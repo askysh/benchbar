@@ -204,11 +204,19 @@ else
 fi
 
 fl_section "INPUTS"
-prompt_value BENCH_DIR "Bench directory name" "frappe-bench"
+prompt_value BENCH_DIR "Bench directory" "${HOME}/frappe-bench"
+case "$BENCH_DIR" in
+  /*) ;;
+  '~'|'~/'*) BENCH_DIR="${HOME}${BENCH_DIR#'~'}" ;;
+  *) BENCH_DIR="${PWD}/${BENCH_DIR}" ;;
+esac
+BENCH_DIR="${BENCH_DIR%/}"
 prompt_value SITE_NAME "Site name (lowercase, hostname-like)" "macdev"
 if ! [[ "$SITE_NAME" =~ ^[a-z0-9][a-z0-9.-]*$ ]]; then
   fl_die "Invalid site name: '${SITE_NAME}'." "Use lowercase letters, digits, '-' and '.' only."
 fi
+SITE_EXISTS=0
+[[ -d "${BENCH_DIR}/sites/${SITE_NAME}" ]] && SITE_EXISTS=1
 
 if [[ -n "$APPS" ]]; then
   fl_info "APPS overrides app bundle selection."
@@ -262,8 +270,14 @@ if [[ "$OFFLINE" != "1" ]]; then
   fl_validate_app_refs_online
 fi
 
-prompt_secret MARIADB_ROOT_PASSWORD "MariaDB root password"
-prompt_secret ADMIN_PASSWORD "Site admin password (Administrator login)"
+if [[ "$SITE_EXISTS" == "1" ]]; then
+  fl_info "site ${SITE_NAME} already exists: no passwords needed"
+  MARIADB_ROOT_PASSWORD="${MARIADB_ROOT_PASSWORD:-}"
+  ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
+else
+  prompt_secret MARIADB_ROOT_PASSWORD "MariaDB root password"
+  prompt_secret ADMIN_PASSWORD "Site admin password (Administrator login)"
+fi
 
 fl_section "PLAN"
 cat <<EOF
@@ -284,7 +298,7 @@ if [[ "$ASSUME_YES" != "1" && "$FL_DRY_RUN" != "1" ]]; then
   fl_confirm "Proceed?" || { fl_warn "Cancelled."; exit 0; }
 fi
 
-if [[ "$FL_DRY_RUN" != "1" ]]; then
+if [[ "$FL_DRY_RUN" != "1" && "$SITE_EXISTS" != "1" ]]; then
   fl_section "VERIFY DB CREDENTIALS"
   mariadb -u root -p"${MARIADB_ROOT_PASSWORD}" -e "SELECT 1" >/dev/null 2>&1 \
     || fl_die "MariaDB root password is wrong." "Double-check the password set during mariadb-secure-installation."
@@ -297,6 +311,8 @@ fl_state_init
 fl_state_set PROFILE "$FL_PROFILE"
 fl_state_set APP_BUNDLE "$APP_BUNDLE"
 fl_state_set APPS "${FL_SELECTED_APPS[*]}"
+fl_state_set BENCH_DIR "$BENCH_DIR"
+fl_state_set SITE_NAME "$SITE_NAME"
 
 fl_install_pipx_if_needed
 fl_install_bench_if_needed
@@ -322,8 +338,8 @@ fi
 
 if [[ -n "$FRAPPE_COMMIT" || -n "$ERPNEXT_COMMIT" ]]; then
   fl_warn "Rebuilding bench after commit pinning"
-  fl_bench_run "$BENCH_DIR" bench setup requirements
-  fl_bench_run "$BENCH_DIR" bench build
+  fl_bench_run_long "bench setup requirements" "$BENCH_DIR" bench setup requirements
+  fl_bench_run_long "bench build" "$BENCH_DIR" bench build
 fi
 
 fl_new_site_if_needed "$BENCH_DIR" "$SITE_NAME" "$MARIADB_ROOT_PASSWORD" "$ADMIN_PASSWORD"
@@ -337,14 +353,17 @@ done
 fl_verify_site_health "$BENCH_DIR" "$SITE_NAME"
 
 fl_section "READY"
-if ! grep -qE "^[[:space:]]*127\.0\.0\.1[[:space:]].*([[:space:]]|^)${SITE_NAME}([[:space:]]|$)" /etc/hosts 2>/dev/null; then
-  fl_warn "Add this host entry before opening the site:"
-  printf '  echo "127.0.0.1 %s" | sudo tee -a /etc/hosts\n\n' "$SITE_NAME"
+if ! grep -qE "^[[:space:]]*127\.0\.0\.1[[:space:]]+(.*[[:space:]])?${SITE_NAME//./\\.}([[:space:]]|$)" "${FL_HOSTS_FILE:-/etc/hosts}" 2>/dev/null; then
+  fl_warn "No /etc/hosts entry for ${SITE_NAME} yet; frappe-mac install (or repair) adds it, or run:"
+  printf '  printf "127.0.0.1 %s\\n" | sudo tee -a /etc/hosts\n\n' "$SITE_NAME"
 fi
 cat <<EOF
-Start:
-  cd ${BENCH_DIR}
-  bench start
+Run in the background (recommended):
+  ${SCRIPT_DIR}/frappe-mac service --bench-dir ${BENCH_DIR}
+  benchup
+
+Or in the foreground:
+  cd ${BENCH_DIR} && bench start
 
 Open:
   http://${SITE_NAME}:8000

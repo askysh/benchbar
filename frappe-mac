@@ -217,7 +217,7 @@ cmd_install() {
     fl_info "dry-run: the bench does not exist yet, so the service plan is shown against an empty bench"
   fi
   FL_SKIP_PLAN_CONFIRM=1
-  if fl_repair_engine "Background service" service; then
+  if fl_repair_engine "Background service" system service; then
     fl_step_end "done"
   else
     fl_step_end warning "see above"

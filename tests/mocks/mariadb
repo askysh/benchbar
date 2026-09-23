@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# mariadb client mock (copied into the fake brew prefix)
+printf 'mariadb %s\n' "$*" >>"${MOCK_LOG:-/dev/null}"
+case "$*" in
+  --version) printf 'mariadb  Ver 15.1 Distrib 10.11.14-MariaDB, for osx10.20 (arm64)\n' ;;
+  *"--connect-timeout=2 -e SELECT 1"*) exit "${MOCK_MARIADB_NOPASS_EXIT:-1}" ;;
+  *"SHOW VARIABLES LIKE 'character_set_server'"*) printf 'character_set_server\tutf8mb4\n' ;;
+  *"-e SELECT 1"*) exit 0 ;;
+esac
+exit 0

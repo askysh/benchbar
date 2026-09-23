@@ -47,6 +47,30 @@ fl_bench_complete() {
   [[ -d "$bench_dir/apps/frappe" && -d "$bench_dir/env" && -f "$bench_dir/sites/apps.txt" ]]
 }
 
+# A bench that has real content (apps or sites) must never be moved aside
+# by the installer, even when env/ or node_modules are gone.
+fl_bench_has_data() {
+  local bench_dir="$1" s
+  [[ -d "$bench_dir/apps/frappe" ]] && return 0
+  for s in "$bench_dir"/sites/*/site_config.json; do
+    [[ -f "$s" ]] && return 0
+  done
+  return 1
+}
+
+# fl_bench_run_long LABEL BENCH_DIR COMMAND...: a slow bench command with a spinner
+fl_bench_run_long() {
+  local label="$1" bench_dir="$2"
+  shift 2
+  fl_run_long "$label" fl__in_dir "$bench_dir" "$@"
+}
+
+fl__in_dir() {
+  local dir="$1"
+  shift
+  (cd "$dir" && "$@")
+}
+
 fl_bench_init_if_needed() {
   local bench_dir="$1" frappe_ref="$2" python_bin="$3" repair="${4:-0}" timestamp backup
   local timeout_seconds="${BENCH_INIT_TIMEOUT_SECONDS:-2700}"
@@ -58,6 +82,9 @@ fl_bench_init_if_needed() {
     return 0
   fi
   if [[ -e "$bench_dir" ]]; then
+    if fl_bench_has_data "$bench_dir"; then
+      fl_die "Bench ${bench_dir} has apps or sites but its env is missing or incomplete." "This is a repair, not a reinstall. Run: ${SCRIPT_DIR}/frappe-mac repair --bench-dir ${bench_dir}"
+    fi
     if [[ "$repair" != "1" ]]; then
       fl_die "Bench directory exists but is incomplete: ${bench_dir}" "Move it aside or rerun with --repair-bench after reading: mv ${bench_dir} ${bench_dir}.incomplete.\$(date +%Y%m%d%H%M%S)"
     fi
@@ -81,10 +108,10 @@ fl_get_app_if_needed() {
   else
     fl_info "Getting ${app} at ${branch}"
     if [[ -n "$repo" ]]; then
-      fl_bench_run "$bench_dir" bench get-app --branch "$branch" "$repo" \
+      fl_bench_run_long "bench get-app ${app} (${branch})" "$bench_dir" bench get-app --branch "$branch" "$repo" \
         || fl_die "bench get-app failed for ${app}." "Manual command: cd ${bench_dir} && bench get-app --branch ${branch} ${repo}"
     else
-      fl_bench_run "$bench_dir" bench get-app --branch "$branch" "$app" \
+      fl_bench_run_long "bench get-app ${app} (${branch})" "$bench_dir" bench get-app --branch "$branch" "$app" \
         || fl_die "bench get-app failed for ${app}." "Manual command: cd ${bench_dir} && bench get-app --branch ${branch} ${app}"
     fi
   fi
@@ -106,7 +133,7 @@ fl_new_site_if_needed() {
     fl_state_set SITE_CREATED yes
     return 0
   fi
-  fl_bench_run "$bench_dir" bench new-site "$site_name" \
+  fl_bench_run_long "bench new-site ${site_name}" "$bench_dir" bench new-site "$site_name" \
     --mariadb-root-password "$db_password" \
     --admin-password "$admin_password" \
     --no-mariadb-socket \
@@ -125,7 +152,7 @@ fl_install_app_if_needed() {
   if printf '%s\n' "$installed" | awk '{print $1}' | grep -qx "$app"; then
     fl_ok "${app} already installed on ${site_name}"
   else
-    fl_bench_run "$bench_dir" bench --site "$site_name" install-app "$app" \
+    fl_bench_run_long "bench install-app ${app} on ${site_name}" "$bench_dir" bench --site "$site_name" install-app "$app" \
       || fl_die "bench install-app failed for ${app}." "Manual command: cd ${bench_dir} && bench --site ${site_name} install-app ${app}"
   fi
   fl_state_set "APP_${app}_INSTALLED" yes

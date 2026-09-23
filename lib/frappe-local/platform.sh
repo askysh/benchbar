@@ -56,7 +56,7 @@ fl_brew_ensure() {
   if brew list --formula --versions "$formula" >/dev/null 2>&1; then
     fl_info "$formula already installed ($(brew list --versions "$formula" | head -n1))"
   else
-    fl_run brew install "$formula"
+    fl_run_long "brew install ${formula}" brew install "$formula"
   fi
 }
 

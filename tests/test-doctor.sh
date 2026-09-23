@@ -128,8 +128,11 @@ assert_contains "$OUT" "brew tab --installed-on-request python@3.11"
 printf 'python@3.11\nnode@20\n' >"$MOCK_BREW_LEAVES"
 
 # 13. missing formula
-MOCK_BREW_INSTALLED="python@3.11 node@20" run_fm doctor --bench-dir "$BENCH"
+cp "$MOCK_STATE/installed" "$MOCK_STATE/installed.bak"
+printf 'python@3.11\nnode@20\n' >"$MOCK_STATE/installed"
+run_fm doctor --bench-dir "$BENCH"
 assert_contains "$OUT" "[FAIL] Homebrew formulae: missing formulae: mariadb@10.11 redis"
+mv "$MOCK_STATE/installed.bak" "$MOCK_STATE/installed"
 
 # 14. large logs
 dd if=/dev/zero of="$BENCH/logs/worker.error.log" bs=1048576 count=3 2>/dev/null

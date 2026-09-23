@@ -7,7 +7,9 @@ case "${1:-}" in
   --version) printf 'Homebrew 4.4.0\n' ;;
   list)
     f="${*: -1}"
-    case " ${MOCK_BREW_INSTALLED:-} " in *" $f "*) printf '%s 1.0\n' "$f" ;; *) exit 1 ;; esac ;;
+    if grep -qx "$f" "${MOCK_STATE:?}/installed" 2>/dev/null; then printf '%s 1.0\n' "$f"; else exit 1; fi ;;
+  install)
+    printf '%s\n' "${*: -1}" >>"${MOCK_STATE:?}/installed" ;;
   leaves) cat "${MOCK_BREW_LEAVES:?}" ;;
   tab)
     [[ "${2:-}" == "--help" ]] && { echo "Usage: brew tab"; exit 0; }

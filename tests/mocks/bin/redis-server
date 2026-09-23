@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+[[ "${1:-}" == "--version" ]] && printf 'Redis server v=7.2.5 sha=00000000:0 malloc=libc bits=64 build=abc\n'
+exit 0
