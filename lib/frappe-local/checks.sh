@@ -333,7 +333,7 @@ chk_ping() {
     chk__set ok "http://${FL_SITE}:${FL_WEB_PORT}/api/method/ping returned 200"
     return 0
   fi
-  reason="$(tr -d '[:space:]' <"$(fl_stop_flag_path)" 2>/dev/null || true)"
+  reason="$(fl_stop_flag_reason)"
   if fl_bench_is_running; then
     chk__set fail "bench processes are running but ping returned ${code}" "${SCRIPT_DIR}/benchbar logs"
   elif [[ "$reason" == "manual" || -z "$reason" && ! -f "$(fl_runner_path)" ]]; then

@@ -101,12 +101,12 @@ grep -q '<key>RunAtLoad</key><true/>' "$plist" || fail "autostart on must restor
 printf '\n# edited by hand\n' >>"$BENCH/frappe-mac-run.sh"
 run_fm doctor --bench-dir "$BENCH"
 assert_contains "$OUT" "[OK] Runner script"   # appended text does not change the header, so still current
-sed -i '' 's/frappe-mac-template: bench-run.sh v1 [0-9a-f]*/frappe-mac-template: bench-run.sh v0 000000000000/' "$BENCH/frappe-mac-run.sh"
+sed -i '' 's/frappe-mac-template: bench-run.sh v2 [0-9a-f]*/frappe-mac-template: bench-run.sh v0 000000000000/' "$BENCH/frappe-mac-run.sh"
 run_fm doctor --bench-dir "$BENCH"
 assert_contains "$OUT" "[WARN] Runner script: runner is outdated"
 run_fm repair --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
-grep -q 'frappe-mac-template: bench-run.sh v1' "$BENCH/frappe-mac-run.sh" || fail "runner must be regenerated"
+grep -q 'frappe-mac-template: bench-run.sh v2' "$BENCH/frappe-mac-run.sh" || fail "runner must be regenerated"
 
 # ---- uninstall-service removes only service files
 run_fm uninstall-service --yes --bench-dir "$BENCH"

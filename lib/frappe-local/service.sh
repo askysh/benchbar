@@ -46,6 +46,9 @@ fl_render_all() {
     "BENCH_NAME=${FL_BENCH_NAME}" \
     "HONCHO=${honcho}" \
     "PORTS=$(fl_bench_ports_csv)" \
+    "SITE=${FL_SITE}" \
+    "WEB_PORT=${FL_WEB_PORT}" \
+    "CLI_VERSION=${FL_VERSION:-0}" \
     "LABEL=$(fl_agent_label)" \
     "MAX_STARTS=${FL_CRASH_MAX_STARTS}" \
     "WINDOW=${FL_CRASH_WINDOW}")"
@@ -86,7 +89,10 @@ fl_wait_for_ping() {
 }
 
 fl_stop_flag_reason() {
-  tr -d '[:space:]' <"$(fl_stop_flag_path)" 2>/dev/null || true
+  local flag
+  flag="$(fl_stop_flag_path)"
+  [[ -f "$flag" ]] || return 0
+  tr -d "[:space:]" <"$flag" 2>/dev/null || true
 }
 
 fl_arm_start() {
@@ -126,6 +132,7 @@ fl_cmd_up() {
     fl_info "agent not loaded; loading $(fl_agent_plist_path)"
     fl_agent_bootstrap "$(fl_agent_plist_path)" || fl_die "launchctl could not load the agent." "Run: ${SCRIPT_DIR}/benchbar repair"
   fi
+  fl_state_json_write starting "" "" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "" ""
   fl_agent_kickstart || fl_die "launchctl kickstart failed." "Run: ${SCRIPT_DIR}/benchbar doctor"
   [[ "${FL_DRY_RUN:-0}" == "1" ]] && return 0
   fl_spinner_start "starting bench ${FL_BENCH_NAME}" "$(fl_bench_log_path)"
@@ -162,6 +169,7 @@ fl_cmd_down() {
     fl_fail "some bench processes are still alive: $(fl_bench_process_pids | tr '\n' ' ')"
     return 1
   fi
+  fl_state_json_write stopped manual "" "$(fl_state_json_get started_at)" "$(fl_state_json_get last_exit_code)" ""
   fl_ok "bench ${FL_BENCH_NAME} stopped (auto-restart off until benchup)"
 }
 
@@ -171,6 +179,7 @@ fl_cmd_restart() {
   if ! fl_agent_loaded; then
     fl_agent_bootstrap "$(fl_agent_plist_path)" || fl_die "launchctl could not load the agent."
   fi
+  fl_state_json_write starting "" "" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "" ""
   fl_agent_kickstart -k || fl_die "launchctl kickstart -k failed."
   [[ "${FL_DRY_RUN:-0}" == "1" ]] && return 0
   fl_spinner_start "restarting bench ${FL_BENCH_NAME}" "$(fl_bench_log_path)"
@@ -186,36 +195,29 @@ fl_cmd_restart() {
 }
 
 fl_cmd_status() {
-  local loaded=no state="" pid="" code="" reason ping running=no json="${1:-0}"
+  local json="${1:-0}"
   fl_require_bench
-  if fl_agent_loaded; then
-    loaded=yes
-    state="$(fl_agent_field state)"; pid="$(fl_agent_field pid)"; code="$(fl_agent_field 'last exit code')"
-  fi
-  reason="$(fl_stop_flag_reason)"
-  ping="$(fl_site_ping_code)"
-  fl_bench_is_running && running=yes
+  fl_status_compute
   if [[ "$json" == "1" ]]; then
-    printf '{"bench":"%s","site":"%s","url":"%s","agent":"%s","loaded":"%s","state":"%s","pid":"%s","last_exit_code":"%s","stop_flag":"%s","processes_running":"%s","ping":"%s","log":"%s"}\n' \
-      "$(fl_json_escape "$FL_BENCH_DIR")" "$FL_SITE" "$(fl_site_url)" "$(fl_agent_label)" "$loaded" "${state:-}" "${pid:-}" "${code:-}" "${reason:-none}" "$running" "$ping" "$(fl_json_escape "$(fl_bench_log_path)")"
+    fl_status_print_json
     return 0
   fi
   fl_table \
     "bench|${FL_BENCH_DIR}" \
     "site|$(fl_site_url)" \
-    "agent|$(fl_agent_label) (loaded: ${loaded})" \
-    "state|${state:-not loaded}${pid:+, pid ${pid}}${code:+, last exit code ${code}}" \
-    "stop flag|${reason:-none (auto-restart armed)}" \
-    "processes|${running}" \
-    "web ping|${ping}" \
+    "state|${ST_STATE}${ST_PID:+, pid ${ST_PID}}${ST_REASON:+ (${ST_REASON})}${ST_EXIT:+, last exit code ${ST_EXIT}}" \
+    "agent|$(fl_agent_label) (loaded: $([[ "$ST_LOADED" == "1" ]] && printf yes || printf no)${ST_AGENT_STATE:+, ${ST_AGENT_STATE}})" \
+    "stop flag|${ST_FLAG:-none (auto-restart armed)}" \
+    "processes|$([[ "$ST_PROCS" == "1" ]] && printf yes || printf no)" \
+    "web ping|${ST_PING}" \
     "ports|web ${FL_WEB_PORT}, socketio ${FL_SOCKETIO_PORT}, redis ${FL_REDIS_QUEUE_PORT}/${FL_REDIS_CACHE_PORT}" \
     "log|$(fl_bench_log_path)"
-  if [[ "$ping" == "200" ]]; then
+  if [[ "$ST_PING" == "200" ]]; then
     fl_ok "site responds"
-  elif [[ "$running" == "yes" ]]; then
-    fl_warn "processes are running but the site does not respond (ping ${ping}); see: ${SCRIPT_DIR}/benchbar logs"
+  elif [[ "$ST_PROCS" == "1" ]]; then
+    fl_warn "processes are running but the site does not respond (ping ${ST_PING}); see: ${SCRIPT_DIR}/benchbar logs"
   else
-    case "$reason" in
+    case "$ST_FLAG" in
       crash) fl_warn "auto-restart paused after repeated crashes; run: ${SCRIPT_DIR}/benchbar logs, fix, then benchup" ;;
       broken) fl_warn "auto-restart paused: run ${SCRIPT_DIR}/benchbar repair, then benchup" ;;
       *) fl_info "bench is stopped; start with benchup" ;;

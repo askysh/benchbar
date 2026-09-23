@@ -58,13 +58,18 @@ fl_json_escape() {
   printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | tr -d '\n\r\t'
 }
 
+# Schema 1 (docs/json-schema.md). "level" and "fix_command" are the contract
+# names; "status" and "fix" are the frappe-mac 0.2.0 names, kept for older readers.
 fl_doctor_print_json() {
   local i=0 sep=""
-  printf '{"bench":"%s","site":"%s","profile":"%s","checks":[' "$(fl_json_escape "$FL_BENCH_DIR")" "$(fl_json_escape "$FL_SITE")" "$(fl_json_escape "$FL_PROFILE")"
+  printf '{"schema_version":%d,"cli_version":"%s","bench":"%s","name":"%s","site":"%s","profile":"%s","checks":[' \
+    "${FL_SCHEMA_VERSION:-1}" "${FL_VERSION:-0}" "$(fl_json_escape "$FL_BENCH_DIR")" "$(fl_json_escape "$FL_BENCH_NAME")" \
+    "$(fl_json_escape "$FL_SITE")" "$(fl_json_escape "$FL_PROFILE")"
   while [[ "$i" -lt "${#FL_D_IDS[@]}" ]]; do
-    printf '%s{"id":"%s","group":"%s","label":"%s","status":"%s","message":"%s","fix":"%s","action":"%s"}' \
+    printf '%s{"id":"%s","group":"%s","label":"%s","level":"%s","message":"%s","fix_command":%s,"action":%s,"status":"%s","fix":"%s"}' \
       "$sep" "${FL_D_IDS[$i]}" "$(fl_check_group "${FL_D_IDS[$i]}")" "$(fl_json_escape "$(fl_check_label "${FL_D_IDS[$i]}")")" \
-      "${FL_D_STATUS[$i]}" "$(fl_json_escape "${FL_D_MSG[$i]}")" "$(fl_json_escape "${FL_D_FIX[$i]}")" "${FL_D_ACTION[$i]}"
+      "${FL_D_STATUS[$i]}" "$(fl_json_escape "${FL_D_MSG[$i]}")" "$(fl_json_str "${FL_D_FIX[$i]}")" "$(fl_json_str "${FL_D_ACTION[$i]}")" \
+      "${FL_D_STATUS[$i]}" "$(fl_json_escape "${FL_D_FIX[$i]}")"
     sep=","
     i=$((i + 1))
   done

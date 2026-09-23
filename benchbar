@@ -49,6 +49,8 @@ SCRIPT_DIR="$(fl_resolve_self)"
 . "${SCRIPT_DIR}/lib/frappe-local/process.sh"
 # shellcheck source=lib/frappe-local/launchd.sh
 . "${SCRIPT_DIR}/lib/frappe-local/launchd.sh"
+# shellcheck source=lib/frappe-local/benchstate.sh
+. "${SCRIPT_DIR}/lib/frappe-local/benchstate.sh"
 # shellcheck source=lib/frappe-local/checks.sh
 . "${SCRIPT_DIR}/lib/frappe-local/checks.sh"
 # shellcheck source=lib/frappe-local/doctor.sh
@@ -86,7 +88,8 @@ Daily
   up                  Start the bench in the background (benchup).
   down                Stop it and keep it stopped across reboots (benchdown).
   restart             Restart it, for example after changing Python code.
-  status              Agent state, stop flag, site ping (benchstatus).
+  status              State, pid, stop reason, site ping (benchstatus).
+  list                Every bench benchbar knows about.
   logs                Tail logs/bench.log. Flags: --worker, --worker-error, --previous, -n50, --no-follow
   fg                  Stop the service and run honcho in the foreground.
   watch               Run bench watch for asset rebuilds.
@@ -100,7 +103,7 @@ Options
   --bundle NAME       App bundle for install (minimal, common, extended)
   --dry-run           Print the full plan, change nothing
   -y, --yes           Do not ask; secrets must come from the environment
-  --json              Machine-readable output for doctor and status
+  --json              Versioned JSON for list, status and doctor (docs/json-schema.md)
   --plain             No colors or spinners (also: NO_COLOR=1, or a non-TTY)
   -h, --help          This help
   --version           Print the version
@@ -287,6 +290,7 @@ case "$COMMAND" in
   doctor) cmd_doctor ;;
   repair) cmd_repair ;;
   status) cmd_status ;;
+  list) fl_cmd_list "$OPT_JSON" ;;
   up) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_up ;;
   down) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_down ;;
   restart) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_restart ;;
