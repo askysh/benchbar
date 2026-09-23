@@ -42,3 +42,17 @@ One line per non obvious choice: the decision, then the reason.
 - Arm64 only (`ARCHS = arm64`), macOS 14 deployment target, as locked.
 - `scripts/macos-build.sh` signs with `codesign --options runtime --sign -` after `xcodebuild`, so the app in `macos/build` always has the Hardened Runtime flag even though the ad hoc identity cannot be notarized.
 - `scripts/macos-install-local.sh` quits a running copy through Apple Events first and falls back to `pkill -x BenchBar`.
+
+## Phase 2: talking to the CLI
+
+- swift-subprocess 1.0.0 (not Foundation `Process`): it supports macOS 13+, so it works with the macOS 14 target, and gives async/await, output limits and a teardown sequence on cancel.
+- Timeouts race the command against `Task.sleep` in a task group; cancelling the loser makes swift-subprocess send SIGTERM, wait 2 s, then SIGKILL.
+- The environment inherits the app's (HOME, USER, TMPDIR, SHELL) and overrides PATH, NO_COLOR, TERM and LANG; a fully custom environment would lose TMPDIR and SHELL, which the CLI uses.
+- stdin is closed and `--yes` is never passed: if the CLI needs to ask (a port clash), it answers no and fails with a message the popover shows.
+- `~/.local/bin/frappe-mac` is a last fallback after the four locations in the brief: installs from before the rename only have that link until `benchbar repair` runs.
+- A user CLI path that is not executable is an error, not skipped, so a typo in Settings is visible.
+- Unknown `state`, `stop_reason` and `level` values decode as `.unknown`; a `schema_version` above 1 is refused with "update BenchBar".
+- `doctor` exit code 1 is accepted when stdout is a valid report (it means a check failed, not that doctor failed).
+- Failed actions show the CLI's `[FAIL]`/`[WARN]` lines, or the last three lines when there are none.
+- `tests/test-json.sh` compares the live CLI output's keys with the app's fixture files, so the fixtures cannot drift from the CLI.
+- Test helpers are `nonisolated`: the test target also defaults to MainActor.

@@ -141,3 +141,69 @@ To open the project in Xcode (optional, nothing needs clicking to build):
    My Mac. Press Cmd+R to build and run, Cmd+U to run the tests.
 4. The app has no window: look for the runner in the menu bar.
 5. Press Cmd+. (Cmd and period) to stop it.
+
+## Phase 2: talking to the CLI
+
+### Running another program from Swift
+
+`SubprocessRunner` (in `CLI/CommandRunner.swift`) uses Apple's
+**swift-subprocess** package. A **Swift package** is a library pulled
+from a git URL; `project.yml` lists it under `packages:` and Xcode
+downloads it on the first build (you will see it under Package
+Dependencies in Xcode's file list).
+
+```swift
+let result = try await Subprocess.run(
+    .path(FilePath("/Users/you/.local/bin/benchbar")),
+    arguments: ["status", "--json"],
+    output: .string(limit: 4 * 1024 * 1024))
+```
+
+- `async` / `await`: the call suspends instead of blocking the thread, so
+  the menu bar stays responsive while the CLI runs.
+- `throws(CLIError)` is **typed throws** (Swift 6): the compiler knows
+  every error is a `CLIError`, so the UI can `switch` over the cases.
+- **Timeouts** use a **task group**: two child tasks race, one runs the
+  command, one sleeps. Whoever finishes first wins; `cancelAll()` stops
+  the other. Cancelling the command makes swift-subprocess send SIGTERM,
+  then SIGKILL.
+
+### Why an explicit PATH
+
+Apps started from Finder or at login inherit launchd's minimal
+environment, not your `~/.zshrc`. `/opt/homebrew/bin` is not on it. So
+the app (a) finds `benchbar` by absolute path (`CLILocator.swift`) and
+(b) passes a PATH that includes Homebrew, because the CLI itself calls
+brew, bench and curl.
+
+### Codable
+
+`Models.swift` declares structs that mirror the JSON. `Codable` makes
+Swift generate the parsing code. `CodingKeys` maps `web_url` to
+`webURL`. Two tricks:
+
+- An `enum` with a custom `init(from:)` turns unknown strings into
+  `.unknown`, so a newer CLI adding a state does not break the app.
+- `SchemaProbe` decodes only `schema_version` first, so a future
+  breaking schema gets a clear message instead of a confusing parse error.
+
+### Protocols for testing
+
+`CLIClient` does not start processes itself; it asks a `CommandRunning`.
+The app passes `SubprocessRunner`, the tests pass `FakeRunner`, which
+answers with the JSON files in `BenchBarTests/Fixtures`. This is how
+you test code that talks to the outside world without the outside world.
+
+### Swift Testing
+
+Tests are functions marked `@Test`, grouped in a `@Suite` struct.
+`#expect(a == b)` checks a value; `#expect(throws:)` checks an error;
+`#require` stops the test if a value is missing. Run them with
+`scripts/macos-build.sh --test` or Cmd+U in Xcode. In Xcode, the Test
+navigator (Cmd+6) lists every test with a play button.
+
+### Files to read
+
+- `macos/BenchBar/CLI/CLIClient.swift`: the only door to the bench.
+- `macos/BenchBar/CLI/CommandRunner.swift`, `CLILocator.swift`, `Models.swift`, `CLIError.swift`.
+- `macos/BenchBarTests/CLIClientTests.swift`, `SubprocessRunnerTests.swift`.

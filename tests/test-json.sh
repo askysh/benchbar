@@ -114,4 +114,29 @@ make_fake_bench "$QUOTED" odd
 run_fm status --json --bench-dir "$QUOTED"
 assert_eq "$QUOTED" "$(printf '%s' "$OUT" | jget - 'd["bench"]')"
 
+# ---- the app's fixtures (macos/BenchBarTests/Fixtures) have exactly the keys the CLI prints
+FIX="$ROOT/macos/BenchBarTests/Fixtures"
+run_fm status --json --bench-dir "$BENCH"
+printf '%s' "$OUT" | python3 -c '
+import json, sys
+live = json.load(sys.stdin)
+fixture = json.load(open(sys.argv[1]))
+assert set(live) == set(fixture), ("status keys drifted", set(live) ^ set(fixture))
+assert set(live["ports"]) == set(fixture["ports"])
+' "$FIX/status-running.json" || fail "status --json and the app fixture disagree"
+run_fm list --json
+printf '%s' "$OUT" | python3 -c '
+import json, sys
+live = json.load(sys.stdin); fixture = json.load(open(sys.argv[1]))
+assert set(live) == set(fixture)
+assert set(live["benches"][0]) == set(fixture["benches"][0]), set(live["benches"][0]) ^ set(fixture["benches"][0])
+' "$FIX/list.json" || fail "list --json and the app fixture disagree"
+run_fm doctor --json --bench-dir "$BENCH"
+printf '%s' "$OUT" | python3 -c '
+import json, sys
+live = json.load(sys.stdin); fixture = json.load(open(sys.argv[1]))
+assert set(live) == set(fixture), set(live) ^ set(fixture)
+assert set(live["checks"][0]) == set(fixture["checks"][0])
+' "$FIX/doctor.json" || fail "doctor --json and the app fixture disagree"
+
 printf 'test-json: ok\n'
