@@ -207,3 +207,55 @@ navigator (Cmd+6) lists every test with a play button.
 - `macos/BenchBar/CLI/CLIClient.swift`: the only door to the bench.
 - `macos/BenchBar/CLI/CommandRunner.swift`, `CLILocator.swift`, `Models.swift`, `CLIError.swift`.
 - `macos/BenchBarTests/CLIClientTests.swift`, `SubprocessRunnerTests.swift`.
+
+## Phase 3: knowing the bench's state
+
+### Observation
+
+`BenchStore` and `BenchModel` are marked `@Observable` (the Observation
+framework, macOS 14+). Any SwiftUI view that reads a property, say
+`bench.state`, redraws when that property changes, with no
+`@Published` or Combine. `@ObservationIgnored` opts out properties the
+UI never reads (tasks, watchers, callbacks).
+
+### A pure state machine
+
+`State/BenchStateMachine.swift` has no I/O at all. You give it an
+**event** (a status was observed, an action started or finished, the
+CLI went missing) and it returns **effects** (show an alert, ping the
+site, refresh). The store performs the effects. Because the machine is
+just a value, `StateMachineTests.swift` can walk it through a crash, a
+crash-guard pause and a recovery in a few lines, with no processes or
+timers.
+
+Two rules worth reading in the code:
+
+- **Optimistic start**: pressing Start shows "starting" at once.
+- **Stale answers**: while a start is in flight, a "stopped" answer is
+  from before the start, so it is ignored.
+
+### Three sources of truth, fastest first
+
+1. **Folder watcher** (`DirectoryWatcher.swift`): a `DispatchSource`
+   on the file descriptor of `logs/.benchbar`. The kernel tells us when
+   a file there is created or renamed. We watch the folder, not the
+   file, because the runner writes `state.json` with `mv`, which swaps
+   in a new file; a watcher on the old one would never fire again.
+2. **Polling**: `Task.sleep(for:tolerance:)` in a loop. The tolerance
+   lets macOS group our wakeup with others, which saves battery.
+3. **Ping** (`SitePinger.swift`): one HTTP request after a start. It
+   uses the Network framework (`NWConnection`) because it must set the
+   Host header, which URLSession does not allow.
+
+### Continuations
+
+`SitePinger` wraps callback-based `NWConnection` code into `async` with
+`withCheckedContinuation`. A continuation must be resumed exactly once;
+`ResultBox` uses a lock so whichever callback (reply, failure, timeout,
+cancel) comes first wins and the rest do nothing.
+
+### Files to read
+
+- `macos/BenchBar/State/BenchStateMachine.swift` first, then `BenchStore.swift`.
+- `macos/BenchBar/State/DirectoryWatcher.swift`, `SitePinger.swift`.
+- `macos/BenchBarTests/StateMachineTests.swift`, `BenchStoreTests.swift`, `DirectoryWatcherTests.swift`.

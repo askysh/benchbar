@@ -56,3 +56,16 @@ One line per non obvious choice: the decision, then the reason.
 - Failed actions show the CLI's `[FAIL]`/`[WARN]` lines, or the last three lines when there are none.
 - `tests/test-json.sh` compares the live CLI output's keys with the app's fixture files, so the fixtures cannot drift from the CLI.
 - Test helpers are `nonisolated`: the test target also defaults to MainActor.
+
+## Phase 3: state store
+
+- The state logic is a pure value type, `BenchStateMachine`: events in, effects (alert, ping, refresh) out. The store does the I/O. This keeps every transition unit-testable without a CLI, clock or file system.
+- `status --json` is the truth; `state.json` is a fast hint applied first, then confirmed by a status call. Both go through the same machine.
+- Start and restart are optimistic (show "starting" at once). While an action is in flight, an observed state from before it (stopped during a start, running during a stop) is ignored as stale.
+- Crash-guard alerts fire on any move into `paused` with reason `crash`, not only from `crashed`: a 30 s poll can miss the short crashed state between launchd retries.
+- The watcher watches the folder `logs/.benchbar`, not `state.json`, because the runner replaces the file with `mv`. If the folder is missing, it watches the parent until it appears; the app never creates folders in a bench.
+- Folder events are debounced by 150 ms: one `mv` gives several events.
+- Status calls for one bench never overlap; a request during a call is coalesced into one more call afterwards.
+- Poll every 30 s (5 s tolerance) with the popover closed, every 5 s (1 s tolerance) while it is open; tolerance lets macOS batch wakeups.
+- The site ping is raw HTTP/1.1 over `NWConnection` to 127.0.0.1 with the site in the Host header, like the CLI, because URLSession will not send a custom Host header. It runs once after a successful start, then triggers a refresh.
+- `suspend()` / `resume()` exist on the store for sleep and wake; wiring them to `NSWorkspace` notifications is left to Phase 5, with the popover.
