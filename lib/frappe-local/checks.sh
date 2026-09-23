@@ -11,7 +11,7 @@
 # Groups (used by "frappe-mac service" versus "frappe-mac repair"):
 #   system, bench, service, site
 
-FL_CHECK_ORDER="brew python_leaves mariadb_bind redis_6379 cleanmymac env_python bench_version socketio assets logs honcho procfile runner agent stop_flag helpers legacy_agents hosts port_clash ping"
+FL_CHECK_ORDER="brew python_leaves mariadb_bind redis_6379 cleanmymac env_python bench_version socketio assets logs honcho procfile runner agent stop_flag helpers cli_link legacy_agents hosts port_clash ping"
 FL_LOG_WARN_MB="${FL_LOG_WARN_MB:-50}"
 FL_HOSTS_FILE="${FL_HOSTS_FILE:-/etc/hosts}"
 
@@ -38,6 +38,7 @@ fl_check_label() {
     agent) printf 'launchd agent' ;;
     stop_flag) printf 'Stop flag' ;;
     helpers) printf 'Shell helpers' ;;
+    cli_link) printf 'frappe-mac on PATH' ;;
     legacy_agents) printf 'Legacy agents' ;;
     mariadb_bind) printf 'MariaDB bind address' ;;
     redis_6379) printf 'Homebrew redis' ;;
@@ -219,6 +220,23 @@ chk_helpers() {
     [[ "$CHK_STATUS" == "ok" ]] && CHK_STATUS=warn
     CHK_MSG="${CHK_MSG}; old block(s) still present: ${legacy} (remove by hand, the frappe-mac block wins because it comes later)"
     [[ -n "$CHK_FIX" ]] || CHK_FIX="open ${rc} and delete the old '${legacy}' block"
+  fi
+}
+
+fl_cli_link_path() { printf '%s/.local/bin/frappe-mac' "$HOME"; }
+
+chk_cli_link() {
+  local link target
+  link="$(fl_cli_link_path)"
+  target="${SCRIPT_DIR}/frappe-mac"
+  if [[ -L "$link" && "$(readlink "$link")" == "$target" ]]; then
+    chk__set ok "${link} points to this checkout"
+  elif [[ -e "$link" && ! -L "$link" ]]; then
+    chk__set warn "${link} exists and is not a symlink; leaving it alone" "mv ${link} ${link}.bak && ln -s ${target} ${link}"
+  elif [[ -L "$link" ]]; then
+    chk__set warn "${link} points to $(readlink "$link"), not this checkout" "${SCRIPT_DIR}/frappe-mac repair" write_cli_link
+  else
+    chk__set warn "no ${link} symlink yet (so 'frappe-mac' works from any folder)" "${SCRIPT_DIR}/frappe-mac repair" write_cli_link
   fi
 }
 

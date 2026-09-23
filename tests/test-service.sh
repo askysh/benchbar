@@ -50,6 +50,8 @@ grep -q 'benchup()' "$HOME/.zshrc" || fail "benchup helper expected"
 grep -q "opt/python@3.11/bin" "$HOME/.zshrc" || fail "profile exports expected in the helper block"
 grep -q '^export EDITOR=vim$' "$HOME/.zshrc" || fail "existing zshrc content must survive"
 assert_calls_contain "^launchctl bootstrap gui/[0-9]+ ${plist}\$"
+[[ -L "$HOME/.local/bin/frappe-mac" && "$(readlink "$HOME/.local/bin/frappe-mac")" == "$ROOT/frappe-mac" ]] || fail "frappe-mac must be linked into ~/.local/bin"
+"$HOME/.local/bin/frappe-mac" --version | grep -q 'frappe-mac 0.2.0' || fail "the symlinked CLI must resolve its own libraries"
 assert_eq "manual" "$(cat "$BENCH/logs/.bench-stopped")"
 # legacy agents: booted out and moved, never deleted, unrelated agent untouched
 for name in web worker socketio; do

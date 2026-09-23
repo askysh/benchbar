@@ -6,7 +6,7 @@ All notable changes to this project are documented here.
 
 ### Added
 
-- `frappe-mac`, a single entrypoint with `install`, `service`, `doctor`,
+- `frappe-mac`, a single entrypoint (also linked into `~/.local/bin`) with `install`, `service`, `doctor`,
   `repair`, `up`, `down`, `restart`, `status`, `logs`, `fg`, `watch`,
   `autostart on|off`, `uninstall-service` and `path`. Global flags
   `--bench-dir`, `--site`, `--profile`, `--bundle`, `--dry-run`, `--yes`,

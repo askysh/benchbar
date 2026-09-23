@@ -5,7 +5,7 @@
 # the check -> plan -> apply -> verify engine shared by "repair" and
 # "service" (the background phase).
 
-FL_ACTION_ORDER="python_leaves env_rebuild honcho_install node_requirements build clear_cache mariadb_bind legacy_migrate write_procfile write_runner write_plist write_helpers hosts_entry rotate_logs redis_stop"
+FL_ACTION_ORDER="python_leaves env_rebuild honcho_install node_requirements build clear_cache mariadb_bind legacy_migrate write_procfile write_runner write_plist write_helpers write_cli_link hosts_entry rotate_logs redis_stop"
 FL_NEED_CLEAR_CACHE=0
 
 fl_action_label() {
@@ -22,6 +22,7 @@ fl_action_label() {
     write_runner) printf 'write the runner script' ;;
     write_plist) printf 'write and load the launchd agent' ;;
     write_helpers) printf 'write the shell helper block' ;;
+    write_cli_link) printf 'link frappe-mac into ~/.local/bin' ;;
     hosts_entry) printf 'add %s to /etc/hosts (sudo)' "$FL_SITE" ;;
     rotate_logs) printf 'move large logs aside' ;;
     redis_stop) printf 'stop Homebrew redis on 6379' ;;
@@ -193,6 +194,23 @@ act_write_helpers() {
   rc="$(fl_rc_file)"
   fl_rc_block_write "$rc" "$FL_R_HELPERS"
   [[ "${FL_DRY_RUN:-0}" == "1" ]] || fl_ok "helper block written to ${rc} (open a new shell or: source ${rc})"
+}
+
+act_write_cli_link() {
+  local link
+  link="$(fl_cli_link_path)"
+  if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
+    fl_info "dry-run: ln -sfn ${SCRIPT_DIR}/frappe-mac ${link}"
+    return 0
+  fi
+  [[ -e "$link" && ! -L "$link" ]] && { fl_warn "${link} is a regular file; not touching it"; return 0; }
+  mkdir -p "$(dirname "$link")"
+  ln -sfn "${SCRIPT_DIR}/frappe-mac" "$link"
+  fl_ok "linked ${link}"
+  case ":$PATH:" in
+    *":$(dirname "$link"):"*) ;;
+    *) fl_info "$(dirname "$link") is not on PATH in this shell; the helper block adds it for new shells" ;;
+  esac
 }
 
 act_hosts_entry() {

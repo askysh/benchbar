@@ -3,6 +3,7 @@
 # Managed by frappe-mac (https://github.com/askysh/frappe_mac_dev_server).
 # Do not edit inside the markers: run "frappe-mac repair" to regenerate.
 __PROFILE_EXPORTS__
+case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) export PATH="$HOME/.local/bin:$PATH" ;; esac
 FRAPPE_MAC="__FRAPPE_MAC__"
 benchup()      { "$FRAPPE_MAC" up "$@"; }
 benchdown()    { "$FRAPPE_MAC" down "$@"; }
