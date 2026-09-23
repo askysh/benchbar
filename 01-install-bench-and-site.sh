@@ -6,6 +6,7 @@
 # Creates or repairs a bench, resolves apps from policy, creates a site,
 # installs apps idempotently, and records resumable state.
 
+# shellcheck disable=SC2153  # BENCH_DIR, SITE_NAME and passwords may come from the environment
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

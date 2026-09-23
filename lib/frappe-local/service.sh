@@ -1,0 +1,304 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2034  # globals are shared with the other lib files
+#
+# service.sh: context for one bench (paths, profile, rendered templates) and
+# the daily commands: up, down, restart, status, logs, fg, watch, autostart,
+# uninstall-service.
+
+FL_R_RUNNER=""
+FL_R_PLIST=""
+FL_R_PROCFILE=""
+FL_R_HELPERS=""
+FL_CRASH_MAX_STARTS="${FL_CRASH_MAX_STARTS:-3}"
+FL_CRASH_WINDOW="${FL_CRASH_WINDOW:-600}"
+FL_UP_WAIT_SECS="${FL_UP_WAIT_SECS:-45}"
+
+# fl_context_init [BENCH_DIR_FLAG] [SITE_FLAG] [PROFILE_FLAG]
+fl_context_init() {
+  local profile="${3:-}"
+  fl_bench_detect "${1:-}"
+  fl_site_detect "${2:-}"
+  fl_ports_detect
+  [[ -n "$profile" ]] || profile="$(fl_state_get PROFILE 2>/dev/null || true)"
+  [[ -n "$profile" ]] || profile="$(fl_default_profile)"
+  fl_load_profile "$profile"
+  if command -v brew >/dev/null 2>&1; then
+    FL_BREW_PREFIX="$(brew --prefix 2>/dev/null || printf '/opt/homebrew')"
+  else
+    FL_BREW_PREFIX="${FL_BREW_PREFIX:-/opt/homebrew}"
+  fi
+  FL_ARCH="$(uname -m)"
+  fl_honcho_resolve || true
+  fl_render_all
+}
+
+fl_autostart_enabled() {
+  [[ "$(fl_state_get AUTOSTART 2>/dev/null || true)" != "off" ]]
+}
+
+fl_render_all() {
+  local honcho="${FL_HONCHO:-${FL_BENCH_DIR}/env/bin/honcho}" run_at_load=true
+  fl_autostart_enabled || run_at_load=false
+  FL_R_PROCFILE="$(fl_template_render Procfile.lean "WEB_PORT=${FL_WEB_PORT}")"
+  FL_R_RUNNER="$(fl_template_render bench-run.sh \
+    "BENCH_DIR=${FL_BENCH_DIR}" \
+    "BENCH_RE=$(fl_regex_escape "$FL_BENCH_DIR")" \
+    "BENCH_NAME=${FL_BENCH_NAME}" \
+    "HONCHO=${honcho}" \
+    "PORTS=$(fl_bench_ports_csv)" \
+    "LABEL=$(fl_agent_label)" \
+    "MAX_STARTS=${FL_CRASH_MAX_STARTS}" \
+    "WINDOW=${FL_CRASH_WINDOW}")"
+  FL_R_PLIST="$(fl_template_render launchagent.plist \
+    "LABEL=$(fl_agent_label)" \
+    "RUNNER=$(fl_runner_path)" \
+    "BENCH_DIR=${FL_BENCH_DIR}" \
+    "PATH=$(fl_launchd_path_value)" \
+    "RUN_AT_LOAD=${run_at_load}" \
+    "LOG=$(fl_bench_log_path)")"
+  FL_R_HELPERS="$(fl_template_render shell-helpers \
+    "PROFILE_EXPORTS=$(fl_profile_path_exports)" \
+    "FRAPPE_MAC=${SCRIPT_DIR}/frappe-mac")"
+}
+
+fl_require_bench() {
+  fl_is_bench_dir "$FL_BENCH_DIR" || fl_die "No bench at ${FL_BENCH_DIR}." "Run: ${SCRIPT_DIR}/frappe-mac install, or pass --bench-dir <path>."
+}
+
+fl_require_service() {
+  fl_require_bench
+  [[ -f "$(fl_runner_path)" && -f "$(fl_agent_plist_path)" ]] \
+    || fl_die "The background service for ${FL_BENCH_NAME} is not installed." "Run: ${SCRIPT_DIR}/frappe-mac service (or frappe-mac install)."
+}
+
+fl_site_url() { printf 'http://%s:%s' "$FL_SITE" "$FL_WEB_PORT"; }
+
+fl_wait_for_ping() {
+  local secs="${1:-$FL_UP_WAIT_SECS}" i=0 code
+  while [[ "$i" -lt "$secs" ]]; do
+    code="$(fl_site_ping_code)"
+    [[ "$code" == "200" ]] && return 0
+    sleep 1
+    i=$((i + 1))
+  done
+  return 1
+}
+
+fl_stop_flag_reason() {
+  tr -d '[:space:]' <"$(fl_stop_flag_path)" 2>/dev/null || true
+}
+
+fl_arm_start() {
+  # removes the stop flag and the crash history; keeps the tail of the old log
+  local flag hist log prev
+  flag="$(fl_stop_flag_path)"; hist="$(fl_starts_path)"; log="$(fl_bench_log_path)"
+  prev="${FL_BENCH_DIR}/logs/bench.previous.log"
+  if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
+    fl_info "dry-run: would remove ${flag}, clear ${hist} and rotate ${log}"
+    return 0
+  fi
+  mkdir -p "${FL_BENCH_DIR}/logs"
+  rm -f "$flag"
+  : >"$hist"
+  if [[ -s "$log" ]]; then
+    tail -n 500 "$log" >"$prev" 2>/dev/null || true
+    : >"$log"
+  fi
+}
+
+fl_check_port_clash_or_confirm() {
+  chk_port_clash
+  [[ "$CHK_STATUS" == "ok" ]] && return 0
+  fl_warn "$CHK_MSG"
+  fl_confirm "Start anyway?" || return 1
+}
+
+fl_cmd_up() {
+  fl_require_service
+  if fl_bench_is_running; then
+    fl_ok "bench ${FL_BENCH_NAME} is already running at $(fl_site_url)"
+    return 0
+  fi
+  fl_check_port_clash_or_confirm || return 1
+  fl_arm_start
+  if ! fl_agent_loaded; then
+    fl_info "agent not loaded; loading $(fl_agent_plist_path)"
+    fl_agent_bootstrap "$(fl_agent_plist_path)" || fl_die "launchctl could not load the agent." "Run: ${SCRIPT_DIR}/frappe-mac repair"
+  fi
+  fl_agent_kickstart || fl_die "launchctl kickstart failed." "Run: ${SCRIPT_DIR}/frappe-mac doctor"
+  [[ "${FL_DRY_RUN:-0}" == "1" ]] && return 0
+  fl_spinner_start "starting bench ${FL_BENCH_NAME}" "$(fl_bench_log_path)"
+  if fl_wait_for_ping; then
+    fl_spinner_stop
+    fl_ok "bench is up: $(fl_site_url)"
+  else
+    fl_spinner_stop
+    fl_warn "no 200 from $(fl_site_url)/api/method/ping after ${FL_UP_WAIT_SECS}s; it may still be starting"
+    fl_fix "${SCRIPT_DIR}/frappe-mac logs"
+    return 1
+  fi
+}
+
+fl_cmd_down() {
+  local flag
+  fl_require_bench
+  flag="$(fl_stop_flag_path)"
+  if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
+    fl_info "dry-run: would write 'manual' to ${flag}, send SIGTERM to the agent, then stop leftover bench processes"
+    return 0
+  fi
+  mkdir -p "$(dirname "$flag")"
+  printf 'manual\n' >"$flag"
+  if fl_agent_loaded; then fl_agent_signal SIGTERM; fi
+  if ! fl_bench_wait_stopped 8; then
+    fl_bench_kill_processes TERM
+    if ! fl_bench_wait_stopped 5; then
+      fl_bench_kill_processes KILL
+      sleep 1
+    fi
+  fi
+  if fl_bench_is_running; then
+    fl_fail "some bench processes are still alive: $(fl_bench_process_pids | tr '\n' ' ')"
+    return 1
+  fi
+  fl_ok "bench ${FL_BENCH_NAME} stopped (auto-restart off until benchup)"
+}
+
+fl_cmd_restart() {
+  fl_require_service
+  fl_arm_start
+  if ! fl_agent_loaded; then
+    fl_agent_bootstrap "$(fl_agent_plist_path)" || fl_die "launchctl could not load the agent."
+  fi
+  fl_agent_kickstart -k || fl_die "launchctl kickstart -k failed."
+  [[ "${FL_DRY_RUN:-0}" == "1" ]] && return 0
+  fl_spinner_start "restarting bench ${FL_BENCH_NAME}" "$(fl_bench_log_path)"
+  if fl_wait_for_ping; then
+    fl_spinner_stop
+    fl_ok "bench restarted: $(fl_site_url)"
+  else
+    fl_spinner_stop
+    fl_warn "no 200 from $(fl_site_url)/api/method/ping after ${FL_UP_WAIT_SECS}s"
+    fl_fix "${SCRIPT_DIR}/frappe-mac logs"
+    return 1
+  fi
+}
+
+fl_cmd_status() {
+  local loaded=no state="" pid="" code="" reason ping running=no json="${1:-0}"
+  fl_require_bench
+  if fl_agent_loaded; then
+    loaded=yes
+    state="$(fl_agent_field state)"; pid="$(fl_agent_field pid)"; code="$(fl_agent_field 'last exit code')"
+  fi
+  reason="$(fl_stop_flag_reason)"
+  ping="$(fl_site_ping_code)"
+  fl_bench_is_running && running=yes
+  if [[ "$json" == "1" ]]; then
+    printf '{"bench":"%s","site":"%s","url":"%s","agent":"%s","loaded":"%s","state":"%s","pid":"%s","last_exit_code":"%s","stop_flag":"%s","processes_running":"%s","ping":"%s","log":"%s"}\n' \
+      "$(fl_json_escape "$FL_BENCH_DIR")" "$FL_SITE" "$(fl_site_url)" "$(fl_agent_label)" "$loaded" "${state:-}" "${pid:-}" "${code:-}" "${reason:-none}" "$running" "$ping" "$(fl_json_escape "$(fl_bench_log_path)")"
+    return 0
+  fi
+  fl_table \
+    "bench|${FL_BENCH_DIR}" \
+    "site|$(fl_site_url)" \
+    "agent|$(fl_agent_label) (loaded: ${loaded})" \
+    "state|${state:-not loaded}${pid:+, pid ${pid}}${code:+, last exit code ${code}}" \
+    "stop flag|${reason:-none (auto-restart armed)}" \
+    "processes|${running}" \
+    "web ping|${ping}" \
+    "ports|web ${FL_WEB_PORT}, socketio ${FL_SOCKETIO_PORT}, redis ${FL_REDIS_QUEUE_PORT}/${FL_REDIS_CACHE_PORT}" \
+    "log|$(fl_bench_log_path)"
+  if [[ "$ping" == "200" ]]; then
+    fl_ok "site responds"
+  elif [[ "$running" == "yes" ]]; then
+    fl_warn "processes are running but the site does not respond (ping ${ping}); see: ${SCRIPT_DIR}/frappe-mac logs"
+  else
+    case "$reason" in
+      crash) fl_warn "auto-restart paused after repeated crashes; run: ${SCRIPT_DIR}/frappe-mac logs, fix, then benchup" ;;
+      broken) fl_warn "auto-restart paused: run ${SCRIPT_DIR}/frappe-mac repair, then benchup" ;;
+      *) fl_info "bench is stopped; start with benchup" ;;
+    esac
+  fi
+}
+
+fl_cmd_logs() {
+  local file lines=50 follow=1 arg
+  fl_require_bench
+  file="$(fl_bench_log_path)"
+  for arg in "$@"; do
+    case "$arg" in
+      --worker) file="${FL_BENCH_DIR}/logs/worker.log" ;;
+      --worker-error) file="${FL_BENCH_DIR}/logs/worker.error.log" ;;
+      --previous) file="${FL_BENCH_DIR}/logs/bench.previous.log" ;;
+      --no-follow) follow=0 ;;
+      -n*) lines="${arg#-n}" ;;
+      [0-9]*) lines="$arg" ;;
+    esac
+  done
+  [[ -f "$file" ]] || { fl_warn "no log yet at ${file}"; return 0; }
+  if [[ "$follow" == "1" && -t 1 ]]; then
+    exec tail -n "$lines" -f "$file"
+  fi
+  tail -n "$lines" "$file"
+}
+
+fl_cmd_fg() {
+  fl_require_bench
+  [[ -n "$FL_HONCHO" ]] || fl_die "honcho not found." "Run: ${SCRIPT_DIR}/frappe-mac repair"
+  [[ -f "$(fl_procfile_path)" ]] || fl_die "Procfile.lean missing." "Run: ${SCRIPT_DIR}/frappe-mac service"
+  fl_cmd_down >/dev/null 2>&1 || true
+  if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
+    fl_info "dry-run: cd ${FL_BENCH_DIR} && ${FL_HONCHO} start -f Procfile.lean"
+    return 0
+  fi
+  fl_info "running in the foreground; Ctrl+C stops it (benchup brings the background service back)"
+  cd "$FL_BENCH_DIR" || exit 1
+  OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES NO_PROXY='*' exec "$FL_HONCHO" start -f Procfile.lean
+}
+
+fl_cmd_watch() {
+  fl_require_bench
+  fl_bench_env_exports
+  if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
+    fl_info "dry-run: cd ${FL_BENCH_DIR} && bench watch"
+    return 0
+  fi
+  cd "$FL_BENCH_DIR" || exit 1
+  exec bench watch
+}
+
+fl_cmd_autostart() {
+  local mode="${1:-}"
+  fl_require_service
+  case "$mode" in
+    on|off) ;;
+    "") if fl_autostart_enabled; then fl_ok "autostart is on (bench returns after login if it was running)"; else fl_ok "autostart is off"; fi; return 0 ;;
+    *) fl_die "Usage: frappe-mac autostart on|off" ;;
+  esac
+  fl_state_set AUTOSTART "$mode"
+  fl_render_all
+  act_write_plist || return 1
+  fl_ok "autostart ${mode}"
+}
+
+fl_cmd_uninstall_service() {
+  local plist rc dest
+  fl_require_bench
+  plist="$(fl_agent_plist_path)"
+  rc="$(fl_rc_file)"
+  fl_info "This removes the launchd agent, runner, Procfile.lean and the shell helper block."
+  fl_info "The bench, its sites, apps and databases are not touched."
+  fl_confirm "Uninstall the background service for ${FL_BENCH_NAME}?" || { fl_warn "Cancelled."; return 1; }
+  fl_cmd_down || true
+  if fl_agent_loaded; then fl_agent_bootout; fi
+  if [[ -f "$plist" ]]; then
+    dest="${FL_LEGACY_DIR}/$(basename "$plist" .plist)-$(fl_backup_stamp)"
+    if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then fl_info "dry-run: would move ${plist} to ${dest}/"; else mkdir -p "$dest"; mv "$plist" "$dest/"; fl_ok "moved ${plist} to ${dest}/"; fi
+  fi
+  fl_backup_file "$(fl_runner_path)"; [[ "${FL_DRY_RUN:-0}" == "1" || ! -f "$(fl_runner_path)" ]] || { rm -f "$(fl_runner_path)"; fl_ok "removed runner (backup: ${FL_LAST_BACKUP})"; }
+  fl_backup_file "$(fl_procfile_path)"; [[ "${FL_DRY_RUN:-0}" == "1" || ! -f "$(fl_procfile_path)" ]] || { rm -f "$(fl_procfile_path)"; fl_ok "removed Procfile.lean (backup: ${FL_LAST_BACKUP})"; }
+  fl_rc_block_remove "$rc"
+  [[ "${FL_DRY_RUN:-0}" == "1" ]] || fl_ok "removed the helper block from ${rc}"
+  fl_ok "service uninstalled; start the bench by hand with: cd ${FL_BENCH_DIR} && bench start"
+}

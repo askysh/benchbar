@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# kill replacement for tests (FL_KILL_CMD): drops pids from the fake process table
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "$(dirname "$0")/_mocklib.sh"
+mock_log "$@"
+sig="TERM"
+for a in "$@"; do case "$a" in -*) sig="${a#-}" ;; *) grep -v "^${a} " "${MOCK_PROCS:?}" >"${MOCK_PROCS}.tmp" || true; mv "${MOCK_PROCS}.tmp" "$MOCK_PROCS"; printf 'killed %s %s\n' "$sig" "$a" >>"${MOCK_STATE:?}/killed" ;; esac; done
+exit 0

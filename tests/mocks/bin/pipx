@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "$(dirname "$0")/_mocklib.sh"
+mock_log "$@"
+case "$*" in
+  "environment --value PIPX_HOME") printf '%s\n' "${MOCK_PIPX_HOME:-$HOME/.local/pipx}" ;;
+  "environment --value PIPX_BIN_DIR") printf '%s\n' "$HOME/.local/bin" ;;
+  --version) printf '1.7.1\n' ;;
+  *) ;;
+esac
+exit 0

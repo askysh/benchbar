@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# uv mock: "pip install --python <py> honcho" drops a honcho next to <py>
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "$(dirname "$0")/_mocklib.sh"
+mock_log "$@"
+py=""
+while [[ "$#" -gt 0 ]]; do case "$1" in --python) py="$2"; shift 2 ;; *) shift ;; esac; done
+[[ -n "$py" ]] && { cp "$(dirname "$0")/../honcho" "$(dirname "$py")/honcho"; chmod +x "$(dirname "$py")/honcho"; }
+exit 0

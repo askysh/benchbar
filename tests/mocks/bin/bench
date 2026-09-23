@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# bench mock: enough of the bench CLI for the installer and repair flows.
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "$(dirname "$0")/_mocklib.sh"
+mock_log "$@"
+[[ -n "${BENCH_LOG:-}" ]] && printf 'bench %s\n' "$*" >>"$BENCH_LOG"
+case "$1" in
+  version) printf 'erpnext 15.0.0\nfrappe 15.0.0\n'; exit 0 ;;
+  init)
+    mkdir -p "$2/apps/frappe" "$2/env" "$2/sites"
+    touch "$2/sites/apps.txt"; exit 0 ;;
+  get-app)
+    app="${*: -1}"; app="${app##*/}"; app="${app%.git}"
+    mkdir -p "apps/$app"; exit 0 ;;
+  new-site)
+    mkdir -p "sites/$2"; touch "sites/$2/installed_apps"; exit 0 ;;
+  use) exit 0 ;;
+  build)
+    # create every dist file referenced by assets.json
+    if [[ -f sites/assets/assets.json ]]; then
+      grep -o '"/assets/[^"]*"' sites/assets/assets.json | tr -d '"' | while read -r ref; do
+        f="sites/assets/${ref#/assets/}"; mkdir -p "$(dirname "$f")"; printf 'built\n' >"$f"
+      done
+    fi
+    exit "${MOCK_BENCH_BUILD_EXIT:-0}" ;;
+  setup)
+    case "$2" in
+      env)
+        mkdir -p env/bin
+        cat >env/bin/python <<'PY'
+#!/bin/bash
+case "$*" in *version_info*) echo "3.11" ;; --version) echo "Python 3.11.9" ;; *) exit 0 ;; esac
+PY
+        chmod +x env/bin/python; exit 0 ;;
+      requirements)
+        case "$3" in
+          --node) mkdir -p apps/frappe/node_modules/socket.io; exit 0 ;;
+          *) exit 0 ;;
+        esac ;;
+    esac
+    exit 0 ;;
+  --site)
+    case "$3" in
+      list-apps) [[ -f "sites/$2/installed_apps" ]] && cat "sites/$2/installed_apps"; exit 0 ;;
+      install-app) mkdir -p "sites/$2"; printf '%s 1.0.0\n' "$4" >>"sites/$2/installed_apps"; exit 0 ;;
+      doctor|clear-cache|clear-website-cache) exit 0 ;;
+    esac
+    exit 0 ;;
+  *) exit 0 ;;
+esac

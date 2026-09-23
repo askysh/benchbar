@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# lsof mock: listeners come from $MOCK_LISTEN lines "port pid cmd addr"
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "$(dirname "$0")/_mocklib.sh"
+mock_log "$@"
+ports=""; terse=0
+for a in "$@"; do
+  case "$a" in
+    -ti) terse=1 ;;
+    tcp:*) ports="${a#tcp:}" ;;
+    -iTCP:*) ports="${a#-iTCP:}" ;;
+  esac
+done
+found=0
+[[ "$terse" == "1" ]] || printf 'COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME\n'
+while read -r port pid cmd addr; do
+  [[ -n "$port" ]] || continue
+  # a listener whose pid was killed (removed from the fake process table) is gone;
+  # pids that were never in the table (mariadbd, other apps) are always shown
+  if grep -q "^${pid} " "${MOCK_PROCS:-/dev/null}" 2>/dev/null || ! grep -q "^${pid} " "${MOCK_STATE:?}/ever_procs" 2>/dev/null; then :; else continue; fi
+  case ",${ports}," in
+    *",${port},"*)
+      found=1
+      if [[ "$terse" == "1" ]]; then printf '%s\n' "$pid"; else printf '%s %s user 17u IPv4 0x1 0t0 TCP %s:%s (LISTEN)\n' "$cmd" "$pid" "$addr" "$port"; fi ;;
+  esac
+done <"${MOCK_LISTEN:?}"
+[[ "$found" == "1" ]] && exit 0
+exit 1

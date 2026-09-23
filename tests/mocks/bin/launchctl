@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# launchctl mock: agents live as files in $MOCK_STATE/agents/<label>
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "$(dirname "$0")/_mocklib.sh"
+mock_log "$@"
+agents="${MOCK_STATE:?}/agents"
+mkdir -p "$agents"
+cmd="${1:-}"; shift || true
+label_of_target() { printf '%s' "${1##*/}"; }
+case "$cmd" in
+  print)
+    f="$agents/$(label_of_target "$1")"
+    [[ -f "$f" ]] || { echo "Could not find service" >&2; exit 113; }
+    printf '%s = {\n' "$1"; sed 's/^/\t/' "$f"; printf '}\n' ;;
+  bootstrap)
+    plist="$2"; label="$(basename "$plist" .plist)"
+    [[ -f "$plist" ]] || exit 5
+    [[ -f "$agents/$label" ]] && { echo "already bootstrapped" >&2; exit 37; }
+    printf 'state = not running\nlast exit code = 0\n' >"$agents/$label" ;;
+  load)
+    plist="${*: -1}"; label="$(basename "$plist" .plist)"
+    printf 'state = not running\nlast exit code = 0\n' >"$agents/$label" ;;
+  bootout|remove)
+    rm -f "$agents/$(label_of_target "$1")" ;;
+  unload)
+    rm -f "$agents/$(basename "${*: -1}" .plist)" ;;
+  kickstart)
+    [[ "$1" == "-k" ]] && shift
+    f="$agents/$(label_of_target "$1")"
+    [[ -f "$f" ]] || exit 113
+    printf 'state = running\npid = 4242\nlast exit code = 0\n' >"$f"
+    # simulate the runner starting: honcho appears in the process table
+    printf '4242 honcho start -f Procfile.lean\n' >>"${MOCK_PROCS:?}"
+    [[ -n "${MOCK_KICKSTART_PING:-}" ]] && printf '%s' "$MOCK_KICKSTART_PING" >"${MOCK_STATE}/curl_code" ;;
+  kill)
+    f="$agents/$(label_of_target "$2")"
+    [[ -f "$f" ]] && printf 'state = not running\nlast exit code = 0\n' >"$f"
+    grep -v 'honcho start' "${MOCK_PROCS:?}" >"${MOCK_PROCS}.tmp" 2>/dev/null || true
+    mv "${MOCK_PROCS}.tmp" "${MOCK_PROCS}"
+    rm -f "${MOCK_STATE}/curl_code" ;;
+  *) ;;
+esac
+exit 0

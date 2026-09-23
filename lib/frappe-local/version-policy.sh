@@ -51,6 +51,7 @@ fl_validate_custom_commit() {
 
 fl_expand_policy_ref() {
   local ref="$1"
+  # shellcheck disable=SC2016
   case "$ref" in
     '${frappe_branch}') printf '%s\n' "$FL_FRAPPE_BRANCH" ;;
     '${erpnext_branch}') printf '%s\n' "$FL_ERPNEXT_BRANCH" ;;
@@ -127,6 +128,7 @@ fl_update_cache_file() {
 
 fl_print_newest_update_cache() {
   local newest
+  # shellcheck disable=SC2012
   newest="$(ls -t "${SCRIPT_DIR}"/.frappe-local/update-check.*.txt 2>/dev/null | head -n1 || true)"
   if [[ -n "$newest" ]]; then
     fl_warn "Offline mode: printing newest cached update check from ${newest}"

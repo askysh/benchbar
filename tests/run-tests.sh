@@ -3,14 +3,18 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-bash -n "$ROOT"/00-mac-system-deps.sh "$ROOT"/01-install-bench-and-site.sh "$ROOT"/lib/frappe-local/*.sh
-bash "$ROOT"/tests/test-platform.sh
-bash "$ROOT"/tests/test-run.sh
-bash "$ROOT"/tests/test-version-policy.sh
-bash "$ROOT"/tests/test-bench-flow.sh
+SCRIPTS=("$ROOT"/frappe-mac "$ROOT"/00-mac-system-deps.sh "$ROOT"/01-install-bench-and-site.sh "$ROOT"/02-background-service.sh "$ROOT"/lib/frappe-local/*.sh)
+
+bash -n "${SCRIPTS[@]}"
+
+for t in test-ui test-templates test-shellrc test-platform test-run test-version-policy test-bench-flow test-runner test-process test-service test-doctor test-repair test-cli test-phases; do
+  [[ -f "$ROOT/tests/$t.sh" ]] || continue
+  bash "$ROOT/tests/$t.sh"
+done
 
 if command -v shellcheck >/dev/null 2>&1; then
-  shellcheck "$ROOT"/00-mac-system-deps.sh "$ROOT"/01-install-bench-and-site.sh "$ROOT"/lib/frappe-local/*.sh
+  shellcheck -x "${SCRIPTS[@]}" "$ROOT"/tests/*.sh "$ROOT"/tests/lib/*.sh "$ROOT"/tests/mocks/bin/*
+  printf 'shellcheck: ok\n'
 else
-  printf 'shellcheck not installed; skipped lint\n'
+  printf 'shellcheck not installed; skipped lint (brew install shellcheck)\n'
 fi

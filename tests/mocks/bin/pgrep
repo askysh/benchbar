@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "$(dirname "$0")/_mocklib.sh"
+mock_log "$@"
+pattern=""
+while [[ "$#" -gt 0 ]]; do case "$1" in -f) pattern="$2"; shift 2 ;; -q*) shift ;; *) pattern="$1"; shift ;; esac; done
+found=1
+while read -r pid cmdline; do
+  [[ -n "$pid" ]] || continue
+  if printf '%s' "$cmdline" | grep -qE -- "$pattern"; then printf '%s\n' "$pid"; found=0; fi
+done <"${MOCK_PROCS:?}"
+exit "$found"

@@ -1,0 +1,6 @@
+# Globals are shared across lib files that are sourced into one shell.
+disable=SC2034
+# Quoted "~" is shown to humans on purpose in prompts and messages.
+disable=SC2088
+# Source paths are given with "source=" directives; follow them.
+external-sources=true

@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# sudo mock: runs the command as the current user (tests use a temp hosts file)
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "$(dirname "$0")/_mocklib.sh"
+mock_log "$@"
+exec "$@"
