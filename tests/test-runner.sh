@@ -13,7 +13,7 @@ FL_BENCH_DIR="$BENCH"
 HONCHO="$MOCK_PIPX_HOME/venvs/frappe-bench/bin/honcho"
 runner="$BENCH/frappe-mac-run.sh"
 fl_template_render bench-run.sh "BENCH_DIR=$BENCH" "BENCH_RE=$(fl_regex_escape "$BENCH")" "BENCH_NAME=bench" \
-  "HONCHO=$HONCHO" "PORTS=8000,9000,11000,13000" "LABEL=com.frappe-mac.bench" "MAX_STARTS=3" "WINDOW=600" >"$runner"
+  "HONCHO=$HONCHO" "PORTS=8000,9000,11000,13000" "LABEL=com.benchbar.bench" "MAX_STARTS=3" "WINDOW=600" >"$runner"
 chmod +x "$runner"
 bash -n "$runner"
 

@@ -135,35 +135,45 @@ fl_plist_label() {
        /<key>Label<\/key><string>/ { l = $0; sub(/.*<key>Label<\/key><string>/, "", l); sub(/<\/string>.*/, "", l); print l; exit }' "$file" 2>/dev/null
 }
 
-# Lists LaunchAgents that look like older per-process Frappe setups or a
-# hand-made agent for this bench. Prints "path|label|state|last-exit" lines.
+fl_plist_working_dir() {
+  awk '/<key>WorkingDirectory<\/key>/ { l = $0; if (l !~ /<string>/) getline l; sub(/.*<string>/, "", l); sub(/<\/string>.*/, "", l); print l; exit }' "$1" 2>/dev/null
+}
+
+# Lists LaunchAgents to migrate for this bench. Prints "path|label|state|last-exit" lines.
+#   com.frappe-mac.*   the frappe-mac 0.2.0 agent, only when its WorkingDirectory is this bench
+#   anything else      older per-process Frappe setups or a hand-made agent
+# com.benchbar.* agents (this bench and others) are never listed.
 fl_legacy_agents_list() {
   local f label state code dir="$HOME/Library/LaunchAgents"
   [[ -d "$dir" ]] || return 0
   for f in "$dir"/*.plist; do
     [[ -f "$f" ]] || continue
     case "$(basename "$f")" in
-      com.frappe-mac.*|sh.brew.*|homebrew.mxcl.*|com.apple.*) continue ;;
+      com.benchbar.*|sh.brew.*|homebrew.mxcl.*|com.apple.*) continue ;;
+      com.frappe-mac.*)
+        [[ "$(fl_plist_working_dir "$f")" == "$FL_BENCH_DIR" ]] || continue ;;
+      *)
+        grep -q -F "$FL_BENCH_DIR" "$f" 2>/dev/null || grep -q -i -E 'frappe|honcho|socketio\.js|bench_helper|bench-run' "$f" 2>/dev/null || continue ;;
     esac
-    if grep -q -F "$FL_BENCH_DIR" "$f" 2>/dev/null || grep -q -i -E 'frappe|honcho|socketio\.js|bench_helper|bench-run' "$f" 2>/dev/null; then
-      label="$(fl_plist_label "$f")"
-      [[ -n "$label" ]] || label="$(basename "$f" .plist)"
-      state="$(fl_agent_field state "$(fl_launchd_domain)/${label}")"
-      code="$(fl_agent_field 'last exit code' "$(fl_launchd_domain)/${label}")"
-      printf '%s|%s|%s|%s\n' "$f" "$label" "${state:-not loaded}" "${code:-none}"
-    fi
+    label="$(fl_plist_label "$f")"
+    [[ -n "$label" ]] || label="$(basename "$f" .plist)"
+    state="$(fl_agent_field state "$(fl_launchd_domain)/${label}")"
+    code="$(fl_agent_field 'last exit code' "$(fl_launchd_domain)/${label}")"
+    printf '%s|%s|%s|%s\n' "$f" "$label" "${state:-not loaded}" "${code:-none}"
   done
 }
 
-# Migrates one legacy agent: bootout, then move the plist (never delete).
+# Migrates one legacy agent: bootout, then move the plist (never delete) to
+# ~/Library/LaunchAgents-disabled/<timestamp>/. Safe to re-run: a plist that
+# is already gone is skipped.
 fl_legacy_agent_migrate() {
-  local file="$1" label="$2" dest stamp
-  stamp="$(fl_backup_stamp)"
-  dest="${FL_LEGACY_DIR}/$(basename "$file" .plist)-${stamp}"
+  local file="$1" label="$2" dest
+  dest="${FL_LEGACY_DIR}/$(fl_backup_stamp)"
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
     fl_info "dry-run: would bootout ${label} and move ${file} to ${dest}/"
     return 0
   fi
+  [[ -f "$file" ]] || return 0
   launchctl bootout "$(fl_launchd_domain)/${label}" 2>/dev/null || launchctl unload "$file" 2>/dev/null || true
   mkdir -p "$dest"
   mv "$file" "$dest/"

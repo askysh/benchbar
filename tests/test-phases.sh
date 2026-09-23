@@ -55,7 +55,7 @@ rm -rf "$BENCH/env"
 run01 --yes --offline
 assert_eq "1" "$CODE"
 assert_contains "$OUT" "has apps or sites but its env is missing"
-assert_contains "$OUT" "frappe-mac repair"
+assert_contains "$OUT" "benchbar repair"
 assert_file "$BENCH/sites/macdev/site_config.json"
 run01 --yes --offline --repair-bench
 assert_eq "1" "$CODE"
@@ -71,7 +71,7 @@ assert_calls_contain "^bench init ${BENCH} --frappe-branch version-15"
 assert_calls_contain "^bench new-site macdev"
 assert_eq "$BENCH" "$(sed -n 's/^BENCH_DIR=//p' "$FL_STATE_FILE")"
 assert_eq "macdev" "$(sed -n 's/^SITE_NAME=//p' "$FL_STATE_FILE")"
-assert_contains "$OUT" "frappe-mac service"
+assert_contains "$OUT" "benchbar service"
 unset MARIADB_ROOT_PASSWORD ADMIN_PASSWORD
 reset_calls
 run01 --yes --offline
@@ -90,7 +90,7 @@ assert_contains "$OUT" "2. Bench and site"
 assert_contains "$OUT" "3. Background service"
 assert_contains "$OUT" "Next steps"
 assert_file "$BENCH/frappe-mac-run.sh"
-assert_file "$HOME/Library/LaunchAgents/com.frappe-mac.frappe-bench.plist"
+assert_file "$HOME/Library/LaunchAgents/com.benchbar.frappe-bench.plist"
 grep -q '^127.0.0.1 macdev$' "$FL_HOSTS_FILE" || fail "install --yes must add the hosts entry"
 unset MARIADB_ROOT_PASSWORD ADMIN_PASSWORD
 

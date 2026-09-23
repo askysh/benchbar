@@ -53,7 +53,7 @@ cp "$ROOT/tests/mocks/honcho" "$MOCK_PIPX_HOME/venvs/frappe-bench/bin/honcho"
 chmod +x "$MOCK_PIPX_HOME/venvs/frappe-bench/bin/honcho"
 export PATH="$ROOT/tests/mocks/bin:$PATH"
 
-FM="$ROOT/frappe-mac"
+FM="$ROOT/benchbar"
 
 # ---------------------------------------------------------------- asserts
 

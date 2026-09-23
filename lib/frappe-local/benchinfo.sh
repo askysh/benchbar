@@ -112,7 +112,14 @@ fl_bench_ports_csv() {
   printf '%s,%s,%s,%s' "$FL_WEB_PORT" "$FL_SOCKETIO_PORT" "$FL_REDIS_QUEUE_PORT" "$FL_REDIS_CACHE_PORT"
 }
 
+FL_APP_BUNDLE_ID="com.akashmishra.benchbar"
+
 fl_agent_label() {
+  printf 'com.benchbar.%s' "$FL_BENCH_NAME"
+}
+
+# The label used by frappe-mac 0.2.0, migrated by "benchbar repair".
+fl_agent_label_legacy() {
   printf 'com.frappe-mac.%s' "$FL_BENCH_NAME"
 }
 

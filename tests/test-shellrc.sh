@@ -9,8 +9,8 @@
 
 rc="$TMP_DIR/zshrc"
 printf 'export A=1\n' >"$rc"
-c1="$(fl_template_render shell-helpers "PROFILE_EXPORTS=export P=1" "FRAPPE_MAC=/x/frappe-mac")"
-c2="$(fl_template_render shell-helpers "PROFILE_EXPORTS=export P=2" "FRAPPE_MAC=/x/frappe-mac")"
+c1="$(fl_template_render shell-helpers "PROFILE_EXPORTS=export P=1" "BENCHBAR=/x/benchbar")"
+c2="$(fl_template_render shell-helpers "PROFILE_EXPORTS=export P=2" "BENCHBAR=/x/benchbar")"
 
 assert_eq "missing" "$(fl_rc_block_status "$rc" "$c1")"
 fl_rc_block_write "$rc" "$c1"

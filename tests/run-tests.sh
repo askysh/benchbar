@@ -3,11 +3,11 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-SCRIPTS=("$ROOT"/frappe-mac "$ROOT"/00-mac-system-deps.sh "$ROOT"/01-install-bench-and-site.sh "$ROOT"/02-background-service.sh "$ROOT"/lib/frappe-local/*.sh)
+SCRIPTS=("$ROOT"/benchbar "$ROOT"/00-mac-system-deps.sh "$ROOT"/01-install-bench-and-site.sh "$ROOT"/02-background-service.sh "$ROOT"/lib/frappe-local/*.sh)
 
 bash -n "${SCRIPTS[@]}"
 
-for t in test-ui test-templates test-shellrc test-platform test-run test-version-policy test-bench-flow test-runner test-process test-service test-doctor test-repair test-cli test-phases; do
+for t in test-ui test-templates test-shellrc test-platform test-run test-version-policy test-bench-flow test-runner test-process test-service test-migrate test-doctor test-repair test-cli test-phases; do
   [[ -f "$ROOT/tests/$t.sh" ]] || continue
   bash "$ROOT/tests/$t.sh"
 done

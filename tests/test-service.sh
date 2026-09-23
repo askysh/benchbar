@@ -6,7 +6,7 @@
 BENCH="$HOME/dev/frappe-bench"
 make_fake_bench "$BENCH"
 mkdir -p "$HOME/Library/LaunchAgents"
-plist="$HOME/Library/LaunchAgents/com.frappe-mac.frappe-bench.plist"
+plist="$HOME/Library/LaunchAgents/com.benchbar.frappe-bench.plist"
 
 # ---- legacy per-process agents from an older setup, one of them crash-looping
 for name in web worker socketio; do
@@ -50,8 +50,12 @@ grep -q 'benchup()' "$HOME/.zshrc" || fail "benchup helper expected"
 grep -q "opt/python@3.11/bin" "$HOME/.zshrc" || fail "profile exports expected in the helper block"
 grep -q '^export EDITOR=vim$' "$HOME/.zshrc" || fail "existing zshrc content must survive"
 assert_calls_contain "^launchctl bootstrap gui/[0-9]+ ${plist}\$"
-[[ -L "$HOME/.local/bin/frappe-mac" && "$(readlink "$HOME/.local/bin/frappe-mac")" == "$ROOT/frappe-mac" ]] || fail "frappe-mac must be linked into ~/.local/bin"
-"$HOME/.local/bin/frappe-mac" --version | grep -q 'frappe-mac 0.2.0' || fail "the symlinked CLI must resolve its own libraries"
+for name in benchbar frappe-mac; do
+  [[ -L "$HOME/.local/bin/$name" && "$(readlink "$HOME/.local/bin/$name")" == "$ROOT/benchbar" ]] || fail "$name must be linked into ~/.local/bin"
+  "$HOME/.local/bin/$name" --version | grep -q 'benchbar 0.3.0' || fail "the symlinked $name must resolve its own libraries"
+done
+grep -q '<key>AssociatedBundleIdentifiers</key>' "$plist" || fail "plist must name the BenchBar app"
+grep -q '<string>com.akashmishra.benchbar</string>' "$plist" || fail "plist must carry the app bundle id"
 assert_eq "manual" "$(cat "$BENCH/logs/.bench-stopped")"
 # legacy agents: booted out and moved, never deleted, unrelated agent untouched
 for name in web worker socketio; do
@@ -87,7 +91,7 @@ reset_calls
 run_fm autostart off --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 grep -q '<key>RunAtLoad</key><false/>' "$plist" || fail "autostart off must set RunAtLoad false"
-[[ -n "$(find "$FL_BACKUP_ROOT" -name '*com.frappe-mac.frappe-bench.plist' | head -n1)" ]] || fail "old plist must be backed up"
+[[ -n "$(find "$FL_BACKUP_ROOT" -name '*com.benchbar.frappe-bench.plist' | head -n1)" ]] || fail "old plist must be backed up"
 assert_calls_contain '^launchctl bootout'
 assert_calls_contain '^launchctl bootstrap'
 run_fm autostart on --bench-dir "$BENCH"
@@ -115,6 +119,6 @@ grep -q '^export EDITOR=vim$' "$HOME/.zshrc" || fail "user zshrc content must su
 assert_file "$BENCH/sites/macdev/site_config.json"
 assert_file "$BENCH/apps/frappe"
 assert_file "$BENCH/env/bin/python"
-[[ -n "$(find "$HOME/Library/LaunchAgents-disabled" -name 'com.frappe-mac.frappe-bench.plist')" ]] || fail "uninstalled plist must be kept aside"
+[[ -n "$(find "$HOME/Library/LaunchAgents-disabled" -name 'com.benchbar.frappe-bench.plist')" ]] || fail "uninstalled plist must be kept aside"
 
 printf 'test-service: ok\n'

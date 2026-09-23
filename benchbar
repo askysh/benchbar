@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 #
-# frappe-mac: one entrypoint for a local Frappe/ERPNext bench on macOS.
+# benchbar: one entrypoint (also installed as frappe-mac) for a local Frappe/ERPNext bench on macOS.
 #
-#   frappe-mac install        phases 00, 01 and the background service, idempotent
-#   frappe-mac up | down      start or stop the bench in the background
-#   frappe-mac doctor         read-only health report with exact fix commands
-#   frappe-mac repair         apply only the fixes doctor flagged
+#   benchbar install        phases 00, 01 and the background service, idempotent
+#   benchbar up | down      start or stop the bench in the background
+#   benchbar doctor         read-only health report with exact fix commands
+#   benchbar repair         apply only the fixes doctor flagged
 #
 # Runs on macOS /bin/bash 3.2. No dependencies beyond the ones the installer
 # already needs.
 
 set -euo pipefail
 
-FL_VERSION="0.2.0"
+FL_VERSION="0.3.0"
 
 # Resolve the real script location even when invoked through a symlink
 # (for example ~/.local/bin/frappe-mac).
@@ -70,9 +70,9 @@ ARGS=()
 
 usage() {
   cat <<USAGE
-frappe-mac ${FL_VERSION}: local Frappe/ERPNext bench on macOS, in the background.
+benchbar ${FL_VERSION}: local Frappe/ERPNext bench on macOS, in the background.
 
-Usage: frappe-mac <command> [options]
+Usage: benchbar <command> [options]
 
 Setup
   install             Run phase 00 (system deps), 01 (bench and site) and the
@@ -124,11 +124,11 @@ while [[ "$#" -gt 0 ]]; do
     -y|--yes) FL_ASSUME_YES=1; shift ;;
     --json) OPT_JSON=1; shift ;;
     --plain|--no-color) FL_PLAIN=1; fl_ui_init; shift ;;
-    --version) printf 'frappe-mac %s\n' "$FL_VERSION"; exit 0 ;;
+    --version) printf 'benchbar %s\n' "$FL_VERSION"; exit 0 ;;
     -h|--help) usage; exit 0 ;;
     --) shift; ARGS+=("$@"); break ;;
     -*)
-      if [[ -n "$COMMAND" ]]; then ARGS+=("$1"); shift; else fl_die "Unknown option: $1" "Run: frappe-mac --help"; fi ;;
+      if [[ -n "$COMMAND" ]]; then ARGS+=("$1"); shift; else fl_die "Unknown option: $1" "Run: benchbar --help"; fi ;;
     *)
       if [[ -z "$COMMAND" ]]; then COMMAND="$1"; else ARGS+=("$1"); fi
       shift ;;
@@ -172,7 +172,7 @@ fl_run_phase_script() {
 cmd_install() {
   local code=0 args00=() args01=() bundle
   fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
-  fl_header "frappe-mac install" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "$FL_SITE"
+  fl_header "benchbar install" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "$FL_SITE"
   fl_steps_define "System dependencies (00-mac-system-deps.sh)" "Bench and site (01-install-bench-and-site.sh)" "Background service"
   fl_steps_print_plan
 
@@ -231,7 +231,7 @@ cmd_install() {
 cmd_service() {
   fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
   fl_require_bench
-  fl_header "frappe-mac service" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "$FL_SITE"
+  fl_header "benchbar service" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "$FL_SITE"
   fl_state_set BENCH_DIR "$FL_BENCH_DIR"
   fl_state_set SITE_NAME "$FL_SITE"
   fl_state_set PROFILE "$FL_PROFILE"
@@ -250,11 +250,11 @@ cmd_doctor() {
   if [[ "$OPT_JSON" == "1" ]]; then
     fl_doctor_print_json
   else
-    fl_header "frappe-mac doctor" "read-only" "$FL_PROFILE" "$FL_BENCH_DIR" "$FL_SITE"
+    fl_header "benchbar doctor" "read-only" "$FL_PROFILE" "$FL_BENCH_DIR" "$FL_SITE"
     fl_doctor_print
     if [[ -n "$(fl_doctor_actions)" ]]; then
       printf '\n'
-      fl_info "run '${SCRIPT_DIR}/frappe-mac repair' to apply the fixes marked above (dry-run: add --dry-run)"
+      fl_info "run '${SCRIPT_DIR}/benchbar repair' to apply the fixes marked above (dry-run: add --dry-run)"
     fi
   fi
   fails="$(fl_doctor_count fail)"
@@ -264,7 +264,7 @@ cmd_doctor() {
 cmd_repair() {
   fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
   fl_require_bench
-  fl_header "frappe-mac repair" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "$FL_SITE"
+  fl_header "benchbar repair" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "$FL_SITE"
   fl_repair_engine "Repair"
 }
 
@@ -297,5 +297,5 @@ case "$COMMAND" in
   uninstall-service) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_uninstall_service ;;
   path) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; printf '%s\n' "$FL_BENCH_DIR" ;;
   help) usage ;;
-  *) fl_die "Unknown command: ${COMMAND}" "Run: frappe-mac --help" ;;
+  *) fl_die "Unknown command: ${COMMAND}" "Run: benchbar --help" ;;
 esac

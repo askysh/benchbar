@@ -354,12 +354,12 @@ fl_verify_site_health "$BENCH_DIR" "$SITE_NAME"
 
 fl_section "READY"
 if ! grep -qE "^[[:space:]]*127\.0\.0\.1[[:space:]]+(.*[[:space:]])?${SITE_NAME//./\\.}([[:space:]]|$)" "${FL_HOSTS_FILE:-/etc/hosts}" 2>/dev/null; then
-  fl_warn "No /etc/hosts entry for ${SITE_NAME} yet; frappe-mac install (or repair) adds it, or run:"
+  fl_warn "No /etc/hosts entry for ${SITE_NAME} yet; benchbar install (or repair) adds it, or run:"
   printf '  printf "127.0.0.1 %s\\n" | sudo tee -a /etc/hosts\n\n' "$SITE_NAME"
 fi
 cat <<EOF
 Run in the background (recommended):
-  ${SCRIPT_DIR}/frappe-mac service --bench-dir ${BENCH_DIR}
+  ${SCRIPT_DIR}/benchbar service --bench-dir ${BENCH_DIR}
   benchup
 
 Or in the foreground:

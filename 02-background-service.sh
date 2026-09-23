@@ -4,7 +4,7 @@
 #
 # Phase 2 for local Frappe/ERPNext development on macOS: run the bench in
 # the background under one launchd agent. Thin wrapper around
-# "frappe-mac service" so the phase scripts keep their numbering.
+# "benchbar service" so the phase scripts keep their numbering.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec "${SCRIPT_DIR}/frappe-mac" service "$@"
+exec "${SCRIPT_DIR}/benchbar" service "$@"

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# ui.sh: terminal output for frappe-mac.
+# ui.sh: terminal output for benchbar.
 #
 # Colors come from tput and are disabled when stdout is not a TTY, when
 # NO_COLOR is set, or when FL_PLAIN=1. Every status line is also appended

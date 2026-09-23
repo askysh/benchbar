@@ -39,7 +39,7 @@ done
 for pid in 200 201 202 203; do
   grep -q "^${pid} " "$MOCK_PROCS" || fail "pid ${pid} (user command or other bench) must survive benchdown"
 done
-assert_calls_contain '^launchctl kill SIGTERM gui/[0-9]+/com.frappe-mac.frappe-bench$'
+assert_calls_contain '^launchctl kill SIGTERM gui/[0-9]+/com.benchbar.frappe-bench$'
 assert_calls_not_contain 'tcp:3306'
 
 # "down" while nothing runs is fine and idempotent
