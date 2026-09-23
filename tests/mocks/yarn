@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+printf '1.22.22\n'

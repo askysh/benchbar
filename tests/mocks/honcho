@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# honcho mock: self-contained because it gets copied into fake venvs
+printf 'honcho %s\n' "$*" >>"${MOCK_LOG:-/dev/null}"
+exit "${MOCK_HONCHO_EXIT:-0}"

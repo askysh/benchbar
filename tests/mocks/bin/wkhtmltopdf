@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+[[ "${MOCK_WKHTML_PATCHED:-1}" == "1" ]] && printf 'wkhtmltopdf 0.12.6 (with patched qt)\n' || printf 'wkhtmltopdf 0.12.6\n'
+exit 0

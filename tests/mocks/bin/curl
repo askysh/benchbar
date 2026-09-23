@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "$(dirname "$0")/_mocklib.sh"
+mock_log "$@"
+code="${MOCK_CURL_CODE:-000}"
+[[ -f "${MOCK_STATE:-/nonexistent}/curl_code" ]] && code="$(cat "${MOCK_STATE}/curl_code")"
+for a in "$@"; do [[ "$a" == "-w" ]] && { printf '%s' "$code"; [[ "$code" == "000" ]] && exit 7; exit 0; }; done
+exit 0

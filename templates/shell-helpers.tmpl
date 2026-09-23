@@ -1,0 +1,16 @@
+#@version 1
+# __HEADER__
+# Managed by frappe-mac (https://github.com/askysh/frappe_mac_dev_server).
+# Do not edit inside the markers: run "frappe-mac repair" to regenerate.
+__PROFILE_EXPORTS__
+case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) export PATH="$HOME/.local/bin:$PATH" ;; esac
+FRAPPE_MAC="__FRAPPE_MAC__"
+benchup()      { "$FRAPPE_MAC" up "$@"; }
+benchdown()    { "$FRAPPE_MAC" down "$@"; }
+benchrestart() { "$FRAPPE_MAC" restart "$@"; }
+benchstatus()  { "$FRAPPE_MAC" status "$@"; }
+benchlogs()    { "$FRAPPE_MAC" logs "$@"; }
+benchfg()      { "$FRAPPE_MAC" fg "$@"; }
+benchwatch()   { "$FRAPPE_MAC" watch "$@"; }
+benchdoctor()  { "$FRAPPE_MAC" doctor "$@"; }
+benchcd()      { cd "$("$FRAPPE_MAC" path)" || return 1; }

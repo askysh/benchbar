@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+case "$*" in
+  --version) printf '10.8.2\n' ;;
+  "ls -g --depth=0") printf '/x/lib\n+-- yarn@1.22.22\n' ;;
+esac
+exit 0

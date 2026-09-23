@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "$(dirname "$0")/_mocklib.sh"
+mock_log "$@"
+case "${1:-}" in
+  --prefix) printf '%s\n' "${MOCK_BREW_PREFIX:?}" ;;
+  --version) printf 'Homebrew 4.4.0\n' ;;
+  list)
+    f="${*: -1}"
+    if grep -qx "$f" "${MOCK_STATE:?}/installed" 2>/dev/null; then printf '%s 1.0\n' "$f"; else exit 1; fi ;;
+  install)
+    printf '%s\n' "${*: -1}" >>"${MOCK_STATE:?}/installed" ;;
+  leaves) cat "${MOCK_BREW_LEAVES:?}" ;;
+  tab)
+    [[ "${2:-}" == "--help" ]] && { echo "Usage: brew tab"; exit 0; }
+    printf '%s\n' "${*: -1}" >>"${MOCK_BREW_LEAVES:?}" ;;
+  services)
+    case "${2:-}" in
+      list) printf 'Name Status User File\n'; cat "${MOCK_BREW_SERVICES:?}" ;;
+      restart)
+        # a restarted mariadb picks up the bind-address drop-in
+        case "${3:-}" in mariadb*)
+          if grep -q 'bind-address = 127.0.0.1' "${MOCK_BREW_PREFIX:?}"/etc/my.cnf.d/*.cnf 2>/dev/null; then
+            sed 's/^3306 \(.*\) \*$/3306 \1 127.0.0.1/' "${MOCK_LISTEN:?}" >"${MOCK_LISTEN}.tmp"; mv "${MOCK_LISTEN}.tmp" "${MOCK_LISTEN}"
+          fi ;;
+        esac ;;
+      *) ;;
+    esac ;;
+  info) exit 0 ;;
+  *) ;;
+esac
+exit 0

@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+printf 'ProductName:\tmacOS\nProductVersion:\t15.1\nBuildVersion:\t24B83\n'

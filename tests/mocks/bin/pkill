@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# pkill mock: removes matching lines from the fake process table
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "$(dirname "$0")/_mocklib.sh"
+mock_log "$@"
+pattern=""; sig="TERM"
+while [[ "$#" -gt 0 ]]; do case "$1" in -f) pattern="$2"; shift 2 ;; -*) sig="${1#-}"; shift ;; *) pattern="$1"; shift ;; esac; done
+found=1
+: >"${MOCK_PROCS}.tmp"
+while read -r pid cmdline; do
+  [[ -n "$pid" ]] || continue
+  if printf '%s' "$cmdline" | grep -qE -- "$pattern"; then
+    printf 'killed %s %s %s\n' "$sig" "$pid" "$cmdline" >>"${MOCK_STATE:?}/killed"
+    found=0
+  else
+    printf '%s %s\n' "$pid" "$cmdline" >>"${MOCK_PROCS}.tmp"
+  fi
+done <"${MOCK_PROCS:?}"
+mv "${MOCK_PROCS}.tmp" "${MOCK_PROCS}"
+exit "$found"

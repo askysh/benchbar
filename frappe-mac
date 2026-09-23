@@ -1,0 +1,301 @@
+#!/usr/bin/env bash
+#
+# frappe-mac: one entrypoint for a local Frappe/ERPNext bench on macOS.
+#
+#   frappe-mac install        phases 00, 01 and the background service, idempotent
+#   frappe-mac up | down      start or stop the bench in the background
+#   frappe-mac doctor         read-only health report with exact fix commands
+#   frappe-mac repair         apply only the fixes doctor flagged
+#
+# Runs on macOS /bin/bash 3.2. No dependencies beyond the ones the installer
+# already needs.
+
+set -euo pipefail
+
+FL_VERSION="0.2.0"
+
+# Resolve the real script location even when invoked through a symlink
+# (for example ~/.local/bin/frappe-mac).
+fl_resolve_self() {
+  local src="${BASH_SOURCE[0]}" dir
+  while [[ -L "$src" ]]; do
+    dir="$(cd "$(dirname "$src")" && pwd)"
+    src="$(readlink "$src")"
+    [[ "$src" == /* ]] || src="${dir}/${src}"
+  done
+  cd "$(dirname "$src")" && pwd
+}
+SCRIPT_DIR="$(fl_resolve_self)"
+
+# shellcheck source=lib/frappe-local/ui.sh
+. "${SCRIPT_DIR}/lib/frappe-local/ui.sh"
+# shellcheck source=lib/frappe-local/run.sh
+. "${SCRIPT_DIR}/lib/frappe-local/run.sh"
+# shellcheck source=lib/frappe-local/platform.sh
+. "${SCRIPT_DIR}/lib/frappe-local/platform.sh"
+# shellcheck source=lib/frappe-local/version-policy.sh
+. "${SCRIPT_DIR}/lib/frappe-local/version-policy.sh"
+# shellcheck source=lib/frappe-local/state.sh
+. "${SCRIPT_DIR}/lib/frappe-local/state.sh"
+# shellcheck source=lib/frappe-local/lock.sh
+. "${SCRIPT_DIR}/lib/frappe-local/lock.sh"
+# shellcheck source=lib/frappe-local/templates.sh
+. "${SCRIPT_DIR}/lib/frappe-local/templates.sh"
+# shellcheck source=lib/frappe-local/shellrc.sh
+. "${SCRIPT_DIR}/lib/frappe-local/shellrc.sh"
+# shellcheck source=lib/frappe-local/benchinfo.sh
+. "${SCRIPT_DIR}/lib/frappe-local/benchinfo.sh"
+# shellcheck source=lib/frappe-local/process.sh
+. "${SCRIPT_DIR}/lib/frappe-local/process.sh"
+# shellcheck source=lib/frappe-local/launchd.sh
+. "${SCRIPT_DIR}/lib/frappe-local/launchd.sh"
+# shellcheck source=lib/frappe-local/checks.sh
+. "${SCRIPT_DIR}/lib/frappe-local/checks.sh"
+# shellcheck source=lib/frappe-local/doctor.sh
+. "${SCRIPT_DIR}/lib/frappe-local/doctor.sh"
+# shellcheck source=lib/frappe-local/repair.sh
+. "${SCRIPT_DIR}/lib/frappe-local/repair.sh"
+# shellcheck source=lib/frappe-local/service.sh
+. "${SCRIPT_DIR}/lib/frappe-local/service.sh"
+
+OPT_BENCH_DIR=""
+OPT_SITE=""
+OPT_PROFILE=""
+OPT_BUNDLE="${APP_BUNDLE:-}"
+OPT_JSON=0
+FL_ASSUME_YES="${FL_ASSUME_YES:-0}"
+FL_SKIP_PLAN_CONFIRM=0
+COMMAND=""
+ARGS=()
+
+usage() {
+  cat <<USAGE
+frappe-mac ${FL_VERSION}: local Frappe/ERPNext bench on macOS, in the background.
+
+Usage: frappe-mac <command> [options]
+
+Setup
+  install             Run phase 00 (system deps), 01 (bench and site) and the
+                      background service. Safe to re-run: only changes what changed.
+  service             Install or refresh only the background service (phase 02).
+  doctor              Read-only health report. Exit 1 when something FAILs.
+  repair              Apply only the fixes doctor flagged, in dependency order.
+  uninstall-service   Remove the agent, runner, Procfile.lean and shell helpers.
+
+Daily
+  up                  Start the bench in the background (benchup).
+  down                Stop it and keep it stopped across reboots (benchdown).
+  restart             Restart it, for example after changing Python code.
+  status              Agent state, stop flag, site ping (benchstatus).
+  logs                Tail logs/bench.log. Flags: --worker, --worker-error, --previous, -n50, --no-follow
+  fg                  Stop the service and run honcho in the foreground.
+  watch               Run bench watch for asset rebuilds.
+  autostart on|off    Whether the bench may come back after login.
+  path                Print the bench directory (used by benchcd).
+
+Options
+  --bench-dir DIR     Bench to act on (default: remembered, or auto-detected)
+  --site NAME         Site name (default: remembered, or from the bench)
+  --profile NAME      Release profile for install/repair (default: v15-lts)
+  --bundle NAME       App bundle for install (minimal, common, extended)
+  --dry-run           Print the full plan, change nothing
+  -y, --yes           Do not ask; secrets must come from the environment
+  --json              Machine-readable output for doctor and status
+  --plain             No colors or spinners (also: NO_COLOR=1, or a non-TTY)
+  -h, --help          This help
+  --version           Print the version
+
+Shell helpers (written to your shell rc by install or repair):
+  benchup benchdown benchrestart benchstatus benchlogs benchfg benchwatch benchdoctor benchcd
+USAGE
+}
+
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --bench-dir) OPT_BENCH_DIR="${2:-}"; shift 2 ;;
+    --bench-dir=*) OPT_BENCH_DIR="${1#*=}"; shift ;;
+    --site) OPT_SITE="${2:-}"; shift 2 ;;
+    --site=*) OPT_SITE="${1#*=}"; shift ;;
+    --profile) OPT_PROFILE="${2:-}"; shift 2 ;;
+    --profile=*) OPT_PROFILE="${1#*=}"; shift ;;
+    --bundle) OPT_BUNDLE="${2:-}"; shift 2 ;;
+    --bundle=*) OPT_BUNDLE="${1#*=}"; shift ;;
+    --dry-run) FL_DRY_RUN=1; shift ;;
+    -y|--yes) FL_ASSUME_YES=1; shift ;;
+    --json) OPT_JSON=1; shift ;;
+    --plain|--no-color) FL_PLAIN=1; fl_ui_init; shift ;;
+    --version) printf 'frappe-mac %s\n' "$FL_VERSION"; exit 0 ;;
+    -h|--help) usage; exit 0 ;;
+    --) shift; ARGS+=("$@"); break ;;
+    -*)
+      if [[ -n "$COMMAND" ]]; then ARGS+=("$1"); shift; else fl_die "Unknown option: $1" "Run: frappe-mac --help"; fi ;;
+    *)
+      if [[ -z "$COMMAND" ]]; then COMMAND="$1"; else ARGS+=("$1"); fi
+      shift ;;
+  esac
+done
+export FL_DRY_RUN FL_ASSUME_YES
+
+[[ -n "$COMMAND" ]] || { usage; exit 0; }
+
+fl_mode_name() {
+  if [[ "$FL_DRY_RUN" == "1" ]]; then printf 'dry-run'; else printf '%s' "$COMMAND"; fi
+}
+
+fl_cleanup() {
+  fl_spinner_stop
+  fl_lock_release
+}
+trap fl_cleanup EXIT
+trap fl_on_error ERR
+
+fl_next_steps_box() {
+  fl_box "Next steps" \
+    "source $(fl_rc_file)      (once, so benchup and friends exist)" \
+    "benchup                     start the bench in the background" \
+    "open $(fl_site_url)" \
+    "benchstatus / benchlogs     check on it" \
+    "benchrestart                after changing Python code" \
+    "benchwatch                  while editing JS or CSS"
+}
+
+fl_run_phase_script() {
+  # fl_run_phase_script SCRIPT ARGS... : streams the phase script's output
+  local script="$1" code=0
+  shift
+  FL_LAST_COMMAND="${script} $*"
+  fl_log "phase: ${script} $*"
+  "$script" "$@" || code=$?
+  return "$code"
+}
+
+cmd_install() {
+  local code=0 args00=() args01=() bundle
+  fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
+  fl_header "frappe-mac install" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "$FL_SITE"
+  fl_steps_define "System dependencies (00-mac-system-deps.sh)" "Bench and site (01-install-bench-and-site.sh)" "Background service"
+  fl_steps_print_plan
+
+  args00=(--profile "$FL_PROFILE"); args01=(--profile "$FL_PROFILE")
+  [[ "$FL_DRY_RUN" == "1" ]] && { args00+=(--dry-run); args01+=(--dry-run); }
+  [[ "$FL_ASSUME_YES" == "1" ]] && args01+=(--yes)
+  bundle="${OPT_BUNDLE:-$(fl_state_get APP_BUNDLE 2>/dev/null || true)}"
+
+  fl_step_begin 0
+  if fl_run_phase_script "${SCRIPT_DIR}/00-mac-system-deps.sh" "${args00[@]}"; then
+    fl_step_end "done"
+  else
+    code=$?
+    if [[ "$code" == "2" ]]; then
+      fl_step_end warning "manual steps pending"
+      fl_steps_summary
+      fl_box "Stopped" "Complete the PENDING MANUAL STEPS printed above," "then run this command again. Nothing else changed."
+      return 2
+    fi
+    fl_step_end failed
+    fl_steps_summary
+    return "$code"
+  fi
+
+  fl_step_begin 1
+  if BENCH_DIR="$FL_BENCH_DIR" SITE_NAME="$FL_SITE" APP_BUNDLE="${bundle:-minimal}" \
+     fl_run_phase_script "${SCRIPT_DIR}/01-install-bench-and-site.sh" "${args01[@]}"; then
+    fl_step_end "done"
+  else
+    code=$?
+    fl_step_end failed
+    fl_steps_summary
+    return "$code"
+  fi
+  fl_state_set BENCH_DIR "$FL_BENCH_DIR"
+  fl_state_set SITE_NAME "$FL_SITE"
+  fl_state_set PROFILE "$FL_PROFILE"
+
+  fl_step_begin 2
+  fl_context_init "$FL_BENCH_DIR" "$FL_SITE" "$FL_PROFILE"
+  if [[ "$FL_DRY_RUN" == "1" && ! -d "$FL_BENCH_DIR" ]]; then
+    fl_info "dry-run: the bench does not exist yet, so the service plan is shown against an empty bench"
+  fi
+  FL_SKIP_PLAN_CONFIRM=1
+  if fl_repair_engine "Background service" system service; then
+    fl_step_end "done"
+  else
+    fl_step_end warning "see above"
+    code=1
+  fi
+  fl_steps_summary
+  fl_next_steps_box
+  return "$code"
+}
+
+cmd_service() {
+  fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
+  fl_require_bench
+  fl_header "frappe-mac service" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "$FL_SITE"
+  fl_state_set BENCH_DIR "$FL_BENCH_DIR"
+  fl_state_set SITE_NAME "$FL_SITE"
+  fl_state_set PROFILE "$FL_PROFILE"
+  if fl_repair_engine "Background service" service; then
+    fl_next_steps_box
+    return 0
+  fi
+  return 1
+}
+
+cmd_doctor() {
+  local fails
+  fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
+  fl_require_bench
+  fl_doctor_run
+  if [[ "$OPT_JSON" == "1" ]]; then
+    fl_doctor_print_json
+  else
+    fl_header "frappe-mac doctor" "read-only" "$FL_PROFILE" "$FL_BENCH_DIR" "$FL_SITE"
+    fl_doctor_print
+    if [[ -n "$(fl_doctor_actions)" ]]; then
+      printf '\n'
+      fl_info "run '${SCRIPT_DIR}/frappe-mac repair' to apply the fixes marked above (dry-run: add --dry-run)"
+    fi
+  fi
+  fails="$(fl_doctor_count fail)"
+  [[ "$fails" == "0" ]]
+}
+
+cmd_repair() {
+  fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
+  fl_require_bench
+  fl_header "frappe-mac repair" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "$FL_SITE"
+  fl_repair_engine "Repair"
+}
+
+cmd_status() {
+  fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
+  fl_cmd_status "$OPT_JSON"
+}
+
+case "$COMMAND" in
+  install|service|repair|up|down|restart|autostart|uninstall-service)
+    fl_log_init "${FL_STATE_DIR}/logs"
+    fl_lock_acquire
+    ;;
+  *) ;;
+esac
+
+case "$COMMAND" in
+  install) cmd_install ;;
+  service) cmd_service ;;
+  doctor) cmd_doctor ;;
+  repair) cmd_repair ;;
+  status) cmd_status ;;
+  up) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_up ;;
+  down) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_down ;;
+  restart) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_restart ;;
+  logs) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_logs ${ARGS[@]+"${ARGS[@]}"} ;;
+  fg) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_fg ;;
+  watch) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_watch ;;
+  autostart) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_autostart "${ARGS[0]:-}" ;;
+  uninstall-service) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_uninstall_service ;;
+  path) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; printf '%s\n' "$FL_BENCH_DIR" ;;
+  help) usage ;;
+  *) fl_die "Unknown command: ${COMMAND}" "Run: frappe-mac --help" ;;
+esac

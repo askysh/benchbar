@@ -16,6 +16,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${SCRIPT_DIR}/lib/frappe-local/platform.sh"
 # shellcheck source=lib/frappe-local/version-policy.sh
 . "${SCRIPT_DIR}/lib/frappe-local/version-policy.sh"
+# shellcheck source=lib/frappe-local/state.sh
+. "${SCRIPT_DIR}/lib/frappe-local/state.sh"
+# shellcheck source=lib/frappe-local/templates.sh
+. "${SCRIPT_DIR}/lib/frappe-local/templates.sh"
+# shellcheck source=lib/frappe-local/shellrc.sh
+. "${SCRIPT_DIR}/lib/frappe-local/shellrc.sh"
 trap fl_on_error ERR
 
 PROFILE="${PROFILE:-}"
@@ -36,6 +42,10 @@ Recommended:
 
 Recovery:
   ./00-mac-system-deps.sh --dry-run
+
+Exit codes:
+  0  everything is installed and configured
+  2  manual steps remain (they are printed at the end)
 
 Options:
   --profile VALUE      Use release profile (default: v15-lts)
@@ -205,11 +215,32 @@ else
 fi
 
 UTF8_CNF_PATH="${FL_BREW_PREFIX}/etc/my.cnf.d/frappe.cnf"
+MY_CNF_PATH="${FL_BREW_PREFIX}/etc/my.cnf"
 if [[ -f "$UTF8_CNF_PATH" ]] && grep -q 'character-set-server.*utf8mb4' "$UTF8_CNF_PATH"; then
   fl_ok "frappe.cnf utf8mb4 config present at ${UTF8_CNF_PATH}"
 else
-  fl_warn "utf8mb4 config not found at ${UTF8_CNF_PATH}"
-  add_pending "MARIADB_UTF8MB4"
+  fl_warn "utf8mb4 config not found at ${UTF8_CNF_PATH}; writing it"
+  if [[ -f "$MY_CNF_PATH" ]] && ! grep -q "^!includedir ${FL_BREW_PREFIX}/etc/my.cnf.d" "$MY_CNF_PATH"; then
+    if [[ "$FL_DRY_RUN" == "1" ]]; then
+      fl_info "dry-run: would append '!includedir ${FL_BREW_PREFIX}/etc/my.cnf.d' to ${MY_CNF_PATH}"
+    else
+      fl_backup_file "$MY_CNF_PATH"
+      printf '\n!includedir %s/etc/my.cnf.d\n' "$FL_BREW_PREFIX" >>"$MY_CNF_PATH"
+      fl_ok "added !includedir to ${MY_CNF_PATH}"
+    fi
+  elif [[ ! -f "$MY_CNF_PATH" && "$FL_DRY_RUN" != "1" ]]; then
+    mkdir -p "$(dirname "$MY_CNF_PATH")"
+    printf '[client-server]\n!includedir %s/etc/my.cnf.d\n' "$FL_BREW_PREFIX" >"$MY_CNF_PATH"
+    fl_ok "created ${MY_CNF_PATH}"
+  fi
+  fl_template_apply "$UTF8_CNF_PATH" "$(fl_template_render mariadb-frappe.cnf)" 644
+  if [[ "$FL_DRY_RUN" == "1" ]]; then
+    fl_info "dry-run: brew services restart ${FL_MARIADB_FORMULA}"
+  else
+    fl_ok "wrote ${UTF8_CNF_PATH}"
+    fl_run_long "brew services restart ${FL_MARIADB_FORMULA}" brew services restart "$FL_MARIADB_FORMULA" \
+      || fl_warn "restart failed; run: brew services restart ${FL_MARIADB_FORMULA}"
+  fi
 fi
 
 fl_section "REDIS"
@@ -243,17 +274,21 @@ for formula in openssl@3 libffi zlib; do
 done
 
 fl_section "SHELL CONFIG"
-ZSHRC="${HOME}/.zshrc"
-if [[ -f "$ZSHRC" ]] && \
-   grep -q "opt/${FL_PYTHON_FORMULA}/bin" "$ZSHRC" && \
-   grep -q "opt/${FL_NODE_FORMULA}/bin" "$ZSHRC" && \
-   grep -q "opt/${FL_MARIADB_FORMULA}/bin" "$ZSHRC" && \
-   grep -q "opt/openssl@3/lib" "$ZSHRC"; then
-  fl_ok "~/.zshrc has the required profile exports"
-else
-  fl_warn "~/.zshrc is missing some/all required profile exports."
-  add_pending "ZSHRC_EXPORTS"
-fi
+ZSHRC="$(fl_rc_file)"
+HELPER_BLOCK="$(fl_template_render shell-helpers "PROFILE_EXPORTS=$(fl_profile_path_exports)" "FRAPPE_MAC=${SCRIPT_DIR}/frappe-mac")"
+case "$(fl_rc_block_status "$ZSHRC" "$HELPER_BLOCK")" in
+  current)
+    fl_ok "${ZSHRC} has the frappe-mac block (profile exports and bench helpers)"
+    ;;
+  *)
+    fl_warn "${ZSHRC} is missing the frappe-mac block; writing it (profile exports and bench helpers)"
+    fl_rc_block_write "$ZSHRC" "$HELPER_BLOCK"
+    if [[ "$FL_DRY_RUN" != "1" ]]; then
+      fl_ok "wrote the frappe-mac block to ${ZSHRC}"
+      add_pending "SOURCE_RC"
+    fi
+    ;;
+esac
 
 fl_section "SUMMARY"
 printf '%-22s %-22s %s\n' "DEP" "VERSION" "PATH"
@@ -275,14 +310,11 @@ step_n=0
 for step in "${PENDING_STEPS[@]}"; do
   step_n=$((step_n + 1))
   case "$step" in
-    ZSHRC_EXPORTS)
+    SOURCE_RC)
       cat <<EOF
-${step_n}) Append the selected-profile exports to ~/.zshrc, then source it:
+${step_n}) Load the new shell block into this terminal (or open a new one):
 
-   cat >> ~/.zshrc <<'BLOCK'
-# Frappe local dev - ${FL_PROFILE}
-$(fl_profile_path_exports)
-BLOCK
+   source ${ZSHRC}
 
 EOF
       ;;
@@ -303,24 +335,6 @@ ${step_n}) Set a MariaDB root password:
 
 EOF
       ;;
-    MARIADB_UTF8MB4)
-      cat <<EOF
-${step_n}) Add Frappe's required utf8mb4 config and restart MariaDB:
-
-   mkdir -p ${FL_BREW_PREFIX}/etc/my.cnf.d
-   cat > ${FL_BREW_PREFIX}/etc/my.cnf.d/frappe.cnf <<'CNF'
-[mysqld]
-character-set-client-handshake = FALSE
-character-set-server = utf8mb4
-collation-server = utf8mb4_unicode_ci
-
-[mysql]
-default-character-set = utf8mb4
-CNF
-   brew services restart ${FL_MARIADB_FORMULA}
-
-EOF
-      ;;
     WKHTMLTOPDF)
       cat <<EOF
 ${step_n}) Install patched-Qt wkhtmltopdf:
@@ -335,3 +349,8 @@ EOF
 done
 
 printf '%sAfter completing the above, re-run this script to verify.%s\n\n' "$FL_YELLOW$FL_BOLD" "$FL_RESET"
+# only "source the rc file" left: that is not a blocker for the next phase
+only_source=1
+for step in "${PENDING_STEPS[@]}"; do [[ "$step" == "SOURCE_RC" ]] || only_source=0; done
+[[ "$only_source" == "1" ]] && exit 0
+exit 2
