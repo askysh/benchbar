@@ -271,9 +271,13 @@ fl_repair_engine() {
   fl_doctor_print compact
   if [[ -z "$actions" ]]; then
     printf '\n'
-    if [[ "$(fl_doctor_count fail)" != "0" || "$(fl_doctor_count warn)" != "0" ]]; then
+    if [[ "$(fl_doctor_count fail)" != "0" ]]; then
       fl_warn "unchanged: nothing frappe-mac can repair automatically; follow the fix lines above"
       return 1
+    fi
+    if [[ "$(fl_doctor_count warn)" != "0" ]]; then
+      fl_ok "unchanged: $(fl_doctor_count ok) checks pass, $(fl_doctor_count warn) warning(s) need a manual step (see above)"
+      return 0
     fi
     fl_ok "unchanged: all ${#FL_D_IDS[@]} checks pass, nothing to do"
     return 0
