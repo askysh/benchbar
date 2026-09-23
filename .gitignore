@@ -4,3 +4,7 @@ frappe-bench/
 *.incomplete.*
 *.log
 tests/tmp/
+macos/*.xcodeproj/
+macos/build/
+macos/DerivedData/
+macos/BenchBar/Resources/Info.plist
