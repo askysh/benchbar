@@ -43,6 +43,10 @@ while [[ "$i" -le 300 ]]; do printf 'line %d from %s/logs\n' "$i" "$HOME" >>"$BE
   printf 'GET /api/method/ping?api_key=%s&x=1 200\n' "$URL_KEY"
 } >>"$BENCH/logs/bench.log"
 printf 'worker boot\ndb_password = %s\n' "$INI_PW" >"$BENCH/logs/worker.error.log"
+# the names of the Mac (the scutil mock): a Bonjour name in an rq worker name and a
+# computer name with brackets, which would break an unescaped sed pattern
+# shellcheck disable=SC1112
+printf 'rq:worker:testmac.local.4242 started\nsession on Tester’s Mac [mock] by tester\n' >>"$BENCH/logs/worker.error.log"
 
 # a fake installed app so its version shows up
 mkdir -p "$HOME/Applications/BenchBar.app/Contents"
@@ -70,6 +74,10 @@ for secret in "$DB_PW" "$ENC_KEY" "$API_KEY" "$API_SECRET" "$ROOT_PW" "$TOKEN" "
   assert_not_contains "$all" "$secret" "(secret must not reach the zip)"
 done
 assert_not_contains "$all" "$HOME" "(home folder must be written as ~)"
+assert_not_contains "$all" "testmac" "(the Bonjour name from scutil must be replaced)"
+assert_not_contains "$all" "Tester’s Mac [mock]" "(the computer name, brackets and all, must be replaced)"
+assert_contains "$(cat "$EX/worker.error.log.tail")" "rq:worker:<host>.local.4242"
+assert_contains "$(cat "$EX/worker.error.log.tail")" "session on <host> by tester"
 assert_contains "$all" "~/frappe-bench"
 # key names are listed, values are not
 keys="$(cat "$EX/site-config-keys.txt")"
@@ -95,6 +103,7 @@ red="$(cat "$EX/REDACTIONS.txt")"
 assert_contains "$red" "masked credential-like values"
 assert_contains "$red" "bench.log.tail:"
 assert_contains "$red" "replaced the home folder with ~"
+assert_contains "$red" "worker.error.log.tail: replaced a name of this Mac with <host>"
 # versions and JSON
 ver="$(cat "$EX/versions.txt")"
 assert_contains "$ver" "benchbar CLI: 0.3.0"

@@ -17,7 +17,8 @@
 #     their key names are listed
 #   - any value whose key matches password, secret, token, key, api or auth
 #     is replaced by ***
-#   - $HOME becomes ~, the username <user>, the hostname <host>
+#   - $HOME becomes ~, the username <user>, and every name of this Mac
+#     (hostname, Bonjour name, computer name) <host>
 #   - REDACTIONS.txt inside the bundle lists what was replaced
 
 FL_REPORT_TAIL_LINES="${FL_REPORT_TAIL_LINES:-200}"
@@ -163,14 +164,31 @@ fl_report_collect() {
   } >"${FL_REPORT_DIR}/site-config-keys.txt"
 }
 
+# The names this Mac goes by: what "hostname" prints (without .local), and
+# the Bonjour and computer names from scutil. "hostname" can be a name the
+# router handed out (Mac.lan) while the logs carry the Bonjour name, so all
+# of them are replaced. One per line, longest first, nothing shorter than
+# three characters, never localhost.
+fl_report_host_names() {
+  {
+    hostname 2>/dev/null || true
+    if command -v scutil >/dev/null 2>&1; then
+      scutil --get LocalHostName 2>/dev/null || true
+      scutil --get ComputerName 2>/dev/null || true
+    fi
+  } | sed -e 's/\.local$//' | awk 'length($0) >= 3 && $0 != "localhost" && !seen[$0]++ { print length($0) "\t" $0 }' | sort -rn | cut -f2-
+}
+
+# fl_report_sed_escape TEXT: TEXT as a literal sed pattern (delimiter #)
+fl_report_sed_escape() { printf '%s' "$1" | sed -e 's/[][\.*^$#]/\\&/g'; }
+
 # fl_report_redact_file FILE: masks secret values and personal paths in place.
 # Appends one line per kind of replacement to FL_REPORT_REDACTIONS.
 fl_report_redact_file() {
-  local file="$1" name user host tmp before after n
+  local file="$1" name user host hosts tmp before after n
   name="$(basename "$file")"
   user="$(id -un 2>/dev/null || printf '%s' "${USER:-user}")"
-  host="$(hostname 2>/dev/null || printf 'host')"
-  host="${host%%.local}"
+  hosts="$(fl_report_host_names)"
   tmp="${file}.redact"
 
   # 1. values of keys that look like credentials, in JSON ("key": "value" or "key": 123),
@@ -189,24 +207,26 @@ fl_report_redact_file() {
   [[ "${n:-0}" -gt 0 ]] && FL_REPORT_REDACTIONS="${FL_REPORT_REDACTIONS}${name}: masked credential-like values on ${n} line(s)"$'\n'
   mv "$tmp" "$file"
 
-  # 2. home folder, username, hostname
-  n="$(grep -c -F "$HOME" "$file" 2>/dev/null || true)"
+  # 2. home folder, the names of this Mac, username (the names first: a
+  #    computer name like "Bob's MacBook" contains the username)
+  n="$(grep -c -F -e "$HOME" "$file" 2>/dev/null || true)"
   if [[ "${n:-0}" -gt 0 ]]; then
-    sed -e "s#${HOME}#~#g" "$file" >"$tmp" && mv "$tmp" "$file"
+    sed -e "s#$(fl_report_sed_escape "$HOME")#~#g" "$file" >"$tmp" && mv "$tmp" "$file"
     FL_REPORT_REDACTIONS="${FL_REPORT_REDACTIONS}${name}: replaced the home folder with ~ on ${n} line(s)"$'\n'
   fi
-  if [[ -n "$user" && "${#user}" -ge 3 ]]; then
-    n="$(grep -c -F "$user" "$file" 2>/dev/null || true)"
+  while IFS= read -r host; do
+    [[ -n "$host" ]] || continue
+    n="$(grep -c -F -e "$host" "$file" 2>/dev/null || true)"
     if [[ "${n:-0}" -gt 0 ]]; then
-      sed -e "s#${user}#<user>#g" "$file" >"$tmp" && mv "$tmp" "$file"
-      FL_REPORT_REDACTIONS="${FL_REPORT_REDACTIONS}${name}: replaced the username with <user> on ${n} line(s)"$'\n'
+      sed -e "s#$(fl_report_sed_escape "$host")#<host>#g" "$file" >"$tmp" && mv "$tmp" "$file"
+      FL_REPORT_REDACTIONS="${FL_REPORT_REDACTIONS}${name}: replaced a name of this Mac with <host> on ${n} line(s)"$'\n'
     fi
-  fi
-  if [[ -n "$host" && "${#host}" -ge 3 && "$host" != "localhost" ]]; then
-    n="$(grep -c -F "$host" "$file" 2>/dev/null || true)"
+  done <<<"$hosts"
+  if [[ -n "$user" && "${#user}" -ge 3 ]]; then
+    n="$(grep -c -F -e "$user" "$file" 2>/dev/null || true)"
     if [[ "${n:-0}" -gt 0 ]]; then
-      sed -e "s#${host}#<host>#g" "$file" >"$tmp" && mv "$tmp" "$file"
-      FL_REPORT_REDACTIONS="${FL_REPORT_REDACTIONS}${name}: replaced the hostname with <host> on ${n} line(s)"$'\n'
+      sed -e "s#$(fl_report_sed_escape "$user")#<user>#g" "$file" >"$tmp" && mv "$tmp" "$file"
+      FL_REPORT_REDACTIONS="${FL_REPORT_REDACTIONS}${name}: replaced the username with <user> on ${n} line(s)"$'\n'
     fi
   fi
   after="$(wc -l <"$file" | tr -d ' ')"
@@ -225,7 +245,7 @@ fl_report_redact_all() {
     printf 'Rules:\n'
     printf -- '- site_config.json and common_site_config.json are not included; site-config-keys.txt lists their key names only\n'
     printf -- '- values of keys matching password, secret, token, key, api or auth are replaced by ***\n'
-    printf -- '- the home folder is written as ~, the username as <user>, the hostname as <host>\n\n'
+    printf -- '- the home folder is written as ~, the username as <user>, the hostname, Bonjour name and computer name as <host>\n\n'
     printf 'Applied:\n'
     if [[ -n "$FL_REPORT_REDACTIONS" ]]; then printf '%s' "$FL_REPORT_REDACTIONS"; else printf '(nothing matched)\n'; fi
   } >"${FL_REPORT_DIR}/REDACTIONS.txt"
