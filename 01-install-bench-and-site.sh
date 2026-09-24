@@ -284,8 +284,9 @@ if [[ "$SITE_EXISTS" == "1" ]]; then
   ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
 else
   # environment, then the Keychain (written by phase 00), then a prompt
+  # exit 2, the documented "root password unknown" code, not a generic failure
   fl_mariadb_root_password_resolve || fl_die "MariaDB root password needed to create the site." \
-    "Re-run with: MARIADB_ROOT_PASSWORD='...' $0 --yes, or run ./00-mac-system-deps.sh once to store it in the Keychain."
+    "Re-run with: MARIADB_ROOT_PASSWORD='...' $0 --yes, or run ./00-mac-system-deps.sh once to store it in the Keychain." 2
   MARIADB_ROOT_PASSWORD="$FL_MARIADB_ROOT_PW"
   prompt_secret ADMIN_PASSWORD "Site admin password (Administrator login)"
 fi

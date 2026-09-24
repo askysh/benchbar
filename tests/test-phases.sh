@@ -169,7 +169,7 @@ assert_calls_contain "^bench new-site macdev"
 # and none at all: a clear failure, not a hang
 rm -rf "$BENCH"; rm -f "$MOCK_STATE/keychain/benchbar-mariadb--root"
 ADMIN_PASSWORD=adminpw run01 --yes --offline
-assert_eq "1" "$CODE" "$OUT"
+assert_eq "2" "$CODE" "$OUT"
 assert_contains "$OUT" "not in MARIADB_ROOT_PASSWORD and not in the Keychain"
 
 # ---- benchbar install, twice
@@ -198,6 +198,20 @@ assert_eq "$snap_before" "$(snapshot "$HOME" "$BENCH")" "(second install must wr
 assert_calls_not_contain '^bench (init|new-site|get-app|build|setup)'
 assert_calls_not_contain '^launchctl (bootstrap|bootout|kickstart)'
 
+# the official package binary wins over an unpatched Homebrew build, which is reported as shadowing it
+mkdir -p "$(dirname "$FL_WKHTML_PKG_BIN")"
+printf '#!/usr/bin/env bash\nprintf "wkhtmltopdf 0.12.6 (with patched qt)\\n"\n' >"$FL_WKHTML_PKG_BIN"; chmod +x "$FL_WKHTML_PKG_BIN"
+rm -f "$MOCK_STATE/wkhtml_installed" "$MOCK_STATE/wkhtml_missing"; reset_calls
+MOCK_WKHTML_PATCHED=0 run00 --yes --profile v15-lts
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "[OK] wkhtmltopdf patched Qt build at ${FL_WKHTML_PKG_BIN}"
+assert_contains "$OUT" "is not the patched build: Frappe would run it"
+assert_contains "$OUT" "brew uninstall wkhtmltopdf"
+assert_calls_not_contain '^(sudo installer|curl .*wkhtmltox)' "(nothing to install when the package binary is present)"
+MOCK_WKHTML_PATCHED=0 run_fm doctor --bench-dir "$BENCH"
+assert_contains "$OUT" "[WARN] wkhtmltopdf: patched build at ${FL_WKHTML_PKG_BIN}, but"
+rm -f "$FL_WKHTML_PKG_BIN"; touch "$MOCK_STATE/wkhtml_installed"
+
 # a refused sudo is asked once for the whole install, then every sudo step is skipped
 rm -f "$MOCK_STATE/wkhtml_installed"; touch "$MOCK_STATE/wkhtml_missing" "$MOCK_STATE/sudo_refused"
 printf '127.0.0.1 localhost\n' >"$FL_HOSTS_FILE"; rm -rf "$FL_STATE_DIR/downloads"; reset_calls
@@ -224,6 +238,7 @@ run_fm install --yes --bench-dir "$BENCH" --site macdev
 assert_eq "2" "$CODE" "$OUT"
 assert_contains "$OUT" "manual steps pending"
 assert_calls_not_contain '^bench init'
+
 
 # a second site on the same run: the hosts line goes inside the existing block
 printf 'rootpw' >"$MOCK_STATE/mariadb_root_pw"

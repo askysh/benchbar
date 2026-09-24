@@ -12,7 +12,7 @@
 
 set -euo pipefail
 
-FL_VERSION="0.3.0"
+FL_VERSION="0.3.1"
 
 # Resolve the real script location even when invoked through a symlink
 # (for example ~/.local/bin/frappe-mac).
@@ -232,6 +232,12 @@ cmd_install() {
     fl_step_end "done"
   else
     code=$?
+    if [[ "$code" == "2" ]]; then
+      fl_step_end warning "manual steps pending"
+      fl_steps_summary
+      fl_box "Stopped" "The MariaDB root password is unknown; see above for how to pass it," "then run this command again. Nothing else changed."
+      return 2
+    fi
     fl_step_end failed
     fl_steps_summary
     return "$code"

@@ -52,7 +52,7 @@ grep -q '^export EDITOR=vim$' "$HOME/.zshrc" || fail "existing zshrc content mus
 assert_calls_contain "^launchctl bootstrap gui/[0-9]+ ${plist}\$"
 for name in benchbar frappe-mac; do
   [[ -L "$HOME/.local/bin/$name" && "$(readlink "$HOME/.local/bin/$name")" == "$ROOT/benchbar" ]] || fail "$name must be linked into ~/.local/bin"
-  "$HOME/.local/bin/$name" --version | grep -q 'benchbar 0.3.0' || fail "the symlinked $name must resolve its own libraries"
+  "$HOME/.local/bin/$name" --version | grep -q 'benchbar 0.3.1' || fail "the symlinked $name must resolve its own libraries"
 done
 grep -q '<key>AssociatedBundleIdentifiers</key>' "$plist" || fail "plist must name the BenchBar app"
 grep -q '<string>com.akashmishra.benchbar</string>' "$plist" || fail "plist must carry the app bundle id"

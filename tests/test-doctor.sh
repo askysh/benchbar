@@ -177,4 +177,17 @@ grep -q "^!includedir $MOCK_BREW_PREFIX/etc/my.cnf.d" "$MOCK_BREW_PREFIX/etc/my.
 run_fm doctor --bench-dir "$BENCH"
 assert_not_contains "$OUT" "[WARN] MariaDB utf8mb4:"
 
+# a missing my.cnf counts as a missing include line, and repair recreates it
+rm -f "$MOCK_BREW_PREFIX/etc/my.cnf"
+run_fm doctor --bench-dir "$BENCH"
+assert_contains "$OUT" "[WARN] MariaDB utf8mb4:"
+assert_contains "$OUT" "is missing or has no '!includedir'"
+run_fm repair --yes --bench-dir "$BENCH"
+grep -q "^!includedir $MOCK_BREW_PREFIX/etc/my.cnf.d" "$MOCK_BREW_PREFIX/etc/my.cnf" || fail "repair must recreate my.cnf with the includedir line"
+
+# ---- doctor is read only: it never reads the Keychain, whatever the server runs
+reset_calls
+run_fm doctor --bench-dir "$BENCH"
+assert_calls_not_contain '^security' "(doctor must never touch the Keychain)"
+
 printf 'test-doctor utf8: ok\n'

@@ -83,13 +83,17 @@ decisions of the app work live in `macos/DECISIONS.md`.
 - `release-local.sh` no longer re-signs the app: `macos-build.sh` already signed it ad hoc with the Hardened Runtime and the entitlements, and a plain `codesign --force -s -` dropped both. The script verifies the signature and the runtime flag instead.
 - Phase 01 no longer requires `wkhtmltopdf`: a bench without it works, only PDF printing does not, and phase 00 already said so when the package was declined.
 - The report's quoted value patterns accept backslash escaped characters inside the quotes, so `"api_key":"abc\"tail"` is masked whole.
-- The utf8mb4 doctor check also requires the `!includedir` line in `my.cnf` and, when MariaDB runs and the root password is known, a live `character_set_server` of utf8mb4; the repair action restarts MariaDB when either the files changed or the live value is wrong.
+- The utf8mb4 doctor check also requires the `!includedir` line in `my.cnf` (a missing `my.cnf` counts as missing). The live `character_set_server` query that 0.3.0 added was removed in 0.3.1: it read the root password from the Keychain, and doctor is read only and runs on a timer in the app, so it must never touch the Keychain. A test asserts that doctor makes no `security` call.
 - `adopt --dry-run` never touched state (`fl_state_set` is a no-op under `FL_DRY_RUN`); a test now proves it.
 
 - The report also masks Python repr mappings (`'password': 'x'`): worker logs print dicts that way.
 - `adopt` runs the engine with `FL_ENGINE_SKIP_ACTIONS=honcho_install`: a missing honcho is reported with `pipx install honcho` or `benchbar repair` as the fix, and nothing is ever installed into the bench's `env/` by adopt.
 - Phase 00 tells a failed wkhtmltopdf install (download, checksum, installer) apart from a deliberate skip: it prints FAILED and a manual step, but still exits 0, since PDFs are optional and the bench can be created.
 - A generated MariaDB password is written to the Keychain before it is applied to the server; when the Keychain refuses (locked), MariaDB is left unchanged and the run stops with the fix, so no password ever exists only in a dying process.
+
+- Phase 01 exits 2, the documented "root password unknown" code, when a fresh site needs the MariaDB password and no source has it; `benchbar install` reports it as a pending manual step like phase 00 does.
+- wkhtmltopdf detection prefers the package binary at `/usr/local/bin/wkhtmltopdf` when it is the patched build, and warns with `brew uninstall wkhtmltopdf` when an unpatched build earlier on PATH would shadow it: Frappe finds the binary through PATH, and the launchd PATH puts Homebrew's bin before /usr/local/bin.
+- A missing `my.cnf` counts as a missing `!includedir` in the utf8mb4 check: without it the drop-in folder is never read.
 
 ## Found on a real Mac (macOS 27, Apple Silicon)
 

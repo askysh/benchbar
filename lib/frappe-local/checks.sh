@@ -310,7 +310,7 @@ chk_mariadb_bind() {
 }
 
 chk_mariadb_utf8() {
-  local dropin status live mycnf
+  local dropin status mycnf
   dropin="$(fl_mariadb_utf8_dropin_path)"
   mycnf="${FL_BREW_PREFIX:-/opt/homebrew}/etc/my.cnf"
   status="$(fl_template_status "$dropin" "$(fl_template_render mariadb-frappe.cnf)")"
@@ -325,22 +325,25 @@ chk_mariadb_utf8() {
       fi ;;
     *) chk__set warn "utf8mb4 drop-in is ${status} (${dropin}); Frappe needs utf8mb4 server wide" "${SCRIPT_DIR}/benchbar repair" mariadb_utf8; return 0 ;;
   esac
-  # the drop-in only counts when my.cnf pulls the folder in
-  if [[ -f "$mycnf" ]] && ! fl_mariadb_includedir_present; then
-    chk__set warn "${mycnf} has no '!includedir' for my.cnf.d, so the utf8mb4 drop-in is ignored" "${SCRIPT_DIR}/benchbar repair" mariadb_utf8
-    return 0
-  fi
-  # and the running server must actually use it
-  live="$(fl_mariadb_live_charset)"
-  if [[ -n "$live" && "$live" != "utf8mb4" ]]; then
-    chk__set warn "MariaDB runs with character_set_server=${live}; a restart is needed to pick up utf8mb4" "${SCRIPT_DIR}/benchbar repair (restarts MariaDB)" mariadb_utf8
+  # the drop-in only counts when my.cnf pulls the folder in. The server's
+  # live charset is not queried: doctor is read only and must never read the
+  # Keychain (the app runs it on a timer).
+  if ! fl_mariadb_includedir_present; then
+    chk__set warn "${mycnf} is missing or has no '!includedir' for my.cnf.d, so the utf8mb4 drop-in is ignored" "${SCRIPT_DIR}/benchbar repair" mariadb_utf8
   fi
 }
 
 chk_wkhtmltopdf() {
+  local shadow
   case "$(fl_wkhtmltopdf_state)" in
-    patched) chk__set ok "patched Qt build at $(command -v wkhtmltopdf)" ;;
-    unpatched) chk__set warn "$(command -v wkhtmltopdf) is not the patched Qt build; PDFs will crash" "${SCRIPT_DIR}/benchbar repair (installs the official package, sudo)" wkhtmltopdf_install ;;
+    patched)
+      shadow="$(fl_wkhtmltopdf_shadow)"
+      if [[ -n "$shadow" ]]; then
+        chk__set warn "patched build at $(fl_wkhtmltopdf_bin), but ${shadow} comes first on PATH and is not patched" "brew uninstall wkhtmltopdf"
+      else
+        chk__set ok "patched Qt build at $(fl_wkhtmltopdf_bin)"
+      fi ;;
+    unpatched) chk__set warn "$(fl_wkhtmltopdf_bin) is not the patched Qt build; PDFs will crash" "${SCRIPT_DIR}/benchbar repair (installs the official package, sudo)" wkhtmltopdf_install ;;
     *) chk__set warn "not installed; PDF printing will not work" "${SCRIPT_DIR}/benchbar repair (installs the official package, sudo)" wkhtmltopdf_install ;;
   esac
 }

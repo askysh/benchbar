@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented here.
 
+## 0.3.1 - 2026-09-24
+
+### Fixed
+
+- `benchbar doctor` no longer reads the MariaDB root password from the
+  Keychain: the live `character_set_server` query added in 0.3.0 is gone.
+  Doctor is read only and the app runs it on a timer, so it must never
+  touch the Keychain. The `!includedir` check stays; a missing `my.cnf`
+  counts as a missing includedir.
+- Phase 01 exits 2, the documented "root password unknown" code, when a
+  fresh site needs the MariaDB root password and no source has it, and
+  `benchbar install` reports that as a pending manual step.
+- wkhtmltopdf detection prefers the official package binary in
+  `/usr/local/bin` when it is the patched build, and warns (fix:
+  `brew uninstall wkhtmltopdf`) when an unpatched Homebrew build earlier
+  on PATH would shadow it.
+
 ## 0.3.0 - 2026-09-24
 
 The project is now **BenchBar**: the `benchbar` command line tool, plus a

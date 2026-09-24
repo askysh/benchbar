@@ -120,6 +120,6 @@ assert_calls_not_contain '^launchctl kickstart'
 assert_eq "manual" "$(cat "$BENCH2/logs/.bench-stopped")"
 
 # ---- the frappe-mac alias still works
-"$ROOT/frappe-mac" --version | grep -q 'benchbar 0.3.0' || fail "frappe-mac alias must run benchbar"
+"$ROOT/frappe-mac" --version | grep -q 'benchbar 0.3.1' || fail "frappe-mac alias must run benchbar"
 
 printf 'test-migrate: ok\n'
