@@ -18,7 +18,9 @@
 # id. xcodebuild then signs with it and a secure timestamp, and the ad hoc
 # step is skipped. Unset (the default), the app is signed ad hoc.
 # With --sparkle, BENCHBAR_APPCAST_URL and BENCHBAR_SPARKLE_PUBLIC_KEY go
-# into Info.plist.
+# into Info.plist. BENCHBAR_VERSION and BENCHBAR_BUILD override
+# MARKETING_VERSION and CURRENT_PROJECT_VERSION from project.yml (release
+# builds set them from the git tag).
 #
 # Needs full Xcode 26 or newer (not only the Command Line Tools) and
 # XcodeGen (brew install xcodegen).
@@ -36,6 +38,9 @@ SIGN_IDENTITY="${BENCHBAR_SIGN_IDENTITY:-}"
 TEAM_ID="${BENCHBAR_TEAM_ID:-}"
 APPCAST_URL="${BENCHBAR_APPCAST_URL:-https://github.com/askysh/benchbar/releases/latest/download/appcast.xml}"
 SPARKLE_KEY="${BENCHBAR_SPARKLE_PUBLIC_KEY:-}"
+VERSION_ARGS=()
+[[ -n "${BENCHBAR_VERSION:-}" ]] && VERSION_ARGS+=(MARKETING_VERSION="$BENCHBAR_VERSION")
+[[ -n "${BENCHBAR_BUILD:-}" ]] && VERSION_ARGS+=(CURRENT_PROJECT_VERSION="$BENCHBAR_BUILD")
 
 for arg in "$@"; do
   case "$arg" in
@@ -73,7 +78,7 @@ if [[ "$RUN_TESTS" == "1" ]]; then
   [[ "$code" == "0" ]] || die "Swift tests failed (exit ${code})" "less ${BUILD}/test.log"
 fi
 
-step "xcodebuild ${CONFIG}"
+step "xcodebuild ${CONFIG}${BENCHBAR_VERSION:+ (version ${BENCHBAR_VERSION}, build ${BENCHBAR_BUILD:-project})}"
 if [[ -n "$SIGN_IDENTITY" ]]; then
   [[ -n "$TEAM_ID" ]] || die "BENCHBAR_SIGN_IDENTITY needs BENCHBAR_TEAM_ID" "export BENCHBAR_TEAM_ID=ABCDE12345"
   SIGN_ARGS=(CODE_SIGN_IDENTITY="$SIGN_IDENTITY" DEVELOPMENT_TEAM="$TEAM_ID" OTHER_CODE_SIGN_FLAGS="--timestamp")
@@ -82,7 +87,8 @@ else
 fi
 xcodebuild -project "${MACOS}/BenchBar.xcodeproj" -scheme BenchBar -configuration "$CONFIG" \
   -derivedDataPath "$DERIVED" -destination 'generic/platform=macOS' \
-  "${SIGN_ARGS[@]}" BENCHBAR_APPCAST_URL="$APPCAST_URL" BENCHBAR_SPARKLE_PUBLIC_KEY="$SPARKLE_KEY" \
+  "${SIGN_ARGS[@]}" ${VERSION_ARGS[@]+"${VERSION_ARGS[@]}"} \
+  BENCHBAR_APPCAST_URL="$APPCAST_URL" BENCHBAR_SPARKLE_PUBLIC_KEY="$SPARKLE_KEY" \
   -quiet build 2>&1 | pretty
 
 APP="${DERIVED}/Build/Products/${CONFIG}/BenchBar.app"
