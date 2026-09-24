@@ -83,7 +83,7 @@ decisions of the app work live in `macos/DECISIONS.md`.
 - `release-local.sh` no longer re-signs the app: `macos-build.sh` already signed it ad hoc with the Hardened Runtime and the entitlements, and a plain `codesign --force -s -` dropped both. The script verifies the signature and the runtime flag instead.
 - Phase 01 no longer requires `wkhtmltopdf`: a bench without it works, only PDF printing does not, and phase 00 already said so when the package was declined.
 - The report's quoted value patterns accept backslash escaped characters inside the quotes, so `"api_key":"abc\"tail"` is masked whole.
-- The utf8mb4 doctor check also requires the `!includedir` line in `my.cnf` and, when MariaDB runs and the root password is known, a live `character_set_server` of utf8mb4; the repair action restarts MariaDB when either the files changed or the live value is wrong.
+- The utf8mb4 doctor check also requires the `!includedir` line in `my.cnf` (a missing `my.cnf` counts as missing). The live `character_set_server` query that 0.3.0 added was removed in 0.3.1: it read the root password from the Keychain, and doctor is read only and runs on a timer in the app, so it must never touch the Keychain. A test asserts that doctor makes no `security` call.
 - `adopt --dry-run` never touched state (`fl_state_set` is a no-op under `FL_DRY_RUN`); a test now proves it.
 
 - The report also masks Python repr mappings (`'password': 'x'`): worker logs print dicts that way.

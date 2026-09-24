@@ -286,16 +286,6 @@ fl_mariadb_dropin_apply() {
   return 0
 }
 
-# The server's live character_set_server when it runs and the root password
-# is known (Keychain or environment); empty otherwise.
-fl_mariadb_live_charset() {
-  local pw
-  fl_process_running mariadbd || fl_port_listening 3306 || return 0
-  pw="${MARIADB_ROOT_PASSWORD:-$(fl_keychain_get 2>/dev/null || true)}"
-  [[ -n "$pw" ]] || return 0
-  fl_mariadb_server_charset "$pw" 2>/dev/null || true
-}
-
 # fl_mariadb_restart_if_running: a changed drop-in needs a restart; a
 # stopped server picks it up on its next start.
 fl_mariadb_restart_if_running() {
