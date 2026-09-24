@@ -356,3 +356,105 @@ To try it: System Settings, Accessibility, Display (or Motion on macOS
 - `macos/BenchBar/Speed/SpeedSource.swift`, `ProcessTreeCPU.swift`, `SpeedController.swift`.
 - `macos/BenchBar/StatusItem/StatusItemController.swift`, `macos/BenchBar/System/SystemActivity.swift`.
 - `macos/BenchBarTests/RunnerTests.swift`, `SpeedTests.swift`.
+
+## Phase 5: the popover and Settings
+
+### SwiftUI inside AppKit
+
+The menu bar item is AppKit; what it opens is SwiftUI. The bridge is
+`NSHostingController(rootView:)`, a view controller that hosts a SwiftUI
+view. `sizingOptions = [.preferredContentSize]` lets the SwiftUI view
+decide the size, so the popover grows when doctor results arrive.
+
+- `Popover/PopoverController.swift` puts it in an `NSPopover` with
+  `behavior = .transient` (a click elsewhere closes it).
+- `Popover/PopoverView.swift` reads `BenchStore` and `BenchModel`
+  directly. They are `@Observable`, so the view redraws when a state
+  changes, with no extra wiring.
+
+### Why the app activates itself
+
+An accessory app is never frontmost on its own. If it does not call
+`NSApp.activate()` before showing the popover, the popover's window never
+becomes key, and key presses (the ⌘ shortcuts) go to whatever app was in
+front. After showing it we also clear the first responder, so no button
+starts with the focus ring: a stray Space must not stop your bench.
+
+### Keyboard shortcuts
+
+`.keyboardShortcut("u", modifiers: .command)` on a SwiftUI button fires
+it on ⌘U while its window is key. A disabled button ignores its shortcut,
+so ⌘U does nothing while the bench runs.
+
+| Keys | Action |
+|---|---|
+| ⌘U / ⌘D / ⌘R | start (benchup) / stop (benchdown) / restart |
+| ⌘O / ⌘L / ⌘F | open site / logs in Terminal / bench folder |
+| ⌘K | run doctor (read only) |
+| ⌘, / ⌘Q | Settings / quit |
+
+### The Settings window pattern
+
+A menu bar app has `LSUIElement = true`: no Dock icon, and macOS treats
+its windows as second class (they open behind other apps). The pattern
+that works (`Settings/SettingsWindowController.swift`):
+
+1. On open: `NSApp.setActivationPolicy(.regular)`, which gives a Dock
+   icon and a normal menu bar for as long as the window is open, then
+   `NSApp.activate()` and `makeKeyAndOrderFront`.
+2. On close (`windowWillClose`): `setActivationPolicy(.accessory)`, and
+   the Dock icon goes away.
+
+The app also installs a small main menu (`AppDelegate.makeMainMenu`).
+Without an Edit menu, ⌘C and ⌘V do nothing in a text field, because
+those shortcuts are menu items.
+
+We do not use SwiftUI's `Settings` scene: it needs a SwiftUI `App`, and
+opening it from a menu bar app is unreliable across macOS versions.
+
+### Launch at login
+
+`SMAppService.mainApp.register()` (ServiceManagement, macOS 13+) adds the
+app itself to Login Items. There is no plist to write. The status can be:
+
+- enabled
+- not registered
+- requires approval: the user has to allow it
+- not found: macOS cannot register this copy, for example one running
+  from Xcode's build folder
+
+To approve it by hand:
+
+1. Open System Settings, General, Login Items & Extensions.
+2. Under "Open at Login", find BenchBar and switch it on.
+
+The Settings window has a button that opens that page
+(`SMAppService.openSystemSettingsLoginItems()`).
+
+### Opening things
+
+`System/Workspace.swift`: the site in your browser (`NSWorkspace.open`),
+the folder in Finder, and the logs in Terminal. For the logs we write a
+tiny `.command` script (`benchbar logs -n200 --bench-dir ...`) and open it
+with Terminal. Terminal runs `.command` files, so we need no Apple Events
+permission to "tell Terminal to do script".
+
+### Seeing the UI without clicking
+
+`BenchBarTests/SnapshotTests.swift` renders the popover and Settings
+with fixture data to PNG files, light and dark:
+
+```bash
+mkdir -p ~/Library/Caches/BenchBarSnapshots
+scripts/macos-build.sh --test
+open ~/Library/Caches/BenchBarSnapshots
+```
+
+The suite is off unless that folder exists.
+
+### Files to read
+
+- `macos/BenchBar/Popover/PopoverView.swift`, `PopoverController.swift`, `BenchPresentation.swift`.
+- `macos/BenchBar/Settings/SettingsWindowController.swift`, `SettingsView.swift`, `LaunchAtLogin.swift`, `RunnerPreview.swift`.
+- `macos/BenchBar/App/AppDelegate.swift` for the wiring and the click handling.
+- `macos/BenchBarTests/PresentationTests.swift`.

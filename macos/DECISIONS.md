@@ -85,3 +85,18 @@ One line per non obvious choice: the decision, then the reason.
 - Sleep, screen sleep, lock and session resign also suspend the store's polling and watchers (the Phase 3 note left this for Phase 5).
 - The app skips all startup when `XCTestConfigurationFilePath` is set, as the Phase 1 note says; the placeholder app had nothing to skip before.
 - Until the popover (Phase 5) the status item has a one item menu, Quit BenchBar.
+
+## Phase 5: menu and settings
+
+- Left click opens the popover, right click or control click shows a two item menu (Settings, Quit): the standard menu bar convention, and a way out if the popover ever misbehaves.
+- The app activates itself before showing the popover and then clears the first responder: without activation the ⌘ shortcuts never reach it, and without clearing, Stop starts focused and a Space stops the bench.
+- Shortcuts follow the CLI helpers: ⌘U up, ⌘D down, ⌘R restart; ⌘O site, ⌘L logs, ⌘F folder, ⌘K doctor, ⌘, Settings, ⌘Q quit.
+- Button rules live in a pure `BenchControls`: a bench with `stop_reason: broken` or without an agent cannot be started from the app, and shows `benchbar repair --bench-dir ...` with a Copy button instead. The app never runs repair itself (the brief keeps doctor read only in v0.2).
+- Open logs writes a `.command` file under the app's temp folder and opens it with Terminal: no Apple Events entitlement or permission prompt, unlike "tell application Terminal to do script". It runs `benchbar logs`, which execs `tail -f` when it has a terminal.
+- Settings is an AppKit window hosting SwiftUI (not the SwiftUI `Settings` scene), with the .regular / .accessory activation policy switch from the brief.
+- A small main menu (app, Edit, Window) exists only so ⌘C, ⌘V, ⌘W work while Settings is open.
+- The runner preview in Settings reuses RunnerAnimator at 2x, running at speed 3, and respects Reduce Motion.
+- Launch at login shows the SMAppService status; "not found" gets an explanation (a copy in DerivedData or a disk image cannot register).
+- The CLI file picker is shown automatically once, only when the CLI is not found anywhere (`askedForCLI`); after that, Settings and the popover have Choose buttons.
+- Snapshot tests render the popover and Settings to PNG, gated on `~/Library/Caches/BenchBarSnapshots` existing, because xcodebuild passes neither environment variables nor its TMPDIR to a hosted test.
+- The notifications toggle is stored now and used in Phase 6.

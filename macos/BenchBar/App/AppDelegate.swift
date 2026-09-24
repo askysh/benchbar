@@ -1,30 +1,143 @@
 import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private var settings: AppSettings?
-    private var store: BenchStore?
-    private var statusItemController: StatusItemController?
+    private var settings: AppSettings!
+    private var store: BenchStore!
+    private var statusItemController: StatusItemController!
+    private var popover: PopoverController!
+    private var settingsWindow: SettingsWindowController!
+    private let launchAtLogin = LaunchAtLogin()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // the tests run inside this app (TEST_HOST): no menu bar item, no CLI calls
         guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
 
-        let settings = AppSettings()
-        let store = BenchStore(settings: settings)
-        let controller = StatusItemController(store: store, settings: settings)
-        store.onChange = { [weak controller] in controller?.update() }
-        statusItemController = controller
-        controller.statusItem.menu = makeMenu()
-        self.settings = settings
-        self.store = store
+        settings = AppSettings()
+        store = BenchStore(settings: settings)
+        statusItemController = StatusItemController(store: store, settings: settings)
+        store.onChange = { [weak self] in self?.statusItemController.update() }
 
-        Task { await store.start() }
+        let commands = AppCommands(
+            openSettings: { [weak self] in self?.openSettings() },
+            quit: { NSApp.terminate(nil) },
+            chooseCLI: { [weak self] in self?.chooseCLI() },
+            openLogs: { [weak self] bench in self?.openLogs(bench) })
+        popover = PopoverController(rootView: PopoverView(store: store, commands: commands))
+        popover.onOpenChange = { [weak self] open in self?.store.setPopoverOpen(open) }
+
+        settingsWindow = SettingsWindowController { [unowned self] in
+            SettingsView(settings: settings, store: store, launchAtLogin: launchAtLogin, chooseCLI: { [weak self] in self?.chooseCLI() })
+        }
+
+        NSApp.mainMenu = makeMainMenu()
+        setUpClicks()
+
+        Task {
+            await store.start()
+            askForCLIOnce()
+        }
     }
 
-    /// A stand in until the popover (Phase 5): just a way to quit.
-    private func makeMenu() -> NSMenu {
+    // MARK: status item clicks
+
+    /// Left click toggles the popover; right click (or control click) shows a small menu.
+    private func setUpClicks() {
+        guard let button = statusItemController.statusItem.button else { return }
+        button.target = self
+        button.action = #selector(statusItemClicked(_:))
+        button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+    }
+
+    @objc private func statusItemClicked(_ sender: NSStatusBarButton) {
+        let event = NSApp.currentEvent
+        if event?.type == .rightMouseUp || event?.modifierFlags.contains(.control) == true {
+            popover.close()
+            // assigning a menu for one click shows it the standard way
+            statusItemController.statusItem.menu = makeStatusMenu()
+            sender.performClick(nil)
+            statusItemController.statusItem.menu = nil
+        } else {
+            popover.toggle(from: sender)
+        }
+    }
+
+    private func makeStatusMenu() -> NSMenu {
         let menu = NSMenu()
+        menu.addItem(withTitle: "Settings…", action: #selector(openSettingsAction), keyEquivalent: ",").target = self
+        menu.addItem(.separator())
         menu.addItem(withTitle: "Quit BenchBar", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         return menu
+    }
+
+    // MARK: commands
+
+    @objc private func openSettingsAction() { openSettings() }
+
+    private func openSettings() {
+        popover.close()
+        settingsWindow.show()
+    }
+
+    private func chooseCLI() {
+        popover.close()
+        guard let path = Workspace.chooseCLI() else { return }
+        Task { await store.useCLI(path: path) }
+    }
+
+    private func openLogs(_ bench: BenchModel) {
+        guard case .ready(let cli) = store.cli else { return }
+        popover.close()
+        do {
+            try Workspace.openLogs(bench, cli: cli)
+        } catch {
+            bench.lastError = "Could not open the logs: \(error.localizedDescription)"
+        }
+    }
+
+    /// The brief: when the CLI is not in any known place, ask once with a
+    /// file picker. After that, Settings has the Choose button.
+    private func askForCLIOnce() {
+        guard case .missing(.notFound) = store.cli, !settings.askedForCLI else { return }
+        settings.askedForCLI = true
+        chooseCLI()
+    }
+
+    // MARK: main menu
+
+    /// Only visible while Settings is open (the app is .regular then), but
+    /// it is what makes ⌘W, ⌘Q and copy and paste work in that window.
+    private func makeMainMenu() -> NSMenu {
+        let main = NSMenu()
+
+        let appMenu = NSMenu()
+        appMenu.addItem(withTitle: "About BenchBar", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "Settings…", action: #selector(openSettingsAction), keyEquivalent: ",").target = self
+        appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "Quit BenchBar", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        main.addItem(submenu(appMenu, title: "BenchBar"))
+
+        let edit = NSMenu(title: "Edit")
+        edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
+        edit.addItem(.separator())
+        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        main.addItem(submenu(edit, title: "Edit"))
+
+        let window = NSMenu(title: "Window")
+        window.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        window.addItem(withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
+        main.addItem(submenu(window, title: "Window"))
+        NSApp.windowsMenu = window
+        return main
+    }
+
+    private func submenu(_ menu: NSMenu, title: String) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        item.submenu = menu
+        return item
     }
 }
