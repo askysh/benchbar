@@ -63,3 +63,8 @@ decisions of the app work live in `macos/DECISIONS.md`.
 - Releases are created as drafts: the person publishes after looking at the files. `workflow_dispatch` with a version builds the artifact without touching releases, for a rehearsal.
 - Sparkle stays out of the ad hoc path: unsigned updates would defeat its purpose, and the ad hoc app contains no update code.
 - The DMG carries an Applications symlink and is not signed on the ad hoc path (signing a DMG ad hoc buys nothing); Gatekeeper's warning is expected and documented with the macOS 15 "Open Anyway" steps in README.
+
+## Found on the macOS runners
+
+- A generated password reads a bounded 4 KB of `/dev/urandom`: BSD `tr` on an endless stream never exits when `head` closes the pipe and SIGPIPE is ignored, as it is under GitHub Actions. The CLI job hung on that for 45 minutes before the cause was found.
+- The sudo keepalive owns no stdio and sleeps in five second slices: with the caller's stdout inherited, every `$(...)` capture of a run waited for its `sleep 50`, and on macOS never returned. The tests capture output, so this showed up only in CI.
