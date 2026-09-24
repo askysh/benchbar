@@ -14,6 +14,16 @@ for a in "$@"; do
   prev="$a"
 done
 for a in "$@"; do [[ "$a" == "-w" ]] && { printf '%s' "$code"; [[ "$code" == "000" ]] && exit 7; exit 0; }; done
+url="${*: -1}"
+# the GitHub release API and its files (install.sh): $MOCK_STATE/release.json,
+# release.zip and release.sums; a missing release.json is a 404
+case "$url" in
+  *"/releases/latest"|*"/releases/tags/"*)
+    if [[ -f "${MOCK_STATE:-/nonexistent}/release.json" ]]; then cat "${MOCK_STATE}/release.json"; exit 0; fi
+    echo "curl: (22) The requested URL returned error: 404" >&2; exit 22 ;;
+  *BenchBar-*.zip) [[ -n "$out" ]] && cp "${MOCK_STATE:?}/release.zip" "$out"; exit 0 ;;
+  *SHA256SUMS) [[ -n "$out" ]] && cp "${MOCK_STATE:?}/release.sums" "$out"; exit 0 ;;
+esac
 if [[ -n "$out" ]]; then
   [[ -f "${MOCK_STATE:-/nonexistent}/download_fail" ]] && { echo "curl: (22) The requested URL returned error: 404" >&2; exit 22; }
   if [[ -f "${MOCK_STATE:-/nonexistent}/download_payload" ]]; then cp "${MOCK_STATE}/download_payload" "$out"; else printf 'stub download\n' >"$out"; fi

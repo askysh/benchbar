@@ -21,12 +21,15 @@ Both are safe to run at any time. Every check carries a `fix` string
 MARIADB_ROOT_PASSWORD='...' ADMIN_PASSWORD='...' ./benchbar install --yes
 ```
 
-Ask the user for the two passwords before you start, or run without
-`--yes` and let the user type them. The first run usually exits with code
-2 after phase 1 and prints manual steps (`mariadb-secure-installation`,
-the patched-Qt `wkhtmltopdf` package). Relay them to the user verbatim,
-including the answer table in README, wait, then run the same command
-again. Re-running is always safe.
+`ADMIN_PASSWORD` is the site's Administrator login; ask the user for it,
+or run without `--yes` and let them type it. `MARIADB_ROOT_PASSWORD` is
+optional: a fresh MariaDB gets a generated password, an existing password
+is read from the Keychain (`benchbar mariadb-password` prints it). Only
+when MariaDB already has a password that neither the environment nor the
+Keychain knows does the run stop with exit code 2 and say what to pass.
+The patched wkhtmltopdf package and the `/etc/hosts` line need `sudo`;
+`install` asks for it once up front and says why. Re-running is always
+safe.
 
 When it finishes: tell the user to run `source ~/.zshrc` and `benchup`,
 then open `http://<site>:8000`.
@@ -35,9 +38,13 @@ then open `http://<site>:8000`.
 
 ```bash
 ./benchbar doctor --bench-dir <path>
+./benchbar adopt <path>                          # register it: plan first, then asks; --yes to apply
 ./benchbar repair --dry-run --bench-dir <path>   # show the plan first
 ./benchbar repair --yes --bench-dir <path>
 ```
+
+`adopt` writes only the service files (Procfile.lean, runner, agent,
+helpers, hosts line) and never runs `migrate`, `build` or `update`.
 
 `repair` only runs the fixes doctor flagged, in dependency order, with a
 backup before each change. The bench path is remembered after the first
@@ -59,8 +66,13 @@ call, so later commands do not need `--bench-dir`.
   file. `repair` regenerates it.
 - Use `--dry-run` before any `repair` or `install` on a machine you have
   not seen before, and show the plan to the user.
-- `sudo` is only ever used for `/etc/hosts`. With `--yes` that happens
-  without a prompt, so say so.
+- `sudo` is only ever used for `/etc/hosts` and the wkhtmltopdf package.
+  The run asks for it once up front; with `--yes` the confirmation is
+  skipped but the password prompt is not, so say so.
+- Never print or log the MariaDB root password. It lives in the Keychain;
+  `benchbar mariadb-password --yes` prints it when a user asks for it.
+- When something is wrong, `./benchbar report --print` shows the redacted
+  diagnostics; `./benchbar report` writes the zip for a bug report.
 - If doctor warns about CleanMyMac, tell the user to add the bench folder
   to its Ignore List. This is the most common cause of a bench that
   "suddenly" lost `env/`, `node_modules` and the built assets.
@@ -75,8 +87,8 @@ call, so later commands do not need `--bench-dir`.
 - Full command output of every mutating run is in
   `.benchbar/logs/<timestamp>.log`. Backups are in
   `.benchbar/backups/<timestamp>/`.
-- Exit codes: 0 success, 1 failure or a failing check, 2 manual steps
-  pending (phase 1 only).
+- Exit codes: 0 success, 1 failure or a failing check, 2 the MariaDB root
+  password is unknown (phase 1 only; pass `MARIADB_ROOT_PASSWORD`).
 
 ## Daily operations for the user
 

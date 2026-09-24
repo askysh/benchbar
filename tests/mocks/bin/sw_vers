@@ -1,2 +1,6 @@
 #!/usr/bin/env bash
-printf 'ProductName:\tmacOS\nProductVersion:\t15.1\nBuildVersion:\t24B83\n'
+case "${1:-}" in
+  -productVersion|--productVersion) printf '15.1\n' ;;
+  -productName|--productName) printf 'macOS\n' ;;
+  *) printf 'ProductName:\tmacOS\nProductVersion:\t15.1\nBuildVersion:\t24B83\n' ;;
+esac

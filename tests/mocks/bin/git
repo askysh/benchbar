@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# git mock for install.sh: "clone URL DIR" copies the checkout at $MOCK_REPO_ROOT
+# into DIR (with a fake .git), "pull --ff-only" reports "Already up to date."
+# unless $MOCK_STATE/git_update exists, "rev-parse --short HEAD" prints the
+# content of $MOCK_STATE/git_head (default abc1234). Anything else: real git.
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "$(dirname "$0")/_mocklib.sh"
+mock_log "$@"
+dir=""
+if [[ "${1:-}" == "-C" ]]; then dir="$2"; shift 2; fi
+case "${1:-}" in
+  clone)
+    dest="${*: -1}"
+    mkdir -p "$dest/.git"
+    for f in benchbar frappe-mac lib templates config docs tests; do cp -R "${MOCK_REPO_ROOT:?}/$f" "$dest/"; done
+    exit 0 ;;
+  pull)
+    if [[ -f "${MOCK_STATE:?}/git_update" ]]; then
+      printf 'Updating abc1234..def5678\nFast-forward\n'
+      printf 'def5678' >"${MOCK_STATE}/git_head"
+      rm -f "${MOCK_STATE}/git_update"
+    else
+      printf 'Already up to date.\n'
+    fi
+    exit 0 ;;
+  rev-parse)
+    cat "${MOCK_STATE:?}/git_head" 2>/dev/null || printf 'abc1234'
+    printf '\n'
+    exit 0 ;;
+esac
+real="$(command -v -p git || true)"
+[[ -n "$real" ]] || exit 1
+if [[ -n "$dir" ]]; then exec "$real" -C "$dir" "$@"; else exec "$real" "$@"; fi

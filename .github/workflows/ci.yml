@@ -25,7 +25,7 @@ jobs:
   cli-macos:
     name: CLI tests and shellcheck (macOS)
     runs-on: macos-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -55,7 +55,7 @@ jobs:
   cli-linux:
     name: CLI tests (Linux, quick signal)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - name: Install shellcheck and zip

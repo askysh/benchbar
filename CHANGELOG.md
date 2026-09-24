@@ -10,6 +10,48 @@ affiliated with Frappe Technologies.
 
 ### Added
 
+- **One line installer**, `install.sh`: checks macOS, the Command Line
+  Tools and Homebrew (offering their installers), clones the CLI into
+  `~/.local/share/benchbar` with links in `~/.local/bin` and a PATH block
+  in `~/.zshrc`, installs the BenchBar app from the latest GitHub release
+  (zip checked against the release's `SHA256SUMS`, unpacked with `ditto`,
+  so no Gatekeeper prompt), then offers `benchbar adopt` for a bench it
+  finds or `benchbar install`. Flags `--yes`, `--dry-run`, `--no-app`,
+  `--app-only`, `--version vX.Y.Z`, `--uninstall`. Re-runs say
+  `unchanged`.
+- **The manual install steps are gone.** Phase 00 sets the MariaDB root
+  password itself (generated, or `MARIADB_ROOT_PASSWORD`), applies the
+  secure installation steps in SQL, and keeps the password in the macOS
+  Keychain (`benchbar-mariadb`); every later step reads it from there and
+  passes it through `MYSQL_PWD`. The utf8mb4 drop-in is a doctor check and
+  repair action. The patched Qt wkhtmltopdf is downloaded from the pinned
+  official package (`config/wkhtmltopdf.tsv`, sha256 checked) and
+  installed with `installer`; on Apple Silicon Rosetta 2 is offered first
+  because the package is an Intel binary, and skipping it only costs
+  PDFs. The `/etc/hosts` line sits inside `# >>> benchbar >>>` markers,
+  with a backup first. One `sudo` prompt covers a whole run.
+- `benchbar adopt PATH`: registers an existing bench (Procfile.lean,
+  runner, launchd agent, helpers, hosts line) after showing the plan and
+  asking. Never runs `migrate`, `build` or `update`.
+- `benchbar report [--print]`: a redacted diagnostics zip on the Desktop
+  with doctor and status JSON, versions, the agent, `Procfile.lean`,
+  `state.json`, log tails and the key names of the site configs. Secrets
+  are masked by key name, paths and names are replaced by placeholders,
+  and `REDACTIONS.txt` lists what was replaced.
+- `benchbar mariadb-password`: prints the Keychain password after a
+  confirmation.
+- Doctor checks `MariaDB utf8mb4` and `wkhtmltopdf`, with repair actions.
+- CI (`.github/workflows/ci.yml`) on pull requests and pushes to main:
+  shellcheck and the CLI tests on macOS (`/bin/bash` 3.2) and Linux, an
+  unsigned app build and the Swift tests, and `scripts/release-local.sh`
+  whose zip, dmg and `SHA256SUMS` are uploaded as a workflow artifact.
+- Releases (`.github/workflows/release.yml`): a `v*` tag drafts a GitHub
+  release with the CHANGELOG section as notes. Without Developer ID
+  secrets the app is ad hoc signed (`scripts/release-local.sh`); with
+  them it is signed, notarized and stapled, with the Sparkle appcast and
+  the Homebrew cask (`docs/releasing.md`).
+- `docs/testing.md`, a three step guide for testers, and
+  `docs/DECISIONS.md`.
 - **BenchBar.app** (`macos/`, macOS 14+, Apple Silicon), built from the
   command line with `scripts/macos-build.sh` and installed with
   `scripts/macos-install-local.sh`:
@@ -42,6 +84,12 @@ affiliated with Frappe Technologies.
 
 ### Changed
 
+- `00-mac-system-deps.sh` exits 2 only when MariaDB already has a root
+  password that neither the environment nor the Keychain knows; it takes
+  `--yes`. `01-install-bench-and-site.sh` reads the root password from
+  the Keychain and no longer passes it on the `mariadb` command line.
+- The test suite runs on Linux as well as macOS (GNU stat and sed, a
+  `uname` mock), so a Linux machine gives quick feedback.
 - The CLI is `benchbar`; `frappe-mac` stays as a link to it.
 - Agents are `com.benchbar.<bench>` and carry
   `AssociatedBundleIdentifiers` so Login Items shows them under BenchBar.

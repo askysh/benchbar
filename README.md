@@ -47,66 +47,105 @@ You need:
 You do not need Docker, a VM, or any pre-installed Python, Node, MariaDB
 or Redis. Homebrew provides all of it.
 
-## Quick start (fresh Mac)
+## Install
 
-Open Terminal and run:
+### One line
 
 ```bash
-cd ~
-git clone https://github.com/askysh/benchbar.git
-cd benchbar
-./benchbar install
+curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash
 ```
 
-`install` runs three phases and shows a numbered step list with live
-status and timings:
+It checks macOS, the Command Line Tools and Homebrew (offering the
+official installers), puts the `benchbar` CLI in `~/.local/share/benchbar`
+with links in `~/.local/bin`, installs the BenchBar app from the latest
+release into `~/Applications` (sha256 checked against the release), and
+then offers `benchbar adopt` for a bench it finds or `benchbar install`
+for a new one. It never runs `sudo` itself. Flags: `--yes`, `--dry-run`,
+`--no-app`, `--app-only`, `--version vX.Y.Z`, `--uninstall`. Running it
+again updates both and says `unchanged` when there is nothing to do.
+
+### The app by hand (DMG)
+
+Download `BenchBar-<version>.dmg` from the
+[releases page](https://github.com/askysh/benchbar/releases), open it and
+drag BenchBar to Applications. The app is not signed with an Apple
+Developer ID yet, so macOS 15 and later stop the first launch:
+
+1. Double click BenchBar. macOS says it could not verify the app. Click
+   **Done** (not Move to Trash).
+2. Open **System Settings > Privacy & Security**, scroll to the Security
+   section: "BenchBar was blocked to protect your Mac".
+3. Click **Open Anyway**, confirm with your password or Touch ID, then
+   **Open Anyway** once more in the dialog.
+
+This happens once. The one liner avoids it, because `curl` sets no
+quarantine flag on the download. Check a download with
+`shasum -a 256 -c SHA256SUMS` from the same release.
+
+### From source
+
+```bash
+git clone https://github.com/askysh/benchbar.git && cd benchbar
+./benchbar install                 # the CLI, no app needed
+brew install xcodegen
+scripts/release-local.sh           # the app: dist/BenchBar-<version>.zip and .dmg
+scripts/macos-install-local.sh     # or: build and copy it to ~/Applications
+```
+
+The app needs full Xcode 26 or newer (not only the Command Line Tools).
+
+## Setting up a bench
+
+`benchbar install` runs three phases and shows a numbered step list with
+live status and timings:
 
 1. **System dependencies**: Homebrew formulae (Python 3.11, Node 20,
-   MariaDB 10.11, Redis), the utf8mb4 MariaDB config, and a managed block
-   in your `~/.zshrc` with the profile exports and the `bench*` helpers.
+   MariaDB 10.11, Redis), the MariaDB root password (generated, or
+   `MARIADB_ROOT_PASSWORD`, kept in your Keychain), the secure
+   installation steps (no anonymous users, no test database, no remote
+   root), the utf8mb4 drop-in, the patched Qt `wkhtmltopdf` package
+   (downloaded from the official release, sha256 checked, installed with
+   `installer`; Rosetta 2 is offered first on Apple Silicon because the
+   package is an Intel binary), and a managed block in your `~/.zshrc`
+   with the profile exports and the `bench*` helpers.
 2. **Bench and site**: `frappe-bench` via pipx, `bench init`, ERPNext,
-   `bench new-site macdev`. You are asked for two passwords here.
+   `bench new-site macdev`. You are asked for the site's Administrator
+   password here; the MariaDB password comes from the Keychain.
 3. **Background service**: honcho, `Procfile.lean`, the runner script,
-   the launchd agent, the `/etc/hosts` entry (one `sudo` prompt), MariaDB
-   bound to 127.0.0.1, and migration of any older per-process agents.
+   the launchd agent, the `/etc/hosts` entry (inside marker comments,
+   with a backup), MariaDB bound to 127.0.0.1, and migration of any
+   older per-process agents.
 
-The first run stops after phase 1 with a short list of **manual steps**
-that no script can do safely for you. Complete them, then run
-`./benchbar install` again. It picks up where it left off.
+`sudo` is asked for once at the start, only when a step ahead needs it
+(the wkhtmltopdf package, the `/etc/hosts` line), and the run says so.
+Everything is idempotent: run it again and it reports `unchanged`.
 
-### The manual steps
+### Passwords
 
-**Set a MariaDB root password** with `mariadb-secure-installation`. The
-right answers for a Frappe dev box are not all defaults:
+| What | Where it lives | When you need it |
+|---|---|---|
+| MariaDB root | your macOS Keychain, item `benchbar-mariadb`. `benchbar mariadb-password` prints it after a confirmation | rarely: `bench new-site` for another site, or `mariadb -u root -p` |
+| ERPNext `Administrator` | you choose it in phase 2 (or `ADMIN_PASSWORD`) | every login at `http://macdev:8000` |
 
-| Prompt | Answer |
-|---|---|
-| `Enter current password for root` | Press Enter (no password yet) |
-| `Switch to unix_socket authentication` | `n` (Frappe needs password auth) |
-| `Change the root password?` | `y`, then pick a strong password and **write it down** |
-| `Remove anonymous users?` | `y` |
-| `Disallow root login remotely?` | `y` |
-| `Remove test database and access to it?` | `y` |
-| `Reload privilege tables now?` | `y` |
-
-**Install patched-Qt wkhtmltopdf** from
-<https://github.com/wkhtmltopdf/packaging/releases> (the latest
-`0.12.6.x` macOS `.pkg`). `wkhtmltopdf --version` must print
-`with patched qt`. Homebrew's build crashes on real Frappe templates.
-
-### Two passwords to write down
-
-| # | Where you set it | What it unlocks | When you need it again |
-|---|---|---|---|
-| 1 | `mariadb-secure-installation` | MariaDB root (the database) | Phase 2 asks for it once, to create the site |
-| 2 | Phase 2 prompt `Site admin password` | ERPNext `Administrator` login | Every login at `http://macdev:8000` |
-
-Do not reuse the same password for both. If you forget #2 later:
+If MariaDB already had a root password before BenchBar, phase 1 asks for
+it once (or reads `MARIADB_ROOT_PASSWORD`), verifies it and saves it to
+the Keychain. Forgot the Administrator password later:
 `bench --site macdev set-admin-password <new>` inside the bench folder.
+
+### Already have a bench?
+
+```bash
+benchbar adopt ~/frappe-bench
+```
+
+`adopt` validates the folder, remembers it, shows the plan (Procfile.lean,
+runner, launchd agent, shell helpers, `/etc/hosts` line) and asks before
+writing. It never runs `migrate`, `build` or `update` and never touches
+`sites/`. `--yes` skips the question.
 
 ### Start it
 
-When `install` ends with the "Next steps" box:
+When `install` or `adopt` ends with the "Next steps" box:
 
 ```bash
 source ~/.zshrc
@@ -131,7 +170,9 @@ running.
 | `benchdoctor` | `benchbar doctor` | Read-only health report |
 | `benchcd` | `cd "$(benchbar path)"` | Jump into the bench folder |
 
-Other commands: `benchbar repair`, `benchbar service`,
+Other commands: `benchbar adopt <path>`, `benchbar report` (a redacted
+diagnostics zip for bug reports, see [docs/testing.md](docs/testing.md)),
+`benchbar mariadb-password`, `benchbar repair`, `benchbar service`,
 `benchbar autostart on|off`, `benchbar uninstall-service`,
 `benchbar --help`.
 
@@ -178,20 +219,11 @@ on every change.
 
 <img src="docs/images/runners.png" width="420" alt="Every frame of the two built in runners">
 
-### Build and install it
+### Install it
 
-There is no signed download yet (see [docs/releasing.md](docs/releasing.md)),
-so build it on your Mac. You need full Xcode 26 or newer (not only the
-Command Line Tools) and XcodeGen:
-
-```bash
-brew install xcodegen
-scripts/macos-build.sh --test      # tests, then macos/build/BenchBar.app
-scripts/macos-install-local.sh     # copies it to ~/Applications and opens it
-```
-
-The build is signed ad hoc for your own Mac. It needs macOS 14 or later on
-Apple Silicon.
+The one liner in [Install](#install) puts the latest release in
+`~/Applications`; the DMG and the source build are described there too.
+The app needs macOS 14 or later on Apple Silicon.
 
 ### First run
 
@@ -316,8 +348,12 @@ running bench already uses the same web or socketio port.
 - Stop and cleanup only match this bench's honcho, `serve`, `worker`,
   `schedule`, `socketio.js` and the listeners on its ports. Your own
   `bench migrate` or `bench console` keeps running.
-- `sudo` is used for `/etc/hosts` only, and only after asking (or with
-  `--yes`).
+- `sudo` is used for two things only, the `/etc/hosts` line and the
+  wkhtmltopdf package, asked for once per run and only after saying why
+  (`--yes` skips the question, not the password prompt).
+- The MariaDB root password lives in the macOS Keychain, never in a file,
+  and is passed to the client through `MYSQL_PWD`, never on a command
+  line.
 - A lock in `.benchbar/lock` stops two runs from overlapping.
 - Full logs of every mutating run: `.benchbar/logs/<timestamp>.log`.
 
@@ -365,7 +401,8 @@ stays a question).
 `00-mac-system-deps.sh`, `01-install-bench-and-site.sh` and
 `02-background-service.sh` keep their flags: `--yes`, `--profile`,
 `--advanced`, `--check-updates`, `--offline`, `--dry-run`,
-`--repair-bench`. `00` exits with code 2 while manual steps remain.
+`--repair-bench`. `00` exits with code 2 only when MariaDB already has a root password that
+neither the environment nor the Keychain knows.
 `--repair-bench` only moves aside a folder that never became a bench; a
 bench with apps or sites is always kept and sent to `benchbar repair`.
 
@@ -417,9 +454,10 @@ built assets are missing, `./benchbar repair` runs `bench build`.
 missing. `./benchbar repair` adds it, or run
 `printf '127.0.0.1 macdev\n' | sudo tee -a /etc/hosts`.
 
-**MariaDB rejects the root password.** Confirm it with
-`mariadb -u root -p` in another tab. If that fails too, re-run
-`mariadb-secure-installation`.
+**MariaDB rejects the root password.** `benchbar mariadb-password`
+prints the one in the Keychain; confirm it with `mariadb -u root -p` in
+another tab. If it changed, run `MARIADB_ROOT_PASSWORD='...' benchbar
+install` once to verify and save the new one.
 
 **Phase 2 says the bench has apps or sites but no env.** That is the
 cleanup-tool case above. Run `./benchbar repair`, not the installer.
@@ -437,7 +475,8 @@ inside the bench.
 ## Files
 
 ```text
-benchbar                      # the CLI: install, up, down, doctor, repair, ...
+install.sh                    # the one line installer: CLI, app, then adopt or install
+benchbar                      # the CLI: install, adopt, up, down, doctor, repair, report, ...
 frappe-mac                    # the old name, a link to benchbar
 00-mac-system-deps.sh         # Phase 1: Homebrew formulae, MariaDB config, shell block
 01-install-bench-and-site.sh  # Phase 2: bench init, apps, site
@@ -448,7 +487,7 @@ config/                       # release profiles and app bundles
 tests/                        # mocked test harness (launchctl, brew, lsof, bench, ...)
 macos/                        # the BenchBar app (Swift, XcodeGen project)
 scripts/                      # build, install and release scripts for the app
-docs/                         # JSON API, custom runners, releasing
+docs/                         # tester guide, JSON API, custom runners, releasing, decisions
 examples/runners/             # an example custom runner
 ```
 

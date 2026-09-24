@@ -1,0 +1,221 @@
+# Builds BenchBar and drafts a GitHub release when a v* tag is pushed.
+#
+# Two paths, one workflow (docs/releasing.md):
+#   ad hoc      no Apple Developer account: the app is ad hoc signed,
+#               packaged as zip and dmg with SHA256SUMS, and attached to a
+#               draft release. Downloads open after "Open Anyway"; install.sh
+#               fetches them with curl, which sets no quarantine flag.
+#   Developer ID  when the signing and notarization secrets exist: signed,
+#               notarized, stapled, Sparkle appcast and Homebrew cask too.
+#
+# The version comes from the tag (v0.3.0 -> 0.3.0) and is written into
+# CFBundleShortVersionString; CFBundleVersion is the commit count.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build (X.Y.Z), for a manual run without a tag"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Which path
+    runs-on: ubuntu-latest
+    outputs:
+      signed: ${{ steps.secrets.outputs.signed }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - id: version
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ -n "$INPUT_VERSION" ]; then v="${INPUT_VERSION#v}"; else v="${REF_NAME#v}"; fi
+          case "$v" in
+            [0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "::error::'$v' is not a version (expected X.Y.Z)"; exit 1 ;;
+          esac
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "Building version $v"
+      - id: secrets
+        env:
+          CERT: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          CERT_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+          KEY: ${{ secrets.NOTARY_API_KEY_P8 }}
+          KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
+          ISSUER: ${{ secrets.NOTARY_API_ISSUER_ID }}
+          ED_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+          ED_PUBLIC: ${{ secrets.SPARKLE_ED_PUBLIC_KEY }}
+        run: |
+          missing=""
+          for name in CERT CERT_PASSWORD IDENTITY TEAM KEY KEY_ID ISSUER ED_KEY ED_PUBLIC; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          if [ -z "$missing" ]; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Developer ID release::Signing secrets found: the app will be signed, notarized and stapled."
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Ad hoc release::No Developer ID secrets (missing:${missing}). Building the unsigned release. See docs/releasing.md."
+          fi
+
+  build:
+    name: Build and draft the release (${{ needs.check.outputs.signed == 'true' && 'Developer ID' || 'ad hoc' }})
+    needs: check
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+      SIGNED: ${{ needs.check.outputs.signed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Cache Homebrew downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/Homebrew
+          key: brew-${{ runner.os }}-${{ runner.arch }}-xcodegen
+          restore-keys: brew-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Install tools
+        run: brew install xcodegen shellcheck
+
+      - name: CLI tests
+        run: /bin/bash tests/run-tests.sh
+
+      - name: Check the version against project.yml and the CHANGELOG
+        run: |
+          project="$(sed -n 's/^ *MARKETING_VERSION: *"\{0,1\}\([^"]*\)"\{0,1\} *$/\1/p' macos/project.yml | head -n 1)"
+          [ "$project" = "$VERSION" ] || { echo "::error::tag says $VERSION but macos/project.yml says $project"; exit 1; }
+          grep -q "^## ${VERSION} " CHANGELOG.md || { echo "::error::CHANGELOG.md has no '## ${VERSION} ' section"; exit 1; }
+          echo "version $VERSION matches project.yml and has a CHANGELOG section"
+
+      # ---------------------------------------------------------- Developer ID path
+      - name: Import the Developer ID certificate
+        if: env.SIGNED == 'true'
+        env:
+          CERT: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          CERT_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/release.keychain-db"
+          keychain_password="$(uuidgen)"
+          echo "$CERT" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$RUNNER_TEMP/cert.p12" -P "$CERT_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple: -k "$keychain_password" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          rm -f "$RUNNER_TEMP/cert.p12"
+          echo "KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+
+      - name: Write the notary and Sparkle keys
+        if: env.SIGNED == 'true'
+        env:
+          KEY: ${{ secrets.NOTARY_API_KEY_P8 }}
+          ED_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          umask 077
+          echo "$KEY" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
+          printf '%s' "$ED_KEY" > "$RUNNER_TEMP/sparkle_ed.key"
+
+      - name: Build, sign, notarize, package
+        if: env.SIGNED == 'true'
+        env:
+          BENCHBAR_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          BENCHBAR_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          BENCHBAR_SPARKLE_PUBLIC_KEY: ${{ secrets.SPARKLE_ED_PUBLIC_KEY }}
+          NOTARY_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_API_ISSUER_ID }}
+          SPARKLE_ED_KEY_PATH: ${{ runner.temp }}/sparkle_ed.key
+        run: scripts/macos-release.sh "$VERSION"
+
+      # ---------------------------------------------------------- ad hoc path
+      - name: Build, ad hoc sign, package
+        if: env.SIGNED != 'true'
+        run: scripts/release-local.sh "$VERSION"
+
+      # ---------------------------------------------------------- both paths
+      - name: Release notes from the CHANGELOG
+        run: |
+          {
+            awk -v v="$VERSION" '/^## /{p = ($2 == v)} p' CHANGELOG.md | tail -n +2
+            printf '\n---\n\n'
+            if [ "$SIGNED" = "true" ]; then
+              printf 'Signed with a Developer ID and notarized by Apple. Install with the DMG or with:\n\n'
+            else
+              printf 'This build is **not signed with an Apple Developer ID** (ad hoc signature). macOS shows "Apple could not verify" on first open of the DMG: use System Settings > Privacy & Security > Open Anyway, or install with the one liner, which downloads with curl and opens without that prompt:\n\n'
+            fi
+            printf '```bash\ncurl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash\n```\n\n'
+            printf 'Checksums are in `SHA256SUMS`.\n'
+          } > "$RUNNER_TEMP/notes.md"
+          cat "$RUNNER_TEMP/notes.md"
+
+      - name: Upload the files as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BenchBar-${{ env.VERSION }}
+          path: dist/*
+          if-no-files-found: error
+
+      - name: Create or update the draft GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "BenchBar ${VERSION}" --notes-file "$RUNNER_TEMP/notes.md"
+          else
+            gh release create "$TAG" --draft --title "BenchBar ${VERSION}" --notes-file "$RUNNER_TEMP/notes.md"
+          fi
+          gh release upload "$TAG" dist/* --clobber
+          echo "::notice title=Draft release::https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG} (draft: review, then publish)"
+
+      - name: Open a pull request on the Homebrew tap
+        if: env.SIGNED == 'true' && startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::notice::HOMEBREW_TAP_TOKEN is not set; update askysh/homebrew-tap by hand with dist/benchbar.rb"
+            exit 0
+          fi
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/askysh/homebrew-tap.git" "$RUNNER_TEMP/tap"
+          cd "$RUNNER_TEMP/tap"
+          git checkout -b "benchbar-${VERSION}"
+          mkdir -p Casks
+          cp "$GITHUB_WORKSPACE/dist/benchbar.rb" Casks/benchbar.rb
+          git add Casks/benchbar.rb
+          git -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" \
+            commit -m "benchbar ${VERSION}"
+          git push origin "benchbar-${VERSION}"
+          gh pr create --repo askysh/homebrew-tap --head "benchbar-${VERSION}" --title "benchbar ${VERSION}" \
+            --body "Cask update from the BenchBar release workflow."
+
+      - name: Remove the keychain and keys
+        if: always()
+        run: |
+          [ -z "${KEYCHAIN:-}" ] || security delete-keychain "$KEYCHAIN" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/AuthKey.p8" "$RUNNER_TEMP/sparkle_ed.key"

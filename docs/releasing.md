@@ -1,24 +1,57 @@
 # Releasing BenchBar
 
-Status: **designed, not live.** There is no Apple Developer account yet, so
-every build today is signed ad hoc and only runs on the Mac that built it.
-Everything below is written and ready; it switches on when the secrets
-exist. Until then the release workflow skips itself with a notice.
+One workflow, `.github/workflows/release.yml`, two paths. It runs when a
+`v*` tag is pushed and drafts a GitHub release with the files below. You
+review the draft and publish it.
 
-## What a release is
-
-| File | For | Made by |
+| Path | When | What people get |
 |---|---|---|
-| `BenchBar-<version>.dmg` | people downloading it, and Homebrew | signed, notarized, stapled |
-| `BenchBar-<version>.zip` | Sparkle updates inside the app | the stapled app, zipped with `ditto` |
-| `appcast.xml` | Sparkle's update feed | `generate_appcast`, signed with the EdDSA key |
-| `benchbar.rb` | the Homebrew cask | `packaging/homebrew/benchbar.rb.tmpl` with the DMG's sha256 |
-| `SHA256SUMS` | checking downloads | `shasum -a 256` |
+| **Ad hoc** (today) | no Apple Developer secrets in the repository | `BenchBar-<version>.zip`, `BenchBar-<version>.dmg`, `SHA256SUMS`. The app is ad hoc signed: a DMG download shows "Apple could not verify" once (README explains Open Anyway); `install.sh` downloads with curl, which sets no quarantine flag, so the app opens directly. |
+| **Developer ID** | the nine signing and notarization secrets exist | the same zip and dmg, signed, notarized and stapled, plus `appcast.xml` for Sparkle and `benchbar.rb` for the Homebrew tap |
 
-All of them come out of one command, `scripts/macos-release.sh <version>`,
-locally or in GitHub Actions.
+The `check` job decides: it looks for the secrets and prints which path
+runs as a notice. Nothing else differs for you: same tag, same draft
+release.
 
-## One time setup
+## Cutting a release
+
+1. Bump `MARKETING_VERSION` in `macos/project.yml` and `FL_VERSION` in
+   `benchbar`. The workflow refuses a tag that does not match
+   `MARKETING_VERSION`.
+2. Add the `## X.Y.Z` section to `CHANGELOG.md`. The workflow refuses a
+   version without one, and uses the section as the release notes.
+3. Commit, tag, push:
+   ```bash
+   git tag v0.3.0
+   git push origin v0.3.0
+   ```
+4. Wait for the Release workflow, open the draft on the Releases page,
+   check the files, publish.
+
+`CFBundleShortVersionString` is set from the tag and `CFBundleVersion`
+from the commit count, so the checkout is never edited by CI.
+
+### Trying a build without a release
+
+Every pull request run of CI (`ci.yml`, job "Unsigned release bundle")
+uploads the same zip, dmg and `SHA256SUMS` as a workflow artifact named
+`BenchBar-unsigned-<sha>`: open the run on the Actions tab, scroll to
+Artifacts, download. Locally, the same files come from:
+
+```bash
+brew install xcodegen
+scripts/release-local.sh            # version from project.yml, Swift tests first
+scripts/release-local.sh --skip-tests
+ls dist/
+```
+
+`release-local.sh` needs full Xcode, XcodeGen and nothing else. It is the
+ad hoc path of the workflow, running on your Mac.
+
+## The Developer ID path: one time setup
+
+Everything below switches on when the secrets exist. Until then the
+workflow takes the ad hoc path.
 
 ### 1. Apple Developer Program
 
@@ -84,7 +117,7 @@ brew install --cask askysh/tap/benchbar
 The official `homebrew/cask` needs a notable, notarized app with some
 history; submit there once BenchBar qualifies (roadmap v1.0).
 
-## Secrets
+### Secrets
 
 Add these in the GitHub repository, Settings, Secrets and variables,
 Actions:
@@ -102,26 +135,8 @@ Actions:
 | `SPARKLE_ED_PUBLIC_KEY` | the public key `generate_keys` printed |
 | `HOMEBREW_TAP_TOKEN` | optional: the tap token from step 5 |
 
-The workflow's first job only checks that the first nine exist. If any is
-missing, the release job is skipped and the run shows "Release skipped"
-with the missing names.
-
-## Cutting a release
-
-1. Bump `MARKETING_VERSION` (and `CURRENT_PROJECT_VERSION`) in
-   `macos/project.yml`, and `FL_VERSION` in `benchbar` if the CLI changed.
-2. Add the CHANGELOG entry.
-3. Commit, then tag and push:
-   ```bash
-   git tag v0.3.0
-   git push origin v0.3.0
-   ```
-4. GitHub Actions (`.github/workflows/macos-release.yml`) runs the CLI
-   tests, then `scripts/macos-release.sh`, which runs the Swift tests and
-   builds, then uploads the files to the GitHub release and opens a pull
-   request on the tap.
-
-The tag has to match `MARKETING_VERSION`; the script refuses otherwise.
+The `check` job needs the first nine. With any missing it says which and
+takes the ad hoc path.
 
 ### Locally, without CI
 
@@ -134,10 +149,25 @@ export NOTARY_KEY_PATH=~/keys/AuthKey_ABC123.p8 NOTARY_KEY_ID=ABC123 NOTARY_ISSU
 export SPARKLE_ED_KEY_PATH=~/keys/sparkle_ed.key BENCHBAR_SPARKLE_PUBLIC_KEY=...
 scripts/macos-release.sh --check      # tools, settings, identity, version
 scripts/macos-release.sh 0.3.0
-gh release create v0.3.0 dist/* --title "BenchBar 0.3.0" --generate-notes
+gh release create v0.3.0 dist/* --title "BenchBar 0.3.0" --draft
 ```
 
 ## What each step does, and why
+
+### Ad hoc path (`scripts/release-local.sh`)
+
+1. **Build** with `scripts/macos-build.sh`, version and build number from
+   the environment, then `codesign --force --deep -s -`. An ad hoc
+   signature satisfies Apple Silicon's requirement that every binary is
+   signed, but carries no identity, so Gatekeeper cannot trust it.
+2. **Zip** with `ditto -c -k --keepParent`, the form macOS expects for
+   app bundles (resource forks and symlinks survive).
+3. **DMG** with `hdiutil create`, holding the app and an Applications
+   shortcut for drag and drop.
+4. **SHA256SUMS** with `shasum -a 256`. `install.sh` checks the zip
+   against it before unpacking.
+
+### Developer ID path (`scripts/macos-release.sh`)
 
 1. **Build and sign** (`scripts/macos-build.sh --sparkle` with
    `BENCHBAR_SIGN_IDENTITY` set). xcodebuild signs the app and Sparkle's
@@ -156,12 +186,14 @@ gh release create v0.3.0 dist/* --title "BenchBar 0.3.0" --generate-notes
    release. The app's `SUFeedURL` points at
    `https://github.com/askysh/benchbar/releases/latest/download/appcast.xml`,
    so the newest release's feed is always the one read.
-6. **Cask.** The template gets the version and the DMG's sha256.
+6. **Cask.** The template gets the version and the DMG's sha256, and a
+   pull request is opened on the tap when `HOMEBREW_TAP_TOKEN` exists.
 
 ## Sparkle in the app
 
 - Off by default. `scripts/macos-build.sh` builds without Sparkle; the
-  app then contains no update code and makes no network requests.
+  app then contains no update code and makes no network requests. The ad
+  hoc path never includes it: Sparkle needs signed updates to be safe.
 - `scripts/macos-build.sh --sparkle` (or `BENCHBAR_SPARKLE=YES`) makes
   XcodeGen include `macos/sparkle.yml`: the Sparkle 2 package, the
   `SPARKLE` compilation condition, and `SUFeedURL`, `SUPublicEDKey` and
@@ -171,12 +203,14 @@ gh release create v0.3.0 dist/* --title "BenchBar 0.3.0" --generate-notes
   app menu.
 - `BENCHBAR_APPCAST_URL` overrides the feed URL (for a test feed).
 
-## Checking a signed build
+## Checking a build
 
 ```bash
+codesign -dv --verbose=2 macos/build/BenchBar.app            # ad hoc: "Signature=adhoc"
 codesign --verify --deep --strict --verbose=2 macos/build/BenchBar.app
-spctl --assess --type execute --verbose=2 macos/build/BenchBar.app   # "source=Notarized Developer ID"
-xcrun stapler validate dist/BenchBar-0.3.0.dmg
+spctl --assess --type execute --verbose=2 macos/build/BenchBar.app   # Developer ID: "source=Notarized Developer ID"
+xcrun stapler validate dist/BenchBar-0.3.0.dmg                # Developer ID only
+shasum -a 256 -c dist/SHA256SUMS
 ```
 
 ## Not in scope

@@ -80,8 +80,11 @@ fl_mariadb_server_charset() {
 }
 
 fl_password_generate() {
-  # 24 letters and digits: safe in SQL, shell and bench's command line
-  LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 24
+  # 24 letters and digits: safe in SQL, shell and bench's command line.
+  # The input is bounded (4 KB of urandom gives about 1500 usable
+  # characters): BSD tr reading /dev/urandom forever never notices a
+  # closed pipe when SIGPIPE is ignored, as it is under GitHub Actions.
+  head -c 4096 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' | head -c 24
 }
 
 fl_sql_escape() { printf '%s' "$1" | sed "s/\\\\/\\\\\\\\/g; s/'/\\\\'/g"; }
