@@ -28,6 +28,8 @@ export FL_STATE_DIR="$TMP_DIR/state"
 export FL_STATE_FILE="$FL_STATE_DIR/state.env"
 export FL_BACKUP_ROOT="$TMP_DIR/state/backups"
 export FL_HOSTS_FILE="$TMP_DIR/hosts"
+# where the official wkhtmltopdf package would put its binary (tests never look at /usr/local)
+export FL_WKHTML_PKG_BIN="$TMP_DIR/usr-local-bin/wkhtmltopdf"
 export FL_RC_FILE="$HOME/.zshrc"
 export FL_UP_WAIT_SECS=2
 export FL_KILL_CMD=mockkill

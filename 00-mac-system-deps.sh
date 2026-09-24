@@ -292,7 +292,7 @@ printf '%-22s %-22s %s\n' "node" "$NODE_VERSION" "$NODE_BIN"
 printf '%-22s %-22s %s\n' "$FL_MARIADB_FORMULA" "$MARIADB_DISTRIB" "$MARIADB_BIN"
 printf '%-22s %-22s %s\n' "redis-server" "${REDIS_VERSION:-?}" "$REDIS_BIN"
 case "$WKHTML_STATE" in
-  ok) printf '%-22s %-22s %s\n' "wkhtmltopdf" "$(wkhtmltopdf --version 2>/dev/null | head -n1 | awk '{print $2}')" "$(command -v wkhtmltopdf)" ;;
+  ok) printf '%-22s %-22s %s\n' "wkhtmltopdf" "$("$(fl_wkhtmltopdf_bin)" --version 2>/dev/null | head -n1 | awk '{print $2}')" "$(fl_wkhtmltopdf_bin)" ;;
   skipped) printf '%-22s %-22s %s\n' "wkhtmltopdf" "skipped" "PDFs will not work until it is installed" ;;
   *) printf '%-22s %-22s %s\n' "wkhtmltopdf" "FAILED" "the install did not succeed; see the step below" ;;
 esac

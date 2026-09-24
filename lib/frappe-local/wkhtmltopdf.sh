@@ -14,6 +14,31 @@
 # work; the bench itself is fine).
 
 FL_WKHTML_DOWNLOAD_DIR="${FL_WKHTML_DOWNLOAD_DIR:-${FL_STATE_DIR}/downloads}"
+# where the official package puts its binary
+FL_WKHTML_PKG_BIN="${FL_WKHTML_PKG_BIN:-/usr/local/bin/wkhtmltopdf}"
+
+fl__wkhtmltopdf_is_patched() {
+  [[ -n "$1" && -x "$1" ]] || return 1
+  "$1" --version 2>&1 | grep -qi 'with patched qt'
+}
+
+# The binary that counts: the package's own when it is the patched build,
+# otherwise whatever PATH resolves (an unpatched Homebrew build, or nothing).
+fl_wkhtmltopdf_bin() {
+  if fl__wkhtmltopdf_is_patched "$FL_WKHTML_PKG_BIN"; then printf '%s' "$FL_WKHTML_PKG_BIN"; return 0; fi
+  command -v wkhtmltopdf 2>/dev/null || true
+}
+
+# Prints the path of an unpatched wkhtmltopdf that PATH resolves before the
+# patched package binary (Frappe would run the crashing one), or nothing.
+fl_wkhtmltopdf_shadow() {
+  local on_path
+  fl__wkhtmltopdf_is_patched "$FL_WKHTML_PKG_BIN" || return 0
+  on_path="$(command -v wkhtmltopdf 2>/dev/null || true)"
+  [[ -n "$on_path" && "$on_path" != "$FL_WKHTML_PKG_BIN" ]] || return 0
+  fl__wkhtmltopdf_is_patched "$on_path" && return 0
+  printf '%s' "$on_path"
+}
 
 fl_wkhtmltopdf_pin() {
   # sets FL_WKHTML_VERSION, FL_WKHTML_FILE, FL_WKHTML_URL, FL_WKHTML_SHA256
@@ -27,7 +52,7 @@ fl_wkhtmltopdf_pin() {
 # prints "patched", "unpatched" or "missing"
 fl_wkhtmltopdf_state() {
   local bin raw
-  bin="$(command -v wkhtmltopdf 2>/dev/null || true)"
+  bin="$(fl_wkhtmltopdf_bin)"
   [[ -n "$bin" ]] || { printf 'missing'; return 0; }
   raw="$("$bin" --version 2>&1 || true)"
   if printf '%s' "$raw" | grep -qi 'with patched qt'; then printf 'patched'; elif [[ -n "$raw" ]]; then printf 'unpatched'; else printf 'missing'; fi
@@ -96,9 +121,18 @@ fl_wkhtmltopdf_install() {
   fl_run_long "installer -pkg ${FL_WKHTML_FILE}" sudo installer -pkg "$FL_WKHTML_PKG" -target / || return 1
   hash -r 2>/dev/null || true
   case "$(fl_wkhtmltopdf_state)" in
-    patched) fl_ok "$(wkhtmltopdf --version 2>&1 | head -n1) at $(command -v wkhtmltopdf)" ;;
+    patched) fl_ok "$("$(fl_wkhtmltopdf_bin)" --version 2>&1 | head -n1) at $(fl_wkhtmltopdf_bin)"; fl_wkhtmltopdf_shadow_warn ;;
     *) fl_fail "the package installed but 'wkhtmltopdf --version' does not say 'with patched qt'"; return 1 ;;
   esac
+}
+
+# Says so when an unpatched build earlier on PATH would be the one Frappe runs.
+fl_wkhtmltopdf_shadow_warn() {
+  local shadow
+  shadow="$(fl_wkhtmltopdf_shadow)"
+  [[ -n "$shadow" ]] || return 0
+  fl_warn "${shadow} comes before ${FL_WKHTML_PKG_BIN} on PATH and is not the patched build: Frappe would run it"
+  fl_fix "brew uninstall wkhtmltopdf   (the official package at ${FL_WKHTML_PKG_BIN} stays)"
 }
 
 # The whole flow: detect, Rosetta, download, verify, install.
@@ -109,11 +143,12 @@ fl_wkhtmltopdf_ensure() {
   local state
   state="$(fl_wkhtmltopdf_state)"
   if [[ "$state" == "patched" ]]; then
-    fl_ok "wkhtmltopdf patched Qt build at $(command -v wkhtmltopdf)"
+    fl_ok "wkhtmltopdf patched Qt build at $(fl_wkhtmltopdf_bin)"
+    fl_wkhtmltopdf_shadow_warn
     return 0
   fi
   if [[ "$state" == "unpatched" ]]; then
-    fl_warn "wkhtmltopdf at $(command -v wkhtmltopdf) is not the patched Qt build (Homebrew's crashes on Frappe templates)"
+    fl_warn "wkhtmltopdf at $(fl_wkhtmltopdf_bin) is not the patched Qt build (Homebrew's crashes on Frappe templates)"
   else
     fl_warn "wkhtmltopdf is not installed (Frappe needs it for PDF printing)"
   fi
