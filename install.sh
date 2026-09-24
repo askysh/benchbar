@@ -113,9 +113,9 @@ app_version() {
 
 quit_app() {
   pgrep -xq BenchBar 2>/dev/null || return 0
+  if [[ "$DRY" == "1" ]]; then info "dry-run: would quit the running BenchBar"; return 0; fi
   info "quitting the running BenchBar"
-  run osascript -e 'tell application id "com.akashmishra.benchbar" to quit' >/dev/null 2>&1 || true
-  [[ "$DRY" == "1" ]] && return 0
+  osascript -e 'tell application id "com.akashmishra.benchbar" to quit' >/dev/null 2>&1 || true
   local i=0
   while pgrep -xq BenchBar 2>/dev/null && [[ "$i" -lt 20 ]]; do sleep 0.5; i=$((i + 1)); done
   pgrep -xq BenchBar 2>/dev/null && { pkill -x BenchBar 2>/dev/null || true; sleep 1; }
@@ -444,7 +444,9 @@ uninstall() {
     same "no checkout at ${BENCHBAR_HOME}"
   fi
   printf '\n'
-  if [[ "$CHANGED" == "1" ]]; then ok "BenchBar removed. Open a new terminal to drop the old PATH."; else ok "nothing to remove (unchanged)"; fi
+  if [[ "$DRY" == "1" ]]; then ok "dry-run finished; nothing was removed"
+  elif [[ "$CHANGED" == "1" ]]; then ok "BenchBar removed. Open a new terminal to drop the old PATH."
+  else ok "nothing to remove (unchanged)"; fi
 }
 
 # ---------------------------------------------------------------- main

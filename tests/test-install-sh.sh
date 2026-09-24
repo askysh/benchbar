@@ -181,9 +181,28 @@ assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "Intel Mac"
 assert_not_contains "$OUT" "==> BenchBar app"
 
-# ---- --uninstall: app, links and block go; agents are offered; benches stay
+# ---- --uninstall --dry-run: the whole plan, nothing removed, the app keeps running
 run_install --yes --app-only
 assert_file "$APP"
+add_proc 778 "BenchBar"
+reset_calls
+snap_before="$(snapshot "$HOME")"
+run_install --uninstall --dry-run --yes
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "dry-run: would quit the running BenchBar"
+assert_contains "$OUT" "dry-run: rm -rf ${APP}"
+assert_contains "$OUT" "uninstall-service --bench-dir ${BENCH} --yes"
+assert_contains "$OUT" "dry-run: rm -rf ${CLI_HOME}"
+assert_contains "$OUT" "dry-run finished; nothing was removed"
+assert_not_contains "$OUT" "BenchBar removed"
+assert_eq "$snap_before" "$(snapshot "$HOME")" "(uninstall dry-run must write nothing)"
+assert_file "$APP"
+assert_file "$HOME/.local/bin/benchbar"
+assert_file "$HOME/Library/LaunchAgents/com.benchbar.frappe-bench.plist"
+assert_file "$CLI_HOME/benchbar"
+assert_calls_not_contain '^(osascript|pkill|launchctl)'
+
+# ---- --uninstall: app, links and block go; agents are offered; benches stay
 reset_calls
 run_install --uninstall --yes
 assert_eq "0" "$CODE" "$OUT"
