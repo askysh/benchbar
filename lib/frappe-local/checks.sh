@@ -168,7 +168,13 @@ chk__template() {
 }
 
 chk_procfile() { chk__template "Procfile.lean" "$(fl_procfile_path)" "$FL_R_PROCFILE" write_procfile; }
-chk_runner() { chk__template "runner" "$(fl_runner_path)" "$FL_R_RUNNER" write_runner; }
+chk_runner() {
+  chk__template "runner" "$(fl_runner_path)" "$FL_R_RUNNER" write_runner
+  # frappe-mac-run.sh from before 0.3.0, left behind if a repair was interrupted
+  if [[ "$CHK_STATUS" == "ok" && -f "$(fl_runner_path_legacy)" ]] && ! fl_runner_legacy_in_use; then
+    chk__set warn "the old runner $(fl_runner_path_legacy) is still in the bench" "${SCRIPT_DIR}/benchbar repair" write_runner
+  fi
+}
 
 chk_agent() {
   local plist state pid code
@@ -214,11 +220,11 @@ chk_helpers() {
     current) chk__set ok "helper block in ${rc} is current" ;;
     missing) chk__set warn "helper block missing from ${rc}" "${SCRIPT_DIR}/benchbar repair" write_helpers ;;
     outdated) chk__set warn "helper block in ${rc} is outdated" "${SCRIPT_DIR}/benchbar repair" write_helpers ;;
-    broken) chk__set warn "frappe-mac markers in ${rc} are malformed; a fresh block will be appended" "${SCRIPT_DIR}/benchbar repair" write_helpers ;;
+    broken) chk__set warn "benchbar markers in ${rc} are malformed; a fresh block will be appended" "${SCRIPT_DIR}/benchbar repair" write_helpers ;;
   esac
   if [[ -n "$legacy" ]]; then
     [[ "$CHK_STATUS" == "ok" ]] && CHK_STATUS=warn
-    CHK_MSG="${CHK_MSG}; old block(s) still present: ${legacy} (remove by hand, the frappe-mac block wins because it comes later)"
+    CHK_MSG="${CHK_MSG}; old block(s) still present: ${legacy} (remove by hand, the benchbar block wins because it comes later)"
     [[ -n "$CHK_FIX" ]] || CHK_FIX="open ${rc} and delete the old '${legacy}' block"
   fi
 }

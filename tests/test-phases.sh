@@ -18,7 +18,7 @@ assert_eq "2" "$CODE" "$OUT"
 assert_contains "$OUT" "PENDING MANUAL STEPS"
 assert_contains "$OUT" "mariadb-secure-installation"
 assert_not_contains "$OUT" "cat >> ~/.zshrc"
-grep -q -x -F "# >>> frappe-mac >>>" "$HOME/.zshrc" || fail "00 must write the frappe-mac block"
+grep -q -x -F "# >>> benchbar >>>" "$HOME/.zshrc" || fail "00 must write the benchbar block"
 grep -q "opt/python@3.11/bin" "$HOME/.zshrc" || fail "profile exports expected"
 assert_file "$MOCK_BREW_PREFIX/etc/my.cnf.d/frappe.cnf"
 grep -q 'character-set-server = utf8mb4' "$MOCK_BREW_PREFIX/etc/my.cnf.d/frappe.cnf" || fail "utf8mb4 config expected"
@@ -34,7 +34,7 @@ assert_eq "2" "$CODE" "$OUT"
 assert_eq "$snap_before" "$(snapshot "$HOME" "$MOCK_BREW_PREFIX/etc")" "(00 rerun must write nothing)"
 assert_calls_not_contain '^brew services restart'
 assert_contains "$OUT" "[OK] frappe.cnf utf8mb4 config present"
-assert_contains "$OUT" "has the frappe-mac block"
+assert_contains "$OUT" "has the benchbar block"
 
 # password set: all green, exit 0
 export MOCK_MARIADB_NOPASS_EXIT=1
@@ -89,7 +89,7 @@ assert_contains "$OUT" "1. System dependencies"
 assert_contains "$OUT" "2. Bench and site"
 assert_contains "$OUT" "3. Background service"
 assert_contains "$OUT" "Next steps"
-assert_file "$BENCH/frappe-mac-run.sh"
+assert_file "$BENCH/benchbar-run.sh"
 assert_file "$HOME/Library/LaunchAgents/com.benchbar.frappe-bench.plist"
 grep -q '^127.0.0.1 macdev$' "$FL_HOSTS_FILE" || fail "install --yes must add the hosts entry"
 unset MARIADB_ROOT_PASSWORD ADMIN_PASSWORD

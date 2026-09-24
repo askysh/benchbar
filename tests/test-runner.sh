@@ -12,7 +12,7 @@ BENCH="$TMP_DIR/bench"
 make_fake_bench "$BENCH"
 FL_BENCH_DIR="$BENCH"
 HONCHO="$MOCK_PIPX_HOME/venvs/frappe-bench/bin/honcho"
-runner="$BENCH/frappe-mac-run.sh"
+runner="$BENCH/benchbar-run.sh"
 fl_template_render bench-run.sh "BENCH_DIR=$BENCH" "BENCH_RE=$(fl_regex_escape "$BENCH")" "BENCH_NAME=bench" \
   "HONCHO=$HONCHO" "PORTS=8000,9000,11000,13000" "LABEL=com.benchbar.bench" "MAX_STARTS=3" "WINDOW=600" \
   "SITE=macdev" "WEB_PORT=8000" "CLI_VERSION=9.9.9" >"$runner"

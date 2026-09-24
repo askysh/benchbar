@@ -123,13 +123,13 @@ fl_validate_app_refs_online() {
 }
 
 fl_update_cache_file() {
-  date "+${SCRIPT_DIR}/.frappe-local/update-check.%Y%m%d.txt"
+  date "+${FL_STATE_DIR}/update-check.%Y%m%d.txt"
 }
 
 fl_print_newest_update_cache() {
   local newest
   # shellcheck disable=SC2012
-  newest="$(ls -t "${SCRIPT_DIR}"/.frappe-local/update-check.*.txt 2>/dev/null | head -n1 || true)"
+  newest="$(ls -t "${FL_STATE_DIR}"/update-check.*.txt 2>/dev/null | head -n1 || true)"
   if [[ -n "$newest" ]]; then
     fl_warn "Offline mode: printing newest cached update check from ${newest}"
     cat "$newest"
@@ -140,7 +140,7 @@ fl_print_newest_update_cache() {
 
 fl_check_updates() {
   local cache frappe_heads erpnext_heads default_profile default_support max_support max_profile
-  mkdir -p "${SCRIPT_DIR}/.frappe-local"
+  mkdir -p "${FL_STATE_DIR}"
   cache="$(fl_update_cache_file)"
   if [[ "${OFFLINE:-0}" == "1" ]]; then
     fl_print_newest_update_cache

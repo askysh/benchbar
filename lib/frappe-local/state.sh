@@ -1,8 +1,20 @@
 #!/usr/bin/env bash
 #
-# state.sh: small key=value store in .frappe-local/state.env.
+# state.sh: small key=value store in .benchbar/state.env.
+#
+# The folder was .frappe-local before 0.3.0. The first run after the
+# upgrade renames it (one atomic mv in the checkout), unless a run holds
+# its lock right now; until then the old folder is used as is.
 
-FL_STATE_DIR="${FL_STATE_DIR:-${SCRIPT_DIR}/.frappe-local}"
+fl_state_dir_default() {
+  local new="${SCRIPT_DIR}/.benchbar" old="${SCRIPT_DIR}/.frappe-local"
+  if [[ -d "$old" && ! -e "$new" && ! -d "${old}/lock" ]]; then
+    mv "$old" "$new" 2>/dev/null || true
+  fi
+  if [[ -d "$new" || ! -d "$old" ]]; then printf '%s' "$new"; else printf '%s' "$old"; fi
+}
+
+FL_STATE_DIR="${FL_STATE_DIR:-$(fl_state_dir_default)}"
 FL_STATE_FILE="${FL_STATE_FILE:-${FL_STATE_DIR}/state.env}"
 
 fl_state_init() {

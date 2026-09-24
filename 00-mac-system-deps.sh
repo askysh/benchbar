@@ -278,13 +278,13 @@ ZSHRC="$(fl_rc_file)"
 HELPER_BLOCK="$(fl_template_render shell-helpers "PROFILE_EXPORTS=$(fl_profile_path_exports)" "BENCHBAR=${SCRIPT_DIR}/benchbar")"
 case "$(fl_rc_block_status "$ZSHRC" "$HELPER_BLOCK")" in
   current)
-    fl_ok "${ZSHRC} has the frappe-mac block (profile exports and bench helpers)"
+    fl_ok "${ZSHRC} has the benchbar block (profile exports and bench helpers)"
     ;;
   *)
-    fl_warn "${ZSHRC} is missing the frappe-mac block; writing it (profile exports and bench helpers)"
+    fl_warn "${ZSHRC} needs the benchbar block; writing it (profile exports and bench helpers)"
     fl_rc_block_write "$ZSHRC" "$HELPER_BLOCK"
     if [[ "$FL_DRY_RUN" != "1" ]]; then
-      fl_ok "wrote the frappe-mac block to ${ZSHRC}"
+      fl_ok "wrote the benchbar block to ${ZSHRC}"
       add_pending "SOURCE_RC"
     fi
     ;;

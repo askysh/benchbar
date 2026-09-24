@@ -34,7 +34,7 @@ RUN_TESTS=0
 export BENCHBAR_SPARKLE="${BENCHBAR_SPARKLE:-NO}"
 SIGN_IDENTITY="${BENCHBAR_SIGN_IDENTITY:-}"
 TEAM_ID="${BENCHBAR_TEAM_ID:-}"
-APPCAST_URL="${BENCHBAR_APPCAST_URL:-https://github.com/askysh/frappe-mac-dev-server/releases/latest/download/appcast.xml}"
+APPCAST_URL="${BENCHBAR_APPCAST_URL:-https://github.com/askysh/benchbar/releases/latest/download/appcast.xml}"
 SPARKLE_KEY="${BENCHBAR_SPARKLE_PUBLIC_KEY:-}"
 
 for arg in "$@"; do

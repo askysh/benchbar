@@ -25,7 +25,7 @@ assert_contains "$OUT" "mode     dry-run"
 assert_contains "$OUT" "to update"
 assert_contains "$OUT" "dry-run: would write"
 assert_no_file "$plist"
-assert_no_file "$BENCH/frappe-mac-run.sh"
+assert_no_file "$BENCH/benchbar-run.sh"
 assert_eq "$snap_before" "$(snapshot "$HOME" "$BENCH" "$FL_STATE_DIR")" "(dry-run wrote nothing)"
 assert_calls_not_contain '^launchctl (bootstrap|bootout|kickstart)'
 
@@ -36,16 +36,16 @@ assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "Legacy agents: 3 legacy agent(s)"
 assert_contains "$OUT" "com.akash.frappe-bench.worker (not running, last exit 1)"
 assert_file "$plist"
-assert_file "$BENCH/frappe-mac-run.sh"
+assert_file "$BENCH/benchbar-run.sh"
 assert_file "$BENCH/Procfile.lean"
-[[ -x "$BENCH/frappe-mac-run.sh" ]] || fail "runner must be executable"
-bash -n "$BENCH/frappe-mac-run.sh"
-grep -q "$MOCK_PIPX_HOME/venvs/frappe-bench/bin/honcho" "$BENCH/frappe-mac-run.sh" || fail "runner must bake the absolute honcho path"
+[[ -x "$BENCH/benchbar-run.sh" ]] || fail "runner must be executable"
+bash -n "$BENCH/benchbar-run.sh"
+grep -q "$MOCK_PIPX_HOME/venvs/frappe-bench/bin/honcho" "$BENCH/benchbar-run.sh" || fail "runner must bake the absolute honcho path"
 grep -q 'OBJC_DISABLE_INITIALIZE_FORK_SAFETY' "$plist" || fail "plist must set the fork safety variable"
 grep -q '<key>NO_PROXY</key><string>\*</string>' "$plist" || fail "plist must set NO_PROXY=*"
 grep -q "<string>${MOCK_BREW_PREFIX}/opt/python@3.11/bin:" "$plist" || fail "plist must bake PATH"
 grep -q '<key>RunAtLoad</key><true/>' "$plist" || fail "RunAtLoad expected"
-grep -q -x -F "# >>> frappe-mac >>>" "$HOME/.zshrc" || fail "helper block expected in zshrc"
+grep -q -x -F "# >>> benchbar >>>" "$HOME/.zshrc" || fail "helper block expected in zshrc"
 grep -q 'benchup()' "$HOME/.zshrc" || fail "benchup helper expected"
 grep -q "opt/python@3.11/bin" "$HOME/.zshrc" || fail "profile exports expected in the helper block"
 grep -q '^export EDITOR=vim$' "$HOME/.zshrc" || fail "existing zshrc content must survive"
@@ -98,23 +98,44 @@ run_fm autostart on --bench-dir "$BENCH"
 grep -q '<key>RunAtLoad</key><true/>' "$plist" || fail "autostart on must restore RunAtLoad"
 
 # ---- a hand-edited runner is detected as outdated and regenerated
-printf '\n# edited by hand\n' >>"$BENCH/frappe-mac-run.sh"
+printf '\n# edited by hand\n' >>"$BENCH/benchbar-run.sh"
 run_fm doctor --bench-dir "$BENCH"
 assert_contains "$OUT" "[OK] Runner script"   # appended text does not change the header, so still current
-sed -i '' 's/frappe-mac-template: bench-run.sh v2 [0-9a-f]*/frappe-mac-template: bench-run.sh v0 000000000000/' "$BENCH/frappe-mac-run.sh"
+sed -i '' 's/benchbar-template: bench-run.sh v2 [0-9a-f]*/benchbar-template: bench-run.sh v0 000000000000/' "$BENCH/benchbar-run.sh"
 run_fm doctor --bench-dir "$BENCH"
 assert_contains "$OUT" "[WARN] Runner script: runner is outdated"
 run_fm repair --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
-grep -q 'frappe-mac-template: bench-run.sh v2' "$BENCH/frappe-mac-run.sh" || fail "runner must be regenerated"
+grep -q 'benchbar-template: bench-run.sh v2' "$BENCH/benchbar-run.sh" || fail "runner must be regenerated"
+
+# ---- reloading a running agent waits for launchd to let go of it
+# (real launchctl: bootout returns while the job still shuts down, and a
+# bootstrap meanwhile fails; this left a bench stopped and unloaded)
+run_fm up --bench-dir "$BENCH" >/dev/null
+sed -i '' 's/benchbar-template: launchagent.plist v\([0-9]*\) [0-9a-f]*/benchbar-template: launchagent.plist v\1 000000000000/' "$plist"
+reset_calls
+MOCK_BOOTOUT_LINGER=3 run_fm repair --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_file "$MOCK_STATE/agents/com.benchbar.frappe-bench" "(agent must be loaded after the reload)"
+assert_contains "$(cat "$MOCK_STATE/agents/com.benchbar.frappe-bench")" "state = running"
+assert_calls_contain '^launchctl kickstart gui/[0-9]+/com.benchbar.frappe-bench$'
+assert_not_contains "$OUT" "written but not loaded"
+
+# a job that never goes away fails the step instead of claiming success
+sed -i '' 's/benchbar-template: launchagent.plist v\([0-9]*\) [0-9a-f]*/benchbar-template: launchagent.plist v\1 000000000000/' "$plist"
+FL_BOOTOUT_WAIT_SECS=1 MOCK_BOOTOUT_LINGER=1000 run_fm repair --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "launchd did not let go of com.benchbar.frappe-bench"
+rm -f "$MOCK_STATE/agents/com.benchbar.frappe-bench.linger"
+set_agent com.benchbar.frappe-bench running 4242 0
 
 # ---- uninstall-service removes only service files
 run_fm uninstall-service --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 assert_no_file "$plist"
-assert_no_file "$BENCH/frappe-mac-run.sh"
+assert_no_file "$BENCH/benchbar-run.sh"
 assert_no_file "$BENCH/Procfile.lean"
-! grep -q -x -F "# >>> frappe-mac >>>" "$HOME/.zshrc" || fail "helper block must be removed"
+! grep -q -x -F "# >>> benchbar >>>" "$HOME/.zshrc" || fail "helper block must be removed"
 grep -q '^export EDITOR=vim$' "$HOME/.zshrc" || fail "user zshrc content must survive uninstall"
 assert_file "$BENCH/sites/macdev/site_config.json"
 assert_file "$BENCH/apps/frappe"

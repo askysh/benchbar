@@ -131,7 +131,20 @@ fl_launchd_domain() {
   printf 'gui/%s' "$(id -u)"
 }
 
-fl_runner_path() { printf '%s/frappe-mac-run.sh' "$FL_BENCH_DIR"; }
+fl_runner_path() { printf '%s/benchbar-run.sh' "$FL_BENCH_DIR"; }
+
+# The runner's name before 0.3.0. Repair retires it once no agent points at it.
+fl_runner_path_legacy() { printf '%s/frappe-mac-run.sh' "$FL_BENCH_DIR"; }
+
+# True while an installed agent plist of this bench still runs the old runner.
+fl_runner_legacy_in_use() {
+  local old plist
+  old="$(fl_runner_path_legacy)"
+  for plist in "$(fl_agent_plist_path)" "$HOME/Library/LaunchAgents/$(fl_agent_label_legacy).plist"; do
+    [[ -f "$plist" ]] && grep -q -F "$old" "$plist" 2>/dev/null && return 0
+  done
+  return 1
+}
 fl_procfile_path() { printf '%s/Procfile.lean' "$FL_BENCH_DIR"; }
 fl_stop_flag_path() { printf '%s/logs/.bench-stopped' "$FL_BENCH_DIR"; }
 fl_starts_path() { printf '%s/logs/.bench-starts' "$FL_BENCH_DIR"; }

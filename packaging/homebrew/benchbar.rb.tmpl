@@ -5,10 +5,10 @@ cask "benchbar" do
   version "{{VERSION}}"
   sha256 "{{SHA256}}"
 
-  url "https://github.com/askysh/frappe-mac-dev-server/releases/download/v#{version}/BenchBar-#{version}.dmg"
+  url "https://github.com/askysh/benchbar/releases/download/v#{version}/BenchBar-#{version}.dmg"
   name "BenchBar"
   desc "Menu bar runner for local Frappe and ERPNext development benches"
-  homepage "https://github.com/askysh/frappe-mac-dev-server"
+  homepage "https://github.com/askysh/benchbar"
 
   livecheck do
     url :url
@@ -32,8 +32,8 @@ cask "benchbar" do
   caveats <<~EOS
     BenchBar drives the benchbar command line tool, which sets up and runs
     the benches. Install it from the repository:
-      git clone https://github.com/askysh/frappe-mac-dev-server.git
-      cd frappe-mac-dev-server && ./benchbar install
+      git clone https://github.com/askysh/benchbar.git
+      cd benchbar && ./benchbar install
     Frappe and ERPNext are trademarks of Frappe Technologies.
     BenchBar is not affiliated with or endorsed by them.
   EOS

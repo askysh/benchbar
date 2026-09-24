@@ -56,13 +56,28 @@ affiliated with Frappe Technologies.
   BenchBar runs.
 - `status --json`: `state` is now the contract value (stopped, starting,
   running, crashed, paused); launchd's word moved to `agent_state`.
-- README, AGENTS.md and the roadmap describe BenchBar and the new repo URL,
-  github.com/askysh/frappe-mac-dev-server.
+- The repository is now github.com/askysh/benchbar (the old URLs
+  redirect). README, AGENTS.md, the docs, the cask and the Sparkle feed use
+  it.
+- Names from before 0.3.0 move over once, on the next run or `repair`:
+  the checkout's `.frappe-local/` becomes `.benchbar/`,
+  `frappe-mac-run.sh` in the bench becomes `benchbar-run.sh` (the old file
+  goes to the backups once no agent uses it), the `# >>> frappe-mac >>>`
+  block in the shell rc is replaced in place by `# >>> benchbar >>>`, and
+  new files carry a `benchbar-template:` header. Files are not rewritten
+  for the header word alone, so MariaDB is not restarted.
 
 ### Fixed
 
 - Reading a missing stop flag no longer prints "No such file or
   directory".
+- Reloading the agent of a running bench (a repair after a template or
+  setting change, `autostart on|off`) could leave it stopped and unloaded:
+  `launchctl bootout` returns while the job is still shutting down, the
+  immediate `bootstrap` failed, and the `load -w` fallback exits 0 without
+  loading anything. The CLI now waits until launchd has let go of the job
+  (up to 30 seconds), confirms the load with `launchctl print`, and fails
+  the step clearly instead of reporting success.
 
 ## 0.2.0 - 2026-09-23
 

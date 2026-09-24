@@ -13,7 +13,7 @@ One line per non obvious choice: the decision, then the reason.
 
 - `benchbar` is the real file, `frappe-mac` is a symlink to it: the entrypoint already resolves symlink chains, so `~/.local/bin/frappe-mac` from 0.2.0 keeps working without a wrapper.
 - CLI version 0.3.0: 0.2.0 was the frappe-mac release in CHANGELOG; the roadmap's "v0.2 BenchBar alpha" is a product milestone, not the CLI version (open question in the summary).
-- Kept internal names: `FL_` variable prefix, `.frappe-local/` state dir, `frappe-mac-run.sh`, the `# >>> frappe-mac >>>` rc markers and the `frappe-mac-template:` header token. Renaming them would mark every installed file as foreign and force needless rewrites.
+- Kept internal names: `FL_` variable prefix, `.frappe-local/` state dir, `frappe-mac-run.sh`, the `# >>> frappe-mac >>>` rc markers and the `frappe-mac-template:` header token. Renaming them would mark every installed file as foreign and force needless rewrites. (Superseded for the user visible ones: see "Rename follow-up" at the end.)
 - Kept the MariaDB drop-in templates byte for byte: a changed comment would make repair restart MariaDB for nothing.
 - Shell helper variable is now `BENCHBAR` (was `FRAPPE_MAC`); helper names are unchanged.
 - `~/.local/bin` gets both `benchbar` and `frappe-mac` links; an old `frappe-mac` link that points at the checkout's `frappe-mac` counts as current.
@@ -141,3 +141,16 @@ One line per non obvious choice: the decision, then the reason.
 - The README update the brief asked for in Phase 0 (new repo URL) had not been done; it is done here, with AGENTS.md.
 - Screenshots are real renders of the SwiftUI views with fixture data (snapshot tests), not mockups; the menu bar strip is the built in runner sheet.
 - CHANGELOG: one 0.3.0 entry for the rename, the JSON API and the app, matching `FL_VERSION` and `MARKETING_VERSION`.
+
+## Rename follow-up
+
+Asked for after the phases, to stop naming drift before the first release.
+
+- Repo renamed from `askysh/frappe-mac-dev-server` to `askysh/benchbar` (`gh repo rename`); GitHub redirects the old URLs, but the Sparkle feed, the cask and the docs point at the new one so nothing relies on the redirect.
+- User visible names move to benchbar, each with a one time migration: the checkout's `.frappe-local/` becomes `.benchbar/`, `frappe-mac-run.sh` becomes `benchbar-run.sh`, the rc markers become `# >>> benchbar >>>`, and new files carry `benchbar-template:`.
+- Template headers: both `benchbar-template:` and `frappe-mac-template:` count as ours and only `<name> vN <hash>` is compared, so the word alone never rewrites a file; the MariaDB drop-ins stay byte for byte and MariaDB is not restarted. (The hash is computed with the header placeholder in place, so it does not depend on the word.)
+- `.frappe-local/` is renamed by the first command that runs (one `mv` in the checkout), except while a run holds its lock; a concurrent second process falls back to whichever folder exists. This includes read only commands: it is the tool's own state, not the bench or the system.
+- A frappe-mac rc block is "legacy": doctor calls it outdated, and `repair` replaces it in place with benchbar markers, keeping its position. A stray frappe-mac block next to a benchbar block is reported like any other old block.
+- The old runner is backed up and removed only once no installed agent (new or legacy plist) points at it, so a running bench is never left without its script; write_plist retires it after loading the new agent, write_runner after an interrupted repair, and doctor flags a leftover.
+- Kept: `FL_` and `lib/frappe-local/` (internal, never shown), the MariaDB drop-in names (renaming restarts MariaDB), `~/.local/bin/frappe-mac` and the `com.frappe-mac` label migration (until 1.0). The local checkout folder is the user's to rename; `benchbar repair` repoints the rc block and links afterwards.
+- Found while running the migration on the real bench: reloading a running agent left it unloaded (bootout is asynchronous, the immediate bootstrap failed with 5: Input/output error, and `load -w` exits 0 without loading). Reproduced with a throwaway launchd job from the scratch folder (not in ~/Library/LaunchAgents). Fix: bootout waits until `launchctl print` no longer lists the job (FL_BOOTOUT_WAIT_SECS, 30 s; launchd kills after 20), bootstrap retries and trusts only `launchctl print`, and write_plist fails the step if the job never goes. The mock launchctl can now linger (MOCK_BOOTOUT_LINGER) to cover it.

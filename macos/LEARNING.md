@@ -595,3 +595,23 @@ Files to read: `docs/releasing.md`, `scripts/macos-release.sh`,
 - Before calling anything done, all four checks: `tests/run-tests.sh`
   (CLI and shellcheck), `shellcheck scripts/*.sh`,
   `scripts/macos-build.sh --test` (Swift), and a Release build.
+
+## After the phases: renaming without breaking installs
+
+Renaming files that are already on people's machines is a migration, not
+a find and replace. The pattern used for every name (read
+`lib/frappe-local/shellrc.sh`, `templates.sh`, `state.sh`,
+`benchinfo.sh` and `tests/test-migrate.sh`):
+
+1. **Recognize the old name as ours.** A block with the old markers is
+   "legacy", a header with the old word still matches.
+2. **Decide what counts as a change.** Only the name, version and hash of
+   a template are compared, so the old word alone never triggers a
+   rewrite (important for MariaDB, which restarts on a config change).
+3. **Move once, atomically, and keep a backup.** `mv` of the state
+   folder, an in place replacement of the rc block, a backup before the
+   old runner is removed.
+4. **Never pull the rug.** The old runner goes only after no agent points
+   at it.
+5. **Test the old state, not just the new one.** The tests build a bench
+   and an rc file the way 0.2.0 left them and check the result.

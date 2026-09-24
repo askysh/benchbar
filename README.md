@@ -53,8 +53,8 @@ Open Terminal and run:
 
 ```bash
 cd ~
-git clone https://github.com/askysh/frappe-mac-dev-server.git
-cd frappe-mac-dev-server
+git clone https://github.com/askysh/benchbar.git
+cd benchbar
 ./benchbar install
 ```
 
@@ -263,7 +263,7 @@ folder to its Ignore List.
 ## Existing bench, or migrating from an older setup
 
 Point the tool at any bench once. It remembers the path in
-`.frappe-local/state.env`:
+`.benchbar/state.env`:
 
 ```bash
 ./benchbar doctor --bench-dir ~/dev/frappe-bench
@@ -286,6 +286,15 @@ their launchctl state and last exit code. Repair boots them out and moves
 the plists to `~/Library/LaunchAgents-disabled/<timestamp>/`.
 Nothing is deleted.
 
+Names from before 0.3.0 move over on the next `benchbar repair`: the
+`# >>> frappe-mac >>>` block in `~/.zshrc` is replaced in place by a
+`# >>> benchbar >>>` block, `frappe-mac-run.sh` in the bench becomes
+`benchbar-run.sh` (the old file goes to the backups once the agent no
+longer uses it), and the checkout's `.frappe-local/` folder is renamed to
+`.benchbar/` by the first command that runs. Files are not rewritten just
+because their header still says `frappe-mac-template`, so MariaDB is not
+restarted for the rename.
+
 Older `# >>> frappe-bench helpers >>>` blocks in `~/.zshrc` are reported
 so you can remove them by hand. The frappe-mac block comes later in the
 file, so its functions win in the meantime.
@@ -301,7 +310,7 @@ running bench already uses the same web or socketio port.
 - Generated files (runner, plist, `Procfile.lean`, the shell block, the
   MariaDB drop-ins) carry a version and content hash header. They are
   rewritten only when the template or its inputs changed, and the old
-  copy goes to `.frappe-local/backups/<timestamp>/` first.
+  copy goes to `.benchbar/backups/<timestamp>/` first.
 - `sites/`, databases, `apps/` source code and your files are never
   touched. Broken folders are moved aside, never removed.
 - Stop and cleanup only match this bench's honcho, `serve`, `worker`,
@@ -309,8 +318,8 @@ running bench already uses the same web or socketio port.
   `bench migrate` or `bench console` keeps running.
 - `sudo` is used for `/etc/hosts` only, and only after asking (or with
   `--yes`).
-- A lock in `.frappe-local/lock` stops two runs from overlapping.
-- Full logs of every mutating run: `.frappe-local/logs/<timestamp>.log`.
+- A lock in `.benchbar/lock` stops two runs from overlapping.
+- Full logs of every mutating run: `.benchbar/logs/<timestamp>.log`.
 
 ## Customizing
 
@@ -381,7 +390,7 @@ this for you):
 ```bash
 ./benchbar uninstall-service
 rm -rf ~/frappe-bench
-rm -rf ~/frappe-mac-dev-server/.frappe-local
+rm -rf ~/benchbar/.benchbar
 ```
 
 Drop the site database in `mariadb -u root -p`: `SHOW DATABASES;` lists
@@ -416,7 +425,7 @@ missing. `./benchbar repair` adds it, or run
 cleanup-tool case above. Run `./benchbar repair`, not the installer.
 
 **Something else.** `./benchbar doctor` first. Every line names its
-fix. The run log in `.frappe-local/logs/` has the full command output.
+fix. The run log in `.benchbar/logs/` has the full command output.
 
 ## For AI coding agents
 
@@ -443,9 +452,9 @@ docs/                         # JSON API, custom runners, releasing
 examples/runners/             # an example custom runner
 ```
 
-Generated at install time: `<bench>/frappe-mac-run.sh`,
+Generated at install time: `<bench>/benchbar-run.sh`,
 `<bench>/Procfile.lean`, `~/Library/LaunchAgents/com.benchbar.<bench>.plist`,
-the `# >>> frappe-mac >>>` block in `~/.zshrc`, and
+the `# >>> benchbar >>>` block in `~/.zshrc`, and
 `$(brew --prefix)/etc/my.cnf.d/frappe.cnf` plus `frappe-mac-local-only.cnf`.
 
 Everything runs on the macOS `/bin/bash` 3.2 with no extra dependencies.

@@ -51,6 +51,13 @@ assert_contains "$OUT" "frappe-bench still uses the old agent com.frappe-mac.fra
 assert_contains "$OUT" "benchbar repair"
 assert_not_contains "$OUT" "not installed"
 
+# ---- names from before 0.3.0 in the bench and the rc file
+printf '#!/bin/bash\n# frappe-mac-template: bench-run.sh v2 000000000000\n' >"$BENCH/frappe-mac-run.sh"
+printf '# >>> frappe-mac >>>\nbenchup() { old; }\n# <<< frappe-mac <<<\nexport AFTER=1\n' >>"$HOME/.zshrc"
+run_fm doctor --bench-dir "$BENCH"
+assert_contains "$OUT" "helper block in $HOME/.zshrc is outdated"
+assert_not_contains "$OUT" "old block(s) still present"
+
 # ---- dry-run changes nothing
 snap_before="$(snapshot "$HOME" "$BENCH")"
 run_fm repair --dry-run --bench-dir "$BENCH"
@@ -73,6 +80,15 @@ grep -q '<string>com.akashmishra.benchbar</string>' "$new" || fail "AssociatedBu
 assert_calls_contain "^launchctl bootstrap gui/[0-9]+ ${new}\$"
 assert_calls_contain '^launchctl kickstart gui/[0-9]+/com.benchbar.frappe-bench$' "(a running bench must come back under the new agent)"
 assert_no_file "$BENCH/logs/.bench-stopped" "(a running bench must not get a manual stop flag)"
+# the runner is benchbar-run.sh now; the old one is backed up and gone
+assert_file "$BENCH/benchbar-run.sh"
+grep -q "$BENCH/benchbar-run.sh" "$new" || fail "the new agent must run benchbar-run.sh"
+assert_no_file "$BENCH/frappe-mac-run.sh"
+[[ -n "$(find "$FL_BACKUP_ROOT" -name '*frappe-mac-run.sh' | head -n1)" ]] || fail "the old runner must be backed up"
+# the frappe-mac block became the benchbar block, in the same place
+assert_eq "1" "$(grep -c -x -F '# >>> benchbar >>>' "$HOME/.zshrc")"
+assert_eq "0" "$(grep -c -x -F '# >>> frappe-mac >>>' "$HOME/.zshrc")"
+assert_eq "export AFTER=1" "$(tail -n 1 "$HOME/.zshrc")" "(content after the block stays after it)"
 # the other bench keeps its agent until its own repair
 assert_file "$other_old"
 assert_calls_not_contain '(bootout|bootstrap|kickstart|unload).*com.frappe-mac.other-bench'

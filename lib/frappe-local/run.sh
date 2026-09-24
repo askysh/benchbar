@@ -32,7 +32,7 @@ fl_run_long() {
     fl_info "dry-run: ${FL_LAST_COMMAND}"
     return 0
   fi
-  log="$(mktemp "${TMPDIR:-/tmp}/frappe-mac-cmd.XXXXXX")"
+  log="$(mktemp "${TMPDIR:-/tmp}/benchbar-cmd.XXXXXX")"
   fl_log "run: $* (log follows)"
   start="$SECONDS"
   "$@" </dev/null >"$log" 2>&1 &

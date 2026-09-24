@@ -160,7 +160,25 @@ act_write_runner() {
   [[ "${FL_DRY_RUN:-0}" == "1" ]] || mkdir -p "${FL_BENCH_DIR}/logs"
   fl_template_apply "$(fl_runner_path)" "$FL_R_RUNNER" 755
   [[ "$FL_TEMPLATE_CHANGED" == "1" && "${FL_DRY_RUN:-0}" != "1" ]] && fl_ok "wrote $(fl_runner_path)"
+  fl_runner_legacy_retire
   return 0
+}
+
+# Backs up and removes frappe-mac-run.sh (the runner's name before 0.3.0),
+# but only once no installed agent runs it: write_plist calls this again
+# after it has loaded the agent that points at benchbar-run.sh.
+fl_runner_legacy_retire() {
+  local old
+  old="$(fl_runner_path_legacy)"
+  [[ -f "$old" ]] || return 0
+  fl_runner_legacy_in_use && return 0
+  if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
+    fl_info "dry-run: would move the old runner ${old} to the backups"
+    return 0
+  fi
+  fl_backup_file "$old"
+  rm -f "$old"
+  fl_ok "retired the old runner ${old} (backup: ${FL_LAST_BACKUP})"
 }
 
 # Writes the plist and (re)loads the agent. A bench that is not running
@@ -183,7 +201,10 @@ act_write_plist() {
   [[ "$FL_TEMPLATE_CHANGED" == "1" && "${FL_DRY_RUN:-0}" != "1" ]] && fl_ok "wrote ${plist}"
   if fl_agent_loaded; then
     [[ "$FL_TEMPLATE_CHANGED" == "1" ]] || return 0
-    fl_agent_bootout
+    fl_agent_bootout || {
+      fl_fail "launchd did not let go of $(fl_agent_label) within ${FL_BOOTOUT_WAIT_SECS} s; run benchbar repair again"
+      return 1
+    }
   fi
   fl_agent_bootstrap "$plist" || { fl_fail "launchctl could not load ${plist}"; return 1; }
   if [[ "$was_running" == "1" ]]; then
@@ -193,6 +214,7 @@ act_write_plist() {
   else
     fl_ok "agent loaded (bench stays stopped until benchup)"
   fi
+  fl_runner_legacy_retire
 }
 
 act_write_helpers() {

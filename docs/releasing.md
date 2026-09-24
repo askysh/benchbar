@@ -154,7 +154,7 @@ gh release create v0.3.0 dist/* --title "BenchBar 0.3.0" --generate-notes
 5. **Appcast.** `generate_appcast` reads the zip, signs it with the
    EdDSA key and writes `appcast.xml` with the download URL on the GitHub
    release. The app's `SUFeedURL` points at
-   `https://github.com/askysh/frappe-mac-dev-server/releases/latest/download/appcast.xml`,
+   `https://github.com/askysh/benchbar/releases/latest/download/appcast.xml`,
    so the newest release's feed is always the one read.
 6. **Cask.** The template gets the version and the DMG's sha256.
 
