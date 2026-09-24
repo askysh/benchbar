@@ -56,7 +56,15 @@ struct SnapshotTests {
     @Test func settingsWindow() async throws {
         base.cli.answer("list", json: base.listJSON())
         base.cli.answer("status", json: base.statusJSON("running"))
-        let store = base.makeStore()
+        // a path that reads well in the README screenshot
+        let cliPath = "/Users/you/.local/bin/benchbar"
+        base.settings.cliPath = cliPath
+        let runner = base.cli.runner()
+        let store = BenchStore(
+            settings: base.settings,
+            locator: CLILocator(home: base.dir.url, isExecutable: { $0 == cliPath }),
+            makeClient: { CLIClient(executable: $0, runner: runner) },
+            pinger: { _, _ in 200 })
         await store.start(polling: false)
         let view = SettingsView(settings: base.settings, store: store,
                                 library: RunnerLibrary(folder: base.dir.url.appendingPathComponent("Runners")), launchAtLogin: LaunchAtLogin(),

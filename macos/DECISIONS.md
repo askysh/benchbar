@@ -134,3 +134,10 @@ One line per non obvious choice: the decision, then the reason.
 - Sparkle's `Check for Updates…` item exists only in Sparkle builds; the default `Updater` is an empty stub, so no `#if` spreads through the app.
 - The cask is Apple Silicon and macOS 14+ only, with caveats pointing at the CLI install and the trademark note.
 - Verified locally: the Sparkle build compiles and embeds Sparkle.framework with SUFeedURL; `macos-release.sh --check` fails cleanly listing missing settings; shellcheck passes; the workflow parses. Not run: signing, notarization, the workflow itself.
+
+## Phase 9: docs and wrap up
+
+- The README title is now BenchBar with the tagline; the repo name stays descriptive. Every command example uses `benchbar`, the clone URL is the renamed repo, and `frappe-mac` is mentioned only as the old name. Internal names (rc markers, `frappe-mac-run.sh`, the MariaDB drop-in) are unchanged, as decided in Phase 0.
+- The README update the brief asked for in Phase 0 (new repo URL) had not been done; it is done here, with AGENTS.md.
+- Screenshots are real renders of the SwiftUI views with fixture data (snapshot tests), not mockups; the menu bar strip is the built in runner sheet.
+- CHANGELOG: one 0.3.0 entry for the rename, the JSON API and the app, matching `FL_VERSION` and `MARKETING_VERSION`.

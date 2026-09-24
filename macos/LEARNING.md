@@ -580,3 +580,18 @@ is the full guide. The ideas, in plain words:
 Files to read: `docs/releasing.md`, `scripts/macos-release.sh`,
 `.github/workflows/macos-release.yml`, `packaging/homebrew/benchbar.rb.tmpl`,
 `macos/BenchBar/Updates/Updater.swift`.
+
+## Phase 9: docs and wrap up
+
+- The README now leads with BenchBar, uses `benchbar` for every command,
+  and has a menu bar app section, an FAQ and the trademark note.
+- The screenshots in `docs/images` are the snapshot test renders from
+  Phase 5, so they can be made again after a UI change:
+  ```bash
+  mkdir -p ~/Library/Caches/BenchBarSnapshots
+  scripts/macos-build.sh --test
+  cp ~/Library/Caches/BenchBarSnapshots/popover-running-light.png docs/images/popover-light.png
+  ```
+- Before calling anything done, all four checks: `tests/run-tests.sh`
+  (CLI and shellcheck), `shellcheck scripts/*.sh`,
+  `scripts/macos-build.sh --test` (Swift), and a Release build.

@@ -2,6 +2,68 @@
 
 All notable changes to this project are documented here.
 
+## 0.3.0 - 2026-09-24
+
+The project is now **BenchBar**: the `benchbar` command line tool, plus a
+native menu bar app. Built for Frappe and ERPNext on macOS; not
+affiliated with Frappe Technologies.
+
+### Added
+
+- **BenchBar.app** (`macos/`, macOS 14+, Apple Silicon), built from the
+  command line with `scripts/macos-build.sh` and installed with
+  `scripts/macos-install-local.sh`:
+  - an animated menu bar runner per state (sleeping, walking, running,
+    stumbling, alert, question), one Core Animation keyframe animation,
+    tinted for light, dark and the transparent menu bar;
+  - running speed from the CPU use of the bench's process tree (libproc,
+    every 2 seconds, smoothed), behind a `SpeedSource` protocol;
+  - Reduce Motion support, and pausing on sleep, screen sleep, lock and
+    user switching;
+  - a popover with state, uptime, Start, Stop, Restart, open site, logs
+    (Terminal) and folder, a read only doctor, a bench picker, repair
+    hints and keyboard shortcuts;
+  - a Settings window: runner picker with live preview, speed toggle,
+    launch at login (`SMAppService`), notifications, CLI path;
+  - notifications on crash, crash guard pause and recovery;
+  - two original built in runners (a bench and a coffee cup) and custom
+    runners: a folder with `manifest.json` and PNG frames, imported from
+    a folder or zip with strict validation (`docs/runners.md`,
+    `examples/runners/blob`).
+- Versioned JSON API (`schema_version: 1`): `benchbar list --json`,
+  `status --json`, `doctor --json`, and `<bench>/logs/.benchbar/state.json`
+  written atomically by the runner on every transition
+  (`docs/json-schema.md`).
+- `stop_reason: "broken"` for a bench that cannot start until `repair`.
+- Release plumbing, documented and not yet live (no Apple Developer
+  account): Developer ID signing, notarization, DMG, Sparkle 2 behind a
+  build flag, a Homebrew cask template and a guarded GitHub Actions
+  workflow (`docs/releasing.md`).
+
+### Changed
+
+- The CLI is `benchbar`; `frappe-mac` stays as a link to it.
+- Agents are `com.benchbar.<bench>` and carry
+  `AssociatedBundleIdentifiers` so Login Items shows them under BenchBar.
+  `benchbar repair` migrates `com.frappe-mac.<bench>` agents (only for
+  this bench), restarting the bench if it was running. Old plists move to
+  `~/Library/LaunchAgents-disabled/<timestamp>/`.
+- `up`, `down` and `restart` on a bench that still has its old agent now
+  say so and point at `benchbar repair`, instead of "not installed".
+- The runner runs honcho as a child, forwards SIGTERM and records the
+  final state; a SIGTERM without a stop flag is a clean stop. Its
+  osascript crash notification stays as a fallback and is skipped while
+  BenchBar runs.
+- `status --json`: `state` is now the contract value (stopped, starting,
+  running, crashed, paused); launchd's word moved to `agent_state`.
+- README, AGENTS.md and the roadmap describe BenchBar and the new repo URL,
+  github.com/askysh/frappe-mac-dev-server.
+
+### Fixed
+
+- Reading a missing stop flag no longer prints "No such file or
+  directory".
+
 ## 0.2.0 - 2026-09-23
 
 ### Added
