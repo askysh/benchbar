@@ -81,6 +81,11 @@ decisions of the app work live in `macos/DECISIONS.md`.
 - The repair engine resets `FL_STEP_RESULT` before each action and reports it, so a skipped wkhtmltopdf or hosts step prints `skipped`, the documented step status, not `done`.
 - The report's assignment style masking also treats `?` as a key boundary, so a credential in a URL query string (`?api_key=...&x=1`) is masked like any other.
 - `release-local.sh` no longer re-signs the app: `macos-build.sh` already signed it ad hoc with the Hardened Runtime and the entitlements, and a plain `codesign --force -s -` dropped both. The script verifies the signature and the runtime flag instead.
+- Phase 01 no longer requires `wkhtmltopdf`: a bench without it works, only PDF printing does not, and phase 00 already said so when the package was declined.
+- The report's quoted value patterns accept backslash escaped characters inside the quotes, so `"api_key":"abc\"tail"` is masked whole.
+- The utf8mb4 doctor check also requires the `!includedir` line in `my.cnf` and, when MariaDB runs and the root password is known, a live `character_set_server` of utf8mb4; the repair action restarts MariaDB when either the files changed or the live value is wrong.
+- `adopt --dry-run` never touched state (`fl_state_set` is a no-op under `FL_DRY_RUN`); a test now proves it.
+
 ## Found on a real Mac (macOS 27, Apple Silicon)
 
 - Verified read only on the real bench: `install.sh --dry-run` and `--dry-run --uninstall` write nothing; `doctor` and `report --print` run clean (no home path, username, hostname or site config value in the report); `adopt` on an already adopted bench is a no-op that only remembers the path. `release-local.sh` builds, passes the 114 Swift tests, and `shasum -a 256 -c dist/SHA256SUMS` passes; the DMG (UDZO, read-only, Applications symlink) mounts and the unpacked app carries a valid ad hoc signature. Every macOS flag the mocks assume was checked against the man pages: `security add-generic-password -U`, `arch -x86_64 prog`, `softwareupdate --install-rosetta --agree-to-license`, `installer -pkg X -target /`, `ditto -x -k` and `-c -k --keepParent`, `hdiutil create -format UDZO`, `sw_vers -productVersion` (the man page lists `--productVersion`; the single dash form still works and is what macOS 12 and older knew).

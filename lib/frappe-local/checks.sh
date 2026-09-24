@@ -310,8 +310,9 @@ chk_mariadb_bind() {
 }
 
 chk_mariadb_utf8() {
-  local dropin status
+  local dropin status live mycnf
   dropin="$(fl_mariadb_utf8_dropin_path)"
+  mycnf="${FL_BREW_PREFIX:-/opt/homebrew}/etc/my.cnf"
   status="$(fl_template_status "$dropin" "$(fl_template_render mariadb-frappe.cnf)")"
   case "$status" in
     current) chk__set ok "utf8mb4 drop-in ${dropin} is current" ;;
@@ -320,9 +321,20 @@ chk_mariadb_utf8() {
         chk__set ok "${dropin} sets utf8mb4 (not written by benchbar, left alone)"
       else
         chk__set warn "${dropin} exists but does not set utf8mb4" "${SCRIPT_DIR}/benchbar repair" mariadb_utf8
+        return 0
       fi ;;
-    *) chk__set warn "utf8mb4 drop-in is ${status} (${dropin}); Frappe needs utf8mb4 server wide" "${SCRIPT_DIR}/benchbar repair" mariadb_utf8 ;;
+    *) chk__set warn "utf8mb4 drop-in is ${status} (${dropin}); Frappe needs utf8mb4 server wide" "${SCRIPT_DIR}/benchbar repair" mariadb_utf8; return 0 ;;
   esac
+  # the drop-in only counts when my.cnf pulls the folder in
+  if [[ -f "$mycnf" ]] && ! fl_mariadb_includedir_present; then
+    chk__set warn "${mycnf} has no '!includedir' for my.cnf.d, so the utf8mb4 drop-in is ignored" "${SCRIPT_DIR}/benchbar repair" mariadb_utf8
+    return 0
+  fi
+  # and the running server must actually use it
+  live="$(fl_mariadb_live_charset)"
+  if [[ -n "$live" && "$live" != "utf8mb4" ]]; then
+    chk__set warn "MariaDB runs with character_set_server=${live}; a restart is needed to pick up utf8mb4" "${SCRIPT_DIR}/benchbar repair (restarts MariaDB)" mariadb_utf8
+  fi
 }
 
 chk_wkhtmltopdf() {

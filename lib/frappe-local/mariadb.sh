@@ -223,10 +223,21 @@ fl_mariadb_utf8_dropin_path() {
   printf '%s/etc/my.cnf.d/frappe.cnf' "${FL_BREW_PREFIX:-/opt/homebrew}"
 }
 
-# Makes sure $(brew --prefix)/etc/my.cnf includes my.cnf.d. Returns 0 always.
+# true when $(brew --prefix)/etc/my.cnf pulls in my.cnf.d (or does not exist
+# yet: a fresh Homebrew MariaDB writes one that does)
+fl_mariadb_includedir_present() {
+  local brew="${FL_BREW_PREFIX:-/opt/homebrew}" mycnf
+  mycnf="${brew}/etc/my.cnf"
+  [[ -f "$mycnf" ]] || return 1
+  grep -q "^!includedir ${brew}/etc/my.cnf.d" "$mycnf"
+}
+
+# Makes sure $(brew --prefix)/etc/my.cnf includes my.cnf.d. Returns 0 always;
+# sets FL_MYCNF_CHANGED=1 when the file was written.
 fl_mariadb_includedir_ensure() {
   local brew="${FL_BREW_PREFIX:-/opt/homebrew}" mycnf
   mycnf="${brew}/etc/my.cnf"
+  FL_MYCNF_CHANGED=0
   if [[ -f "$mycnf" ]]; then
     grep -q "^!includedir ${brew}/etc/my.cnf.d" "$mycnf" && return 0
     if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
@@ -234,6 +245,7 @@ fl_mariadb_includedir_ensure() {
     else
       fl_backup_file "$mycnf"
       printf '\n!includedir %s/etc/my.cnf.d\n' "$brew" >>"$mycnf"
+      FL_MYCNF_CHANGED=1
       fl_ok "added !includedir to ${mycnf}"
     fi
     return 0
@@ -243,19 +255,32 @@ fl_mariadb_includedir_ensure() {
   else
     mkdir -p "$(dirname "$mycnf")"
     printf '[client-server]\n!includedir %s/etc/my.cnf.d\n' "$brew" >"$mycnf"
+    FL_MYCNF_CHANGED=1
     fl_ok "created ${mycnf}"
   fi
 }
 
 # fl_mariadb_dropin_apply TEMPLATE PATH: renders the drop-in and writes it
-# when it is missing or outdated. Sets FL_TEMPLATE_CHANGED.
+# when it is missing or outdated. Sets FL_TEMPLATE_CHANGED (drop-in or
+# my.cnf written), so the caller knows a restart is due.
 fl_mariadb_dropin_apply() {
   local template="$1" path="$2" rendered
   fl_mariadb_includedir_ensure
   rendered="$(fl_template_render "$template")"
   fl_template_apply "$path" "$rendered" 644
   [[ "$FL_TEMPLATE_CHANGED" == "1" && "${FL_DRY_RUN:-0}" != "1" ]] && fl_ok "wrote ${path}"
+  [[ "${FL_MYCNF_CHANGED:-0}" == "1" ]] && FL_TEMPLATE_CHANGED=1
   return 0
+}
+
+# The server's live character_set_server when it runs and the root password
+# is known (Keychain or environment); empty otherwise.
+fl_mariadb_live_charset() {
+  local pw
+  fl_process_running mariadbd || fl_port_listening 3306 || return 0
+  pw="${MARIADB_ROOT_PASSWORD:-$(fl_keychain_get 2>/dev/null || true)}"
+  [[ -n "$pw" ]] || return 0
+  fl_mariadb_server_charset "$pw" 2>/dev/null || true
 }
 
 # fl_mariadb_restart_if_running: a changed drop-in needs a restart; a

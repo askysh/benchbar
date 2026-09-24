@@ -166,3 +166,15 @@ run_fm status --json --bench-dir "$BENCH"
 printf '%s' "$OUT" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["stop_flag"]=="manual"' || fail "status --json must be valid JSON"
 
 printf 'test-doctor: ok\n'
+
+# ---- utf8mb4: a current drop-in is not enough when my.cnf stopped including my.cnf.d
+printf '[client-server]\n' >"$MOCK_BREW_PREFIX/etc/my.cnf"
+run_fm doctor --bench-dir "$BENCH"
+assert_contains "$OUT" "[WARN] MariaDB utf8mb4:"
+assert_contains "$OUT" "no '!includedir'"
+run_fm repair --yes --bench-dir "$BENCH"
+grep -q "^!includedir $MOCK_BREW_PREFIX/etc/my.cnf.d" "$MOCK_BREW_PREFIX/etc/my.cnf" || fail "repair must restore the includedir line"
+run_fm doctor --bench-dir "$BENCH"
+assert_not_contains "$OUT" "[WARN] MariaDB utf8mb4:"
+
+printf 'test-doctor utf8: ok\n'

@@ -198,7 +198,11 @@ else
   fl_require_cmd yarn "Run ./00-mac-system-deps.sh --profile ${FL_PROFILE}"
   fl_require_cmd mariadb "Run ./00-mac-system-deps.sh --profile ${FL_PROFILE}"
   fl_require_cmd redis-server "Run ./00-mac-system-deps.sh --profile ${FL_PROFILE}"
-  fl_require_cmd wkhtmltopdf "Install patched-Qt build from https://github.com/wkhtmltopdf/packaging/releases"
+  if command -v wkhtmltopdf >/dev/null 2>&1; then
+    fl_ok "wkhtmltopdf found"
+  else
+    fl_warn "wkhtmltopdf is not installed: the bench works, PDF printing does not. Run ./00-mac-system-deps.sh to add it later."
+  fi
   if fl_port_listening 3306; then
     fl_mariadb_safe_mode_note
   fi

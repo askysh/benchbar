@@ -115,8 +115,10 @@ act_mariadb_bind() {
 }
 
 act_mariadb_utf8() {
+  local live
   fl_mariadb_dropin_apply mariadb-frappe.cnf "$(fl_mariadb_utf8_dropin_path)"
-  if [[ "$FL_TEMPLATE_CHANGED" == "1" ]]; then
+  live="$(fl_mariadb_live_charset)"
+  if [[ "$FL_TEMPLATE_CHANGED" == "1" || ( -n "$live" && "$live" != "utf8mb4" ) ]]; then
     fl_mariadb_restart_if_running || return 1
   fi
 }

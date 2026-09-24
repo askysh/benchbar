@@ -32,6 +32,7 @@ run_fm adopt "$BENCH" --dry-run
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "dry-run: nothing will be changed"
 assert_no_file "$BENCH/Procfile.lean"
+[[ -z "$(sed -n 's/^BENCH_DIR=//p' "$FL_STATE_FILE" 2>/dev/null)" ]] || fail "a dry-run adopt must not remember the bench"
 
 # --yes applies: service files, agent, helpers, hosts; the bench stays stopped
 run_fm adopt "$BENCH" --yes

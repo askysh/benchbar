@@ -194,14 +194,15 @@ fl_report_redact_file() {
   # 1. values of keys that look like credentials, in JSON ("key": "value" or "key": 123),
   #    INI (key = value), shell (key=value), URL query (?key=value&...) and
   #    header (Key: value) forms. The
-  #    last one masks a quoted value whole, otherwise to the end of the line
+  #    last one masks a quoted value whole (escaped quotes inside it included),
+  #    otherwise to the end of the line
   #    or to the next quote or comma when the key sits inside a one line
   #    JSON document.
   before="$(wc -l <"$file" | tr -d ' ')"
   sed -E \
-    -e 's/("('"$FL_REPORT_KEY_RE"')"[[:space:]]*:[[:space:]]*)"[^"]*"/\1"***"/g' \
+    -e 's/("('"$FL_REPORT_KEY_RE"')"[[:space:]]*:[[:space:]]*)"([^"\\]|\\.)*"/\1"***"/g' \
     -e 's/("('"$FL_REPORT_KEY_RE"')"[[:space:]]*:[[:space:]]*)[0-9][0-9.]*/\1"***"/g' \
-    -e 's/(^|[[:space:],;&?])(('"$FL_REPORT_KEY_RE"')[[:space:]]*[=:][[:space:]]*)("[^"]*"|'"'"'[^'"'"']*'"'"'|[^",;&}]*)/\1\2***/g' \
+    -e 's/(^|[[:space:],;&?])(('"$FL_REPORT_KEY_RE"')[[:space:]]*[=:][[:space:]]*)("([^"\\]|\\.)*"|'"'"'([^'"'"'\\]|\\.)*'"'"'|[^",;&}]*)/\1\2***/g' \
     "$file" >"$tmp"
   n="$(diff "$file" "$tmp" 2>/dev/null | grep -c '^>' || true)"
   [[ "${n:-0}" -gt 0 ]] && FL_REPORT_REDACTIONS="${FL_REPORT_REDACTIONS}${name}: masked credential-like values on ${n} line(s)"$'\n'
