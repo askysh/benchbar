@@ -69,3 +69,19 @@ One line per non obvious choice: the decision, then the reason.
 - Poll every 30 s (5 s tolerance) with the popover closed, every 5 s (1 s tolerance) while it is open; tolerance lets macOS batch wakeups.
 - The site ping is raw HTTP/1.1 over `NWConnection` to 127.0.0.1 with the site in the Host header, like the CLI, because URLSession will not send a custom Host header. It runs once after a successful start, then triggers a refresh.
 - `suspend()` / `resume()` exist on the store for sleep and wake; wiring them to `NSWorkspace` notifications is left to Phase 5, with the popover.
+
+## Phase 4: animated runner
+
+- Frames are tinted in code, not shown as template NSImages: a CALayer ignores `isTemplate`, so the animator fills each frame's alpha with `labelColor` resolved in the button's `effectiveAppearance` and re-tints on appearance changes. A mask layer would avoid the re-tint, but its timing parent is unclear, and layer.speed must work.
+- Pose names (`sleeping, starting, running, crashed, alert, unknown`) are the manifest keys from the Phase 7 format, so built in and custom runners share one model.
+- crashed and paused map to the same plan, and the same plan twice is a no-op, so crashed to paused does not start the stumble over.
+- The stumble is one non repeating keyframe animation (stumble x3, then the alert frames); the layer's model `contents` is the alert frame, so it rests there with no completion callback.
+- Base rates: running 5 fps at speed 1 (60 fps at speed 12), walking 6, stumble 8, sleeping and still poses 2. Only the running loop follows `layer.speed`.
+- CPU is summed over cores, so 110% (about one busy core) is already top speed, as the brief's formula gives.
+- Processes are keyed by pid plus start time; a process that appears between samples counts all its CPU time only if it started after the last sample, and exited ones drop out, so the total never goes negative.
+- EMA alpha 0.35: a single busy sample moves the speed about a third of the way.
+- Both runners are 24 pt wide (48 px @2x) so the "z", "!" and "?" marks fit beside the character.
+- No RunCat code or art was used; the technique (keyframes on `contents`) is standard Core Animation, so no NOTICE entry is needed.
+- Sleep, screen sleep, lock and session resign also suspend the store's polling and watchers (the Phase 3 note left this for Phase 5).
+- The app skips all startup when `XCTestConfigurationFilePath` is set, as the Phase 1 note says; the placeholder app had nothing to skip before.
+- Until the popover (Phase 5) the status item has a one item menu, Quit BenchBar.

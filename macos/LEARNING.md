@@ -259,3 +259,100 @@ cancel) comes first wins and the rest do nothing.
 - `macos/BenchBar/State/BenchStateMachine.swift` first, then `BenchStore.swift`.
 - `macos/BenchBar/State/DirectoryWatcher.swift`, `SitePinger.swift`.
 - `macos/BenchBarTests/StateMachineTests.swift`, `BenchStoreTests.swift`, `DirectoryWatcherTests.swift`.
+
+## Phase 4: the animated runner
+
+### A status item is a button with a layer
+
+`NSStatusItem` gives you an `NSStatusBarButton` in the menu bar. Most
+apps set `button.image`. We instead turn on `button.wantsLayer` and add
+our own `CALayer` on top (`StatusItem/StatusItemController.swift`).
+A **layer** is a rectangle Core Animation draws on the GPU; every
+AppKit view can be backed by one.
+
+### One animation, run by the system
+
+`Runners/RunnerAnimator.swift` puts one `CAKeyframeAnimation` on the
+layer's `contents` (the image it shows):
+
+- `values` is the list of frames, `keyTimes` says when each starts.
+- `calculationMode = .discrete` means "jump from frame to frame", no
+  blending between them. In this mode `keyTimes` has one more entry
+  than `values`: each frame holds until the next key time.
+- `repeatCount = .infinity` loops it.
+
+Once added, the animation runs in the render server, a separate
+process. Our app does no work per frame and can sit idle, which is why
+the brief rules out swapping images on a timer.
+
+### Speed without restarting
+
+Every layer has its own clock: local time is
+`(parent time - beginTime) * speed + timeOffset`. Setting `speed = 3`
+plays the loop three times faster. Changing `speed` alone would make
+the animation jump (the whole past is suddenly scaled), so
+`applySpeed()` first pins `beginTime` to now and `timeOffset` to the
+current local time. `speed = 0` is how you pause a layer.
+
+### Template images, by hand
+
+A template image is black plus transparency; macOS paints it in the
+menu bar's text color, so it works on light, dark and the macOS 26
+transparent menu bar. A `CALayer` does not know about templates, so we
+tint the frames ourselves with `NSColor.labelColor` resolved in the
+button's `effectiveAppearance`, and tint again when that appearance
+changes (key value observing on `effectiveAppearance`).
+
+### Drawing the art in code
+
+`Runners/BuiltInRunners.swift` draws both runners with Core Graphics:
+rounded rectangles, lines and dots in an 18 point canvas, rendered at
+2x into 36 pixel tall bitmaps. The faces are drawn with the `.clear`
+blend mode, which punches holes. Legs are two segments whose angles
+come from a sine wave (`Gait`), so a whole run cycle is a formula.
+
+### State to animation is a table
+
+`Runners/RunnerPlan.swift` maps a bench state to a plan: loop a pose,
+stumble then hold the alert, or show one still frame (Reduce Motion).
+It is a pure function, so `RunnerTests.swift` checks the whole table.
+
+### Speed from CPU
+
+`Speed/ProcessTreeCPU.swift` uses **libproc**, the C library behind
+Activity Monitor:
+
+- `proc_listchildpids` lists a process's children; walking them from
+  the runner's pid gives the whole bench (honcho, web, workers,
+  socketio, Redis).
+- `proc_pid_rusage` gives each process's CPU time so far.
+
+Two readings 2 seconds apart give CPU percent. On Apple Silicon these
+times are in "mach ticks", not nanoseconds, so `MachTime` converts them
+with `mach_timebase_info`. The percent becomes a speed
+(`1 + cpu / 10`, kept between 1 and 12) and an exponential moving
+average smooths it. `SpeedSource` is a protocol, so queue depth or
+requests per second can replace CPU later.
+
+An `actor` (`ProcessTreeCPUSource`) holds the previous reading. Actors
+let only one caller at a time touch their state, so no locks.
+
+### Being a good citizen
+
+`System/SystemActivity.swift` listens for sleep, screen sleep, screen
+lock (a distributed notification from loginwindow) and fast user
+switching. While any of those is true the layer is paused, CPU sampling
+stops and the store stops polling. It also watches
+`accessibilityDisplayShouldReduceMotion`: with Reduce Motion on, every
+state shows one still frame.
+
+To try it: System Settings, Accessibility, Display (or Motion on macOS
+26), turn on Reduce motion. The runner stops moving at once.
+
+### Files to read
+
+- `macos/BenchBar/Runners/RunnerPlan.swift`, then `RunnerAnimator.swift`.
+- `macos/BenchBar/Runners/BuiltInRunners.swift` for the drawing.
+- `macos/BenchBar/Speed/SpeedSource.swift`, `ProcessTreeCPU.swift`, `SpeedController.swift`.
+- `macos/BenchBar/StatusItem/StatusItemController.swift`, `macos/BenchBar/System/SystemActivity.swift`.
+- `macos/BenchBarTests/RunnerTests.swift`, `SpeedTests.swift`.
