@@ -71,8 +71,10 @@ Download `BenchBar-<version>.dmg` from the
 drag BenchBar to Applications. The app is not signed with an Apple
 Developer ID yet, so macOS 15 and later stop the first launch:
 
-1. Double click BenchBar. macOS says it could not verify the app. Click
-   **Done** (not Move to Trash).
+1. Double click BenchBar. A dialog says "BenchBar" Not Opened: Apple
+   could not verify it is free of malware. Click **Done**. The highlighted
+   button is **Move to Trash** (Move to Bin in British English), so do not
+   press Return.
 2. Open **System Settings > Privacy & Security**, scroll to the Security
    section: "BenchBar was blocked to protect your Mac".
 3. Click **Open Anyway**, confirm with your password or Touch ID, then
