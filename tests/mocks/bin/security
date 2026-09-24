@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# security mock: generic passwords live as files in $MOCK_STATE/keychain/<service>--<account>
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "$(dirname "$0")/_mocklib.sh"
+# never log the password itself
+args=()
+skip=0
+for a in "$@"; do
+  if [[ "$skip" == "1" ]]; then args+=("<hidden>"); skip=0; continue; fi
+  [[ "$a" == "-w" ]] && skip=1
+  args+=("$a")
+done
+mock_log "${args[@]}"
+dir="${MOCK_STATE:?}/keychain"; mkdir -p "$dir"
+cmd="${1:-}"; shift || true
+service=""; account=""; pw=""; want_pw=0
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    -s) service="$2"; shift 2 ;;
+    -a) account="$2"; shift 2 ;;
+    -w) if [[ -n "${2:-}" && "${2:0:1}" != "-" ]]; then pw="$2"; shift 2; else want_pw=1; shift; fi ;;
+    -l|-j) shift 2 ;;
+    *) shift ;;
+  esac
+done
+item="$dir/${service}--${account}"
+case "$cmd" in
+  find-generic-password)
+    [[ -f "$item" ]] || { echo "security: SecKeychainSearchCopyNext: The specified item could not be found in the keychain." >&2; exit 44; }
+    [[ "$want_pw" == "1" ]] && cat "$item"
+    exit 0 ;;
+  add-generic-password)
+    printf '%s\n' "$pw" >"$item"; exit 0 ;;
+  delete-generic-password)
+    rm -f "$item"; exit 0 ;;
+  *) exit 0 ;;
+esac

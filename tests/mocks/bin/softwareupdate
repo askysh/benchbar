@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# softwareupdate mock: --install-rosetta marks Rosetta as present
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "$(dirname "$0")/_mocklib.sh"
+mock_log "$@"
+case "$*" in *--install-rosetta*) printf 'rosetta\n' >"${MOCK_STATE:?}/rosetta" ;; esac
+exit 0

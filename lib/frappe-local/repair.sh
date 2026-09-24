@@ -5,7 +5,7 @@
 # the check -> plan -> apply -> verify engine shared by "repair" and
 # "service" (the background phase).
 
-FL_ACTION_ORDER="python_leaves env_rebuild honcho_install node_requirements build clear_cache mariadb_bind legacy_migrate write_procfile write_runner write_plist write_helpers write_cli_link hosts_entry rotate_logs redis_stop"
+FL_ACTION_ORDER="python_leaves env_rebuild honcho_install node_requirements build clear_cache mariadb_bind mariadb_utf8 wkhtmltopdf_install legacy_migrate write_procfile write_runner write_plist write_helpers write_cli_link hosts_entry rotate_logs redis_stop"
 FL_NEED_CLEAR_CACHE=0
 # set by legacy_migrate when it booted out an agent that was running the
 # bench, so write_plist starts the bench again under the new agent
@@ -20,6 +20,8 @@ fl_action_label() {
     build) printf 'bench build' ;;
     clear_cache) printf 'bench clear-cache and clear-website-cache' ;;
     mariadb_bind) printf 'bind MariaDB to 127.0.0.1' ;;
+    mariadb_utf8) printf 'write the utf8mb4 MariaDB drop-in' ;;
+    wkhtmltopdf_install) printf 'install the patched wkhtmltopdf package (sudo)' ;;
     legacy_migrate) printf 'migrate legacy launchd agents' ;;
     write_procfile) printf 'write Procfile.lean' ;;
     write_runner) printf 'write the runner script' ;;
@@ -102,40 +104,22 @@ act_clear_cache() {
   FL_NEED_CLEAR_CACHE=0
 }
 
-fl_mariadb_service_formula() {
-  local f
-  f="$(brew services list 2>/dev/null | awk '$1 ~ /^mariadb/ && $2 == "started" {print $1; exit}' || true)"
-  printf '%s' "${f:-$FL_MARIADB_FORMULA}"
+act_mariadb_bind() {
+  fl_mariadb_dropin_apply mariadb-local-only.cnf "$(fl_mariadb_dropin_path)"
+  if [[ -n "$(fl_port_listen_addresses 3306)" ]]; then
+    fl_mariadb_restart_if_running || return 1
+  fi
 }
 
-act_mariadb_bind() {
-  local brew="${FL_BREW_PREFIX:-/opt/homebrew}" mycnf dropin rendered formula
-  mycnf="${brew}/etc/my.cnf"
-  dropin="$(fl_mariadb_dropin_path)"
-  if [[ -f "$mycnf" ]] && ! grep -q "^!includedir ${brew}/etc/my.cnf.d" "$mycnf"; then
-    if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
-      fl_info "dry-run: would append '!includedir ${brew}/etc/my.cnf.d' to ${mycnf}"
-    else
-      fl_backup_file "$mycnf"
-      printf '\n!includedir %s/etc/my.cnf.d\n' "$brew" >>"$mycnf"
-      fl_ok "added !includedir to ${mycnf}"
-    fi
-  elif [[ ! -f "$mycnf" ]]; then
-    if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
-      fl_info "dry-run: would create ${mycnf} with !includedir"
-    else
-      mkdir -p "$(dirname "$mycnf")"
-      printf '[client-server]\n!includedir %s/etc/my.cnf.d\n' "$brew" >"$mycnf"
-      fl_ok "created ${mycnf}"
-    fi
+act_mariadb_utf8() {
+  fl_mariadb_dropin_apply mariadb-frappe.cnf "$(fl_mariadb_utf8_dropin_path)"
+  if [[ "$FL_TEMPLATE_CHANGED" == "1" ]]; then
+    fl_mariadb_restart_if_running || return 1
   fi
-  rendered="$(fl_template_render mariadb-local-only.cnf)"
-  fl_template_apply "$dropin" "$rendered" 644
-  [[ "$FL_TEMPLATE_CHANGED" == "1" && "${FL_DRY_RUN:-0}" != "1" ]] && fl_ok "wrote ${dropin}"
-  if [[ -n "$(fl_port_listen_addresses 3306)" ]]; then
-    formula="$(fl_mariadb_service_formula)"
-    fl_run_long "brew services restart ${formula}" brew services restart "$formula" || return 1
-  fi
+}
+
+act_wkhtmltopdf_install() {
+  fl_wkhtmltopdf_ensure
 }
 
 act_legacy_migrate() {
@@ -246,21 +230,38 @@ act_write_cli_link() {
   esac
 }
 
+FL_HOSTS_START="# >>> benchbar >>>"
+FL_HOSTS_END="# <<< benchbar <<<"
+
+# Adds "127.0.0.1 <site>" inside a marker block in /etc/hosts. Missing block:
+# appended with sudo tee -a. Existing block: the line goes inside it and the
+# whole file is rewritten from a temp copy (sudo cp). A backup comes first.
 act_hosts_entry() {
+  local line tmp
   if fl_hosts_has_site; then
     return 0
   fi
+  line="127.0.0.1 ${FL_SITE}"
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
-    fl_info "dry-run: would run: printf '127.0.0.1 ${FL_SITE}\\n' | sudo tee -a ${FL_HOSTS_FILE}"
+    fl_info "dry-run: would add '${line}' inside the '${FL_HOSTS_START}' block of ${FL_HOSTS_FILE} (sudo, backup first)"
     return 0
   fi
-  if ! fl_confirm "Add '127.0.0.1 ${FL_SITE}' to ${FL_HOSTS_FILE} with sudo?"; then
-    fl_warn "skipped; run: printf '127.0.0.1 ${FL_SITE}\\n' | sudo tee -a ${FL_HOSTS_FILE}"
+  if ! fl_confirm "Add '${line}' to ${FL_HOSTS_FILE} with sudo?"; then
+    fl_warn "skipped; run: printf '${line}\\n' | sudo tee -a ${FL_HOSTS_FILE}"
     return 0
   fi
+  fl_sudo_begin "add '${line}' to ${FL_HOSTS_FILE}" || { fl_fail "sudo not available; run: printf '${line}\\n' | sudo tee -a ${FL_HOSTS_FILE}"; return 1; }
   fl_backup_file "$FL_HOSTS_FILE"
-  printf '127.0.0.1 %s\n' "$FL_SITE" | sudo tee -a "$FL_HOSTS_FILE" >/dev/null || { fl_fail "sudo tee failed"; return 1; }
-  fl_ok "added ${FL_SITE} to ${FL_HOSTS_FILE}"
+  if [[ "$(fl_rc_markers_state "$FL_HOSTS_FILE" "$FL_HOSTS_START" "$FL_HOSTS_END")" == "present" ]]; then
+    tmp="$(mktemp "${TMPDIR:-/tmp}/benchbar-hosts.XXXXXX")"
+    awk -v e="$FL_HOSTS_END" -v l="$line" '$0 == e { print l } { print }' "$FL_HOSTS_FILE" >"$tmp"
+    sudo cp "$tmp" "$FL_HOSTS_FILE" || { rm -f "$tmp"; fl_fail "sudo cp failed"; return 1; }
+    rm -f "$tmp"
+  else
+    printf '\n%s\n%s\n%s\n' "$FL_HOSTS_START" "$line" "$FL_HOSTS_END" | sudo tee -a "$FL_HOSTS_FILE" >/dev/null || { fl_fail "sudo tee failed"; return 1; }
+  fi
+  fl_hosts_has_site || { fl_fail "${FL_HOSTS_FILE} still has no entry for ${FL_SITE}"; return 1; }
+  fl_ok "added '${line}' to ${FL_HOSTS_FILE} (backup: ${FL_LAST_BACKUP:-none})"
 }
 
 act_rotate_logs() {

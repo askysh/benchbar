@@ -1,3 +1,13 @@
 #!/usr/bin/env bash
-[[ "${MOCK_WKHTML_PATCHED:-1}" == "1" ]] && printf 'wkhtmltopdf 0.12.6 (with patched qt)\n' || printf 'wkhtmltopdf 0.12.6\n'
+# wkhtmltopdf mock. State, first match wins:
+#   $MOCK_STATE/wkhtml_missing    behaves as if not installed (no output, exit 127)
+#   $MOCK_STATE/wkhtml_installed  the official package was "installed": patched qt
+#   MOCK_WKHTML_PATCHED=0         Homebrew's unpatched build
+#   default                       patched qt
+if [[ -f "${MOCK_STATE:-/nonexistent}/wkhtml_missing" && ! -f "${MOCK_STATE:-/nonexistent}/wkhtml_installed" ]]; then exit 127; fi
+if [[ -f "${MOCK_STATE:-/nonexistent}/wkhtml_installed" || "${MOCK_WKHTML_PATCHED:-1}" == "1" ]]; then
+  printf 'wkhtmltopdf 0.12.6 (with patched qt)\n'
+else
+  printf 'wkhtmltopdf 0.12.6\n'
+fi
 exit 0

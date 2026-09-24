@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
-# sudo mock: runs the command as the current user (tests use a temp hosts file)
+# sudo mock: runs the command as the current user (tests use a temp hosts file).
+# "sudo -v" and "sudo -n true" succeed unless $MOCK_STATE/sudo_refused exists.
 # shellcheck source=tests/mocks/bin/_mocklib.sh
 . "$(dirname "$0")/_mocklib.sh"
 mock_log "$@"
+[[ -f "${MOCK_STATE:-/nonexistent}/sudo_refused" ]] && { echo "sudo: a password is required" >&2; exit 1; }
+case "${1:-}" in
+  -v) exit 0 ;;
+  -n) shift; [[ "${1:-}" == "true" ]] && exit 0 ;;
+esac
 exec "$@"

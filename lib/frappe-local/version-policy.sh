@@ -16,8 +16,9 @@ FL_SUPPORT_END=""
 FL_SELECTED_APPS=()
 FL_INSTALL_SPECS=()
 
+# FL_CONFIG_DIR overrides the config folder (the tests pin their own checksums)
 fl_config_file() {
-  printf '%s/config/%s\n' "$SCRIPT_DIR" "$1"
+  printf '%s/%s\n' "${FL_CONFIG_DIR:-${SCRIPT_DIR}/config}" "$1"
 }
 
 fl_load_profile() {

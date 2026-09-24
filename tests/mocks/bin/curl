@@ -1,8 +1,21 @@
 #!/usr/bin/env bash
+# curl mock. "-w" (the site ping) prints $MOCK_CURL_CODE or $MOCK_STATE/curl_code.
+# "-o FILE URL" (a download) writes $MOCK_STATE/download_payload, or a stub,
+# unless $MOCK_STATE/download_fail exists.
 # shellcheck source=tests/mocks/bin/_mocklib.sh
 . "$(dirname "$0")/_mocklib.sh"
 mock_log "$@"
 code="${MOCK_CURL_CODE:-000}"
 [[ -f "${MOCK_STATE:-/nonexistent}/curl_code" ]] && code="$(cat "${MOCK_STATE}/curl_code")"
+out=""
+prev=""
+for a in "$@"; do
+  [[ "$prev" == "-o" ]] && out="$a"
+  prev="$a"
+done
 for a in "$@"; do [[ "$a" == "-w" ]] && { printf '%s' "$code"; [[ "$code" == "000" ]] && exit 7; exit 0; }; done
+if [[ -n "$out" ]]; then
+  [[ -f "${MOCK_STATE:-/nonexistent}/download_fail" ]] && { echo "curl: (22) The requested URL returned error: 404" >&2; exit 22; }
+  if [[ -f "${MOCK_STATE:-/nonexistent}/download_payload" ]]; then cp "${MOCK_STATE}/download_payload" "$out"; else printf 'stub download\n' >"$out"; fi
+fi
 exit 0
