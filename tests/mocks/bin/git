@@ -28,6 +28,14 @@ case "${1:-}" in
     printf '\n'
     exit 0 ;;
 esac
-real="$(command -v -p git || true)"
-[[ -n "$real" ]] || exit 1
+# Anything else goes to the real git: the first one on PATH outside the
+# mocks folder. Never this script again (bash 3.2's "command -v -p" still
+# returned the mock, and the exec loop spun forever on macOS).
+self="$(cd "$(dirname "$0")" && pwd)/git"
+real=""
+for cand in $(type -ap git 2>/dev/null) /usr/bin/git /opt/homebrew/bin/git /usr/local/bin/git; do
+  [[ -x "$cand" && "$cand" != "$self" && "$cand" != */tests/mocks/bin/git ]] || continue
+  real="$cand"; break
+done
+[[ -n "$real" ]] || { echo "git mock: no real git found" >&2; exit 1; }
 if [[ -n "$dir" ]]; then exec "$real" -C "$dir" "$@"; else exec "$real" "$@"; fi
