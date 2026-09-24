@@ -86,6 +86,11 @@ decisions of the app work live in `macos/DECISIONS.md`.
 - The utf8mb4 doctor check also requires the `!includedir` line in `my.cnf` and, when MariaDB runs and the root password is known, a live `character_set_server` of utf8mb4; the repair action restarts MariaDB when either the files changed or the live value is wrong.
 - `adopt --dry-run` never touched state (`fl_state_set` is a no-op under `FL_DRY_RUN`); a test now proves it.
 
+- The report also masks Python repr mappings (`'password': 'x'`): worker logs print dicts that way.
+- `adopt` runs the engine with `FL_ENGINE_SKIP_ACTIONS=honcho_install`: a missing honcho is reported with `pipx install honcho` or `benchbar repair` as the fix, and nothing is ever installed into the bench's `env/` by adopt.
+- Phase 00 tells a failed wkhtmltopdf install (download, checksum, installer) apart from a deliberate skip: it prints FAILED and a manual step, but still exits 0, since PDFs are optional and the bench can be created.
+- A generated MariaDB password is written to the Keychain before it is applied to the server; when the Keychain refuses (locked), MariaDB is left unchanged and the run stops with the fix, so no password ever exists only in a dying process.
+
 ## Found on a real Mac (macOS 27, Apple Silicon)
 
 - Verified read only on the real bench: `install.sh --dry-run` and `--dry-run --uninstall` write nothing; `doctor` and `report --print` run clean (no home path, username, hostname or site config value in the report); `adopt` on an already adopted bench is a no-op that only remembers the path. `release-local.sh` builds, passes the 114 Swift tests, and `shasum -a 256 -c dist/SHA256SUMS` passes; the DMG (UDZO, read-only, Applications symlink) mounts and the unpacked app carries a valid ad hoc signature. Every macOS flag the mocks assume was checked against the man pages: `security add-generic-password -U`, `arch -x86_64 prog`, `softwareupdate --install-rosetta --agree-to-license`, `installer -pkg X -target /`, `ditto -x -k` and `-c -k --keepParent`, `hdiutil create -format UDZO`, `sw_vers -productVersion` (the man page lists `--productVersion`; the single dash form still works and is what macOS 12 and older knew).

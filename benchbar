@@ -283,7 +283,12 @@ cmd_adopt() {
   fl_header "benchbar adopt" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "$FL_SITE"
   fl_info "adopt only adds the background service files and remembers the bench."
   fl_info "sites/, apps/, env/ and the databases are not touched; migrate, build and update never run."
-  if fl_repair_engine "Adopt" service; then
+  if [[ -z "$FL_HONCHO" ]]; then
+    fl_warn "honcho was not found on PATH, in the pipx venv of frappe-bench or in ${FL_BENCH_DIR}/env; adopt does not install into env"
+    fl_fix "pipx install honcho   (or: ${SCRIPT_DIR}/benchbar repair, which installs it into the bench env), then benchbar adopt again"
+  fi
+  # the service group would install honcho into env when it is missing; adopt must not
+  if FL_ENGINE_SKIP_ACTIONS="honcho_install" fl_repair_engine "Adopt" service; then
     # remembered only now: a cancelled plan must not make this the default bench
     fl_state_set BENCH_DIR "$FL_BENCH_DIR"
     fl_state_set SITE_NAME "$FL_SITE"

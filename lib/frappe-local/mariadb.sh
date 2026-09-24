@@ -129,12 +129,25 @@ fl_mariadb_root_setup() {
       pw="$(fl_password_generate)"; source="generated"
     fi
     fl_warn "MariaDB root@localhost has no password yet; setting one (${source})"
-    fl_mariadb_secure "$pw" || { fl_fail "could not set the MariaDB root password"; return 1; }
+    # the Keychain write comes first: a generated password that exists only
+    # in this process must never be applied to the server
+    if ! fl_keychain_set "$pw"; then
+      if [[ "$source" == "generated" ]]; then
+        fl_fail "the Keychain refused the new password, so MariaDB was left unchanged (is the login Keychain locked?)"
+        fl_fix "unlock the Keychain (security unlock-keychain), or pass MARIADB_ROOT_PASSWORD='...' to use a password you keep yourself"
+        return 1
+      fi
+      fl_warn "the password from MARIADB_ROOT_PASSWORD could not be saved to the Keychain; keep it, later runs need it in the environment"
+    fi
+    if ! fl_mariadb_secure "$pw"; then
+      fl_fail "could not set the MariaDB root password"
+      [[ "$source" == "generated" ]] && fl_keychain_delete
+      return 1
+    fi
     if [[ "${FL_DRY_RUN:-0}" != "1" ]]; then
       fl_mariadb_root_verify "$pw" || { fl_fail "the new root password does not work; check the MariaDB log"; return 1; }
       fl_ok "MariaDB root password set, anonymous users and the test database removed, remote root blocked"
     fi
-    fl_keychain_set "$pw" || true
     FL_MARIADB_ROOT_PW="$pw"; FL_MARIADB_ROOT_PW_SOURCE="$source"
     return 0
   fi

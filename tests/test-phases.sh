@@ -11,6 +11,15 @@ printf 'mariadb@10.11 started akash file\nredis started akash file\n' >"$MOCK_BR
 run00() { set +e; OUT="$("$ROOT/00-mac-system-deps.sh" "$@" 2>&1)"; CODE=$?; set -e; }
 run01() { set +e; OUT="$("$ROOT/01-install-bench-and-site.sh" "$@" 2>&1)"; CODE=$?; set -e; }
 
+# ---- 00: a locked Keychain: the generated password is never applied to MariaDB
+touch "$MOCK_STATE/keychain_locked"
+run00 --yes --profile v15-lts
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "MariaDB was left unchanged"
+[[ -z "$(mariadb_pw)" ]] || fail "MariaDB must keep its empty password when the Keychain refuses"
+[[ -z "$(keychain_get)" ]] || fail "nothing may be stored in a locked Keychain"
+rm -f "$MOCK_STATE/keychain_locked"
+
 # ---- 00: fresh machine: MariaDB without a password, no wkhtmltopdf, no Rosetta
 rm -f "$MOCK_BREW_PREFIX/etc/my.cnf.d/frappe.cnf"
 touch "$MOCK_STATE/wkhtml_missing"
@@ -87,12 +96,16 @@ assert_contains "$OUT" "PDFs will not work"
 assert_calls_not_contain '^(sudo|installer|curl .*wkhtmltox)'
 assert_contains "$OUT" "wkhtmltopdf            skipped"
 
-# checksum mismatch: the download is discarded and nothing is installed
+# checksum mismatch: the download is discarded and nothing is installed; a
+# failure is listed as such (not as a skip) but does not block the next phase
 printf 'tampered\n' >"$MOCK_STATE/download_payload"; printf 'rosetta\n' >"$MOCK_STATE/rosetta"; reset_calls
 rm -rf "$FL_STATE_DIR/downloads"
 run00 --yes --profile v15-lts
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "checksum mismatch"
+assert_contains "$OUT" "wkhtmltopdf            FAILED"
+assert_contains "$OUT" "The wkhtmltopdf install failed (not skipped)"
+assert_not_contains "$OUT" "wkhtmltopdf            skipped"
 assert_calls_not_contain '^sudo installer'
 assert_no_file "$FL_STATE_DIR/downloads/wkhtmltox-0.12.6-2.macos-cocoa.pkg.part"
 printf 'stub download\n' >"$MOCK_STATE/download_payload"

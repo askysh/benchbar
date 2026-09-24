@@ -82,6 +82,18 @@ assert_no_file "$HOME/Library/LaunchAgents/com.frappe-mac.oldbench.plist"
 assert_file "$HOME/Library/LaunchAgents/com.benchbar.oldbench.plist"
 [[ -n "$(ls "$HOME"/Library/LaunchAgents-disabled/*/com.frappe-mac.oldbench.plist 2>/dev/null)" ]] || fail "old plist must be moved aside, not deleted"
 
+# ---- a bench without honcho: adopt warns and never installs into env
+NOH="$HOME/nohoncho"; make_fake_bench "$NOH" nosite
+mv "$MOCK_PIPX_HOME/venvs/frappe-bench/bin/honcho" "$MOCK_PIPX_HOME/venvs/frappe-bench/bin/honcho.away"
+run_fm adopt "$NOH" --yes
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "adopt does not install into env"
+assert_contains "$OUT" "pipx install honcho"
+assert_calls_not_contain '^(uv pip install|pip install|pipx install|python.* -m pip install)' "(adopt must not install anything)"
+assert_not_contains "$OUT" "install honcho into the bench env"
+assert_file "$HOME/Library/LaunchAgents/com.benchbar.nohoncho.plist"
+mv "$MOCK_PIPX_HOME/venvs/frappe-bench/bin/honcho.away" "$MOCK_PIPX_HOME/venvs/frappe-bench/bin/honcho"
+
 # ---- benchbar mariadb-password
 run_fm mariadb-password </dev/null
 assert_eq "1" "$CODE"; assert_contains "$OUT" "no MariaDB root password in the Keychain"

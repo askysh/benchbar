@@ -14,7 +14,7 @@ printf "__version__ = '15.48.0'\n" >"$BENCH/apps/erpnext/erpnext/__init__.py"
 # secrets that must never appear in the report
 DB_PW="SuperSecretDbPw1"; ENC_KEY="EncKeyXYZ987"; API_KEY="ApiKeyQQQ"; API_SECRET="ApiSecretZZZ"
 ROOT_PW="RootPwHidden"; TOKEN="TokenLeak123"; BEARER="BearerLeak456"; JSON_PW="JsonPwLeak789"; INI_PW="IniLeak000"
-DQ_PW="QuotedSecret123"; SQ_TOKEN="SingleQuoted456"; URL_KEY="UrlSecret789"; ESC_TAIL="EscapedTail321"
+DQ_PW="QuotedSecret123"; SQ_TOKEN="SingleQuoted456"; URL_KEY="UrlSecret789"; ESC_TAIL="EscapedTail321"; PY_PW="PyReprSecret654"
 cat >"$BENCH/sites/macdev/site_config.json" <<JSON
 {
  "db_name": "_1234abcd",
@@ -42,6 +42,7 @@ while [[ "$i" -le 300 ]]; do printf 'line %d from %s/logs\n' "$i" "$HOME" >>"$BE
   printf 'db_password="%s" user=bob\nexport API_TOKEN='"'"'%s'"'"'\n' "$DQ_PW" "$SQ_TOKEN"
   printf 'GET /api/method/ping?api_key=%s&x=1 200\n' "$URL_KEY"
   printf '{"api_key":"abc\\"%s"} and secret="one\\"%s"\n' "$ESC_TAIL" "$ESC_TAIL"
+  printf "conf = {'db_name': '_abc', 'password': '%s', 'port': 3306}\n" "$PY_PW"
 } >>"$BENCH/logs/bench.log"
 printf 'worker boot\ndb_password = %s\n' "$INI_PW" >"$BENCH/logs/worker.error.log"
 # the names of the Mac (the scutil mock): a Bonjour name in an rq worker name and a
@@ -71,7 +72,7 @@ assert_not_contains "$listing" "site_config.json" "(site configs are never packe
 
 EX="$TMP_DIR/extract"; mkdir -p "$EX"; unzip -q "$ZIP" -d "$EX"
 all="$(cat "$EX"/*)"
-for secret in "$DB_PW" "$ENC_KEY" "$API_KEY" "$API_SECRET" "$ROOT_PW" "$TOKEN" "$BEARER" "$JSON_PW" "$INI_PW" "$DQ_PW" "$SQ_TOKEN" "$URL_KEY" "$ESC_TAIL"; do
+for secret in "$DB_PW" "$ENC_KEY" "$API_KEY" "$API_SECRET" "$ROOT_PW" "$TOKEN" "$BEARER" "$JSON_PW" "$INI_PW" "$DQ_PW" "$SQ_TOKEN" "$URL_KEY" "$ESC_TAIL" "$PY_PW"; do
   assert_not_contains "$all" "$secret" "(secret must not reach the zip)"
 done
 assert_not_contains "$all" "$HOME" "(home folder must be written as ~)"
@@ -95,7 +96,8 @@ assert_contains "$(cat "$EX/worker.error.log.tail")" "db_password = ***"
 assert_contains "$(cat "$EX/bench.log.tail")" 'db_password=*** user=bob'
 assert_contains "$(cat "$EX/bench.log.tail")" "export API_TOKEN=***"
 assert_contains "$(cat "$EX/bench.log.tail")" 'ping?api_key=***&x=1 200'
-assert_contains "$(cat "$EX/bench.log.tail")" '{"api_key":"***"} and secret=***' 
+assert_contains "$(cat "$EX/bench.log.tail")" '{"api_key":"***"} and secret=***'
+assert_contains "$(cat "$EX/bench.log.tail")" "'password': '***', 'port': 3306" 
 # the tail is 200 lines plus its heading
 assert_eq "201" "$(wc -l <"$EX/bench.log.tail" | tr -d ' ')"
 assert_contains "$(cat "$EX/bench.log.tail")" "line 300 from"

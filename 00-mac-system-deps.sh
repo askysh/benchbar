@@ -252,8 +252,13 @@ fl_ok "redis-server - ${REDIS_VERSION:-unknown} at ${REDIS_BIN}"
 fl_ensure_service_started redis "redis-server"
 
 fl_section "PDF"
-WKHTML_OK=1
-fl_wkhtmltopdf_ensure || WKHTML_OK=0
+# ok | skipped (declined on purpose, return 2) | failed (download, checksum,
+# installer). PDFs are optional either way, but a failure is said out loud
+# and listed at the end instead of looking like a choice.
+WKHTML_STATE=ok
+if fl_wkhtmltopdf_ensure; then WKHTML_STATE=ok; else
+  case "$?" in 2) WKHTML_STATE=skipped ;; *) WKHTML_STATE=failed; add_pending "WKHTMLTOPDF_FAILED" ;; esac
+fi
 
 fl_section "BUILD DEPS"
 for formula in openssl@3 libffi zlib; do
@@ -286,11 +291,11 @@ printf '%-22s %-22s %s\n' "$FL_PYTHON_BIN_NAME" "$PY_VERSION" "$PY_BIN"
 printf '%-22s %-22s %s\n' "node" "$NODE_VERSION" "$NODE_BIN"
 printf '%-22s %-22s %s\n' "$FL_MARIADB_FORMULA" "$MARIADB_DISTRIB" "$MARIADB_BIN"
 printf '%-22s %-22s %s\n' "redis-server" "${REDIS_VERSION:-?}" "$REDIS_BIN"
-if [[ "$WKHTML_OK" == "1" ]]; then
-  printf '%-22s %-22s %s\n' "wkhtmltopdf" "$(wkhtmltopdf --version 2>/dev/null | head -n1 | awk '{print $2}')" "$(command -v wkhtmltopdf)"
-else
-  printf '%-22s %-22s %s\n' "wkhtmltopdf" "skipped" "PDFs will not work until it is installed"
-fi
+case "$WKHTML_STATE" in
+  ok) printf '%-22s %-22s %s\n' "wkhtmltopdf" "$(wkhtmltopdf --version 2>/dev/null | head -n1 | awk '{print $2}')" "$(command -v wkhtmltopdf)" ;;
+  skipped) printf '%-22s %-22s %s\n' "wkhtmltopdf" "skipped" "PDFs will not work until it is installed" ;;
+  *) printf '%-22s %-22s %s\n' "wkhtmltopdf" "FAILED" "the install did not succeed; see the step below" ;;
+esac
 
 if (( ${#PENDING_STEPS[@]} == 0 )); then
   fl_section "READY"
@@ -308,6 +313,17 @@ for step in "${PENDING_STEPS[@]}"; do
 ${step_n}) Load the new shell block into this terminal (or open a new one):
 
    source ${ZSHRC}
+
+EOF
+      ;;
+    WKHTMLTOPDF_FAILED)
+      cat <<EOF
+${step_n}) The wkhtmltopdf install failed (not skipped): a download, checksum or
+   installer error is printed above. The bench works without it, PDF printing
+   does not. Run this again to retry, or install the package by hand:
+
+   https://github.com/wkhtmltopdf/packaging/releases   (0.12.6-2, macos-cocoa.pkg)
+   ${SCRIPT_DIR}/benchbar repair                         (retries the download and install)
 
 EOF
       ;;
@@ -332,8 +348,10 @@ EOF
 done
 
 printf '%sAfter completing the above, re-run this script to verify.%s\n\n' "$FL_YELLOW$FL_BOLD" "$FL_RESET"
-# only "source the rc file" left: that is not a blocker for the next phase
-only_source=1
-for step in "${PENDING_STEPS[@]}"; do [[ "$step" == "SOURCE_RC" ]] || only_source=0; done
-[[ "$only_source" == "1" ]] && exit 0
+# "source the rc file" and a failed optional PDF tool do not block the next phase
+only_soft=1
+for step in "${PENDING_STEPS[@]}"; do
+  case "$step" in SOURCE_RC|WKHTMLTOPDF_FAILED) ;; *) only_soft=0 ;; esac
+done
+[[ "$only_soft" == "1" ]] && exit 0
 exit 2

@@ -30,6 +30,8 @@ case "$cmd" in
     [[ "$want_pw" == "1" ]] && cat "$item"
     exit 0 ;;
   add-generic-password)
+    # $MOCK_STATE/keychain_locked: the login Keychain refuses writes (errSecInteractionNotAllowed)
+    [[ -f "${MOCK_STATE}/keychain_locked" ]] && { echo "security: SecKeychainItemCreateFromContent: User interaction is not allowed." >&2; exit 36; }
     printf '%s\n' "$pw" >"$item"; exit 0 ;;
   delete-generic-password)
     rm -f "$item"; exit 0 ;;

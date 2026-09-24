@@ -312,7 +312,12 @@ fl_repair_engine() {
   shift
   local actions action i n=0 rows=() unchanged remaining status labels
   fl_doctor_run "$@"
-  actions="$(fl_doctor_actions)"
+  actions=""
+  for action in $(fl_doctor_actions); do
+    # FL_ENGINE_SKIP_ACTIONS: actions a command refuses to run (adopt never installs into env)
+    case " ${FL_ENGINE_SKIP_ACTIONS:-} " in *" $action "*) continue ;; esac
+    actions="${actions}${actions:+ }${action}"
+  done
   unchanged=$(( ${#FL_D_IDS[@]} - $(fl_doctor_count warn) - $(fl_doctor_count fail) ))
 
   printf '\n%sPlan%s\n' "$FL_BOLD" "$FL_RESET"
@@ -385,7 +390,7 @@ fl_repair_engine() {
     fl_doctor_print compact
     remaining=""
     for action in $(fl_doctor_actions); do
-      case " $FL_OPTIONAL_ACTIONS " in *" $action "*) continue ;; esac
+      case " $FL_OPTIONAL_ACTIONS ${FL_ENGINE_SKIP_ACTIONS:-} " in *" $action "*) continue ;; esac
       remaining="${remaining} ${action}"
     done
   fi

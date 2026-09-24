@@ -190,8 +190,12 @@ fl_report_redact_file() {
   user="$(id -un 2>/dev/null || printf '%s' "${USER:-user}")"
   hosts="$(fl_report_host_names)"
   tmp="${file}.redact"
+  # a Python repr value: 'quoted', "quoted" (escapes allowed inside) or a number
+  local sq="'" dq='"' pyval
+  pyval="(${sq}([^${sq}\\\\]|\\\\.)*${sq}|${dq}([^${dq}\\\\]|\\\\.)*${dq}|[0-9][0-9.]*)"
 
   # 1. values of keys that look like credentials, in JSON ("key": "value" or "key": 123),
+  #    Python repr mappings ('key': 'value'),
   #    INI (key = value), shell (key=value), URL query (?key=value&...) and
   #    header (Key: value) forms. The
   #    last one masks a quoted value whole (escaped quotes inside it included),
@@ -202,6 +206,7 @@ fl_report_redact_file() {
   sed -E \
     -e 's/("('"$FL_REPORT_KEY_RE"')"[[:space:]]*:[[:space:]]*)"([^"\\]|\\.)*"/\1"***"/g' \
     -e 's/("('"$FL_REPORT_KEY_RE"')"[[:space:]]*:[[:space:]]*)[0-9][0-9.]*/\1"***"/g' \
+    -e "s/(${sq}(${FL_REPORT_KEY_RE})${sq}[[:space:]]*:[[:space:]]*)${pyval}/\\1${sq}***${sq}/g" \
     -e 's/(^|[[:space:],;&?])(('"$FL_REPORT_KEY_RE"')[[:space:]]*[=:][[:space:]]*)("([^"\\]|\\.)*"|'"'"'([^'"'"'\\]|\\.)*'"'"'|[^",;&}]*)/\1\2***/g' \
     "$file" >"$tmp"
   n="$(diff "$file" "$tmp" 2>/dev/null | grep -c '^>' || true)"
