@@ -147,6 +147,7 @@ fl_install_app_if_needed() {
   if [[ "$FL_DRY_RUN" == "1" && ! -d "$bench_dir" ]]; then
     installed=""
   else
+    # shellcheck disable=SC2015  # an unreadable list means "nothing installed yet"
     installed="$(cd "$bench_dir" && bench --site "$site_name" list-apps 2>/dev/null || true)"
   fi
   if printf '%s\n' "$installed" | awk '{print $1}' | grep -qx "$app"; then

@@ -279,7 +279,7 @@ cmd_status() {
 case "$COMMAND" in
   install|service|repair|up|down|restart|autostart|uninstall-service)
     fl_log_init "${FL_STATE_DIR}/logs"
-    fl_lock_acquire
+    fl_lock_acquire "${FL_STATE_DIR}/lock"
     ;;
   *) ;;
 esac

@@ -145,7 +145,7 @@ fl_cmd_up() {
   fl_agent_kickstart || fl_die "launchctl kickstart failed." "Run: ${SCRIPT_DIR}/benchbar doctor"
   [[ "${FL_DRY_RUN:-0}" == "1" ]] && return 0
   fl_spinner_start "starting bench ${FL_BENCH_NAME}" "$(fl_bench_log_path)"
-  if fl_wait_for_ping; then
+  if fl_wait_for_ping "$FL_UP_WAIT_SECS"; then
     fl_spinner_stop
     fl_ok "bench is up: $(fl_site_url)"
   else
@@ -192,7 +192,7 @@ fl_cmd_restart() {
   fl_agent_kickstart -k || fl_die "launchctl kickstart -k failed."
   [[ "${FL_DRY_RUN:-0}" == "1" ]] && return 0
   fl_spinner_start "restarting bench ${FL_BENCH_NAME}" "$(fl_bench_log_path)"
-  if fl_wait_for_ping; then
+  if fl_wait_for_ping "$FL_UP_WAIT_SECS"; then
     fl_spinner_stop
     fl_ok "bench restarted: $(fl_site_url)"
   else

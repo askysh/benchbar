@@ -33,6 +33,8 @@ export FL_UP_WAIT_SECS=2
 export FL_KILL_CMD=mockkill
 export FL_APP_DIRS="$HOME/Applications"
 export NO_COLOR=1
+# the suite may run as root on a Linux machine; the CLI must still see a normal user
+export FL_EFFECTIVE_UID=501
 export SHELL=/bin/zsh
 unset BENCH_DIR SITE_NAME FL_DRY_RUN FL_ASSUME_YES 2>/dev/null || true
 
@@ -79,12 +81,18 @@ run_fm() {
   set -e
 }
 reset_calls() { : >"$MOCK_LOG"; }
+# BSD stat on macOS, GNU stat on Linux (the suite also runs on Linux machines).
+if stat --version >/dev/null 2>&1; then STAT_GNU=1; else STAT_GNU=0; fi
+# sed_inplace SCRIPT FILE: edit a file in place without the BSD/GNU "-i" difference
+sed_inplace() { sed "$1" "$2" >"$2.tmp" && mv "$2.tmp" "$2"; }
+# mtime_of FILE: modification time in seconds
+mtime_of() { if [[ "$STAT_GNU" == "1" ]]; then stat -c %Y "$1"; else stat -f %m "$1"; fi; }
 
 # Snapshot of every file (path, size, mtime) under the given dirs, for
 # "second run writes nothing" assertions.
 snapshot() {
   find "$@" -type f 2>/dev/null | sort | while IFS= read -r f; do
-    stat -f '%N %z %m' "$f"
+    if [[ "$STAT_GNU" == "1" ]]; then stat -c '%n %s %Y' "$f"; else stat -f '%N %z %m' "$f"; fi
   done
 }
 

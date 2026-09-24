@@ -362,7 +362,8 @@ chk_hosts() {
 fl_file_mb() {
   local f="$1" bytes
   [[ -f "$f" ]] || { printf '0'; return 0; }
-  bytes="$(stat -f %z "$f" 2>/dev/null || wc -c <"$f")"
+  # wc, not stat: BSD and GNU stat disagree on -f, and the suite runs on both
+  bytes="$(wc -c <"$f" | tr -d ' ')"
   printf '%d' $((bytes / 1024 / 1024))
 }
 

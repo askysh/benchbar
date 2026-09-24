@@ -8,7 +8,7 @@ BENCH="$HOME/dev/frappe-bench"
 OTHER="$HOME/dev/second"
 make_fake_bench "$BENCH"
 make_fake_bench "$OTHER" secondsite
-sed -i '' 's/"webserver_port": 8000/"webserver_port": 8001/; s/"socketio_port": 9000/"socketio_port": 9001/' "$OTHER/sites/common_site_config.json"
+sed_inplace 's/"webserver_port": 8000/"webserver_port": 8001/; s/"socketio_port": 9000/"socketio_port": 9001/' "$OTHER/sites/common_site_config.json"
 state="$BENCH/logs/.benchbar/state.json"
 
 # status_field EXPR: runs status --json for $BENCH and evaluates EXPR on it
