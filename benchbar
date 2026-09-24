@@ -12,7 +12,7 @@
 
 set -euo pipefail
 
-FL_VERSION="0.3.0"
+FL_VERSION="0.3.1"
 
 # Resolve the real script location even when invoked through a symlink
 # (for example ~/.local/bin/frappe-mac).

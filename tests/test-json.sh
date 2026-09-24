@@ -23,7 +23,7 @@ run_fm service --yes --bench-dir "$BENCH"; assert_eq "0" "$CODE" "$OUT"
 run_fm list --json
 assert_eq "0" "$CODE" "$OUT"
 assert_eq "1" "$(printf '%s' "$OUT" | jget - 'd["schema_version"]')"
-assert_eq "0.3.0" "$(printf '%s' "$OUT" | jget - 'd["cli_version"]')"
+assert_eq "0.3.1" "$(printf '%s' "$OUT" | jget - 'd["cli_version"]')"
 assert_eq "$BENCH" "$(printf '%s' "$OUT" | jget - 'd["default_bench"]')"
 assert_eq "2" "$(printf '%s' "$OUT" | jget - 'len(d["benches"])')"
 printf '%s' "$OUT" | python3 -c '
@@ -47,7 +47,7 @@ assert_contains "$OUT" "secondsite"
 # ---- status: every state
 # stopped by hand (service writes a manual flag for a bench that was not running)
 assert_eq "stopped manual None None" "$(status_field 'd["state"], d["stop_reason"], d["pid"], d["web_ping_code"]' | tr -d "(),'")"
-assert_eq "1 0.3.0 com.benchbar.frappe-bench http://macdev:8000" \
+assert_eq "1 0.3.1 com.benchbar.frappe-bench http://macdev:8000" \
   "$(status_field 'd["schema_version"], d["cli_version"], d["label"], d["web_url"]' | tr -d "(),'")"
 assert_eq "$BENCH frappe-bench macdev" "$(status_field 'd["bench"], d["name"], d["site"]' | tr -d "(),'")"
 # the frappe-mac 0.2.0 fields are still there
@@ -95,7 +95,7 @@ run_fm doctor --json --bench-dir "$BENCH"
 printf '%s' "$OUT" | python3 -c '
 import json, sys
 d = json.load(sys.stdin)
-assert d["schema_version"] == 1 and d["cli_version"] == "0.3.0", d
+assert d["schema_version"] == 1 and d["cli_version"] == "0.3.1", d
 assert d["name"] == "frappe-bench", d
 for c in d["checks"]:
     assert set(["id", "level", "message", "fix_command"]) <= set(c), c
