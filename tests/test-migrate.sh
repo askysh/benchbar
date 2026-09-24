@@ -44,6 +44,13 @@ run_fm doctor --bench-dir "$BENCH"
 assert_contains "$OUT" "[WARN] Legacy agents: 1 legacy agent(s): com.frappe-mac.frappe-bench (running, last exit 0)"
 assert_not_contains "$OUT" "com.frappe-mac.other-bench ("
 
+# ---- up before the migration names the old agent and the fix, not "not installed"
+run_fm up --bench-dir "$BENCH"
+assert_eq "1" "$CODE"
+assert_contains "$OUT" "frappe-bench still uses the old agent com.frappe-mac.frappe-bench"
+assert_contains "$OUT" "benchbar repair"
+assert_not_contains "$OUT" "not installed"
+
 # ---- dry-run changes nothing
 snap_before="$(snapshot "$HOME" "$BENCH")"
 run_fm repair --dry-run --bench-dir "$BENCH"

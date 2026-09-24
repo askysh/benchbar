@@ -71,8 +71,17 @@ fl_require_bench() {
 
 fl_require_service() {
   fl_require_bench
-  [[ -f "$(fl_runner_path)" && -f "$(fl_agent_plist_path)" ]] \
-    || fl_die "The background service for ${FL_BENCH_NAME} is not installed." "Run: ${SCRIPT_DIR}/benchbar service (or benchbar install)."
+  [[ -f "$(fl_runner_path)" && -f "$(fl_agent_plist_path)" ]] && return 0
+  # a bench set up before the rename still has its com.frappe-mac agent:
+  # it is installed, it only needs the one time migration
+  local list legacy
+  list="$(fl_legacy_agents_list)"
+  legacy="${list%%$'\n'*}"; legacy="${legacy#*|}"; legacy="${legacy%%|*}"
+  if [[ -n "$legacy" ]]; then
+    fl_die "${FL_BENCH_NAME} still uses the old agent ${legacy}, from before the BenchBar rename." \
+      "Run: ${SCRIPT_DIR}/benchbar repair (moves the old agent aside and installs $(fl_agent_label); sites and data are not touched)."
+  fi
+  fl_die "The background service for ${FL_BENCH_NAME} is not installed." "Run: ${SCRIPT_DIR}/benchbar service (or benchbar install)."
 }
 
 fl_site_url() { printf 'http://%s:%s' "$FL_SITE" "$FL_WEB_PORT"; }
