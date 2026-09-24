@@ -7,6 +7,9 @@
 
 FL_ACTION_ORDER="python_leaves env_rebuild honcho_install node_requirements build clear_cache mariadb_bind legacy_migrate write_procfile write_runner write_plist write_helpers write_cli_link hosts_entry rotate_logs redis_stop"
 FL_NEED_CLEAR_CACHE=0
+# set by legacy_migrate when it booted out an agent that was running the
+# bench, so write_plist starts the bench again under the new agent
+FL_MIGRATED_RUNNING=0
 
 fl_action_label() {
   case "$1" in
@@ -22,7 +25,7 @@ fl_action_label() {
     write_runner) printf 'write the runner script' ;;
     write_plist) printf 'write and load the launchd agent' ;;
     write_helpers) printf 'write the shell helper block' ;;
-    write_cli_link) printf 'link frappe-mac into ~/.local/bin' ;;
+    write_cli_link) printf 'link benchbar and frappe-mac into ~/.local/bin' ;;
     hosts_entry) printf 'add %s to /etc/hosts (sudo)' "$FL_SITE" ;;
     rotate_logs) printf 'move large logs aside' ;;
     redis_stop) printf 'stop Homebrew redis on 6379' ;;
@@ -139,6 +142,7 @@ act_legacy_migrate() {
   local list path label state code
   list="$(fl_legacy_agents_list)"
   [[ -n "$list" ]] || return 0
+  fl_bench_is_running && FL_MIGRATED_RUNNING=1
   while IFS='|' read -r path label state code; do
     [[ -n "$path" ]] || continue
     fl_info "${label}: ${state}, last exit code ${code}"
@@ -165,7 +169,7 @@ act_write_plist() {
   local plist was_running=0 flag
   plist="$(fl_agent_plist_path)"
   flag="$(fl_stop_flag_path)"
-  fl_bench_is_running && was_running=1
+  if fl_bench_is_running || [[ "$FL_MIGRATED_RUNNING" == "1" ]]; then was_running=1; fi
   if [[ "$was_running" == "0" && ! -f "$flag" ]]; then
     if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
       fl_info "dry-run: would write 'manual' to ${flag} so the agent does not auto-start"
@@ -183,6 +187,8 @@ act_write_plist() {
   fi
   fl_agent_bootstrap "$plist" || { fl_fail "launchctl could not load ${plist}"; return 1; }
   if [[ "$was_running" == "1" ]]; then
+    # RunAtLoad starts it unless autostart is off; kickstart is a no-op when it already runs
+    fl_agent_kickstart >/dev/null 2>&1 || true
     fl_ok "agent reloaded; the bench restarts under the new agent"
   else
     fl_ok "agent loaded (bench stays stopped until benchup)"
@@ -197,19 +203,24 @@ act_write_helpers() {
 }
 
 act_write_cli_link() {
-  local link
-  link="$(fl_cli_link_path)"
-  if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
-    fl_info "dry-run: ln -sfn ${SCRIPT_DIR}/frappe-mac ${link}"
-    return 0
-  fi
-  [[ -e "$link" && ! -L "$link" ]] && { fl_warn "${link} is a regular file; not touching it"; return 0; }
-  mkdir -p "$(dirname "$link")"
-  ln -sfn "${SCRIPT_DIR}/frappe-mac" "$link"
-  fl_ok "linked ${link}"
+  local name link dir
+  dir="$(dirname "$(fl_cli_link_path)")"
+  for name in benchbar frappe-mac; do
+    link="$(fl_cli_link_path "$name")"
+    fl_cli_link_ok "$link" && continue
+    if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
+      fl_info "dry-run: ln -sfn ${SCRIPT_DIR}/benchbar ${link}"
+      continue
+    fi
+    [[ -e "$link" && ! -L "$link" ]] && { fl_warn "${link} is a regular file; not touching it"; continue; }
+    mkdir -p "$dir"
+    ln -sfn "${SCRIPT_DIR}/benchbar" "$link"
+    fl_ok "linked ${link}"
+  done
+  [[ "${FL_DRY_RUN:-0}" == "1" ]] && return 0
   case ":$PATH:" in
-    *":$(dirname "$link"):"*) ;;
-    *) fl_info "$(dirname "$link") is not on PATH in this shell; the helper block adds it for new shells" ;;
+    *":${dir}:"*) ;;
+    *) fl_info "${dir} is not on PATH in this shell; the helper block adds it for new shells" ;;
   esac
 }
 
@@ -272,7 +283,7 @@ fl_repair_engine() {
   if [[ -z "$actions" ]]; then
     printf '\n'
     if [[ "$(fl_doctor_count fail)" != "0" ]]; then
-      fl_warn "unchanged: nothing frappe-mac can repair automatically; follow the fix lines above"
+      fl_warn "unchanged: nothing benchbar can repair automatically; follow the fix lines above"
       return 1
     fi
     if [[ "$(fl_doctor_count warn)" != "0" ]]; then

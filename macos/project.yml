@@ -1,0 +1,116 @@
+# XcodeGen spec for BenchBar. The .xcodeproj is generated from this file
+# (scripts/macos-build.sh runs "xcodegen generate") and is not committed.
+#
+# Optional Sparkle support: BENCHBAR_SPARKLE=YES xcodegen generate
+# (see docs/releasing.md). Off by default.
+name: BenchBar
+
+options:
+  bundleIdPrefix: com.akashmishra
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+  xcodeVersion: "27.0"
+
+include:
+  - path: sparkle.yml
+    enable: ${BENCHBAR_SPARKLE}
+
+settings:
+  base:
+    MARKETING_VERSION: "0.3.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    ARCHS: arm64
+    # Swift 6 strict concurrency, with MainActor as the default isolation
+    # (the Xcode 26 template default). Background work opts out explicitly.
+    SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+    SWIFT_APPROACHABLE_CONCURRENCY: "YES"
+    SWIFT_STRICT_CONCURRENCY: complete
+    ENABLE_USER_SCRIPT_SANDBOXING: "YES"
+    DEAD_CODE_STRIPPING: "YES"
+    # No Apple Developer account yet: sign ad hoc ("-") for local use.
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    DEVELOPMENT_TEAM: ""
+
+packages:
+  Subprocess:
+    url: https://github.com/swiftlang/swift-subprocess.git
+    from: "1.0.0"
+
+targets:
+  BenchBar:
+    type: application
+    platform: macOS
+    sources:
+      - path: BenchBar
+        excludes:
+          - "Resources/Info.plist"
+    info:
+      path: BenchBar/Resources/Info.plist
+      properties:
+        CFBundleName: BenchBar
+        CFBundleDisplayName: BenchBar
+        CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
+        CFBundleExecutable: $(EXECUTABLE_NAME)
+        CFBundlePackageType: APPL
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDevelopmentRegion: en
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        LSApplicationCategoryType: public.app-category.developer-tools
+        # menu bar only: no Dock icon, no main menu
+        LSUIElement: true
+        NSPrincipalClass: NSApplication
+        NSHumanReadableCopyright: "BenchBar. Built for Frappe and ERPNext on macOS. MIT License."
+        BenchBarTagline: "Built for Frappe and ERPNext on macOS"
+    entitlements:
+      path: BenchBar/Resources/BenchBar.entitlements
+      properties:
+        # Not sandboxed: a sandboxed app cannot run the benchbar CLI.
+        com.apple.security.app-sandbox: false
+    settings:
+      base:
+        PRODUCT_NAME: BenchBar
+        PRODUCT_BUNDLE_IDENTIFIER: com.akashmishra.benchbar
+        ENABLE_HARDENED_RUNTIME: "YES"
+        GENERATE_INFOPLIST_FILE: "NO"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        COMBINE_HIDPI_IMAGES: "YES"
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
+    dependencies:
+      - package: Subprocess
+        product: Subprocess
+
+  BenchBarTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: BenchBarTests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.akashmishra.benchbar.tests
+        GENERATE_INFOPLIST_FILE: "YES"
+        BUNDLE_LOADER: $(TEST_HOST)
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/BenchBar.app/Contents/MacOS/BenchBar
+    dependencies:
+      - target: BenchBar
+
+schemes:
+  BenchBar:
+    build:
+      targets:
+        BenchBar: all
+        BenchBarTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: false
+      targets:
+        - BenchBarTests
+    archive:
+      config: Release

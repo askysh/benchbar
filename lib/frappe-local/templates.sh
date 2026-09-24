@@ -65,7 +65,7 @@ fl_template_header_of() {
 }
 
 # fl_template_status PATH RENDERED -> missing | current | outdated | foreign
-#   foreign: the file exists but was not written by frappe-mac
+#   foreign: the file exists but was not written by benchbar
 fl_template_status() {
   local path="$1" rendered="$2" have want
   [[ -e "$path" ]] || { printf 'missing'; return 0; }
@@ -126,7 +126,7 @@ fl_template_apply() {
     FL_TEMPLATE_CHANGED=1
     return 0
   fi
-  [[ "$status" == "foreign" ]] && fl_warn "${path} was not written by frappe-mac; backing it up before replacing"
+  [[ "$status" == "foreign" ]] && fl_warn "${path} was not written by benchbar; backing it up before replacing"
   fl_backup_file "$path"
   mkdir -p "$(dirname "$path")"
   tmp="$(mktemp "${path}.tmp.XXXXXX")"

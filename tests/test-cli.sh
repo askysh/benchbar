@@ -5,7 +5,7 @@
 
 run_fm --help; assert_eq "0" "$CODE"; assert_contains "$OUT" "install             Run phase 00"
 run_fm; assert_eq "0" "$CODE"; assert_contains "$OUT" "Usage:"
-run_fm --version; assert_contains "$OUT" "frappe-mac 0.2.0"
+run_fm --version; assert_contains "$OUT" "benchbar 0.3.0"
 run_fm bogus; assert_eq "1" "$CODE"; assert_contains "$OUT" "Unknown command: bogus"
 run_fm --nope; assert_eq "1" "$CODE"; assert_contains "$OUT" "Unknown option"
 
@@ -36,7 +36,7 @@ run_fm up --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "bench is up: http://macdev:8000"
 assert_no_file "$BENCH/logs/.bench-stopped"
-assert_calls_contain '^launchctl kickstart gui/[0-9]+/com.frappe-mac.frappe-bench$'
+assert_calls_contain '^launchctl kickstart gui/[0-9]+/com.benchbar.frappe-bench$'
 grep -q 'old log line' "$BENCH/logs/bench.previous.log" || fail "previous log must be kept"
 [[ ! -s "$BENCH/logs/bench.log" ]] || fail "bench.log must start fresh"
 
@@ -56,7 +56,7 @@ assert_contains "$OUT" "[OK] site responds"
 reset_calls
 run_fm restart --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
-assert_calls_contain '^launchctl kickstart -k gui/[0-9]+/com.frappe-mac.frappe-bench$'
+assert_calls_contain '^launchctl kickstart -k gui/[0-9]+/com.benchbar.frappe-bench$'
 
 # down, then up again after a crash pause clears the history
 run_fm down --bench-dir "$BENCH"; assert_eq "0" "$CODE" "$OUT"
@@ -76,7 +76,7 @@ run_fm logs --worker --no-follow --bench-dir "$BENCH"; assert_contains "$OUT" "n
 
 # lock: a second concurrent mutating run is refused, a stale lock is reclaimed
 mkdir -p "$FL_STATE_DIR/lock"; printf '%s\n' "$$" >"$FL_STATE_DIR/lock/pid"
-run_fm service --yes --bench-dir "$BENCH"; assert_eq "1" "$CODE"; assert_contains "$OUT" "Another frappe-mac run is active"
+run_fm service --yes --bench-dir "$BENCH"; assert_eq "1" "$CODE"; assert_contains "$OUT" "Another benchbar run is active"
 printf '999999\n' >"$FL_STATE_DIR/lock/pid"
 run_fm service --yes --bench-dir "$BENCH"; assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "Reclaiming stale lock"
 assert_no_file "$FL_STATE_DIR/lock"

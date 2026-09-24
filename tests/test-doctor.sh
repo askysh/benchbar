@@ -91,10 +91,10 @@ assert_contains "$OUT" "[WARN] Site ping: bench is paused (crash)"
 printf 'manual\n' >"$BENCH/logs/.bench-stopped"
 
 # 9. our agent loaded but its last run failed
-set_agent com.frappe-mac.frappe-bench "not running" "" 78
+set_agent com.benchbar.frappe-bench "not running" "" 78
 run_fm doctor --bench-dir "$BENCH"
 assert_contains "$OUT" "[WARN] launchd agent: agent loaded, not running, last exit code 78"
-set_agent com.frappe-mac.frappe-bench "not running" "" 0
+set_agent com.benchbar.frappe-bench "not running" "" 0
 
 # 10. running but the site does not answer
 add_proc 4242 "honcho start -f Procfile.lean"
@@ -155,9 +155,9 @@ assert_contains "$OUT" "old block(s) still present: frappe-bench helpers"
 OTHER="$HOME/dev/other"
 make_fake_bench "$OTHER" other
 run_fm service --yes --bench-dir "$OTHER"
-set_agent com.frappe-mac.other running 777 0
+set_agent com.benchbar.other running 777 0
 run_fm doctor --bench-dir "$BENCH"
-assert_contains "$OUT" "[WARN] Port clash: another running bench uses the same port: com.frappe-mac.other:8000"
+assert_contains "$OUT" "[WARN] Port clash: another running bench uses the same port: com.benchbar.other:8000"
 
 # JSON output is machine readable
 run_fm doctor --json --bench-dir "$BENCH"

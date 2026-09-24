@@ -8,7 +8,7 @@
 #   CHK_FIX     the exact command a human would run (may be empty)
 #   CHK_ACTION  the repair action id that fixes it (may be empty)
 #
-# Groups (used by "frappe-mac service" versus "frappe-mac repair"):
+# Groups (used by "benchbar service" versus "benchbar repair"):
 #   system, bench, service, site
 
 FL_CHECK_ORDER="brew python_leaves mariadb_bind redis_6379 cleanmymac env_python bench_version socketio assets logs honcho procfile runner agent stop_flag helpers cli_link legacy_agents hosts port_clash ping"
@@ -38,7 +38,7 @@ fl_check_label() {
     agent) printf 'launchd agent' ;;
     stop_flag) printf 'Stop flag' ;;
     helpers) printf 'Shell helpers' ;;
-    cli_link) printf 'frappe-mac on PATH' ;;
+    cli_link) printf 'benchbar on PATH' ;;
     legacy_agents) printf 'Legacy agents' ;;
     mariadb_bind) printf 'MariaDB bind address' ;;
     redis_6379) printf 'Homebrew redis' ;;
@@ -90,15 +90,15 @@ chk_env_python() {
   local py="${FL_BENCH_DIR}/env/bin/python" ver want
   want="${FL_PYTHON_BIN_NAME#python}"
   if [[ ! -e "$py" && ! -L "$py" ]]; then
-    chk__set fail "env/bin/python is missing (env deleted, for example by a cleanup tool)" "${SCRIPT_DIR}/frappe-mac repair" env_rebuild
+    chk__set fail "env/bin/python is missing (env deleted, for example by a cleanup tool)" "${SCRIPT_DIR}/benchbar repair" env_rebuild
     return 0
   fi
   if ! ver="$("$py" -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null)"; then
-    chk__set fail "env/bin/python does not run (broken symlink or removed interpreter)" "${SCRIPT_DIR}/frappe-mac repair" env_rebuild
+    chk__set fail "env/bin/python does not run (broken symlink or removed interpreter)" "${SCRIPT_DIR}/benchbar repair" env_rebuild
     return 0
   fi
   if [[ "$ver" != "$want" ]]; then
-    chk__set fail "env uses Python ${ver}, profile ${FL_PROFILE} expects ${want}" "${SCRIPT_DIR}/frappe-mac repair" env_rebuild
+    chk__set fail "env uses Python ${ver}, profile ${FL_PROFILE} expects ${want}" "${SCRIPT_DIR}/benchbar repair" env_rebuild
     return 0
   fi
   chk__set ok "env/bin/python runs (Python ${ver})"
@@ -107,13 +107,13 @@ chk_env_python() {
 chk_bench_version() {
   local out
   if [[ ! -e "${FL_BENCH_DIR}/env/bin/python" ]]; then
-    chk__set fail "skipped: env is missing" "${SCRIPT_DIR}/frappe-mac repair" env_rebuild
+    chk__set fail "skipped: env is missing" "${SCRIPT_DIR}/benchbar repair" env_rebuild
     return 0
   fi
   if out="$(cd "$FL_BENCH_DIR" && bench version 2>&1)"; then
     chk__set ok "bench version works ($(printf '%s' "$out" | grep -m1 -E '^frappe' || printf 'ok'))"
   else
-    chk__set fail "bench version fails: $(printf '%s' "$out" | tail -n1)" "${SCRIPT_DIR}/frappe-mac repair" env_rebuild
+    chk__set fail "bench version fails: $(printf '%s' "$out" | tail -n1)" "${SCRIPT_DIR}/benchbar repair" env_rebuild
   fi
 }
 
@@ -161,9 +161,9 @@ chk__template() {
   status="$(fl_template_status "$path" "$rendered")"
   case "$status" in
     current) chk__set ok "${label} is current ($(fl_template_header_of "$rendered" | awk '{print $3, $4}'))" ;;
-    missing) chk__set warn "${label} is missing (${path})" "${SCRIPT_DIR}/frappe-mac repair" "$action" ;;
-    outdated) chk__set warn "${label} is outdated (template or settings changed)" "${SCRIPT_DIR}/frappe-mac repair" "$action" ;;
-    foreign) chk__set warn "${label} exists but was not written by frappe-mac" "${SCRIPT_DIR}/frappe-mac repair" "$action" ;;
+    missing) chk__set warn "${label} is missing (${path})" "${SCRIPT_DIR}/benchbar repair" "$action" ;;
+    outdated) chk__set warn "${label} is outdated (template or settings changed)" "${SCRIPT_DIR}/benchbar repair" "$action" ;;
+    foreign) chk__set warn "${label} exists but was not written by benchbar" "${SCRIPT_DIR}/benchbar repair" "$action" ;;
   esac
 }
 
@@ -183,7 +183,7 @@ chk_agent() {
   if [[ "$state" == "running" ]]; then
     chk__set ok "agent $(fl_agent_label) loaded, running (pid ${pid:-?})"
   elif [[ -n "$code" && "$code" != "0" && "$code" != "(never exited)" ]]; then
-    chk__set warn "agent loaded, ${state:-not running}, last exit code ${code}" "${SCRIPT_DIR}/frappe-mac logs"
+    chk__set warn "agent loaded, ${state:-not running}, last exit code ${code}" "${SCRIPT_DIR}/benchbar logs"
   else
     chk__set ok "agent $(fl_agent_label) loaded, ${state:-not running}"
   fi
@@ -199,8 +199,8 @@ chk_stop_flag() {
   reason="$(tr -d '[:space:]' <"$flag")"
   case "$reason" in
     manual) chk__set ok "stopped on purpose (benchdown); start with benchup" ;;
-    crash) chk__set warn "auto-restart paused after repeated crashes" "${SCRIPT_DIR}/frappe-mac logs, fix the cause, then benchup" ;;
-    broken) chk__set warn "auto-restart paused: honcho or env was missing" "${SCRIPT_DIR}/frappe-mac repair, then benchup" ;;
+    crash) chk__set warn "auto-restart paused after repeated crashes" "${SCRIPT_DIR}/benchbar logs, fix the cause, then benchup" ;;
+    broken) chk__set warn "auto-restart paused: honcho or env was missing" "${SCRIPT_DIR}/benchbar repair, then benchup" ;;
     *) chk__set warn "stop flag has unknown content '${reason}'" "rm ${flag}" ;;
   esac
 }
@@ -212,9 +212,9 @@ chk_helpers() {
   legacy="$(fl_rc_legacy_blocks "$rc" | tr '\n' ',' | sed 's/,$//')"
   case "$status" in
     current) chk__set ok "helper block in ${rc} is current" ;;
-    missing) chk__set warn "helper block missing from ${rc}" "${SCRIPT_DIR}/frappe-mac repair" write_helpers ;;
-    outdated) chk__set warn "helper block in ${rc} is outdated" "${SCRIPT_DIR}/frappe-mac repair" write_helpers ;;
-    broken) chk__set warn "frappe-mac markers in ${rc} are malformed; a fresh block will be appended" "${SCRIPT_DIR}/frappe-mac repair" write_helpers ;;
+    missing) chk__set warn "helper block missing from ${rc}" "${SCRIPT_DIR}/benchbar repair" write_helpers ;;
+    outdated) chk__set warn "helper block in ${rc} is outdated" "${SCRIPT_DIR}/benchbar repair" write_helpers ;;
+    broken) chk__set warn "frappe-mac markers in ${rc} are malformed; a fresh block will be appended" "${SCRIPT_DIR}/benchbar repair" write_helpers ;;
   esac
   if [[ -n "$legacy" ]]; then
     [[ "$CHK_STATUS" == "ok" ]] && CHK_STATUS=warn
@@ -223,20 +223,36 @@ chk_helpers() {
   fi
 }
 
-fl_cli_link_path() { printf '%s/.local/bin/frappe-mac' "$HOME"; }
+fl_cli_link_path() { printf '%s/.local/bin/%s' "$HOME" "${1:-benchbar}"; }
+
+# A link is current when it resolves to this checkout's benchbar. The
+# frappe-mac alias may point at either name in the checkout.
+fl_cli_link_ok() {
+  local link="$1" have
+  [[ -L "$link" ]] || return 1
+  have="$(readlink "$link")"
+  [[ "$have" == "${SCRIPT_DIR}/benchbar" || "$have" == "${SCRIPT_DIR}/frappe-mac" ]]
+}
 
 chk_cli_link() {
-  local link target
-  link="$(fl_cli_link_path)"
-  target="${SCRIPT_DIR}/frappe-mac"
-  if [[ -L "$link" && "$(readlink "$link")" == "$target" ]]; then
-    chk__set ok "${link} points to this checkout"
-  elif [[ -e "$link" && ! -L "$link" ]]; then
-    chk__set warn "${link} exists and is not a symlink; leaving it alone" "mv ${link} ${link}.bak && ln -s ${target} ${link}"
-  elif [[ -L "$link" ]]; then
-    chk__set warn "${link} points to $(readlink "$link"), not this checkout" "${SCRIPT_DIR}/frappe-mac repair" write_cli_link
+  local name link bad="" foreign="" target="${SCRIPT_DIR}/benchbar"
+  for name in benchbar frappe-mac; do
+    link="$(fl_cli_link_path "$name")"
+    fl_cli_link_ok "$link" && continue
+    if [[ -e "$link" && ! -L "$link" ]]; then
+      foreign="${foreign}${foreign:+, }${link}"
+    elif [[ -L "$link" ]]; then
+      bad="${bad}${bad:+; }${link} points to $(readlink "$link")"
+    else
+      bad="${bad}${bad:+; }no ${link} yet"
+    fi
+  done
+  if [[ -n "$bad" ]]; then
+    chk__set warn "${bad} (so 'benchbar' and 'frappe-mac' work from any folder)" "${SCRIPT_DIR}/benchbar repair" write_cli_link
+  elif [[ -n "$foreign" ]]; then
+    chk__set warn "${foreign} exists and is not a symlink; leaving it alone" "mv ${foreign%%,*} ${foreign%%,*}.bak && ln -s ${target} ${foreign%%,*}"
   else
-    chk__set warn "no ${link} symlink yet (so 'frappe-mac' works from any folder)" "${SCRIPT_DIR}/frappe-mac repair" write_cli_link
+    chk__set ok "~/.local/bin/benchbar and ~/.local/bin/frappe-mac point to this checkout"
   fi
 }
 
@@ -253,7 +269,7 @@ chk_legacy_agents() {
     n=$((n + 1))
     desc="${desc}${desc:+; }${label} (${state}, last exit ${code})"
   done <<<"$list"
-  chk__set warn "${n} legacy agent(s): ${desc}" "${SCRIPT_DIR}/frappe-mac repair (moves them to ${FL_LEGACY_DIR})" legacy_migrate
+  chk__set warn "${n} legacy agent(s): ${desc}" "${SCRIPT_DIR}/benchbar repair (moves them to ${FL_LEGACY_DIR})" legacy_migrate
 }
 
 fl_mariadb_dropin_path() {
@@ -272,7 +288,7 @@ chk_mariadb_bind() {
       esac
     done <<<"$addrs"
     if [[ -n "$exposed" ]]; then
-      chk__set warn "MariaDB listens on${exposed} (reachable from the network)" "${SCRIPT_DIR}/frappe-mac repair (writes ${dropin} and restarts MariaDB)" mariadb_bind
+      chk__set warn "MariaDB listens on${exposed} (reachable from the network)" "${SCRIPT_DIR}/benchbar repair (writes ${dropin} and restarts MariaDB)" mariadb_bind
     else
       chk__set ok "MariaDB listens on 127.0.0.1 only"
     fi
@@ -281,7 +297,7 @@ chk_mariadb_bind() {
   if [[ -f "$dropin" ]] || grep -qs 'bind-address[[:space:]]*=[[:space:]]*127\.0\.0\.1' "${FL_BREW_PREFIX:-/opt/homebrew}"/etc/my.cnf.d/*.cnf 2>/dev/null; then
     chk__set ok "MariaDB is not running; bind-address drop-in present"
   else
-    chk__set warn "MariaDB is not running and no bind-address drop-in exists" "${SCRIPT_DIR}/frappe-mac repair" mariadb_bind
+    chk__set warn "MariaDB is not running and no bind-address drop-in exists" "${SCRIPT_DIR}/benchbar repair" mariadb_bind
   fi
 }
 
@@ -317,13 +333,13 @@ chk_ping() {
     chk__set ok "http://${FL_SITE}:${FL_WEB_PORT}/api/method/ping returned 200"
     return 0
   fi
-  reason="$(tr -d '[:space:]' <"$(fl_stop_flag_path)" 2>/dev/null || true)"
+  reason="$(fl_stop_flag_reason)"
   if fl_bench_is_running; then
-    chk__set fail "bench processes are running but ping returned ${code}" "${SCRIPT_DIR}/frappe-mac logs"
+    chk__set fail "bench processes are running but ping returned ${code}" "${SCRIPT_DIR}/benchbar logs"
   elif [[ "$reason" == "manual" || -z "$reason" && ! -f "$(fl_runner_path)" ]]; then
     chk__set ok "bench is stopped; start it with benchup"
   elif [[ "$reason" == "crash" || "$reason" == "broken" ]]; then
-    chk__set warn "bench is paused (${reason}); fix, then benchup" "${SCRIPT_DIR}/frappe-mac logs"
+    chk__set warn "bench is paused (${reason}); fix, then benchup" "${SCRIPT_DIR}/benchbar logs"
   else
     chk__set warn "bench is not running (ping ${code})" "benchup"
   fi
@@ -351,7 +367,7 @@ chk_logs() {
     [[ "$mb" -ge "$FL_LOG_WARN_MB" ]] && big="${big} ${f} (${mb} MB)"
   done
   if [[ -n "$big" ]]; then
-    chk__set warn "large logs:${big}" "${SCRIPT_DIR}/frappe-mac repair (moves them aside)" rotate_logs
+    chk__set warn "large logs:${big}" "${SCRIPT_DIR}/benchbar repair (moves them aside)" rotate_logs
   else
     chk__set ok "bench.log and worker logs are under ${FL_LOG_WARN_MB} MB"
   fi
@@ -378,14 +394,14 @@ chk_cleanmymac() {
 
 chk_port_clash() {
   local f other label state wd ports clash=""
-  for f in "$HOME"/Library/LaunchAgents/com.frappe-mac.*.plist; do
+  for f in "$HOME"/Library/LaunchAgents/com.benchbar.*.plist "$HOME"/Library/LaunchAgents/com.frappe-mac.*.plist; do
     [[ -f "$f" ]] || continue
     label="$(fl_plist_label "$f")"
-    [[ "$label" == "$(fl_agent_label)" ]] && continue
+    [[ "$label" == "$(fl_agent_label)" || "$label" == "$(fl_agent_label_legacy)" ]] && continue
     state="$(fl_agent_field state "$(fl_launchd_domain)/${label}")"
     [[ "$state" == "running" ]] || continue
-    wd="$(awk '/<key>WorkingDirectory<\/key>/ { l = $0; sub(/.*<string>/, "", l); sub(/<\/string>.*/, "", l); print l; exit }' "$f")"
-    [[ -n "$wd" && -f "$wd/sites/common_site_config.json" ]] || continue
+    wd="$(fl_plist_working_dir "$f")"
+    [[ -n "$wd" && "$wd" != "$FL_BENCH_DIR" && -f "$wd/sites/common_site_config.json" ]] || continue
     ports="$(sed -E -n 's/^[[:space:]]*"webserver_port"[[:space:]]*:[[:space:]]*([0-9]*).*/\1/p' "$wd/sites/common_site_config.json"; sed -E -n 's/^[[:space:]]*"socketio_port"[[:space:]]*:[[:space:]]*([0-9]*).*/\1/p' "$wd/sites/common_site_config.json")"
     for other in $ports; do
       if [[ "$other" == "$FL_WEB_PORT" || "$other" == "$FL_SOCKETIO_PORT" ]]; then clash="${clash} ${label}:${other}"; fi
@@ -394,6 +410,6 @@ chk_port_clash() {
   if [[ -n "$clash" ]]; then
     chk__set warn "another running bench uses the same port:${clash}" "stop the other bench or change webserver_port in sites/common_site_config.json"
   else
-    chk__set ok "no other frappe-mac bench is running on ${FL_WEB_PORT}/${FL_SOCKETIO_PORT}"
+    chk__set ok "no other benchbar bench is running on ${FL_WEB_PORT}/${FL_SOCKETIO_PORT}"
   fi
 }

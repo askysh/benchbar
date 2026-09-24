@@ -1,13 +1,19 @@
-# Frappe Mac Local Install
+# BenchBar
+
+Built for Frappe and ERPNext on macOS.
 
 Set up a local Frappe / ERPNext development server on macOS, run it in the
 background, and keep it healthy. One command installs everything, one
 command repairs a bench that a cleanup tool or an upgrade broke, and the
-bench keeps running with no Terminal window left open.
+bench keeps running with no Terminal window left open. The `benchbar`
+command line tool does the work; the optional **BenchBar** menu bar app
+shows each bench as a little runner that sleeps, runs and stumbles, with
+start, stop and a health check one click away.
 
 This is the macOS counterpart to
 [askysh/frappe_wsl_dev_server](https://github.com/askysh/frappe_wsl_dev_server)
-(for Windows / WSL).
+(for Windows / WSL). The command was called `frappe-mac` before 0.3.0; that
+name still works.
 
 ## What you get
 
@@ -19,8 +25,8 @@ This is the macOS counterpart to
   pauses and shows a macOS notification instead of looping forever.
 - Shell helpers: `benchup`, `benchdown`, `benchrestart`, `benchstatus`,
   `benchlogs`, `benchfg`, `benchwatch`, `benchdoctor`, `benchcd`.
-- `frappe-mac doctor` (read only) pinpoints what is broken and prints the
-  exact fix. `frappe-mac repair` applies only those fixes, in the right
+- `benchbar doctor` (read only) pinpoints what is broken and prints the
+  exact fix. `benchbar repair` applies only those fixes, in the right
   order, with a backup before every change.
 - Every run is idempotent: run `install` or `repair` as often as you like.
   If nothing changed, it says "unchanged" and writes nothing.
@@ -47,9 +53,9 @@ Open Terminal and run:
 
 ```bash
 cd ~
-git clone https://github.com/askysh/frappe_mac_dev_server.git
-cd frappe_mac_dev_server
-./frappe-mac install
+git clone https://github.com/askysh/frappe-mac-dev-server.git
+cd frappe-mac-dev-server
+./benchbar install
 ```
 
 `install` runs three phases and shows a numbered step list with live
@@ -66,7 +72,7 @@ status and timings:
 
 The first run stops after phase 1 with a short list of **manual steps**
 that no script can do safely for you. Complete them, then run
-`./frappe-mac install` again. It picks up where it left off.
+`./benchbar install` again. It picks up where it left off.
 
 ### The manual steps
 
@@ -115,19 +121,19 @@ running.
 
 | Helper | Same as | What it does |
 |---|---|---|
-| `benchup` | `frappe-mac up` | Start the bench in the background and wait for the site to answer |
-| `benchdown` | `frappe-mac down` | Stop it and keep it stopped, also across reboots |
-| `benchrestart` | `frappe-mac restart` | Restart all processes. Needed after changing Python code |
-| `benchstatus` | `frappe-mac status` | Agent state, pid, last exit code, stop flag, site ping |
-| `benchlogs` | `frappe-mac logs` | Follow `logs/bench.log`. Add `--worker`, `--previous`, `--no-follow` |
-| `benchfg` | `frappe-mac fg` | Stop the service and run honcho in the foreground (Ctrl+C to stop) |
-| `benchwatch` | `frappe-mac watch` | `bench watch` for JS and CSS rebuilds |
-| `benchdoctor` | `frappe-mac doctor` | Read-only health report |
-| `benchcd` | `cd "$(frappe-mac path)"` | Jump into the bench folder |
+| `benchup` | `benchbar up` | Start the bench in the background and wait for the site to answer |
+| `benchdown` | `benchbar down` | Stop it and keep it stopped, also across reboots |
+| `benchrestart` | `benchbar restart` | Restart all processes. Needed after changing Python code |
+| `benchstatus` | `benchbar status` | Agent state, pid, last exit code, stop flag, site ping |
+| `benchlogs` | `benchbar logs` | Follow `logs/bench.log`. Add `--worker`, `--previous`, `--no-follow` |
+| `benchfg` | `benchbar fg` | Stop the service and run honcho in the foreground (Ctrl+C to stop) |
+| `benchwatch` | `benchbar watch` | `bench watch` for JS and CSS rebuilds |
+| `benchdoctor` | `benchbar doctor` | Read-only health report |
+| `benchcd` | `cd "$(benchbar path)"` | Jump into the bench folder |
 
-Other commands: `frappe-mac repair`, `frappe-mac service`,
-`frappe-mac autostart on|off`, `frappe-mac uninstall-service`,
-`frappe-mac --help`.
+Other commands: `benchbar repair`, `benchbar service`,
+`benchbar autostart on|off`, `benchbar uninstall-service`,
+`benchbar --help`.
 
 ### What recovers on its own, and what does not
 
@@ -144,10 +150,79 @@ Other commands: `frappe-mac repair`, `frappe-mac service`,
 The bench log is `<bench>/logs/bench.log`. `benchup` keeps the tail of the
 previous run in `logs/bench.previous.log`.
 
+## BenchBar, the menu bar app
+
+<p>
+  <img src="docs/images/popover-light.png" width="340" alt="The BenchBar popover: a running bench with Start, Stop, Restart, shortcuts and doctor results">
+  <img src="docs/images/popover-dark.png" width="340" alt="The same popover in dark mode">
+</p>
+
+A native macOS menu bar app on top of the CLI. It never touches your bench
+itself: every button runs `benchbar ... --json` and the app reads the
+answer, plus the `logs/.benchbar/state.json` file the bench runner writes
+on every change.
+
+- **A runner in the menu bar** that shows the state at a glance: sleeping
+  when stopped, walking while starting, running while up (faster when the
+  bench is busy, from its CPU use), stumbling when it crashes, and a
+  question mark when the CLI is missing. Reduce Motion shows still poses.
+- **A popover**: bench, site, state and uptime; Start, Stop, Restart; open
+  the site, the logs in Terminal, or the bench folder; a read only doctor.
+  Keyboard: ⌘U start, ⌘D stop, ⌘R restart, ⌘O site, ⌘L logs, ⌘F folder,
+  ⌘K doctor. Right click the runner for Settings and Quit.
+- **Notifications** when a bench crashes, when the crash guard pauses it,
+  and when it is running again. Click one to open the popover.
+- **Settings**: two built in runners (a bench and a coffee cup) with a
+  live preview, custom runners ([docs/runners.md](docs/runners.md)), speed
+  on or off, launch at login, notifications, and the CLI path.
+
+<img src="docs/images/runners.png" width="420" alt="Every frame of the two built in runners">
+
+### Build and install it
+
+There is no signed download yet (see [docs/releasing.md](docs/releasing.md)),
+so build it on your Mac. You need full Xcode 26 or newer (not only the
+Command Line Tools) and XcodeGen:
+
+```bash
+brew install xcodegen
+scripts/macos-build.sh --test      # tests, then macos/build/BenchBar.app
+scripts/macos-install-local.sh     # copies it to ~/Applications and opens it
+```
+
+The build is signed ad hoc for your own Mac. It needs macOS 14 or later on
+Apple Silicon.
+
+### First run
+
+1. BenchBar looks for the CLI in `~/.local/bin/benchbar` (linked by
+   `benchbar install` or `benchbar repair`), then Homebrew's folders. If it
+   finds none it asks once with a file picker; later, Settings has a
+   Choose button.
+2. macOS asks whether BenchBar may send notifications. Allow it for the
+   crash alerts; you can change it later in System Settings,
+   Notifications.
+3. A bench from before 0.3.0 still has its old `com.frappe-mac` agent. The
+   popover then shows `benchbar repair --bench-dir ...` with a Copy
+   button: run it once in Terminal.
+4. To start BenchBar at login: Settings, General, Open BenchBar at login.
+   If macOS asks for approval, the button there opens System Settings,
+   General, Login Items.
+
+If a menu bar organizer (Bartender, Ice, Hidden Bar) hides new icons,
+drag BenchBar out of its hidden section.
+
+### What stays with the CLI
+
+The app does not write plists, edit bench files, or run `bench`, `brew`
+or `launchctl`. Doctor is read only in the app; repairs run in Terminal
+with `benchbar repair`, where you can see and confirm the plan. The JSON
+the app reads is documented in [docs/json-schema.md](docs/json-schema.md).
+
 ## Health: doctor and repair
 
 ```bash
-./frappe-mac doctor
+./benchbar doctor
 ```
 
 Read only. Each check prints `[OK]`, `[WARN]` or `[FAIL]` with the exact
@@ -161,8 +236,8 @@ Homebrew redis on 6379, the site ping, `/etc/hosts`, log sizes,
 CleanMyMac, and port clashes with other benches.
 
 ```bash
-./frappe-mac repair --dry-run   # show the plan, change nothing
-./frappe-mac repair             # apply, with a confirmation prompt
+./benchbar repair --dry-run   # show the plan, change nothing
+./benchbar repair             # apply, with a confirmation prompt
 ```
 
 Repair runs only the fixes doctor flagged, in dependency order: Python
@@ -191,18 +266,24 @@ Point the tool at any bench once. It remembers the path in
 `.frappe-local/state.env`:
 
 ```bash
-./frappe-mac doctor --bench-dir ~/dev/frappe-bench
-./frappe-mac repair --bench-dir ~/dev/frappe-bench
+./benchbar doctor --bench-dir ~/dev/frappe-bench
+./benchbar repair --bench-dir ~/dev/frappe-bench
 ```
 
 Without `--bench-dir` it looks for a remembered bench, then
 `~/frappe-bench`, `~/dev/frappe-bench`, and any folder under `~` or
 `~/dev` that holds `sites/common_site_config.json`.
 
+Benches set up by frappe-mac 0.2.0 run under `com.frappe-mac.<bench>`.
+`benchup` on such a bench says so and points at `benchbar repair`, which
+moves the old agent aside and installs `com.benchbar.<bench>`, starting
+the bench again if it was running. `frappe-mac` keeps working as a name
+for `benchbar`.
+
 If you used per-process LaunchAgents before (one agent each for web,
 worker, socketio and so on) or a hand-made agent, doctor lists them with
 their launchctl state and last exit code. Repair boots them out and moves
-the plists to `~/Library/LaunchAgents-disabled/<name>-<timestamp>/`.
+the plists to `~/Library/LaunchAgents-disabled/<timestamp>/`.
 Nothing is deleted.
 
 Older `# >>> frappe-bench helpers >>>` blocks in `~/.zshrc` are reported
@@ -210,7 +291,7 @@ so you can remove them by hand. The frappe-mac block comes later in the
 file, so its functions win in the meantime.
 
 Multiple benches work side by side. Each gets its own agent
-`com.frappe-mac.<bench folder name>`. `benchup` warns when another
+`com.benchbar.<bench folder name>`. `benchup` warns when another
 running bench already uses the same web or socketio port.
 
 ## Safety rules
@@ -242,7 +323,7 @@ running bench already uses the same web or socketio port.
 | `extended` | `erpnext hrms payments crm helpdesk insights` |
 
 ```bash
-./frappe-mac install --bundle common
+./benchbar install --bundle common
 APPS="erpnext hrms crm" ./01-install-bench-and-site.sh
 ```
 
@@ -256,14 +337,14 @@ Definitions live in `config/app-bundles.tsv` and `config/apps.tsv`.
 | `v16-lts` | `version-16` | `version-16` | `python@3.14` | `node@24` | `mariadb@11.8` |
 
 ```bash
-./frappe-mac install --profile v16-lts
+./benchbar install --profile v16-lts
 ./00-mac-system-deps.sh --list-profiles
 ```
 
 ### Non-interactive
 
 ```bash
-MARIADB_ROOT_PASSWORD='...' ADMIN_PASSWORD='...' ./frappe-mac install --yes
+MARIADB_ROOT_PASSWORD='...' ADMIN_PASSWORD='...' ./benchbar install --yes
 ```
 
 `--yes` accepts every default and confirmation, including the `sudo`
@@ -277,13 +358,13 @@ stays a question).
 `--advanced`, `--check-updates`, `--offline`, `--dry-run`,
 `--repair-bench`. `00` exits with code 2 while manual steps remain.
 `--repair-bench` only moves aside a folder that never became a bench; a
-bench with apps or sites is always kept and sent to `frappe-mac repair`.
+bench with apps or sites is always kept and sent to `benchbar repair`.
 
 ### Autostart
 
 ```bash
-./frappe-mac autostart off   # never start at login, benchup still works
-./frappe-mac autostart on
+./benchbar autostart off   # never start at login, benchup still works
+./benchbar autostart on
 ```
 
 ## Uninstall
@@ -291,16 +372,16 @@ bench with apps or sites is always kept and sent to `frappe-mac repair`.
 Remove the background service and helpers but keep the bench:
 
 ```bash
-./frappe-mac uninstall-service
+./benchbar uninstall-service
 ```
 
 Wipe the bench and site (this deletes your data; the tool never does
 this for you):
 
 ```bash
-./frappe-mac uninstall-service
+./benchbar uninstall-service
 rm -rf ~/frappe-bench
-rm -rf ~/frappe_mac_dev_server/.frappe-local
+rm -rf ~/frappe-mac-dev-server/.frappe-local
 ```
 
 Drop the site database in `mariadb -u root -p`: `SHOW DATABASES;` lists
@@ -317,14 +398,14 @@ new Terminal tab.
 minutes and paused itself. `benchlogs` shows why (`--previous` shows the
 run before). Fix it, then `benchup`.
 
-**The site loads without styling.** Run `./frappe-mac doctor`. If the
-built assets are missing, `./frappe-mac repair` runs `bench build`.
+**The site loads without styling.** Run `./benchbar doctor`. If the
+built assets are missing, `./benchbar repair` runs `bench build`.
 
 **`bench: command not found` after phase 2.** pipx installs to
 `~/.local/bin`. Run `pipx ensurepath` and open a new Terminal.
 
 **Browser says it cannot connect to `macdev`.** The `/etc/hosts` line is
-missing. `./frappe-mac repair` adds it, or run
+missing. `./benchbar repair` adds it, or run
 `printf '127.0.0.1 macdev\n' | sudo tee -a /etc/hosts`.
 
 **MariaDB rejects the root password.** Confirm it with
@@ -332,14 +413,14 @@ missing. `./frappe-mac repair` adds it, or run
 `mariadb-secure-installation`.
 
 **Phase 2 says the bench has apps or sites but no env.** That is the
-cleanup-tool case above. Run `./frappe-mac repair`, not the installer.
+cleanup-tool case above. Run `./benchbar repair`, not the installer.
 
-**Something else.** `./frappe-mac doctor` first. Every line names its
+**Something else.** `./benchbar doctor` first. Every line names its
 fix. The run log in `.frappe-local/logs/` has the full command output.
 
 ## For AI coding agents
 
-See [AGENTS.md](AGENTS.md). Short version: run `./frappe-mac doctor
+See [AGENTS.md](AGENTS.md). Short version: run `./benchbar doctor
 --json` first, prefer `--dry-run` before `repair`, pass `--yes` with the
 passwords in the environment for `install`, and never `rm -rf` anything
 inside the bench.
@@ -347,18 +428,23 @@ inside the bench.
 ## Files
 
 ```text
-frappe-mac                    # the CLI: install, up, down, doctor, repair, ...
+benchbar                      # the CLI: install, up, down, doctor, repair, ...
+frappe-mac                    # the old name, a link to benchbar
 00-mac-system-deps.sh         # Phase 1: Homebrew formulae, MariaDB config, shell block
 01-install-bench-and-site.sh  # Phase 2: bench init, apps, site
-02-background-service.sh      # Phase 3: same as "frappe-mac service"
+02-background-service.sh      # Phase 3: same as "benchbar service"
 lib/frappe-local/             # shared shell library (ui, checks, repair, launchd, ...)
 templates/                    # runner, plist, Procfile.lean, shell block, MariaDB drop-ins
 config/                       # release profiles and app bundles
 tests/                        # mocked test harness (launchctl, brew, lsof, bench, ...)
+macos/                        # the BenchBar app (Swift, XcodeGen project)
+scripts/                      # build, install and release scripts for the app
+docs/                         # JSON API, custom runners, releasing
+examples/runners/             # an example custom runner
 ```
 
 Generated at install time: `<bench>/frappe-mac-run.sh`,
-`<bench>/Procfile.lean`, `~/Library/LaunchAgents/com.frappe-mac.<bench>.plist`,
+`<bench>/Procfile.lean`, `~/Library/LaunchAgents/com.benchbar.<bench>.plist`,
 the `# >>> frappe-mac >>>` block in `~/.zshrc`, and
 `$(brew --prefix)/etc/my.cnf.d/frappe.cnf` plus `frappe-mac-local-only.cnf`.
 
@@ -368,7 +454,8 @@ If `gum` is installed it is used for prompts.
 ## Tests
 
 ```bash
-tests/run-tests.sh
+tests/run-tests.sh              # the CLI
+scripts/macos-build.sh --test   # the app (Swift Testing)
 ```
 
 The suite mocks `launchctl`, `brew`, `lsof`, `pkill`, `curl`, `osascript`,
@@ -394,6 +481,35 @@ See [CHANGELOG.md](CHANGELOG.md) for release notes and
   or `~/Documents`.
 - If CleanMyMac or a similar tool is installed, add the bench folder to
   its ignore list before running any cleanup.
+
+## FAQ
+
+**Why is BenchBar not in the Mac App Store?** App Store apps must run in
+the App Sandbox, and a sandboxed app cannot run the `benchbar` CLI, start
+launchd agents or read a bench in your home folder. BenchBar will be
+distributed as a signed, notarized download and a Homebrew cask instead.
+
+**Why no Docker?** A bench runs natively: Python, Node, MariaDB and Redis
+from Homebrew, the processes under launchd. File watching, `bench build`
+and debugging are faster than through a VM, there is no Docker Desktop
+license or memory overhead, and the setup matches what most Frappe
+developers run on Linux. Docker and VMs are on the "not planned" list in
+[ROADMAP.md](ROADMAP.md).
+
+**Do I need the app?** No. Everything works from the command line; the
+app is a view and a remote control for the same CLI.
+
+**Does the app phone home?** No. It talks to the CLI and pings your local
+site. The default build contains no update code; automatic updates
+(Sparkle) are a build option for signed releases.
+
+**Can I make my own runner?** Yes: a folder with a `manifest.json` and
+PNG frames. See [docs/runners.md](docs/runners.md).
+
+## Trademarks
+
+Frappe and ERPNext are trademarks of Frappe Technologies. BenchBar is not
+affiliated with or endorsed by them.
 
 ## License
 

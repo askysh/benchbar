@@ -53,7 +53,7 @@ cp "$ROOT/tests/mocks/honcho" "$MOCK_PIPX_HOME/venvs/frappe-bench/bin/honcho"
 chmod +x "$MOCK_PIPX_HOME/venvs/frappe-bench/bin/honcho"
 export PATH="$ROOT/tests/mocks/bin:$PATH"
 
-FM="$ROOT/frappe-mac"
+FM="$ROOT/benchbar"
 
 # ---------------------------------------------------------------- asserts
 
@@ -140,4 +140,15 @@ add_listener() { printf '%s %s %s %s\n' "$1" "$2" "$3" "${4:-127.0.0.1}" >>"$MOC
 # set_agent LABEL STATE PID EXIT: a fake loaded launchd agent
 set_agent() {
   printf 'state = %s\npid = %s\nlast exit code = %s\n' "$2" "${3:-}" "${4:-0}" >"$MOCK_STATE/agents/$1"
+}
+
+# jget FILE_OR_DASH EXPR: evaluates a Python expression on the parsed JSON
+# document `d` (reads stdin for "-"), for asserting JSON output.
+jget() {
+  local src="$1" expr="$2"
+  if [[ "$src" == "-" ]]; then
+    python3 -c "import json,sys; d=json.load(sys.stdin); print($expr)"
+  else
+    python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print($expr)" "$src"
+  fi
 }

@@ -7,9 +7,9 @@ without surprising the user.
 ## Start with the facts
 
 ```bash
-./frappe-mac doctor --json          # machine readable, read only, exit 1 on any FAIL
-./frappe-mac status --json          # agent state, stop flag, site ping
-./frappe-mac doctor                 # same, for humans
+./benchbar doctor --json          # machine readable, read only, exit 1 on any FAIL
+./benchbar status --json          # agent state, stop flag, site ping
+./benchbar doctor                 # same, for humans
 ```
 
 Both are safe to run at any time. Every check carries a `fix` string
@@ -18,7 +18,7 @@ Both are safe to run at any time. Every check carries a `fix` string
 ## Fresh install
 
 ```bash
-MARIADB_ROOT_PASSWORD='...' ADMIN_PASSWORD='...' ./frappe-mac install --yes
+MARIADB_ROOT_PASSWORD='...' ADMIN_PASSWORD='...' ./benchbar install --yes
 ```
 
 Ask the user for the two passwords before you start, or run without
@@ -34,9 +34,9 @@ then open `http://<site>:8000`.
 ## Existing or broken bench
 
 ```bash
-./frappe-mac doctor --bench-dir <path>
-./frappe-mac repair --dry-run --bench-dir <path>   # show the plan first
-./frappe-mac repair --yes --bench-dir <path>
+./benchbar doctor --bench-dir <path>
+./benchbar repair --dry-run --bench-dir <path>   # show the plan first
+./benchbar repair --yes --bench-dir <path>
 ```
 
 `repair` only runs the fixes doctor flagged, in dependency order, with a
@@ -48,10 +48,10 @@ call, so later commands do not need `--bench-dir`.
 - Never `rm -rf` inside a bench, never drop databases, never edit
   `sites/`. The tool moves broken folders aside; do the same.
 - Never run `bench update` unless the user asked for it by name.
-- Never write your own LaunchAgents or `Procfile`. Use `frappe-mac
+- Never write your own LaunchAgents or `Procfile`. Use `benchbar
   service`, which generates `Procfile.lean`, the runner and the agent
   from templates with a version hash header.
-- Never kill processes by pattern yourself. `frappe-mac down` stops only
+- Never kill processes by pattern yourself. `benchbar down` stops only
   this bench's honcho, serve, worker, schedule, socketio and port
   listeners, and leaves the user's `bench migrate` or `bench console`
   alone.
@@ -82,5 +82,5 @@ call, so later commands do not need `--bench-dir`.
 
 `benchup`, `benchdown`, `benchrestart` (after Python changes),
 `benchwatch` (while editing JS or CSS), `benchlogs`, `benchstatus`. All
-of them are thin wrappers around `frappe-mac <command>`, so you can run
+of them are thin wrappers around `benchbar <command>`, so you can run
 the long form yourself.

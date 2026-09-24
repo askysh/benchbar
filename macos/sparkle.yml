@@ -1,0 +1,22 @@
+# Included by project.yml only when BENCHBAR_SPARKLE=YES. Adds Sparkle 2
+# and the SPARKLE compilation condition, so code under "#if SPARKLE" is
+# built. The appcast URL and public EdDSA key come from build settings
+# (see docs/releasing.md); nothing here holds a secret.
+packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: "2.6.0"
+
+targets:
+  BenchBar:
+    dependencies:
+      - package: Sparkle
+        product: Sparkle
+    settings:
+      base:
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) SPARKLE"
+    info:
+      properties:
+        SUFeedURL: $(BENCHBAR_APPCAST_URL)
+        SUPublicEDKey: $(BENCHBAR_SPARKLE_PUBLIC_KEY)
+        SUEnableAutomaticChecks: true

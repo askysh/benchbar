@@ -83,7 +83,7 @@ fl_bench_init_if_needed() {
   fi
   if [[ -e "$bench_dir" ]]; then
     if fl_bench_has_data "$bench_dir"; then
-      fl_die "Bench ${bench_dir} has apps or sites but its env is missing or incomplete." "This is a repair, not a reinstall. Run: ${SCRIPT_DIR}/frappe-mac repair --bench-dir ${bench_dir}"
+      fl_die "Bench ${bench_dir} has apps or sites but its env is missing or incomplete." "This is a repair, not a reinstall. Run: ${SCRIPT_DIR}/benchbar repair --bench-dir ${bench_dir}"
     fi
     if [[ "$repair" != "1" ]]; then
       fl_die "Bench directory exists but is incomplete: ${bench_dir}" "Move it aside or rerun with --repair-bench after reading: mv ${bench_dir} ${bench_dir}.incomplete.\$(date +%Y%m%d%H%M%S)"

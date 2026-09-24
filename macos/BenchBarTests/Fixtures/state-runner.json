@@ -1,0 +1,1 @@
+{"schema_version":1,"cli_version":"0.3.0","bench":"/Users/you/frappe-bench","name":"frappe-bench","site":"macdev","label":"com.benchbar.frappe-bench","state":"crashed","stop_reason":"crash","pid":null,"started_at":"2026-09-23T10:00:00Z","last_exit_code":1,"web_url":"http://macdev:8000","web_ping_code":null,"updated_at":"2026-09-23T10:05:00Z","source":"runner"}

@@ -275,7 +275,7 @@ done
 
 fl_section "SHELL CONFIG"
 ZSHRC="$(fl_rc_file)"
-HELPER_BLOCK="$(fl_template_render shell-helpers "PROFILE_EXPORTS=$(fl_profile_path_exports)" "FRAPPE_MAC=${SCRIPT_DIR}/frappe-mac")"
+HELPER_BLOCK="$(fl_template_render shell-helpers "PROFILE_EXPORTS=$(fl_profile_path_exports)" "BENCHBAR=${SCRIPT_DIR}/benchbar")"
 case "$(fl_rc_block_status "$ZSHRC" "$HELPER_BLOCK")" in
   current)
     fl_ok "${ZSHRC} has the frappe-mac block (profile exports and bench helpers)"
