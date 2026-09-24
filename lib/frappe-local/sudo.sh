@@ -37,8 +37,16 @@ fl_sudo_begin() {
   fi
   FL_SUDO_SESSION=1
   export FL_SUDO_SESSION
-  # keep the timestamp fresh while this process lives; exits with it
-  ( while kill -0 "$$" 2>/dev/null; do sudo -n true 2>/dev/null || exit 0; sleep 50; done ) &
+  # Keep the timestamp fresh while this process lives. The loop owns no
+  # stdio (a caller capturing our output must not wait for it), sleeps in
+  # short slices so it notices the parent leaving, and dies on TERM.
+  ( trap 'exit 0' TERM
+    parent="$$"
+    while kill -0 "$parent" 2>/dev/null; do
+      sudo -n true 2>/dev/null || exit 0
+      slice=0
+      while [[ "$slice" -lt 10 ]]; do sleep 5; kill -0 "$parent" 2>/dev/null || exit 0; slice=$((slice + 1)); done
+    done ) </dev/null >/dev/null 2>&1 &
   FL_SUDO_KEEPALIVE_PID="$!"
   fl_log "sudo session started (keepalive pid ${FL_SUDO_KEEPALIVE_PID})"
   return 0
