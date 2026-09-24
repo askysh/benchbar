@@ -185,6 +185,16 @@ assert_eq "$snap_before" "$(snapshot "$HOME" "$BENCH")" "(second install must wr
 assert_calls_not_contain '^bench (init|new-site|get-app|build|setup)'
 assert_calls_not_contain '^launchctl (bootstrap|bootout|kickstart)'
 
+# a refused sudo is asked once for the whole install, then every sudo step is skipped
+rm -f "$MOCK_STATE/wkhtml_installed"; touch "$MOCK_STATE/wkhtml_missing" "$MOCK_STATE/sudo_refused"
+printf '127.0.0.1 localhost\n' >"$FL_HOSTS_FILE"; rm -rf "$FL_STATE_DIR/downloads"; reset_calls
+run_fm install --yes --bench-dir "$BENCH" --site macdev
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "1" "$(grep -c '^sudo -v$' "$MOCK_LOG")" "(a refused sudo is asked exactly once)"
+assert_contains "$OUT" "not asking again"
+assert_calls_not_contain '^sudo (installer|tee|cp)'
+rm -f "$MOCK_STATE/sudo_refused"; touch "$MOCK_STATE/wkhtml_installed"
+
 # a deliberately skipped wkhtmltopdf (no Rosetta, no terminal) does not fail the install
 rm -f "$MOCK_STATE/rosetta" "$MOCK_STATE/wkhtml_installed"; touch "$MOCK_STATE/wkhtml_missing"
 run_fm install --bench-dir "$BENCH" --site macdev </dev/null

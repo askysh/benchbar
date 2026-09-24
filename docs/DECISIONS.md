@@ -74,3 +74,7 @@ decisions of the app work live in `macos/DECISIONS.md`.
 
 - `fl_wkhtmltopdf_ensure` returns 2 for a deliberate skip (Rosetta or the package declined, no sudo) and 1 for an error; the repair action reports a skip as `skipped`, and the engine's verify pass ignores the optional actions `wkhtmltopdf_install` and `redis_stop`, so a bench install without PDFs exits 0.
 - The report's assignment style masking takes a quoted value whole (`key="secret"`, `key='secret'`): the unquoted form stopped at the quote and left the secret in place.
+- `install.sh --app-only` skips the Command Line Tools and Homebrew checks: the prebuilt app needs only `curl`, `shasum` and `ditto`; macOS and the architecture are still checked.
+- The installer's PATH block is generated from the configured bin folder (`BENCHBAR_BIN_DIR`), written as `$HOME/...` when it lives under the home folder.
+- A refused up-front `sudo -v` sets `FL_SUDO_REFUSED=1`, exported to the phase scripts, so an install asks for sudo exactly once whatever the answer and skips every sudo step with a message after a refusal.
+- A hosts line that cannot be written because sudo was refused is a skipped step with the manual command printed, and `hosts_entry` joins the optional actions, so a run the user chose to keep sudo free still ends with exit 0 and warnings.

@@ -128,10 +128,22 @@ rc_block_state() {
   if grep -q -x -F "$RC_START" "$RC_FILE" && grep -q -x -F "$RC_END" "$RC_FILE"; then printf 'present'; else printf 'missing'; fi
 }
 
+# the bin folder as written into the rc file: under the home folder it is
+# spelled with $HOME so the block survives a renamed user
+rc_bin_dir() {
+  # shellcheck disable=SC2016  # a literal $HOME is the point
+  case "$BIN_DIR" in
+    "$HOME"/*) printf '$HOME/%s' "${BIN_DIR#"$HOME"/}" ;;
+    *) printf '%s' "$BIN_DIR" ;;
+  esac
+}
+
 rc_block_content() {
+  local dir
+  dir="$(rc_bin_dir)"
   printf '%s\n' "$RC_START" \
     "# Added by the BenchBar installer so that benchbar and frappe-mac are on PATH." \
-    "case \":\$PATH:\" in *\":\$HOME/.local/bin:\"*) ;; *) export PATH=\"\$HOME/.local/bin:\$PATH\" ;; esac" \
+    "case \":\$PATH:\" in *\":${dir}:\"*) ;; *) export PATH=\"${dir}:\$PATH\" ;; esac" \
     "$RC_END"
 }
 
@@ -151,7 +163,7 @@ rc_block_write() {
     if [[ "$DRY" == "1" ]]; then info "dry-run: would append the PATH block to ${RC_FILE}"; return 0; fi
     { [[ -f "$RC_FILE" ]] && cat "$RC_FILE"; printf '\n%s\n' "$want"; } >"${RC_FILE}.benchbar.tmp"
     mv "${RC_FILE}.benchbar.tmp" "$RC_FILE"
-    ok "added ~/.local/bin to PATH in ${RC_FILE}"
+    ok "added ${BIN_DIR} to PATH in ${RC_FILE}"
   fi
   CHANGED=1
 }
@@ -181,6 +193,11 @@ check_system() {
   else
     warn "Intel Mac ($(uname -m)): the CLI works, the BenchBar app is built for Apple Silicon only and is skipped"
     DO_APP=0
+  fi
+  # the prebuilt app needs only curl, shasum and ditto: developer tools are for the CLI
+  if [[ "$DO_CLI" != "1" ]]; then
+    info "app only: skipping the Command Line Tools and Homebrew checks"
+    return 0
   fi
   if xcode-select -p >/dev/null 2>&1; then
     ok "Xcode Command Line Tools at $(xcode-select -p)"
@@ -441,7 +458,11 @@ printf '  Plan:\n'
 [[ "$DO_CLI" == "1" ]] && printf '   1. check macOS, the Command Line Tools and Homebrew\n   2. clone or update the CLI in %s, link it into %s, add that folder to PATH in %s\n' "$BENCHBAR_HOME" "$BIN_DIR" "$RC_FILE"
 [[ "$DO_APP" == "1" ]] && printf '   3. install or update the BenchBar app in %s from the %s GitHub release (sha256 checked)\n' "$APP_DIR" "${PIN:-latest}"
 [[ "$DO_CLI" == "1" ]] && printf '   4. offer benchbar adopt for an existing bench, or benchbar install\n'
-printf '  This script never runs sudo. Homebrew'"'"'s installer, if you accept it, asks for your password itself.\n'
+if [[ "$DO_CLI" == "1" ]]; then
+  printf '  This script never runs sudo. Homebrew'"'"'s installer, if you accept it, asks for your password itself.\n'
+else
+  printf '  This script never runs sudo.\n'
+fi
 
 check_system
 [[ "$DO_CLI" == "1" ]] && install_cli

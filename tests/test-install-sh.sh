@@ -123,7 +123,22 @@ assert_eq "0.3.0" "$(installed_app_version)"
 run_install --yes --app-only
 assert_eq "0" "$CODE" "$OUT"
 assert_not_contains "$OUT" "==> Command line tool"
+assert_not_contains "$OUT" "[OK] Xcode Command Line Tools"
+assert_not_contains "$OUT" "[OK] Homebrew"
+assert_not_contains "$OUT" "Homebrew's installer"
+assert_contains "$OUT" "app only: skipping"
 assert_eq "0.5.0" "$(installed_app_version)"
+
+# a custom bin folder goes into the PATH block, spelled with $HOME when it is under it
+BENCHBAR_BIN_DIR="$HOME/bin" run_install --yes --no-app
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "$CLI_HOME/benchbar" "$(readlink "$HOME/bin/benchbar")"
+grep -q -F "export PATH=\"\$HOME/bin:\$PATH\"" "$HOME/.zshrc" || fail "PATH block must name the configured bin folder"
+BENCHBAR_BIN_DIR="$HOME/bin" run_install --yes --no-app
+assert_contains "$OUT" "PATH block in ${HOME}/.zshrc (unchanged)"
+rm -f "$HOME/bin/benchbar" "$HOME/bin/frappe-mac"
+run_install --yes --no-app
+grep -q -F "export PATH=\"\$HOME/.local/bin:\$PATH\"" "$HOME/.zshrc" || fail "PATH block must follow the bin folder back"
 
 # ---- dry-run writes nothing, even from scratch
 rm -rf "$CLI_HOME" "$APP" "$HOME/.local/bin/benchbar" "$HOME/.local/bin/frappe-mac"

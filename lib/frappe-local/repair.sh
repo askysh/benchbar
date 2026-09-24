@@ -7,8 +7,8 @@
 
 FL_ACTION_ORDER="python_leaves env_rebuild honcho_install node_requirements build clear_cache mariadb_bind mariadb_utf8 wkhtmltopdf_install legacy_migrate write_procfile write_runner write_plist write_helpers write_cli_link hosts_entry rotate_logs redis_stop"
 # actions whose check may stay a warning after a run without failing it:
-# the user may decline them on purpose
-FL_OPTIONAL_ACTIONS="wkhtmltopdf_install redis_stop"
+# the user may decline them (or sudo) on purpose
+FL_OPTIONAL_ACTIONS="wkhtmltopdf_install hosts_entry redis_stop"
 FL_NEED_CLEAR_CACHE=0
 # set by legacy_migrate when it booted out an agent that was running the
 # bench, so write_plist starts the bench again under the new agent
@@ -258,7 +258,11 @@ act_hosts_entry() {
     fl_warn "skipped; run: printf '${line}\\n' | sudo tee -a ${FL_HOSTS_FILE}"
     return 0
   fi
-  fl_sudo_begin "add '${line}' to ${FL_HOSTS_FILE}" || { fl_fail "sudo not available; run: printf '${line}\\n' | sudo tee -a ${FL_HOSTS_FILE}"; return 1; }
+  if ! fl_sudo_begin "add '${line}' to ${FL_HOSTS_FILE}"; then
+    fl_warn "skipped without sudo; run: printf '${line}\\n' | sudo tee -a ${FL_HOSTS_FILE}"
+    FL_STEP_RESULT="skipped"
+    return 0
+  fi
   fl_backup_file "$FL_HOSTS_FILE"
   if [[ "$(fl_rc_markers_state "$FL_HOSTS_FILE" "$FL_HOSTS_START" "$FL_HOSTS_END")" == "present" ]]; then
     tmp="$(mktemp "${TMPDIR:-/tmp}/benchbar-hosts.XXXXXX")"

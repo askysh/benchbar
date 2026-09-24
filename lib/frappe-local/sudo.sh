@@ -14,6 +14,8 @@
 
 FL_SUDO_KEEPALIVE_PID=""
 FL_SUDO_SESSION="${FL_SUDO_SESSION:-0}"
+# 1 once sudo was refused in this run: later steps skip instead of asking again
+FL_SUDO_REFUSED="${FL_SUDO_REFUSED:-0}"
 
 fl_sudo_available() {
   # true when a sudo credential is cached or can be obtained without a prompt
@@ -26,13 +28,19 @@ fl_sudo_begin() {
   local reason
   [[ "${FL_DRY_RUN:-0}" == "1" ]] && { fl_info "dry-run: would ask for your password once (sudo) to: $*"; return 0; }
   [[ "$FL_SUDO_SESSION" == "1" ]] && return 0
+  if [[ "$FL_SUDO_REFUSED" == "1" ]]; then
+    fl_warn "sudo was refused earlier in this run; not asking again for: $*"
+    return 1
+  fi
   command -v sudo >/dev/null 2>&1 || { fl_warn "sudo is not available"; return 1; }
   fl_spinner_pause
   printf '\n  %ssudo%s is needed once for this run, to:\n' "$FL_BOLD" "$FL_RESET"
   for reason in "$@"; do printf '     %s %s\n' "$FL_G_PEND" "$reason"; done
   printf '     nothing else runs as root; the password is not stored\n'
   if ! sudo -v; then
-    fl_warn "sudo was refused; the steps above are skipped and listed at the end"
+    FL_SUDO_REFUSED=1
+    export FL_SUDO_REFUSED
+    fl_warn "sudo was refused; the steps above are skipped, and this run will not ask again"
     return 1
   fi
   FL_SUDO_SESSION=1
