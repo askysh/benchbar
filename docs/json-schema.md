@@ -91,7 +91,7 @@ How `status` decides (live facts win over the state file):
 | `benches[].state_file` | string | where the runner writes `state.json` |
 
 Benches are found in this order, without duplicates: the remembered
-bench (`.frappe-local/state.env`), the `WorkingDirectory` of every
+bench (`.benchbar/state.env`), the `WorkingDirectory` of every
 `com.benchbar.*` and `com.frappe-mac.*` agent, then `~/frappe-bench`,
 `~/dev/frappe-bench` and any `~/*` or `~/dev/*` folder with
 `sites/common_site_config.json`.

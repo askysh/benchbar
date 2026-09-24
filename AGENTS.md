@@ -55,7 +55,7 @@ call, so later commands do not need `--bench-dir`.
   this bench's honcho, serve, worker, schedule, socketio and port
   listeners, and leaves the user's `bench migrate` or `bench console`
   alone.
-- Do not edit inside the `# >>> frappe-mac >>>` block of the shell rc
+- Do not edit inside the `# >>> benchbar >>>` block of the shell rc
   file. `repair` regenerates it.
 - Use `--dry-run` before any `repair` or `install` on a machine you have
   not seen before, and show the plan to the user.
@@ -73,8 +73,8 @@ call, so later commands do not need `--bench-dir`.
 - "unchanged: all N checks pass, nothing to do" means the run was a
   no-op. That is the expected result of a second run.
 - Full command output of every mutating run is in
-  `.frappe-local/logs/<timestamp>.log`. Backups are in
-  `.frappe-local/backups/<timestamp>/`.
+  `.benchbar/logs/<timestamp>.log`. Backups are in
+  `.benchbar/backups/<timestamp>/`.
 - Exit codes: 0 success, 1 failure or a failing check, 2 manual steps
   pending (phase 1 only).
 

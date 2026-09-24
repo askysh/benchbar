@@ -6,13 +6,20 @@
 #
 # A template may contain:
 #   #@version N            stripped on render, becomes the vN in the header
-#   __HEADER__             replaced by "frappe-mac-template: <name> vN <hash>"
+#   __HEADER__             replaced by "benchbar-template: <name> vN <hash>"
 #   __KEY__                replaced by the value passed as KEY=value
 # The hash covers the rendered content with __HEADER__ still in place, so it
 # only changes when the template or its inputs change.
+#
+# Files written before 0.3.0 say "frappe-mac-template:". Both words count as
+# ours, and only "<name> vN <hash>" is compared, so the rename alone never
+# rewrites a file (a MariaDB drop-in rewrite would restart MariaDB).
+
+FL_TEMPLATE_TOKEN="benchbar-template"
+FL_TEMPLATE_HEADER_RE='\(benchbar\|frappe-mac\)-template: [A-Za-z0-9._-]* v[0-9]* [0-9a-f]*'
 
 FL_TEMPLATE_DIR="${FL_TEMPLATE_DIR:-${SCRIPT_DIR}/templates}"
-FL_BACKUP_ROOT="${FL_BACKUP_ROOT:-${SCRIPT_DIR}/.frappe-local/backups}"
+FL_BACKUP_ROOT="${FL_BACKUP_ROOT:-${FL_STATE_DIR}/backups}"
 FL_BACKUP_STAMP=""
 FL_LAST_BACKUP=""
 
@@ -50,18 +57,23 @@ fl_template_render() {
     body="${body}${line}"$'\n'
   done <"$file"
   hash="$(printf '%s' "$body" | fl_content_hash)"
-  printf '%s' "${body//__HEADER__/frappe-mac-template: ${name} v${version:-1} ${hash}}"
+  printf '%s' "${body//__HEADER__/${FL_TEMPLATE_TOKEN}: ${name} v${version:-1} ${hash}}"
 }
 
-# Prints the header token found in an existing file, or nothing.
+# Prints "<name> vN <hash>" from the first header on stdin, or nothing.
+fl_template_header_key() {
+  grep -o "$FL_TEMPLATE_HEADER_RE" | head -n1 | sed 's/^[a-z-]*-template: //' || true
+}
+
+# Prints the header key found in an existing file, or nothing.
 fl_template_installed_header() {
   local path="$1"
   [[ -f "$path" ]] || return 0
-  grep -o 'frappe-mac-template: [A-Za-z0-9._-]* v[0-9]* [0-9a-f]*' "$path" 2>/dev/null | head -n1 || true
+  fl_template_header_key <"$path" 2>/dev/null || true
 }
 
 fl_template_header_of() {
-  printf '%s' "$1" | grep -o 'frappe-mac-template: [A-Za-z0-9._-]* v[0-9]* [0-9a-f]*' | head -n1 || true
+  printf '%s' "$1" | fl_template_header_key
 }
 
 # fl_template_status PATH RENDERED -> missing | current | outdated | foreign

@@ -65,7 +65,7 @@ assert_fails() {
   fi
 }
 
-FL_STATE_DIR="$TMP_DIR/.frappe-local"
+FL_STATE_DIR="$TMP_DIR/.benchbar"
 FL_STATE_FILE="$FL_STATE_DIR/state.env"
 fl_state_init
 

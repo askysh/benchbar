@@ -56,8 +56,16 @@ affiliated with Frappe Technologies.
   BenchBar runs.
 - `status --json`: `state` is now the contract value (stopped, starting,
   running, crashed, paused); launchd's word moved to `agent_state`.
-- README, AGENTS.md and the roadmap describe BenchBar and the new repo URL,
-  github.com/askysh/frappe-mac-dev-server.
+- The repository is now github.com/askysh/benchbar (the old URLs
+  redirect). README, AGENTS.md, the docs, the cask and the Sparkle feed use
+  it.
+- Names from before 0.3.0 move over once, on the next run or `repair`:
+  the checkout's `.frappe-local/` becomes `.benchbar/`,
+  `frappe-mac-run.sh` in the bench becomes `benchbar-run.sh` (the old file
+  goes to the backups once no agent uses it), the `# >>> frappe-mac >>>`
+  block in the shell rc is replaced in place by `# >>> benchbar >>>`, and
+  new files carry a `benchbar-template:` header. Files are not rewritten
+  for the header word alone, so MariaDB is not restarted.
 
 ### Fixed
 

@@ -28,7 +28,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST="${ROOT}/dist"
 APP="${ROOT}/macos/build/BenchBar.app"
-REPO_URL="https://github.com/askysh/frappe-mac-dev-server"
+REPO_URL="https://github.com/askysh/benchbar"
 
 die() { printf '[FAIL] %s\n' "$1" >&2; [[ -n "${2:-}" ]] && printf '  fix: %s\n' "$2" >&2; exit 1; }
 step() { printf '\n==> %s\n' "$1"; }

@@ -1,4 +1,5 @@
 .DS_Store
+.benchbar/
 .frappe-local/
 frappe-bench/
 *.incomplete.*

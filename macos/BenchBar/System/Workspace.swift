@@ -32,7 +32,7 @@ enum Workspace {
     static func chooseCLI() -> String? {
         let panel = NSOpenPanel()
         panel.title = "Choose the benchbar command"
-        panel.message = "Pick the benchbar file in your frappe-mac-dev-server checkout, or ~/.local/bin/benchbar."
+        panel.message = "Pick the benchbar file in your benchbar checkout, or ~/.local/bin/benchbar."
         panel.prompt = "Use This"
         panel.canChooseFiles = true
         panel.canChooseDirectories = false

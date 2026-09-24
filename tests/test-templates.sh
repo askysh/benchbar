@@ -10,7 +10,7 @@ r1="$(fl_template_render Procfile.lean WEB_PORT=8000)"
 r2="$(fl_template_render Procfile.lean WEB_PORT=8000)"
 r3="$(fl_template_render Procfile.lean WEB_PORT=8001)"
 assert_eq "$r1" "$r2" "(render is deterministic)"
-assert_contains "$r1" "frappe-mac-template: Procfile.lean v1 "
+assert_contains "$r1" "benchbar-template: Procfile.lean v1 "
 assert_contains "$r1" "web: bench serve --port 8000"
 assert_not_contains "$r1" "#@version"
 assert_not_contains "$r1" "__HEADER__"
@@ -22,6 +22,14 @@ fl_template_apply "$target" "$r1" 644
 assert_eq "1" "$FL_TEMPLATE_CHANGED"
 assert_eq "current" "$(fl_template_status "$target" "$r1")"
 assert_eq "outdated" "$(fl_template_status "$target" "$r3")"
+
+# a file written before 0.3.0 says frappe-mac-template: the word alone is
+# not a change, so nothing (like a MariaDB drop-in) is rewritten for it
+old_copy="$TMP_DIR/old-Procfile.lean"
+printf '%s' "${r1/benchbar-template:/frappe-mac-template:}" >"$old_copy"
+grep -q 'frappe-mac-template: Procfile.lean v1 ' "$old_copy" || fail "fixture must carry the old word"
+assert_eq "current" "$(fl_template_status "$old_copy" "$r1")"
+assert_eq "outdated" "$(fl_template_status "$old_copy" "$r3")"
 
 # unchanged apply writes nothing
 before="$(stat -f %m "$target")"

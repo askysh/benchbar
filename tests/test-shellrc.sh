@@ -37,7 +37,7 @@ bash -n "$TMP_DIR/block.sh"
 command -v zsh >/dev/null 2>&1 && zsh -n "$TMP_DIR/block.sh"
 
 # broken markers: append a fresh block and warn, never edit in place
-printf 'export A=1\n%s\nbroken\n# <<< frappe-mac <\n' "$FL_RC_START" >"$rc"
+printf 'export A=1\n%s\nbroken\n# <<< benchbar <\n' "$FL_RC_START" >"$rc"
 assert_eq "broken" "$(fl_rc_block_state "$rc")"
 out="$(fl_rc_block_write "$rc" "$c1")"
 assert_contains "$out" "[WARN]"
@@ -47,6 +47,28 @@ assert_eq "2" "$(grep -c -x -F "$FL_RC_START" "$rc")"
 # legacy blocks from older setups are reported
 printf '# >>> frappe-bench helpers >>>\nbenchup() { :; }\n# <<< frappe-bench helpers <\n' >>"$rc"
 assert_eq "frappe-bench helpers" "$(fl_rc_legacy_blocks "$rc")"
+
+# a frappe-mac block from before 0.3.0 is ours: outdated, and replaced in
+# place with benchbar markers
+printf 'export A=1\n# >>> frappe-mac >>>\nbenchup() { old; }\n# <<< frappe-mac <<<\nexport Z=9\n' >"$rc"
+assert_eq "legacy" "$(fl_rc_block_state "$rc")"
+assert_eq "outdated" "$(fl_rc_block_status "$rc" "$c1")"
+assert_eq "" "$(fl_rc_legacy_blocks "$rc")" "(not reported as a foreign block)"
+fl_rc_block_write "$rc" "$c1"
+assert_eq "present" "$(fl_rc_block_state "$rc")"
+assert_eq "current" "$(fl_rc_block_status "$rc" "$c1")"
+assert_eq "0" "$(grep -c -F 'frappe-mac >>>' "$rc")"
+assert_eq "export A=1" "$(head -n 1 "$rc")"
+assert_eq "$FL_RC_START" "$(sed -n 2p "$rc")" "(new block where the old one was)"
+assert_eq "export Z=9" "$(tail -n 1 "$rc")"
+! grep -q 'old; }' "$rc" || fail "old block content must be gone"
+# a stray frappe-mac block next to a benchbar block is reported
+printf '# >>> frappe-mac >>>\nx\n# <<< frappe-mac <<<\n' >>"$rc"
+assert_eq "frappe-mac" "$(fl_rc_legacy_blocks "$rc")"
+# remove takes a legacy block too
+printf 'export A=1\n# >>> frappe-mac >>>\nx\n# <<< frappe-mac <<<\n' >"$rc"
+fl_rc_block_remove "$rc"
+assert_eq "missing" "$(fl_rc_block_state "$rc")"
 
 # remove
 printf 'export A=1\n' >"$rc"

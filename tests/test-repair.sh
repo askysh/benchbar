@@ -48,7 +48,7 @@ assert_file "$BENCH/env/bin/python"
 assert_file "$BENCH/apps/frappe/node_modules/socket.io"
 assert_file "$BENCH/apps/frappe/frappe/public/dist/js/desk.bundle.ABC123.js"
 assert_file "$BENCH/env/bin/honcho"
-grep -q "$BENCH/env/bin/honcho" "$BENCH/frappe-mac-run.sh" || fail "runner must be re-rendered with the new honcho path"
+grep -q "$BENCH/env/bin/honcho" "$BENCH/benchbar-run.sh" || fail "runner must be re-rendered with the new honcho path"
 assert_eq "important" "$(cat "$BENCH/sites/macdev/site_config.json")" "(sites must not be touched)"
 assert_file "$BENCH/sites/macdev"
 assert_calls_not_contain '^bench (update|drop-site|new-site|migrate)'

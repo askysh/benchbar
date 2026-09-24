@@ -349,7 +349,7 @@ fl_step_run() {
   FL_STEP_START="$SECONDS"
   FL_STEP_STATUS[i]="running"
   FL_STEP_RESULT="done"
-  out="$(mktemp "${TMPDIR:-/tmp}/frappe-mac-step.XXXXXX")"
+  out="$(mktemp "${TMPDIR:-/tmp}/benchbar-step.XXXXXX")"
   fl_log "step $((i + 1)) start: $label"
   fl_spinner_start "$((i + 1)). $label" "$out"
   "$fn" "$@" >"$out" 2>&1 || code=$?

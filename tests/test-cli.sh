@@ -69,6 +69,19 @@ unset MOCK_KICKSTART_PING
 NEW="$HOME/new"; make_fake_bench "$NEW" newsite
 run_fm up --bench-dir "$NEW"; assert_eq "1" "$CODE"; assert_contains "$OUT" "not installed"
 
+# the state folder moves from .frappe-local to .benchbar, unless a run holds its lock
+# shellcheck disable=SC2016 # the single quoted script expands in the child bash
+state_dir_for() { env -u FL_STATE_DIR -u FL_STATE_FILE SCRIPT_DIR="$1" bash -c '. "$0/lib/frappe-local/state.sh"; printf "%s" "$FL_STATE_DIR"' "$ROOT"; }
+co="$TMP_DIR/checkout-old"; mkdir -p "$co/.frappe-local"; printf 'BENCH_DIR=/x\n' >"$co/.frappe-local/state.env"
+assert_eq "$co/.benchbar" "$(state_dir_for "$co")"
+assert_file "$co/.benchbar/state.env"
+[[ ! -e "$co/.frappe-local" ]] || fail ".frappe-local must be renamed"
+co="$TMP_DIR/checkout-locked"; mkdir -p "$co/.frappe-local/lock"
+assert_eq "$co/.frappe-local" "$(state_dir_for "$co")" "(a held lock keeps the old folder)"
+[[ -d "$co/.frappe-local/lock" ]] || fail "a locked .frappe-local must not move"
+co="$TMP_DIR/checkout-new"; mkdir -p "$co"
+assert_eq "$co/.benchbar" "$(state_dir_for "$co")"
+
 # logs without follow
 printf 'line1\nline2\n' >"$BENCH/logs/bench.log"
 run_fm logs --no-follow --bench-dir "$BENCH"; assert_contains "$OUT" "line2"

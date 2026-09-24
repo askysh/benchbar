@@ -309,6 +309,7 @@ fl_cmd_uninstall_service() {
     if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then fl_info "dry-run: would move ${plist} to ${dest}/"; else mkdir -p "$dest"; mv "$plist" "$dest/"; fl_ok "moved ${plist} to ${dest}/"; fi
   fi
   fl_backup_file "$(fl_runner_path)"; [[ "${FL_DRY_RUN:-0}" == "1" || ! -f "$(fl_runner_path)" ]] || { rm -f "$(fl_runner_path)"; fl_ok "removed runner (backup: ${FL_LAST_BACKUP})"; }
+  fl_backup_file "$(fl_runner_path_legacy)"; [[ "${FL_DRY_RUN:-0}" == "1" || ! -f "$(fl_runner_path_legacy)" ]] || { rm -f "$(fl_runner_path_legacy)"; fl_ok "removed the old runner (backup: ${FL_LAST_BACKUP})"; }
   fl_backup_file "$(fl_procfile_path)"; [[ "${FL_DRY_RUN:-0}" == "1" || ! -f "$(fl_procfile_path)" ]] || { rm -f "$(fl_procfile_path)"; fl_ok "removed Procfile.lean (backup: ${FL_LAST_BACKUP})"; }
   fl_rc_block_remove "$rc"
   [[ "${FL_DRY_RUN:-0}" == "1" ]] || fl_ok "removed the helper block from ${rc}"
