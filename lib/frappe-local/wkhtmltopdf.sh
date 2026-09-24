@@ -103,7 +103,8 @@ fl_wkhtmltopdf_install() {
 
 # The whole flow: detect, Rosetta, download, verify, install.
 #   0  patched build present (already, or installed now)
-#   1  not installed: skipped by the user, or a step failed (message printed)
+#   1  a step failed (message printed)
+#   2  skipped on purpose: Rosetta or the package declined, or no sudo
 fl_wkhtmltopdf_ensure() {
   local state
   state="$(fl_wkhtmltopdf_state)"
@@ -120,18 +121,18 @@ fl_wkhtmltopdf_ensure() {
   if [[ "${FL_ARCH:-$(uname -m)}" == "arm64" ]] && ! fl_rosetta_ensure; then
     fl_warn "skipping wkhtmltopdf: without Rosetta 2 the Intel binary cannot run. PDFs will not work; everything else does."
     fl_fix "softwareupdate --install-rosetta --agree-to-license, then run this again"
-    return 1
+    return 2
   fi
   if [[ "${FL_DRY_RUN:-0}" != "1" ]] && ! fl_confirm "Download wkhtmltopdf ${FL_WKHTML_VERSION} (official patched Qt package, sha256 verified) and install it with sudo?"; then
     fl_warn "skipping wkhtmltopdf: PDFs will not work until it is installed; everything else does."
     fl_fix "${SCRIPT_DIR}/00-mac-system-deps.sh   (asks again)"
-    return 1
+    return 2
   fi
   fl_wkhtmltopdf_download || return 1
   if [[ "${FL_DRY_RUN:-0}" != "1" ]] && ! fl_sudo_begin "install the wkhtmltopdf package (installer -pkg ${FL_WKHTML_FILE} -target /)"; then
     fl_warn "skipping wkhtmltopdf: sudo was not available"
     fl_fix "sudo installer -pkg ${FL_WKHTML_PKG} -target /"
-    return 1
+    return 2
   fi
   fl_wkhtmltopdf_install
 }

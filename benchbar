@@ -283,11 +283,12 @@ cmd_adopt() {
   fl_header "benchbar adopt" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "$FL_SITE"
   fl_info "adopt only adds the background service files and remembers the bench."
   fl_info "sites/, apps/, env/ and the databases are not touched; migrate, build and update never run."
-  fl_state_set BENCH_DIR "$FL_BENCH_DIR"
-  fl_state_set SITE_NAME "$FL_SITE"
-  fl_state_set PROFILE "$FL_PROFILE"
-  [[ "$FL_DRY_RUN" == "1" ]] || fl_ok "remembered ${FL_BENCH_DIR} (site ${FL_SITE}) as the default bench"
   if fl_repair_engine "Adopt" service; then
+    # remembered only now: a cancelled plan must not make this the default bench
+    fl_state_set BENCH_DIR "$FL_BENCH_DIR"
+    fl_state_set SITE_NAME "$FL_SITE"
+    fl_state_set PROFILE "$FL_PROFILE"
+    [[ "$FL_DRY_RUN" == "1" ]] || fl_ok "remembered ${FL_BENCH_DIR} (site ${FL_SITE}) as the default bench"
     fl_next_steps_box
     return 0
   fi

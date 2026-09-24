@@ -24,8 +24,8 @@ assert_contains "$OUT" "Cancelled. Nothing was changed."
 assert_no_file "$BENCH/Procfile.lean"
 assert_no_file "$BENCH/benchbar-run.sh"
 assert_no_file "$HOME/Library/LaunchAgents/com.benchbar.frappe-bench.plist"
-# the bench is remembered even so, so later commands find it
-assert_eq "$BENCH" "$(sed -n 's/^BENCH_DIR=//p' "$FL_STATE_FILE")"
+# a cancelled adopt does not make the bench the default
+[[ -z "$(sed -n 's/^BENCH_DIR=//p' "$FL_STATE_FILE" 2>/dev/null)" ]] || fail "a cancelled adopt must not remember the bench"
 
 # dry-run shows the plan and writes nothing
 run_fm adopt "$BENCH" --dry-run
@@ -47,6 +47,7 @@ assert_eq "manual" "$(tr -d '[:space:]' <"$BENCH/logs/.bench-stopped")" "(adopt 
 assert_calls_not_contain '^bench (migrate|build|update|setup)'
 assert_calls_contain '^launchctl bootstrap'
 assert_contains "$OUT" "Next steps"
+assert_eq "$BENCH" "$(sed -n 's/^BENCH_DIR=//p' "$FL_STATE_FILE")" "(remembered once applied)"
 # data untouched
 assert_file "$BENCH/sites/macdev/site_config.json"
 assert_eq "$(cat "$BENCH/Procfile")" "redis_cache: redis-server config/redis_cache.conf

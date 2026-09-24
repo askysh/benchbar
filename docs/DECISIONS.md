@@ -38,7 +38,7 @@ decisions of the app work live in `macos/DECISIONS.md`.
 - One sudo prompt per run: `benchbar install` looks ahead (patched wkhtmltopdf present? hosts line present?) and runs `sudo -v` with a keepalive before phase 00; the phase scripts inherit the session through `FL_SUDO_SESSION` and sudo's own per terminal timestamp. Standalone `00-mac-system-deps.sh` asks itself, only when it gets to the package.
 - The `/etc/hosts` line sits inside `# >>> benchbar >>>` markers. A missing block is appended with `sudo tee -a`; an existing block gets the new line inside it through a temp copy and `sudo cp`, after `fl_backup_file`. Rewriting the whole file is limited to the second case.
 - The utf8mb4 drop-in and wkhtmltopdf became doctor checks with repair actions (`mariadb_utf8`, `wkhtmltopdf_install`): the same code serves phase 00 and `benchbar repair`, and the tester guide can say "run doctor".
-- `benchbar adopt` is `benchbar service` with a positional path, validation and an explicit safety statement, run through the same engine restricted to the service group: that group has no `migrate`, `build`, `update` or env rebuild by construction. It records the bench first, so a cancelled plan still leaves the bench remembered.
+- `benchbar adopt` is `benchbar service` with a positional path, validation and an explicit safety statement, run through the same engine restricted to the service group: that group has no `migrate`, `build`, `update` or env rebuild by construction. It remembers the bench only after the plan was applied or found unchanged, so a cancelled adopt never makes that bench the default (a Codex review finding).
 - `benchbar mariadb-password` asks before printing unless `--yes`: a terminal print is a deliberate act, and the app or a script can pass `--yes`.
 - The mocks gained state (`mariadb_root_pw`, a keychain folder, `wkhtml_installed`, `rosetta`, `sudo_refused`, `download_payload`) instead of environment switches, so a test reads like a machine's history.
 
@@ -69,3 +69,8 @@ decisions of the app work live in `macos/DECISIONS.md`.
 - A generated password reads a bounded 4 KB of `/dev/urandom`: BSD `tr` on an endless stream never exits when `head` closes the pipe and SIGPIPE is ignored, as it is under GitHub Actions. The CLI job hung on that for 45 minutes before the cause was found.
 - The sudo keepalive owns no stdio and sleeps in five second slices: with the caller's stdout inherited, every `$(...)` capture of a run waited for its `sleep 50`, and on macOS never returned. The tests capture output, so this showed up only in CI.
 - The `git` mock's pass through to the real git picks the first `git` on PATH outside `tests/mocks` and refuses to exec itself: on macOS `/bin/bash` 3.2, `command -v -p git` still returned the mock, which then exec'd itself in a loop at full CPU. This was the hang behind three timed out macOS CLI jobs; the Linux job never saw it. The test runner now kills a test after ten minutes and prints its process tree, which is how this was found.
+
+## Review findings on the pull request
+
+- `fl_wkhtmltopdf_ensure` returns 2 for a deliberate skip (Rosetta or the package declined, no sudo) and 1 for an error; the repair action reports a skip as `skipped`, and the engine's verify pass ignores the optional actions `wkhtmltopdf_install` and `redis_stop`, so a bench install without PDFs exits 0.
+- The report's assignment style masking takes a quoted value whole (`key="secret"`, `key='secret'`): the unquoted form stopped at the quote and left the secret in place.

@@ -6,6 +6,9 @@
 # "service" (the background phase).
 
 FL_ACTION_ORDER="python_leaves env_rebuild honcho_install node_requirements build clear_cache mariadb_bind mariadb_utf8 wkhtmltopdf_install legacy_migrate write_procfile write_runner write_plist write_helpers write_cli_link hosts_entry rotate_logs redis_stop"
+# actions whose check may stay a warning after a run without failing it:
+# the user may decline them on purpose
+FL_OPTIONAL_ACTIONS="wkhtmltopdf_install redis_stop"
 FL_NEED_CLEAR_CACHE=0
 # set by legacy_migrate when it booted out an agent that was running the
 # bench, so write_plist starts the bench again under the new agent
@@ -118,8 +121,13 @@ act_mariadb_utf8() {
   fi
 }
 
+# PDFs are optional: a skip (Rosetta or the package declined, no sudo) is
+# not a failed step, only a real error is.
 act_wkhtmltopdf_install() {
-  fl_wkhtmltopdf_ensure
+  local code=0
+  fl_wkhtmltopdf_ensure || code=$?
+  [[ "$code" == "2" ]] && { FL_STEP_RESULT="skipped"; return 0; }
+  return "$code"
 }
 
 act_legacy_migrate() {
@@ -367,7 +375,11 @@ fl_repair_engine() {
     printf '\n%sVerify%s\n' "$FL_BOLD" "$FL_RESET"
     fl_doctor_run "$@"
     fl_doctor_print compact
-    remaining="$(fl_doctor_actions)"
+    remaining=""
+    for action in $(fl_doctor_actions); do
+      case " $FL_OPTIONAL_ACTIONS " in *" $action "*) continue ;; esac
+      remaining="${remaining} ${action}"
+    done
   fi
   fl_steps_summary
   if [[ "$status" != "0" ]]; then

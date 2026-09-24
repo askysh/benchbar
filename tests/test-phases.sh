@@ -185,6 +185,14 @@ assert_eq "$snap_before" "$(snapshot "$HOME" "$BENCH")" "(second install must wr
 assert_calls_not_contain '^bench (init|new-site|get-app|build|setup)'
 assert_calls_not_contain '^launchctl (bootstrap|bootout|kickstart)'
 
+# a deliberately skipped wkhtmltopdf (no Rosetta, no terminal) does not fail the install
+rm -f "$MOCK_STATE/rosetta" "$MOCK_STATE/wkhtml_installed"; touch "$MOCK_STATE/wkhtml_missing"
+run_fm install --bench-dir "$BENCH" --site macdev </dev/null
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "PDFs will not work"
+assert_not_contains "$OUT" "still need attention"
+printf 'rosetta\n' >"$MOCK_STATE/rosetta"; touch "$MOCK_STATE/wkhtml_installed"
+
 # install stops cleanly when 00 leaves manual steps (unknown root password under --yes)
 rm -f "$MOCK_STATE/keychain/benchbar-mariadb--root"; printf 'mystery' >"$MOCK_STATE/mariadb_root_pw"
 run_fm install --yes --bench-dir "$BENCH" --site macdev
