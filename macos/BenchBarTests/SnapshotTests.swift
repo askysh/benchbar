@@ -58,7 +58,8 @@ struct SnapshotTests {
         base.cli.answer("status", json: base.statusJSON("running"))
         let store = base.makeStore()
         await store.start(polling: false)
-        let view = SettingsView(settings: base.settings, store: store, launchAtLogin: LaunchAtLogin(),
+        let view = SettingsView(settings: base.settings, store: store,
+                                library: RunnerLibrary(folder: base.dir.url.appendingPathComponent("Runners")), launchAtLogin: LaunchAtLogin(),
                                 notifier: Notifier(settings: base.settings), chooseCLI: {})
         try render(view, "settings")
     }

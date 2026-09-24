@@ -9,6 +9,7 @@ final class StatusItemController {
 
     private let store: BenchStore
     private let settings: AppSettings
+    private let library: RunnerLibrary
     private let speed: SpeedController
     private let activity: SystemActivityMonitor
     private var appearanceObservation: NSKeyValueObservation?
@@ -16,13 +17,14 @@ final class StatusItemController {
     /// Room on each side of the runner inside the button.
     static let padding: CGFloat = 3
 
-    init(store: BenchStore, settings: AppSettings, speed: SpeedController = SpeedController(),
+    init(store: BenchStore, settings: AppSettings, library: RunnerLibrary, speed: SpeedController = SpeedController(),
          activity: SystemActivityMonitor = SystemActivityMonitor()) {
         self.store = store
         self.settings = settings
+        self.library = library
         self.speed = speed
         self.activity = activity
-        let runner = Runner.builtIn(settings.runnerID)
+        let runner = library.runner(settings.runnerID)
         animator = RunnerAnimator(runner: runner)
         statusItem = NSStatusBar.system.statusItem(withLength: runner.pointWidth + Self.padding * 2)
         setUpButton()
@@ -72,8 +74,8 @@ final class StatusItemController {
 
     /// Called whenever the store, the settings, Reduce Motion or sleep change.
     func update() {
-        let runner = Runner.builtIn(settings.runnerID)
-        if runner.id != animator.runner.id {
+        let runner = library.runner(settings.runnerID)
+        if !runner.isSame(as: animator.runner) {
             animator.setRunner(runner)
             placeRunner()
         }
@@ -137,6 +139,7 @@ final class StatusItemController {
         withObservationTracking {
             _ = settings.runnerID
             _ = settings.speedEnabled
+            _ = library.custom.count
         } onChange: { [weak self] in
             Task { @MainActor in
                 self?.update()

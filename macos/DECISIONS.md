@@ -109,3 +109,16 @@ One line per non obvious choice: the decision, then the reason.
 - Banners show even while BenchBar is active (`willPresent` returns banner, sound, list), since the popover being open makes BenchBar the active app.
 - Clicking a notification selects that bench and opens the popover; other actions (dismiss) do nothing.
 - Not tested end to end with a real crash: that needs a throwaway bench with a loaded LaunchAgent, which the brief's hard stops rule out without asking. The transitions are covered by the state machine tests and the wording by NotifierTests.
+
+## Phase 7: custom runners
+
+- `frame_order` (optional in the brief, unspecified) is `"forward"` (default) or `"ping_pong"` (1 2 3 2): the one ordering option that saves artists frames.
+- Unknown state names are errors, not ignored: a typo like "runing" would otherwise silently fall back to running.
+- A state listed with no frames is an error ("leave it out instead"), so fallback is always explicit.
+- The 2 MB limit counts every regular file in the folder, and a zip is refused before unpacking if its listing has more than 200 files or more than 4 MB unpacked.
+- Import copies only manifest.json and the listed frames, staged and then swapped in, so a bad or partial import never leaves a half runner behind.
+- The id is the folder name made safe (lowercase, `[a-z0-9._-]`); for a zip it is the single folder inside, or the zip's name. Re-importing the same id replaces it. `bench` and `cup` are reserved.
+- Remove moves the runner to the Trash instead of deleting it.
+- A broken runner already in the folder is listed in Settings with its error; if it was selected, the default runner shows.
+- Custom runners load when the app starts and whenever Settings opens; there is no folder watcher for them (rarely changed, one less thing running).
+- The example runner (`examples/runners/blob`) ships with its generator script, and a test loads it from the repo so it cannot drift from the rules.

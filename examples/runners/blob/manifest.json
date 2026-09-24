@@ -1,0 +1,12 @@
+{
+  "name": "Blob",
+  "author": "BenchBar example",
+  "template": true,
+  "states": {
+    "running": ["run1.png", "run2.png", "run3.png", "run4.png"],
+    "sleeping": ["sleep1.png", "sleep2.png"],
+    "crashed": ["wobble1.png", "wobble2.png"],
+    "alert": ["alert.png"]
+  },
+  "frame_order": "forward"
+}

@@ -42,7 +42,7 @@ final class RunnerAnimator {
     // MARK: inputs
 
     func setRunner(_ runner: Runner) {
-        guard runner.id != self.runner.id || runner.frames.count != self.runner.frames.count else { return }
+        guard !runner.isSame(as: self.runner) else { return }
         self.runner = runner
         tinted = [:]
         layer.bounds = CGRect(origin: .zero, size: runner.size)

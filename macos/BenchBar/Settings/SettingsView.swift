@@ -1,14 +1,17 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SettingsView: View {
     @Bindable var settings: AppSettings
     let store: BenchStore
+    let library: RunnerLibrary
     let launchAtLogin: LaunchAtLogin
     let notifier: Notifier
     let chooseCLI: () -> Void
 
     @State private var previewState: BenchState = .running
     @State private var cliPathDraft = ""
+    @State private var importMessage: String?
 
     var body: some View {
         Form {
@@ -21,6 +24,7 @@ struct SettingsView: View {
         .fixedSize(horizontal: false, vertical: true)
         .onAppear {
             cliPathDraft = settings.cliPath
+            library.reload()
             launchAtLogin.refresh()
             Task { await notifier.refresh() }
         }
@@ -31,13 +35,14 @@ struct SettingsView: View {
     private var runnerSection: some View {
         Section("Menu bar runner") {
             Picker("Runner", selection: $settings.runnerID) {
-                ForEach(Runner.builtIns) { runner in
-                    Text(runner.name).tag(runner.id)
+                ForEach(library.all) { runner in
+                    Text(library.isCustom(runner.id) && !runner.author.isEmpty ? "\(runner.name) (by \(runner.author))" : runner.name)
+                        .tag(runner.id)
                 }
             }
             HStack {
                 Spacer()
-                RunnerPreview(runner: Runner.builtIn(settings.runnerID), state: previewState)
+                RunnerPreview(runner: library.runner(settings.runnerID), state: previewState)
                     .frame(height: Runner.pointHeight * 2)
                 Spacer()
             }
@@ -50,6 +55,26 @@ struct SettingsView: View {
                 Text("Unknown").tag(BenchState.unknown)
             }
             .pickerStyle(.segmented)
+            HStack {
+                Button("Import Runner…", action: importRunner)
+                Button("Show Runners Folder") { library.revealFolder() }
+                Spacer()
+                if library.isCustom(settings.runnerID) {
+                    Button("Remove") {
+                        let id = settings.runnerID
+                        settings.runnerID = Runner.defaultID
+                        library.remove(id)
+                    }
+                }
+            }
+            .controlSize(.small)
+            if let importMessage {
+                Text(importMessage).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+            }
+            ForEach(library.problems) { problem in
+                Label("\(problem.id): \(problem.message)", systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption).foregroundStyle(.orange).textSelection(.enabled)
+            }
             Toggle("Run faster when the bench is busy", isOn: $settings.speedEnabled)
             Text("Speed follows the CPU use of the bench's processes, sampled every 2 seconds. With Reduce Motion on, the runner shows a still pose.")
                 .font(.caption).foregroundStyle(.secondary)
@@ -135,6 +160,24 @@ struct SettingsView: View {
                 .font(.caption).foregroundStyle(.red)
         case .searching:
             ProgressView().controlSize(.small)
+        }
+    }
+
+    /// A runner folder or a .zip of one, from the file picker.
+    private func importRunner() {
+        let panel = NSOpenPanel()
+        panel.title = "Import a runner"
+        panel.message = "Choose a runner folder (with manifest.json) or a .zip of one. See docs/runners.md."
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = true
+        panel.allowedContentTypes = [.folder, .zip]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do throws(RunnerError) {
+            let id = try library.importRunner(from: url)
+            settings.runnerID = id
+            importMessage = "Imported \(library.runner(id).name)."
+        } catch {
+            importMessage = "Not imported: \(error.localizedDescription)"
         }
     }
 

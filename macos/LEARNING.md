@@ -502,3 +502,48 @@ Settings shows a button for this when permission is off.
 
 - `macos/BenchBar/Notifications/Notifier.swift`
 - `macos/BenchBarTests/NotifierTests.swift`
+
+## Phase 7: custom runners
+
+### Reading files a stranger made
+
+A runner comes from someone else, so `Runners/RunnerPackage.swift`
+treats it like untrusted input:
+
+- `Codable` decodes `manifest.json` into a struct. A missing field or a
+  wrong type throws a `DecodingError`, which we turn into one sentence.
+- Frame names are checked before any file is opened: no `/`, no `..`, no
+  hidden files, `.png` only. That is what stops a manifest from pointing
+  at `../../somewhere/else`.
+- **ImageIO** (`CGImageSourceCreateWithURL`) opens the PNGs.
+  `CGImageSourceGetType` tells us what the file really is, whatever its
+  name says.
+- Symlinks are refused: a link could point anywhere on disk.
+
+**Typed throws** (`throws(RunnerError)`) means the compiler knows every
+error is a `RunnerError`, so the Settings window can always show a
+message, and the tests compare errors with `==`.
+
+### Import without trusting the archive
+
+`Runners/RunnerLibrary.swift`:
+
+1. For a zip, `zipinfo -t` reads the listing first: too many files or
+   too many unpacked bytes (a "zip bomb") and we stop before unpacking.
+2. `ditto -x -k` (macOS's own archiver, the one Finder uses) unpacks it
+   into a temporary folder.
+3. The folder is validated as above.
+4. Only `manifest.json` and the frames it lists are copied into a
+   staging folder, which then replaces the installed one in one move.
+
+### Where it lives
+
+`~/Library/Application Support/BenchBar/Runners/<id>/`. Application
+Support is the standard place for an app's own data; it is not synced or
+cleaned by macOS.
+
+### Files to read
+
+- `macos/BenchBar/Runners/RunnerPackage.swift`, `RunnerLibrary.swift`
+- `docs/runners.md`, `examples/runners/blob/`
+- `macos/BenchBarTests/RunnerPackageTests.swift`

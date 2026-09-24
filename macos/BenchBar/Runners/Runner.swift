@@ -22,6 +22,12 @@ nonisolated struct Runner: Sendable, Identifiable {
 
     var size: CGSize { CGSize(width: pointWidth, height: Self.pointHeight) }
 
+    /// Same runner and same frames: a re-imported runner keeps its id but
+    /// brings new images.
+    func isSame(as other: Runner) -> Bool {
+        id == other.id && frames(for: .running).first === other.frames(for: .running).first
+    }
+
     /// The frames for a pose. A pose the runner does not have falls back to
     /// `running`, the one pose every runner must have.
     func frames(for pose: RunnerPose) -> [CGImage] {

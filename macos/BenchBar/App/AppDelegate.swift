@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWindow: SettingsWindowController!
     private let launchAtLogin = LaunchAtLogin()
     private var notifier: Notifier!
+    private let library = RunnerLibrary()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // the tests run inside this app (TEST_HOST): no menu bar item, no CLI calls
@@ -15,7 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         settings = AppSettings()
         store = BenchStore(settings: settings)
-        statusItemController = StatusItemController(store: store, settings: settings)
+        statusItemController = StatusItemController(store: store, settings: settings, library: library)
         store.onChange = { [weak self] in self?.statusItemController.update() }
 
         notifier = Notifier(settings: settings)
@@ -32,7 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover.onOpenChange = { [weak self] open in self?.store.setPopoverOpen(open) }
 
         settingsWindow = SettingsWindowController { [unowned self] in
-            SettingsView(settings: settings, store: store, launchAtLogin: launchAtLogin, notifier: notifier,
+            SettingsView(settings: settings, store: store, library: library, launchAtLogin: launchAtLogin, notifier: notifier,
                          chooseCLI: { [weak self] in self?.chooseCLI() })
         }
 
