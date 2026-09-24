@@ -7,21 +7,38 @@ agents="${MOCK_STATE:?}/agents"
 mkdir -p "$agents"
 cmd="${1:-}"; shift || true
 label_of_target() { printf '%s' "${1##*/}"; }
+# MOCK_BOOTOUT_LINGER=N: like the real launchctl, bootout returns while a
+# running job is still shutting down. The job stays listed for N more
+# "print" calls, and bootstrap fails meanwhile (exit 5, Input/output error),
+# while "load -w" prints an error but still exits 0.
+lingering() { [[ -f "$agents/$1.linger" ]]; }
 case "$cmd" in
   print)
-    f="$agents/$(label_of_target "$1")"
+    label="$(label_of_target "$1")"
+    f="$agents/$label"
+    if lingering "$label"; then
+      n="$(cat "$agents/$label.linger")"
+      if [[ "$n" -le 0 ]]; then rm -f "$agents/$label.linger" "$f"; else printf '%s' "$((n - 1))" >"$agents/$label.linger"; fi
+    fi
     [[ -f "$f" ]] || { echo "Could not find service" >&2; exit 113; }
     printf '%s = {\n' "$1"; sed 's/^/\t/' "$f"; printf '}\n' ;;
   bootstrap)
     plist="$2"; label="$(basename "$plist" .plist)"
     [[ -f "$plist" ]] || exit 5
+    lingering "$label" && { echo "Bootstrap failed: 5: Input/output error" >&2; exit 5; }
     [[ -f "$agents/$label" ]] && { echo "already bootstrapped" >&2; exit 37; }
     printf 'state = not running\nlast exit code = 0\n' >"$agents/$label" ;;
   load)
     plist="${*: -1}"; label="$(basename "$plist" .plist)"
+    lingering "$label" && { echo "Load failed: 5: Input/output error" >&2; exit 0; }
     printf 'state = not running\nlast exit code = 0\n' >"$agents/$label" ;;
   bootout|remove)
-    rm -f "$agents/$(label_of_target "$1")" ;;
+    label="$(label_of_target "$1")"
+    if [[ -n "${MOCK_BOOTOUT_LINGER:-}" && -f "$agents/$label" ]]; then
+      printf '%s' "$MOCK_BOOTOUT_LINGER" >"$agents/$label.linger"
+    else
+      rm -f "$agents/$label"
+    fi ;;
   unload)
     rm -f "$agents/$(basename "${*: -1}" .plist)" ;;
   kickstart)

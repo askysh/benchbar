@@ -201,7 +201,10 @@ act_write_plist() {
   [[ "$FL_TEMPLATE_CHANGED" == "1" && "${FL_DRY_RUN:-0}" != "1" ]] && fl_ok "wrote ${plist}"
   if fl_agent_loaded; then
     [[ "$FL_TEMPLATE_CHANGED" == "1" ]] || return 0
-    fl_agent_bootout
+    fl_agent_bootout || {
+      fl_fail "launchd did not let go of $(fl_agent_label) within ${FL_BOOTOUT_WAIT_SECS} s; run benchbar repair again"
+      return 1
+    }
   fi
   fl_agent_bootstrap "$plist" || { fl_fail "launchctl could not load ${plist}"; return 1; }
   if [[ "$was_running" == "1" ]]; then

@@ -71,6 +71,13 @@ affiliated with Frappe Technologies.
 
 - Reading a missing stop flag no longer prints "No such file or
   directory".
+- Reloading the agent of a running bench (a repair after a template or
+  setting change, `autostart on|off`) could leave it stopped and unloaded:
+  `launchctl bootout` returns while the job is still shutting down, the
+  immediate `bootstrap` failed, and the `load -w` fallback exits 0 without
+  loading anything. The CLI now waits until launchd has let go of the job
+  (up to 30 seconds), confirms the load with `launchctl print`, and fails
+  the step clearly instead of reporting success.
 
 ## 0.2.0 - 2026-09-23
 

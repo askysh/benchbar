@@ -81,16 +81,44 @@ fl_agent_field() {
     $1 ~ "^[[:space:]]*" f "$" { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2; exit }' || true
 }
 
+# Loads a plist and confirms launchd lists the job. Neither exit code can be
+# trusted on its own: "load -w" exits 0 even when it loaded nothing, so the
+# result is checked with "launchctl print". A few tries, a second apart.
 fl_agent_bootstrap() {
-  local plist="$1"
+  local plist="$1" target try
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
     fl_info "dry-run: launchctl bootstrap $(fl_launchd_domain) ${plist}"
     return 0
   fi
-  fl_log "launchctl bootstrap $(fl_launchd_domain) ${plist}"
-  if ! launchctl bootstrap "$(fl_launchd_domain)" "$plist" 2>/dev/null; then
-    launchctl load -w "$plist" 2>/dev/null || return 1
-  fi
+  target="$(fl_launchd_domain)/$(basename "$plist" .plist)"
+  for try in 1 2 3; do
+    fl_log "launchctl bootstrap $(fl_launchd_domain) ${plist} (try ${try})"
+    launchctl bootstrap "$(fl_launchd_domain)" "$plist" 2>/dev/null || launchctl load -w "$plist" 2>/dev/null || true
+    launchctl print "$target" >/dev/null 2>&1 && return 0
+    sleep 1
+  done
+  fl_log "launchd does not list ${target} after 3 tries"
+  return 1
+}
+
+# launchctl bootout returns before a running job has stopped (the runner
+# forwards SIGTERM and waits for honcho). Until launchd forgets the job, a
+# bootstrap of the same label fails, so wait for that, up to
+# FL_BOOTOUT_WAIT_SECS (launchd itself sends SIGKILL after 20 seconds).
+FL_BOOTOUT_WAIT_SECS="${FL_BOOTOUT_WAIT_SECS:-30}"
+
+fl_agent_wait_gone() {
+  local target="$1" i=0 limit=$((FL_BOOTOUT_WAIT_SECS * 4))
+  while launchctl print "$target" >/dev/null 2>&1; do
+    if [[ "$i" -ge "$limit" ]]; then
+      fl_warn "launchd still lists ${target} after ${FL_BOOTOUT_WAIT_SECS} s"
+      return 1
+    fi
+    sleep 0.25
+    i=$((i + 1))
+  done
+  [[ "$i" == "0" ]] || fl_log "${target} gone after $((i / 4)) s"
+  return 0
 }
 
 fl_agent_bootout() {
@@ -101,6 +129,9 @@ fl_agent_bootout() {
   fi
   fl_log "launchctl bootout ${target}"
   launchctl bootout "$target" 2>/dev/null || launchctl remove "${target##*/}" 2>/dev/null || true
+  # non zero when the job is still there: a bootstrap now would fail, or
+  # find the old job and look like it worked
+  fl_agent_wait_gone "$target"
 }
 
 fl_agent_kickstart() {

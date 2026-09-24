@@ -303,7 +303,7 @@ fl_cmd_uninstall_service() {
   fl_info "The bench, its sites, apps and databases are not touched."
   fl_confirm "Uninstall the background service for ${FL_BENCH_NAME}?" || { fl_warn "Cancelled."; return 1; }
   fl_cmd_down || true
-  if fl_agent_loaded; then fl_agent_bootout; fi
+  if fl_agent_loaded; then fl_agent_bootout || true; fi
   if [[ -f "$plist" ]]; then
     dest="${FL_LEGACY_DIR}/$(basename "$plist" .plist)-$(fl_backup_stamp)"
     if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then fl_info "dry-run: would move ${plist} to ${dest}/"; else mkdir -p "$dest"; mv "$plist" "$dest/"; fl_ok "moved ${plist} to ${dest}/"; fi
