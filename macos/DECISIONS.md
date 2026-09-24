@@ -100,3 +100,12 @@ One line per non obvious choice: the decision, then the reason.
 - The CLI file picker is shown automatically once, only when the CLI is not found anywhere (`askedForCLI`); after that, Settings and the popover have Choose buttons.
 - Snapshot tests render the popover and Settings to PNG, gated on `~/Library/Caches/BenchBarSnapshots` existing, because xcodebuild passes neither environment variables nor its TMPDIR to a hosted test.
 - The notifications toggle is stored now and used in Phase 6.
+
+## Phase 6: notifications
+
+- Permission is asked on first launch only if notifications are on (the default), and again only when the user turns the toggle on while macOS has never been asked; a denial shows a button to System Settings.
+- One notification identifier per bench and kind (crashed, paused, recovered): a crash loop replaces its banner instead of stacking them.
+- Crash and crash guard notifications play the default sound; recovery is silent.
+- Banners show even while BenchBar is active (`willPresent` returns banner, sound, list), since the popover being open makes BenchBar the active app.
+- Clicking a notification selects that bench and opens the popover; other actions (dismiss) do nothing.
+- Not tested end to end with a real crash: that needs a throwaway bench with a loaded LaunchAgent, which the brief's hard stops rule out without asking. The transitions are covered by the state machine tests and the wording by NotifierTests.

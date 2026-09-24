@@ -458,3 +458,47 @@ The suite is off unless that folder exists.
 - `macos/BenchBar/Settings/SettingsWindowController.swift`, `SettingsView.swift`, `LaunchAtLogin.swift`, `RunnerPreview.swift`.
 - `macos/BenchBar/App/AppDelegate.swift` for the wiring and the click handling.
 - `macos/BenchBarTests/PresentationTests.swift`.
+
+## Phase 6: notifications
+
+### UserNotifications in three calls
+
+`Notifications/Notifier.swift`:
+
+1. `requestAuthorization(options: [.alert, .sound])` shows macOS's
+   "BenchBar would like to send notifications" prompt. It only ever shows
+   once; after that macOS remembers the answer, and changing it happens in
+   System Settings.
+2. `add(UNNotificationRequest(...))` posts one. `trigger: nil` means now.
+   The same `identifier` replaces an older banner, so a crash loop does
+   not pile up ten notifications.
+3. The **delegate** (`UNUserNotificationCenterDelegate`) hears two things:
+   `willPresent` (a notification arrives while BenchBar is the active app;
+   we still want the banner) and `didReceive` (the user clicked it; we
+   open the popover on that bench).
+
+The delegate methods are `nonisolated` because macOS calls them from
+its own queue; `MainActor.run` hops back to the main thread for the UI.
+
+### Where alerts come from
+
+The state machine from Phase 3 already returns `.alert(...)` effects on
+exactly the three transitions the brief lists: running to crashed,
+into paused because of crashes, and paused to running. The store hands
+them to `Notifier.post`, which checks the toggle in Settings.
+
+The CLI's runner also has an osascript notification for people without
+the app. It stays quiet while a process named BenchBar runs, so you never
+get two.
+
+### If you said no to the prompt
+
+1. Open System Settings, Notifications.
+2. Find BenchBar in the list and turn on Allow notifications.
+
+Settings shows a button for this when permission is off.
+
+### Files to read
+
+- `macos/BenchBar/Notifications/Notifier.swift`
+- `macos/BenchBarTests/NotifierTests.swift`

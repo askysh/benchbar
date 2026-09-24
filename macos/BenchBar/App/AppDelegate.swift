@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var popover: PopoverController!
     private var settingsWindow: SettingsWindowController!
     private let launchAtLogin = LaunchAtLogin()
+    private var notifier: Notifier!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // the tests run inside this app (TEST_HOST): no menu bar item, no CLI calls
@@ -17,6 +18,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItemController = StatusItemController(store: store, settings: settings)
         store.onChange = { [weak self] in self?.statusItemController.update() }
 
+        notifier = Notifier(settings: settings)
+        store.onAlert = { [weak self] bench, alert in self?.notifier.post(alert, bench: bench) }
+        notifier.onOpen = { [weak self] path in self?.showPopover(for: path) }
+        notifier.start()
+
         let commands = AppCommands(
             openSettings: { [weak self] in self?.openSettings() },
             quit: { NSApp.terminate(nil) },
@@ -26,7 +32,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover.onOpenChange = { [weak self] open in self?.store.setPopoverOpen(open) }
 
         settingsWindow = SettingsWindowController { [unowned self] in
-            SettingsView(settings: settings, store: store, launchAtLogin: launchAtLogin, chooseCLI: { [weak self] in self?.chooseCLI() })
+            SettingsView(settings: settings, store: store, launchAtLogin: launchAtLogin, notifier: notifier,
+                         chooseCLI: { [weak self] in self?.chooseCLI() })
         }
 
         NSApp.mainMenu = makeMainMenu()
@@ -70,6 +77,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     // MARK: commands
+
+    /// A notification was clicked: show that bench in the popover.
+    private func showPopover(for path: String) {
+        if store.benches.contains(where: { $0.path == path }) {
+            store.selectedPath = path
+        }
+        guard let button = statusItemController.statusItem.button else { return }
+        if !popover.isShown { popover.show(from: button) }
+    }
 
     @objc private func openSettingsAction() { openSettings() }
 

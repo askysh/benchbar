@@ -4,6 +4,7 @@ struct SettingsView: View {
     @Bindable var settings: AppSettings
     let store: BenchStore
     let launchAtLogin: LaunchAtLogin
+    let notifier: Notifier
     let chooseCLI: () -> Void
 
     @State private var previewState: BenchState = .running
@@ -21,6 +22,7 @@ struct SettingsView: View {
         .onAppear {
             cliPathDraft = settings.cliPath
             launchAtLogin.refresh()
+            Task { await notifier.refresh() }
         }
     }
 
@@ -81,6 +83,20 @@ struct SettingsView: View {
                 Text(error).font(.caption).foregroundStyle(.red)
             }
             Toggle("Notify me when a bench crashes or recovers", isOn: $settings.notificationsEnabled)
+                .onChange(of: settings.notificationsEnabled) { _, on in
+                    if on && notifier.permission == .notAsked {
+                        Task { await notifier.requestPermission() }
+                    }
+                }
+            if settings.notificationsEnabled && notifier.permission == .denied {
+                HStack {
+                    Text("Notifications for BenchBar are off in System Settings.")
+                        .font(.caption).foregroundStyle(.orange)
+                    Spacer()
+                    Button("Open Notifications…") { notifier.openSystemSettings() }
+                        .controlSize(.small)
+                }
+            }
         }
     }
 
