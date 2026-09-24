@@ -547,3 +547,36 @@ cleaned by macOS.
 - `macos/BenchBar/Runners/RunnerPackage.swift`, `RunnerLibrary.swift`
 - `docs/runners.md`, `examples/runners/blob/`
 - `macos/BenchBarTests/RunnerPackageTests.swift`
+
+## Phase 8: shipping an app outside the App Store
+
+Nothing here runs yet (no Apple Developer account); `docs/releasing.md`
+is the full guide. The ideas, in plain words:
+
+- **Code signing** proves who made the app and that nobody changed it.
+  Today we sign "ad hoc" (`codesign --sign -`): valid, but it names no
+  one, so only your own Mac trusts it. A **Developer ID** certificate
+  from Apple names you.
+- **Hardened Runtime** is a set of protections (no injected code, no
+  unsigned libraries). Notarization requires it; we have had it on since
+  Phase 1.
+- **Notarization**: you upload the signed app to Apple, a machine scans
+  it for malware, and Apple issues a ticket. `notarytool` does the upload.
+- **Stapling** attaches that ticket to the app or DMG, so Gatekeeper
+  (the "can this app open?" check) can confirm it offline.
+- **Sparkle** is the standard update framework for apps outside the App
+  Store. The app reads an RSS style feed (`appcast.xml`) and checks every
+  download against a public key built into it; only the holder of the
+  matching private key can publish an update.
+- **A Homebrew cask** is a small Ruby file telling Homebrew where the DMG
+  is and its checksum, so `brew install --cask` can install the app.
+- **Compilation conditions**: `#if SPARKLE` in Swift keeps code out of
+  the build entirely unless the flag is set. `macos/sparkle.yml` sets it
+  only when `BENCHBAR_SPARKLE=YES`.
+- **A guarded workflow**: GitHub Actions cannot test for a secret in a
+  job's `if:`, so a tiny first job checks the secrets and outputs
+  `ready`, and the release job runs only when `ready` is true.
+
+Files to read: `docs/releasing.md`, `scripts/macos-release.sh`,
+`.github/workflows/macos-release.yml`, `packaging/homebrew/benchbar.rb.tmpl`,
+`macos/BenchBar/Updates/Updater.swift`.

@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let launchAtLogin = LaunchAtLogin()
     private var notifier: Notifier!
     private let library = RunnerLibrary()
+    private var updater: Updater?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // the tests run inside this app (TEST_HOST): no menu bar item, no CLI calls
@@ -37,6 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                          chooseCLI: { [weak self] in self?.chooseCLI() })
         }
 
+        if Updater.isAvailable { updater = Updater() }
         NSApp.mainMenu = makeMainMenu()
         setUpClicks()
 
@@ -72,6 +74,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func makeStatusMenu() -> NSMenu {
         let menu = NSMenu()
         menu.addItem(withTitle: "Settings…", action: #selector(openSettingsAction), keyEquivalent: ",").target = self
+        if let item = updater?.menuItem() { menu.addItem(item) }
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit BenchBar", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         return menu
@@ -130,6 +133,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appMenu.addItem(withTitle: "About BenchBar", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Settings…", action: #selector(openSettingsAction), keyEquivalent: ",").target = self
+        if let item = updater?.menuItem() { appMenu.addItem(item) }
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Quit BenchBar", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         main.addItem(submenu(appMenu, title: "BenchBar"))

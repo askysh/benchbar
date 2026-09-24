@@ -8,3 +8,4 @@ macos/*.xcodeproj/
 macos/build/
 macos/DerivedData/
 macos/BenchBar/Resources/Info.plist
+dist/

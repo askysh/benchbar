@@ -122,3 +122,15 @@ One line per non obvious choice: the decision, then the reason.
 - A broken runner already in the folder is listed in Settings with its error; if it was selected, the default runner shows.
 - Custom runners load when the app starts and whenever Settings opens; there is no folder watcher for them (rarely changed, one less thing running).
 - The example runner (`examples/runners/blob`) ships with its generator script, and a test loads it from the repo so it cannot drift from the rules.
+
+## Phase 8: release plumbing
+
+- Developer ID signing happens in xcodebuild (`CODE_SIGN_IDENTITY`, `DEVELOPMENT_TEAM`, `OTHER_CODE_SIGN_FLAGS=--timestamp`), not by re-signing afterwards with `--deep`: xcodebuild signs Sparkle's nested helpers correctly, `--deep` is not recommended for distribution. The ad hoc path is unchanged.
+- One script, `scripts/macos-release.sh`, does the whole release locally or in CI; `--check` validates tools, settings, the keychain identity and that the version matches `MARKETING_VERSION`.
+- Both the app zip (for Sparkle) and the DMG (for people and Homebrew) are notarized and stapled; the zip is made again after stapling so updates carry the ticket.
+- The appcast is generated per release and served from `releases/latest/download/appcast.xml`, so there is no separate hosting.
+- The workflow guard is a separate job that outputs `ready`; missing secrets give a notice and a skipped job, never a red run. The Homebrew tap update is a pull request, and optional (`HOMEBREW_TAP_TOKEN`).
+- The runner label is `macos-26` and Xcode is `latest-stable`: the project needs Xcode 26 or newer.
+- Sparkle's `Check for Updates…` item exists only in Sparkle builds; the default `Updater` is an empty stub, so no `#if` spreads through the app.
+- The cask is Apple Silicon and macOS 14+ only, with caveats pointing at the CLI install and the trademark note.
+- Verified locally: the Sparkle build compiles and embeds Sparkle.framework with SUFeedURL; `macos-release.sh --check` fails cleanly listing missing settings; shellcheck passes; the workflow parses. Not run: signing, notarization, the workflow itself.
