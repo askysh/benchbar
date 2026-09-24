@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# uname mock: the suite always sees an Apple Silicon Mac, on any host
+case "${1:-}" in
+  -m) printf 'arm64\n' ;;
+  -s|"") printf 'Darwin\n' ;;
+  -r) printf '24.1.0\n' ;;
+  *) printf 'Darwin mac 24.1.0 Darwin Kernel Version 24.1.0 arm64\n' ;;
+esac

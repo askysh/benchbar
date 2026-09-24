@@ -59,6 +59,14 @@ SCRIPT_DIR="$(fl_resolve_self)"
 . "${SCRIPT_DIR}/lib/frappe-local/repair.sh"
 # shellcheck source=lib/frappe-local/service.sh
 . "${SCRIPT_DIR}/lib/frappe-local/service.sh"
+# shellcheck source=lib/frappe-local/report.sh
+. "${SCRIPT_DIR}/lib/frappe-local/report.sh"
+# shellcheck source=lib/frappe-local/sudo.sh
+. "${SCRIPT_DIR}/lib/frappe-local/sudo.sh"
+# shellcheck source=lib/frappe-local/mariadb.sh
+. "${SCRIPT_DIR}/lib/frappe-local/mariadb.sh"
+# shellcheck source=lib/frappe-local/wkhtmltopdf.sh
+. "${SCRIPT_DIR}/lib/frappe-local/wkhtmltopdf.sh"
 
 OPT_BENCH_DIR=""
 OPT_SITE=""
@@ -79,8 +87,11 @@ Usage: benchbar <command> [options]
 Setup
   install             Run phase 00 (system deps), 01 (bench and site) and the
                       background service. Safe to re-run: only changes what changed.
+  adopt PATH          Register an existing bench: Procfile.lean, runner, agent, helpers.
+                      Shows the plan and asks; never runs migrate, build or update.
   service             Install or refresh only the background service (phase 02).
   doctor              Read-only health report. Exit 1 when something FAILs.
+  report              Redacted diagnostics zip on the Desktop for bug reports (--print: to the terminal).
   repair              Apply only the fixes doctor flagged, in dependency order.
   uninstall-service   Remove the agent, runner, Procfile.lean and shell helpers.
 
@@ -95,6 +106,7 @@ Daily
   watch               Run bench watch for asset rebuilds.
   autostart on|off    Whether the bench may come back after login.
   path                Print the bench directory (used by benchcd).
+  mariadb-password    Print the MariaDB root password kept in the Keychain (asks first).
 
 Options
   --bench-dir DIR     Bench to act on (default: remembered, or auto-detected)
@@ -147,6 +159,7 @@ fl_mode_name() {
 
 fl_cleanup() {
   fl_spinner_stop
+  fl_sudo_end
   fl_lock_release
 }
 trap fl_cleanup EXIT
@@ -172,16 +185,29 @@ fl_run_phase_script() {
   return "$code"
 }
 
+# One sudo prompt for the whole install: ask up front when a step ahead will
+# need it (the wkhtmltopdf package, the /etc/hosts line), keep it alive, and
+# let the phase scripts inherit the session.
+fl_install_sudo_upfront() {
+  local reasons=()
+  [[ "$FL_DRY_RUN" == "1" ]] && return 0
+  [[ "$(fl_wkhtmltopdf_state)" == "patched" ]] || reasons+=("install the patched wkhtmltopdf package (installer -pkg)")
+  fl_hosts_has_site || reasons+=("add '127.0.0.1 ${FL_SITE}' to ${FL_HOSTS_FILE}")
+  [[ "${#reasons[@]}" -gt 0 ]] || return 0
+  fl_sudo_begin "${reasons[@]}" || true
+}
+
 cmd_install() {
   local code=0 args00=() args01=() bundle
   fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
   fl_header "benchbar install" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "$FL_SITE"
   fl_steps_define "System dependencies (00-mac-system-deps.sh)" "Bench and site (01-install-bench-and-site.sh)" "Background service"
   fl_steps_print_plan
+  fl_install_sudo_upfront
 
   args00=(--profile "$FL_PROFILE"); args01=(--profile "$FL_PROFILE")
   [[ "$FL_DRY_RUN" == "1" ]] && { args00+=(--dry-run); args01+=(--dry-run); }
-  [[ "$FL_ASSUME_YES" == "1" ]] && args01+=(--yes)
+  [[ "$FL_ASSUME_YES" == "1" ]] && { args00+=(--yes); args01+=(--yes); }
   bundle="${OPT_BUNDLE:-$(fl_state_get APP_BUNDLE 2>/dev/null || true)}"
 
   fl_step_begin 0
@@ -245,6 +271,35 @@ cmd_service() {
   return 1
 }
 
+# benchbar adopt PATH: register an existing bench without touching its data.
+# Same engine as "service" (only the service group of checks and actions), so
+# it never runs migrate, build, update or an env rebuild.
+cmd_adopt() {
+  local path="${1:-}"
+  [[ -n "$path" ]] || fl_die "Usage: benchbar adopt <bench path>" "Example: benchbar adopt ~/frappe-bench"
+  path="$(fl_abs_path "$path")"
+  fl_is_bench_dir "$path" || fl_die "${path} is not a bench (no sites/common_site_config.json and no apps/frappe)." "Point adopt at the folder that holds apps/, sites/ and env/."
+  fl_context_init "$path" "$OPT_SITE" "$OPT_PROFILE"
+  fl_header "benchbar adopt" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "$FL_SITE"
+  fl_info "adopt only adds the background service files and remembers the bench."
+  fl_info "sites/, apps/, env/ and the databases are not touched; migrate, build and update never run."
+  if [[ -z "$FL_HONCHO" ]]; then
+    fl_warn "honcho was not found on PATH, in the pipx venv of frappe-bench or in ${FL_BENCH_DIR}/env; adopt does not install into env"
+    fl_fix "pipx install honcho   (or: ${SCRIPT_DIR}/benchbar repair, which installs it into the bench env), then benchbar adopt again"
+  fi
+  # the service group would install honcho into env when it is missing; adopt must not
+  if FL_ENGINE_SKIP_ACTIONS="honcho_install" fl_repair_engine "Adopt" service; then
+    # remembered only now: a cancelled plan must not make this the default bench
+    fl_state_set BENCH_DIR "$FL_BENCH_DIR"
+    fl_state_set SITE_NAME "$FL_SITE"
+    fl_state_set PROFILE "$FL_PROFILE"
+    [[ "$FL_DRY_RUN" == "1" ]] || fl_ok "remembered ${FL_BENCH_DIR} (site ${FL_SITE}) as the default bench"
+    fl_next_steps_box
+    return 0
+  fi
+  return 1
+}
+
 cmd_doctor() {
   local fails
   fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
@@ -277,16 +332,18 @@ cmd_status() {
 }
 
 case "$COMMAND" in
-  install|service|repair|up|down|restart|autostart|uninstall-service)
+  install|adopt|service|repair|up|down|restart|autostart|uninstall-service)
     fl_log_init "${FL_STATE_DIR}/logs"
-    fl_lock_acquire
+    fl_lock_acquire "${FL_STATE_DIR}/lock"
     ;;
   *) ;;
 esac
 
 case "$COMMAND" in
   install) cmd_install ;;
+  adopt) cmd_adopt "${ARGS[0]:-}" ;;
   service) cmd_service ;;
+  mariadb-password) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_mariadb_password ;;
   doctor) cmd_doctor ;;
   repair) cmd_repair ;;
   status) cmd_status ;;
@@ -300,6 +357,7 @@ case "$COMMAND" in
   autostart) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_autostart "${ARGS[0]:-}" ;;
   uninstall-service) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_uninstall_service ;;
   path) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; printf '%s\n' "$FL_BENCH_DIR" ;;
+  report) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_report ${ARGS[@]+"${ARGS[@]}"} ;;
   help) usage ;;
   *) fl_die "Unknown command: ${COMMAND}" "Run: benchbar --help" ;;
 esac

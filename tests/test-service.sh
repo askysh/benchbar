@@ -101,7 +101,7 @@ grep -q '<key>RunAtLoad</key><true/>' "$plist" || fail "autostart on must restor
 printf '\n# edited by hand\n' >>"$BENCH/benchbar-run.sh"
 run_fm doctor --bench-dir "$BENCH"
 assert_contains "$OUT" "[OK] Runner script"   # appended text does not change the header, so still current
-sed -i '' 's/benchbar-template: bench-run.sh v2 [0-9a-f]*/benchbar-template: bench-run.sh v0 000000000000/' "$BENCH/benchbar-run.sh"
+sed_inplace 's/benchbar-template: bench-run.sh v2 [0-9a-f]*/benchbar-template: bench-run.sh v0 000000000000/' "$BENCH/benchbar-run.sh"
 run_fm doctor --bench-dir "$BENCH"
 assert_contains "$OUT" "[WARN] Runner script: runner is outdated"
 run_fm repair --yes --bench-dir "$BENCH"
@@ -112,7 +112,7 @@ grep -q 'benchbar-template: bench-run.sh v2' "$BENCH/benchbar-run.sh" || fail "r
 # (real launchctl: bootout returns while the job still shuts down, and a
 # bootstrap meanwhile fails; this left a bench stopped and unloaded)
 run_fm up --bench-dir "$BENCH" >/dev/null
-sed -i '' 's/benchbar-template: launchagent.plist v\([0-9]*\) [0-9a-f]*/benchbar-template: launchagent.plist v\1 000000000000/' "$plist"
+sed_inplace 's/benchbar-template: launchagent.plist v\([0-9]*\) [0-9a-f]*/benchbar-template: launchagent.plist v\1 000000000000/' "$plist"
 reset_calls
 MOCK_BOOTOUT_LINGER=3 run_fm repair --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
@@ -122,7 +122,7 @@ assert_calls_contain '^launchctl kickstart gui/[0-9]+/com.benchbar.frappe-bench$
 assert_not_contains "$OUT" "written but not loaded"
 
 # a job that never goes away fails the step instead of claiming success
-sed -i '' 's/benchbar-template: launchagent.plist v\([0-9]*\) [0-9a-f]*/benchbar-template: launchagent.plist v\1 000000000000/' "$plist"
+sed_inplace 's/benchbar-template: launchagent.plist v\([0-9]*\) [0-9a-f]*/benchbar-template: launchagent.plist v\1 000000000000/' "$plist"
 FL_BOOTOUT_WAIT_SECS=1 MOCK_BOOTOUT_LINGER=1000 run_fm repair --yes --bench-dir "$BENCH"
 assert_eq "1" "$CODE" "$OUT"
 assert_contains "$OUT" "launchd did not let go of com.benchbar.frappe-bench"

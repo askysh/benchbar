@@ -22,6 +22,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${SCRIPT_DIR}/lib/frappe-local/state.sh"
 # shellcheck source=lib/frappe-local/bench.sh
 . "${SCRIPT_DIR}/lib/frappe-local/bench.sh"
+# shellcheck source=lib/frappe-local/templates.sh
+. "${SCRIPT_DIR}/lib/frappe-local/templates.sh"
+# shellcheck source=lib/frappe-local/mariadb.sh
+. "${SCRIPT_DIR}/lib/frappe-local/mariadb.sh"
 trap fl_on_error ERR
 
 ASSUME_YES=0
@@ -64,7 +68,7 @@ EOF
 
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
-    -y|--yes) ASSUME_YES=1; shift ;;
+    -y|--yes) ASSUME_YES=1; FL_ASSUME_YES=1; shift ;;
     --profile) PROFILE="${2:-}"; shift 2 ;;
     --list-profiles) LIST_PROFILES=1; shift ;;
     --check-updates) CHECK_UPDATES=1; shift ;;
@@ -194,7 +198,11 @@ else
   fl_require_cmd yarn "Run ./00-mac-system-deps.sh --profile ${FL_PROFILE}"
   fl_require_cmd mariadb "Run ./00-mac-system-deps.sh --profile ${FL_PROFILE}"
   fl_require_cmd redis-server "Run ./00-mac-system-deps.sh --profile ${FL_PROFILE}"
-  fl_require_cmd wkhtmltopdf "Install patched-Qt build from https://github.com/wkhtmltopdf/packaging/releases"
+  if command -v wkhtmltopdf >/dev/null 2>&1; then
+    fl_ok "wkhtmltopdf found"
+  else
+    fl_warn "wkhtmltopdf is not installed: the bench works, PDF printing does not. Run ./00-mac-system-deps.sh to add it later."
+  fi
   if fl_port_listening 3306; then
     fl_mariadb_safe_mode_note
   fi
@@ -275,7 +283,10 @@ if [[ "$SITE_EXISTS" == "1" ]]; then
   MARIADB_ROOT_PASSWORD="${MARIADB_ROOT_PASSWORD:-}"
   ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
 else
-  prompt_secret MARIADB_ROOT_PASSWORD "MariaDB root password"
+  # environment, then the Keychain (written by phase 00), then a prompt
+  fl_mariadb_root_password_resolve || fl_die "MariaDB root password needed to create the site." \
+    "Re-run with: MARIADB_ROOT_PASSWORD='...' $0 --yes, or run ./00-mac-system-deps.sh once to store it in the Keychain."
+  MARIADB_ROOT_PASSWORD="$FL_MARIADB_ROOT_PW"
   prompt_secret ADMIN_PASSWORD "Site admin password (Administrator login)"
 fi
 
@@ -300,10 +311,10 @@ fi
 
 if [[ "$FL_DRY_RUN" != "1" && "$SITE_EXISTS" != "1" ]]; then
   fl_section "VERIFY DB CREDENTIALS"
-  mariadb -u root -p"${MARIADB_ROOT_PASSWORD}" -e "SELECT 1" >/dev/null 2>&1 \
-    || fl_die "MariaDB root password is wrong." "Double-check the password set during mariadb-secure-installation."
-  DB_CHARSET="$(mariadb -u root -p"${MARIADB_ROOT_PASSWORD}" -sNe "SHOW VARIABLES LIKE 'character_set_server'" 2>/dev/null | awk '{print $2}')"
-  [[ "$DB_CHARSET" == "utf8mb4" ]] || fl_die "MariaDB character_set_server is '${DB_CHARSET}', expected 'utf8mb4'." "Run ./00-mac-system-deps.sh and complete pending MariaDB steps."
+  fl_mariadb_root_verify "$MARIADB_ROOT_PASSWORD" \
+    || fl_die "MariaDB root password is wrong." "benchbar mariadb-password prints the stored one; MARIADB_ROOT_PASSWORD='...' overrides it."
+  DB_CHARSET="$(fl_mariadb_server_charset "$MARIADB_ROOT_PASSWORD")"
+  [[ "$DB_CHARSET" == "utf8mb4" ]] || fl_die "MariaDB character_set_server is '${DB_CHARSET}', expected 'utf8mb4'." "Run ./00-mac-system-deps.sh again (it writes the utf8mb4 drop-in and restarts MariaDB)."
   fl_ok "MariaDB root password verified and charset is utf8mb4"
 fi
 

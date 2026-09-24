@@ -11,13 +11,13 @@
 # Groups (used by "benchbar service" versus "benchbar repair"):
 #   system, bench, service, site
 
-FL_CHECK_ORDER="brew python_leaves mariadb_bind redis_6379 cleanmymac env_python bench_version socketio assets logs honcho procfile runner agent stop_flag helpers cli_link legacy_agents hosts port_clash ping"
+FL_CHECK_ORDER="brew python_leaves mariadb_bind mariadb_utf8 wkhtmltopdf redis_6379 cleanmymac env_python bench_version socketio assets logs honcho procfile runner agent stop_flag helpers cli_link legacy_agents hosts port_clash ping"
 FL_LOG_WARN_MB="${FL_LOG_WARN_MB:-50}"
 FL_HOSTS_FILE="${FL_HOSTS_FILE:-/etc/hosts}"
 
 fl_check_group() {
   case "$1" in
-    brew|python_leaves|mariadb_bind|redis_6379|cleanmymac) printf 'system' ;;
+    brew|python_leaves|mariadb_bind|mariadb_utf8|wkhtmltopdf|redis_6379|cleanmymac) printf 'system' ;;
     env_python|bench_version|socketio|assets|logs) printf 'bench' ;;
     ping) printf 'site' ;;
     *) printf 'service' ;;
@@ -41,6 +41,8 @@ fl_check_label() {
     cli_link) printf 'benchbar on PATH' ;;
     legacy_agents) printf 'Legacy agents' ;;
     mariadb_bind) printf 'MariaDB bind address' ;;
+    mariadb_utf8) printf 'MariaDB utf8mb4' ;;
+    wkhtmltopdf) printf 'wkhtmltopdf' ;;
     redis_6379) printf 'Homebrew redis' ;;
     ping) printf 'Site ping' ;;
     hosts) printf '/etc/hosts entry' ;;
@@ -307,6 +309,42 @@ chk_mariadb_bind() {
   fi
 }
 
+chk_mariadb_utf8() {
+  local dropin status live mycnf
+  dropin="$(fl_mariadb_utf8_dropin_path)"
+  mycnf="${FL_BREW_PREFIX:-/opt/homebrew}/etc/my.cnf"
+  status="$(fl_template_status "$dropin" "$(fl_template_render mariadb-frappe.cnf)")"
+  case "$status" in
+    current) chk__set ok "utf8mb4 drop-in ${dropin} is current" ;;
+    foreign)
+      if grep -q 'character-set-server[[:space:]]*=[[:space:]]*utf8mb4' "$dropin" 2>/dev/null; then
+        chk__set ok "${dropin} sets utf8mb4 (not written by benchbar, left alone)"
+      else
+        chk__set warn "${dropin} exists but does not set utf8mb4" "${SCRIPT_DIR}/benchbar repair" mariadb_utf8
+        return 0
+      fi ;;
+    *) chk__set warn "utf8mb4 drop-in is ${status} (${dropin}); Frappe needs utf8mb4 server wide" "${SCRIPT_DIR}/benchbar repair" mariadb_utf8; return 0 ;;
+  esac
+  # the drop-in only counts when my.cnf pulls the folder in
+  if [[ -f "$mycnf" ]] && ! fl_mariadb_includedir_present; then
+    chk__set warn "${mycnf} has no '!includedir' for my.cnf.d, so the utf8mb4 drop-in is ignored" "${SCRIPT_DIR}/benchbar repair" mariadb_utf8
+    return 0
+  fi
+  # and the running server must actually use it
+  live="$(fl_mariadb_live_charset)"
+  if [[ -n "$live" && "$live" != "utf8mb4" ]]; then
+    chk__set warn "MariaDB runs with character_set_server=${live}; a restart is needed to pick up utf8mb4" "${SCRIPT_DIR}/benchbar repair (restarts MariaDB)" mariadb_utf8
+  fi
+}
+
+chk_wkhtmltopdf() {
+  case "$(fl_wkhtmltopdf_state)" in
+    patched) chk__set ok "patched Qt build at $(command -v wkhtmltopdf)" ;;
+    unpatched) chk__set warn "$(command -v wkhtmltopdf) is not the patched Qt build; PDFs will crash" "${SCRIPT_DIR}/benchbar repair (installs the official package, sudo)" wkhtmltopdf_install ;;
+    *) chk__set warn "not installed; PDF printing will not work" "${SCRIPT_DIR}/benchbar repair (installs the official package, sudo)" wkhtmltopdf_install ;;
+  esac
+}
+
 chk_redis_6379() {
   local who
   who="$(fl_port_listener_summary 6379)"
@@ -362,7 +400,8 @@ chk_hosts() {
 fl_file_mb() {
   local f="$1" bytes
   [[ -f "$f" ]] || { printf '0'; return 0; }
-  bytes="$(stat -f %z "$f" 2>/dev/null || wc -c <"$f")"
+  # wc, not stat: BSD and GNU stat disagree on -f, and the suite runs on both
+  bytes="$(wc -c <"$f" | tr -d ' ')"
   printf '%d' $((bytes / 1024 / 1024))
 }
 

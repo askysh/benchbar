@@ -19,6 +19,7 @@ SH
 chmod +x "$TMP_DIR/bin/git"
 export PATH="$TMP_DIR/bin:$PATH"
 export GIT_CALL_LOG="$TMP_DIR/git.log"
+export FL_STATE_DIR="$TMP_DIR/state"
 : >"$GIT_CALL_LOG"
 
 . "$ROOT/lib/frappe-local/ui.sh"

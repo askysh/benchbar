@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# scutil mock: the Bonjour and computer names of the test Mac (benchbar report).
+# The curly apostrophe is what macOS puts in a default computer name.
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "$(dirname "$0")/_mocklib.sh"
+mock_log "$@"
+# shellcheck disable=SC1112
+case "${1:-} ${2:-}" in
+  "--get LocalHostName") printf 'testmac\n' ;;
+  "--get ComputerName") printf 'Tester’s Mac [mock]\n' ;;
+  *) echo "scutil mock: unsupported: $*" >&2; exit 1 ;;
+esac

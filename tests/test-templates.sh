@@ -32,11 +32,11 @@ assert_eq "current" "$(fl_template_status "$old_copy" "$r1")"
 assert_eq "outdated" "$(fl_template_status "$old_copy" "$r3")"
 
 # unchanged apply writes nothing
-before="$(stat -f %m "$target")"
+before="$(mtime_of "$target")"
 sleep 1
 fl_template_apply "$target" "$r1" 644
 assert_eq "0" "$FL_TEMPLATE_CHANGED"
-assert_eq "$before" "$(stat -f %m "$target")" "(no rewrite when current)"
+assert_eq "$before" "$(mtime_of "$target")" "(no rewrite when current)"
 
 # outdated apply backs up the old copy first
 fl_template_apply "$target" "$r3" 644

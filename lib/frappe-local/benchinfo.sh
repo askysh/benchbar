@@ -63,7 +63,7 @@ fl_bench_detect() {
       fi
     fi
   fi
-  FL_BENCH_NAME="$(basename "$FL_BENCH_DIR" | tr -c 'A-Za-z0-9._-\n' '-')"
+  FL_BENCH_NAME="$(basename "$FL_BENCH_DIR" | tr -c 'A-Za-z0-9._\n-' '-')"
 }
 
 fl_site_config_value() {

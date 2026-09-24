@@ -1,0 +1,2 @@
+version	file	url	sha256	arch	note
+0.12.6-2	wkhtmltox-0.12.6-2.macos-cocoa.pkg	https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6-2/wkhtmltox-0.12.6-2.macos-cocoa.pkg	81a66b77b508fede8dbcaa67127203748376568b3673a17f6611b6d51e9894f8	x86_64	official patched Qt build; Intel only, needs Rosetta 2 on Apple Silicon

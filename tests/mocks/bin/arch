@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# arch mock: "arch -x86_64 cmd" works only when Rosetta is "installed"
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "$(dirname "$0")/_mocklib.sh"
+mock_log "$@"
+if [[ "${1:-}" == "-x86_64" ]]; then
+  [[ -f "${MOCK_STATE:?}/rosetta" ]] || { echo "arch: posix_spawnp: $2: Bad CPU type in executable" >&2; exit 1; }
+  exit 0
+fi
+printf 'arm64\n'

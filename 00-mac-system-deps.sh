@@ -22,7 +22,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${SCRIPT_DIR}/lib/frappe-local/templates.sh"
 # shellcheck source=lib/frappe-local/shellrc.sh
 . "${SCRIPT_DIR}/lib/frappe-local/shellrc.sh"
+# shellcheck source=lib/frappe-local/sudo.sh
+. "${SCRIPT_DIR}/lib/frappe-local/sudo.sh"
+# shellcheck source=lib/frappe-local/mariadb.sh
+. "${SCRIPT_DIR}/lib/frappe-local/mariadb.sh"
+# shellcheck source=lib/frappe-local/wkhtmltopdf.sh
+. "${SCRIPT_DIR}/lib/frappe-local/wkhtmltopdf.sh"
 trap fl_on_error ERR
+trap fl_sudo_end EXIT
 
 PROFILE="${PROFILE:-}"
 LIST_PROFILES=0
@@ -47,7 +54,12 @@ Exit codes:
   0  everything is installed and configured
   2  manual steps remain (they are printed at the end)
 
+Environment:
+  MARIADB_ROOT_PASSWORD   Password to set (fresh MariaDB) or to verify (existing one).
+                          Otherwise a strong one is generated. It is kept in the Keychain.
+
 Options:
+  -y, --yes            Do not ask; confirmations are accepted, sudo runs without a question
   --profile VALUE      Use release profile (default: v15-lts)
   --list-profiles      Print known profiles and exit
   --check-updates      Check remote Frappe/ERPNext version branches
@@ -59,6 +71,7 @@ EOF
 
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
+    -y|--yes) FL_ASSUME_YES=1; shift ;;
     --profile) PROFILE="${2:-}"; shift 2 ;;
     --list-profiles) LIST_PROFILES=1; shift ;;
     --check-updates) CHECK_UPDATES=1; shift ;;
@@ -68,6 +81,7 @@ while [[ "$#" -gt 0 ]]; do
     *) fl_die "Unknown argument: $1" "Use --help for usage." ;;
   esac
 done
+export FL_ASSUME_YES FL_DRY_RUN
 
 if [[ "$LIST_PROFILES" == "1" ]]; then
   fl_list_profiles
@@ -207,39 +221,24 @@ if [[ -f "${MARIADB_DATA_DIR}/mariadb_upgrade_info" ]]; then
   fi
 fi
 
-if "$MARIADB_BIN" -u root --connect-timeout=2 -e "SELECT 1" >/dev/null 2>&1; then
-  fl_warn "MariaDB root@localhost has no password or uses socket auth."
-  add_pending "MARIADB_PASSWORD"
-else
-  fl_ok "MariaDB root@localhost requires a password or is OS-restricted"
-fi
+root_setup_code=0
+if fl_mariadb_root_setup; then root_setup_code=0; else root_setup_code=$?; fi
+case "$root_setup_code" in
+  0) ;;
+  2) add_pending "MARIADB_PASSWORD" ;;
+  *) fl_die "Could not set up the MariaDB root password." ;;
+esac
 
-UTF8_CNF_PATH="${FL_BREW_PREFIX}/etc/my.cnf.d/frappe.cnf"
-MY_CNF_PATH="${FL_BREW_PREFIX}/etc/my.cnf"
-if [[ -f "$UTF8_CNF_PATH" ]] && grep -q 'character-set-server.*utf8mb4' "$UTF8_CNF_PATH"; then
+UTF8_CNF_PATH="$(fl_mariadb_utf8_dropin_path)"
+if [[ "$(fl_template_status "$UTF8_CNF_PATH" "$(fl_template_render mariadb-frappe.cnf)")" == "current" ]]; then
   fl_ok "frappe.cnf utf8mb4 config present at ${UTF8_CNF_PATH}"
 else
-  fl_warn "utf8mb4 config not found at ${UTF8_CNF_PATH}; writing it"
-  if [[ -f "$MY_CNF_PATH" ]] && ! grep -q "^!includedir ${FL_BREW_PREFIX}/etc/my.cnf.d" "$MY_CNF_PATH"; then
-    if [[ "$FL_DRY_RUN" == "1" ]]; then
-      fl_info "dry-run: would append '!includedir ${FL_BREW_PREFIX}/etc/my.cnf.d' to ${MY_CNF_PATH}"
-    else
-      fl_backup_file "$MY_CNF_PATH"
-      printf '\n!includedir %s/etc/my.cnf.d\n' "$FL_BREW_PREFIX" >>"$MY_CNF_PATH"
-      fl_ok "added !includedir to ${MY_CNF_PATH}"
-    fi
-  elif [[ ! -f "$MY_CNF_PATH" && "$FL_DRY_RUN" != "1" ]]; then
-    mkdir -p "$(dirname "$MY_CNF_PATH")"
-    printf '[client-server]\n!includedir %s/etc/my.cnf.d\n' "$FL_BREW_PREFIX" >"$MY_CNF_PATH"
-    fl_ok "created ${MY_CNF_PATH}"
-  fi
-  fl_template_apply "$UTF8_CNF_PATH" "$(fl_template_render mariadb-frappe.cnf)" 644
+  fl_warn "utf8mb4 config missing or outdated at ${UTF8_CNF_PATH}; writing it"
+  fl_mariadb_dropin_apply mariadb-frappe.cnf "$UTF8_CNF_PATH"
   if [[ "$FL_DRY_RUN" == "1" ]]; then
     fl_info "dry-run: brew services restart ${FL_MARIADB_FORMULA}"
   else
-    fl_ok "wrote ${UTF8_CNF_PATH}"
-    fl_run_long "brew services restart ${FL_MARIADB_FORMULA}" brew services restart "$FL_MARIADB_FORMULA" \
-      || fl_warn "restart failed; run: brew services restart ${FL_MARIADB_FORMULA}"
+    fl_mariadb_restart_if_running || true
   fi
 fi
 
@@ -253,18 +252,12 @@ fl_ok "redis-server - ${REDIS_VERSION:-unknown} at ${REDIS_BIN}"
 fl_ensure_service_started redis "redis-server"
 
 fl_section "PDF"
-WKHTML_BIN="$(command -v wkhtmltopdf || true)"
-if [[ -z "$WKHTML_BIN" ]]; then
-  fl_warn "wkhtmltopdf not installed."
-  add_pending "WKHTMLTOPDF"
-else
-  WKHTML_RAW="$("$WKHTML_BIN" --version 2>&1 || true)"
-  if printf '%s' "$WKHTML_RAW" | grep -qi 'with patched qt'; then
-    fl_ok "wkhtmltopdf patched Qt build at ${WKHTML_BIN}"
-  else
-    fl_warn "wkhtmltopdf is not the patched-Qt build: $(printf '%s\n' "$WKHTML_RAW" | head -n1)"
-    add_pending "WKHTMLTOPDF"
-  fi
+# ok | skipped (declined on purpose, return 2) | failed (download, checksum,
+# installer). PDFs are optional either way, but a failure is said out loud
+# and listed at the end instead of looking like a choice.
+WKHTML_STATE=ok
+if fl_wkhtmltopdf_ensure; then WKHTML_STATE=ok; else
+  case "$?" in 2) WKHTML_STATE=skipped ;; *) WKHTML_STATE=failed; add_pending "WKHTMLTOPDF_FAILED" ;; esac
 fi
 
 fl_section "BUILD DEPS"
@@ -298,6 +291,11 @@ printf '%-22s %-22s %s\n' "$FL_PYTHON_BIN_NAME" "$PY_VERSION" "$PY_BIN"
 printf '%-22s %-22s %s\n' "node" "$NODE_VERSION" "$NODE_BIN"
 printf '%-22s %-22s %s\n' "$FL_MARIADB_FORMULA" "$MARIADB_DISTRIB" "$MARIADB_BIN"
 printf '%-22s %-22s %s\n' "redis-server" "${REDIS_VERSION:-?}" "$REDIS_BIN"
+case "$WKHTML_STATE" in
+  ok) printf '%-22s %-22s %s\n' "wkhtmltopdf" "$(wkhtmltopdf --version 2>/dev/null | head -n1 | awk '{print $2}')" "$(command -v wkhtmltopdf)" ;;
+  skipped) printf '%-22s %-22s %s\n' "wkhtmltopdf" "skipped" "PDFs will not work until it is installed" ;;
+  *) printf '%-22s %-22s %s\n' "wkhtmltopdf" "FAILED" "the install did not succeed; see the step below" ;;
+esac
 
 if (( ${#PENDING_STEPS[@]} == 0 )); then
   fl_section "READY"
@@ -318,30 +316,31 @@ ${step_n}) Load the new shell block into this terminal (or open a new one):
 
 EOF
       ;;
-    MARIADB_PASSWORD)
+    WKHTMLTOPDF_FAILED)
       cat <<EOF
-${step_n}) Set a MariaDB root password:
+${step_n}) The wkhtmltopdf install failed (not skipped): a download, checksum or
+   installer error is printed above. The bench works without it, PDF printing
+   does not. Run this again to retry, or install the package by hand:
 
-   mariadb-secure-installation
-
-   If socket auth or an old data dir blocks login, back up and re-init:
-     brew services stop ${FL_MARIADB_FORMULA}
-     mv ${FL_BREW_PREFIX}/var/mysql ${FL_BREW_PREFIX}/var/mysql.bak.\$(date +%s)
-     ${FL_BREW_PREFIX}/opt/${FL_MARIADB_FORMULA}/bin/mariadb-install-db \\
-       --user=\$(whoami) --basedir=${FL_BREW_PREFIX}/opt/${FL_MARIADB_FORMULA} \\
-       --datadir=${FL_BREW_PREFIX}/var/mysql --auth-root-authentication-method=normal
-     brew services start ${FL_MARIADB_FORMULA}
-     mariadb-secure-installation
+   https://github.com/wkhtmltopdf/packaging/releases   (0.12.6-2, macos-cocoa.pkg)
+   ${SCRIPT_DIR}/benchbar repair                         (retries the download and install)
 
 EOF
       ;;
-    WKHTMLTOPDF)
+    MARIADB_PASSWORD)
       cat <<EOF
-${step_n}) Install patched-Qt wkhtmltopdf:
+${step_n}) MariaDB root already has a password, and neither the environment nor the
+   Keychain knows it. Run this once with the password (it is verified, then saved
+   to the Keychain and never asked again):
 
-   Download from: https://github.com/wkhtmltopdf/packaging/releases
-   Verify with: wkhtmltopdf --version
-   Output must include: with patched qt
+   MARIADB_ROOT_PASSWORD='the password' ${SCRIPT_DIR}/benchbar install
+
+   Or run ${SCRIPT_DIR}/benchbar install without --yes and type it when asked.
+   Forgotten? Reset it (this keeps the databases):
+     brew services stop ${FL_MARIADB_FORMULA}
+     ${FL_BREW_PREFIX}/opt/${FL_MARIADB_FORMULA}/bin/mariadbd-safe --skip-grant-tables --skip-networking &
+     mariadb -u root -e "FLUSH PRIVILEGES; ALTER USER 'root'@'localhost' IDENTIFIED VIA mysql_native_password USING PASSWORD('new-password');"
+     kill %1; brew services start ${FL_MARIADB_FORMULA}
 
 EOF
       ;;
@@ -349,8 +348,10 @@ EOF
 done
 
 printf '%sAfter completing the above, re-run this script to verify.%s\n\n' "$FL_YELLOW$FL_BOLD" "$FL_RESET"
-# only "source the rc file" left: that is not a blocker for the next phase
-only_source=1
-for step in "${PENDING_STEPS[@]}"; do [[ "$step" == "SOURCE_RC" ]] || only_source=0; done
-[[ "$only_source" == "1" ]] && exit 0
+# "source the rc file" and a failed optional PDF tool do not block the next phase
+only_soft=1
+for step in "${PENDING_STEPS[@]}"; do
+  case "$step" in SOURCE_RC|WKHTMLTOPDF_FAILED) ;; *) only_soft=0 ;; esac
+done
+[[ "$only_soft" == "1" ]] && exit 0
 exit 2

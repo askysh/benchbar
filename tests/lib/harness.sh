@@ -33,6 +33,8 @@ export FL_UP_WAIT_SECS=2
 export FL_KILL_CMD=mockkill
 export FL_APP_DIRS="$HOME/Applications"
 export NO_COLOR=1
+# the suite may run as root on a Linux machine; the CLI must still see a normal user
+export FL_EFFECTIVE_UID=501
 export SHELL=/bin/zsh
 unset BENCH_DIR SITE_NAME FL_DRY_RUN FL_ASSUME_YES 2>/dev/null || true
 
@@ -49,6 +51,15 @@ chmod +x "$MOCK_BREW_PREFIX"/opt/*/bin/*
 printf '127.0.0.1 localhost\n' >"$FL_HOSTS_FILE"
 printf '[client-server]\n!includedir %s/etc/my.cnf.d\n' "$MOCK_BREW_PREFIX" >"$MOCK_BREW_PREFIX/etc/my.cnf.d/../my.cnf"
 printf '# test zshrc\nexport EDITOR=vim\n' >"$HOME/.zshrc"
+# the utf8mb4 drop-in is in place on a set up machine; tests of phase 00 remove it first
+SCRIPT_DIR="$ROOT" bash -c '. "$1/lib/frappe-local/ui.sh"; . "$1/lib/frappe-local/templates.sh"; fl_template_render mariadb-frappe.cnf' _ "$ROOT" \
+  >"$MOCK_BREW_PREFIX/etc/my.cnf.d/frappe.cnf"
+# config with the checksum of the mocked wkhtmltopdf download (the curl mock writes "stub download")
+export FL_CONFIG_DIR="$TMP_DIR/config"
+mkdir -p "$FL_CONFIG_DIR"; cp "$ROOT"/config/*.tsv "$FL_CONFIG_DIR/"
+printf 'stub download\n' >"$MOCK_STATE/download_payload"
+STUB_SHA="$(shasum -a 256 "$MOCK_STATE/download_payload" | awk '{print $1}')"
+sed "s/81a66b77b508fede8dbcaa67127203748376568b3673a17f6611b6d51e9894f8/${STUB_SHA}/" "$ROOT/config/wkhtmltopdf.tsv" >"$FL_CONFIG_DIR/wkhtmltopdf.tsv"
 cp "$ROOT/tests/mocks/honcho" "$MOCK_PIPX_HOME/venvs/frappe-bench/bin/honcho"
 chmod +x "$MOCK_PIPX_HOME/venvs/frappe-bench/bin/honcho"
 export PATH="$ROOT/tests/mocks/bin:$PATH"
@@ -79,12 +90,18 @@ run_fm() {
   set -e
 }
 reset_calls() { : >"$MOCK_LOG"; }
+# BSD stat on macOS, GNU stat on Linux (the suite also runs on Linux machines).
+if stat --version >/dev/null 2>&1; then STAT_GNU=1; else STAT_GNU=0; fi
+# sed_inplace SCRIPT FILE: edit a file in place without the BSD/GNU "-i" difference
+sed_inplace() { sed "$1" "$2" >"$2.tmp" && mv "$2.tmp" "$2"; }
+# mtime_of FILE: modification time in seconds
+mtime_of() { if [[ "$STAT_GNU" == "1" ]]; then stat -c %Y "$1"; else stat -f %m "$1"; fi; }
 
 # Snapshot of every file (path, size, mtime) under the given dirs, for
 # "second run writes nothing" assertions.
 snapshot() {
   find "$@" -type f 2>/dev/null | sort | while IFS= read -r f; do
-    stat -f '%N %z %m' "$f"
+    if [[ "$STAT_GNU" == "1" ]]; then stat -c '%n %s %Y' "$f"; else stat -f '%N %z %m' "$f"; fi
   done
 }
 
@@ -137,6 +154,10 @@ PY
 add_proc() { printf '%s %s\n' "$1" "$2" >>"$MOCK_PROCS"; printf '%s %s\n' "$1" "$2" >>"$MOCK_STATE/ever_procs"; }
 # add_listener PORT PID CMD ADDR: a fake TCP listener for the lsof mock
 add_listener() { printf '%s %s %s %s\n' "$1" "$2" "$3" "${4:-127.0.0.1}" >>"$MOCK_LISTEN"; }
+# keychain_get: the MariaDB root password the security mock stored
+keychain_get() { cat "$MOCK_STATE/keychain/benchbar-mariadb--root" 2>/dev/null || true; }
+# mariadb_pw: the root password the mariadb mock currently expects (empty: none)
+mariadb_pw() { cat "$MOCK_STATE/mariadb_root_pw" 2>/dev/null || true; }
 # set_agent LABEL STATE PID EXIT: a fake loaded launchd agent
 set_agent() {
   printf 'state = %s\npid = %s\nlast exit code = %s\n' "$2" "${3:-}" "${4:-0}" >"$MOCK_STATE/agents/$1"

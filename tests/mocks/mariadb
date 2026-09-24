@@ -1,10 +1,33 @@
 #!/usr/bin/env bash
-# mariadb client mock (copied into the fake brew prefix)
+# mariadb client mock (copied into the fake brew prefix).
+# The root password lives in $MOCK_STATE/mariadb_root_pw (absent: no password,
+# like a fresh Homebrew install). Logins use MYSQL_PWD, like the CLI.
+# SQL on stdin is recorded in $MOCK_STATE/mariadb_sql.log; an ALTER USER
+# statement sets the password.
 printf 'mariadb %s\n' "$*" >>"${MOCK_LOG:-/dev/null}"
+state="${MOCK_STATE:-/nonexistent}"
+pwfile="$state/mariadb_root_pw"
+check_login() {
+  local want=""
+  [[ -f "$pwfile" ]] && want="$(cat "$pwfile")"
+  [[ "${MYSQL_PWD:-}" == "$want" ]]
+}
 case "$*" in
-  --version) printf 'mariadb  Ver 15.1 Distrib 10.11.14-MariaDB, for osx10.20 (arm64)\n' ;;
-  *"--connect-timeout=2 -e SELECT 1"*) exit "${MOCK_MARIADB_NOPASS_EXIT:-1}" ;;
-  *"SHOW VARIABLES LIKE 'character_set_server'"*) printf 'character_set_server\tutf8mb4\n' ;;
-  *"-e SELECT 1"*) exit 0 ;;
+  --version) printf 'mariadb  Ver 15.1 Distrib 10.11.14-MariaDB, for osx10.20 (arm64)\n'; exit 0 ;;
 esac
-exit 0
+case "$*" in
+  *"-e "*|*"-sNe "*)
+    check_login || { echo "ERROR 1045 (28000): Access denied for user 'root'@'localhost' (using password: $([[ -n "${MYSQL_PWD:-}" ]] && echo YES || echo NO))" >&2; exit 1; }
+    case "$*" in
+      *"character_set_server"*) printf 'character_set_server\tutf8mb4\n' ;;
+    esac
+    exit 0 ;;
+  *)
+    # SQL script on stdin
+    check_login || { echo "ERROR 1045 (28000): Access denied for user 'root'@'localhost'" >&2; exit 1; }
+    sql="$(cat)"
+    printf '%s\n' "$sql" >>"$state/mariadb_sql.log"
+    newpw="$(printf '%s\n' "$sql" | sed -n "s/.*ALTER USER 'root'@'localhost' IDENTIFIED VIA mysql_native_password USING PASSWORD('\([^']*\)').*/\1/p" | head -n1)"
+    [[ -n "$newpw" ]] && printf '%s' "$newpw" >"$pwfile"
+    exit 0 ;;
+esac
