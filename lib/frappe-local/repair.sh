@@ -356,8 +356,10 @@ fl_repair_engine() {
   status=0
   for action in $actions; do
     fl_step_begin "$i"
+    # an action may report "skipped" (or "unchanged") through FL_STEP_RESULT
+    FL_STEP_RESULT="done"
     if "act_${action}"; then
-      fl_step_end "done"
+      fl_step_end "$FL_STEP_RESULT"
     else
       fl_step_end failed
       status=1

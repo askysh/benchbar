@@ -78,3 +78,6 @@ decisions of the app work live in `macos/DECISIONS.md`.
 - The installer's PATH block is generated from the configured bin folder (`BENCHBAR_BIN_DIR`), written as `$HOME/...` when it lives under the home folder.
 - A refused up-front `sudo -v` sets `FL_SUDO_REFUSED=1`, exported to the phase scripts, so an install asks for sudo exactly once whatever the answer and skips every sudo step with a message after a refusal.
 - A hosts line that cannot be written because sudo was refused is a skipped step with the manual command printed, and `hosts_entry` joins the optional actions, so a run the user chose to keep sudo free still ends with exit 0 and warnings.
+- The repair engine resets `FL_STEP_RESULT` before each action and reports it, so a skipped wkhtmltopdf or hosts step prints `skipped`, the documented step status, not `done`.
+- The report's assignment style masking also treats `?` as a key boundary, so a credential in a URL query string (`?api_key=...&x=1`) is masked like any other.
+- `release-local.sh` no longer re-signs the app: `macos-build.sh` already signed it ad hoc with the Hardened Runtime and the entitlements, and a plain `codesign --force -s -` dropped both. The script verifies the signature and the runtime flag instead.

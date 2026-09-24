@@ -192,6 +192,8 @@ run_fm install --yes --bench-dir "$BENCH" --site macdev
 assert_eq "0" "$CODE" "$OUT"
 assert_eq "1" "$(grep -c '^sudo -v$' "$MOCK_LOG")" "(a refused sudo is asked exactly once)"
 assert_contains "$OUT" "not asking again"
+assert_contains "$OUT" "install the patched wkhtmltopdf package (sudo): skipped"
+assert_contains "$OUT" "add macdev to /etc/hosts (sudo): skipped"
 assert_calls_not_contain '^sudo (installer|tee|cp)'
 rm -f "$MOCK_STATE/sudo_refused"; touch "$MOCK_STATE/wkhtml_installed"
 

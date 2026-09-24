@@ -13,7 +13,7 @@
 #   BenchBar-<version>.dmg     hdiutil image with an Applications shortcut
 #   SHA256SUMS                 shasum -a 256 of both
 #
-# The app is ad hoc signed (codesign -s -), so Gatekeeper shows "Apple could
+# The app is ad hoc signed (by macos-build.sh), so Gatekeeper shows "Apple could
 # not verify" on the first open of a DMG download. README explains the
 # "Open Anyway" steps; install.sh downloads with curl, which sets no
 # quarantine flag, so the app opens directly.
@@ -59,8 +59,10 @@ build_args=()
 [[ "$RUN_TESTS" == "1" ]] && build_args+=(--test)
 BENCHBAR_VERSION="$VERSION" BENCHBAR_BUILD="$BUILD_NUMBER" "${ROOT}/scripts/macos-build.sh" ${build_args[@]+"${build_args[@]}"}
 [[ -d "$APP" ]] || die "no app at ${APP}"
-codesign --force --deep -s - "$APP"
+# macos-build.sh already signed ad hoc with the Hardened Runtime and the
+# entitlements; signing again here would drop both. Only verify.
 codesign --verify --deep --strict "$APP"
+codesign -dv --verbose=2 "$APP" 2>&1 | grep -q 'flags=.*runtime' || die "the app lost its Hardened Runtime flag"
 got="$(defaults read "${APP}/Contents/Info" CFBundleShortVersionString 2>/dev/null || true)"
 [[ "$got" == "$VERSION" ]] || die "Info.plist says ${got:-nothing}, expected ${VERSION}"
 ok "BenchBar.app ${VERSION} (${BUILD_NUMBER}), ad hoc signed"
