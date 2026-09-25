@@ -7,12 +7,14 @@ mock_log "$@"
 case "$1" in
   version) printf 'erpnext 15.0.0\nfrappe 15.0.0\n'; exit 0 ;;
   init)
-    mkdir -p "$2/apps/frappe" "$2/env" "$2/sites"
+    mkdir -p "$2/apps/frappe" "$2/env" "$2/sites" "$2/config"
+    printf 'port 11000\n' >"$2/config/redis_queue.conf"; printf 'port 13000\n' >"$2/config/redis_cache.conf"
     touch "$2/sites/apps.txt"; exit 0 ;;
   get-app)
     app="${*: -1}"; app="${app##*/}"; app="${app%.git}"
     mkdir -p "apps/$app"; exit 0 ;;
   new-site)
+    [[ -n "${MOCK_BENCH_NEW_SITE_EXIT:-}" ]] && exit "$MOCK_BENCH_NEW_SITE_EXIT"
     mkdir -p "sites/$2"; touch "sites/$2/installed_apps"; printf '{"db_name": "_x"}\n' >"sites/$2/site_config.json"; exit 0 ;;
   use) printf '%s\n' "$2" >sites/currentsite.txt; exit 0 ;;
   set-config)

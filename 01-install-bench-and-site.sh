@@ -358,6 +358,9 @@ if [[ -n "$FRAPPE_COMMIT" || -n "$ERPNEXT_COMMIT" ]]; then
   fl_bench_run_long "bench build" "$BENCH_DIR" bench build
 fi
 
+# the bench's Redis runs for new-site and install-app (frappe v16 needs it)
+fl_bench_redis_up "$BENCH_DIR"
+trap 'fl_bench_redis_down' EXIT
 fl_new_site_if_needed "$BENCH_DIR" "$SITE_NAME" "$MARIADB_ROOT_PASSWORD" "$ADMIN_PASSWORD"
 
 fl_section "INSTALL APPS ON SITE"
