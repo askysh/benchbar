@@ -67,6 +67,8 @@ fl_log_init() {
   stamp="$(date +%Y%m%d-%H%M%S)"
   FL_LOG_FILE="${dir}/${stamp}.log"
   : >"$FL_LOG_FILE" 2>/dev/null || FL_LOG_FILE=""
+  # the phase scripts are child processes: they log to the same file
+  export FL_LOG_FILE
 }
 
 fl_log() {

@@ -54,8 +54,17 @@ assert_eq "1" "$CODE" "$OUT"
 assert_calls_contain '^redis-cli -p 11000 shutdown save$' "(cleanup after a failure)"
 ! grep -q -E '^(11000|13000) ' "$MOCK_LISTEN" || fail "no setup Redis may stay behind"
 
+# another bench's Redis on these ports is refused: its workers would get our jobs
+add_listener 11000 5110 redis-server; mkdir -p "$MOCK_STATE/cwd"; printf '%s' "$HOME/other-bench" >"$MOCK_STATE/cwd/5110"
+reset_calls
+ADMIN_PASSWORD=adminpw run_fm site add v16five --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "Port 11000 (config/redis_queue.conf) is held by another process running in ${HOME}/other-bench"
+assert_calls_not_contain '^bench new-site'
+sed_inplace '/^11000 /d' "$MOCK_LISTEN"
 # a running bench's Redis is used as it is, never started twice or stopped
 add_listener 11000 5111 redis-server; add_listener 13000 5112 redis-server
+printf '%s' "$BENCH" >"$MOCK_STATE/cwd/5111"; printf '%s/config' "$BENCH" >"$MOCK_STATE/cwd/5112"
 reset_calls
 ADMIN_PASSWORD=adminpw run_fm site add v16four --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"

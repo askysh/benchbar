@@ -152,14 +152,33 @@ fl_get_app_if_needed() {
 
 FL_SETUP_REDIS_PORTS=""
 
+# The working folder of whatever listens on PORT (the bench's own Redis runs
+# inside the bench), or nothing when nothing listens or it cannot be read.
+fl_port_owner_cwd() {
+  local pid
+  pid="$(lsof -ti "tcp:$1" -sTCP:LISTEN 2>/dev/null | head -n1 || true)"
+  [[ -n "$pid" ]] || return 0
+  lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n1
+}
+
 fl_bench_redis_up() {
-  local bench_dir="$1" conf port
+  local bench_dir="$1" conf port owner
   [[ "$FL_DRY_RUN" == "1" ]] && { fl_info "dry-run: start the bench's Redis (config/redis_queue.conf, config/redis_cache.conf) for the site setup"; return 0; }
   for conf in "$bench_dir"/config/redis_queue.conf "$bench_dir"/config/redis_cache.conf; do
     [[ -f "$conf" ]] || continue
     port="$(awk '$1 == "port" {print $2; exit}' "$conf")"
     [[ "$port" =~ ^[0-9]+$ ]] || continue
-    fl_port_listening "$port" && continue
+    if fl_port_listening "$port"; then
+      # the bench's own Redis (running bench): use it. Anything else, for
+      # example another bench on the same default ports, must not receive
+      # this bench's cache and queued install jobs.
+      owner="$(fl_port_owner_cwd "$port")"
+      case "$owner" in
+        "$bench_dir"|"$bench_dir"/*) continue ;;
+      esac
+      fl_die "Port ${port} (config/$(basename "$conf")) is held by another process$([[ -n "$owner" ]] && printf ' running in %s' "$owner"), not this bench's Redis." \
+        "Give this bench its own ports first: benchbar service --port-offset N --bench-dir ${bench_dir}, then run this again."
+    fi
     # its complaints (a bad config, a folder it cannot write) go to the run log
     if (cd "$bench_dir" && redis-server "config/$(basename "$conf")" --daemonize yes) >>"${FL_LOG_FILE:-/dev/null}" 2>&1; then
       FL_SETUP_REDIS_PORTS="${FL_SETUP_REDIS_PORTS} ${port}:$(basename "$conf" .conf)"
