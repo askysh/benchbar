@@ -95,6 +95,10 @@ Checked in frappe `version-16` at 012667b and bench `develop` at c9d1250 (Septem
 - `bench init` in `~/dev/v16-bench` chose 8001, 9001, 11001, 13001 (and file watcher 6788) by itself, as a sibling of `~/dev/frappe-bench`; benchbar's port check agreed and moved nothing.
 - On v16, `bench --site v16dev install-app erpnext` failed with "Error 61 connecting to 127.0.0.1:11001. Connection refused": frappe v16 connects to the bench's Redis during site setup, and a fresh bench has none running. Phase 01 and `site add` now start the bench's own Redis servers from `config/redis_*.conf` when nothing listens on their ports, and stop only the ones they started: the queue with `shutdown save`, so jobs an app install enqueued wait for the first worker, the cache with `nosave` (Codex). Redis startup errors go to the run log, whose path is now exported to the phase scripts. A listener on the bench's Redis ports is used only when it runs inside the bench (working folder); another process there, such as another bench on the same default ports, stops the setup with the `--port-offset` fix, so this bench's cache and install jobs never land in someone else's Redis (Codex). A running bench's Redis is used as it is.
 
+## 0.4: python formula check
+
+- `python_leaves` asks `brew list --formula --installed-on-request`, not `brew leaves`: on the real Mac `python@3.14` was installed on request (and `brew tab` set it again), but pipx, uv and ollama depend on it, and `brew leaves` hides every formula another formula depends on, so the check could never pass. What protects a formula from `brew autoremove` is "installed on request", which is what the check now reads.
+
 # The easy install run (v0.3)
 
 ## Setup and environment

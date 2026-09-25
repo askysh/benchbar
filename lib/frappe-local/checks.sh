@@ -109,7 +109,9 @@ chk_python_leaves() {
     "${want}".*) ;;
     *) chk__set fail "${py} is ${ver}, profile expects ${want}.x" "brew reinstall ${FL_PYTHON_FORMULA}"; return 0 ;;
   esac
-  if brew leaves 2>/dev/null | grep -qx "$FL_PYTHON_FORMULA"; then
+  # installed on request, not "a leaf": brew leaves hides a formula another
+  # formula depends on (python@3.14 under pipx or uv) even when it was asked for
+  if brew list --formula --installed-on-request 2>/dev/null | grep -qx "$FL_PYTHON_FORMULA"; then
     chk__set ok "${FL_PYTHON_FORMULA} ${ver} is user-installed (safe from brew autoremove)"
   else
     chk__set warn "${FL_PYTHON_FORMULA} is only a dependency; brew autoremove could delete it" "brew tab --installed-on-request ${FL_PYTHON_FORMULA}" python_leaves
