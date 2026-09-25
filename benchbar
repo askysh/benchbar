@@ -74,6 +74,7 @@ OPT_PROFILE=""
 OPT_BUNDLE="${APP_BUNDLE:-}"
 OPT_JSON=0
 FL_ASSUME_YES="${FL_ASSUME_YES:-0}"
+FL_MAKE_DEFAULT="${FL_MAKE_DEFAULT:-0}"
 FL_SKIP_PLAN_CONFIRM=0
 COMMAND=""
 ARGS=()
@@ -113,6 +114,8 @@ Options
   --site NAME         Site name (default: remembered, or from the bench)
   --profile NAME      Release profile for install/repair (default: v15-lts)
   --bundle NAME       App bundle for install (minimal, common, extended)
+  --make-default      install, adopt, service: make this the default bench even when
+                      another one is already the default
   --dry-run           Print the full plan, change nothing
   -y, --yes           Do not ask; secrets must come from the environment
   --json              Versioned JSON for list, status and doctor (docs/json-schema.md)
@@ -136,6 +139,7 @@ while [[ "$#" -gt 0 ]]; do
     --bundle) OPT_BUNDLE="${2:-}"; shift 2 ;;
     --bundle=*) OPT_BUNDLE="${1#*=}"; shift ;;
     --dry-run) FL_DRY_RUN=1; shift ;;
+    --make-default) FL_MAKE_DEFAULT=1; shift ;;
     -y|--yes) FL_ASSUME_YES=1; shift ;;
     --json) OPT_JSON=1; shift ;;
     --plain|--no-color) FL_PLAIN=1; fl_ui_init; shift ;;
@@ -149,7 +153,7 @@ while [[ "$#" -gt 0 ]]; do
       shift ;;
   esac
 done
-export FL_DRY_RUN FL_ASSUME_YES
+export FL_DRY_RUN FL_ASSUME_YES FL_MAKE_DEFAULT
 
 [[ -n "$COMMAND" ]] || { usage; exit 0; }
 
@@ -197,6 +201,19 @@ fl_install_sudo_upfront() {
   fl_sudo_begin "${reasons[@]}" || true
 }
 
+# fl_remember_bench: this bench's own settings, and the default bench when
+# fl_remember_default allows it. Returns 1 when another bench stays default.
+fl_remember_bench() {
+  local code=0
+  fl_bench_state_migrate "$FL_BENCH_DIR"
+  fl_remember_default "$FL_BENCH_DIR" || code=1
+  fl_bstate_set SITE_NAME "$FL_SITE"
+  fl_bstate_set PROFILE "$FL_PROFILE"
+  # the shell block follows the default bench, which may just have changed
+  fl_render_all
+  return "$code"
+}
+
 cmd_install() {
   local code=0 args00=() args01=() bundle
   fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
@@ -208,7 +225,7 @@ cmd_install() {
   args00=(--profile "$FL_PROFILE"); args01=(--profile "$FL_PROFILE")
   [[ "$FL_DRY_RUN" == "1" ]] && { args00+=(--dry-run); args01+=(--dry-run); }
   [[ "$FL_ASSUME_YES" == "1" ]] && { args00+=(--yes); args01+=(--yes); }
-  bundle="${OPT_BUNDLE:-$(fl_state_get APP_BUNDLE 2>/dev/null || true)}"
+  bundle="${OPT_BUNDLE:-$(fl_bstate_get APP_BUNDLE 2>/dev/null || true)}"
 
   fl_step_begin 0
   if fl_run_phase_script "${SCRIPT_DIR}/00-mac-system-deps.sh" "${args00[@]}"; then
@@ -242,9 +259,7 @@ cmd_install() {
     fl_steps_summary
     return "$code"
   fi
-  fl_state_set BENCH_DIR "$FL_BENCH_DIR"
-  fl_state_set SITE_NAME "$FL_SITE"
-  fl_state_set PROFILE "$FL_PROFILE"
+  fl_remember_bench || fl_info "the default bench stays $(fl_state_get BENCH_DIR) (--make-default changes it)"
 
   fl_step_begin 2
   fl_context_init "$FL_BENCH_DIR" "$FL_SITE" "$FL_PROFILE"
@@ -267,9 +282,7 @@ cmd_service() {
   fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
   fl_require_bench
   fl_header "benchbar service" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "$FL_SITE"
-  fl_state_set BENCH_DIR "$FL_BENCH_DIR"
-  fl_state_set SITE_NAME "$FL_SITE"
-  fl_state_set PROFILE "$FL_PROFILE"
+  fl_remember_bench || true
   if fl_repair_engine "Background service" service; then
     fl_next_steps_box
     return 0
@@ -296,10 +309,11 @@ cmd_adopt() {
   # the service group would install honcho into env when it is missing; adopt must not
   if FL_ENGINE_SKIP_ACTIONS="honcho_install honcho_setuptools" fl_repair_engine "Adopt" service; then
     # remembered only now: a cancelled plan must not make this the default bench
-    fl_state_set BENCH_DIR "$FL_BENCH_DIR"
-    fl_state_set SITE_NAME "$FL_SITE"
-    fl_state_set PROFILE "$FL_PROFILE"
-    [[ "$FL_DRY_RUN" == "1" ]] || fl_ok "remembered ${FL_BENCH_DIR} (site ${FL_SITE}) as the default bench"
+    if fl_remember_bench; then
+      [[ "$FL_DRY_RUN" == "1" ]] || fl_ok "remembered ${FL_BENCH_DIR} (site ${FL_SITE}) as the default bench"
+    else
+      [[ "$FL_DRY_RUN" == "1" ]] || fl_ok "remembered ${FL_BENCH_DIR} (site ${FL_SITE}); the default bench stays $(fl_state_get BENCH_DIR) (--make-default changes it)"
+    fi
     fl_next_steps_box
     return 0
   fi

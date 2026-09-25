@@ -52,7 +52,17 @@ case "$cmd" in
   kill)
     f="$agents/$(label_of_target "$2")"
     [[ -f "$f" ]] && printf 'state = not running\nlast exit code = 0\n' >"$f"
-    grep -v 'honcho start' "${MOCK_PROCS:?}" >"${MOCK_PROCS}.tmp" 2>/dev/null || true
+    # the agent's honcho stops: one without a recorded folder, or in the agent's bench
+    wd="$(sed -n 's#.*<key>WorkingDirectory</key><string>\(.*\)</string>.*#\1#p' "$HOME/Library/LaunchAgents/$(label_of_target "$2").plist" 2>/dev/null | head -n1)"
+    : >"${MOCK_PROCS}.tmp"
+    while read -r pid cmdline; do
+      [[ -n "$pid" ]] || continue
+      if [[ "$cmdline" == *"honcho start"* ]]; then
+        cwd="$(cat "${MOCK_STATE}/cwd/${pid}" 2>/dev/null || true)"
+        [[ -z "$cwd" || "$cwd" == "$wd" ]] && continue
+      fi
+      printf '%s %s\n' "$pid" "$cmdline" >>"${MOCK_PROCS}.tmp"
+    done <"${MOCK_PROCS:?}"
     mv "${MOCK_PROCS}.tmp" "${MOCK_PROCS}"
     rm -f "${MOCK_STATE}/curl_code" ;;
   *) ;;

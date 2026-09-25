@@ -63,7 +63,7 @@ fl_bench_detect() {
       fi
     fi
   fi
-  FL_BENCH_NAME="$(basename "$FL_BENCH_DIR" | tr -c 'A-Za-z0-9._\n-' '-')"
+  FL_BENCH_NAME="$(fl_bench_name_of "$FL_BENCH_DIR")"
 }
 
 fl_site_config_value() {
@@ -81,9 +81,9 @@ fl_site_detect() {
   if [[ -n "${SITE_NAME:-}" ]]; then
     FL_SITE="$SITE_NAME"; FL_SITE_SOURCE="env"; return 0
   fi
-  # the remembered site belongs to the remembered bench only
-  state="$(fl_state_get SITE_NAME 2>/dev/null || true)"
-  if [[ -n "$state" && "$(fl_state_get BENCH_DIR 2>/dev/null || true)" == "$FL_BENCH_DIR" ]]; then
+  # the site remembered for this bench (its own state file)
+  state="$(fl_bstate_get SITE_NAME 2>/dev/null || true)"
+  if [[ -n "$state" ]]; then
     FL_SITE="$state"; FL_SITE_SOURCE="state"; return 0
   fi
   if [[ -f "${FL_BENCH_DIR}/sites/currentsite.txt" ]]; then

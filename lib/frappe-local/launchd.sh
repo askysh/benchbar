@@ -47,7 +47,7 @@ fl_bench_owner() {
 fl_honcho_resolve() {
   local cand stored
   FL_HONCHO=""
-  stored="$(fl_state_get HONCHO_BIN 2>/dev/null || true)"
+  stored="$(fl_bstate_get HONCHO_BIN 2>/dev/null || true)"
   for cand in \
     "$(command -v honcho 2>/dev/null || true)" \
     "$(fl_pipx_home)/venvs/frappe-bench/bin/honcho" \

@@ -143,11 +143,20 @@ fl_mariadb_bin() {
   printf '%s/bin/mariadb\n' "$(fl_formula_prefix "$FL_MARIADB_FORMULA")"
 }
 
+# fl_profile_path_exports [PROFILE]: the shell block's exports, for the
+# loaded profile or the one named (the block follows the default bench).
 fl_profile_path_exports() {
+  local py="$FL_PYTHON_FORMULA" node="$FL_NODE_FORMULA" db="$FL_MARIADB_FORMULA" row
+  if [[ -n "${1:-}" && "${1:-}" != "$FL_PROFILE" ]]; then
+    row="$(awk -F '\t' -v p="$1" 'NR > 1 && $1 == p {print $5 "|" $7 "|" $9}' "$(fl_config_file release-profiles.tsv)")"
+    if [[ -n "$row" ]]; then
+      IFS='|' read -r py node db <<<"$row"
+    fi
+  fi
   cat <<EOF
-export PATH="${FL_BREW_PREFIX}/opt/${FL_PYTHON_FORMULA}/bin:\$PATH"
-export PATH="${FL_BREW_PREFIX}/opt/${FL_NODE_FORMULA}/bin:\$PATH"
-export PATH="${FL_BREW_PREFIX}/opt/${FL_MARIADB_FORMULA}/bin:\$PATH"
+export PATH="${FL_BREW_PREFIX}/opt/${py}/bin:\$PATH"
+export PATH="${FL_BREW_PREFIX}/opt/${node}/bin:\$PATH"
+export PATH="${FL_BREW_PREFIX}/opt/${db}/bin:\$PATH"
 export LDFLAGS="-L${FL_BREW_PREFIX}/opt/openssl@3/lib -L${FL_BREW_PREFIX}/opt/libffi/lib -L${FL_BREW_PREFIX}/opt/zlib/lib"
 export CPPFLAGS="-I${FL_BREW_PREFIX}/opt/openssl@3/include -I${FL_BREW_PREFIX}/opt/libffi/include -I${FL_BREW_PREFIX}/opt/zlib/include"
 export PKG_CONFIG_PATH="${FL_BREW_PREFIX}/opt/openssl@3/lib/pkgconfig:${FL_BREW_PREFIX}/opt/libffi/lib/pkgconfig:${FL_BREW_PREFIX}/opt/zlib/lib/pkgconfig:${FL_BREW_PREFIX}/opt/mariadb-connector-c/lib/pkgconfig"

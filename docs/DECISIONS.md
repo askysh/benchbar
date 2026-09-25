@@ -37,6 +37,19 @@ Checked in frappe `version-16` at 012667b and bench `develop` at c9d1250 (Septem
 - `orphans` counts listeners on the bench's ports only when neither the agent nor a honcho runs the bench, so a bench started with `benchfg` is not reported.
 - Found while testing: `doctor --json` with a failing check went through the ERR trap on its way to exit 1 and printed `[FAIL] Last command failed` on stdout after the JSON. The dispatcher now exits 1 itself, and test-json parses a failing report.
 
+## 0.4: several benches
+
+- Per bench settings live in the checkout, `.benchbar/benches/<name>.env`, not in the bench: benchbar writes only its service files into a bench, and a folder name is already the agent's unique key (`com.benchbar.<name>`), so it is a safe file name too.
+- Keys that were per bench but global before 0.4 (`PROFILE`, `SITE_NAME`, `AUTOSTART`, `HONCHO_BIN`, `APP_BUNDLE`, `APPS`) are read from `state.env` for the default bench until its own file has them, and moved by the next writing command. Doctor and status stay read only, and an upgrade needs no migration step.
+- When the default bench changes, its old settings move into its own file first, so `AUTOSTART=off` of the old default never leaks to the new one.
+- A second `install`, `adopt` or `service` keeps the default bench (`--make-default` changes it): "set up a v16 bench to try something" must not change what `benchup` starts.
+- A bench with no stored profile gets the one whose Frappe branch matches `apps/frappe/frappe/__init__.py` (`__version__ = "16.x"` is `v16-lts`), before the default profile: doctor on a freshly found v16 bench would otherwise judge it by v15 rules.
+- The shell block's PATH lines follow the default bench's profile, and every bench renders the block the same way. Before, a v16 bench would have put Python 3.14 and Node 24 first in the user's shell, and the two benches' doctors would have called each other's block outdated forever.
+- Phase 00 writes the shell block only when it is missing: it knows a profile but not which bench is the default. `service` and `repair` keep it current.
+- honcho and socketio are matched by their working folder (`lsof -a -p PID -d cwd`): both start with a relative path (`honcho start -f Procfile.lean`, `node apps/frappe/socketio.js`), so the command line is identical in every bench. A process whose folder cannot be read is still matched, the pre 0.4 behaviour, since it is usually exiting.
+- The runner (template v3) clears only its own bench's stale socketio at start, with the same working folder test; before, starting a second bench killed the first bench's socketio.
+- The launchctl mock now stops only the agent's own honcho, so the tests can run two benches at once.
+
 # The easy install run (v0.3)
 
 ## Setup and environment

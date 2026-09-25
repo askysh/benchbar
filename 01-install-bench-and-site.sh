@@ -320,11 +320,14 @@ if [[ "$FL_DRY_RUN" != "1" && "$SITE_EXISTS" != "1" ]]; then
 fi
 
 fl_state_init
-fl_state_set PROFILE "$FL_PROFILE"
-fl_state_set APP_BUNDLE "$APP_BUNDLE"
-fl_state_set APPS "${FL_SELECTED_APPS[*]}"
-fl_state_set BENCH_DIR "$BENCH_DIR"
-fl_state_set SITE_NAME "$SITE_NAME"
+# per bench settings; the default bench changes only when there is none yet
+# (or --make-default), so a second bench never takes over benchup
+fl_bench_state_migrate "$(fl_state_get BENCH_DIR)"
+fl_remember_default "$BENCH_DIR" || fl_info "the default bench stays $(fl_state_get BENCH_DIR); pass --make-default to benchbar install to change it"
+fl_bstate_set_for "$BENCH_DIR" PROFILE "$FL_PROFILE"
+fl_bstate_set_for "$BENCH_DIR" APP_BUNDLE "$APP_BUNDLE"
+fl_bstate_set_for "$BENCH_DIR" APPS "${FL_SELECTED_APPS[*]}"
+fl_bstate_set_for "$BENCH_DIR" SITE_NAME "$SITE_NAME"
 
 fl_install_pipx_if_needed
 fl_install_bench_if_needed

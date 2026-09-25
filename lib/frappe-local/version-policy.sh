@@ -40,6 +40,16 @@ fl_profile_major() {
   case "$v" in ''|*[!0-9]*) printf '0' ;; *) printf '%s' "$v" ;; esac
 }
 
+# fl_profile_detect DIR: the profile whose Frappe branch matches the major
+# version of DIR/apps/frappe (15.113.4 -> version-15 -> v15-lts), or nothing.
+fl_profile_detect() {
+  local init="$1/apps/frappe/frappe/__init__.py" major
+  [[ -f "$init" ]] || return 0
+  major="$(sed -n 's/^__version__[[:space:]]*=[[:space:]]*["'"'"']\([0-9][0-9]*\)\..*/\1/p' "$init" | head -n1)"
+  [[ -n "$major" ]] || return 0
+  awk -F '\t' -v b="version-${major}" 'NR > 1 && $3 == b {print $1; exit}' "$(fl_config_file release-profiles.tsv)"
+}
+
 fl_default_profile() {
   awk -F '\t' 'NR > 1 && $13 == "yes" {print $1; exit}' "$(fl_config_file release-profiles.tsv)"
 }

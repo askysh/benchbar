@@ -33,6 +33,7 @@ export FL_WKHTML_PKG_BIN="$TMP_DIR/usr-local-bin/wkhtmltopdf"
 export FL_RC_FILE="$HOME/.zshrc"
 export FL_UP_WAIT_SECS=2
 export FL_KILL_CMD=mockkill
+export BENCHBAR_KILL_CMD=mockkill
 export FL_APP_DIRS="$HOME/Applications"
 export NO_COLOR=1
 # the suite may run as root on a Linux machine; the CLI must still see a normal user
@@ -158,7 +159,11 @@ PY
 }
 
 # add_proc PID CMDLINE: adds a line to the fake process table used by pgrep/pkill
-add_proc() { printf '%s %s\n' "$1" "$2" >>"$MOCK_PROCS"; printf '%s %s\n' "$1" "$2" >>"$MOCK_STATE/ever_procs"; }
+# add_proc PID CMDLINE [CWD]: CWD is what lsof reports as its working folder
+add_proc() {
+  printf '%s %s\n' "$1" "$2" >>"$MOCK_PROCS"; printf '%s %s\n' "$1" "$2" >>"$MOCK_STATE/ever_procs"
+  if [[ -n "${3:-}" ]]; then mkdir -p "$MOCK_STATE/cwd"; printf '%s' "$3" >"$MOCK_STATE/cwd/$1"; fi
+}
 # add_listener PORT PID CMD ADDR: a fake TCP listener for the lsof mock
 add_listener() { printf '%s %s %s %s\n' "$1" "$2" "$3" "${4:-127.0.0.1}" >>"$MOCK_LISTEN"; }
 # keychain_get: the MariaDB root password the security mock stored

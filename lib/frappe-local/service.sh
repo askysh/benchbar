@@ -19,7 +19,8 @@ fl_context_init() {
   fl_bench_detect "${1:-}"
   fl_site_detect "${2:-}"
   fl_ports_detect
-  [[ -n "$profile" ]] || profile="$(fl_state_get PROFILE 2>/dev/null || true)"
+  [[ -n "$profile" ]] || profile="$(fl_bstate_get PROFILE 2>/dev/null || true)"
+  [[ -n "$profile" ]] || profile="$(fl_profile_detect "$FL_BENCH_DIR")"
   [[ -n "$profile" ]] || profile="$(fl_default_profile)"
   fl_load_profile "$profile"
   if command -v brew >/dev/null 2>&1; then
@@ -32,8 +33,22 @@ fl_context_init() {
   fl_render_all
 }
 
+# The profile the shell block's PATH follows: the default bench's, so
+# setting up a second bench never changes the Python and Node of the shell.
+fl_rc_profile() {
+  local def p=""
+  def="$(fl_state_get BENCH_DIR 2>/dev/null || true)"
+  if [[ -z "$def" || "$def" == "$FL_BENCH_DIR" || ! -d "$def" ]]; then
+    printf '%s' "$FL_PROFILE"
+    return 0
+  fi
+  p="$(fl_bstate_get_for "$def" PROFILE)"
+  [[ -n "$p" ]] || p="$(fl_profile_detect "$def")"
+  printf '%s' "${p:-$FL_PROFILE}"
+}
+
 fl_autostart_enabled() {
-  [[ "$(fl_state_get AUTOSTART 2>/dev/null || true)" != "off" ]]
+  [[ "$(fl_bstate_get AUTOSTART 2>/dev/null || true)" != "off" ]]
 }
 
 fl_render_all() {
@@ -61,7 +76,7 @@ fl_render_all() {
     "RUN_AT_LOAD=${run_at_load}" \
     "LOG=$(fl_bench_log_path)")"
   FL_R_HELPERS="$(fl_template_render shell-helpers \
-    "PROFILE_EXPORTS=$(fl_profile_path_exports)" \
+    "PROFILE_EXPORTS=$(fl_profile_path_exports "$(fl_rc_profile)")" \
     "BENCHBAR=${SCRIPT_DIR}/benchbar")"
 }
 
@@ -288,7 +303,8 @@ fl_cmd_autostart() {
     "") if fl_autostart_enabled; then fl_ok "autostart is on (bench returns after login if it was running)"; else fl_ok "autostart is off"; fi; return 0 ;;
     *) fl_die "Usage: benchbar autostart on|off" ;;
   esac
-  fl_state_set AUTOSTART "$mode"
+  fl_bench_state_migrate "$FL_BENCH_DIR"
+  fl_bstate_set AUTOSTART "$mode"
   fl_render_all
   act_write_plist || return 1
   fl_ok "autostart ${mode}"

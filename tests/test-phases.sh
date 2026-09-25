@@ -150,7 +150,10 @@ assert_eq "rootpw" "$(keychain_get)" "(a verified env password is saved)"
 assert_calls_contain "^bench init ${BENCH} --frappe-branch version-15"
 assert_calls_contain "^bench new-site macdev"
 assert_eq "$BENCH" "$(sed -n 's/^BENCH_DIR=//p' "$FL_STATE_FILE")"
-assert_eq "macdev" "$(sed -n 's/^SITE_NAME=//p' "$FL_STATE_FILE")"
+# the site and profile belong to the bench's own state file
+assert_eq "macdev" "$(sed -n 's/^SITE_NAME=//p' "$FL_STATE_DIR/benches/$(basename "$BENCH").env")"
+assert_eq "v15-lts" "$(sed -n 's/^PROFILE=//p' "$FL_STATE_DIR/benches/$(basename "$BENCH").env")"
+[[ -z "$(sed -n 's/^SITE_NAME=//p' "$FL_STATE_FILE")" ]] || fail "SITE_NAME no longer lives in state.env"
 assert_contains "$OUT" "benchbar service"
 unset MARIADB_ROOT_PASSWORD ADMIN_PASSWORD
 reset_calls

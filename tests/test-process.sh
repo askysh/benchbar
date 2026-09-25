@@ -42,6 +42,24 @@ done
 assert_calls_contain '^launchctl kill SIGTERM gui/[0-9]+/com.benchbar.frappe-bench$'
 assert_calls_not_contain 'tcp:3306'
 
+# ---- two benches: honcho and socketio look the same in both, the working folder decides
+: >"$MOCK_PROCS"; : >"$MOCK_STATE/killed"
+add_proc 500 "/x/bin/python /x/bin/honcho start -f Procfile.lean" "$BENCH"
+add_proc 501 "node apps/frappe/socketio.js" "$BENCH"
+add_proc 600 "/x/bin/python /x/bin/honcho start -f Procfile.lean" "$OTHER"
+add_proc 601 "node apps/frappe/socketio.js" "$OTHER"
+add_proc 602 "$OTHER/env/bin/python -m frappe.utils.bench_helper frappe worker" "$OTHER"
+run_fm status --json --bench-dir "$OTHER"
+assert_eq "True" "$(printf '%s' "$OUT" | jget - 'd["processes_running"]')"
+run_fm down --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+for pid in 500 501; do ! grep -q "^${pid} " "$MOCK_PROCS" || fail "pid ${pid} of this bench should have been stopped"; done
+for pid in 600 601 602; do grep -q "^${pid} " "$MOCK_PROCS" || fail "pid ${pid} of the other bench must survive benchdown"; done
+# the stopped bench does not look running because the other one runs
+run_fm status --json --bench-dir "$BENCH"
+assert_eq "False" "$(printf '%s' "$OUT" | jget - 'd["processes_running"]')"
+assert_eq "stopped" "$(printf '%s' "$OUT" | jget - 'd["state"]')"
+
 # "down" while nothing runs is fine and idempotent
 : >"$MOCK_PROCS"
 run_fm down --bench-dir "$BENCH"
