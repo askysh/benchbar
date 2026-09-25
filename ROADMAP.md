@@ -60,16 +60,30 @@ drafts from a tag.
   agents can list benches, read status, doctor and logs, and start, stop
   or restart a bench. Nothing that repairs, installs or needs `sudo`.
 
+## Then: 0.6, sites and apps
+
+- App installs: `benchbar app list`, `app add` (with the branch for the
+  bench's profile), `app install` on a site, and `app update` for one app
+  with a changelog preview and a backup before `migrate`. Never
+  `bench update`.
+- A team lockfile, `benchbar.toml`, pinning the profile, bench and app
+  branches or commits: `benchbar lock write`, `lock check` (also in
+  doctor) and `lock apply`, so teammates get identical benches.
+- `benchbar pull`: a production site into a new local site over SSH. It
+  uses the latest backup on the server unless asked to take one, carries
+  the encryption key over without printing it, brings missing apps in at
+  the production branch first, and mutes email and the scheduler on the
+  copy.
+
 ## Later
 
-**0.6, public launch.** Developer ID signing and notarization, a signed
+**0.7, public launch.** Developer ID signing and notarization, a signed
 DMG, a cask in `askysh/homebrew-tap`, Sparkle updates, a documentation
 site, and a launch post on discuss.frappe.io.
 
-**0.7, sites and apps.** Backup and restore from the app, dropping a site
-with a backup first, app installs from GitHub with branch picking and per
-bench updates with a changelog preview, a first run wizard in the app,
-profile switching per bench.
+**0.8, the app for sites and apps.** Backup and restore from the app,
+dropping a site with a backup first, the 0.6 app installs and pulls in
+the app, a first run wizard, profile switching per bench.
 
 **1.0.** A stable JSON API and runner format, an official Homebrew cask,
 full doctor coverage for v15 and v16.
@@ -78,12 +92,6 @@ full doctor coverage for v15 and v16.
 
 Not scheduled, kept because they came up more than once.
 
-- A team lockfile, `benchbar.toml`, pinning the profile, bench and app
-  branches, so teammates get identical benches.
-- A wizard that pulls a production site into a local bench over SSH
-  (backup, download, restore, rename) and handles the encryption key and
-  the app list mismatch. After the install pains, the most requested
-  thing in the community threads.
 - A URL scheme for Raycast and Shortcuts, then Shortcuts actions, a
   Raycast extension, desktop widgets.
 - Open a bench in VS Code or Cursor, open a bench console.

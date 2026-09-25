@@ -37,8 +37,9 @@ All notable changes to this project are documented here.
 - Missing build formulae are a doctor warning with `brew install` as the
   fix.
 - ROADMAP.md: 0.4 is Frappe v16 and more than one bench, 0.5 is repair
-  from the app, a log viewer and `benchbar mcp`; the public launch moves
-  to 0.6.
+  from the app, a log viewer and `benchbar mcp`, 0.6 is app installs, a
+  team lockfile and pulling a production site; the public launch moves
+  to 0.7.
 
 ### Fixed
 
