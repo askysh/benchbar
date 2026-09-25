@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here.
 
+## Unreleased
+
+### Changed
+
+- ROADMAP.md: 0.4 is Frappe v16 and more than one bench, 0.5 is repair
+  from the app, a log viewer and `benchbar mcp`; the public launch moves
+  to 0.6.
+
 ## 0.3.1 - 2026-09-24
 
 ### Fixed
