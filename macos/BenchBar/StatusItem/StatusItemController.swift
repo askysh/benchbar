@@ -89,7 +89,7 @@ final class StatusItemController {
 
     private func updateSpeed(_ plan: RunnerPlan) {
         guard plan.followsSpeed, settings.speedEnabled, activity.isActive,
-              let bench = store.selected, let pid = bench.status?.pid, pid > 0 else {
+              let bench = store.speedBench, let pid = bench.status?.pid, pid > 0 else {
             speed.stop()
             animator.setSpeed(1)
             return
@@ -113,6 +113,8 @@ final class StatusItemController {
         let text: String
         if case .missing = store.cli {
             text = "BenchBar: benchbar CLI not found"
+        } else if store.benches.count > 1 {
+            text = "BenchBar: \(store.benches.count) benches, \(BenchAggregate.upText(store.benches.map(\.state)))"
         } else if let bench = store.selected {
             text = "BenchBar: \(bench.name) \(Self.word(for: state))"
         } else {

@@ -26,6 +26,13 @@ final class BenchModel: Identifiable {
     var pending: CLIClient.Action? { machine.pending }
     /// No com.benchbar agent yet: `benchbar repair` installs or migrates it.
     var needsService: Bool { !summary.serviceInstalled }
+    /// The bench's sites: from the latest status, else from the list.
+    var siteRows: [SiteRow] {
+        SiteRow.make(sites: status?.sites ?? summary.sites, defaultSite: summary.site,
+                     port: status?.ports?.web ?? summary.ports.web)
+    }
+    /// Procfile.lean runs the scheduler (status --json, CLI 0.4 and later).
+    var schedulerOn: Bool? { status?.scheduler }
     /// When the current run started, while it is starting or running.
     var runningSince: Date? {
         guard state == .running || state == .starting else { return nil }
@@ -97,10 +104,19 @@ final class BenchStore {
         benches.first { $0.path == selectedPath } ?? benches.first
     }
 
-    /// The state to animate: unknown while the CLI is missing or nothing is known yet.
+    /// The state to animate: the worst state across all benches (a crash
+    /// anywhere stumbles), unknown while the CLI is missing.
     var displayState: BenchState {
         guard case .ready = cli else { return .unknown }
-        return selected?.state ?? .unknown
+        return BenchAggregate.state(benches.map(\.state))
+    }
+
+    /// The bench whose CPU sets the running speed: the selected one while it
+    /// is up, else the first bench that is.
+    var speedBench: BenchModel? {
+        let up: (BenchModel) -> Bool = { $0.state == .running || $0.state == .starting }
+        if let selected, up(selected) { return selected }
+        return benches.first(where: up)
     }
 
     // MARK: lifecycle
@@ -204,6 +220,24 @@ final class BenchStore {
         } catch {
             bench.lastError = error.localizedDescription
             apply(.actionFinished(action, succeeded: false), to: bench)
+        }
+    }
+
+    /// Turns the scheduler on or off (benchbar service --with-schedule or
+    /// --without-schedule), then restarts a running bench so honcho reads
+    /// the new Procfile. The caller has asked the user first.
+    func setScheduler(_ on: Bool, on bench: BenchModel) async {
+        guard let client, bench.pending == nil else { return }
+        bench.lastError = nil
+        do {
+            try await client.setScheduler(on, bench: bench.path)
+            await refresh(bench)
+            if bench.state == .running || bench.state == .starting {
+                await perform(.restart, on: bench)
+            }
+        } catch {
+            bench.lastError = error.localizedDescription
+            notifyChange()
         }
     }
 

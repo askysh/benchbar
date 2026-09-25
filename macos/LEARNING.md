@@ -615,3 +615,38 @@ a find and replace. The pattern used for every name (read
    at it.
 5. **Test the old state, not just the new one.** The tests build a bench
    and an rc file the way 0.2.0 left them and check the result.
+
+## 0.4: several benches in one menu bar item
+
+A menu bar app has one icon, but a Mac can run two benches. Three small
+ideas carry the whole feature (read `Popover/BenchPresentation.swift`,
+`State/BenchStore.swift`, `Popover/PopoverView.swift` and
+`BenchBarTests/AggregateTests.swift`):
+
+1. **Aggregate with a rule you can say in one line.** "The worst state
+   wins": a crash anywhere stumbles, else anything starting walks, else
+   anything running runs, else the runner sleeps. `BenchAggregate` is a
+   plain function of an array of states, so the order is tested without
+   an app, a clock or a CLI. The speed still follows one bench: the
+   selected one while it runs, else the first that does.
+2. **Act on a row without selecting it.** Each row in the bench list has
+   its own Start, Stop and Restart buttons. In SwiftUI a `Button` inside a
+   row with `onTapGesture` gets the click first, so the row's tap (which
+   selects the bench) and the buttons (which act) do not fight. The same
+   `BenchControls` rules decide which buttons are enabled in the row and
+   in the detail, so they can never disagree.
+3. **Show the fix, do not apply it.** A site without an `/etc/hosts` line
+   needs `sudo`, which an app should not ask for behind the user's back.
+   The popover shows the exact command with a Copy button instead, the
+   pattern `BenchControls` started for repairs. The one change the app
+   does make, the scheduler toggle in Settings, asks first in an alert and
+   then runs `benchbar service --yes --with-schedule`: the `--yes` is
+   the user's answer to that alert, since the CLI cannot ask through a
+   closed stdin.
+
+**Testing two benches.** The scripted CLI used by the store tests answered
+by command name only, so both benches got the same status. It now also
+takes an answer for one `--bench-dir`, which is how a test builds "v15
+running, v16 paused" and checks the menu bar stumbles. The snapshot test
+`popoverTwoBenches` renders the result to
+`~/Library/Caches/BenchBarSnapshots/popover-two-benches-*.png`.

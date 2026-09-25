@@ -9,6 +9,11 @@ enum Workspace {
         NSWorkspace.shared.open(url)
     }
 
+    static func open(_ text: String) {
+        guard let url = URL(string: text) else { return }
+        NSWorkspace.shared.open(url)
+    }
+
     static func openFolder(_ bench: BenchModel) {
         NSWorkspace.shared.open(URL(fileURLWithPath: bench.path, isDirectory: true))
     }

@@ -10,12 +10,18 @@ nonisolated final class ScriptedCLI: @unchecked Sendable {
 
     func answer(_ command: String, _ output: CommandOutput) { lock.withLock { answers[command] = output } }
     func answer(_ command: String, json: String) { answer(command, .ok(json)) }
+    /// An answer for one bench only (matched on --bench-dir), before the general one.
+    func answer(_ command: String, bench: String, json: String) { answer("\(command)|\(bench)", .ok(json)) }
     var calls: [[String]] { lock.withLock { log } }
 
     func runner() -> FakeRunner {
         FakeRunner { [self] arguments throws(CLIError) in
             lock.withLock {
                 log.append(arguments)
+                if let i = arguments.firstIndex(of: "--bench-dir"), i + 1 < arguments.count,
+                   let perBench = answers["\(arguments[0])|\(arguments[i + 1])"] {
+                    return perBench
+                }
                 return answers[arguments[0]] ?? CommandOutput(exitCode: 1, stdout: "", stderr: "[FAIL] no scripted answer for \(arguments[0])")
             }
         }

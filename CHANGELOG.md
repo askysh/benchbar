@@ -64,6 +64,13 @@ All notable changes to this project are documented here.
 - Site setup (phase 01 and `site add`) runs the bench's own Redis while
   it creates the site and installs apps, when nothing else does: frappe
   v16 needs it, and a new bench has no service running yet.
+- BenchBar.app with several benches: a bench list with state, uptime and
+  Start, Stop and Restart per row; the menu bar runner shows the worst
+  state across all benches with an "n of m up" count in the popover; the
+  selected bench lists its sites with an Open button each, the default
+  one marked, and the `site hosts` fix when a hosts line is missing; a
+  per bench scheduler toggle in Settings (asks, runs `benchbar service
+  --with-schedule`, restarts a running bench).
 
 ### Changed
 

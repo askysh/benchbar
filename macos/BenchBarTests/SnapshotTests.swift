@@ -46,6 +46,17 @@ struct SnapshotTests {
         try render(PopoverView(store: store, commands: AppCommands()), "popover-paused")
     }
 
+    @Test func popoverTwoBenches() async throws {
+        let v15 = "/Users/you/frappe-bench", v16 = "/Users/you/dev/v16-bench"
+        base.cli.answer("list", json: try Fixture.string("list-two-benches"))
+        base.cli.answer("status", bench: v15, json: #"{"schema_version":1,"bench":"\#(v15)","state":"running","stop_reason":null,"pid":4242,"started_at":"2026-09-26T01:00:00Z","last_exit_code":null,"web_url":"http://macdev:8000","web_ping_code":200}"#)
+        base.cli.answer("status", bench: v16, json: try Fixture.string("status-v16-two-sites"))
+        let store = base.makeStore()
+        await store.start(polling: false)
+        store.selectedPath = v16
+        try render(PopoverView(store: store, commands: AppCommands()), "popover-two-benches")
+    }
+
     @Test func popoverCLIMissing() async throws {
         base.settings.cliPath = ""
         let store = base.makeStore()
