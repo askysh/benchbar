@@ -4,6 +4,11 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+### Added (0.5)
+
+- `benchbar repair --json` streams a plan, a step event per action and a
+  done event with the exit code; `--dry-run --json` prints only the plan.
+
 ### Added
 
 - The `v16-lts` profile is ready for an end to end run: `pkgconf`

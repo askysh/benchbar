@@ -89,6 +89,13 @@ Checked in frappe `version-16` at 012667b and bench `develop` at c9d1250 (Septem
 - The scheduler line is an optional template line: a line that is only a token rendering to nothing is dropped. With the scheduler off, `Procfile.lean` renders byte for byte as before 0.4 (hash 92548cf35913 checked against the real bench), so no existing bench sees an outdated Procfile. The file's comment still says "no schedule" when it is on: changing it would change every existing Procfile's hash.
 - The scheduler choice is per bench state (`SCHEDULER` in its state file), so `repair` renders the same Procfile and never undoes it; `status --json` reports `scheduler`.
 
+## 0.5: repair --json
+
+- The events go to fd 3 (the command's stdout) and every human line to the run's log: the engine prints with the same helpers as always, so the text and the JSON can never disagree, and the log keeps the full story for a failed step.
+- Without `--yes` a JSON run applies nothing: the confirmation would be invisible, so stdin is closed and the plan is answered no (plan, then done with 1). The app shows the plan from `--dry-run --json`, asks, and then passes `--yes`.
+- `sudo` actions are marked in the plan (`"sudo": true`): without a terminal they are skipped with their manual command as the message, which the app shows as "run in Terminal".
+- A step's message is its own last `[FAIL]` line, else its `[WARN]` line, from the log lines written during the step; the step summary line is ignored.
+
 # The easy install run (v0.3)
 
 ## Setup and environment

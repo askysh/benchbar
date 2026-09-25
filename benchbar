@@ -384,11 +384,27 @@ cmd_doctor() {
   [[ "$fails" == "0" ]]
 }
 
+# repair --json: events on stdout (docs/json-schema.md), the human text in
+# the run's log. Without --yes or --dry-run nothing is applied: a reader
+# that cannot answer the question gets the plan and exit code 1.
 cmd_repair() {
+  local code=0
   fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
   fl_require_bench
+  if [[ "$OPT_JSON" == "1" ]]; then
+    exec 3>&1 1>>"${FL_LOG_FILE:-/dev/null}" 2>&1
+    FL_JSON_EVENTS=1
+    FL_PLAIN=1; fl_ui_init
+    # the question would be invisible (the text goes to the log): without
+    # --yes it is answered no
+    [[ "$FL_ASSUME_YES" == "1" ]] || exec 0</dev/null
+  fi
   fl_header "benchbar repair" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "$FL_SITE"
-  fl_repair_engine "Repair"
+  fl_repair_engine "Repair" || code=$?
+  if [[ "$FL_JSON_EVENTS" == "1" && "${FL_DRY_RUN:-0}" != "1" ]]; then
+    fl_event "{\"event\":\"done\",\"exit_code\":${code},\"log\":$(fl_json_str "${FL_LOG_FILE:-}")}"
+  fi
+  return "$code"
 }
 
 cmd_status() {
@@ -419,7 +435,7 @@ case "$COMMAND" in
   # exit 1 by hand: a failing check must not reach the ERR trap, whose
   # "[FAIL] Last command failed" line would follow the JSON on stdout
   doctor) cmd_doctor || exit 1 ;;
-  repair) cmd_repair ;;
+  repair) cmd_repair || exit $? ;;
   status) cmd_status ;;
   list) fl_cmd_list "$OPT_JSON" ;;
   up) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_up ;;
