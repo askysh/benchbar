@@ -189,5 +189,8 @@ fl_verify_site_health() {
   if ! (cd "$bench_dir" && bench --site "$site_name" doctor); then
     fl_warn "bench doctor reported issues; the site may still be usable."
   fi
-  fl_bench_run "$bench_dir" bench use "$site_name"
+  # bench use rewrites currentsite.txt every time; a rerun must write nothing
+  if [[ "$(tr -d '[:space:]' <"$bench_dir/sites/currentsite.txt" 2>/dev/null)" != "$site_name" ]]; then
+    fl_bench_run "$bench_dir" bench use "$site_name"
+  fi
 }

@@ -78,6 +78,16 @@ Checked in frappe `version-16` at 012667b and bench `develop` at c9d1250 (Septem
 
 - Option (a), decided with Akash on 2026-09-26 ("let's struggle and find out"): the v16 bench uses the `mariadb@10.11` server the v15 bench already runs on 3306. frappe v16 accepts it without a warning, and it keeps one server, one data folder and one Keychain password. Option (b) (a second `mariadb@11.8` service on 3307) stays possible later if v16 turns out to need 11.8.
 - The supported path: when a MariaDB server runs on 3306 and its version is inside the profile's range, phases 00 and 01 and every command use that server's formula instead of the profile's (named from the server binary's `opt/<formula>` or `Cellar/<formula>` path, read with `ps`), and the formula is stored per bench (`MARIADB_FORMULA`) by phase 01 or the first `service`, `adopt` or `install`. Daily commands read only the stored value: `test-process` guards that `down` never touches port 3306, and a detection in every command's context broke that guarantee. So a v16 install on this Mac never installs or starts `mariadb@11.8`, and a machine without MariaDB still gets the profile's formula. `mariadb_version` in doctor checks the range per profile.
+## 0.4: sites and the scheduler
+
+- The default site is the one benchbar remembers per bench; `site default` also runs `bench use`, so `currentsite.txt` agrees, and rewrites the runner, whose ping embeds the site. `benchup`'s wait, `status` and the app all use it; a second site never changes it on its own.
+- `site add` creates a new site only, on the same MariaDB server as the bench (option (a) of the MariaDB decision), with the Keychain password; it never drops or overwrites a site, and there is no `site drop` in 0.4.
+- Apps for a new site come only from `apps/` (`--bundle` or `--apps`); a missing app is refused with the `bench get-app` command. Fetching apps belongs to the 0.6 app commands.
+- A site's `ping_code` is only tried when something listens on the web port, so `list --json` on stopped benches costs no three second timeouts per site.
+- `site hosts` asks once for all missing lines and uses one sudo prompt, through the existing marker block logic.
+- `site list` takes no lock (it is read only); `add`, `default` and `hosts` take the checkout's lock like every other writing command.
+- The scheduler line is an optional template line: a line that is only a token rendering to nothing is dropped. With the scheduler off, `Procfile.lean` renders byte for byte as before 0.4 (hash 92548cf35913 checked against the real bench), so no existing bench sees an outdated Procfile. The file's comment still says "no schedule" when it is on: changing it would change every existing Procfile's hash.
+- The scheduler choice is per bench state (`SCHEDULER` in its state file), so `repair` renders the same Procfile and never undoes it; `status --json` reports `scheduler`.
 
 # The easy install run (v0.3)
 

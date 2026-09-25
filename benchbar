@@ -69,6 +69,10 @@ SCRIPT_DIR="$(fl_resolve_self)"
 . "${SCRIPT_DIR}/lib/frappe-local/mariadb.sh"
 # shellcheck source=lib/frappe-local/wkhtmltopdf.sh
 . "${SCRIPT_DIR}/lib/frappe-local/wkhtmltopdf.sh"
+# shellcheck source=lib/frappe-local/bench.sh
+. "${SCRIPT_DIR}/lib/frappe-local/bench.sh"
+# shellcheck source=lib/frappe-local/sites.sh
+. "${SCRIPT_DIR}/lib/frappe-local/sites.sh"
 
 OPT_BENCH_DIR=""
 OPT_SITE=""
@@ -78,6 +82,7 @@ OPT_JSON=0
 OPT_PORT_OFFSET=""
 FL_ASSUME_YES="${FL_ASSUME_YES:-0}"
 FL_MAKE_DEFAULT="${FL_MAKE_DEFAULT:-0}"
+FL_SCHEDULER=""
 FL_SKIP_PLAN_CONFIRM=0
 COMMAND=""
 ARGS=()
@@ -110,6 +115,11 @@ Daily
   watch               Run bench watch for asset rebuilds.
   autostart on|off    Whether the bench may come back after login.
   path                Print the bench directory (used by benchcd).
+  site list           The bench's sites; the default one is what benchup waits for.
+  site add NAME       bench new-site (Keychain MariaDB password), the hosts line, and
+                      --bundle NAME or --apps "a b" from apps/. The default stays.
+  site default NAME   Make NAME the default site (bench use, runner, benchup, the app).
+  site hosts          Add a 127.0.0.1 line for every site to /etc/hosts (sudo, once).
   mariadb-password    Print the MariaDB root password kept in the Keychain (asks first).
 
 Options
@@ -119,6 +129,8 @@ Options
   --bundle NAME       App bundle for install (minimal, common, extended)
   --make-default      install, adopt, service: make this the default bench even when
                       another one is already the default
+  --with-schedule     service: add the scheduler to Procfile.lean (per bench, kept by repair)
+  --without-schedule  service: remove it again (the default)
   --port-offset N     install, adopt, service: use port block N (web 8000+N, socketio 9000+N,
                       redis 11000+N and 13000+N). Default: keep the ports, or the next
                       free block when another bench already uses them
@@ -146,6 +158,8 @@ while [[ "$#" -gt 0 ]]; do
     --bundle=*) OPT_BUNDLE="${1#*=}"; shift ;;
     --dry-run) FL_DRY_RUN=1; shift ;;
     --make-default) FL_MAKE_DEFAULT=1; shift ;;
+    --with-schedule) FL_SCHEDULER=on; shift ;;
+    --without-schedule) FL_SCHEDULER=off; shift ;;
     --port-offset) OPT_PORT_OFFSET="${2:-}"; shift 2 ;;
     --port-offset=*) OPT_PORT_OFFSET="${1#*=}"; shift ;;
     -y|--yes) FL_ASSUME_YES=1; shift ;;
@@ -304,7 +318,15 @@ cmd_service() {
     fl_ports_plan "$OPT_PORT_OFFSET" || return 1
   fi
   fl_remember_bench || true
+  if [[ -n "$FL_SCHEDULER" ]]; then
+    # stored now (not in a dry run) and rendered for the plan either way
+    fl_bstate_set SCHEDULER "$FL_SCHEDULER"
+    fl_render_all
+  fi
   if FL_PLAN_CHECKS="port_block" fl_repair_engine "Background service" service; then
+    if [[ -n "$FL_SCHEDULER" && "${FL_DRY_RUN:-0}" != "1" ]] && fl_bench_is_running; then
+      fl_warn "the running bench still uses the old Procfile.lean; run: benchbar restart --bench-dir ${FL_BENCH_DIR}"
+    fi
     fl_next_steps_box
     return 0
   fi
@@ -375,6 +397,13 @@ cmd_status() {
 }
 
 case "$COMMAND" in
+  site)
+    # site list is read only; add, default and hosts change things
+    if [[ "${ARGS[0]:-list}" != "list" ]]; then
+      fl_log_init "${FL_STATE_DIR}/logs"
+      fl_lock_acquire "${FL_STATE_DIR}/lock"
+    fi
+    ;;
   install|adopt|service|repair|up|down|restart|autostart|uninstall-service)
     fl_log_init "${FL_STATE_DIR}/logs"
     fl_lock_acquire "${FL_STATE_DIR}/lock"
@@ -402,6 +431,7 @@ case "$COMMAND" in
   autostart) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_autostart "${ARGS[0]:-}" ;;
   uninstall-service) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_uninstall_service ;;
   path) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; printf '%s\n' "$FL_BENCH_DIR" ;;
+  site) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_site ${ARGS[@]+"${ARGS[@]}"} ;;
   report) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_report ${ARGS[@]+"${ARGS[@]}"} ;;
   help) usage ;;
   *) fl_die "Unknown command: ${COMMAND}" "Run: benchbar --help" ;;

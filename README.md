@@ -141,8 +141,14 @@ close Terminal; the bench keeps running.
 | `benchcd` | `cd "$(benchbar path)"` | Jump into the bench folder |
 
 The lean Procfile runs Redis, the web server, socketio and one worker. It
-has no watcher and no scheduler: run `benchwatch` while you edit assets,
-and `bench schedule` by hand when you need scheduled jobs.
+has no watcher: run `benchwatch` while you edit assets. The scheduler is
+opt in per bench: `benchbar service --with-schedule` adds it (and
+`--without-schedule` takes it out again), then `benchbar restart`.
+
+Sites: `benchbar site list`, `site add NAME` (a new site on the same
+MariaDB, with its `/etc/hosts` line; `--bundle` or `--apps` installs apps
+already in the bench), `site default NAME` (the site `benchup` waits for
+and the app opens) and `site hosts` (adds every missing hosts line).
 
 Other commands: `benchbar list`, `benchbar report`,
 `benchbar mariadb-password`, `benchbar service`,

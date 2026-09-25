@@ -13,8 +13,8 @@ case "$1" in
     app="${*: -1}"; app="${app##*/}"; app="${app%.git}"
     mkdir -p "apps/$app"; exit 0 ;;
   new-site)
-    mkdir -p "sites/$2"; touch "sites/$2/installed_apps"; exit 0 ;;
-  use) exit 0 ;;
+    mkdir -p "sites/$2"; touch "sites/$2/installed_apps"; printf '{"db_name": "_x"}\n' >"sites/$2/site_config.json"; exit 0 ;;
+  use) printf '%s\n' "$2" >sites/currentsite.txt; exit 0 ;;
   set-config)
     # set-config -g [-p] KEY VALUE: writes sites/common_site_config.json like frappe
     shift; parse=0

@@ -7,7 +7,9 @@
 # A template may contain:
 #   #@version N            stripped on render, becomes the vN in the header
 #   __HEADER__             replaced by "benchbar-template: <name> vN <hash>"
-#   __KEY__                replaced by the value passed as KEY=value
+#   __KEY__                replaced by the value passed as KEY=value; a line
+#                          that is only __KEY__ and renders to nothing is
+#                          dropped (an optional line, like the scheduler)
 # The hash covers the rendered content with __HEADER__ still in place, so it
 # only changes when the template or its inputs change.
 #
@@ -39,7 +41,7 @@ fl_template_version() {
 # fl_template_render NAME KEY=VALUE...  (NAME is the file under templates/, without .tmpl)
 # Prints the rendered content including the resolved header line.
 fl_template_render() {
-  local name="$1" file body line pair key value hash version
+  local name="$1" file body line pair key value hash version only_token
   shift
   file="${FL_TEMPLATE_DIR}/${name}.tmpl"
   [[ -f "$file" ]] || { fl_fail "template not found: ${file}"; return 1; }
@@ -49,11 +51,14 @@ fl_template_render() {
     case "$line" in
       '#@version'*) continue ;;
     esac
+    only_token=0
+    [[ "$line" =~ ^__[A-Z_]+__$ ]] && only_token=1
     for pair in "$@"; do
       key="${pair%%=*}"
       value="${pair#*=}"
       line="${line//__${key}__/$value}"
     done
+    [[ "$only_token" == "1" && -z "$line" ]] && continue
     body="${body}${line}"$'\n'
   done <"$file"
   hash="$(printf '%s' "$body" | fl_content_hash)"

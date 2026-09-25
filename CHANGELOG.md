@@ -50,6 +50,17 @@ All notable changes to this project are documented here.
   (`mariadb_min`, `mariadb_max` in `release-profiles.tsv`): 10.6 to 10.11
   for v15, 10.6 to 11.8 for v16.
 
+- Sites: `benchbar site list`, `site add NAME` (bench new-site with the
+  Keychain MariaDB password, the hosts line, and `--bundle` or `--apps`
+  from `apps/`), `site default NAME` (`bench use`, remembered, the runner
+  pings it) and `site hosts` (every missing hosts line after one
+  question). `list --json` and `status --json` gain `sites[]` with
+  `name`, `default`, `hosts_entry` and `ping_code`.
+- The scheduler, opt in per bench: `benchbar service --with-schedule`
+  adds `schedule: bench schedule` to `Procfile.lean`, `--without-schedule`
+  removes it, `repair` keeps the choice, `status --json` gains
+  `scheduler`, and doctor reports it.
+
 ### Changed
 
 - The port clash check also warns when another bench is only configured

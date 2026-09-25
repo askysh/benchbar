@@ -11,7 +11,7 @@
 # Groups (used by "benchbar service" versus "benchbar repair"):
 #   system, bench, service, site
 
-FL_CHECK_ORDER="brew python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac full_disk_access env_python bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets logs honcho honcho_setuptools procfile runner agent fork_safety stop_flag helpers cli_link legacy_agents hosts port_clash orphans ping"
+FL_CHECK_ORDER="brew python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac full_disk_access env_python bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets logs honcho honcho_setuptools procfile runner agent fork_safety scheduler stop_flag helpers cli_link legacy_agents hosts port_clash orphans ping"
 FL_LOG_WARN_MB="${FL_LOG_WARN_MB:-50}"
 FL_HOSTS_FILE="${FL_HOSTS_FILE:-/etc/hosts}"
 
@@ -60,6 +60,7 @@ fl_check_label() {
     cleanmymac) printf 'CleanMyMac' ;;
     port_clash) printf 'Port clash' ;;
     port_block) printf 'Port block' ;;
+    scheduler) printf 'Scheduler' ;;
     full_disk_access) printf 'Full Disk Access' ;;
     toolchain_node) printf 'Node' ;;
     toolchain_yarn) printf 'yarn' ;;
@@ -528,6 +529,16 @@ chk_port_clash() {
 }
 
 # ------------------------------------------------------------- 0.4 checks
+
+# Reported, never flagged: the scheduler is a choice. A Procfile that does
+# not match the choice shows up as "Procfile.lean is outdated".
+chk_scheduler() {
+  if fl_scheduler_enabled; then
+    chk__set ok "on: Procfile.lean runs bench schedule (off: benchbar service --without-schedule)"
+  else
+    chk__set ok "off, scheduled jobs do not run (on: benchbar service --with-schedule)"
+  fi
+}
 
 chk_full_disk_access() {
   # Full Disk Access belongs to the app that runs bench init (Terminal);

@@ -24,6 +24,15 @@ struct ModelTests {
         #expect(ports.web == 8000)
     }
 
+    @Test func decodesSitesAndScheduler() throws {
+        let status = try BenchJSON.decode(BenchStatus.self, from: Fixture.data("status-running"))
+        #expect(status.sites?.first?.isDefault == true)
+        #expect(status.sites?.first?.pingCode == 200)
+        #expect(status.scheduler == false)
+        let list = try BenchJSON.decode(BenchList.self, from: Fixture.data("list"))
+        #expect(list.benches[0].sites?.map(\.name) == ["macdev"])
+    }
+
     @Test func decodesEmptyList() throws {
         let list = try BenchJSON.decode(BenchList.self, from: Fixture.data("list-empty"))
         #expect(list.benches.isEmpty)

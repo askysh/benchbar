@@ -41,6 +41,23 @@ nonisolated struct BenchPorts: Codable, Sendable, Equatable, Hashable {
     }
 }
 
+/// One site of a bench (`sites[]` in list and status, added in 0.4).
+nonisolated struct SiteInfo: Codable, Sendable, Equatable, Hashable, Identifiable {
+    var name: String
+    var isDefault: Bool
+    var hostsEntry: Bool
+    var pingCode: Int?
+
+    var id: String { name }
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case isDefault = "default"
+        case hostsEntry = "hosts_entry"
+        case pingCode = "ping_code"
+    }
+}
+
 /// One entry of `benchbar list --json`.
 nonisolated struct BenchSummary: Codable, Sendable, Equatable, Hashable, Identifiable {
     var path: String
@@ -52,11 +69,13 @@ nonisolated struct BenchSummary: Codable, Sendable, Equatable, Hashable, Identif
     var isDefault: Bool
     var serviceInstalled: Bool
     var stateFile: String
+    /// Added in 0.4; nil from an older CLI.
+    var sites: [SiteInfo]? = nil
 
     var id: String { path }
 
     enum CodingKeys: String, CodingKey {
-        case path, name, site, label, ports
+        case path, name, site, label, ports, sites
         case webURL = "web_url"
         case isDefault = "default"
         case serviceInstalled = "service_installed"
@@ -102,12 +121,15 @@ nonisolated struct BenchStatus: Codable, Sendable, Equatable {
     var agentLoaded: Bool?
     var agentState: String?
     var processesRunning: Bool?
+    /// Added in 0.4.
+    var sites: [SiteInfo]?
+    var scheduler: Bool?
     // state.json only
     var updatedAt: Date?
     var source: String?
 
     enum CodingKeys: String, CodingKey {
-        case bench, name, site, label, state, pid, ports, log, source
+        case bench, name, site, label, state, pid, ports, log, source, sites, scheduler
         case schemaVersion = "schema_version"
         case cliVersion = "cli_version"
         case stopReason = "stop_reason"

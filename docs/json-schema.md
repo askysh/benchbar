@@ -86,6 +86,7 @@ How `status` decides (live facts win over the state file):
 | `benches[].label` | string | launchd label, `com.benchbar.<name>` |
 | `benches[].web_url` | string | `http://<site>:<web port>` |
 | `benches[].ports` | object | web, socketio, redis_queue, redis_socketio, redis_cache. `redis_socketio` was added in 0.4: bench keeps it equal to `redis_cache` and frappe v15 and v16 never connect to it; older CLIs leave it out |
+| `benches[].sites` | array | added in 0.4, see [Sites](#sites) |
 | `benches[].default` | bool | same as `path == default_bench` |
 | `benches[].service_installed` | bool | the agent plist exists |
 | `benches[].state_file` | string | where the runner writes `state.json` |
@@ -143,12 +144,35 @@ bench (`.benchbar/state.env`), the `WorkingDirectory` of every
 | `agent_loaded` | bool | the launchd agent is loaded |
 | `agent_state` | string or null | launchd's own word, for example `running` or `not running` |
 | `processes_running` | bool | any honcho, serve, worker, socketio or port listener of this bench |
+| `sites` | array | added in 0.4, see [Sites](#sites) |
+| `scheduler` | bool | added in 0.4: `Procfile.lean` runs `bench schedule` (`benchbar service --with-schedule`) |
 
 Kept from frappe-mac 0.2.0 for older readers: `url`, `agent`,
 `loaded` (`"yes"` or `"no"`), `stop_flag` (`"manual"`, `"crash"`,
 `"broken"` or `"none"`), `ping` (string, `"000"` for no answer). In
 0.2.0 `state` held launchd's word (now `agent_state`), and `pid` and
 `last_exit_code` were strings.
+
+## Sites
+
+`list --json` (per bench), `status --json` and `benchbar site list --json`
+carry the bench's sites, read from `sites/*/site_config.json`:
+
+```json
+"sites": [
+  { "name": "v16dev", "default": true, "hosts_entry": true, "ping_code": 200 },
+  { "name": "v16two", "default": false, "hosts_entry": false, "ping_code": null }
+]
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `name` | string | the site folder |
+| `default` | bool | the site `benchup` waits for, the runner pings and the app opens; `benchbar site default NAME` changes it (and runs `bench use`) |
+| `hosts_entry` | bool | `/etc/hosts` maps it to 127.0.0.1; `benchbar site hosts` adds the missing lines |
+| `ping_code` | number or null | HTTP code of `/api/method/ping` with this site as `Host`; `null` when nothing listens on the web port or nothing answered |
+
+`benchbar site list --json` prints `{"schema_version":1,"cli_version":..,"bench":..,"sites":[..]}`.
 
 ## `benchbar doctor --json`
 

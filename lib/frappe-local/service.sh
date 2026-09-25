@@ -53,6 +53,14 @@ fl_rc_profile() {
   printf '%s' "${p:-$FL_PROFILE}"
 }
 
+# The scheduler is opt in per bench (service --with-schedule). FL_SCHEDULER
+# overrides the stored value while a plan is being made.
+fl_scheduler_enabled() {
+  local v="${FL_SCHEDULER:-}"
+  [[ -n "$v" ]] || v="$(fl_bstate_get SCHEDULER 2>/dev/null || true)"
+  [[ "$v" == "on" ]]
+}
+
 fl_autostart_enabled() {
   [[ "$(fl_bstate_get AUTOSTART 2>/dev/null || true)" != "off" ]]
 }
@@ -60,7 +68,7 @@ fl_autostart_enabled() {
 fl_render_all() {
   local honcho="${FL_HONCHO:-${FL_BENCH_DIR}/env/bin/honcho}" run_at_load=true
   fl_autostart_enabled || run_at_load=false
-  FL_R_PROCFILE="$(fl_template_render Procfile.lean "WEB_PORT=${FL_WEB_PORT}")"
+  FL_R_PROCFILE="$(fl_template_render Procfile.lean "WEB_PORT=${FL_WEB_PORT}" "SCHEDULE=$(fl_scheduler_enabled && printf 'schedule: bench schedule')")"
   FL_R_RUNNER="$(fl_template_render bench-run.sh \
     "BENCH_DIR=${FL_BENCH_DIR}" \
     "BENCH_RE=$(fl_regex_escape "$FL_BENCH_DIR")" \
