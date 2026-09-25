@@ -210,6 +210,14 @@ bench keeps the first one as the default (the one `benchup` starts) unless
 you pass `--make-default`; the PATH lines in your shell block follow the
 default bench's profile. Stopping one bench never touches another.
 
+Each bench has its own port block: web `8000 + n`, socketio `9000 + n`,
+Redis `11000 + n` and `13000 + n`. `bench init` already counts up for
+benches in the same folder; `install` and `adopt` also check every bench
+benchbar knows and the ports in use, and move a new bench that clashes
+with an established one to the next free block, with `bench set-config -g`
+and `bench setup redis`. `--port-offset N` picks a block, for example
+`benchbar service --port-offset 1 --bench-dir ~/dev/v16-bench`.
+
 **Profiles** pick the Frappe branch and the matching toolchain:
 
 | Profile | Frappe | ERPNext | Python | Node | MariaDB |

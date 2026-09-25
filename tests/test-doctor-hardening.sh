@@ -57,20 +57,20 @@ if [[ ! -x /usr/local/bin/yarn && ! -x /usr/bin/yarn ]]; then
 fi
 mv "$TMP_DIR/yarn.aside" "$MOCK_BREW_PREFIX/opt/node@20/bin/yarn"
 
-# ---- toolchain_mariadb: not running, too old, too new; never reads the Keychain
+# ---- mariadb_version: not running, too old, too new; never reads the Keychain
 reset_calls
 : >"$MOCK_LISTEN"
-r="$(check toolchain_mariadb)"
+r="$(check mariadb_version)"
 assert_contains "$r" "warn|nothing listens on 3306"
 assert_contains "$r" "brew services start mariadb@10.11"
 assert_calls_not_contain '^security '
 printf '3306 111 mariadbd 127.0.0.1\n' >"$MOCK_LISTEN"
-assert_contains "$(check toolchain_mariadb)" "ok|MariaDB 10.11"
+assert_contains "$(check mariadb_version)" "ok|MariaDB 10.11"
 cp "$MOCK_BREW_PREFIX/opt/mariadb@10.11/bin/mariadb" "$TMP_DIR/mariadb.real"
 printf '#!/bin/sh\necho "mariadb  Ver 15.1 Distrib 10.5.9-MariaDB, for osx10.20 (arm64)"\n' >"$MOCK_BREW_PREFIX/opt/mariadb@10.11/bin/mariadb"
-assert_contains "$(check toolchain_mariadb)" "warn|MariaDB 10.5.9 is older than 10.6"
+assert_contains "$(check mariadb_version)" "warn|MariaDB 10.5.9 is older than 10.6, the oldest profile v15-lts supports"
 printf '#!/bin/sh\necho "mariadb from 12.0.2-MariaDB, client 15.2 for osx10.20 (arm64)"\n' >"$MOCK_BREW_PREFIX/opt/mariadb@10.11/bin/mariadb"
-assert_contains "$(check toolchain_mariadb)" "warn|MariaDB 12.0.2 is newer than 11.8"
+assert_contains "$(check mariadb_version)" "warn|MariaDB 12.0.2 is newer than 10.11, the newest profile v15-lts is tested with"
 cp "$TMP_DIR/mariadb.real" "$MOCK_BREW_PREFIX/opt/mariadb@10.11/bin/mariadb"
 
 # ---- toolchain_pkgconfig: connector missing, pkg-config missing

@@ -29,6 +29,9 @@ run_fm doctor --bench-dir "$BENCH"
 assert_contains "$OUT" "profile  v16-lts"
 assert_contains "$OUT" "[OK] Homebrew formulae: python@3.14, node@24, mariadb@11.8, redis, pkgconf, mariadb-connector-c installed"
 assert_contains "$OUT" "[OK] Bench env: env/bin/python runs (Python 3.14)"
+# the MariaDB 10.11 server a v15 machine already runs is inside v16's range
+assert_contains "$OUT" "[OK] MariaDB server: MariaDB 10.11"
+assert_contains "$OUT" "profile v16-lts accepts 10.6 to 11.8"
 grep -q 'opt/mariadb-connector-c/lib/pkgconfig' "$HOME/.zshrc" || fail "PKG_CONFIG_PATH must include mariadb-connector-c"
 
 # pdf_engine on v16: wkhtmltopdf patched, Chromium not downloaded yet: a warning with the frappe command

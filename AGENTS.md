@@ -44,7 +44,10 @@ then open `http://<site>:8000`.
 ```
 
 `adopt` writes only the service files (Procfile.lean, runner, agent,
-helpers, hosts line) and never runs `migrate`, `build` or `update`.
+helpers, hosts line) and never runs `migrate`, `build` or `update`. When
+the bench uses the same ports as an established bench, it also moves it
+to the next free port block with `bench set-config -g` (after asking);
+the default bench never moves on its own.
 
 `repair` only runs the fixes doctor flagged, in dependency order, with a
 backup before each change. The bench path is remembered after the first
