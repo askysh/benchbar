@@ -151,7 +151,7 @@ assert_calls_contain "^bench init ${BENCH} --frappe-branch version-15"
 # the bench's own Redis ran for new-site and install-app, and was stopped after
 assert_calls_contain '^redis-server config/redis_queue.conf --daemonize yes$'
 assert_calls_contain '^redis-server config/redis_cache.conf --daemonize yes$'
-assert_calls_contain '^redis-cli -p 11000 shutdown nosave$'
+assert_calls_contain '^redis-cli -p 11000 shutdown save$'
 assert_calls_contain '^redis-cli -p 13000 shutdown nosave$'
 ! grep -q -E '^(11000|13000) ' "$MOCK_LISTEN" || fail "the setup Redis must be stopped afterwards"
 assert_calls_contain "^bench new-site macdev"

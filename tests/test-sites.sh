@@ -36,7 +36,7 @@ assert_eq "0" "$CODE" "$OUT"
 assert_calls_contain '^bench new-site v16two --mariadb-root-password rootpw --admin-password adminpw --no-mariadb-socket$'
 assert_calls_not_contain '^bench --site v16two install-app'
 assert_calls_contain '^redis-server config/redis_queue.conf --daemonize yes$' "(frappe v16 needs the bench's Redis for new-site)"
-assert_calls_contain '^redis-cli -p 11000 shutdown nosave$'
+assert_calls_contain '^redis-cli -p 11000 shutdown save$'
 grep -q '^127.0.0.1 v16two$' "$FL_HOSTS_FILE" || fail "hosts line for the new site"
 assert_contains "$OUT" "the default site stays v16dev"
 run_fm site list --json --bench-dir "$BENCH"
@@ -51,7 +51,7 @@ assert_calls_not_contain '^bench new-site'
 reset_calls
 MOCK_BENCH_NEW_SITE_EXIT=1 ADMIN_PASSWORD=adminpw run_fm site add v16broken --yes --bench-dir "$BENCH"
 assert_eq "1" "$CODE" "$OUT"
-assert_calls_contain '^redis-cli -p 11000 shutdown nosave$' "(cleanup after a failure)"
+assert_calls_contain '^redis-cli -p 11000 shutdown save$' "(cleanup after a failure)"
 ! grep -q -E '^(11000|13000) ' "$MOCK_LISTEN" || fail "no setup Redis may stay behind"
 
 # a running bench's Redis is used as it is, never started twice or stopped

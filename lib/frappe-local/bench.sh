@@ -160,8 +160,9 @@ fl_bench_redis_up() {
     port="$(awk '$1 == "port" {print $2; exit}' "$conf")"
     [[ "$port" =~ ^[0-9]+$ ]] || continue
     fl_port_listening "$port" && continue
-    if (cd "$bench_dir" && redis-server "config/$(basename "$conf")" --daemonize yes) >/dev/null 2>&1; then
-      FL_SETUP_REDIS_PORTS="${FL_SETUP_REDIS_PORTS} ${port}"
+    # its complaints (a bad config, a folder it cannot write) go to the run log
+    if (cd "$bench_dir" && redis-server "config/$(basename "$conf")" --daemonize yes) >>"${FL_LOG_FILE:-/dev/null}" 2>&1; then
+      FL_SETUP_REDIS_PORTS="${FL_SETUP_REDIS_PORTS} ${port}:$(basename "$conf" .conf)"
       fl_info "started the bench's Redis on ${port} for the site setup"
     else
       fl_warn "could not start Redis from ${conf}; site setup may fail"
@@ -171,9 +172,12 @@ fl_bench_redis_up() {
 }
 
 fl_bench_redis_down() {
-  local port
-  for port in $FL_SETUP_REDIS_PORTS; do
-    redis-cli -p "$port" shutdown nosave >/dev/null 2>&1 || true
+  local entry port mode
+  for entry in $FL_SETUP_REDIS_PORTS; do
+    port="${entry%%:*}"
+    # the queue keeps jobs an app install enqueued for the first worker; the cache may go
+    mode=nosave; [[ "$entry" == *:redis_queue ]] && mode=save
+    redis-cli -p "$port" shutdown "$mode" >>"${FL_LOG_FILE:-/dev/null}" 2>&1 || true
     fl_info "stopped the setup Redis on ${port}"
   done
   FL_SETUP_REDIS_PORTS=""

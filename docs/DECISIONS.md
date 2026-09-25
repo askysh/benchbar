@@ -93,7 +93,7 @@ Checked in frappe `version-16` at 012667b and bench `develop` at c9d1250 (Septem
 
 - The MariaDB root password of a bench set up before 0.3 was never in the Keychain, so phase 00 stopped with exit 2 as designed; Akash reset it with the documented recipe (databases kept, the v15 bench stopped around it with `benchbar down` and brought back with `benchbar up`), and the next run verified the new password and saved it to the Keychain.
 - `bench init` in `~/dev/v16-bench` chose 8001, 9001, 11001, 13001 (and file watcher 6788) by itself, as a sibling of `~/dev/frappe-bench`; benchbar's port check agreed and moved nothing.
-- On v16, `bench --site v16dev install-app erpnext` failed with "Error 61 connecting to 127.0.0.1:11001. Connection refused": frappe v16 connects to the bench's Redis during site setup, and a fresh bench has none running. Phase 01 and `site add` now start the bench's own Redis servers from `config/redis_*.conf` when nothing listens on their ports, and stop only the ones they started (`redis-cli shutdown nosave`). A running bench's Redis is used as it is.
+- On v16, `bench --site v16dev install-app erpnext` failed with "Error 61 connecting to 127.0.0.1:11001. Connection refused": frappe v16 connects to the bench's Redis during site setup, and a fresh bench has none running. Phase 01 and `site add` now start the bench's own Redis servers from `config/redis_*.conf` when nothing listens on their ports, and stop only the ones they started: the queue with `shutdown save`, so jobs an app install enqueued wait for the first worker, the cache with `nosave` (Codex). Redis startup errors go to the run log. A running bench's Redis is used as it is.
 
 # The easy install run (v0.3)
 
