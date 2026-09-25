@@ -144,7 +144,11 @@ fl_on_error() {
   local code="$?"
   [[ "$code" -eq 0 ]] && return 0
   fl_spinner_stop
-  fl_fail "Last command failed with exit code ${code}: ${FL_LAST_COMMAND:-unknown}"
-  if [[ -n "${FL_LOG_FILE:-}" ]]; then fl_note "full log: ${FL_LOG_FILE}"; fi
+  # nothing to name: the command already said why it ended (a verify pass
+  # with warnings), so a "[FAIL] Last command failed" line would only mislead
+  if [[ -n "${FL_LAST_COMMAND:-}" ]]; then
+    fl_fail "Last command failed with exit code ${code}: ${FL_LAST_COMMAND}"
+    if [[ -n "${FL_LOG_FILE:-}" ]]; then fl_note "full log: ${FL_LOG_FILE}"; fi
+  fi
   exit "$code"
 }

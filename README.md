@@ -229,7 +229,7 @@ and `bench setup redis`. `--port-offset N` picks a block, for example
 | Profile | Frappe | ERPNext | Python | Node | MariaDB |
 |---|---|---|---|---|---|
 | `v15-lts` (default) | `version-15` | `version-15` | `python@3.11` | `node@20` | `mariadb@10.11` |
-| `v16-lts` (experimental) | `version-16` | `version-16` | `python@3.14` | `node@24` | `mariadb@11.8` |
+| `v16-lts` | `version-16` | `version-16` | `python@3.14` | `node@24` | `mariadb@11.8` |
 
 Every profile also installs `pkgconf` (pkg-config) and
 `mariadb-connector-c`, which `mysqlclient` needs to build on v16. When
