@@ -162,7 +162,11 @@ it starts, runs while it is up (faster when the bench is busy), stumbles
 when it crashes, and shows a question mark when the CLI is missing.
 Reduce Motion shows still poses. Click it for the popover: bench, site,
 state and uptime, Start, Stop, Restart, open the site, the logs or the
-bench folder, and a read only doctor. Keyboard: ⌘U start, ⌘D stop,
+bench folder, and a read only doctor. With more than one bench the runner
+shows the worst state of all of them, and the popover lists every bench
+with its own Start, Stop and Restart and an "n of m up" count; the
+selected bench lists its sites, each with an Open button. Settings has a
+scheduler switch per bench. Keyboard: ⌘U start, ⌘D stop,
 ⌘R restart, ⌘O site, ⌘L logs, ⌘F folder, ⌘K doctor.
 
 On first run the app looks for the CLI in `~/.local/bin/benchbar`, then in

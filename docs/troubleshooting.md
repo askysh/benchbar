@@ -32,6 +32,31 @@ once to verify and save the new one. Forgotten entirely: phase 00 prints
 the reset recipe (stop MariaDB, start `mariadbd-safe --skip-grant-tables`,
 `ALTER USER`), which keeps the databases.
 
+**Phase 00 stops: "MariaDB root already has a password".** A bench set
+up before 0.3 never stored the root password in the Keychain. Type it when
+asked (it is verified and saved), or pass `MARIADB_ROOT_PASSWORD`. If
+nobody knows it, the reset above keeps every database; stop your benches
+first (`benchbar down --bench-dir ...`) so they do not lose their
+database mid request, and bring them back with `benchbar up` afterwards.
+
+**`bench init` fails with "Operation not permitted" on crontab.** On
+macOS 14 and later a Terminal without Full Disk Access may not write a
+crontab, and bench then offers to delete the new bench (frappe/bench#1730,
+open). benchbar runs `bench init --no-backups`, which needs no crontab,
+and doctor's `full_disk_access` check says when the Terminal lacks it. To
+use `bench setup backups` later: System Settings > Privacy & Security >
+Full Disk Access, add Terminal, open a new window.
+
+**Two benches, and one crashes when the other starts.** Both benches need
+runner template v3 (0.4): an older runner clears every `socketio.js` on
+the Mac when its bench starts. `benchbar doctor` on each bench says
+"runner is outdated" until `benchbar repair --bench-dir ...` rewrites it.
+
+**A v16 bench and MariaDB 10.11.** Frappe v16 accepts MariaDB 10.6 to
+11.8, so a v16 bench shares the `mariadb@10.11` server a v15 bench runs;
+benchbar detects the running server and does not install `mariadb@11.8`.
+A second MariaDB (11.8 on another port) is not needed for development.
+
 **Phase 2 says the bench has apps or sites but no env.** That is the
 cleanup tool case below. Run `benchbar repair`, not the installer.
 
