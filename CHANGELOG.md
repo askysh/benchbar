@@ -4,8 +4,26 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+### Added
+
+- The `v16-lts` profile is ready for an end to end run: `pkgconf`
+  (pkg-config) and `mariadb-connector-c` are system dependencies of every
+  profile and on `PKG_CONFIG_PATH` (frappe v16 pins `mysqlclient`, which
+  builds against them), and a CI job runs the v16 profile under mocks.
+  It stays `experimental` until it has run on a real Mac.
+- `bench` is installed with `uv tool install frappe-bench` when uv is on
+  PATH; pipx stays the fallback and existing pipx installs are left as
+  they are. The `bench command` check names the owner.
+- honcho is also found in uv's tool folder.
+
 ### Changed
 
+- The doctor check `wkhtmltopdf` is now `pdf_engine`. It checks
+  wkhtmltopdf as before on every profile (it is still frappe v16's default
+  engine) and, on v16, the Chromium used by Print Formats set to `chrome`,
+  with `bench setup-chrome` as the fix when it is missing.
+- Missing build formulae are a doctor warning with `brew install` as the
+  fix.
 - ROADMAP.md: 0.4 is Frappe v16 and more than one bench, 0.5 is repair
   from the app, a log viewer and `benchbar mcp`; the public launch moves
   to 0.6.

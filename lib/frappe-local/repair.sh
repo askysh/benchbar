@@ -43,7 +43,7 @@ fl_bench_env_exports() {
   export PATH="${brew}/opt/${FL_PYTHON_FORMULA}/bin:${brew}/opt/${FL_NODE_FORMULA}/bin:${brew}/opt/${FL_MARIADB_FORMULA}/bin:$HOME/.local/bin:${brew}/bin:$PATH"
   export LDFLAGS="-L${brew}/opt/openssl@3/lib -L${brew}/opt/libffi/lib -L${brew}/opt/zlib/lib"
   export CPPFLAGS="-I${brew}/opt/openssl@3/include -I${brew}/opt/libffi/include -I${brew}/opt/zlib/include"
-  export PKG_CONFIG_PATH="${brew}/opt/openssl@3/lib/pkgconfig:${brew}/opt/libffi/lib/pkgconfig:${brew}/opt/zlib/lib/pkgconfig"
+  export PKG_CONFIG_PATH="${brew}/opt/openssl@3/lib/pkgconfig:${brew}/opt/libffi/lib/pkgconfig:${brew}/opt/zlib/lib/pkgconfig:${brew}/opt/mariadb-connector-c/lib/pkgconfig"
 }
 
 fl_in_bench() {

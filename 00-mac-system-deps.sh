@@ -151,6 +151,8 @@ if [[ "$FL_DRY_RUN" == "1" ]]; then
   fl_run brew install openssl@3
   fl_run brew install libffi
   fl_run brew install zlib
+  fl_run brew install pkgconf
+  fl_run brew install mariadb-connector-c
   exit 0
 fi
 
@@ -261,7 +263,7 @@ if fl_wkhtmltopdf_ensure; then WKHTML_STATE=ok; else
 fi
 
 fl_section "BUILD DEPS"
-for formula in openssl@3 libffi zlib; do
+for formula in openssl@3 libffi zlib $FL_BUILD_FORMULAE; do
   fl_brew_ensure "$formula"
   fl_ok "$formula - $(brew list --versions "$formula" | head -n1)"
 done

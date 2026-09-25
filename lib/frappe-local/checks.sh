@@ -11,13 +11,13 @@
 # Groups (used by "benchbar service" versus "benchbar repair"):
 #   system, bench, service, site
 
-FL_CHECK_ORDER="brew python_leaves mariadb_bind mariadb_utf8 wkhtmltopdf redis_6379 cleanmymac env_python bench_version socketio assets logs honcho procfile runner agent stop_flag helpers cli_link legacy_agents hosts port_clash ping"
+FL_CHECK_ORDER="brew python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac env_python bench_version socketio assets logs honcho procfile runner agent stop_flag helpers cli_link legacy_agents hosts port_clash ping"
 FL_LOG_WARN_MB="${FL_LOG_WARN_MB:-50}"
 FL_HOSTS_FILE="${FL_HOSTS_FILE:-/etc/hosts}"
 
 fl_check_group() {
   case "$1" in
-    brew|python_leaves|mariadb_bind|mariadb_utf8|wkhtmltopdf|redis_6379|cleanmymac) printf 'system' ;;
+    brew|python_leaves|mariadb_bind|mariadb_utf8|pdf_engine|redis_6379|cleanmymac) printf 'system' ;;
     env_python|bench_version|socketio|assets|logs) printf 'bench' ;;
     ping) printf 'site' ;;
     *) printf 'service' ;;
@@ -42,7 +42,7 @@ fl_check_label() {
     legacy_agents) printf 'Legacy agents' ;;
     mariadb_bind) printf 'MariaDB bind address' ;;
     mariadb_utf8) printf 'MariaDB utf8mb4' ;;
-    wkhtmltopdf) printf 'wkhtmltopdf' ;;
+    pdf_engine) printf 'PDF engine' ;;
     redis_6379) printf 'Homebrew redis' ;;
     ping) printf 'Site ping' ;;
     hosts) printf '/etc/hosts entry' ;;
@@ -63,8 +63,16 @@ chk_brew() {
   done
   if [[ -n "$missing" ]]; then
     chk__set fail "missing formulae:${missing}" "${SCRIPT_DIR}/00-mac-system-deps.sh --profile ${FL_PROFILE}"
+    return 0
+  fi
+  # build formulae: mysqlclient (a frappe v16 dependency) compiles against them
+  for f in $FL_BUILD_FORMULAE; do
+    brew list --formula --versions "$f" >/dev/null 2>&1 || missing="${missing} ${f}"
+  done
+  if [[ -n "$missing" ]]; then
+    chk__set warn "${FL_PYTHON_FORMULA}, ${FL_NODE_FORMULA}, ${FL_MARIADB_FORMULA}, redis installed; missing build formulae:${missing} (needed to build mysqlclient for frappe v16)" "brew install${missing}"
   else
-    chk__set ok "${FL_PYTHON_FORMULA}, ${FL_NODE_FORMULA}, ${FL_MARIADB_FORMULA}, redis installed"
+    chk__set ok "${FL_PYTHON_FORMULA}, ${FL_NODE_FORMULA}, ${FL_MARIADB_FORMULA}, redis, pkgconf, mariadb-connector-c installed"
   fi
 }
 
@@ -113,7 +121,7 @@ chk_bench_version() {
     return 0
   fi
   if out="$(cd "$FL_BENCH_DIR" && bench version 2>&1)"; then
-    chk__set ok "bench version works ($(printf '%s' "$out" | grep -m1 -E '^frappe' || printf 'ok'))"
+    chk__set ok "bench version works ($(printf '%s' "$out" | grep -m1 -E '^frappe' || printf 'ok'); bench installed by $(fl_bench_owner))"
   else
     chk__set fail "bench version fails: $(printf '%s' "$out" | tail -n1)" "${SCRIPT_DIR}/benchbar repair" env_rebuild
   fi
@@ -333,18 +341,40 @@ chk_mariadb_utf8() {
   fi
 }
 
-chk_wkhtmltopdf() {
-  local shadow
+# The Chromium frappe v16 uses for Print Formats set to "chrome": the
+# chromium_path from common_site_config.json, else <bench>/chromium, where
+# "bench setup-chrome" (or the first chrome PDF) downloads it.
+fl_chromium_path() {
+  local p
+  p="$(fl_site_config_value chromium_path)"
+  if [[ -n "$p" ]]; then
+    [[ "$p" == /* ]] || p="$(command -v "$p" 2>/dev/null || printf '%s' "$p")"
+    printf '%s' "$p"
+    return 0
+  fi
+  printf '%s/chromium/chrome-mac/headless_shell' "$FL_BENCH_DIR"
+}
+
+# wkhtmltopdf is the default PDF engine on every profile (frappe v16 still
+# defaults Print Formats to it); from v16 on a Print Format can use Chromium.
+chk_pdf_engine() {
+  local shadow chrome="" chrome_ok=1 bin
+  if [[ "$(fl_profile_major)" -ge 16 ]]; then
+    bin="$(fl_chromium_path)"
+    if [[ -x "$bin" ]]; then chrome="; Chromium at ${bin}"; else chrome_ok=0; chrome="; Chromium for chrome Print Formats is not downloaded yet"; fi
+  fi
   case "$(fl_wkhtmltopdf_state)" in
     patched)
       shadow="$(fl_wkhtmltopdf_shadow)"
       if [[ -n "$shadow" ]]; then
-        chk__set warn "patched build at $(fl_wkhtmltopdf_bin), but ${shadow} comes first on PATH and is not patched" "brew uninstall wkhtmltopdf"
+        chk__set warn "patched build at $(fl_wkhtmltopdf_bin), but ${shadow} comes first on PATH and is not patched${chrome}" "brew uninstall wkhtmltopdf"
+      elif [[ "$chrome_ok" == "0" ]]; then
+        chk__set warn "wkhtmltopdf: patched Qt build at $(fl_wkhtmltopdf_bin)${chrome}" "cd ${FL_BENCH_DIR} && bench setup-chrome"
       else
-        chk__set ok "patched Qt build at $(fl_wkhtmltopdf_bin)"
+        chk__set ok "wkhtmltopdf: patched Qt build at $(fl_wkhtmltopdf_bin)${chrome}"
       fi ;;
-    unpatched) chk__set warn "$(fl_wkhtmltopdf_bin) is not the patched Qt build; PDFs will crash" "${SCRIPT_DIR}/benchbar repair (installs the official package, sudo)" wkhtmltopdf_install ;;
-    *) chk__set warn "not installed; PDF printing will not work" "${SCRIPT_DIR}/benchbar repair (installs the official package, sudo)" wkhtmltopdf_install ;;
+    unpatched) chk__set warn "$(fl_wkhtmltopdf_bin) is not the patched Qt build; PDFs will crash${chrome}" "${SCRIPT_DIR}/benchbar repair (installs the official package, sudo)" wkhtmltopdf_install ;;
+    *) chk__set warn "wkhtmltopdf is not installed; PDF printing will not work${chrome}" "${SCRIPT_DIR}/benchbar repair (installs the official package, sudo)" wkhtmltopdf_install ;;
   esac
 }
 

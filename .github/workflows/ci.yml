@@ -52,6 +52,15 @@ jobs:
       - name: CLI tests (macOS /bin/bash 3.2)
         run: /bin/bash tests/run-tests.sh
 
+  cli-v16:
+    name: CLI tests, v16-lts profile (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: v16 profile under mocks (macOS /bin/bash 3.2)
+        run: /bin/bash tests/test-profile-v16.sh
+
   cli-linux:
     name: CLI tests (Linux, quick signal)
     runs-on: ubuntu-latest

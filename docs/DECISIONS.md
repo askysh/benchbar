@@ -10,6 +10,21 @@ first, the 0.3 easy install run follows.
 - Pulling a production site moved from the 0.7 plan to Ideas, as a wizard that also handles the encryption key and the app list mismatch: without those two it restores a site that cannot decrypt its passwords or fails on missing apps, and it is not scheduled yet.
 - The old 0.4 items the brief did not schedule (worker restart on Python changes, more speed sources, a runner gallery, running one scheduler event) moved to Ideas; runner import from a zip was dropped from the list because 0.3 already ships it.
 
+## 0.4: the v16 profile
+
+Checked in frappe `version-16` at 012667b and bench `develop` at c9d1250 (September 2026), not from memory:
+
+- v16 needs Python 3.14 exactly (`requires-python = ">=3.14,<3.15"`) and Node 24 (`engines.node >=24`); frappe itself only warns below Node 18 at build time, so the profile's pin is what enforces 24.
+- frappe v16 refuses no MariaDB version: `check_compatible_versions` in `frappe/database/mariadb/setup_db.py` only warns below 10.6 or above 11.8, at new-site and restore. 10.11 gets no warning at all. The docs' 11.8 is a recommendation.
+- wkhtmltopdf stays installed on v16: `pdf_generator` on Print Format defaults to `wkhtmltopdf` and a v16 patch sets every existing format to it; Chromium is opt in per format. So the check became `pdf_engine` (wkhtmltopdf everywhere, plus Chromium on v16) instead of swapping one tool for the other.
+- Chromium is looked up the way frappe does (`find_or_download_chromium_executable`): `chromium_path` from common_site_config, else `<bench>/chromium/chrome-mac/headless_shell`. A missing one is a warning with `bench setup-chrome`, not a repair action: frappe downloads it on first use anyway, and its download removes `<bench>/chromium` first, which benchbar should not trigger on its own.
+- `pkgconf` and `mariadb-connector-c` are system dependencies of every profile: v16 pins `mysqlclient==2.2.7`, which does not build without them. `pkg-config` is only an alias of `pkgconf` in Homebrew, and `brew list pkg-config` does not follow it, so the formula is named `pkgconf`.
+- bench sets `PKG_CONFIG_PATH` itself from `brew --prefix mariadb-connector-c`, only for frappe 16 or newer on darwin, when it builds the env or installs an app. benchbar adds the same folder to its own exports (shell block, repair, phase 01) so a pip build outside bench finds it too. The launchd plist and the runner set no `PKG_CONFIG_PATH`, so nothing undoes bench's value; the running bench needs none.
+- Missing build formulae are a warning, not a failure: a v15 bench runs without them and a v15 machine set up before 0.4 should not turn red.
+- bench 5.31 depends on uv and uses it for the env by default (`BENCH_DISABLE_UV=1` turns that off), so "uv or pipx" only decides how the `bench` command itself is installed. uv wins when it is on PATH, as in the Frappe docs; an existing pipx `bench` is reported and never moved.
+- honcho 2.0.0 imports `importlib.metadata`, not `pkg_resources`; only honcho 1.x breaks on Python 3.12 or newer without setuptools.
+- The v16 CI row is a separate job running `tests/test-profile-v16.sh` on macOS `/bin/bash` 3.2: the rest of the suite asserts v15 strings on purpose, and a second full run would only repeat them.
+
 # The easy install run (v0.3)
 
 ## Setup and environment
