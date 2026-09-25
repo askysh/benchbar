@@ -209,7 +209,7 @@ assert_contains "$OUT" "is not the patched build: Frappe would run it"
 assert_contains "$OUT" "brew uninstall wkhtmltopdf"
 assert_calls_not_contain '^(sudo installer|curl .*wkhtmltox)' "(nothing to install when the package binary is present)"
 MOCK_WKHTML_PATCHED=0 run_fm doctor --bench-dir "$BENCH"
-assert_contains "$OUT" "[WARN] wkhtmltopdf: patched build at ${FL_WKHTML_PKG_BIN}, but"
+assert_contains "$OUT" "[WARN] PDF engine: patched build at ${FL_WKHTML_PKG_BIN}, but"
 rm -f "$FL_WKHTML_PKG_BIN"; touch "$MOCK_STATE/wkhtml_installed"
 
 # a refused sudo is asked once for the whole install, then every sudo step is skipped

@@ -185,7 +185,8 @@ Doctor checks the Homebrew formulae, the bench env, `bench version`, the
 socket.io module, the built assets that `assets.json` references, honcho,
 `Procfile.lean`, the runner, the launchd agent and its last exit code,
 the stop flag, the shell helpers, legacy agents, the MariaDB bind address
-and charset config, wkhtmltopdf, a stray Homebrew Redis on 6379, the site
+and charset config, the PDF engine (wkhtmltopdf, and on v16 the Chromium
+frappe can use), a stray Homebrew Redis on 6379, the site
 ping, `/etc/hosts`, log sizes, CleanMyMac, and port clashes with other
 benches. Every warning and failure names its fix.
 
@@ -207,7 +208,13 @@ side by side, each under its own agent `com.benchbar.<folder>`.
 | Profile | Frappe | ERPNext | Python | Node | MariaDB |
 |---|---|---|---|---|---|
 | `v15-lts` (default) | `version-15` | `version-15` | `python@3.11` | `node@20` | `mariadb@10.11` |
-| `v16-lts` | `version-16` | `version-16` | `python@3.14` | `node@24` | `mariadb@11.8` |
+| `v16-lts` (experimental) | `version-16` | `version-16` | `python@3.14` | `node@24` | `mariadb@11.8` |
+
+Every profile also installs `pkgconf` (pkg-config) and
+`mariadb-connector-c`, which `mysqlclient` needs to build on v16. When
+`uv` is on PATH, `bench` itself is installed with `uv tool install
+frappe-bench`, as the Frappe docs now recommend; an existing pipx install
+is kept, and doctor says which one owns `bench`.
 
 **App bundles** pick what `install` adds beyond Frappe: `minimal`
 (`erpnext`), `common` (`erpnext hrms payments`), `extended` (`erpnext hrms

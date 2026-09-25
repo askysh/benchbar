@@ -11,6 +11,8 @@ fl_bench_run() {
 }
 
 fl_install_pipx_if_needed() {
+  # uv is preferred for bench itself; pipx is only needed without it
+  command -v uv >/dev/null 2>&1 && return 0
   fl_section "PIPX"
   fl_info "Checking pipx"
   if command -v pipx >/dev/null 2>&1; then
@@ -31,13 +33,19 @@ fl_install_bench_if_needed() {
     fl_ok "bench at $(command -v bench)"
     return 0
   fi
-  if pipx list 2>/dev/null | grep -q '^   package frappe-bench'; then
+  if command -v uv >/dev/null 2>&1; then
+    # the official docs install bench with uv; its bin folder is ~/.local/bin
+    fl_warn "frappe-bench is missing; installing with uv"
+    fl_run uv tool install frappe-bench || fl_die "frappe-bench install failed." "Manual command: uv tool install frappe-bench"
+    export PATH="$HOME/.local/bin:$PATH"
+  elif pipx list 2>/dev/null | grep -q '^   package frappe-bench'; then
     fl_info "frappe-bench already installed via pipx"
   else
     fl_warn "frappe-bench is missing; installing with pipx"
     fl_run pipx install frappe-bench || fl_die "frappe-bench install failed." "Manual command: pipx install frappe-bench"
   fi
-  command -v bench >/dev/null 2>&1 || fl_die "bench command not found after pipx install." "Manual check: ls ${PIPX_BIN_DIR}/bench"
+  [[ "$FL_DRY_RUN" == "1" ]] && return 0
+  command -v bench >/dev/null 2>&1 || fl_die "bench command not found after installing frappe-bench." "Manual check: ls ${PIPX_BIN_DIR:-$HOME/.local/bin}/bench"
   fl_state_set BENCH_BIN "$(command -v bench)"
   fl_ok "bench version: $(bench --version 2>/dev/null || echo installed)"
 }

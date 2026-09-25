@@ -169,7 +169,7 @@ fl_preflight_basics "$OFFLINE" "$FL_MIN_DISK_GB" "$HOME"
 export PATH="${FL_BREW_PREFIX}/opt/${FL_PYTHON_FORMULA}/bin:${FL_BREW_PREFIX}/opt/${FL_NODE_FORMULA}/bin:${FL_BREW_PREFIX}/opt/${FL_MARIADB_FORMULA}/bin:$HOME/.local/bin:$PATH"
 export LDFLAGS="-L${FL_BREW_PREFIX}/opt/openssl@3/lib -L${FL_BREW_PREFIX}/opt/libffi/lib -L${FL_BREW_PREFIX}/opt/zlib/lib"
 export CPPFLAGS="-I${FL_BREW_PREFIX}/opt/openssl@3/include -I${FL_BREW_PREFIX}/opt/libffi/include -I${FL_BREW_PREFIX}/opt/zlib/include"
-export PKG_CONFIG_PATH="${FL_BREW_PREFIX}/opt/openssl@3/lib/pkgconfig:${FL_BREW_PREFIX}/opt/libffi/lib/pkgconfig:${FL_BREW_PREFIX}/opt/zlib/lib/pkgconfig"
+export PKG_CONFIG_PATH="${FL_BREW_PREFIX}/opt/openssl@3/lib/pkgconfig:${FL_BREW_PREFIX}/opt/libffi/lib/pkgconfig:${FL_BREW_PREFIX}/opt/zlib/lib/pkgconfig:${FL_BREW_PREFIX}/opt/mariadb-connector-c/lib/pkgconfig"
 
 if [[ "$OFFLINE" != "1" ]]; then
   if [[ -z "$FRAPPE_COMMIT" ]]; then

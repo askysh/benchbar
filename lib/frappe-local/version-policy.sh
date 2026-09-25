@@ -13,6 +13,9 @@ FL_MARIADB_MAJOR_MINOR=""
 FL_PROFILE_STATUS=""
 FL_SUPPORT_END=""
 
+# every profile builds mysqlclient (pinned by frappe v16) against these
+FL_BUILD_FORMULAE="pkgconf mariadb-connector-c"
+
 FL_SELECTED_APPS=()
 FL_INSTALL_SPECS=()
 
@@ -29,6 +32,12 @@ fl_load_profile() {
   IFS=$'\t' read -r FL_PROFILE FL_PROFILE_LABEL FL_FRAPPE_BRANCH FL_ERPNEXT_BRANCH \
     FL_PYTHON_FORMULA FL_PYTHON_BIN_NAME FL_NODE_FORMULA FL_NODE_MAJOR \
     FL_MARIADB_FORMULA FL_MARIADB_MAJOR_MINOR FL_PROFILE_STATUS FL_SUPPORT_END _default <<<"$row"
+}
+
+# The Frappe major version of the loaded profile: 15 for version-15.
+fl_profile_major() {
+  local v="${FL_FRAPPE_BRANCH#version-}"
+  case "$v" in ''|*[!0-9]*) printf '0' ;; *) printf '%s' "$v" ;; esac
 }
 
 fl_default_profile() {

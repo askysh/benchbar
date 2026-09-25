@@ -6,7 +6,15 @@ case "$*" in
   "environment --value PIPX_HOME") printf '%s\n' "${MOCK_PIPX_HOME:-$HOME/.local/pipx}" ;;
   "environment --value PIPX_BIN_DIR") printf '%s\n' "$HOME/.local/bin" ;;
   --version) printf '1.7.1\n' ;;
-  list) printf 'venvs are in %s/venvs\n   package frappe-bench 5.25.0, installed using Python 3.11.9\n    - bench\n' "${MOCK_PIPX_HOME:-$HOME/.local/pipx}" ;;
+  "install frappe-bench")
+    venv="${MOCK_PIPX_HOME:-$HOME/.local/pipx}/venvs/frappe-bench/bin"
+    mkdir -p "$venv" "$HOME/.local/bin"
+    printf '#!/usr/bin/env bash\nexit 0\n' >"$venv/bench"; chmod +x "$venv/bench"
+    ln -sfn "$venv/bench" "$HOME/.local/bin/bench" ;;
+  list)
+    printf 'venvs are in %s/venvs\n' "${MOCK_PIPX_HOME:-$HOME/.local/pipx}"
+    # MOCK_PIPX_NO_BENCH: a machine where pipx has never installed frappe-bench
+    [[ -n "${MOCK_PIPX_NO_BENCH:-}" ]] || printf '   package frappe-bench 5.25.0, installed using Python 3.11.9\n    - bench\n' ;;
   *) ;;
 esac
 exit 0

@@ -20,6 +20,28 @@ fl_pipx_home() {
   fi
 }
 
+# uv installs tools here; "uv tool dir" says the same, but costs a process
+fl_uv_tool_dir() { printf '%s' "${UV_TOOL_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/uv/tools}"; }
+
+# Who installed the bench command on PATH: uv, pipx or other (nothing when
+# there is no bench). Existing pipx installs are reported, never migrated.
+fl_bench_owner() {
+  local bin dir target
+  bin="$(command -v bench 2>/dev/null || true)"
+  [[ -n "$bin" ]] || return 0
+  target="$bin"
+  while [[ -L "$target" ]]; do
+    dir="$(cd "$(dirname "$target")" && pwd)"
+    target="$(readlink "$target")"
+    [[ "$target" == /* ]] || target="${dir}/${target}"
+  done
+  case "$target" in
+    */uv/tools/*) printf 'uv' ;;
+    */pipx/venvs/*|*/pipx/*/venvs/*) printf 'pipx' ;;
+    *) printf 'other' ;;
+  esac
+}
+
 # Resolves honcho in this order: PATH, pipx venv of frappe-bench, bench env.
 # Sets FL_HONCHO (absolute path) or leaves it empty.
 fl_honcho_resolve() {
@@ -29,6 +51,7 @@ fl_honcho_resolve() {
   for cand in \
     "$(command -v honcho 2>/dev/null || true)" \
     "$(fl_pipx_home)/venvs/frappe-bench/bin/honcho" \
+    "$(fl_uv_tool_dir)/frappe-bench/bin/honcho" \
     "$HOME/.local/pipx/venvs/frappe-bench/bin/honcho" \
     "${FL_BENCH_DIR}/env/bin/honcho" \
     "$stored"; do
