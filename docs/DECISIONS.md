@@ -1,7 +1,16 @@
-# Decisions: the easy install run (v0.3)
+# Decisions
 
 One line per non obvious choice: the decision, then the reason. The
-decisions of the app work live in `macos/DECISIONS.md`.
+decisions of the app work live in `macos/DECISIONS.md`. The 0.4 run comes
+first, the 0.3 easy install run follows.
+
+## 0.4: roadmap
+
+- Work happens in a second git worktree (`~/dev/benchbar-work`): `~/.local/bin/benchbar` and the app run the checkout in `~/dev/benchbar`, so a feature branch checked out there would change the CLI in daily use. That checkout stays on main and is fast forwarded after each merge.
+- Pulling a production site moved from the 0.7 plan to Ideas, as a wizard that also handles the encryption key and the app list mismatch: without those two it restores a site that cannot decrypt its passwords or fails on missing apps, and it is not scheduled yet.
+- The old 0.4 items the brief did not schedule (worker restart on Python changes, more speed sources, a runner gallery, running one scheduler event) moved to Ideas; runner import from a zip was dropped from the list because 0.3 already ships it.
+
+# The easy install run (v0.3)
 
 ## Setup and environment
 
