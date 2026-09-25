@@ -50,6 +50,14 @@ Checked in frappe `version-16` at 012667b and bench `develop` at c9d1250 (Septem
 - The runner (template v3) clears only its own bench's stale socketio at start, with the same working folder test; before, starting a second bench killed the first bench's socketio.
 - The launchctl mock now stops only the agent's own honcho, so the tests can run two benches at once.
 
+## 0.4: Codex review findings on PRs 10 to 12
+
+- The per bench state file is `<name>-<8 hex of the full path>.env` (cksum): `~/frappe-bench` and `~/dev/frappe-bench` are both detected candidates and would otherwise share one file. The agent label still uses the folder name only; two benches with the same folder name remain unsupported, as before 0.4.
+- A bench installed with uv is looked up in `uv tool dir --bin`, which follows `UV_TOOL_BIN_DIR` and `XDG_BIN_HOME`, instead of assuming `~/.local/bin`.
+- Phase 01 records the default bench only after the site is verified, so a failed `install --make-default` leaves `benchup` pointing at the bench that worked.
+- With `--make-default`, the shell block is rendered for the bench being set up even in a dry run, so the plan shows the PATH change the real run makes.
+- The `orphans` finding (a machine wide `pgrep` for honcho) was already fixed by the working folder match in the multi bench PR.
+
 # The easy install run (v0.3)
 
 ## Setup and environment

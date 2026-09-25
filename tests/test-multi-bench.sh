@@ -11,7 +11,7 @@ make_fake_bench "$A" macdev
 make_fake_bench "$B" v16dev
 mkdir -p "$B/apps/frappe/frappe"; printf '__version__ = "16.35.0"\n' >"$B/apps/frappe/frappe/__init__.py"
 printf '127.0.0.1 macdev\n127.0.0.1 v16dev\n' >>"$FL_HOSTS_FILE"
-bstate() { sed -n "s/^$2=//p" "$FL_STATE_DIR/benches/$1.env" 2>/dev/null; }
+bstate() { cat "$FL_STATE_DIR/benches/$1"-????????.env 2>/dev/null | sed -n "s/^$2=//p"; }
 gstate() { sed -n "s/^$1=//p" "$FL_STATE_FILE"; }
 
 # ---- settings from before 0.4: everything in state.env, for bench A
@@ -64,6 +64,7 @@ assert_eq "off" "$(bstate v16-bench AUTOSTART)"
 snap="$(snapshot "$FL_STATE_DIR" "$HOME/.zshrc")"
 run_fm service --dry-run --make-default --bench-dir "$B"
 assert_eq "$snap" "$(snapshot "$FL_STATE_DIR" "$HOME/.zshrc")" "(dry run)"
+assert_contains "$OUT" "Shell helpers: helper block" "(the dry run shows the block change the real run makes)"
 run_fm service --yes --make-default --bench-dir "$B"
 assert_eq "0" "$CODE" "$OUT"
 assert_eq "$B" "$(gstate BENCH_DIR)"
@@ -71,6 +72,14 @@ grep -q 'opt/python@3.14/bin' "$HOME/.zshrc" || fail "the shell block follows th
 run_fm doctor --bench-dir "$A"
 assert_contains "$OUT" "profile  v15-lts"
 assert_contains "$OUT" "[OK] Shell helpers"
+
+# ---- same folder name, different paths: separate state files
+D="$HOME/dev/frappe-bench"
+make_fake_bench "$D" other
+run_fm service --yes --bench-dir "$D" --profile v16-lts
+run_fm doctor --bench-dir "$A"
+assert_contains "$OUT" "profile  v15-lts"
+assert_eq "2" "$(find "$FL_STATE_DIR/benches" -name 'frappe-bench-*.env' | wc -l | tr -d ' ')"
 
 # ---- phase 00 never rewrites an existing block to its own profile
 before="$(cat "$HOME/.zshrc")"

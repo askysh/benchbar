@@ -62,7 +62,7 @@ fl_state_get() { fl_kv_get "$FL_STATE_FILE" "$1"; }
 # ---------------------------------------------------------------- per bench
 #
 # Settings that belong to one bench (profile, site, autostart, honcho,
-# bundle) live in .benchbar/benches/<name>.env, so a second bench never
+# bundle) live in .benchbar/benches/<name>-<path hash>.env, so a second bench never
 # changes the first. state.env keeps what is global: BENCH_DIR, the default
 # bench, and the tool paths.
 #
@@ -77,8 +77,12 @@ fl_bench_name_of() {
   basename "$1" | tr -c 'A-Za-z0-9._\n-' '-'
 }
 
+# <name>-<8 hex of the full path>.env: ~/frappe-bench and ~/dev/frappe-bench
+# share a folder name, never a file
 fl_bench_state_file_for() {
-  printf '%s/benches/%s.env' "$FL_STATE_DIR" "$(fl_bench_name_of "$1")"
+  local h
+  h="$(printf '%s' "$1" | cksum | awk '{printf "%08x", $1}')"
+  printf '%s/benches/%s-%s.env' "$FL_STATE_DIR" "$(fl_bench_name_of "$1")" "$h"
 }
 
 # fl_bstate_get_for DIR KEY: the bench's own value, else the pre 0.4 global

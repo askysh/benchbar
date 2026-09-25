@@ -109,6 +109,16 @@ MOCK_PIPX_NO_BENCH=1 install_bench "$NOBENCH:$HOME/.local/bin"
 assert_eq "0" "$CODE" "$OUT"
 assert_calls_contain '^pipx install frappe-bench$'
 assert_contains "$OUT" "owner=pipx"
+# uv's executable folder moved with UV_TOOL_BIN_DIR: bench is still found there
+rm -f "$HOME/.local/bin/bench"; ln -s "$ROOT/tests/mocks/bin/uv" "$NOBENCH/uv"; reset_calls
+export UV_TOOL_BIN_DIR="$TMP_DIR/uvbin"
+MOCK_PIPX_NO_BENCH=1 install_bench "$NOBENCH"
+unset UV_TOOL_BIN_DIR
+assert_eq "0" "$CODE" "$OUT"
+assert_calls_contain '^uv tool install frappe-bench$'
+assert_contains "$OUT" "owner=uv"
+rm -f "$TMP_DIR/uvbin/bench"; rm "$NOBENCH/uv"
+MOCK_PIPX_NO_BENCH=1 install_bench "$NOBENCH:$HOME/.local/bin" >/dev/null
 # an existing pipx bench is reported, never migrated to uv
 ln -s "$ROOT/tests/mocks/bin/uv" "$NOBENCH/uv"; reset_calls
 install_bench "$NOBENCH:$HOME/.local/bin"

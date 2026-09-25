@@ -34,10 +34,13 @@ fl_install_bench_if_needed() {
     return 0
   fi
   if command -v uv >/dev/null 2>&1; then
-    # the official docs install bench with uv; its bin folder is ~/.local/bin
+    # the official docs install bench with uv; uv says where its executables
+    # go (UV_TOOL_BIN_DIR, XDG_BIN_HOME, else ~/.local/bin)
     fl_warn "frappe-bench is missing; installing with uv"
     fl_run uv tool install frappe-bench || fl_die "frappe-bench install failed." "Manual command: uv tool install frappe-bench"
-    export PATH="$HOME/.local/bin:$PATH"
+    PIPX_BIN_DIR="$(uv tool dir --bin 2>/dev/null || true)"
+    PIPX_BIN_DIR="${PIPX_BIN_DIR:-$HOME/.local/bin}"
+    export PATH="${PIPX_BIN_DIR}:$PATH"
   elif pipx list 2>/dev/null | grep -q '^   package frappe-bench'; then
     fl_info "frappe-bench already installed via pipx"
   else

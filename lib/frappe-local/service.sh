@@ -38,7 +38,8 @@ fl_context_init() {
 fl_rc_profile() {
   local def p=""
   def="$(fl_state_get BENCH_DIR 2>/dev/null || true)"
-  if [[ -z "$def" || "$def" == "$FL_BENCH_DIR" || ! -d "$def" ]]; then
+  # --make-default: this bench is (or, in a dry run, would be) the default
+  if [[ -z "$def" || "$def" == "$FL_BENCH_DIR" || ! -d "$def" || "${FL_MAKE_DEFAULT:-0}" == "1" ]]; then
     printf '%s' "$FL_PROFILE"
     return 0
   fi
