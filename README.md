@@ -204,7 +204,11 @@ Point the tool at any bench once with `--bench-dir`; the path is
 remembered. Without it, benchbar looks for a remembered bench, then
 `~/frappe-bench`, `~/dev/frappe-bench`, and any folder under `~` or
 `~/dev` that holds `sites/common_site_config.json`. Several benches work
-side by side, each under its own agent `com.benchbar.<folder>`.
+side by side, each under its own agent `com.benchbar.<folder>`, with its
+own profile, site and autostart setting. Installing or adopting a second
+bench keeps the first one as the default (the one `benchup` starts) unless
+you pass `--make-default`; the PATH lines in your shell block follow the
+default bench's profile. Stopping one bench never touches another.
 
 **Profiles** pick the Frappe branch and the matching toolchain:
 

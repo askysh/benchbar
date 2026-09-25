@@ -28,8 +28,23 @@ All notable changes to this project are documented here.
 - `bench init` runs with `--no-backups`: a dev bench needs no backup
   cron, and the crontab write is what fails without Full Disk Access.
 
+- Several benches side by side: every bench keeps its own profile, site,
+  autostart, honcho and bundle in `.benchbar/benches/<name>.env`
+  (settings from before 0.4 still count for the default bench and move
+  there on the next `service`, `adopt` or `install`), and a bench without
+  a stored profile gets it from its frappe version.
+- `--make-default` for `install`, `adopt` and `service`: a second bench no
+  longer becomes the default by being set up.
+
 ### Changed
 
+- `benchbar down`, `status` and the runner match honcho and socketio by
+  their working folder: both run with the same relative command line in
+  every bench, so stopping or starting one bench used to stop the other's
+  honcho and socketio too. The runner template is v3; `benchbar repair`
+  rewrites it.
+- The PATH lines of the shell block follow the default bench's profile;
+  phase 00 writes the block only when there is none.
 - The doctor check `wkhtmltopdf` is now `pdf_engine`. It checks
   wkhtmltopdf as before on every profile (it is still frappe v16's default
   engine) and, on v16, the Chromium used by Print Formats set to `chrome`,

@@ -3,6 +3,14 @@
 # shellcheck source=tests/mocks/bin/_mocklib.sh
 . "$(dirname "$0")/_mocklib.sh"
 mock_log "$@"
+# "-a -p PID -d cwd -Fn": the working folder from $MOCK_STATE/cwd/PID, if any
+if [[ " $* " == *" -d cwd "* ]]; then
+  pid=""; prev=""
+  for a in "$@"; do [[ "$prev" == "-p" ]] && pid="$a"; prev="$a"; done
+  [[ -f "${MOCK_STATE:?}/cwd/${pid}" ]] || exit 1
+  printf 'p%s\nfcwd\nn%s\n' "$pid" "$(cat "${MOCK_STATE}/cwd/${pid}")"
+  exit 0
+fi
 ports=""; terse=0
 for a in "$@"; do
   case "$a" in

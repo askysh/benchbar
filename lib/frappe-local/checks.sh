@@ -664,7 +664,7 @@ chk_fork_safety() {
 chk_orphans() {
   local port who held=""
   [[ "$(fl_agent_field state)" == "running" ]] && { chk__set ok "the agent runs this bench"; return 0; }
-  if pgrep -f "honcho start -f Procfile" >/dev/null 2>&1; then
+  if [[ -n "$(fl_bench_honcho_pids)" ]]; then
     chk__set ok "honcho is running (benchfg or bench start)"
     return 0
   fi

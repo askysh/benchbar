@@ -23,24 +23,110 @@ fl_state_init() {
   touch "$FL_STATE_FILE"
 }
 
-fl_state_set() {
-  local key="$1" value="$2"
+# fl_kv_set FILE KEY VALUE and fl_kv_get FILE KEY: the store behind both
+# the checkout's state.env and the per bench files. Nothing is written in a
+# dry run, and an unchanged value is not written again.
+fl_kv_set() {
+  local file="$1" key="$2" value="$3"
   [[ "${FL_DRY_RUN:-0}" == "1" ]] && return 0
-  mkdir -p "$FL_STATE_DIR" 2>/dev/null || true
-  [[ -f "$FL_STATE_FILE" ]] || : >"$FL_STATE_FILE"
-  if [[ "$(fl_state_get "$key")" == "$value" ]]; then
+  mkdir -p "$(dirname "$file")" 2>/dev/null || true
+  [[ -f "$file" ]] || : >"$file"
+  if [[ "$(fl_kv_get "$file" "$key")" == "$value" ]]; then
     return 0
   fi
-  grep -v "^${key}=" "$FL_STATE_FILE" >"${FL_STATE_FILE}.tmp" 2>/dev/null || true
-  printf '%s=%q\n' "$key" "$value" >>"${FL_STATE_FILE}.tmp"
-  mv "${FL_STATE_FILE}.tmp" "$FL_STATE_FILE"
+  grep -v "^${key}=" "$file" >"${file}.tmp" 2>/dev/null || true
+  printf '%s=%q\n' "$key" "$value" >>"${file}.tmp"
+  mv "${file}.tmp" "$file"
 }
 
-fl_state_get() {
-  local key="$1" raw
-  [[ -f "$FL_STATE_FILE" ]] || return 0
-  raw="$(sed -n "s/^${key}=//p" "$FL_STATE_FILE" | tail -n1)"
+fl_kv_get() {
+  local file="$1" key="$2" raw
+  [[ -f "$file" ]] || return 0
+  raw="$(sed -n "s/^${key}=//p" "$file" | tail -n1)"
   [[ -n "$raw" ]] || return 0
   # values are stored with %q; unquote the common forms
   eval "printf '%s\n' $raw"
+}
+
+fl_kv_del() {
+  local file="$1" key="$2"
+  [[ "${FL_DRY_RUN:-0}" == "1" ]] && return 0
+  grep -q "^${key}=" "$file" 2>/dev/null || return 0
+  grep -v "^${key}=" "$file" >"${file}.tmp" 2>/dev/null || true
+  mv "${file}.tmp" "$file"
+}
+
+fl_state_set() { fl_kv_set "$FL_STATE_FILE" "$1" "$2"; }
+fl_state_get() { fl_kv_get "$FL_STATE_FILE" "$1"; }
+
+# ---------------------------------------------------------------- per bench
+#
+# Settings that belong to one bench (profile, site, autostart, honcho,
+# bundle) live in .benchbar/benches/<name>.env, so a second bench never
+# changes the first. state.env keeps what is global: BENCH_DIR, the default
+# bench, and the tool paths.
+#
+# Before 0.4 these keys lived in state.env. They still count there for the
+# default bench until its own file has the key, so an upgrade needs no
+# migration and doctor stays read only.
+
+FL_BENCH_KEYS="PROFILE SITE_NAME AUTOSTART HONCHO_BIN APP_BUNDLE APPS"
+
+# The name a bench goes by in agent labels and state files: its folder name.
+fl_bench_name_of() {
+  basename "$1" | tr -c 'A-Za-z0-9._\n-' '-'
+}
+
+fl_bench_state_file_for() {
+  printf '%s/benches/%s.env' "$FL_STATE_DIR" "$(fl_bench_name_of "$1")"
+}
+
+# fl_bstate_get_for DIR KEY: the bench's own value, else the pre 0.4 global
+# one when DIR is the default bench.
+fl_bstate_get_for() {
+  local dir="$1" key="$2" v
+  v="$(fl_kv_get "$(fl_bench_state_file_for "$dir")" "$key")"
+  if [[ -z "$v" && "$(fl_state_get BENCH_DIR)" == "$dir" ]]; then
+    case " $FL_BENCH_KEYS " in *" $key "*) v="$(fl_state_get "$key")" ;; esac
+  fi
+  printf '%s' "$v"
+  [[ -n "$v" ]] && printf '\n'
+  return 0
+}
+
+fl_bstate_set_for() { fl_kv_set "$(fl_bench_state_file_for "$1")" "$2" "$3"; }
+
+# The current bench (FL_BENCH_DIR).
+fl_bstate_get() { fl_bstate_get_for "$FL_BENCH_DIR" "$1"; }
+fl_bstate_set() { fl_bstate_set_for "$FL_BENCH_DIR" "$1" "$2"; }
+
+# fl_bench_state_migrate DIR: moves the pre 0.4 per bench keys from
+# state.env into DIR's own file (only when DIR is the default bench they
+# belonged to). Writing commands call it; readers never need it.
+fl_bench_state_migrate() {
+  local dir="$1" key v file
+  [[ "$(fl_state_get BENCH_DIR)" == "$dir" ]] || return 0
+  file="$(fl_bench_state_file_for "$dir")"
+  for key in $FL_BENCH_KEYS; do
+    v="$(fl_state_get "$key")"
+    [[ -n "$v" ]] || continue
+    [[ -n "$(fl_kv_get "$file" "$key")" ]] || fl_kv_set "$file" "$key" "$v"
+    fl_kv_del "$FL_STATE_FILE" "$key"
+  done
+}
+
+# fl_remember_default DIR: DIR becomes the default bench (the one commands
+# use without --bench-dir) only when there is none yet, the old one is gone,
+# it already is, or FL_MAKE_DEFAULT=1 (--make-default). A second bench never
+# takes over "benchup" by being installed.
+fl_remember_default() {
+  local dir="$1" cur
+  cur="$(fl_state_get BENCH_DIR)"
+  if [[ -z "$cur" || "$cur" == "$dir" || ! -d "$cur" || "${FL_MAKE_DEFAULT:-0}" == "1" ]]; then
+    # the old default keeps its settings: move them into its own file first
+    [[ -n "$cur" && "$cur" != "$dir" ]] && fl_bench_state_migrate "$cur"
+    fl_state_set BENCH_DIR "$dir"
+    return 0
+  fi
+  return 1
 }

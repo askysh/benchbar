@@ -30,8 +30,10 @@ reset_transitions() { : >"$BENCHBAR_STATE_LOG"; }
 # 1. normal start: leftovers of this bench are cleared, honcho runs
 add_proc 111 "$BENCH/env/bin/python -m frappe.utils.bench_helper frappe serve --port 8000"
 add_proc 222 "$BENCH/env/bin/python -m frappe.utils.bench_helper frappe --site macdev migrate"
-add_proc 333 "node apps/frappe/socketio.js"
+add_proc 333 "node apps/frappe/socketio.js" "$BENCH"
+add_proc 444 "node apps/frappe/socketio.js" "$HOME/another-bench"
 assert_status 0 "$runner"
+grep -q '^444 ' "$MOCK_PROCS" || fail "another bench's socketio must survive this runner's cleanup"
 assert_calls_contain '^honcho start -f Procfile.lean$'
 grep -q '^222 ' "$MOCK_PROCS" || fail "bench migrate must survive the runner cleanup"
 ! grep -q '^111 ' "$MOCK_PROCS" || fail "stale serve must be cleared"

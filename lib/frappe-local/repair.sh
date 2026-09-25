@@ -62,12 +62,12 @@ act_python_leaves() {
 act_honcho_install() {
   if fl_honcho_resolve; then
     fl_ok "honcho already available at ${FL_HONCHO}"
-    fl_state_set HONCHO_BIN "$FL_HONCHO"
+    fl_bstate_set HONCHO_BIN "$FL_HONCHO"
     fl_render_all
     return 0
   fi
   fl_honcho_install || return 1
-  [[ -n "$FL_HONCHO" ]] && fl_state_set HONCHO_BIN "$FL_HONCHO"
+  [[ -n "$FL_HONCHO" ]] && fl_bstate_set HONCHO_BIN "$FL_HONCHO"
   fl_render_all
 }
 
@@ -97,7 +97,7 @@ act_env_rebuild() {
     fl_info "honcho lived in the old env; installing it into the new one"
     fl_honcho_install || return 1
   fi
-  [[ -n "$FL_HONCHO" ]] && fl_state_set HONCHO_BIN "$FL_HONCHO"
+  [[ -n "$FL_HONCHO" ]] && fl_bstate_set HONCHO_BIN "$FL_HONCHO"
   fl_render_all
 }
 

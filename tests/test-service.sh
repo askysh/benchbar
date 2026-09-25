@@ -101,12 +101,12 @@ grep -q '<key>RunAtLoad</key><true/>' "$plist" || fail "autostart on must restor
 printf '\n# edited by hand\n' >>"$BENCH/benchbar-run.sh"
 run_fm doctor --bench-dir "$BENCH"
 assert_contains "$OUT" "[OK] Runner script"   # appended text does not change the header, so still current
-sed_inplace 's/benchbar-template: bench-run.sh v2 [0-9a-f]*/benchbar-template: bench-run.sh v0 000000000000/' "$BENCH/benchbar-run.sh"
+sed_inplace 's/benchbar-template: bench-run.sh v[0-9]* [0-9a-f]*/benchbar-template: bench-run.sh v0 000000000000/' "$BENCH/benchbar-run.sh"
 run_fm doctor --bench-dir "$BENCH"
 assert_contains "$OUT" "[WARN] Runner script: runner is outdated"
 run_fm repair --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
-grep -q 'benchbar-template: bench-run.sh v2' "$BENCH/benchbar-run.sh" || fail "runner must be regenerated"
+grep -q 'benchbar-template: bench-run.sh v3' "$BENCH/benchbar-run.sh" || fail "runner must be regenerated"
 
 # ---- reloading a running agent waits for launchd to let go of it
 # (real launchctl: bootout returns while the job still shuts down, and a
