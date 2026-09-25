@@ -276,9 +276,9 @@ cmd_install() {
   fi
   FL_SKIP_PLAN_CONFIRM=1
   if [[ -d "$FL_BENCH_DIR/sites" ]]; then
-    fl_ports_assign "$OPT_PORT_OFFSET" || { fl_step_end failed; fl_steps_summary; return 1; }
+    fl_ports_plan "$OPT_PORT_OFFSET" || { fl_step_end failed; fl_steps_summary; return 1; }
   fi
-  if fl_repair_engine "Background service" system service; then
+  if FL_PLAN_CHECKS="port_block" fl_repair_engine "Background service" system service; then
     fl_step_end "done"
   else
     fl_step_end warning "see above"
@@ -295,9 +295,9 @@ cmd_service() {
   fl_header "benchbar service" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "$FL_SITE"
   fl_remember_bench || true
   if [[ -n "$OPT_PORT_OFFSET" ]]; then
-    fl_ports_assign "$OPT_PORT_OFFSET" || return 1
+    fl_ports_plan "$OPT_PORT_OFFSET" || return 1
   fi
-  if fl_repair_engine "Background service" service; then
+  if FL_PLAN_CHECKS="port_block" fl_repair_engine "Background service" service; then
     fl_next_steps_box
     return 0
   fi
@@ -321,9 +321,9 @@ cmd_adopt() {
     fl_warn "honcho was not found on PATH, in the pipx venv of frappe-bench or in ${FL_BENCH_DIR}/env; adopt does not install into env"
     fl_fix "pipx install honcho   (or: ${SCRIPT_DIR}/benchbar repair, which installs it into the bench env), then benchbar adopt again"
   fi
-  fl_ports_assign "$OPT_PORT_OFFSET" || return 1
+  fl_ports_plan "$OPT_PORT_OFFSET" || return 1
   # the service group would install honcho into env when it is missing; adopt must not
-  if FL_ENGINE_SKIP_ACTIONS="honcho_install honcho_setuptools" fl_repair_engine "Adopt" service; then
+  if FL_PLAN_CHECKS="port_block" FL_ENGINE_SKIP_ACTIONS="honcho_install honcho_setuptools" fl_repair_engine "Adopt" service; then
     # remembered only now: a cancelled plan must not make this the default bench
     if fl_remember_bench; then
       [[ "$FL_DRY_RUN" == "1" ]] || fl_ok "remembered ${FL_BENCH_DIR} (site ${FL_SITE}) as the default bench"

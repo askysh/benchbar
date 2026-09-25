@@ -24,8 +24,9 @@ fl_abs_path() {
     '~'|'~/'*) p="${HOME}${p#'~'}" ;;
     *) p="${PWD}/${p}" ;;
   esac
-  # collapse a trailing slash
-  printf '%s' "${p%/}"
+  # one spelling per bench: symlinks, "." and ".." resolved (fl_bench_canonical),
+  # so state, ports and agents never see the same bench twice
+  fl_bench_canonical "${p%/}"
 }
 
 fl_is_bench_dir() {

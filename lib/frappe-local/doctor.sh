@@ -15,7 +15,8 @@ fl_doctor_reset() { FL_D_IDS=(); FL_D_STATUS=(); FL_D_MSG=(); FL_D_FIX=(); FL_D_
 fl_doctor_run() {
   local id groups="$*" g
   fl_doctor_reset
-  for id in $FL_CHECK_ORDER; do
+  # a plan may add checks (port_block while ports move)
+  for id in ${FL_PLAN_CHECKS:-} $FL_CHECK_ORDER; do
     g="$(fl_check_group "$id")"
     if [[ -n "$groups" ]]; then
       case " $groups " in *" $g "*) ;; *) continue ;; esac

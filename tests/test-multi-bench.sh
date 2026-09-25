@@ -81,6 +81,38 @@ run_fm doctor --bench-dir "$A"
 assert_contains "$OUT" "profile  v15-lts"
 assert_eq "2" "$(find "$FL_STATE_DIR/benches" -name 'frappe-bench-*.env' | wc -l | tr -d ' ')"
 
+# ---- another spelling of the same path finds the same settings
+run_fm doctor --bench-dir "$HOME/dev/./v16-bench"
+assert_contains "$OUT" "profile  v16-lts"
+# a plain <name>.env from the first 0.4 builds is read, then renamed on the next write
+E="$HOME/dev/early"; make_fake_bench "$E" early
+printf 'PROFILE=v16-lts\nAUTOSTART=off\n' >"$FL_STATE_DIR/benches/early.env"
+prev_default="$(gstate BENCH_DIR)"
+sed_inplace "s#^BENCH_DIR=.*#BENCH_DIR=${E}#" "$FL_STATE_FILE"
+run_fm doctor --bench-dir "$E"
+assert_contains "$OUT" "profile  v16-lts"
+run_fm service --yes --bench-dir "$E"
+assert_no_file "$FL_STATE_DIR/benches/early.env"
+assert_eq "off" "$(bstate early AUTOSTART)"
+sed_inplace "s#^BENCH_DIR=.*#BENCH_DIR=${prev_default}#" "$FL_STATE_FILE"
+
+# ---- a symlinked spelling is the same bench: same state file, no port clash with itself
+ln -s "$B" "$HOME/v16link"
+run_fm doctor --bench-dir "$HOME/v16link"
+assert_contains "$OUT" "profile  v16-lts"
+assert_not_contains "$OUT" "v16-bench: 8000" "(a bench never clashes with its own symlink)"
+assert_not_contains "$OUT" "v16link"
+[[ -z "$(find "$FL_STATE_DIR/benches" -name 'v16link-*')" ]] || fail "a symlink must not get its own state file"
+
+# ---- a plain <name>.env belongs to the default bench only, never to a namesake
+printf 'PROFILE=v16-lts\n' >"$FL_STATE_DIR/benches/v16-bench.env"
+N="$HOME/other/v16-bench"; make_fake_bench "$N" namesake
+run_fm doctor --bench-dir "$N"
+assert_contains "$OUT" "profile  v15-lts"
+run_fm service --yes --bench-dir "$N"
+assert_file "$FL_STATE_DIR/benches/v16-bench.env" "(a namesake never claims the old file)"
+rm -f "$FL_STATE_DIR/benches/v16-bench.env"
+
 # ---- phase 00 never rewrites an existing block to its own profile
 before="$(cat "$HOME/.zshrc")"
 set +e; OUT="$("$ROOT/00-mac-system-deps.sh" --yes --profile v15-lts 2>&1)"; set -e

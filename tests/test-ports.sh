@@ -27,6 +27,16 @@ reset_calls
 run_fm adopt "$B" --dry-run
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "dry-run: cd ${B} && bench set-config -g -p webserver_port 8001"
+assert_contains "$OUT" "dry-run: would write ${B}/Procfile.lean" "(the plan shows the Procfile the move rewrites)"
+assert_calls_not_contain '^bench (set-config|setup redis)'
+assert_eq "$snapB" "$(snapshot "$B/sites" "$B/config")"
+
+# ---- a cancelled adopt leaves the ports alone: the move is part of the one plan
+reset_calls
+run_fm adopt "$B" </dev/null
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "move the bench to port block 1"
+assert_contains "$OUT" "Cancelled. Nothing was changed."
 assert_calls_not_contain '^bench (set-config|setup redis)'
 assert_eq "$snapB" "$(snapshot "$B/sites" "$B/config")"
 
@@ -45,7 +55,7 @@ grep -q 'port 11001' "$B/config/redis_queue.conf" || fail "redis config regenera
 grep -q 'bench serve --port 8001' "$B/Procfile.lean" || fail "Procfile.lean uses the new port"
 grep -q 'PORTS="8001,9001,11001,13001"' "$B/benchbar-run.sh" || fail "the runner uses the new ports"
 assert_eq "$snapA" "$(snapshot "$A")" "(the first bench is never touched)"
-assert_eq "1" "$(sed -n 's/^PORT_OFFSET=//p' "$FL_STATE_DIR/benches/v16-bench.env")"
+assert_eq "1" "$(cat "$FL_STATE_DIR"/benches/v16-bench-????????.env | sed -n 's/^PORT_OFFSET=//p')"
 run_fm list --json
 assert_eq "8000 8001 8000" "$(printf '%s' "$OUT" | jget - '" ".join(str(b["ports"]["web"]) for b in d["benches"])')"
 assert_eq "13001" "$(printf '%s' "$OUT" | jget - '[b for b in d["benches"] if b["name"]=="v16-bench"][0]["ports"]["redis_socketio"]')"
@@ -66,6 +76,18 @@ run_fm adopt "$C" --yes
 assert_eq "0" "$CODE" "$OUT"
 assert_eq "8003" "$(cfg "$C" webserver_port)"
 
+# ---- a foreign listener on a newcomer's own ports moves it too
+D="$HOME/dev/fourth"
+make_fake_bench "$D" fourth
+bench_json="$D/sites/common_site_config.json"
+sed_inplace 's/8000/8010/; s/9000/9010/; s/11000/11010/; s/13000/13010/' "$bench_json"
+add_listener 8010 7778 OtherApp
+mkdir -p "$MOCK_STATE/cwd"; printf '/Applications/OtherApp.app' >"$MOCK_STATE/cwd/7778"
+run_fm adopt "$D" --yes
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "8010 has a listener: pid 7778 OtherApp"
+assert_eq "8004" "$(cfg "$D" webserver_port)"
+
 # ---- --port-offset: a taken block is refused, a free one is used
 reset_calls
 run_fm service --port-offset 0 --bench-dir "$C"
@@ -82,6 +104,12 @@ assert_eq "0" "$CODE" "$OUT"
 assert_eq "8005" "$(cfg "$C" webserver_port)"
 run_fm service --yes --port-offset 5 --bench-dir "$C"
 assert_contains "$OUT" "ports already use block 5"
+# the current block is still checked: another bench moved onto it is refused
+cp "$C/sites/common_site_config.json" "$TMP_DIR/c.json"
+cp "$C/sites/common_site_config.json" "$D/sites/common_site_config.json"
+run_fm service --yes --port-offset 5 --bench-dir "$C"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "port block 5 is not free: 8005 used by ${D}"
 
 # ---- up asks only about a running clash, not a configured one
 cp "$A/sites/common_site_config.json" "$TMP_DIR/a.json"

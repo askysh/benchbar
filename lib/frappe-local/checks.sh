@@ -15,6 +15,16 @@ FL_CHECK_ORDER="brew python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_63
 FL_LOG_WARN_MB="${FL_LOG_WARN_MB:-50}"
 FL_HOSTS_FILE="${FL_HOSTS_FILE:-/etc/hosts}"
 
+# port_block only exists while a plan moves this bench's ports
+# (FL_PORT_TARGET, set by fl_ports_plan); doctor never shows it.
+chk_port_block() {
+  if [[ -n "${FL_PORT_TARGET:-}" && "$FL_PORT_TARGET" != "$(fl_port_offset_current)" ]]; then
+    chk__set warn "ports move to block ${FL_PORT_TARGET}: $(fl_port_block "$FL_PORT_TARGET" | tr ' ' '/')" "${SCRIPT_DIR}/benchbar service --port-offset ${FL_PORT_TARGET} --bench-dir ${FL_BENCH_DIR}" port_block
+  else
+    chk__set ok "ports stay ${FL_WEB_PORT}/${FL_SOCKETIO_PORT}/${FL_REDIS_QUEUE_PORT}/${FL_REDIS_CACHE_PORT}"
+  fi
+}
+
 fl_check_group() {
   case "$1" in
     brew|python_leaves|mariadb_bind|mariadb_utf8|pdf_engine|redis_6379|cleanmymac|full_disk_access) printf 'system' ;;
@@ -49,6 +59,7 @@ fl_check_label() {
     logs) printf 'Log sizes' ;;
     cleanmymac) printf 'CleanMyMac' ;;
     port_clash) printf 'Port clash' ;;
+    port_block) printf 'Port block' ;;
     full_disk_access) printf 'Full Disk Access' ;;
     toolchain_node) printf 'Node' ;;
     toolchain_yarn) printf 'yarn' ;;
@@ -504,8 +515,8 @@ chk_port_clash() {
   local running configured next
   running="$(fl_port_clash_running)"
   # "third: 8000, 9000, 11000, 13000; other: 8000"
-  configured="$(fl_port_clashes_with_benches | awk '{n = $2; sub(/.*\//, "", n); if (!(n in seen)) { order[++k] = n; seen[n] = $1 } else seen[n] = seen[n] ", " $1 }
-    END { for (i = 1; i <= k; i++) printf "%s%s: %s", (i > 1 ? "; " : ""), order[i], seen[order[i]] }')"
+  configured="$(fl_port_clashes_with_benches | awk '{ if (!($2 in seen)) { order[++k] = $2; seen[$2] = $1 } else seen[$2] = seen[$2] ", " $1 }
+    END { for (i = 1; i <= k; i++) { n = order[i]; sub(/.*\//, "", n); printf "%s%s: %s", (i > 1 ? "; " : ""), n, seen[order[i]] } }')"
   next="$(fl_port_next_free_offset 2>/dev/null || printf 'N')"
   if [[ -n "$running" ]]; then
     chk__set warn "another running bench uses the same port:${running}" "${SCRIPT_DIR}/benchbar service --port-offset ${next} --bench-dir ${FL_BENCH_DIR}   (or stop the other bench)"

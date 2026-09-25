@@ -5,7 +5,7 @@
 # the check -> plan -> apply -> verify engine shared by "repair" and
 # "service" (the background phase).
 
-FL_ACTION_ORDER="python_leaves env_rebuild honcho_install honcho_setuptools node_requirements build clear_cache mariadb_bind mariadb_utf8 wkhtmltopdf_install legacy_migrate write_procfile write_runner write_plist write_helpers write_cli_link hosts_entry rotate_logs redis_stop"
+FL_ACTION_ORDER="python_leaves env_rebuild honcho_install honcho_setuptools node_requirements build clear_cache mariadb_bind mariadb_utf8 wkhtmltopdf_install legacy_migrate port_block write_procfile write_runner write_plist write_helpers write_cli_link hosts_entry rotate_logs redis_stop"
 # actions whose check may stay a warning after a run without failing it:
 # the user may decline them (or sudo) on purpose
 FL_OPTIONAL_ACTIONS="wkhtmltopdf_install hosts_entry redis_stop"
@@ -27,6 +27,7 @@ fl_action_label() {
     mariadb_utf8) printf 'write the utf8mb4 MariaDB drop-in' ;;
     wkhtmltopdf_install) printf 'install the patched wkhtmltopdf package (sudo)' ;;
     legacy_migrate) printf 'migrate legacy launchd agents' ;;
+    port_block) printf 'move the bench to port block %s (bench set-config, bench setup redis)' "${FL_PORT_TARGET:-?}" ;;
     write_procfile) printf 'write Procfile.lean' ;;
     write_runner) printf 'write the runner script' ;;
     write_plist) printf 'write and load the launchd agent' ;;
@@ -153,6 +154,19 @@ act_legacy_migrate() {
     fl_info "${label}: ${state}, last exit code ${code}"
     fl_legacy_agent_migrate "$path" "$label"
   done <<<"$list"
+}
+
+# Runs before write_procfile and the runner: fl_ports_apply re-renders them
+# with the new ports.
+act_port_block() {
+  local running=0
+  fl_bench_is_running && running=1
+  fl_ports_apply "$FL_PORT_TARGET" || return 1
+  # the Procfile and the runner carry the ports; they may have been current
+  # when the plan was made, so they are not in it
+  act_write_procfile && act_write_runner || return 1
+  [[ "$running" == "1" && "${FL_DRY_RUN:-0}" != "1" ]] && fl_warn "the bench is running on its old ports; run: benchbar restart --bench-dir ${FL_BENCH_DIR}"
+  return 0
 }
 
 act_write_procfile() {

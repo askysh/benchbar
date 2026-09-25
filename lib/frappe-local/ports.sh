@@ -47,7 +47,8 @@ fl_ports_of_bench() {
 fl_ports_taken_by_others() {
   local d p
   while IFS= read -r d; do
-    [[ -n "$d" && "$d" != "$FL_BENCH_DIR" ]] || continue
+    [[ -n "$d" ]] || continue
+    fl_same_path "$d" "$FL_BENCH_DIR" && continue
     for p in $(fl_ports_of_bench "$d"); do printf '%s %s\n' "$p" "$d"; done
   done < <(fl_known_benches)
 }
@@ -99,6 +100,9 @@ fl_ports_apply() {
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
     fl_info "dry-run: cd ${FL_BENCH_DIR} && bench set-config -g -p webserver_port ${web} (and socketio_port ${sio}, redis_queue :${queue}, redis_cache and redis_socketio :${cache})"
     fl_info "dry-run: cd ${FL_BENCH_DIR} && bench setup redis"
+    # render with the new ports, so the plan shows the Procfile and runner changes
+    FL_WEB_PORT="$web"; FL_SOCKETIO_PORT="$sio"; FL_REDIS_QUEUE_PORT="$queue"; FL_REDIS_CACHE_PORT="$cache"; FL_REDIS_SOCKETIO_PORT="$cache"
+    fl_render_all
     return 0
   fi
   fl_bench_env_exports
@@ -122,7 +126,7 @@ fl_ports_apply() {
 # settled, and a newcomer moves out of its way, never the other way round.
 fl_bench_established() {
   local dir="$1"
-  [[ "$(fl_state_get BENCH_DIR 2>/dev/null || true)" == "$dir" ]] && return 0
+  fl_same_path "$(fl_state_get BENCH_DIR 2>/dev/null || true)" "$dir" && return 0
   [[ -f "$HOME/Library/LaunchAgents/com.benchbar.$(fl_bench_name_of "$dir").plist" ]]
 }
 
@@ -130,44 +134,72 @@ fl_bench_established() {
 fl_bench_is_or_becomes_default() {
   local cur
   cur="$(fl_state_get BENCH_DIR 2>/dev/null || true)"
-  [[ -z "$cur" || "$cur" == "$FL_BENCH_DIR" || ! -d "$cur" || "${FL_MAKE_DEFAULT:-0}" == "1" ]]
+  [[ -z "$cur" || ! -d "$cur" || "${FL_MAKE_DEFAULT:-0}" == "1" ]] || fl_same_path "$cur" "$FL_BENCH_DIR"
 }
 
-# fl_ports_assign [OFFSET]: used by install, adopt and service. With an
-# offset, that block (refused when another bench or a listener has it).
-# Without one, the bench keeps its ports unless an established bench uses
-# them; then it moves to the next free block. The default bench never moves
-# on its own. Returns 1 on a refusal.
-fl_ports_assign() {
-  local want="${1:-}" cur conflicts running=0 clashes established=0 _p d
+# Foreign listeners on the current bench's own ports ("8001 has a listener:
+# pid cmd" lines); this bench's own processes do not count.
+# A listener is the bench's own when it runs inside the bench folder (honcho
+# starts redis, web and socketio there); an unreadable folder counts as own,
+# so a bench is never moved on a guess.
+fl_pid_is_bench_own() {
+  local cwd
+  cwd="$(fl_pid_cwd "$1")"
+  [[ -z "$cwd" || "$cwd" == "$FL_BENCH_DIR" || "$cwd" == "$FL_BENCH_DIR"/* ]]
+}
+
+fl_port_current_listener_conflicts() {
+  local p who
+  for p in "$FL_WEB_PORT" "$FL_SOCKETIO_PORT" "$FL_REDIS_QUEUE_PORT" "$FL_REDIS_CACHE_PORT"; do
+    who="$(fl_port_listener_summary "$p")"
+    [[ -n "$who" ]] && ! fl_pid_is_bench_own "${who%% *}" && printf '%s has a listener: pid %s\n' "$p" "$who"
+  done
+  return 0
+}
+
+# fl_ports_plan [OFFSET]: decides the port block for install, adopt and
+# service and sets FL_PORT_TARGET (empty: keep the ports). Nothing is
+# written here: the move is the "port_block" action of the same plan, so
+# one confirmation covers it and a cancelled plan changes nothing.
+#   with OFFSET  that block; refused (return 1) when another bench or a
+#                listener has it, also when it is the current block
+#   without      keep the ports, unless this bench is a newcomer (not the
+#                default) and an established bench or a foreign listener
+#                has them: then the next free block. The default bench
+#                never moves on its own; a listener on its ports is reported.
+FL_PORT_TARGET=""
+fl_ports_plan() {
+  local want="${1:-}" cur conflicts clashes established=0 _p d
+  FL_PORT_TARGET=""
   cur="$(fl_port_offset_current)"
-  if [[ -z "$want" ]]; then
-    clashes="$(fl_port_clashes_with_benches)"
-    [[ -z "$clashes" ]] && return 0
-    fl_bench_is_or_becomes_default && return 0
-    while read -r _p d; do
-      [[ -n "$d" ]] && fl_bench_established "$d" && established=1
-    done <<<"$clashes"
-    [[ "$established" == "1" ]] || return 0
-    want="$(fl_port_next_free_offset)" || { fl_fail "no free port block between 0 and ${FL_PORT_MAX_OFFSET}"; return 1; }
-    fl_warn "ports ${FL_WEB_PORT}/${FL_SOCKETIO_PORT} are used by another bench: $(fl_port_clashes_with_benches | awk '{print $2}' | sort -u | tr '\n' ' ')"
-  else
+  if [[ -n "$want" ]]; then
     [[ "$want" =~ ^[0-9]+$ && "$want" -le "$FL_PORT_MAX_OFFSET" ]] || { fl_fail "--port-offset takes a number from 0 to ${FL_PORT_MAX_OFFSET}"; return 1; }
-    [[ "$want" == "$cur" ]] && { fl_ok "ports already use block ${want} (web ${FL_WEB_PORT})"; return 0; }
     conflicts="$(fl_port_block_conflicts "$want")"
     if [[ -n "$conflicts" ]]; then
       fl_fail "port block ${want} is not free: $(printf '%s' "$conflicts" | tr '\n' ';' | sed 's/;$//; s/;/; /g')"
       fl_fix "benchbar service --port-offset $(fl_port_next_free_offset || printf 'N') --bench-dir ${FL_BENCH_DIR}"
       return 1
     fi
-  fi
-  fl_bench_is_running && running=1
-  fl_info "moving ${FL_BENCH_NAME} to port block ${want}: web $(fl_port_block "$want" | awk '{print $1}')"
-  if [[ "${FL_DRY_RUN:-0}" != "1" ]] && ! fl_confirm "Write port block ${want} into ${FL_BENCH_DIR}/sites/common_site_config.json with bench set-config?"; then
-    fl_warn "ports left as they are (${FL_WEB_PORT}/${FL_SOCKETIO_PORT})"
+    [[ "$want" == "$cur" ]] && { fl_ok "ports already use block ${want} (web ${FL_WEB_PORT})"; return 0; }
+    FL_PORT_TARGET="$want"
     return 0
   fi
-  fl_ports_apply "$want" || return 1
-  [[ "$running" == "1" && "${FL_DRY_RUN:-0}" != "1" ]] && fl_warn "the bench is running on its old ports; run: benchbar restart --bench-dir ${FL_BENCH_DIR}"
+  clashes="$(fl_port_clashes_with_benches)"
+  while read -r _p d; do
+    [[ -n "$d" ]] && fl_bench_established "$d" && established=1
+  done <<<"$clashes"
+  conflicts="$(fl_port_current_listener_conflicts)"
+  [[ "$established" == "1" || -n "$conflicts" ]] || return 0
+  if fl_bench_is_or_becomes_default; then
+    [[ -n "$conflicts" ]] && fl_warn "ports of the default bench are taken: $(printf '%s' "$conflicts" | tr '\n' ';' | sed 's/;$//; s/;/; /g'); it is not moved on its own (--port-offset moves it)"
+    return 0
+  fi
+  FL_PORT_TARGET="$(fl_port_next_free_offset)" || { fl_fail "no free port block between 0 and ${FL_PORT_MAX_OFFSET}"; return 1; }
+  if [[ -n "$clashes" ]]; then
+    fl_warn "ports ${FL_WEB_PORT}/${FL_SOCKETIO_PORT} are used by another bench: $(printf '%s\n' "$clashes" | awk '{print $2}' | sort -u | tr '\n' ' ')"
+  else
+    fl_warn "ports of ${FL_BENCH_NAME} are taken: $(printf '%s' "$conflicts" | tr '\n' ';' | sed 's/;$//; s/;/; /g')"
+  fi
+  fl_info "plan: move ${FL_BENCH_NAME} to port block ${FL_PORT_TARGET} (web $(fl_port_block "$FL_PORT_TARGET" | awk '{print $1}'))"
   return 0
 }
