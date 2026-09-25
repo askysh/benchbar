@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# crontab mock: $MOCK_STATE/crontab_denied answers like macOS without Full Disk Access
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "$(dirname "$0")/_mocklib.sh"
+mock_log "$@"
+if [[ -f "${MOCK_STATE:?}/crontab_denied" ]]; then
+  printf 'crontab: tmp/tmp.12345: Operation not permitted\n' >&2
+  exit 1
+fi
+printf 'crontab: no crontab for %s\n' "${USER:-akash}" >&2
+exit 1

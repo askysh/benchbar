@@ -5,7 +5,7 @@
 # the check -> plan -> apply -> verify engine shared by "repair" and
 # "service" (the background phase).
 
-FL_ACTION_ORDER="python_leaves env_rebuild honcho_install node_requirements build clear_cache mariadb_bind mariadb_utf8 wkhtmltopdf_install legacy_migrate write_procfile write_runner write_plist write_helpers write_cli_link hosts_entry rotate_logs redis_stop"
+FL_ACTION_ORDER="python_leaves env_rebuild honcho_install honcho_setuptools node_requirements build clear_cache mariadb_bind mariadb_utf8 wkhtmltopdf_install legacy_migrate write_procfile write_runner write_plist write_helpers write_cli_link hosts_entry rotate_logs redis_stop"
 # actions whose check may stay a warning after a run without failing it:
 # the user may decline them (or sudo) on purpose
 FL_OPTIONAL_ACTIONS="wkhtmltopdf_install hosts_entry redis_stop"
@@ -18,6 +18,7 @@ fl_action_label() {
   case "$1" in
     python_leaves) printf 'mark %s as user-installed' "$FL_PYTHON_FORMULA" ;;
     honcho_install) printf 'install honcho into the bench env' ;;
+    honcho_setuptools) printf "install setuptools into honcho's venv" ;;
     env_rebuild) printf 'rebuild the bench env (old env moved aside)' ;;
     node_requirements) printf 'bench setup requirements --node' ;;
     build) printf 'bench build' ;;
@@ -68,6 +69,18 @@ act_honcho_install() {
   fl_honcho_install || return 1
   [[ -n "$FL_HONCHO" ]] && fl_state_set HONCHO_BIN "$FL_HONCHO"
   fl_render_all
+}
+
+# setuptools goes into the venv honcho runs from (pipx, uv or env), nowhere else
+act_honcho_setuptools() {
+  local py
+  py="$(fl_honcho_python)"
+  [[ -n "$py" ]] || { fl_fail "honcho's Python was not found"; return 1; }
+  if command -v uv >/dev/null 2>&1; then
+    fl_run_long "install setuptools for honcho (uv)" uv pip install --python "$py" setuptools || return 1
+  else
+    fl_run_long "install setuptools for honcho (pip)" "$py" -m pip install setuptools || return 1
+  fi
 }
 
 act_env_rebuild() {

@@ -11,14 +11,14 @@
 # Groups (used by "benchbar service" versus "benchbar repair"):
 #   system, bench, service, site
 
-FL_CHECK_ORDER="brew python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac env_python bench_version socketio assets logs honcho procfile runner agent stop_flag helpers cli_link legacy_agents hosts port_clash ping"
+FL_CHECK_ORDER="brew python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac full_disk_access env_python bench_version toolchain_node toolchain_yarn toolchain_mariadb toolchain_pkgconfig socketio assets logs honcho honcho_setuptools procfile runner agent fork_safety stop_flag helpers cli_link legacy_agents hosts port_clash orphans ping"
 FL_LOG_WARN_MB="${FL_LOG_WARN_MB:-50}"
 FL_HOSTS_FILE="${FL_HOSTS_FILE:-/etc/hosts}"
 
 fl_check_group() {
   case "$1" in
-    brew|python_leaves|mariadb_bind|mariadb_utf8|pdf_engine|redis_6379|cleanmymac) printf 'system' ;;
-    env_python|bench_version|socketio|assets|logs) printf 'bench' ;;
+    brew|python_leaves|mariadb_bind|mariadb_utf8|pdf_engine|redis_6379|cleanmymac|full_disk_access) printf 'system' ;;
+    env_python|bench_version|toolchain_*|socketio|assets|logs) printf 'bench' ;;
     ping) printf 'site' ;;
     *) printf 'service' ;;
   esac
@@ -49,6 +49,14 @@ fl_check_label() {
     logs) printf 'Log sizes' ;;
     cleanmymac) printf 'CleanMyMac' ;;
     port_clash) printf 'Port clash' ;;
+    full_disk_access) printf 'Full Disk Access' ;;
+    toolchain_node) printf 'Node' ;;
+    toolchain_yarn) printf 'yarn' ;;
+    toolchain_mariadb) printf 'MariaDB server' ;;
+    toolchain_pkgconfig) printf 'pkg-config' ;;
+    honcho_setuptools) printf 'honcho imports' ;;
+    fork_safety) printf 'Fork safety env' ;;
+    orphans) printf 'Stale processes' ;;
     *) printf '%s' "$1" ;;
   esac
 }
@@ -489,5 +497,184 @@ chk_port_clash() {
     chk__set warn "another running bench uses the same port:${clash}" "stop the other bench or change webserver_port in sites/common_site_config.json"
   else
     chk__set ok "no other benchbar bench is running on ${FL_WEB_PORT}/${FL_SOCKETIO_PORT}"
+  fi
+}
+
+# ------------------------------------------------------------- 0.4 checks
+
+chk_full_disk_access() {
+  # Full Disk Access belongs to the app that runs bench init (Terminal);
+  # BenchBar never needs it, so its own answer would only mislead
+  if [[ "${__CFBundleIdentifier:-}" == "$FL_APP_BUNDLE_ID" ]]; then
+    chk__set ok "not checked from BenchBar (it matters for the Terminal that runs bench init)"
+    return 0
+  fi
+  if fl_crontab_denied; then
+    chk__set warn "crontab is not readable (Operation not permitted): bench init and bench setup backups fail without Full Disk Access" \
+      "System Settings > Privacy & Security > Full Disk Access: add Terminal (or the app that runs benchbar), then open a new window"
+  else
+    chk__set ok "crontab is readable"
+  fi
+}
+
+# The tools as the bench's processes see them: launchd's PATH, not the
+# caller's. nvm's node lives in a shell PATH only, so bench never sees it.
+fl_bench_which() {
+  PATH="$(fl_launchd_path_value)" command -v "$1" 2>/dev/null || true
+}
+
+chk_toolchain_node() {
+  local node where ver major
+  if [[ -x "${FL_BENCH_DIR}/env/bin/node" ]]; then node="${FL_BENCH_DIR}/env/bin/node"; where="env/bin/node"
+  else node="$(fl_bench_which node)"; where="$node"; fi
+  if [[ -z "$node" ]]; then
+    if [[ -d "$HOME/.nvm" ]]; then
+      chk__set warn "no node on the bench's PATH (nvm's node is only on your shell's PATH, bench does not see it)" "brew install ${FL_NODE_FORMULA}"
+    else
+      chk__set warn "no node on the bench's PATH" "brew install ${FL_NODE_FORMULA}"
+    fi
+    return 0
+  fi
+  ver="$("$node" --version 2>/dev/null | tr -d 'v' || true)"
+  major="${ver%%.*}"
+  if [[ "$major" == "$FL_NODE_MAJOR" ]]; then
+    chk__set ok "Node ${ver} at ${where}, profile ${FL_PROFILE} expects ${FL_NODE_MAJOR}"
+  else
+    chk__set warn "Node ${ver:-unknown} at ${where}, profile ${FL_PROFILE} expects ${FL_NODE_MAJOR}" "brew install ${FL_NODE_FORMULA}   (the bench's PATH puts ${FL_BREW_PREFIX}/opt/${FL_NODE_FORMULA}/bin first)"
+  fi
+}
+
+chk_toolchain_yarn() {
+  local yarn ver
+  yarn="$(fl_bench_which yarn)"
+  if [[ -z "$yarn" ]]; then
+    chk__set warn "no yarn on the bench's PATH (bench build needs it)" "$(fl_npm_bin) install -g yarn"
+    return 0
+  fi
+  ver="$("$yarn" --version 2>/dev/null || true)"
+  chk__set ok "yarn ${ver:-found} at ${yarn}"
+}
+
+# The version of the MariaDB server listening on 3306: its own binary when
+# ps can name it, else the installed mariadb formula. Never logs in, so the
+# Keychain is never read.
+fl_mariadb_server_version() {
+  local pid bin f
+  pid="$(fl_port_listener_pid 3306)"
+  if [[ -n "$pid" ]]; then
+    bin="$(ps -o command= -p "$pid" 2>/dev/null | awk '{print $1}' || true)"
+    if [[ "$bin" == */mariadbd && -x "$bin" ]]; then
+      "$bin" --version 2>/dev/null | fl_parse_mariadb_version | head -n1
+      return 0
+    fi
+  fi
+  for f in "$FL_MARIADB_FORMULA" mariadb@11.8 mariadb@11.4 mariadb@10.11 mariadb@10.6 mariadb; do
+    if [[ -x "${FL_BREW_PREFIX}/opt/${f}/bin/mariadb" ]]; then
+      "${FL_BREW_PREFIX}/opt/${f}/bin/mariadb" --version 2>/dev/null | fl_parse_mariadb_version | head -n1
+      return 0
+    fi
+  done
+}
+
+# frappe's own range (check_compatible_versions in v15 and v16): below 10.6
+# is unsupported, above 11.8 untested. Both are warnings there too.
+chk_toolchain_mariadb() {
+  local ver mm
+  if [[ -z "$(fl_port_listener_pid 3306)" ]]; then
+    chk__set warn "nothing listens on 3306: MariaDB is not running" "brew services start ${FL_MARIADB_FORMULA}"
+    return 0
+  fi
+  ver="$(fl_mariadb_server_version)"
+  mm="$(printf '%s' "$ver" | awk -F. '{printf "%d%03d", $1, $2}')"
+  if [[ -z "$ver" ]]; then
+    chk__set ok "MariaDB listens on 3306 (version not readable)"
+  elif [[ "$mm" -lt 10006 ]]; then
+    chk__set warn "MariaDB ${ver} is older than 10.6, which Frappe does not support" "brew install ${FL_MARIADB_FORMULA}"
+  elif [[ "$mm" -gt 11008 ]]; then
+    chk__set warn "MariaDB ${ver} is newer than 11.8, which Frappe has not tested" "brew install ${FL_MARIADB_FORMULA}"
+  else
+    chk__set ok "MariaDB ${ver} on 3306 (Frappe supports 10.6 to 11.8; profile ${FL_PROFILE} installs ${FL_MARIADB_MAJOR_MINOR})"
+  fi
+}
+
+chk_toolchain_pkgconfig() {
+  local pc ver
+  pc="$(fl_bench_which pkg-config)"
+  if [[ -z "$pc" ]]; then
+    chk__set warn "no pkg-config on the bench's PATH (mysqlclient for frappe v16 needs it)" "brew install pkgconf mariadb-connector-c"
+    return 0
+  fi
+  ver="$("$pc" --version 2>/dev/null || true)"
+  if PKG_CONFIG_PATH="${FL_BREW_PREFIX}/opt/mariadb-connector-c/lib/pkgconfig" "$pc" --exists libmariadb 2>/dev/null; then
+    chk__set ok "pkg-config ${ver} finds mariadb-connector-c"
+  else
+    chk__set warn "pkg-config ${ver} does not find mariadb-connector-c (libmariadb)" "brew install mariadb-connector-c"
+  fi
+}
+
+# The interpreter named in honcho's shebang, when it is a Python.
+fl_honcho_python() {
+  local line py
+  [[ -n "$FL_HONCHO" && -f "$FL_HONCHO" ]] || return 0
+  line="$(head -n1 "$FL_HONCHO" 2>/dev/null || true)"
+  py="${line#\#!}"; py="${py%% *}"
+  case "$py" in */python*) [[ -x "$py" ]] && printf '%s' "$py" ;; esac
+  return 0
+}
+
+# honcho 1.x imports pkg_resources, which Python 3.12 and later only have
+# with setuptools installed; honcho 2.0 no longer needs it.
+chk_honcho_setuptools() {
+  local py
+  py="$(fl_honcho_python)"
+  if [[ -z "$py" ]]; then
+    chk__set ok "skipped: honcho is not a Python script here"
+    return 0
+  fi
+  if "$py" -c 'import honcho.command' >/dev/null 2>&1; then
+    chk__set ok "honcho imports cleanly with ${py}"
+  elif "$py" -c 'import pkg_resources' >/dev/null 2>&1; then
+    chk__set warn "honcho does not import with ${py}" "${py} -c 'import honcho.command'   (shows the error)"
+  else
+    chk__set warn "honcho needs pkg_resources, which ${py} lacks (No module named 'pkg_resources')" "${SCRIPT_DIR}/benchbar repair (installs setuptools into honcho's venv only)" honcho_setuptools
+  fi
+}
+
+# OBJC_DISABLE_INITIALIZE_FORK_SAFETY and NO_PROXY keep macOS from killing
+# forked workers; the agent plist sets them and honcho's children inherit.
+chk_fork_safety() {
+  local plist missing=""
+  plist="$(fl_agent_plist_path)"
+  if [[ ! -f "$plist" ]]; then
+    chk__set ok "skipped: no agent plist yet"
+    return 0
+  fi
+  grep -A1 -F '<key>OBJC_DISABLE_INITIALIZE_FORK_SAFETY</key>' "$plist" | grep -q -F '<string>YES</string>' || missing="${missing} OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES"
+  grep -A1 -F '<key>NO_PROXY</key>' "$plist" | grep -q -F '<string>*</string>' || missing="${missing} NO_PROXY=*"
+  if [[ -n "$missing" ]]; then
+    chk__set warn "the agent does not pass${missing} to the workers" "${SCRIPT_DIR}/benchbar repair" write_plist
+  else
+    chk__set ok "the agent passes OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES and NO_PROXY=* to every process"
+  fi
+}
+
+# A killed "bench start" leaves redis, socketio or gunicorn on the bench's
+# ports; the agent then cannot start. honcho running (benchfg or the agent)
+# means the listeners are its own.
+chk_orphans() {
+  local port who held=""
+  [[ "$(fl_agent_field state)" == "running" ]] && { chk__set ok "the agent runs this bench"; return 0; }
+  if pgrep -f "honcho start -f Procfile" >/dev/null 2>&1; then
+    chk__set ok "honcho is running (benchfg or bench start)"
+    return 0
+  fi
+  for port in $(fl_bench_ports_csv | tr ',' ' '); do
+    who="$(fl_port_listener_summary "$port")"
+    [[ -n "$who" ]] && held="${held}${held:+, }${port} (pid ${who% *} ${who#* })"
+  done
+  if [[ -n "$held" ]]; then
+    chk__set warn "stale processes hold this bench's ports: ${held}" "${SCRIPT_DIR}/benchbar down   (or benchbar restart)"
+  else
+    chk__set ok "no stale process holds ${FL_WEB_PORT}, ${FL_SOCKETIO_PORT}, ${FL_REDIS_QUEUE_PORT} or ${FL_REDIS_CACHE_PORT}"
   fi
 }

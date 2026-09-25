@@ -108,6 +108,13 @@ assert any(c["id"] == "agent" for c in d["checks"])
 assert set(d["summary"]) == {"ok", "warn", "fail"}
 ' || fail "doctor --json content"
 
+# a failing check: exit 1 and stdout is still exactly one JSON document
+mv "$BENCH/env" "$BENCH/env.gone"
+set +e; JOUT="$("$FM" doctor --json --bench-dir "$BENCH" 2>/dev/null)"; JCODE=$?; set -e
+mv "$BENCH/env.gone" "$BENCH/env"
+assert_eq "1" "$JCODE"
+printf '%s' "$JOUT" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["summary"]["fail"] >= 1' || fail "doctor --json with a failing check must print only JSON on stdout: $JOUT"
+
 # ---- strings with quotes and backslashes stay valid JSON
 QUOTED="$HOME/dev/we\"ird"
 make_fake_bench "$QUOTED" odd

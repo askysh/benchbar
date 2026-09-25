@@ -186,7 +186,10 @@ socket.io module, the built assets that `assets.json` references, honcho,
 `Procfile.lean`, the runner, the launchd agent and its last exit code,
 the stop flag, the shell helpers, legacy agents, the MariaDB bind address
 and charset config, the PDF engine (wkhtmltopdf, and on v16 the Chromium
-frappe can use), a stray Homebrew Redis on 6379, the site
+frappe can use), a stray Homebrew Redis on 6379, Full Disk Access for
+`crontab`, the toolchain as the bench sees it (Node, yarn, the MariaDB
+server, pkg-config), honcho without `pkg_resources`, the fork safety
+variables, stale processes on the bench's ports, the site
 ping, `/etc/hosts`, log sizes, CleanMyMac, and port clashes with other
 benches. Every warning and failure names its fix.
 
