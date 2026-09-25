@@ -19,7 +19,7 @@ All notable changes to this project are documented here.
 - Doctor checks from the community threads, each with a fix line:
   `full_disk_access` (crontab denied, the cause of `bench init` offering
   to delete a new bench), `toolchain_node`, `toolchain_yarn`,
-  `toolchain_mariadb` and `toolchain_pkgconfig` (the tools as the bench's
+  `mariadb_version` and `toolchain_pkgconfig` (the tools as the bench's
   launchd PATH sees them, so nvm's node shows up as missing),
   `honcho_setuptools` (honcho 1.x on Python 3.12 or newer, with a repair
   action that installs setuptools into honcho's venv only), `fork_safety`
@@ -36,8 +36,22 @@ All notable changes to this project are documented here.
 - `--make-default` for `install`, `adopt` and `service`: a second bench no
   longer becomes the default by being set up.
 
+- Port blocks: `install` and `adopt` move a bench whose ports clash with
+  an established bench (one with an agent, or the default) to the next
+  free block (web `8000 + n`, socketio `9000 + n`, Redis `11000 + n` and
+  `13000 + n`), checking every known bench and the listeners on the Mac,
+  with `bench set-config -g` and `bench setup redis`. `--port-offset N`
+  picks the block for `install`, `adopt` and `service`. `ports` in
+  `list --json` and `status --json` gains `redis_socketio`.
+- `mariadb_version` checks the MariaDB server against the profile's range
+  (`mariadb_min`, `mariadb_max` in `release-profiles.tsv`): 10.6 to 10.11
+  for v15, 10.6 to 11.8 for v16.
+
 ### Changed
 
+- The port clash check also warns when another bench is only configured
+  with the same ports, and names the `--port-offset` that fixes it.
+  `benchbar up` still asks only when a clashing bench is running.
 - `benchbar down`, `status` and the runner match honcho and socketio by
   their working folder: both run with the same relative command line in
   every bench, so stopping or starting one bench used to stop the other's

@@ -11,7 +11,7 @@
 # Groups (used by "benchbar service" versus "benchbar repair"):
 #   system, bench, service, site
 
-FL_CHECK_ORDER="brew python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac full_disk_access env_python bench_version toolchain_node toolchain_yarn toolchain_mariadb toolchain_pkgconfig socketio assets logs honcho honcho_setuptools procfile runner agent fork_safety stop_flag helpers cli_link legacy_agents hosts port_clash orphans ping"
+FL_CHECK_ORDER="brew python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac full_disk_access env_python bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets logs honcho honcho_setuptools procfile runner agent fork_safety stop_flag helpers cli_link legacy_agents hosts port_clash orphans ping"
 FL_LOG_WARN_MB="${FL_LOG_WARN_MB:-50}"
 FL_HOSTS_FILE="${FL_HOSTS_FILE:-/etc/hosts}"
 
@@ -52,7 +52,7 @@ fl_check_label() {
     full_disk_access) printf 'Full Disk Access' ;;
     toolchain_node) printf 'Node' ;;
     toolchain_yarn) printf 'yarn' ;;
-    toolchain_mariadb) printf 'MariaDB server' ;;
+    mariadb_version) printf 'MariaDB server' ;;
     toolchain_pkgconfig) printf 'pkg-config' ;;
     honcho_setuptools) printf 'honcho imports' ;;
     fork_safety) printf 'Fork safety env' ;;
@@ -478,7 +478,9 @@ chk_cleanmymac() {
   fi
 }
 
-chk_port_clash() {
+# Running benchbar benches that use this bench's web or socketio port, as
+# " label:port" words; "benchbar up" asks before starting next to one.
+fl_port_clash_running() {
   local f other label state wd ports clash=""
   for f in "$HOME"/Library/LaunchAgents/com.benchbar.*.plist "$HOME"/Library/LaunchAgents/com.frappe-mac.*.plist; do
     [[ -f "$f" ]] || continue
@@ -493,10 +495,24 @@ chk_port_clash() {
       if [[ "$other" == "$FL_WEB_PORT" || "$other" == "$FL_SOCKETIO_PORT" ]]; then clash="${clash} ${label}:${other}"; fi
     done
   done
-  if [[ -n "$clash" ]]; then
-    chk__set warn "another running bench uses the same port:${clash}" "stop the other bench or change webserver_port in sites/common_site_config.json"
+  printf '%s' "$clash"
+}
+
+# Another bench with the same ports: a warning while it runs, and also when
+# it is only configured that way (then only one of them can run at a time).
+chk_port_clash() {
+  local running configured next
+  running="$(fl_port_clash_running)"
+  # "third: 8000, 9000, 11000, 13000; other: 8000"
+  configured="$(fl_port_clashes_with_benches | awk '{n = $2; sub(/.*\//, "", n); if (!(n in seen)) { order[++k] = n; seen[n] = $1 } else seen[n] = seen[n] ", " $1 }
+    END { for (i = 1; i <= k; i++) printf "%s%s: %s", (i > 1 ? "; " : ""), order[i], seen[order[i]] }')"
+  next="$(fl_port_next_free_offset 2>/dev/null || printf 'N')"
+  if [[ -n "$running" ]]; then
+    chk__set warn "another running bench uses the same port:${running}" "${SCRIPT_DIR}/benchbar service --port-offset ${next} --bench-dir ${FL_BENCH_DIR}   (or stop the other bench)"
+  elif [[ -n "$configured" ]]; then
+    chk__set warn "another bench is set up with the same ports (${configured}); only one of them can run at a time" "${SCRIPT_DIR}/benchbar service --port-offset ${next} --bench-dir ${FL_BENCH_DIR}"
   else
-    chk__set ok "no other benchbar bench is running on ${FL_WEB_PORT}/${FL_SOCKETIO_PORT}"
+    chk__set ok "no other benchbar bench uses ${FL_WEB_PORT}, ${FL_SOCKETIO_PORT}, ${FL_REDIS_QUEUE_PORT} or ${FL_REDIS_CACHE_PORT}"
   fi
 }
 
@@ -576,24 +592,28 @@ fl_mariadb_server_version() {
   done
 }
 
-# frappe's own range (check_compatible_versions in v15 and v16): below 10.6
-# is unsupported, above 11.8 untested. Both are warnings there too.
-chk_toolchain_mariadb() {
+# The range each profile accepts (release-profiles.tsv): v16's is frappe's
+# own check_compatible_versions (10.6 to 11.8); v15's code warns above 10.8,
+# a stale bound, so its range ends at the 10.11 the v15 docs install.
+# Outside the range is a warning, as it is in frappe.
+fl_mm_num() { printf '%s' "$1" | awk -F. '{printf "%d%03d", $1, $2}'; }
+
+chk_mariadb_version() {
   local ver mm
   if [[ -z "$(fl_port_listener_pid 3306)" ]]; then
     chk__set warn "nothing listens on 3306: MariaDB is not running" "brew services start ${FL_MARIADB_FORMULA}"
     return 0
   fi
   ver="$(fl_mariadb_server_version)"
-  mm="$(printf '%s' "$ver" | awk -F. '{printf "%d%03d", $1, $2}')"
+  mm="$(fl_mm_num "$ver")"
   if [[ -z "$ver" ]]; then
     chk__set ok "MariaDB listens on 3306 (version not readable)"
-  elif [[ "$mm" -lt 10006 ]]; then
-    chk__set warn "MariaDB ${ver} is older than 10.6, which Frappe does not support" "brew install ${FL_MARIADB_FORMULA}"
-  elif [[ "$mm" -gt 11008 ]]; then
-    chk__set warn "MariaDB ${ver} is newer than 11.8, which Frappe has not tested" "brew install ${FL_MARIADB_FORMULA}"
+  elif [[ "$mm" -lt "$(fl_mm_num "$FL_MARIADB_MIN")" ]]; then
+    chk__set warn "MariaDB ${ver} is older than ${FL_MARIADB_MIN}, the oldest profile ${FL_PROFILE} supports" "brew install ${FL_MARIADB_FORMULA}"
+  elif [[ "$mm" -gt "$(fl_mm_num "$FL_MARIADB_MAX")" ]]; then
+    chk__set warn "MariaDB ${ver} is newer than ${FL_MARIADB_MAX}, the newest profile ${FL_PROFILE} is tested with" "brew install ${FL_MARIADB_FORMULA}"
   else
-    chk__set ok "MariaDB ${ver} on 3306 (Frappe supports 10.6 to 11.8; profile ${FL_PROFILE} installs ${FL_MARIADB_MAJOR_MINOR})"
+    chk__set ok "MariaDB ${ver} on 3306 (profile ${FL_PROFILE} accepts ${FL_MARIADB_MIN} to ${FL_MARIADB_MAX})"
   fi
 }
 

@@ -68,7 +68,7 @@ How `status` decides (live facts win over the state file):
       "site": "macdev",
       "label": "com.benchbar.frappe-bench",
       "web_url": "http://macdev:8000",
-      "ports": { "web": 8000, "socketio": 9000, "redis_queue": 11000, "redis_cache": 13000 },
+      "ports": { "web": 8000, "socketio": 9000, "redis_queue": 11000, "redis_socketio": 13000, "redis_cache": 13000 },
       "default": true,
       "service_installed": true,
       "state_file": "/Users/you/frappe-bench/logs/.benchbar/state.json"
@@ -85,7 +85,7 @@ How `status` decides (live facts win over the state file):
 | `benches[].site` | string | default site |
 | `benches[].label` | string | launchd label, `com.benchbar.<name>` |
 | `benches[].web_url` | string | `http://<site>:<web port>` |
-| `benches[].ports` | object | web, socketio, redis_queue, redis_cache |
+| `benches[].ports` | object | web, socketio, redis_queue, redis_socketio, redis_cache. `redis_socketio` was added in 0.4: bench keeps it equal to `redis_cache` and frappe v15 and v16 never connect to it; older CLIs leave it out |
 | `benches[].default` | bool | same as `path == default_bench` |
 | `benches[].service_installed` | bool | the agent plist exists |
 | `benches[].state_file` | string | where the runner writes `state.json` |
@@ -113,7 +113,7 @@ bench (`.benchbar/state.env`), the `WorkingDirectory` of every
   "last_exit_code": 0,
   "web_url": "http://macdev:8000",
   "web_ping_code": 200,
-  "ports": { "web": 8000, "socketio": 9000, "redis_queue": 11000, "redis_cache": 13000 },
+  "ports": { "web": 8000, "socketio": 9000, "redis_queue": 11000, "redis_socketio": 13000, "redis_cache": 13000 },
   "state_file": "/Users/you/frappe-bench/logs/.benchbar/state.json",
   "log": "/Users/you/frappe-bench/logs/bench.log",
   "agent_loaded": true,

@@ -30,11 +30,14 @@ nonisolated struct BenchPorts: Codable, Sendable, Equatable, Hashable {
     var socketio: Int
     var redisQueue: Int
     var redisCache: Int
+    /// Added in 0.4. bench keeps it equal to redis_cache; nil from an older CLI.
+    var redisSocketio: Int? = nil
 
     enum CodingKeys: String, CodingKey {
         case web, socketio
         case redisQueue = "redis_queue"
         case redisCache = "redis_cache"
+        case redisSocketio = "redis_socketio"
     }
 }
 

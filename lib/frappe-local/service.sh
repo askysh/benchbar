@@ -139,9 +139,10 @@ fl_arm_start() {
 }
 
 fl_check_port_clash_or_confirm() {
-  chk_port_clash
-  [[ "$CHK_STATUS" == "ok" ]] && return 0
-  fl_warn "$CHK_MSG"
+  local clash
+  clash="$(fl_port_clash_running)"
+  [[ -z "$clash" ]] && return 0
+  fl_warn "another running bench uses the same port:${clash}"
   fl_confirm "Start anyway?" || return 1
 }
 

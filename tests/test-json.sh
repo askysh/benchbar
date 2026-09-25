@@ -34,7 +34,7 @@ first, second = b["frappe-bench"], b["second"]
 assert first["default"] is True and second["default"] is False, d
 assert first["label"] == "com.benchbar.frappe-bench", first
 assert first["site"] == "macdev" and second["site"] == "secondsite", d
-assert second["ports"] == {"web": 8001, "socketio": 9001, "redis_queue": 11000, "redis_cache": 13000}, second
+assert second["ports"] == {"web": 8001, "socketio": 9001, "redis_queue": 11000, "redis_socketio": 13000, "redis_cache": 13000}, second
 assert second["web_url"] == "http://secondsite:8001", second
 assert first["service_installed"] is True and second["service_installed"] is False, d
 assert first["state_file"].endswith("/frappe-bench/logs/.benchbar/state.json"), first
