@@ -90,6 +90,7 @@ fi
 
 [[ -n "$PROFILE" ]] || PROFILE="$(fl_default_profile)"
 fl_load_profile "$PROFILE"
+fl_mariadb_prefer_running
 
 fl_section "PROFILE"
 fl_ok "Using ${FL_PROFILE_LABEL} (${FL_PROFILE})"
@@ -130,6 +131,7 @@ fi
 fl_ok "Homebrew $(brew --version | head -n1 | awk '{print $2}') at ${FL_BREW_PREFIX}"
 
 fl_section "PLAN"
+[[ "$FL_MARIADB_SOURCE" == "running" ]] && fl_info "MariaDB: using the ${FL_MARIADB_FORMULA} server already running on 3306 (inside ${FL_PROFILE}'s range ${FL_MARIADB_MIN} to ${FL_MARIADB_MAX})"
 cat <<EOF
   Profile: ${FL_PROFILE}, Frappe ${FL_FRAPPE_BRANCH}, ERPNext ${FL_ERPNEXT_BRANCH}
   Python:  ${FL_PYTHON_FORMULA} (${FL_PYTHON_BIN_NAME})

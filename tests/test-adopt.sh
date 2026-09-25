@@ -37,7 +37,7 @@ assert_no_file "$BENCH/Procfile.lean"
 # --yes applies: service files, agent, helpers, hosts; the bench stays stopped
 run_fm adopt "$BENCH" --yes
 assert_eq "0" "$CODE" "$OUT"
-assert_contains "$OUT" "sites/, apps/, env/ and the databases are not touched"
+assert_contains "$OUT" "apps/, env/, the sites and the databases are not touched"
 assert_file "$BENCH/Procfile.lean"
 assert_file "$BENCH/benchbar-run.sh"
 assert_file "$HOME/Library/LaunchAgents/com.benchbar.frappe-bench.plist"

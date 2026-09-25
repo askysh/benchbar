@@ -35,7 +35,7 @@ run_test_with_deadline() {
   return "$code"
 }
 
-for t in test-ui test-templates test-shellrc test-platform test-run test-version-policy test-bench-flow test-runner test-process test-multi-bench test-service test-migrate test-json test-doctor test-doctor-hardening test-repair test-cli test-phases test-report test-adopt test-install-sh test-profile-v16; do
+for t in test-ui test-templates test-shellrc test-platform test-run test-version-policy test-bench-flow test-runner test-process test-multi-bench test-ports test-sites test-service test-migrate test-json test-doctor test-doctor-hardening test-repair test-cli test-phases test-report test-adopt test-install-sh test-profile-v16; do
   [[ -f "$ROOT/tests/$t.sh" ]] || continue
   run_test_with_deadline "$ROOT/tests/$t.sh"
 done

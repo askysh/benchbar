@@ -11,10 +11,26 @@ struct ModelTests {
         #expect(list.benches.count == 2)
         let second = list.benches[1]
         #expect(second.name == "v16")
-        #expect(second.ports == BenchPorts(web: 8001, socketio: 9001, redisQueue: 11001, redisCache: 13001))
+        #expect(second.ports == BenchPorts(web: 8001, socketio: 9001, redisQueue: 11001, redisCache: 13001, redisSocketio: 13001))
         #expect(second.isDefault == false)
         #expect(second.serviceInstalled == false)
         #expect(second.id == "/Users/you/dev/v16")
+    }
+
+    @Test func portsFromACLIBefore04HaveNoSocketioRedis() throws {
+        let json = Data(#"{"web":8000,"socketio":9000,"redis_queue":11000,"redis_cache":13000}"#.utf8)
+        let ports = try JSONDecoder().decode(BenchPorts.self, from: json)
+        #expect(ports.redisSocketio == nil)
+        #expect(ports.web == 8000)
+    }
+
+    @Test func decodesSitesAndScheduler() throws {
+        let status = try BenchJSON.decode(BenchStatus.self, from: Fixture.data("status-running"))
+        #expect(status.sites?.first?.isDefault == true)
+        #expect(status.sites?.first?.pingCode == 200)
+        #expect(status.scheduler == false)
+        let list = try BenchJSON.decode(BenchList.self, from: Fixture.data("list"))
+        #expect(list.benches[0].sites?.map(\.name) == ["macdev"])
     }
 
     @Test func decodesEmptyList() throws {

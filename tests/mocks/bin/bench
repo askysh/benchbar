@@ -13,8 +13,22 @@ case "$1" in
     app="${*: -1}"; app="${app##*/}"; app="${app%.git}"
     mkdir -p "apps/$app"; exit 0 ;;
   new-site)
-    mkdir -p "sites/$2"; touch "sites/$2/installed_apps"; exit 0 ;;
-  use) exit 0 ;;
+    mkdir -p "sites/$2"; touch "sites/$2/installed_apps"; printf '{"db_name": "_x"}\n' >"sites/$2/site_config.json"; exit 0 ;;
+  use) printf '%s\n' "$2" >sites/currentsite.txt; exit 0 ;;
+  set-config)
+    # set-config -g [-p] KEY VALUE: writes sites/common_site_config.json like frappe
+    shift; parse=0
+    while [[ "${1:-}" == -* ]]; do [[ "$1" == "-p" ]] && parse=1; shift; done
+    python3 - "$1" "$2" "$parse" <<'PY'
+import json, sys
+key, value, parse = sys.argv[1], sys.argv[2], sys.argv[3] == "1"
+path = "sites/common_site_config.json"
+conf = json.load(open(path))
+conf[key] = int(value) if parse else value
+json.dump(conf, open(path, "w"), indent=1, sort_keys=True)
+open(path, "a").write("\n")
+PY
+    exit 0 ;;
   build)
     # create every dist file referenced by assets.json
     if [[ -f sites/assets/assets.json ]]; then
@@ -32,6 +46,13 @@ case "$1" in
 case "$*" in *version_info*) echo "3.11" ;; --version) echo "Python 3.11.9" ;; *) exit 0 ;; esac
 PY
         chmod +x env/bin/python; exit 0 ;;
+      redis)
+        mkdir -p config
+        for k in redis_queue redis_cache; do
+          port="$(sed -n "s/.*\"${k}\": \"redis:\/\/127.0.0.1:\([0-9]*\)\".*/\1/p" sites/common_site_config.json)"
+          printf 'port %s\n' "$port" >"config/${k}.conf"
+        done
+        exit 0 ;;
       requirements)
         case "$3" in
           --node) mkdir -p apps/frappe/node_modules/socket.io; exit 0 ;;

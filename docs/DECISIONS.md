@@ -29,7 +29,7 @@ Checked in frappe `version-16` at 012667b and bench `develop` at c9d1250 (Septem
 
 - Full Disk Access: frappe/bench#1730 (crontab "Operation not permitted" during `bench init`) is still open with no fix merged as of 2026-09-25; the rollback bench offers is a prompt (`click.confirm`), not automatic. benchbar passes `--no-backups`, which skips python-crontab entirely, and keeps a doctor check plus a warning before `bench init`, since `bench setup backups` would still need it.
 - The probe is `crontab -l`: "no crontab for" and exit 1 is a normal answer, only "Operation not permitted" counts. Run from BenchBar the check reports ok without probing: the access that matters is the Terminal's, not the app's.
-- The toolchain is four checks (`toolchain_node`, `toolchain_yarn`, `toolchain_mariadb`, `toolchain_pkgconfig`), one line each in doctor's existing one line per check format. Python is not repeated: `env_python` already compares the env's version with the profile.
+- The toolchain is four checks (`toolchain_node`, `toolchain_yarn`, `toolchain_pkgconfig`, plus `mariadb_version`), one line each in doctor's existing one line per check format. Python is not repeated: `env_python` already compares the env's version with the profile.
 - Tools are resolved on the launchd PATH the agent uses, not the caller's: the forum case "nvm's node is not seen by bench" is exactly a node that only exists on the shell's PATH. `env/bin/node` wins when bench put one there.
 - The MariaDB server version comes from the binary of the process listening on 3306 (`ps`), else the installed formula's client; doctor never logs in, so it never reads the Keychain. The range is frappe's own: below 10.6 unsupported, above 11.8 untested, both warnings.
 - `honcho_setuptools` imports `honcho.command` with the interpreter in honcho's shebang instead of importing `pkg_resources` directly: honcho 2.0 does not need it, and a bare `pkg_resources` probe would warn on every healthy Python 3.12 venv. The repair installs setuptools into that venv (pipx or uv), never into the bench env, and adopt skips it like `honcho_install`.
@@ -49,6 +49,45 @@ Checked in frappe `version-16` at 012667b and bench `develop` at c9d1250 (Septem
 - honcho and socketio are matched by their working folder (`lsof -a -p PID -d cwd`): both start with a relative path (`honcho start -f Procfile.lean`, `node apps/frappe/socketio.js`), so the command line is identical in every bench. A process whose folder cannot be read is still matched, the pre 0.4 behaviour, since it is usually exiting.
 - The runner (template v3) clears only its own bench's stale socketio at start, with the same working folder test; before, starting a second bench killed the first bench's socketio.
 - The launchctl mock now stops only the agent's own honcho, so the tests can run two benches at once.
+
+## 0.4: Codex review findings on PRs 10 to 12
+
+- Bench paths are resolved once, in `fl_abs_path` (symlinks, `.` and `..`), so state, ports, the default bench and agents see one spelling per bench; a stored `BENCH_DIR` from before is compared through `fl_same_path`. A local review before pushing found a symlinked spelling clashing with its own ports and getting its own state file.
+- The per bench state file is `<name>-<8 hex of the canonical path>.env` (cksum of `pwd -P`, so every spelling of a bench maps to one file; a plain `<name>.env` from the first 0.4 builds is read and renamed on the next write, by the default bench, or by a bench no other known bench shares the folder name with): `~/frappe-bench` and `~/dev/frappe-bench` are both detected candidates and would otherwise share one file. The agent label still uses the folder name only; two benches with the same folder name remain unsupported, as before 0.4.
+- A bench installed with uv is looked up in `uv tool dir --bin`, which follows `UV_TOOL_BIN_DIR` and `XDG_BIN_HOME`, instead of assuming `~/.local/bin`.
+- Phase 01 records the default bench only after the site is verified, so a failed `install --make-default` leaves `benchup` pointing at the bench that worked.
+- With `--make-default`, the shell block is rendered for the bench being set up even in a dry run, so the plan shows the PATH change the real run makes.
+- The `orphans` finding (a machine wide `pgrep` for honcho) was already fixed by the working folder match in the multi bench PR.
+## 0.4: port blocks
+
+- `bench init` already chooses ports: `make_ports` in bench's `config/common_site_config.py` takes max+1 over the benches in the same parent folder. benchbar keeps that and only moves a bench when it clashes with another bench it knows (anywhere under `~` or `~/dev`, or registered by an agent) or a port is taken by a listener.
+- The block is written with frappe's own `bench set-config -g` (`-p` for the two integer ports) and the Redis files with `bench setup redis`, not by editing `common_site_config.json` or `config/redis_*.conf`: the AGENTS.md rule "never edit sites/" holds, and the files look exactly as bench would write them. The config is backed up first.
+- `redis_socketio` is written equal to `redis_cache` and no `12000 + n` port is reserved: bench keeps the two equal "for backward compatibility", and neither frappe v15 nor v16 connects to it (v16 realtime uses `redis_queue`).
+- Only a newcomer moves: the default bench (or the one about to become it) never changes ports on its own, and a bench moves only when it clashes with an established bench, one with a benchbar agent or the default. Found by the tests: without that rule, adopting the first bench on a Mac with two more unregistered benches moved the first bench off 8000.
+- Moving ports is the `port_block` action of the same plan as the service files (a check that exists only while a plan moves ports, never in doctor): one confirmation covers it, and a cancelled adopt really changed nothing. Codex found the first version asking separately and moving the ports before the plan could still be cancelled.
+- Listener ownership has two strictness levels. For the bench's current ports an unreadable working folder counts as its own, so it never moves on a guess; for a block it does not use yet, only a listener known to run inside the bench is its own (Codex found the first version trusting every listener on the current ports, which could then be killed by the runner's cleanup).
+- `service --port-offset` validates the block before remembering the bench, so a refused block never makes it the default (Codex).
+- The action rewrites `Procfile.lean` and the runner itself after the move: they carry the ports, and when the plan was made they may have been current and therefore not in it.
+- `--port-offset` checks the block for conflicts even when it is the current one, so two benches already sharing block 0 are not confirmed by asking for block 0 (Codex).
+- A newcomer also moves when a foreign process listens on its own ports, not only when a known bench has them (Codex). "Foreign" is decided by working folder: honcho starts redis, web and socketio inside the bench, and an unreadable folder counts as the bench's own, so nothing moves on a guess. The default bench is never moved for a listener either; it gets a warning.
+- The port clash check now also reports a bench that is only configured with the same ports, since only one of them can run; `benchbar up` still asks only about a running one, so the app (which cannot answer) can start either bench.
+- MariaDB ranges live in the profile (`mariadb_min`, `mariadb_max`). v16 uses frappe's own bounds, 10.6 to 11.8. v15's code warns above 10.8, but the v15 docs and this installer use 10.11, so v15's range ends at 10.11; the check is a warning either way, as in frappe.
+- The toolchain's MariaDB check was named `mariadb_version` before 0.4 shipped, to match the brief; nothing released used the other name.
+
+## 0.4: the MariaDB decision
+
+- Option (a), decided with Akash on 2026-09-26 ("let's struggle and find out"): the v16 bench uses the `mariadb@10.11` server the v15 bench already runs on 3306. frappe v16 accepts it without a warning, and it keeps one server, one data folder and one Keychain password. Option (b) (a second `mariadb@11.8` service on 3307) stays possible later if v16 turns out to need 11.8.
+- The supported path: when a MariaDB server runs on 3306 and its version is inside the profile's range, phases 00 and 01 and every command use that server's formula instead of the profile's (named from the server binary's `opt/<formula>` or `Cellar/<formula>` path, read with `ps`), and the formula is stored per bench (`MARIADB_FORMULA`) by phase 01 or the first `service`, `adopt` or `install`. Daily commands read only the stored value: `test-process` guards that `down` never touches port 3306, and a detection in every command's context broke that guarantee. So a v16 install on this Mac never installs or starts `mariadb@11.8`, and a machine without MariaDB still gets the profile's formula. `mariadb_version` in doctor checks the range per profile.
+## 0.4: sites and the scheduler
+
+- The default site is the one benchbar remembers per bench; `site default` also runs `bench use`, so `currentsite.txt` agrees, and rewrites the runner, whose ping embeds the site. `benchup`'s wait, `status` and the app all use it; a second site never changes it on its own.
+- `site add` creates a new site only, on the same MariaDB server as the bench (option (a) of the MariaDB decision), with the Keychain password; it never drops or overwrites a site, and there is no `site drop` in 0.4.
+- Apps for a new site come only from `apps/` (`--bundle` or `--apps`); a missing app is refused with the `bench get-app` command. Fetching apps belongs to the 0.6 app commands.
+- A site's `ping_code` is only tried when something listens on the web port, so `list --json` on stopped benches costs no three second timeouts per site.
+- `site hosts` asks once for all missing lines and uses one sudo prompt, through the existing marker block logic.
+- `site list` takes no lock (it is read only); `add`, `default` and `hosts` take the checkout's lock like every other writing command.
+- The scheduler line is an optional template line: a line that is only a token rendering to nothing is dropped. With the scheduler off, `Procfile.lean` renders byte for byte as before 0.4 (hash 92548cf35913 checked against the real bench), so no existing bench sees an outdated Procfile. The file's comment still says "no schedule" when it is on: changing it would change every existing Procfile's hash.
+- The scheduler choice is per bench state (`SCHEDULER` in its state file), so `repair` renders the same Procfile and never undoes it; `status --json` reports `scheduler`.
 
 # The easy install run (v0.3)
 

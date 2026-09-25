@@ -123,8 +123,7 @@ fl_status_compute() {
 fl_status_print_json() {
   printf '{'
   fl_state_core_json "$ST_STATE" "$ST_REASON" "$ST_PID" "$ST_STARTED" "$ST_EXIT" "$ST_PING"
-  printf ',"ports":{"web":%s,"socketio":%s,"redis_queue":%s,"redis_cache":%s}' \
-    "$FL_WEB_PORT" "$FL_SOCKETIO_PORT" "$FL_REDIS_QUEUE_PORT" "$FL_REDIS_CACHE_PORT"
+  printf ',"ports":%s,"sites":%s,"scheduler":%s' "$(fl_ports_json)" "$(fl_sites_json)" "$(fl_json_bool "$(fl_scheduler_enabled && printf 1 || printf 0)")"
   printf ',"state_file":%s,"log":%s,"agent_loaded":%s,"agent_state":%s,"processes_running":%s' \
     "$(fl_json_str "$(fl_state_json_path)")" "$(fl_json_str "$(fl_bench_log_path)")" \
     "$(fl_json_bool "$ST_LOADED")" "$(fl_json_str "$ST_AGENT_STATE")" "$(fl_json_bool "$ST_PROCS")"
@@ -132,6 +131,11 @@ fl_status_print_json() {
   printf ',"url":%s,"agent":"%s","loaded":"%s","stop_flag":"%s","ping":"%s"}\n' \
     "$(fl_json_str "$(fl_site_url)")" "$(fl_agent_label)" \
     "$([[ "$ST_LOADED" == "1" ]] && printf yes || printf no)" "${ST_FLAG:-none}" "$ST_PING"
+}
+
+fl_ports_json() {
+  printf '{"web":%s,"socketio":%s,"redis_queue":%s,"redis_socketio":%s,"redis_cache":%s}' \
+    "$FL_WEB_PORT" "$FL_SOCKETIO_PORT" "$FL_REDIS_QUEUE_PORT" "${FL_REDIS_SOCKETIO_PORT:-$FL_REDIS_CACHE_PORT}" "$FL_REDIS_CACHE_PORT"
 }
 
 # ---------------------------------------------------------------- list
@@ -159,7 +163,7 @@ fl_known_benches() {
 # exits afterwards, so nothing needs restoring.
 fl_bench_load() {
   SITE_NAME=""; BENCH_DIR=""
-  FL_WEB_PORT=8000; FL_SOCKETIO_PORT=9000; FL_REDIS_CACHE_PORT=13000; FL_REDIS_QUEUE_PORT=11000
+  FL_WEB_PORT=8000; FL_SOCKETIO_PORT=9000; FL_REDIS_CACHE_PORT=13000; FL_REDIS_QUEUE_PORT=11000; FL_REDIS_SOCKETIO_PORT=""
   fl_bench_detect "$1"
   fl_site_detect ""
   fl_ports_detect
@@ -168,10 +172,9 @@ fl_bench_load() {
 fl_list_entry_json() {
   local default="$1" installed=0
   [[ -f "$(fl_agent_plist_path)" ]] && installed=1
-  printf '{"path":%s,"name":%s,"site":%s,"label":"%s","web_url":%s,"ports":{"web":%s,"socketio":%s,"redis_queue":%s,"redis_cache":%s},"default":%s,"service_installed":%s,"state_file":%s}' \
+  printf '{"path":%s,"name":%s,"site":%s,"label":"%s","web_url":%s,"ports":%s,"sites":%s,"default":%s,"service_installed":%s,"state_file":%s}' \
     "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$FL_BENCH_NAME")" "$(fl_json_str "$FL_SITE")" "$(fl_agent_label)" \
-    "$(fl_json_str "$(fl_site_url)")" \
-    "$FL_WEB_PORT" "$FL_SOCKETIO_PORT" "$FL_REDIS_QUEUE_PORT" "$FL_REDIS_CACHE_PORT" \
+    "$(fl_json_str "$(fl_site_url)")" "$(fl_ports_json)" "$(fl_sites_json)" \
     "$(fl_json_bool "$default")" "$(fl_json_bool "$installed")" "$(fl_json_str "$(fl_state_json_path)")"
 }
 

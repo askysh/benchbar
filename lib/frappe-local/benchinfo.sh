@@ -15,6 +15,7 @@ FL_WEB_PORT=8000
 FL_SOCKETIO_PORT=9000
 FL_REDIS_CACHE_PORT=13000
 FL_REDIS_QUEUE_PORT=11000
+FL_REDIS_SOCKETIO_PORT=""
 
 fl_abs_path() {
   local p="$1"
@@ -23,8 +24,9 @@ fl_abs_path() {
     '~'|'~/'*) p="${HOME}${p#'~'}" ;;
     *) p="${PWD}/${p}" ;;
   esac
-  # collapse a trailing slash
-  printf '%s' "${p%/}"
+  # one spelling per bench: symlinks, "." and ".." resolved (fl_bench_canonical),
+  # so state, ports and agents never see the same bench twice
+  fl_bench_canonical "${p%/}"
 }
 
 fl_is_bench_dir() {
@@ -105,6 +107,9 @@ fl_ports_detect() {
   v="$(fl_site_config_value socketio_port)"; [[ "$v" =~ ^[0-9]+$ ]] && FL_SOCKETIO_PORT="$v"
   v="$(fl_site_config_value redis_cache)"; v="${v##*:}"; [[ "$v" =~ ^[0-9]+$ ]] && FL_REDIS_CACHE_PORT="$v"
   v="$(fl_site_config_value redis_queue)"; v="${v##*:}"; [[ "$v" =~ ^[0-9]+$ ]] && FL_REDIS_QUEUE_PORT="$v"
+  # bench keeps redis_socketio equal to redis_cache; frappe v15 and v16 never use it
+  FL_REDIS_SOCKETIO_PORT="$FL_REDIS_CACHE_PORT"
+  v="$(fl_site_config_value redis_socketio)"; v="${v##*:}"; [[ "$v" =~ ^[0-9]+$ ]] && FL_REDIS_SOCKETIO_PORT="$v"
   return 0
 }
 

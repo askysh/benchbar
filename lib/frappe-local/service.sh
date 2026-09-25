@@ -23,6 +23,11 @@ fl_context_init() {
   [[ -n "$profile" ]] || profile="$(fl_profile_detect "$FL_BENCH_DIR")"
   [[ -n "$profile" ]] || profile="$(fl_default_profile)"
   fl_load_profile "$profile"
+  # the MariaDB formula this bench was set up with; detection of the running
+  # server happens only when a bench is set up (fl_remember_bench, phases 00
+  # and 01), so daily commands never look at port 3306
+  FL_MARIADB_FORMULA_PINNED="$(fl_bstate_get MARIADB_FORMULA 2>/dev/null || true)"
+  [[ -n "$FL_MARIADB_FORMULA_PINNED" ]] && fl_mariadb_prefer_running
   if command -v brew >/dev/null 2>&1; then
     FL_BREW_PREFIX="$(brew --prefix 2>/dev/null || printf '/opt/homebrew')"
   else
@@ -38,13 +43,22 @@ fl_context_init() {
 fl_rc_profile() {
   local def p=""
   def="$(fl_state_get BENCH_DIR 2>/dev/null || true)"
-  if [[ -z "$def" || "$def" == "$FL_BENCH_DIR" || ! -d "$def" ]]; then
+  # --make-default: this bench is (or, in a dry run, would be) the default
+  if [[ -z "$def" || ! -d "$def" || "${FL_MAKE_DEFAULT:-0}" == "1" ]] || fl_same_path "$def" "$FL_BENCH_DIR"; then
     printf '%s' "$FL_PROFILE"
     return 0
   fi
   p="$(fl_bstate_get_for "$def" PROFILE)"
   [[ -n "$p" ]] || p="$(fl_profile_detect "$def")"
   printf '%s' "${p:-$FL_PROFILE}"
+}
+
+# The scheduler is opt in per bench (service --with-schedule). FL_SCHEDULER
+# overrides the stored value while a plan is being made.
+fl_scheduler_enabled() {
+  local v="${FL_SCHEDULER:-}"
+  [[ -n "$v" ]] || v="$(fl_bstate_get SCHEDULER 2>/dev/null || true)"
+  [[ "$v" == "on" ]]
 }
 
 fl_autostart_enabled() {
@@ -54,7 +68,7 @@ fl_autostart_enabled() {
 fl_render_all() {
   local honcho="${FL_HONCHO:-${FL_BENCH_DIR}/env/bin/honcho}" run_at_load=true
   fl_autostart_enabled || run_at_load=false
-  FL_R_PROCFILE="$(fl_template_render Procfile.lean "WEB_PORT=${FL_WEB_PORT}")"
+  FL_R_PROCFILE="$(fl_template_render Procfile.lean "WEB_PORT=${FL_WEB_PORT}" "SCHEDULE=$(fl_scheduler_enabled && printf 'schedule: bench schedule')")"
   FL_R_RUNNER="$(fl_template_render bench-run.sh \
     "BENCH_DIR=${FL_BENCH_DIR}" \
     "BENCH_RE=$(fl_regex_escape "$FL_BENCH_DIR")" \
@@ -138,9 +152,10 @@ fl_arm_start() {
 }
 
 fl_check_port_clash_or_confirm() {
-  chk_port_clash
-  [[ "$CHK_STATUS" == "ok" ]] && return 0
-  fl_warn "$CHK_MSG"
+  local clash
+  clash="$(fl_port_clash_running)"
+  [[ -z "$clash" ]] && return 0
+  fl_warn "another running bench uses the same port:${clash}"
   fl_confirm "Start anyway?" || return 1
 }
 

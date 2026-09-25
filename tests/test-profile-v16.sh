@@ -29,6 +29,31 @@ run_fm doctor --bench-dir "$BENCH"
 assert_contains "$OUT" "profile  v16-lts"
 assert_contains "$OUT" "[OK] Homebrew formulae: python@3.14, node@24, mariadb@11.8, redis, pkgconf, mariadb-connector-c installed"
 assert_contains "$OUT" "[OK] Bench env: env/bin/python runs (Python 3.14)"
+# ---- option (a): the mariadb@10.11 server already on 3306 serves the v16 bench
+printf '#!/bin/sh\necho "mariadbd  Ver 10.11.19-MariaDB for osx10.21 on arm64 (Homebrew)"\n' >"$MOCK_BREW_PREFIX/opt/mariadb@10.11/bin/mariadbd"
+chmod +x "$MOCK_BREW_PREFIX/opt/mariadb@10.11/bin/mariadbd"
+mkdir -p "$MOCK_STATE/ps"; printf '%s --basedir=x\n' "$MOCK_BREW_PREFIX/opt/mariadb@10.11/bin/mariadbd" >"$MOCK_STATE/ps/111"
+set +e; D00="$("$ROOT/00-mac-system-deps.sh" --dry-run --profile v16-lts 2>&1)"; set -e
+assert_contains "$D00" "MariaDB: using the mariadb@10.11 server already running on 3306"
+assert_contains "$D00" "brew install mariadb@10.11"
+assert_not_contains "$D00" "brew install mariadb@11.8"
+run_fm service --yes --bench-dir "$BENCH"
+assert_eq "mariadb@10.11" "$(cat "$FL_STATE_DIR"/benches/v16-bench-????????.env | sed -n 's/^MARIADB_FORMULA=//p')"
+rm -rf "$MOCK_STATE/ps"
+run_fm doctor --bench-dir "$BENCH"
+assert_contains "$OUT" "[OK] Homebrew formulae: python@3.14, node@24, mariadb@10.11, redis" "(stored per bench, no detection needed)"
+mkdir -p "$MOCK_STATE/ps"
+# a server outside the range is not taken: v15 does not accept an 11.8 server
+printf '%s\n' "$MOCK_BREW_PREFIX/opt/mariadb@11.8/bin/mariadbd" >"$MOCK_STATE/ps/111"
+printf '#!/bin/sh\necho "mariadbd  Ver 11.8.9-MariaDB for osx10.21 on arm64 (Homebrew)"\n' >"$MOCK_BREW_PREFIX/opt/mariadb@11.8/bin/mariadbd"; chmod +x "$MOCK_BREW_PREFIX/opt/mariadb@11.8/bin/mariadbd"
+set +e; D00="$("$ROOT/00-mac-system-deps.sh" --dry-run --profile v15-lts 2>&1)"; set -e
+assert_contains "$D00" "brew install mariadb@10.11"
+assert_not_contains "$D00" "using the mariadb@11.8 server"
+rm -rf "$MOCK_STATE/ps"
+
+# the MariaDB 10.11 server a v15 machine already runs is inside v16's range
+assert_contains "$OUT" "[OK] MariaDB server: MariaDB 10.11"
+assert_contains "$OUT" "profile v16-lts accepts 10.6 to 11.8"
 grep -q 'opt/mariadb-connector-c/lib/pkgconfig' "$HOME/.zshrc" || fail "PKG_CONFIG_PATH must include mariadb-connector-c"
 
 # pdf_engine on v16: wkhtmltopdf patched, Chromium not downloaded yet: a warning with the frappe command
@@ -109,6 +134,16 @@ MOCK_PIPX_NO_BENCH=1 install_bench "$NOBENCH:$HOME/.local/bin"
 assert_eq "0" "$CODE" "$OUT"
 assert_calls_contain '^pipx install frappe-bench$'
 assert_contains "$OUT" "owner=pipx"
+# uv's executable folder moved with UV_TOOL_BIN_DIR: bench is still found there
+rm -f "$HOME/.local/bin/bench"; ln -s "$ROOT/tests/mocks/bin/uv" "$NOBENCH/uv"; reset_calls
+export UV_TOOL_BIN_DIR="$TMP_DIR/uvbin"
+MOCK_PIPX_NO_BENCH=1 install_bench "$NOBENCH"
+unset UV_TOOL_BIN_DIR
+assert_eq "0" "$CODE" "$OUT"
+assert_calls_contain '^uv tool install frappe-bench$'
+assert_contains "$OUT" "owner=uv"
+rm -f "$TMP_DIR/uvbin/bench"; rm "$NOBENCH/uv"
+MOCK_PIPX_NO_BENCH=1 install_bench "$NOBENCH:$HOME/.local/bin" >/dev/null
 # an existing pipx bench is reported, never migrated to uv
 ln -s "$ROOT/tests/mocks/bin/uv" "$NOBENCH/uv"; reset_calls
 install_bench "$NOBENCH:$HOME/.local/bin"

@@ -141,8 +141,14 @@ close Terminal; the bench keeps running.
 | `benchcd` | `cd "$(benchbar path)"` | Jump into the bench folder |
 
 The lean Procfile runs Redis, the web server, socketio and one worker. It
-has no watcher and no scheduler: run `benchwatch` while you edit assets,
-and `bench schedule` by hand when you need scheduled jobs.
+has no watcher: run `benchwatch` while you edit assets. The scheduler is
+opt in per bench: `benchbar service --with-schedule` adds it (and
+`--without-schedule` takes it out again), then `benchbar restart`.
+
+Sites: `benchbar site list`, `site add NAME` (a new site on the same
+MariaDB, with its `/etc/hosts` line; `--bundle` or `--apps` installs apps
+already in the bench), `site default NAME` (the site `benchup` waits for
+and the app opens) and `site hosts` (adds every missing hosts line).
 
 Other commands: `benchbar list`, `benchbar report`,
 `benchbar mariadb-password`, `benchbar service`,
@@ -209,6 +215,14 @@ own profile, site and autostart setting. Installing or adopting a second
 bench keeps the first one as the default (the one `benchup` starts) unless
 you pass `--make-default`; the PATH lines in your shell block follow the
 default bench's profile. Stopping one bench never touches another.
+
+Each bench has its own port block: web `8000 + n`, socketio `9000 + n`,
+Redis `11000 + n` and `13000 + n`. `bench init` already counts up for
+benches in the same folder; `install` and `adopt` also check every bench
+benchbar knows and the ports in use, and move a new bench that clashes
+with an established one to the next free block, with `bench set-config -g`
+and `bench setup redis`. `--port-offset N` picks a block, for example
+`benchbar service --port-offset 1 --bench-dir ~/dev/v16-bench`.
 
 **Profiles** pick the Frappe branch and the matching toolchain:
 

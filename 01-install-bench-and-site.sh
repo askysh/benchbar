@@ -88,6 +88,7 @@ fi
 
 [[ -n "$PROFILE" ]] || PROFILE="$(fl_default_profile)"
 fl_load_profile "$PROFILE"
+fl_mariadb_prefer_running
 
 FRAPPE_REF="$FL_FRAPPE_BRANCH"
 ERPNEXT_REF="$FL_ERPNEXT_BRANCH"
@@ -323,11 +324,11 @@ fl_state_init
 # per bench settings; the default bench changes only when there is none yet
 # (or --make-default), so a second bench never takes over benchup
 fl_bench_state_migrate "$(fl_state_get BENCH_DIR)"
-fl_remember_default "$BENCH_DIR" || fl_info "the default bench stays $(fl_state_get BENCH_DIR); pass --make-default to benchbar install to change it"
 fl_bstate_set_for "$BENCH_DIR" PROFILE "$FL_PROFILE"
 fl_bstate_set_for "$BENCH_DIR" APP_BUNDLE "$APP_BUNDLE"
 fl_bstate_set_for "$BENCH_DIR" APPS "${FL_SELECTED_APPS[*]}"
 fl_bstate_set_for "$BENCH_DIR" SITE_NAME "$SITE_NAME"
+fl_bstate_set_for "$BENCH_DIR" MARIADB_FORMULA "$FL_MARIADB_FORMULA"
 
 fl_install_pipx_if_needed
 fl_install_bench_if_needed
@@ -366,6 +367,10 @@ for spec in "${FL_INSTALL_SPECS[@]}"; do
 done
 
 fl_verify_site_health "$BENCH_DIR" "$SITE_NAME"
+
+# only now, with the site verified: a failed install must not become the
+# bench that benchup starts
+fl_remember_default "$BENCH_DIR" || fl_info "the default bench stays $(fl_state_get BENCH_DIR); pass --make-default to benchbar install to change it"
 
 fl_section "READY"
 if ! grep -qE "^[[:space:]]*127\.0\.0\.1[[:space:]]+(.*[[:space:]])?${SITE_NAME//./\\.}([[:space:]]|$)" "${FL_HOSTS_FILE:-/etc/hosts}" 2>/dev/null; then

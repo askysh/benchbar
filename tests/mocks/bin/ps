@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# ps mock: "ps -o command= -p PID" answers from $MOCK_STATE/ps/PID when a test
+# recorded one; everything else goes to the real ps.
+if [[ "${1:-}" == "-o" && "${2:-}" == "command=" && "${3:-}" == "-p" && -f "${MOCK_STATE:-/nonexistent}/ps/${4:-x}" ]]; then
+  cat "${MOCK_STATE}/ps/$4"
+  exit 0
+fi
+exec /bin/ps "$@"
