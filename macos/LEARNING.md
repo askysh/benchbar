@@ -615,3 +615,26 @@ a find and replace. The pattern used for every name (read
    at it.
 5. **Test the old state, not just the new one.** The tests build a bench
    and an rc file the way 0.2.0 left them and check the result.
+
+## 0.5: a log viewer that survives rotation
+
+`tail -F` looks simple until the file under it changes. Read
+`Logs/LogTailer.swift`, `Logs/LogModel.swift` and their tests:
+
+1. **Watch the file and its folder.** A `DispatchSource` on an open file
+   descriptor reports appends (`.extend`), but after the file is replaced
+   with `mv` the descriptor still points at the old, now nameless file. The
+   folder watcher from Phase 3 notices the new file; both call the same
+   `readNew()`.
+2. **Decide by inode and size, not by event.** Events coalesce and arrive
+   in bursts. `readNew()` only asks: is this still the file I opened
+   (inode), and is it at least as long as what I read (size)? No means
+   start over from the top.
+3. **Decode whole lines.** A read can end in the middle of a multi byte
+   character. Keeping the bytes after the last newline for the next read
+   avoids the replacement character.
+4. **Bound everything.** The view keeps the last 5000 lines; the first read
+   takes only the file's last 256 KB.
+5. **Let AppKit do text.** `NSTextView` inside `NSViewRepresentable` gives
+   fast scrolling, selection and copy for free. The SwiftUI side only
+   tells it what changed (`changes`, `appended`).

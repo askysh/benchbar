@@ -4,6 +4,14 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+### Added (0.5)
+
+- A log window per bench (⌘L): follows `logs/bench.log` with smart
+  scroll, search with a match count and next and previous (⌘G, ⇧⌘G), a
+  filter per honcho process, errors and tracebacks in red, the previous
+  log, clear, select and copy, and Open in Terminal. It survives the
+  runner's log rotation and keeps at most 5000 lines.
+
 ### Added
 
 - The `v16-lts` profile is ready for an end to end run: `pkgconf`

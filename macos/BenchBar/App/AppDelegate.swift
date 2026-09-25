@@ -6,6 +6,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItemController: StatusItemController!
     private var popover: PopoverController!
     private var settingsWindow: SettingsWindowController!
+    private var logWindows: LogWindowController!
     private let launchAtLogin = LaunchAtLogin()
     private var notifier: Notifier!
     private let library = RunnerLibrary()
@@ -37,6 +38,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             SettingsView(settings: settings, store: store, library: library, launchAtLogin: launchAtLogin, notifier: notifier,
                          chooseCLI: { [weak self] in self?.chooseCLI() })
         }
+
+        logWindows = LogWindowController { [weak self] path in self?.openLogsInTerminal(path) }
 
         if Updater.isAvailable { updater = Updater() }
         NSApp.mainMenu = makeMainMenu()
@@ -104,9 +107,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task { await store.useCLI(path: path) }
     }
 
+    /// ⌘L: the log window. "Open in Terminal" in its toolbar is the old path.
     private func openLogs(_ bench: BenchModel) {
-        guard case .ready(let cli) = store.cli else { return }
         popover.close()
+        logWindows.show(benchName: bench.name, benchPath: bench.path)
+    }
+
+    private func openLogsInTerminal(_ path: String) {
+        guard case .ready(let cli) = store.cli, let bench = store.benches.first(where: { $0.path == path }) else { return }
         do {
             try Workspace.openLogs(bench, cli: cli)
         } catch {
