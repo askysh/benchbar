@@ -226,6 +226,19 @@ carry the bench's sites, read from `sites/*/site_config.json`:
 `status` and `fix` are the 0.2.0 names of `level` and `fix_command` (with
 `""` instead of `null`), kept for older readers.
 
+## `benchbar logs --json`
+
+```json
+{"schema_version":1,"cli_version":"0.5.0","bench":"/Users/you/frappe-bench","file":"/Users/you/frappe-bench/logs/bench.log","process":"web","lines":["10:00:01 web.1 | * Running on http://127.0.0.1:8000"]}
+```
+
+`-nN` sets how many lines (after the filter), `--process NAME` keeps one
+honcho process (`web`, `worker`, `socketio`, `schedule`, `redis_queue`,
+`redis_cache`); lines without a honcho prefix, such as a traceback, stay
+with the process above them. `process` is `null` without a filter.
+Control characters (terminal colors) are removed. `benchbar mcp` uses it
+for `benchbar_logs_tail`.
+
 ## `logs/.benchbar/state.json`
 
 Written on every transition, always by writing a temp file in the same

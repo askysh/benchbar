@@ -89,6 +89,15 @@ Checked in frappe `version-16` at 012667b and bench `develop` at c9d1250 (Septem
 - The scheduler line is an optional template line: a line that is only a token rendering to nothing is dropped. With the scheduler off, `Procfile.lean` renders byte for byte as before 0.4 (hash 92548cf35913 checked against the real bench), so no existing bench sees an outdated Procfile. The file's comment still says "no schedule" when it is on: changing it would change every existing Procfile's hash.
 - The scheduler choice is per bench state (`SCHEDULER` in its state file), so `repair` renders the same Procfile and never undoes it; `status --json` reports `scheduler`.
 
+## 0.5: benchbar mcp
+
+- The server is stdlib only Python 3.9 (`lib/frappe-local/mcp.py`), run with whatever `python3` is on PATH: the Command Line Tools' 3.9 is enough, so CLI only users need nothing new. The Swift MCP SDK would tie it to the app.
+- Every tool shells out to `benchbar ... --json` and returns its output as text and as `structuredContent`; the server holds no bench logic. Actions (`up`, `down`, `restart`) return their text output plus a fresh `status --json`, so an agent sees the outcome without a second call.
+- No repair, install, service, site add or anything with sudo behind a tool: those change files or need a password, and belong in a terminal with the user. Read tools carry `readOnlyHint: true`, actions `false`.
+- stdin of every CLI call is closed, so a question (a port clash on `up`) is answered no instead of hanging the session; one bad message gets a JSON-RPC error and the session goes on.
+- Protocol versions 2025-06-18, 2025-03-26 and 2024-11-05 are accepted as asked; anything else gets 2025-06-18. The transport is newline delimited JSON on stdio, as the spec says for stdio.
+- `logs --json` exists for `benchbar_logs_tail`: the brief keeps the server free of logic, so the process filter (honcho's `HH:MM:SS name.N |` prefix, with unprefixed lines such as tracebacks kept under their process) lives in the CLI. `fl_json_escape` now drops control characters, since log lines may carry terminal colors.
+
 # The easy install run (v0.3)
 
 ## Setup and environment

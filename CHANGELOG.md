@@ -4,6 +4,14 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+### Added (0.5)
+
+- `benchbar mcp`: a Model Context Protocol server on stdio (stdlib only
+  Python) with `benchbar_list`, `benchbar_status`, `benchbar_doctor`,
+  `benchbar_logs_tail`, `benchbar_site_list`, `benchbar_up`,
+  `benchbar_down` and `benchbar_restart`, each backed by the CLI's JSON.
+- `benchbar logs --json` with `-nN` and `--process NAME`.
+
 ### Added
 
 - The `v16-lts` profile is ready for an end to end run: `pkgconf`
