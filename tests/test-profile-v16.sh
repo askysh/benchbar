@@ -29,6 +29,28 @@ run_fm doctor --bench-dir "$BENCH"
 assert_contains "$OUT" "profile  v16-lts"
 assert_contains "$OUT" "[OK] Homebrew formulae: python@3.14, node@24, mariadb@11.8, redis, pkgconf, mariadb-connector-c installed"
 assert_contains "$OUT" "[OK] Bench env: env/bin/python runs (Python 3.14)"
+# ---- option (a): the mariadb@10.11 server already on 3306 serves the v16 bench
+printf '#!/bin/sh\necho "mariadbd  Ver 10.11.19-MariaDB for osx10.21 on arm64 (Homebrew)"\n' >"$MOCK_BREW_PREFIX/opt/mariadb@10.11/bin/mariadbd"
+chmod +x "$MOCK_BREW_PREFIX/opt/mariadb@10.11/bin/mariadbd"
+mkdir -p "$MOCK_STATE/ps"; printf '%s --basedir=x\n' "$MOCK_BREW_PREFIX/opt/mariadb@10.11/bin/mariadbd" >"$MOCK_STATE/ps/111"
+set +e; D00="$("$ROOT/00-mac-system-deps.sh" --dry-run --profile v16-lts 2>&1)"; set -e
+assert_contains "$D00" "MariaDB: using the mariadb@10.11 server already running on 3306"
+assert_contains "$D00" "brew install mariadb@10.11"
+assert_not_contains "$D00" "brew install mariadb@11.8"
+run_fm service --yes --bench-dir "$BENCH"
+assert_eq "mariadb@10.11" "$(cat "$FL_STATE_DIR"/benches/v16-bench-????????.env | sed -n 's/^MARIADB_FORMULA=//p')"
+rm -rf "$MOCK_STATE/ps"
+run_fm doctor --bench-dir "$BENCH"
+assert_contains "$OUT" "[OK] Homebrew formulae: python@3.14, node@24, mariadb@10.11, redis" "(stored per bench, no detection needed)"
+mkdir -p "$MOCK_STATE/ps"
+# a server outside the range is not taken: v15 does not accept an 11.8 server
+printf '%s\n' "$MOCK_BREW_PREFIX/opt/mariadb@11.8/bin/mariadbd" >"$MOCK_STATE/ps/111"
+printf '#!/bin/sh\necho "mariadbd  Ver 11.8.9-MariaDB for osx10.21 on arm64 (Homebrew)"\n' >"$MOCK_BREW_PREFIX/opt/mariadb@11.8/bin/mariadbd"; chmod +x "$MOCK_BREW_PREFIX/opt/mariadb@11.8/bin/mariadbd"
+set +e; D00="$("$ROOT/00-mac-system-deps.sh" --dry-run --profile v15-lts 2>&1)"; set -e
+assert_contains "$D00" "brew install mariadb@10.11"
+assert_not_contains "$D00" "using the mariadb@11.8 server"
+rm -rf "$MOCK_STATE/ps"
+
 # the MariaDB 10.11 server a v15 machine already runs is inside v16's range
 assert_contains "$OUT" "[OK] MariaDB server: MariaDB 10.11"
 assert_contains "$OUT" "profile v16-lts accepts 10.6 to 11.8"

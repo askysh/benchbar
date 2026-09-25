@@ -88,6 +88,7 @@ fi
 
 [[ -n "$PROFILE" ]] || PROFILE="$(fl_default_profile)"
 fl_load_profile "$PROFILE"
+fl_mariadb_prefer_running
 
 FRAPPE_REF="$FL_FRAPPE_BRANCH"
 ERPNEXT_REF="$FL_ERPNEXT_BRANCH"
@@ -327,6 +328,7 @@ fl_bstate_set_for "$BENCH_DIR" PROFILE "$FL_PROFILE"
 fl_bstate_set_for "$BENCH_DIR" APP_BUNDLE "$APP_BUNDLE"
 fl_bstate_set_for "$BENCH_DIR" APPS "${FL_SELECTED_APPS[*]}"
 fl_bstate_set_for "$BENCH_DIR" SITE_NAME "$SITE_NAME"
+fl_bstate_set_for "$BENCH_DIR" MARIADB_FORMULA "$FL_MARIADB_FORMULA"
 
 fl_install_pipx_if_needed
 fl_install_bench_if_needed

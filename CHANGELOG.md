@@ -43,6 +43,9 @@ All notable changes to this project are documented here.
   with `bench set-config -g` and `bench setup redis`. `--port-offset N`
   picks the block for `install`, `adopt` and `service`. `ports` in
   `list --json` and `status --json` gains `redis_socketio`.
+- A bench uses the MariaDB server already running on 3306 when the
+  profile accepts its version (so a v16 bench on a Mac with
+  `mariadb@10.11` never installs `mariadb@11.8`), and remembers it.
 - `mariadb_version` checks the MariaDB server against the profile's range
   (`mariadb_min`, `mariadb_max` in `release-profiles.tsv`): 10.6 to 10.11
   for v15, 10.6 to 11.8 for v16.

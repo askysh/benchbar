@@ -217,6 +217,12 @@ fl_remember_bench() {
   fl_remember_default "$FL_BENCH_DIR" || code=1
   fl_bstate_set SITE_NAME "$FL_SITE"
   fl_bstate_set PROFILE "$FL_PROFILE"
+  # a bench set up before 0.4 has no MariaDB formula stored: the running
+  # server's, when the profile accepts it, else the profile's own
+  if [[ -z "$(fl_bstate_get MARIADB_FORMULA)" ]]; then
+    fl_mariadb_prefer_running
+    [[ "$FL_MARIADB_SOURCE" == "running" ]] && fl_bstate_set MARIADB_FORMULA "$FL_MARIADB_FORMULA"
+  fi
   # the shell block follows the default bench, which may just have changed
   fl_render_all
   return "$code"

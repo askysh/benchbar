@@ -23,6 +23,11 @@ fl_context_init() {
   [[ -n "$profile" ]] || profile="$(fl_profile_detect "$FL_BENCH_DIR")"
   [[ -n "$profile" ]] || profile="$(fl_default_profile)"
   fl_load_profile "$profile"
+  # the MariaDB formula this bench was set up with; detection of the running
+  # server happens only when a bench is set up (fl_remember_bench, phases 00
+  # and 01), so daily commands never look at port 3306
+  FL_MARIADB_FORMULA_PINNED="$(fl_bstate_get MARIADB_FORMULA 2>/dev/null || true)"
+  [[ -n "$FL_MARIADB_FORMULA_PINNED" ]] && fl_mariadb_prefer_running
   if command -v brew >/dev/null 2>&1; then
     FL_BREW_PREFIX="$(brew --prefix 2>/dev/null || printf '/opt/homebrew')"
   else

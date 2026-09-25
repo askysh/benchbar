@@ -38,6 +38,50 @@ fl_load_profile() {
   FL_MARIADB_MIN="${FL_MARIADB_MIN:-10.6}"; FL_MARIADB_MAX="${FL_MARIADB_MAX:-$FL_MARIADB_MAJOR_MINOR}"
 }
 
+# ---------------------------------------------------------------- MariaDB source
+#
+# One MariaDB server serves every bench on the Mac. When one already runs on
+# 3306 and its version is inside the loaded profile's range, the profile uses
+# that server's formula instead of installing its own (a v16 bench on the
+# mariadb@10.11 a v15 bench set up). FL_MARIADB_FORMULA_PINNED (a bench's
+# stored MARIADB_FORMULA) wins over detection.
+
+# "formula version" of the server listening on 3306, from its binary path
+# (.../opt/<formula>/bin/mariadbd or .../Cellar/<formula>/<ver>/bin/mariadbd).
+fl_mariadb_running_formula() {
+  local pid bin formula ver
+  pid="$(lsof -ti tcp:3306 -sTCP:LISTEN 2>/dev/null | head -n1 || true)"
+  [[ -n "$pid" ]] || return 0
+  bin="$(ps -o command= -p "$pid" 2>/dev/null | awk '{print $1}' || true)"
+  formula="$(printf '%s' "$bin" | sed -n -E 's#.*/(opt|Cellar)/(mariadb(@[0-9.]+)?)/.*#\2#p')"
+  [[ -n "$formula" && -x "$bin" ]] || return 0
+  ver="$("$bin" --version 2>/dev/null | sed -n 's/.*[^0-9]\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)-MariaDB.*/\1/p' | head -n1)"
+  [[ -n "$ver" ]] && printf '%s %s' "$formula" "$ver"
+  return 0
+}
+
+fl_mm_to_num() { printf '%s' "$1" | awk -F. '{printf "%d%03d", $1, $2}'; }
+
+# fl_mariadb_prefer_running: switches FL_MARIADB_FORMULA and
+# FL_MARIADB_MAJOR_MINOR to the running server when the profile accepts it.
+FL_MARIADB_SOURCE="profile"
+fl_mariadb_prefer_running() {
+  local formula ver mm
+  if [[ -n "${FL_MARIADB_FORMULA_PINNED:-}" ]]; then
+    FL_MARIADB_FORMULA="$FL_MARIADB_FORMULA_PINNED"
+    FL_MARIADB_MAJOR_MINOR="${FL_MARIADB_FORMULA#mariadb@}"
+    FL_MARIADB_SOURCE="bench"
+    return 0
+  fi
+  read -r formula ver <<<"$(fl_mariadb_running_formula)"
+  [[ -n "$formula" && -n "$ver" && "$formula" != "$FL_MARIADB_FORMULA" ]] || return 0
+  mm="$(fl_mm_to_num "$ver")"
+  [[ "$mm" -ge "$(fl_mm_to_num "$FL_MARIADB_MIN")" && "$mm" -le "$(fl_mm_to_num "$FL_MARIADB_MAX")" ]] || return 0
+  FL_MARIADB_FORMULA="$formula"
+  FL_MARIADB_MAJOR_MINOR="$(printf '%s' "$ver" | awk -F. '{print $1 "." $2}')"
+  FL_MARIADB_SOURCE="running"
+}
+
 # The Frappe major version of the loaded profile: 15 for version-15.
 fl_profile_major() {
   local v="${FL_FRAPPE_BRANCH#version-}"

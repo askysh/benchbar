@@ -74,6 +74,11 @@ Checked in frappe `version-16` at 012667b and bench `develop` at c9d1250 (Septem
 - MariaDB ranges live in the profile (`mariadb_min`, `mariadb_max`). v16 uses frappe's own bounds, 10.6 to 11.8. v15's code warns above 10.8, but the v15 docs and this installer use 10.11, so v15's range ends at 10.11; the check is a warning either way, as in frappe.
 - The toolchain's MariaDB check was named `mariadb_version` before 0.4 shipped, to match the brief; nothing released used the other name.
 
+## 0.4: the MariaDB decision
+
+- Option (a), decided with Akash on 2026-09-26 ("let's struggle and find out"): the v16 bench uses the `mariadb@10.11` server the v15 bench already runs on 3306. frappe v16 accepts it without a warning, and it keeps one server, one data folder and one Keychain password. Option (b) (a second `mariadb@11.8` service on 3307) stays possible later if v16 turns out to need 11.8.
+- The supported path: when a MariaDB server runs on 3306 and its version is inside the profile's range, phases 00 and 01 and every command use that server's formula instead of the profile's (named from the server binary's `opt/<formula>` or `Cellar/<formula>` path, read with `ps`), and the formula is stored per bench (`MARIADB_FORMULA`) by phase 01 or the first `service`, `adopt` or `install`. Daily commands read only the stored value: `test-process` guards that `down` never touches port 3306, and a detection in every command's context broke that guarantee. So a v16 install on this Mac never installs or starts `mariadb@11.8`, and a machine without MariaDB still gets the profile's formula. `mariadb_version` in doctor checks the range per profile.
+
 # The easy install run (v0.3)
 
 ## Setup and environment

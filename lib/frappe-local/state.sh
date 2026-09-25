@@ -71,6 +71,8 @@ fl_state_get() { fl_kv_get "$FL_STATE_FILE" "$1"; }
 # migration and doctor stays read only.
 
 FL_BENCH_KEYS="PROFILE SITE_NAME AUTOSTART HONCHO_BIN APP_BUNDLE APPS"
+# MARIADB_FORMULA, PORT_OFFSET and SCHEDULER are per bench too, but never
+# lived in state.env, so they need no fallback
 
 # The name a bench goes by in agent labels and state files: its folder name.
 fl_bench_name_of() {
