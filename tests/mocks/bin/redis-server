@@ -1,3 +1,12 @@
 #!/usr/bin/env bash
-[[ "${1:-}" == "--version" ]] && printf 'Redis server v=7.2.5 sha=00000000:0 malloc=libc bits=64 build=abc\n'
+# redis-server mock: "--version", or "config/<x>.conf --daemonize yes" adds a
+# fake listener on the port from that file
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "$(dirname "$0")/_mocklib.sh"
+[[ "${1:-}" == "--version" ]] && { printf 'Redis server v=7.2.5 sha=00000000:0 malloc=libc bits=64 build=abc\n'; exit 0; }
+mock_log "$@"
+if [[ -f "${1:-}" && " $* " == *" --daemonize yes "* ]]; then
+  port="$(awk '$1 == "port" {print $2; exit}' "$1")"
+  [[ -n "$port" ]] && printf '%s %s redis-server 127.0.0.1\n' "$port" "$((RANDOM + 20000))" >>"${MOCK_LISTEN:?}"
+fi
 exit 0

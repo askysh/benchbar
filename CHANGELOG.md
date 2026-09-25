@@ -61,6 +61,10 @@ All notable changes to this project are documented here.
   removes it, `repair` keeps the choice, `status --json` gains
   `scheduler`, and doctor reports it.
 
+- Site setup (phase 01 and `site add`) runs the bench's own Redis while
+  it creates the site and installs apps, when nothing else does: frappe
+  v16 needs it, and a new bench has no service running yet.
+
 ### Changed
 
 - The port clash check also warns when another bench is only configured

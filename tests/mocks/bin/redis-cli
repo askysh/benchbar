@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# redis-cli mock: "shutdown" drops the fake listener on that port
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "$(dirname "$0")/_mocklib.sh"
+mock_log "$@"
+port=""; prev=""
+for a in "$@"; do [[ "$prev" == "-p" ]] && port="$a"; prev="$a"; done
+if [[ " $* " == *" shutdown "* && -n "$port" ]]; then
+  grep -v "^${port} " "${MOCK_LISTEN:?}" >"${MOCK_LISTEN}.tmp" || true; mv "${MOCK_LISTEN}.tmp" "$MOCK_LISTEN"
+fi
+exit 0

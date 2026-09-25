@@ -158,11 +158,14 @@ fl_cmd_site_add() {
       else fl_ask_secret ADMIN_PASSWORD "Administrator password for ${name}"; fi
     fi
     fl_bench_env_exports
-    fl_new_site_if_needed "$FL_BENCH_DIR" "$name" "$FL_MARIADB_ROOT_PW" "$ADMIN_PASSWORD"
+    fl_bench_redis_up "$FL_BENCH_DIR"
+    fl_new_site_if_needed "$FL_BENCH_DIR" "$name" "$FL_MARIADB_ROOT_PW" "$ADMIN_PASSWORD" || { fl_bench_redis_down; return 1; }
   fi
+  [[ -n "$apps" && -z "$FL_SETUP_REDIS_PORTS" ]] && fl_bench_redis_up "$FL_BENCH_DIR"
   for app in $apps; do
     fl_install_app_if_needed "$FL_BENCH_DIR" "$name" "$app"
   done
+  fl_bench_redis_down
   fl_hosts_add_names "$name"
   fl_ok "site ${name}: http://${name}:${FL_WEB_PORT} (the default site stays ${FL_SITE}; benchbar site default ${name} changes it)"
 }

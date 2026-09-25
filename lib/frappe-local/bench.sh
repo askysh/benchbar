@@ -142,6 +142,44 @@ fl_get_app_if_needed() {
   fl_state_set "APP_${app}_CLONED" yes
 }
 
+# ---------------------------------------------------------------- setup redis
+#
+# frappe v16 connects to the bench's Redis during new-site and install-app
+# (a fresh v16 bench failed "install-app erpnext" with "Connection refused"
+# on its redis_queue port). Before the service exists nothing runs them, so
+# setup starts the bench's own Redis servers from config/redis_*.conf, and
+# afterwards stops only the ones it started.
+
+FL_SETUP_REDIS_PORTS=""
+
+fl_bench_redis_up() {
+  local bench_dir="$1" conf port
+  [[ "$FL_DRY_RUN" == "1" ]] && { fl_info "dry-run: start the bench's Redis (config/redis_queue.conf, config/redis_cache.conf) for the site setup"; return 0; }
+  for conf in "$bench_dir"/config/redis_queue.conf "$bench_dir"/config/redis_cache.conf; do
+    [[ -f "$conf" ]] || continue
+    port="$(awk '$1 == "port" {print $2; exit}' "$conf")"
+    [[ "$port" =~ ^[0-9]+$ ]] || continue
+    fl_port_listening "$port" && continue
+    if (cd "$bench_dir" && redis-server "config/$(basename "$conf")" --daemonize yes) >/dev/null 2>&1; then
+      FL_SETUP_REDIS_PORTS="${FL_SETUP_REDIS_PORTS} ${port}"
+      fl_info "started the bench's Redis on ${port} for the site setup"
+    else
+      fl_warn "could not start Redis from ${conf}; site setup may fail"
+    fi
+  done
+  return 0
+}
+
+fl_bench_redis_down() {
+  local port
+  for port in $FL_SETUP_REDIS_PORTS; do
+    redis-cli -p "$port" shutdown nosave >/dev/null 2>&1 || true
+    fl_info "stopped the setup Redis on ${port}"
+  done
+  FL_SETUP_REDIS_PORTS=""
+  return 0
+}
+
 fl_new_site_if_needed() {
   local bench_dir="$1" site_name="$2" db_password="$3" admin_password="$4"
   fl_section "CREATE SITE"

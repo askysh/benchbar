@@ -148,6 +148,12 @@ assert_eq "0" "$CODE" "$OUT"
 assert_calls_not_contain '^mariadb -u root -p' "(the password never goes on the command line)"
 assert_eq "rootpw" "$(keychain_get)" "(a verified env password is saved)"
 assert_calls_contain "^bench init ${BENCH} --frappe-branch version-15"
+# the bench's own Redis ran for new-site and install-app, and was stopped after
+assert_calls_contain '^redis-server config/redis_queue.conf --daemonize yes$'
+assert_calls_contain '^redis-server config/redis_cache.conf --daemonize yes$'
+assert_calls_contain '^redis-cli -p 11000 shutdown nosave$'
+assert_calls_contain '^redis-cli -p 13000 shutdown nosave$'
+! grep -q -E '^(11000|13000) ' "$MOCK_LISTEN" || fail "the setup Redis must be stopped afterwards"
 assert_calls_contain "^bench new-site macdev"
 assert_eq "$BENCH" "$(sed -n 's/^BENCH_DIR=//p' "$FL_STATE_FILE")"
 # the site and profile belong to the bench's own state file
