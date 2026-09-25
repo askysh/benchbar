@@ -47,6 +47,13 @@ run_fm site add v16two --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "site v16two already exists"
 assert_calls_not_contain '^bench new-site'
+# a failed new-site still stops the Redis it started (the exit handler does it)
+reset_calls
+MOCK_BENCH_NEW_SITE_EXIT=1 ADMIN_PASSWORD=adminpw run_fm site add v16broken --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"
+assert_calls_contain '^redis-cli -p 11000 shutdown nosave$' "(cleanup after a failure)"
+! grep -q -E '^(11000|13000) ' "$MOCK_LISTEN" || fail "no setup Redis may stay behind"
+
 # a running bench's Redis is used as it is, never started twice or stopped
 add_listener 11000 5111 redis-server; add_listener 13000 5112 redis-server
 reset_calls

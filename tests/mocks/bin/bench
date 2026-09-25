@@ -14,6 +14,7 @@ case "$1" in
     app="${*: -1}"; app="${app##*/}"; app="${app%.git}"
     mkdir -p "apps/$app"; exit 0 ;;
   new-site)
+    [[ -n "${MOCK_BENCH_NEW_SITE_EXIT:-}" ]] && exit "$MOCK_BENCH_NEW_SITE_EXIT"
     mkdir -p "sites/$2"; touch "sites/$2/installed_apps"; printf '{"db_name": "_x"}\n' >"sites/$2/site_config.json"; exit 0 ;;
   use) printf '%s\n' "$2" >sites/currentsite.txt; exit 0 ;;
   set-config)

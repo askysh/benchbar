@@ -185,6 +185,8 @@ fl_mode_name() {
 
 fl_cleanup() {
   fl_spinner_stop
+  # a setup Redis started for site add goes, however the command ends
+  fl_bench_redis_down >/dev/null 2>&1 || true
   fl_sudo_end
   fl_lock_release
 }
