@@ -293,10 +293,11 @@ cmd_service() {
   fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
   fl_require_bench
   fl_header "benchbar service" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "$FL_SITE"
-  fl_remember_bench || true
+  # validate a requested block before anything is remembered
   if [[ -n "$OPT_PORT_OFFSET" ]]; then
     fl_ports_plan "$OPT_PORT_OFFSET" || return 1
   fi
+  fl_remember_bench || true
   if FL_PLAN_CHECKS="port_block" fl_repair_engine "Background service" service; then
     fl_next_steps_box
     return 0

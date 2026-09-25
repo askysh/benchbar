@@ -88,6 +88,18 @@ assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "8010 has a listener: pid 7778 OtherApp"
 assert_eq "8004" "$(cfg "$D" webserver_port)"
 
+# ---- a foreign listener on a requested block is never taken for the bench's own
+add_listener 8006 7779 ThirdApp
+mkdir -p "$MOCK_STATE/cwd"; printf '/Applications/ThirdApp.app' >"$MOCK_STATE/cwd/7779"
+run_fm service --yes --port-offset 6 --bench-dir "$D"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "8006 has a listener: pid 7779 ThirdApp"
+# a refused block does not make the bench the default either
+before_default="$(sed -n 's/^BENCH_DIR=//p' "$FL_STATE_FILE")"
+run_fm service --yes --make-default --port-offset 6 --bench-dir "$D"
+assert_eq "1" "$CODE"
+assert_eq "$before_default" "$(sed -n 's/^BENCH_DIR=//p' "$FL_STATE_FILE")" "(nothing remembered after a refused port block)"
+
 # ---- --port-offset: a taken block is refused, a free one is used
 reset_calls
 run_fm service --port-offset 0 --bench-dir "$C"

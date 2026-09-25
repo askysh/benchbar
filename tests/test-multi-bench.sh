@@ -113,6 +113,13 @@ run_fm service --yes --bench-dir "$N"
 assert_file "$FL_STATE_DIR/benches/v16-bench.env" "(a namesake never claims the old file)"
 rm -f "$FL_STATE_DIR/benches/v16-bench.env"
 
+# ---- a registered non-default bench with a unique name claims its plain <name>.env too
+U="$HOME/dev/unique"; make_fake_bench "$U" unique
+printf 'AUTOSTART=off\n' >"$FL_STATE_DIR/benches/unique.env"
+run_fm service --yes --bench-dir "$U"
+assert_no_file "$FL_STATE_DIR/benches/unique.env"
+assert_eq "off" "$(bstate unique AUTOSTART)"
+
 # ---- phase 00 never rewrites an existing block to its own profile
 before="$(cat "$HOME/.zshrc")"
 set +e; OUT="$("$ROOT/00-mac-system-deps.sh" --yes --profile v15-lts 2>&1)"; set -e

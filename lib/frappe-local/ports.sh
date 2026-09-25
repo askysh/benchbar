@@ -57,16 +57,17 @@ fl_ports_taken_by_others() {
 # per line ("8001 used by <bench>", "8001 has a listener: pid cmd"), or nothing.
 # A listener that is this bench's own process does not count.
 fl_port_block_conflicts() {
-  local n="$1" p taken who mine
+  local n="$1" p taken who
   taken="$(fl_ports_taken_by_others)"
-  mine=" $(fl_bench_process_pids | tr '\n' ' ') "
   for p in $(fl_port_block "$n"); do
     if printf '%s\n' "$taken" | grep -q "^${p} "; then
       printf '%s used by %s\n' "$p" "$(printf '%s\n' "$taken" | awk -v p="$p" '$1 == p {print $2; exit}')"
       continue
     fi
     who="$(fl_port_listener_summary "$p")"
-    if [[ -n "$who" && "$mine" != *" ${who%% *} "* ]]; then
+    # strict here: a listener on a block the bench does not use yet is
+    # foreign unless it is known to run inside this bench
+    if [[ -n "$who" ]] && ! fl_pid_is_bench_own_strict "${who%% *}"; then
       printf '%s has a listener: pid %s\n' "$p" "$who"
     fi
   done
@@ -146,6 +147,12 @@ fl_pid_is_bench_own() {
   local cwd
   cwd="$(fl_pid_cwd "$1")"
   [[ -z "$cwd" || "$cwd" == "$FL_BENCH_DIR" || "$cwd" == "$FL_BENCH_DIR"/* ]]
+}
+
+fl_pid_is_bench_own_strict() {
+  local cwd
+  cwd="$(fl_pid_cwd "$1")"
+  [[ -n "$cwd" ]] && [[ "$cwd" == "$FL_BENCH_DIR" || "$cwd" == "$FL_BENCH_DIR"/* ]]
 }
 
 fl_port_current_listener_conflicts() {

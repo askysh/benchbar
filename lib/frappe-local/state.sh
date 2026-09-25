@@ -105,6 +105,20 @@ fl_same_path() {
   [[ -n "$1" && -n "$2" && "$(fl_bench_canonical "$1")" == "$(fl_bench_canonical "$2")" ]]
 }
 
+# True when DIR may claim the plain <name>.env of the first 0.4 builds: it is
+# the default bench, or no other known bench shares its folder name.
+fl_bench_owns_old_file() {
+  local dir="$1" name d
+  fl_same_path "$(fl_state_get BENCH_DIR)" "$dir" && return 0
+  declare -F fl_known_benches >/dev/null || return 1
+  name="$(fl_bench_name_of "$(fl_bench_canonical "$dir")")"
+  while IFS= read -r d; do
+    [[ -n "$d" && "$(fl_bench_name_of "$d")" == "$name" ]] || continue
+    fl_same_path "$d" "$dir" || return 1
+  done < <(fl_known_benches 2>/dev/null)
+  return 0
+}
+
 fl_bench_state_file_old() { printf '%s/benches/%s.env' "$FL_STATE_DIR" "$(fl_bench_name_of "$1")"; }
 
 # fl_bstate_get_for DIR KEY: the bench's own value, else the pre 0.4 global
@@ -112,9 +126,9 @@ fl_bench_state_file_old() { printf '%s/benches/%s.env' "$FL_STATE_DIR" "$(fl_ben
 fl_bstate_get_for() {
   local dir="$1" key="$2" v file
   file="$(fl_bench_state_file_for "$dir")"
-  # the plain <name>.env of the first 0.4 builds: only the default bench may
-  # claim it, since another bench can share the folder name
-  if [[ ! -f "$file" ]] && fl_same_path "$(fl_state_get BENCH_DIR)" "$dir"; then file="$(fl_bench_state_file_old "$dir")"; fi
+  # the plain <name>.env of the first 0.4 builds: claimed only when no other
+  # bench could own it (the default bench, or the only one with that name)
+  if [[ ! -f "$file" ]] && fl_bench_owns_old_file "$dir"; then file="$(fl_bench_state_file_old "$dir")"; fi
   v="$(fl_kv_get "$file" "$key")"
   if [[ -z "$v" ]] && fl_same_path "$(fl_state_get BENCH_DIR)" "$dir"; then
     case " $FL_BENCH_KEYS " in *" $key "*) v="$(fl_state_get "$key")" ;; esac
@@ -127,7 +141,7 @@ fl_bstate_get_for() {
 fl_bstate_set_for() {
   local file old
   file="$(fl_bench_state_file_for "$1")"; old="$(fl_bench_state_file_old "$1")"
-  if [[ ! -f "$file" && -f "$old" && "${FL_DRY_RUN:-0}" != "1" ]] && fl_same_path "$(fl_state_get BENCH_DIR)" "$1"; then mv "$old" "$file"; fi
+  if [[ ! -f "$file" && -f "$old" && "${FL_DRY_RUN:-0}" != "1" ]] && fl_bench_owns_old_file "$1"; then mv "$old" "$file"; fi
   fl_kv_set "$file" "$2" "$3"
 }
 
