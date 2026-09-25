@@ -49,7 +49,12 @@ mkdir -p "$MOCK_BREW_PREFIX/opt/node@20/bin" "$MOCK_BREW_PREFIX/opt/mariadb@10.1
 cp "$ROOT/tests/mocks/python3.11" "$MOCK_BREW_PREFIX/opt/python@3.11/bin/python3.11"
 cp "$ROOT/tests/mocks/node" "$ROOT/tests/mocks/npm" "$ROOT/tests/mocks/yarn" "$MOCK_BREW_PREFIX/opt/node@20/bin/"
 cp "$ROOT/tests/mocks/mariadb" "$MOCK_BREW_PREFIX/opt/mariadb@10.11/bin/mariadb"
+mkdir -p "$MOCK_BREW_PREFIX/bin"
+# on the bench's (launchd) PATH, which does not include tests/mocks/bin
+cp "$ROOT/tests/mocks/bin/pkg-config" "$ROOT/tests/mocks/bin/_mocklib.sh" "$MOCK_BREW_PREFIX/bin/"
 chmod +x "$MOCK_BREW_PREFIX"/opt/*/bin/*
+# MariaDB runs on 3306 on a set up machine (tests of a stopped server clear this)
+printf '3306 111 mariadbd 127.0.0.1\n' >"$MOCK_LISTEN"
 printf '127.0.0.1 localhost\n' >"$FL_HOSTS_FILE"
 printf '[client-server]\n!includedir %s/etc/my.cnf.d\n' "$MOCK_BREW_PREFIX" >"$MOCK_BREW_PREFIX/etc/my.cnf.d/../my.cnf"
 printf '# test zshrc\nexport EDITOR=vim\n' >"$HOME/.zshrc"

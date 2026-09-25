@@ -16,6 +16,18 @@ All notable changes to this project are documented here.
   they are. The `bench command` check names the owner.
 - honcho is also found in uv's tool folder.
 
+- Doctor checks from the community threads, each with a fix line:
+  `full_disk_access` (crontab denied, the cause of `bench init` offering
+  to delete a new bench), `toolchain_node`, `toolchain_yarn`,
+  `toolchain_mariadb` and `toolchain_pkgconfig` (the tools as the bench's
+  launchd PATH sees them, so nvm's node shows up as missing),
+  `honcho_setuptools` (honcho 1.x on Python 3.12 or newer, with a repair
+  action that installs setuptools into honcho's venv only), `fork_safety`
+  and `orphans` (stale redis, socketio or web processes on the bench's
+  ports, fix `benchbar down`).
+- `bench init` runs with `--no-backups`: a dev bench needs no backup
+  cron, and the crontab write is what fails without Full Disk Access.
+
 ### Changed
 
 - The doctor check `wkhtmltopdf` is now `pdf_engine`. It checks
@@ -27,6 +39,12 @@ All notable changes to this project are documented here.
 - ROADMAP.md: 0.4 is Frappe v16 and more than one bench, 0.5 is repair
   from the app, a log viewer and `benchbar mcp`; the public launch moves
   to 0.6.
+
+### Fixed
+
+- `doctor --json` with a failing check printed a `[FAIL] Last command
+  failed` line after the JSON on stdout, so readers (the app included)
+  could not parse the report. It now exits 1 with only the JSON.
 
 ## 0.3.1 - 2026-09-24
 

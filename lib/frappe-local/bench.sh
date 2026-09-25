@@ -101,10 +101,17 @@ fl_bench_init_if_needed() {
     fl_warn "Moving incomplete bench to ${backup}"
     fl_run mv "$bench_dir" "$backup"
   fi
+  # --no-backups keeps bench init away from crontab: a dev bench needs no
+  # backup cron, and without Full Disk Access the crontab write fails and
+  # bench offers to delete the new bench (frappe/bench#1730)
+  if fl_crontab_denied; then
+    fl_warn "crontab is not readable here (no Full Disk Access); bench init runs with --no-backups, so it is not needed"
+    fl_info "for bench setup backups later: System Settings > Privacy & Security > Full Disk Access, add Terminal"
+  fi
   fl_info "Running bench init for frappe ref ${frappe_ref}"
   fl_info "bench init timeout: $((timeout_seconds / 60)) minutes"
-  fl_run_with_timeout "$timeout_seconds" "bench init" bench init "$bench_dir" --frappe-branch "$frappe_ref" --python "$python_bin" --verbose \
-    || fl_die "bench init failed." "Manual command: bench init ${bench_dir} --frappe-branch ${frappe_ref} --python ${python_bin} --verbose"
+  fl_run_with_timeout "$timeout_seconds" "bench init" bench init "$bench_dir" --frappe-branch "$frappe_ref" --python "$python_bin" --no-backups --verbose \
+    || fl_die "bench init failed." "Manual command: bench init ${bench_dir} --frappe-branch ${frappe_ref} --python ${python_bin} --no-backups --verbose"
   fl_state_set BENCH_INIT complete
 }
 

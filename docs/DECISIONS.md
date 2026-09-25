@@ -25,6 +25,18 @@ Checked in frappe `version-16` at 012667b and bench `develop` at c9d1250 (Septem
 - honcho 2.0.0 imports `importlib.metadata`, not `pkg_resources`; only honcho 1.x breaks on Python 3.12 or newer without setuptools.
 - The v16 CI row is a separate job running `tests/test-profile-v16.sh` on macOS `/bin/bash` 3.2: the rest of the suite asserts v15 strings on purpose, and a second full run would only repeat them.
 
+## 0.4: doctor hardening
+
+- Full Disk Access: frappe/bench#1730 (crontab "Operation not permitted" during `bench init`) is still open with no fix merged as of 2026-09-25; the rollback bench offers is a prompt (`click.confirm`), not automatic. benchbar passes `--no-backups`, which skips python-crontab entirely, and keeps a doctor check plus a warning before `bench init`, since `bench setup backups` would still need it.
+- The probe is `crontab -l`: "no crontab for" and exit 1 is a normal answer, only "Operation not permitted" counts. Run from BenchBar the check reports ok without probing: the access that matters is the Terminal's, not the app's.
+- The toolchain is four checks (`toolchain_node`, `toolchain_yarn`, `toolchain_mariadb`, `toolchain_pkgconfig`), one line each in doctor's existing one line per check format. Python is not repeated: `env_python` already compares the env's version with the profile.
+- Tools are resolved on the launchd PATH the agent uses, not the caller's: the forum case "nvm's node is not seen by bench" is exactly a node that only exists on the shell's PATH. `env/bin/node` wins when bench put one there.
+- The MariaDB server version comes from the binary of the process listening on 3306 (`ps`), else the installed formula's client; doctor never logs in, so it never reads the Keychain. The range is frappe's own: below 10.6 unsupported, above 11.8 untested, both warnings.
+- `honcho_setuptools` imports `honcho.command` with the interpreter in honcho's shebang instead of importing `pkg_resources` directly: honcho 2.0 does not need it, and a bare `pkg_resources` probe would warn on every healthy Python 3.12 venv. The repair installs setuptools into that venv (pipx or uv), never into the bench env, and adopt skips it like `honcho_install`.
+- `fork_safety` reads the plist only: the variables reach honcho and every worker through the agent's environment, and `Procfile.lean` does not need to repeat them. `benchfg` sets them itself.
+- `orphans` counts listeners on the bench's ports only when neither the agent nor a honcho runs the bench, so a bench started with `benchfg` is not reported.
+- Found while testing: `doctor --json` with a failing check went through the ERR trap on its way to exit 1 and printed `[FAIL] Last command failed` on stdout after the JSON. The dispatcher now exits 1 itself, and test-json parses a failing report.
+
 # The easy install run (v0.3)
 
 ## Setup and environment

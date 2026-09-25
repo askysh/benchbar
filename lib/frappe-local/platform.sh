@@ -51,6 +51,16 @@ fl_preflight_basics() {
   fl_preflight_internet "$offline"
 }
 
+# bench init writes a crontab (python-crontab). On macOS 14 and later a
+# process without Full Disk Access gets "Operation not permitted", and bench
+# offers to delete the new bench. "crontab -l" shows the same denial.
+fl_crontab_denied() {
+  local out
+  out="$(crontab -l 2>&1 </dev/null || true)"
+  case "$out" in *"Operation not permitted"*|*"not permitted"*) return 0 ;; esac
+  return 1
+}
+
 fl_brew_ensure() {
   local formula="$1"
   if brew list --formula --versions "$formula" >/dev/null 2>&1; then

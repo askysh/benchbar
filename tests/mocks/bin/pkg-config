@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# pkg-config mock: finds libmariadb when mariadb-connector-c is "installed"
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "$(dirname "$0")/_mocklib.sh"
+mock_log "$@"
+case "$*" in
+  --version) printf '2.5.1\n' ;;
+  "--exists libmariadb") grep -qx mariadb-connector-c "${MOCK_STATE:?}/installed" ;;
+  *) exit 0 ;;
+esac

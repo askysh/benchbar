@@ -294,7 +294,7 @@ cmd_adopt() {
     fl_fix "pipx install honcho   (or: ${SCRIPT_DIR}/benchbar repair, which installs it into the bench env), then benchbar adopt again"
   fi
   # the service group would install honcho into env when it is missing; adopt must not
-  if FL_ENGINE_SKIP_ACTIONS="honcho_install" fl_repair_engine "Adopt" service; then
+  if FL_ENGINE_SKIP_ACTIONS="honcho_install honcho_setuptools" fl_repair_engine "Adopt" service; then
     # remembered only now: a cancelled plan must not make this the default bench
     fl_state_set BENCH_DIR "$FL_BENCH_DIR"
     fl_state_set SITE_NAME "$FL_SITE"
@@ -350,7 +350,9 @@ case "$COMMAND" in
   adopt) cmd_adopt "${ARGS[0]:-}" ;;
   service) cmd_service ;;
   mariadb-password) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_mariadb_password ;;
-  doctor) cmd_doctor ;;
+  # exit 1 by hand: a failing check must not reach the ERR trap, whose
+  # "[FAIL] Last command failed" line would follow the JSON on stdout
+  doctor) cmd_doctor || exit 1 ;;
   repair) cmd_repair ;;
   status) cmd_status ;;
   list) fl_cmd_list "$OPT_JSON" ;;
