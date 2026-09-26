@@ -212,11 +212,16 @@ fl_new_site_if_needed() {
     fl_state_set SITE_CREATED yes
     return 0
   fi
+  # the site's database user may log in from any host (bench connects over
+  # TCP to 127.0.0.1): v16 names this --mariadb-user-host-login-scope and
+  # calls --no-mariadb-socket deprecated; v15 knows only the old flag
+  local scope="--no-mariadb-socket"
+  [[ "$(fl_profile_major)" -ge 16 ]] && scope="--mariadb-user-host-login-scope=%"
   fl_bench_run_long "bench new-site ${site_name}" "$bench_dir" bench new-site "$site_name" \
     --mariadb-root-password "$db_password" \
     --admin-password "$admin_password" \
-    --no-mariadb-socket \
-    || fl_die "bench new-site failed." "Manual command: cd ${bench_dir} && bench new-site ${site_name} --no-mariadb-socket"
+    "$scope" \
+    || fl_die "bench new-site failed." "Manual command: cd ${bench_dir} && bench new-site ${site_name} ${scope}"
   fl_state_set SITE_CREATED yes
 }
 

@@ -150,4 +150,14 @@ install_bench "$NOBENCH:$HOME/.local/bin"
 assert_calls_not_contain '^(uv tool install|pipx install)'
 assert_contains "$OUT" "owner=pipx"
 
+# v16 creates sites with --mariadb-user-host-login-scope, v15 with --no-mariadb-socket
+v16new() {
+  SCRIPT_DIR="$ROOT" bash -c '
+    . "$SCRIPT_DIR/lib/frappe-local/ui.sh"; . "$SCRIPT_DIR/lib/frappe-local/run.sh"; . "$SCRIPT_DIR/lib/frappe-local/state.sh"
+    . "$SCRIPT_DIR/lib/frappe-local/version-policy.sh"; . "$SCRIPT_DIR/lib/frappe-local/bench.sh"
+    FL_DRY_RUN=1; fl_load_profile "$1"; fl_new_site_if_needed "$2" newsite pw adminpw' _ "$1" "$BENCH" 2>&1
+}
+assert_contains "$(v16new v16-lts)" "--mariadb-user-host-login-scope=%"
+assert_contains "$(v16new v15-lts)" "--no-mariadb-socket"
+
 printf 'test-profile-v16: ok\n'
