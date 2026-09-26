@@ -9,6 +9,9 @@ final class BenchModel: Identifiable {
     var machine = BenchStateMachine()
     /// The last failed action or refresh, shown once in the popover.
     var lastError: String?
+    /// Why the last background status refresh failed; cleared by the next
+    /// one that works, so a single slow call does not leave a banner behind.
+    var refreshError: String?
     var doctor: DoctorReport?
     var doctorError: String?
     var isRunningDoctor = false
@@ -216,9 +219,10 @@ final class BenchStore {
             do {
                 let status = try await client.status(bench: bench.path)
                 bench.lastRefresh = Date()
+                bench.refreshError = nil
                 apply(.observed(status, .status), to: bench)
             } catch {
-                bench.lastError = error.localizedDescription
+                bench.refreshError = error.localizedDescription
                 notifyChange()
             }
         } while refreshAgain.contains(bench.path)

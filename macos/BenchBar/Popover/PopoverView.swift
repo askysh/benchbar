@@ -131,7 +131,7 @@ struct BenchPanel: View {
                    text: "Parts of the bench are missing (env, node modules or assets). Run:",
                    command: BenchText.command("repair", bench: bench.path))
         }
-        if let error = bench.lastError {
+        if let error = bench.lastError ?? bench.refreshError {
             Banner(systemImage: "exclamationmark.triangle", tint: .red, text: error, command: nil)
         }
     }

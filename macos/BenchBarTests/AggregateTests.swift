@@ -113,6 +113,18 @@ struct TwoBenchStoreTests {
         #expect(!calls.contains { $0.first == "restart" && $0.last == v15 })
     }
 
+    @Test func aFailedRefreshClearsWhenTheNextOneWorks() async throws {
+        let store = try await store(v15: "running", v16: "stopped")
+        let bench = try #require(store.benches.first { $0.path == v15 })
+        base.cli.answer("status", bench: v15, json: "not json")
+        await store.refresh(bench)
+        #expect(bench.refreshError != nil)
+        base.cli.answer("status", bench: v15, json: status(v15, "running", pid: 4242))
+        await store.refresh(bench)
+        #expect(bench.refreshError == nil, "a working refresh removes the banner")
+        #expect(bench.lastError == nil)
+    }
+
     @Test func noActionWhileTheSchedulerChanges() {
         let c = BenchControls.make(state: .running, reason: nil, pending: nil, needsService: false, cliReady: true, otherWork: true)
         #expect(c == .none)
