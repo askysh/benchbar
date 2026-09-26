@@ -7,8 +7,8 @@ and PNG frames. A working example with the script that drew it is in
 
 ## Install one
 
-1. Open BenchBar Settings (right click the runner, Settings, or ⌘, in the popover).
-2. Under Menu bar runner, click **Import Runner…**.
+1. Open the BenchBar window (⌘M or "Apps, sites and settings…" in the popover) and pick **Menu Bar**.
+2. Under Runner, click **Import…**.
 3. Choose the runner folder, or a `.zip` of it.
 
 BenchBar checks it, copies it to
