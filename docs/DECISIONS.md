@@ -4,6 +4,19 @@ One line per non obvious choice: the decision, then the reason. The
 decisions of the app work live in `macos/DECISIONS.md`. The 0.5 and 0.4
 runs come first, the 0.3 easy install run follows.
 
+## 0.5.5: repo foundation
+
+- The Code of Conduct's contact is a private advisory on GitHub until a contact email exists: the git address is a noreply address that cannot receive mail, and an advisory is private to the maintainers.
+- The AI policy welcomes AI assisted pull requests with a one line disclosure instead of banning them: BenchBar is itself built with coding agents (AGENTS.md), and a ban nobody can check only hides the tool.
+- `good first issue` items are kept for people working by hand: they exist to teach the codebase, and an agent solving them teaches nobody.
+- The bug form requires the `benchbar report` zip and doctor output: those two answer most first questions, and the zip is already redacted.
+- Blank issues are off and questions go to Discussions Q&A: the issue list stays a list of things to fix.
+- `scripts/social-preview.swift` uses AppKit, not Python: the Mac has no imaging library by default and the repo already builds with Swift; `scripts/app-icon.py` only writes SVG text.
+- The social preview and the og:image come from one script with a size argument: one design, two sizes (1280x640 for GitHub, 1200x630 for the docs site), no drift between them.
+- The runner strip in the preview is cut from `docs/images/runners.png`, with the grey tiles made transparent: the frames stay the ones the app draws, without rendering them again.
+- Dependabot watches `/macos` for Swift: the package list lives in `macos/project.yml` (XcodeGen) and the generated `.xcodeproj` is not committed, so Swift updates only start once a `Package.resolved` is in the repo.
+- Vouch waits until drive-by pull requests appear: a trust list for a project with one maintainer and few contributors is ceremony.
+
 ## 0.5: app installs
 
 Designed against frappe/bench develop (c9d1250) and frappe version-15; the code moved on since the design, and the code won where they disagreed:

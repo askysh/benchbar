@@ -1,0 +1,75 @@
+name: Bug report
+description: Something in the CLI or the app does not work as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please search the open issues first.
+        A security problem goes through a private report instead: see SECURITY.md.
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      description: Apple menu, About This Mac. Say Intel if it is not Apple Silicon.
+      placeholder: macOS 26.1, Apple Silicon
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: benchbar --version
+      placeholder: benchbar 0.5.0
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Install method
+      options:
+        - The one line installer (install.sh)
+        - A git clone
+        - A release download of the app
+        - Built from source (scripts/macos-install-local.sh)
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: profile
+    attributes:
+      label: Profile
+      description: v15-lts, v16-lts or the name of a team profile. `benchbar status` shows it.
+      placeholder: v16-lts
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you ran or clicked, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: report
+    attributes:
+      label: The benchbar report zip
+      description: |
+        Run `benchbar report` and drag the zip it writes into this box. It holds
+        no passwords, keys, paths or names; `benchbar report --print` shows what is in it.
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: benchbar doctor
+      description: The output of `benchbar doctor` (add `--bench-dir PATH` for a bench other than the default).
+      render: text
+    validations:
+      required: true
+  - type: checkboxes
+    id: ai
+    attributes:
+      label: Written by you
+      options:
+        - label: I wrote this report in my own words (CONTRIBUTING.md, AI assisted contributions).
+          required: true
