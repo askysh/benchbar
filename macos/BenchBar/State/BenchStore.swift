@@ -9,9 +9,15 @@ final class BenchModel: Identifiable {
     var machine = BenchStateMachine()
     /// The last failed action or refresh, shown once in the popover.
     var lastError: String?
+    /// Why the last background status refresh failed; cleared by the next
+    /// one that works, so a single slow call does not leave a banner behind.
+    var refreshError: String?
     var doctor: DoctorReport?
     var doctorError: String?
     var isRunningDoctor = false
+    /// benchbar service is changing the scheduler (and may restart the bench):
+    /// every action on this bench waits, the CLI would refuse it anyway (its lock).
+    var isChangingScheduler = false
     var lastRefresh: Date?
 
     init(summary: BenchSummary) {
@@ -26,6 +32,13 @@ final class BenchModel: Identifiable {
     var pending: CLIClient.Action? { machine.pending }
     /// No com.benchbar agent yet: `benchbar repair` installs or migrates it.
     var needsService: Bool { !summary.serviceInstalled }
+    /// The bench's sites: from the latest status, else from the list.
+    var siteRows: [SiteRow] {
+        SiteRow.make(sites: status?.sites ?? summary.sites, defaultSite: summary.site,
+                     port: status?.ports?.web ?? summary.ports.web)
+    }
+    /// Procfile.lean runs the scheduler (status --json, CLI 0.4 and later).
+    var schedulerOn: Bool? { status?.scheduler }
     /// When the current run started, while it is starting or running.
     var runningSince: Date? {
         guard state == .running || state == .starting else { return nil }
@@ -97,10 +110,32 @@ final class BenchStore {
         benches.first { $0.path == selectedPath } ?? benches.first
     }
 
-    /// The state to animate: unknown while the CLI is missing or nothing is known yet.
+    /// The state to animate: the worst state across all benches (a crash
+    /// anywhere stumbles), unknown while the CLI is missing.
     var displayState: BenchState {
         guard case .ready = cli else { return .unknown }
-        return selected?.state ?? .unknown
+        return BenchAggregate.state(benches.map(\.state))
+    }
+
+    /// A bench with a change running (start, stop, restart, the scheduler).
+    /// The CLI takes one lock for the whole checkout, so while this is set no
+    /// other bench may start a change either: it would fail on the lock.
+    var busyBench: BenchModel? {
+        benches.first { $0.pending != nil || $0.isChangingScheduler }
+    }
+
+    /// True when another bench holds the CLI's lock: this one waits.
+    func waitsForOtherBench(_ bench: BenchModel) -> Bool {
+        guard let busy = busyBench else { return false }
+        return busy.path != bench.path
+    }
+
+    /// The bench whose CPU sets the running speed: the selected one while it
+    /// is up, else the first bench that is.
+    var speedBench: BenchModel? {
+        let up: (BenchModel) -> Bool = { $0.state == .running || $0.state == .starting }
+        if let selected, up(selected) { return selected }
+        return benches.first(where: up)
     }
 
     // MARK: lifecycle
@@ -184,9 +219,10 @@ final class BenchStore {
             do {
                 let status = try await client.status(bench: bench.path)
                 bench.lastRefresh = Date()
+                bench.refreshError = nil
                 apply(.observed(status, .status), to: bench)
             } catch {
-                bench.lastError = error.localizedDescription
+                bench.refreshError = error.localizedDescription
                 notifyChange()
             }
         } while refreshAgain.contains(bench.path)
@@ -195,7 +231,14 @@ final class BenchStore {
     // MARK: actions
 
     func perform(_ action: CLIClient.Action, on bench: BenchModel) async {
-        guard let client, bench.pending == nil else { return }
+        guard bench.pending == nil, !bench.isChangingScheduler, !waitsForOtherBench(bench) else { return }
+        await run(action, on: bench)
+    }
+
+    /// The action itself, for callers that already hold the one change slot
+    /// (the restart after a scheduler change).
+    private func run(_ action: CLIClient.Action, on bench: BenchModel) async {
+        guard let client else { return }
         bench.lastError = nil
         apply(.actionStarted(action), to: bench)
         do {
@@ -204,6 +247,26 @@ final class BenchStore {
         } catch {
             bench.lastError = error.localizedDescription
             apply(.actionFinished(action, succeeded: false), to: bench)
+        }
+    }
+
+    /// Turns the scheduler on or off (benchbar service --with-schedule or
+    /// --without-schedule), then restarts a running bench so honcho reads
+    /// the new Procfile. The caller has asked the user first.
+    func setScheduler(_ on: Bool, on bench: BenchModel) async {
+        guard let client, bench.pending == nil, !bench.isChangingScheduler, !waitsForOtherBench(bench) else { return }
+        bench.isChangingScheduler = true
+        defer { bench.isChangingScheduler = false; notifyChange() }
+        bench.lastError = nil
+        do {
+            try await client.setScheduler(on, bench: bench.path)
+            await refresh(bench)
+            if bench.state == .running || bench.state == .starting {
+                await run(.restart, on: bench)
+            }
+        } catch {
+            bench.lastError = error.localizedDescription
+            notifyChange()
         }
     }
 

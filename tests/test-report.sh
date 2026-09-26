@@ -110,7 +110,7 @@ assert_contains "$red" "replaced the home folder with ~"
 assert_contains "$red" "worker.error.log.tail: replaced a name of this Mac with <host>"
 # versions and JSON
 ver="$(cat "$EX/versions.txt")"
-assert_contains "$ver" "benchbar CLI: 0.3.1"
+assert_contains "$ver" "benchbar CLI: ${VER}"
 assert_contains "$ver" "BenchBar app: 0.3.0"
 assert_contains "$ver" "frappe: 15.50.1"
 assert_contains "$ver" "erpnext: 15.48.0"
@@ -142,7 +142,7 @@ assert_eq "0" "$CODE" "$OUT"
 run_fm report --bench-dir "$HOME/nothing-here" --print
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "no bench at"
-assert_contains "$OUT" "benchbar CLI: 0.3.1"
+assert_contains "$OUT" "benchbar CLI: ${VER}"
 
 run_fm report --bench-dir "$BENCH" --bogus
 assert_eq "1" "$CODE"

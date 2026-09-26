@@ -10,6 +10,7 @@ first, the 0.3 easy install run follows.
 - Pulling a production site moved from the 0.7 plan to Ideas, as a wizard that also handles the encryption key and the app list mismatch: without those two it restores a site that cannot decrypt its passwords or fails on missing apps, and it is not scheduled yet.
 - The old 0.4 items the brief did not schedule (worker restart on Python changes, more speed sources, a runner gallery, running one scheduler event) moved to Ideas; runner import from a zip was dropped from the list because 0.3 already ships it.
 
+- App installs, team profiles, the lockfile and `pull` were scheduled as 0.6, then folded into 0.5 (Akash, 2026-09-26): they are being built at the same time as the 0.5 app work, and one bigger release is less to write up and tag than two. Patch numbers stay for fixes.
 ## 0.4: the v16 profile
 
 Checked in frappe `version-16` at 012667b and bench `develop` at c9d1250 (September 2026), not from memory:
@@ -94,6 +95,21 @@ Checked in frappe `version-16` at 012667b and bench `develop` at c9d1250 (Septem
 - The MariaDB root password of a bench set up before 0.3 was never in the Keychain, so phase 00 stopped with exit 2 as designed; Akash reset it with the documented recipe (databases kept, the v15 bench stopped around it with `benchbar down` and brought back with `benchbar up`), and the next run verified the new password and saved it to the Keychain.
 - `bench init` in `~/dev/v16-bench` chose 8001, 9001, 11001, 13001 (and file watcher 6788) by itself, as a sibling of `~/dev/frappe-bench`; benchbar's port check agreed and moved nothing.
 - On v16, `bench --site v16dev install-app erpnext` failed with "Error 61 connecting to 127.0.0.1:11001. Connection refused": frappe v16 connects to the bench's Redis during site setup, and a fresh bench has none running. Phase 01 and `site add` now start the bench's own Redis servers from `config/redis_*.conf` when nothing listens on their ports, and stop only the ones they started: the queue with `shutdown save`, so jobs an app install enqueued wait for the first worker, the cache with `nosave` (Codex). Redis startup errors go to the run log, whose path is now exported to the phase scripts. A listener on the bench's Redis ports is used only when it runs inside the bench (working folder); another process there, such as another bench on the same default ports, stops the setup with the `--port-offset` fix, so this bench's cache and install jobs never land in someone else's Redis (Codex). A running bench's Redis is used as it is.
+
+## 0.4: the v16 bench on a real Mac, verified (2026-09-26, macOS 27, Apple Silicon)
+
+- Installed `~/dev/v16-bench` (profile `v16-lts`, bundle `minimal`, site `v16dev`) with `benchbar install` next to the running v15 bench: frappe and erpnext `version-16`, Python 3.14.7, Node 24.21.0, the existing `mariadb@10.11` server (10.11.19, option (a)), ports 8001, 9001, 11001, 13001. The profile is now `supported`.
+- Both benches up at once: `macdev` on 8000 and `v16dev` on 8001 each answer `/api/method/ping` with 200 (Host header); `benchbar list` shows both, `frappe-bench` as the default; the shell block still puts python@3.11 and node@20 first.
+- `benchbar down` on v16 left v15 running (ping 200), and `down` on v15 left v16 running (ping 200).
+- `up` on v15 then crashed v16 once: the v15 bench still had runner template v2 (Akash has not run `repair` since 0.4's runner v3), whose start up cleanup kills every `socketio.js` on the Mac; honcho in v16 exited with 241, launchd restarted it after about 20 seconds and it answered 200 again. This is the bug the working folder match fixes; `benchbar repair` on the v15 bench installs runner v3. The crash guard counted one start and did not trip.
+- Doctor: v15 30 ok, 2 warn (CleanMyMac, the outdated runner). v16 28 ok, 4 warn: CleanMyMac, the missing `v16dev` hosts line (sudo, pending Akash), Chromium not downloaded yet (expected: frappe fetches it on first chrome PDF), and the python formula check, which was wrong (next section).
+- The resumed install ran with `--yes` and no terminal: phase 01 installed erpnext on the existing site with the setup Redis, the service files were written and the agent loaded with the bench stopped, and the hosts step was skipped with its manual command. The run ended with the verify warnings and a misleading `[FAIL] Last command failed ... brew tab` from the ERR trap; the trap now stays quiet when the last command is a finished verify pass.
+- Then, with Akash: `benchbar repair` on the v15 bench (runner v3; doctor 31 ok, 1 warn), `benchbar site add v16two` (his Administrator password, the hosts line with sudo) and `benchbar site hosts` for `v16dev`; `macdev:8000`, `v16dev:8001` and `v16two:8001` all answer ping 200 by hostname, and the hosts block holds exactly one line per v16 site.
+- frappe v16's `bench new-site` calls `--no-mariadb-socket` deprecated in favour of `--mariadb-user-host-login-scope='%'`; v16 profiles now pass the new flag, v15 keeps the old one, which it still needs.
+
+## 0.4: python formula check
+
+- `python_leaves` asks `brew list --formula --installed-on-request`, not `brew leaves`: on the real Mac `python@3.14` was installed on request (and `brew tab` set it again), but pipx, uv and ollama depend on it, and `brew leaves` hides every formula another formula depends on, so the check could never pass. What protects a formula from `brew autoremove` is "installed on request", which is what the check now reads.
 
 # The easy install run (v0.3)
 

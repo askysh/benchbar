@@ -12,11 +12,14 @@ struct SettingsView: View {
     @State private var previewState: BenchState = .running
     @State private var cliPathDraft = ""
     @State private var importMessage: String?
+    /// A scheduler change waiting for its confirmation: the bench and the new value.
+    @State private var schedulerChange: (path: String, on: Bool)?
 
     var body: some View {
         Form {
             runnerSection
             generalSection
+            benchesSection
             cliSection
         }
         .formStyle(.grouped)
@@ -28,6 +31,50 @@ struct SettingsView: View {
             launchAtLogin.refresh()
             Task { await notifier.refresh() }
         }
+    }
+
+    // MARK: benches
+
+    /// Per bench settings that live in the CLI (it stores them per bench):
+    /// the scheduler. Changing it runs benchbar service after a confirmation.
+    @ViewBuilder private var benchesSection: some View {
+        if !store.benches.isEmpty {
+            Section {
+                ForEach(store.benches) { bench in
+                    Toggle(isOn: Binding(
+                        get: { bench.schedulerOn ?? false },
+                        set: { schedulerChange = (bench.path, $0) }
+                    )) {
+                        Text("Scheduler for \(bench.name)")
+                        Text(bench.schedulerOn == nil ? "Needs benchbar 0.4 or later" : "Runs scheduled jobs (bench schedule) in the background")
+                    }
+                    .disabled(bench.schedulerOn == nil || bench.pending != nil || bench.isChangingScheduler
+                              || store.waitsForOtherBench(bench))
+                }
+            } header: {
+                Text("Benches")
+            }
+            .alert(schedulerAlertTitle, isPresented: Binding(
+                get: { schedulerChange != nil },
+                set: { if !$0 { schedulerChange = nil } }
+            )) {
+                Button(schedulerChange?.on == true ? "Turn On and Restart" : "Turn Off and Restart") {
+                    guard let change = schedulerChange,
+                          let bench = store.benches.first(where: { $0.path == change.path }) else { return }
+                    schedulerChange = nil
+                    Task { await store.setScheduler(change.on, on: bench) }
+                }
+                Button("Cancel", role: .cancel) { schedulerChange = nil }
+            } message: {
+                Text("BenchBar runs benchbar service \(schedulerChange?.on == true ? "--with-schedule" : "--without-schedule"), then restarts the bench if it is running.")
+            }
+        }
+    }
+
+    private var schedulerAlertTitle: String {
+        guard let change = schedulerChange,
+              let bench = store.benches.first(where: { $0.path == change.path }) else { return "Scheduler" }
+        return change.on ? "Run the scheduler for \(bench.name)?" : "Stop the scheduler for \(bench.name)?"
     }
 
     // MARK: runner

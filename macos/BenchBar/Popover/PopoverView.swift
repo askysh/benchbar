@@ -42,25 +42,15 @@ struct PopoverView: View {
                     Task { await store.reloadBenches() }
                 }
             } else {
-                if store.benches.count > 1 { benchPicker }
+                if store.benches.count > 1 {
+                    BenchListSection(store: store)
+                    Divider()
+                }
                 if let bench = store.selected {
                     BenchPanel(store: store, bench: bench, commands: commands)
                 }
             }
         }
-    }
-
-    private var benchPicker: some View {
-        Picker("Bench", selection: Binding(
-            get: { store.selected?.path ?? "" },
-            set: { store.selectedPath = $0 }
-        )) {
-            ForEach(store.benches) { bench in
-                Text(bench.name).tag(bench.path)
-            }
-        }
-        .pickerStyle(.menu)
-        .labelsHidden()
     }
 
     private var footer: some View {
@@ -87,7 +77,7 @@ struct BenchPanel: View {
         var cliReady = false
         if case .ready = store.cli { cliReady = true }
         return .make(state: bench.state, reason: bench.machine.stopReason, pending: bench.pending,
-                     needsService: bench.needsService, cliReady: cliReady)
+                     needsService: bench.needsService, cliReady: cliReady, otherWork: bench.isChangingScheduler || store.waitsForOtherBench(bench))
     }
 
     var body: some View {
@@ -104,6 +94,7 @@ struct BenchPanel: View {
                 RowButton("Open bench folder", systemImage: "folder", shortcut: "F") { Workspace.openFolder(bench) }
                     .keyboardShortcut("f", modifiers: .command)
             }
+            SitesSection(bench: bench)
             Divider()
             DoctorSection(store: store, bench: bench)
         }
@@ -140,7 +131,7 @@ struct BenchPanel: View {
                    text: "Parts of the bench are missing (env, node modules or assets). Run:",
                    command: BenchText.command("repair", bench: bench.path))
         }
-        if let error = bench.lastError {
+        if let error = bench.lastError ?? bench.refreshError {
             Banner(systemImage: "exclamationmark.triangle", tint: .red, text: error, command: nil)
         }
     }
@@ -160,6 +151,164 @@ struct BenchPanel: View {
                 Task { await store.perform(.restart, on: bench) }
             }
             .keyboardShortcut("r", modifiers: .command)
+        }
+    }
+}
+
+// MARK: several benches
+
+/// Every bench with its state, uptime and actions, above the selected
+/// bench's detail. The row buttons act on their own bench without changing
+/// the selection; clicking the row selects it.
+struct BenchListSection: View {
+    let store: BenchStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("Benches").font(.subheadline.weight(.semibold))
+                Spacer()
+                Text(BenchAggregate.upText(store.benches.map(\.state)))
+                    .font(.caption.weight(.medium)).monospacedDigit()
+                    .padding(.horizontal, 7).padding(.vertical, 2)
+                    .background(Color.secondary.opacity(0.15), in: Capsule())
+            }
+            if store.benches.count > Self.visibleRows {
+                // many benches: the list scrolls, so the detail and the footer stay on screen
+                ScrollView {
+                    rows
+                }
+                .frame(height: Self.rowHeight * CGFloat(Self.visibleRows))
+            } else {
+                rows
+            }
+        }
+    }
+
+    static let visibleRows = 4
+    static let rowHeight: CGFloat = 44
+
+    private var rows: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(store.benches) { bench in
+                BenchRow(store: store, bench: bench, selected: bench.path == store.selected?.path)
+            }
+        }
+    }
+}
+
+struct BenchRow: View {
+    let store: BenchStore
+    let bench: BenchModel
+    let selected: Bool
+    @State private var hovering = false
+
+    private var controls: BenchControls {
+        var cliReady = false
+        if case .ready = store.cli { cliReady = true }
+        return .make(state: bench.state, reason: bench.machine.stopReason, pending: bench.pending,
+                     needsService: bench.needsService, cliReady: cliReady, otherWork: bench.isChangingScheduler || store.waitsForOtherBench(bench))
+    }
+
+    var body: some View {
+        let controls = controls
+        HStack(spacing: 8) {
+            Circle().fill(StatePill.color(for: bench.state)).frame(width: 8, height: 8)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(bench.name).font(.callout.weight(selected ? .semibold : .regular))
+                Group {
+                    if let since = bench.runningSince {
+                        TimelineView(.periodic(from: .now, by: 30)) { context in
+                            Text("\(StatusItemController.word(for: bench.state)), up \(BenchText.uptime(since: since, now: context.date))")
+                        }
+                    } else {
+                        Text(StatusItemController.word(for: bench.state))
+                    }
+                }
+                .font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            if let busy = controls.busy {
+                ProgressView().controlSize(.mini).help("\(busy.rawValue) in progress")
+            } else {
+                RowIcon("play.fill", help: "Start \(bench.name)", enabled: controls.canStart) {
+                    Task { await store.perform(.up, on: bench) }
+                }
+                RowIcon("stop.fill", help: "Stop \(bench.name)", enabled: controls.canStop) {
+                    Task { await store.perform(.down, on: bench) }
+                }
+                RowIcon("arrow.clockwise", help: "Restart \(bench.name)", enabled: controls.canRestart) {
+                    Task { await store.perform(.restart, on: bench) }
+                }
+            }
+        }
+        .padding(.horizontal, 6).padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .background(selected ? Color.accentColor.opacity(0.14) : (hovering ? Color.primary.opacity(0.06) : .clear),
+                    in: RoundedRectangle(cornerRadius: 6))
+        .onHover { hovering = $0 }
+        .onTapGesture { store.selectedPath = bench.path }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(bench.name), \(StatusItemController.word(for: bench.state))")
+    }
+}
+
+struct RowIcon: View {
+    let systemImage: String
+    let help: String
+    let enabled: Bool
+    let action: () -> Void
+
+    init(_ systemImage: String, help: String, enabled: Bool, action: @escaping () -> Void) {
+        self.systemImage = systemImage
+        self.help = help
+        self.enabled = enabled
+        self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage).frame(width: 18, height: 18)
+        }
+        .buttonStyle(.borderless)
+        .disabled(!enabled)
+        .help(help)
+        .accessibilityLabel(help)
+    }
+}
+
+// MARK: sites
+
+/// The bench's sites with an Open button each; the default one is what ⌘O
+/// opens and benchup waits for. A missing hosts line shows its fix.
+struct SitesSection: View {
+    let bench: BenchModel
+
+    var body: some View {
+        let rows = bench.siteRows
+        VStack(alignment: .leading, spacing: 4) {
+            if rows.count > 1 || rows.contains(where: \.needsHosts) {
+                Text("Sites").font(.subheadline.weight(.semibold))
+                ForEach(rows) { row in
+                    HStack(spacing: 6) {
+                        Image(systemName: row.isDefault ? "star.fill" : "globe")
+                            .foregroundStyle(row.isDefault ? .yellow : .secondary).font(.caption)
+                            .help(row.isDefault ? "Default site (⌘O)" : "")
+                        Text(row.name).font(.callout)
+                        if row.needsHosts {
+                            Text("no hosts entry").font(.caption).foregroundStyle(.orange)
+                        }
+                        Spacer()
+                        Button("Open") { Workspace.open(row.url) }
+                            .controlSize(.small)
+                            .help(row.url)
+                    }
+                }
+                if let fix = SiteRow.hostsFix(rows, bench: bench.path) {
+                    Banner(systemImage: "network", tint: .orange,
+                           text: "A site has no /etc/hosts line, so its name does not resolve. Run:", command: fix)
+                }
+            }
         }
     }
 }
@@ -272,7 +421,9 @@ struct StatePill: View {
         .background(color.opacity(0.15), in: Capsule())
     }
 
-    private var color: Color {
+    private var color: Color { Self.color(for: state) }
+
+    static func color(for state: BenchState) -> Color {
         switch state {
         case .running: .green
         case .starting: .yellow

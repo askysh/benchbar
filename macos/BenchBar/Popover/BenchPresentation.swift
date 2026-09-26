@@ -12,8 +12,9 @@ nonisolated struct BenchControls: Equatable, Sendable {
     static let none = BenchControls()
 
     static func make(state: BenchState, reason: StopReason?, pending: CLIClient.Action?,
-                     needsService: Bool, cliReady: Bool) -> BenchControls {
-        guard cliReady, !needsService else { return .none }
+                     needsService: Bool, cliReady: Bool, otherWork: Bool = false) -> BenchControls {
+        // another change (the scheduler) holds the CLI's lock: nothing to click
+        guard cliReady, !needsService, !otherWork else { return .none }
         if let pending { return BenchControls(busy: pending) }
         // a bench with a missing env needs repair; starting it would only fail again
         let broken = reason == .broken
@@ -115,5 +116,59 @@ nonisolated enum LogsScript {
         exec \(Shell.quote(cli)) logs -n\(lines) --bench-dir \(Shell.quote(bench))
 
         """
+    }
+}
+
+/// What the menu bar runner shows when there is more than one bench: the
+/// worst state wins, so a crash anywhere is never hidden behind a bench
+/// that runs fine. Pure, so the order is tested without an app.
+nonisolated enum BenchAggregate {
+    ///   any crashed or paused bench   stumbles
+    ///   else any starting             walks
+    ///   else any running              runs
+    ///   else                          sleeps (unknown until something is known)
+    static func state(_ states: [BenchState]) -> BenchState {
+        let known = states.filter { $0 != .unknown }
+        if known.isEmpty { return .unknown }
+        if known.contains(.crashed) { return .crashed }
+        if known.contains(.paused) { return .paused }
+        if known.contains(.starting) { return .starting }
+        if known.contains(.running) { return .running }
+        return .stopped
+    }
+
+    /// Benches that are up (running or starting), for the count in the header.
+    static func upCount(_ states: [BenchState]) -> Int {
+        states.filter { $0 == .running || $0 == .starting }.count
+    }
+
+    /// "2 of 3 up", "none up".
+    static func upText(_ states: [BenchState]) -> String {
+        let up = upCount(states)
+        return up == 0 ? "none up" : "\(up) of \(states.count) up"
+    }
+}
+
+/// One line of the sites list in the popover.
+nonisolated struct SiteRow: Equatable, Sendable, Identifiable {
+    var name: String
+    var isDefault: Bool
+    var url: String
+    var needsHosts: Bool
+
+    var id: String { name }
+
+    /// The default site first, then by name. Without sites from the CLI (a
+    /// CLI older than 0.4) the bench's own site is the only row.
+    static func make(sites: [SiteInfo]?, defaultSite: String, port: Int) -> [SiteRow] {
+        let infos = sites ?? [SiteInfo(name: defaultSite, isDefault: true, hostsEntry: true, pingCode: nil)]
+        return infos
+            .map { SiteRow(name: $0.name, isDefault: $0.isDefault, url: "http://\($0.name):\(port)", needsHosts: !$0.hostsEntry) }
+            .sorted { ($0.isDefault ? 0 : 1, $0.name) < ($1.isDefault ? 0 : 1, $1.name) }
+    }
+
+    /// The command that adds every missing hosts line, when one is missing.
+    static func hostsFix(_ rows: [SiteRow], bench: String) -> String? {
+        rows.contains(where: \.needsHosts) ? BenchText.command("site hosts", bench: bench) : nil
     }
 }

@@ -65,6 +65,15 @@ nonisolated struct CLIClient: Sendable {
         try await run([action.rawValue, "--plain", "--bench-dir", bench], timeout: Timeout.action, acceptExitCodes: [0])
     }
 
+    /// benchbar service --with-schedule (or --without-schedule). --yes because
+    /// the app asked the user already: service shows a plan and asks, and
+    /// with stdin closed it would answer no.
+    @discardableResult
+    func setScheduler(_ on: Bool, bench: String) async throws(CLIError) -> CommandOutput {
+        try await run(["service", "--yes", "--plain", on ? "--with-schedule" : "--without-schedule", "--bench-dir", bench],
+                      timeout: Timeout.action, acceptExitCodes: [0])
+    }
+
     // MARK: plumbing
 
     func run(_ arguments: [String], timeout: Duration, acceptExitCodes: Set<Int32>) async throws(CLIError) -> CommandOutput {

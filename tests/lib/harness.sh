@@ -74,6 +74,8 @@ chmod +x "$MOCK_PIPX_HOME/venvs/frappe-bench/bin/honcho"
 export PATH="$ROOT/tests/mocks/bin:$PATH"
 
 FM="$ROOT/benchbar"
+# the CLI's own version, so a release bump needs no test edits
+VER="$(sed -n 's/^FL_VERSION="\(.*\)"$/\1/p' "$FM")"
 
 # ---------------------------------------------------------------- asserts
 

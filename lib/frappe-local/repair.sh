@@ -411,6 +411,8 @@ fl_repair_engine() {
     fl_info "dry-run: skipping the verify pass because nothing was changed"
   else
     printf '\n%sVerify%s\n' "$FL_BOLD" "$FL_RESET"
+    # every action finished; a failure from here on is a check, not a command
+    FL_LAST_COMMAND=""
     fl_doctor_run "$@"
     fl_doctor_print compact
     remaining=""

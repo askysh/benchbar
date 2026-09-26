@@ -2,97 +2,97 @@
 
 All notable changes to this project are documented here.
 
-## Unreleased
+## 0.4.0 - 2026-09-26
+
+Frappe v16 is a first class profile, and more than one bench runs on the
+same Mac: each with its own ports, sites, settings and scheduler choice,
+side by side in the menu bar. Verified on a real Mac with a v15 and a v16
+bench running at once (docs/DECISIONS.md, "the v16 bench on a real Mac").
 
 ### Added
 
-- The `v16-lts` profile is ready for an end to end run: `pkgconf`
-  (pkg-config) and `mariadb-connector-c` are system dependencies of every
-  profile and on `PKG_CONFIG_PATH` (frappe v16 pins `mysqlclient`, which
-  builds against them), and a CI job runs the v16 profile under mocks.
-  It stays `experimental` until it has run on a real Mac.
-- `bench` is installed with `uv tool install frappe-bench` when uv is on
-  PATH; pipx stays the fallback and existing pipx installs are left as
-  they are. The `bench command` check names the owner.
-- honcho is also found in uv's tool folder.
-
-- Doctor checks from the community threads, each with a fix line:
-  `full_disk_access` (crontab denied, the cause of `bench init` offering
-  to delete a new bench), `toolchain_node`, `toolchain_yarn`,
-  `mariadb_version` and `toolchain_pkgconfig` (the tools as the bench's
-  launchd PATH sees them, so nvm's node shows up as missing),
-  `honcho_setuptools` (honcho 1.x on Python 3.12 or newer, with a repair
-  action that installs setuptools into honcho's venv only), `fork_safety`
-  and `orphans` (stale redis, socketio or web processes on the bench's
-  ports, fix `benchbar down`).
-- `bench init` runs with `--no-backups`: a dev bench needs no backup
-  cron, and the crontab write is what fails without Full Disk Access.
-
-- Several benches side by side: every bench keeps its own profile, site,
-  autostart, honcho and bundle in `.benchbar/benches/<name>.env`
-  (settings from before 0.4 still count for the default bench and move
-  there on the next `service`, `adopt` or `install`), and a bench without
-  a stored profile gets it from its frappe version.
-- `--make-default` for `install`, `adopt` and `service`: a second bench no
-  longer becomes the default by being set up.
-
-- Port blocks: `install` and `adopt` move a bench whose ports clash with
-  an established bench (one with an agent, or the default) to the next
-  free block (web `8000 + n`, socketio `9000 + n`, Redis `11000 + n` and
-  `13000 + n`), checking every known bench and the listeners on the Mac,
-  with `bench set-config -g` and `bench setup redis`. `--port-offset N`
-  picks the block for `install`, `adopt` and `service`. `ports` in
-  `list --json` and `status --json` gains `redis_socketio`.
-- A bench uses the MariaDB server already running on 3306 when the
-  profile accepts its version (so a v16 bench on a Mac with
-  `mariadb@10.11` never installs `mariadb@11.8`), and remembers it.
-- `mariadb_version` checks the MariaDB server against the profile's range
-  (`mariadb_min`, `mariadb_max` in `release-profiles.tsv`): 10.6 to 10.11
-  for v15, 10.6 to 11.8 for v16.
-
-- Sites: `benchbar site list`, `site add NAME` (bench new-site with the
-  Keychain MariaDB password, the hosts line, and `--bundle` or `--apps`
-  from `apps/`), `site default NAME` (`bench use`, remembered, the runner
-  pings it) and `site hosts` (every missing hosts line after one
-  question). `list --json` and `status --json` gain `sites[]` with
-  `name`, `default`, `hosts_entry` and `ping_code`.
-- The scheduler, opt in per bench: `benchbar service --with-schedule`
-  adds `schedule: bench schedule` to `Procfile.lean`, `--without-schedule`
-  removes it, `repair` keeps the choice, `status --json` gains
-  `scheduler`, and doctor reports it.
-
-- Site setup (phase 01 and `site add`) runs the bench's own Redis while
-  it creates the site and installs apps, when nothing else does: frappe
-  v16 needs it, and a new bench has no service running yet.
+- **Frappe v16, supported.** The `v16-lts` profile (Python 3.14, Node 24)
+  installs and runs end to end. `pkgconf` and `mariadb-connector-c` are
+  system dependencies of every profile and on `PKG_CONFIG_PATH` (v16
+  pins `mysqlclient`, which builds against them); a CI job runs the v16
+  profile under mocks.
+- **One MariaDB for every bench.** A bench uses the MariaDB server
+  already running on 3306 when the profile accepts its version (v16
+  accepts 10.6 to 11.8), so a v16 bench next to a v15 bench shares
+  `mariadb@10.11` instead of installing `mariadb@11.8`.
+- **Several benches side by side.** Every bench keeps its own profile,
+  site, autostart, scheduler, honcho and ports in
+  `.benchbar/benches/<name>-<hash>.env`; settings from before 0.4 still
+  count for the default bench and move there on the next `service`,
+  `adopt` or `install`. A bench without a stored profile gets it from its
+  frappe version. A second bench no longer becomes the default by being
+  set up; `--make-default` does that.
+- **Port blocks.** A new bench that clashes with an established one moves
+  to the next free block (web `8000 + n`, socketio `9000 + n`, Redis
+  `11000 + n` and `13000 + n`), written with `bench set-config -g` and
+  `bench setup redis` as part of the plan; `--port-offset N` picks one.
+  The default bench never moves on its own.
+- **Sites.** `benchbar site list`, `site add NAME` (with the Keychain
+  MariaDB password, the hosts line, and apps from `apps/`),
+  `site default NAME` and `site hosts`.
+- **The scheduler, opt in per bench:** `benchbar service --with-schedule`
+  and `--without-schedule`; `repair` keeps the choice.
+- **Doctor checks from the community threads**, each with its fix:
+  `full_disk_access`, `toolchain_node`, `toolchain_yarn`,
+  `toolchain_pkgconfig` (the tools as the bench's launchd PATH sees them,
+  so nvm's node shows up as missing), `mariadb_version` (the profile's
+  range), `honcho_setuptools` (with a repair that touches only honcho's
+  venv), `fork_safety`, `orphans` (stale processes on the bench's ports)
+  and `scheduler`.
+- **BenchBar.app with several benches:** a bench list with state, uptime
+  and Start, Stop and Restart per row; the runner shows the worst state
+  across all benches, with an "n of m up" count; the selected bench lists
+  its sites with Open buttons, the default marked, and the `site hosts`
+  fix when a hosts line is missing; a scheduler switch per bench in
+  Settings.
+- JSON (still `schema_version: 1`): `sites[]` in `list` and `status`,
+  `scheduler` in `status`, `redis_socketio` in `ports`.
+- `bench` itself is installed with `uv tool install frappe-bench` when uv
+  is on PATH; pipx stays the fallback and existing pipx installs are left
+  alone. Doctor names the owner.
 
 ### Changed
 
-- The port clash check also warns when another bench is only configured
-  with the same ports, and names the `--port-offset` that fixes it.
-  `benchbar up` still asks only when a clashing bench is running.
-- `benchbar down`, `status` and the runner match honcho and socketio by
-  their working folder: both run with the same relative command line in
-  every bench, so stopping or starting one bench used to stop the other's
-  honcho and socketio too. The runner template is v3; `benchbar repair`
-  rewrites it.
-- The PATH lines of the shell block follow the default bench's profile;
-  phase 00 writes the block only when there is none.
-- The doctor check `wkhtmltopdf` is now `pdf_engine`. It checks
-  wkhtmltopdf as before on every profile (it is still frappe v16's default
-  engine) and, on v16, the Chromium used by Print Formats set to `chrome`,
-  with `bench setup-chrome` as the fix when it is missing.
-- Missing build formulae are a doctor warning with `brew install` as the
-  fix.
-- ROADMAP.md: 0.4 is Frappe v16 and more than one bench, 0.5 is repair
-  from the app, a log viewer and `benchbar mcp`, 0.6 is app installs, a
-  team lockfile and pulling a production site; the public launch moves
-  to 0.7.
+- **Benches never touch each other's processes.** `down`, `status` and
+  the runner match honcho and socketio by their working folder: both run
+  with the same relative command line in every bench, and before 0.4
+  starting or stopping one bench also stopped the other's. The runner
+  template is v3; run `benchbar repair` on every bench once.
+- The shell block's PATH lines follow the default bench's profile, so a
+  v16 bench never changes the Python and Node of your shell; phase 00
+  writes the block only when there is none.
+- The doctor check `wkhtmltopdf` is now `pdf_engine`: wkhtmltopdf on
+  every profile (still v16's default engine) and, on v16, the Chromium
+  used by Print Formats set to `chrome`, with `bench setup-chrome` as
+  the fix.
+- `bench init` runs with `--no-backups`: a dev bench needs no backup
+  cron, and the crontab write is what fails without Full Disk Access.
+- Site setup runs the bench's own Redis while it creates the site and
+  installs apps (frappe v16 needs it; a new bench has none running yet),
+  and stops only what it started.
+- v16 sites are created with `--mariadb-user-host-login-scope=%`; v16
+  calls `--no-mariadb-socket` deprecated.
+- The port clash check also reports a bench that is only configured with
+  the same ports, with the `--port-offset` that fixes it.
+- ROADMAP.md: 0.5 is one bigger release (repair from the app, a log
+  viewer, `benchbar mcp`, app installs from any GitHub repo, team
+  profiles, a team lockfile and pulling a production site); the public
+  launch moves to 0.6.
 
 ### Fixed
 
 - `doctor --json` with a failing check printed a `[FAIL] Last command
-  failed` line after the JSON on stdout, so readers (the app included)
-  could not parse the report. It now exits 1 with only the JSON.
+  failed` line after the JSON, so the app could not read the report.
+- The Python formula check read `brew leaves`, which hides a formula
+  other formulae depend on (python@3.14 under pipx and uv); it now reads
+  "installed on request".
+- A run that ended on verify warnings no longer adds a misleading
+  `[FAIL] Last command failed` line naming a command that succeeded.
 
 ## 0.3.1 - 2026-09-24
 
