@@ -2,6 +2,34 @@
 
 All notable changes to this project are documented here.
 
+## 0.5.6 - 2026-09-26
+
+Doctor knows the cleanup tool that actually deletes benches. Mole's
+`mo purge` removes `env/`, `node_modules` and `dist` from projects under
+`~/dev`; doctor now warns about it until the bench is in Mole's
+whitelist, finds CleanMyMac when Setapp installed it, and stops flagging
+the installer's own PATH block.
+
+### Added
+
+- Doctor check `mole`: warns when Mole is installed (as `mole`, or as a
+  `mo` that is Mole's script) and the bench is not in
+  `~/.config/mole/whitelist`, and passes once a plain path there is the
+  bench or a folder above it, the rule Mole itself uses. When the file
+  does not exist yet, the fix says to save it once with
+  `mo clean --whitelist`, since a whitelist file replaces Mole's built in
+  entries.
+
+### Fixed
+
+- The `cleanmymac` check also looks in the `Setapp` folder inside
+  `/Applications` and `~/Applications`, where the Setapp copy lives.
+- Doctor no longer lists the installer's `benchbar-path` block in
+  `~/.zshrc` as an old block to delete by hand; removing it would take
+  `benchbar` off PATH.
+- `install.sh` and `scripts/macos-install-local.sh` touch BenchBar.app
+  after copying it, so Finder shows the new icon after an upgrade.
+
 ## 0.5.5 - 2026-09-26
 
 The project skin: BenchBar gets a manual, a front door and a way to

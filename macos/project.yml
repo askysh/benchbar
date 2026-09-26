@@ -19,7 +19,7 @@ include:
 
 settings:
   base:
-    MARKETING_VERSION: "0.5.5"
+    MARKETING_VERSION: "0.5.6"
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "6.0"
     MACOSX_DEPLOYMENT_TARGET: "14.0"
