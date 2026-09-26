@@ -498,10 +498,26 @@ chk_cleanmymac() {
   fi
 }
 
-FL_MOLE_CMD="${FL_MOLE_CMD:-mole}"
+# Homebrew links both mole and mo; the script installer can leave only mo,
+# a name another tool (the mustache renderer) also uses
+FL_MOLE_CMDS="${FL_MOLE_CMDS:-mole mo}"
 
-# Mole's "mo purge" deletes node_modules, dist and venv folders under ~/dev
-# and similar folders, unless a line in ~/.config/mole/whitelist is the
+fl_mole_bin() {
+  local name bin
+  for name in $FL_MOLE_CMDS; do
+    bin="$(command -v "$name" 2>/dev/null || true)"
+    [[ -n "$bin" && -f "$bin" ]] || continue
+    if [[ "${name##*/}" == "mole" ]] || head -c 4096 "$bin" 2>/dev/null | grep -a -q -i 'mole'; then
+      printf '%s' "$bin"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Mole's "mo purge" deletes node_modules, dist and any folder with a
+# CACHEDIR.TAG (a virtualenv's env/) under ~/dev and similar folders,
+# unless a line in ~/.config/mole/whitelist is the
 # bench or a folder above it. Glob lines are not read: the bench counts as
 # covered only by a plain path.
 fl_mole_protects() {
@@ -523,14 +539,17 @@ fl_mole_protects() {
 }
 
 chk_mole() {
-  local bin
-  bin="$(command -v "$FL_MOLE_CMD" 2>/dev/null || true)"
+  local bin fix
+  bin="$(fl_mole_bin || true)"
+  fix="echo '${FL_BENCH_DIR}' >> ~/.config/mole/whitelist"
+  # a new whitelist file replaces Mole's default entries; its editor writes them first
+  [[ -f "$HOME/.config/mole/whitelist" ]] || fix="run 'mo clean --whitelist' and save once (it writes Mole's defaults), then: ${fix}"
   if [[ -z "$bin" ]]; then
     chk__set ok "Mole not installed"
   elif fl_mole_protects "$FL_BENCH_DIR"; then
     chk__set ok "Mole is installed; ${FL_BENCH_DIR} is in ~/.config/mole/whitelist"
   else
-    chk__set warn "Mole is installed (${bin}); 'mo purge' can delete node_modules and dist folders inside the bench" "mkdir -p ~/.config/mole && echo '${FL_BENCH_DIR}' >> ~/.config/mole/whitelist"
+    chk__set warn "Mole is installed (${bin}); 'mo purge' can delete env/, node_modules and dist folders inside the bench" "$fix"
   fi
 }
 

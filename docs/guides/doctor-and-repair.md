@@ -121,14 +121,16 @@ running any cleanup.
 
 Mole (`mo`) is not installed, or the bench is protected in its whitelist.
 `mo purge` looks for projects under `~/dev` and similar folders and
-deletes their `node_modules`, `dist` and `venv` folders, which leaves the
-bench with no socketio modules and an unstyled site. It skips any path in
+deletes their `node_modules` and `dist` folders and any folder with a
+`CACHEDIR.TAG`, which includes the bench's `env/`. It skips any path in
 `~/.config/mole/whitelist` and everything below it, so the check passes
 when a line there is the bench folder or a folder above it. Lines with
 `*`, `?` or `[` are not read.
 
-Fix: `mkdir -p ~/.config/mole && echo '<bench>' >> ~/.config/mole/whitelist`,
-or add the folder with `mo clean --whitelist`.
+Fix: `echo '<bench>' >> ~/.config/mole/whitelist`. When that file does
+not exist yet, run `mo clean --whitelist` and save once first: a
+whitelist file replaces Mole's built in entries, and its editor writes
+them into the new file.
 
 ### full_disk_access
 
