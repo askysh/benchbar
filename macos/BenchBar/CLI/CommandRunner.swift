@@ -135,6 +135,8 @@ nonisolated struct SubprocessRunner: CommandRunning {
                         output: .sequence,
                         error: .discarded
                     ) { execution in
+                        // strings() splits on line breaks and buffers a partial
+                        // line (up to 128 KiB), so every call gets one whole event
                         for try await line in execution.standardOutput.strings() {
                             onLine(line)
                         }

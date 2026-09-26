@@ -241,6 +241,7 @@ Checked in frappe `version-16` at 012667b and bench `develop` at c9d1250 (Septem
 - `app list --json` on a bench without sites reads its cache with `grep ... || true`, so pipefail does not end the run.
 - `benchbar mcp` answers a message that is not an object with -32600 and parameters that are not objects with -32602, and keeps the session going.
 - The app's repair sheet applies stream events on the main actor in order, through one `AsyncStream`, so a late step event can never overwrite a failed run.
+- Codex on the pull request: `app update` refuses to run when any site's `list-apps` fails, since a stale list could skip a site's backup or migrate. `pull` into a running bench sets `pause_scheduler` in `common_site_config.json` before the restore and removes it once the copy has its own `pause_scheduler` and `mute_emails`, so the bench's scheduler never sees the production copy unguarded; a bench already paused by hand is left alone, and a pull that stops halfway leaves the bench paused and says how to resume. The test runner kills a timed out test's whole process tree, collected before anything dies.
 
 # The easy install run (v0.3)
 
@@ -356,6 +357,6 @@ Measured on five PR runs (September 2026): 11 to 14 minutes wall clock, all of i
 - shellcheck runs as one more pool job in shard 1 (and on Linux), over the full file list the CI step had (`scripts/*.sh` and `install.sh` included): it overlaps the tests instead of adding 25s in front of them, and needs no extra runner.
 - The separate v16 job is gone: `run-tests.sh` has run `test-profile-v16.sh` since 4d666ee, so it ran twice per PR.
 - The release bundle is built in the app job (`release-local.sh --skip-tests` replaces the plain Release build step, then the Swift tests run on the warm DerivedData): its Release build is a superset of the old unsigned build (it also signs ad hoc and verifies), and it saves a second runner, Xcode selection, XcodeGen install, cache restore and a full Release build (about 1.5 min on the critical path), while still producing the bundle on every PR.
-- The Linux job stays: with the pool on 4 CPUs it should take about 2 to 3 minutes, and it is the only run of the suite on GNU tools, which the Linux dev container relies on. It skips `apt-get` when the image already has shellcheck, zip and unzip (11s).
+- The Linux job is gone (Akash, 0.5 pull request): BenchBar only runs on macOS, the macOS shards already run the suite on the `/bin/bash` 3.2 users have, and the Linux job was the slowest one left (4.5 minutes) while only ever finding GNU tool differences no user hits. The suite still aims to run on Linux for a Linux dev container, without a CI guarantee.
 - `brew install` is skipped when the tool is already on the runner, and the Homebrew and DerivedData caches stay as they were: both already hit (restore key for DerivedData, which is expected when sources change).
-- Estimate after: about 3 to 4 minutes wall clock per PR, bounded by the slowest shard or the Linux job; to be confirmed by the first CI run of this change.
+- Estimate after: about 3 to 4 minutes wall clock per PR, bounded by the slowest shard. First run on the 0.5 pull request: shards 2m28s to 3m50s, the app job 1m50s.

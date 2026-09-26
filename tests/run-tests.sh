@@ -70,10 +70,13 @@ run_test_with_deadline() {
       printf '\nFAIL: %s still running after %ss; processes:\n' "$(basename "$script")" "$TEST_TIMEOUT" >&2
       tree="$(descendants "$pid" | tr '\n' ',' | sed 's/,$//')"
       [[ -n "$tree" ]] && ps -o pid,ppid,stat,etime,command -p "$tree" >&2 2>/dev/null || true
-      pkill -P "$pid" 2>/dev/null || true
-      kill "$pid" 2>/dev/null || true
+      # the whole tree, collected before anything dies: a killed parent
+      # would reparent its grandchildren out of reach of pkill -P
+      # shellcheck disable=SC2086  # the pids are words
+      kill ${tree//,/ } 2>/dev/null || true
       sleep 1
-      kill -9 "$pid" 2>/dev/null || true
+      # shellcheck disable=SC2086
+      kill -9 ${tree//,/ } "$pid" 2>/dev/null || true
       return 124
     fi
     sleep 0.2

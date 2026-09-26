@@ -47,6 +47,20 @@ json.dump(conf, open(path, "w"), indent=1, sort_keys=True)
 open(path, "a").write("\n")
 PY
     exit 0 ;;
+  config)
+    # config remove-common-config KEY...: drops keys from common_site_config.json
+    [[ "$2" == "remove-common-config" ]] || exit 0
+    shift 2
+    python3 - "$@" <<'PY'
+import json, sys
+path = "sites/common_site_config.json"
+conf = json.load(open(path))
+for key in sys.argv[1:]:
+    conf.pop(key, None)
+json.dump(conf, open(path, "w"), indent=1, sort_keys=True)
+open(path, "a").write("\n")
+PY
+    exit 0 ;;
   build)
     # create every dist file referenced by assets.json
     if [[ -f sites/assets/assets.json ]]; then

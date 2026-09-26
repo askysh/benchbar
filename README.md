@@ -435,7 +435,7 @@ scripts/macos-build.sh --test   # the app and its Swift tests
 Shell code targets macOS `/bin/bash` 3.2 with no dependencies beyond the
 ones the installer needs, passes shellcheck, and every command stays
 idempotent: a second run changes nothing and says so. CI runs the suite
-on macOS and Linux, builds the app, and uploads an unsigned bundle for
+on macOS, builds the app, and uploads an unsigned bundle for
 every pull request.
 
 ## License

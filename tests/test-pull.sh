@@ -292,4 +292,26 @@ assert_eq "$ENC_KEY" "$(conf_get fromdir encryption_key)"
 assert_file "$DL/20260925_020000-erp_example_com-database.sql.gz" "(the folder is left as it was)"
 assert_no_secrets "(from dir)"
 
+# ---- a running bench: its scheduler is paused for the whole bench until
+# the copy has its own pause_scheduler and mute_emails, then resumed
+add_proc 4242 "honcho start -f Procfile.lean" "$BENCH"
+reset_calls
+run_fm pull --from-dir "$DL" --as livecopy --skip-app hrms --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "Pause this bench's scheduler during the restore"
+q="$(grep -n 'set-config -g -p pause_scheduler 1$' "$MOCK_LOG" | head -n1 | cut -d: -f1)"
+r="$(grep -n 'benchbar-frappe livecopy restore' "$MOCK_LOG" | head -n1 | cut -d: -f1)"
+p="$(grep -n 'bench --site livecopy set-config -p pause_scheduler 1$' "$MOCK_LOG" | head -n1 | cut -d: -f1)"
+u="$(grep -n 'config remove-common-config pause_scheduler$' "$MOCK_LOG" | head -n1 | cut -d: -f1)"
+[[ -n "$q" && -n "$r" && -n "$p" && -n "$u" && "$q" -lt "$r" && "$r" -lt "$p" && "$p" -lt "$u" ]] || fail "pause the bench, restore, pause the site, resume the bench (${q} ${r} ${p} ${u})"$'\n'"$(cat "$MOCK_LOG")"
+assert_eq "False" "$(python3 -c 'import json,sys; print("pause_scheduler" in json.load(open(sys.argv[1])))' "$BENCH/sites/common_site_config.json")"
+assert_eq "1" "$(conf_get livecopy pause_scheduler)"
+# a bench paused by hand stays paused: no step touches it
+(cd "$BENCH" && bench set-config -g -p pause_scheduler 1)
+reset_calls
+run_fm pull --from-dir "$DL" --as livecopy2 --skip-app hrms --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_calls_not_contain 'remove-common-config'
+assert_eq "1" "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["pause_scheduler"])' "$BENCH/sites/common_site_config.json")"
+
 printf 'test-pull: ok\n'

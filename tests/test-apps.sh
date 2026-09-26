@@ -228,6 +228,16 @@ run_fm app update acme_crm --skip-backup --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 assert_calls_not_contain 'backup$'
 assert_calls_contain '^bench --site macdev migrate$'
+# a site that cannot be asked stops the update before anything changes
+push_commits acme_crm 1
+before="$(app_head "$BENCH/apps/acme_crm")"
+reset_calls
+MOCK_BENCH_LIST_APPS_EXIT=1 run_fm app update acme_crm --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "Not updating acme_crm: bench list-apps failed for"
+assert_eq "$before" "$(app_head "$BENCH/apps/acme_crm")" "(refused update keeps the code)"
+assert_calls_not_contain '^bench --site .* (backup|migrate)'
+assert_calls_not_contain 'merge --ff-only'
 # a failed migrate prints the way back, never runs it
 push_commits acme_crm 1
 before="$(app_head "$BENCH/apps/acme_crm")"

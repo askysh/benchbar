@@ -59,6 +59,8 @@ FL_PULL_WARNINGS=""
 FL_PULL_APPS_JSON=""
 FL_PULL_ADMIN_PW=""
 FL_PULL_STEPS=()
+FL_PULL_QUIESCE=0
+FL_PULL_QUIESCED=0
 
 # Python snippets (they contain no single quotes, so they travel over SSH as
 # one quoted word). None of them takes a secret as an argument.
@@ -573,9 +575,15 @@ fl_pull_plan_steps() {
   [[ -z "$FL_PULL_FROM_DIR" ]] && FL_PULL_STEPS+=("download|Download the backup")
   [[ "$FL_PULL_ENCRYPTED" == "1" || "$FL_PULL_NEW_BACKUP" == "1" ]] && FL_PULL_STEPS+=("decrypt|Decrypt the backup (gpg, local)")
   [[ "$FL_PULL_SITE_EXISTS" == "1" ]] && FL_PULL_STEPS+=("local_backup|Back up the local site ${FL_PULL_AS}")
+  # a running scheduler would find the copy before its own pause_scheduler
+  # and mute_emails exist, so the whole bench pauses until they do
+  FL_PULL_QUIESCE=0
+  fl_bench_is_running && ! fl_pull_common_paused && FL_PULL_QUIESCE=1
+  [[ "$FL_PULL_QUIESCE" == "1" ]] && FL_PULL_STEPS+=("quiesce|Pause this bench's scheduler during the restore")
   FL_PULL_STEPS+=("restore|Restore into ${FL_PULL_AS}")
   FL_PULL_STEPS+=("encryption_key|Carry the encryption key over")
   FL_PULL_STEPS+=("dev_safety|Mute email and pause the scheduler")
+  [[ "$FL_PULL_QUIESCE" == "1" ]] && FL_PULL_STEPS+=("resume|Resume this bench's scheduler")
   [[ -n "$FL_PULL_SKIP_APPS" ]] && FL_PULL_STEPS+=("skip_apps|Remove skipped apps from the site: ${FL_PULL_SKIP_APPS}")
   FL_PULL_STEPS+=("migrate|bench migrate")
   FL_PULL_STEPS+=("clear_cache|Clear caches")
@@ -808,6 +816,28 @@ fl_pull_step_dev_safety() {
   fl_pull_bench_site set-config host_name "http://${FL_PULL_AS}:${FL_WEB_PORT}" || fl_warn "could not set host_name"
 }
 
+# pause_scheduler in common_site_config.json: set by the user, or left by
+# a pull that stopped halfway
+fl_pull_common_paused() {
+  local out
+  out="$("${FL_BENCH_DIR}/env/bin/python" -c "$FL_PULL_PY_CONF" "${FL_BENCH_DIR}/sites/common_site_config.json" has pause_scheduler 2>/dev/null || true)"
+  [[ "$out" == "pause_scheduler=yes" ]]
+}
+
+fl_pull_step_quiesce() {
+  fl_bench_env_exports
+  (cd "$FL_BENCH_DIR" && bench set-config -g -p pause_scheduler 1) >>"${FL_LOG_FILE:-/dev/null}" 2>&1 || { fl_fail "bench set-config -g pause_scheduler failed"; return 1; }
+  FL_PULL_QUIESCED=1
+  fl_ok "the scheduler of every site on this bench is paused until the copy is safe"
+}
+
+fl_pull_step_resume() {
+  fl_bench_env_exports
+  (cd "$FL_BENCH_DIR" && bench config remove-common-config pause_scheduler) >>"${FL_LOG_FILE:-/dev/null}" 2>&1 || { fl_fail "bench config remove-common-config pause_scheduler failed"; return 1; }
+  FL_PULL_QUIESCED=0
+  fl_ok "the other sites' schedulers run again"
+}
+
 fl_pull_step_skip_apps() {
   local a
   fl_bench_env_exports
@@ -985,6 +1015,10 @@ fl_cmd_pull() {
       fl_steps_summary
       if [[ -d "${FL_BENCH_DIR}/sites/${FL_PULL_AS}" && "$i" -gt 0 ]]; then
         fl_info "site ${FL_PULL_AS} may be half set up; after fixing the cause run the same pull with --replace"
+      fi
+      if [[ "${FL_PULL_QUIESCED:-0}" == "1" ]]; then
+        fl_warn "the scheduler of every site on this bench stays paused (pause_scheduler in common_site_config.json)"
+        fl_fix "once ${FL_PULL_AS} is fixed or removed: cd ${FL_BENCH_DIR} && bench config remove-common-config pause_scheduler"
       fi
       exit 1
     fi

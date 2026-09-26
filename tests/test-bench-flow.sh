@@ -14,7 +14,7 @@ if [[ "$1" == "init" ]]; then
   mkdir -p "$2/apps/frappe" "$2/env/bin" "$2/sites"
   touch "$2/sites/apps.txt"
   # new-site runs through the bench's python with its passwords on stdin
-  printf '#!/usr/bin/env bash\ncat >/dev/null\nshift 4\nexec bench "$@"\n' >"$2/env/bin/python"
+  printf '#!/usr/bin/env bash\ncat >/dev/null\nshift 4\ncd .. && exec bench "$@"\n' >"$2/env/bin/python"
   chmod +x "$2/env/bin/python"
   exit 0
 fi

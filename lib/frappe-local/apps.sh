@@ -786,7 +786,11 @@ fl_cmd_app_update() {
   total=0
   [[ "$old" == "$new" ]] || total="$(fl_app_git "$app" rev-list --count "${old}..${new}")"
   # which sites to back up and migrate: asked only when there is something to do
-  [[ "$total" == "0" ]] || fl_site_apps_refresh >/dev/null 2>&1 || true
+  # (every site must answer: a stale list could skip a backup or a migrate)
+  if [[ "$total" != "0" ]]; then
+    fl_site_apps_refresh >/dev/null 2>&1 || true
+    [[ -z "$FL_SITE_APPS_ERROR" ]] || fl_die "Not updating ${app}: ${FL_SITE_APPS_ERROR}." "Start MariaDB (benchbar doctor names the fix), then run benchbar app update ${app} again."
+  fi
   while IFS= read -r s; do [[ -n "$s" ]] && fl_site_has_app "$s" "$app" && sites+=("$s"); done < <(fl_sites_list)
   if [[ "$total" != "0" ]]; then
     fl_bench_is_running && running=1

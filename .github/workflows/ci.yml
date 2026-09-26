@@ -1,4 +1,4 @@
-# CI for BenchBar: the CLI tests and lint on macOS and Linux, the app build
+# CI for BenchBar: the CLI tests and lint on macOS, the app build
 # and Swift tests on macOS, and an unsigned release bundle you can download
 # from the run to try the app without a GitHub release.
 #
@@ -62,22 +62,6 @@ jobs:
         env:
           SHARD: ${{ matrix.shard }}/3
         run: /bin/bash tests/run-tests.sh
-
-  cli-linux:
-    name: CLI tests and shellcheck (Linux, quick signal)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install shellcheck and zip (when the image lacks them)
-        run: |
-          if command -v shellcheck >/dev/null && command -v zip >/dev/null && command -v unzip >/dev/null; then
-            echo "preinstalled: $(shellcheck --version | sed -n 2p)"
-          else
-            sudo apt-get update -q && sudo apt-get install -y -q shellcheck zip unzip
-          fi
-      - name: CLI tests
-        run: tests/run-tests.sh
 
   app:
     name: App build, Swift tests and unsigned release bundle (macOS)
