@@ -11,8 +11,11 @@ cat >"$TMP_DIR/bin/bench" <<'SH'
 #!/usr/bin/env bash
 printf 'bench %s\n' "$*" >>"${BENCH_LOG:?}"
 if [[ "$1" == "init" ]]; then
-  mkdir -p "$2/apps/frappe" "$2/env" "$2/sites"
+  mkdir -p "$2/apps/frappe" "$2/env/bin" "$2/sites"
   touch "$2/sites/apps.txt"
+  # new-site runs through the bench's python with its passwords on stdin
+  printf '#!/usr/bin/env bash\ncat >/dev/null\nshift 4\nexec bench "$@"\n' >"$2/env/bin/python"
+  chmod +x "$2/env/bin/python"
   exit 0
 fi
 if [[ "$1" == "get-app" ]]; then
@@ -52,6 +55,8 @@ export BENCH_LOG="$TMP_DIR/bench.log"
 . "$ROOT/lib/frappe-local/ui.sh"
 . "$ROOT/lib/frappe-local/run.sh"
 . "$ROOT/lib/frappe-local/state.sh"
+. "$ROOT/lib/frappe-local/platform.sh"
+. "$ROOT/lib/frappe-local/version-policy.sh"
 . "$ROOT/lib/frappe-local/bench.sh"
 
 assert_eq() {
