@@ -4,6 +4,34 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+### Added (0.5)
+
+- `benchbar pull HOST:SITE --as NAME` copies a production site over SSH
+  into a new local site. It uses the latest backup that already exists on
+  the server, so a plain pull writes nothing there; `--new-backup` runs
+  `bench backup` first, after the production site name is typed (or
+  given with `--confirm-site`), because that also deletes older backups
+  on the server. The download resumes (`rsync --partial`, `scp` when the
+  server has no rsync) into `<bench>/.benchbar/pulls/`, mode 0700.
+- The copy keeps its stored passwords: the production `encryption_key` is
+  written into the new site config through stdin and never shown or
+  logged, and a probe counts the encrypted rows that decrypt. Encrypted
+  backups are decrypted locally with `gpg --passphrase-fd 0`.
+- Before the restore, pull compares the production apps with the bench
+  and stops with the `bench get-app` commands when one is missing
+  (`--skip-app APP` restores without it and says what that leaves
+  behind), and stops when production frappe is newer than the bench.
+- After the restore: `mute_emails`, `pause_scheduler` and
+  `disable-scheduler` (unless `--keep-scheduler`), `host_name`, the
+  removal of skipped apps, `bench migrate` when the apps differ,
+  `clear-cache`, an optional Administrator password (`ADMIN_PASSWORD` or
+  a prompt, on stdin), the hosts line, and a verify pass.
+- `--replace` restores over an existing local site after a
+  `bench backup --with-files` of it; `--from-dir DIR` restores a backup
+  set downloaded by hand (Frappe Cloud); `--dry-run` connects read only
+  and prints the plan; `--json` streams `plan`, `gate`, `progress`,
+  `step` and `done` events (docs/json-schema.md).
+
 ### Added
 
 - The `v16-lts` profile is ready for an end to end run: `pkgconf`
