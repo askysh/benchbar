@@ -650,3 +650,55 @@ takes an answer for one `--bench-dir`, which is how a test builds "v15
 running, v16 paused" and checks the menu bar stumbles. The snapshot test
 `popoverTwoBenches` renders the result to
 `~/Library/Caches/BenchBarSnapshots/popover-two-benches-*.png`.
+## 0.5: a log viewer that survives rotation
+
+`tail -F` looks simple until the file under it changes. Read
+`Logs/LogTailer.swift`, `Logs/LogModel.swift` and their tests:
+
+1. **Watch the file and its folder.** A `DispatchSource` on an open file
+   descriptor reports appends (`.extend`), but after the file is replaced
+   with `mv` the descriptor still points at the old, now nameless file. The
+   folder watcher from Phase 3 notices the new file; both call the same
+   `readNew()`.
+2. **Decide by inode and size, not by event.** Events coalesce and arrive
+   in bursts. `readNew()` only asks: is this still the file I opened
+   (inode), and is it at least as long as what I read (size)? No means
+   start over from the top.
+3. **Decode whole lines.** A read can end in the middle of a multi byte
+   character. Keeping the bytes after the last newline for the next read
+   avoids the replacement character.
+4. **Bound everything.** The view keeps the last 5000 lines; the first read
+   takes only the file's last 256 KB.
+5. **Let AppKit do text.** `NSTextView` inside `NSViewRepresentable` gives
+   fast scrolling, selection and copy for free. The SwiftUI side only
+   tells it what changed (`changes`, `appended`).
+
+## 0.5: a window for everything that needs a form
+
+A menu bar popover is good for a glance and a click. Adding an app from a
+GitHub URL, creating a site with a password, or reading a changelog
+before an update needs room, a form and a confirmation. Read
+`Window/MainWindow.swift`, `Window/BenchPage.swift`,
+`Window/BenchApps.swift`, `Window/RepairRun.swift` and
+`BenchBarTests/WorkbenchTests.swift`:
+
+1. **`NavigationSplitView` with a selection enum.** `WindowPane` is either
+   an app pane or `.bench(path)`; the sidebar's `List(selection:)` binds
+   to it, and a small `WindowRouter` object lets the popover open the
+   window at a bench and a tab.
+2. **Plan, confirm, run.** Every change first shows what will happen (a
+   dry run, or a form) in a sheet; only the sheet's default button runs
+   the command, with `--yes`, because the CLI's own question could never
+   be answered through a closed stdin.
+3. **One change at a time.** `BenchStore.runChange` marks the bench busy,
+   refuses a second change anywhere (the CLI holds one lock for the whole
+   checkout), and reloads the list afterwards. The views only read that
+   state to disable their buttons.
+4. **Streaming output.** swift-subprocess can hand over stdout as an async
+   sequence of lines (`output: .sequence`, then `strings()`), which is
+   how the Repair sheet shows each step as it happens. The test fakes get
+   a default `stream` that replays their canned output.
+5. **Secrets in the environment, not the arguments.** A command line is
+   visible to every process of the user (`ps`); the environment of one
+   short lived child is not written anywhere. The test reads the fake
+   runner's recorded arguments and environment to prove it.

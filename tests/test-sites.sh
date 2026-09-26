@@ -33,7 +33,14 @@ assert_calls_not_contain '^bench new-site'
 reset_calls
 ADMIN_PASSWORD=adminpw run_fm site add v16two --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
-assert_calls_contain '^bench new-site v16two --mariadb-root-password rootpw --admin-password adminpw --no-mariadb-socket$'
+# the passwords go to frappe on stdin: placeholders on the command line, nothing in any log
+assert_calls_contain '^bench new-site v16two --mariadb-root-password @secret0@ --admin-password @secret1@ --no-mariadb-socket$'
+assert_eq "rootpw
+adminpw" "$(cat "$MOCK_STATE/stdin-new-site")"
+assert_not_contains "$(cat "$MOCK_LOG")" "adminpw"
+assert_not_contains "$(cat "$MOCK_LOG")" "rootpw"
+assert_not_contains "$(cat "$FL_STATE_DIR"/logs/*.log)" "adminpw"
+assert_not_contains "$OUT" "adminpw"
 assert_calls_not_contain '^bench --site v16two install-app'
 assert_calls_contain '^redis-server config/redis_queue.conf --daemonize yes$' "(frappe v16 needs the bench's Redis for new-site)"
 assert_calls_contain '^redis-cli -p 11000 shutdown save$'

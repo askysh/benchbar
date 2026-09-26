@@ -10,7 +10,12 @@ Raycast extensions and the like can rely on it too.
 | `benchbar list --json` | every bench benchbar knows about |
 | `benchbar status --json [--bench-dir DIR]` | the live state of one bench |
 | `benchbar doctor --json [--bench-dir DIR]` | every health check with its fix |
+| `benchbar app list --json` | the bench's apps, their git state and sites (0.5) |
+| `benchbar app update NAME --dry-run --json` | the changelog and plan of an update (0.5) |
+| `benchbar profile list --json` | built in and team profiles, with where each comes from (0.5) |
+| `benchbar lock check --json` | how the bench differs from its `benchbar.toml` (0.5) |
 | `<bench>/logs/.benchbar/state.json` | the last state transition, written by the runner and the CLI |
+| `benchbar pull ... --json` | JSON lines while a production site is copied, see [pull](#benchbar-pull---json) |
 
 ## Rules for readers
 
@@ -214,7 +219,7 @@ carry the bench's sites, read from `sites/*/site_config.json`:
 
 | Field | Type | Notes |
 |---|---|---|
-| `checks[].id` | string | stable id, for example `env_python`, `assets`, `agent`, `legacy_agents`. `pdf_engine` replaced `wkhtmltopdf` in 0.4 |
+| `checks[].id` | string | stable id, for example `env_python`, `assets`, `agent`, `legacy_agents`. `pdf_engine` replaced `wkhtmltopdf` in 0.4. 0.5 adds `apps_txt`, `app_branch_policy`, `lock_parse` and `lock_drift` (group `bench`, no repair action) |
 | `checks[].group` | string | `system`, `bench`, `service` or `site` |
 | `checks[].label` | string | short name for humans |
 | `checks[].level` | string | `ok`, `warn` or `fail` |
@@ -225,6 +230,196 @@ carry the bench's sites, read from `sites/*/site_config.json`:
 
 `status` and `fix` are the 0.2.0 names of `level` and `fix_command` (with
 `""` instead of `null`), kept for older readers.
+
+## `benchbar logs --json`
+
+```json
+{"schema_version":1,"cli_version":"0.5.0","bench":"/Users/you/frappe-bench","file":"/Users/you/frappe-bench/logs/bench.log","process":"web","lines":["10:00:01 web.1 | * Running on http://127.0.0.1:8000"]}
+```
+
+`-nN` sets how many lines (after the filter), `--process NAME` keeps one
+honcho process (`web`, `worker`, `socketio`, `schedule`, `redis_queue`,
+`redis_cache`); lines without a honcho prefix, such as a traceback, stay
+with the process above them. `process` is `null` without a filter.
+Control characters (terminal colors) are removed. `benchbar mcp` uses it
+for `benchbar_logs_tail`.
+## `benchbar repair --json`
+
+A stream: one JSON object per line on stdout, as the run goes. The human
+text goes to the run's log (`.benchbar/logs/<timestamp>.log`).
+
+```json
+{"event":"plan","schema_version":1,"cli_version":"0.5.0","bench":"/Users/you/frappe-bench","dry_run":false,"actions":[{"id":"build","label":"bench build","fixes":["Built assets"],"sudo":false},{"id":"hosts_entry","label":"add macdev to /etc/hosts (sudo)","fixes":["/etc/hosts entry"],"sudo":true}],"backups":"/Users/you/.local/share/benchbar/.benchbar/backups","log":"/Users/you/.local/share/benchbar/.benchbar/logs/20260926-101500.log"}
+{"event":"step","action":"build","status":"running","message":"bench build"}
+{"event":"step","action":"build","status":"done","message":"bench build"}
+{"event":"step","action":"hosts_entry","status":"running","message":"add macdev to /etc/hosts (sudo)"}
+{"event":"step","action":"hosts_entry","status":"skipped","message":"[WARN] skipped without sudo; run: printf '127.0.0.1 macdev\n' | sudo tee -a /etc/hosts"}
+{"event":"done","exit_code":0,"log":"/Users/you/.local/share/benchbar/.benchbar/logs/20260926-101500.log"}
+```
+
+| Event | Fields |
+|---|---|
+| `plan` | `actions[]` with `id` (a repair action), `label`, `fixes` (the doctor checks it fixes), `sudo` (needs a password: skipped without a terminal); `dry_run`; `backups` (the backup root); `log` |
+| `step` | `action`, `status` (`running`, then `done`, `skipped` or `failed`), `message` (for `failed` and `skipped`, the CLI's `[FAIL]` or `[WARN]` line) |
+| `done` | `exit_code` (0 when every check passes afterwards), `log` |
+
+`repair --dry-run --json` prints only the `plan` line and changes
+nothing. Without `--yes` (and without `--dry-run`) nothing is applied:
+the plan is printed, then `done` with exit code 1, because the question
+cannot be answered. An empty `actions` means nothing needs repairing.
+## `benchbar app list --json`
+
+Added in 0.5. Every app of the bench: the lines of `sites/apps.txt` in
+order, then any git app in `apps/` that is not listed. The sites come
+from `bench --site S list-apps --format json` (15 seconds per site),
+cached per bench; `--no-sites` reads only the cache, so it never needs
+MariaDB.
+
+```json
+{"schema_version":1,"cli_version":"0.5.0","bench":"/Users/you/frappe-bench","profile":"v15-lts",
+ "sites_checked_at":"2026-09-25T10:00:00Z","sites_error":null,
+ "apps":[{"name":"erpnext","in_apps_txt":true,"repo":"https://github.com/frappe/erpnext","remote":"upstream",
+  "branch":"version-15","policy_branch":"version-15","commit":"b5f784612d5b7969b72848dda5b22f10d3a8f764",
+  "dirty":false,"shallow":true,"version":"15.115.0","sites":["macdev"]}]}
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `sites_checked_at` | string or null | when the site lists were last read from bench |
+| `sites_error` | string or null | why the last read failed for a site (MariaDB down); its apps come from the previous read |
+| `apps[].in_apps_txt` | bool | `false` for a git app that is only a folder (doctor warns) |
+| `apps[].repo` | string or null | the URL of the remote the branch follows (else `upstream`, else the first), without a user name or token |
+| `apps[].remote` | string or null | that remote's name |
+| `apps[].branch` | string or null | `null` on a detached HEAD or without git |
+| `apps[].policy_branch` | string or null | the branch `config/apps.tsv` (or the profile, for frappe) names |
+| `apps[].commit` | string or null | the full HEAD commit |
+| `apps[].dirty` | bool | tracked files have local changes (`git status --porcelain -uno`) |
+| `apps[].shallow` | bool | a shallow clone (bench's `shallow_clone`) |
+| `apps[].version` | string or null | from `sites/apps.json` |
+| `apps[].sites` | array of strings | the sites that have the app installed |
+
+## `benchbar app update NAME --dry-run --json`
+
+Added in 0.5. The plan of an update, after `git fetch` (which changes
+only the app's `.git`). `--json` without `--dry-run` is refused.
+
+```json
+{"schema_version":1,"cli_version":"0.5.0","bench":"/Users/you/frappe-bench","app":"erpnext","remote":"upstream","branch":"version-15",
+ "from":"a1b2c3d...","to":"b5f7846...","commits":[{"sha":"b5f7846","subject":"fix: ..."}],"commits_total":12,
+ "sites":["macdev"],"skip_backup":false,
+ "steps":[{"name":"Back up macdev","command":"bench --site macdev backup"},{"name":"Fast forward","command":"git -C apps/erpnext merge --ff-only b5f784612d5b"}]}
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `from`, `to` | string | full commits; equal when there is nothing to take (also when the app is ahead of its remote) |
+| `commits` | array | newest first, at most 30, `sha` short |
+| `commits_total` | number | all commits in `from..to` |
+| `sites` | array of strings | the sites that have the app: each is backed up (unless `skip_backup`) and migrated |
+| `steps` | array | in order: `Back up S`, `Fast forward`, `Python requirements`, `Node requirements`, `Migrate S`, `Build`, and `Restart` when the bench runs; empty when there is nothing to do |
+
+A dirty tree, a detached HEAD or a diverged branch exits 1 with the
+reason as text.
+
+## `benchbar lock check --json`
+
+Added in 0.5. The bench compared with its lockfile (`benchbar.toml`).
+Read only: no network, no database (a site's apps come from the cache
+`app list` fills), only `bench --version` for the bench CLI. Exit 1 on
+any drift; the JSON is still printed.
+
+```json
+{"schema_version":1,"cli_version":"0.5.0","bench":"/Users/you/frappe-bench","lock_file":"/Users/you/frappe-bench/apps/acme/benchbar.toml",
+ "in_sync":false,
+ "drift":[{"kind":"commit_behind","app":"erpnext","site":null,"expected":"b5f7846","actual":"a1b2c3d","level":"warn","fix_command":"benchbar lock apply"}],
+ "summary":{"ok":12,"warn":1,"fail":0}}
+```
+
+| `kind` | `level` | Meaning |
+|---|---|---|
+| `profile_mismatch` | warn | the lock's `[bench] profile` differs from the bench's (a team profile's base) |
+| `bench_version_mismatch` | warn | the `frappe-bench` CLI version differs |
+| `app_missing` | fail | a lock app has no folder or no `apps.txt` line |
+| `app_extra` | warn | an `apps.txt` app the lock does not name |
+| `repo_mismatch` | warn | the app's remote is another repo (HTTPS and SSH spellings of one repo compare equal) |
+| `branch_mismatch` | warn | another branch, or a detached HEAD (`actual` is `detached`) |
+| `commit_behind` | warn | the pinned commit is ahead of the checkout; `lock apply` fast forwards |
+| `commit_ahead` | warn | the checkout has commits after the pin; `lock apply` leaves it |
+| `commit_diverged` | warn | neither contains the other; `lock apply` leaves it |
+| `commit_unknown` | warn | the pin is not in the local history yet; `lock apply` fetches it |
+| `dirty` | warn | tracked files have local changes |
+| `site_missing` | warn | a lock site has no folder |
+| `site_app_missing` | warn | the site lacks an app the lock lists for it (`app` and `site` are both set) |
+
+`expected` and `actual` are strings or `null`; commits are 7 characters.
+`summary.ok` counts the lock's apps, sites and bench fields without
+drift. Doctor runs the same comparison as `lock_drift` (without the
+bench version) and `lock_parse`, both in group `bench` with `action:
+null`.
+
+`list --json` gains `benches[].lock_file`: the path `lock check` would
+use for that bench (remembered from `--lock`, or `<bench>/benchbar.toml`
+when it exists), else `null`.
+
+## `benchbar profile list --json`
+
+Added in 0.5. The built in profiles, then every team profile file on the
+lookup path (`~/.config/benchbar/profiles/`, then each folder of
+`BENCHBAR_PROFILE_PATH`), invalid ones included so a reader can show why.
+
+```json
+{"schema_version":1,"cli_version":"0.5.0","profiles":[
+ {"name":"v15-lts","kind":"builtin","source":"builtin","file":"/Users/you/benchbar/config/release-profiles.tsv","base":null,
+  "label":"Frappe/ERPNext v15 LTS","frappe_branch":"version-15","valid":true,"error":null},
+ {"name":"acme","kind":"team","source":"user","file":"/Users/you/.config/benchbar/profiles/acme.toml","base":"v15-lts",
+  "label":"Acme ERP","frappe_branch":null,"valid":true,"error":null}]}
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `kind` | string | `builtin` or `team` |
+| `source` | string | `builtin`, `user` (`~/.config/benchbar/profiles`) or `path` (a `BENCHBAR_PROFILE_PATH` folder) |
+| `file` | string | where it was read from |
+| `base` | string or null | the built in profile a team profile builds on; `null` for built in ones and invalid files |
+| `label` | string or null | the built in label, or a team profile's `description` |
+| `frappe_branch` | string or null | a team profile's override, else the built in branch |
+| `valid` | bool | `false` when `install --profile NAME` would refuse it |
+| `error` | string or null | why: a parse error (`FILE:LINE: not supported: ...`), a name that shadows a built in profile, or a name hidden by an earlier file |
+## `benchbar pull --json`
+
+Added in 0.5. Unlike the commands above, `pull` changes things, so it
+streams: one JSON object per line on stdout, written as the run goes, and
+every human line on stderr. Use it with `--yes` (a gate that cannot be
+answered counts as no). Each line carries `schema_version`,
+`cli_version` and `event`:
+
+```json
+{"schema_version":1,"cli_version":"0.5.0","event":"plan","source":"prod:erp.example.com","host":"prod","remote_site":"erp.example.com","remote_bench":"~/frappe-bench","from_dir":null,"bench":"/Users/you/frappe-bench","site":"erpcopy","replace":false,"backup":{"name":"20260925_020000-erp_example_com-database.sql.gz","new":false,"bytes":734003200,"age_hours":31,"encrypted":false},"encryption_key":true,"apps":[{"app":"frappe","production_version":"15.40.0","production_branch":"version-15","local_version":"15.41.0","local_branch":"version-15","status":"local newer"}],"migrate":true,"steps":["Download the backup","Restore into erpcopy","..."],"dry_run":false}
+{"schema_version":1,"cli_version":"0.5.0","event":"gate","name":"apply","answer":"yes"}
+{"schema_version":1,"cli_version":"0.5.0","event":"progress","file":"20260925_020000-erp_example_com-database.sql.gz","bytes":700000000,"total":734003200}
+{"schema_version":1,"cli_version":"0.5.0","event":"step","n":1,"id":"download","name":"Download the backup","status":"done"}
+{"schema_version":1,"cli_version":"0.5.0","event":"done","exit":0,"site":"erpcopy","url":"http://erpcopy:8000","decrypt":{"ok":12,"failed":0},"warnings":[]}
+```
+
+| Event | Fields | Notes |
+|---|---|---|
+| `plan` | `source`, `host`, `remote_site`, `remote_bench`, `from_dir`, `bench`, `site`, `replace`, `backup`, `encryption_key`, `apps`, `migrate`, `steps`, `dry_run` | once, after the read only checks. `backup.name`, `bytes` and `age_hours` are `null` with `--new-backup` (that backup does not exist yet). `encryption_key` says whether production has one to carry over, never its value |
+| `gate` | `name` (`new_backup`, `apply`, `replace`), `answer` (`yes`, `no`) | a question the run asked. `new_backup` is `yes` only when the typed (or `--confirm-site`) name matches |
+| `progress` | `file`, `bytes`, `total` | after each downloaded file; `bytes` counts the files so far |
+| `step` | `n`, `id`, `name`, `status` | `n` counts from 1 in the order of `plan.steps`; `status` is `done`, `unchanged`, `skipped` or `failed` |
+| `done` | `exit`, `site`, `warnings`, and on success `url` and `decrypt` | always the last line: also after a refusal or a failure (`exit` 1) and after `--dry-run` (`dry_run: true`) |
+
+`apps[].status` is `ok`, `missing`, `skipped` (`--skip-app`), `branch
+differs`, `local older` or `local newer`. `decrypt.ok` and
+`decrypt.failed` count the encrypted `__Auth` rows that do and do not
+decrypt with the site's `encryption_key`; `failed` above 0 means stored
+passwords must be entered again. Step ids: `new_backup`, `download`,
+`decrypt`, `local_backup`, `restore`, `encryption_key`, `dev_safety`,
+`skip_apps`, `migrate`, `clear_cache`, `admin_password`, `hosts`,
+`cleanup`, `verify`; a run lists only the ones it needs.
+
+No event ever holds a password, the encryption key or a token from an
+app's remote URL.
 
 ## `logs/.benchbar/state.json`
 

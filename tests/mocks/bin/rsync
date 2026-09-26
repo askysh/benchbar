@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# rsync mock: copies HOST:PATH from the fake remote home into the local
+# destination. $MOCK_STATE/rsync_fail_after (a byte count) cuts the next
+# fresh transfer short like a dropped link; a later call that finds the
+# partial file records its size in $MOCK_STATE/rsync_resumed_from.
+# $MOCK_STATE/rsync_version sets the version line (default 3.2.7).
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "$(dirname "$0")/_mocklib.sh"
+if [[ "${1:-}" == "--version" ]]; then
+  printf 'rsync  version %s  protocol version 31\n' "$(cat "${MOCK_STATE:?}/rsync_version" 2>/dev/null || printf '3.2.7')"
+  exit 0
+fi
+mock_log "$@"
+pos=()
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    -e) shift 2 ;;
+    -*) shift ;;
+    *) pos+=("$1"); shift ;;
+  esac
+done
+src="${pos[0]:-}"; dest="${pos[1]:-}"
+path="${src#*:}"
+[[ "$path" == /* ]] || path="${MOCK_STATE:?}/remote/home/${path}"
+[[ -f "$path" ]] || { echo "rsync: link_stat \"${src}\" failed: No such file or directory (2)" >&2; exit 23; }
+[[ -d "$dest" ]] && dest="${dest%/}/$(basename "$path")"
+if [[ -f "${MOCK_STATE}/rsync_fail_after" && ! -f "$dest" ]]; then
+  head -c "$(cat "${MOCK_STATE}/rsync_fail_after")" "$path" >"$dest"
+  rm -f "${MOCK_STATE}/rsync_fail_after"
+  echo "rsync: connection unexpectedly closed (0 bytes received so far) [receiver]" >&2
+  echo "rsync error: error in rsync protocol data stream (code 12)" >&2
+  exit 12
+fi
+[[ -f "$dest" ]] && wc -c <"$dest" | tr -d ' ' >"${MOCK_STATE}/rsync_resumed_from"
+cp "$path" "$dest"

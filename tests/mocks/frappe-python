@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# env/bin/python mock for benchbar pull, copied into the local bench and the
+# fake remote bench. It answers:
+#   -m frappe.utils.bench_helper frappe --site S list-apps|backup ...
+#                                   (the remote reads, from sites/)
+#   -c SNIPPET benchbar-frappe SITE CMD OPT ARGS...
+#                                   benchbar's wrapper that reads a secret on
+#                                   stdin: the secret is saved to
+#                                   $MOCK_STATE/stdin-CMD, never logged
+#   -c SNIPPET benchbar-probe SITE  the decrypt probe: "5 0" when the site
+#                                   holds $MOCK_STATE/site_key, else "0 5"
+#   -c SNIPPET ARGS...              any other snippet runs in the real python3
+# Calls are logged to $MOCK_LOG as "python ARGS" (the snippet left out).
+log() { printf 'python %s\n' "$*" >>"${MOCK_LOG:-/dev/null}"; }
+case "$*" in *version_info*) echo "3.11"; exit 0 ;; esac
+[[ "${1:-}" == "--version" ]] && { echo "Python 3.11.9"; exit 0; }
+
+if [[ "${1:-}" == "-m" && "${2:-}" == "frappe.utils.bench_helper" ]]; then
+  shift 2
+  log "bench_helper $*"
+  site="${3:-}"; cmd="${4:-}"
+  case "$cmd" in
+    list-apps) cat "${site}/installed_apps" ;;
+    backup)
+      ts="$(cat "${MOCK_STATE:?}/new_backup_ts" 2>/dev/null || printf '20260926_120000')"
+      base="${site}/private/backups/${ts}-${site//./_}"
+      cp "${MOCK_STATE}/remote_dump.sql.gz" "${base}-database.sql.gz"
+      printf 'public\n' >"${base}-files.tar"; printf 'private\n' >"${base}-private-files.tar"
+      printf '{}\n' >"${base}-site_config_backup.json"
+      : >"${MOCK_STATE}/remote_backup_taken" ;;
+  esac
+  exit 0
+fi
+
+if [[ "${1:-}" == "-c" ]]; then
+  snippet="${2:-}"; shift 2
+  case "${1:-}" in
+    benchbar-frappe)
+      shift
+      log "benchbar-frappe $*"
+      site="$1"; cmd="$2"
+      cat >"${MOCK_STATE:?}/stdin-${cmd}"
+      [[ -n "${MOCK_FRAPPE_FAIL:-}" && "$MOCK_FRAPPE_FAIL" == "$cmd" ]] && { echo "mock: ${cmd} failed" >&2; exit 1; }
+      if [[ "$cmd" == "restore" ]]; then
+        dump="$4"
+        mkdir -p "$site"
+        # frappe writes a fresh site config with a key of its own
+        printf '{\n "db_name": "_mock%s",\n "db_password": "localdbpw",\n "encryption_key": "generated-local-key"\n}\n' "$RANDOM" >"${site}/site_config.json"
+        gzip -dc "$dump" 2>/dev/null | python3 -c '
+import re, sys
+m = re.search(r"installed_apps\x27,\x27\[([^\]]*)\]", sys.stdin.read())
+for app in (m.group(1) if m else "").replace("\\", "").replace("\"", "").split(","):
+    if app:
+        print(app + " 1.0.0")' >"${site}/installed_apps"
+        printf '%s\n' "$*" >"${MOCK_STATE}/restore_args"
+      fi
+      exit 0 ;;
+    benchbar-probe)
+      shift
+      log "benchbar-probe $*"
+      key="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("encryption_key", ""))' "$1/site_config.json")"
+      if [[ -n "$key" && "$key" == "$(cat "${MOCK_STATE:?}/site_key" 2>/dev/null)" ]]; then
+        echo "benchbar-probe 5 0"
+      else
+        echo "benchbar-probe 0 5"
+      fi
+      exit 0 ;;
+  esac
+  log "-c $*"
+  exec python3 -c "$snippet" "$@"
+fi
+exit 0

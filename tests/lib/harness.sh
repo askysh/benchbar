@@ -121,7 +121,7 @@ snapshot() {
 make_fake_bench() {
   local dir="$1" site="${2:-macdev}"
   mkdir -p "$dir/apps/frappe/node_modules/socket.io" "$dir/apps/frappe/frappe/public/dist/js" "$dir/apps/frappe/frappe/public/dist/css" \
-    "$dir/sites/$site" "$dir/sites/assets" "$dir/env/bin" "$dir/logs" "$dir/config"
+    "$dir/sites/$site" "$dir/sites/assets" "$dir/env/bin" "$dir/logs" "$dir/config" "$dir/apps/erpnext"
   printf 'frappe\nerpnext\n' >"$dir/sites/apps.txt"
   printf '%s\n' "$site" >"$dir/sites/currentsite.txt"
   printf '{}\n' >"$dir/sites/$site/site_config.json"
@@ -150,14 +150,7 @@ JSON
 make_fake_env_python() {
   local dir="$1"
   mkdir -p "$dir/env/bin"
-  cat >"$dir/env/bin/python" <<'PY'
-#!/bin/bash
-case "$*" in
-  *version_info*) echo "3.11" ;;
-  --version) echo "Python 3.11.9" ;;
-  *) exit 0 ;;
-esac
-PY
+  cp "$ROOT/tests/mocks/env-python" "$dir/env/bin/python"
   chmod +x "$dir/env/bin/python"
 }
 

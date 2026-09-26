@@ -9,6 +9,117 @@ same Mac: each with its own ports, sites, settings and scheduler choice,
 side by side in the menu bar. Verified on a real Mac with a v15 and a v16
 bench running at once (docs/DECISIONS.md, "the v16 bench on a real Mac").
 
+### Added (0.5)
+
+- **The BenchBar window** replaces the sparse Settings window: General,
+  Menu Bar, Team Profiles and About, then a page per bench with Overview
+  (actions, ports, the scheduler), Sites (add a site with its
+  Administrator password, make one the default, the hosts fix), Apps (add
+  from the registry or any GitHub URL, public or private, install on a
+  site, update after a changelog preview) and Health (doctor, and Repair
+  with the plan first and a live step list). The popover links into it
+  (⌘M) and offers Repair when doctor found something repairable.
+
+- `benchbar mcp`: a Model Context Protocol server on stdio (stdlib only
+  Python) with `benchbar_list`, `benchbar_status`, `benchbar_doctor`,
+  `benchbar_logs_tail`, `benchbar_site_list`, `benchbar_up`,
+  `benchbar_down` and `benchbar_restart`, each backed by the CLI's JSON.
+- `benchbar logs --json` with `-nN` and `--process NAME`.
+
+### Added (0.5)
+
+- `benchbar repair --json` streams a plan, a step event per action and a
+  done event with the exit code; `--dry-run --json` prints only the plan.
+
+### Added (0.5)
+
+- A log window per bench (⌘L): follows `logs/bench.log` with smart
+  scroll, search with a match count and next and previous (⌘G, ⇧⌘G), a
+  filter per honcho process, errors and tracebacks in red, the previous
+  log, clear, select and copy, and Open in Terminal. It survives the
+  runner's log rotation and keeps at most 5000 lines.
+
+### Added (0.5)
+
+- App commands. `benchbar app list [--json] [--no-sites]` shows every
+  app with its branch, commit, local changes, shallow clone, version,
+  the `apps.tsv` branch and the sites that have it (read with
+  `bench list-apps`, cached per bench). `app add NAME|URL` gets an app
+  from `config/apps.tsv` or any git URL (GitHub over HTTPS, SSH, or an
+  SSH host alias from `~/.ssh/config`), with `--branch`, `--name`, and
+  `--site S` or `--all-sites`: it checks access first with a git that
+  never prompts, so a missing key or token fails in a second with a fix
+  line, clones with `bench get-app --skip-assets` (never `--overwrite`
+  or `--resolve-deps`), clones the `required_apps` of `hooks.py` after
+  a second plan, installs on the sites, builds once and restarts a
+  running bench. A half finished clone moves to the backups. `app
+  install NAME --site S` installs an app the bench has. `app update
+  NAME` fetches, shows the changelog, backs up every site that has the
+  app, fast forwards, runs requirements, migrate and build; it refuses
+  a dirty tree, a detached HEAD or a diverged branch, and on a failure
+  prints (never runs) the way back. `app update --dry-run --json` is the
+  plan for the app.
+- Doctor checks `apps_txt` (an `apps.txt` line without its folder
+  fails, a git app missing from `apps.txt` warns) and
+  `app_branch_policy` (an app off its `apps.tsv` branch warns). Both
+  read only local files and git; `repair` has no action for them.
+- Team profiles: an organisation's bench recipe in a TOML file outside
+  BenchBar, in `~/.config/benchbar/profiles/NAME.toml` or a folder on
+  `BENCHBAR_PROFILE_PATH` (a clone of the team's config repo). It names
+  a built in `base` for Python, Node and MariaDB, an optional
+  `frappe_branch`, a `bundle` or `[[apps]]` with repo, branch and an
+  optional commit, and optional `site` and `scheduler`. `benchbar
+  install --profile NAME` uses it, and the bench keeps following it.
+  `benchbar profile list [--json]`, `profile show NAME` and `profile
+  create NAME --from-bench PATH [--dir DIR]` (reads a bench, never
+  writes a credential or a commit). A team profile may not shadow a
+  built in one.
+- The team lockfile `benchbar.toml`: every app's repo, branch and
+  commit in `apps.txt` order, and each site with its apps, in the same
+  strict TOML subset. `benchbar lock write` writes it from the bench
+  (refuses local changes or a detached HEAD unless `--allow-dirty`,
+  `--no-commits` for branches only, shows the diff, backs up the old
+  file), `lock check [--json]` reports drift (13 kinds, from a missing
+  app to a site without an app) with no network or database, and `lock
+  apply` clones missing apps, switches clean apps to the locked branch
+  and fast forwards to pinned commits, then runs requirements and
+  build. It never touches a site, never resets local work (ahead,
+  diverged and dirty apps are skipped), and prints the site steps to run
+  by hand. `--lock PATH` (remembered per bench) or `BENCHBAR_LOCK`
+  points at a file kept in the team's app. Doctor gains `lock_parse`
+  and `lock_drift`; `list --json` gains `benches[].lock_file`.
+- Access checks before cloning (phase 01 and `app add`) run git with
+  `GIT_TERMINAL_PROMPT=0` and SSH in batch mode, so a private repo fails
+  at once instead of waiting on a prompt.
+
+### Added (0.5)
+
+- `benchbar pull HOST:SITE --as NAME` copies a production site over SSH
+  into a new local site. It uses the latest backup that already exists on
+  the server, so a plain pull writes nothing there; `--new-backup` runs
+  `bench backup` first, after the production site name is typed (or
+  given with `--confirm-site`), because that also deletes older backups
+  on the server. The download resumes (`rsync --partial`, `scp` when the
+  server has no rsync) into `<bench>/.benchbar/pulls/`, mode 0700.
+- The copy keeps its stored passwords: the production `encryption_key` is
+  written into the new site config through stdin and never shown or
+  logged, and a probe counts the encrypted rows that decrypt. Encrypted
+  backups are decrypted locally with `gpg --passphrase-fd 0`.
+- Before the restore, pull compares the production apps with the bench
+  and stops with the `bench get-app` commands when one is missing
+  (`--skip-app APP` restores without it and says what that leaves
+  behind), and stops when production frappe is newer than the bench.
+- After the restore: `mute_emails`, `pause_scheduler` and
+  `disable-scheduler` (unless `--keep-scheduler`), `host_name`, the
+  removal of skipped apps, `bench migrate` when the apps differ,
+  `clear-cache`, an optional Administrator password (`ADMIN_PASSWORD` or
+  a prompt, on stdin), the hosts line, and a verify pass.
+- `--replace` restores over an existing local site after a
+  `bench backup --with-files` of it; `--from-dir DIR` restores a backup
+  set downloaded by hand (Frappe Cloud); `--dry-run` connects read only
+  and prints the plan; `--json` streams `plan`, `gate`, `progress`,
+  `step` and `done` events (docs/json-schema.md).
+
 ### Added
 
 - **Frappe v16, supported.** The `v16-lts` profile (Python 3.14, Node 24)

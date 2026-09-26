@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# env/bin/python of a fake bench. Besides the version it answers benchbar's
+# stdin secret wrapper for frappe commands:
+#   -c SNIPPET benchbar-secrets frappe new-site SITE ARGS...
+# The secrets arrive on stdin and are saved to $MOCK_STATE/stdin-new-site,
+# never logged; the call is logged as "bench new-site SITE ARGS" with the
+# @secretN@ placeholders, so tests can assert both. Runs in sites/, like frappe.
+case "$*" in
+  *version_info*) echo "3.11"; exit 0 ;;
+  --version) echo "Python 3.11.9"; exit 0 ;;
+esac
+if [[ "${1:-}" == "-c" && "${3:-}" == "benchbar-secrets" && "${4:-}" == "frappe" ]]; then
+  shift 4
+  cmd="${1:-}"
+  cat >"${MOCK_STATE:?}/stdin-${cmd}"
+  printf 'bench %s\n' "$*" >>"${MOCK_LOG:-/dev/null}"
+  case "$cmd" in
+    new-site)
+      [[ -n "${MOCK_BENCH_NEW_SITE_EXIT:-}" ]] && exit "$MOCK_BENCH_NEW_SITE_EXIT"
+      site="$2"
+      mkdir -p "$site"; touch "$site/installed_apps"; printf '{"db_name": "_x"}\n' >"$site/site_config.json" ;;
+  esac
+  exit 0
+fi
+exit 0

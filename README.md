@@ -150,17 +150,114 @@ MariaDB, with its `/etc/hosts` line; `--bundle` or `--apps` installs apps
 already in the bench), `site default NAME` (the site `benchup` waits for
 and the app opens) and `site hosts` (adds every missing hosts line).
 
+Apps:
+
+```bash
+benchbar app list                                   # branch, commit, local changes, sites
+benchbar app add crm --site macdev                  # from config/apps.tsv
+benchbar app add git@github.com:acme/acme.git --branch main --all-sites
+benchbar app install crm --site v16two              # an app the bench already has
+benchbar app update erpnext --dry-run               # the changelog and the plan
+benchbar app update erpnext                         # backup, fast forward, migrate, build
+```
+
+`app add` checks that git can read the repo before it changes anything,
+so a private repo without a key or token fails at once with the fix. It
+never replaces an existing app, and `app update` never runs `bench
+update`, never rebases and never resets: a dirty or diverged app is
+refused.
+### A copy of production
+
+```bash
+benchbar pull prod:erp.example.com --as erpcopy --dry-run   # read only, prints the plan
+benchbar pull prod:erp.example.com --as erpcopy             # asks before it restores
+benchbar pull --from-dir ~/Downloads/erp-backup --as erpcopy   # a Frappe Cloud download
+```
+
+`prod` is a Host from `~/.ssh/config`. Pull takes the latest backup that
+already exists on the server, so nothing is written there (`--new-backup`
+runs `bench backup` first, which also deletes older backups on the server,
+so it asks you to type the site name). The download resumes when the link
+drops. The copy always goes into a new local site (`--replace` backs an
+existing one up first), gets the production `encryption_key` so stored
+passwords still decrypt, has email muted and the scheduler paused before it
+ever starts, and runs `bench migrate` when your apps are newer. When the
+bench lacks an app production has, pull stops and prints the
+`bench get-app` command; `--skip-app APP` restores without it. Encrypted
+backups are decrypted locally with `gpg` (`brew install gnupg`).
+
 Other commands: `benchbar list`, `benchbar report`,
 `benchbar mariadb-password`, `benchbar service`,
 `benchbar autostart on|off`, `benchbar uninstall-service`,
 `benchbar --help`.
+
+## Team profiles
+
+A team profile is your organisation's bench recipe: a small TOML file
+that names a built in base profile and your apps with their repos and
+branches. It lives outside BenchBar, in
+`~/.config/benchbar/profiles/NAME.toml` or in a clone of your team's
+config repo listed in `BENCHBAR_PROFILE_PATH`.
+
+```toml
+# ~/.config/benchbar/profiles/acme.toml
+base = "v15-lts"                  # Python, Node and MariaDB come from here
+site = "acme.localhost"
+scheduler = false
+
+[[apps]]
+name = "erpnext"
+repo = "https://github.com/frappe/erpnext"
+branch = "version-15"
+
+[[apps]]
+name = "acme"
+repo = "git@github.com:acme/acme.git"
+branch = "main"
+```
+
+```bash
+benchbar profile create acme --from-bench ~/frappe-bench   # write one from a bench you have
+benchbar profile list                                     # built in and team profiles
+benchbar profile show acme
+benchbar install --profile acme                           # a new Mac, the same bench
+```
+
+The file is a strict subset of TOML (strings, booleans, integers and
+one line lists; no escapes, no inline tables), and a repo URL with a
+user name or token is refused, since the file is meant to be committed.
+
+## The team lockfile
+
+A team profile is the recipe; `benchbar.toml` is the exact state, so
+every developer's bench runs the same commits. Keep it in your main
+custom app and commit it there:
+
+```bash
+benchbar lock write --lock apps/acme/benchbar.toml   # once; the path is remembered
+benchbar lock check                                  # read only, exit 1 on any difference
+benchbar lock apply --dry-run                        # what a teammate's bench would change
+benchbar lock apply
+```
+
+`lock apply` clones missing apps, switches clean apps to the locked
+branch and fast forwards to pinned commits, then runs requirements and
+build. It never touches a site (it prints the `site add`, `app install`
+and migrate steps instead) and never overwrites local work: an app with
+local changes or commits of its own is skipped with a warning. Doctor
+reports drift as a warning.
 
 ## The menu bar app
 
 The runner in the menu bar sleeps when the bench is stopped, walks while
 it starts, runs while it is up (faster when the bench is busy), stumbles
 when it crashes, and shows a question mark when the CLI is missing.
-Reduce Motion shows still poses. Click it for the popover: bench, site,
+Reduce Motion shows still poses. The BenchBar window (⌘, or "Apps, sites
+and settings…" in the popover) has a page per bench: add apps from the
+registry or any GitHub repository, add sites, change the default site,
+switch the scheduler, and run doctor and Repair with the plan shown
+first; team profiles and the app's own settings live there too.
+Click the runner for the popover: bench, site,
 state and uptime, Start, Stop, Restart, open the site, the logs or the
 bench folder, and a read only doctor. With more than one bench the runner
 shows the worst state of all of them, and the popover lists every bench
@@ -168,6 +265,9 @@ with its own Start, Stop and Restart and an "n of m up" count; the
 selected bench lists its sites, each with an Open button. Settings has a
 scheduler switch per bench. Keyboard: ⌘U start, ⌘D stop,
 ⌘R restart, ⌘O site, ⌘L logs, ⌘F folder, ⌘K doctor.
+bench folder, and a read only doctor. Keyboard: ⌘U start, ⌘D stop,
+⌘R restart, ⌘O site, ⌘L logs (a log window with search and a filter per
+process), ⌘F folder, ⌘K doctor.
 
 On first run the app looks for the CLI in `~/.local/bin/benchbar`, then in
 Homebrew's folders, and asks once with a file picker if it finds none.
@@ -290,6 +390,22 @@ to remove the agents and the checkout. Benches, sites and databases are
 never deleted by benchbar; the recipe for wiping one by hand is in
 [docs/troubleshooting.md](docs/troubleshooting.md).
 
+## For coding agents
+
+`benchbar mcp` is a Model Context Protocol server on stdio, so Claude
+Code, Cursor and other agents can see and drive your benches:
+
+```bash
+claude mcp add benchbar -- benchbar mcp
+```
+
+Tools: `benchbar_list`, `benchbar_status`, `benchbar_doctor`,
+`benchbar_logs_tail` (last lines, one process if asked) and
+`benchbar_site_list` read; `benchbar_up`, `benchbar_down` and
+`benchbar_restart` act. Each one runs `benchbar ... --json` and returns
+what the CLI printed. Nothing that repairs, installs or needs `sudo` is
+offered. It needs only `python3`, which the Command Line Tools provide.
+
 ## Documentation
 
 - [docs/troubleshooting.md](docs/troubleshooting.md): common stumbles, the
@@ -312,14 +428,14 @@ Issues and pull requests are welcome. For a bug, attach the zip from
 `benchbar report`; it contains no secrets, paths or names.
 
 ```bash
-tests/run-tests.sh              # the CLI, under mocks; shellcheck when installed
+tests/run-tests.sh              # the CLI, under mocks, in parallel; shellcheck when installed
 scripts/macos-build.sh --test   # the app and its Swift tests
 ```
 
 Shell code targets macOS `/bin/bash` 3.2 with no dependencies beyond the
 ones the installer needs, passes shellcheck, and every command stays
 idempotent: a second run changes nothing and says so. CI runs the suite
-on macOS and Linux, builds the app, and uploads an unsigned bundle for
+on macOS, builds the app, and uploads an unsigned bundle for
 every pull request.
 
 ## License

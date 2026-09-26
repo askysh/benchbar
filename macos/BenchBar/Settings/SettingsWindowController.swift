@@ -1,39 +1,42 @@
 import AppKit
 import SwiftUI
 
-/// The Settings window of a menu bar app.
+/// The BenchBar window (settings, benches, apps, sites, profiles).
 ///
 /// BenchBar is an "accessory" app (LSUIElement): no Dock icon, and macOS
-/// will not bring its windows to the front. The known working pattern:
-/// switch the activation policy to .regular while the window is open, so it
-/// behaves like a normal window (Dock icon, ⌘Tab, focus), and back to
-/// .accessory when it closes.
+/// will not bring its windows to the front. While this window is open the
+/// app becomes a regular app (WindowPresence counts the open windows).
 final class SettingsWindowController: NSObject, NSWindowDelegate {
     private var window: NSWindow?
-    private let makeView: () -> SettingsView
+    let router = WindowRouter()
+    private let makeView: (WindowRouter) -> MainWindowView
 
-    init(makeView: @escaping () -> SettingsView) {
+    init(makeView: @escaping (WindowRouter) -> MainWindowView) {
         self.makeView = makeView
     }
 
-    func show() {
+    func show(_ pane: WindowPane? = nil, tab: BenchTab? = nil, repair: Bool = false) {
+        if let pane { router.pane = pane }
+        if let tab { router.benchTab = tab }
+        if repair { router.repairRequested = true }
         if window == nil {
-            let hosting = NSHostingController(rootView: makeView())
-            hosting.sizingOptions = [.preferredContentSize]
+            let hosting = NSHostingController(rootView: makeView(router))
             let window = NSWindow(contentViewController: hosting)
-            window.title = "BenchBar Settings"
-            window.styleMask = [.titled, .closable]
+            window.title = "BenchBar"
+            window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
+            window.toolbarStyle = .unified
+            window.setContentSize(NSSize(width: 860, height: 600))
             window.isReleasedWhenClosed = false
             window.delegate = self
+            window.setFrameAutosaveName("BenchBarWindow")
             window.center()
             self.window = window
         }
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate()
-        window?.makeKeyAndOrderFront(nil)
+        if window?.isVisible != true { WindowPresence.opened() }
+        if let window { WindowPresence.bringForward(window) }
     }
 
     func windowWillClose(_ notification: Notification) {
-        NSApp.setActivationPolicy(.accessory)
+        WindowPresence.closed()
     }
 }

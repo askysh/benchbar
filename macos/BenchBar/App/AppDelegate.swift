@@ -6,6 +6,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItemController: StatusItemController!
     private var popover: PopoverController!
     private var settingsWindow: SettingsWindowController!
+    private var logWindows: LogWindowController!
     private let launchAtLogin = LaunchAtLogin()
     private var notifier: Notifier!
     private let library = RunnerLibrary()
@@ -29,14 +30,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             openSettings: { [weak self] in self?.openSettings() },
             quit: { NSApp.terminate(nil) },
             chooseCLI: { [weak self] in self?.chooseCLI() },
-            openLogs: { [weak self] bench in self?.openLogs(bench) })
+            openLogs: { [weak self] bench in self?.openLogs(bench) },
+            manage: { [weak self] bench, tab, repair in self?.openBench(bench, tab: tab, repair: repair) })
         popover = PopoverController(rootView: PopoverView(store: store, commands: commands))
         popover.onOpenChange = { [weak self] open in self?.store.setPopoverOpen(open) }
 
-        settingsWindow = SettingsWindowController { [unowned self] in
-            SettingsView(settings: settings, store: store, library: library, launchAtLogin: launchAtLogin, notifier: notifier,
-                         chooseCLI: { [weak self] in self?.chooseCLI() })
+        let workbench = Workbench(store: store)
+        settingsWindow = SettingsWindowController { [unowned self] router in
+            MainWindowView(store: store, router: router, workbench: workbench) { [unowned self] part in
+                SettingsView(settings: settings, store: store, library: library, launchAtLogin: launchAtLogin, notifier: notifier,
+                             part: part, chooseCLI: { [weak self] in self?.chooseCLI() })
+            }
         }
+
+        logWindows = LogWindowController { [weak self] path in self?.openLogsInTerminal(path) }
 
         if Updater.isAvailable { updater = Updater() }
         NSApp.mainMenu = makeMainMenu()
@@ -98,15 +105,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsWindow.show()
     }
 
+    /// The BenchBar window at one bench's tab (from the popover).
+    private func openBench(_ bench: BenchModel, tab: BenchTab, repair: Bool) {
+        popover.close()
+        settingsWindow.show(.bench(bench.path), tab: tab, repair: repair)
+    }
+
+
     private func chooseCLI() {
         popover.close()
         guard let path = Workspace.chooseCLI() else { return }
         Task { await store.useCLI(path: path) }
     }
 
+    /// ⌘L: the log window. "Open in Terminal" in its toolbar is the old path.
     private func openLogs(_ bench: BenchModel) {
-        guard case .ready(let cli) = store.cli else { return }
         popover.close()
+        logWindows.show(benchName: bench.name, benchPath: bench.path)
+    }
+
+    private func openLogsInTerminal(_ path: String) {
+        guard case .ready(let cli) = store.cli, let bench = store.benches.first(where: { $0.path == path }) else { return }
         do {
             try Workspace.openLogs(bench, cli: cli)
         } catch {

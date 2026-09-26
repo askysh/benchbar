@@ -30,7 +30,10 @@ fl_load_profile() {
   local profile="$1" file row
   file="$(fl_config_file release-profiles.tsv)"
   row="$(awk -F '\t' -v p="$profile" 'NR > 1 && $1 == p {print}' "$file")"
-  [[ -n "$row" ]] || fl_die "Unknown release profile: ${profile}" "Run with --list-profiles."
+  # not built in: a team profile (profiles.sh) loads its base, then its own values
+  if [[ -z "$row" ]] && declare -F fl_team_profile_load >/dev/null && fl_team_profile_load "$profile"; then return 0; fi
+  FL_TEAM_PROFILE=""
+  [[ -n "$row" ]] || fl_die "Unknown release profile: ${profile}" "Built in: --list-profiles. A team profile is ~/.config/benchbar/profiles/${profile}.toml or ${profile}.toml in a BENCHBAR_PROFILE_PATH folder."
   IFS=$'\t' read -r FL_PROFILE FL_PROFILE_LABEL FL_FRAPPE_BRANCH FL_ERPNEXT_BRANCH \
     FL_PYTHON_FORMULA FL_PYTHON_BIN_NAME FL_NODE_FORMULA FL_NODE_MAJOR \
     FL_MARIADB_FORMULA FL_MARIADB_MAJOR_MINOR FL_PROFILE_STATUS FL_SUPPORT_END _default \
@@ -109,7 +112,8 @@ fl_list_profiles() {
 
 fl_repo_ref_exists() {
   local repo="$1" ref="$2"
-  git ls-remote --exit-code --heads --tags "$repo" "$ref" >/dev/null 2>&1
+  # never a prompt: a private repo without a key or token fails at once
+  env GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes' git ls-remote --exit-code --heads --tags -- "$repo" "$ref" >/dev/null 2>&1
 }
 
 fl_validate_custom_commit() {
@@ -129,6 +133,8 @@ fl_expand_policy_ref() {
 
 fl_lookup_app_policy() {
   local app="$1" profile="$2" file row repo v15 v16 priority notes branch
+  # a loaded team profile names its own apps' repos and branches
+  if declare -F fl_team_app_policy >/dev/null && fl_team_app_policy "$app"; then return 0; fi
   file="$(fl_config_file apps.tsv)"
   row="$(awk -F '\t' -v a="$app" 'NR > 1 && $1 == a {printf "%s|%s|%s|%s|%s\n", $2, $3, $4, $5, $6}' "$file")"
   [[ -n "$row" ]] || return 1

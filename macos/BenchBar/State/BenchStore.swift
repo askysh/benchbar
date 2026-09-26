@@ -18,6 +18,9 @@ final class BenchModel: Identifiable {
     /// benchbar service is changing the scheduler (and may restart the bench):
     /// every action on this bench waits, the CLI would refuse it anyway (its lock).
     var isChangingScheduler = false
+    /// A longer change from the BenchBar window (add an app, a site, an
+    /// update, a repair), named for the spinner. Holds the one change slot.
+    var activity: String?
     var lastRefresh: Date?
 
     init(summary: BenchSummary) {
@@ -121,7 +124,7 @@ final class BenchStore {
     /// The CLI takes one lock for the whole checkout, so while this is set no
     /// other bench may start a change either: it would fail on the lock.
     var busyBench: BenchModel? {
-        benches.first { $0.pending != nil || $0.isChangingScheduler }
+        benches.first { $0.pending != nil || $0.isChangingScheduler || $0.activity != nil }
     }
 
     /// True when another bench holds the CLI's lock: this one waits.
@@ -231,7 +234,7 @@ final class BenchStore {
     // MARK: actions
 
     func perform(_ action: CLIClient.Action, on bench: BenchModel) async {
-        guard bench.pending == nil, !bench.isChangingScheduler, !waitsForOtherBench(bench) else { return }
+        guard bench.pending == nil, !bench.isChangingScheduler, bench.activity == nil, !waitsForOtherBench(bench) else { return }
         await run(action, on: bench)
     }
 
@@ -250,11 +253,37 @@ final class BenchStore {
         }
     }
 
+    /// The CLI, for the BenchBar window's calls (apps, sites, profiles, repair).
+    var cliClient: CLIClient? { client }
+
+    /// Runs one longer change on a bench in the one change slot: nothing
+    /// else starts on any bench meanwhile, the bench shows `label`, and the
+    /// bench and the list are refreshed afterwards. Returns the error text,
+    /// nil on success; "busy" when another change holds the slot.
+    func runChange(_ label: String, on bench: BenchModel,
+                   _ work: (CLIClient) async throws(CLIError) -> Void) async -> String? {
+        guard let client else { return "The benchbar command line tool is not available." }
+        guard bench.pending == nil, !bench.isChangingScheduler, bench.activity == nil, !waitsForOtherBench(bench) else {
+            return "Another change is still running; try again when it has finished."
+        }
+        bench.activity = label
+        notifyChange()
+        defer { bench.activity = nil; notifyChange() }
+        do {
+            try await work(client)
+        } catch {
+            await refresh(bench)
+            return error.localizedDescription
+        }
+        await reloadBenches()
+        return nil
+    }
+
     /// Turns the scheduler on or off (benchbar service --with-schedule or
     /// --without-schedule), then restarts a running bench so honcho reads
     /// the new Procfile. The caller has asked the user first.
     func setScheduler(_ on: Bool, on bench: BenchModel) async {
-        guard let client, bench.pending == nil, !bench.isChangingScheduler, !waitsForOtherBench(bench) else { return }
+        guard let client, bench.pending == nil, !bench.isChangingScheduler, bench.activity == nil, !waitsForOtherBench(bench) else { return }
         bench.isChangingScheduler = true
         defer { bench.isChangingScheduler = false; notifyChange() }
         bench.lastError = nil

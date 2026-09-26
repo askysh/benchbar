@@ -1,8 +1,117 @@
 # Decisions
 
 One line per non obvious choice: the decision, then the reason. The
-decisions of the app work live in `macos/DECISIONS.md`. The 0.4 run comes
+decisions of the app work live in `macos/DECISIONS.md`. The 0.5 and 0.4
+runs come first, the 0.3 easy install run follows.
+
+## 0.5: app installs
+
+Designed against frappe/bench develop (c9d1250) and frappe version-15; the code moved on since the design, and the code won where they disagreed:
+
+- Everything per bench goes through the existing per bench state (`.benchbar/benches/<name>-<hash>.env`, `fl_bstate_get/set`); the site app cache is a sibling file, `<name>-<hash>.site-apps`, not the `<name>.site-apps` of the design.
+- install-app and migrate run with the bench's own Redis up (`fl_bench_redis_up`/`down` from 0.4), because frappe v16 connects to it during both; the exit handler stops what was started, however the command ends.
+- Never `get-app --resolve-deps`: it reads `hooks.py` through the GitHub API (no private repos) and can `rmtree` an existing app. `required_apps` is read from the local `hooks.py` after the clone, resolved through `apps.tsv`, and cloned after a second plan and question.
+- Never `get-app --overwrite`, and stdin is `/dev/null`: an app that exists is reported with the manual `git fetch` and `git checkout`, and a surprise `click.confirm` fails instead of hanging.
+- `--skip-assets`, then one `bench build --app X` (or `--apps a,b` with the required apps): one build, after every dependency is in place.
+- Access is checked before any change with `git ls-remote` under `GIT_TERMINAL_PROMPT=0` and `GIT_SSH_COMMAND='ssh -o BatchMode=yes'`: a private repo without a key or token fails in a second with a fix line (`ssh -T git@HOST` and `ssh-add` for SSH, which also covers host aliases; the SSH URL or `gh auth setup-git` for HTTPS) instead of waiting on a hidden prompt.
+- A repo URL with a user name or token is refused: it would land in `.git/config`, `app list --json` and later a committed lockfile. Remote URLs are always shown without userinfo.
+- `get-app` is always given the resolved URL, also for names like `erpnext` that bench could resolve itself: the preflight checked exactly that URL, and apps.tsv entries without a repo map to `github.com/frappe/<name>`, which is what bench uses.
+- The app name is the repo name (lower case, `-` as `_`) or `--name`; the folder bench actually created is found by comparing `apps/` before and after, so `Raven` becoming `raven` is followed.
+- A get-app that fails half way moves the new folder to `.benchbar/backups/<ts>/apps/` only while `sites/apps.txt` does not list it. Once bench has listed it, the folder and the line stay and the fix (`bench remove-app NAME`) is printed: benchbar never edits `sites/` (AGENTS.md), and doctor's `apps_txt` check keeps reporting it. The first version removed the line itself; the review before the 0.5 PR reverted that.
+- A dirty app is left alone by `add` (it only installs on sites) but refused by `update`: `add` never touches the code, `update` moves it.
+- `app update` is `git fetch` plus `merge --ff-only`, never `bench update`: one app changes, nothing is rebased or reset. A diverged branch stops with the `git log --graph` to look at; an app ahead of its remote is "unchanged". On a failure the `reset --hard OLD` is printed, never run.
+- A shallow clone is fetched with `--shallow-since=@<HEAD time - 1s>`, so `old..new` exists locally for the changelog and the fast forward check.
+- `update --dry-run` runs `git fetch`: the changelog needs the new commits. Only the app's `.git` changes; the working tree, the sites and benchbar's state do not, and the test snapshots exactly that.
+- Every site that has the app is backed up (`bench --site S backup`) before the merge, `--skip-backup` opts out: the repo rule is a backup before every change, and migrate is the step that can hurt data.
+- Which sites have an app comes from `bench --site S list-apps --format json` with a 15 second limit per site, cached per bench: it needs MariaDB, and doctor (on a timer in the app), `app list --no-sites` and the lockfile check must never need it. A failed read keeps the last good list and says so in `sites_error`.
+- `app update --json` is only the plan (`--dry-run --json`): the app shows the changelog, then runs the update with `--yes` and a live log, and a JSON stream of an apply would need its own format.
+- The doctor checks `apps_txt` and `app_branch_policy` have no repair action: fixing either means changing which code runs, a person's call.
+- `--site` stays the global option, so `app install NAME --site S` and `app add X --site S` parse like every other command.
+- The fake bench of the tests now has an `apps/erpnext` folder: it always listed erpnext in `apps.txt`, which the new `apps_txt` check rightly fails.
+- `app add` takes the app name from the repo name (or `--name`), never from `apps.tsv`, when given a URL: `apps.tsv` is only the catalog for names.
+- The git mock passes everything to the real git under `MOCK_GIT_REAL=1`, and the bench mock's `get-app` then really clones (`--origin upstream`, shallow with `MOCK_BENCH_SHALLOW=1`) from bare repos in the test folder over `file://`. `MOCK_GIT_LSREMOTE_EXIT` fakes a private repo. No test touches the network.
+
+## 0.5: team profiles
+
+- A team profile lives outside BenchBar: `~/.config/benchbar/profiles/NAME.toml`, then each folder of `BENCHBAR_PROFILE_PATH` (colon separated), so an organisation's repos and branches never land in `config/` or in this repo, and a team shares its recipe through its own config repo.
+- Built in profiles are looked up first, and a team file named like one (`v15-lts.toml`) is reported as invalid instead of loaded: `--profile v15-lts` must mean the same thing on every Mac. A later file with an earlier file's name is hidden, and `profile list` says so.
+- A team profile names a built in `base` and never its own Python, Node or MariaDB: those formulae, the MariaDB range and the doctor checks are tested per built in profile. Only `frappe_branch` may be overridden.
+- `PROFILE` in the bench's state stays the base, and `TEAM_PROFILE` names the team profile: every daily command, doctor included, works from the base alone, and follows the team's app branches (the `app_branch_policy` check, `app add NAME`) while the file exists and parses. A missing or broken team file falls back to the base instead of breaking doctor.
+- The team's apps plug into the existing policy lookup (`fl_lookup_app_policy` asks the loaded team profile first), so phase 01, `app add NAME` and required apps all resolve a team app the same way.
+- The phases get the team profile's name (`--profile acme`) and load it themselves: phase 00 needs only the base, phase 01 the apps, site and pins, and `benchbar install` stays a thin wrapper.
+- `bundle` and `[[apps]]` exclude each other: a bundle is the built in app list, `[[apps]]` the team's own, and mixing them would make the order of `apps.txt` depend on rules nobody wrote down.
+- An optional `commit` in `[[apps]]` goes through phase 01's existing pin (`fetch --all --tags`, `checkout COMMIT`), which leaves a detached HEAD; exact pins for identical benches are the lockfile's job, a profile is the recipe.
+- `profile create --from-bench` reads the bench only: remote URLs without user info, current branches (the policy branch for a detached app, else the app is skipped with a warning), the base from `apps/frappe`'s version, the default site name and the scheduler choice. It writes no commits and nothing from `sites/` except that name; the written file is parsed back before it is offered, and an existing file is shown as a diff and backed up.
+- The format is the strict TOML subset of `lib/frappe-local/toml.sh`, shared with the lockfile: one parser, and a file this parser accepts is valid TOML. `schema = 1` is optional in a profile (written by `create`) and refused when it is another number.
+- `profile create` takes the checkout's lock like other writing commands; `profile list` and `show` do not.
+
+## 0.5: the team lockfile
+
+- The lockfile is an awk parsed TOML subset (`toml.sh`, shared with team profiles), not `tomllib`: the Command Line Tools' `/usr/bin/python3` is 3.9 without it, the bench's env Python is missing exactly when a check matters, doctor stays pure shell, and a fallback would mean two parsers that can disagree. Every refusal names the line (`benchbar.toml:3: not supported: inline tables`).
+- The code lives in `teamlock.sh`: `lock.sh` already is the checkout's run lock, and the two must not be confused.
+- Lookup is `--lock PATH`, `BENCHBAR_LOCK`, `LOCK_FILE` in the bench's own state file (`fl_bstate_set`, not the `<name>.env` of the design), then `<bench>/benchbar.toml`. A relative `--lock` is taken from the current folder when it exists there, else from the bench, so `--lock apps/acme/benchbar.toml` works from anywhere. The path is remembered by write, check and apply (not in a dry run); `BENCHBAR_LOCK` never is, and `list --json` ignores it since it names one bench, not all.
+- The app that holds the lockfile gets no `commit`: committing the lockfile moves that app's HEAD, so its pin would always be one commit behind and every teammate would see `commit_ahead`.
+- Frappe is an ordinary `[[app]]`: one code path, and the entry order is `apps.txt`'s, so `apply` clones in dependency order.
+- Repos compare as host and path (`git@github.com:acme/x.git` equals `https://github.com/acme/x`): teammates clone over SSH or HTTPS as they like. An SSH host alias from `~/.ssh/config` is not resolved and reads as another repo (a warning only).
+- `lock check` is read only and offline: git reads, `apps.txt`, and the site app cache that `app list` fills, so it works with MariaDB stopped. The one outside call is `bench --version` (15 seconds at most) for `bench_version_mismatch`; doctor's `lock_drift` leaves that kind out and calls nothing.
+- `app_missing` is the only `fail` level: the bench lacks code the team's sites need. Everything else is a warning, and doctor reports the whole lock as one `lock_drift` warning pointing at `lock check`.
+- Drift exits 1 like a failing doctor, through the dispatcher (`|| exit 1`), so `lock check --json` prints only the JSON.
+- `lock apply` stops at code: no `new-site`, `install-app`, `migrate` or `bench update`. Missing sites and site apps are printed as `benchbar site add` and `benchbar app install` lines, and a changed app ends with the reminder to migrate: site data is the user's to change.
+- A pinned commit is reached with `git merge --ff-only`, after `git fetch REMOTE SHA` when it is not local (protocol v2 serves any reachable commit), and `--unshallow` for a shallow clone as the fallback. The design's `fetch --depth 1 SHA` was dropped: a depth 1 fetch cuts the history between HEAD and the pin, so the fast forward check fails.
+- An app that is ahead of its pin, diverged from it, or dirty is skipped with a warning and apply still exits 0: local work outranks the lock, and a second apply must say `unchanged`, not fail forever.
+- A branch switch happens only on a clean tree: the locked branch is fetched into its remote tracking ref (`--depth 1` for a shallow clone), then checked out as the local branch when there is one, else created with `--track`. `checkout -B` is never used on an existing branch, since it would drop that branch's local commits.
+- A freshly cloned app whose branch tip is ahead of the pin is moved to the pin with `checkout -B BRANCH SHA`: the clone is seconds old and holds no local work, so this is not the reset the rules forbid.
+- Cloning goes through `app add`'s own steps (access check, `get-app --skip-assets`, the half clone rollback); `setup requirements --python` and `--node` run only for apps whose code changed in place (get-app already did it for new clones), and one `bench build --apps a,b` covers all of them.
+- `lock write` refreshes the site app lists from bench (it is the one lock command that may ask the database) and falls back to the cache with a warning. A dirty or detached app is refused unless `--allow-dirty`, which pins the commit as it is (a detached app then takes its policy branch).
+- The written file is parsed back before it is shown, so `write` can never produce a file `check` rejects.
+decisions of the app work live in `macos/DECISIONS.md`. The 0.5 and 0.4 runs come
 first, the 0.3 easy install run follows.
+
+## 0.5: benchbar pull
+
+Upstream facts behind the design, frappe `version-15` and `version-16` (the same in both), from the design notes:
+
+- F1 `frappe/commands/site.py` restore: `--encryption-key` is the gpg passphrase for `-enc` backup files, not the site `encryption_key`; without it restore reads `backup_encryption_key` from the site config (`get_or_generate_backup_encryption_key()` in `frappe/utils/backups.py`).
+- F2 `decrypt_backup` in `frappe/utils/backups.py` runs `gpg --yes --passphrase {passphrase} ...` in a shell, so the passphrase shows in the process list.
+- F3 `frappe/utils/password.py`: `get_encryption_key()` generates and saves a new key when `encryption_key` is missing, and `decrypt()` then fails with "Encryption key is invalid! Please check site_config.json". Restore never copies the key.
+- F4 `restore_backup` calls `_new_site(..., force=True)`: on an existing site it recreates the database; a fresh name is created with a generated `db_name` (`get_sites` in `frappe/utils/bench_helper.py` accepts any name).
+- F5 `_new_site` installs only frappe, `install_apps` and `--install-app`; restore never checks that the dumped apps exist on the bench.
+- F6 restore `--force` only skips the downgrade question and turns a missing `__Auth` into a warning; it does nothing for missing apps.
+- F7 `bench backup` calls `new_backup(force=True)`, which first runs `delete_temp_backups()` and removes files in `private/backups` older than `keep_backups_for_hours` (default 23).
+- F8 migrate's `pre_schema_updates` and `after_migrate` call `get_hooks(app_name=app)` for every installed app; `_load_app_hooks` re-raises `ImportError` for an app not on the bench. `remove-from-installed-apps` edits only the list.
+- F9 `are_emails_muted()` is `flags.mute_emails or cint(conf.get("mute_emails"))`; there is no `disable_email` key. The scheduler stops with `pause_scheduler` in the config or `disable-scheduler`.
+
+Decisions:
+
+- The default source is the latest existing backup: a plain pull writes nothing on the server.
+- `--new-backup` needs the production site name typed, even with `--yes`, because `bench backup` also deletes older backups (F7). Without a terminal the name comes from `--confirm-site SITE`, still typed by whoever runs the command; `--yes` alone never takes a backup.
+- Restore goes only into a new site name; `--replace` first runs `bench --site NAME backup --with-files` locally, because restore over an existing site recreates its database (F4).
+- The keys come from the live production `site_config.json`, read by a Python snippet on the server that prints only the one value asked for, not from the downloaded `site_config_backup.json` (the design): the database password and Redis settings of production never reach the Mac, and it also works when the config backup is encrypted. `--from-dir` has no server and reads the `site_config_backup.json` in the folder.
+- Only `encryption_key` is written into the new site (F3); `backup_encryption_key` is used only as the gpg passphrase (F1), so the copy's own backups are not encrypted with the production key.
+- The key flows through pipes only (ssh stdout into a Python snippet's stdin); it is never on a command line, in a shell variable, on disk outside `site_config.json`, in the output or in the log. The snippet writes the file the way `update_site_config` does (indent 1, sorted keys, temp file and rename) with plain Python, so it needs no frappe import and runs under the test mocks.
+- The MariaDB root password and the Administrator password reach frappe on stdin: a small wrapper reads the secret, puts it into `sys.argv` inside the process and calls `frappe.utils.bench_helper.main()`, which is what `bench` itself runs from `sites/`. The design passed `--db-root-password` on the command line (accepted in 0.3 for `new-site`); the wrapper keeps it out of `ps` at no cost. The option used is `--mariadb-root-password`, the spelling `new-site` already uses.
+- Encrypted backups are decrypted here with `gpg --batch --pinentry-mode loopback --passphrase-fd 0` (F2); gpg is needed only then, and a missing one stops before the download with `brew install gnupg`.
+- Restore `--force` is never passed: it does not help with missing apps (F6) and would hide a downgrade. Instead pull stops before the download when production frappe is newer than the bench's.
+- Missing apps stop the run before the download with the `bench get-app --branch B URL` commands (F5, F8). The design offered `benchbar app add`; that command is being built separately, so pull only prints the commands for now.
+- `--skip-app` runs `remove-from-installed-apps` and prints that its doctypes and tables stay as orphans (F8). frappe cannot be skipped.
+- Tokens in an app's git remote URL (`https://user:token@host/...`) are cut before the URL is shown or logged.
+- The production app list comes from the text form of `list-apps` (name, version, branch), parsed by its first columns; `--from-dir` reads the `installed_apps` global from the dump (`tabDefaultValue`, what `frappe.get_installed_apps()` reads), after decryption when the dump is encrypted.
+- Migrate runs when any app version differs from production, is unknown, or an app was skipped; the design ran it only when local code was newer, but an older local app with the same schema is the rare case and a needless migrate is cheap.
+- Email is muted (`mute_emails`), the scheduler paused (`pause_scheduler` and `disable-scheduler`) and `host_name` set before the first start (F9): a copy must never mail customers or poll inboxes. `--keep-scheduler` leaves the scheduler alone.
+- The Administrator password is reset only with `ADMIN_PASSWORD` or after a yes at the prompt; otherwise the production password keeps working. The design's `--admin-password-prompt` flag was left out: without `--yes` pull asks anyway.
+- A decrypt probe after the restore counts the encrypted `__Auth` rows that decrypt and that fail and prints only the counts, so a wrong key shows up at once, not at the first email sync.
+- Restore and migrate run with the bench's own Redis (`fl_bench_redis_up`, from `site add`): frappe v16 connects to it during site setup, and the code has moved on since the design.
+- The staging folder is `<bench>/.benchbar/pulls/<site>-<backup timestamp>/`, not `<timestamp of the run>`: a rerun of the same pull finds the partial files and resumes. It is mode 0700, removed file by file after a successful run, kept after a failed one.
+- rsync gets `--partial --append-verify --info=progress2` only when the local rsync is 3.x; macOS ships openrsync (2.6.9 compatible), which has neither, so it gets `--partial --progress`, and the partial file is the basis of the next transfer. `scp` is used when the server has no rsync; it cannot resume.
+- A file whose local size already matches the server's is not downloaded again.
+- The free space check wants 3x the backup (download, decrypted copy or database, extracted files) on the bench's volume, before any transfer.
+- SSH settings come only from `~/.ssh/config` (ProxyJump, keys, ports); benchbar adds `BatchMode=yes` under `--yes` or `--json` and one control connection (`ControlMaster=auto`, `ControlPersist=60`) closed with `-O exit` when the run ends. Its socket is in `/tmp/benchbar-ssh.XXXXXX`, because socket paths are limited to 104 bytes and bench paths can be long.
+- The host must look like a Host alias (`[A-Za-z0-9@._-]`, not starting with `-`) and every remote word is single quoted, so no argument becomes an ssh option or remote shell code.
+- Remote commands are an allowlist (the site check, `list-apps`, `git rev-parse` and `remote get-url`, `ls`, `wc -c`, the key read, `command -v rsync`, and `bench backup` after the gate); the test fails on anything else.
+- Remote frappe runs through `env/bin/python -m frappe.utils.bench_helper` from `sites/`: non login SSH shells often lack `bench` on PATH.
+- `pull --json` streams one object per line on stdout and moves every human line to stderr; `done` is always the last line, written by the exit handler after a refusal or a failure too.
+- Only the source (`PULL_SOURCE`) and the remote bench are remembered, per bench, so `benchbar pull` alone repeats the last pull; no password is stored.
+- test-pull fails first when an ssh, rsync, scp, gpg or df mock is not the first one on PATH: during development a mock that was not yet executable let `/usr/bin/ssh` look up the host `prod`, which did not resolve, so nothing connected.
 
 ## 0.4: roadmap
 
@@ -110,6 +219,29 @@ Checked in frappe `version-16` at 012667b and bench `develop` at c9d1250 (Septem
 ## 0.4: python formula check
 
 - `python_leaves` asks `brew list --formula --installed-on-request`, not `brew leaves`: on the real Mac `python@3.14` was installed on request (and `brew tab` set it again), but pipx, uv and ollama depend on it, and `brew leaves` hides every formula another formula depends on, so the check could never pass. What protects a formula from `brew autoremove` is "installed on request", which is what the check now reads.
+## 0.5: benchbar mcp
+
+- The server is stdlib only Python 3.9 (`lib/frappe-local/mcp.py`), run with whatever `python3` is on PATH: the Command Line Tools' 3.9 is enough, so CLI only users need nothing new. The Swift MCP SDK would tie it to the app.
+- Every tool shells out to `benchbar ... --json` and returns its output as text and as `structuredContent`; the server holds no bench logic. Actions (`up`, `down`, `restart`) return their text output plus a fresh `status --json`, so an agent sees the outcome without a second call.
+- No repair, install, service, site add or anything with sudo behind a tool: those change files or need a password, and belong in a terminal with the user. Read tools carry `readOnlyHint: true`, actions `false`.
+- stdin of every CLI call is closed, so a question (a port clash on `up`) is answered no instead of hanging the session; one bad message gets a JSON-RPC error and the session goes on.
+- Protocol versions 2025-06-18, 2025-03-26 and 2024-11-05 are accepted as asked; anything else gets 2025-06-18. The transport is newline delimited JSON on stdio, as the spec says for stdio.
+- `logs --json` exists for `benchbar_logs_tail`: the brief keeps the server free of logic, so the process filter (honcho's `HH:MM:SS name.N |` prefix, with unprefixed lines such as tracebacks kept under their process) lives in the CLI. `fl_json_escape` now drops control characters, since log lines may carry terminal colors.
+## 0.5: repair --json
+
+- The events go to fd 3 (the command's stdout) and every human line to the run's log: the engine prints with the same helpers as always, so the text and the JSON can never disagree, and the log keeps the full story for a failed step.
+- Without `--yes` a JSON run applies nothing: the confirmation would be invisible, so stdin is closed and the plan is answered no (plan, then done with 1). The app shows the plan from `--dry-run --json`, asks, and then passes `--yes`.
+- `sudo` actions are marked in the plan (`"sudo": true`): without a terminal they are skipped with their manual command as the message, which the app shows as "run in Terminal".
+- A step's message is its own last `[FAIL]` line, else its `[WARN]` line, from the log lines written during the step; the step summary line is ignored.
+
+## 0.5: local review before the pull request
+
+- `bench new-site` gets both passwords on stdin, not in its arguments: the bench's own Python reads them and swaps `@secret0@`, `@secret1@` in its argv before handing over to frappe's `bench_helper`, so the passwords never appear in `ps` or the run log.
+- Every `git ls-remote` puts `--` before the repository, and a profile or lockfile entry whose repo, branch, commit or name starts with `-` is refused: a team file must not be able to pass git an option.
+- `app list --json` on a bench without sites reads its cache with `grep ... || true`, so pipefail does not end the run.
+- `benchbar mcp` answers a message that is not an object with -32600 and parameters that are not objects with -32602, and keeps the session going.
+- The app's repair sheet applies stream events on the main actor in order, through one `AsyncStream`, so a late step event can never overwrite a failed run.
+- Codex on the pull request: `app update` refuses to run when any site's `list-apps` fails, since a stale list could skip a site's backup or migrate. `pull` into a running bench sets `pause_scheduler` in `common_site_config.json` before the restore and removes it once the copy has its own `pause_scheduler` and `mute_emails`, so the bench's scheduler never sees the production copy unguarded; a bench already paused by hand is left alone, and a pull that stops halfway leaves the bench paused and says how to resume. The test runner kills a timed out test's whole process tree, collected before anything dies.
 
 # The easy install run (v0.3)
 
@@ -212,3 +344,19 @@ Checked in frappe `version-16` at 012667b and bench `develop` at c9d1250 (Septem
 - `install.sh --uninstall --dry-run` ended with "BenchBar removed": the uninstall summary has its own dry-run branch now, and `quit_app` prints what it would do instead of hiding the line behind the redirected `osascript`.
 - The Gatekeeper dialog for a quarantined ad hoc build reads "BenchBar" Not Opened, Apple could not verify it is free of malware, with Done and Move to Trash (Move to Bin in British English) where Move to Trash is the highlighted default. README says so. The System Settings steps were not clicked: Open Anyway changes a security setting, which the brief reserves for the user.
 - `fl_password_generate` and the sudo keepalive were exercised on macOS `/bin/bash` 3.2: the generator returns 24 characters at once, also with SIGPIPE ignored, and 4 KB of urandom never yields fewer than about 900 usable characters; a captured `fl_sudo_begin` returns immediately and its keepalive exits within one five second slice of the parent leaving.
+
+## CI speed
+
+Measured on five PR runs (September 2026): 11 to 14 minutes wall clock, all of it the macOS CLI job (10.7 to 13.5 min; its test step 605 to 763s). Linux CLI took 7.5 to 8.8 min, the app job 1.4 to 1.7 min, the release bundle 1.2 to 1.8 min after it, v16 0.3 to 0.7 min, shellcheck 22 to 32s, `brew install` 2 to 4s (bottle cache hits), DerivedData restores from its restore key in about 5s.
+
+- `tests/run-tests.sh` runs the test files in a bash 3.2 worker pool, `PARALLEL` at a time (default: the CPU count), output buffered per test and printed whole in list order, the ten minute deadline kept per test (polled every 0.2s instead of 1s), and every failure reported at the end instead of stopping at the first: the files were already independent (each builds its own HOME and mock state under mktemp; the real `ps` fallback only reads, the mocks only read from the checkout). Local, this Mac: 512s one at a time, 233s with 3, 113s with 10.
+- The deadline's process dump lists only the stuck test's process tree: with tests side by side, the old `ps | grep tests/` would name every running test.
+- The list is ordered longest first by measured time and a test file missing from it fails the run: the pool then never waits on a slow test started last, and a new file cannot be silently skipped.
+- `SHARD=i/n` takes every nth test of that list: shards are balanced by construction (local, 3 workers each: 75s, 65s, 70s).
+- The macOS CLI job is a matrix of three shards, each running its share 3 at a time (macos-latest has 3 CPUs): the 11 minute test step should drop to about 2 minutes per shard. Three shards plus the app job stay under the five concurrent macOS jobs of the free plan.
+- shellcheck runs as one more pool job in shard 1 (and on Linux), over the full file list the CI step had (`scripts/*.sh` and `install.sh` included): it overlaps the tests instead of adding 25s in front of them, and needs no extra runner.
+- The separate v16 job is gone: `run-tests.sh` has run `test-profile-v16.sh` since 4d666ee, so it ran twice per PR.
+- The release bundle is built in the app job (`release-local.sh --skip-tests` replaces the plain Release build step, then the Swift tests run on the warm DerivedData): its Release build is a superset of the old unsigned build (it also signs ad hoc and verifies), and it saves a second runner, Xcode selection, XcodeGen install, cache restore and a full Release build (about 1.5 min on the critical path), while still producing the bundle on every PR.
+- The Linux job is gone (Akash, 0.5 pull request): BenchBar only runs on macOS, the macOS shards already run the suite on the `/bin/bash` 3.2 users have, and the Linux job was the slowest one left (4.5 minutes) while only ever finding GNU tool differences no user hits. The suite still aims to run on Linux for a Linux dev container, without a CI guarantee.
+- `brew install` is skipped when the tool is already on the runner, and the Homebrew and DerivedData caches stay as they were: both already hit (restore key for DerivedData, which is expected when sources change).
+- Estimate after: about 3 to 4 minutes wall clock per PR, bounded by the slowest shard. First run on the 0.5 pull request: shards 2m28s to 3m50s, the app job 1m50s.

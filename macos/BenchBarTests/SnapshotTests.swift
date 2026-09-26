@@ -57,6 +57,94 @@ struct SnapshotTests {
         try render(PopoverView(store: store, commands: AppCommands()), "popover-two-benches")
     }
 
+    @Test func logWindow() async throws {
+        let bench = base.dir.url.appendingPathComponent("frappe-bench")
+        try FileManager.default.createDirectory(at: bench.appendingPathComponent("logs"), withIntermediateDirectories: true)
+        let log = """
+        10:00:01 system      | redis_cache.1 started (pid=4101)
+        10:00:01 redis_cache.1 | Ready to accept connections tcp
+        10:00:02 web.1       | * Running on http://127.0.0.1:8000
+        10:00:03 socketio.1  | Realtime service listening on: ws://0.0.0.0:9000
+        10:00:05 web.1       | 127.0.0.1 - - "GET /api/method/ping HTTP/1.1" 200 -
+        10:00:09 worker.1    | 10:00:09 default: frappe.utils.background_jobs.run_doc_method (job-1)
+        10:00:12 web.1       | Traceback (most recent call last):
+          File "apps/frappe/frappe/app.py", line 115, in application
+            response = frappe.api.handle(request)
+        frappe.exceptions.ValidationError: Customer Name is mandatory
+        10:00:13 web.1       | 127.0.0.1 - - "POST /api/resource/Customer HTTP/1.1" 417 -
+        10:00:15 worker.1    | 10:00:15 default: Job OK (job-1)
+
+        """
+        try Data(log.utf8).write(to: bench.appendingPathComponent("logs/bench.log"))
+        let model = LogViewModel(benchName: "frappe-bench", benchPath: bench.path)
+        model.start()
+        model.query.search = "customer"
+        try render(LogView(model: model, openInTerminal: {}).frame(width: 860, height: 400), "log-window")
+        model.stop()
+    }
+
+    // MARK: the BenchBar window
+
+    private func windowStore() async throws -> BenchStore {
+        let v15 = "/Users/you/frappe-bench"
+        base.cli.answer("list", json: try Fixture.string("list-two-benches"))
+        base.cli.answer("status", bench: v15, json: #"{"schema_version":1,"bench":"\#(v15)","state":"running","stop_reason":null,"pid":4242,"started_at":"2026-09-26T01:00:00Z","last_exit_code":null,"web_url":"http://macdev:8000","web_ping_code":200,"scheduler":false}"#)
+        base.cli.answer("status", bench: "/Users/you/dev/v16-bench", json: try Fixture.string("status-v16-two-sites"))
+        base.cli.answer("app", json: try Fixture.string("app-list"))
+        base.cli.answer("profile", json: try Fixture.string("profile-list"))
+        base.cli.answer("doctor", json: try Fixture.string("doctor"))
+        let store = base.makeStore()
+        await store.start(polling: false)
+        return store
+    }
+
+    private func window(_ store: BenchStore, _ workbench: Workbench, _ router: WindowRouter) -> some View {
+        MainWindowView(store: store, router: router, workbench: workbench) { part in
+            SettingsView(settings: base.settings, store: store, library: RunnerLibrary(folder: base.dir.url.appendingPathComponent("Runners")),
+                         launchAtLogin: LaunchAtLogin(), notifier: Notifier(settings: base.settings), part: part, chooseCLI: {})
+        }
+        .frame(width: 900, height: 620)
+    }
+
+    @Test func windowBenchApps() async throws {
+        let store = try await windowStore()
+        let workbench = Workbench(store: store)
+        let bench = try #require(store.benches.last)
+        await workbench.loadApps(bench)
+        let router = WindowRouter()
+        router.show(bench: bench.path, tab: .apps)
+        try render(window(store, workbench, router), "window-apps")
+        router.benchTab = .sites
+        try render(window(store, workbench, router), "window-sites")
+        router.benchTab = .overview
+        try render(window(store, workbench, router), "window-overview")
+    }
+
+    @Test func windowProfilesAndGeneral() async throws {
+        let store = try await windowStore()
+        let workbench = Workbench(store: store)
+        await workbench.loadProfiles()
+        let router = WindowRouter()
+        router.pane = .profiles
+        try render(window(store, workbench, router), "window-profiles")
+        router.pane = .general
+        try render(window(store, workbench, router), "window-general")
+    }
+
+    @Test func repairSheetWhileRunning() async throws {
+        let store = try await windowStore()
+        let bench = try #require(store.benches.last)
+        base.cli.answer("repair", json: #"{"event":"plan","actions":[{"id":"node_requirements","label":"bench setup requirements --node","fixes":["socket.io module"],"sudo":false},{"id":"build","label":"bench build","fixes":["Built assets"],"sudo":false},{"id":"hosts_entry","label":"add v16two to /etc/hosts (sudo)","fixes":["/etc/hosts entry"],"sudo":true}],"log":null}"#)
+        let run = RepairRun(bench: bench, store: store)
+        await run.loadPlan()
+        try render(RepairSheet(run: run, close: {}), "repair-plan")
+        run.apply(.step(action: "node_requirements", status: "done", message: "bench setup requirements --node"))
+        run.apply(.step(action: "build", status: "failed", message: "[FAIL] bench build failed (exit 1): see the log"))
+        run.apply(.step(action: "hosts_entry", status: "skipped", message: "[WARN] skipped without sudo; run: printf '127.0.0.1 v16two' | sudo tee -a /etc/hosts"))
+        run.apply(.done(exitCode: 1, log: "/Users/you/.local/share/benchbar/.benchbar/logs/20260926-101500.log"))
+        try render(RepairSheet(run: run, close: {}), "repair-finished")
+    }
+
     @Test func popoverCLIMissing() async throws {
         base.settings.cliPath = ""
         let store = base.makeStore()
