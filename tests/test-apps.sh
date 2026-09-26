@@ -45,7 +45,7 @@ assert_eq "$snap" "$(snapshot "$BENCH" "$FL_STATE_DIR")" "(dry run writes nothin
 reset_calls
 run_fm app add acme_crm --site macdev --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
-assert_calls_contain "^git ls-remote --exit-code --heads --tags file://${REMOTES}/acme_crm.git main$"
+assert_calls_contain "^git ls-remote --exit-code --heads --tags -- file://${REMOTES}/acme_crm.git main$"
 assert_calls_contain "^bench get-app --skip-assets --branch main file://${REMOTES}/acme_crm.git$"
 assert_calls_not_contain 'get-app.*(--overwrite|--resolve-deps)'
 assert_calls_contain '^bench --site macdev install-app acme_crm$'
@@ -280,5 +280,14 @@ assert_eq "None" "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["i
 sed_inplace '/^ghost$/d' "$BENCH/sites/apps.txt"
 run_fm doctor --json --bench-dir "$BENCH"
 assert_contains "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"]=="apps_txt"][0]["message"]')" "apps/stray is a git app that is not in sites/apps.txt"
+
+# ---- a bench with no site: the site cache holds only @ lines, and app list still works (twice)
+NOSITE="$HOME/nosite-bench"
+make_fake_bench "$NOSITE" gone
+rm -rf "$NOSITE/sites/gone"
+run_fm app list --json --bench-dir "$NOSITE"
+assert_eq "0" "$CODE" "$OUT"
+run_fm app list --json --bench-dir "$NOSITE"
+assert_eq "0" "$CODE" "(the second run reads a cache with only @ lines) $OUT"
 
 printf 'test-apps: ok\n'

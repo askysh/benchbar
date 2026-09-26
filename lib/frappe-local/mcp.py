@@ -125,6 +125,8 @@ def tool_list():
 def tool_call(params):
     name = params.get("name")
     arguments = params.get("arguments") or {}
+    if not isinstance(arguments, dict):
+        raise RpcError(-32602, "arguments must be an object")
     if name not in TOOLS:
         raise RpcError(-32602, "unknown tool: %s" % name)
     _description, props, build, read_only, codes = TOOLS[name]
@@ -175,6 +177,8 @@ class RpcError(Exception):
 def handle(msg):
     method = msg.get("method")
     params = msg.get("params") or {}
+    if not isinstance(params, dict):
+        raise RpcError(-32602, "params must be an object")
     if method == "initialize":
         asked = params.get("protocolVersion")
         return {
@@ -204,6 +208,11 @@ def main():
             msg = json.loads(line)
         except ValueError:
             out.write(json.dumps({"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "parse error"}}) + "\n")
+            out.flush()
+            continue
+        if not isinstance(msg, dict):
+            # valid JSON that is not a request object ("5", a list): answer, keep going
+            out.write(json.dumps({"jsonrpc": "2.0", "id": None, "error": {"code": -32600, "message": "invalid request"}}) + "\n")
             out.flush()
             continue
         if "id" not in msg:

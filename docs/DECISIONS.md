@@ -234,6 +234,14 @@ Checked in frappe `version-16` at 012667b and bench `develop` at c9d1250 (Septem
 - `sudo` actions are marked in the plan (`"sudo": true`): without a terminal they are skipped with their manual command as the message, which the app shows as "run in Terminal".
 - A step's message is its own last `[FAIL]` line, else its `[WARN]` line, from the log lines written during the step; the step summary line is ignored.
 
+## 0.5: local review before the pull request
+
+- `bench new-site` gets both passwords on stdin, not in its arguments: the bench's own Python reads them and swaps `@secret0@`, `@secret1@` in its argv before handing over to frappe's `bench_helper`, so the passwords never appear in `ps` or the run log.
+- Every `git ls-remote` puts `--` before the repository, and a profile or lockfile entry whose repo, branch, commit or name starts with `-` is refused: a team file must not be able to pass git an option.
+- `app list --json` on a bench without sites reads its cache with `grep ... || true`, so pipefail does not end the run.
+- `benchbar mcp` answers a message that is not an object with -32600 and parameters that are not objects with -32602, and keeps the session going.
+- The app's repair sheet applies stream events on the main actor in order, through one `AsyncStream`, so a late step event can never overwrite a failed run.
+
 # The easy install run (v0.3)
 
 ## Setup and environment

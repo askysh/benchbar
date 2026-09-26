@@ -70,6 +70,14 @@ run_fm profile show broken
 assert_eq "1" "$CODE"; assert_contains "$OUT" "inline tables"
 run_fm profile show nosuch
 assert_eq "1" "$CODE"; assert_contains "$OUT" "No profile 'nosuch'"
+# a repo git would read as an option (it runs a command) is refused before git sees it
+printf 'base = "v15-lts"\n\n[[apps]]\nname = "evil"\nrepo = "--upload-pack=touch %s/PWNED;git-upload-pack"\nbranch = "."\n' "$TMP_DIR" >"$USER_DIR/evil.toml"
+run_fm profile show evil
+assert_eq "1" "$CODE"
+assert_contains "$OUT" '"repo" must not start with "-"'
+run_fm install --profile evil --dry-run --bench-dir "$HOME/evil-bench"
+assert_no_file "$TMP_DIR/PWNED" "(no command from a profile file ever runs)"
+rm "$USER_DIR/evil.toml"
 # a built in name always means the built in profile
 run_fm profile show v15-lts
 assert_contains "$OUT" "v15-lts (built in)"
@@ -101,7 +109,7 @@ assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "acme (team, on v15-lts)"
 assert_contains "$OUT" "Team profile: acme"
 assert_calls_contain "^bench init ${BENCH} --frappe-branch version-15 --python "
-assert_calls_contain "^git ls-remote --exit-code --heads --tags file://${REMOTES}/acme_crm.git main$"
+assert_calls_contain "^git ls-remote --exit-code --heads --tags -- file://${REMOTES}/acme_crm.git main$"
 assert_calls_contain "^bench get-app --branch main file://${REMOTES}/acme_crm.git$"
 assert_calls_contain "^bench get-app --branch version-15 file://${REMOTES}/acme_tools.git$"
 assert_calls_contain "checkout ${PIN}$"

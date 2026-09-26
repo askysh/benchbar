@@ -203,6 +203,34 @@ fl_bench_redis_down() {
   return 0
 }
 
+# frappe's own command line (what "bench new-site" runs), started inside
+# the bench's Python with the secrets read from stdin, one per line, and put
+# in place of @secret0@, @secret1@ ... only inside that process. So no
+# password is ever on a command line (ps), in the run log or in an error
+# message. The same approach as benchbar pull's restore.
+FL_PY_FRAPPE_SECRETS='import sys
+secrets = [line.rstrip("\n") for line in sys.stdin]
+def fill(arg):
+    if arg.startswith("@secret") and arg.endswith("@"):
+        return secrets[int(arg[7:-1])]
+    return arg
+sys.argv = ["bench_helper"] + [fill(a) for a in sys.argv[2:]]
+from frappe.utils.bench_helper import main
+main()'
+
+# fl__frappe_with_secrets BENCH_DIR VAR... -- ARGS...: frappe ARGS in the bench,
+# with the values of the named variables on stdin (names, never values, are
+# arguments here, since fl_run_long logs its arguments).
+fl__frappe_with_secrets() {
+  local bench_dir="$1" var
+  shift
+  local names=()
+  while [[ "$#" -gt 0 && "$1" != "--" ]]; do names+=("$1"); shift; done
+  shift
+  for var in "${names[@]}"; do printf '%s\n' "${!var}"; done |
+    fl__in_dir "${bench_dir}/sites" "${bench_dir}/env/bin/python" -c "$FL_PY_FRAPPE_SECRETS" benchbar-secrets frappe "$@"
+}
+
 fl_new_site_if_needed() {
   local bench_dir="$1" site_name="$2" db_password="$3" admin_password="$4"
   fl_section "CREATE SITE"
@@ -217,11 +245,14 @@ fl_new_site_if_needed() {
   # calls --no-mariadb-socket deprecated; v15 knows only the old flag
   local scope="--no-mariadb-socket"
   [[ "$(fl_profile_major)" -ge 16 ]] && scope="--mariadb-user-host-login-scope=%"
-  fl_bench_run_long "bench new-site ${site_name}" "$bench_dir" bench new-site "$site_name" \
-    --mariadb-root-password "$db_password" \
-    --admin-password "$admin_password" \
-    "$scope" \
-    || fl_die "bench new-site failed." "Manual command: cd ${bench_dir} && bench new-site ${site_name} ${scope}"
+  # the passwords travel on stdin (see FL_PY_FRAPPE_SECRETS), never as
+  # arguments; plain shell variables (not exported), cleared right after
+  local code=0
+  FL__DB_PW="$db_password"; FL__ADMIN_PW="$admin_password"
+  fl_run_long "bench new-site ${site_name}" fl__frappe_with_secrets "$bench_dir" FL__DB_PW FL__ADMIN_PW -- \
+    new-site "$site_name" --mariadb-root-password @secret0@ --admin-password @secret1@ "$scope" || code=$?
+  FL__DB_PW=""; FL__ADMIN_PW=""
+  [[ "$code" == "0" ]] || fl_die "bench new-site failed." "Manual command: cd ${bench_dir} && bench new-site ${site_name} ${scope}   (it asks for both passwords)"
   fl_state_set SITE_CREATED yes
 }
 

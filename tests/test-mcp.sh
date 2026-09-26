@@ -37,12 +37,14 @@ REPLIES="$(mcp \
   '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"benchbar_logs_tail","arguments":{"bench":"'"$BENCH"'","lines":2,"process":"web"}}}' \
   '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"benchbar_repair","arguments":{}}}' \
   'not json' \
+  '5' \
+  '{"jsonrpc":"2.0","id":7,"method":"tools/list","params":"x"}' \
   '{"jsonrpc":"2.0","id":6,"method":"ping"}')"
 printf '%s\n' "$REPLIES" | python3 -c '
 import json, sys
 r = [json.loads(l) for l in sys.stdin if l.strip()]
 by = {m.get("id"): m for m in r}
-assert len(r) == 7, r                                   # the notification got no reply
+assert len(r) == 9, r                                   # the notification got no reply
 i = by[1]["result"]
 assert i["protocolVersion"] == "2025-06-18" and i["serverInfo"]["name"] == "benchbar", i
 names = [t["name"] for t in by[2]["result"]["tools"]]
@@ -55,7 +57,9 @@ assert not lst["isError"] and lst["structuredContent"]["benches"][0]["name"] == 
 logs = by[4]["result"]["structuredContent"]
 assert logs["process"] == "web" and len(logs["lines"]) == 2, logs
 assert by[5]["error"]["code"] == -32602, by[5]           # no repair tool
-assert by[None]["error"]["code"] == -32700               # a bad line does not end the session
+nulls = sorted(m["error"]["code"] for m in r if m.get("id") is None)
+assert nulls == [-32700, -32600], nulls                  # bad lines are answered, the session goes on
+assert by[7]["error"]["code"] == -32602, by[7]
 assert by[6]["result"] == {}
 ' || fail "MCP replies: $REPLIES"
 

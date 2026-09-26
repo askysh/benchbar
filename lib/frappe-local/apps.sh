@@ -195,7 +195,9 @@ fl_site_apps_refresh() {
   done
   # sites not asked this time keep their line
   if [[ -f "$file" ]]; then
-    grep -v '^@' "$file" 2>/dev/null | while read -r s apps; do
+    # a cache with only @ lines (no site yet, or every read failed) is fine:
+    # grep finding nothing must not end the run under pipefail
+    { grep -v '^@' "$file" 2>/dev/null || true; } | while read -r s apps; do
       case " ${sites[*]:-} " in *" $s "*) ;; *) printf '%s %s\n' "$s" "$apps" ;; esac
     done >>"$tmp"
   fi
@@ -345,7 +347,7 @@ fl_repo_access_hint() {
 
 # fl_repo_default_branch REPO: the remote's HEAD branch, or nothing
 fl_repo_default_branch() {
-  fl_git_batch ls-remote --symref "$1" HEAD 2>/dev/null | sed -n 's#^ref: refs/heads/\([^[:space:]]*\)[[:space:]]*HEAD$#\1#p' | head -n1
+  fl_git_batch ls-remote --symref -- "$1" HEAD 2>/dev/null | sed -n 's#^ref: refs/heads/\([^[:space:]]*\)[[:space:]]*HEAD$#\1#p' | head -n1
 }
 
 # fl_repo_preflight REPO BRANCH: 0 when the branch (or tag) exists and the
@@ -353,12 +355,12 @@ fl_repo_default_branch() {
 fl_repo_preflight() {
   local repo="$1" branch="$2" code=0 err heads
   err="$(mktemp "${TMPDIR:-/tmp}/benchbar-lsremote.XXXXXX")"
-  fl_git_batch ls-remote --exit-code --heads --tags "$repo" "$branch" >/dev/null 2>"$err" || code=$?
+  fl_git_batch ls-remote --exit-code --heads --tags -- "$repo" "$branch" >/dev/null 2>"$err" || code=$?
   fl_log_file_append "$err"
   if [[ "$code" == "0" ]]; then rm -f "$err"; return 0; fi
   if [[ "$code" == "2" ]]; then
     rm -f "$err"
-    heads="$(fl_git_batch ls-remote --heads "$repo" 2>/dev/null | sed 's#.*refs/heads/##' | head -n 20 | tr '\n' ' ')"
+    heads="$(fl_git_batch ls-remote --heads -- "$repo" 2>/dev/null | sed 's#.*refs/heads/##' | head -n 20 | tr '\n' ' ')"
     fl_fail "branch ${branch} not found in ${repo}"
     fl_note "remote branches: ${heads:-none}"
     fl_fix "pass one of them with --branch"

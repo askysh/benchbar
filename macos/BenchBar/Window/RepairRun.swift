@@ -49,19 +49,25 @@ final class RepairRun {
         }
     }
 
-    /// The user said yes to the plan.
+    /// The user said yes to the plan. Events arrive on the subprocess's
+    /// thread; they go through one stream that is drained on the main actor
+    /// before the phase settles, so every step lands, in order, and a late
+    /// event never overwrites the final state.
     func run() async {
         guard phase == .review else { return }
         phase = .running
+        let (events, continuation) = AsyncStream<RepairEvent>.makeStream()
+        let consumer = Task { @MainActor in
+            for await event in events { self.apply(event) }
+        }
         var exit: Int32 = 1
         let error = await store.runChange("Repair", on: bench) { client throws(CLIError) in
-            exit = try await client.repair(bench: bench.path) { event in
-                Task { @MainActor in self.apply(event) }
-            }
+            defer { continuation.finish() }
+            exit = try await client.repair(bench: bench.path) { event in continuation.yield(event) }
         }
-        // let the last events land before the phase settles
-        await Task.yield()
-        if let error, phase == .running {
+        continuation.finish()
+        await consumer.value
+        if let error {
             phase = .failed(error)
         } else if phase == .running {
             phase = .finished(exitCode: Int(exit))

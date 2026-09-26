@@ -148,12 +148,27 @@ struct WorkbenchTests {
         {"event":"done","exit_code":0,"log":"/logs/r.log"}
         """)
         await run.run()
-        for _ in 0..<20 { await Task.yield() }
+        // no waiting: every event is applied before run() returns
         #expect(base.cli.calls.contains(["repair", "--yes", "--json", "--bench-dir", v16]))
         #expect(run.steps.map(\.status) == ["done", "skipped"])
         #expect(run.steps[1].message.contains("sudo"))
         #expect(run.phase == .finished(exitCode: 0) && run.log == "/logs/r.log")
         #expect(bench.activity == nil)
+    }
+
+    @Test func aFailedRunIsNotOverwrittenByItsEvents() async throws {
+        let (store, _) = try await store()
+        let bench = try #require(store.benches.first { $0.path == v16 })
+        base.cli.answer("doctor", json: try Fixture.string("doctor"))
+        base.cli.answer("repair", json: #"{"event":"plan","actions":[{"id":"build","label":"bench build","fixes":[],"sudo":false}],"log":null}"#)
+        let run = RepairRun(bench: bench, store: store)
+        await run.loadPlan()
+        // the run prints a step, then the CLI fails (exit 1 is not accepted by runChange's stream? it is: the error comes from the lock)
+        let other = try #require(store.benches.first { $0.path != v16 })
+        other.activity = "Something else"
+        await run.run()
+        guard case .failed = run.phase else { Issue.record("expected failed, got \(run.phase)"); return }
+        other.activity = nil
     }
 
     @Test func aPlanThatCannotBeReadFails() async throws {

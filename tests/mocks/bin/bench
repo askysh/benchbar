@@ -7,7 +7,8 @@ mock_log "$@"
 case "$1" in
   version) printf 'erpnext 15.0.0\nfrappe 15.0.0\n'; exit 0 ;;
   init)
-    mkdir -p "$2/apps/frappe" "$2/env" "$2/sites" "$2/config"
+    mkdir -p "$2/apps/frappe" "$2/env/bin" "$2/sites" "$2/config"
+    cp "$(dirname "$0")/../env-python" "$2/env/bin/python"; chmod +x "$2/env/bin/python"
     printf 'port 11000\n' >"$2/config/redis_queue.conf"; printf 'port 13000\n' >"$2/config/redis_cache.conf"
     touch "$2/sites/apps.txt"; exit 0 ;;
   --version) [[ -n "${MOCK_BENCH_VERSION:-}" ]] && printf '%s\n' "$MOCK_BENCH_VERSION"; exit 0 ;;

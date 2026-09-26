@@ -113,7 +113,7 @@ fl_list_profiles() {
 fl_repo_ref_exists() {
   local repo="$1" ref="$2"
   # never a prompt: a private repo without a key or token fails at once
-  env GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes' git ls-remote --exit-code --heads --tags "$repo" "$ref" >/dev/null 2>&1
+  env GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes' git ls-remote --exit-code --heads --tags -- "$repo" "$ref" >/dev/null 2>&1
 }
 
 fl_validate_custom_commit() {

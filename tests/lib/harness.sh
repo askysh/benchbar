@@ -150,14 +150,7 @@ JSON
 make_fake_env_python() {
   local dir="$1"
   mkdir -p "$dir/env/bin"
-  cat >"$dir/env/bin/python" <<'PY'
-#!/bin/bash
-case "$*" in
-  *version_info*) echo "3.11" ;;
-  --version) echo "Python 3.11.9" ;;
-  *) exit 0 ;;
-esac
-PY
+  cp "$ROOT/tests/mocks/env-python" "$dir/env/bin/python"
   chmod +x "$dir/env/bin/python"
 }
 
