@@ -57,13 +57,19 @@ extension View {
         }
     }
 
-    /// A row of page tabs: the macOS 27 tab picker, segmented before.
+    /// A row of page tabs: the macOS 27 tab picker, segmented before. The
+    /// compiler check keeps the build working with Xcode 26 (the CI
+    /// runners), whose SDK has no .tabs; #available alone is a run time check.
     @ViewBuilder func pageTabs() -> some View {
+        #if compiler(>=6.4)
         if #available(macOS 27, *) {
             pickerStyle(.tabs)
         } else {
             pickerStyle(.segmented)
         }
+        #else
+        pickerStyle(.segmented)
+        #endif
     }
 }
 

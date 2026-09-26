@@ -195,6 +195,7 @@ Asked for after the phases, to stop naming drift before the first release.
 ## 0.5: finishing the window, the icon
 
 - The icon is an Icon Composer `.icon` (Xcode 27 compiles it to `Assets.car` and `AppIcon.icns`, Liquid Glass on macOS 26 and later, a flat render before). Its layers are SVGs drawn by `scripts/app-icon.py` from the same geometry as the menu bar runner, so the icon and the runner are one character; `icon.json` holds the gradient and the glass. XcodeGen adds the `.icon` as one file (`type: file`), or it would copy the SVGs as loose resources.
+- `.tabs` is also behind `#if compiler(>=6.4)`: the GitHub runners build with Xcode 26.6, whose SDK does not have it, and `#available` is only a run time check. A release built there shows segmented tabs on macOS 27 until the runners get Xcode 27; everything else in the new look needs only the macOS 26 SDK.
 - macOS 27's `.pickerStyle(.tabs)` for the bench tabs and macOS 26's `.glassProminent` for each pane's main action, behind `#available` with the segmented and bordered styles before: the deployment target stays macOS 14, the testers are on 27.
 - Every pane starts with a `PaneHeader` (a tinted symbol tile, the name, one line on what it is for), like System Settings; explanations moved from inline captions to section footers.
 - `NSHostingController.sizingOptions = [.minSize]`: the default also follows each pane's ideal size, and the window jumped to 1285 points wide on General.
