@@ -6,6 +6,8 @@ struct AppCommands {
     var quit: () -> Void = {}
     var chooseCLI: () -> Void = {}
     var openLogs: (BenchModel) -> Void = { _ in }
+    /// The BenchBar window at a bench's tab (true: open the Repair sheet too).
+    var manage: (BenchModel, BenchTab, Bool) -> Void = { _, _, _ in }
 }
 
 /// The popover under the menu bar runner.
@@ -77,7 +79,7 @@ struct BenchPanel: View {
         var cliReady = false
         if case .ready = store.cli { cliReady = true }
         return .make(state: bench.state, reason: bench.machine.stopReason, pending: bench.pending,
-                     needsService: bench.needsService, cliReady: cliReady, otherWork: bench.isChangingScheduler || store.waitsForOtherBench(bench))
+                     needsService: bench.needsService, cliReady: cliReady, otherWork: bench.isChangingScheduler || bench.activity != nil || store.waitsForOtherBench(bench))
     }
 
     var body: some View {
@@ -93,10 +95,12 @@ struct BenchPanel: View {
                     .keyboardShortcut("l", modifiers: .command)
                 RowButton("Open bench folder", systemImage: "folder", shortcut: "F") { Workspace.openFolder(bench) }
                     .keyboardShortcut("f", modifiers: .command)
+                RowButton("Apps, sites and settings…", systemImage: "square.grid.2x2", shortcut: "M") { commands.manage(bench, .apps, false) }
+                    .keyboardShortcut("m", modifiers: .command)
             }
             SitesSection(bench: bench)
             Divider()
-            DoctorSection(store: store, bench: bench)
+            DoctorSection(store: store, bench: bench) { commands.manage(bench, .health, true) }
         }
     }
 
@@ -207,7 +211,7 @@ struct BenchRow: View {
         var cliReady = false
         if case .ready = store.cli { cliReady = true }
         return .make(state: bench.state, reason: bench.machine.stopReason, pending: bench.pending,
-                     needsService: bench.needsService, cliReady: cliReady, otherWork: bench.isChangingScheduler || store.waitsForOtherBench(bench))
+                     needsService: bench.needsService, cliReady: cliReady, otherWork: bench.isChangingScheduler || bench.activity != nil || store.waitsForOtherBench(bench))
     }
 
     var body: some View {
@@ -284,29 +288,43 @@ struct RowIcon: View {
 struct SitesSection: View {
     let bench: BenchModel
 
+    static let visibleRows = 4
+    static let rowHeight: CGFloat = 26
+
     var body: some View {
         let rows = bench.siteRows
         VStack(alignment: .leading, spacing: 4) {
             if rows.count > 1 || rows.contains(where: \.needsHosts) {
                 Text("Sites").font(.subheadline.weight(.semibold))
-                ForEach(rows) { row in
-                    HStack(spacing: 6) {
-                        Image(systemName: row.isDefault ? "star.fill" : "globe")
-                            .foregroundStyle(row.isDefault ? .yellow : .secondary).font(.caption)
-                            .help(row.isDefault ? "Default site (⌘O)" : "")
-                        Text(row.name).font(.callout)
-                        if row.needsHosts {
-                            Text("no hosts entry").font(.caption).foregroundStyle(.orange)
-                        }
-                        Spacer()
-                        Button("Open") { Workspace.open(row.url) }
-                            .controlSize(.small)
-                            .help(row.url)
-                    }
+                if rows.count > Self.visibleRows {
+                    // many sites: the list scrolls, so Doctor and the footer stay on screen
+                    ScrollView { siteList(rows) }.frame(height: Self.rowHeight * CGFloat(Self.visibleRows))
+                } else {
+                    siteList(rows)
                 }
                 if let fix = SiteRow.hostsFix(rows, bench: bench.path) {
                     Banner(systemImage: "network", tint: .orange,
                            text: "A site has no /etc/hosts line, so its name does not resolve. Run:", command: fix)
+                }
+            }
+        }
+    }
+
+    private func siteList(_ rows: [SiteRow]) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(rows) { row in
+                HStack(spacing: 6) {
+                    Image(systemName: row.isDefault ? "star.fill" : "globe")
+                        .foregroundStyle(row.isDefault ? .yellow : .secondary).font(.caption)
+                        .help(row.isDefault ? "Default site (⌘O)" : "")
+                    Text(row.name).font(.callout)
+                    if row.needsHosts {
+                        Text("no hosts entry").font(.caption).foregroundStyle(.orange)
+                    }
+                    Spacer()
+                    Button("Open") { Workspace.open(row.url) }
+                        .controlSize(.small)
+                        .help(row.url)
                 }
             }
         }
@@ -318,6 +336,8 @@ struct SitesSection: View {
 struct DoctorSection: View {
     let store: BenchStore
     let bench: BenchModel
+    /// Opens the Repair sheet in the BenchBar window (plan first, then a confirmation).
+    var repair: () -> Void = {}
     @State private var showPassing = false
 
     var body: some View {
@@ -329,6 +349,11 @@ struct DoctorSection: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
+                if bench.doctor?.checks.contains(where: { $0.level != .ok && $0.action != nil }) == true, !bench.isRunningDoctor {
+                    Button("Repair…", action: repair)
+                        .controlSize(.small)
+                        .help("Shows the repair plan in the BenchBar window; nothing changes until you confirm")
+                }
                 if bench.isRunningDoctor {
                     ProgressView().controlSize(.small)
                 } else {

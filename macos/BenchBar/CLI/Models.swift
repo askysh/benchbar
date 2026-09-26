@@ -245,3 +245,141 @@ nonisolated enum BenchJSON {
         }
     }
 }
+
+// MARK: 0.5: apps, profiles, repair events
+
+/// One app of a bench (`benchbar app list --json`).
+nonisolated struct AppInfo: Codable, Sendable, Equatable, Identifiable {
+    var name: String
+    var inAppsTxt: Bool
+    var repo: String?
+    var branch: String?
+    var policyBranch: String?
+    var commit: String?
+    var dirty: Bool
+    var version: String?
+    var sites: [String]
+
+    var id: String { name }
+
+    enum CodingKeys: String, CodingKey {
+        case name, repo, branch, commit, dirty, version, sites
+        case inAppsTxt = "in_apps_txt"
+        case policyBranch = "policy_branch"
+    }
+}
+
+/// `benchbar app list --json`.
+nonisolated struct AppList: Codable, Sendable, Equatable {
+    var schemaVersion: Int
+    var bench: String
+    var sitesError: String?
+    var apps: [AppInfo]
+
+    enum CodingKeys: String, CodingKey {
+        case bench, apps
+        case schemaVersion = "schema_version"
+        case sitesError = "sites_error"
+    }
+}
+
+/// `benchbar app update NAME --dry-run --json`: what an update would do.
+nonisolated struct AppUpdatePlan: Codable, Sendable, Equatable {
+    nonisolated struct Commit: Codable, Sendable, Equatable, Identifiable {
+        var sha: String
+        var subject: String
+        var id: String { sha }
+    }
+    nonisolated struct Step: Codable, Sendable, Equatable, Identifiable {
+        var name: String
+        var command: String
+        var id: String { name }
+    }
+
+    var schemaVersion: Int
+    var app: String
+    var branch: String?
+    var from: String
+    var to: String
+    var commits: [Commit]
+    var commitsTotal: Int
+    var sites: [String]
+    var steps: [Step]
+
+    var isUpToDate: Bool { from == to || steps.isEmpty }
+
+    enum CodingKeys: String, CodingKey {
+        case app, branch, from, to, commits, sites, steps
+        case schemaVersion = "schema_version"
+        case commitsTotal = "commits_total"
+    }
+}
+
+/// One profile (`benchbar profile list --json`): built in or a team's.
+nonisolated struct ProfileInfo: Codable, Sendable, Equatable, Identifiable {
+    var name: String
+    var kind: String
+    var source: String
+    var file: String
+    var base: String?
+    var label: String?
+    var frappeBranch: String?
+    var valid: Bool
+    var error: String?
+
+    var id: String { name }
+    var isTeam: Bool { kind == "team" }
+
+    enum CodingKeys: String, CodingKey {
+        case name, kind, source, file, base, label, valid, error
+        case frappeBranch = "frappe_branch"
+    }
+}
+
+nonisolated struct ProfileList: Codable, Sendable, Equatable {
+    var schemaVersion: Int
+    var profiles: [ProfileInfo]
+
+    enum CodingKeys: String, CodingKey {
+        case profiles
+        case schemaVersion = "schema_version"
+    }
+}
+
+/// One line of `benchbar repair --json` (docs/json-schema.md).
+nonisolated enum RepairEvent: Equatable, Sendable {
+    nonisolated struct Action: Codable, Sendable, Equatable, Identifiable {
+        var id: String
+        var label: String
+        var fixes: [String]
+        var sudo: Bool
+    }
+
+    case plan(actions: [Action], log: String?)
+    case step(action: String, status: String, message: String)
+    case done(exitCode: Int, log: String?)
+
+    /// nil for a line that is not an event this reader knows (ignored, per the schema rules).
+    static func parse(_ line: String) -> RepairEvent? {
+        guard let data = line.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let event = object["event"] as? String else { return nil }
+        switch event {
+        case "plan":
+            let raw = (object["actions"] as? [[String: Any]]) ?? []
+            let actions = raw.compactMap { a -> Action? in
+                guard let id = a["id"] as? String else { return nil }
+                return Action(id: id, label: a["label"] as? String ?? id,
+                              fixes: a["fixes"] as? [String] ?? [], sudo: a["sudo"] as? Bool ?? false)
+            }
+            return .plan(actions: actions, log: object["log"] as? String)
+        case "step":
+            guard let action = object["action"] as? String, let status = object["status"] as? String else { return nil }
+            return .step(action: action, status: status, message: object["message"] as? String ?? "")
+        case "done":
+            return .done(exitCode: object["exit_code"] as? Int ?? 1, log: object["log"] as? String)
+        default:
+            return nil
+        }
+    }
+}

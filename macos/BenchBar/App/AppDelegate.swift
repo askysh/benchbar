@@ -30,13 +30,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             openSettings: { [weak self] in self?.openSettings() },
             quit: { NSApp.terminate(nil) },
             chooseCLI: { [weak self] in self?.chooseCLI() },
-            openLogs: { [weak self] bench in self?.openLogs(bench) })
+            openLogs: { [weak self] bench in self?.openLogs(bench) },
+            manage: { [weak self] bench, tab, repair in self?.openBench(bench, tab: tab, repair: repair) })
         popover = PopoverController(rootView: PopoverView(store: store, commands: commands))
         popover.onOpenChange = { [weak self] open in self?.store.setPopoverOpen(open) }
 
-        settingsWindow = SettingsWindowController { [unowned self] in
-            SettingsView(settings: settings, store: store, library: library, launchAtLogin: launchAtLogin, notifier: notifier,
-                         chooseCLI: { [weak self] in self?.chooseCLI() })
+        let workbench = Workbench(store: store)
+        settingsWindow = SettingsWindowController { [unowned self] router in
+            MainWindowView(store: store, router: router, workbench: workbench) { [unowned self] part in
+                SettingsView(settings: settings, store: store, library: library, launchAtLogin: launchAtLogin, notifier: notifier,
+                             part: part, chooseCLI: { [weak self] in self?.chooseCLI() })
+            }
         }
 
         logWindows = LogWindowController { [weak self] path in self?.openLogsInTerminal(path) }
@@ -100,6 +104,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover.close()
         settingsWindow.show()
     }
+
+    /// The BenchBar window at one bench's tab (from the popover).
+    private func openBench(_ bench: BenchModel, tab: BenchTab, repair: Bool) {
+        popover.close()
+        settingsWindow.show(.bench(bench.path), tab: tab, repair: repair)
+    }
+
 
     private func chooseCLI() {
         popover.close()
