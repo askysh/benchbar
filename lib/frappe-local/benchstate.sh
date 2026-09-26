@@ -170,12 +170,17 @@ fl_bench_load() {
 }
 
 fl_list_entry_json() {
-  local default="$1" installed=0
+  local default="$1" installed=0 lock=""
   [[ -f "$(fl_agent_plist_path)" ]] && installed=1
-  printf '{"path":%s,"name":%s,"site":%s,"label":"%s","web_url":%s,"ports":%s,"sites":%s,"default":%s,"service_installed":%s,"state_file":%s}' \
+  # the bench's lockfile: remembered or <bench>/benchbar.toml (BENCHBAR_LOCK names one bench, not all)
+  if declare -F fl_lock_file_resolve >/dev/null; then
+    fl_lock_file_resolve "" no-env
+    [[ "$FL_LOCK_SOURCE" != "none" ]] && lock="$FL_LOCK_FILE"
+  fi
+  printf '{"path":%s,"name":%s,"site":%s,"label":"%s","web_url":%s,"ports":%s,"sites":%s,"default":%s,"service_installed":%s,"state_file":%s,"lock_file":%s}' \
     "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$FL_BENCH_NAME")" "$(fl_json_str "$FL_SITE")" "$(fl_agent_label)" \
     "$(fl_json_str "$(fl_site_url)")" "$(fl_ports_json)" "$(fl_sites_json)" \
-    "$(fl_json_bool "$default")" "$(fl_json_bool "$installed")" "$(fl_json_str "$(fl_state_json_path)")"
+    "$(fl_json_bool "$default")" "$(fl_json_bool "$installed")" "$(fl_json_str "$(fl_state_json_path)")" "$(fl_json_str "$lock")"
 }
 
 # fl_cmd_list JSON: the default bench is the one commands use without --bench-dir.

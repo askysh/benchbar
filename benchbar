@@ -79,6 +79,8 @@ SCRIPT_DIR="$(fl_resolve_self)"
 . "${SCRIPT_DIR}/lib/frappe-local/sites.sh"
 # shellcheck source=lib/frappe-local/apps.sh
 . "${SCRIPT_DIR}/lib/frappe-local/apps.sh"
+# shellcheck source=lib/frappe-local/teamlock.sh
+. "${SCRIPT_DIR}/lib/frappe-local/teamlock.sh"
 
 OPT_BENCH_DIR=""
 OPT_SITE=""
@@ -137,6 +139,14 @@ Apps
   app install NAME    Install an app of the bench on a site (--site S).
   app update NAME     Fast forward one app with a changelog first, back up the sites
                       that have it, then requirements, migrate and build (--skip-backup).
+
+Team lockfile (benchbar.toml: each app's repo, branch and commit, and the sites)
+  lock write          Write it from this bench (asks, shows the diff, backs up the old one);
+                      --lock PATH (remembered), --no-commits, --allow-dirty.
+  lock check          Compare the bench with it: read only, no network, no database.
+                      Exit 1 on any difference (--json).
+  lock apply          Clone missing apps, switch branches, fast forward to pinned commits,
+                      then requirements and build. Never touches a site or local work.
 
 Team profiles
   profile list        Built in and team profiles, with where each comes from (--json).
@@ -442,9 +452,9 @@ cmd_status() {
 }
 
 case "$COMMAND" in
-  site|app|profile)
-    # the list and show commands are read only; the others change things
-    if [[ "${ARGS[0]:-list}" != "list" && "${ARGS[0]:-}" != "show" ]]; then
+  site|app|profile|lock)
+    # the list, show and check commands are read only; the others change things
+    if [[ "${ARGS[0]:-list}" != "list" && "${ARGS[0]:-}" != "show" && "${ARGS[0]:-}" != "check" ]]; then
       fl_log_init "${FL_STATE_DIR}/logs"
       fl_lock_acquire "${FL_STATE_DIR}/lock"
     fi
@@ -479,6 +489,8 @@ case "$COMMAND" in
   site) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_site ${ARGS[@]+"${ARGS[@]}"} ;;
   app) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_app ${ARGS[@]+"${ARGS[@]}"} ;;
   profile) fl_cmd_profile ${ARGS[@]+"${ARGS[@]}"} ;;
+  # like doctor: drift exits 1 without the ERR trap's line after the JSON
+  lock) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_lock ${ARGS[@]+"${ARGS[@]}"} || exit 1 ;;
   report) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_report ${ARGS[@]+"${ARGS[@]}"} ;;
   help) usage ;;
   *) fl_die "Unknown command: ${COMMAND}" "Run: benchbar --help" ;;
