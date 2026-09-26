@@ -18,6 +18,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${SCRIPT_DIR}/lib/frappe-local/platform.sh"
 # shellcheck source=lib/frappe-local/version-policy.sh
 . "${SCRIPT_DIR}/lib/frappe-local/version-policy.sh"
+# shellcheck source=lib/frappe-local/toml.sh
+. "${SCRIPT_DIR}/lib/frappe-local/toml.sh"
+# shellcheck source=lib/frappe-local/profiles.sh
+. "${SCRIPT_DIR}/lib/frappe-local/profiles.sh"
 # shellcheck source=lib/frappe-local/state.sh
 . "${SCRIPT_DIR}/lib/frappe-local/state.sh"
 # shellcheck source=lib/frappe-local/bench.sh
@@ -220,16 +224,22 @@ case "$BENCH_DIR" in
   *) BENCH_DIR="${PWD}/${BENCH_DIR}" ;;
 esac
 BENCH_DIR="${BENCH_DIR%/}"
-prompt_value SITE_NAME "Site name (lowercase, hostname-like)" "macdev"
+prompt_value SITE_NAME "Site name (lowercase, hostname-like)" "${FL_TEAM_SITE:-macdev}"
 if ! [[ "$SITE_NAME" =~ ^[a-z0-9][a-z0-9.-]*$ ]]; then
   fl_die "Invalid site name: '${SITE_NAME}'." "Use lowercase letters, digits, '-' and '.' only."
 fi
 SITE_EXISTS=0
 [[ -d "${BENCH_DIR}/sites/${SITE_NAME}" ]] && SITE_EXISTS=1
 
+TEAM_APPS=0
 if [[ -n "$APPS" ]]; then
   fl_info "APPS overrides app bundle selection."
+elif [[ -n "$FL_TEAM_PROFILE" && "${#FL_TEAM_APPS[@]}" -gt 0 ]]; then
+  TEAM_APPS=1
+  fl_info "apps from team profile ${FL_TEAM_PROFILE} (${FL_TEAM_PROFILE_FILE})"
+  APP_BUNDLE="${APP_BUNDLE:-minimal}"
 else
+  [[ -n "$APP_BUNDLE" ]] || APP_BUNDLE="$FL_TEAM_BUNDLE"
   if [[ -z "$APP_BUNDLE" ]]; then
     if [[ "$ASSUME_YES" == "1" ]]; then
       APP_BUNDLE="minimal"
@@ -249,7 +259,14 @@ else
 fi
 [[ -n "$APP_BUNDLE" ]] || APP_BUNDLE="minimal"
 
-fl_resolve_selected_apps "$FL_PROFILE" "$APP_BUNDLE" "$APPS"
+if [[ "$TEAM_APPS" == "1" ]]; then
+  # the team profile's own list: its repos and branches, in its order
+  apps_line=""
+  for spec in "${FL_TEAM_APPS[@]}"; do apps_line="${apps_line} ${spec%%|*}"; done
+  fl_resolve_selected_apps "$FL_PROFILE" "$APP_BUNDLE" "$apps_line"
+else
+  fl_resolve_selected_apps "$FL_PROFILE" "$APP_BUNDLE" "$APPS"
+fi
 
 CUSTOMIZED_SPECS=()
 for spec in "${FL_INSTALL_SPECS[@]}"; do
@@ -306,6 +323,9 @@ EOF
 if [[ -n "$FRAPPE_COMMIT" || -n "$ERPNEXT_COMMIT" ]]; then
   printf '  Commit pins: frappe=%s erpnext=%s\n' "${FRAPPE_COMMIT:-none}" "${ERPNEXT_COMMIT:-none}"
 fi
+if [[ -n "$FL_TEAM_PROFILE" ]]; then
+  printf '  Team profile: %s (%s)\n' "$FL_TEAM_PROFILE" "$FL_TEAM_PROFILE_FILE"
+fi
 
 if [[ "$ASSUME_YES" != "1" && "$FL_DRY_RUN" != "1" ]]; then
   fl_confirm "Proceed?" || { fl_warn "Cancelled."; exit 0; }
@@ -325,6 +345,7 @@ fl_state_init
 # (or --make-default), so a second bench never takes over benchup
 fl_bench_state_migrate "$(fl_state_get BENCH_DIR)"
 fl_bstate_set_for "$BENCH_DIR" PROFILE "$FL_PROFILE"
+[[ -z "$FL_TEAM_PROFILE" ]] || fl_bstate_set_for "$BENCH_DIR" TEAM_PROFILE "$FL_TEAM_PROFILE"
 fl_bstate_set_for "$BENCH_DIR" APP_BUNDLE "$APP_BUNDLE"
 fl_bstate_set_for "$BENCH_DIR" APPS "${FL_SELECTED_APPS[*]}"
 fl_bstate_set_for "$BENCH_DIR" SITE_NAME "$SITE_NAME"
@@ -343,7 +364,16 @@ fi
 fl_section "GET APPS"
 for spec in "${FL_INSTALL_SPECS[@]}"; do
   IFS='|' read -r app branch repo _priority _notes <<<"$spec"
-  fl_get_app_if_needed "$BENCH_DIR" "$app" "$branch" "$repo" "" "0"
+  # a team profile may pin a commit
+  pin_commit=""
+  for team_spec in ${FL_TEAM_APPS[@]+"${FL_TEAM_APPS[@]}"}; do
+    [[ -n "$FL_TEAM_PROFILE" && "${team_spec%%|*}" == "$app" ]] && pin_commit="${team_spec##*|}"
+  done
+  if [[ -n "$pin_commit" ]]; then
+    fl_get_app_if_needed "$BENCH_DIR" "$app" "$branch" "$repo" "$pin_commit" "1"
+  else
+    fl_get_app_if_needed "$BENCH_DIR" "$app" "$branch" "$repo" "" "0"
+  fi
 done
 
 if [[ -n "$ERPNEXT_COMMIT" && -d "$BENCH_DIR/apps/erpnext/.git" ]]; then
