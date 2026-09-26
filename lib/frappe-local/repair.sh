@@ -329,13 +329,66 @@ act_redis_stop() {
   fi
 }
 
+# ---------------------------------------------------------------- JSON events
+#
+# repair --json streams one JSON object per line on fd 3 (the command's real
+# stdout; the human text goes to the run's log): a plan, a step per action
+# (running, then done, skipped or failed), and done with the exit code.
+
+FL_JSON_EVENTS="${FL_JSON_EVENTS:-0}"
+
+fl_event() {
+  [[ "$FL_JSON_EVENTS" == "1" ]] || return 0
+  printf '%s\n' "$1" >&3
+}
+
+# Actions that need sudo: the app cannot type a password, so it shows them
+# as "run in Terminal" and the run skips them without a terminal.
+fl_action_needs_sudo() {
+  case "$1" in hosts_entry|wkhtmltopdf_install) return 0 ;; esac
+  return 1
+}
+
+fl_event_plan() {
+  local actions="$1" a sep="" fixes f fsep
+  [[ "$FL_JSON_EVENTS" == "1" ]] || return 0
+  local body=""
+  for a in $actions; do
+    fixes=""; fsep=""
+    while IFS= read -r f; do
+      [[ -n "$f" ]] || continue
+      fixes="${fixes}${fsep}$(fl_json_str "$f")"; fsep=","
+    done < <(fl_doctor_checks_for_action "$a")
+    body="${body}${sep}{\"id\":\"${a}\",\"label\":$(fl_json_str "$(fl_action_label "$a")"),\"fixes\":[${fixes}],\"sudo\":$(fl_json_bool "$(fl_action_needs_sudo "$a" && printf 1 || printf 0)")}"
+    sep=","
+  done
+  fl_event "{\"event\":\"plan\",\"schema_version\":${FL_SCHEMA_VERSION:-1},\"cli_version\":\"${FL_VERSION:-0}\",\"bench\":$(fl_json_str "$FL_BENCH_DIR"),\"dry_run\":$(fl_json_bool "${FL_DRY_RUN:-0}"),\"actions\":[${body}],\"backups\":$(fl_json_str "${FL_BACKUP_ROOT}"),\"log\":$(fl_json_str "${FL_LOG_FILE:-}")}"
+}
+
+fl_event_step() {
+  fl_event "{\"event\":\"step\",\"action\":\"$1\",\"status\":\"$2\",\"message\":$(fl_json_str "$3")}"
+}
+
+# The most telling line the step wrote to the log since line $1: its last
+# [FAIL], else its last [WARN] or skip note, else nothing.
+fl_log_step_message() {
+  local from="$1" text
+  [[ -n "${FL_LOG_FILE:-}" && -f "$FL_LOG_FILE" ]] || return 0
+  text="$(tail -n +"$((from + 1))" "$FL_LOG_FILE" 2>/dev/null)"
+  local line
+  line="$(printf '%s\n' "$text" | grep -E '\[FAIL\]' | tail -n1)"
+  [[ -n "$line" ]] || line="$(printf '%s\n' "$text" | grep -E '\[WARN\]' | tail -n1)"
+  [[ -n "$line" ]] || line="$(printf '%s\n' "$text" | grep -E 'skipped' | grep -v -E '(^|[0-9:] )step [0-9]+ ' | tail -n1)"
+  printf '%s' "$line" | sed 's/^[0-9][0-9]:[0-9][0-9]:[0-9][0-9] //'
+}
+
 # ---------------------------------------------------------------- engine
 
 # fl_repair_engine TITLE [GROUP...]: check, plan, confirm, apply, verify.
 # Returns 0 when everything is healthy afterwards, 1 when something failed.
 fl_repair_engine() {
   shift
-  local actions action i n=0 rows=() unchanged remaining status labels
+  local actions action i n=0 rows=() unchanged remaining status labels step_from
   fl_doctor_run "$@"
   actions=""
   for action in $(fl_doctor_actions); do
@@ -348,6 +401,7 @@ fl_repair_engine() {
   printf '\n%sPlan%s\n' "$FL_BOLD" "$FL_RESET"
   fl_doctor_print compact
   if [[ -z "$actions" ]]; then
+    fl_event_plan ""
     printf '\n'
     if [[ "$(fl_doctor_count fail)" != "0" ]]; then
       fl_warn "unchanged: nothing benchbar can repair automatically; follow the fix lines above"
@@ -358,6 +412,11 @@ fl_repair_engine() {
       return 0
     fi
     fl_ok "unchanged: all ${#FL_D_IDS[@]} checks pass, nothing to do"
+    return 0
+  fi
+
+  fl_event_plan "$actions"
+  if [[ "$FL_JSON_EVENTS" == "1" && "${FL_DRY_RUN:-0}" == "1" ]]; then
     return 0
   fi
 
@@ -390,10 +449,18 @@ fl_repair_engine() {
     fl_step_begin "$i"
     # an action may report "skipped" (or "unchanged") through FL_STEP_RESULT
     FL_STEP_RESULT="done"
+    step_from="$(wc -l <"${FL_LOG_FILE:-/dev/null}" 2>/dev/null | tr -d ' ')"
+    fl_event_step "$action" running "$(fl_action_label "$action")"
     if "act_${action}"; then
       fl_step_end "$FL_STEP_RESULT"
+      if [[ "$FL_STEP_RESULT" == "done" ]]; then
+        fl_event_step "$action" "done" "$(fl_action_label "$action")"
+      else
+        fl_event_step "$action" "$FL_STEP_RESULT" "$(fl_log_step_message "${step_from:-0}")"
+      fi
     else
       fl_step_end failed
+      fl_event_step "$action" failed "$(fl_log_step_message "${step_from:-0}")"
       status=1
       case "$action" in
         env_rebuild|honcho_install) fl_warn "stopping: later steps depend on this one"; break ;;

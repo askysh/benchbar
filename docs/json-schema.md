@@ -238,6 +238,30 @@ honcho process (`web`, `worker`, `socketio`, `schedule`, `redis_queue`,
 with the process above them. `process` is `null` without a filter.
 Control characters (terminal colors) are removed. `benchbar mcp` uses it
 for `benchbar_logs_tail`.
+## `benchbar repair --json`
+
+A stream: one JSON object per line on stdout, as the run goes. The human
+text goes to the run's log (`.benchbar/logs/<timestamp>.log`).
+
+```json
+{"event":"plan","schema_version":1,"cli_version":"0.5.0","bench":"/Users/you/frappe-bench","dry_run":false,"actions":[{"id":"build","label":"bench build","fixes":["Built assets"],"sudo":false},{"id":"hosts_entry","label":"add macdev to /etc/hosts (sudo)","fixes":["/etc/hosts entry"],"sudo":true}],"backups":"/Users/you/.local/share/benchbar/.benchbar/backups","log":"/Users/you/.local/share/benchbar/.benchbar/logs/20260926-101500.log"}
+{"event":"step","action":"build","status":"running","message":"bench build"}
+{"event":"step","action":"build","status":"done","message":"bench build"}
+{"event":"step","action":"hosts_entry","status":"running","message":"add macdev to /etc/hosts (sudo)"}
+{"event":"step","action":"hosts_entry","status":"skipped","message":"[WARN] skipped without sudo; run: printf '127.0.0.1 macdev\n' | sudo tee -a /etc/hosts"}
+{"event":"done","exit_code":0,"log":"/Users/you/.local/share/benchbar/.benchbar/logs/20260926-101500.log"}
+```
+
+| Event | Fields |
+|---|---|
+| `plan` | `actions[]` with `id` (a repair action), `label`, `fixes` (the doctor checks it fixes), `sudo` (needs a password: skipped without a terminal); `dry_run`; `backups` (the backup root); `log` |
+| `step` | `action`, `status` (`running`, then `done`, `skipped` or `failed`), `message` (for `failed` and `skipped`, the CLI's `[FAIL]` or `[WARN]` line) |
+| `done` | `exit_code` (0 when every check passes afterwards), `log` |
+
+`repair --dry-run --json` prints only the `plan` line and changes
+nothing. Without `--yes` (and without `--dry-run`) nothing is applied:
+the plan is printed, then `done` with exit code 1, because the question
+cannot be answered. An empty `actions` means nothing needs repairing.
 
 ## `logs/.benchbar/state.json`
 

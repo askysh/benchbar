@@ -118,6 +118,12 @@ Checked in frappe `version-16` at 012667b and bench `develop` at c9d1250 (Septem
 - stdin of every CLI call is closed, so a question (a port clash on `up`) is answered no instead of hanging the session; one bad message gets a JSON-RPC error and the session goes on.
 - Protocol versions 2025-06-18, 2025-03-26 and 2024-11-05 are accepted as asked; anything else gets 2025-06-18. The transport is newline delimited JSON on stdio, as the spec says for stdio.
 - `logs --json` exists for `benchbar_logs_tail`: the brief keeps the server free of logic, so the process filter (honcho's `HH:MM:SS name.N |` prefix, with unprefixed lines such as tracebacks kept under their process) lives in the CLI. `fl_json_escape` now drops control characters, since log lines may carry terminal colors.
+## 0.5: repair --json
+
+- The events go to fd 3 (the command's stdout) and every human line to the run's log: the engine prints with the same helpers as always, so the text and the JSON can never disagree, and the log keeps the full story for a failed step.
+- Without `--yes` a JSON run applies nothing: the confirmation would be invisible, so stdin is closed and the plan is answered no (plan, then done with 1). The app shows the plan from `--dry-run --json`, asks, and then passes `--yes`.
+- `sudo` actions are marked in the plan (`"sudo": true`): without a terminal they are skipped with their manual command as the message, which the app shows as "run in Terminal".
+- A step's message is its own last `[FAIL]` line, else its `[WARN]` line, from the log lines written during the step; the step summary line is ignored.
 
 # The easy install run (v0.3)
 

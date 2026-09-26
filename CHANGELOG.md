@@ -17,6 +17,11 @@ bench running at once (docs/DECISIONS.md, "the v16 bench on a real Mac").
   `benchbar_down` and `benchbar_restart`, each backed by the CLI's JSON.
 - `benchbar logs --json` with `-nN` and `--process NAME`.
 
+### Added (0.5)
+
+- `benchbar repair --json` streams a plan, a step event per action and a
+  done event with the exit code; `--dry-run --json` prints only the plan.
+
 ### Added
 
 - **Frappe v16, supported.** The `v16-lts` profile (Python 3.14, Node 24)
