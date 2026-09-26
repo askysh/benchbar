@@ -79,7 +79,7 @@ jobs:
 
       - name: Cache Homebrew downloads
         if: env.CODE == 'true' && matrix.shard == 1
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/Library/Caches/Homebrew
           key: brew-${{ runner.os }}-${{ runner.arch }}-shellcheck
@@ -119,7 +119,7 @@ jobs:
           xcode-version: latest-stable
 
       - name: Cache Homebrew downloads
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/Library/Caches/Homebrew
           key: brew-${{ runner.os }}-${{ runner.arch }}-xcodegen
@@ -129,7 +129,7 @@ jobs:
         run: command -v xcodegen >/dev/null 2>&1 || brew install xcodegen
 
       - name: Cache DerivedData and Swift packages
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: macos/build/DerivedData
           key: deriveddata-${{ runner.os }}-${{ hashFiles('macos/project.yml', 'macos/BenchBar/**/*.swift', 'macos/BenchBarTests/**/*.swift') }}
