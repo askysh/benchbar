@@ -1,0 +1,12 @@
+# Weekly updates for the Actions in .github/workflows and the Swift
+# packages of the app. The CLI is plain bash with no packages to update.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: swift
+    directory: /macos
+    schedule:
+      interval: weekly

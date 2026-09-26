@@ -1,0 +1,44 @@
+name: Feature request
+description: An idea for the CLI, the app or the docs.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please check ROADMAP.md first: the idea may be planned, or listed under Not planned with the reason.
+        Open questions and early ideas fit Discussions, Ideas, better than an issue.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do, and what gets in the way today?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you would like
+      description: The command, the option or the change in the app. An example of the output helps.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do today instead
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - The CLI
+        - The menu bar app
+        - The docs
+        - Not sure
+    validations:
+      required: true
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Help
+      options:
+        - label: I would like to build this myself, with some pointers.
