@@ -85,9 +85,10 @@ call, so later commands do not need `--bench-dir`.
   `benchbar mariadb-password --yes` prints it when a user asks for it.
 - When something is wrong, `./benchbar report --print` shows the redacted
   diagnostics; `./benchbar report` writes the zip for a bug report.
-- If doctor warns about CleanMyMac, tell the user to add the bench folder
-  to its Ignore List. This is the most common cause of a bench that
-  "suddenly" lost `env/`, `node_modules` and the built assets.
+- If doctor warns about CleanMyMac or Mole, tell the user to add the
+  bench folder to CleanMyMac's Ignore List or Mole's whitelist. A
+  cleanup tool is the most common cause of a bench that "suddenly" lost
+  `env/`, `node_modules` and the built assets.
 
 ## Reading the output
 

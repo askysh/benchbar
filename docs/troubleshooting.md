@@ -93,8 +93,8 @@ report; attach it to an issue at
 
 ## The cleanup tool case
 
-A cleanup tool (most often CleanMyMac's developer junk cleanup) can delete
-`env/`, `node_modules/` and `apps/*/public/dist`. The symptoms:
+A cleanup tool (Mole's `mo purge`, or CleanMyMac's developer junk
+cleanup) can delete `env/`, `node_modules/` and `apps/*/public/dist`. The symptoms:
 
 - `bench` commands fail with `FileNotFoundError` for `env/bin/python`,
 - socketio fails with `Cannot find module 'socket.io'`,
@@ -105,7 +105,8 @@ Doctor detects all three separately (it checks the dist files that
 `assets.json` references), and repair rebuilds only what is missing: the
 env (the old one moved to `env.broken.<timestamp>`), the node
 requirements, `bench build`, then the caches. If CleanMyMac is installed,
-doctor warns; add the bench folder to its Ignore List.
+doctor warns; add the bench folder to its Ignore List. If Mole is
+installed, doctor warns until the bench is in `~/.config/mole/whitelist`.
 
 ## What recovers on its own, and what does not
 
@@ -203,5 +204,5 @@ for that name. To remove the Homebrew formulae:
   or `~/Documents`.
 - Do not run `bench update` on a bench you cannot rebuild; it rewrites
   `Procfile` and can change the toolchain.
-- If CleanMyMac or a similar tool is installed, add the bench folder to
-  its ignore list before running any cleanup.
+- If CleanMyMac, Mole or a similar tool is installed, add the bench
+  folder to its ignore list or whitelist before running any cleanup.

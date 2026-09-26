@@ -18,8 +18,8 @@ frappe can use), a stray Homebrew Redis on 6379, Full Disk Access for
 `crontab`, the toolchain as the bench sees it (Node, yarn, the MariaDB
 server, pkg-config), honcho without `pkg_resources`, the fork safety
 variables, stale processes on the bench's ports, the site
-ping, `/etc/hosts`, log sizes, CleanMyMac, and port clashes with other
-benches. Every warning and failure names its fix.
+ping, `/etc/hosts`, log sizes, CleanMyMac, Mole, and port clashes with
+other benches. Every warning and failure names its fix.
 
 Repair runs only the flagged fixes, in dependency order. A broken `env/`
 is moved to `env.broken.<timestamp>`, never deleted. The most common case,
@@ -42,7 +42,7 @@ Keychain, so the app runs it on a timer.
 Checks with a repair action are fixed by `benchbar repair`. The others
 name a command for you to run, because the change is a person's call
 (for example which branch an app follows) or needs another app (Full
-Disk Access, CleanMyMac). Commands and flags are in the
+Disk Access, CleanMyMac, Mole). Commands and flags are in the
 [CLI reference](../reference/cli/doctor.md).
 
 ## System checks
@@ -110,12 +110,27 @@ Fix: `brew services stop redis`, only if nothing else needs it.
 
 ### cleanmymac
 
-CleanMyMac is not installed in `/Applications` or `~/Applications`. Its
-cleanup can delete `env/`, `node_modules` and `public/dist`, which is the
-most common cause of a bench that suddenly stops working.
+CleanMyMac is not installed in `/Applications` or `~/Applications`, or in
+the `Setapp` folder inside either. Its cleanup can delete `env/`,
+`node_modules` and `public/dist`.
 
 Fix: in CleanMyMac, add the bench folder to the Ignore List before
 running any cleanup.
+
+### mole
+
+Mole (`mo`) is not installed, or the bench is protected in its whitelist.
+`mo purge` looks for projects under `~/dev` and similar folders and
+deletes their `node_modules` and `dist` folders and any folder with a
+`CACHEDIR.TAG`, which includes the bench's `env/`. It skips any path in
+`~/.config/mole/whitelist` and everything below it, so the check passes
+when a line there is the bench folder or a folder above it. Lines with
+`*`, `?` or `[` are not read.
+
+Fix: `echo '<bench>' >> ~/.config/mole/whitelist`. When that file does
+not exist yet, run `mo clean --whitelist` and save once first: a
+whitelist file replaces Mole's built in entries, and its editor writes
+them into the new file.
 
 ### full_disk_access
 
