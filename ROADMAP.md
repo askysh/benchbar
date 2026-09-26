@@ -56,7 +56,9 @@ site with a backup first, pull and the lockfile in the app, a first run
 wizard, profile switching per bench.
 
 **1.0.** A stable JSON API and runner format, an official Homebrew cask,
-full doctor coverage for v15 and v16.
+full doctor coverage for v15 and v16. Vouch
+([github.com/mitchellh/vouch](https://github.com/mitchellh/vouch)) when
+drive-by PRs appear. Not before.
 
 ## Ideas
 
