@@ -73,6 +73,8 @@ SCRIPT_DIR="$(fl_resolve_self)"
 . "${SCRIPT_DIR}/lib/frappe-local/bench.sh"
 # shellcheck source=lib/frappe-local/sites.sh
 . "${SCRIPT_DIR}/lib/frappe-local/sites.sh"
+# shellcheck source=lib/frappe-local/apps.sh
+. "${SCRIPT_DIR}/lib/frappe-local/apps.sh"
 
 OPT_BENCH_DIR=""
 OPT_SITE=""
@@ -121,6 +123,16 @@ Daily
   site default NAME   Make NAME the default site (bench use, runner, benchup, the app).
   site hosts          Add a 127.0.0.1 line for every site to /etc/hosts (sudo, once).
   mariadb-password    Print the MariaDB root password kept in the Keychain (asks first).
+
+Apps
+  app list            Every app: branch, commit, local changes, the sites that have it
+                      (--json; --no-sites reads the last site lists instead of asking bench).
+  app add NAME|URL    bench get-app from config/apps.tsv or any git URL (GitHub, SSH, a
+                      host alias), after checking access; --branch B, --name N, and
+                      --site S or --all-sites to install it. Never replaces an app.
+  app install NAME    Install an app of the bench on a site (--site S).
+  app update NAME     Fast forward one app with a changelog first, back up the sites
+                      that have it, then requirements, migrate and build (--skip-backup).
 
 Options
   --bench-dir DIR     Bench to act on (default: remembered, or auto-detected)
@@ -399,8 +411,8 @@ cmd_status() {
 }
 
 case "$COMMAND" in
-  site)
-    # site list is read only; add, default and hosts change things
+  site|app)
+    # site list and app list are read only; the others change things
     if [[ "${ARGS[0]:-list}" != "list" ]]; then
       fl_log_init "${FL_STATE_DIR}/logs"
       fl_lock_acquire "${FL_STATE_DIR}/lock"
@@ -434,6 +446,7 @@ case "$COMMAND" in
   uninstall-service) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_uninstall_service ;;
   path) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; printf '%s\n' "$FL_BENCH_DIR" ;;
   site) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_site ${ARGS[@]+"${ARGS[@]}"} ;;
+  app) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_app ${ARGS[@]+"${ARGS[@]}"} ;;
   report) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_report ${ARGS[@]+"${ARGS[@]}"} ;;
   help) usage ;;
   *) fl_die "Unknown command: ${COMMAND}" "Run: benchbar --help" ;;

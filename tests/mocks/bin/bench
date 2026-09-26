@@ -10,8 +10,23 @@ case "$1" in
     mkdir -p "$2/apps/frappe" "$2/env" "$2/sites" "$2/config"
     printf 'port 11000\n' >"$2/config/redis_queue.conf"; printf 'port 13000\n' >"$2/config/redis_cache.conf"
     touch "$2/sites/apps.txt"; exit 0 ;;
+  --version) [[ -n "${MOCK_BENCH_VERSION:-}" ]] && printf '%s\n' "$MOCK_BENCH_VERSION"; exit 0 ;;
   get-app)
     app="${*: -1}"; app="${app##*/}"; app="${app%.git}"
+    if [[ "${MOCK_GIT_REAL:-0}" == "1" ]]; then
+      # like bench: clone with --origin upstream (shallow when asked), apps.txt
+      shift; branch=""; repo=""
+      while [[ "$#" -gt 0 ]]; do
+        case "$1" in --branch) branch="$2"; shift 2 ;; -*) shift ;; *) repo="$1"; shift ;; esac
+      done
+      app="$(printf '%s' "$app" | tr '[:upper:]-' '[:lower:]_')"
+      depth=(); [[ "${MOCK_BENCH_SHALLOW:-0}" == "1" ]] && depth=(--depth 1)
+      git clone -q --origin upstream ${depth[@]+"${depth[@]}"} ${branch:+--branch "$branch"} "$repo" "apps/$app" || exit 1
+      [[ -n "$(tail -c1 sites/apps.txt 2>/dev/null)" ]] && printf '\n' >>sites/apps.txt
+      printf '%s\n' "$app" >>sites/apps.txt
+      [[ -n "${MOCK_BENCH_GET_APP_EXIT:-}" ]] && exit "$MOCK_BENCH_GET_APP_EXIT"
+      exit 0
+    fi
     mkdir -p "apps/$app"; exit 0 ;;
   new-site)
     [[ -n "${MOCK_BENCH_NEW_SITE_EXIT:-}" ]] && exit "$MOCK_BENCH_NEW_SITE_EXIT"
@@ -64,8 +79,20 @@ PY
     exit 0 ;;
   --site)
     case "$3" in
-      list-apps) [[ -f "sites/$2/installed_apps" ]] && cat "sites/$2/installed_apps"; exit 0 ;;
-      install-app) mkdir -p "sites/$2"; printf '%s 1.0.0\n' "$4" >>"sites/$2/installed_apps"; exit 0 ;;
+      list-apps)
+        [[ -n "${MOCK_BENCH_LIST_APPS_EXIT:-}" ]] && exit "$MOCK_BENCH_LIST_APPS_EXIT"
+        if [[ "${4:-}" == "--format" && "${5:-}" == "json" ]]; then
+          printf '{"%s": [' "$2"; sep=""
+          if [[ -f "sites/$2/installed_apps" ]]; then
+            while read -r a _; do [[ -n "$a" ]] && { printf '%s"%s"' "$sep" "$a"; sep=", "; }; done <"sites/$2/installed_apps"
+          fi
+          printf ']}\n'; exit 0
+        fi
+        [[ -f "sites/$2/installed_apps" ]] && cat "sites/$2/installed_apps"; exit 0 ;;
+      install-app)
+        [[ -n "${MOCK_BENCH_INSTALL_APP_EXIT:-}" ]] && exit "$MOCK_BENCH_INSTALL_APP_EXIT"
+        mkdir -p "sites/$2"; printf '%s 1.0.0\n' "$4" >>"sites/$2/installed_apps"; exit 0 ;;
+      migrate) exit "${MOCK_BENCH_MIGRATE_EXIT:-0}" ;;
       doctor|clear-cache|clear-website-cache) exit 0 ;;
     esac
     exit 0 ;;

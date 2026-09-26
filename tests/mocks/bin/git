@@ -8,7 +8,16 @@
 mock_log "$@"
 dir=""
 if [[ "${1:-}" == "-C" ]]; then dir="$2"; shift 2; fi
+# MOCK_GIT_REAL=1: every call goes to the real git (the app and lock tests
+# use real repos with file:// remotes). MOCK_GIT_LSREMOTE_EXIT fakes a
+# remote that cannot be read (a private repo without a key or token).
+if [[ "${1:-}" == "ls-remote" && -n "${MOCK_GIT_LSREMOTE_EXIT:-}" ]]; then
+  printf 'git@github.com: Permission denied (publickey).\nfatal: Could not read from remote repository.\n' >&2
+  exit "$MOCK_GIT_LSREMOTE_EXIT"
+fi
+[[ "${MOCK_GIT_REAL:-0}" == "1" ]] && set -- __real__ "$@"
 case "${1:-}" in
+  __real__) shift ;;
   clone)
     dest="${*: -1}"
     mkdir -p "$dest/.git"
