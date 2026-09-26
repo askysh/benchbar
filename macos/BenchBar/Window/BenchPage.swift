@@ -14,10 +14,10 @@ struct BenchPage: View {
             Picker("", selection: $router.benchTab) {
                 ForEach(BenchTab.allCases) { Text($0.rawValue).tag($0) }
             }
-            .pickerStyle(.segmented)
+            .pageTabs()
             .labelsHidden()
             .padding(.horizontal, 20)
-            ChangeResultBanner(workbench: workbench)
+            ChangeResultBanner(workbench: workbench, scope: bench.path)
                 .padding(.horizontal, 20).padding(.top, 10)
             Group {
                 switch router.benchTab {
@@ -55,13 +55,7 @@ struct BenchOverview: View {
     let bench: BenchModel
     @State private var schedulerChange: Bool?
 
-    private var controls: BenchControls {
-        var cliReady = false
-        if case .ready = store.cli { cliReady = true }
-        return .make(state: bench.state, reason: bench.machine.stopReason, pending: bench.pending,
-                     needsService: bench.needsService, cliReady: cliReady,
-                     otherWork: bench.isChangingScheduler || bench.activity != nil || store.waitsForOtherBench(bench))
-    }
+    private var controls: BenchControls { store.controls(for: bench) }
 
     var body: some View {
         let ports = bench.status?.ports ?? bench.summary.ports
@@ -167,6 +161,7 @@ struct BenchSites: View {
                     Text("Sites")
                     Spacer()
                     Button { addingSite = true } label: { Label("Add Site…", systemImage: "plus") }
+                        .primaryAction()
                         .disabled(busy)
                 }
             } footer: {

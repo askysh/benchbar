@@ -191,3 +191,13 @@ Asked for after the phases, to stop naming drift before the first release.
 - Update shows `app update --dry-run --json` first: the commits (newest 30 of the total), the steps and the sites that get a backup; the Update button exists only when there is something to take. An app with local changes cannot be updated from the app.
 - The Repair sheet reads `repair --dry-run --json`, then streams `repair --yes --json` through a new line streaming call of the subprocess runner (swift-subprocess `.sequence` output); the real run's plan replaces the dry run's, since the bench may have changed in between. The sheet cannot be dismissed while it runs.
 - Mobbin was not usable for references (the MCP server answered that a paid plan is needed); the layout follows Apple's own Settings instead.
+
+## 0.5: finishing the window, the icon
+
+- The icon is an Icon Composer `.icon` (Xcode 27 compiles it to `Assets.car` and `AppIcon.icns`, Liquid Glass on macOS 26 and later, a flat render before). Its layers are SVGs drawn by `scripts/app-icon.py` from the same geometry as the menu bar runner, so the icon and the runner are one character; `icon.json` holds the gradient and the glass. XcodeGen adds the `.icon` as one file (`type: file`), or it would copy the SVGs as loose resources.
+- macOS 27's `.pickerStyle(.tabs)` for the bench tabs and macOS 26's `.glassProminent` for each pane's main action, behind `#available` with the segmented and bordered styles before: the deployment target stays macOS 14, the testers are on 27.
+- Every pane starts with a `PaneHeader` (a tinted symbol tile, the name, one line on what it is for), like System Settings; explanations moved from inline captions to section footers.
+- `NSHostingController.sizingOptions = [.minSize]`: the default also follows each pane's ideal size, and the window jumped to 1285 points wide on General.
+- The change banner carries a scope (a bench's path, or profiles) and shows only there.
+- Opening BenchBar again (Finder, Spotlight) shows the window: an accessory app otherwise gives no sign it heard.
+- The README's window pictures are screenshots of the real window (`screencapture -l`); the offscreen snapshots draw a selected sidebar row and tab as solid black, since the view is in no key window.

@@ -20,8 +20,12 @@ final class Workbench {
     nonisolated struct ChangeResult: Equatable, Sendable {
         var title: String
         var error: String?
+        /// Where the banner shows: a bench's path, or `Workbench.profilesScope`.
+        var scope: String = ""
         var succeeded: Bool { error == nil }
     }
+
+    static let profilesScope = "profiles"
 
     init(store: BenchStore) {
         self.store = store
@@ -101,7 +105,7 @@ final class Workbench {
     }
 
     func createProfile(_ name: String, from bench: BenchModel) async {
-        await change("Create team profile \(name)", on: bench) { client throws(CLIError) in
+        await change("Create team profile \(name)", on: bench, scope: Self.profilesScope) { client throws(CLIError) in
             try await client.createProfile(name, fromBench: bench.path)
         }
         await loadProfiles()
@@ -113,10 +117,10 @@ final class Workbench {
         var message: String
     }
 
-    private func change(_ title: String, on bench: BenchModel,
+    private func change(_ title: String, on bench: BenchModel, scope: String? = nil,
                         _ work: (CLIClient) async throws(CLIError) -> Void) async {
         let error = await store.runChange(title, on: bench, work)
-        result = ChangeResult(title: title, error: error)
+        result = ChangeResult(title: title, error: error, scope: scope ?? bench.path)
     }
 }
 

@@ -57,6 +57,7 @@ struct MainWindowView: View {
                             }
                         }
                         .tag(WindowPane.bench(bench.path))
+                        .contextMenu { BenchContextMenu(store: store, bench: bench) }
                     }
                 }
             }
@@ -93,9 +94,11 @@ struct MainWindowView: View {
 /// The banner with the outcome of the last change, at the top of a pane.
 struct ChangeResultBanner: View {
     let workbench: Workbench
+    /// Only the outcome of a change made here: a bench's path, or the profiles scope.
+    let scope: String
 
     var body: some View {
-        if let result = workbench.result {
+        if let result = workbench.result, result.scope == scope {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Image(systemName: result.succeeded ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                     .foregroundStyle(result.succeeded ? .green : .red)

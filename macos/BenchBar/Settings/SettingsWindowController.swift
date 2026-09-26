@@ -21,6 +21,9 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         if repair { router.repairRequested = true }
         if window == nil {
             let hosting = NSHostingController(rootView: makeView(router))
+            // only a minimum: the default also follows the ideal size of each
+            // pane, so the window jumped wider on General
+            hosting.sizingOptions = [.minSize]
             let window = NSWindow(contentViewController: hosting)
             window.title = "BenchBar"
             window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]

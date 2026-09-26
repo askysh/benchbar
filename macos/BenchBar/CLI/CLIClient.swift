@@ -86,7 +86,9 @@ nonisolated struct CLIClient: Sendable {
     func apps(bench: String, liveSites: Bool = true) async throws(CLIError) -> AppList {
         var args = ["app", "list", "--json", "--bench-dir", bench]
         if !liveSites { args.insert("--no-sites", at: 3) }
-        let output = try await run(args, timeout: liveSites ? Timeout.doctor : Timeout.query, acceptExitCodes: [0])
+        // several git calls per app: on a cold start next to status and doctor
+        // for every bench, 20 seconds was not always enough
+        let output = try await run(args, timeout: Timeout.doctor, acceptExitCodes: [0])
         return try BenchJSON.decode(AppList.self, from: Data(output.stdout.utf8))
     }
 
