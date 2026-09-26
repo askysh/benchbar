@@ -2,7 +2,14 @@
 
 All notable changes to this project are documented here.
 
-## Unreleased
+## 0.5.5 - 2026-09-26
+
+The project skin: BenchBar gets a manual, a front door and a way to
+reach you. The documentation moves to its own site,
+benchbar.akashmishra.com, built from `docs/` with search and a page per
+command; the README becomes a short front door; the repository gets the
+files a project people contribute to needs; and the app gets an About
+pane with an update check, a Help menu and Report a Bug.
 
 ### App
 
@@ -83,6 +90,9 @@ All notable changes to this project are documented here.
   `benchbar --help`, and that every page has its frontmatter.
 - CI skips the CLI and app jobs when a change touches only `docs/` or
   `site/`.
+
+- The command reference documents `benchbar docs`, `--version` and
+  `report --json`; troubleshooting says how to turn the scheduler on.
 
 ### Readme
 

@@ -45,11 +45,18 @@ agents, app installs and updates from the registry or any GitHub repo
 with the encryption key carried over and email and the scheduler off, a
 new app icon, and the macOS 27 look.
 
+**0.5.5, the project skin.** The documentation site at
+benchbar.akashmishra.com with a page per command, a short README, the
+community files (contributing with an AI policy, code of conduct,
+security policy, issue forms), and in the app an About pane with an
+update check, a Help menu and Report a Bug; `benchbar docs` and doctor
+links into the docs.
+
 ## Later
 
 **0.6, public launch.** Developer ID signing and notarization, a signed
-DMG, a cask in `askysh/homebrew-tap`, Sparkle updates, a documentation
-site, and a launch post on discuss.frappe.io.
+DMG, a cask in `askysh/homebrew-tap`, Sparkle updates, and a launch post
+on discuss.frappe.io.
 
 **0.7, the app for sites.** Backup and restore from the app, dropping a
 site with a backup first, pull and the lockfile in the app, a first run
