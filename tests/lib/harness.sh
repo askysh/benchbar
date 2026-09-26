@@ -36,6 +36,8 @@ export FL_UP_WAIT_SECS=2
 export FL_KILL_CMD=mockkill
 export BENCHBAR_KILL_CMD=mockkill
 export FL_APP_DIRS="$HOME/Applications"
+# a name that is on no PATH, so the Mac running the suite does not leak its own Mole
+export FL_MOLE_CMD=benchbar-test-no-mole
 export NO_COLOR=1
 # the suite may run as root on a Linux machine; the CLI must still see a normal user
 export FL_EFFECTIVE_UID=501

@@ -11,7 +11,7 @@
 # Groups (used by "benchbar service" versus "benchbar repair"):
 #   system, bench, service, site
 
-FL_CHECK_ORDER="brew python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac full_disk_access env_python bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy lock_parse lock_drift logs honcho honcho_setuptools procfile runner agent fork_safety scheduler stop_flag helpers cli_link legacy_agents hosts port_clash orphans ping"
+FL_CHECK_ORDER="brew python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac mole full_disk_access env_python bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy lock_parse lock_drift logs honcho honcho_setuptools procfile runner agent fork_safety scheduler stop_flag helpers cli_link legacy_agents hosts port_clash orphans ping"
 FL_LOG_WARN_MB="${FL_LOG_WARN_MB:-50}"
 FL_HOSTS_FILE="${FL_HOSTS_FILE:-/etc/hosts}"
 
@@ -27,7 +27,7 @@ chk_port_block() {
 
 fl_check_group() {
   case "$1" in
-    brew|python_leaves|mariadb_bind|mariadb_utf8|pdf_engine|redis_6379|cleanmymac|full_disk_access) printf 'system' ;;
+    brew|python_leaves|mariadb_bind|mariadb_utf8|pdf_engine|redis_6379|cleanmymac|mole|full_disk_access) printf 'system' ;;
     env_python|bench_version|toolchain_*|socketio|assets|apps_txt|app_branch_policy|lock_parse|lock_drift|logs) printf 'bench' ;;
     ping) printf 'site' ;;
     *) printf 'service' ;;
@@ -58,6 +58,7 @@ fl_check_label() {
     hosts) printf '/etc/hosts entry' ;;
     logs) printf 'Log sizes' ;;
     cleanmymac) printf 'CleanMyMac' ;;
+    mole) printf 'Mole' ;;
     port_clash) printf 'Port clash' ;;
     port_block) printf 'Port block' ;;
     scheduler) printf 'Scheduler' ;;
@@ -485,7 +486,8 @@ chk_cleanmymac() {
   while [[ -n "$dirs" ]]; do
     dir="${dirs%%:*}"
     [[ "$dirs" == *:* ]] && dirs="${dirs#*:}" || dirs=""
-    for app in "$dir"/CleanMyMac*.app; do
+    # Setapp installs its copy in a Setapp folder inside Applications
+    for app in "$dir"/CleanMyMac*.app "$dir"/Setapp/CleanMyMac*.app; do
       [[ -d "$app" ]] && found="$app"
     done
   done
@@ -493,6 +495,42 @@ chk_cleanmymac() {
     chk__set warn "$(basename "$found") is installed; its cleanup can delete env/, node_modules and public/dist" "In CleanMyMac, add ${FL_BENCH_DIR} to the Ignore List before running any cleanup"
   else
     chk__set ok "CleanMyMac not installed"
+  fi
+}
+
+FL_MOLE_CMD="${FL_MOLE_CMD:-mole}"
+
+# Mole's "mo purge" deletes node_modules, dist and venv folders under ~/dev
+# and similar folders, unless a line in ~/.config/mole/whitelist is the
+# bench or a folder above it. Glob lines are not read: the bench counts as
+# covered only by a plain path.
+fl_mole_protects() {
+  local dir="$1" file="$HOME/.config/mole/whitelist" line
+  [[ -f "$file" ]] || return 1
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line#"${line%%[![:space:]]*}"}"
+    line="${line%"${line##*[![:space:]]}"}"
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    [[ "$line" == "~"* ]] && line="${HOME}${line#"~"}"
+    line="${line//\$\{HOME\}/$HOME}"
+    line="${line//\$HOME/$HOME}"
+    line="${line%/}"
+    case "$line" in *\** | *\?* | *\[*) continue ;; esac
+    [[ -n "$line" ]] || continue
+    [[ "$dir" == "$line" || "$dir" == "$line"/* ]] && return 0
+  done <"$file"
+  return 1
+}
+
+chk_mole() {
+  local bin
+  bin="$(command -v "$FL_MOLE_CMD" 2>/dev/null || true)"
+  if [[ -z "$bin" ]]; then
+    chk__set ok "Mole not installed"
+  elif fl_mole_protects "$FL_BENCH_DIR"; then
+    chk__set ok "Mole is installed; ${FL_BENCH_DIR} is in ~/.config/mole/whitelist"
+  else
+    chk__set warn "Mole is installed (${bin}); 'mo purge' can delete node_modules and dist folders inside the bench" "mkdir -p ~/.config/mole && echo '${FL_BENCH_DIR}' >> ~/.config/mole/whitelist"
   fi
 }
 
