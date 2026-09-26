@@ -8,7 +8,7 @@ Every command takes the [options for every command](install.md#options-for-every
 ## report
 
 ```
-benchbar report [--print]
+benchbar report [--print | --json]
 ```
 
 Writes a redacted diagnostics zip, `~/Desktop/benchbar-report-<stamp>.zip`,
@@ -25,6 +25,7 @@ zip lists what was replaced.
 | Flag | What it does |
 |---|---|
 | `--print` | Print the same contents to the terminal instead |
+| `--json` | Write the zip and print `{"zip": path, "redactions": n}`, the [report schema](../../json-schema.md#benchbar-report---json) the app reads |
 
 Exit codes: 0; 1 when the zip could not be written.
 
@@ -33,6 +34,38 @@ benchbar report --print
 ```
 
 Attach the zip to an issue at <https://github.com/askysh/benchbar/issues>.
+
+## docs
+
+```
+benchbar docs [TOPIC] [--print]
+```
+
+Opens this documentation in your browser, or the page of one topic:
+`install`, `quick-start`, `app`, `sites`, `apps`, `doctor`, `teams`,
+`agents`, `mcp`, `cli`, `config`, `json`, `runners`, `troubleshooting`,
+`decisions`, `roadmap` or `contributing`. `benchbar docs --help` lists
+every topic with its aliases.
+
+| Flag | What it does |
+|---|---|
+| `--print` | Print the URL instead of opening it |
+
+Exit codes: 0; 1 for an unknown topic.
+
+```bash
+benchbar docs doctor
+```
+
+## --version
+
+```
+benchbar --version
+```
+
+The first line is always `benchbar <version>`, which the app and scripts
+read. When BenchBar.app is installed in `~/Applications` or
+`/Applications`, a second line gives the app's version.
 
 ## list
 

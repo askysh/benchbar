@@ -116,7 +116,7 @@ doctor warns; add the bench folder to its Ignore List.
 | You reboot | The bench comes back only if it was running before; `benchdown` keeps it down |
 | You edit Python code | The web server reloads, the worker does not: `benchrestart` |
 | You edit JS or CSS | Nothing rebuilds in the lean Procfile: `benchwatch` while you work |
-| Scheduled jobs | The lean Procfile has no scheduler: `bench schedule` by hand |
+| Scheduled jobs | The scheduler is opt in: `benchbar service --with-schedule`, then `benchbar restart` |
 | `bench update` or `bench setup procfile` | They rewrite `Procfile`. `Procfile.lean` is separate and untouched |
 
 The bench log is `<bench>/logs/bench.log`; `benchup` keeps the tail of the
