@@ -47,6 +47,9 @@ assert_eq "2" "$(grep -c -x -F "$FL_RC_START" "$rc")"
 # legacy blocks from older setups are reported
 printf '# >>> frappe-bench helpers >>>\nbenchup() { :; }\n# <<< frappe-bench helpers <\n' >>"$rc"
 assert_eq "frappe-bench helpers" "$(fl_rc_legacy_blocks "$rc")"
+# the installer's PATH block is not a legacy block
+printf '# >>> benchbar-path >>>\nexport PATH=x\n# <<< benchbar-path <<<\n' >>"$rc"
+assert_eq "frappe-bench helpers" "$(fl_rc_legacy_blocks "$rc")" "(benchbar-path is not reported)"
 
 # a frappe-mac block from before 0.3.0 is ours: outdated, and replaced in
 # place with benchbar markers
