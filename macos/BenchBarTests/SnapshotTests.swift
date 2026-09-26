@@ -55,6 +55,8 @@ struct SnapshotTests {
         await store.start(polling: false)
         store.selectedPath = v16
         try render(PopoverView(store: store, commands: AppCommands()), "popover-two-benches")
+    }
+
     @Test func logWindow() async throws {
         let bench = base.dir.url.appendingPathComponent("frappe-bench")
         try FileManager.default.createDirectory(at: bench.appendingPathComponent("logs"), withIntermediateDirectories: true)
