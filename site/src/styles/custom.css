@@ -1,0 +1,6 @@
+/* Screenshots in the docs are sized for GitHub with width attributes;
+   keep them inside the content column. */
+.sl-markdown-content img {
+  max-width: 100%;
+  height: auto;
+}

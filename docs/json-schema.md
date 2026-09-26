@@ -1,4 +1,7 @@
-# benchbar JSON API, schema version 1
+---
+title: "benchbar JSON API, schema version 1"
+description: "The versioned JSON that benchbar prints for list, status, doctor, logs, repair, apps, lock, profiles and pull, and the state file the runner writes."
+---
 
 `benchbar` (and its alias `frappe-mac`) prints versioned JSON for three
 commands, and the runner writes one state file per bench. The BenchBar

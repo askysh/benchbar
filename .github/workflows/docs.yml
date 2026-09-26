@@ -1,0 +1,113 @@
+# The docs site, https://benchbar.akashmishra.com: Astro Starlight in
+# site/, built from the markdown in docs/ (plus ROADMAP.md and
+# CONTRIBUTING.md at the root) with Bun.
+#
+# Every pull request gets a "Docs build" check: the build and a link check
+# over the built site. It runs on every pull request, and a small "changes"
+# job skips the build when no docs file changed: a skipped job counts as a
+# pass for a required check, where a workflow filtered out by "paths" would
+# leave the check pending forever (docs/DECISIONS.md, "0.5.5: docs site").
+#
+# A push to main that changed the docs builds again and deploys to GitHub
+# Pages. This is the official Astro Pages workflow with its steps spelled
+# out, so the install can be "bun install --frozen-lockfile" and the link
+# check can run before anything is uploaded.
+name: Docs
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    name: Docs changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      docs: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.docs == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            docs:
+              - 'docs/**'
+              - 'site/**'
+              - 'ROADMAP.md'
+              - 'CONTRIBUTING.md'
+              - '.github/workflows/docs.yml'
+
+  build:
+    name: Docs build
+    needs: changes
+    if: needs.changes.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: site
+    steps:
+      # the whole history: "Last updated" on each page comes from git log
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # the docs' promises to the CLI: a heading per doctor check id, only
+      # flags that --help knows, frontmatter on every page
+      - name: Docs test (tests/test-docs.sh)
+        working-directory: .
+        run: bash tests/run-tests.sh test-docs
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: site/.bun-version
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        env:
+          ASTRO_TELEMETRY_DISABLED: '1'
+        run: bun run build
+
+      - name: Link check
+        run: bun run linkcheck
+
+      - name: Upload the site
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: site/dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v5

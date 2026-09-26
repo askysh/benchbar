@@ -11,6 +11,12 @@
 # shards, each running its tests in parallel; shellcheck runs in shard 1
 # alongside its tests; the release bundle is built in the app job from the
 # same checkout and DerivedData instead of a second job.
+#
+# A change that touches only docs/** or site/** skips the CLI and app jobs
+# (the "changes" job decides; the docs site has its own workflow, docs.yml).
+# The skip happens inside the run, not with a workflow "paths-ignore": a
+# skipped job counts as a pass for a required check, a workflow that never
+# starts leaves it pending (docs/DECISIONS.md, "0.5.5: docs site").
 name: CI
 
 on:
@@ -27,19 +33,52 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Code changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.code == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      # "code" is any file outside docs/ and site/
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          predicate-quantifier: every
+          filters: |
+            code:
+              - '!docs/**'
+              - '!site/**'
+
+  # The shards skip step by step, not with a job "if": a matrix job skipped
+  # as a whole reports one check under its unexpanded name, so a required
+  # "shard 1/3" check would wait forever. A skipped shard runs on a cheap
+  # Linux runner for a few seconds and passes.
   cli-macos:
     name: CLI tests (macOS, shard ${{ matrix.shard }}/3${{ matrix.shard == 1 && ', shellcheck' || '' }})
-    runs-on: macos-latest
+    needs: changes
+    runs-on: ${{ needs.changes.outputs.code == 'true' && 'macos-latest' || 'ubuntu-latest' }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         shard: [1, 2, 3]
+    env:
+      CODE: ${{ needs.changes.outputs.code }}
     steps:
+      - name: Skipped (only docs/ or site/ changed)
+        if: env.CODE != 'true'
+        run: echo "Only docs/ or site/ changed; the CLI tests do not run."
+
       - uses: actions/checkout@v4
+        if: env.CODE == 'true'
 
       - name: Cache Homebrew downloads
-        if: matrix.shard == 1
+        if: env.CODE == 'true' && matrix.shard == 1
         uses: actions/cache@v4
         with:
           path: ~/Library/Caches/Homebrew
@@ -47,10 +86,11 @@ jobs:
           restore-keys: brew-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Install shellcheck
-        if: matrix.shard == 1
+        if: env.CODE == 'true' && matrix.shard == 1
         run: command -v shellcheck >/dev/null 2>&1 || brew install shellcheck
 
       - name: Versions
+        if: env.CODE == 'true'
         run: |
           /bin/bash --version | head -n 1
           sysctl -n hw.ncpu
@@ -59,12 +99,15 @@ jobs:
       # run-tests.sh runs its share of the tests PARALLEL (the CPU count) at a
       # time, and shellcheck as one more job in shard 1
       - name: CLI tests (macOS /bin/bash 3.2)
+        if: env.CODE == 'true'
         env:
           SHARD: ${{ matrix.shard }}/3
         run: /bin/bash tests/run-tests.sh
 
   app:
     name: App build, Swift tests and unsigned release bundle (macOS)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: macos-26
     timeout-minutes: 45
     steps:
