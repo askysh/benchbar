@@ -1,8 +1,34 @@
 # Decisions
 
 One line per non obvious choice: the decision, then the reason. The
-decisions of the app work live in `macos/DECISIONS.md`. The 0.4 run comes
-first, the 0.3 easy install run follows.
+decisions of the app work live in `macos/DECISIONS.md`. The 0.5 and 0.4
+runs come first, the 0.3 easy install run follows.
+
+## 0.5: app installs
+
+Designed against frappe/bench develop (c9d1250) and frappe version-15; the code moved on since the design, and the code won where they disagreed:
+
+- Everything per bench goes through the existing per bench state (`.benchbar/benches/<name>-<hash>.env`, `fl_bstate_get/set`); the site app cache is a sibling file, `<name>-<hash>.site-apps`, not the `<name>.site-apps` of the design.
+- install-app and migrate run with the bench's own Redis up (`fl_bench_redis_up`/`down` from 0.4), because frappe v16 connects to it during both; the exit handler stops what was started, however the command ends.
+- Never `get-app --resolve-deps`: it reads `hooks.py` through the GitHub API (no private repos) and can `rmtree` an existing app. `required_apps` is read from the local `hooks.py` after the clone, resolved through `apps.tsv`, and cloned after a second plan and question.
+- Never `get-app --overwrite`, and stdin is `/dev/null`: an app that exists is reported with the manual `git fetch` and `git checkout`, and a surprise `click.confirm` fails instead of hanging.
+- `--skip-assets`, then one `bench build --app X` (or `--apps a,b` with the required apps): one build, after every dependency is in place.
+- Access is checked before any change with `git ls-remote` under `GIT_TERMINAL_PROMPT=0` and `GIT_SSH_COMMAND='ssh -o BatchMode=yes'`: a private repo without a key or token fails in a second with a fix line (`ssh -T git@HOST` and `ssh-add` for SSH, which also covers host aliases; the SSH URL or `gh auth setup-git` for HTTPS) instead of waiting on a hidden prompt.
+- A repo URL with a user name or token is refused: it would land in `.git/config`, `app list --json` and later a committed lockfile. Remote URLs are always shown without userinfo.
+- `get-app` is always given the resolved URL, also for names like `erpnext` that bench could resolve itself: the preflight checked exactly that URL, and apps.tsv entries without a repo map to `github.com/frappe/<name>`, which is what bench uses.
+- The app name is the repo name (lower case, `-` as `_`) or `--name`; the folder bench actually created is found by comparing `apps/` before and after, so `Raven` becoming `raven` is followed.
+- A get-app that fails half way moves the new folder to `.benchbar/backups/<ts>/apps/` and removes its `apps.txt` line after backing the file up. This is the one edit of `sites/` benchbar makes: a listed app without a folder breaks every bench command, and the line is bench's own half finished write.
+- A dirty app is left alone by `add` (it only installs on sites) but refused by `update`: `add` never touches the code, `update` moves it.
+- `app update` is `git fetch` plus `merge --ff-only`, never `bench update`: one app changes, nothing is rebased or reset. A diverged branch stops with the `git log --graph` to look at; an app ahead of its remote is "unchanged". On a failure the `reset --hard OLD` is printed, never run.
+- A shallow clone is fetched with `--shallow-since=@<HEAD time - 1s>`, so `old..new` exists locally for the changelog and the fast forward check.
+- `update --dry-run` runs `git fetch`: the changelog needs the new commits. Only the app's `.git` changes; the working tree, the sites and benchbar's state do not, and the test snapshots exactly that.
+- Every site that has the app is backed up (`bench --site S backup`) before the merge, `--skip-backup` opts out: the repo rule is a backup before every change, and migrate is the step that can hurt data.
+- Which sites have an app comes from `bench --site S list-apps --format json` with a 15 second limit per site, cached per bench: it needs MariaDB, and doctor (on a timer in the app), `app list --no-sites` and the lockfile check must never need it. A failed read keeps the last good list and says so in `sites_error`.
+- `app update --json` is only the plan (`--dry-run --json`): the app shows the changelog, then runs the update with `--yes` and a live log, and a JSON stream of an apply would need its own format.
+- The doctor checks `apps_txt` and `app_branch_policy` have no repair action: fixing either means changing which code runs, a person's call.
+- `--site` stays the global option, so `app install NAME --site S` and `app add X --site S` parse like every other command.
+- The fake bench of the tests now has an `apps/erpnext` folder: it always listed erpnext in `apps.txt`, which the new `apps_txt` check rightly fails.
+- The git mock passes everything to the real git under `MOCK_GIT_REAL=1`, and the bench mock's `get-app` then really clones (`--origin upstream`, shallow with `MOCK_BENCH_SHALLOW=1`) from bare repos in the test folder over `file://`. `MOCK_GIT_LSREMOTE_EXIT` fakes a private repo. No test touches the network.
 
 ## 0.4: roadmap
 

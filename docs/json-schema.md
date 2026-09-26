@@ -10,6 +10,8 @@ Raycast extensions and the like can rely on it too.
 | `benchbar list --json` | every bench benchbar knows about |
 | `benchbar status --json [--bench-dir DIR]` | the live state of one bench |
 | `benchbar doctor --json [--bench-dir DIR]` | every health check with its fix |
+| `benchbar app list --json` | the bench's apps, their git state and sites (0.5) |
+| `benchbar app update NAME --dry-run --json` | the changelog and plan of an update (0.5) |
 | `<bench>/logs/.benchbar/state.json` | the last state transition, written by the runner and the CLI |
 
 ## Rules for readers
@@ -225,6 +227,60 @@ carry the bench's sites, read from `sites/*/site_config.json`:
 
 `status` and `fix` are the 0.2.0 names of `level` and `fix_command` (with
 `""` instead of `null`), kept for older readers.
+
+## `benchbar app list --json`
+
+Added in 0.5. Every app of the bench: the lines of `sites/apps.txt` in
+order, then any git app in `apps/` that is not listed. The sites come
+from `bench --site S list-apps --format json` (15 seconds per site),
+cached per bench; `--no-sites` reads only the cache, so it never needs
+MariaDB.
+
+```json
+{"schema_version":1,"cli_version":"0.5.0","bench":"/Users/you/frappe-bench","profile":"v15-lts",
+ "sites_checked_at":"2026-09-25T10:00:00Z","sites_error":null,
+ "apps":[{"name":"erpnext","in_apps_txt":true,"repo":"https://github.com/frappe/erpnext","remote":"upstream",
+  "branch":"version-15","policy_branch":"version-15","commit":"b5f784612d5b7969b72848dda5b22f10d3a8f764",
+  "dirty":false,"shallow":true,"version":"15.115.0","sites":["macdev"]}]}
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `sites_checked_at` | string or null | when the site lists were last read from bench |
+| `sites_error` | string or null | why the last read failed for a site (MariaDB down); its apps come from the previous read |
+| `apps[].in_apps_txt` | bool | `false` for a git app that is only a folder (doctor warns) |
+| `apps[].repo` | string or null | the URL of the remote the branch follows (else `upstream`, else the first), without a user name or token |
+| `apps[].remote` | string or null | that remote's name |
+| `apps[].branch` | string or null | `null` on a detached HEAD or without git |
+| `apps[].policy_branch` | string or null | the branch `config/apps.tsv` (or the profile, for frappe) names |
+| `apps[].commit` | string or null | the full HEAD commit |
+| `apps[].dirty` | bool | tracked files have local changes (`git status --porcelain -uno`) |
+| `apps[].shallow` | bool | a shallow clone (bench's `shallow_clone`) |
+| `apps[].version` | string or null | from `sites/apps.json` |
+| `apps[].sites` | array of strings | the sites that have the app installed |
+
+## `benchbar app update NAME --dry-run --json`
+
+Added in 0.5. The plan of an update, after `git fetch` (which changes
+only the app's `.git`). `--json` without `--dry-run` is refused.
+
+```json
+{"schema_version":1,"cli_version":"0.5.0","bench":"/Users/you/frappe-bench","app":"erpnext","remote":"upstream","branch":"version-15",
+ "from":"a1b2c3d...","to":"b5f7846...","commits":[{"sha":"b5f7846","subject":"fix: ..."}],"commits_total":12,
+ "sites":["macdev"],"skip_backup":false,
+ "steps":[{"name":"Back up macdev","command":"bench --site macdev backup"},{"name":"Fast forward","command":"git -C apps/erpnext merge --ff-only b5f784612d5b"}]}
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `from`, `to` | string | full commits; equal when there is nothing to take (also when the app is ahead of its remote) |
+| `commits` | array | newest first, at most 30, `sha` short |
+| `commits_total` | number | all commits in `from..to` |
+| `sites` | array of strings | the sites that have the app: each is backed up (unless `skip_backup`) and migrated |
+| `steps` | array | in order: `Back up S`, `Fast forward`, `Python requirements`, `Node requirements`, `Migrate S`, `Build`, and `Restart` when the bench runs; empty when there is nothing to do |
+
+A dirty tree, a detached HEAD or a diverged branch exits 1 with the
+reason as text.
 
 ## `logs/.benchbar/state.json`
 

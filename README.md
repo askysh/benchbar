@@ -150,6 +150,23 @@ MariaDB, with its `/etc/hosts` line; `--bundle` or `--apps` installs apps
 already in the bench), `site default NAME` (the site `benchup` waits for
 and the app opens) and `site hosts` (adds every missing hosts line).
 
+Apps:
+
+```bash
+benchbar app list                                   # branch, commit, local changes, sites
+benchbar app add crm --site macdev                  # from config/apps.tsv
+benchbar app add git@github.com:acme/acme.git --branch main --all-sites
+benchbar app install crm --site v16two              # an app the bench already has
+benchbar app update erpnext --dry-run               # the changelog and the plan
+benchbar app update erpnext                         # backup, fast forward, migrate, build
+```
+
+`app add` checks that git can read the repo before it changes anything,
+so a private repo without a key or token fails at once with the fix. It
+never replaces an existing app, and `app update` never runs `bench
+update`, never rebases and never resets: a dirty or diverged app is
+refused.
+
 Other commands: `benchbar list`, `benchbar report`,
 `benchbar mariadb-password`, `benchbar service`,
 `benchbar autostart on|off`, `benchbar uninstall-service`,

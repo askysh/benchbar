@@ -4,6 +4,31 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+### Added (0.5)
+
+- App commands. `benchbar app list [--json] [--no-sites]` shows every
+  app with its branch, commit, local changes, shallow clone, version,
+  the `apps.tsv` branch and the sites that have it (read with
+  `bench list-apps`, cached per bench). `app add NAME|URL` gets an app
+  from `config/apps.tsv` or any git URL (GitHub over HTTPS, SSH, or an
+  SSH host alias from `~/.ssh/config`), with `--branch`, `--name`, and
+  `--site S` or `--all-sites`: it checks access first with a git that
+  never prompts, so a missing key or token fails in a second with a fix
+  line, clones with `bench get-app --skip-assets` (never `--overwrite`
+  or `--resolve-deps`), clones the `required_apps` of `hooks.py` after
+  a second plan, installs on the sites, builds once and restarts a
+  running bench. A half finished clone moves to the backups. `app
+  install NAME --site S` installs an app the bench has. `app update
+  NAME` fetches, shows the changelog, backs up every site that has the
+  app, fast forwards, runs requirements, migrate and build; it refuses
+  a dirty tree, a detached HEAD or a diverged branch, and on a failure
+  prints (never runs) the way back. `app update --dry-run --json` is the
+  plan for the app.
+- Doctor checks `apps_txt` (an `apps.txt` line without its folder
+  fails, a git app missing from `apps.txt` warns) and
+  `app_branch_policy` (an app off its `apps.tsv` branch warns). Both
+  read only local files and git; `repair` has no action for them.
+
 ### Added
 
 - The `v16-lts` profile is ready for an end to end run: `pkgconf`
