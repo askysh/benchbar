@@ -45,7 +45,7 @@ runs come first, the 0.3 easy install run follows.
 - Docs only changes skip the CLI and app jobs through a `changes` job (`dorny/paths-filter`) and `if:` conditions, not a workflow `paths-ignore`: a workflow that never starts leaves a required check pending forever, a skipped job counts as a pass. The matrix shards skip step by step on an Ubuntu runner, because a matrix job skipped as a whole reports one check under its unexpanded name. A push to `main` skips the same way: the pull request already ran everything, and `workflow_dispatch` runs all jobs.
 - The docs workflow runs on every pull request and skips its build job the same way when no docs file changed, so "Docs build" can be required too. It also runs `tests/test-docs.sh`, which the CLI shards skip on a docs only change.
 - The link check is linkinator over `site/dist` with fragment checks on, skipping every external URL: GitHub and the site's own domain (before DNS) would make the check flaky, and the internal links are the ones a docs change breaks.
-- The Umami script ships with the `UMAMI_WEBSITE_ID` placeholder, and `og:image` points at `https://benchbar.akashmishra.com/og.png`, which the build copies from `docs/images/og-image.png` when that file exists.
+- The Umami script uses the benchbar.akashmishra.com website of Akash's Umami, limited with `data-domains` so local previews are not counted, and `og:image` points at `https://benchbar.akashmishra.com/og.png`, which the build copies from `docs/images/og-image.png` when that file exists.
 
 ## 0.5.5: readme
 
