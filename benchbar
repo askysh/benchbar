@@ -73,6 +73,8 @@ SCRIPT_DIR="$(fl_resolve_self)"
 . "${SCRIPT_DIR}/lib/frappe-local/bench.sh"
 # shellcheck source=lib/frappe-local/sites.sh
 . "${SCRIPT_DIR}/lib/frappe-local/sites.sh"
+# shellcheck source=lib/frappe-local/pull.sh
+. "${SCRIPT_DIR}/lib/frappe-local/pull.sh"
 
 OPT_BENCH_DIR=""
 OPT_SITE=""
@@ -122,6 +124,19 @@ Daily
   site hosts          Add a 127.0.0.1 line for every site to /etc/hosts (sudo, once).
   mariadb-password    Print the MariaDB root password kept in the Keychain (asks first).
 
+Production copy
+  pull HOST:SITE      Copy a production site over SSH into a NEW local site: the latest
+                      backup on the server (nothing written there), the encryption key,
+                      email muted and the scheduler paused. HOST is from ~/.ssh/config.
+    --as NAME         Local site name (default: SITE.local)
+    --from-dir DIR    A backup set downloaded by hand (Frappe Cloud), no SSH
+    --remote-bench D  The bench folder on the server (default ~/frappe-bench)
+    --new-backup      Run bench backup on the server first (it also deletes older
+                      backups there); asks for the site name, or --confirm-site SITE
+    --replace         Restore over an existing local site, after backing it up
+    --skip-app APP    Restore without APP (its tables stay behind as orphans)
+    --no-files        Database only; --keep-scheduler, --keep-staging
+
 Options
   --bench-dir DIR     Bench to act on (default: remembered, or auto-detected)
   --site NAME         Site name (default: remembered, or from the bench)
@@ -136,7 +151,8 @@ Options
                       free block when another bench already uses them
   --dry-run           Print the full plan, change nothing
   -y, --yes           Do not ask; secrets must come from the environment
-  --json              Versioned JSON for list, status and doctor (docs/json-schema.md)
+  --json              Versioned JSON for list, status and doctor; JSON lines for pull
+                      (docs/json-schema.md)
   --plain             No colors or spinners (also: NO_COLOR=1, or a non-TTY)
   -h, --help          This help
   --version           Print the version
@@ -184,7 +200,10 @@ fl_mode_name() {
 }
 
 fl_cleanup() {
+  local code=$?
   fl_spinner_stop
+  # pull closes its SSH connection and ends its JSON stream with "done"
+  fl_pull_on_exit "$code"
   # a setup Redis started for site add goes, however the command ends
   fl_bench_redis_down >/dev/null 2>&1 || true
   fl_sudo_end
@@ -406,7 +425,7 @@ case "$COMMAND" in
       fl_lock_acquire "${FL_STATE_DIR}/lock"
     fi
     ;;
-  install|adopt|service|repair|up|down|restart|autostart|uninstall-service)
+  install|adopt|service|repair|up|down|restart|autostart|uninstall-service|pull)
     fl_log_init "${FL_STATE_DIR}/logs"
     fl_lock_acquire "${FL_STATE_DIR}/lock"
     ;;
@@ -434,6 +453,7 @@ case "$COMMAND" in
   uninstall-service) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_uninstall_service ;;
   path) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; printf '%s\n' "$FL_BENCH_DIR" ;;
   site) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_site ${ARGS[@]+"${ARGS[@]}"} ;;
+  pull) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_pull ${ARGS[@]+"${ARGS[@]}"} ;;
   report) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_report ${ARGS[@]+"${ARGS[@]}"} ;;
   help) usage ;;
   *) fl_die "Unknown command: ${COMMAND}" "Run: benchbar --help" ;;
