@@ -94,7 +94,7 @@ fl_app_remote_url() {
 }
 
 # The version bench recorded in sites/apps.json for APP.
-fl_app_version() {
+fl_app_json_version() {
   local f="${FL_BENCH_DIR}/sites/apps.json"
   [[ -f "$f" ]] || return 0
   awk -v a="\"$1\"" '
@@ -281,7 +281,7 @@ fl_cmd_app_list() {
         "$(fl_json_str "$(fl_app_remote "$app")")" "$(fl_json_str "$(fl_app_branch "$app")")" \
         "$(fl_json_str "$(fl_app_policy_branch "$app")")" "$(fl_json_str "$(fl_app_commit "$app")")" \
         "$(fl_json_bool "$dirty")" "$(fl_json_bool "$(fl_app_shallow "$app" && printf 1 || printf 0)")" \
-        "$(fl_json_str "$(fl_app_version "$app")")" "$(fl_json_str_array $(fl_app_sites "$app"))"
+        "$(fl_json_str "$(fl_app_json_version "$app")")" "$(fl_json_str_array $(fl_app_sites "$app"))"
       sep=","
     done < <(fl_apps_all)
     printf ']}\n'
@@ -296,7 +296,7 @@ fl_cmd_app_list() {
     fl_app_in_apps_txt "$app" || branch="${branch} (not in apps.txt)"
     policy="$(fl_app_policy_branch "$app")"
     sites="$(fl_app_sites "$app")"
-    rows+=("${app}|${branch:--}|${commit:0:7}|${policy:--}|$(fl_app_version "$app")|${sites:--}")
+    rows+=("${app}|${branch:--}|${commit:0:7}|${policy:--}|$(fl_app_json_version "$app")|${sites:--}")
   done < <(fl_apps_all)
   fl_table "${rows[@]}"
   [[ -n "$(fl_site_apps_meta error)" ]] && fl_warn "$(fl_site_apps_meta error); sites shown from the last good read"
