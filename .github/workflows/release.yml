@@ -81,7 +81,7 @@ jobs:
       VERSION: ${{ needs.check.outputs.version }}
       SIGNED: ${{ needs.check.outputs.signed }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 

@@ -43,7 +43,7 @@ jobs:
     outputs:
       code: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.code == 'true' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # "code" is any file outside docs/ and site/
       - uses: dorny/paths-filter@v4
         id: filter
@@ -74,7 +74,7 @@ jobs:
         if: env.CODE != 'true'
         run: echo "Only docs/ or site/ changed; the CLI tests do not run."
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         if: env.CODE == 'true'
 
       - name: Cache Homebrew downloads
@@ -111,7 +111,7 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@v1
