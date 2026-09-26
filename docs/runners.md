@@ -1,9 +1,12 @@
-# Custom runners
+---
+title: "Custom runners"
+description: "Make your own menu bar runner for BenchBar: the folder, manifest.json, states and frame rules."
+---
 
 The character in the menu bar is a **runner**. BenchBar ships two, Bench
 and Coffee cup, and you can add your own: a folder with a `manifest.json`
 and PNG frames. A working example with the script that drew it is in
-[`examples/runners/blob`](../examples/runners/blob).
+[`examples/runners/blob`](https://github.com/askysh/benchbar/tree/main/examples/runners/blob).
 
 ## Install one
 
@@ -100,7 +103,7 @@ file.
 
 ## Making frames in code
 
-[`examples/runners/blob/make-frames.swift`](../examples/runners/blob/make-frames.swift)
+[`examples/runners/blob/make-frames.swift`](https://github.com/askysh/benchbar/blob/main/examples/runners/blob/make-frames.swift)
 draws the example with Core Graphics:
 
 ```bash

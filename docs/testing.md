@@ -1,4 +1,7 @@
-# Testing BenchBar on your Mac
+---
+title: "Testing BenchBar on your Mac"
+description: "The ten minute guide for testers: install BenchBar, try it on a bench, and send a report."
+---
 
 Thanks for trying BenchBar. This takes about ten minutes if you already
 have a bench, longer for a fresh install (Homebrew downloads and
@@ -149,3 +152,12 @@ a failing test does not stop the others: the run lists every failure at
 the end and exits 1. `TEST_TIMEOUT` (default 600 seconds) kills a hung
 test and prints its process tree. A new `tests/test-*.sh` must be added
 to the list in `tests/run-tests.sh`, or the run fails.
+
+The app and its Swift tests build with `scripts/macos-build.sh --test`.
+
+Issues and pull requests are welcome. For a bug, attach the zip from
+`benchbar report`; it contains no secrets, paths or names. Shell code
+targets macOS `/bin/bash` 3.2 with no dependencies beyond the ones the
+installer needs, passes shellcheck, and every command stays idempotent:
+a second run changes nothing and says so. CI runs the suite on macOS,
+builds the app, and uploads an unsigned bundle for every pull request.

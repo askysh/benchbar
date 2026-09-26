@@ -1,4 +1,7 @@
-# Releasing BenchBar
+---
+title: "Releasing BenchBar"
+description: "How BenchBar releases are built, signed, notarized and published, with the ad hoc and Developer ID paths."
+---
 
 One workflow, `.github/workflows/release.yml`, two paths. It runs when a
 `v*` tag is pushed and drafts a GitHub release with the files below. You

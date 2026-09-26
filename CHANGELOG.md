@@ -21,6 +21,33 @@ All notable changes to this project are documented here.
   the runner frames.
 - ROADMAP: Vouch under 1.0, once drive-by pull requests appear.
 
+### Docs
+
+- **A docs site** at <https://benchbar.akashmishra.com>: Astro Starlight
+  in `site/`, built with Bun from the markdown in `docs/`, with search,
+  dark mode that follows the system, an edit link and the last updated
+  date on every page. Start (Introduction, Install, Quick start, The menu
+  bar app), Guides (Benches and sites, Apps, Doctor and repair, Teams,
+  Coding agents and MCP), a CLI reference with one page per command group
+  (flags, exit codes, an example each), Configuration, and the existing
+  JSON schema, Runners, Troubleshooting, Decisions, Releasing and Testing
+  pages. `ROADMAP.md` and `CONTRIBUTING.md` stay at the repo root and
+  appear as `/roadmap/` and `/contributing/`.
+- Every paragraph of the old README now lives in `docs/`, rewritten into
+  those pages.
+- `docs/guides/doctor-and-repair.md` has a `### <check_id>` heading for
+  every doctor check, with what it checks and its fix, so
+  `/guides/doctor-and-repair/#<check_id>` links land on the right check.
+- Every markdown file in `docs/` has `title` and `description`
+  frontmatter; the duplicate `# ` headings are gone.
+- `.github/workflows/docs.yml` builds the site and checks its links on
+  every pull request, and deploys it to GitHub Pages on a push to `main`
+  that changed the docs. `tests/test-docs.sh` checks that every doctor
+  check id has its heading, that every flag in the CLI reference exists in
+  `benchbar --help`, and that every page has its frontmatter.
+- CI skips the CLI and app jobs when a change touches only `docs/` or
+  `site/`.
+
 ## 0.5.0 - 2026-09-26
 
 BenchBar grows from a start and stop button into the place you run your

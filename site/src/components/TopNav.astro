@@ -1,0 +1,21 @@
+---
+// The top bar's links: the changelog (GitHub releases), then the social
+// icons Starlight renders by default (GitHub).
+import Default from '@astrojs/starlight/components/SocialIcons.astro';
+---
+
+<a class="top-link" href="https://github.com/askysh/benchbar/releases">Changelog</a>
+<Default />
+
+<style>
+  .top-link {
+    color: var(--sl-color-text-accent);
+    font-size: var(--sl-text-sm);
+    text-decoration: none;
+    margin-inline-end: 0.5rem;
+    white-space: nowrap;
+  }
+  .top-link:hover {
+    color: var(--sl-color-white);
+  }
+</style>
