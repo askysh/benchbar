@@ -66,7 +66,25 @@ PY
     case "$3" in
       list-apps) [[ -f "sites/$2/installed_apps" ]] && cat "sites/$2/installed_apps"; exit 0 ;;
       install-app) mkdir -p "sites/$2"; printf '%s 1.0.0\n' "$4" >>"sites/$2/installed_apps"; exit 0 ;;
-      doctor|clear-cache|clear-website-cache) exit 0 ;;
+      doctor|clear-cache|clear-website-cache|migrate|disable-scheduler) exit 0 ;;
+      set-config)
+        # bench --site S set-config [-p] KEY VALUE: the site's own config
+        site="$2"; shift 3; parse=0
+        [[ "${1:-}" == "-p" ]] && { parse=1; shift; }
+        python3 - "sites/${site}/site_config.json" "$1" "$2" "$parse" <<'PY'
+import json, sys
+path, key, value, parse = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4] == "1"
+conf = json.load(open(path))
+conf[key] = json.loads(value) if parse else value
+json.dump(conf, open(path, "w"), indent=1, sort_keys=True)
+open(path, "a").write("\n")
+PY
+        exit 0 ;;
+      remove-from-installed-apps)
+        grep -v "^$4 " "sites/$2/installed_apps" >"sites/$2/installed_apps.tmp" || true
+        mv "sites/$2/installed_apps.tmp" "sites/$2/installed_apps"; exit 0 ;;
+      backup)
+        mkdir -p "sites/$2/private/backups"; printf 'local backup\n' >"sites/$2/private/backups/local-$(date +%s)-database.sql.gz"; exit 0 ;;
     esac
     exit 0 ;;
   *) exit 0 ;;
