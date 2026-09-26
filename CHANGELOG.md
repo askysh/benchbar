@@ -48,6 +48,13 @@ All notable changes to this project are documented here.
 - CI skips the CLI and app jobs when a change touches only `docs/` or
   `site/`.
 
+### Readme
+
+- README rewritten as the front door: logo and popover in light and dark,
+  why, install, quick start, eight features and links into the new
+  documentation site, about 800 words instead of 3,200. Everything it no
+  longer says lives in the docs.
+
 ## 0.5.0 - 2026-09-26
 
 BenchBar grows from a start and stop button into the place you run your
