@@ -105,3 +105,18 @@ removes the app, the `benchbar` links and the PATH block, and offers to
 stop and remove the launchd agents. Your bench, its sites and databases
 are never touched. `benchbar uninstall-service` alone removes only the
 background service of one bench.
+
+## Running the test suite (contributors)
+
+```bash
+tests/run-tests.sh                   # every test, as many at a time as you have CPUs
+PARALLEL=1 tests/run-tests.sh        # one after another
+tests/run-tests.sh test-doctor       # only the named tests
+SHARD=2/3 tests/run-tests.sh         # the second third, as a CI shard does
+```
+
+Each test's output is printed whole when it finishes, in list order, and
+a failing test does not stop the others: the run lists every failure at
+the end and exits 1. `TEST_TIMEOUT` (default 600 seconds) kills a hung
+test and prints its process tree. A new `tests/test-*.sh` must be added
+to the list in `tests/run-tests.sh`, or the run fails.

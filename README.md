@@ -428,7 +428,7 @@ Issues and pull requests are welcome. For a bug, attach the zip from
 `benchbar report`; it contains no secrets, paths or names.
 
 ```bash
-tests/run-tests.sh              # the CLI, under mocks; shellcheck when installed
+tests/run-tests.sh              # the CLI, under mocks, in parallel; shellcheck when installed
 scripts/macos-build.sh --test   # the app and its Swift tests
 ```
 
