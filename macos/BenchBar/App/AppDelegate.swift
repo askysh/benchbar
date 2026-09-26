@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var notifier: Notifier!
     private let library = RunnerLibrary()
     private var updater: Updater?
+    private var about: AboutModel!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // the tests run inside this app (TEST_HOST): no menu bar item, no CLI calls
@@ -36,10 +37,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover.onOpenChange = { [weak self] open in self?.store.setPopoverOpen(open) }
 
         let workbench = Workbench(store: store)
+        about = AboutModel(store: store)
         settingsWindow = SettingsWindowController { [unowned self] router in
-            MainWindowView(store: store, router: router, workbench: workbench) { [unowned self] part in
+            MainWindowView(store: store, router: router, workbench: workbench, about: about) { [unowned self] part in
                 SettingsView(settings: settings, store: store, library: library, launchAtLogin: launchAtLogin, notifier: notifier,
-                             part: part, chooseCLI: { [weak self] in self?.chooseCLI() })
+                             part: part, router: router, chooseCLI: { [weak self] in self?.chooseCLI() })
             }
         }
 
@@ -78,9 +80,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func makeStatusMenu() -> NSMenu {
+    func makeStatusMenu() -> NSMenu {
         let menu = NSMenu()
         menu.addItem(withTitle: "Settings…", action: #selector(openSettingsAction), keyEquivalent: ",").target = self
+        menu.addItem(withTitle: "About BenchBar", action: #selector(openAboutAction), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Documentation", action: #selector(openDocsAction), keyEquivalent: "").target = self
         if let item = updater?.menuItem() { menu.addItem(item) }
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit BenchBar", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
@@ -99,6 +103,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openSettingsAction() { openSettings() }
+
+    // MARK: About and Help
+
+    @objc private func openAboutAction() {
+        popover.close()
+        settingsWindow.show(.about)
+    }
+
+    /// The app menu's Check for Updates in a build without Sparkle: the
+    /// About pane shows the answer.
+    @objc private func checkForUpdatesAction() {
+        settingsWindow.router.updateCheckRequested = true
+        openAboutAction()
+    }
+
+    @objc private func openDocsAction() { NSWorkspace.shared.open(BenchBarLinks.docs) }
+    @objc private func openReleaseNotesAction() { NSWorkspace.shared.open(BenchBarLinks.changelog) }
+
+    @objc private func showShortcutsAction() {
+        popover.close()
+        settingsWindow.router.scrollTarget = SettingsView.shortcutsID
+        settingsWindow.show(.general)
+    }
+
+    @objc private func reportBugAction() {
+        settingsWindow.router.bugReportRequested = true
+        openAboutAction()
+    }
 
     /// Opening BenchBar again (Finder, Spotlight, the Dock while a window is
     /// open) shows the window: a menu bar app has nothing else to show.
@@ -152,14 +184,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Only visible while Settings is open (the app is .regular then), but
     /// it is what makes ⌘W, ⌘Q and copy and paste work in that window.
-    private func makeMainMenu() -> NSMenu {
+    func makeMainMenu() -> NSMenu {
         let main = NSMenu()
 
         let appMenu = NSMenu()
-        appMenu.addItem(withTitle: "About BenchBar", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        appMenu.addItem(withTitle: "About BenchBar", action: #selector(openAboutAction), keyEquivalent: "").target = self
+        if let item = updater?.menuItem() {
+            appMenu.addItem(item)
+        } else {
+            appMenu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdatesAction), keyEquivalent: "").target = self
+        }
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Settings…", action: #selector(openSettingsAction), keyEquivalent: ",").target = self
-        if let item = updater?.menuItem() { appMenu.addItem(item) }
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Quit BenchBar", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         main.addItem(submenu(appMenu, title: "BenchBar"))
@@ -179,6 +215,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.addItem(withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
         main.addItem(submenu(window, title: "Window"))
         NSApp.windowsMenu = window
+
+        // Help last: macOS adds its search field to the menu set as helpMenu
+        let help = NSMenu(title: "Help")
+        help.addItem(withTitle: "BenchBar Documentation", action: #selector(openDocsAction), keyEquivalent: "?").target = self
+        help.addItem(withTitle: "Keyboard Shortcuts", action: #selector(showShortcutsAction), keyEquivalent: "").target = self
+        help.addItem(.separator())
+        help.addItem(withTitle: "Release Notes", action: #selector(openReleaseNotesAction), keyEquivalent: "").target = self
+        help.addItem(withTitle: "Report a Bug…", action: #selector(reportBugAction), keyEquivalent: "").target = self
+        main.addItem(submenu(help, title: "Help"))
+        NSApp.helpMenu = help
         return main
     }
 

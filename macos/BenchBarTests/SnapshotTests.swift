@@ -98,8 +98,9 @@ struct SnapshotTests {
         return store
     }
 
-    private func window(_ store: BenchStore, _ workbench: Workbench, _ router: WindowRouter) -> some View {
-        MainWindowView(store: store, router: router, workbench: workbench) { part in
+    private func window(_ store: BenchStore, _ workbench: Workbench, _ router: WindowRouter,
+                        about: AboutModel? = nil) -> some View {
+        MainWindowView(store: store, router: router, workbench: workbench, about: about ?? AboutModel(store: store)) { part in
             SettingsView(settings: base.settings, store: store, library: RunnerLibrary(folder: base.dir.url.appendingPathComponent("Runners")),
                          launchAtLogin: LaunchAtLogin(), notifier: Notifier(settings: base.settings), part: part, chooseCLI: {})
         }
@@ -143,6 +144,37 @@ struct SnapshotTests {
         run.apply(.step(action: "hosts_entry", status: "skipped", message: "[WARN] skipped without sudo; run: printf '127.0.0.1 v16two' | sudo tee -a /etc/hosts"))
         run.apply(.done(exitCode: 1, log: "/Users/you/.local/share/benchbar/.benchbar/logs/20260926-101500.log"))
         try render(RepairSheet(run: run, close: {}), "repair-finished")
+    }
+
+    @Test func windowAbout() async throws {
+        let store = try await windowStore()
+        base.cli.answer("--version", json: "benchbar 0.5.5\nBenchBar app 0.5.5 (/Applications/BenchBar.app)\n")
+        let release = try Fixture.data("github-release-latest")
+        let about = AboutModel(store: store, updates: UpdateChecker(currentVersion: "0.5.5") { _ throws(UpdateCheckError) in release })
+        await about.loadCLIVersion()
+        await about.updates.check()
+        let router = WindowRouter()
+        router.pane = .about
+        try render(window(store, Workbench(store: store), router, about: about), "window-about")
+    }
+
+    @Test func bugReportSheet() async throws {
+        let store = try await windowStore()
+        base.cli.answer("--version", json: "benchbar 0.5.5\n")
+        base.cli.answer("report", json: try Fixture.string("report"))
+        let report = BugReport(store: store)
+        report.reveal = { _ in }
+        report.openURL = { _ in }
+        try render(BugReportSheet(report: report, close: {}), "bug-report-ready")
+        await report.create()
+        try render(BugReportSheet(report: report, close: {}), "bug-report-done")
+    }
+
+    @Test func popoverNoBench() async throws {
+        base.cli.answer("list", json: try Fixture.string("list-empty"))
+        let store = base.makeStore()
+        await store.start(polling: false)
+        try render(PopoverView(store: store, commands: AppCommands()), "popover-no-bench")
     }
 
     @Test func popoverCLIMissing() async throws {

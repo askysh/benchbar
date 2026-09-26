@@ -1,0 +1,20 @@
+{
+  "url": "https://api.github.com/repos/askysh/benchbar/releases/250000000",
+  "html_url": "https://github.com/askysh/benchbar/releases/tag/v0.6.0",
+  "id": 250000000,
+  "tag_name": "v0.6.0",
+  "target_commitish": "main",
+  "name": "BenchBar 0.6.0",
+  "draft": false,
+  "prerelease": false,
+  "created_at": "2026-10-20T09:00:00Z",
+  "published_at": "2026-10-20T09:30:00Z",
+  "assets": [
+    {
+      "name": "BenchBar-0.6.0.zip",
+      "browser_download_url": "https://github.com/askysh/benchbar/releases/download/v0.6.0/BenchBar-0.6.0.zip",
+      "size": 4200000
+    }
+  ],
+  "body": "See CHANGELOG.md"
+}

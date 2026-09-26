@@ -18,6 +18,12 @@ final class WindowRouter {
     var benchTab: BenchTab = .overview
     /// Set to open the Repair sheet on the bench page when it appears.
     var repairRequested = false
+    /// Set by the Help menu: the About pane opens its Report a Bug sheet.
+    var bugReportRequested = false
+    /// Set by the app menu: the About pane checks for updates.
+    var updateCheckRequested = false
+    /// Set by Help > Keyboard Shortcuts: General scrolls to that section.
+    var scrollTarget: String?
 
     func show(bench path: String, tab: BenchTab = .overview) {
         pane = .bench(path)
@@ -32,6 +38,7 @@ struct MainWindowView: View {
     let store: BenchStore
     @Bindable var router: WindowRouter
     let workbench: Workbench
+    let about: AboutModel
     let makeSettings: (SettingsView.Part) -> SettingsView
 
     var body: some View {
@@ -77,7 +84,7 @@ struct MainWindowView: View {
         case .profiles:
             ProfilesPane(store: store, workbench: workbench).navigationTitle("Team Profiles")
         case .about:
-            AboutPane(store: store).navigationTitle("About BenchBar")
+            AboutPane(store: store, model: about, router: router).navigationTitle("About BenchBar")
         case .bench(let path):
             if let bench = store.benches.first(where: { $0.path == path }) {
                 BenchPage(store: store, workbench: workbench, bench: bench, router: router)

@@ -67,6 +67,8 @@ SCRIPT_DIR="$(fl_resolve_self)"
 . "${SCRIPT_DIR}/lib/frappe-local/service.sh"
 # shellcheck source=lib/frappe-local/report.sh
 . "${SCRIPT_DIR}/lib/frappe-local/report.sh"
+# shellcheck source=lib/frappe-local/docs.sh
+. "${SCRIPT_DIR}/lib/frappe-local/docs.sh"
 # shellcheck source=lib/frappe-local/sudo.sh
 . "${SCRIPT_DIR}/lib/frappe-local/sudo.sh"
 # shellcheck source=lib/frappe-local/mariadb.sh
@@ -110,7 +112,8 @@ Setup
                       Shows the plan and asks; never runs migrate, build or update.
   service             Install or refresh only the background service (phase 02).
   doctor              Read-only health report. Exit 1 when something FAILs.
-  report              Redacted diagnostics zip on the Desktop for bug reports (--print: to the terminal).
+  report              Redacted diagnostics zip on the Desktop for bug reports (--print: to the terminal,
+                      --json: {"zip": path, "redactions": n} for the app and scripts).
   repair              Apply only the fixes doctor flagged, in dependency order.
   uninstall-service   Remove the agent, runner, Procfile.lean and shell helpers.
 
@@ -134,6 +137,8 @@ Daily
   mariadb-password    Print the MariaDB root password kept in the Keychain (asks first).
   mcp                 Model Context Protocol server on stdio for coding agents
                       (claude mcp add benchbar -- benchbar mcp). Read tools, up, down, restart.
+  docs [TOPIC]        Open the documentation, or one topic's page (benchbar docs --help lists
+                      them: install, doctor, apps, mcp, json ...); --print prints the URL.
 
 Apps
   app list            Every app: branch, commit, local changes, the sites that have it
@@ -193,11 +198,23 @@ Options
                       (docs/json-schema.md)
   --plain             No colors or spinners (also: NO_COLOR=1, or a non-TTY)
   -h, --help          This help
-  --version           Print the version
+  --version           Print the version (and the BenchBar app's, when it is installed)
 
 Shell helpers (written to your shell rc by install or repair):
   benchup benchdown benchrestart benchstatus benchlogs benchfg benchwatch benchdoctor benchcd
+
+Documentation: $(fl_docs_url /)
 USAGE
+}
+
+# benchbar --version: the first line stays "benchbar X.Y.Z" (the app and
+# scripts read it); the installed app's version follows on its own line.
+fl_print_version() {
+  local app tab=$'\t'
+  printf 'benchbar %s\n' "$FL_VERSION"
+  app="$(fl_app_bundle_info)"
+  [[ -n "$app" ]] && printf 'BenchBar app %s (%s)\n' "${app%%"$tab"*}" "${app#*"$tab"}"
+  return 0
 }
 
 while [[ "$#" -gt 0 ]]; do
@@ -219,8 +236,9 @@ while [[ "$#" -gt 0 ]]; do
     -y|--yes) FL_ASSUME_YES=1; shift ;;
     --json) OPT_JSON=1; shift ;;
     --plain|--no-color) FL_PLAIN=1; fl_ui_init; shift ;;
-    --version) printf 'benchbar %s\n' "$FL_VERSION"; exit 0 ;;
-    -h|--help) usage; exit 0 ;;
+    --version) fl_print_version; exit 0 ;;
+    # benchbar docs --help lists the topics; every other --help is this one
+    -h|--help) if [[ "$COMMAND" == "docs" ]]; then ARGS+=("$1"); shift; else usage; exit 0; fi ;;
     --) shift; ARGS+=("$@"); break ;;
     -*)
       if [[ -n "$COMMAND" ]]; then ARGS+=("$1"); shift; else fl_die "Unknown option: $1" "Run: benchbar --help"; fi ;;
@@ -531,6 +549,7 @@ case "$COMMAND" in
   lock) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_lock ${ARGS[@]+"${ARGS[@]}"} || exit 1 ;;
   pull) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_pull ${ARGS[@]+"${ARGS[@]}"} ;;
   report) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_report ${ARGS[@]+"${ARGS[@]}"} ;;
+  docs) fl_cmd_docs ${ARGS[@]+"${ARGS[@]}"} ;;
   mcp)
     # stdlib only Python 3.9+; the Command Line Tools' python3 is enough
     command -v python3 >/dev/null 2>&1 || fl_die "python3 is needed for benchbar mcp." "Install the Xcode Command Line Tools: xcode-select --install"

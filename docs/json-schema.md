@@ -16,6 +16,7 @@ Raycast extensions and the like can rely on it too.
 | `benchbar lock check --json` | how the bench differs from its `benchbar.toml` (0.5) |
 | `<bench>/logs/.benchbar/state.json` | the last state transition, written by the runner and the CLI |
 | `benchbar pull ... --json` | JSON lines while a production site is copied, see [pull](#benchbar-pull---json) |
+| `benchbar report --json` | where the redacted diagnostics zip went (0.5.5), see [report](#benchbar-report---json) |
 
 ## Rules for readers
 
@@ -420,6 +421,23 @@ passwords must be entered again. Step ids: `new_backup`, `download`,
 
 No event ever holds a password, the encryption key or a token from an
 app's remote URL.
+
+## `benchbar report --json`
+
+Writes the redacted diagnostics zip (to `~/Desktop`, or `--out DIR`) and
+prints one line on stdout; the human text goes to stderr. The BenchBar
+app's Report a Bug uses it.
+
+```json
+{"schema_version":1,"cli_version":"0.5.5","zip":"/Users/you/Desktop/benchbar-report-20260926-101500.zip","redactions":14}
+```
+
+| Field | Type | Meaning |
+|---|---|---|
+| `zip` | string | absolute path of the zip just written |
+| `redactions` | number | lines on which something was replaced (a credential, the home folder, the username, a name of this Mac); `REDACTIONS.txt` in the zip lists them |
+
+Exit 0 when the zip was written. `--json` with `--print` exits 1.
 
 ## `logs/.benchbar/state.json`
 
