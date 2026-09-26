@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# scp mock: copies HOST:PATH from the fake remote home into the local destination.
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "$(dirname "$0")/_mocklib.sh"
+mock_log "$@"
+pos=()
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    -o|-P|-i|-F|-J) shift 2 ;;
+    -*) shift ;;
+    *) pos+=("$1"); shift ;;
+  esac
+done
+src="${pos[0]:-}"; dest="${pos[1]:-}"
+path="${src#*:}"
+[[ "$path" == /* ]] || path="${MOCK_STATE:?}/remote/home/${path}"
+[[ -f "$path" ]] || { echo "scp: ${path}: No such file or directory" >&2; exit 1; }
+[[ -d "$dest" ]] && dest="${dest%/}/$(basename "$path")"
+cp "$path" "$dest"

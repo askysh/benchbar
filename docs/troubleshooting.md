@@ -70,6 +70,20 @@ patched Qt package (Intel binary, Rosetta 2 offered on Apple Silicon,
 `sudo` once). If a Homebrew wkhtmltopdf earlier on `PATH` shadows the
 package, doctor says so: `brew uninstall wkhtmltopdf`.
 
+**Passwords do not decrypt after a restore.** Frappe says "Encryption key
+is invalid! Please check site_config.json", an Email Account stops
+connecting, or `benchbar pull` warns that stored passwords do not
+decrypt. Frappe encrypts every stored password (email accounts,
+integrations, `Password` fields) with `encryption_key` from the site's
+`site_config.json`, and `bench restore` never copies it: a restored site
+without it generates a new key, which cannot read the old rows.
+`benchbar pull` copies the production key for you. After a restore by
+hand, or when production had no key, copy `encryption_key` from the
+production `site_config.json` into the local one (only that key; the
+database password and Redis settings there belong to production), then
+`bench --site SITE clear-cache`. When the production key is lost, the
+passwords are too: enter them again in the copy.
+
 **Something else.** `benchbar report` writes a redacted zip for a bug
 report; attach it to an issue at
 <https://github.com/askysh/benchbar/issues>.
@@ -141,6 +155,9 @@ are reported so you can remove them by hand.
   checkout
 - the Keychain item `benchbar-mariadb`
 - `<bench>/logs/.benchbar/state.json`, written by the runner
+- `<bench>/.benchbar/pulls/<site>-<backup>/` (mode 0700), the download of
+  `benchbar pull`: kept after a failed run so the next one resumes,
+  removed after a successful one unless `--keep-staging`
 
 Every generated file carries a `benchbar-template` header with a version
 and a content hash. Do not edit inside the markers of the shell block or

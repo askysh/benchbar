@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# ssh mock: runs the remote command with bash inside a fake remote home
+# ($MOCK_STATE/remote/home), so "~/frappe-bench" is a folder the test built.
+# Every call is logged on one line (a multi line snippet too). "-O exit"
+# (closing the control master) only logs. $MOCK_STATE/ssh_refused makes the
+# connection fail with 255, $MOCK_STATE/remote_no_rsync hides rsync there.
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "$(dirname "$0")/_mocklib.sh"
+mock_log "$(printf '%s' "$*" | tr '\n' ' ')"
+host=""; op=""; cmd=()
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    -O) op="$2"; shift 2 ;;
+    -o|-p|-i|-l|-F|-J) shift 2 ;;
+    --) shift; host="${1:-}"; shift || true; cmd=("$@"); break ;;
+    -*) shift ;;
+    *) host="$1"; shift; cmd=("$@"); break ;;
+  esac
+done
+[[ -n "$op" ]] && exit 0
+if [[ -f "${MOCK_STATE:?}/ssh_refused" ]]; then
+  echo "ssh: connect to host ${host} port 22: Connection refused" >&2
+  exit 255
+fi
+remote="${MOCK_STATE}/remote/home"
+[[ -d "$remote" ]] || { echo "ssh: Could not resolve hostname ${host}" >&2; exit 255; }
+if [[ "${cmd[*]}" == "command -v rsync" && -f "${MOCK_STATE}/remote_no_rsync" ]]; then exit 1; fi
+cd "$remote" || exit 255
+HOME="$remote" exec bash -c "${cmd[*]}"

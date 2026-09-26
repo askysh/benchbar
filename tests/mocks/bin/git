@@ -33,9 +33,20 @@ case "${1:-}" in
     fi
     exit 0 ;;
   rev-parse)
+    # "-C DIR rev-parse --abbrev-ref HEAD" on a fake app: the branch from .git/HEAD
+    if [[ "${2:-}" == "--abbrev-ref" && -f "${dir:-.}/.git/HEAD" ]]; then
+      sed 's#^ref: refs/heads/##' "${dir:-.}/.git/HEAD"
+      exit 0
+    fi
     cat "${MOCK_STATE:?}/git_head" 2>/dev/null || printf 'abc1234'
     printf '\n'
     exit 0 ;;
+  remote)
+    # "-C DIR remote get-url origin" on a fake app: .git/origin_url
+    if [[ "${2:-}" == "get-url" && -f "${dir:-.}/.git/origin_url" ]]; then
+      cat "${dir:-.}/.git/origin_url"
+      exit 0
+    fi ;;
 esac
 # Anything else goes to the real git: the first one on PATH outside the
 # mocks folder. Never this script again (bash 3.2's "command -v -p" still

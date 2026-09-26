@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# gpg mock: "-o OUT -d IN" with the passphrase on stdin (--passphrase-fd 0).
+# The passphrase must equal $MOCK_STATE/backup_key; the "encrypted" file is
+# copied as it is. Only the arguments are logged, never stdin.
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "$(dirname "$0")/_mocklib.sh"
+[[ "${1:-}" == "--version" ]] && { printf 'gpg (GnuPG) 2.4.5\n'; exit 0; }
+mock_log "$@"
+out=""; in=""; fd=""
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    -o|--output) out="$2"; shift 2 ;;
+    -d|--decrypt) in="$2"; shift 2 ;;
+    --passphrase-fd) fd="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+[[ "$fd" == "0" ]] || { echo "gpg: no passphrase given" >&2; exit 2; }
+pass="$(cat)"
+if [[ "$pass" != "$(cat "${MOCK_STATE:?}/backup_key" 2>/dev/null)" ]]; then
+  echo "gpg: decryption failed: Bad session key" >&2
+  exit 2
+fi
+: >"${MOCK_STATE}/gpg_passphrase_ok"
+cp "$in" "$out"

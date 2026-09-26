@@ -64,6 +64,54 @@ Designed against frappe/bench develop (c9d1250) and frappe version-15; the code 
 - Cloning goes through `app add`'s own steps (access check, `get-app --skip-assets`, the half clone rollback); `setup requirements --python` and `--node` run only for apps whose code changed in place (get-app already did it for new clones), and one `bench build --apps a,b` covers all of them.
 - `lock write` refreshes the site app lists from bench (it is the one lock command that may ask the database) and falls back to the cache with a warning. A dirty or detached app is refused unless `--allow-dirty`, which pins the commit as it is (a detached app then takes its policy branch).
 - The written file is parsed back before it is shown, so `write` can never produce a file `check` rejects.
+decisions of the app work live in `macos/DECISIONS.md`. The 0.5 and 0.4 runs come
+first, the 0.3 easy install run follows.
+
+## 0.5: benchbar pull
+
+Upstream facts behind the design, frappe `version-15` and `version-16` (the same in both), from the design notes:
+
+- F1 `frappe/commands/site.py` restore: `--encryption-key` is the gpg passphrase for `-enc` backup files, not the site `encryption_key`; without it restore reads `backup_encryption_key` from the site config (`get_or_generate_backup_encryption_key()` in `frappe/utils/backups.py`).
+- F2 `decrypt_backup` in `frappe/utils/backups.py` runs `gpg --yes --passphrase {passphrase} ...` in a shell, so the passphrase shows in the process list.
+- F3 `frappe/utils/password.py`: `get_encryption_key()` generates and saves a new key when `encryption_key` is missing, and `decrypt()` then fails with "Encryption key is invalid! Please check site_config.json". Restore never copies the key.
+- F4 `restore_backup` calls `_new_site(..., force=True)`: on an existing site it recreates the database; a fresh name is created with a generated `db_name` (`get_sites` in `frappe/utils/bench_helper.py` accepts any name).
+- F5 `_new_site` installs only frappe, `install_apps` and `--install-app`; restore never checks that the dumped apps exist on the bench.
+- F6 restore `--force` only skips the downgrade question and turns a missing `__Auth` into a warning; it does nothing for missing apps.
+- F7 `bench backup` calls `new_backup(force=True)`, which first runs `delete_temp_backups()` and removes files in `private/backups` older than `keep_backups_for_hours` (default 23).
+- F8 migrate's `pre_schema_updates` and `after_migrate` call `get_hooks(app_name=app)` for every installed app; `_load_app_hooks` re-raises `ImportError` for an app not on the bench. `remove-from-installed-apps` edits only the list.
+- F9 `are_emails_muted()` is `flags.mute_emails or cint(conf.get("mute_emails"))`; there is no `disable_email` key. The scheduler stops with `pause_scheduler` in the config or `disable-scheduler`.
+
+Decisions:
+
+- The default source is the latest existing backup: a plain pull writes nothing on the server.
+- `--new-backup` needs the production site name typed, even with `--yes`, because `bench backup` also deletes older backups (F7). Without a terminal the name comes from `--confirm-site SITE`, still typed by whoever runs the command; `--yes` alone never takes a backup.
+- Restore goes only into a new site name; `--replace` first runs `bench --site NAME backup --with-files` locally, because restore over an existing site recreates its database (F4).
+- The keys come from the live production `site_config.json`, read by a Python snippet on the server that prints only the one value asked for, not from the downloaded `site_config_backup.json` (the design): the database password and Redis settings of production never reach the Mac, and it also works when the config backup is encrypted. `--from-dir` has no server and reads the `site_config_backup.json` in the folder.
+- Only `encryption_key` is written into the new site (F3); `backup_encryption_key` is used only as the gpg passphrase (F1), so the copy's own backups are not encrypted with the production key.
+- The key flows through pipes only (ssh stdout into a Python snippet's stdin); it is never on a command line, in a shell variable, on disk outside `site_config.json`, in the output or in the log. The snippet writes the file the way `update_site_config` does (indent 1, sorted keys, temp file and rename) with plain Python, so it needs no frappe import and runs under the test mocks.
+- The MariaDB root password and the Administrator password reach frappe on stdin: a small wrapper reads the secret, puts it into `sys.argv` inside the process and calls `frappe.utils.bench_helper.main()`, which is what `bench` itself runs from `sites/`. The design passed `--db-root-password` on the command line (accepted in 0.3 for `new-site`); the wrapper keeps it out of `ps` at no cost. The option used is `--mariadb-root-password`, the spelling `new-site` already uses.
+- Encrypted backups are decrypted here with `gpg --batch --pinentry-mode loopback --passphrase-fd 0` (F2); gpg is needed only then, and a missing one stops before the download with `brew install gnupg`.
+- Restore `--force` is never passed: it does not help with missing apps (F6) and would hide a downgrade. Instead pull stops before the download when production frappe is newer than the bench's.
+- Missing apps stop the run before the download with the `bench get-app --branch B URL` commands (F5, F8). The design offered `benchbar app add`; that command is being built separately, so pull only prints the commands for now.
+- `--skip-app` runs `remove-from-installed-apps` and prints that its doctypes and tables stay as orphans (F8). frappe cannot be skipped.
+- Tokens in an app's git remote URL (`https://user:token@host/...`) are cut before the URL is shown or logged.
+- The production app list comes from the text form of `list-apps` (name, version, branch), parsed by its first columns; `--from-dir` reads the `installed_apps` global from the dump (`tabDefaultValue`, what `frappe.get_installed_apps()` reads), after decryption when the dump is encrypted.
+- Migrate runs when any app version differs from production, is unknown, or an app was skipped; the design ran it only when local code was newer, but an older local app with the same schema is the rare case and a needless migrate is cheap.
+- Email is muted (`mute_emails`), the scheduler paused (`pause_scheduler` and `disable-scheduler`) and `host_name` set before the first start (F9): a copy must never mail customers or poll inboxes. `--keep-scheduler` leaves the scheduler alone.
+- The Administrator password is reset only with `ADMIN_PASSWORD` or after a yes at the prompt; otherwise the production password keeps working. The design's `--admin-password-prompt` flag was left out: without `--yes` pull asks anyway.
+- A decrypt probe after the restore counts the encrypted `__Auth` rows that decrypt and that fail and prints only the counts, so a wrong key shows up at once, not at the first email sync.
+- Restore and migrate run with the bench's own Redis (`fl_bench_redis_up`, from `site add`): frappe v16 connects to it during site setup, and the code has moved on since the design.
+- The staging folder is `<bench>/.benchbar/pulls/<site>-<backup timestamp>/`, not `<timestamp of the run>`: a rerun of the same pull finds the partial files and resumes. It is mode 0700, removed file by file after a successful run, kept after a failed one.
+- rsync gets `--partial --append-verify --info=progress2` only when the local rsync is 3.x; macOS ships openrsync (2.6.9 compatible), which has neither, so it gets `--partial --progress`, and the partial file is the basis of the next transfer. `scp` is used when the server has no rsync; it cannot resume.
+- A file whose local size already matches the server's is not downloaded again.
+- The free space check wants 3x the backup (download, decrypted copy or database, extracted files) on the bench's volume, before any transfer.
+- SSH settings come only from `~/.ssh/config` (ProxyJump, keys, ports); benchbar adds `BatchMode=yes` under `--yes` or `--json` and one control connection (`ControlMaster=auto`, `ControlPersist=60`) closed with `-O exit` when the run ends. Its socket is in `/tmp/benchbar-ssh.XXXXXX`, because socket paths are limited to 104 bytes and bench paths can be long.
+- The host must look like a Host alias (`[A-Za-z0-9@._-]`, not starting with `-`) and every remote word is single quoted, so no argument becomes an ssh option or remote shell code.
+- Remote commands are an allowlist (the site check, `list-apps`, `git rev-parse` and `remote get-url`, `ls`, `wc -c`, the key read, `command -v rsync`, and `bench backup` after the gate); the test fails on anything else.
+- Remote frappe runs through `env/bin/python -m frappe.utils.bench_helper` from `sites/`: non login SSH shells often lack `bench` on PATH.
+- `pull --json` streams one object per line on stdout and moves every human line to stderr; `done` is always the last line, written by the exit handler after a refusal or a failure too.
+- Only the source (`PULL_SOURCE`) and the remote bench are remembered, per bench, so `benchbar pull` alone repeats the last pull; no password is stored.
+- test-pull fails first when an ssh, rsync, scp, gpg or df mock is not the first one on PATH: during development a mock that was not yet executable let `/usr/bin/ssh` look up the host `prod`, which did not resolve, so nothing connected.
 
 ## 0.4: roadmap
 

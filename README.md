@@ -166,6 +166,25 @@ so a private repo without a key or token fails at once with the fix. It
 never replaces an existing app, and `app update` never runs `bench
 update`, never rebases and never resets: a dirty or diverged app is
 refused.
+### A copy of production
+
+```bash
+benchbar pull prod:erp.example.com --as erpcopy --dry-run   # read only, prints the plan
+benchbar pull prod:erp.example.com --as erpcopy             # asks before it restores
+benchbar pull --from-dir ~/Downloads/erp-backup --as erpcopy   # a Frappe Cloud download
+```
+
+`prod` is a Host from `~/.ssh/config`. Pull takes the latest backup that
+already exists on the server, so nothing is written there (`--new-backup`
+runs `bench backup` first, which also deletes older backups on the server,
+so it asks you to type the site name). The download resumes when the link
+drops. The copy always goes into a new local site (`--replace` backs an
+existing one up first), gets the production `encryption_key` so stored
+passwords still decrypt, has email muted and the scheduler paused before it
+ever starts, and runs `bench migrate` when your apps are newer. When the
+bench lacks an app production has, pull stops and prints the
+`bench get-app` command; `--skip-app APP` restores without it. Encrypted
+backups are decrypted locally with `gpg` (`brew install gnupg`).
 
 Other commands: `benchbar list`, `benchbar report`,
 `benchbar mariadb-password`, `benchbar service`,

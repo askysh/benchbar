@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# df mock: $MOCK_STATE/df_avail_kb fakes the free space of every volume;
+# without it the real df answers.
+if [[ -f "${MOCK_STATE:-/nonexistent}/df_avail_kb" ]]; then
+  printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\n'
+  printf '/dev/disk3s5 999999999 1 %s 1%% /\n' "$(cat "${MOCK_STATE}/df_avail_kb")"
+  exit 0
+fi
+exec /bin/df "$@"
