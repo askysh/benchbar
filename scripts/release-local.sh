@@ -62,7 +62,10 @@ BENCHBAR_VERSION="$VERSION" BENCHBAR_BUILD="$BUILD_NUMBER" "${ROOT}/scripts/maco
 # macos-build.sh already signed ad hoc with the Hardened Runtime and the
 # entitlements; signing again here would drop both. Only verify.
 codesign --verify --deep --strict "$APP"
-codesign -dv --verbose=2 "$APP" 2>&1 | grep -q 'flags=.*runtime' || die "the app lost its Hardened Runtime flag"
+# captured first: grep -q stops reading at the match, and codesign's
+# SIGPIPE would fail the pipeline under pipefail
+signature="$(codesign -dv --verbose=2 "$APP" 2>&1 || true)"
+[[ "$signature" == *"flags="*"runtime"* ]] || die "the app lost its Hardened Runtime flag"
 got="$(defaults read "${APP}/Contents/Info" CFBundleShortVersionString 2>/dev/null || true)"
 [[ "$got" == "$VERSION" ]] || die "Info.plist says ${got:-nothing}, expected ${VERSION}"
 ok "BenchBar.app ${VERSION} (${BUILD_NUMBER}), ad hoc signed"
