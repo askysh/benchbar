@@ -28,6 +28,20 @@ All notable changes to this project are documented here.
   fails, a git app missing from `apps.txt` warns) and
   `app_branch_policy` (an app off its `apps.tsv` branch warns). Both
   read only local files and git; `repair` has no action for them.
+- Team profiles: an organisation's bench recipe in a TOML file outside
+  BenchBar, in `~/.config/benchbar/profiles/NAME.toml` or a folder on
+  `BENCHBAR_PROFILE_PATH` (a clone of the team's config repo). It names
+  a built in `base` for Python, Node and MariaDB, an optional
+  `frappe_branch`, a `bundle` or `[[apps]]` with repo, branch and an
+  optional commit, and optional `site` and `scheduler`. `benchbar
+  install --profile NAME` uses it, and the bench keeps following it.
+  `benchbar profile list [--json]`, `profile show NAME` and `profile
+  create NAME --from-bench PATH [--dir DIR]` (reads a bench, never
+  writes a credential or a commit). A team profile may not shadow a
+  built in one.
+- Access checks before cloning (phase 01 and `app add`) run git with
+  `GIT_TERMINAL_PROMPT=0` and SSH in batch mode, so a private repo fails
+  at once instead of waiting on a prompt.
 
 ### Added
 

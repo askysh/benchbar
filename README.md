@@ -172,6 +172,42 @@ Other commands: `benchbar list`, `benchbar report`,
 `benchbar autostart on|off`, `benchbar uninstall-service`,
 `benchbar --help`.
 
+## Team profiles
+
+A team profile is your organisation's bench recipe: a small TOML file
+that names a built in base profile and your apps with their repos and
+branches. It lives outside BenchBar, in
+`~/.config/benchbar/profiles/NAME.toml` or in a clone of your team's
+config repo listed in `BENCHBAR_PROFILE_PATH`.
+
+```toml
+# ~/.config/benchbar/profiles/acme.toml
+base = "v15-lts"                  # Python, Node and MariaDB come from here
+site = "acme.localhost"
+scheduler = false
+
+[[apps]]
+name = "erpnext"
+repo = "https://github.com/frappe/erpnext"
+branch = "version-15"
+
+[[apps]]
+name = "acme"
+repo = "git@github.com:acme/acme.git"
+branch = "main"
+```
+
+```bash
+benchbar profile create acme --from-bench ~/frappe-bench   # write one from a bench you have
+benchbar profile list                                     # built in and team profiles
+benchbar profile show acme
+benchbar install --profile acme                           # a new Mac, the same bench
+```
+
+The file is a strict subset of TOML (strings, booleans, integers and
+one line lists; no escapes, no inline tables), and a repo URL with a
+user name or token is refused, since the file is meant to be committed.
+
 ## The menu bar app
 
 The runner in the menu bar sleeps when the bench is stopped, walks while

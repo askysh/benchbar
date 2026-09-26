@@ -12,6 +12,7 @@ Raycast extensions and the like can rely on it too.
 | `benchbar doctor --json [--bench-dir DIR]` | every health check with its fix |
 | `benchbar app list --json` | the bench's apps, their git state and sites (0.5) |
 | `benchbar app update NAME --dry-run --json` | the changelog and plan of an update (0.5) |
+| `benchbar profile list --json` | built in and team profiles, with where each comes from (0.5) |
 | `<bench>/logs/.benchbar/state.json` | the last state transition, written by the runner and the CLI |
 
 ## Rules for readers
@@ -281,6 +282,31 @@ only the app's `.git`). `--json` without `--dry-run` is refused.
 
 A dirty tree, a detached HEAD or a diverged branch exits 1 with the
 reason as text.
+
+## `benchbar profile list --json`
+
+Added in 0.5. The built in profiles, then every team profile file on the
+lookup path (`~/.config/benchbar/profiles/`, then each folder of
+`BENCHBAR_PROFILE_PATH`), invalid ones included so a reader can show why.
+
+```json
+{"schema_version":1,"cli_version":"0.5.0","profiles":[
+ {"name":"v15-lts","kind":"builtin","source":"builtin","file":"/Users/you/benchbar/config/release-profiles.tsv","base":null,
+  "label":"Frappe/ERPNext v15 LTS","frappe_branch":"version-15","valid":true,"error":null},
+ {"name":"acme","kind":"team","source":"user","file":"/Users/you/.config/benchbar/profiles/acme.toml","base":"v15-lts",
+  "label":"Acme ERP","frappe_branch":null,"valid":true,"error":null}]}
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `kind` | string | `builtin` or `team` |
+| `source` | string | `builtin`, `user` (`~/.config/benchbar/profiles`) or `path` (a `BENCHBAR_PROFILE_PATH` folder) |
+| `file` | string | where it was read from |
+| `base` | string or null | the built in profile a team profile builds on; `null` for built in ones and invalid files |
+| `label` | string or null | the built in label, or a team profile's `description` |
+| `frappe_branch` | string or null | a team profile's override, else the built in branch |
+| `valid` | bool | `false` when `install --profile NAME` would refuse it |
+| `error` | string or null | why: a parse error (`FILE:LINE: not supported: ...`), a name that shadows a built in profile, or a name hidden by an earlier file |
 
 ## `logs/.benchbar/state.json`
 

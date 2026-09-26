@@ -28,7 +28,22 @@ Designed against frappe/bench develop (c9d1250) and frappe version-15; the code 
 - The doctor checks `apps_txt` and `app_branch_policy` have no repair action: fixing either means changing which code runs, a person's call.
 - `--site` stays the global option, so `app install NAME --site S` and `app add X --site S` parse like every other command.
 - The fake bench of the tests now has an `apps/erpnext` folder: it always listed erpnext in `apps.txt`, which the new `apps_txt` check rightly fails.
+- `app add` takes the app name from the repo name (or `--name`), never from `apps.tsv`, when given a URL: `apps.tsv` is only the catalog for names.
 - The git mock passes everything to the real git under `MOCK_GIT_REAL=1`, and the bench mock's `get-app` then really clones (`--origin upstream`, shallow with `MOCK_BENCH_SHALLOW=1`) from bare repos in the test folder over `file://`. `MOCK_GIT_LSREMOTE_EXIT` fakes a private repo. No test touches the network.
+
+## 0.5: team profiles
+
+- A team profile lives outside BenchBar: `~/.config/benchbar/profiles/NAME.toml`, then each folder of `BENCHBAR_PROFILE_PATH` (colon separated), so an organisation's repos and branches never land in `config/` or in this repo, and a team shares its recipe through its own config repo.
+- Built in profiles are looked up first, and a team file named like one (`v15-lts.toml`) is reported as invalid instead of loaded: `--profile v15-lts` must mean the same thing on every Mac. A later file with an earlier file's name is hidden, and `profile list` says so.
+- A team profile names a built in `base` and never its own Python, Node or MariaDB: those formulae, the MariaDB range and the doctor checks are tested per built in profile. Only `frappe_branch` may be overridden.
+- `PROFILE` in the bench's state stays the base, and `TEAM_PROFILE` names the team profile: every daily command, doctor included, works from the base alone, and follows the team's app branches (the `app_branch_policy` check, `app add NAME`) while the file exists and parses. A missing or broken team file falls back to the base instead of breaking doctor.
+- The team's apps plug into the existing policy lookup (`fl_lookup_app_policy` asks the loaded team profile first), so phase 01, `app add NAME` and required apps all resolve a team app the same way.
+- The phases get the team profile's name (`--profile acme`) and load it themselves: phase 00 needs only the base, phase 01 the apps, site and pins, and `benchbar install` stays a thin wrapper.
+- `bundle` and `[[apps]]` exclude each other: a bundle is the built in app list, `[[apps]]` the team's own, and mixing them would make the order of `apps.txt` depend on rules nobody wrote down.
+- An optional `commit` in `[[apps]]` goes through phase 01's existing pin (`fetch --all --tags`, `checkout COMMIT`), which leaves a detached HEAD; exact pins for identical benches are the lockfile's job, a profile is the recipe.
+- `profile create --from-bench` reads the bench only: remote URLs without user info, current branches (the policy branch for a detached app, else the app is skipped with a warning), the base from `apps/frappe`'s version, the default site name and the scheduler choice. It writes no commits and nothing from `sites/` except that name; the written file is parsed back before it is offered, and an existing file is shown as a diff and backed up.
+- The format is the strict TOML subset of `lib/frappe-local/toml.sh`, shared with the lockfile: one parser, and a file this parser accepts is valid TOML. `schema = 1` is optional in a profile (written by `create`) and refused when it is another number.
+- `profile create` takes the checkout's lock like other writing commands; `profile list` and `show` do not.
 
 ## 0.4: roadmap
 
