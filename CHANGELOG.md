@@ -64,6 +64,9 @@ pane with an update check, a Help menu and Report a Bug.
   the runner frames.
 - ROADMAP: Vouch under 1.0, once drive-by pull requests appear.
 
+- The Code of Conduct and the security policy give
+  mail@akashmishra.com for people who cannot use GitHub.
+
 ### Docs
 
 - **A docs site** at <https://benchbar.akashmishra.com>: Astro Starlight

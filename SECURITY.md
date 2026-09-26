@@ -6,7 +6,8 @@ Please report it privately, never in a public issue, discussion or pull
 request: open a report at
 [github.com/askysh/benchbar/security/advisories/new](https://github.com/askysh/benchbar/security/advisories/new)
 (Security, then Report a vulnerability). Only the maintainers can read
-it. You get an answer within a week, and a fix or a plan for one before
+it. If you cannot use GitHub, email
+[mail@akashmishra.com](mailto:mail@akashmishra.com). You get an answer within a week, and a fix or a plan for one before
 anything is disclosed. Say whether you want credit in the advisory.
 
 Include what you ran, the macOS version, `benchbar --version`, and what
