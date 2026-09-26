@@ -56,7 +56,8 @@ fl_doctor_print() {
 }
 
 fl_json_escape() {
-  printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | tr -d '\n\r\t'
+  # control characters (terminal colors in logs) are not valid in a JSON string
+  printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | tr -d '\000-\037'
 }
 
 # Schema 1 (docs/json-schema.md). "level" and "fix_command" are the contract

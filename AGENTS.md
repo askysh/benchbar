@@ -4,6 +4,15 @@ People often point an agent at this repo and say "set up Frappe on my
 Mac" or "my bench is broken, fix it". This file tells you how to do that
 without surprising the user.
 
+## MCP
+
+If your client speaks the Model Context Protocol, add the server once
+(`claude mcp add benchbar -- benchbar mcp`) and use its tools instead of
+parsing text: `benchbar_status`, `benchbar_doctor`, `benchbar_logs_tail`
+and friends return the same JSON as the commands below. Repairs and
+installs are deliberately not tools: run them in a terminal, with the
+user, as described here.
+
 ## Start with the facts
 
 ```bash

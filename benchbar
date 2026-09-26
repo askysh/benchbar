@@ -110,7 +110,8 @@ Daily
   restart             Restart it, for example after changing Python code.
   status              State, pid, stop reason, site ping (benchstatus).
   list                Every bench benchbar knows about.
-  logs                Tail logs/bench.log. Flags: --worker, --worker-error, --previous, -n50, --no-follow
+  logs                Tail logs/bench.log. Flags: --worker, --worker-error, --previous, -n50, --no-follow,
+                      --process web|worker|socketio|schedule (with --json: the lines as JSON)
   fg                  Stop the service and run honcho in the foreground.
   watch               Run bench watch for asset rebuilds.
   autostart on|off    Whether the bench may come back after login.
@@ -121,6 +122,8 @@ Daily
   site default NAME   Make NAME the default site (bench use, runner, benchup, the app).
   site hosts          Add a 127.0.0.1 line for every site to /etc/hosts (sudo, once).
   mariadb-password    Print the MariaDB root password kept in the Keychain (asks first).
+  mcp                 Model Context Protocol server on stdio for coding agents
+                      (claude mcp add benchbar -- benchbar mcp). Read tools, up, down, restart.
 
 Options
   --bench-dir DIR     Bench to act on (default: remembered, or auto-detected)
@@ -435,6 +438,10 @@ case "$COMMAND" in
   path) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; printf '%s\n' "$FL_BENCH_DIR" ;;
   site) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_site ${ARGS[@]+"${ARGS[@]}"} ;;
   report) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_report ${ARGS[@]+"${ARGS[@]}"} ;;
+  mcp)
+    # stdlib only Python 3.9+; the Command Line Tools' python3 is enough
+    command -v python3 >/dev/null 2>&1 || fl_die "python3 is needed for benchbar mcp." "Install the Xcode Command Line Tools: xcode-select --install"
+    BENCHBAR="${SCRIPT_DIR}/benchbar" BENCHBAR_VERSION="$FL_VERSION" exec python3 "${SCRIPT_DIR}/lib/frappe-local/mcp.py" ;;
   help) usage ;;
   *) fl_die "Unknown command: ${COMMAND}" "Run: benchbar --help" ;;
 esac

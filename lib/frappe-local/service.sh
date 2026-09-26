@@ -265,24 +265,53 @@ fl_cmd_status() {
 }
 
 fl_cmd_logs() {
-  local file lines=50 follow=1 arg
+  local file lines=50 follow=1 arg process="" prev=""
   fl_require_bench
   file="$(fl_bench_log_path)"
   for arg in "$@"; do
+    if [[ "$prev" == "--process" ]]; then process="$arg"; prev=""; continue; fi
     case "$arg" in
       --worker) file="${FL_BENCH_DIR}/logs/worker.log" ;;
       --worker-error) file="${FL_BENCH_DIR}/logs/worker.error.log" ;;
       --previous) file="${FL_BENCH_DIR}/logs/bench.previous.log" ;;
       --no-follow) follow=0 ;;
+      --process) prev="--process" ;;
+      --process=*) process="${arg#*=}" ;;
       -n*) lines="${arg#-n}" ;;
       [0-9]*) lines="$arg" ;;
     esac
   done
+  [[ "$lines" =~ ^[0-9]+$ ]] || fl_die "logs -n takes a number of lines"
+  [[ -z "$process" || "$process" =~ ^[a-z_]+$ ]] || fl_die "--process takes a honcho process name: web, worker, socketio, schedule, redis_queue, redis_cache"
+  if [[ "${OPT_JSON:-0}" == "1" ]]; then
+    fl_logs_json "$file" "$lines" "$process"
+    return 0
+  fi
   [[ -f "$file" ]] || { fl_warn "no log yet at ${file}"; return 0; }
   if [[ "$follow" == "1" && -t 1 ]]; then
     exec tail -n "$lines" -f "$file"
   fi
   tail -n "$lines" "$file"
+}
+
+# logs --json [-nN] [--process NAME]: the last N lines of the log (after the
+# process filter), for scripts and the MCP server. honcho prefixes each line
+# with "HH:MM:SS <process>.<n> |"; lines without a prefix (tracebacks) stay
+# with the process line above them.
+fl_logs_json() {
+  local file="$1" lines="$2" process="$3" sep="" line
+  printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"file":%s,"process":%s,"lines":[' \
+    "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$file")" "$(fl_json_str "$process")"
+  if [[ -f "$file" ]]; then
+    while IFS= read -r line; do
+      printf '%s"%s"' "$sep" "$(fl_json_escape "$line")"
+      sep=","
+    done < <(awk -v p="$process" '
+      p == "" { print; next }
+      /^[0-9][0-9]:[0-9][0-9]:[0-9][0-9] [A-Za-z_]+(\.[0-9]+)? +\|/ { split($2, a, "."); keep = (a[1] == p) }
+      keep { print }' "$file" | tail -n "$lines")
+  fi
+  printf ']}\n'
 }
 
 fl_cmd_fg() {

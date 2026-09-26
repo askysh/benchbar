@@ -110,6 +110,14 @@ Checked in frappe `version-16` at 012667b and bench `develop` at c9d1250 (Septem
 ## 0.4: python formula check
 
 - `python_leaves` asks `brew list --formula --installed-on-request`, not `brew leaves`: on the real Mac `python@3.14` was installed on request (and `brew tab` set it again), but pipx, uv and ollama depend on it, and `brew leaves` hides every formula another formula depends on, so the check could never pass. What protects a formula from `brew autoremove` is "installed on request", which is what the check now reads.
+## 0.5: benchbar mcp
+
+- The server is stdlib only Python 3.9 (`lib/frappe-local/mcp.py`), run with whatever `python3` is on PATH: the Command Line Tools' 3.9 is enough, so CLI only users need nothing new. The Swift MCP SDK would tie it to the app.
+- Every tool shells out to `benchbar ... --json` and returns its output as text and as `structuredContent`; the server holds no bench logic. Actions (`up`, `down`, `restart`) return their text output plus a fresh `status --json`, so an agent sees the outcome without a second call.
+- No repair, install, service, site add or anything with sudo behind a tool: those change files or need a password, and belong in a terminal with the user. Read tools carry `readOnlyHint: true`, actions `false`.
+- stdin of every CLI call is closed, so a question (a port clash on `up`) is answered no instead of hanging the session; one bad message gets a JSON-RPC error and the session goes on.
+- Protocol versions 2025-06-18, 2025-03-26 and 2024-11-05 are accepted as asked; anything else gets 2025-06-18. The transport is newline delimited JSON on stdio, as the spec says for stdio.
+- `logs --json` exists for `benchbar_logs_tail`: the brief keeps the server free of logic, so the process filter (honcho's `HH:MM:SS name.N |` prefix, with unprefixed lines such as tracebacks kept under their process) lives in the CLI. `fl_json_escape` now drops control characters, since log lines may carry terminal colors.
 
 # The easy install run (v0.3)
 

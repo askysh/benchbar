@@ -290,6 +290,22 @@ to remove the agents and the checkout. Benches, sites and databases are
 never deleted by benchbar; the recipe for wiping one by hand is in
 [docs/troubleshooting.md](docs/troubleshooting.md).
 
+## For coding agents
+
+`benchbar mcp` is a Model Context Protocol server on stdio, so Claude
+Code, Cursor and other agents can see and drive your benches:
+
+```bash
+claude mcp add benchbar -- benchbar mcp
+```
+
+Tools: `benchbar_list`, `benchbar_status`, `benchbar_doctor`,
+`benchbar_logs_tail` (last lines, one process if asked) and
+`benchbar_site_list` read; `benchbar_up`, `benchbar_down` and
+`benchbar_restart` act. Each one runs `benchbar ... --json` and returns
+what the CLI printed. Nothing that repairs, installs or needs `sudo` is
+offered. It needs only `python3`, which the Command Line Tools provide.
+
 ## Documentation
 
 - [docs/troubleshooting.md](docs/troubleshooting.md): common stumbles, the

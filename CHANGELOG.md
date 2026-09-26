@@ -9,6 +9,14 @@ same Mac: each with its own ports, sites, settings and scheduler choice,
 side by side in the menu bar. Verified on a real Mac with a v15 and a v16
 bench running at once (docs/DECISIONS.md, "the v16 bench on a real Mac").
 
+### Added (0.5)
+
+- `benchbar mcp`: a Model Context Protocol server on stdio (stdlib only
+  Python) with `benchbar_list`, `benchbar_status`, `benchbar_doctor`,
+  `benchbar_logs_tail`, `benchbar_site_list`, `benchbar_up`,
+  `benchbar_down` and `benchbar_restart`, each backed by the CLI's JSON.
+- `benchbar logs --json` with `-nN` and `--process NAME`.
+
 ### Added
 
 - **Frappe v16, supported.** The `v16-lts` profile (Python 3.14, Node 24)
