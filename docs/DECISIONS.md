@@ -17,6 +17,12 @@ runs come first, the 0.3 easy install run follows.
 - Dependabot watches `/macos` for Swift: the package list lives in `macos/project.yml` (XcodeGen) and the generated `.xcodeproj` is not committed, so Swift updates only start once a `Package.resolved` is in the repo.
 - Vouch waits until drive-by pull requests appear: a trust list for a project with one maintainer and few contributors is ceremony.
 
+## 0.5.5: readme
+
+- The README keeps only what a visitor needs to decide and start (why, install, quick start, features) and links four deep pages of the docs site: a 3,200 word README had become the manual, which nobody can navigate on GitHub, and the docs site now has search and a sidebar.
+- The README runs about 800 words, not the 1,100 the brief suggested: the fixed order and one line per item leave no room for more without padding.
+- The logo and the hero image switch with the reader's appearance through `<picture>`; the icons are exported from `AppIcon.icon` with Icon Composer's `ictool` (Default and Dark renditions), so they match the app icon exactly.
+
 ## 0.5: app installs
 
 Designed against frappe/bench develop (c9d1250) and frappe version-15; the code moved on since the design, and the code won where they disagreed:
