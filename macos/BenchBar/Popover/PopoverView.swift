@@ -173,6 +173,23 @@ struct BenchListSection: View {
                     .padding(.horizontal, 7).padding(.vertical, 2)
                     .background(Color.secondary.opacity(0.15), in: Capsule())
             }
+            if store.benches.count > Self.visibleRows {
+                // many benches: the list scrolls, so the detail and the footer stay on screen
+                ScrollView {
+                    rows
+                }
+                .frame(height: Self.rowHeight * CGFloat(Self.visibleRows))
+            } else {
+                rows
+            }
+        }
+    }
+
+    static let visibleRows = 4
+    static let rowHeight: CGFloat = 44
+
+    private var rows: some View {
+        VStack(alignment: .leading, spacing: 4) {
             ForEach(store.benches) { bench in
                 BenchRow(store: store, bench: bench, selected: bench.path == store.selected?.path)
             }
