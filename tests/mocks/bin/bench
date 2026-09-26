@@ -94,9 +94,7 @@ PY
         mkdir -p "sites/$2"; printf '%s 1.0.0\n' "$4" >>"sites/$2/installed_apps"; exit 0 ;;
       migrate) exit "${MOCK_BENCH_MIGRATE_EXIT:-0}" ;;
       doctor|clear-cache|clear-website-cache) exit 0 ;;
-      list-apps) [[ -f "sites/$2/installed_apps" ]] && cat "sites/$2/installed_apps"; exit 0 ;;
-      install-app) mkdir -p "sites/$2"; printf '%s 1.0.0\n' "$4" >>"sites/$2/installed_apps"; exit 0 ;;
-      doctor|clear-cache|clear-website-cache|migrate|disable-scheduler) exit 0 ;;
+      disable-scheduler) exit 0 ;;
       set-config)
         # bench --site S set-config [-p] KEY VALUE: the site's own config
         site="$2"; shift 3; parse=0

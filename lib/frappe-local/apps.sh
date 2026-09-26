@@ -412,23 +412,24 @@ fl__apps_dirs() {
   for d in "${FL_BENCH_DIR}"/apps/*/; do [[ -d "$d" ]] && basename "$d"; done | LC_ALL=C sort
 }
 
-# A get-app that failed half way: the new folder moves to the backups and
-# its apps.txt line goes (after a backup), so every other bench command
-# keeps working. Nothing is deleted.
+# A get-app that failed half way. A folder bench did not list yet moves to
+# the backups (nothing refers to it). A folder bench already put in
+# sites/apps.txt stays, and so does the line: benchbar never edits sites/
+# (AGENTS.md), so the fix is printed and doctor's apps_txt check keeps
+# reporting it until bench's own remove-app has run.
 fl_app_clone_rollback() {
-  local d dest txt="${FL_BENCH_DIR}/sites/apps.txt"
+  local d dest
   for d in "$@"; do
     [[ -n "$d" && -d "$(fl_app_path "$d")" ]] || continue
+    if fl_app_in_apps_txt "$d"; then
+      fl_warn "apps/${d} is half cloned and already listed in sites/apps.txt; benchbar does not edit sites/"
+      fl_fix "cd ${FL_BENCH_DIR} && bench remove-app ${d}   (then benchbar app add ${d} again)"
+      continue
+    fi
     dest="${FL_BACKUP_ROOT}/$(fl_backup_stamp)/apps"
     mkdir -p "$dest"
     mv "$(fl_app_path "$d")" "$dest/$d"
     fl_warn "moved the half cloned apps/${d} to ${dest}/${d}"
-    if fl_app_in_apps_txt "$d"; then
-      fl_backup_file "$txt"
-      grep -vxF "$d" "$txt" >"${txt}.tmp" || true
-      mv "${txt}.tmp" "$txt"
-      fl_warn "removed ${d} from sites/apps.txt (backup: ${FL_LAST_BACKUP})"
-    fi
   done
 }
 

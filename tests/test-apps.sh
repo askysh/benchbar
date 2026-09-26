@@ -138,16 +138,17 @@ run_fm app add acme_orphan --site macdev --yes --bench-dir "$BENCH"
 assert_eq "1" "$CODE"
 assert_contains "$OUT" "benchbar app add nosuchapp"
 
-# ---- get-app failing half way: the folder moves to the backups, apps.txt loses the line
+# ---- get-app failing half way after bench listed the app: benchbar never edits
+# sites/ (AGENTS.md), so the folder and the apps.txt line stay and the fix is printed
 make_app_remote acme_half
 add_policy acme_half main
+cp "$BENCH/sites/apps.txt" "$TMP_DIR/apps.txt.before"
 MOCK_BENCH_GET_APP_EXIT=1 run_fm app add acme_half --yes --bench-dir "$BENCH"
 assert_eq "1" "$CODE"
-assert_no_file "$BENCH/apps/acme_half"
-assert_contains "$OUT" "moved the half cloned apps/acme_half"
-! grep -qx acme_half "$BENCH/sites/apps.txt" || fail "the half clone's apps.txt line goes"
-ls "$FL_BACKUP_ROOT"/*/apps/acme_half/pyproject.toml >/dev/null 2>&1 || fail "the half clone is in the backups"
-ls "$FL_BACKUP_ROOT"/*/*sites__apps.txt >/dev/null 2>&1 || fail "apps.txt is backed up before the line goes"
+assert_contains "$OUT" "apps/acme_half is half cloned and already listed in sites/apps.txt"
+assert_contains "$OUT" "bench remove-app acme_half"
+grep -qx acme_half "$BENCH/sites/apps.txt" || fail "bench's own apps.txt line is left to bench"
+[[ "$(grep -v -x acme_half "$BENCH/sites/apps.txt")" == "$(cat "$TMP_DIR/apps.txt.before")" ]] || fail "nothing else in apps.txt changed"
 
 # ---- install-app failing: the clone stays, a rerun resumes with the install only
 mkdir -p "$BENCH/sites/site2"; printf '{}\n' >"$BENCH/sites/site2/site_config.json"
