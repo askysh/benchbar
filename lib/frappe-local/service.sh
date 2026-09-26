@@ -19,6 +19,13 @@ fl_context_init() {
   fl_bench_detect "${1:-}"
   fl_site_detect "${2:-}"
   fl_ports_detect
+  # a bench set up from a team profile keeps following it while the file
+  # exists and parses; otherwise its base (stored as PROFILE) takes over
+  if [[ -z "$profile" ]] && declare -F fl_team_profile_file >/dev/null; then
+    local team team_file
+    team="$(fl_bstate_get TEAM_PROFILE 2>/dev/null || true)"
+    if [[ -n "$team" ]] && team_file="$(fl_team_profile_file "$team")" && fl_team_profile_read "$team_file"; then profile="$team"; fi
+  fi
   [[ -n "$profile" ]] || profile="$(fl_bstate_get PROFILE 2>/dev/null || true)"
   [[ -n "$profile" ]] || profile="$(fl_profile_detect "$FL_BENCH_DIR")"
   [[ -n "$profile" ]] || profile="$(fl_default_profile)"

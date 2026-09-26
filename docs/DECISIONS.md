@@ -1,8 +1,69 @@
 # Decisions
 
 One line per non obvious choice: the decision, then the reason. The
-decisions of the app work live in `macos/DECISIONS.md`. The 0.4 run comes
-first, the 0.3 easy install run follows.
+decisions of the app work live in `macos/DECISIONS.md`. The 0.5 and 0.4
+runs come first, the 0.3 easy install run follows.
+
+## 0.5: app installs
+
+Designed against frappe/bench develop (c9d1250) and frappe version-15; the code moved on since the design, and the code won where they disagreed:
+
+- Everything per bench goes through the existing per bench state (`.benchbar/benches/<name>-<hash>.env`, `fl_bstate_get/set`); the site app cache is a sibling file, `<name>-<hash>.site-apps`, not the `<name>.site-apps` of the design.
+- install-app and migrate run with the bench's own Redis up (`fl_bench_redis_up`/`down` from 0.4), because frappe v16 connects to it during both; the exit handler stops what was started, however the command ends.
+- Never `get-app --resolve-deps`: it reads `hooks.py` through the GitHub API (no private repos) and can `rmtree` an existing app. `required_apps` is read from the local `hooks.py` after the clone, resolved through `apps.tsv`, and cloned after a second plan and question.
+- Never `get-app --overwrite`, and stdin is `/dev/null`: an app that exists is reported with the manual `git fetch` and `git checkout`, and a surprise `click.confirm` fails instead of hanging.
+- `--skip-assets`, then one `bench build --app X` (or `--apps a,b` with the required apps): one build, after every dependency is in place.
+- Access is checked before any change with `git ls-remote` under `GIT_TERMINAL_PROMPT=0` and `GIT_SSH_COMMAND='ssh -o BatchMode=yes'`: a private repo without a key or token fails in a second with a fix line (`ssh -T git@HOST` and `ssh-add` for SSH, which also covers host aliases; the SSH URL or `gh auth setup-git` for HTTPS) instead of waiting on a hidden prompt.
+- A repo URL with a user name or token is refused: it would land in `.git/config`, `app list --json` and later a committed lockfile. Remote URLs are always shown without userinfo.
+- `get-app` is always given the resolved URL, also for names like `erpnext` that bench could resolve itself: the preflight checked exactly that URL, and apps.tsv entries without a repo map to `github.com/frappe/<name>`, which is what bench uses.
+- The app name is the repo name (lower case, `-` as `_`) or `--name`; the folder bench actually created is found by comparing `apps/` before and after, so `Raven` becoming `raven` is followed.
+- A get-app that fails half way moves the new folder to `.benchbar/backups/<ts>/apps/` and removes its `apps.txt` line after backing the file up. This is the one edit of `sites/` benchbar makes: a listed app without a folder breaks every bench command, and the line is bench's own half finished write.
+- A dirty app is left alone by `add` (it only installs on sites) but refused by `update`: `add` never touches the code, `update` moves it.
+- `app update` is `git fetch` plus `merge --ff-only`, never `bench update`: one app changes, nothing is rebased or reset. A diverged branch stops with the `git log --graph` to look at; an app ahead of its remote is "unchanged". On a failure the `reset --hard OLD` is printed, never run.
+- A shallow clone is fetched with `--shallow-since=@<HEAD time - 1s>`, so `old..new` exists locally for the changelog and the fast forward check.
+- `update --dry-run` runs `git fetch`: the changelog needs the new commits. Only the app's `.git` changes; the working tree, the sites and benchbar's state do not, and the test snapshots exactly that.
+- Every site that has the app is backed up (`bench --site S backup`) before the merge, `--skip-backup` opts out: the repo rule is a backup before every change, and migrate is the step that can hurt data.
+- Which sites have an app comes from `bench --site S list-apps --format json` with a 15 second limit per site, cached per bench: it needs MariaDB, and doctor (on a timer in the app), `app list --no-sites` and the lockfile check must never need it. A failed read keeps the last good list and says so in `sites_error`.
+- `app update --json` is only the plan (`--dry-run --json`): the app shows the changelog, then runs the update with `--yes` and a live log, and a JSON stream of an apply would need its own format.
+- The doctor checks `apps_txt` and `app_branch_policy` have no repair action: fixing either means changing which code runs, a person's call.
+- `--site` stays the global option, so `app install NAME --site S` and `app add X --site S` parse like every other command.
+- The fake bench of the tests now has an `apps/erpnext` folder: it always listed erpnext in `apps.txt`, which the new `apps_txt` check rightly fails.
+- `app add` takes the app name from the repo name (or `--name`), never from `apps.tsv`, when given a URL: `apps.tsv` is only the catalog for names.
+- The git mock passes everything to the real git under `MOCK_GIT_REAL=1`, and the bench mock's `get-app` then really clones (`--origin upstream`, shallow with `MOCK_BENCH_SHALLOW=1`) from bare repos in the test folder over `file://`. `MOCK_GIT_LSREMOTE_EXIT` fakes a private repo. No test touches the network.
+
+## 0.5: team profiles
+
+- A team profile lives outside BenchBar: `~/.config/benchbar/profiles/NAME.toml`, then each folder of `BENCHBAR_PROFILE_PATH` (colon separated), so an organisation's repos and branches never land in `config/` or in this repo, and a team shares its recipe through its own config repo.
+- Built in profiles are looked up first, and a team file named like one (`v15-lts.toml`) is reported as invalid instead of loaded: `--profile v15-lts` must mean the same thing on every Mac. A later file with an earlier file's name is hidden, and `profile list` says so.
+- A team profile names a built in `base` and never its own Python, Node or MariaDB: those formulae, the MariaDB range and the doctor checks are tested per built in profile. Only `frappe_branch` may be overridden.
+- `PROFILE` in the bench's state stays the base, and `TEAM_PROFILE` names the team profile: every daily command, doctor included, works from the base alone, and follows the team's app branches (the `app_branch_policy` check, `app add NAME`) while the file exists and parses. A missing or broken team file falls back to the base instead of breaking doctor.
+- The team's apps plug into the existing policy lookup (`fl_lookup_app_policy` asks the loaded team profile first), so phase 01, `app add NAME` and required apps all resolve a team app the same way.
+- The phases get the team profile's name (`--profile acme`) and load it themselves: phase 00 needs only the base, phase 01 the apps, site and pins, and `benchbar install` stays a thin wrapper.
+- `bundle` and `[[apps]]` exclude each other: a bundle is the built in app list, `[[apps]]` the team's own, and mixing them would make the order of `apps.txt` depend on rules nobody wrote down.
+- An optional `commit` in `[[apps]]` goes through phase 01's existing pin (`fetch --all --tags`, `checkout COMMIT`), which leaves a detached HEAD; exact pins for identical benches are the lockfile's job, a profile is the recipe.
+- `profile create --from-bench` reads the bench only: remote URLs without user info, current branches (the policy branch for a detached app, else the app is skipped with a warning), the base from `apps/frappe`'s version, the default site name and the scheduler choice. It writes no commits and nothing from `sites/` except that name; the written file is parsed back before it is offered, and an existing file is shown as a diff and backed up.
+- The format is the strict TOML subset of `lib/frappe-local/toml.sh`, shared with the lockfile: one parser, and a file this parser accepts is valid TOML. `schema = 1` is optional in a profile (written by `create`) and refused when it is another number.
+- `profile create` takes the checkout's lock like other writing commands; `profile list` and `show` do not.
+
+## 0.5: the team lockfile
+
+- The lockfile is an awk parsed TOML subset (`toml.sh`, shared with team profiles), not `tomllib`: the Command Line Tools' `/usr/bin/python3` is 3.9 without it, the bench's env Python is missing exactly when a check matters, doctor stays pure shell, and a fallback would mean two parsers that can disagree. Every refusal names the line (`benchbar.toml:3: not supported: inline tables`).
+- The code lives in `teamlock.sh`: `lock.sh` already is the checkout's run lock, and the two must not be confused.
+- Lookup is `--lock PATH`, `BENCHBAR_LOCK`, `LOCK_FILE` in the bench's own state file (`fl_bstate_set`, not the `<name>.env` of the design), then `<bench>/benchbar.toml`. A relative `--lock` is taken from the current folder when it exists there, else from the bench, so `--lock apps/acme/benchbar.toml` works from anywhere. The path is remembered by write, check and apply (not in a dry run); `BENCHBAR_LOCK` never is, and `list --json` ignores it since it names one bench, not all.
+- The app that holds the lockfile gets no `commit`: committing the lockfile moves that app's HEAD, so its pin would always be one commit behind and every teammate would see `commit_ahead`.
+- Frappe is an ordinary `[[app]]`: one code path, and the entry order is `apps.txt`'s, so `apply` clones in dependency order.
+- Repos compare as host and path (`git@github.com:acme/x.git` equals `https://github.com/acme/x`): teammates clone over SSH or HTTPS as they like. An SSH host alias from `~/.ssh/config` is not resolved and reads as another repo (a warning only).
+- `lock check` is read only and offline: git reads, `apps.txt`, and the site app cache that `app list` fills, so it works with MariaDB stopped. The one outside call is `bench --version` (15 seconds at most) for `bench_version_mismatch`; doctor's `lock_drift` leaves that kind out and calls nothing.
+- `app_missing` is the only `fail` level: the bench lacks code the team's sites need. Everything else is a warning, and doctor reports the whole lock as one `lock_drift` warning pointing at `lock check`.
+- Drift exits 1 like a failing doctor, through the dispatcher (`|| exit 1`), so `lock check --json` prints only the JSON.
+- `lock apply` stops at code: no `new-site`, `install-app`, `migrate` or `bench update`. Missing sites and site apps are printed as `benchbar site add` and `benchbar app install` lines, and a changed app ends with the reminder to migrate: site data is the user's to change.
+- A pinned commit is reached with `git merge --ff-only`, after `git fetch REMOTE SHA` when it is not local (protocol v2 serves any reachable commit), and `--unshallow` for a shallow clone as the fallback. The design's `fetch --depth 1 SHA` was dropped: a depth 1 fetch cuts the history between HEAD and the pin, so the fast forward check fails.
+- An app that is ahead of its pin, diverged from it, or dirty is skipped with a warning and apply still exits 0: local work outranks the lock, and a second apply must say `unchanged`, not fail forever.
+- A branch switch happens only on a clean tree: the locked branch is fetched into its remote tracking ref (`--depth 1` for a shallow clone), then checked out as the local branch when there is one, else created with `--track`. `checkout -B` is never used on an existing branch, since it would drop that branch's local commits.
+- A freshly cloned app whose branch tip is ahead of the pin is moved to the pin with `checkout -B BRANCH SHA`: the clone is seconds old and holds no local work, so this is not the reset the rules forbid.
+- Cloning goes through `app add`'s own steps (access check, `get-app --skip-assets`, the half clone rollback); `setup requirements --python` and `--node` run only for apps whose code changed in place (get-app already did it for new clones), and one `bench build --apps a,b` covers all of them.
+- `lock write` refreshes the site app lists from bench (it is the one lock command that may ask the database) and falls back to the cache with a warning. A dirty or detached app is refused unless `--allow-dirty`, which pins the commit as it is (a detached app then takes its policy branch).
+- The written file is parsed back before it is shown, so `write` can never produce a file `check` rejects.
 
 ## 0.4: roadmap
 

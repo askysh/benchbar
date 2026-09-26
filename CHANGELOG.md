@@ -30,6 +30,59 @@ bench running at once (docs/DECISIONS.md, "the v16 bench on a real Mac").
   log, clear, select and copy, and Open in Terminal. It survives the
   runner's log rotation and keeps at most 5000 lines.
 
+### Added (0.5)
+
+- App commands. `benchbar app list [--json] [--no-sites]` shows every
+  app with its branch, commit, local changes, shallow clone, version,
+  the `apps.tsv` branch and the sites that have it (read with
+  `bench list-apps`, cached per bench). `app add NAME|URL` gets an app
+  from `config/apps.tsv` or any git URL (GitHub over HTTPS, SSH, or an
+  SSH host alias from `~/.ssh/config`), with `--branch`, `--name`, and
+  `--site S` or `--all-sites`: it checks access first with a git that
+  never prompts, so a missing key or token fails in a second with a fix
+  line, clones with `bench get-app --skip-assets` (never `--overwrite`
+  or `--resolve-deps`), clones the `required_apps` of `hooks.py` after
+  a second plan, installs on the sites, builds once and restarts a
+  running bench. A half finished clone moves to the backups. `app
+  install NAME --site S` installs an app the bench has. `app update
+  NAME` fetches, shows the changelog, backs up every site that has the
+  app, fast forwards, runs requirements, migrate and build; it refuses
+  a dirty tree, a detached HEAD or a diverged branch, and on a failure
+  prints (never runs) the way back. `app update --dry-run --json` is the
+  plan for the app.
+- Doctor checks `apps_txt` (an `apps.txt` line without its folder
+  fails, a git app missing from `apps.txt` warns) and
+  `app_branch_policy` (an app off its `apps.tsv` branch warns). Both
+  read only local files and git; `repair` has no action for them.
+- Team profiles: an organisation's bench recipe in a TOML file outside
+  BenchBar, in `~/.config/benchbar/profiles/NAME.toml` or a folder on
+  `BENCHBAR_PROFILE_PATH` (a clone of the team's config repo). It names
+  a built in `base` for Python, Node and MariaDB, an optional
+  `frappe_branch`, a `bundle` or `[[apps]]` with repo, branch and an
+  optional commit, and optional `site` and `scheduler`. `benchbar
+  install --profile NAME` uses it, and the bench keeps following it.
+  `benchbar profile list [--json]`, `profile show NAME` and `profile
+  create NAME --from-bench PATH [--dir DIR]` (reads a bench, never
+  writes a credential or a commit). A team profile may not shadow a
+  built in one.
+- The team lockfile `benchbar.toml`: every app's repo, branch and
+  commit in `apps.txt` order, and each site with its apps, in the same
+  strict TOML subset. `benchbar lock write` writes it from the bench
+  (refuses local changes or a detached HEAD unless `--allow-dirty`,
+  `--no-commits` for branches only, shows the diff, backs up the old
+  file), `lock check [--json]` reports drift (13 kinds, from a missing
+  app to a site without an app) with no network or database, and `lock
+  apply` clones missing apps, switches clean apps to the locked branch
+  and fast forwards to pinned commits, then runs requirements and
+  build. It never touches a site, never resets local work (ahead,
+  diverged and dirty apps are skipped), and prints the site steps to run
+  by hand. `--lock PATH` (remembered per bench) or `BENCHBAR_LOCK`
+  points at a file kept in the team's app. Doctor gains `lock_parse`
+  and `lock_drift`; `list --json` gains `benches[].lock_file`.
+- Access checks before cloning (phase 01 and `app add`) run git with
+  `GIT_TERMINAL_PROMPT=0` and SSH in batch mode, so a private repo fails
+  at once instead of waiting on a prompt.
+
 ### Added
 
 - **Frappe v16, supported.** The `v16-lts` profile (Python 3.14, Node 24)

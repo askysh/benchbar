@@ -16,6 +16,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${SCRIPT_DIR}/lib/frappe-local/platform.sh"
 # shellcheck source=lib/frappe-local/version-policy.sh
 . "${SCRIPT_DIR}/lib/frappe-local/version-policy.sh"
+# shellcheck source=lib/frappe-local/toml.sh
+. "${SCRIPT_DIR}/lib/frappe-local/toml.sh"
+# shellcheck source=lib/frappe-local/profiles.sh
+. "${SCRIPT_DIR}/lib/frappe-local/profiles.sh"
 # shellcheck source=lib/frappe-local/state.sh
 . "${SCRIPT_DIR}/lib/frappe-local/state.sh"
 # shellcheck source=lib/frappe-local/templates.sh

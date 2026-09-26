@@ -150,10 +150,83 @@ MariaDB, with its `/etc/hosts` line; `--bundle` or `--apps` installs apps
 already in the bench), `site default NAME` (the site `benchup` waits for
 and the app opens) and `site hosts` (adds every missing hosts line).
 
+Apps:
+
+```bash
+benchbar app list                                   # branch, commit, local changes, sites
+benchbar app add crm --site macdev                  # from config/apps.tsv
+benchbar app add git@github.com:acme/acme.git --branch main --all-sites
+benchbar app install crm --site v16two              # an app the bench already has
+benchbar app update erpnext --dry-run               # the changelog and the plan
+benchbar app update erpnext                         # backup, fast forward, migrate, build
+```
+
+`app add` checks that git can read the repo before it changes anything,
+so a private repo without a key or token fails at once with the fix. It
+never replaces an existing app, and `app update` never runs `bench
+update`, never rebases and never resets: a dirty or diverged app is
+refused.
+
 Other commands: `benchbar list`, `benchbar report`,
 `benchbar mariadb-password`, `benchbar service`,
 `benchbar autostart on|off`, `benchbar uninstall-service`,
 `benchbar --help`.
+
+## Team profiles
+
+A team profile is your organisation's bench recipe: a small TOML file
+that names a built in base profile and your apps with their repos and
+branches. It lives outside BenchBar, in
+`~/.config/benchbar/profiles/NAME.toml` or in a clone of your team's
+config repo listed in `BENCHBAR_PROFILE_PATH`.
+
+```toml
+# ~/.config/benchbar/profiles/acme.toml
+base = "v15-lts"                  # Python, Node and MariaDB come from here
+site = "acme.localhost"
+scheduler = false
+
+[[apps]]
+name = "erpnext"
+repo = "https://github.com/frappe/erpnext"
+branch = "version-15"
+
+[[apps]]
+name = "acme"
+repo = "git@github.com:acme/acme.git"
+branch = "main"
+```
+
+```bash
+benchbar profile create acme --from-bench ~/frappe-bench   # write one from a bench you have
+benchbar profile list                                     # built in and team profiles
+benchbar profile show acme
+benchbar install --profile acme                           # a new Mac, the same bench
+```
+
+The file is a strict subset of TOML (strings, booleans, integers and
+one line lists; no escapes, no inline tables), and a repo URL with a
+user name or token is refused, since the file is meant to be committed.
+
+## The team lockfile
+
+A team profile is the recipe; `benchbar.toml` is the exact state, so
+every developer's bench runs the same commits. Keep it in your main
+custom app and commit it there:
+
+```bash
+benchbar lock write --lock apps/acme/benchbar.toml   # once; the path is remembered
+benchbar lock check                                  # read only, exit 1 on any difference
+benchbar lock apply --dry-run                        # what a teammate's bench would change
+benchbar lock apply
+```
+
+`lock apply` clones missing apps, switches clean apps to the locked
+branch and fast forwards to pinned commits, then runs requirements and
+build. It never touches a site (it prints the `site add`, `app install`
+and migrate steps instead) and never overwrites local work: an app with
+local changes or commits of its own is skipped with a warning. Doctor
+reports drift as a warning.
 
 ## The menu bar app
 

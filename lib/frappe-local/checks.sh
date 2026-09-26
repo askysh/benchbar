@@ -11,7 +11,7 @@
 # Groups (used by "benchbar service" versus "benchbar repair"):
 #   system, bench, service, site
 
-FL_CHECK_ORDER="brew python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac full_disk_access env_python bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets logs honcho honcho_setuptools procfile runner agent fork_safety scheduler stop_flag helpers cli_link legacy_agents hosts port_clash orphans ping"
+FL_CHECK_ORDER="brew python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac full_disk_access env_python bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy lock_parse lock_drift logs honcho honcho_setuptools procfile runner agent fork_safety scheduler stop_flag helpers cli_link legacy_agents hosts port_clash orphans ping"
 FL_LOG_WARN_MB="${FL_LOG_WARN_MB:-50}"
 FL_HOSTS_FILE="${FL_HOSTS_FILE:-/etc/hosts}"
 
@@ -28,7 +28,7 @@ chk_port_block() {
 fl_check_group() {
   case "$1" in
     brew|python_leaves|mariadb_bind|mariadb_utf8|pdf_engine|redis_6379|cleanmymac|full_disk_access) printf 'system' ;;
-    env_python|bench_version|toolchain_*|socketio|assets|logs) printf 'bench' ;;
+    env_python|bench_version|toolchain_*|socketio|assets|apps_txt|app_branch_policy|lock_parse|lock_drift|logs) printf 'bench' ;;
     ping) printf 'site' ;;
     *) printf 'service' ;;
   esac
@@ -69,6 +69,10 @@ fl_check_label() {
     honcho_setuptools) printf 'honcho imports' ;;
     fork_safety) printf 'Fork safety env' ;;
     orphans) printf 'Stale processes' ;;
+    apps_txt) printf 'Apps in apps.txt' ;;
+    app_branch_policy) printf 'App branches' ;;
+    lock_parse) printf 'benchbar.toml' ;;
+    lock_drift) printf 'Lockfile drift' ;;
     *) printf '%s' "$1" ;;
   esac
 }
@@ -720,5 +724,47 @@ chk_orphans() {
     chk__set warn "stale processes hold this bench's ports: ${held}" "${SCRIPT_DIR}/benchbar down   (or benchbar restart)"
   else
     chk__set ok "no stale process holds ${FL_WEB_PORT}, ${FL_SOCKETIO_PORT}, ${FL_REDIS_QUEUE_PORT} or ${FL_REDIS_CACHE_PORT}"
+  fi
+}
+
+# Apps: local reads only (apps.txt, the folders, git), never bench or the
+# network. repair has no action for them: changing code is a person's call.
+chk_apps_txt() {
+  local app missing="" unlisted n=0
+  while IFS= read -r app; do
+    [[ -n "$app" ]] || continue
+    n=$((n + 1))
+    [[ -d "$(fl_app_path "$app")" ]] || missing="${missing}${missing:+ }${app}"
+  done < <(fl_apps_txt)
+  unlisted="$(fl_apps_unlisted | tr '\n' ' ')"; unlisted="${unlisted% }"
+  if [[ -n "$missing" ]]; then
+    chk__set fail "sites/apps.txt lists ${missing} but apps/ has no such folder (every bench command fails to import it)" "benchbar app add ${missing%% *} --bench-dir ${FL_BENCH_DIR}"
+  elif [[ -n "$unlisted" ]]; then
+    chk__set warn "apps/${unlisted// /, apps/} is a git app that is not in sites/apps.txt (a get-app that did not finish?)" "mv ${FL_BENCH_DIR}/apps/${unlisted%% *} ~/${unlisted%% *}.aside, then: benchbar app add <its git URL>"
+  else
+    chk__set ok "${n} apps in sites/apps.txt, all present"
+  fi
+}
+
+chk_app_branch_policy() {
+  local app want cur off="" fix="" n=0
+  while IFS= read -r app; do
+    if [[ -z "$app" ]] || ! fl_app_has_git "$app"; then continue; fi
+    want="$(fl_app_policy_branch "$app")"
+    [[ -n "$want" ]] || continue
+    cur="$(fl_app_branch "$app")"
+    [[ -n "$cur" ]] || continue
+    n=$((n + 1))
+    if [[ "$cur" != "$want" ]]; then
+      off="${off}${off:+, }${app} is on ${cur} (policy ${want})"
+      [[ -n "$fix" ]] || fix="cd ${FL_BENCH_DIR}/apps/${app} && git fetch $(fl_app_remote "$app") ${want} && git checkout ${want}   (only if you meant to follow the policy)"
+    fi
+  done < <(fl_apps_txt)
+  if [[ -n "$off" ]]; then
+    chk__set warn "${off}" "$fix"
+  elif [[ "$n" == "0" ]]; then
+    chk__set ok "no app with a branch policy is a git checkout"
+  else
+    chk__set ok "${n} app(s) on the branch config/apps.tsv names for ${FL_PROFILE}"
   fi
 }
