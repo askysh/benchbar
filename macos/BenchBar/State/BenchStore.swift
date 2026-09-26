@@ -12,6 +12,9 @@ final class BenchModel: Identifiable {
     var doctor: DoctorReport?
     var doctorError: String?
     var isRunningDoctor = false
+    /// benchbar service is changing the scheduler (and may restart the bench):
+    /// every action on this bench waits, the CLI would refuse it anyway (its lock).
+    var isChangingScheduler = false
     var lastRefresh: Date?
 
     init(summary: BenchSummary) {
@@ -227,7 +230,9 @@ final class BenchStore {
     /// --without-schedule), then restarts a running bench so honcho reads
     /// the new Procfile. The caller has asked the user first.
     func setScheduler(_ on: Bool, on bench: BenchModel) async {
-        guard let client, bench.pending == nil else { return }
+        guard let client, bench.pending == nil, !bench.isChangingScheduler else { return }
+        bench.isChangingScheduler = true
+        defer { bench.isChangingScheduler = false; notifyChange() }
         bench.lastError = nil
         do {
             try await client.setScheduler(on, bench: bench.path)

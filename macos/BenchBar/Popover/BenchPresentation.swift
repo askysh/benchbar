@@ -12,8 +12,9 @@ nonisolated struct BenchControls: Equatable, Sendable {
     static let none = BenchControls()
 
     static func make(state: BenchState, reason: StopReason?, pending: CLIClient.Action?,
-                     needsService: Bool, cliReady: Bool) -> BenchControls {
-        guard cliReady, !needsService else { return .none }
+                     needsService: Bool, cliReady: Bool, otherWork: Bool = false) -> BenchControls {
+        // another change (the scheduler) holds the CLI's lock: nothing to click
+        guard cliReady, !needsService, !otherWork else { return .none }
         if let pending { return BenchControls(busy: pending) }
         // a bench with a missing env needs repair; starting it would only fail again
         let broken = reason == .broken

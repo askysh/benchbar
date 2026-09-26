@@ -113,6 +113,24 @@ struct TwoBenchStoreTests {
         #expect(!calls.contains { $0.first == "restart" && $0.last == v15 })
     }
 
+    @Test func noActionWhileTheSchedulerChanges() {
+        let c = BenchControls.make(state: .running, reason: nil, pending: nil, needsService: false, cliReady: true, otherWork: true)
+        #expect(c == .none)
+    }
+
+    @Test func aSecondSchedulerChangeWaitsForTheFirst() async throws {
+        let store = try await store(v15: "stopped", v16: "stopped")
+        base.cli.answer("service", json: "")
+        let bench = try #require(store.benches.first { $0.path == v16 })
+        bench.isChangingScheduler = true
+        await store.setScheduler(true, on: bench)
+        #expect(!base.cli.calls.contains { $0.first == "service" }, "ignored while one runs")
+        bench.isChangingScheduler = false
+        await store.setScheduler(true, on: bench)
+        #expect(base.cli.calls.contains { $0.first == "service" })
+        #expect(bench.isChangingScheduler == false, "cleared when done")
+    }
+
     @Test func schedulerLeavesAStoppedBenchStopped() async throws {
         let store = try await store(v15: "stopped", v16: "stopped")
         base.cli.answer("service", json: "")
