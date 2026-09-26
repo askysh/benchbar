@@ -145,11 +145,12 @@ fl_rc_block_remove() {
 }
 
 # Prints marker names of other managed blocks (for example old
-# "frappe-bench helpers" blocks) so doctor can warn about them.
+# "frappe-bench helpers" blocks) so doctor can warn about them. The
+# installer's own PATH block (benchbar-path) is not one of them.
 fl_rc_legacy_blocks() {
   local file="$1" ours="frappe-mac"
   [[ -f "$file" ]] || return 0
   # a frappe-mac block is ours to migrate, unless a benchbar block already exists
   [[ "$(fl_rc_markers_state "$file" "$FL_RC_START" "$FL_RC_END")" == "present" ]] && ours="benchbar"
-  grep -o '^# >>> [A-Za-z0-9 ._-]* >>>' "$file" 2>/dev/null | sed -e 's/^# >>> //' -e 's/ >>>$//' | grep -v -x -e 'benchbar' -e "$ours" | sort -u || true
+  grep -o '^# >>> [A-Za-z0-9 ._-]* >>>' "$file" 2>/dev/null | sed -e 's/^# >>> //' -e 's/ >>>$//' | grep -v -x -e 'benchbar' -e 'benchbar-path' -e "$ours" | sort -u || true
 }
