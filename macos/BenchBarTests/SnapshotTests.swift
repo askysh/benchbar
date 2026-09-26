@@ -55,6 +55,30 @@ struct SnapshotTests {
         await store.start(polling: false)
         store.selectedPath = v16
         try render(PopoverView(store: store, commands: AppCommands()), "popover-two-benches")
+    @Test func logWindow() async throws {
+        let bench = base.dir.url.appendingPathComponent("frappe-bench")
+        try FileManager.default.createDirectory(at: bench.appendingPathComponent("logs"), withIntermediateDirectories: true)
+        let log = """
+        10:00:01 system      | redis_cache.1 started (pid=4101)
+        10:00:01 redis_cache.1 | Ready to accept connections tcp
+        10:00:02 web.1       | * Running on http://127.0.0.1:8000
+        10:00:03 socketio.1  | Realtime service listening on: ws://0.0.0.0:9000
+        10:00:05 web.1       | 127.0.0.1 - - "GET /api/method/ping HTTP/1.1" 200 -
+        10:00:09 worker.1    | 10:00:09 default: frappe.utils.background_jobs.run_doc_method (job-1)
+        10:00:12 web.1       | Traceback (most recent call last):
+          File "apps/frappe/frappe/app.py", line 115, in application
+            response = frappe.api.handle(request)
+        frappe.exceptions.ValidationError: Customer Name is mandatory
+        10:00:13 web.1       | 127.0.0.1 - - "POST /api/resource/Customer HTTP/1.1" 417 -
+        10:00:15 worker.1    | 10:00:15 default: Job OK (job-1)
+
+        """
+        try Data(log.utf8).write(to: bench.appendingPathComponent("logs/bench.log"))
+        let model = LogViewModel(benchName: "frappe-bench", benchPath: bench.path)
+        model.start()
+        model.query.search = "customer"
+        try render(LogView(model: model, openInTerminal: {}).frame(width: 860, height: 400), "log-window")
+        model.stop()
     }
 
     @Test func popoverCLIMissing() async throws {

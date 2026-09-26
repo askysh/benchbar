@@ -28,12 +28,11 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             window.center()
             self.window = window
         }
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate()
-        window?.makeKeyAndOrderFront(nil)
+        if window?.isVisible != true { WindowPresence.opened() }
+        if let window { WindowPresence.bringForward(window) }
     }
 
     func windowWillClose(_ notification: Notification) {
-        NSApp.setActivationPolicy(.accessory)
+        WindowPresence.closed()
     }
 }

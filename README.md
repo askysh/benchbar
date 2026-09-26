@@ -168,6 +168,9 @@ with its own Start, Stop and Restart and an "n of m up" count; the
 selected bench lists its sites, each with an Open button. Settings has a
 scheduler switch per bench. Keyboard: ⌘U start, ⌘D stop,
 ⌘R restart, ⌘O site, ⌘L logs, ⌘F folder, ⌘K doctor.
+bench folder, and a read only doctor. Keyboard: ⌘U start, ⌘D stop,
+⌘R restart, ⌘O site, ⌘L logs (a log window with search and a filter per
+process), ⌘F folder, ⌘K doctor.
 
 On first run the app looks for the CLI in `~/.local/bin/benchbar`, then in
 Homebrew's folders, and asks once with a file picker if it finds none.

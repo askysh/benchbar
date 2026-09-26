@@ -22,6 +22,14 @@ bench running at once (docs/DECISIONS.md, "the v16 bench on a real Mac").
 - `benchbar repair --json` streams a plan, a step event per action and a
   done event with the exit code; `--dry-run --json` prints only the plan.
 
+### Added (0.5)
+
+- A log window per bench (⌘L): follows `logs/bench.log` with smart
+  scroll, search with a match count and next and previous (⌘G, ⇧⌘G), a
+  filter per honcho process, errors and tracebacks in red, the previous
+  log, clear, select and copy, and Open in Terminal. It survives the
+  runner's log rotation and keeps at most 5000 lines.
+
 ### Added
 
 - **Frappe v16, supported.** The `v16-lts` profile (Python 3.14, Node 24)
