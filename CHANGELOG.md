@@ -11,6 +11,15 @@ bench running at once (docs/DECISIONS.md, "the v16 bench on a real Mac").
 
 ### Added (0.5)
 
+- **The BenchBar window** replaces the sparse Settings window: General,
+  Menu Bar, Team Profiles and About, then a page per bench with Overview
+  (actions, ports, the scheduler), Sites (add a site with its
+  Administrator password, make one the default, the hosts fix), Apps (add
+  from the registry or any GitHub URL, public or private, install on a
+  site, update after a changelog preview) and Health (doctor, and Repair
+  with the plan first and a live step list). The popover links into it
+  (⌘M) and offers Repair when doctor found something repairable.
+
 - `benchbar mcp`: a Model Context Protocol server on stdio (stdlib only
   Python) with `benchbar_list`, `benchbar_status`, `benchbar_doctor`,
   `benchbar_logs_tail`, `benchbar_site_list`, `benchbar_up`,
