@@ -107,7 +107,7 @@ jobs:
           grep -q -E '\*\* TEST SUCCEEDED \*\*|Test run with [0-9]+ tests? passed' macos/build/test.log
 
       - name: Upload the bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: BenchBar-unsigned-${{ github.sha }}
           path: |
@@ -119,7 +119,7 @@ jobs:
 
       - name: Upload the test log on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: swift-test-log
           path: macos/build/test.log

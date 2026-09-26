@@ -173,7 +173,7 @@ jobs:
           cat "$RUNNER_TEMP/notes.md"
 
       - name: Upload the files as a workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: BenchBar-${{ env.VERSION }}
           path: dist/*
