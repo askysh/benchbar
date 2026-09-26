@@ -42,6 +42,7 @@ printf '==> installing to %s\n' "$DEST"
 mkdir -p "$DEST_DIR"
 rm -rf "$DEST"
 ditto "$SRC" "$DEST"
+touch "$DEST"  # ditto keeps the build's mtime; a fresh one makes Finder reread the icon
 
 if [[ "$OPEN" == "1" ]]; then
   open "$DEST"

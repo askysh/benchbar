@@ -337,6 +337,7 @@ install_app() {
   [[ -d "${tmp}/unpacked/BenchBar.app" ]] || { rm -rf "$tmp"; die "${zipname} does not contain BenchBar.app"; }
   rm -rf "$APP"
   ditto "${tmp}/unpacked/BenchBar.app" "$APP"
+  touch "$APP"  # ditto keeps the build's mtime; a fresh one makes Finder reread the icon
   rm -rf "$tmp"
   CHANGED=1
   ok "BenchBar ${want} installed in ${APP_DIR} (downloaded with curl: no Gatekeeper prompt on first open)"
