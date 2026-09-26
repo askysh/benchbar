@@ -12,6 +12,7 @@ struct SettingsView: View {
     let launchAtLogin: LaunchAtLogin
     let notifier: Notifier
     var part: Part = .general
+    var router: WindowRouter?
     let chooseCLI: () -> Void
 
     @State private var previewState: BenchState = .running
@@ -19,13 +20,14 @@ struct SettingsView: View {
     @State private var importMessage: String?
 
     init(settings: AppSettings, store: BenchStore, library: RunnerLibrary, launchAtLogin: LaunchAtLogin,
-         notifier: Notifier, part: Part = .general, chooseCLI: @escaping () -> Void) {
+         notifier: Notifier, part: Part = .general, router: WindowRouter? = nil, chooseCLI: @escaping () -> Void) {
         self.settings = settings
         self.store = store
         self.library = library
         self.launchAtLogin = launchAtLogin
         self.notifier = notifier
         self.part = part
+        self.router = router
         self.chooseCLI = chooseCLI
     }
 
@@ -39,20 +41,24 @@ struct SettingsView: View {
                 PaneHeader(symbol: "menubar.rectangle", tint: .blue, title: "Menu Bar",
                            subtitle: "The runner in the menu bar shows your bench's state at a glance.")
             }
-            Form {
-                switch part {
-                case .general:
-                    startupSection
-                    notificationsSection
-                    cliSection
-                    shortcutsSection
-                case .menuBar:
-                    previewSection
-                    runnerSection
-                    motionSection
+            ScrollViewReader { proxy in
+                Form {
+                    switch part {
+                    case .general:
+                        startupSection
+                        notificationsSection
+                        cliSection
+                        shortcutsSection.id(Self.shortcutsID)
+                    case .menuBar:
+                        previewSection
+                        runnerSection
+                        motionSection
+                    }
                 }
+                .formStyle(.grouped)
+                .onAppear { scroll(proxy) }
+                .onChange(of: router?.scrollTarget) { scroll(proxy) }
             }
-            .formStyle(.grouped)
         }
         .onAppear {
             cliPathDraft = settings.cliPath
@@ -139,6 +145,18 @@ struct SettingsView: View {
     }
 
     // MARK: shortcuts
+
+    static let shortcutsID = "shortcuts"
+
+    /// Help > Keyboard Shortcuts opens General at the shortcuts.
+    private func scroll(_ proxy: ScrollViewProxy) {
+        guard part == .general, let target = router?.scrollTarget else { return }
+        router?.scrollTarget = nil
+        // after the form's first layout, or there is nothing to scroll yet
+        Task { @MainActor in
+            withAnimation { proxy.scrollTo(target, anchor: .top) }
+        }
+    }
 
     private var shortcutsSection: some View {
         Section {

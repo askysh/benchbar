@@ -702,3 +702,47 @@ before an update needs room, a form and a confirmation. Read
    visible to every process of the user (`ps`); the environment of one
    short lived child is not written anywhere. The test reads the fake
    runner's recorded arguments and environment to prove it.
+
+## 0.5.5: menus, one web request, and a bug report
+
+An app is not finished when it works; people also need to find out what
+version they run, where the docs are and how to tell you something broke.
+Read `App/AppDelegate.swift` (the menus), `Updates/UpdateCheck.swift`,
+`System/Links.swift`, `Window/AboutPane.swift` and
+`BenchBarTests/AboutAndHelpTests.swift`:
+
+1. **Menus in an accessory app.** BenchBar has no Dock icon
+   (`LSUIElement`), so its main menu is only on screen while the window
+   is open and the app has turned itself into a regular app. The menu
+   still has to exist: it is what makes ⌘W, ⌘Q, copy and paste, and now
+   ⌘? work. The Help menu is an ordinary `NSMenu` set as `NSApp.helpMenu`;
+   macOS adds the search field to it by itself. A key equivalent of `"?"`
+   means ⌘⇧/ on a US keyboard, which is the standard Help shortcut. The
+   status item's right click menu is a second `NSMenu`, built fresh for
+   each click. Both builders are plain functions, so a test can build the
+   menus and read their titles without clicking anything.
+2. **One web request, done carefully.** `URLSession` with an
+   `.ephemeral` configuration keeps no cookies and no cache. The
+   `URLRequest` carries the timeout (10 seconds, also set on the session
+   for the whole transfer) and a `User-Agent`: GitHub's API refuses
+   requests without one. The fetch is a closure passed into
+   `UpdateChecker`, so tests hand it a fixture file and never touch the
+   network, and the parsing (`UpdateCheck.parse`) is a pure function of
+   the bytes and the current version.
+3. **Comparing versions.** Strings compare the wrong way ("0.10" sorts
+   before "0.9"). `AppVersion` splits on dots and compares numbers part
+   by part, treats a missing part as 0, drops a leading `v` from the git
+   tag, and puts `0.6.0-beta.1` before `0.6.0`. Implementing `<` and `==`
+   gives `Comparable`, and with it `max`, `sorted` and friends.
+4. **Show, do not upload.** Report a Bug runs the CLI, then hands the
+   result to the Mac: `NSWorkspace.shared.activateFileViewerSelecting`
+   opens a Finder window with the zip selected, and `NSWorkspace.shared.open`
+   opens the issue page in the default browser with the versions in its
+   query string (`URLComponents` does the escaping). The person decides
+   what to attach. Both calls are properties on the `BugReport` model, so
+   the test replaces them and checks what would have been opened.
+5. **Requests through the router.** The Help menu lives in AppKit and the
+   sheet lives in a SwiftUI pane that may not exist yet. The menu sets a
+   flag on the shared `WindowRouter` and opens the window at About; the
+   pane reads the flag in `onAppear` and `onChange`, clears it and shows
+   its sheet. The same pattern opened the Repair sheet in 0.5.

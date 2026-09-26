@@ -572,9 +572,14 @@ struct NoBenchView: View {
                 ProgressView("Loading benches").controlSize(.small)
             } else {
                 Label("No bench found", systemImage: "tray").font(.headline)
-                Text(error ?? "Create one with the installer (benchbar install), or point the CLI at yours with benchbar repair --bench-dir <path>.")
+                Text(error ?? "Create one with the installer (benchbar install), or register one you already have with benchbar adopt <path>.")
                     .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
+                if error == nil {
+                    // first run: the one page that gets a bench going
+                    Link("New here? The Install guide sets up your first bench.", destination: BenchBarLinks.install)
+                        .font(.caption)
+                }
                 Button("Try Again", action: retry)
             }
         }

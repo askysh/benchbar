@@ -2,6 +2,21 @@
 
 One line per non obvious choice: the decision, then the reason.
 
+## 0.5.5: about and help
+
+- The update check is a button, not a timer: one `GET` of GitHub's latest release with a User-Agent (GitHub refuses requests without one), `Accept: application/vnd.github+json`, a 10 second limit and an ephemeral session (no cookies, no cache). Unsigned builds until 0.6 mean no Sparkle and no download: the answer links to the release page.
+- Versions compare part by part as numbers (0.10 after 0.9), a missing part is 0, a leading `v` is dropped and a prerelease sorts before its release. A version that does not parse (a local build) is never told to update.
+- A Sparkle build keeps Sparkle's own Check for Updates item; the default build gets one that opens the About pane and runs the check there, so the answer is visible.
+- Report a Bug lives as a sheet on the About pane; the Help menu opens the pane and sets a flag on `WindowRouter` that the pane turns into the sheet, like `repairRequested`. The sheet explains what the zip holds before anything runs.
+- After `report --json`, Finder selects the zip (`activateFileViewerSelecting`) and the browser opens `issues/new?template=bug_report.yml&macos=...&version=...`; nothing is uploaded. A CLI older than 0.5.5 prints text instead of JSON, and the sheet says to run `benchbar report` in Terminal.
+- The report is of the selected bench (`--bench-dir`): the one the person is looking at when something went wrong.
+- About BenchBar in the menus opens the About pane, not `orderFrontStandardAboutPanel`: the pane has the CLI version and the links, the standard panel had neither.
+- Help > Keyboard Shortcuts opens General and scrolls to its shortcuts section (a `ScrollViewReader` around the form and a `scrollTarget` on the router) instead of a second list of shortcuts that could drift.
+- The status item menu gets About and Documentation, the two things a person looks for there when the window is closed.
+- `CLIClient.version()` returns only the first line of `benchbar --version`, which a 0.5.5 CLI follows with the app's version.
+- Links live in one `BenchBarLinks` enum, with the same paths as `benchbar docs`.
+- The live app could not be driven with the computer use tools on this Mac (an ad hoc signed accessory app is not in their app list), so the About pane, both sheet states and the empty popover are checked through snapshots, and the menus through a unit test of the built `NSMenu`.
+
 ## Setup
 
 - Branched `feat/benchbar-app` from `origin/main` at 7f0653e: the CLI work was already merged there, as the brief's update said.

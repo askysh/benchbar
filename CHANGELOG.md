@@ -4,6 +4,42 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+### App
+
+- **About pane**: the app's version and build, the command line tool's
+  version and path (from `benchbar --version`), links to the docs, the
+  release notes and the source, the license line and the trademark note.
+- **Check for Updates** in the About pane and the app menu: one request
+  to GitHub's latest release, only when you click, with "up to date" or
+  "0.6.0 available" and a button to the release page. Nothing is
+  downloaded.
+- **Help menu**: BenchBar Documentation (⌘?), Keyboard Shortcuts, Release
+  Notes and Report a Bug. The status item's right click menu has About
+  and Documentation.
+- **Report a Bug**: a sheet explains what the zip holds (no secrets, no
+  personal paths, no names), runs `benchbar report --json`, shows the zip
+  in Finder and opens a new issue with the macOS and BenchBar versions
+  filled in.
+- With no bench yet, the popover points at the Install guide, and its
+  hint says `benchbar adopt <path>` for a bench you already have.
+- About BenchBar in the menus opens the About pane instead of the bare
+  standard panel.
+
+### Command line
+
+- `benchbar docs [TOPIC]` opens the documentation site or a topic's page
+  (install, quick-start, app, sites, apps, doctor, teams, agents, mcp,
+  cli, json, runners, troubleshooting, config ...); `--print` prints the
+  URL; `benchbar docs --help` lists the topics.
+- `benchbar --help` ends with the docs URL.
+- `benchbar doctor` prints a `see:` line with the check's section of the
+  doctor guide under every `[FAIL]` (after its `fix:` line). The
+  `[OK]`, `[WARN]`, `[FAIL]` and `fix:` lines and `--json` are unchanged.
+- `benchbar --version` adds the installed BenchBar app's version on a
+  second line; the first line is unchanged.
+- `benchbar report --json` prints `{"schema_version":1,"cli_version":..,"zip":PATH,"redactions":N}`
+  for the app and scripts (docs/json-schema.md).
+
 ### Repo
 
 - `CONTRIBUTING.md`: the tests, bash 3.2 and shellcheck, idempotency,

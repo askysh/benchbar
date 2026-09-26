@@ -383,3 +383,16 @@ nonisolated enum RepairEvent: Equatable, Sendable {
         }
     }
 }
+
+/// `benchbar report --json` (CLI 0.5.5): where the zip went and how many
+/// lines had something replaced.
+nonisolated struct BugReportFile: Codable, Sendable, Equatable {
+    var schemaVersion: Int
+    var zip: String
+    var redactions: Int
+
+    enum CodingKeys: String, CodingKey {
+        case zip, redactions
+        case schemaVersion = "schema_version"
+    }
+}

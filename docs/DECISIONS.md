@@ -7,6 +7,16 @@ One line per non obvious choice: the decision, then the reason. The
 decisions of the app work live in `macos/DECISIONS.md`. The 0.5.5, 0.5 and 0.4
 runs come first, the 0.3 easy install run follows.
 
+## 0.5.5: about, help and docs links
+
+- `benchbar docs` checks the page with one `curl -I` (3 seconds) before opening it: a 404 opens the start page with a warning, and no answer (offline, DNS, a slow network) opens the page anyway, so the check can only improve on a plain `open`, never block it.
+- `benchbar docs --print` prints the URL without opening it or touching the network: agents and scripts want the link, not a browser window.
+- Topics are short names with aliases (`doctor` and `repair`, `teams`, `profiles` and `lock`), kept in one table in `lib/frappe-local/docs.sh`; an unknown topic exits 1 with the list, so a typo never opens a wrong page.
+- The doctor `see:` line goes under every `[FAIL]`, after `fix:`, and never under `[WARN]` or in `--json`: AGENTS.md promises parsers the existing lines byte for byte, and a new line starting with `see:` is ignored by anything that reads `[FAIL]` and `fix:`. Every check id has an anchor in the doctor guide, so no per check table is needed.
+- `--version` keeps `benchbar X.Y.Z` as the first line and adds `BenchBar app X.Y.Z (path)` only when an app is installed: the app, `install.sh` and the tests read the first line. The app version is read from the XML Info.plist with awk, the helper `report` already used, instead of `plutil` or `defaults`, so the tests can fake an app with a small file.
+- `report --json` sends the human lines to stderr and prints one object on stdout, with `schema_version` and `cli_version` like every other document; `redactions` counts the lines where something was replaced (the sum of what REDACTIONS.txt lists). `--json` and `--print` together are refused.
+- The bug report form's version fields are prefilled by the ids `bug_report.yml` uses: `macos` and `version`.
+
 ## 0.5.5: repo foundation
 
 - The Code of Conduct's contact is a private advisory on GitHub until a contact email exists: the git address is a noreply address that cannot receive mail, and an advisory is private to the maintainers.

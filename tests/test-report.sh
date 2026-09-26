@@ -144,6 +144,25 @@ assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "no bench at"
 assert_contains "$OUT" "benchbar CLI: ${VER}"
 
+# ---- --json: one line on stdout with the zip and the redaction count
+JOUT="$TMP_DIR/json-out"
+set +e
+json_line="$("$FM" report --json --bench-dir "$BENCH" --out "$JOUT" 2>"$TMP_DIR/report.err")"
+code=$?
+set -e
+assert_eq "0" "$code" "$(cat "$TMP_DIR/report.err")"
+assert_eq "1" "$(printf '%s\n' "$json_line" | wc -l | tr -d ' ')" "(one JSON line, the text goes to stderr)"
+assert_contains "$(cat "$TMP_DIR/report.err")" "report written:"
+jzip="$(printf '%s' "$json_line" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["zip"])')"
+jred="$(printf '%s' "$json_line" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["redactions"])')"
+assert_eq "1" "$(printf '%s' "$json_line" | python3 -c 'import json,sys; print(json.load(sys.stdin)["schema_version"])')"
+assert_eq "${VER}" "$(printf '%s' "$json_line" | python3 -c 'import json,sys; print(json.load(sys.stdin)["cli_version"])')"
+assert_file "$jzip"
+case "$jzip" in "$JOUT"/benchbar-report-*.zip) ;; *) fail "zip path expected under $JOUT, got $jzip" ;; esac
+[[ "$jred" =~ ^[0-9]+$ && "$jred" -gt 0 ]] || fail "redactions must be a positive number, got $jred"
+run_fm report --json --print --bench-dir "$BENCH"
+assert_eq "1" "$CODE"; assert_contains "$OUT" "not both"
+
 run_fm report --bench-dir "$BENCH" --bogus
 assert_eq "1" "$CODE"
 assert_contains "$OUT" "Unknown report option"

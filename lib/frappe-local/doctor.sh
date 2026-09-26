@@ -35,6 +35,9 @@ fl_doctor_count() {
 }
 
 # fl_doctor_print [compact]: compact mode hides [OK] lines and empty groups.
+# A [FAIL] gets a "see:" line with its section of the doctor guide, after
+# the fix line (the [OK], [WARN], [FAIL] and fix: lines stay as they were
+# for parsers; --json never has it).
 fl_doctor_print() {
   local compact="${1:-}" i=0 group last_group="" label
   while [[ "$i" -lt "${#FL_D_IDS[@]}" ]]; do
@@ -48,7 +51,8 @@ fl_doctor_print() {
     case "${FL_D_STATUS[$i]}" in
       ok) fl_ok "${label}: ${FL_D_MSG[$i]}" ;;
       warn) fl_warn "${label}: ${FL_D_MSG[$i]}"; [[ -n "${FL_D_FIX[$i]}" ]] && fl_fix "${FL_D_FIX[$i]}" ;;
-      fail) fl_fail "${label}: ${FL_D_MSG[$i]}"; [[ -n "${FL_D_FIX[$i]}" ]] && fl_fix "${FL_D_FIX[$i]}" ;;
+      fail) fl_fail "${label}: ${FL_D_MSG[$i]}"; [[ -n "${FL_D_FIX[$i]}" ]] && fl_fix "${FL_D_FIX[$i]}"
+            fl_see "$(fl_docs_check_url "${FL_D_IDS[$i]}")" ;;
     esac
     i=$((i + 1))
   done

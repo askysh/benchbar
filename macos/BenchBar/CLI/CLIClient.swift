@@ -49,9 +49,25 @@ nonisolated struct CLIClient: Sendable {
         return try BenchJSON.decode(DoctorReport.self, from: Data(output.stdout.utf8))
     }
 
+    /// The first line of `benchbar --version` ("benchbar 0.5.0"). A 0.5.5
+    /// CLI adds the installed app's version on a second line.
     func version() async throws(CLIError) -> String {
         let output = try await run(["--version"], timeout: Timeout.query, acceptExitCodes: [0])
-        return output.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+        return Self.firstLine(output.stdout)
+    }
+
+    static func firstLine(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.split(separator: "\n", maxSplits: 1).first.map(String.init) ?? trimmed
+    }
+
+    /// benchbar report --json: the redacted diagnostics zip (Desktop by
+    /// default). It runs doctor, so it gets doctor's time.
+    func report(bench: String?) async throws(CLIError) -> BugReportFile {
+        var args = ["report", "--json"]
+        if let bench { args += ["--bench-dir", bench] }
+        let output = try await run(args, timeout: Timeout.doctor, acceptExitCodes: [0])
+        return try BenchJSON.decode(BugReportFile.self, from: Data(output.stdout.utf8))
     }
 
     // MARK: actions

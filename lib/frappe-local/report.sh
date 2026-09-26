@@ -25,6 +25,7 @@ FL_REPORT_TAIL_LINES="${FL_REPORT_TAIL_LINES:-200}"
 FL_REPORT_KEY_RE='[A-Za-z0-9_.-]*[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd][A-Za-z0-9_.-]*|[A-Za-z0-9_.-]*[Ss][Ee][Cc][Rr][Ee][Tt][A-Za-z0-9_.-]*|[A-Za-z0-9_.-]*[Tt][Oo][Kk][Ee][Nn][A-Za-z0-9_.-]*|[A-Za-z0-9_.-]*[Kk][Ee][Yy][A-Za-z0-9_.-]*|[A-Za-z0-9_.-]*[Aa][Pp][Ii][A-Za-z0-9_.-]*|[A-Za-z0-9_.-]*[Aa][Uu][Tt][Hh][A-Za-z0-9_.-]*'
 FL_REPORT_DIR=""
 FL_REPORT_REDACTIONS=""
+FL_REPORT_REDACTION_COUNT=0
 
 fl_report_default_out() { printf '%s/Desktop' "$HOME"; }
 
@@ -80,19 +81,30 @@ fl_app_version() {
   printf '%s' "${v:-unknown}"
 }
 
-# Version of the installed BenchBar app, read from its Info.plist without plutil.
-fl_app_bundle_version() {
-  local dir dirs="$FL_APP_DIRS" plist
+# The installed BenchBar app, read from its Info.plist without plutil (an
+# XML plist, which is what the build writes): "VERSION<tab>APP PATH", or
+# nothing when no app is installed. /Applications first, then ~/Applications.
+fl_app_bundle_info() {
+  local dir dirs="$FL_APP_DIRS" plist v
   while [[ -n "$dirs" ]]; do
     dir="${dirs%%:*}"
     [[ "$dirs" == *:* ]] && dirs="${dirs#*:}" || dirs=""
     plist="${dir}/BenchBar.app/Contents/Info.plist"
     if [[ -f "$plist" ]]; then
-      awk '/<key>CFBundleShortVersionString<\/key>/ { l = $0; if (l !~ /<string>/) getline l; sub(/.*<string>/, "", l); sub(/<\/string>.*/, "", l); print l " (" FILENAME ")"; exit }' "$plist"
+      v="$(awk '/<key>CFBundleShortVersionString<\/key>/ { l = $0; if (l !~ /<string>/) getline l; sub(/.*<string>/, "", l); sub(/<\/string>.*/, "", l); print l; exit }' "$plist" 2>/dev/null || true)"
+      [[ -n "$v" ]] || continue
+      printf '%s\t%s' "$v" "${dir}/BenchBar.app"
       return 0
     fi
   done
-  printf 'not installed'
+  return 0
+}
+
+# Version of the installed BenchBar app and where it is, for versions.txt.
+fl_app_bundle_version() {
+  local info tab=$'\t'
+  info="$(fl_app_bundle_info)"
+  if [[ -n "$info" ]]; then printf '%s (%s)' "${info%%"$tab"*}" "${info#*"$tab"}"; else printf 'not installed'; fi
 }
 
 fl_report_versions() {
@@ -210,7 +222,10 @@ fl_report_redact_file() {
     -e 's/(^|[[:space:],;&?])(('"$FL_REPORT_KEY_RE"')[[:space:]]*[=:][[:space:]]*)("([^"\\]|\\.)*"|'"'"'([^'"'"'\\]|\\.)*'"'"'|[^",;&}]*)/\1\2***/g' \
     "$file" >"$tmp"
   n="$(diff "$file" "$tmp" 2>/dev/null | grep -c '^>' || true)"
-  [[ "${n:-0}" -gt 0 ]] && FL_REPORT_REDACTIONS="${FL_REPORT_REDACTIONS}${name}: masked credential-like values on ${n} line(s)"$'\n'
+  if [[ "${n:-0}" -gt 0 ]]; then
+    FL_REPORT_REDACTIONS="${FL_REPORT_REDACTIONS}${name}: masked credential-like values on ${n} line(s)"$'\n'
+    FL_REPORT_REDACTION_COUNT=$((FL_REPORT_REDACTION_COUNT + n))
+  fi
   mv "$tmp" "$file"
 
   # 2. home folder, the names of this Mac, username (the names first: a
@@ -219,6 +234,7 @@ fl_report_redact_file() {
   if [[ "${n:-0}" -gt 0 ]]; then
     sed -e "s#$(fl_report_sed_escape "$HOME")#~#g" "$file" >"$tmp" && mv "$tmp" "$file"
     FL_REPORT_REDACTIONS="${FL_REPORT_REDACTIONS}${name}: replaced the home folder with ~ on ${n} line(s)"$'\n'
+    FL_REPORT_REDACTION_COUNT=$((FL_REPORT_REDACTION_COUNT + n))
   fi
   while IFS= read -r host; do
     [[ -n "$host" ]] || continue
@@ -226,6 +242,7 @@ fl_report_redact_file() {
     if [[ "${n:-0}" -gt 0 ]]; then
       sed -e "s#$(fl_report_sed_escape "$host")#<host>#g" "$file" >"$tmp" && mv "$tmp" "$file"
       FL_REPORT_REDACTIONS="${FL_REPORT_REDACTIONS}${name}: replaced a name of this Mac with <host> on ${n} line(s)"$'\n'
+      FL_REPORT_REDACTION_COUNT=$((FL_REPORT_REDACTION_COUNT + n))
     fi
   done <<<"$hosts"
   if [[ -n "$user" && "${#user}" -ge 3 ]]; then
@@ -233,6 +250,7 @@ fl_report_redact_file() {
     if [[ "${n:-0}" -gt 0 ]]; then
       sed -e "s#$(fl_report_sed_escape "$user")#<user>#g" "$file" >"$tmp" && mv "$tmp" "$file"
       FL_REPORT_REDACTIONS="${FL_REPORT_REDACTIONS}${name}: replaced the username with <user> on ${n} line(s)"$'\n'
+      FL_REPORT_REDACTION_COUNT=$((FL_REPORT_REDACTION_COUNT + n))
     fi
   fi
   after="$(wc -l <"$file" | tr -d ' ')"
@@ -242,6 +260,7 @@ fl_report_redact_file() {
 fl_report_redact_all() {
   local f
   FL_REPORT_REDACTIONS=""
+  FL_REPORT_REDACTION_COUNT=0
   for f in "${FL_REPORT_DIR}"/*; do
     [[ -f "$f" ]] || continue
     fl_report_redact_file "$f"
@@ -266,20 +285,25 @@ fl_report_print() {
   done
 }
 
-# fl_cmd_report [--print] [--out DIR]
+# fl_cmd_report [--print] [--out DIR], and the global --json: one line
+# {"schema_version":1,"cli_version":..,"zip":PATH,"redactions":N} on stdout
+# (N: the lines where something was replaced), the human text on stderr.
 fl_cmd_report() {
-  local print=0 out="" arg want_out=0 stamp zip
+  local print=0 out="" arg want_out=0 stamp zip json="${OPT_JSON:-0}"
   for arg in "$@"; do
     if [[ "$want_out" == "1" ]]; then out="$arg"; want_out=0; continue; fi
     case "$arg" in
       --print) print=1 ;;
       --out) want_out=1 ;;
       --out=*) out="${arg#*=}" ;;
-      *) fl_die "Unknown report option: ${arg}" "Usage: benchbar report [--print] [--out DIR]" ;;
+      *) fl_die "Unknown report option: ${arg}" "Usage: benchbar report [--print | --json] [--out DIR]" ;;
     esac
   done
+  [[ "$print" == "1" && "$json" == "1" ]] && fl_die "report takes --print or --json, not both" "Usage: benchbar report [--print | --json] [--out DIR]"
   [[ -n "$out" ]] || out="${BENCHBAR_REPORT_DIR:-$(fl_report_default_out)}"
   out="$(fl_abs_path "$out")"
+  # with --json only the JSON line reaches stdout
+  [[ "$json" == "1" ]] && exec 3>&1 1>&2
 
   FL_REPORT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/benchbar-report.XXXXXX")"
   fl_report_collect
@@ -301,5 +325,10 @@ fl_cmd_report() {
   fl_info "it contains doctor and status JSON, versions, the agent, Procfile.lean, state.json and log tails"
   fl_info "secrets are masked and site configs are reduced to key names; see REDACTIONS.txt inside"
   fl_info "attach it to your issue at https://github.com/askysh/benchbar/issues"
-  printf '%s\n' "$zip"
+  if [[ "$json" == "1" ]]; then
+    printf '{"schema_version":%d,"cli_version":"%s","zip":%s,"redactions":%d}\n' \
+      "${FL_SCHEMA_VERSION:-1}" "${FL_VERSION:-0}" "$(fl_json_str "$zip")" "$FL_REPORT_REDACTION_COUNT" >&3
+  else
+    printf '%s\n' "$zip"
+  fi
 }

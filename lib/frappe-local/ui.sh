@@ -119,6 +119,13 @@ fl_fix() {
   fl_log "   fix: $1"
 }
 
+# fl_see URL: the documentation for the line above, under its fix: line
+fl_see() {
+  fl_spinner_pause
+  printf '     %ssee:%s %s\n' "$FL_DIM" "$FL_RESET" "$1"
+  fl_log "   see: $1"
+}
+
 fl_die() {
   fl_spinner_stop
   fl_fail "$1"
