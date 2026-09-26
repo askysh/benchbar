@@ -6,6 +6,11 @@
 # (default MainActor isolation, approachable concurrency) that older Xcode
 # versions do not know. The CLI jobs run on macos-latest, where /bin/bash
 # is the same 3.2 the CLI targets.
+#
+# Speed (docs/DECISIONS.md, "CI speed"): the macOS CLI tests run in three
+# shards, each running its tests in parallel; shellcheck runs in shard 1
+# alongside its tests; the release bundle is built in the app job from the
+# same checkout and DerivedData instead of a second job.
 name: CI
 
 on:
@@ -23,13 +28,18 @@ concurrency:
 
 jobs:
   cli-macos:
-    name: CLI tests and shellcheck (macOS)
+    name: CLI tests (macOS, shard ${{ matrix.shard }}/3${{ matrix.shard == 1 && ', shellcheck' || '' }})
     runs-on: macos-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@v4
 
       - name: Cache Homebrew downloads
+        if: matrix.shard == 1
         uses: actions/cache@v4
         with:
           path: ~/Library/Caches/Homebrew
@@ -37,43 +47,40 @@ jobs:
           restore-keys: brew-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Install shellcheck
-        run: brew install shellcheck
+        if: matrix.shard == 1
+        run: command -v shellcheck >/dev/null 2>&1 || brew install shellcheck
 
-      - name: shellcheck
+      - name: Versions
         run: |
-          shellcheck --version
-          shellcheck -x benchbar 00-mac-system-deps.sh 01-install-bench-and-site.sh 02-background-service.sh \
-            lib/frappe-local/*.sh tests/*.sh tests/lib/*.sh tests/mocks/bin/* scripts/*.sh
-          if [ -f install.sh ]; then shellcheck -x install.sh; fi
+          /bin/bash --version | head -n 1
+          sysctl -n hw.ncpu
+          if command -v shellcheck >/dev/null 2>&1; then shellcheck --version | sed -n 2p; fi
 
-      - name: bash version
-        run: /bin/bash --version | head -n 1
-
+      # run-tests.sh runs its share of the tests PARALLEL (the CPU count) at a
+      # time, and shellcheck as one more job in shard 1
       - name: CLI tests (macOS /bin/bash 3.2)
+        env:
+          SHARD: ${{ matrix.shard }}/3
         run: /bin/bash tests/run-tests.sh
 
-  cli-v16:
-    name: CLI tests, v16-lts profile (macOS)
-    runs-on: macos-latest
+  cli-linux:
+    name: CLI tests and shellcheck (Linux, quick signal)
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: v16 profile under mocks (macOS /bin/bash 3.2)
-        run: /bin/bash tests/test-profile-v16.sh
-
-  cli-linux:
-    name: CLI tests (Linux, quick signal)
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install shellcheck and zip
-        run: sudo apt-get update -q && sudo apt-get install -y -q shellcheck zip unzip
+      - name: Install shellcheck and zip (when the image lacks them)
+        run: |
+          if command -v shellcheck >/dev/null && command -v zip >/dev/null && command -v unzip >/dev/null; then
+            echo "preinstalled: $(shellcheck --version | sed -n 2p)"
+          else
+            sudo apt-get update -q && sudo apt-get install -y -q shellcheck zip unzip
+          fi
       - name: CLI tests
         run: tests/run-tests.sh
 
   app:
-    name: App build and Swift tests (macOS)
+    name: App build, Swift tests and unsigned release bundle (macOS)
     runs-on: macos-26
     timeout-minutes: 45
     steps:
@@ -92,7 +99,7 @@ jobs:
           restore-keys: brew-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Install XcodeGen
-        run: brew install xcodegen
+        run: command -v xcodegen >/dev/null 2>&1 || brew install xcodegen
 
       - name: Cache DerivedData and Swift packages
         uses: actions/cache@v4
@@ -101,16 +108,10 @@ jobs:
           key: deriveddata-${{ runner.os }}-${{ hashFiles('macos/project.yml', 'macos/BenchBar/**/*.swift', 'macos/BenchBarTests/**/*.swift') }}
           restore-keys: deriveddata-${{ runner.os }}-
 
-      - name: xcodegen generate
-        working-directory: macos
-        run: xcodegen generate --quiet
-
-      - name: Build (unsigned)
-        run: |
-          set -o pipefail
-          xcodebuild -project macos/BenchBar.xcodeproj -scheme BenchBar -configuration Release \
-            -derivedDataPath macos/build/DerivedData -destination 'generic/platform=macOS' \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY= -quiet build
+      # The Release build of the app, ad hoc signed, zipped, imaged and
+      # checksummed: the same script and output the separate bundle job had.
+      - name: Build the unsigned release bundle (scripts/release-local.sh)
+        run: scripts/release-local.sh --skip-tests
 
       - name: Swift tests
         run: |
@@ -120,47 +121,6 @@ jobs:
             CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY= test 2>&1 | tee macos/build/test.log | \
             grep -E '^(✔|✘)|Test run with|Test Suite|error:|\*\* TEST|Executed' || true
           grep -q -E '\*\* TEST SUCCEEDED \*\*|Test run with [0-9]+ tests? passed' macos/build/test.log
-
-      - name: Upload the test log on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: swift-test-log
-          path: macos/build/test.log
-          if-no-files-found: ignore
-
-  release-bundle:
-    name: Unsigned release bundle (zip, dmg, SHA256SUMS)
-    runs-on: macos-26
-    timeout-minutes: 45
-    needs: [app]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Select Xcode
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: latest-stable
-
-      - name: Cache Homebrew downloads
-        uses: actions/cache@v4
-        with:
-          path: ~/Library/Caches/Homebrew
-          key: brew-${{ runner.os }}-${{ runner.arch }}-xcodegen
-          restore-keys: brew-${{ runner.os }}-${{ runner.arch }}-
-
-      - name: Install XcodeGen
-        run: brew install xcodegen
-
-      - name: Cache DerivedData and Swift packages
-        uses: actions/cache@v4
-        with:
-          path: macos/build/DerivedData
-          key: deriveddata-${{ runner.os }}-${{ hashFiles('macos/project.yml', 'macos/BenchBar/**/*.swift', 'macos/BenchBarTests/**/*.swift') }}
-          restore-keys: deriveddata-${{ runner.os }}-
-
-      - name: scripts/release-local.sh
-        run: scripts/release-local.sh --skip-tests
 
       - name: Upload the bundle
         uses: actions/upload-artifact@v4
@@ -172,3 +132,11 @@ jobs:
             dist/SHA256SUMS
           if-no-files-found: error
           retention-days: 14
+
+      - name: Upload the test log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: swift-test-log
+          path: macos/build/test.log
+          if-no-files-found: ignore
