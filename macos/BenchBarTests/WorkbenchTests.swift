@@ -76,7 +76,7 @@ struct WorkbenchTests {
         await workbench.addApp(" https://github.com/acme/acme_erp ", branch: "develop", site: "v16two", on: bench)
         #expect(base.cli.calls.contains(["app", "add", "https://github.com/acme/acme_erp", "--yes", "--plain", "--bench-dir", v16,
                                          "--branch", "develop", "--site", "v16two"]))
-        #expect(workbench.result == .init(title: "Add acme_erp", error: nil))
+        #expect(workbench.result == .init(title: "Add acme_erp", error: nil, scope: v16), "the banner shows on this bench only")
         #expect(bench.activity == nil, "the slot is free again")
     }
 

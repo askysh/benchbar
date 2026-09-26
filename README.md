@@ -1,9 +1,12 @@
+<img src="docs/images/app-icon.png" width="96" alt="The BenchBar icon: a park bench on the run" align="right">
+
 # BenchBar
 
 Local Frappe and ERPNext development benches on macOS. The `benchbar`
 command line tool installs a bench, runs it in the background under
 launchd and keeps it healthy. The BenchBar menu bar app shows each bench
-as a small runner with start, stop and a health check one click away.
+as a small runner with start, stop and a health check one click away, and
+a window for each bench's sites, apps and health.
 
 [![CI](https://github.com/askysh/benchbar/actions/workflows/ci.yml/badge.svg)](https://github.com/askysh/benchbar/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/askysh/benchbar)](https://github.com/askysh/benchbar/releases/latest)
@@ -31,8 +34,20 @@ as a small runner with start, stop and a health check one click away.
 - **Existing benches welcome.** `benchbar adopt` registers a bench you
   already have without touching its apps, sites or databases.
 - **A menu bar app.** State at a glance, start, stop, restart, the site,
-  the logs, a read only doctor, and crash notifications. The app never
-  writes to a bench itself; it runs the CLI and reads its JSON.
+  the logs, a read only doctor, and crash notifications. The BenchBar
+  window adds a page per bench: sites, apps, doctor and Repair. The app
+  never writes to a bench itself; it runs the CLI and reads its JSON.
+- **Several benches side by side.** A v15 and a v16 bench, each with its
+  own ports, sites and scheduler, on one MariaDB.
+- **Apps from anywhere.** From the app registry or any GitHub repository,
+  private ones included (your SSH key or `gh` login), with a changelog
+  before every update.
+- **Made for teams.** A team profile sets up a new bench with your apps
+  and branches; the `benchbar.toml` lockfile keeps everyone's bench the
+  same; `benchbar pull` copies a production site into a local one, email
+  muted and scheduler paused.
+- **For coding agents.** `benchbar mcp` lets Claude Code, Cursor and
+  other agents read and drive your benches.
 - **Shell helpers.** `benchup`, `benchdown`, `benchrestart`,
   `benchstatus`, `benchlogs`, `benchwatch` and friends.
 - **Bug reports without secrets.** `benchbar report` writes a redacted
@@ -252,29 +267,49 @@ reports drift as a warning.
 The runner in the menu bar sleeps when the bench is stopped, walks while
 it starts, runs while it is up (faster when the bench is busy), stumbles
 when it crashes, and shows a question mark when the CLI is missing.
-Reduce Motion shows still poses. The BenchBar window (⌘, or "Apps, sites
-and settings…" in the popover) has a page per bench: add apps from the
-registry or any GitHub repository, add sites, change the default site,
-switch the scheduler, and run doctor and Repair with the plan shown
-first; team profiles and the app's own settings live there too.
-Click the runner for the popover: bench, site,
-state and uptime, Start, Stop, Restart, open the site, the logs or the
-bench folder, and a read only doctor. With more than one bench the runner
-shows the worst state of all of them, and the popover lists every bench
-with its own Start, Stop and Restart and an "n of m up" count; the
-selected bench lists its sites, each with an Open button. Settings has a
-scheduler switch per bench. Keyboard: ⌘U start, ⌘D stop,
-⌘R restart, ⌘O site, ⌘L logs, ⌘F folder, ⌘K doctor.
-bench folder, and a read only doctor. Keyboard: ⌘U start, ⌘D stop,
-⌘R restart, ⌘O site, ⌘L logs (a log window with search and a filter per
-process), ⌘F folder, ⌘K doctor.
+Reduce Motion shows still poses. With more than one bench it shows the
+worst state of all of them.
+
+Click it for the popover: bench, site, state and uptime, Start, Stop,
+Restart, open the site, the logs or the bench folder, and a read only
+doctor with Repair when something is repairable. With more than one
+bench the popover lists every bench with its own buttons and an "n of m
+up" count. Keyboard: ⌘U start, ⌘D stop, ⌘R restart, ⌘O site, ⌘L logs (a
+log window with search and a filter per process), ⌘F folder, ⌘K doctor,
+⌘M the BenchBar window.
+
+<p>
+  <img src="docs/images/window-overview.png" width="420" alt="The BenchBar window: a bench's overview with Start, Stop, Restart, its site and ports, and the scheduler switch">
+  <img src="docs/images/window-apps.png" width="420" alt="A bench's apps: branch, repository, the sites that have each app, Install and Update">
+</p>
+
+The BenchBar window (⌘M, "Apps, sites and settings…" in the popover, or
+open BenchBar again from Finder or Spotlight) has a page per bench:
+
+- **Overview**: start, stop, restart, the site and ports, and the
+  scheduler switch.
+- **Sites**: add a site (it asks for the Administrator password), make
+  one the default, open any of them.
+- **Apps**: add an app from the registry or any GitHub URL, install it on
+  a site, and update it after reading the changelog. Right click a bench
+  in the sidebar for its actions.
+- **Health**: doctor's checks, and Repair with its plan shown before
+  anything changes and each step as it runs.
+
+Above the benches: General (open at login, notifications, which
+`benchbar` the app runs, the keyboard shortcuts), Menu Bar (the runner,
+with a live preview and custom runners, see
+[docs/runners.md](docs/runners.md)), Team Profiles and About.
+
+<p>
+  <img src="docs/images/window-health.png" width="420" alt="A bench's health: doctor's warnings with their fixes, Run Doctor and Repair">
+  <img src="docs/images/window-general.png" width="420" alt="General settings: startup, notifications, the command line tool and keyboard shortcuts">
+</p>
 
 On first run the app looks for the CLI in `~/.local/bin/benchbar`, then in
 Homebrew's folders, and asks once with a file picker if it finds none.
 macOS asks whether BenchBar may send notifications; allow it for the
-crash alerts. Settings has two built in runners with a live preview,
-custom runners ([docs/runners.md](docs/runners.md)), launch at login,
-notifications and the CLI path.
+crash alerts.
 
 The app does not write plists, edit bench files, or run `bench`, `brew`
 or `launchctl`. Every button runs `benchbar ... --json` and reads the

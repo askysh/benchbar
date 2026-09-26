@@ -103,6 +103,11 @@ assert_contains "$OUT" "branch nope not found"
 assert_contains "$OUT" "remote branches: main version-15"
 assert_calls_not_contain '^bench get-app'
 
+# ---- a URL for a known app follows its known branch, not the remote's default
+run_fm app add "file://${REMOTES}/acme_hr.git" --dry-run --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "bench get-app --skip-assets --branch version-15 file://${REMOTES}/acme_hr.git"
+
 # ---- a private repo fails fast with a fix, for SSH (a host alias) and HTTPS
 reset_calls
 MOCK_GIT_LSREMOTE_EXIT=128 run_fm app add "git@work-gh:acme/private.git" --branch main --bench-dir "$BENCH"

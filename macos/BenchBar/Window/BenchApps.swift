@@ -40,6 +40,7 @@ struct BenchApps: View {
                     }
                     .help("Ask bench which sites have which app (needs MariaDB)")
                     Button { adding = true } label: { Label("Add App…", systemImage: "plus") }
+                        .primaryAction()
                         .disabled(busy)
                 }
             } footer: {

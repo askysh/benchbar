@@ -243,6 +243,12 @@ Checked in frappe `version-16` at 012667b and bench `develop` at c9d1250 (Septem
 - The app's repair sheet applies stream events on the main actor in order, through one `AsyncStream`, so a late step event can never overwrite a failed run.
 - Codex on the pull request: `app update` refuses to run when any site's `list-apps` fails, since a stale list could skip a site's backup or migrate. `pull` into a running bench sets `pause_scheduler` in `common_site_config.json` before the restore and removes it once the copy has its own `pause_scheduler` and `mute_emails`, so the bench's scheduler never sees the production copy unguarded; a bench already paused by hand is left alone, and a pull that stops halfway leaves the bench paused and says how to resume. The test runner kills a timed out test's whole process tree, collected before anything dies.
 
+## 0.5: found on the real Mac before the release
+
+- `app add URL` for an app `config/apps.tsv` knows follows that branch when the repository has it (Raven added by its URL came in on `develop`, the repository default, and doctor then warned that it was off `main`). A URL for an unknown app still takes the default branch; `--branch` always wins.
+- Raven moved to `github.com/frappe/raven`; the registry points there (the old URL redirects).
+- The app reads `app list` with the 90 second limit, not 20: at app start it runs next to status and doctor for every bench, and it makes several git calls per app.
+
 # The easy install run (v0.3)
 
 ## Setup and environment

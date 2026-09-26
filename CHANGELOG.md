@@ -2,14 +2,17 @@
 
 All notable changes to this project are documented here.
 
-## 0.4.0 - 2026-09-26
+## 0.5.0 - 2026-09-26
 
-Frappe v16 is a first class profile, and more than one bench runs on the
-same Mac: each with its own ports, sites, settings and scheduler choice,
-side by side in the menu bar. Verified on a real Mac with a v15 and a v16
-bench running at once (docs/DECISIONS.md, "the v16 bench on a real Mac").
+BenchBar grows from a start and stop button into the place you run your
+benches from: a window with every bench's sites, apps and health, Repair
+from the app, a log window, apps from any GitHub repository (private
+ones too), team profiles and a lockfile for the whole team, `benchbar
+pull` for a production copy, and `benchbar mcp` for coding agents. A new
+app icon, and the window uses the macOS 27 tab style and Liquid Glass
+buttons (older macOS versions get the classic look).
 
-### Added (0.5)
+### Added: the app
 
 - **The BenchBar window** replaces the sparse Settings window: General,
   Menu Bar, Team Profiles and About, then a page per bench with Overview
@@ -19,19 +22,9 @@ bench running at once (docs/DECISIONS.md, "the v16 bench on a real Mac").
   site, update after a changelog preview) and Health (doctor, and Repair
   with the plan first and a live step list). The popover links into it
   (⌘M) and offers Repair when doctor found something repairable.
-
-- `benchbar mcp`: a Model Context Protocol server on stdio (stdlib only
-  Python) with `benchbar_list`, `benchbar_status`, `benchbar_doctor`,
-  `benchbar_logs_tail`, `benchbar_site_list`, `benchbar_up`,
-  `benchbar_down` and `benchbar_restart`, each backed by the CLI's JSON.
-- `benchbar logs --json` with `-nN` and `--process NAME`.
-
-### Added (0.5)
-
-- `benchbar repair --json` streams a plan, a step event per action and a
-  done event with the exit code; `--dry-run --json` prints only the plan.
-
-### Added (0.5)
+- A new app icon: the menu bar runner, a park bench on the run, drawn
+  for Icon Composer (`macos/BenchBar/Resources/AppIcon.icon`,
+  `scripts/app-icon.py`).
 
 - A log window per bench (⌘L): follows `logs/bench.log` with smart
   scroll, search with a match count and next and previous (⌘G, ⇧⌘G), a
@@ -39,7 +32,15 @@ bench running at once (docs/DECISIONS.md, "the v16 bench on a real Mac").
   log, clear, select and copy, and Open in Terminal. It survives the
   runner's log rotation and keeps at most 5000 lines.
 
-### Added (0.5)
+### Added: the command line
+
+- `benchbar mcp`: a Model Context Protocol server on stdio (stdlib only
+  Python) with `benchbar_list`, `benchbar_status`, `benchbar_doctor`,
+  `benchbar_logs_tail`, `benchbar_site_list`, `benchbar_up`,
+  `benchbar_down` and `benchbar_restart`, each backed by the CLI's JSON.
+- `benchbar logs --json` with `-nN` and `--process NAME`.
+- `benchbar repair --json` streams a plan, a step event per action and a
+  done event with the exit code; `--dry-run --json` prints only the plan.
 
 - App commands. `benchbar app list [--json] [--no-sites]` shows every
   app with its branch, commit, local changes, shallow clone, version,
@@ -92,7 +93,7 @@ bench running at once (docs/DECISIONS.md, "the v16 bench on a real Mac").
   `GIT_TERMINAL_PROMPT=0` and SSH in batch mode, so a private repo fails
   at once instead of waiting on a prompt.
 
-### Added (0.5)
+### Added: pull
 
 - `benchbar pull HOST:SITE --as NAME` copies a production site over SSH
   into a new local site. It uses the latest backup that already exists on
@@ -119,6 +120,41 @@ bench running at once (docs/DECISIONS.md, "the v16 bench on a real Mac").
   set downloaded by hand (Frappe Cloud); `--dry-run` connects read only
   and prints the plan; `--json` streams `plan`, `gate`, `progress`,
   `step` and `done` events (docs/json-schema.md).
+
+### Changed
+
+- The window's settings panes are laid out like System Settings: a
+  header per pane, Startup, Notifications, Command line tool and
+  Keyboard shortcuts on General, a runner preview on Menu Bar. The
+  sidebar's benches have a context menu (start, stop, restart, open,
+  show, copy path).
+- `app add URL` for an app in `config/apps.tsv` follows its branch there
+  when the repository has it, instead of the repository's default
+  branch, so doctor does not warn about an app it just added. Raven's
+  registry entry points at `github.com/frappe/raven`.
+- `bench new-site` gets the MariaDB root and Administrator passwords on
+  stdin, never in its arguments.
+- CI runs the CLI tests in three parallel macOS shards (about 4 minutes
+  per pull request, from about 13); the Linux job is gone.
+
+### Fixed
+
+- `app update` refuses to run when a site's app list cannot be read, so
+  it never skips a site's backup or migrate.
+- `pull` into a running bench pauses the bench's scheduler until the
+  copy has its own `pause_scheduler` and `mute_emails`.
+- A git repository or branch from a team profile or lockfile can no
+  longer be read as a git option (`--` everywhere, values starting with
+  `-` refused).
+- The window no longer jumps wider when you open General, and a
+  change's result shows only on the page it belongs to.
+
+## 0.4.0 - 2026-09-26
+
+Frappe v16 is a first class profile, and more than one bench runs on the
+same Mac: each with its own ports, sites, settings and scheduler choice,
+side by side in the menu bar. Verified on a real Mac with a v15 and a v16
+bench running at once (docs/DECISIONS.md, "the v16 bench on a real Mac").
 
 ### Added
 

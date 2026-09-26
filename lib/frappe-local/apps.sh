@@ -562,7 +562,7 @@ fl_app_verify() {
 
 fl_cmd_app_add() {
   local target="" branch="" name="" all=0 sites=() s existing="" state="clone" cur to_install=() missing_deps=""
-  local rows=() labels=() i code=0 build_apps running=0 dep
+  local rows=() labels=() i code=0 build_apps running=0 dep policy
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
       --branch) branch="${2:-}"; shift 2 ;;
@@ -598,6 +598,13 @@ fl_cmd_app_add() {
     fl_app_dirty "$existing" && fl_warn "apps/${existing} has local changes; add only installs it on sites (app update and lock apply refuse a dirty app)"
     missing_deps="$(fl_app_missing_required "$existing" | tr '\n' ' ')"
   else
+    # a URL for an app BenchBar knows follows the known branch, so doctor
+    # does not warn about the app it just added
+    if [[ -z "$FL_RES_BRANCH" ]]; then
+      policy="$(fl_lookup_app_policy "$FL_RES_NAME" "$FL_PROFILE" 2>/dev/null || true)"
+      policy="${policy%%|*}"
+      if [[ -n "$policy" ]] && fl_repo_ref_exists "$FL_RES_REPO" "$policy"; then FL_RES_BRANCH="$policy"; fi
+    fi
     if [[ -z "$FL_RES_BRANCH" ]]; then
       FL_RES_BRANCH="$(fl_repo_default_branch "$FL_RES_REPO")"
       if [[ -z "$FL_RES_BRANCH" ]]; then

@@ -19,7 +19,7 @@ include:
 
 settings:
   base:
-    MARKETING_VERSION: "0.4.0"
+    MARKETING_VERSION: "0.5.0"
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "6.0"
     MACOSX_DEPLOYMENT_TARGET: "14.0"
@@ -49,6 +49,11 @@ targets:
       - path: BenchBar
         excludes:
           - "Resources/Info.plist"
+          - "Resources/AppIcon.icon"
+      # the Icon Composer icon is one file to Xcode, compiled by actool
+      - path: BenchBar/Resources/AppIcon.icon
+        type: file
+        buildPhase: resources
     info:
       path: BenchBar/Resources/Info.plist
       properties:

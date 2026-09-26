@@ -1,0 +1,41 @@
+{
+  "fill" : {
+    "linear-gradient" : [
+      "extended-srgb:0.10196,0.47843,0.96078,1.00000",
+      "extended-srgb:0.05098,0.19608,0.54902,1.00000"
+    ],
+    "orientation" : {
+      "start" : { "x" : 0.5, "y" : 0 },
+      "stop" : { "x" : 0.5, "y" : 1 }
+    }
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "fill-specializations" : [
+            { "value" : { "solid" : "extended-srgb:0.04314,0.16471,0.29020,1.00000" } },
+            { "appearance" : "dark", "value" : { "solid" : "extended-srgb:0.04314,0.16471,0.29020,1.00000" } }
+          ],
+          "glass" : false,
+          "image-name" : "eyes.svg",
+          "name" : "eyes"
+        },
+        { "glass" : true, "image-name" : "bench.svg", "name" : "bench" },
+        { "glass" : true, "image-name" : "legs.svg", "name" : "legs" }
+      ],
+      "shadow" : { "kind" : "neutral", "opacity" : 0.5 },
+      "translucency" : { "enabled" : true, "value" : 0.35 }
+    },
+    {
+      "layers" : [
+        { "glass" : true, "image-name" : "speed.svg", "name" : "speed", "opacity" : 0.7 }
+      ],
+      "shadow" : { "kind" : "none", "opacity" : 0 },
+      "translucency" : { "enabled" : true, "value" : 0.5 }
+    }
+  ],
+  "supported-platforms" : {
+    "squares" : [ "macOS" ]
+  }
+}

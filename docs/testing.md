@@ -71,6 +71,35 @@ Things worth checking:
 Everything is idempotent: run `benchbar install`, `repair` or `adopt`
 twice and the second run says `unchanged`.
 
+### New in 0.5, worth a try
+
+- **The BenchBar window**: ⌘M in the popover (or open BenchBar again from
+  Spotlight). Each bench has Overview, Sites, Apps and Health. Right
+  click a bench in the sidebar for its actions.
+- **Add an app**: Apps, then **Add App…**. Pick one from the list or
+  paste a GitHub URL; a private repo works when `git clone` of it works
+  in your Terminal (SSH key or `gh auth login`). It shows the plan, then
+  clones, installs on the site you picked and builds.
+- **Update an app**: **Update…** on an app shows the commits it would
+  take before anything changes, then backs up every site that has the
+  app, fast forwards, migrates and builds.
+- **Repair from the app**: Health, then **Repair…**. It lists what it
+  would do before it does it.
+- **The log window**: ⌘L, with search (⌘G for the next match) and a filter per process.
+- **A second bench**: `benchbar install --profile v16-lts --bench-dir
+  ~/v16-bench` puts a Frappe v16 bench next to your first one, on its own
+  ports; both show up in the menu bar.
+- **Your team's profile**: `benchbar profile create myteam --from-bench
+  ~/frappe-bench` writes `~/.config/benchbar/profiles/myteam.toml` from
+  a bench you already have (it only reads the bench). A teammate with
+  that file runs `benchbar install --profile myteam`.
+- **A coding agent**: `claude mcp add benchbar -- benchbar mcp`, then ask
+  it how your benches are doing.
+
+Coming from 0.4: re-run the install line above to update, then run
+`benchbar doctor`. If it says the runner script is outdated, `benchbar
+repair` rewrites it (it asks first).
+
 ## 3. Send a report
 
 Whether it worked or not, run:

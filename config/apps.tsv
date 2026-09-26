@@ -9,4 +9,4 @@ wiki	https://github.com/frappe/wiki	master	master	70	Frappe Wiki
 insights	https://github.com/frappe/insights	version-3	version-3	80	Frappe Insights
 drive	https://github.com/frappe/drive	main	main	90	Frappe Drive
 builder	https://github.com/frappe/builder	main	main	100	Frappe Builder
-raven	https://github.com/The-Commit-Company/Raven	main	main	110	Third-party Frappe app
+raven	https://github.com/frappe/raven	main	main	110	Third-party Frappe app

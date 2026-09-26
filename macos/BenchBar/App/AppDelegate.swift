@@ -100,6 +100,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openSettingsAction() { openSettings() }
 
+    /// Opening BenchBar again (Finder, Spotlight, the Dock while a window is
+    /// open) shows the window: a menu bar app has nothing else to show.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag { openSettings() }
+        return true
+    }
+
     private func openSettings() {
         popover.close()
         settingsWindow.show()

@@ -36,36 +36,14 @@ as the bench sees it, honcho without `pkg_resources`, stale processes),
 and the app with a bench list, the worst state in the menu bar and the
 sites of each bench.
 
-## Next: 0.5, the app does more, apps and team profiles
-
-A bigger release: the app work, and everything a team needs to share one
-way of setting up benches.
-
-- Repair from the app: the plan in a sheet, then a live step list, from
-  `benchbar repair --json`, which streams one event per line.
-- A log viewer window: follow with smart scroll, search, a filter per
-  process (web, worker, socketio, schedule, redis), errors tinted, the
-  previous log one click away.
-- `benchbar mcp`: a Model Context Protocol server over stdio, so coding
-  agents can list benches, read status, doctor and logs, and start, stop
-  or restart a bench. Nothing that repairs, installs or needs `sudo`.
-- App installs: `benchbar app list`, `app add` from the app registry or
-  any GitHub repo, public or private (SSH keys and host aliases),
-  `app install` on a site, and `app update` for one app with a changelog
-  preview and a backup before `migrate`. Never `bench update`.
-- Team profiles: an org's recipe (base profile, apps with repos and
-  branches, site defaults) in a TOML file on the Mac or in the team's own
-  config repo, never in BenchBar's code. `benchbar profile create NAME
-  --from-bench PATH` turns an existing bench into one, and
-  `benchbar install --profile NAME` uses it like a built in profile.
-- A team lockfile, `benchbar.toml`, pinning the profile, bench and app
-  branches or commits: `benchbar lock write`, `lock check` (also in
-  doctor) and `lock apply`, so teammates get identical benches.
-- `benchbar pull`: a production site into a new local site over SSH. It
-  uses the latest backup on the server unless asked to take one, carries
-  the encryption key over without printing it, brings missing apps in at
-  the production branch first, and mutes email and the scheduler on the
-  copy.
+**0.5, the app does more, apps and team profiles.** The BenchBar window
+with a page per bench (sites, apps, doctor and Repair with its plan
+first), a log window, `benchbar repair --json`, `benchbar mcp` for coding
+agents, app installs and updates from the registry or any GitHub repo
+(private ones too), team profiles kept outside BenchBar, the
+`benchbar.toml` team lockfile, `benchbar pull` for a production copy
+with the encryption key carried over and email and the scheduler off, a
+new app icon, and the macOS 27 look.
 
 ## Later
 
@@ -73,9 +51,9 @@ way of setting up benches.
 DMG, a cask in `askysh/homebrew-tap`, Sparkle updates, a documentation
 site, and a launch post on discuss.frappe.io.
 
-**0.7, the app for sites and apps.** Backup and restore from the app,
-dropping a site with a backup first, app installs, team profiles and
-pulls in the app, a first run wizard, profile switching per bench.
+**0.7, the app for sites.** Backup and restore from the app, dropping a
+site with a backup first, pull and the lockfile in the app, a first run
+wizard, profile switching per bench.
 
 **1.0.** A stable JSON API and runner format, an official Homebrew cask,
 full doctor coverage for v15 and v16.

@@ -9,8 +9,28 @@ struct ProfilesPane: View {
     @State private var creating = false
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            PaneHeader(symbol: "person.2.fill", tint: .indigo, title: "Team Profiles",
+                       subtitle: "Pin a base profile and your team's apps, then set up a bench from it.") {
+                Button { creating = true } label: { Label("Create from Bench…", systemImage: "plus") }
+                    .primaryAction()
+                    .disabled(store.benches.isEmpty)
+            }
+            ChangeResultBanner(workbench: workbench, scope: Workbench.profilesScope)
+                .padding(.horizontal, 20).padding(.top, 6)
+            profiles
+        }
+        .task { await workbench.loadProfiles() }
+        .sheet(isPresented: $creating) {
+            CreateProfileSheet(benches: store.benches) { name, bench in
+                creating = false
+                Task { await workbench.createProfile(name, from: bench) }
+            } cancel: { creating = false }
+        }
+    }
+
+    private var profiles: some View {
         Form {
-            ChangeResultBanner(workbench: workbench)
             Section {
                 ForEach(workbench.profiles) { profile in
                     HStack(alignment: .firstTextBaseline) {
@@ -40,25 +60,13 @@ struct ProfilesPane: View {
                     Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled)
                 }
             } header: {
-                HStack {
-                    Text("Profiles")
-                    Spacer()
-                    Button { creating = true } label: { Label("Create from Bench…", systemImage: "plus") }
-                        .disabled(store.benches.isEmpty)
-                }
+                Text("Profiles")
             } footer: {
-                Text("A team profile pins a base profile and the team's apps with their repositories and branches. Use it with benchbar install --profile NAME. Team profiles live in ~/.config/benchbar/profiles or a folder in BENCHBAR_PROFILE_PATH, never inside BenchBar.")
+                Text("Set up a bench from one with benchbar install --profile NAME. Team profiles are files in ~/.config/benchbar/profiles or a folder in BENCHBAR_PROFILE_PATH (a team repository works well), never inside BenchBar.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
-        .task { await workbench.loadProfiles() }
-        .sheet(isPresented: $creating) {
-            CreateProfileSheet(benches: store.benches) { name, bench in
-                creating = false
-                Task { await workbench.createProfile(name, from: bench) }
-            } cancel: { creating = false }
-        }
     }
 }
 
@@ -105,6 +113,23 @@ struct AboutPane: View {
     }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 14) {
+                Image(nsImage: NSApp.applicationIconImage)
+                    .resizable().frame(width: 64, height: 64)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("BenchBar").font(.title.weight(.semibold))
+                    Text("Version \(appVersion)").font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
+                    Text("Frappe benches on your Mac, from the menu bar.").font(.callout).foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 20).padding(.top, 16).padding(.bottom, 6)
+            form
+        }
+    }
+
+    private var form: some View {
         Form {
             Section {
                 LabeledContent("BenchBar", value: appVersion)
