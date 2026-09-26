@@ -5,7 +5,7 @@
 
 run_fm --help; assert_eq "0" "$CODE"; assert_contains "$OUT" "install             Run phase 00"
 run_fm; assert_eq "0" "$CODE"; assert_contains "$OUT" "Usage:"
-run_fm --version; assert_contains "$OUT" "benchbar 0.3.1"
+run_fm --version; assert_contains "$OUT" "benchbar ${VER}"
 run_fm bogus; assert_eq "1" "$CODE"; assert_contains "$OUT" "Unknown command: bogus"
 run_fm --nope; assert_eq "1" "$CODE"; assert_contains "$OUT" "Unknown option"
 

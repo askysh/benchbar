@@ -27,29 +27,19 @@ per run), `benchbar adopt` for existing benches, `benchbar report` for
 redacted bug reports, CI on macOS and Linux, unsigned releases built as
 drafts from a tag.
 
-## Next: 0.4, Frappe v16 and more than one bench
+**0.4, Frappe v16 and more than one bench.** The v16 profile tested end to
+end on a real Mac, one MariaDB server shared by every bench, several
+benches side by side with their own port blocks, settings and processes,
+sites (`site add`, `site default`, `site hosts`), the scheduler opt in,
+doctor checks from the community threads (Full Disk Access, the toolchain
+as the bench sees it, honcho without `pkg_resources`, stale processes),
+and the app with a bench list, the worst state in the menu bar and the
+sites of each bench.
 
-- Frappe v16 as a first class profile: Python 3.14, Node 24, `pkg-config`
-  and `mariadb-connector-c` for `mysqlclient`, `bench` installed with
-  `uv tool` when uv is there, and a `pdf_engine` check that knows
-  wkhtmltopdf and the Chromium v16 can use. Tested end to end on a real
-  Mac, with a v16 row in CI.
-- Doctor checks for what the community threads keep hitting: Full Disk
-  Access before `bench init` (bench otherwise rolls a new bench back),
-  the toolchain per profile (Python, Node, yarn, MariaDB, `pkg-config`),
-  honcho without `pkg_resources`, the fork safety variables, and stale
-  processes holding a bench's ports.
-- A second bench next to the first: each bench gets its own port block
-  (`--port-offset`, or the next free one), processes are matched per
-  bench, and `benchbar down` on one never touches another.
-- Sites: `benchbar site list`, `site add`, `site default`, `site hosts`,
-  and the sites of every bench in the JSON.
-- The app with several benches: a bench list with actions per row, the
-  worst state in the menu bar, the sites of each bench with Open buttons.
-- The scheduler, opt in: `benchbar service --with-schedule`, and a toggle
-  per bench in the app.
+## Next: 0.5, the app does more, apps and team profiles
 
-## Then: 0.5, the app does more
+A bigger release: the app work, and everything a team needs to share one
+way of setting up benches.
 
 - Repair from the app: the plan in a sheet, then a live step list, from
   `benchbar repair --json`, which streams one event per line.
@@ -59,13 +49,15 @@ drafts from a tag.
 - `benchbar mcp`: a Model Context Protocol server over stdio, so coding
   agents can list benches, read status, doctor and logs, and start, stop
   or restart a bench. Nothing that repairs, installs or needs `sudo`.
-
-## Then: 0.6, sites and apps
-
-- App installs: `benchbar app list`, `app add` (with the branch for the
-  bench's profile), `app install` on a site, and `app update` for one app
-  with a changelog preview and a backup before `migrate`. Never
-  `bench update`.
+- App installs: `benchbar app list`, `app add` from the app registry or
+  any GitHub repo, public or private (SSH keys and host aliases),
+  `app install` on a site, and `app update` for one app with a changelog
+  preview and a backup before `migrate`. Never `bench update`.
+- Team profiles: an org's recipe (base profile, apps with repos and
+  branches, site defaults) in a TOML file on the Mac or in the team's own
+  config repo, never in BenchBar's code. `benchbar profile create NAME
+  --from-bench PATH` turns an existing bench into one, and
+  `benchbar install --profile NAME` uses it like a built in profile.
 - A team lockfile, `benchbar.toml`, pinning the profile, bench and app
   branches or commits: `benchbar lock write`, `lock check` (also in
   doctor) and `lock apply`, so teammates get identical benches.
@@ -77,13 +69,13 @@ drafts from a tag.
 
 ## Later
 
-**0.7, public launch.** Developer ID signing and notarization, a signed
+**0.6, public launch.** Developer ID signing and notarization, a signed
 DMG, a cask in `askysh/homebrew-tap`, Sparkle updates, a documentation
 site, and a launch post on discuss.frappe.io.
 
-**0.8, the app for sites and apps.** Backup and restore from the app,
-dropping a site with a backup first, the 0.6 app installs and pulls in
-the app, a first run wizard, profile switching per bench.
+**0.7, the app for sites and apps.** Backup and restore from the app,
+dropping a site with a backup first, app installs, team profiles and
+pulls in the app, a first run wizard, profile switching per bench.
 
 **1.0.** A stable JSON API and runner format, an official Homebrew cask,
 full doctor coverage for v15 and v16.

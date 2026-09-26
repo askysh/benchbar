@@ -66,7 +66,8 @@ struct SnapshotTests {
 
     @Test func settingsWindow() async throws {
         base.cli.answer("list", json: base.listJSON())
-        base.cli.answer("status", json: base.statusJSON("running"))
+        // a 0.4 CLI reports the scheduler, so the switch is live in the screenshot
+        base.cli.answer("status", json: base.statusJSON("running").replacingOccurrences(of: "\"web_ping_code\":null}", with: "\"web_ping_code\":null,\"scheduler\":false}"))
         // a path that reads well in the README screenshot
         let cliPath = "/Users/you/.local/bin/benchbar"
         base.settings.cliPath = cliPath

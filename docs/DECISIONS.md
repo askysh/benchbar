@@ -10,6 +10,7 @@ first, the 0.3 easy install run follows.
 - Pulling a production site moved from the 0.7 plan to Ideas, as a wizard that also handles the encryption key and the app list mismatch: without those two it restores a site that cannot decrypt its passwords or fails on missing apps, and it is not scheduled yet.
 - The old 0.4 items the brief did not schedule (worker restart on Python changes, more speed sources, a runner gallery, running one scheduler event) moved to Ideas; runner import from a zip was dropped from the list because 0.3 already ships it.
 
+- App installs, team profiles, the lockfile and `pull` were scheduled as 0.6, then folded into 0.5 (Akash, 2026-09-26): they are being built at the same time as the 0.5 app work, and one bigger release is less to write up and tag than two. Patch numbers stay for fixes.
 ## 0.4: the v16 profile
 
 Checked in frappe `version-16` at 012667b and bench `develop` at c9d1250 (September 2026), not from memory:
