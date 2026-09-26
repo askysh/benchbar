@@ -35,13 +35,13 @@ export default defineConfig({
         { tag: 'meta', attrs: { property: 'og:image:alt', content: 'BenchBar: local Frappe benches on macOS' } },
         { tag: 'meta', attrs: { name: 'twitter:card', content: 'summary_large_image' } },
         { tag: 'meta', attrs: { name: 'twitter:image', content: `${site}/og.png` } },
-        // Umami analytics; UMAMI_WEBSITE_ID is filled in by Akash
+        // Umami analytics at analytics.akashmishra.com, only counted on benchbar.akashmishra.com
         {
           tag: 'script',
           attrs: {
             defer: true,
             src: 'https://analytics.akashmishra.com/script.js',
-            'data-website-id': 'UMAMI_WEBSITE_ID',
+            'data-website-id': '44b22d77-3180-41e4-adff-bf868420c142',
             'data-domains': 'benchbar.akashmishra.com',
           },
         },
