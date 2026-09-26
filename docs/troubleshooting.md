@@ -1,4 +1,7 @@
-# Troubleshooting
+---
+title: "Troubleshooting"
+description: "Common stumbles with a local Frappe bench on macOS, the cleanup tool case, what benchbar writes, and how to wipe a bench."
+---
 
 Start with `benchbar doctor`. It is read only, every warning and failure
 names its fix, and `benchbar repair` applies the fixes it flagged. The

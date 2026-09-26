@@ -1,7 +1,10 @@
-# Decisions
+---
+title: "Decisions"
+description: "Every non obvious choice in the BenchBar CLI and repo, one line each: the decision, then the reason."
+---
 
 One line per non obvious choice: the decision, then the reason. The
-decisions of the app work live in `macos/DECISIONS.md`. The 0.5 and 0.4
+decisions of the app work live in `macos/DECISIONS.md`. The 0.5.5, 0.5 and 0.4
 runs come first, the 0.3 easy install run follows.
 
 ## 0.5.5: about, help and docs links
@@ -26,6 +29,29 @@ runs come first, the 0.3 easy install run follows.
 - The runner strip in the preview is cut from `docs/images/runners.png`, with the grey tiles made transparent: the frames stay the ones the app draws, without rendering them again.
 - Dependabot watches `/macos` for Swift: the package list lives in `macos/project.yml` (XcodeGen) and the generated `.xcodeproj` is not committed, so Swift updates only start once a `Package.resolved` is in the repo.
 - Vouch waits until drive-by pull requests appear: a trust list for a project with one maintainer and few contributors is ceremony.
+
+## 0.5.5: docs site
+
+- The site reads `docs/` in place through a glob loader with `base: ".."` in `site/src/content.config.ts`, not a symlink: Starlight 0.42 supports any Astro loader for the `docs` collection, a symlink breaks on Windows clones and in some editors, and `entry.filePath` stays a real repo path, so "Last updated" comes from the file's own git history.
+- `editLink.baseUrl` is `https://github.com/askysh/benchbar/edit/main/site/`: Starlight appends `entry.filePath`, which is `../docs/<page>.md` relative to `site/`, and the URL resolves to `edit/main/docs/<page>.md`.
+- Page URLs are the lowercased file paths under `docs/` (`DECISIONS.md` is `/decisions/`), set by the loader's `generateId`, so the URLs the README and the app link to follow the file names.
+- `ROADMAP.md` and `CONTRIBUTING.md` stay at the repo root with no frontmatter; `site/scripts/prepare.mjs` copies them into `site/.generated/` (ignored by git) before each build with a title from their `# ` heading, their own edit link and last commit date. A missing `CONTRIBUTING.md` is skipped, and the sidebar leaves it out.
+- Links in `docs/` stay relative `.md` paths so GitHub renders them; a remark plugin (`site/src/remark-repo-links.mjs`) turns them into site URLs, and links to other repo files into GitHub links, at build time.
+- Screenshots in the moved README content use markdown image syntax, not `<img width>`: Astro optimises markdown images (webp, a fifth of the size) and ignores raw `<img>` paths.
+- The heading slugs come from github-slugger, which keeps underscores, so `### port_clash` is `#port_clash`; `tests/test-docs.sh` checks a heading for every check id in `FL_CHECK_ORDER` plus `port_block`.
+- The CLI reference documents only flags that `benchbar --help` shows (`tests/test-docs.sh` checks it). `report --out DIR` and `app update --json` without `--dry-run` exist in the code but not in `--help`, so they are left out until `--help` names them.
+- Astro and Starlight run under Bun (`bun --bun astro build`): Astro 7 needs Node 22.12 or later, and Bun alone avoids a second runtime in CI and on a contributor's Mac. `@astrojs/markdown-remark` is a direct dependency because Astro 7 only runs remark plugins through it.
+- The docs workflow is the official Astro Pages workflow with its steps written out (`withastro/action` would run `bun install` without `--frozen-lockfile` and has no place for the link check).
+- Docs only changes skip the CLI and app jobs through a `changes` job (`dorny/paths-filter`) and `if:` conditions, not a workflow `paths-ignore`: a workflow that never starts leaves a required check pending forever, a skipped job counts as a pass. The matrix shards skip step by step on an Ubuntu runner, because a matrix job skipped as a whole reports one check under its unexpanded name. A push to `main` skips the same way: the pull request already ran everything, and `workflow_dispatch` runs all jobs.
+- The docs workflow runs on every pull request and skips its build job the same way when no docs file changed, so "Docs build" can be required too. It also runs `tests/test-docs.sh`, which the CLI shards skip on a docs only change.
+- The link check is linkinator over `site/dist` with fragment checks on, skipping every external URL: GitHub and the site's own domain (before DNS) would make the check flaky, and the internal links are the ones a docs change breaks.
+- The Umami script ships with the `UMAMI_WEBSITE_ID` placeholder, and `og:image` points at `https://benchbar.akashmishra.com/og.png`, which the build copies from `docs/images/og-image.png` when that file exists.
+
+## 0.5.5: readme
+
+- The README keeps only what a visitor needs to decide and start (why, install, quick start, features) and links four deep pages of the docs site: a 3,200 word README had become the manual, which nobody can navigate on GitHub, and the docs site now has search and a sidebar.
+- The README runs about 800 words, not the 1,100 the brief suggested: the fixed order and one line per item leave no room for more without padding.
+- The logo and the hero image switch with the reader's appearance through `<picture>`; the icons are exported from `AppIcon.icon` with Icon Composer's `ictool` (Default and Dark renditions), so they match the app icon exactly.
 
 ## 0.5: app installs
 
