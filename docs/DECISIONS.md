@@ -45,6 +45,26 @@ Designed against frappe/bench develop (c9d1250) and frappe version-15; the code 
 - The format is the strict TOML subset of `lib/frappe-local/toml.sh`, shared with the lockfile: one parser, and a file this parser accepts is valid TOML. `schema = 1` is optional in a profile (written by `create`) and refused when it is another number.
 - `profile create` takes the checkout's lock like other writing commands; `profile list` and `show` do not.
 
+## 0.5: the team lockfile
+
+- The lockfile is an awk parsed TOML subset (`toml.sh`, shared with team profiles), not `tomllib`: the Command Line Tools' `/usr/bin/python3` is 3.9 without it, the bench's env Python is missing exactly when a check matters, doctor stays pure shell, and a fallback would mean two parsers that can disagree. Every refusal names the line (`benchbar.toml:3: not supported: inline tables`).
+- The code lives in `teamlock.sh`: `lock.sh` already is the checkout's run lock, and the two must not be confused.
+- Lookup is `--lock PATH`, `BENCHBAR_LOCK`, `LOCK_FILE` in the bench's own state file (`fl_bstate_set`, not the `<name>.env` of the design), then `<bench>/benchbar.toml`. A relative `--lock` is taken from the current folder when it exists there, else from the bench, so `--lock apps/acme/benchbar.toml` works from anywhere. The path is remembered by write, check and apply (not in a dry run); `BENCHBAR_LOCK` never is, and `list --json` ignores it since it names one bench, not all.
+- The app that holds the lockfile gets no `commit`: committing the lockfile moves that app's HEAD, so its pin would always be one commit behind and every teammate would see `commit_ahead`.
+- Frappe is an ordinary `[[app]]`: one code path, and the entry order is `apps.txt`'s, so `apply` clones in dependency order.
+- Repos compare as host and path (`git@github.com:acme/x.git` equals `https://github.com/acme/x`): teammates clone over SSH or HTTPS as they like. An SSH host alias from `~/.ssh/config` is not resolved and reads as another repo (a warning only).
+- `lock check` is read only and offline: git reads, `apps.txt`, and the site app cache that `app list` fills, so it works with MariaDB stopped. The one outside call is `bench --version` (15 seconds at most) for `bench_version_mismatch`; doctor's `lock_drift` leaves that kind out and calls nothing.
+- `app_missing` is the only `fail` level: the bench lacks code the team's sites need. Everything else is a warning, and doctor reports the whole lock as one `lock_drift` warning pointing at `lock check`.
+- Drift exits 1 like a failing doctor, through the dispatcher (`|| exit 1`), so `lock check --json` prints only the JSON.
+- `lock apply` stops at code: no `new-site`, `install-app`, `migrate` or `bench update`. Missing sites and site apps are printed as `benchbar site add` and `benchbar app install` lines, and a changed app ends with the reminder to migrate: site data is the user's to change.
+- A pinned commit is reached with `git merge --ff-only`, after `git fetch REMOTE SHA` when it is not local (protocol v2 serves any reachable commit), and `--unshallow` for a shallow clone as the fallback. The design's `fetch --depth 1 SHA` was dropped: a depth 1 fetch cuts the history between HEAD and the pin, so the fast forward check fails.
+- An app that is ahead of its pin, diverged from it, or dirty is skipped with a warning and apply still exits 0: local work outranks the lock, and a second apply must say `unchanged`, not fail forever.
+- A branch switch happens only on a clean tree: the locked branch is fetched into its remote tracking ref (`--depth 1` for a shallow clone), then checked out as the local branch when there is one, else created with `--track`. `checkout -B` is never used on an existing branch, since it would drop that branch's local commits.
+- A freshly cloned app whose branch tip is ahead of the pin is moved to the pin with `checkout -B BRANCH SHA`: the clone is seconds old and holds no local work, so this is not the reset the rules forbid.
+- Cloning goes through `app add`'s own steps (access check, `get-app --skip-assets`, the half clone rollback); `setup requirements --python` and `--node` run only for apps whose code changed in place (get-app already did it for new clones), and one `bench build --apps a,b` covers all of them.
+- `lock write` refreshes the site app lists from bench (it is the one lock command that may ask the database) and falls back to the cache with a warning. A dirty or detached app is refused unless `--allow-dirty`, which pins the commit as it is (a detached app then takes its policy branch).
+- The written file is parsed back before it is shown, so `write` can never produce a file `check` rejects.
+
 ## 0.4: roadmap
 
 - Work happens in a second git worktree (`~/dev/benchbar-work`): `~/.local/bin/benchbar` and the app run the checkout in `~/dev/benchbar`, so a feature branch checked out there would change the CLI in daily use. That checkout stays on main and is fast forwarded after each merge.

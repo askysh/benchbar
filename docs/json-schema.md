@@ -13,6 +13,7 @@ Raycast extensions and the like can rely on it too.
 | `benchbar app list --json` | the bench's apps, their git state and sites (0.5) |
 | `benchbar app update NAME --dry-run --json` | the changelog and plan of an update (0.5) |
 | `benchbar profile list --json` | built in and team profiles, with where each comes from (0.5) |
+| `benchbar lock check --json` | how the bench differs from its `benchbar.toml` (0.5) |
 | `<bench>/logs/.benchbar/state.json` | the last state transition, written by the runner and the CLI |
 
 ## Rules for readers
@@ -217,7 +218,7 @@ carry the bench's sites, read from `sites/*/site_config.json`:
 
 | Field | Type | Notes |
 |---|---|---|
-| `checks[].id` | string | stable id, for example `env_python`, `assets`, `agent`, `legacy_agents`. `pdf_engine` replaced `wkhtmltopdf` in 0.4 |
+| `checks[].id` | string | stable id, for example `env_python`, `assets`, `agent`, `legacy_agents`. `pdf_engine` replaced `wkhtmltopdf` in 0.4. 0.5 adds `apps_txt`, `app_branch_policy`, `lock_parse` and `lock_drift` (group `bench`, no repair action) |
 | `checks[].group` | string | `system`, `bench`, `service` or `site` |
 | `checks[].label` | string | short name for humans |
 | `checks[].level` | string | `ok`, `warn` or `fail` |
@@ -282,6 +283,46 @@ only the app's `.git`). `--json` without `--dry-run` is refused.
 
 A dirty tree, a detached HEAD or a diverged branch exits 1 with the
 reason as text.
+
+## `benchbar lock check --json`
+
+Added in 0.5. The bench compared with its lockfile (`benchbar.toml`).
+Read only: no network, no database (a site's apps come from the cache
+`app list` fills), only `bench --version` for the bench CLI. Exit 1 on
+any drift; the JSON is still printed.
+
+```json
+{"schema_version":1,"cli_version":"0.5.0","bench":"/Users/you/frappe-bench","lock_file":"/Users/you/frappe-bench/apps/acme/benchbar.toml",
+ "in_sync":false,
+ "drift":[{"kind":"commit_behind","app":"erpnext","site":null,"expected":"b5f7846","actual":"a1b2c3d","level":"warn","fix_command":"benchbar lock apply"}],
+ "summary":{"ok":12,"warn":1,"fail":0}}
+```
+
+| `kind` | `level` | Meaning |
+|---|---|---|
+| `profile_mismatch` | warn | the lock's `[bench] profile` differs from the bench's (a team profile's base) |
+| `bench_version_mismatch` | warn | the `frappe-bench` CLI version differs |
+| `app_missing` | fail | a lock app has no folder or no `apps.txt` line |
+| `app_extra` | warn | an `apps.txt` app the lock does not name |
+| `repo_mismatch` | warn | the app's remote is another repo (HTTPS and SSH spellings of one repo compare equal) |
+| `branch_mismatch` | warn | another branch, or a detached HEAD (`actual` is `detached`) |
+| `commit_behind` | warn | the pinned commit is ahead of the checkout; `lock apply` fast forwards |
+| `commit_ahead` | warn | the checkout has commits after the pin; `lock apply` leaves it |
+| `commit_diverged` | warn | neither contains the other; `lock apply` leaves it |
+| `commit_unknown` | warn | the pin is not in the local history yet; `lock apply` fetches it |
+| `dirty` | warn | tracked files have local changes |
+| `site_missing` | warn | a lock site has no folder |
+| `site_app_missing` | warn | the site lacks an app the lock lists for it (`app` and `site` are both set) |
+
+`expected` and `actual` are strings or `null`; commits are 7 characters.
+`summary.ok` counts the lock's apps, sites and bench fields without
+drift. Doctor runs the same comparison as `lock_drift` (without the
+bench version) and `lock_parse`, both in group `bench` with `action:
+null`.
+
+`list --json` gains `benches[].lock_file`: the path `lock check` would
+use for that bench (remembered from `--lock`, or `<bench>/benchbar.toml`
+when it exists), else `null`.
 
 ## `benchbar profile list --json`
 

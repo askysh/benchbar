@@ -39,6 +39,20 @@ All notable changes to this project are documented here.
   create NAME --from-bench PATH [--dir DIR]` (reads a bench, never
   writes a credential or a commit). A team profile may not shadow a
   built in one.
+- The team lockfile `benchbar.toml`: every app's repo, branch and
+  commit in `apps.txt` order, and each site with its apps, in the same
+  strict TOML subset. `benchbar lock write` writes it from the bench
+  (refuses local changes or a detached HEAD unless `--allow-dirty`,
+  `--no-commits` for branches only, shows the diff, backs up the old
+  file), `lock check [--json]` reports drift (13 kinds, from a missing
+  app to a site without an app) with no network or database, and `lock
+  apply` clones missing apps, switches clean apps to the locked branch
+  and fast forwards to pinned commits, then runs requirements and
+  build. It never touches a site, never resets local work (ahead,
+  diverged and dirty apps are skipped), and prints the site steps to run
+  by hand. `--lock PATH` (remembered per bench) or `BENCHBAR_LOCK`
+  points at a file kept in the team's app. Doctor gains `lock_parse`
+  and `lock_drift`; `list --json` gains `benches[].lock_file`.
 - Access checks before cloning (phase 01 and `app add`) run git with
   `GIT_TERMINAL_PROMPT=0` and SSH in batch mode, so a private repo fails
   at once instead of waiting on a prompt.

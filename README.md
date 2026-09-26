@@ -208,6 +208,26 @@ The file is a strict subset of TOML (strings, booleans, integers and
 one line lists; no escapes, no inline tables), and a repo URL with a
 user name or token is refused, since the file is meant to be committed.
 
+## The team lockfile
+
+A team profile is the recipe; `benchbar.toml` is the exact state, so
+every developer's bench runs the same commits. Keep it in your main
+custom app and commit it there:
+
+```bash
+benchbar lock write --lock apps/acme/benchbar.toml   # once; the path is remembered
+benchbar lock check                                  # read only, exit 1 on any difference
+benchbar lock apply --dry-run                        # what a teammate's bench would change
+benchbar lock apply
+```
+
+`lock apply` clones missing apps, switches clean apps to the locked
+branch and fast forwards to pinned commits, then runs requirements and
+build. It never touches a site (it prints the `site add`, `app install`
+and migrate steps instead) and never overwrites local work: an app with
+local changes or commits of its own is skipped with a warning. Doctor
+reports drift as a warning.
+
 ## The menu bar app
 
 The runner in the menu bar sleeps when the bench is stopped, walks while
