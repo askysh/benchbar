@@ -12,7 +12,7 @@ runs come first, the 0.3 easy install run follows.
 - The doctor `see:` line goes under every `[FAIL]`, after `fix:`, and never under `[WARN]` or in `--json`: AGENTS.md promises parsers the existing lines byte for byte, and a new line starting with `see:` is ignored by anything that reads `[FAIL]` and `fix:`. Every check id has an anchor in the doctor guide, so no per check table is needed.
 - `--version` keeps `benchbar X.Y.Z` as the first line and adds `BenchBar app X.Y.Z (path)` only when an app is installed: the app, `install.sh` and the tests read the first line. The app version is read from the XML Info.plist with awk, the helper `report` already used, instead of `plutil` or `defaults`, so the tests can fake an app with a small file.
 - `report --json` sends the human lines to stderr and prints one object on stdout, with `schema_version` and `cli_version` like every other document; `redactions` counts the lines where something was replaced (the sum of what REDACTIONS.txt lists). `--json` and `--print` together are refused.
-- The bug report form's version fields are prefilled by id: `macos-version` and `benchbar-version`, the ids `bug_report.yml` must use.
+- The bug report form's version fields are prefilled by the ids `bug_report.yml` uses: `macos` and `version`.
 
 ## 0.5: app installs
 

@@ -105,15 +105,15 @@ struct LinksTests {
         #expect(parts.path == "/askysh/benchbar/issues/new")
         let items = Dictionary(uniqueKeysWithValues: (parts.queryItems ?? []).map { ($0.name, $0.value ?? "") })
         #expect(items["template"] == "bug_report.yml")
-        #expect(items["macos-version"] == "macOS 27.0 (26A123)")
-        #expect(items["benchbar-version"] == "BenchBar 0.5.5, benchbar 0.5.5")
+        #expect(items["macos"] == "macOS 27.0 (26A123)")
+        #expect(items["version"] == "BenchBar 0.5.5, benchbar 0.5.5")
         #expect(!url.absoluteString.contains(" "))
     }
 
     @Test func withoutTheCLIOnlyTheAppVersion() throws {
         let url = BenchBarLinks.newBugReport(macOS: "macOS 27.0", app: "0.5.5", cli: nil)
         let parts = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
-        #expect(parts.queryItems?.first { $0.name == "benchbar-version" }?.value == "BenchBar 0.5.5")
+        #expect(parts.queryItems?.first { $0.name == "version" }?.value == "BenchBar 0.5.5")
     }
 
     @Test func docsPagesAndCheckAnchors() {
@@ -170,7 +170,7 @@ struct BugReportTests {
         #expect(revealed == [URL(fileURLWithPath: "/Users/you/Desktop/benchbar-report-20260926-101500.zip")])
         let issue = try #require(opened.first)
         #expect(issue.absoluteString.contains("template=bug_report.yml"))
-        #expect(issue.absoluteString.contains("benchbar-version=BenchBar%200.5.5,%20benchbar%200.5.5"))
+        #expect(issue.absoluteString.contains("version=BenchBar%200.5.5,%20benchbar%200.5.5"))
         guard case .done(let file, _) = report.state else { Issue.record("expected done, got \(report.state)"); return }
         #expect(file.redactions == 14)
     }
@@ -202,7 +202,7 @@ struct BugReportTests {
         await report.create()
         guard case .failed(let message, let issue) = report.state else { Issue.record("expected failed"); return }
         #expect(message.contains("not found"))
-        #expect(issue.absoluteString.contains("macos-version="))
+        #expect(issue.absoluteString.contains("macos="))
     }
 }
 

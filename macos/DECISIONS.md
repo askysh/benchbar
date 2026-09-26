@@ -8,7 +8,7 @@ One line per non obvious choice: the decision, then the reason.
 - Versions compare part by part as numbers (0.10 after 0.9), a missing part is 0, a leading `v` is dropped and a prerelease sorts before its release. A version that does not parse (a local build) is never told to update.
 - A Sparkle build keeps Sparkle's own Check for Updates item; the default build gets one that opens the About pane and runs the check there, so the answer is visible.
 - Report a Bug lives as a sheet on the About pane; the Help menu opens the pane and sets a flag on `WindowRouter` that the pane turns into the sheet, like `repairRequested`. The sheet explains what the zip holds before anything runs.
-- After `report --json`, Finder selects the zip (`activateFileViewerSelecting`) and the browser opens `issues/new?template=bug_report.yml&macos-version=...&benchbar-version=...`; nothing is uploaded. A CLI older than 0.5.5 prints text instead of JSON, and the sheet says to run `benchbar report` in Terminal.
+- After `report --json`, Finder selects the zip (`activateFileViewerSelecting`) and the browser opens `issues/new?template=bug_report.yml&macos=...&version=...`; nothing is uploaded. A CLI older than 0.5.5 prints text instead of JSON, and the sheet says to run `benchbar report` in Terminal.
 - The report is of the selected bench (`--bench-dir`): the one the person is looking at when something went wrong.
 - About BenchBar in the menus opens the About pane, not `orderFrontStandardAboutPanel`: the pane has the CLI version and the links, the standard panel had neither.
 - Help > Keyboard Shortcuts opens General and scrolls to its shortcuts section (a `ScrollViewReader` around the form and a `scrollTarget` on the router) instead of a second list of shortcuts that could drift.

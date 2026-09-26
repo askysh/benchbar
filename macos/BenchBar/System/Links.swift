@@ -23,15 +23,15 @@ nonisolated enum BenchBarLinks {
 
     /// A new issue from the bug report form, with the versions filled in.
     /// GitHub issue forms take a query parameter per field id; the ids are
-    /// `macos-version` and `benchbar-version` in `.github/ISSUE_TEMPLATE/bug_report.yml`.
+    /// `macos` and `version` in `.github/ISSUE_TEMPLATE/bug_report.yml`.
     static func newBugReport(macOS: String, app: String, cli: String?) -> URL {
         var parts = URLComponents(url: repository.appending(path: "issues/new"), resolvingAgainstBaseURL: false)!
         var benchbar = "BenchBar \(app)"
         if let cli, !cli.isEmpty { benchbar += ", \(cli)" }
         parts.queryItems = [
             URLQueryItem(name: "template", value: "bug_report.yml"),
-            URLQueryItem(name: "macos-version", value: macOS),
-            URLQueryItem(name: "benchbar-version", value: benchbar),
+            URLQueryItem(name: "macos", value: macOS),
+            URLQueryItem(name: "version", value: benchbar),
         ]
         return parts.url!
     }
