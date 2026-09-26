@@ -48,7 +48,8 @@ struct SettingsView: View {
                         Text("Scheduler for \(bench.name)")
                         Text(bench.schedulerOn == nil ? "Needs benchbar 0.4 or later" : "Runs scheduled jobs (bench schedule) in the background")
                     }
-                    .disabled(bench.schedulerOn == nil || bench.pending != nil || bench.isChangingScheduler)
+                    .disabled(bench.schedulerOn == nil || bench.pending != nil || bench.isChangingScheduler
+                              || store.waitsForOtherBench(bench))
                 }
             } header: {
                 Text("Benches")

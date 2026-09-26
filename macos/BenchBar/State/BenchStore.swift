@@ -114,6 +114,19 @@ final class BenchStore {
         return BenchAggregate.state(benches.map(\.state))
     }
 
+    /// A bench with a change running (start, stop, restart, the scheduler).
+    /// The CLI takes one lock for the whole checkout, so while this is set no
+    /// other bench may start a change either: it would fail on the lock.
+    var busyBench: BenchModel? {
+        benches.first { $0.pending != nil || $0.isChangingScheduler }
+    }
+
+    /// True when another bench holds the CLI's lock: this one waits.
+    func waitsForOtherBench(_ bench: BenchModel) -> Bool {
+        guard let busy = busyBench else { return false }
+        return busy.path != bench.path
+    }
+
     /// The bench whose CPU sets the running speed: the selected one while it
     /// is up, else the first bench that is.
     var speedBench: BenchModel? {
@@ -214,7 +227,14 @@ final class BenchStore {
     // MARK: actions
 
     func perform(_ action: CLIClient.Action, on bench: BenchModel) async {
-        guard let client, bench.pending == nil else { return }
+        guard bench.pending == nil, !bench.isChangingScheduler, !waitsForOtherBench(bench) else { return }
+        await run(action, on: bench)
+    }
+
+    /// The action itself, for callers that already hold the one change slot
+    /// (the restart after a scheduler change).
+    private func run(_ action: CLIClient.Action, on bench: BenchModel) async {
+        guard let client else { return }
         bench.lastError = nil
         apply(.actionStarted(action), to: bench)
         do {
@@ -230,7 +250,7 @@ final class BenchStore {
     /// --without-schedule), then restarts a running bench so honcho reads
     /// the new Procfile. The caller has asked the user first.
     func setScheduler(_ on: Bool, on bench: BenchModel) async {
-        guard let client, bench.pending == nil, !bench.isChangingScheduler else { return }
+        guard let client, bench.pending == nil, !bench.isChangingScheduler, !waitsForOtherBench(bench) else { return }
         bench.isChangingScheduler = true
         defer { bench.isChangingScheduler = false; notifyChange() }
         bench.lastError = nil
@@ -238,7 +258,7 @@ final class BenchStore {
             try await client.setScheduler(on, bench: bench.path)
             await refresh(bench)
             if bench.state == .running || bench.state == .starting {
-                await perform(.restart, on: bench)
+                await run(.restart, on: bench)
             }
         } catch {
             bench.lastError = error.localizedDescription

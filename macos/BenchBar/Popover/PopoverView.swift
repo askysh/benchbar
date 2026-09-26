@@ -77,7 +77,7 @@ struct BenchPanel: View {
         var cliReady = false
         if case .ready = store.cli { cliReady = true }
         return .make(state: bench.state, reason: bench.machine.stopReason, pending: bench.pending,
-                     needsService: bench.needsService, cliReady: cliReady, otherWork: bench.isChangingScheduler)
+                     needsService: bench.needsService, cliReady: cliReady, otherWork: bench.isChangingScheduler || store.waitsForOtherBench(bench))
     }
 
     var body: some View {
@@ -190,7 +190,7 @@ struct BenchRow: View {
         var cliReady = false
         if case .ready = store.cli { cliReady = true }
         return .make(state: bench.state, reason: bench.machine.stopReason, pending: bench.pending,
-                     needsService: bench.needsService, cliReady: cliReady, otherWork: bench.isChangingScheduler)
+                     needsService: bench.needsService, cliReady: cliReady, otherWork: bench.isChangingScheduler || store.waitsForOtherBench(bench))
     }
 
     var body: some View {

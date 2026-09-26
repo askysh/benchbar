@@ -131,6 +131,23 @@ struct TwoBenchStoreTests {
         #expect(bench.isChangingScheduler == false, "cleared when done")
     }
 
+    @Test func oneChangeAtATimeAcrossBenches() async throws {
+        // the CLI's lock covers the checkout: a change on one bench blocks the others
+        let store = try await store(v15: "stopped", v16: "stopped")
+        base.cli.answer("up", json: "")
+        let first = try #require(store.benches.first { $0.path == v15 })
+        let second = try #require(store.benches.first { $0.path == v16 })
+        first.isChangingScheduler = true
+        #expect(store.waitsForOtherBench(second))
+        #expect(!store.waitsForOtherBench(first))
+        await store.perform(.up, on: second)
+        #expect(!base.cli.calls.contains { $0.first == "up" }, "no second CLI run while one holds the lock")
+        first.isChangingScheduler = false
+        #expect(!store.waitsForOtherBench(second))
+        await store.perform(.up, on: second)
+        #expect(base.cli.calls.contains { $0.first == "up" })
+    }
+
     @Test func schedulerLeavesAStoppedBenchStopped() async throws {
         let store = try await store(v15: "stopped", v16: "stopped")
         base.cli.answer("service", json: "")
