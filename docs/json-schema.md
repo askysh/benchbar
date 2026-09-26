@@ -11,6 +11,7 @@ Raycast extensions and the like can rely on it too.
 | `benchbar status --json [--bench-dir DIR]` | the live state of one bench |
 | `benchbar doctor --json [--bench-dir DIR]` | every health check with its fix |
 | `<bench>/logs/.benchbar/state.json` | the last state transition, written by the runner and the CLI |
+| `benchbar pull ... --json` | JSON lines while a production site is copied, see [pull](#benchbar-pull---json) |
 
 ## Rules for readers
 
@@ -225,6 +226,42 @@ carry the bench's sites, read from `sites/*/site_config.json`:
 
 `status` and `fix` are the 0.2.0 names of `level` and `fix_command` (with
 `""` instead of `null`), kept for older readers.
+
+## `benchbar pull --json`
+
+Added in 0.5. Unlike the commands above, `pull` changes things, so it
+streams: one JSON object per line on stdout, written as the run goes, and
+every human line on stderr. Use it with `--yes` (a gate that cannot be
+answered counts as no). Each line carries `schema_version`,
+`cli_version` and `event`:
+
+```json
+{"schema_version":1,"cli_version":"0.5.0","event":"plan","source":"prod:erp.example.com","host":"prod","remote_site":"erp.example.com","remote_bench":"~/frappe-bench","from_dir":null,"bench":"/Users/you/frappe-bench","site":"erpcopy","replace":false,"backup":{"name":"20260925_020000-erp_example_com-database.sql.gz","new":false,"bytes":734003200,"age_hours":31,"encrypted":false},"encryption_key":true,"apps":[{"app":"frappe","production_version":"15.40.0","production_branch":"version-15","local_version":"15.41.0","local_branch":"version-15","status":"local newer"}],"migrate":true,"steps":["Download the backup","Restore into erpcopy","..."],"dry_run":false}
+{"schema_version":1,"cli_version":"0.5.0","event":"gate","name":"apply","answer":"yes"}
+{"schema_version":1,"cli_version":"0.5.0","event":"progress","file":"20260925_020000-erp_example_com-database.sql.gz","bytes":700000000,"total":734003200}
+{"schema_version":1,"cli_version":"0.5.0","event":"step","n":1,"id":"download","name":"Download the backup","status":"done"}
+{"schema_version":1,"cli_version":"0.5.0","event":"done","exit":0,"site":"erpcopy","url":"http://erpcopy:8000","decrypt":{"ok":12,"failed":0},"warnings":[]}
+```
+
+| Event | Fields | Notes |
+|---|---|---|
+| `plan` | `source`, `host`, `remote_site`, `remote_bench`, `from_dir`, `bench`, `site`, `replace`, `backup`, `encryption_key`, `apps`, `migrate`, `steps`, `dry_run` | once, after the read only checks. `backup.name`, `bytes` and `age_hours` are `null` with `--new-backup` (that backup does not exist yet). `encryption_key` says whether production has one to carry over, never its value |
+| `gate` | `name` (`new_backup`, `apply`, `replace`), `answer` (`yes`, `no`) | a question the run asked. `new_backup` is `yes` only when the typed (or `--confirm-site`) name matches |
+| `progress` | `file`, `bytes`, `total` | after each downloaded file; `bytes` counts the files so far |
+| `step` | `n`, `id`, `name`, `status` | `n` counts from 1 in the order of `plan.steps`; `status` is `done`, `unchanged`, `skipped` or `failed` |
+| `done` | `exit`, `site`, `warnings`, and on success `url` and `decrypt` | always the last line: also after a refusal or a failure (`exit` 1) and after `--dry-run` (`dry_run: true`) |
+
+`apps[].status` is `ok`, `missing`, `skipped` (`--skip-app`), `branch
+differs`, `local older` or `local newer`. `decrypt.ok` and
+`decrypt.failed` count the encrypted `__Auth` rows that do and do not
+decrypt with the site's `encryption_key`; `failed` above 0 means stored
+passwords must be entered again. Step ids: `new_backup`, `download`,
+`decrypt`, `local_backup`, `restore`, `encryption_key`, `dev_safety`,
+`skip_apps`, `migrate`, `clear_cache`, `admin_password`, `hosts`,
+`cleanup`, `verify`; a run lists only the ones it needs.
+
+No event ever holds a password, the encryption key or a token from an
+app's remote URL.
 
 ## `logs/.benchbar/state.json`
 
