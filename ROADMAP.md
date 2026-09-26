@@ -52,6 +52,10 @@ security policy, issue forms), and in the app an About pane with an
 update check, a Help menu and Report a Bug; `benchbar docs` and doctor
 links into the docs.
 
+**0.5.6, cleanup tools.** Doctor warns about Mole until the bench is in
+its whitelist, finds CleanMyMac installed from Setapp, and no longer
+flags the installer's PATH block.
+
 ## Later
 
 **0.6, public launch.** Developer ID signing and notarization, a signed
