@@ -40,6 +40,23 @@ All notable changes to this project are documented here.
 - `benchbar report --json` prints `{"schema_version":1,"cli_version":..,"zip":PATH,"redactions":N}`
   for the app and scripts (docs/json-schema.md).
 
+### Repo
+
+- `CONTRIBUTING.md`: the tests, bash 3.2 and shellcheck, idempotency,
+  what a pull request needs (small, CHANGELOG, DECISIONS, tested on) and
+  the AI policy. README's Contributing section now points to it.
+- `CODE_OF_CONDUCT.md` (Contributor Covenant 3.0) and `SECURITY.md`
+  (private vulnerability reports, what counts, latest release supported).
+- Issue forms for bugs (macOS, version, install method, profile, the
+  `benchbar report` zip, doctor output) and features, blank issues off
+  with a link to Discussions Q&A, a pull request template with an AI
+  disclosure line, `CODEOWNERS`, Dependabot for Actions and Swift, and a
+  commented out `FUNDING.yml`.
+- `docs/images/social-preview.png` and `docs/images/og-image.png`, drawn
+  by `scripts/social-preview.swift` from the icon, the light popover and
+  the runner frames.
+- ROADMAP: Vouch under 1.0, once drive-by pull requests appear.
+
 ## 0.5.0 - 2026-09-26
 
 BenchBar grows from a start and stop button into the place you run your

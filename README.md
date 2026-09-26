@@ -459,19 +459,8 @@ offered. It needs only `python3`, which the Command Line Tools provide.
 
 ## Contributing
 
-Issues and pull requests are welcome. For a bug, attach the zip from
-`benchbar report`; it contains no secrets, paths or names.
-
-```bash
-tests/run-tests.sh              # the CLI, under mocks, in parallel; shellcheck when installed
-scripts/macos-build.sh --test   # the app and its Swift tests
-```
-
-Shell code targets macOS `/bin/bash` 3.2 with no dependencies beyond the
-ones the installer needs, passes shellcheck, and every command stays
-idempotent: a second run changes nothing and says so. CI runs the suite
-on macOS, builds the app, and uploads an unsigned bundle for
-every pull request.
+Issues and pull requests are welcome; for a bug, attach the zip from `benchbar report`.
+[CONTRIBUTING.md](CONTRIBUTING.md) has the tests, the rules for a pull request and the AI policy.
 
 ## License
 
