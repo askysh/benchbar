@@ -4,9 +4,11 @@
 
 FL_SCAN_BENCHES=()
 FL_SCAN_WARNINGS=()
+# Benches sit a few folders below a project folder; deeper trees are not walked.
+FL_SCAN_MAX_DEPTH="${FL_SCAN_MAX_DEPTH:-6}"
 
 fl_scan_walk() {
-  local dir="$1" child name
+  local dir="$1" depth="${2:-0}" child name found=0
   if [[ ! -r "$dir" || ! -x "$dir" ]]; then
     FL_SCAN_WARNINGS+=("Cannot read folder: ${dir}")
     return 0
@@ -18,16 +20,28 @@ fl_scan_walk() {
     FL_SCAN_BENCHES+=("$dir")
     return 0
   fi
+  if [[ "$depth" -ge "$FL_SCAN_MAX_DEPTH" ]]; then
+    FL_SCAN_WARNINGS+=("Stopped at ${FL_SCAN_MAX_DEPTH} folders deep: ${dir}")
+    return 0
+  fi
   # Globs omit hidden directories. Never follow directory symlinks or descend
   # into a bench once found (apps may themselves contain example benches).
+  # macOS system, media and volume folders never hold benches and are huge or
+  # privacy protected, so a scan of ~ or / does not walk them.
   for child in "$dir"/*; do
+    [[ -e "$child" || -L "$child" ]] && found=1
     [[ -d "$child" && ! -L "$child" ]] || continue
     name="${child##*/}"
     case "$name" in
       node_modules|env|venv|__pycache__|build|dist|vendor|tests|test|fixtures) continue ;;
+      Library|Applications|Pictures|Music|Movies|Volumes|System|private|cores|dev) continue ;;
     esac
-    fl_scan_walk "$child"
+    fl_scan_walk "$child" $((depth + 1))
   done
+  # A folder macOS privacy settings block passes -r and -x but lists as empty.
+  if [[ "$found" == "0" ]] && ! ls "$dir" >/dev/null 2>&1; then
+    FL_SCAN_WARNINGS+=("Cannot read folder: ${dir}")
+  fi
   return 0
 }
 
@@ -39,6 +53,7 @@ fl_cmd_scan() {
   FL_SCAN_BENCHES=(); FL_SCAN_WARNINGS=()
   fl_scan_walk "$root"
   if [[ "$OPT_JSON" == "1" ]]; then
+    fl_known_benches_prime
     printf '{"schema_version":%s,"cli_version":"%s","root":%s,"benches":[' \
       "$FL_SCHEMA_VERSION" "$FL_VERSION" "$(fl_json_str "$root")"
     for d in ${FL_SCAN_BENCHES[@]+"${FL_SCAN_BENCHES[@]}"}; do

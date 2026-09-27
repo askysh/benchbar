@@ -134,10 +134,23 @@ fl_agent_label() {
   done
   if [[ -f "$HOME/Library/LaunchAgents/${base}.plist" ]]; then printf '%s' "$hashed"; return 0; fi
   while IFS= read -r d; do
-    [[ "$d" != "$FL_BENCH_DIR" ]] || continue
+    [[ -n "$d" && "$d" != "$FL_BENCH_DIR" ]] || continue
     if [[ "$(fl_bench_name_of "$d")" == "$FL_BENCH_NAME" ]]; then printf '%s' "$hashed"; return 0; fi
-  done < <(fl_known_benches)
+  done <<<"$(fl_known_benches_cached)"
   printf '%s' "$base"
+}
+
+# fl_known_benches once per run: fl_agent_label runs in many $(...) subshells,
+# so list, scan and fl_context_init fill this before those calls.
+FL_KNOWN_BENCHES_CACHE=""
+FL_KNOWN_BENCHES_CACHED=0
+fl_known_benches_prime() {
+  # its pipeline ends on the last candidate's test, so a non-bench there is not a failure
+  FL_KNOWN_BENCHES_CACHE="$(fl_known_benches)" || true
+  FL_KNOWN_BENCHES_CACHED=1
+}
+fl_known_benches_cached() {
+  if [[ "$FL_KNOWN_BENCHES_CACHED" == "1" ]]; then printf '%s\n' "$FL_KNOWN_BENCHES_CACHE"; else fl_known_benches; fi
 }
 
 # The label used by frappe-mac 0.2.0, migrated by "benchbar repair".

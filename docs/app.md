@@ -96,9 +96,12 @@ Choose **Scan Folder…** in the menu bar popover (or its right-click menu),
 then select a folder such as `~/Developer`. **Find Benches** in the window
 keeps the results and offers **Choose Folder…** and **Scan Again**.
 
-The scanner searches subfolders until it finds a bench. Hidden folders,
-symlinks, dependency/build folders, and test/fixture directories are skipped.
-Unreadable subfolders produce warnings alongside the results. Cancel Scan
+The scanner searches subfolders, up to six levels deep, until it finds a
+bench. Hidden folders, symlinks, dependency/build folders, test/fixture
+directories and macOS system and media folders (Library, Applications,
+Pictures, Music, Movies, Volumes, System) are skipped. Unreadable subfolders,
+including ones macOS privacy settings block, produce warnings alongside the
+results. Cancel Scan
 stops the search. No bench, service, site, or database is changed by scanning.
 
 Review the full paths and sites, select benches, and click **Add Selected**.
