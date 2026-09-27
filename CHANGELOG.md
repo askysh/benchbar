@@ -2,7 +2,13 @@
 
 All notable changes to this project are documented here.
 
-## Unreleased
+## 0.5.7 - 2026-09-27
+
+BenchBar finds benches that live outside the usual places. Scan Folder
+searches a folder you choose, Find Benches lists what it found with full
+paths, and Add Selected remembers them. Setting up the service stays a
+separate step that shows the adopt plan first and refuses a running
+bench. Nothing is started or changed by a scan.
 
 ### Added
 
@@ -16,6 +22,11 @@ All notable changes to this project are documented here.
 - Same-named benches receive distinct service labels when needed, and port
   reservations recognize those labels by their working-directory ownership.
 - Folder discovery preserves `/` when resolving a filesystem-root selection.
+- The scan stops six folders deep, skips macOS system and media folders
+  (Library, Applications, Pictures, Music, Movies, Volumes, System) and
+  warns about folders that macOS privacy settings block.
+- Service labels no longer rebuild the list of known benches on every
+  lookup, so `list` stays fast with many remembered benches.
 
 ## 0.5.6 - 2026-09-26
 

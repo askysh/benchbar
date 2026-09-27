@@ -56,6 +56,10 @@ links into the docs.
 its whitelist, finds CleanMyMac installed from Setapp, and no longer
 flags the installer's PATH block.
 
+**0.5.7, find your benches.** Scan Folder in the menu bar and Find
+Benches in the app find existing benches in a folder, remember the ones
+you pick, and set up their service after showing the plan.
+
 ## Later
 
 **0.6, public launch.** Developer ID signing and notarization, a signed
