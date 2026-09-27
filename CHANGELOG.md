@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented here.
 
+## Unreleased
+
+### Added
+
+- Batch setup preview with stable port allocations, Automatic/Fixed modes, and
+  explicit Resolve & Start. Saved allocations reserve ports while stopped.
+- `ports plan`, `ports apply`, `ports check`, and `ports mode` commands; stale
+  previews are rejected before applying changes.
+
+### Fixed
+
+- Start, restart, and foreground start refuse conflicting reservations and
+  unrelated listeners before changing process state.
+
 ## 0.5.7 - 2026-09-27
 
 BenchBar finds benches that live outside the usual places. Scan Folder
@@ -12,10 +26,6 @@ bench. Nothing is started or changed by a scan.
 
 ### Added
 
-- Batch setup preview with stable port allocations, Automatic/Fixed modes, and
-  explicit Resolve & Start. Saved allocations reserve ports while stopped.
-- `ports plan`, `ports apply`, `ports check`, and `ports mode` commands; stale
-  previews are rejected before applying changes.
 - Scan Folder in the menu bar and Find Benches in the app: recursively find
   existing benches, select paths to remember, and preview management setup.
 - Read-only `benchbar scan PATH --json` and persistent `benchbar register PATH ...`
@@ -23,8 +33,6 @@ bench. Nothing is started or changed by a scan.
 
 ### Fixed
 
-- Start, restart, and foreground start refuse conflicting reservations and
-  unrelated listeners before changing process state.
 - Same-named benches receive distinct service labels when needed, and port
   reservations recognize those labels by their working-directory ownership.
 - Folder discovery preserves `/` when resolving a filesystem-root selection.
