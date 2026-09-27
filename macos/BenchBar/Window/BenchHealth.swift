@@ -13,6 +13,12 @@ struct BenchHealth: View {
 
     var body: some View {
         Form {
+            if let error = bench.lastError ?? bench.refreshError {
+                Section("Last operation or connection error") {
+                    Label(error, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.red).textSelection(.enabled)
+                }
+            }
             Section {
                 if let report = bench.doctor {
                     if report.needsAttention.isEmpty {

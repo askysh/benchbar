@@ -19,6 +19,8 @@ final class WindowRouter {
     /// Set to open the Repair sheet on the bench page when it appears.
     var repairRequested = false
     var scanRequested = false
+    var setupRequest: String?
+    var startAfterSetup = false
     /// Set by the Help menu: the About pane opens its Report a Bug sheet.
     var bugReportRequested = false
     /// Set by the app menu: the About pane checks for updates.

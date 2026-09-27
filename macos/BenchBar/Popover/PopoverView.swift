@@ -7,6 +7,7 @@ struct AppCommands {
     var chooseCLI: () -> Void = {}
     var scanFolder: () -> Void = {}
     var openLogs: (BenchModel) -> Void = { _ in }
+    var setup: (BenchModel, Bool) -> Void = { _, _ in }
     /// The BenchBar window at a bench's tab (true: open the Repair sheet too).
     var manage: (BenchModel, BenchTab, Bool) -> Void = { _, _, _ in }
 }
@@ -15,7 +16,7 @@ struct AppCommands {
 ///
 /// Shortcuts (while the popover is open):
 ///   ⌘U start   ⌘D stop   ⌘R restart
-///   ⌘O open site   ⌘L logs   ⌘F bench folder   ⌘K run doctor
+///   ⌘O open site   ⌘L logs   ⌘F bench folder   ⌘K view Health
 ///   ⌘, settings   ⌘Q quit
 struct PopoverView: View {
     let store: BenchStore
@@ -23,14 +24,15 @@ struct PopoverView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            content
+            ScrollView { content.frame(maxWidth: .infinity, alignment: .leading) }
+                .frame(height: 430)
             Divider()
             Button("Scan Folder…", systemImage: "folder.badge.plus", action: commands.scanFolder)
                 .buttonStyle(.borderless)
             footer
         }
         .padding(14)
-        .frame(width: 340)
+        .frame(width: 370)
     }
 
     @ViewBuilder private var content: some View {
@@ -48,7 +50,14 @@ struct PopoverView: View {
                 }
             } else {
                 if store.benches.count > 1 {
-                    BenchListSection(store: store)
+                    Picker("Bench", selection: Binding(get: { store.selected?.path ?? "" }, set: { store.selectedPath = $0 })) {
+                        ForEach(store.benches) { bench in
+                            Text(bench.name + (store.benches.filter { $0.name == bench.name }.count > 1
+                                ? " — " + URL(fileURLWithPath: bench.path).deletingLastPathComponent().lastPathComponent : ""))
+                                .tag(bench.path)
+                        }
+                    }
+                    .pickerStyle(.menu)
                     Divider()
                 }
                 if let bench = store.selected {
@@ -89,22 +98,31 @@ struct BenchPanel: View {
         VStack(alignment: .leading, spacing: 12) {
             header
             banners
-            PortConflictAction(store: store, bench: bench)
-            actionButtons
+            if bench.needsService {
+                Button("Set Up Management…", systemImage: "wrench.and.screwdriver") { commands.setup(bench, false) }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(store.busyBench != nil)
+            } else if bench.portConflict != nil {
+                Button("Review Port Conflict…", systemImage: "exclamationmark.triangle") { commands.setup(bench, true) }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(store.busyBench != nil)
+            } else {
+                actionButtons
+            }
             Divider()
-            VStack(spacing: 2) {
-                RowButton("Open site", systemImage: "safari", shortcut: "O") { Workspace.openSite(bench) }
-                    .keyboardShortcut("o", modifiers: .command)
-                RowButton("Open logs", systemImage: "text.alignleft", shortcut: "L") { commands.openLogs(bench) }
+            HStack {
+                Button("Logs", systemImage: "text.alignleft") { commands.openLogs(bench) }
                     .keyboardShortcut("l", modifiers: .command)
-                RowButton("Open bench folder", systemImage: "folder", shortcut: "F") { Workspace.openFolder(bench) }
+                Button("Folder", systemImage: "folder") { Workspace.openFolder(bench) }
                     .keyboardShortcut("f", modifiers: .command)
-                RowButton("Apps, sites and settings…", systemImage: "square.grid.2x2", shortcut: "M") { commands.manage(bench, .apps, false) }
+                Spacer()
+                Button("Manage…") { commands.manage(bench, .overview, false) }
                     .keyboardShortcut("m", modifiers: .command)
             }
-            SitesSection(bench: bench)
+            .controlSize(.small)
+            SitesSection(bench: bench) { commands.manage(bench, .sites, false) }
             Divider()
-            DoctorSection(store: store, bench: bench) { commands.manage(bench, .health, true) }
+            DoctorSection(store: store, bench: bench) { commands.manage(bench, .health, false) }
         }
     }
 
@@ -131,16 +149,16 @@ struct BenchPanel: View {
 
     @ViewBuilder private var banners: some View {
         if bench.needsService {
-            Banner(systemImage: "wrench.and.screwdriver", tint: .orange,
-                   text: "This bench has no BenchBar agent yet. Run this once in Terminal:",
-                   command: BenchText.command("repair", bench: bench.path))
+            Label("Set up management to enable Start, Stop and Restart.", systemImage: "wrench.and.screwdriver")
+                .font(.callout).foregroundStyle(.secondary)
         } else if bench.machine.stopReason == .broken {
-            Banner(systemImage: "wrench.and.screwdriver", tint: .orange,
-                   text: "Parts of the bench are missing (env, node modules or assets). Run:",
-                   command: BenchText.command("repair", bench: bench.path))
+            Button("Bench needs repair — review in Health…") { commands.manage(bench, .health, true) }
+                .buttonStyle(.link)
         }
-        if let error = bench.lastError ?? bench.refreshError {
-            Banner(systemImage: "exclamationmark.triangle", tint: .red, text: error, command: nil)
+        if let error = bench.lastError ?? bench.refreshError, bench.portConflict == nil {
+            Text(error).font(.caption).foregroundStyle(.red).lineLimit(2)
+                .help(error)
+            Button("View Health…") { commands.manage(bench, .health, false) }.controlSize(.small)
         }
     }
 
@@ -291,108 +309,86 @@ struct RowIcon: View {
 /// opens and benchup waits for. A missing hosts line shows its fix.
 struct SitesSection: View {
     let bench: BenchModel
-
-    static let visibleRows = 4
-    static let rowHeight: CGFloat = 26
+    var manage: () -> Void = {}
+    static let visibleRows = 3
 
     var body: some View {
         let rows = bench.siteRows
-        VStack(alignment: .leading, spacing: 4) {
-            if rows.count > 1 || rows.contains(where: \.needsHosts) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
                 Text("Sites").font(.subheadline.weight(.semibold))
-                if rows.count > Self.visibleRows {
-                    // many sites: the list scrolls, so Doctor and the footer stay on screen
-                    ScrollView { siteList(rows) }.frame(height: Self.rowHeight * CGFloat(Self.visibleRows))
-                } else {
-                    siteList(rows)
-                }
-                if let fix = SiteRow.hostsFix(rows, bench: bench.path) {
-                    Banner(systemImage: "network", tint: .orange,
-                           text: "A site has no /etc/hosts line, so its name does not resolve. Run:", command: fix)
-                }
+                Spacer()
+                Button(rows.count > Self.visibleRows ? "View all \(rows.count)…" : "Manage…", action: manage)
+                    .controlSize(.small)
             }
-        }
-    }
-
-    private func siteList(_ rows: [SiteRow]) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            ForEach(rows) { row in
-                HStack(spacing: 6) {
+            ForEach(Array(rows.prefix(Self.visibleRows))) { row in
+                HStack(spacing: 8) {
                     Image(systemName: row.isDefault ? "star.fill" : "globe")
                         .foregroundStyle(row.isDefault ? .yellow : .secondary).font(.caption)
-                        .help(row.isDefault ? "Default site (⌘O)" : "")
-                    Text(row.name).font(.callout)
-                    if row.needsHosts {
-                        Text("no hosts entry").font(.caption).foregroundStyle(.orange)
+                        .accessibilityLabel(row.isDefault ? "Default site" : "Site")
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(row.name).font(.callout).lineLimit(1).truncationMode(.middle).help(row.name)
+                        Text(row.needsHosts ? "Hostname setup needed" : (bench.state == .running ? "Running" : "Bench is not running"))
+                            .font(.caption).foregroundStyle(row.needsHosts ? .orange : .secondary)
                     }
-                    Spacer()
-                    Button("Open") { Workspace.open(row.url) }
-                        .controlSize(.small)
-                        .help(row.url)
+                    Spacer(minLength: 4)
+                    siteAction(row)
                 }
             }
+
         }
     }
+    @ViewBuilder private func siteAction(_ row: SiteRow) -> some View {
+        if row.isDefault { siteButton(row).keyboardShortcut("o", modifiers: .command) }
+        else { siteButton(row) }
+    }
+
+    private func siteButton(_ row: SiteRow) -> some View {
+        Button(row.needsHosts ? "Set Up…" : "Open") {
+            if row.needsHosts { manage() } else { Workspace.open(row.url) }
+        }
+        .controlSize(.small)
+        .disabled(!row.needsHosts && bench.state != .running)
+        .help(row.needsHosts ? "Review hostname setup in Sites" : row.url)
+    }
+
 }
 
-// MARK: doctor
+// MARK: health summary
 
 struct DoctorSection: View {
     let store: BenchStore
     let bench: BenchModel
-    /// Opens the Repair sheet in the BenchBar window (plan first, then a confirmation).
-    var repair: () -> Void = {}
-    @State private var showPassing = false
+    var details: () -> Void = {}
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("Doctor").font(.subheadline.weight(.semibold))
-                if let report = bench.doctor {
-                    Text("\(report.summary.ok) ok, \(report.summary.warn) warn, \(report.summary.fail) fail")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
+                Text("Health").font(.subheadline.weight(.semibold))
                 Spacer()
-                if bench.doctor?.checks.contains(where: { $0.level != .ok && $0.action != nil }) == true, !bench.isRunningDoctor {
-                    Button("Repair…", action: repair)
-                        .controlSize(.small)
-                        .help("Shows the repair plan in the BenchBar window; nothing changes until you confirm")
-                }
-                if bench.isRunningDoctor {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Button(bench.doctor == nil ? "Run doctor" : "Run again") {
-                        Task { await store.runDoctor(on: bench) }
-                    }
+                if bench.isRunningDoctor { ProgressView().controlSize(.small) }
+                Button("View Health…", action: details).controlSize(.small)
                     .keyboardShortcut("k", modifiers: .command)
-                    .controlSize(.small)
-                    .help("Read only: benchbar doctor --json (⌘K)")
-                }
             }
-            if let error = bench.doctorError {
-                Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled)
-            }
-            if let report = bench.doctor {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 8) {
-                        if report.needsAttention.isEmpty {
-                            Label("Every check passes.", systemImage: "checkmark.circle.fill")
-                                .font(.caption).foregroundStyle(.green)
-                        }
-                        ForEach(report.needsAttention) { CheckRow(check: $0) }
-                        if !report.passing.isEmpty {
-                            DisclosureGroup("\(report.passing.count) passing", isExpanded: $showPassing) {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    ForEach(report.passing) { CheckRow(check: $0) }
-                                }
-                                .padding(.top, 4)
-                            }
-                            .font(.caption)
-                        }
+            if bench.doctorError != nil {
+                Label("Health refresh failed. Previous results may be out of date.", systemImage: "exclamationmark.triangle")
+                    .font(.caption).foregroundStyle(.orange)
+            } else if let report = bench.doctor {
+                if report.needsAttention.isEmpty {
+                    Label("All checks passed", systemImage: "checkmark.circle").font(.caption).foregroundStyle(.secondary)
+                } else {
+                    Text([
+                        report.summary.fail > 0 ? "\(report.summary.fail) " + (report.summary.fail == 1 ? "failure" : "failures") : nil,
+                        report.summary.warn > 0 ? "\(report.summary.warn) " + (report.summary.warn == 1 ? "warning" : "warnings") : nil
+                    ].compactMap { $0 }.joined(separator: " · "))
+                        .font(.caption).foregroundStyle(report.summary.fail > 0 ? .red : .orange)
+                    ForEach(Array(report.needsAttention.prefix(2))) { check in
+                        Text(check.label).font(.caption).lineLimit(1)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxHeight: 220)
+            } else {
+                Text(bench.doctorError == nil ? "Review diagnostics and repairs in Health." : "Health check failed. Open Health for details.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
         }
     }
@@ -409,7 +405,10 @@ struct CheckRow: View {
                 if check.level != .ok {
                     Text(check.message).font(.caption).foregroundStyle(.secondary)
                     if let fix = check.fixCommand, !fix.isEmpty {
-                        Text(fix).font(.caption.monospaced()).textSelection(.enabled)
+                        DisclosureGroup("Terminal instructions") {
+                            Text(fix).font(.caption.monospaced()).textSelection(.enabled)
+                            Button("Copy Command") { Workspace.copy(fix) }.controlSize(.small)
+                        }
                     }
                 }
             }

@@ -21,7 +21,7 @@ struct BenchPage: View {
                 .padding(.horizontal, 20).padding(.top, 10)
             Group {
                 switch router.benchTab {
-                case .overview: BenchOverview(store: store, bench: bench)
+                case .overview: BenchOverview(store: store, bench: bench, router: router)
                 case .sites: BenchSites(store: store, workbench: workbench, bench: bench)
                 case .apps: BenchApps(store: store, workbench: workbench, bench: bench)
                 case .health: BenchHealth(store: store, bench: bench, router: router)
@@ -53,6 +53,7 @@ struct BenchPage: View {
 struct BenchOverview: View {
     let store: BenchStore
     let bench: BenchModel
+    @Bindable var router: WindowRouter
     @State private var schedulerChange: Bool?
     @State private var portSetup: PortSetupRun?
 
@@ -63,14 +64,27 @@ struct BenchOverview: View {
         Form {
             Section {
                 HStack(spacing: 8) {
-                    Button { Task { await store.perform(.up, on: bench) } } label: { Label("Start", systemImage: "play.fill") }
-                        .disabled(!controls.canStart)
-                    Button { Task { await store.perform(.down, on: bench) } } label: { Label("Stop", systemImage: "stop.fill") }
-                        .disabled(!controls.canStop)
-                    Button { Task { await store.perform(.restart, on: bench) } } label: { Label("Restart", systemImage: "arrow.clockwise") }
-                        .disabled(!controls.canRestart)
+                    if bench.needsService {
+                        Button("Set Up Management…") {
+                            router.startAfterSetup = false
+                            router.setupRequest = bench.path
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(store.busyBench != nil)
+                    } else {
+                        Button { Task { await store.perform(.up, on: bench) } } label: { Label("Start", systemImage: "play.fill") }
+                            .disabled(!controls.canStart)
+                        Button { Task { await store.perform(.down, on: bench) } } label: { Label("Stop", systemImage: "stop.fill") }
+                            .disabled(!controls.canStop)
+                        Button { Task { await store.perform(.restart, on: bench) } } label: { Label("Restart", systemImage: "arrow.clockwise") }
+                            .disabled(!controls.canRestart)
+                    }
                     Spacer()
-                    Button("Open Site") { Workspace.openSite(bench) }
+                    Button(bench.siteRows.first(where: \.isDefault)?.needsHosts == true ? "Set Up Site…" : "Open Site") {
+                        if bench.siteRows.first(where: \.isDefault)?.needsHosts == true { router.benchTab = .sites }
+                        else { Workspace.openSite(bench) }
+                    }
+                    .disabled(bench.state != .running && bench.siteRows.first(where: \.isDefault)?.needsHosts != true)
                     Button("Show in Finder") { Workspace.openFolder(bench) }
                 }
                 if let since = bench.runningSince {
@@ -103,16 +117,12 @@ struct BenchOverview: View {
                 }
                 .disabled(bench.schedulerOn == nil || !controlsIdle)
             }
-            if bench.needsService {
-                Section {
-                    Label("This bench has no BenchBar agent yet. Run \(BenchText.command("adopt", bench: bench.path)) in Terminal.",
-                          systemImage: "wrench.and.screwdriver")
-                        .foregroundStyle(.orange).textSelection(.enabled)
-                }
-            }
+
         }
         .formStyle(.grouped)
         .sheet(item: $portSetup) { run in PortSetupSheet(run: run) { portSetup = nil } }
+        .task { openRequestedSetup() }
+        .onChange(of: router.setupRequest) { _, _ in openRequestedSetup() }
         .alert(schedulerChange == true ? "Run the scheduler for \(bench.name)?" : "Stop the scheduler for \(bench.name)?",
                isPresented: Binding(get: { schedulerChange != nil }, set: { if !$0 { schedulerChange = nil } })) {
             Button(schedulerChange == true ? "Turn On and Restart" : "Turn Off and Restart") {
@@ -124,6 +134,16 @@ struct BenchOverview: View {
         } message: {
             Text("BenchBar runs benchbar service \(schedulerChange == true ? "--with-schedule" : "--without-schedule"), then restarts the bench if it is running.")
         }
+    }
+
+    private func openRequestedSetup() {
+        guard router.setupRequest == bench.path else { return }
+        let start = router.startAfterSetup
+        router.setupRequest = nil
+        router.startAfterSetup = false
+        let run = PortSetupRun(summaries: [bench.summary], store: store, startAfterSetup: start)
+        portSetup = run
+        Task { await run.loadPlan() }
     }
 
     private var controlsIdle: Bool {
@@ -138,6 +158,7 @@ struct BenchSites: View {
     let workbench: Workbench
     let bench: BenchModel
     @State private var addingSite = false
+    @State private var showHostsInstructions = false
 
     private var busy: Bool {
         bench.pending != nil || bench.isChangingScheduler || bench.activity != nil || store.waitsForOtherBench(bench)
@@ -161,7 +182,11 @@ struct BenchSites: View {
                             Button("Make Default") { Task { await workbench.setDefaultSite(row.name, on: bench) } }
                                 .disabled(busy)
                         }
-                        Button("Open") { Workspace.open(row.url) }
+                        Button(row.needsHosts ? "Set Up…" : "Open") {
+                            if row.needsHosts { showHostsInstructions = true }
+                            else { Workspace.open(row.url) }
+                        }
+                        .disabled(!row.needsHosts && bench.state != .running)
                     }
                 }
             } header: {
@@ -178,12 +203,14 @@ struct BenchSites: View {
             }
             if let fix = SiteRow.hostsFix(rows, bench: bench.path) {
                 Section("Hosts") {
-                    Text("A site without a 127.0.0.1 line in /etc/hosts does not open by its name. Adding it needs your password, so run this in Terminal:")
+                    Text("Some site names need a local hosts entry. This step requires your Mac password in Terminal.")
                         .font(.callout)
-                    HStack {
-                        Text(fix).font(.callout.monospaced()).textSelection(.enabled)
-                        Spacer()
-                        Button("Copy") { Workspace.copy(fix) }
+                    DisclosureGroup("Terminal instructions", isExpanded: $showHostsInstructions) {
+                        HStack(alignment: .top) {
+                            Text(fix).font(.callout.monospaced()).textSelection(.enabled)
+                            Spacer()
+                            Button("Copy Command") { Workspace.copy(fix) }
+                        }
                     }
                 }
             }

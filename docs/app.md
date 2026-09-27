@@ -129,3 +129,15 @@ Fixed conflicts need the competing service stopped or a switch to Automatic.
 BenchBar never stops an unrelated listener to obtain a port. Setup output retains
 per-bench completion details if a later batch entry fails; completed entries stay
 configured and the next preview reflects the actual state.
+
+
+## Compact menu-bar controls
+
+The popover uses a bench picker and a bounded scrolling body so the footer stays
+reachable. An unmanaged bench offers **Set Up Management…**, which opens its
+review-only setup preview in the main window. A port conflict similarly opens
+**Review Port Conflict…** there. The popover shows up to three sites; **View all**
+opens the complete Sites tab. Missing hostname entries offer **Set Up…**, while
+Open is enabled once the bench is running. **View Health…** shows failures and
+warnings before passing checks, with full error details and expandable Terminal
+instructions. Failed diagnostic refreshes are marked stale in the popover.

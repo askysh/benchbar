@@ -177,7 +177,7 @@ struct SettingsView: View {
         ("Open the site", "⌘O"),
         ("Logs", "⌘L"),
         ("Show in Finder", "⌘F"),
-        ("Run doctor", "⌘K"),
+        ("View Health", "⌘K"),
         ("Apps, sites and settings", "⌘M"),
     ]
 

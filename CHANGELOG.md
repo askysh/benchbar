@@ -13,6 +13,9 @@ All notable changes to this project are documented here.
 
 ### Fixed
 
+- Keep the menu-bar popover compact with a bench picker, native setup actions,
+  contextual site actions, and a health summary. Full diagnostics and expandable
+  Terminal instructions live in the management window.
 - Start, restart, and foreground start refuse conflicting reservations and
   unrelated listeners before changing process state.
 
