@@ -98,7 +98,7 @@ assert_calls_not_contain '^launchctl (kickstart|kill|bootout)'
 run_fm fg --bench-dir "$B" --yes
 assert_eq 1 "$CODE"
 assert_contains "$OUT" 'Cannot start'
-assert_calls_not_contain '^(launchctl (kickstart|kill|bootout)|mockkill|pkill)' 
+assert_calls_not_contain '^(launchctl (kickstart|kill|bootout)|mockkill|pkill)'
 # A failed second action stops the batch and never records success for it.
 # Stub the adoption boundary so this is deterministic, independent of launchd.
 (

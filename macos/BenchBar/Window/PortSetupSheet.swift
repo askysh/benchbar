@@ -28,7 +28,7 @@ struct PortSetupSheet: View {
                                 Text(entry.path).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                                 LabeledContent("Current address", value: entry.currentURL)
                                 LabeledContent(entry.changesPorts ? "New address" : "Address stays", value: entry.proposedURL)
-                                Text("Web \(entry.proposed.web) · Socket.IO \(entry.proposed.socketio) · Redis \(entry.proposed.redisQueue)/\(entry.proposed.redisCache)")
+                                Text("Web \(String(entry.proposed.web)) · Socket.IO \(String(entry.proposed.socketio)) · Redis \(String(entry.proposed.redisQueue))/\(String(entry.proposed.redisCache))")
                                     .font(.caption).monospacedDigit()
                                 Picker("Port mode", selection: Binding(get: { entry.mode }, set: { mode in
                                     Task { await run.setMode(mode, path: entry.path) }
