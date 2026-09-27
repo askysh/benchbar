@@ -26,6 +26,7 @@ fl_abs_path() {
   esac
   # one spelling per bench: symlinks, "." and ".." resolved (fl_bench_canonical),
   # so state, ports and agents never see the same bench twice
+  [[ "$p" == / ]] && { printf '/'; return 0; }
   fl_bench_canonical "${p%/}"
 }
 
@@ -120,7 +121,23 @@ fl_bench_ports_csv() {
 FL_APP_BUNDLE_ID="com.akashmishra.benchbar"
 
 fl_agent_label() {
-  printf 'com.benchbar.%s' "$FL_BENCH_NAME"
+  local base="com.benchbar.${FL_BENCH_NAME}" hash hashed f owner d
+  hash="$(printf '%s' "$FL_BENCH_DIR" | cksum | awk '{printf "%08x", $1}')"
+  hashed="${base}-${hash}"
+  # Keep an installed label stable. Never claim another bench's plist merely
+  # because both directories are named frappe-bench.
+  for f in "$hashed" "$base"; do
+    if [[ -f "$HOME/Library/LaunchAgents/${f}.plist" ]]; then
+      owner="$(fl_plist_working_dir "$HOME/Library/LaunchAgents/${f}.plist")"
+      if fl_same_path "$owner" "$FL_BENCH_DIR"; then printf '%s' "$f"; return 0; fi
+    fi
+  done
+  if [[ -f "$HOME/Library/LaunchAgents/${base}.plist" ]]; then printf '%s' "$hashed"; return 0; fi
+  while IFS= read -r d; do
+    [[ "$d" != "$FL_BENCH_DIR" ]] || continue
+    if [[ "$(fl_bench_name_of "$d")" == "$FL_BENCH_NAME" ]]; then printf '%s' "$hashed"; return 0; fi
+  done < <(fl_known_benches)
+  printf '%s' "$base"
 }
 
 # The label used by frappe-mac 0.2.0, migrated by "benchbar repair".

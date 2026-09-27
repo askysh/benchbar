@@ -83,6 +83,13 @@ nonisolated struct BenchSummary: Codable, Sendable, Equatable, Hashable, Identif
     }
 }
 
+/// `benchbar scan PATH --json`: discoveries and any skipped-folder warnings.
+nonisolated struct BenchScan: Codable, Sendable {
+    var root: String
+    var benches: [BenchSummary]
+    var warnings: [String]
+}
+
 /// `benchbar list --json`.
 nonisolated struct BenchList: Codable, Sendable, Equatable {
     var schemaVersion: Int

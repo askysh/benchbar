@@ -146,6 +146,7 @@ fl_known_benches() {
   local f d
   {
     fl_state_get BENCH_DIR 2>/dev/null || true
+    fl_registered_benches
     for f in "$HOME"/Library/LaunchAgents/com.benchbar.*.plist "$HOME"/Library/LaunchAgents/com.frappe-mac.*.plist; do
       [[ -f "$f" ]] || continue
       fl_plist_working_dir "$f"

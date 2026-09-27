@@ -478,3 +478,23 @@ The CLI writes `starting` just before `up` and `restart` kick the agent,
 and `stopped` with `manual` after `down`. The state file is a hint for
 fast updates; `status --json` is the truth, because it also checks the
 processes and the site.
+
+## Folder discovery
+
+`benchbar scan PATH --json` is read only and returns a schema-version-1 object:
+`schema_version`, `cli_version`, `root` (canonical selected folder), `benches`
+(the same entries as `list`), and `warnings` (strings for skipped unreadable
+folders). A valid folder with no benches returns an empty array; an invalid or
+unreadable root exits 1. Hidden directories, symlinks, dependency/build folders,
+and test/fixture folders are skipped. A found bench's children are not scanned.
+
+`benchbar register PATH ... --json` validates every path, atomically remembers
+the canonical paths in `.benchbar/registered-benches.txt`, then returns the
+normal `list` response. It does not create services or change the default bench.
+`--dry-run` does not write the registry. List includes these registered paths
+while they still identify bench directories. Registration is idempotent.
+
+Same-named benches receive distinct launchd labels when necessary, using a
+canonical-path checksum suffix. An installed label owned by the same bench
+is retained. Clients should always use the returned label rather than deriving
+it from the directory name.

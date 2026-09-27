@@ -3,6 +3,20 @@ import AppKit
 /// Things the popover opens outside the app. None of them touch the bench:
 /// a browser, Finder, and Terminal running `benchbar logs`.
 enum Workspace {
+    static func chooseScanFolder(previous: String) -> String? {
+        let panel = NSOpenPanel()
+        panel.title = "Scan for Frappe benches"
+        panel.message = "Choose a folder to search, including its subfolders."
+        panel.prompt = "Scan Folder"
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = previous.isEmpty
+            ? FileManager.default.homeDirectoryForCurrentUser
+            : URL(fileURLWithPath: previous, isDirectory: true)
+        NSApp.activate()
+        return panel.runModal() == .OK ? panel.url?.path : nil
+    }
     static func openSite(_ bench: BenchModel) {
         let text = bench.status?.webURL ?? bench.summary.webURL
         guard let url = URL(string: text) else { return }

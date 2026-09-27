@@ -31,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             openSettings: { [weak self] in self?.openSettings() },
             quit: { NSApp.terminate(nil) },
             chooseCLI: { [weak self] in self?.chooseCLI() },
+            scanFolder: { [weak self] in self?.scanFolderAction() },
             openLogs: { [weak self] bench in self?.openLogs(bench) },
             manage: { [weak self] bench, tab, repair in self?.openBench(bench, tab: tab, repair: repair) })
         popover = PopoverController(rootView: PopoverView(store: store, commands: commands))
@@ -38,8 +39,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let workbench = Workbench(store: store)
         about = AboutModel(store: store)
+        let discovery = BenchDiscovery(store: store)
         settingsWindow = SettingsWindowController { [unowned self] router in
-            MainWindowView(store: store, router: router, workbench: workbench, about: about) { [unowned self] part in
+            MainWindowView(store: store, router: router, workbench: workbench, about: about, discovery: discovery) { [unowned self] part in
                 SettingsView(settings: settings, store: store, library: library, launchAtLogin: launchAtLogin, notifier: notifier,
                              part: part, router: router, chooseCLI: { [weak self] in self?.chooseCLI() })
             }
@@ -82,6 +84,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func makeStatusMenu() -> NSMenu {
         let menu = NSMenu()
+        menu.addItem(withTitle: "Scan Folder…", action: #selector(scanFolderAction), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Settings…", action: #selector(openSettingsAction), keyEquivalent: ",").target = self
         menu.addItem(withTitle: "About BenchBar", action: #selector(openAboutAction), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Documentation", action: #selector(openDocsAction), keyEquivalent: "").target = self
@@ -103,6 +106,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openSettingsAction() { openSettings() }
+
+    @objc private func scanFolderAction() {
+        popover.close()
+        settingsWindow.router.scanRequested = true
+        settingsWindow.show(.discovery)
+    }
 
     // MARK: About and Help
 

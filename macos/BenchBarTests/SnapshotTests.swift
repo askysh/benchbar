@@ -100,7 +100,7 @@ struct SnapshotTests {
 
     private func window(_ store: BenchStore, _ workbench: Workbench, _ router: WindowRouter,
                         about: AboutModel? = nil) -> some View {
-        MainWindowView(store: store, router: router, workbench: workbench, about: about ?? AboutModel(store: store)) { part in
+        MainWindowView(store: store, router: router, workbench: workbench, about: about ?? AboutModel(store: store), discovery: BenchDiscovery(store: store)) { part in
             SettingsView(settings: base.settings, store: store, library: RunnerLibrary(folder: base.dir.url.appendingPathComponent("Runners")),
                          launchAtLogin: LaunchAtLogin(), notifier: Notifier(settings: base.settings), part: part, chooseCLI: {})
         }
