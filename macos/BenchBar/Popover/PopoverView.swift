@@ -5,6 +5,7 @@ struct AppCommands {
     var openSettings: () -> Void = {}
     var quit: () -> Void = {}
     var chooseCLI: () -> Void = {}
+    var scanFolder: () -> Void = {}
     var openLogs: (BenchModel) -> Void = { _ in }
     /// The BenchBar window at a bench's tab (true: open the Repair sheet too).
     var manage: (BenchModel, BenchTab, Bool) -> Void = { _, _, _ in }
@@ -24,6 +25,8 @@ struct PopoverView: View {
         VStack(alignment: .leading, spacing: 12) {
             content
             Divider()
+            Button("Scan Folder…", systemImage: "folder.badge.plus", action: commands.scanFolder)
+                .buttonStyle(.borderless)
             footer
         }
         .padding(14)

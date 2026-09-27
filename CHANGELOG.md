@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented here.
 
+## Unreleased
+
+### Added
+
+- Scan Folder in the menu bar and Find Benches in the app: recursively find
+  existing benches, select paths to remember, and preview management setup.
+- Read-only `benchbar scan PATH --json` and persistent `benchbar register PATH ...`
+  commands, with duplicate detection and warnings for unreadable folders.
+
+### Fixed
+
+- Same-named benches receive distinct service labels when needed, and port
+  reservations recognize those labels by their working-directory ownership.
+- Folder discovery preserves `/` when resolving a filesystem-root selection.
+
 ## 0.5.6 - 2026-09-26
 
 Doctor knows the cleanup tool that actually deletes benches. Mole's

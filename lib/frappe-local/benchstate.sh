@@ -146,6 +146,7 @@ fl_known_benches() {
   local f d
   {
     fl_state_get BENCH_DIR 2>/dev/null || true
+    fl_registered_benches
     for f in "$HOME"/Library/LaunchAgents/com.benchbar.*.plist "$HOME"/Library/LaunchAgents/com.frappe-mac.*.plist; do
       [[ -f "$f" ]] || continue
       fl_plist_working_dir "$f"
@@ -191,6 +192,8 @@ fl_cmd_list() {
   while IFS= read -r d; do
     [[ -n "$d" ]] && benches+=("$d")
   done < <(fl_known_benches)
+  # every bench's label needs this list; build it once, not per label
+  FL_KNOWN_BENCHES_CACHE="$(printf '%s\n' ${benches[@]+"${benches[@]}"})"; FL_KNOWN_BENCHES_CACHED=1
   if [[ "$json" == "1" ]]; then
     printf '{"schema_version":%d,"cli_version":"%s","default_bench":%s,"benches":[' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$default")"
     for d in ${benches[@]+"${benches[@]}"}; do

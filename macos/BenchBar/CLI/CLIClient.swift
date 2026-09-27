@@ -33,6 +33,21 @@ nonisolated struct CLIClient: Sendable {
 
     // MARK: queries (read only, safe to poll)
 
+    func scan(folder: String) async throws(CLIError) -> BenchScan {
+        let output = try await run(["scan", folder, "--json"], timeout: Timeout.doctor, acceptExitCodes: [0])
+        return try BenchJSON.decode(BenchScan.self, from: Data(output.stdout.utf8))
+    }
+
+    func register(benches: [String]) async throws(CLIError) {
+        guard !benches.isEmpty else { return }
+        _ = try await run(["register", "--json", "--"] + benches, timeout: Timeout.doctor, acceptExitCodes: [0])
+    }
+
+    func adopt(bench: String, preview: Bool) async throws(CLIError) -> CommandOutput {
+        try await run(["adopt", bench, "--plain", preview ? "--dry-run" : "--yes"],
+                      timeout: Timeout.action, acceptExitCodes: [0])
+    }
+
     func list() async throws(CLIError) -> BenchList {
         let output = try await run(["list", "--json"], timeout: Timeout.query, acceptExitCodes: [0])
         return try BenchJSON.decode(BenchList.self, from: Data(output.stdout.utf8))

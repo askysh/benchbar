@@ -7,6 +7,13 @@ One line per non obvious choice: the decision, then the reason. The
 decisions of the app work live in `macos/DECISIONS.md`. The 0.5.5, 0.5 and 0.4
 runs come first, the 0.3 easy install run follows.
 
+## Folder discovery
+
+- Scanning is read only and registration only remembers canonical paths: finding an existing bench must not silently create a service, start processes, or change its ports.
+- Recursive scans stop at a found bench and skip symlinks, hidden folders, dependencies and test fixtures: this avoids cycles, nested example benches and expensive dependency traversal.
+- Same-name services use a canonical-path checksum suffix when needed, while retaining labels already owned by the bench: separate projects often use the same `frappe-bench` directory name.
+- Port reservations inspect the service's working directory instead of deriving its label: both legacy names and path-specific labels must reserve the correct bench's ports.
+
 ## 0.5.5: about, help and docs links
 
 - `benchbar docs` checks the page with one `curl -I` (3 seconds) before opening it: a 404 opens the start page with a warning, and no answer (offline, DNS, a slow network) opens the page anyway, so the check can only improve on a plain `open`, never block it.

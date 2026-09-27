@@ -746,3 +746,6 @@ Read `App/AppDelegate.swift` (the menus), `Updates/UpdateCheck.swift`,
    flag on the shared `WindowRouter` and opens the window at About; the
    pane reads the flag in `onAppear` and `onChange`, clears it and shows
    its sheet. The same pattern opened the Repair sheet in 0.5.
+# Folder discovery
+
+- A cancelled subprocess can finish while its replacement scan is already running; a generation token prevents stale results from becoming visible.

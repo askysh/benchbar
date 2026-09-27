@@ -9,6 +9,7 @@ import Observation
 final class AppSettings {
     enum Key {
         static let cliPath = "cliPath"
+        static let scanFolder = "scanFolder"
         static let askedForCLI = "askedForCLI"
         static let runnerID = "runnerID"
         static let speedEnabled = "speedEnabled"
@@ -21,6 +22,7 @@ final class AppSettings {
 
     /// Absolute path to benchbar chosen by the user; empty means "search".
     var cliPath: String { didSet { defaults.set(cliPath, forKey: Key.cliPath) } }
+    var scanFolder: String { didSet { defaults.set(scanFolder, forKey: Key.scanFolder) } }
     /// The file picker for the CLI is shown at most once automatically.
     var askedForCLI: Bool { didSet { defaults.set(askedForCLI, forKey: Key.askedForCLI) } }
     /// Built in ("bench", "cup") or a custom runner folder name.
@@ -40,6 +42,7 @@ final class AppSettings {
             Key.notificationsEnabled: true,
         ])
         cliPath = defaults.string(forKey: Key.cliPath) ?? ""
+        scanFolder = defaults.string(forKey: Key.scanFolder) ?? ""
         askedForCLI = defaults.bool(forKey: Key.askedForCLI)
         runnerID = defaults.string(forKey: Key.runnerID) ?? "bench"
         speedEnabled = defaults.bool(forKey: Key.speedEnabled)

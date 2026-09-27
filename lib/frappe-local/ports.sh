@@ -126,9 +126,13 @@ fl_ports_apply() {
 # True when DIR has a benchbar agent or is the default bench: its ports are
 # settled, and a newcomer moves out of its way, never the other way round.
 fl_bench_established() {
-  local dir="$1"
+  local dir="$1" plist
   fl_same_path "$(fl_state_get BENCH_DIR 2>/dev/null || true)" "$dir" && return 0
-  [[ -f "$HOME/Library/LaunchAgents/com.benchbar.$(fl_bench_name_of "$dir").plist" ]]
+  for plist in "$HOME"/Library/LaunchAgents/com.benchbar.*.plist; do
+    [[ -f "$plist" ]] || continue
+    fl_same_path "$(fl_plist_working_dir "$plist")" "$dir" && return 0
+  done
+  return 1
 }
 
 # True when the current bench is the default bench or becomes it now.

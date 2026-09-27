@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Where the BenchBar window is: an app pane, or one bench's page and tab.
 nonisolated enum WindowPane: Hashable, Sendable {
-    case general, menuBar, profiles, about
+    case general, menuBar, profiles, about, discovery
     case bench(String)
 }
 
@@ -18,6 +18,7 @@ final class WindowRouter {
     var benchTab: BenchTab = .overview
     /// Set to open the Repair sheet on the bench page when it appears.
     var repairRequested = false
+    var scanRequested = false
     /// Set by the Help menu: the About pane opens its Report a Bug sheet.
     var bugReportRequested = false
     /// Set by the app menu: the About pane checks for updates.
@@ -39,6 +40,7 @@ struct MainWindowView: View {
     @Bindable var router: WindowRouter
     let workbench: Workbench
     let about: AboutModel
+    let discovery: BenchDiscovery
     let makeSettings: (SettingsView.Part) -> SettingsView
 
     var body: some View {
@@ -51,13 +53,21 @@ struct MainWindowView: View {
                     Label("About", systemImage: "info.circle").tag(WindowPane.about)
                 }
                 Section("Benches") {
+                    Label("Find Benches", systemImage: "folder.badge.plus").tag(WindowPane.discovery)
                     if store.benches.isEmpty {
                         Text("No bench yet").foregroundStyle(.secondary)
                     }
                     ForEach(store.benches) { bench in
                         HStack(spacing: 8) {
                             Circle().fill(StatePill.color(for: bench.state)).frame(width: 8, height: 8)
-                            Text(bench.name)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(bench.name)
+                                if store.benches.filter({ $0.name == bench.name }).count > 1 {
+                                    Text(URL(fileURLWithPath: bench.path).deletingLastPathComponent().lastPathComponent)
+                                        .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                                }
+                            }
+                            .help(bench.path)
                             Spacer()
                             if bench.activity != nil || bench.pending != nil || bench.isChangingScheduler {
                                 ProgressView().controlSize(.mini)
@@ -85,6 +95,8 @@ struct MainWindowView: View {
             ProfilesPane(store: store, workbench: workbench).navigationTitle("Team Profiles")
         case .about:
             AboutPane(store: store, model: about, router: router).navigationTitle("About BenchBar")
+        case .discovery:
+            DiscoveryPane(discovery: discovery, router: router).navigationTitle("Find Benches")
         case .bench(let path):
             if let bench = store.benches.first(where: { $0.path == path }) {
                 BenchPage(store: store, workbench: workbench, bench: bench, router: router)

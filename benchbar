@@ -55,6 +55,8 @@ SCRIPT_DIR="$(fl_resolve_self)"
 . "${SCRIPT_DIR}/lib/frappe-local/launchd.sh"
 # shellcheck source=lib/frappe-local/benchstate.sh
 . "${SCRIPT_DIR}/lib/frappe-local/benchstate.sh"
+# shellcheck source=lib/frappe-local/discovery.sh
+. "${SCRIPT_DIR}/lib/frappe-local/discovery.sh"
 # shellcheck source=lib/frappe-local/ports.sh
 . "${SCRIPT_DIR}/lib/frappe-local/ports.sh"
 # shellcheck source=lib/frappe-local/checks.sh
@@ -123,6 +125,8 @@ Daily
   restart             Restart it, for example after changing Python code.
   status              State, pid, stop reason, site ping (benchstatus).
   list                Every bench benchbar knows about.
+  scan PATH           Find benches recursively in a folder (read only; --json).
+  register PATH ...   Remember selected benches without changing their services.
   logs                Tail logs/bench.log. Flags: --worker, --worker-error, --previous, -n50, --no-follow,
                       --process web|worker|socketio|schedule (with --json: the lines as JSON)
   fg                  Stop the service and run honcho in the foreground.
@@ -508,6 +512,7 @@ cmd_status() {
 }
 
 case "$COMMAND" in
+  register) fl_lock_acquire "${FL_STATE_DIR}/lock" ;;
   site|app|profile|lock)
     # the list, show and check commands are read only; the others change things
     if [[ "${ARGS[0]:-list}" != "list" && "${ARGS[0]:-}" != "show" && "${ARGS[0]:-}" != "check" ]]; then
@@ -533,6 +538,8 @@ case "$COMMAND" in
   repair) cmd_repair || exit $? ;;
   status) cmd_status ;;
   list) fl_cmd_list "$OPT_JSON" ;;
+  scan) fl_cmd_scan "${ARGS[0]:-}" ;;
+  register) fl_cmd_register ${ARGS[@]+"${ARGS[@]}"} ;;
   up) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_up ;;
   down) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_down ;;
   restart) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_restart ;;

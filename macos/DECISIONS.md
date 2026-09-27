@@ -2,6 +2,13 @@
 
 One line per non obvious choice: the decision, then the reason.
 
+## Folder discovery
+
+- Scan Folder opens a native directory picker and routes results to a persistent Find Benches pane: a long, selectable result list does not fit the menu bar popover.
+- Adding a bench and setting up management are separate actions; setup previews the existing adoption command and checks for running processes again before applying it.
+- Cancelling a scan invalidates its generation as well as cancelling its task: a late subprocess result must not replace a newer selection or repopulate a cancelled scan.
+- Duplicate bench names show their parent folder in the sidebar, and scan results always show full paths: the user must be able to distinguish projects before configuring a service.
+
 ## 0.5.5: about and help
 
 - The update check is a button, not a timer: one `GET` of GitHub's latest release with a User-Agent (GitHub refuses requests without one), `Accept: application/vnd.github+json`, a 10 second limit and an ephemeral session (no cookies, no cache). Unsigned builds until 0.6 mean no Sparkle and no download: the answer links to the release page.
