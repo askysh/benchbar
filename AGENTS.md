@@ -90,6 +90,18 @@ call, so later commands do not need `--bench-dir`.
   cleanup tool is the most common cause of a bench that "suddenly" lost
   `env/`, `node_modules` and the built assets.
 
+## Contributing a change
+
+- Do not commit your own working notes: design briefs, plans, specs,
+  state or progress files, or anything your tooling writes for itself
+  (for example `design-state.md`, `docs/designpowers/`, `docs/plans/`,
+  `PLAN.md`, `TODO.md`). Keep them outside the repository or untracked.
+- Everything under `docs/` is published on the documentation site, so
+  add a page there only when it is for users.
+- Record a non obvious choice as one line in `docs/DECISIONS.md` (CLI)
+  or `macos/DECISIONS.md` (app), and user facing changes under
+  `## Unreleased` in `CHANGELOG.md`. The PR description holds the rest.
+
 ## Reading the output
 
 - `[OK]`, `[WARN]`, `[FAIL]` lines are stable and safe to parse. A
