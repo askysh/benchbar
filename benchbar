@@ -59,6 +59,8 @@ SCRIPT_DIR="$(fl_resolve_self)"
 . "${SCRIPT_DIR}/lib/frappe-local/discovery.sh"
 # shellcheck source=lib/frappe-local/ports.sh
 . "${SCRIPT_DIR}/lib/frappe-local/ports.sh"
+# shellcheck source=lib/frappe-local/port-management.sh
+. "${SCRIPT_DIR}/lib/frappe-local/port-management.sh"
 # shellcheck source=lib/frappe-local/checks.sh
 . "${SCRIPT_DIR}/lib/frappe-local/checks.sh"
 # shellcheck source=lib/frappe-local/doctor.sh
@@ -114,6 +116,7 @@ Setup
                       Shows the plan and asks; never runs migrate, build or update.
   service             Install or refresh only the background service (phase 02).
   doctor              Read-only health report. Exit 1 when something FAILs.
+  ports               Preview/apply port allocation for selected benches; check conflicts or set mode
   report              Redacted diagnostics zip on the Desktop for bug reports (--print: to the terminal,
                       --json: {"zip": path, "redactions": n} for the app and scripts).
   repair              Apply only the fixes doctor flagged, in dependency order.
@@ -398,6 +401,7 @@ cmd_install() {
     fl_ports_plan "$OPT_PORT_OFFSET" || { fl_step_end failed; fl_steps_summary; return 1; }
   fi
   if FL_PLAN_CHECKS="port_block" fl_repair_engine "Background service" system service; then
+    fl_pm_remember
     fl_step_end "done"
   else
     fl_step_end warning "see above"
@@ -423,6 +427,7 @@ cmd_service() {
     fl_render_all
   fi
   if FL_PLAN_CHECKS="port_block" fl_repair_engine "Background service" service; then
+    fl_pm_remember
     if [[ -n "$FL_SCHEDULER" && "${FL_DRY_RUN:-0}" != "1" ]] && fl_bench_is_running; then
       fl_warn "the running bench still uses the old Procfile.lean; run: benchbar restart --bench-dir ${FL_BENCH_DIR}"
     fi
@@ -452,6 +457,7 @@ cmd_adopt() {
   fl_ports_plan "$OPT_PORT_OFFSET" || return 1
   # the service group would install honcho into env when it is missing; adopt must not
   if FL_PLAN_CHECKS="port_block" FL_ENGINE_SKIP_ACTIONS="honcho_install honcho_setuptools" fl_repair_engine "Adopt" service; then
+    fl_pm_remember
     # remembered only now: a cancelled plan must not make this the default bench
     if fl_remember_bench; then
       [[ "$FL_DRY_RUN" == "1" ]] || fl_ok "remembered ${FL_BENCH_DIR} (site ${FL_SITE}) as the default bench"
@@ -512,6 +518,11 @@ cmd_status() {
 }
 
 case "$COMMAND" in
+  ports)
+    if [[ "${ARGS[0]:-}" == apply || "${ARGS[0]:-}" == mode ]]; then
+      fl_log_init "${FL_STATE_DIR}/logs"
+      fl_lock_acquire "${FL_STATE_DIR}/lock"
+    fi ;;
   register) fl_lock_acquire "${FL_STATE_DIR}/lock" ;;
   site|app|profile|lock)
     # the list, show and check commands are read only; the others change things
@@ -538,6 +549,7 @@ case "$COMMAND" in
   repair) cmd_repair || exit $? ;;
   status) cmd_status ;;
   list) fl_cmd_list "$OPT_JSON" ;;
+  ports) fl_cmd_ports ${ARGS[@]+"${ARGS[@]}"} || exit $? ;;
   scan) fl_cmd_scan "${ARGS[0]:-}" ;;
   register) fl_cmd_register ${ARGS[@]+"${ARGS[@]}"} ;;
   up) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_up ;;

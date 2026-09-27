@@ -23,7 +23,17 @@ final class BenchDiscovery {
     }
 
     var knownPaths: Set<String> { Set(store.benches.map(\.path)) }
+    var selectablePaths: Set<String> { Set(results.map(\.path)) }
     var availablePaths: Set<String> { Set(results.map(\.path)).subtracting(knownPaths) }
+
+    func hasPortConflict(_ result: BenchSummary) -> Bool {
+        let own = Set([result.ports.web, result.ports.socketio, result.ports.redisQueue, result.ports.redisCache])
+        let others = results + store.benches.map(\.summary)
+        return others.contains { other in
+            other.path != result.path && !own.isDisjoint(with: [other.ports.web, other.ports.socketio,
+                                                                other.ports.redisQueue, other.ports.redisCache])
+        }
+    }
 
     @discardableResult
     func scan(folder: String) -> Task<Void, Never> {

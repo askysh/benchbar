@@ -54,6 +54,7 @@ struct BenchOverview: View {
     let store: BenchStore
     let bench: BenchModel
     @State private var schedulerChange: Bool?
+    @State private var portSetup: PortSetupRun?
 
     private var controls: BenchControls { store.controls(for: bench) }
 
@@ -82,6 +83,12 @@ struct BenchOverview: View {
                 }
             }
             Section("Site and ports") {
+                PortConflictAction(store: store, bench: bench)
+                Button("Port Settings & Setup…") {
+                    let run = PortSetupRun(summaries: [bench.summary], store: store)
+                    portSetup = run
+                    Task { await run.loadPlan() }
+                }.disabled(store.busyBench != nil)
                 LabeledContent("Default site", value: bench.summary.site)
                 LabeledContent("Web", value: bench.status?.webURL ?? bench.summary.webURL)
                 LabeledContent("Socket.IO port", value: String(ports.socketio))
@@ -105,6 +112,7 @@ struct BenchOverview: View {
             }
         }
         .formStyle(.grouped)
+        .sheet(item: $portSetup) { run in PortSetupSheet(run: run) { portSetup = nil } }
         .alert(schedulerChange == true ? "Run the scheduler for \(bench.name)?" : "Stop the scheduler for \(bench.name)?",
                isPresented: Binding(get: { schedulerChange != nil }, set: { if !$0 { schedulerChange = nil } })) {
             Button(schedulerChange == true ? "Turn On and Restart" : "Turn Off and Restart") {

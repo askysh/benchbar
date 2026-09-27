@@ -422,3 +422,17 @@ Measured on five PR runs (September 2026): 11 to 14 minutes wall clock, all of i
 - The Linux job is gone (Akash, 0.5 pull request): BenchBar only runs on macOS, the macOS shards already run the suite on the `/bin/bash` 3.2 users have, and the Linux job was the slowest one left (4.5 minutes) while only ever finding GNU tool differences no user hits. The suite still aims to run on Linux for a Linux dev container, without a CI guarantee.
 - `brew install` is skipped when the tool is already on the runner, and the Homebrew and DerivedData caches stay as they were: both already hit (restore key for DerivedData, which is expected when sources change).
 - Estimate after: about 3 to 4 minutes wall clock per PR, bounded by the slowest shard. First run on the 0.5 pull request: shards 2m28s to 3m50s, the app job 1m50s.
+
+## Batch port allocation
+
+- Preserve usable allocations before choosing replacement blocks, so an early
+  conflicting entry cannot displace another selected bench's valid address.
+  Fixed claims take priority, then managed benches, then newcomers.
+- Approval uses a fingerprint of the complete plan and relevant configuration
+  and ownership state. Apply recomputes under the existing CLI lock, then checks
+  listeners and running state again per entry. Foreign processes do not share
+  that lock, so launch also checks; no unrelated process is killed for a port.
+- Persist reservations in existing per-bench state after successful setup.
+  Registration alone remains read-only with respect to bench configuration.
+- Apply reuses the backed-up adoption engine. This is sequential execution, not
+  an all-or-nothing transaction: report completed entries on a later failure.

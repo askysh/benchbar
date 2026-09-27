@@ -498,3 +498,28 @@ Same-named benches receive distinct launchd labels when necessary, using a
 canonical-path checksum suffix. An installed label owned by the same bench
 is retained. Clients should always use the returned label rather than deriving
 it from the directory name.
+
+## Port management
+
+`benchbar ports plan --json -- PATH ...` is read-only. Canonical paths are
+sorted and deduplicated. The response has `schema_version: 1`, an opaque `token`,
+`can_apply` (boolean), and `entries`. Each entry includes `path`, `name`, `site`,
+`mode` (`automatic` or `fixed`), `current` and `proposed` port objects (`web`,
+`socketio`, `redis_queue`, `redis_cache`), `conflicts` (strings), `blocked`
+(string or null), and `service_installed` (boolean).
+
+`ports apply TOKEN --yes -- PATH ...` recomputes the selection under the CLI lock;
+a changed token or any blocked entry fails before adoption. It emits human
+progress, including completed paths and any failing path, and exits nonzero on
+failure. Earlier completed entries remain configured. A new preview is required
+before retrying. Apply does not start services. Socket availability cannot be
+reserved against unrelated programs; start checks again before launching.
+
+`ports check --json --bench-dir PATH` returns `schema_version: 1`, `conflicts`
+(strings), and `mode`. It checks configured reservations and all listening PIDs,
+ignoring only listeners positively identified as belonging to that bench.
+
+`ports mode automatic|fixed --bench-dir PATH` saves the policy and reserves the
+current ports without moving them. `--dry-run` does not save it. New benches
+default to automatic. Fixed mode means the current allocation stays pinned until
+the policy changes or an explicit CLI `--port-offset` override is requested.

@@ -30,11 +30,22 @@ run_fm status --bench-dir "$OTHER" --site custom; assert_contains "$OUT" "http:/
 
 # up: arms the flag, kickstarts, waits for the ping
 run_fm service --yes --bench-dir "$BENCH"; assert_eq "0" "$CODE" "$OUT"
+# The earlier default bench owns block 0 even while stopped. Starting this
+# second managed bench must refuse the collision until its ports are resolved.
+reset_calls
+run_fm up --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "Cannot start"
+assert_contains "$OUT" "reserved by $OTHER"
+assert_calls_not_contain '^launchctl kickstart'
+run_fm service --yes --port-offset 1 --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+run_fm status --bench-dir "$OTHER"; assert_contains "$OUT" "http://other:8000"
 printf 'old log line\n' >"$BENCH/logs/bench.log"
 export MOCK_KICKSTART_PING=200
 run_fm up --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
-assert_contains "$OUT" "bench is up: http://macdev:8000"
+assert_contains "$OUT" "bench is up: http://macdev:8001"
 assert_no_file "$BENCH/logs/.bench-stopped"
 assert_calls_contain '^launchctl kickstart gui/[0-9]+/com.benchbar.frappe-bench$'
 grep -q 'old log line' "$BENCH/logs/bench.previous.log" || fail "previous log must be kept"

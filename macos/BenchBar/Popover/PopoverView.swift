@@ -89,6 +89,7 @@ struct BenchPanel: View {
         VStack(alignment: .leading, spacing: 12) {
             header
             banners
+            PortConflictAction(store: store, bench: bench)
             actionButtons
             Divider()
             VStack(spacing: 2) {

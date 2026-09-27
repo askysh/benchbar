@@ -160,20 +160,20 @@ fl_arm_start() {
 }
 
 fl_check_port_clash_or_confirm() {
-  local clash
-  clash="$(fl_port_clash_running)"
-  [[ -z "$clash" ]] && return 0
-  fl_warn "another running bench uses the same port:${clash}"
-  fl_confirm "Start anyway?" || return 1
+  fl_pm_check
+  [[ -n "$PM_CONFLICTS" ]] || return 0
+  fl_fail "Cannot start: $PM_CONFLICTS"
+  fl_fix "Review benchbar ports plan --json -- ${FL_BENCH_DIR}, then resolve the conflict."
+  return 1
 }
 
 fl_cmd_up() {
   fl_require_service
+  fl_check_port_clash_or_confirm || return 1
   if fl_bench_is_running; then
     fl_ok "bench ${FL_BENCH_NAME} is already running at $(fl_site_url)"
     return 0
   fi
-  fl_check_port_clash_or_confirm || return 1
   fl_arm_start
   if ! fl_agent_loaded; then
     fl_info "agent not loaded; loading $(fl_agent_plist_path)"
@@ -222,6 +222,7 @@ fl_cmd_down() {
 
 fl_cmd_restart() {
   fl_require_service
+  fl_check_port_clash_or_confirm || return 1
   fl_arm_start
   if ! fl_agent_loaded; then
     fl_agent_bootstrap "$(fl_agent_plist_path)" || fl_die "launchctl could not load the agent."
@@ -326,6 +327,7 @@ fl_cmd_fg() {
   fl_require_bench
   [[ -n "$FL_HONCHO" ]] || fl_die "honcho not found." "Run: ${SCRIPT_DIR}/benchbar repair"
   [[ -f "$(fl_procfile_path)" ]] || fl_die "Procfile.lean missing." "Run: ${SCRIPT_DIR}/benchbar service"
+  fl_check_port_clash_or_confirm || return 1
   fl_cmd_down >/dev/null 2>&1 || true
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
     fl_info "dry-run: cd ${FL_BENCH_DIR} && ${FL_HONCHO} start -f Procfile.lean"

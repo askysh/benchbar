@@ -3,7 +3,7 @@ import SwiftUI
 struct DiscoveryPane: View {
     @Bindable var discovery: BenchDiscovery
     @Bindable var router: WindowRouter
-    @State private var adoption: AdoptionRun?
+    @State private var setup: PortSetupRun?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -50,8 +50,8 @@ struct DiscoveryPane: View {
                 HStack {
                     Text("\(discovery.results.count) benches found").font(.headline)
                     Spacer()
-                    Button("Select All") { discovery.selected = discovery.availablePaths }
-                        .disabled(discovery.availablePaths.isEmpty || discovery.isAdding)
+                    Button("Select All") { discovery.selected = discovery.selectablePaths }
+                        .disabled(discovery.selectablePaths.isEmpty || discovery.isAdding)
                     Button("Clear Selection") { discovery.selected = [] }
                         .disabled(discovery.selected.isEmpty || discovery.isAdding)
                 }
@@ -68,8 +68,12 @@ struct DiscoveryPane: View {
                     Spacer()
                     if discovery.isAdding { ProgressView().controlSize(.small) }
                     Button("Add Selected") { Task { await discovery.addSelected() } }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(discovery.selected.isEmpty || discovery.isAdding || discovery.store.busyBench != nil)
+                        .disabled(discovery.selected.intersection(discovery.availablePaths).isEmpty || discovery.isAdding || discovery.store.busyBench != nil)
+                    Button("Set Up Selected…") {
+                        preview(discovery.results.filter { discovery.selected.contains($0.path) })
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(discovery.selected.isEmpty || discovery.isAdding || discovery.store.busyBench != nil)
                 }
             } else if !discovery.isScanning {
                 ContentUnavailableView("Your benches, in one place", systemImage: "folder.badge.plus",
@@ -86,7 +90,13 @@ struct DiscoveryPane: View {
         .onChange(of: router.scanRequested) { _, requested in
             if requested { router.scanRequested = false; chooseFolder() }
         }
-        .sheet(item: $adoption) { run in AdoptionSheet(run: run) { adoption = nil } }
+        .sheet(item: $setup) { run in PortSetupSheet(run: run) { setup = nil } }
+    }
+
+    private func preview(_ summaries: [BenchSummary]) {
+        let run = PortSetupRun(summaries: summaries, store: discovery.store)
+        setup = run
+        Task { await run.loadPlan() }
     }
 
     private func chooseFolder() {
@@ -104,12 +114,16 @@ struct DiscoveryPane: View {
             )) { Text("Select \(result.name) at \(result.path)") }
                 .toggleStyle(.checkbox).labelsHidden()
                 .accessibilityLabel("Select \(result.name) at \(result.path)")
-                .disabled(known != nil || discovery.isAdding)
+                .disabled(discovery.isAdding)
             VStack(alignment: .leading, spacing: 4) {
                 Text(result.name).font(.headline)
                 Text(result.path).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
                 Text("\(result.site) · Port \(String(result.ports.web))").font(.caption).foregroundStyle(.secondary)
+                if discovery.hasPortConflict(result) {
+                    Label("Port conflict · Review during setup", systemImage: "exclamationmark.triangle")
+                        .font(.caption).foregroundStyle(.orange)
+                }
                 if let known {
                     Label(known.needsService ? "Added · Management needs setup" : "Managed by BenchBar",
                           systemImage: known.needsService ? "wrench" : "checkmark.circle")
@@ -120,9 +134,7 @@ struct DiscoveryPane: View {
             if let known {
                 if known.needsService {
                     Button("Set Up Management…") {
-                        let run = AdoptionRun(bench: known, store: discovery.store)
-                        adoption = run
-                        Task { await run.loadPlan() }
+                        preview([known.summary])
                     }
                     .disabled(discovery.store.busyBench != nil || discovery.isAdding)
                 } else {
@@ -131,49 +143,5 @@ struct DiscoveryPane: View {
             }
         }
         .padding(.vertical, 12)
-    }
-}
-
-private struct AdoptionSheet: View {
-    let run: AdoptionRun
-    let close: () -> Void
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Set up management for \(run.bench.name)").font(.headline)
-            Text(run.bench.path).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
-            switch run.phase {
-            case .planning:
-                ProgressView("Checking the bench and preparing the plan…")
-            case .running:
-                ProgressView("Setting up BenchBar management…")
-            case .failed(let error):
-                Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red).textSelection(.enabled)
-            case .finished:
-                Label("Management is set up. Start the bench when you are ready.", systemImage: "checkmark.circle")
-            case .review:
-                Text("Review the service changes below. Existing apps and databases are preserved. Stop any previous manager's automatic startup before continuing.")
-                    .font(.callout)
-            }
-            if !run.output.isEmpty {
-                ScrollView([.horizontal, .vertical]) {
-                    Text(run.output).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .frame(height: 260)
-            }
-            Text("If a hosts entry needs your password, setup reports the Terminal command to complete it.")
-                .font(.caption).foregroundStyle(.secondary)
-            HStack {
-                Spacer()
-                Button(run.phase == .review ? "Cancel" : "Done", action: close)
-                    .disabled(run.phase == .running || run.phase == .planning)
-                if run.phase == .review {
-                    Button("Set Up Management") { Task { await run.run() } }
-                        .buttonStyle(.borderedProminent)
-                }
-            }
-        }
-        .padding(20).frame(width: 660)
-        .interactiveDismissDisabled(run.phase == .running || run.phase == .planning)
     }
 }

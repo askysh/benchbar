@@ -22,6 +22,7 @@ nonisolated final class ScriptedCLI: @unchecked Sendable {
                    let perBench = answers["\(arguments[0])|\(arguments[i + 1])"] {
                     return perBench
                 }
+                if arguments.count > 1, let subcommand = answers["\(arguments[0]) \(arguments[1])"] { return subcommand }
                 return answers[arguments[0]] ?? CommandOutput(exitCode: 1, stdout: "", stderr: "[FAIL] no scripted answer for \(arguments[0])")
             }
         }
@@ -39,6 +40,7 @@ struct BenchStoreTests {
         let defaults = UserDefaults(suiteName: "benchbar-tests-\(UUID().uuidString)")!
         settings = AppSettings(defaults: defaults)
         settings.cliPath = "/fake/benchbar"
+        cli.answer("ports", json: #"{"schema_version":1,"conflicts":[],"mode":"automatic"}"#)
     }
 
     var benchPath: String { dir.url.appendingPathComponent("frappe-bench").path }
@@ -118,6 +120,20 @@ struct BenchStoreTests {
         await settle()
         #expect(bench.lastError?.contains("not installed") == true)
         #expect(bench.state == .stopped)
+    }
+
+    @Test(arguments: [CLIClient.Action.up, .restart])
+    func aPortConflictPreventsStarting(_ action: CLIClient.Action) async throws {
+        cli.answer("list", json: listJSON())
+        cli.answer("status", json: statusJSON("stopped", reason: "manual"))
+        cli.answer("ports", json: #"{"schema_version":1,"conflicts":["8000 is used by another app"],"mode":"automatic"}"#)
+        cli.answer("up", .ok("started"))
+        let store = makeStore()
+        await store.start(polling: false)
+        let bench = try #require(store.selected)
+        await store.perform(action, on: bench)
+        #expect(!cli.calls.contains { $0.first == action.rawValue })
+        #expect(bench.lastError?.contains("8000") == true)
     }
 
     @Test func stateFileChangesAlertOnCrash() async throws {
