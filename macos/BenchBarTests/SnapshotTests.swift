@@ -57,6 +57,23 @@ struct SnapshotTests {
         try render(PopoverView(store: store, commands: AppCommands()), "popover-two-benches")
     }
 
+    @Test func popoverManySitesNeedsSetup() async throws {
+        base.cli.answer("list", json: base.listJSON(installed: false))
+        base.cli.answer("status", json: base.statusJSON("stopped", reason: "manual"))
+        base.cli.answer("doctor", json: try Fixture.string("doctor"))
+        let store = base.makeStore()
+        await store.start(polling: false)
+        let bench = try #require(store.selected)
+        bench.summary.sites = (1...12).map {
+            SiteInfo(name: "long-customer-site-\($0).localhost", isDefault: $0 == 1,
+                     hostsEntry: $0 > 2, pingCode: nil)
+        }
+        await store.runDoctor(on: bench)
+        try render(PopoverView(store: store, commands: AppCommands()), "popover-many-sites-setup")
+        bench.doctorError = "The diagnostic command timed out."
+        try render(PopoverView(store: store, commands: AppCommands()), "popover-stale-health")
+    }
+
     @Test func logWindow() async throws {
         let bench = base.dir.url.appendingPathComponent("frappe-bench")
         try FileManager.default.createDirectory(at: bench.appendingPathComponent("logs"), withIntermediateDirectories: true)
@@ -184,6 +201,13 @@ struct SnapshotTests {
         try render(PopoverView(store: store, commands: AppCommands()), "popover-cli-missing")
     }
 
+    @Test func setupIncludesServicePreview() async throws {
+        let tests = try PortSetupTests()
+        let (_, run) = try await tests.setup()
+        await run.loadPlan()
+        try render(PortSetupSheet(run: run, close: {}), "port-setup-preview")
+    }
+
     @Test func settingsWindow() async throws {
         base.cli.answer("list", json: base.listJSON())
         // a 0.4 CLI reports the scheduler, so the switch is live in the screenshot
@@ -213,6 +237,10 @@ struct SnapshotTests {
             window.appearance = look
             window.contentView = hosting
             let size = hosting.fittingSize
+            if name.hasPrefix("popover-") {
+                #expect(size.height <= 620, "Popover height must remain bounded with diagnostics and many sites")
+                #expect(size.width <= 400)
+            }
             window.setContentSize(size)
             hosting.frame = CGRect(origin: .zero, size: size)
             hosting.layoutSubtreeIfNeeded()

@@ -2,6 +2,31 @@
 
 All notable changes to this project are documented here.
 
+## Unreleased
+
+### Added
+
+- Batch setup preview with stable port allocations, Automatic/Fixed modes, and
+  explicit Resolve & Start. Current allocations reserve ports while stopped; stale automatic reservations
+  are ignored after an external configuration change.
+- `ports setup` previews ports and service changes, then asks before applying.
+  `ports plan --json` and token-based `ports apply` support integrations;
+  `ports check` and `ports mode` expose checks and policy. Stale previews are
+  rejected before applying changes.
+
+### Changed
+
+- Keep the menu-bar popover compact with a bench picker, native setup actions,
+  contextual site actions, and a health summary. The popover is only as tall as
+  its content, lists sites that need a hosts line before the rest in natural
+  name order, keeps the `site hosts` command one Copy away, and shows the first
+  checks that need attention with Copy Fix, Repair and Check Again. Full
+  diagnostics and expandable Terminal instructions live in the management window.
+- Start, restart, and foreground start refuse running owners and unrelated
+  listeners before changing process state. CLI users can confirm a stopped
+  bench overlap to run one bench at a time; the app offers Resolve & Start.
+  Starting an already-running bench remains a successful no-op.
+
 ## 0.5.7 - 2026-09-27
 
 BenchBar finds benches that live outside the usual places. Scan Folder

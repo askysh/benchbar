@@ -9,6 +9,7 @@ final class BenchModel: Identifiable {
     var machine = BenchStateMachine()
     /// The last failed action or refresh, shown once in the popover.
     var lastError: String?
+    var portConflict: PortCheck?
     /// Why the last background status refresh failed; cleared by the next
     /// one that works, so a single slow call does not leave a banner behind.
     var refreshError: String?
@@ -68,6 +69,7 @@ final class BenchStore {
     private(set) var isLoading = false
     /// Why the bench list could not be loaded, if it could not.
     private(set) var listError: String?
+    private var changeAnchor: BenchModel?
 
     var selectedPath: String? {
         didSet { if let selectedPath { settings.selectedBench = selectedPath }; notifyChange() }
@@ -124,7 +126,7 @@ final class BenchStore {
     /// The CLI takes one lock for the whole checkout, so while this is set no
     /// other bench may start a change either: it would fail on the lock.
     var busyBench: BenchModel? {
-        benches.first { $0.pending != nil || $0.isChangingScheduler || $0.activity != nil }
+        changeAnchor ?? benches.first { $0.pending != nil || $0.isChangingScheduler || $0.activity != nil }
     }
 
     /// True when another bench holds the CLI's lock: this one waits.
@@ -234,7 +236,7 @@ final class BenchStore {
     // MARK: actions
 
     func perform(_ action: CLIClient.Action, on bench: BenchModel) async {
-        guard bench.pending == nil, !bench.isChangingScheduler, bench.activity == nil, !waitsForOtherBench(bench) else { return }
+        guard changeAnchor == nil, bench.pending == nil, !bench.isChangingScheduler, bench.activity == nil, !waitsForOtherBench(bench) else { return }
         await run(action, on: bench)
     }
 
@@ -245,6 +247,15 @@ final class BenchStore {
         bench.lastError = nil
         apply(.actionStarted(action), to: bench)
         do {
+            if action == .up || action == .restart {
+                let check = try await client.portCheck(bench: bench.path)
+                let alreadyRunning = action == .up && check.alreadyRunning == true
+                bench.portConflict = check.conflicts.isEmpty || alreadyRunning ? nil : check
+                if !check.conflicts.isEmpty && !alreadyRunning {
+                    throw CLIError.failed(command: "ports", exitCode: 1,
+                        message: "Port conflict. Review the proposed resolution before starting.\n" + check.conflicts.joined(separator: "\n"))
+                }
+            }
             try await client.perform(action, bench: bench.path)
             apply(.actionFinished(action, succeeded: true), to: bench)
         } catch {
@@ -263,12 +274,13 @@ final class BenchStore {
     func runChange(_ label: String, on bench: BenchModel,
                    _ work: (CLIClient) async throws(CLIError) -> Void) async -> String? {
         guard let client else { return "The benchbar command line tool is not available." }
-        guard bench.pending == nil, !bench.isChangingScheduler, bench.activity == nil, !waitsForOtherBench(bench) else {
+        guard changeAnchor == nil, bench.pending == nil, !bench.isChangingScheduler, bench.activity == nil, !waitsForOtherBench(bench) else {
             return "Another change is still running; try again when it has finished."
         }
+        changeAnchor = bench
         bench.activity = label
         notifyChange()
-        defer { bench.activity = nil; notifyChange() }
+        defer { bench.activity = nil; changeAnchor = nil; notifyChange() }
         do {
             try await work(client)
         } catch {
@@ -283,7 +295,7 @@ final class BenchStore {
     /// --without-schedule), then restarts a running bench so honcho reads
     /// the new Procfile. The caller has asked the user first.
     func setScheduler(_ on: Bool, on bench: BenchModel) async {
-        guard let client, bench.pending == nil, !bench.isChangingScheduler, bench.activity == nil, !waitsForOtherBench(bench) else { return }
+        guard let client, changeAnchor == nil, bench.pending == nil, !bench.isChangingScheduler, bench.activity == nil, !waitsForOtherBench(bench) else { return }
         bench.isChangingScheduler = true
         defer { bench.isChangingScheduler = false; notifyChange() }
         bench.lastError = nil

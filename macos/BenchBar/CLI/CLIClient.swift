@@ -43,9 +43,29 @@ nonisolated struct CLIClient: Sendable {
         _ = try await run(["register", "--json", "--"] + benches, timeout: Timeout.doctor, acceptExitCodes: [0])
     }
 
-    func adopt(bench: String, preview: Bool) async throws(CLIError) -> CommandOutput {
-        try await run(["adopt", bench, "--plain", preview ? "--dry-run" : "--yes"],
-                      timeout: Timeout.action, acceptExitCodes: [0])
+    func portPlan(benches: [String]) async throws(CLIError) -> PortPlan {
+        let output = try await run(["ports", "plan", "--json", "--"] + benches,
+                                   timeout: Timeout.long, acceptExitCodes: [0])
+        return try BenchJSON.decode(PortPlan.self, from: Data(output.stdout.utf8))
+    }
+
+    func portCheck(bench: String) async throws(CLIError) -> PortCheck {
+        let output = try await run(["ports", "check", "--json", "--bench-dir", bench],
+                                   timeout: Timeout.doctor, acceptExitCodes: [0])
+        return try BenchJSON.decode(PortCheck.self, from: Data(output.stdout.utf8))
+    }
+
+    func applyPortPlan(_ plan: PortPlan) async throws(CLIError) -> CommandOutput {
+        // Preserve partial batch output on any exit code; the workflow presents
+        // it alongside the failure rather than losing completed-entry details.
+        try await runner.run(executable: executable,
+            arguments: ["ports", "apply", plan.token, "--yes", "--plain", "--"] + plan.entries.map(\.path),
+            environment: environment(), timeout: Timeout.long)
+    }
+
+    func setPortMode(_ mode: PortMode, bench: String) async throws(CLIError) {
+        _ = try await run(["ports", "mode", mode.rawValue, "--bench-dir", bench, "--plain"],
+                          timeout: Timeout.action, acceptExitCodes: [0])
     }
 
     func list() async throws(CLIError) -> BenchList {

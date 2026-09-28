@@ -9,7 +9,7 @@ launchd and keeps it healthy. The BenchBar menu bar app shows each bench
 as a small runner with start, stop and a health check one click away, and
 a window for each bench's sites, apps and health.
 
-![The BenchBar popover: a running bench with Start, Stop, Restart, shortcuts and doctor results](images/popover-light.png)
+![The BenchBar popover: a running bench with Start, Stop, Restart, its sites and a health summary](images/popover-light.png)
 
 New here? [Install](install.md) BenchBar, then follow the
 [Quick start](quick-start.md). You have a bench already? The quick start

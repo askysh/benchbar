@@ -158,13 +158,27 @@ nonisolated struct SiteRow: Equatable, Sendable, Identifiable {
 
     var id: String { name }
 
-    /// The default site first, then by name. Without sites from the CLI (a
-    /// CLI older than 0.4) the bench's own site is the only row.
+    /// The default site first, then by name as Finder sorts it (site-2
+    /// before site-10). Without sites from the CLI (a CLI older than 0.4) the
+    /// bench's own site is the only row.
     static func make(sites: [SiteInfo]?, defaultSite: String, port: Int) -> [SiteRow] {
         let infos = sites ?? [SiteInfo(name: defaultSite, isDefault: true, hostsEntry: true, pingCode: nil)]
         return infos
             .map { SiteRow(name: $0.name, isDefault: $0.isDefault, url: "http://\($0.name):\(port)", needsHosts: !$0.hostsEntry) }
-            .sorted { ($0.isDefault ? 0 : 1, $0.name) < ($1.isDefault ? 0 : 1, $1.name) }
+            .sorted { a, b in
+                if a.isDefault != b.isDefault { return a.isDefault }
+                return a.name.localizedStandardCompare(b.name) == .orderedAscending
+            }
+    }
+
+    /// The few rows the popover has room for: the default site, then the
+    /// sites that need a hosts line, then the rest, each group in `rows` order.
+    static func popoverRows(_ rows: [SiteRow], limit: Int) -> [SiteRow] {
+        let rank = { (row: SiteRow) in row.isDefault ? 0 : (row.needsHosts ? 1 : 2) }
+        return Array(rows.enumerated()
+            .sorted { (rank($0.element), $0.offset) < (rank($1.element), $1.offset) }
+            .map(\.element)
+            .prefix(limit))
     }
 
     /// The command that adds every missing hosts line, when one is missing.

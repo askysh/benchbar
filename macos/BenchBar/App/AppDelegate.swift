@@ -33,6 +33,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             chooseCLI: { [weak self] in self?.chooseCLI() },
             scanFolder: { [weak self] in self?.scanFolderAction() },
             openLogs: { [weak self] bench in self?.openLogs(bench) },
+            setup: { [weak self] bench, start in
+                guard let self else { return }
+                settingsWindow.router.startAfterSetup = start
+                settingsWindow.router.setupRequest = bench.path
+                openBench(bench, tab: .overview, repair: false)
+            },
             manage: { [weak self] bench, tab, repair in self?.openBench(bench, tab: tab, repair: repair) })
         popover = PopoverController(rootView: PopoverView(store: store, commands: commands))
         popover.onOpenChange = { [weak self] open in self?.store.setPopoverOpen(open) }

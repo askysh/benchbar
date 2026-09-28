@@ -23,7 +23,17 @@ final class BenchDiscovery {
     }
 
     var knownPaths: Set<String> { Set(store.benches.map(\.path)) }
+    var selectablePaths: Set<String> { Set(results.map(\.path)) }
     var availablePaths: Set<String> { Set(results.map(\.path)).subtracting(knownPaths) }
+
+    func hasPortConflict(_ result: BenchSummary) -> Bool {
+        let own = Set([result.ports.web, result.ports.socketio, result.ports.redisQueue, result.ports.redisCache])
+        let others = results + store.benches.map(\.summary)
+        return others.contains { other in
+            other.path != result.path && !own.isDisjoint(with: [other.ports.web, other.ports.socketio,
+                                                                other.ports.redisQueue, other.ports.redisCache])
+        }
+    }
 
     @discardableResult
     func scan(folder: String) -> Task<Void, Never> {
@@ -84,47 +94,5 @@ final class BenchDiscovery {
         } catch {
             self.error = error.localizedDescription
         }
-    }
-}
-
-/// Uses the existing service-only adoption command, with a preview first.
-@Observable
-final class AdoptionRun: Identifiable {
-    enum Phase: Equatable { case planning, review, running, finished, failed(String) }
-    private(set) var phase: Phase = .planning
-    private(set) var output = ""
-    let bench: BenchModel
-    private let store: BenchStore
-
-    init(bench: BenchModel, store: BenchStore) { self.bench = bench; self.store = store }
-
-    private func checkStopped(_ client: CLIClient) async throws(CLIError) {
-        let status = try await client.status(bench: bench.path)
-        if status.processesRunning == true || status.state == .running || status.state == .starting {
-            throw CLIError.failed(command: "adopt", exitCode: 1,
-                                  message: "Stop this bench and disable its previous automatic startup before setting up BenchBar management. Its processes are still running.")
-        }
-    }
-
-    func loadPlan() async {
-        guard let client = store.cliClient else { phase = .failed("The benchbar command is unavailable."); return }
-        do {
-            try await checkStopped(client)
-            output = try await client.adopt(bench: bench.path, preview: true).stdout
-            phase = .review
-        } catch { phase = .failed(error.localizedDescription) }
-    }
-
-    func run() async {
-        guard phase == .review else { return }
-        phase = .running
-        let error = await store.runChange("Set up management", on: bench) { client throws(CLIError) in
-            try await self.checkStopped(client)
-            let result = try await client.adopt(bench: self.bench.path, preview: false)
-            self.output = result.stdout + result.stderr
-        }
-        if let error { phase = .failed(error) }
-        else if store.benches.first(where: { $0.path == bench.path })?.summary.serviceInstalled == true { phase = .finished }
-        else { phase = .failed("Setup returned, but the service was not found. Review the output and run Doctor.") }
     }
 }

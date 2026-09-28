@@ -749,3 +749,11 @@ Read `App/AppDelegate.swift` (the menus), `Updates/UpdateCheck.swift`,
 # Folder discovery
 
 - A cancelled subprocess can finish while its replacement scan is already running; a generation token prevents stale results from becoming visible.
+
+## Port setup
+
+- Two model objects can represent the same path before registration. Lock an
+  operation independently of model identity so neither can clear the other's
+  busy state.
+- Preserve subprocess output on a failed batch: warnings from earlier successes
+  must not hide the failing path or partial-completion details.

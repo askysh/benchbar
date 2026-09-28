@@ -24,10 +24,11 @@ own: see [Custom runners](runners.md).
 ## The popover
 
 Click the runner for the popover: bench, site, state and uptime, Start,
-Stop, Restart, open the site, the logs or the bench folder, and a read
-only doctor with Repair when something is repairable. With more than one
-bench the popover lists every bench with its own buttons and an "n of m
-up" count.
+Stop and Restart, the logs and the bench folder, the bench's sites with
+an Open button each, and a health summary: the first checks that need
+attention with a Copy Fix button, Repair when something is repairable,
+and a button to check again. With more than one bench a picker at the
+top chooses which bench the popover shows.
 
 ![The same popover in dark mode](images/popover-dark.png)
 
@@ -41,12 +42,12 @@ up" count.
 | ⌘O | Open the site |
 | ⌘L | Logs: a log window with search and a filter per process |
 | ⌘F | Open the bench folder |
-| ⌘K | Doctor |
+| ⌘K | Health in the BenchBar window |
 | ⌘M | The BenchBar window |
 
 ## The BenchBar window
 
-Open it with ⌘M, "Apps, sites and settings…" in the popover, or by
+Open it with ⌘M, **Manage Bench…** in the popover, or by
 opening BenchBar again from Finder or Spotlight. It has a page per bench:
 
 - **Overview**: start, stop, restart, the site and ports, and the
@@ -108,8 +109,48 @@ Review the full paths and sites, select benches, and click **Add Selected**.
 The selection is remembered by the CLI and survives app restarts; aliases and
 repeat scans do not add duplicates. Already-added benches are labelled.
 
-For a bench without a BenchBar service, **Set Up Management…** shows the
-`benchbar adopt --dry-run` plan before applying it. Stop the bench and disable
-its previous automatic startup first. Setup uses the existing adoption command,
-does not start the bench, and reports any password-requiring steps for Terminal.
-You can then use the normal Start, Stop, Restart, and Health controls.
+Select benches and choose **Set Up Selected…** to review all current and proposed
+addresses together with each bench’s service and hosts changes. Conflict labels identify overlapping configured ports. The
+planner also checks live listeners, retains valid addresses where possible, and
+shows blocked running benches. Stop those benches and disable their previous
+automatic startup, or deselect them. Applying the preview configures management
+through the existing adoption engine and remembers the benches; it does not start
+them. Password-requiring hosts entries are reported for Terminal.
+
+**Port Settings & Setup…** in Overview offers Automatic and Fixed mode. Fixed
+pins the current ports. Saving a mode takes effect immediately but never moves
+ports; address changes require applying a fresh preview. Automatic preserves
+working allocations and proposes replacements for conflicts. Stopped managed
+benches retain reservations for their current configuration; automatic mode
+ignores outdated saved allocations after an external port change. If the configuration changes after preview,
+BenchBar refuses the old plan and offers **Refresh Preview**.
+
+Start and Restart check again before proceeding. A conflict exposes **Review
+Port Conflict…**; review the proposed change and choose **Resolve & Start**.
+For a fixed allocation that overlaps another bench’s claim, switch to Automatic
+or reallocate the competing bench. Stopping it alone does not release its claim
+for setup. CLI users can instead confirm a stopped overlap to run one bench at
+a time without changing addresses.
+BenchBar never stops an unrelated listener to obtain a port. Setup output retains
+per-bench completion details if a later batch entry fails; completed entries stay
+configured and the next preview reflects the actual state.
+
+
+## Compact menu-bar controls
+
+The popover is as tall as its content and scrolls only past a fixed cap,
+so the footer stays reachable. An unmanaged bench offers **Set Up
+Management…**, which opens its review only setup preview in the main
+window. A port conflict similarly opens **Review Port Conflict…** there.
+
+The popover shows up to three sites: the default site first, then any
+site that still needs a hosts line, then the rest in name order (site-2
+before site-10). **Manage Sites…**, or **View All** when there are more,
+opens the complete Sites tab. A missing hosts line shows the `benchbar
+site hosts` command with a Copy button, and **Set Up…** on the site.
+Open is enabled once the bench is running.
+
+Health shows the failure and warning counts and the first two checks
+with their message and **Copy Fix**. **View Health…** (⌘K) has the full
+report with passing checks and Terminal instructions. A failed refresh
+is marked stale in the popover.

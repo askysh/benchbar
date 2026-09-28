@@ -76,40 +76,4 @@ struct DiscoveryTests {
         #expect(discovery.error?.contains("Another run") == true)
         #expect(!discovery.isAdding)
     }
-
-    @Test func adoptionRequiresAPlanAndRefusesExternallyRunningBenches() async throws {
-        base.cli.answer("list", json: base.listJSON(installed: false))
-        base.cli.answer("status", json: base.statusJSON("running"))
-        let store = base.makeStore()
-        await store.start(polling: false)
-        let bench = try #require(store.selected)
-        let run = AdoptionRun(bench: bench, store: store)
-        await run.run()
-        #expect(!base.cli.calls.contains { $0[0] == "adopt" })
-        await run.loadPlan()
-        guard case .failed(let message) = run.phase else { Issue.record("Expected a running-bench warning"); return }
-        #expect(message.contains("Stop"))
-        #expect(!base.cli.calls.contains { $0[0] == "adopt" })
-    }
-
-    @Test func adoptionPreviewsThenAppliesAndVerifiesTheService() async throws {
-        base.cli.answer("list", json: base.listJSON(installed: false))
-        base.cli.answer("status", json: base.statusJSON("stopped"))
-        base.cli.answer("adopt", .ok("Plan: write service files"))
-        let store = base.makeStore()
-        await store.start(polling: false)
-        let bench = try #require(store.selected)
-        let run = AdoptionRun(bench: bench, store: store)
-        await run.loadPlan()
-        #expect(run.phase == .review)
-        #expect(run.output.contains("Plan"))
-        #expect(base.cli.calls.contains(["adopt", base.benchPath, "--plain", "--dry-run"]))
-        #expect(!base.cli.calls.contains { $0.contains("--yes") })
-        base.cli.answer("list", json: base.listJSON(installed: true))
-        await run.run()
-        #expect(run.phase == .finished)
-        #expect(store.selected?.needsService == false)
-        #expect(base.cli.calls.contains(["adopt", base.benchPath, "--plain", "--yes"]))
-        #expect(!base.cli.calls.contains { ["up", "repair", "install"].contains($0[0]) })
-    }
 }

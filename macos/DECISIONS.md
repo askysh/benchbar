@@ -224,3 +224,17 @@ Asked for after the phases, to stop naming drift before the first release.
 - The change banner carries a scope (a bench's path, or profiles) and shows only there.
 - Opening BenchBar again (Finder, Spotlight) shows the window: an accessory app otherwise gives no sign it heard.
 - The README's window pictures are screenshots of the real window (`screencapture -l`); the offscreen snapshots draw a selected sidebar row and tab as solid black, since the view is in no key window.
+
+## Batch setup and port conflicts
+
+- The CLI owns the allocation and its approval token; the app displays the
+  complete proposal and returns that token, never recalculating ports itself.
+- Automatic/Fixed mode saves immediately with explicit explanatory text. A new
+  preview follows every mode change; moving ports is a separate apply action.
+- A shared operation anchor guards setup even before a selected bench is in the
+  store. Full failed-batch output remains available, including partial success.
+
+- Bound the popover body and keep its footer outside scrolling; a bench picker and three-site summary replace nested diagnostic and bench lists.
+- Route setup and hostname fixes to the persistent management window; the transient popover must not own a long-running setup sheet.
+- Keep stale diagnostic errors visible ahead of a previous passing report; Health retains full action and refresh errors.
+- Setup displays the CLI's adoption service preview alongside addresses before approval; a CLI without that preview must be upgraded before the app can apply.
