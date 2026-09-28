@@ -24,10 +24,11 @@ own: see [Custom runners](runners.md).
 ## The popover
 
 Click the runner for the popover: bench, site, state and uptime, Start,
-Stop, Restart, open the site, the logs or the bench folder, and a read
-only doctor with Repair when something is repairable. With more than one
-bench the popover lists every bench with its own buttons and an "n of m
-up" count.
+Stop and Restart, the logs and the bench folder, the bench's sites with
+an Open button each, and a health summary: the first checks that need
+attention with a Copy Fix button, Repair when something is repairable,
+and a button to check again. With more than one bench a picker at the
+top chooses which bench the popover shows.
 
 ![The same popover in dark mode](images/popover-dark.png)
 
@@ -41,12 +42,12 @@ up" count.
 | ⌘O | Open the site |
 | ⌘L | Logs: a log window with search and a filter per process |
 | ⌘F | Open the bench folder |
-| ⌘K | Doctor |
+| ⌘K | Health in the BenchBar window |
 | ⌘M | The BenchBar window |
 
 ## The BenchBar window
 
-Open it with ⌘M, "Apps, sites and settings…" in the popover, or by
+Open it with ⌘M, **Manage Bench…** in the popover, or by
 opening BenchBar again from Finder or Spotlight. It has a page per bench:
 
 - **Overview**: start, stop, restart, the site and ports, and the
@@ -137,11 +138,19 @@ configured and the next preview reflects the actual state.
 
 ## Compact menu-bar controls
 
-The popover uses a bench picker and a bounded scrolling body so the footer stays
-reachable. An unmanaged bench offers **Set Up Management…**, which opens its
-review-only setup preview in the main window. A port conflict similarly opens
-**Review Port Conflict…** there. The popover shows up to three sites; **View all**
-opens the complete Sites tab. Missing hostname entries offer **Set Up…**, while
-Open is enabled once the bench is running. **View Health…** shows failures and
-warnings before passing checks, with full error details and expandable Terminal
-instructions. Failed diagnostic refreshes are marked stale in the popover.
+The popover is as tall as its content and scrolls only past a fixed cap,
+so the footer stays reachable. An unmanaged bench offers **Set Up
+Management…**, which opens its review only setup preview in the main
+window. A port conflict similarly opens **Review Port Conflict…** there.
+
+The popover shows up to three sites: the default site first, then any
+site that still needs a hosts line, then the rest in name order (site-2
+before site-10). **Manage Sites…**, or **View All** when there are more,
+opens the complete Sites tab. A missing hosts line shows the `benchbar
+site hosts` command with a Copy button, and **Set Up…** on the site.
+Open is enabled once the bench is running.
+
+Health shows the failure and warning counts and the first two checks
+with their message and **Copy Fix**. **View Health…** (⌘K) has the full
+report with passing checks and Terminal instructions. A failed refresh
+is marked stale in the popover.

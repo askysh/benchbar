@@ -25,7 +25,11 @@ struct PortSetupSheet: View {
                         ForEach(plan.entries) { entry in
                             VStack(alignment: .leading, spacing: 5) {
                                 Text(entry.name).font(.headline)
-                                Text(entry.path).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                                Text((entry.path as NSString).abbreviatingWithTildeInPath)
+                                    .font(.caption).foregroundStyle(.secondary)
+                                    .lineLimit(1).truncationMode(.middle)
+                                    .help(entry.path)
+                                    .textSelection(.enabled)
                                 LabeledContent("Current address", value: entry.currentURL)
                                 LabeledContent(entry.changesPorts ? "New address" : "Address stays", value: entry.proposedURL)
                                 Text("Web \(String(entry.proposed.web)) · Socket.IO \(String(entry.proposed.socketio)) · Redis \(String(entry.proposed.redisQueue))/\(String(entry.proposed.redisCache))")

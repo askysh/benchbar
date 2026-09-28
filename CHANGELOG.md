@@ -17,8 +17,11 @@ All notable changes to this project are documented here.
 ### Changed
 
 - Keep the menu-bar popover compact with a bench picker, native setup actions,
-  contextual site actions, and a health summary. Full diagnostics and expandable
-  Terminal instructions live in the management window.
+  contextual site actions, and a health summary. The popover is only as tall as
+  its content, lists sites that need a hosts line before the rest in natural
+  name order, keeps the `site hosts` command one Copy away, and shows the first
+  checks that need attention with Copy Fix, Repair and Check Again. Full
+  diagnostics and expandable Terminal instructions live in the management window.
 - Start, restart, and foreground start refuse running owners and unrelated
   listeners before changing process state. CLI users can confirm a stopped
   bench overlap to run one bench at a time; the app offers Resolve & Start.

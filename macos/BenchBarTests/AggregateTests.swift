@@ -38,6 +38,25 @@ struct AggregateTests {
         #expect(SiteRow.hostsFix(rows, bench: "/Users/you/dev/v16-bench") == "benchbar site hosts --bench-dir /Users/you/dev/v16-bench")
     }
 
+    @Test func siteRowsSortNumbersNaturally() {
+        let sites = (1...12).map { SiteInfo(name: "site-\($0)", isDefault: false, hostsEntry: true, pingCode: nil) }
+        let rows = SiteRow.make(sites: sites.reversed(), defaultSite: "site-1", port: 8000)
+        #expect(rows.prefix(4).map(\.name) == ["site-1", "site-2", "site-3", "site-4"])
+        #expect(rows.last?.name == "site-12")
+    }
+
+    @Test func popoverRowsKeepSitesThatNeedSetupInView() {
+        let sites = [
+            SiteInfo(name: "a", isDefault: false, hostsEntry: true, pingCode: nil),
+            SiteInfo(name: "b", isDefault: false, hostsEntry: true, pingCode: nil),
+            SiteInfo(name: "main", isDefault: true, hostsEntry: true, pingCode: nil),
+            SiteInfo(name: "z", isDefault: false, hostsEntry: false, pingCode: nil),
+        ]
+        let rows = SiteRow.make(sites: sites, defaultSite: "main", port: 8000)
+        #expect(SiteRow.popoverRows(rows, limit: 3).map(\.name) == ["main", "z", "a"])
+        #expect(SiteRow.popoverRows(rows, limit: 10).count == 4)
+    }
+
     @Test func siteRowsFromAnOlderCLI() {
         let rows = SiteRow.make(sites: nil, defaultSite: "macdev", port: 8000)
         #expect(rows == [SiteRow(name: "macdev", isDefault: true, url: "http://macdev:8000", needsHosts: false)])

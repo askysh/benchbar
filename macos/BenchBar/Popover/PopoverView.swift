@@ -21,11 +21,14 @@ struct AppCommands {
 struct PopoverView: View {
     let store: BenchStore
     let commands: AppCommands
+    static let maxContentHeight: CGFloat = 470
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            ScrollView { content.frame(maxWidth: .infinity, alignment: .leading) }
-                .frame(height: 430)
+            // as tall as the content, scrolling only past the cap
+            CappedHeight(maxHeight: Self.maxContentHeight) {
+                ScrollView { content.frame(maxWidth: .infinity, alignment: .leading) }
+            }
             Divider()
             Button("Scan Folder…", systemImage: "folder.badge.plus", action: commands.scanFolder)
                 .buttonStyle(.borderless)
@@ -116,13 +119,16 @@ struct BenchPanel: View {
                 Button("Folder", systemImage: "folder") { Workspace.openFolder(bench) }
                     .keyboardShortcut("f", modifiers: .command)
                 Spacer()
-                Button("Manage…") { commands.manage(bench, .overview, false) }
+                Button("Manage Bench…") { commands.manage(bench, .overview, false) }
                     .keyboardShortcut("m", modifiers: .command)
+                    .help("Apps, sites and settings in the BenchBar window (⌘M)")
             }
             .controlSize(.small)
             SitesSection(bench: bench) { commands.manage(bench, .sites, false) }
             Divider()
-            DoctorSection(store: store, bench: bench) { commands.manage(bench, .health, false) }
+            DoctorSection(store: store, bench: bench,
+                          details: { commands.manage(bench, .health, false) },
+                          repair: { commands.manage(bench, .health, true) })
         }
     }
 
@@ -181,132 +187,11 @@ struct BenchPanel: View {
     }
 }
 
-// MARK: several benches
-
-/// Every bench with its state, uptime and actions, above the selected
-/// bench's detail. The row buttons act on their own bench without changing
-/// the selection; clicking the row selects it.
-struct BenchListSection: View {
-    let store: BenchStore
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text("Benches").font(.subheadline.weight(.semibold))
-                Spacer()
-                Text(BenchAggregate.upText(store.benches.map(\.state)))
-                    .font(.caption.weight(.medium)).monospacedDigit()
-                    .padding(.horizontal, 7).padding(.vertical, 2)
-                    .background(Color.secondary.opacity(0.15), in: Capsule())
-            }
-            if store.benches.count > Self.visibleRows {
-                // many benches: the list scrolls, so the detail and the footer stay on screen
-                ScrollView {
-                    rows
-                }
-                .frame(height: Self.rowHeight * CGFloat(Self.visibleRows))
-            } else {
-                rows
-            }
-        }
-    }
-
-    static let visibleRows = 4
-    static let rowHeight: CGFloat = 44
-
-    private var rows: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            ForEach(store.benches) { bench in
-                BenchRow(store: store, bench: bench, selected: bench.path == store.selected?.path)
-            }
-        }
-    }
-}
-
-struct BenchRow: View {
-    let store: BenchStore
-    let bench: BenchModel
-    let selected: Bool
-    @State private var hovering = false
-
-    private var controls: BenchControls {
-        var cliReady = false
-        if case .ready = store.cli { cliReady = true }
-        return .make(state: bench.state, reason: bench.machine.stopReason, pending: bench.pending,
-                     needsService: bench.needsService, cliReady: cliReady, otherWork: bench.isChangingScheduler || bench.activity != nil || store.waitsForOtherBench(bench))
-    }
-
-    var body: some View {
-        let controls = controls
-        HStack(spacing: 8) {
-            Circle().fill(StatePill.color(for: bench.state)).frame(width: 8, height: 8)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(bench.name).font(.callout.weight(selected ? .semibold : .regular))
-                Group {
-                    if let since = bench.runningSince {
-                        TimelineView(.periodic(from: .now, by: 30)) { context in
-                            Text("\(StatusItemController.word(for: bench.state)), up \(BenchText.uptime(since: since, now: context.date))")
-                        }
-                    } else {
-                        Text(StatusItemController.word(for: bench.state))
-                    }
-                }
-                .font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer()
-            if let busy = controls.busy {
-                ProgressView().controlSize(.mini).help("\(busy.rawValue) in progress")
-            } else {
-                RowIcon("play.fill", help: "Start \(bench.name)", enabled: controls.canStart) {
-                    Task { await store.perform(.up, on: bench) }
-                }
-                RowIcon("stop.fill", help: "Stop \(bench.name)", enabled: controls.canStop) {
-                    Task { await store.perform(.down, on: bench) }
-                }
-                RowIcon("arrow.clockwise", help: "Restart \(bench.name)", enabled: controls.canRestart) {
-                    Task { await store.perform(.restart, on: bench) }
-                }
-            }
-        }
-        .padding(.horizontal, 6).padding(.vertical, 4)
-        .contentShape(Rectangle())
-        .background(selected ? Color.accentColor.opacity(0.14) : (hovering ? Color.primary.opacity(0.06) : .clear),
-                    in: RoundedRectangle(cornerRadius: 6))
-        .onHover { hovering = $0 }
-        .onTapGesture { store.selectedPath = bench.path }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("\(bench.name), \(StatusItemController.word(for: bench.state))")
-    }
-}
-
-struct RowIcon: View {
-    let systemImage: String
-    let help: String
-    let enabled: Bool
-    let action: () -> Void
-
-    init(_ systemImage: String, help: String, enabled: Bool, action: @escaping () -> Void) {
-        self.systemImage = systemImage
-        self.help = help
-        self.enabled = enabled
-        self.action = action
-    }
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: systemImage).frame(width: 18, height: 18)
-        }
-        .buttonStyle(.borderless)
-        .disabled(!enabled)
-        .help(help)
-        .accessibilityLabel(help)
-    }
-}
-
 // MARK: sites
 
 /// The bench's sites with an Open button each; the default one is what ⌘O
-/// opens and benchup waits for. A missing hosts line shows its fix.
+/// opens and benchup waits for. Sites that need a hosts line come next, so
+/// they stay in view, and the command that adds the lines is one Copy away.
 struct SitesSection: View {
     let bench: BenchModel
     var manage: () -> Void = {}
@@ -318,10 +203,11 @@ struct SitesSection: View {
             HStack {
                 Text("Sites").font(.subheadline.weight(.semibold))
                 Spacer()
-                Button(rows.count > Self.visibleRows ? "View all \(rows.count)…" : "Manage…", action: manage)
+                Button(rows.count > Self.visibleRows ? "View All \(rows.count)…" : "Manage Sites…", action: manage)
                     .controlSize(.small)
+                    .help("Sites in the BenchBar window")
             }
-            ForEach(Array(rows.prefix(Self.visibleRows))) { row in
+            ForEach(SiteRow.popoverRows(rows, limit: Self.visibleRows)) { row in
                 HStack(spacing: 8) {
                     Image(systemName: row.isDefault ? "star.fill" : "globe")
                         .foregroundStyle(row.isDefault ? .yellow : .secondary).font(.caption)
@@ -335,9 +221,13 @@ struct SitesSection: View {
                     siteAction(row)
                 }
             }
-
+            if let fix = SiteRow.hostsFix(rows, bench: bench.path) {
+                Banner(systemImage: "network", tint: .orange,
+                       text: "A site has no /etc/hosts line, so its name does not resolve. Run:", command: fix)
+            }
         }
     }
+
     @ViewBuilder private func siteAction(_ row: SiteRow) -> some View {
         if row.isDefault { siteButton(row).keyboardShortcut("o", modifiers: .command) }
         else { siteButton(row) }
@@ -351,29 +241,47 @@ struct SitesSection: View {
         .disabled(!row.needsHosts && bench.state != .running)
         .help(row.needsHosts ? "Review hostname setup in Sites" : row.url)
     }
-
 }
 
 // MARK: health summary
 
+/// Counts, the first checks that need attention with their fix, and the way
+/// into Health and Repair. The full report lives in the window.
 struct DoctorSection: View {
     let store: BenchStore
     let bench: BenchModel
     var details: () -> Void = {}
+    /// Opens the Repair sheet in the BenchBar window (plan first, then a confirmation).
+    var repair: () -> Void = {}
+    static let visibleChecks = 2
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
+            HStack(spacing: 6) {
                 Text("Health").font(.subheadline.weight(.semibold))
                 Spacer()
-                if bench.isRunningDoctor { ProgressView().controlSize(.small) }
+                if bench.isRunningDoctor {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Button { Task { await store.runDoctor(on: bench) } } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .buttonStyle(.borderless)
+                    .help(bench.doctor == nil ? "Check health now (read only)" : "Check again (read only)")
+                    .accessibilityLabel("Check health again")
+                    if bench.doctor?.checks.contains(where: { $0.level != .ok && $0.action != nil }) == true {
+                        Button("Repair…", action: repair).controlSize(.small)
+                            .help("Shows the repair plan in the BenchBar window; nothing changes until you confirm")
+                    }
+                }
                 Button("View Health…", action: details).controlSize(.small)
                     .keyboardShortcut("k", modifiers: .command)
             }
             if bench.doctorError != nil {
                 Label("Health refresh failed. Previous results may be out of date.", systemImage: "exclamationmark.triangle")
                     .font(.caption).foregroundStyle(.orange)
-            } else if let report = bench.doctor {
+            }
+            if let report = bench.doctor {
                 if report.needsAttention.isEmpty {
                     Label("All checks passed", systemImage: "checkmark.circle").font(.caption).foregroundStyle(.secondary)
                 } else {
@@ -381,14 +289,37 @@ struct DoctorSection: View {
                         report.summary.fail > 0 ? "\(report.summary.fail) " + (report.summary.fail == 1 ? "failure" : "failures") : nil,
                         report.summary.warn > 0 ? "\(report.summary.warn) " + (report.summary.warn == 1 ? "warning" : "warnings") : nil
                     ].compactMap { $0 }.joined(separator: " · "))
-                        .font(.caption).foregroundStyle(report.summary.fail > 0 ? .red : .orange)
-                    ForEach(Array(report.needsAttention.prefix(2))) { check in
-                        Text(check.label).font(.caption).lineLimit(1)
+                        .font(.caption.weight(.medium)).foregroundStyle(report.summary.fail > 0 ? .red : .orange)
+                    ForEach(Array(report.needsAttention.prefix(Self.visibleChecks))) { CompactCheckRow(check: $0) }
+                    if report.needsAttention.count > Self.visibleChecks {
+                        Button("\(report.needsAttention.count - Self.visibleChecks) more in Health…", action: details)
+                            .buttonStyle(.link).font(.caption)
                     }
                 }
-            } else {
-                Text(bench.doctorError == nil ? "Review diagnostics and repairs in Health." : "Health check failed. Open Health for details.")
-                    .font(.caption).foregroundStyle(.secondary)
+            } else if bench.doctorError == nil {
+                Text("Not checked yet.").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+/// One check in the popover: what is wrong in two lines, and its fix to copy.
+struct CompactCheckRow: View {
+    let check: DoctorCheck
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Image(systemName: check.level == .fail ? "xmark.octagon.fill" : "exclamationmark.triangle.fill")
+                .foregroundStyle(check.level == .fail ? .red : .orange).font(.caption)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(check.label).font(.caption.weight(.medium))
+                Text(check.message).font(.caption).foregroundStyle(.secondary).lineLimit(2).help(check.message)
+            }
+            Spacer(minLength: 4)
+            if let fix = check.fixCommand, !fix.isEmpty {
+                Button("Copy Fix") { Workspace.copy(fix) }
+                    .controlSize(.mini)
+                    .help(fix)
             }
         }
     }
@@ -554,5 +485,21 @@ struct NoBenchView: View {
                 Button("Try Again", action: retry)
             }
         }
+    }
+}
+
+/// Sizes its content to its ideal height, up to `maxHeight`: a scroll view
+/// inside is only as tall as what it scrolls, so a short popover has no gap.
+struct CappedHeight: Layout {
+    let maxHeight: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let view = subviews.first else { return .zero }
+        let ideal = view.sizeThatFits(ProposedViewSize(width: proposal.width, height: nil))
+        return CGSize(width: proposal.width ?? ideal.width, height: min(ideal.height, maxHeight))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
     }
 }
