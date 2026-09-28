@@ -485,38 +485,6 @@ struct ActionButton: View {
     }
 }
 
-/// A full width row that highlights under the pointer, like a menu item.
-struct RowButton: View {
-    let title: String
-    let systemImage: String
-    let shortcut: String
-    let action: () -> Void
-    @State private var hovering = false
-
-    init(_ title: String, systemImage: String, shortcut: String, action: @escaping () -> Void) {
-        self.title = title
-        self.systemImage = systemImage
-        self.shortcut = shortcut
-        self.action = action
-    }
-
-    var body: some View {
-        Button(action: action) {
-            HStack {
-                Image(systemName: systemImage).frame(width: 18)
-                Text(title)
-                Spacer()
-                Text("⌘\(shortcut)").foregroundStyle(.secondary).font(.caption)
-            }
-            .padding(.horizontal, 6).padding(.vertical, 4)
-            .contentShape(Rectangle())
-            .background(hovering ? Color.primary.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 5))
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-    }
-}
-
 struct Banner: View {
     let systemImage: String
     let tint: Color

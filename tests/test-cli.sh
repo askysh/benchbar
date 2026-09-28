@@ -30,14 +30,31 @@ run_fm status --bench-dir "$OTHER" --site custom; assert_contains "$OUT" "http:/
 
 # up: arms the flag, kickstarts, waits for the ping
 run_fm service --yes --bench-dir "$BENCH"; assert_eq "0" "$CODE" "$OUT"
-# The earlier default bench owns block 0 even while stopped. Starting this
-# second managed bench must refuse the collision until its ports are resolved.
+# Compatibility: stopped configured collisions warn and require consent;
+# they do not silently change either address or prevent deliberate startup.
 reset_calls
-run_fm up --yes --bench-dir "$BENCH"
+run_fm up --dry-run --bench-dir "$BENCH" </dev/null
 assert_eq "1" "$CODE" "$OUT"
-assert_contains "$OUT" "Cannot start"
-assert_contains "$OUT" "reserved by $OTHER"
+assert_contains "$OUT" "[WARN] Stopped bench port conflict: 8000 reserved by $OTHER"
 assert_calls_not_contain '^launchctl kickstart'
+run_fm up --yes --dry-run --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" 'auto-confirmed'
+# A positively owned running process makes up idempotent despite the overlap.
+add_proc 3333 'honcho start -f Procfile.lean' "$BENCH"
+run_fm ports check --json --bench-dir "$BENCH"
+assert_eq True "$(printf '%s' "$OUT" | jget - 'd["already_running"]')"
+run_fm up --dry-run --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" 'already running'
+: >"$MOCK_PROCS"
+# A running owner is a hard refusal even when it has not opened sockets yet.
+add_proc 3334 'honcho start -f Procfile.lean' "$OTHER"
+run_fm up --yes --dry-run --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" '[FAIL] Cannot start: 8000 reserved by'
+assert_contains "$OUT" '(bench is running)'
+: >"$MOCK_PROCS"
 run_fm service --yes --port-offset 1 --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 run_fm status --bench-dir "$OTHER"; assert_contains "$OUT" "http://other:8000"
@@ -51,6 +68,9 @@ assert_calls_contain '^launchctl kickstart gui/[0-9]+/com.benchbar.frappe-bench$
 grep -q 'old log line' "$BENCH/logs/bench.previous.log" || fail "previous log must be kept"
 [[ ! -s "$BENCH/logs/bench.log" ]] || fail "bench.log must start fresh"
 
+# The launchctl mock starts honcho; provide its working directory as real
+# lsof would, so an unrelated process is never treated as positive ownership.
+mkdir -p "$MOCK_STATE/cwd"; printf '%s' "$BENCH" >"$MOCK_STATE/cwd/4242"
 # up when already running is a no-op
 reset_calls
 run_fm up --bench-dir "$BENCH"

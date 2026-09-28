@@ -237,3 +237,4 @@ Asked for after the phases, to stop naming drift before the first release.
 - Bound the popover body and keep its footer outside scrolling; a bench picker and three-site summary replace nested diagnostic and bench lists.
 - Route setup and hostname fixes to the persistent management window; the transient popover must not own a long-running setup sheet.
 - Keep stale diagnostic errors visible ahead of a previous passing report; Health retains full action and refresh errors.
+- Setup displays the CLI's adoption service preview alongside addresses before approval; a CLI without that preview must be upgraded before the app can apply.

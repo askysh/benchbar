@@ -28,6 +28,15 @@ token="$(printf '%s' "$OUT" | jget - 'd["token"]')"
 assert_eq "$before" "$(snapshot "$A" "$B")"
 run_fm ports plan --json -- "$A" "$B"
 assert_eq "$token" "$(printf '%s' "$OUT" | jget - 'd["token"]')"
+# Overrides cannot make the applied service differ from its approved preview.
+run_fm ports plan --json --site other-site -- "$A" "$B"
+assert_eq 1 "$CODE" "$OUT"
+assert_contains "$OUT" '--site and --profile are not supported'
+run_fm ports setup --yes --profile v16 -- "$A" "$B"
+assert_eq 1 "$CODE" "$OUT"
+run_fm ports apply "$token" --yes --site other-site -- "$A" "$B"
+assert_eq 1 "$CODE" "$OUT"
+assert_eq "$before" "$(snapshot "$A" "$B")"
 # Whole plan must become blocked if a fixed bench's current ports conflict.
 run_fm ports mode fixed --bench-dir "$A"
 run_fm ports mode fixed --bench-dir "$B"
@@ -76,6 +85,16 @@ run_fm ports check --json --bench-dir "$A"
 assert_eq 0 "$(printf '%s' "$OUT" | jget - 'len(d["conflicts"])')"
 run_fm ports plan --json -- "$A"
 assert_eq 8000 "$(printf '%s' "$OUT" | jget - 'd["entries"][0]["proposed"]["web"]')"
+# An unmanaged owner's live worker is a hard conflict even without sockets.
+add_proc 12346 "$C/env/bin/python -m frappe.utils.bench_helper frappe worker" "$C"
+run_fm ports check --json --bench-dir "$A"
+assert_eq True "$(printf '%s' "$OUT" | jget - 'len(d["conflicts"]) > 0')"
+reset_calls
+run_fm up --yes --dry-run --bench-dir "$A"
+assert_eq 1 "$CODE" "$OUT"
+assert_contains "$OUT" '(bench is running)'
+assert_calls_not_contain '^launchctl kickstart'
+: >"$MOCK_PROCS"
 # Insufficient space is an explicit blocked plan, never an arbitrary port.
 export FL_PORT_MAX_OFFSET=1
 run_fm ports plan --json -- "$C"
@@ -99,6 +118,67 @@ run_fm fg --bench-dir "$B" --yes
 assert_eq 1 "$CODE"
 assert_contains "$OUT" 'Cannot start'
 assert_calls_not_contain '^(launchctl (kickstart|kill|bootout)|mockkill|pkill)'
+# Automatic reservations follow external config edits; Fixed mode keeps its pin.
+D="$HOME/Drift bench"; E="$HOME/Free old block"
+make_fake_bench "$D" drift; make_fake_bench "$E" free
+for bench in "$D" "$E"; do sed_inplace 's/8000/8020/; s/9000/9020/; s/11000/11020/; s/13000/13020/' "$bench/sites/common_site_config.json"; done
+run_fm register "$D" "$E"
+run_fm ports mode automatic --bench-dir "$D"
+sed_inplace 's/8020/8021/; s/9020/9021/; s/11020/11021/; s/13020/13021/' "$D/sites/common_site_config.json"
+snap="$(snapshot "$FL_STATE_DIR/benches")"
+run_fm ports check --json --bench-dir "$E"
+assert_eq 0 "$(printf '%s' "$OUT" | jget - 'len(d["conflicts"])')"
+assert_eq "$snap" "$(snapshot "$FL_STATE_DIR/benches")"
+run_fm ports mode fixed --bench-dir "$D"
+sed_inplace 's/8021/8022/; s/9021/9022/; s/11021/11022/; s/13021/13022/' "$D/sites/common_site_config.json"
+sed_inplace 's/8020/8021/; s/9020/9021/; s/11020/11021/; s/13020/13021/' "$E/sites/common_site_config.json"
+run_fm ports check --json --bench-dir "$E"
+assert_eq 4 "$(printf '%s' "$OUT" | jget - 'len(d["conflicts"])')"
+# Selecting the fixed owner must not release its saved claim either.
+run_fm ports plan --json -- "$D" "$E"
+assert_eq True "$(printf '%s' "$OUT" | jget - 'all(x["proposed"]["web"] != 8021 for x in d["entries"] if x["path"].endswith("Free old block"))')"
+run_fm ports mode fixed --bench-dir "$D"
+# These helpers are only used by the direct dedup assertion; CLI runs below
+# are separate processes and keep the production discovery implementation.
+. "$ROOT/lib/frappe-local/state.sh"
+. "$ROOT/lib/frappe-local/ports.sh"
+fl_known_benches() { printf '%s\n' "$D"; }
+FL_BENCH_DIR="$E"
+assert_eq 4 "$(fl_ports_taken_by_others | wc -l | tr -d ' ')" 'same configured and pinned ports are emitted once'
+unset -f fl_known_benches
+
+snap="$(snapshot "$FL_STATE_DIR/benches")"
+run_fm ports mode automatic --dry-run --bench-dir "$D"
+assert_contains "$OUT" 'dry-run: would set port mode'
+assert_eq "$snap" "$(snapshot "$FL_STATE_DIR/benches")"
+# Human preview includes service and hosts actions without requiring JSON.
+run_fm ports plan --json -- "$E"
+assert_eq 0 "$CODE" "$OUT"
+assert_eq True "$(printf '%s' "$OUT" | jget - '"\n" in d["entries"][0]["setup_plan"]')"
+token="$(printf '%s' "$OUT" | jget - 'd["token"]')"
+assert_contains "$OUT" 'Procfile.lean'
+assert_contains "$OUT" 'hosts'
+# A changed hosts action invalidates approval even when ports stay the same.
+printf '127.0.0.1 free\n' >>"$FL_HOSTS_FILE"
+run_fm ports apply "$token" --yes -- "$E"
+assert_eq 1 "$CODE" "$OUT"
+assert_contains "$OUT" 'plan changed'
+sed_inplace '/^127.0.0.1 free$/d' "$FL_HOSTS_FILE"
+snap="$(snapshot "$E" "$FL_STATE_DIR/benches" "$FL_HOSTS_FILE")"
+run_fm ports setup --dry-run -- "$E"
+assert_eq 0 "$CODE" "$OUT"
+assert_contains "$OUT" 'Proposed ports:'
+assert_contains "$OUT" 'dry-run: preview only'
+assert_eq "$snap" "$(snapshot "$E" "$FL_STATE_DIR/benches" "$FL_HOSTS_FILE")"
+run_fm ports setup -- "$E" </dev/null
+assert_eq 1 "$CODE" "$OUT"
+assert_contains "$OUT" 'Cancelled. Nothing was changed.'
+assert_eq "$snap" "$(snapshot "$E" "$FL_STATE_DIR/benches" "$FL_HOSTS_FILE")"
+run_fm ports setup --yes -- "$E"
+assert_eq 0 "$CODE" "$OUT"
+assert_contains "$OUT" "Completed: $E"
+assert_file "$E/Procfile.lean"
+assert_calls_not_contain '^bench (migrate|build|update|start)'
 # A failed second action stops the batch and never records success for it.
 # Stub the adoption boundary so this is deterministic, independent of launchd.
 (

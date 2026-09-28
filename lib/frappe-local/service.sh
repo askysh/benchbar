@@ -160,20 +160,37 @@ fl_arm_start() {
 }
 
 fl_check_port_clash_or_confirm() {
+  local line owner hard="" soft="" quoted
   fl_pm_check
   [[ -n "$PM_CONFLICTS" ]] || return 0
-  fl_fail "Cannot start: $PM_CONFLICTS"
-  fl_fix "Review benchbar ports plan --json -- ${FL_BENCH_DIR}, then resolve the conflict."
-  return 1
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    case "$line" in
+      *' has a listener:'*) hard="${hard}${line}"$'\n' ;;
+      *' reserved by '*)
+        owner="${line#* reserved by }"
+        if (fl_bench_load "$owner"; fl_pm_running); then hard="${hard}${line} (bench is running)"$'\n'
+        else soft="${soft}${line}"$'\n'; fi ;;
+    esac
+  done <<<"$PM_CONFLICTS"
+  printf -v quoted '%q' "$FL_BENCH_DIR"
+  if [[ -n "$hard" ]]; then
+    while IFS= read -r line; do [[ -z "$line" ]] || fl_fail "Cannot start: $line"; done <<<"$hard"
+    fl_fix "benchbar ports setup -- ${quoted}"
+    return 1
+  fi
+  while IFS= read -r line; do [[ -z "$line" ]] || fl_warn "Stopped bench port conflict: $line"; done <<<"$soft"
+  fl_fix "benchbar ports setup -- ${quoted}"
+  fl_confirm "Other stopped benches use these ports. Start this bench without changing its address?"
 }
 
 fl_cmd_up() {
   fl_require_service
-  fl_check_port_clash_or_confirm || return 1
-  if fl_bench_is_running; then
+  if fl_pm_running; then
     fl_ok "bench ${FL_BENCH_NAME} is already running at $(fl_site_url)"
     return 0
   fi
+  fl_check_port_clash_or_confirm || return 1
   fl_arm_start
   if ! fl_agent_loaded; then
     fl_info "agent not loaded; loading $(fl_agent_plist_path)"

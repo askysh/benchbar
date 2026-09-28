@@ -62,6 +62,29 @@ the default bench never moves on its own.
 backup before each change. The bench path is remembered after the first
 call, so later commands do not need `--bench-dir`.
 
+## Port setup and conflicts
+
+```bash
+./benchbar ports plan -- <path>                    # readable, read-only preview
+./benchbar ports plan --json -- <path> <path>        # allocation + service plan + approval token
+./benchbar ports setup -- <path> <path>              # preview, confirm, then apply
+./benchbar ports check --json --bench-dir <path>     # current conflicts
+./benchbar ports mode fixed --bench-dir <path>      # pin current allocation
+./benchbar ports mode automatic --bench-dir <path>  # allow approved reallocations
+```
+
+Setup includes the adoption service plan and never starts a bench. Review it
+before applying; integrations can pass its token to `ports apply TOKEN --yes --
+PATH ...`. Apply recomputes the plan under the CLI lock and rejects stale tokens.
+`--dry-run` does not save a mode or apply setup. Fixed mode retains saved claims;
+automatic mode ignores saved claims that no longer match the bench config.
+
+Start refuses running owners and unrelated listeners; it never takes their
+ports. A stopped bench with overlapping ports can be run one at a time after
+CLI confirmation. Use `ports setup` to give the benches distinct allocations.
+An already-running bench's `up` is a successful no-op. The app offers a reviewed
+Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
+
 ## Rules
 
 - Never `rm -rf` inside a bench, never drop databases, never edit

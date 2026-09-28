@@ -43,11 +43,6 @@ nonisolated struct CLIClient: Sendable {
         _ = try await run(["register", "--json", "--"] + benches, timeout: Timeout.doctor, acceptExitCodes: [0])
     }
 
-    func adopt(bench: String, preview: Bool) async throws(CLIError) -> CommandOutput {
-        try await run(["adopt", bench, "--plain", preview ? "--dry-run" : "--yes"],
-                      timeout: Timeout.action, acceptExitCodes: [0])
-    }
-
     func portPlan(benches: [String]) async throws(CLIError) -> PortPlan {
         let output = try await run(["ports", "plan", "--json", "--"] + benches,
                                    timeout: Timeout.long, acceptExitCodes: [0])

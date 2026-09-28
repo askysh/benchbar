@@ -506,7 +506,14 @@ sorted and deduplicated. The response has `schema_version: 1`, an opaque `token`
 `can_apply` (boolean), and `entries`. Each entry includes `path`, `name`, `site`,
 `mode` (`automatic` or `fixed`), `current` and `proposed` port objects (`web`,
 `socketio`, `redis_queue`, `redis_cache`), `conflicts` (strings), `blocked`
-(string or null), and `service_installed` (boolean).
+(string or null), `service_installed` (boolean), and `setup_plan` (string, or null when setup is blocked):
+the adoption dry-run output for the proposed allocation, including service
+and hosts changes. The approval token covers this plan.
+
+`ports plan` without `--json` renders a readable preview. `ports setup -- PATH ...`
+shows that preview and asks before applying, without manual token copying.
+`ports setup --dry-run` only previews. Plan, setup and apply use each bench’s
+detected site/profile and reject `--site` or `--profile` overrides.
 
 `ports apply TOKEN --yes -- PATH ...` recomputes the selection under the CLI lock;
 a changed token or any blocked entry fails before adoption. It emits human
@@ -516,7 +523,9 @@ before retrying. Apply does not start services. Socket availability cannot be
 reserved against unrelated programs; start checks again before launching.
 
 `ports check --json --bench-dir PATH` returns `schema_version: 1`, `conflicts`
-(strings), and `mode`. It checks configured reservations and all listening PIDs,
+(strings), `mode`, and `already_running` (boolean, positively owned running
+processes). Clients may treat `up` as idempotent when `already_running` is true;
+restart still needs a conflict check. It checks configured reservations and all listening PIDs,
 ignoring only listeners positively identified as belonging to that bench.
 
 `ports mode automatic|fixed --bench-dir PATH` saves the policy and reserves the

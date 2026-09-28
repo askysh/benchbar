@@ -436,3 +436,7 @@ Measured on five PR runs (September 2026): 11 to 14 minutes wall clock, all of i
   Registration alone remains read-only with respect to bench configuration.
 - Apply reuses the backed-up adoption engine. This is sequential execution, not
   an all-or-nothing transaction: report completed entries on a later failure.
+- Ignore stale saved automatic reservations on read; fixed reservations remain pinned, and current configuration always participates without duplicate claims.
+- CLI starts distinguish hard live-owner conflicts from stopped overlaps that can be confirmed for one-at-a-time operation; positively owned running benches keep idempotent `up`.
+- Include the adoption dry-run service plan in the approval fingerprint; `ports setup` handles human preview and confirmation while token-based apply remains available for clients.
+- Reject site/profile overrides for port planning and apply so the adopted service always matches the reviewed preview.

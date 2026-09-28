@@ -249,8 +249,9 @@ final class BenchStore {
         do {
             if action == .up || action == .restart {
                 let check = try await client.portCheck(bench: bench.path)
-                bench.portConflict = check.conflicts.isEmpty ? nil : check
-                if !check.conflicts.isEmpty {
+                let alreadyRunning = action == .up && check.alreadyRunning == true
+                bench.portConflict = check.conflicts.isEmpty || alreadyRunning ? nil : check
+                if !check.conflicts.isEmpty && !alreadyRunning {
                     throw CLIError.failed(command: "ports", exitCode: 1,
                         message: "Port conflict. Review the proposed resolution before starting.\n" + check.conflicts.joined(separator: "\n"))
                 }

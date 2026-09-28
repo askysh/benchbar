@@ -49,8 +49,15 @@ fl_ports_taken_by_others() {
   while IFS= read -r d; do
     [[ -n "$d" ]] || continue
     fl_same_path "$d" "$FL_BENCH_DIR" && continue
-    for p in $(fl_ports_of_bench "$d") $(fl_bstate_get_for "$d" PORT_RESERVATION); do printf '%s %s\n' "$p" "$d"; done
-  done < <(fl_known_benches)
+    for p in $(fl_ports_of_bench "$d") $(fl_ports_pinned_reservation "$d"); do printf '%s %s\n' "$p" "$d"; done
+  done < <(fl_known_benches) | awk '!seen[$0]++'
+}
+
+# Automatic allocations follow the actual bench config after external edits.
+# Only Fixed mode pins remembered ports; readers never rewrite saved state.
+fl_ports_pinned_reservation() {
+  [[ "$(fl_bstate_get_for "$1" PORT_MODE)" == fixed ]] || return 0
+  fl_bstate_get_for "$1" PORT_RESERVATION
 }
 
 # fl_port_block_conflicts N: why block N cannot be this bench's, one reason
@@ -180,7 +187,7 @@ fl_port_current_listener_conflicts() {
 #                never moves on its own; a listener on its ports is reported.
 FL_PORT_TARGET=""
 fl_ports_plan() {
-  local want="${1:-}" cur conflicts clashes established=0 _p d
+  local want="${1:-}" cur conflicts clashes established=0 _p d line
   FL_PORT_TARGET=""
   if [[ "${FL_PORT_PLAN_APPROVED:-0}" == 1 ]]; then FL_PORT_TARGET="$want"; return 0; fi
   cur="$(fl_port_offset_current)"
@@ -198,7 +205,11 @@ fl_ports_plan() {
   fi
   if [[ "$(fl_bstate_get PORT_MODE)" == fixed ]]; then
     conflicts="$(fl_port_clashes_with_benches; fl_port_current_listener_conflicts)"
-    [[ -z "$conflicts" ]] || { fl_fail "Fixed ports conflict: $conflicts. Choose Automatic or free these ports."; return 1; }
+    if [[ -n "$conflicts" ]]; then
+      while IFS= read -r line; do [[ -z "$line" ]] || fl_fail "Fixed ports conflict: $line"; done <<<"$conflicts"
+      fl_fix "Choose Automatic with benchbar ports mode automatic --bench-dir $(printf '%q' "$FL_BENCH_DIR"), or free these ports."
+      return 1
+    fi
     return 0
   fi
   clashes="$(fl_port_clashes_with_benches)"

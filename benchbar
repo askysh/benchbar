@@ -116,7 +116,15 @@ Setup
                       Shows the plan and asks; never runs migrate, build or update.
   service             Install or refresh only the background service (phase 02).
   doctor              Read-only health report. Exit 1 when something FAILs.
-  ports               Preview/apply port allocation for selected benches; check conflicts or set mode
+  ports setup -- PATH ...
+                      Preview management/port changes, confirm once, then apply (--dry-run: preview only)
+  ports plan -- PATH ...
+                      Show the same read-only preview (--json: machine-readable plan and token)
+  ports check         Check conflicts for --bench-dir PATH (--json)
+  ports mode automatic|fixed
+                      Keep automatic or fixed ports for --bench-dir PATH
+  ports apply TOKEN --yes -- PATH ...
+                      Apply a previously reviewed JSON plan; refuse stale approvals
   report              Redacted diagnostics zip on the Desktop for bug reports (--print: to the terminal,
                       --json: {"zip": path, "redactions": n} for the app and scripts).
   repair              Apply only the fixes doctor flagged, in dependency order.

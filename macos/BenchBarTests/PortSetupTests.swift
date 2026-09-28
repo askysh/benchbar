@@ -13,7 +13,7 @@ struct PortSetupTests {
         {"path":"\(base.benchPath)","name":"frappe-bench","site":"macdev","mode":"\(mode)",
         "current":{"web":8000,"socketio":9000,"redis_queue":11000,"redis_cache":13000},
         "proposed":{"web":8001,"socketio":9001,"redis_queue":11001,"redis_cache":13001},
-        "conflicts":["8000 has a listener"],"blocked":\(blocked ? "\"Fixed ports conflict\"" : "null"),"service_installed":true}]}
+        "conflicts":["8000 has a listener"],"blocked":\(blocked ? "\"Fixed ports conflict\"" : "null"),"service_installed":true,"setup_plan":"Write Procfile.lean, runner and LaunchAgent; add hosts entry"}]}
         """
     }
 
@@ -36,6 +36,7 @@ struct PortSetupTests {
         #expect(!base.cli.calls.contains { $0.starts(with: ["ports", "apply"]) })
         await run.loadPlan()
         #expect(run.phase == .review)
+        #expect(run.plan?.entries.first?.setupPlan == "Write Procfile.lean, runner and LaunchAgent; add hosts entry")
         #expect(run.plan?.entries.first?.currentURL == "http://macdev:8000")
         #expect(run.plan?.entries.first?.proposedURL == "http://macdev:8001")
         #expect(!base.cli.calls.contains { $0.contains("--yes") })
@@ -43,6 +44,16 @@ struct PortSetupTests {
         #expect(run.phase == .finished)
         #expect(base.cli.calls.contains(["ports", "apply", "reviewed-token", "--yes", "--plain", "--", base.benchPath]))
         #expect(!base.cli.calls.contains { $0.first == "up" })
+    }
+
+    @Test func missingServicePreviewPreventsApproval() async throws {
+        let (_, run) = try await setup()
+        base.cli.answer("ports plan", json: planJSON().replacingOccurrences(of: ",\"setup_plan\":\"Write Procfile.lean, runner and LaunchAgent; add hosts entry\"", with: ""))
+        await run.loadPlan()
+        await run.apply()
+        guard case .failed(let message) = run.phase else { Issue.record("Expected missing-preview failure"); return }
+        #expect(message.contains("Upgrade benchbar"))
+        #expect(!base.cli.calls.contains { $0.starts(with: ["ports", "apply"]) })
     }
 
     @Test func fixedConflictBlocksApply() async throws {

@@ -11,7 +11,7 @@ struct PortSetupSheet: View {
             case .planning: ProgressView("Checking ports and preparing the selection…")
             case .running: ProgressView("Applying changes…")
             case .review:
-                Text("Review every address before applying. Existing apps and databases are preserved. Stop any previous manager’s automatic startup first.")
+                Text("Review the addresses and service changes before applying. Existing apps and databases are preserved. Stop any previous manager’s automatic startup first.")
                     .font(.callout)
             case .finished:
                 Label(run.startAfterSetup ? "Setup completed and the start command succeeded." : "Management is set up. Start the benches when you are ready.", systemImage: "checkmark.circle")
@@ -30,6 +30,13 @@ struct PortSetupSheet: View {
                                 LabeledContent(entry.changesPorts ? "New address" : "Address stays", value: entry.proposedURL)
                                 Text("Web \(String(entry.proposed.web)) · Socket.IO \(String(entry.proposed.socketio)) · Redis \(String(entry.proposed.redisQueue))/\(String(entry.proposed.redisCache))")
                                     .font(.caption).monospacedDigit()
+                                if let setupPlan = entry.setupPlan, !setupPlan.isEmpty {
+                                    Text("Service changes").font(.subheadline.bold()).padding(.top, 6)
+                                    Text(setupPlan)
+                                        .font(.system(.caption, design: .monospaced))
+                                        .textSelection(.enabled)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
                                 Picker("Port mode", selection: Binding(get: { entry.mode }, set: { mode in
                                     Task { await run.setMode(mode, path: entry.path) }
                                 })) {

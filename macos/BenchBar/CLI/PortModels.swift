@@ -8,6 +8,8 @@ nonisolated enum PortMode: String, Codable, Sendable, CaseIterable {
 nonisolated struct PortCheck: Codable, Sendable {
     let conflicts: [String]
     let mode: PortMode
+    let alreadyRunning: Bool?
+    enum CodingKeys: String, CodingKey { case conflicts, mode; case alreadyRunning = "already_running" }
 }
 
 nonisolated struct PortPlan: Codable, Sendable {
@@ -26,6 +28,7 @@ nonisolated struct PortPlan: Codable, Sendable {
         let conflicts: [String]
         let blocked: String?
         let serviceInstalled: Bool
+        let setupPlan: String?
         var id: String { path }
         var currentURL: String { "http://\(site):\(current.web)" }
         var proposedURL: String { "http://\(site):\(proposed.web)" }
@@ -36,6 +39,7 @@ nonisolated struct PortPlan: Codable, Sendable {
         enum CodingKeys: String, CodingKey {
             case path, name, site, mode, current, proposed, conflicts, blocked
             case serviceInstalled = "service_installed"
+            case setupPlan = "setup_plan"
         }
     }
 }

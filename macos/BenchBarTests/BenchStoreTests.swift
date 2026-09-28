@@ -136,6 +136,20 @@ struct BenchStoreTests {
         #expect(bench.lastError?.contains("8000") == true)
     }
 
+    @Test(arguments: [CLIClient.Action.up, .restart])
+    func ownedRunningBenchSkipsConflictsOnlyForIdempotentUp(_ action: CLIClient.Action) async throws {
+        cli.answer("list", json: listJSON())
+        cli.answer("status", json: statusJSON("running"))
+        cli.answer("ports", json: #"{"schema_version":1,"conflicts":["8000 overlaps a stopped bench"],"mode":"automatic","already_running":true}"#)
+        cli.answer("up", .ok("already running"))
+        let store = makeStore()
+        await store.start(polling: false)
+        let bench = try #require(store.selected)
+        await store.perform(action, on: bench)
+        #expect(cli.calls.contains { $0.first == action.rawValue } == (action == .up))
+        #expect((bench.portConflict == nil) == (action == .up))
+    }
+
     @Test func stateFileChangesAlertOnCrash() async throws {
         cli.answer("list", json: listJSON())
         cli.answer("status", json: statusJSON("running"))

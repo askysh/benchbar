@@ -201,6 +201,13 @@ struct SnapshotTests {
         try render(PopoverView(store: store, commands: AppCommands()), "popover-cli-missing")
     }
 
+    @Test func setupIncludesServicePreview() async throws {
+        let tests = try PortSetupTests()
+        let (_, run) = try await tests.setup()
+        await run.loadPlan()
+        try render(PortSetupSheet(run: run, close: {}), "port-setup-preview")
+    }
+
     @Test func settingsWindow() async throws {
         base.cli.answer("list", json: base.listJSON())
         // a 0.4 CLI reports the scheduler, so the switch is live in the screenshot

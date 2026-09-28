@@ -109,7 +109,7 @@ The selection is remembered by the CLI and survives app restarts; aliases and
 repeat scans do not add duplicates. Already-added benches are labelled.
 
 Select benches and choose **Set Up Selected…** to review all current and proposed
-addresses together. Conflict labels identify overlapping configured ports. The
+addresses together with each bench’s service and hosts changes. Conflict labels identify overlapping configured ports. The
 planner also checks live listeners, retains valid addresses where possible, and
 shows blocked running benches. Stop those benches and disable their previous
 automatic startup, or deselect them. Applying the preview configures management
@@ -120,12 +120,16 @@ them. Password-requiring hosts entries are reported for Terminal.
 pins the current ports. Saving a mode takes effect immediately but never moves
 ports; address changes require applying a fresh preview. Automatic preserves
 working allocations and proposes replacements for conflicts. Stopped managed
-benches retain their reservations. If the configuration changes after preview,
+benches retain reservations for their current configuration; automatic mode
+ignores outdated saved allocations after an external port change. If the configuration changes after preview,
 BenchBar refuses the old plan and offers **Refresh Preview**.
 
 Start and Restart check again before proceeding. A conflict exposes **Review
 Port Conflict…**; review the proposed change and choose **Resolve & Start**.
-Fixed conflicts need the competing service stopped or a switch to Automatic.
+For a fixed allocation that overlaps another bench’s claim, switch to Automatic
+or reallocate the competing bench. Stopping it alone does not release its claim
+for setup. CLI users can instead confirm a stopped overlap to run one bench at
+a time without changing addresses.
 BenchBar never stops an unrelated listener to obtain a port. Setup output retains
 per-bench completion details if a later batch entry fails; completed entries stay
 configured and the next preview reflects the actual state.

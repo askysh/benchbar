@@ -28,6 +28,10 @@ final class PortSetupRun: Identifiable {
         plan = nil
         do {
             plan = try await client.portPlan(benches: summaries.map(\.path))
+            if plan?.canApply == true && plan?.entries.contains(where: { $0.setupPlan?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false }) == true {
+                phase = .failed("The CLI did not provide a service-change preview. Upgrade benchbar and refresh the preview before applying.")
+                return
+            }
             phase = .review
         } catch { phase = .failed(error.localizedDescription) }
     }
