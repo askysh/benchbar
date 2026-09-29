@@ -106,6 +106,10 @@ All notable changes to this project are documented here.
   commit, and planning the app again is not refused.
 - A team profile that lists the same app twice is refused with a clear
   error; the app's Export sheet crashed on it.
+- Dependency freshness read `required_apps` only when an app's folder
+  and package had the same name, so a folder like `apps/Raven` lost its
+  dependencies. A `doctor --fetch` where some fetches failed also
+  marked the answer as fresh; now it keeps the last full fetch time.
 - `benchbar scan ~` and Find Benches skipped every folder named `dev`,
   so benches in `~/dev` were not found; only the system `/dev` is skipped
   now.

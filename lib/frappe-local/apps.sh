@@ -114,7 +114,19 @@ fl_app_policy_branch() {
 
 # required_apps from the app's hooks.py, read like bench does (a Python
 # list of strings; "org/app" entries count as "app"), frappe left out.
-fl_app_required_apps() { fl_hooks_required_apps "$(fl_app_path "$1")/$1/hooks.py"; }
+fl_app_required_apps() { local f; f="$(fl_app_hooks_file "$1")" && fl_hooks_required_apps "$f"; return 0; }
+
+# fl_app_hooks_file APP: apps/APP/<package>/hooks.py. The folder and the
+# package can differ (apps/Raven holds raven), so like the app add plan:
+# the folder's own name, its lower case form, else the one package there.
+fl_app_hooks_file() {
+  local d f lower
+  d="$(fl_app_path "$1")"
+  lower="$(printf '%s' "$1" | tr '[:upper:]-' '[:lower:]_')"
+  for f in "$d/$1/hooks.py" "$d/${lower}/hooks.py"; do [[ -f "$f" ]] && { printf '%s' "$f"; return 0; }; done
+  for f in "$d"/*/hooks.py; do [[ -f "$f" ]] && { printf '%s' "$f"; return 0; }; done
+  return 1
+}
 
 # fl_hooks_required_apps FILE: the same read from any hooks.py
 fl_hooks_required_apps() {

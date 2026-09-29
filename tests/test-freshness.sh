@@ -139,6 +139,22 @@ assert_eq "0" "$(printf '%s' "$OUT" | jget - 'd["summary"]["fail"]')"
 ! grep -q 'TRIED_AT' "$statef" || fail "no retry state is kept"
 mv "$REMOTES/mid_dep.git.aside" "$REMOTES/mid_dep.git"
 mv "$REMOTES/core_dep.git.aside" "$REMOTES/core_dep.git"
+# one fetch works and one fails: the time stays, so the note still warns
+mv "$REMOTES/mid_dep.git" "$REMOTES/mid_dep.git.aside"
+FL_NOW="$((NOW + 5 * DAY))" run_fm doctor --fetch --json --bench-dir "$BENCH"
+assert_eq "$before" "$(sed -n 's/^FETCHED_AT=//p' "$statef")" "(a partly failed fetch keeps the last good time)"
+assert_contains "$(check "$OUT" dependency_behind)" "(as of a fetch 5 days ago)"
+mv "$REMOTES/mid_dep.git.aside" "$REMOTES/mid_dep.git"
+
+# ---- a folder named unlike its package (apps/cased-app holds cased_app):
+# its required_apps still count
+mkdir -p "$BENCH/apps/cased-app/cased_app"
+printf 'required_apps = ["core_dep"]\n' >"$BENCH/apps/cased-app/cased_app/hooks.py"
+(cd "$BENCH/apps/cased-app" && git init -q -b main . && git add -A && git -c user.email=tester@example.com -c user.name=t commit -q -m init)
+printf 'cased-app\n' >>"$BENCH/sites/apps.txt"
+OFFLINE=1 run_fm app focus --json --bench-dir "$BENCH"
+assert_eq "['core_dep']" "$(app_field "$OUT" cased-app requires)"
+rm -rf "$BENCH/apps/cased-app"; sed_inplace '/^cased-app$/d' "$BENCH/sites/apps.txt"
 
 # ---- never fetched (no tracking ref): unknown, never a warning or FAIL
 git -C "$BENCH/apps/mid_dep" update-ref -d refs/remotes/upstream/main

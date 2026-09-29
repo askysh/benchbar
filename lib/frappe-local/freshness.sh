@@ -204,10 +204,11 @@ fl_freshness_age_note() {
 
 # fl_freshness_fetch APP...: fetches each app's upstream branch into its
 # remote tracking ref, side by side, each with a timeout and no prompt.
-# Only .git changes (like app update's fetch). Records the time when at
-# least one fetch worked (FETCHED_AT, for the age note).
+# Only .git changes (like app update's fetch). Records the time only when
+# every fetch worked (FETCHED_AT, for the age note): one failure keeps the
+# old time, so the note still says the answer may be stale.
 fl_freshness_fetch() {
-  local app up remote branch dir ts args codes ok=0 pids=()
+  local app up remote branch dir ts args codes ok=0 failed=0 pids=()
   [[ "${FL_DRY_RUN:-0}" == "1" ]] && return 0
   codes="$(mktemp -d "${TMPDIR:-/tmp}/benchbar-fresh.XXXXXX")"
   for app in "$@"; do
@@ -226,9 +227,12 @@ fl_freshness_fetch() {
     pids+=("$!")
   done
   for app in ${pids[@]+"${pids[@]}"}; do wait "$app" 2>/dev/null || true; done
-  for app in "$codes"/*; do [[ -f "$app" && "$(cat "$app")" == "0" ]] && ok=1; done
+  for app in "$codes"/*; do
+    [[ -f "$app" ]] || continue
+    if [[ "$(cat "$app")" == "0" ]]; then ok=1; else failed=1; fi
+  done
   rm -rf "$codes"
-  [[ "$ok" == "1" ]] && fl_kv_set "$(fl_freshness_file)" FETCHED_AT "$(fl_now)"
+  [[ "$ok" == "1" && "$failed" == "0" ]] && fl_kv_set "$(fl_freshness_file)" FETCHED_AT "$(fl_now)"
   return 0
 }
 
