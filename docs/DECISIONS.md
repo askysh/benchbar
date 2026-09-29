@@ -450,3 +450,5 @@ Measured on five PR runs (September 2026): 11 to 14 minutes wall clock, all of i
 - The hosts line is removed only inside benchbar's marker block and only when no other known bench has a site with that name; a line outside the block is the user's and is only reported with the command to remove it.
 - Without a terminal and a cached sudo credential the hosts step is not attempted and comes back as `manual_step`: the app never asks for a password, as with `site hosts`.
 - `site backups` is read only and takes no lock, like `site list`, so the Sites tab can read it while another change runs.
+- `uninstall-service` on a path that is not a bench falls back to the com.benchbar agents whose WorkingDirectory is that path, and touches nothing else there: the folder may be half deleted or reused, so only the agent is ours to remove.
+- `dead_agents` looks at every com.benchbar agent, not only the current bench's: the bench whose runner is gone cannot run doctor any more, so another bench's doctor is the only place the warning can show.

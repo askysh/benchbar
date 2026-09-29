@@ -193,6 +193,38 @@ fl_plist_working_dir() {
   awk '/<key>WorkingDirectory<\/key>/ { l = $0; if (l !~ /<string>/) getline l; sub(/.*<string>/, "", l); sub(/<\/string>.*/, "", l); print l; exit }' "$1" 2>/dev/null
 }
 
+# fl_plist_runner PLIST: the script the agent runs (the argument after /bin/bash).
+fl_plist_runner() {
+  awk '/<key>ProgramArguments<\/key>/ { p = 1; next }
+    p && /<\/array>/ { exit }
+    p && /<string>/ { n++; if (n == 2) { l = $0; sub(/.*<string>/, "", l); sub(/<\/string>.*/, "", l); print l; exit } }' "$1" 2>/dev/null
+}
+
+# com.benchbar agents whose WorkingDirectory is DIR, even when DIR is no
+# longer a bench (its folder was emptied): "plist|label" lines.
+fl_agents_for_dir() {
+  local f
+  for f in "$HOME"/Library/LaunchAgents/com.benchbar.*.plist; do
+    [[ -f "$f" ]] || continue
+    fl_same_path "$(fl_plist_working_dir "$f")" "$1" || continue
+    printf '%s|%s\n' "$f" "$(basename "$f" .plist)"
+  done
+}
+
+# Loaded com.benchbar agents whose runner script is gone: launchd starts
+# them every 20 seconds, they exit 127 and fill bench.log. "plist|label|dir".
+fl_dead_agents_list() {
+  local f label runner
+  for f in "$HOME"/Library/LaunchAgents/com.benchbar.*.plist; do
+    [[ -f "$f" ]] || continue
+    runner="$(fl_plist_runner "$f")"
+    [[ -n "$runner" && ! -f "$runner" ]] || continue
+    label="$(basename "$f" .plist)"
+    launchctl print "$(fl_launchd_domain)/${label}" >/dev/null 2>&1 || continue
+    printf '%s|%s|%s\n' "$f" "$label" "$(fl_plist_working_dir "$f")"
+  done
+}
+
 # Lists LaunchAgents to migrate for this bench. Prints "path|label|state|last-exit" lines.
 #   com.frappe-mac.*   the frappe-mac 0.2.0 agent, only when its WorkingDirectory is this bench
 #   anything else      older per-process Frappe setups or a hand-made agent

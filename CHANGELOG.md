@@ -47,6 +47,11 @@ All notable changes to this project are documented here.
   no longer ends silently: questions with a default take the default and
   say so, and a password it cannot ask for stops with a message and the
   fix (`ADMIN_PASSWORD='...' benchbar install`, or run it in a terminal).
+- `benchbar uninstall-service --bench-dir PATH` removes the agent of a
+  bench folder that was emptied or deleted, instead of refusing with "No
+  bench at PATH". Such an agent restarted every 20 seconds, exited with
+  code 127 and grew the log. Doctor has a new check, `dead_agents`, that
+  warns about any loaded benchbar agent whose runner script is missing.
 
 ## 0.5.7 - 2026-09-27
 

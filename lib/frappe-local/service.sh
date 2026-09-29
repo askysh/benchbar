@@ -381,8 +381,41 @@ fl_cmd_autostart() {
   fl_ok "autostart ${mode}"
 }
 
+# The bench folder is gone or emptied but its agent is still installed (and
+# restarting every 20 seconds): boot out and move aside every com.benchbar
+# agent whose WorkingDirectory is that path. Nothing else is touched.
+fl_uninstall_orphan_agents() {
+  local list plist label dest
+  list="$(fl_agents_for_dir "$FL_BENCH_DIR")"
+  [[ -n "$list" ]] || fl_die "No bench at ${FL_BENCH_DIR}, and no com.benchbar agent points at it." \
+    "Check the path, or list the agents: ls ~/Library/LaunchAgents/com.benchbar.*"
+  fl_warn "${FL_BENCH_DIR} is not a bench (any more), but its agent is still installed."
+  fl_info "This boots out and moves aside: $(printf '%s\n' "$list" | cut -d'|' -f2 | tr '\n' ' ')"
+  fl_confirm "Remove the agent for ${FL_BENCH_DIR}?" || { fl_warn "Cancelled."; return 1; }
+  while IFS='|' read -r plist label; do
+    [[ -n "$plist" ]] || continue
+    if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
+      fl_info "dry-run: would boot out ${label} and move ${plist} to ${FL_LEGACY_DIR}/"
+      continue
+    fi
+    if launchctl print "$(fl_launchd_domain)/${label}" >/dev/null 2>&1; then
+      launchctl bootout "$(fl_launchd_domain)/${label}" 2>/dev/null || launchctl unload -w "$plist" 2>/dev/null || true
+      fl_agent_wait_gone "$(fl_launchd_domain)/${label}" || true
+      fl_ok "booted out ${label}"
+    fi
+    dest="${FL_LEGACY_DIR}/${label}-$(fl_backup_stamp)"
+    mkdir -p "$dest"; mv "$plist" "$dest/"
+    fl_ok "moved ${plist} to ${dest}/"
+  done <<<"$list"
+  fl_ok "agent removed; nothing else in ${FL_BENCH_DIR} was touched"
+}
+
 fl_cmd_uninstall_service() {
   local plist rc dest
+  if ! fl_is_bench_dir "$FL_BENCH_DIR"; then
+    fl_uninstall_orphan_agents
+    return $?
+  fi
   fl_require_bench
   plist="$(fl_agent_plist_path)"
   rc="$(fl_rc_file)"

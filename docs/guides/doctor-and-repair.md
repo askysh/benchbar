@@ -341,6 +341,19 @@ on) and no agent from frappe-mac 0.2.
 Fix: `benchbar repair` boots them out and moves the plists to
 `~/Library/LaunchAgents-disabled/<timestamp>/`.
 
+### dead_agents
+
+Every loaded `com.benchbar.*` agent still has its runner script. When a
+bench folder is emptied or deleted (a cleanup tool, `rm`) while its agent
+stays loaded, launchd starts the missing script every 20 seconds, it
+exits with code 127, and each try adds a line to the bench's log. The
+check looks at every bench's agent, not only the current one.
+
+Fix: `benchbar uninstall-service --bench-dir <path>`, with the path the
+warning shows. It works when the folder is no longer a bench: it boots
+out the agent that points at the path and moves its plist to
+`~/Library/LaunchAgents-disabled/<timestamp>/`.
+
 ### hosts
 
 `/etc/hosts` maps the site to 127.0.0.1.
