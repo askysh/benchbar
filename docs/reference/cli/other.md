@@ -187,11 +187,14 @@ benchbar mariadb-password
 benchbar uninstall-service [--bench-dir DIR] [--dry-run]
 ```
 
-Removes the launchd agent, the runner, `Procfile.lean` and the shell
-helper block of one bench, after asking. The bench, its sites, apps and
-databases are not touched; the plist is moved to
-`~/Library/LaunchAgents-disabled/` and the other files are backed up
-first.
+Stops the bench (like `benchbar down`), then removes its launchd agent,
+the runner and `Procfile.lean`, after asking. It also removes the
+`# >>> benchbar >>>` block from your shell rc file, so `benchup` and the
+other helpers are gone for every bench until `benchbar repair` or
+`benchbar service` on a remaining bench writes the block again. The
+bench, its sites, apps and databases are not touched; the plist is moved
+to `~/Library/LaunchAgents-disabled/` and the other files are backed up
+first. `--dry-run` shows the steps.
 
 When the folder is no longer a bench (emptied by a cleanup tool, or
 deleted) but its agent is still installed, it removes only that agent:

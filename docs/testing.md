@@ -22,29 +22,53 @@ curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | b
 It clones the CLI into `~/.local/share/benchbar`, links `benchbar` into
 `~/.local/bin`, adds that folder to your `~/.zshrc`, and installs the
 BenchBar menu bar app into `~/Applications` when a release exists. It
-prints every step before doing it and asks before anything that needs
-`sudo` (only the `/etc/hosts` line for your site).
+prints every step before doing it and never runs `sudo` itself; only
+Homebrew's own installer, if you accept it, asks for your password. At
+the end it offers `benchbar adopt` for a bench it finds, or `benchbar
+install`; you can say no and run them yourself as below. The last line
+is `BenchBar is installed.`, and `benchbar --version` in a new Terminal
+tab prints the version.
+
+Two words you will see a lot: a **bench** is the folder that holds a
+Frappe installation (its apps, its Python environment and its sites),
+and a **site** is one Frappe instance inside it, with its own database
+and its own address such as `http://macdev:8000`.
 
 Then pick one:
 
-- **You already have a bench** (for example `~/frappe-bench`): run
-  `benchbar doctor --bench-dir ~/frappe-bench`. It is read only and
-  prints `[OK]`, `[WARN]` or `[FAIL]` per check with the exact fix. If it
-  looks right, register the bench so the app and the `bench*` helpers see
-  it:
+- **You already have a bench**: run doctor on it. The examples on this
+  page use `~/frappe-bench`; put your bench's folder in its place.
+
+  ```bash
+  benchbar doctor --bench-dir ~/frappe-bench
+  ```
+
+  It is read only and prints `[OK]`, `[WARN]` or `[FAIL]` per check,
+  with the exact fix under every WARN and FAIL. If it looks right,
+  register the bench so the app and the `bench*` helpers see it:
 
   ```bash
   benchbar adopt ~/frappe-bench
   ```
 
-  `adopt` shows its plan and asks before writing `Procfile.lean`, the
-  runner script and the launchd agent into place. It never runs
-  `migrate`, `build` or `update`, and it never touches `sites/`.
+  `adopt` shows its plan and asks before writing `Procfile.lean` (the
+  list of processes the bench runs), the runner script and the launchd
+  agent (the macOS service that keeps the bench running in the
+  background). It never runs `migrate`, `build` or `update`, and never
+  touches your apps, sites or databases. The one exception: when the
+  bench uses the same ports as another bench benchbar knows, the plan
+  says so and, after asking, writes new port numbers into
+  `sites/common_site_config.json` (with a backup first).
 
-- **You have no bench yet**: run `benchbar install`. It asks for two
-  passwords (MariaDB root, which it stores in your Keychain, and the site
-  Administrator) and does the rest, including the MariaDB setup and the
-  patched wkhtmltopdf. Re-running it is always safe.
+- **You have no bench yet**: run `benchbar install`. It asks for the
+  folder (default `~/frappe-bench`), the site name (default `macdev`)
+  and the site's Administrator password, generates a MariaDB root
+  password and keeps it in your Keychain (the macOS password store),
+  and does the rest, including the MariaDB setup and the patched
+  wkhtmltopdf. It asks for your `sudo` password once, for the
+  wkhtmltopdf package and the `/etc/hosts` line. It ends with a list of
+  steps marked `done`; re-running it is always safe, and a second run
+  says `unchanged`.
 
 Open a new Terminal tab afterwards, or run `source ~/.zshrc`.
 
@@ -58,16 +82,31 @@ benchlogs          # follow the log (Ctrl+C to stop following)
 benchdown          # stop it, also across reboots
 ```
 
+`benchup` ends with `bench is up: http://macdev:8000`, and `benchstatus`
+shows `web ping 200` while the site answers. If you picked another site
+name, use it in place of `macdev`; `benchstatus` shows the address.
+
 Things worth checking:
 
 - Close Terminal after `benchup`. The site should keep answering.
 - Open the BenchBar app from `~/Applications`. The runner in the menu
   bar sleeps when the bench is stopped and runs when it is up. Click it
   for Start, Stop, Restart, the site, logs and a read only doctor.
-- Break something on purpose: `mv ~/frappe-bench/env ~/frappe-bench/env.away`
-  then `benchbar doctor`. It should name the missing env and offer
-  `benchbar repair`. Move the folder back afterwards (or let repair
-  rebuild it, which takes a few minutes).
+- Break something on purpose, safely: stop the bench first, since its
+  processes run from the Python environment in `env/`, then move that
+  folder aside (moved, not deleted) and run doctor:
+
+  ```bash
+  benchdown
+  mv ~/frappe-bench/env ~/frappe-bench/env.away
+  benchbar doctor
+  ```
+
+  Doctor should report the missing env as a `[FAIL]` and name
+  `benchbar repair` as the fix. Undo it by moving the folder back,
+  `mv ~/frappe-bench/env.away ~/frappe-bench/env`, then `benchup`. Or
+  let `benchbar repair` build a new env, which takes a few minutes; then
+  `env.away` is left over and you can delete it once the bench runs.
 - Reboot. If the bench was running it comes back on its own; if you had
   run `benchdown` it stays down.
 
@@ -90,8 +129,9 @@ twice and the second run says `unchanged`.
   would do before it does it.
 - **The log window**: ⌘L, with search (⌘G for the next match) and a filter per process.
 - **A second bench**: `benchbar install --profile v16-lts --bench-dir
-  ~/v16-bench` puts a Frappe v16 bench next to your first one, on its own
-  ports; both show up in the menu bar.
+  ~/v16-bench` puts a Frappe v16 bench in a new folder next to your first
+  one, on its own ports; both show up in the menu bar. It asks for the
+  new site's name and Administrator password, like the first install.
 - **Your team's profile**: `benchbar profile create myteam --from-bench
   ~/frappe-bench` writes `~/.config/benchbar/profiles/myteam.toml` from
   a bench you already have (it only reads the bench). A teammate with
@@ -133,10 +173,15 @@ what you did and what you expected. Screenshots of the app are welcome.
 curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash -s -- --uninstall
 ```
 
-removes the app, the `benchbar` links and the PATH block, and offers to
-stop and remove the launchd agents. Your bench, its sites and databases
-are never touched. `benchbar uninstall-service` alone removes only the
-background service of one bench.
+removes the app, the `benchbar` links and the PATH block. Then it asks,
+one at a time, whether to stop each bench's launchd agent and remove it
+with its runner and `Procfile.lean`, and whether to delete
+`~/.local/share/benchbar`, which also holds the logs and file backups
+of every benchbar run. Answer no to keep those logs. Your benches, their
+sites and databases, the Homebrew packages and the MariaDB password in
+the Keychain stay. Add `--dry-run` after `--uninstall` to see the list
+first. `benchbar uninstall-service` alone removes only the background
+service of one bench.
 
 ## Running the test suite (contributors)
 

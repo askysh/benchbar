@@ -3,8 +3,13 @@ title: "Benches and sites"
 description: "Run a Frappe bench in the background every day: the shell helpers, the lean Procfile, the scheduler, sites, several benches side by side and their port blocks."
 ---
 
-A bench runs under its own launchd agent, `com.benchbar.<folder>`. It
-keeps running when you close Terminal, comes back after a reboot if it
+A bench is the folder that holds a Frappe installation: its apps in
+`apps/`, its Python environment in `env/` and its sites in `sites/`. A
+site is one Frappe instance in that bench, with its own database and
+address. benchbar runs each bench under its own launchd agent,
+`com.benchbar.<folder>`: launchd is the part of macOS that starts
+programs in the background and keeps them running. The bench keeps
+running when you close Terminal, comes back after a reboot if it
 was running, and restarts after a crash. After three crashes in ten
 minutes it pauses and BenchBar shows a notification.
 
@@ -20,7 +25,7 @@ Each one is a short name for a `benchbar` command.
 | `benchrestart` | `benchbar restart` | Restart every process. Needed after Python changes |
 | `benchstatus` | `benchbar status` | Agent state, pid, last exit code, stop flag, site ping |
 | `benchlogs` | `benchbar logs` | Follow `logs/bench.log`. Flags: `--worker`, `--previous`, `--no-follow` |
-| `benchfg` | `benchbar fg` | Stop the service and run honcho in the foreground |
+| `benchfg` | `benchbar fg` | Stop the service and run the bench in this Terminal, to watch its output |
 | `benchwatch` | `benchbar watch` | `bench watch` for JS and CSS rebuilds |
 | `benchdoctor` | `benchbar doctor` | Read only health report |
 | `benchcd` | `cd "$(benchbar path)"` | Jump into the bench folder |
@@ -29,8 +34,10 @@ Every flag is in the [CLI reference](../reference/cli/running.md).
 
 ## The lean Procfile and the scheduler
 
-The lean Procfile runs Redis, the web server, socketio and one worker. It
-has no watcher: run `benchwatch` while you edit assets. The scheduler is
+A Procfile lists the processes a bench runs, one per line; honcho, a
+small process manager, starts them all and stops them together. The
+lean Procfile, `Procfile.lean`, runs Redis, the web server, socketio and
+one worker. It has no watcher: run `benchwatch` while you edit assets. The scheduler is
 opt in per bench: `benchbar service --with-schedule` adds it (and
 `--without-schedule` takes it out again), then `benchbar restart`.
 
@@ -61,6 +68,34 @@ the new site's Administrator password (or reads `ADMIN_PASSWORD`). To
 copy a production site into a new local one, see
 [benchbar pull](teams.md#a-copy-of-production).
 
+### Backing up and dropping a site
+
+```bash
+benchbar site backup v16two --with-files    # database, site config and uploaded files
+benchbar site backups v16two                # every backup, newest first
+```
+
+A backup lands inside the bench, in `sites/NAME/private/backups/`. Copy
+it somewhere else when you need it to outlive the bench.
+
+`site drop` removes a site for good: its database and database user are
+dropped, and only the backup it takes first can bring them back. Before
+you drop one, check that it is the site you mean (`benchbar site list`)
+and that nothing you need exists only there. Then look at the plan
+first, and run it with the site name typed twice:
+
+```bash
+benchbar site drop v16two --confirm-site v16two --dry-run
+benchbar site drop v16two --confirm-site v16two
+```
+
+It takes a backup with files first and stops if that fails, then drops
+the database, moves the site folder with the backup to
+`archived/sites/` in the bench, and removes the site's `/etc/hosts` line
+(one `sudo` prompt). The default site also needs `--new-default OTHER`,
+and the only site of a bench is never dropped. See
+[site drop](../reference/cli/site.md#site-drop) for how to restore one.
+
 ## Finding the bench
 
 Point the tool at any bench once with `--bench-dir`; the path is
@@ -79,15 +114,19 @@ Installing or adopting a second bench keeps the first one as the default
 lines in your shell block follow the default bench's profile. Stopping
 one bench never touches another.
 
-To act on a bench that is not the default, add `--bench-dir`:
+To act on a bench that is not the default, add `--bench-dir` with its
+folder (`~/dev/v16-bench` here is an example):
 
 ```bash
 benchbar up --bench-dir ~/dev/v16-bench
 benchbar status --bench-dir ~/dev/v16-bench
 ```
 
-`benchup` warns when another running bench already uses the same web or
-socketio port, and asks before it starts.
+`benchup` refuses to start a bench whose ports a running bench, or any
+other program, is listening on; it never takes their ports. When only a
+stopped bench shares the ports, it warns and asks, so the two can run one
+at a time. Either way it prints the fix, `benchbar ports setup`, which
+gives each bench its own block.
 
 ## Port blocks
 
@@ -102,6 +141,21 @@ and `bench setup redis`. `--port-offset N` picks a block, for example
 The default bench never moves on its own. Doctor's
 [`port_clash`](doctor-and-repair.md#port_clash) check warns when two
 benches share ports.
+
+To sort out the ports of several benches at once, preview first, then
+apply:
+
+```bash
+benchbar ports plan -- ~/frappe-bench ~/dev/v16-bench    # read only
+benchbar ports setup -- ~/frappe-bench ~/dev/v16-bench   # the same plan, asks once, then applies
+```
+
+Stop the benches first (`benchbar down --bench-dir PATH`): the plan
+marks a running bench as blocked, and setup applies nothing while any
+bench in it is blocked. The plan lists every bench's ports and the
+service files it would rewrite, and setup never starts a bench; run
+`benchup` afterwards. `benchbar ports check
+--bench-dir PATH` shows the conflicts of one bench.
 
 ## Autostart
 
