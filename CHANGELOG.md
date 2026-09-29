@@ -53,6 +53,12 @@ All notable changes to this project are documented here.
 
 ### Fixed
 
+- `benchbar down` stopped every process listening on the bench's ports,
+  also another bench's or an unrelated server's; it now stops only
+  listeners that run inside the bench folder.
+- Troubleshooting, Wiping a bench: what is lost comes before any
+  command, and the databases are dropped while the bench folder still
+  names them.
 - App: Create from Bench accepts profile names with `_`, as the CLI does.
 
 ## 0.5.8 - 2026-09-29
