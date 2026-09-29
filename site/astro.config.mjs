@@ -75,6 +75,8 @@ export default defineConfig({
                 { label: 'install and adopt', slug: 'reference/cli/install' },
                 { label: 'up, down, restart, status, logs', slug: 'reference/cli/running' },
                 { label: 'doctor and repair', slug: 'reference/cli/doctor' },
+                { label: 'ports', slug: 'reference/cli/ports' },
+                { label: 'scan and register', slug: 'reference/cli/scan' },
                 { label: 'site', slug: 'reference/cli/site' },
                 { label: 'app', slug: 'reference/cli/app' },
                 { label: 'profile', slug: 'reference/cli/profile' },

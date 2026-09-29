@@ -100,10 +100,13 @@ and the only site of a bench is never dropped. See
 
 Point the tool at any bench once with `--bench-dir`; the path is
 remembered. Without it, benchbar looks for a remembered bench, then
-`~/frappe-bench`, `~/dev/frappe-bench`, and any folder under `~` or
-`~/dev` that holds `sites/common_site_config.json`.
+`~/frappe-bench`, `~/dev/frappe-bench`, and any folder directly under
+`~` or `~/dev` that holds `sites/common_site_config.json`.
 
-`benchbar list` prints every bench benchbar knows about.
+`benchbar list` prints every bench benchbar knows about. For benches
+deeper in a folder, `benchbar scan ~/Developer` lists them (read only)
+and `benchbar register PATH ...` remembers the ones you pick, without
+touching their services; see [scan and register](../reference/cli/scan.md).
 
 ## Several benches
 
@@ -154,8 +157,9 @@ Stop the benches first (`benchbar down --bench-dir PATH`): the plan
 marks a running bench as blocked, and setup applies nothing while any
 bench in it is blocked. The plan lists every bench's ports and the
 service files it would rewrite, and setup never starts a bench; run
-`benchup` afterwards. `benchbar ports check
---bench-dir PATH` shows the conflicts of one bench.
+`benchup` afterwards. `benchbar ports check --bench-dir PATH` shows the
+conflicts of one bench. Every command and flag is in the
+[ports reference](../reference/cli/ports.md).
 
 ## Autostart
 
