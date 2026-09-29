@@ -146,4 +146,29 @@ assert set(live) == set(fixture), set(live) ^ set(fixture)
 assert set(live["checks"][0]) == set(fixture["checks"][0])
 ' "$FIX/doctor.json" || fail "doctor --json and the app fixture disagree"
 
+# ---- site backup, backups and drop: the same keys as the app's fixtures
+mkdir -p "$BENCH/sites/bbtest.localhost"; printf '{}\n' >"$BENCH/sites/bbtest.localhost/site_config.json"
+printf '# >>> benchbar >>>\n127.0.0.1 bbtest.localhost\n# <<< benchbar <<<\n' >>"$FL_HOSTS_FILE"
+export MARIADB_ROOT_PASSWORD=rootpw
+# same_keys FIXTURE: stdout of the last call against the fixture, one level into "backup" and the lists
+same_keys() {
+  printf '%s' "$(cat "$MOCK_STATE/json-out")" | python3 -c '
+import json, sys
+live = json.load(sys.stdin); fixture = json.load(open(sys.argv[1]))
+assert live["schema_version"] == 1
+assert set(live) == set(fixture), set(live) ^ set(fixture)
+for key in ("backup",):
+    if isinstance(live.get(key), dict) and isinstance(fixture.get(key), dict):
+        assert set(live[key]) == set(fixture[key]), set(live[key]) ^ set(fixture[key])
+for key in ("backups", "steps"):
+    if live.get(key) and fixture.get(key):
+        assert set(live[key][0]) == set(fixture[key][0]), set(live[key][0]) ^ set(fixture[key][0])
+' "$FIX/$1" || fail "$2 and the app fixture $1 disagree"
+}
+json_call() { "$FM" "$@" 2>/dev/null >"$MOCK_STATE/json-out" || fail "$* failed"; }
+json_call site backup bbtest.localhost --with-files --json --bench-dir "$BENCH"; same_keys site-backup.json "site backup --json"
+json_call site backups bbtest.localhost --json --bench-dir "$BENCH"; same_keys site-backups.json "site backups --json"
+json_call site drop bbtest.localhost --confirm-site bbtest.localhost --dry-run --json --bench-dir "$BENCH"; same_keys site-drop-plan.json "site drop --dry-run --json"
+json_call site drop bbtest.localhost --confirm-site bbtest.localhost --json --bench-dir "$BENCH" </dev/null; same_keys site-drop.json "site drop --json"
+
 printf 'test-json: ok\n'

@@ -440,3 +440,13 @@ Measured on five PR runs (September 2026): 11 to 14 minutes wall clock, all of i
 - CLI starts distinguish hard live-owner conflicts from stopped overlaps that can be confirmed for one-at-a-time operation; positively owned running benches keep idempotent `up`.
 - Include the adoption dry-run service plan in the approval fingerprint; `ports setup` handles human preview and confirmation while token-based apply remains available for clients.
 - Reject site/profile overrides for port planning and apply so the adopted service always matches the reviewed preview.
+
+## 0.5.8: site backup and drop
+
+- `site drop` wraps `bench drop-site` instead of dropping the database itself: bench's own backup with files comes first and stops the drop when it fails, and the folder is moved to `archived/sites/`, never deleted. benchbar only adds the refusals, the password on stdin and the hosts line.
+- The typed confirmation is checked by the CLI (`--confirm-site` must equal the name), not only by the app, so no caller can drop a site by passing the name it already has; the app passes what the user typed.
+- The default site cannot be dropped without `--new-default`, which runs `site default` first: dropping it would leave the runner pinging and `benchup` waiting for a site that is gone. The only site of a bench is never dropped.
+- A backup "set" is the files sharing the timestamp prefix, read from the folder, not from bench's output: bench prints paths in formats that change between versions, and the folder also holds backups taken outside benchbar.
+- The hosts line is removed only inside benchbar's marker block and only when no other known bench has a site with that name; a line outside the block is the user's and is only reported with the command to remove it.
+- Without a terminal and a cached sudo credential the hosts step is not attempted and comes back as `manual_step`: the app never asks for a password, as with `site hosts`.
+- `site backups` is read only and takes no lock, like `site list`, so the Sites tab can read it while another change runs.

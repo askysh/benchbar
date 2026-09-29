@@ -65,7 +65,11 @@ opening BenchBar again from Finder or Spotlight. It has a page per bench:
   the bench's own processes, not the shared MariaDB, and are kept in
   memory only.
 - **Sites**: add a site (it asks for the Administrator password), make
-  one the default, open any of them.
+  one the default, open any of them. The ⋯ menu of a site backs it up
+  (with or without files) and shows the last backup in Finder; **Drop
+  Site…** shows the plan, asks you to type the site name, and reports
+  where bench put the backup. Removing the site's `/etc/hosts` line needs
+  your password, so the sheet shows that command to run in Terminal.
 - **Apps**: add an app from the registry or any GitHub URL, install it on
   a site, and update it after reading the changelog. Right click a bench
   in the sidebar for its actions.

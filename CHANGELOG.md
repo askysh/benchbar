@@ -10,6 +10,13 @@ All notable changes to this project are documented here.
   `restart`, `open`, `logs`, `window` and `doctor`, with `bench=` (a name
   or a path) and `site=`. Links only start, stop and open things; any
   other route is ignored and logged. See the URL scheme reference page.
+- `benchbar site backup NAME [--with-files]`, `site backups NAME` and
+  `site drop NAME --confirm-site NAME`: bench's own backup, a list of a
+  site's backups, and dropping a site with a backup first. Drop refuses
+  without the site name typed again, and the default site needs
+  `--new-default`; it removes the site's hosts line with one `sudo`
+  prompt. In the app, the Sites tab backs up a site and drops it behind a
+  sheet with the plan and a typed confirmation.
 - CPU and memory per bench: the Overview tab charts the last ten minutes
   while the bench runs, and the popover shows the current values. Measured
   with the same process tree walk as the runner speed, in memory only.

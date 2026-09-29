@@ -162,6 +162,7 @@ struct BenchSites: View {
     let bench: BenchModel
     @State private var addingSite = false
     @State private var showHostsInstructions = false
+    @State private var dropping: String?
 
     private var busy: Bool {
         bench.pending != nil || bench.isChangingScheduler || bench.activity != nil || store.waitsForOtherBench(bench)
@@ -179,8 +180,14 @@ struct BenchSites: View {
                             Text(row.name)
                             Text(row.needsHosts ? "no /etc/hosts line yet" : row.url)
                                 .font(.caption).foregroundStyle(row.needsHosts ? .orange : .secondary)
+                            if let last = workbench.backups(of: row.name, on: bench)?.backups.first {
+                                LastBackupLine(backup: last)
+                            }
                         }
                         Spacer()
+                        if bench.activity?.hasPrefix("Back up \(row.name)") == true {
+                            ProgressView().controlSize(.small)
+                        }
                         if !row.isDefault {
                             Button("Make Default") { Task { await workbench.setDefaultSite(row.name, on: bench) } }
                                 .disabled(busy)
@@ -190,6 +197,8 @@ struct BenchSites: View {
                             else { Workspace.open(row.url) }
                         }
                         .disabled(!row.needsHosts && bench.state != .running)
+                        SiteMenu(workbench: workbench, bench: bench, row: row, busy: busy,
+                                 onlySite: rows.count == 1) { dropping = row.name }
                     }
                 }
             } header: {
@@ -219,12 +228,75 @@ struct BenchSites: View {
             }
         }
         .formStyle(.grouped)
+        .task(id: bench.siteRows.map(\.name)) { await workbench.loadBackups(bench) }
+        .sheet(item: Binding(get: { dropping.map(DropTarget.init) }, set: { dropping = $0?.site })) { target in
+            SiteDropSheet(workbench: workbench, bench: bench, site: target.site) { dropping = nil }
+        }
         .sheet(isPresented: $addingSite) {
             AddSiteSheet(bench: bench) { name, password in
                 addingSite = false
                 Task { await workbench.addSite(name, adminPassword: password, on: bench) }
             } cancel: { addingSite = false }
         }
+    }
+}
+
+private struct DropTarget: Identifiable {
+    var site: String
+    var id: String { site }
+}
+
+/// "Backed up 2 hours ago, 5.0 MB, with files" and Show in Finder.
+struct LastBackupLine: View {
+    let backup: SiteBackup
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(text).font(.caption).foregroundStyle(.secondary)
+            Button("Show in Finder") { Workspace.reveal(backup.parts) }
+                .buttonStyle(.link).font(.caption)
+        }
+    }
+
+    private var text: String {
+        let size = ByteCountFormatter.string(fromByteCount: backup.sizeBytes, countStyle: .file)
+        // a clock that is a little behind must not say "in 2 minutes"
+        let when = backup.time.map { "Backed up " + min($0, .now).formatted(.relative(presentation: .named)) } ?? "Backed up \(backup.stamp)"
+        return "\(when), \(size)\(backup.withFiles ? ", with files" : "")"
+    }
+}
+
+/// The per site actions that do not fit a button: backups and drop.
+struct SiteMenu: View {
+    let workbench: Workbench
+    let bench: BenchModel
+    let row: SiteRow
+    let busy: Bool
+    let onlySite: Bool
+    let drop: () -> Void
+
+    var body: some View {
+        Menu {
+            Button("Back Up") { Task { await workbench.backUpSite(row.name, withFiles: false, on: bench) } }
+            Button("Back Up with Files") { Task { await workbench.backUpSite(row.name, withFiles: true, on: bench) } }
+            if let list = workbench.backups(of: row.name, on: bench) {
+                Button("Show Backups in Finder") {
+                    if let last = list.backups.first { Workspace.reveal([last.path]) }
+                    else { Workspace.open(URL(fileURLWithPath: list.folder).absoluteString) }
+                }
+                .disabled(list.backups.isEmpty)
+            }
+            Divider()
+            Button("Drop Site…", role: .destructive, action: drop)
+                .disabled(onlySite)
+        } label: {
+            Image(systemName: "ellipsis.circle")
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .disabled(busy)
+        .help("Back up or drop \(row.name)")
     }
 }
 

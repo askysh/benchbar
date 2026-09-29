@@ -14,6 +14,8 @@ final class Workbench {
     private(set) var loadingApps: Set<String> = []
     private(set) var profiles: [ProfileInfo] = []
     private(set) var profilesError: String?
+    /// Each site's backups, keyed by `backupKey(bench, site)`; read on the Sites tab.
+    private(set) var backups: [String: SiteBackupList] = [:]
     /// The last change's outcome, for the banner at the top of the pane.
     var result: ChangeResult?
 
@@ -90,6 +92,61 @@ final class Workbench {
         await change("Make \(name) the default site", on: bench) { client throws(CLIError) in
             try await client.setDefaultSite(name, bench: bench.path)
         }
+    }
+
+    // MARK: backups and drop
+
+    static func backupKey(_ bench: String, _ site: String) -> String { bench + "\n" + site }
+
+    func backups(of site: String, on bench: BenchModel) -> SiteBackupList? {
+        backups[Self.backupKey(bench.path, site)]
+    }
+
+    /// `site backups --json` for every site of the bench. Read only; a site
+    /// that fails (an older CLI) just shows no backup line.
+    func loadBackups(_ bench: BenchModel) async {
+        guard let client = store.cliClient else { return }
+        for row in bench.siteRows {
+            if let list = try? await client.siteBackups(row.name, bench: bench.path) {
+                backups[Self.backupKey(bench.path, row.name)] = list
+            }
+        }
+    }
+
+    /// Backs up a site in the change slot. Returns the new backup, nil when
+    /// it failed (the banner says why).
+    @discardableResult
+    func backUpSite(_ site: String, withFiles: Bool, on bench: BenchModel) async -> SiteBackup? {
+        var made: SiteBackup?
+        await change(withFiles ? "Back up \(site) with files" : "Back up \(site)", on: bench) { client throws(CLIError) in
+            made = try await client.backupSite(site, withFiles: withFiles, bench: bench.path).backup
+        }
+        if let client = store.cliClient, let list = try? await client.siteBackups(site, bench: bench.path) {
+            backups[Self.backupKey(bench.path, site)] = list
+        }
+        return made
+    }
+
+    func dropPlan(_ site: String, newDefault: String?, on bench: BenchModel) async -> Result<SiteDropPlan, ChangeError> {
+        guard let client = store.cliClient else { return .failure(ChangeError(message: "The benchbar command line tool is not available.")) }
+        do {
+            return .success(try await client.dropPlan(site: site, newDefault: newDefault, bench: bench.path))
+        } catch {
+            return .failure(ChangeError(message: error.localizedDescription))
+        }
+    }
+
+    /// Drops the site in the change slot; `confirm` is what the user typed.
+    func dropSite(_ site: String, confirm: String, newDefault: String?, on bench: BenchModel) async -> Result<SiteDropResult, ChangeError> {
+        var dropped: SiteDropResult?
+        await change("Drop site \(site)", on: bench) { client throws(CLIError) in
+            dropped = try await client.dropSite(site, confirm: confirm, newDefault: newDefault, bench: bench.path)
+        }
+        if let dropped {
+            backups[Self.backupKey(bench.path, site)] = nil
+            return .success(dropped)
+        }
+        return .failure(ChangeError(message: result?.error ?? "The site was not dropped."))
     }
 
     // MARK: profiles

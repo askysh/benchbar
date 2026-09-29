@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # env/bin/python of a fake bench. Besides the version it answers benchbar's
 # stdin secret wrapper for frappe commands:
-#   -c SNIPPET benchbar-secrets frappe new-site SITE ARGS...
+#   -c SNIPPET benchbar-secrets frappe new-site|drop-site SITE ARGS...
 # The secrets arrive on stdin and are saved to $MOCK_STATE/stdin-new-site,
 # never logged; the call is logged as "bench new-site SITE ARGS" with the
 # @secretN@ placeholders, so tests can assert both. Runs in sites/, like frappe.
@@ -19,6 +19,17 @@ if [[ "${1:-}" == "-c" && "${3:-}" == "benchbar-secrets" && "${4:-}" == "frappe"
       [[ -n "${MOCK_BENCH_NEW_SITE_EXIT:-}" ]] && exit "$MOCK_BENCH_NEW_SITE_EXIT"
       site="$2"
       mkdir -p "$site"; touch "$site/installed_apps"; printf '{"db_name": "_x"}\n' >"$site/site_config.json" ;;
+    drop-site)
+      # like frappe: a backup with files (no config), then the folder to ../archived/sites
+      [[ -n "${MOCK_DROP_SITE_EXIT:-}" ]] && { echo "Error: backup failed" >&2; exit "$MOCK_DROP_SITE_EXIT"; }
+      site="$2"
+      base="${site}/private/backups/20260929_110000-${site//./_}"
+      mkdir -p "${site}/private/backups"
+      printf 'dump\n' >"${base}-database.sql.gz"; printf 'public\n' >"${base}-files.tar"; printf 'private\n' >"${base}-private-files.tar"
+      mkdir -p ../archived/sites
+      dest="../archived/sites/${site}"; n=""
+      while [[ -e "${dest}${n}" ]]; do n=$(( ${n:-0} + 1 )); done
+      mv "$site" "${dest}${n}" ;;
   esac
   exit 0
 fi

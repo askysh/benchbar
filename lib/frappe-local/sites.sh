@@ -7,6 +7,7 @@
 #   benchbar site add NAME         bench new-site, the hosts line, optional apps
 #   benchbar site default NAME     the site benchup waits for and the app opens
 #   benchbar site hosts            a hosts line for every site
+#   benchbar site backup|backups|drop   see site-backups.sh
 #
 # The default site is the one benchbar remembers for the bench (its state
 # file), which "site default" keeps in step with currentsite.txt through
@@ -178,6 +179,9 @@ fl_cmd_site() {
     add) fl_cmd_site_add "$@" ;;
     default) fl_cmd_site_default "${1:-}" ;;
     hosts) fl_cmd_site_hosts ;;
-    *) fl_die "Unknown site command: ${sub}" "Use: benchbar site list | add NAME | default NAME | hosts" ;;
+    backup) fl_cmd_site_backup "$@" ;;
+    backups) fl_cmd_site_backups "$@" ;;
+    drop) fl_cmd_site_drop "$@" ;;
+    *) fl_die "Unknown site command: ${sub}" "Use: benchbar site list | add NAME | default NAME | hosts | backup NAME | backups NAME | drop NAME" ;;
   esac
 }

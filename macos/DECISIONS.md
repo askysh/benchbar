@@ -251,3 +251,5 @@ Asked for after the phases, to stop naming drift before the first release.
 - The history belongs to one run: a new runner pid starts it over, so a restart never draws a line across the gap. It is bounded by age (ten minutes) and by count (600), and a clock that goes back starts it over.
 - Memory switches to GB at 1000 MB, not 1024, so the popover never shows "1020 MB".
 - Two charts, one measure each, no axes: CPU percent and bytes have nothing in common to share a scale. The line has no animation, so Reduce Motion needs nothing extra beyond dropping any transaction animation.
+- Back Up and Drop Site live in a per site ⋯ menu, not as more buttons: a row already has Open and Make Default, and a destructive action should not sit one click from Open.
+- The Drop sheet reads the plan with `--dry-run --json` on open and again when the new default changes, and cannot be dismissed while the drop runs; the typed name goes to `--confirm-site` as typed.

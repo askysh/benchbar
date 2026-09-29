@@ -83,6 +83,8 @@ SCRIPT_DIR="$(fl_resolve_self)"
 . "${SCRIPT_DIR}/lib/frappe-local/bench.sh"
 # shellcheck source=lib/frappe-local/sites.sh
 . "${SCRIPT_DIR}/lib/frappe-local/sites.sh"
+# shellcheck source=lib/frappe-local/site-backups.sh
+. "${SCRIPT_DIR}/lib/frappe-local/site-backups.sh"
 # shellcheck source=lib/frappe-local/apps.sh
 . "${SCRIPT_DIR}/lib/frappe-local/apps.sh"
 # shellcheck source=lib/frappe-local/teamlock.sh
@@ -149,6 +151,11 @@ Daily
                       --bundle NAME or --apps "a b" from apps/. The default stays.
   site default NAME   Make NAME the default site (bench use, runner, benchup, the app).
   site hosts          Add a 127.0.0.1 line for every site to /etc/hosts (sudo, once).
+  site backup NAME    bench --site NAME backup (--with-files for the uploads too; --json).
+  site backups NAME   The site's backups, newest first: time, size, with files (--json).
+  site drop NAME      bench drop-site: a backup with files first, the folder moved to
+                      archived/sites, the hosts line removed. Needs --confirm-site NAME;
+                      the default site also needs --new-default OTHER (--dry-run, --json).
   mariadb-password    Print the MariaDB root password kept in the Keychain (asks first).
   mcp                 Model Context Protocol server on stdio for coding agents
                       (claude mcp add benchbar -- benchbar mcp). Read tools, up, down, restart.
@@ -534,7 +541,7 @@ case "$COMMAND" in
   register) fl_lock_acquire "${FL_STATE_DIR}/lock" ;;
   site|app|profile|lock)
     # the list, show and check commands are read only; the others change things
-    if [[ "${ARGS[0]:-list}" != "list" && "${ARGS[0]:-}" != "show" && "${ARGS[0]:-}" != "check" ]]; then
+    if [[ "${ARGS[0]:-list}" != "list" && "${ARGS[0]:-}" != "show" && "${ARGS[0]:-}" != "check" && "${ARGS[0]:-}" != "backups" ]]; then
       fl_log_init "${FL_STATE_DIR}/logs"
       fl_lock_acquire "${FL_STATE_DIR}/lock"
     fi

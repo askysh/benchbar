@@ -28,6 +28,13 @@ enum Workspace {
         NSWorkspace.shared.open(url)
     }
 
+    /// Finder with these files selected (a backup's parts). Missing ones are skipped.
+    static func reveal(_ paths: [String]) {
+        let urls = paths.map { URL(fileURLWithPath: $0) }.filter { FileManager.default.fileExists(atPath: $0.path) }
+        guard !urls.isEmpty else { return }
+        NSWorkspace.shared.activateFileViewerSelecting(urls)
+    }
+
     static func openFolder(_ bench: BenchModel) {
         NSWorkspace.shared.open(URL(fileURLWithPath: bench.path, isDirectory: true))
     }

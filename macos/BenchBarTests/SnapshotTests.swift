@@ -51,6 +51,20 @@ struct SnapshotTests {
         try render(PopoverView(store: store, commands: AppCommands()), "popover-running-resources")
     }
 
+    @Test func sitesWithBackups() async throws {
+        base.cli.answer("list", json: try Fixture.string("list-two-benches"))
+        base.cli.answer("status", json: try Fixture.string("status-v16-two-sites"))
+        base.cli.answer("site backups", json: try Fixture.string("site-backups"))
+        base.cli.answer("site drop", json: try Fixture.string("site-drop-plan"))
+        let store = base.makeStore()
+        await store.start(polling: false)
+        let bench = try #require(store.benches.first { $0.path == "/Users/you/dev/v16-bench" })
+        let workbench = Workbench(store: store)
+        await workbench.loadBackups(bench)
+        try render(BenchSites(store: store, workbench: workbench, bench: bench).frame(width: 600, height: 300), "bench-sites-backups")
+        try render(SiteDropSheet(workbench: workbench, bench: bench, site: "v16two") {}, "site-drop-sheet")
+    }
+
     @Test func popoverNeedsRepair() async throws {
         base.cli.answer("list", json: base.listJSON(installed: false))
         base.cli.answer("status", json: base.statusJSON("stopped", reason: "manual"))
