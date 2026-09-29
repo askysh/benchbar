@@ -31,7 +31,8 @@ sites or databases.
   fixes, in order, with a backup before every change. See
   [Doctor and repair](guides/doctor-and-repair.md).
 - **Existing benches welcome.** `benchbar adopt` registers a bench you
-  already have without touching its apps, sites or databases.
+  already have without touching its apps, sites or databases. Only when
+  its ports clash with another bench does it move them, after asking.
 - **A menu bar app.** State at a glance, start, stop, restart, the site,
   the logs, a read only doctor, and crash notifications. The BenchBar
   window adds a page per bench: sites, apps, doctor and Repair. The app
@@ -72,11 +73,20 @@ No Docker, no VM, no preinstalled Python, Node, MariaDB or Redis.
 - Generated files carry a version and content hash header. They are
   rewritten only when their template or inputs changed, and the previous
   copy goes to `.benchbar/backups/<timestamp>/` first.
-- `sites/`, databases, `apps/` and your own files are never touched.
-  Broken folders are moved aside, never removed.
+- `install`, `adopt`, `doctor` and `repair` never change your sites,
+  databases, `apps/` or your own files; the one exception is the port
+  keys in `sites/common_site_config.json` when a bench moves to a free
+  port block, after asking and with a backup. Broken folders are moved
+  aside, never removed.
+- Commands that exist to change a site or an app ask first (`site drop`
+  wants the site name typed again with `--confirm-site`) and back up
+  first: `site drop` backs the site up with its files and then drops
+  its database, `pull --replace`
+  backs up the site it overwrites, `app update` backs up the sites that
+  have the app. benchbar never deletes a whole bench.
 - Stop and cleanup match only this bench's processes and port listeners.
   Your own `bench migrate` or `bench console` keeps running.
-- `sudo` is used for two things, the `/etc/hosts` line and the
+- `sudo` is used for two things, lines in `/etc/hosts` and the
   wkhtmltopdf package, once per run and only after saying why.
 - The MariaDB root password lives in the Keychain and reaches the client
   through `MYSQL_PWD`, never on a command line.
