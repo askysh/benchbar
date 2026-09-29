@@ -392,6 +392,13 @@ assert_contains "$ERR" "apps/acme_tagged is at tag v1.0.0"
 run_json app add "file://${REMOTES}/acme_tagged.git" --branch v1.0.0 --site plansite --dry-run --json --bench-dir "$PB"
 assert_eq "0" "$CODE" "$ERR"
 assert_eq "True False" "$(printf '%s' "$OUT" | jget - '" ".join(str(x) for x in [d["present"], d["changes"]])')"
+# a branch with '|' (git allows it): refused in the plan, never split at apply
+make_app_remote acme_pipe
+git -C "$REMOTES/acme_pipe.git" branch 'feature|x' main
+run_json app add "file://${REMOTES}/acme_pipe.git" --branch 'feature|x' --site plansite --dry-run --json --bench-dir "$PB"
+assert_eq "0" "$CODE" "$ERR"
+assert_eq "False" "$(printf '%s' "$OUT" | jget - 'd["can_apply"]')"
+assert_contains "$(printf '%s' "$OUT" | jget - '" ".join(d["errors"])')" "contains '|'"
 # an unreachable repo and an unknown required app: can_apply false with the reasons
 MOCK_GIT_LSREMOTE_EXIT=128 run_json app add "git@work-gh:acme/private.git" --dry-run --json --bench-dir "$PB"
 assert_eq "0" "$CODE" "$ERR"

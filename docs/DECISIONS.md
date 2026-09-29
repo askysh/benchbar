@@ -468,7 +468,7 @@ Measured on five PR runs (September 2026): 11 to 14 minutes wall clock, all of i
 
 ## 0.6.0: update path
 
-- `benchbar self-update` is the name, not `update`: `app update` and `profile update` exist and `bench update` is the command users fear, so the word alone would be ambiguous. It runs the one line installer from `main` instead of its own git pull, so the CLI, the app's Update Now and the release notes all run the same command.
+- `benchbar self-update` is the name, not `update`: `app update` and `profile update` exist and `bench update` is the command users fear, so the word alone would be ambiguous. It runs the one line installer instead of its own git pull, so the CLI, the app's Update Now and the release notes all run the same command; once a release is offered, the installer comes from that release's tag with `--version`, so the version confirmed is the one installed.
 - `self-update` execs the installer pipeline: `install.sh` pulls the checkout the running script lives in, and nothing of benchbar should run after that.
 - `install.sh --yes` on a Mac whose CLI checkout already exists is an update: it adopts or installs no bench and never starts the Homebrew installer (the one step that asks for a password). An interactive run still offers both.
 - A CLI that is not `~/.local/share/benchbar` gets `--app-only`: a git checkout is the developer's own branch, and a pull the installer did not start could fail on local changes or move them. The same rule is in `lib/frappe-local/selfupdate.sh` and the app's `UpdatePlan`, tested on both sides.

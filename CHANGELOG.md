@@ -96,8 +96,11 @@ All notable changes to this project are documented here.
   update` plans carry a `digest` that `--expect` checks (export too). The
   app passes it, so a profile that changes after Review is refused, not
   applied.
-- Update Now installs the release it offered: the installer comes from
-  that release's tag with `--version`, not from `main`.
+- Update Now and `benchbar self-update` install the release they
+  offered: the installer comes from that release's tag with
+  `--version`, not from `main`.
+- A profile import or update review also covers the local file it
+  replaces: an edit made after the review makes it stale.
 
 ### Fixed
 

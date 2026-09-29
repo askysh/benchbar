@@ -113,6 +113,15 @@ fl__ap_read_hooks() {
 
 fl__ap_err() { AP_ERRORS+=("$1"); AP_CAN_APPLY=0; }
 
+# fl__ap_plain APP REPO BRANCH: 0 when neither holds '|', the separator of
+# the plan's records; git allows it in a branch, the plan refuses it rather
+# than run get-app with a branch it split differently
+fl__ap_plain() {
+  [[ "$2$3" != *"|"* ]] && return 0
+  fl__ap_err "${1}: the repo or branch contains '|', which benchbar app add does not handle; add it with bench get-app yourself"
+  return 1
+}
+
 # fl__ap_on_tag DIR TAG: 0 when apps/DIR is a detached HEAD at TAG's commit
 # (git checks a tag out detached, so there is no branch to compare)
 fl__ap_on_tag() {
@@ -155,6 +164,7 @@ fl__ap_required() {
         fl__ap_err "${parent} requires ${dep}, which is not in the bench and not in $(fl_config_file apps.tsv) or the team profile"
       fi
     fi
+    if [[ "$resolves" == "1" ]] && ! fl__ap_plain "$dep" "$repo" "$branch"; then repo="${repo//|/}"; branch="${branch//|/}"; resolves=0; fi
     if [[ "$resolves" != "1" ]]; then AP_REQ+=("${dep}|${parent}|${present}|${resolves}|${source}|${repo}|${branch}|"); continue; fi
     if fl__ap_read_hooks "$repo" "$branch" "$dep"; then
       AP_REQ+=("${dep}|${parent}|${present}|${resolves}|${source}|${repo}|${branch}|${AP__SHA}")
@@ -209,7 +219,7 @@ fl_app_add_plan() {
     else
       fl__ap_err "$AP__ERR"
     fi
-    if [[ "$AP_CAN_APPLY" == "1" ]]; then
+    if [[ "$AP_CAN_APPLY" == "1" ]] && fl__ap_plain "$AP_NAME" "$AP_REPO" "$AP_BRANCH"; then
       if fl__ap_read_hooks "$AP_REPO" "$AP_BRANCH" "$AP_NAME"; then
         AP_PKG="$AP__PKG"; reqs="$AP__REQ"; AP_COMMIT="$AP__SHA"
         # bench names the folder after the package, so that is the app
