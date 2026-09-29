@@ -410,6 +410,9 @@ cmd_install() {
 
   fl_step_begin 2
   fl_context_init "$FL_BENCH_DIR" "$FL_SITE" "$FL_PROFILE"
+  # no MariaDB formula saved yet (a dry run saves nothing): check against the
+  # server phase 00 chose, not the profile default. Setup may look at 3306.
+  [[ -n "$FL_MARIADB_FORMULA_PINNED" ]] || fl_mariadb_prefer_running
   if [[ "$FL_DRY_RUN" == "1" && ! -d "$FL_BENCH_DIR" ]]; then
     fl_info "dry-run: the bench does not exist yet, so the service plan is shown against an empty bench"
   fi

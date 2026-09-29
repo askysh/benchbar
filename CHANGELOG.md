@@ -55,6 +55,10 @@ All notable changes to this project are documented here.
 - `benchbar install --port-offset N --dry-run` for a new bench shows the
   ports it will get (web 8000+N): no port clash with the benches on 8000,
   and the "Open" address uses the right port.
+- The service pass of `benchbar install` checks the MariaDB the install
+  chose (a running server inside the profile's range, for example
+  mariadb@10.11 for v16) instead of failing on the profile's default
+  formula when the bench has no saved state yet, as in a dry run.
 
 ## 0.5.7 - 2026-09-27
 
