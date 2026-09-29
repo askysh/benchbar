@@ -49,10 +49,12 @@ export BENCHBAR_PROFILE_PATH="$TEAM_REPO"
 run_fm profile list --json
 assert_eq "0" "$CODE" "$OUT"
 j() { printf '%s' "$OUT" | jget - "$1"; }
-assert_eq "user True v15-lts Acme ERP" "$(j '" ".join(str(x) for x in [[p for p in d["profiles"] if p["name"]=="acme"][0][k] for k in ("source","valid","base","label")])')"
-assert_eq "path True v16-lts" "$(j '" ".join(str(x) for x in [[p for p in d["profiles"] if p["name"]=="acme16"][0][k] for k in ("source","valid","base")])')"
+assert_eq "user None True v15-lts Acme ERP 1" "$(j '" ".join(str(x) for x in [[p for p in d["profiles"] if p["name"]=="acme"][0][k] for k in ("source_kind","source","valid","base","label","schema")])')"
+assert_eq "path True v16-lts None None" "$(j '" ".join(str(x) for x in [[p for p in d["profiles"] if p["name"]=="acme16"][0][k] for k in ("source_kind","valid","base","subscription","shadowed_by")])')"
 assert_contains "$(j '[p for p in d["profiles"] if p["name"]=="v15-lts" and p["kind"]=="team"][0]["error"]')" "shadows the built in profile v15-lts"
-assert_contains "$(j '[p for p in d["profiles"] if p["name"]=="acme" and p["source"]=="path"][0]["error"]')" "hidden by an earlier acme.toml"
+assert_contains "$(j '[p for p in d["profiles"] if p["name"]=="acme" and p["source_kind"]=="path"][0]["error"]')" "hidden by an earlier acme.toml"
+assert_eq "$USER_DIR/acme.toml" "$(j '[p for p in d["profiles"] if p["name"]=="acme" and p["source_kind"]=="path"][0]["shadowed_by"]')"
+assert_eq "builtin None None" "$(j '" ".join(str(p[k]) for p in d["profiles"] if p["name"]=="v16-lts" and p["kind"]=="builtin" for k in ("source_kind","source","schema"))')"
 assert_contains "$(j '[p for p in d["profiles"] if p["name"]=="broken"][0]["error"]')" "broken.toml:2: not supported: inline tables"
 run_fm profile list
 assert_contains "$OUT" "acme"
