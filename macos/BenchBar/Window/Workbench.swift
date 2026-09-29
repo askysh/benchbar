@@ -110,6 +110,8 @@ final class Workbench {
             lockChecks[bench.path] = try await client.lockCheck(bench: bench.path)
             lockErrors[bench.path] = nil
         } catch {
+            // an old "In sync" must not stand for a check that failed
+            lockChecks[bench.path] = nil
             lockErrors[bench.path] = error.localizedDescription
         }
     }

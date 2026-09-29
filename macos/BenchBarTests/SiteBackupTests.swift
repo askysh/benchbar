@@ -140,4 +140,21 @@ struct LockBadgeTests {
         #expect(workbench.lockChecks.count == 1)
         #expect(base.cli.calls.filter { $0.first == "lock" } == [["lock", "check", "--json", "--bench-dir", locked.path]])
     }
+
+    /// A failed Check Again must not leave the last "In sync" on screen.
+    @Test func aFailedRecheckClearsTheOldResult() async throws {
+        base.cli.answer("list", json: try Fixture.string("list"))
+        base.cli.answer("status", json: try Fixture.string("status-running"))
+        base.cli.answer("lock", CommandOutput(exitCode: 1, stdout: try Fixture.string("lock-check"), stderr: ""))
+        let store = base.makeStore()
+        await store.start(polling: false)
+        let workbench = Workbench(store: store)
+        let locked = try #require(store.benches.first { $0.summary.lockFile != nil })
+        await workbench.checkLock(locked)
+        #expect(workbench.lockChecks[locked.path] != nil)
+        base.cli.answer("lock", CommandOutput(exitCode: 2, stdout: "", stderr: "[FAIL] benchbar.toml: parse error"))
+        await workbench.checkLock(locked)
+        #expect(workbench.lockChecks[locked.path] == nil)
+        #expect(workbench.lockErrors[locked.path]?.contains("parse error") == true)
+    }
 }
