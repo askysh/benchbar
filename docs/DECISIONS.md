@@ -454,3 +454,11 @@ Measured on five PR runs (September 2026): 11 to 14 minutes wall clock, all of i
 - `dead_agents` looks at every com.benchbar agent, not only the current bench's: the bench whose runner is gone cannot run doctor any more, so another bench's doctor is the only place the warning can show.
 - `benchbar console` and `db` exec bench (`bench --site S console|mariadb`) instead of running it as a child: the terminal, signals and exit code are bench's, and no benchbar lock or trap outlives the shell. `db` relies on bench reading the site's own credentials, so the root password is never involved.
 - `doctor --fix-hints` lists failures before warnings and prints each fix once: several checks share `benchbar repair` as their fix, and an agent should run it once. Everything but the hints goes to stderr, so the output can be piped as it is.
+
+## 0.6.0: update path
+
+- `benchbar self-update` is the name, not `update`: `app update` and `profile update` exist and `bench update` is the command users fear, so the word alone would be ambiguous. It runs the one line installer from `main` instead of its own git pull, so the CLI, the app's Update Now and the release notes all run the same command.
+- `self-update` execs the installer pipeline: `install.sh` pulls the checkout the running script lives in, and nothing of benchbar should run after that.
+- `install.sh --yes` on a Mac whose CLI checkout already exists is an update: it adopts or installs no bench and never starts the Homebrew installer (the one step that asks for a password). An interactive run still offers both.
+- A CLI that is not `~/.local/share/benchbar` gets `--app-only`: a git checkout is the developer's own branch, and a pull the installer did not start could fail on local changes or move them. The same rule is in `lib/frappe-local/selfupdate.sh` and the app's `UpdatePlan`, tested on both sides.
+- The release notes are built by `scripts/release-notes.sh` (tested) instead of inline workflow shell, with an Update section first: 0.5.x apps open the release page from Check for Updates, so the copy paste command has to be at the top of that page.

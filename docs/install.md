@@ -50,7 +50,7 @@ Pass flags after `bash -s --`, for example
 
 | Flag | What it does |
 |---|---|
-| `--yes` | Accept every default, no questions (no terminal needed) |
+| `--yes` | Accept every default, no questions (no terminal needed). On a Mac that already has the CLI in `~/.local/share/benchbar` this is an update: the CLI and the app only, no bench is adopted or installed and the Homebrew installer is never run |
 | `--dry-run` | Print the plan and every command, change nothing |
 | `--no-app` | The CLI only |
 | `--app-only` | The app only |
@@ -91,6 +91,42 @@ scripts/macos-install-local.sh     # or build it and copy it to ~/Applications
 ```
 
 The app needs full Xcode 26 or newer.
+
+## Updating
+
+In the app, click **Update Now**. BenchBar asks GitHub for the latest
+release once a day (turn it off in General, **Check for updates
+automatically**), and when there is a newer one it shows **Update to
+X…** in the popover and the menu bar menu, and a banner on top of the
+BenchBar window. Update Now opens Terminal with the installer, BenchBar
+quits while it is replaced and opens again at the end. Your benches keep
+running. **Copy Command** copies the same command, **Release Notes**
+opens the release page.
+
+In Terminal, the same update is:
+
+```bash
+benchbar self-update               # shows the plan, asks, then runs the installer
+benchbar self-update --check       # this version against the latest release
+```
+
+or, on any version, including 0.5.x, which has no `self-update`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash -s -- --yes
+```
+
+It pulls the CLI in `~/.local/share/benchbar`, replaces the app in
+`~/Applications` (it quits a running BenchBar first), and changes no
+bench: it never adopts, installs or updates a bench and never runs
+`bench update`. It never runs `sudo`. An app in `/Applications` is
+replaced there when that folder is writable (the app and `self-update`
+pass `BENCHBAR_APP_DIR=/Applications`).
+
+If your `benchbar` is a git checkout of your own, for example
+`~/dev/benchbar`, the app and `self-update` update only the app
+(`--app-only`) and tell you to update the CLI with `git pull` in that
+checkout.
 
 ## After installing
 

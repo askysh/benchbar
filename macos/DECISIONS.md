@@ -260,3 +260,13 @@ Asked for after the phases, to stop naming drift before the first release.
 - `console`, `db` and `editor` became link routes: they only open a window at a prompt, like `logs`.
 - The resource charts' time axis starts at the first sample and grows to ten minutes; memory is scaled to its own range without a fill. A fixed ten minute axis and a zero based memory scale drew a fresh bench as a sliver and a flat memory line as a solid block (found by Akash on the real Mac).
 - While resource charts are on screen the store polls every 5 seconds, as with the popover open (the same loop, no new timer), so a chart has a line within seconds.
+
+## 0.6.0: update path
+
+- Background update checks are now on by default (once a day, launch, wake and an hourly look at the clock). 0.5 did none because an update meant a manual download of an unsigned DMG; now the update is the one line installer, which checks the zip against SHA256SUMS and downloads with curl, so the unsigned app opens without Gatekeeper. Signing moves to 0.7. The check is one unauthenticated GET to the releases API with no identifier beyond the app version in the User-Agent, and a toggle in General turns it off.
+- A Sparkle build (BENCHBAR_SPARKLE=YES) makes no checks of its own and hides the toggle: Sparkle has its own schedule, and two checkers would offer two different update paths.
+- The last check time, the latest version seen, its page and the dismissed version live in UserDefaults, so Update to X shows right after launch without waiting for the network. A failed check is not recorded and is retried at the next wake or hour; an answered one waits a day.
+- The banner is dismissed per version, the menu item is not: hiding a nag should not hide the way to update.
+- Update Now writes a `.command` file and opens it with Terminal, the same path as Open in Terminal: `osascript` or `do script` would need the Automation consent prompt. The app quits itself 1.5 seconds later so the installer can replace it (the installer's own quit is the fallback), and the script opens the app again at the end, the new one or the old one when the update failed.
+- Command selection (install.sh's CLI, a developer checkout, another install, the app in `/Applications`) is a pure `UpdatePlan.make` with the file system passed in, so every case is a unit test. An app in `/Applications` gets `BENCHBAR_APP_DIR=/Applications` when writable; otherwise the update goes to `~/Applications` and says to trash the old copy.
+- The automatic check does not go through the About pane's `UpdateChecker`, so a failure in the background never shows an error the person did not ask for; a manual check feeds the offer through `onStatus`.
