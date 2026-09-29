@@ -73,7 +73,10 @@ runs `migrate`, `build` or `update`, and never touches `apps/`, `env/`,
 the sites or the databases.
 
 When the bench uses the same ports as an established bench, adopt moves
-it to the next free port block with `bench set-config -g`, after asking.
+it to the next free port block, after asking: `bench set-config -g`
+writes the port keys into `sites/common_site_config.json` (backed up
+first) and `bench setup redis` rewrites `config/redis_*.conf`. That is
+the only change under `sites/`.
 The default bench never moves on its own. When honcho is missing, adopt
 warns and does not install it into the bench env.
 

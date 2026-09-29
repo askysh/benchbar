@@ -54,7 +54,8 @@ Exit codes: 0 repaired, or nothing to do; 1 a step failed or the plan was
 declined.
 
 The full output of every run is in `.benchbar/logs/<timestamp>.log` and
-the backups in `.benchbar/backups/<timestamp>/`, in the checkout.
+the backups in `.benchbar/backups/<timestamp>/`, in the benchbar
+checkout (`~/.local/share/benchbar` after the one line installer).
 
 ```bash
 benchbar repair --dry-run
