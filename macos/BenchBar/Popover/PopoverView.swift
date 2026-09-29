@@ -10,6 +10,9 @@ struct AppCommands {
     var setup: (BenchModel, Bool) -> Void = { _, _ in }
     /// The BenchBar window at a bench's tab (true: open the Repair sheet too).
     var manage: (BenchModel, BenchTab, Bool) -> Void = { _, _, _ in }
+    /// A newer release on offer: "Update to X…" in the footer.
+    var updateOffer: UpdateOffer?
+    var update: () -> Void = {}
 }
 
 /// The popover under the menu bar runner.
@@ -32,6 +35,10 @@ struct PopoverView: View {
             Divider()
             Button("Scan Folder…", systemImage: "folder.badge.plus", action: commands.scanFolder)
                 .buttonStyle(.borderless)
+            if let version = commands.updateOffer?.version {
+                Button("Update to \(version)…", systemImage: "arrow.down.circle", action: commands.update)
+                    .buttonStyle(.borderless)
+            }
             footer
         }
         .padding(14)

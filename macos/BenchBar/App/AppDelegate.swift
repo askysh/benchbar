@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let library = RunnerLibrary()
     private var updater: Updater?
     private var about: AboutModel!
+    private var updateOffer: UpdateOffer!
     /// benchbar:// links that arrived before the bench list was loaded
     /// (a link can launch the app).
     private var pendingURLs: [URL] = []
@@ -41,6 +42,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         notifier.onOpen = { [weak self] path in self?.showPopover(for: path) }
         notifier.start()
 
+        updateOffer = UpdateOffer(settings: settings)
+        updateOffer.cliPath = { [weak self] in
+            if case .ready(let url) = self?.store.cli { return url.path }
+            return nil
+        }
+
         let commands = AppCommands(
             openSettings: { [weak self] in self?.openSettings() },
             quit: { NSApp.terminate(nil) },
@@ -53,12 +60,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 settingsWindow.router.setupRequest = bench.path
                 openBench(bench, tab: .overview, repair: false)
             },
-            manage: { [weak self] bench, tab, repair in self?.openBench(bench, tab: tab, repair: repair) })
+            manage: { [weak self] bench, tab, repair in self?.openBench(bench, tab: tab, repair: repair) },
+            updateOffer: updateOffer,
+            update: { [weak self] in self?.updateNowAction() })
         popover = PopoverController(rootView: PopoverView(store: store, commands: commands))
         popover.onOpenChange = { [weak self] open in self?.store.setPopoverOpen(open) }
 
         let workbench = Workbench(store: store)
-        about = AboutModel(store: store)
+        about = AboutModel(store: store, offer: updateOffer)
         let discovery = BenchDiscovery(store: store)
         settingsWindow = SettingsWindowController { [unowned self] router in
             MainWindowView(store: store, router: router, workbench: workbench, about: about, discovery: discovery) { [unowned self] part in
@@ -80,6 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             pendingURLs = []
             waiting.forEach(handle)
             askForCLIOnce()
+            updateOffer.startAutomaticChecks()
         }
     }
 
@@ -108,6 +118,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func makeStatusMenu() -> NSMenu {
         let menu = NSMenu()
+        if let version = updateOffer?.version {
+            menu.addItem(withTitle: "Update to \(version)…", action: #selector(updateNowAction), keyEquivalent: "").target = self
+            menu.addItem(.separator())
+        }
         menu.addItem(withTitle: "Scan Folder…", action: #selector(scanFolderAction), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Settings…", action: #selector(openSettingsAction), keyEquivalent: ",").target = self
         menu.addItem(withTitle: "About BenchBar", action: #selector(openAboutAction), keyEquivalent: "").target = self
@@ -204,6 +218,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func checkForUpdatesAction() {
         settingsWindow.router.updateCheckRequested = true
         openAboutAction()
+    }
+
+    /// "Update to X…": what happens, then Update Now, Copy Command or Release Notes.
+    @objc private func updateNowAction() {
+        popover.close()
+        updateOffer.confirmFromMenu()
     }
 
     @objc private func openDocsAction() { NSWorkspace.shared.open(BenchBarLinks.docs) }
