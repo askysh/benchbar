@@ -61,6 +61,12 @@ run_fm lock check --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "in sync"
 run_fm lock check --json --bench-dir "$BENCH"
 assert_eq "True 0" "$(printf '%s' "$OUT" | jget - 'str(d["in_sync"]) + " " + str(len(d["drift"]))')"
+# the app's fixture has the same keys (the drift entries are checked where there is drift)
+printf '%s' "$OUT" | python3 -c '
+import json, sys
+live = json.load(sys.stdin); fixture = json.load(open(sys.argv[1]))
+assert set(live) == set(fixture), set(live) ^ set(fixture)
+' "$ROOT/macos/BenchBarTests/Fixtures/lock-check.json" || fail "lock check --json and the app fixture lock-check.json disagree"
 # lock check is read only and offline
 reset_calls; snap="$(snapshot "$BENCH" "$FL_STATE_DIR")"
 run_fm lock check --bench-dir "$BENCH"
@@ -71,6 +77,12 @@ cp "$LOCK" "$TMP_DIR/lock.good"
 # ---- every drift kind
 sed_inplace 's/^profile = "v15-lts"$/profile = "v16-lts"/' "$LOCK"
 assert_contains "$(drift_kinds)" "profile_mismatch:-"
+run_fm lock check --json --bench-dir "$BENCH"
+printf '%s' "$OUT" | python3 -c '
+import json, sys
+live = json.load(sys.stdin); fixture = json.load(open(sys.argv[1]))
+assert set(live["drift"][0]) == set(fixture["drift"][0]), set(live["drift"][0]) ^ set(fixture["drift"][0])
+' "$ROOT/macos/BenchBarTests/Fixtures/lock-check.json" || fail "lock check drift entries and the app fixture disagree"
 MOCK_BENCH_VERSION=5.30.0 run_fm lock check --json --bench-dir "$BENCH"
 assert_contains "$OUT" '"kind":"bench_version_mismatch"'
 cp "$TMP_DIR/lock.good" "$LOCK"

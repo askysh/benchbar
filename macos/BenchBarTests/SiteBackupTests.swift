@@ -101,3 +101,43 @@ struct SiteBackupTests {
         #expect(error.message.contains("--confirm-site"))
     }
 }
+
+@Suite("Lockfile badge", .serialized)
+struct LockBadgeTests {
+    let base: BenchStoreTests
+
+    init() throws { base = try BenchStoreTests() }
+
+    @Test func decodesAndWordsTheDrift() throws {
+        let check = try BenchJSON.decode(LockCheck.self, from: Fixture.data("lock-check"))
+        #expect(!check.inSync && check.drift.count == 2)
+        #expect(LockText.badge(check) == "2 differences")
+        #expect(check.drift[0].text == "erpnext: commit behind (is a1b2c3d, lock b5f7846)")
+        #expect(check.drift[1].text == "hrms on v16two: site app missing (lock hrms)")
+        var synced = check
+        synced.inSync = true; synced.drift = []
+        #expect(LockText.badge(synced) == "In sync")
+        synced.inSync = false; synced.drift = [check.drift[0]]
+        #expect(LockText.badge(synced) == "1 difference")
+    }
+
+    @Test func listCarriesTheLockfile() throws {
+        let list = try BenchJSON.decode(BenchList.self, from: Fixture.data("list"))
+        #expect(list.benches.map(\.lockFile) == ["/Users/you/frappe-bench/apps/acme/benchbar.toml", nil])
+    }
+
+    /// Drift exits 1 with the JSON: still a result, not an error.
+    @Test func driftIsAResultAndOnlyBenchesWithALockAreChecked() async throws {
+        base.cli.answer("list", json: try Fixture.string("list"))
+        base.cli.answer("status", json: try Fixture.string("status-running"))
+        base.cli.answer("lock", CommandOutput(exitCode: 1, stdout: try Fixture.string("lock-check"), stderr: ""))
+        let store = base.makeStore()
+        await store.start(polling: false)
+        let workbench = Workbench(store: store)
+        for bench in store.benches { await workbench.checkLock(bench) }
+        let locked = try #require(store.benches.first { $0.summary.lockFile != nil })
+        #expect(workbench.lockChecks[locked.path]?.drift.count == 2)
+        #expect(workbench.lockChecks.count == 1)
+        #expect(base.cli.calls.filter { $0.first == "lock" } == [["lock", "check", "--json", "--bench-dir", locked.path]])
+    }
+}

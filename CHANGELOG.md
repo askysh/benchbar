@@ -17,6 +17,9 @@ All notable changes to this project are documented here.
   `--new-default`; it removes the site's hosts line with one `sudo`
   prompt. In the app, the Sites tab backs up a site and drops it behind a
   sheet with the plan and a typed confirmation.
+- The Overview tab of a bench with a lockfile shows "In sync" or "N
+  differences" with the list, from `benchbar lock check --json`, on open
+  and with Check Again.
 - CPU and memory per bench: the Overview tab charts the last ten minutes
   while the bench runs, and the popover shows the current values. Measured
   with the same process tree walk as the runner speed, in memory only.

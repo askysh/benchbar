@@ -21,7 +21,7 @@ struct BenchPage: View {
                 .padding(.horizontal, 20).padding(.top, 10)
             Group {
                 switch router.benchTab {
-                case .overview: BenchOverview(store: store, bench: bench, router: router)
+                case .overview: BenchOverview(store: store, workbench: workbench, bench: bench, router: router)
                 case .sites: BenchSites(store: store, workbench: workbench, bench: bench)
                 case .apps: BenchApps(store: store, workbench: workbench, bench: bench)
                 case .health: BenchHealth(store: store, bench: bench, router: router)
@@ -52,6 +52,7 @@ struct BenchPage: View {
 
 struct BenchOverview: View {
     let store: BenchStore
+    let workbench: Workbench
     let bench: BenchModel
     @Bindable var router: WindowRouter
     @State private var schedulerChange: Bool?
@@ -98,6 +99,9 @@ struct BenchOverview: View {
             }
             if bench.runningSince != nil {
                 ResourceSection(bench: bench)
+            }
+            if bench.summary.lockFile != nil {
+                LockSection(workbench: workbench, bench: bench)
             }
             Section("Site and ports") {
                 PortConflictAction(store: store, bench: bench)
@@ -345,5 +349,71 @@ nonisolated enum SiteName {
     static func isValid(_ name: String) -> Bool {
         guard let first = name.first, first.isLowercase || first.isNumber else { return false }
         return name.allSatisfy { ($0.isASCII && ($0.isLowercase || $0.isNumber)) || $0 == "-" || $0 == "." }
+    }
+}
+
+// MARK: lockfile
+
+/// "In sync" or "N differences" against the bench's benchbar.toml, from
+/// `lock check --json` (read only). No apply here: that is `benchbar lock
+/// apply` in Terminal for now.
+struct LockSection: View {
+    let workbench: Workbench
+    let bench: BenchModel
+    @State private var showDrift = false
+
+    var body: some View {
+        let check = workbench.lockChecks[bench.path]
+        Section {
+            HStack(spacing: 8) {
+                if workbench.checkingLock.contains(bench.path) && check == nil {
+                    ProgressView().controlSize(.small)
+                    Text("Comparing with the lockfile…").foregroundStyle(.secondary)
+                } else if let check {
+                    Image(systemName: check.inSync ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
+                        .foregroundStyle(check.inSync ? .green : .orange)
+                    Text(LockText.badge(check))
+                } else if let error = workbench.lockErrors[bench.path] {
+                    Image(systemName: "xmark.octagon.fill").foregroundStyle(.red)
+                    Text(error).font(.caption).foregroundStyle(.secondary).lineLimit(2).textSelection(.enabled)
+                }
+                Spacer()
+                Button("Check Again") { Task { await workbench.checkLock(bench) } }
+                    .disabled(workbench.checkingLock.contains(bench.path))
+            }
+            if let check, !check.drift.isEmpty {
+                DisclosureGroup(isExpanded: $showDrift) {
+                    ForEach(check.drift) { drift in
+                        Label(drift.text, systemImage: drift.level == "fail" ? "xmark.circle" : "exclamationmark.circle")
+                            .font(.callout)
+                            .foregroundStyle(drift.level == "fail" ? .red : .primary)
+                            .textSelection(.enabled)
+                    }
+                } label: {
+                    Text("Differences").font(.callout)
+                }
+            }
+        } header: {
+            Text("Lockfile")
+        } footer: {
+            Text(LockText.footer(bench.summary.lockFile ?? ""))
+        }
+        .task(id: bench.path) { await workbench.checkLock(bench) }
+        // after a change (an app added or updated) the answer may differ
+        .onChange(of: workbench.result) { _, result in
+            if result?.scope == bench.path { Task { await workbench.checkLock(bench) } }
+        }
+    }
+}
+
+nonisolated enum LockText {
+    static func badge(_ check: LockCheck) -> String {
+        if check.inSync { return "In sync" }
+        let n = check.drift.count
+        return n == 1 ? "1 difference" : "\(n) differences"
+    }
+
+    static func footer(_ path: String) -> String {
+        "Compared with \(path). To bring the bench in line, run benchbar lock apply in Terminal."
     }
 }

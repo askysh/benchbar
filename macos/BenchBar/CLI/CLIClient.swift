@@ -184,6 +184,12 @@ nonisolated struct CLIClient: Sendable {
         try await run(["site", "default", name, "--plain", "--bench-dir", bench], timeout: Timeout.action, acceptExitCodes: [0])
     }
 
+    /// The bench against its lockfile. Read only; exit 1 means drift, with the JSON.
+    func lockCheck(bench: String) async throws(CLIError) -> LockCheck {
+        let output = try await run(["lock", "check", "--json", "--bench-dir", bench], timeout: Timeout.doctor, acceptExitCodes: [0, 1])
+        return try BenchJSON.decode(LockCheck.self, from: Data(output.stdout.utf8))
+    }
+
     /// bench --site NAME backup, through the CLI. Minutes for a big site.
     func backupSite(_ name: String, withFiles: Bool, bench: String) async throws(CLIError) -> SiteBackupResult {
         let output = try await run(["site", "backup", name] + (withFiles ? ["--with-files"] : []) + ["--json", "--bench-dir", bench],

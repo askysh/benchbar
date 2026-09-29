@@ -63,7 +63,9 @@ opening BenchBar again from Finder or Spotlight. It has a page per bench:
   and memory for the last ten minutes (hover for the value at a moment);
   the popover shows the current values under the bench name. They count
   the bench's own processes, not the shared MariaDB, and are kept in
-  memory only.
+  memory only. A bench with a lockfile (`benchbar.toml`) shows **In
+  sync** or **N differences** with the list, from `benchbar lock check`
+  (read only); bring it in line with `benchbar lock apply` in Terminal.
 - **Sites**: add a site (it asks for the Administrator password), make
   one the default, open any of them. The ⋯ menu of a site backs it up
   (with or without files) and shows the last backup in Finder; **Drop

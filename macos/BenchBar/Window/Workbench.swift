@@ -16,6 +16,10 @@ final class Workbench {
     private(set) var profilesError: String?
     /// Each site's backups, keyed by `backupKey(bench, site)`; read on the Sites tab.
     private(set) var backups: [String: SiteBackupList] = [:]
+    /// `lock check --json` per bench path, and why it failed.
+    private(set) var lockChecks: [String: LockCheck] = [:]
+    private(set) var lockErrors: [String: String] = [:]
+    private(set) var checkingLock: Set<String> = []
     /// The last change's outcome, for the banner at the top of the pane.
     var result: ChangeResult?
 
@@ -91,6 +95,22 @@ final class Workbench {
     func setDefaultSite(_ name: String, on bench: BenchModel) async {
         await change("Make \(name) the default site", on: bench) { client throws(CLIError) in
             try await client.setDefaultSite(name, bench: bench.path)
+        }
+    }
+
+    // MARK: lockfile
+
+    /// Compares the bench with its remembered lockfile. Read only; nothing
+    /// to do for a bench without one.
+    func checkLock(_ bench: BenchModel) async {
+        guard bench.summary.lockFile != nil, let client = store.cliClient, !checkingLock.contains(bench.path) else { return }
+        checkingLock.insert(bench.path)
+        defer { checkingLock.remove(bench.path) }
+        do {
+            lockChecks[bench.path] = try await client.lockCheck(bench: bench.path)
+            lockErrors[bench.path] = nil
+        } catch {
+            lockErrors[bench.path] = error.localizedDescription
         }
     }
 

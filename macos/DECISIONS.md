@@ -253,3 +253,5 @@ Asked for after the phases, to stop naming drift before the first release.
 - Two charts, one measure each, no axes: CPU percent and bytes have nothing in common to share a scale. The line has no animation, so Reduce Motion needs nothing extra beyond dropping any transaction animation.
 - Back Up and Drop Site live in a per site ⋯ menu, not as more buttons: a row already has Open and Make Default, and a destructive action should not sit one click from Open.
 - The Drop sheet reads the plan with `--dry-run --json` on open and again when the new default changes, and cannot be dismissed while the drop runs; the typed name goes to `--confirm-site` as typed.
+- The lockfile badge runs `lock check` when the Overview opens, with Check Again, and after a change on that bench, not on the status poll: `lock check` runs `bench --version` and reads every app's git state, too slow for every 30 seconds. `lock check` exits 1 on drift, so exit 1 with JSON counts as a result.
+- No Apply button in 0.5.8: `lock apply` moves app checkouts and runs migrate, which needs its own plan sheet; the footer names the command instead.

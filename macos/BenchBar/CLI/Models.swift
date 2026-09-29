@@ -71,11 +71,14 @@ nonisolated struct BenchSummary: Codable, Sendable, Equatable, Hashable, Identif
     var stateFile: String
     /// Added in 0.4; nil from an older CLI.
     var sites: [SiteInfo]? = nil
+    /// The lockfile `lock check` compares with (0.5), nil without one.
+    var lockFile: String? = nil
 
     var id: String { path }
 
     enum CodingKeys: String, CodingKey {
         case path, name, site, label, ports, sites
+        case lockFile = "lock_file"
         case webURL = "web_url"
         case isDefault = "default"
         case serviceInstalled = "service_installed"
