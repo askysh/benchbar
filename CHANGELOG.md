@@ -2,14 +2,26 @@
 
 All notable changes to this project are documented here.
 
-## Unreleased
+## 0.5.8 - 2026-09-29
+
+Quick wins, and port blocks across benches. Links for Raycast and
+Shortcuts drive a bench without the menu bar, each bench's page charts
+its CPU and memory and says whether it matches its lockfile, and a site
+can be backed up or dropped (with a backup first and its name typed
+again) from the CLI and the app. VS Code or Cursor, a console and the
+site's database are one click away, and `doctor --fix-hints` gives agents
+just the commands. Setup plans port blocks for several benches at once
+and refuses a start that would take another bench's ports. The installer
+no longer ends silently without a terminal, and an emptied bench's agent
+can be removed.
 
 ### Added
 
 - `benchbar://` links for Raycast, Shortcuts and scripts: `up`, `down`,
-  `restart`, `open`, `logs`, `window` and `doctor`, with `bench=` (a name
-  or a path) and `site=`. Links only start, stop and open things; any
-  other route is ignored and logged. See the URL scheme reference page.
+  `restart`, `open`, `logs`, `window`, `doctor`, `console`, `db` and
+  `editor`, with `bench=` (a name or a path) and `site=`. Links only
+  start, stop and open things; any other route is ignored and logged. See
+  the URL scheme reference page.
 - `benchbar doctor --fix-hints`: only the fix commands of failing and
   warning checks, one per line, for coding agents and scripts. The exit
   code is doctor's.

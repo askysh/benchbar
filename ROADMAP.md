@@ -60,15 +60,21 @@ flags the installer's PATH block.
 Benches in the app find existing benches in a folder, remember the ones
 you pick, and set up their service after showing the plan.
 
+**0.5.8, quick wins.** `benchbar://` links for Raycast and Shortcuts,
+CPU and memory charts per bench, site backup, backups and drop with a
+backup first, the lockfile badge, Open in VS Code or Cursor, `benchbar
+console` and `db`, `doctor --fix-hints`, and port blocks planned across
+benches with a check before every start.
+
 ## Later
 
 **0.6, public launch.** Developer ID signing and notarization, a signed
 DMG, a cask in `askysh/homebrew-tap`, Sparkle updates, and a launch post
 on discuss.frappe.io.
 
-**0.7, the app for sites.** Backup and restore from the app, dropping a
-site with a backup first, pull and the lockfile in the app, a first run
-wizard, profile switching per bench.
+**0.7, the app for sites.** Restore from the app (backup and drop
+shipped in 0.5.8), pull and lock apply in the app, a first run wizard,
+new bench from a profile.
 
 **1.0.** A stable JSON API and runner format, an official Homebrew cask,
 full doctor coverage for v15 and v16. Vouch
@@ -79,18 +85,14 @@ drive-by PRs appear. Not before.
 
 Not scheduled, kept because they came up more than once.
 
-- A URL scheme for Raycast and Shortcuts, then Shortcuts actions, a
-  Raycast extension, desktop widgets.
-- Open a bench in VS Code or Cursor, open a bench console.
+- Shortcuts actions, a Raycast extension, desktop widgets (the URL scheme
+  shipped in 0.5.8).
 - A local mail catcher for development email.
-- Resource graphs per bench.
 - Run one scheduler event now from the app.
 - Worker restart when Python files change, opt in.
 - More speed sources for the runner: job queue depth, requests per second.
 - A runner gallery in the docs.
 - Log rotation on a size limit without a manual `repair`.
-- `benchbar doctor --fix-hints` for agents: only the fix commands, one per
-  line.
 - More failure path tests for bench creation and app installation.
 - `benchbar wipe`, the uninstall recipe behind an explicit confirmation,
   never touching MariaDB data without a backup.
