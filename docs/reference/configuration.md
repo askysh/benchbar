@@ -47,7 +47,10 @@ benchbar autostart off                                                  # never 
 ```
 
 `--yes` accepts every default and confirmation, including the `sudo` line
-for `/etc/hosts`, and expects the passwords in the environment.
+for `/etc/hosts`; the `sudo` password prompt itself still appears.
+`ADMIN_PASSWORD` must be in the environment. `MARIADB_ROOT_PASSWORD` is
+needed only when MariaDB already has a root password that the Keychain
+does not know: a fresh MariaDB gets a generated one.
 
 ## Team profile files
 
@@ -89,7 +92,7 @@ share ([Sharing a profile](../guides/teams.md#sharing-a-profile)).
 | What | Where it lives | When you need it |
 |---|---|---|
 | MariaDB root | your Keychain, item `benchbar-mariadb`; `benchbar mariadb-password` prints it after a confirmation | rarely: another `bench new-site`, or `mariadb -u root -p` |
-| Administrator | you choose it in phase 2, or `ADMIN_PASSWORD` | every login at `http://macdev:8000` |
+| Administrator | you choose it during `benchbar install` or `site add`, or `ADMIN_PASSWORD` | every login at `http://<site>:<port>`, by default `http://macdev:8000` |
 
 ## Environment variables
 
@@ -100,6 +103,9 @@ share ([Sharing a profile](../guides/teams.md#sharing-a-profile)).
 | `BENCHBAR_PROFILE_PATH` | `--profile`, `profile` | Colon separated folders with team profiles, for example a clone of your team's config repo |
 | `BENCHBAR_OFFLINE` | `profile`, doctor | `BENCHBAR_OFFLINE=1`: no network for team profiles; reachability is `null` and doctor does not fetch subscriptions |
 | `BENCHBAR_LOCK` | `lock`, doctor | The lockfile path, when `--lock` is not given |
+| `BENCH_DIR` | every command | The bench to act on when `--bench-dir` is not given; checked before the remembered bench |
+| `SITE_NAME` | every command | The site to act on when `--site` is not given; checked before the remembered site |
+| `OFFLINE` | `install`, doctor, `app focus`, `profile` | `OFFLINE=1`: no network for version checks, `--fetch` and team profiles (like `BENCHBAR_OFFLINE=1`) |
 | `BENCHBAR_REPORT_DIR` | `report` | Where the zip goes instead of `~/Desktop` |
 | `NO_COLOR` | every command | `NO_COLOR=1` turns off colors and spinners, like `--plain` |
 
@@ -111,9 +117,10 @@ The one line installer reads `BENCHBAR_HOME` (the checkout, default
 ## Bench discovery
 
 Point the tool at any bench once with `--bench-dir`; the path is
-remembered. Without it, benchbar looks for a remembered bench, then
-`~/frappe-bench`, `~/dev/frappe-bench`, and any folder under `~` or
-`~/dev` that holds `sites/common_site_config.json`.
+remembered. Without it, benchbar uses `BENCH_DIR` when it is set, then
+the remembered bench, then `~/frappe-bench`, `~/dev/frappe-bench`, and
+any folder directly under `~` or `~/dev` (one level deep) that holds
+`sites/common_site_config.json`. `benchbar scan PATH` looks deeper.
 
 The first bench you install or adopt becomes the default; a second one
 keeps the first as the default unless you pass `--make-default`. See

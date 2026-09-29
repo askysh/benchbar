@@ -59,7 +59,7 @@ Exit codes: 0; 1 when the name is not valid, the path is not a bench, or
 a repo URL carries credentials.
 
 ```bash
-benchbar profile create acme --from-bench ~/frappe-bench
+benchbar profile create acme --from-bench ~/frappe-bench   # your bench's folder
 ```
 
 ## profile export
