@@ -24,9 +24,9 @@ struct BenchHealth: View {
                     if report.needsAttention.isEmpty {
                         Label("Every check passes.", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
                     }
-                    ForEach(report.needsAttention) { CheckRow(check: $0) }
+                    ForEach(report.needsAttention, id: \.rowKey) { CheckRow(check: $0) }
                     DisclosureGroup("\(report.passing.count) passing") {
-                        ForEach(report.passing) { CheckRow(check: $0) }
+                        ForEach(report.passing, id: \.rowKey) { CheckRow(check: $0) }
                     }
                 } else if bench.isRunningDoctor {
                     HStack { ProgressView().controlSize(.small); Text("Running doctor…").foregroundStyle(.secondary) }

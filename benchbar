@@ -89,6 +89,8 @@ SCRIPT_DIR="$(fl_resolve_self)"
 . "${SCRIPT_DIR}/lib/frappe-local/consoles.sh"
 # shellcheck source=lib/frappe-local/apps.sh
 . "${SCRIPT_DIR}/lib/frappe-local/apps.sh"
+# shellcheck source=lib/frappe-local/freshness.sh
+. "${SCRIPT_DIR}/lib/frappe-local/freshness.sh"
 # shellcheck source=lib/frappe-local/teamlock.sh
 . "${SCRIPT_DIR}/lib/frappe-local/teamlock.sh"
 # shellcheck source=lib/frappe-local/pull.sh
@@ -182,6 +184,11 @@ Apps
   app install NAME    Install an app of the bench on a site (--site S).
   app update NAME     Fast forward one app with a changelog first, back up the sites
                       that have it, then requirements, migrate and build (--skip-backup).
+  app focus [NAME]    Focus apps (the ones you work on: local changes, another branch, a
+                      commit of yours in 14 days): doctor warns when an app they need falls
+                      behind. No NAME lists them (--list, --json, --fetch); NAME pins it as
+                      focus, --auto infers again.
+  app unfocus NAME    Pin NAME as not a focus app.
 
 Team lockfile (benchbar.toml: each app's repo, branch and commit, and the sites)
   lock write          Write it from this bench (asks, shows the diff, backs up the old one);

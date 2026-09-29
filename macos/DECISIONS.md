@@ -287,3 +287,9 @@ Asked for after the phases, to stop naming drift before the first release.
 - Remove is offered only for imported and subscribed profiles, which the CLI moves aside; a subscribed profile's confirmation names every profile of that repository, since the whole subscription goes.
 - Scroll views in the sheets get an explicit height from their row count: a scroll view inside a sheet has no height of its own and showed only the first repository.
 - Prompts that hold a URL or `git@host` use `Text(verbatim:)`, or SwiftUI draws them as links.
+
+## 0.6.0: dependency freshness
+
+- The focus state rides on `app list --json` (the Apps page's existing read), and the Auto / Focus / Ignore menu calls `benchbar app focus NAME [--auto]` or `app unfocus NAME` directly, not through `runChange`: a pin is a preference in the bench's state file, not a change to the bench, so it must not take the one change slot or show a banner.
+- Doctor rows are identified by id and message in the lists (`DoctorCheck.rowKey`): `dependency_behind` can appear once per stale dependency, and SwiftUI must not see duplicate ids.
+- The warning itself needs no new UI: it is a doctor WARN with a fix command, so Health and the popover show it like every other check.

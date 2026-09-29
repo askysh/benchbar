@@ -301,7 +301,7 @@ struct DoctorSection: View {
                         report.summary.warn > 0 ? "\(report.summary.warn) " + (report.summary.warn == 1 ? "warning" : "warnings") : nil
                     ].compactMap { $0 }.joined(separator: " · "))
                         .font(.caption.weight(.medium)).foregroundStyle(report.summary.fail > 0 ? .red : .orange)
-                    ForEach(Array(report.needsAttention.prefix(Self.visibleChecks))) { CompactCheckRow(check: $0) }
+                    ForEach(Array(report.needsAttention.prefix(Self.visibleChecks)), id: \.rowKey) { CompactCheckRow(check: $0) }
                     if report.needsAttention.count > Self.visibleChecks {
                         Button("\(report.needsAttention.count - Self.visibleChecks) more in Health…", action: details)
                             .buttonStyle(.link).font(.caption)

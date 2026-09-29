@@ -462,3 +462,16 @@ Measured on five PR runs (September 2026): 11 to 14 minutes wall clock, all of i
 - `install.sh --yes` on a Mac whose CLI checkout already exists is an update: it adopts or installs no bench and never starts the Homebrew installer (the one step that asks for a password). An interactive run still offers both.
 - A CLI that is not `~/.local/share/benchbar` gets `--app-only`: a git checkout is the developer's own branch, and a pull the installer did not start could fail on local changes or move them. The same rule is in `lib/frappe-local/selfupdate.sh` and the app's `UpdatePlan`, tested on both sides.
 - The release notes are built by `scripts/release-notes.sh` (tested) instead of inline workflow shell, with an Update section first: 0.5.x apps open the release page from Check for Updates, so the copy paste command has to be at the top of that page.
+
+## 0.6.0: dependency freshness
+
+- Doctor warns about the dependencies of focus apps, never about a focus app: the developer pulls the app they work on themselves, so a warning about it is noise, while the apps it needs go stale unnoticed.
+- Focus is inferred from local reads only (a dirty tree, a branch other than the profile's or, without a policy, the remote's default, a commit whose author is `git config user.email` in the last 14 days, read from HEAD and the local branches), so doctor needs no network to decide it. A pin (`focus`, `ignore`) wins; `ignore` only means "not a focus app", the app is still checked when a focus app needs it.
+- Pins live in one per bench key (`APP_FOCUS="a=focus b=ignore"`) in the bench's state file, not in the app's repo or the lockfile: focus is about one developer on one bench, not the team.
+- The graph is `required_apps` from hooks.py (as `fl_app_required_apps` reads it), followed transitively, frappe left out: frappe moves under every app, and a warning for it on every bench would drown the ones that matter.
+- "Behind" is counted against the remote tracking ref of the branch the app follows (`branch.B.merge` on its remote, else the same name), and the days are the age of the oldest commit HEAD lacks: that is how long the bench has been missing changes, not how old HEAD is.
+- Doctor fetches only the focus apps' dependencies, at most once a day (and an hour after a try where no fetch worked), side by side, 20 seconds each, with no prompt (GIT_TERMINAL_PROMPT=0, ssh BatchMode) and an explicit refspec into the tracking ref, so only `.git` changes, as with `app update`'s fetch. The other apps are summed up from whatever their tracking refs say.
+- Offline is never a FAIL: a failed fetch keeps the last numbers (flagged "offline since" after two days), an app never fetched is unknown in the OK line, and `OFFLINE=1` or `--dry-run` never fetches.
+- `dependency_behind` is the one check id that can appear several times (one row per stale dependency, each with its own fix); the doctor runner takes extra rows from `CHK_MORE`, so the other checks are unchanged.
+- The fix is `benchbar app update NAME`, which already fast forwards with a changelog, backups and migrate; a dependency with local changes gets `git status` first. Never `bench update`.
+- `benchbar app focus` without a name lists, instead of a new top level command, and `app list --json` carries the same fields, so the app gets them from the read it already does.

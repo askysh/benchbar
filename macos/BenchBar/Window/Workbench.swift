@@ -84,6 +84,20 @@ final class Workbench {
         await loadApps(bench, liveSites: true)
     }
 
+    /// Sets an app's focus pin. Not a change to the bench (no change slot,
+    /// no banner): the CLI writes one key of the bench's state, then the
+    /// list is read again from the cached site lists.
+    func setFocus(_ pin: FocusPin, app: String, on bench: BenchModel) async {
+        guard let client = store.cliClient else { return }
+        do {
+            try await client.setAppFocus(app, pin: pin, bench: bench.path)
+        } catch {
+            appsError[bench.path] = error.localizedDescription
+            return
+        }
+        await loadApps(bench)
+    }
+
     // MARK: sites
 
     func addSite(_ name: String, adminPassword: String, on bench: BenchModel) async {

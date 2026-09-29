@@ -18,7 +18,6 @@ All notable changes to this project are documented here.
   runs `bench update`.
 - Release notes start with an Update section and the command, for
   anyone on 0.5.x who opens the release page from Check for Updates.
-
 - App, Team Profiles: Import (a `.toml` file, an https link, or a file
   dropped on the page) and Subscribe (a team's git repository of
   profiles), each reviewed before anything is written. Every row says
@@ -31,11 +30,27 @@ All notable changes to this project are documented here.
 - `benchbar://profile/import?url=` and `benchbar://profile/subscribe?url=`
   open Team Profiles with the sheet filled in; nothing happens until you
   click.
+- Dependency freshness: doctor warns (`dependency_behind`) when an app
+  that one of your focus apps needs, directly or through another app, is
+  behind its remote branch, for example "exponent_custom_v1 (needed by
+  exponent_ecr) is 30 commits / 12 days behind upstream/develop", with
+  `benchbar app update NAME` as the fix. A focus app itself never gets
+  the warning, and the other apps get one summary line (`apps_behind`).
+  Focus apps are inferred (local changes, another branch than the
+  profile's, a commit of yours in the last 14 days) and can be pinned
+  with `benchbar app focus NAME`, `benchbar app unfocus NAME` and
+  `benchbar app focus NAME --auto`; `benchbar app focus` lists them. The
+  dependencies are fetched at most once a day, and doctor stays offline
+  safe.
+- The Apps page shows which apps are focus apps and why, how far a
+  dependency is behind, and a menu to set each app to Auto, Focus or
+  Ignore.
 
 ### Changed
 
 - `install.sh --yes` on a Mac that already has the CLI is an update: it
   no longer adopts a bench it finds or starts the Homebrew installer.
+
 ### Fixed
 
 - App: Create from Bench accepts profile names with `_`, as the CLI does.

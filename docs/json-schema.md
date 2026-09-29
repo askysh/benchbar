@@ -15,6 +15,7 @@ Raycast extensions and the like can rely on it too.
 | `benchbar doctor --json [--bench-dir DIR]` | every health check with its fix |
 | `benchbar app list --json` | the bench's apps, their git state and sites (0.5) |
 | `benchbar app update NAME --dry-run --json` | the changelog and plan of an update (0.5) |
+| `benchbar app focus --json` | focus apps and how far behind the apps they need are (0.6), see [app focus](#benchbar-app-focus---json) |
 | `benchbar profile list --json` | built in and team profiles, with where each comes from (0.5) |
 | `benchbar lock check --json` | how the bench differs from its `benchbar.toml` (0.5) |
 | `<bench>/logs/.benchbar/state.json` | the last state transition, written by the runner and the CLI |
@@ -226,7 +227,7 @@ carry the bench's sites, read from `sites/*/site_config.json`:
 
 | Field | Type | Notes |
 |---|---|---|
-| `checks[].id` | string | stable id, for example `env_python`, `assets`, `agent`, `legacy_agents`. `pdf_engine` replaced `wkhtmltopdf` in 0.4. 0.5 adds `apps_txt`, `app_branch_policy`, `lock_parse` and `lock_drift` (group `bench`, no repair action) |
+| `checks[].id` | string | stable id, for example `env_python`, `assets`, `agent`, `legacy_agents`. `pdf_engine` replaced `wkhtmltopdf` in 0.4. 0.5 adds `apps_txt`, `app_branch_policy`, `lock_parse` and `lock_drift` (group `bench`, no repair action). 0.6 adds `dependency_behind` and `apps_behind` (group `bench`, no repair action); `dependency_behind` is the one id that can appear several times, once per stale dependency |
 | `checks[].group` | string | `system`, `bench`, `service` or `site` |
 | `checks[].label` | string | short name for humans |
 | `checks[].level` | string | `ok`, `warn` or `fail` |
@@ -304,6 +305,39 @@ MariaDB.
 | `apps[].shallow` | bool | a shallow clone (bench's `shallow_clone`) |
 | `apps[].version` | string or null | from `sites/apps.json` |
 | `apps[].sites` | array of strings | the sites that have the app installed |
+| `apps[].focus`, `focus_pin`, `focus_reasons`, `requires`, `needed_by`, `upstream`, `behind`, `behind_days` | | added in 0.6, the same fields as [app focus](#benchbar-app-focus---json) |
+
+## `benchbar app focus --json`
+
+Added in 0.6. Every app of the bench, whether it is a focus app (one you
+work on) and why, what it needs, which focus apps need it, and how far it
+is behind its remote branch. Local reads only; `--fetch` fetches the
+dependencies of the focus apps first (doctor does that at most once a
+day).
+
+```json
+{"schema_version":1,"cli_version":"0.6.0","bench":"/Users/you/frappe-bench","focus_days":14,"fetched_at":"2026-09-29T08:00:00Z",
+ "apps":[{"name":"exponent_ecr","focus":true,"focus_pin":"auto","focus_reasons":["your commit 2 day(s) ago"],"requires":["exponent_custom_v1"],
+  "needed_by":[],"upstream":"upstream/develop","behind":0,"behind_days":0},
+  {"name":"exponent_custom_v1","focus":false,"focus_pin":"auto","focus_reasons":[],"requires":[],
+  "needed_by":["exponent_ecr"],"upstream":"upstream/develop","behind":30,"behind_days":12}]}
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `fetched_at` | string or null | the last fetch of the dependencies that worked |
+| `focus_days` | number | how recent a commit of yours must be to count |
+| `apps[].focus` | bool | a focus app: pinned so, or (pin `auto`) with a reason |
+| `apps[].focus_pin` | string | `auto`, `focus` (`app focus NAME`) or `ignore` (`app unfocus NAME`) |
+| `apps[].focus_reasons` | array of strings | `pinned`, `local changes`, `on BRANCH, not POLICY`, `your commit today` or `your commit N day(s) ago`; empty when not a focus app |
+| `apps[].requires` | array of strings | `required_apps` from the app's `hooks.py`, frappe left out |
+| `apps[].needed_by` | array of strings | the focus apps that need it, directly or through another app; empty for a focus app |
+| `apps[].upstream` | string or null | `REMOTE/BRANCH` the app's branch follows; `null` on a detached HEAD |
+| `apps[].behind` | number or null | commits on the upstream (as last fetched) that HEAD lacks; `null` when unknown (never fetched) |
+| `apps[].behind_days` | number or null | the age in days of the oldest of those commits |
+
+`app focus NAME [--auto] --json` and `app unfocus NAME --json` print
+`{"schema_version","cli_version","bench","app","pin","focus","reasons"}`.
 
 ## `benchbar app update NAME --dry-run --json`
 

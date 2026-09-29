@@ -46,11 +46,42 @@ the plan and changes nothing.
 `app update` never runs `bench update`, never rebases and never resets: a
 dirty or diverged app is refused.
 
+## Focus apps and their dependencies
+
+You pull the app you work on yourself, so a warning about it is noise.
+What goes stale quietly are the apps it needs. benchbar calls the apps
+you work on focus apps, and doctor warns only about the apps they need:
+
+```
+[WARN] Dependencies of focus apps: exponent_custom_v1 (needed by exponent_ecr) is 30 commits / 12 days behind upstream/develop
+  fix: benchbar app update exponent_custom_v1 --bench-dir ~/frappe-bench
+```
+
+An app is a focus app when it has local changes, is on a branch other
+than the one the profile names (or the remote's default branch), or has
+a commit by your `git config user.email` in the last 14 days. What it
+needs comes from `required_apps` in each app's `hooks.py`, followed
+through other apps, so an app two steps away counts too. Every other app
+gets one summary line (`apps_behind`).
+
+```bash
+benchbar app focus                   # every app: focus or not, why, needed by, behind
+benchbar app focus exponent_ecr      # pin it as a focus app
+benchbar app unfocus erpnext         # pin it as not one (a branch you only tried)
+benchbar app focus erpnext --auto    # infer again
+```
+
+Doctor fetches the dependencies' branches at most once a day, so it
+stays fast and works offline: without a network the numbers are those of
+the last fetch, and an app never fetched is unknown, never a failure.
+`benchbar app focus --fetch` fetches now, and `OFFLINE=1` never fetches.
+
 ## In the app
 
 The BenchBar window's Apps page does the same: add an app from the
 registry or any GitHub URL, install it on a site, and update it after
-reading the changelog. See [The menu bar app](../app.md#the-benchbar-window).
+reading the changelog. Each app shows whether it is a focus app, and a
+menu sets it to Auto, Focus or Ignore. See [The menu bar app](../app.md#the-benchbar-window).
 
 ## Keeping a team on the same apps
 

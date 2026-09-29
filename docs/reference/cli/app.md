@@ -89,3 +89,35 @@ Exit codes: 0 updated or already current; 1 refused or a step failed.
 ```bash
 benchbar app update erpnext --dry-run
 ```
+
+## app focus
+
+```
+benchbar app focus [--list] [--json] [--fetch]
+benchbar app focus NAME [--auto] [--json]
+benchbar app unfocus NAME [--json]
+```
+
+Focus apps are the ones you work on. Doctor warns when an app they need
+falls behind its remote (`dependency_behind`), never about a focus app
+itself. See [focus apps](../../guides/apps.md#focus-apps-and-their-dependencies).
+
+Without NAME: every app, whether it is a focus app and why, which focus
+apps need it, and how far behind it is. With NAME: `focus` pins it as a
+focus app, `unfocus` pins it as not one (`ignore`), and `--auto` removes
+the pin so it is inferred again. The pin is kept in the bench's state.
+
+| Flag | What it does |
+|---|---|
+| `--list` | List the apps (the same as no NAME) |
+| `--json` | As JSON ([schema](../../json-schema.md#benchbar-app-focus---json)) |
+| `--fetch` | Fetch the focus apps' dependencies now instead of waiting for doctor's daily fetch |
+| `--auto` | With NAME: remove the pin, infer again |
+
+Exit codes: 0; 1 when the app or the bench is not found.
+
+```bash
+benchbar app focus
+benchbar app focus exponent_ecr
+benchbar app unfocus erpnext
+```
