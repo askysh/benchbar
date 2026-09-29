@@ -84,8 +84,10 @@ No Docker, no VM, no preinstalled Python, Node, MariaDB or Redis.
   its database, `pull --replace`
   backs up the site it overwrites, `app update` backs up the sites that
   have the app. benchbar never deletes a whole bench.
-- Stop and cleanup match this bench's processes and whatever listens on
-  its ports. Your own `bench migrate` or `bench console` keeps running.
+- Stop and cleanup match only this bench's processes, including the
+  listeners on its ports that run inside the bench folder. Another
+  bench, an unrelated server, and your own `bench migrate` or `bench
+  console` keep running.
 - `sudo` is used for two things, lines in `/etc/hosts` and the
   wkhtmltopdf package, once per run and only after saying why.
 - The MariaDB root password lives in the Keychain and reaches the client

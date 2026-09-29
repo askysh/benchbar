@@ -40,10 +40,11 @@ benchbar down [--bench-dir DIR] [--dry-run]
 Stops the bench and keeps it stopped, also across reboots: it writes
 `manual` to the stop flag and stops the agent. Then it stops what is
 left: this bench's honcho, serve, worker, schedule and socketio
-processes, and every process that listens on the bench's web, socketio
-or Redis ports, whoever started it. `benchbar ports check --bench-dir
-DIR` shows beforehand whether another program holds them. Your own `bench migrate` or `bench console`
-keeps running.
+processes, and the processes listening on the bench's web, socketio or
+Redis ports that run inside the bench folder. A listener started
+elsewhere, such as another bench or an unrelated server, is left alone;
+`benchbar ports check --bench-dir DIR` shows whether one holds the
+ports. Your own `bench migrate` or `bench console` keeps running.
 
 Exit codes: 0 stopped; 1 some bench processes are still alive.
 
