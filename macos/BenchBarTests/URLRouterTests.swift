@@ -92,4 +92,42 @@ struct URLRouterTests {
     @Test func emptyQueryValuesCountAsMissing() {
         #expect(route("benchbar://open?bench=&site=", selected: main.path) == .run(.open, bench: main.path, site: nil))
     }
+
+    // MARK: profile links
+
+    @Test func profileImportLinkPrefillsTheSheet() {
+        let file = "https://raw.githubusercontent.com/acme/p/main/acme.toml"
+        #expect(route("benchbar://profile/import?url=https%3A%2F%2Fraw.githubusercontent.com%2Facme%2Fp%2Fmain%2Facme.toml")
+                == .profile(.importProfile(file)))
+        #expect(route("benchbar://profile/import?url=\(file)") == .profile(.importProfile(file)))
+        #expect(route("BENCHBAR://Profile/Import?URL=\(file)") == .profile(.importProfile(file)))
+        #expect(route("benchbar:profile/import?url=\(file)") == .profile(.importProfile(file)))
+        #expect(route("benchbar://profile/import?url=\(file)", benches: []) == .profile(.importProfile(file)), "no bench needed")
+    }
+
+    @Test func profileSubscribeLinkPrefillsTheSheet() {
+        #expect(route("benchbar://profile/subscribe?url=git%40github.com%3Aacme%2Fbenchbar-profiles.git")
+                == .profile(.subscribe("git@github.com:acme/benchbar-profiles.git")))
+        #expect(route("benchbar://profile/subscribe?url=https://github.com/acme/profiles")
+                == .profile(.subscribe("https://github.com/acme/profiles")))
+    }
+
+    /// A web page can open these: only an https file or a git remote opens a sheet.
+    @Test func profileLinksWithABadAddressOpenNothing() {
+        for link in ["benchbar://profile/import", "benchbar://profile/import?url=",
+                     "benchbar://profile/import?url=http%3A%2F%2Fexample.com%2Fa.toml",
+                     "benchbar://profile/import?url=file%3A%2F%2F%2Fetc%2Fpasswd",
+                     "benchbar://profile/import?url=%2FUsers%2Fyou%2Facme.toml",
+                     "benchbar://profile/import?url=--yes",
+                     "benchbar://profile/subscribe?url=file%3A%2F%2F%2Ftmp%2Frepo",
+                     "benchbar://profile/subscribe?url=ext%3A%3Ash%20-c%20x",
+                     "benchbar://profile/subscribe?url=--upload-pack%3Dx",
+                     "benchbar://profile/subscribe"] {
+            if case .explain = route(link) {} else { Issue.record("\(link) was not refused") }
+        }
+        for link in ["benchbar://profile", "benchbar://profile/remove?url=https://x.com/a.toml",
+                     "benchbar://profile/update?url=https://x.com/a.toml", "benchbar://profile/import/now?url=https://x.com/a.toml"] {
+            if case .ignore = route(link) {} else { Issue.record("\(link) was not ignored") }
+        }
+    }
 }

@@ -5,7 +5,8 @@ import Foundation
 /// the app.
 ///
 /// Any web page can open a link like this, so only launches and start,
-/// stop and restart are routes. Nothing here repairs, drops, restores,
+/// stop and restart are routes, plus two profile links that only open a
+/// prefilled sheet.Nothing here repairs, drops, restores,
 /// pulls, installs or deletes; a route that is not in `Route` is ignored.
 nonisolated enum URLRouter {
     static let scheme = "benchbar"
@@ -39,6 +40,15 @@ nonisolated enum URLRouter {
         case explain(String)
         /// Not a link for us, or a route we do not have: log it, do nothing.
         case ignore(String)
+        /// Team Profiles with the import or subscribe sheet prefilled. The
+        /// sheet waits for the user's click; the link itself fetches nothing.
+        case profile(ProfileLink)
+    }
+
+    /// `benchbar://profile/import?url=` and `benchbar://profile/subscribe?url=`.
+    enum ProfileLink: Equatable, Sendable {
+        case importProfile(String)
+        case subscribe(String)
     }
 
     /// The bench fields the router needs from `benchbar list --json`.
@@ -81,12 +91,39 @@ nonisolated enum URLRouter {
     /// The whole decision: parse, then pick the bench. `selected` is the
     /// bench the app has selected, if any.
     static func route(_ url: URL, benches: [Bench], selected: String?) -> Outcome {
+        if let outcome = profileRoute(url) { return outcome }
         switch parse(url) {
         case .failure(let reason):
             return .ignore(reason.message)
         case .success(let request):
             return resolve(request, benches: benches, selected: selected)
         }
+    }
+
+    /// nil when the link is not a profile link. The address must be an
+    /// https URL (import) or a git remote (subscribe), or nothing opens.
+    static func profileRoute(_ url: URL) -> Outcome? {
+        guard url.scheme?.lowercased() == scheme else { return nil }
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        let words = ((url.host(percentEncoded: false) ?? "") + "/" + (components?.path ?? ""))
+            .split(separator: "/").map { $0.lowercased() }
+        guard words.first == "profile" else { return nil }
+        let action = words.count > 1 ? words[1] : ""
+        guard action == "import" || action == "subscribe", words.count == 2 else {
+            return .ignore("unknown route \"\(words.joined(separator: "/"))\"")
+        }
+        let address = components?.queryItems?.last(where: { $0.name.lowercased() == "url" })?.value?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if action == "import" {
+            guard ProfileSourceRule.isImportURL(address) else {
+                return .explain("The profile link has no https address in url=, so BenchBar did not open it.")
+            }
+            return .profile(.importProfile(address))
+        }
+        guard ProfileSourceRule.isGitURL(address) else {
+            return .explain("The subscribe link has no git repository address in url=, so BenchBar did not open it.")
+        }
+        return .profile(.subscribe(address))
     }
 
     static func resolve(_ request: Request, benches: [Bench], selected: String?) -> Outcome {

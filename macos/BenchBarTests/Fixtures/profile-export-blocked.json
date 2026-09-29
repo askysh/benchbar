@@ -1,0 +1,1 @@
+{"schema_version":1,"cli_version":"0.6.0","error":"acme_core is required by acme_erp: keep it or drop acme_erp too","blocked":[{"app":"acme_core","required_by":["acme_erp"]}]}

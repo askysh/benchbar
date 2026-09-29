@@ -326,23 +326,32 @@ nonisolated struct AppUpdatePlan: Codable, Sendable, Equatable {
 }
 
 /// One profile (`benchbar profile list --json`): built in or a team's.
+/// Since 0.6.0 `source` is the URL a profile came from (nil for local ones)
+/// and `source_kind` says where it lives; before, `source` held the kind.
 nonisolated struct ProfileInfo: Codable, Sendable, Equatable, Identifiable {
     var name: String
     var kind: String
-    var source: String
+    var source: String?
     var file: String
     var base: String?
     var label: String?
     var frappeBranch: String?
     var valid: Bool
     var error: String?
+    var sourceKind: String?
+    var subscription: ProfileSubscription?
+    var shadowedBy: String?
+    var schema: Int?
 
-    var id: String { name }
+    /// A shadowed file has the same name as the one that wins, so the file is part of the id.
+    var id: String { "\(name)\t\(file)" }
     var isTeam: Bool { kind == "team" }
 
     enum CodingKeys: String, CodingKey {
-        case name, kind, source, file, base, label, valid, error
+        case name, kind, source, file, base, label, valid, error, subscription, schema
         case frappeBranch = "frappe_branch"
+        case sourceKind = "source_kind"
+        case shadowedBy = "shadowed_by"
     }
 }
 

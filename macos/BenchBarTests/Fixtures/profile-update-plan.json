@@ -1,0 +1,1 @@
+{"schema_version":1,"cli_version":"0.6.0","updates":[{"name":"acme-erp","kind":"subscribed","behind":3,"diff":"@@ -2 +2 @@\n-label = \"Acme ERP\"\n+label = \"Acme ERP (team)\""}]}

@@ -19,10 +19,26 @@ All notable changes to this project are documented here.
 - Release notes start with an Update section and the command, for
   anyone on 0.5.x who opens the release page from Check for Updates.
 
+- App, Team Profiles: Import (a `.toml` file, an https link, or a file
+  dropped on the page) and Subscribe (a team's git repository of
+  profiles), each reviewed before anything is written. Every row says
+  where the profile comes from, shows "Outdated" when its subscription is
+  behind and warns when another file with the same name hides it.
+- App: a profile's ⋯ menu has Export (the branch per app, which apps to
+  share, blocked when a kept app requires a dropped one, then Copy Import
+  Link), Update (the diff first), Check Access, Show in Finder and Remove
+  (asks first, moves the file aside).
+- `benchbar://profile/import?url=` and `benchbar://profile/subscribe?url=`
+  open Team Profiles with the sheet filled in; nothing happens until you
+  click.
+
 ### Changed
 
 - `install.sh --yes` on a Mac that already has the CLI is an update: it
   no longer adopts a bench it finds or starts the Homebrew installer.
+### Fixed
+
+- App: Create from Bench accepts profile names with `_`, as the CLI does.
 
 ## 0.5.8 - 2026-09-29
 
