@@ -21,10 +21,10 @@ or `apps/frappe`. It goes at most six folders deep and never looks
 inside a bench it found. It skips hidden folders, symbolic links,
 dependency and build folders (`node_modules`, `env`, `venv`,
 `__pycache__`, `build`, `dist`, `vendor`), test folders (`tests`,
-`test`, `fixtures`), and macOS system and media folders (`Library`,
-`Applications`, `Pictures`, `Music`, `Movies`, `Volumes`, `System`,
-`private`, `cores`, `dev`). The last one means a scan of `~` does not
-look into `~/dev`: scan `~/dev` itself. Folders it cannot read, for
+`test`, `fixtures`), macOS media folders (`Library`, `Applications`,
+`Pictures`, `Music`, `Movies`), and, only when you scan `/`, the
+system folders there (`Volumes`, `System`, `private`, `cores`, `dev`,
+`usr`, `bin`, `sbin`, `opt`). A scan of `~` does look into `~/dev`. Folders it cannot read, for
 example ones macOS privacy settings block, are listed as warnings.
 
 | Flag | What it does |

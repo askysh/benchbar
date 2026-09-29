@@ -90,6 +90,9 @@ All notable changes to this project are documented here.
 
 ### Fixed
 
+- `benchbar scan ~` and Find Benches skipped every folder named `dev`,
+  so benches in `~/dev` were not found; only the system `/dev` is skipped
+  now.
 - `benchbar down` stopped every process listening on the bench's ports,
   also another bench's or an unrelated server's; it now stops only
   listeners that run inside the bench folder.

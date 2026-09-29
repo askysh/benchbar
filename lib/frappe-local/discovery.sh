@@ -26,16 +26,21 @@ fl_scan_walk() {
   fi
   # Globs omit hidden directories. Never follow directory symlinks or descend
   # into a bench once found (apps may themselves contain example benches).
-  # macOS system, media and volume folders never hold benches and are huge or
-  # privacy protected, so a scan of ~ or / does not walk them.
+  # macOS media folders never hold benches and are huge or privacy
+  # protected, so a scan of ~ or / does not walk them; nor the system
+  # folders at / (Volumes, System, dev and the like).
   for child in "$dir"/*; do
     [[ -e "$child" || -L "$child" ]] && found=1
     [[ -d "$child" && ! -L "$child" ]] || continue
     name="${child##*/}"
     case "$name" in
       node_modules|env|venv|__pycache__|build|dist|vendor|tests|test|fixtures) continue ;;
-      Library|Applications|Pictures|Music|Movies|Volumes|System|private|cores|dev) continue ;;
+      Library|Applications|Pictures|Music|Movies) continue ;;
     esac
+    # system folders of the disk itself: only at /, so ~/dev is still scanned
+    if [[ "$dir" == "/" || -z "$dir" ]]; then
+      case "$name" in Volumes|System|private|cores|dev|usr|bin|sbin|opt) continue ;; esac
+    fi
     fl_scan_walk "$child" $((depth + 1))
   done
   # A folder macOS privacy settings block passes -r and -x but lists as empty.
