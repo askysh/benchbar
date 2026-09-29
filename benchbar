@@ -388,7 +388,9 @@ cmd_install() {
   fi
 
   fl_step_begin 1
-  if BENCH_DIR="$FL_BENCH_DIR" SITE_NAME="$FL_SITE" APP_BUNDLE="${bundle:-minimal}" \
+  local web_port=""
+  [[ "$OPT_PORT_OFFSET" =~ ^[0-9]+$ ]] && web_port=$((FL_PORT_BASE_WEB + OPT_PORT_OFFSET))
+  if BENCH_DIR="$FL_BENCH_DIR" SITE_NAME="$FL_SITE" APP_BUNDLE="${bundle:-minimal}" BENCHBAR_WEB_PORT="$web_port" \
      fl_run_phase_script "${SCRIPT_DIR}/01-install-bench-and-site.sh" "${args01[@]}"; then
     fl_step_end "done"
   else
@@ -414,6 +416,17 @@ cmd_install() {
   FL_SKIP_PLAN_CONFIRM=1
   if [[ -d "$FL_BENCH_DIR/sites" ]]; then
     fl_ports_plan "$OPT_PORT_OFFSET" || { fl_step_end failed; fl_steps_summary; return 1; }
+  elif [[ "$FL_DRY_RUN" == "1" && -n "$OPT_PORT_OFFSET" ]]; then
+    # the bench is not there yet: show the plan with the ports it will get,
+    # not the defaults (the real run moves them once the bench exists)
+    fl_ports_plan "$OPT_PORT_OFFSET" || { fl_step_end failed; fl_steps_summary; return 1; }
+    if [[ -n "$FL_PORT_TARGET" ]]; then
+      read -r FL_WEB_PORT FL_SOCKETIO_PORT FL_REDIS_QUEUE_PORT FL_REDIS_CACHE_PORT <<<"$(fl_port_block "$FL_PORT_TARGET")"
+      FL_REDIS_SOCKETIO_PORT="$FL_REDIS_CACHE_PORT"
+      fl_info "dry-run: the new bench gets port block ${FL_PORT_TARGET} (web ${FL_WEB_PORT}, socketio ${FL_SOCKETIO_PORT})"
+      FL_PORT_TARGET=""
+      fl_render_all
+    fi
   fi
   if FL_PLAN_CHECKS="port_block" fl_repair_engine "Background service" system service; then
     fl_pm_remember

@@ -410,6 +410,13 @@ fl_verify_site_health "$BENCH_DIR" "$SITE_NAME"
 fl_remember_default "$BENCH_DIR" || fl_info "the default bench stays $(fl_state_get BENCH_DIR); pass --make-default to benchbar install to change it"
 
 fl_section "READY"
+# the port the site will answer on: benchbar install passes the block it
+# plans (--port-offset), else the bench's own config, else bench's default
+READY_WEB_PORT="${BENCHBAR_WEB_PORT:-}"
+if ! [[ "$READY_WEB_PORT" =~ ^[0-9]+$ ]]; then
+  READY_WEB_PORT="$(sed -E -n 's/^[[:space:]]*"webserver_port"[[:space:]]*:[[:space:]]*([0-9]+).*/\1/p' "${BENCH_DIR}/sites/common_site_config.json" 2>/dev/null | head -n1 || true)"
+fi
+[[ "$READY_WEB_PORT" =~ ^[0-9]+$ ]] || READY_WEB_PORT=8000
 if ! grep -qE "^[[:space:]]*127\.0\.0\.1[[:space:]]+(.*[[:space:]])?${SITE_NAME//./\\.}([[:space:]]|$)" "${FL_HOSTS_FILE:-/etc/hosts}" 2>/dev/null; then
   fl_warn "No /etc/hosts entry for ${SITE_NAME} yet; benchbar install (or repair) adds it, or run:"
   printf '  printf "127.0.0.1 %s\\n" | sudo tee -a /etc/hosts\n\n' "$SITE_NAME"
@@ -423,7 +430,7 @@ Or in the foreground:
   cd ${BENCH_DIR} && bench start
 
 Open:
-  http://${SITE_NAME}:8000
+  http://${SITE_NAME}:${READY_WEB_PORT}
 
 Login:
   Administrator / <password you entered>

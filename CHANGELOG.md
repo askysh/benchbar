@@ -52,6 +52,9 @@ All notable changes to this project are documented here.
   bench at PATH". Such an agent restarted every 20 seconds, exited with
   code 127 and grew the log. Doctor has a new check, `dead_agents`, that
   warns about any loaded benchbar agent whose runner script is missing.
+- `benchbar install --port-offset N --dry-run` for a new bench shows the
+  ports it will get (web 8000+N): no port clash with the benches on 8000,
+  and the "Open" address uses the right port.
 
 ## 0.5.7 - 2026-09-27
 
