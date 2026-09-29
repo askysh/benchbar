@@ -59,7 +59,11 @@ Open it with ⌘M, **Manage Bench…** in the popover, or by
 opening BenchBar again from Finder or Spotlight. It has a page per bench:
 
 - **Overview**: start, stop, restart, the site and ports, and the
-  scheduler switch.
+  scheduler switch. While the bench runs, two small charts show its CPU
+  and memory for the last ten minutes (hover for the value at a moment);
+  the popover shows the current values under the bench name. They count
+  the bench's own processes, not the shared MariaDB, and are kept in
+  memory only.
 - **Sites**: add a site (it asks for the Administrator password), make
   one the default, open any of them.
 - **Apps**: add an app from the registry or any GitHub URL, install it on

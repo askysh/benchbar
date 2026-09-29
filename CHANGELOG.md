@@ -10,6 +10,9 @@ All notable changes to this project are documented here.
   `restart`, `open`, `logs`, `window` and `doctor`, with `bench=` (a name
   or a path) and `site=`. Links only start, stop and open things; any
   other route is ignored and logged. See the URL scheme reference page.
+- CPU and memory per bench: the Overview tab charts the last ten minutes
+  while the bench runs, and the popover shows the current values. Measured
+  with the same process tree walk as the runner speed, in memory only.
 - Batch setup preview with stable port allocations, Automatic/Fixed modes, and
   explicit Resolve & Start. Current allocations reserve ports while stopped; stale automatic reservations
   are ignored after an external configuration change.

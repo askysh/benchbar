@@ -96,6 +96,9 @@ struct BenchOverview: View {
                     Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled)
                 }
             }
+            if bench.runningSince != nil {
+                ResourceSection(bench: bench)
+            }
             Section("Site and ports") {
                 PortConflictAction(store: store, bench: bench)
                 Button("Port Settings & Setup…") {

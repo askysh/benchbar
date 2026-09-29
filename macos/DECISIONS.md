@@ -246,3 +246,8 @@ Asked for after the phases, to stop naming drift before the first release.
 - The Apple Event handler is registered in `applicationWillFinishLaunching` and links wait until the first bench list is loaded, so a link that launches the app acts on real benches instead of an empty list.
 - Without `bench=` a link uses the selected bench only when it still exists, else the only bench; a stale selection or two benches with the same name open the window with a notice instead of picking one.
 - No confirmation for up, down and restart from a link: browsers already ask before a page opens an app, and a prompt would break Raycast and Shortcuts, which exist to skip clicks.
+- Resource samples ride on the store's status refresh (30 seconds, 5 with the popover open) instead of the runner's 2 second speed timer: every running bench gets a history, not only the one that sets the speed, and no new timer wakes the Mac. Twenty points for ten minutes is enough for a sparkline.
+- Memory is the sum of `ri_phys_footprint` over the bench's process tree, read in the same `proc_pid_rusage` call as the CPU time: the figure Activity Monitor calls Memory. MariaDB is shared by every bench and is not in the tree, so it is not counted.
+- The history belongs to one run: a new runner pid starts it over, so a restart never draws a line across the gap. It is bounded by age (ten minutes) and by count (600), and a clock that goes back starts it over.
+- Memory switches to GB at 1000 MB, not 1024, so the popover never shows "1020 MB".
+- Two charts, one measure each, no axes: CPU percent and bytes have nothing in common to share a scale. The line has no animation, so Reduce Motion needs nothing extra beyond dropping any transaction animation.
