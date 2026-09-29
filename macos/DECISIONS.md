@@ -258,3 +258,5 @@ Asked for after the phases, to stop naming drift before the first release.
 - Editors are found by bundle id through Launch Services (VS Code, Cursor, VS Code Insiders), not by path or the `code` shell command: they can live anywhere, and the shell command is often not installed. A saved choice that is uninstalled falls back to the first installed editor.
 - Console and Database reuse the `.command` file of Open in Terminal: it needs no Apple Events permission. The script runs `benchbar console|db`, never bench directly, so the CLI stays the only way into a bench and no password is in the script.
 - `console`, `db` and `editor` became link routes: they only open a window at a prompt, like `logs`.
+- The resource charts' time axis starts at the first sample and grows to ten minutes; memory is scaled to its own range without a fill. A fixed ten minute axis and a zero based memory scale drew a fresh bench as a sliver and a flat memory line as a solid block (found by Akash on the real Mac).
+- While resource charts are on screen the store polls every 5 seconds, as with the popover open (the same loop, no new timer), so a chart has a line within seconds.

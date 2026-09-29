@@ -69,6 +69,34 @@ nonisolated struct ResourceSampler: Sendable {
     }
 }
 
+/// The scales of the two sparklines. Pure, so the ranges are tested.
+nonisolated enum ResourceScale {
+    /// The time shown: from the first sample (at least a minute back) to the
+    /// last, growing to ten minutes. A fixed ten minute axis drew a fresh
+    /// bench as a sliver at the right edge.
+    static func time(_ samples: [ResourceSample]) -> ClosedRange<Date> {
+        guard let last = samples.last?.time, let first = samples.first?.time else {
+            let now = Date()
+            return now.addingTimeInterval(-60)...now
+        }
+        let span = min(max(last.timeIntervalSince(first), 60), ResourceHistory.window)
+        return last.addingTimeInterval(-span)...last
+    }
+
+    /// CPU from zero: idle should look idle.
+    static func cpu(_ values: [Double]) -> ClosedRange<Double> {
+        0...max((values.max() ?? 0) * 1.15, 5)
+    }
+
+    /// Memory around its own range: a few MB of change on 400 MB should be
+    /// visible, and a flat line sits in the middle instead of filling the chart.
+    static func memory(_ values: [Double]) -> ClosedRange<Double> {
+        guard let low = values.min(), let high = values.max() else { return 0...1 }
+        let pad = max((high - low) * 0.25, 32 * 1_048_576)
+        return max(0, low - pad)...(high + pad)
+    }
+}
+
 nonisolated enum ResourceText {
     /// "0%", "12%", "250%": percent of one core, like Activity Monitor.
     static func cpu(_ percent: Double) -> String {

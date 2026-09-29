@@ -93,6 +93,9 @@ final class BenchStore {
     @ObservationIgnored private var inFlight: Set<String> = []
     @ObservationIgnored private var refreshAgain: Set<String> = []
     @ObservationIgnored private var popoverOpen = false
+    /// Resource charts on screen (the window's Overview): poll as fast as
+    /// with the popover open, so the charts fill in seconds, not minutes.
+    @ObservationIgnored private var chartViewers = 0
     @ObservationIgnored private var suspended = false
 
     static let pollInterval: Duration = .seconds(30)
@@ -370,7 +373,7 @@ final class BenchStore {
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
-                let open = self.popoverOpen
+                let open = self.popoverOpen || self.chartViewers > 0
                 // tolerance lets macOS batch this wakeup with others, which saves energy
                 try? await Task.sleep(
                     for: open ? Self.openPollInterval : Self.pollInterval,
@@ -379,6 +382,16 @@ final class BenchStore {
                 await self.refreshAll()
             }
         }
+    }
+
+    /// A resource chart appeared (true) or went away (false).
+    func setChartsVisible(_ visible: Bool) {
+        let wasFast = popoverOpen || chartViewers > 0
+        chartViewers = max(0, chartViewers + (visible ? 1 : -1))
+        guard !suspended, wasFast != (popoverOpen || chartViewers > 0) else { return }
+        startPolling()
+        // a sample now: the chart needs two before it draws a line
+        if visible { Task { await refreshAll() } }
     }
 
     func setPopoverOpen(_ open: Bool) {

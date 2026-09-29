@@ -101,3 +101,33 @@ struct ResourceTests {
         #expect(ResourceText.memory(1020 << 20) == "1.0 GB")
     }
 }
+
+@Suite("Resource chart scales")
+struct ResourceScaleTests {
+    let start = Date(timeIntervalSince1970: 1_800_000_000)
+
+    func samples(_ seconds: [TimeInterval]) -> [ResourceSample] {
+        seconds.map { ResourceSample(time: start.addingTimeInterval($0), cpuPercent: 1, memoryBytes: 1) }
+    }
+
+    /// A fresh bench fills the width: the axis starts at its first sample.
+    @Test func timeGrowsFromTheFirstSampleToTenMinutes() {
+        let fresh = ResourceScale.time(samples([0, 30, 90]))
+        #expect(fresh.lowerBound == start && fresh.upperBound == start.addingTimeInterval(90))
+        let tiny = ResourceScale.time(samples([0, 5]))
+        #expect(tiny.upperBound.timeIntervalSince(tiny.lowerBound) == 60)
+        let long = ResourceScale.time(samples([0, 900]))
+        #expect(long.upperBound.timeIntervalSince(long.lowerBound) == ResourceHistory.window)
+    }
+
+    @Test func cpuStartsAtZeroMemoryAroundItsRange() {
+        #expect(ResourceScale.cpu([0.2, 1]) == 0...5)
+        #expect(ResourceScale.cpu([100]).upperBound > 100)
+        let mb = 1_048_576.0
+        let flat = ResourceScale.memory([424 * mb, 425 * mb])
+        #expect(flat.lowerBound > 0 && flat.lowerBound < 424 * mb && flat.upperBound > 425 * mb)
+        // a flat line sits near the middle, not on the top edge
+        let middle = (flat.lowerBound + flat.upperBound) / 2
+        #expect(abs(middle - 424.5 * mb) < mb)
+    }
+}

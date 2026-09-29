@@ -47,7 +47,7 @@ struct SnapshotTests {
             bench.resources.record(ProcessTree.Snapshot(takenAt: UInt64(i) * 30_000_000_000, cpu: [key: cpu], memory: [key: memory]),
                                    root: 4242, at: start.addingTimeInterval(Double(i) * 30))
         }
-        try render(Form { ResourceSection(bench: bench) }.formStyle(.grouped).frame(width: 560), "bench-resources")
+        try render(Form { ResourceSection(store: store, bench: bench) }.formStyle(.grouped).frame(width: 560), "bench-resources")
         try render(PopoverView(store: store, commands: AppCommands()), "popover-running-resources")
     }
 

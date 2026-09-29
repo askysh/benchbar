@@ -115,7 +115,7 @@ struct BenchOverview: View {
                 }
             }
             if bench.runningSince != nil {
-                ResourceSection(bench: bench)
+                ResourceSection(store: store, bench: bench)
             }
             if bench.summary.lockFile != nil {
                 LockSection(workbench: workbench, bench: bench)

@@ -4,24 +4,32 @@ import SwiftUI
 /// The bench page's CPU and memory for the last ten minutes: two small
 /// charts, one measure each, with the current value beside them.
 struct ResourceSection: View {
+    let store: BenchStore
     let bench: BenchModel
 
     var body: some View {
         let history = bench.resources.history
         Section {
-            if let latest = history.latest {
-                Sparkline(title: "CPU", samples: history.samples, value: \.cpuPercent,
+            if history.samples.count >= 2, let latest = history.latest {
+                let cpu = history.samples.map(\.cpuPercent)
+                let memory = history.samples.map { Double($0.memoryBytes) }
+                Sparkline(title: "CPU", samples: history.samples, values: cpu, yDomain: ResourceScale.cpu(cpu), fill: true,
                           current: ResourceText.cpu(latest.cpuPercent), format: ResourceText.cpu)
-                Sparkline(title: "Memory", samples: history.samples, value: { Double($0.memoryBytes) },
+                Sparkline(title: "Memory", samples: history.samples, values: memory, yDomain: ResourceScale.memory(memory), fill: false,
                           current: ResourceText.memory(latest.memoryBytes), format: { ResourceText.memory(UInt64(max(0, $0))) })
             } else {
-                Text("Measuring…").foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Measuring…").foregroundStyle(.secondary)
+                }
             }
         } header: {
             Text("Resources")
         } footer: {
-            Text("The bench's own processes (web, workers, Redis, Socket.IO), not the shared MariaDB. Last ten minutes, measured while BenchBar refreshes the bench.")
+            Text("The bench's own processes (web, workers, Redis, Socket.IO), not the shared MariaDB. Up to the last ten minutes, measured every few seconds while this page is open.")
         }
+        .onAppear { store.setChartsVisible(true) }
+        .onDisappear { store.setChartsVisible(false) }
     }
 }
 
@@ -30,70 +38,62 @@ struct ResourceSection: View {
 struct Sparkline: View {
     let title: String
     let samples: [ResourceSample]
-    let value: (ResourceSample) -> Double
+    let values: [Double]
+    let yDomain: ClosedRange<Double>
+    let fill: Bool
     let current: String
     let format: (Double) -> String
     @State private var hovered: Date?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    init(title: String, samples: [ResourceSample], value: @escaping (ResourceSample) -> Double,
-         current: String, format: @escaping (Double) -> String) {
-        self.title = title
-        self.samples = samples
-        self.value = value
-        self.current = current
-        self.format = format
-    }
-
-    init(title: String, samples: [ResourceSample], value: KeyPath<ResourceSample, Double>,
-         current: String, format: @escaping (Double) -> String) {
-        self.init(title: title, samples: samples, value: { $0[keyPath: value] }, current: current, format: format)
-    }
-
-    private var hoveredSample: ResourceSample? {
-        guard let hovered else { return nil }
-        return samples.min { abs($0.time.timeIntervalSince(hovered)) < abs($1.time.timeIntervalSince(hovered)) }
+    private var hoveredIndex: Int? {
+        guard let hovered, !samples.isEmpty else { return nil }
+        return samples.indices.min { abs(samples[$0].time.timeIntervalSince(hovered)) < abs(samples[$1].time.timeIntervalSince(hovered)) }
     }
 
     var body: some View {
-        let end = samples.last?.time ?? .now
-        let peak = samples.map(value).max() ?? 0
+        let points = Array(zip(samples.map(\.time), values))
         HStack(spacing: 12) {
-            Text(title).frame(width: 60, alignment: .leading)
+            Text(title).frame(width: 64, alignment: .leading)
             Chart {
-                ForEach(samples, id: \.time) { sample in
-                    AreaMark(x: .value("Time", sample.time), y: .value(title, value(sample)))
-                        .foregroundStyle(Color.accentColor.opacity(0.12))
-                        .interpolationMethod(.monotone)
-                    LineMark(x: .value("Time", sample.time), y: .value(title, value(sample)))
+                ForEach(points, id: \.0) { time, value in
+                    if fill {
+                        AreaMark(x: .value("Time", time), yStart: .value(title, yDomain.lowerBound), yEnd: .value(title, value))
+                            .foregroundStyle(Color.accentColor.opacity(0.12))
+                            .interpolationMethod(.monotone)
+                    }
+                    LineMark(x: .value("Time", time), y: .value(title, value))
                         .foregroundStyle(Color.accentColor)
                         .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
                         .interpolationMethod(.monotone)
                 }
-                if let sample = hoveredSample {
-                    RuleMark(x: .value("Time", sample.time))
+                if let index = hoveredIndex {
+                    RuleMark(x: .value("Time", samples[index].time))
                         .foregroundStyle(Color.secondary.opacity(0.5))
                         .lineStyle(StrokeStyle(lineWidth: 1))
-                    PointMark(x: .value("Time", sample.time), y: .value(title, value(sample)))
+                    PointMark(x: .value("Time", samples[index].time), y: .value(title, values[index]))
                         .foregroundStyle(Color.accentColor)
-                        .symbolSize(40)
+                        .symbolSize(36)
                 }
             }
-            .chartXScale(domain: end.addingTimeInterval(-ResourceHistory.window)...end)
-            // a flat idle line sits on the floor instead of filling the chart
-            .chartYScale(domain: 0...max(peak * 1.15, 1))
+            .chartXScale(domain: ResourceScale.time(samples))
+            .chartYScale(domain: yDomain)
             .chartXAxis(.hidden)
             .chartYAxis(.hidden)
             .chartXSelection(value: $hovered)
-            .frame(height: 32)
+            .frame(maxWidth: .infinity)
+            .frame(height: 36)
             .transaction { if reduceMotion { $0.animation = nil } }
-            Text(hoveredSample.map { "\(format(value($0))) at \($0.time.formatted(date: .omitted, time: .shortened))" } ?? current)
-                .monospacedDigit()
-                .foregroundStyle(hoveredSample == nil ? .primary : .secondary)
-                .frame(minWidth: 72, alignment: .trailing)
+            VStack(alignment: .trailing, spacing: 1) {
+                Text(hoveredIndex.map { format(values[$0]) } ?? current)
+                    .monospacedDigit()
+                Text(hoveredIndex.map { samples[$0].time.formatted(date: .omitted, time: .standard) } ?? "now")
+                    .font(.caption2).foregroundStyle(.secondary).monospacedDigit()
+            }
+            .frame(width: 84, alignment: .trailing)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
-        .accessibilityValue("\(current) now, highest \(format(peak)) in the last ten minutes")
+        .accessibilityValue("\(current) now, highest \(format(values.max() ?? 0)) in the chart")
     }
 }
