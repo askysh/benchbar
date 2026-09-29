@@ -31,6 +31,12 @@ struct RepoCheckRow: View {
         }
     }
 
+    /// A scroll view in a sheet takes no height of its own: room for every
+    /// row (two lines, a third for a reason), up to a limit.
+    static func listHeight(_ rows: Int, reasons: Int, limit: CGFloat = 240) -> CGFloat {
+        min(CGFloat(rows) * 42 + CGFloat(reasons) * 16, limit)
+    }
+
     private var color: Color {
         switch check?.reachable {
         case true?: return .green
@@ -109,7 +115,7 @@ struct ImportProfileSheet: View {
     private var form: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                TextField("File or https URL", text: $run.source, prompt: Text("https://github.com/acme/profiles/blob/main/acme.toml"))
+                TextField("File or https URL", text: $run.source, prompt: Text(verbatim: "https://github.com/acme/profiles/blob/main/acme.toml"))
                     .textFieldStyle(.roundedBorder)
                     .autocorrectionDisabled()
                 Button("Choose File…") { choose() }
@@ -117,9 +123,13 @@ struct ImportProfileSheet: View {
             if !run.trimmedSource.isEmpty && !run.sourceValid {
                 Text("Use a .toml file on this Mac or an https URL.").font(.caption).foregroundStyle(.red)
             }
-            TextField("Save as (optional)", text: $run.saveAs, prompt: Text("the name in the file"))
-                .textFieldStyle(.roundedBorder)
-                .autocorrectionDisabled()
+            HStack {
+                Text("Save as")
+                TextField("Save as", text: $run.saveAs, prompt: Text("optional: the name in the file"))
+                    .labelsHidden()
+                    .textFieldStyle(.roundedBorder)
+                    .autocorrectionDisabled()
+            }
             if !run.nameValid {
                 Text("Lower case letters, digits, '.', '_' or '-', starting with a letter or digit.")
                     .font(.caption).foregroundStyle(.red)
@@ -159,7 +169,7 @@ struct ImportProfileSheet: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxHeight: 200)
+                .frame(height: RepoCheckRow.listHeight(plan.apps.count, reasons: plan.check.repos.filter { $0.reachable != true }.count))
                 if !plan.skippedApps.isEmpty {
                     Text("Skipped when a bench is set up from it, until this Mac can reach them: \(plan.skippedApps.joined(separator: ", ")).")
                         .font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
@@ -221,7 +231,7 @@ struct SubscribeProfilesSheet: View {
             case .done:
                 if let result = run.result { done(result) }
             default:
-                TextField("Git repository", text: $run.repo, prompt: Text("git@github.com:acme/benchbar-profiles.git"))
+                TextField("Git repository", text: $run.repo, prompt: Text(verbatim: "git@github.com:acme/benchbar-profiles.git"))
                     .textFieldStyle(.roundedBorder)
                     .autocorrectionDisabled()
                 if !run.trimmedRepo.isEmpty && !ProfileSourceRule.isGitURL(run.trimmedRepo) {
@@ -307,7 +317,7 @@ struct ExportProfileSheet: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxHeight: 300)
+        .frame(height: min(CGFloat(plan.apps.count) * 58 + CGFloat(plan.apps.filter { !$0.requires.isEmpty }.count) * 18, 320))
         ForEach(plan.warnings, id: \.self) { warning in
             Label(warning, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange)
         }
@@ -374,7 +384,7 @@ struct ExportProfileSheet: View {
                 Text("Put the file where your team can read it over https (a repository, a gist), then paste its address here. Teammates click the link and review the profile before BenchBar adds it.")
                     .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 HStack {
-                    TextField("Hosted file", text: $hostedURL, prompt: Text("https://github.com/acme/profiles/blob/main/acme.toml"))
+                    TextField("Hosted file", text: $hostedURL, prompt: Text(verbatim: "https://github.com/acme/profiles/blob/main/acme.toml"))
                         .textFieldStyle(.roundedBorder)
                         .autocorrectionDisabled()
                         .onChange(of: hostedURL) { copied = false }
@@ -490,7 +500,7 @@ struct CheckAccessSheet: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .frame(maxHeight: 280)
+                    .frame(height: RepoCheckRow.listHeight(check.repos.count, reasons: check.repos.filter { $0.reachable != true }.count, limit: 280))
                     if !check.skippedApps.isEmpty {
                         Text("A bench set up from this profile now would skip: \(check.skippedApps.joined(separator: ", ")). Ask the repository owner for access, then check again.")
                             .font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)

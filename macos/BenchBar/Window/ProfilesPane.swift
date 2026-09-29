@@ -49,6 +49,7 @@ struct ProfilesPane: View {
                         .primaryAction()
                         .disabled(store.benches.isEmpty)
                 }
+                .fixedSize()
             }
             ChangeResultBanner(workbench: workbench, scope: Workbench.profilesScope)
                 .padding(.horizontal, 20).padding(.top, 6)

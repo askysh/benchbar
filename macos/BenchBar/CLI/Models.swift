@@ -343,7 +343,8 @@ nonisolated struct ProfileInfo: Codable, Sendable, Equatable, Identifiable {
     var shadowedBy: String?
     var schema: Int?
 
-    var id: String { name }
+    /// A shadowed file has the same name as the one that wins, so the file is part of the id.
+    var id: String { "\(name)\t\(file)" }
     var isTeam: Bool { kind == "team" }
 
     enum CodingKeys: String, CodingKey {
