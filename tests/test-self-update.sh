@@ -7,6 +7,8 @@
 . "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
 
 INSTALLER="https://raw.githubusercontent.com/askysh/benchbar/main/install.sh"
+# an offered release is installed from its own tag, pinned with --version
+PINNED="https://raw.githubusercontent.com/askysh/benchbar/v99.0.0/install.sh"
 
 # ---- the version compare
 lt() { bash -c '. "$1/lib/frappe-local/selfupdate.sh"; fl_version_lt "$2" "$3"' _ "$ROOT" "$1" "$2"; }
@@ -73,12 +75,12 @@ assert_eq "checkout" "$(jget "$TMP_DIR/su.json" 'd["install"]')"
 assert_eq "True" "$(jget "$TMP_DIR/su.json" 'd["app_only"]')"
 assert_eq "None" "$(jget "$TMP_DIR/su.json" 'd["app_version"]')"
 assert_eq "None" "$(jget "$TMP_DIR/su.json" 'd["error"]')"
-assert_eq "curl -fsSL ${INSTALLER} | bash -s -- --yes --app-only" "$(jget "$TMP_DIR/su.json" 'd["command"]')"
+assert_eq "curl -fsSL ${PINNED} | bash -s -- --yes --app-only --version v99.0.0" "$(jget "$TMP_DIR/su.json" 'd["command"]')"
 assert_eq "" "$(installer_log)"
 
 # ---- --dry-run: the plan, nothing runs
 run_fm self-update --dry-run; assert_eq "0" "$CODE" "$OUT"
-assert_contains "$OUT" "runs: curl -fsSL ${INSTALLER} | bash -s -- --yes --app-only"
+assert_contains "$OUT" "runs: curl -fsSL ${PINNED} | bash -s -- --yes --app-only --version v99.0.0"
 assert_contains "$OUT" "dry-run: nothing was run"
 assert_eq "" "$(installer_log)"
 
@@ -91,8 +93,8 @@ assert_eq "" "$(installer_log)"
 reset_calls
 run_fm self-update --yes; assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "stub installer ran"
-assert_eq "args: --yes --app-only" "$(installer_log | sed -n 1p)"
-assert_calls_contain "^curl -fsSL ${INSTALLER}$"
+assert_eq "args: --yes --app-only --version v99.0.0" "$(installer_log | sed -n 1p)" "(the release that was shown, not whatever is latest later)"
+assert_calls_contain "^curl -fsSL ${PINNED}$"
 assert_calls_not_contain '^bench '
 rm -f "$MOCK_STATE/installer.log"
 
@@ -103,7 +105,7 @@ run_fm self-update --json; assert_eq "managed" "$(printf '%s' "$OUT" | jget - 'd
 assert_eq "False" "$(printf '%s' "$OUT" | jget - 'd["app_only"]')"
 run_fm self-update --yes; assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "it pulls the CLI in ${ROOT}"
-assert_eq "args: --yes" "$(installer_log | sed -n 1p)"
+assert_eq "args: --yes --version v99.0.0" "$(installer_log | sed -n 1p)"
 assert_eq "app_dir: " "$(installer_log | sed -n 2p)"
 assert_calls_not_contain '^bench '
 rm -f "$MOCK_STATE/installer.log"

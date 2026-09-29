@@ -79,11 +79,23 @@ fl_selfupdate_plan() {
       fi
     fi
   fi
-  SU_COMMAND="curl -fsSL ${FL_SELFUPDATE_INSTALLER} | "
-  [[ -n "$SU_APP_DIR" ]] && SU_COMMAND+="BENCHBAR_APP_DIR=$(printf '%q' "$SU_APP_DIR") "
-  SU_COMMAND+="bash -s -- --yes"
-  [[ "$SU_APP_ONLY" == "1" ]] && SU_COMMAND+=" --app-only"
+  fl_selfupdate_pin ""
   return 0
+}
+
+# fl_selfupdate_pin VERSION: SU_INSTALLER, SU_ARGS and SU_COMMAND for that
+# release: its tag's install.sh with --version, so a release published
+# after the prompt cannot change what is installed. Empty or odd: main.
+fl_selfupdate_pin() {
+  SU_INSTALLER="$FL_SELFUPDATE_INSTALLER"; SU_ARGS=(--yes)
+  [[ "$SU_APP_ONLY" == "1" ]] && SU_ARGS+=(--app-only)
+  if [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+    [[ -z "${BENCHBAR_INSTALLER_URL:-}" ]] && SU_INSTALLER="https://raw.githubusercontent.com/askysh/benchbar/v${1}/install.sh"
+    SU_ARGS+=(--version "v${1}")
+  fi
+  SU_COMMAND="curl -fsSL ${SU_INSTALLER} | "
+  [[ -n "$SU_APP_DIR" ]] && SU_COMMAND+="BENCHBAR_APP_DIR=$(printf '%q' "$SU_APP_DIR") "
+  SU_COMMAND+="bash -s -- ${SU_ARGS[*]}"
 }
 
 fl_selfupdate_json() {
@@ -136,6 +148,7 @@ fl_cmd_self_update() {
     latest="${got%%"$tab"*}"; page="${got#*"$tab"}"
     if fl_version_lt "${FL_VERSION:-0}" "$latest" || { [[ -n "$SU_APP_VERSION" ]] && fl_version_lt "$SU_APP_VERSION" "$latest"; }; then
       available=true
+      fl_selfupdate_pin "$latest"
     fi
   else
     available=null
@@ -182,9 +195,7 @@ fl_cmd_self_update() {
   fi
   fl_confirm "Update BenchBar to ${latest} now?" || { fl_info "Cancelled. Nothing was changed. Later: benchbar self-update"; return 1; }
   [[ -n "$SU_APP_DIR" ]] && export BENCHBAR_APP_DIR="$SU_APP_DIR"
-  local args=(--yes)
-  [[ "$SU_APP_ONLY" == "1" ]] && args+=(--app-only)
   # exec: the installer may replace this very script with git pull
   # shellcheck disable=SC2016  # $1 and $@ belong to the inner bash
-  exec bash -c 'set -o pipefail; url="$1"; shift; curl -fsSL "$url" | bash -s -- "$@"' _ "$FL_SELFUPDATE_INSTALLER" "${args[@]}"
+  exec bash -c 'set -o pipefail; url="$1"; shift; curl -fsSL "$url" | bash -s -- "$@"' _ "$SU_INSTALLER" "${SU_ARGS[@]}"
 }

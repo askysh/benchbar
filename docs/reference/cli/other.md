@@ -42,10 +42,12 @@ benchbar self-update [--check] [--json] [--dry-run] [--yes]
 ```
 
 Updates the benchbar CLI and the BenchBar app with the one line
-installer, the same command as the app's Update Now:
-`curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash -s -- --yes`.
+installer, the same command as the app's Update Now. For release 0.6.1:
+`curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/v0.6.1/install.sh | bash -s -- --yes --version v0.6.1`.
 It asks the GitHub API for the latest release, shows this CLI's and the
-app's versions and the command, and asks before it runs. It changes no
+app's versions and the command, and asks before it runs. The installer
+comes from that release's tag and installs that release, even if a newer
+one is published while you read the prompt. It changes no
 bench and never runs `bench update`.
 
 A CLI that is a git checkout of your own (not `~/.local/share/benchbar`)
