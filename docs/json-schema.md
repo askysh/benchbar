@@ -328,6 +328,61 @@ only the app's `.git`). `--json` without `--dry-run` is refused.
 A dirty tree, a detached HEAD or a diverged branch exits 1 with the
 reason as text.
 
+## `benchbar app add URL --dry-run --json`
+
+Added in 0.6.0. The plan of an app add, read only, with the token that
+`--apply TOKEN --yes` (and `benchbar_app_add` over MCP) needs. The text
+goes to stderr. A refusal the plain `app add` also makes (an unknown
+name, a URL with a token in it, an unknown site, the app on another
+branch) exits 1 with the reason as text; anything else is a plan, with
+`can_apply` saying whether it can run.
+
+```json
+{"schema_version":1,"cli_version":"0.6.0","bench":"/Users/you/frappe-bench","profile":"v15-lts",
+ "target":"https://github.com/acme/acme_crm","app":"acme_crm","package":"acme_crm",
+ "repo":"https://github.com/acme/acme_crm","branch":"main","branch_source":"remote_default",
+ "present":false,"reachable":true,
+ "sites":[{"name":"macdev","installed":false}],"sites_error":null,
+ "required_apps":[{"name":"acme_base","required_by":"acme_crm","present":false,"resolves":true,
+   "source":"apps_tsv","repo":"https://github.com/acme/acme_base","branch":"main"}],
+ "missing_required":["acme_base"],
+ "steps":[{"kind":"clone_required","name":"Clone acme_base","command":"bench get-app --skip-assets --branch main https://github.com/acme/acme_base","note":"..."},
+  {"kind":"clone","name":"Clone acme_crm","command":"bench get-app --skip-assets --branch main https://github.com/acme/acme_crm","note":"..."},
+  {"kind":"build","name":"Build","command":"bench build --apps acme_base,acme_crm","note":"..."},
+  {"kind":"install","name":"Install on macdev","command":"bench --site macdev install-app acme_crm","note":"..."},
+  {"kind":"restart","name":"Restart","command":"benchbar restart","note":"only when the bench is running, ..."}],
+ "errors":[],"changes":true,"can_apply":true,
+ "token":"3f9c0e...64 hex characters"}
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `target` | string | what was asked for, without a user name or token |
+| `app` | string | the app name: `--name`, else the package folder that holds `hooks.py`, else the repo name |
+| `package` | string or null | that package folder; `null` when `hooks.py` could not be read |
+| `repo` | string | the URL `get-app` gets |
+| `branch` | string or null | `null` when it could not be told (then `errors` says so) |
+| `branch_source` | string or null | `given` (`--branch`), `policy` (`config/apps.tsv` or the team profile), `remote_default` (the remote's HEAD) or `present` (the branch of the app already in the bench) |
+| `present` | bool | the bench already has the app; then no clone and no build, only installs |
+| `reachable` | bool or null | git could read the repo without a prompt, within the timeout; `null` when the app is present (nothing is fetched) |
+| `sites[]` | array | the target sites (`--site`, `--all-sites`) and whether each has the app already |
+| `sites_error` | string or null | as in `app list --json` |
+| `required_apps[]` | array | every app `hooks.py` requires, followed through the ones that get cloned; `present` in the bench, `resolves` through `source` (`apps_tsv` or `team_profile`) with its `repo` and `branch` |
+| `missing_required` | array of strings | the required apps the plan clones or cannot resolve |
+| `steps[]` | array | in the order `--apply` runs them; `kind` is `clone_required`, `clone`, `build`, `install` or `restart` (run only when the bench is running); `note` says what else the step does, for `install` that it changes the site's database like a migrate of these apps |
+| `errors` | array of strings | why the plan cannot run: an unreadable repo, a missing branch, no `hooks.py`, a required app nothing resolves |
+| `changes` | bool | `false` when there is nothing to do |
+| `can_apply` | bool | `false` when `errors` is not empty |
+| `token` | string | SHA-256 of the plan and of the bench's `sites/apps.txt`, `apps/` folders and site list |
+
+`benchbar app add URL --apply TOKEN --yes --json`, the result:
+`{"schema_version", "cli_version", "bench", "app", "branch", "token",
+"applied": true, "ok", "steps": [{"kind", "name", "status"}]}`, where
+`status` is `done`, `failed`, `skipped` (after a failed clone, or a
+restart of a stopped bench) or `pending`. Exit 0 when `ok`. A stale
+token or a plan that cannot run exits 1 with no JSON and the reason on
+stderr.
+
 ## `benchbar lock check --json`
 
 Added in 0.5. The bench compared with its lockfile (`benchbar.toml`).

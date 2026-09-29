@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented here.
 
+## Unreleased
+
+### Added
+
+- `benchbar app add NAME|URL --dry-run --json`: the plan of an app add
+  with an approval token, read only: the repo and branch, whether git can
+  read it, the sites, the required apps from `hooks.py` (read from a
+  shallow clone in a temp folder) and whether each resolves, and the
+  steps. `--apply TOKEN --yes` runs exactly that plan, required apps
+  included, without a question, and refuses a token the bench no longer
+  matches.
+- `benchbar mcp`: `benchbar_app_add_plan` and `benchbar_app_add`, so a
+  coding agent can add an app from a pasted git URL after showing you the
+  plan. Repairs and bench installs are still not tools.
+
 ## 0.5.8 - 2026-09-29
 
 Quick wins, and port blocks across benches. Links for Raycast and

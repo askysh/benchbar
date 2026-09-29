@@ -25,13 +25,35 @@ the argument `mcp`.
 | `benchbar_up` | Start a bench and wait for its default site |
 | `benchbar_down` | Stop a bench and keep it stopped, also across reboots |
 | `benchbar_restart` | Restart every process of a bench |
+| `benchbar_app_add_plan` | The plan of adding an app from a git URL or a known name, with its token (read only) |
+| `benchbar_app_add` | Apply that plan: needs the token, returns the output and a fresh app list |
 
 `benchbar_list`, `benchbar_status`, `benchbar_doctor`,
-`benchbar_logs_tail` (last lines, one process if asked) and
-`benchbar_site_list` read; `benchbar_up`, `benchbar_down` and
-`benchbar_restart` act. Each one runs `benchbar ... --json` and returns
-what the CLI printed. Nothing that repairs, installs or needs `sudo` is
-offered. It needs only `python3`, which the Command Line Tools provide.
+`benchbar_logs_tail` (last lines, one process if asked),
+`benchbar_site_list` and `benchbar_app_add_plan` read; `benchbar_up`,
+`benchbar_down`, `benchbar_restart` and `benchbar_app_add` act. Each one
+runs `benchbar ... --json` and returns what the CLI printed. Nothing that
+repairs, installs a bench or needs `sudo` is offered. It needs only
+`python3`, which the Command Line Tools provide.
+
+## Adding an app
+
+Paste a GitHub URL into the chat and the agent can add the app, but
+only from a plan you have seen:
+
+1. `benchbar_app_add_plan` with `url_or_name` (and `branch`, `name`,
+   `site` or `all_sites`) reads the repo and its `hooks.py` and returns
+   the plan: repo, branch, the required apps and where each comes from,
+   the sites, the steps, and a `token`. Nothing changes.
+2. The agent shows you that plan and waits for your OK.
+3. `benchbar_app_add` with the same arguments and the `token` runs
+   exactly that plan. If `sites/apps.txt`, `apps/` or the sites changed
+   in between, the token is refused and the agent plans again.
+
+The apply can take several minutes (clone, pip, yarn, build); the server
+waits up to an hour and returns everything at the end. Some clients stop
+waiting sooner: the run goes on, and `benchbar_status` or `app list`
+shows the outcome.
 
 Every tool but `benchbar_list` takes an optional `bench`, the absolute
 path from `benchbar_list`; without it the tool acts on the default bench.
@@ -39,7 +61,7 @@ The JSON each one returns is described in the [JSON schema](../json-schema.md).
 
 ## Repairs and installs
 
-Repairs and installs are deliberately not tools. An agent runs them in a
+Repairs and bench installs are deliberately not tools. An agent runs them in a
 terminal, with you, and shows the plan first:
 
 ```bash
