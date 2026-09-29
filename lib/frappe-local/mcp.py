@@ -2,10 +2,11 @@
 """benchbar mcp: a Model Context Protocol server over stdio.
 
 Coding agents (Claude Code, Cursor, ...) can list benches, read status,
-doctor and log tails, and start, stop or restart a bench. Every tool runs
+doctor and log tails, start, stop or restart a bench, and add an app from
+a plan the person approved (the plan's token). Every tool runs
 `benchbar ... --json` and hands back what the CLI printed: no logic about
 benches lives here, so the CLI stays the only thing that touches a bench.
-Nothing that repairs, installs or needs sudo is offered.
+Nothing that repairs, installs a bench or needs sudo is offered.
 
 Standard library only, Python 3.9 or newer (the Command Line Tools' python3).
 Messages are JSON-RPC 2.0, one per line on stdin and stdout; stderr is for
@@ -97,6 +98,56 @@ TOOLS = {
 }
 
 
+APP_ADD = {
+    "url_or_name": {"type": "string", "description": "A git URL (https, SSH, a host alias) or an app name from config/apps.tsv or the team profile."},
+    "branch": {"type": "string", "description": "Branch or tag. Default: the known branch for a known app, else the remote's default branch."},
+    "name": {"type": "string", "description": "The app (Python package) name, when it differs from the repository name."},
+    "site": {"type": "string", "description": "Install the app on this site."},
+    "all_sites": {"type": "boolean", "description": "Install the app on every site of the bench."},
+    "bench": BENCH,
+}
+
+
+def app_add_args(a):
+    argv = ["app", "add", a["url_or_name"]]
+    if a.get("branch"):
+        argv += ["--branch", a["branch"]]
+    if a.get("name"):
+        argv += ["--name", a["name"]]
+    if a.get("site"):
+        argv += ["--site", a["site"]]
+    if a.get("all_sites"):
+        argv += ["--all-sites"]
+    return argv + bench_args(a)
+
+
+# app add from a reviewed plan (0.6.0): the plan is a read tool, applying it
+# needs the plan's token, and the CLI refuses a token the bench no longer matches
+TOOLS["benchbar_app_add_plan"] = (
+    "Plan adding a Frappe app to a bench from a git URL or a known app name, read only: the resolved repo and branch, "
+    "whether the repo is readable, the sites, the required apps (from hooks.py) and whether each resolves, the steps, "
+    "and a token for benchbar_app_add. Show this plan to the person before applying it.",
+    APP_ADD,
+    lambda a: app_add_args(a) + ["--dry-run", "--json"],
+    True,
+    (0,),
+)
+TOOLS["benchbar_app_add"] = (
+    "Apply a plan from benchbar_app_add_plan: clone the app and its planned required apps, build, install on the planned "
+    "sites. Only call this after showing that plan to the person and getting their OK; pass the same arguments and the "
+    "plan's token. A stale token (apps.txt, apps/ or the sites changed) is refused: plan again. Takes minutes.",
+    dict(APP_ADD, token={"type": "string", "description": "The token of the plan the person approved."}),
+    lambda a: app_add_args(a) + ["--apply", a["token"], "--yes", "--json"],
+    False,
+    (0,),
+)
+REQUIRED = {"benchbar_app_add_plan": ["url_or_name"], "benchbar_app_add": ["url_or_name", "token"]}
+# seconds per call; get-app, pip, yarn and a build take long on a slow network
+TIMEOUTS = {"benchbar_app_add_plan": 300, "benchbar_app_add": 3600}
+# what an action returns after its output: the fresh status, or the app list
+AFTER = {"benchbar_app_add": ("apps", lambda a: ["app", "list", "--json"] + bench_args(a))}
+
+
 def bench_args(arguments):
     bench = arguments.get("bench")
     return ["--bench-dir", bench] if bench else []
@@ -116,7 +167,8 @@ def tool_list():
         tools.append({
             "name": name,
             "description": description,
-            "inputSchema": {"type": "object", "properties": props, "additionalProperties": False},
+            "inputSchema": dict({"type": "object", "properties": props, "additionalProperties": False},
+                                **({"required": REQUIRED[name]} if name in REQUIRED else {})),
             "annotations": {"readOnlyHint": read_only, "destructiveHint": False, "openWorldHint": False},
         })
     return {"tools": tools}
@@ -133,8 +185,14 @@ def tool_call(params):
     unknown = [k for k in arguments if k not in props]
     if unknown:
         raise RpcError(-32602, "unknown argument(s) for %s: %s" % (name, ", ".join(unknown)))
+    missing = [k for k in REQUIRED.get(name, []) if not arguments.get(k)]
+    if missing:
+        raise RpcError(-32602, "missing argument(s) for %s: %s" % (name, ", ".join(missing)))
+    # a value is never an option: "--yes" as a URL must not reach the CLI's parser
+    if any(isinstance(v, str) and v.startswith("-") for v in arguments.values()):
+        raise RpcError(-32602, "argument values must not start with '-'")
     try:
-        code, out, err = run_cli(build(arguments))
+        code, out, err = run_cli(build(arguments), timeout=TIMEOUTS.get(name, 180))
     except subprocess.TimeoutExpired:
         return text_result("benchbar did not answer in time", is_error=True)
     except OSError as e:
@@ -150,11 +208,18 @@ def tool_call(params):
             return result
         return text_result((err or out).strip() or "benchbar exited with %d" % code, is_error=True)
     # actions print text; the fresh status follows, so the agent sees the outcome
-    status_code, status_out, _ = run_cli(["status", "--json"] + bench_args(arguments))
+    key, after = AFTER.get(name, ("status", lambda a: ["status", "--json"] + bench_args(a)))
+    status_code, status_out, _ = run_cli(after(arguments))
     summary = {"exit_code": code, "output": (out + err).strip()}
+    if out.strip().startswith("{"):
+        try:  # an action run with --json: its result, and the text from stderr
+            summary["result"] = json.loads(out)
+            summary["output"] = err.strip()
+        except ValueError:
+            pass
     if status_code == 0:
         try:
-            summary["status"] = json.loads(status_out)
+            summary[key] = json.loads(status_out)
         except ValueError:
             pass
     result = text_result(json.dumps(summary))
@@ -186,8 +251,10 @@ def handle(msg):
             "capabilities": {"tools": {"listChanged": False}},
             "serverInfo": SERVER,
             "instructions": "Local Frappe benches managed by benchbar. Read tools are safe to call any time; "
-                            "benchbar_up, benchbar_down and benchbar_restart change a bench. Repairs and installs "
-                            "are not offered: suggest the fix command doctor prints to the user instead.",
+                            "benchbar_up, benchbar_down and benchbar_restart change a bench. To add an app, call "
+                            "benchbar_app_add_plan, show the plan to the person, and only after their OK call "
+                            "benchbar_app_add with its token. Repairs and bench installs are not offered: suggest "
+                            "the fix command doctor prints to the user instead.",
         }
     if method == "ping":
         return {}
