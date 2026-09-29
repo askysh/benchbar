@@ -21,7 +21,7 @@ struct BenchPage: View {
                 .padding(.horizontal, 20).padding(.top, 10)
             Group {
                 switch router.benchTab {
-                case .overview: BenchOverview(store: store, bench: bench, router: router)
+                case .overview: BenchOverview(store: store, workbench: workbench, bench: bench, router: router)
                 case .sites: BenchSites(store: store, workbench: workbench, bench: bench)
                 case .apps: BenchApps(store: store, workbench: workbench, bench: bench)
                 case .health: BenchHealth(store: store, bench: bench, router: router)
@@ -52,6 +52,7 @@ struct BenchPage: View {
 
 struct BenchOverview: View {
     let store: BenchStore
+    let workbench: Workbench
     let bench: BenchModel
     @Bindable var router: WindowRouter
     @State private var schedulerChange: Bool?
@@ -87,6 +88,23 @@ struct BenchOverview: View {
                     .disabled(bench.state != .running && bench.siteRows.first(where: \.isDefault)?.needsHosts != true)
                     Button("Show in Finder") { Workspace.openFolder(bench) }
                 }
+                HStack(spacing: 8) {
+                    let editor = store.settings.editor
+                    Button { if let editor { Workspace.openInEditor(bench, editor: editor) } } label: {
+                        Label(editor.map { "Open in \($0.name)" } ?? "Open in Editor", systemImage: "chevron.left.forwardslash.chevron.right")
+                    }
+                    .disabled(editor == nil)
+                    .help(editor == nil ? "Install VS Code or Cursor to open the bench folder in it." : bench.path)
+                    Spacer()
+                    Button { Workspace.openShell(.console, site: bench.summary.site, bench: bench, store: store) } label: {
+                        Label("Console", systemImage: "terminal")
+                    }
+                    .help("bench --site \(bench.summary.site) console, in Terminal")
+                    Button { Workspace.openShell(.db, site: bench.summary.site, bench: bench, store: store) } label: {
+                        Label("Database", systemImage: "cylinder")
+                    }
+                    .help("bench --site \(bench.summary.site) mariadb, in Terminal, with the site's own database user")
+                }
                 if let since = bench.runningSince {
                     TimelineView(.periodic(from: .now, by: 30)) { context in
                         LabeledContent("Up for", value: BenchText.uptime(since: since, now: context.date))
@@ -95,6 +113,12 @@ struct BenchOverview: View {
                 if let error = bench.lastError ?? bench.refreshError {
                     Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled)
                 }
+            }
+            if bench.runningSince != nil {
+                ResourceSection(store: store, bench: bench)
+            }
+            if bench.summary.lockFile != nil {
+                LockSection(workbench: workbench, bench: bench)
             }
             Section("Site and ports") {
                 PortConflictAction(store: store, bench: bench)
@@ -159,6 +183,7 @@ struct BenchSites: View {
     let bench: BenchModel
     @State private var addingSite = false
     @State private var showHostsInstructions = false
+    @State private var dropping: String?
 
     private var busy: Bool {
         bench.pending != nil || bench.isChangingScheduler || bench.activity != nil || store.waitsForOtherBench(bench)
@@ -176,8 +201,14 @@ struct BenchSites: View {
                             Text(row.name)
                             Text(row.needsHosts ? "no /etc/hosts line yet" : row.url)
                                 .font(.caption).foregroundStyle(row.needsHosts ? .orange : .secondary)
+                            if let last = workbench.backups(of: row.name, on: bench)?.backups.first {
+                                LastBackupLine(backup: last)
+                            }
                         }
                         Spacer()
+                        if bench.activity?.hasPrefix("Back up \(row.name)") == true {
+                            ProgressView().controlSize(.small)
+                        }
                         if !row.isDefault {
                             Button("Make Default") { Task { await workbench.setDefaultSite(row.name, on: bench) } }
                                 .disabled(busy)
@@ -187,6 +218,8 @@ struct BenchSites: View {
                             else { Workspace.open(row.url) }
                         }
                         .disabled(!row.needsHosts && bench.state != .running)
+                        SiteMenu(workbench: workbench, bench: bench, row: row, busy: busy,
+                                 onlySite: rows.count == 1) { dropping = row.name }
                     }
                 }
             } header: {
@@ -216,12 +249,78 @@ struct BenchSites: View {
             }
         }
         .formStyle(.grouped)
+        .task(id: bench.siteRows.map(\.name)) { await workbench.loadBackups(bench) }
+        .sheet(item: Binding(get: { dropping.map(DropTarget.init) }, set: { dropping = $0?.site })) { target in
+            SiteDropSheet(workbench: workbench, bench: bench, site: target.site) { dropping = nil }
+        }
         .sheet(isPresented: $addingSite) {
             AddSiteSheet(bench: bench) { name, password in
                 addingSite = false
                 Task { await workbench.addSite(name, adminPassword: password, on: bench) }
             } cancel: { addingSite = false }
         }
+    }
+}
+
+private struct DropTarget: Identifiable {
+    var site: String
+    var id: String { site }
+}
+
+/// "Backed up 2 hours ago, 5.0 MB, with files" and Show in Finder.
+struct LastBackupLine: View {
+    let backup: SiteBackup
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(text).font(.caption).foregroundStyle(.secondary)
+            Button("Show in Finder") { Workspace.reveal(backup.parts) }
+                .buttonStyle(.link).font(.caption)
+        }
+    }
+
+    private var text: String {
+        let size = ByteCountFormatter.string(fromByteCount: backup.sizeBytes, countStyle: .file)
+        // a clock that is a little behind must not say "in 2 minutes"
+        let when = backup.time.map { "Backed up " + min($0, .now).formatted(.relative(presentation: .named)) } ?? "Backed up \(backup.stamp)"
+        return "\(when), \(size)\(backup.withFiles ? ", with files" : "")"
+    }
+}
+
+/// The per site actions that do not fit a button: backups and drop.
+struct SiteMenu: View {
+    let workbench: Workbench
+    let bench: BenchModel
+    let row: SiteRow
+    let busy: Bool
+    let onlySite: Bool
+    let drop: () -> Void
+
+    var body: some View {
+        Menu {
+            Button("Back Up") { Task { await workbench.backUpSite(row.name, withFiles: false, on: bench) } }
+            Button("Back Up with Files") { Task { await workbench.backUpSite(row.name, withFiles: true, on: bench) } }
+            if let list = workbench.backups(of: row.name, on: bench) {
+                Button("Show Backups in Finder") {
+                    if let last = list.backups.first { Workspace.reveal([last.path]) }
+                    else { Workspace.open(URL(fileURLWithPath: list.folder).absoluteString) }
+                }
+                .disabled(list.backups.isEmpty)
+            }
+            Divider()
+            Button("Open Console") { Workspace.openShell(.console, site: row.name, bench: bench, store: workbench.store) }
+            Button("Open Database") { Workspace.openShell(.db, site: row.name, bench: bench, store: workbench.store) }
+            Divider()
+            Button("Drop Site…", role: .destructive, action: drop)
+                .disabled(onlySite)
+        } label: {
+            Image(systemName: "ellipsis.circle")
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .disabled(busy)
+        .help("Back up or drop \(row.name)")
     }
 }
 
@@ -270,5 +369,71 @@ nonisolated enum SiteName {
     static func isValid(_ name: String) -> Bool {
         guard let first = name.first, first.isLowercase || first.isNumber else { return false }
         return name.allSatisfy { ($0.isASCII && ($0.isLowercase || $0.isNumber)) || $0 == "-" || $0 == "." }
+    }
+}
+
+// MARK: lockfile
+
+/// "In sync" or "N differences" against the bench's benchbar.toml, from
+/// `lock check --json` (read only). No apply here: that is `benchbar lock
+/// apply` in Terminal for now.
+struct LockSection: View {
+    let workbench: Workbench
+    let bench: BenchModel
+    @State private var showDrift = false
+
+    var body: some View {
+        let check = workbench.lockChecks[bench.path]
+        Section {
+            HStack(spacing: 8) {
+                if workbench.checkingLock.contains(bench.path) && check == nil {
+                    ProgressView().controlSize(.small)
+                    Text("Comparing with the lockfile…").foregroundStyle(.secondary)
+                } else if let check {
+                    Image(systemName: check.inSync ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
+                        .foregroundStyle(check.inSync ? .green : .orange)
+                    Text(LockText.badge(check))
+                } else if let error = workbench.lockErrors[bench.path] {
+                    Image(systemName: "xmark.octagon.fill").foregroundStyle(.red)
+                    Text(error).font(.caption).foregroundStyle(.secondary).lineLimit(2).textSelection(.enabled)
+                }
+                Spacer()
+                Button("Check Again") { Task { await workbench.checkLock(bench) } }
+                    .disabled(workbench.checkingLock.contains(bench.path))
+            }
+            if let check, !check.drift.isEmpty {
+                DisclosureGroup(isExpanded: $showDrift) {
+                    ForEach(check.drift) { drift in
+                        Label(drift.text, systemImage: drift.level == "fail" ? "xmark.circle" : "exclamationmark.circle")
+                            .font(.callout)
+                            .foregroundStyle(drift.level == "fail" ? .red : .primary)
+                            .textSelection(.enabled)
+                    }
+                } label: {
+                    Text("Differences").font(.callout)
+                }
+            }
+        } header: {
+            Text("Lockfile")
+        } footer: {
+            Text(LockText.footer(bench.summary.lockFile ?? ""))
+        }
+        .task(id: bench.path) { await workbench.checkLock(bench) }
+        // after a change (an app added or updated) the answer may differ
+        .onChange(of: workbench.result) { _, result in
+            if result?.scope == bench.path { Task { await workbench.checkLock(bench) } }
+        }
+    }
+}
+
+nonisolated enum LockText {
+    static func badge(_ check: LockCheck) -> String {
+        if check.inSync { return "In sync" }
+        let n = check.drift.count
+        return n == 1 ? "1 difference" : "\(n) differences"
+    }
+
+    static func footer(_ path: String) -> String {
+        "Compared with \(path). To bring the bench in line, run benchbar lock apply in Terminal."
     }
 }

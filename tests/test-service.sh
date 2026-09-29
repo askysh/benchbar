@@ -142,4 +142,42 @@ assert_file "$BENCH/apps/frappe"
 assert_file "$BENCH/env/bin/python"
 [[ -n "$(find "$HOME/Library/LaunchAgents-disabled" -name 'com.benchbar.frappe-bench.plist')" ]] || fail "uninstalled plist must be kept aside"
 
+# ---- an emptied bench whose agent is still loaded (it exits 127 every 20 s)
+V16="$HOME/dev/v16-bench"
+make_fake_bench "$V16" v16dev
+run_fm service --yes --bench-dir "$V16"
+assert_eq "0" "$CODE" "$OUT"
+v16plist="$HOME/Library/LaunchAgents/com.benchbar.v16-bench.plist"
+assert_file "$v16plist"
+launchctl print "gui/$(id -u)/com.benchbar.v16-bench" >/dev/null 2>&1 || fail "test setup: the v16 agent is loaded"
+find "$V16" -mindepth 1 -delete   # a cleanup tool emptied the folder
+# doctor of another bench names it, with the command that removes it
+make_fake_bench "$BENCH"
+run_fm doctor --json --bench-dir "$BENCH"
+assert_eq "warn" "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "dead_agents"][0]["status"]')"
+assert_contains "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "dead_agents"][0]["fix"]')" "uninstall-service --bench-dir '$V16'"
+# uninstall-service works on the emptied folder: the agent goes, nothing else
+run_fm uninstall-service --dry-run --yes --bench-dir "$V16"
+assert_eq "0" "$CODE" "$OUT"
+assert_file "$v16plist"
+# launchd keeps the job past the wait: the plist stays and the run fails, so it can be retried
+FL_BOOTOUT_WAIT_SECS=1 MOCK_BOOTOUT_LINGER=100 run_fm uninstall-service --yes --bench-dir "$V16"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "launchd still runs com.benchbar.v16-bench"
+assert_file "$v16plist"
+rm -f "$MOCK_STATE"/agents/com.benchbar.v16-bench.linger
+printf 'state = running\nlast exit code = 127\n' >"$MOCK_STATE/agents/com.benchbar.v16-bench"
+run_fm uninstall-service --yes --bench-dir "$V16"
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "booted out com.benchbar.v16-bench"
+assert_no_file "$v16plist"
+! launchctl print "gui/$(id -u)/com.benchbar.v16-bench" >/dev/null 2>&1 || fail "the agent must be booted out"
+[[ -n "$(find "$HOME/Library/LaunchAgents-disabled" -name 'com.benchbar.v16-bench.plist')" ]] || fail "its plist is kept aside"
+run_fm doctor --json --bench-dir "$BENCH"
+assert_eq "ok" "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "dead_agents"][0]["status"]')"
+# a path with no bench and no agent: the old refusal, clearer
+run_fm uninstall-service --yes --bench-dir "$HOME/nowhere"
+assert_eq "1" "$CODE"
+assert_contains "$OUT" "no com.benchbar agent points at it"
+
 printf 'test-service: ok\n'

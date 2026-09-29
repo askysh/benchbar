@@ -19,7 +19,7 @@ include:
 
 settings:
   base:
-    MARKETING_VERSION: "0.5.7"
+    MARKETING_VERSION: "0.5.8"
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "6.0"
     MACOSX_DEPLOYMENT_TARGET: "14.0"
@@ -72,6 +72,10 @@ targets:
         NSPrincipalClass: NSApplication
         NSHumanReadableCopyright: "BenchBar. Built for Frappe and ERPNext on macOS. MIT License."
         BenchBarTagline: "Built for Frappe and ERPNext on macOS"
+        # benchbar:// links (Raycast, Shortcuts); App/URLRouter.swift lists the routes
+        CFBundleURLTypes:
+          - CFBundleURLName: com.akashmishra.benchbar
+            CFBundleURLSchemes: [benchbar]
     entitlements:
       path: BenchBar/Resources/BenchBar.entitlements
       properties:

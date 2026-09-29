@@ -1,6 +1,6 @@
 ---
 title: "report and other commands"
-description: "benchbar report, list, autostart, mariadb-password, uninstall-service and help: the remaining commands with flags, exit codes and examples."
+description: "benchbar report, list, console, db, autostart, mariadb-password, uninstall-service and help: the remaining commands with flags, exit codes and examples."
 ---
 
 Every command takes the [options for every command](install.md#options-for-every-command).
@@ -83,6 +83,41 @@ Exit codes: 0.
 benchbar list --json
 ```
 
+## console
+
+```
+benchbar console [--site NAME] [--bench-dir DIR]
+```
+
+`bench --site NAME console` in the bench folder: an IPython shell with
+frappe connected to the site. Without `--site`, the bench's default site.
+It replaces the benchbar process, so the terminal is bench's until you
+leave with Ctrl-D. Nothing is written and no lock is taken. While the
+bench is stopped, calls that need Redis (`frappe.cache`, `enqueue`) fail;
+benchbar says so before it starts.
+
+Exit codes: bench's; 1 when the site does not exist.
+
+```bash
+benchbar console --site macdev
+```
+
+## db
+
+```
+benchbar db [--site NAME] [--bench-dir DIR]
+```
+
+`bench --site NAME mariadb`: the MariaDB shell on the site's database,
+logged in as the site's own database user from its `site_config.json`.
+The MariaDB root password is not used and nothing is written to disk.
+
+Exit codes: bench's; 1 when the site does not exist.
+
+```bash
+benchbar db --site macdev
+```
+
 ## autostart
 
 ```
@@ -126,7 +161,15 @@ databases are not touched; the plist is moved to
 `~/Library/LaunchAgents-disabled/` and the other files are backed up
 first.
 
-Exit codes: 0; 1 declined.
+When the folder is no longer a bench (emptied by a cleanup tool, or
+deleted) but its agent is still installed, it removes only that agent:
+every `com.benchbar.*` agent whose working directory is the path is
+booted out and its plist moved aside. Such an agent otherwise restarts
+every 20 seconds, exits with code 127 and fills the log; doctor's
+[`dead_agents`](../../guides/doctor-and-repair.md#dead_agents) check
+points here.
+
+Exit codes: 0; 1 declined, or no bench and no agent at the path.
 
 ```bash
 benchbar uninstall-service --bench-dir ~/dev/v16-bench

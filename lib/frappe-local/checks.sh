@@ -11,7 +11,7 @@
 # Groups (used by "benchbar service" versus "benchbar repair"):
 #   system, bench, service, site
 
-FL_CHECK_ORDER="brew python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac mole full_disk_access env_python bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy lock_parse lock_drift logs honcho honcho_setuptools procfile runner agent fork_safety scheduler stop_flag helpers cli_link legacy_agents hosts port_clash orphans ping"
+FL_CHECK_ORDER="brew python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac mole full_disk_access env_python bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy lock_parse lock_drift logs honcho honcho_setuptools procfile runner agent fork_safety scheduler stop_flag helpers cli_link legacy_agents dead_agents hosts port_clash orphans ping"
 FL_LOG_WARN_MB="${FL_LOG_WARN_MB:-50}"
 FL_HOSTS_FILE="${FL_HOSTS_FILE:-/etc/hosts}"
 
@@ -50,6 +50,7 @@ fl_check_label() {
     helpers) printf 'Shell helpers' ;;
     cli_link) printf 'benchbar on PATH' ;;
     legacy_agents) printf 'Legacy agents' ;;
+    dead_agents) printf 'Agents without a runner' ;;
     mariadb_bind) printf 'MariaDB bind address' ;;
     mariadb_utf8) printf 'MariaDB utf8mb4' ;;
     pdf_engine) printf 'PDF engine' ;;
@@ -313,6 +314,24 @@ chk_legacy_agents() {
     desc="${desc}${desc:+; }${label} (${state}, last exit ${code})"
   done <<<"$list"
   chk__set warn "${n} legacy agent(s): ${desc}" "${SCRIPT_DIR}/benchbar repair (moves them to ${FL_LEGACY_DIR})" legacy_migrate
+}
+
+# Any bench's agent, not only this one's: a loaded agent whose runner is
+# gone restarts every 20 seconds, exits 127 and writes to its bench.log.
+chk_dead_agents() {
+  local list n=0 desc="" fixes="" plist label dir
+  list="$(fl_dead_agents_list)"
+  if [[ -z "$list" ]]; then
+    chk__set ok "every loaded benchbar agent has its runner"
+    return 0
+  fi
+  while IFS='|' read -r plist label dir; do
+    [[ -n "$plist" ]] || continue
+    n=$((n + 1))
+    desc="${desc}${desc:+; }${label} (${dir:-no folder})"
+    fixes="${fixes}${fixes:+ ; }${SCRIPT_DIR}/benchbar uninstall-service --bench-dir $(fl_sq "$dir")"
+  done <<<"$list"
+  chk__set warn "${n} loaded agent(s) whose runner script is missing, restarted every 20 s: ${desc}" "$fixes"
 }
 
 fl_mariadb_dropin_path() {

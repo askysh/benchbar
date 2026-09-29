@@ -138,6 +138,10 @@ struct BenchPanel: View {
                 Text(bench.name).font(.headline)
                 Text("\(bench.summary.site), port \(String(bench.summary.ports.web))")
                     .font(.caption).foregroundStyle(.secondary)
+                if bench.runningSince != nil, let now = bench.resources.history.latest {
+                    Text("CPU \(ResourceText.cpu(now.cpuPercent)), memory \(ResourceText.memory(now.memoryBytes))")
+                        .font(.caption).monospacedDigit().foregroundStyle(.secondary)
+                }
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 3) {

@@ -27,6 +27,9 @@ final class WindowRouter {
     var updateCheckRequested = false
     /// Set by Help > Keyboard Shortcuts: General scrolls to that section.
     var scrollTarget: String?
+    /// Why a benchbar:// link did nothing (no such bench, which bench):
+    /// shown on top of the window until dismissed.
+    var notice: String?
 
     func show(bench path: String, tab: BenchTab = .overview) {
         pane = .bench(path)
@@ -84,6 +87,12 @@ struct MainWindowView: View {
         } detail: {
             detail
                 .frame(minWidth: 560, minHeight: 460)
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    if let notice = router.notice {
+                        NoticeBanner(text: notice) { router.notice = nil }
+                            .padding([.horizontal, .top], 16)
+                    }
+                }
         }
     }
 
@@ -109,6 +118,27 @@ struct MainWindowView: View {
                                        description: Text("benchbar list no longer reports it."))
             }
         }
+    }
+}
+
+/// A message for the whole window, for now only from a benchbar:// link.
+struct NoticeBanner: View {
+    let text: String
+    let dismiss: () -> Void
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: "link").foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("A BenchBar link did nothing").font(.callout.weight(.medium))
+                Text(text).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+            }
+            Spacer()
+            Button(action: dismiss) { Image(systemName: "xmark") }
+                .buttonStyle(.borderless).help("Dismiss")
+        }
+        .padding(10)
+        .background(Color.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
     }
 }
 

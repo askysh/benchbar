@@ -175,6 +175,13 @@ ADMIN_PASSWORD=adminpw run01 --yes --offline
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "MariaDB root password read from the Keychain"
 assert_calls_contain "^bench new-site macdev"
+# no ADMIN_PASSWORD and no terminal to ask (an agent): a message and a fix, not a silent exit 1
+rm -rf "$BENCH"; reset_calls
+run01 --offline </dev/null
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "Cannot ask for ADMIN_PASSWORD: there is no terminal to type it in."
+assert_contains "$OUT" "ADMIN_PASSWORD='...' benchbar install"
+assert_calls_not_contain '^bench new-site'
 # and none at all: a clear failure, not a hang
 rm -rf "$BENCH"; rm -f "$MOCK_STATE/keychain/benchbar-mariadb--root"
 ADMIN_PASSWORD=adminpw run01 --yes --offline
@@ -192,6 +199,7 @@ assert_contains "$OUT" "1. System dependencies"
 assert_contains "$OUT" "2. Bench and site"
 assert_contains "$OUT" "3. Background service"
 assert_contains "$OUT" "Next steps"
+assert_eq "1" "$(printf '%s\n' "$OUT" | grep -c '^Summary')" "(one Summary for the whole install)"
 assert_file "$BENCH/benchbar-run.sh"
 assert_file "$HOME/Library/LaunchAgents/com.benchbar.frappe-bench.plist"
 grep -q '^127.0.0.1 macdev$' "$FL_HOSTS_FILE" || fail "install --yes must add the hosts entry"

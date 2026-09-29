@@ -2,10 +2,47 @@
 
 All notable changes to this project are documented here.
 
-## Unreleased
+## 0.5.8 - 2026-09-29
+
+Quick wins, and port blocks across benches. Links for Raycast and
+Shortcuts drive a bench without the menu bar, each bench's page charts
+its CPU and memory and says whether it matches its lockfile, and a site
+can be backed up or dropped (with a backup first and its name typed
+again) from the CLI and the app. VS Code or Cursor, a console and the
+site's database are one click away, and `doctor --fix-hints` gives agents
+just the commands. Setup plans port blocks for several benches at once
+and refuses a start that would take another bench's ports. The installer
+no longer ends silently without a terminal, and an emptied bench's agent
+can be removed.
 
 ### Added
 
+- `benchbar://` links for Raycast, Shortcuts and scripts: `up`, `down`,
+  `restart`, `open`, `logs`, `window`, `doctor`, `console`, `db` and
+  `editor`, with `bench=` (a name or a path) and `site=`. Links only
+  start, stop and open things; any other route is ignored and logged. See
+  the URL scheme reference page.
+- `benchbar doctor --fix-hints`: only the fix commands of failing and
+  warning checks, one per line, for coding agents and scripts. The exit
+  code is doctor's.
+- `benchbar console` and `benchbar db` (both take `--site`): bench's
+  Python console and the site's MariaDB shell with the site's own user.
+  In the app, Open in VS Code or Cursor (chosen in Settings), Console and
+  Database on the bench page and in each site's menu, and the
+  `benchbar://console`, `db` and `editor` links.
+- `benchbar site backup NAME [--with-files]`, `site backups NAME` and
+  `site drop NAME --confirm-site NAME`: bench's own backup, a list of a
+  site's backups, and dropping a site with a backup first. Drop refuses
+  without the site name typed again, and the default site needs
+  `--new-default`; it removes the site's hosts line with one `sudo`
+  prompt. In the app, the Sites tab backs up a site and drops it behind a
+  sheet with the plan and a typed confirmation.
+- The Overview tab of a bench with a lockfile shows "In sync" or "N
+  differences" with the list, from `benchbar lock check --json`, on open
+  and with Check Again.
+- CPU and memory per bench: the Overview tab charts the last ten minutes
+  while the bench runs, and the popover shows the current values. Measured
+  with the same process tree walk as the runner speed, in memory only.
 - Batch setup preview with stable port allocations, Automatic/Fixed modes, and
   explicit Resolve & Start. Current allocations reserve ports while stopped; stale automatic reservations
   are ignored after an external configuration change.
@@ -26,6 +63,27 @@ All notable changes to this project are documented here.
   listeners before changing process state. CLI users can confirm a stopped
   bench overlap to run one bench at a time; the app offers Resolve & Start.
   Starting an already-running bench remains a successful no-op.
+
+### Fixed
+
+- `benchbar install` without a terminal (run by a coding agent, or piped)
+  no longer ends silently: questions with a default take the default and
+  say so, and a password it cannot ask for stops with a message and the
+  fix (`ADMIN_PASSWORD='...' benchbar install`, or run it in a terminal).
+- `benchbar uninstall-service --bench-dir PATH` removes the agent of a
+  bench folder that was emptied or deleted, instead of refusing with "No
+  bench at PATH". Such an agent restarted every 20 seconds, exited with
+  code 127 and grew the log. Doctor has a new check, `dead_agents`, that
+  warns about any loaded benchbar agent whose runner script is missing.
+- `benchbar install --port-offset N --dry-run` for a new bench shows the
+  ports it will get (web 8000+N): no port clash with the benches on 8000,
+  and the "Open" address uses the right port.
+- The service pass of `benchbar install` checks the MariaDB the install
+  chose (a running server inside the profile's range, for example
+  mariadb@10.11 for v16) instead of failing on the profile's default
+  formula when the bench has no saved state yet, as in a dry run.
+- `benchbar install` ends with one Summary table, of its three steps; the
+  service pass no longer prints a second one of its own actions.
 
 ## 0.5.7 - 2026-09-27
 

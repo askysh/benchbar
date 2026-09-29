@@ -57,13 +57,34 @@ struct BenchStoreTests {
         return #"{"schema_version":1,"bench":"\#(benchPath)","state":"\#(state)","stop_reason":\#(r),"pid":null,"started_at":"2026-09-23T10:00:00Z","last_exit_code":\#(e),"web_url":"http://macdev:8000","web_ping_code":null}"#
     }
 
-    func makeStore(ping: Int? = 200) -> BenchStore {
+    func makeStore(ping: Int? = 200,
+                   snapshotter: @escaping @Sendable (Int32) async -> ProcessTree.Snapshot = { _ in ProcessTree.Snapshot(takenAt: 0, cpu: [:]) }) -> BenchStore {
         let runner = cli.runner()
         return BenchStore(
             settings: settings,
             locator: CLILocator(home: dir.url, isExecutable: { $0 == "/fake/benchbar" }),
             makeClient: { CLIClient(executable: $0, runner: runner) },
-            pinger: { _, _ in ping })
+            pinger: { _, _ in ping },
+            snapshotter: snapshotter)
+    }
+
+    @Test func samplesResourcesOnlyWhileRunning() async {
+        let clock = SnapshotClock()
+        cli.answer("list", json: listJSON())
+        cli.answer("status", json: statusJSON("running").replacingOccurrences(of: #""pid":null"#, with: #""pid":4242"#))
+        let store = makeStore(snapshotter: { pid in clock.next(pid) })
+        await store.start(polling: false)
+        let bench = store.benches[0]
+        #expect(bench.resources.history.isEmpty)  // the first refresh is the baseline
+        await store.refresh(bench)
+        #expect(bench.resources.history.samples.count == 1)
+        #expect(bench.resources.history.latest?.memoryBytes == 64 << 20)
+        #expect(clock.pids == [4242, 4242])
+
+        cli.answer("status", json: statusJSON("stopped", reason: "manual"))
+        await store.refresh(bench)
+        #expect(clock.pids.count == 2)
+        #expect(!bench.resources.isTracking)
     }
 
     func settle() async {
@@ -181,5 +202,21 @@ struct BenchStoreTests {
         await store.runDoctor(on: bench)
         #expect(bench.doctor?.summary.fail == 1)
         #expect(bench.isRunningDoctor == false)
+    }
+}
+
+/// Snapshots a second apart, each process a little busier.
+nonisolated final class SnapshotClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var calls: [Int32] = []
+    var pids: [Int32] { lock.withLock { calls } }
+
+    func next(_ pid: Int32) -> ProcessTree.Snapshot {
+        lock.withLock {
+            calls.append(pid)
+            let n = UInt64(calls.count)
+            let key = ProcessTree.Key(pid: pid, startTime: 0)
+            return ProcessTree.Snapshot(takenAt: n * 1_000_000_000, cpu: [key: n * 100_000_000], memory: [key: 64 << 20])
+        }
     }
 }

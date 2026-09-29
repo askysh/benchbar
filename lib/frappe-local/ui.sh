@@ -299,6 +299,21 @@ fl_steps_define() {
   done
 }
 
+# fl_steps_push / fl_steps_pop: keep a command's own steps while a nested
+# run (the repair engine inside install) defines and prints its own. One level.
+fl_steps_push() {
+  FL_SAVED_LABELS=(${FL_STEP_LABELS[@]+"${FL_STEP_LABELS[@]}"})
+  FL_SAVED_STATUS=(${FL_STEP_STATUS[@]+"${FL_STEP_STATUS[@]}"})
+  FL_SAVED_SECS=(${FL_STEP_SECS[@]+"${FL_STEP_SECS[@]}"})
+  FL_SAVED_CURRENT="$FL_STEP_CURRENT"; FL_SAVED_START="$FL_STEP_START"; FL_SAVED_RUN_START="$FL_RUN_START"
+}
+fl_steps_pop() {
+  FL_STEP_LABELS=(${FL_SAVED_LABELS[@]+"${FL_SAVED_LABELS[@]}"})
+  FL_STEP_STATUS=(${FL_SAVED_STATUS[@]+"${FL_SAVED_STATUS[@]}"})
+  FL_STEP_SECS=(${FL_SAVED_SECS[@]+"${FL_SAVED_SECS[@]}"})
+  FL_STEP_CURRENT="$FL_SAVED_CURRENT"; FL_STEP_START="$FL_SAVED_START"; FL_RUN_START="$FL_SAVED_RUN_START"
+}
+
 fl_steps_print_plan() {
   local i=0
   fl_spinner_pause
@@ -435,6 +450,15 @@ fl_ask() {
     printf -v "$__varname" '%s' "${__answer:-$__default}"
     return 0
   fi
+  # no terminal (an agent, a pipe): the default is the answer; without one,
+  # say what to pass instead of letting read end the run silently
+  if [[ ! -t 0 ]]; then
+    [[ -n "$__default" ]] || fl_die "Cannot ask for ${__varname}: there is no terminal to type it in." \
+      "Pass it in the environment (${__varname}='...' before the command), or run the command in a terminal"
+    printf -v "$__varname" '%s' "$__default"
+    fl_info "no terminal: ${__prompt}: ${__default} (the default)"
+    return 0
+  fi
   if [[ -n "$__default" ]]; then
     read -r -p "  ${__prompt} [${__default}]: " __answer
     printf -v "$__varname" '%s' "${__answer:-$__default}"
@@ -451,10 +475,16 @@ fl_ask_secret() {
     fl_info "using env-provided ${__varname} (hidden)"
     return 0
   fi
+  # no terminal: read hits end of input, and under set -e the run would
+  # end right here without a word
+  [[ -t 0 ]] || fl_die "Cannot ask for ${__varname}: there is no terminal to type it in." \
+    "Pass it in the environment (${__varname}='...' before the command), or run the command in a terminal"
   while true; do
-    read -r -s -p "  ${__prompt}: " __answer; printf '\n'
+    read -r -s -p "  ${__prompt}: " __answer || fl_die "No ${__varname} given (end of input)." "Pass ${__varname}='...' before the command"
+    printf '\n'
     [[ -n "$__answer" ]] || { fl_warn "empty value; retry"; continue; }
-    read -r -s -p "  confirm ${__prompt}: " __confirm; printf '\n'
+    read -r -s -p "  confirm ${__prompt}: " __confirm || fl_die "No ${__varname} given (end of input)." "Pass ${__varname}='...' before the command"
+    printf '\n'
     [[ "$__answer" == "$__confirm" ]] && { printf -v "$__varname" '%s' "$__answer"; return 0; }
     fl_warn "values do not match; retry"
   done

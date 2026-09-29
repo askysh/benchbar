@@ -45,15 +45,36 @@ top chooses which bench the popover shows.
 | ⌘K | Health in the BenchBar window |
 | ⌘M | The BenchBar window |
 
+## Links for Raycast and Shortcuts
+
+`benchbar://up`, `down`, `restart`, `open`, `logs`, `window`, `doctor`,
+`console`, `db` and `editor` act on a bench from Raycast, Shortcuts or a script, for example
+`open "benchbar://restart?bench=frappe-bench"`. Links never repair,
+install or delete anything. The [URL scheme](/reference/url-scheme/) page
+has every route and ready to use Raycast and Shortcuts recipes.
+
 ## The BenchBar window
 
 Open it with ⌘M, **Manage Bench…** in the popover, or by
 opening BenchBar again from Finder or Spotlight. It has a page per bench:
 
 - **Overview**: start, stop, restart, the site and ports, and the
-  scheduler switch.
+  scheduler switch. **Open in VS Code** (or Cursor, chosen in Settings,
+  General) opens the bench folder; **Console** and **Database** open
+  Terminal with `benchbar console` and `benchbar db` for the default site.
+  The ⋯ menu of each site on the Sites tab has both for that site. While the bench runs, two small charts show its CPU
+  and memory for the last ten minutes (hover for the value at a moment);
+  the popover shows the current values under the bench name. They count
+  the bench's own processes, not the shared MariaDB, and are kept in
+  memory only. A bench with a lockfile (`benchbar.toml`) shows **In
+  sync** or **N differences** with the list, from `benchbar lock check`
+  (read only); bring it in line with `benchbar lock apply` in Terminal.
 - **Sites**: add a site (it asks for the Administrator password), make
-  one the default, open any of them.
+  one the default, open any of them. The ⋯ menu of a site backs it up
+  (with or without files) and shows the last backup in Finder; **Drop
+  Site…** shows the plan, asks you to type the site name, and reports
+  where bench put the backup. Removing the site's `/etc/hosts` line needs
+  your password, so the sheet shows that command to run in Terminal.
 - **Apps**: add an app from the registry or any GitHub URL, install it on
   a site, and update it after reading the changelog. Right click a bench
   in the sidebar for its actions.

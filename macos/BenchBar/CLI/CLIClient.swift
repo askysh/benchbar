@@ -184,6 +184,46 @@ nonisolated struct CLIClient: Sendable {
         try await run(["site", "default", name, "--plain", "--bench-dir", bench], timeout: Timeout.action, acceptExitCodes: [0])
     }
 
+    /// The bench against its lockfile. Read only; exit 1 means drift, with the JSON.
+    func lockCheck(bench: String) async throws(CLIError) -> LockCheck {
+        let output = try await run(["lock", "check", "--json", "--bench-dir", bench], timeout: Timeout.doctor, acceptExitCodes: [0, 1])
+        return try BenchJSON.decode(LockCheck.self, from: Data(output.stdout.utf8))
+    }
+
+    /// bench --site NAME backup, through the CLI. Minutes for a big site.
+    func backupSite(_ name: String, withFiles: Bool, bench: String) async throws(CLIError) -> SiteBackupResult {
+        let output = try await run(["site", "backup", name] + (withFiles ? ["--with-files"] : []) + ["--json", "--bench-dir", bench],
+                                   timeout: Timeout.long, acceptExitCodes: [0])
+        return try BenchJSON.decode(SiteBackupResult.self, from: Data(output.stdout.utf8))
+    }
+
+    /// The site's backups, newest first. Read only.
+    func siteBackups(_ name: String, bench: String) async throws(CLIError) -> SiteBackupList {
+        let output = try await run(["site", "backups", name, "--json", "--bench-dir", bench], timeout: Timeout.query, acceptExitCodes: [0])
+        return try BenchJSON.decode(SiteBackupList.self, from: Data(output.stdout.utf8))
+    }
+
+    /// What dropping the site would do (--dry-run): nothing changes.
+    func dropPlan(site: String, newDefault: String?, bench: String) async throws(CLIError) -> SiteDropPlan {
+        let output = try await run(Self.dropArguments(site: site, confirm: site, newDefault: newDefault, bench: bench) + ["--dry-run"],
+                                   timeout: Timeout.doctor, acceptExitCodes: [0])
+        return try BenchJSON.decode(SiteDropPlan.self, from: Data(output.stdout.utf8))
+    }
+
+    /// Drops the site. `confirm` is what the user typed: the CLI refuses
+    /// unless it is the site name exactly, so the app never supplies it.
+    /// No --yes and stdin closed: the hosts line comes back as a manual step.
+    func dropSite(_ site: String, confirm: String, newDefault: String?, bench: String) async throws(CLIError) -> SiteDropResult {
+        let output = try await run(Self.dropArguments(site: site, confirm: confirm, newDefault: newDefault, bench: bench),
+                                   timeout: Timeout.long, acceptExitCodes: [0])
+        return try BenchJSON.decode(SiteDropResult.self, from: Data(output.stdout.utf8))
+    }
+
+    static func dropArguments(site: String, confirm: String, newDefault: String?, bench: String) -> [String] {
+        ["site", "drop", site, "--confirm-site", confirm] + (newDefault.map { ["--new-default", $0] } ?? [])
+            + ["--json", "--bench-dir", bench]
+    }
+
     func profiles() async throws(CLIError) -> ProfileList {
         let output = try await run(["profile", "list", "--json"], timeout: Timeout.query, acceptExitCodes: [0])
         return try BenchJSON.decode(ProfileList.self, from: Data(output.stdout.utf8))

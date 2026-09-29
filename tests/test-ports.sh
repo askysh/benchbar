@@ -130,4 +130,17 @@ run_fm up --bench-dir "$A"
 assert_not_contains "$OUT" "Start anyway?"
 cp "$TMP_DIR/a.json" "$A/sites/common_site_config.json"
 
+# ---- install --dry-run --port-offset for a bench that does not exist yet:
+# the plan and the URL use the chosen block, and A's ports are no clash
+run_fm install --dry-run --yes --port-offset 3 --bench-dir "$HOME/dev/newbench" --site newsite
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "dry-run: the new bench gets port block 3 (web 8003, socketio 9003)"
+assert_contains "$OUT" "http://newsite:8003"
+assert_not_contains "$OUT" "http://newsite:8000"
+assert_not_contains "$OUT" "[WARN] Port clash"
+assert_no_file "$HOME/dev/newbench"
+# one Summary at the end, of the install's own three steps
+assert_eq "1" "$(printf '%s\n' "$OUT" | grep -c '^Summary')" "(the service pass must not print a second table)"
+printf '%s\n' "$OUT" | sed -n '/^Summary/,$p' | grep -q '3  Background service' || fail "the Summary lists the install's steps"
+
 printf 'test-ports: ok\n'

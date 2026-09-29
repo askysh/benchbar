@@ -23,6 +23,9 @@ final class BenchModel: Identifiable {
     /// update, a repair), named for the spinner. Holds the one change slot.
     var activity: String?
     var lastRefresh: Date?
+    /// CPU and memory of the last ten minutes, sampled at each refresh
+    /// while the bench runs.
+    var resources = ResourceSampler()
 
     init(summary: BenchSummary) {
         self.path = summary.path
@@ -83,12 +86,16 @@ final class BenchStore {
     @ObservationIgnored private let makeClient: (URL) -> CLIClient
     @ObservationIgnored private let locator: CLILocator
     @ObservationIgnored private let pinger: @Sendable (String, Int) async -> Int?
+    @ObservationIgnored private let snapshotter: @Sendable (Int32) async -> ProcessTree.Snapshot
     @ObservationIgnored private var client: CLIClient?
     @ObservationIgnored private var watchers: [String: DirectoryWatcher] = [:]
     @ObservationIgnored private var pollTask: Task<Void, Never>?
     @ObservationIgnored private var inFlight: Set<String> = []
     @ObservationIgnored private var refreshAgain: Set<String> = []
     @ObservationIgnored private var popoverOpen = false
+    /// Resource charts on screen (the window's Overview): poll as fast as
+    /// with the popover open, so the charts fill in seconds, not minutes.
+    @ObservationIgnored private var chartViewers = 0
     @ObservationIgnored private var suspended = false
 
     static let pollInterval: Duration = .seconds(30)
@@ -100,12 +107,16 @@ final class BenchStore {
         settings: AppSettings,
         locator: CLILocator = CLILocator(),
         makeClient: @escaping (URL) -> CLIClient = { CLIClient(executable: $0) },
-        pinger: @escaping @Sendable (String, Int) async -> Int? = { await SitePinger.ping(site: $0, port: $1) }
+        pinger: @escaping @Sendable (String, Int) async -> Int? = { await SitePinger.ping(site: $0, port: $1) },
+        snapshotter: @escaping @Sendable (Int32) async -> ProcessTree.Snapshot = { pid in
+            await Task.detached(priority: .utility) { ProcessTree.snapshot(root: pid) }.value
+        }
     ) {
         self.settings = settings
         self.locator = locator
         self.makeClient = makeClient
         self.pinger = pinger
+        self.snapshotter = snapshotter
         self.selectedPath = settings.selectedBench.isEmpty ? nil : settings.selectedBench
     }
 
@@ -226,6 +237,7 @@ final class BenchStore {
                 bench.lastRefresh = Date()
                 bench.refreshError = nil
                 apply(.observed(status, .status), to: bench)
+                await sampleResources(bench)
             } catch {
                 bench.refreshError = error.localizedDescription
                 notifyChange()
@@ -361,7 +373,7 @@ final class BenchStore {
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
-                let open = self.popoverOpen
+                let open = self.popoverOpen || self.chartViewers > 0
                 // tolerance lets macOS batch this wakeup with others, which saves energy
                 try? await Task.sleep(
                     for: open ? Self.openPollInterval : Self.pollInterval,
@@ -370,6 +382,16 @@ final class BenchStore {
                 await self.refreshAll()
             }
         }
+    }
+
+    /// A resource chart appeared (true) or went away (false).
+    func setChartsVisible(_ visible: Bool) {
+        let wasFast = popoverOpen || chartViewers > 0
+        chartViewers = max(0, chartViewers + (visible ? 1 : -1))
+        guard !suspended, wasFast != (popoverOpen || chartViewers > 0) else { return }
+        startPolling()
+        // a sample now: the chart needs two before it draws a line
+        if visible { Task { await refreshAll() } }
     }
 
     func setPopoverOpen(_ open: Bool) {
@@ -415,6 +437,17 @@ final class BenchStore {
             }
         }
         notifyChange()
+    }
+
+    /// One CPU and memory sample from the bench's process tree, only while
+    /// it runs. Rides on the status refresh: no timer of its own.
+    private func sampleResources(_ bench: BenchModel) async {
+        guard bench.state == .running || bench.state == .starting, let pid = bench.status?.pid, pid > 0 else {
+            if bench.resources.isTracking { bench.resources.stop() }
+            return
+        }
+        let snapshot = await snapshotter(pid)
+        bench.resources.record(snapshot, root: pid, at: Date())
     }
 
     private func pingAfterStart(_ bench: BenchModel) async {

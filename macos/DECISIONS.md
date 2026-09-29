@@ -238,3 +238,25 @@ Asked for after the phases, to stop naming drift before the first release.
 - Route setup and hostname fixes to the persistent management window; the transient popover must not own a long-running setup sheet.
 - Keep stale diagnostic errors visible ahead of a previous passing report; Health retains full action and refresh errors.
 - Setup displays the CLI's adoption service preview alongside addresses before approval; a CLI without that preview must be upgraded before the app can apply.
+
+## 0.5.8: quick wins
+
+- `benchbar://` routes are an allow list in a pure `URLRouter` (URL and bench list in, one outcome out); a web page can open any link, so only launches and up, down, restart are routes, and anything else is ignored and logged under the `url` category, never guessed at.
+- Links go through `BenchStore.perform`, the same path as the buttons: port checks and the one change slot apply, and a busy bench ignores the link rather than queueing it.
+- The Apple Event handler is registered in `applicationWillFinishLaunching` and links wait until the first bench list is loaded, so a link that launches the app acts on real benches instead of an empty list.
+- Without `bench=` a link uses the selected bench only when it still exists, else the only bench; a stale selection or two benches with the same name open the window with a notice instead of picking one.
+- No confirmation for up, down and restart from a link: browsers already ask before a page opens an app, and a prompt would break Raycast and Shortcuts, which exist to skip clicks.
+- Resource samples ride on the store's status refresh (30 seconds, 5 with the popover open) instead of the runner's 2 second speed timer: every running bench gets a history, not only the one that sets the speed, and no new timer wakes the Mac. Twenty points for ten minutes is enough for a sparkline.
+- Memory is the sum of `ri_phys_footprint` over the bench's process tree, read in the same `proc_pid_rusage` call as the CPU time: the figure Activity Monitor calls Memory. MariaDB is shared by every bench and is not in the tree, so it is not counted.
+- The history belongs to one run: a new runner pid starts it over, so a restart never draws a line across the gap. It is bounded by age (ten minutes) and by count (600), and a clock that goes back starts it over.
+- Memory switches to GB at 1000 MB, not 1024, so the popover never shows "1020 MB".
+- Two charts, one measure each, no axes: CPU percent and bytes have nothing in common to share a scale. The line has no animation, so Reduce Motion needs nothing extra beyond dropping any transaction animation.
+- Back Up and Drop Site live in a per site ⋯ menu, not as more buttons: a row already has Open and Make Default, and a destructive action should not sit one click from Open.
+- The Drop sheet reads the plan with `--dry-run --json` on open and again when the new default changes, and cannot be dismissed while the drop runs; the typed name goes to `--confirm-site` as typed.
+- The lockfile badge runs `lock check` when the Overview opens, with Check Again, and after a change on that bench, not on the status poll: `lock check` runs `bench --version` and reads every app's git state, too slow for every 30 seconds. `lock check` exits 1 on drift, so exit 1 with JSON counts as a result.
+- No Apply button in 0.5.8: `lock apply` moves app checkouts and runs migrate, which needs its own plan sheet; the footer names the command instead.
+- Editors are found by bundle id through Launch Services (VS Code, Cursor, VS Code Insiders), not by path or the `code` shell command: they can live anywhere, and the shell command is often not installed. A saved choice that is uninstalled falls back to the first installed editor.
+- Console and Database reuse the `.command` file of Open in Terminal: it needs no Apple Events permission. The script runs `benchbar console|db`, never bench directly, so the CLI stays the only way into a bench and no password is in the script.
+- `console`, `db` and `editor` became link routes: they only open a window at a prompt, like `logs`.
+- The resource charts' time axis starts at the first sample and grows to ten minutes; memory is scaled to its own range without a fill. A fixed ten minute axis and a zero based memory scale drew a fresh bench as a sliver and a flat memory line as a solid block (found by Akash on the real Mac).
+- While resource charts are on screen the store polls every 5 seconds, as with the popover open (the same loop, no new timer), so a chart has a line within seconds.

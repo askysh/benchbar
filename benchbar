@@ -12,7 +12,7 @@
 
 set -euo pipefail
 
-FL_VERSION="0.5.7"
+FL_VERSION="0.5.8"
 
 # Resolve the real script location even when invoked through a symlink
 # (for example ~/.local/bin/frappe-mac).
@@ -83,6 +83,10 @@ SCRIPT_DIR="$(fl_resolve_self)"
 . "${SCRIPT_DIR}/lib/frappe-local/bench.sh"
 # shellcheck source=lib/frappe-local/sites.sh
 . "${SCRIPT_DIR}/lib/frappe-local/sites.sh"
+# shellcheck source=lib/frappe-local/site-backups.sh
+. "${SCRIPT_DIR}/lib/frappe-local/site-backups.sh"
+# shellcheck source=lib/frappe-local/consoles.sh
+. "${SCRIPT_DIR}/lib/frappe-local/consoles.sh"
 # shellcheck source=lib/frappe-local/apps.sh
 . "${SCRIPT_DIR}/lib/frappe-local/apps.sh"
 # shellcheck source=lib/frappe-local/teamlock.sh
@@ -96,6 +100,7 @@ OPT_PROFILE=""
 OPT_BUNDLE="${APP_BUNDLE:-}"
 OPT_JSON=0
 OPT_PORT_OFFSET=""
+OPT_FIX_HINTS=0
 FL_ASSUME_YES="${FL_ASSUME_YES:-0}"
 FL_MAKE_DEFAULT="${FL_MAKE_DEFAULT:-0}"
 FL_SCHEDULER=""
@@ -116,6 +121,7 @@ Setup
                       Shows the plan and asks; never runs migrate, build or update.
   service             Install or refresh only the background service (phase 02).
   doctor              Read-only health report. Exit 1 when something FAILs.
+                      --fix-hints: only the fix commands of FAIL and WARN checks, one per line.
   ports setup -- PATH ...
                       Preview management/port changes, confirm once, then apply (--dry-run: preview only)
   ports plan -- PATH ...
@@ -149,6 +155,13 @@ Daily
                       --bundle NAME or --apps "a b" from apps/. The default stays.
   site default NAME   Make NAME the default site (bench use, runner, benchup, the app).
   site hosts          Add a 127.0.0.1 line for every site to /etc/hosts (sudo, once).
+  site backup NAME    bench --site NAME backup (--with-files for the uploads too; --json).
+  site backups NAME   The site's backups, newest first: time, size, with files (--json).
+  site drop NAME      bench drop-site: a backup with files first, the folder moved to
+                      archived/sites, the hosts line removed. Needs --confirm-site NAME;
+                      the default site also needs --new-default OTHER (--dry-run, --json).
+  console             bench --site SITE console: a Python shell with frappe (--site S).
+  db                  bench --site SITE mariadb: the site's database with its own user (--site S).
   mariadb-password    Print the MariaDB root password kept in the Keychain (asks first).
   mcp                 Model Context Protocol server on stdio for coding agents
                       (claude mcp add benchbar -- benchbar mcp). Read tools, up, down, restart.
@@ -250,6 +263,7 @@ while [[ "$#" -gt 0 ]]; do
     --port-offset=*) OPT_PORT_OFFSET="${1#*=}"; shift ;;
     -y|--yes) FL_ASSUME_YES=1; shift ;;
     --json) OPT_JSON=1; shift ;;
+    --fix-hints) OPT_FIX_HINTS=1; shift ;;
     --plain|--no-color) FL_PLAIN=1; fl_ui_init; shift ;;
     --version) fl_print_version; exit 0 ;;
     # benchbar docs --help lists the topics; every other --help is this one
@@ -381,7 +395,9 @@ cmd_install() {
   fi
 
   fl_step_begin 1
-  if BENCH_DIR="$FL_BENCH_DIR" SITE_NAME="$FL_SITE" APP_BUNDLE="${bundle:-minimal}" \
+  local web_port=""
+  [[ "$OPT_PORT_OFFSET" =~ ^[0-9]+$ ]] && web_port=$((FL_PORT_BASE_WEB + OPT_PORT_OFFSET))
+  if BENCH_DIR="$FL_BENCH_DIR" SITE_NAME="$FL_SITE" APP_BUNDLE="${bundle:-minimal}" BENCHBAR_WEB_PORT="$web_port" \
      fl_run_phase_script "${SCRIPT_DIR}/01-install-bench-and-site.sh" "${args01[@]}"; then
     fl_step_end "done"
   else
@@ -401,17 +417,36 @@ cmd_install() {
 
   fl_step_begin 2
   fl_context_init "$FL_BENCH_DIR" "$FL_SITE" "$FL_PROFILE"
+  # no MariaDB formula saved yet (a dry run saves nothing): check against the
+  # server phase 00 chose, not the profile default. Setup may look at 3306.
+  [[ -n "$FL_MARIADB_FORMULA_PINNED" ]] || fl_mariadb_prefer_running
   if [[ "$FL_DRY_RUN" == "1" && ! -d "$FL_BENCH_DIR" ]]; then
     fl_info "dry-run: the bench does not exist yet, so the service plan is shown against an empty bench"
   fi
   FL_SKIP_PLAN_CONFIRM=1
   if [[ -d "$FL_BENCH_DIR/sites" ]]; then
     fl_ports_plan "$OPT_PORT_OFFSET" || { fl_step_end failed; fl_steps_summary; return 1; }
+  elif [[ "$FL_DRY_RUN" == "1" && -n "$OPT_PORT_OFFSET" ]]; then
+    # the bench is not there yet: show the plan with the ports it will get,
+    # not the defaults (the real run moves them once the bench exists)
+    fl_ports_plan "$OPT_PORT_OFFSET" || { fl_step_end failed; fl_steps_summary; return 1; }
+    if [[ -n "$FL_PORT_TARGET" ]]; then
+      read -r FL_WEB_PORT FL_SOCKETIO_PORT FL_REDIS_QUEUE_PORT FL_REDIS_CACHE_PORT <<<"$(fl_port_block "$FL_PORT_TARGET")"
+      FL_REDIS_SOCKETIO_PORT="$FL_REDIS_CACHE_PORT"
+      fl_info "dry-run: the new bench gets port block ${FL_PORT_TARGET} (web ${FL_WEB_PORT}, socketio ${FL_SOCKETIO_PORT})"
+      FL_PORT_TARGET=""
+      fl_render_all
+    fi
   fi
-  if FL_PLAN_CHECKS="port_block" fl_repair_engine "Background service" system service; then
+  # the engine lists and times its own actions; the install's three steps
+  # come back afterwards for the one Summary at the end
+  fl_steps_push
+  if FL_ENGINE_NO_SUMMARY=1 FL_PLAN_CHECKS="port_block" fl_repair_engine "Background service" system service; then
+    fl_steps_pop
     fl_pm_remember
     fl_step_end "done"
   else
+    fl_steps_pop
     fl_step_end warning "see above"
     code=1
   fi
@@ -480,10 +515,15 @@ cmd_adopt() {
 
 cmd_doctor() {
   local fails
+  # --fix-hints: only the fix commands on stdout (fd 3), everything else,
+  # a missing bench included, on stderr
+  if [[ "$OPT_FIX_HINTS" == "1" ]]; then exec 3>&1 1>&2; FL_PLAIN=1; fl_ui_init; fi
   fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
   fl_require_bench
   fl_doctor_run
-  if [[ "$OPT_JSON" == "1" ]]; then
+  if [[ "$OPT_FIX_HINTS" == "1" ]]; then
+    fl_doctor_print_fix_hints >&3
+  elif [[ "$OPT_JSON" == "1" ]]; then
     fl_doctor_print_json
   else
     fl_header "benchbar doctor" "read-only" "$FL_PROFILE" "$FL_BENCH_DIR" "$FL_SITE"
@@ -534,7 +574,7 @@ case "$COMMAND" in
   register) fl_lock_acquire "${FL_STATE_DIR}/lock" ;;
   site|app|profile|lock)
     # the list, show and check commands are read only; the others change things
-    if [[ "${ARGS[0]:-list}" != "list" && "${ARGS[0]:-}" != "show" && "${ARGS[0]:-}" != "check" ]]; then
+    if [[ "${ARGS[0]:-list}" != "list" && "${ARGS[0]:-}" != "show" && "${ARGS[0]:-}" != "check" && "${ARGS[0]:-}" != "backups" ]]; then
       fl_log_init "${FL_STATE_DIR}/logs"
       fl_lock_acquire "${FL_STATE_DIR}/lock"
     fi
@@ -569,6 +609,8 @@ case "$COMMAND" in
   autostart) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_autostart "${ARGS[0]:-}" ;;
   uninstall-service) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_uninstall_service ;;
   path) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; printf '%s\n' "$FL_BENCH_DIR" ;;
+  console) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_console ${ARGS[@]+"${ARGS[@]}"} ;;
+  db) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_db ${ARGS[@]+"${ARGS[@]}"} ;;
   site) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_site ${ARGS[@]+"${ARGS[@]}"} ;;
   app) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_app ${ARGS[@]+"${ARGS[@]}"} ;;
   profile) fl_cmd_profile ${ARGS[@]+"${ARGS[@]}"} ;;

@@ -10,7 +10,7 @@ commands take the [options for every command](install.md#options-for-every-comma
 ## doctor
 
 ```
-benchbar doctor [--json] [--bench-dir DIR] [--profile NAME]
+benchbar doctor [--json | --fix-hints] [--bench-dir DIR] [--profile NAME]
 ```
 
 The read only health report. Every check prints `[OK]`, `[WARN]` or
@@ -20,13 +20,16 @@ and FAIL. It changes nothing and never reads the Keychain.
 | Flag | What it does |
 |---|---|
 | `--json` | Every check with its `id`, `level`, `fix_command` and `action` ([schema](../../json-schema.md#benchbar-doctor---json)) |
+| `--fix-hints` | Only the fix commands of FAIL and WARN checks, failures first, one per line, each once; nothing else on stdout |
 | `--bench-dir DIR` | The bench to check |
 | `--profile NAME` | Check against another release profile than the remembered one |
 
 Exit codes: 0 no check failed (warnings allowed); 1 at least one FAIL.
+The same with `--fix-hints`, which prints nothing when all is well.
 
 ```bash
 benchbar doctor --json --bench-dir ~/frappe-bench
+benchbar doctor --fix-hints
 ```
 
 ## repair

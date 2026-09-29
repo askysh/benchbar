@@ -160,4 +160,14 @@ v16new() {
 assert_contains "$(v16new v16-lts)" "--mariadb-user-host-login-scope=%"
 assert_contains "$(v16new v15-lts)" "--no-mariadb-socket"
 
+# ---- install --dry-run --profile v16-lts on a machine that runs mariadb@10.11 (inside
+# v16's range) and has no mariadb@11.8: the service pass checks 10.11, not the profile default
+sed_inplace '/^mariadb@11.8$/d' "$MOCK_STATE/installed"
+grep -qx 'mariadb@10.11' "$MOCK_STATE/installed" || printf 'mariadb@10.11\n' >>"$MOCK_STATE/installed"
+mkdir -p "$MOCK_STATE/ps"; printf '%s --basedir=x\n' "$MOCK_BREW_PREFIX/opt/mariadb@10.11/bin/mariadbd" >"$MOCK_STATE/ps/111"
+run_fm install --dry-run --yes --profile v16-lts --bench-dir "$HOME/v16-new" --site v16new
+assert_contains "$OUT" "MariaDB: using the mariadb@10.11 server already running on 3306"
+assert_not_contains "$OUT" "missing formulae: mariadb@11.8"
+rm -rf "$MOCK_STATE/ps"
+
 printf 'test-profile-v16: ok\n'

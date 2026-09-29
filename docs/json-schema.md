@@ -1,6 +1,6 @@
 ---
 title: "benchbar JSON API, schema version 1"
-description: "The versioned JSON that benchbar prints for list, status, doctor, logs, repair, apps, lock, profiles and pull, and the state file the runner writes."
+description: "The versioned JSON that benchbar prints for list, status, doctor, logs, repair, apps, lock, profiles, pull and site backups, and the state file the runner writes."
 ---
 
 `benchbar` (and its alias `frappe-mac`) prints versioned JSON for three
@@ -20,6 +20,9 @@ Raycast extensions and the like can rely on it too.
 | `<bench>/logs/.benchbar/state.json` | the last state transition, written by the runner and the CLI |
 | `benchbar pull ... --json` | JSON lines while a production site is copied, see [pull](#benchbar-pull---json) |
 | `benchbar report --json` | where the redacted diagnostics zip went (0.5.5), see [report](#benchbar-report---json) |
+| `benchbar site backup NAME --json` | the backup just taken (0.5.8), see [site backups](#site-backups) |
+| `benchbar site backups NAME --json` | every backup of a site (0.5.8) |
+| `benchbar site drop NAME --json` | the plan (with `--dry-run`) or the result of dropping a site (0.5.8) |
 
 ## Rules for readers
 
@@ -441,6 +444,70 @@ app's Report a Bug uses it.
 | `redactions` | number | lines on which something was replaced (a credential, the home folder, the username, a name of this Mac); `REDACTIONS.txt` in the zip lists them |
 
 Exit 0 when the zip was written. `--json` with `--print` exits 1.
+
+## Site backups
+
+`site backup`, `site backups` and `site drop` (0.5.8) describe a backup
+the same way. A backup is the files in the site's backup folder that
+share one timestamp:
+
+```json
+{
+  "stamp": "20260929_101500",
+  "time": "2026-09-29T04:45:00Z",
+  "path": "/Users/you/frappe-bench/sites/macdev/private/backups/20260929_101500-macdev-database.sql.gz",
+  "database": "/Users/you/frappe-bench/sites/macdev/private/backups/20260929_101500-macdev-database.sql.gz",
+  "files": "/Users/you/frappe-bench/sites/macdev/private/backups/20260929_101500-macdev-files.tar",
+  "private_files": "/Users/you/frappe-bench/sites/macdev/private/backups/20260929_101500-macdev-private-files.tar",
+  "config": "/Users/you/frappe-bench/sites/macdev/private/backups/20260929_101500-macdev-site_config_backup.json",
+  "size_bytes": 5242880,
+  "with_files": true,
+  "encrypted": false,
+  "partial": false
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `stamp` | the timestamp at the start of the file names, in the site's time zone |
+| `time` | when the database file was written, UTC |
+| `path` | the database file, the one a restore needs (else the first file of the set) |
+| `database`, `files`, `private_files`, `config` | each part, `null` when the set has none |
+| `size_bytes` | all parts together |
+| `with_files` | the set has the public or private files |
+| `encrypted`, `partial` | bench's encrypted and partial backups (`-enc`, `-partial`) |
+
+`benchbar site backups NAME --json`: `{"schema_version", "cli_version",
+"bench", "site", "folder", "backups": [backup, ...]}`, newest first.
+
+`benchbar site backup NAME --json`: `{"schema_version", "cli_version",
+"bench", "site", "dry_run", "backup": backup}`; `backup` is `null` in a
+dry run.
+
+`benchbar site drop NAME --confirm-site NAME --dry-run --json`, the plan:
+
+```json
+{
+  "schema_version": 1, "cli_version": "0.5.8",
+  "bench": "/Users/you/frappe-bench", "site": "bbtest.localhost",
+  "dry_run": true, "is_default": false, "new_default": null,
+  "steps": [
+    {"title": "Back up bbtest.localhost with files, drop its database and user, move the folder to archived/sites", "command": "bench drop-site bbtest.localhost", "needs_password": false},
+    {"title": "Remove '127.0.0.1 bbtest.localhost' from /etc/hosts", "command": "sudo, backup first", "needs_password": true}
+  ]
+}
+```
+
+And the result, without `--dry-run`:
+
+| Field | Meaning |
+|---|---|
+| `dropped` | `true`; a failed drop exits 1 with no JSON |
+| `archived_path` | the site folder in `archived/sites/`, `null` if bench put it elsewhere |
+| `backup` | the backup bench took before dropping (inside the archived folder), or `null` |
+| `new_default` | the site that became the default, or `null` |
+| `hosts_removed` | the `/etc/hosts` line was removed |
+| `manual_step` | the command that removes the hosts line by hand when benchbar could not (no terminal for `sudo`, a line outside benchbar's block), else `null` |
 
 ## `logs/.benchbar/state.json`
 

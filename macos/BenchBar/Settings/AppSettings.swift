@@ -16,6 +16,7 @@ final class AppSettings {
         static let notificationsEnabled = "notificationsEnabled"
         static let selectedBench = "selectedBench"
         static let askedForNotifications = "askedForNotifications"
+        static let editorBundleID = "editorBundleID"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -33,6 +34,11 @@ final class AppSettings {
     /// Path of the bench shown in the menu bar when there are several.
     var selectedBench: String { didSet { defaults.set(selectedBench, forKey: Key.selectedBench) } }
     var askedForNotifications: Bool { didSet { defaults.set(askedForNotifications, forKey: Key.askedForNotifications) } }
+    /// Open in Editor: a bundle id from `Editors.known`; empty means the first installed.
+    var editorBundleID: String { didSet { defaults.set(editorBundleID, forKey: Key.editorBundleID) } }
+
+    /// The editor Open in Editor uses right now, nil when none is installed.
+    var editor: Editor? { Editors.choice(preferred: editorBundleID, installed: Editors.installedNow()) }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -49,5 +55,6 @@ final class AppSettings {
         notificationsEnabled = defaults.bool(forKey: Key.notificationsEnabled)
         selectedBench = defaults.string(forKey: Key.selectedBench) ?? ""
         askedForNotifications = defaults.bool(forKey: Key.askedForNotifications)
+        editorBundleID = defaults.string(forKey: Key.editorBundleID) ?? ""
     }
 }

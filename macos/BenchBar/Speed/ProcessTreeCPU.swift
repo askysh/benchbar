@@ -1,7 +1,7 @@
 import Darwin
 import Foundation
 
-/// CPU time of a process tree, read with libproc (the API behind
+/// CPU time and memory of a process tree, read with libproc (the API behind
 /// Activity Monitor and `top`). Works for our own user's processes
 /// without any entitlement.
 nonisolated enum ProcessTree {
@@ -11,10 +11,18 @@ nonisolated enum ProcessTree {
         var startTime: UInt64
     }
 
-    /// CPU time per process, and when it was read (both in nanoseconds).
+    /// CPU time per process, and when it was read (both in nanoseconds),
+    /// and the memory of each process in bytes.
     struct Snapshot: Equatable, Sendable {
         var takenAt: UInt64
         var cpu: [Key: UInt64]
+        var memory: [Key: UInt64] = [:]
+
+        /// The tree's memory: the sum of each process's physical footprint,
+        /// the "Memory" column of Activity Monitor.
+        var memoryBytes: UInt64 {
+            memory.values.reduce(0) { $0 &+ $1 }
+        }
     }
 
     /// `root` and all its descendants, root first.
@@ -48,10 +56,11 @@ nonisolated enum ProcessTree {
         return []
     }
 
-    /// Reads the CPU time of every process under `root`. Processes that
-    /// exit while we read are skipped.
+    /// Reads the CPU time and memory of every process under `root`.
+    /// Processes that exit while we read are skipped.
     static func snapshot(root: pid_t) -> Snapshot {
         var cpu: [Key: UInt64] = [:]
+        var memory: [Key: UInt64] = [:]
         for pid in pids(under: root) {
             var info = rusage_info_v2()
             let result = withUnsafeMutablePointer(to: &info) { pointer in
@@ -62,8 +71,9 @@ nonisolated enum ProcessTree {
             guard result == 0 else { continue }
             let key = Key(pid: pid, startTime: info.ri_proc_start_abstime)
             cpu[key] = MachTime.nanoseconds(info.ri_user_time &+ info.ri_system_time)
+            memory[key] = info.ri_phys_footprint
         }
-        return Snapshot(takenAt: MachTime.nanoseconds(mach_absolute_time()), cpu: cpu)
+        return Snapshot(takenAt: MachTime.nanoseconds(mach_absolute_time()), cpu: cpu, memory: memory)
     }
 
     /// CPU use between two snapshots, in percent of one core (so 250 means
