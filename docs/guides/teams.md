@@ -60,6 +60,8 @@ writes a copy that is safe to hand over, import and subscribe bring it
 in on the other side, and check says up front which repos a teammate
 cannot read.
 
+![Team Profiles in the app: the built in profiles and a team profile with where each comes from, and the Import and Subscribe buttons](../images/window-profiles.png)
+
 ### Sending one
 
 ```bash

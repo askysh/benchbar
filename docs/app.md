@@ -87,7 +87,7 @@ opening BenchBar again from Finder or Spotlight. It has a page per bench:
 
 ![The BenchBar window: a bench's overview with Start, Stop, Restart, its site and ports, and the scheduler switch](images/window-overview.png)
 
-![A bench's apps: branch, repository, the sites that have each app, Install and Update](images/window-apps.png)
+![A bench's apps: branch, repository, the sites that have each app, the focus menu, Check Remotes, Install and Update](images/window-apps.png)
 
 ![A bench's health: doctor's warnings with their fixes, Run Doctor and Repair](images/window-health.png)
 
@@ -110,6 +110,8 @@ Above the benches:
   before they write, and nothing is installed from this page. See
   [Teams](guides/teams.md#team-profiles).
 - **About**: the versions, Check for Updates, Report a Bug.
+
+![Team Profiles: the built in profiles and a team profile with where each comes from, and the Import and Subscribe buttons](images/window-profiles.png)
 
 ## Updates
 
@@ -136,7 +138,7 @@ The close button on the banner hides it until the next version; the
 menu item stays. See [Updating](install.md#updating) for what the
 installer changes.
 
-![General settings: startup, notifications, the command line tool and keyboard shortcuts](images/window-general.png)
+![General settings: startup, notifications, Check for updates automatically and the command line tool](images/window-general.png)
 
 ## First run
 
