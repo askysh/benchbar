@@ -171,7 +171,7 @@ struct ImportProfileSheet: View {
                 }
                 .frame(height: RepoCheckRow.listHeight(plan.apps.count, reasons: plan.check.repos.filter { $0.reachable != true }.count))
                 if !plan.skippedApps.isEmpty {
-                    Text("Skipped when a bench is set up from it, until this Mac can reach them: \(plan.skippedApps.joined(separator: ", ")).")
+                    Text("Left out when a bench is set up from it, because this Mac cannot read their repository or they require an app that is left out: \(plan.skippedApps.joined(separator: ", ")).")
                         .font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
                 }
             }
