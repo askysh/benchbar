@@ -83,13 +83,14 @@ benchbar site hosts
 ## site backup
 
 ```
-benchbar site backup NAME [--with-files] [--json]
+benchbar site backup NAME [--with-files] [--json] [--dry-run]
 ```
 
 Runs bench's own `bench --site NAME backup` and reports the new backup:
 the database dump, the site config and, with `--with-files`, the public
 and private files. The backup lands where bench always puts it,
-`sites/NAME/private/backups/`. When the bench is stopped, its Redis is
+`sites/NAME/private/backups/`, inside the bench: copy it elsewhere when
+it has to outlive the bench. When the bench is stopped, its Redis is
 started for the backup and stopped again.
 
 | Flag | What it does |
@@ -127,9 +128,14 @@ benchbar site backups macdev --json
 benchbar site drop NAME --confirm-site NAME [--new-default OTHER] [--dry-run] [--json]
 ```
 
-Removes a site with `bench drop-site`, which takes a backup with files
-first, drops the site's database and database user, and moves the site
-folder to `archived/sites/` in the bench (nothing is deleted there). The
+Removes a site for good. Its database and database user are dropped,
+and only the backup taken first can bring the data back; the site's
+address stops working. Check that it is the site you mean and run with
+`--dry-run` first.
+
+It runs `bench drop-site`, which takes a backup with files first, drops
+the database and user, and moves the site folder, with that backup, to
+`archived/sites/` in the bench (nothing is deleted there). The
 MariaDB root password comes from the Keychain and reaches bench on
 stdin, never on the command line. Afterwards the site's `127.0.0.1` line
 is removed from `/etc/hosts`, with one `sudo` prompt, when it is inside
@@ -163,5 +169,10 @@ benchbar site drop bbtest.localhost --confirm-site bbtest.localhost --dry-run
 benchbar site drop bbtest.localhost --confirm-site bbtest.localhost
 ```
 
-To bring a dropped site back, restore its backup into a new site with
+To bring a dropped site back, restore its backup from
+`archived/sites/NAME/private/backups/` into a new site with
 `bench --site NAME restore PATH --with-public-files ... --with-private-files ...`.
+The restore does not bring back the site's `encryption_key`: copy it
+from `archived/sites/NAME/site_config.json` into the new site's
+`site_config.json`, or its stored passwords do not decrypt (see
+[Troubleshooting](../../troubleshooting.md#common-stumbles)).
