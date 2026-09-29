@@ -7,6 +7,17 @@ One line per non obvious choice: the decision, then the reason. The
 decisions of the app work live in `macos/DECISIONS.md`. The 0.5.5, 0.5 and 0.4
 runs come first, the 0.3 easy install run follows.
 
+## 0.6.0: app add over MCP
+
+- The 0.5 rule "no install behind a tool" now has one exception, `benchbar_app_add`: Akash's call on 2026-09-29. The app's installer already takes a pasted GitHub URL, so an agent should too, gated by a plan and a token instead of a terminal. Repairs, bench installs, services and anything with `sudo` stay out of MCP.
+- The plan is its own read tool (`benchbar_app_add_plan`, `app add --dry-run --json`); applying needs the plan's token, like `ports apply`. The token is a SHA-256 of the plan JSON (without `cli_version`) plus `sites/apps.txt`, the `apps/` folders and the site list, so a bench that changed between the review and the apply is refused before anything runs.
+- `--apply` recomputes the plan under the CLI lock and compares tokens there, so two agents cannot both apply one plan. It runs with stdin on `/dev/null` and never asks: the plan already disclosed every required app it clones.
+- Required apps are read before any change from a `git clone --depth 1 --filter=blob:none --no-checkout` into a temp folder outside the bench, `hooks.py` only, then the folder is removed. It works for any host the user's git can read, where the GitHub API or raw URLs would not. Every required app the registry or the team profile resolves is followed the same way; one that neither resolves blocks the plan (`can_apply: false`).
+- Without `--name`, the app is the package folder that holds `hooks.py`, since that is the folder bench creates.
+- Every remote call of the plan runs under `GIT_TERMINAL_PROMPT=0`, SSH `BatchMode` and a timeout (30 seconds for `ls-remote`, 120 for the shallow clone), so an unreachable or private repo gives `reachable: false` and a reason instead of a hang.
+- The steps are: clone the required apps (deepest first), clone the app, one build, `install-app` per site, restart only when the bench is running. The restart is always in the plan and decided at apply time, so starting or stopping the bench does not invalidate a token.
+- The MCP server gives `benchbar_app_add` a one hour limit (the plan five minutes, every other tool three) and streams nothing: the call returns the output, the `--json` result and a fresh `app list --json` at the end. Any argument value that starts with `-` is refused, so a URL can never become a CLI option.
+- A URL with a user name or token is still refused, not stripped: it would land in `.git/config`.
 ## Folder discovery
 
 - Scanning is read only and registration only remembers canonical paths: finding an existing bench must not silently create a service, start processes, or change its ports.
@@ -454,3 +465,46 @@ Measured on five PR runs (September 2026): 11 to 14 minutes wall clock, all of i
 - `dead_agents` looks at every com.benchbar agent, not only the current bench's: the bench whose runner is gone cannot run doctor any more, so another bench's doctor is the only place the warning can show.
 - `benchbar console` and `db` exec bench (`bench --site S console|mariadb`) instead of running it as a child: the terminal, signals and exit code are bench's, and no benchbar lock or trap outlives the shell. `db` relies on bench reading the site's own credentials, so the root password is never involved.
 - `doctor --fix-hints` lists failures before warnings and prints each fix once: several checks share `benchbar repair` as their fix, and an agent should run it once. Everything but the hints goes to stderr, so the output can be piped as it is.
+
+## 0.6.0: update path
+
+- `benchbar self-update` is the name, not `update`: `app update` and `profile update` exist and `bench update` is the command users fear, so the word alone would be ambiguous. It runs the one line installer instead of its own git pull, so the CLI, the app's Update Now and the release notes all run the same command; once a release is offered, the installer comes from that release's tag with `--version`, so the version confirmed is the one installed.
+- `self-update` execs the installer pipeline: `install.sh` pulls the checkout the running script lives in, and nothing of benchbar should run after that.
+- `install.sh --yes` on a Mac whose CLI checkout already exists is an update: it adopts or installs no bench and never starts the Homebrew installer (the one step that asks for a password). An interactive run still offers both.
+- A CLI that is not `~/.local/share/benchbar` gets `--app-only`: a git checkout is the developer's own branch, and a pull the installer did not start could fail on local changes or move them. The same rule is in `lib/frappe-local/selfupdate.sh` and the app's `UpdatePlan`, tested on both sides.
+- The release notes are built by `scripts/release-notes.sh` (tested) instead of inline workflow shell, with an Update section first: 0.5.x apps open the release page from Check for Updates, so the copy paste command has to be at the top of that page.
+
+## 0.6.0: dependency freshness
+
+- Doctor warns about the dependencies of focus apps, never about a focus app: the developer pulls the app they work on themselves, so a warning about it is noise, while the apps it needs go stale unnoticed.
+- Focus is inferred from local reads only (a dirty tree, a branch other than the profile's or, without a policy, the remote's default, a commit whose author is `git config user.email` in the last 14 days, read from HEAD and the local branches), so doctor needs no network to decide it. A pin (`focus`, `ignore`) wins; `ignore` only means "not a focus app", the app is still checked when a focus app needs it.
+- Pins live in one per bench key (`APP_FOCUS="a=focus b=ignore"`) in the bench's state file, not in the app's repo or the lockfile: focus is about one developer on one bench, not the team.
+- The graph is `required_apps` from hooks.py (as `fl_app_required_apps` reads it), followed transitively, frappe left out: frappe moves under every app, and a warning for it on every bench would drown the ones that matter.
+- "Behind" is counted against the remote tracking ref of the branch the app follows (`branch.B.merge` on its remote, else the same name), and the days are the age of the oldest commit HEAD lacks: that is how long the bench has been missing changes, not how old HEAD is.
+- Doctor stays read only (Akash, 2026-09-29): no automatic fetch, not even once a day. Only `doctor --fetch` or `app focus --fetch` (one global `FL_FETCH`, parsed like `--fix-hints` and ignored by other commands) fetches the focus apps' dependencies, side by side, 20 seconds each, with no prompt (GIT_TERMINAL_PROMPT=0, ssh BatchMode) and an explicit refspec into the tracking ref, so only `.git` changes. Without it the numbers are whatever git last fetched, the user's own `git fetch` included; FETCHED_AT is kept only to say how old benchbar's last fetch is. The other apps are never fetched.
+- Offline is never a FAIL: a failed fetch keeps the last numbers, an app never fetched is unknown in the OK line, and `OFFLINE=1` or `--dry-run` never fetches. MCP's `benchbar_doctor` and the app's doctor runs never pass `--fetch`.
+- `dependency_behind` is the one check id that can appear several times (one row per stale dependency, each with its own fix); the doctor runner takes extra rows from `CHK_MORE`, so the other checks are unchanged.
+- The fix is `benchbar app update NAME`, which already fast forwards with a changelog, backups and migrate; a dependency with local changes gets `git status` first. Never `bench update`.
+- `benchbar app focus` without a name lists, instead of a new top level command, and `app list --json` carries the same fields, so the app gets them from the read it already does.
+
+## 0.6.0: profile sharing
+
+- Export reads each default branch through the URL as it is on this Mac and writes the portable one: an SSH alias such as `github-exponent` exists because it carries another account's key, and `git@github.com` with the default key is refused for exactly those repos (found on Akash's Expo profile, 15 of 23 apps). Any app on the base's release branch keeps it, not only registry apps: india_compliance on `version-15` would otherwise be exported on `develop`.
+- `profile list --json` keeps `source` as the kind (adding `imported` and `subscribed`) and puts an import's or subscription's URL in the new `source_url`: changing what `source` means would break readers under schema 1, adding a field does not.
+- A reviewed plan is bound to the content it showed: the app add token hashes each planned repo's commit (and apply checks the clone is at it before build and install), and profile import, update and export plans carry a `digest` that `--expect` checks (the app also passes every export branch, not only edited ones), so a source that moves between review and apply is refused instead of applied unseen.
+- `down` kills a port listener only when its folder is readably inside the bench (`fl_pid_is_bench_own_strict`); the lenient check stays for conflict detection, where an unknown folder should not block a start.
+- Update Now and Copy Command fetch `install.sh` from the offered release's tag and pass `--version`, so the app installed is the one the prompt named; the CLI still follows `main` with `git pull --ff-only`, since a tag would leave the managed checkout detached.
+- Freshness keeps one `FETCHED_AT` per bench and advances it only when every fetch of the run worked, rather than one time per app: the age note is a caution, and a partly failed run should keep it showing.
+- The anonymous access probe runs git with `GIT_CONFIG_GLOBAL=/dev/null`, no system config and an empty credential helper: a global `url.insteadOf` that rewrites https to SSH would otherwise make every private repo look public.
+- `personal` needs both a failed anonymous read and `api.github.com/users/OWNER` saying `User`: a public repo in a personal account is fine to share, so it stays `public`.
+- Export keeps the release branch of a registry app (erpnext on `version-15` for a v15 base): the repo's default branch is `develop`, and following it would put a v15 bench on the development branch. Every other app follows its default branch, as agreed.
+- Export drops a pinned `commit` when it changes the app's branch: the pin belongs to the old branch.
+- Import adds `schema = 2` and `source` at the top of the stored file and removes the file's own lines for them, so what is stored always says where it came from and parses as schema 2.
+- `profile check` exits 0 whatever it finds: the answer is in the output, and the app and MCP read the JSON. A missing or invalid profile still exits 1.
+- Reachability runs `ls-remote --exit-code --heads --tags REPO BRANCH`: exit 2 (no such branch) is `false`, like a denied read, because install would fail on it too. A resolve or connect error and the 10 second limit are `null`, not `false`, so offline never removes apps.
+- `install --profile` skips only `false` repos. With a repo that is `null` it goes on and fails at get-app as before, rather than silently build a smaller bench offline.
+- A subscription's profiles are `profiles/*.toml` when that folder exists, else `*.toml` at the root: a config repo often keeps its own `benchbar.toml` lockfile or other TOML at the root.
+- Clones and fetches run with `core.hooksPath=/dev/null` and `GIT_LFS_SKIP_SMUDGE=1`, and subscribe clones into a temporary folder first, so a repo that holds no valid profile leaves nothing behind.
+- `profile_outdated` follows the read only doctor rule of dependency freshness: the subscription is fetched only with `doctor --fetch`; `.git/benchbar-fetched` in the clone dates the last good fetch for the age note.
+- The `--plan` forms of export, import, subscribe and update take no CLI lock, like `list` and `check`, so the app can preview while an install runs.
+- `profile remove` refuses a profile that is your own file or a `BENCHBAR_PROFILE_PATH` folder: it only undoes what import and subscribe did.

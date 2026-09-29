@@ -10,6 +10,9 @@ struct AppCommands {
     var setup: (BenchModel, Bool) -> Void = { _, _ in }
     /// The BenchBar window at a bench's tab (true: open the Repair sheet too).
     var manage: (BenchModel, BenchTab, Bool) -> Void = { _, _, _ in }
+    /// A newer release on offer: "Update to X…" in the footer.
+    var updateOffer: UpdateOffer?
+    var update: () -> Void = {}
 }
 
 /// The popover under the menu bar runner.
@@ -32,6 +35,10 @@ struct PopoverView: View {
             Divider()
             Button("Scan Folder…", systemImage: "folder.badge.plus", action: commands.scanFolder)
                 .buttonStyle(.borderless)
+            if let version = commands.updateOffer?.version {
+                Button("Update to \(version)…", systemImage: "arrow.down.circle", action: commands.update)
+                    .buttonStyle(.borderless)
+            }
             footer
         }
         .padding(14)
@@ -294,7 +301,7 @@ struct DoctorSection: View {
                         report.summary.warn > 0 ? "\(report.summary.warn) " + (report.summary.warn == 1 ? "warning" : "warnings") : nil
                     ].compactMap { $0 }.joined(separator: " · "))
                         .font(.caption.weight(.medium)).foregroundStyle(report.summary.fail > 0 ? .red : .orange)
-                    ForEach(Array(report.needsAttention.prefix(Self.visibleChecks))) { CompactCheckRow(check: $0) }
+                    ForEach(Array(report.needsAttention.prefix(Self.visibleChecks)), id: \.rowKey) { CompactCheckRow(check: $0) }
                     if report.needsAttention.count > Self.visibleChecks {
                         Button("\(report.needsAttention.count - Self.visibleChecks) more in Health…", action: details)
                             .buttonStyle(.link).font(.caption)

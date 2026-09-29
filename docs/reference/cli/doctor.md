@@ -10,17 +10,19 @@ commands take the [options for every command](install.md#options-for-every-comma
 ## doctor
 
 ```
-benchbar doctor [--json | --fix-hints] [--bench-dir DIR] [--profile NAME]
+benchbar doctor [--json | --fix-hints] [--fetch] [--bench-dir DIR] [--profile NAME]
 ```
 
 The read only health report. Every check prints `[OK]`, `[WARN]` or
 `[FAIL]`, and a `fix:` line with the exact command follows every WARN
-and FAIL. It changes nothing and never reads the Keychain.
+and FAIL. It changes nothing, never reads the Keychain and never touches
+the network unless you pass `--fetch`.
 
 | Flag | What it does |
 |---|---|
 | `--json` | Every check with its `id`, `level`, `fix_command` and `action` ([schema](../../json-schema.md#benchbar-doctor---json)) |
 | `--fix-hints` | Only the fix commands of FAIL and WARN checks, failures first, one per line, each once; nothing else on stdout |
+| `--fetch` | First `git fetch` the branches of the apps your focus apps need, for `dependency_behind` (20 seconds each, no prompt; only `.git` changes; not with `OFFLINE=1` or `--dry-run`) |
 | `--bench-dir DIR` | The bench to check |
 | `--profile NAME` | Check against another release profile than the remembered one |
 
@@ -54,7 +56,8 @@ Exit codes: 0 repaired, or nothing to do; 1 a step failed or the plan was
 declined.
 
 The full output of every run is in `.benchbar/logs/<timestamp>.log` and
-the backups in `.benchbar/backups/<timestamp>/`, in the checkout.
+the backups in `.benchbar/backups/<timestamp>/`, in the benchbar
+checkout (`~/.local/share/benchbar` after the one line installer).
 
 ```bash
 benchbar repair --dry-run

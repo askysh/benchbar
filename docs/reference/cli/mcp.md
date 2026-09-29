@@ -8,10 +8,13 @@ benchbar mcp
 ```
 
 A Model Context Protocol server on stdio for coding agents. It offers
-read tools and `up`, `down` and `restart`; nothing that repairs, installs
-or needs `sudo`. Each tool runs `benchbar ... --json` with stdin closed,
-so a question from the CLI is answered no and never hangs. It needs only
-`python3` (3.9 or later), which the Xcode Command Line Tools provide.
+read tools, `up`, `down` and `restart`, and app add from a reviewed plan
+(`benchbar_app_add_plan`, then `benchbar_app_add` with the plan's token);
+nothing that repairs, installs a bench or needs `sudo`. Each tool runs
+`benchbar ... --json` with stdin closed, so a question from the CLI is
+answered no and never hangs. A call may take 3 minutes, the plan 5 and
+`benchbar_app_add` an hour. It needs only `python3` (3.9 or later),
+which the Xcode Command Line Tools provide.
 
 The tools and their arguments are in
 [Coding agents and MCP](../../guides/agents.md#tools).

@@ -9,7 +9,11 @@ without surprising the user.
 If your client speaks the Model Context Protocol, add the server once
 (`claude mcp add benchbar -- benchbar mcp`) and use its tools instead of
 parsing text: `benchbar_status`, `benchbar_doctor`, `benchbar_logs_tail`
-and friends return the same JSON as the commands below. Repairs and
+and friends return the same JSON as the commands below. Adding an app
+goes through a plan and its token: call `benchbar_app_add_plan`, show
+the plan to the user, and only after their OK call `benchbar_app_add`
+with the same arguments and the token (the CLI form is `benchbar app add
+URL --dry-run --json`, then `--apply TOKEN --yes`). Repairs and bench
 installs are deliberately not tools: run them in a terminal, with the
 user, as described here.
 

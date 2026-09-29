@@ -1,0 +1,5 @@
+{"schema_version":1,"cli_version":"0.6.0","name":"acme","source":"https://raw.githubusercontent.com/acme/profiles/main/acme.toml","exists":true,
+"diff":"--- acme.toml (on this Mac)\n+++ acme.toml (imported)\n@@ -4,2 +4,2 @@\n-branch = \"version-15\"\n+branch = \"develop\"","base":"v16-lts",
+"apps":[{"name":"acme_core","repo":"git@github.com:acme/acme_core.git","branch":"develop","access":"private","requires":[]},{"name":"acme_erp","repo":"https://github.com/acme/acme_erp","branch":"develop","access":"public","requires":["acme_core"]},{"name":"acme_labs","repo":"git@github.com:acme/acme_labs.git","branch":"main","access":"unknown","requires":[]}],
+"check":{"repos":[{"app":"acme_core","repo":"git@github.com:acme/acme_core.git","reachable":false,"reason":"Permission denied (publickey)"},{"app":"acme_erp","repo":"https://github.com/acme/acme_erp","reachable":true,"reason":null},{"app":"acme_labs","repo":"git@github.com:acme/acme_labs.git","reachable":null,"reason":"offline"}]},
+"skipped_apps":["acme_core","acme_erp"],"digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1"}

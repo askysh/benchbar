@@ -46,8 +46,16 @@ fl_bench_socketio_pids() {
   { pgrep -f "apps/frappe/socketio\\.js" 2>/dev/null || true; } | fl_pids_in_bench
 }
 
+# Listeners on the bench's ports that run inside the bench folder (redis,
+# web and socketio start there). A listener elsewhere on the same port, such
+# as another bench or an unrelated server, is never this bench's to stop, and
+# neither is one whose folder cannot be read: stopping needs proof.
 fl_bench_listener_pids() {
-  lsof -ti "tcp:$(fl_bench_ports_csv)" -sTCP:LISTEN 2>/dev/null || true
+  local pid
+  { lsof -ti "tcp:$(fl_bench_ports_csv)" -sTCP:LISTEN 2>/dev/null || true; } | while IFS= read -r pid; do
+    [[ -n "$pid" ]] && fl_pid_is_bench_own_strict "$pid" && printf '%s\n' "$pid"
+  done
+  return 0
 }
 
 fl_bench_process_pids() {

@@ -269,13 +269,27 @@ nonisolated struct AppInfo: Codable, Sendable, Equatable, Identifiable {
     var dirty: Bool
     var version: String?
     var sites: [String]
+    // 0.6: focus apps and freshness (nil from an older CLI), see AppFocus.swift
+    var focus: Bool?
+    var focusPin: String?
+    var focusReasons: [String]?
+    var requires: [String]?
+    var neededBy: [String]?
+    var upstream: String?
+    var behind: Int?
+    var behindDays: Int?
 
     var id: String { name }
 
     enum CodingKeys: String, CodingKey {
         case name, repo, branch, commit, dirty, version, sites
+        case focus, requires, upstream, behind
         case inAppsTxt = "in_apps_txt"
         case policyBranch = "policy_branch"
+        case focusPin = "focus_pin"
+        case focusReasons = "focus_reasons"
+        case neededBy = "needed_by"
+        case behindDays = "behind_days"
     }
 }
 
@@ -326,23 +340,32 @@ nonisolated struct AppUpdatePlan: Codable, Sendable, Equatable {
 }
 
 /// One profile (`benchbar profile list --json`): built in or a team's.
+/// `source` says where it lives (builtin, user, imported, subscribed, path);
+/// since 0.6.0 `source_url` is the URL an import or subscription came from.
 nonisolated struct ProfileInfo: Codable, Sendable, Equatable, Identifiable {
     var name: String
     var kind: String
-    var source: String
+    var source: String?
     var file: String
     var base: String?
     var label: String?
     var frappeBranch: String?
     var valid: Bool
     var error: String?
+    var sourceURL: String?
+    var subscription: ProfileSubscription?
+    var shadowedBy: String?
+    var schema: Int?
 
-    var id: String { name }
+    /// A shadowed file has the same name as the one that wins, so the file is part of the id.
+    var id: String { "\(name)\t\(file)" }
     var isTeam: Bool { kind == "team" }
 
     enum CodingKeys: String, CodingKey {
-        case name, kind, source, file, base, label, valid, error
+        case name, kind, source, file, base, label, valid, error, subscription, schema
         case frappeBranch = "frappe_branch"
+        case sourceURL = "source_url"
+        case shadowedBy = "shadowed_by"
     }
 }
 

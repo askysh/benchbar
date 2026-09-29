@@ -1,6 +1,6 @@
 ---
 title: "report and other commands"
-description: "benchbar report, list, console, db, autostart, mariadb-password, uninstall-service and help: the remaining commands with flags, exit codes and examples."
+description: "benchbar report, self-update, list, console, db, autostart, mariadb-password, uninstall-service and help: the remaining commands with flags, exit codes and examples."
 ---
 
 Every command takes the [options for every command](install.md#options-for-every-command).
@@ -34,6 +34,40 @@ benchbar report --print
 ```
 
 Attach the zip to an issue at <https://github.com/askysh/benchbar/issues>.
+
+## self-update
+
+```
+benchbar self-update [--check] [--json] [--dry-run] [--yes]
+```
+
+Updates the benchbar CLI and the BenchBar app with the one line
+installer, the same command as the app's Update Now. For release 0.6.1:
+`curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/v0.6.1/install.sh | bash -s -- --yes --version v0.6.1`.
+It asks the GitHub API for the latest release, shows this CLI's and the
+app's versions and the command, and asks before it runs. The installer
+comes from that release's tag and installs that release, even if a newer
+one is published while you read the prompt. It changes no
+bench and never runs `bench update`.
+
+A CLI that is a git checkout of your own (not `~/.local/share/benchbar`)
+gets `--app-only` and the `git -C PATH pull` to run; a CLI installed
+some other way gets `--app-only` too. An app in a writable folder other
+than `~/Applications` is replaced where it is (`BENCHBAR_APP_DIR`).
+
+| Flag | What it does |
+|---|---|
+| `--check` | Only compare with the latest release |
+| `--json` | The same as JSON, never runs anything: `current`, `app_version`, `app_path`, `latest`, `release_url`, `update_available` (true, false, null offline), `install` (`managed`, `checkout`, `other`), `cli_dir`, `app_only`, `app_dir`, `command`, `notes`, `error` |
+| `--dry-run` | The plan and the command, nothing runs |
+| `--yes` | Do not ask |
+
+Exit codes: 0; 1 when GitHub could not be reached or the question was
+answered no.
+
+```bash
+benchbar self-update --check
+```
 
 ## docs
 
@@ -155,11 +189,14 @@ benchbar mariadb-password
 benchbar uninstall-service [--bench-dir DIR] [--dry-run]
 ```
 
-Removes the launchd agent, the runner, `Procfile.lean` and the shell
-helper block of one bench, after asking. The bench, its sites, apps and
-databases are not touched; the plist is moved to
-`~/Library/LaunchAgents-disabled/` and the other files are backed up
-first.
+Stops the bench (like `benchbar down`), then removes its launchd agent,
+the runner and `Procfile.lean`, after asking. It also removes the
+`# >>> benchbar >>>` block from your shell rc file, so `benchup` and the
+other helpers are gone for every bench until `benchbar repair` or
+`benchbar service` on a remaining bench writes the block again. The
+bench, its sites, apps and databases are not touched; the plist is moved
+to `~/Library/LaunchAgents-disabled/` and the other files are backed up
+first. `--dry-run` shows the steps.
 
 When the folder is no longer a bench (emptied by a cleanup tool, or
 deleted) but its agent is still installed, it removes only that agent:

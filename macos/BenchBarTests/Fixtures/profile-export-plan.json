@@ -1,0 +1,5 @@
+{"schema_version":1,"cli_version":"0.6.0","name":"acme","base":"v16-lts","apps":[
+{"name":"acme_core","repo":"git@github-acme:acme/acme_core.git","exported_repo":"git@github.com:acme/acme_core.git","current_branch":"feature/invoices","exported_branch":"develop","default_branch":"develop","branch_verified":true,"access":"private","requires":[],"keep":true},
+{"name":"acme_erp","repo":"https://github.com/acme/acme_erp","exported_repo":"https://github.com/acme/acme_erp","current_branch":"develop","exported_branch":"develop","default_branch":"develop","branch_verified":true,"access":"public","requires":["acme_core"],"keep":true},
+{"name":"my_tools","repo":"git@github.com:you/my_tools.git","exported_repo":"git@github.com:you/my_tools.git","current_branch":"main","exported_branch":"main","default_branch":"main","branch_verified":false,"access":"personal","requires":[],"keep":true}
+],"warnings":["my_tools is in a personal GitHub account: teammates may not have access"],"digest":"ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc3"}

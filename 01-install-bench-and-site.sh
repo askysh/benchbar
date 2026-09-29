@@ -264,9 +264,15 @@ fi
 [[ -n "$APP_BUNDLE" ]] || APP_BUNDLE="minimal"
 
 if [[ "$TEAM_APPS" == "1" ]]; then
-  # the team profile's own list: its repos and branches, in its order
+  # the team profile's own list: its repos and branches, in its order,
+  # without the repos git cannot read and the apps that require them
+  [[ "$OFFLINE" == "1" ]] || fl_profile_install_skips
   apps_line=""
-  for spec in "${FL_TEAM_APPS[@]}"; do apps_line="${apps_line} ${spec%%|*}"; done
+  for spec in "${FL_TEAM_APPS[@]}"; do
+    [[ "$FL_PROFILE_SKIP" == *" ${spec%%|*} "* ]] || apps_line="${apps_line} ${spec%%|*}"
+  done
+  for note in ${FL_PROFILE_SKIP_NOTES[@]+"${FL_PROFILE_SKIP_NOTES[@]}"}; do fl_warn "skipping ${note}"; done
+  [[ -n "${apps_line// /}" ]] || fl_die "No app of team profile ${FL_TEAM_PROFILE} can be read with your credentials." "benchbar profile check ${FL_TEAM_PROFILE} says why."
   fl_resolve_selected_apps "$FL_PROFILE" "$APP_BUNDLE" "$apps_line"
 else
   fl_resolve_selected_apps "$FL_PROFILE" "$APP_BUNDLE" "$APPS"
@@ -329,6 +335,9 @@ if [[ -n "$FRAPPE_COMMIT" || -n "$ERPNEXT_COMMIT" ]]; then
 fi
 if [[ -n "$FL_TEAM_PROFILE" ]]; then
   printf '  Team profile: %s (%s)\n' "$FL_TEAM_PROFILE" "$FL_TEAM_PROFILE_FILE"
+fi
+if [[ "${#FL_PROFILE_SKIP_NOTES[@]}" -gt 0 ]]; then
+  printf '  Skipped apps: %s\n' "$(printf '%s, ' "${FL_PROFILE_SKIP_NOTES[@]}" | sed 's/, $//')"
 fi
 
 if [[ "$ASSUME_YES" != "1" && "$FL_DRY_RUN" != "1" ]]; then
@@ -421,6 +430,9 @@ if ! grep -qE "^[[:space:]]*127\.0\.0\.1[[:space:]]+(.*[[:space:]])?${SITE_NAME/
   fl_warn "No /etc/hosts entry for ${SITE_NAME} yet; benchbar install (or repair) adds it, or run:"
   printf '  printf "127.0.0.1 %s\\n" | sudo tee -a /etc/hosts\n\n' "$SITE_NAME"
 fi
+for note in ${FL_PROFILE_SKIP_NOTES[@]+"${FL_PROFILE_SKIP_NOTES[@]}"}; do
+  fl_warn "skipped ${note}; once git can read it: benchbar app add ${note%% *} --bench-dir ${BENCH_DIR}"
+done
 cat <<EOF
 Run in the background (recommended):
   ${SCRIPT_DIR}/benchbar service --bench-dir ${BENCH_DIR}

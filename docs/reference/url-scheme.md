@@ -57,13 +57,30 @@ benchbar://doctor?bench=%2FUsers%2Fyou%2Fwork%2Ffrappe-bench
 
 Encode a path in a query: `/` becomes `%2F`, a space `%20`.
 
+## Profile links
+
+Two links share a team profile. They need no bench.
+
+| Link | What it does |
+|---|---|
+| `benchbar://profile/import?url=ENC` | Team Profiles with the Import sheet filled in with this https address |
+| `benchbar://profile/subscribe?url=ENC` | Team Profiles with the Subscribe sheet filled in with this git repository |
+
+`ENC` is the address, percent encoded. The sheet waits for your click:
+Review fetches and checks the profile, Add Profile saves it, Subscribe
+clones the repository. Nothing is installed from a link. Import takes
+only an https address, subscribe only an https, ssh or `git@host:owner/repo`
+remote; any other address opens the window with a message instead.
+Export in Team Profiles makes an import link for you (Copy Import Link).
+
 ## What links cannot do
 
 Any web page can open a `benchbar://` link, so links only start, stop,
 restart and open things. `console` and `db` only open a Terminal window
 at a prompt; nothing runs in it until you type. There is no route for repair, install, update,
 pull, restore, dropping a site or anything else that changes or deletes
-files; the app ignores any route not in the table above and logs it.
+files; the profile links only fill in a sheet, and the app ignores any
+route not in the tables above and logs it.
 Browsers ask before a page opens an app, so a page cannot do even that
 silently.
 

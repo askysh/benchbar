@@ -170,6 +170,20 @@ assert_contains "$OUT" "Cancelled. Nothing was changed."
 assert_contains "$OUT" "later: benchbar adopt ${BENCH} --yes"
 assert_no_file "$BENCH/Procfile.lean"
 
+# ---- an update with --yes (the CLI was already there) adopts nothing
+reset_calls
+run_install --yes --no-app
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "update with --yes: no bench is adopted or installed"
+assert_no_file "$BENCH/Procfile.lean"
+# and never offers the Homebrew installer (the one step that asks for a password)
+mkdir -p "$TMP_DIR/nobrew"
+for m in "$ROOT"/tests/mocks/bin/*; do [[ "$(basename "$m")" == brew ]] || ln -sf "$m" "$TMP_DIR/nobrew/"; done
+PATH="$TMP_DIR/nobrew:/usr/bin:/bin:/usr/sbin:/sbin" run_install --yes --no-app
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "an update with --yes never runs the Homebrew installer"
+assert_calls_not_contain 'Homebrew/install'
+
 # ---- Intel Mac: CLI only, with a warning
 cat >"$TMP_DIR/uname-intel" <<'SH'
 #!/usr/bin/env bash

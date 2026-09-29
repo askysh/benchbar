@@ -260,3 +260,37 @@ Asked for after the phases, to stop naming drift before the first release.
 - `console`, `db` and `editor` became link routes: they only open a window at a prompt, like `logs`.
 - The resource charts' time axis starts at the first sample and grows to ten minutes; memory is scaled to its own range without a fill. A fixed ten minute axis and a zero based memory scale drew a fresh bench as a sliver and a flat memory line as a solid block (found by Akash on the real Mac).
 - While resource charts are on screen the store polls every 5 seconds, as with the popover open (the same loop, no new timer), so a chart has a line within seconds.
+
+## 0.6.0: update path
+
+- Background update checks are now on by default (once a day, launch, wake and an hourly look at the clock). 0.5 did none because an update meant a manual download of an unsigned DMG; now the update is the one line installer, which checks the zip against SHA256SUMS and downloads with curl, so the unsigned app opens without Gatekeeper. Signing moves to 0.7. The check is one unauthenticated GET to the releases API with no identifier beyond the app version in the User-Agent, and a toggle in General turns it off.
+- A Sparkle build (BENCHBAR_SPARKLE=YES) makes no checks of its own and hides the toggle: Sparkle has its own schedule, and two checkers would offer two different update paths.
+- The last check time, the latest version seen, its page and the dismissed version live in UserDefaults, so Update to X shows right after launch without waiting for the network. A failed check is not recorded and is retried at the next wake or hour; an answered one waits a day.
+- The banner is dismissed per version, the menu item is not: hiding a nag should not hide the way to update.
+- Update Now writes a `.command` file and opens it with Terminal, the same path as Open in Terminal: `osascript` or `do script` would need the Automation consent prompt. The app quits itself 1.5 seconds later so the installer can replace it (the installer's own quit is the fallback), and the script opens the app again at the end, the new one or the old one when the update failed.
+- Command selection (install.sh's CLI, a developer checkout, another install, the app in `/Applications`) is a pure `UpdatePlan.make` with the file system passed in, so every case is a unit test. An app in `/Applications` gets `BENCHBAR_APP_DIR=/Applications` when writable; otherwise the update goes to `~/Applications` and says to trash the old copy.
+- The automatic check does not go through the About pane's `UpdateChecker`, so a failure in the background never shows an error the person did not ask for; a manual check feeds the offer through `onStatus`.
+
+## 0.6.0: profile sharing in the app
+
+- Profile runs call the CLI directly, not through a bench's change slot: profiles live in ~/.config/benchbar and no bench is touched, so an import should not wait for a bench's build, and there may be no bench at all.
+- Each sheet has its own `@Observable` run (`ProfileExportRun`, `ProfileImportRun`, ...) like `PortSetupRun`, so the rules and the CLI arguments are tested without views and the snapshots render real plans.
+- `ProfileInfo.source` stays the kind and the URL is the new optional `source_url`, so a 0.5 CLI's list decodes unchanged; a kind the app does not know reads as a local file.
+- A profile row's id is name plus file: a shadowed file has the same name as the one that wins, and an id of the name alone drew the winner twice.
+- `ProfileName` is its own rule (`^[a-z0-9][a-z0-9._-]*$`), not `SiteName`: the CLI allows `_` in profile names, and `acme_hr` was refused by Create.
+- A profile link only prefills the sheet; even Review (read only, but it fetches the URL and runs git ls-remote) waits for a click, so a web page cannot make the Mac reach out. A file the user picked or dropped is reviewed right away: that was the click.
+- Links and text fields pass `ProfileSourceRule` before any argument list: import takes https or an absolute local `.toml` (links: https only), subscribe https, ssh or scp style remotes. A leading `-`, whitespace, `::` (git's `ext::` transport) and file:// are refused, so nothing can turn into a git option.
+- Add Profile only applies the plan that matches the fields as they are now; editing the source or Save As after Review needs a new Review.
+- Export works out blocked drops itself from `requires` and disables Export with the reason, and still reads the CLI's refusal JSON (exit 1) in case the two disagree.
+- Only changed branches go to `--branch APP=BR`; an unchanged row sends nothing, so the CLI's default branch logic stays the one source of truth.
+- Copy Import Link asks for the hosted https address instead of guessing it from the saved path: the app cannot know where the team puts the file.
+- Remove is offered only for imported and subscribed profiles, which the CLI moves aside; a subscribed profile's confirmation names every profile of that repository, since the whole subscription goes.
+- Scroll views in the sheets get an explicit height from their row count: a scroll view inside a sheet has no height of its own and showed only the first repository.
+- Prompts that hold a URL or `git@host` use `Text(verbatim:)`, or SwiftUI draws them as links.
+
+## 0.6.0: dependency freshness
+
+- The focus state rides on `app list --json` (the Apps page's existing read), and the Auto / Focus / Ignore menu calls `benchbar app focus NAME [--auto]` or `app unfocus NAME` directly, not through `runChange`: a pin is a preference in the bench's state file, not a change to the bench, so it must not take the one change slot or show a banner.
+- Doctor rows are identified by id and message in the lists (`DoctorCheck.rowKey`): `dependency_behind` can appear once per stale dependency, and SwiftUI must not see duplicate ids.
+- The warning itself needs no new UI: it is a doctor WARN with a fix command, so Health and the popover show it like every other check.
+- Check Remotes on the Apps page is the app's only fetch (`app focus --fetch --json`, then the list is read again); the app's doctor runs never pass `--fetch`, so doctor stays read only (Akash, 2026-09-29). It takes no change slot: only the apps' `.git` changes.

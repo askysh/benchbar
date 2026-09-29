@@ -15,11 +15,29 @@ for a in "$@"; do
 done
 for a in "$@"; do [[ "$a" == "-w" ]] && { printf '%s' "$code"; [[ "$code" == "000" ]] && exit 7; exit 0; }; done
 url="${*: -1}"
+# $MOCK_STATE/http/KEY serves URL (KEY: the URL with every character other
+# than a letter or digit as "_"); $MOCK_STATE/http_offline fails them all
+if [[ -d "${MOCK_STATE:-/nonexistent}/http" ]]; then
+  [[ -f "${MOCK_STATE}/http_offline" ]] && { echo "curl: (6) Could not resolve host" >&2; exit 6; }
+  key="$(printf '%s' "$url" | tr -c 'A-Za-z0-9' '_')"
+  if [[ -f "${MOCK_STATE}/http/${key}" ]]; then
+    if [[ -n "$out" ]]; then cp "${MOCK_STATE}/http/${key}" "$out"; else cat "${MOCK_STATE}/http/${key}"; fi
+    exit 0
+  fi
+  case "$url" in
+    https://raw.githubusercontent.com/*|https://gist.githubusercontent.com/*|https://example.com/*)
+      echo "curl: (22) The requested URL returned error: 404" >&2; exit 22 ;;
+  esac
+fi
 # the GitHub release API and its files (install.sh): $MOCK_STATE/release.json,
 # release.zip and release.sums; a missing release.json is a 404
 case "$url" in
   *"/releases/latest"|*"/releases/tags/"*)
     if [[ -f "${MOCK_STATE:-/nonexistent}/release.json" ]]; then cat "${MOCK_STATE}/release.json"; exit 0; fi
+    echo "curl: (22) The requested URL returned error: 404" >&2; exit 22 ;;
+  # the one line installer (benchbar self-update): $MOCK_STATE/installer.sh
+  */install.sh)
+    if [[ -f "${MOCK_STATE:-/nonexistent}/installer.sh" ]]; then cat "${MOCK_STATE}/installer.sh"; exit 0; fi
     echo "curl: (22) The requested URL returned error: 404" >&2; exit 22 ;;
   *BenchBar-*.zip) [[ -n "$out" ]] && cp "${MOCK_STATE:?}/release.zip" "$out"; exit 0 ;;
   *SHA256SUMS) [[ -n "$out" ]] && cp "${MOCK_STATE:?}/release.sums" "$out"; exit 0 ;;

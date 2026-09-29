@@ -12,8 +12,9 @@ a new bench. The lockfile pins the exact commits every bench should run.
 A team profile is your organisation's bench recipe: a small TOML file
 that names a built in base profile and your apps with their repos and
 branches. It lives outside BenchBar, in
-`~/.config/benchbar/profiles/NAME.toml` or in a clone of your team's
-config repo listed in `BENCHBAR_PROFILE_PATH`.
+`~/.config/benchbar/profiles/NAME.toml`, in a team config repo you
+[subscribed](#subscribing-to-a-teams-config-repo) to, or in a clone
+listed in `BENCHBAR_PROFILE_PATH`.
 
 ```toml
 # ~/.config/benchbar/profiles/acme.toml
@@ -39,6 +40,9 @@ benchbar profile show acme
 benchbar install --profile acme                           # a new Mac, the same bench
 ```
 
+`~/frappe-bench` is an example: use your bench's folder. `profile
+create` only reads the bench.
+
 The file is a strict subset of TOML (strings, booleans, integers and
 one line lists; no escapes, no inline tables), and a repo URL with a
 user name or token is refused, since the file is meant to be committed.
@@ -46,6 +50,103 @@ Every key is listed in [Configuration](../reference/configuration.md#team-profil
 
 A built in profile of the same name wins. The BenchBar window's Team
 Profiles page lists them too.
+
+## Sharing a profile
+
+A profile that works on your Mac often does not work on a teammate's:
+it names your SSH alias (`git@github-work:...`), the feature branch you
+happen to be on, or a repo in your personal GitHub account. Export
+writes a copy that is safe to hand over, import and subscribe bring it
+in on the other side, and check says up front which repos a teammate
+cannot read.
+
+![Team Profiles in the app: the built in profiles and a team profile with where each comes from, and the Import and Subscribe buttons](../images/window-profiles.png)
+
+### Sending one
+
+```bash
+benchbar profile export acme --plan                 # read only: the review, nothing written
+benchbar profile export acme --out ~/acme.toml      # review, confirm, write
+benchbar profile export acme --branch acme_ecr=main --drop scratch_app --out ~/acme.toml
+```
+
+The review lists each app with its access, its branch before and after,
+and what it requires:
+
+- Repo URLs lose any user info, and an SSH alias becomes the real host
+  (`ssh -G` reads it from your `~/.ssh/config`).
+- Each app follows its repo's default branch, read with your own
+  credentials (through your SSH alias, if the repo uses one). An app on
+  the base's release branch (erpnext, hrms or india_compliance on
+  `version-15`) keeps it, since their default branch needs another
+  Frappe. `--branch APP=BR` picks another one.
+- `access` is `public` when git can read the repo without any
+  credentials, `private` otherwise, `personal` when it is private and
+  its GitHub owner is a person rather than an organisation (teammates
+  must be added to it one by one), `unknown` when offline.
+- `requires` comes from each app's `hooks.py` in the bench
+  (`--bench-dir`), unless the profile already says it. Dropping an app
+  that a kept app requires is refused.
+
+Commit the file to your team's config repo, or send it.
+
+In the app, a profile's ⋯ menu on Team Profiles has **Export…** with the
+same review:
+
+![Export in the app: each app with its access, its branch before and after, what it requires, and a checkbox to leave it out](../images/profile-export.png)
+
+### Receiving one
+
+```bash
+benchbar profile import ~/Downloads/acme.toml
+benchbar profile import https://github.com/acme/bench-config/blob/main/acme.toml --plan
+benchbar profile check acme                        # which repos can you read?
+benchbar install --profile acme
+```
+
+Import takes a local file or an https URL (a GitHub file or gist page is
+fetched raw), 64 KB at most, and writes
+`~/.config/benchbar/profiles/NAME.toml` with its `source`, only after it
+parses. A file of the same name is diffed and replaced only when you
+confirm. A profile names the repos `install` clones, and their code runs
+in your bench, so import only from people you trust and read the app
+list in the plan (`--plan` shows it without writing anything). `check` asks git, with your own keys and tokens and never a
+prompt, whether each repo and branch can be read. `install --profile`
+does the same and leaves out the apps it cannot clone, and every app that
+requires one, and lists them in its plan and at the end.
+
+`benchbar profile update acme` fetches the source again, shows the diff
+and asks. `benchbar profile remove acme` moves an imported file to
+`~/.config/benchbar/removed/`. For a profile that came from a
+subscription, it moves the whole subscription aside, with every profile
+in it. It never removes a file you wrote yourself.
+
+In the app, **Import…** on Team Profiles takes a file or a link and shows
+the same check before anything is written:
+
+![Import in the app: the profile, which repositories this Mac can read, the apps left out, and the change to an existing profile of the same name](../images/profile-import.png)
+
+### Subscribing to a team's config repo
+
+```bash
+benchbar profile subscribe git@github.com:acme/bench-config.git
+benchbar profile list                     # its profiles, and how far behind the clone is
+benchbar profile update --all             # fetch, show the diff, ask, fast forward
+benchbar profile remove acme-bench-config # unsubscribe (moved aside, not deleted)
+```
+
+Subscribe clones the repo into
+`~/.config/benchbar/sources/OWNER-REPO/`. Its profiles are the `*.toml`
+files in its `profiles/` folder, or at its root when it has none; nothing
+else in it is read or run. Subscriptions come after your own folder and
+before `BENCHBAR_PROFILE_PATH`, in the order you subscribed; `profile
+list` warns when a name is hidden by an earlier file. Nothing updates on
+its own. When the bench's team profile comes from a subscription that is
+behind, doctor warns
+([`profile_outdated`](doctor-and-repair.md#profile_outdated)) as of the
+last fetch; `benchbar doctor --fetch` checks the remote first.
+
+Every flag is in the [profile reference](../reference/cli/profile.md).
 
 ## The team lockfile
 
@@ -103,9 +204,10 @@ benchbar pull --from-dir ~/Downloads/erp-backup --as erpcopy   # a Frappe Cloud 
 already exists on the server, so nothing is written there (`--new-backup`
 runs `bench backup` first, which also deletes older backups on the server,
 so it asks you to type the site name). The download resumes when the link
-drops. The copy always goes into a new local site (`--replace` backs an
-existing one up first), gets the production `encryption_key` so stored
-passwords still decrypt, has email muted and the scheduler paused before it
+drops. The copy goes into a new local site: pull refuses a site name
+that exists. `--replace` overwrites that site's database and files
+instead, after backing it up and asking again. The copy gets the
+production `encryption_key` so stored passwords still decrypt, has email muted and the scheduler paused before it
 ever starts, and runs `bench migrate` when your apps are newer. When the
 bench lacks an app production has, pull stops and prints the
 `bench get-app` command; `--skip-app APP` restores without it. Encrypted

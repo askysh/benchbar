@@ -29,8 +29,9 @@
 BenchBar runs a bench natively, with Python, Node, MariaDB and Redis from
 Homebrew and no Docker or VM in between, so file watching, `bench build`
 and a debugger run at the Mac's full speed and the setup matches what
-most Frappe developers run on Linux. Each bench is a launchd agent: it
-keeps running after you close Terminal, comes back after a reboot when it
+most Frappe developers run on Linux. Each bench (the folder that holds
+a Frappe installation and its sites) runs as a launchd agent, the macOS
+way of running a program in the background: it keeps running after you close Terminal, comes back after a reboot when it
 was running, restarts after a crash and pauses with a notification when
 it keeps crashing. When something breaks, `benchbar doctor` names the
 exact fix for every problem it finds, and `benchbar repair` applies only
@@ -59,11 +60,15 @@ source ~/.zshrc && benchup        # start it in the background and wait for the 
 open http://macdev:8000           # log in as Administrator
 ```
 
-`adopt` writes only the service files and never runs `migrate`, `build`
-or `update`. `install` asks for the site's Administrator password and
-keeps a generated MariaDB root password in your Keychain; it asks for
-`sudo` once, for the wkhtmltopdf package and the `/etc/hosts` line. After
-that you can close Terminal: `benchdown` stops the bench, `benchrestart`
+Run either `adopt` or `install`, not both. `~/frappe-bench` is an
+example: give `adopt` your bench's folder. `adopt` writes only the
+service files and never runs `migrate`, `build` or `update`. `install`
+asks for the bench folder (default `~/frappe-bench`), the site name
+(default `macdev`) and the site's Administrator password, and keeps a
+generated MariaDB root password in your Keychain; it asks for `sudo`
+once, for the wkhtmltopdf package and the `/etc/hosts` line. `benchup`
+ends with `bench is up:` and the site's address; with another site name,
+open that one instead of `macdev`. After that you can close Terminal: `benchdown` stops the bench, `benchrestart`
 restarts it after Python changes, `benchlogs` follows its log and
 `benchwatch` rebuilds assets while you edit them.
 
@@ -104,7 +109,7 @@ GitHub too, and `benchbar docs` opens them from the terminal.
 
 ## Roadmap
 
-0.6 brings Developer ID signing, a Homebrew cask and in app updates; the rest is in [ROADMAP.md](ROADMAP.md).
+0.7 brings Developer ID signing, notarization and a Homebrew cask; the rest is in [ROADMAP.md](ROADMAP.md).
 
 ## Contributing
 

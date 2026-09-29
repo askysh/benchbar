@@ -12,6 +12,7 @@ final class Workbench {
     private(set) var apps: [String: AppList] = [:]
     private(set) var appsError: [String: String] = [:]
     private(set) var loadingApps: Set<String> = []
+    private(set) var checkingRemotes: Set<String> = []
     private(set) var profiles: [ProfileInfo] = []
     private(set) var profilesError: String?
     /// Each site's backups, keyed by `backupKey(bench, site)`; read on the Sites tab.
@@ -82,6 +83,35 @@ final class Workbench {
             try await client.updateApp(app, bench: bench.path)
         }
         await loadApps(bench, liveSites: true)
+    }
+
+    /// Sets an app's focus pin. Not a change to the bench (no change slot,
+    /// no banner): the CLI writes one key of the bench's state, then the
+    /// list is read again from the cached site lists.
+    func setFocus(_ pin: FocusPin, app: String, on bench: BenchModel) async {
+        guard let client = store.cliClient else { return }
+        do {
+            try await client.setAppFocus(app, pin: pin, bench: bench.path)
+        } catch {
+            appsError[bench.path] = error.localizedDescription
+            return
+        }
+        await loadApps(bench)
+    }
+
+    /// Fetches the focus apps' dependencies (the only fetch the app asks
+    /// for: its doctor runs stay read only), then reads the list again.
+    func checkRemotes(_ bench: BenchModel) async {
+        guard let client = store.cliClient, !checkingRemotes.contains(bench.path) else { return }
+        checkingRemotes.insert(bench.path)
+        defer { checkingRemotes.remove(bench.path) }
+        do {
+            try await client.checkRemotes(bench: bench.path)
+        } catch {
+            appsError[bench.path] = error.localizedDescription
+            return
+        }
+        await loadApps(bench)
     }
 
     // MARK: sites

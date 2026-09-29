@@ -184,6 +184,46 @@ struct SnapshotTests {
         try render(window(store, workbench, router), "window-general")
     }
 
+    @Test func profileSharing() async throws {
+        let store = try await windowStore()
+        base.cli.answer("profile list", json: try Fixture.string("profile-list-sharing"))
+        base.cli.answer("profile export", json: try Fixture.string("profile-export-plan"))
+        base.cli.answer("profile import", json: try Fixture.string("profile-import-plan"))
+        base.cli.answer("profile update", json: try Fixture.string("profile-update-plan"))
+        base.cli.answer("profile check", json: try Fixture.string("profile-check"))
+        let workbench = Workbench(store: store)
+        await workbench.loadProfiles()
+        let router = WindowRouter()
+        router.pane = .profiles
+        try render(window(store, workbench, router), "window-profiles-sharing")
+
+        let export = ProfileExportRun(name: "acme", workbench: workbench)
+        await export.load()
+        export.setKeep("acme_core", false)
+        try render(ExportProfileSheet(run: export) {}, "profile-export-blocked")
+        export.setKeep("acme_core", true)
+        export.setKeep("my_tools", false)
+        try render(ExportProfileSheet(run: export) {}, "profile-export")
+        base.cli.answer("profile export", json: try Fixture.string("profile-export"))
+        await export.export(to: "/Users/you/Desktop/acme.toml")
+        try render(ExportProfileSheet(run: export) {}, "profile-export-done")
+
+        let importing = ProfileImportRun(source: "https://raw.githubusercontent.com/acme/profiles/main/acme.toml", workbench: workbench)
+        await importing.review()
+        try render(ImportProfileSheet(run: importing) {}, "profile-import")
+
+        let update = ProfileUpdateRun(name: "acme-erp", workbench: workbench)
+        await update.load()
+        try render(UpdateProfileSheet(run: update) {}, "profile-update")
+
+        let check = ProfileCheckRun(name: "acme", workbench: workbench)
+        await check.load()
+        try render(CheckAccessSheet(run: check) {}, "profile-check")
+
+        try render(SubscribeProfilesSheet(run: ProfileSubscribeRun(repo: "git@github.com:acme/benchbar-profiles.git", workbench: workbench)) {},
+                   "profile-subscribe")
+    }
+
     @Test func repairSheetWhileRunning() async throws {
         let store = try await windowStore()
         let bench = try #require(store.benches.last)

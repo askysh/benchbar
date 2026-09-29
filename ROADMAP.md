@@ -66,13 +66,25 @@ backup first, the lockfile badge, Open in VS Code or Cursor, `benchbar
 console` and `db`, `doctor --fix-hints`, and port blocks planned across
 benches with a check before every start.
 
+**0.6, sharing profiles between teams.** `benchbar profile export` writes
+a portable copy (SSH host aliases resolved, each app on its repo's
+default branch after a review, public, private and personal repos
+marked, the apps each one requires listed), `profile import` takes a
+file or an https URL and checks access to every repo first, `profile
+subscribe` follows a team's config repo with an outdated warning instead
+of silent pulls. Doctor warns when an app your work depends on falls
+behind, never about the app you are working on. The app checks for
+updates once a day and updates in one click, the CLI with `benchbar
+self-update`.
+
 ## Later
 
-**0.6, public launch.** Developer ID signing and notarization, a signed
+**0.7, public launch.** Developer ID signing and notarization, a signed
 DMG, a cask in `askysh/homebrew-tap`, Sparkle updates, and a launch post
-on discuss.frappe.io.
+on discuss.frappe.io. Moved from 0.6 while the Apple developer account
+is approved.
 
-**0.7, the app for sites.** Restore from the app (backup and drop
+**0.8, the app for sites.** Restore from the app (backup and drop
 shipped in 0.5.8), pull and lock apply in the app, a first run wizard,
 new bench from a profile.
 

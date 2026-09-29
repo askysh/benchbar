@@ -2,6 +2,130 @@
 
 All notable changes to this project are documented here.
 
+## 0.6.0 - 2026-09-29
+
+### Added
+
+- Update Now: the app checks GitHub for a newer release once a day (on
+  launch and wake; turn it off in General with Check for updates
+  automatically) and offers Update to X in the popover and the menu bar
+  menu, and a banner in the window. Update Now opens Terminal with the
+  one line installer, quits BenchBar while it is replaced and opens it
+  again; Copy Command and Release Notes are next to it. A benchbar that
+  is a git checkout of your own gets `--app-only` and a `git pull` hint.
+- `benchbar self-update`: the same update from the CLI, after asking
+  (`--check`, `--json`, `--dry-run`). It never touches a bench and never
+  runs `bench update`.
+- Release notes start with an Update section and the command, for
+  anyone on 0.5.x who opens the release page from Check for Updates.
+- App, Team Profiles: Import (a `.toml` file, an https link, or a file
+  dropped on the page) and Subscribe (a team's git repository of
+  profiles), each reviewed before anything is written. Every row says
+  where the profile comes from, shows "Outdated" when its subscription is
+  behind and warns when another file with the same name hides it.
+- App: a profile's ⋯ menu has Export (the branch per app, which apps to
+  share, blocked when a kept app requires a dropped one, then Copy Import
+  Link), Update (the diff first), Check Access, Show in Finder and Remove
+  (asks first, moves the file aside).
+- `benchbar://profile/import?url=` and `benchbar://profile/subscribe?url=`
+  open Team Profiles with the sheet filled in; nothing happens until you
+  click.
+- Dependency freshness: doctor warns (`dependency_behind`) when an app
+  that one of your focus apps needs, directly or through another app, is
+  behind its remote branch, for example "exponent_custom_v1 (needed by
+  exponent_ecr) is 30 commits / 12 days behind upstream/develop", with
+  `benchbar app update NAME` as the fix. A focus app itself never gets
+  the warning, and the other apps get one summary line (`apps_behind`).
+  Focus apps are inferred (local changes, another branch than the
+  profile's, a commit of yours in the last 14 days) and can be pinned
+  with `benchbar app focus NAME`, `benchbar app unfocus NAME` and
+  `benchbar app focus NAME --auto`; `benchbar app focus` lists them.
+  Doctor stays read only: it reads the remotes as git last fetched them
+  and says how old that is, and `benchbar doctor --fetch` (or `app focus
+  --fetch`) fetches the dependencies first.
+- The Apps page shows which apps are focus apps and why, how far a
+  dependency is behind, a Check Remotes button that fetches the
+  dependencies, and a menu to set each app to Auto, Focus or
+  Ignore.
+- Share team profiles. `benchbar profile export NAME` writes a copy for
+  teammates: SSH aliases resolved to real hosts, each repo's default
+  branch, and per app its access (`public`, `private`, `personal`) and
+  the apps it requires, after a review you confirm (`--branch APP=BR`,
+  `--drop APP`, `--plan`).
+- `benchbar profile import FILE|URL` adds a profile someone sent (https
+  only, 64 KB at most, GitHub file and gist pages fetched raw), shows the
+  diff when the name exists, and checks which repos you can read.
+- `benchbar profile subscribe GIT_URL` clones a team's config repo; its
+  profiles join the lookup path after your own. `profile update NAME|--all`
+  fetches again, shows the diff and asks; `profile remove NAME` moves an
+  import or a subscription aside.
+- `benchbar profile check NAME` asks git, with your own credentials,
+  whether every repo of a profile can be read.
+- `install --profile` leaves out the apps whose repos cannot be read,
+  and every app that requires one, and lists them.
+- Doctor warns with `profile_outdated` when the bench's team profile
+  comes from a subscription that is behind, as of the last fetch
+  (`doctor --fetch` checks the remote first).
+- MCP read tools `benchbar_profile_list` and `benchbar_profile_check`.
+- Team profile schema 2: `source`, `exported_from`, and per app `access`
+  and `requires`. Schema 1 files keep working.
+- `benchbar app add NAME|URL --dry-run --json`: the plan of an app add
+  with an approval token, read only: the repo and branch, whether git can
+  read it, the sites, the required apps from `hooks.py` (read from a
+  shallow clone in a temp folder) and whether each resolves, and the
+  steps. `--apply TOKEN --yes` runs exactly that plan, required apps
+  included, without a question, and refuses a token the bench no longer
+  matches.
+- `benchbar mcp`: `benchbar_app_add_plan` and `benchbar_app_add`, so a
+  coding agent can add an app from a pasted git URL after showing you the
+  plan. Repairs and bench installs are still not tools.
+
+### Changed
+
+- `install.sh --yes` on a Mac that already has the CLI is an update: it
+  no longer adopts a bench it finds or starts the Homebrew installer.
+- `profile list --json`: `source` has two new values, `imported` and
+  `subscribed`. New fields `source_url` (the URL an import or
+  subscription came from, or null), `subscription`, `shadowed_by` and
+  `schema`.
+- `benchbar down` stops a listener on the bench's ports only when its
+  folder is inside the bench; one whose folder cannot be read is left
+  alone.
+- Plans are bound to what they showed: an `app add` token covers the
+  commit of every repo it clones, and `profile import` and `profile
+  update` plans carry a `digest` that `--expect` checks (export too). The
+  app passes it, so a profile that changes after Review is refused, not
+  applied.
+- Update Now and `benchbar self-update` install the release they
+  offered: the installer comes from that release's tag with
+  `--version`, not from `main`.
+- A profile import or update review also covers the local file it
+  replaces: an edit made after the review makes it stale.
+
+### Fixed
+
+- `app add --branch TAG` no longer reports a failure after a good
+  install: git checks a tag out detached, so the check is the tag's
+  commit, and planning the app again is not refused.
+- A team profile that lists the same app twice is refused with a clear
+  error; the app's Export sheet crashed on it.
+- `app add` plans follow the requirements of a required app that is
+  already in the bench, so an app it needs that is missing is planned too.
+- Dependency freshness read `required_apps` only when an app's folder
+  and package had the same name, so a folder like `apps/Raven` lost its
+  dependencies. A `doctor --fetch` where some fetches failed also
+  marked the answer as fresh; now it keeps the last full fetch time.
+- `benchbar scan ~` and Find Benches skipped every folder named `dev`,
+  so benches in `~/dev` were not found; only the system `/dev` is skipped
+  now.
+- `benchbar down` stopped every process listening on the bench's ports,
+  also another bench's or an unrelated server's; it now stops only
+  listeners that run inside the bench folder.
+- Troubleshooting, Wiping a bench: what is lost comes before any
+  command, and the databases are dropped while the bench folder still
+  names them.
+- App: Create from Bench accepts profile names with `_`, as the CLI does.
+
 ## 0.5.8 - 2026-09-29
 
 Quick wins, and port blocks across benches. Links for Raycast and

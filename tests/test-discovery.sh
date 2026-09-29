@@ -32,6 +32,13 @@ assert_calls_not_contain '^(bench |launchctl |sudo |security )'
 run_fm scan "$FIRST" --json
 assert_eq 0 "$CODE" "$OUT"
 assert_eq 1 "$(printf '%s' "$OUT" | jget - 'len(d["benches"])')"
+# a folder named dev under ~ is scanned; only the system /dev is skipped
+mkdir -p "$HOME/devscan"
+make_fake_bench "$HOME/devscan/dev/frappe-bench" dev.local
+make_fake_bench "$HOME/devscan/Library/ignored"
+run_fm scan "$HOME/devscan" --json
+assert_eq 0 "$CODE" "$OUT"
+assert_eq "$HOME/devscan/dev/frappe-bench" "$(printf '%s' "$OUT" | jget - '" ".join(x["path"] for x in d["benches"])')"
 mkdir -p "$HOME/empty"
 run_fm scan "$HOME/empty" --json
 assert_eq 0 "$CODE" "$OUT"

@@ -1,0 +1,1 @@
+{"schema_version":1,"cli_version":"0.6.0","name":"acme","repos":[{"app":"acme_core","repo":"git@github.com:acme/acme_core.git","reachable":true,"reason":null},{"app":"acme_erp","repo":"https://github.com/acme/acme_erp","reachable":false,"reason":"Repository not found"}],"skipped_apps":["acme_erp"]}

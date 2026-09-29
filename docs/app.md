@@ -71,9 +71,13 @@ opening BenchBar again from Finder or Spotlight. It has a page per bench:
   (read only); bring it in line with `benchbar lock apply` in Terminal.
 - **Sites**: add a site (it asks for the Administrator password), make
   one the default, open any of them. The ⋯ menu of a site backs it up
-  (with or without files) and shows the last backup in Finder; **Drop
-  Site…** shows the plan, asks you to type the site name, and reports
-  where bench put the backup. Removing the site's `/etc/hosts` line needs
+  (with or without files) and shows the last backup in Finder. **Drop
+  Site…** deletes the site's database and database user for good; only
+  the backup bench takes first (with files) can bring it back. The sheet
+  shows that plan, asks you to type the site name, and reports where the
+  backup went: the site folder with it moves to `archived/sites/` in the
+  bench. The default site can be dropped only by naming the site that
+  takes its place, and the only site of a bench cannot be dropped. Removing the site's `/etc/hosts` line needs
   your password, so the sheet shows that command to run in Terminal.
 - **Apps**: add an app from the registry or any GitHub URL, install it on
   a site, and update it after reading the changelog. Right click a bench
@@ -83,20 +87,60 @@ opening BenchBar again from Finder or Spotlight. It has a page per bench:
 
 ![The BenchBar window: a bench's overview with Start, Stop, Restart, its site and ports, and the scheduler switch](images/window-overview.png)
 
-![A bench's apps: branch, repository, the sites that have each app, Install and Update](images/window-apps.png)
+![A bench's apps: branch, repository, the sites that have each app, the focus menu, Check Remotes, Install and Update](images/window-apps.png)
 
 ![A bench's health: doctor's warnings with their fixes, Run Doctor and Repair](images/window-health.png)
 
 Above the benches:
 
-- **General**: open at login, notifications, which `benchbar` the app
-  runs, the keyboard shortcuts.
+- **General**: open at login, notifications, **Check for updates
+  automatically**, which `benchbar` the app runs, the keyboard shortcuts.
 - **Menu Bar**: the runner, with a live preview and custom runners, see
   [Custom runners](runners.md).
-- **Team Profiles**: see [Teams](guides/teams.md#team-profiles).
-- **About**.
+- **Team Profiles**: every profile with where it comes from (built in,
+  local, imported, subscribed), a badge when a subscription is behind and
+  a warning when another file with the same name hides one. **Import…**
+  takes a `.toml` file or an https link (or drop the file on the page),
+  **Subscribe…** a team's git repository of profiles. Each profile's ⋯
+  menu has Export (pick each app's branch and which apps to share, then
+  Copy Import Link), Update (shows the changes first), Check Access
+  (which repositories your git credentials reach), Show in Finder and
+  Remove (moves the file aside; for a subscribed profile, the whole
+  subscription with every profile in it). Import and update show what changes
+  before they write, and nothing is installed from this page. See
+  [Teams](guides/teams.md#team-profiles).
+- **About**: the versions, Check for Updates, Report a Bug.
 
-![General settings: startup, notifications, the command line tool and keyboard shortcuts](images/window-general.png)
+![Team Profiles: the built in profiles and a team profile with where each comes from, and the Import and Subscribe buttons](images/window-profiles.png)
+
+## Updates
+
+BenchBar asks GitHub for the latest release at most once a day, when it
+starts, when the Mac wakes, and on an hourly look at the clock. The
+check is one request to the GitHub API and downloads nothing. Turn it
+off in General with **Check for updates automatically**; **Check for
+Updates** in About and in the app menu still works. A build with Sparkle
+(see [Releasing](releasing.md)) leaves the schedule to Sparkle.
+
+When a newer release is out, the popover and the menu bar menu show
+**Update to X…**, and the BenchBar window shows a banner with:
+
+- **Update Now**: Terminal opens and runs the one line installer of
+  that release (`install.sh --yes --version vX.Y.Z` from the release's
+  tag, or with `--app-only` when your CLI is a git checkout of your own),
+  so it installs the version the prompt named even if a newer one came
+  out since. BenchBar quits so the installer can replace it and opens
+  again when it is done. Your benches keep running. The app writes a
+  `.command` file for Terminal, so macOS asks for no Automation
+  permission.
+- **Copy Command**: the same command, to run yourself.
+- **Release Notes**: the release page.
+
+The close button on the banner hides it until the next version; the
+menu item stays. See [Updating](install.md#updating) for what the
+installer changes.
+
+![General settings: startup, notifications, Check for updates automatically and the command line tool](images/window-general.png)
 
 ## First run
 

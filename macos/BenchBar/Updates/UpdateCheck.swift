@@ -77,9 +77,13 @@ nonisolated enum UpdateCheckError: Error, Equatable, Sendable, LocalizedError {
     }
 }
 
-/// Asks GitHub for the latest release, only when the person clicks. No
-/// download, no background checks: BenchBar is unsigned until 0.6, so an
-/// update is the person's own download from the release page.
+/// Asks GitHub for the latest release: when the person clicks Check for
+/// Updates, and once a day in the background (UpdateOffer, which can be
+/// turned off in Settings). The check downloads nothing: the update is the
+/// one line installer, which the person starts with Update Now in Terminal
+/// and which checks the zip against SHA256SUMS. Signing and notarization
+/// move to 0.7; the installer downloads with curl, so the unsigned app
+/// opens without a Gatekeeper prompt.
 nonisolated enum UpdateCheck {
     static let latestReleaseURL = URL(string: "https://api.github.com/repos/askysh/benchbar/releases/latest")!
     static let timeout: TimeInterval = 10
@@ -152,6 +156,8 @@ final class UpdateChecker {
 
     private(set) var state: State = .idle
     let currentVersion: String
+    /// Told about every answer, so the update offer follows a manual check.
+    @ObservationIgnored var onStatus: ((UpdateStatus) -> Void)?
     @ObservationIgnored private let fetch: UpdateCheck.Fetch
 
     init(currentVersion: String = BenchBarLinks.appVersion, fetch: @escaping UpdateCheck.Fetch = UpdateCheck.liveFetch) {
@@ -164,7 +170,9 @@ final class UpdateChecker {
         state = .checking
         do throws(UpdateCheckError) {
             let data = try await fetch(UpdateCheck.request(appVersion: currentVersion))
-            state = .done(try UpdateCheck.parse(data, current: currentVersion))
+            let status = try UpdateCheck.parse(data, current: currentVersion)
+            state = .done(status)
+            onStatus?(status)
         } catch {
             state = .failed(error.localizedDescription)
         }

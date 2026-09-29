@@ -7,6 +7,15 @@
 # shellcheck source=tests/mocks/bin/_mocklib.sh
 . "$(dirname "$0")/_mocklib.sh"
 mock_log "$(printf '%s' "$*" | tr '\n' ' ')"
+# "-G HOST" prints the resolved config: $MOCK_STATE/ssh_hosts maps an
+# alias to HOSTNAME<TAB>PORT (default: the host itself, port 22)
+if [[ "${1:-}" == "-G" ]]; then
+  row="$(awk -F '\t' -v h="${2:-}" '$1 == h {print $2 "\t" $3; exit}' "${MOCK_STATE:?}/ssh_hosts" 2>/dev/null || true)"
+  hn="${row%%$'\t'*}"; hp="${row#*$'\t'}"
+  [[ -n "$row" ]] || { hn="${2:-}"; hp=22; }
+  printf 'host %s\nuser akash\nhostname %s\nport %s\n' "${2:-}" "$hn" "${hp:-22}"
+  exit 0
+fi
 host=""; op=""; cmd=()
 while [[ "$#" -gt 0 ]]; do
   case "$1" in

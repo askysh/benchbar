@@ -47,6 +47,7 @@ struct SettingsView: View {
                     case .general:
                         startupSection
                         notificationsSection
+                        if !Updater.isAvailable { updatesSection }
                         cliSection
                         editorSection
                         shortcutsSection.id(Self.shortcutsID)
@@ -236,6 +237,20 @@ struct SettingsView: View {
             }
         } header: {
             Text("Notifications")
+        }
+    }
+
+    // MARK: updates
+
+    /// Not in a Sparkle build: Sparkle has its own schedule and settings.
+    private var updatesSection: some View {
+        Section {
+            Toggle(isOn: $settings.checkUpdatesAutomatically) {
+                Text("Check for updates automatically")
+                Text("Once a day, BenchBar asks GitHub for the latest release. Nothing is downloaded until you click Update Now.")
+            }
+        } header: {
+            Text("Updates")
         }
     }
 

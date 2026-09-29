@@ -7,6 +7,7 @@
 #   benchbar app add NAME|URL [--branch B] [--name N] [--site S | --all-sites]
 #   benchbar app install NAME --site S
 #   benchbar app update NAME [--skip-backup] [--dry-run --json]
+#   benchbar app focus [NAME] | app unfocus NAME   (freshness.sh)
 #
 # Apps come from bench itself (get-app, install-app, migrate, build); git
 # is only used to read an app and to fast forward it. Nothing here ever
@@ -113,10 +114,23 @@ fl_app_policy_branch() {
 
 # required_apps from the app's hooks.py, read like bench does (a Python
 # list of strings; "org/app" entries count as "app"), frappe left out.
-fl_app_required_apps() {
-  local dir hooks
-  dir="$(fl_app_path "$1")"
-  hooks="${dir}/$1/hooks.py"
+fl_app_required_apps() { local f; f="$(fl_app_hooks_file "$1")" && fl_hooks_required_apps "$f"; return 0; }
+
+# fl_app_hooks_file APP: apps/APP/<package>/hooks.py. The folder and the
+# package can differ (apps/Raven holds raven), so like the app add plan:
+# the folder's own name, its lower case form, else the one package there.
+fl_app_hooks_file() {
+  local d f lower
+  d="$(fl_app_path "$1")"
+  lower="$(printf '%s' "$1" | tr '[:upper:]-' '[:lower:]_')"
+  for f in "$d/$1/hooks.py" "$d/${lower}/hooks.py"; do [[ -f "$f" ]] && { printf '%s' "$f"; return 0; }; done
+  for f in "$d"/*/hooks.py; do [[ -f "$f" ]] && { printf '%s' "$f"; return 0; }; done
+  return 1
+}
+
+# fl_hooks_required_apps FILE: the same read from any hooks.py
+fl_hooks_required_apps() {
+  local hooks="$1"
   [[ -f "$hooks" ]] || return 0
   awk '
     /^[ \t]*required_apps[ \t]*=/ { f = 1 }
@@ -273,17 +287,18 @@ fl_cmd_app_list() {
     printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"profile":%s,"sites_checked_at":%s,"sites_error":%s,"apps":[' \
       "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$FL_PROFILE")" \
       "$(fl_json_str "$(fl_site_apps_meta checked_at)")" "$(fl_json_str "$(fl_site_apps_meta error)")"
+    FL_FRESHNESS_READY=""; fl_freshness_prepare
     while IFS= read -r app; do
       [[ -n "$app" ]] || continue
       listed=0; fl_app_in_apps_txt "$app" && listed=1
       dirty=0; fl_app_dirty "$app" && dirty=1
       # shellcheck disable=SC2046  # the site names are words
-      printf '%s{"name":%s,"in_apps_txt":%s,"repo":%s,"remote":%s,"branch":%s,"policy_branch":%s,"commit":%s,"dirty":%s,"shallow":%s,"version":%s,"sites":%s}' \
+      printf '%s{"name":%s,"in_apps_txt":%s,"repo":%s,"remote":%s,"branch":%s,"policy_branch":%s,"commit":%s,"dirty":%s,"shallow":%s,"version":%s,"sites":%s,%s}' \
         "$sep" "$(fl_json_str "$app")" "$(fl_json_bool "$listed")" "$(fl_json_str "$(fl_app_remote_url "$app")")" \
         "$(fl_json_str "$(fl_app_remote "$app")")" "$(fl_json_str "$(fl_app_branch "$app")")" \
         "$(fl_json_str "$(fl_app_policy_branch "$app")")" "$(fl_json_str "$(fl_app_commit "$app")")" \
         "$(fl_json_bool "$dirty")" "$(fl_json_bool "$(fl_app_shallow "$app" && printf 1 || printf 0)")" \
-        "$(fl_json_str "$(fl_app_json_version "$app")")" "$(fl_json_str_array $(fl_app_sites "$app"))"
+        "$(fl_json_str "$(fl_app_json_version "$app")")" "$(fl_json_str_array $(fl_app_sites "$app"))" "$(fl_freshness_app_json "$app")"
       sep=","
     done < <(fl_apps_all)
     printf ']}\n'
@@ -890,9 +905,11 @@ fl_cmd_app() {
   shift || true
   case "$sub" in
     list|"") fl_cmd_app_list "$@" ;;
-    add) fl_cmd_app_add "$@" ;;
+    # --json and --apply TOKEN: the plan with a token, and applying it (app-plan.sh)
+    add) if [[ "$OPT_JSON" == "1" ]] || fl_app_plan_wanted "$@"; then fl_cmd_app_add_planned "$@"; else fl_cmd_app_add "$@"; fi ;;
     install) fl_cmd_app_install "$@" ;;
     update) fl_cmd_app_update "$@" ;;
-    *) fl_die "Unknown app command: ${sub}" "Use: benchbar app list | add NAME|URL | install NAME --site S | update NAME" ;;
+    focus|unfocus) fl_cmd_app_focus "$sub" "$@" ;;
+    *) fl_die "Unknown app command: ${sub}" "Use: benchbar app list | add NAME|URL | install NAME --site S | update NAME | focus [NAME] | unfocus NAME" ;;
   esac
 }

@@ -6,8 +6,10 @@ description: "Common stumbles with a local Frappe bench on macOS, the cleanup to
 Start with `benchbar doctor`. It is read only, every warning and failure
 names its fix, and `benchbar repair` applies the fixes it flagged. The
 full command output of every mutating run is in
-`.benchbar/logs/<timestamp>.log` inside the checkout, and the backups of
-every replaced file in `.benchbar/backups/<timestamp>/`.
+`.benchbar/logs/<timestamp>.log` inside the benchbar checkout, and the
+backups of every replaced file in `.benchbar/backups/<timestamp>/`. The
+checkout is `~/.local/share/benchbar` after the one line installer, or
+the folder you cloned.
 
 ## Common stumbles
 
@@ -24,23 +26,27 @@ assets are missing, `benchbar repair` runs `bench build`.
 **`bench: command not found` after phase 2.** pipx installs to
 `~/.local/bin`. Run `pipx ensurepath` and open a new Terminal.
 
-**The browser cannot connect to `macdev`.** The `/etc/hosts` line is
-missing. `benchbar repair` adds it, or run
-`printf '127.0.0.1 macdev\n' | sudo tee -a /etc/hosts`.
+**The browser cannot connect to `macdev`.** The site's line in
+`/etc/hosts`, which points the name at your own Mac, is missing. Run
+`benchbar site hosts`: it adds a `127.0.0.1` line for every site of the
+bench inside benchbar's marked block, after one `sudo` prompt, and backs
+the file up first. `benchbar repair` does the same for the default site.
+Editing `/etc/hosts` by hand works too, but keep a copy first
+(`sudo cp /etc/hosts /etc/hosts.bak`) and use your site's name in place
+of `macdev`.
 
 **MariaDB rejects the root password.** `benchbar mariadb-password` prints
 the one in the Keychain; confirm it with `mariadb -u root -p` in another
 tab. If it changed, run `MARIADB_ROOT_PASSWORD='...' benchbar install`
-once to verify and save the new one. Forgotten entirely: phase 00 prints
-the reset recipe (stop MariaDB, start `mariadbd-safe --skip-grant-tables`,
-`ALTER USER`), which keeps the databases.
+once to verify and save the new one. Forgotten entirely: see
+[resetting the MariaDB root password](#resetting-the-mariadb-root-password)
+below.
 
 **Phase 00 stops: "MariaDB root already has a password".** A bench set
 up before 0.3 never stored the root password in the Keychain. Type it when
 asked (it is verified and saved), or pass `MARIADB_ROOT_PASSWORD`. If
-nobody knows it, the reset above keeps every database; stop your benches
-first (`benchbar down --bench-dir ...`) so they do not lose their
-database mid request, and bring them back with `benchbar up` afterwards.
+nobody knows it, follow
+[resetting the MariaDB root password](#resetting-the-mariadb-root-password).
 
 **`bench init` fails with "Operation not permitted" on crontab.** On
 macOS 14 and later a Terminal without Full Disk Access may not write a
@@ -71,7 +77,9 @@ running and picks the new runner up on its next start.
 `benchbar doctor` says which; `benchbar repair` installs the official
 patched Qt package (Intel binary, Rosetta 2 offered on Apple Silicon,
 `sudo` once). If a Homebrew wkhtmltopdf earlier on `PATH` shadows the
-package, doctor says so: `brew uninstall wkhtmltopdf`.
+package, doctor says so. `brew uninstall wkhtmltopdf` then removes only
+the Homebrew build; the package in `/usr/local/bin` stays and takes
+over.
 
 **Passwords do not decrypt after a restore.** Frappe says "Encryption key
 is invalid! Please check site_config.json", an Email Account stops
@@ -81,8 +89,10 @@ integrations, `Password` fields) with `encryption_key` from the site's
 `site_config.json`, and `bench restore` never copies it: a restored site
 without it generates a new key, which cannot read the old rows.
 `benchbar pull` copies the production key for you. After a restore by
-hand, or when production had no key, copy `encryption_key` from the
-production `site_config.json` into the local one (only that key; the
+hand, or when production had no key, first copy the local
+`sites/SITE/site_config.json` aside (`cp site_config.json
+site_config.json.bak` in that folder), then copy `encryption_key` from
+the production `site_config.json` into the local one (only that key; the
 database password and Redis settings there belong to production), then
 `bench --site SITE clear-cache`. When the production key is lost, the
 passwords are too: enter them again in the copy.
@@ -90,6 +100,51 @@ passwords are too: enter them again in the copy.
 **Something else.** `benchbar report` writes a redacted zip for a bug
 report; attach it to an issue at
 <https://github.com/askysh/benchbar/issues>.
+
+## Resetting the MariaDB root password
+
+This changes the root password of the one MariaDB server every bench on
+this Mac shares. The databases stay, and so do the sites' own database
+users, which do not use the root password. For a few minutes MariaDB
+runs without any password checks, reachable only from this Mac.
+
+Before you start:
+
+- Stop every bench, so none loses its database mid request:
+  `benchbar list` shows them, `benchbar down --bench-dir PATH` stops each.
+- Back up the sites you cannot rebuild: `benchbar site backup SITE`.
+  That needs no root password.
+
+Then, in this order. Phase 00 prints the same steps with your paths.
+The examples use `mariadb@10.11`; `brew services list` shows the MariaDB
+formula your Mac runs, so use that name if it differs.
+
+1. Stop the MariaDB service and start it once without password checks:
+
+   ```bash
+   brew services stop mariadb@10.11
+   "$(brew --prefix)/opt/mariadb@10.11/bin/mariadbd-safe" --skip-grant-tables --skip-networking &
+   ```
+
+2. Set a new root password; put yours in place of `new-password`:
+
+   ```bash
+   mariadb -u root -e "FLUSH PRIVILEGES; ALTER USER 'root'@'localhost' IDENTIFIED VIA mysql_native_password USING PASSWORD('new-password');"
+   ```
+
+3. Stop the unprotected server and start the service again:
+
+   ```bash
+   kill %1
+   brew services start mariadb@10.11
+   ```
+
+4. Save the new password in the Keychain, then bring the benches back
+   with `benchbar up --bench-dir PATH`:
+
+   ```bash
+   MARIADB_ROOT_PASSWORD='new-password' benchbar install
+   ```
 
 ## The cleanup tool case
 
@@ -121,8 +176,10 @@ installed, doctor warns until the bench is in `~/.config/mole/whitelist`.
 | `bench update` or `bench setup procfile` | They rewrite `Procfile`. `Procfile.lean` is separate and untouched |
 
 The bench log is `<bench>/logs/bench.log`; `benchup` keeps the tail of the
-previous run in `logs/bench.previous.log`. `benchup` warns when another
-running bench already uses the same web or socketio port.
+previous run in `logs/bench.previous.log`. `benchup` refuses to start
+when a running bench or another program holds its ports, and asks when
+only a stopped bench shares them; `benchbar ports setup` gives each bench
+its own ports.
 
 ## Migrating from frappe-mac 0.2 or older setups
 
@@ -159,6 +216,12 @@ are reported so you can remove them by hand.
   checkout
 - the Keychain item `benchbar-mariadb`
 - `<bench>/logs/.benchbar/state.json`, written by the runner
+- `.benchbar/` in the benchbar checkout: the remembered benches
+  (`benches/<folder>-<hash>.env`), and the logs and backups of every run
+- the port keys in `<bench>/sites/common_site_config.json` and
+  `<bench>/config/redis_*.conf`, only when a bench moves to another
+  port block (with `bench set-config -g` and `bench setup redis`, after
+  asking and with a backup)
 - `<bench>/.benchbar/pulls/<site>-<backup>/` (mode 0700), the download of
   `benchbar pull`: kept after a failed run so the next one resumes,
   removed after a successful one unless `--keep-staging`
@@ -177,18 +240,74 @@ sites is always kept and sent to `benchbar repair`.
 
 ## Wiping a bench
 
-benchbar never deletes a bench, a site or a database. To do it by hand:
+Wiping a bench deletes it for good: every app checkout in `apps/` with
+its uncommitted and unpushed work, the virtualenv, the sites with their
+uploaded files, and their databases. Nothing can bring it back, which is
+why benchbar never deletes a whole bench for you. If you only want a
+broken bench working again, try `benchbar repair` first; if you only
+want one site gone, `benchbar site drop` takes a backup first.
 
-```bash
-benchbar uninstall-service
-rm -rf ~/frappe-bench
-rm -rf ~/.local/share/benchbar/.benchbar    # or the .benchbar folder of your checkout
-```
+Before you start:
 
-Drop the site database in `mariadb -u root -p`: `SHOW DATABASES;` lists it
-(the name starts with an underscore), then `DROP DATABASE` and `DROP USER`
-for that name. To remove the Homebrew formulae:
-`brew uninstall mariadb@10.11 redis node@20 python@3.11`.
+- Push every app branch you want to keep: `git status` and `git log
+  @{u}..` in each folder under `apps/`.
+- Back up each site you may need and copy the backup out of the bench,
+  since backups live inside it: `benchbar site backup SITE --with-files`,
+  then copy `sites/SITE/private/backups/` somewhere else.
+
+Then, in this order. The examples use `~/frappe-bench`; use your
+bench's path.
+
+1. Stop the bench and remove its service. This removes only the launchd
+   agent, the runner, `Procfile.lean` and the shell helpers, and leaves
+   the bench itself alone:
+
+   ```bash
+   benchbar down --bench-dir ~/frappe-bench
+   benchbar uninstall-service --bench-dir ~/frappe-bench
+   ```
+
+   The shell helpers are one block in `~/.zshrc` shared by every bench,
+   so `benchup` and the other helpers go away for your other benches
+   too. When another bench remains, `benchbar repair --bench-dir PATH`
+   on it writes the block again.
+
+2. Drop each site's database while the bench folder still exists: the
+   database name and user are only written in the site's
+   `site_config.json`. Look them up, then drop both in `mariadb -u root
+   -p` (`benchbar mariadb-password --yes` prints the root password):
+
+   ```bash
+   grep -h '"db_name"' ~/frappe-bench/sites/*/site_config.json
+   ```
+
+   ```sql
+   DROP DATABASE `_1a2b3c4d5e6f`;
+   DROP USER '_1a2b3c4d5e6f'@'localhost';
+   ```
+
+   Check the name twice: every bench on this Mac shares one MariaDB
+   server, and `SHOW DATABASES;` lists the other benches' sites too.
+
+3. Delete the bench folder. This is the step that cannot be undone:
+
+   ```bash
+   rm -rf ~/frappe-bench
+   ```
+
+4. Make benchbar forget the bench: delete only that bench's files in
+   `~/.local/share/benchbar/.benchbar/benches/` (or the `.benchbar`
+   folder of your checkout). They are named after the folder plus a
+   short hash, for example `frappe-bench-c7a84bb1.env` and, when it
+   exists, `frappe-bench-c7a84bb1.site-apps`. Leave the rest of
+   `.benchbar` alone: it holds the other benches and the logs and
+   backups of every run.
+
+The site's line in `/etc/hosts` can stay; it does nothing without the
+bench. To remove the Homebrew formulae as well, when no other bench
+needs them: `brew uninstall mariadb@10.11 redis node@20 python@3.11`.
+That keeps MariaDB's data folder, `$(brew --prefix)/var/mysql`, with
+every other database on the Mac.
 
 ## Things to avoid
 
