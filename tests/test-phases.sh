@@ -175,6 +175,13 @@ ADMIN_PASSWORD=adminpw run01 --yes --offline
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "MariaDB root password read from the Keychain"
 assert_calls_contain "^bench new-site macdev"
+# no ADMIN_PASSWORD and no terminal to ask (an agent): a message and a fix, not a silent exit 1
+rm -rf "$BENCH"; reset_calls
+run01 --offline </dev/null
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "Cannot ask for ADMIN_PASSWORD: there is no terminal to type it in."
+assert_contains "$OUT" "ADMIN_PASSWORD='...' benchbar install"
+assert_calls_not_contain '^bench new-site'
 # and none at all: a clear failure, not a hang
 rm -rf "$BENCH"; rm -f "$MOCK_STATE/keychain/benchbar-mariadb--root"
 ADMIN_PASSWORD=adminpw run01 --yes --offline

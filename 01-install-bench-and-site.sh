@@ -119,7 +119,11 @@ prompt_secret() {
     printf -v "$varname" '%s' "dry-run-placeholder"
     fl_info "dry-run: using placeholder for ${varname}"
   elif [[ "$ASSUME_YES" == "1" ]]; then
-    fl_die "Secret '${varname}' must be supplied via env var when using --yes." "Re-run with: ${varname}='...' $0 --yes"
+    fl_die "Secret '${varname}' must be supplied via env var when using --yes." "Re-run with: ${varname}='...' benchbar install --yes"
+  elif [[ ! -t 0 ]]; then
+    # no terminal (an agent, a pipe): read would fail and end the run silently
+    fl_die "Cannot ask for ${varname}: there is no terminal to type it in." \
+      "Pass it in the environment: ${varname}='...' benchbar install, or run the install in a terminal"
   else
     fl_ask_secret "$varname" "$prompt"
   fi
@@ -241,7 +245,7 @@ elif [[ -n "$FL_TEAM_PROFILE" && "${#FL_TEAM_APPS[@]}" -gt 0 ]]; then
 else
   [[ -n "$APP_BUNDLE" ]] || APP_BUNDLE="$FL_TEAM_BUNDLE"
   if [[ -z "$APP_BUNDLE" ]]; then
-    if [[ "$ASSUME_YES" == "1" ]]; then
+    if [[ "$ASSUME_YES" == "1" || ! -t 0 ]]; then
       APP_BUNDLE="minimal"
     else
       printf '\nInstall bundle:\n'

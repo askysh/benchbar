@@ -41,6 +41,13 @@ All notable changes to this project are documented here.
   bench overlap to run one bench at a time; the app offers Resolve & Start.
   Starting an already-running bench remains a successful no-op.
 
+### Fixed
+
+- `benchbar install` without a terminal (run by a coding agent, or piped)
+  no longer ends silently: questions with a default take the default and
+  say so, and a password it cannot ask for stops with a message and the
+  fix (`ADMIN_PASSWORD='...' benchbar install`, or run it in a terminal).
+
 ## 0.5.7 - 2026-09-27
 
 BenchBar finds benches that live outside the usual places. Scan Folder
