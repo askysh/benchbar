@@ -48,7 +48,7 @@ assert len(r) == 9, r                                   # the notification got n
 i = by[1]["result"]
 assert i["protocolVersion"] == "2025-06-18" and i["serverInfo"]["name"] == "benchbar", i
 names = [t["name"] for t in by[2]["result"]["tools"]]
-assert names == ["benchbar_list", "benchbar_status", "benchbar_doctor", "benchbar_logs_tail", "benchbar_site_list", "benchbar_up", "benchbar_down", "benchbar_restart"], names
+assert names == ["benchbar_list", "benchbar_status", "benchbar_doctor", "benchbar_logs_tail", "benchbar_site_list", "benchbar_profile_list", "benchbar_profile_check", "benchbar_up", "benchbar_down", "benchbar_restart"], names
 assert not any("repair" in n or "install" in n for n in names)
 ro = {t["name"]: t["annotations"]["readOnlyHint"] for t in by[2]["result"]["tools"]}
 assert ro["benchbar_doctor"] and not ro["benchbar_down"], ro
@@ -62,6 +62,29 @@ assert nulls == [-32700, -32600], nulls                  # bad lines are answere
 assert by[7]["error"]["code"] == -32602, by[7]
 assert by[6]["result"] == {}
 ' || fail "MCP replies: $REPLIES"
+
+# ---- the profile read tools: list, and check (name required)
+mkdir -p "$HOME/.config/benchbar/profiles"
+printf 'base = "v15-lts"\n\n[[apps]]\nname = "gone"\nrepo = "file://%s/nothing.git"\nbranch = "main"\n' "$TMP_DIR" >"$HOME/.config/benchbar/profiles/acme.toml"
+REPLIES="$(mcp \
+  '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"benchbar_profile_list","arguments":{}}}' \
+  '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"benchbar_profile_check","arguments":{"name":"acme"}}}' \
+  '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"benchbar_profile_check","arguments":{}}}' \
+  '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"benchbar_profile_check","arguments":{"name":"--help"}}}' \
+  '{"jsonrpc":"2.0","id":5,"method":"tools/list"}')"
+printf '%s\n' "$REPLIES" | python3 -c '
+import json, sys
+by = {m["id"]: m for m in (json.loads(l) for l in sys.stdin if l.strip())}
+p = by[1]["result"]["structuredContent"]["profiles"]
+assert [x["source_kind"] for x in p if x["name"] == "acme"] == ["user"], p
+c = by[2]["result"]["structuredContent"]
+assert c["name"] == "acme" and c["repos"][0]["reachable"] is False and c["skipped_apps"] == ["gone"], c
+assert by[3]["error"]["code"] == -32602, by[3]
+assert by[4]["result"]["isError"], by[4]                    # an option is never passed as a name
+t = {x["name"]: x for x in by[5]["result"]["tools"]}
+assert t["benchbar_profile_check"]["inputSchema"]["required"] == ["name"]
+assert t["benchbar_profile_list"]["annotations"]["readOnlyHint"] and t["benchbar_profile_check"]["annotations"]["readOnlyHint"]
+' || fail "MCP profile replies: $REPLIES"
 
 # an unknown protocol version gets the newest one this server speaks
 R="$(mcp '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"1999-01-01"}}')"
