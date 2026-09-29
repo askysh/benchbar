@@ -124,9 +124,9 @@ assert_eq "acme" "$(sed -n 's/^TEAM_PROFILE=//p' "$state")"
 assert_eq "on" "$(sed -n 's/^SCHEDULER=//p' "$state")"
 grep -q '^schedule: bench schedule$' "$BENCH/Procfile.lean" || fail "the team profile turns the scheduler on"
 # daily commands follow the team profile: its branches are the policy
-run_fm app list --json --no-sites --bench-dir "$BENCH"
-assert_eq "0" "$CODE" "app list: $OUT"
-assert_eq "version-15" "$(printf '%s' "$OUT" | jget - '[a for a in d["apps"] if a["name"]=="acme_tools"][0]["policy_branch"]')"
+# stdout only: the JSON contract keeps warnings on stderr, and CI prints one here
+OUT="$("$FM" app list --json --no-sites --bench-dir "$BENCH" 2>"$HOME/app-list.err")" || fail "app list failed: $(cat "$HOME/app-list.err")"
+assert_eq "version-15" "$(printf '%s' "$OUT" | jget - '[a for a in d["apps"] if a["name"]=="acme_tools"][0]["policy_branch"]')" "stderr: $(cat "$HOME/app-list.err")"
 # the rerun changes nothing
 reset_calls
 run_fm install --yes --bench-dir "$BENCH"
