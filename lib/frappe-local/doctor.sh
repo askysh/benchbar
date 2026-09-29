@@ -82,6 +82,19 @@ fl_doctor_print_json() {
   printf '],"summary":{"ok":%d,"warn":%d,"fail":%d}}\n' "$(fl_doctor_count ok)" "$(fl_doctor_count warn)" "$(fl_doctor_count fail)"
 }
 
+# doctor --fix-hints: the fix command of every failing and warning check,
+# failures first, one per line, each once. For agents and scripts.
+fl_doctor_print_fix_hints() {
+  local want i
+  for want in fail warn; do
+    i=0
+    while [[ "$i" -lt "${#FL_D_IDS[@]}" ]]; do
+      if [[ "${FL_D_STATUS[$i]}" == "$want" && -n "${FL_D_FIX[$i]}" ]]; then printf '%s\n' "${FL_D_FIX[$i]}"; fi
+      i=$((i + 1))
+    done
+  done | awk '!seen[$0]++'
+}
+
 # Prints the distinct repair actions of flagged checks, in dependency order.
 fl_doctor_actions() {
   local a i flagged=""

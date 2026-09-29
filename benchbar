@@ -100,6 +100,7 @@ OPT_PROFILE=""
 OPT_BUNDLE="${APP_BUNDLE:-}"
 OPT_JSON=0
 OPT_PORT_OFFSET=""
+OPT_FIX_HINTS=0
 FL_ASSUME_YES="${FL_ASSUME_YES:-0}"
 FL_MAKE_DEFAULT="${FL_MAKE_DEFAULT:-0}"
 FL_SCHEDULER=""
@@ -120,6 +121,7 @@ Setup
                       Shows the plan and asks; never runs migrate, build or update.
   service             Install or refresh only the background service (phase 02).
   doctor              Read-only health report. Exit 1 when something FAILs.
+                      --fix-hints: only the fix commands of FAIL and WARN checks, one per line.
   ports setup -- PATH ...
                       Preview management/port changes, confirm once, then apply (--dry-run: preview only)
   ports plan -- PATH ...
@@ -261,6 +263,7 @@ while [[ "$#" -gt 0 ]]; do
     --port-offset=*) OPT_PORT_OFFSET="${1#*=}"; shift ;;
     -y|--yes) FL_ASSUME_YES=1; shift ;;
     --json) OPT_JSON=1; shift ;;
+    --fix-hints) OPT_FIX_HINTS=1; shift ;;
     --plain|--no-color) FL_PLAIN=1; fl_ui_init; shift ;;
     --version) fl_print_version; exit 0 ;;
     # benchbar docs --help lists the topics; every other --help is this one
@@ -512,10 +515,15 @@ cmd_adopt() {
 
 cmd_doctor() {
   local fails
+  # --fix-hints: only the fix commands on stdout (fd 3), everything else,
+  # a missing bench included, on stderr
+  if [[ "$OPT_FIX_HINTS" == "1" ]]; then exec 3>&1 1>&2; FL_PLAIN=1; fl_ui_init; fi
   fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
   fl_require_bench
   fl_doctor_run
-  if [[ "$OPT_JSON" == "1" ]]; then
+  if [[ "$OPT_FIX_HINTS" == "1" ]]; then
+    fl_doctor_print_fix_hints >&3
+  elif [[ "$OPT_JSON" == "1" ]]; then
     fl_doctor_print_json
   else
     fl_header "benchbar doctor" "read-only" "$FL_PROFILE" "$FL_BENCH_DIR" "$FL_SITE"

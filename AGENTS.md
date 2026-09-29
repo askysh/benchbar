@@ -17,6 +17,7 @@ user, as described here.
 
 ```bash
 ./benchbar doctor --json          # machine readable, read only, exit 1 on any FAIL
+./benchbar doctor --fix-hints     # only the fix commands, one per line
 ./benchbar status --json          # agent state, stop flag, site ping
 ./benchbar doctor                 # same, for humans
 ```

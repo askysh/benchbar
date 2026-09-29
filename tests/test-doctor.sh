@@ -229,4 +229,24 @@ reset_calls
 run_fm doctor --bench-dir "$BENCH"
 assert_calls_not_contain '^security' "(doctor must never touch the Keychain)"
 
+# ---- --fix-hints: exactly the fixes of fail, then warn checks, each once; nothing else on stdout
+set +e
+json="$("$FM" doctor --json --bench-dir "$BENCH" 2>/dev/null)"; json_code=$?
+hints="$("$FM" doctor --fix-hints --bench-dir "$BENCH" 2>/dev/null)"; hints_code=$?
+set -e
+assert_eq "$json_code" "$hints_code" "(the exit code is doctor's)"
+expected="$(printf '%s' "$json" | python3 -c '
+import json, sys
+d = json.load(sys.stdin); seen = []
+for level in ("fail", "warn"):
+    for c in d["checks"]:
+        if c["level"] == level and c["fix_command"] and c["fix_command"] not in seen:
+            seen.append(c["fix_command"])
+print("\n".join(seen))')"
+[[ -n "$expected" ]] || fail "test setup: this bench should have at least one fix"
+assert_eq "$expected" "$hints"
+assert_not_contains "$hints" "[WARN]"
+set +e; missing="$("$FM" doctor --fix-hints --bench-dir "$HOME/nowhere" 2>/dev/null)"; missing_code=$?; set -e
+assert_eq "1" "$missing_code"; assert_eq "" "$missing" "(errors go to stderr)"
+
 printf 'test-doctor utf8: ok\n'

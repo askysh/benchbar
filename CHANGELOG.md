@@ -10,6 +10,9 @@ All notable changes to this project are documented here.
   `restart`, `open`, `logs`, `window` and `doctor`, with `bench=` (a name
   or a path) and `site=`. Links only start, stop and open things; any
   other route is ignored and logged. See the URL scheme reference page.
+- `benchbar doctor --fix-hints`: only the fix commands of failing and
+  warning checks, one per line, for coding agents and scripts. The exit
+  code is doctor's.
 - `benchbar console` and `benchbar db` (both take `--site`): bench's
   Python console and the site's MariaDB shell with the site's own user.
   In the app, Open in VS Code or Cursor (chosen in Settings), Console and
