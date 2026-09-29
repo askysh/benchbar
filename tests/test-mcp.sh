@@ -80,7 +80,7 @@ assert [x["source_kind"] for x in p if x["name"] == "acme"] == ["user"], p
 c = by[2]["result"]["structuredContent"]
 assert c["name"] == "acme" and c["repos"][0]["reachable"] is False and c["skipped_apps"] == ["gone"], c
 assert by[3]["error"]["code"] == -32602, by[3]
-assert by[4]["result"]["isError"], by[4]                    # an option is never passed as a name
+assert by[4]["error"]["code"] == -32602, by[4]              # an option is never passed as a name
 t = {x["name"]: x for x in by[5]["result"]["tools"]}
 assert t["benchbar_profile_check"]["inputSchema"]["required"] == ["name"]
 assert t["benchbar_profile_list"]["annotations"]["readOnlyHint"] and t["benchbar_profile_check"]["annotations"]["readOnlyHint"]
