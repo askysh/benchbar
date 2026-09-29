@@ -88,9 +88,14 @@ struct MainWindowView: View {
             detail
                 .frame(minWidth: 560, minHeight: 460)
                 .safeAreaInset(edge: .top, spacing: 0) {
-                    if let notice = router.notice {
-                        NoticeBanner(text: notice) { router.notice = nil }
-                            .padding([.horizontal, .top], 16)
+                    VStack(spacing: 0) {
+                        if let offer = about.offer, offer.showsBanner {
+                            UpdateBanner(offer: offer).padding([.horizontal, .top], 16)
+                        }
+                        if let notice = router.notice {
+                            NoticeBanner(text: notice) { router.notice = nil }
+                                .padding([.horizontal, .top], 16)
+                        }
                     }
                 }
         }

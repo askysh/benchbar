@@ -93,6 +93,8 @@ SCRIPT_DIR="$(fl_resolve_self)"
 . "${SCRIPT_DIR}/lib/frappe-local/teamlock.sh"
 # shellcheck source=lib/frappe-local/pull.sh
 . "${SCRIPT_DIR}/lib/frappe-local/pull.sh"
+# shellcheck source=lib/frappe-local/selfupdate.sh
+. "${SCRIPT_DIR}/lib/frappe-local/selfupdate.sh"
 
 OPT_BENCH_DIR=""
 OPT_SITE=""
@@ -135,6 +137,9 @@ Setup
                       --json: {"zip": path, "redactions": n} for the app and scripts).
   repair              Apply only the fixes doctor flagged, in dependency order.
   uninstall-service   Remove the agent, runner, Procfile.lean and shell helpers.
+  self-update         Update the benchbar CLI and the BenchBar app with the one line installer,
+                      after asking (--check: this version against the latest, --json, --dry-run).
+                      Never touches a bench; never runs bench update.
 
 Daily
   up                  Start the bench in the background (benchup).
@@ -619,6 +624,7 @@ case "$COMMAND" in
   pull) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_pull ${ARGS[@]+"${ARGS[@]}"} ;;
   report) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_report ${ARGS[@]+"${ARGS[@]}"} ;;
   docs) fl_cmd_docs ${ARGS[@]+"${ARGS[@]}"} ;;
+  self-update) fl_cmd_self_update ${ARGS[@]+"${ARGS[@]}"} || exit 1 ;;
   mcp)
     # stdlib only Python 3.9+; the Command Line Tools' python3 is enough
     command -v python3 >/dev/null 2>&1 || fl_die "python3 is needed for benchbar mcp." "Install the Xcode Command Line Tools: xcode-select --install"

@@ -2,6 +2,28 @@
 
 All notable changes to this project are documented here.
 
+## Unreleased
+
+### Added
+
+- Update Now: the app checks GitHub for a newer release once a day (on
+  launch and wake; turn it off in General with Check for updates
+  automatically) and offers Update to X in the popover and the menu bar
+  menu, and a banner in the window. Update Now opens Terminal with the
+  one line installer, quits BenchBar while it is replaced and opens it
+  again; Copy Command and Release Notes are next to it. A benchbar that
+  is a git checkout of your own gets `--app-only` and a `git pull` hint.
+- `benchbar self-update`: the same update from the CLI, after asking
+  (`--check`, `--json`, `--dry-run`). It never touches a bench and never
+  runs `bench update`.
+- Release notes start with an Update section and the command, for
+  anyone on 0.5.x who opens the release page from Check for Updates.
+
+### Changed
+
+- `install.sh --yes` on a Mac that already has the CLI is an update: it
+  no longer adopts a bench it finds or starts the Homebrew installer.
+
 ## 0.5.8 - 2026-09-29
 
 Quick wins, and port blocks across benches. Links for Raycast and

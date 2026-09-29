@@ -1,6 +1,6 @@
 ---
 title: "report and other commands"
-description: "benchbar report, list, console, db, autostart, mariadb-password, uninstall-service and help: the remaining commands with flags, exit codes and examples."
+description: "benchbar report, self-update, list, console, db, autostart, mariadb-password, uninstall-service and help: the remaining commands with flags, exit codes and examples."
 ---
 
 Every command takes the [options for every command](install.md#options-for-every-command).
@@ -34,6 +34,38 @@ benchbar report --print
 ```
 
 Attach the zip to an issue at <https://github.com/askysh/benchbar/issues>.
+
+## self-update
+
+```
+benchbar self-update [--check] [--json] [--dry-run] [--yes]
+```
+
+Updates the benchbar CLI and the BenchBar app with the one line
+installer, the same command as the app's Update Now:
+`curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash -s -- --yes`.
+It asks the GitHub API for the latest release, shows this CLI's and the
+app's versions and the command, and asks before it runs. It changes no
+bench and never runs `bench update`.
+
+A CLI that is a git checkout of your own (not `~/.local/share/benchbar`)
+gets `--app-only` and the `git -C PATH pull` to run; a CLI installed
+some other way gets `--app-only` too. An app in a writable folder other
+than `~/Applications` is replaced where it is (`BENCHBAR_APP_DIR`).
+
+| Flag | What it does |
+|---|---|
+| `--check` | Only compare with the latest release |
+| `--json` | The same as JSON, never runs anything: `current`, `app_version`, `app_path`, `latest`, `release_url`, `update_available` (true, false, null offline), `install` (`managed`, `checkout`, `other`), `cli_dir`, `app_only`, `app_dir`, `command`, `notes`, `error` |
+| `--dry-run` | The plan and the command, nothing runs |
+| `--yes` | Do not ask |
+
+Exit codes: 0; 1 when GitHub could not be reached or the question was
+answered no.
+
+```bash
+benchbar self-update --check
+```
 
 ## docs
 

@@ -6,16 +6,20 @@ import SwiftUI
 @Observable
 final class AboutModel {
     let updates: UpdateChecker
+    /// The newer release on offer (the window's banner, the menu item).
+    let offer: UpdateOffer?
     let bugReport: BugReport
     /// "benchbar 0.5.0", the first line of `benchbar --version`.
     private(set) var cliVersion: String?
 
     @ObservationIgnored private let store: BenchStore
 
-    init(store: BenchStore, updates: UpdateChecker = UpdateChecker(), bugReport: BugReport? = nil) {
+    init(store: BenchStore, updates: UpdateChecker = UpdateChecker(), offer: UpdateOffer? = nil, bugReport: BugReport? = nil) {
         self.store = store
         self.updates = updates
+        self.offer = offer
         self.bugReport = bugReport ?? BugReport(store: store)
+        if let offer { updates.onStatus = { [weak offer] in offer?.record($0) } }
     }
 
     func loadCLIVersion() async {
@@ -206,6 +210,10 @@ struct AboutPane: View {
                 case .done(.available(let version, let page)):
                     Label("\(version) available", systemImage: "arrow.down.circle.fill")
                         .foregroundStyle(.blue)
+                    if let offer = model.offer, offer.version != nil {
+                        Button("Update Now") { offer.updateNow() }
+                        Button("Copy Command") { offer.copyCommand() }.help(offer.plan.command)
+                    }
                     Button("Release Page") { NSWorkspace.shared.open(page) }
                 case .failed(let message):
                     Text(message).font(.caption).foregroundStyle(.secondary)
@@ -216,7 +224,9 @@ struct AboutPane: View {
             }
         } label: {
             Text("Updates")
-            Text("Asks GitHub for the latest release, only when you click.")
+            Text(model.offer == nil || Updater.isAvailable
+                 ? "Asks GitHub for the latest release."
+                 : "Asks GitHub for the latest release, and once a day when Check for updates automatically is on in General.")
         }
     }
 }

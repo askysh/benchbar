@@ -89,12 +89,37 @@ opening BenchBar again from Finder or Spotlight. It has a page per bench:
 
 Above the benches:
 
-- **General**: open at login, notifications, which `benchbar` the app
-  runs, the keyboard shortcuts.
+- **General**: open at login, notifications, **Check for updates
+  automatically**, which `benchbar` the app runs, the keyboard shortcuts.
 - **Menu Bar**: the runner, with a live preview and custom runners, see
   [Custom runners](runners.md).
 - **Team Profiles**: see [Teams](guides/teams.md#team-profiles).
-- **About**.
+- **About**: the versions, Check for Updates, Report a Bug.
+
+## Updates
+
+BenchBar asks GitHub for the latest release at most once a day, when it
+starts, when the Mac wakes, and on an hourly look at the clock. The
+check is one request to the GitHub API and downloads nothing. Turn it
+off in General with **Check for updates automatically**; **Check for
+Updates** in About and in the app menu still works. A build with Sparkle
+(see [Releasing](releasing.md)) leaves the schedule to Sparkle.
+
+When a newer release is out, the popover and the menu bar menu show
+**Update to X…**, and the BenchBar window shows a banner with:
+
+- **Update Now**: Terminal opens and runs the one line installer
+  (`install.sh --yes`, or `--app-only` when your CLI is a git checkout of
+  your own). BenchBar quits so the installer can replace it and opens
+  again when it is done. Your benches keep running. The app writes a
+  `.command` file for Terminal, so macOS asks for no Automation
+  permission.
+- **Copy Command**: the same command, to run yourself.
+- **Release Notes**: the release page.
+
+The close button on the banner hides it until the next version; the
+menu item stays. See [Updating](install.md#updating) for what the
+installer changes.
 
 ![General settings: startup, notifications, the command line tool and keyboard shortcuts](images/window-general.png)
 

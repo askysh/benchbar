@@ -17,7 +17,10 @@
 #   4. offers "benchbar adopt" for a bench it finds, or "benchbar install"
 #
 # Flags:
-#   --yes             accept every default, no questions (no TTY needed)
+#   --yes             accept every default, no questions (no TTY needed). On a
+#                     Mac that already has the CLI in ~/.local/share/benchbar
+#                     this is an update: CLI and app only, no adopt or install
+#                     of a bench, no Homebrew installer
 #   --dry-run         print the plan and every command, change nothing
 #   --no-app          CLI only
 #   --app-only        app only
@@ -45,6 +48,9 @@ RC_END="# <<< benchbar-path <<<"
 
 YES=0; DRY=0; DO_CLI=1; DO_APP=1; UNINSTALL=0; PIN=""
 CHANGED=0
+# the CLI checkout was there before this run: with --yes this run is an update
+UPDATING=0
+[[ -d "${BENCHBAR_HOME}/.git" ]] && UPDATING=1
 
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
@@ -55,7 +61,7 @@ while [[ "$#" -gt 0 ]]; do
     --version) PIN="${2:-}"; shift ;;
     --version=*) PIN="${1#*=}" ;;
     --uninstall) UNINSTALL=1 ;;
-    -h|--help) sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) printf 'Unknown option: %s (try --help)\n' "$1" >&2; exit 1 ;;
   esac
   shift
@@ -223,6 +229,10 @@ check_system() {
     info "dry-run: would offer the official Homebrew installer (it asks for your password itself)"
     return 0
   fi
+  if [[ "$YES" == "1" && "$UPDATING" == "1" ]]; then
+    warn "an update with --yes never runs the Homebrew installer; install it from https://brew.sh"
+    return 0
+  fi
   if confirm "Run the official Homebrew installer now? (from brew.sh, it asks for your password)" y; then
     /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" </dev/tty
     for p in /opt/homebrew/bin/brew /usr/local/bin/brew; do
@@ -350,6 +360,11 @@ offer_bench() {
   step "Your bench"
   local cli="${BENCHBAR_HOME}/benchbar" found=""
   [[ -x "$cli" ]] || { info "the CLI is not installed; skipping"; return 0; }
+  # an update (BenchBar's Update Now, benchbar self-update) changes no bench
+  if [[ "$YES" == "1" && "$UPDATING" == "1" ]]; then
+    info "update with --yes: no bench is adopted or installed (later: benchbar adopt PATH, or benchbar install)"
+    return 0
+  fi
   found="$("$cli" list --json 2>/dev/null | tr ',' '\n' | sed -n 's/.*"path":"\([^"]*\)".*/\1/p' | head -n 1 || true)"
   if [[ -n "$found" ]]; then
     ok "found a bench at ${found}"

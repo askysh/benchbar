@@ -17,6 +17,7 @@ final class AppSettings {
         static let selectedBench = "selectedBench"
         static let askedForNotifications = "askedForNotifications"
         static let editorBundleID = "editorBundleID"
+        static let checkUpdatesAutomatically = "checkUpdatesAutomatically"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -36,6 +37,8 @@ final class AppSettings {
     var askedForNotifications: Bool { didSet { defaults.set(askedForNotifications, forKey: Key.askedForNotifications) } }
     /// Open in Editor: a bundle id from `Editors.known`; empty means the first installed.
     var editorBundleID: String { didSet { defaults.set(editorBundleID, forKey: Key.editorBundleID) } }
+    /// Ask GitHub for the latest release once a day (UpdateOffer).
+    var checkUpdatesAutomatically: Bool { didSet { defaults.set(checkUpdatesAutomatically, forKey: Key.checkUpdatesAutomatically) } }
 
     /// The editor Open in Editor uses right now, nil when none is installed.
     var editor: Editor? { Editors.choice(preferred: editorBundleID, installed: Editors.installedNow()) }
@@ -46,6 +49,7 @@ final class AppSettings {
             Key.runnerID: "bench",
             Key.speedEnabled: true,
             Key.notificationsEnabled: true,
+            Key.checkUpdatesAutomatically: true,
         ])
         cliPath = defaults.string(forKey: Key.cliPath) ?? ""
         scanFolder = defaults.string(forKey: Key.scanFolder) ?? ""
@@ -56,5 +60,6 @@ final class AppSettings {
         selectedBench = defaults.string(forKey: Key.selectedBench) ?? ""
         askedForNotifications = defaults.bool(forKey: Key.askedForNotifications)
         editorBundleID = defaults.string(forKey: Key.editorBundleID) ?? ""
+        checkUpdatesAutomatically = defaults.bool(forKey: Key.checkUpdatesAutomatically)
     }
 }

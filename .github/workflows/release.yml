@@ -159,17 +159,11 @@ jobs:
       # ---------------------------------------------------------- both paths
       - name: Release notes from the CHANGELOG
         run: |
-          {
-            awk -v v="$VERSION" '/^## /{p = ($2 == v)} p' CHANGELOG.md | tail -n +2
-            printf '\n---\n\n'
-            if [ "$SIGNED" = "true" ]; then
-              printf 'Signed with a Developer ID and notarized by Apple. Install with the DMG or with:\n\n'
-            else
-              printf 'This build is **not signed with an Apple Developer ID** (ad hoc signature). macOS shows "Apple could not verify" on first open of the DMG: use System Settings > Privacy & Security > Open Anyway, or install with the one liner, which downloads with curl and opens without that prompt:\n\n'
-            fi
-            printf '```bash\ncurl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash\n```\n\n'
-            printf 'Checksums are in `SHA256SUMS`.\n'
-          } > "$RUNNER_TEMP/notes.md"
+          if [ "$SIGNED" = "true" ]; then
+            scripts/release-notes.sh "$VERSION" --signed > "$RUNNER_TEMP/notes.md"
+          else
+            scripts/release-notes.sh "$VERSION" > "$RUNNER_TEMP/notes.md"
+          fi
           cat "$RUNNER_TEMP/notes.md"
 
       - name: Upload the files as a workflow artifact
