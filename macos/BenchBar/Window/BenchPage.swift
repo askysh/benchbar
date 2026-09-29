@@ -88,6 +88,23 @@ struct BenchOverview: View {
                     .disabled(bench.state != .running && bench.siteRows.first(where: \.isDefault)?.needsHosts != true)
                     Button("Show in Finder") { Workspace.openFolder(bench) }
                 }
+                HStack(spacing: 8) {
+                    let editor = store.settings.editor
+                    Button { if let editor { Workspace.openInEditor(bench, editor: editor) } } label: {
+                        Label(editor.map { "Open in \($0.name)" } ?? "Open in Editor", systemImage: "chevron.left.forwardslash.chevron.right")
+                    }
+                    .disabled(editor == nil)
+                    .help(editor == nil ? "Install VS Code or Cursor to open the bench folder in it." : bench.path)
+                    Spacer()
+                    Button { Workspace.openShell(.console, site: bench.summary.site, bench: bench, store: store) } label: {
+                        Label("Console", systemImage: "terminal")
+                    }
+                    .help("bench --site \(bench.summary.site) console, in Terminal")
+                    Button { Workspace.openShell(.db, site: bench.summary.site, bench: bench, store: store) } label: {
+                        Label("Database", systemImage: "cylinder")
+                    }
+                    .help("bench --site \(bench.summary.site) mariadb, in Terminal, with the site's own database user")
+                }
                 if let since = bench.runningSince {
                     TimelineView(.periodic(from: .now, by: 30)) { context in
                         LabeledContent("Up for", value: BenchText.uptime(since: since, now: context.date))
@@ -290,6 +307,9 @@ struct SiteMenu: View {
                 }
                 .disabled(list.backups.isEmpty)
             }
+            Divider()
+            Button("Open Console") { Workspace.openShell(.console, site: row.name, bench: bench, store: workbench.store) }
+            Button("Open Database") { Workspace.openShell(.db, site: row.name, bench: bench, store: workbench.store) }
             Divider()
             Button("Drop Site…", role: .destructive, action: drop)
                 .disabled(onlySite)

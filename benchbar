@@ -85,6 +85,8 @@ SCRIPT_DIR="$(fl_resolve_self)"
 . "${SCRIPT_DIR}/lib/frappe-local/sites.sh"
 # shellcheck source=lib/frappe-local/site-backups.sh
 . "${SCRIPT_DIR}/lib/frappe-local/site-backups.sh"
+# shellcheck source=lib/frappe-local/consoles.sh
+. "${SCRIPT_DIR}/lib/frappe-local/consoles.sh"
 # shellcheck source=lib/frappe-local/apps.sh
 . "${SCRIPT_DIR}/lib/frappe-local/apps.sh"
 # shellcheck source=lib/frappe-local/teamlock.sh
@@ -156,6 +158,8 @@ Daily
   site drop NAME      bench drop-site: a backup with files first, the folder moved to
                       archived/sites, the hosts line removed. Needs --confirm-site NAME;
                       the default site also needs --new-default OTHER (--dry-run, --json).
+  console             bench --site SITE console: a Python shell with frappe (--site S).
+  db                  bench --site SITE mariadb: the site's database with its own user (--site S).
   mariadb-password    Print the MariaDB root password kept in the Keychain (asks first).
   mcp                 Model Context Protocol server on stdio for coding agents
                       (claude mcp add benchbar -- benchbar mcp). Read tools, up, down, restart.
@@ -597,6 +601,8 @@ case "$COMMAND" in
   autostart) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_autostart "${ARGS[0]:-}" ;;
   uninstall-service) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_uninstall_service ;;
   path) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; printf '%s\n' "$FL_BENCH_DIR" ;;
+  console) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_console ${ARGS[@]+"${ARGS[@]}"} ;;
+  db) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_db ${ARGS[@]+"${ARGS[@]}"} ;;
   site) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_site ${ARGS[@]+"${ARGS[@]}"} ;;
   app) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_app ${ARGS[@]+"${ARGS[@]}"} ;;
   profile) fl_cmd_profile ${ARGS[@]+"${ARGS[@]}"} ;;

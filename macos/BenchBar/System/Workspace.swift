@@ -43,10 +43,44 @@ enum Workspace {
     /// `.command` file is a shell script Terminal runs when it opens it, so
     /// this needs no Apple Events permission.
     static func openLogs(_ bench: BenchModel, cli: URL) throws {
+        try runInTerminal(name: "logs-\(bench.name)", contents: LogsScript.contents(cli: cli.path, bench: bench.path))
+    }
+
+    /// Open Console and Open Database: `benchbar console|db` in Terminal.
+    static func openShell(_ kind: TerminalScript.Kind, site: String, bench: BenchModel, cli: URL) throws {
+        try runInTerminal(name: "\(kind.rawValue)-\(bench.name)-\(site)",
+                          contents: TerminalScript.contents(kind, cli: cli.path, bench: bench.path, site: site))
+    }
+
+    /// Open Console / Open Database from a view: the error lands on the bench.
+    static func openShell(_ kind: TerminalScript.Kind, site: String, bench: BenchModel, store: BenchStore) {
+        guard case .ready(let cli) = store.cli else {
+            bench.lastError = "The benchbar command line tool is not available."
+            return
+        }
+        do {
+            try openShell(kind, site: site, bench: bench, cli: cli)
+        } catch {
+            bench.lastError = "Could not open Terminal: \(error.localizedDescription)"
+        }
+    }
+
+    /// The bench folder in an editor (VS Code, Cursor). False when it is not installed.
+    @discardableResult
+    static func openInEditor(_ bench: BenchModel, editor: Editor) -> Bool {
+        guard let app = Editors.appURL(editor.bundleID) else { return false }
+        NSWorkspace.shared.open([URL(fileURLWithPath: bench.path, isDirectory: true)], withApplicationAt: app,
+                                configuration: NSWorkspace.OpenConfiguration())
+        return true
+    }
+
+    /// Writes a `.command` script (owner only) and has Terminal run it.
+    private static func runInTerminal(name: String, contents: String) throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("BenchBar", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let script = folder.appendingPathComponent("logs-\(bench.name).command")
-        try LogsScript.contents(cli: cli.path, bench: bench.path).write(to: script, atomically: true, encoding: .utf8)
+        let safe = name.map { $0.isLetter || $0.isNumber || "-_.".contains($0) ? $0 : "_" }
+        let script = folder.appendingPathComponent(String(safe) + ".command")
+        try contents.write(to: script, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: script.path)
 
         let terminal = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Terminal")

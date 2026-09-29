@@ -47,8 +47,8 @@ top chooses which bench the popover shows.
 
 ## Links for Raycast and Shortcuts
 
-`benchbar://up`, `down`, `restart`, `open`, `logs`, `window` and `doctor`
-act on a bench from Raycast, Shortcuts or a script, for example
+`benchbar://up`, `down`, `restart`, `open`, `logs`, `window`, `doctor`,
+`console`, `db` and `editor` act on a bench from Raycast, Shortcuts or a script, for example
 `open "benchbar://restart?bench=frappe-bench"`. Links never repair,
 install or delete anything. The [URL scheme](/reference/url-scheme/) page
 has every route and ready to use Raycast and Shortcuts recipes.
@@ -59,7 +59,10 @@ Open it with ⌘M, **Manage Bench…** in the popover, or by
 opening BenchBar again from Finder or Spotlight. It has a page per bench:
 
 - **Overview**: start, stop, restart, the site and ports, and the
-  scheduler switch. While the bench runs, two small charts show its CPU
+  scheduler switch. **Open in VS Code** (or Cursor, chosen in Settings,
+  General) opens the bench folder; **Console** and **Database** open
+  Terminal with `benchbar console` and `benchbar db` for the default site.
+  The ⋯ menu of each site on the Sites tab has both for that site. While the bench runs, two small charts show its CPU
   and memory for the last ten minutes (hover for the value at a moment);
   the popover shows the current values under the bench name. They count
   the bench's own processes, not the shared MariaDB, and are kept in

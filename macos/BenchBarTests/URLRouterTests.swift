@@ -12,7 +12,7 @@ struct URLRouterTests {
     }
 
     @Test func everyRouteOnANamedBench() {
-        for name in ["up", "down", "restart", "open", "logs", "window", "doctor"] {
+        for name in ["up", "down", "restart", "open", "logs", "window", "doctor", "console", "db", "editor"] {
             let expected = URLRouter.Route(rawValue: name)!
             #expect(route("benchbar://\(name)?bench=v16-bench") == .run(expected, bench: v16.path, site: nil))
         }
@@ -28,7 +28,8 @@ struct URLRouterTests {
 
     /// Links can come from any web page: nothing destructive is a route.
     @Test func destructiveAndUnknownRoutesAreIgnored() {
-        for word in ["repair", "drop", "restore", "pull", "install", "update", "delete", "wipe", "rm", "service", "site", ""] {
+        for word in ["repair", "drop", "restore", "pull", "install", "update", "delete", "wipe", "rm", "service", "site",
+                     "mariadb-password", "backup", "migrate", "exec", "shell", ""] {
             if case .ignore = route("benchbar://\(word)?bench=v16-bench") {} else {
                 Issue.record("\(word) was not ignored")
             }
@@ -78,6 +79,10 @@ struct URLRouterTests {
         #expect(route("benchbar://open?bench=frappe-bench&site=second") == .run(.open, bench: main.path, site: "second"))
         #expect(route("benchbar://open?bench=frappe-bench&site=SECOND") == .run(.open, bench: main.path, site: "second"))
         #expect(route("benchbar://up?bench=frappe-bench&site=second") == .run(.up, bench: main.path, site: nil))
+        #expect(route("benchbar://console?bench=frappe-bench&site=second") == .run(.console, bench: main.path, site: "second"))
+        #expect(route("benchbar://db?bench=frappe-bench&site=second") == .run(.db, bench: main.path, site: "second"))
+        #expect(route("benchbar://editor?bench=frappe-bench&site=second") == .run(.editor, bench: main.path, site: nil))
+        if case .explain = route("benchbar://db?bench=frappe-bench&site=nope") {} else { Issue.record("db on an unknown site ran") }
         guard case .explain(let text) = route("benchbar://open?bench=frappe-bench&site=nope") else {
             Issue.record("an unknown site opened"); return
         }

@@ -255,3 +255,6 @@ Asked for after the phases, to stop naming drift before the first release.
 - The Drop sheet reads the plan with `--dry-run --json` on open and again when the new default changes, and cannot be dismissed while the drop runs; the typed name goes to `--confirm-site` as typed.
 - The lockfile badge runs `lock check` when the Overview opens, with Check Again, and after a change on that bench, not on the status poll: `lock check` runs `bench --version` and reads every app's git state, too slow for every 30 seconds. `lock check` exits 1 on drift, so exit 1 with JSON counts as a result.
 - No Apply button in 0.5.8: `lock apply` moves app checkouts and runs migrate, which needs its own plan sheet; the footer names the command instead.
+- Editors are found by bundle id through Launch Services (VS Code, Cursor, VS Code Insiders), not by path or the `code` shell command: they can live anywhere, and the shell command is often not installed. A saved choice that is uninstalled falls back to the first installed editor.
+- Console and Database reuse the `.command` file of Open in Terminal: it needs no Apple Events permission. The script runs `benchbar console|db`, never bench directly, so the CLI stays the only way into a bench and no password is in the script.
+- `console`, `db` and `editor` became link routes: they only open a window at a prompt, like `logs`.

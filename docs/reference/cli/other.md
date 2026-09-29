@@ -1,6 +1,6 @@
 ---
 title: "report and other commands"
-description: "benchbar report, list, autostart, mariadb-password, uninstall-service and help: the remaining commands with flags, exit codes and examples."
+description: "benchbar report, list, console, db, autostart, mariadb-password, uninstall-service and help: the remaining commands with flags, exit codes and examples."
 ---
 
 Every command takes the [options for every command](install.md#options-for-every-command).
@@ -81,6 +81,41 @@ Exit codes: 0.
 
 ```bash
 benchbar list --json
+```
+
+## console
+
+```
+benchbar console [--site NAME] [--bench-dir DIR]
+```
+
+`bench --site NAME console` in the bench folder: an IPython shell with
+frappe connected to the site. Without `--site`, the bench's default site.
+It replaces the benchbar process, so the terminal is bench's until you
+leave with Ctrl-D. Nothing is written and no lock is taken. While the
+bench is stopped, calls that need Redis (`frappe.cache`, `enqueue`) fail;
+benchbar says so before it starts.
+
+Exit codes: bench's; 1 when the site does not exist.
+
+```bash
+benchbar console --site macdev
+```
+
+## db
+
+```
+benchbar db [--site NAME] [--bench-dir DIR]
+```
+
+`bench --site NAME mariadb`: the MariaDB shell on the site's database,
+logged in as the site's own database user from its `site_config.json`.
+The MariaDB root password is not used and nothing is written to disk.
+
+Exit codes: bench's; 1 when the site does not exist.
+
+```bash
+benchbar db --site macdev
 ```
 
 ## autostart

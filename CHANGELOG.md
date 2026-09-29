@@ -10,6 +10,11 @@ All notable changes to this project are documented here.
   `restart`, `open`, `logs`, `window` and `doctor`, with `bench=` (a name
   or a path) and `site=`. Links only start, stop and open things; any
   other route is ignored and logged. See the URL scheme reference page.
+- `benchbar console` and `benchbar db` (both take `--site`): bench's
+  Python console and the site's MariaDB shell with the site's own user.
+  In the app, Open in VS Code or Cursor (chosen in Settings), Console and
+  Database on the bench page and in each site's menu, and the
+  `benchbar://console`, `db` and `editor` links.
 - `benchbar site backup NAME [--with-files]`, `site backups NAME` and
   `site drop NAME --confirm-site NAME`: bench's own backup, a list of a
   site's backups, and dropping a site with a backup first. Drop refuses

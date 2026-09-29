@@ -179,6 +179,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             case .doctor:
                 openBench(bench, tab: .health, repair: false)
                 Task { await store.runDoctor(on: bench) }
+            case .console, .db:
+                Workspace.openShell(route == .console ? .console : .db, site: site ?? bench.summary.site, bench: bench, store: store)
+            case .editor:
+                if let editor = settings.editor {
+                    Workspace.openInEditor(bench, editor: editor)
+                } else {
+                    settingsWindow.router.notice = "Neither VS Code nor Cursor is installed, so there is no editor to open \(bench.name) in."
+                    openSettings()
+                }
             }
         }
     }

@@ -48,6 +48,7 @@ struct SettingsView: View {
                         startupSection
                         notificationsSection
                         cliSection
+                        editorSection
                         shortcutsSection.id(Self.shortcutsID)
                     case .menuBar:
                         previewSection
@@ -235,6 +236,28 @@ struct SettingsView: View {
             }
         } header: {
             Text("Notifications")
+        }
+    }
+
+    // MARK: editor
+
+    private var editorSection: some View {
+        let installed = Editors.installedNow()
+        return Section {
+            if installed.isEmpty {
+                Text("Neither VS Code nor Cursor is installed.").foregroundStyle(.secondary)
+            } else {
+                Picker("Open benches in", selection: Binding(
+                    get: { Editors.choice(preferred: settings.editorBundleID, installed: installed)?.bundleID ?? "" },
+                    set: { settings.editorBundleID = $0 })) {
+                    ForEach(installed) { Text($0.name).tag($0.bundleID) }
+                }
+            }
+        } header: {
+            Text("Editor")
+        } footer: {
+            Text("Open in Editor on a bench's page opens the bench folder in this app.")
+                .font(.caption).foregroundStyle(.secondary)
         }
     }
 

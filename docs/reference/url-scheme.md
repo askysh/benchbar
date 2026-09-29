@@ -25,6 +25,9 @@ running, the link starts it first.
 | `benchbar://logs` | opens the bench's log window |
 | `benchbar://window` | opens the BenchBar window at the bench's page |
 | `benchbar://doctor` | runs doctor and opens the bench's Health tab |
+| `benchbar://console` | Terminal with `benchbar console` for the site |
+| `benchbar://db` | Terminal with `benchbar db` for the site |
+| `benchbar://editor` | the bench folder in VS Code or Cursor (the one chosen in Settings) |
 
 Start and restart check ports first, as the buttons do: a conflict is
 not resolved from a link, it shows in the popover.
@@ -35,7 +38,7 @@ not resolved from a link, it shows in the popover.
 |---|---|
 | `bench=NAME` | the bench with this name, as `benchbar list` shows it |
 | `bench=/absolute/path` | the bench in this folder; `~/frappe-bench` works too |
-| `site=NAME` | with `open`: this site instead of the default one |
+| `site=NAME` | with `open`, `console` and `db`: this site instead of the default one |
 
 Without `bench=`, a link acts on the bench selected in the menu bar, or
 on the only bench there is. When that is not clear (several benches and
@@ -57,7 +60,8 @@ Encode a path in a query: `/` becomes `%2F`, a space `%20`.
 ## What links cannot do
 
 Any web page can open a `benchbar://` link, so links only start, stop,
-restart and open things. There is no route for repair, install, update,
+restart and open things. `console` and `db` only open a Terminal window
+at a prompt; nothing runs in it until you type. There is no route for repair, install, update,
 pull, restore, dropping a site or anything else that changes or deletes
 files; the app ignores any route not in the table above and logs it.
 Browsers ask before a page opens an app, so a page cannot do even that

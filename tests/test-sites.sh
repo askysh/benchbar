@@ -136,4 +136,19 @@ assert_contains "$OUT" "[OK] Procfile.lean"
 run_fm service --yes --without-schedule --bench-dir "$BENCH"
 assert_eq "$before" "$(cat "$BENCH/Procfile.lean")"
 
+# ---- console and db: bench's own shells for the default site or --site, nothing written
+reset_calls; snap="$(snapshot "$BENCH/sites" "$FL_STATE_DIR")"
+run_fm console --bench-dir "$BENCH" </dev/null
+assert_eq "0" "$CODE" "$OUT"
+assert_calls_contain '^bench --site v16(dev|two) console$' "(the default site)"
+run_fm db --site v16two --bench-dir "$BENCH" </dev/null
+assert_eq "0" "$CODE" "$OUT"
+assert_calls_contain '^bench --site v16two mariadb$'
+assert_not_contains "$(cat "$MOCK_LOG")" "rootpw" "(db uses the site's own user, never the root password)"
+assert_eq "$snap" "$(snapshot "$BENCH/sites" "$FL_STATE_DIR")" "(console and db write nothing)"
+run_fm db --site nosuch --bench-dir "$BENCH" </dev/null
+assert_eq "1" "$CODE"; assert_contains "$OUT" "No site 'nosuch'"
+run_fm console extra --bench-dir "$BENCH" </dev/null
+assert_eq "1" "$CODE"; assert_contains "$OUT" "Unknown argument for console"
+
 printf 'test-sites: ok\n'

@@ -12,6 +12,11 @@ nonisolated enum URLRouter {
 
     enum Route: String, CaseIterable, Sendable {
         case up, down, restart, open, logs, window, doctor
+        /// Launches only: Terminal with bench's console or database, the editor.
+        case console, db, editor
+
+        /// The routes `site=` applies to.
+        var takesSite: Bool { self == .open || self == .console || self == .db }
     }
 
     /// A parsed link, before the bench is known.
@@ -19,13 +24,13 @@ nonisolated enum URLRouter {
         var route: Route
         /// `bench=`: a name or an absolute path.
         var bench: String?
-        /// `site=`: which site `open` opens.
+        /// `site=`: which site `open`, `console` and `db` use.
         var site: String?
     }
 
     /// What the app should do.
     enum Outcome: Equatable, Sendable {
-        /// Run the route on this bench (its path); `site` only for `open`.
+        /// Run the route on this bench (its path); `site` only for `open`, `console`, `db`.
         case run(Route, bench: String, site: String?)
         /// The window, with no bench in particular.
         case window
@@ -102,7 +107,7 @@ nonisolated enum URLRouter {
         }
 
         var site: String?
-        if request.route == .open, let wanted = request.site {
+        if request.route.takesSite, let wanted = request.site {
             guard let match = bench.sites.first(where: { $0.caseInsensitiveCompare(wanted) == .orderedSame }) else {
                 return .explain("\(bench.name) has no site named \"\(wanted)\".")
             }
