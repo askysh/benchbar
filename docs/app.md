@@ -93,7 +93,17 @@ Above the benches:
   runs, the keyboard shortcuts.
 - **Menu Bar**: the runner, with a live preview and custom runners, see
   [Custom runners](runners.md).
-- **Team Profiles**: see [Teams](guides/teams.md#team-profiles).
+- **Team Profiles**: every profile with where it comes from (built in,
+  local, imported, subscribed), a badge when a subscription is behind and
+  a warning when another file with the same name hides one. **Import…**
+  takes a `.toml` file or an https link (or drop the file on the page),
+  **Subscribe…** a team's git repository of profiles. Each profile's ⋯
+  menu has Export (pick each app's branch and which apps to share, then
+  Copy Import Link), Update (shows the changes first), Check Access
+  (which repositories your git credentials reach), Show in Finder and
+  Remove (moves the file aside). Import and update show what changes
+  before they write, and nothing is installed from this page. See
+  [Teams](guides/teams.md#team-profiles).
 - **About**.
 
 ![General settings: startup, notifications, the command line tool and keyboard shortcuts](images/window-general.png)

@@ -260,3 +260,20 @@ Asked for after the phases, to stop naming drift before the first release.
 - `console`, `db` and `editor` became link routes: they only open a window at a prompt, like `logs`.
 - The resource charts' time axis starts at the first sample and grows to ten minutes; memory is scaled to its own range without a fill. A fixed ten minute axis and a zero based memory scale drew a fresh bench as a sliver and a flat memory line as a solid block (found by Akash on the real Mac).
 - While resource charts are on screen the store polls every 5 seconds, as with the popover open (the same loop, no new timer), so a chart has a line within seconds.
+
+## 0.6.0: profile sharing in the app
+
+- Profile runs call the CLI directly, not through a bench's change slot: profiles live in ~/.config/benchbar and no bench is touched, so an import should not wait for a bench's build, and there may be no bench at all.
+- Each sheet has its own `@Observable` run (`ProfileExportRun`, `ProfileImportRun`, ...) like `PortSetupRun`, so the rules and the CLI arguments are tested without views and the snapshots render real plans.
+- `ProfileInfo.source` became optional and `source_kind` wins when present: 0.6.0 reuses `source` for the URL, a 0.5 CLI still sends the kind there, and both lists decode.
+- A profile row's id is name plus file: a shadowed file has the same name as the one that wins, and an id of the name alone drew the winner twice.
+- `ProfileName` is its own rule (`^[a-z0-9][a-z0-9._-]*$`), not `SiteName`: the CLI allows `_` in profile names, and `acme_hr` was refused by Create.
+- A profile link only prefills the sheet; even Review (read only, but it fetches the URL and runs git ls-remote) waits for a click, so a web page cannot make the Mac reach out. A file the user picked or dropped is reviewed right away: that was the click.
+- Links and text fields pass `ProfileSourceRule` before any argument list: import takes https or an absolute local `.toml` (links: https only), subscribe https, ssh or scp style remotes. A leading `-`, whitespace, `::` (git's `ext::` transport) and file:// are refused, so nothing can turn into a git option.
+- Add Profile only applies the plan that matches the fields as they are now; editing the source or Save As after Review needs a new Review.
+- Export works out blocked drops itself from `requires` and disables Export with the reason, and still reads the CLI's refusal JSON (exit 1) in case the two disagree.
+- Only changed branches go to `--branch APP=BR`; an unchanged row sends nothing, so the CLI's default branch logic stays the one source of truth.
+- Copy Import Link asks for the hosted https address instead of guessing it from the saved path: the app cannot know where the team puts the file.
+- Remove is offered only for imported and subscribed profiles, which the CLI moves aside; a subscribed profile's confirmation names every profile of that repository, since the whole subscription goes.
+- Scroll views in the sheets get an explicit height from their row count: a scroll view inside a sheet has no height of its own and showed only the first repository.
+- Prompts that hold a URL or `git@host` use `Text(verbatim:)`, or SwiftUI draws them as links.
