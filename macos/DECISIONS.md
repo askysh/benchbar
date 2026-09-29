@@ -260,3 +260,9 @@ Asked for after the phases, to stop naming drift before the first release.
 - `console`, `db` and `editor` became link routes: they only open a window at a prompt, like `logs`.
 - The resource charts' time axis starts at the first sample and grows to ten minutes; memory is scaled to its own range without a fill. A fixed ten minute axis and a zero based memory scale drew a fresh bench as a sliver and a flat memory line as a solid block (found by Akash on the real Mac).
 - While resource charts are on screen the store polls every 5 seconds, as with the popover open (the same loop, no new timer), so a chart has a line within seconds.
+
+## 0.6.0: dependency freshness
+
+- The focus state rides on `app list --json` (the Apps page's existing read), and the Auto / Focus / Ignore menu calls `benchbar app focus NAME [--auto]` or `app unfocus NAME` directly, not through `runChange`: a pin is a preference in the bench's state file, not a change to the bench, so it must not take the one change slot or show a banner.
+- Doctor rows are identified by id and message in the lists (`DoctorCheck.rowKey`): `dependency_behind` can appear once per stale dependency, and SwiftUI must not see duplicate ids.
+- The warning itself needs no new UI: it is a doctor WARN with a fix command, so Health and the popover show it like every other check.

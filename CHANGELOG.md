@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented here.
 
+## Unreleased
+
+### Added
+
+- Dependency freshness: doctor warns (`dependency_behind`) when an app
+  that one of your focus apps needs, directly or through another app, is
+  behind its remote branch, for example "exponent_custom_v1 (needed by
+  exponent_ecr) is 30 commits / 12 days behind upstream/develop", with
+  `benchbar app update NAME` as the fix. A focus app itself never gets
+  the warning, and the other apps get one summary line (`apps_behind`).
+  Focus apps are inferred (local changes, another branch than the
+  profile's, a commit of yours in the last 14 days) and can be pinned
+  with `benchbar app focus NAME`, `benchbar app unfocus NAME` and
+  `benchbar app focus NAME --auto`; `benchbar app focus` lists them. The
+  dependencies are fetched at most once a day, and doctor stays offline
+  safe.
+- The Apps page shows which apps are focus apps and why, how far a
+  dependency is behind, and a menu to set each app to Auto, Focus or
+  Ignore.
+
 ## 0.5.8 - 2026-09-29
 
 Quick wins, and port blocks across benches. Links for Raycast and

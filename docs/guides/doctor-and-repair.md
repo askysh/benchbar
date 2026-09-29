@@ -221,6 +221,32 @@ Each git app is on the branch `config/apps.tsv` names for the profile.
 Fix: `git fetch` and `git checkout` the policy branch in the app, only if
 you meant to follow the policy. Repair has no action here.
 
+### dependency_behind
+
+One warning for each app a focus app needs (its `required_apps` in
+`hooks.py`, followed through other apps) that is behind its remote
+branch, for example `exponent_custom_v1 (needed by exponent_ecr) is 30
+commits / 12 days behind upstream/develop`. The days are the age of the
+oldest commit you do not have yet. A focus app itself never gets this
+warning: you pull the app you work on yourself. See
+[focus apps](apps.md#focus-apps-and-their-dependencies).
+
+Doctor fetches those apps' branches at most once a day (an hour after a
+failed try), with a timeout and never with a password prompt; only
+`.git` changes. With `OFFLINE=1`, or without a network, the numbers are
+those of the last fetch, and an app never fetched is reported as
+unknown. It never fails.
+
+Fix: `benchbar app update <app>`, which shows the changelog, backs up
+the sites that have the app, fast forwards it and migrates. A dependency
+with local changes gets `git status` first. Never `bench update`.
+
+### apps_behind
+
+One line about every other app: neither a focus app nor needed by one.
+It reads the remote branches as they were last fetched (doctor does not
+fetch these) and is always OK.
+
 ### lock_parse
 
 The bench's `benchbar.toml` lockfile, when one is set, exists and parses.
