@@ -145,17 +145,22 @@ fl_cmd_site_backup() {
       "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$name")" >&3
     return 0
   fi
-  before="$(fl_backup_stamps "$dir" | head -n1)"
+  # what bench writes from now on is the new backup: two backups in one
+  # second share a timestamp, and bench then overwrites the older files,
+  # so the files' age tells, not their names
+  before="$(mktemp "${TMPDIR:-/tmp}/benchbar-backup-start.XXXXXX")"
   fl_bench_env_exports
   # frappe reads the site's settings through the bench's Redis cache
   fl_bench_redis_up "$FL_BENCH_DIR"
   if ! fl_bench_run_long "bench --site ${name} backup$([[ "$with_files" == "1" ]] && printf ' --with-files')" "$FL_BENCH_DIR" "${args[@]}"; then
+    rm -f "$before"
     fl_bench_redis_down
     fl_die "The backup of ${name} failed." "Run it by hand to see why: cd ${FL_BENCH_DIR} && ${args[*]}"
   fi
   fl_bench_redis_down
-  stamp="$(fl_backup_stamps "$dir" | head -n1)"
-  [[ -n "$stamp" && "$stamp" != "$before" ]] || fl_die "bench reported success, but ${dir} has no new backup." "Look in ${dir}"
+  stamp="$(find "$dir" -maxdepth 1 -type f -newer "$before" -name '[0-9]*_[0-9]*-*' 2>/dev/null | sed -n 's#.*/\([0-9]\{8\}_[0-9]\{6\}\)-.*#\1#p' | sort -r | head -n1)"
+  rm -f "$before"
+  [[ -n "$stamp" ]] || fl_die "bench reported success, but ${dir} has no new backup." "Look in ${dir}"
   set="$(fl_backup_set_json "$dir" "$stamp")"
   if [[ "$json" == "1" ]]; then
     printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"site":%s,"dry_run":false,"backup":%s}\n' \

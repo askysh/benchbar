@@ -55,6 +55,10 @@ assert_eq "True $BK/20260929_100002-bbtest_localhost-files.tar $BK/20260929_1000
 run_fm site backup bbtest.localhost --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "backup of bbtest.localhost: $BK/20260929_100003-bbtest_localhost-database.sql.gz"
+# two backups within one second share bench's timestamp, and bench overwrites the files: still a new backup
+MOCK_BENCH_BACKUP_STAMP=20260929_100003 run_json site backup bbtest.localhost --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT$ERR"
+assert_eq "20260929_100003" "$(printf '%s' "$OUT" | jget - 'd["backup"]["stamp"]')"
 # a failed backup says so and prints no JSON
 MOCK_BENCH_BACKUP_EXIT=1 run_json site backup bbtest.localhost --json --bench-dir "$BENCH"
 assert_eq "1" "$CODE"
