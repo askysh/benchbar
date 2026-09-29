@@ -45,6 +45,14 @@ top chooses which bench the popover shows.
 | ⌘K | Health in the BenchBar window |
 | ⌘M | The BenchBar window |
 
+## Links for Raycast and Shortcuts
+
+`benchbar://up`, `down`, `restart`, `open`, `logs`, `window` and `doctor`
+act on a bench from Raycast, Shortcuts or a script, for example
+`open "benchbar://restart?bench=frappe-bench"`. Links never repair,
+install or delete anything. The [URL scheme](/reference/url-scheme/) page
+has every route and ready to use Raycast and Shortcuts recipes.
+
 ## The BenchBar window
 
 Open it with ⌘M, **Manage Bench…** in the popover, or by

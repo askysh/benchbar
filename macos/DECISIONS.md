@@ -238,3 +238,11 @@ Asked for after the phases, to stop naming drift before the first release.
 - Route setup and hostname fixes to the persistent management window; the transient popover must not own a long-running setup sheet.
 - Keep stale diagnostic errors visible ahead of a previous passing report; Health retains full action and refresh errors.
 - Setup displays the CLI's adoption service preview alongside addresses before approval; a CLI without that preview must be upgraded before the app can apply.
+
+## 0.5.8: quick wins
+
+- `benchbar://` routes are an allow list in a pure `URLRouter` (URL and bench list in, one outcome out); a web page can open any link, so only launches and up, down, restart are routes, and anything else is ignored and logged under the `url` category, never guessed at.
+- Links go through `BenchStore.perform`, the same path as the buttons: port checks and the one change slot apply, and a busy bench ignores the link rather than queueing it.
+- The Apple Event handler is registered in `applicationWillFinishLaunching` and links wait until the first bench list is loaded, so a link that launches the app acts on real benches instead of an empty list.
+- Without `bench=` a link uses the selected bench only when it still exists, else the only bench; a stale selection or two benches with the same name open the window with a notice instead of picking one.
+- No confirmation for up, down and restart from a link: browsers already ask before a page opens an app, and a prompt would break Raycast and Shortcuts, which exist to skip clicks.

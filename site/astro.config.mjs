@@ -87,6 +87,7 @@ export default defineConfig({
             { label: 'JSON schema', slug: 'json-schema' },
             { label: 'Runners', slug: 'runners' },
             { label: 'Configuration', slug: 'reference/configuration' },
+            { label: 'URL scheme', slug: 'reference/url-scheme' },
           ],
         },
         {

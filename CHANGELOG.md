@@ -6,6 +6,10 @@ All notable changes to this project are documented here.
 
 ### Added
 
+- `benchbar://` links for Raycast, Shortcuts and scripts: `up`, `down`,
+  `restart`, `open`, `logs`, `window` and `doctor`, with `bench=` (a name
+  or a path) and `site=`. Links only start, stop and open things; any
+  other route is ignored and logged. See the URL scheme reference page.
 - Batch setup preview with stable port allocations, Automatic/Fixed modes, and
   explicit Resolve & Start. Current allocations reserve ports while stopped; stale automatic reservations
   are ignored after an external configuration change.

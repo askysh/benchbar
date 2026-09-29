@@ -1,4 +1,5 @@
 import AppKit
+import os
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settings: AppSettings!
@@ -12,6 +13,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let library = RunnerLibrary()
     private var updater: Updater?
     private var about: AboutModel!
+    /// benchbar:// links that arrived before the bench list was loaded
+    /// (a link can launch the app).
+    private var pendingURLs: [URL] = []
+    private var benchesLoaded = false
+    private static let urlLog = Logger(subsystem: "com.akashmishra.benchbar", category: "url")
+
+    /// Before launch finishes, so a link that launches the app is not lost.
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
+        NSAppleEventManager.shared().setEventHandler(
+            self, andSelector: #selector(handleGetURL(_:reply:)),
+            forEventClass: AEEventClass(kInternetEventClass), andEventID: AEEventID(kAEGetURL))
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // the tests run inside this app (TEST_HOST): no menu bar item, no CLI calls
@@ -61,6 +75,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         Task {
             await store.start()
+            benchesLoaded = true
+            let waiting = pendingURLs
+            pendingURLs = []
+            waiting.forEach(handle)
             askForCLIOnce()
         }
     }
@@ -117,6 +135,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover.close()
         settingsWindow.router.scanRequested = true
         settingsWindow.show(.discovery)
+    }
+
+    // MARK: benchbar:// links
+
+    @objc private func handleGetURL(_ event: NSAppleEventDescriptor, reply: NSAppleEventDescriptor) {
+        guard let text = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue,
+              let url = URL(string: text) else { return }
+        if benchesLoaded { handle(url) } else { pendingURLs.append(url) }
+    }
+
+    /// One link: URLRouter decides, this only carries it out. Every route is
+    /// a launch or start, stop, restart; nothing that deletes.
+    private func handle(_ url: URL) {
+        let benches = store.benches.map {
+            URLRouter.Bench(path: $0.path, name: $0.name, sites: $0.siteRows.map(\.name))
+        }
+        let link = String(url.absoluteString.prefix(300))
+        switch URLRouter.route(url, benches: benches, selected: store.selectedPath) {
+        case .ignore(let reason):
+            Self.urlLog.notice("Ignored \(link, privacy: .public): \(reason, privacy: .public)")
+        case .window:
+            openSettings()
+        case .explain(let message):
+            Self.urlLog.notice("\(link, privacy: .public): \(message, privacy: .public)")
+            settingsWindow.router.notice = message
+            openSettings()
+        case .run(let route, let path, let site):
+            guard let bench = store.benches.first(where: { $0.path == path }) else { return }
+            Self.urlLog.info("\(route.rawValue, privacy: .public) on \(bench.name, privacy: .public)")
+            switch route {
+            case .up: Task { await store.perform(.up, on: bench) }
+            case .down: Task { await store.perform(.down, on: bench) }
+            case .restart: Task { await store.perform(.restart, on: bench) }
+            case .open:
+                if let site, let row = bench.siteRows.first(where: { $0.name == site }) {
+                    Workspace.open(row.url)
+                } else {
+                    Workspace.openSite(bench)
+                }
+            case .logs: openLogs(bench)
+            case .window: openBench(bench, tab: .overview, repair: false)
+            case .doctor:
+                openBench(bench, tab: .health, repair: false)
+                Task { await store.runDoctor(on: bench) }
+            }
+        }
     }
 
     // MARK: About and Help
