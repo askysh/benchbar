@@ -252,6 +252,13 @@ cp "$TMP_DIR/share.bak" "$USER_DIR/share.toml"
 run_js profile export share --branch acme_base=version-15 --drop tool --expect "$EDIGEST" --out "$TMP_DIR/x.toml" --yes --json --bench-dir "$SHARE_BENCH"
 assert_eq "0" "$CODE" "$OUT $ERR"
 rm -f "$TMP_DIR/x.toml"
+# a reviewed branch deleted since the review: the digest no longer matches
+v15="$(git -C "$REMOTES/erpnext.git" rev-parse version-15)"
+git -C "$REMOTES/erpnext.git" update-ref -d refs/heads/version-15
+run_js profile export share --branch acme_base=version-15 --branch erpnext=version-15 --drop tool --expect "$EDIGEST" --out "$TMP_DIR/x.toml" --yes --json --bench-dir "$SHARE_BENCH"
+assert_eq "1" "$CODE"; assert_contains "$ERR" "changed since it was reviewed"
+assert_no_file "$TMP_DIR/x.toml"
+git -C "$REMOTES/erpnext.git" update-ref refs/heads/version-15 "$v15"
 run_js profile export share --drop acme_base --out "$TMP_DIR/x.toml" --yes --json --bench-dir "$SHARE_BENCH"
 assert_eq "1" "$CODE"
 assert_eq "acme_base ['acme_ecr']" "$(ex '" ".join(str(b[k]) for b in d["blocked"] for k in ("app","required_by"))')"

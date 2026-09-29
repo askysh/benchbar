@@ -739,8 +739,8 @@ EX_BLOCKED=()   # "app<TAB>required_by required_by"
 # fl_profile_export_plan OVERRIDES DROPS: fills the EX_* arrays for the
 # loaded profile. OVERRIDES is "app=branch ...", DROPS " app app ".
 fl_profile_export_plan() {
-  local overrides="$1" drops="$2" spec n b r c i=0 xr def xb ver req policy o ov bench="" d j by
-  EX_NAME=(); EX_REPO=(); EX_XREPO=(); EX_CUR=(); EX_XBR=(); EX_DEF=(); EX_VER=(); EX_ACC=(); EX_REQ=(); EX_KEEP=(); EX_COMMIT=(); EX_WARN=(); EX_BLOCKED=()
+  local overrides="$1" drops="$2" spec n b r c i=0 xr def xb ver nxb nver req policy o ov bench="" d j by
+  EX_NXB=(); EX_NVER=(); EX_NAME=(); EX_REPO=(); EX_XREPO=(); EX_CUR=(); EX_XBR=(); EX_DEF=(); EX_VER=(); EX_ACC=(); EX_REQ=(); EX_KEEP=(); EX_COMMIT=(); EX_WARN=(); EX_BLOCKED=()
   # requires from the bench's hooks.py when the file does not say (read only)
   fl_bench_detect "${OPT_BENCH_DIR:-}" >/dev/null 2>&1 || true
   [[ -n "${FL_BENCH_DIR:-}" ]] && fl_is_bench_dir "$FL_BENCH_DIR" && bench="$FL_BENCH_DIR"
@@ -757,20 +757,26 @@ fl_profile_export_plan() {
     o=""
     for ov in $overrides; do [[ "${ov%%=*}" == "$n" ]] && o="${ov#*=}"; done
     policy="$(fl_lookup_app_policy "$n" "$FL_TEAM_BASE" 2>/dev/null || true)"; policy="${policy%%|*}"
-    if [[ -n "$o" ]]; then
-      xb="$o"; ver=false; { fl_profile_branch_exists "$r" "$o" || fl_profile_branch_exists "$xr" "$o"; } && ver=true
-      [[ "$ver" == "true" ]] || EX_WARN+=("${n}: branch ${o} was not found in ${xr}")
-    elif [[ "$b" == "${FL_FRAPPE_BRANCH:-}" || ( -n "$policy" && "$b" == "$policy" ) ]]; then
+    # the plan's own branch and whether it exists, before any --branch: the
+    # digest covers these, so a reviewed branch deleted since is caught
+    if [[ "$b" == "${FL_FRAPPE_BRANCH:-}" || ( -n "$policy" && "$b" == "$policy" ) ]]; then
       # an app on the base's release branch (erpnext, hrms or india_compliance on
       # version-15) keeps it: its default branch is develop, which needs another frappe
-      xb="$b"; ver=false; { fl_profile_branch_exists "$r" "$b" || fl_profile_branch_exists "$xr" "$b"; } && ver=true
-      [[ -n "$def" && "$def" != "$b" ]] && EX_WARN+=("${n}: keeps ${b}, the ${FL_TEAM_BASE} release branch (its default branch is ${def})")
+      nxb="$b"; nver=false; { fl_profile_branch_exists "$r" "$b" || fl_profile_branch_exists "$xr" "$b"; } && nver=true
+      [[ -z "$o" && -n "$def" && "$def" != "$b" ]] && EX_WARN+=("${n}: keeps ${b}, the ${FL_TEAM_BASE} release branch (its default branch is ${def})")
     elif [[ -n "$def" ]]; then
-      xb="$def"; ver=true
+      nxb="$def"; nver=true
     else
-      xb="$b"; ver=false
-      EX_WARN+=("${n}: could not read the default branch of ${xr}${FL_PROFILE_ERR:+ (${FL_PROFILE_ERR})}; keeping ${b}")
+      nxb="$b"; nver=false
+      [[ -z "$o" ]] && EX_WARN+=("${n}: could not read the default branch of ${xr}${FL_PROFILE_ERR:+ (${FL_PROFILE_ERR})}; keeping ${b}")
     fi
+    if [[ -z "$o" ]]; then xb="$nxb"; ver="$nver"
+    elif [[ "$o" == "$nxb" ]]; then xb="$o"; ver="$nver"
+    else
+      xb="$o"; ver=false; { fl_profile_branch_exists "$r" "$o" || fl_profile_branch_exists "$xr" "$o"; } && ver=true
+    fi
+    [[ -n "$o" && "$ver" != "true" ]] && EX_WARN+=("${n}: branch ${o} was not found in ${xr}")
+    EX_NXB+=("$nxb"); EX_NVER+=("$nver")
     EX_NAME+=("$n"); EX_REPO+=("$r"); EX_XREPO+=("$xr"); EX_CUR+=("$b"); EX_XBR+=("$xb"); EX_DEF+=("$def"); EX_VER+=("$ver")
     EX_ACC+=("$(fl_profile_access "$xr")"); EX_REQ+=("$req")
     if [[ "$xb" == "$b" ]]; then EX_COMMIT+=("$c"); else EX_COMMIT+=(""); fi
@@ -821,14 +827,15 @@ fl_profile_export_render() {
 }
 
 # fl_profile_export_digest FILE: sha256 of what the plan read and showed,
-# before any choice: the file, and each app's repo, exported URL, branches,
-# access and requires. export --expect refuses a plan that moved on.
+# before any choice: the file, and each app's repo, exported URL, branches
+# (the plan's own one and whether it exists), access and requires. export --expect refuses a plan that moved on.
 fl_profile_export_digest() {
   local i=0
   {
     fl_profile_file_digest "$1"
     while [[ "$i" -lt "${#EX_NAME[@]}" ]]; do
-      printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "${EX_NAME[$i]}" "${EX_REPO[$i]}" "${EX_XREPO[$i]}" "${EX_CUR[$i]}" "${EX_DEF[$i]}" "${EX_ACC[$i]}" "${EX_REQ[$i]}"
+      printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "${EX_NAME[$i]}" "${EX_REPO[$i]}" "${EX_XREPO[$i]}" "${EX_CUR[$i]}" "${EX_DEF[$i]}" \
+        "${EX_NXB[$i]}" "${EX_NVER[$i]}" "${EX_ACC[$i]}" "${EX_REQ[$i]}"
       i=$((i + 1))
     done
   } | shasum -a 256 | awk '{print $1}'
