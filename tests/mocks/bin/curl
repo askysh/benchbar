@@ -21,6 +21,10 @@ case "$url" in
   *"/releases/latest"|*"/releases/tags/"*)
     if [[ -f "${MOCK_STATE:-/nonexistent}/release.json" ]]; then cat "${MOCK_STATE}/release.json"; exit 0; fi
     echo "curl: (22) The requested URL returned error: 404" >&2; exit 22 ;;
+  # the one line installer (benchbar self-update): $MOCK_STATE/installer.sh
+  */install.sh)
+    if [[ -f "${MOCK_STATE:-/nonexistent}/installer.sh" ]]; then cat "${MOCK_STATE}/installer.sh"; exit 0; fi
+    echo "curl: (22) The requested URL returned error: 404" >&2; exit 22 ;;
   *BenchBar-*.zip) [[ -n "$out" ]] && cp "${MOCK_STATE:?}/release.zip" "$out"; exit 0 ;;
   *SHA256SUMS) [[ -n "$out" ]] && cp "${MOCK_STATE:?}/release.sums" "$out"; exit 0 ;;
 esac
