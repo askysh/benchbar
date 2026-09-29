@@ -1061,7 +1061,7 @@ fl_cmd_profile_import() {
       printf '{"schema_version":%d,"cli_version":"%s","name":%s,"source":%s,"exists":%s,"diff":%s,"base":%s,"apps":%s,"check":{"repos":%s},"skipped_apps":%s,"digest":"%s"}\n' \
         "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$name")" "$(fl_json_str "$FL_PROFILE_RECORD")" "$exists" "$(fl_profile_json_text "$diff")" \
         "$(fl_json_str "$FL_TEAM_BASE")" "$(fl_profile_import_apps_json)" "$(fl_profile_check_repos_json)" "$(fl_profile_json_list ${CK_SKIPPED[@]+"${CK_SKIPPED[@]}"})" \
-        "$(fl_profile_file_digest "$tmp")" >&3
+        "$(fl_profile_import_digest "$tmp" "$target")" >&3
     else
       fl_info "${src}: team profile ${name}, base ${FL_TEAM_BASE}, ${#FL_TEAM_APPS[@]} app(s)$([[ "$exists" == true ]] && printf ', replaces %s' "$target")"
       [[ -n "$diff" ]] && printf '%s\n' "$diff" | sed 's/^/    /'
@@ -1070,9 +1070,9 @@ fl_cmd_profile_import() {
     rm -f "$tmp"
     return 0
   fi
-  if [[ -n "$expect" && "$expect" != "$(fl_profile_file_digest "$tmp")" ]]; then
+  if [[ -n "$expect" && "$expect" != "$(fl_profile_import_digest "$tmp" "$target")" ]]; then
     rm -f "$tmp"
-    fl_die "${src} changed since it was reviewed. Nothing was imported." "Review it again: benchbar profile import ${src} --as ${name} --plan"
+    fl_die "${src} or ${target} changed since it was reviewed. Nothing was imported." "Review it again: benchbar profile import ${src} --as ${name} --plan"
   fi
   fl_info "${src}: team profile ${name}, base ${FL_TEAM_BASE}, ${#FL_TEAM_APPS[@]} app(s)"
   fl_write_reviewed "$target" "$tmp" "team profile ${name}" || code=1
@@ -1250,13 +1250,27 @@ fl_profile_update_add() {
 # can refuse content that changed after the plan showed it
 fl_profile_file_digest() { shasum -a 256 "$1" | awk '{print $1}'; }
 
-# fl_profile_update_digest: one digest over every update's reviewed state:
-# the fetched file of an import, the upstream commit of a subscription
+# fl_profile_import_digest NEW TARGET: the file import would write and the
+# one it would replace (or its absence), so a local edit after the review
+# also makes the review stale
+fl_profile_import_digest() {
+  { fl_profile_file_digest "$1"; if [[ -f "$2" ]]; then fl_profile_file_digest "$2"; else printf 'absent\n'; fi; } | shasum -a 256 | awk '{print $1}'
+}
+
+# fl_profile_update_digest: one digest over every update's reviewed state,
+# both sides of each diff: an import's fetched file and the local file it
+# replaces, a subscription's upstream commit and the clone's HEAD
 fl_profile_update_digest() {
-  local i=0
+  local i=0 new old
   while [[ "$i" -lt "${#UP_NAME[@]}" ]]; do
-    printf '%s\t%s\t%s\n' "${UP_KIND[$i]}" "${UP_NAME[$i]}" \
-      "$(if [[ -n "${UP_NEW[$i]}" ]]; then fl_profile_file_digest "${UP_NEW[$i]}"; else printf '%s' "${UP_TO[$i]:--}"; fi)"
+    if [[ "${UP_KIND[$i]}" == "imported" ]]; then
+      new="-"; [[ -n "${UP_NEW[$i]}" ]] && new="$(fl_profile_file_digest "${UP_NEW[$i]}")"
+      old="-"; [[ -f "${UP_PATH[$i]}" ]] && old="$(fl_profile_file_digest "${UP_PATH[$i]}")"
+    else
+      new="${UP_TO[$i]:--}"
+      old="$(fl_profile_git "${UP_PATH[$i]}" rev-parse -q --verify HEAD 2>/dev/null || printf -- -)"
+    fi
+    printf '%s\t%s\t%s\t%s\n' "${UP_KIND[$i]}" "${UP_NAME[$i]}" "$new" "$old"
     i=$((i + 1))
   done | shasum -a 256 | awk '{print $1}'
 }
@@ -1328,7 +1342,7 @@ fl_cmd_profile_update() {
   fi
   if [[ -n "$expect" && "$expect" != "$(fl_profile_update_digest)" ]]; then
     i=0; while [[ "$i" -lt "${#UP_NAME[@]}" ]]; do [[ -n "${UP_NEW[$i]}" ]] && rm -f "${UP_NEW[$i]}"; i=$((i + 1)); done
-    fl_die "The update changed since it was reviewed (the source has newer content). Nothing was changed." \
+    fl_die "The update changed since it was reviewed (newer content at the source, or a local change). Nothing was changed." \
       "Review it again: benchbar profile update ${target:---all} --plan"
   fi
   while [[ "$i" -lt "${#UP_NAME[@]}" ]]; do

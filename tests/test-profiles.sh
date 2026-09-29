@@ -358,6 +358,19 @@ sed_inplace 's/^description = "Acme ECR"$/description = "Acme ECR 2"/' "$EXPORTE
 run_js profile import "$EXPORTED" --as shared --plan --json
 assert_eq "True" "$(ex 'd["exists"]')"
 assert_contains "$(ex 'd["diff"]')" '+description = "Acme ECR 2"'
+# the local file edited after the review: the reviewed diff is no longer
+# what would be replaced, so --expect refuses
+IDIGEST="$(ex 'd["digest"]')"
+cp "$USER_DIR/shared.toml" "$TMP_DIR/shared-local.bak"
+printf '# my local note\n' >>"$USER_DIR/shared.toml"
+run_js profile import "$EXPORTED" --as shared --expect "$IDIGEST" --yes --json
+assert_eq "1" "$CODE"; assert_contains "$ERR" "changed since it was reviewed"
+grep -q '^# my local note$' "$USER_DIR/shared.toml" || fail "a stale import review keeps the local edit"
+run_js profile update shared --plan --json
+UDIGEST0="$(ex 'd["digest"]')"
+cp "$TMP_DIR/shared-local.bak" "$USER_DIR/shared.toml"
+run_js profile update shared --expect "$UDIGEST0" --yes --json
+assert_eq "1" "$CODE" "(update: the local file changed since its review)"; assert_contains "$ERR" "changed since it was reviewed"
 run_fm profile import "$EXPORTED" --as shared
 assert_eq "1" "$CODE"
 grep -q '^description = "Acme ECR"$' "$USER_DIR/shared.toml" || fail "not confirmed, not written"
