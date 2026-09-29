@@ -132,6 +132,12 @@ bench: it never adopts, installs or updates a bench and never runs
 replaced there when that folder is writable (the app and `self-update`
 pass `BENCHBAR_APP_DIR=/Applications`).
 
+The pull is a fast forward only: local changes in
+`~/.local/share/benchbar` stop it with a message instead of being
+overwritten. After an update, run `benchbar doctor`: when it says the
+runner is outdated, `benchbar repair` rewrites it, and a running bench
+picks it up on its next start.
+
 If your `benchbar` is a git checkout of your own, for example
 `~/dev/benchbar`, the app and `self-update` update only the app
 (`--app-only`) and tell you to update the CLI with `git pull` in that
