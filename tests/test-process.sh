@@ -71,6 +71,15 @@ assert_eq "0" "$CODE" "$OUT"
 grep -q "^700 " "$MOCK_PROCS" || fail "an unrelated server on the bench's web port must survive benchdown"
 ! grep -q "^701 " "$MOCK_PROCS" || fail "the bench's own redis listener should have been stopped"
 
+# a listener whose folder cannot be read is not proven to be this bench's
+: >"$MOCK_PROCS"; : >"$MOCK_LISTEN"; : >"$MOCK_STATE/killed"
+add_proc 702 "node server.js"
+rm -f "$MOCK_STATE/cwd/702"
+add_listener 9000 702 node
+run_fm down --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+grep -q "^702 " "$MOCK_PROCS" || fail "a listener with an unreadable folder must survive benchdown"
+
 # "down" while nothing runs is fine and idempotent
 : >"$MOCK_PROCS"
 run_fm down --bench-dir "$BENCH"

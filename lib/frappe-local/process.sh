@@ -48,12 +48,12 @@ fl_bench_socketio_pids() {
 
 # Listeners on the bench's ports that run inside the bench folder (redis,
 # web and socketio start there). A listener elsewhere on the same port, such
-# as another bench or an unrelated server, is never this bench's to stop; an
-# unreadable folder counts as the bench's, like fl_pids_in_bench.
+# as another bench or an unrelated server, is never this bench's to stop, and
+# neither is one whose folder cannot be read: stopping needs proof.
 fl_bench_listener_pids() {
   local pid
   { lsof -ti "tcp:$(fl_bench_ports_csv)" -sTCP:LISTEN 2>/dev/null || true; } | while IFS= read -r pid; do
-    [[ -n "$pid" ]] && fl_pid_is_bench_own "$pid" && printf '%s\n' "$pid"
+    [[ -n "$pid" ]] && fl_pid_is_bench_own_strict "$pid" && printf '%s\n' "$pid"
   done
   return 0
 }
