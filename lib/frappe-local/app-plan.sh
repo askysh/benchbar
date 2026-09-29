@@ -165,7 +165,14 @@ fl__ap_required() {
       fi
     fi
     if [[ "$resolves" == "1" ]] && ! fl__ap_plain "$dep" "$repo" "$branch"; then repo="${repo//|/}"; branch="${branch//|/}"; resolves=0; fi
-    if [[ "$resolves" != "1" ]]; then AP_REQ+=("${dep}|${parent}|${present}|${resolves}|${source}|${repo}|${branch}|"); continue; fi
+    if [[ "$resolves" != "1" ]]; then
+      AP_REQ+=("${dep}|${parent}|${present}|${resolves}|${source}|${repo}|${branch}|")
+      # a present app's own required_apps count too: one of them may be missing
+      if [[ "$present" == "1" ]]; then
+        while IFS= read -r line; do [[ -n "$line" ]] && queue+=("${line}|${dep}"); done < <(fl_app_required_apps "$(fl_app_existing_dir "$dep")")
+      fi
+      continue
+    fi
     if fl__ap_read_hooks "$repo" "$branch" "$dep"; then
       AP_REQ+=("${dep}|${parent}|${present}|${resolves}|${source}|${repo}|${branch}|${AP__SHA}")
       AP_DEPS=("${dep}|${repo}|${branch}|${AP__SHA}" ${AP_DEPS[@]+"${AP_DEPS[@]}"})

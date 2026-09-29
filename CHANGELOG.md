@@ -109,6 +109,8 @@ All notable changes to this project are documented here.
   commit, and planning the app again is not refused.
 - A team profile that lists the same app twice is refused with a clear
   error; the app's Export sheet crashed on it.
+- `app add` plans follow the requirements of a required app that is
+  already in the bench, so an app it needs that is missing is planned too.
 - Dependency freshness read `required_apps` only when an app's folder
   and package had the same name, so a folder like `apps/Raven` lost its
   dependencies. A `doctor --fetch` where some fetches failed also

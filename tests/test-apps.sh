@@ -392,6 +392,20 @@ assert_contains "$ERR" "apps/acme_tagged is at tag v1.0.0"
 run_json app add "file://${REMOTES}/acme_tagged.git" --branch v1.0.0 --site plansite --dry-run --json --bench-dir "$PB"
 assert_eq "0" "$CODE" "$ERR"
 assert_eq "True False" "$(printf '%s' "$OUT" | jget - '" ".join(str(x) for x in [d["present"], d["changes"]])')"
+# a present required app's own requirements are followed: acme_newtop needs
+# acme_host (in the bench), which needs acme_far (not yet)
+make_app_remote acme_far
+add_policy acme_far main
+mkdir -p "$PB/apps/acme_host/acme_host"
+printf 'required_apps = ["acme_far"]\n' >"$PB/apps/acme_host/acme_host/hooks.py"
+printf 'acme_host\n' >>"$PB/sites/apps.txt"
+make_app_remote acme_newtop acme_host
+run_json app add "file://${REMOTES}/acme_newtop.git" --branch main --dry-run --json --bench-dir "$PB"
+assert_eq "0" "$CODE" "$ERR"
+assert_eq "['acme_far']" "$(printf '%s' "$OUT" | jget - 'd["missing_required"]')"
+assert_eq "acme_host:True acme_far:False" "$(printf '%s' "$OUT" | jget - '" ".join("%s:%s" % (r["name"], r["present"]) for r in d["required_apps"])')"
+assert_contains "$(printf '%s' "$OUT" | jget - '",".join(s["name"] for s in d["steps"])')" "Clone acme_far"
+rm -rf "$PB/apps/acme_host"; sed_inplace '/^acme_host$/d' "$PB/sites/apps.txt"
 # a branch with '|' (git allows it): refused in the plan, never split at apply
 make_app_remote acme_pipe
 git -C "$REMOTES/acme_pipe.git" branch 'feature|x' main
