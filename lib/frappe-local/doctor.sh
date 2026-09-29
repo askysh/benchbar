@@ -12,8 +12,9 @@ FL_D_ACTION=()
 fl_doctor_reset() { FL_D_IDS=(); FL_D_STATUS=(); FL_D_MSG=(); FL_D_FIX=(); FL_D_ACTION=(); }
 
 # fl_doctor_run [GROUP...]: runs every check (or only the given groups).
+CHK_MORE=()
 fl_doctor_run() {
-  local id groups="$*" g
+  local id groups="$*" g row
   fl_doctor_reset
   # a plan may add checks (port_block while ports move)
   for id in ${FL_PLAN_CHECKS:-} $FL_CHECK_ORDER; do
@@ -21,10 +22,19 @@ fl_doctor_run() {
     if [[ -n "$groups" ]]; then
       case " $groups " in *" $g "*) ;; *) continue ;; esac
     fi
-    CHK_STATUS=""; CHK_MSG=""; CHK_FIX=""; CHK_ACTION=""
+    CHK_STATUS=""; CHK_MSG=""; CHK_FIX=""; CHK_ACTION=""; CHK_MORE=()
     "chk_${id}" || true
-    FL_D_IDS+=("$id"); FL_D_STATUS+=("$CHK_STATUS"); FL_D_MSG+=("$CHK_MSG"); FL_D_FIX+=("$CHK_FIX"); FL_D_ACTION+=("$CHK_ACTION")
-    fl_log "check ${id}: ${CHK_STATUS} ${CHK_MSG}"
+    # a check may report one row per finding instead (CHK_MORE, \037
+    # separated status, message, fix, action), all under its id
+    if [[ -n "$CHK_STATUS" || "${#CHK_MORE[@]}" == "0" ]]; then
+      FL_D_IDS+=("$id"); FL_D_STATUS+=("$CHK_STATUS"); FL_D_MSG+=("$CHK_MSG"); FL_D_FIX+=("$CHK_FIX"); FL_D_ACTION+=("$CHK_ACTION")
+      fl_log "check ${id}: ${CHK_STATUS} ${CHK_MSG}"
+    fi
+    for row in ${CHK_MORE[@]+"${CHK_MORE[@]}"}; do
+      IFS=$'\037' read -r CHK_STATUS CHK_MSG CHK_FIX CHK_ACTION <<<"$row"
+      FL_D_IDS+=("$id"); FL_D_STATUS+=("$CHK_STATUS"); FL_D_MSG+=("$CHK_MSG"); FL_D_FIX+=("$CHK_FIX"); FL_D_ACTION+=("$CHK_ACTION")
+      fl_log "check ${id}: ${CHK_STATUS} ${CHK_MSG}"
+    done
   done
 }
 
