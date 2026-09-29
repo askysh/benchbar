@@ -35,6 +35,10 @@ benchbar app add NAME|URL [--branch B] [--name N] [--site S | --all-sites]
 
 `bench get-app` from `config/apps.tsv` or any git URL (GitHub, SSH, a
 host alias), after checking that git can read it. Never replaces an app.
+It shows the plan and asks first. Then it clones, builds, installs the
+app on the sites you name (`bench install-app`, which writes its tables
+into each site's database) and restarts the bench when it is running.
+The app's own code runs on your Mac, so add only repos you trust.
 
 | Flag | What it does |
 |---|---|

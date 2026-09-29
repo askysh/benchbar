@@ -267,6 +267,11 @@ bench's path.
    benchbar uninstall-service --bench-dir ~/frappe-bench
    ```
 
+   The shell helpers are one block in `~/.zshrc` shared by every bench,
+   so `benchup` and the other helpers go away for your other benches
+   too. When another bench remains, `benchbar repair --bench-dir PATH`
+   on it writes the block again.
+
 2. Drop each site's database while the bench folder still exists: the
    database name and user are only written in the site's
    `site_config.json`. Look them up, then drop both in `mariadb -u root

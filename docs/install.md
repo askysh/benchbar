@@ -21,8 +21,8 @@ The installer checks macOS, the Command Line Tools and Homebrew, clones
 the CLI into `~/.local/share/benchbar` with links in `~/.local/bin`, adds
 that folder to `~/.zshrc`, and installs the BenchBar app from the latest
 release into `~/Applications` after checking its sha256. It then offers
-`benchbar adopt` for a bench it finds, or `benchbar install`. It never
-runs `sudo`.
+`benchbar adopt` for a bench it finds, or `benchbar install`. The
+installer itself never runs `sudo`.
 
 In more detail, in this order, and it says so before each step:
 
@@ -39,9 +39,12 @@ In more detail, in this order, and it says so before each step:
    exists yet.
 4. It offers `benchbar adopt` for a bench it finds, or `benchbar install`.
 
-The only step that may ask for your password is Homebrew's own
-installer, and it says so first. Prompts read from the terminal, so the
-installer works when piped from `curl`.
+The installer never runs `sudo` itself. Homebrew's own installer, if
+you accept it in step 1, asks for your password and says so first. If
+you accept `benchbar install` or `benchbar adopt` in step 4, that
+command asks for it once too, for the `/etc/hosts` line and the
+wkhtmltopdf package. Prompts read from the terminal, so the installer
+works when piped from `curl`.
 
 ### Installer flags
 
@@ -82,15 +85,21 @@ The app needs the CLI. Install it with the one line installer and
 
 ## From source
 
+The CLI runs straight from the clone. Building the app needs full Xcode
+26 or newer, not only the Command Line Tools.
+
 ```bash
 git clone https://github.com/askysh/benchbar.git && cd benchbar
-./benchbar install                 # the CLI needs nothing else
+./benchbar install                 # optional: sets up a bench and a site, as in the Quick start
 brew install xcodegen
 scripts/release-local.sh           # the app: dist/BenchBar-<version>.zip and .dmg
 scripts/macos-install-local.sh     # or build it and copy it to ~/Applications
 ```
 
-The app needs full Xcode 26 or newer.
+`./benchbar install` is the full setup: Homebrew packages, a bench, a
+site and the background service. It asks for passwords and `sudo`, and
+the first run takes a while. Skip it when you only want to work on the
+app or adopt a bench you have.
 
 ## Updating
 
@@ -123,6 +132,12 @@ bench: it never adopts, installs or updates a bench and never runs
 replaced there when that folder is writable (the app and `self-update`
 pass `BENCHBAR_APP_DIR=/Applications`).
 
+The pull is a fast forward only: local changes in
+`~/.local/share/benchbar` stop it with a message instead of being
+overwritten. After an update, run `benchbar doctor`: when it says the
+runner is outdated, `benchbar repair` rewrites it, and a running bench
+picks it up on its next start.
+
 If your `benchbar` is a git checkout of your own, for example
 `~/dev/benchbar`, the app and `self-update` update only the app
 (`--app-only`) and tell you to update the CLI with `git pull` in that
@@ -136,13 +151,43 @@ Open a new Terminal tab, or run `source ~/.zshrc`, so `benchbar` and the
 
 ## Uninstall
 
+Uninstalling removes BenchBar, not your benches: every bench, site,
+database and Homebrew package stays. Two things are worth knowing
+first:
+
+- Removing a bench's agent stops that bench. Without the agent it no
+  longer runs in the background; you can still run it by hand with
+  `bench start` in its folder.
+- Removing the checkout, `~/.local/share/benchbar`, also deletes its
+  `.benchbar/` folder: the logs and file backups of every benchbar run
+  and the settings benchbar keeps for each bench. Copy `.benchbar/`
+  somewhere else first if you may want them.
+
+To see the plan without changing anything, then to uninstall:
+
 ```bash
-benchbar uninstall-service     # remove the agent, runner, Procfile.lean and helpers; keep the bench
+curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash -s -- --uninstall --dry-run
 curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash -s -- --uninstall
 ```
 
-The second line removes the app, the links and the PATH block, and offers
-to remove the agents and the checkout (with `--yes`: yes to both).
-Benches, sites and databases are never deleted by benchbar; the recipe
-for wiping one by hand is in
+It removes the app, the `benchbar` and `frappe-mac` links and the PATH
+block. Then it asks, for each bench's agent, whether to stop the bench
+and remove its agent, runner and `Procfile.lean`, and last whether to
+delete the checkout. Answer no to keep either. With `--yes` the answer
+to both is yes.
+
+To remove only the background service of one bench and keep BenchBar:
+
+```bash
+benchbar uninstall-service --bench-dir ~/frappe-bench   # use your bench's folder
+```
+
+It stops the bench and removes its agent, runner and `Procfile.lean`.
+It also removes the `# >>> benchbar >>>` block from `~/.zshrc`, so
+`benchup` and the other helpers are gone for every bench until
+`benchbar repair` on a remaining bench writes the block again.
+
+benchbar never deletes a whole bench. The only commands that drop or
+overwrite a site's database, `benchbar site drop` and `benchbar pull
+--replace`, back it up first. To wipe a bench by hand, see
 [Troubleshooting](troubleshooting.md#wiping-a-bench).

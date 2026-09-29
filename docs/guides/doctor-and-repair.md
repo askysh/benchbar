@@ -9,6 +9,13 @@ benchbar repair --dry-run    # show the plan, change nothing
 benchbar repair              # apply, with a confirmation prompt
 ```
 
+A few names used below: the **launchd agent** is the macOS background
+job that runs the bench; **honcho** is the process manager that starts
+the processes listed in **`Procfile.lean`**; the **runner** is the
+script the agent starts; the **stop flag** is the file that says
+whether the bench was stopped on purpose (`manual`) or paused after
+crashes (`crash`), so it is not restarted.
+
 Doctor checks the Homebrew formulae, the bench env, `bench version`, the
 socket.io module, the built assets that `assets.json` references, honcho,
 `Procfile.lean`, the runner, the launchd agent and its last exit code,
@@ -21,8 +28,11 @@ variables, stale processes on the bench's ports, the site
 ping, `/etc/hosts`, log sizes, CleanMyMac, Mole, and port clashes with
 other benches. Every warning and failure names its fix.
 
-Repair runs only the flagged fixes, in dependency order. A broken `env/`
-is moved to `env.broken.<timestamp>`, never deleted. The most common case,
+Repair runs only the flagged fixes, in dependency order, and shows the
+plan before it asks. A broken `env/` is moved to
+`env.broken.<timestamp>`, never deleted. When every check passes, repair
+prints `unchanged: all N checks pass, nothing to do`, and a second run
+after a repair should say the same. The most common case,
 a cleanup tool that removed `env/`, `node_modules` and the built assets,
 is covered in [Troubleshooting](../troubleshooting.md#the-cleanup-tool-case).
 
@@ -79,7 +89,10 @@ bind address drop-in `frappe-mac-local-only.cnf` exists. A server
 reachable from the network is a warning.
 
 Fix: `benchbar repair` writes the drop-in into
-`$(brew --prefix)/etc/my.cnf.d/` and restarts MariaDB.
+`$(brew --prefix)/etc/my.cnf.d/` and restarts MariaDB when it is
+running. Every bench on this Mac shares that server, so running benches
+lose their database for a few seconds; stop them first, or repair when
+nothing is mid request.
 
 ### mariadb_utf8
 
@@ -88,7 +101,10 @@ current, and `my.cnf` includes that folder. Frappe needs utf8mb4 server
 wide. A drop-in written by someone else that sets utf8mb4 is accepted and
 left alone. Doctor reads the files only; it never logs in to MariaDB.
 
-Fix: `benchbar repair` writes the drop-in and the `!includedir` line.
+Fix: `benchbar repair` writes the drop-in and the `!includedir` line,
+then restarts MariaDB when it is running and the drop-in changed. As
+with `mariadb_bind`, every running bench loses its database for a few
+seconds.
 
 ### pdf_engine
 
@@ -106,7 +122,9 @@ Chromium: `cd <bench> && bench setup-chrome`.
 Nothing listens on port 6379. The bench runs its own Redis on its port
 block, so a Homebrew Redis on 6379 is unused.
 
-Fix: `brew services stop redis`, only if nothing else needs it.
+Fix: `brew services stop redis`, only if nothing else on this Mac needs
+it. `benchbar repair` offers the same and asks first; under `--yes` it
+leaves Redis running and prints the command.
 
 ### cleanmymac
 
@@ -127,10 +145,11 @@ deletes their `node_modules` and `dist` folders and any folder with a
 when a line there is the bench folder or a folder above it. Lines with
 `*`, `?` or `[` are not read.
 
-Fix: `echo '<bench>' >> ~/.config/mole/whitelist`. When that file does
-not exist yet, run `mo clean --whitelist` and save once first: a
-whitelist file replaces Mole's built in entries, and its editor writes
-them into the new file.
+Fix: when `~/.config/mole/whitelist` does not exist yet, first run
+`mo clean --whitelist` and save once: a whitelist file replaces Mole's
+built in entries, and its editor writes them into the new file. Then
+add the bench folder, with your bench's path in place of `<bench>`:
+`echo '<bench>' >> ~/.config/mole/whitelist`.
 
 ### full_disk_access
 

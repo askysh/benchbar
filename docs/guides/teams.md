@@ -40,6 +40,9 @@ benchbar profile show acme
 benchbar install --profile acme                           # a new Mac, the same bench
 ```
 
+`~/frappe-bench` is an example: use your bench's folder. `profile
+create` only reads the bench.
+
 The file is a strict subset of TOML (strings, booleans, integers and
 one line lists; no escapes, no inline tables), and a repo URL with a
 user name or token is refused, since the file is meant to be committed.
@@ -96,14 +99,18 @@ Import takes a local file or an https URL (a GitHub file or gist page is
 fetched raw), 64 KB at most, and writes
 `~/.config/benchbar/profiles/NAME.toml` with its `source`, only after it
 parses. A file of the same name is diffed and replaced only when you
-confirm. `check` asks git, with your own keys and tokens and never a
+confirm. A profile names the repos `install` clones, and their code runs
+in your bench, so import only from people you trust and read the app
+list in the plan (`--plan` shows it without writing anything). `check` asks git, with your own keys and tokens and never a
 prompt, whether each repo and branch can be read. `install --profile`
 does the same and leaves out the apps it cannot clone, and every app that
 requires one, and lists them in its plan and at the end.
 
 `benchbar profile update acme` fetches the source again, shows the diff
-and asks. `benchbar profile remove acme` moves the file to
-`~/.config/benchbar/removed/`.
+and asks. `benchbar profile remove acme` moves an imported file to
+`~/.config/benchbar/removed/`. For a profile that came from a
+subscription, it moves the whole subscription aside, with every profile
+in it. It never removes a file you wrote yourself.
 
 ### Subscribing to a team's config repo
 
@@ -183,9 +190,10 @@ benchbar pull --from-dir ~/Downloads/erp-backup --as erpcopy   # a Frappe Cloud 
 already exists on the server, so nothing is written there (`--new-backup`
 runs `bench backup` first, which also deletes older backups on the server,
 so it asks you to type the site name). The download resumes when the link
-drops. The copy always goes into a new local site (`--replace` backs an
-existing one up first), gets the production `encryption_key` so stored
-passwords still decrypt, has email muted and the scheduler paused before it
+drops. The copy goes into a new local site: pull refuses a site name
+that exists. `--replace` overwrites that site's database and files
+instead, after backing it up and asking again. The copy gets the
+production `encryption_key` so stored passwords still decrypt, has email muted and the scheduler paused before it
 ever starts, and runs `bench migrate` when your apps are newer. When the
 bench lacks an app production has, pull stops and prints the
 `bench get-app` command; `--skip-app APP` restores without it. Encrypted

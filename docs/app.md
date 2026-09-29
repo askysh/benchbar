@@ -71,9 +71,13 @@ opening BenchBar again from Finder or Spotlight. It has a page per bench:
   (read only); bring it in line with `benchbar lock apply` in Terminal.
 - **Sites**: add a site (it asks for the Administrator password), make
   one the default, open any of them. The ⋯ menu of a site backs it up
-  (with or without files) and shows the last backup in Finder; **Drop
-  Site…** shows the plan, asks you to type the site name, and reports
-  where bench put the backup. Removing the site's `/etc/hosts` line needs
+  (with or without files) and shows the last backup in Finder. **Drop
+  Site…** deletes the site's database and database user for good; only
+  the backup bench takes first (with files) can bring it back. The sheet
+  shows that plan, asks you to type the site name, and reports where the
+  backup went: the site folder with it moves to `archived/sites/` in the
+  bench. The default site can be dropped only by naming the site that
+  takes its place, and the only site of a bench cannot be dropped. Removing the site's `/etc/hosts` line needs
   your password, so the sheet shows that command to run in Terminal.
 - **Apps**: add an app from the registry or any GitHub URL, install it on
   a site, and update it after reading the changelog. Right click a bench
@@ -101,7 +105,8 @@ Above the benches:
   menu has Export (pick each app's branch and which apps to share, then
   Copy Import Link), Update (shows the changes first), Check Access
   (which repositories your git credentials reach), Show in Finder and
-  Remove (moves the file aside). Import and update show what changes
+  Remove (moves the file aside; for a subscribed profile, the whole
+  subscription with every profile in it). Import and update show what changes
   before they write, and nothing is installed from this page. See
   [Teams](guides/teams.md#team-profiles).
 - **About**: the versions, Check for Updates, Report a Bug.
