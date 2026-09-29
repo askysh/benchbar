@@ -747,16 +747,20 @@ fl_profile_export_plan() {
     if [[ -z "$req" && -n "$bench" && -d "${bench}/apps/${n}" ]]; then req="$(fl_app_required_apps "$n" | tr '\n' ' ')"; req="${req% }"; fi
     xr="$(fl_profile_export_url "$r")"
     [[ "$xr" != "$r" ]] && EX_WARN+=("${n}: ${r} is written as ${xr}")
-    def="$(fl_profile_default_branch "$xr")"
+    # ask git with the URL as it is on this Mac (an SSH alias carries the key
+    # for that account), write the portable one
+    def="$(fl_profile_default_branch "$r")"
+    [[ -z "$def" && "$xr" != "$r" ]] && def="$(fl_profile_default_branch "$xr")"
     o=""
     for ov in $overrides; do [[ "${ov%%=*}" == "$n" ]] && o="${ov#*=}"; done
     policy="$(fl_lookup_app_policy "$n" "$FL_TEAM_BASE" 2>/dev/null || true)"; policy="${policy%%|*}"
     if [[ -n "$o" ]]; then
-      xb="$o"; ver=false; fl_profile_branch_exists "$xr" "$o" && ver=true
+      xb="$o"; ver=false; { fl_profile_branch_exists "$r" "$o" || fl_profile_branch_exists "$xr" "$o"; } && ver=true
       [[ "$ver" == "true" ]] || EX_WARN+=("${n}: branch ${o} was not found in ${xr}")
-    elif [[ -n "$policy" && "$b" == "$policy" ]]; then
-      # a registry app on its release branch (erpnext on version-15) keeps it: its default branch is develop
-      xb="$b"; ver=false; fl_profile_branch_exists "$xr" "$b" && ver=true
+    elif [[ "$b" == "${FL_FRAPPE_BRANCH:-}" || ( -n "$policy" && "$b" == "$policy" ) ]]; then
+      # an app on the base's release branch (erpnext, hrms or india_compliance on
+      # version-15) keeps it: its default branch is develop, which needs another frappe
+      xb="$b"; ver=false; { fl_profile_branch_exists "$r" "$b" || fl_profile_branch_exists "$xr" "$b"; } && ver=true
       [[ -n "$def" && "$def" != "$b" ]] && EX_WARN+=("${n}: keeps ${b}, the ${FL_TEAM_BASE} release branch (its default branch is ${def})")
     elif [[ -n "$def" ]]; then
       xb="$def"; ver=true

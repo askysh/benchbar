@@ -246,6 +246,39 @@ assert_no_file "$TMP_DIR/x.toml"
 run_fm profile export share --branch nope=main --plan
 assert_eq "1" "$CODE"; assert_contains "$OUT" "share has no app nope"
 
+# ---- the default branch is read through the URL as it is on this Mac: an
+# SSH alias carries the key of another account, the real host may refuse it
+make_app_remote alias_app
+make_app_remote compliance
+( cd "$WORK/alias_app" && git branch develop && git push -q origin develop )
+( cd "$WORK/compliance" && git branch develop && git push -q origin develop )
+head_to alias_app develop; head_to compliance develop
+{
+  printf 'git@github-acme:acme/alias_app.git\t%s\tprivate\n' "$REMOTES/alias_app.git"
+  printf 'git@github.com:acme/alias_app.git\t%s\tgone\n' "$REMOTES/alias_app.git"
+  printf 'https://github.com/acme/alias_app.git\t%s\tprivate\n' "$REMOTES/alias_app.git"
+  printf 'https://github.com/acme/compliance.git\t%s\tpublic\n' "$REMOTES/compliance.git"
+} >>"$MOCK_STATE/git_remotes"
+cat >"$USER_DIR/share2.toml" <<'TOML'
+base = "v15-lts"
+
+[[apps]]
+name = "alias_app"
+repo = "git@github-acme:acme/alias_app.git"
+branch = "wip"
+
+[[apps]]
+name = "compliance"
+repo = "https://github.com/acme/compliance.git"
+branch = "version-15"
+TOML
+run_js profile export share2 --plan --json
+assert_eq "0" "$CODE" "$OUT $ERR"
+assert_eq "git@github.com:acme/alias_app.git develop develop True" "$(ex '" ".join(str(a[k]) for a in d["apps"] if a["name"]=="alias_app" for k in ("exported_repo","exported_branch","default_branch","branch_verified"))')"
+# an app outside the registry on the base's release branch keeps it too
+assert_eq "version-15 develop True" "$(ex '" ".join(str(a[k]) for a in d["apps"] if a["name"]=="compliance" for k in ("exported_branch","default_branch","branch_verified"))')"
+rm "$USER_DIR/share2.toml"
+
 # ---- export writes a schema 2 file that reads back
 EXPORTED="$TMP_DIR/out/share.toml"
 run_js profile export share --drop tool --out "$EXPORTED" --yes --json --bench-dir "$SHARE_BENCH"

@@ -489,6 +489,7 @@ Measured on five PR runs (September 2026): 11 to 14 minutes wall clock, all of i
 
 ## 0.6.0: profile sharing
 
+- Export reads each default branch through the URL as it is on this Mac and writes the portable one: an SSH alias such as `github-exponent` exists because it carries another account's key, and `git@github.com` with the default key is refused for exactly those repos (found on Akash's Expo profile, 15 of 23 apps). Any app on the base's release branch keeps it, not only registry apps: india_compliance on `version-15` would otherwise be exported on `develop`.
 - `profile list --json` follows the 0.6 contract with the app: `source` is now the URL an import or subscription came from (or null), and the folder kind it used to hold moved to `source_kind`. The schema version stays 1 because the CLI and the app ship together; an older reader of `source` sees a URL or null.
 - The anonymous access probe runs git with `GIT_CONFIG_GLOBAL=/dev/null`, no system config and an empty credential helper: a global `url.insteadOf` that rewrites https to SSH would otherwise make every private repo look public.
 - `personal` needs both a failed anonymous read and `api.github.com/users/OWNER` saying `User`: a public repo in a personal account is fine to share, so it stays `public`.
