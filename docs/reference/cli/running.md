@@ -16,13 +16,16 @@ benchbar up [--bench-dir DIR]
 ```
 
 Starts the bench in the background and waits for the site's ping. It
-clears the stop flag, loads the launchd agent when it is not loaded, and
-asks before starting when another running bench uses the same web or
-socketio port. A running bench is left as it is.
+clears the stop flag and loads the launchd agent when it is not loaded.
+Before that it checks the bench's ports: it refuses to start when a
+running bench, or any other program, listens on one of them (it never
+takes their ports), and asks when only a stopped bench shares them.
+Both print `benchbar ports setup -- PATH` as the fix. A running bench is
+left as it is.
 
 Exit codes: 0 the bench is up (or already was); 1 the site did not answer
-in time (it may still be starting: `benchbar logs`), or you declined the
-port question.
+in time (it may still be starting: `benchbar logs`), a port is taken, or
+you declined the port question.
 
 ```bash
 benchbar up --bench-dir ~/dev/v16-bench
@@ -35,9 +38,12 @@ benchbar down [--bench-dir DIR] [--dry-run]
 ```
 
 Stops the bench and keeps it stopped, also across reboots: it writes
-`manual` to the stop flag, stops the agent, then only this bench's
-leftover processes and port listeners. Your own `bench migrate` or `bench
-console` keeps running.
+`manual` to the stop flag and stops the agent. Then it stops what is
+left: this bench's honcho, serve, worker, schedule and socketio
+processes, and every process that listens on the bench's web, socketio
+or Redis ports, whoever started it. `benchbar ports check --bench-dir
+DIR` shows beforehand whether another program holds them. Your own `bench migrate` or `bench console`
+keeps running.
 
 Exit codes: 0 stopped; 1 some bench processes are still alive.
 
@@ -106,7 +112,9 @@ benchbar logs --json --no-follow -n100 --process worker
 benchbar fg [--bench-dir DIR]
 ```
 
-Stops the service and runs honcho with `Procfile.lean` in the foreground.
+Stops the service and runs honcho, the process manager, with
+`Procfile.lean` in the foreground, so the output of every process shows
+in the terminal.
 Ctrl+C stops it; `benchup` brings the background service back.
 
 Exit codes: honcho's; 1 when honcho or `Procfile.lean` is missing.
