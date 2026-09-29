@@ -177,18 +177,69 @@ sites is always kept and sent to `benchbar repair`.
 
 ## Wiping a bench
 
-benchbar never deletes a bench, a site or a database. To do it by hand:
+Wiping a bench deletes it for good: every app checkout in `apps/` with
+its uncommitted and unpushed work, the virtualenv, the sites with their
+uploaded files, and their databases. Nothing can bring it back, which is
+why benchbar never deletes a whole bench for you. If you only want a
+broken bench working again, try `benchbar repair` first; if you only
+want one site gone, `benchbar site drop` takes a backup first.
 
-```bash
-benchbar uninstall-service
-rm -rf ~/frappe-bench
-rm -rf ~/.local/share/benchbar/.benchbar    # or the .benchbar folder of your checkout
-```
+Before you start:
 
-Drop the site database in `mariadb -u root -p`: `SHOW DATABASES;` lists it
-(the name starts with an underscore), then `DROP DATABASE` and `DROP USER`
-for that name. To remove the Homebrew formulae:
-`brew uninstall mariadb@10.11 redis node@20 python@3.11`.
+- Push every app branch you want to keep: `git status` and `git log
+  @{u}..` in each folder under `apps/`.
+- Back up each site you may need and copy the backup out of the bench,
+  since backups live inside it: `benchbar site backup SITE --with-files`,
+  then copy `sites/SITE/private/backups/` somewhere else.
+
+Then, in this order. The examples use `~/frappe-bench`; use your
+bench's path.
+
+1. Stop the bench and remove its service. This removes only the launchd
+   agent, the runner, `Procfile.lean` and the shell helpers, and leaves
+   the bench itself alone:
+
+   ```bash
+   benchbar down --bench-dir ~/frappe-bench
+   benchbar uninstall-service --bench-dir ~/frappe-bench
+   ```
+
+2. Drop each site's database while the bench folder still exists: the
+   database name and user are only written in the site's
+   `site_config.json`. Look them up, then drop both in `mariadb -u root
+   -p` (`benchbar mariadb-password --yes` prints the root password):
+
+   ```bash
+   grep -h '"db_name"' ~/frappe-bench/sites/*/site_config.json
+   ```
+
+   ```sql
+   DROP DATABASE `_1a2b3c4d5e6f`;
+   DROP USER '_1a2b3c4d5e6f'@'localhost';
+   ```
+
+   Check the name twice: every bench on this Mac shares one MariaDB
+   server, and `SHOW DATABASES;` lists the other benches' sites too.
+
+3. Delete the bench folder. This is the step that cannot be undone:
+
+   ```bash
+   rm -rf ~/frappe-bench
+   ```
+
+4. Make benchbar forget the bench: delete only that bench's files in
+   `~/.local/share/benchbar/.benchbar/benches/` (or the `.benchbar`
+   folder of your checkout). They are named after the folder plus a
+   short hash, for example `frappe-bench-c7a84bb1.env` and, when it
+   exists, `frappe-bench-c7a84bb1.site-apps`. Leave the rest of
+   `.benchbar` alone: it holds the other benches and the logs and
+   backups of every run.
+
+The site's line in `/etc/hosts` can stay; it does nothing without the
+bench. To remove the Homebrew formulae as well, when no other bench
+needs them: `brew uninstall mariadb@10.11 redis node@20 python@3.11`.
+That keeps MariaDB's data folder, `$(brew --prefix)/var/mysql`, with
+every other database on the Mac.
 
 ## Things to avoid
 
