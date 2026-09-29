@@ -48,7 +48,7 @@ assert len(r) == 9, r                                   # the notification got n
 i = by[1]["result"]
 assert i["protocolVersion"] == "2025-06-18" and i["serverInfo"]["name"] == "benchbar", i
 names = [t["name"] for t in by[2]["result"]["tools"]]
-assert names == ["benchbar_list", "benchbar_status", "benchbar_doctor", "benchbar_logs_tail", "benchbar_site_list", "benchbar_profile_list", "benchbar_profile_check", "benchbar_up", "benchbar_down", "benchbar_restart"], names
+assert names == ["benchbar_list", "benchbar_status", "benchbar_doctor", "benchbar_logs_tail", "benchbar_site_list", "benchbar_profile_list", "benchbar_profile_check", "benchbar_up", "benchbar_down", "benchbar_restart", "benchbar_app_add_plan", "benchbar_app_add"], names
 assert not any("repair" in n or "install" in n for n in names)
 ro = {t["name"]: t["annotations"]["readOnlyHint"] for t in by[2]["result"]["tools"]}
 assert ro["benchbar_doctor"] and not ro["benchbar_down"], ro
@@ -94,5 +94,48 @@ assert_eq "2025-06-18" "$(printf '%s' "$R" | jget - 'd["result"]["protocolVersio
 R="$(mcp '{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"benchbar_down","arguments":{"bench":"'"$BENCH"'"}}}')"
 assert_eq "False" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')"
 assert_eq "stopped" "$(printf '%s' "$R" | jget - 'd["result"]["structuredContent"]["status"]["state"]')"
+
+# ---- app add over MCP: a read only plan with a token, then the approved plan
+# shellcheck source=tests/lib/apps-fixtures.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/apps-fixtures.sh"
+make_app_remote acme_dep
+make_app_remote acme_web acme_dep
+add_policy acme_dep main
+URL="file://${REMOTES}/acme_web.git"
+call() { printf '{"jsonrpc":"2.0","id":%s,"method":"tools/call","params":{"name":"%s","arguments":%s}}' "$1" "$2" "$3"; }
+R="$(mcp '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')"
+printf '%s' "$R" | python3 -c '
+import json, sys
+t = {x["name"]: x for x in json.load(sys.stdin)["result"]["tools"]}
+p, a = t["benchbar_app_add_plan"], t["benchbar_app_add"]
+assert p["annotations"]["readOnlyHint"] is True and a["annotations"]["readOnlyHint"] is False, (p, a)
+assert a["annotations"]["destructiveHint"] is False
+assert a["inputSchema"]["required"] == ["url_or_name", "token"], a["inputSchema"]
+assert set(p["inputSchema"]["properties"]) == {"url_or_name", "branch", "name", "site", "all_sites", "bench"}, p
+assert "OK" in a["description"] and "plan" in a["description"], a["description"]
+' || fail "MCP app add tools: $R"
+ARGS='{"url_or_name":"'"$URL"'","branch":"main","site":"macdev","bench":"'"$BENCH"'"}'
+reset_calls
+R="$(mcp "$(call 1 benchbar_app_add_plan "$ARGS")")"
+assert_eq "False" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')" "$R"
+assert_eq "acme_web ['acme_dep'] True" "$(printf '%s' "$R" | jget - '" ".join(str(x) for x in [d["result"]["structuredContent"]["app"], d["result"]["structuredContent"]["missing_required"], d["result"]["structuredContent"]["can_apply"]])')"
+assert_calls_not_contain '^bench (get-app|build)'
+TOKEN="$(printf '%s' "$R" | jget - 'd["result"]["structuredContent"]["token"]')"
+# refusals: no token, a value that looks like an option, a stale token
+R="$(mcp "$(call 2 benchbar_app_add "$ARGS")" "$(call 3 benchbar_app_add_plan '{"url_or_name":"--yes"}')")"
+assert_eq "-32602 -32602" "$(printf '%s\n' "$R" | python3 -c 'import json,sys; print(" ".join(str(json.loads(l)["error"]["code"]) for l in sys.stdin if l.strip()))')"
+STALE="$(printf '%s' "$ARGS" | python3 -c 'import json,sys; a=json.load(sys.stdin); a["token"]="0"*64; print(json.dumps(a))')"
+R="$(mcp "$(call 4 benchbar_app_add "$STALE")")"
+assert_eq "True" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')"
+assert_contains "$(printf '%s' "$R" | jget - 'd["result"]["structuredContent"]["output"]')" "The app add plan changed"
+assert_calls_not_contain '^bench (get-app|build)'
+# the approved plan: output, the result and a fresh app list
+WITH="$(printf '%s' "$ARGS" | python3 -c 'import json,sys; a=json.load(sys.stdin); a["token"]=sys.argv[1]; print(json.dumps(a))' "$TOKEN")"
+R="$(mcp "$(call 5 benchbar_app_add "$WITH")")"
+assert_eq "False" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')" "$R"
+assert_eq "0 True" "$(printf '%s' "$R" | jget - '" ".join(str(x) for x in [d["result"]["structuredContent"]["exit_code"], d["result"]["structuredContent"]["result"]["ok"]])')"
+assert_contains "$(printf '%s' "$R" | jget - '[a["name"] for a in d["result"]["structuredContent"]["apps"]["apps"]]')" "'acme_dep', 'acme_web'"
+assert_calls_contain "^bench get-app --skip-assets --branch main file://${REMOTES}/acme_dep.git$"
+assert_calls_contain '^bench --site macdev install-app acme_web$'
 
 printf 'test-mcp: ok\n'

@@ -50,6 +50,40 @@ app exists, or a step failed.
 benchbar app add git@github.com:acme/acme.git --branch main --all-sites
 ```
 
+### The plan and its token
+
+```
+benchbar app add NAME|URL [same flags] --dry-run --json
+benchbar app add NAME|URL [same flags] --apply TOKEN --yes [--json]
+```
+
+`--dry-run --json` prints the plan and changes nothing: the resolved app,
+repo and branch, whether git can read the repo (without a prompt, with a
+timeout), the sites, the required apps from `hooks.py` (read from a
+shallow clone in a temp folder, then removed) and whether each resolves
+through `config/apps.tsv` or the team profile, the steps, and a `token`.
+See the [JSON schema](../../json-schema.md#benchbar-app-add-url---dry-run---json).
+
+`--apply TOKEN --yes`, with the same arguments, recomputes the plan
+under the CLI lock and runs exactly that plan, including the planned
+required apps, without asking anything. `benchbar_app_add` in
+[benchbar mcp](mcp.md) uses it.
+
+| Flag | What it does |
+|---|---|
+| `--apply TOKEN` | Run the plan with this token; needs `--yes`, not with `--dry-run` |
+| `--json` | With `--dry-run` the plan, with `--apply` the result; text goes to stderr |
+
+Exit codes: 0 planned, or applied (also when there was nothing to do); 1
+the token no longer matches (`sites/apps.txt`, `apps/` or the sites
+changed: plan again), the plan cannot be applied (`can_apply` false), or
+a step failed. `--json` without `--dry-run` or `--apply` is refused.
+
+```bash
+benchbar app add https://github.com/acme/acme_crm --site macdev --dry-run --json
+benchbar app add https://github.com/acme/acme_crm --site macdev --apply 3f9c...e1 --yes
+```
+
 ## app install
 
 ```

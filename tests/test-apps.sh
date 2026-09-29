@@ -305,4 +305,81 @@ assert_eq "0" "$CODE" "$OUT"
 run_fm app list --json --bench-dir "$NOSITE"
 assert_eq "0" "$CODE" "(the second run reads a cache with only @ lines) $OUT"
 
+# ---- app add as a plan with a token (0.6.0, for benchbar_app_add over MCP)
+run_json() { set +e; OUT="$("$FM" "$@" 2>"$MOCK_STATE/stderr")"; CODE="$?"; ERR="$(cat "$MOCK_STATE/stderr")"; set -e; }
+PB="$HOME/plan-bench"
+make_fake_bench "$PB" plansite
+printf 'frappe\n' >"$PB/sites/apps.txt"
+rmdir "$PB/apps/erpnext"
+printf 'frappe 15.0.0\n' >"$PB/sites/plansite/installed_apps"
+make_app_remote acme_leaf
+make_app_remote acme_mid acme_leaf
+make_app_remote acme_top acme_mid
+git -C "$REMOTES/acme_top.git" symbolic-ref HEAD refs/heads/main
+add_policy acme_leaf main
+add_policy acme_mid version-15
+# plan: read only, JSON only on stdout, required apps followed through apps.tsv
+reset_calls; snap="$(snapshot "$PB" "$FL_STATE_DIR")"
+run_json app add "file://${REMOTES}/acme_top.git" --site plansite --dry-run --json --bench-dir "$PB"
+assert_eq "0" "$CODE" "$ERR"
+assert_eq "$snap" "$(snapshot "$PB" "$FL_STATE_DIR")" "(the plan writes nothing in the bench)"
+assert_calls_not_contain '^bench (get-app|build|--site plansite install-app)'
+assert_calls_contain "^git clone --quiet --depth 1 --filter=blob:none --no-checkout --branch main -- file://${REMOTES}/acme_top.git "
+assert_eq "1 acme_top main remote_default True False True" "$(printf '%s' "$OUT" | jget - '" ".join(str(x) for x in [d["schema_version"], d["app"], d["branch"], d["branch_source"], d["reachable"], d["present"], d["can_apply"]])')"
+assert_eq "file://${REMOTES}/acme_top.git" "$(printf '%s' "$OUT" | jget - 'd["repo"]')"
+assert_eq "[{'name': 'plansite', 'installed': False}]" "$(printf '%s' "$OUT" | jget - 'd["sites"]')"
+assert_eq "acme_mid:acme_top:apps_tsv:version-15 acme_leaf:acme_mid:apps_tsv:main" "$(printf '%s' "$OUT" | jget - '" ".join("%s:%s:%s:%s" % (r["name"], r["required_by"], r["source"], r["branch"]) for r in d["required_apps"])')"
+assert_eq "['acme_mid', 'acme_leaf']" "$(printf '%s' "$OUT" | jget - 'd["missing_required"]')"
+assert_eq "Clone acme_leaf,Clone acme_mid,Clone acme_top,Build,Install on plansite,Restart" "$(printf '%s' "$OUT" | jget - '",".join(s["name"] for s in d["steps"])')"
+assert_eq "bench build --apps acme_leaf,acme_mid,acme_top" "$(printf '%s' "$OUT" | jget - 'd["steps"][3]["command"]')"
+assert_contains "$(printf '%s' "$OUT" | jget - 'd["steps"][4]["note"]')" "like a migrate"
+assert_eq "64" "$(printf '%s' "$OUT" | jget - 'len(d["token"])')"
+TOKEN="$(printf '%s' "$OUT" | jget - 'd["token"]')"
+# the same state gives the same token
+run_json app add "file://${REMOTES}/acme_top.git" --site plansite --dry-run --json --bench-dir "$PB"
+assert_eq "$TOKEN" "$(printf '%s' "$OUT" | jget - 'd["token"]')" "(token stable)"
+# --json without --dry-run or --apply, --apply without --yes: refused
+run_json app add "file://${REMOTES}/acme_top.git" --json --bench-dir "$PB"
+assert_eq "1" "$CODE"; assert_contains "$ERR" "add --dry-run"
+run_fm app add "file://${REMOTES}/acme_top.git" --site plansite --apply "$TOKEN" --bench-dir "$PB"
+assert_eq "1" "$CODE"; assert_contains "$OUT" "--apply TOKEN --yes"
+# apps.txt changed: the token is stale and nothing runs
+cp "$PB/sites/apps.txt" "$TMP_DIR/pb-apps.txt"
+printf 'extra_app\n' >>"$PB/sites/apps.txt"
+reset_calls
+run_json app add "file://${REMOTES}/acme_top.git" --site plansite --apply "$TOKEN" --yes --json --bench-dir "$PB"
+assert_eq "1" "$CODE"; assert_contains "$ERR" "The app add plan changed"
+assert_calls_not_contain '^bench (get-app|build|--site plansite install-app)'
+cp "$TMP_DIR/pb-apps.txt" "$PB/sites/apps.txt"
+# the approved plan runs, required apps included, never reading stdin
+reset_calls
+set +e; OUT="$(printf 'n\nn\n' | "$FM" app add "file://${REMOTES}/acme_top.git" --site plansite --apply "$TOKEN" --yes --json --bench-dir "$PB" 2>"$MOCK_STATE/stderr")"; CODE="$?"; set -e
+ERR="$(cat "$MOCK_STATE/stderr")"
+assert_eq "0" "$CODE" "$ERR"
+assert_calls_contain "^bench get-app --skip-assets --branch main file://${REMOTES}/acme_leaf.git$"
+assert_calls_contain "^bench get-app --skip-assets --branch version-15 file://${REMOTES}/acme_mid.git$"
+assert_calls_contain "^bench get-app --skip-assets --branch main file://${REMOTES}/acme_top.git$"
+assert_calls_contain '^bench build --apps acme_leaf,acme_mid,acme_top$'
+assert_calls_contain '^bench --site plansite install-app acme_top$'
+assert_calls_not_contain 'get-app.*(--overwrite|--resolve-deps)'
+assert_eq "frappe acme_leaf acme_mid acme_top" "$(tr '\n' ' ' <"$PB/sites/apps.txt" | sed 's/ $//')"
+assert_eq "True done,done,done,done,done,skipped" "$(printf '%s' "$OUT" | jget - 'str(d["ok"]) + " " + ",".join(s["status"] for s in d["steps"])')"
+assert_eq "$TOKEN" "$(printf '%s' "$OUT" | jget - 'd["token"]')"
+# the plan of a present app is empty
+run_json app add "file://${REMOTES}/acme_top.git" --site plansite --dry-run --json --bench-dir "$PB"
+assert_eq "0" "$CODE" "$ERR"
+assert_eq "True present [] False" "$(printf '%s' "$OUT" | jget - '" ".join(str(x) for x in [d["present"], d["branch_source"], d["steps"], d["changes"]])')"
+# an unreachable repo and an unknown required app: can_apply false with the reasons
+MOCK_GIT_LSREMOTE_EXIT=128 run_json app add "git@work-gh:acme/private.git" --dry-run --json --bench-dir "$PB"
+assert_eq "0" "$CODE" "$ERR"
+assert_eq "False False" "$(printf '%s' "$OUT" | jget - '" ".join(str(x) for x in [d["reachable"], d["can_apply"]])')"
+assert_contains "$(printf '%s' "$OUT" | jget - 'd["errors"][0]')" "cannot read git@work-gh:acme/private.git"
+run_json app add acme_orphan --dry-run --json --bench-dir "$PB"
+assert_eq "False" "$(printf '%s' "$OUT" | jget - 'd["can_apply"]')"
+assert_eq "nosuchapp False False" "$(printf '%s' "$OUT" | jget - '" ".join(str(x) for x in [d["required_apps"][0]["name"], d["required_apps"][0]["present"], d["required_apps"][0]["resolves"]])')"
+TOKEN="$(printf '%s' "$OUT" | jget - 'd["token"]')"
+run_fm app add acme_orphan --apply "$TOKEN" --yes --bench-dir "$PB"
+assert_eq "1" "$CODE"; assert_contains "$OUT" "cannot be applied"
+assert_no_file "$PB/apps/acme_orphan"
+
 printf 'test-apps: ok\n'

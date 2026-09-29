@@ -7,6 +7,17 @@ One line per non obvious choice: the decision, then the reason. The
 decisions of the app work live in `macos/DECISIONS.md`. The 0.5.5, 0.5 and 0.4
 runs come first, the 0.3 easy install run follows.
 
+## 0.6.0: app add over MCP
+
+- The 0.5 rule "no install behind a tool" now has one exception, `benchbar_app_add`: Akash's call on 2026-09-29. The app's installer already takes a pasted GitHub URL, so an agent should too, gated by a plan and a token instead of a terminal. Repairs, bench installs, services and anything with `sudo` stay out of MCP.
+- The plan is its own read tool (`benchbar_app_add_plan`, `app add --dry-run --json`); applying needs the plan's token, like `ports apply`. The token is a SHA-256 of the plan JSON (without `cli_version`) plus `sites/apps.txt`, the `apps/` folders and the site list, so a bench that changed between the review and the apply is refused before anything runs.
+- `--apply` recomputes the plan under the CLI lock and compares tokens there, so two agents cannot both apply one plan. It runs with stdin on `/dev/null` and never asks: the plan already disclosed every required app it clones.
+- Required apps are read before any change from a `git clone --depth 1 --filter=blob:none --no-checkout` into a temp folder outside the bench, `hooks.py` only, then the folder is removed. It works for any host the user's git can read, where the GitHub API or raw URLs would not. Every required app the registry or the team profile resolves is followed the same way; one that neither resolves blocks the plan (`can_apply: false`).
+- Without `--name`, the app is the package folder that holds `hooks.py`, since that is the folder bench creates.
+- Every remote call of the plan runs under `GIT_TERMINAL_PROMPT=0`, SSH `BatchMode` and a timeout (30 seconds for `ls-remote`, 120 for the shallow clone), so an unreachable or private repo gives `reachable: false` and a reason instead of a hang.
+- The steps are: clone the required apps (deepest first), clone the app, one build, `install-app` per site, restart only when the bench is running. The restart is always in the plan and decided at apply time, so starting or stopping the bench does not invalidate a token.
+- The MCP server gives `benchbar_app_add` a one hour limit (the plan five minutes, every other tool three) and streams nothing: the call returns the output, the `--json` result and a fresh `app list --json` at the end. Any argument value that starts with `-` is refused, so a URL can never become a CLI option.
+- A URL with a user name or token is still refused, not stripped: it would land in `.git/config`.
 ## Folder discovery
 
 - Scanning is read only and registration only remembers canonical paths: finding an existing bench must not silently create a service, start processes, or change its ports.

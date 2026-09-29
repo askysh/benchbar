@@ -31,6 +31,11 @@ Private repositories work with your SSH key or your `gh` login. It never
 replaces an existing app. A clone that does not finish is moved to the
 backups, not left half done.
 
+`app add URL --dry-run --json` prints the whole plan first, required
+apps from `hooks.py` included, with a token; `--apply TOKEN --yes` runs
+exactly that plan without a question. Coding agents add apps this way
+(see [Coding agents and MCP](agents.md#adding-an-app)).
+
 ## Installing on a site
 
 `app install NAME --site S` installs an app the bench already has on one
