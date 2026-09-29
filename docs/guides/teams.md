@@ -73,9 +73,11 @@ and what it requires:
 
 - Repo URLs lose any user info, and an SSH alias becomes the real host
   (`ssh -G` reads it from your `~/.ssh/config`).
-- Each app follows its repo's default branch. An app of the built in
-  registry on its release branch (erpnext on `version-15`) keeps it.
-  `--branch APP=BR` picks another one.
+- Each app follows its repo's default branch, read with your own
+  credentials (through your SSH alias, if the repo uses one). An app on
+  the base's release branch (erpnext, hrms or india_compliance on
+  `version-15`) keeps it, since their default branch needs another
+  Frappe. `--branch APP=BR` picks another one.
 - `access` is `public` when git can read the repo without any
   credentials, `private` otherwise, `personal` when it is private and
   its GitHub owner is a person rather than an organisation (teammates
@@ -85,6 +87,11 @@ and what it requires:
   that a kept app requires is refused.
 
 Commit the file to your team's config repo, or send it.
+
+In the app, a profile's ⋯ menu on Team Profiles has **Export…** with the
+same review:
+
+![Export in the app: each app with its access, its branch before and after, what it requires, and a checkbox to leave it out](../images/profile-export.png)
 
 ### Receiving one
 
@@ -111,6 +118,11 @@ and asks. `benchbar profile remove acme` moves an imported file to
 `~/.config/benchbar/removed/`. For a profile that came from a
 subscription, it moves the whole subscription aside, with every profile
 in it. It never removes a file you wrote yourself.
+
+In the app, **Import…** on Team Profiles takes a file or a link and shows
+the same check before anything is written:
+
+![Import in the app: the profile, which repositories this Mac can read, the apps left out, and the change to an existing profile of the same name](../images/profile-import.png)
 
 ### Subscribing to a team's config repo
 
