@@ -275,7 +275,7 @@ Asked for after the phases, to stop naming drift before the first release.
 
 - Profile runs call the CLI directly, not through a bench's change slot: profiles live in ~/.config/benchbar and no bench is touched, so an import should not wait for a bench's build, and there may be no bench at all.
 - Each sheet has its own `@Observable` run (`ProfileExportRun`, `ProfileImportRun`, ...) like `PortSetupRun`, so the rules and the CLI arguments are tested without views and the snapshots render real plans.
-- `ProfileInfo.source` became optional and `source_kind` wins when present: 0.6.0 reuses `source` for the URL, a 0.5 CLI still sends the kind there, and both lists decode.
+- `ProfileInfo.source` stays the kind and the URL is the new optional `source_url`, so a 0.5 CLI's list decodes unchanged; a kind the app does not know reads as a local file.
 - A profile row's id is name plus file: a shadowed file has the same name as the one that wins, and an id of the name alone drew the winner twice.
 - `ProfileName` is its own rule (`^[a-z0-9][a-z0-9._-]*$`), not `SiteName`: the CLI allows `_` in profile names, and `acme_hr` was refused by Create.
 - A profile link only prefills the sheet; even Review (read only, but it fetches the URL and runs git ls-remote) waits for a click, so a web page cannot make the Mac reach out. A file the user picked or dropped is reviewed right away: that was the click.

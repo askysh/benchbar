@@ -49,12 +49,12 @@ export BENCHBAR_PROFILE_PATH="$TEAM_REPO"
 run_fm profile list --json
 assert_eq "0" "$CODE" "$OUT"
 j() { printf '%s' "$OUT" | jget - "$1"; }
-assert_eq "user None True v15-lts Acme ERP 1" "$(j '" ".join(str(x) for x in [[p for p in d["profiles"] if p["name"]=="acme"][0][k] for k in ("source_kind","source","valid","base","label","schema")])')"
-assert_eq "path True v16-lts None None" "$(j '" ".join(str(x) for x in [[p for p in d["profiles"] if p["name"]=="acme16"][0][k] for k in ("source_kind","valid","base","subscription","shadowed_by")])')"
+assert_eq "user None True v15-lts Acme ERP 1" "$(j '" ".join(str(x) for x in [[p for p in d["profiles"] if p["name"]=="acme"][0][k] for k in ("source","source_url","valid","base","label","schema")])')"
+assert_eq "path True v16-lts None None" "$(j '" ".join(str(x) for x in [[p for p in d["profiles"] if p["name"]=="acme16"][0][k] for k in ("source","valid","base","subscription","shadowed_by")])')"
 assert_contains "$(j '[p for p in d["profiles"] if p["name"]=="v15-lts" and p["kind"]=="team"][0]["error"]')" "shadows the built in profile v15-lts"
-assert_contains "$(j '[p for p in d["profiles"] if p["name"]=="acme" and p["source_kind"]=="path"][0]["error"]')" "hidden by an earlier acme.toml"
-assert_eq "$USER_DIR/acme.toml" "$(j '[p for p in d["profiles"] if p["name"]=="acme" and p["source_kind"]=="path"][0]["shadowed_by"]')"
-assert_eq "builtin None None" "$(j '" ".join(str(p[k]) for p in d["profiles"] if p["name"]=="v16-lts" and p["kind"]=="builtin" for k in ("source_kind","source","schema"))')"
+assert_contains "$(j '[p for p in d["profiles"] if p["name"]=="acme" and p["source"]=="path"][0]["error"]')" "hidden by an earlier acme.toml"
+assert_eq "$USER_DIR/acme.toml" "$(j '[p for p in d["profiles"] if p["name"]=="acme" and p["source"]=="path"][0]["shadowed_by"]')"
+assert_eq "builtin None None" "$(j '" ".join(str(p[k]) for p in d["profiles"] if p["name"]=="v16-lts" and p["kind"]=="builtin" for k in ("source","source_url","schema"))')"
 assert_contains "$(j '[p for p in d["profiles"] if p["name"]=="broken"][0]["error"]')" "broken.toml:2: not supported: inline tables"
 run_fm profile list
 assert_contains "$OUT" "acme"
@@ -317,7 +317,7 @@ grep -q "^source = \"${EXPORTED}\"$" "$USER_DIR/shared.toml" || fail "the import
 run_fm profile import "$EXPORTED" --as shared --yes
 assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "unchanged"
 run_js profile list --json
-assert_eq "imported $EXPORTED 2" "$(ex '" ".join(str(p[k]) for p in d["profiles"] if p["name"]=="shared" for k in ("source_kind","source","schema"))')"
+assert_eq "imported $EXPORTED 2" "$(ex '" ".join(str(p[k]) for p in d["profiles"] if p["name"]=="shared" for k in ("source","source_url","schema"))')"
 # a changed source: the plan shows the diff, and a non interactive run without --yes writes nothing
 sed_inplace 's/^description = "Acme ECR"$/description = "Acme ECR 2"/' "$EXPORTED"
 run_js profile import "$EXPORTED" --as shared --plan --json
@@ -445,13 +445,13 @@ assert_eq "remotes-team-config	$SUB_URL" "$(cat "$HOME/.config/benchbar/sources.
 run_fm profile subscribe "$SUB_URL" --yes
 assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "already subscribed"
 run_js profile list --json
-assert_eq "subscribed $SUB_URL $SUB_URL $SUB_DIR 0 0 True" "$(ex '" ".join(str(x) for p in d["profiles"] if p["name"]=="team-a" for x in (p["source_kind"], p["source"], p["subscription"]["repo"], p["subscription"]["dir"], p["subscription"]["behind"], p["subscription"]["days"], p["subscription"]["fetched_at"].endswith("Z")))')"
+assert_eq "subscribed $SUB_URL $SUB_URL $SUB_DIR 0 0 True" "$(ex '" ".join(str(x) for p in d["profiles"] if p["name"]=="team-a" for x in (p["source"], p["source_url"], p["subscription"]["repo"], p["subscription"]["dir"], p["subscription"]["behind"], p["subscription"]["days"], p["subscription"]["fetched_at"].endswith("Z")))')"
 run_fm profile show team-a
 assert_contains "$OUT" "Team A"
 # a user file of the same name comes first; list names the file it hides
 printf 'base = "v15-lts"\nbundle = "minimal"\n' >"$USER_DIR/team-a.toml"
 run_js profile list --json
-assert_eq "$USER_DIR/team-a.toml" "$(ex '[p for p in d["profiles"] if p["name"]=="team-a" and p["source_kind"]=="subscribed"][0]["shadowed_by"]')"
+assert_eq "$USER_DIR/team-a.toml" "$(ex '[p for p in d["profiles"] if p["name"]=="team-a" and p["source"]=="subscribed"][0]["shadowed_by"]')"
 run_fm profile list
 assert_contains "$OUT" "[WARN] shadowed: team-a: $SUB_DIR/profiles/team-a.toml is hidden by $USER_DIR/team-a.toml"
 rm "$USER_DIR/team-a.toml"

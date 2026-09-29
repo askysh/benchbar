@@ -207,7 +207,7 @@ fl_cmd_profile_list() {
   if [[ "$json" == "1" ]]; then
     printf '{"schema_version":%d,"cli_version":"%s","profiles":[' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}"
     while IFS=$'\t' read -r p label; do
-      printf '%s{"name":%s,"kind":"builtin","source_kind":"builtin","source":null,"subscription":null,"shadowed_by":null,"schema":null,"file":%s,"base":null,"label":%s,"frappe_branch":%s,"valid":true,"error":null}' \
+      printf '%s{"name":%s,"kind":"builtin","source":"builtin","source_url":null,"subscription":null,"shadowed_by":null,"schema":null,"file":%s,"base":null,"label":%s,"frappe_branch":%s,"valid":true,"error":null}' \
         "$sep" "$(fl_json_str "$p")" "$(fl_json_str "$tsv")" "$(fl_json_str "$label")" \
         "$(fl_json_str "$(awk -F '\t' -v p="$p" 'NR > 1 && $1 == p {print $3}' "$tsv")")"
       sep=","
@@ -245,7 +245,7 @@ fl_cmd_profile_list() {
       [[ "${behind:-0}" =~ ^[1-9] ]] && status="ok, ${behind} commit(s) behind: benchbar profile update ${name}"
     fi
     if [[ "$json" == "1" ]]; then
-      printf '%s{"name":%s,"kind":"team","source_kind":"%s","source":%s,"subscription":%s,"shadowed_by":%s,"schema":%s,"file":%s,"base":%s,"label":%s,"frappe_branch":%s,"valid":%s,"error":%s}' \
+      printf '%s{"name":%s,"kind":"team","source":"%s","source_url":%s,"subscription":%s,"shadowed_by":%s,"schema":%s,"file":%s,"base":%s,"label":%s,"frappe_branch":%s,"valid":%s,"error":%s}' \
         "$sep" "$(fl_json_str "$name")" "$skind" "$(fl_json_str "$src")" "$subjson" "$(fl_json_str "$shadow")" "$(fl_json_num "$schema")" \
         "$(fl_json_str "$file")" "$(fl_json_str "$base")" \
         "$(fl_json_str "$([[ -z "$err" ]] && printf '%s' "$FL_TEAM_DESCRIPTION")")" \

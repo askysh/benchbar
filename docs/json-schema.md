@@ -468,10 +468,10 @@ subscription is behind comes from its last fetch.
 
 ```json
 {"schema_version":1,"cli_version":"0.6.0","profiles":[
- {"name":"v15-lts","kind":"builtin","source_kind":"builtin","source":null,"subscription":null,"shadowed_by":null,"schema":null,
+ {"name":"v15-lts","kind":"builtin","source":"builtin","source_url":null,"subscription":null,"shadowed_by":null,"schema":null,
   "file":"/Users/you/benchbar/config/release-profiles.tsv","base":null,
   "label":"Frappe/ERPNext v15 LTS","frappe_branch":"version-15","valid":true,"error":null},
- {"name":"acme","kind":"team","source_kind":"subscribed","source":"git@github.com:acme/bench-config.git",
+ {"name":"acme","kind":"team","source":"subscribed","source_url":"git@github.com:acme/bench-config.git",
   "subscription":{"repo":"git@github.com:acme/bench-config.git","dir":"/Users/you/.config/benchbar/sources/acme-bench-config",
    "behind":2,"days":5,"fetched_at":"2026-09-29T10:00:00Z"},"shadowed_by":null,"schema":2,
   "file":"/Users/you/.config/benchbar/sources/acme-bench-config/profiles/acme.toml","base":"v15-lts",
@@ -481,8 +481,8 @@ subscription is behind comes from its last fetch.
 | Field | Type | Notes |
 |---|---|---|
 | `kind` | string | `builtin` or `team` |
-| `source_kind` | string | 0.6: `builtin`, `user` (a file in `~/.config/benchbar/profiles`), `imported` (a file there that `profile import` wrote), `subscribed` or `path` (a `BENCHBAR_PROFILE_PATH` folder) |
-| `source` | string or null | 0.6: the URL or path an imported file came from, or a subscription's repo URL; `null` otherwise. Until 0.5.8 this field held what `source_kind` holds now |
+| `source` | string | `builtin`, `user` (a file in `~/.config/benchbar/profiles`) or `path` (a `BENCHBAR_PROFILE_PATH` folder); 0.6 adds `imported` (a file there that `profile import` wrote) and `subscribed` |
+| `source_url` | string or null | 0.6: the URL or path an imported file came from, or a subscription's repo URL; `null` otherwise |
 | `subscription` | object or null | 0.6: for a subscribed profile, `repo`, `dir`, `behind` (commits the clone lacks, int or null), `days` (age of the oldest of them, int or null) and `fetched_at` (the last successful fetch, or null) |
 | `shadowed_by` | string or null | 0.6: the file that hides this one (an earlier file of the same name, or the built in profiles' file) |
 | `schema` | int or null | 0.6: the file's `schema` (1 when it has none); `null` for built in profiles and invalid files |

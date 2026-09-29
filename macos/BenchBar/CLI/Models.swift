@@ -340,8 +340,8 @@ nonisolated struct AppUpdatePlan: Codable, Sendable, Equatable {
 }
 
 /// One profile (`benchbar profile list --json`): built in or a team's.
-/// Since 0.6.0 `source` is the URL a profile came from (nil for local ones)
-/// and `source_kind` says where it lives; before, `source` held the kind.
+/// `source` says where it lives (builtin, user, imported, subscribed, path);
+/// since 0.6.0 `source_url` is the URL an import or subscription came from.
 nonisolated struct ProfileInfo: Codable, Sendable, Equatable, Identifiable {
     var name: String
     var kind: String
@@ -352,7 +352,7 @@ nonisolated struct ProfileInfo: Codable, Sendable, Equatable, Identifiable {
     var frappeBranch: String?
     var valid: Bool
     var error: String?
-    var sourceKind: String?
+    var sourceURL: String?
     var subscription: ProfileSubscription?
     var shadowedBy: String?
     var schema: Int?
@@ -364,7 +364,7 @@ nonisolated struct ProfileInfo: Codable, Sendable, Equatable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case name, kind, source, file, base, label, valid, error, subscription, schema
         case frappeBranch = "frappe_branch"
-        case sourceKind = "source_kind"
+        case sourceURL = "source_url"
         case shadowedBy = "shadowed_by"
     }
 }

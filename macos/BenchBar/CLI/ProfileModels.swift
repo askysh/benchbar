@@ -317,17 +317,10 @@ nonisolated extension ProfileInfo {
         case builtin, user, imported, subscribed, path
     }
 
-    /// `source_kind`, or for a CLI before 0.6.0 the old `source` word.
+    /// `source`; a value this app does not know reads as a local file.
     var origin: Origin {
-        if let known = sourceKind.flatMap(Origin.init(rawValue:)) { return known }
         if kind == "builtin" { return .builtin }
         return source.flatMap(Origin.init(rawValue:)) ?? .user
-    }
-
-    /// The URL an imported profile came from (a pre 0.6.0 `source` is a kind, not a URL).
-    var sourceURL: String? {
-        guard let source, source.contains("://") || source.contains("@") else { return nil }
-        return source
     }
 
     /// "built in", "local", "imported", "subscribed · acme/profiles"

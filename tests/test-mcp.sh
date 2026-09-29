@@ -76,7 +76,7 @@ printf '%s\n' "$REPLIES" | python3 -c '
 import json, sys
 by = {m["id"]: m for m in (json.loads(l) for l in sys.stdin if l.strip())}
 p = by[1]["result"]["structuredContent"]["profiles"]
-assert [x["source_kind"] for x in p if x["name"] == "acme"] == ["user"], p
+assert [x["source"] for x in p if x["name"] == "acme"] == ["user"], p
 c = by[2]["result"]["structuredContent"]
 assert c["name"] == "acme" and c["repos"][0]["reachable"] is False and c["skipped_apps"] == ["gone"], c
 assert by[3]["error"]["code"] == -32602, by[3]

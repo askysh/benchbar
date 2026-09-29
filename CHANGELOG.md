@@ -84,9 +84,10 @@ All notable changes to this project are documented here.
 
 - `install.sh --yes` on a Mac that already has the CLI is an update: it
   no longer adopts a bench it finds or starts the Homebrew installer.
-- `profile list --json`: `source` is now the URL an import or
-  subscription came from (or null); the folder kind is `source_kind`.
-  New fields `subscription`, `shadowed_by` and `schema`.
+- `profile list --json`: `source` has two new values, `imported` and
+  `subscribed`. New fields `source_url` (the URL an import or
+  subscription came from, or null), `subscription`, `shadowed_by` and
+  `schema`.
 
 ### Fixed
 
