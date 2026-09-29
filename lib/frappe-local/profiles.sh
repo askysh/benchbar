@@ -662,9 +662,12 @@ fl_profile_check_repos_json() {
 }
 
 fl_profile_check_print() {
-  local i=0 rows=("App|Reachable|Repo|Why")
+  local i=0 rows=("App|Reachable|Repo|Why") word
   while [[ "$i" -lt "${#CK_APPS[@]}" ]]; do
-    rows+=("${CK_APPS[$i]}|$(case "${CK_REACH[$i]}" in true) printf yes ;; false) printf no ;; *) printf 'not known' ;; esac)|${CK_REPOS[$i]}|${CK_REASON[$i]:--}")
+    word="not known"
+    [[ "${CK_REACH[$i]}" == "true" ]] && word="yes"
+    [[ "${CK_REACH[$i]}" == "false" ]] && word="no"
+    rows+=("${CK_APPS[$i]}|${word}|${CK_REPOS[$i]}|${CK_REASON[$i]:--}")
     i=$((i + 1))
   done
   [[ "${#CK_APPS[@]}" -gt 0 ]] && fl_table "${rows[@]}"
