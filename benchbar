@@ -431,10 +431,15 @@ cmd_install() {
       fl_render_all
     fi
   fi
-  if FL_PLAN_CHECKS="port_block" fl_repair_engine "Background service" system service; then
+  # the engine lists and times its own actions; the install's three steps
+  # come back afterwards for the one Summary at the end
+  fl_steps_push
+  if FL_ENGINE_NO_SUMMARY=1 FL_PLAN_CHECKS="port_block" fl_repair_engine "Background service" system service; then
+    fl_steps_pop
     fl_pm_remember
     fl_step_end "done"
   else
+    fl_steps_pop
     fl_step_end warning "see above"
     code=1
   fi

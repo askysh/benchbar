@@ -488,7 +488,8 @@ fl_repair_engine() {
       remaining="${remaining} ${action}"
     done
   fi
-  fl_steps_summary
+  # inside install the outer run prints the one summary, of its own steps
+  [[ "${FL_ENGINE_NO_SUMMARY:-0}" == "1" ]] || fl_steps_summary
   if [[ "$status" != "0" ]]; then
     return 1
   fi

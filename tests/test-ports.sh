@@ -139,5 +139,8 @@ assert_contains "$OUT" "http://newsite:8003"
 assert_not_contains "$OUT" "http://newsite:8000"
 assert_not_contains "$OUT" "[WARN] Port clash"
 assert_no_file "$HOME/dev/newbench"
+# one Summary at the end, of the install's own three steps
+assert_eq "1" "$(printf '%s\n' "$OUT" | grep -c '^Summary')" "(the service pass must not print a second table)"
+printf '%s\n' "$OUT" | sed -n '/^Summary/,$p' | grep -q '3  Background service' || fail "the Summary lists the install's steps"
 
 printf 'test-ports: ok\n'

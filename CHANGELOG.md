@@ -59,6 +59,8 @@ All notable changes to this project are documented here.
   chose (a running server inside the profile's range, for example
   mariadb@10.11 for v16) instead of failing on the profile's default
   formula when the bench has no saved state yet, as in a dry run.
+- `benchbar install` ends with one Summary table, of its three steps; the
+  service pass no longer prints a second one of its own actions.
 
 ## 0.5.7 - 2026-09-27
 

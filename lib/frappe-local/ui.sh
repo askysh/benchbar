@@ -299,6 +299,21 @@ fl_steps_define() {
   done
 }
 
+# fl_steps_push / fl_steps_pop: keep a command's own steps while a nested
+# run (the repair engine inside install) defines and prints its own. One level.
+fl_steps_push() {
+  FL_SAVED_LABELS=(${FL_STEP_LABELS[@]+"${FL_STEP_LABELS[@]}"})
+  FL_SAVED_STATUS=(${FL_STEP_STATUS[@]+"${FL_STEP_STATUS[@]}"})
+  FL_SAVED_SECS=(${FL_STEP_SECS[@]+"${FL_STEP_SECS[@]}"})
+  FL_SAVED_CURRENT="$FL_STEP_CURRENT"; FL_SAVED_START="$FL_STEP_START"; FL_SAVED_RUN_START="$FL_RUN_START"
+}
+fl_steps_pop() {
+  FL_STEP_LABELS=(${FL_SAVED_LABELS[@]+"${FL_SAVED_LABELS[@]}"})
+  FL_STEP_STATUS=(${FL_SAVED_STATUS[@]+"${FL_SAVED_STATUS[@]}"})
+  FL_STEP_SECS=(${FL_SAVED_SECS[@]+"${FL_SAVED_SECS[@]}"})
+  FL_STEP_CURRENT="$FL_SAVED_CURRENT"; FL_STEP_START="$FL_SAVED_START"; FL_RUN_START="$FL_SAVED_RUN_START"
+}
+
 fl_steps_print_plan() {
   local i=0
   fl_spinner_pause
