@@ -108,7 +108,7 @@ final class ProfileImportRun {
         guard canAdd, let reviewed, let client = workbench.store.cliClient else { return }
         phase = .running
         do {
-            result = try await client.importProfile(reviewed.source, as: reviewed.name)
+            result = try await client.importProfile(reviewed.source, as: reviewed.name, expect: plan?.digest)
             phase = .done
         } catch {
             phase = .failed(error.localizedDescription)
@@ -177,7 +177,7 @@ final class ProfileUpdateRun {
         guard canApply, let client = workbench.store.cliClient else { return }
         phase = .running
         do {
-            plan = try await client.updateProfile(name)
+            plan = try await client.updateProfile(name, expect: plan?.digest)
             phase = .done
         } catch {
             phase = .failed(error.localizedDescription)

@@ -33,13 +33,20 @@ extension CLIClient {
         return try BenchJSON.decode(ProfileImportPlan.self, from: Data(output.stdout.utf8))
     }
 
-    func importProfile(_ source: String, as name: String?) async throws(CLIError) -> ProfileImportResult {
-        let output = try await run(Self.importArguments(source, as: name) + ["--yes", "--json"], timeout: Timeout.action, acceptExitCodes: [0])
+    /// `expect` is the reviewed plan's digest: the CLI refuses content that changed since.
+    func importProfile(_ source: String, as name: String?, expect digest: String?) async throws(CLIError) -> ProfileImportResult {
+        let output = try await run(Self.importArguments(source, as: name) + Self.expectArguments(digest) + ["--yes", "--json"],
+                                   timeout: Timeout.action, acceptExitCodes: [0])
         return try BenchJSON.decode(ProfileImportResult.self, from: Data(output.stdout.utf8))
     }
 
     static func importArguments(_ source: String, as name: String?) -> [String] {
         ["profile", "import", source] + (name.map { ["--as", $0] } ?? [])
+    }
+
+    static func expectArguments(_ digest: String?) -> [String] {
+        guard let digest, digest.count == 64, digest.allSatisfy(\.isHexDigit) else { return [] }
+        return ["--expect", digest]
     }
 
     /// Clones the repository into ~/.config/benchbar/sources; only its *.toml files are read.
@@ -53,8 +60,9 @@ extension CLIClient {
         return try BenchJSON.decode(ProfileUpdatePlan.self, from: Data(output.stdout.utf8))
     }
 
-    func updateProfile(_ name: String) async throws(CLIError) -> ProfileUpdatePlan {
-        let output = try await run(["profile", "update", name, "--yes", "--json"], timeout: Timeout.action, acceptExitCodes: [0])
+    func updateProfile(_ name: String, expect digest: String?) async throws(CLIError) -> ProfileUpdatePlan {
+        let output = try await run(["profile", "update", name] + Self.expectArguments(digest) + ["--yes", "--json"],
+                                   timeout: Timeout.action, acceptExitCodes: [0])
         return try BenchJSON.decode(ProfileUpdatePlan.self, from: Data(output.stdout.utf8))
     }
 

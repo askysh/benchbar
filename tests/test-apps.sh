@@ -335,6 +335,8 @@ assert_eq "bench build --apps acme_leaf,acme_mid,acme_top" "$(printf '%s' "$OUT"
 assert_contains "$(printf '%s' "$OUT" | jget - 'd["steps"][4]["note"]')" "like a migrate"
 assert_eq "64" "$(printf '%s' "$OUT" | jget - 'len(d["token"])')"
 TOKEN="$(printf '%s' "$OUT" | jget - 'd["token"]')"
+assert_eq "$(git -C "$REMOTES/acme_top.git" rev-parse main)" "$(printf '%s' "$OUT" | jget - 'd["commit"]')"
+assert_eq "$(git -C "$REMOTES/acme_leaf.git" rev-parse main)" "$(printf '%s' "$OUT" | jget - '[r for r in d["required_apps"] if r["name"]=="acme_leaf"][0]["commit"]')"
 # the same state gives the same token
 run_json app add "file://${REMOTES}/acme_top.git" --site plansite --dry-run --json --bench-dir "$PB"
 assert_eq "$TOKEN" "$(printf '%s' "$OUT" | jget - 'd["token"]')" "(token stable)"
@@ -343,6 +345,14 @@ run_json app add "file://${REMOTES}/acme_top.git" --json --bench-dir "$PB"
 assert_eq "1" "$CODE"; assert_contains "$ERR" "add --dry-run"
 run_fm app add "file://${REMOTES}/acme_top.git" --site plansite --apply "$TOKEN" --bench-dir "$PB"
 assert_eq "1" "$CODE"; assert_contains "$OUT" "--apply TOKEN --yes"
+# a branch that moves after the review makes the token stale, even with the
+# same package and required_apps: the reviewed commit is part of the plan
+git -C "$REMOTES/acme_leaf.git" update-ref refs/heads/moved "$(git -C "$REMOTES/acme_leaf.git" rev-parse main)"
+wt="$TMP_DIR/leaf-wt"; git clone -q -b main "$REMOTES/acme_leaf.git" "$wt"
+git -C "$wt" -c user.name=t -c user.email=t@t commit -q --allow-empty -m "new code" && git -C "$wt" push -q origin HEAD:main
+run_json app add "file://${REMOTES}/acme_top.git" --site plansite --apply "$TOKEN" --yes --json --bench-dir "$PB"
+assert_eq "1" "$CODE"; assert_contains "$ERR" "The app add plan changed"
+git -C "$REMOTES/acme_leaf.git" update-ref refs/heads/main "$(git -C "$REMOTES/acme_leaf.git" rev-parse moved)"
 # apps.txt changed: the token is stale and nothing runs
 cp "$PB/sites/apps.txt" "$TMP_DIR/pb-apps.txt"
 printf 'extra_app\n' >>"$PB/sites/apps.txt"
@@ -353,7 +363,7 @@ assert_calls_not_contain '^bench (get-app|build|--site plansite install-app)'
 cp "$TMP_DIR/pb-apps.txt" "$PB/sites/apps.txt"
 # the approved plan runs, required apps included, never reading stdin
 reset_calls
-set +e; OUT="$(printf 'n\nn\n' | "$FM" app add "file://${REMOTES}/acme_top.git" --site plansite --apply "$TOKEN" --yes --json --bench-dir "$PB" 2>"$MOCK_STATE/stderr")"; CODE="$?"; set -e
+set +e; OUT="$(printf 'n\nn\n' | MOCK_GIT_REAL=1 "$FM" app add "file://${REMOTES}/acme_top.git" --site plansite --apply "$TOKEN" --yes --json --bench-dir "$PB" 2>"$MOCK_STATE/stderr")"; CODE="$?"; set -e
 ERR="$(cat "$MOCK_STATE/stderr")"
 assert_eq "0" "$CODE" "$ERR"
 assert_calls_contain "^bench get-app --skip-assets --branch main file://${REMOTES}/acme_leaf.git$"

@@ -143,6 +143,8 @@ nonisolated struct ProfileImportPlan: Codable, Sendable, Equatable {
     var apps: [App]
     var check: Check
     var skippedApps: [String]
+    /// sha256 of the file this plan would write; import with `--expect` refuses other content (0.6.0)
+    var digest: String?
 
     nonisolated struct App: Codable, Sendable, Equatable, Identifiable {
         var name: String
@@ -161,7 +163,7 @@ nonisolated struct ProfileImportPlan: Codable, Sendable, Equatable {
     func check(for app: String) -> ProfileRepoCheck? { check.repos.first { $0.app == app } }
 
     enum CodingKeys: String, CodingKey {
-        case name, source, exists, diff, base, apps, check
+        case name, source, exists, diff, base, apps, check, digest
         case schemaVersion = "schema_version"
         case skippedApps = "skipped_apps"
     }
@@ -214,6 +216,8 @@ nonisolated struct ProfileUpdatePlan: Codable, Sendable, Equatable {
     var schemaVersion: Int
     var updates: [Update]
     var applied: Bool?
+    /// The reviewed content and commits; update with `--expect` refuses anything newer (0.6.0)
+    var digest: String?
 
     nonisolated struct Update: Codable, Sendable, Equatable, Identifiable {
         var name: String
@@ -228,7 +232,7 @@ nonisolated struct ProfileUpdatePlan: Codable, Sendable, Equatable {
     var hasChanges: Bool { updates.contains(where: \.hasChanges) }
 
     enum CodingKeys: String, CodingKey {
-        case updates, applied
+        case updates, applied, digest
         case schemaVersion = "schema_version"
     }
 }

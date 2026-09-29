@@ -996,13 +996,15 @@ fl_profile_import_apps_json() {
 }
 
 fl_cmd_profile_import() {
-  local src="" name="" plan=0 tmp target exists=false diff="" other code=0 base re='^[^?#]*/([^/?#]+)\.toml([?#].*)?$'
+  local src="" name="" plan=0 expect="" tmp target exists=false diff="" other code=0 base re='^[^?#]*/([^/?#]+)\.toml([?#].*)?$'
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
       --as) name="${2:-}"; shift 2 ;;
       --as=*) name="${1#*=}"; shift ;;
       --plan) plan=1; shift ;;
-      -*) fl_die "Unknown option for profile import: $1" "Use: benchbar profile import FILE|URL [--as NAME] [--plan]" ;;
+      --expect) expect="${2:-}"; shift 2 || shift ;;
+      --expect=*) expect="${1#*=}"; shift ;;
+      -*) fl_die "Unknown option for profile import: $1" "Use: benchbar profile import FILE|URL [--as NAME] [--plan] [--expect DIGEST]" ;;
       *) [[ -z "$src" ]] && src="$1"; shift ;;
     esac
   done
@@ -1026,9 +1028,10 @@ fl_cmd_profile_import() {
   if [[ "$plan" == "1" ]]; then
     fl_profile_check_loaded
     if [[ "${OPT_JSON:-0}" == "1" ]]; then
-      printf '{"schema_version":%d,"cli_version":"%s","name":%s,"source":%s,"exists":%s,"diff":%s,"base":%s,"apps":%s,"check":{"repos":%s},"skipped_apps":%s}\n' \
+      printf '{"schema_version":%d,"cli_version":"%s","name":%s,"source":%s,"exists":%s,"diff":%s,"base":%s,"apps":%s,"check":{"repos":%s},"skipped_apps":%s,"digest":"%s"}\n' \
         "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$name")" "$(fl_json_str "$FL_PROFILE_RECORD")" "$exists" "$(fl_profile_json_text "$diff")" \
-        "$(fl_json_str "$FL_TEAM_BASE")" "$(fl_profile_import_apps_json)" "$(fl_profile_check_repos_json)" "$(fl_profile_json_list ${CK_SKIPPED[@]+"${CK_SKIPPED[@]}"})" >&3
+        "$(fl_json_str "$FL_TEAM_BASE")" "$(fl_profile_import_apps_json)" "$(fl_profile_check_repos_json)" "$(fl_profile_json_list ${CK_SKIPPED[@]+"${CK_SKIPPED[@]}"})" \
+        "$(fl_profile_file_digest "$tmp")" >&3
     else
       fl_info "${src}: team profile ${name}, base ${FL_TEAM_BASE}, ${#FL_TEAM_APPS[@]} app(s)$([[ "$exists" == true ]] && printf ', replaces %s' "$target")"
       [[ -n "$diff" ]] && printf '%s\n' "$diff" | sed 's/^/    /'
@@ -1036,6 +1039,10 @@ fl_cmd_profile_import() {
     fi
     rm -f "$tmp"
     return 0
+  fi
+  if [[ -n "$expect" && "$expect" != "$(fl_profile_file_digest "$tmp")" ]]; then
+    rm -f "$tmp"
+    fl_die "${src} changed since it was reviewed. Nothing was imported." "Review it again: benchbar profile import ${src} --as ${name} --plan"
   fi
   fl_info "${src}: team profile ${name}, base ${FL_TEAM_BASE}, ${#FL_TEAM_APPS[@]} app(s)"
   fl_write_reviewed "$target" "$tmp" "team profile ${name}" || code=1
@@ -1185,7 +1192,7 @@ UP_KIND=(); UP_NAME=(); UP_PATH=(); UP_BEHIND=(); UP_DIFF=(); UP_NEW=()
 # fl_profile_update_add KIND NAME PATH: fetches again and fills UP_* (the
 # new file of an import, the new commits of a subscription); never applies
 fl_profile_update_add() {
-  local kind="$1" name="$2" path="$3" src tmp="" raw diff="" behind="" _days
+  local kind="$1" name="$2" path="$3" src tmp="" raw diff="" behind="" _days to=""
   if [[ "$kind" == "imported" ]]; then
     src="$(fl_profile_file_source "$path")"
     tmp="$(mktemp "${TMPDIR:-/tmp}/benchbar-profile.XXXXXX")"
@@ -1203,9 +1210,25 @@ fl_profile_update_add() {
   else
     fl_profile_sub_fetch "$path" || fl_warn "${name}: cannot fetch: ${FL_PROFILE_ERR}; showing the last fetch"
     read -r behind _days <<<"$(fl_profile_sub_behind "$path")"
-    [[ "${behind:-0}" =~ ^[1-9] ]] && diff="$(fl_profile_git "$path" diff 'HEAD..@{upstream}' -- '*.toml' 2>/dev/null || true)"
+    to="$(fl_profile_git "$path" rev-parse -q --verify '@{upstream}' 2>/dev/null || true)"
+    [[ "${behind:-0}" =~ ^[1-9] ]] && diff="$(fl_profile_git "$path" diff "HEAD..${to}" -- '*.toml' 2>/dev/null || true)"
   fi
-  UP_KIND+=("$kind"); UP_NAME+=("$name"); UP_PATH+=("$path"); UP_BEHIND+=("$behind"); UP_DIFF+=("$diff"); UP_NEW+=("$tmp")
+  UP_KIND+=("$kind"); UP_NAME+=("$name"); UP_PATH+=("$path"); UP_BEHIND+=("$behind"); UP_DIFF+=("$diff"); UP_NEW+=("$tmp"); UP_TO+=("$to")
+}
+
+# fl_profile_file_digest FILE: sha256 of what would be written, so an apply
+# can refuse content that changed after the plan showed it
+fl_profile_file_digest() { shasum -a 256 "$1" | awk '{print $1}'; }
+
+# fl_profile_update_digest: one digest over every update's reviewed state:
+# the fetched file of an import, the upstream commit of a subscription
+fl_profile_update_digest() {
+  local i=0
+  while [[ "$i" -lt "${#UP_NAME[@]}" ]]; do
+    printf '%s\t%s\t%s\n' "${UP_KIND[$i]}" "${UP_NAME[$i]}" \
+      "$(if [[ -n "${UP_NEW[$i]}" ]]; then fl_profile_file_digest "${UP_NEW[$i]}"; else printf '%s' "${UP_TO[$i]:--}"; fi)"
+    i=$((i + 1))
+  done | shasum -a 256 | awk '{print $1}'
 }
 
 fl_profile_update_json() {
@@ -1216,24 +1239,26 @@ fl_profile_update_json() {
       "$(fl_json_num "${UP_BEHIND[$i]}")" "$(fl_profile_json_text "${UP_DIFF[$i]}")"
     sep=","; i=$((i + 1))
   done
-  printf ']'
+  printf '],"digest":"%s"' "$(fl_profile_update_digest)"
   [[ -n "$applied" ]] && printf ',"applied":%s' "$applied"
   printf '}\n'
 }
 
 fl_cmd_profile_update() {
-  local target="" all=0 plan=0 f n sub sname surl sdir i=0 applied=true code=0 udir
+  local target="" all=0 plan=0 f n sub sname surl sdir i=0 applied=true code=0 udir expect="" to=""
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
       --all) all=1; shift ;;
       --plan) plan=1; shift ;;
-      -*) fl_die "Unknown option for profile update: $1" "Use: benchbar profile update NAME|--all [--plan]" ;;
+      --expect) expect="${2:-}"; shift 2 || shift ;;
+      --expect=*) expect="${1#*=}"; shift ;;
+      -*) fl_die "Unknown option for profile update: $1" "Use: benchbar profile update NAME|--all [--plan] [--expect DIGEST]" ;;
       *) [[ -z "$target" ]] && target="$1"; shift ;;
     esac
   done
   [[ -n "$target" || "$all" == "1" ]] || fl_die "Usage: benchbar profile update NAME|--all [--plan]"
   fl_profile_json_begin
-  UP_KIND=(); UP_NAME=(); UP_PATH=(); UP_BEHIND=(); UP_DIFF=(); UP_NEW=()
+  UP_KIND=(); UP_NAME=(); UP_PATH=(); UP_BEHIND=(); UP_DIFF=(); UP_NEW=(); UP_TO=()
   udir="$(fl_team_profile_user_dir)"
   if [[ "$all" == "1" ]]; then
     for f in "$udir"/*.toml; do
@@ -1265,11 +1290,16 @@ fl_cmd_profile_update() {
       else
         fl_ok "${UP_NAME[$i]} (${UP_KIND[$i]}): up to date"
       fi
-      [[ -n "${UP_NEW[$i]}" ]] && rm -f "${UP_NEW[$i]}"
       i=$((i + 1))
     done
     if [[ "${OPT_JSON:-0}" == "1" ]]; then fl_profile_update_json "" >&3; fi
+    i=0; while [[ "$i" -lt "${#UP_NAME[@]}" ]]; do [[ -n "${UP_NEW[$i]}" ]] && rm -f "${UP_NEW[$i]}"; i=$((i + 1)); done
     return 0
+  fi
+  if [[ -n "$expect" && "$expect" != "$(fl_profile_update_digest)" ]]; then
+    i=0; while [[ "$i" -lt "${#UP_NAME[@]}" ]]; do [[ -n "${UP_NEW[$i]}" ]] && rm -f "${UP_NEW[$i]}"; i=$((i + 1)); done
+    fl_die "The update changed since it was reviewed (the source has newer content). Nothing was changed." \
+      "Review it again: benchbar profile update ${target:---all} --plan"
   fi
   while [[ "$i" -lt "${#UP_NAME[@]}" ]]; do
     n="${UP_NAME[$i]}"
@@ -1284,7 +1314,8 @@ fl_cmd_profile_update() {
       if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
         fl_info "dry-run: nothing was changed"
       elif fl_confirm "Fast forward ${UP_PATH[$i]} to these commits?"; then
-        if fl_profile_git "${UP_PATH[$i]}" merge --ff-only --quiet '@{upstream}' >/dev/null 2>&1; then
+        to="${UP_TO[$i]}"; [[ -n "$to" ]] || to='@{upstream}'
+        if fl_profile_git "${UP_PATH[$i]}" merge --ff-only --quiet "$to" >/dev/null 2>&1; then
           fl_ok "${n}: updated (${UP_PATH[$i]})"
         else
           fl_fail "${n}: not a fast forward; ${UP_PATH[$i]} has changes of its own"

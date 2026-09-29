@@ -310,7 +310,16 @@ assert_eq "$snap" "$(snapshot "$USER_DIR")" "(import --plan writes nothing)"
 assert_eq "shared $EXPORTED False None v15-lts 3" "$(ex '" ".join(str(x) for x in (d["name"], d["source"], d["exists"], d["diff"], d["base"], len(d["apps"])))')"
 assert_eq "acme_ecr private ['acme_base']" "$(ex '" ".join(str(a[k]) for a in d["apps"] if a["name"]=="acme_ecr" for k in ("name","access","requires"))')"
 assert_eq "True True True []" "$(ex '" ".join(str(x) for x in [r["reachable"] for r in d["check"]["repos"]] + [d["skipped_apps"]])')"
-run_js profile import "$EXPORTED" --as shared --yes --json
+DIGEST="$(ex 'd["digest"]')"
+assert_eq "64" "${#DIGEST}"
+# content that changed after the review is refused with --expect
+cp "$EXPORTED" "$TMP_DIR/exported.bak"
+printf '# edited after review\n' >>"$EXPORTED"
+run_js profile import "$EXPORTED" --as shared --expect "$DIGEST" --yes --json
+assert_eq "1" "$CODE"; assert_contains "$ERR" "changed since it was reviewed"
+assert_no_file "$USER_DIR/shared.toml"
+cp "$TMP_DIR/exported.bak" "$EXPORTED"
+run_js profile import "$EXPORTED" --as shared --expect "$DIGEST" --yes --json
 assert_eq "0" "$CODE" "$OUT $ERR"
 assert_eq "shared $USER_DIR/shared.toml $EXPORTED" "$(ex '" ".join(d[k] for k in ("name","path","source"))')"
 grep -q "^source = \"${EXPORTED}\"$" "$USER_DIR/shared.toml" || fail "the import records its source"
@@ -332,7 +341,14 @@ run_js profile update shared --plan --json
 assert_eq "0" "$CODE" "$OUT $ERR"
 assert_eq "shared imported None" "$(ex '" ".join(str(u[k]) for u in d["updates"] for k in ("name","kind","behind"))')"
 assert_contains "$(ex 'd["updates"][0]["diff"]')" "Acme ECR 2"
-run_js profile update shared --yes --json
+UDIGEST="$(ex 'd["digest"]')"
+# the source changed again after the review: --expect refuses, nothing written
+sed_inplace 's/^description = "Acme ECR 2"$/description = "Acme ECR 3"/' "$EXPORTED"
+run_js profile update shared --expect "$UDIGEST" --yes --json
+assert_eq "1" "$CODE"; assert_contains "$ERR" "changed since it was reviewed"
+grep -q '^description = "Acme ECR"$' "$USER_DIR/shared.toml" || fail "a stale update review writes nothing"
+sed_inplace 's/^description = "Acme ECR 3"$/description = "Acme ECR 2"/' "$EXPORTED"
+run_js profile update shared --expect "$UDIGEST" --yes --json
 assert_eq "True" "$(ex 'd["applied"]')"
 grep -q '^description = "Acme ECR 2"$' "$USER_DIR/shared.toml" || fail "update wrote the new file"
 ls "$FL_BACKUP_ROOT"/*/*shared.toml >/dev/null 2>&1 || fail "update backed up the old file"
@@ -463,6 +479,7 @@ run_js profile update team-a --plan --json
 assert_eq "0" "$CODE" "$OUT $ERR"
 assert_eq "team-a subscribed 1" "$(ex '" ".join(str(u[k]) for u in d["updates"] for k in ("name","kind","behind"))')"
 assert_contains "$(ex 'd["updates"][0]["diff"]')" '+description = "Team A v2"'
+TDIGEST="$(ex 'd["digest"]')"
 run_js profile list --json
 assert_eq "1" "$(ex '[p for p in d["profiles"] if p["name"]=="team-a"][0]["subscription"]["behind"]')"
 # doctor: the bench follows team-a; doctor never fetches without --fetch
@@ -483,7 +500,14 @@ run_js doctor --fetch --json --bench-dir "$BENCH"
 assert_calls_contain "fetch --quiet --no-tags" "(doctor --fetch fetches the subscription)"
 BENCHBAR_OFFLINE=1 run_js doctor --json --bench-dir "$BENCH"
 assert_eq "warn" "$(ex '[c["level"] for c in d["checks"] if c["id"]=="profile_outdated"][0]')"
-run_js profile update team-a --yes --json
+# a commit pushed after the review makes the reviewed digest stale
+( cd "$WORK/team-config" && sed_inplace 's/Team A v2/Team A v3/' profiles/team-a.toml && git commit -q -am "v3" && git push -q origin main )
+run_js profile update team-a --expect "$TDIGEST" --yes --json
+assert_eq "1" "$CODE"; assert_contains "$ERR" "changed since it was reviewed"
+grep -q 'Team A v2' "$SUB_DIR/profiles/team-a.toml" && fail "a stale update review must not fast forward"
+( cd "$WORK/team-config" && sed_inplace "s/Team A v3/Team A v2/" profiles/team-a.toml && git commit -q -am "back to v2" && git push -q origin main )
+run_js profile update team-a --plan --json
+run_js profile update team-a --expect "$(ex 'd["digest"]')" --yes --json
 assert_eq "0" "$CODE" "$OUT $ERR"
 assert_eq "True" "$(ex 'd["applied"]')"
 grep -q 'Team A v2' "$SUB_DIR/profiles/team-a.toml" || fail "update fast forwarded the clone"

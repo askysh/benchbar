@@ -216,7 +216,8 @@ struct ProfileSharingTests {
         base.cli.answer("profile import", json: try Fixture.string("profile-import"))
         await run.add()
         #expect(run.phase == .done && run.result?.name == "acme")
-        #expect(calls("import").last == ["profile", "import", url, "--as", "acme_team", "--yes", "--json"])
+        #expect(calls("import").last == ["profile", "import", url, "--as", "acme_team", "--expect", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1", "--yes", "--json"],
+                "Add imports only the content that was reviewed")
         #expect(calls("list").count >= 1, "the list reloads")
     }
 
@@ -259,7 +260,8 @@ struct ProfileSharingTests {
         base.cli.answer("profile update", json: try Fixture.string("profile-update"))
         await run.apply()
         #expect(run.phase == .done && run.plan?.applied == true)
-        #expect(calls("update").last == ["profile", "update", "acme-erp", "--yes", "--json"])
+        #expect(calls("update").last == ["profile", "update", "acme-erp", "--expect", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb2", "--yes", "--json"],
+                "Apply updates only to what the review showed")
     }
 
     @Test func updateWithNothingNewCannotApply() async throws {

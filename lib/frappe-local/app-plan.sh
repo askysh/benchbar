@@ -75,11 +75,12 @@ fl__ap_remote() {
 
 # fl__ap_read_hooks REPO BRANCH NAME: a shallow, blobless clone into a temp
 # folder outside the bench, only hooks.py read from it. Sets AP__PKG (the
-# package folder that holds hooks.py) and AP__REQ (its required_apps, one
-# per line); 1 with AP__ERR when it cannot be read.
+# package folder that holds hooks.py), AP__REQ (its required_apps, one
+# per line) and AP__SHA (the commit it read); 1 with AP__ERR when it cannot
+# be read.
 fl__ap_read_hooks() {
   local repo="$1" branch="$2" name="$3" tmp code=0 path=""
-  AP__PKG=""; AP__REQ=""; AP__ERR=""
+  AP__PKG=""; AP__REQ=""; AP__ERR=""; AP__SHA=""
   tmp="$(mktemp -d "${TMPDIR:-/tmp}/benchbar-plan.XXXXXX")"
   fl__ap_git "${FL_GIT_CLONE_TIMEOUT:-120}" "$tmp/out" "$tmp/err" \
     clone --quiet --depth 1 --filter=blob:none --no-checkout --branch "$branch" -- "$repo" "$tmp/repo" || code=$?
@@ -88,6 +89,7 @@ fl__ap_read_hooks() {
     AP__ERR="could not read hooks.py of ${repo} (git clone exit ${code}): $(fl__ap_first_line "$tmp/err")"
     rm -rf "$tmp"; return 1
   fi
+  AP__SHA="$(git -C "$tmp/repo" rev-parse HEAD 2>/dev/null || true)"
   git -C "$tmp/repo" ls-tree -r --name-only HEAD >"$tmp/tree" 2>/dev/null || true
   if grep -qxF "${name}/hooks.py" "$tmp/tree"; then path="${name}/hooks.py"
   else path="$(grep -E '^[^/]+/hooks\.py$' "$tmp/tree" | head -n1 || true)"; fi
@@ -110,6 +112,12 @@ fl__ap_read_hooks() {
 # ---------------------------------------------------------------- the plan
 
 fl__ap_err() { AP_ERRORS+=("$1"); AP_CAN_APPLY=0; }
+
+# fl__ap_at_commit DIR SHA: 0 when the clone in apps/DIR is at SHA; sets AP__GOT
+fl__ap_at_commit() {
+  AP__GOT="$(git -C "$(fl_app_path "$1")" rev-parse HEAD 2>/dev/null || true)"
+  [[ -n "$2" && "$AP__GOT" == "$2" ]]
+}
 
 # fl__ap_required PARENT LIST: walks required_apps breadth first. A dep in
 # the bench is noted; one config/apps.tsv or the team profile resolves is
@@ -137,12 +145,13 @@ fl__ap_required() {
         fl__ap_err "${parent} requires ${dep}, which is not in the bench and not in $(fl_config_file apps.tsv) or the team profile"
       fi
     fi
-    AP_REQ+=("${dep}|${parent}|${present}|${resolves}|${source}|${repo}|${branch}")
-    [[ "$resolves" == "1" ]] || continue
+    if [[ "$resolves" != "1" ]]; then AP_REQ+=("${dep}|${parent}|${present}|${resolves}|${source}|${repo}|${branch}|"); continue; fi
     if fl__ap_read_hooks "$repo" "$branch" "$dep"; then
-      AP_DEPS=("${dep}|${repo}|${branch}" ${AP_DEPS[@]+"${AP_DEPS[@]}"})
+      AP_REQ+=("${dep}|${parent}|${present}|${resolves}|${source}|${repo}|${branch}|${AP__SHA}")
+      AP_DEPS=("${dep}|${repo}|${branch}|${AP__SHA}" ${AP_DEPS[@]+"${AP_DEPS[@]}"})
       while IFS= read -r line; do [[ -n "$line" ]] && queue+=("${line}|${dep}"); done <<<"$AP__REQ"
     else
+      AP_REQ+=("${dep}|${parent}|${present}|${resolves}|${source}|${repo}|${branch}|")
       fl__ap_err "$AP__ERR"
     fi
   done
@@ -154,7 +163,7 @@ fl__ap_required() {
 fl_app_add_plan() {
   local target="$1" branch="$2" name="$3" all="$4" s policy cur reqs="" sep i entry body state default
   local n by pr rs src rp br kind label cmd note
-  AP_NAME=""; AP_REPO=""; AP_BRANCH=""; AP_BRANCH_SOURCE=""; AP_PRESENT=0; AP_REACHABLE=""; AP_PKG=""
+  AP_NAME=""; AP_REPO=""; AP_BRANCH=""; AP_BRANCH_SOURCE=""; AP_PRESENT=0; AP_REACHABLE=""; AP_PKG=""; AP_COMMIT=""
   AP_SITES=(); AP_INSTALL=(); AP_REQ=(); AP_DEPS=(); AP_ERRORS=(); AP_STEPS=(); AP_CAN_APPLY=1
   [[ "$all" == "1" && -n "${OPT_SITE:-}" ]] && fl_die "Pass --site or --all-sites, not both."
   [[ -z "$name" || "$name" =~ ^[a-z][a-z0-9_]*$ ]] || fl_die "Invalid app name: '${name}'." "Use a Python package name: lowercase letters, digits and '_'."
@@ -192,7 +201,7 @@ fl_app_add_plan() {
     fi
     if [[ "$AP_CAN_APPLY" == "1" ]]; then
       if fl__ap_read_hooks "$AP_REPO" "$AP_BRANCH" "$AP_NAME"; then
-        AP_PKG="$AP__PKG"; reqs="$AP__REQ"
+        AP_PKG="$AP__PKG"; reqs="$AP__REQ"; AP_COMMIT="$AP__SHA"
         # bench names the folder after the package, so that is the app
         if [[ -z "$name" && "$AP_PKG" != "$AP_NAME" ]]; then
           AP_NAME="$AP_PKG"
@@ -216,7 +225,7 @@ fl_app_add_plan() {
 
   # the steps, in the order --apply runs them
   for entry in ${AP_DEPS[@]+"${AP_DEPS[@]}"}; do
-    IFS='|' read -r n rp br <<<"$entry"
+    IFS='|' read -r n rp br _ <<<"$entry"
     AP_STEPS+=("clone_required|${n}|Clone ${n}|bench get-app --skip-assets --branch ${br} ${rp}|required app of ${AP_NAME} (hooks.py required_apps); get-app also pip installs it into the bench env")
   done
   if [[ "$AP_PRESENT" == "0" ]]; then
@@ -238,9 +247,9 @@ fl_app_add_plan() {
   fi
 
   # JSON
-  body="$(printf '"bench":%s,"profile":%s,"target":%s,"app":%s,"package":%s,"repo":%s,"branch":%s,"branch_source":%s,"present":%s,"reachable":%s,' \
+  body="$(printf '"bench":%s,"profile":%s,"target":%s,"app":%s,"package":%s,"repo":%s,"branch":%s,"commit":%s,"branch_source":%s,"present":%s,"reachable":%s,' \
     "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$FL_PROFILE")" "$(fl_json_str "$(fl_url_strip_userinfo "$target")")" \
-    "$(fl_json_str "$AP_NAME")" "$(fl_json_str "$AP_PKG")" "$(fl_json_str "$AP_REPO")" "$(fl_json_str "$AP_BRANCH")" \
+    "$(fl_json_str "$AP_NAME")" "$(fl_json_str "$AP_PKG")" "$(fl_json_str "$AP_REPO")" "$(fl_json_str "$AP_BRANCH")" "$(fl_json_str "$AP_COMMIT")" \
     "$(fl_json_str "$AP_BRANCH_SOURCE")" "$(fl_json_bool "$AP_PRESENT")" \
     "$(if [[ -z "$AP_REACHABLE" ]]; then printf null; else fl_json_bool "$AP_REACHABLE"; fi)")"
   body="${body}\"sites\":["; sep=""
@@ -250,8 +259,8 @@ fl_app_add_plan() {
   done
   body="${body}],\"sites_error\":$(fl_json_str "${FL_SITE_APPS_ERROR:-}"),\"required_apps\":["; sep=""
   for entry in ${AP_REQ[@]+"${AP_REQ[@]}"}; do
-    IFS='|' read -r n by pr rs src rp br <<<"$entry"
-    body="${body}${sep}{\"name\":$(fl_json_str "$n"),\"required_by\":$(fl_json_str "$by"),\"present\":$(fl_json_bool "$pr"),\"resolves\":$(fl_json_bool "$rs"),\"source\":$(fl_json_str "$src"),\"repo\":$(fl_json_str "$rp"),\"branch\":$(fl_json_str "$br")}"; sep=","
+    IFS='|' read -r n by pr rs src rp br sha <<<"$entry"
+    body="${body}${sep}{\"name\":$(fl_json_str "$n"),\"required_by\":$(fl_json_str "$by"),\"present\":$(fl_json_bool "$pr"),\"resolves\":$(fl_json_bool "$rs"),\"source\":$(fl_json_str "$src"),\"repo\":$(fl_json_str "$rp"),\"branch\":$(fl_json_str "$br"),\"commit\":$(fl_json_str "$sha")}"; sep=","
   done
   body="${body}],\"missing_required\":["; sep=""
   for entry in ${AP_REQ[@]+"${AP_REQ[@]}"}; do
@@ -331,7 +340,7 @@ fl_cmd_app_add_planned() {
     return 0
   fi
 
-  local labels=() stop=0 e rp br
+  local labels=() stop=0 e rp br sha
   for entry in "${AP_STEPS[@]}"; do IFS='|' read -r _ _ label _ _ <<<"$entry"; labels+=("$label"); done
   fl_steps_define "${labels[@]}"
   i=0
@@ -342,12 +351,18 @@ fl_cmd_app_add_planned() {
     fl_step_begin "$i"
     case "$kind" in
       clone_required|clone)
-        rp=""; br=""
-        for e in ${AP_DEPS[@]+"${AP_DEPS[@]}"} "${AP_NAME}|${AP_REPO}|${AP_BRANCH}"; do
-          [[ "${e%%|*}" == "$arg" ]] && { IFS='|' read -r _ rp br <<<"$e"; break; }
+        rp=""; br=""; sha=""
+        for e in ${AP_DEPS[@]+"${AP_DEPS[@]}"} "${AP_NAME}|${AP_REPO}|${AP_BRANCH}|${AP_COMMIT}"; do
+          [[ "${e%%|*}" == "$arg" ]] && { IFS='|' read -r _ rp br sha <<<"$e"; break; }
         done
-        if fl_app_clone "$arg" "$rp" "$br"; then built+=("$FL_CLONED_DIR"); fl_step_end "done"
-        else fl_step_end failed; code=1; stop=1; fi ;;
+        if ! fl_app_clone "$arg" "$rp" "$br"; then fl_step_end failed; code=1; stop=1
+        elif ! fl__ap_at_commit "$FL_CLONED_DIR" "$sha"; then
+          # the branch moved between the plan and get-app: build and install
+          # would run code nobody reviewed
+          fl_step_end failed; code=1; stop=1
+          fl_fail "${arg}: ${br} moved after the plan was made (planned ${sha:0:12}, cloned ${AP__GOT:0:12}); nothing was built or installed."
+          fl_fix "Review a fresh plan: benchbar app add ${target} ... --dry-run --json"
+        else built+=("$FL_CLONED_DIR"); fl_step_end "done"; fi ;;
       build)
         s="$arg"
         [[ "${#built[@]}" -gt 0 ]] && s="$(IFS=,; printf '%s' "${built[*]}")"

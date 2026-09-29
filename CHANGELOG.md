@@ -88,6 +88,13 @@ All notable changes to this project are documented here.
   `subscribed`. New fields `source_url` (the URL an import or
   subscription came from, or null), `subscription`, `shadowed_by` and
   `schema`.
+- `benchbar down` stops a listener on the bench's ports only when its
+  folder is inside the bench; one whose folder cannot be read is left
+  alone.
+- Plans are bound to what they showed: an `app add` token covers the
+  commit of every repo it clones, and `profile import` and `profile
+  update` plans carry a `digest` that `--expect` checks. The app passes
+  it, so a profile that changes after Review is refused, not applied.
 
 ### Fixed
 
