@@ -379,6 +379,19 @@ assert_eq "$TOKEN" "$(printf '%s' "$OUT" | jget - 'd["token"]')"
 run_json app add "file://${REMOTES}/acme_top.git" --site plansite --dry-run --json --bench-dir "$PB"
 assert_eq "0" "$CODE" "$ERR"
 assert_eq "True present [] False" "$(printf '%s' "$OUT" | jget - '" ".join(str(x) for x in [d["present"], d["branch_source"], d["steps"], d["changes"]])')"
+# a tag: git checks it out detached; the check is its commit, and a second
+# plan of the present app is not refused for being detached
+make_app_remote acme_tagged
+git -C "$REMOTES/acme_tagged.git" tag v1.0.0 main
+run_json app add "file://${REMOTES}/acme_tagged.git" --branch v1.0.0 --site plansite --dry-run --json --bench-dir "$PB"
+assert_eq "0" "$CODE" "$ERR"
+TAGTOKEN="$(printf '%s' "$OUT" | jget - 'd["token"]')"
+MOCK_GIT_REAL=1 run_json app add "file://${REMOTES}/acme_tagged.git" --branch v1.0.0 --site plansite --apply "$TAGTOKEN" --yes --json --bench-dir "$PB"
+assert_eq "0" "$CODE" "$ERR"
+assert_contains "$ERR" "apps/acme_tagged is at tag v1.0.0"
+run_json app add "file://${REMOTES}/acme_tagged.git" --branch v1.0.0 --site plansite --dry-run --json --bench-dir "$PB"
+assert_eq "0" "$CODE" "$ERR"
+assert_eq "True False" "$(printf '%s' "$OUT" | jget - '" ".join(str(x) for x in [d["present"], d["changes"]])')"
 # an unreachable repo and an unknown required app: can_apply false with the reasons
 MOCK_GIT_LSREMOTE_EXIT=128 run_json app add "git@work-gh:acme/private.git" --dry-run --json --bench-dir "$PB"
 assert_eq "0" "$CODE" "$ERR"

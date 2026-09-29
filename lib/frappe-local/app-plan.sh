@@ -113,6 +113,16 @@ fl__ap_read_hooks() {
 
 fl__ap_err() { AP_ERRORS+=("$1"); AP_CAN_APPLY=0; }
 
+# fl__ap_on_tag DIR TAG: 0 when apps/DIR is a detached HEAD at TAG's commit
+# (git checks a tag out detached, so there is no branch to compare)
+fl__ap_on_tag() {
+  local head want
+  [[ -z "$(fl_app_branch "$1")" && -n "$2" ]] || return 1
+  head="$(git -C "$(fl_app_path "$1")" rev-parse -q --verify HEAD 2>/dev/null)" || return 1
+  want="$(git -C "$(fl_app_path "$1")" rev-parse -q --verify "refs/tags/${2}^{commit}" 2>/dev/null)" || return 1
+  [[ "$head" == "$want" ]]
+}
+
 # fl__ap_at_commit DIR SHA: 0 when the clone in apps/DIR is at SHA; sets AP__GOT
 fl__ap_at_commit() {
   AP__GOT="$(git -C "$(fl_app_path "$1")" rev-parse HEAD 2>/dev/null || true)"
@@ -180,7 +190,7 @@ fl_app_add_plan() {
       "Move it aside (mv ${FL_BENCH_DIR}/apps/${cur} ~/${cur}.aside), then run this command again."
     s="$(fl_app_branch "$cur")"
     [[ -n "$AP_BRANCH" ]] || { AP_BRANCH="$s"; AP_BRANCH_SOURCE="present"; }
-    [[ "$s" == "$AP_BRANCH" ]] || fl_die "apps/${cur} is on ${s:-a detached HEAD}, not ${AP_BRANCH}." \
+    [[ "$s" == "$AP_BRANCH" ]] || fl__ap_on_tag "$cur" "$AP_BRANCH" || fl_die "apps/${cur} is on ${s:-a detached HEAD}, not ${AP_BRANCH}." \
       "benchbar never replaces an app. To switch it yourself: cd ${FL_BENCH_DIR}/apps/${cur} && git fetch $(fl_app_remote "$cur") ${AP_BRANCH} && git checkout ${AP_BRANCH}"
     reqs="$(fl_app_required_apps "$cur")"
   else
@@ -379,7 +389,10 @@ fl_cmd_app_add_planned() {
   done
   fl_bench_redis_down
   if [[ -d "$(fl_app_path "$AP_NAME")" ]]; then
-    fl_app_verify "$AP_NAME" "$AP_BRANCH" ${AP_INSTALL[@]+"${AP_INSTALL[@]}"} || code=1
+    s="$AP_BRANCH"
+    # a tag is checked out detached: its commit is the check, not a branch name
+    if fl__ap_on_tag "$AP_NAME" "$AP_BRANCH"; then fl_ok "apps/${AP_NAME} is at tag ${AP_BRANCH}"; s=""; fi
+    fl_app_verify "$AP_NAME" "$s" ${AP_INSTALL[@]+"${AP_INSTALL[@]}"} || code=1
   fi
   fl_steps_summary
   [[ "$json" == "1" ]] && fl__ap_result_json "$code" >&3
