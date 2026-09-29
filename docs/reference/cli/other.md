@@ -126,7 +126,15 @@ databases are not touched; the plist is moved to
 `~/Library/LaunchAgents-disabled/` and the other files are backed up
 first.
 
-Exit codes: 0; 1 declined.
+When the folder is no longer a bench (emptied by a cleanup tool, or
+deleted) but its agent is still installed, it removes only that agent:
+every `com.benchbar.*` agent whose working directory is the path is
+booted out and its plist moved aside. Such an agent otherwise restarts
+every 20 seconds, exits with code 127 and fills the log; doctor's
+[`dead_agents`](../../guides/doctor-and-repair.md#dead_agents) check
+points here.
+
+Exit codes: 0; 1 declined, or no bench and no agent at the path.
 
 ```bash
 benchbar uninstall-service --bench-dir ~/dev/v16-bench
