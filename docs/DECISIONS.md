@@ -500,6 +500,6 @@ Measured on five PR runs (September 2026): 11 to 14 minutes wall clock, all of i
 - `install --profile` skips only `false` repos. With a repo that is `null` it goes on and fails at get-app as before, rather than silently build a smaller bench offline.
 - A subscription's profiles are `profiles/*.toml` when that folder exists, else `*.toml` at the root: a config repo often keeps its own `benchbar.toml` lockfile or other TOML at the root.
 - Clones and fetches run with `core.hooksPath=/dev/null` and `GIT_LFS_SKIP_SMUDGE=1`, and subscribe clones into a temporary folder first, so a repo that holds no valid profile leaves nothing behind.
-- Doctor's daily fetch stamps `.git/benchbar-tried` in the clone before it fetches, and `.git/benchbar-fetched` only when it worked: an offline Mac tries once a day, not on every doctor run.
+- `profile_outdated` follows the read only doctor rule of dependency freshness: the subscription is fetched only with `doctor --fetch`; `.git/benchbar-fetched` in the clone dates the last good fetch for the age note.
 - The `--plan` forms of export, import, subscribe and update take no CLI lock, like `list` and `check`, so the app can preview while an install runs.
 - `profile remove` refuses a profile that is your own file or a `BENCHBAR_PROFILE_PATH` folder: it only undoes what import and subscribe did.

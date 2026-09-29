@@ -270,8 +270,10 @@ Fix: `benchbar lock apply` (`benchbar lock check` lists the differences).
 ### profile_outdated
 
 The bench's team profile comes from a subscription whose clone is behind
-its remote. Doctor fetches the subscription at most once a day (not at
-all with `BENCHBAR_OFFLINE=1`), so most runs need no network. See
+its remote, as of the clone's last fetch. Doctor itself never fetches;
+`benchbar doctor --fetch` fetches the subscription first (not with
+`BENCHBAR_OFFLINE=1`), and the message says when the last fetch is
+older than a day. See
 [Sharing a profile](teams.md#sharing-a-profile).
 
 Fix: `benchbar profile update NAME` (shows the changes and asks).

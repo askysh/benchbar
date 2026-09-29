@@ -1357,10 +1357,10 @@ fl_cmd_profile_remove() {
 # ---- doctor
 
 # profile_outdated: the bench's team profile comes from a subscription
-# that is behind. Fetches at most once a day (the stamp is in the clone's
-# .git), so a doctor run with a fresh stamp needs no network.
+# that is behind, as of the clone's last fetch. Doctor stays read only: it
+# fetches only with --fetch (FL_FETCH=1), never in a dry run or offline.
 chk_profile_outdated() {
-  local team file sub _sname surl sdir tried now behind="" days=""
+  local team file sub _sname surl sdir fetched behind="" days="" note=""
   team="$(fl_bstate_get TEAM_PROFILE 2>/dev/null || true)"
   [[ -n "$team" ]] || { chk__set ok "the bench follows no team profile"; return 0; }
   file="$(fl_team_profile_file "$team" 2>/dev/null || true)"
@@ -1368,14 +1368,20 @@ chk_profile_outdated() {
   sub="$(fl_profile_subscription_of "$file" || true)"
   [[ -n "$sub" ]] || { chk__set ok "team profile ${team} is not from a subscription"; return 0; }
   IFS=$'\t' read -r _sname surl sdir <<<"$sub"
-  tried="$(fl_profile_sub_stamp "$sdir" tried)"
-  now="$(date +%s)"
-  if ! fl_profile_offline_mode && [[ $((now - ${tried:-0})) -ge 86400 ]]; then fl_profile_sub_fetch "$sdir" >/dev/null 2>&1 || true; fi
+  if [[ "${FL_FETCH:-0}" == "1" && "${FL_DRY_RUN:-0}" != "1" ]] && ! fl_profile_offline_mode; then
+    fl_profile_sub_fetch "$sdir" >/dev/null 2>&1 || true
+  fi
+  fetched="$(fl_profile_sub_stamp "$sdir" fetched)"
+  if [[ ! "$fetched" =~ ^[0-9]+$ ]]; then
+    note=" (as of your last git fetch; run benchbar doctor --fetch to check the remote)"
+  elif [[ $(($(date +%s) - fetched)) -ge 86400 ]]; then
+    note=" (as of a fetch $(fl_age_words "$fetched"); run benchbar doctor --fetch to check the remote)"
+  fi
   read -r behind days <<<"$(fl_profile_sub_behind "$sdir")"
   if [[ "${behind:-0}" =~ ^[1-9] ]]; then
-    chk__set warn "team profile ${team} is ${behind} commit(s)${days:+, ${days} day(s),} behind ${surl}" "benchbar profile update ${team}"
+    chk__set warn "team profile ${team} is ${behind} commit(s)${days:+, ${days} day(s),} behind ${surl}${note}" "benchbar profile update ${team}"
   else
-    chk__set ok "team profile ${team} is up to date with ${surl}"
+    chk__set ok "team profile ${team} is up to date with ${surl}${note}"
   fi
 }
 

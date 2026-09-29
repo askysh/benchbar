@@ -431,7 +431,7 @@ assert_eq "team-a subscribed 1" "$(ex '" ".join(str(u[k]) for u in d["updates"] 
 assert_contains "$(ex 'd["updates"][0]["diff"]')" '+description = "Team A v2"'
 run_js profile list --json
 assert_eq "1" "$(ex '[p for p in d["profiles"] if p["name"]=="team-a"][0]["subscription"]["behind"]')"
-# doctor: the bench follows team-a; a fresh stamp means no fetch
+# doctor: the bench follows team-a; doctor never fetches without --fetch
 state="$(ls "$FL_STATE_DIR"/benches/acme-bench-*.env)"
 sed_inplace 's/^TEAM_PROFILE=.*/TEAM_PROFILE=team-a/' "$state"
 reset_calls
@@ -439,10 +439,14 @@ run_js doctor --json --bench-dir "$BENCH"
 assert_eq "warn benchbar profile update team-a" "$(ex '" ".join(str(c[k]) for c in d["checks"] if c["id"]=="profile_outdated" for k in ("level","fix_command"))')"
 assert_contains "$(ex '[c["message"] for c in d["checks"] if c["id"]=="profile_outdated"][0]')" "1 commit(s)"
 assert_calls_not_contain 'fetch'
-printf '0\n' >"$SUB_DIR/.git/benchbar-tried"
+printf '0\n' >"$SUB_DIR/.git/benchbar-fetched"
 reset_calls
 run_js doctor --json --bench-dir "$BENCH"
-assert_calls_contain "fetch --quiet --no-tags" "(a day old stamp: doctor fetches once)"
+assert_calls_not_contain 'fetch'
+assert_contains "$(ex '[c["message"] for c in d["checks"] if c["id"]=="profile_outdated"][0]')" "run benchbar doctor --fetch"
+reset_calls
+run_js doctor --fetch --json --bench-dir "$BENCH"
+assert_calls_contain "fetch --quiet --no-tags" "(doctor --fetch fetches the subscription)"
 BENCHBAR_OFFLINE=1 run_js doctor --json --bench-dir "$BENCH"
 assert_eq "warn" "$(ex '[c["level"] for c in d["checks"] if c["id"]=="profile_outdated"][0]')"
 run_js profile update team-a --yes --json

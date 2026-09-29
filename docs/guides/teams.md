@@ -122,8 +122,8 @@ before `BENCHBAR_PROFILE_PATH`, in the order you subscribed; `profile
 list` warns when a name is hidden by an earlier file. Nothing updates on
 its own. When the bench's team profile comes from a subscription that is
 behind, doctor warns
-([`profile_outdated`](doctor-and-repair.md#profile_outdated)); it fetches
-at most once a day, and not at all with `BENCHBAR_OFFLINE=1`.
+([`profile_outdated`](doctor-and-repair.md#profile_outdated)) as of the
+last fetch; `benchbar doctor --fetch` checks the remote first.
 
 Every flag is in the [profile reference](../reference/cli/profile.md).
 

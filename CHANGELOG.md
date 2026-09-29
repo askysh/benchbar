@@ -64,7 +64,8 @@ All notable changes to this project are documented here.
 - `install --profile` leaves out the apps whose repos cannot be read,
   and every app that requires one, and lists them.
 - Doctor warns with `profile_outdated` when the bench's team profile
-  comes from a subscription that is behind (one fetch a day at most).
+  comes from a subscription that is behind, as of the last fetch
+  (`doctor --fetch` checks the remote first).
 - MCP read tools `benchbar_profile_list` and `benchbar_profile_check`.
 - Team profile schema 2: `source`, `exported_from`, and per app `access`
   and `requires`. Schema 1 files keep working.
