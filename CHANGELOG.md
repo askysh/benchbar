@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here.
 
-## Unreleased
+## 0.6.0 - 2026-09-29
 
 ### Added
 
@@ -96,6 +96,8 @@ All notable changes to this project are documented here.
   update` plans carry a `digest` that `--expect` checks (export too). The
   app passes it, so a profile that changes after Review is refused, not
   applied.
+- Update Now installs the release it offered: the installer comes from
+  that release's tag with `--version`, not from `main`.
 
 ### Fixed
 

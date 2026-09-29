@@ -136,7 +136,13 @@ final class UpdateOffer {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [quit] in quit() }
     }
 
-    func copyCommand() { copy(plan.command) }
+    func copyCommand() {
+        guard let version else { return }
+        copy(plan.command(to: version))
+    }
+
+    /// The command Copy Command copies, for its tooltip.
+    var command: String { version.map { plan.command(to: $0) } ?? "" }
 
     func openReleaseNotes() { openURL(page ?? BenchBarLinks.releases) }
 
@@ -184,7 +190,7 @@ struct UpdateBanner: View {
                     HStack {
                         Button("Update Now") { offer.updateNow() }
                         Button("Copy Command") { offer.copyCommand() }
-                            .help(offer.plan.command)
+                            .help(offer.command)
                         Button("Release Notes") { offer.openReleaseNotes() }
                     }
                     .controlSize(.small)

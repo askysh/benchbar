@@ -58,15 +58,23 @@ struct UpdatePlanTests {
         #expect(!plan.appOnly)
         #expect(plan.appDirectory == nil)
         #expect(plan.notes.isEmpty)
-        #expect(plan.command == "curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash -s -- --yes")
+        #expect(plan.command(to: "0.6.1") == "curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/v0.6.1/install.sh | bash -s -- --yes --version v0.6.1",
+                "the installer and the app are the release the prompt offered, not whatever is latest later")
         #expect(plan.installedApp == "/Users/you/Applications/BenchBar.app")
+    }
+
+    @Test func anOddVersionFallsBackToMainWithoutAPin() {
+        let plan = UpdatePlan.make(env(cli: "/Users/you/.local/bin/benchbar", checkouts: ["/Users/you/.local/share/benchbar"]))
+        #expect(UpdatePlan.isReleaseVersion("0.7.0-beta.1"))
+        #expect(plan.command(to: "v0.6.1; rm -rf ~") == "curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash -s -- --yes",
+                "nothing from the version string reaches the shell unless it is a plain release number")
     }
 
     @Test func aDeveloperCheckoutGetsAppOnlyAndAGitPull() throws {
         let plan = UpdatePlan.make(env(cli: "/Users/you/dev/benchbar/benchbar", checkouts: ["/Users/you/dev/benchbar"]))
         #expect(plan.cli == .checkout("/Users/you/dev/benchbar"))
         #expect(plan.appOnly)
-        #expect(plan.command.hasSuffix("| bash -s -- --yes --app-only"))
+        #expect(plan.command(to: "0.6.1").hasSuffix("| bash -s -- --yes --app-only --version v0.6.1"))
         let note = try #require(plan.notes.first)
         #expect(note.contains("git -C /Users/you/dev/benchbar pull"))
     }
@@ -93,7 +101,7 @@ struct UpdatePlanTests {
     @Test func anAppInApplicationsIsReplacedThere() {
         let plan = UpdatePlan.make(env(cli: "/Users/you/.local/bin/benchbar", app: "/Applications/BenchBar.app"))
         #expect(plan.appDirectory == "/Applications")
-        #expect(plan.command == "curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | BENCHBAR_APP_DIR=/Applications bash -s -- --yes")
+        #expect(plan.command(to: "0.6.1") == "curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/v0.6.1/install.sh | BENCHBAR_APP_DIR=/Applications bash -s -- --yes --version v0.6.1")
         #expect(plan.installedApp == "/Applications/BenchBar.app")
         #expect(plan.notes.isEmpty)
     }
@@ -113,7 +121,7 @@ struct UpdatePlanTests {
         let script = plan.script(from: "0.5.8", to: "0.6.0")
         #expect(script.hasPrefix("#!/bin/bash\n"))
         #expect(script.contains("set -o pipefail"))
-        #expect(script.contains("curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | BENCHBAR_APP_DIR=/Applications bash -s -- --yes --app-only\n"))
+        #expect(script.contains("curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/v0.6.0/install.sh | BENCHBAR_APP_DIR=/Applications bash -s -- --yes --app-only --version v0.6.0\n"))
         #expect(script.contains("git -C /Users/you/dev/benchbar pull"))
         #expect(script.contains("open /Applications/BenchBar.app"))
         #expect(script.contains("rm -f \"$0\""))
@@ -218,7 +226,8 @@ struct UpdateOfferTests {
         #expect(name == "update-benchbar")
         #expect(script.contains("--yes --app-only"))
         model.copyCommand()
-        #expect(copied.value == "curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash -s -- --yes --app-only")
+        #expect(script.contains("--version v0.6.0"), "Update Now installs the offered release")
+        #expect(copied.value == "curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/v0.6.0/install.sh | bash -s -- --yes --app-only --version v0.6.0")
     }
 
     @Test func aTerminalThatDoesNotOpenIsShownAndNothingQuits() async {

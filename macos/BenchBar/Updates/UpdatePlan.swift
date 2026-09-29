@@ -46,6 +46,17 @@ nonisolated enum UpdateSchedule {
 nonisolated struct UpdatePlan: Equatable, Sendable {
     static let installerURL = "https://raw.githubusercontent.com/askysh/benchbar/main/install.sh"
 
+    /// A release version as the update check reports it (0.6.0, 0.7.0-beta.1).
+    static func isReleaseVersion(_ version: String) -> Bool {
+        version.range(of: #"^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$"#, options: .regularExpression) != nil
+    }
+
+    /// The installer of that release's tag, so a release published after
+    /// the prompt cannot change what runs; main only for an odd version.
+    static func installerURL(for version: String) -> String {
+        isReleaseVersion(version) ? "https://raw.githubusercontent.com/askysh/benchbar/v\(version)/install.sh" : installerURL
+    }
+
     enum CLI: Equatable, Sendable {
         case managed
         case missing
@@ -70,12 +81,15 @@ nonisolated struct UpdatePlan: Equatable, Sendable {
         }
     }
 
-    var installerArguments: [String] { appOnly ? ["--yes", "--app-only"] : ["--yes"] }
+    /// `--version` installs the app release the prompt offered, not whatever is latest by then.
+    func installerArguments(for version: String) -> [String] {
+        (appOnly ? ["--yes", "--app-only"] : ["--yes"]) + (Self.isReleaseVersion(version) ? ["--version", "v\(version)"] : [])
+    }
 
-    /// The one line to paste in Terminal.
-    var command: String {
+    /// The one line to paste in Terminal, pinned to `version`.
+    func command(to version: String) -> String {
         let env = appDirectory.map { "BENCHBAR_APP_DIR=\(Shell.quote($0)) " } ?? ""
-        return "curl -fsSL \(Self.installerURL) | \(env)bash -s -- \(installerArguments.joined(separator: " "))"
+        return "curl -fsSL \(Self.installerURL(for: version)) | \(env)bash -s -- \(installerArguments(for: version).joined(separator: " "))"
     }
 
     /// Where things are, as the app sees them. `live` reads the disk.
@@ -138,7 +152,6 @@ nonisolated struct UpdatePlan: Equatable, Sendable {
     /// notes, then the app opened again (the new one, or the old one when
     /// the update failed). It deletes itself at the end.
     func script(from current: String, to version: String) -> String {
-        let env = appDirectory.map { "BENCHBAR_APP_DIR=\(Shell.quote($0)) " } ?? ""
         let noteLines = notes.map { "echo \(Shell.quote($0))" }.joined(separator: "\n")
         return """
         #!/bin/bash
@@ -147,9 +160,9 @@ nonisolated struct UpdatePlan: Equatable, Sendable {
         set -o pipefail
         clear
         echo \(Shell.quote("Updating BenchBar \(current) to \(version)"))
-        echo \(Shell.quote("$ \(command)"))
+        echo \(Shell.quote("$ \(command(to: version))"))
         echo
-        curl -fsSL \(Self.installerURL) | \(env)bash -s -- \(installerArguments.joined(separator: " "))
+        \(command(to: version))
         code=$?
         echo
         \(noteLines.isEmpty ? ":" : noteLines)

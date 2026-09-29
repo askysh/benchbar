@@ -125,9 +125,11 @@ Updates** in About and in the app menu still works. A build with Sparkle
 When a newer release is out, the popover and the menu bar menu show
 **Update to X…**, and the BenchBar window shows a banner with:
 
-- **Update Now**: Terminal opens and runs the one line installer
-  (`install.sh --yes`, or `--app-only` when your CLI is a git checkout of
-  your own). BenchBar quits so the installer can replace it and opens
+- **Update Now**: Terminal opens and runs the one line installer of
+  that release (`install.sh --yes --version vX.Y.Z` from the release's
+  tag, or with `--app-only` when your CLI is a git checkout of your own),
+  so it installs the version the prompt named even if a newer one came
+  out since. BenchBar quits so the installer can replace it and opens
   again when it is done. Your benches keep running. The app writes a
   `.command` file for Terminal, so macOS asks for no Automation
   permission.

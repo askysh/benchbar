@@ -212,7 +212,7 @@ struct AboutPane: View {
                         .foregroundStyle(.blue)
                     if let offer = model.offer, offer.version != nil {
                         Button("Update Now") { offer.updateNow() }
-                        Button("Copy Command") { offer.copyCommand() }.help(offer.plan.command)
+                        Button("Copy Command") { offer.copyCommand() }.help(offer.command)
                     }
                     Button("Release Page") { NSWorkspace.shared.open(page) }
                 case .failed(let message):
