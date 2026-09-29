@@ -385,7 +385,7 @@ fl_cmd_autostart() {
 # restarting every 20 seconds): boot out and move aside every com.benchbar
 # agent whose WorkingDirectory is that path. Nothing else is touched.
 fl_uninstall_orphan_agents() {
-  local list plist label dest
+  local list plist label dest code=0
   list="$(fl_agents_for_dir "$FL_BENCH_DIR")"
   [[ -n "$list" ]] || fl_die "No bench at ${FL_BENCH_DIR}, and no com.benchbar agent points at it." \
     "Check the path, or list the agents: ls ~/Library/LaunchAgents/com.benchbar.*"
@@ -400,13 +400,21 @@ fl_uninstall_orphan_agents() {
     fi
     if launchctl print "$(fl_launchd_domain)/${label}" >/dev/null 2>&1; then
       launchctl bootout "$(fl_launchd_domain)/${label}" 2>/dev/null || launchctl unload -w "$plist" 2>/dev/null || true
-      fl_agent_wait_gone "$(fl_launchd_domain)/${label}" || true
+      # still loaded: keep the plist, or the job would go on restarting
+      # with nothing left on disk to remove it by
+      if ! fl_agent_wait_gone "$(fl_launchd_domain)/${label}"; then
+        fl_fail "launchd still runs ${label}; its plist stays at ${plist}"
+        fl_fix "launchctl bootout $(fl_launchd_domain)/${label}, then run this command again"
+        code=1
+        continue
+      fi
       fl_ok "booted out ${label}"
     fi
     dest="${FL_LEGACY_DIR}/${label}-$(fl_backup_stamp)"
     mkdir -p "$dest"; mv "$plist" "$dest/"
     fl_ok "moved ${plist} to ${dest}/"
   done <<<"$list"
+  [[ "$code" == "0" ]] || return 1
   fl_ok "agent removed; nothing else in ${FL_BENCH_DIR} was touched"
 }
 

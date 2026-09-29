@@ -160,6 +160,13 @@ assert_contains "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id
 run_fm uninstall-service --dry-run --yes --bench-dir "$V16"
 assert_eq "0" "$CODE" "$OUT"
 assert_file "$v16plist"
+# launchd keeps the job past the wait: the plist stays and the run fails, so it can be retried
+FL_BOOTOUT_WAIT_SECS=1 MOCK_BOOTOUT_LINGER=100 run_fm uninstall-service --yes --bench-dir "$V16"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "launchd still runs com.benchbar.v16-bench"
+assert_file "$v16plist"
+rm -f "$MOCK_STATE"/agents/com.benchbar.v16-bench.linger
+printf 'state = running\nlast exit code = 127\n' >"$MOCK_STATE/agents/com.benchbar.v16-bench"
 run_fm uninstall-service --yes --bench-dir "$V16"
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "booted out com.benchbar.v16-bench"
