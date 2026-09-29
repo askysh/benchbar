@@ -3,9 +3,13 @@ title: "Apps"
 description: "Add Frappe apps from the registry or any git repository, install them on sites, and update them with a changelog first, without bench update."
 ---
 
-`benchbar app` adds, installs and updates the apps of a bench. It uses
-bench itself (`get-app`, `install-app`, `migrate`, `build`) and git only
-to read an app and to fast forward it.
+`benchbar app` adds, installs and updates the apps of a bench. An app
+is a git repository in the bench's `apps/` folder, such as erpnext; a
+site is one Frappe instance in the bench, with its own database, and an
+app does nothing on a site until it is installed there. `benchbar app`
+uses bench itself (`get-app`, `install-app`, `migrate`, `build`) and git
+only to read an app and to fast forward it. The examples use the site
+`macdev`; `benchbar site list` shows yours.
 
 ```bash
 benchbar app list                                   # branch, commit, local changes, sites
@@ -44,9 +48,12 @@ of its sites.
 ## Updating an app
 
 `app update NAME` fast forwards one app. It shows the changelog first,
-backs up the sites that have the app (`--skip-backup` skips that), then
-runs requirements, migrate and build. `--dry-run` shows the changelog and
-the plan and changes nothing.
+backs up the sites that have the app, then runs requirements, migrate
+and build, and restarts the bench when it is running. `migrate` changes
+the sites' databases and is not undone by moving the app back, so keep
+the backup: `--skip-backup` skips it, which makes sense only for a site
+you can rebuild. `--dry-run` shows the changelog and the plan and
+changes nothing.
 
 `app update` never runs `bench update`, never rebases and never resets: a
 dirty or diverged app is refused.
