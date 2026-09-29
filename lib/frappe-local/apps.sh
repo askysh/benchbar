@@ -113,10 +113,11 @@ fl_app_policy_branch() {
 
 # required_apps from the app's hooks.py, read like bench does (a Python
 # list of strings; "org/app" entries count as "app"), frappe left out.
-fl_app_required_apps() {
-  local dir hooks
-  dir="$(fl_app_path "$1")"
-  hooks="${dir}/$1/hooks.py"
+fl_app_required_apps() { fl_hooks_required_apps "$(fl_app_path "$1")/$1/hooks.py"; }
+
+# fl_hooks_required_apps FILE: the same read from any hooks.py
+fl_hooks_required_apps() {
+  local hooks="$1"
   [[ -f "$hooks" ]] || return 0
   awk '
     /^[ \t]*required_apps[ \t]*=/ { f = 1 }
@@ -890,7 +891,8 @@ fl_cmd_app() {
   shift || true
   case "$sub" in
     list|"") fl_cmd_app_list "$@" ;;
-    add) fl_cmd_app_add "$@" ;;
+    # --json and --apply TOKEN: the plan with a token, and applying it (app-plan.sh)
+    add) if [[ "$OPT_JSON" == "1" ]] || fl_app_plan_wanted "$@"; then fl_cmd_app_add_planned "$@"; else fl_cmd_app_add "$@"; fi ;;
     install) fl_cmd_app_install "$@" ;;
     update) fl_cmd_app_update "$@" ;;
     *) fl_die "Unknown app command: ${sub}" "Use: benchbar app list | add NAME|URL | install NAME --site S | update NAME" ;;

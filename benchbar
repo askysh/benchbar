@@ -89,6 +89,8 @@ SCRIPT_DIR="$(fl_resolve_self)"
 . "${SCRIPT_DIR}/lib/frappe-local/consoles.sh"
 # shellcheck source=lib/frappe-local/apps.sh
 . "${SCRIPT_DIR}/lib/frappe-local/apps.sh"
+# shellcheck source=lib/frappe-local/app-plan.sh
+. "${SCRIPT_DIR}/lib/frappe-local/app-plan.sh"
 # shellcheck source=lib/frappe-local/teamlock.sh
 . "${SCRIPT_DIR}/lib/frappe-local/teamlock.sh"
 # shellcheck source=lib/frappe-local/pull.sh
@@ -164,7 +166,8 @@ Daily
   db                  bench --site SITE mariadb: the site's database with its own user (--site S).
   mariadb-password    Print the MariaDB root password kept in the Keychain (asks first).
   mcp                 Model Context Protocol server on stdio for coding agents
-                      (claude mcp add benchbar -- benchbar mcp). Read tools, up, down, restart.
+                      (claude mcp add benchbar -- benchbar mcp). Read tools, up, down, restart,
+                      app add from a reviewed plan.
   docs [TOPIC]        Open the documentation, or one topic's page (benchbar docs --help lists
                       them: install, doctor, apps, mcp, json ...); --print prints the URL.
 
@@ -174,6 +177,8 @@ Apps
   app add NAME|URL    bench get-app from config/apps.tsv or any git URL (GitHub, SSH, a
                       host alias), after checking access; --branch B, --name N, and
                       --site S or --all-sites to install it. Never replaces an app.
+                      --dry-run --json: the plan with its token (required apps read from
+                      hooks.py); --apply TOKEN --yes runs exactly that plan, no questions.
   app install NAME    Install an app of the bench on a site (--site S).
   app update NAME     Fast forward one app with a changelog first, back up the sites
                       that have it, then requirements, migrate and build (--skip-backup).
