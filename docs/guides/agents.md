@@ -38,14 +38,20 @@ repairs, installs a bench or needs `sudo` is offered. It needs only
 
 ## Adding an app
 
-Paste a GitHub URL into the chat and the agent can add the app, but
-only from a plan you have seen:
+Paste a GitHub URL into the chat and the agent can add the app, from a
+plan it should show you first. Adding an app runs its code on your Mac:
+its Python and Node requirements are installed and, on each site you
+name, `bench install-app` runs its install hooks and writes its tables
+into that site's database. A running bench is restarted at the end. So
+add only repos you trust, and read the plan:
 
 1. `benchbar_app_add_plan` with `url_or_name` (and `branch`, `name`,
    `site` or `all_sites`) reads the repo and its `hooks.py` and returns
    the plan: repo, branch, the required apps and where each comes from,
    the sites, the steps, and a `token`. Nothing changes.
-2. The agent shows you that plan and waits for your OK.
+2. The agent shows you that plan and waits for your OK. benchbar cannot
+   tell whether you saw it: the token proves only that nothing changed
+   since the plan, so ask your agent to show the plan before it applies.
 3. `benchbar_app_add` with the same arguments and the `token` runs
    exactly that plan. If `sites/apps.txt`, `apps/` or the sites changed
    in between, the token is refused and the agent plans again.
