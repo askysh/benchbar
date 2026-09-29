@@ -237,6 +237,15 @@ pinned commits. Drift is a warning.
 
 Fix: `benchbar lock apply` (`benchbar lock check` lists the differences).
 
+### profile_outdated
+
+The bench's team profile comes from a subscription whose clone is behind
+its remote. Doctor fetches the subscription at most once a day (not at
+all with `BENCHBAR_OFFLINE=1`), so most runs need no network. See
+[Sharing a profile](teams.md#sharing-a-profile).
+
+Fix: `benchbar profile update NAME` (shows the changes and asks).
+
 ### logs
 
 `bench.log`, `worker.log` and `worker.error.log` are under 50 MB each.
