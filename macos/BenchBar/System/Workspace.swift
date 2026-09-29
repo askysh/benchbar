@@ -75,7 +75,7 @@ enum Workspace {
     }
 
     /// Writes a `.command` script (owner only) and has Terminal run it.
-    private static func runInTerminal(name: String, contents: String) throws {
+    static func runInTerminal(name: String, contents: String) throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("BenchBar", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let safe = name.map { $0.isLetter || $0.isNumber || "-_.".contains($0) ? $0 : "_" }
