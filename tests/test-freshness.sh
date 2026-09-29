@@ -70,8 +70,19 @@ push_commits my_app 5
 push_commits other_app 2
 # other apps are never fetched by doctor: their numbers are from your own fetches
 git -C "$BENCH/apps/other_app" fetch -q upstream
+# ---- doctor stays read only: no fetch without --fetch, and it says so
 reset_calls
 FL_NOW="$NOW" run_fm doctor --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_calls_not_contain ' fetch'
+assert_eq "ok" "$(levels "$OUT" dependency_behind)"
+assert_contains "$(check "$OUT" dependency_behind)" "as of your last git fetch"
+assert_contains "$(check "$OUT" dependency_behind)" "run benchbar doctor --fetch to check the remotes"
+assert_contains "$(check "$OUT" apps_behind)" "other_app 2"
+
+# ---- doctor --fetch: only the focus app's dependencies, then one row each
+reset_calls
+FL_NOW="$NOW" run_fm doctor --fetch --json --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 assert_calls_contain "^git -C ${BENCH}/apps/mid_dep fetch --quiet --no-tags upstream \+refs/heads/main:refs/remotes/upstream/main$"
 assert_calls_contain "^git -C ${BENCH}/apps/core_dep fetch"
@@ -81,56 +92,51 @@ msgs="$(printf '%s' "$OUT" | jget - "'|'.join(c['message'] for c in d['checks'] 
 assert_contains "$msgs" "mid_dep (needed by my_app) is 1 commit behind upstream/main"
 assert_contains "$msgs" "core_dep (needed by my_app) is 3 commits / 12 days behind upstream/main"
 assert_not_contains "$msgs" "my_app ("
+assert_not_contains "$msgs" "as of"
 fixes="$(printf '%s' "$OUT" | jget - "'|'.join(c['fix_command'] for c in d['checks'] if c['id']=='dependency_behind')")"
 assert_contains "$fixes" "benchbar app update core_dep --bench-dir ${BENCH}"
 assert_not_contains "$fixes" "bench update"
-assert_contains "$(check "$OUT" apps_behind)" "other_app 2"
 assert_not_contains "$(check "$OUT" apps_behind)" "my_app"
 assert_eq "ok" "$(levels "$OUT" apps_behind)"
-# the text form: one [WARN] and fix line per dependency
+# the text form: one [WARN] and fix line per dependency (no fetch this time)
+reset_calls
 FL_NOW="$NOW" run_fm doctor --bench-dir "$BENCH"
 assert_contains "$OUT" "[WARN] Dependencies of focus apps: core_dep (needed by my_app) is 3 commits / 12 days behind upstream/main"
 assert_contains "$OUT" "fix: benchbar app update core_dep --bench-dir ${BENCH}"
 assert_contains "$OUT" "[WARN] Dependencies of focus apps: mid_dep (needed by my_app)"
+assert_calls_not_contain ' fetch'
 run_fm doctor --fix-hints --bench-dir "$BENCH"
 assert_contains "$OUT" "benchbar app update mid_dep --bench-dir ${BENCH}"
 
-# ---- at most once a day: the next runs read the cache
-reset_calls
-FL_NOW="$((NOW + 3600))" run_fm doctor --json --bench-dir "$BENCH"
-assert_calls_not_contain ' fetch'
-assert_eq "warn warn" "$(levels "$OUT" dependency_behind)"
+# ---- later runs read the refs as they are, and say how old the fetch is
 push_commits mid_dep 1
 reset_calls
-FL_NOW="$((NOW + 2 * 3600))" run_fm doctor --json --bench-dir "$BENCH"
+FL_NOW="$((NOW + 2 * DAY))" run_fm doctor --json --bench-dir "$BENCH"
 assert_calls_not_contain ' fetch'
-assert_contains "$(check "$OUT" dependency_behind)" "mid_dep (needed by my_app) is 1 commit behind"
-reset_calls
-FL_NOW="$((NOW + DAY + 60))" run_fm doctor --json --bench-dir "$BENCH"
-assert_calls_contain 'apps/mid_dep fetch'
+assert_contains "$(check "$OUT" dependency_behind)" "mid_dep (needed by my_app) is 1 commit / 1 day behind upstream/main (as of a fetch 2 days ago)"
+# your own git fetch counts
+git -C "$BENCH/apps/mid_dep" fetch -q upstream
+FL_NOW="$((NOW + 2 * DAY))" run_fm doctor --json --bench-dir "$BENCH"
 assert_contains "$(check "$OUT" dependency_behind)" "mid_dep (needed by my_app) is 2 commits"
-# OFFLINE=1 never fetches
+# --fetch never runs with OFFLINE=1 or --dry-run
 reset_calls
-OFFLINE=1 FL_NOW="$((NOW + 3 * DAY))" run_fm doctor --json --bench-dir "$BENCH"
+OFFLINE=1 run_fm doctor --fetch --json --bench-dir "$BENCH"
+run_fm doctor --fetch --dry-run --json --bench-dir "$BENCH"
 assert_calls_not_contain ' fetch'
 
-# ---- no network: a failed fetch is no FAIL, the numbers are the last fetch's
+# ---- no network: a failed fetch is no FAIL, the numbers are the last ones
 mv "$REMOTES/mid_dep.git" "$REMOTES/mid_dep.git.aside"
 mv "$REMOTES/core_dep.git" "$REMOTES/core_dep.git.aside"
 statef="$(ls "$FL_STATE_DIR"/benches/*.freshness)"
 before="$(sed -n 's/^FETCHED_AT=//p' "$statef")"
 reset_calls
-FL_NOW="$((NOW + 4 * DAY))" run_fm doctor --json --bench-dir "$BENCH"
+FL_NOW="$((NOW + 4 * DAY))" run_fm doctor --fetch --json --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 assert_calls_contain 'apps/mid_dep fetch'
 assert_eq "$before" "$(sed -n 's/^FETCHED_AT=//p' "$statef")" "(a failed fetch keeps the last good time)"
-assert_eq "$((NOW + 4 * DAY))" "$(sed -n 's/^TRIED_AT=//p' "$statef")"
-assert_contains "$(check "$OUT" dependency_behind)" "offline since"
+assert_contains "$(check "$OUT" dependency_behind)" "(as of a fetch 4 days ago)"
 assert_eq "0" "$(printf '%s' "$OUT" | jget - 'd["summary"]["fail"]')"
-# retried an hour later, not sooner
-reset_calls
-FL_NOW="$((NOW + 4 * DAY + 600))" run_fm doctor --json --bench-dir "$BENCH"
-assert_calls_not_contain ' fetch'
+! grep -q 'TRIED_AT' "$statef" || fail "no retry state is kept"
 mv "$REMOTES/mid_dep.git.aside" "$REMOTES/mid_dep.git"
 mv "$REMOTES/core_dep.git.aside" "$REMOTES/core_dep.git"
 

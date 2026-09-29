@@ -103,6 +103,8 @@ OPT_BUNDLE="${APP_BUNDLE:-}"
 OPT_JSON=0
 OPT_PORT_OFFSET=""
 OPT_FIX_HINTS=0
+# --fetch: doctor and app focus fetch the focus apps' dependencies (freshness.sh)
+FL_FETCH=0
 FL_ASSUME_YES="${FL_ASSUME_YES:-0}"
 FL_MAKE_DEFAULT="${FL_MAKE_DEFAULT:-0}"
 FL_SCHEDULER=""
@@ -124,6 +126,8 @@ Setup
   service             Install or refresh only the background service (phase 02).
   doctor              Read-only health report. Exit 1 when something FAILs.
                       --fix-hints: only the fix commands of FAIL and WARN checks, one per line.
+                      --fetch: git fetch the branches of the apps your focus apps need first
+                      (without it doctor never touches the network).
   ports setup -- PATH ...
                       Preview management/port changes, confirm once, then apply (--dry-run: preview only)
   ports plan -- PATH ...
@@ -271,6 +275,7 @@ while [[ "$#" -gt 0 ]]; do
     -y|--yes) FL_ASSUME_YES=1; shift ;;
     --json) OPT_JSON=1; shift ;;
     --fix-hints) OPT_FIX_HINTS=1; shift ;;
+    --fetch) FL_FETCH=1; shift ;;
     --plain|--no-color) FL_PLAIN=1; fl_ui_init; shift ;;
     --version) fl_print_version; exit 0 ;;
     # benchbar docs --help lists the topics; every other --help is this one
