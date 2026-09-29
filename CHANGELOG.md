@@ -45,11 +45,35 @@ All notable changes to this project are documented here.
 - The Apps page shows which apps are focus apps and why, how far a
   dependency is behind, and a menu to set each app to Auto, Focus or
   Ignore.
+- Share team profiles. `benchbar profile export NAME` writes a copy for
+  teammates: SSH aliases resolved to real hosts, each repo's default
+  branch, and per app its access (`public`, `private`, `personal`) and
+  the apps it requires, after a review you confirm (`--branch APP=BR`,
+  `--drop APP`, `--plan`).
+- `benchbar profile import FILE|URL` adds a profile someone sent (https
+  only, 64 KB at most, GitHub file and gist pages fetched raw), shows the
+  diff when the name exists, and checks which repos you can read.
+- `benchbar profile subscribe GIT_URL` clones a team's config repo; its
+  profiles join the lookup path after your own. `profile update NAME|--all`
+  fetches again, shows the diff and asks; `profile remove NAME` moves an
+  import or a subscription aside.
+- `benchbar profile check NAME` asks git, with your own credentials,
+  whether every repo of a profile can be read.
+- `install --profile` leaves out the apps whose repos cannot be read,
+  and every app that requires one, and lists them.
+- Doctor warns with `profile_outdated` when the bench's team profile
+  comes from a subscription that is behind (one fetch a day at most).
+- MCP read tools `benchbar_profile_list` and `benchbar_profile_check`.
+- Team profile schema 2: `source`, `exported_from`, and per app `access`
+  and `requires`. Schema 1 files keep working.
 
 ### Changed
 
 - `install.sh --yes` on a Mac that already has the CLI is an update: it
   no longer adopts a bench it finds or starts the Homebrew installer.
+- `profile list --json`: `source` is now the URL an import or
+  subscription came from (or null); the folder kind is `source_kind`.
+  New fields `subscription`, `shadowed_by` and `schema`.
 
 ### Fixed
 

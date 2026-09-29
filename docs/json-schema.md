@@ -17,6 +17,7 @@ Raycast extensions and the like can rely on it too.
 | `benchbar app update NAME --dry-run --json` | the changelog and plan of an update (0.5) |
 | `benchbar app focus --json` | focus apps and how far behind the apps they need are (0.6), see [app focus](#benchbar-app-focus---json) |
 | `benchbar profile list --json` | built in and team profiles, with where each comes from (0.5) |
+| `benchbar profile export\|import\|subscribe\|update\|remove\|check ... --json` | sharing team profiles (0.6), see [profile sharing](#profile-sharing) |
 | `benchbar lock check --json` | how the bench differs from its `benchbar.toml` (0.5) |
 | `<bench>/logs/.benchbar/state.json` | the last state transition, written by the runner and the CLI |
 | `benchbar pull ... --json` | JSON lines while a production site is copied, see [pull](#benchbar-pull---json) |
@@ -227,7 +228,7 @@ carry the bench's sites, read from `sites/*/site_config.json`:
 
 | Field | Type | Notes |
 |---|---|---|
-| `checks[].id` | string | stable id, for example `env_python`, `assets`, `agent`, `legacy_agents`. `pdf_engine` replaced `wkhtmltopdf` in 0.4. 0.5 adds `apps_txt`, `app_branch_policy`, `lock_parse` and `lock_drift` (group `bench`, no repair action). 0.6 adds `dependency_behind` and `apps_behind` (group `bench`, no repair action); `dependency_behind` is the one id that can appear several times, once per stale dependency |
+| `checks[].id` | string | stable id, for example `env_python`, `assets`, `agent`, `legacy_agents`. `pdf_engine` replaced `wkhtmltopdf` in 0.4. 0.5 adds `apps_txt`, `app_branch_policy`, `lock_parse` and `lock_drift` (group `bench`, no repair action). 0.6 adds `dependency_behind`, `apps_behind` and `profile_outdated` (group `bench`, no repair action); `dependency_behind` is the one id that can appear several times, once per stale dependency |
 | `checks[].group` | string | `system`, `bench`, `service` or `site` |
 | `checks[].label` | string | short name for humans |
 | `checks[].level` | string | `ok`, `warn` or `fail` |
@@ -405,27 +406,124 @@ when it exists), else `null`.
 ## `benchbar profile list --json`
 
 Added in 0.5. The built in profiles, then every team profile file on the
-lookup path (`~/.config/benchbar/profiles/`, then each folder of
-`BENCHBAR_PROFILE_PATH`), invalid ones included so a reader can show why.
+lookup path (`~/.config/benchbar/profiles/`, then each subscription in
+subscribe order, then each folder of `BENCHBAR_PROFILE_PATH`), invalid
+ones included so a reader can show why. Read only and offline: how far a
+subscription is behind comes from its last fetch.
 
 ```json
-{"schema_version":1,"cli_version":"0.5.0","profiles":[
- {"name":"v15-lts","kind":"builtin","source":"builtin","file":"/Users/you/benchbar/config/release-profiles.tsv","base":null,
+{"schema_version":1,"cli_version":"0.6.0","profiles":[
+ {"name":"v15-lts","kind":"builtin","source_kind":"builtin","source":null,"subscription":null,"shadowed_by":null,"schema":null,
+  "file":"/Users/you/benchbar/config/release-profiles.tsv","base":null,
   "label":"Frappe/ERPNext v15 LTS","frappe_branch":"version-15","valid":true,"error":null},
- {"name":"acme","kind":"team","source":"user","file":"/Users/you/.config/benchbar/profiles/acme.toml","base":"v15-lts",
+ {"name":"acme","kind":"team","source_kind":"subscribed","source":"git@github.com:acme/bench-config.git",
+  "subscription":{"repo":"git@github.com:acme/bench-config.git","dir":"/Users/you/.config/benchbar/sources/acme-bench-config",
+   "behind":2,"days":5,"fetched_at":"2026-09-29T10:00:00Z"},"shadowed_by":null,"schema":2,
+  "file":"/Users/you/.config/benchbar/sources/acme-bench-config/profiles/acme.toml","base":"v15-lts",
   "label":"Acme ERP","frappe_branch":null,"valid":true,"error":null}]}
 ```
 
 | Field | Type | Notes |
 |---|---|---|
 | `kind` | string | `builtin` or `team` |
-| `source` | string | `builtin`, `user` (`~/.config/benchbar/profiles`) or `path` (a `BENCHBAR_PROFILE_PATH` folder) |
+| `source_kind` | string | 0.6: `builtin`, `user` (a file in `~/.config/benchbar/profiles`), `imported` (a file there that `profile import` wrote), `subscribed` or `path` (a `BENCHBAR_PROFILE_PATH` folder) |
+| `source` | string or null | 0.6: the URL or path an imported file came from, or a subscription's repo URL; `null` otherwise. Until 0.5.8 this field held what `source_kind` holds now |
+| `subscription` | object or null | 0.6: for a subscribed profile, `repo`, `dir`, `behind` (commits the clone lacks, int or null), `days` (age of the oldest of them, int or null) and `fetched_at` (the last successful fetch, or null) |
+| `shadowed_by` | string or null | 0.6: the file that hides this one (an earlier file of the same name, or the built in profiles' file) |
+| `schema` | int or null | 0.6: the file's `schema` (1 when it has none); `null` for built in profiles and invalid files |
 | `file` | string | where it was read from |
 | `base` | string or null | the built in profile a team profile builds on; `null` for built in ones and invalid files |
 | `label` | string or null | the built in label, or a team profile's `description` |
 | `frappe_branch` | string or null | a team profile's override, else the built in branch |
 | `valid` | bool | `false` when `install --profile NAME` would refuse it |
 | `error` | string or null | why: a parse error (`FILE:LINE: not supported: ...`), a name that shadows a built in profile, or a name hidden by an earlier file |
+
+## Profile sharing
+
+Added in 0.6. With `--json`, each of these prints one document on stdout
+and every human line on stderr. `--plan` is read only (it may ask git and
+the network, never writes) and takes no lock. A write needs `--yes`: a
+question that cannot be answered counts as no and exits 1. A refusal or
+error exits 1; `profile check` exits 0 whatever it finds. `reachable` is
+`true`, `false` (git answered no: no access, no such repo or branch) or
+`null` (offline or timed out, 10 seconds per repo), with `reason` saying
+why when it is not `true`.
+
+### `benchbar profile export NAME --plan --json`
+
+```json
+{"schema_version":1,"cli_version":"0.6.0","name":"acme","base":"v15-lts","apps":[
+ {"name":"acme_ecr","repo":"git@github-work:acme/acme_ecr.git","exported_repo":"git@github.com:acme/acme_ecr.git",
+  "current_branch":"wip","exported_branch":"develop","default_branch":"develop","branch_verified":true,
+  "access":"private","requires":["acme_base"],"keep":true}],
+ "warnings":["acme_ecr: git@github-work:acme/acme_ecr.git is written as git@github.com:acme/acme_ecr.git"]}
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `apps[].repo` | string | the URL in the profile |
+| `apps[].exported_repo` | string | the URL written: SSH alias resolved with `ssh -G`, user info removed |
+| `apps[].current_branch` | string | the branch in the profile |
+| `apps[].exported_branch` | string | the branch written: `--branch APP=BR`, else the repo's default branch; an app of `config/apps.tsv` on the base's release branch (erpnext on `version-15`) keeps it |
+| `apps[].default_branch` | string or null | what the remote's HEAD points at; `null` when git could not tell |
+| `apps[].branch_verified` | bool | the exported branch exists on the remote |
+| `apps[].access` | string | `public` (a stranger can read it over https), `private`, `personal` (private, and its GitHub owner is a user, not an organisation) or `unknown` (offline, or not an https or SSH URL) |
+| `apps[].requires` | list of strings | from the profile, else from the app's `hooks.py` in the bench (`--bench-dir`) |
+| `apps[].keep` | bool | `false` for an app given to `--drop` |
+| `warnings` | list of strings | for a person: rewritten URLs, unverified branches, personal repos, drops that are refused |
+
+`profile export NAME --out FILE [--branch APP=BR]... [--drop APP]... --yes --json`
+writes the file and prints `{"path","apps","dropped"}`: the path, how many
+apps it holds and the dropped ones. Dropping an app that a kept app
+requires is refused with exit 1 and
+`{"error":"...","blocked":[{"app":"acme_base","required_by":["acme_ecr"]}]}`.
+
+### `benchbar profile import SRC [--as NAME] --plan --json`
+
+```json
+{"schema_version":1,"cli_version":"0.6.0","name":"acme","source":"https://github.com/acme/config/blob/main/acme.toml",
+ "exists":true,"diff":"@@ -3 +3 @@\n-description = \"Acme\"\n+description = \"Acme ERP\"","base":"v15-lts",
+ "apps":[{"name":"acme_ecr","repo":"git@github.com:acme/acme_ecr.git","branch":"develop","access":"private","requires":["acme_base"]}],
+ "check":{"repos":[{"app":"acme_ecr","repo":"git@github.com:acme/acme_ecr.git","reachable":false,"reason":"Permission denied (publickey)."}]},
+ "skipped_apps":["acme_ecr"]}
+```
+
+`exists` is whether `~/.config/benchbar/profiles/NAME.toml` is there;
+`diff` is the unified diff against it (`null` when there is none or they
+are equal). `apps[].access` is `null` when the file does not say.
+`skipped_apps` are the apps `install --profile` would leave out: the
+unreachable ones and every app that requires one. With `--yes --json` it
+writes and prints `{"name","path","source"}`.
+
+### `benchbar profile subscribe GIT_URL [--plan|--yes] --json`
+
+`{"repo","dir","profiles"}`: the URL, the clone's folder
+(`~/.config/benchbar/sources/OWNER-REPO`) and the valid profile names in
+it. Subscribing to a URL already subscribed prints the same and changes
+nothing.
+
+### `benchbar profile update NAME|--all --plan --json`
+
+```json
+{"schema_version":1,"cli_version":"0.6.0","updates":[
+ {"name":"acme","kind":"subscribed","behind":2,"diff":"diff --git a/profiles/acme.toml ..."}]}
+```
+
+`kind` is `imported` or `subscribed`; `behind` is the new commits of a
+subscription (`null` for an import); `diff` is `null` when there is
+nothing new. With `--yes` the same document adds `"applied":true`
+(`false` when one of them could not be applied).
+
+### `benchbar profile remove NAME --yes --json`
+
+`{"name","moved_to"}`: the file or subscription folder now under
+`~/.config/benchbar/removed/<timestamp>/`.
+
+### `benchbar profile check NAME --json`
+
+`{"name","repos":[{"app","repo","reachable","reason"}],"skipped_apps":[...]}`,
+as in the import plan.
+
 ## `benchbar pull --json`
 
 Added in 0.5. Unlike the commands above, `pull` changes things, so it

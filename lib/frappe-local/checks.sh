@@ -11,7 +11,7 @@
 # Groups (used by "benchbar service" versus "benchbar repair"):
 #   system, bench, service, site
 
-FL_CHECK_ORDER="brew python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac mole full_disk_access env_python bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy dependency_behind apps_behind lock_parse lock_drift logs honcho honcho_setuptools procfile runner agent fork_safety scheduler stop_flag helpers cli_link legacy_agents dead_agents hosts port_clash orphans ping"
+FL_CHECK_ORDER="brew python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac mole full_disk_access env_python bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy dependency_behind apps_behind lock_parse lock_drift profile_outdated logs honcho honcho_setuptools procfile runner agent fork_safety scheduler stop_flag helpers cli_link legacy_agents dead_agents hosts port_clash orphans ping"
 FL_LOG_WARN_MB="${FL_LOG_WARN_MB:-50}"
 FL_HOSTS_FILE="${FL_HOSTS_FILE:-/etc/hosts}"
 
@@ -29,6 +29,7 @@ fl_check_group() {
   case "$1" in
     brew|python_leaves|mariadb_bind|mariadb_utf8|pdf_engine|redis_6379|cleanmymac|mole|full_disk_access) printf 'system' ;;
     env_python|bench_version|toolchain_*|socketio|assets|apps_txt|app_branch_policy|dependency_behind|apps_behind|lock_parse|lock_drift|logs) printf 'bench' ;;
+    profile_outdated) printf 'bench' ;;
     ping) printf 'site' ;;
     *) printf 'service' ;;
   esac
@@ -77,6 +78,7 @@ fl_check_label() {
     apps_behind) printf 'Other apps' ;;
     lock_parse) printf 'benchbar.toml' ;;
     lock_drift) printf 'Lockfile drift' ;;
+    profile_outdated) printf 'Team profile subscription' ;;
     *) printf '%s' "$1" ;;
   esac
 }

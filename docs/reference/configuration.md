@@ -51,26 +51,38 @@ for `/etc/hosts`, and expects the passwords in the environment.
 
 ## Team profile files
 
-A team profile is `NAME.toml` in `~/.config/benchbar/profiles/`, then in
-each folder of `BENCHBAR_PROFILE_PATH`. A built in profile of the same
-name wins. The format is a strict subset of TOML: strings, booleans,
-integers and one line lists; no escapes, no inline tables.
+A team profile is `NAME.toml` in `~/.config/benchbar/profiles/` (your
+own files and the ones `profile import` wrote), then in each
+subscription (`~/.config/benchbar/sources/`, in the order of
+`~/.config/benchbar/sources.list`), then in each folder of
+`BENCHBAR_PROFILE_PATH`. The first file of a name wins, and a built in
+profile of the same name wins over all of them. The format is a strict
+subset of TOML: strings, booleans, integers and one line lists; no
+escapes, no inline tables.
 
 | Key | Required | What it sets |
 |---|---|---|
+| `schema` | no | `1` or `2`; `1` when absent. A file with any schema 2 key must say `schema = 2` |
 | `base` | yes | The built in profile for Python, Node and MariaDB, for example `"v15-lts"` |
 | `description` | no | One line shown by `profile list` |
 | `frappe_branch` | no | Another Frappe branch than the base's |
-| `bundle` | no | An app bundle, instead of or besides `[[apps]]` |
+| `bundle` | no | An app bundle, instead of `[[apps]]`: a file with both is refused |
 | `site` | no | The default site name for `install` |
 | `scheduler` | no | `true` to run the scheduler |
+| `source` | no, schema 2 | Where `profile import` fetched the file (an https URL or a path); `profile update` fetches it again |
+| `exported_from` | no, schema 2 | Written by `profile export`, for example `"benchbar 0.6.0, 2026-09-29"` |
 | `[[apps]]` `name` | yes, per app | The app's folder name |
 | `[[apps]]` `repo` | yes, per app | Its git URL. A URL with a user name or token is refused |
 | `[[apps]]` `branch` | yes, per app | The branch to clone |
 | `[[apps]]` `commit` | no | A commit to pin |
+| `[[apps]]` `access` | no, schema 2 | `public`, `private`, `personal` or `unknown`: who can read the repo, as `profile export` found it |
+| `[[apps]]` `requires` | no, schema 2 | The apps this one needs, for example `["acme_base"]`. `install --profile` leaves an app out when one it requires cannot be read |
 
-An example is in [Teams](../guides/teams.md#team-profiles). `benchbar
-profile create` writes one from a bench you have.
+A benchbar before 0.6 refuses a schema 2 file with "not supported:
+schema 2", so update benchbar before you share one. An example is in
+[Teams](../guides/teams.md#team-profiles). `benchbar profile create`
+writes one from a bench you have, `benchbar profile export` a copy to
+share ([Sharing a profile](../guides/teams.md#sharing-a-profile)).
 
 ## Passwords
 
@@ -86,6 +98,7 @@ profile create` writes one from a bench you have.
 | `MARIADB_ROOT_PASSWORD` | `install`, `site add`, `pull` | The MariaDB root password. A fresh MariaDB gets a generated one when unset; an existing one is read from the Keychain |
 | `ADMIN_PASSWORD` | `install`, `site add`, `pull` | The Administrator password of a new site; for `pull`, a new Administrator password for the copy |
 | `BENCHBAR_PROFILE_PATH` | `--profile`, `profile` | Colon separated folders with team profiles, for example a clone of your team's config repo |
+| `BENCHBAR_OFFLINE` | `profile`, doctor | `BENCHBAR_OFFLINE=1`: no network for team profiles; reachability is `null` and doctor does not fetch subscriptions |
 | `BENCHBAR_LOCK` | `lock`, doctor | The lockfile path, when `--lock` is not given |
 | `BENCHBAR_REPORT_DIR` | `report` | Where the zip goes instead of `~/Desktop` |
 | `NO_COLOR` | every command | `NO_COLOR=1` turns off colors and spinners, like `--plain` |

@@ -205,6 +205,18 @@ Team profiles
                       Write a team profile from a bench (read only: app repos and
                       branches, the base from its frappe version). install --profile NAME
                       then builds the same bench on another Mac.
+  profile export NAME [--out FILE] [--branch APP=BR]... [--drop APP]... [--plan]
+                      A copy to share: SSH aliases resolved, each repo's default branch,
+                      access (public, private, personal) and requires per app.
+  profile import FILE|URL [--as NAME] [--plan]
+                      Add a profile someone sent (https only, 64 KB at most); checks
+                      which repos you can read. A GitHub page URL is fetched raw.
+  profile subscribe GIT_URL [--plan]
+                      Clone a team's config repo; its profiles join the lookup path.
+  profile update NAME|--all [--plan]
+                      Fetch an import or subscription again, show the diff, ask.
+  profile remove NAME Move an import or a whole subscription aside.
+  profile check NAME  Can git read every repo with your credentials? (--json)
 
 Production copy
   pull HOST:SITE      Copy a production site over SSH into a NEW local site: the latest
@@ -585,8 +597,9 @@ case "$COMMAND" in
     fi ;;
   register) fl_lock_acquire "${FL_STATE_DIR}/lock" ;;
   site|app|profile|lock)
-    # the list, show and check commands are read only; the others change things
-    if [[ "${ARGS[0]:-list}" != "list" && "${ARGS[0]:-}" != "show" && "${ARGS[0]:-}" != "check" && "${ARGS[0]:-}" != "backups" ]]; then
+    # the list, show and check commands are read only, and so is a --plan; the others change things
+    if [[ "${ARGS[0]:-list}" != "list" && "${ARGS[0]:-}" != "show" && "${ARGS[0]:-}" != "check" && "${ARGS[0]:-}" != "backups" \
+      && " ${ARGS[*]:-} " != *" --plan "* ]]; then
       fl_log_init "${FL_STATE_DIR}/logs"
       fl_lock_acquire "${FL_STATE_DIR}/lock"
     fi

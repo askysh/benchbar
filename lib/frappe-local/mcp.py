@@ -73,6 +73,22 @@ TOOLS = {
         True,
         (0,),
     ),
+    "benchbar_profile_list": (
+        "Built in and team profiles (user, imported, subscribed, BENCHBAR_PROFILE_PATH): source, subscription "
+        "and how far behind it is, what shadows what, and parse errors.",
+        {},
+        lambda a: ["profile", "list", "--json"],
+        True,
+        (0,),
+    ),
+    "benchbar_profile_check": (
+        "Whether git can read every repo of a team profile with the user's own credentials (reachable true, false, "
+        "or null when offline), and which apps install --profile would leave out.",
+        {"name": {"type": "string", "description": "The team profile name (from benchbar_profile_list)."}},
+        lambda a: ["profile", "check", "--json", "--", required(a, "name")],
+        True,
+        (0,),
+    ),
     "benchbar_up": (
         "Start a bench in the background (launchd) and wait for its default site to answer.",
         {"bench": BENCH},
@@ -97,6 +113,16 @@ TOOLS = {
 }
 
 
+REQUIRED = {"benchbar_profile_check": ["name"]}
+
+
+def required(arguments, key):
+    value = arguments.get(key)
+    if not isinstance(value, str) or not value:
+        raise RpcError(-32602, "%s is required" % key)
+    return value
+
+
 def bench_args(arguments):
     bench = arguments.get("bench")
     return ["--bench-dir", bench] if bench else []
@@ -113,10 +139,13 @@ def run_cli(argv, timeout=180):
 def tool_list():
     tools = []
     for name, (description, props, _argv, read_only, _codes) in TOOLS.items():
+        schema = {"type": "object", "properties": props, "additionalProperties": False}
+        if name in REQUIRED:
+            schema["required"] = REQUIRED[name]
         tools.append({
             "name": name,
             "description": description,
-            "inputSchema": {"type": "object", "properties": props, "additionalProperties": False},
+            "inputSchema": schema,
             "annotations": {"readOnlyHint": read_only, "destructiveHint": False, "openWorldHint": False},
         })
     return {"tools": tools}

@@ -475,3 +475,20 @@ Measured on five PR runs (September 2026): 11 to 14 minutes wall clock, all of i
 - `dependency_behind` is the one check id that can appear several times (one row per stale dependency, each with its own fix); the doctor runner takes extra rows from `CHK_MORE`, so the other checks are unchanged.
 - The fix is `benchbar app update NAME`, which already fast forwards with a changelog, backups and migrate; a dependency with local changes gets `git status` first. Never `bench update`.
 - `benchbar app focus` without a name lists, instead of a new top level command, and `app list --json` carries the same fields, so the app gets them from the read it already does.
+
+## 0.6.0: profile sharing
+
+- `profile list --json` follows the 0.6 contract with the app: `source` is now the URL an import or subscription came from (or null), and the folder kind it used to hold moved to `source_kind`. The schema version stays 1 because the CLI and the app ship together; an older reader of `source` sees a URL or null.
+- The anonymous access probe runs git with `GIT_CONFIG_GLOBAL=/dev/null`, no system config and an empty credential helper: a global `url.insteadOf` that rewrites https to SSH would otherwise make every private repo look public.
+- `personal` needs both a failed anonymous read and `api.github.com/users/OWNER` saying `User`: a public repo in a personal account is fine to share, so it stays `public`.
+- Export keeps the release branch of a registry app (erpnext on `version-15` for a v15 base): the repo's default branch is `develop`, and following it would put a v15 bench on the development branch. Every other app follows its default branch, as agreed.
+- Export drops a pinned `commit` when it changes the app's branch: the pin belongs to the old branch.
+- Import adds `schema = 2` and `source` at the top of the stored file and removes the file's own lines for them, so what is stored always says where it came from and parses as schema 2.
+- `profile check` exits 0 whatever it finds: the answer is in the output, and the app and MCP read the JSON. A missing or invalid profile still exits 1.
+- Reachability runs `ls-remote --exit-code --heads --tags REPO BRANCH`: exit 2 (no such branch) is `false`, like a denied read, because install would fail on it too. A resolve or connect error and the 10 second limit are `null`, not `false`, so offline never removes apps.
+- `install --profile` skips only `false` repos. With a repo that is `null` it goes on and fails at get-app as before, rather than silently build a smaller bench offline.
+- A subscription's profiles are `profiles/*.toml` when that folder exists, else `*.toml` at the root: a config repo often keeps its own `benchbar.toml` lockfile or other TOML at the root.
+- Clones and fetches run with `core.hooksPath=/dev/null` and `GIT_LFS_SKIP_SMUDGE=1`, and subscribe clones into a temporary folder first, so a repo that holds no valid profile leaves nothing behind.
+- Doctor's daily fetch stamps `.git/benchbar-tried` in the clone before it fetches, and `.git/benchbar-fetched` only when it worked: an offline Mac tries once a day, not on every doctor run.
+- The `--plan` forms of export, import, subscribe and update take no CLI lock, like `list` and `check`, so the app can preview while an install runs.
+- `profile remove` refuses a profile that is your own file or a `BENCHBAR_PROFILE_PATH` folder: it only undoes what import and subscribe did.
