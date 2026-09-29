@@ -104,7 +104,7 @@ GitHub too, and `benchbar docs` opens them from the terminal.
 
 ## Roadmap
 
-0.6 brings Developer ID signing, a Homebrew cask and in app updates; the rest is in [ROADMAP.md](ROADMAP.md).
+0.7 brings Developer ID signing, notarization and a Homebrew cask; the rest is in [ROADMAP.md](ROADMAP.md).
 
 ## Contributing
 
