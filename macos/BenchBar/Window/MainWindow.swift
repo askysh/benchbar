@@ -30,6 +30,8 @@ final class WindowRouter {
     /// Why a benchbar:// link did nothing (no such bench, which bench):
     /// shown on top of the window until dismissed.
     var notice: String?
+    /// A benchbar://profile link: Team Profiles opens the sheet prefilled.
+    var profileRequest: URLRouter.ProfileLink?
 
     func show(bench path: String, tab: BenchTab = .overview) {
         pane = .bench(path)
@@ -103,7 +105,7 @@ struct MainWindowView: View {
         case .menuBar:
             makeSettings(.menuBar).navigationTitle("Menu Bar")
         case .profiles:
-            ProfilesPane(store: store, workbench: workbench).navigationTitle("Team Profiles")
+            ProfilesPane(store: store, workbench: workbench, router: router).navigationTitle("Team Profiles")
         case .about:
             AboutPane(store: store, model: about, router: router).navigationTitle("About BenchBar")
         case .discovery:

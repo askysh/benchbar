@@ -157,6 +157,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Self.urlLog.notice("Ignored \(link, privacy: .public): \(reason, privacy: .public)")
         case .window:
             openSettings()
+        case .profile(let link):
+            Self.urlLog.info("profile link: Team Profiles, sheet prefilled")
+            settingsWindow.router.profileRequest = link
+            settingsWindow.show(.profiles)
         case .explain(let message):
             Self.urlLog.notice("\(link, privacy: .public): \(message, privacy: .public)")
             settingsWindow.router.notice = message
