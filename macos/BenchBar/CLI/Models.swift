@@ -269,13 +269,27 @@ nonisolated struct AppInfo: Codable, Sendable, Equatable, Identifiable {
     var dirty: Bool
     var version: String?
     var sites: [String]
+    // 0.6: focus apps and freshness (nil from an older CLI), see AppFocus.swift
+    var focus: Bool?
+    var focusPin: String?
+    var focusReasons: [String]?
+    var requires: [String]?
+    var neededBy: [String]?
+    var upstream: String?
+    var behind: Int?
+    var behindDays: Int?
 
     var id: String { name }
 
     enum CodingKeys: String, CodingKey {
         case name, repo, branch, commit, dirty, version, sites
+        case focus, requires, upstream, behind
         case inAppsTxt = "in_apps_txt"
         case policyBranch = "policy_branch"
+        case focusPin = "focus_pin"
+        case focusReasons = "focus_reasons"
+        case neededBy = "needed_by"
+        case behindDays = "behind_days"
     }
 }
 

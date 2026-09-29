@@ -164,6 +164,13 @@ nonisolated struct CLIClient: Sendable {
         return try BenchJSON.decode(AppUpdatePlan.self, from: Data(output.stdout.utf8))
     }
 
+    /// benchbar app focus NAME [--auto] | app unfocus NAME: a pin in the
+    /// bench's state file, nothing else changes, so no --yes is needed.
+    @discardableResult
+    func setAppFocus(_ app: String, pin: FocusPin, bench: String) async throws(CLIError) -> CommandOutput {
+        try await run(pin.arguments(app: app) + ["--plain", "--bench-dir", bench], timeout: Timeout.query, acceptExitCodes: [0])
+    }
+
     @discardableResult
     func updateApp(_ app: String, bench: String) async throws(CLIError) -> CommandOutput {
         try await run(["app", "update", app, "--yes", "--plain", "--bench-dir", bench], timeout: Timeout.long, acceptExitCodes: [0])

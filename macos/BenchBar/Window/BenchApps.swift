@@ -72,6 +72,11 @@ struct BenchApps: View {
                     if let branch = app.branch, let policy = app.policyBranch, branch != policy {
                         Tag(text: "expected \(policy)", color: .orange)
                     }
+                    if app.isFocus { Tag(text: "focus", color: .accentColor) }
+                    if app.isStaleDependency { Tag(text: "behind", color: .orange) }
+                }
+                if let words = app.focusSummary ?? app.dependencySummary {
+                    Text(words).font(.caption).foregroundStyle(app.isStaleDependency ? .orange : .secondary)
                 }
                 Text([app.branch.map { "branch \($0)" } ?? "detached", app.repo].compactMap { $0 }.joined(separator: "  ·  "))
                     .font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
@@ -79,6 +84,9 @@ struct BenchApps: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
+            FocusMenu(app: app, disabled: busy) { pin in
+                Task { await workbench.setFocus(pin, app: app.name, on: bench) }
+            }
             let missing = AppSource.sitesWithout(app, among: siteNames)
             if !missing.isEmpty && app.name != "frappe" {
                 Menu("Install") {
