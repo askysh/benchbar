@@ -76,17 +76,19 @@ benchbar app unfocus erpnext         # pin it as not one (a branch you only trie
 benchbar app focus erpnext --auto    # infer again
 ```
 
-Doctor fetches the dependencies' branches at most once a day, so it
-stays fast and works offline: without a network the numbers are those of
-the last fetch, and an app never fetched is unknown, never a failure.
-`benchbar app focus --fetch` fetches now, and `OFFLINE=1` never fetches.
+Doctor is read only and never touches the network on its own, so it
+stays fast and works offline: the numbers are those of the last fetch,
+yours or benchbar's, and an app never fetched is unknown, never a
+failure. `benchbar doctor --fetch` or `benchbar app focus --fetch`
+fetches the dependencies first; `OFFLINE=1` never fetches.
 
 ## In the app
 
 The BenchBar window's Apps page does the same: add an app from the
 registry or any GitHub URL, install it on a site, and update it after
 reading the changelog. Each app shows whether it is a focus app, and a
-menu sets it to Auto, Focus or Ignore. See [The menu bar app](../app.md#the-benchbar-window).
+menu sets it to Auto, Focus or Ignore; Check Remotes fetches the
+dependencies (`app focus --fetch`). See [The menu bar app](../app.md#the-benchbar-window).
 
 ## Keeping a team on the same apps
 

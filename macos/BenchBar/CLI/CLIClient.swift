@@ -171,6 +171,13 @@ nonisolated struct CLIClient: Sendable {
         try await run(pin.arguments(app: app) + ["--plain", "--bench-dir", bench], timeout: Timeout.query, acceptExitCodes: [0])
     }
 
+    /// benchbar app focus --fetch --json: git fetch of the focus apps'
+    /// dependencies (20 seconds each in the CLI). Doctor never fetches.
+    @discardableResult
+    func checkRemotes(bench: String) async throws(CLIError) -> CommandOutput {
+        try await run(["app", "focus", "--fetch", "--json", "--bench-dir", bench], timeout: Timeout.doctor, acceptExitCodes: [0])
+    }
+
     @discardableResult
     func updateApp(_ app: String, bench: String) async throws(CLIError) -> CommandOutput {
         try await run(["app", "update", app, "--yes", "--plain", "--bench-dir", bench], timeout: Timeout.long, acceptExitCodes: [0])

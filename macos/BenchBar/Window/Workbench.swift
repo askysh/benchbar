@@ -12,6 +12,7 @@ final class Workbench {
     private(set) var apps: [String: AppList] = [:]
     private(set) var appsError: [String: String] = [:]
     private(set) var loadingApps: Set<String> = []
+    private(set) var checkingRemotes: Set<String> = []
     private(set) var profiles: [ProfileInfo] = []
     private(set) var profilesError: String?
     /// Each site's backups, keyed by `backupKey(bench, site)`; read on the Sites tab.
@@ -91,6 +92,21 @@ final class Workbench {
         guard let client = store.cliClient else { return }
         do {
             try await client.setAppFocus(app, pin: pin, bench: bench.path)
+        } catch {
+            appsError[bench.path] = error.localizedDescription
+            return
+        }
+        await loadApps(bench)
+    }
+
+    /// Fetches the focus apps' dependencies (the only fetch the app asks
+    /// for: its doctor runs stay read only), then reads the list again.
+    func checkRemotes(_ bench: BenchModel) async {
+        guard let client = store.cliClient, !checkingRemotes.contains(bench.path) else { return }
+        checkingRemotes.insert(bench.path)
+        defer { checkingRemotes.remove(bench.path) }
+        do {
+            try await client.checkRemotes(bench: bench.path)
         } catch {
             appsError[bench.path] = error.localizedDescription
             return

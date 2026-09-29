@@ -39,6 +39,11 @@ struct BenchApps: View {
                         Label("Refresh", systemImage: "arrow.clockwise")
                     }
                     .help("Ask bench which sites have which app (needs MariaDB)")
+                    Button { Task { await workbench.checkRemotes(bench) } } label: {
+                        Label("Check Remotes", systemImage: "arrow.down.circle")
+                    }
+                    .disabled(workbench.checkingRemotes.contains(bench.path))
+                    .help("git fetch the apps your focus apps need, to see how far behind they are (only .git changes)")
                     Button { adding = true } label: { Label("Add App…", systemImage: "plus") }
                         .primaryAction()
                         .disabled(busy)

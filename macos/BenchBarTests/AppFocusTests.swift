@@ -67,6 +67,23 @@ struct AppFocusTests {
         #expect(workbench.apps[v16]?.apps.count == 4)
     }
 
+    @Test func checkRemotesFetchesThenReadsTheListAndDoctorNeverFetches() async throws {
+        base.cli.answer("list", json: try Fixture.string("list-two-benches"))
+        base.cli.answer("status", json: try Fixture.string("status-v16-two-sites"))
+        base.cli.answer("app", json: try Fixture.string("app-list-focus"))
+        base.cli.answer("doctor", json: try Fixture.string("doctor-dependency-behind"))
+        let store = base.makeStore()
+        await store.start(polling: false)
+        let bench = try #require(store.benches.first { $0.path == v16 })
+        let workbench = Workbench(store: store)
+        await workbench.checkRemotes(bench)
+        #expect(base.cli.calls.contains(["app", "focus", "--fetch", "--json", "--bench-dir", v16]))
+        #expect(base.cli.calls.contains(["app", "list", "--json", "--no-sites", "--bench-dir", v16]))
+        #expect(workbench.checkingRemotes.isEmpty && workbench.result == nil)
+        await store.runDoctor(on: bench)
+        #expect(!base.cli.calls.contains { $0.first == "doctor" && $0.contains("--fetch") }, "doctor from the app stays read only")
+    }
+
     @Test func aFailedPinShowsTheCLIMessage() async throws {
         base.cli.answer("list", json: try Fixture.string("list-two-benches"))
         base.cli.answer("status", json: try Fixture.string("status-v16-two-sites"))

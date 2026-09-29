@@ -18,15 +18,15 @@
 # the remote's default), or has a commit by your git user.email in the last
 # FL_FOCUS_DAYS days. Pins live in the bench's state file (APP_FOCUS).
 #
-# The network: doctor fetches the dependencies' remote branches at most once
-# a day (FL_FRESHNESS_TTL), once an hour after a failed try, each with a
-# timeout, never with a prompt, and never with OFFLINE=1 or --dry-run. Every
-# other read is local (the remote tracking refs), so without a network the
-# numbers are those of the last fetch, and an app never fetched is unknown.
+# The network: doctor stays read only and never fetches on its own. Only
+# --fetch (FL_FETCH=1, for doctor and app focus) fetches the dependencies'
+# remote branches, each with a timeout and never with a prompt, and never
+# with OFFLINE=1 or --dry-run. Every other read is local (the remote
+# tracking refs, whoever fetched them last), so an app never fetched is
+# unknown, never a failure.
 
 FL_FOCUS_DAYS="${FL_FOCUS_DAYS:-14}"
-FL_FRESHNESS_TTL="${FL_FRESHNESS_TTL:-86400}"
-FL_FRESHNESS_RETRY="${FL_FRESHNESS_RETRY:-3600}"
+FL_FETCH="${FL_FETCH:-0}"
 FL_FRESHNESS_FETCH_TIMEOUT="${FL_FRESHNESS_FETCH_TIMEOUT:-20}"
 
 # now as epoch seconds; FL_NOW fixes it (tests)
@@ -187,22 +187,25 @@ fl_freshness_file() {
 
 fl_freshness_fetched_at() { fl_kv_get "$(fl_freshness_file)" FETCHED_AT; }
 
-# 0 when the last good fetch is older than a day and the last try older
-# than an hour; never with OFFLINE=1 or in a dry run
-fl_freshness_fetch_due() {
-  local file now got tried
-  [[ "${OFFLINE:-0}" == "1" || "${FL_DRY_RUN:-0}" == "1" ]] && return 1
-  file="$(fl_freshness_file)"; now="$(fl_now)"
-  got="$(fl_kv_get "$file" FETCHED_AT)"; tried="$(fl_kv_get "$file" TRIED_AT)"
-  [[ "$got" =~ ^[0-9]+$ && $((now - got)) -lt "$FL_FRESHNESS_TTL" ]] && return 1
-  [[ "$tried" =~ ^[0-9]+$ && $((now - tried)) -lt "$FL_FRESHNESS_RETRY" ]] && return 1
+# 0 when --fetch asked for a fetch that may run (not OFFLINE=1, no dry run)
+fl_freshness_fetch_wanted() {
+  [[ "$FL_FETCH" == "1" && "${OFFLINE:-0}" != "1" && "${FL_DRY_RUN:-0}" != "1" ]]
+}
+
+# How old the numbers are: nothing when benchbar fetched in the last day,
+# else "as of a fetch 3 days ago" or "as of your last git fetch"
+fl_freshness_age_note() {
+  local fetched
+  fetched="$(fl_freshness_fetched_at)"
+  if [[ ! "$fetched" =~ ^[0-9]+$ ]]; then printf 'as of your last git fetch'
+  elif [[ $(($(fl_now) - fetched)) -ge 86400 ]]; then printf 'as of a fetch %s' "$(fl_age_words "$fetched")"; fi
   return 0
 }
 
 # fl_freshness_fetch APP...: fetches each app's upstream branch into its
 # remote tracking ref, side by side, each with a timeout and no prompt.
-# Only .git changes (like app update's fetch). Records the try, and the
-# time when at least one fetch worked.
+# Only .git changes (like app update's fetch). Records the time when at
+# least one fetch worked (FETCHED_AT, for the age note).
 fl_freshness_fetch() {
   local app up remote branch dir ts args codes ok=0 pids=()
   [[ "${FL_DRY_RUN:-0}" == "1" ]] && return 0
@@ -225,7 +228,6 @@ fl_freshness_fetch() {
   for app in ${pids[@]+"${pids[@]}"}; do wait "$app" 2>/dev/null || true; done
   for app in "$codes"/*; do [[ -f "$app" && "$(cat "$app")" == "0" ]] && ok=1; done
   rm -rf "$codes"
-  fl_kv_set "$(fl_freshness_file)" TRIED_AT "$(fl_now)"
   [[ "$ok" == "1" ]] && fl_kv_set "$(fl_freshness_file)" FETCHED_AT "$(fl_now)"
   return 0
 }
@@ -258,7 +260,7 @@ fl_freshness_prepare() {
 }
 
 chk_dependency_behind() {
-  local deps dep by b n days up fetched stale="" unknown="" fresh=0 fix note=""
+  local deps dep by b n days up age stale="" unknown="" fresh=0 fix note="" hint=""
   FL_FRESHNESS_READY=""
   fl_freshness_prepare
   if [[ -z "$FL_FOCUS_APPS" ]]; then
@@ -271,11 +273,9 @@ chk_dependency_behind() {
     return 0
   fi
   # shellcheck disable=SC2046  # the app names are words
-  fl_freshness_fetch_due && fl_freshness_fetch $(printf '%s\n' "$deps" | awk '{print $1}')
-  fetched="$(fl_freshness_fetched_at)"
-  if [[ "$fetched" =~ ^[0-9]+$ ]]; then
-    [[ $(($(fl_now) - fetched)) -ge $((2 * FL_FRESHNESS_TTL)) ]] && note=" (as of the fetch $(fl_age_words "$fetched"), offline since)"
-  fi
+  fl_freshness_fetch_wanted && fl_freshness_fetch $(printf '%s\n' "$deps" | awk '{print $1}')
+  age="$(fl_freshness_age_note)"
+  if [[ -n "$age" ]]; then note=" (${age})"; hint="; run benchbar doctor --fetch to check the remotes"; fi
   while read -r dep by; do
     [[ -n "$dep" ]] || continue
     b="$(fl_app_behind "$dep")"
@@ -292,9 +292,9 @@ chk_dependency_behind() {
   done <<<"$deps"
   [[ -n "$stale" ]] && return 0
   if [[ -n "$unknown" ]]; then
-    chk__set ok "${fresh} dependenc$([[ "$fresh" == "1" ]] && printf y || printf ies) of the focus apps up to date${note}; unknown for ${unknown} (never fetched, or no upstream branch)"
+    chk__set ok "${fresh} dependenc$([[ "$fresh" == "1" ]] && printf y || printf ies) of the focus apps up to date${note}; unknown for ${unknown} (never fetched, or no upstream branch)${hint}"
   else
-    chk__set ok "the ${fresh} app(s) the focus apps need are up to date with their remotes${note}"
+    chk__set ok "the ${fresh} app(s) the focus apps need are up to date with their remotes${note}${hint}"
   fi
 }
 
@@ -342,11 +342,11 @@ fl_freshness_app_json() {
 }
 
 fl_cmd_app_focus_list() {
-  local fetch="$1" app sep="" rows=() reasons by b n days up state fetched
+  local app sep="" rows=() reasons by b n days up state fetched
   FL_FRESHNESS_READY=""
   fl_freshness_prepare
   # shellcheck disable=SC2046  # the app names are words
-  if [[ "$fetch" == "1" && -n "$FL_FOCUS_DEPS" && "${OFFLINE:-0}" != "1" ]]; then fl_freshness_fetch $(printf '%s\n' "$FL_FOCUS_DEPS" | awk '{print $1}'); fi
+  if [[ -n "$FL_FOCUS_DEPS" ]] && fl_freshness_fetch_wanted; then fl_freshness_fetch $(printf '%s\n' "$FL_FOCUS_DEPS" | awk '{print $1}'); fi
   fetched="$(fl_freshness_fetched_at)"
   if [[ "$OPT_JSON" == "1" ]]; then
     printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"focus_days":%d,"fetched_at":%s,"apps":[' \
@@ -370,18 +370,18 @@ fl_cmd_app_focus_list() {
     rows+=("${app}|${state}|${reasons:--}|${by//,/, }|${n}")
   done < <(fl_apps_all)
   fl_table "${rows[@]}"
-  if [[ "$fetched" =~ ^[0-9]+$ ]]; then fl_note "dependencies last fetched $(fl_age_words "$fetched"); --fetch fetches them now"; else fl_note "dependencies not fetched yet; --fetch fetches them now (doctor does once a day)"; fi
+  if [[ "$fetched" =~ ^[0-9]+$ ]]; then fl_note "dependencies last fetched $(fl_age_words "$fetched"); --fetch fetches them now"; else fl_note "numbers as of your last git fetch; --fetch fetches the dependencies now (doctor never fetches without it)"; fi
 }
 
 fl_cmd_app_focus() {
-  local cmd="$1" app="" a auto=0 list=0 fetch=0 pin reasons=()
+  local cmd="$1" app="" a auto=0 list=0 pin reasons=()
   shift
   for a in "$@"; do
     case "$a" in
       --json) OPT_JSON=1 ;;
       --list) list=1 ;;
       --auto) auto=1 ;;
-      --fetch) fetch=1 ;;
+      --fetch) FL_FETCH=1 ;;
       -*) fl_die "Unknown option for app ${cmd}: $a" "Use: benchbar app focus [--list] [--json] [--fetch] | app focus NAME [--auto] | app unfocus NAME" ;;
       *) [[ -z "$app" ]] && app="$a" ;;
     esac
@@ -389,7 +389,7 @@ fl_cmd_app_focus() {
   fl_require_bench
   if [[ -z "$app" ]]; then
     [[ "$cmd" == "focus" ]] || fl_die "Usage: benchbar app unfocus NAME"
-    fl_cmd_app_focus_list "$fetch"
+    fl_cmd_app_focus_list
     return 0
   fi
   [[ "$list" == "0" ]] || fl_die "--list takes no app name." "benchbar app focus --list"
