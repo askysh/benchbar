@@ -15,11 +15,13 @@ All notable changes to this project are documented here.
   Focus apps are inferred (local changes, another branch than the
   profile's, a commit of yours in the last 14 days) and can be pinned
   with `benchbar app focus NAME`, `benchbar app unfocus NAME` and
-  `benchbar app focus NAME --auto`; `benchbar app focus` lists them. The
-  dependencies are fetched at most once a day, and doctor stays offline
-  safe.
+  `benchbar app focus NAME --auto`; `benchbar app focus` lists them.
+  Doctor stays read only: it reads the remotes as git last fetched them
+  and says how old that is, and `benchbar doctor --fetch` (or `app focus
+  --fetch`) fetches the dependencies first.
 - The Apps page shows which apps are focus apps and why, how far a
-  dependency is behind, and a menu to set each app to Auto, Focus or
+  dependency is behind, a Check Remotes button that fetches the
+  dependencies, and a menu to set each app to Auto, Focus or
   Ignore.
 
 ## 0.5.8 - 2026-09-29

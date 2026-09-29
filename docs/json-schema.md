@@ -312,8 +312,8 @@ MariaDB.
 Added in 0.6. Every app of the bench, whether it is a focus app (one you
 work on) and why, what it needs, which focus apps need it, and how far it
 is behind its remote branch. Local reads only; `--fetch` fetches the
-dependencies of the focus apps first (doctor does that at most once a
-day).
+dependencies of the focus apps first (so does `doctor --fetch`; nothing
+fetches without the flag). `fetched_at` is benchbar's last such fetch.
 
 ```json
 {"schema_version":1,"cli_version":"0.6.0","bench":"/Users/you/frappe-bench","focus_days":14,"fetched_at":"2026-09-29T08:00:00Z",

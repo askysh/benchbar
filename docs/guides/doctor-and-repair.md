@@ -231,11 +231,15 @@ oldest commit you do not have yet. A focus app itself never gets this
 warning: you pull the app you work on yourself. See
 [focus apps](apps.md#focus-apps-and-their-dependencies).
 
-Doctor fetches those apps' branches at most once a day (an hour after a
-failed try), with a timeout and never with a password prompt; only
-`.git` changes. With `OFFLINE=1`, or without a network, the numbers are
-those of the last fetch, and an app never fetched is reported as
-unknown. It never fails.
+Doctor stays read only and never fetches on its own: the numbers come
+from the remote branches as git last fetched them, your own `git fetch`
+included. When benchbar has not fetched them in the last day, the row
+says so ("as of a fetch 3 days ago") and the OK line says to run
+`benchbar doctor --fetch`. That fetches the focus apps' dependencies
+first, with a 20 second timeout each and never a password prompt; only
+`.git` changes. It never runs with `OFFLINE=1` or `--dry-run`. An app
+never fetched is reported as unknown, and a fetch that fails is no
+failure either.
 
 Fix: `benchbar app update <app>`, which shows the changelog, backs up
 the sites that have the app, fast forwards it and migrates. A dependency
@@ -244,8 +248,8 @@ with local changes gets `git status` first. Never `bench update`.
 ### apps_behind
 
 One line about every other app: neither a focus app nor needed by one.
-It reads the remote branches as they were last fetched (doctor does not
-fetch these) and is always OK.
+It reads the remote branches as they were last fetched (even `doctor
+--fetch` does not fetch these) and is always OK.
 
 ### lock_parse
 

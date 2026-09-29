@@ -111,7 +111,7 @@ the pin so it is inferred again. The pin is kept in the bench's state.
 |---|---|
 | `--list` | List the apps (the same as no NAME) |
 | `--json` | As JSON ([schema](../../json-schema.md#benchbar-app-focus---json)) |
-| `--fetch` | Fetch the focus apps' dependencies now instead of waiting for doctor's daily fetch |
+| `--fetch` | Fetch the focus apps' dependencies first (20 seconds each, no prompt; not with `OFFLINE=1` or `--dry-run`) |
 | `--auto` | With NAME: remove the pin, infer again |
 
 Exit codes: 0; 1 when the app or the bench is not found.
