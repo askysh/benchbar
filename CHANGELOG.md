@@ -93,11 +93,17 @@ All notable changes to this project are documented here.
   alone.
 - Plans are bound to what they showed: an `app add` token covers the
   commit of every repo it clones, and `profile import` and `profile
-  update` plans carry a `digest` that `--expect` checks. The app passes
-  it, so a profile that changes after Review is refused, not applied.
+  update` plans carry a `digest` that `--expect` checks (export too). The
+  app passes it, so a profile that changes after Review is refused, not
+  applied.
 
 ### Fixed
 
+- `app add --branch TAG` no longer reports a failure after a good
+  install: git checks a tag out detached, so the check is the tag's
+  commit, and planning the app again is not refused.
+- A team profile that lists the same app twice is refused with a clear
+  error; the app's Export sheet crashed on it.
 - `benchbar scan ~` and Find Benches skipped every folder named `dev`,
   so benches in `~/dev` were not found; only the system `/dev` is skipped
   now.

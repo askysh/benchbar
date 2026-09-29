@@ -52,7 +52,7 @@ final class ProfileExportRun {
         guard canExport, let plan, let client = workbench.store.cliClient else { return }
         phase = .running
         do {
-            result = try await client.exportProfile(name, to: file, choices: choices.arguments(for: plan))
+            result = try await client.exportProfile(name, to: file, choices: choices.arguments(for: plan) + CLIClient.expectArguments(plan.digest))
             phase = .done
         } catch {
             phase = .failed(error.localizedDescription)

@@ -512,7 +512,8 @@ why when it is not `true`.
  {"name":"acme_ecr","repo":"git@github-work:acme/acme_ecr.git","exported_repo":"git@github.com:acme/acme_ecr.git",
   "current_branch":"wip","exported_branch":"develop","default_branch":"develop","branch_verified":true,
   "access":"private","requires":["acme_base"],"keep":true}],
- "warnings":["acme_ecr: git@github-work:acme/acme_ecr.git is written as git@github.com:acme/acme_ecr.git"]}
+ "warnings":["acme_ecr: git@github-work:acme/acme_ecr.git is written as git@github.com:acme/acme_ecr.git"],
+ "digest":"5d41aa...64 hex characters"}
 ```
 
 | Field | Type | Notes |
@@ -527,12 +528,16 @@ why when it is not `true`.
 | `apps[].requires` | list of strings | from the profile, else from the app's `hooks.py` in the bench (`--bench-dir`) |
 | `apps[].keep` | bool | `false` for an app given to `--drop` |
 | `warnings` | list of strings | for a person: rewritten URLs, unverified branches, personal repos, drops that are refused |
+| `digest` | string | 0.6: SHA-256 of what the plan read: the profile file and each app's URLs, branches, access and requires; the same with or without `--branch` and `--drop` |
 
 `profile export NAME --out FILE [--branch APP=BR]... [--drop APP]... --yes --json`
 writes the file and prints `{"path","apps","dropped"}`: the path, how many
 apps it holds and the dropped ones. Dropping an app that a kept app
 requires is refused with exit 1 and
 `{"error":"...","blocked":[{"app":"acme_base","required_by":["acme_ecr"]}]}`.
+With `--expect DIGEST` it refuses (exit 1, nothing written) when the plan
+no longer matches that digest. BenchBar passes the digest and every kept
+app's branch, so it writes exactly what the sheet showed.
 
 ### `benchbar profile import SRC [--as NAME] --plan --json`
 

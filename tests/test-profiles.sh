@@ -236,9 +236,22 @@ assert_eq "version-15 develop True" "$(ex '" ".join(str(a[k]) for a in d["apps"]
 assert_contains "$(ex '"|".join(d["warnings"])')" "keeps version-15"
 assert_contains "$(ex '"|".join(d["warnings"])')" "personal GitHub account"
 assert_calls_contain '^ssh -G github-acme'
+EDIGEST="$(ex 'd["digest"]')"
+assert_eq "64" "${#EDIGEST}"
 # overrides, and a drop that a kept app requires is refused
 run_js profile export share --plan --json --branch acme_base=version-15 --drop tool --bench-dir "$SHARE_BENCH"
 assert_eq "version-15 True False" "$(ex '" ".join(str(x) for x in ([a["exported_branch"] for a in d["apps"] if a["name"]=="acme_base"][0], [a["branch_verified"] for a in d["apps"] if a["name"]=="acme_base"][0], [a["keep"] for a in d["apps"] if a["name"]=="tool"][0]))')"
+assert_eq "$EDIGEST" "$(ex 'd["digest"]')" "(the digest covers what was read, not the choices)"
+# the profile changed after the review: --expect refuses and writes nothing
+cp "$USER_DIR/share.toml" "$TMP_DIR/share.bak"
+printf '# edited after review\n' >>"$USER_DIR/share.toml"
+run_js profile export share --branch acme_base=version-15 --drop tool --expect "$EDIGEST" --out "$TMP_DIR/x.toml" --yes --json --bench-dir "$SHARE_BENCH"
+assert_eq "1" "$CODE"; assert_contains "$ERR" "changed since it was reviewed"
+assert_no_file "$TMP_DIR/x.toml"
+cp "$TMP_DIR/share.bak" "$USER_DIR/share.toml"
+run_js profile export share --branch acme_base=version-15 --drop tool --expect "$EDIGEST" --out "$TMP_DIR/x.toml" --yes --json --bench-dir "$SHARE_BENCH"
+assert_eq "0" "$CODE" "$OUT $ERR"
+rm -f "$TMP_DIR/x.toml"
 run_js profile export share --drop acme_base --out "$TMP_DIR/x.toml" --yes --json --bench-dir "$SHARE_BENCH"
 assert_eq "1" "$CODE"
 assert_eq "acme_base ['acme_ecr']" "$(ex '" ".join(str(b[k]) for b in d["blocked"] for k in ("app","required_by"))')"
@@ -300,6 +313,11 @@ assert_eq "1" "$CODE"; assert_contains "$OUT" "reads schema 1 and 2"
 printf 'schema = 2\nbase = "v15-lts"\n[[apps]]\nname = "x"\nrepo = "https://example.com/x"\nbranch = "main"\naccess = "secret"\n' >"$USER_DIR/old1.toml"
 run_fm profile show old1
 assert_eq "1" "$CODE"; assert_contains "$OUT" 'access "secret"'
+rm "$USER_DIR/old1.toml"
+# the same app twice: refused, not left to whichever reader picks one
+printf 'base = "v15-lts"\n[[apps]]\nname = "x"\nrepo = "https://example.com/x"\nbranch = "main"\n[[apps]]\nname = "x"\nrepo = "https://example.com/x"\nbranch = "dev"\n' >"$USER_DIR/old1.toml"
+run_fm profile show old1
+assert_eq "1" "$CODE"; assert_contains "$OUT" 'app "x" is listed twice'
 rm "$USER_DIR/old1.toml"
 
 # ---- import a file: plan (with check), then write with its source

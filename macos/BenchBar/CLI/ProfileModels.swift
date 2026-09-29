@@ -50,6 +50,8 @@ nonisolated struct ProfileExportPlan: Codable, Sendable, Equatable {
     var base: String?
     var apps: [App]
     var warnings: [String]
+    /// What the plan read (file, repos, branches, access, requires); export with `--expect` refuses a plan that moved on (0.6.0)
+    var digest: String?
 
     nonisolated struct App: Codable, Sendable, Equatable, Identifiable {
         var name: String
@@ -76,7 +78,7 @@ nonisolated struct ProfileExportPlan: Codable, Sendable, Equatable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case name, base, apps, warnings
+        case name, base, apps, warnings, digest
         case schemaVersion = "schema_version"
     }
 }
@@ -370,8 +372,10 @@ nonisolated struct ProfileExportChoices: Equatable, Sendable {
     }
 
     init(plan: ProfileExportPlan) {
-        branches = Dictionary(uniqueKeysWithValues: plan.apps.map { ($0.name, $0.exportedBranch) })
-        keep = Dictionary(uniqueKeysWithValues: plan.apps.map { ($0.name, $0.keep) })
+        // the CLI refuses a profile that lists an app twice; the first entry
+        // wins here anyway, so a plan from an older CLI cannot crash the sheet
+        branches = Dictionary(plan.apps.map { ($0.name, $0.exportedBranch) }, uniquingKeysWith: { first, _ in first })
+        keep = Dictionary(plan.apps.map { ($0.name, $0.keep) }, uniquingKeysWith: { first, _ in first })
     }
 
     func keeps(_ app: String) -> Bool { keep[app] ?? true }
@@ -398,11 +402,14 @@ nonisolated struct ProfileExportChoices: Equatable, Sendable {
     }
 
     /// `--branch APP=BR` for every changed branch, `--drop APP` for every dropped app.
+    /// Every kept app's branch is passed, not only the edited ones: the
+    /// CLI would otherwise work out a default again, which may differ from
+    /// the one the sheet showed.
     func arguments(for plan: ProfileExportPlan) -> [String] {
         var args: [String] = []
         for app in plan.apps where keeps(app.name) {
             let branch = (branches[app.name] ?? app.exportedBranch).trimmingCharacters(in: .whitespaces)
-            if branch != app.exportedBranch { args += ["--branch", "\(app.name)=\(branch)"] }
+            args += ["--branch", "\(app.name)=\(branch)"]
         }
         for app in plan.apps where !keeps(app.name) { args += ["--drop", app.name] }
         return args

@@ -151,6 +151,9 @@ fl_team_profile_read() {
     esac
   done <<<"$out"
   [[ "$cur" != "0" ]] && fl_team__app_add "$name" "$branch" "$repo" "$commit" "$access" "$requires"
+  # one entry per app: install, export and the app would each pick a different one
+  r="$(printf '%s\n' ${FL_TEAM_APPS[@]+"${FL_TEAM_APPS[@]}"} | cut -d'|' -f1 | sort | uniq -d | head -n1)"
+  [[ -z "$r" ]] || { FL_TEAM_ERROR="$(basename "$file"): app \"${r}\" is listed twice in [[apps]]"; return 1; }
   if [[ -n "$v2" && "$FL_TEAM_SCHEMA" != "2" ]]; then
     FL_TEAM_ERROR="$(basename "$file"): ${v2} needs schema = 2 (source, exported_from, access and requires are schema 2 keys)"
     return 1
@@ -817,8 +820,22 @@ fl_profile_export_render() {
   done
 }
 
+# fl_profile_export_digest FILE: sha256 of what the plan read and showed,
+# before any choice: the file, and each app's repo, exported URL, branches,
+# access and requires. export --expect refuses a plan that moved on.
+fl_profile_export_digest() {
+  local i=0
+  {
+    fl_profile_file_digest "$1"
+    while [[ "$i" -lt "${#EX_NAME[@]}" ]]; do
+      printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "${EX_NAME[$i]}" "${EX_REPO[$i]}" "${EX_XREPO[$i]}" "${EX_CUR[$i]}" "${EX_DEF[$i]}" "${EX_ACC[$i]}" "${EX_REQ[$i]}"
+      i=$((i + 1))
+    done
+  } | shasum -a 256 | awk '{print $1}'
+}
+
 fl_profile_export_plan_json() {
-  local name="$1" i=0 sep="" w
+  local name="$1" file="$2" i=0 sep="" w
   printf '{"schema_version":%d,"cli_version":"%s","name":%s,"base":%s,"apps":[' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$name")" "$(fl_json_str "$FL_TEAM_BASE")"
   while [[ "$i" -lt "${#EX_NAME[@]}" ]]; do
     # shellcheck disable=SC2086  # requires is a word list
@@ -830,7 +847,7 @@ fl_profile_export_plan_json() {
   printf '],"warnings":['
   sep=""
   for w in ${EX_WARN[@]+"${EX_WARN[@]}"}; do printf '%s%s' "$sep" "$(fl_json_str "$w")"; sep=","; done
-  printf ']}\n'
+  printf '],"digest":"%s"}\n' "$(fl_profile_export_digest "$file")"
 }
 
 fl_profile_export_print() {
@@ -845,7 +862,7 @@ fl_profile_export_print() {
 }
 
 fl_cmd_profile_export() {
-  local name="" out="" plan=0 overrides="" drops=" " a file tmp dropped=() i=0 kept=0 sep line code=0
+  local name="" out="" plan=0 overrides="" drops=" " a file tmp dropped=() i=0 kept=0 sep line code=0 expect=""
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
       --plan) plan=1; shift ;;
@@ -855,7 +872,9 @@ fl_cmd_profile_export() {
       --branch=*) overrides="${overrides} ${1#*=}"; shift ;;
       --drop) drops="${drops}${2:-} "; shift 2 ;;
       --drop=*) drops="${drops}${1#*=} "; shift ;;
-      -*) fl_die "Unknown option for profile export: $1" "Use: benchbar profile export NAME [--plan] [--out FILE] [--branch APP=BR]... [--drop APP]..." ;;
+      --expect) expect="${2:-}"; shift 2 || shift ;;
+      --expect=*) expect="${1#*=}"; shift ;;
+      -*) fl_die "Unknown option for profile export: $1" "Use: benchbar profile export NAME [--plan] [--out FILE] [--branch APP=BR]... [--drop APP]... [--expect DIGEST]" ;;
       *) [[ -z "$name" ]] && name="$1"; shift ;;
     esac
   done
@@ -872,8 +891,12 @@ fl_cmd_profile_export() {
   fl_info "reading ${file} and asking git about ${#FL_TEAM_APPS[@]} repo(s) (read only)"
   fl_profile_export_plan "$overrides" "$drops"
   if [[ "$plan" == "1" ]]; then
-    if [[ "${OPT_JSON:-0}" == "1" ]]; then fl_profile_export_plan_json "$name" >&3; else fl_profile_export_print; fi
+    if [[ "${OPT_JSON:-0}" == "1" ]]; then fl_profile_export_plan_json "$name" "$file" >&3; else fl_profile_export_print; fi
     return 0
+  fi
+  if [[ -n "$expect" && "$expect" != "$(fl_profile_export_digest "$file")" ]]; then
+    fl_die "The export plan changed since it was reviewed (the file, a default branch, access or requires). Nothing was written." \
+      "Review it again: benchbar profile export ${name} --plan"
   fi
   if [[ "${#EX_BLOCKED[@]}" -gt 0 ]]; then
     fl_profile_export_print

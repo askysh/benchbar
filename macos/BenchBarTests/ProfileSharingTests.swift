@@ -134,10 +134,22 @@ struct ProfileSharingTests {
 
     // MARK: export
 
+    @Test func exportChoicesSurviveADuplicateApp() throws {
+        var plan = try BenchJSON.decode(ProfileExportPlan.self, from: Fixture.data("profile-export-plan"))
+        let first = try #require(plan.apps.first)
+        var twin = first
+        twin.keep = !first.keep
+        plan.apps.append(twin)
+        let choices = ProfileExportChoices(plan: plan)
+        #expect(choices.keeps(first.name) == first.keep, "the first entry wins, no crash")
+    }
+
     @Test func droppingARequiredAppBlocksExport() throws {
         let plan = try BenchJSON.decode(ProfileExportPlan.self, from: Fixture.data("profile-export-plan"))
         var choices = ProfileExportChoices(plan: plan)
-        #expect(choices.problem(in: plan) == nil && choices.arguments(for: plan).isEmpty)
+        #expect(choices.problem(in: plan) == nil)
+        #expect(choices.arguments(for: plan) == ["--branch", "acme_core=develop", "--branch", "acme_erp=develop", "--branch", "my_tools=main"],
+                "every reviewed branch is pinned, not worked out again")
 
         choices.keep["acme_core"] = false
         #expect(choices.blocked(in: plan) == [.init(app: "acme_core", requiredBy: ["acme_erp"])])
@@ -145,7 +157,7 @@ struct ProfileSharingTests {
 
         choices.keep["acme_erp"] = false
         #expect(choices.problem(in: plan) == nil, "dropping both is fine")
-        #expect(choices.arguments(for: plan) == ["--drop", "acme_core", "--drop", "acme_erp"])
+        #expect(choices.arguments(for: plan) == ["--branch", "my_tools=main", "--drop", "acme_core", "--drop", "acme_erp"])
 
         choices.keep["my_tools"] = false
         #expect(choices.problem(in: plan) == "Keep at least one app.")
@@ -156,7 +168,7 @@ struct ProfileSharingTests {
         var choices = ProfileExportChoices(plan: plan)
         choices.branches["acme_core"] = " feature/invoices "
         choices.keep["my_tools"] = false
-        #expect(choices.arguments(for: plan) == ["--branch", "acme_core=feature/invoices", "--drop", "my_tools"])
+        #expect(choices.arguments(for: plan) == ["--branch", "acme_core=feature/invoices", "--branch", "acme_erp=develop", "--drop", "my_tools"])
         for bad in ["", "-x", "a b", "a..b", "a=b"] {
             choices.branches["acme_erp"] = bad
             #expect(choices.problem(in: plan) == "acme_erp needs a branch name.", "\(bad)")
@@ -177,7 +189,8 @@ struct ProfileSharingTests {
         await run.export(to: "/Users/you/Desktop/acme.toml")
         #expect(run.phase == .done && run.result?.dropped == ["my_tools"])
         #expect(calls("export").last == ["profile", "export", "acme", "--out", "/Users/you/Desktop/acme.toml",
-                                         "--branch", "acme_erp=main", "--drop", "my_tools", "--yes", "--json"])
+                                         "--branch", "acme_core=develop", "--branch", "acme_erp=main", "--drop", "my_tools",
+                                         "--expect", "ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc3", "--yes", "--json"])
     }
 
     @Test func blockedExportIsNotSentAndARefusalIsShown() async throws {
