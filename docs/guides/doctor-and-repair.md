@@ -353,6 +353,19 @@ not an error.
 Fix: `benchbar repair` writes and loads it. A non zero last exit code:
 `benchbar logs` shows why.
 
+### runner_heartbeat
+
+A running runner rewrites `logs/.benchbar/heartbeat` every 30 seconds
+(runners written by BenchBar 0.6.1 and later), and the app trusts the
+runner's `state.json` only while that file is under 90 seconds old. A
+warning means the bench runs a runner process older than its script:
+`benchbar service` or `repair` rewrote the script, but a running bench
+keeps the process it started with.
+
+Fix: `benchbar restart`. Until then the app checks that bench with the
+CLI once a minute, as it did before 0.6.1. When the script itself is
+outdated, the runner check says so and this one waits.
+
 ### fork_safety
 
 The agent passes `OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES` and

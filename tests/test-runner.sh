@@ -151,4 +151,34 @@ assert_status 0 "$runner"
 assert_eq "crash" "$(cat "$flag")"
 assert_calls_not_contain '^osascript'
 
+# 12. the heartbeat: rewritten in place while honcho runs (same inode, the
+# folder unchanged, so no folder watcher wakes), never through state.json,
+# and no more beats once the runner has exited
+rm -f "$flag"; : >"$hist"; reset_transitions
+hb="$BENCH/logs/.benchbar/heartbeat"
+rm -f "$hb"
+# ino_mtime PATH: inode and nanosecond mtime
+ino_mtime() { python3 -c 'import os,sys; s=os.stat(sys.argv[1]); print(s.st_ino, s.st_mtime_ns)' "$1"; }
+BENCHBAR_HEARTBEAT_EVERY=1 MOCK_HONCHO_SLEEP=4 "$runner" &
+rpid=$!
+for _ in $(seq 1 50); do [[ "$(transitions)" == "starting" ]] && break; sleep 0.1; done
+assert_eq "starting" "$(transitions)"
+assert_file "$hb"
+file1="$(ino_mtime "$hb")"; dir1="$(ino_mtime "$BENCH/logs/.benchbar")"
+beats=" $(cat "$hb") "
+for _ in $(seq 1 12); do
+  sleep 0.25
+  b="$(cat "$hb" 2>/dev/null || true)"
+  [[ -n "$b" && "$beats" != *" $b "* ]] && beats="${beats}${b} "
+done
+[[ "$(printf '%s' "$beats" | wc -w | tr -d ' ')" -ge 3 ]] || fail "the heartbeat must be rewritten while honcho runs (saw:${beats})"
+assert_eq "${file1%% *}" "$(ino_mtime "$hb" | cut -d' ' -f1)" "(the heartbeat is written in place, not replaced)"
+assert_eq "$dir1" "$(ino_mtime "$BENCH/logs/.benchbar")" "(a beat must not change the folder)"
+set +e; wait "$rpid"; rcode=$?; set -e
+assert_eq "0" "$rcode"
+assert_eq "starting stopped" "$(transitions)" "(the heartbeat never writes state.json)"
+last="$(cat "$hb")"
+sleep 2.5
+assert_eq "$last" "$(cat "$hb")" "(no beats after the runner exited)"
+
 printf 'test-runner: ok\n'

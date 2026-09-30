@@ -20,6 +20,7 @@ Raycast extensions and the like can rely on it too.
 | `benchbar profile export\|import\|subscribe\|update\|remove\|check ... --json` | sharing team profiles (0.6), see [profile sharing](#profile-sharing) |
 | `benchbar lock check --json` | how the bench differs from its `benchbar.toml` (0.5) |
 | `<bench>/logs/.benchbar/state.json` | the last state transition, written by the runner and the CLI |
+| `<bench>/logs/.benchbar/heartbeat` | since 0.6.1: rewritten in place every 30 seconds while the runner runs; its mtime says the runner is alive |
 | `benchbar pull ... --json` | JSON lines while a production site is copied, see [pull](#benchbar-pull---json) |
 | `benchbar report --json` | where the redacted diagnostics zip went (0.5.5), see [report](#benchbar-report---json) |
 | `benchbar site backup NAME --json` | the backup just taken (0.5.8), see [site backups](#site-backups) |
@@ -729,7 +730,7 @@ plus:
 
 | Field | Type | Notes |
 |---|---|---|
-| `updated_at` | string | when this transition was written |
+| `updated_at` | string | when this transition was written; it does not move between transitions (the heartbeat is its own file, below) |
 | `source` | string | `runner` (the launchd runner) or `cli` (`up`, `down`, `restart`) |
 
 Transitions the runner writes:
@@ -749,6 +750,26 @@ The CLI writes `starting` just before `up` and `restart` kick the agent,
 and `stopped` with `manual` after `down`. The state file is a hint for
 fast updates; `status --json` is the truth, because it also checks the
 processes and the site.
+
+## `logs/.benchbar/heartbeat`
+
+Since 0.6.1 the runner rewrites this file every 30 seconds while honcho
+runs, starting just before it writes `starting`. The write is in place
+(no temp file, no rename), so it changes no entry of the folder and a
+folder watcher is not woken by it; only the transitions in `state.json`
+are. The content is the runner's age in seconds, one line; read the
+file's modification time, not the content. The file stays after the
+runner stops.
+
+How a reader uses it, while `state.json` says `running` or `starting`:
+
+| The runner's `pid` | `heartbeat` mtime | Meaning |
+|---|---|---|
+| alive | under 90 seconds old | fresh: `state.json` is the truth, no need to ask the CLI |
+| alive | missing, or 90 seconds or older | a runner from before 0.6.1 (or one that hangs): ask `status --json`; `benchbar restart` gives the bench a runner that beats |
+| dead | any | the runner is gone without writing its last state: ask `status --json` |
+
+`benchbar doctor` reads the same file (check `runner_heartbeat`).
 
 ## Folder discovery
 

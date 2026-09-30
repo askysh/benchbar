@@ -169,7 +169,7 @@ run_fm status --json --bench-dir "$BENCH"
 assert_eq "running 5001 True" "$(status_of 'd["state"], d["pid"], d["processes_running"]')"
 budget pgrep 1 "status, serve by hand"
 budget lsof 1 "status, serve by hand"
-grep -v -E '^5001 ' "$MOCK_PROCS" >"$MOCK_PROCS.tmp"; mv "$MOCK_PROCS.tmp" "$MOCK_PROCS"
+{ grep -v -E '^5001 ' "$MOCK_PROCS" || true; } >"$MOCK_PROCS.tmp"; mv "$MOCK_PROCS.tmp" "$MOCK_PROCS"
 run_fm status --json --bench-dir "$BENCH"
 assert_eq "stopped False" "$(status_of 'd["state"], d["processes_running"]')"
 
