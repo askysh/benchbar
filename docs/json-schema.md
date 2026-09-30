@@ -62,7 +62,11 @@ How `status` decides (live facts win over the state file):
 
 1. Processes of this bench are running: `running` when the site answers
    any HTTP code, otherwise `starting`. A bench started by hand with
-   `benchfg` counts as running.
+   `benchfg` counts as running. While the runner's `state.json` says
+   `running` or `starting` and launchd runs that very pid, that is the
+   answer; otherwise one process scan looks for this bench's honcho,
+   serve, worker, schedule and socketio (0.6.1: port listeners alone no
+   longer count, a leftover Redis is not a running bench).
 2. The stop flag `logs/.bench-stopped` says `manual`: `stopped`.
 3. It says `crash`: `paused` with `crash`. Anything else: `paused` with `broken`.
 4. `state.json` says `crashed`: `crashed` (launchd is about to retry).
@@ -152,12 +156,12 @@ bench (`.benchbar/state.env`), the `WorkingDirectory` of every
 | `started_at` | string or null | when the current (or last) run started |
 | `last_exit_code` | number or null | exit code of the last run of honcho |
 | `web_url` | string | |
-| `web_ping_code` | number or null | HTTP code of `GET /api/method/ping` with the site as `Host`; `null` when nothing answered within 3 seconds |
+| `web_ping_code` | number or null | HTTP code of `GET /api/method/ping` with the site as `Host`; `null` when nothing answered. Asked only while processes run, with a 2 second limit (3 seconds before 0.6.1) |
 | `ports` | object | as in `list` |
 | `state_file`, `log` | string | paths |
 | `agent_loaded` | bool | the launchd agent is loaded |
 | `agent_state` | string or null | launchd's own word, for example `running` or `not running` |
-| `processes_running` | bool | any honcho, serve, worker, socketio or port listener of this bench |
+| `processes_running` | bool | any honcho, serve, worker, schedule or socketio process of this bench (before 0.6.1 a port listener counted too) |
 | `sites` | array | added in 0.4, see [Sites](#sites) |
 | `scheduler` | bool | added in 0.4: `Procfile.lean` runs `bench schedule` (`benchbar service --with-schedule`) |
 
@@ -184,7 +188,7 @@ carry the bench's sites, read from `sites/*/site_config.json`:
 | `name` | string | the site folder |
 | `default` | bool | the site `benchup` waits for, the runner pings and the app opens; `benchbar site default NAME` changes it (and runs `bench use`) |
 | `hosts_entry` | bool | `/etc/hosts` maps it to 127.0.0.1; `benchbar site hosts` adds the missing lines |
-| `ping_code` | number or null | HTTP code of `/api/method/ping` with this site as `Host`; `null` when nothing listens on the web port or nothing answered |
+| `ping_code` | number or null | HTTP code of `/api/method/ping` with this site as `Host`; `null` when nothing listens on the web port or nothing answered. Since 0.6.1 `list --json` and `status --json` leave it `null` (they are polled; `web_ping_code` is the default site's ping) unless `status --json --ping` asks every site once; `site list --json` always asks |
 
 `benchbar site list --json` prints `{"schema_version":1,"cli_version":..,"bench":..,"sites":[..]}`.
 

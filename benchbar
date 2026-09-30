@@ -16,14 +16,16 @@ FL_VERSION="0.6.0"
 
 # Resolve the real script location even when invoked through a symlink
 # (for example ~/.local/bin/frappe-mac).
+# dirname by parameter expansion: every status poll of the app starts here
+fl_resolve_self_dir() { case "$1" in */*) printf '%s' "${1%/*}" ;; *) printf '.' ;; esac; }
 fl_resolve_self() {
   local src="${BASH_SOURCE[0]}" dir
   while [[ -L "$src" ]]; do
-    dir="$(cd "$(dirname "$src")" && pwd)"
+    dir="$(cd "$(fl_resolve_self_dir "$src")/" && pwd)"
     src="$(readlink "$src")"
     [[ "$src" == /* ]] || src="${dir}/${src}"
   done
-  cd "$(dirname "$src")" && pwd
+  cd "$(fl_resolve_self_dir "$src")/" && pwd
 }
 SCRIPT_DIR="$(fl_resolve_self)"
 
@@ -107,6 +109,8 @@ OPT_BUNDLE="${APP_BUNDLE:-}"
 OPT_JSON=0
 OPT_PORT_OFFSET=""
 OPT_FIX_HINTS=0
+# --ping: status asks every site (sites[].ping_code), not only the default one
+OPT_PING=0
 # --fetch: doctor and app focus fetch the focus apps' dependencies (freshness.sh)
 FL_FETCH=0
 FL_ASSUME_YES="${FL_ASSUME_YES:-0}"
@@ -297,6 +301,7 @@ while [[ "$#" -gt 0 ]]; do
     -y|--yes) FL_ASSUME_YES=1; shift ;;
     --json) OPT_JSON=1; shift ;;
     --fix-hints) OPT_FIX_HINTS=1; shift ;;
+    --ping) OPT_PING=1; shift ;;
     --fetch) FL_FETCH=1; shift ;;
     --plain|--no-color) FL_PLAIN=1; fl_ui_init; shift ;;
     --version) fl_print_version; exit 0 ;;
@@ -595,6 +600,7 @@ cmd_repair() {
 }
 
 cmd_status() {
+  FL_CONTEXT_LIGHT=1
   fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
   fl_cmd_status "$OPT_JSON"
 }
@@ -631,8 +637,10 @@ case "$COMMAND" in
   doctor) cmd_doctor || exit 1 ;;
   repair) cmd_repair || exit $? ;;
   status) cmd_status ;;
-  list) fl_cmd_list "$OPT_JSON" ;;
-  ports) fl_cmd_ports ${ARGS[@]+"${ARGS[@]}"} || exit $? ;;
+  list) FL_CONTEXT_LIGHT=1; fl_cmd_list "$OPT_JSON" ;;
+  ports)
+    [[ "${ARGS[0]:-}" == check ]] && FL_CONTEXT_LIGHT=1
+    fl_cmd_ports ${ARGS[@]+"${ARGS[@]}"} || exit $? ;;
   scan) fl_cmd_scan "${ARGS[0]:-}" ;;
   register) fl_cmd_register ${ARGS[@]+"${ARGS[@]}"} ;;
   up) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_up ;;

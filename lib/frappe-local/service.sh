@@ -14,12 +14,28 @@ FL_CRASH_WINDOW="${FL_CRASH_WINDOW:-600}"
 FL_UP_WAIT_SECS="${FL_UP_WAIT_SECS:-45}"
 
 # fl_context_init [BENCH_DIR_FLAG] [SITE_FLAG] [PROFILE_FLAG]
+#
+# FL_CONTEXT_LIGHT=1 (status, list, ports check: they only read) stops after
+# the bench, site, ports and label: no profile, team profile, brew, uname,
+# honcho or rendered templates, which only the commands that write or check
+# files use. Each file is read once, into the caches of state.sh and
+# benchinfo.sh.
 fl_context_init() {
   local profile="${3:-}"
   fl_bench_detect "${1:-}"
+  fl_bench_hash_prime
+  if [[ "${FL_CONTEXT_LIGHT:-0}" == "1" ]]; then
+    fl_bstate_prime
+    fl_site_config_prime
+    fl_site_detect "${2:-}"
+    fl_ports_detect
+    fl_agent_label_prime
+    return 0
+  fi
   fl_site_detect "${2:-}"
   fl_ports_detect
   fl_known_benches_prime
+  fl_agent_label_prime
   # a bench set up from a team profile keeps following it while the file
   # exists and parses; otherwise its base (stored as PROFILE) takes over
   if [[ -z "$profile" ]] && declare -F fl_team_profile_file >/dev/null; then
@@ -134,11 +150,21 @@ fl_wait_for_ping() {
   return 1
 }
 
+# fl_stop_flag_reason_v VAR: the stop flag's word (manual, crash, broken),
+# whitespace removed, or empty without a flag
+fl_stop_flag_reason_v() {
+  local __flag="${FL_BENCH_DIR}/logs/.bench-stopped" __v=""
+  if [[ -f "$__flag" && -r "$__flag" ]]; then
+    IFS= read -r -d '' __v <"$__flag" || true
+    __v="${__v//[[:space:]]/}"
+  fi
+  printf -v "$1" '%s' "$__v"
+}
+
 fl_stop_flag_reason() {
-  local flag
-  flag="$(fl_stop_flag_path)"
-  [[ -f "$flag" ]] || return 0
-  tr -d "[:space:]" <"$flag" 2>/dev/null || true
+  local reason
+  fl_stop_flag_reason_v reason
+  printf '%s' "$reason"
 }
 
 fl_arm_start() {
@@ -264,7 +290,8 @@ fl_cmd_status() {
   fl_require_bench
   fl_status_compute
   if [[ "$json" == "1" ]]; then
-    fl_status_print_json
+    # --ping asks every site; without it sites[].ping_code is null
+    if [[ "${OPT_PING:-0}" == "1" ]]; then fl_status_print_json ask; else fl_status_print_json; fi
     return 0
   fi
   fl_table \

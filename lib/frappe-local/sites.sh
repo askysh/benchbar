@@ -13,45 +13,76 @@
 # file), which "site default" keeps in step with currentsite.txt through
 # "bench use". benchup's wait, the runner's ping and status all use it.
 
-# Every site folder of the bench (it has a site_config.json), sorted.
+# Every site folder of the bench (it has a site_config.json), sorted. The
+# glob is in bash; sort runs only for two or more sites, since a glob's
+# order differs from sort's in a UTF-8 locale (upper and lower case).
 fl_sites_list() {
-  local d
+  local d names=()
   for d in "${FL_BENCH_DIR}"/sites/*/site_config.json; do
     [[ -f "$d" ]] || continue
-    basename "$(dirname "$d")"
-  done | sort
+    d="${d%/site_config.json}"
+    names+=("${d##*/}")
+  done
+  case "${#names[@]}" in
+    0) ;;
+    1) printf '%s\n' "${names[0]}" ;;
+    *) printf '%s\n' "${names[@]}" | sort ;;
+  esac
 }
 
 # fl_site_ping_code_for SITE: HTTP code of the ping with SITE as Host, 000
 # when nothing answers. Nothing is tried when no one listens on the web port,
 # so a stopped bench costs no timeouts.
 fl_site_ping_code_for() {
-  local code
   if [[ -z "$(fl_port_listener_pid "$FL_WEB_PORT")" ]]; then printf '000'; return 0; fi
-  code="$(curl -s -o /dev/null -m 3 -w '%{http_code}' -H "Host: $1" "http://127.0.0.1:${FL_WEB_PORT}/api/method/ping" 2>/dev/null || true)"
+  fl_site_curl_code "$1" 3
+}
+
+# fl_site_curl_code SITE SECONDS: one ping with SITE as Host, 000 when nothing answers
+fl_site_curl_code() {
+  local code
+  code="$(curl -s -o /dev/null -m "$2" -w '%{http_code}' -H "Host: $1" "http://127.0.0.1:${FL_WEB_PORT}/api/method/ping" 2>/dev/null || true)"
   case "$code" in [0-9][0-9][0-9]) printf '%s' "$code" ;; *) printf '000' ;; esac
 }
 
+# A "127.0.0.1 ... NAME" line in the hosts file, read in bash (list and
+# status ask this for every site).
 fl_hosts_has_name() {
-  local re
-  re="$(printf '%s' "$1" | sed 's/\./\\./g')"
-  grep -qE "^[[:space:]]*127\.0\.0\.1[[:space:]]+(.*[[:space:]])?${re}([[:space:]]|$)" "$FL_HOSTS_FILE" 2>/dev/null
+  local re line
+  re="^[[:space:]]*127\\.0\\.0\\.1[[:space:]]+(.*[[:space:]])?${1//./\\.}([[:space:]]|\$)"
+  [[ -f "$FL_HOSTS_FILE" && -r "$FL_HOSTS_FILE" ]] || return 1
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ "$line" =~ $re ]] && return 0
+  done <"$FL_HOSTS_FILE"
+  return 1
 }
 
-# [{"name":..,"default":..,"hosts_entry":..,"ping_code":..}] for list and status
-fl_sites_json() {
-  local s sep="" ping
-  printf '['
-  while IFS= read -r s; do
-    [[ -n "$s" ]] || continue
-    ping="$(fl_site_ping_code_for "$s")"; [[ "$ping" == "000" ]] && ping=""
-    printf '%s{"name":%s,"default":%s,"hosts_entry":%s,"ping_code":%s}' "$sep" "$(fl_json_str "$s")" \
-      "$(fl_json_bool "$([[ "$s" == "$FL_SITE" ]] && printf 1 || printf 0)")" \
-      "$(fl_json_bool "$(fl_hosts_has_name "$s" && printf 1 || printf 0)")" "$(fl_json_num "$ping")"
-    sep=","
+# fl_sites_json_v VAR [PINGS]: [{"name":..,"default":..,"hosts_entry":..,"ping_code":..}]
+#   none  ping_code null (list; status without --ping), no lsof, no curl
+#   ask   one curl per site; the default site reuses FL_DEFAULT_PING when set (status --ping)
+#   ping  one curl per site when something listens on the web port (site list)
+FL_DEFAULT_PING=""
+fl_sites_json_v() {
+  local __mode="${2:-none}" __out="[" __sep="" __s __ping __listening=1 __jn __jd __jh __jp __def __hosts
+  if [[ "$__mode" == "ping" && -z "$(fl_port_listener_pid "$FL_WEB_PORT")" ]]; then __listening=0; fi
+  while IFS= read -r __s; do
+    [[ -n "$__s" ]] || continue
+    __ping=""
+    if [[ "$__mode" == "ask" || ( "$__mode" == "ping" && "$__listening" == "1" ) ]]; then
+      if [[ "$__s" == "$FL_SITE" && -n "$FL_DEFAULT_PING" ]]; then __ping="$FL_DEFAULT_PING"; else __ping="$(fl_site_curl_code "$__s" 3)"; fi
+      [[ "$__ping" == "000" ]] && __ping=""
+    fi
+    __def=0; [[ "$__s" == "$FL_SITE" ]] && __def=1
+    __hosts=0; fl_hosts_has_name "$__s" && __hosts=1
+    fl_json_str_v __jn "$__s"; fl_json_bool_v __jd "$__def"; fl_json_bool_v __jh "$__hosts"; fl_json_num_v __jp "$__ping"
+    __out="${__out}${__sep}{\"name\":${__jn},\"default\":${__jd},\"hosts_entry\":${__jh},\"ping_code\":${__jp}}"
+    __sep=","
   done < <(fl_sites_list)
-  printf ']'
+  printf -v "$1" '%s]' "$__out"
 }
+
+# fl_sites_json [PINGS]: the same, printed; site list asks every site
+fl_sites_json() { local j; fl_sites_json_v j "${1:-ping}"; printf '%s' "$j"; }
 
 fl_site_valid_name() {
   [[ "$1" =~ ^[a-z0-9][a-z0-9.-]*$ ]] || fl_die "Invalid site name: '$1'." "Use lowercase letters, digits, '-' and '.' only."

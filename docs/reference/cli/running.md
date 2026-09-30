@@ -70,12 +70,17 @@ benchbar restart
 ## status
 
 ```
-benchbar status [--json] [--bench-dir DIR]
+benchbar status [--json] [--ping] [--bench-dir DIR]
 ```
 
 Agent state, pid, stop reason, last exit code, the processes, the site
 ping, the ports and the log path. `--json` prints the versioned JSON in
 [the schema](../../json-schema.md#benchbar-status---json).
+
+The app runs `status` for every bench, so it is cheap: one `launchctl`
+call, and one ping of the default site while the bench runs. The other
+sites are not asked; `--ping` asks each of them once and fills
+`ping_code` in the JSON's `sites`.
 
 Exit codes: 0 always, whatever the state; 1 only when no bench is found.
 

@@ -78,7 +78,9 @@ fl_cmd_scan() {
 }
 
 fl_registered_benches() {
-  [[ ! -f "${FL_STATE_DIR}/registered-benches.txt" ]] || cat "${FL_STATE_DIR}/registered-benches.txt"
+  local d
+  [[ -f "${FL_STATE_DIR}/registered-benches.txt" ]] || return 0
+  while IFS= read -r d || [[ -n "$d" ]]; do printf '%s\n' "$d"; done <"${FL_STATE_DIR}/registered-benches.txt"
 }
 
 fl_cmd_register() {

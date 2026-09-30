@@ -2,10 +2,13 @@
 # shellcheck source=tests/mocks/bin/_mocklib.sh
 . "$(dirname "$0")/_mocklib.sh"
 mock_log "$@"
-pattern=""; quiet=0
+pattern=""; quiet=0; long=0
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
     -f) pattern="$2"; shift 2 ;;
+    # -l with -f: "pid command line", like the real pgrep -lf
+    -l) long=1; shift ;;
+    -lf|-fl) long=1; pattern="$2"; shift 2 ;;
     -q*) quiet=1; [[ "$1" == *f* ]] && { pattern="$2"; shift; }; shift ;;
     -*) shift ;;
     *) pattern="$1"; shift ;;
@@ -14,6 +17,9 @@ done
 found=1
 while read -r pid cmdline; do
   [[ -n "$pid" ]] || continue
-  if printf '%s' "$cmdline" | grep -qE -- "$pattern"; then [[ "$quiet" == "1" ]] || printf '%s\n' "$pid"; found=0; fi
+  if printf '%s' "$cmdline" | grep -qE -- "$pattern"; then
+    found=0
+    if [[ "$quiet" == "1" ]]; then :; elif [[ "$long" == "1" ]]; then printf '%s %s\n' "$pid" "$cmdline"; else printf '%s\n' "$pid"; fi
+  fi
 done <"${MOCK_PROCS:?}"
 exit "$found"
