@@ -376,3 +376,4 @@ Asked for after the phases, to stop naming drift before the first release.
 - `CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO` for the Developer ID build: a plain Release `xcodebuild build` adds `get-task-allow`, which notarization refuses.
 - The release script reads the notarization status instead of trusting notarytool's exit code, which is 0 on Invalid, and prints Apple's log when it is not Accepted.
 - Each notarization waits up to 50 minutes (`NOTARY_TIMEOUT`) and the release job up to 120: Apple held the team's first accepted submission for over 30 minutes.
+- The signed path builds with the commit count as `CFBundleVersion`, as the ad hoc path always did, and stops if the app says otherwise: Sparkle compares that number to decide an update is newer, and project.yml's constant 1 would have made every later release look the same as 0.6.1.

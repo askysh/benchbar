@@ -71,7 +71,13 @@ want="$(project_version)"
 [[ -n "$VERSION" ]] || VERSION="$want"
 [[ "$VERSION" == "$want" ]] || die "version $VERSION does not match MARKETING_VERSION $want in macos/project.yml" \
   "bump MARKETING_VERSION (and CURRENT_PROJECT_VERSION), commit, tag v${want}"
-ok "version ${VERSION}"
+# CFBundleVersion is what Sparkle compares to decide an update is newer:
+# the commit count, as release-local.sh uses, so it only grows (CI checks
+# out the full history). project.yml's constant 1 would make every
+# release look the same to Sparkle.
+BUILD_NUMBER="$(git -C "$ROOT" rev-list --count HEAD 2>/dev/null)" \
+  || die "cannot count the commits for the build number" "run from a full git checkout (fetch-depth 0)"
+ok "version ${VERSION}, build ${BUILD_NUMBER}"
 [[ "$CHECK_ONLY" == "1" ]] && { printf '\n[OK] ready to release %s\n' "$VERSION"; exit 0; }
 
 # notarytool exits 0 when Apple answers Invalid: the status decides, and
@@ -94,7 +100,9 @@ notarize() {
 # ------------------------------------------------------------------- build
 step "build with Developer ID and Sparkle"
 export BENCHBAR_SPARKLE=YES
-"${ROOT}/scripts/macos-build.sh" --test --sparkle
+BENCHBAR_VERSION="$VERSION" BENCHBAR_BUILD="$BUILD_NUMBER" "${ROOT}/scripts/macos-build.sh" --test --sparkle
+built="$(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' "${APP}/Contents/Info.plist")"
+[[ "$built" == "$BUILD_NUMBER" ]] || die "the app says build ${built}, expected ${BUILD_NUMBER}"
 
 rm -rf "$DIST"
 mkdir -p "$DIST"
