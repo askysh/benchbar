@@ -76,7 +76,7 @@ jobs:
     name: Build and draft the release (${{ needs.check.outputs.signed == 'true' && 'Developer ID' || 'ad hoc' }})
     needs: check
     runs-on: macos-26
-    timeout-minutes: 60
+    timeout-minutes: 120
     env:
       VERSION: ${{ needs.check.outputs.version }}
       SIGNED: ${{ needs.check.outputs.signed }}

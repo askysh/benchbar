@@ -81,7 +81,10 @@ fi
 step "xcodebuild ${CONFIG}${BENCHBAR_VERSION:+ (version ${BENCHBAR_VERSION}, build ${BENCHBAR_BUILD:-project})}"
 if [[ -n "$SIGN_IDENTITY" ]]; then
   [[ -n "$TEAM_ID" ]] || die "BENCHBAR_SIGN_IDENTITY needs BENCHBAR_TEAM_ID" "export BENCHBAR_TEAM_ID=ABCDE12345"
-  SIGN_ARGS=(CODE_SIGN_IDENTITY="$SIGN_IDENTITY" DEVELOPMENT_TEAM="$TEAM_ID" OTHER_CODE_SIGN_FLAGS="--timestamp")
+  # no base entitlements: a plain build adds get-task-allow, which
+  # notarization refuses
+  SIGN_ARGS=(CODE_SIGN_IDENTITY="$SIGN_IDENTITY" DEVELOPMENT_TEAM="$TEAM_ID" OTHER_CODE_SIGN_FLAGS="--timestamp"
+    CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO)
 else
   SIGN_ARGS=(CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO)
 fi
@@ -99,6 +102,22 @@ rm -rf "${BUILD}/BenchBar.app"
 ditto "$APP" "${BUILD}/BenchBar.app"
 
 if [[ -n "$SIGN_IDENTITY" ]]; then
+  # xcodebuild signs the Sparkle framework it embeds, but not the helpers
+  # inside it, which keep Sparkle's own signature: notarization wants every
+  # binary on our Developer ID with the Hardened Runtime and a timestamp.
+  # Inside out, as Sparkle's documentation does it, then the app with its
+  # own entitlements only.
+  sign() { codesign --force --sign "$SIGN_IDENTITY" --options runtime --timestamp "$@"; }
+  sparkle="${BUILD}/BenchBar.app/Contents/Frameworks/Sparkle.framework"
+  if [[ -d "$sparkle" ]]; then
+    step "sign Sparkle's helpers with the Developer ID"
+    sign "${sparkle}/Versions/B/XPCServices/Installer.xpc"
+    sign --preserve-metadata=entitlements "${sparkle}/Versions/B/XPCServices/Downloader.xpc"
+    sign "${sparkle}/Versions/B/Autoupdate"
+    sign "${sparkle}/Versions/B/Updater.app"
+    sign "$sparkle"
+  fi
+  sign --entitlements "${MACOS}/BenchBar/Resources/BenchBar.entitlements" "${BUILD}/BenchBar.app"
   step "verify the Developer ID signature"
   codesign --verify --deep --strict --verbose=1 "${BUILD}/BenchBar.app"
   codesign -dv --verbose=2 "${BUILD}/BenchBar.app" 2>&1 | grep -E '^(Authority|TeamIdentifier|Timestamp|Runtime)' || true

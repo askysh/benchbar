@@ -74,9 +74,21 @@ want="$(project_version)"
 ok "version ${VERSION}"
 [[ "$CHECK_ONLY" == "1" ]] && { printf '\n[OK] ready to release %s\n' "$VERSION"; exit 0; }
 
+# notarytool exits 0 when Apple answers Invalid: the status decides, and
+# the log says why. Its progress shows as it waits. Apple's first
+# submissions for a team can take well over the usual minutes:
+# NOTARY_TIMEOUT sets the wait (a submission that outlasts it goes on at
+# Apple: `xcrun notarytool wait ID`).
 notarize() {
-  xcrun notarytool submit "$1" --key "$NOTARY_KEY_PATH" --key-id "$NOTARY_KEY_ID" \
-    --issuer "$NOTARY_ISSUER_ID" --wait --timeout 30m
+  local out id
+  out="$(xcrun notarytool submit "$1" --key "$NOTARY_KEY_PATH" --key-id "$NOTARY_KEY_ID" \
+    --issuer "$NOTARY_ISSUER_ID" --wait --timeout "${NOTARY_TIMEOUT:-50m}" 2>&1 | tee /dev/stderr)" \
+    || die "notarytool failed for $1" "if it timed out, xcrun notarytool wait ID, then run this again"
+  if ! grep -q '^[[:space:]]*status: Accepted' <<<"$out"; then
+    id="$(sed -n 's/^[[:space:]]*id: //p' <<<"$out" | head -n 1)"
+    [[ -n "$id" ]] && xcrun notarytool log "$id" --key "$NOTARY_KEY_PATH" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" || true
+    die "Apple did not accept $1" "read the log above; the issues name each binary"
+  fi
 }
 
 # ------------------------------------------------------------------- build
