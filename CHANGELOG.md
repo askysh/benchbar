@@ -2,6 +2,62 @@
 
 All notable changes to this project are documented here.
 
+## 0.6.1 - 2026-10-01
+
+Cost at rest. macOS flagged BenchBar for significant energy: it ran
+`benchbar status --json` for every bench every 30 seconds (every 5 once
+a bench Overview had been shown), and each call started about 212
+programs. Ten minutes at rest on an M4, window closed, one bench
+running and one stopped, BenchBar plus the processes it starts:
+
+| | BenchBar | its children | total |
+|---|---|---|---|
+| 0.6.0 | 0.12 % | 6.05 % | 6.16 % |
+| 0.6.1 | 0.06 % | 0.04 % | 0.10 % |
+
+### Changed
+
+- `benchbar status --json` starts 5 programs instead of 212 (0.03 s of
+  CPU instead of 0.86), `list --json` 4 instead of 119, with the same
+  JSON. No brew, pipx or template renders, one `launchctl print`, and
+  the default site is pinged once, only while the bench runs.
+- `status` and `list` leave `sites[].ping_code` null; `status --ping`
+  asks every site once. `site list --json` still pings each site.
+- The app polls on events, not on a clock: it reads the bench's
+  `logs/.benchbar` files and asks the CLI on launch, wake, after an
+  action, when the popover or window opens, and in a safety check every
+  5 minutes. A bench whose runner predates the heartbeat is asked once
+  a minute.
+- The CPU charts and the runner's speed share one sampler and stop
+  while idle, in Low Power Mode, or with the menu bar hidden. The
+  stopped and unknown poses play three loops, then hold still; running
+  is capped at 30 frames per second.
+- Doctor and app list results are kept per bench while the window is
+  open; Refresh and every action ask again.
+- CLI queries run at utility quality of service.
+
+### Added
+
+- The runner writes a heartbeat (`logs/.benchbar/heartbeat`) every 30
+  seconds while the bench runs, and doctor has a "Runner heartbeat"
+  check: `benchbar service` writes the new runner, `benchbar restart`
+  starts it.
+- The app logs every CLI call and every change of polling mode at info
+  level, subsystem `com.akashmishra.benchbar`.
+
+### Fixed
+
+- The 5 second poll of a bench Overview kept running after the window
+  was closed, until the app quit.
+- Changing the poll interval cancelled a status call in flight, which
+  showed a "timed out" banner.
+- Leaving the Health or Apps page no longer stops a doctor or app list
+  call midway.
+- Resolve & Start now starts the bench like the Start button: the
+  state, the site ping and the refresh follow.
+- The log view no longer writes its model while drawing, and reads new
+  lines in one batch.
+
 ## 0.6.0 - 2026-09-29
 
 ### Added

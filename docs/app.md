@@ -156,6 +156,34 @@ or `launchctl`. Every button runs `benchbar ... --json` and reads the
 answer, plus the state file the runner writes on every transition. That
 JSON is a documented API: [JSON schema](json-schema.md).
 
+## Energy
+
+At rest, with the window and the popover closed, BenchBar starts no
+process for a running bench. The runner writes a heartbeat file,
+`logs/.benchbar/heartbeat`, every 30 seconds, and the app trusts the
+bench's `state.json` while that heartbeat is under 90 seconds old.
+Starts, stops and crashes reach the app as a change in that folder, at
+once. Every 5 minutes, when macOS finds a good moment, the app asks
+`benchbar status` about benches it cannot read from their files, for
+example a stopped one. On an M4 this is under 0.1 percent of one core,
+down from about 6 percent in 0.6.0.
+
+A bench whose runner predates 0.6.1 writes no heartbeat. The app then
+asks `benchbar status` once a minute, and `doctor` warns "Runner
+heartbeat". `benchbar service` (or `benchbar repair`) writes the new
+runner, and `benchbar restart` starts it.
+
+The CPU charts and the running speed are read from the kernel
+(libproc), not from the CLI: every 2 seconds for the bench the runner
+follows, every 5 seconds for a bench whose charts are on screen, and
+only while that bench runs. The runner's speed is not read while the Mac
+sleeps, the screen is locked, the menu bar is hidden or Low Power Mode
+is on (the runner then plays at one speed).
+
+`benchbar status` pings only the default site. `benchbar status --ping`
+asks every site once and fills `ping_code` in the JSON; see
+[Running a bench](reference/cli/running.md).
+
 ## Find existing benches in a folder
 
 Choose **Scan Folder…** in the menu bar popover (or its right-click menu),

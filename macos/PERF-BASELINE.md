@@ -194,3 +194,30 @@ a=$(sh -c 'echo $$'); benchbar status --json >/dev/null; b=$(sh -c 'echo $$'); e
 
 `tests/test-status-cost.sh` holds the same budgets under the mocks, so a
 change that adds a process to a poll fails the suite.
+
+## Results by phase
+
+Ten minutes at rest on the same Mac, measured as above: the window and
+the popover closed, frappe-bench running, migration-16 stopped. Phases 1
+and 2 changed the CLI only and ran under the 0.6.0 app; from Phase 3 on
+the app is the phase's build.
+
+| | BenchBar | its children | total | CLI calls |
+|---|---|---|---|---|
+| 0.6.0 (baseline) | 0.12 % | 6.05 % | 6.16 % | about 38 |
+| Phase 1: fast status | 0.083 % | 0.602 % | 0.685 % | about 38 |
+| Phase 2: runner heartbeat | 0.067 % | 0.579 % | 0.647 % | about 38 |
+| Phase 3: events, not a clock | 0.056 % | 0.042 % | 0.098 % | 2 |
+| Phase 4: on demand cost | 0.054 % | 0.123 % | 0.177 % | 6 |
+
+Phase 3's two calls are the safety poll asking about the stopped bench.
+Phase 4's window had the same two plus four from one display sleep and
+wake (two refreshes of both benches a second apart).
+
+One call after Phase 1, through `~/.local/bin/benchbar`:
+
+| command | programs | forks | time |
+|---|---|---|---|
+| `status --json` (frappe-bench, running) | 5: bash, readlink, cksum, launchctl, curl | 35 | 0.07 s |
+| `status --json` (migration-16, stopped) | 6: bash, readlink, cksum, launchctl, pgrep, lsof | 39 | 0.08 s |
+| `list --json` (2 benches) | 4: bash, readlink, cksum 2 | 61 | 0.06 s |

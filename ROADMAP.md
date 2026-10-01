@@ -84,6 +84,12 @@ DMG, a cask in `askysh/homebrew-tap`, Sparkle updates, and a launch post
 on discuss.frappe.io. Moved from 0.6 while the Apple developer account
 is approved.
 
+**Management in its own target.** Team profiles, bench discovery and
+port setup move out of the menu bar app into a separate management
+target that runs only while it is open. The reason is scope: the menu
+bar app should start, stop and show benches. Not energy: 0.6.1 brought
+the app to under 0.1 percent of a core at rest with these in it.
+
 **0.8, the app for sites.** Restore from the app (backup and drop
 shipped in 0.5.8), pull and lock apply in the app, a first run wizard,
 new bench from a profile.
