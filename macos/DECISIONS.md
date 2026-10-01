@@ -297,7 +297,7 @@ Asked for after the phases, to stop naming drift before the first release.
 
 ## 0.6.1: cost at rest
 
-- Every phase reports BenchBar's own CPU, its children's CPU and the total over ten minutes at rest, the children read with `proc_pid_rusage` (`ri_child_user_time` plus `ri_child_system_time`): `ps cputime` counts only the app's own time, and macOS bills the `benchbar` processes it starts to BenchBar too. The 0.6.0 baseline was 0.12 percent own and 6.05 percent children (macos/PERF-BASELINE.md, which also holds the commands every phase repeats).
+- Every phase reports BenchBar's own CPU, its children's CPU and the total over ten minutes at rest, the children read with `proc_pid_rusage` (`ri_child_user_time` plus `ri_child_system_time`): `ps cputime` counts only the app's own time, and macOS bills the `benchbar` processes it starts to BenchBar too. The 0.6.0 baseline was 0.12 percent own and 6.05 percent children; the measurements of every phase are in the 0.6.1 pull request (#44).
 
 ### Phase 1: fast status (CLI)
 
