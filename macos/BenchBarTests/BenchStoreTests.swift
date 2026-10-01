@@ -432,6 +432,38 @@ struct BenchStoreTests {
         #expect(held.statusCalls == 3, "at launch, the held one, and one more")
     }
 
+    /// A new run whose first write keeps the state (starting over starting,
+    /// as after the Start button) still overtakes a status call under way:
+    /// its answer from between the runs is dropped, not shown.
+    @Test func aNewRunThatKeepsTheStateStillOvertakesAStatusCall() async throws {
+        func startingJSON(pid: Int) -> String {
+            statusJSON("starting").replacingOccurrences(of: #""pid":null"#, with: "\"pid\":\(pid)")
+        }
+        let files = FakeBenchFiles(fileStatus(.starting, pid: 4242), heartbeat: .beating(since: Date()), alive: [4242, 4243])
+        let held = HeldCLI(["list": listJSON(), "status": startingJSON(pid: 4242)])
+        let store = makeStore(files: files, runner: held)
+        await store.start(polling: false)
+        let bench = try #require(store.selected)
+        #expect(bench.state == .starting)
+
+        held.answer("status", statusJSON("stopped", reason: "manual"))
+        held.hold = true
+        let call = Task { await store.refresh(bench) }
+        await waitUntil { held.isHolding }
+        #expect(held.isHolding)
+        files.set(fileStatus(.starting, pid: 4243))
+        held.answer("status", startingJSON(pid: 4243))
+        await store.stateFileChanged(bench)
+        #expect(bench.state == .starting)
+        #expect(bench.status?.pid == 4243)
+
+        held.release()
+        await call.value
+        #expect(bench.state == .starting, "the stopped answer from between the runs is dropped")
+        #expect(bench.status?.pid == 4243)
+        #expect(held.statusCalls == 3, "at launch, the held one, and one more")
+    }
+
     /// A status call that fails (a timeout on a cold start) leaves no bench
     /// without a timer: the files say what they can, the CLI is asked again
     /// every minute until it answers.

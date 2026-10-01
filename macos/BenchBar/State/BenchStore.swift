@@ -556,7 +556,9 @@ final class BenchStore {
         await sampleResources(bench)
     }
 
-    /// Applies state.json's status; true when the bench's state moved.
+    /// Applies state.json's status; true when the bench's status moved,
+    /// its state or the run (a new runner writes `starting` while the bench
+    /// already shows starting from the Start button: a new pid).
     @discardableResult
     private func applyFile(_ status: BenchStatus, to bench: BenchModel) -> Bool {
         // the runner writes running only on a 200 from the site, and stops
@@ -566,9 +568,9 @@ final class BenchStore {
         if status.state == .starting, bench.state == .running, let pid = status.pid, pid == bench.status?.pid {
             return false
         }
-        let before = bench.state
+        let before = (bench.state, bench.status)
         apply(.observed(status.merged(over: bench.status), .stateFile), to: bench)
-        return bench.state != before
+        return bench.state != before.0 || bench.status != before.1
     }
 
     /// Reads state.json and the heartbeat's age (no CLI), and notes the
