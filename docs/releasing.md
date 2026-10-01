@@ -9,8 +9,8 @@ review the draft and publish it.
 
 | Path | When | What people get |
 |---|---|---|
-| **Ad hoc** (today) | no Apple Developer secrets in the repository | `BenchBar-<version>.zip`, `BenchBar-<version>.dmg`, `SHA256SUMS`. The app is ad hoc signed: a DMG download shows "Apple could not verify" once (README explains Open Anyway); `install.sh` downloads with curl, which sets no quarantine flag, so the app opens directly. |
-| **Developer ID** | the nine signing and notarization secrets exist | the same zip and dmg, signed, notarized and stapled, plus `appcast.xml` for Sparkle and `benchbar.rb` for the Homebrew tap |
+| **Developer ID** (since 0.6.1) | the nine signing and notarization secrets exist | `BenchBar-<version>.zip`, `BenchBar-<version>.dmg` and `SHA256SUMS`, signed, notarized and stapled, plus `appcast.xml` for Sparkle and `benchbar.rb` for the Homebrew tap |
+| **Ad hoc** (up to 0.6.0) | no Apple Developer secrets in the repository | the same zip, dmg and `SHA256SUMS`, ad hoc signed. A DMG download showed "Apple could not verify" once (the install page keeps the Open Anyway steps for those releases); `install.sh` downloads with curl, which sets no quarantine flag, so the app opened directly. |
 
 The `check` job decides: it looks for the secrets and prints which path
 runs as a notice. Nothing else differs for you: same tag, same draft
@@ -53,8 +53,9 @@ ad hoc path of the workflow, running on your Mac.
 
 ## The Developer ID path: one time setup
 
-Everything below switches on when the secrets exist. Until then the
-workflow takes the ad hoc path.
+Everything below switches on when the secrets exist; the repository has
+had all nine since 0.6.1. Without them the workflow takes the ad hoc
+path.
 
 ### 1. Apple Developer Program
 
