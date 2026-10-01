@@ -12,6 +12,12 @@ printf 'export A=1\n' >"$rc"
 c1="$(fl_template_render shell-helpers "PROFILE_EXPORTS=export P=1" "BENCHBAR=/x/benchbar")"
 c2="$(fl_template_render shell-helpers "PROFILE_EXPORTS=export P=2" "BENCHBAR=/x/benchbar")"
 
+# a regression guard, not a 0.7.0 change: the block keeps ~/.local/bin on
+# PATH even when Homebrew puts benchbar on PATH, since pipx and uv put
+# bench there (which path a Homebrew CLI records is test-homebrew's)
+# shellcheck disable=SC2016 # the block's own line, unexpanded
+assert_contains "$c1" 'export PATH="$HOME/.local/bin:$PATH"'
+
 assert_eq "missing" "$(fl_rc_block_status "$rc" "$c1")"
 fl_rc_block_write "$rc" "$c1"
 assert_eq "present" "$(fl_rc_block_state "$rc")"

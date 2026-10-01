@@ -300,7 +300,7 @@ fl_cmd_list() {
     return 0
   fi
   if [[ "${#benches[@]}" == "0" ]]; then
-    fl_info "no benches found; create one with: ${SCRIPT_DIR}/benchbar install"
+    fl_info "no benches found; create one with: ${FL_SELF} install"
     return 0
   fi
   rows+=("Bench|Site|Web|Path")

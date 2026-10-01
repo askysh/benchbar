@@ -81,21 +81,26 @@ fl_app_version() {
   printf '%s' "${v:-unknown}"
 }
 
-# The installed BenchBar app, read from its Info.plist without plutil (an
-# XML plist, which is what the build writes): "VERSION<tab>APP PATH", or
-# nothing when no app is installed. /Applications first, then ~/Applications.
+# fl_app_bundle_version_at APP: the version in APP's Info.plist, read
+# without plutil (an XML plist, which is what the build writes), or nothing
+fl_app_bundle_version_at() {
+  local plist="${1}/Contents/Info.plist"
+  [[ -f "$plist" ]] || return 0
+  awk '/<key>CFBundleShortVersionString<\/key>/ { l = $0; if (l !~ /<string>/) getline l; sub(/.*<string>/, "", l); sub(/<\/string>.*/, "", l); print l; exit }' "$plist" 2>/dev/null || true
+}
+
+# The installed BenchBar app: "VERSION<tab>APP PATH", or nothing when no
+# app is installed. /Applications first, then ~/Applications.
 fl_app_bundle_info() {
-  local dir dirs="$FL_APP_DIRS" plist v
+  local dir dirs="$FL_APP_DIRS" v
   while [[ -n "$dirs" ]]; do
     dir="${dirs%%:*}"
     [[ "$dirs" == *:* ]] && dirs="${dirs#*:}" || dirs=""
-    plist="${dir}/BenchBar.app/Contents/Info.plist"
-    if [[ -f "$plist" ]]; then
-      v="$(awk '/<key>CFBundleShortVersionString<\/key>/ { l = $0; if (l !~ /<string>/) getline l; sub(/.*<string>/, "", l); sub(/<\/string>.*/, "", l); print l; exit }' "$plist" 2>/dev/null || true)"
-      [[ -n "$v" ]] || continue
-      printf '%s\t%s' "$v" "${dir}/BenchBar.app"
-      return 0
-    fi
+    [[ -f "${dir}/BenchBar.app/Contents/Info.plist" ]] || continue
+    v="$(fl_app_bundle_version_at "${dir}/BenchBar.app")"
+    [[ -n "$v" ]] || continue
+    printf '%s\t%s' "$v" "${dir}/BenchBar.app"
+    return 0
   done
   return 0
 }
@@ -111,7 +116,8 @@ fl_report_versions() {
   local f="versions.txt" py mariadb_bin node_bin
   py="$(fl_python_bin)"; mariadb_bin="$(fl_mariadb_bin)"; node_bin="$(fl_node_bin)"
   {
-    printf 'benchbar CLI: %s (%s)\n' "${FL_VERSION:-0}" "${SCRIPT_DIR}/benchbar"
+    printf 'benchbar CLI: %s (%s, %s)\n' "${FL_VERSION:-0}" "$FL_INSTALL_KIND" "$FL_SELF"
+    printf 'benchbar state: %s\n' "$FL_STATE_DIR"
     printf 'BenchBar app: %s\n' "$(fl_app_bundle_version)"
     printf 'profile: %s\n' "$FL_PROFILE"
     printf 'bench: %s\n' "$FL_BENCH_DIR"

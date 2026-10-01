@@ -32,7 +32,9 @@ fl_action_label() {
     write_runner) printf 'write the runner script' ;;
     write_plist) printf 'write and load the launchd agent' ;;
     write_helpers) printf 'write the shell helper block' ;;
-    write_cli_link) printf 'link benchbar and frappe-mac into ~/.local/bin' ;;
+    write_cli_link)
+      if [[ -n "$(fl_brew_cli)" ]]; then printf 'point ~/.local/bin/benchbar and frappe-mac at %s' "$FL_SELF"
+      else printf 'link benchbar and frappe-mac into ~/.local/bin'; fi ;;
     hosts_entry) printf 'add %s to /etc/hosts (sudo)' "$FL_SITE" ;;
     rotate_logs) printf 'move large logs aside' ;;
     redis_stop) printf 'stop Homebrew redis on 6379' ;;
@@ -237,28 +239,59 @@ act_write_plist() {
 }
 
 act_write_helpers() {
-  local rc
+  local rc recorded own=""
   rc="$(fl_rc_file)"
+  # under Homebrew a block that runs a checkout with its own state stays:
+  # rewritten, benchup would start without that state (chk_helpers)
+  if [[ "${FL_INSTALL_KIND:-}" == homebrew ]]; then
+    recorded="$(fl_rc_block_extract "$rc" | sed -n 's/^BENCHBAR="\(.*\)"$/\1/p' | head -n 1)"
+    [[ -z "$recorded" || ! -e "$recorded" ]] || fl_cli_own_state_v own "$recorded"
+    if [[ -n "$own" ]]; then
+      fl_warn "the helper block in ${rc} runs ${recorded}, a checkout with its own state (${own}); left as is"
+      return 0
+    fi
+  fi
   fl_rc_block_write "$rc" "$FL_R_HELPERS"
   [[ "${FL_DRY_RUN:-0}" == "1" ]] || fl_ok "helper block written to ${rc} (open a new shell or: source ${rc})"
 }
 
+# Links ~/.local/bin/benchbar and frappe-mac to FL_SELF. A link that leads
+# elsewhere is pointed at it, the old one kept in the backups. With
+# Homebrew's benchbar installed a missing link stays missing: brew's bin
+# folder already puts benchbar on PATH (chk_cli_link).
 act_write_cli_link() {
-  local name link dir
+  local name link dir old brew own=""
   dir="$(dirname "$(fl_cli_link_path)")"
+  brew="$(fl_brew_cli)"
   for name in benchbar frappe-mac; do
     link="$(fl_cli_link_path "$name")"
     fl_cli_link_ok "$link" && continue
-    if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
-      fl_info "dry-run: ln -sfn ${SCRIPT_DIR}/benchbar ${link}"
+    [[ -e "$link" && ! -L "$link" ]] && { fl_warn "${link} is a regular file; not touching it"; continue; }
+    if [[ "${FL_INSTALL_KIND:-}" == homebrew && -L "$link" ]]; then
+      fl_cli_own_state_v own "$(readlink "$link")"
+      if [[ -n "$own" ]]; then fl_warn "${link} leads to a checkout with its own state (${own}); not touching it"; continue; fi
+    fi
+    if [[ -L "$link" ]]; then
+      old="$(readlink "$link")"
+      if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
+        fl_info "dry-run: ln -sfn ${FL_SELF} ${link}   (now a link to ${old}, kept in the backups)"
+        continue
+      fi
+      fl_backup_link "$link"
+      ln -sfn "$FL_SELF" "$link"
+      fl_ok "pointed ${link} at ${FL_SELF} (it led to ${old}; backup: ${FL_LAST_BACKUP})"
       continue
     fi
-    [[ -e "$link" && ! -L "$link" ]] && { fl_warn "${link} is a regular file; not touching it"; continue; }
+    [[ -z "$brew" ]] || continue
+    if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
+      fl_info "dry-run: ln -sfn ${FL_SELF} ${link}"
+      continue
+    fi
     mkdir -p "$dir"
-    ln -sfn "${SCRIPT_DIR}/benchbar" "$link"
+    ln -sfn "$FL_SELF" "$link"
     fl_ok "linked ${link}"
   done
-  [[ "${FL_DRY_RUN:-0}" == "1" ]] && return 0
+  [[ "${FL_DRY_RUN:-0}" == "1" || -n "$brew" ]] && return 0
   case ":$PATH:" in
     *":${dir}:"*) ;;
     *) fl_info "${dir} is not on PATH in this shell; the helper block adds it for new shells" ;;

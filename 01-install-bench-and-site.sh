@@ -10,6 +10,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/frappe-local/install-kind.sh
+. "${SCRIPT_DIR}/lib/frappe-local/install-kind.sh"
 # shellcheck source=lib/frappe-local/ui.sh
 . "${SCRIPT_DIR}/lib/frappe-local/ui.sh"
 # shellcheck source=lib/frappe-local/run.sh
@@ -435,7 +437,7 @@ for note in ${FL_PROFILE_SKIP_NOTES[@]+"${FL_PROFILE_SKIP_NOTES[@]}"}; do
 done
 cat <<EOF
 Run in the background (recommended):
-  ${SCRIPT_DIR}/benchbar service --bench-dir ${BENCH_DIR}
+  ${FL_SELF} service --bench-dir ${BENCH_DIR}
   benchup
 
 Or in the foreground:

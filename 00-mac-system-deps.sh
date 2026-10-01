@@ -8,6 +8,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/frappe-local/install-kind.sh
+. "${SCRIPT_DIR}/lib/frappe-local/install-kind.sh"
 # shellcheck source=lib/frappe-local/ui.sh
 . "${SCRIPT_DIR}/lib/frappe-local/ui.sh"
 # shellcheck source=lib/frappe-local/run.sh
@@ -276,7 +278,7 @@ done
 
 fl_section "SHELL CONFIG"
 ZSHRC="$(fl_rc_file)"
-HELPER_BLOCK="$(fl_template_render shell-helpers "PROFILE_EXPORTS=$(fl_profile_path_exports "$FL_PROFILE")" "BENCHBAR=${SCRIPT_DIR}/benchbar")"
+HELPER_BLOCK="$(fl_template_render shell-helpers "PROFILE_EXPORTS=$(fl_profile_path_exports "$FL_PROFILE")" "BENCHBAR=${FL_SELF}")"
 case "$(fl_rc_block_status "$ZSHRC" "$HELPER_BLOCK")" in
   current)
     fl_ok "${ZSHRC} has the benchbar block (profile exports and bench helpers)"
@@ -336,7 +338,7 @@ ${step_n}) The wkhtmltopdf install failed (not skipped): a download, checksum or
    does not. Run this again to retry, or install the package by hand:
 
    https://github.com/wkhtmltopdf/packaging/releases   (0.12.6-2, macos-cocoa.pkg)
-   ${SCRIPT_DIR}/benchbar repair                         (retries the download and install)
+   ${FL_SELF} repair                         (retries the download and install)
 
 EOF
       ;;
@@ -346,9 +348,9 @@ ${step_n}) MariaDB root already has a password, and neither the environment nor 
    Keychain knows it. Run this once with the password (it is verified, then saved
    to the Keychain and never asked again):
 
-   MARIADB_ROOT_PASSWORD='the password' ${SCRIPT_DIR}/benchbar install
+   MARIADB_ROOT_PASSWORD='the password' ${FL_SELF} install
 
-   Or run ${SCRIPT_DIR}/benchbar install without --yes and type it when asked.
+   Or run ${FL_SELF} install without --yes and type it when asked.
    Forgotten? Reset it (this keeps the databases):
      brew services stop ${FL_MARIADB_FORMULA}
      ${FL_BREW_PREFIX}/opt/${FL_MARIADB_FORMULA}/bin/mariadbd-safe --skip-grant-tables --skip-networking &

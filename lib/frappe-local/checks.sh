@@ -11,7 +11,7 @@
 # Groups (used by "benchbar service" versus "benchbar repair"):
 #   system, bench, service, site
 
-FL_CHECK_ORDER="brew python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac mole full_disk_access env_python bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy dependency_behind apps_behind lock_parse lock_drift profile_outdated logs honcho honcho_setuptools procfile runner agent runner_heartbeat fork_safety scheduler stop_flag helpers cli_link legacy_agents dead_agents hosts port_clash orphans ping"
+FL_CHECK_ORDER="brew python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac mole app_copies full_disk_access env_python bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy dependency_behind apps_behind lock_parse lock_drift profile_outdated logs honcho honcho_setuptools procfile runner agent runner_heartbeat fork_safety scheduler stop_flag helpers cli_link cli_duplicate legacy_agents dead_agents hosts port_clash orphans ping"
 FL_LOG_WARN_MB="${FL_LOG_WARN_MB:-50}"
 FL_HOSTS_FILE="${FL_HOSTS_FILE:-/etc/hosts}"
 
@@ -19,7 +19,7 @@ FL_HOSTS_FILE="${FL_HOSTS_FILE:-/etc/hosts}"
 # (FL_PORT_TARGET, set by fl_ports_plan); doctor never shows it.
 chk_port_block() {
   if [[ -n "${FL_PORT_TARGET:-}" && "$FL_PORT_TARGET" != "$(fl_port_offset_current)" ]]; then
-    chk__set warn "ports move to block ${FL_PORT_TARGET}: $(fl_port_block "$FL_PORT_TARGET" | tr ' ' '/')" "${SCRIPT_DIR}/benchbar service --port-offset ${FL_PORT_TARGET} --bench-dir ${FL_BENCH_DIR}" port_block
+    chk__set warn "ports move to block ${FL_PORT_TARGET}: $(fl_port_block "$FL_PORT_TARGET" | tr ' ' '/')" "${FL_SELF} service --port-offset ${FL_PORT_TARGET} --bench-dir ${FL_BENCH_DIR}" port_block
   else
     chk__set ok "ports stay ${FL_WEB_PORT}/${FL_SOCKETIO_PORT}/${FL_REDIS_QUEUE_PORT}/${FL_REDIS_CACHE_PORT}"
   fi
@@ -27,7 +27,7 @@ chk_port_block() {
 
 fl_check_group() {
   case "$1" in
-    brew|python_leaves|mariadb_bind|mariadb_utf8|pdf_engine|redis_6379|cleanmymac|mole|full_disk_access) printf 'system' ;;
+    brew|python_leaves|mariadb_bind|mariadb_utf8|pdf_engine|redis_6379|cleanmymac|mole|app_copies|full_disk_access) printf 'system' ;;
     env_python|bench_version|toolchain_*|socketio|assets|apps_txt|app_branch_policy|dependency_behind|apps_behind|lock_parse|lock_drift|logs) printf 'bench' ;;
     profile_outdated) printf 'bench' ;;
     ping) printf 'site' ;;
@@ -51,6 +51,8 @@ fl_check_label() {
     stop_flag) printf 'Stop flag' ;;
     helpers) printf 'Shell helpers' ;;
     cli_link) printf 'benchbar on PATH' ;;
+    cli_duplicate) printf 'Second CLI' ;;
+    app_copies) printf 'BenchBar.app copies' ;;
     legacy_agents) printf 'Legacy agents' ;;
     dead_agents) printf 'Agents without a runner' ;;
     mariadb_bind) printf 'MariaDB bind address' ;;
@@ -93,7 +95,7 @@ chk_brew() {
     brew list --formula --versions "$f" >/dev/null 2>&1 || missing="${missing} ${f}"
   done
   if [[ -n "$missing" ]]; then
-    chk__set fail "missing formulae:${missing}" "${SCRIPT_DIR}/00-mac-system-deps.sh --profile ${FL_PROFILE}"
+    chk__set fail "missing formulae:${missing}" "${FL_SELF_DIR}/00-mac-system-deps.sh --profile ${FL_PROFILE}"
     return 0
   fi
   # build formulae: mysqlclient (a frappe v16 dependency) compiles against them
@@ -133,15 +135,15 @@ chk_env_python() {
   local py="${FL_BENCH_DIR}/env/bin/python" ver want
   want="${FL_PYTHON_BIN_NAME#python}"
   if [[ ! -e "$py" && ! -L "$py" ]]; then
-    chk__set fail "env/bin/python is missing (env deleted, for example by a cleanup tool)" "${SCRIPT_DIR}/benchbar repair" env_rebuild
+    chk__set fail "env/bin/python is missing (env deleted, for example by a cleanup tool)" "${FL_SELF} repair" env_rebuild
     return 0
   fi
   if ! ver="$("$py" -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null)"; then
-    chk__set fail "env/bin/python does not run (broken symlink or removed interpreter)" "${SCRIPT_DIR}/benchbar repair" env_rebuild
+    chk__set fail "env/bin/python does not run (broken symlink or removed interpreter)" "${FL_SELF} repair" env_rebuild
     return 0
   fi
   if [[ "$ver" != "$want" ]]; then
-    chk__set fail "env uses Python ${ver}, profile ${FL_PROFILE} expects ${want}" "${SCRIPT_DIR}/benchbar repair" env_rebuild
+    chk__set fail "env uses Python ${ver}, profile ${FL_PROFILE} expects ${want}" "${FL_SELF} repair" env_rebuild
     return 0
   fi
   chk__set ok "env/bin/python runs (Python ${ver})"
@@ -150,13 +152,13 @@ chk_env_python() {
 chk_bench_version() {
   local out
   if [[ ! -e "${FL_BENCH_DIR}/env/bin/python" ]]; then
-    chk__set fail "skipped: env is missing" "${SCRIPT_DIR}/benchbar repair" env_rebuild
+    chk__set fail "skipped: env is missing" "${FL_SELF} repair" env_rebuild
     return 0
   fi
   if out="$(cd "$FL_BENCH_DIR" && bench version 2>&1)"; then
     chk__set ok "bench version works ($(printf '%s' "$out" | grep -m1 -E '^frappe' || printf 'ok'); bench installed by $(fl_bench_owner))"
   else
-    chk__set fail "bench version fails: $(printf '%s' "$out" | tail -n1)" "${SCRIPT_DIR}/benchbar repair" env_rebuild
+    chk__set fail "bench version fails: $(printf '%s' "$out" | tail -n1)" "${FL_SELF} repair" env_rebuild
   fi
 }
 
@@ -204,9 +206,9 @@ chk__template() {
   status="$(fl_template_status "$path" "$rendered")"
   case "$status" in
     current) chk__set ok "${label} is current ($(fl_template_header_of "$rendered" | awk '{print $3, $4}'))" ;;
-    missing) chk__set warn "${label} is missing (${path})" "${SCRIPT_DIR}/benchbar repair" "$action" ;;
-    outdated) chk__set warn "${label} is outdated (template or settings changed)" "${SCRIPT_DIR}/benchbar repair" "$action" ;;
-    foreign) chk__set warn "${label} exists but was not written by benchbar" "${SCRIPT_DIR}/benchbar repair" "$action" ;;
+    missing) chk__set warn "${label} is missing (${path})" "${FL_SELF} repair" "$action" ;;
+    outdated) chk__set warn "${label} is outdated (template or settings changed)" "${FL_SELF} repair" "$action" ;;
+    foreign) chk__set warn "${label} exists but was not written by benchbar" "${FL_SELF} repair" "$action" ;;
   esac
 }
 
@@ -215,7 +217,7 @@ chk_runner() {
   chk__template "runner" "$(fl_runner_path)" "$FL_R_RUNNER" write_runner
   # frappe-mac-run.sh from before 0.3.0, left behind if a repair was interrupted
   if [[ "$CHK_STATUS" == "ok" && -f "$(fl_runner_path_legacy)" ]] && ! fl_runner_legacy_in_use; then
-    chk__set warn "the old runner $(fl_runner_path_legacy) is still in the bench" "${SCRIPT_DIR}/benchbar repair" write_runner
+    chk__set warn "the old runner $(fl_runner_path_legacy) is still in the bench" "${FL_SELF} repair" write_runner
   fi
 }
 
@@ -232,7 +234,7 @@ chk_agent() {
   if [[ "$state" == "running" ]]; then
     chk__set ok "agent $(fl_agent_label) loaded, running (pid ${pid:-?})"
   elif [[ -n "$code" && "$code" != "0" && "$code" != "(never exited)" ]]; then
-    chk__set warn "agent loaded, ${state:-not running}, last exit code ${code}" "${SCRIPT_DIR}/benchbar logs"
+    chk__set warn "agent loaded, ${state:-not running}, last exit code ${code}" "${FL_SELF} logs"
   else
     chk__set ok "agent $(fl_agent_label) loaded, ${state:-not running}"
   fi
@@ -251,7 +253,7 @@ FL_HEARTBEAT_STALE_SECS="${FL_HEARTBEAT_STALE_SECS:-90}"
 FL_HEARTBEAT_FUTURE_SECS=5
 chk_runner_heartbeat() {
   local hb="${FL_BENCH_DIR}/logs/.benchbar/heartbeat" age fix
-  fix="${SCRIPT_DIR}/benchbar restart --bench-dir ${FL_BENCH_DIR}"
+  fix="${FL_SELF} restart --bench-dir ${FL_BENCH_DIR}"
   if [[ "$(fl_template_status "$(fl_runner_path)" "$FL_R_RUNNER")" != "current" ]]; then
     chk__set ok "no heartbeat to check until the runner script is current (see the runner check)"
     return 0
@@ -285,23 +287,34 @@ chk_stop_flag() {
   reason="$(tr -d '[:space:]' <"$flag")"
   case "$reason" in
     manual) chk__set ok "stopped on purpose (benchdown); start with benchup" ;;
-    crash) chk__set warn "auto-restart paused after repeated crashes" "${SCRIPT_DIR}/benchbar logs, fix the cause, then benchup" ;;
-    broken) chk__set warn "auto-restart paused: honcho or env was missing" "${SCRIPT_DIR}/benchbar repair, then benchup" ;;
+    crash) chk__set warn "auto-restart paused after repeated crashes" "${FL_SELF} logs, fix the cause, then benchup" ;;
+    broken) chk__set warn "auto-restart paused: honcho or env was missing" "${FL_SELF} repair, then benchup" ;;
     *) chk__set warn "stop flag has unknown content '${reason}'" "rm ${flag}" ;;
   esac
 }
 
 chk_helpers() {
-  local rc status legacy
+  local rc status legacy recorded own=""
   rc="$(fl_rc_file)"
   status="$(fl_rc_block_status "$rc" "$FL_R_HELPERS")"
   legacy="$(fl_rc_legacy_blocks "$rc" | tr '\n' ',' | sed 's/,$//')"
   case "$status" in
     current) chk__set ok "helper block in ${rc} is current" ;;
-    missing) chk__set warn "helper block missing from ${rc}" "${SCRIPT_DIR}/benchbar repair" write_helpers ;;
-    outdated) chk__set warn "helper block in ${rc} is outdated" "${SCRIPT_DIR}/benchbar repair" write_helpers ;;
-    broken) chk__set warn "benchbar markers in ${rc} are malformed; a fresh block will be appended" "${SCRIPT_DIR}/benchbar repair" write_helpers ;;
+    missing) chk__set warn "helper block missing from ${rc}" "${FL_SELF} repair" write_helpers ;;
+    outdated) chk__set warn "helper block in ${rc} is outdated" "${FL_SELF} repair" write_helpers ;;
+    broken) chk__set warn "benchbar markers in ${rc} are malformed; a fresh block will be appended" "${FL_SELF} repair" write_helpers ;;
   esac
+  # every helper runs the benchbar the block names: one that is gone (a
+  # Cellar folder after brew cleanup, a checkout moved to the Trash) breaks
+  # them all, whatever the block's hash says
+  recorded="$(fl_rc_block_extract "$rc" | sed -n 's/^BENCHBAR="\(.*\)"$/\1/p' | head -n 1)"
+  if [[ -n "$recorded" && ! -e "$recorded" ]]; then
+    chk__set fail "benchup and the other helpers in ${rc} run ${recorded}, which is gone" "${FL_SELF} repair" write_helpers
+  elif [[ "$CHK_STATUS" != ok && "${FL_INSTALL_KIND:-}" == homebrew && -n "$recorded" ]]; then
+    # a checkout with its own state keeps its block (act_write_helpers)
+    fl_cli_own_state_v own "$recorded"
+    [[ -z "$own" ]] || chk__set warn "the helper block in ${rc} runs ${recorded}, a checkout with its own state (${own}), which Homebrew's benchbar never reads; leaving it" "brew uninstall benchbar   (the checkout stays in use)"
+  fi
   if [[ -n "$legacy" ]]; then
     [[ "$CHK_STATUS" == "ok" ]] && CHK_STATUS=warn
     CHK_MSG="${CHK_MSG}; old block(s) still present: ${legacy} (remove by hand, the benchbar block wins because it comes later)"
@@ -311,34 +324,167 @@ chk_helpers() {
 
 fl_cli_link_path() { printf '%s/.local/bin/%s' "$HOME" "${1:-benchbar}"; }
 
-# A link is current when it resolves to this checkout's benchbar. The
-# frappe-mac alias may point at either name in the checkout.
+# Homebrew's benchbar by a path brew upgrade keeps: the opt path, or its
+# link in <prefix>/bin. Never a Cellar path, which brew cleanup deletes.
+fl_cli_path_is_brew() {
+  local p
+  case "$1" in
+    */opt/benchbar/bin/benchbar|*/opt/benchbar/bin/frappe-mac|*/opt/benchbar/libexec/benchbar|*/opt/benchbar/libexec/frappe-mac) return 0 ;;
+  esac
+  for p in "${FL_SELF_PREFIX:-}" "${FL_BREW_PREFIX:-}"; do
+    [[ -n "$p" ]] || continue
+    [[ "$1" == "${p}/bin/benchbar" || "$1" == "${p}/bin/frappe-mac" ]] && return 0
+  done
+  return 1
+}
+
+# fl_brew_cli: Homebrew's benchbar when its formula is installed (this CLI
+# under Homebrew, else <prefix>/opt/benchbar/bin/benchbar), or nothing.
+# Brew then puts benchbar on PATH, so a link in ~/.local/bin is optional.
+fl_brew_cli() {
+  if [[ "${FL_INSTALL_KIND:-}" == homebrew ]]; then printf '%s' "$FL_SELF"; return 0; fi
+  if [[ -n "${FL_BREW_PREFIX:-}" && -x "${FL_BREW_PREFIX}/opt/benchbar/bin/benchbar" ]]; then
+    printf '%s' "${FL_BREW_PREFIX}/opt/benchbar/bin/benchbar"
+  fi
+  return 0
+}
+
+# A link is current when it leads to this CLI: FL_SELF, which repair links,
+# or either name in its folder (never a Cellar folder). A link to Homebrew's
+# benchbar is current for every kind: whenever brew has the formula, its CLI
+# is the one on PATH, and no other copy's repair points the link away.
 fl_cli_link_ok() {
   local link="$1" have
   [[ -L "$link" ]] || return 1
   have="$(readlink "$link")"
+  [[ "$have" == "$FL_SELF" ]] && return 0
+  if fl_cli_path_is_brew "$have" && [[ -e "$link" ]]; then return 0; fi
+  [[ "${FL_INSTALL_KIND:-}" != homebrew ]] || return 1
   [[ "$have" == "${SCRIPT_DIR}/benchbar" || "$have" == "${SCRIPT_DIR}/frappe-mac" ]]
 }
 
+# fl_cli_own_state_v VAR CLI: the .benchbar a CLI at that path keeps next to
+# itself and this run does not use (a git checkout's), else empty. The
+# installer's folder never counts: Homebrew's CLI moves its state. No
+# process: tests on the path alone.
+fl_cli_own_state_v() {
+  local __d="${2%/*}"
+  printf -v "$1" '%s' ""
+  [[ "$2" == /* && "$__d" != "$FL_MANAGED_HOME" && "${__d}/.benchbar" != "$FL_STATE_DIR" ]] || return 0
+  if [[ -d "${__d}/.benchbar" && ! -L "${__d}/.benchbar" ]]; then printf -v "$1" '%s' "${__d}/.benchbar"; fi
+  return 0
+}
+
+# ~/.local/bin/benchbar and frappe-mac. A copy installed some other way
+# needs them (the helper block puts ~/.local/bin on PATH), and repair makes
+# them. With Homebrew's benchbar installed they are optional and never
+# made, and under Homebrew a link that leads elsewhere comes before brew's
+# benchbar on PATH: repair points it at FL_SELF, keeping the old link.
 chk_cli_link() {
-  local name link bad="" foreign="" target="${SCRIPT_DIR}/benchbar"
+  local name link bad="" foreign="" absent=0 brew to_self="" to_brew="" target="$FL_SELF" own="" own_state=""
+  brew="$(fl_brew_cli)"
   for name in benchbar frappe-mac; do
     link="$(fl_cli_link_path "$name")"
-    fl_cli_link_ok "$link" && continue
+    if fl_cli_link_ok "$link"; then
+      if [[ "${FL_INSTALL_KIND:-}" != homebrew ]] && fl_cli_path_is_brew "$(readlink "$link")"; then to_brew="${to_brew} ${name}"; else to_self="${to_self} ${name}"; fi
+      continue
+    fi
+    # under Homebrew a link to a checkout with its own state stays: pointed
+    # here, every benchbar call would start without that state
+    if [[ "${FL_INSTALL_KIND:-}" == homebrew && -L "$link" ]]; then
+      fl_cli_own_state_v own_state "$(readlink "$link")"
+      if [[ -n "$own_state" ]]; then own="${own}${own:+, }${link}"; continue; fi
+    fi
     if [[ -e "$link" && ! -L "$link" ]]; then
       foreign="${foreign}${foreign:+, }${link}"
     elif [[ -L "$link" ]]; then
       bad="${bad}${bad:+; }${link} points to $(readlink "$link")"
+    elif [[ -n "$brew" ]]; then
+      absent=$((absent + 1))
     else
       bad="${bad}${bad:+; }no ${link} yet"
     fi
   done
-  if [[ -n "$bad" ]]; then
-    chk__set warn "${bad} (so 'benchbar' and 'frappe-mac' work from any folder)" "${SCRIPT_DIR}/benchbar repair" write_cli_link
+  if [[ -n "$bad" && "${FL_INSTALL_KIND:-}" == homebrew ]]; then
+    chk__set warn "${bad}, ahead of Homebrew's benchbar on PATH" "${FL_SELF} repair" write_cli_link
+  elif [[ -n "$own" ]]; then
+    chk__set warn "${own} leads to a checkout with its own state (${own_state}), which Homebrew's benchbar never reads; leaving it" "brew uninstall benchbar   (the checkout stays in use)"
+  elif [[ -n "$bad" ]]; then
+    chk__set warn "${bad} (so 'benchbar' and 'frappe-mac' work from any folder)" "${FL_SELF} repair" write_cli_link
+  elif [[ -n "$foreign" && "${FL_INSTALL_KIND:-}" == homebrew ]]; then
+    chk__set warn "${foreign} is not a symlink and comes before Homebrew's benchbar on PATH; leaving it alone" "mv ${foreign%%,*} ${foreign%%,*}.bak"
   elif [[ -n "$foreign" ]]; then
     chk__set warn "${foreign} exists and is not a symlink; leaving it alone" "mv ${foreign%%,*} ${foreign%%,*}.bak && ln -s ${target} ${foreign%%,*}"
+  elif [[ "$absent" == "2" ]]; then
+    chk__set ok "no link in ~/.local/bin: Homebrew puts benchbar on PATH (${brew})"
+  elif [[ "${FL_INSTALL_KIND:-}" == homebrew ]]; then
+    chk__set ok "~/.local/bin leads to this CLI (${FL_SELF})"
+  elif [[ -n "$to_brew" && -z "$to_self" ]]; then
+    chk__set ok "~/.local/bin leads to Homebrew's benchbar (${brew}), not to this copy"
+  elif [[ -n "$brew" ]]; then
+    chk__set ok "~/.local/bin leads to this copy (${to_self# }), ahead of Homebrew's benchbar (${brew}); see Second CLI"
   else
     chk__set ok "~/.local/bin/benchbar and ~/.local/bin/frappe-mac point to this checkout"
+  fi
+}
+
+# fl_cli_version_at FILE: the version a benchbar script declares, or nothing
+fl_cli_version_at() { sed -n 's/^FL_VERSION="\(.*\)"$/\1/p' "$1" 2>/dev/null | head -n 1; }
+
+# A second copy of the CLI: the one line installer's checkout next to
+# Homebrew's formula. Those two share one state folder (state.sh moves the
+# installer's to ~/.local/state/benchbar), but only one of them is benchbar
+# on PATH, and the other one's repair or self-update changes the copy
+# nobody runs. A git checkout keeps its own .benchbar, which Homebrew's CLI
+# never reads, so for it Homebrew's is no drop in. Which one stays is the
+# user's call, so no repair action; nothing is ever deleted for them, and
+# the Trash is offered only for a folder that no longer holds the state.
+chk_cli_duplicate() {
+  local other v name link linked=0 legacy repair="" state
+  if [[ "${FL_INSTALL_KIND:-}" == homebrew ]]; then
+    other="${FL_MANAGED_HOME}/benchbar"
+    if [[ ! -f "$other" ]]; then
+      chk__set ok "no other copy: the one line installer's CLI is not in ${FL_MANAGED_HOME}"
+      return 0
+    fi
+    v="$(fl_cli_version_at "$other")"
+    for name in benchbar frappe-mac; do
+      link="$(fl_cli_link_path "$name")"
+      [[ -L "$link" && "$(readlink "$link")" == "${FL_MANAGED_HOME}/"* ]] && linked=1
+    done
+    legacy="${FL_MANAGED_HOME}/.benchbar"
+    [[ "$linked" == "1" ]] && repair="${FL_SELF} repair, then: "
+    if [[ "$FL_STATE_DIR" == "${FL_MANAGED_HOME}/"* ]]; then
+      # the move waits for a run of the old CLI (or failed): the folder still holds the state
+      chk__set warn "the one line installer's benchbar ${v:-?} is still in ${FL_MANAGED_HOME}, and so is the state (${FL_STATE_DIR}): a run of it holds the lock, or the move failed" "${FL_SELF} repair once no other benchbar run is active: the state moves to ~/.local/state/benchbar first, and this check then says what can go"
+    elif [[ -L "$FL_STATE_DIR" && -d "$legacy" && ! -L "$legacy" ]]; then
+      # another volume: the state stayed in the old folder, behind a link
+      if [[ "$linked" == "1" ]]; then
+        chk__set warn "the one line installer's benchbar ${v:-?} is still in ${FL_MANAGED_HOME}, and ~/.local/bin leads to it; that folder also holds the state (${FL_STATE_DIR} leads to ${legacy}), so keep it" "${FL_SELF} repair"
+      else
+        chk__set ok "the one line installer's benchbar ${v:-?} is in ${FL_MANAGED_HOME}, which also holds the state (${FL_STATE_DIR} leads to ${legacy}); keep it"
+      fi
+    elif [[ -d "$legacy" && ! -L "$legacy" ]]; then
+      # an older CLI made its folder again after the move: two states
+      chk__set warn "the one line installer's benchbar ${v:-?} is still in ${FL_MANAGED_HOME} and has started a state folder of its own (${legacy}) since the state moved to ${FL_STATE_DIR}, so its runs no longer share it" "${repair}mv ${FL_MANAGED_HOME} ~/.Trash/   (its .benchbar holds only what it wrote since the move; the benches and ${FL_STATE_DIR} stay)"
+    elif [[ "$linked" == "1" ]]; then
+      chk__set warn "the one line installer's benchbar ${v:-?} is still in ${FL_MANAGED_HOME}, and ~/.local/bin leads to it" "${repair}mv ${FL_MANAGED_HOME} ~/.Trash/   (the benches and ${FL_STATE_DIR} stay)"
+    else
+      chk__set warn "the one line installer's benchbar ${v:-?} is still in ${FL_MANAGED_HOME}, though ~/.local/bin no longer leads to it" "mv ${FL_MANAGED_HOME} ~/.Trash/   (the benches and ${FL_STATE_DIR} stay)"
+    fi
+    return 0
+  fi
+  other="$(fl_brew_cli)"
+  if [[ -z "$other" ]]; then
+    chk__set ok "no other copy: Homebrew has no benchbar formula"
+    return 0
+  fi
+  v="$(fl_cli_version_at "${other%/bin/benchbar}/libexec/benchbar")"
+  state="${HOME%/}/.local/state/benchbar"
+  if [[ "${FL_INSTALL_KIND:-}" == managed || "$FL_STATE_DIR" == "$state" ]]; then
+    chk__set warn "Homebrew has benchbar ${v:-?} too (${other}): two copies of the CLI for the same benches" "${other} repair   (Homebrew's takes over), or: brew uninstall benchbar   (this one stays)"
+  else
+    chk__set warn "Homebrew has benchbar ${v:-?} too (${other}), with its own state in ${state}: this copy's remembered benches, settings and backups are in ${FL_STATE_DIR}, which Homebrew's never reads" "brew uninstall benchbar   (this one stays; Homebrew's would start without this copy's state)"
   fi
 }
 
@@ -355,7 +501,7 @@ chk_legacy_agents() {
     n=$((n + 1))
     desc="${desc}${desc:+; }${label} (${state}, last exit ${code})"
   done <<<"$list"
-  chk__set warn "${n} legacy agent(s): ${desc}" "${SCRIPT_DIR}/benchbar repair (moves them to ${FL_LEGACY_DIR})" legacy_migrate
+  chk__set warn "${n} legacy agent(s): ${desc}" "${FL_SELF} repair (moves them to ${FL_LEGACY_DIR})" legacy_migrate
 }
 
 # Any bench's agent, not only this one's: a loaded agent whose runner is
@@ -371,7 +517,7 @@ chk_dead_agents() {
     [[ -n "$plist" ]] || continue
     n=$((n + 1))
     desc="${desc}${desc:+; }${label} (${dir:-no folder})"
-    fixes="${fixes}${fixes:+ ; }${SCRIPT_DIR}/benchbar uninstall-service --bench-dir $(fl_sq "$dir")"
+    fixes="${fixes}${fixes:+ ; }${FL_SELF} uninstall-service --bench-dir $(fl_sq "$dir")"
   done <<<"$list"
   chk__set warn "${n} loaded agent(s) whose runner script is missing, restarted every 20 s: ${desc}" "$fixes"
 }
@@ -392,7 +538,7 @@ chk_mariadb_bind() {
       esac
     done <<<"$addrs"
     if [[ -n "$exposed" ]]; then
-      chk__set warn "MariaDB listens on${exposed} (reachable from the network)" "${SCRIPT_DIR}/benchbar repair (writes ${dropin} and restarts MariaDB)" mariadb_bind
+      chk__set warn "MariaDB listens on${exposed} (reachable from the network)" "${FL_SELF} repair (writes ${dropin} and restarts MariaDB)" mariadb_bind
     else
       chk__set ok "MariaDB listens on 127.0.0.1 only"
     fi
@@ -401,7 +547,7 @@ chk_mariadb_bind() {
   if [[ -f "$dropin" ]] || grep -qs 'bind-address[[:space:]]*=[[:space:]]*127\.0\.0\.1' "${FL_BREW_PREFIX:-/opt/homebrew}"/etc/my.cnf.d/*.cnf 2>/dev/null; then
     chk__set ok "MariaDB is not running; bind-address drop-in present"
   else
-    chk__set warn "MariaDB is not running and no bind-address drop-in exists" "${SCRIPT_DIR}/benchbar repair" mariadb_bind
+    chk__set warn "MariaDB is not running and no bind-address drop-in exists" "${FL_SELF} repair" mariadb_bind
   fi
 }
 
@@ -416,16 +562,16 @@ chk_mariadb_utf8() {
       if grep -q 'character-set-server[[:space:]]*=[[:space:]]*utf8mb4' "$dropin" 2>/dev/null; then
         chk__set ok "${dropin} sets utf8mb4 (not written by benchbar, left alone)"
       else
-        chk__set warn "${dropin} exists but does not set utf8mb4" "${SCRIPT_DIR}/benchbar repair" mariadb_utf8
+        chk__set warn "${dropin} exists but does not set utf8mb4" "${FL_SELF} repair" mariadb_utf8
         return 0
       fi ;;
-    *) chk__set warn "utf8mb4 drop-in is ${status} (${dropin}); Frappe needs utf8mb4 server wide" "${SCRIPT_DIR}/benchbar repair" mariadb_utf8; return 0 ;;
+    *) chk__set warn "utf8mb4 drop-in is ${status} (${dropin}); Frappe needs utf8mb4 server wide" "${FL_SELF} repair" mariadb_utf8; return 0 ;;
   esac
   # the drop-in only counts when my.cnf pulls the folder in. The server's
   # live charset is not queried: doctor is read only and must never read the
   # Keychain (the app runs it on a timer).
   if ! fl_mariadb_includedir_present; then
-    chk__set warn "${mycnf} is missing or has no '!includedir' for my.cnf.d, so the utf8mb4 drop-in is ignored" "${SCRIPT_DIR}/benchbar repair" mariadb_utf8
+    chk__set warn "${mycnf} is missing or has no '!includedir' for my.cnf.d, so the utf8mb4 drop-in is ignored" "${FL_SELF} repair" mariadb_utf8
   fi
 }
 
@@ -461,8 +607,8 @@ chk_pdf_engine() {
       else
         chk__set ok "wkhtmltopdf: patched Qt build at $(fl_wkhtmltopdf_bin)${chrome}"
       fi ;;
-    unpatched) chk__set warn "$(fl_wkhtmltopdf_bin) is not the patched Qt build; PDFs will crash${chrome}" "${SCRIPT_DIR}/benchbar repair (installs the official package, sudo)" wkhtmltopdf_install ;;
-    *) chk__set warn "wkhtmltopdf is not installed; PDF printing will not work${chrome}" "${SCRIPT_DIR}/benchbar repair (installs the official package, sudo)" wkhtmltopdf_install ;;
+    unpatched) chk__set warn "$(fl_wkhtmltopdf_bin) is not the patched Qt build; PDFs will crash${chrome}" "${FL_SELF} repair (installs the official package, sudo)" wkhtmltopdf_install ;;
+    *) chk__set warn "wkhtmltopdf is not installed; PDF printing will not work${chrome}" "${FL_SELF} repair (installs the official package, sudo)" wkhtmltopdf_install ;;
   esac
 }
 
@@ -501,11 +647,11 @@ chk_ping() {
   fi
   reason="$(fl_stop_flag_reason)"
   if fl_bench_is_running; then
-    chk__set fail "bench processes are running but ping returned ${code}" "${SCRIPT_DIR}/benchbar logs"
+    chk__set fail "bench processes are running but ping returned ${code}" "${FL_SELF} logs"
   elif [[ "$reason" == "manual" || -z "$reason" && ! -f "$(fl_runner_path)" ]]; then
     chk__set ok "bench is stopped; start it with benchup"
   elif [[ "$reason" == "crash" || "$reason" == "broken" ]]; then
-    chk__set warn "bench is paused (${reason}); fix, then benchup" "${SCRIPT_DIR}/benchbar logs"
+    chk__set warn "bench is paused (${reason}); fix, then benchup" "${FL_SELF} logs"
   else
     chk__set warn "bench is not running (ping ${code})" "benchup"
   fi
@@ -534,7 +680,7 @@ chk_logs() {
     [[ "$mb" -ge "$FL_LOG_WARN_MB" ]] && big="${big} ${f} (${mb} MB)"
   done
   if [[ -n "$big" ]]; then
-    chk__set warn "large logs:${big}" "${SCRIPT_DIR}/benchbar repair (moves them aside)" rotate_logs
+    chk__set warn "large logs:${big}" "${FL_SELF} repair (moves them aside)" rotate_logs
   else
     chk__set ok "bench.log and worker logs are under ${FL_LOG_WARN_MB} MB"
   fi
@@ -615,6 +761,33 @@ chk_mole() {
   fi
 }
 
+# Two BenchBar.app copies, typically the cask's in /Applications and the one
+# line installer's in ~/Applications: one bundle id, so Launch Services, the
+# login item and the updater may each pick a different one. Which one goes
+# is the user's call, so no repair action; no app is ever deleted for them.
+chk_app_copies() {
+  local dirs="$FL_APP_DIRS" dir apps=() app desc="" v home_app="${HOME}/Applications/BenchBar.app" fix
+  while [[ -n "$dirs" ]]; do
+    dir="${dirs%%:*}"
+    [[ "$dirs" == *:* ]] && dirs="${dirs#*:}" || dirs=""
+    [[ -d "${dir}/BenchBar.app" ]] && apps+=("${dir}/BenchBar.app")
+  done
+  case "${#apps[@]}" in
+    0) chk__set ok "BenchBar.app is not installed"; return 0 ;;
+    1) chk__set ok "one BenchBar.app (${apps[0]})"; return 0 ;;
+  esac
+  for app in "${apps[@]}"; do
+    v="$(fl_app_bundle_version_at "$app")"
+    desc="${desc}${desc:+, }${app} (${v:-version unknown})"
+  done
+  if [[ -n "${FL_BREW_PREFIX:-}" && -d "${FL_BREW_PREFIX}/Caskroom/benchbar-app" && -d "$home_app" ]]; then
+    fix="quit BenchBar, then: mv $(fl_sq "$home_app") ~/.Trash/   (the one line installer's copy; Homebrew's cask benchbar-app is the other)"
+  else
+    fix="quit BenchBar, keep the copy you use and move the other to the Trash, for example: mv $(fl_sq "${apps[${#apps[@]}-1]}") ~/.Trash/"
+  fi
+  chk__set warn "${#apps[@]} copies share one bundle id, so macOS may open either: ${desc}" "$fix"
+}
+
 # Running benchbar benches that use this bench's web or socketio port, as
 # " label:port" words; "benchbar up" asks before starting next to one.
 fl_port_clash_running() {
@@ -645,9 +818,9 @@ chk_port_clash() {
     END { for (i = 1; i <= k; i++) { n = order[i]; sub(/.*\//, "", n); printf "%s%s: %s", (i > 1 ? "; " : ""), n, seen[order[i]] } }')"
   next="$(fl_port_next_free_offset 2>/dev/null || printf 'N')"
   if [[ -n "$running" ]]; then
-    chk__set warn "another running bench uses the same port:${running}" "${SCRIPT_DIR}/benchbar service --port-offset ${next} --bench-dir ${FL_BENCH_DIR}   (or stop the other bench)"
+    chk__set warn "another running bench uses the same port:${running}" "${FL_SELF} service --port-offset ${next} --bench-dir ${FL_BENCH_DIR}   (or stop the other bench)"
   elif [[ -n "$configured" ]]; then
-    chk__set warn "another bench is set up with the same ports (${configured}); only one of them can run at a time" "${SCRIPT_DIR}/benchbar service --port-offset ${next} --bench-dir ${FL_BENCH_DIR}"
+    chk__set warn "another bench is set up with the same ports (${configured}); only one of them can run at a time" "${FL_SELF} service --port-offset ${next} --bench-dir ${FL_BENCH_DIR}"
   else
     chk__set ok "no other benchbar bench uses ${FL_WEB_PORT}, ${FL_SOCKETIO_PORT}, ${FL_REDIS_QUEUE_PORT} or ${FL_REDIS_CACHE_PORT}"
   fi
@@ -803,7 +976,7 @@ chk_honcho_setuptools() {
   elif "$py" -c 'import pkg_resources' >/dev/null 2>&1; then
     chk__set warn "honcho does not import with ${py}" "${py} -c 'import honcho.command'   (shows the error)"
   else
-    chk__set warn "honcho needs pkg_resources, which ${py} lacks (No module named 'pkg_resources')" "${SCRIPT_DIR}/benchbar repair (installs setuptools into honcho's venv only)" honcho_setuptools
+    chk__set warn "honcho needs pkg_resources, which ${py} lacks (No module named 'pkg_resources')" "${FL_SELF} repair (installs setuptools into honcho's venv only)" honcho_setuptools
   fi
 }
 
@@ -819,7 +992,7 @@ chk_fork_safety() {
   grep -A1 -F '<key>OBJC_DISABLE_INITIALIZE_FORK_SAFETY</key>' "$plist" | grep -q -F '<string>YES</string>' || missing="${missing} OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES"
   grep -A1 -F '<key>NO_PROXY</key>' "$plist" | grep -q -F '<string>*</string>' || missing="${missing} NO_PROXY=*"
   if [[ -n "$missing" ]]; then
-    chk__set warn "the agent does not pass${missing} to the workers" "${SCRIPT_DIR}/benchbar repair" write_plist
+    chk__set warn "the agent does not pass${missing} to the workers" "${FL_SELF} repair" write_plist
   else
     chk__set ok "the agent passes OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES and NO_PROXY=* to every process"
   fi
@@ -840,7 +1013,7 @@ chk_orphans() {
     [[ -n "$who" ]] && held="${held}${held:+, }${port} (pid ${who% *} ${who#* })"
   done
   if [[ -n "$held" ]]; then
-    chk__set warn "stale processes hold this bench's ports: ${held}" "${SCRIPT_DIR}/benchbar down   (or benchbar restart)"
+    chk__set warn "stale processes hold this bench's ports: ${held}" "${FL_SELF} down   (or benchbar restart)"
   else
     chk__set ok "no stale process holds ${FL_WEB_PORT}, ${FL_SOCKETIO_PORT}, ${FL_REDIS_QUEUE_PORT} or ${FL_REDIS_CACHE_PORT}"
   fi

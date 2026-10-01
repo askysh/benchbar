@@ -1,20 +1,107 @@
 #!/usr/bin/env bash
 #
-# state.sh: small key=value store in .benchbar/state.env.
+# state.sh: the folder benchbar keeps its own state in (the remembered
+# benches, per bench settings, logs, backups, the lock), and the small
+# key=value store in its state.env.
+#
+# A packaged CLI (homebrew or managed, see install-kind.sh) keeps it in
+# ~/.local/state/benchbar, outside the install folder: brew upgrade
+# installs every version into a new folder, and brew cleanup deletes the
+# old one. The path is fixed, not ${XDG_STATE_HOME}: BenchBar.app, an MCP
+# client and launchd start the CLI without the variables of ~/.zshrc, and
+# every caller must find the same state and the same lock. Any other CLI, a
+# checkout, keeps .benchbar next to itself. FL_STATE_DIR from the
+# environment wins over both.
+#
+# The one line installer's checkout kept it in
+# ~/.local/share/benchbar/.benchbar until 0.7.0. The first run of a packaged
+# CLI moves that folder there with one mv (a rename) and leaves a symlink at
+# the old path, so an older CLI still on the Mac reads the same state and
+# takes the same lock; a later run makes that link again when it is gone. A
+# run that holds the old folder's lock defers the move: until it ends, the
+# old folder is used as is. On another volume mv would copy, and a copy cut
+# short would pass for the state, so the folder stays where it is and the
+# new path is a link to it. Nothing is copied or deleted.
 #
 # The folder was .frappe-local before 0.3.0. The first run after the
 # upgrade renames it (one atomic mv in the checkout), unless a run holds
 # its lock right now; until then the old folder is used as is.
 
-fl_state_dir_default() {
-  local new="${SCRIPT_DIR}/.benchbar" old="${SCRIPT_DIR}/.frappe-local"
-  if [[ -d "$old" && ! -e "$new" && ! -d "${old}/lock" ]]; then
-    mv "$old" "$new" 2>/dev/null || true
+# fl_state_dir_in_v VAR DIR: DIR/.benchbar, or DIR/.frappe-local while a
+# run holds that one's lock
+fl_state_dir_in_v() {
+  local __new="${2}/.benchbar" __old="${2}/.frappe-local"
+  if [[ -d "$__old" && ! -e "$__new" && ! -d "${__old}/lock" ]]; then
+    mv "$__old" "$__new" 2>/dev/null || true
   fi
-  if [[ -d "$new" || ! -d "$old" ]]; then printf '%s' "$new"; else printf '%s' "$old"; fi
+  if [[ -d "$__new" || ! -d "$__old" ]]; then printf -v "$1" '%s' "$__new"; else printf -v "$1" '%s' "$__old"; fi
 }
 
-FL_STATE_DIR="${FL_STATE_DIR:-$(fl_state_dir_default)}"
+# fl_state_dir_user_v VAR: the state folder of a packaged CLI, after the
+# one time move of the installer checkout's folder. A few tests on every
+# run but the first, and no process: status runs this on every poll.
+fl_state_dir_user_v() {
+  local __base="${HOME%/}/.local/state" __new legacy __mh="${FL_MANAGED_HOME:-${HOME%/}/.local/share/benchbar}" __d1="" __d2=""
+  __new="${__base}/benchbar"
+  printf -v "$1" '%s' "$__new"
+  if [[ -e "$__new" || -L "$__new" ]]; then
+    # moved before, but the link is gone (a run stopped between the mv and
+    # the ln): an older CLI there would start empty, so it is made again
+    if [[ -d "$__mh" && -d "$__new" && ! -L "$__new" && ! -e "${__mh}/.benchbar" && ! -L "${__mh}/.benchbar" && ! -e "${__mh}/.frappe-local" ]]; then
+      ln -s "$__new" "${__mh}/.benchbar" 2>/dev/null || true
+    fi
+    return 0
+  fi
+  fl_state_dir_in_v legacy "$__mh"
+  # nothing to move; a symlink there is a move made before
+  [[ -d "$legacy" && ! -L "$legacy" ]] || return 0
+  if [[ -d "${legacy}/lock" ]]; then printf -v "$1" '%s' "$legacy"; return 0; fi
+  mkdir -p "$__base" 2>/dev/null || true
+  # checked again after that process: another first run may have moved it
+  if [[ ! -d "$legacy" || -L "$legacy" || -e "$__new" || -L "$__new" ]]; then
+    [[ -d "$__new" ]] || printf -v "$1" '%s' "$legacy"
+    return 0
+  fi
+  # another volume: mv would copy, and a copy cut short would pass for the
+  # state. The folder stays, and the new path leads to it.
+  { read -r __d1; read -r __d2; } < <( (stat -c %d "$__base" "$__mh" || stat -f %d "$__base" "$__mh") 2>/dev/null)
+  if [[ -z "$__d1" || "$__d1" != "$__d2" ]]; then
+    ln -s "$legacy" "$__new" 2>/dev/null || true
+    [[ -L "$__new" ]] || printf -v "$1" '%s' "$legacy"
+    return 0
+  fi
+  if mv "$legacy" "$__new" 2>/dev/null; then
+    # a second first run moved the first one's link into the new folder
+    # (mv puts it inside an existing folder): it goes back
+    if [[ -L "${__new}/${legacy##*/}" ]]; then
+      mv "${__new}/${legacy##*/}" "$legacy" 2>/dev/null || rm -f "${__new:?}/${legacy##*/}"
+      return 0
+    fi
+    ln -s "$__new" "$legacy" 2>/dev/null || true
+    if [[ ! -L "$legacy" ]]; then
+      if [[ -d "$legacy" ]]; then
+        # an older CLI made the folder again in between, and ln put the link
+        # inside it: that link goes, the folder stays (doctor's Second CLI
+        # names it), and this run uses the moved state
+        if [[ -L "${legacy}/${__new##*/}" ]]; then rm -f "${legacy:?}/${__new##*/}"; fi
+      elif mv "$__new" "$legacy" 2>/dev/null; then
+        # without the link an older CLI would start empty: the move is undone
+        printf -v "$1" '%s' "$legacy"
+      fi
+    fi
+  elif [[ ! -d "$__new" ]]; then
+    # not moved (when another run just moved it, the new folder is there)
+    printf -v "$1" '%s' "$legacy"
+  fi
+  return 0
+}
+
+if [[ -z "${FL_STATE_DIR:-}" ]]; then
+  case "${FL_INSTALL_KIND:-}" in
+    homebrew|managed) fl_state_dir_user_v FL_STATE_DIR ;;
+    *) fl_state_dir_in_v FL_STATE_DIR "$SCRIPT_DIR" ;;
+  esac
+fi
 FL_STATE_FILE="${FL_STATE_FILE:-${FL_STATE_DIR}/state.env}"
 
 fl_state_init() {

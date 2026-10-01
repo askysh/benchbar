@@ -29,6 +29,8 @@ case "${1:-}" in
       *) ;;
     esac ;;
   info) exit 0 ;;
+  # self-update of a Homebrew CLI hands over to brew (the call is in MOCK_LOG)
+  upgrade) printf '==> Upgrading %s\n' "${*: -1}" ;;
   *) ;;
 esac
 exit 0

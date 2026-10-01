@@ -160,7 +160,7 @@ fl_wkhtmltopdf_ensure() {
   fi
   if [[ "${FL_DRY_RUN:-0}" != "1" ]] && ! fl_confirm "Download wkhtmltopdf ${FL_WKHTML_VERSION} (official patched Qt package, sha256 verified) and install it with sudo?"; then
     fl_warn "skipping wkhtmltopdf: PDFs will not work until it is installed; everything else does."
-    fl_fix "${SCRIPT_DIR}/00-mac-system-deps.sh   (asks again)"
+    fl_fix "${FL_SELF_DIR}/00-mac-system-deps.sh   (asks again)"
     return 2
   fi
   fl_wkhtmltopdf_download || return 1

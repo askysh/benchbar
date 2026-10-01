@@ -2,6 +2,88 @@
 
 All notable changes to this project are documented here.
 
+## Unreleased
+
+The groundwork for installing the CLI with Homebrew: the CLI no longer
+keeps its state in the folder it is installed in, every path it records
+stays valid across `brew upgrade` and `brew cleanup`, and the CLI, the
+one line installer and doctor know a Homebrew install when they see one.
+
+### Changed
+
+- The CLI's state (the remembered benches, per bench settings, run logs,
+  file backups and the lock) moves out of the install folder for the one
+  line installer, to `~/.local/state/benchbar`, the same path for the
+  terminal, BenchBar.app and MCP clients whatever `XDG_STATE_HOME` says.
+  The first run moves `~/.local/share/benchbar/.benchbar` there in one
+  step and leaves a symlink, so an older copy of the CLI keeps the same
+  benches; a later run makes that symlink again if it is gone. While
+  another run holds that folder's lock, the move waits for a later run.
+  When the two folders are on different volumes nothing is copied: the
+  state stays and the new path leads to it. A git checkout keeps its
+  `.benchbar` folder.
+- A new CLI version alone no longer makes doctor report every bench's
+  runner as outdated. The runner keeps the version that wrote it in
+  `state.json`. Runners written by 0.6.1 are outdated once: `benchbar
+  repair` or `benchbar service` rewrites them.
+- `benchbar report` names how the CLI was installed and its state folder.
+- With Homebrew's benchbar installed, the `~/.local/bin` links are
+  optional: doctor's "benchbar on PATH" passes without them and `benchbar
+  repair` makes none. Under Homebrew a link that leads elsewhere (the one
+  line installer's copy, a Cellar folder) comes before brew's on PATH:
+  repair points it at the Homebrew CLI and keeps the old link in its
+  backups. A link to Homebrew's benchbar now counts as current for every
+  copy of the CLI, so another copy's repair no longer points it back.
+- Doctor fails "Shell helpers" when the benchbar the helper block runs is
+  gone (a Cellar folder after `brew cleanup`, a checkout moved to the
+  Trash): every helper would fail. `benchbar repair` rewrites the block.
+- `install.sh --uninstall` says where the logs, backups and remembered
+  benches are now and keeps that folder. With Homebrew's benchbar
+  installed but not yet run, it first moves the checkout's state to
+  `~/.local/state/benchbar` instead of deleting it with the checkout.
+- Doctor's "Second CLI" no longer suggests the Trash for the one line
+  installer's folder while that folder still holds the state, and for a
+  git checkout it no longer says Homebrew's CLI takes over, since that
+  CLI never reads the checkout's state. Under Homebrew, `benchbar repair`
+  leaves a `~/.local/bin` link or helper block that runs such a checkout.
+- `benchbar uninstall-service --all` removes the helper block even when
+  every agent belongs to a folder that is no bench any more.
+
+### Added
+
+- benchbar recognizes a Homebrew install (`<prefix>/opt/benchbar` or
+  `<prefix>/Cellar/benchbar/<version>`) and keeps its state in
+  `~/.local/state/benchbar`. The shell helpers, the `~/.local/bin` links,
+  doctor's fix commands, the report and the MCP server then name
+  `<prefix>/opt/benchbar/bin/benchbar`, which survives `brew upgrade` and
+  `brew cleanup`, never a versioned Cellar path.
+- `benchbar self-update` on a Homebrew install runs `brew upgrade
+  askysh/tap/benchbar` after asking, never the one line installer; the
+  app updates itself or comes from the cask, and a note says which. The
+  JSON keeps its fields, with `install: "homebrew"`.
+- `benchbar where [--json]`: how the CLI was installed (`homebrew`,
+  `managed`, `checkout`, `other`), the path it records for itself, its
+  state folder and the BenchBar app.
+- `benchbar uninstall-service --all`: the background service of every
+  bench that has a benchbar agent, after one question. Run it before
+  `brew uninstall benchbar`, which cannot stop the agents.
+- Two doctor warnings without a repair action: "Second CLI" when the one
+  line installer's CLI and Homebrew's are both on the Mac, and
+  "BenchBar.app copies" when `/Applications` and `~/Applications` both
+  have the app. Nothing is deleted for you; the fix line says what to
+  move to the Trash.
+- The one line installer leaves to Homebrew what Homebrew installed: with
+  the `benchbar` formula it skips the CLI, with the `benchbar-app` cask
+  the app, and prints the brew command instead; when nothing is left it
+  exits 0. An older app's Update Now fetches the newest installer, so it
+  gets this too and never puts a second copy next to brew's.
+
+### Fixed
+
+- The one line installer no longer fails on a clean checkout that is on
+  a detached HEAD: it switches back to main, then pulls. A checkout with
+  uncommitted changes still stops with the same message.
+
 ## 0.6.1 - 2026-10-01
 
 The first signed and notarized release: the app, the zip and the DMG are

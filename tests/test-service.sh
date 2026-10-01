@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Background service phase: install twice, legacy migration, dry-run, autostart, uninstall.
+# Background service phase: install twice, legacy migration, dry-run, autostart, uninstall,
+# and uninstall-service --all over several benches.
 # shellcheck source=tests/lib/harness.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
 
@@ -179,5 +180,67 @@ assert_eq "ok" "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"
 run_fm uninstall-service --yes --bench-dir "$HOME/nowhere"
 assert_eq "1" "$CODE"
 assert_contains "$OUT" "no com.benchbar agent points at it"
+
+# ---- uninstall-service --all: every bench with a benchbar agent, after one
+# question (before brew uninstall, which cannot stop them); a folder that is
+# no bench any more loses only its agent, and the benches stay
+A="$HOME/dev/all-a"; B="$HOME/dev/all-b"; GONE="$HOME/dev/all-gone"
+make_fake_bench "$A"; make_fake_bench "$B" bdev; make_fake_bench "$GONE" gonedev
+for b in "$A" "$B" "$GONE"; do
+  run_fm service --yes --bench-dir "$b"
+  assert_eq "0" "$CODE" "$OUT"
+done
+find "$GONE" -mindepth 1 -delete
+snap_before="$(snapshot "$HOME")"
+run_fm uninstall-service --all </dev/null
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "This removes the background service of 3 bench(es)"
+assert_contains "$OUT" "${GONE}   (no bench there any more: only its agent goes)"
+assert_contains "$OUT" "Cancelled."
+run_fm uninstall-service --all --dry-run --yes
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "$snap_before" "$(snapshot "$HOME")" "(no answer and a dry run change nothing)"
+run_fm uninstall-service --all --bench-dir "$A"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "takes --all or --bench-dir, not both"
+# launchd keeps the gone folder's job past the wait: that one fails, the
+# other two are still uninstalled, and the run says how many
+FL_BOOTOUT_WAIT_SECS=1 MOCK_BOOTOUT_LINGER=100 run_fm uninstall-service --all --yes
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "launchd still runs com.benchbar.all-gone"
+assert_contains "$OUT" "2 of 3 bench(es) uninstalled"
+for b in all-a all-b; do
+  assert_no_file "$HOME/Library/LaunchAgents/com.benchbar.${b}.plist"
+  [[ -n "$(find "$HOME/Library/LaunchAgents-disabled" -name "com.benchbar.${b}.plist")" ]] || fail "the ${b} plist is kept aside"
+done
+for b in "$A" "$B"; do
+  assert_no_file "$b/benchbar-run.sh"
+  assert_no_file "$b/Procfile.lean"
+  assert_file "$b/sites/common_site_config.json"
+  assert_file "$b/apps/frappe"
+done
+assert_file "$HOME/Library/LaunchAgents/com.benchbar.all-gone.plist"
+! grep -q -x -F "# >>> benchbar >>>" "$HOME/.zshrc" || fail "the helper block goes with --all"
+assert_eq "1" "$(grep -c 'removed the helper block' <<<"$OUT")" "(the block is removed once, and said once)"
+# the next run finds only what is left: an agent whose folder is no bench
+# any more. Its run alone never removes the block, so --all does, once
+rm -f "$MOCK_STATE"/agents/*.linger
+printf '\n# >>> benchbar >>>\nBENCHBAR="%s"\n# <<< benchbar <<<\n' "$FM" >>"$HOME/.zshrc"
+run_fm uninstall-service --all --yes
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "the background service of 1 bench(es) is uninstalled"
+assert_no_file "$HOME/Library/LaunchAgents/com.benchbar.all-gone.plist"
+! grep -q -x -F "# >>> benchbar >>>" "$HOME/.zshrc" || fail "with only orphan agents the helper block goes too"
+assert_eq "1" "$(grep -c 'removed the helper block' <<<"$OUT")"
+# nothing left
+run_fm uninstall-service --all --yes
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "nothing to uninstall"
+# no agent, but a helper block: --all removes it too, after asking
+printf '\n# >>> benchbar >>>\nBENCHBAR="%s"\n# <<< benchbar <<<\n' "$FM" >>"$HOME/.zshrc"
+run_fm uninstall-service --all --yes
+assert_eq "0" "$CODE" "$OUT"
+! grep -q -x -F "# >>> benchbar >>>" "$HOME/.zshrc" || fail "the helper block goes with --all"
+grep -q '^export EDITOR=vim$' "$HOME/.zshrc" || fail "user zshrc content must survive"
 
 printf 'test-service: ok\n'

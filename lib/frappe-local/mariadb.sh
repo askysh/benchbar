@@ -313,7 +313,7 @@ fl_cmd_mariadb_password() {
   pw="$(fl_keychain_get || true)"
   if [[ -z "$pw" ]]; then
     fl_fail "no MariaDB root password in the Keychain (service ${FL_KEYCHAIN_SERVICE})"
-    fl_fix "MARIADB_ROOT_PASSWORD='...' ${SCRIPT_DIR}/benchbar install    (verifies it and saves it)"
+    fl_fix "MARIADB_ROOT_PASSWORD='...' ${FL_SELF} install    (verifies it and saves it)"
     return 1
   fi
   if [[ "${FL_ASSUME_YES:-0}" != "1" ]]; then
