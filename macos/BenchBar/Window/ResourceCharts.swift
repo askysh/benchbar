@@ -3,8 +3,12 @@ import SwiftUI
 
 /// The bench page's CPU and memory for the last ten minutes: two small
 /// charts, one measure each, with the current value beside them.
+///
+/// It starts no sampling of its own: the store samples the bench whose
+/// Overview the window shows while the window is on screen (the window
+/// reports that, not this view: SwiftUI's onDisappear never comes when the
+/// window closes, as the window and its views are kept).
 struct ResourceSection: View {
-    let store: BenchStore
     let bench: BenchModel
 
     var body: some View {
@@ -28,8 +32,6 @@ struct ResourceSection: View {
         } footer: {
             Text("The bench's own processes (web, workers, Redis, Socket.IO), not the shared MariaDB. Up to the last ten minutes, measured every few seconds while this page is open.")
         }
-        .onAppear { store.setChartsVisible(true) }
-        .onDisappear { store.setChartsVisible(false) }
     }
 }
 

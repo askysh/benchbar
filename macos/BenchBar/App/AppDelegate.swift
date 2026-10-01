@@ -75,6 +75,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                              part: part, router: router, chooseCLI: { [weak self] in self?.chooseCLI() })
             }
         }
+        // open, close, occlusion and the page: the window's views stay alive
+        // when it closes, so the store hears of them from the controller
+        settingsWindow.onSight = { [weak self] sight in self?.store.setWindow(sight) }
 
         logWindows = LogWindowController { [weak self] path in self?.openLogsInTerminal(path) }
 

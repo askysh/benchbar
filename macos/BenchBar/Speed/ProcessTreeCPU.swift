@@ -115,14 +115,15 @@ nonisolated enum MachTime {
 
 /// The v1 speed source: CPU use of the bench's whole process tree
 /// (runner, honcho, web, workers, socketio, Redis), sampled by the caller
-/// every 2 seconds.
+/// every 2 seconds. Each reading carries its snapshot for the history.
 actor ProcessTreeCPUSource: SpeedSource {
     private var last: (root: pid_t, snapshot: ProcessTree.Snapshot)?
 
-    func sample(_ target: SpeedTarget) async -> Double? {
+    func sample(_ target: SpeedTarget) async -> SpeedReading {
         let now = ProcessTree.snapshot(root: target.pid)
         defer { last = (target.pid, now) }
-        guard let last, last.root == target.pid, !now.cpu.isEmpty else { return nil }
-        return SpeedMapping.speed(cpuPercent: ProcessTree.cpuPercent(from: last.snapshot, to: now))
+        guard let last, last.root == target.pid, !now.cpu.isEmpty else { return SpeedReading(snapshot: now) }
+        return SpeedReading(speed: SpeedMapping.speed(cpuPercent: ProcessTree.cpuPercent(from: last.snapshot, to: now)),
+                            snapshot: now)
     }
 }

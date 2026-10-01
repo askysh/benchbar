@@ -71,6 +71,9 @@ final class UpdateOffer {
         timer = Timer.scheduledTimer(withTimeInterval: 60 * 60, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.checkSoon() }
         }
+        // a look at the clock once a day is due: ten minutes either way lets
+        // macOS fold the wakeup into others
+        timer?.tolerance = 600
     }
 
     private func checkSoon() { Task { await checkIfDue() } }

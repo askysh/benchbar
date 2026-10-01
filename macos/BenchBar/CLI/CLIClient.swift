@@ -51,7 +51,7 @@ nonisolated struct CLIClient: Sendable {
 
     func portCheck(bench: String) async throws(CLIError) -> PortCheck {
         let output = try await run(["ports", "check", "--json", "--bench-dir", bench],
-                                   timeout: Timeout.doctor, acceptExitCodes: [0])
+                                   timeout: Timeout.doctor, acceptExitCodes: [0], qos: .utility)
         return try BenchJSON.decode(PortCheck.self, from: Data(output.stdout.utf8))
     }
 
@@ -69,12 +69,12 @@ nonisolated struct CLIClient: Sendable {
     }
 
     func list() async throws(CLIError) -> BenchList {
-        let output = try await run(["list", "--json"], timeout: Timeout.query, acceptExitCodes: [0])
+        let output = try await run(["list", "--json"], timeout: Timeout.query, acceptExitCodes: [0], qos: .utility)
         return try BenchJSON.decode(BenchList.self, from: Data(output.stdout.utf8))
     }
 
     func status(bench: String) async throws(CLIError) -> BenchStatus {
-        let output = try await run(["status", "--json", "--bench-dir", bench], timeout: Timeout.query, acceptExitCodes: [0])
+        let output = try await run(["status", "--json", "--bench-dir", bench], timeout: Timeout.query, acceptExitCodes: [0], qos: .utility)
         return try BenchJSON.decode(BenchStatus.self, from: Data(output.stdout.utf8))
     }
 
@@ -139,7 +139,7 @@ nonisolated struct CLIClient: Sendable {
         if !liveSites { args.insert("--no-sites", at: 3) }
         // several git calls per app: on a cold start next to status and doctor
         // for every bench, 20 seconds was not always enough
-        let output = try await run(args, timeout: Timeout.doctor, acceptExitCodes: [0])
+        let output = try await run(args, timeout: Timeout.doctor, acceptExitCodes: [0], qos: .utility)
         return try BenchJSON.decode(AppList.self, from: Data(output.stdout.utf8))
     }
 
@@ -267,10 +267,13 @@ nonisolated struct CLIClient: Sendable {
 
     // MARK: plumbing
 
+    /// `qos`: `.utility` for the queries (status, list, ports check, app
+    /// list), so the processes the app starts on its own run below the work
+    /// a person waits for; `.default` for everything a person asked for.
     func run(_ arguments: [String], timeout: Duration, acceptExitCodes: Set<Int32>,
-             extraEnvironment: [String: String] = [:]) async throws(CLIError) -> CommandOutput {
+             extraEnvironment: [String: String] = [:], qos: QualityOfService = .default) async throws(CLIError) -> CommandOutput {
         let env = environment().merging(extraEnvironment) { _, new in new }
-        let output = try await runner.run(executable: executable, arguments: arguments, environment: env, timeout: timeout)
+        let output = try await runner.run(executable: executable, arguments: arguments, environment: env, timeout: timeout, qos: qos)
         guard acceptExitCodes.contains(output.exitCode) else {
             throw .failed(command: arguments.first ?? "", exitCode: output.exitCode, message: Self.summarize(output))
         }

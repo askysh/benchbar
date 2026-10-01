@@ -13,6 +13,11 @@ final class StatusItemController {
     private let speed: SpeedController
     private let activity: SystemActivityMonitor
     private var appearanceObservation: NSKeyValueObservation?
+    private var occlusionObserver: NSObjectProtocol?
+    /// The item's window is on screen: false under a full screen app that
+    /// hides the menu bar, or on a display that sleeps. The runner is paused
+    /// and the speed loop stops while it is hidden.
+    private var itemVisible = true
 
     /// Room on each side of the runner inside the button.
     static let padding: CGFloat = 3
@@ -30,9 +35,16 @@ final class StatusItemController {
         setUpButton()
 
         speed.onSpeed = { [weak self] value in self?.animator.setSpeed(value) }
+        // the speed loop's snapshots are the speed bench's resource history
+        speed.onSnapshot = { [weak store] target, snapshot in store?.record(snapshot, bench: target.bench, root: target.pid) }
         activity.onActiveChange = { [weak self] active in self?.activeChanged(active) }
         activity.onReduceMotionChange = { [weak self] _ in self?.update() }
+        activity.onLowPowerChange = { [weak self] on in
+            Log.poll.info("Low Power Mode \(on ? "on" : "off", privacy: .public)")
+            self?.update()
+        }
         activity.start()
+        observeOcclusion()
         observeSettings()
         update()
     }
@@ -72,7 +84,8 @@ final class StatusItemController {
 
     // MARK: state
 
-    /// Called whenever the store, the settings, Reduce Motion or sleep change.
+    /// Called whenever the store, the settings, Reduce Motion, Low Power
+    /// Mode, sleep or the item's visibility change.
     func update() {
         let runner = library.runner(settings.runnerID)
         if !runner.isSame(as: animator.runner) {
@@ -87,28 +100,61 @@ final class StatusItemController {
         describe(state)
     }
 
+    /// The 2 second libproc loop runs only while someone can see the runner
+    /// move: not asleep or locked, not in Low Power Mode (the runner plays
+    /// at speed 1 there), not with the item hidden.
     private func updateSpeed(_ plan: RunnerPlan) {
-        guard plan.followsSpeed, settings.speedEnabled, activity.isActive,
+        guard plan.followsSpeed, settings.speedEnabled, activity.isActive, !activity.lowPower, itemVisible,
               let bench = store.speedBench, let pid = bench.status?.pid, pid > 0 else {
             speed.stop()
             animator.setSpeed(1)
+            store.setSpeedSampled(nil)
             return
         }
         speed.run(SpeedTarget(bench: bench.path, pid: pid, ports: bench.summary.ports))
+        store.setSpeedSampled(bench.path)
     }
 
     private func activeChanged(_ active: Bool) {
         if active {
-            animator.resume()
             store.resume()
         } else {
-            animator.pause()
             store.suspend()
         }
+        applyPause()
         update()
     }
 
-    /// Tooltip and VoiceOver text: the runner itself says nothing.
+    /// One rule for the frozen frame: asleep or locked, or the item hidden.
+    private func applyPause() {
+        if activity.isActive && itemVisible {
+            animator.resume()
+        } else {
+            animator.pause()
+        }
+    }
+
+    /// Any window's occlusion change re-reads the item's own: its window can
+    /// be replaced when the menu bar is rebuilt, so it is not the filter.
+    private func observeOcclusion() {
+        occlusionObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didChangeOcclusionStateNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.occlusionChanged() }
+            }
+    }
+
+    private func occlusionChanged() {
+        guard let window = statusItem.button?.window else { return }
+        let visible = window.occlusionState.contains(.visible)
+        guard visible != itemVisible else { return }
+        itemVisible = visible
+        Log.poll.info("menu bar item \(visible ? "visible" : "hidden", privacy: .public)")
+        applyPause()
+        update()
+    }
+
+    /// Tooltip and VoiceOver text: the runner itself says nothing. Set only
+    /// when it changed, so an unchanged state costs the button nothing.
     private func describe(_ state: BenchState) {
         let text: String
         if case .missing = store.cli {
@@ -120,8 +166,10 @@ final class StatusItemController {
         } else {
             text = "BenchBar: no bench"
         }
-        statusItem.button?.toolTip = text
-        statusItem.button?.setAccessibilityValue(Self.word(for: state))
+        guard let button = statusItem.button else { return }
+        if button.toolTip != text { button.toolTip = text }
+        let word = Self.word(for: state)
+        if button.accessibilityValue() as? String != word { button.setAccessibilityValue(word) }
     }
 
     static func word(for state: BenchState) -> String {

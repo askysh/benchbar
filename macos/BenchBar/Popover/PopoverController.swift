@@ -4,7 +4,8 @@ import SwiftUI
 /// Shows the SwiftUI popover under the status item.
 final class PopoverController: NSObject, NSPopoverDelegate {
     private let popover = NSPopover()
-    /// Tells the store to poll faster while the popover is open.
+    /// Tells the store the popover opened (one refresh, samples shown live)
+    /// or closed.
     var onOpenChange: ((Bool) -> Void)?
     private weak var button: NSStatusBarButton?
 

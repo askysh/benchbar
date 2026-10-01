@@ -257,7 +257,7 @@ struct SettingsView: View {
     // MARK: editor
 
     private var editorSection: some View {
-        let installed = Editors.installedNow()
+        let installed = settings.installedEditors
         return Section {
             if installed.isEmpty {
                 Text("Neither VS Code nor Cursor is installed.").foregroundStyle(.secondary)

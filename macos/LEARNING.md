@@ -346,6 +346,13 @@ stops and the store stops polling. It also watches
 `accessibilityDisplayShouldReduceMotion`: with Reduce Motion on, every
 state shows one still frame.
 
+Since 0.6.1 the store has no clock of its own: it reads a bench's
+`logs/.benchbar/state.json` and the age of the runner's heartbeat file
+(`State/BenchTrust.swift`) and asks the CLI only when those cannot be
+believed, plus a safety poll every 5 minutes (`State/SafetyPoll.swift`).
+Low Power Mode plays the runner at speed 1, and a hidden menu bar (the
+status item's window occluded) stops CPU sampling and the animation.
+
 To try it: System Settings, Accessibility, Display (or Motion on macOS
 26), turn on Reduce motion. The runner stops moving at once.
 
