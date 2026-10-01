@@ -952,6 +952,11 @@ struct BenchTrustTests {
         #expect(BenchTrust.evaluate(file(.running, heartbeat: nil), pidAlive: alive) == .legacy(.noHeartbeat))
         #expect(BenchTrust.evaluate(file(.running, heartbeat: 90), pidAlive: alive) == .legacy(.staleHeartbeat))
         #expect(BenchTrust.evaluate(file(.starting, heartbeat: 3600), pidAlive: alive) == .legacy(.staleHeartbeat))
+        // dated in the future: the clock moved back, and a beating runner
+        // would have rewritten it by now
+        #expect(BenchTrust.evaluate(file(.running, heartbeat: -2), pidAlive: alive) == .heartbeat)
+        #expect(BenchTrust.evaluate(file(.running, heartbeat: -5), pidAlive: alive) == .legacy(.staleHeartbeat))
+        #expect(BenchTrust.evaluate(file(.running, heartbeat: -3600), pidAlive: alive) == .legacy(.staleHeartbeat))
         #expect(BenchTrust.legacy(.staleHeartbeat).isLegacy)
         #expect(!BenchTrust.heartbeat.isLegacy && !BenchTrust.terminal.isLegacy)
     }

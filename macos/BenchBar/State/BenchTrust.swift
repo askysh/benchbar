@@ -34,6 +34,10 @@ nonisolated enum BenchTrust: Equatable, Sendable {
 
     /// Three missed beats: the runner writes one every 30 seconds.
     static let freshness: TimeInterval = 90
+    /// A beat written between reading the clock and the stat is a little in
+    /// the future. More than this is a clock that moved back: a runner that
+    /// beats fixes it within 30 seconds, one that hangs never does.
+    static let futureSkew: TimeInterval = 5
 
     var isLegacy: Bool { if case .legacy = self { true } else { false } }
 
@@ -65,7 +69,7 @@ nonisolated enum BenchTrust: Equatable, Sendable {
         case .running, .starting:
             guard let pid = status.pid, pid > 0, pidAlive(pid) else { return .legacy(.deadPid) }
             guard let age = file.heartbeatAge else { return .legacy(.noHeartbeat) }
-            return age < freshness ? .heartbeat : .legacy(.staleHeartbeat)
+            return age < freshness && age > -futureSkew ? .heartbeat : .legacy(.staleHeartbeat)
         case .unknown:
             return .legacy(.unreadable)
         }

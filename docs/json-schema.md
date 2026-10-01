@@ -766,7 +766,7 @@ How a reader uses it, while `state.json` says `running` or `starting`:
 | The runner's `pid` | `heartbeat` mtime | Meaning |
 |---|---|---|
 | alive | under 90 seconds old | fresh: `state.json` is the truth, no need to ask the CLI |
-| alive | missing, or 90 seconds or older | a runner from before 0.6.1 (or one that hangs): ask `status --json`; `benchbar restart` gives the bench a runner that beats |
+| alive | missing, 90 seconds or older, or dated more than 5 seconds in the future (a clock moved back; a beating runner rewrites it within 30 seconds) | a runner from before 0.6.1 (or one that hangs): ask `status --json`; `benchbar restart` gives the bench a runner that beats |
 | dead | any | the runner is gone without writing its last state: ask `status --json` |
 
 `benchbar doctor` reads the same file (check `runner_heartbeat`).

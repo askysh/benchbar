@@ -43,6 +43,11 @@ touch "$hb"
 assert_eq "ok | -" "$(hb_check)"
 FL_NOW="$(( $(mtime_of "$hb") + 200 ))" run_fm doctor --bench-dir "$BENCH"
 assert_contains "$OUT" "[WARN] Runner heartbeat: the runner's last heartbeat is 200s old (pid 4241)"
+# dated in the future: a clock moved back, and a beating runner rewrites it
+FL_NOW="$(( $(mtime_of "$hb") - 2 ))" run_fm doctor --bench-dir "$BENCH"
+assert_contains "$OUT" "[OK] Runner heartbeat"
+FL_NOW="$(( $(mtime_of "$hb") - 600 ))" run_fm doctor --bench-dir "$BENCH"
+assert_contains "$OUT" "[WARN] Runner heartbeat: the runner's last heartbeat is dated 600s in the future (pid 4241)"
 # an outdated runner script is the runner check's to report, not this one's
 cp "$BENCH/benchbar-run.sh" "$TMP_DIR/runner.saved"
 sed_inplace 's/benchbar-template: bench-run.sh v[0-9]* [0-9a-f]*/benchbar-template: bench-run.sh v0 000000000000/' "$BENCH/benchbar-run.sh"

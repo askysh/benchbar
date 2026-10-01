@@ -246,6 +246,9 @@ chk_agent() {
 # outdated script is the runner check's to report. No repair action: repair
 # never restarts a bench on its own.
 FL_HEARTBEAT_STALE_SECS="${FL_HEARTBEAT_STALE_SECS:-90}"
+# a beat may land a moment after the clock was read; more than this in the
+# future is a clock that moved back, which a beating runner fixes in 30 s
+FL_HEARTBEAT_FUTURE_SECS=5
 chk_runner_heartbeat() {
   local hb="${FL_BENCH_DIR}/logs/.benchbar/heartbeat" age fix
   fix="${SCRIPT_DIR}/benchbar restart --bench-dir ${FL_BENCH_DIR}"
@@ -263,7 +266,9 @@ chk_runner_heartbeat() {
     return 0
   fi
   age=$(( $(fl_now) - $(fl_file_mtime "$hb") ))
-  if [[ "$age" -gt "$FL_HEARTBEAT_STALE_SECS" ]]; then
+  if [[ "$age" -le "-$FL_HEARTBEAT_FUTURE_SECS" ]]; then
+    chk__set warn "the runner's last heartbeat is dated $(( -age ))s in the future (pid ${SJ_PID}): the clock moved back and the runner has not beaten since, it hangs" "$fix"
+  elif [[ "$age" -gt "$FL_HEARTBEAT_STALE_SECS" ]]; then
     chk__set warn "the runner's last heartbeat is ${age}s old (pid ${SJ_PID}): it started before its script was updated, or hangs" "$fix"
   else
     chk__set ok "runner heartbeat ${age}s ago (pid ${SJ_PID})"
