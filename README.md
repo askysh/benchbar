@@ -46,9 +46,9 @@ curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | b
 The installer checks macOS, the Command Line Tools and Homebrew, puts the
 CLI in `~/.local/bin` and the app in `~/Applications`, and never runs
 `sudo`. Or download the DMG from the
-[releases page](https://github.com/askysh/benchbar/releases): the app is
-not signed yet, so its [first launch](https://benchbar.akashmishra.com/install/)
-needs one trip to Privacy & Security. Or build from source: `git clone`
+[releases page](https://github.com/askysh/benchbar/releases): since 0.6.1
+the app is signed with a Developer ID and notarized by Apple, so it opens
+like any other download. Or build from source: `git clone`
 this repository and run `./benchbar install`; the app needs Xcode 26.
 
 ## Quick start
@@ -96,7 +96,7 @@ health. The app never writes to a bench itself; every button runs
 The manual lives at
 [benchbar.akashmishra.com](https://benchbar.akashmishra.com). Start with
 [Install](https://benchbar.akashmishra.com/install/) for the requirements,
-every installer flag and the first launch of an unsigned app. Read
+every installer flag and the DMG download. Read
 [The menu bar app](https://benchbar.akashmishra.com/app/) for the popover,
 the BenchBar window and the keyboard shortcuts. Keep
 [Doctor and repair](https://benchbar.akashmishra.com/guides/doctor-and-repair/)
@@ -109,7 +109,7 @@ GitHub too, and `benchbar docs` opens them from the terminal.
 
 ## Roadmap
 
-0.7 brings Developer ID signing, notarization and a Homebrew cask; the rest is in [ROADMAP.md](ROADMAP.md).
+0.6.1 is the first signed and notarized release, with Sparkle updates. 0.7 brings a Homebrew cask and the public launch; the rest is in [ROADMAP.md](ROADMAP.md).
 
 ## Contributing
 

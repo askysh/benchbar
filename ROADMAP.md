@@ -77,12 +77,16 @@ behind, never about the app you are working on. The app checks for
 updates once a day and updates in one click, the CLI with `benchbar
 self-update`.
 
+**0.6.1, cost at rest, signed.** Under 0.1 percent of a core at rest
+(from about 6): status in 5 programs, a runner heartbeat, an app that
+polls on events. The first release signed with a Developer ID, notarized
+and stapled, with Sparkle updates.
+
 ## Later
 
-**0.7, public launch.** Developer ID signing and notarization, a signed
-DMG, a cask in `askysh/homebrew-tap`, Sparkle updates, and a launch post
-on discuss.frappe.io. Moved from 0.6 while the Apple developer account
-is approved.
+**0.7, public launch.** A cask in `askysh/homebrew-tap` and a launch post
+on discuss.frappe.io. Developer ID signing, notarization, the signed DMG
+and Sparkle updates shipped in 0.6.1.
 
 **Management in its own target.** Team profiles, bench discovery and
 port setup move out of the menu bar app into a separate management

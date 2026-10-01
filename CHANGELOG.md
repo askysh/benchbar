@@ -4,6 +4,11 @@ All notable changes to this project are documented here.
 
 ## 0.6.1 - 2026-10-01
 
+The first signed and notarized release: the app, the zip and the DMG are
+signed with a Developer ID, notarized by Apple and stapled, so the DMG
+opens without the Privacy & Security trip, and the app updates itself
+with Sparkle from this release on.
+
 Cost at rest. macOS flagged BenchBar for significant energy: it ran
 `benchbar status --json` for every bench every 30 seconds (every 5 once
 a bench Overview had been shown), and each call started about 212
