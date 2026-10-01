@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import Observation
 
 /// User preferences, stored in UserDefaults (~/Library/Preferences/com.akashmishra.benchbar.plist).
@@ -21,6 +21,8 @@ final class AppSettings {
     }
 
     @ObservationIgnored private let defaults: UserDefaults
+    @ObservationIgnored private let findEditors: () -> [Editor]
+    @ObservationIgnored private var observers: [NSObjectProtocol] = []
 
     /// Absolute path to benchbar chosen by the user; empty means "search".
     var cliPath: String { didSet { defaults.set(cliPath, forKey: Key.cliPath) } }
@@ -40,11 +42,18 @@ final class AppSettings {
     /// Ask GitHub for the latest release once a day (UpdateOffer).
     var checkUpdatesAutomatically: Bool { didSet { defaults.set(checkUpdatesAutomatically, forKey: Key.checkUpdatesAutomatically) } }
 
-    /// The editor Open in Editor uses right now, nil when none is installed.
-    var editor: Editor? { Editors.choice(preferred: editorBundleID, installed: Editors.installedNow()) }
+    /// The editors that are installed. Launch Services answers from disk, so
+    /// it is asked once at launch and again when any app launches or quits
+    /// (an editor installed since is found when it first runs), never from
+    /// a view body.
+    private(set) var installedEditors: [Editor] = []
 
-    init(defaults: UserDefaults = .standard) {
+    /// The editor Open in Editor uses right now, nil when none is installed.
+    var editor: Editor? { Editors.choice(preferred: editorBundleID, installed: installedEditors) }
+
+    init(defaults: UserDefaults = .standard, findEditors: @escaping () -> [Editor] = Editors.installedNow) {
         self.defaults = defaults
+        self.findEditors = findEditors
         defaults.register(defaults: [
             Key.runnerID: "bench",
             Key.speedEnabled: true,
@@ -61,5 +70,18 @@ final class AppSettings {
         askedForNotifications = defaults.bool(forKey: Key.askedForNotifications)
         editorBundleID = defaults.string(forKey: Key.editorBundleID) ?? ""
         checkUpdatesAutomatically = defaults.bool(forKey: Key.checkUpdatesAutomatically)
+        installedEditors = findEditors()
+        let workspace = NSWorkspace.shared.notificationCenter
+        for name in [NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification] {
+            observers.append(workspace.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.refreshEditors() }
+            })
+        }
+    }
+
+    /// Looks again; the views redraw only when the list changed.
+    func refreshEditors() {
+        let found = findEditors()
+        if found != installedEditors { installedEditors = found }
     }
 }

@@ -19,6 +19,17 @@ nonisolated protocol CommandRunning: Sendable {
         timeout: Duration
     ) async throws(CLIError) -> CommandOutput
 
+    /// The same at a quality of service: `.utility` for the queries the app
+    /// makes on its own (status, list, ports check, app list), `.default`
+    /// for what a person asked for.
+    func run(
+        executable: URL,
+        arguments: [String],
+        environment: [String: String],
+        timeout: Duration,
+        qos: QualityOfService
+    ) async throws(CLIError) -> CommandOutput
+
     /// Runs a program and hands each line of stdout to `onLine` as it is
     /// written (repair --json streams its events). Returns the exit code.
     func stream(
@@ -31,6 +42,17 @@ nonisolated protocol CommandRunning: Sendable {
 }
 
 extension CommandRunning {
+    /// Runners without a quality of service (the test fakes) ignore it.
+    func run(
+        executable: URL,
+        arguments: [String],
+        environment: [String: String],
+        timeout: Duration,
+        qos: QualityOfService
+    ) async throws(CLIError) -> CommandOutput {
+        try await run(executable: executable, arguments: arguments, environment: environment, timeout: timeout)
+    }
+
     /// For runners that cannot stream (the test fakes): run, then replay the lines.
     func stream(
         executable: URL,
@@ -52,6 +74,8 @@ extension CommandRunning {
 ///   collected up to 4 MB each.
 /// - A timeout cancels the task; swift-subprocess then sends SIGTERM, waits
 ///   2 seconds, and sends SIGKILL.
+/// - Each process gets one `.info` line in the log (Log.cli), with the
+///   command word only: the rest may hold paths or names.
 nonisolated struct SubprocessRunner: CommandRunning {
     static let outputLimit = 4 * 1024 * 1024
 
@@ -61,7 +85,18 @@ nonisolated struct SubprocessRunner: CommandRunning {
         environment: [String: String],
         timeout: Duration
     ) async throws(CLIError) -> CommandOutput {
+        try await run(executable: executable, arguments: arguments, environment: environment, timeout: timeout, qos: .default)
+    }
+
+    func run(
+        executable: URL,
+        arguments: [String],
+        environment: [String: String],
+        timeout: Duration,
+        qos: QualityOfService
+    ) async throws(CLIError) -> CommandOutput {
         let label = arguments.first ?? executable.lastPathComponent
+        Self.log(label, qos)
 
         do {
             return try await withThrowingTaskGroup(of: CommandOutput.self) { group in
@@ -69,6 +104,9 @@ nonisolated struct SubprocessRunner: CommandRunning {
                     // PlatformOptions is not Sendable, so it is built inside the task
                     var options = PlatformOptions()
                     options.teardownSequence = [.gracefulShutDown(allowedDurationToNextStep: .seconds(2))]
+                    // utility: the child runs below the work a person waits for
+                    // (swift-subprocess sets only utility and background)
+                    options.qualityOfService = qos
                     let overrides = Dictionary(uniqueKeysWithValues: environment.map {
                         (Environment.Key(stringLiteral: $0.key), Optional($0.value))
                     })
@@ -118,6 +156,7 @@ nonisolated struct SubprocessRunner: CommandRunning {
         onLine: @escaping @Sendable (String) -> Void
     ) async throws(CLIError) -> Int32 {
         let label = arguments.first ?? executable.lastPathComponent
+        Self.log(label, .default)
         do {
             return try await withThrowingTaskGroup(of: Int32.self) { group in
                 group.addTask {
@@ -163,5 +202,9 @@ nonisolated struct SubprocessRunner: CommandRunning {
         } catch {
             throw .launchFailed(detail: String(describing: error))
         }
+    }
+
+    private static func log(_ label: String, _ qos: QualityOfService) {
+        Log.cli.info("cli: \(label, privacy: .public) (\(qos == .utility ? "utility" : "default", privacy: .public))")
     }
 }

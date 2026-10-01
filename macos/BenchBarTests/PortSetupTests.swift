@@ -17,14 +17,14 @@ struct PortSetupTests {
         """
     }
 
-    func setup(start: Bool = false, blocked: Bool = false) async throws -> (BenchStore, PortSetupRun) {
+    func setup(start: Bool = false, blocked: Bool = false, pinged: Flag? = nil) async throws -> (BenchStore, PortSetupRun) {
         base.cli.answer("list", json: base.listJSON())
         base.cli.answer("status", json: base.statusJSON("stopped"))
         base.cli.answer("ports plan", json: planJSON(blocked: blocked))
         base.cli.answer("ports apply", .ok("Completed: bench"))
         base.cli.answer("ports check", json: #"{"schema_version":1,"conflicts":[],"mode":"automatic"}"#)
         base.cli.answer("up", .ok("bench is up"))
-        let store = base.makeStore()
+        let store = base.makeStore(pinged: pinged)
         await store.start(polling: false)
         let bench = try #require(store.selected)
         return (store, PortSetupRun(summaries: [bench.summary], store: store, startAfterSetup: start))
@@ -103,13 +103,17 @@ struct PortSetupTests {
     }
 
     @Test func resolveAndStartChecksAgainAfterApply() async throws {
-        let (_, run) = try await setup(start: true)
+        let (store, run) = try await setup(start: true)
+        let bench = try #require(store.selected)
         base.cli.answer("ports check", json: #"{"schema_version":1,"conflicts":["8001 was just occupied"],"mode":"automatic"}"#)
         await run.loadPlan()
         await run.apply()
         guard case .failed(let message) = run.phase else { Issue.record("Expected failure"); return }
         #expect(message.contains("not started"))
+        #expect(message.contains("8001 was just occupied"))
         #expect(!base.cli.calls.contains { $0.first == "up" })
+        #expect(bench.portConflict?.conflicts == ["8001 was just occupied"], "the bench offers Review Port Conflict again")
+        #expect(bench.pending == nil)
     }
 
     @Test func confirmedResolveStartsOnlyAfterApplyAndCheck() async throws {
@@ -119,6 +123,27 @@ struct PortSetupTests {
         #expect(run.phase == .finished)
         let commands = base.cli.calls.filter { $0.first == "ports" || $0.first == "up" }.map { $0.prefix(2).joined(separator: " ") }
         #expect(commands == ["ports plan", "ports apply", "ports check", "up --plain"])
+    }
+
+    /// Resolve & Start starts the bench as the Start button does: the state
+    /// machine shows the start, the site is pinged and the bench refreshed.
+    @Test func resolveAndStartStartsThroughTheStore() async throws {
+        let pinged = Flag()
+        let (store, run) = try await setup(start: true, pinged: pinged)
+        let bench = try #require(store.selected)
+        var seen: [BenchState] = []
+        store.onChange = { seen.append(bench.state) }
+        await run.loadPlan()
+        base.cli.answer("status", json: base.runningJSON())
+        await run.apply()
+        #expect(run.phase == .finished)
+        #expect(seen.contains(.starting), "the state machine saw the start")
+        await base.waitUntil { pinged.isSet && bench.state == .running }
+        #expect(pinged.isSet, "the site is pinged after up")
+        #expect(bench.state == .running)
+        let afterUp = base.cli.calls.drop { $0.first != "up" }.dropFirst()
+        #expect(afterUp.contains { $0.first == "status" }, "and the bench refreshed")
+        #expect(bench.portConflict == nil && bench.lastError == nil)
     }
 
     @Test func savingModeRefreshesPreviewWithoutApplying() async throws {

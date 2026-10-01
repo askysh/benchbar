@@ -77,18 +77,37 @@ struct SpeedTests {
 
         let source = ProcessTreeCPUSource()
         let target = SpeedTarget(bench: "/tmp/x", pid: busy.processIdentifier)
-        #expect(await source.sample(target) == nil, "the first sample is only a baseline")
+        let first = await source.sample(target)
+        #expect(first.speed == nil, "the first sample is only a baseline")
+        #expect(first.snapshot?.cpu.isEmpty == false, "but its snapshot is one for the history")
         try await Task.sleep(for: .milliseconds(600))
-        let speed = try #require(await source.sample(target))
+        let reading = await source.sample(target)
+        let speed = try #require(reading.speed)
         // yes keeps one core busy: close to 100%, so near the top speed
         #expect(speed > 5, "speed was \(speed)")
+        #expect(reading.snapshot?.cpu.keys.contains { $0.pid == busy.processIdentifier } == true)
     }
 
     @Test func missingProcessGivesNoSpeed() async {
         let source = ProcessTreeCPUSource()
         let target = SpeedTarget(bench: "/tmp/x", pid: 999_999)
-        #expect(await source.sample(target) == nil)
-        #expect(await source.sample(target) == nil)
+        #expect(await source.sample(target).speed == nil)
+        #expect(await source.sample(target).speed == nil)
+    }
+
+    /// One read feeds both: the snapshot goes to the history, the speed to
+    /// the runner.
+    @Test func theSpeedLoopHandsOnEverySnapshot() async throws {
+        let controller = SpeedController(source: ScriptedSpeed())
+        var snapshots: [Int32] = []
+        var speeds: [Double] = []
+        controller.onSnapshot = { target, _ in snapshots.append(target.pid) }
+        controller.onSpeed = { speeds.append($0) }
+        controller.run(SpeedTarget(bench: "/b", pid: 42))
+        for _ in 0..<100 where snapshots.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        controller.stop()
+        #expect(snapshots == [42])
+        #expect(speeds.count == 1)
     }
 
     @Test func machTimeConvertsToNanoseconds() {
@@ -96,6 +115,13 @@ struct SpeedTests {
         Thread.sleep(forTimeInterval: 0.05)
         let elapsed = MachTime.nanoseconds(mach_absolute_time()) - start
         #expect(elapsed > 40_000_000 && elapsed < 500_000_000)
+    }
+}
+
+/// One reading: a speed of 7 and an empty tree.
+nonisolated struct ScriptedSpeed: SpeedSource {
+    func sample(_ target: SpeedTarget) async -> SpeedReading {
+        SpeedReading(speed: 7, snapshot: ProcessTree.Snapshot(takenAt: 1, cpu: [:]))
     }
 }
 

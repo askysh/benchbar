@@ -11,7 +11,7 @@
 # Groups (used by "benchbar service" versus "benchbar repair"):
 #   system, bench, service, site
 
-FL_CHECK_ORDER="brew python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac mole full_disk_access env_python bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy dependency_behind apps_behind lock_parse lock_drift profile_outdated logs honcho honcho_setuptools procfile runner agent fork_safety scheduler stop_flag helpers cli_link legacy_agents dead_agents hosts port_clash orphans ping"
+FL_CHECK_ORDER="brew python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac mole full_disk_access env_python bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy dependency_behind apps_behind lock_parse lock_drift profile_outdated logs honcho honcho_setuptools procfile runner agent runner_heartbeat fork_safety scheduler stop_flag helpers cli_link legacy_agents dead_agents hosts port_clash orphans ping"
 FL_LOG_WARN_MB="${FL_LOG_WARN_MB:-50}"
 FL_HOSTS_FILE="${FL_HOSTS_FILE:-/etc/hosts}"
 
@@ -47,6 +47,7 @@ fl_check_label() {
     procfile) printf 'Procfile.lean' ;;
     runner) printf 'Runner script' ;;
     agent) printf 'launchd agent' ;;
+    runner_heartbeat) printf 'Runner heartbeat' ;;
     stop_flag) printf 'Stop flag' ;;
     helpers) printf 'Shell helpers' ;;
     cli_link) printf 'benchbar on PATH' ;;
@@ -234,6 +235,43 @@ chk_agent() {
     chk__set warn "agent loaded, ${state:-not running}, last exit code ${code}" "${SCRIPT_DIR}/benchbar logs"
   else
     chk__set ok "agent $(fl_agent_label) loaded, ${state:-not running}"
+  fi
+}
+
+# runner_heartbeat: since 0.6.1 a running runner rewrites
+# logs/.benchbar/heartbeat every 30 seconds, and the app trusts state.json
+# only while that file is fresh. A current runner script whose running
+# process beats no more was started before the script was rewritten
+# (benchbar service does not restart a bench), so the fix is a restart. An
+# outdated script is the runner check's to report. No repair action: repair
+# never restarts a bench on its own.
+FL_HEARTBEAT_STALE_SECS="${FL_HEARTBEAT_STALE_SECS:-90}"
+# a beat may land a moment after the clock was read; more than this in the
+# future is a clock that moved back, which a beating runner fixes in 30 s
+FL_HEARTBEAT_FUTURE_SECS=5
+chk_runner_heartbeat() {
+  local hb="${FL_BENCH_DIR}/logs/.benchbar/heartbeat" age fix
+  fix="${SCRIPT_DIR}/benchbar restart --bench-dir ${FL_BENCH_DIR}"
+  if [[ "$(fl_template_status "$(fl_runner_path)" "$FL_R_RUNNER")" != "current" ]]; then
+    chk__set ok "no heartbeat to check until the runner script is current (see the runner check)"
+    return 0
+  fi
+  fl_state_json_read
+  if [[ ! ( "$SJ_STATE" == running || "$SJ_STATE" == starting ) || ! "$SJ_PID" =~ ^[0-9]+$ ]] || ! fl_pid_alive "$SJ_PID"; then
+    chk__set ok "no runner running, nothing to beat"
+    return 0
+  fi
+  if [[ ! -f "$hb" ]]; then
+    chk__set warn "the runner running now (pid ${SJ_PID}) started before its script was updated and writes no heartbeat" "$fix"
+    return 0
+  fi
+  age=$(( $(fl_now) - $(fl_file_mtime "$hb") ))
+  if [[ "$age" -le "-$FL_HEARTBEAT_FUTURE_SECS" ]]; then
+    chk__set warn "the runner's last heartbeat is dated $(( -age ))s in the future (pid ${SJ_PID}): the clock moved back and the runner has not beaten since, it hangs" "$fix"
+  elif [[ "$age" -gt "$FL_HEARTBEAT_STALE_SECS" ]]; then
+    chk__set warn "the runner's last heartbeat is ${age}s old (pid ${SJ_PID}): it started before its script was updated, or hangs" "$fix"
+  else
+    chk__set ok "runner heartbeat ${age}s ago (pid ${SJ_PID})"
   fi
 }
 
@@ -438,9 +476,10 @@ chk_redis_6379() {
   fi
 }
 
+# fl_site_ping_code [SECONDS]: the default site's ping (3 s; status asks with 1)
 fl_site_ping_code() {
   local code
-  code="$(curl -s -o /dev/null -m 3 -w '%{http_code}' -H "Host: ${FL_SITE}" "http://127.0.0.1:${FL_WEB_PORT}/api/method/ping" 2>/dev/null || true)"
+  code="$(curl -s -o /dev/null -m "${1:-3}" -w '%{http_code}' -H "Host: ${FL_SITE}" "http://127.0.0.1:${FL_WEB_PORT}/api/method/ping" 2>/dev/null || true)"
   case "$code" in
     [0-9][0-9][0-9]) printf '%s' "$code" ;;
     *) printf '000' ;;

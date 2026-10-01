@@ -72,7 +72,9 @@ nonisolated struct BenchStateMachine: Equatable, Sendable {
             if isStale(observed.state, source: source) {
                 return []
             }
-            status = observed
+            // the same answer again writes nothing (the store compares the
+            // whole machine before it writes it back to the model)
+            if status != observed { status = observed }
             return transition(to: observed.state, reason: observed.stopReason, exitCode: observed.lastExitCode)
         }
     }
@@ -92,8 +94,8 @@ nonisolated struct BenchStateMachine: Equatable, Sendable {
 
     private mutating func transition(to next: BenchState, reason: StopReason?, exitCode: Int? = nil) -> [BenchEffect] {
         let previous = state
-        state = next
-        stopReason = reason
+        if state != next { state = next }
+        if stopReason != reason { stopReason = reason }
         guard previous != next else { return [] }
 
         var effects: [BenchEffect] = []

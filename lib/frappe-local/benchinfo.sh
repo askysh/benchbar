@@ -9,6 +9,7 @@
 FL_BENCH_DIR="${FL_BENCH_DIR:-}"
 FL_BENCH_NAME=""
 FL_BENCH_SOURCE=""
+FL_BENCH_DIR_CANON=""
 FL_SITE="${FL_SITE:-}"
 FL_SITE_SOURCE=""
 FL_WEB_PORT=8000
@@ -66,14 +67,53 @@ fl_bench_detect() {
       fi
     fi
   fi
-  FL_BENCH_NAME="$(fl_bench_name_of "$FL_BENCH_DIR")"
+  # fl_abs_path resolved it (cd -P into a folder that exists): fl_bench_canonical
+  # may skip the cd for it. A bench not created yet (install) is resolved again later.
+  FL_BENCH_DIR_CANON=""
+  if [[ "$FL_BENCH_SOURCE" =~ ^(flag|env|state)$ && -d "$FL_BENCH_DIR" ]]; then FL_BENCH_DIR_CANON="$FL_BENCH_DIR"; fi
+  fl_bench_name_v FL_BENCH_NAME "$FL_BENCH_DIR"
+}
+
+# common_site_config.json, read a line at a time as before 0.6.1 (the first
+# line that holds only "KEY": value), in bash. The read only commands
+# (FL_CONTEXT_LIGHT=1) read the file once, into FL_SCC_*.
+FL_SCC_FILE=""
+FL_SCC_KEYS=()
+FL_SCC_VALS=()
+FL_SCC_LINE_RE='^[[:space:]]*"([^"]*)"[[:space:]]*:[[:space:]]*"?([^",]*)"?,?[[:space:]]*$'
+fl_site_config_prime() {
+  local file="${FL_BENCH_DIR}/sites/common_site_config.json" line
+  FL_SCC_FILE=""; FL_SCC_KEYS=(); FL_SCC_VALS=()
+  [[ "${FL_CONTEXT_LIGHT:-0}" == "1" && -f "$file" && -r "$file" ]] || return 0
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ "$line" =~ $FL_SCC_LINE_RE ]] || continue
+    FL_SCC_KEYS+=("${BASH_REMATCH[1]}"); FL_SCC_VALS+=("${BASH_REMATCH[2]}")
+  done <"$file"
+  FL_SCC_FILE="$file"
+}
+
+# fl_site_config_value_v VAR KEY: VAR gets KEY's raw JSON value (a string
+# without quotes, or a number), empty when the file or the key is missing
+fl_site_config_value_v() {
+  local __file="${FL_BENCH_DIR}/sites/common_site_config.json" __line __v="" __i
+  if [[ -n "$FL_SCC_FILE" && "$FL_SCC_FILE" == "$__file" ]]; then
+    for ((__i = 0; __i < ${#FL_SCC_KEYS[@]}; __i++)); do
+      [[ "${FL_SCC_KEYS[$__i]}" == "$2" ]] && { __v="${FL_SCC_VALS[$__i]}"; break; }
+    done
+  elif [[ -f "$__file" && -r "$__file" ]]; then
+    while IFS= read -r __line || [[ -n "$__line" ]]; do
+      [[ "$__line" =~ $FL_SCC_LINE_RE && "${BASH_REMATCH[1]}" == "$2" ]] && { __v="${BASH_REMATCH[2]}"; break; }
+    done <"$__file"
+  fi
+  printf -v "$1" '%s' "$__v"
 }
 
 fl_site_config_value() {
   # fl_site_config_value KEY -> raw JSON value (string without quotes or number)
-  local key="$1" file="${FL_BENCH_DIR}/sites/common_site_config.json"
-  [[ -f "$file" ]] || return 0
-  sed -n "s/^[[:space:]]*\"${key}\"[[:space:]]*:[[:space:]]*\"\{0,1\}\([^\",]*\)\"\{0,1\},\{0,1\}[[:space:]]*$/\1/p" "$file" | head -n1
+  local v
+  fl_site_config_value_v v "$1"
+  [[ -n "$v" ]] && printf '%s\n' "$v"
+  return 0
 }
 
 fl_site_detect() {
@@ -90,10 +130,12 @@ fl_site_detect() {
     FL_SITE="$state"; FL_SITE_SOURCE="state"; return 0
   fi
   if [[ -f "${FL_BENCH_DIR}/sites/currentsite.txt" ]]; then
-    FL_SITE="$(tr -d '[:space:]' <"${FL_BENCH_DIR}/sites/currentsite.txt")"
+    FL_SITE=""
+    IFS= read -r -d '' FL_SITE <"${FL_BENCH_DIR}/sites/currentsite.txt" || true
+    FL_SITE="${FL_SITE//[[:space:]]/}"
     [[ -n "$FL_SITE" ]] && { FL_SITE_SOURCE="currentsite"; return 0; }
   fi
-  FL_SITE="$(fl_site_config_value default_site)"
+  fl_site_config_value_v FL_SITE default_site
   [[ -n "$FL_SITE" ]] && { FL_SITE_SOURCE="common_site_config"; return 0; }
   for d in "${FL_BENCH_DIR}"/sites/*/site_config.json; do
     [[ -f "$d" ]] || continue
@@ -104,13 +146,13 @@ fl_site_detect() {
 
 fl_ports_detect() {
   local v
-  v="$(fl_site_config_value webserver_port)"; [[ "$v" =~ ^[0-9]+$ ]] && FL_WEB_PORT="$v"
-  v="$(fl_site_config_value socketio_port)"; [[ "$v" =~ ^[0-9]+$ ]] && FL_SOCKETIO_PORT="$v"
-  v="$(fl_site_config_value redis_cache)"; v="${v##*:}"; [[ "$v" =~ ^[0-9]+$ ]] && FL_REDIS_CACHE_PORT="$v"
-  v="$(fl_site_config_value redis_queue)"; v="${v##*:}"; [[ "$v" =~ ^[0-9]+$ ]] && FL_REDIS_QUEUE_PORT="$v"
+  fl_site_config_value_v v webserver_port; [[ "$v" =~ ^[0-9]+$ ]] && FL_WEB_PORT="$v"
+  fl_site_config_value_v v socketio_port; [[ "$v" =~ ^[0-9]+$ ]] && FL_SOCKETIO_PORT="$v"
+  fl_site_config_value_v v redis_cache; v="${v##*:}"; [[ "$v" =~ ^[0-9]+$ ]] && FL_REDIS_CACHE_PORT="$v"
+  fl_site_config_value_v v redis_queue; v="${v##*:}"; [[ "$v" =~ ^[0-9]+$ ]] && FL_REDIS_QUEUE_PORT="$v"
   # bench keeps redis_socketio equal to redis_cache; frappe v15 and v16 never use it
   FL_REDIS_SOCKETIO_PORT="$FL_REDIS_CACHE_PORT"
-  v="$(fl_site_config_value redis_socketio)"; v="${v##*:}"; [[ "$v" =~ ^[0-9]+$ ]] && FL_REDIS_SOCKETIO_PORT="$v"
+  fl_site_config_value_v v redis_socketio; v="${v##*:}"; [[ "$v" =~ ^[0-9]+$ ]] && FL_REDIS_SOCKETIO_PORT="$v"
   return 0
 }
 
@@ -120,9 +162,29 @@ fl_bench_ports_csv() {
 
 FL_APP_BUNDLE_ID="com.akashmishra.benchbar"
 
+# The bench's launchd label. Every command asks for it many times, most of
+# them inside $(...), so fl_context_init and fl_bench_load compute it once
+# (fl_agent_label_prime) and fl_agent_label answers from FL_AGENT_LABEL for
+# that bench.
+FL_AGENT_LABEL=""
+FL_AGENT_LABEL_DIR=""
 fl_agent_label() {
-  local base="com.benchbar.${FL_BENCH_NAME}" hash hashed f owner d
-  hash="$(printf '%s' "$FL_BENCH_DIR" | cksum | awk '{printf "%08x", $1}')"
+  if [[ -n "$FL_AGENT_LABEL" && "$FL_AGENT_LABEL_DIR" == "$FL_BENCH_DIR" ]]; then printf '%s' "$FL_AGENT_LABEL"; return 0; fi
+  fl_agent_label_compute
+}
+fl_agent_label_v() {
+  if [[ -n "$FL_AGENT_LABEL" && "$FL_AGENT_LABEL_DIR" == "$FL_BENCH_DIR" ]]; then printf -v "$1" '%s' "$FL_AGENT_LABEL"; return 0; fi
+  printf -v "$1" '%s' "$(fl_agent_label_compute)"
+}
+fl_agent_label_prime() {
+  fl_bench_hash_prime
+  FL_AGENT_LABEL=""
+  FL_AGENT_LABEL="$(fl_agent_label_compute)"
+  FL_AGENT_LABEL_DIR="$FL_BENCH_DIR"
+}
+fl_agent_label_compute() {
+  local base="com.benchbar.${FL_BENCH_NAME}" hash hashed f owner d name
+  if [[ "$FL_BENCH_HASH_DIR" == "$FL_BENCH_DIR" && -n "$FL_BENCH_HASH" ]]; then hash="$FL_BENCH_HASH"; else fl_path_hash_v hash "$FL_BENCH_DIR"; fi
   hashed="${base}-${hash}"
   # Keep an installed label stable. Never claim another bench's plist merely
   # because both directories are named frappe-bench.
@@ -135,7 +197,8 @@ fl_agent_label() {
   if [[ -f "$HOME/Library/LaunchAgents/${base}.plist" ]]; then printf '%s' "$hashed"; return 0; fi
   while IFS= read -r d; do
     [[ -n "$d" && "$d" != "$FL_BENCH_DIR" ]] || continue
-    if [[ "$(fl_bench_name_of "$d")" == "$FL_BENCH_NAME" ]]; then printf '%s' "$hashed"; return 0; fi
+    fl_bench_name_v name "$d"
+    if [[ "$name" == "$FL_BENCH_NAME" ]]; then printf '%s' "$hashed"; return 0; fi
   done <<<"$(fl_known_benches_cached)"
   printf '%s' "$base"
 }
@@ -163,7 +226,8 @@ fl_agent_plist_path() {
 }
 
 fl_launchd_domain() {
-  printf 'gui/%s' "$(id -u)"
+  # bash's EUID is what `id -u` prints, without the process
+  printf 'gui/%s' "$EUID"
 }
 
 fl_runner_path() { printf '%s/benchbar-run.sh' "$FL_BENCH_DIR"; }

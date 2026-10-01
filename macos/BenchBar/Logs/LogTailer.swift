@@ -7,15 +7,29 @@ import Foundation
 /// replace the file with `mv`. A file watcher alone goes quiet after a
 /// replacement, so there are two: one on the open file (appends,
 /// truncation, rename, delete) and a `DirectoryWatcher` on its folder
-/// (the file coming back). Every event ends in `readNew()`, which compares
-/// the file's inode and size with what it has read so far.
+/// (the file coming back).
+///
+/// A busy bench writes many times a second, so events are coalesced: the
+/// first one opens a 100 ms window, and one read at its end takes all that
+/// came meanwhile. That read asks the open descriptor (`fstat`) for its size;
+/// the path is looked at only when the file may have been replaced or
+/// removed (a delete or rename event, a change in the folder, nothing open).
+/// Each event also asks the descriptor whether the file shrank below what
+/// was read: a log truncated and grown past that again before the window
+/// closes looks like an append by then.
 ///
 /// Only whole lines are decoded: bytes after the last newline wait for the
 /// next read, so a UTF-8 character is never cut in half.
 final class LogTailer {
+    /// Runs `work` on the main queue after a delay (the tests run it themselves).
+    typealias Schedule = (_ delay: DispatchTimeInterval, _ work: @escaping @MainActor () -> Void) -> Void
+
     let url: URL
     /// How much of an existing file is shown at first (the rest is skipped).
     let initialBytes: Int
+    /// How long events gather before the one read that takes them all.
+    let window: DispatchTimeInterval
+    private let schedule: Schedule
     private let onLines: (String) -> Void
     private let onReset: () -> Void
 
@@ -25,10 +39,22 @@ final class LogTailer {
     private var pending = Data()
     private var fileSource: DispatchSourceFileSystemObject?
     private var folderWatcher: DirectoryWatcher?
+    /// A read is scheduled at the end of the window.
+    private var readDue = false
+    /// An event in the window may have replaced or removed the file.
+    private var pathChanged = false
+    /// An event in the window found the file shorter than what was read.
+    private var truncated = false
+    /// How often the path was looked at (the tests check that appends need none).
+    private(set) var pathLookups = 0
 
-    init(url: URL, initialBytes: Int = 256 * 1024, onLines: @escaping (String) -> Void, onReset: @escaping () -> Void) {
+    init(url: URL, initialBytes: Int = 256 * 1024, window: DispatchTimeInterval = .milliseconds(100),
+         schedule: @escaping Schedule = LogTailer.onMainQueue,
+         onLines: @escaping (String) -> Void, onReset: @escaping () -> Void) {
         self.url = url
         self.initialBytes = initialBytes
+        self.window = window
+        self.schedule = schedule
         self.onLines = onLines
         self.onReset = onReset
     }
@@ -40,12 +66,15 @@ final class LogTailer {
 
     func start() {
         open(fromEnd: true)
-        let watcher = DirectoryWatcher(target: url.deletingLastPathComponent()) { [weak self] in self?.readNew() }
+        let watcher = DirectoryWatcher(target: url.deletingLastPathComponent()) { [weak self] in self?.changed(replaced: true) }
         watcher.start()
         folderWatcher = watcher
     }
 
     func stop() {
+        readDue = false
+        pathChanged = false
+        truncated = false
         fileSource?.cancel()
         fileSource = nil
         folderWatcher?.stop()
@@ -54,27 +83,65 @@ final class LogTailer {
         handle = nil
     }
 
-    /// Reads what was appended; reopens from the start after a truncation
-    /// or a replacement. Safe to call any time (tests call it directly).
-    func readNew() {
-        guard let now = Self.stat(url) else {
-            // gone for now (rotated with mv, not back yet): wait for the folder
-            closeFile()
-            return
+    /// Something happened to the file or its folder: one read at the end of
+    /// the window, for this event and every one until then. `replaced`: the
+    /// file may be gone, or another one now has its name. A truncation is
+    /// noted now (one `fstat`): by the window's end the file may be longer
+    /// than before again.
+    func changed(replaced: Bool) {
+        if replaced { pathChanged = true }
+        if !truncated, let handle, let now = Self.info(fd: handle.fileDescriptor), now.size < offset {
+            truncated = true
         }
-        if handle == nil || now.inode != inode || now.size < offset {
-            if handle != nil { onReset() }
-            open(fromEnd: false)
-            return
+        guard !readDue else { return }
+        readDue = true
+        schedule(window) { [weak self] in self?.windowClosed() }
+    }
+
+    /// Reads what was appended; reads again from the start after a
+    /// truncation, and opens the file again after a replacement. With
+    /// `checkPath` false the open descriptor says it all (an append or a
+    /// truncation). Safe to call any time (tests call it directly).
+    func readNew(checkPath: Bool = true) {
+        if checkPath || handle == nil {
+            pathLookups += 1
+            guard let now = Self.info(path: url.path) else {
+                // gone for now (rotated with mv, not back yet): wait for the folder.
+                // A truncation seen in this window still marks the end of the run.
+                if truncated { onReset() }
+                closeFile()
+                return
+            }
+            if handle == nil || now.inode != inode {
+                if handle != nil { onReset() }
+                open(fromEnd: false)
+                return
+            }
+        }
+        guard let handle, let now = Self.info(fd: handle.fileDescriptor) else { return }
+        if truncated || now.size < offset {
+            // truncated in place (the runner's ": >"): the same file, from the top
+            truncated = false
+            onReset()
+            offset = 0
+            pending = Data()
         }
         readToEnd()
     }
 
     // MARK: -
 
+    private func windowClosed() {
+        guard readDue else { return }   // stopped meanwhile
+        readDue = false
+        let checkPath = pathChanged
+        pathChanged = false
+        readNew(checkPath: checkPath)
+    }
+
     private func open(fromEnd: Bool) {
         closeFile()
-        guard let info = Self.stat(url), let handle = try? FileHandle(forReadingFrom: url) else { return }
+        guard let handle = try? FileHandle(forReadingFrom: url), let info = Self.info(fd: handle.fileDescriptor) else { return }
         self.handle = handle
         inode = info.inode
         pending = Data()
@@ -110,23 +177,41 @@ final class LogTailer {
         let source = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: handle.fileDescriptor, eventMask: [.extend, .write, .delete, .rename, .attrib], queue: .main)
         source.setEventHandler { [weak self] in
-            MainActor.assumeIsolated { self?.readNew() }
+            MainActor.assumeIsolated {
+                guard let self, let events = self.fileSource?.data else { return }
+                self.changed(replaced: !events.isDisjoint(with: [.delete, .rename]))
+            }
         }
         source.resume()
         fileSource = source
     }
 
     private func closeFile() {
+        truncated = false
         fileSource?.cancel()
         fileSource = nil
         try? handle?.close()
         handle = nil
     }
 
-    nonisolated static func stat(_ url: URL) -> (inode: UInt64, size: UInt64)? {
-        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
-              let inode = attributes[.systemFileNumber] as? NSNumber,
-              let size = attributes[.size] as? NSNumber else { return nil }
-        return (inode.uint64Value, size.uint64Value)
+    /// The main queue, `delay` from now.
+    nonisolated static func onMainQueue(after delay: DispatchTimeInterval, _ work: @escaping @MainActor () -> Void) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            MainActor.assumeIsolated(work)
+        }
+    }
+
+    /// Inode and size of an open file, one `fstat`.
+    nonisolated static func info(fd: Int32) -> (inode: UInt64, size: UInt64)? {
+        var info = stat()
+        guard fstat(fd, &info) == 0 else { return nil }
+        return (UInt64(info.st_ino), UInt64(max(0, info.st_size)))
+    }
+
+    /// Inode and size of what the path names now, one `stat`.
+    nonisolated static func info(path: String) -> (inode: UInt64, size: UInt64)? {
+        var info = stat()
+        guard stat(path, &info) == 0 else { return nil }
+        return (UInt64(info.st_ino), UInt64(max(0, info.st_size)))
     }
 }

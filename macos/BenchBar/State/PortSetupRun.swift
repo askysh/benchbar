@@ -58,27 +58,31 @@ final class PortSetupRun: Identifiable {
                 throw CLIError.failed(command: "ports apply", exitCode: result.exitCode,
                     message: failures.isEmpty ? CLIClient.summarize(result) : failures.joined(separator: "\n"))
             }
-            if self.startAfterSetup {
-                let check = try await client.portCheck(bench: summary.path)
-                guard check.conflicts.isEmpty else {
-                    throw CLIError.failed(command: "ports", exitCode: 1,
-                        message: "Setup completed, but a port is now occupied. The bench was not started. " + check.conflicts.joined(separator: "\n"))
-                }
-                let started = try await client.perform(.up, bench: summary.path)
-                self.output += "\n" + started.stdout + started.stderr
-            }
         }
         if let error {
             // A batch may have completed earlier entries. Always refresh what actually exists.
             await store.reloadBenches()
             phase = .failed(error)
-        } else if summaries.allSatisfy({ summary in store.benches.contains { $0.path == summary.path && !$0.needsService } }) {
-            for bench in store.benches where summaries.contains(where: { $0.path == bench.path }) {
-                bench.portConflict = nil; bench.lastError = nil
-            }
-            phase = .finished
-        } else {
-            phase = .failed("Setup returned, but some services were not found. Review the output and run Doctor.")
+            return
         }
+        guard summaries.allSatisfy({ summary in store.benches.contains { $0.path == summary.path && !$0.needsService } }) else {
+            phase = .failed("Setup returned, but some services were not found. Review the output and run Doctor.")
+            return
+        }
+        for bench in store.benches where summaries.contains(where: { $0.path == bench.path }) {
+            bench.portConflict = nil; bench.lastError = nil
+        }
+        if startAfterSetup, let bench = store.benches.first(where: { $0.path == summary.path }) {
+            // as the Start button does: the ports are checked once more, the
+            // bench shows starting, and the site is pinged and the bench
+            // refreshed when up returns
+            if let error = await store.perform(.up, on: bench) {
+                phase = .failed(bench.portConflict.map {
+                    "Setup completed, but a port is now occupied. The bench was not started. " + $0.conflicts.joined(separator: "\n")
+                } ?? error)
+                return
+            }
+        }
+        phase = .finished
     }
 }

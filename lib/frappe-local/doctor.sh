@@ -69,9 +69,29 @@ fl_doctor_print() {
   printf '\n  %s%d ok, %d warn, %d fail%s\n' "$FL_BOLD" "$(fl_doctor_count ok)" "$(fl_doctor_count warn)" "$(fl_doctor_count fail)" "$FL_RESET"
 }
 
+# fl_json_escape_v VAR TEXT: TEXT with backslashes and quotes escaped and
+# control characters (terminal colors in logs) dropped, as a JSON string
+# needs; in bash, the same bytes `sed | tr -d '\000-\037'` gave. The control
+# characters are listed one by one: a range in bash 3.2 follows the locale.
+FL_JSON_CTRL=$'\001\002\003\004\005\006\007\010\011\012\013\014\015\016\017\020\021\022\023\024\025\026\027\030\031\032\033\034\035\036\037'
+fl_json_escape_v() {
+  local __e="$2" __o="" __p
+  __e="${__e//\\/\\\\}"
+  __e="${__e//\"/\\\"}"
+  # cut at each control character: bash 3.2's ${x//[set]/} is quadratic in
+  # the string's length, and a colored 10 KB log line took 20 seconds
+  while [[ "$__e" == *[$FL_JSON_CTRL]* ]]; do
+    __p="${__e%%["$FL_JSON_CTRL"]*}"
+    __o="${__o}${__p}"
+    __e="${__e:${#__p}+1}"
+  done
+  printf -v "$1" '%s' "${__o}${__e}"
+}
+
 fl_json_escape() {
-  # control characters (terminal colors in logs) are not valid in a JSON string
-  printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | tr -d '\000-\037'
+  local e
+  fl_json_escape_v e "$1"
+  printf '%s' "$e"
 }
 
 # Schema 1 (docs/json-schema.md). "level" and "fix_command" are the contract

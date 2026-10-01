@@ -75,9 +75,10 @@ struct LogTextView: NSViewRepresentable {
     }
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
-        // reading these registers the view for their changes
+        // reading these registers the view for their changes; drawing only
+        // reads the model, never writes it
         _ = model.changes
-        _ = model.appended.count
+        _ = model.buffer.lines.last?.id
         _ = model.follow
         context.coordinator.sync()
     }
@@ -87,6 +88,11 @@ struct LogTextView: NSViewRepresentable {
         private weak var scroll: NSScrollView?
         private weak var text: NSTextView?
         private var drawnChanges = -1
+        /// The newest line looked at (drawn, or hidden by the filter).
+        private var drawnThrough = -1
+        /// The lines in the text, oldest first, with their length (newline
+        /// included): what the buffer drops from its top leaves the text too.
+        private var drawn: [(id: Int, length: Int)] = []
         /// Set while the view scrolls itself, so that is not taken as the user scrolling up.
         private var scrollingProgrammatically = false
 
@@ -114,19 +120,45 @@ struct LogTextView: NSViewRepresentable {
         func sync() {
             guard let text, let storage = text.textStorage else { return }
             if drawnChanges != model.changes {
-                storage.setAttributedString(Self.render(model.visible, matches: Set(model.matches), current: model.currentMatchID))
+                let visible = model.visible
+                storage.setAttributedString(Self.render(visible, matches: Set(model.matches), current: model.currentMatchID))
+                drawn = visible.map { ($0.id, Self.length(of: $0)) }
                 drawnChanges = model.changes
-                model.consumeAppended()
-            } else if !model.appended.isEmpty {
-                let matches = Set(model.query.matches(in: model.appended))
-                storage.append(Self.render(model.appended, matches: matches, current: nil))
-                model.consumeAppended()
+            } else {
+                appendNewLines(to: storage)
             }
-            if let id = model.currentMatchID, let range = Self.range(of: id, in: model.visible, storage: storage) {
+            drawnThrough = model.buffer.lines.last?.id ?? -1
+            if let id = model.currentMatchID, let range = range(of: id) {
                 scrolling { text.scrollRangeToVisible(range) }
             } else if model.follow {
                 scrolling { text.scrollToEndOfDocument(nil) }
             }
+        }
+
+        /// The lines that came since the last sync, in one edit of the text:
+        /// those the buffer dropped leave the top, the new visible ones go at
+        /// the end. A busy log gets one layout pass per read, not one per line.
+        /// While the person reads scrolled up the top stays: the clip view
+        /// keeps its offset, so a cut there slides the text under them. The
+        /// dropped lines leave with the first sync that follows again, or
+        /// the next redraw.
+        private func appendNewLines(to storage: NSTextStorage) {
+            let first = model.buffer.lines.first?.id ?? Int.max
+            var dropped = 0, cut = 0
+            while model.follow, dropped < drawn.count, drawn[dropped].id < first {
+                cut += drawn[dropped].length
+                dropped += 1
+            }
+            let added = model.visible(after: drawnThrough)
+            guard cut > 0 || !added.isEmpty else { return }
+            storage.beginEditing()
+            if cut > 0 { storage.deleteCharacters(in: NSRange(location: 0, length: cut)) }
+            if !added.isEmpty {
+                storage.append(Self.render(added, matches: Set(model.query.matches(in: added)), current: nil))
+            }
+            storage.endEditing()
+            drawn.removeFirst(dropped)
+            drawn += added.map { ($0.id, Self.length(of: $0)) }
         }
 
         private func scrolling(_ work: () -> Void) {
@@ -150,15 +182,20 @@ struct LogTextView: NSViewRepresentable {
             return out
         }
 
-        /// Where line `id` sits in the text (lines are drawn one per row, in order).
-        static func range(of id: Int, in lines: [LogLine], storage: NSTextStorage) -> NSRange? {
+        /// Where line `id` sits in the text: counted over the lines drawn,
+        /// which can start above the buffer's first while scrolled up.
+        private func range(of id: Int) -> NSRange? {
             var location = 0
-            for line in lines {
-                let length = (line.text as NSString).length + 1
-                if line.id == id { return NSRange(location: location, length: max(0, length - 1)) }
-                location += length
+            for line in drawn {
+                if line.id == id { return NSRange(location: location, length: max(0, line.length - 1)) }
+                location += line.length
             }
             return nil
+        }
+
+        /// A line's length in the text: UTF-16 units, its newline included.
+        static func length(of line: LogLine) -> Int {
+            (line.text as NSString).length + 1
         }
     }
 }

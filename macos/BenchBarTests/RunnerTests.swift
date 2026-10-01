@@ -6,12 +6,12 @@ import Testing
 @Suite("Runner animation")
 struct RunnerTests {
     @Test func stateToAnimationFollowsTheTable() {
-        #expect(RunnerPlan.forState(.stopped, reduceMotion: false) == .loop(.sleeping))
+        #expect(RunnerPlan.forState(.stopped, reduceMotion: false) == .settle(.sleeping, times: 3))
         #expect(RunnerPlan.forState(.starting, reduceMotion: false) == .loop(.starting))
         #expect(RunnerPlan.forState(.running, reduceMotion: false) == .loop(.running))
         #expect(RunnerPlan.forState(.crashed, reduceMotion: false) == .stumble(times: 3, then: .alert))
         #expect(RunnerPlan.forState(.paused, reduceMotion: false) == .stumble(times: 3, then: .alert))
-        #expect(RunnerPlan.forState(.unknown, reduceMotion: false) == .loop(.unknown))
+        #expect(RunnerPlan.forState(.unknown, reduceMotion: false) == .settle(.unknown, times: 3))
     }
 
     @Test func reduceMotionShowsOneStillPosePerState() {
@@ -67,9 +67,25 @@ struct RunnerTests {
 
     @Test func aFinishedStumbleJustHoldsTheAlert() {
         let runner = Runner.builtIn("bench")
-        let built = RunnerAnimator.animation(for: .stumble(times: 3, then: .alert), frames: runner.frames(for:), stumbleDone: true)
+        let built = RunnerAnimator.animation(for: .stumble(times: 3, then: .alert), frames: runner.frames(for:), finished: true)
         #expect(built.animation == nil)
         #expect(built.rest === runner.frames(for: .alert).last)
+    }
+
+    @Test func aStoppedBenchLoopsThreeTimesThenHoldsTheFirstFrame() throws {
+        let runner = Runner.builtIn("bench")
+        let frames = runner.frames(for: .sleeping)
+        let built = RunnerAnimator.animation(for: .settle(.sleeping, times: 3), frames: runner.frames(for:))
+        let animation = try #require(built.animation)
+        #expect(animation.values?.count == frames.count)
+        #expect(animation.repeatCount == 3)
+        // removed when done, so the layer shows its contents: the still frame
+        #expect(animation.isRemovedOnCompletion)
+        #expect(abs(animation.duration - Double(frames.count) / RunnerPose.sleeping.baseFPS) < 0.0001)
+        #expect(built.rest === frames[0])
+        let after = RunnerAnimator.animation(for: .settle(.sleeping, times: 3), frames: runner.frames(for:), finished: true)
+        #expect(after.animation == nil)
+        #expect(after.rest === frames[0])
     }
 
     @Test func stillAndSingleFrameLoopsHaveNoAnimation() {
@@ -177,11 +193,27 @@ struct RunnerAnimatorTests {
         let animator = RunnerAnimator(runner: Runner.builtIn("bench"))
         animator.play(.loop(.running))
         animator.setSpeed(40)
-        #expect(animator.layer.speed == 12)
+        #expect(animator.speed == 12)
+        // the speed keeps its range, the layer plays at most 30 frames a second
+        #expect(animator.layer.speed == 6)
+        #expect(Double(animator.layer.speed) * RunnerPose.running.baseFPS == RunnerPose.maxFPS)
         animator.pause()
         #expect(animator.layer.speed == 0)
         animator.resume()
-        #expect(animator.layer.speed == 12)
+        #expect(animator.layer.speed == 6)
+    }
+
+    @Test func aNewStateRestartsTheSettleLoops() throws {
+        let animator = RunnerAnimator(runner: Runner.builtIn("bench"))
+        animator.play(.settle(.sleeping, times: 3))
+        let first = try #require(animator.layer.animation(forKey: RunnerAnimator.animationKey))
+        animator.play(.settle(.sleeping, times: 3))
+        #expect(animator.layer.animation(forKey: RunnerAnimator.animationKey) === first, "the same state does not restart")
+        animator.play(.loop(.running))
+        animator.play(.settle(.sleeping, times: 3))
+        let again = try #require(animator.layer.animation(forKey: RunnerAnimator.animationKey))
+        #expect(again !== first)
+        #expect(again.repeatCount == 3)
     }
 
     @Test func stillPlanSetsContentsWithoutAnimation() {

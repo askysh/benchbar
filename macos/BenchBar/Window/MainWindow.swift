@@ -76,7 +76,7 @@ struct MainWindowView: View {
                             }
                             .help(bench.path)
                             Spacer()
-                            if bench.activity != nil || bench.pending != nil || bench.isChangingScheduler {
+                            if bench.isBusy {
                                 ProgressView().controlSize(.mini)
                             }
                         }

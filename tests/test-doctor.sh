@@ -28,6 +28,35 @@ run_fm doctor --bench-dir "$BENCH"
 assert_eq "$snap_before" "$(snapshot "$HOME" "$BENCH")" "(doctor must not write)"
 assert_calls_not_contain '^(launchctl (bootstrap|bootout|kickstart|kill)|pkill|bench (build|setup)|brew services)'
 
+# runner heartbeat (0.6.1): a runner process older than its script
+hb_check() {
+  { "$FM" doctor --json --bench-dir "$BENCH" 2>/dev/null || true; } |
+    jget - '" | ".join("%s | %s" % (c["level"], c["fix_command"] or "-") for c in d["checks"] if c["id"] == "runner_heartbeat")'
+}
+hb="$BENCH/logs/.benchbar/heartbeat"
+assert_eq "ok | -" "$(hb_check)" "(a stopped bench has nothing to beat)"
+mkdir -p "$BENCH/logs/.benchbar"
+printf '{"state":"running","pid":4241}\n' >"$BENCH/logs/.benchbar/state.json"
+add_proc 4241 "/bin/bash $BENCH/benchbar-run.sh" "$BENCH"
+assert_eq "warn | ${ROOT}/benchbar restart --bench-dir ${BENCH}" "$(hb_check)" "(a running runner without a heartbeat predates its script)"
+touch "$hb"
+assert_eq "ok | -" "$(hb_check)"
+FL_NOW="$(( $(mtime_of "$hb") + 200 ))" run_fm doctor --bench-dir "$BENCH"
+assert_contains "$OUT" "[WARN] Runner heartbeat: the runner's last heartbeat is 200s old (pid 4241)"
+# dated in the future: a clock moved back, and a beating runner rewrites it
+FL_NOW="$(( $(mtime_of "$hb") - 2 ))" run_fm doctor --bench-dir "$BENCH"
+assert_contains "$OUT" "[OK] Runner heartbeat"
+FL_NOW="$(( $(mtime_of "$hb") - 600 ))" run_fm doctor --bench-dir "$BENCH"
+assert_contains "$OUT" "[WARN] Runner heartbeat: the runner's last heartbeat is dated 600s in the future (pid 4241)"
+# an outdated runner script is the runner check's to report, not this one's
+cp "$BENCH/benchbar-run.sh" "$TMP_DIR/runner.saved"
+sed_inplace 's/benchbar-template: bench-run.sh v[0-9]* [0-9a-f]*/benchbar-template: bench-run.sh v0 000000000000/' "$BENCH/benchbar-run.sh"
+rm -f "$hb"
+assert_eq "ok | -" "$(hb_check)"
+cp "$TMP_DIR/runner.saved" "$BENCH/benchbar-run.sh"
+rm -f "$BENCH/logs/.benchbar/state.json"
+{ grep -v '^4241 ' "$MOCK_PROCS" || true; } >"$MOCK_PROCS.tmp"; mv "$MOCK_PROCS.tmp" "$MOCK_PROCS"
+
 # 1. env deleted (the cleanup-tool case)
 mv "$BENCH/env" "$BENCH/env.gone"
 run_fm doctor --bench-dir "$BENCH"

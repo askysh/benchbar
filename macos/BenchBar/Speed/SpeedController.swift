@@ -1,12 +1,16 @@
 import Foundation
 
 /// Samples a speed source every 2 seconds while a bench runs, smooths the
-/// result and hands it to the animator.
+/// result and hands it to the animator. It is the app's one 2 second
+/// libproc loop: each snapshot also goes to the bench's resource history,
+/// so the charts never read the same tree a second time.
 final class SpeedController {
     static let interval: Duration = .seconds(2)
     static let tolerance: Duration = .milliseconds(500)
 
     var onSpeed: ((Double) -> Void)?
+    /// Every process tree snapshot, for the bench's resource history.
+    var onSnapshot: ((SpeedTarget, ProcessTree.Snapshot) -> Void)?
     private(set) var target: SpeedTarget?
 
     private let source: any SpeedSource
@@ -22,12 +26,13 @@ final class SpeedController {
         guard target != self.target || task == nil else { return }
         stop()
         self.target = target
-        task = Task { [weak self, source] in
+        // utility: a menu bar animation must not compete with the person's work
+        task = Task(priority: .utility) { [weak self, source] in
             while !Task.isCancelled {
-                if let raw = await source.sample(target) {
-                    guard !Task.isCancelled, let self else { return }
-                    self.onSpeed?(self.smoother.add(raw))
-                }
+                let reading = await source.sample(target)
+                guard !Task.isCancelled, let self else { return }
+                if let snapshot = reading.snapshot { self.onSnapshot?(target, snapshot) }
+                if let raw = reading.speed { self.onSpeed?(self.smoother.add(raw)) }
                 try? await Task.sleep(for: Self.interval, tolerance: Self.tolerance)
             }
         }

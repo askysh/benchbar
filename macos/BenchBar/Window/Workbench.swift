@@ -23,6 +23,7 @@ final class Workbench {
     private(set) var checkingLock: Set<String> = []
     /// The last change's outcome, for the banner at the top of the pane.
     var result: ChangeResult?
+    @ObservationIgnored private let appCalls = OnDemandCalls()
 
     nonisolated struct ChangeResult: Equatable, Sendable {
         var title: String
@@ -40,16 +41,31 @@ final class Workbench {
 
     // MARK: apps
 
-    /// `liveSites: false` reads the cached site lists (no MariaDB needed).
+    /// `app list --json` now: the Refresh button, and after a change to the
+    /// apps. `liveSites: false` reads the cached site lists (no MariaDB needed).
     func loadApps(_ bench: BenchModel, liveSites: Bool = false) async {
-        guard let client = store.cliClient, !loadingApps.contains(bench.path) else { return }
-        loadingApps.insert(bench.path)
-        defer { loadingApps.remove(bench.path) }
-        do {
-            apps[bench.path] = try await client.apps(bench: bench.path, liveSites: liveSites)
-            appsError[bench.path] = nil
-        } catch {
-            appsError[bench.path] = error.localizedDescription
+        await askApps(bench, liveSites: liveSites, force: true)
+    }
+
+    /// The Apps page is on screen: the list is read (cached site lists)
+    /// unless there is one from this window session and nothing was done to
+    /// the bench since.
+    func showApps(_ bench: BenchModel) async {
+        guard store.pageMayAsk(about: bench) else { return }
+        await askApps(bench, liveSites: false, force: false)
+    }
+
+    private func askApps(_ bench: BenchModel, liveSites: Bool, force: Bool) async {
+        guard let client = store.cliClient else { return }
+        await appCalls.ask(bench.path, force: force, stamp: { store.stamp(for: bench) }) {
+            self.loadingApps.insert(bench.path)
+            defer { self.loadingApps.remove(bench.path) }
+            do {
+                self.apps[bench.path] = try await client.apps(bench: bench.path, liveSites: liveSites)
+                self.appsError[bench.path] = nil
+            } catch {
+                self.appsError[bench.path] = error.localizedDescription
+            }
         }
     }
 
@@ -96,6 +112,8 @@ final class Workbench {
             appsError[bench.path] = error.localizedDescription
             return
         }
+        // a list read before the pin is old now, even one still under way
+        bench.markChanged()
         await loadApps(bench)
     }
 
@@ -111,6 +129,7 @@ final class Workbench {
             appsError[bench.path] = error.localizedDescription
             return
         }
+        bench.markChanged()
         await loadApps(bench)
     }
 

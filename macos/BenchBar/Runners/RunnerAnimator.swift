@@ -22,9 +22,9 @@ final class RunnerAnimator {
     private var tint: CGColor
     /// Tinted frames for the current runner and tint, built on first use.
     private var tinted: [RunnerPose: [CGImage]] = [:]
-    /// When the current stumble ends, in media time, so a re-tint during
-    /// the alert pose does not stumble again.
-    private var stumbleEndsAt: CFTimeInterval = 0
+    /// When the current stumble or settle ends, in media time, so a re-tint
+    /// after it holds the still frame instead of playing it again.
+    private var finiteEndsAt: CFTimeInterval = 0
 
     static let animationKey = "frames"
 
@@ -57,16 +57,18 @@ final class RunnerAnimator {
     }
 
     /// Plays a plan; the same plan again is a no-op, so a crashed to paused
-    /// move (both stumble) does not start the stumble over.
+    /// move (both stumble) does not start the stumble over. A new plan (a
+    /// state change) plays from the start, settle loops included.
     func play(_ plan: RunnerPlan) {
         guard plan != self.plan else { return }
         self.plan = plan
-        stumbleEndsAt = 0
-        start(plan, stumbleDone: false)
+        finiteEndsAt = 0
+        start(plan, finished: false)
     }
 
     /// Speed of the running loop: 1 is idle, 12 is flat out. Other poses
-    /// keep their own pace.
+    /// keep their own pace. The layer plays no faster than
+    /// `RunnerPose.maxFPS` whatever the speed.
     func setSpeed(_ speed: Double) {
         let clamped = min(max(speed, SpeedMapping.range.lowerBound), SpeedMapping.range.upperBound)
         guard abs(clamped - self.speed) >= 0.05 else { return }
@@ -74,7 +76,7 @@ final class RunnerAnimator {
         applySpeed()
     }
 
-    /// Freezes the current frame (sleep, screen lock).
+    /// Freezes the current frame (sleep, screen lock, the menu bar hidden).
     func pause() {
         guard !isPaused else { return }
         isPaused = true
@@ -91,34 +93,35 @@ final class RunnerAnimator {
 
     private func replay() {
         guard let plan else { return }
-        start(plan, stumbleDone: CACurrentMediaTime() >= stumbleEndsAt)
+        start(plan, finished: CACurrentMediaTime() >= finiteEndsAt)
     }
 
-    private func start(_ plan: RunnerPlan, stumbleDone: Bool) {
+    private func start(_ plan: RunnerPlan, finished: Bool) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
 
         layer.removeAnimation(forKey: Self.animationKey)
-        let built = Self.animation(for: plan, frames: frames(for:), stumbleDone: stumbleDone)
+        let built = Self.animation(for: plan, frames: frames(for:), finished: finished)
         // the model value is what shows when no animation runs, and what a
-        // one shot animation (the stumble) settles on when it ends
+        // finite animation (the stumble, the settle loops) rests on when it ends
         layer.contents = built.rest
         applySpeed()
         if let animation = built.animation {
             layer.add(animation, forKey: Self.animationKey)
-            if case .stumble = plan, !stumbleDone {
-                stumbleEndsAt = CACurrentMediaTime() + animation.duration
+            if animation.repeatCount.isFinite, !finished {
+                finiteEndsAt = CACurrentMediaTime() + animation.duration * Double(animation.repeatCount)
             }
         }
     }
 
     /// The keyframe animation for a plan, and the frame to rest on.
     /// Static so tests can check it without a layer or a window.
+    /// `finished`: the stumble or the settle loops already played.
     nonisolated static func animation(
         for plan: RunnerPlan,
         frames: (RunnerPose) -> [CGImage],
-        stumbleDone: Bool = false
+        finished: Bool = false
     ) -> (animation: CAKeyframeAnimation?, rest: CGImage?) {
         switch plan {
         case .still(let pose):
@@ -132,10 +135,19 @@ final class RunnerAnimator {
             animation.repeatCount = .infinity
             return (animation, images[0])
 
+        case .settle(let pose, let times):
+            let images = frames(pose)
+            let rest = restFrame(pose, images)
+            guard images.count > 1, !finished else { return (nil, rest) }
+            let animation = keyframes(images, durations: Array(repeating: 1 / pose.baseFPS, count: images.count))
+            // removed when done (keyframes sets it): the layer shows `rest`
+            animation.repeatCount = Float(max(times, 1))
+            return (animation, rest)
+
         case .stumble(let times, let then):
             let alert = frames(then)
             let rest = restFrame(then, alert)
-            if stumbleDone { return (nil, rest) }
+            if finished { return (nil, rest) }
             let stumble = frames(.crashed)
             var images: [CGImage] = []
             var durations: [CFTimeInterval] = []
@@ -191,7 +203,8 @@ final class RunnerAnimator {
         if isPaused {
             target = 0
         } else if plan?.followsSpeed == true {
-            target = Float(speed)
+            // the speed keeps its 1 to 12 range; the layer stops at 30 fps
+            target = Float(min(speed, RunnerPose.maxFPS / RunnerPose.running.baseFPS))
         } else {
             target = 1
         }

@@ -10,12 +10,13 @@ nonisolated struct ResourceSample: Equatable, Sendable {
 
 /// The last ten minutes of a bench's CPU and memory, in memory only.
 ///
-/// Samples come from the store's status refreshes (every 30 seconds, every
-/// 5 while the popover is open), so the spacing is uneven; a chart plots
-/// them by time. The buffer is bounded twice: by age and by count.
+/// Samples come from the runner's speed loop (every 2 seconds for the bench
+/// that sets the speed), the charts' loop (every 5 seconds for another bench
+/// on screen) and the status refreshes, so the spacing is uneven; a chart
+/// plots them by time. The buffer is bounded twice: by age and by count.
 nonisolated struct ResourceHistory: Equatable, Sendable {
     static let window: TimeInterval = 10 * 60
-    /// One sample a second for ten minutes is far more than the polls make.
+    /// One sample a second for ten minutes is more than the loops make.
     static let capacity = 600
 
     private(set) var samples: [ResourceSample] = []

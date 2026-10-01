@@ -42,23 +42,19 @@ fl_bench_owner() {
   esac
 }
 
-# Resolves honcho in this order: PATH, pipx venv of frappe-bench, bench env.
-# Sets FL_HONCHO (absolute path) or leaves it empty.
+# Resolves honcho in this order: PATH, pipx venv of frappe-bench, uv tool,
+# bench env, the stored HONCHO_BIN. Sets FL_HONCHO (absolute path) or leaves
+# it empty. One candidate at a time: "pipx environment" starts Python, so it
+# runs only when honcho is not on PATH (a word list would expand them all).
+fl_honcho_try() { [[ -n "$1" && -x "$1" ]] && FL_HONCHO="$1"; }
 fl_honcho_resolve() {
-  local cand stored
   FL_HONCHO=""
-  stored="$(fl_bstate_get HONCHO_BIN 2>/dev/null || true)"
-  for cand in \
-    "$(command -v honcho 2>/dev/null || true)" \
-    "$(fl_pipx_home)/venvs/frappe-bench/bin/honcho" \
-    "$(fl_uv_tool_dir)/frappe-bench/bin/honcho" \
-    "$HOME/.local/pipx/venvs/frappe-bench/bin/honcho" \
-    "${FL_BENCH_DIR}/env/bin/honcho" \
-    "$stored"; do
-    [[ -n "$cand" && -x "$cand" ]] || continue
-    FL_HONCHO="$cand"
-    return 0
-  done
+  fl_honcho_try "$(command -v honcho 2>/dev/null || true)" && return 0
+  fl_honcho_try "$(fl_pipx_home)/venvs/frappe-bench/bin/honcho" && return 0
+  fl_honcho_try "$(fl_uv_tool_dir)/frappe-bench/bin/honcho" && return 0
+  fl_honcho_try "$HOME/.local/pipx/venvs/frappe-bench/bin/honcho" && return 0
+  fl_honcho_try "${FL_BENCH_DIR}/env/bin/honcho" && return 0
+  fl_honcho_try "$(fl_bstate_get HONCHO_BIN 2>/dev/null || true)" && return 0
   return 1
 }
 
@@ -95,6 +91,33 @@ fl_agent_target() {
 
 fl_agent_loaded() {
   launchctl print "$(fl_agent_target)" >/dev/null 2>&1
+}
+
+# fl_agent_read [TARGET]: one "launchctl print" of the agent, for status.
+# Sets AG_LOADED (1 when launchd knows the job), AG_STATE, AG_PID and
+# AG_EXIT, each the first line of that name, as fl_agent_field reads it.
+AG_LOADED=0; AG_STATE=""; AG_PID=""; AG_EXIT=""
+fl_agent_read() {
+  local target="${1:-}" out line k v rest
+  [[ -n "$target" ]] || target="$(fl_agent_target)"
+  AG_LOADED=0; AG_STATE=""; AG_PID=""; AG_EXIT=""
+  out="$(launchctl print "$target" 2>/dev/null)" || return 0
+  AG_LOADED=1
+  rest="$out"
+  while [[ -n "$rest" ]]; do
+    line="${rest%%$'\n'*}"
+    if [[ "$line" == "$rest" ]]; then rest=""; else rest="${rest#*$'\n'}"; fi
+    [[ "$line" == *" = "* ]] || continue
+    k="${line%%" = "*}"; k="${k#"${k%%[![:space:]]*}"}"
+    v="${line#*" = "}"; v="${v%%" = "*}"
+    v="${v#"${v%%[![:space:]]*}"}"; v="${v%"${v##*[![:space:]]}"}"
+    case "$k" in
+      state) [[ -n "$AG_STATE" ]] || AG_STATE="$v" ;;
+      pid) [[ -n "$AG_PID" ]] || AG_PID="$v" ;;
+      "last exit code") [[ -n "$AG_EXIT" ]] || AG_EXIT="$v" ;;
+    esac
+  done
+  return 0
 }
 
 # fl_agent_field FIELD [TARGET]: reads "state", "pid" or "last exit code".
@@ -189,8 +212,22 @@ fl_plist_label() {
        /<key>Label<\/key><string>/ { l = $0; sub(/.*<key>Label<\/key><string>/, "", l); sub(/<\/string>.*/, "", l); print l; exit }' "$file" 2>/dev/null
 }
 
+# The WorkingDirectory of a plist, read as the awk before 0.6.1 did: the
+# <string> on the key's line or the next one. In bash: fl_known_benches and
+# every agent label read it.
 fl_plist_working_dir() {
-  awk '/<key>WorkingDirectory<\/key>/ { l = $0; if (l !~ /<string>/) getline l; sub(/.*<string>/, "", l); sub(/<\/string>.*/, "", l); print l; exit }' "$1" 2>/dev/null
+  local line l="" next=0
+  [[ -f "$1" && -r "$1" ]] || return 0
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    if [[ "$next" == "1" ]]; then l="$line"; break; fi
+    if [[ "$line" == *"<key>WorkingDirectory</key>"* ]]; then
+      if [[ "$line" == *"<string>"* ]]; then l="$line"; break; fi
+      next=1
+    fi
+  done <"$1"
+  [[ -n "$l" ]] || return 0
+  l="${l##*<string>}"; l="${l%%</string>*}"
+  printf '%s\n' "$l"
 }
 
 # fl_plist_runner PLIST: the script the agent runs (the argument after /bin/bash).

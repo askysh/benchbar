@@ -20,6 +20,7 @@ Raycast extensions and the like can rely on it too.
 | `benchbar profile export\|import\|subscribe\|update\|remove\|check ... --json` | sharing team profiles (0.6), see [profile sharing](#profile-sharing) |
 | `benchbar lock check --json` | how the bench differs from its `benchbar.toml` (0.5) |
 | `<bench>/logs/.benchbar/state.json` | the last state transition, written by the runner and the CLI |
+| `<bench>/logs/.benchbar/heartbeat` | since 0.6.1: rewritten in place every 30 seconds while the runner runs; its mtime says the runner is alive |
 | `benchbar pull ... --json` | JSON lines while a production site is copied, see [pull](#benchbar-pull---json) |
 | `benchbar report --json` | where the redacted diagnostics zip went (0.5.5), see [report](#benchbar-report---json) |
 | `benchbar site backup NAME --json` | the backup just taken (0.5.8), see [site backups](#site-backups) |
@@ -62,7 +63,11 @@ How `status` decides (live facts win over the state file):
 
 1. Processes of this bench are running: `running` when the site answers
    any HTTP code, otherwise `starting`. A bench started by hand with
-   `benchfg` counts as running.
+   `benchfg` counts as running. While the runner's `state.json` says
+   `running` or `starting` and launchd runs that very pid, that is the
+   answer; otherwise one process scan looks for this bench's honcho,
+   serve, worker, schedule and socketio (0.6.1: port listeners alone no
+   longer count, a leftover Redis is not a running bench).
 2. The stop flag `logs/.bench-stopped` says `manual`: `stopped`.
 3. It says `crash`: `paused` with `crash`. Anything else: `paused` with `broken`.
 4. `state.json` says `crashed`: `crashed` (launchd is about to retry).
@@ -152,12 +157,12 @@ bench (`.benchbar/state.env`), the `WorkingDirectory` of every
 | `started_at` | string or null | when the current (or last) run started |
 | `last_exit_code` | number or null | exit code of the last run of honcho |
 | `web_url` | string | |
-| `web_ping_code` | number or null | HTTP code of `GET /api/method/ping` with the site as `Host`; `null` when nothing answered within 3 seconds |
+| `web_ping_code` | number or null | HTTP code of `GET /api/method/ping` with the site as `Host`; `null` when nothing answered. Asked only while processes run, with a 2 second limit (3 seconds before 0.6.1) |
 | `ports` | object | as in `list` |
 | `state_file`, `log` | string | paths |
 | `agent_loaded` | bool | the launchd agent is loaded |
 | `agent_state` | string or null | launchd's own word, for example `running` or `not running` |
-| `processes_running` | bool | any honcho, serve, worker, socketio or port listener of this bench |
+| `processes_running` | bool | any honcho, serve, worker, schedule or socketio process of this bench (before 0.6.1 a port listener counted too) |
 | `sites` | array | added in 0.4, see [Sites](#sites) |
 | `scheduler` | bool | added in 0.4: `Procfile.lean` runs `bench schedule` (`benchbar service --with-schedule`) |
 
@@ -184,7 +189,7 @@ carry the bench's sites, read from `sites/*/site_config.json`:
 | `name` | string | the site folder |
 | `default` | bool | the site `benchup` waits for, the runner pings and the app opens; `benchbar site default NAME` changes it (and runs `bench use`) |
 | `hosts_entry` | bool | `/etc/hosts` maps it to 127.0.0.1; `benchbar site hosts` adds the missing lines |
-| `ping_code` | number or null | HTTP code of `/api/method/ping` with this site as `Host`; `null` when nothing listens on the web port or nothing answered |
+| `ping_code` | number or null | HTTP code of `/api/method/ping` with this site as `Host`; `null` when nothing listens on the web port or nothing answered. Since 0.6.1 `list --json` and `status --json` leave it `null` (they are polled; `web_ping_code` is the default site's ping) unless `status --json --ping` asks every site once; `site list --json` always asks |
 
 `benchbar site list --json` prints `{"schema_version":1,"cli_version":..,"bench":..,"sites":[..]}`.
 
@@ -725,7 +730,7 @@ plus:
 
 | Field | Type | Notes |
 |---|---|---|
-| `updated_at` | string | when this transition was written |
+| `updated_at` | string | when this transition was written; it does not move between transitions (the heartbeat is its own file, below) |
 | `source` | string | `runner` (the launchd runner) or `cli` (`up`, `down`, `restart`) |
 
 Transitions the runner writes:
@@ -745,6 +750,26 @@ The CLI writes `starting` just before `up` and `restart` kick the agent,
 and `stopped` with `manual` after `down`. The state file is a hint for
 fast updates; `status --json` is the truth, because it also checks the
 processes and the site.
+
+## `logs/.benchbar/heartbeat`
+
+Since 0.6.1 the runner rewrites this file every 30 seconds while honcho
+runs, starting just before it writes `starting`. The write is in place
+(no temp file, no rename), so it changes no entry of the folder and a
+folder watcher is not woken by it; only the transitions in `state.json`
+are. The content is the runner's age in seconds, one line; read the
+file's modification time, not the content. The file stays after the
+runner stops.
+
+How a reader uses it, while `state.json` says `running` or `starting`:
+
+| The runner's `pid` | `heartbeat` mtime | Meaning |
+|---|---|---|
+| alive | under 90 seconds old | fresh: `state.json` is the truth, no need to ask the CLI |
+| alive | missing, 90 seconds or older, or dated more than 5 seconds in the future (a clock moved back; a beating runner rewrites it within 30 seconds) | a runner from before 0.6.1 (or one that hangs): ask `status --json`; `benchbar restart` gives the bench a runner that beats |
+| dead | any | the runner is gone without writing its last state: ask `status --json` |
+
+`benchbar doctor` reads the same file (check `runner_heartbeat`).
 
 ## Folder discovery
 

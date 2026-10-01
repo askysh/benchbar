@@ -95,6 +95,25 @@ struct StateMachineTests {
         #expect(machine.handle(.actionFinished(.restart, succeeded: false)) == [.refresh])
     }
 
+    /// The safety poll and the files repeat what is already known: nothing
+    /// may change, so the store writes nothing back and no view redraws.
+    @Test func theSameObservationAgainChangesNothing() {
+        var machine = BenchStateMachine()
+        let running = BenchStatus(schemaVersion: 1, bench: "/b", state: .running, pid: 4242, webPingCode: 200)
+        _ = machine.handle(.observed(running, .status))
+        let before = machine
+        #expect(machine.handle(.observed(running, .status)) == [])
+        #expect(machine == before)
+        #expect(machine.handle(.observed(running, .stateFile)) == [])
+        #expect(machine == before)
+        // a different answer with the same state still updates the status
+        var restarted = running
+        restarted.pid = 5151
+        #expect(machine.handle(.observed(restarted, .status)) == [])
+        #expect(machine.status?.pid == 5151)
+        #expect(machine.state == .running)
+    }
+
     @Test func missingCLIGoesUnknown() {
         var machine = BenchStateMachine()
         _ = machine.handle(.observed(status(.running), .status))

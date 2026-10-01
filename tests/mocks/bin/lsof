@@ -3,13 +3,20 @@
 # shellcheck source=tests/mocks/bin/_mocklib.sh
 . "$(dirname "$0")/_mocklib.sh"
 mock_log "$@"
-# "-a -p PID -d cwd -Fn": the working folder from $MOCK_STATE/cwd/PID, if any
+# "-a -p PID[,PID...] -d cwd -Fn": the working folder of every pid that has a
+# $MOCK_STATE/cwd/PID; like the real lsof, exit 1 when any pid had none
 if [[ " $* " == *" -d cwd "* ]]; then
-  pid=""; prev=""
-  for a in "$@"; do [[ "$prev" == "-p" ]] && pid="$a"; prev="$a"; done
-  [[ -f "${MOCK_STATE:?}/cwd/${pid}" ]] || exit 1
-  printf 'p%s\nfcwd\nn%s\n' "$pid" "$(cat "${MOCK_STATE}/cwd/${pid}")"
-  exit 0
+  pids=""; prev=""; rc=0
+  for a in "$@"; do [[ "$prev" == "-p" ]] && pids="$a"; prev="$a"; done
+  IFS=, read -r -a list <<<"$pids"
+  for pid in ${list[@]+"${list[@]}"}; do
+    if [[ -f "${MOCK_STATE:?}/cwd/${pid}" ]]; then
+      printf 'p%s\nfcwd\nn%s\n' "$pid" "$(cat "${MOCK_STATE}/cwd/${pid}")"
+    else
+      rc=1
+    fi
+  done
+  exit "$rc"
 fi
 ports=""; terse=0
 for a in "$@"; do

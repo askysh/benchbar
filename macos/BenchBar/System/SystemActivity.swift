@@ -20,15 +20,18 @@ nonisolated struct ActivityGate: Equatable, Sendable {
     }
 }
 
-/// Watches sleep, screen sleep, screen lock, fast user switching and the
-/// Reduce Motion setting, and reports changes.
+/// Watches sleep, screen sleep, screen lock, fast user switching, the
+/// Reduce Motion setting and Low Power Mode, and reports changes.
 final class SystemActivityMonitor {
     /// Called with true on wake (all reasons cleared), false on the first idle reason.
     var onActiveChange: ((Bool) -> Void)?
     var onReduceMotionChange: ((Bool) -> Void)?
+    var onLowPowerChange: ((Bool) -> Void)?
 
     private(set) var gate = ActivityGate()
     private(set) var reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+    /// Low Power Mode: the runner plays at speed 1, without its 2 second loop.
+    private(set) var lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
     private var tokens: [(NotificationCenter, NSObjectProtocol)] = []
 
     var isActive: Bool { gate.isActive }
@@ -57,6 +60,13 @@ final class SystemActivityMonitor {
             guard now != monitor.reduceMotion else { return }
             monitor.reduceMotion = now
             monitor.onReduceMotionChange?(now)
+        }
+
+        observe(NotificationCenter.default, .NSProcessInfoPowerStateDidChange) { monitor in
+            let now = ProcessInfo.processInfo.isLowPowerModeEnabled
+            guard now != monitor.lowPower else { return }
+            monitor.lowPower = now
+            monitor.onLowPowerChange?(now)
         }
     }
 

@@ -40,9 +40,13 @@ fl_kv_set() {
 }
 
 fl_kv_get() {
-  local file="$1" key="$2" raw
-  [[ -f "$file" ]] || return 0
-  raw="$(sed -n "s/^${key}=//p" "$file" | tail -n1)"
+  local file="$1" key="$2" raw="" line
+  [[ -f "$file" && -r "$file" ]] || return 0
+  # the last line for KEY wins (fl_kv_set appends); read in bash, as status
+  # and list do this a dozen times per call
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ "$line" == "${key}="* ]] && raw="${line#"${key}="}"
+  done <"$file"
   [[ -n "$raw" ]] || return 0
   # values are stored with %q; unquote the common forms
   eval "printf '%s\n' $raw"
@@ -74,9 +78,38 @@ FL_BENCH_KEYS="PROFILE SITE_NAME AUTOSTART HONCHO_BIN APP_BUNDLE APPS"
 # MARIADB_FORMULA, PORT_OFFSET and SCHEDULER are per bench too, but never
 # lived in state.env, so they need no fallback
 
-# The name a bench goes by in agent labels and state files: its folder name.
+# The name a bench goes by in agent labels and state files: its folder name,
+# every character outside A-Za-z0-9._- turned into "-" (what
+# `basename | tr -c 'A-Za-z0-9._\n-' '-'` gave before 0.6.1). The characters
+# are listed one by one: in bash 3.2 a range follows the locale's collation
+# and would keep an "é" that tr replaces, which would rename state files.
+FL_NAME_CHARS="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
+fl_bench_name_v() {
+  local __n="$2"
+  while [[ "$__n" == */ && "$__n" != / ]]; do __n="${__n%/}"; done
+  [[ "$__n" == / ]] || __n="${__n##*/}"
+  printf -v "$1" '%s' "${__n//[!${FL_NAME_CHARS}]/-}"
+}
 fl_bench_name_of() {
-  basename "$1" | tr -c 'A-Za-z0-9._\n-' '-'
+  local name
+  fl_bench_name_v name "$1"
+  printf '%s\n' "$name"
+}
+
+# fl_path_hash_v VAR PATH: the 8 hex digits of `cksum` of PATH, which name
+# state files and agent labels. One process; FL_BENCH_HASH keeps the current
+# bench's for the rest of the run.
+fl_path_hash_v() {
+  local __crc __rest
+  read -r __crc __rest < <(printf '%s' "$2" | cksum)
+  printf -v "$1" '%08x' "$__crc"
+}
+FL_BENCH_HASH=""
+FL_BENCH_HASH_DIR=""
+fl_bench_hash_prime() {
+  [[ "$FL_BENCH_HASH_DIR" == "$FL_BENCH_DIR" && -n "$FL_BENCH_HASH" ]] && return 0
+  fl_path_hash_v FL_BENCH_HASH "$FL_BENCH_DIR"
+  FL_BENCH_HASH_DIR="$FL_BENCH_DIR"
 }
 
 # <name>-<8 hex of the full path>.env: ~/frappe-bench and ~/dev/frappe-bench
@@ -87,6 +120,8 @@ fl_bench_name_of() {
 # exists and is renamed by the next write.
 fl_bench_canonical() {
   local parent real
+  # the current bench, found by fl_bench_detect, is canonical already
+  if [[ -n "$1" && "$1" == "${FL_BENCH_DIR_CANON:-}" ]]; then printf '%s' "$1"; return 0; fi
   # printf, not pwd's own output: the hash must not depend on a newline
   if [[ -d "$1" ]] && real="$(cd "$1" 2>/dev/null && pwd -P)"; then printf '%s' "$real"; return 0; fi
   # not created yet (phase 01 records it before bench init): resolve the parent
@@ -95,10 +130,11 @@ fl_bench_canonical() {
 }
 
 fl_bench_state_file_for() {
-  local h real
+  local h real name
   real="$(fl_bench_canonical "$1")"
-  h="$(printf '%s' "$real" | cksum | awk '{printf "%08x", $1}')"
-  printf '%s/benches/%s-%s.env' "$FL_STATE_DIR" "$(fl_bench_name_of "$real")" "$h"
+  if [[ "$real" == "$FL_BENCH_HASH_DIR" && -n "$FL_BENCH_HASH" ]]; then h="$FL_BENCH_HASH"; else fl_path_hash_v h "$real"; fi
+  fl_bench_name_v name "$real"
+  printf '%s/benches/%s-%s.env' "$FL_STATE_DIR" "$name" "$h"
 }
 
 # fl_same_path A B: one bench, however either path is spelled (a stored
@@ -126,7 +162,21 @@ fl_bench_state_file_old() { printf '%s/benches/%s.env' "$FL_STATE_DIR" "$(fl_ben
 # fl_bstate_get_for DIR KEY: the bench's own value, else the pre 0.4 global
 # one when DIR is the default bench.
 fl_bstate_get_for() {
-  local dir="$1" key="$2" v file
+  local dir="$1" key="$2" v file i
+  if [[ -n "$dir" && "$dir" == "$FL_BS_DIR" ]]; then
+    v=""
+    for ((i = 0; i < ${#FL_BS_KEYS[@]}; i++)); do
+      [[ "${FL_BS_KEYS[$i]}" == "$key" ]] && v="${FL_BS_VALS[$i]}"
+    done
+    # values are stored with %q, as in fl_kv_get
+    [[ -n "$v" ]] && eval "printf -v v '%s' $v"
+    if [[ -z "$v" && "$FL_BS_DEFAULT" == "1" ]]; then
+      case " $FL_BENCH_KEYS " in *" $key "*) v="$(fl_state_get "$key")" ;; esac
+    fi
+    printf '%s' "$v"
+    [[ -n "$v" ]] && printf '\n'
+    return 0
+  fi
   file="$(fl_bench_state_file_for "$dir")"
   # the plain <name>.env of the first 0.4 builds: claimed only when no other
   # bench could own it (the default bench, or the only one with that name)
@@ -142,9 +192,36 @@ fl_bstate_get_for() {
 
 fl_bstate_set_for() {
   local file old
+  # a primed read cache of this bench is stale from here on
+  [[ "$1" == "$FL_BS_DIR" ]] && FL_BS_DIR=""
   file="$(fl_bench_state_file_for "$1")"; old="$(fl_bench_state_file_old "$1")"
   if [[ ! -f "$file" && -f "$old" && "${FL_DRY_RUN:-0}" != "1" ]] && fl_bench_owns_old_file "$1"; then mv "$old" "$file"; fi
   fl_kv_set "$file" "$2" "$3"
+}
+
+# fl_bstate_prime: the current bench's state file read once, for the read
+# only commands (status, list, ports check; FL_CONTEXT_LIGHT=1). Every
+# fl_bstate_get of that bench then answers from FL_BS_*, with the same
+# fallbacks as a read of the file. Commands that write never prime: a cache
+# could miss a write made in a subshell.
+FL_BS_DIR=""
+FL_BS_DEFAULT=0
+FL_BS_KEYS=()
+FL_BS_VALS=()
+fl_bstate_prime() {
+  local file line
+  FL_BS_DIR=""; FL_BS_DEFAULT=0; FL_BS_KEYS=(); FL_BS_VALS=()
+  [[ "${FL_CONTEXT_LIGHT:-0}" == "1" && -n "$FL_BENCH_DIR" ]] || return 0
+  file="$(fl_bench_state_file_for "$FL_BENCH_DIR")"
+  if [[ ! -f "$file" ]] && fl_bench_owns_old_file "$FL_BENCH_DIR"; then file="$(fl_bench_state_file_old "$FL_BENCH_DIR")"; fi
+  if [[ -f "$file" && -r "$file" ]]; then
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      [[ "$line" == *=* ]] || continue
+      FL_BS_KEYS+=("${line%%=*}"); FL_BS_VALS+=("${line#*=}")
+    done <"$file"
+  fi
+  fl_same_path "$(fl_state_get BENCH_DIR)" "$FL_BENCH_DIR" && FL_BS_DEFAULT=1
+  FL_BS_DIR="$FL_BENCH_DIR"
 }
 
 # The current bench (FL_BENCH_DIR).

@@ -12,8 +12,19 @@
 # path, so their command lines are the same in every bench and only the
 # working folder tells them apart.
 
+# A backslash before every ERE special character, in bash: the same text
+# `sed 's/[][\.*^$+?(){}|\\]/\\&/g'` gives (the rendered runner embeds it, so
+# a different byte would mark every runner outdated), without a process.
 fl_regex_escape() {
-  printf '%s' "$1" | sed -e 's/[][\.*^$+?(){}|\\]/\\&/g'
+  local s="$1" out="" c i
+  for ((i = 0; i < ${#s}; i++)); do
+    c="${s:i:1}"
+    case "$c" in
+      '['|']'|\\|'.'|'*'|'^'|'$'|'+'|'?'|'('|')'|'{'|'}'|'|') out="${out}\\${c}" ;;
+      *) out="${out}${c}" ;;
+    esac
+  done
+  printf '%s' "$out"
 }
 
 fl_bench_helper_pattern() {
@@ -69,6 +80,47 @@ fl_bench_process_pids() {
 
 fl_bench_is_running() {
   [[ -n "$(fl_bench_process_pids)" ]]
+}
+
+# fl_bench_status_pids: this bench's honcho, then its serve, worker,
+# schedule and socketio pids, one per line, from one pgrep and at most one
+# lsof for the folders of them all. status uses it only when state.json
+# cannot say; down and the port checks keep the full scan above, listeners
+# included. No pattern carries the bench's path: a Homebrew Python
+# re-executes itself, so serve's command line starts with the framework's
+# interpreter, not <bench>/env/bin/python. The folder decides instead:
+# honcho and socketio run in the bench, serve and the workers in its sites/.
+fl_bench_status_pids() {
+  local found line pid cmd all="" honcho=" " keep=" " cwds="" cur="" first="" rest=""
+  found="$(pgrep -lf 'honcho start -f Procfile\.lean|-m frappe\.utils\.bench_helper frappe (serve|worker|schedule)|apps/frappe/socketio\.js' 2>/dev/null)" || return 0
+  while IFS= read -r line; do
+    pid="${line%% *}"; cmd="${line#* }"
+    [[ "$pid" =~ ^[0-9]+$ ]] || continue
+    all="${all:+${all},}${pid}"
+    [[ "$cmd" == *"honcho start -f Procfile.lean"* ]] && honcho="${honcho}${pid} "
+  done <<<"$found"
+  [[ -n "$all" ]] || return 0
+  # only a pid whose folder lsof reports inside the bench counts: the one
+  # pgrep sees every bench's processes, and one that exited before lsof (or
+  # whose folder cannot be read) proves nothing. status only reads; down and
+  # the port checks keep their own scan.
+  cwds="$(lsof -a -d cwd -Fn -p "$all" 2>/dev/null || true)"
+  while IFS= read -r line; do
+    case "$line" in
+      p*) cur="${line#p}" ;;
+      n*)
+        case "${line#n}" in
+          "$FL_BENCH_DIR"|"$FL_BENCH_DIR"/*) if [[ -n "$cur" ]]; then keep="${keep}${cur} "; fi ;;
+        esac ;;
+    esac
+  done <<<"$cwds"
+  # honcho first: status falls back to the first pid, and the app samples
+  # CPU and memory from it down
+  for pid in ${all//,/ }; do
+    case "$keep" in *" $pid "*) ;; *) continue ;; esac
+    case "$honcho" in *" $pid "*) first="${first}${pid}"$'\n' ;; *) rest="${rest}${pid}"$'\n' ;; esac
+  done
+  printf '%s%s' "$first" "$rest"
 }
 
 # fl_bench_kill_processes [SIGNAL]

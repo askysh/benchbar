@@ -14,15 +14,18 @@ final class LogViewModel {
     var showPrevious = false { didSet { if oldValue != showPrevious { restart() } } }
     private(set) var currentMatch: Int?
     /// Bumped on every change the text view must redraw for (not per line).
+    /// New lines are not a change: the view appends what follows the last
+    /// line it drew (`visible(after:)`), so drawing never writes to the model.
     private(set) var changes = 0
-    /// Lines added since the last full redraw, appended by the view as is.
-    private(set) var appended: [LogLine] = []
 
     @ObservationIgnored private var tailer: LogTailer?
+    @ObservationIgnored private let capacity: Int
 
-    init(benchName: String, benchPath: String) {
+    init(benchName: String, benchPath: String, capacity: Int = 5000) {
         self.benchName = benchName
         self.benchPath = benchPath
+        self.capacity = capacity
+        buffer = LogBuffer(capacity: capacity)
     }
 
     var fileURL: URL {
@@ -30,6 +33,15 @@ final class LogViewModel {
     }
 
     var visible: [LogLine] { query.visible(buffer.lines) }
+    /// The visible lines that came after line `id`, oldest first. The
+    /// buffer's ids grow by one per line, so this is an index, not a search.
+    func visible(after id: Int) -> [LogLine] {
+        let lines = buffer.lines
+        guard let first = lines.first?.id else { return [] }
+        let start = max(0, id - first + 1)
+        guard start < lines.count else { return [] }
+        return query.visible(Array(lines[start...]))
+    }
     var matches: [Int] { query.matches(in: visible) }
     var searchSummary: String {
         SearchText.describe(current: currentMatch, total: matches.count, searching: !query.search.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -57,27 +69,18 @@ final class LogViewModel {
 
     func clear() {
         buffer.clear()
-        appended = []
         changes += 1
     }
 
-    /// The view drew `appended`; forget it.
-    func consumeAppended() { appended = [] }
-
     private func restart() {
         tailer?.stop()
-        buffer = LogBuffer()
-        appended = []
+        buffer = LogBuffer(capacity: capacity)
         currentMatch = nil
         let tailer = LogTailer(url: fileURL, onLines: { [weak self] chunk in
-            guard let self else { return }
-            let added = self.buffer.append(chunk)
-            self.appended.append(contentsOf: added.filter(self.query.shows))
+            self?.buffer.append(chunk)
         }, onReset: { [weak self] in
-            guard let self else { return }
             // the runner started a new log: keep what was shown, mark the cut
-            let added = self.buffer.append("--- log restarted ---\n")
-            self.appended.append(contentsOf: added)
+            self?.buffer.append("--- log restarted ---\n")
         })
         self.tailer = tailer
         tailer.start()

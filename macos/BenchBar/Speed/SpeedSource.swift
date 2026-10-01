@@ -8,14 +8,22 @@ nonisolated struct SpeedTarget: Equatable, Sendable {
     var ports: BenchPorts?
 }
 
+/// One look at a bench by a speed source.
+nonisolated struct SpeedReading: Sendable {
+    /// A raw speed from 1 (idle) to 12 for this moment, or nil when the
+    /// source cannot tell yet (the first CPU sample only sets a baseline).
+    var speed: Double?
+    /// The process tree the speed came from, when the source reads one: the
+    /// bench's resource history takes it, so one libproc read feeds both.
+    var snapshot: ProcessTree.Snapshot?
+}
+
 /// Something that turns a bench's load into a runner speed.
 ///
 /// v1 has one source, CPU use of the bench's process tree. Queue depth and
 /// requests per second (v0.3) plug in here without touching the animator.
 nonisolated protocol SpeedSource: Sendable {
-    /// A raw speed from 1 (idle) to 12 for this moment, or nil when the
-    /// source cannot tell yet (the first CPU sample only sets a baseline).
-    func sample(_ target: SpeedTarget) async -> Double?
+    func sample(_ target: SpeedTarget) async -> SpeedReading
 }
 
 nonisolated enum SpeedMapping {
