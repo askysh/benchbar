@@ -172,6 +172,13 @@ budget lsof 1 "status, serve by hand"
 { grep -v -E '^5001 ' "$MOCK_PROCS" || true; } >"$MOCK_PROCS.tmp"; mv "$MOCK_PROCS.tmp" "$MOCK_PROCS"
 run_fm status --json --bench-dir "$BENCH"
 assert_eq "stopped False" "$(status_of 'd["state"], d["processes_running"]')"
+# a candidate whose folder lsof does not report (it exited between pgrep
+# and lsof, or another bench's) is not this bench's: status keeps only
+# pids proven to run inside the bench
+add_proc 5004 "honcho start -f Procfile.lean"
+run_fm status --json --bench-dir "$BENCH"
+assert_eq "stopped False" "$(status_of 'd["state"], d["processes_running"]')" "(an unproven pid does not make the bench run)"
+{ grep -v -E '^5004 ' "$MOCK_PROCS" || true; } >"$MOCK_PROCS.tmp"; mv "$MOCK_PROCS.tmp" "$MOCK_PROCS"
 
 # ---- the pid of a bench without its agent is honcho's, the root of the
 # tree the app samples, even with a lower serve pid

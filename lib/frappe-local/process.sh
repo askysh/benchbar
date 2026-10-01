@@ -91,7 +91,7 @@ fl_bench_is_running() {
 # interpreter, not <bench>/env/bin/python. The folder decides instead:
 # honcho and socketio run in the bench, serve and the workers in its sites/.
 fl_bench_status_pids() {
-  local found line pid cmd all="" honcho=" " drop=" " cwds="" cur="" first="" rest=""
+  local found line pid cmd all="" honcho=" " keep=" " cwds="" cur="" first="" rest=""
   found="$(pgrep -lf 'honcho start -f Procfile\.lean|-m frappe\.utils\.bench_helper frappe (serve|worker|schedule)|apps/frappe/socketio\.js' 2>/dev/null)" || return 0
   while IFS= read -r line; do
     pid="${line%% *}"; cmd="${line#* }"
@@ -100,22 +100,24 @@ fl_bench_status_pids() {
     [[ "$cmd" == *"honcho start -f Procfile.lean"* ]] && honcho="${honcho}${pid} "
   done <<<"$found"
   [[ -n "$all" ]] || return 0
-  # a pid lsof cannot answer for (it just exited) is kept, as fl_pids_in_bench does
+  # only a pid whose folder lsof reports inside the bench counts: the one
+  # pgrep sees every bench's processes, and one that exited before lsof (or
+  # whose folder cannot be read) proves nothing. status only reads; down and
+  # the port checks keep their own scan.
   cwds="$(lsof -a -d cwd -Fn -p "$all" 2>/dev/null || true)"
   while IFS= read -r line; do
     case "$line" in
       p*) cur="${line#p}" ;;
       n*)
         case "${line#n}" in
-          "$FL_BENCH_DIR"|"$FL_BENCH_DIR"/*) ;;
-          *) [[ -n "$cur" ]] && drop="${drop}${cur} " ;;
+          "$FL_BENCH_DIR"|"$FL_BENCH_DIR"/*) if [[ -n "$cur" ]]; then keep="${keep}${cur} "; fi ;;
         esac ;;
     esac
   done <<<"$cwds"
   # honcho first: status falls back to the first pid, and the app samples
   # CPU and memory from it down
   for pid in ${all//,/ }; do
-    case "$drop" in *" $pid "*) continue ;; esac
+    case "$keep" in *" $pid "*) ;; *) continue ;; esac
     case "$honcho" in *" $pid "*) first="${first}${pid}"$'\n' ;; *) rest="${rest}${pid}"$'\n' ;; esac
   done
   printf '%s%s' "$first" "$rest"

@@ -67,7 +67,7 @@ assert_eq "crashed crash 3 2026-09-23T10:00:00Z" "$(status_field 'd["state"], d[
 
 # processes up but the site does not answer yet
 set_agent com.benchbar.frappe-bench running 4242 0
-add_proc 4242 "honcho start -f Procfile.lean"
+add_proc 4242 "honcho start -f Procfile.lean" "$BENCH"
 assert_eq "starting 4242 None" "$(status_field 'd["state"], d["pid"], d["web_ping_code"]' | tr -d "(),'")"
 export MOCK_CURL_CODE=200
 assert_eq "running 4242 200 None" "$(status_field 'd["state"], d["pid"], d["web_ping_code"], d["stop_reason"]' | tr -d "(),'")"
