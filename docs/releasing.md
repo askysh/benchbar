@@ -152,7 +152,7 @@ export BENCHBAR_TEAM_ID=TEAMID
 export NOTARY_KEY_PATH=~/keys/AuthKey_ABC123.p8 NOTARY_KEY_ID=ABC123 NOTARY_ISSUER_ID=...
 export SPARKLE_ED_KEY_PATH=~/keys/sparkle_ed.key BENCHBAR_SPARKLE_PUBLIC_KEY=...
 scripts/macos-release.sh --check      # tools, settings, identity, version
-scripts/macos-release.sh 0.3.0
+scripts/macos-release.sh 0.3.0        # NOTARY_TIMEOUT=2h for a slow first notarization
 gh release create v0.3.0 dist/* --title "BenchBar 0.3.0" --draft
 ```
 

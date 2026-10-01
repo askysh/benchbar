@@ -369,3 +369,10 @@ Asked for after the phases, to stop naming drift before the first release.
 - `perform` returns the error text like `runChange` does, nil on success: the sheet says why the bench did not start.
 - `canChange` is the one busy guard: the actions, the window's buttons and Repair… ask it. It also counts a change held by another model of the same path (a bench being set up), and Repair… now waits while the bench starts or stops; both used to reach the CLI's lock and fail there.
 - The uptime helper counts its 30 second schedule from the run's start, not `.now`: the popover's header redraws every 2 seconds while open, and a schedule from `.now` is a new one on every redraw.
+
+## 0.6.1: the first signed release
+
+- The Developer ID build re-signs Sparkle's helpers itself, inside out (Installer.xpc, Downloader.xpc with its entitlements kept, Autoupdate, Updater.app, the framework), then the app with BenchBar.entitlements only: xcodebuild signs the framework it embeds but leaves the helpers on Sparkle's own signature, and Apple refused the first submission for all four (no Developer ID, no secure timestamp).
+- `CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO` for the Developer ID build: a plain Release `xcodebuild build` adds `get-task-allow`, which notarization refuses.
+- The release script reads the notarization status instead of trusting notarytool's exit code, which is 0 on Invalid, and prints Apple's log when it is not Accepted.
+- Each notarization waits up to 50 minutes (`NOTARY_TIMEOUT`) and the release job up to 120: Apple held the team's first accepted submission for over 30 minutes.
