@@ -149,6 +149,43 @@ struct TwoBenchStoreTests {
         #expect(c == .none)
     }
 
+    /// One helper says which of Start, Stop and Restart work, and one
+    /// whether a change may start: the popover, the page, the context menu
+    /// and every busy guard ask the same.
+    @Test func oneHelperForTheButtonsAndOneForTheGuards() async throws {
+        let store = try await store(v15: "running", v16: "stopped")
+        let first = try #require(store.benches.first { $0.path == v15 })
+        let second = try #require(store.benches.first { $0.path == v16 })
+        #expect(store.controls(for: first) == BenchControls(canStop: true, canRestart: true))
+        #expect(store.controls(for: second) == BenchControls(canStart: true))
+        #expect(store.canChange(first) && store.canChange(second))
+
+        // a restart under way: its button spins, nothing else may start
+        var machine = first.machine
+        _ = machine.handle(.actionStarted(.restart))
+        first.machine = machine
+        #expect(first.isBusy && store.busyBench === first)
+        #expect(store.controls(for: first) == BenchControls(busy: .restart))
+        #expect(store.controls(for: second) == .none)
+        #expect(!store.canChange(first) && !store.canChange(second))
+        _ = machine.handle(.actionFinished(.restart, succeeded: true))
+        first.machine = machine
+
+        // a change from the window on the other bench
+        second.activity = "Add an app"
+        #expect(store.controls(for: first) == .none)
+        #expect(!store.canChange(first) && !store.canChange(second))
+        second.activity = nil
+        #expect(store.canChange(first) && store.canChange(second))
+
+        // a change through another model of the same path (a bench being set up)
+        _ = await store.runChange("Set up", on: BenchModel(summary: first.summary)) { _ throws(CLIError) in
+            #expect(store.controls(for: first) == .none)
+            #expect(!store.canChange(first))
+        }
+        #expect(store.canChange(first))
+    }
+
     @Test func aSecondSchedulerChangeWaitsForTheFirst() async throws {
         let store = try await store(v15: "stopped", v16: "stopped")
         base.cli.answer("service", json: "")

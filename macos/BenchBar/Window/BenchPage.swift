@@ -106,9 +106,7 @@ struct BenchOverview: View {
                     .help("bench --site \(bench.summary.site) mariadb, in Terminal, with the site's own database user")
                 }
                 if let since = bench.runningSince {
-                    TimelineView(.periodic(from: .now, by: 30)) { context in
-                        LabeledContent("Up for", value: BenchText.uptime(since: since, now: context.date))
-                    }
+                    Uptime(since: since) { LabeledContent("Up for", value: $0) }
                 }
                 if let error = bench.lastError ?? bench.refreshError {
                     Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled)
@@ -139,7 +137,7 @@ struct BenchOverview: View {
                     Text(bench.schedulerOn == nil ? "Needs benchbar 0.4 or later"
                          : "Runs scheduled jobs (bench schedule) in the background. Changing it restarts a running bench.")
                 }
-                .disabled(bench.schedulerOn == nil || !controlsIdle)
+                .disabled(bench.schedulerOn == nil || !store.canChange(bench))
             }
 
         }
@@ -169,10 +167,6 @@ struct BenchOverview: View {
         portSetup = run
         Task { await run.loadPlan() }
     }
-
-    private var controlsIdle: Bool {
-        bench.pending == nil && !bench.isChangingScheduler && bench.activity == nil && !store.waitsForOtherBench(bench)
-    }
 }
 
 // MARK: sites
@@ -185,9 +179,7 @@ struct BenchSites: View {
     @State private var showHostsInstructions = false
     @State private var dropping: String?
 
-    private var busy: Bool {
-        bench.pending != nil || bench.isChangingScheduler || bench.activity != nil || store.waitsForOtherBench(bench)
-    }
+    private var busy: Bool { !store.canChange(bench) }
 
     var body: some View {
         let rows = bench.siteRows

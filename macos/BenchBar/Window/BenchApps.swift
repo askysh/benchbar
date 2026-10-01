@@ -9,9 +9,7 @@ struct BenchApps: View {
     @State private var adding = false
     @State private var updating: AppInfo?
 
-    private var busy: Bool {
-        bench.pending != nil || bench.isChangingScheduler || bench.activity != nil || store.waitsForOtherBench(bench)
-    }
+    private var busy: Bool { !store.canChange(bench) }
     private var siteNames: [String] { bench.siteRows.map(\.name) }
 
     var body: some View {
@@ -38,6 +36,7 @@ struct BenchApps: View {
                     Button { Task { await workbench.loadApps(bench, liveSites: true) } } label: {
                         Label("Refresh", systemImage: "arrow.clockwise")
                     }
+                    .disabled(workbench.loadingApps.contains(bench.path))
                     .help("Ask bench which sites have which app (needs MariaDB)")
                     Button { Task { await workbench.checkRemotes(bench) } } label: {
                         Label("Check Remotes", systemImage: "arrow.down.circle")
@@ -54,7 +53,8 @@ struct BenchApps: View {
             }
         }
         .formStyle(.grouped)
-        .task(id: bench.path) { await workbench.loadApps(bench) }
+        // kept for the window session, like Health's doctor report
+        .task(id: store.stamp(for: bench)) { await workbench.showApps(bench) }
         .sheet(isPresented: $adding) {
             AddAppSheet(bench: bench, sites: siteNames) { source, branch, site in
                 adding = false

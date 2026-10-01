@@ -181,3 +181,195 @@ struct WorkbenchTests {
         #expect(message.contains("No bench"))
     }
 }
+
+/// Doctor and the app list are asked for on demand by the window's pages,
+/// and kept per bench for the window session.
+@Suite("Window session: doctor and the app list", .serialized)
+struct OnDemandTests {
+    let base: BenchStoreTests
+
+    init() throws { base = try BenchStoreTests() }
+
+    func count(_ command: String) -> Int { base.cli.calls.filter { $0.first == command }.count }
+
+    func store() async throws -> (BenchStore, Workbench, BenchModel) {
+        base.cli.answer("list", json: base.listJSON())
+        base.cli.answer("status", json: base.statusJSON("stopped", reason: "manual"))
+        base.cli.answer("doctor", json: try Fixture.string("doctor"))
+        base.cli.answer("app", json: try Fixture.string("app-list"))
+        base.cli.answer("up", .ok("[OK] bench is up"))
+        base.cli.answer("down", .ok("[OK] bench is down"))
+        let store = base.makeStore()
+        await store.start(polling: false)
+        return (store, Workbench(store: store), try #require(store.selected))
+    }
+
+    func show(_ store: BenchStore, _ workbench: Workbench, _ bench: BenchModel) async {
+        await store.showDoctor(on: bench)
+        await workbench.showApps(bench)
+    }
+
+    /// Switching tabs, or between benches, and back asks nothing again.
+    @Test func aPageShownAgainKeepsItsAnswer() async throws {
+        let (store, workbench, bench) = try await store()
+        await show(store, workbench, bench)
+        #expect(count("doctor") == 0 && count("app") == 0, "the window is not open: its pages live on, but ask nothing")
+
+        store.setWindow(WindowSight(isOpen: true, isVisible: true))
+        await show(store, workbench, bench)
+        #expect(count("doctor") == 1 && count("app") == 1)
+        #expect(bench.doctor != nil && workbench.apps[bench.path] != nil)
+        #expect(base.cli.calls.contains(["app", "list", "--json", "--no-sites", "--bench-dir", base.benchPath]))
+        await show(store, workbench, bench)
+        await show(store, workbench, bench)
+        #expect(count("doctor") == 1 && count("app") == 1)
+    }
+
+    /// Run Doctor and Refresh always ask, window or not.
+    @Test func theButtonsAlwaysAsk() async throws {
+        let (store, workbench, bench) = try await store()
+        await store.runDoctor(on: bench)
+        await store.runDoctor(on: bench)
+        await workbench.loadApps(bench, liveSites: true)
+        #expect(count("doctor") == 2)
+        #expect(base.cli.calls.contains(["app", "list", "--json", "--bench-dir", base.benchPath]), "Refresh asks MariaDB")
+    }
+
+    /// An action on the bench makes its answers old, and so does the next
+    /// window session; a closed window asks nothing meanwhile.
+    @Test func anActionOrTheNextSessionAsksAgain() async throws {
+        let (store, workbench, bench) = try await store()
+        store.setWindow(WindowSight(isOpen: true, isVisible: true))
+        await show(store, workbench, bench)
+        let before = store.stamp(for: bench)
+
+        await store.perform(.up, on: bench)
+        #expect(store.stamp(for: bench) != before, "the page's task id moves")
+        await show(store, workbench, bench)
+        await show(store, workbench, bench)
+        #expect(count("doctor") == 2 && count("app") == 2)
+
+        store.setWindow(WindowSight())
+        await store.perform(.down, on: bench)
+        await show(store, workbench, bench)
+        #expect(count("doctor") == 2 && count("app") == 2, "closed: nothing")
+
+        store.setWindow(WindowSight(isOpen: true, isVisible: false))
+        await show(store, workbench, bench)
+        #expect(count("doctor") == 3 && count("app") == 3, "a new session asks once")
+        await show(store, workbench, bench)
+        #expect(count("doctor") == 3 && count("app") == 3)
+    }
+
+    /// While a change runs on the bench its pages wait; the end of the
+    /// change moves the stamp, and that asks.
+    @Test func aPageWaitsWhileItsBenchChanges() async throws {
+        let (store, workbench, bench) = try await store()
+        store.setWindow(WindowSight(isOpen: true, isVisible: true))
+        bench.activity = "Add an app"
+        await show(store, workbench, bench)
+        #expect(count("doctor") == 0 && count("app") == 0)
+        bench.activity = nil
+        await show(store, workbench, bench)
+        #expect(count("doctor") == 1 && count("app") == 1)
+    }
+
+    /// Every change from the window ends by making the bench's answers old:
+    /// a site, the scheduler, a focus pin, a fetch of the remotes. The last
+    /// two read the app list themselves, under the new stamp.
+    @Test func everyChangeFromTheWindowAsksAgain() async throws {
+        let (store, workbench, bench) = try await store()
+        base.cli.answer("site", .ok("[OK] site added"))
+        base.cli.answer("service", json: "")
+        store.setWindow(WindowSight(isOpen: true, isVisible: true))
+        await show(store, workbench, bench)
+        var doctor = 1, apps = 1
+        let changes: [(name: String, listsApps: Bool, run: () async -> Void)] = [
+            ("a site", false, { await workbench.addSite("two.localhost", adminPassword: "x", on: bench) }),
+            ("a raw change", false, { _ = await store.runChange("Something", on: bench) { _ throws(CLIError) in } }),
+            ("the scheduler", false, { await store.setScheduler(true, on: bench) }),
+            ("a focus pin", true, { await workbench.setFocus(.ignore, app: "erpnext", on: bench) }),
+            ("Check Remotes", true, { await workbench.checkRemotes(bench) }),
+        ]
+        for change in changes {
+            let before = store.stamp(for: bench)
+            await change.run()
+            #expect(store.stamp(for: bench) != before, "\(change.name) moves the stamp")
+            if change.listsApps { apps += 1 }
+            await show(store, workbench, bench)
+            doctor += 1
+            if !change.listsApps { apps += 1 }
+            #expect(count("doctor") == doctor, "\(change.name): doctor asks again")
+            #expect(appLists() == apps, "\(change.name): the app list is read once more")
+        }
+    }
+
+    func appLists() -> Int { base.cli.calls.filter { $0.starts(with: ["app", "list"]) }.count }
+
+    /// After a change to the apps the list is read with the live site lists,
+    /// even though the page asks too when the change ends.
+    @Test func aChangeToTheAppsReadsTheLiveSites() async throws {
+        let (store, workbench, bench) = try await store()
+        store.setWindow(WindowSight(isOpen: true, isVisible: true))
+        await workbench.showApps(bench)
+        await workbench.addApp("hrms", branch: "", site: nil, on: bench)
+        await workbench.showApps(bench)
+        let lists = base.cli.calls.filter { $0.starts(with: ["app", "list"]) }
+        #expect(lists.count == 2)
+        #expect(lists.last == ["app", "list", "--json", "--bench-dir", base.benchPath])
+    }
+
+    /// The person switches tab while doctor runs: SwiftUI cancels the page's
+    /// task, but not the call, which finishes; its answer is kept. Coming
+    /// back meanwhile joins the call instead of starting another.
+    @Test func aCancelledPageDoesNotStopItsCall() async throws {
+        let held = HeldCLI(["list": base.listJSON(), "status": base.statusJSON("stopped", reason: "manual"),
+                            "doctor": try Fixture.string("doctor")], holding: ["doctor"])
+        let store = base.makeStore(runner: held)
+        await store.start(polling: false)
+        let bench = try #require(store.selected)
+        store.setWindow(WindowSight(isOpen: true, isVisible: true))
+        held.hold = true
+        let page = Task { await store.showDoctor(on: bench) }
+        await base.waitUntil { held.isHolding }
+        #expect(bench.isRunningDoctor)
+        page.cancel()
+        let back = Task { await store.showDoctor(on: bench) }
+        await base.settle()
+        #expect(held.count("doctor") == 1, "joined, not doubled")
+
+        held.release()
+        await page.value
+        await back.value
+        #expect(held.finished == 1)
+        #expect(held.cancelled == 0, "no SIGTERM: the call is not the page's to cancel")
+        #expect(bench.doctor != nil)
+        #expect(bench.doctorError == nil)
+        await store.showDoctor(on: bench)
+        #expect(held.count("doctor") == 1, "the answer was kept")
+    }
+
+    /// An action that ends while a call runs makes its answer old: the page
+    /// asked again by the new stamp waits for the call, then asks once more.
+    @Test func anActionDuringTheCallAsksOnceMore() async throws {
+        let held = HeldCLI(["list": base.listJSON(), "status": base.statusJSON("stopped", reason: "manual"),
+                            "doctor": try Fixture.string("doctor")], holding: ["doctor"])
+        let store = base.makeStore(runner: held)
+        await store.start(polling: false)
+        let bench = try #require(store.selected)
+        store.setWindow(WindowSight(isOpen: true, isVisible: true))
+        held.hold = true
+        let first = Task { await store.showDoctor(on: bench) }
+        await base.waitUntil { held.isHolding }
+        bench.markChanged()
+        let second = Task { await store.showDoctor(on: bench) }
+        await base.settle()
+        #expect(held.count("doctor") == 1)
+        held.release()
+        await first.value
+        await second.value
+        #expect(held.count("doctor") == 2)
+        await store.showDoctor(on: bench)
+        #expect(held.count("doctor") == 2)
+    }
+}

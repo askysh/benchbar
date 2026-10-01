@@ -665,12 +665,14 @@ running, v16 paused" and checks the menu bar stumbles. The snapshot test
 1. **Watch the file and its folder.** A `DispatchSource` on an open file
    descriptor reports appends (`.extend`), but after the file is replaced
    with `mv` the descriptor still points at the old, now nameless file. The
-   folder watcher from Phase 3 notices the new file; both call the same
-   `readNew()`.
+   folder watcher from Phase 3 notices the new file; both end in the same
+   `readNew()`, once per 100 ms window however many events came.
 2. **Decide by inode and size, not by event.** Events coalesce and arrive
    in bursts. `readNew()` only asks: is this still the file I opened
    (inode), and is it at least as long as what I read (size)? No means
-   start over from the top.
+   start over from the top. The size comes from the open descriptor
+   (`fstat`); an event only says whether the path needs a look too (a
+   delete, a rename, the folder).
 3. **Decode whole lines.** A read can end in the middle of a multi byte
    character. Keeping the bytes after the last newline for the next read
    avoids the replacement character.
@@ -678,7 +680,9 @@ running, v16 paused" and checks the menu bar stumbles. The snapshot test
    takes only the file's last 256 KB.
 5. **Let AppKit do text.** `NSTextView` inside `NSViewRepresentable` gives
    fast scrolling, selection and copy for free. The SwiftUI side only
-   tells it what changed (`changes`, `appended`).
+   tells it that something changed; the view remembers the last line it
+   drew and appends the rest in one edit. `updateNSView` only reads the
+   model: a write there makes SwiftUI update the view again.
 
 ## 0.5: a window for everything that needs a form
 
@@ -709,6 +713,11 @@ before an update needs room, a form and a confirmation. Read
    visible to every process of the user (`ps`); the environment of one
    short lived child is not written anywhere. The test reads the fake
    runner's recorded arguments and environment to prove it.
+6. **A view's `.task` is cancelled when the view goes away**, and a
+   cancelled subprocess call is SIGTERMed. Switching tab did that to
+   doctor. What a page asks for on its own (doctor, the app list) runs in
+   a task of its own (`State/OnDemandCalls.swift`), so the answer arrives
+   anyway and is kept for the window session.
 
 ## 0.5.5: menus, one web request, and a bug report
 

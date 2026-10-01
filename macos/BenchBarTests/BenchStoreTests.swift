@@ -70,8 +70,10 @@ struct BenchStoreTests {
     }
 
     /// The real files by default (a temp folder without state.json), and a
-    /// safety poll that only fires when a test says so.
+    /// safety poll that only fires when a test says so. `pinged` is set when
+    /// the store pings a site.
     func makeStore(ping: Int? = 200,
+                   pinged: Flag? = nil,
                    snapshotter: @escaping @Sendable (Int32) async -> ProcessTree.Snapshot = { _ in ProcessTree.Snapshot(takenAt: 0, cpu: [:]) },
                    files: any BenchFiles = LiveBenchFiles(),
                    safetyPoll: any SafetyPolling = ManualSafetyPoll(),
@@ -83,7 +85,7 @@ struct BenchStoreTests {
             settings: settings,
             locator: CLILocator(home: dir.url, isExecutable: { $0 == "/fake/benchbar" }),
             makeClient: { CLIClient(executable: $0, runner: runner) },
-            pinger: { _, _ in ping },
+            pinger: { _, _ in pinged?.set(); return ping },
             snapshotter: snapshotter,
             files: files,
             safetyPoll: safetyPoll,
@@ -814,17 +816,23 @@ final class ManualSafetyPoll: SafetyPolling {
     func fire() async { await work?() }
 }
 
-/// A CLI whose status calls wait for the test while `hold` is set, and end
-/// as a timeout when cancelled meanwhile, as swift-subprocess does (SIGTERM).
-/// A call answers what was true when it began, like the CLI reading the bench.
+/// A CLI whose held calls (status, unless the test names others) wait for
+/// the test while `hold` is set, and end as a timeout when cancelled
+/// meanwhile, as swift-subprocess does (SIGTERM). A call answers what was
+/// true when it began, like the CLI reading the bench.
 nonisolated final class HeldCLI: CommandRunning, @unchecked Sendable {
     private let lock = NSLock()
     private var answers: [String: String]
+    private let held: Set<String>
     private var holding = false
     private var waiting: [CheckedContinuation<Void, Never>] = []
     private var counts = (finished: 0, cancelled: 0, status: 0)
+    private var asked: [String: Int] = [:]
 
-    init(_ answers: [String: String]) { self.answers = answers }
+    init(_ answers: [String: String], holding held: Set<String> = ["status"]) {
+        self.answers = answers
+        self.held = held
+    }
 
     var hold: Bool {
         get { lock.withLock { holding } }
@@ -834,6 +842,8 @@ nonisolated final class HeldCLI: CommandRunning, @unchecked Sendable {
     var finished: Int { lock.withLock { counts.finished } }
     var cancelled: Int { lock.withLock { counts.cancelled } }
     var statusCalls: Int { lock.withLock { counts.status } }
+    /// How many calls of a command began.
+    func count(_ command: String) -> Int { lock.withLock { asked[command, default: 0] } }
 
     func answer(_ command: String, _ json: String) { lock.withLock { answers[command] = json } }
 
@@ -850,9 +860,10 @@ nonisolated final class HeldCLI: CommandRunning, @unchecked Sendable {
         let command = arguments.first ?? ""
         let answer = lock.withLock { () -> String in
             if command == "status" { counts.status += 1 }
+            asked[command, default: 0] += 1
             return answers[command] ?? ""
         }
-        if command == "status", hold {
+        if held.contains(command), hold {
             await withCheckedContinuation { continuation in lock.withLock { waiting.append(continuation) } }
             if Task.isCancelled {
                 lock.withLock { counts.cancelled += 1 }

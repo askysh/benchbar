@@ -73,18 +73,8 @@ extension View {
     }
 }
 
-/// Start, stop, restart, open and show for one bench: the same rules as
-/// the popover's buttons, for the sidebar's context menu and the page.
-extension BenchStore {
-    func controls(for bench: BenchModel) -> BenchControls {
-        var cliReady = false
-        if case .ready = cli { cliReady = true }
-        return .make(state: bench.state, reason: bench.machine.stopReason, pending: bench.pending,
-                     needsService: bench.needsService, cliReady: cliReady,
-                     otherWork: bench.isChangingScheduler || bench.activity != nil || waitsForOtherBench(bench))
-    }
-}
-
+/// Start, stop, restart, open and show for one bench, in the sidebar: the
+/// same rules as the popover's buttons (`BenchStore.controls(for:)`).
 struct BenchContextMenu: View {
     let store: BenchStore
     let bench: BenchModel

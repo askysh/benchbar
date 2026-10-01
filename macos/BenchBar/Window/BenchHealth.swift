@@ -47,7 +47,7 @@ struct BenchHealth: View {
                     Button("Run Doctor") { Task { await store.runDoctor(on: bench) } }
                         .disabled(bench.isRunningDoctor)
                     Button("Repair…") { startRepair() }
-                        .disabled(!repairable || bench.activity != nil || store.waitsForOtherBench(bench))
+                        .disabled(!repairable || !store.canChange(bench))
                         .help(repairable ? "Shows the plan first; nothing changes until you confirm" : "Nothing repair can fix")
                 }
             } footer: {
@@ -56,9 +56,11 @@ struct BenchHealth: View {
             }
         }
         .formStyle(.grouped)
-        .task(id: bench.path) {
-            if bench.doctor == nil { await store.runDoctor(on: bench) }
+        // the answer is kept for the window session: asked again after an
+        // action on the bench or in the next session, not on every visit
+        .task(id: store.stamp(for: bench)) {
             if router.repairRequested { router.repairRequested = false; startRepair() }
+            await store.showDoctor(on: bench)
         }
         .sheet(item: $repair) { run in
             RepairSheet(run: run) { repair = nil }

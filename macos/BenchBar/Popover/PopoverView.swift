@@ -97,13 +97,6 @@ struct BenchPanel: View {
     let bench: BenchModel
     let commands: AppCommands
 
-    private var controls: BenchControls {
-        var cliReady = false
-        if case .ready = store.cli { cliReady = true }
-        return .make(state: bench.state, reason: bench.machine.stopReason, pending: bench.pending,
-                     needsService: bench.needsService, cliReady: cliReady, otherWork: bench.isChangingScheduler || bench.activity != nil || store.waitsForOtherBench(bench))
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
@@ -155,10 +148,7 @@ struct BenchPanel: View {
                 StatePill(state: bench.state, text: BenchText.headline(
                     bench.state, reason: bench.machine.stopReason, exitCode: bench.status?.lastExitCode))
                 if let since = bench.runningSince {
-                    TimelineView(.periodic(from: .now, by: 30)) { context in
-                        Text("up \(BenchText.uptime(since: since, now: context.date))")
-                            .font(.caption).monospacedDigit().foregroundStyle(.secondary)
-                    }
+                    Uptime(since: since) { Text("up \($0)").font(.caption).monospacedDigit().foregroundStyle(.secondary) }
                 }
             }
         }
@@ -180,7 +170,7 @@ struct BenchPanel: View {
     }
 
     private var actionButtons: some View {
-        let controls = controls
+        let controls = store.controls(for: bench)
         return HStack(spacing: 8) {
             ActionButton(title: "Start", systemImage: "play.fill", busy: controls.busy == .up, enabled: controls.canStart) {
                 Task { await store.perform(.up, on: bench) }
@@ -377,6 +367,20 @@ struct CheckRow: View {
 }
 
 // MARK: small pieces
+
+/// How long a bench has been up, as `content` shows it, redrawn every 30
+/// seconds: the popover's header and the bench page share it. The schedule
+/// counts from the run's start, so a redraw of the parent keeps it.
+struct Uptime<Content: View>: View {
+    let since: Date
+    @ViewBuilder let content: (String) -> Content
+
+    var body: some View {
+        TimelineView(.periodic(from: since, by: 30)) { context in
+            content(BenchText.uptime(since: since, now: context.date))
+        }
+    }
+}
 
 struct StatePill: View {
     let state: BenchState

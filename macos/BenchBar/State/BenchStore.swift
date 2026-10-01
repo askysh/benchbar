@@ -16,6 +16,11 @@ final class BenchModel: Identifiable {
     var doctor: DoctorReport?
     var doctorError: String?
     var isRunningDoctor = false
+    /// Bumped when an action on the bench ends (start, stop, restart, the
+    /// scheduler, a change from the window, a focus pin, a fetch): what the
+    /// window shows on demand (doctor, the app list) is asked again
+    /// (`BenchStore.stamp(for:)`).
+    private(set) var revision = 0
     /// benchbar service is changing the scheduler (and may restart the bench):
     /// every action on this bench waits, the CLI would refuse it anyway (its lock).
     var isChangingScheduler = false
@@ -40,6 +45,9 @@ final class BenchModel: Identifiable {
     var state: BenchState { machine.state }
     var status: BenchStatus? { machine.status }
     var pending: CLIClient.Action? { machine.pending }
+    /// A change runs on this bench: start, stop or restart, the scheduler,
+    /// or a longer change from the window.
+    var isBusy: Bool { pending != nil || isChangingScheduler || activity != nil }
     /// No com.benchbar agent yet: `benchbar repair` installs or migrates it.
     var needsService: Bool { !summary.serviceInstalled }
     /// The bench's sites: from the latest status, else from the list.
@@ -72,6 +80,9 @@ final class BenchModel: Identifiable {
     func publishResources() {
         withMutation(keyPath: \.resources) {}
     }
+
+    /// An action on the bench ended.
+    func markChanged() { revision += 1 }
 }
 
 nonisolated enum CLIAvailability: Equatable, Sendable {
@@ -162,6 +173,10 @@ final class BenchStore {
     /// the chart loop leaves it alone.
     @ObservationIgnored private var speedSampled: String?
     @ObservationIgnored private var lastFacts: MenuFacts?
+    @ObservationIgnored private let doctorCalls = OnDemandCalls()
+    /// Bumped each time the BenchBar window opens: what it shows on demand
+    /// (doctor, the app list) is kept for one session.
+    private(set) var windowSession = 0
 
     /// A bench whose runner does not beat: `status --json` once a minute.
     static let legacyInterval: Duration = .seconds(60)
@@ -212,13 +227,35 @@ final class BenchStore {
     /// The CLI takes one lock for the whole checkout, so while this is set no
     /// other bench may start a change either: it would fail on the lock.
     var busyBench: BenchModel? {
-        changeAnchor ?? benches.first { $0.pending != nil || $0.isChangingScheduler || $0.activity != nil }
+        changeAnchor ?? benches.first(where: \.isBusy)
     }
 
     /// True when another bench holds the CLI's lock: this one waits.
     func waitsForOtherBench(_ bench: BenchModel) -> Bool {
         guard let busy = busyBench else { return false }
         return busy.path != bench.path
+    }
+
+    /// A change may start on the bench now: nothing runs on it and nothing
+    /// holds the one change slot. Every action asks this, and every button
+    /// that starts one.
+    func canChange(_ bench: BenchModel) -> Bool {
+        bench.pending == nil && !otherWork(on: bench)
+    }
+
+    /// Something other than the bench's own start, stop or restart holds
+    /// the slot: the scheduler, a change from the window, another bench.
+    private func otherWork(on bench: BenchModel) -> Bool {
+        changeAnchor != nil || bench.isChangingScheduler || bench.activity != nil || waitsForOtherBench(bench)
+    }
+
+    /// Start, Stop and Restart for one bench, wherever they show: the
+    /// popover, the bench page, the sidebar's context menu.
+    func controls(for bench: BenchModel) -> BenchControls {
+        var cliReady = false
+        if case .ready = cli { cliReady = true }
+        return .make(state: bench.state, reason: bench.machine.stopReason, pending: bench.pending,
+                     needsService: bench.needsService, cliReady: cliReady, otherWork: otherWork(on: bench))
     }
 
     /// The bench whose CPU sets the running speed: the selected one while it
@@ -359,17 +396,25 @@ final class BenchStore {
 
     // MARK: actions
 
-    func perform(_ action: CLIClient.Action, on bench: BenchModel) async {
-        guard changeAnchor == nil, bench.pending == nil, !bench.isChangingScheduler, bench.activity == nil, !waitsForOtherBench(bench) else { return }
-        await run(action, on: bench)
+    static let noCLIMessage = "The benchbar command line tool is not available."
+    static let busyMessage = "Another change is still running; try again when it has finished."
+
+    /// Start, stop or restart. Returns the error text, nil on success;
+    /// "busy" when another change holds the slot.
+    @discardableResult
+    func perform(_ action: CLIClient.Action, on bench: BenchModel) async -> String? {
+        guard canChange(bench) else { return Self.busyMessage }
+        return await run(action, on: bench)
     }
 
     /// The action itself, for callers that already hold the one change slot
     /// (the restart after a scheduler change).
-    private func run(_ action: CLIClient.Action, on bench: BenchModel) async {
-        guard let client else { return }
+    @discardableResult
+    private func run(_ action: CLIClient.Action, on bench: BenchModel) async -> String? {
+        guard let client else { return Self.noCLIMessage }
         bench.lastError = nil
         apply(.actionStarted(action), to: bench)
+        defer { bench.markChanged() }
         do {
             if action == .up || action == .restart {
                 let check = try await client.portCheck(bench: bench.path)
@@ -382,9 +427,11 @@ final class BenchStore {
             }
             try await client.perform(action, bench: bench.path)
             apply(.actionFinished(action, succeeded: true), to: bench)
+            return nil
         } catch {
             bench.lastError = error.localizedDescription
             apply(.actionFinished(action, succeeded: false), to: bench)
+            return bench.lastError
         }
     }
 
@@ -397,14 +444,12 @@ final class BenchStore {
     /// nil on success; "busy" when another change holds the slot.
     func runChange(_ label: String, on bench: BenchModel,
                    _ work: (CLIClient) async throws(CLIError) -> Void) async -> String? {
-        guard let client else { return "The benchbar command line tool is not available." }
-        guard changeAnchor == nil, bench.pending == nil, !bench.isChangingScheduler, bench.activity == nil, !waitsForOtherBench(bench) else {
-            return "Another change is still running; try again when it has finished."
-        }
+        guard let client else { return Self.noCLIMessage }
+        guard canChange(bench) else { return Self.busyMessage }
         changeAnchor = bench
         bench.activity = label
         notifyChange()
-        defer { bench.activity = nil; changeAnchor = nil; notifyChange() }
+        defer { bench.activity = nil; changeAnchor = nil; bench.markChanged(); notifyChange() }
         do {
             try await work(client)
         } catch {
@@ -419,9 +464,9 @@ final class BenchStore {
     /// --without-schedule), then restarts a running bench so honcho reads
     /// the new Procfile. The caller has asked the user first.
     func setScheduler(_ on: Bool, on bench: BenchModel) async {
-        guard let client, changeAnchor == nil, bench.pending == nil, !bench.isChangingScheduler, bench.activity == nil, !waitsForOtherBench(bench) else { return }
+        guard let client, canChange(bench) else { return }
         bench.isChangingScheduler = true
-        defer { bench.isChangingScheduler = false; notifyChange() }
+        defer { bench.isChangingScheduler = false; bench.markChanged(); notifyChange() }
         bench.lastError = nil
         do {
             try await client.setScheduler(on, bench: bench.path)
@@ -435,15 +480,44 @@ final class BenchStore {
         }
     }
 
+    // MARK: on demand
+
+    /// What the window's on demand answers for the bench are kept under:
+    /// its pages ask again when this changes (`.task(id:)`).
+    func stamp(for bench: BenchModel) -> QueryStamp {
+        QueryStamp(session: windowSession, revision: bench.revision)
+    }
+
+    /// A page may ask the CLI about the bench on its own: the window is
+    /// open (its views live on when it closes, and still update) and no
+    /// change runs on the bench (its end changes the stamp, which asks).
+    func pageMayAsk(about bench: BenchModel) -> Bool {
+        windowSight.isOpen && !bench.isBusy
+    }
+
+    /// `doctor --json` now: the Run Doctor buttons, after a repair, a link.
     func runDoctor(on bench: BenchModel) async {
-        guard let client, !bench.isRunningDoctor else { return }
-        bench.isRunningDoctor = true
-        bench.doctorError = nil
-        defer { bench.isRunningDoctor = false }
-        do {
-            bench.doctor = try await client.doctor(bench: bench.path)
-        } catch {
-            bench.doctorError = error.localizedDescription
+        await askDoctor(bench, force: true)
+    }
+
+    /// The Health page is on screen: doctor runs unless the bench has an
+    /// answer from this window session and nothing was done to it since.
+    func showDoctor(on bench: BenchModel) async {
+        guard pageMayAsk(about: bench) else { return }
+        await askDoctor(bench, force: false)
+    }
+
+    private func askDoctor(_ bench: BenchModel, force: Bool) async {
+        guard let client else { return }
+        await doctorCalls.ask(bench.path, force: force, stamp: { stamp(for: bench) }) {
+            bench.isRunningDoctor = true
+            bench.doctorError = nil
+            defer { bench.isRunningDoctor = false }
+            do {
+                bench.doctor = try await client.doctor(bench: bench.path)
+            } catch {
+                bench.doctorError = error.localizedDescription
+            }
         }
     }
 
@@ -663,6 +737,7 @@ final class BenchStore {
         let wasFast = fastMode
         let opened = sight.isOpen && !windowSight.isOpen
         windowSight = sight
+        if opened { windowSession += 1 }
         screenChanged(wasFast: wasFast)
         if opened, !suspended { Task(priority: .utility) { await reloadBenches() } }
     }
