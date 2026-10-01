@@ -159,7 +159,10 @@ hb="$BENCH/logs/.benchbar/heartbeat"
 rm -f "$hb"
 # ino_mtime PATH: inode and nanosecond mtime
 ino_mtime() { python3 -c 'import os,sys; s=os.stat(sys.argv[1]); print(s.st_ino, s.st_mtime_ns)' "$1"; }
-BENCHBAR_HEARTBEAT_EVERY=1 MOCK_HONCHO_SLEEP=4 "$runner" &
+# honcho runs until the checks are done, then stops on TERM as in test 10:
+# a fixed honcho lifetime raced the checks on a slow machine (the stopped
+# write is a folder change of its own)
+BENCHBAR_HEARTBEAT_EVERY=1 MOCK_HONCHO_SLEEP=30 MOCK_HONCHO_TERM_EXIT=143 "$runner" &
 rpid=$!
 for _ in $(seq 1 50); do [[ "$(transitions)" == "starting" ]] && break; sleep 0.1; done
 assert_eq "starting" "$(transitions)"
@@ -174,6 +177,8 @@ done
 [[ "$(printf '%s' "$beats" | wc -w | tr -d ' ')" -ge 3 ]] || fail "the heartbeat must be rewritten while honcho runs (saw:${beats})"
 assert_eq "${file1%% *}" "$(ino_mtime "$hb" | cut -d' ' -f1)" "(the heartbeat is written in place, not replaced)"
 assert_eq "$dir1" "$(ino_mtime "$BENCH/logs/.benchbar")" "(a beat must not change the folder)"
+assert_eq "starting" "$(transitions)" "(honcho still runs while the folder is compared)"
+kill -TERM "$rpid"
 set +e; wait "$rpid"; rcode=$?; set -e
 assert_eq "0" "$rcode"
 assert_eq "starting stopped" "$(transitions)" "(the heartbeat never writes state.json)"
