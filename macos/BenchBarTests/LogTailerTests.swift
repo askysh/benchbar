@@ -164,6 +164,37 @@ struct LogTailerTests {
         t.stop()
     }
 
+    /// A restart after a short log: truncated, then longer than before, all
+    /// in one window. The size at the window's end says nothing, so the event
+    /// of the truncation has to remember it; else the new log loses its start
+    /// and the rest is glued to the old run.
+    @Test func aTruncationIsSeenEvenWhenTheLogRegrowsInTheSameWindow() throws {
+        try write("old 1\nold 2\n")
+        let window = ManualWindow()
+        let t = tailer(window: window)
+        t.start()
+        #expect(seen.text == "old 1\nold 2\n")
+        let h = try FileHandle(forWritingTo: file)
+        try h.truncate(atOffset: 0)   // the runner's ": > bench.log"
+        t.changed(replaced: false)
+        try h.write(contentsOf: Data("new run 1\nnew run 2\nnew run 3\n".utf8))
+        try h.close()
+        t.changed(replaced: false)
+        #expect(window.scheduled == 1, "one window for both events")
+        window.close()
+        #expect(seen.resets == 1, "the truncation is not lost to the regrowth")
+        #expect(seen.text == "old 1\nold 2\nnew run 1\nnew run 2\nnew run 3\n")
+        #expect(t.pathLookups == 0)
+
+        // the next window, a plain append: no second reset
+        try append("new run 4\n")
+        t.changed(replaced: false)
+        window.close()
+        #expect(seen.resets == 1)
+        #expect(seen.text.hasSuffix("new run 3\nnew run 4\n"))
+        t.stop()
+    }
+
     /// The file watcher and the main queue's clock, as the log window runs them.
     @Test func anAppendArrivesThroughTheWatcher() async throws {
         try write("a\n")

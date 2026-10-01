@@ -14,6 +14,9 @@ import Foundation
 /// came meanwhile. That read asks the open descriptor (`fstat`) for its size;
 /// the path is looked at only when the file may have been replaced or
 /// removed (a delete or rename event, a change in the folder, nothing open).
+/// Each event also asks the descriptor whether the file shrank below what
+/// was read: a log truncated and grown past that again before the window
+/// closes looks like an append by then.
 ///
 /// Only whole lines are decoded: bytes after the last newline wait for the
 /// next read, so a UTF-8 character is never cut in half.
@@ -40,6 +43,8 @@ final class LogTailer {
     private var readDue = false
     /// An event in the window may have replaced or removed the file.
     private var pathChanged = false
+    /// An event in the window found the file shorter than what was read.
+    private var truncated = false
     /// How often the path was looked at (the tests check that appends need none).
     private(set) var pathLookups = 0
 
@@ -69,6 +74,7 @@ final class LogTailer {
     func stop() {
         readDue = false
         pathChanged = false
+        truncated = false
         fileSource?.cancel()
         fileSource = nil
         folderWatcher?.stop()
@@ -79,9 +85,14 @@ final class LogTailer {
 
     /// Something happened to the file or its folder: one read at the end of
     /// the window, for this event and every one until then. `replaced`: the
-    /// file may be gone, or another one now has its name.
+    /// file may be gone, or another one now has its name. A truncation is
+    /// noted now (one `fstat`): by the window's end the file may be longer
+    /// than before again.
     func changed(replaced: Bool) {
         if replaced { pathChanged = true }
+        if !truncated, let handle, let now = Self.info(fd: handle.fileDescriptor), now.size < offset {
+            truncated = true
+        }
         guard !readDue else { return }
         readDue = true
         schedule(window) { [weak self] in self?.windowClosed() }
@@ -95,7 +106,9 @@ final class LogTailer {
         if checkPath || handle == nil {
             pathLookups += 1
             guard let now = Self.info(path: url.path) else {
-                // gone for now (rotated with mv, not back yet): wait for the folder
+                // gone for now (rotated with mv, not back yet): wait for the folder.
+                // A truncation seen in this window still marks the end of the run.
+                if truncated { onReset() }
                 closeFile()
                 return
             }
@@ -106,8 +119,9 @@ final class LogTailer {
             }
         }
         guard let handle, let now = Self.info(fd: handle.fileDescriptor) else { return }
-        if now.size < offset {
+        if truncated || now.size < offset {
             // truncated in place (the runner's ": >"): the same file, from the top
+            truncated = false
             onReset()
             offset = 0
             pending = Data()
@@ -173,6 +187,7 @@ final class LogTailer {
     }
 
     private func closeFile() {
+        truncated = false
         fileSource?.cancel()
         fileSource = nil
         try? handle?.close()
