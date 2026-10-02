@@ -7,9 +7,12 @@
 # network and no real CLI: the tests answer every CLI call from
 # macos/BenchBarTests/Fixtures.
 #
-#   gh workflow run snapshots.yml --ref <branch>             render the branch
-#   gh workflow run snapshots.yml --ref <branch> -f ref=main render main
-#   gh run download <run id> -n snapshots-<sha>
+#   gh workflow run snapshots.yml -f ref=<branch>   render a branch, tag or commit
+#   label a pull request "snapshots"                 render its head and its base
+#   gh run download <run id>                         fetch the PNGs
+#
+# The label works before this file is on main (workflow_dispatch needs the
+# file on the default branch). Remove and add the label again to re-render.
 #
 # Known artifact: offscreen renders have no key window, so the selected
 # sidebar row and the selected tab draw solid black.
@@ -22,19 +25,27 @@ on:
         description: Branch, tag or commit to render (empty for the ref the workflow runs on)
         required: false
         default: ''
+  pull_request:
+    types: [labeled]
 
 permissions:
   contents: read
 
 jobs:
   render:
-    name: Render snapshots (macOS)
+    name: Render snapshots (${{ matrix.side }})
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'snapshots'
     runs-on: macos-26
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        # a labeled pull request renders before (base) and after (head)
+        side: ${{ fromJSON(github.event_name == 'pull_request' && '["head","base"]' || '["ref"]') }}
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.ref || github.sha }}
+          ref: ${{ matrix.side == 'base' && github.event.pull_request.base.sha || matrix.side == 'head' && github.event.pull_request.head.sha || inputs.ref || github.sha }}
 
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@v1
@@ -70,7 +81,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: snapshots-${{ steps.rev.outputs.sha }}
+          name: snapshots-${{ matrix.side }}-${{ steps.rev.outputs.sha }}
           path: ~/Library/Caches/BenchBarSnapshots/*.png
           if-no-files-found: error
           retention-days: 30
@@ -79,6 +90,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: snapshots-test-log-${{ steps.rev.outputs.sha }}
+          name: snapshots-test-log-${{ matrix.side }}-${{ steps.rev.outputs.sha }}
           path: macos/build/test.log
           if-no-files-found: ignore
