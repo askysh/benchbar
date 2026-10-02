@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here.
 
-## Unreleased
+## 0.7.1 - 2026-10-02
 
 BenchBar.app carries its own copy of the CLI, and updating the app
 updates both. Homebrew and the one line installer stay; their `benchbar`
