@@ -401,3 +401,22 @@ Asked for after the phases, to stop naming drift before the first release.
 - The locator puts the app's own CLI right after a path saved in Settings: the app and its CLI ship together, and a saved path stays the developer's override.
 - Update Now is Sparkle only. The cask keeps `auto_updates true`: Homebrew 7 upgrades such a cask on a plain `brew upgrade` only when the app bundle's own version is older than the tap's, so a Sparkle update and a later `brew upgrade` never fight. `--greedy` is gone; naming the cask upgrades it. A build without Sparkle opens the release page instead of running the installer in Terminal.
 - `AppCLILink` re-points the link with a temporary link renamed over the old one, so a benchbar starting at that moment finds a link either way.
+
+## 0.7: the window pass
+
+- One `SheetScaffold` for every sheet (title, one line of explanation, content, footer) and one `SheetPhase` for its states, so loading, running, the result and a failure look the same in all fourteen; each run keeps its own phase and maps onto `SheetPhase`, the CLI calls are untouched.
+- The scaffold's content scrolls past 520 points (420 hid the diff under review in Import) while the title and footer stay; it measures its content (`onGeometryChange`) because a scroll view in a sheet takes no height of its own. Plan lists lost their inner scroll views and computed heights; a diff keeps its own, bounded.
+- The snapshot tests set `drawsGlass` off, so `primaryAction()` renders `.borderedProminent` there: `cacheDisplay` cannot draw Liquid Glass, and a glass button came out as bare text (black on dark). The app is unchanged.
+- Forms inside a sheet use `.formStyle(.columns)`: a grouped Form is a scroll view and collapses inside the scaffold's.
+- Two sheet widths (520 and 640) instead of nine, and title-style capitalization without a symbol in every sheet title.
+- Return is the primary action and Esc is Cancel in every sheet; Port setup gained both. Drop Site stays off Return: a destructive button is never the default, the typed name is its confirmation.
+- Cancel is disabled while a profile sheet's change runs, as the sheet already could not be dismissed; before, Cancel closed it and the CLI carried on unseen.
+- At most one prominent button per pane, through `primaryAction()` or `primaryAction(_:)` when the main action follows the state (Open Site, or Set Up Management… before the bench is managed; Repair… only when doctor found something it can fix). The update banner's Update Now is bordered so the pane under it keeps its own.
+- Actions used less often moved into one trailing ⋯ menu (`MoreMenu`) per pane, section or row, never removed: Console, Database, Show in Finder and Copy Path on Overview; Make Default on a site; Refresh Site Lists and Check Remotes on Apps; Install and the focus pin on an app; Copy Command in the update banner and About; Copy Path and Show in Finder for the CLI; Show Folder and Remove for runners.
+- Start, Stop and Restart are three titled buttons side by side, as in the popover. A `ControlGroup` drew them as bare icons in the window, even with `.labelStyle(.titleAndIcon)`.
+- Team Profiles has one Add Profile menu (Create from Bench…, Import…, Subscribe to a Repository…) and no prominent button: everything on that pane is rare, and three header buttons competed with the list.
+- About's documentation, release notes and source rows are links with the short address, like System Settings, instead of three Open buttons.
+- Removing a custom runner asks first: it moves the folder to the Trash and was the one destructive action without a confirmation.
+- Spacing, padding and corner radius come from `WindowMetrics`; fonts stay the system text styles.
+- The NSAlert for Update to X… from the menu bar menu stays an alert: the window may be closed. Its wording and button order (Update Now, Cancel, then Release Notes and Copy Command on the left) already follow the sheet rules.
+- `.github/workflows/snapshots.yml` renders `SnapshotTests` on demand, or when a pull request is labelled `snapshots` (its head and base, for before and after); workflow_dispatch alone would need the file on main first. `scripts/ci-annotate.sh` turns compiler errors and failed tests into annotations, readable through the checks API without the log.

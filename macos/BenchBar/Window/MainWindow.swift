@@ -92,11 +92,11 @@ struct MainWindowView: View {
                 .safeAreaInset(edge: .top, spacing: 0) {
                     VStack(spacing: 0) {
                         if let offer = about.offer, offer.showsBanner {
-                            UpdateBanner(offer: offer).padding([.horizontal, .top], 16)
+                            UpdateBanner(offer: offer).padding([.horizontal, .top], WindowMetrics.paneInset)
                         }
                         if let notice = router.notice {
                             NoticeBanner(text: notice) { router.notice = nil }
-                                .padding([.horizontal, .top], 16)
+                                .padding([.horizontal, .top], WindowMetrics.paneInset)
                         }
                     }
                 }
@@ -134,18 +134,7 @@ struct NoticeBanner: View {
     let dismiss: () -> Void
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: "link").foregroundStyle(.orange)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("A BenchBar link did nothing").font(.callout.weight(.medium))
-                Text(text).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
-            }
-            Spacer()
-            Button(action: dismiss) { Image(systemName: "xmark") }
-                .buttonStyle(.borderless).help("Dismiss")
-        }
-        .padding(10)
-        .background(Color.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+        PaneBanner(symbol: "link", tint: .orange, title: "A BenchBar link did nothing", detail: text, dismiss: dismiss)
     }
 }
 
@@ -157,21 +146,10 @@ struct ChangeResultBanner: View {
 
     var body: some View {
         if let result = workbench.result, result.scope == scope {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Image(systemName: result.succeeded ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                    .foregroundStyle(result.succeeded ? .green : .red)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(result.succeeded ? "\(result.title): done" : "\(result.title): failed").font(.callout.weight(.medium))
-                    if let error = result.error {
-                        Text(error).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
-                    }
-                }
-                Spacer()
-                Button { workbench.result = nil } label: { Image(systemName: "xmark") }
-                    .buttonStyle(.borderless).help("Dismiss")
-            }
-            .padding(10)
-            .background((result.succeeded ? Color.green : Color.red).opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+            PaneBanner(symbol: result.succeeded ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
+                   tint: result.succeeded ? .green : .red,
+                   title: result.succeeded ? "\(result.title): done" : "\(result.title): failed",
+                   detail: result.error, dismiss: { workbench.result = nil })
         }
     }
 }

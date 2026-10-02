@@ -46,7 +46,9 @@ struct BenchHealth: View {
                     Spacer()
                     Button("Run Doctor") { Task { await store.runDoctor(on: bench) } }
                         .disabled(bench.isRunningDoctor)
+                    // the main action only when doctor found something repair can fix
                     Button("Repair…") { startRepair() }
+                        .primaryAction(repairable)
                         .disabled(!repairable || !store.canChange(bench))
                         .help(repairable ? "Shows the plan first; nothing changes until you confirm" : "Nothing repair can fix")
                 }
@@ -78,80 +80,84 @@ extension RepairRun: Identifiable {
     nonisolated var id: ObjectIdentifier { ObjectIdentifier(self) }
 }
 
+extension RepairRun {
+    /// The sheet's state. The steps stay on screen while repair runs, after
+    /// it and after a failure, so nothing that happened scrolls away.
+    var sheetPhase: SheetPhase {
+        switch phase {
+        case .planning: .loading("Reading the plan (benchbar repair --dry-run)…")
+        case .review: .ready
+        case .running: .running("Repairing…")
+        case .finished(let code):
+            .done(code == 0 ? .success("Repair finished; every check passes.")
+                  : .warning("Repair finished with problems left", "See the steps below and the log."))
+        case .failed(let message): .failed(message, title: steps.isEmpty ? "No repair plan" : "Repair stopped")
+        }
+    }
+}
+
 /// The plan, a confirmation, then each step as it runs.
 struct RepairSheet: View {
     let run: RepairRun
     let close: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Repair \(run.bench.name)").font(.headline)
-            switch run.phase {
-            case .planning:
-                HStack { ProgressView().controlSize(.small); Text("Reading the plan (benchbar repair --dry-run)…").foregroundStyle(.secondary) }
-            case .failed(let message):
-                Label(message, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red).textSelection(.enabled)
-            default:
+        SheetScaffold("Repair \(run.bench.name)",
+                      explanation: "Runs the fixes doctor found, in order, with a backup before each change.",
+                      phase: run.sheetPhase) {
+            if run.phase != .planning {
                 if run.steps.isEmpty {
-                    Label("Nothing to repair.", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                    if run.phase == .review {
+                        SheetOutcome(symbol: "checkmark.circle.fill", tint: .green, title: "Nothing to repair.")
+                    }
                 } else {
                     stepList
                 }
             }
             if run.phase == .review {
-                Text("A backup is taken before every change (.benchbar/backups). Broken folders are moved aside, never deleted.")
-                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                SheetNote("A backup is taken before every change (.benchbar/backups). Broken folders are moved aside, never deleted.")
                 if run.hasSudoSteps {
-                    Text("Steps that need your password are skipped here; run them in Terminal with benchbar repair afterwards.")
-                        .font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+                    SheetNote("Steps that need your password are skipped here; run them in Terminal with benchbar repair afterwards.", tint: .orange)
                 }
-            }
-            if case .finished(let code) = run.phase {
-                Label(code == 0 ? "Repair finished; every check passes." : "Repair finished with problems left; see the steps and the log.",
-                      systemImage: code == 0 ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                    .foregroundStyle(code == 0 ? .green : .orange)
             }
             if let log = run.log, run.phase != .review {
-                HStack {
-                    Text(log).font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
-                    Spacer()
-                    Button("Show Log") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: log)]) }
-                        .controlSize(.small)
-                }
+                Text(log).font(.caption.monospaced()).foregroundStyle(.secondary)
+                    .lineLimit(1).truncationMode(.middle).textSelection(.enabled)
             }
-            HStack {
-                Spacer()
-                switch run.phase {
-                case .review:
-                    Button("Cancel", role: .cancel, action: close).keyboardShortcut(.cancelAction)
-                    Button("Repair") { Task { await run.run() } }
-                        .keyboardShortcut(.defaultAction)
-                        .disabled(run.steps.isEmpty)
-                case .running:
-                    ProgressView().controlSize(.small)
-                    Text("Running…").foregroundStyle(.secondary)
-                default:
-                    Button("Done", action: close).keyboardShortcut(.defaultAction)
-                }
+        } leading: {
+            if let log = run.log, run.phase != .review, run.phase != .running {
+                Button("Show Log") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: log)]) }
+            }
+        } actions: {
+            switch run.phase {
+            case .review:
+                CancelButton(action: close)
+                Button("Repair") { Task { await run.run() } }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(run.steps.isEmpty)
+            case .planning:
+                CancelButton(action: close)
+            case .running:
+                EmptyView()
+            case .finished, .failed:
+                DoneButton(action: close)
             }
         }
-        .padding(20)
-        .frame(width: 520)
-        .interactiveDismissDisabled(run.phase == .running)
     }
 
     private var stepList: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: WindowMetrics.rowSpacing) {
             ForEach(run.steps) { step in
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    StepIcon(status: step.status)
-                    VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: WindowMetrics.rowSpacing) {
+                    StepIcon(status: step.status).accessibilityLabel(StepIcon.label(step.status))
+                    VStack(alignment: .leading, spacing: WindowMetrics.lineSpacing) {
                         HStack(spacing: 6) {
                             Text(step.label)
                             if step.sudo { Tag(text: "needs password", color: .orange) }
                         }
                         if !step.message.isEmpty, step.status != "done" {
                             Text(step.message).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                 }
@@ -169,6 +175,17 @@ struct StepIcon: View {
         case "skipped": Image(systemName: "minus.circle.fill").foregroundStyle(.orange)
         case "failed": Image(systemName: "xmark.circle.fill").foregroundStyle(.red)
         default: Image(systemName: "circle").foregroundStyle(.secondary)
+        }
+    }
+
+    /// What VoiceOver reads for the icon.
+    static func label(_ status: String) -> String {
+        switch status {
+        case "running": "running"
+        case "done": "done"
+        case "skipped": "skipped"
+        case "failed": "failed"
+        default: "not started"
         }
     }
 }

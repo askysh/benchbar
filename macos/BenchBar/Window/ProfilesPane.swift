@@ -38,21 +38,10 @@ struct ProfilesPane: View {
         VStack(alignment: .leading, spacing: 0) {
             PaneHeader(symbol: "person.2.fill", tint: .indigo, title: "Team Profiles",
                        subtitle: "Pin a base profile and your team's apps, then set up a bench from it.") {
-                HStack(spacing: 8) {
-                    Button { sheet = .importing(ProfileImportRun(workbench: workbench), autoReview: false) } label: {
-                        Label("Import…", systemImage: "square.and.arrow.down")
-                    }
-                    Button { sheet = .subscribe(ProfileSubscribeRun(workbench: workbench)) } label: {
-                        Label("Subscribe…", systemImage: "arrow.triangle.2.circlepath")
-                    }
-                    Button { sheet = .create } label: { Label("Create from Bench…", systemImage: "plus") }
-                        .primaryAction()
-                        .disabled(store.benches.isEmpty)
-                }
-                .fixedSize()
+                addMenu
             }
             ChangeResultBanner(workbench: workbench, scope: Workbench.profilesScope)
-                .padding(.horizontal, 20).padding(.top, 6)
+                .padding(.horizontal, WindowMetrics.paneInset).padding(.top, 6)
             profiles
         }
         .overlay {
@@ -109,6 +98,26 @@ struct ProfilesPane: View {
         }
     }
 
+    /// Every way to add a profile, in one menu: all of them are rare, so
+    /// none is prominent.
+    private var addMenu: some View {
+        Menu {
+            Button("Create from Bench…", systemImage: "plus") { sheet = .create }
+                .disabled(store.benches.isEmpty)
+            Button("Import…", systemImage: "square.and.arrow.down") {
+                sheet = .importing(ProfileImportRun(workbench: workbench), autoReview: false)
+            }
+            Button("Subscribe to a Repository…", systemImage: "arrow.triangle.2.circlepath") {
+                sheet = .subscribe(ProfileSubscribeRun(workbench: workbench))
+            }
+        } label: {
+            Label("Add Profile", systemImage: "plus")
+        }
+        .menuStyle(.button)
+        .fixedSize()
+        .help("Create a profile from a bench, import a profile file or link, or subscribe to a team's repository")
+    }
+
     private var removeTitle: String {
         guard let removing else { return "Remove profile?" }
         return removing.origin == .subscribed ? "Remove the subscription?" : "Remove \(removing.name)?"
@@ -141,10 +150,10 @@ struct ProfilesPane: View {
     }
 
     private func row(_ profile: ProfileInfo) -> some View {
-        HStack(alignment: .firstTextBaseline) {
+        HStack(alignment: .firstTextBaseline, spacing: WindowMetrics.rowSpacing) {
             Image(systemName: profile.isTeam ? "person.2.fill" : "shippingbox")
                 .foregroundStyle(profile.valid ? Color.accentColor : .red)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: WindowMetrics.lineSpacing) {
                 HStack(spacing: 6) {
                     Text(profile.name).font(.body.weight(.medium))
                     Tag(text: profile.originText, color: profile.origin == .subscribed ? .indigo : .secondary)
@@ -168,7 +177,7 @@ struct ProfilesPane: View {
     }
 
     private func menu(_ profile: ProfileInfo) -> some View {
-        Menu {
+        MoreMenu(help: "Export, update, check or remove \(profile.name)") {
             Button("Export…") { sheet = .export(ProfileExportRun(name: profile.name, workbench: workbench)) }
                 .disabled(!profile.canExport)
             if profile.canUpdate {
@@ -181,16 +190,12 @@ struct ProfilesPane: View {
                 Divider()
                 Button(profile.origin == .subscribed ? "Remove Subscription…" : "Remove…", role: .destructive) { removing = profile }
             }
-        } label: {
-            Image(systemName: "ellipsis.circle")
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .help("Export, update, check or remove \(profile.name)")
     }
 }
 
+/// A team profile from one of the benches: the apps, their repositories and
+/// branches, and the Frappe version.
 struct CreateProfileSheet: View {
     let benches: [BenchModel]
     let create: (String, BenchModel) -> Void
@@ -199,33 +204,29 @@ struct CreateProfileSheet: View {
     @State private var benchPath = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Create a team profile").font(.headline)
+        SheetScaffold("Create a Team Profile",
+                      explanation: "Writes a profile from one bench's apps, branches and Frappe version.") {
             Form {
                 TextField("Profile name", text: $name, prompt: Text("acme"))
+                    .textFieldStyle(.roundedBorder)
                 Picker("From bench", selection: $benchPath) {
                     ForEach(benches) { Text($0.name).tag($0.path) }
                 }
             }
-            .formStyle(.grouped)
+            .formStyle(.columns)
             if !name.isEmpty && !ProfileName.isValid(name) {
                 Text("Lower case letters, digits, '.', '_' or '-', starting with a letter or digit.")
                     .font(.caption).foregroundStyle(.red)
             }
-            Text("BenchBar reads the bench (its apps, their repositories and branches, and its Frappe version) and writes ~/.config/benchbar/profiles/NAME.toml. The bench is not changed; no site data or password goes into the file.")
-                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            HStack {
-                Spacer()
-                Button("Cancel", role: .cancel, action: cancel).keyboardShortcut(.cancelAction)
-                Button("Create") {
-                    if let bench = benches.first(where: { $0.path == benchPath }) { create(name, bench) }
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(!ProfileName.isValid(name) || benchPath.isEmpty)
+            SheetNote("BenchBar reads the bench (its apps, their repositories and branches, and its Frappe version) and writes ~/.config/benchbar/profiles/NAME.toml. The bench is not changed; no site data or password goes into the file.")
+        } actions: {
+            CancelButton(action: cancel)
+            Button("Create") {
+                if let bench = benches.first(where: { $0.path == benchPath }) { create(name, bench) }
             }
+            .keyboardShortcut(.defaultAction)
+            .disabled(!ProfileName.isValid(name) || benchPath.isEmpty)
         }
-        .padding(20)
-        .frame(width: 460)
         .onAppear { benchPath = benches.first?.path ?? "" }
     }
 }

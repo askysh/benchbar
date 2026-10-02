@@ -30,19 +30,21 @@ struct BenchApps: View {
                         .font(.caption).foregroundStyle(.orange)
                 }
             } header: {
-                HStack {
+                HStack(spacing: WindowMetrics.rowSpacing) {
                     Text("Apps")
                     Spacer()
-                    Button { Task { await workbench.loadApps(bench, liveSites: true) } } label: {
-                        Label("Refresh", systemImage: "arrow.clockwise")
+                    MoreMenu(help: "Refresh the site lists or check the remotes") {
+                        Button { Task { await workbench.loadApps(bench, liveSites: true) } } label: {
+                            Label("Refresh Site Lists", systemImage: "arrow.clockwise")
+                        }
+                        .disabled(workbench.loadingApps.contains(bench.path))
+                        .help("Ask bench which sites have which app (needs MariaDB)")
+                        Button { Task { await workbench.checkRemotes(bench) } } label: {
+                            Label("Check Remotes", systemImage: "arrow.down.circle")
+                        }
+                        .disabled(workbench.checkingRemotes.contains(bench.path))
+                        .help("git fetch the apps your focus apps need, to see how far behind they are (only .git changes)")
                     }
-                    .disabled(workbench.loadingApps.contains(bench.path))
-                    .help("Ask bench which sites have which app (needs MariaDB)")
-                    Button { Task { await workbench.checkRemotes(bench) } } label: {
-                        Label("Check Remotes", systemImage: "arrow.down.circle")
-                    }
-                    .disabled(workbench.checkingRemotes.contains(bench.path))
-                    .help("git fetch the apps your focus apps need, to see how far behind they are (only .git changes)")
                     Button { adding = true } label: { Label("Add App…", systemImage: "plus") }
                         .primaryAction()
                         .disabled(busy)
@@ -78,6 +80,7 @@ struct BenchApps: View {
                         Tag(text: "expected \(policy)", color: .orange)
                     }
                     if app.isFocus { Tag(text: "focus", color: .accentColor) }
+                    if app.pin == .ignore { Tag(text: "ignored", color: .secondary) }
                     if app.isStaleDependency { Tag(text: "behind", color: .orange) }
                 }
                 if let words = app.focusSummary ?? app.dependencySummary {
@@ -89,22 +92,14 @@ struct BenchApps: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
-            FocusMenu(app: app, disabled: busy) { pin in
-                Task { await workbench.setFocus(pin, app: app.name, on: bench) }
-            }
-            let missing = AppSource.sitesWithout(app, among: siteNames)
-            if !missing.isEmpty && app.name != "frappe" {
-                Menu("Install") {
-                    ForEach(missing, id: \.self) { site in
-                        Button("On \(site)") { Task { await workbench.installApp(app.name, site: site, on: bench) } }
-                    }
-                }
-                .fixedSize()
-                .disabled(busy)
-            }
             Button("Update…") { updating = app }
                 .disabled(busy || app.branch == nil || app.dirty)
                 .help(app.dirty ? "The app has local changes; commit or stash them first" : "Shows the changelog before anything changes")
+            AppMenu(app: app, missingSites: app.name == "frappe" ? [] : AppSource.sitesWithout(app, among: siteNames), busy: busy) { site in
+                Task { await workbench.installApp(app.name, site: site, on: bench) }
+            } setFocus: { pin in
+                Task { await workbench.setFocus(pin, app: app.name, on: bench) }
+            }
         }
         .padding(.vertical, 2)
     }
@@ -131,8 +126,8 @@ struct AddAppSheet: View {
     @State private var site = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Add an app to \(bench.name)").font(.headline)
+        SheetScaffold("Add an App to \(bench.name)",
+                      explanation: "Clones an app from the app registry or a git repository and installs it.") {
             Form {
                 TextField("App or repository", text: $source, prompt: Text("erpnext, or https://github.com/org/app"))
                 TextField("Branch", text: $branch, prompt: Text(AppSource.isURL(source) ? "the repository's default" : "the profile's branch"))
@@ -141,23 +136,17 @@ struct AddAppSheet: View {
                     ForEach(sites, id: \.self) { Text($0).tag($0) }
                 }
             }
-            .formStyle(.grouped)
-            Text(AppSource.isURL(source)
-                 ? "Private repositories work when your SSH key (or a git credential helper) can read them; BenchBar checks access first, so a missing key fails in seconds."
-                 : "A name from the app registry gets the branch that matches this bench's profile.")
-                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            Text("benchbar app add runs bench get-app, installs the app's requirements and builds its assets. This can take several minutes; the bench keeps running.")
-                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            HStack {
-                Spacer()
-                Button("Cancel", role: .cancel, action: cancel).keyboardShortcut(.cancelAction)
-                Button("Add App") { add(source, branch, site.isEmpty ? nil : site) }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(source.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
+            .formStyle(.columns)
+            SheetNote(AppSource.isURL(source)
+                      ? "Private repositories work when your SSH key (or a git credential helper) can read them; BenchBar checks access first, so a missing key fails in seconds."
+                      : "A name from the app registry gets the branch that matches this bench's profile.")
+            SheetNote("benchbar app add runs bench get-app, installs the app's requirements and builds its assets. This can take several minutes; the bench keeps running.")
+        } actions: {
+            CancelButton(action: cancel)
+            Button("Add App") { add(source, branch, site.isEmpty ? nil : site) }
+                .keyboardShortcut(.defaultAction)
+                .disabled(source.trimmingCharacters(in: .whitespaces).isEmpty)
         }
-        .padding(20)
-        .frame(width: 480)
     }
 }
 
@@ -170,53 +159,54 @@ struct UpdateAppSheet: View {
     @State private var plan: AppUpdatePlan?
     @State private var error: String?
 
+    private var phase: SheetPhase {
+        if let error { return .failed(error, title: "No changelog for \(app.name)") }
+        guard let plan else { return .loading("Fetching the changes…") }
+        return plan.isUpToDate ? .done(.success("\(app.name) is up to date on \(plan.branch ?? "its branch").")) : .ready
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Update \(app.name)").font(.headline)
-            if let plan {
-                if plan.isUpToDate {
-                    Label("\(app.name) is up to date on \(plan.branch ?? "its branch").", systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                } else {
-                    Text("\(plan.commitsTotal) new commit\(plan.commitsTotal == 1 ? "" : "s") on \(plan.branch ?? "the branch"):")
-                        .font(.callout)
-                    List(plan.commits) { commit in
-                        HStack(alignment: .firstTextBaseline) {
+        SheetScaffold("Update \(app.name)",
+                      explanation: "Shows the new commits and the steps before anything changes.",
+                      phase: phase) {
+            if let plan, !plan.isUpToDate {
+                Text("\(plan.commitsTotal) new commit\(plan.commitsTotal == 1 ? "" : "s") on \(plan.branch ?? "the branch"):")
+                    .font(.callout)
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(plan.commits) { commit in
+                        HStack(alignment: .firstTextBaseline, spacing: WindowMetrics.rowSpacing) {
                             Text(commit.sha).font(.caption.monospaced()).foregroundStyle(.secondary)
-                            Text(commit.subject).font(.callout)
+                            Text(commit.subject).font(.callout).fixedSize(horizontal: false, vertical: true)
                         }
-                    }
-                    .frame(height: 170)
-                    Text("Then, in order:").font(.callout)
-                    VStack(alignment: .leading, spacing: 3) {
-                        ForEach(plan.steps) { step in
-                            Label(step.name, systemImage: "circle").font(.callout)
-                        }
-                    }
-                    if !plan.sites.isEmpty {
-                        Text("Each site is backed up before it is migrated: \(plan.sites.joined(separator: ", ")).")
-                            .font(.caption).foregroundStyle(.secondary)
                     }
                 }
-            } else if let error {
-                Text(error).font(.callout).foregroundStyle(.red).textSelection(.enabled)
-            } else {
-                HStack { ProgressView().controlSize(.small); Text("Fetching the changes…").foregroundStyle(.secondary) }
+                .padding(WindowMetrics.bannerPadding)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: WindowMetrics.cornerRadius))
+                Text("Then, in order:").font(.callout)
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(plan.steps) { step in
+                        Label(step.name, systemImage: "circle").font(.callout)
+                    }
+                }
+                if !plan.sites.isEmpty {
+                    SheetNote("Each site is backed up before it is migrated: \(plan.sites.joined(separator: ", ")).")
+                }
             }
-            HStack {
-                Spacer()
-                Button("Cancel", role: .cancel, action: close).keyboardShortcut(.cancelAction)
-                if let plan, !plan.isUpToDate {
-                    Button("Update") {
-                        close()
-                        Task { await workbench.updateApp(app.name, on: bench) }
-                    }
-                    .keyboardShortcut(.defaultAction)
+        } actions: {
+            if let plan, !plan.isUpToDate {
+                CancelButton(action: close)
+                Button("Update") {
+                    close()
+                    Task { await workbench.updateApp(app.name, on: bench) }
                 }
+                .keyboardShortcut(.defaultAction)
+            } else if plan == nil && error == nil {
+                CancelButton(action: close)
+            } else {
+                DoneButton(action: close)
             }
         }
-        .padding(20)
-        .frame(width: 520)
         .task {
             switch await workbench.updatePlan(app.name, on: bench) {
             case .success(let p): plan = p

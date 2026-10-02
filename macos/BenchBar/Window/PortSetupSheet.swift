@@ -1,69 +1,75 @@
 import SwiftUI
 
+extension PortSetupRun {
+    var sheetPhase: SheetPhase {
+        switch phase {
+        case .planning: .loading("Checking ports and preparing the selection…")
+        case .review: .ready
+        case .running: .running("Applying changes…")
+        case .finished:
+            .done(.success(startAfterSetup ? "Setup completed and the start command succeeded."
+                           : "Management is set up. Start the benches when you are ready."))
+        case .failed(let error): .failed(error, title: "Setup did not finish")
+        }
+    }
+}
+
 struct PortSetupSheet: View {
     let run: PortSetupRun
     let close: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text(run.title).font(.title2.bold())
-            switch run.phase {
-            case .planning: ProgressView("Checking ports and preparing the selection…")
-            case .running: ProgressView("Applying changes…")
-            case .review:
-                Text("Review the addresses and service changes before applying. Existing apps and databases are preserved. Stop any previous manager’s automatic startup first.")
-                    .font(.callout)
-            case .finished:
-                Label(run.startAfterSetup ? "Setup completed and the start command succeeded." : "Management is set up. Start the benches when you are ready.", systemImage: "checkmark.circle")
-            case .failed(let error):
-                Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red).textSelection(.enabled)
+        SheetScaffold(run.title,
+                      explanation: "Review the addresses and service changes before applying. Existing apps and databases are preserved.",
+                      phase: run.sheetPhase, width: .wide) {
+            if let error = run.modeError {
+                Text(error).foregroundStyle(.red).textSelection(.enabled)
             }
-            if let error = run.modeError { Text(error).foregroundStyle(.red).textSelection(.enabled) }
+            if run.phase == .review {
+                SheetNote("Stop any previous manager's automatic startup first.")
+            }
             if let plan = run.plan {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        ForEach(plan.entries) { entry in
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text(entry.name).font(.headline)
-                                Text((entry.path as NSString).abbreviatingWithTildeInPath)
-                                    .font(.caption).foregroundStyle(.secondary)
-                                    .lineLimit(1).truncationMode(.middle)
-                                    .help(entry.path)
+                VStack(alignment: .leading, spacing: 16) {
+                    ForEach(plan.entries) { entry in
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(entry.name).font(.headline)
+                            Text((entry.path as NSString).abbreviatingWithTildeInPath)
+                                .font(.caption).foregroundStyle(.secondary)
+                                .lineLimit(1).truncationMode(.middle)
+                                .help(entry.path)
+                                .textSelection(.enabled)
+                            LabeledContent("Current address", value: entry.currentURL)
+                            LabeledContent(entry.changesPorts ? "New address" : "Address stays", value: entry.proposedURL)
+                            Text("Web \(String(entry.proposed.web)) · Socket.IO \(String(entry.proposed.socketio)) · Redis \(String(entry.proposed.redisQueue))/\(String(entry.proposed.redisCache))")
+                                .font(.caption).monospacedDigit()
+                            if let setupPlan = entry.setupPlan, !setupPlan.isEmpty {
+                                Text("Service changes").font(.subheadline.bold()).padding(.top, 6)
+                                Text(setupPlan)
+                                    .font(.system(.caption, design: .monospaced))
                                     .textSelection(.enabled)
-                                LabeledContent("Current address", value: entry.currentURL)
-                                LabeledContent(entry.changesPorts ? "New address" : "Address stays", value: entry.proposedURL)
-                                Text("Web \(String(entry.proposed.web)) · Socket.IO \(String(entry.proposed.socketio)) · Redis \(String(entry.proposed.redisQueue))/\(String(entry.proposed.redisCache))")
-                                    .font(.caption).monospacedDigit()
-                                if let setupPlan = entry.setupPlan, !setupPlan.isEmpty {
-                                    Text("Service changes").font(.subheadline.bold()).padding(.top, 6)
-                                    Text(setupPlan)
-                                        .font(.system(.caption, design: .monospaced))
-                                        .textSelection(.enabled)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                }
-                                Picker("Port mode", selection: Binding(get: { entry.mode }, set: { mode in
-                                    Task { await run.setMode(mode, path: entry.path) }
-                                })) {
-                                    ForEach(PortMode.allCases, id: \.self) { Text($0.title).tag($0) }
-                                }
-                                .disabled(run.phase != .review || run.store.busyBench != nil)
-                                .help("Fixed keeps the current ports. Automatic can propose new ports for your approval.")
-                                if let blocked = entry.blocked, !blocked.isEmpty {
-                                    Label(blocked, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
-                                } else if entry.changesPorts {
-                                    Label("Port conflict resolved by the proposed allocation", systemImage: "arrow.triangle.swap").foregroundStyle(.secondary)
-                                }
-                                if !entry.conflicts.isEmpty {
-                                    DisclosureGroup("Conflict details") {
-                                        ForEach(entry.conflicts, id: \.self) { Text($0).font(.caption).textSelection(.enabled) }
-                                    }
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Picker("Port mode", selection: Binding(get: { entry.mode }, set: { mode in
+                                Task { await run.setMode(mode, path: entry.path) }
+                            })) {
+                                ForEach(PortMode.allCases, id: \.self) { Text($0.title).tag($0) }
+                            }
+                            .disabled(run.phase != .review || run.store.busyBench != nil)
+                            .help("Fixed keeps the current ports. Automatic can propose new ports for your approval.")
+                            if let blocked = entry.blocked, !blocked.isEmpty {
+                                Label(blocked, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
+                            } else if entry.changesPorts {
+                                Label("Port conflict resolved by the proposed allocation", systemImage: "arrow.triangle.swap").foregroundStyle(.secondary)
+                            }
+                            if !entry.conflicts.isEmpty {
+                                DisclosureGroup("Conflict details") {
+                                    ForEach(entry.conflicts, id: \.self) { Text($0).font(.caption).textSelection(.enabled) }
                                 }
                             }
-                            Divider()
                         }
+                        Divider()
                     }
                 }
-                .frame(maxHeight: 360)
                 if run.phase == .review && !plan.canApply {
                     Text("Resolve the blocked benches before applying. Fixed mode keeps the current ports; Automatic allows a new allocation after review.")
                         .font(.callout).foregroundStyle(.secondary)
@@ -71,28 +77,27 @@ struct PortSetupSheet: View {
             }
             if !run.output.isEmpty {
                 DisclosureGroup("Setup output") {
-                    ScrollView {
-                        Text(run.output).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
-                    }.frame(height: 140)
+                    Text(run.output).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            Text("Changing the mode saves your preference immediately; ports change only when you apply. Hosts entries that need a password are reported as a Terminal command.")
-                .font(.caption).foregroundStyle(.secondary)
-            HStack {
-                Button(run.phase == .review ? "Cancel" : "Done", action: close).disabled(run.phase == .running)
-                Spacer()
-                if !run.isBusy && run.phase != .finished {
-                    Button("Refresh Preview") { Task { await run.loadPlan() } }
-                }
-                if run.phase == .review {
-                    Button(run.startAfterSetup ? "Resolve & Start" : "Set Up Selected Benches") { Task { await run.apply() } }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(run.plan?.canApply != true || run.store.busyBench != nil)
-                }
+            SheetNote("Changing the mode saves your preference immediately; ports change only when you apply. Hosts entries that need a password are reported as a Terminal command.")
+        } leading: {
+            if !run.isBusy && run.phase != .finished {
+                Button("Refresh Preview") { Task { await run.loadPlan() } }
+            }
+        } actions: {
+            if run.phase == .review {
+                CancelButton(action: close)
+                Button(run.startAfterSetup ? "Resolve & Start" : "Set Up Selected Benches") { Task { await run.apply() } }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(run.plan?.canApply != true || run.store.busyBench != nil)
+            } else if run.phase == .planning {
+                CancelButton(action: close)
+            } else if run.phase != .running {
+                DoneButton(action: close)
             }
         }
-        .padding(24).frame(width: 660)
-        .interactiveDismissDisabled(run.phase == .running)
     }
 }
 

@@ -172,29 +172,22 @@ struct UpdateBanner: View {
 
     var body: some View {
         if let version = offer.version, offer.showsBanner {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Image(systemName: "arrow.down.circle.fill").foregroundStyle(.blue)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("BenchBar \(version) is available").font(.callout.weight(.medium))
-                    Text(Self.explanation(offer.plan)).font(.caption).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    HStack {
-                        Button("Update Now") { offer.updateNow() }
-                        if let command = offer.command {
+            PaneBanner(symbol: "arrow.down.circle.fill", tint: .blue, title: "BenchBar \(version) is available",
+                   detail: Self.explanation(offer.plan), dismissHelp: "Hide until the next version", dismiss: { offer.dismiss() }) {
+                HStack {
+                    // bordered: the pane under the banner keeps its own main action
+                    Button("Update Now") { offer.updateNow() }
+                    Button("Release Notes") { offer.openReleaseNotes() }
+                    if let command = offer.command {
+                        MoreMenu(help: "Copy the update command") {
                             Button("Copy Command") { offer.copyCommand() }
                                 .help(command)
                         }
-                        Button("Release Notes") { offer.openReleaseNotes() }
                     }
-                    .controlSize(.small)
-                    .padding(.top, 2)
                 }
-                Spacer()
-                Button { offer.dismiss() } label: { Image(systemName: "xmark") }
-                    .buttonStyle(.borderless).help("Hide until the next version")
+                .controlSize(.small)
+                .padding(.top, 2)
             }
-            .padding(10)
-            .background(Color.blue.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
         }
     }
 }

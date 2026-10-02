@@ -19,7 +19,7 @@ final class PortSetupRun: Identifiable {
         self.startAfterSetup = startAfterSetup && summaries.count == 1
     }
 
-    var title: String { startAfterSetup ? "Resolve port conflict" : "Set up selected benches" }
+    var title: String { startAfterSetup ? "Resolve Port Conflict" : "Set Up Selected Benches" }
     var isBusy: Bool { phase == .planning || phase == .running }
 
     func loadPlan() async {

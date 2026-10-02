@@ -11,16 +11,16 @@ struct PaneHeader<Trailing: View>: View {
     @ViewBuilder var trailing: Trailing
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .center, spacing: WindowMetrics.spacing) {
             SymbolTile(symbol: symbol, tint: tint)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: WindowMetrics.lineSpacing) {
                 Text(title).font(.title2.weight(.semibold))
                 Text(subtitle).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
             }
-            Spacer(minLength: 12)
+            Spacer(minLength: WindowMetrics.spacing)
             trailing
         }
-        .padding(.horizontal, 20).padding(.top, 16).padding(.bottom, 6)
+        .padding(.horizontal, WindowMetrics.paneInset).padding(.top, 16).padding(.bottom, 6)
     }
 }
 
@@ -46,15 +46,37 @@ struct SymbolTile: View {
     }
 }
 
+private nonisolated struct DrawsGlassKey: EnvironmentKey {
+    static let defaultValue = true
+}
+
+nonisolated extension EnvironmentValues {
+    /// Off in the snapshot tests: an offscreen render (cacheDisplay) cannot
+    /// draw Liquid Glass, so a glass button would show as bare text.
+    var drawsGlass: Bool {
+        get { self[DrawsGlassKey.self] }
+        set { self[DrawsGlassKey.self] = newValue }
+    }
+}
+
+/// The style behind `primaryAction()`.
+private struct PrimaryActionStyle: ViewModifier {
+    @Environment(\.drawsGlass) private var drawsGlass
+
+    func body(content: Content) -> some View {
+        if #available(macOS 26, *), drawsGlass {
+            content.buttonStyle(.glassProminent)
+        } else {
+            content.buttonStyle(.borderedProminent)
+        }
+    }
+}
+
 extension View {
     /// The main action of a pane: a prominent glass button on macOS 26 and
     /// later, a prominent bordered one before.
-    @ViewBuilder func primaryAction() -> some View {
-        if #available(macOS 26, *) {
-            buttonStyle(.glassProminent)
-        } else {
-            buttonStyle(.borderedProminent)
-        }
+    func primaryAction() -> some View {
+        modifier(PrimaryActionStyle())
     }
 
     /// A row of page tabs: the macOS 27 tab picker, segmented before. The

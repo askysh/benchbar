@@ -18,6 +18,8 @@ struct SettingsView: View {
     @State private var previewState: BenchState = .running
     @State private var cliPathDraft = ""
     @State private var importMessage: String?
+    /// The custom runner waiting for the Remove confirmation.
+    @State private var runnerToRemove: Runner?
 
     init(settings: AppSettings, store: BenchStore, library: RunnerLibrary, launchAtLogin: LaunchAtLogin,
          notifier: Notifier, part: Part = .general, router: WindowRouter? = nil, chooseCLI: @escaping () -> Void) {
@@ -74,12 +76,12 @@ struct SettingsView: View {
 
     private var previewSection: some View {
         Section {
-            VStack(spacing: 14) {
+            VStack(spacing: WindowMetrics.spacing) {
                 RunnerPreview(runner: library.runner(settings.runnerID), state: previewState)
                     .frame(height: Runner.pointHeight * 3)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 18)
-                    .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .padding(.vertical, WindowMetrics.paneInset)
+                    .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: WindowMetrics.cornerRadius, style: .continuous))
                 Picker("Preview", selection: $previewState) {
                     Text("Stopped").tag(BenchState.stopped)
                     Text("Starting").tag(BenchState.starting)
@@ -90,7 +92,7 @@ struct SettingsView: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, WindowMetrics.lineSpacing + 2)
         } footer: {
             Text("Pick a state to see how the runner shows it.").font(.caption).foregroundStyle(.secondary)
         }
@@ -105,17 +107,29 @@ struct SettingsView: View {
                 }
             }
             LabeledContent("Your runners") {
-                HStack {
-                    if library.isCustom(settings.runnerID) {
-                        Button("Remove", role: .destructive) {
-                            let id = settings.runnerID
-                            settings.runnerID = Runner.defaultID
-                            library.remove(id)
+                HStack(spacing: WindowMetrics.rowSpacing) {
+                    Button("Import…", action: importRunner)
+                    MoreMenu(help: "More runner actions") {
+                        Button("Show Folder") { library.revealFolder() }
+                        if library.isCustom(settings.runnerID) {
+                            Divider()
+                            Button("Remove…", role: .destructive) { runnerToRemove = library.runner(settings.runnerID) }
                         }
                     }
-                    Button("Show Folder") { library.revealFolder() }
-                    Button("Import…", action: importRunner)
                 }
+            }
+            .confirmationDialog("Remove the runner \(runnerToRemove?.name ?? "")?",
+                                isPresented: Binding(get: { runnerToRemove != nil }, set: { if !$0 { runnerToRemove = nil } }),
+                                titleVisibility: .visible, presenting: runnerToRemove) { runner in
+                Button("Remove", role: .destructive) {
+                    if settings.runnerID == runner.id { settings.runnerID = Runner.defaultID }
+                    library.remove(runner.id)
+                    runnerToRemove = nil
+                    importMessage = nil
+                }
+                Button("Cancel", role: .cancel) { runnerToRemove = nil }
+            } message: { _ in
+                Text("Its folder moves from the Runners folder to the Trash, so you can take it back from there. The menu bar goes back to the default runner.")
             }
             if let importMessage {
                 Text(importMessage).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
@@ -280,45 +294,43 @@ struct SettingsView: View {
 
     private var cliSection: some View {
         Section {
-            LabeledContent("Status") { cliStatus }
+            LabeledContent("Status") {
+                HStack(spacing: WindowMetrics.rowSpacing) {
+                    cliStatus
+                    if case .ready(let url) = store.cli {
+                        MoreMenu(help: "More actions for the command line tool") {
+                            Button("Copy Path") { Workspace.copy(url.path) }
+                            Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+                        }
+                    }
+                }
+            }
             LabeledContent("Location") {
-                HStack {
+                HStack(spacing: WindowMetrics.rowSpacing) {
                     TextField("Location", text: $cliPathDraft, prompt: Text("Automatic"))
                         .labelsHidden()
                         .textFieldStyle(.roundedBorder)
                         .frame(maxWidth: 300)
                         .onSubmit(applyCLIPath)
+                    // back to the automatic search, when a custom path is set
+                    if case .ready = store.cli, !settings.cliPath.isEmpty {
+                        Button("Use Automatic") {
+                            cliPathDraft = ""
+                            applyCLIPath()
+                        }
+                    }
                     Button("Choose…", action: chooseCLI)
                 }
             }
             if case .missing(.notFound) = store.cli {
                 LabeledContent("Install") {
-                    HStack {
-                        Text(Homebrew.installCLI).font(.callout.monospaced()).textSelection(.enabled)
-                        Button("Copy") { Workspace.copy(Homebrew.installCLI) }
-                            .accessibilityLabel("Copy the Homebrew command that installs benchbar")
-                    }
-                }
-            }
-            if case .ready(let url) = store.cli {
-                LabeledContent("") {
-                    HStack {
-                        if !settings.cliPath.isEmpty {
-                            Button("Use Automatic") {
-                                cliPathDraft = ""
-                                applyCLIPath()
-                            }
-                        }
-                        Button("Copy Path") { Workspace.copy(url.path) }
-                        Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
-                    }
-                    .controlSize(.small)
+                    CopyableCommand(command: Homebrew.installCLI, copyLabel: "Copy the Homebrew command that installs benchbar")
                 }
             }
         } header: {
             Text("Command line tool")
         } footer: {
-            Text("Automatic looks in Homebrew (/opt/homebrew/bin, then /usr/local/bin), then ~/.local/bin (the one line installer's link). Install it with \(Homebrew.installCLI). Every change the app makes runs this command, the same one you use in Terminal.")
+            Text("Automatic uses the command line tool inside BenchBar, then Homebrew's (/opt/homebrew/bin, then /usr/local/bin), then ~/.local/bin (the one line installer's link). Every change the app makes runs this command, the same one you use in Terminal.")
                 .font(.caption).foregroundStyle(.secondary)
         }
         .onChange(of: settings.cliPath) { _, path in cliPathDraft = path }

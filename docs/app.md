@@ -62,19 +62,22 @@ has every route and ready to use Raycast and Shortcuts recipes.
 Open it with ⌘M, **Manage Bench…** in the popover, or by
 opening BenchBar again from Finder or Spotlight. It has a page per bench:
 
-- **Overview**: start, stop, restart, the site and ports, and the
-  scheduler switch. **Open in VS Code** (or Cursor, chosen in Settings,
-  General) opens the bench folder; **Console** and **Database** open
-  Terminal with `benchbar console` and `benchbar db` for the default site.
-  The ⋯ menu of each site on the Sites tab has both for that site. While the bench runs, two small charts show its CPU
+- **Overview**: start, stop and restart (one group of buttons), **Open
+  Site**, the site and ports, and the scheduler switch. **Open in VS
+  Code** (or Cursor, chosen in Settings, General) opens the bench folder.
+  The ⋯ menu beside Open Site has **Open Console** and **Open Database**
+  (Terminal with `benchbar console` and `benchbar db` for the default
+  site), Show in Finder and Copy Path. The ⋯ menu of each site on the
+  Sites tab has both for that site. **Port Settings & Setup…** sits in
+  the header of the Site and ports section. While the bench runs, two small charts show its CPU
   and memory for the last ten minutes (hover for the value at a moment);
   the popover shows the current values under the bench name. They count
   the bench's own processes, not the shared MariaDB, and are kept in
   memory only. A bench with a lockfile (`benchbar.toml`) shows **In
   sync** or **N differences** with the list, from `benchbar lock check`
   (read only); bring it in line with `benchbar lock apply` in Terminal.
-- **Sites**: add a site (it asks for the Administrator password), make
-  one the default, open any of them. The ⋯ menu of a site backs it up
+- **Sites**: add a site (it asks for the Administrator password) and open
+  any of them. The ⋯ menu of a site makes it the default, backs it up
   (with or without files) and shows the last backup in Finder. **Drop
   Site…** deletes the site's database and database user for good; only
   the backup bench takes first (with files) can bring it back. The sheet
@@ -83,11 +86,18 @@ opening BenchBar again from Finder or Spotlight. It has a page per bench:
   bench. The default site can be dropped only by naming the site that
   takes its place, and the only site of a bench cannot be dropped. Removing the site's `/etc/hosts` line needs
   your password, so the sheet shows that command to run in Terminal.
-- **Apps**: add an app from the registry or any GitHub URL, install it on
-  a site, and update it after reading the changelog. Right click a bench
-  in the sidebar for its actions.
+- **Apps**: add an app from the registry or any GitHub URL, and update it
+  after reading the changelog. Each app's ⋯ menu installs it on a site
+  that lacks it and sets its focus (Auto, Focus, Ignore). The ⋯ menu
+  beside **Add App…** has **Refresh Site Lists** and **Check Remotes**.
+  Right click a bench in the sidebar for its actions.
 - **Health**: doctor's checks, and Repair with its plan shown before
   anything changes and each step as it runs.
+
+Every sheet works the same way: the plan or the form first, then your
+confirmation, the run with its progress at the bottom, and the outcome on
+top. Return confirms and Esc cancels; a sheet cannot be closed while its
+change runs. Drop Site is never on Return: it needs the site name typed.
 
 ![The BenchBar window: a bench's overview with Start, Stop, Restart, its site and ports, and the scheduler switch](images/window-overview.png)
 
@@ -105,9 +115,10 @@ Above the benches:
   [Custom runners](runners.md).
 - **Team Profiles**: every profile with where it comes from (built in,
   local, imported, subscribed), a badge when a subscription is behind and
-  a warning when another file with the same name hides one. **Import…**
-  takes a `.toml` file or an https link (or drop the file on the page),
-  **Subscribe…** a team's git repository of profiles. Each profile's ⋯
+  a warning when another file with the same name hides one. The **Add
+  Profile** menu has **Create from Bench…**, **Import…** (a `.toml` file
+  or an https link; or drop the file on the page) and **Subscribe to a
+  Repository…** (a team's git repository of profiles). Each profile's ⋯
   menu has Export (pick each app's branch and which apps to share, then
   Copy Import Link), Update (shows the changes first), Check Access
   (which repositories your git credentials reach), Show in Finder and
@@ -116,9 +127,10 @@ Above the benches:
   before they write, and nothing is installed from this page. See
   [Teams](guides/teams.md#team-profiles).
 - **About**: the app's version and the command line tool's (with its
-  path), Check for Updates, links to the documentation, the release
-  notes and the source, Report a Bug, and the `claude mcp add` command
-  for coding agents.
+  path), Check for Updates (with **Update Now** when a newer release is
+  out, and Copy Update Command and Release Notes in its ⋯ menu), links to
+  the documentation, the release notes and the source, Report a Bug, and
+  the `claude mcp add` command for coding agents.
 
 ![Team Profiles: the built in profiles and a team profile with where each comes from, and the Import and Subscribe buttons](images/window-profiles.png)
 
@@ -146,9 +158,10 @@ instead.
   BenchBar. The app carries its command line tool, so the CLI is updated
   with it; nothing runs in Terminal. Your benches keep running. A build
   without Sparkle (one you built yourself) opens the release page.
-- **Copy Command**: for an app from the `benchbar-app` cask, `brew
-  upgrade askysh/tap/benchbar-app`, the same update through Homebrew.
 - **Release Notes**: the release page.
+- **Copy Command**, in the banner's ⋯ menu: for an app from the
+  `benchbar-app` cask, `brew upgrade askysh/tap/benchbar-app`, the same
+  update through Homebrew.
 
 The close button on the banner hides it until the next version; the
 menu item stays. See [Updating](install.md#updating).
@@ -224,7 +237,8 @@ asks every site once and fills `ping_code` in the JSON; see
 
 Choose **Scan Folder…** in the menu bar popover (or its right-click menu),
 then select a folder such as `~/Developer`. **Find Benches** in the window
-keeps the results and offers **Choose Folder…** and **Scan Again**.
+keeps the results and offers **Choose Folder…** and **Scan Again** (the
+↻ button beside the folder).
 
 The scanner searches subfolders, up to six levels deep, until it finds a
 bench. Hidden folders, symlinks, dependency/build folders, test/fixture
