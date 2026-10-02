@@ -402,7 +402,7 @@ Asked for after the phases, to stop naming drift before the first release.
 - Update Now is Sparkle only. The cask keeps `auto_updates true`: Homebrew 7 upgrades such a cask on a plain `brew upgrade` only when the app bundle's own version is older than the tap's, so a Sparkle update and a later `brew upgrade` never fight. `--greedy` is gone; naming the cask upgrades it. A build without Sparkle opens the release page instead of running the installer in Terminal.
 - `AppCLILink` re-points the link with a temporary link renamed over the old one, so a benchbar starting at that moment finds a link either way.
 
-## 0.7: the window pass
+## 0.7.2: the window pass
 
 - One `SheetScaffold` for every sheet (title, one line of explanation, content, footer) and one `SheetPhase` for its states, so loading, running, the result and a failure look the same in all fourteen; each run keeps its own phase and maps onto `SheetPhase`, the CLI calls are untouched.
 - The scaffold's content scrolls past 520 points (420 hid the diff under review in Import) while the title and footer stay; it measures its content (`onGeometryChange`) because a scroll view in a sheet takes no height of its own. Plan lists lost their inner scroll views and computed heights; a diff keeps its own, bounded.
