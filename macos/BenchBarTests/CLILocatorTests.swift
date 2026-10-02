@@ -4,8 +4,18 @@ import Testing
 
 @Suite("CLI locator")
 struct CLILocatorTests {
+    @Test func theAppsOwnCLIComesRightAfterSettings() throws {
+        let bundled = "/Applications/BenchBar.app/Contents/Resources/cli/benchbar"
+        let installed: Set = [bundled, "/opt/homebrew/bin/benchbar", "/Users/you/src/benchbar"]
+        let locator = CLILocator(home: URL(fileURLWithPath: "/Users/you"), isExecutable: { installed.contains($0) },
+                                 exists: { installed.contains($0) }, resolve: { $0 }, bundled: bundled)
+        #expect(Array(locator.candidates(userPath: nil).prefix(2)) == [bundled, "/opt/homebrew/bin/benchbar"])
+        #expect(try locator.locate(userPath: nil).path == bundled)
+        #expect(try locator.locate(userPath: "/Users/you/src/benchbar").path == "/Users/you/src/benchbar", "a saved path still wins")
+    }
+
     @Test func searchOrder() {
-        let locator = CLILocator(home: URL(fileURLWithPath: "/Users/you"), isExecutable: { _ in false }, resolve: { $0 })
+        let locator = CLILocator(home: URL(fileURLWithPath: "/Users/you"), isExecutable: { _ in false }, resolve: { $0 }, bundled: nil)
         #expect(locator.candidates(userPath: "~/src/benchbar") == [
             (("~/src/benchbar") as NSString).expandingTildeInPath,
             "/opt/homebrew/bin/benchbar",

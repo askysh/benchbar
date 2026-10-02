@@ -8,11 +8,14 @@ import Foundation
 ///   1. the path saved in Settings (a Cellar path counts as its stable
 ///      <prefix>/opt/benchbar/bin/benchbar; a path that is gone falls
 ///      back to the rest of this list)
-///   2. /opt/homebrew/bin/benchbar  (Homebrew's formula)
-///   3. /usr/local/bin/benchbar     (Homebrew on Intel, only when it is that formula)
-///   4. ~/.local/bin/benchbar       (the one line installer's link)
-///   5. /usr/local/bin/benchbar     (anything else there)
-///   6. ~/.local/bin/frappe-mac     (installs from before the rename)
+///   2. the CLI inside this app (Contents/Resources/cli/benchbar), the
+///      one Homebrew's and the installer's copy hand off to
+///   3. /opt/homebrew/bin/benchbar  (Homebrew's formula)
+///   4. /usr/local/bin/benchbar     (Homebrew on Intel, only when it is that formula)
+///   5. ~/.local/bin/benchbar       (the one line installer's link)
+///   6. /usr/local/bin/benchbar     (anything else there)
+///   7. ~/.local/bin/frappe-mac     (installs from before the rename)
+/// A build from Xcode carries no CLI and starts at 3.
 /// If none exists, the app asks once with a file picker.
 nonisolated struct CLILocator: Sendable {
     var home: URL = FileManager.default.homeDirectoryForCurrentUser
@@ -20,6 +23,14 @@ nonisolated struct CLILocator: Sendable {
     /// False for a dangling link too: its target is gone.
     var exists: @Sendable (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
     var resolve: @Sendable (String) -> String = { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path }
+    /// The CLI inside this app, nil when the build carries none.
+    var bundled: String? = CLILocator.bundledCLI()
+
+    static func bundledCLI(in bundle: Bundle = .main) -> String? {
+        guard let resources = bundle.resourceURL else { return nil }
+        let path = resources.appendingPathComponent("cli/benchbar").path
+        return FileManager.default.isExecutableFile(atPath: path) ? path : nil
+    }
 
     /// The Settings path as the locator uses it: tilde expanded, a Cellar
     /// path moved to its opt link. nil for Automatic.
@@ -31,6 +42,7 @@ nonisolated struct CLILocator: Sendable {
     func candidates(userPath: String?) -> [String] {
         var list: [String] = []
         if let saved = saved(userPath) { list.append(saved) }
+        if let bundled { list.append(bundled) }
         let usrLocal = "/usr/local/bin/benchbar"
         // a stale /usr/local/bin/benchbar that is not Homebrew's (an old
         // manual copy) must not win over the one line installer's link
@@ -76,8 +88,9 @@ nonisolated enum Homebrew {
     static let install = "brew install askysh/tap/benchbar askysh/tap/benchbar-app"
     static let installCLI = "brew install askysh/tap/benchbar"
     static let upgradeCLI = "brew upgrade askysh/tap/benchbar"
-    /// The cask has auto_updates, so a plain `brew upgrade` skips it.
-    static let upgradeApp = "brew upgrade --cask --greedy askysh/tap/benchbar-app"
+    /// The cask has auto_updates: brew replaces the app only when the app's
+    /// own version is older than the tap's, so Sparkle and brew both work.
+    static let upgradeApp = "brew upgrade askysh/tap/benchbar-app"
     /// Apple silicon first, then Intel.
     static let prefixes = ["/opt/homebrew", "/usr/local"]
 

@@ -612,8 +612,13 @@ cmd_repair() {
 cmd_where() {
   local info app_version="" app_path="" tab=$'\t' how
   [[ "${#ARGS[@]}" == "0" ]] || fl_die "Unexpected argument for where: ${ARGS[0]}" "Usage: benchbar where [--json]"
-  info="$(fl_app_bundle_info)"
-  if [[ -n "$info" ]]; then app_version="${info%%"$tab"*}"; app_path="${info#*"$tab"}"; fi
+  if [[ "$FL_INSTALL_KIND" == app ]]; then
+    # the app this CLI is part of, not the first one found
+    app_path="${SCRIPT_DIR%/Contents/Resources/cli}"; app_version="$(fl_app_bundle_version_at "$app_path")"
+  else
+    info="$(fl_app_bundle_info)"
+    if [[ -n "$info" ]]; then app_version="${info%%"$tab"*}"; app_path="${info#*"$tab"}"; fi
+  fi
   if [[ "$OPT_JSON" == "1" ]]; then
     printf '{"schema_version":%d,"cli_version":%s,"install":%s,"self":%s,"state_dir":%s,"app_version":%s,"app_path":%s,"handoff_from":%s}\n' \
       "$FL_SCHEMA_VERSION" "$(fl_json_str "$FL_VERSION")" "$(fl_json_str "$FL_INSTALL_KIND")" "$(fl_json_str "$FL_SELF")" \

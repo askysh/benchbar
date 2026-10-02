@@ -92,6 +92,8 @@ assert_eq "app" "$(where_field install)"
 assert_eq "$LINK" "$(where_field self)"
 assert_eq "$OPT_SELF" "$(where_field handoff_from)"
 assert_eq "$HOME/.local/state/benchbar" "$(where_field state_dir)"
+assert_eq "$APP" "$(where_field app_path)" "(the app it is part of)"
+assert_eq "0.7.2" "$(where_field app_version)"
 run "$PREFIX/bin/benchbar" where
 assert_contains "$OUT" "installed inside BenchBar.app"
 assert_contains "$OUT" "via      $OPT_SELF, which hands off to this CLI"

@@ -22,9 +22,6 @@ final class UpdateOffer {
     private(set) var version: String?
     private(set) var page: URL?
     private(set) var dismissedVersion: String?
-    /// Why Update Now could not open Terminal.
-    var error: String?
-
     var showsBanner: Bool { UpdateSchedule.showsBanner(offer: version, dismissed: dismissedVersion) }
 
     let currentVersion: String
@@ -37,14 +34,10 @@ final class UpdateOffer {
     @ObservationIgnored private var timer: Timer?
     @ObservationIgnored private var checking = false
 
-    /// The benchbar the app runs, for the plan. Set by the app delegate.
-    @ObservationIgnored var cliPath: () -> String? = { nil }
-    @ObservationIgnored var environment: (String?) -> UpdatePlan.Environment = { UpdatePlan.Environment.live(cliPath: $0) }
-    @ObservationIgnored var runInTerminal: (String, String) throws -> Void = { try Workspace.runInTerminal(name: $0, contents: $1) }
-    @ObservationIgnored var quit: () -> Void = { NSApp.terminate(nil) }
+    @ObservationIgnored var environment: () -> UpdatePlan.Environment = { UpdatePlan.Environment.live() }
     @ObservationIgnored var copy: (String) -> Void = { Workspace.copy($0) }
     @ObservationIgnored var openURL: (URL) -> Void = { NSWorkspace.shared.open($0) }
-    /// Sparkle's Check for Updates, for a plan whose app Sparkle replaces. Set by the app delegate.
+    /// Sparkle's Check for Updates. Set by the app delegate.
     @ObservationIgnored var checkWithSparkle: () -> Void = {}
 
     init(settings: AppSettings, currentVersion: String = BenchBarLinks.appVersion, defaults: UserDefaults = .standard,
@@ -61,7 +54,7 @@ final class UpdateOffer {
     }
 
     var plan: UpdatePlan {
-        var env = environment(cliPath())
+        var env = environment()
         env.sparkle = sparkle
         return UpdatePlan.make(env)
     }
@@ -127,39 +120,23 @@ final class UpdateOffer {
         defaults.set(version, forKey: Key.dismissed)
     }
 
-    /// Terminal runs the plan's commands from a `.command` file (no Apple
-    /// Events, so no Automation prompt), then BenchBar quits so the
-    /// installer or brew can replace it; the script opens it again at the
-    /// end. When Sparkle replaces the app, BenchBar stays open and asks
-    /// Sparkle instead.
+    /// Sparkle replaces the app, and the CLI inside it, where it is; a
+    /// build without Sparkle opens the release page.
     func updateNow() {
-        guard let version else { return }
-        let plan = plan
-        if plan.runsInTerminal {
-            do {
-                try runInTerminal("update-benchbar", plan.script(from: currentVersion, to: version))
-            } catch {
-                self.error = "Could not open Terminal: \(error.localizedDescription). Copy the command and run it yourself."
-                return
-            }
+        guard version != nil else { return }
+        switch plan.channel {
+        case .sparkle: checkWithSparkle()
+        case .releasePage: openReleaseNotes()
         }
-        error = nil
-        guard plan.replacesApp else {
-            checkWithSparkle()
-            return
-        }
-        // a moment for Terminal to take the file; the installer only
-        // replaces the app after its git pull and download
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [quit] in quit() }
     }
 
     func copyCommand() {
-        guard let version else { return }
-        copy(plan.command(to: version))
+        guard version != nil, let command = plan.command else { return }
+        copy(command)
     }
 
-    /// The command Copy Command copies, for its tooltip.
-    var command: String { version.map { plan.command(to: $0) } ?? "" }
+    /// The command Copy Command copies, nil when there is none.
+    var command: String? { version == nil ? nil : plan.command }
 
     func openReleaseNotes() { openURL(page ?? BenchBarLinks.releases) }
 
@@ -171,13 +148,13 @@ final class UpdateOffer {
         alert.informativeText = UpdateBanner.explanation(plan)
         alert.addButton(withTitle: "Update Now")
         alert.addButton(withTitle: "Cancel")
-        alert.addButton(withTitle: "Copy Command")
         alert.addButton(withTitle: "Release Notes")
+        if command != nil { alert.addButton(withTitle: "Copy Command") }
         NSApp.activate()
         switch alert.runModal() {
         case .alertFirstButtonReturn: updateNow()
-        case .alertThirdButtonReturn: copyCommand()
-        case NSApplication.ModalResponse(rawValue: 1003): openReleaseNotes()  // the fourth button
+        case .alertThirdButtonReturn: openReleaseNotes()
+        case NSApplication.ModalResponse(rawValue: 1003): copyCommand()  // the fourth button
         default: break
         }
     }
@@ -201,13 +178,12 @@ struct UpdateBanner: View {
                     Text("BenchBar \(version) is available").font(.callout.weight(.medium))
                     Text(Self.explanation(offer.plan)).font(.caption).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-                    if let error = offer.error {
-                        Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled)
-                    }
                     HStack {
                         Button("Update Now") { offer.updateNow() }
-                        Button("Copy Command") { offer.copyCommand() }
-                            .help(offer.command)
+                        if let command = offer.command {
+                            Button("Copy Command") { offer.copyCommand() }
+                                .help(command)
+                        }
                         Button("Release Notes") { offer.openReleaseNotes() }
                     }
                     .controlSize(.small)
