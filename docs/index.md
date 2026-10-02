@@ -36,7 +36,8 @@ sites or databases.
 - **A menu bar app.** State at a glance, start, stop, restart, the site,
   the logs, a read only doctor, and crash notifications. The BenchBar
   window adds a page per bench: sites, apps, doctor and Repair. The app
-  never writes to a bench itself; it runs the CLI and reads its JSON. See
+  never writes to a bench itself; it runs the CLI and reads its JSON. It
+  carries a CLI of its own version, so one update covers both. See
   [The menu bar app](app.md).
 - **Several benches side by side.** A v15 and a v16 bench, each with its
   own ports, sites and scheduler, on one MariaDB. See
@@ -72,7 +73,8 @@ No Docker, no VM, no preinstalled Python, Node, MariaDB or Redis.
   full plan and changes nothing. A second run says `unchanged`.
 - Generated files carry a version and content hash header. They are
   rewritten only when their template or inputs changed, and the previous
-  copy goes to `.benchbar/backups/<timestamp>/` first.
+  copy goes to `backups/<timestamp>/` in benchbar's state folder first
+  (`~/.local/state/benchbar`; `benchbar where` shows it).
 - `install`, `adopt`, `doctor` and `repair` never change your sites,
   databases, `apps/` or your own files; the one exception is the port
   keys in `sites/common_site_config.json` when a bench moves to a free
@@ -92,7 +94,8 @@ No Docker, no VM, no preinstalled Python, Node, MariaDB or Redis.
   wkhtmltopdf package, once per run and only after saying why.
 - The MariaDB root password lives in the Keychain and reaches the client
   through `MYSQL_PWD`, never on a command line.
-- Full logs of every mutating run: `.benchbar/logs/<timestamp>.log`.
+- Full logs of every mutating run: `logs/<timestamp>.log` in the same
+  state folder.
 
 ## Documentation
 

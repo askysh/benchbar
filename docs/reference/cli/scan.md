@@ -46,7 +46,8 @@ benchbar register PATH ... [--json] [--dry-run]
 
 Remembers the benches you name, so `benchbar list` and the app show
 them. Every path must be a bench, or nothing is written. It adds them
-to `.benchbar/registered-benches.txt` in the benchbar checkout, once
+to `registered-benches.txt` in benchbar's state folder
+(`~/.local/state/benchbar`, or `.benchbar` in a git checkout), once
 each; it does not write a service file, change the default bench or
 touch the bench. To forget one, delete its line from that file.
 

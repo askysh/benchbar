@@ -22,6 +22,8 @@ the argument `mcp`.
 | `benchbar_doctor` | The read only health report of one bench, every check with its level and fix |
 | `benchbar_logs_tail` | The last lines of the bench log, one process if asked |
 | `benchbar_site_list` | The sites of one bench, the default, the hosts line and the ping code |
+| `benchbar_profile_list` | Built in and team profiles: where each comes from, how far a subscription is behind, what hides what |
+| `benchbar_profile_check` | Whether git can read every repo of a team profile (`name`) with your credentials, and which apps `install --profile` would leave out |
 | `benchbar_up` | Start a bench and wait for its default site |
 | `benchbar_down` | Stop a bench and keep it stopped, also across reboots |
 | `benchbar_restart` | Restart every process of a bench |
@@ -30,7 +32,8 @@ the argument `mcp`.
 
 `benchbar_list`, `benchbar_status`, `benchbar_doctor`,
 `benchbar_logs_tail` (last lines, one process if asked),
-`benchbar_site_list` and `benchbar_app_add_plan` read; `benchbar_up`,
+`benchbar_site_list`, `benchbar_profile_list`, `benchbar_profile_check`
+and `benchbar_app_add_plan` read; `benchbar_up`,
 `benchbar_down`, `benchbar_restart` and `benchbar_app_add` act. Each one
 runs `benchbar ... --json` and returns what the CLI printed. Nothing that
 repairs, installs a bench or needs `sudo` is offered. It needs only
@@ -61,8 +64,9 @@ waits up to an hour and returns everything at the end. Some clients stop
 waiting sooner: the run goes on, and `benchbar_status` or `app list`
 shows the outcome.
 
-Every tool but `benchbar_list` takes an optional `bench`, the absolute
-path from `benchbar_list`; without it the tool acts on the default bench.
+Every tool but `benchbar_list` and the two profile tools takes an
+optional `bench`, the absolute path from `benchbar_list`; without it the
+tool acts on the default bench.
 The JSON each one returns is described in the [JSON schema](../json-schema.md).
 
 ## Repairs and installs

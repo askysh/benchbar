@@ -21,7 +21,7 @@ These come from `benchbar --help` and work with every command below.
 | `--json` | Versioned JSON where a command supports it ([JSON schema](../../json-schema.md)) |
 | `--plain` | No colors or spinners (also: `NO_COLOR=1`, or a non TTY) |
 | `-h`, `--help` | The help |
-| `--version` | Print the version |
+| `--version` | Print the version, and the BenchBar app's when it is installed |
 
 ## install
 

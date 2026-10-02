@@ -55,9 +55,10 @@ the first call.
 Exit codes: 0 repaired, or nothing to do; 1 a step failed or the plan was
 declined.
 
-The full output of every run is in `.benchbar/logs/<timestamp>.log` and
-the backups in `.benchbar/backups/<timestamp>/`, in the benchbar
-checkout (`~/.local/share/benchbar` after the one line installer).
+The full output of every run is in `logs/<timestamp>.log` and the
+backups in `backups/<timestamp>/`, in benchbar's state folder:
+`~/.local/state/benchbar` for Homebrew, the one line installer and the
+app's CLI, `.benchbar` in a git checkout. `benchbar where` shows it.
 
 ```bash
 benchbar repair --dry-run
