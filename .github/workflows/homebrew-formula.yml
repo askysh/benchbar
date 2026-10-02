@@ -103,8 +103,9 @@ jobs:
               print("::error::" + line)
           sys.exit(1 if bad else 0)
           EOF
-          if grep -R -l "$(brew --prefix)/Cellar" "$HOME" 2>/dev/null; then
-            echo "::error::a file in HOME names a Cellar path"; exit 1
+          # what benchbar writes; HOME/Library has brew's own caches, which name the Cellar
+          if grep -R -l "$(brew --prefix)/Cellar" "$HOME/.local" "$HOME/.zshrc" "$HOME/frappe-bench" 2>/dev/null; then
+            echo "::error::a file benchbar wrote names a Cellar path"; exit 1
           fi
 
       - name: brew uninstall
