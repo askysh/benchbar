@@ -29,6 +29,10 @@ install`; you can say no and run them yourself as below. The last line
 is `BenchBar is installed.`, and `benchbar --version` in a new Terminal
 tab prints the version.
 
+With Homebrew, `brew install askysh/tap/benchbar askysh/tap/benchbar-app`
+does the same; see [Install](install.md#homebrew). Either way, the app
+carries its own copy of the CLI and every `benchbar` hands off to it.
+
 Two words you will see a lot: a **bench** is the folder that holds a
 Frappe installation (its apps, its Python environment and its sites),
 and a **site** is one Frappe instance inside it, with its own database
@@ -113,7 +117,7 @@ Things worth checking:
 Everything is idempotent: run `benchbar install`, `repair` or `adopt`
 twice and the second run says `unchanged`.
 
-### New in 0.5, worth a try
+### More to try
 
 - **The BenchBar window**: ⌘M in the popover (or open BenchBar again from
   Spotlight). Each bench has Overview, Sites, Apps and Health. Right
@@ -139,9 +143,10 @@ twice and the second run says `unchanged`.
 - **A coding agent**: `claude mcp add benchbar -- benchbar mcp`, then ask
   it how your benches are doing.
 
-Coming from 0.4: re-run the install line above to update, then run
-`benchbar doctor`. If it says the runner script is outdated, `benchbar
-repair` rewrites it (it asks first).
+Coming from an older version: update as in
+[Updating](install.md#updating), then run `benchbar doctor`. If it says
+the runner script is outdated, `benchbar repair` rewrites it (it asks
+first).
 
 ## 3. Send a report
 
@@ -175,13 +180,15 @@ curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | b
 
 removes the app, the `benchbar` links and the PATH block. Then it asks,
 one at a time, whether to stop each bench's launchd agent and remove it
-with its runner and `Procfile.lean`, and whether to delete
-`~/.local/share/benchbar`, which also holds the logs and file backups
-of every benchbar run. Answer no to keep those logs. Your benches, their
-sites and databases, the Homebrew packages and the MariaDB password in
-the Keychain stay. Add `--dry-run` after `--uninstall` to see the list
+with its runner and `Procfile.lean`, and whether to delete the checkout
+in `~/.local/share/benchbar`. The logs and file backups of every
+benchbar run stay in `~/.local/state/benchbar`; move that folder to the
+Trash yourself when you no longer want them. Your benches, their sites
+and databases, the Homebrew packages and the MariaDB password in the
+Keychain stay. Add `--dry-run` after `--uninstall` to see the list
 first. `benchbar uninstall-service` alone removes only the background
-service of one bench.
+service of one bench. For a Homebrew install, see
+[Uninstall](install.md#uninstall).
 
 ## Running the test suite (contributors)
 

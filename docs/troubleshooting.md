@@ -8,8 +8,9 @@ names its fix, and `benchbar repair` applies the fixes it flagged. The
 full command output of every mutating run is in
 `logs/<timestamp>.log` of benchbar's state folder, and the backups of
 every replaced file in `backups/<timestamp>/`. The state folder is
-`~/.local/state/benchbar` with Homebrew and the one line installer, or
-`.benchbar` in the folder you cloned; `benchbar where` shows it.
+`~/.local/state/benchbar` with Homebrew, the one line installer and the
+CLI inside BenchBar.app, or `.benchbar` in the folder you cloned;
+`benchbar where` shows it.
 
 ## Common stumbles
 
@@ -69,9 +70,17 @@ A second MariaDB (11.8 on another port) is not needed for development.
 **Phase 2 says the bench has apps or sites but no env.** That is the
 cleanup tool case below. Run `benchbar repair`, not the installer.
 
-**The runner is reported outdated after an update.** The runner script
-carries the CLI version. `benchbar repair` rewrites it; the bench keeps
-running and picks the new runner up on its next start.
+**The runner is reported outdated after an update.** An update that
+changed the runner's template makes every runner written before it
+outdated (a new version alone does not, since 0.7.0). `benchbar repair`
+rewrites it; the bench keeps running and picks the new runner up on its
+next start.
+
+**`benchbar` in Terminal is older than the app.** Since 0.7.1
+Homebrew's and the one line installer's `benchbar` hand off to the CLI
+inside BenchBar.app. A copy from before 0.7.1 cannot, and doctor's
+"Second CLI" check names it with the command that updates it.
+`benchbar where` shows which CLI runs and which one handed off to it.
 
 **PDFs do not print.** wkhtmltopdf was skipped or is the Homebrew build.
 `benchbar doctor` says which; `benchbar repair` installs the official
@@ -214,6 +223,9 @@ are reported so you can remove them by hand.
   `/etc/hosts`
 - `~/.local/bin/benchbar` and `~/.local/bin/frappe-mac`, links to the
   checkout, or to Homebrew's benchbar when one is there
+- `~/.local/state/benchbar/bin/benchbar`, written by BenchBar.app at
+  launch: a link to the CLI inside the app, which Homebrew's and the
+  installer's `benchbar` hand off to
 - the Keychain item `benchbar-mariadb`
 - `<bench>/logs/.benchbar/state.json`, written by the runner
 - the state folder, `~/.local/state/benchbar` (`.benchbar/` in a git

@@ -8,7 +8,9 @@ runner, and a window with a page per bench for its sites, apps and
 health. It installs with [Homebrew](install.md#homebrew) (the
 `benchbar-app` cask), the
 [one line installer](install.md#the-one-line-installer) or the
-[DMG](install.md#the-app-from-the-dmg).
+[DMG](install.md#the-app-from-the-dmg), and carries its own copy of
+the CLI (see [The command line tool inside the
+app](#the-command-line-tool-inside-the-app)).
 
 ## The runner
 
@@ -95,8 +97,10 @@ opening BenchBar again from Finder or Spotlight. It has a page per bench:
 
 Above the benches:
 
-- **General**: open at login, notifications, **Check for updates
-  automatically**, which `benchbar` the app runs, the keyboard shortcuts.
+- **General**: open at login, notifications, which `benchbar` the app
+  runs (Automatic, or a path you choose), the editor for **Open in VS
+  Code** or Cursor, and the keyboard shortcuts. A build without Sparkle
+  (one you built yourself) also has **Check for updates automatically**.
 - **Menu Bar**: the runner, with a live preview and custom runners, see
   [Custom runners](runners.md).
 - **Team Profiles**: every profile with where it comes from (built in,
@@ -111,21 +115,32 @@ Above the benches:
   subscription with every profile in it). Import and update show what changes
   before they write, and nothing is installed from this page. See
   [Teams](guides/teams.md#team-profiles).
-- **About**: the versions, Check for Updates, Report a Bug.
+- **About**: the app's version and the command line tool's (with its
+  path), Check for Updates, links to the documentation, the release
+  notes and the source, Report a Bug, and the `claude mcp add` command
+  for coding agents.
 
 ![Team Profiles: the built in profiles and a team profile with where each comes from, and the Import and Subscribe buttons](images/window-profiles.png)
 
 ## Updates
 
-BenchBar asks GitHub for the latest release at most once a day, when it
-starts, when the Mac wakes, and on an hourly look at the clock. The
-check is one request to the GitHub API and downloads nothing. Turn it
-off in General with **Check for updates automatically**; **Check for
-Updates** in About and in the app menu still works. A build with Sparkle
-(see [Releasing](releasing.md)) leaves the schedule to Sparkle.
+Every release has Sparkle, the macOS updater (see
+[Releasing](releasing.md)). It checks for a new version once a day on
+its own and offers it in its own window; **Check for Updates…** in the
+app menu and the menu bar menu asks at once. **Check for Updates** in
+About asks GitHub for the latest release, one request that downloads
+nothing.
 
-When a newer release is out, the popover and the menu bar menu show
-**Update to X…**, and the BenchBar window shows a banner with:
+A build without Sparkle (one you built yourself) asks GitHub itself, at
+most once a day: when it starts, when the Mac wakes, and on an hourly
+look at the clock. Turn that off in General with **Check for updates
+automatically**; **Check for Updates** in About still works.
+
+When the GitHub check (Check for Updates in About, or the daily check of
+a build without Sparkle) finds a newer release, the popover and the menu
+bar menu show **Update to X…**, and the BenchBar window shows a banner
+with the choices below. Sparkle's own check shows its own window
+instead.
 
 - **Update Now**: Sparkle downloads the new version and restarts
   BenchBar. The app carries its command line tool, so the CLI is updated
@@ -159,13 +174,14 @@ a Copy button.
 
 ## First run
 
-On first run the app looks for the CLI in Homebrew's folders first,
-`/opt/homebrew/bin`, then `/usr/local/bin` when that is Homebrew's
-benchbar too, then in `~/.local/bin`, the one line installer's link. A
-path chosen in General comes before all of them; one that is gone, such
-as a Cellar folder after `brew cleanup`, falls back to Automatic. With
-no CLI at all, the app says to install one with `brew install
-askysh/tap/benchbar` and asks once with a file picker.
+On Automatic the app runs the CLI inside it. A path chosen in General
+comes first; one that is gone, such as a Cellar folder after `brew
+cleanup`, falls back to Automatic. Only a build that carries no CLI (one
+run from Xcode) looks further: Homebrew's folders, `/opt/homebrew/bin`,
+then `/usr/local/bin` when that is Homebrew's benchbar too, then
+`~/.local/bin`, the one line installer's link. With no CLI at all, the
+app says to install one with `brew install askysh/tap/benchbar` and
+asks once with a file picker.
 macOS asks whether BenchBar may send notifications; allow it for the
 crash alerts.
 

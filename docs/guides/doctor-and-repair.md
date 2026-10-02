@@ -412,7 +412,9 @@ went to the Trash.
 
 Under Homebrew a block that runs a git checkout with its own
 `.benchbar` folder is a warning and stays as it is: Homebrew's CLI never
-reads that checkout's state, so `benchup` would lose its benches.
+reads that checkout's state, so `benchup` would lose its benches. A
+block that names Homebrew's or the one line installer's `benchbar`
+stays as it is when that copy hands off to the CLI inside BenchBar.app.
 
 Fix: `benchbar repair` writes the block. Remove an old block by hand.
 
@@ -426,7 +428,8 @@ as current. Under Homebrew a link that leads anywhere else, such as the
 one line installer's checkout or a Cellar folder, comes first on PATH and
 is a warning. A link to a git checkout with its own `.benchbar` folder is
 a warning too, but repair leaves it: that checkout's state is not
-Homebrew's.
+Homebrew's. For the CLI inside BenchBar.app, links to a Homebrew or
+installer copy that hands off to it are current.
 
 Fix: `benchbar repair` writes the links. With Homebrew's benchbar
 installed it never makes a new one: it points a wrong link at this CLI
@@ -453,6 +456,13 @@ it ends. When the two folders are on different volumes the state stays
 in `~/.local/share/benchbar/.benchbar`, so keep that folder. To keep the
 installer's, `brew uninstall benchbar`. There is no repair action: which
 copy stays is your call.
+
+The CLI inside BenchBar.app (0.7.1) next to Homebrew's or the
+installer's copy is the normal case: since 0.7.1 those hand off to it,
+so this check passes. A copy too old to hand off (before 0.7.1) is a
+warning, because `benchbar` in Terminal may run that older copy. Fix:
+`brew upgrade askysh/tap/benchbar` for Homebrew's, `git -C
+~/.local/share/benchbar pull --ff-only` for the installer's.
 
 ### legacy_agents
 

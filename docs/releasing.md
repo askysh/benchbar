@@ -141,8 +141,11 @@ brew install askysh/tap/benchbar                           # CLI only
 
 Both names are typed because Homebrew only trusts a third party tap for
 the names given on the command line; the cask alone would be refused its
-formula. The CLI is not bundled in the app, so the formula works on
-Intel Macs too while the cask is Apple silicon only.
+formula. Since 0.7.1 the app also carries its own copy of the CLI (the
+same files as the formula's tarball, copied in by
+`scripts/app-embed-cli.sh` when the app is built), and the formula's
+`benchbar` hands off to it. The formula still stands on its own, so it
+works on Intel Macs too while the cask is Apple silicon only.
 
 Pull requests that change the CLI or `packaging/homebrew` also run
 `homebrew-formula.yml`, which builds the tarball from the checkout,
