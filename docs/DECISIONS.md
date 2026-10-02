@@ -566,3 +566,12 @@ Measured on five PR runs (September 2026): 11 to 14 minutes wall clock, all of i
 - `profile_outdated` follows the read only doctor rule of dependency freshness: the subscription is fetched only with `doctor --fetch`; `.git/benchbar-fetched` in the clone dates the last good fetch for the age note.
 - The `--plan` forms of export, import, subscribe and update take no CLI lock, like `list` and `check`, so the app can preview while an install runs.
 - `profile remove` refuses a profile that is your own file or a `BENCHBAR_PROFILE_PATH` folder: it only undoes what import and subscribe did.
+
+## 0.7.1: the app's CLI
+
+- BenchBar.app carries the CLI (`Contents/Resources/cli`, install kind `app`) and Homebrew's and the installer's copy exec it through `~/.local/state/benchbar/bin/benchbar`: the app and its CLI are one version whichever channel updated what, without removing a channel or rewriting anyone's PATH. The app always wins over a standalone copy, even a newer one, so the CLI never drifts from the app.
+- The hand off is decided in `install-kind.sh` from a fixed path and `-x`, with no process: status runs it on every poll. A dangling link (the app in the Trash) means no hand off. `BENCHBAR_HANDOFF_FROM` stops a second hand off and is unset at once, so no child sees it.
+- The app's CLI records the link as `FL_SELF`, the same path whether the app or a handed off copy ran it, so the helper block does not flip between the two. A block naming Homebrew's or the installer's copy that hands off is kept as current: rewriting it would only churn `~/.zshrc`.
+- Only an app in `/Applications` or `~/Applications` makes the link: an Xcode build, the DMG and a translocated copy would leave it leading somewhere that goes away.
+- Only Homebrew and the installer hand off, not `other`: a copy of unknown origin (a test's temporary tree) keeps running itself.
+- The CLI is embedded by `macos-build.sh` before signing, not by an Xcode build phase: the files are sealed with the bundle, user script sandboxing stays on, and Xcode's own Debug builds simply carry no CLI. Tracked files only, as in the tarball.

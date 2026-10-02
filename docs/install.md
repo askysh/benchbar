@@ -141,41 +141,35 @@ app or adopt a bench you have.
 
 ## Updating
 
-With Homebrew:
+BenchBar.app carries its own copy of the CLI, and since 0.7.1 Homebrew's
+and the one line installer's `benchbar` hand off to it once the app is
+installed: whichever `benchbar` you run, it is the app's version. So with
+the app, updating the app updates everything, by either channel:
 
-```bash
-brew upgrade askysh/tap/benchbar
-```
+- **In the app**: **Update Now** (or **Check for Updates…** in the menu
+  bar menu). Sparkle downloads the new version and restarts BenchBar.
+  Your benches keep running.
+- **With Homebrew**, when the cask installed the app:
 
-`benchbar self-update` runs the same command for a Homebrew CLI, after
-asking, and never the one line installer. The app updates itself with
-Sparkle: **Check for Updates…** in the menu bar menu, or on its own.
-To force the cask's version:
+  ```bash
+  brew upgrade
+  ```
 
-```bash
-brew upgrade --cask --greedy askysh/tap/benchbar-app
-```
+  The cask has `auto_updates`, so brew replaces the app only when the
+  app itself is older than the tap's version: after Sparkle updated it,
+  `brew upgrade` leaves it alone, and when Sparkle has not, brew updates
+  it. Right after a release the tap can be a few minutes behind.
 
-In the app, **Update Now** and **Copy Command** follow how BenchBar was
-installed: for Homebrew's CLI they run `brew upgrade askysh/tap/benchbar`
-in Terminal, and the app from the cask is never replaced by the one line
-installer. When Sparkle has the app, BenchBar stays open and Sparkle
-offers the new version. Right after a release the tap can be a few
-minutes behind: when brew says benchbar is already installed, try again
-later. Your benches keep running.
+`benchbar where` shows which CLI runs (`install app`) and which one it
+was handed off from. To run Homebrew's or the installer's own copy for
+once, set `BENCHBAR_NO_HANDOFF=1`. A git checkout of your own never
+hands off.
 
-### With the one line installer
+### Without the app
 
-In the app, click **Update Now**. BenchBar asks GitHub for the latest
-release once a day (turn it off in General, **Check for updates
-automatically**), and when there is a newer one it shows **Update to
-X…** in the popover and the menu bar menu, and a banner on top of the
-BenchBar window. Update Now opens Terminal with the installer, BenchBar
-quits while it is replaced and opens again at the end. Your benches keep
-running. **Copy Command** copies the same command, **Release Notes**
-opens the release page.
-
-In Terminal, the same update is:
+Homebrew's CLI updates with `brew upgrade askysh/tap/benchbar`, which
+`benchbar self-update` runs after asking. The one line installer's CLI
+updates with `benchbar self-update`:
 
 ```bash
 benchbar self-update               # shows the plan, asks, then runs the installer
@@ -202,9 +196,8 @@ runner is outdated, `benchbar repair` rewrites it, and a running bench
 picks it up on its next start.
 
 If your `benchbar` is a git checkout of your own, for example
-`~/dev/benchbar`, the app and `self-update` update only the app
-(`--app-only`) and tell you to update the CLI with `git pull` in that
-checkout.
+`~/dev/benchbar`, `self-update` updates only the app (`--app-only`) and
+tells you to update the CLI with `git pull` in that checkout.
 
 ## From the one line installer to Homebrew
 
@@ -235,7 +228,9 @@ never name the CLI.
 
 Do not use `install.sh --uninstall` for this: it stops every bench's
 agent. Until the old copies are gone, doctor's "Second CLI" and
-"BenchBar.app copies" warnings point at them.
+"BenchBar.app copies" warnings point at them. Two copies of the app
+matter more than two of the CLI: the login item and Spotlight may open
+the old one, and its CLI is the one every `benchbar` hands off to.
 
 ## After installing
 

@@ -31,9 +31,12 @@ Both are safe to run at any time. Every check carries a `fix` string
 
 The examples run `./benchbar` from this checkout. On a user's Mac the
 CLI may be Homebrew's (`brew install askysh/tap/benchbar`) or the one
-line installer's; run `benchbar` from `PATH` then. `benchbar where
---json` says how it was installed (`install`), the path it records for
-itself (`self`) and its state folder (`state_dir`).
+line installer's; run `benchbar` from `PATH` then. When BenchBar.app is
+installed, those hand off to the CLI inside the app, so every
+`benchbar` is the app's version. `benchbar where --json` says how it was
+installed (`install`, `app` for the app's CLI), the path it records for
+itself (`self`), its state folder (`state_dir`) and the copy it was
+handed off from (`handoff_from`).
 
 ## Fresh install
 
