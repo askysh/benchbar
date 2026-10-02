@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented here.
 
+## Unreleased
+
+### Changed
+
+- The BenchBar window is calmer: each page has one main action, actions
+  used less often moved into a ⋯ menu (none were removed), and every
+  sheet has the same layout, button order and keys (Return confirms, Esc
+  cancels). Removing a custom runner now asks first.
+
 ## 0.7.1 - 2026-10-02
 
 BenchBar.app carries its own copy of the CLI, and updating the app

@@ -288,7 +288,7 @@ struct MoreMenu<Items: View>: View {
 /// A message across the top of a pane: an update, a link that did nothing,
 /// the outcome of the last change. Its actions sit under the text, and the
 /// close button carries a label for VoiceOver.
-struct Banner<Actions: View>: View {
+struct PaneBanner<Actions: View>: View {
     let symbol: String
     let tint: Color
     let title: String
@@ -322,7 +322,7 @@ struct Banner<Actions: View>: View {
     }
 }
 
-extension Banner where Actions == EmptyView {
+extension PaneBanner where Actions == EmptyView {
     init(symbol: String, tint: Color, title: String, detail: String? = nil, dismissHelp: String = "Dismiss", dismiss: (() -> Void)? = nil) {
         self.init(symbol: symbol, tint: tint, title: title, detail: detail, dismissHelp: dismissHelp, dismiss: dismiss) { EmptyView() }
     }

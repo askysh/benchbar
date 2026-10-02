@@ -134,7 +134,7 @@ struct NoticeBanner: View {
     let dismiss: () -> Void
 
     var body: some View {
-        Banner(symbol: "link", tint: .orange, title: "A BenchBar link did nothing", detail: text, dismiss: dismiss)
+        PaneBanner(symbol: "link", tint: .orange, title: "A BenchBar link did nothing", detail: text, dismiss: dismiss)
     }
 }
 
@@ -146,7 +146,7 @@ struct ChangeResultBanner: View {
 
     var body: some View {
         if let result = workbench.result, result.scope == scope {
-            Banner(symbol: result.succeeded ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
+            PaneBanner(symbol: result.succeeded ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
                    tint: result.succeeded ? .green : .red,
                    title: result.succeeded ? "\(result.title): done" : "\(result.title): failed",
                    detail: result.error, dismiss: { workbench.result = nil })

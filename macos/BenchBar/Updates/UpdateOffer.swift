@@ -172,7 +172,7 @@ struct UpdateBanner: View {
 
     var body: some View {
         if let version = offer.version, offer.showsBanner {
-            Banner(symbol: "arrow.down.circle.fill", tint: .blue, title: "BenchBar \(version) is available",
+            PaneBanner(symbol: "arrow.down.circle.fill", tint: .blue, title: "BenchBar \(version) is available",
                    detail: Self.explanation(offer.plan), dismissHelp: "Hide until the next version", dismiss: { offer.dismiss() }) {
                 HStack {
                     // bordered: the pane under the banner keeps its own main action
