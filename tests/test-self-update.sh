@@ -188,7 +188,7 @@ assert_eq "" "$(installer_log)" "(the installer never runs under Homebrew)"
 # with Homebrew's cask the note names brew's cask command
 mkdir -p "$MOCK_BREW_PREFIX/Caskroom/benchbar-app/0.1.0"
 run_brew_cli self-update --json; assert_eq "0" "$CODE" "$OUT"
-assert_contains "$(printf '%s' "$OUT" | jget - '" ".join(d["notes"])')" "brew upgrade --cask --greedy askysh/tap/benchbar-app"
+assert_contains "$(printf '%s' "$OUT" | jget - '" ".join(d["notes"])')" "brew upgrade askysh/tap/benchbar-app"
 assert_eq "brew upgrade askysh/tap/benchbar" "$(printf '%s' "$OUT" | jget - 'd["command"]')"
 # a current CLI is up to date, even with an older app: the app is not
 # this command's, so nothing runs and the note says how the app updates
@@ -197,7 +197,7 @@ reset_calls
 run_brew_cli self-update --yes; assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "the benchbar CLI is up to date (${VER})"
 assert_contains "$OUT" "BenchBar app 0.1.0 is older than ${VER}"
-assert_contains "$OUT" "brew upgrade --cask --greedy askysh/tap/benchbar-app"
+assert_contains "$OUT" "brew upgrade askysh/tap/benchbar-app"
 assert_calls_not_contain '^brew upgrade'
 run_brew_cli self-update --json
 assert_eq "False" "$(printf '%s' "$OUT" | jget - 'd["update_available"]')"

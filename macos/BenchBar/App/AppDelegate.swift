@@ -32,6 +32,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // the tests run inside this app (TEST_HOST): no menu bar item, no CLI calls
         guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
 
+        // before the first CLI call: Homebrew's and the installer's
+        // benchbar hand off to the CLI this link leads to
+        AppCLILink.register()
         settings = AppSettings()
         store = BenchStore(settings: settings)
         statusItemController = StatusItemController(store: store, settings: settings, library: library)
@@ -43,10 +46,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         notifier.start()
 
         updateOffer = UpdateOffer(settings: settings)
-        updateOffer.cliPath = { [weak self] in
-            if case .ready(let url) = self?.store.cli { return url.path }
-            return nil
-        }
 
         let commands = AppCommands(
             openSettings: { [weak self] in self?.openSettings() },

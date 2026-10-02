@@ -2,6 +2,45 @@
 
 All notable changes to this project are documented here.
 
+## 0.7.1 - 2026-10-02
+
+BenchBar.app carries its own copy of the CLI, and updating the app
+updates both. Homebrew and the one line installer stay; their `benchbar`
+hands off to the app's when the app is installed.
+
+### Changed
+
+- The app has the `benchbar` CLI inside it, the same version as the app,
+  and runs it. At launch, an app in `/Applications` or `~/Applications`
+  links `~/.local/state/benchbar/bin/benchbar` to it, and Homebrew's and
+  the one line installer's `benchbar` hand off to that link: every
+  `benchbar` on the Mac is the app's version, and an app updated by
+  Sparkle no longer leaves an older CLI behind. A git checkout never
+  hands off, and `BENCHBAR_NO_HANDOFF=1` runs a copy as it is. Without
+  the app (or with it in the Trash) each copy runs itself, as before.
+- Update Now asks Sparkle, which replaces the app and its CLI where they
+  are, the cask's app included; nothing runs in Terminal and BenchBar
+  does not quit for it. `brew upgrade` still updates the cask's app when
+  Sparkle has not, and leaves it alone when Sparkle has. Copy Command
+  offers `brew upgrade askysh/tap/benchbar-app` for the cask's app. A
+  build without Sparkle opens the release page.
+- `brew upgrade askysh/tap/benchbar-app` replaces `brew upgrade --cask
+  --greedy ...` everywhere: naming the cask is enough.
+- `benchbar where` shows the new install kind `app`, the app the CLI is
+  part of and the CLI it was handed off from (`handoff_from` in the
+  JSON). `benchbar self-update` from the app's CLI runs `brew upgrade
+  askysh/tap/benchbar-app` for the cask's app and otherwise points at
+  Check for Updates.
+- Doctor's "Second CLI" check knows the app's CLI: copies that hand off
+  to it are fine, and one too old to hand off is named with the command
+  that updates it. A helper block that names Homebrew's or the
+  installer's `benchbar` stays as it is when that copy hands off.
+
+### Fixed
+
+- A compiled `mcp.py` (`__pycache__`) was committed by mistake and
+  shipped in the Homebrew tarball.
+
 ## 0.7.0 - 2026-10-02
 
 BenchBar installs with Homebrew: `brew install askysh/tap/benchbar

@@ -4,7 +4,8 @@
 #
 #   1. xcodegen generates macos/BenchBar.xcodeproj from macos/project.yml
 #   2. xcodebuild builds the Release configuration
-#   3. codesign signs the app ad hoc ("-") with the Hardened Runtime
+#   3. scripts/app-embed-cli.sh puts the CLI in Contents/Resources/cli
+#   4. codesign signs the app ad hoc ("-") with the Hardened Runtime
 #
 # Output: macos/build/BenchBar.app
 #
@@ -100,6 +101,10 @@ APP="${DERIVED}/Build/Products/${CONFIG}/BenchBar.app"
 step "copy to macos/build/BenchBar.app"
 rm -rf "${BUILD}/BenchBar.app"
 ditto "$APP" "${BUILD}/BenchBar.app"
+
+# the CLI goes in before signing, so it is sealed with the app
+step "embed the benchbar CLI"
+"${ROOT}/scripts/app-embed-cli.sh" "${BUILD}/BenchBar.app"
 
 if [[ -n "$SIGN_IDENTITY" ]]; then
   # xcodebuild signs the Sparkle framework it embeds, but not the helpers

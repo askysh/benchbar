@@ -42,8 +42,8 @@ benchbar self-update [--check] [--json] [--dry-run] [--yes]
 ```
 
 Updates the benchbar CLI and the BenchBar app with the one line
-installer, the same command as the app's Update Now. For release 0.7.0:
-`curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/v0.7.0/install.sh | bash -s -- --yes --version v0.7.0`.
+installer, the same command as the app's Update Now. For release 0.7.1:
+`curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/v0.7.1/install.sh | bash -s -- --yes --version v0.7.1`.
 It asks the GitHub API for the latest release, shows this CLI's and the
 app's versions and the command, and asks before it runs. The installer
 comes from that release's tag and installs that release, even if a newer
@@ -58,8 +58,15 @@ than `~/Applications` is replaced where it is (`BENCHBAR_APP_DIR`).
 A CLI installed with Homebrew is upgraded by Homebrew: the command is
 `brew upgrade askysh/tap/benchbar`, run after the same question, and the
 installer never runs. The app is not this command's then: it updates
-itself, or comes from the cask (`brew upgrade --cask --greedy
-askysh/tap/benchbar-app`), and a note says which. `update_available`
+itself, or comes from the cask (`brew upgrade
+askysh/tap/benchbar-app`), and a note says which.
+
+The CLI inside BenchBar.app (`install` is `app`; Homebrew's and the
+installer's benchbar hand off to it once the app is installed) updates
+with the app. For the cask's app the command is `brew upgrade
+askysh/tap/benchbar-app`, run after the same question. Otherwise
+nothing runs: open BenchBar and choose **Check for Updates**, and Sparkle
+replaces the app and its CLI. `update_available`
 compares only the CLI. When brew says benchbar is already installed
 right after a release, the tap has not caught up yet; try again a few
 minutes later.
@@ -67,7 +74,7 @@ minutes later.
 | Flag | What it does |
 |---|---|
 | `--check` | Only compare with the latest release |
-| `--json` | The same as JSON, never runs anything: `current`, `app_version`, `app_path`, `latest`, `release_url`, `update_available` (true, false, null offline), `install` (`managed`, `checkout`, `other`, `homebrew`), `cli_dir`, `app_only`, `app_dir`, `command`, `notes`, `error` |
+| `--json` | The same as JSON, never runs anything: `current`, `app_version`, `app_path`, `latest`, `release_url`, `update_available` (true, false, null offline), `install` (`managed`, `checkout`, `other`, `homebrew`, `app`), `cli_dir`, `app_only`, `app_dir`, `command`, `notes`, `error` |
 | `--dry-run` | The plan and the command, nothing runs |
 | `--yes` | Do not ask |
 
@@ -85,8 +92,10 @@ benchbar where [--json]
 ```
 
 How this CLI was installed and where its things are: the install kind
-(`homebrew`, `managed` for the one line installer, `checkout` for a git
-clone, or `other`), the path it records for itself in the helper block,
+(`homebrew`, `managed` for the one line installer, `app` for the CLI
+inside BenchBar.app, `checkout` for a git clone, or `other`), the
+Homebrew or installer CLI it was handed off from, the path it records
+for itself in the helper block,
 the `~/.local/bin` links and every fix command (under Homebrew
 `<prefix>/opt/benchbar/bin/benchbar`, which `brew upgrade` keeps), its
 state folder, and the BenchBar app it finds. Read only; it needs no

@@ -115,7 +115,20 @@ fl_render_all() {
     "LOG=$(fl_bench_log_path)")"
   FL_R_HELPERS="$(fl_template_render shell-helpers \
     "PROFILE_EXPORTS=$(fl_profile_path_exports "$(fl_rc_profile)")" \
-    "BENCHBAR=${FL_SELF}")"
+    "BENCHBAR=$(fl_helpers_cli)")"
+}
+
+# fl_helpers_cli: the benchbar the helper block runs. FL_SELF, except that
+# the app's CLI keeps a block naming Homebrew's or the installer's copy when
+# that copy hands off to it: both lead here, and rewriting the block on
+# every switch between them would only churn ~/.zshrc.
+fl_helpers_cli() {
+  local recorded
+  if [[ "${FL_INSTALL_KIND:-}" == app ]]; then
+    recorded="$(fl_rc_block_extract "$(fl_rc_file)" 2>/dev/null | sed -n 's/^BENCHBAR="\(.*\)"$/\1/p' | head -n 1)"
+    if [[ -n "$recorded" ]] && fl_cli_hands_off "$recorded"; then printf '%s' "$recorded"; return 0; fi
+  fi
+  printf '%s' "$FL_SELF"
 }
 
 fl_require_bench() {

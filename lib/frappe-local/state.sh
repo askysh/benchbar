@@ -4,7 +4,7 @@
 # benches, per bench settings, logs, backups, the lock), and the small
 # key=value store in its state.env.
 #
-# A packaged CLI (homebrew or managed, see install-kind.sh) keeps it in
+# A packaged CLI (homebrew, managed or app, see install-kind.sh) keeps it in
 # ~/.local/state/benchbar, outside the install folder: brew upgrade
 # installs every version into a new folder, and brew cleanup deletes the
 # old one. The path is fixed, not ${XDG_STATE_HOME}: BenchBar.app, an MCP
@@ -98,7 +98,7 @@ fl_state_dir_user_v() {
 
 if [[ -z "${FL_STATE_DIR:-}" ]]; then
   case "${FL_INSTALL_KIND:-}" in
-    homebrew|managed) fl_state_dir_user_v FL_STATE_DIR ;;
+    homebrew|managed|app) fl_state_dir_user_v FL_STATE_DIR ;;
     *) fl_state_dir_in_v FL_STATE_DIR "$SCRIPT_DIR" ;;
   esac
 fi

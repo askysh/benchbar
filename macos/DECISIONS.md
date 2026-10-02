@@ -395,3 +395,9 @@ Asked for after the phases, to stop naming drift before the first release.
 - "The command line tool is behind" shows in About only from two minor versions (or an older major): Sparkle ships the app at publish and the formula follows after the tap merge, so one minor behind is normal for a while. The rule is `CLIVersionRule`, pure and tested.
 - The behind row names `brew upgrade askysh/tap/benchbar` for Homebrew's CLI, `benchbar self-update` otherwise, and the one line installer with `--no-app` for a CLI before 0.6.0, which has no self-update.
 - Where the app has no CLI it names `brew install askysh/tap/benchbar`, not the two name headline: the person already runs the app, and the cask refuses to install over an app already in /Applications.
+
+## 0.7.1: the app's CLI
+
+- The locator puts the app's own CLI right after a path saved in Settings: the app and its CLI ship together, and a saved path stays the developer's override.
+- Update Now is Sparkle only. The cask keeps `auto_updates true`: Homebrew 7 upgrades such a cask on a plain `brew upgrade` only when the app bundle's own version is older than the tap's, so a Sparkle update and a later `brew upgrade` never fight. `--greedy` is gone; naming the cask upgrades it. A build without Sparkle opens the release page instead of running the installer in Terminal.
+- `AppCLILink` re-points the link with a temporary link renamed over the old one, so a benchbar starting at that moment finds a link either way.

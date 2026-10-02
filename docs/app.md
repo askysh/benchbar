@@ -127,32 +127,33 @@ Updates** in About and in the app menu still works. A build with Sparkle
 When a newer release is out, the popover and the menu bar menu show
 **Update to X…**, and the BenchBar window shows a banner with:
 
-- **Update Now**: Terminal opens and runs what fits how BenchBar was
-  installed. Homebrew's CLI gets `brew upgrade askysh/tap/benchbar`. An
-  app from the `benchbar-app` cask is never replaced by the one line
-  installer: Sparkle updates it in a build that has Sparkle, otherwise
-  `brew upgrade --cask --greedy askysh/tap/benchbar-app` runs. When
-  Sparkle has the app, BenchBar stays open and Sparkle offers the new
-  version. Otherwise it is the one line installer of that release
-  (`install.sh --yes --version vX.Y.Z` from the release's tag, with
-  `--no-app` when the app is the cask's, or with `--app-only` when your
-  CLI is a git checkout of your own), so it installs the version the
-  prompt named even if a newer one came out since. BenchBar
-  quits when Terminal replaces it and opens again when it is done. Your
-  benches keep running. The app writes a `.command` file for Terminal,
-  so macOS asks for no Automation permission.
-- **Copy Command**: the same command, to run yourself.
+- **Update Now**: Sparkle downloads the new version and restarts
+  BenchBar. The app carries its command line tool, so the CLI is updated
+  with it; nothing runs in Terminal. Your benches keep running. A build
+  without Sparkle (one you built yourself) opens the release page.
+- **Copy Command**: for an app from the `benchbar-app` cask, `brew
+  upgrade askysh/tap/benchbar-app`, the same update through Homebrew.
 - **Release Notes**: the release page.
 
 The close button on the banner hides it until the next version; the
-menu item stays. See [Updating](install.md#updating) for what the
-installer changes.
+menu item stays. See [Updating](install.md#updating).
 
-About says when the command line tool is two or more minor versions
-older than the app, with the command that updates it (`brew upgrade
-askysh/tap/benchbar` for Homebrew's, `benchbar self-update` otherwise)
-and a Copy button. One minor version behind is normal while Homebrew
-catches up with a release, so it shows nothing.
+## The command line tool inside the app
+
+BenchBar.app has the `benchbar` CLI inside it
+(`BenchBar.app/Contents/Resources/cli`), the same version as the app,
+and runs that one unless Settings names another. When the app is in
+`/Applications` or `~/Applications`, it links
+`~/.local/state/benchbar/bin/benchbar` to its CLI at launch, and
+Homebrew's and the one line installer's `benchbar` (0.7.1 or newer) hand
+off to it. Every `benchbar` on the Mac, in Terminal, in an MCP client or
+in your shell helpers, is then the app's version, and stays in step with
+it through every update. Move the app to the Trash and they run
+themselves again.
+
+About says when a command line tool named in Settings is two or more
+minor versions older than the app, with the command that updates it and
+a Copy button.
 
 ![General settings: startup, notifications, Check for updates automatically and the command line tool](images/window-general.png)
 
