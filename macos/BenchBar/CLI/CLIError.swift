@@ -3,9 +3,10 @@ import Foundation
 /// Everything that can go wrong between the app and the benchbar CLI.
 /// Each case carries enough to show one clear sentence in the popover.
 nonisolated enum CLIError: Error, Equatable, Sendable {
-    /// No benchbar found in the setting, ~/.local/bin or Homebrew.
+    /// No benchbar found in Homebrew, ~/.local/bin or /usr/local/bin, and
+    /// the Settings path (if any) is gone.
     case notFound(searched: [String])
-    /// A path was configured but is not an executable file.
+    /// The Settings path exists but is not an executable file.
     case notExecutable(path: String)
     /// The process could not be started at all.
     case launchFailed(detail: String)
@@ -43,7 +44,7 @@ extension CLIError: LocalizedError {
     nonisolated var recoverySuggestion: String? {
         switch self {
         case .notFound(let searched):
-            return "Looked in: \(searched.joined(separator: ", ")). Run the installer from the repo, or choose the file in Settings."
+            return "Looked in: \(searched.joined(separator: ", ")). Install it with \(Homebrew.installCLI) (or the one line installer with --no-app), or choose the file in Settings."
         case .notExecutable:
             return "Choose the benchbar file again in Settings."
         case .timedOut:

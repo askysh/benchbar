@@ -291,6 +291,15 @@ struct SettingsView: View {
                     Button("Choose…", action: chooseCLI)
                 }
             }
+            if case .missing(.notFound) = store.cli {
+                LabeledContent("Install") {
+                    HStack {
+                        Text(Homebrew.installCLI).font(.callout.monospaced()).textSelection(.enabled)
+                        Button("Copy") { Workspace.copy(Homebrew.installCLI) }
+                            .accessibilityLabel("Copy the Homebrew command that installs benchbar")
+                    }
+                }
+            }
             if case .ready(let url) = store.cli {
                 LabeledContent("") {
                     HStack {
@@ -309,7 +318,7 @@ struct SettingsView: View {
         } header: {
             Text("Command line tool")
         } footer: {
-            Text("Automatic looks in ~/.local/bin (linked by benchbar repair), then Homebrew. Every change the app makes runs this command, the same one you use in Terminal.")
+            Text("Automatic looks in Homebrew (/opt/homebrew/bin, then /usr/local/bin), then ~/.local/bin (the one line installer's link). Install it with \(Homebrew.installCLI). Every change the app makes runs this command, the same one you use in Terminal.")
                 .font(.caption).foregroundStyle(.secondary)
         }
         .onChange(of: settings.cliPath) { _, path in cliPathDraft = path }

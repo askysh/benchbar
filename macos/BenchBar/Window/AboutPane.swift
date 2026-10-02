@@ -11,8 +11,12 @@ final class AboutModel {
     let bugReport: BugReport
     /// "benchbar 0.5.0", the first line of `benchbar --version`.
     private(set) var cliVersion: String?
+    /// The command that updates the CLI when it is too far behind this app
+    /// (CLIVersionRule), nil when it is not.
+    private(set) var cliUpdate: String?
 
     @ObservationIgnored private let store: BenchStore
+    @ObservationIgnored var appVersion: String = BenchBarLinks.appVersion
 
     init(store: BenchStore, updates: UpdateChecker = UpdateChecker(), offer: UpdateOffer? = nil, bugReport: BugReport? = nil) {
         self.store = store
@@ -23,8 +27,10 @@ final class AboutModel {
     }
 
     func loadCLIVersion() async {
-        guard let client = store.cliClient else { cliVersion = nil; return }
+        guard let client = store.cliClient, case .ready(let url) = store.cli else { cliVersion = nil; cliUpdate = nil; return }
         cliVersion = try? await client.version()
+        let homebrew = (Homebrew.prefix(ofCLI: url.resolvingSymlinksInPath().path) ?? Homebrew.prefix(ofCLI: url.path)) != nil
+        cliUpdate = CLIVersionRule.behind(cliLine: cliVersion, app: appVersion, homebrew: homebrew)
     }
 }
 
@@ -158,6 +164,9 @@ struct AboutPane: View {
                         }
                     }
                 }
+                if let command = model.cliUpdate {
+                    cliBehindRow(command)
+                }
                 updateRow
             } header: {
                 Text("Versions")
@@ -194,6 +203,22 @@ struct AboutPane: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    /// Two or more minor versions apart, the app may ask for things this CLI cannot do.
+    private func cliBehindRow(_ command: String) -> some View {
+        LabeledContent {
+            HStack(spacing: 8) {
+                Text(command).font(.callout.monospaced()).textSelection(.enabled)
+                Button("Copy") { Workspace.copy(command) }
+                    .accessibilityLabel("Copy the command that updates the command line tool")
+                    .help(command)
+            }
+        } label: {
+            Label("The command line tool is behind", systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+            Text("It is more than one minor version older than BenchBar \(model.appVersion). Update it in Terminal:")
+        }
     }
 
     @ViewBuilder private var updateRow: some View {

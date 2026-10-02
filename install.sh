@@ -16,6 +16,11 @@
 #      into ~/Applications); skipped when no release exists yet
 #   4. offers "benchbar adopt" for a bench it finds, or "benchbar install"
 #
+# Homebrew owns a half it installed: with the benchbar formula
+# (<prefix>/opt/benchbar) the CLI half is skipped, with the benchbar-app
+# cask (<prefix>/Caskroom/benchbar-app) the app half. Each prints the brew
+# command that updates it instead, so a Mac never gets a second copy.
+#
 # Flags:
 #   --yes             accept every default, no questions (no TTY needed). On a
 #                     Mac that already has the CLI in ~/.local/share/benchbar
@@ -61,7 +66,7 @@ while [[ "$#" -gt 0 ]]; do
     --version) PIN="${2:-}"; shift ;;
     --version=*) PIN="${1#*=}" ;;
     --uninstall) UNINSTALL=1 ;;
-    -h|--help) sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) printf 'Unknown option: %s (try --help)\n' "$1" >&2; exit 1 ;;
   esac
   shift
@@ -245,14 +250,77 @@ check_system() {
   fi
 }
 
+# ---------------------------------------------------------------- Homebrew
+
+# brew_detect: BREW_CLI (<prefix>/opt/benchbar) when Homebrew has the
+# benchbar formula, BREW_APP (<prefix>/Caskroom/benchbar-app) when it has
+# the cask; empty otherwise, and without a brew on PATH
+brew_detect() {
+  local prefix=""
+  BREW_CLI=""; BREW_APP=""
+  command -v brew >/dev/null 2>&1 || return 0
+  prefix="$(brew --prefix 2>/dev/null || true)"
+  [[ -n "$prefix" ]] || return 0
+  [[ -e "${prefix}/opt/benchbar" ]] && BREW_CLI="${prefix}/opt/benchbar"
+  [[ -d "${prefix}/Caskroom/benchbar-app" ]] && BREW_APP="${prefix}/Caskroom/benchbar-app"
+  return 0
+}
+
+# brew_guard: a half that Homebrew installed is skipped, with the brew
+# command that updates it, so this installer never adds a second CLI or a
+# second app next to brew's. Old apps and old self-updates fetch the newest
+# install.sh, so they skip it too. Exits 0 when no half is left.
+brew_guard() {
+  local cli=0 app=0
+  [[ -n "$BREW_CLI" && "$DO_CLI" == "1" ]] && cli=1
+  [[ -n "$BREW_APP" && "$DO_APP" == "1" ]] && app=1
+  [[ "$cli" == "1" || "$app" == "1" ]] || return 0
+  step "Homebrew"
+  if [[ "$cli" == "1" ]]; then
+    DO_CLI=0
+    ok "the benchbar CLI is installed with Homebrew (${BREW_CLI}); this installer leaves it to brew"
+    info "update it with: brew upgrade askysh/tap/benchbar"
+    if [[ -e "${BENCHBAR_HOME}/benchbar" ]]; then
+      # the installer's copy is still here: brew's repair takes over from it
+      # (absolute: ~/.local/bin may still lead to the old copy in this shell)
+      info "then, once, so Homebrew's CLI takes over from ${BENCHBAR_HOME}:"
+      info "  ${BREW_CLI}/bin/benchbar repair   (moves the state, points ~/.local/bin at it, rewrites the helper block)"
+    fi
+  fi
+  if [[ "$app" == "1" ]]; then
+    DO_APP=0
+    ok "the BenchBar app is installed with Homebrew (cask benchbar-app); it updates itself"
+    info "or with brew: brew upgrade --cask --greedy askysh/tap/benchbar-app"
+  fi
+  if [[ "$DO_CLI" == "0" && "$DO_APP" == "0" ]]; then
+    step "Done"
+    ok "nothing for this installer to do: Homebrew installs and updates BenchBar here"
+    exit 0
+  fi
+}
+
 # ---------------------------------------------------------------- CLI
 
 install_cli() {
   step "Command line tool"
   command -v git >/dev/null 2>&1 || die "git not found" "install the Xcode Command Line Tools: xcode-select --install"
   if [[ -d "${BENCHBAR_HOME}/.git" ]]; then
-    local before after out
+    local before after out ref=0 changes
     before="$(git -C "$BENCHBAR_HOME" rev-parse --short HEAD 2>/dev/null || true)"
+    # a detached HEAD (a tag or commit checked out by hand) has no branch to
+    # pull: a clean checkout goes back to main first. Untracked files do not
+    # count (a 0.7 CLI leaves its moved state's symlink, .benchbar, which an
+    # older .gitignore does not cover); with changes, the pull fails below.
+    git -C "$BENCHBAR_HOME" symbolic-ref -q HEAD >/dev/null 2>&1 || ref=$?
+    if [[ "$ref" == "1" ]] && changes="$(git -C "$BENCHBAR_HOME" status --porcelain --untracked-files=no 2>/dev/null)" && [[ -z "$changes" ]]; then
+      if [[ "$DRY" == "1" ]]; then
+        info "dry-run: git -C ${BENCHBAR_HOME} checkout --quiet main   (it is on a detached HEAD)"
+      else
+        out="$(git -C "$BENCHBAR_HOME" checkout --quiet main 2>&1)" || { printf '%s\n' "$out"; die "git checkout main failed in ${BENCHBAR_HOME}" "fix the checkout or move it aside"; }
+        ok "${BENCHBAR_HOME} was on a detached HEAD (${before:-?}); switched back to main"
+        CHANGED=1
+      fi
+    fi
     if [[ "$DRY" == "1" ]]; then
       info "dry-run: git -C ${BENCHBAR_HOME} pull --ff-only"
     else
@@ -395,6 +463,13 @@ offer_bench() {
 
 # ---------------------------------------------------------------- uninstall
 
+# state_dir: where a 0.7.0 or later CLI keeps its state (state.sh): where
+# the checkout's .benchbar link leads, else ~/.local/state/benchbar
+state_dir() {
+  if [[ -L "${BENCHBAR_HOME}/.benchbar" ]]; then readlink "${BENCHBAR_HOME}/.benchbar"; return 0; fi
+  printf '%s/.local/state/benchbar' "${HOME%/}"
+}
+
 uninstall() {
   step "Uninstall BenchBar"
   info "removes: the app, the benchbar and frappe-mac links, the PATH block"
@@ -447,9 +522,38 @@ uninstall() {
   [[ "$any" == "1" ]] || same "no benchbar agents"
 
   step "Checkout"
+  local state own="${BENCHBAR_HOME}/.benchbar" keep=0
+  state="$(state_dir)"
   if [[ -d "$BENCHBAR_HOME" ]]; then
-    info "${BENCHBAR_HOME} holds the CLI and its logs and backups (.benchbar/)"
-    if [[ "$YES" == "1" ]] || confirm "Remove ${BENCHBAR_HOME}?" n; then
+    if [[ -L "$own" ]]; then
+      info "${BENCHBAR_HOME} holds the CLI; its logs, backups and remembered benches are in ${state}"
+    elif [[ -d "$own" && -n "$BREW_CLI" && ! -e "$state" && ! -L "$state" ]]; then
+      # Homebrew's CLI would have moved it on its first run. Through a name
+      # of its own: across volumes mv copies, and a copy cut short must not
+      # pass for the state
+      info "${BENCHBAR_HOME} holds the CLI; its logs, backups and remembered benches (.benchbar/) move to ${state}, where Homebrew's benchbar reads them"
+      run mkdir -p "${state%/*}"
+      if run mv "$own" "${state%/*}/.benchbar-moving.$$" && run mv "${state%/*}/.benchbar-moving.$$" "$state"; then
+        [[ "$DRY" == "1" ]] || ok "moved ${own} to ${state}"
+      else
+        warn "could not move ${own} to ${state}; kept ${BENCHBAR_HOME}"
+        if [[ -d "${state%/*}/.benchbar-moving.$$" && -d "$own" ]]; then
+          info "${state%/*}/.benchbar-moving.$$ is a partial copy; the state is still in ${own}"
+        elif [[ -d "${state%/*}/.benchbar-moving.$$" ]]; then
+          info "the state is in ${state%/*}/.benchbar-moving.$$ now; mv it to ${state} by hand"
+        fi
+        keep=1
+      fi
+    elif [[ -d "$own" && -n "$BREW_CLI" ]]; then
+      warn "${own} holds state (logs, backups, remembered benches), and Homebrew's benchbar already has its own in ${state}; kept ${BENCHBAR_HOME}"
+      info "move what you need out of ${own}, then: mv ${BENCHBAR_HOME} ~/.Trash/"
+      keep=1
+    else
+      info "${BENCHBAR_HOME} holds the CLI and its logs and backups (.benchbar/)"
+    fi
+    if [[ "$keep" == "1" ]]; then
+      :
+    elif [[ "$YES" == "1" ]] || confirm "Remove ${BENCHBAR_HOME}?" n; then
       run rm -rf "$BENCHBAR_HOME"
       [[ "$DRY" == "1" ]] || ok "removed ${BENCHBAR_HOME}"
       CHANGED=1
@@ -458,6 +562,19 @@ uninstall() {
     fi
   else
     same "no checkout at ${BENCHBAR_HOME}"
+  fi
+  # since 0.7.0 the state is outside the checkout, and Homebrew's CLI shares
+  # it: this never removes it
+  if [[ -d "$state" && -n "$BREW_CLI" ]]; then
+    info "kept ${state}: Homebrew's benchbar uses it"
+  elif [[ -d "$state" ]]; then
+    info "kept ${state} (logs, backups, the remembered benches); move it to the Trash once you no longer need it"
+  fi
+  if [[ -n "$BREW_CLI" || -n "$BREW_APP" ]]; then
+    step "Homebrew"
+    info "Homebrew's copies stay; this installer did not put them there. To remove them as well:"
+    [[ -z "$BREW_CLI" ]] || info "  benchbar uninstall-service --all, then: brew uninstall benchbar"
+    [[ -z "$BREW_APP" ]] || info "  brew uninstall --cask benchbar-app"
   fi
   printf '\n'
   if [[ "$DRY" == "1" ]]; then ok "dry-run finished; nothing was removed"
@@ -468,10 +585,12 @@ uninstall() {
 # ---------------------------------------------------------------- main
 
 printf '\n%sBenchBar installer%s%s\n' "$B" "$R" "$([[ "$DRY" == "1" ]] && printf ' (dry-run: nothing is changed)')"
+brew_detect
 if [[ "$UNINSTALL" == "1" ]]; then
   uninstall
   exit 0
 fi
+brew_guard
 printf '  Plan:\n'
 [[ "$DO_CLI" == "1" ]] && printf '   1. check macOS, the Command Line Tools and Homebrew\n   2. clone or update the CLI in %s, link it into %s, add that folder to PATH in %s\n' "$BENCHBAR_HOME" "$BIN_DIR" "$RC_FILE"
 [[ "$DO_APP" == "1" ]] && printf '   3. install or update the BenchBar app in %s from the %s GitHub release (sha256 checked)\n' "$APP_DIR" "${PIN:-latest}"
@@ -496,4 +615,5 @@ else
   ok "everything was already in place (unchanged)"
 fi
 [[ -d "$APP" ]] && info "app: open ${APP}"
-info "testing guide: ${BENCHBAR_HOME}/docs/testing.md"
+[[ "$DO_CLI" == "1" ]] && info "testing guide: ${BENCHBAR_HOME}/docs/testing.md"
+exit 0

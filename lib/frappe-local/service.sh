@@ -115,11 +115,11 @@ fl_render_all() {
     "LOG=$(fl_bench_log_path)")"
   FL_R_HELPERS="$(fl_template_render shell-helpers \
     "PROFILE_EXPORTS=$(fl_profile_path_exports "$(fl_rc_profile)")" \
-    "BENCHBAR=${SCRIPT_DIR}/benchbar")"
+    "BENCHBAR=${FL_SELF}")"
 }
 
 fl_require_bench() {
-  fl_is_bench_dir "$FL_BENCH_DIR" || fl_die "No bench at ${FL_BENCH_DIR}." "Run: ${SCRIPT_DIR}/benchbar install, or pass --bench-dir <path>."
+  fl_is_bench_dir "$FL_BENCH_DIR" || fl_die "No bench at ${FL_BENCH_DIR}." "Run: ${FL_SELF} install, or pass --bench-dir <path>."
 }
 
 fl_require_service() {
@@ -132,9 +132,9 @@ fl_require_service() {
   legacy="${list%%$'\n'*}"; legacy="${legacy#*|}"; legacy="${legacy%%|*}"
   if [[ -n "$legacy" ]]; then
     fl_die "${FL_BENCH_NAME} still uses the old agent ${legacy}, from before the BenchBar rename." \
-      "Run: ${SCRIPT_DIR}/benchbar repair (moves the old agent aside and installs $(fl_agent_label); sites and data are not touched)."
+      "Run: ${FL_SELF} repair (moves the old agent aside and installs $(fl_agent_label); sites and data are not touched)."
   fi
-  fl_die "The background service for ${FL_BENCH_NAME} is not installed." "Run: ${SCRIPT_DIR}/benchbar service (or benchbar install)."
+  fl_die "The background service for ${FL_BENCH_NAME} is not installed." "Run: ${FL_SELF} service (or benchbar install)."
 }
 
 fl_site_url() { printf 'http://%s:%s' "$FL_SITE" "$FL_WEB_PORT"; }
@@ -220,10 +220,10 @@ fl_cmd_up() {
   fl_arm_start
   if ! fl_agent_loaded; then
     fl_info "agent not loaded; loading $(fl_agent_plist_path)"
-    fl_agent_bootstrap "$(fl_agent_plist_path)" || fl_die "launchctl could not load the agent." "Run: ${SCRIPT_DIR}/benchbar repair"
+    fl_agent_bootstrap "$(fl_agent_plist_path)" || fl_die "launchctl could not load the agent." "Run: ${FL_SELF} repair"
   fi
   fl_state_json_write starting "" "" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "" ""
-  fl_agent_kickstart || fl_die "launchctl kickstart failed." "Run: ${SCRIPT_DIR}/benchbar doctor"
+  fl_agent_kickstart || fl_die "launchctl kickstart failed." "Run: ${FL_SELF} doctor"
   [[ "${FL_DRY_RUN:-0}" == "1" ]] && return 0
   fl_spinner_start "starting bench ${FL_BENCH_NAME}" "$(fl_bench_log_path)"
   if fl_wait_for_ping "$FL_UP_WAIT_SECS"; then
@@ -232,7 +232,7 @@ fl_cmd_up() {
   else
     fl_spinner_stop
     fl_warn "no 200 from $(fl_site_url)/api/method/ping after ${FL_UP_WAIT_SECS}s; it may still be starting"
-    fl_fix "${SCRIPT_DIR}/benchbar logs"
+    fl_fix "${FL_SELF} logs"
     return 1
   fi
 }
@@ -280,7 +280,7 @@ fl_cmd_restart() {
   else
     fl_spinner_stop
     fl_warn "no 200 from $(fl_site_url)/api/method/ping after ${FL_UP_WAIT_SECS}s"
-    fl_fix "${SCRIPT_DIR}/benchbar logs"
+    fl_fix "${FL_SELF} logs"
     return 1
   fi
 }
@@ -307,11 +307,11 @@ fl_cmd_status() {
   if [[ "$ST_PING" == "200" ]]; then
     fl_ok "site responds"
   elif [[ "$ST_PROCS" == "1" ]]; then
-    fl_warn "processes are running but the site does not respond (ping ${ST_PING}); see: ${SCRIPT_DIR}/benchbar logs"
+    fl_warn "processes are running but the site does not respond (ping ${ST_PING}); see: ${FL_SELF} logs"
   else
     case "$ST_FLAG" in
-      crash) fl_warn "auto-restart paused after repeated crashes; run: ${SCRIPT_DIR}/benchbar logs, fix, then benchup" ;;
-      broken) fl_warn "auto-restart paused: run ${SCRIPT_DIR}/benchbar repair, then benchup" ;;
+      crash) fl_warn "auto-restart paused after repeated crashes; run: ${FL_SELF} logs, fix, then benchup" ;;
+      broken) fl_warn "auto-restart paused: run ${FL_SELF} repair, then benchup" ;;
       *) fl_info "bench is stopped; start with benchup" ;;
     esac
   fi
@@ -369,8 +369,8 @@ fl_logs_json() {
 
 fl_cmd_fg() {
   fl_require_bench
-  [[ -n "$FL_HONCHO" ]] || fl_die "honcho not found." "Run: ${SCRIPT_DIR}/benchbar repair"
-  [[ -f "$(fl_procfile_path)" ]] || fl_die "Procfile.lean missing." "Run: ${SCRIPT_DIR}/benchbar service"
+  [[ -n "$FL_HONCHO" ]] || fl_die "honcho not found." "Run: ${FL_SELF} repair"
+  [[ -f "$(fl_procfile_path)" ]] || fl_die "Procfile.lean missing." "Run: ${FL_SELF} service"
   fl_check_port_clash_or_confirm || return 1
   fl_cmd_down >/dev/null 2>&1 || true
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
@@ -411,6 +411,7 @@ fl_cmd_autostart() {
 # The bench folder is gone or emptied but its agent is still installed (and
 # restarting every 20 seconds): boot out and move aside every com.benchbar
 # agent whose WorkingDirectory is that path. Nothing else is touched.
+# "confirmed": --all asked once already.
 fl_uninstall_orphan_agents() {
   local list plist label dest code=0
   list="$(fl_agents_for_dir "$FL_BENCH_DIR")"
@@ -418,7 +419,7 @@ fl_uninstall_orphan_agents() {
     "Check the path, or list the agents: ls ~/Library/LaunchAgents/com.benchbar.*"
   fl_warn "${FL_BENCH_DIR} is not a bench (any more), but its agent is still installed."
   fl_info "This boots out and moves aside: $(printf '%s\n' "$list" | cut -d'|' -f2 | tr '\n' ' ')"
-  fl_confirm "Remove the agent for ${FL_BENCH_DIR}?" || { fl_warn "Cancelled."; return 1; }
+  [[ "${1:-}" == confirmed ]] || fl_confirm "Remove the agent for ${FL_BENCH_DIR}?" || { fl_warn "Cancelled."; return 1; }
   while IFS='|' read -r plist label; do
     [[ -n "$plist" ]] || continue
     if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
@@ -445,10 +446,12 @@ fl_uninstall_orphan_agents() {
   fl_ok "agent removed; nothing else in ${FL_BENCH_DIR} was touched"
 }
 
+# fl_cmd_uninstall_service [confirmed]: "confirmed" when --all asked once
+# for every bench already
 fl_cmd_uninstall_service() {
   local plist rc dest
   if ! fl_is_bench_dir "$FL_BENCH_DIR"; then
-    fl_uninstall_orphan_agents
+    fl_uninstall_orphan_agents "${1:-}"
     return $?
   fi
   fl_require_bench
@@ -456,7 +459,7 @@ fl_cmd_uninstall_service() {
   rc="$(fl_rc_file)"
   fl_info "This removes the launchd agent, runner, Procfile.lean and the shell helper block."
   fl_info "The bench, its sites, apps and databases are not touched."
-  fl_confirm "Uninstall the background service for ${FL_BENCH_NAME}?" || { fl_warn "Cancelled."; return 1; }
+  [[ "${1:-}" == confirmed ]] || fl_confirm "Uninstall the background service for ${FL_BENCH_NAME}?" || { fl_warn "Cancelled."; return 1; }
   fl_cmd_down || true
   if fl_agent_loaded; then fl_agent_bootout || true; fi
   if [[ -f "$plist" ]]; then
@@ -466,7 +469,70 @@ fl_cmd_uninstall_service() {
   fl_backup_file "$(fl_runner_path)"; [[ "${FL_DRY_RUN:-0}" == "1" || ! -f "$(fl_runner_path)" ]] || { rm -f "$(fl_runner_path)"; fl_ok "removed runner (backup: ${FL_LAST_BACKUP})"; }
   fl_backup_file "$(fl_runner_path_legacy)"; [[ "${FL_DRY_RUN:-0}" == "1" || ! -f "$(fl_runner_path_legacy)" ]] || { rm -f "$(fl_runner_path_legacy)"; fl_ok "removed the old runner (backup: ${FL_LAST_BACKUP})"; }
   fl_backup_file "$(fl_procfile_path)"; [[ "${FL_DRY_RUN:-0}" == "1" || ! -f "$(fl_procfile_path)" ]] || { rm -f "$(fl_procfile_path)"; fl_ok "removed Procfile.lean (backup: ${FL_LAST_BACKUP})"; }
-  fl_rc_block_remove "$rc"
-  [[ "${FL_DRY_RUN:-0}" == "1" ]] || fl_ok "removed the helper block from ${rc}"
+  fl_uninstall_helper_block "$rc"
   fl_ok "service uninstalled; start the bench by hand with: cd ${FL_BENCH_DIR} && bench start"
+}
+
+# fl_uninstall_helper_block RC: the benchbar block goes from RC (it is one
+# for every bench), backed up first; says so only when there was one
+fl_uninstall_helper_block() {
+  case "$(fl_rc_block_state "$1")" in present|legacy) ;; *) return 0 ;; esac
+  fl_rc_block_remove "$1"
+  [[ "${FL_DRY_RUN:-0}" == "1" ]] || fl_ok "removed the helper block from ${1}"
+}
+
+# benchbar uninstall-service --all: the same for every bench that has a
+# com.benchbar agent in ~/Library/LaunchAgents (a folder that is no bench
+# any more loses only its agent), one after the other, after one question.
+# brew uninstall cannot do this itself: a formula has no uninstall hook.
+fl_cmd_uninstall_service_all() {
+  local plist dir dirs=() seen=$'\n' rc code=0 n=0 one
+  for plist in "$HOME"/Library/LaunchAgents/com.benchbar.*.plist; do
+    [[ -f "$plist" ]] || continue
+    dir="$(fl_plist_working_dir "$plist")"
+    if [[ -z "$dir" ]]; then fl_warn "$(basename "$plist") names no bench folder; left alone"; continue; fi
+    case "$seen" in *$'\n'"${dir}"$'\n'*) continue ;; esac
+    seen="${seen}${dir}"$'\n'
+    dirs+=("$dir")
+  done
+  rc="$(fl_rc_file)"
+  if [[ "${#dirs[@]}" == "0" ]]; then
+    case "$(fl_rc_block_state "$rc")" in
+      present|legacy) ;;
+      *) fl_ok "nothing to uninstall: no benchbar agent in ~/Library/LaunchAgents and no helper block in ${rc}"; return 0 ;;
+    esac
+    fl_info "No benchbar agent is installed; the shell helper block in ${rc} is still there."
+    fl_confirm "Remove the helper block from ${rc}?" || { fl_warn "Cancelled."; return 1; }
+    fl_uninstall_helper_block "$rc"
+    return 0
+  fi
+  fl_info "This removes the background service of ${#dirs[@]} bench(es), one after the other:"
+  for dir in "${dirs[@]}"; do
+    if fl_is_bench_dir "$dir"; then fl_note "$dir"; else fl_note "${dir}   (no bench there any more: only its agent goes)"; fi
+  done
+  fl_info "Each loses its launchd agent, runner and Procfile.lean, and the shell helper block goes."
+  fl_info "The benches, their sites, apps and databases are not touched."
+  fl_confirm "Uninstall the background service of these ${#dirs[@]} bench(es)?" || { fl_warn "Cancelled."; return 1; }
+  # a subshell per bench: its own context, and a bench that fails (a job
+  # launchd keeps) stops only itself. Not under if or ||, which would turn
+  # errexit off inside it. The ERR trap does not run in a function (no
+  # errtrace), so only this function's own return reaches it.
+  for dir in "${dirs[@]}"; do
+    fl_section "$dir"
+    set +e
+    (set -e; fl_context_init "$dir" "" ""; fl_cmd_uninstall_service confirmed)
+    one=$?
+    set -e
+    if [[ "$one" == "0" ]]; then n=$((n + 1)); else code=1; fi
+  done
+  # a folder that is no bench any more loses only its agent, so with no
+  # bench left the block would stay and run a CLI that is about to go
+  fl_uninstall_helper_block "$rc" || code=1
+  printf '\n'
+  if [[ "$code" == "0" ]]; then
+    fl_ok "the background service of ${n} bench(es) is uninstalled"
+  else
+    fl_warn "${n} of ${#dirs[@]} bench(es) uninstalled; see above, then run this again"
+  fi
+  return "$code"
 }

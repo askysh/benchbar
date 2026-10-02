@@ -1,0 +1,115 @@
+# Installs the benchbar formula from this checkout the way Homebrew users
+# get it: the CLI tarball (scripts/cli-tarball.sh), the formula rendered
+# with a file:// url into a throwaway askysh/tap, brew style, brew audit,
+# brew install, brew test, the CLI run in an empty HOME, brew uninstall.
+#
+# Only when the CLI or its packaging changes, and nightly (brew itself
+# moves), so it is not a required check: brew talks to the network and a
+# flaky mirror should not block a pull request. The cask is styled and
+# audited with a stand in DMG; installing it needs a signed release, which
+# homebrew-tap.yml does after publishing.
+name: Homebrew formula
+
+on:
+  pull_request:
+    paths:
+      - benchbar
+      - frappe-mac
+      - "0*.sh"
+      - lib/**
+      - templates/**
+      - config/**
+      - packaging/homebrew/**
+      - scripts/cli-tarball.sh
+      - scripts/homebrew-render.sh
+      - .github/workflows/homebrew-formula.yml
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: homebrew-formula-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  formula:
+    name: brew install from this checkout
+    runs-on: macos-latest
+    timeout-minutes: 20
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_ANALYTICS: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+      HOMEBREW_NO_ENV_HINTS: "1"
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Tarball and a local askysh/tap
+        id: tap
+        run: |
+          version="$(sed -n 's/^FL_VERSION="\([^"]*\)"$/\1/p' benchbar | head -n 1)"
+          dist="$RUNNER_TEMP/dist"
+          scripts/cli-tarball.sh "$version" "$dist"
+          # a stand in for the signed DMG: enough for style and audit
+          printf 'not a disk image\n' >"$dist/BenchBar-${version}.dmg"
+          brew tap-new --no-git askysh/tap
+          tap="$(brew --repository)/Library/Taps/askysh/homebrew-tap"
+          scripts/homebrew-render.sh --version "$version" --cli "$dist/benchbar-cli-${version}.tar.gz" \
+            --url "file://$dist/benchbar-cli-${version}.tar.gz" --dmg "$dist/BenchBar-${version}.dmg" "$tap"
+          cat "$tap/Formula/benchbar.rb"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: brew style and brew audit
+        run: |
+          brew style askysh/tap/benchbar askysh/tap/benchbar-app
+          brew audit --strict --formula askysh/tap/benchbar
+          brew audit --strict --cask askysh/tap/benchbar-app
+
+      - name: brew install and brew test
+        run: |
+          brew install askysh/tap/benchbar
+          brew test askysh/tap/benchbar
+
+      - name: The installed CLI in an empty HOME
+        env:
+          VERSION: ${{ steps.tap.outputs.version }}
+        run: |
+          export HOME="$RUNNER_TEMP/home"
+          mkdir -p "$HOME"
+          cli="$(brew --prefix)/bin/benchbar"
+          "$cli" --version | grep -F "benchbar ${VERSION}"
+          where="$("$cli" where --json)"
+          echo "$where"
+          case "$where" in *'"install":"homebrew"'*) ;; *) echo "::error::where --json does not say homebrew"; exit 1 ;; esac
+          case "$where" in *'"state_dir":"'"$HOME"'/.local/state/benchbar"'*) ;; *) echo "::error::state is not in ~/.local/state/benchbar"; exit 1 ;; esac
+          # a stub bench, so doctor gets past "No bench"; its other checks
+          # fail on a bare runner, only the CLI's own checks matter here
+          mkdir -p "$HOME/frappe-bench/sites"
+          printf '{}\n' >"$HOME/frappe-bench/sites/common_site_config.json"
+          "$cli" doctor --json --bench-dir "$HOME/frappe-bench" >"$RUNNER_TEMP/doctor.json" || true
+          /usr/bin/python3 - "$RUNNER_TEMP/doctor.json" <<'EOF'
+          import json, sys
+          checks = {c["id"]: c for c in json.load(open(sys.argv[1]))["checks"]}
+          bad = []
+          if checks["cli_link"]["status"] != "ok":
+              bad.append("cli_link: " + checks["cli_link"]["message"])
+          for c in checks.values():
+              if "/Cellar/" in (c.get("fix") or ""):
+                  bad.append(c["id"] + " names a Cellar path: " + c["fix"])
+          for line in bad:
+              print("::error::" + line)
+          sys.exit(1 if bad else 0)
+          EOF
+          # what benchbar writes; HOME/Library has brew's own caches, which name the Cellar
+          if grep -R -l "$(brew --prefix)/Cellar" "$HOME/.local" "$HOME/.zshrc" "$HOME/frappe-bench" 2>/dev/null; then
+            echo "::error::a file benchbar wrote names a Cellar path"; exit 1
+          fi
+
+      - name: brew uninstall
+        run: |
+          brew uninstall askysh/tap/benchbar
+          [ ! -e "$(brew --prefix)/bin/benchbar" ] || { echo "::error::bin/benchbar is left after brew uninstall"; exit 1; }
+          [ ! -e "$(brew --prefix)/opt/benchbar" ] || { echo "::error::opt/benchbar is left after brew uninstall"; exit 1; }

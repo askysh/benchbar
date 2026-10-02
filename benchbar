@@ -28,6 +28,9 @@ fl_resolve_self() {
   cd "$(fl_resolve_self_dir "$src")/" && pwd
 }
 SCRIPT_DIR="$(fl_resolve_self)"
+# FL_INSTALL_KIND and FL_SELF, the stable path generated files record
+# shellcheck source=lib/frappe-local/install-kind.sh
+. "${SCRIPT_DIR}/lib/frappe-local/install-kind.sh"
 
 # shellcheck source=lib/frappe-local/ui.sh
 . "${SCRIPT_DIR}/lib/frappe-local/ui.sh"
@@ -149,9 +152,14 @@ Setup
                       --json: {"zip": path, "redactions": n} for the app and scripts).
   repair              Apply only the fixes doctor flagged, in dependency order.
   uninstall-service   Remove the agent, runner, Procfile.lean and shell helpers.
+                      --all: every bench with a benchbar agent, after one question (before
+                      brew uninstall benchbar: brew cannot stop the agents itself).
   self-update         Update the benchbar CLI and the BenchBar app with the one line installer,
                       after asking (--check: this version against the latest, --json, --dry-run).
+                      A Homebrew install runs brew upgrade askysh/tap/benchbar instead.
                       Never touches a bench; never runs bench update.
+  where               How this CLI was installed (homebrew, managed, checkout, other), the path
+                      it records for itself, its state folder and the BenchBar app (--json).
 
 Daily
   up                  Start the bench in the background (benchup).
@@ -534,7 +542,7 @@ cmd_adopt() {
   fl_info "only when another bench uses the same ports (or --port-offset is given) does it move the ports, with bench set-config -g."
   if [[ -z "$FL_HONCHO" ]]; then
     fl_warn "honcho was not found on PATH, in the pipx venv of frappe-bench or in ${FL_BENCH_DIR}/env; adopt does not install into env"
-    fl_fix "pipx install honcho   (or: ${SCRIPT_DIR}/benchbar repair, which installs it into the bench env), then benchbar adopt again"
+    fl_fix "pipx install honcho   (or: ${FL_SELF} repair, which installs it into the bench env), then benchbar adopt again"
   fi
   fl_ports_plan "$OPT_PORT_OFFSET" || return 1
   # the service group would install honcho into env when it is missing; adopt must not
@@ -569,7 +577,7 @@ cmd_doctor() {
     fl_doctor_print
     if [[ -n "$(fl_doctor_actions)" ]]; then
       printf '\n'
-      fl_info "run '${SCRIPT_DIR}/benchbar repair' to apply the fixes marked above (dry-run: add --dry-run)"
+      fl_info "run '${FL_SELF} repair' to apply the fixes marked above (dry-run: add --dry-run)"
     fi
   fi
   fails="$(fl_doctor_count fail)"
@@ -597,6 +605,32 @@ cmd_repair() {
     fl_event "{\"event\":\"done\",\"exit_code\":${code},\"log\":$(fl_json_str "${FL_LOG_FILE:-}")}"
   fi
   return "$code"
+}
+
+# benchbar where [--json]: how this CLI was installed and where its things
+# are. Read only: no bench, no lock, no log.
+cmd_where() {
+  local info app_version="" app_path="" tab=$'\t' how
+  [[ "${#ARGS[@]}" == "0" ]] || fl_die "Unexpected argument for where: ${ARGS[0]}" "Usage: benchbar where [--json]"
+  info="$(fl_app_bundle_info)"
+  if [[ -n "$info" ]]; then app_version="${info%%"$tab"*}"; app_path="${info#*"$tab"}"; fi
+  if [[ "$OPT_JSON" == "1" ]]; then
+    printf '{"schema_version":%d,"cli_version":%s,"install":%s,"self":%s,"state_dir":%s,"app_version":%s,"app_path":%s}\n' \
+      "$FL_SCHEMA_VERSION" "$(fl_json_str "$FL_VERSION")" "$(fl_json_str "$FL_INSTALL_KIND")" "$(fl_json_str "$FL_SELF")" \
+      "$(fl_json_str "$FL_STATE_DIR")" "$(fl_su_json_or_null "$app_version")" "$(fl_su_json_or_null "$app_path")"
+    return 0
+  fi
+  case "$FL_INSTALL_KIND" in
+    homebrew) how="with Homebrew (brew upgrade askysh/tap/benchbar)" ;;
+    managed) how="with the one line installer (benchbar self-update)" ;;
+    checkout) how="as a git checkout (git pull)" ;;
+    *) how="some other way" ;;
+  esac
+  printf 'benchbar %s, installed %s\n' "$FL_VERSION" "$how"
+  printf '  install  %s\n' "$FL_INSTALL_KIND"
+  printf '  self     %s\n' "$FL_SELF"
+  printf '  state    %s\n' "$FL_STATE_DIR"
+  if [[ -n "$app_path" ]]; then printf '  app      %s (%s)\n' "$app_path" "$app_version"; else printf '  app      not installed\n'; fi
 }
 
 cmd_status() {
@@ -650,7 +684,13 @@ case "$COMMAND" in
   fg) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_fg ;;
   watch) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_watch ;;
   autostart) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_autostart "${ARGS[0]:-}" ;;
-  uninstall-service) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_uninstall_service ;;
+  uninstall-service)
+    if [[ " ${ARGS[*]:-} " == *" --all "* ]]; then
+      [[ -z "$OPT_BENCH_DIR" ]] || fl_die "uninstall-service takes --all or --bench-dir, not both." "Every bench: benchbar uninstall-service --all. One bench: benchbar uninstall-service --bench-dir PATH."
+      fl_cmd_uninstall_service_all
+    else
+      fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_uninstall_service
+    fi ;;
   path) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; printf '%s\n' "$FL_BENCH_DIR" ;;
   console) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_console ${ARGS[@]+"${ARGS[@]}"} ;;
   db) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_db ${ARGS[@]+"${ARGS[@]}"} ;;
@@ -663,10 +703,11 @@ case "$COMMAND" in
   report) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_report ${ARGS[@]+"${ARGS[@]}"} ;;
   docs) fl_cmd_docs ${ARGS[@]+"${ARGS[@]}"} ;;
   self-update) fl_cmd_self_update ${ARGS[@]+"${ARGS[@]}"} || exit 1 ;;
+  where) cmd_where ;;
   mcp)
     # stdlib only Python 3.9+; the Command Line Tools' python3 is enough
     command -v python3 >/dev/null 2>&1 || fl_die "python3 is needed for benchbar mcp." "Install the Xcode Command Line Tools: xcode-select --install"
-    BENCHBAR="${SCRIPT_DIR}/benchbar" BENCHBAR_VERSION="$FL_VERSION" exec python3 "${SCRIPT_DIR}/lib/frappe-local/mcp.py" ;;
+    BENCHBAR="${FL_SELF}" BENCHBAR_VERSION="$FL_VERSION" exec python3 "${SCRIPT_DIR}/lib/frappe-local/mcp.py" ;;
   help) usage ;;
   *) fl_die "Unknown command: ${COMMAND}" "Run: benchbar --help" ;;
 esac

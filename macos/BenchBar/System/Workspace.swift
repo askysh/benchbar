@@ -92,14 +92,16 @@ enum Workspace {
     static func chooseCLI() -> String? {
         let panel = NSOpenPanel()
         panel.title = "Choose the benchbar command"
-        panel.message = "Pick the benchbar file in your benchbar checkout, or ~/.local/bin/benchbar."
+        panel.message = "Pick Homebrew's /opt/homebrew/bin/benchbar, ~/.local/bin/benchbar or the benchbar file in your checkout. No benchbar yet? Install it with \(Homebrew.installCLI), or the one line installer."
         panel.prompt = "Use This"
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
         panel.treatsFilePackagesAsDirectories = true
         panel.showsHiddenFiles = true
-        panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/bin")
+        let brewBin = Homebrew.prefixes.map { $0 + "/bin" }.first { FileManager.default.fileExists(atPath: $0 + "/benchbar") }
+        panel.directoryURL = brewBin.map { URL(fileURLWithPath: $0) }
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/bin")
         NSApp.activate()
         return panel.runModal() == .OK ? panel.url?.path : nil
     }

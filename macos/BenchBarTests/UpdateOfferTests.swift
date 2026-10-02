@@ -42,14 +42,25 @@ struct UpdateScheduleTests {
 struct UpdatePlanTests {
     let home = "/Users/you"
 
+    nonisolated static let brewLinks = [
+        "/Users/you/.local/bin/benchbar": "/Users/you/.local/share/benchbar/benchbar",
+        "/opt/homebrew/bin/benchbar": "/opt/homebrew/Cellar/benchbar/0.7.0/bin/benchbar",
+        "/usr/local/bin/benchbar": "/usr/local/Cellar/benchbar/0.7.0/bin/benchbar",
+    ]
+
     private func env(cli: String?, app: String = "/Users/you/Applications/BenchBar.app",
                      checkouts: Set<String> = [], writable: Set<String> = ["/Applications"],
-                     links: [String: String] = ["/Users/you/.local/bin/benchbar": "/Users/you/.local/share/benchbar/benchbar"]) -> UpdatePlan.Environment {
+                     links: [String: String] = UpdatePlanTests.brewLinks,
+                     sparkle: Bool = false, existing: Set<String> = []) -> UpdatePlan.Environment {
         UpdatePlan.Environment(home: home, cliPath: cli, appBundlePath: app,
                                resolve: { links[$0] ?? $0 },
                                isGitCheckout: { checkouts.contains($0) },
-                               isWritable: { writable.contains($0) })
+                               isWritable: { writable.contains($0) },
+                               sparkle: sparkle,
+                               exists: { existing.contains($0) })
     }
+
+    let cask: Set = ["/opt/homebrew/Caskroom/benchbar-app"]
 
     @Test func theManagedInstallUpdatesCLIAndApp() {
         // install.sh's checkout is a git checkout too; where it is decides
@@ -114,6 +125,100 @@ struct UpdatePlanTests {
         let dev = UpdatePlan.make(env(cli: "/Users/you/.local/bin/benchbar", app: "/Users/you/dev/benchbar/macos/build/BenchBar.app"))
         #expect(dev.appDirectory == nil)
         #expect(dev.notes.count == 1)
+    }
+
+    @Test func homebrewsCLIIsUpgradedByBrewNeverTheInstaller() throws {
+        // an app from install.sh in ~/Applications, no Sparkle: brew for the CLI, the installer for the app only
+        let plan = UpdatePlan.make(env(cli: "/opt/homebrew/bin/benchbar"))
+        #expect(plan.cli == .homebrew(prefix: "/opt/homebrew"))
+        #expect(plan.app == .installer)
+        #expect(plan.command(to: "0.7.0") == "brew upgrade askysh/tap/benchbar && curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/v0.7.0/install.sh | bash -s -- --yes --app-only --version v0.7.0")
+        let script = plan.script(from: "0.6.1", to: "0.7.0")
+        #expect(script.contains("\n/opt/homebrew/bin/brew upgrade askysh/tap/benchbar && curl"), "a .command file has no shell PATH: brew by its full path")
+        #expect(script.contains("open /Users/you/Applications/BenchBar.app"))
+        let note = try #require(plan.notes.first)
+        #expect(note.contains("brew upgrade askysh/tap/benchbar"))
+        // the opt link, as a 0.7.0 Settings path saves it, is Homebrew's too
+        #expect(UpdatePlan.make(env(cli: "/opt/homebrew/opt/benchbar/bin/benchbar", links: [:])).cli == .homebrew(prefix: "/opt/homebrew"))
+    }
+
+    @Test func intelHomebrewUsesItsOwnBrew() {
+        let plan = UpdatePlan.make(env(cli: "/usr/local/bin/benchbar", app: "/Applications/BenchBar.app",
+                                       existing: ["/usr/local/Caskroom/benchbar-app"]))
+        #expect(plan.cli == .homebrew(prefix: "/usr/local"))
+        #expect(plan.app == .cask(prefix: "/usr/local"))
+        #expect(plan.scriptCommand(to: "0.7.0") == "/usr/local/bin/brew upgrade askysh/tap/benchbar && /usr/local/bin/brew upgrade --cask --greedy askysh/tap/benchbar-app")
+    }
+
+    @Test func aCaskAppWithHomebrewsCLIIsAllBrew() {
+        let plan = UpdatePlan.make(env(cli: "/opt/homebrew/bin/benchbar", app: "/Applications/BenchBar.app", existing: cask))
+        #expect(plan.app == .cask(prefix: "/opt/homebrew"))
+        #expect(plan.replacesApp)
+        #expect(plan.command(to: "0.7.0") == "brew upgrade askysh/tap/benchbar && brew upgrade --cask --greedy askysh/tap/benchbar-app")
+        #expect(plan.appDirectory == nil)
+        #expect(plan.installedApp == "/Applications/BenchBar.app")
+        #expect(!plan.script(from: "0.6.1", to: "0.7.0").contains("install.sh"), "never the installer over a cask app")
+        #expect(UpdateBanner.explanation(plan).hasPrefix("Terminal opens and runs Homebrew. BenchBar quits"))
+    }
+
+    @Test func withSparkleTheCaskAppIsSparklesAndOnlyTheCLIRunsInTerminal() {
+        let plan = UpdatePlan.make(env(cli: "/opt/homebrew/bin/benchbar", app: "/Applications/BenchBar.app", sparkle: true, existing: cask))
+        #expect(plan.app == .sparkle(cask: "/opt/homebrew"))
+        #expect(!plan.replacesApp)
+        #expect(plan.runsInTerminal)
+        #expect(plan.command(to: "0.7.0") == "brew upgrade askysh/tap/benchbar")
+        let script = plan.script(from: "0.6.1", to: "0.7.0")
+        #expect(!script.contains("open /Applications"), "BenchBar keeps running; Sparkle replaces it")
+        #expect(!script.contains("install.sh"))
+        #expect(plan.notes.contains { $0.contains("its own updater") })
+        // the app from elsewhere next to Homebrew's CLI is Sparkle's too
+        let elsewhere = UpdatePlan.make(env(cli: "/opt/homebrew/bin/benchbar", sparkle: true))
+        #expect(elsewhere.app == .sparkle(cask: nil))
+        #expect(elsewhere.command(to: "0.7.0") == "brew upgrade askysh/tap/benchbar")
+    }
+
+    @Test func aCaskAppWithTheInstallersCLIUpdatesTheCLIWithoutTheApp() {
+        let plan = UpdatePlan.make(env(cli: "/Users/you/.local/bin/benchbar", app: "/Applications/BenchBar.app", existing: cask))
+        #expect(plan.cli == .managed)
+        #expect(plan.app == .cask(prefix: "/opt/homebrew"))
+        #expect(plan.command(to: "0.7.0") == "curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/v0.7.0/install.sh | bash -s -- --yes --no-app --version v0.7.0 && brew upgrade --cask --greedy askysh/tap/benchbar-app",
+                "no BENCHBAR_APP_DIR: the installer leaves the app alone")
+        let sparkle = UpdatePlan.make(env(cli: "/Users/you/.local/bin/benchbar", app: "/Applications/BenchBar.app", sparkle: true, existing: cask))
+        #expect(sparkle.command(to: "0.7.0") == "curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/v0.7.0/install.sh | bash -s -- --yes --no-app --version v0.7.0")
+        #expect(!sparkle.replacesApp)
+    }
+
+    @Test func aCaskAppWithACheckoutAndSparkleRunsNothingInTerminal() {
+        let plan = UpdatePlan.make(env(cli: "/Users/you/dev/benchbar/benchbar", app: "/Applications/BenchBar.app",
+                                       checkouts: ["/Users/you/dev/benchbar"], sparkle: true, existing: cask))
+        #expect(plan.steps.isEmpty)
+        #expect(!plan.runsInTerminal)
+        #expect(plan.command(to: "0.7.0") == "brew upgrade --cask --greedy askysh/tap/benchbar-app", "Copy Command still has something to paste")
+        #expect(UpdateBanner.explanation(plan).hasPrefix("BenchBar's updater downloads"))
+        // without Sparkle brew replaces it
+        let brew = UpdatePlan.make(env(cli: "/Users/you/dev/benchbar/benchbar", app: "/Applications/BenchBar.app",
+                                       checkouts: ["/Users/you/dev/benchbar"], existing: cask))
+        #expect(brew.command(to: "0.7.0") == "brew upgrade --cask --greedy askysh/tap/benchbar-app")
+        #expect(brew.notes.first?.contains("git -C /Users/you/dev/benchbar pull") == true)
+    }
+
+    @Test func noCLINextToACaskAppIsInstalledByBrew() {
+        let plan = UpdatePlan.make(env(cli: nil, app: "/Applications/BenchBar.app", existing: cask))
+        #expect(plan.command(to: "0.7.0") == "brew install askysh/tap/benchbar && brew upgrade --cask --greedy askysh/tap/benchbar-app")
+    }
+
+    @Test func theInstallersAppIsNotTheCasksEvenWithACaskroom() {
+        // a cask installed once and an app from install.sh in ~/Applications, the one running
+        let plan = UpdatePlan.make(env(cli: "/Users/you/.local/bin/benchbar", existing: cask))
+        #expect(plan.app == .installer)
+        #expect(plan.command(to: "0.7.0") == "curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/v0.7.0/install.sh | bash -s -- --yes --version v0.7.0")
+    }
+
+    @Test func aSparkleBuildKeepsTheInstallerForTheOtherKinds() {
+        let managed = UpdatePlan.make(env(cli: "/Users/you/.local/bin/benchbar", sparkle: true))
+        #expect(managed.app == .installer)
+        #expect(managed.command(to: "0.7.0") == "curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/v0.7.0/install.sh | bash -s -- --yes --version v0.7.0")
+        #expect(UpdateBanner.explanation(managed).hasPrefix("Terminal opens and runs the installer. BenchBar quits while it is replaced"))
     }
 
     @Test func theScriptRunsTheInstallerThenOpensTheApp() {
@@ -230,6 +335,31 @@ struct UpdateOfferTests {
         #expect(copied.value == "curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/v0.6.0/install.sh | bash -s -- --yes --app-only --version v0.6.0")
     }
 
+    @Test func whenSparkleHasTheAppUpdateNowAsksSparkleAndStaysOpen() async throws {
+        let model = UpdateOffer(settings: settings, currentVersion: "0.6.1", defaults: defaults, sparkle: true,
+                                fetch: { _ throws(UpdateCheckError) in Data() }, now: Date.init)
+        model.record(.available(version: "0.7.0", page: URL(string: "https://example.com/r")!))
+        model.cliPath = { "/opt/homebrew/bin/benchbar" }
+        model.environment = { path in
+            UpdatePlan.Environment(home: "/Users/you", cliPath: path, appBundlePath: "/Applications/BenchBar.app",
+                                   resolve: { UpdatePlanTests.brewLinks[$0] ?? $0 }, isGitCheckout: { _ in false }, isWritable: { _ in true },
+                                   exists: { $0 == "/opt/homebrew/Caskroom/benchbar-app" })
+        }
+        let ran = Box<String?>(nil)
+        let asked = Box(0)
+        let quit = Box(false)
+        model.runInTerminal = { _, contents in ran.value = contents }
+        model.checkWithSparkle = { asked.value += 1 }
+        model.quit = { quit.value = true }
+        model.updateNow()
+        try? await Task.sleep(for: .seconds(2))
+        #expect(asked.value == 1)
+        #expect(!quit.value)
+        let script = try #require(ran.value)
+        #expect(script.contains("/opt/homebrew/bin/brew upgrade askysh/tap/benchbar\n"))
+        #expect(model.command == "brew upgrade askysh/tap/benchbar")
+    }
+
     @Test func aTerminalThatDoesNotOpenIsShownAndNothingQuits() async {
         let calls = Box(0)
         let model = offer(clock: Box(Date()), calls: calls)
@@ -242,5 +372,35 @@ struct UpdateOfferTests {
         try? await Task.sleep(for: .seconds(2))
         #expect(!quit.value)
         #expect(model.error?.contains("Copy the command") == true)
+    }
+}
+
+@Suite("CLI is behind")
+struct CLIVersionRuleTests {
+    @Test func oneMinorBehindIsTolerated() {
+        #expect(!CLIVersionRule.isBehind(cli: "0.7.0", app: "0.7.0"))
+        #expect(!CLIVersionRule.isBehind(cli: "0.6.1", app: "0.7.0"), "Homebrew can get a release after Sparkle")
+        #expect(!CLIVersionRule.isBehind(cli: "0.6.0", app: "0.7.9"))
+        #expect(!CLIVersionRule.isBehind(cli: "0.8.0", app: "0.7.0"), "a newer CLI is never behind")
+        #expect(!CLIVersionRule.isBehind(cli: "1.0.0", app: "0.9.0"))
+    }
+
+    @Test func twoMinorsOrAnOlderMajorIsBehind() {
+        #expect(CLIVersionRule.isBehind(cli: "0.5.9", app: "0.7.0"))
+        #expect(CLIVersionRule.isBehind(cli: "0.7.0-beta.1", app: "0.9.0"))
+        #expect(CLIVersionRule.isBehind(cli: "0.9.9", app: "1.0.0"))
+        #expect(!CLIVersionRule.isBehind(cli: "?", app: "0.9.0"), "an unreadable version says nothing")
+    }
+
+    @Test func namesTheCommandForHowItWasInstalled() {
+        #expect(CLIVersionRule.version(fromLine: "benchbar 0.6.1") == "0.6.1")
+        #expect(CLIVersionRule.version(fromLine: "benchbar") == nil)
+        #expect(CLIVersionRule.behind(cliLine: "benchbar 0.6.1", app: "0.8.0", homebrew: true) == "brew upgrade askysh/tap/benchbar")
+        #expect(CLIVersionRule.behind(cliLine: "benchbar 0.6.1", app: "0.8.0", homebrew: false) == "benchbar self-update")
+        #expect(CLIVersionRule.behind(cliLine: "benchbar 0.6.1", app: "0.7.0", homebrew: false) == nil)
+        #expect(CLIVersionRule.behind(cliLine: nil, app: "0.8.0", homebrew: false) == nil)
+        // 0.5.x has no self-update
+        #expect(CLIVersionRule.behind(cliLine: "benchbar 0.5.8", app: "0.7.0", homebrew: false)
+                == "curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash -s -- --no-app")
     }
 }

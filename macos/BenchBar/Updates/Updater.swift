@@ -18,11 +18,17 @@ final class Updater {
         item.target = controller
         return item
     }
+
+    /// The same check as the menu item, for Update Now when Sparkle has the app.
+    func checkForUpdates() {
+        controller.checkForUpdates(nil)
+    }
 }
 #else
 /// The default build: no updater, no menu item.
 final class Updater {
     static let isAvailable = false
     func menuItem() -> NSMenuItem? { nil }
+    func checkForUpdates() {}
 }
 #endif

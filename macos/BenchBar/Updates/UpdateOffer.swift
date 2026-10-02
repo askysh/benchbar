@@ -44,6 +44,8 @@ final class UpdateOffer {
     @ObservationIgnored var quit: () -> Void = { NSApp.terminate(nil) }
     @ObservationIgnored var copy: (String) -> Void = { Workspace.copy($0) }
     @ObservationIgnored var openURL: (URL) -> Void = { NSWorkspace.shared.open($0) }
+    /// Sparkle's Check for Updates, for a plan whose app Sparkle replaces. Set by the app delegate.
+    @ObservationIgnored var checkWithSparkle: () -> Void = {}
 
     init(settings: AppSettings, currentVersion: String = BenchBarLinks.appVersion, defaults: UserDefaults = .standard,
          sparkle: Bool = Updater.isAvailable, fetch: @escaping UpdateCheck.Fetch = UpdateCheck.liveFetch,
@@ -58,7 +60,11 @@ final class UpdateOffer {
         refresh()
     }
 
-    var plan: UpdatePlan { UpdatePlan.make(environment(cliPath())) }
+    var plan: UpdatePlan {
+        var env = environment(cliPath())
+        env.sparkle = sparkle
+        return UpdatePlan.make(env)
+    }
 
     /// Launch, wake and an hourly timer; each only checks when one is due.
     func startAutomaticChecks() {
@@ -121,19 +127,27 @@ final class UpdateOffer {
         defaults.set(version, forKey: Key.dismissed)
     }
 
-    /// Terminal runs the installer from a `.command` file (no Apple Events,
-    /// so no Automation prompt), then BenchBar quits so the installer can
-    /// replace it; the script opens it again at the end.
+    /// Terminal runs the plan's commands from a `.command` file (no Apple
+    /// Events, so no Automation prompt), then BenchBar quits so the
+    /// installer or brew can replace it; the script opens it again at the
+    /// end. When Sparkle replaces the app, BenchBar stays open and asks
+    /// Sparkle instead.
     func updateNow() {
         guard let version else { return }
         let plan = plan
-        do {
-            try runInTerminal("update-benchbar", plan.script(from: currentVersion, to: version))
-        } catch {
-            self.error = "Could not open Terminal: \(error.localizedDescription). Copy the command and run it yourself."
-            return
+        if plan.runsInTerminal {
+            do {
+                try runInTerminal("update-benchbar", plan.script(from: currentVersion, to: version))
+            } catch {
+                self.error = "Could not open Terminal: \(error.localizedDescription). Copy the command and run it yourself."
+                return
+            }
         }
         error = nil
+        guard plan.replacesApp else {
+            checkWithSparkle()
+            return
+        }
         // a moment for Terminal to take the file; the installer only
         // replaces the app after its git pull and download
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [quit] in quit() }
@@ -174,7 +188,7 @@ struct UpdateBanner: View {
     let offer: UpdateOffer
 
     static func explanation(_ plan: UpdatePlan) -> String {
-        var text = "Terminal opens and runs the installer. BenchBar quits while it is replaced and opens again at the end; your benches keep running."
+        var text = plan.summary
         if !plan.notes.isEmpty { text += "\n\n" + plan.notes.joined(separator: "\n\n") }
         return text
     }

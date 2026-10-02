@@ -5,7 +5,9 @@ description: "The BenchBar menu bar app and window: the runner, the popover, key
 
 The BenchBar app lives in the menu bar. It shows every bench as a small
 runner, and a window with a page per bench for its sites, apps and
-health. It installs with the [one line installer](install.md) or from the
+health. It installs with [Homebrew](install.md#homebrew) (the
+`benchbar-app` cask), the
+[one line installer](install.md#the-one-line-installer) or the
 [DMG](install.md#the-app-from-the-dmg).
 
 ## The runner
@@ -125,14 +127,20 @@ Updates** in About and in the app menu still works. A build with Sparkle
 When a newer release is out, the popover and the menu bar menu show
 **Update to X…**, and the BenchBar window shows a banner with:
 
-- **Update Now**: Terminal opens and runs the one line installer of
-  that release (`install.sh --yes --version vX.Y.Z` from the release's
-  tag, or with `--app-only` when your CLI is a git checkout of your own),
-  so it installs the version the prompt named even if a newer one came
-  out since. BenchBar quits so the installer can replace it and opens
-  again when it is done. Your benches keep running. The app writes a
-  `.command` file for Terminal, so macOS asks for no Automation
-  permission.
+- **Update Now**: Terminal opens and runs what fits how BenchBar was
+  installed. Homebrew's CLI gets `brew upgrade askysh/tap/benchbar`. An
+  app from the `benchbar-app` cask is never replaced by the one line
+  installer: Sparkle updates it in a build that has Sparkle, otherwise
+  `brew upgrade --cask --greedy askysh/tap/benchbar-app` runs. When
+  Sparkle has the app, BenchBar stays open and Sparkle offers the new
+  version. Otherwise it is the one line installer of that release
+  (`install.sh --yes --version vX.Y.Z` from the release's tag, with
+  `--no-app` when the app is the cask's, or with `--app-only` when your
+  CLI is a git checkout of your own), so it installs the version the
+  prompt named even if a newer one came out since. BenchBar
+  quits when Terminal replaces it and opens again when it is done. Your
+  benches keep running. The app writes a `.command` file for Terminal,
+  so macOS asks for no Automation permission.
 - **Copy Command**: the same command, to run yourself.
 - **Release Notes**: the release page.
 
@@ -140,12 +148,23 @@ The close button on the banner hides it until the next version; the
 menu item stays. See [Updating](install.md#updating) for what the
 installer changes.
 
+About says when the command line tool is two or more minor versions
+older than the app, with the command that updates it (`brew upgrade
+askysh/tap/benchbar` for Homebrew's, `benchbar self-update` otherwise)
+and a Copy button. One minor version behind is normal while Homebrew
+catches up with a release, so it shows nothing.
+
 ![General settings: startup, notifications, Check for updates automatically and the command line tool](images/window-general.png)
 
 ## First run
 
-On first run the app looks for the CLI in `~/.local/bin/benchbar`, then in
-Homebrew's folders, and asks once with a file picker if it finds none.
+On first run the app looks for the CLI in Homebrew's folders first,
+`/opt/homebrew/bin`, then `/usr/local/bin` when that is Homebrew's
+benchbar too, then in `~/.local/bin`, the one line installer's link. A
+path chosen in General comes before all of them; one that is gone, such
+as a Cellar folder after `brew cleanup`, falls back to Automatic. With
+no CLI at all, the app says to install one with `brew install
+askysh/tap/benchbar` and asks once with a file picker.
 macOS asks whether BenchBar may send notifications; allow it for the
 crash alerts.
 

@@ -29,6 +29,12 @@ user, as described here.
 Both are safe to run at any time. Every check carries a `fix` string
 (the exact command) and an `action` id (what `repair` would do).
 
+The examples run `./benchbar` from this checkout. On a user's Mac the
+CLI may be Homebrew's (`brew install askysh/tap/benchbar`) or the one
+line installer's; run `benchbar` from `PATH` then. `benchbar where
+--json` says how it was installed (`install`), the path it records for
+itself (`self`) and its state folder (`state_dir`).
+
 ## Fresh install
 
 ```bash
@@ -139,7 +145,8 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
   no-op. That is the expected result of a second run.
 - Full command output of every mutating run is in
   `.benchbar/logs/<timestamp>.log`. Backups are in
-  `.benchbar/backups/<timestamp>/`.
+  `.benchbar/backups/<timestamp>/`. For Homebrew and the one line
+  installer, `.benchbar` here means `~/.local/state/benchbar`.
 - Exit codes: 0 success, 1 failure or a failing check, 2 the MariaDB root
   password is unknown (phase 1 only; pass `MARIADB_ROOT_PASSWORD`).
 

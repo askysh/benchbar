@@ -10,12 +10,15 @@
 #
 # It updates BenchBar only: never a bench, never "bench update". A CLI that
 # is a developer checkout (not ~/.local/share/benchbar) is left to git: only
-# the app is updated (--app-only) and the git pull to run is printed.
+# the app is updated (--app-only) and the git pull to run is printed. A CLI
+# installed with Homebrew is upgraded by brew (FL_SELFUPDATE_BREW_CMD), and
+# the installer never runs: the app updates itself, or comes from the cask.
 
 FL_SELFUPDATE_API="${BENCHBAR_API:-https://api.github.com/repos/askysh/benchbar}"
 FL_SELFUPDATE_INSTALLER="${BENCHBAR_INSTALLER_URL:-https://raw.githubusercontent.com/askysh/benchbar/main/install.sh}"
 FL_SELFUPDATE_HOME="${BENCHBAR_HOME:-$HOME/.local/share/benchbar}"
 FL_SELFUPDATE_TIMEOUT="${FL_SELFUPDATE_TIMEOUT:-10}"
+FL_SELFUPDATE_BREW_CMD="brew upgrade askysh/tap/benchbar"
 
 # fl_version_lt A B: true when version A is older than B ("v0.5.8" < "0.6.0",
 # 0.10 after 0.9, a prerelease before its release)
@@ -48,15 +51,33 @@ fl_selfupdate_latest() {
   printf '%s\t%s' "${tag#v}" "${page:-https://github.com/askysh/benchbar/releases/tag/${tag}}"
 }
 
-# fl_selfupdate_plan: sets SU_KIND (managed|checkout|other), SU_CLI_DIR,
-# SU_APP_VERSION, SU_APP_PATH, SU_APP_DIR (BENCHBAR_APP_DIR for the
-# installer, empty for its default ~/Applications), SU_APP_ONLY, SU_NOTES
-# (one per line) and SU_COMMAND. The same decisions as the app's UpdatePlan.
+# fl_selfupdate_plan: sets SU_KIND (managed|checkout|other|homebrew),
+# SU_CLI_DIR, SU_APP_VERSION, SU_APP_PATH, SU_APP_DIR (BENCHBAR_APP_DIR for
+# the installer, empty for its default ~/Applications), SU_APP_ONLY,
+# SU_NOTES (one per line) and SU_COMMAND. The same decisions as the app's
+# UpdatePlan.
 fl_selfupdate_plan() {
   local here home info tab=$'\t' parent
+  SU_APP_ONLY=0; SU_NOTES=""; SU_APP_DIR=""
+  info="$(fl_app_bundle_info)"
+  SU_APP_VERSION=""; SU_APP_PATH=""
+  if [[ -n "$info" ]]; then SU_APP_VERSION="${info%%"$tab"*}"; SU_APP_PATH="${info#*"$tab"}"; fi
+  # Homebrew's CLI: install-kind.sh knows it by its path (a pwd -P here
+  # would be the Cellar folder, which is "other")
+  if [[ "${FL_INSTALL_KIND:-}" == homebrew ]]; then
+    SU_KIND=homebrew; SU_CLI_DIR="$FL_SELF_DIR"
+    # the cask's app is in /Applications; one in ~/Applications came from install.sh
+    if [[ -n "$SU_APP_PATH" && -d "${FL_SELF_PREFIX}/Caskroom/benchbar-app" && "$SU_APP_PATH" != "$HOME/Applications/BenchBar.app" ]]; then
+      SU_NOTES="the app comes from Homebrew's cask benchbar-app and updates itself; with brew: brew upgrade --cask --greedy askysh/tap/benchbar-app"
+    elif [[ -n "$SU_APP_PATH" ]]; then
+      SU_NOTES="this updates the CLI only: the app at ${SU_APP_PATH} updates itself (Check for Updates in BenchBar)"
+    fi
+    fl_selfupdate_pin ""
+    return 0
+  fi
   here="$(cd "$SCRIPT_DIR" && pwd -P)"
   home="$(cd "$FL_SELFUPDATE_HOME" 2>/dev/null && pwd -P || printf '%s' "$FL_SELFUPDATE_HOME")"
-  SU_CLI_DIR="$here"; SU_APP_ONLY=0; SU_NOTES=""; SU_APP_DIR=""
+  SU_CLI_DIR="$here"
   if [[ "$here" == "$home" ]]; then
     SU_KIND=managed
   elif [[ -e "${here}/.git" ]]; then
@@ -66,10 +87,7 @@ fl_selfupdate_plan() {
     SU_KIND=other; SU_APP_ONLY=1
     SU_NOTES="the CLI at ${here} was not installed by install.sh: update it the way you installed it"
   fi
-  info="$(fl_app_bundle_info)"
-  SU_APP_VERSION=""; SU_APP_PATH=""
-  if [[ -n "$info" ]]; then
-    SU_APP_VERSION="${info%%"$tab"*}"; SU_APP_PATH="${info#*"$tab"}"
+  if [[ -n "$SU_APP_PATH" ]]; then
     parent="$(dirname "$SU_APP_PATH")"
     if [[ "$parent" != "$HOME/Applications" ]]; then
       if [[ -w "$parent" ]]; then
@@ -86,7 +104,12 @@ fl_selfupdate_plan() {
 # fl_selfupdate_pin VERSION: SU_INSTALLER, SU_ARGS and SU_COMMAND for that
 # release: its tag's install.sh with --version, so a release published
 # after the prompt cannot change what is installed. Empty or odd: main.
+# Homebrew has no pin: brew installs the version its tap has.
 fl_selfupdate_pin() {
+  if [[ "$SU_KIND" == homebrew ]]; then
+    SU_INSTALLER=""; SU_ARGS=(); SU_COMMAND="$FL_SELFUPDATE_BREW_CMD"
+    return 0
+  fi
   SU_INSTALLER="$FL_SELFUPDATE_INSTALLER"; SU_ARGS=(--yes)
   [[ "$SU_APP_ONLY" == "1" ]] && SU_ARGS+=(--app-only)
   if [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
@@ -124,7 +147,8 @@ Updates the benchbar CLI and the BenchBar app with the one line installer:
   curl -fsSL ${FL_SELFUPDATE_INSTALLER} | bash -s -- --yes
 It shows the plan and asks first. It never touches a bench and never runs
 bench update. A CLI that is a git checkout of your own gets --app-only and
-the git pull to run.
+the git pull to run. A CLI installed with Homebrew is upgraded by brew
+(${FL_SELFUPDATE_BREW_CMD}), never by the installer.
 
   --check     this CLI and the app against the latest release, nothing else
   --json      the same as JSON (never runs the installer)
@@ -146,7 +170,9 @@ fl_cmd_self_update() {
   fl_selfupdate_plan
   if got="$(fl_selfupdate_latest)"; then
     latest="${got%%"$tab"*}"; page="${got#*"$tab"}"
-    if fl_version_lt "${FL_VERSION:-0}" "$latest" || { [[ -n "$SU_APP_VERSION" ]] && fl_version_lt "$SU_APP_VERSION" "$latest"; }; then
+    # under Homebrew only the CLI is this command's: the app updates itself
+    if fl_version_lt "${FL_VERSION:-0}" "$latest" \
+      || { [[ "$SU_KIND" != homebrew && -n "$SU_APP_VERSION" ]] && fl_version_lt "$SU_APP_VERSION" "$latest"; }; then
       available=true
       fl_selfupdate_pin "$latest"
     fi
@@ -165,6 +191,7 @@ fl_cmd_self_update() {
   local how="installed some other way"
   [[ "$SU_KIND" == managed ]] && how="installed by install.sh"
   [[ "$SU_KIND" == checkout ]] && how="a git checkout"
+  [[ "$SU_KIND" == homebrew ]] && how="installed with Homebrew"
   fl_info "CLI ${FL_VERSION:-0} at ${SU_CLI_DIR} (${how})"
   if [[ -n "$SU_APP_VERSION" ]]; then fl_info "BenchBar app ${SU_APP_VERSION} at ${SU_APP_PATH}"; else fl_info "BenchBar app not installed"; fi
   if [[ -n "$error" ]]; then
@@ -173,7 +200,14 @@ fl_cmd_self_update() {
     return 1
   fi
   fl_info "latest release ${latest}: ${page}"
-  if [[ "$available" != "true" ]]; then
+  if [[ "$available" != "true" && "$SU_KIND" == homebrew ]]; then
+    fl_ok "the benchbar CLI is up to date (${latest})"
+    if [[ -n "$SU_APP_VERSION" ]] && fl_version_lt "$SU_APP_VERSION" "$latest"; then
+      fl_warn "BenchBar app ${SU_APP_VERSION} is older than ${latest}"
+      while IFS= read -r line; do [[ -z "$line" ]] || fl_note "$line"; done <<<"$SU_NOTES"
+    fi
+    return 0
+  elif [[ "$available" != "true" ]]; then
     fl_ok "BenchBar is up to date (${latest})"
     return 0
   fi
@@ -184,7 +218,10 @@ fl_cmd_self_update() {
     return 0
   fi
   fl_info "runs: ${SU_COMMAND}"
-  if [[ "$SU_APP_ONLY" == "1" ]]; then
+  if [[ "$SU_KIND" == homebrew ]]; then
+    fl_info "Homebrew upgrades the benchbar formula; the app and every bench stay as they are"
+    fl_note "when brew says benchbar is already installed, its tap has not caught up with ${latest} yet: try again in a few minutes"
+  elif [[ "$SU_APP_ONLY" == "1" ]]; then
     fl_info "it updates the app in ${SU_APP_DIR:-$HOME/Applications} (a running BenchBar is quit first); no bench is touched"
   else
     fl_info "it pulls the CLI in ${FL_SELFUPDATE_HOME} and updates the app in ${SU_APP_DIR:-$HOME/Applications}; no bench is touched"
@@ -192,6 +229,14 @@ fl_cmd_self_update() {
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
     fl_info "dry-run: nothing was run"
     return 0
+  fi
+  if [[ "$SU_KIND" == homebrew ]]; then
+    fl_confirm "Upgrade benchbar to ${latest} with Homebrew now?" || { fl_info "Cancelled. Nothing was changed. Later: benchbar self-update"; return 1; }
+    # the brew of the prefix this CLI is in, else the one on PATH; exec:
+    # the upgrade replaces the keg this script runs from
+    local brew=brew
+    [[ -x "${FL_SELF_PREFIX}/bin/brew" ]] && brew="${FL_SELF_PREFIX}/bin/brew"
+    exec "$brew" upgrade askysh/tap/benchbar
   fi
   fl_confirm "Update BenchBar to ${latest} now?" || { fl_info "Cancelled. Nothing was changed. Later: benchbar self-update"; return 1; }
   [[ -n "$SU_APP_DIR" ]] && export BENCHBAR_APP_DIR="$SU_APP_DIR"

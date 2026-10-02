@@ -31,6 +31,20 @@ grep -q 'frappe-mac-template: Procfile.lean v1 ' "$old_copy" || fail "fixture mu
 assert_eq "current" "$(fl_template_status "$old_copy" "$r1")"
 assert_eq "outdated" "$(fl_template_status "$old_copy" "$r3")"
 
+# the runner's CLI_VERSION is unhashed: an upgrade alone does not make every
+# runner outdated, while the version still lands in the file (state.json)
+runner_with() {
+  fl_template_render bench-run.sh "BENCH_DIR=/b" "BENCH_RE=/b" "BENCH_NAME=b" "HONCHO=/h" "PORTS=8000" "SITE=s" \
+    "WEB_PORT=$2" "CLI_VERSION=$1" "LABEL=com.benchbar.b" "MAX_STARTS=3" "WINDOW=600"
+}
+ra="$(runner_with 0.7.0 8000)"; rb="$(runner_with 0.7.1 8000)"; rc="$(runner_with 0.7.0 8001)"
+assert_eq "$(fl_template_header_of "$ra")" "$(fl_template_header_of "$rb")" "(a new CLI version alone keeps the runner current)"
+[[ "$(fl_template_header_of "$ra")" != "$(fl_template_header_of "$rc")" ]] || fail "another input must still change the runner's hash"
+assert_contains "$ra" '"cli_version":"0.7.0"'
+assert_contains "$rb" '"cli_version":"0.7.1"'
+assert_not_contains "$ra" "#@unhashed"
+assert_not_contains "$ra" "__CLI_VERSION__"
+
 # unchanged apply writes nothing
 before="$(mtime_of "$target")"
 sleep 1

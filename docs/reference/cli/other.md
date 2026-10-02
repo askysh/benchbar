@@ -1,6 +1,6 @@
 ---
 title: "report and other commands"
-description: "benchbar report, self-update, list, console, db, autostart, mariadb-password, uninstall-service and help: the remaining commands with flags, exit codes and examples."
+description: "benchbar report, self-update, where, list, console, db, autostart, mariadb-password, uninstall-service and help: the remaining commands with flags, exit codes and examples."
 ---
 
 Every command takes the [options for every command](install.md#options-for-every-command).
@@ -55,10 +55,19 @@ gets `--app-only` and the `git -C PATH pull` to run; a CLI installed
 some other way gets `--app-only` too. An app in a writable folder other
 than `~/Applications` is replaced where it is (`BENCHBAR_APP_DIR`).
 
+A CLI installed with Homebrew is upgraded by Homebrew: the command is
+`brew upgrade askysh/tap/benchbar`, run after the same question, and the
+installer never runs. The app is not this command's then: it updates
+itself, or comes from the cask (`brew upgrade --cask --greedy
+askysh/tap/benchbar-app`), and a note says which. `update_available`
+compares only the CLI. When brew says benchbar is already installed
+right after a release, the tap has not caught up yet; try again a few
+minutes later.
+
 | Flag | What it does |
 |---|---|
 | `--check` | Only compare with the latest release |
-| `--json` | The same as JSON, never runs anything: `current`, `app_version`, `app_path`, `latest`, `release_url`, `update_available` (true, false, null offline), `install` (`managed`, `checkout`, `other`), `cli_dir`, `app_only`, `app_dir`, `command`, `notes`, `error` |
+| `--json` | The same as JSON, never runs anything: `current`, `app_version`, `app_path`, `latest`, `release_url`, `update_available` (true, false, null offline), `install` (`managed`, `checkout`, `other`, `homebrew`), `cli_dir`, `app_only`, `app_dir`, `command`, `notes`, `error` |
 | `--dry-run` | The plan and the command, nothing runs |
 | `--yes` | Do not ask |
 
@@ -67,6 +76,30 @@ answered no.
 
 ```bash
 benchbar self-update --check
+```
+
+## where
+
+```
+benchbar where [--json]
+```
+
+How this CLI was installed and where its things are: the install kind
+(`homebrew`, `managed` for the one line installer, `checkout` for a git
+clone, or `other`), the path it records for itself in the helper block,
+the `~/.local/bin` links and every fix command (under Homebrew
+`<prefix>/opt/benchbar/bin/benchbar`, which `brew upgrade` keeps), its
+state folder, and the BenchBar app it finds. Read only; it needs no
+bench.
+
+| Flag | What it does |
+|---|---|
+| `--json` | The same as JSON, the [where schema](../../json-schema.md#benchbar-where---json) |
+
+Exit codes: 0; 1 for another argument.
+
+```bash
+benchbar where
 ```
 
 ## docs
@@ -186,7 +219,7 @@ benchbar mariadb-password
 ## uninstall-service
 
 ```
-benchbar uninstall-service [--bench-dir DIR] [--dry-run]
+benchbar uninstall-service [--bench-dir DIR | --all] [--dry-run]
 ```
 
 Stops the bench (like `benchbar down`), then removes its launchd agent,
@@ -206,10 +239,24 @@ every 20 seconds, exits with code 127 and fills the log; doctor's
 [`dead_agents`](../../guides/doctor-and-repair.md#dead_agents) check
 points here.
 
-Exit codes: 0; 1 declined, or no bench and no agent at the path.
+With `--all` it does the same for every bench that has a benchbar agent
+in `~/Library/LaunchAgents`, one after the other, after one question
+that lists them; a folder that is no bench any more loses only its
+agent. Run it before `brew uninstall benchbar`: Homebrew cannot stop the
+agents itself. A bench that fails (launchd keeps its job) does not stop
+the others; run it again for what is left.
+
+| Flag | What it does |
+|---|---|
+| `--all` | Every bench with a benchbar agent, after one question; not with `--bench-dir` |
+| `--dry-run` | Show the steps, change nothing |
+
+Exit codes: 0; 1 declined, no bench and no agent at the path, or with
+`--all` a bench that could not be uninstalled.
 
 ```bash
 benchbar uninstall-service --bench-dir ~/dev/v16-bench
+benchbar uninstall-service --all
 ```
 
 To remove BenchBar itself, see [Uninstall](../../install.md#uninstall).

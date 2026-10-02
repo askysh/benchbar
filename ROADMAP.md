@@ -82,11 +82,18 @@ self-update`.
 polls on events. The first release signed with a Developer ID, notarized
 and stapled, with Sparkle updates.
 
+**0.7.0, Homebrew.** `brew install askysh/tap/benchbar
+askysh/tap/benchbar-app` installs the CLI and the app from
+`askysh/homebrew-tap`, and every release updates the tap. The CLI keeps
+its state in `~/.local/state/benchbar`, records paths that survive `brew
+upgrade`, and updates with `brew upgrade`; `benchbar repair` moves a one
+line install over, and doctor warns about a second CLI or app.
+
 ## Later
 
-**0.7, public launch.** A cask in `askysh/homebrew-tap` and a launch post
-on discuss.frappe.io. Developer ID signing, notarization, the signed DMG
-and Sparkle updates shipped in 0.6.1.
+**0.7, public launch.** A launch post on discuss.frappe.io. The
+`askysh/homebrew-tap` formula and cask shipped in 0.7.0; Developer ID
+signing, notarization, the signed DMG and Sparkle updates in 0.6.1.
 
 **Management in its own target.** Team profiles, bench discovery and
 port setup move out of the menu bar app into a separate management

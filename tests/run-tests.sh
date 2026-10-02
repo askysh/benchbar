@@ -26,9 +26,9 @@ bash -n "${SCRIPTS[@]}"
 # started last. Shards take every Nth test of this list, which balances
 # them. A new test file must be added here; the check below enforces it.
 ALL_TESTS="test-phases test-multi-bench test-doctor test-install-sh test-sites test-site-backups test-apps test-ports test-doctor-hardening
-test-profiles test-pull test-lock test-repair-json test-mcp
+test-profiles test-pull test-lock test-repair-json test-mcp test-homebrew
 test-process test-adopt test-repair test-service test-cli test-migrate test-json test-report test-runner
-test-freshness test-profile-v16 test-run test-bench-flow test-version-policy test-templates test-shellrc test-ui test-platform test-docs test-docs-command test-self-update test-release-notes test-discovery test-port-management test-status-cost"
+test-freshness test-profile-v16 test-run test-bench-flow test-version-policy test-templates test-shellrc test-ui test-platform test-docs test-docs-command test-self-update test-release-notes test-discovery test-port-management test-status-cost test-packaging"
 
 for f in "$ROOT"/tests/test-*.sh; do
   n="$(basename "$f" .sh)"

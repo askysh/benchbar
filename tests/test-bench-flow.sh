@@ -52,6 +52,7 @@ export PATH="$TMP_DIR/bin:$PATH"
 export BENCH_LOG="$TMP_DIR/bench.log"
 : >"$BENCH_LOG"
 
+. "$ROOT/lib/frappe-local/install-kind.sh"
 . "$ROOT/lib/frappe-local/ui.sh"
 . "$ROOT/lib/frappe-local/run.sh"
 . "$ROOT/lib/frappe-local/state.sh"

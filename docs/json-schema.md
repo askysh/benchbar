@@ -23,6 +23,7 @@ Raycast extensions and the like can rely on it too.
 | `<bench>/logs/.benchbar/heartbeat` | since 0.6.1: rewritten in place every 30 seconds while the runner runs; its mtime says the runner is alive |
 | `benchbar pull ... --json` | JSON lines while a production site is copied, see [pull](#benchbar-pull---json) |
 | `benchbar report --json` | where the redacted diagnostics zip went (0.5.5), see [report](#benchbar-report---json) |
+| `benchbar where --json` | how this CLI was installed, the path it records for itself, its state folder and the app (0.7), see [where](#benchbar-where---json) |
 | `benchbar site backup NAME --json` | the backup just taken (0.5.8), see [site backups](#site-backups) |
 | `benchbar site backups NAME --json` | every backup of a site (0.5.8) |
 | `benchbar site drop NAME --json` | the plan (with `--dry-run`) or the result of dropping a site (0.5.8) |
@@ -111,7 +112,7 @@ How `status` decides (live facts win over the state file):
 | `benches[].state_file` | string | where the runner writes `state.json` |
 
 Benches are found in this order, without duplicates: the remembered
-bench (`.benchbar/state.env`), the `WorkingDirectory` of every
+bench (`state.env` in benchbar's state folder), the `WorkingDirectory` of every
 `com.benchbar.*` and `com.frappe-mac.*` agent, then `~/frappe-bench`,
 `~/dev/frappe-bench` and any `~/*` or `~/dev/*` folder with
 `sites/common_site_config.json`.
@@ -233,7 +234,7 @@ carry the bench's sites, read from `sites/*/site_config.json`:
 
 | Field | Type | Notes |
 |---|---|---|
-| `checks[].id` | string | stable id, for example `env_python`, `assets`, `agent`, `legacy_agents`. `pdf_engine` replaced `wkhtmltopdf` in 0.4. 0.5 adds `apps_txt`, `app_branch_policy`, `lock_parse` and `lock_drift` (group `bench`, no repair action). 0.6 adds `dependency_behind`, `apps_behind` and `profile_outdated` (group `bench`, no repair action); `dependency_behind` is the one id that can appear several times, once per stale dependency |
+| `checks[].id` | string | stable id, for example `env_python`, `assets`, `agent`, `legacy_agents`. `pdf_engine` replaced `wkhtmltopdf` in 0.4. 0.5 adds `apps_txt`, `app_branch_policy`, `lock_parse` and `lock_drift` (group `bench`, no repair action). 0.6 adds `dependency_behind`, `apps_behind` and `profile_outdated` (group `bench`, no repair action); `dependency_behind` is the one id that can appear several times, once per stale dependency. 0.7 adds `app_copies` (group `system`) and `cli_duplicate` (group `service`), both without a repair action, and `helpers` can be `fail` (the block's benchbar is gone) |
 | `checks[].group` | string | `system`, `bench`, `service` or `site` |
 | `checks[].label` | string | short name for humans |
 | `checks[].level` | string | `ok`, `warn` or `fail` |
@@ -260,15 +261,17 @@ for `benchbar_logs_tail`.
 ## `benchbar repair --json`
 
 A stream: one JSON object per line on stdout, as the run goes. The human
-text goes to the run's log (`.benchbar/logs/<timestamp>.log`).
+text goes to the run's log, `logs/<timestamp>.log` in benchbar's state
+folder: `~/.local/state/benchbar` for the one line installer and
+Homebrew since 0.7.0, `.benchbar/` in a git checkout.
 
 ```json
-{"event":"plan","schema_version":1,"cli_version":"0.5.0","bench":"/Users/you/frappe-bench","dry_run":false,"actions":[{"id":"build","label":"bench build","fixes":["Built assets"],"sudo":false},{"id":"hosts_entry","label":"add macdev to /etc/hosts (sudo)","fixes":["/etc/hosts entry"],"sudo":true}],"backups":"/Users/you/.local/share/benchbar/.benchbar/backups","log":"/Users/you/.local/share/benchbar/.benchbar/logs/20260926-101500.log"}
+{"event":"plan","schema_version":1,"cli_version":"0.5.0","bench":"/Users/you/frappe-bench","dry_run":false,"actions":[{"id":"build","label":"bench build","fixes":["Built assets"],"sudo":false},{"id":"hosts_entry","label":"add macdev to /etc/hosts (sudo)","fixes":["/etc/hosts entry"],"sudo":true}],"backups":"/Users/you/.local/state/benchbar/backups","log":"/Users/you/.local/state/benchbar/logs/20260926-101500.log"}
 {"event":"step","action":"build","status":"running","message":"bench build"}
 {"event":"step","action":"build","status":"done","message":"bench build"}
 {"event":"step","action":"hosts_entry","status":"running","message":"add macdev to /etc/hosts (sudo)"}
 {"event":"step","action":"hosts_entry","status":"skipped","message":"[WARN] skipped without sudo; run: printf '127.0.0.1 macdev\n' | sudo tee -a /etc/hosts"}
-{"event":"done","exit_code":0,"log":"/Users/you/.local/share/benchbar/.benchbar/logs/20260926-101500.log"}
+{"event":"done","exit_code":0,"log":"/Users/you/.local/state/benchbar/logs/20260926-101500.log"}
 ```
 
 | Event | Fields |
@@ -650,6 +653,27 @@ app's Report a Bug uses it.
 
 Exit 0 when the zip was written. `--json` with `--print` exits 1.
 
+## `benchbar where --json`
+
+How this CLI was installed and where its things are, since 0.7.0. Read
+only: it needs no bench, takes no lock and writes no log. Scripts, agents
+and the app can use it to tell a Homebrew install from the others instead
+of guessing from paths.
+
+```json
+{"schema_version":1,"cli_version":"0.7.0","install":"homebrew","self":"/opt/homebrew/opt/benchbar/bin/benchbar","state_dir":"/Users/you/.local/state/benchbar","app_version":"0.7.0","app_path":"/Applications/BenchBar.app"}
+```
+
+| Field | Type | Meaning |
+|---|---|---|
+| `install` | string | `homebrew` (the `benchbar` formula), `managed` (the one line installer's checkout, `~/.local/share/benchbar`), `checkout` (another git clone, such as `./benchbar` in the repo) or `other`. Treat a value you do not know as `other` |
+| `self` | string | the path of this CLI that the helper block, the `~/.local/bin` links and every printed fix command use. Under Homebrew it is `<prefix>/opt/benchbar/bin/benchbar`, which `brew upgrade` keeps; never a versioned Cellar path |
+| `state_dir` | string | the folder of the remembered benches, per bench settings, run logs, backups and the lock: `~/.local/state/benchbar` for `homebrew` and `managed` (a symlink to `~/.local/share/benchbar/.benchbar` when the two are on different volumes), `.benchbar` next to the CLI for the others, or `FL_STATE_DIR` when that is set |
+| `app_version` | string or null | the BenchBar app's version, `null` when no app is installed |
+| `app_path` | string or null | the app it found first, `/Applications` before `~/Applications`; `null` when none |
+
+Exit 0. An argument other than `--json` exits 1.
+
 ## Site backups
 
 `site backup`, `site backups` and `site drop` (0.5.8) describe a backup
@@ -733,6 +757,11 @@ plus:
 | `updated_at` | string | when this transition was written; it does not move between transitions (the heartbeat is its own file, below) |
 | `source` | string | `runner` (the launchd runner) or `cli` (`up`, `down`, `restart`) |
 
+`cli_version` is the version of the benchbar that wrote the transition:
+for `source: runner`, the one that wrote the runner script. Since 0.7.0 a
+new CLI version alone no longer rewrites the runner (doctor does not count
+it as outdated), so this can be older than `benchbar --version`.
+
 Transitions the runner writes:
 
 | When | `state` | `stop_reason` |
@@ -781,7 +810,7 @@ unreadable root exits 1. Hidden directories, symlinks, dependency/build folders,
 and test/fixture folders are skipped. A found bench's children are not scanned.
 
 `benchbar register PATH ... --json` validates every path, atomically remembers
-the canonical paths in `.benchbar/registered-benches.txt`, then returns the
+the canonical paths in `registered-benches.txt` in the state folder, then returns the
 normal `list` response. It does not create services or change the default bench.
 `--dry-run` does not write the registry. List includes these registered paths
 while they still identify bench directories. Registration is idempotent.

@@ -151,6 +151,17 @@ built in entries, and its editor writes them into the new file. Then
 add the bench folder, with your bench's path in place of `<bench>`:
 `echo '<bench>' >> ~/.config/mole/whitelist`.
 
+### app_copies
+
+At most one `BenchBar.app`, in `/Applications` or `~/Applications`. Two
+copies, typically Homebrew's cask in `/Applications` and the one line
+installer's in `~/Applications`, share one bundle id, so macOS may open
+either, and the login item and the updater may each pick a different one.
+
+Fix: quit BenchBar and move the copy you do not use to the Trash. With
+Homebrew's cask `benchbar-app` installed, that is the one in
+`~/Applications`. `benchbar repair` never deletes an app.
+
 ### full_disk_access
 
 `crontab` is readable. Without Full Disk Access for the Terminal, `bench
@@ -394,17 +405,54 @@ Fix: `benchbar logs`, fix the cause, then `benchup`. For `broken`:
 
 The `# >>> benchbar >>>` block in `~/.zshrc` with `benchup` and the other
 helpers is present and current. Old helper blocks from earlier setups are
-reported.
+reported. A block whose `BENCHBAR` path is gone fails: every helper runs
+that path. That happens after `brew cleanup` deleted a versioned Cellar
+folder an old block named, or after the one line installer's checkout
+went to the Trash.
+
+Under Homebrew a block that runs a git checkout with its own
+`.benchbar` folder is a warning and stays as it is: Homebrew's CLI never
+reads that checkout's state, so `benchup` would lose its benches.
 
 Fix: `benchbar repair` writes the block. Remove an old block by hand.
 
 ### cli_link
 
 `~/.local/bin/benchbar` and `~/.local/bin/frappe-mac` are links to this
-checkout, so both names work from any folder.
+checkout, so both names work from any folder. When Homebrew has the
+`benchbar` formula, its own `bin` folder puts `benchbar` on PATH: the
+links are optional then, and a link to Homebrew's benchbar always counts
+as current. Under Homebrew a link that leads anywhere else, such as the
+one line installer's checkout or a Cellar folder, comes first on PATH and
+is a warning. A link to a git checkout with its own `.benchbar` folder is
+a warning too, but repair leaves it: that checkout's state is not
+Homebrew's.
 
-Fix: `benchbar repair` writes the links. A file that is not a link is
-left alone: move it aside and link again.
+Fix: `benchbar repair` writes the links. With Homebrew's benchbar
+installed it never makes a new one: it points a wrong link at this CLI
+and keeps the old link in its backups. A file that is not a link is left
+alone: move it aside (and link again, without Homebrew).
+
+### cli_duplicate
+
+One copy of the CLI: not the one line installer's in
+`~/.local/share/benchbar` next to Homebrew's `benchbar` formula. Both
+copies work on the same state folder and the same benches, but only one
+of them is `benchbar` on PATH, and the other one's `repair` or
+`self-update` changes the copy nobody runs. A git checkout of your own
+warns too while Homebrew has the formula. It keeps its own state, which
+Homebrew's CLI never reads, so for a checkout the fix is `brew uninstall
+benchbar`.
+
+Fix: to keep Homebrew's, run its `repair` by its full path,
+`$(brew --prefix)/opt/benchbar/bin/benchbar repair`, then move
+`~/.local/share/benchbar` to the Trash; the benches and the state stay.
+The check offers the Trash only once the state has moved out of that
+folder: while a run of the old CLI holds its lock, run repair again when
+it ends. When the two folders are on different volumes the state stays
+in `~/.local/share/benchbar/.benchbar`, so keep that folder. To keep the
+installer's, `brew uninstall benchbar`. There is no repair action: which
+copy stays is your call.
 
 ### legacy_agents
 

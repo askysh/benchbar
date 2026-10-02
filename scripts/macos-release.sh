@@ -20,8 +20,11 @@
 #   BenchBar-<version>.dmg      signed, notarized, stapled: for people and Homebrew
 #   BenchBar-<version>.zip      the stapled app: for Sparkle updates
 #   appcast.xml                 the Sparkle feed, signed with the EdDSA key
-#   benchbar.rb                 the Homebrew cask with the DMG's sha256
+#   benchbar-cli-<version>.tar.gz  the CLI for the Homebrew formula
 #   SHA256SUMS
+#
+# The tap's formula and cask are written after the release is published,
+# from these files (.github/workflows/homebrew-tap.yml).
 
 set -euo pipefail
 
@@ -145,13 +148,11 @@ cp "${feed}/appcast.xml" "${DIST}/appcast.xml"
 rm -rf "$feed"
 ok "appcast.xml signed"
 
-# ---------------------------------------------------------------- Homebrew
-step "Homebrew cask"
-sha="$(shasum -a 256 "$DMG" | awk '{print $1}')"
-sed -e "s/{{VERSION}}/${VERSION}/g" -e "s/{{SHA256}}/${sha}/g" \
-  "${ROOT}/packaging/homebrew/benchbar.rb.tmpl" >"${DIST}/benchbar.rb"
-(cd "$DIST" && shasum -a 256 ./*.dmg ./*.zip >SHA256SUMS)
-ok "benchbar.rb (sha256 ${sha})"
+# --------------------------------------------------------------- CLI tarball
+step "CLI tarball"
+"${ROOT}/scripts/cli-tarball.sh" "$VERSION" "$DIST"
+(cd "$DIST" && shasum -a 256 ./*.dmg ./*.zip ./*.tar.gz >SHA256SUMS)
+ok "SHA256SUMS"
 
 printf '\n[OK] release %s in %s\n' "$VERSION" "$DIST"
 ls -1 "$DIST"

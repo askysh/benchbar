@@ -112,6 +112,27 @@ budget pipx 0 "status, running"
 [[ "$(execs)" -le 5 ]] || fail "status, running: $(execs) programs started, budget 5"$'\n'"$(cat "$MOCK_LOG")"
 assert_calls_not_contain '^exec (python3|perl|ruby|shasum|uname|dirname|sed|awk|tr|head|tail|basename|grep|cat|id)( |$)'
 printf 'status --json, running: %s programs (%s)\n' "$(execs)" "$(summary)"
+checkout_programs="$(summary)"
+
+# ---- the same status from a Homebrew CLI (a keg copy run by its opt path,
+# its state folder ~/.local/state/benchbar, here a link to the pinned one,
+# the bench its remembered default; the installer's folder is there too,
+# its state moved): the install kind and the state folder start no program
+KEG="$MOCK_BREW_PREFIX/Cellar/benchbar/$VER"
+mkdir -p "$KEG/libexec" "$HOME/.local/state" "$HOME/.local/share/benchbar"
+cp -R "$ROOT/benchbar" "$ROOT/lib" "$ROOT/templates" "$ROOT/config" "$KEG/libexec/"
+ln -sfn "../Cellar/benchbar/$VER" "$MOCK_BREW_PREFIX/opt/benchbar"
+ln -s "$FL_STATE_DIR" "$HOME/.local/state/benchbar"
+ln -s "$HOME/.local/state/benchbar" "$HOME/.local/share/benchbar/.benchbar"
+reset_calls
+set +e
+OUT="$(PATH="$SHIMS:$PATH" env -u FL_STATE_DIR -u FL_STATE_FILE -u FL_BACKUP_ROOT \
+  "$MOCK_BREW_PREFIX/opt/benchbar/libexec/benchbar" status --json 2>&1)"; CODE=$?
+set -e
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "$BENCH running 4241" "$(status_of 'd["bench"], d["state"], d["pid"]')"
+assert_eq "$checkout_programs" "$(summary)" "(a Homebrew CLI's status starts the same programs)"
+rm -f "$HOME/.local/state/benchbar"; rm -rf "$HOME/.local/share/benchbar"
 
 # ---- --ping asks every site once: the default site's ping is reused
 reset_calls

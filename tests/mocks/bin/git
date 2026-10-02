@@ -3,6 +3,10 @@
 # into DIR (with a fake .git), "pull --ff-only" reports "Already up to date."
 # unless $MOCK_STATE/git_update exists, "rev-parse --short HEAD" prints the
 # content of $MOCK_STATE/git_head (default abc1234). Anything else: real git.
+# In such a fake checkout (.git/mock-checkout) .git/HEAD says the branch
+# ("ref: refs/heads/main", or a commit when detached), .git/dirty lists
+# changed tracked files and .git/untracked untracked ones, for symbolic-ref,
+# status and checkout; pull fails on a detached HEAD, as git does.
 # shellcheck source=tests/mocks/bin/_mocklib.sh
 . "$(dirname "$0")/_mocklib.sh"
 mock_log "$@"
@@ -47,8 +51,27 @@ case "${1:-}" in
     dest="${*: -1}"
     mkdir -p "$dest/.git"
     for f in benchbar frappe-mac lib templates config docs tests; do cp -R "${MOCK_REPO_ROOT:?}/$f" "$dest/"; done
+    : >"$dest/.git/mock-checkout"
+    printf 'ref: refs/heads/main\n' >"$dest/.git/HEAD"
     exit 0 ;;
+  symbolic-ref|status|checkout)
+    fake="${dir:-.}/.git"
+    if [[ -f "$fake/mock-checkout" ]]; then
+      head="$(cat "$fake/HEAD" 2>/dev/null || true)"
+      case "$1" in
+        symbolic-ref) [[ "$head" == "ref: "* ]] || exit 1; printf '%s\n' "${head#ref: }"; exit 0 ;;
+        status)
+          cat "$fake/dirty" 2>/dev/null || true
+          [[ " $* " == *" --untracked-files=no "* || " $* " == *" -uno "* ]] || cat "$fake/untracked" 2>/dev/null || true
+          exit 0 ;;
+        checkout) printf 'ref: refs/heads/%s\n' "${*: -1}" >"$fake/HEAD"; exit 0 ;;
+      esac
+    fi ;;
   pull)
+    if [[ -f "${dir:-.}/.git/mock-checkout" && "$(cat "${dir:-.}/.git/HEAD" 2>/dev/null)" != "ref: "* ]]; then
+      printf 'You are not currently on a branch.\nPlease specify which branch you want to merge with.\n' >&2
+      exit 1
+    fi
     if [[ -f "${MOCK_STATE:?}/git_update" ]]; then
       printf 'Updating abc1234..def5678\nFast-forward\n'
       printf 'def5678' >"${MOCK_STATE}/git_head"

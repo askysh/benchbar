@@ -1,0 +1,176 @@
+# Updates askysh/homebrew-tap when a release is published: the benchbar
+# formula always, the benchbar-app cask only for a signed release (one with
+# a Sparkle appcast). Runs on publish, not in release.yml: a draft's asset
+# URLs answer 404, so a formula merged before publishing breaks brew install.
+#
+# The formula and cask are rendered from packaging/homebrew with the sha256
+# of the published files (checked against SHA256SUMS first), put into a
+# clone of the tap, checked with brew style and brew audit, installed and
+# tested, then proposed as a pull request that merges itself once the tap's
+# checks pass (docs/releasing.md, "The Homebrew tap").
+#
+# Needs the HOMEBREW_TAP_TOKEN secret: a fine grained token with Contents
+# and Pull requests write access to askysh/homebrew-tap only. Without it
+# the run still checks everything and prints the files to copy by hand.
+name: Homebrew tap
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Published version (X.Y.Z) to put in the tap"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: homebrew-tap
+  cancel-in-progress: false
+
+jobs:
+  tap:
+    name: Formula and cask for askysh/homebrew-tap
+    runs-on: macos-latest
+    timeout-minutes: 30
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_ANALYTICS: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+      HOMEBREW_NO_ENV_HINTS: "1"
+    steps:
+      - id: version
+        env:
+          TAG_NAME: ${{ github.event.release.tag_name }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ -n "$INPUT_VERSION" ]; then v="${INPUT_VERSION#v}"; else v="${TAG_NAME#v}"; fi
+          case "$v" in
+            [0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "::error::'$v' is not a version (expected X.Y.Z)"; exit 1 ;;
+          esac
+          if [ "$PRERELEASE" = "true" ]; then
+            echo "::notice title=Prerelease::v$v is a prerelease; the tap keeps the last release."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v7
+        if: steps.version.outputs.skip != 'true'
+        with:
+          ref: v${{ steps.version.outputs.version }}
+
+      - name: Download and check the release files
+        if: steps.version.outputs.skip != 'true'
+        id: files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          dir="$RUNNER_TEMP/release"
+          gh release download "v$VERSION" --dir "$dir" \
+            --pattern "benchbar-cli-${VERSION}.tar.gz" --pattern "BenchBar-${VERSION}.dmg" \
+            --pattern SHA256SUMS --pattern appcast.xml
+          cd "$dir"
+          [ -f "benchbar-cli-${VERSION}.tar.gz" ] || { echo "::error::v$VERSION has no benchbar-cli-${VERSION}.tar.gz (releases before 0.7.0 have none)"; exit 1; }
+          files="benchbar-cli-${VERSION}.tar.gz"
+          signed=false
+          if [ -f appcast.xml ] && [ -f "BenchBar-${VERSION}.dmg" ]; then signed=true; files="$files BenchBar-${VERSION}.dmg"; fi
+          for f in $files; do
+            want="$(awk -v f="$f" '$2 == f || $2 == "*" f || $2 == "./" f {print $1; exit}' SHA256SUMS)"
+            have="$(shasum -a 256 "$f" | awk '{print $1}')"
+            [ -n "$want" ] && [ "$want" = "$have" ] || { echo "::error::$f does not match SHA256SUMS (${want:-not listed}, file $have)"; exit 1; }
+            echo "$f: sha256 $have, matches SHA256SUMS"
+          done
+          [ "$signed" = "true" ] || echo "::notice title=Formula only::v$VERSION is not a signed release; the cask stays as it is."
+          echo "dir=$dir" >> "$GITHUB_OUTPUT"
+          echo "signed=$signed" >> "$GITHUB_OUTPUT"
+
+      - name: Clone the tap and render the formula and cask into it
+        if: steps.version.outputs.skip != 'true'
+        id: tap
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+          DIR: ${{ steps.files.outputs.dir }}
+          SIGNED: ${{ steps.files.outputs.signed }}
+        run: |
+          tap="$(brew --repository)/Library/Taps/askysh/homebrew-tap"
+          if [ -n "$TAP_TOKEN" ]; then
+            git clone "https://x-access-token:${TAP_TOKEN}@github.com/askysh/homebrew-tap.git" "$tap"
+          else
+            echo "::warning::HOMEBREW_TAP_TOKEN is not set: checking only, no pull request."
+            git clone https://github.com/askysh/homebrew-tap.git "$tap" || brew tap-new --no-git askysh/tap
+          fi
+          args=(--version "$VERSION" --cli "$DIR/benchbar-cli-${VERSION}.tar.gz")
+          [ "$SIGNED" != "true" ] || args+=(--dmg "$DIR/BenchBar-${VERSION}.dmg")
+          scripts/homebrew-render.sh "${args[@]}" "$tap"
+          echo "path=$tap" >> "$GITHUB_OUTPUT"
+
+      - name: brew style and brew audit
+        if: steps.version.outputs.skip != 'true'
+        env:
+          SIGNED: ${{ steps.files.outputs.signed }}
+        run: |
+          brew style askysh/tap/benchbar
+          brew audit --strict --online --formula askysh/tap/benchbar
+          if [ "$SIGNED" = "true" ]; then
+            brew style askysh/tap/benchbar-app
+            brew audit --strict --online --cask askysh/tap/benchbar-app
+          fi
+
+      - name: Install, test and uninstall
+        if: steps.version.outputs.skip != 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          SIGNED: ${{ steps.files.outputs.signed }}
+        run: |
+          brew install askysh/tap/benchbar
+          brew test askysh/tap/benchbar
+          home="$(mktemp -d)"
+          where="$(HOME="$home" "$(brew --prefix)/bin/benchbar" where --json)"
+          echo "$where"
+          case "$where" in *'"install":"homebrew"'*) ;; *) echo "::error::where --json does not say homebrew"; exit 1 ;; esac
+          case "$where" in *"/Cellar/"*) echo "::error::where --json names a Cellar path"; exit 1 ;; esac
+          if [ "$SIGNED" = "true" ]; then
+            brew install --cask askysh/tap/benchbar-app
+            got="$(defaults read /Applications/BenchBar.app/Contents/Info CFBundleShortVersionString)"
+            [ "$got" = "$VERSION" ] || { echo "::error::the cask installed BenchBar $got, not $VERSION"; exit 1; }
+            brew uninstall --cask askysh/tap/benchbar-app
+          fi
+          brew uninstall askysh/tap/benchbar
+          [ ! -e "$(brew --prefix)/bin/benchbar" ] || { echo "::error::bin/benchbar is left after brew uninstall"; exit 1; }
+
+      - name: Open the tap pull request and let it merge itself
+        if: steps.version.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+          TAP: ${{ steps.tap.outputs.path }}
+        run: |
+          cd "$TAP"
+          if [ -z "$GH_TOKEN" ]; then
+            for f in Formula/benchbar.rb Casks/benchbar-app.rb; do
+              [ -f "$f" ] && { echo "::group::$f"; cat "$f"; echo "::endgroup::"; }
+            done
+            echo "::notice title=No pull request::Set HOMEBREW_TAP_TOKEN, or copy the files above into askysh/homebrew-tap."
+            exit 0
+          fi
+          git add Formula Casks 2>/dev/null || git add Formula
+          if git diff --cached --quiet; then
+            echo "::notice title=Tap up to date::askysh/homebrew-tap already has $VERSION."
+            exit 0
+          fi
+          branch="benchbar-${VERSION}"
+          git checkout -b "$branch"
+          git -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" \
+            commit -m "benchbar ${VERSION}"
+          git push --force origin "$branch"
+          body="benchbar ${VERSION} from https://github.com/askysh/benchbar/releases/tag/v${VERSION}, rendered, audited and installed by the release's homebrew-tap workflow."
+          gh pr view "$branch" --repo askysh/homebrew-tap >/dev/null 2>&1 \
+            || gh pr create --repo askysh/homebrew-tap --base main --head "$branch" --title "benchbar ${VERSION}" --body "$body"
+          gh pr merge "$branch" --repo askysh/homebrew-tap --auto --squash --delete-branch
+          echo "::notice title=Tap pull request::$(gh pr view "$branch" --repo askysh/homebrew-tap --json url --jq .url) merges itself once its checks pass."

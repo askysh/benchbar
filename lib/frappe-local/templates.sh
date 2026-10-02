@@ -6,12 +6,17 @@
 #
 # A template may contain:
 #   #@version N            stripped on render, becomes the vN in the header
+#   #@unhashed KEY...      stripped on render; these keys' values are left
+#                          out of the hash (put it before their first use)
 #   __HEADER__             replaced by "benchbar-template: <name> vN <hash>"
 #   __KEY__                replaced by the value passed as KEY=value; a line
 #                          that is only __KEY__ and renders to nothing is
 #                          dropped (an optional line, like the scheduler)
 # The hash covers the rendered content with __HEADER__ still in place, so it
-# only changes when the template or its inputs change.
+# only changes when the template or its inputs change. An unhashed key is
+# hashed as its __KEY__ token: the runner's CLI_VERSION, so that an upgrade
+# alone does not make every runner outdated. The value still lands in the
+# file, and stays there until another change rewrites it.
 #
 # Files written before 0.3.0 say "frappe-mac-template:". Both words count as
 # ours, and only "<name> vN <hash>" is compared, so the rename alone never
@@ -41,27 +46,35 @@ fl_template_version() {
 # fl_template_render NAME KEY=VALUE...  (NAME is the file under templates/, without .tmpl)
 # Prints the rendered content including the resolved header line.
 fl_template_render() {
-  local name="$1" file body line pair key value hash version only_token
+  local name="$1" file body hbody line hline pair key value hash version only_token unhashed=""
   shift
   file="${FL_TEMPLATE_DIR}/${name}.tmpl"
   [[ -f "$file" ]] || { fl_fail "template not found: ${file}"; return 1; }
   version="$(fl_template_version "$file")"
-  body=""
+  body=""; hbody=""
   while IFS= read -r line || [[ -n "$line" ]]; do
     case "$line" in
       '#@version'*) continue ;;
+      '#@unhashed'*) unhashed="${unhashed} ${line#'#@unhashed'} "; continue ;;
     esac
     only_token=0
     [[ "$line" =~ ^__[A-Z_]+__$ ]] && only_token=1
+    hline="$line"
     for pair in "$@"; do
       key="${pair%%=*}"
       value="${pair#*=}"
       line="${line//__${key}__/$value}"
+      # the hashed copy keeps an unhashed key's token
+      if [[ -n "$unhashed" ]]; then
+        case "$unhashed" in *" ${key} "*) ;; *) hline="${hline//__${key}__/$value}" ;; esac
+      fi
     done
+    [[ -n "$unhashed" ]] || hline="$line"
     [[ "$only_token" == "1" && -z "$line" ]] && continue
     body="${body}${line}"$'\n'
+    hbody="${hbody}${hline}"$'\n'
   done <"$file"
-  hash="$(printf '%s' "$body" | fl_content_hash)"
+  hash="$(printf '%s' "$hbody" | fl_content_hash)"
   printf '%s' "${body//__HEADER__/${FL_TEMPLATE_TOKEN}: ${name} v${version:-1} ${hash}}"
 }
 
@@ -97,22 +110,46 @@ fl_backup_stamp() {
   printf '%s' "$FL_BACKUP_STAMP"
 }
 
+# fl_backup_dest PATH: where PATH goes in this run's backup folder
+fl_backup_dest() {
+  local flat
+  flat="$(printf '%s' "$1" | sed -e "s#^${HOME}#HOME#" -e 's#^/##' -e 's#/#__#g')"
+  printf '%s/%s/%s' "$FL_BACKUP_ROOT" "$(fl_backup_stamp)" "$flat"
+}
+
 # fl_backup_file PATH: copies PATH into the backup folder for this run.
 # Sets FL_LAST_BACKUP to the copy. Never deletes anything.
 fl_backup_file() {
-  local path="$1" dest flat
+  local path="$1" dest
   FL_LAST_BACKUP=""
   [[ -e "$path" ]] || return 0
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
     fl_info "dry-run: would back up ${path}"
     return 0
   fi
-  flat="$(printf '%s' "$path" | sed -e "s#^${HOME}#HOME#" -e 's#^/##' -e 's#/#__#g')"
-  dest="${FL_BACKUP_ROOT}/$(fl_backup_stamp)/${flat}"
+  dest="$(fl_backup_dest "$path")"
   mkdir -p "$(dirname "$dest")"
   cp -p "$path" "$dest"
   FL_LAST_BACKUP="$dest"
   fl_log "backup: ${path} -> ${dest}"
+}
+
+# fl_backup_link LINK: keeps the symlink itself, not the file it leads to,
+# in the backup folder for this run: a link with the same target, which
+# may be gone already. Sets FL_LAST_BACKUP to it.
+fl_backup_link() {
+  local link="$1" dest
+  FL_LAST_BACKUP=""
+  [[ -L "$link" ]] || return 0
+  if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
+    fl_info "dry-run: would back up the link ${link}"
+    return 0
+  fi
+  dest="$(fl_backup_dest "$link")"
+  mkdir -p "$(dirname "$dest")"
+  ln -sfn "$(readlink "$link")" "$dest"
+  FL_LAST_BACKUP="$dest"
+  fl_log "backup: ${link} -> ${dest} (a link to $(readlink "$link"))"
 }
 
 # fl_move_aside PATH: renames PATH to PATH.<suffix>.<stamp> next to itself.

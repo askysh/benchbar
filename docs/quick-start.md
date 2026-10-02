@@ -3,7 +3,9 @@ title: "Quick start"
 description: "Register a bench you already have with benchbar adopt, or install a new bench and site with benchbar install, then start it."
 ---
 
-Two starting points. Pick the one that matches your Mac.
+First [install](install.md) BenchBar; with Homebrew that is
+`brew install askysh/tap/benchbar askysh/tap/benchbar-app`. Then there
+are two starting points. Pick the one that matches your Mac.
 
 A few words first. A **bench** is the folder that holds a Frappe
 installation: the apps in `apps/`, a Python environment in `env/` and
@@ -61,9 +63,9 @@ wkhtmltopdf package and the `/etc/hosts` line.
 
 The first run downloads a lot and takes a while. Each step ends as
 `done`, `unchanged` or `skipped`; a `failed` step stops the run, and
-the full output is in `.benchbar/logs/` of the benchbar checkout
-(`~/.local/share/benchbar` after the one line installer). Re-running
-`install` is safe: it skips what is already done.
+the full output is in `~/.local/state/benchbar/logs/` (`.benchbar/logs/`
+in a git checkout of benchbar). Re-running `install` is safe: it skips
+what is already done.
 
 To pick the Frappe version or the apps, pass a profile and a bundle, for
 example `benchbar install --profile v16-lts --bundle common`. The choices
