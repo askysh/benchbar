@@ -413,7 +413,7 @@ Asked for after the phases, to stop naming drift before the first release.
 - Cancel is disabled while a profile sheet's change runs, as the sheet already could not be dismissed; before, Cancel closed it and the CLI carried on unseen.
 - At most one prominent button per pane, through `primaryAction()` or `primaryAction(_:)` when the main action follows the state (Open Site, or Set Up Management… before the bench is managed; Repair… only when doctor found something it can fix). The update banner's Update Now is bordered so the pane under it keeps its own.
 - Actions used less often moved into one trailing ⋯ menu (`MoreMenu`) per pane, section or row, never removed: Console, Database, Show in Finder and Copy Path on Overview; Make Default on a site; Refresh Site Lists and Check Remotes on Apps; Install and the focus pin on an app; Copy Command in the update banner and About; Copy Path and Show in Finder for the CLI; Show Folder and Remove for runners.
-- Start, Stop and Restart are one `ControlGroup`: three equal buttons read as three choices, a group reads as one control.
+- Start, Stop and Restart are three titled buttons side by side, as in the popover. A `ControlGroup` drew them as bare icons in the window, even with `.labelStyle(.titleAndIcon)`.
 - Team Profiles has one Add Profile menu (Create from Bench…, Import…, Subscribe to a Repository…) and no prominent button: everything on that pane is rare, and three header buttons competed with the list.
 - About's documentation, release notes and source rows are links with the short address, like System Settings, instead of three Open buttons.
 - Removing a custom runner asks first: it moves the folder to the Trash and was the one destructive action without a confirmation.

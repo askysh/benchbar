@@ -124,7 +124,7 @@ struct BenchOverview: View {
         }
     }
 
-    /// Start, stop and restart as one group, the site as the main action,
+    /// Start, stop and restart side by side, the site as the main action,
     /// the editor beside it and the rest in the "…" menu. Before the bench
     /// is managed, Set Up Management… is the main action instead.
     @ViewBuilder private var controlRow: some View {
@@ -139,7 +139,8 @@ struct BenchOverview: View {
                 .primaryAction()
                 .disabled(store.busyBench != nil)
             } else {
-                ControlGroup {
+                // three titled buttons: a control group draws bare icons
+                HStack(spacing: WindowMetrics.rowSpacing) {
                     Button { Task { await store.perform(.up, on: bench) } } label: { Label("Start", systemImage: "play.fill") }
                         .disabled(!controls.canStart)
                     Button { Task { await store.perform(.down, on: bench) } } label: { Label("Stop", systemImage: "stop.fill") }
@@ -147,8 +148,6 @@ struct BenchOverview: View {
                     Button { Task { await store.perform(.restart, on: bench) } } label: { Label("Restart", systemImage: "arrow.clockwise") }
                         .disabled(!controls.canRestart)
                 }
-                // a control group draws icon only labels by default
-                .labelStyle(.titleAndIcon)
                 .fixedSize()
             }
             Spacer()
