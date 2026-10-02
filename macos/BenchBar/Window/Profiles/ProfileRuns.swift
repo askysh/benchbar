@@ -9,6 +9,21 @@ nonisolated enum ProfileRunPhase: Equatable, Sendable {
     case idle, loading, ready, running, done, failed(String)
 
     var isBusy: Bool { self == .loading || self == .running }
+
+    /// The scaffold's phase, in the sheet's own words. `idle` is what the
+    /// sheet shows before its run starts: the form, or the plan being read.
+    /// Done without a result shows the content as it is.
+    func sheetPhase(idle: SheetPhase = .ready, loading: String, running: String,
+                    done: SheetResult?, failedTitle: String? = nil) -> SheetPhase {
+        switch self {
+        case .idle: return idle
+        case .loading: return .loading(loading)
+        case .ready: return .ready
+        case .running: return .running(running)
+        case .done: return done.map { SheetPhase.done($0) } ?? .ready
+        case .failed(let message): return .failed(message, title: failedTitle)
+        }
+    }
 }
 
 private let noCLI = "The benchbar command line tool is not available."

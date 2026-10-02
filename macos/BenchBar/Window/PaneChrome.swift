@@ -11,16 +11,16 @@ struct PaneHeader<Trailing: View>: View {
     @ViewBuilder var trailing: Trailing
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .center, spacing: WindowMetrics.spacing) {
             SymbolTile(symbol: symbol, tint: tint)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: WindowMetrics.lineSpacing) {
                 Text(title).font(.title2.weight(.semibold))
                 Text(subtitle).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
             }
-            Spacer(minLength: 12)
+            Spacer(minLength: WindowMetrics.spacing)
             trailing
         }
-        .padding(.horizontal, 20).padding(.top, 16).padding(.bottom, 6)
+        .padding(.horizontal, WindowMetrics.paneInset).padding(.top, 16).padding(.bottom, 6)
     }
 }
 

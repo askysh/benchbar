@@ -303,6 +303,68 @@ struct SnapshotTests {
         try render(view, "settings")
     }
 
+    // MARK: screens added in the 0.7 window pass, so every sheet renders
+
+    @Test func benchSheets() async throws {
+        let store = try await windowStore()
+        let workbench = Workbench(store: store)
+        let bench = try #require(store.benches.last)
+        try render(AddSiteSheet(bench: bench) { _, _ in } cancel: {}, "add-site-sheet")
+        try render(AddAppSheet(bench: bench, sites: bench.siteRows.map(\.name)) { _, _, _ in } cancel: {}, "add-app-sheet")
+        base.cli.answer("app update", json: try Fixture.string("app-update-plan"))
+        await workbench.loadApps(bench)
+        let app = try #require(workbench.apps[bench.path]?.apps.first { $0.name != "frappe" } ?? workbench.apps[bench.path]?.apps.first)
+        try render(UpdateAppSheet(workbench: workbench, bench: bench, app: app) {}, "update-app-sheet")
+        try render(CreateProfileSheet(benches: store.benches) { _, _ in } cancel: {}, "profile-create")
+    }
+
+    @Test func windowHealthAndDiscovery() async throws {
+        let store = try await windowStore()
+        let workbench = Workbench(store: store)
+        let bench = try #require(store.benches.last)
+        await store.runDoctor(on: bench)
+        let router = WindowRouter()
+        router.show(bench: bench.path, tab: .health)
+        try render(window(store, workbench, router), "window-health")
+        router.pane = .discovery
+        try render(window(store, workbench, router), "window-discovery")
+        router.pane = .menuBar
+        try render(window(store, workbench, router), "window-menubar")
+    }
+
+    @Test func siteDropOutcomes() async throws {
+        base.cli.answer("list", json: try Fixture.string("list-two-benches"))
+        base.cli.answer("status", json: try Fixture.string("status-v16-two-sites"))
+        base.cli.answer("site drop", json: try Fixture.string("site-drop-plan"))
+        let store = base.makeStore()
+        await store.start(polling: false)
+        let bench = try #require(store.benches.first { $0.path == "/Users/you/dev/v16-bench" })
+        let workbench = Workbench(store: store)
+        // the default site: the sheet asks for the new default first
+        let defaultSite = try #require(bench.siteRows.first(where: \.isDefault)?.name)
+        try render(SiteDropSheet(workbench: workbench, bench: bench, site: defaultSite) {}, "site-drop-default")
+    }
+
+    @Test func repairStates() async throws {
+        let store = try await windowStore()
+        let bench = try #require(store.benches.last)
+        base.cli.answer("repair", json: #"{"event":"plan","actions":[],"log":null}"#)
+        let nothing = RepairRun(bench: bench, store: store)
+        await nothing.loadPlan()
+        try render(RepairSheet(run: nothing, close: {}), "repair-nothing")
+        base.cli.answer("repair", CommandOutput(exitCode: 1, stdout: "", stderr: "[FAIL] benchbar repair needs a bench"))
+        let failed = RepairRun(bench: bench, store: store)
+        await failed.loadPlan()
+        try render(RepairSheet(run: failed, close: {}), "repair-failed")
+    }
+
+    @Test func updateBanner() async throws {
+        let defaults = try #require(UserDefaults(suiteName: "benchbar-snapshots-\(UUID().uuidString)"))
+        let offer = UpdateOffer(settings: base.settings, currentVersion: "0.7.1", defaults: defaults, sparkle: false)
+        offer.record(.available(version: "0.7.2", page: try #require(URL(string: "https://github.com/askysh/benchbar/releases/tag/v0.7.2"))))
+        try render(UpdateBanner(offer: offer).frame(width: 640).padding(), "update-banner")
+    }
+
     private func render(_ view: some View, _ name: String) throws {
         for (suffix, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             let look = try #require(NSAppearance(named: appearance))
@@ -311,6 +373,12 @@ struct SnapshotTests {
             let window = NSWindow(contentRect: .zero, styleMask: [.borderless], backing: .buffered, defer: false)
             window.appearance = look
             window.contentView = hosting
+            // a sheet sizes its scrolling content after the first layout
+            // (SheetScaffold measures it), so lay out, let the update land,
+            // then measure
+            hosting.layoutSubtreeIfNeeded()
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+            hosting.layoutSubtreeIfNeeded()
             let size = hosting.fittingSize
             if name.hasPrefix("popover-") {
                 #expect(size.height <= 620, "Popover height must remain bounded with diagnostics and many sites")

@@ -71,28 +71,37 @@ extension DoctorCheck {
     nonisolated var rowKey: String { "\(id)\u{1F}\(message)" }
 }
 
-/// The Auto / Focus / Ignore menu of one app row.
-struct FocusMenu: View {
+/// The "…" menu of one app row: install it on a site that lacks it, and
+/// its focus pin (Auto, Focus, Ignore). Update stays a button beside it.
+struct AppMenu: View {
     let app: AppInfo
-    let disabled: Bool
-    let set: (FocusPin) -> Void
+    /// Sites without the app; empty hides the Install items.
+    let missingSites: [String]
+    let busy: Bool
+    let install: (String) -> Void
+    let setFocus: (FocusPin) -> Void
 
     var body: some View {
-        Menu {
-            ForEach(FocusPin.allCases) { pin in
-                Button {
-                    set(pin)
-                } label: {
-                    if pin == app.pin { Label(pin.title, systemImage: "checkmark") } else { Text(pin.title) }
+        MoreMenu(help: "Install \(app.name) on a site or change its focus") {
+            if !missingSites.isEmpty {
+                Section("Install") {
+                    ForEach(missingSites, id: \.self) { site in
+                        Button("Install on \(site)") { install(site) }
+                    }
                 }
-                .help(pin.help)
             }
-        } label: {
-            Label(app.pin == .auto ? "Auto" : app.pin.title,
-                  systemImage: app.isFocus ? "scope" : "circle.dashed")
+            Section(app.focus == nil ? "Focus (needs benchbar 0.6 or later)" : "Focus") {
+                ForEach(FocusPin.allCases) { pin in
+                    Button {
+                        setFocus(pin)
+                    } label: {
+                        if pin == app.pin { Label(pin.title, systemImage: "checkmark") } else { Text(pin.title) }
+                    }
+                    .help(pin.help)
+                    .disabled(app.focus == nil)
+                }
+            }
         }
-        .fixedSize()
-        .disabled(disabled || app.focus == nil)
-        .help(app.focus == nil ? "Needs benchbar 0.6 or later" : "Focus: \(app.pin.help)")
+        .disabled(busy)
     }
 }

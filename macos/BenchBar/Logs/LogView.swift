@@ -34,8 +34,10 @@ struct LogView: View {
                 Text(model.searchSummary).font(.caption).foregroundStyle(.secondary).monospacedDigit()
                 Button { model.step(forward: false) } label: { Image(systemName: "chevron.up") }
                     .buttonStyle(.borderless).keyboardShortcut("g", modifiers: [.command, .shift]).help("Previous match (⇧⌘G)")
+                    .accessibilityLabel("Previous match")
                 Button { model.step(forward: true) } label: { Image(systemName: "chevron.down") }
                     .buttonStyle(.borderless).keyboardShortcut("g", modifiers: .command).help("Next match (⌘G)")
+                    .accessibilityLabel("Next match")
             }
             .padding(.horizontal, 6).padding(.vertical, 3)
             .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))

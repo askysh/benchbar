@@ -10,15 +10,15 @@ struct BenchPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-                .padding(.horizontal, 20).padding(.top, 16).padding(.bottom, 10)
+                .padding(.horizontal, WindowMetrics.paneInset).padding(.top, 16).padding(.bottom, 10)
             Picker("", selection: $router.benchTab) {
                 ForEach(BenchTab.allCases) { Text($0.rawValue).tag($0) }
             }
             .pageTabs()
             .labelsHidden()
-            .padding(.horizontal, 20)
+            .padding(.horizontal, WindowMetrics.paneInset)
             ChangeResultBanner(workbench: workbench, scope: bench.path)
-                .padding(.horizontal, 20).padding(.top, 10)
+                .padding(.horizontal, WindowMetrics.paneInset).padding(.top, 10)
             Group {
                 switch router.benchTab {
                 case .overview: BenchOverview(store: store, workbench: workbench, bench: bench, router: router)
@@ -64,47 +64,7 @@ struct BenchOverview: View {
         let ports = bench.status?.ports ?? bench.summary.ports
         Form {
             Section {
-                HStack(spacing: 8) {
-                    if bench.needsService {
-                        Button("Set Up Management…") {
-                            router.startAfterSetup = false
-                            router.setupRequest = bench.path
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(store.busyBench != nil)
-                    } else {
-                        Button { Task { await store.perform(.up, on: bench) } } label: { Label("Start", systemImage: "play.fill") }
-                            .disabled(!controls.canStart)
-                        Button { Task { await store.perform(.down, on: bench) } } label: { Label("Stop", systemImage: "stop.fill") }
-                            .disabled(!controls.canStop)
-                        Button { Task { await store.perform(.restart, on: bench) } } label: { Label("Restart", systemImage: "arrow.clockwise") }
-                            .disabled(!controls.canRestart)
-                    }
-                    Spacer()
-                    Button(bench.siteRows.first(where: \.isDefault)?.needsHosts == true ? "Set Up Site…" : "Open Site") {
-                        if bench.siteRows.first(where: \.isDefault)?.needsHosts == true { router.benchTab = .sites }
-                        else { Workspace.openSite(bench) }
-                    }
-                    .disabled(bench.state != .running && bench.siteRows.first(where: \.isDefault)?.needsHosts != true)
-                    Button("Show in Finder") { Workspace.openFolder(bench) }
-                }
-                HStack(spacing: 8) {
-                    let editor = store.settings.editor
-                    Button { if let editor { Workspace.openInEditor(bench, editor: editor) } } label: {
-                        Label(editor.map { "Open in \($0.name)" } ?? "Open in Editor", systemImage: "chevron.left.forwardslash.chevron.right")
-                    }
-                    .disabled(editor == nil)
-                    .help(editor == nil ? "Install VS Code or Cursor to open the bench folder in it." : bench.path)
-                    Spacer()
-                    Button { Workspace.openShell(.console, site: bench.summary.site, bench: bench, store: store) } label: {
-                        Label("Console", systemImage: "terminal")
-                    }
-                    .help("bench --site \(bench.summary.site) console, in Terminal")
-                    Button { Workspace.openShell(.db, site: bench.summary.site, bench: bench, store: store) } label: {
-                        Label("Database", systemImage: "cylinder")
-                    }
-                    .help("bench --site \(bench.summary.site) mariadb, in Terminal, with the site's own database user")
-                }
+                controlRow
                 if let since = bench.runningSince {
                     Uptime(since: since) { LabeledContent("Up for", value: $0) }
                 }
@@ -118,18 +78,24 @@ struct BenchOverview: View {
             if bench.summary.lockFile != nil {
                 LockSection(workbench: workbench, bench: bench)
             }
-            Section("Site and ports") {
+            Section {
                 PortConflictAction(store: store, bench: bench)
-                Button("Port Settings & Setup…") {
-                    let run = PortSetupRun(summaries: [bench.summary], store: store)
-                    portSetup = run
-                    Task { await run.loadPlan() }
-                }.disabled(store.busyBench != nil)
                 LabeledContent("Default site", value: bench.summary.site)
                 LabeledContent("Web", value: bench.status?.webURL ?? bench.summary.webURL)
                 LabeledContent("Socket.IO port", value: String(ports.socketio))
                 LabeledContent("Redis ports", value: "\(ports.redisQueue) (queue), \(ports.redisCache) (cache)")
                 LabeledContent("Agent", value: bench.summary.label)
+            } header: {
+                HStack {
+                    Text("Site and ports")
+                    Spacer()
+                    Button("Port Settings & Setup…") {
+                        let run = PortSetupRun(summaries: [bench.summary], store: store)
+                        portSetup = run
+                        Task { await run.loadPlan() }
+                    }
+                    .disabled(store.busyBench != nil)
+                }
             }
             Section("Background jobs") {
                 Toggle(isOn: Binding(get: { bench.schedulerOn ?? false }, set: { schedulerChange = $0 })) {
@@ -155,6 +121,59 @@ struct BenchOverview: View {
             Button("Cancel", role: .cancel) { schedulerChange = nil }
         } message: {
             Text("BenchBar runs benchbar service \(schedulerChange == true ? "--with-schedule" : "--without-schedule"), then restarts the bench if it is running.")
+        }
+    }
+
+    /// Start, stop and restart as one group, the site as the main action,
+    /// the editor beside it and the rest in the "…" menu. Before the bench
+    /// is managed, Set Up Management… is the main action instead.
+    @ViewBuilder private var controlRow: some View {
+        let defaultNeedsHosts = bench.siteRows.first(where: \.isDefault)?.needsHosts == true
+        let editor = store.settings.editor
+        HStack(spacing: WindowMetrics.rowSpacing) {
+            if bench.needsService {
+                Button("Set Up Management…") {
+                    router.startAfterSetup = false
+                    router.setupRequest = bench.path
+                }
+                .primaryAction()
+                .disabled(store.busyBench != nil)
+            } else {
+                ControlGroup {
+                    Button { Task { await store.perform(.up, on: bench) } } label: { Label("Start", systemImage: "play.fill") }
+                        .disabled(!controls.canStart)
+                    Button { Task { await store.perform(.down, on: bench) } } label: { Label("Stop", systemImage: "stop.fill") }
+                        .disabled(!controls.canStop)
+                    Button { Task { await store.perform(.restart, on: bench) } } label: { Label("Restart", systemImage: "arrow.clockwise") }
+                        .disabled(!controls.canRestart)
+                }
+                .fixedSize()
+            }
+            Spacer()
+            Button { if let editor { Workspace.openInEditor(bench, editor: editor) } } label: {
+                Label(editor.map { "Open in \($0.name)" } ?? "Open in Editor", systemImage: "chevron.left.forwardslash.chevron.right")
+            }
+            .disabled(editor == nil)
+            .help(editor == nil ? "Install VS Code or Cursor to open the bench folder in it." : bench.path)
+            Button(defaultNeedsHosts ? "Set Up Site…" : "Open Site") {
+                if defaultNeedsHosts { router.benchTab = .sites }
+                else { Workspace.openSite(bench) }
+            }
+            .primaryAction(!bench.needsService)
+            .disabled(bench.state != .running && !defaultNeedsHosts)
+            MoreMenu(help: "Console, database, Finder and the bench path") {
+                Button { Workspace.openShell(.console, site: bench.summary.site, bench: bench, store: store) } label: {
+                    Label("Open Console", systemImage: "terminal")
+                }
+                .help("bench --site \(bench.summary.site) console, in Terminal")
+                Button { Workspace.openShell(.db, site: bench.summary.site, bench: bench, store: store) } label: {
+                    Label("Open Database", systemImage: "cylinder")
+                }
+                .help("bench --site \(bench.summary.site) mariadb, in Terminal, with the site's own database user")
+                Divider()
+                Button("Show in Finder", systemImage: "folder") { Workspace.openFolder(bench) }
+                Button("Copy Path", systemImage: "doc.on.doc") { Workspace.copy(bench.path) }
+            }
         }
     }
 
@@ -201,10 +220,6 @@ struct BenchSites: View {
                         if bench.activity?.hasPrefix("Back up \(row.name)") == true {
                             ProgressView().controlSize(.small)
                         }
-                        if !row.isDefault {
-                            Button("Make Default") { Task { await workbench.setDefaultSite(row.name, on: bench) } }
-                                .disabled(busy)
-                        }
                         Button(row.needsHosts ? "Set Up…" : "Open") {
                             if row.needsHosts { showHostsInstructions = true }
                             else { Workspace.open(row.url) }
@@ -227,16 +242,14 @@ struct BenchSites: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             if let fix = SiteRow.hostsFix(rows, bench: bench.path) {
-                Section("Hosts") {
-                    Text("Some site names need a local hosts entry. This step requires your Mac password in Terminal.")
-                        .font(.callout)
+                Section {
                     DisclosureGroup("Terminal instructions", isExpanded: $showHostsInstructions) {
-                        HStack(alignment: .top) {
-                            Text(fix).font(.callout.monospaced()).textSelection(.enabled)
-                            Spacer()
-                            Button("Copy Command") { Workspace.copy(fix) }
-                        }
+                        CopyableCommand(command: fix, copyLabel: "Copy the command that adds the hosts lines")
                     }
+                } header: {
+                    Text("Hosts")
+                } footer: {
+                    Text("Some site names need a local hosts entry. This step requires your Mac password in Terminal.")
                 }
             }
         }
@@ -279,7 +292,8 @@ struct LastBackupLine: View {
     }
 }
 
-/// The per site actions that do not fit a button: backups and drop.
+/// The per site actions that do not fit a button: the default, backups,
+/// the shells and drop.
 struct SiteMenu: View {
     let workbench: Workbench
     let bench: BenchModel
@@ -289,7 +303,11 @@ struct SiteMenu: View {
     let drop: () -> Void
 
     var body: some View {
-        Menu {
+        MoreMenu(help: "Make \(row.name) the default, back it up or drop it") {
+            if !row.isDefault {
+                Button("Make Default") { Task { await workbench.setDefaultSite(row.name, on: bench) } }
+                Divider()
+            }
             Button("Back Up") { Task { await workbench.backUpSite(row.name, withFiles: false, on: bench) } }
             Button("Back Up with Files") { Task { await workbench.backUpSite(row.name, withFiles: true, on: bench) } }
             if let list = workbench.backups(of: row.name, on: bench) {
@@ -305,14 +323,8 @@ struct SiteMenu: View {
             Divider()
             Button("Drop Site…", role: .destructive, action: drop)
                 .disabled(onlySite)
-        } label: {
-            Image(systemName: "ellipsis.circle")
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
         .disabled(busy)
-        .help("Back up or drop \(row.name)")
     }
 }
 
@@ -328,10 +340,8 @@ struct AddSiteSheet: View {
     private var passwordValid: Bool { !password.isEmpty && password == confirm }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Add a site to \(bench.name)").font(.headline)
-            Text("A new site on the same MariaDB, with only Frappe installed. Add apps from the Apps tab afterwards.")
-                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        SheetScaffold("Add a Site to \(bench.name)",
+                      explanation: "A new site on the same MariaDB, with only Frappe installed. Add apps from the Apps tab afterwards.") {
             Form {
                 TextField("Site name", text: $name, prompt: Text("mysite"))
                 if !name.isEmpty && !SiteName.isValid(name) {
@@ -340,19 +350,14 @@ struct AddSiteSheet: View {
                 SecureField("Administrator password", text: $password)
                 SecureField("Confirm password", text: $confirm)
             }
-            .formStyle(.grouped)
-            Text("The password goes to the benchbar process only, never on a command line or to disk. The MariaDB password comes from your Keychain.")
-                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            HStack {
-                Spacer()
-                Button("Cancel", role: .cancel, action: cancel).keyboardShortcut(.cancelAction)
-                Button("Add Site") { add(name, password) }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(!nameValid || !passwordValid)
-            }
+            .formStyle(.columns)
+            SheetNote("The password goes to the benchbar process only, never on a command line or to disk. The MariaDB password comes from your Keychain.")
+        } actions: {
+            CancelButton(action: cancel)
+            Button("Add Site") { add(name, password) }
+                .keyboardShortcut(.defaultAction)
+                .disabled(!nameValid || !passwordValid)
         }
-        .padding(20)
-        .frame(width: 440)
     }
 }
 

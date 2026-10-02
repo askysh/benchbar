@@ -147,7 +147,7 @@ struct AboutPane: View {
                 Text("Frappe benches on your Mac, from the menu bar.").font(.callout).foregroundStyle(.secondary)
             }
         }
-        .padding(.horizontal, 20).padding(.top, 16).padding(.bottom, 6)
+        .padding(.horizontal, WindowMetrics.paneInset).padding(.top, 16).padding(.bottom, 6)
     }
 
     private var form: some View {
@@ -172,9 +172,9 @@ struct AboutPane: View {
                 Text("Versions")
             }
             Section {
-                LinkRow(title: "Documentation", detail: "benchbar.akashmishra.com", url: BenchBarLinks.docs)
-                LinkRow(title: "Release notes", detail: "What changed in each version", url: BenchBarLinks.changelog)
-                LinkRow(title: "Source code", detail: "github.com/askysh/benchbar", url: BenchBarLinks.repository)
+                LinkRow(title: "Documentation", address: "benchbar.akashmishra.com", url: BenchBarLinks.docs)
+                LinkRow(title: "Release notes", detail: "What changed in each version", address: "CHANGELOG.md", url: BenchBarLinks.changelog)
+                LinkRow(title: "Source code", address: "github.com/askysh/benchbar", url: BenchBarLinks.repository)
                 LabeledContent {
                     Button("Report a Bug…") { showBugReport = true }
                 } label: {
@@ -187,11 +187,7 @@ struct AboutPane: View {
             Section {
                 Text("benchbar mcp lets Claude Code, Cursor and other agents list your benches, read status, doctor and logs, and start, stop or restart them. Add it once:")
                     .font(.callout)
-                HStack {
-                    Text(MCPSnippet.claude).font(.callout.monospaced()).textSelection(.enabled)
-                    Spacer()
-                    Button("Copy") { Workspace.copy(MCPSnippet.claude) }
-                }
+                CopyableCommand(command: MCPSnippet.claude, copyLabel: "Copy the command that adds benchbar mcp")
             } header: {
                 Text("For coding agents")
             }
@@ -208,12 +204,7 @@ struct AboutPane: View {
     /// Two or more minor versions apart, the app may ask for things this CLI cannot do.
     private func cliBehindRow(_ command: String) -> some View {
         LabeledContent {
-            HStack(spacing: 8) {
-                Text(command).font(.callout.monospaced()).textSelection(.enabled)
-                Button("Copy") { Workspace.copy(command) }
-                    .accessibilityLabel("Copy the command that updates the command line tool")
-                    .help(command)
-            }
+            CopyableCommand(command: command, copyLabel: "Copy the command that updates the command line tool")
         } label: {
             Label("The command line tool is behind", systemImage: "exclamationmark.triangle.fill")
                 .foregroundStyle(.orange)
@@ -223,7 +214,7 @@ struct AboutPane: View {
 
     @ViewBuilder private var updateRow: some View {
         LabeledContent {
-            HStack(spacing: 8) {
+            HStack(spacing: WindowMetrics.rowSpacing) {
                 switch model.updates.state {
                 case .idle:
                     EmptyView()
@@ -237,11 +228,14 @@ struct AboutPane: View {
                         .foregroundStyle(.blue)
                     if let offer = model.offer, offer.version != nil {
                         Button("Update Now") { offer.updateNow() }
-                        if let command = offer.command {
-                            Button("Copy Command") { offer.copyCommand() }.help(command)
-                        }
+                            .primaryAction()
                     }
-                    Button("Release Page") { NSWorkspace.shared.open(page) }
+                    MoreMenu(help: "More update actions") {
+                        if let offer = model.offer, offer.version != nil, let command = offer.command {
+                            Button("Copy Update Command") { offer.copyCommand() }.help(command)
+                        }
+                        Button("Release Notes") { NSWorkspace.shared.open(page) }
+                    }
                 case .failed(let message):
                     Text(message).font(.caption).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
@@ -258,18 +252,20 @@ struct AboutPane: View {
     }
 }
 
-/// A row that opens a web page, with the address underneath.
+/// A row that opens a web page, like System Settings: the title, and the
+/// short address as a link.
 private struct LinkRow: View {
     let title: String
-    let detail: String
+    var detail: String?
+    let address: String
     let url: URL
 
     var body: some View {
         LabeledContent {
-            Button("Open") { NSWorkspace.shared.open(url) }
+            Link(address, destination: url)
         } label: {
             Text(title)
-            Text(detail)
+            if let detail { Text(detail) }
         }
         .help(url.absoluteString)
     }
@@ -282,66 +278,65 @@ struct BugReportSheet: View {
     let close: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Label("Report a Bug", systemImage: "ladybug").font(.title3.weight(.semibold))
+        SheetScaffold("Report a Bug",
+                      explanation: "BenchBar writes a redacted diagnostics zip and opens a new GitHub issue for it.",
+                      phase: phase, width: .regular) {
             switch report.state {
-            case .ready:
+            case .ready, .running:
                 explanation
-                HStack {
-                    Spacer()
-                    Button("Cancel", role: .cancel, action: close).keyboardShortcut(.cancelAction)
-                    Button("Create Report") { Task { await report.create() } }
-                        .keyboardShortcut(.defaultAction)
-                }
-            case .running:
-                explanation
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text("Running benchbar report…").foregroundStyle(.secondary)
-                    Spacer()
-                }
+            case .done, .failed:
+                EmptyView()
+            }
+        } leading: {
+            switch report.state {
             case .done(let file, let issue):
-                Label {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(URL(fileURLWithPath: file.zip).lastPathComponent).font(.callout.weight(.medium)).textSelection(.enabled)
-                        Text("\(file.redactions) lines redacted. The zip is selected in Finder and the issue page is open in your browser: describe what happened and attach the zip.")
-                            .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                    }
-                } icon: {
-                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-                }
-                HStack {
-                    Button("Show in Finder") { report.reveal(URL(fileURLWithPath: file.zip)) }
-                    Button("Open Issue Page") { report.openURL(issue) }
-                    Spacer()
-                    Button("Done", action: close).keyboardShortcut(.defaultAction)
-                }
-            case .failed(let message, let issue):
-                Label {
-                    Text(message).font(.callout).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
-                } icon: {
-                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-                }
-                HStack {
-                    Button("Open Issue Page") { report.openURL(issue) }
-                    Spacer()
-                    Button("Close", role: .cancel, action: close).keyboardShortcut(.cancelAction)
-                    Button("Try Again") { Task { await report.create() } }
-                }
+                Button("Show in Finder") { report.reveal(URL(fileURLWithPath: file.zip)) }
+                Button("Open Issue Page") { report.openURL(issue) }
+            case .failed(_, let issue):
+                Button("Open Issue Page") { report.openURL(issue) }
+            case .ready, .running:
+                EmptyView()
+            }
+        } actions: {
+            switch report.state {
+            case .ready, .running:
+                CancelButton(action: close)
+                    .disabled(report.state == .running)
+                Button("Create Report") { Task { await report.create() } }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(report.state == .running)
+            case .done:
+                DoneButton(action: close)
+            case .failed:
+                CancelButton(title: "Close", action: close)
+                Button("Try Again") { Task { await report.create() } }
+                    .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(20)
-        .frame(width: 480)
+    }
+
+    private var phase: SheetPhase {
+        switch report.state {
+        case .ready:
+            .ready
+        case .running:
+            .running("Running benchbar report…")
+        case .done(let file, _):
+            .done(.success(URL(fileURLWithPath: file.zip).lastPathComponent,
+                           "\(file.redactions) lines redacted. The zip is selected in Finder and the issue page is open in your browser: describe what happened and attach the zip."))
+        case .failed(let message, _):
+            .failed(message, title: "No report")
+        }
     }
 
     private var explanation: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: WindowMetrics.rowSpacing) {
             Text("BenchBar runs benchbar report, which writes a zip to your Desktop: doctor and status, the versions of everything involved, the login agent, Procfile.lean and the last lines of the logs.")
+                .fixedSize(horizontal: false, vertical: true)
             Text("It has no secrets, no personal paths and no names: passwords, keys and tokens are masked, your home folder, username and the names of this Mac are replaced, and site configs are reduced to their key names. REDACTIONS.txt inside lists every replacement.")
-            Text("Then Finder shows the zip and GitHub opens a new issue with your macOS and BenchBar versions filled in. Nothing is sent until you attach the zip yourself.")
+                .fixedSize(horizontal: false, vertical: true)
+            SheetNote("Then Finder shows the zip and GitHub opens a new issue with your macOS and BenchBar versions filled in. Nothing is sent until you attach the zip yourself.")
         }
-        .font(.callout)
-        .fixedSize(horizontal: false, vertical: true)
     }
 }
 

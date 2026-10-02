@@ -6,21 +6,42 @@ struct DiscoveryPane: View {
     @State private var setup: PortSetupRun?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text("Find your benches").font(.title2.bold())
-                Text("Choose a project folder. BenchBar searches inside it for existing Frappe benches.")
-                    .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 0) {
+            PaneHeader(symbol: "folder.badge.plus", tint: .teal, title: "Find Benches",
+                       subtitle: "BenchBar searches a project folder for existing Frappe benches.") {
+                // the main action until there are results; then Set Up Selected is
+                Button("Choose Folder…", action: chooseFolder)
+                    .primaryAction(discovery.results.isEmpty)
+                    .disabled(discovery.isScanning || discovery.isAdding)
             }
-            HStack {
-                Image(systemName: "folder")
+            content
+                .padding(WindowMetrics.paneInset)
+        }
+        .task {
+            if router.scanRequested { router.scanRequested = false; chooseFolder() }
+        }
+        .onChange(of: router.scanRequested) { _, requested in
+            if requested { router.scanRequested = false; chooseFolder() }
+        }
+        .sheet(item: $setup) { run in PortSetupSheet(run: run) { setup = nil } }
+    }
+
+    /// Every selectable bench is selected: the selection button deselects.
+    private var allSelected: Bool {
+        !discovery.selectablePaths.isEmpty && discovery.selectablePaths.isSubset(of: discovery.selected)
+    }
+
+    private var content: some View {
+        VStack(alignment: .leading, spacing: WindowMetrics.spacing) {
+            HStack(spacing: WindowMetrics.rowSpacing) {
+                Image(systemName: "folder").accessibilityHidden(true)
                 Text(discovery.folder.isEmpty ? "No folder selected" : discovery.folder)
                     .font(.callout).lineLimit(2).truncationMode(.middle).textSelection(.enabled)
                 Spacer()
-                Button("Choose Folder…", action: chooseFolder)
-                    .disabled(discovery.isScanning || discovery.isAdding)
                 if !discovery.folder.isEmpty {
-                    Button("Scan Again") { discovery.scan(folder: discovery.folder) }
+                    Button { discovery.scan(folder: discovery.folder) } label: { Image(systemName: "arrow.clockwise") }
+                        .accessibilityLabel("Scan Again")
+                        .help("Scan this folder again")
                         .disabled(discovery.isScanning || discovery.isAdding)
                 }
             }
@@ -50,10 +71,13 @@ struct DiscoveryPane: View {
                 HStack {
                     Text("\(discovery.results.count) benches found").font(.headline)
                     Spacer()
-                    Button("Select All") { discovery.selected = discovery.selectablePaths }
-                        .disabled(discovery.selectablePaths.isEmpty || discovery.isAdding)
-                    Button("Clear Selection") { discovery.selected = [] }
-                        .disabled(discovery.selected.isEmpty || discovery.isAdding)
+                    if allSelected {
+                        Button("Deselect All") { discovery.selected = [] }
+                            .disabled(discovery.selected.isEmpty || discovery.isAdding)
+                    } else {
+                        Button("Select All") { discovery.selected = discovery.selectablePaths }
+                            .disabled(discovery.selectablePaths.isEmpty || discovery.isAdding)
+                    }
                 }
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
@@ -72,7 +96,7 @@ struct DiscoveryPane: View {
                     Button("Set Up Selected…") {
                         preview(discovery.results.filter { discovery.selected.contains($0.path) })
                     }
-                    .buttonStyle(.borderedProminent)
+                    .primaryAction()
                     .disabled(discovery.selected.isEmpty || discovery.isAdding || discovery.store.busyBench != nil)
                 }
             } else if !discovery.isScanning {
@@ -83,14 +107,6 @@ struct DiscoveryPane: View {
             Text("Scanning only reads folders. Add Selected remembers your benches; Set Up Management previews the service changes before you apply them.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
-        .padding(24)
-        .task {
-            if router.scanRequested { router.scanRequested = false; chooseFolder() }
-        }
-        .onChange(of: router.scanRequested) { _, requested in
-            if requested { router.scanRequested = false; chooseFolder() }
-        }
-        .sheet(item: $setup) { run in PortSetupSheet(run: run) { setup = nil } }
     }
 
     private func preview(_ summaries: [BenchSummary]) {
@@ -107,7 +123,7 @@ struct DiscoveryPane: View {
 
     private func resultRow(_ result: BenchSummary) -> some View {
         let known = discovery.store.benches.first { $0.path == result.path }
-        return HStack(alignment: .top, spacing: 12) {
+        return HStack(alignment: .top, spacing: WindowMetrics.spacing) {
             Toggle(isOn: Binding(
                 get: { discovery.selected.contains(result.path) },
                 set: { if $0 { discovery.selected.insert(result.path) } else { discovery.selected.remove(result.path) } }
@@ -115,7 +131,7 @@ struct DiscoveryPane: View {
                 .toggleStyle(.checkbox).labelsHidden()
                 .accessibilityLabel("Select \(result.name) at \(result.path)")
                 .disabled(discovery.isAdding)
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: WindowMetrics.lineSpacing + 2) {
                 Text(result.name).font(.headline)
                 Text(result.path).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
@@ -130,7 +146,7 @@ struct DiscoveryPane: View {
                         .font(.caption)
                 }
             }
-            Spacer(minLength: 8)
+            Spacer(minLength: WindowMetrics.rowSpacing)
             if let known {
                 if known.needsService {
                     Button("Set Up Management…") {
@@ -142,6 +158,6 @@ struct DiscoveryPane: View {
                 }
             }
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, WindowMetrics.spacing)
     }
 }
