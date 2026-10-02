@@ -544,7 +544,11 @@ chk_cli_duplicate_app() {
   if [[ -z "$found" ]]; then
     chk__set ok "no other copy: this is the app's CLI, and nothing else is installed"
   elif [[ -n "$old" ]]; then
-    chk__set warn "${old} is too old to hand off to the app's CLI, so benchbar in Terminal may run it instead of this one (${FL_VERSION})" "$fix"
+    if [[ "$old" == *" and "* ]]; then
+      chk__set warn "${old} are too old to hand off to the app's CLI, so benchbar in Terminal may run them instead of this one (${FL_VERSION})" "$fix"
+    else
+      chk__set warn "${old} is too old to hand off to the app's CLI, so benchbar in Terminal may run it instead of this one (${FL_VERSION})" "$fix"
+    fi
   elif [[ "$FL_SELF" != "$FL_APP_CLI" ]]; then
     chk__set ok "${found} run on their own: this app's CLI (${SCRIPT_DIR}) is not the one BenchBar.app registered in ${FL_APP_CLI}"
   else

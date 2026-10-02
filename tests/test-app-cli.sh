@@ -154,6 +154,10 @@ assert_eq "warn" "$(check_status cli_duplicate)"
 assert_contains "$(check_msg cli_duplicate)" "Homebrew's benchbar 0.7.0"
 assert_contains "$(check_msg cli_duplicate)" "too old to hand off"
 assert_eq "warn" "$(check_status helpers)" "(and its block is no longer one that leads here)"
+tree "$HOME/.local/share/benchbar" 0.7.0
+run "$LINK" doctor --json --bench-dir "$BENCH"
+assert_contains "$(check_msg cli_duplicate)" "the one line installer's benchbar 0.7.0 ($HOME/.local/share/benchbar) are too old"
+assert_contains "$(printf '%s' "$OUT" | jget - "[c['fix'] for c in d['checks'] if c['id'] == 'cli_duplicate'][0]")" "brew upgrade askysh/tap/benchbar && git -C $HOME/.local/share/benchbar pull --ff-only"
 keg 0.7.1
 # no other copy at all
 rm -rf "$CELLAR" "$PREFIX/opt/benchbar" "$PREFIX/bin/benchbar" "$HOME/.local/share/benchbar"
