@@ -359,6 +359,7 @@ fl_cli_link_ok() {
   have="$(readlink "$link")"
   [[ "$have" == "$FL_SELF" ]] && return 0
   if fl_cli_path_is_brew "$have" && [[ -e "$link" ]]; then return 0; fi
+  if fl_cli_hands_off "$have"; then return 0; fi
   [[ "${FL_INSTALL_KIND:-}" != homebrew ]] || return 1
   [[ "$have" == "${SCRIPT_DIR}/benchbar" || "$have" == "${SCRIPT_DIR}/frappe-mac" ]]
 }
@@ -375,18 +376,47 @@ fl_cli_own_state_v() {
   return 0
 }
 
+# The first release whose Homebrew and installer copies hand off to the
+# app's CLI (install-kind.sh). An older one runs itself.
+FL_HANDOFF_SINCE="0.7.1"
+
+# fl_cli_standalone_script PATH: the benchbar script behind Homebrew's or the
+# installer's CLI at PATH (as a link or the helper block names it), else
+# nothing. No process.
+fl_cli_standalone_script() {
+  case "$1" in
+    */opt/benchbar/bin/benchbar|*/opt/benchbar/bin/frappe-mac) printf '%s' "${1%/bin/*}/libexec/benchbar" ;;
+    */opt/benchbar/libexec/benchbar|*/opt/benchbar/libexec/frappe-mac) printf '%s' "${1%/*}/benchbar" ;;
+    "${FL_MANAGED_HOME}/benchbar"|"${FL_MANAGED_HOME}/frappe-mac") printf '%s' "${FL_MANAGED_HOME}/benchbar" ;;
+    *) if fl_cli_path_is_brew "$1"; then printf '%s' "${1%/bin/*}/opt/benchbar/libexec/benchbar"; fi ;;
+  esac
+}
+
+# fl_cli_hands_off PATH: true when this is the app's CLI and PATH is a
+# Homebrew or installer copy that hands off to it (new enough to, and the
+# app's link in place). Running PATH then runs this CLI.
+fl_cli_hands_off() {
+  local script v
+  [[ "${FL_INSTALL_KIND:-}" == app && "$FL_SELF" == "$FL_APP_CLI" ]] || return 1
+  script="$(fl_cli_standalone_script "$1")"
+  [[ -n "$script" && -f "$script" ]] || return 1
+  v="$(fl_cli_version_at "$script")"
+  [[ -n "$v" ]] && ! fl_version_lt "$v" "$FL_HANDOFF_SINCE"
+}
+
 # ~/.local/bin/benchbar and frappe-mac. A copy installed some other way
 # needs them (the helper block puts ~/.local/bin on PATH), and repair makes
 # them. With Homebrew's benchbar installed they are optional and never
 # made, and under Homebrew a link that leads elsewhere comes before brew's
 # benchbar on PATH: repair points it at FL_SELF, keeping the old link.
 chk_cli_link() {
-  local name link bad="" foreign="" absent=0 brew to_self="" to_brew="" target="$FL_SELF" own="" own_state=""
+  local name link bad="" foreign="" absent=0 brew to_self="" to_brew="" to_app="" target="$FL_SELF" own="" own_state=""
   brew="$(fl_brew_cli)"
   for name in benchbar frappe-mac; do
     link="$(fl_cli_link_path "$name")"
     if fl_cli_link_ok "$link"; then
-      if [[ "${FL_INSTALL_KIND:-}" != homebrew ]] && fl_cli_path_is_brew "$(readlink "$link")"; then to_brew="${to_brew} ${name}"; else to_self="${to_self} ${name}"; fi
+      if [[ "${FL_INSTALL_KIND:-}" == app ]] && fl_cli_hands_off "$(readlink "$link")"; then to_app="${to_app} ${name}"
+      elif [[ "${FL_INSTALL_KIND:-}" != homebrew ]] && fl_cli_path_is_brew "$(readlink "$link")"; then to_brew="${to_brew} ${name}"; else to_self="${to_self} ${name}"; fi
       continue
     fi
     # under Homebrew a link to a checkout with its own state stays: pointed
@@ -419,6 +449,8 @@ chk_cli_link() {
     chk__set ok "no link in ~/.local/bin: Homebrew puts benchbar on PATH (${brew})"
   elif [[ "${FL_INSTALL_KIND:-}" == homebrew ]]; then
     chk__set ok "~/.local/bin leads to this CLI (${FL_SELF})"
+  elif [[ -n "$to_app" && -z "$to_self" ]]; then
+    chk__set ok "~/.local/bin leads to $(readlink "$(fl_cli_link_path)"), which hands off to the app's CLI (${SCRIPT_DIR})"
   elif [[ -n "$to_brew" && -z "$to_self" ]]; then
     chk__set ok "~/.local/bin leads to Homebrew's benchbar (${brew}), not to this copy"
   elif [[ -n "$brew" ]]; then
@@ -441,6 +473,7 @@ fl_cli_version_at() { sed -n 's/^FL_VERSION="\(.*\)"$/\1/p' "$1" 2>/dev/null | h
 # the Trash is offered only for a folder that no longer holds the state.
 chk_cli_duplicate() {
   local other v name link linked=0 legacy repair="" state
+  if [[ "${FL_INSTALL_KIND:-}" == app ]]; then chk_cli_duplicate_app; return 0; fi
   if [[ "${FL_INSTALL_KIND:-}" == homebrew ]]; then
     other="${FL_MANAGED_HOME}/benchbar"
     if [[ ! -f "$other" ]]; then
@@ -485,6 +518,37 @@ chk_cli_duplicate() {
     chk__set warn "Homebrew has benchbar ${v:-?} too (${other}): two copies of the CLI for the same benches" "${other} repair   (Homebrew's takes over), or: brew uninstall benchbar   (this one stays)"
   else
     chk__set warn "Homebrew has benchbar ${v:-?} too (${other}), with its own state in ${state}: this copy's remembered benches, settings and backups are in ${FL_STATE_DIR}, which Homebrew's never reads" "brew uninstall benchbar   (this one stays; Homebrew's would start without this copy's state)"
+  fi
+}
+
+# The app's CLI next to Homebrew's or the installer's copy is the normal
+# case: those hand off to it. Only a copy too old to hand off is worth a
+# word, since benchbar in Terminal then runs that older copy.
+chk_cli_duplicate_app() {
+  local brew script v found="" old="" fix=""
+  brew="$(fl_brew_cli)"
+  if [[ -n "$brew" ]]; then
+    script="$(fl_cli_standalone_script "$brew")"
+    v="$(fl_cli_version_at "$script")"
+    found="Homebrew's benchbar ${v:-?}"
+    if [[ -z "$v" ]] || fl_version_lt "$v" "$FL_HANDOFF_SINCE"; then old="Homebrew's benchbar ${v:-?} (${brew})"; fix="brew upgrade askysh/tap/benchbar"; fi
+  fi
+  if [[ -f "${FL_MANAGED_HOME}/benchbar" ]]; then
+    v="$(fl_cli_version_at "${FL_MANAGED_HOME}/benchbar")"
+    found="${found}${found:+ and }the one line installer's benchbar ${v:-?}"
+    if [[ -z "$v" ]] || fl_version_lt "$v" "$FL_HANDOFF_SINCE"; then
+      old="${old}${old:+ and }the one line installer's benchbar ${v:-?} (${FL_MANAGED_HOME})"
+      fix="${fix}${fix:+ && }git -C ${FL_MANAGED_HOME} pull --ff-only"
+    fi
+  fi
+  if [[ -z "$found" ]]; then
+    chk__set ok "no other copy: this is the app's CLI, and nothing else is installed"
+  elif [[ -n "$old" ]]; then
+    chk__set warn "${old} is too old to hand off to the app's CLI, so benchbar in Terminal may run it instead of this one (${FL_VERSION})" "$fix"
+  elif [[ "$FL_SELF" != "$FL_APP_CLI" ]]; then
+    chk__set ok "${found} run on their own: this app's CLI (${SCRIPT_DIR}) is not the one BenchBar.app registered in ${FL_APP_CLI}"
+  else
+    chk__set ok "${found} hand off to the app's CLI, so every benchbar runs ${FL_VERSION}"
   fi
 }
 

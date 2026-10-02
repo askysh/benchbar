@@ -290,7 +290,7 @@ brew_guard() {
   if [[ "$app" == "1" ]]; then
     DO_APP=0
     ok "the BenchBar app is installed with Homebrew (cask benchbar-app); it updates itself"
-    info "or with brew: brew upgrade --cask --greedy askysh/tap/benchbar-app"
+    info "or with brew: brew upgrade askysh/tap/benchbar-app"
   fi
   if [[ "$DO_CLI" == "0" && "$DO_APP" == "0" ]]; then
     step "Done"
