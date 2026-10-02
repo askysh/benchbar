@@ -6,7 +6,12 @@
 #               draft release. Downloads open after "Open Anyway"; install.sh
 #               fetches them with curl, which sets no quarantine flag.
 #   Developer ID  when the signing and notarization secrets exist: signed,
-#               notarized, stapled, Sparkle appcast and Homebrew cask too.
+#               notarized, stapled, and a Sparkle appcast too.
+#
+# Both paths attach the CLI tarball the Homebrew formula installs. The tap
+# is updated only after the draft is published, by homebrew-tap.yml: a
+# draft's asset URLs answer 404, so a formula merged earlier would break
+# brew install.
 #
 # The version comes from the tag (v0.3.0 -> 0.3.0) and is written into
 # CFBundleShortVersionString; CFBundleVersion is the commit count.
@@ -103,12 +108,14 @@ jobs:
       - name: CLI tests
         run: /bin/bash tests/run-tests.sh
 
-      - name: Check the version against project.yml and the CHANGELOG
+      - name: Check the version against project.yml, benchbar and the CHANGELOG
         run: |
           project="$(sed -n 's/^ *MARKETING_VERSION: *"\{0,1\}\([^"]*\)"\{0,1\} *$/\1/p' macos/project.yml | head -n 1)"
           [ "$project" = "$VERSION" ] || { echo "::error::tag says $VERSION but macos/project.yml says $project"; exit 1; }
+          cli="$(sed -n 's/^FL_VERSION="\([^"]*\)"$/\1/p' benchbar | head -n 1)"
+          [ "$cli" = "$VERSION" ] || { echo "::error::tag says $VERSION but FL_VERSION in benchbar says $cli"; exit 1; }
           grep -q "^## ${VERSION} " CHANGELOG.md || { echo "::error::CHANGELOG.md has no '## ${VERSION} ' section"; exit 1; }
-          echo "version $VERSION matches project.yml and has a CHANGELOG section"
+          echo "version $VERSION matches project.yml and benchbar, and has a CHANGELOG section"
 
       # ---------------------------------------------------------- Developer ID path
       - name: Import the Developer ID certificate
@@ -185,28 +192,7 @@ jobs:
             gh release create "$TAG" --draft --title "BenchBar ${VERSION}" --notes-file "$RUNNER_TEMP/notes.md"
           fi
           gh release upload "$TAG" dist/* --clobber
-          echo "::notice title=Draft release::https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG} (draft: review, then publish)"
-
-      - name: Open a pull request on the Homebrew tap
-        if: env.SIGNED == 'true' && startsWith(github.ref, 'refs/tags/v')
-        env:
-          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-        run: |
-          if [ -z "$GH_TOKEN" ]; then
-            echo "::notice::HOMEBREW_TAP_TOKEN is not set; update askysh/homebrew-tap by hand with dist/benchbar.rb"
-            exit 0
-          fi
-          git clone "https://x-access-token:${GH_TOKEN}@github.com/askysh/homebrew-tap.git" "$RUNNER_TEMP/tap"
-          cd "$RUNNER_TEMP/tap"
-          git checkout -b "benchbar-${VERSION}"
-          mkdir -p Casks
-          cp "$GITHUB_WORKSPACE/dist/benchbar.rb" Casks/benchbar.rb
-          git add Casks/benchbar.rb
-          git -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" \
-            commit -m "benchbar ${VERSION}"
-          git push origin "benchbar-${VERSION}"
-          gh pr create --repo askysh/homebrew-tap --head "benchbar-${VERSION}" --title "benchbar ${VERSION}" \
-            --body "Cask update from the BenchBar release workflow."
+          echo "::notice title=Draft release::https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG} (draft: review, then publish; publishing updates the Homebrew tap)"
 
       - name: Remove the keychain and keys
         if: always()

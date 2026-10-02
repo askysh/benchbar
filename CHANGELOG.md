@@ -100,6 +100,12 @@ one line installer and doctor know a Homebrew install when they see one.
   otherwise) and a Copy button. One minor version behind is normal while
   Homebrew catches up with a release, so it shows nothing.
 
+- Every release has `benchbar-cli-<version>.tar.gz`, the CLI the
+  Homebrew formula installs, listed in `SHA256SUMS`. Publishing a release
+  updates `askysh/homebrew-tap`: the `benchbar` formula always, the
+  `benchbar-app` cask for a signed release, after both were installed and
+  tested. Install with `brew install askysh/tap/benchbar
+  askysh/tap/benchbar-app`.
 
 ### Fixed
 

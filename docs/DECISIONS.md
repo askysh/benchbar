@@ -55,6 +55,15 @@ runs come first, the 0.3 easy install run follows.
 - `--all` also removes the block once after its loop: a folder that is no bench any more loses only its agent, so with only such folders no per bench run would remove it. It is a no-op when a bench's run already did.
 - `where` prints `install`, `self`, `state_dir`, `app_version` and `app_path`, not SCRIPT_DIR: under the symlink shape that is the Cellar folder, and the formula's test asserts that `where` shows none.
 - The git mock emulates `symbolic-ref`, `status` and `checkout` only in checkouts its own `clone` made (`.git/mock-checkout`): other tests' fake apps have a `.git/HEAD` too, and their calls must keep going to the real git.
+- The formula installs `benchbar-cli-<version>.tar.gz`, a release asset made by `git archive` of the tag (`scripts/cli-tarball.sh`), not GitHub's `/archive/refs/tags/` tarball, whose bytes GitHub does not promise to keep: a changed sha256 breaks every install. A pathspec keeps it to what the CLI runs (no macos/, site/, docs/, tests/), and `gzip -n` makes one commit give one sha256.
+- `cli-tarball.sh` and release.yml refuse a version that `FL_VERSION` does not say: `brew test` and livecheck compare against it, and a formula whose CLI reports the previous version would look like a failed upgrade.
+- The tap is updated by `homebrew-tap.yml` on `release: published`, not by release.yml: a draft's asset URLs answer 404, so a formula merged at draft time breaks `brew install` until someone publishes.
+- The formula goes to the tap for every release, the cask only when the release has `appcast.xml` (the Developer ID path): the CLI needs no signature, and an ad hoc DMG through brew would meet Gatekeeper without the Open Anyway steps.
+- The workflow hashes the published files after checking them against `SHA256SUMS`, then installs both from the tap clone and runs `brew test` before the pull request: what merges is what was installed. The pull request merges itself (`gh pr merge --auto`) once the tap's checks pass.
+- `homebrew-render.sh` takes `--url` so CI can install the formula from a `file://` tarball of the checkout in a local `askysh/tap` (`brew tap-new --no-git`); the cask's `depends_on formula: "askysh/tap/benchbar"` then resolves to that tap without the real one.
+- `homebrew-formula.yml` is path filtered and nightly, never a required check: brew style, audit and install reach the network, and a flaky mirror must not block a pull request.
+- Its doctor run uses a stub bench (`sites/common_site_config.json`) in an empty HOME: doctor stops at "No bench" without one, and only the CLI's own checks (`cli_link`, no Cellar path in a fix) matter there.
+- The formula has no bottle and no `post_install`, `service` or `caveats` that run anything: it copies files into `libexec`, and the person runs `benchbar install` (sudo once) themselves.
 
 ## 0.6.0: app add over MCP
 

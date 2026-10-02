@@ -9,8 +9,8 @@ review the draft and publish it.
 
 | Path | When | What people get |
 |---|---|---|
-| **Developer ID** (since 0.6.1) | the nine signing and notarization secrets exist | `BenchBar-<version>.zip`, `BenchBar-<version>.dmg` and `SHA256SUMS`, signed, notarized and stapled, plus `appcast.xml` for Sparkle and `benchbar.rb` for the Homebrew tap |
-| **Ad hoc** (up to 0.6.0) | no Apple Developer secrets in the repository | the same zip, dmg and `SHA256SUMS`, ad hoc signed. A DMG download showed "Apple could not verify" once (the install page keeps the Open Anyway steps for those releases); `install.sh` downloads with curl, which sets no quarantine flag, so the app opened directly. |
+| **Developer ID** (since 0.6.1) | the nine signing and notarization secrets exist | `BenchBar-<version>.zip`, `BenchBar-<version>.dmg` and `SHA256SUMS`, signed, notarized and stapled, plus `appcast.xml` for Sparkle and `benchbar-cli-<version>.tar.gz` for the Homebrew formula |
+| **Ad hoc** (up to 0.6.0) | no Apple Developer secrets in the repository | the same zip, dmg, CLI tarball and `SHA256SUMS`, ad hoc signed. A DMG download showed "Apple could not verify" once (the install page keeps the Open Anyway steps for those releases); `install.sh` downloads with curl, which sets no quarantine flag, so the app opened directly. |
 
 The `check` job decides: it looks for the secrets and prints which path
 runs as a notice. Nothing else differs for you: same tag, same draft
@@ -19,8 +19,7 @@ release.
 ## Cutting a release
 
 1. Bump `MARKETING_VERSION` in `macos/project.yml` and `FL_VERSION` in
-   `benchbar`. The workflow refuses a tag that does not match
-   `MARKETING_VERSION`.
+   `benchbar`. The workflow refuses a tag that does not match both.
 2. Add the `## X.Y.Z` section to `CHANGELOG.md`. The workflow refuses a
    version without one, and uses the section as the release notes.
 3. Commit, tag, push:
@@ -30,6 +29,8 @@ release.
    ```
 4. Wait for the Release workflow, open the draft on the Releases page,
    check the files, publish.
+5. Publishing starts the Homebrew tap workflow (`homebrew-tap.yml`,
+   below). Check that its pull request on `askysh/homebrew-tap` merged.
 
 `CFBundleShortVersionString` is set from the tag and `CFBundleVersion`
 from the commit count, so the checkout is never edited by CI.
@@ -106,17 +107,48 @@ update, so back it up.
 
 ### 5. The Homebrew tap
 
-1. Create the repository `askysh/homebrew-tap` on GitHub, with a
-   `Casks/` folder.
-2. For automatic cask updates, create a fine grained personal access
-   token with Contents and Pull requests write access to that repository
-   only.
+`askysh/homebrew-tap` holds two files, both written by
+`.github/workflows/homebrew-tap.yml` when a release is published:
+
+| File | Installs | Updated for |
+|---|---|---|
+| `Formula/benchbar.rb` | the CLI, from `benchbar-cli-<version>.tar.gz` | every release |
+| `Casks/benchbar-app.rb` | BenchBar.app, from the DMG; depends on the formula | signed releases (those with `appcast.xml`) |
+
+The workflow runs on publish, not with the draft: a draft's download
+URLs answer 404, so a formula merged earlier would break `brew install`.
+It downloads the release's tarball and DMG, checks them against
+`SHA256SUMS`, renders the formula and cask from `packaging/homebrew`
+with `scripts/homebrew-render.sh`, runs `brew style` and `brew audit
+--strict --online`, installs both, runs `brew test`, uninstalls, and
+opens a pull request on the tap that merges itself once the tap's
+checks pass. A prerelease leaves the tap alone. Run it by hand from the
+Actions tab (Homebrew tap, Run workflow, the version) to redo one.
+
+It needs `HOMEBREW_TAP_TOKEN`: a fine grained personal access token
+with Contents and Pull requests write access to `askysh/homebrew-tap`
+only. Without it the workflow still checks everything and prints the
+two files to copy by hand. The tap repository needs auto-merge allowed
+(Settings, General) and its `tests` check required on `main`, or the
+pull request waits for you.
 
 People then install with:
 
 ```bash
-brew install --cask askysh/tap/benchbar
+brew install askysh/tap/benchbar askysh/tap/benchbar-app   # CLI and app
+brew install askysh/tap/benchbar                           # CLI only
 ```
+
+Both names are typed because Homebrew only trusts a third party tap for
+the names given on the command line; the cask alone would be refused its
+formula. The CLI is not bundled in the app, so the formula works on
+Intel Macs too while the cask is Apple silicon only.
+
+Pull requests that change the CLI or `packaging/homebrew` also run
+`homebrew-formula.yml`, which builds the tarball from the checkout,
+installs it from a throwaway local tap with a `file://` url, and runs
+the CLI in an empty HOME; it runs nightly too, since brew itself
+changes. It is not a required check.
 
 The official `homebrew/cask` needs a notable, notarized app with some
 history; submit there once BenchBar qualifies (roadmap v1.0).
@@ -137,7 +169,7 @@ Actions:
 | `NOTARY_API_ISSUER_ID` | its Issuer ID |
 | `SPARKLE_ED_PRIVATE_KEY` | the contents of `sparkle_ed.key` |
 | `SPARKLE_ED_PUBLIC_KEY` | the public key `generate_keys` printed |
-| `HOMEBREW_TAP_TOKEN` | optional: the tap token from step 5 |
+| `HOMEBREW_TAP_TOKEN` | the tap token from step 5; without it the tap is updated by hand |
 
 The `check` job needs the first nine. With any missing it says which and
 takes the ad hoc path.

@@ -1,14 +1,19 @@
-# Homebrew cask for BenchBar. scripts/macos-release.sh fills in the version
-# and sha256 and writes dist/benchbar.rb; it goes to Casks/benchbar.rb in
-# github.com/askysh/homebrew-tap (docs/releasing.md).
-cask "benchbar" do
+# Homebrew cask for BenchBar.app. scripts/homebrew-render.sh fills in the
+# version and the DMG's sha256; .github/workflows/homebrew-tap.yml puts the
+# result in Casks/benchbar-app.rb of github.com/askysh/homebrew-tap once a
+# signed release is published (docs/releasing.md).
+#
+# The app drives the CLI, so the cask depends on the benchbar formula. Brew
+# installs the formula first when both names are given:
+#   brew install askysh/tap/benchbar askysh/tap/benchbar-app
+cask "benchbar-app" do
   version "{{VERSION}}"
   sha256 "{{SHA256}}"
 
   url "https://github.com/askysh/benchbar/releases/download/v#{version}/BenchBar-#{version}.dmg"
   name "BenchBar"
   desc "Menu bar runner for local Frappe and ERPNext development benches"
-  homepage "https://github.com/askysh/benchbar"
+  homepage "https://benchbar.akashmishra.com/"
 
   livecheck do
     url :url
@@ -17,9 +22,12 @@ cask "benchbar" do
 
   auto_updates true
   depends_on arch: :arm64
-  depends_on macos: ">= :sonoma"
+  depends_on formula: "askysh/tap/benchbar"
+  depends_on macos: :sonoma
 
   app "BenchBar.app"
+
+  uninstall quit: "com.akashmishra.benchbar"
 
   zap trash: [
     "~/Library/Application Support/BenchBar",
@@ -30,10 +38,8 @@ cask "benchbar" do
   ]
 
   caveats <<~EOS
-    BenchBar drives the benchbar command line tool, which sets up and runs
-    the benches. Install it from the repository:
-      git clone https://github.com/askysh/benchbar.git
-      cd benchbar && ./benchbar install
+    BenchBar updates itself. To set up Frappe on this Mac, run once:
+      benchbar install
     Frappe and ERPNext are trademarks of Frappe Technologies.
     BenchBar is not affiliated with or endorsed by them.
   EOS

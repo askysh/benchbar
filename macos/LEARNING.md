@@ -585,7 +585,7 @@ is the full guide. The ideas, in plain words:
   `ready`, and the release job runs only when `ready` is true.
 
 Files to read: `docs/releasing.md`, `scripts/macos-release.sh`,
-`.github/workflows/macos-release.yml`, `packaging/homebrew/benchbar.rb.tmpl`,
+`.github/workflows/macos-release.yml`, `packaging/homebrew/Casks/benchbar-app.rb.tmpl`,
 `macos/BenchBar/Updates/Updater.swift`.
 
 ## Phase 9: docs and wrap up

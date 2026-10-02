@@ -11,7 +11,8 @@
 # Output in dist/:
 #   BenchBar-<version>.zip     ditto -c -k --keepParent of the app
 #   BenchBar-<version>.dmg     hdiutil image with an Applications shortcut
-#   SHA256SUMS                 shasum -a 256 of both
+#   benchbar-cli-<version>.tar.gz  the CLI for the Homebrew formula
+#   SHA256SUMS                 shasum -a 256 of all three
 #
 # The app is ad hoc signed (by macos-build.sh), so Gatekeeper shows "Apple could
 # not verify" on the first open of a DMG download. README explains the
@@ -33,7 +34,7 @@ ok() { printf '  [OK] %s\n' "$1"; }
 for arg in "$@"; do
   case "$arg" in
     --skip-tests) RUN_TESTS=0 ;;
-    -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,21p' "$0"; exit 0 ;;
     -*) die "Unknown option: $arg" ;;
     *) VERSION="$arg" ;;
   esac
@@ -87,8 +88,12 @@ ln -s /Applications "${stage}/Applications"
 hdiutil create -volname "BenchBar ${VERSION}" -srcfolder "$stage" -ov -format UDZO -quiet "$DMG"
 ok "$(basename "$DMG")"
 
+step "CLI tarball"
+"${ROOT}/scripts/cli-tarball.sh" "$VERSION" "$DIST"
+TARBALL="${DIST}/benchbar-cli-${VERSION}.tar.gz"
+
 step "checksums"
-(cd "$DIST" && shasum -a 256 "$(basename "$ZIP")" "$(basename "$DMG")" >SHA256SUMS)
+(cd "$DIST" && shasum -a 256 "$(basename "$ZIP")" "$(basename "$DMG")" "$(basename "$TARBALL")" >SHA256SUMS)
 cat "${DIST}/SHA256SUMS"
 
 printf '\n[OK] unsigned release %s in %s\n' "$VERSION" "$DIST"
