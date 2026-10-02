@@ -7,7 +7,7 @@
 #   3. scripts/app-embed-cli.sh puts the CLI in Contents/Resources/cli
 #   4. codesign signs the app ad hoc ("-") with the Hardened Runtime
 #
-# Output: macos/build/BenchBar.app
+# Output: macos/build/BenchBar.app (the build log in macos/build/build.log)
 #
 # Options:
 #   --test      run the Swift tests before building
@@ -89,11 +89,12 @@ if [[ -n "$SIGN_IDENTITY" ]]; then
 else
   SIGN_ARGS=(CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO)
 fi
+mkdir -p "$BUILD"
 xcodebuild -project "${MACOS}/BenchBar.xcodeproj" -scheme BenchBar -configuration "$CONFIG" \
   -derivedDataPath "$DERIVED" -destination 'generic/platform=macOS' \
   "${SIGN_ARGS[@]}" ${VERSION_ARGS[@]+"${VERSION_ARGS[@]}"} \
   BENCHBAR_APPCAST_URL="$APPCAST_URL" BENCHBAR_SPARKLE_PUBLIC_KEY="$SPARKLE_KEY" \
-  -quiet build 2>&1 | pretty
+  -quiet build 2>&1 | tee "${BUILD}/build.log" | pretty
 
 APP="${DERIVED}/Build/Products/${CONFIG}/BenchBar.app"
 [[ -d "$APP" ]] || die "build finished but ${APP} is missing"

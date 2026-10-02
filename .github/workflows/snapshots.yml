@@ -77,6 +77,10 @@ jobs:
           ls ~/Library/Caches/BenchBarSnapshots
           grep -q -E '\*\* TEST SUCCEEDED \*\*|Test run with [0-9]+ tests? passed' macos/build/test.log
 
+      - name: Annotate compiler errors and failed tests
+        if: failure()
+        run: scripts/ci-annotate.sh macos/build/build.log macos/build/test.log
+
       - name: Upload the PNGs
         if: always()
         uses: actions/upload-artifact@v7
