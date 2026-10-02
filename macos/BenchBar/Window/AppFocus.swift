@@ -91,15 +91,16 @@ struct AppMenu: View {
                 }
             }
             Section(app.focus == nil ? "Focus (needs benchbar 0.6 or later)" : "Focus") {
-                ForEach(FocusPin.allCases) { pin in
-                    Button {
-                        setFocus(pin)
-                    } label: {
-                        if pin == app.pin { Label(pin.title, systemImage: "checkmark") } else { Text(pin.title) }
+                // an inline picker, so the menu checks the current pin: a
+                // Label's checkmark image is not drawn in a menu
+                Picker("Focus", selection: Binding(get: { app.pin }, set: setFocus)) {
+                    ForEach(FocusPin.allCases) { pin in
+                        Text(pin.title).tag(pin).help(pin.help)
                     }
-                    .help(pin.help)
-                    .disabled(app.focus == nil)
                 }
+                .pickerStyle(.inline)
+                .labelsHidden()
+                .disabled(app.focus == nil)
             }
         }
         .disabled(busy)

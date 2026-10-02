@@ -237,12 +237,19 @@ struct CancelButton: View {
 }
 
 /// Done or Close, when there is nothing left to confirm: Return and Esc.
+/// A button takes one shortcut, so an invisible twin carries Esc.
 struct DoneButton: View {
     var title = "Done"
     let action: () -> Void
 
     var body: some View {
         Button(title, action: action).keyboardShortcut(.defaultAction)
+            .background {
+                Button(title, action: action).keyboardShortcut(.cancelAction)
+                    .opacity(0)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
     }
 }
 

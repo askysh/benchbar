@@ -125,6 +125,7 @@ struct SettingsView: View {
                     if settings.runnerID == runner.id { settings.runnerID = Runner.defaultID }
                     library.remove(runner.id)
                     runnerToRemove = nil
+                    importMessage = nil
                 }
                 Button("Cancel", role: .cancel) { runnerToRemove = nil }
             } message: { _ in
