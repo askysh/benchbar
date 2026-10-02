@@ -1,15 +1,44 @@
 ---
 title: "Install"
-description: "Install the benchbar CLI and the BenchBar app with the one line installer, from the DMG, or from source, and uninstall them again."
+description: "Install the benchbar CLI and the BenchBar app with Homebrew, the one line installer, the DMG or from source, update them, move to Homebrew, and uninstall them again."
 ---
 
-There are three ways in. The one line installer sets up the CLI and the
-app together and is the one most people want. The DMG gives you only the
-app. Building from source is for contributors.
+There are four ways in. Homebrew installs the CLI and the app together
+and is the one most people want. The one line installer does the same
+without Homebrew's formula and cask. The DMG gives you only the app.
+Building from source is for contributors.
 
 Check the [requirements](index.md#requirements) first: macOS 14 or later
 on Apple Silicon, Homebrew and the Xcode Command Line Tools, about 5 GB
 of free disk.
+
+## Homebrew
+
+```bash
+brew install askysh/tap/benchbar askysh/tap/benchbar-app
+benchbar install                   # sets up this Mac: asks for sudo once
+source ~/.zshrc && benchup
+```
+
+The first line installs the CLI, the `benchbar` formula, and the menu bar
+app, the `benchbar-app` cask, from the `askysh/tap` tap. Type both names:
+Homebrew trusts a third party tap only for the names you type, so the
+cask alone cannot pull in its formula. `benchbar install` sets up the
+bench, the site and the background service as in the
+[Quick start](quick-start.md); with a bench you already have, run
+`benchbar adopt` instead.
+
+The cask needs Apple Silicon and macOS Sonoma or later. For the CLI
+alone, on an Intel Mac too:
+
+```bash
+brew install askysh/tap/benchbar
+```
+
+The CLI keeps its state (the remembered benches, per bench settings, the
+logs and backups of every run) in `~/.local/state/benchbar`, outside
+Homebrew's folders, so `brew upgrade` and `brew cleanup` never touch it.
+`benchbar where` shows how the CLI was installed and where its state is.
 
 ## The one line installer
 
@@ -22,7 +51,9 @@ the CLI into `~/.local/share/benchbar` with links in `~/.local/bin`, adds
 that folder to `~/.zshrc`, and installs the BenchBar app from the latest
 release into `~/Applications` after checking its sha256. It then offers
 `benchbar adopt` for a bench it finds, or `benchbar install`. The
-installer itself never runs `sudo`.
+installer itself never runs `sudo`. It leaves to Homebrew what Homebrew
+installed: with the `benchbar` formula it skips the CLI, with the
+`benchbar-app` cask the app, and prints the brew command instead.
 
 In more detail, in this order, and it says so before each step:
 
@@ -87,8 +118,8 @@ macOS 15 and later stopped their first launch:
 This happened once per install. The one line installer avoided it,
 because `curl` sets no quarantine flag on the download.
 
-The app needs the CLI. Install it with the one line installer and
-`--no-app`, or from source below.
+The app needs the CLI. Install it with `brew install askysh/tap/benchbar`,
+or with the one line installer and `--no-app`, or from source below.
 
 ## From source
 
@@ -109,6 +140,31 @@ the first run takes a while. Skip it when you only want to work on the
 app or adopt a bench you have.
 
 ## Updating
+
+With Homebrew:
+
+```bash
+brew upgrade askysh/tap/benchbar
+```
+
+`benchbar self-update` runs the same command for a Homebrew CLI, after
+asking, and never the one line installer. The app updates itself with
+Sparkle: **Check for Updates…** in the menu bar menu, or on its own.
+To force the cask's version:
+
+```bash
+brew upgrade --cask --greedy askysh/tap/benchbar-app
+```
+
+In the app, **Update Now** and **Copy Command** follow how BenchBar was
+installed: for Homebrew's CLI they run `brew upgrade askysh/tap/benchbar`
+in Terminal, and the app from the cask is never replaced by the one line
+installer. When Sparkle has the app, BenchBar stays open and Sparkle
+offers the new version. Right after a release the tap can be a few
+minutes behind: when brew says benchbar is already installed, try again
+later. Your benches keep running.
+
+### With the one line installer
 
 In the app, click **Update Now**. BenchBar asks GitHub for the latest
 release once a day (turn it off in General, **Check for updates
@@ -150,6 +206,37 @@ If your `benchbar` is a git checkout of your own, for example
 (`--app-only`) and tell you to update the CLI with `git pull` in that
 checkout.
 
+## From the one line installer to Homebrew
+
+Your benches keep running through the move: their agents and runners
+never name the CLI.
+
+1. Install with Homebrew:
+
+   ```bash
+   brew install askysh/tap/benchbar askysh/tap/benchbar-app
+   ```
+
+2. Run Homebrew's `repair` by its full path. In this Terminal
+   `~/.local/bin` still leads to the old copy, so plain `benchbar` would
+   run that one:
+
+   ```bash
+   /opt/homebrew/opt/benchbar/bin/benchbar repair
+   ```
+
+   It moves the state to `~/.local/state/benchbar`, points the
+   `~/.local/bin` links at Homebrew's CLI and rewrites the helper block in
+   `~/.zshrc`.
+
+3. Run `source ~/.zshrc`, or open a new Terminal tab.
+4. Later, move `~/.local/share/benchbar` and `~/Applications/BenchBar.app`
+   to the Trash.
+
+Do not use `install.sh --uninstall` for this: it stops every bench's
+agent. Until the old copies are gone, doctor's "Second CLI" and
+"BenchBar.app copies" warnings point at them.
+
 ## After installing
 
 Open a new Terminal tab, or run `source ~/.zshrc`, so `benchbar` and the
@@ -159,16 +246,34 @@ Open a new Terminal tab, or run `source ~/.zshrc`, so `benchbar` and the
 ## Uninstall
 
 Uninstalling removes BenchBar, not your benches: every bench, site,
-database and Homebrew package stays. Two things are worth knowing
-first:
+database and the Homebrew packages they use stay. Two things are worth
+knowing first:
 
 - Removing a bench's agent stops that bench. Without the agent it no
   longer runs in the background; you can still run it by hand with
   `bench start` in its folder.
-- Removing the checkout, `~/.local/share/benchbar`, also deletes its
-  `.benchbar/` folder: the logs and file backups of every benchbar run
-  and the settings benchbar keeps for each bench. Copy `.benchbar/`
-  somewhere else first if you may want them.
+- The logs and file backups of every benchbar run, the remembered
+  benches and the settings benchbar keeps for each bench are in
+  `~/.local/state/benchbar`, for Homebrew and the one line installer
+  alike. Uninstalling keeps that folder; move it to the Trash yourself
+  when you no longer want them. When `~/.local/state` is on another
+  volume than `~/.local/share/benchbar`, the state stays in that
+  checkout's `.benchbar/` folder, and deleting the checkout deletes it.
+
+### Homebrew
+
+```bash
+benchbar uninstall-service --all
+brew uninstall --cask benchbar-app
+brew uninstall benchbar
+```
+
+Run `uninstall-service --all` first: `brew uninstall` cannot stop the
+background agents. It asks once, then stops every bench that has a
+benchbar agent and removes its agent, runner and `Procfile.lean`, and the
+`# >>> benchbar >>>` block from `~/.zshrc`.
+
+### The one line installer
 
 To see the plan without changing anything, then to uninstall:
 
@@ -182,6 +287,8 @@ block. Then it asks, for each bench's agent, whether to stop the bench
 and remove its agent, runner and `Procfile.lean`, and last whether to
 delete the checkout. Answer no to keep either. With `--yes` the answer
 to both is yes.
+
+### One bench
 
 To remove only the background service of one bench and keep BenchBar:
 

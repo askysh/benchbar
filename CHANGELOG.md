@@ -4,10 +4,15 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
-The groundwork for installing the CLI with Homebrew: the CLI no longer
-keeps its state in the folder it is installed in, every path it records
-stays valid across `brew upgrade` and `brew cleanup`, and the CLI, the
-one line installer and doctor know a Homebrew install when they see one.
+BenchBar installs with Homebrew: `brew install askysh/tap/benchbar
+askysh/tap/benchbar-app` puts the CLI and the menu bar app on the Mac,
+`brew upgrade askysh/tap/benchbar` updates the CLI and the app updates
+itself. The CLI no longer keeps its state in the folder it is installed
+in, every path it records stays valid across `brew upgrade` and `brew
+cleanup`, and the CLI, the app, the one line installer and doctor know a
+Homebrew install when they see one. `benchbar repair` moves a one line
+install over to Homebrew. The one line installer stays as the
+alternative.
 
 ### Changed
 

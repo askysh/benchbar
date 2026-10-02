@@ -96,8 +96,8 @@ No Docker, no VM, no preinstalled Python, Node, MariaDB or Redis.
 
 ## Documentation
 
-- [Install](install.md): the one line installer, the DMG, building from
-  source, and uninstalling.
+- [Install](install.md): Homebrew, the one line installer, the DMG,
+  building from source, moving to Homebrew, and uninstalling.
 - [Quick start](quick-start.md): adopt a bench or install a new one.
 - [Benches and sites](guides/benches-and-sites.md): daily use, sites,
   several benches, ports and the scheduler.

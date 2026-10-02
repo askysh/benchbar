@@ -40,12 +40,25 @@ those fixes, in order, with a backup before each change.
 ## Install
 
 ```bash
+brew install askysh/tap/benchbar askysh/tap/benchbar-app
+```
+
+That installs the CLI (the `benchbar` formula) and the menu bar app (the
+`benchbar-app` cask). Type both names: Homebrew trusts a third party tap
+only for the names you type. The app needs Apple Silicon and macOS
+Sonoma or later; on an Intel Mac, `brew install askysh/tap/benchbar`
+installs the CLI alone. The app updates itself, and `brew upgrade
+askysh/tap/benchbar` updates the CLI.
+
+The one line installer is the alternative. It checks macOS, the Command
+Line Tools and Homebrew, puts the CLI in `~/.local/bin` and the app in
+`~/Applications`, and never runs `sudo`:
+
+```bash
 curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash
 ```
 
-The installer checks macOS, the Command Line Tools and Homebrew, puts the
-CLI in `~/.local/bin` and the app in `~/Applications`, and never runs
-`sudo`. Or download the DMG from the
+Or download the DMG from the
 [releases page](https://github.com/askysh/benchbar/releases): since 0.6.1
 the app is signed with a Developer ID and notarized by Apple, so it opens
 like any other download. Or build from source: `git clone`
@@ -96,7 +109,7 @@ health. The app never writes to a bench itself; every button runs
 The manual lives at
 [benchbar.akashmishra.com](https://benchbar.akashmishra.com). Start with
 [Install](https://benchbar.akashmishra.com/install/) for the requirements,
-every installer flag and the DMG download. Read
+Homebrew, every installer flag and the DMG download. Read
 [The menu bar app](https://benchbar.akashmishra.com/app/) for the popover,
 the BenchBar window and the keyboard shortcuts. Keep
 [Doctor and repair](https://benchbar.akashmishra.com/guides/doctor-and-repair/)
@@ -109,7 +122,7 @@ GitHub too, and `benchbar docs` opens them from the terminal.
 
 ## Roadmap
 
-0.6.1 is the first signed and notarized release, with Sparkle updates. 0.7 brings a Homebrew cask and the public launch; the rest is in [ROADMAP.md](ROADMAP.md).
+0.6.1 is the first signed and notarized release, with Sparkle updates. 0.7.0 installs the CLI and the app with Homebrew; the public launch and the rest are in [ROADMAP.md](ROADMAP.md).
 
 ## Contributing
 

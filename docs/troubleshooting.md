@@ -6,10 +6,10 @@ description: "Common stumbles with a local Frappe bench on macOS, the cleanup to
 Start with `benchbar doctor`. It is read only, every warning and failure
 names its fix, and `benchbar repair` applies the fixes it flagged. The
 full command output of every mutating run is in
-`.benchbar/logs/<timestamp>.log` inside the benchbar checkout, and the
-backups of every replaced file in `.benchbar/backups/<timestamp>/`. The
-checkout is `~/.local/share/benchbar` after the one line installer, or
-the folder you cloned.
+`logs/<timestamp>.log` of benchbar's state folder, and the backups of
+every replaced file in `backups/<timestamp>/`. The state folder is
+`~/.local/state/benchbar` with Homebrew and the one line installer, or
+`.benchbar` in the folder you cloned; `benchbar where` shows it.
 
 ## Common stumbles
 
@@ -213,11 +213,12 @@ are reported so you can remove them by hand.
 - the `127.0.0.1 <site>` line inside `# >>> benchbar >>>` markers in
   `/etc/hosts`
 - `~/.local/bin/benchbar` and `~/.local/bin/frappe-mac`, links to the
-  checkout
+  checkout, or to Homebrew's benchbar when one is there
 - the Keychain item `benchbar-mariadb`
 - `<bench>/logs/.benchbar/state.json`, written by the runner
-- `.benchbar/` in the benchbar checkout: the remembered benches
-  (`benches/<folder>-<hash>.env`), and the logs and backups of every run
+- the state folder, `~/.local/state/benchbar` (`.benchbar/` in a git
+  checkout): the remembered benches (`benches/<folder>-<hash>.env`), and
+  the logs and backups of every run
 - the port keys in `<bench>/sites/common_site_config.json` and
   `<bench>/config/redis_*.conf`, only when a bench moves to another
   port block (with `bench set-config -g` and `bench setup redis`, after
@@ -296,11 +297,11 @@ bench's path.
    ```
 
 4. Make benchbar forget the bench: delete only that bench's files in
-   `~/.local/share/benchbar/.benchbar/benches/` (or the `.benchbar`
-   folder of your checkout). They are named after the folder plus a
+   `~/.local/state/benchbar/benches/` (or the `.benchbar` folder of your
+   checkout). They are named after the folder plus a
    short hash, for example `frappe-bench-c7a84bb1.env` and, when it
    exists, `frappe-bench-c7a84bb1.site-apps`. Leave the rest of
-   `.benchbar` alone: it holds the other benches and the logs and
+   the state folder alone: it holds the other benches and the logs and
    backups of every run.
 
 The site's line in `/etc/hosts` can stay; it does nothing without the
