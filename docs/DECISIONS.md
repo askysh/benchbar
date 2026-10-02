@@ -575,3 +575,7 @@ Measured on five PR runs (September 2026): 11 to 14 minutes wall clock, all of i
 - Only an app in `/Applications` or `~/Applications` makes the link: an Xcode build, the DMG and a translocated copy would leave it leading somewhere that goes away.
 - Only Homebrew and the installer hand off, not `other`: a copy of unknown origin (a test's temporary tree) keeps running itself.
 - The CLI is embedded by `macos-build.sh` before signing, not by an Xcode build phase: the files are sealed with the bundle, user script sandboxing stays on, and Xcode's own Debug builds simply carry no CLI. Tracked files only, as in the tarball.
+
+## Cloud sessions
+
+- Cloud only agent notes live in .claude/cloud-context.md and reach Claude Code cloud sessions through a SessionStart hook gated on CLAUDE_CODE_REMOTE; local sessions and AGENTS.md are unchanged.
