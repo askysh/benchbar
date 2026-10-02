@@ -28,11 +28,14 @@ printf '## Update\n\n'
 printf 'Already using BenchBar? In the app, click **Update Now** in the update banner or the menu bar menu (BenchBar 0.6 and later check once a day). On 0.5.x, run this in Terminal:\n\n'
 printf '```bash\ncurl -fsSL %s | bash -s -- --yes\n```\n\n' "$INSTALLER"
 printf 'It updates the benchbar CLI in `~/.local/share/benchbar` and the app in `~/Applications`, quits a running BenchBar first and never touches a bench. From 0.6 on, `benchbar self-update` runs the same. If your benchbar is a git checkout of your own, `git pull` there and add `--app-only`.\n\n'
+printf 'Installed with Homebrew? Run `brew upgrade askysh/tap/benchbar` (or `benchbar self-update`, which runs it); the app updates itself. The tap gets a release a few minutes after it is published.\n\n'
 printf '## Changes\n'
 printf '%s\n' "$section"
 printf '\n---\n\n'
 if [[ "$SIGNED" == "1" ]]; then
-  printf 'Signed with a Developer ID and notarized by Apple. Install with the DMG or with:\n\n'
+  printf 'Signed with a Developer ID and notarized by Apple. Install with Homebrew:\n\n'
+  printf '```bash\nbrew install askysh/tap/benchbar askysh/tap/benchbar-app\n```\n\n'
+  printf 'or with the DMG, or with the one line installer:\n\n'
 else
   printf 'This build is **not signed with an Apple Developer ID** (ad hoc signature). macOS shows "Apple could not verify" on first open of the DMG: use System Settings > Privacy & Security > Open Anyway, or install with the one liner, which downloads with curl and opens without that prompt:\n\n'
 fi

@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here.
 
-## Unreleased
+## 0.7.0 - 2026-10-02
 
 BenchBar installs with Homebrew: `brew install askysh/tap/benchbar
 askysh/tap/benchbar-app` puts the CLI and the menu bar app on the Mac,
