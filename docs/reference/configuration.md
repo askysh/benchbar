@@ -108,6 +108,7 @@ share ([Sharing a profile](../guides/teams.md#sharing-a-profile)).
 | `OFFLINE` | `install`, doctor, `app focus`, `profile` | `OFFLINE=1`: no network for version checks, `--fetch` and team profiles (like `BENCHBAR_OFFLINE=1`) |
 | `BENCHBAR_REPORT_DIR` | `report` | Where the zip goes instead of `~/Desktop` |
 | `NO_COLOR` | every command | `NO_COLOR=1` turns off colors and spinners, like `--plain` |
+| `BENCHBAR_NO_HANDOFF` | every command | `BENCHBAR_NO_HANDOFF=1`: Homebrew's or the one line installer's `benchbar` runs itself instead of handing off to the CLI inside BenchBar.app (0.7.1) |
 
 The one line installer reads `BENCHBAR_HOME` (the checkout, default
 `~/.local/share/benchbar`), `BENCHBAR_BIN_DIR` (default `~/.local/bin`),
@@ -135,10 +136,13 @@ moved is in [Port blocks](../guides/benches-and-sites.md#port-blocks).
 
 ## Where state lives
 
+- benchbar's state folder is `~/.local/state/benchbar` for Homebrew, the
+  one line installer and the CLI inside BenchBar.app, and `.benchbar`
+  next to the CLI in a git checkout. `benchbar where` shows it.
 - Per bench settings (profile, site, scheduler, autostart, lockfile
-  path) live in `.benchbar/benches/` in the checkout, one file per bench.
+  path) live in its `benches/` folder, one file per bench.
 - The logs and backups of every mutating run are in the same folder:
-  `.benchbar/logs/<timestamp>.log` and `.benchbar/backups/<timestamp>/`.
+  `logs/<timestamp>.log` and `backups/<timestamp>/`.
 - The runner writes `<bench>/logs/.benchbar/state.json` on every state
   change ([schema](../json-schema.md#logsbenchbarstatejson)).
 - Everything else benchbar writes is listed in

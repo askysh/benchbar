@@ -5,8 +5,9 @@ description: "Install the benchbar CLI and the BenchBar app with Homebrew, the o
 
 There are four ways in. Homebrew installs the CLI and the app together
 and is the one most people want. The one line installer does the same
-without Homebrew's formula and cask. The DMG gives you only the app.
-Building from source is for contributors.
+without Homebrew's formula and cask. The DMG gives you the app, which
+carries its own copy of the CLI but puts no `benchbar` command in
+Terminal. Building from source is for contributors.
 
 Check the [requirements](index.md#requirements) first: macOS 14 or later
 on Apple Silicon, Homebrew and the Xcode Command Line Tools, about 5 GB
@@ -101,6 +102,14 @@ opens like any other download, and later versions arrive through
 **Check for Updates…** (Sparkle). Verify a download with
 `shasum -a 256 -c SHA256SUMS` from the same release.
 
+Since 0.7.1 the app carries its own copy of the CLI and runs it, so its
+buttons work without anything else. For `benchbar` and the `bench*`
+helpers in Terminal, add the CLI too: `brew install askysh/tap/benchbar`,
+or the one line installer with `--no-app`. Either one hands off to the
+app's CLI once the app is in `/Applications` or `~/Applications` (an app
+run straight from the DMG does not register its CLI), see
+[Updating](#updating).
+
 ### Releases before 0.6.1
 
 Releases up to 0.6.0 were not signed with an Apple Developer ID, and
@@ -117,9 +126,6 @@ macOS 15 and later stopped their first launch:
 
 This happened once per install. The one line installer avoided it,
 because `curl` sets no quarantine flag on the download.
-
-The app needs the CLI. Install it with `brew install askysh/tap/benchbar`,
-or with the one line installer and `--no-app`, or from source below.
 
 ## From source
 

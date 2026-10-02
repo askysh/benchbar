@@ -47,8 +47,10 @@ That installs the CLI (the `benchbar` formula) and the menu bar app (the
 `benchbar-app` cask). Type both names: Homebrew trusts a third party tap
 only for the names you type. The app needs Apple Silicon and macOS
 Sonoma or later; on an Intel Mac, `brew install askysh/tap/benchbar`
-installs the CLI alone. The app updates itself, and `brew upgrade
-askysh/tap/benchbar` updates the CLI.
+installs the CLI alone. The app carries its own copy of the CLI, and
+Homebrew's `benchbar` hands off to it, so one update of the app (Update
+Now in the app, or `brew upgrade`) updates both. Without the app, `brew
+upgrade askysh/tap/benchbar` updates the CLI.
 
 The one line installer is the alternative. It checks macOS, the Command
 Line Tools and Homebrew, puts the CLI in `~/.local/bin` and the app in
@@ -61,7 +63,9 @@ curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | b
 Or download the DMG from the
 [releases page](https://github.com/askysh/benchbar/releases): since 0.6.1
 the app is signed with a Developer ID and notarized by Apple, so it opens
-like any other download. Or build from source: `git clone`
+like any other download. The app runs the CLI inside it; for `benchbar`
+in Terminal, add the CLI with Homebrew or the one line installer. Or
+build from source: `git clone`
 this repository and run `./benchbar install`; the app needs Xcode 26.
 
 ## Quick start
@@ -122,7 +126,7 @@ GitHub too, and `benchbar docs` opens them from the terminal.
 
 ## Roadmap
 
-0.6.1 is the first signed and notarized release, with Sparkle updates. 0.7.0 installs the CLI and the app with Homebrew; the public launch and the rest are in [ROADMAP.md](ROADMAP.md).
+0.6.1 is the first signed and notarized release, with Sparkle updates. 0.7.0 installs the CLI and the app with Homebrew, and in 0.7.1 the app ships the CLI, so one update covers both; the public launch and the rest are in [ROADMAP.md](ROADMAP.md).
 
 ## Contributing
 
