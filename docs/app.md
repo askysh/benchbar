@@ -136,8 +136,11 @@ most once a day: when it starts, when the Mac wakes, and on an hourly
 look at the clock. Turn that off in General with **Check for updates
 automatically**; **Check for Updates** in About still works.
 
-When a check finds a newer release, the popover and the menu bar menu
-show **Update to X…**, and the BenchBar window shows a banner with:
+When the GitHub check (Check for Updates in About, or the daily check of
+a build without Sparkle) finds a newer release, the popover and the menu
+bar menu show **Update to X…**, and the BenchBar window shows a banner
+with the choices below. Sparkle's own check shows its own window
+instead.
 
 - **Update Now**: Sparkle downloads the new version and restarts
   BenchBar. The app carries its command line tool, so the CLI is updated
