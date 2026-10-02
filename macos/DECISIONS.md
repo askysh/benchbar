@@ -405,7 +405,8 @@ Asked for after the phases, to stop naming drift before the first release.
 ## 0.7: the window pass
 
 - One `SheetScaffold` for every sheet (title, one line of explanation, content, footer) and one `SheetPhase` for its states, so loading, running, the result and a failure look the same in all fourteen; each run keeps its own phase and maps onto `SheetPhase`, the CLI calls are untouched.
-- The scaffold's content scrolls past 420 points while the title and footer stay; it measures its content (`onGeometryChange`) because a scroll view in a sheet takes no height of its own. Plan lists lost their inner scroll views and computed heights; a diff keeps its own, bounded.
+- The scaffold's content scrolls past 520 points (420 hid the diff under review in Import) while the title and footer stay; it measures its content (`onGeometryChange`) because a scroll view in a sheet takes no height of its own. Plan lists lost their inner scroll views and computed heights; a diff keeps its own, bounded.
+- The snapshot tests set `drawsGlass` off, so `primaryAction()` renders `.borderedProminent` there: `cacheDisplay` cannot draw Liquid Glass, and a glass button came out as bare text (black on dark). The app is unchanged.
 - Forms inside a sheet use `.formStyle(.columns)`: a grouped Form is a scroll view and collapses inside the scaffold's.
 - Two sheet widths (520 and 640) instead of nine, and title-style capitalization without a symbol in every sheet title.
 - Return is the primary action and Esc is Cancel in every sheet; Port setup gained both. Drop Site stays off Return: a destructive button is never the default, the typed name is its confirmation.

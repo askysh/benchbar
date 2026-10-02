@@ -37,7 +37,7 @@ struct SiteDropSheet: View {
 
     var body: some View {
         SheetScaffold("Drop \(site)",
-                      explanation: "Backs the site up with its files, then removes its database. Nothing is deleted from disk.",
+                      explanation: "Backs the site up with its files, drops its database and moves its folder to archived/sites. Nothing is deleted from disk.",
                       phase: sheetPhase) {
             switch phase {
             case .review: review
@@ -66,8 +66,6 @@ struct SiteDropSheet: View {
     }
 
     @ViewBuilder private var review: some View {
-        Text("Bench backs the site up with its files, then drops its database and database user and moves the site folder to archived/sites in the bench. The backup stays in that folder.")
-            .font(.callout).fixedSize(horizontal: false, vertical: true)
         if isDefault {
             if otherSites.isEmpty {
                 Text("\(site) is the only site of \(bench.name). Add another site before dropping it.")

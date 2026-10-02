@@ -368,7 +368,7 @@ struct SnapshotTests {
     private func render(_ view: some View, _ name: String) throws {
         for (suffix, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             let look = try #require(NSAppearance(named: appearance))
-            let hosting = NSHostingView(rootView: view.padding(0))
+            let hosting = NSHostingView(rootView: view.padding(0).environment(\.drawsGlass, false))
             hosting.appearance = look
             let window = NSWindow(contentRect: .zero, styleMask: [.borderless], backing: .buffered, defer: false)
             window.appearance = look

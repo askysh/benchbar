@@ -66,6 +66,8 @@ struct ProfileDiffView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(6)
         }
+        // a short diff sits top left, not centred in the box
+        .defaultScrollAnchor(.topLeading)
         .frame(minHeight: 60, maxHeight: 180)
         .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: WindowMetrics.cornerRadius))
     }

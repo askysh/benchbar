@@ -147,6 +147,8 @@ struct BenchOverview: View {
                     Button { Task { await store.perform(.restart, on: bench) } } label: { Label("Restart", systemImage: "arrow.clockwise") }
                         .disabled(!controls.canRestart)
                 }
+                // a control group draws icon only labels by default
+                .labelStyle(.titleAndIcon)
                 .fixedSize()
             }
             Spacer()

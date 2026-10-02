@@ -46,15 +46,37 @@ struct SymbolTile: View {
     }
 }
 
+private nonisolated struct DrawsGlassKey: EnvironmentKey {
+    static let defaultValue = true
+}
+
+nonisolated extension EnvironmentValues {
+    /// Off in the snapshot tests: an offscreen render (cacheDisplay) cannot
+    /// draw Liquid Glass, so a glass button would show as bare text.
+    var drawsGlass: Bool {
+        get { self[DrawsGlassKey.self] }
+        set { self[DrawsGlassKey.self] = newValue }
+    }
+}
+
+/// The style behind `primaryAction()`.
+private struct PrimaryActionStyle: ViewModifier {
+    @Environment(\.drawsGlass) private var drawsGlass
+
+    func body(content: Content) -> some View {
+        if #available(macOS 26, *), drawsGlass {
+            content.buttonStyle(.glassProminent)
+        } else {
+            content.buttonStyle(.borderedProminent)
+        }
+    }
+}
+
 extension View {
     /// The main action of a pane: a prominent glass button on macOS 26 and
     /// later, a prominent bordered one before.
-    @ViewBuilder func primaryAction() -> some View {
-        if #available(macOS 26, *) {
-            buttonStyle(.glassProminent)
-        } else {
-            buttonStyle(.borderedProminent)
-        }
+    func primaryAction() -> some View {
+        modifier(PrimaryActionStyle())
     }
 
     /// A row of page tabs: the macOS 27 tab picker, segmented before. The
