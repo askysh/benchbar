@@ -473,6 +473,11 @@ struct CLIMissingView: View {
             HStack {
                 Button("Choose benchbar…", action: choose)
                 Button("Try Again", action: retry)
+                if case .notFound = error {
+                    Button("Copy brew Command") { Workspace.copy(Homebrew.installCLI) }
+                        .help(Homebrew.installCLI)
+                        .accessibilityLabel("Copy \(Homebrew.installCLI)")
+                }
             }
         }
     }

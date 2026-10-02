@@ -295,8 +295,10 @@ final class BenchStore {
     }
 
     /// Called when the user picks a CLI path in Settings or the file picker.
+    /// A path inside a Cellar folder is saved as its opt link, which
+    /// outlives brew cleanup.
     func useCLI(path: String) async {
-        settings.cliPath = path
+        settings.cliPath = path.isEmpty ? path : Homebrew.stablePath(path)
         locateCLI()
         await reloadBenches()
     }

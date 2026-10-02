@@ -82,6 +82,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         logWindows = LogWindowController { [weak self] path in self?.openLogsInTerminal(path) }
 
         if Updater.isAvailable { updater = Updater() }
+        updateOffer.checkWithSparkle = { [weak self] in self?.updater?.checkForUpdates() }
         NSApp.mainMenu = makeMainMenu()
         setUpClicks()
 

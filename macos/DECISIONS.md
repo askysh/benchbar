@@ -377,3 +377,21 @@ Asked for after the phases, to stop naming drift before the first release.
 - The release script reads the notarization status instead of trusting notarytool's exit code, which is 0 on Invalid, and prints Apple's log when it is not Accepted.
 - Each notarization waits up to 50 minutes (`NOTARY_TIMEOUT`) and the release job up to 120: Apple held the team's first accepted submission for over 30 minutes.
 - The signed path builds with the commit count as `CFBundleVersion`, as the ad hoc path always did, and stops if the app says otherwise: Sparkle compares that number to decide an update is newer, and project.yml's constant 1 would have made every later release look the same as 0.6.1.
+
+## 0.7.0: Homebrew
+
+- Automatic looks in `/opt/homebrew/bin` before `~/.local/bin`: Homebrew's CLI is the one the docs lead with, and its migration step re-points the `~/.local/bin` links to it anyway. A path saved in Settings still wins, so a 0.6.x setting keeps its CLI.
+- `/usr/local/bin/benchbar` comes before `~/.local/bin` only when it resolves into `/Cellar/benchbar/` or `/opt/benchbar/`: `/usr/local/bin` is shared with everything else on an Intel Mac, and an old manual copy there must not shadow the one line installer's link. `/opt/homebrew/bin` gets no such check; only Homebrew writes there.
+- A saved path inside a Cellar folder is used, and saved, as `<prefix>/opt/benchbar/bin/benchbar`: brew cleanup deletes the versioned folder after an upgrade, the opt link stays.
+- A saved path that no longer exists (a dangling link included) falls back to Automatic instead of an error; one that exists but is not executable is still an error, since that is a wrong choice rather than a moved install.
+- Update Now tells Homebrew's CLI by its resolved path (`/Cellar/benchbar/` or `/opt/benchbar/`, with a non empty prefix), as install-kind.sh does, and never runs `benchbar where`: a 0.6.x CLI has no such command, and the plan is decided without a process.
+- The cask's app is `<prefix>/Caskroom/benchbar-app` existing (the CLI's prefix, then /opt/homebrew, then /usr/local) while this app does not run from `~/Applications`, the same rule as selfupdate.sh: only install.sh puts the app there.
+- The installer never touches a cask app. With Sparkle built in, Sparkle replaces it; without, `brew upgrade --cask --greedy askysh/tap/benchbar-app` does (the cask has auto_updates, so a plain upgrade skips it). The installer's CLI next to it is updated with `--no-app`.
+- Next to Homebrew's CLI, a Sparkle build leaves any app to Sparkle; the other kinds keep the installer in a Sparkle build as in 0.6, so nothing changes for them.
+- When Sparkle has the app, Update Now runs only the CLI's command in Terminal, does not quit BenchBar, and calls Sparkle's Check for Updates: a `.command` file cannot drive Sparkle, and quitting would cut Sparkle off. With nothing to run in Terminal it only asks Sparkle; Copy Command then copies the cask command that forces the update.
+- The `.command` script calls `<prefix>/bin/brew` by its full path (it must not depend on whether the person's shell profile runs `brew shellenv`); Copy Command shows plain `brew`, which is what a person types.
+- Several commands run joined with `&&`: a failed CLI update stops before the app is replaced, and the script's exit message covers both.
+- No benchbar next to the cask app means `brew install askysh/tap/benchbar`, not the installer, since the cask depends on that formula.
+- "The command line tool is behind" shows in About only from two minor versions (or an older major): Sparkle ships the app at publish and the formula follows after the tap merge, so one minor behind is normal for a while. The rule is `CLIVersionRule`, pure and tested.
+- The behind row names `brew upgrade askysh/tap/benchbar` for Homebrew's CLI, `benchbar self-update` otherwise, and the one line installer with `--no-app` for a CLI before 0.6.0, which has no self-update.
+- Where the app has no CLI it names `brew install askysh/tap/benchbar`, not the two name headline: the person already runs the app, and the cask refuses to install over an app already in /Applications.

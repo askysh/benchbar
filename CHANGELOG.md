@@ -48,6 +48,23 @@ one line installer and doctor know a Homebrew install when they see one.
   leaves a `~/.local/bin` link or helper block that runs such a checkout.
 - `benchbar uninstall-service --all` removes the helper block even when
   every agent belongs to a folder that is no bench any more.
+- BenchBar.app looks for Homebrew's benchbar first: `/opt/homebrew/bin`,
+  then `/usr/local/bin` when that is Homebrew's benchbar too, then
+  `~/.local/bin`. A path chosen in Settings still comes first. A chosen
+  path inside a Cellar folder is kept as `<prefix>/opt/benchbar/bin/benchbar`,
+  and one that is gone (after `brew cleanup`, or a moved checkout) falls
+  back to Automatic instead of an error.
+- The app's Update Now and Copy Command follow how BenchBar was
+  installed. Homebrew's CLI is updated with `brew upgrade
+  askysh/tap/benchbar`. An app from the `benchbar-app` cask is never
+  replaced by the one line installer: Sparkle updates it in a build that
+  has Sparkle, otherwise `brew upgrade --cask --greedy
+  askysh/tap/benchbar-app` runs; the installer's CLI next to it is
+  updated with `--no-app`. When Sparkle has the app, BenchBar stays open
+  and Sparkle offers the new version.
+- Where the app finds no CLI, it says to install one with `brew install
+  askysh/tap/benchbar`, with the one line installer as the alternative,
+  and has a button that copies the brew command.
 
 ### Added
 
@@ -77,6 +94,12 @@ one line installer and doctor know a Homebrew install when they see one.
   the app, and prints the brew command instead; when nothing is left it
   exits 0. An older app's Update Now fetches the newest installer, so it
   gets this too and never puts a second copy next to brew's.
+- The About pane says when the command line tool is two or more minor
+  versions older than the app, with the command that updates it (`brew
+  upgrade askysh/tap/benchbar` for Homebrew's, `benchbar self-update`
+  otherwise) and a Copy button. One minor version behind is normal while
+  Homebrew catches up with a release, so it shows nothing.
+
 
 ### Fixed
 
