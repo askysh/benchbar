@@ -4,7 +4,8 @@
 # say; the tarball unpacked the way the formula installs it (libexec, and
 # bin/benchbar as write_exec_script writes it) runs as a homebrew install;
 # scripts/homebrew-render.sh fills in the url and the sha256 of the files,
-# and writes the cask only with a DMG.
+# and writes the cask only with a DMG. scripts/app-embed-cli.sh puts the
+# same files into BenchBar.app.
 # shellcheck source=tests/lib/harness.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
 
@@ -26,6 +27,7 @@ if PATH="$REAL_PATH" git -C "$ROOT" rev-parse --verify -q HEAD >/dev/null 2>&1; 
     lib/frappe-local/install-kind.sh lib/frappe-local/mcp.py templates/shell-helpers.tmpl config/apps.tsv LICENSE README.md; do
     assert_contains "$LIST" "benchbar-${VER}/${f}"
   done
+  assert_not_contains "$LIST" "__pycache__"
   for f in tests/ macos/ docs/ site/ install.sh scripts/ packaging/; do
     assert_not_contains "$LIST" "benchbar-${VER}/${f}"
   done
@@ -50,6 +52,31 @@ if PATH="$REAL_PATH" git -C "$ROOT" rev-parse --verify -q HEAD >/dev/null 2>&1; 
   assert_contains "$WHERE" '"install":"homebrew"'
   assert_contains "$WHERE" "\"self\":\"$PREFIX/opt/benchbar/bin/benchbar\""
   assert_not_contains "$WHERE" "/Cellar/"
+
+  # ---- the CLI embedded in BenchBar.app: tracked files only, its own kind,
+  # and only into an app of the same version
+  EMBED_SH="$ROOT/scripts/app-embed-cli.sh"
+  FAKE_APP="$TMP_DIR/Apps/BenchBar.app"
+  mkdir -p "$FAKE_APP/Contents"
+  printf '<plist><dict>\n<key>CFBundleShortVersionString</key>\n<string>%s</string>\n</dict></plist>\n' "$VER" >"$FAKE_APP/Contents/Info.plist"
+  mkdir -p "$ROOT/lib/frappe-local/__pycache__"
+  : >"$ROOT/lib/frappe-local/__pycache__/embed-test.pyc"
+  PATH="$REAL_PATH" bash "$EMBED_SH" "$FAKE_APP" >/dev/null
+  rm -f "$ROOT/lib/frappe-local/__pycache__/embed-test.pyc"
+  EMBEDDED="$FAKE_APP/Contents/Resources/cli"
+  for f in benchbar 00-mac-system-deps.sh lib/frappe-local/install-kind.sh lib/frappe-local/mcp.py templates/shell-helpers.tmpl config/apps.tsv LICENSE; do
+    assert_file "$EMBEDDED/$f"
+  done
+  [[ -L "$EMBEDDED/frappe-mac" ]] || fail "frappe-mac stays a link"
+  assert_no_file "$EMBEDDED/lib/frappe-local/__pycache__" "(only what git tracks)"
+  assert_no_file "$EMBEDDED/tests"
+  WHERE="$("$EMBEDDED/benchbar" where --json)"
+  assert_contains "$WHERE" '"install":"app"'
+  assert_contains "$WHERE" "\"cli_version\":\"$VER\""
+  printf '<plist><dict>\n<key>CFBundleShortVersionString</key>\n<string>9.9.9</string>\n</dict></plist>\n' >"$FAKE_APP/Contents/Info.plist"
+  set +e; OUT="$(PATH="$REAL_PATH" bash "$EMBED_SH" "$FAKE_APP" 2>&1)"; CODE=$?; set -e
+  assert_eq 1 "$CODE" "(an app of another version)"
+  assert_contains "$OUT" "the app is 9.9.9 but benchbar says FL_VERSION=\"${VER}\""
 else
   printf 'test-packaging: not a git checkout, tarball checks skipped\n'
   TARBALL="$TMP_DIR/a/benchbar-cli-${VER}.tar.gz"

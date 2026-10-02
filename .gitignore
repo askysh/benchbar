@@ -10,3 +10,4 @@ macos/build/
 macos/DerivedData/
 macos/BenchBar/Resources/Info.plist
 dist/
+__pycache__/
