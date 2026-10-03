@@ -7,6 +7,16 @@ One line per non obvious choice: the decision, then the reason. The
 decisions of the app work live in `macos/DECISIONS.md`. The 0.5.5, 0.5 and 0.4
 runs come first, the 0.3 easy install run follows.
 
+## 0.7.3: ownership
+
+- One ownership test, `fl_pid_is_bench_own_strict`, decides every kill of a process found by its working folder (honcho, socketio, port listeners) in the CLI and the runner: lsof must report the folder as the bench or a folder inside it. An unreadable folder is "not ours", not "just exited": the old lenient reading let `down` signal another bench's honcho when lsof lagged, and a leftover that really is ours costs nothing when it is left for the next cleanup. The one other kill is the `pkill` of serve, worker and schedule by their command line, which starts with the bench's own absolute `env/bin/python` path: the path is the proof there.
+- The runner pauses with `port_conflict` instead of starting honcho when a port is still held after its cleanup: honcho would fail to bind, exit non-zero and trip the crash guard after three rounds, with a log that names no port. The flag is cleared by benchup like the others, so the retry is one command once the port is free.
+- `fl_pm_running` (up's "already running") counts honcho, serve, worker, schedule and socketio only, never a listener: a setup Redis left by a cut-short site add is provably the bench's and was making up a no-op. The runner's cleanup stops it since its folder is the bench.
+- A bench running outside BenchBar (bench start: honcho on the bench's own Procfile, or bench processes with no benchbar agent running them) gets its agent loaded with a manual stop flag, never a kickstart: that session is a person's terminal, and the runner's cleanup would have stopped it. Adopt says so and does not refuse, so the service files are in place for the next benchup.
+- `site drop` checks "only site" before and apart from "default site": the default test depended on `FL_SITE`, which `SITE_NAME` or `--site` can point at a site that does not exist, and the only site then fell through to drop-site.
+- The MCP server checks a `bench` argument of a changing tool against `benchbar list --json` (real paths) and refuses the rest: the CLI itself accepts any folder for `--bench-dir`, which is right for a person in a terminal and wrong for a model that got a path from a log.
+- `fg` takes the CLI lock like `down` does, and releases it just before `exec honcho`: exec skips the EXIT trap, and a lock held for as long as honcho runs in front would block every other benchbar run.
+
 ## 0.7.0: Homebrew
 
 - The install kind comes from SCRIPT_DIR as a string: `*/opt/benchbar/libexec` or `*/Cellar/benchbar/*/libexec` is homebrew, exactly `~/.local/share/benchbar` is managed, a folder with `.git` a checkout, anything else other. No process, because status runs it on every poll of the app, and no variable from the formula's wrapper, because every child (bench, honcho, a nested benchbar of another kind) would inherit it.

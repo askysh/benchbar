@@ -54,11 +54,12 @@ Raycast extensions and the like can rely on it too.
 | `starting` | processes are up, the site does not answer yet | `null` |
 | `running` | processes are up and the site answers HTTP | `null` |
 | `crashed` | honcho exited with an error; launchd retries after 20 seconds | `crash` |
-| `paused` | auto-restart is off until `benchup` | `crash` (the crash guard tripped: 3 starts in 10 minutes) or `broken` (honcho or the env is missing: run `benchbar repair`) |
+| `paused` | auto-restart is off until `benchup` | `crash` (the crash guard tripped: 3 starts in 10 minutes), `broken` (honcho or the env is missing: run `benchbar repair`) or `port_conflict` (another process held the bench's ports when the runner started; it was not this bench's to stop: run `benchbar doctor`) |
 
-`stop_reason` can be `manual`, `crash`, `broken` or `null`. `broken` is
-an addition to the original `manual | crash | null` contract: it tells a
-reader that `repair` is needed, not just `benchup`.
+`stop_reason` can be `manual`, `crash`, `broken`, `port_conflict` or
+`null`. `broken` and `port_conflict` are additions to the original
+`manual | crash | null` contract: they tell a reader that `repair` or
+`doctor` is needed, not just `benchup`.
 
 How `status` decides (live facts win over the state file):
 
@@ -70,7 +71,7 @@ How `status` decides (live facts win over the state file):
    serve, worker, schedule and socketio (0.6.1: port listeners alone no
    longer count, a leftover Redis is not a running bench).
 2. The stop flag `logs/.bench-stopped` says `manual`: `stopped`.
-3. It says `crash`: `paused` with `crash`. Anything else: `paused` with `broken`.
+3. It says `crash`: `paused` with `crash`. `port_conflict`: `paused` with `port_conflict`. Anything else: `paused` with `broken`.
 4. `state.json` says `crashed`: `crashed` (launchd is about to retry).
 5. Otherwise `stopped` with `stop_reason: null`.
 
@@ -770,6 +771,7 @@ Transitions the runner writes:
 | the agent starts while a stop flag exists | `stopped` or `paused` | from the flag |
 | honcho or `env/bin/python` is missing | `paused` | `broken` |
 | the crash guard trips | `paused` | `crash` |
+| a process that is not this bench's still holds one of its ports after the cleanup | `paused` | `port_conflict` |
 | honcho started | `starting` | `null` |
 | the site answered 200 (checked every 2 seconds for 4 minutes) | `running` | `null` |
 | honcho exited 0, or the runner got SIGTERM without a stop flag | `stopped` | `null` |

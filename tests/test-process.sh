@@ -17,7 +17,7 @@ add_proc 100 "honcho start -f Procfile.lean"
 add_proc 101 "$BENCH/env/bin/python -m frappe.utils.bench_helper frappe serve --port 8000"
 add_proc 102 "$BENCH/env/bin/python -m frappe.utils.bench_helper frappe worker"
 add_proc 103 "$BENCH/env/bin/python -m frappe.utils.bench_helper frappe schedule"
-add_proc 104 "node apps/frappe/socketio.js"
+add_proc 104 "node apps/frappe/socketio.js" "$BENCH"
 add_proc 200 "$BENCH/env/bin/python -m frappe.utils.bench_helper frappe --site macdev migrate"
 add_proc 201 "$BENCH/env/bin/python -m frappe.utils.bench_helper frappe --site macdev console"
 add_proc 202 "$OTHER/env/bin/python -m frappe.utils.bench_helper frappe serve --port 8100"
@@ -79,6 +79,29 @@ add_listener 9000 702 node
 run_fm down --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 grep -q "^702 " "$MOCK_PROCS" || fail "a listener with an unreadable folder must survive benchdown"
+
+# the one ownership test: a pid whose folder lsof cannot read is never "ours",
+# nor is one running in another folder; honcho and socketio go through it too
+: >"$MOCK_PROCS"; mkdir -p "$MOCK_STATE/cwd"
+add_proc 801 "/x/bin/honcho start -f Procfile.lean"; rm -f "$MOCK_STATE/cwd/801"
+add_proc 802 "/x/bin/honcho start -f Procfile.lean" "$OTHER"
+add_proc 803 "/x/bin/honcho start -f Procfile.lean" "$BENCH"
+add_proc 804 "node apps/frappe/socketio.js" "$BENCH/sites"
+own="$(FL_BENCH_DIR="$BENCH" bash -c '. "$0/lib/frappe-local/process.sh"; printf "801\n802\n803\n804\n" | fl_pids_in_bench | tr "\n" " "' "$ROOT")"
+assert_eq "803 804 " "$own" "(only pids whose folder is this bench, or inside it, are this bench's)"
+FL_BENCH_DIR="$BENCH" bash -c '. "$0/lib/frappe-local/process.sh"; fl_pid_is_bench_own_strict 801' "$ROOT" && fail "an unreadable folder must not count as this bench's"
+FL_BENCH_DIR="$BENCH" bash -c '. "$0/lib/frappe-local/process.sh"; fl_pid_is_bench_own_strict 803' "$ROOT" || fail "a folder inside the bench is this bench's"
+# down leaves the honcho with the unreadable folder and the other bench's alone
+# (the agent is unloaded here: the launchctl mock's kill would take the
+# folderless honcho as the agent's own job)
+mv "$MOCK_STATE/agents/com.benchbar.frappe-bench" "$MOCK_STATE/agent.saved"
+run_fm down --bench-dir "$BENCH"
+mv "$MOCK_STATE/agent.saved" "$MOCK_STATE/agents/com.benchbar.frappe-bench"
+assert_eq "0" "$CODE" "$OUT"
+grep -q "^801 " "$MOCK_PROCS" || fail "an honcho whose folder cannot be read must survive benchdown"
+grep -q "^802 " "$MOCK_PROCS" || fail "the other bench's honcho must survive benchdown"
+! grep -q "^803 " "$MOCK_PROCS" || fail "this bench's honcho should have been stopped"
+: >"$MOCK_PROCS"
 
 # "down" while nothing runs is fine and idempotent
 : >"$MOCK_PROCS"

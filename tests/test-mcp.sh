@@ -95,6 +95,27 @@ R="$(mcp '{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"benchb
 assert_eq "False" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')"
 assert_eq "stopped" "$(printf '%s' "$R" | jget - 'd["result"]["structuredContent"]["status"]["state"]')"
 
+# an action on a folder benchbar does not know (not in benchbar_list: not
+# registered, remembered, discovered under ~ or ~/dev, or given an agent) is
+# refused: no stop flag is written into it and nothing of it is signalled
+STRAY="$HOME/work/stray-bench"; make_fake_bench "$STRAY" stray
+add_proc 6001 "/x/bin/honcho start -f Procfile.lean" "$STRAY"
+reset_calls
+for tool in benchbar_down benchbar_up benchbar_restart; do
+  R="$(mcp '{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"'"$tool"'","arguments":{"bench":"'"$STRAY"'"}}}')"
+  assert_eq "True" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')" "($tool on an unknown bench)"
+  assert_contains "$(printf '%s' "$R" | jget - 'd["result"]["content"][0]["text"]')" "is not a bench benchbar knows"
+done
+assert_no_file "$STRAY/logs/.bench-stopped"
+grep -q '^6001 ' "$MOCK_PROCS" || fail "the unknown bench's honcho must not be signalled"
+assert_calls_not_contain '^(pkill|mockkill|launchctl kill)'
+# the same path through a symlink, once registered, is accepted
+run_fm register "$STRAY"; assert_eq "0" "$CODE" "$OUT"
+ln -s "$STRAY" "$HOME/stray-link"
+R="$(mcp '{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"benchbar_down","arguments":{"bench":"'"$HOME/stray-link"'"}}}')"
+assert_not_contains "$(printf '%s' "$R" | jget - 'd["result"]["content"][0]["text"]')" "is not a bench benchbar knows"
+: >"$MOCK_PROCS"
+
 # ---- app add over MCP: a read only plan with a token, then the approved plan
 # shellcheck source=tests/lib/apps-fixtures.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/apps-fixtures.sh"

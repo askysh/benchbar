@@ -46,6 +46,34 @@ assert_eq "9.9.9" "$(jget "$state" 'd["cli_version"]')"
 assert_eq "None 0 http://macdev:8000 runner" "$(jget "$state" 'd["stop_reason"], d["last_exit_code"], d["web_url"], d["source"]' | tr -d "(),'")"
 [[ -z "$(find "$BENCH/logs/.benchbar" -name '.state.json.*')" ]] || fail "no temp files may be left behind"
 
+# 1b. listeners on the bench's ports: only one whose working folder is this
+# bench is cleared. A foreign program, another bench's redis and a process
+# whose folder cannot be read stay, and the runner pauses with port_conflict
+# instead of starting honcho into ports it cannot bind.
+reset_calls; reset_transitions; : >"$hist"; : >"$MOCK_PROCS"; : >"$MOCK_STATE/killed"
+add_proc 555 "python3 -m http.server 8000" "$HOME/some-project"
+add_proc 666 "redis-server config/redis_queue.conf" "$HOME/another-bench/config/pids"
+add_proc 777 "redis-server config/redis_cache.conf" "$BENCH"
+add_proc 888 "node server.js"
+rm -f "$MOCK_STATE/cwd/888"
+add_listener 8000 555 python3
+add_listener 11000 666 redis-server
+add_listener 13000 777 redis-server
+add_listener 9000 888 node
+assert_status 0 "$runner"
+grep -q '^555 ' "$MOCK_PROCS" || fail "a foreign listener on the web port must survive the runner cleanup"
+grep -q '^666 ' "$MOCK_PROCS" || fail "another bench's redis on this bench's port must survive the runner cleanup"
+grep -q '^888 ' "$MOCK_PROCS" || fail "a listener whose folder cannot be read must survive the runner cleanup"
+! grep -q '^777 ' "$MOCK_PROCS" || fail "this bench's own leftover redis must be cleared"
+assert_calls_not_contain '^honcho' "(honcho must not start into held ports)"
+assert_calls_not_contain '^mockkill .*(555|666|888)'
+assert_eq "port_conflict" "$(cat "$flag")"
+assert_eq "paused" "$(transitions)"
+assert_eq "paused port_conflict" "$(jget "$state" 'd["state"], d["stop_reason"]' | tr -d "(),'")"
+grep -q 'held by processes that are not this bench' "$BENCH/logs/bench.log" || fail "the held ports must be logged"
+assert_calls_contain '^osascript .*Another program holds'
+: >"$MOCK_LISTEN"; : >"$MOCK_PROCS"; rm -f "$flag"; : >"$hist"
+
 # 2. stop flag: exit 0 without starting anything
 reset_calls
 printf 'manual\n' >"$flag"

@@ -127,13 +127,33 @@ assert_contains "$r" "|write_plist"
 cp "$TMP_DIR/plist.good" "$PLIST"
 
 # ---- orphans: redis and gunicorn left on the bench's ports, no honcho, agent not running
-add_listener 13000 4101 redis-server
-add_listener 8000 4102 python3.11
+# (their working folder is inside the bench, as lsof reports for the bench's own processes)
+mkdir -p "$MOCK_STATE/cwd"
+add_listener 13000 4101 redis-server; printf '%s' "$BENCH" >"$MOCK_STATE/cwd/4101"
+add_listener 8000 4102 python3.11; printf '%s/sites' "$BENCH" >"$MOCK_STATE/cwd/4102"
 r="$(check orphans)"
 assert_contains "$r" "warn|stale processes hold this bench's ports: 8000 (pid 4102 python3.11), 13000 (pid 4101 redis-server)"
 assert_contains "$r" "benchbar down"
+# a listener whose folder cannot be read is reported, never offered to "down": it is not proven ours
+rm -f "$MOCK_STATE/cwd/4101" "$MOCK_STATE/cwd/4102"
+r="$(check orphans)"
+assert_contains "$r" "warn|processes hold this bench's ports and their working folder cannot be read, so benchbar will not stop them: 8000 (pid 4102 python3.11), 13000 (pid 4101 redis-server)"
+assert_contains "$r" "|lsof -p 4102   (check whose it is"
+assert_not_contains "$r" "benchbar down"
+# one of each: both are named at once, the fix is down for this bench's own leftover
+printf '%s' "$BENCH" >"$MOCK_STATE/cwd/4101"
+r="$(check orphans)"
+assert_contains "$r" "warn|stale processes hold this bench's ports: 13000 (pid 4101 redis-server); processes hold this bench's ports and their working folder cannot be read, so benchbar will not stop them: 8000 (pid 4102 python3.11)|"
+assert_contains "$r" "benchbar down"
+# a listener running elsewhere is another program's: ports setup, not down
+printf '%s/some-project' "$HOME" >"$MOCK_STATE/cwd/4101"; printf '%s/some-project' "$HOME" >"$MOCK_STATE/cwd/4102"
+r="$(check orphans)"
+assert_contains "$r" "warn|other programs hold this bench's ports (not this bench's to stop): 8000 (pid 4102 python3.11 in ${HOME}/some-project)"
+assert_contains "$r" "benchbar ports setup"
+assert_not_contains "$r" "benchbar down"
+printf '%s' "$BENCH" >"$MOCK_STATE/cwd/4101"; printf '%s/sites' "$BENCH" >"$MOCK_STATE/cwd/4102"
 # the same listeners under benchfg are the bench, not orphans
-add_proc 4100 "/x/honcho start -f Procfile.lean"
+add_proc 4100 "/x/honcho start -f Procfile.lean" "$BENCH"
 assert_contains "$(check orphans)" "ok|honcho is running"
 # and under the agent
 set_agent com.benchbar.frappe-bench running 4099 0

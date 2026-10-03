@@ -23,8 +23,8 @@ fl_action_label() {
     node_requirements) printf 'bench setup requirements --node' ;;
     build) printf 'bench build' ;;
     clear_cache) printf 'bench clear-cache and clear-website-cache' ;;
-    mariadb_bind) printf 'bind MariaDB to 127.0.0.1' ;;
-    mariadb_utf8) printf 'write the utf8mb4 MariaDB drop-in' ;;
+    mariadb_bind) printf 'bind MariaDB to 127.0.0.1%s' "$(fl_mariadb_restart_note)" ;;
+    mariadb_utf8) printf 'write the utf8mb4 MariaDB drop-in%s' "$(fl_mariadb_restart_note)" ;;
     wkhtmltopdf_install) printf 'install the patched wkhtmltopdf package (sudo)' ;;
     legacy_migrate) printf 'migrate legacy launchd agents' ;;
     port_block) printf 'move the bench to port block %s (bench set-config, bench setup redis)' "${FL_PORT_TARGET:-?}" ;;
@@ -204,11 +204,20 @@ fl_runner_legacy_retire() {
 
 # Writes the plist and (re)loads the agent. A bench that is not running
 # gets a "manual" stop flag first so the reload never starts it by surprise.
+# So does one running outside BenchBar (bench start): the runner's cleanup
+# would stop that session's processes.
 act_write_plist() {
   local plist was_running=0 flag
   plist="$(fl_agent_plist_path)"
   flag="$(fl_stop_flag_path)"
-  if fl_bench_is_running || [[ "$FL_MIGRATED_RUNNING" == "1" ]]; then was_running=1; fi
+  # running under the legacy agent that was just migrated, under this
+  # bench's agent (launchd says so), or by processes benchbar can prove are
+  # this bench's; a session outside the agent is left alone
+  if [[ "$FL_MIGRATED_RUNNING" == "1" ]]; then was_running=1
+  elif fl_bench_running_outside_benchbar; then
+    fl_warn "this bench is running outside BenchBar's agent (bench start or benchfg); its processes are left alone and the agent is installed stopped"
+    fl_info "stop that session (Ctrl+C), then run benchup"
+  elif [[ "$(fl_agent_field state 2>/dev/null)" == "running" ]] || fl_bench_is_running; then was_running=1; fi
   if [[ "$was_running" == "0" && ! -f "$flag" ]]; then
     if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
       fl_info "dry-run: would write 'manual' to ${flag} so the agent does not auto-start"
@@ -430,6 +439,8 @@ fl_repair_engine() {
     actions="${actions}${actions:+ }${action}"
   done
   unchanged=$(( ${#FL_D_IDS[@]} - $(fl_doctor_count warn) - $(fl_doctor_count fail) ))
+  # the MariaDB labels name the running benches: one scan, before the labels' subshells
+  case " $actions " in *" mariadb_"*) fl_mariadb_running_benches_prime ;; esac
 
   printf '\n%sPlan%s\n' "$FL_BOLD" "$FL_RESET"
   fl_doctor_print compact

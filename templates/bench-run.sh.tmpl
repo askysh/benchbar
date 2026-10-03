@@ -1,5 +1,5 @@
 #!/bin/bash
-#@version 4
+#@version 5
 #@unhashed CLI_VERSION
 # __HEADER__
 #
@@ -104,15 +104,40 @@ if [ "$(wc -l < "$HIST" | tr -d ' ')" -gt "$MAX_STARTS" ]; then
   exit 0
 fi
 
-# clear leftovers of this bench from a previous crash so the ports are free
+# clear leftovers of this bench from a previous crash so the ports are free.
+# Only a process whose working folder is this bench is ours to stop: another
+# bench's redis, web or socketio and any other program on the same ports
+# stay, and so does a process whose folder cannot be read (no proof).
+is_ours() {
+  case "$(lsof -a -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n1)" in
+    "$BENCH"|"$BENCH"/*) return 0 ;;
+  esac
+  return 1
+}
 pkill -f "^__BENCH_RE__/env/bin/python -m frappe.utils.bench_helper frappe (serve|worker|schedule)" 2>/dev/null
-# socketio runs as "node apps/frappe/socketio.js" in every bench: only the
-# one whose working folder is this bench is ours
+# socketio runs as "node apps/frappe/socketio.js" in every bench
 for pid in $(pgrep -f "apps/frappe/socketio.js" 2>/dev/null); do
-  [ "$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n1)" = "$BENCH" ] && "${BENCHBAR_KILL_CMD:-kill}" "$pid" 2>/dev/null
+  is_ours "$pid" && "${BENCHBAR_KILL_CMD:-kill}" "$pid" 2>/dev/null
 done
-lsof -ti "tcp:$PORTS" -sTCP:LISTEN 2>/dev/null | xargs kill 2>/dev/null
-sleep 1
+for pid in $(lsof -ti "tcp:$PORTS" -sTCP:LISTEN 2>/dev/null); do
+  is_ours "$pid" && "${BENCHBAR_KILL_CMD:-kill}" "$pid" 2>/dev/null
+done
+# a port still held after that is not this bench's to free: honcho would only
+# fail to bind and trip the crash guard, so pause with the reason instead
+i=0; held=""
+while [ "$i" -lt 5 ]; do
+  held="$(lsof -ti "tcp:$PORTS" -sTCP:LISTEN 2>/dev/null | tr '\n' ' ')"
+  [ -n "$held" ] || break
+  sleep 1
+  i=$((i + 1))
+done
+if [ -n "$held" ]; then
+  echo "$(date '+%F %T') ports $PORTS are held by processes that are not this bench's (pid ${held% }); run: benchbar doctor" >> "$LOG"
+  echo "port_conflict" > "$STOPFLAG"
+  write_state paused port_conflict "" "" "$(prev_exit)" ""
+  notify "Another program holds this bench's ports. Run benchbar doctor, then benchup."
+  exit 0
+fi
 
 echo "$(date '+%F %T') starting bench (__LABEL__)" >> "$LOG"
 started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"

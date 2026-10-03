@@ -125,8 +125,8 @@ run_fm doctor --bench-dir "$BENCH"
 assert_contains "$OUT" "[WARN] launchd agent: agent loaded, not running, last exit code 78"
 set_agent com.benchbar.frappe-bench "not running" "" 0
 
-# 10. running but the site does not answer
-add_proc 4242 "honcho start -f Procfile.lean"
+# 10. running but the site does not answer (honcho's working folder is the bench, as lsof reports it)
+add_proc 4242 "honcho start -f Procfile.lean" "$BENCH"
 run_fm doctor --bench-dir "$BENCH"
 assert_eq "1" "$CODE"
 assert_contains "$OUT" "[FAIL] Site ping: bench processes are running but ping returned 000"

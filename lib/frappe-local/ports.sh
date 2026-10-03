@@ -154,23 +154,14 @@ fl_bench_is_or_becomes_default() {
 # A listener is the bench's own when it runs inside the bench folder (honcho
 # starts redis, web and socketio there); an unreadable folder counts as own,
 # so a bench is never moved on a guess.
-fl_pid_is_bench_own() {
-  local cwd
-  cwd="$(fl_pid_cwd "$1")"
-  [[ -z "$cwd" || "$cwd" == "$FL_BENCH_DIR" || "$cwd" == "$FL_BENCH_DIR"/* ]]
-}
-
-fl_pid_is_bench_own_strict() {
-  local cwd
-  cwd="$(fl_pid_cwd "$1")"
-  [[ -n "$cwd" ]] && [[ "$cwd" == "$FL_BENCH_DIR" || "$cwd" == "$FL_BENCH_DIR"/* ]]
-}
-
+# Listeners on the bench's current ports that are not provably this
+# bench's (fl_pid_is_bench_own_strict, the same test up uses): one answer
+# for one listener, whichever command asks.
 fl_port_current_listener_conflicts() {
   local p who
   for p in "$FL_WEB_PORT" "$FL_SOCKETIO_PORT" "$FL_REDIS_QUEUE_PORT" "$FL_REDIS_CACHE_PORT"; do
     who="$(fl_port_listener_summary "$p")"
-    [[ -n "$who" ]] && ! fl_pid_is_bench_own "${who%% *}" && printf '%s has a listener: pid %s\n' "$p" "$who"
+    [[ -n "$who" ]] && ! fl_pid_is_bench_own_strict "${who%% *}" && printf '%s has a listener: pid %s\n' "$p" "$who"
   done
   return 0
 }

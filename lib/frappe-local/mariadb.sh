@@ -286,12 +286,52 @@ fl_mariadb_dropin_apply() {
   return 0
 }
 
+# MariaDB is one server for every bench on the Mac. The benches that are
+# running right now, one name per line. The repair engine primes this once
+# in its own shell when a MariaDB action is planned (fl_mariadb_running_benches_prime):
+# the labels are rendered in subshells, which could not keep the cache.
+FL_MARIADB_RUNNING_BENCHES=""
+FL_MARIADB_RUNNING_BENCHES_SET=0
+fl_mariadb_running_benches() {
+  local d
+  if [[ "$FL_MARIADB_RUNNING_BENCHES_SET" != "1" ]]; then
+    FL_MARIADB_RUNNING_BENCHES_SET=1
+    if declare -F fl_known_benches_cached >/dev/null && declare -F fl_pm_running >/dev/null; then
+      while IFS= read -r d; do
+        if [[ -z "$d" ]] || ! fl_is_bench_dir "$d"; then continue; fi
+        if (fl_bench_load "$d"; fl_pm_running) 2>/dev/null; then
+          FL_MARIADB_RUNNING_BENCHES="${FL_MARIADB_RUNNING_BENCHES}${d##*/}"$'\n'
+        fi
+      done < <(fl_known_benches_cached)
+    fi
+  fi
+  printf '%s' "$FL_MARIADB_RUNNING_BENCHES"
+}
+
+fl_mariadb_running_benches_prime() { fl_mariadb_running_benches >/dev/null; }
+
+# fl_mariadb_restart_note: for an action label: " (restarts MariaDB, shared
+# by N running benches)" when the action would restart a running server.
+fl_mariadb_restart_note() {
+  local n
+  fl_process_running mariadbd || fl_port_listening 3306 || return 0
+  n="$(fl_mariadb_running_benches | grep -c . || true)"
+  printf ' (restarts MariaDB, shared by %s running bench%s)' "${n:-0}" "$([[ "${n:-0}" == "1" ]] || printf 'es')"
+}
+
 # fl_mariadb_restart_if_running: a changed drop-in needs a restart; a
-# stopped server picks it up on its next start.
+# stopped server picks it up on its next start. The server is shared, so
+# the benches that are running are named first, also under --yes.
 fl_mariadb_restart_if_running() {
-  local formula
+  local formula running
   fl_process_running mariadbd || fl_port_listening 3306 || return 0
   formula="$(fl_mariadb_service_formula)"
+  running="$(fl_mariadb_running_benches | tr '\n' ' ')"
+  if [[ -n "${running% }" ]]; then
+    fl_warn "restarting MariaDB, which these running benches use: ${running% }; their database connections drop for a few seconds"
+  else
+    fl_info "restarting MariaDB (no known bench is running)"
+  fi
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
     fl_info "dry-run: brew services restart ${formula}"
     return 0

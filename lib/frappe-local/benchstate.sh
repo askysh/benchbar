@@ -170,6 +170,7 @@ fl_status_compute() {
     case "$ST_FLAG" in
       manual) ST_STATE=stopped; ST_REASON=manual ;;
       crash) ST_STATE=paused; ST_REASON=crash ;;
+      port_conflict) ST_STATE=paused; ST_REASON=port_conflict ;;
       "")
         if [[ "$SJ_STATE" == "crashed" ]]; then ST_STATE=crashed; ST_REASON=crash; else ST_STATE=stopped; fi ;;
       *) ST_STATE=paused; ST_REASON=broken ;;
@@ -239,8 +240,9 @@ fl_known_benches() {
 }
 
 # fl_bench_load DIR: points the FL_* bench globals at DIR (site and ports
-# from that bench, never from the environment). list is the only caller and
-# exits afterwards, so nothing needs restoring.
+# from that bench, never from the environment). list exits afterwards; the
+# other callers (port management, the MariaDB restart note) run it in a
+# subshell, so nothing needs restoring.
 fl_bench_load() {
   SITE_NAME=""; BENCH_DIR=""
   FL_WEB_PORT=8000; FL_SOCKETIO_PORT=9000; FL_REDIS_CACHE_PORT=13000; FL_REDIS_QUEUE_PORT=11000; FL_REDIS_SOCKETIO_PORT=""

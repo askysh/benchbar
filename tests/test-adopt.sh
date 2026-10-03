@@ -82,6 +82,35 @@ assert_no_file "$HOME/Library/LaunchAgents/com.frappe-mac.oldbench.plist"
 assert_file "$HOME/Library/LaunchAgents/com.benchbar.oldbench.plist"
 [[ -n "$(ls "$HOME"/Library/LaunchAgents-disabled/*/com.frappe-mac.oldbench.plist 2>/dev/null)" ]] || fail "old plist must be moved aside, not deleted"
 
+# ---- a bench running outside BenchBar (bench start): its processes are
+# left alone, the agent is installed stopped and never kickstarted
+RUN="$HOME/running-bench"; make_fake_bench "$RUN" runsite
+sed_inplace 's/8000/8300/; s/9000/9300/; s/11000/11300/; s/13000/13300/' "$RUN/sites/common_site_config.json"
+: >"$MOCK_PROCS"; : >"$MOCK_STATE/killed"
+add_proc 7001 "/x/bin/python /x/bin/honcho start" "$RUN"
+add_proc 7002 "$RUN/env/bin/python -m frappe.utils.bench_helper frappe serve --port 8300" "$RUN/sites"
+add_proc 7003 "node apps/frappe/socketio.js" "$RUN"
+add_proc 7004 "redis-server config/redis_queue.conf" "$RUN"
+add_listener 8300 7002 python; add_listener 9300 7003 node; add_listener 11300 7004 redis-server
+reset_calls
+run_fm adopt "$RUN" --yes
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "running outside BenchBar's agent"
+assert_contains "$OUT" "the agent is installed stopped"
+for pid in 7001 7002 7003 7004; do grep -q "^${pid} " "$MOCK_PROCS" || fail "pid ${pid} of the bench running under bench start must survive adopt"; done
+[[ ! -s "$MOCK_STATE/killed" ]] || fail "adopt must not kill anything: $(cat "$MOCK_STATE/killed")"
+assert_calls_not_contain '^(pkill|mockkill)'
+assert_calls_not_contain '^launchctl kickstart'
+assert_calls_contain '^launchctl bootstrap'
+assert_eq "manual" "$(tr -d '[:space:]' <"$RUN/logs/.bench-stopped")" "(the agent must load stopped while bench start runs)"
+# a second adopt while it still runs changes nothing and kills nothing
+reset_calls
+run_fm adopt "$RUN" --yes
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "unchanged: all"
+assert_calls_not_contain '^(pkill|mockkill|launchctl kickstart)'
+: >"$MOCK_PROCS"; : >"$MOCK_LISTEN"; printf '3306 111 mariadbd 127.0.0.1\n' >"$MOCK_LISTEN"
+
 # ---- a bench without honcho: adopt warns and never installs into env
 NOH="$HOME/nohoncho"; make_fake_bench "$NOH" nosite
 mv "$MOCK_PIPX_HOME/venvs/frappe-bench/bin/honcho" "$MOCK_PIPX_HOME/venvs/frappe-bench/bin/honcho.away"
