@@ -3,6 +3,10 @@
 # shellcheck source=tests/mocks/bin/_mocklib.sh
 . "$(dirname "$0")/_mocklib.sh"
 mock_log "$@"
+# "uv pip install --python PY setuptools<70": the env now has pkg_resources
+if [[ "$1" == "pip" && "$2" == "install" && "$*" == *"setuptools<70"* ]]; then
+  prev=""; for a in "$@"; do [[ "$prev" == "--python" ]] && touch "$(dirname "$a")/.setuptools" 2>/dev/null; prev="$a"; done
+fi
 # uv's executable folder, as "uv tool dir --bin" reports it
 bindir="${UV_TOOL_BIN_DIR:-${XDG_BIN_HOME:-$HOME/.local/bin}}"
 if [[ "$*" == "tool dir --bin" ]]; then printf '%s\n' "$bindir"; exit 0; fi

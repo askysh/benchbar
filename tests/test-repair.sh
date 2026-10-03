@@ -71,10 +71,22 @@ printf 'keep me\n' >"$BENCH/env/marker"
 run_fm repair --dry-run --bench-dir "$BENCH"
 assert_contains "$OUT" "dry-run: would move ${BENCH}/env to ${BENCH}/env.broken."
 assert_file "$BENCH/env/marker"
+# while the bench runs, the env is not moved from under its processes
+add_proc 7700 "/x/bin/honcho start -f Procfile.lean" "$BENCH"
 run_fm repair --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "refusing to rebuild env while the bench is running"
+assert_contains "$OUT" "down --bench-dir ${BENCH}, then"
+assert_file "$BENCH/env/marker" "(a running bench keeps its env)"
+[[ -z "$(ls -d "$BENCH"/env.broken.* 2>/dev/null)" ]] || fail "the env of a running bench must not be moved aside"
+: >"$MOCK_PROCS"
+reset_calls
+MOCK_ENV_NO_PKG_RESOURCES=1 run_fm repair --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 [[ -n "$(ls -d "$BENCH"/env.broken.* 2>/dev/null)" ]] || fail "broken env must be moved aside"
 grep -q 'keep me' "$BENCH"/env.broken.*/marker || fail "moved-aside env must keep its content"
+# a v15 env gets setuptools<70, so pkg_resources is there for bench and honcho
+assert_calls_contain "^uv pip install --python ${BENCH}/env/bin/python setuptools<70\$"
 
 # hosts entry: asked unless --yes; with --yes it is applied through sudo
 printf '127.0.0.1 localhost\n' >"$FL_HOSTS_FILE"
@@ -195,6 +207,27 @@ assert_not_contains "$OUT" "to update"
 assert_calls_not_contain '^(brew install|npm install)'
 rm -rf "$MOCK_BREW_PREFIX/opt/node@22"; mv "$TMP_DIR/node22.aside" "$MOCK_BREW_PREFIX/opt/node@22"; rm -f "$MOCK_BREW_PREFIX/bin/node"
 run_fm service --yes --make-default --bench-dir "$BENCH"; assert_eq "0" "$CODE" "$OUT"
+
+# ---- env_setuptools: a v15 env without pkg_resources is flagged and repaired
+make_fake_env_python "$BENCH"
+MOCK_ENV_NO_PKG_RESOURCES=1 run_fm doctor --json --bench-dir "$BENCH"
+r="$(printf '%s' "$OUT" | jget - '"|".join(str([c for c in d["checks"] if c["id"] == "env_setuptools"][0][k]) for k in ("level", "message", "action"))')"
+assert_contains "$r" "warn|env/bin/python lacks pkg_resources (setuptools 70+ or none): bench and honcho fail on Frappe v15|env_setuptools"
+reset_calls
+printf 'still here\n' >"$BENCH/env/marker"
+MOCK_ENV_NO_PKG_RESOURCES=1 run_fm repair --yes --bench-dir "$BENCH"
+assert_contains "$OUT" "install 'setuptools<70' into the bench env"
+assert_calls_contain "^uv pip install --python ${BENCH}/env/bin/python setuptools<70\$"
+assert_file "$BENCH/env/marker" "(setuptools must not rebuild the env)"
+# with pkg_resources present the step is unchanged (an env rebuild in the same run installs it already)
+reset_calls
+printf 'keep\n' >"$BENCH/env/marker"
+run_fm repair --yes --bench-dir "$BENCH"
+assert_calls_not_contain 'setuptools<70'
+assert_calls_not_contain '^bench setup env'
+rm -f "$BENCH/env/marker"
+run_fm doctor --json --bench-dir "$BENCH"
+assert_eq "ok" "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "env_setuptools"][0]["level"]')"
 
 # large logs are moved aside, not deleted
 dd if=/dev/zero of="$BENCH/logs/worker.error.log" bs=1048576 count=3 2>/dev/null

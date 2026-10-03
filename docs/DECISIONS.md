@@ -41,6 +41,15 @@ runs come first, the 0.3 easy install run follows.
 - The phase scripts take `OFFLINE` from the environment (and `BENCHBAR_OFFLINE`) instead of resetting it, and `benchbar install` forwards `--offline`: one switch for every network check, as the docs already claimed.
 - A bootstrap that fails because launchd has the label disabled (119) runs `launchctl enable` once and retries: the disabled list survives a plist rewrite, so a reinstall could never load the agent on such a Mac.
 
+## 0.7.3: profile guards
+
+- `FL_PROFILE_SOURCE` (flag, team, stored, detected, default) is set where the profile is chosen, in `fl_context_init`, and only `default` with an `apps/frappe` present counts as a guess (`fl_profile_is_guess`): a fresh install has no frappe yet and the default is right for it. The guess makes the env checks warn without an action and `act_env_rebuild` refuse: an env rebuilt with the wrong Python breaks a working develop or v17 bench, and the fix is a sentence (`install --profile`), not a guess.
+- The source is not a new key of `doctor --json` yet: the app's fixtures (`macos/BenchBarTests/Fixtures`) pin the exact key set and this run does not touch `macos/`; the Swift follow-up adds `profile_source` to both sides at once. Until then the header and the env check messages carry it.
+- `chk_bench_version` classifies before it offers: `command -v bench` empty or exit 126/127 is the CLI's venv (reinstall with its owner's tool), `No module named 'X'` with X in `sites/apps.txt` is that app's, and only the rest keeps `env_rebuild`. The old mapping of every failure to a rebuild moved a healthy env aside for a broken `~/.local/bin/bench`.
+- `act_env_rebuild` refuses while the bench runs rather than stopping and restarting it: a repair that quietly runs `down` and `up` around a minutes long rebuild is a bigger surprise than "stop it first", and the three commands are one line in the fix.
+- `setuptools<70` is installed into a v15 env after the rebuild and offered as the `env_setuptools` action: honcho and bench on Frappe v15 import `pkg_resources`, which setuptools 70 dropped, and a Python 3.12+ venv ships no setuptools at all. v16 does not import it, so the check skips there.
+- `bench_min` is a new last column of `config/release-profiles.tsv` (5.22.0 for v15, 5.25.0 for v16, conservative: the bench that first handled each profile's Python); an older bench is a warning with the owner's upgrade command, not a stop, since the bench may still work. A `bench` on PATH that does not run (`bench --version` fails) stops the installer with the reinstall for its owner, where before `bench init` failed with a stack trace.
+
 ## 0.7.0: Homebrew
 
 - The install kind comes from SCRIPT_DIR as a string: `*/opt/benchbar/libexec` or `*/Cellar/benchbar/*/libexec` is homebrew, exactly `~/.local/share/benchbar` is managed, a folder with `.git` a checkout, anything else other. No process, because status runs it on every poll of the app, and no variable from the formula's wrapper, because every child (bench, honcho, a nested benchbar of another kind) would inherit it.

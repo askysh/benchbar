@@ -5,7 +5,10 @@
 mock_log "$@"
 [[ -n "${BENCH_LOG:-}" ]] && printf 'bench %s\n' "$*" >>"$BENCH_LOG"
 case "$1" in
-  version) printf 'erpnext 15.0.0\nfrappe 15.0.0\n'; exit 0 ;;
+  version)
+    # MOCK_BENCH_VERSION_EXIT with MOCK_BENCH_VERSION_OUT: a failing "bench version"
+    if [[ -n "${MOCK_BENCH_VERSION_EXIT:-}" ]]; then printf '%s\n' "${MOCK_BENCH_VERSION_OUT:-Traceback}" >&2; exit "$MOCK_BENCH_VERSION_EXIT"; fi
+    printf 'erpnext 15.0.0\nfrappe 15.0.0\n'; exit 0 ;;
   init)
     mkdir -p "$2/apps/frappe" "$2/env/bin" "$2/sites" "$2/config"
     cp "$(dirname "$0")/../env-python" "$2/env/bin/python"; chmod +x "$2/env/bin/python"
@@ -75,7 +78,13 @@ PY
         mkdir -p env/bin
         cat >env/bin/python <<'PY'
 #!/bin/bash
-case "$*" in *version_info*) echo "3.11" ;; --version) echo "Python 3.11.9" ;; *) exit 0 ;; esac
+# a fresh venv: MOCK_ENV_NO_PKG_RESOURCES=1 means its Python has no setuptools (3.12+)
+case "$*" in
+  *version_info*) echo "3.11" ;;
+  --version) echo "Python 3.11.9" ;;
+  "-c import pkg_resources") [[ "${MOCK_ENV_NO_PKG_RESOURCES:-0}" == "1" && ! -f "$(dirname "$0")/.setuptools" ]] && exit 1; exit 0 ;;
+  *) exit 0 ;;
+esac
 PY
         chmod +x env/bin/python; exit 0 ;;
       redis)

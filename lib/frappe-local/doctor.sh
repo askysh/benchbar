@@ -125,6 +125,15 @@ fl_doctor_print_fix_hints() {
   done | awk '!seen[$0]++'
 }
 
+# fl_profile_display: the profile for a header, with its source when it is
+# only the default ("v15-lts (default: no profile matches this bench)")
+fl_profile_display() {
+  case "${FL_PROFILE_SOURCE:-}" in
+    default) printf '%s (default: no profile matches this bench)' "$FL_PROFILE" ;;
+    *) printf '%s' "$FL_PROFILE" ;;
+  esac
+}
+
 # Prints the distinct repair actions of flagged checks, in dependency order.
 fl_doctor_actions() {
   local a i flagged=""

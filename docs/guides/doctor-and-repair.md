@@ -193,14 +193,32 @@ Terminal (or the app that runs benchbar), then open a new window.
 expects.
 
 Fix: `benchbar repair` rebuilds the env; the old one is moved to
-`env.broken.<timestamp>`.
+`env.broken.<timestamp>`. When no profile matches the bench's Frappe (a
+`develop` or v17 bench with no stored profile: doctor's header then says
+`profile v15-lts (default: no profile matches this bench)`), the Python
+to rebuild with is unknown, so a version mismatch is only a warning, no
+rebuild is offered, and the fix is `benchbar install --profile NAME`.
+
+### env_setuptools
+
+On Frappe v15, `env/bin/python` imports `pkg_resources`: bench and honcho
+need it, setuptools 70 and later dropped it, and an env made with Python
+3.12 or newer has no setuptools at all. Skipped on other versions.
+
+Fix: `benchbar repair` installs `setuptools<70` into the env (an env
+rebuild on v15 does the same).
 
 ### bench_version
 
 `bench version` works in the bench folder. The message also says whether
-pipx or uv owns `bench`.
+pipx or uv owns `bench`. A failure is classified first: a missing `bench`
+command, or one whose own venv is broken (exit 126 or 127), is the CLI's
+problem and gets `uv tool install frappe-bench` or the pipx equivalent;
+an app in `sites/apps.txt` that does not import is named, with `bench
+setup requirements --python` as the fix. Neither moves the env aside.
 
-Fix: `benchbar repair` rebuilds the env.
+Fix: `benchbar repair` rebuilds the env only when frappe itself does not
+import and the profile is this bench's (stored or detected).
 
 ### toolchain_node
 
