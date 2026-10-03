@@ -37,7 +37,7 @@ All notable changes to this project are documented here.
 
 ### Changed
 
-- `repair` exits 1 when a check still fails after the run and has no action of its own (a disabled formula, a missing tool), instead of 0 with a FAIL line in the verify pass.
+- `repair` says when a check still fails after the run and has no action of its own (a disabled formula, a missing tool); `doctor` exits 1 while it does.
 - The default profile `v15-lts` installs `node@22` instead of `node@20`,
   which Homebrew disables on 2026-10-28 (Frappe v15 needs Node 18 or
   newer). A bench set up with `node@20` keeps working; `benchbar doctor`

@@ -80,12 +80,15 @@ brew_info_json python@3.11 true null true null >"$MOCK_STATE/brew-info/python@3.
 r="$(FL_NOW=1780272000 check formula_dates)"
 assert_contains "$r" "fail|Homebrew has disabled python@3.11"
 # a FAIL with no action survives a repair that fixed something else: the
-# run still exits 1, so a script sees the disabled formula
+# run names it once more (its exit code says what repair did; doctor's
+# says the state), and the repair itself happened
 rm -f "$BENCH/Procfile.lean"
 FL_NOW=1793836800 run_fm repair --yes --bench-dir "$BENCH"
-assert_eq "1" "$CODE" "$OUT"
+assert_eq "0" "$CODE" "$OUT"
 assert_file "$BENCH/Procfile.lean"
-assert_contains "$OUT" "some checks still fail and need a manual step"
+assert_contains "$OUT" "some checks still fail and need a manual step; see the fix lines above (doctor exits 1 while they do)"
+FL_NOW=1793836800 run_fm doctor --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"
 # with the formula back, the same run is clean
 rm -f "$MOCK_STATE/brew-info/python@3.11.json"
 FL_NOW=1780272000 run_fm repair --yes --bench-dir "$BENCH"

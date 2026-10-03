@@ -111,11 +111,17 @@ act_env_rebuild() {
 # Only an install: the old formula stays for whatever else uses it, and the
 # bench's PATH (shell block, agent plist) puts the profile's first.
 act_node_install() {
-  if brew list --formula --versions "$FL_NODE_FORMULA" >/dev/null 2>&1 && [[ -x "$(fl_node_bin)" ]]; then
-    fl_info "${FL_NODE_FORMULA} is already installed"
-    return 0
+  local verb="install"
+  if brew list --formula --versions "$FL_NODE_FORMULA" >/dev/null 2>&1; then
+    if [[ -x "$(fl_node_bin)" ]]; then
+      fl_info "${FL_NODE_FORMULA} is already installed"
+      return 0
+    fi
+    # brew knows the formula but its node is gone (a damaged keg or opt
+    # link): install would be a no-op, reinstall puts the files back
+    verb="reinstall"
   fi
-  fl_run_long "brew install ${FL_NODE_FORMULA}" brew install "$FL_NODE_FORMULA" || return 1
+  fl_run_long "brew ${verb} ${FL_NODE_FORMULA}" brew "$verb" "$FL_NODE_FORMULA" || return 1
   [[ -x "$(fl_node_bin)" || "${FL_DRY_RUN:-0}" == "1" ]] || { fl_fail "${FL_NODE_FORMULA} installed, but $(fl_node_bin) is missing"; return 1; }
   return 0
 }
@@ -532,7 +538,7 @@ fl_repair_engine() {
       fl_event_step "$action" failed "$(fl_log_step_message "${step_from:-0}")"
       status=1
       case "$action" in
-        env_rebuild|honcho_install) fl_warn "stopping: later steps depend on this one"; break ;;
+        env_rebuild|honcho_install|node_install) fl_warn "stopping: later steps depend on this one"; break ;;
       esac
     fi
     i=$((i + 1))
@@ -566,11 +572,10 @@ fl_repair_engine() {
     fl_warn "some checks still need attention; see the fix lines above"
     return 1
   fi
-  # a FAIL with no action (a disabled formula, a missing tool) is still a
-  # failing check: the run did its part, and the exit code says so
+  # a FAIL with no action (a disabled formula, a missing tool) is named
+  # once more; the exit code says what repair did (doctor's says the state)
   if [[ "${FL_DRY_RUN:-0}" != "1" && "$(fl_doctor_count fail)" != "0" ]]; then
-    fl_warn "some checks still fail and need a manual step; see the fix lines above"
-    return 1
+    fl_warn "some checks still fail and need a manual step; see the fix lines above (doctor exits 1 while they do)"
   fi
   return 0
 }

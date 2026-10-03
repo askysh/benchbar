@@ -153,6 +153,15 @@ run_fm repair --dry-run --bench-dir "$MIG"
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "brew install node@22 (the Node of profile v15-lts; an older node formula is not removed)"
 assert_contains "$OUT" "install yarn under node@22 (npm install -g yarn)"
+# a Node install that fails stops the run before the plist and the shell block
+# are rewritten with a PATH that has no node
+reset_calls
+MOCK_BREW_INSTALL_FAIL=node@22 run_fm repair --yes --bench-dir "$MIG"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "stopping: later steps depend on this one"
+assert_calls_not_contain '^npm install -g yarn$'
+grep -q 'opt/node@20/bin' "$HOME/.zshrc" || fail "a failed node install must leave the shell block on node@20"
+grep -q 'opt/node@20/bin' "$HOME/Library/LaunchAgents/com.benchbar.mig-bench.plist" || fail "a failed node install must leave the plist PATH on node@20"
 reset_calls
 run_fm repair --yes --bench-dir "$MIG"
 assert_eq "0" "$CODE" "$OUT"
@@ -168,6 +177,15 @@ run_fm doctor --bench-dir "$MIG"
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "[OK] Node: Node 22.0.0 at ${MOCK_BREW_PREFIX}/opt/node@22/bin/node, profile v15-lts expects 22"
 assert_contains "$OUT" "[OK] yarn: yarn 1.22.22 at ${MOCK_BREW_PREFIX}/opt/node@22/bin/yarn"
+# brew knows node@22 but its node is gone (a damaged keg): reinstall, not install
+mv "$MOCK_BREW_PREFIX/opt/node@22" "$TMP_DIR/node22.damaged"
+reset_calls
+run_fm repair --yes --bench-dir "$MIG"
+assert_eq "0" "$CODE" "$OUT"
+assert_calls_contain '^brew reinstall node@22$'
+assert_calls_not_contain '^brew install node@22$'
+assert_file "$MOCK_BREW_PREFIX/opt/node@22/bin/node"
+rm -rf "$TMP_DIR/node22.damaged"
 # a second repair changes nothing
 reset_calls
 run_fm repair --yes --bench-dir "$MIG"

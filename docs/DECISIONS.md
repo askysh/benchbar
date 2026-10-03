@@ -19,6 +19,9 @@ runs come first, the 0.3 easy install run follows.
 
 ## 0.7.3: Node for v15
 
+- A failed `node_install` stops the repair run like a failed env rebuild: the plist and the shell block that follow would name a Node that is not there, and a working node@20 bench would stop. A formula brew lists whose node is missing gets `brew reinstall` (install is a no-op on an installed formula).
+- `repair` exits 0 when it did everything it could, even while a check without an action still fails (a disabled formula): its exit code says what repair did, and `doctor` is the command whose exit code says the state. The verify pass names the leftover once more.
+
 - `v15-lts` moves from `node@20` to `node@22`, not to `node@24`: Homebrew disables `node@20` on 2026-10-28 (deprecated a year earlier), Frappe version-15's `engines` says `node >=18`, and `node@22` is the LTS line with the longest Homebrew life that the v15 asset build is known to accept. It is checked on a Mac before each release; the cloud cannot build a bench.
 - The move is a repair, not a surprise: the shell block and the agent plist carry the formula in their PATH, so their hash changes and doctor marks them outdated; `toolchain_node` and `toolchain_yarn` gained the actions `node_install` (brew install of the profile's formula) and `yarn_install` (npm install -g yarn under it), so one `benchbar repair` completes the move. Nothing uninstalls `node@20`: another tool on the Mac may use it, and brew removes it on its own schedule.
 - The disable dates come from `brew info --json=v2`, one call per formula, read from the local tap: three Ruby starts in doctor, no network. One call for all three would be cheaper, but the JSON nests `name` keys (requirements), so pairing dates with formulae by position is the only way and a brew that reorders them would silently mislabel.

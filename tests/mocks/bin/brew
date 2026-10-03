@@ -10,9 +10,11 @@ case "${1:-}" in
     [[ " $* " == *" --installed-on-request "* ]] && { cat "${MOCK_BREW_LEAVES:?}"; exit 0; }
     f="${*: -1}"
     if grep -qx "$f" "${MOCK_STATE:?}/installed" 2>/dev/null; then printf '%s 1.0\n' "$f"; else exit 1; fi ;;
-  install)
+  install|reinstall)
     f="${*: -1}"
-    printf '%s\n' "$f" >>"${MOCK_STATE:?}/installed"
+    # MOCK_BREW_INSTALL_FAIL=formula: that formula's install fails (a bottle that cannot be fetched)
+    if [[ "$f" == "${MOCK_BREW_INSTALL_FAIL:-}" ]]; then echo "Error: ${f}: failed to download resource" >&2; exit 1; fi
+    grep -qx "$f" "${MOCK_STATE:?}/installed" 2>/dev/null || printf '%s\n' "$f" >>"${MOCK_STATE:?}/installed"
     # a node formula brings its node and npm, like the real bottle (yarn
     # comes from "npm install -g yarn", see the npm mock)
     case "$f" in
