@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-printf 'v20.18.0\n'
+printf 'v22.19.0\n'

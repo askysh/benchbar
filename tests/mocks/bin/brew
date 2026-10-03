@@ -11,7 +11,16 @@ case "${1:-}" in
     f="${*: -1}"
     if grep -qx "$f" "${MOCK_STATE:?}/installed" 2>/dev/null; then printf '%s 1.0\n' "$f"; else exit 1; fi ;;
   install)
-    printf '%s\n' "${*: -1}" >>"${MOCK_STATE:?}/installed" ;;
+    f="${*: -1}"
+    printf '%s\n' "$f" >>"${MOCK_STATE:?}/installed"
+    # a node formula brings its node and npm, like the real bottle (yarn
+    # comes from "npm install -g yarn", see the npm mock)
+    case "$f" in
+      node@*)
+        d="${MOCK_BREW_PREFIX:?}/opt/${f}/bin"; mkdir -p "$d"
+        [[ -e "$d/node" ]] || { printf '#!/usr/bin/env bash\nprintf "v%s.0.0\\n"\n' "${f#node@}" >"$d/node"; chmod +x "$d/node"; }
+        [[ -e "$d/npm" ]] || cp "$(dirname "$0")/../npm" "$d/npm" ;;
+    esac ;;
   leaves) cat "${MOCK_BREW_LEAVES:?}" ;;
   tab)
     [[ "${2:-}" == "--help" ]] && { echo "Usage: brew tab"; exit 0; }
@@ -28,7 +37,17 @@ case "${1:-}" in
         esac ;;
       *) ;;
     esac ;;
-  info) exit 0 ;;
+  info)
+    # --json=v2 --formula F: the lifecycle fields from $MOCK_STATE/brew-info/F.json
+    # when a test wrote one, else a formula that is neither deprecated nor disabled
+    if [[ " $* " == *" --json=v2 "* ]]; then
+      f="${*: -1}"
+      # F.missing: brew knows no such formula (exit 1, nothing on stdout)
+      [[ -f "${MOCK_STATE:?}/brew-info/${f}.missing" ]] && { echo "Error: No available formula with the name \"$f\"." >&2; exit 1; }
+      if [[ -f "${MOCK_STATE:?}/brew-info/${f}.json" ]]; then cat "${MOCK_STATE}/brew-info/${f}.json"
+      else printf '{\n  "formulae": [\n    {\n      "name": "%s",\n      "deprecated": false,\n      "deprecation_date": null,\n      "disabled": false,\n      "disable_date": null\n    }\n  ],\n  "casks": []\n}\n' "$f"; fi
+    fi
+    exit 0 ;;
   # self-update of a Homebrew CLI hands over to brew (the call is in MOCK_LOG)
   upgrade) printf '==> Upgrading %s\n' "${*: -1}" ;;
   *) ;;

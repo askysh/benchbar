@@ -11,7 +11,7 @@
 # Groups (used by "benchbar service" versus "benchbar repair"):
 #   system, bench, service, site
 
-FL_CHECK_ORDER="brew python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac mole app_copies full_disk_access env_python bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy dependency_behind apps_behind lock_parse lock_drift profile_outdated logs honcho honcho_setuptools procfile runner agent runner_heartbeat fork_safety scheduler stop_flag helpers cli_link cli_duplicate legacy_agents dead_agents hosts port_clash orphans ping"
+FL_CHECK_ORDER="brew formula_dates python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac mole app_copies full_disk_access env_python bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy dependency_behind apps_behind lock_parse lock_drift profile_outdated logs honcho honcho_setuptools procfile runner agent runner_heartbeat fork_safety scheduler stop_flag helpers cli_link cli_duplicate legacy_agents dead_agents hosts port_clash orphans ping"
 FL_LOG_WARN_MB="${FL_LOG_WARN_MB:-50}"
 FL_HOSTS_FILE="${FL_HOSTS_FILE:-/etc/hosts}"
 
@@ -27,7 +27,7 @@ chk_port_block() {
 
 fl_check_group() {
   case "$1" in
-    brew|python_leaves|mariadb_bind|mariadb_utf8|pdf_engine|redis_6379|cleanmymac|mole|app_copies|full_disk_access) printf 'system' ;;
+    brew|formula_dates|python_leaves|mariadb_bind|mariadb_utf8|pdf_engine|redis_6379|cleanmymac|mole|app_copies|full_disk_access) printf 'system' ;;
     env_python|bench_version|toolchain_*|socketio|assets|apps_txt|app_branch_policy|dependency_behind|apps_behind|lock_parse|lock_drift|logs) printf 'bench' ;;
     profile_outdated) printf 'bench' ;;
     ping) printf 'site' ;;
@@ -69,6 +69,7 @@ fl_check_label() {
     scheduler) printf 'Scheduler' ;;
     full_disk_access) printf 'Full Disk Access' ;;
     toolchain_node) printf 'Node' ;;
+    formula_dates) printf 'Formula lifecycle' ;;
     toolchain_yarn) printf 'yarn' ;;
     mariadb_version) printf 'MariaDB server' ;;
     toolchain_pkgconfig) printf 'pkg-config' ;;
@@ -94,6 +95,12 @@ chk_brew() {
   for f in "$FL_PYTHON_FORMULA" "$FL_NODE_FORMULA" "$FL_MARIADB_FORMULA" redis; do
     brew list --formula --versions "$f" >/dev/null 2>&1 || missing="${missing} ${f}"
   done
+  if [[ "$missing" == " ${FL_NODE_FORMULA}" ]]; then
+    # only the Node formula: a profile that moved to a newer Node (v15-lts
+    # from node@20 to node@22); repair installs it, the old one stays
+    chk__set fail "missing formula: ${FL_NODE_FORMULA} (the profile's Node moved; the bench still runs on the old one)" "${FL_SELF} repair" node_install
+    return 0
+  fi
   if [[ -n "$missing" ]]; then
     chk__set fail "missing formulae:${missing}" "${FL_SELF_DIR}/00-mac-system-deps.sh --profile ${FL_PROFILE}"
     return 0
@@ -106,6 +113,36 @@ chk_brew() {
     chk__set warn "${FL_PYTHON_FORMULA}, ${FL_NODE_FORMULA}, ${FL_MARIADB_FORMULA}, redis installed; missing build formulae:${missing} (needed to build mysqlclient for frappe v16)" "brew install${missing}"
   else
     chk__set ok "${FL_PYTHON_FORMULA}, ${FL_NODE_FORMULA}, ${FL_MARIADB_FORMULA}, redis, pkgconf, mariadb-connector-c installed"
+  fi
+}
+
+# Homebrew deprecates a formula about a year before it disables it, and a
+# disabled formula cannot be installed: a fresh install and every "brew
+# install" fix of this profile fail from that day. WARN inside the last 90
+# days, FAIL once disabled. The fix is a newer BenchBar, whose profile has
+# moved on; a bench keeps the formulae it has. Read from the local tap
+# (brew info --json), no network.
+chk_formula_dates() {
+  local f days soon="" gone="" fix
+  command -v brew >/dev/null 2>&1 || { chk__set ok "Homebrew is not installed; nothing to date"; return 0; }
+  local deprecated disabled dep_date dis_date unknown=""
+  for f in "$FL_PYTHON_FORMULA" "$FL_NODE_FORMULA" "$FL_MARIADB_FORMULA"; do
+    read -r deprecated disabled dep_date dis_date <<<"$(fl_brew_formula_dates "$f")"
+    if [[ "$deprecated" == "missing" ]]; then unknown="${unknown}${unknown:+, }${f}"; continue; fi
+    days="$(fl_formula_disable_days_from "$deprecated" "$disabled" "$dis_date")"
+    [[ -n "$days" ]] || continue
+    if [[ "$days" -lt 0 ]]; then gone="${gone}${gone:+, }${f} (since ${dis_date})"
+    elif [[ "$days" -le "$FL_FORMULA_DISABLE_WARN_DAYS" ]]; then soon="${soon}${soon:+, }${f} (${dis_date}, in ${days} days)"; fi
+  done
+  fix="update BenchBar (brew upgrade benchbar, or Check for Updates in the app): a newer profile names the current formulae"
+  if [[ -n "$unknown" ]]; then
+    chk__set fail "Homebrew no longer has ${unknown} (removed from the tap after being disabled): brew install fails, so a fresh install and this profile's fixes cannot run" "$fix"
+  elif [[ -n "$gone" ]]; then
+    chk__set fail "Homebrew has disabled ${gone}: brew install fails, so a fresh install and this profile's fixes cannot run" "$fix"
+  elif [[ -n "$soon" ]]; then
+    chk__set warn "Homebrew disables ${soon}; after that brew install fails for this profile" "$fix"
+  else
+    chk__set ok "${FL_PYTHON_FORMULA}, ${FL_NODE_FORMULA}, ${FL_MARIADB_FORMULA} are not near a Homebrew disable date"
   fi
 }
 
@@ -934,9 +971,9 @@ chk_toolchain_node() {
   else node="$(fl_bench_which node)"; where="$node"; fi
   if [[ -z "$node" ]]; then
     if [[ -d "$HOME/.nvm" ]]; then
-      chk__set warn "no node on the bench's PATH (nvm's node is only on your shell's PATH, bench does not see it)" "brew install ${FL_NODE_FORMULA}"
+      chk__set warn "no node on the bench's PATH (nvm's node is only on your shell's PATH, bench does not see it)" "brew install ${FL_NODE_FORMULA}" node_install
     else
-      chk__set warn "no node on the bench's PATH" "brew install ${FL_NODE_FORMULA}"
+      chk__set warn "no node on the bench's PATH" "brew install ${FL_NODE_FORMULA}" node_install
     fi
     return 0
   fi
@@ -944,8 +981,14 @@ chk_toolchain_node() {
   major="${ver%%.*}"
   if [[ "$major" == "$FL_NODE_MAJOR" ]]; then
     chk__set ok "Node ${ver} at ${where}, profile ${FL_PROFILE} expects ${FL_NODE_MAJOR}"
+  elif [[ "$where" == "env/bin/node" ]]; then
+    # bench put it there; brew cannot change it
+    chk__set warn "Node ${ver:-unknown} at ${where}, profile ${FL_PROFILE} expects ${FL_NODE_MAJOR}" "brew install ${FL_NODE_FORMULA}, then remove ${FL_BENCH_DIR}/env/bin/node so the bench uses ${FL_BREW_PREFIX}/opt/${FL_NODE_FORMULA}/bin/node"
   else
-    chk__set warn "Node ${ver:-unknown} at ${where}, profile ${FL_PROFILE} expects ${FL_NODE_MAJOR}" "brew install ${FL_NODE_FORMULA}   (the bench's PATH puts ${FL_BREW_PREFIX}/opt/${FL_NODE_FORMULA}/bin first)"
+    # the profile's formula is not installed (a profile that moved to a
+    # newer Node, or a formula Homebrew removed): repair installs it, and the
+    # bench's PATH puts it first; the old formula stays until you remove it
+    chk__set warn "Node ${ver:-unknown} at ${where}, profile ${FL_PROFILE} expects ${FL_NODE_MAJOR}" "brew install ${FL_NODE_FORMULA}   (the bench's PATH puts ${FL_BREW_PREFIX}/opt/${FL_NODE_FORMULA}/bin first)" node_install
   fi
 }
 
@@ -953,7 +996,7 @@ chk_toolchain_yarn() {
   local yarn ver
   yarn="$(fl_bench_which yarn)"
   if [[ -z "$yarn" ]]; then
-    chk__set warn "no yarn on the bench's PATH (bench build needs it)" "$(fl_npm_bin) install -g yarn"
+    chk__set warn "no yarn on the bench's PATH (bench build needs it)" "$(fl_npm_bin) install -g yarn" yarn_install
     return 0
   fi
   ver="$("$yarn" --version 2>/dev/null || true)"

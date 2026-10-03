@@ -111,10 +111,72 @@ assert_calls_not_contain '^brew services stop redis'
 assert_contains "$OUT" "not stopping redis on 6379 automatically"
 
 # python formula marked as installed on request
-printf 'node@20\n' >"$MOCK_BREW_LEAVES"
+printf 'node@22\n' >"$MOCK_BREW_LEAVES"
 run_fm repair --yes --bench-dir "$BENCH"
 assert_calls_contain '^brew tab --installed-on-request python@3.11$'
 grep -qx 'python@3.11' "$MOCK_BREW_LEAVES" || fail "python must become a leaf"
+
+# ---- a bench set up when v15-lts named node@20: doctor flags the shell
+# block, the agent plist and the Node, repair installs node@22 and yarn
+# under it, re-renders both PATHs, and never removes node@20
+: >"$MOCK_LISTEN"; add_listener 3306 900 mariadbd 127.0.0.1
+OLDCFG="$TMP_DIR/config-node20"; mkdir -p "$OLDCFG"; cp "$FL_CONFIG_DIR"/*.tsv "$OLDCFG/"
+sed_inplace 's/node@22	22/node@20	20/' "$OLDCFG/release-profiles.tsv"
+grep -q 'node@20' "$OLDCFG/release-profiles.tsv" || fail "test setup: the old profile names node@20"
+MIG="$HOME/mig-bench"; make_fake_bench "$MIG" migsite
+sed_inplace 's/8000/8200/; s/9000/9200/; s/11000/11200/; s/13000/13200/' "$MIG/sites/common_site_config.json"
+# the Mac of that time: node@20 installed with its yarn, no node@22 anywhere
+mkdir -p "$MOCK_BREW_PREFIX/opt/node@20/bin"
+printf '#!/usr/bin/env bash\nprintf "v20.18.0\\n"\n' >"$MOCK_BREW_PREFIX/opt/node@20/bin/node"; chmod +x "$MOCK_BREW_PREFIX/opt/node@20/bin/node"
+cp "$ROOT/tests/mocks/npm" "$ROOT/tests/mocks/yarn" "$MOCK_BREW_PREFIX/opt/node@20/bin/"
+mv "$MOCK_BREW_PREFIX/opt/node@22" "$TMP_DIR/node22.aside"
+# brew's unversioned node (brew/bin comes before /usr/local/bin on the agent's PATH, so the Mac running this test does not decide)
+cp "$MOCK_BREW_PREFIX/opt/node@20/bin/node" "$MOCK_BREW_PREFIX/bin/node"
+grep -v '^node@22$' "$MOCK_STATE/installed" >"$MOCK_STATE/installed.tmp"; printf 'node@20\n' >>"$MOCK_STATE/installed.tmp"; mv "$MOCK_STATE/installed.tmp" "$MOCK_STATE/installed"
+FL_CONFIG_DIR="$OLDCFG" run_fm service --yes --make-default --bench-dir "$MIG"
+assert_eq "0" "$CODE" "$OUT"
+grep -q 'opt/node@20/bin' "$HOME/.zshrc" || fail "test setup: the shell block names node@20"
+grep -q 'opt/node@20/bin' "$HOME/Library/LaunchAgents/com.benchbar.mig-bench.plist" || fail "test setup: the plist PATH names node@20"
+FL_CONFIG_DIR="$OLDCFG" run_fm doctor --bench-dir "$MIG"
+assert_eq "0" "$CODE" "$OUT"
+# the new profile: the block and the plist are outdated, Node and yarn are flagged with actions
+run_fm doctor --json --bench-dir "$MIG"
+assert_eq "warn" "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "helpers"][0]["status"]')"
+assert_eq "warn write_plist" "$(printf '%s' "$OUT" | jget - '" ".join(str(x) for x in [[c for c in d["checks"] if c["id"] == "agent"][0]["status"], [c for c in d["checks"] if c["id"] == "agent"][0]["action"]])')"
+assert_eq "warn node_install" "$(printf '%s' "$OUT" | jget - '" ".join(str(x) for x in [[c for c in d["checks"] if c["id"] == "toolchain_node"][0]["status"], [c for c in d["checks"] if c["id"] == "toolchain_node"][0]["action"]])')"
+# the formulae check names the move too, with the same action, not the whole system-deps script
+assert_eq "fail node_install" "$(printf '%s' "$OUT" | jget - '" ".join(str(x) for x in [[c for c in d["checks"] if c["id"] == "brew"][0]["status"], [c for c in d["checks"] if c["id"] == "brew"][0]["action"]])')"
+assert_contains "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "brew"][0]["message"]')" "missing formula: node@22 (the profile's Node moved"
+assert_contains "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "toolchain_node"][0]["message"]')" "profile v15-lts expects 22"
+assert_eq "warn yarn_install" "$(printf '%s' "$OUT" | jget - '" ".join(str(x) for x in [[c for c in d["checks"] if c["id"] == "toolchain_yarn"][0]["status"], [c for c in d["checks"] if c["id"] == "toolchain_yarn"][0]["action"]])')"
+run_fm repair --dry-run --bench-dir "$MIG"
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "brew install node@22 (the Node of profile v15-lts; an older node formula is not removed)"
+assert_contains "$OUT" "install yarn under node@22 (npm install -g yarn)"
+reset_calls
+run_fm repair --yes --bench-dir "$MIG"
+assert_eq "0" "$CODE" "$OUT"
+assert_calls_contain '^brew install node@22$'
+assert_calls_contain '^npm install -g yarn$'
+assert_calls_not_contain '^brew (uninstall|remove)' "(node@20 stays for whatever else uses it)"
+assert_file "$MOCK_BREW_PREFIX/opt/node@22/bin/yarn"
+assert_file "$MOCK_BREW_PREFIX/opt/node@20/bin/yarn"
+grep -q 'opt/node@22/bin' "$HOME/.zshrc" || fail "the shell block must name node@22 after repair"
+! grep -q 'opt/node@20/bin' "$HOME/.zshrc" || fail "the shell block must no longer name node@20"
+grep -q 'opt/node@22/bin' "$HOME/Library/LaunchAgents/com.benchbar.mig-bench.plist" || fail "the plist PATH must name node@22 after repair"
+run_fm doctor --bench-dir "$MIG"
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "[OK] Node: Node 22.0.0 at ${MOCK_BREW_PREFIX}/opt/node@22/bin/node, profile v15-lts expects 22"
+assert_contains "$OUT" "[OK] yarn: yarn 1.22.22 at ${MOCK_BREW_PREFIX}/opt/node@22/bin/yarn"
+# a second repair changes nothing
+reset_calls
+run_fm repair --yes --bench-dir "$MIG"
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "unchanged:"
+assert_not_contains "$OUT" "to update"
+assert_calls_not_contain '^(brew install|npm install)'
+rm -rf "$MOCK_BREW_PREFIX/opt/node@22"; mv "$TMP_DIR/node22.aside" "$MOCK_BREW_PREFIX/opt/node@22"; rm -f "$MOCK_BREW_PREFIX/bin/node"
+run_fm service --yes --make-default --bench-dir "$BENCH"; assert_eq "0" "$CODE" "$OUT"
 
 # large logs are moved aside, not deleted
 dd if=/dev/zero of="$BENCH/logs/worker.error.log" bs=1048576 count=3 2>/dev/null

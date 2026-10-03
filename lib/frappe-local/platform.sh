@@ -70,6 +70,55 @@ fl_brew_ensure() {
   fi
 }
 
+# fl_brew_formula_dates FORMULA: "deprecated disabled deprecation_date
+# disable_date" from `brew info --json=v2` (local tap data, no network;
+# "-" for an unknown or null value). Homebrew deprecates a formula a year
+# before it disables it, and a disabled formula can no longer be installed:
+# the profiles must move before that date, and doctor says how close it is.
+# "missing - - -" when brew knows no such formula (removed from the tap,
+# which Homebrew does about a year after disabling one).
+fl_brew_formula_dates() {
+  local json deprecated disabled dep_date dis_date
+  json="$(HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_ANALYTICS=1 brew info --json=v2 --formula "$1" 2>/dev/null | tr -d '\n')" || true
+  [[ -n "$json" ]] || { printf 'missing - - -'; return 0; }
+  # BSD sed has no alternation in a BRE: match the word, not true|false
+  deprecated="$(printf '%s' "$json" | sed -n 's/.*"deprecated":[[:space:]]*\([a-z]*\).*/\1/p')"
+  disabled="$(printf '%s' "$json" | sed -n 's/.*"disabled":[[:space:]]*\([a-z]*\).*/\1/p')"
+  dep_date="$(printf '%s' "$json" | sed -n 's/.*"deprecation_date":[[:space:]]*"\([0-9-]*\)".*/\1/p')"
+  dis_date="$(printf '%s' "$json" | sed -n 's/.*"disable_date":[[:space:]]*"\([0-9-]*\)".*/\1/p')"
+  printf '%s %s %s %s' "${deprecated:--}" "${disabled:--}" "${dep_date:--}" "${dis_date:--}"
+}
+
+# fl_date_epoch YYYY-MM-DD: seconds since the epoch at midnight UTC of that
+# day (BSD date on macOS, GNU date elsewhere), nothing for a bad date.
+fl_date_epoch() {
+  [[ "$1" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || return 0
+  TZ=UTC date -j -f '%Y-%m-%d %H:%M:%S' "$1 00:00:00" +%s 2>/dev/null || TZ=UTC date -d "$1 00:00:00" +%s 2>/dev/null || true
+}
+
+# fl_formula_disable_days_from DEPRECATED DISABLED DISABLE_DATE: how many
+# days until Homebrew disables the formula (0 on the day itself, negative
+# after; brew install fails from day 0), -1 for a formula that is disabled
+# with no date or that brew no longer knows, nothing when no date is set.
+FL_FORMULA_DISABLE_WARN_DAYS=90
+fl_formula_disable_days_from() {
+  local deprecated="$1" disabled="$2" dis_date="$3" at now
+  if [[ "$deprecated" == "missing" ]] || [[ "$disabled" == "true" && "$dis_date" == "-" ]]; then printf -- '-1'; return 0; fi
+  [[ "$dis_date" != "-" ]] || return 0
+  at="$(fl_date_epoch "$dis_date")"
+  [[ -n "$at" ]] || return 0
+  # FL_NOW: the tests' clock (freshness.sh's fl_now reads it too)
+  now="${FL_NOW:-$(date +%s)}"
+  if [[ "$now" -ge "$at" ]]; then printf '%s' "$(( (now - at) / 86400 * -1 - 1 ))"; else printf '%s' "$(( (at - now) / 86400 ))"; fi
+}
+
+# fl_formula_disable_days FORMULA: the same, from one brew info call
+fl_formula_disable_days() {
+  local deprecated disabled dep_date dis_date
+  read -r deprecated disabled dep_date dis_date <<<"$(fl_brew_formula_dates "$1")"
+  fl_formula_disable_days_from "$deprecated" "$disabled" "$dis_date"
+}
+
 fl_brew_formula_available() {
   local formula="$1"
   brew list --formula --versions "$formula" >/dev/null 2>&1 || brew info "$formula" >/dev/null 2>&1

@@ -318,7 +318,7 @@ bench's path.
 
 The site's line in `/etc/hosts` can stay; it does nothing without the
 bench. To remove the Homebrew formulae as well, when no other bench
-needs them: `brew uninstall mariadb@10.11 redis node@20 python@3.11`.
+needs them: `brew uninstall mariadb@10.11 redis node@22 python@3.11`.
 That keeps MariaDB's data folder, `$(brew --prefix)/var/mysql`, with
 every other database on the Mac.
 
