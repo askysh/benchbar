@@ -79,6 +79,18 @@ rm -f "$MOCK_STATE/brew-info/mariadb@10.11.missing"
 brew_info_json python@3.11 true null true null >"$MOCK_STATE/brew-info/python@3.11.json"
 r="$(FL_NOW=1780272000 check formula_dates)"
 assert_contains "$r" "fail|Homebrew has disabled python@3.11"
+# a FAIL with no action survives a repair that fixed something else: the
+# run still exits 1, so a script sees the disabled formula
+rm -f "$BENCH/Procfile.lean"
+FL_NOW=1793836800 run_fm repair --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"
+assert_file "$BENCH/Procfile.lean"
+assert_contains "$OUT" "some checks still fail and need a manual step"
+# with the formula back, the same run is clean
+rm -f "$MOCK_STATE/brew-info/python@3.11.json"
+FL_NOW=1780272000 run_fm repair --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+brew_info_json python@3.11 true null true null >"$MOCK_STATE/brew-info/python@3.11.json"
 # deprecated with no disable date yet: nothing to warn about
 brew_info_json python@3.11 true '"2026-01-01"' false null >"$MOCK_STATE/brew-info/python@3.11.json"
 rm -f "$MOCK_STATE/brew-info/node@22.json"

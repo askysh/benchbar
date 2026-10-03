@@ -566,5 +566,11 @@ fl_repair_engine() {
     fl_warn "some checks still need attention; see the fix lines above"
     return 1
   fi
+  # a FAIL with no action (a disabled formula, a missing tool) is still a
+  # failing check: the run did its part, and the exit code says so
+  if [[ "${FL_DRY_RUN:-0}" != "1" && "$(fl_doctor_count fail)" != "0" ]]; then
+    fl_warn "some checks still fail and need a manual step; see the fix lines above"
+    return 1
+  fi
   return 0
 }
