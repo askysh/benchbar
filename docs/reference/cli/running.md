@@ -103,7 +103,7 @@ Tails `logs/bench.log` and follows it in a terminal.
 | `--previous` | `logs/bench.previous.log`, the tail of the run before |
 | `-n50` | The last 50 lines (the default); any number works, `-n` then the count |
 | `--no-follow` | Print and exit |
-| `--process NAME` | With `--json`: only the lines of one honcho process: `web`, `worker`, `socketio`, `schedule`, `redis_queue`, `redis_cache` |
+| `--process NAME` | Only the lines of one honcho process: `web`, `socketio`, `schedule`, `redis_queue`, `redis_cache`. `worker` reads `logs/worker.log` instead, where `Procfile.lean` sends the worker (it never writes to `bench.log`); `--previous` does not combine with it, since `worker.log` has no previous file |
 | `--json` | The lines as JSON ([schema](../../json-schema.md#benchbar-logs---json)) |
 
 Exit codes: 0; 1 for a bad `-n` or `--process` value.

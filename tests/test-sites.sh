@@ -17,7 +17,16 @@ export MARIADB_ROOT_PASSWORD=rootpw
 run_fm site list --bench-dir "$BENCH"
 assert_contains "$OUT" "v16dev"
 run_fm site list --json --bench-dir "$BENCH"
-assert_eq "[{'name': 'v16dev', 'default': True, 'hosts_entry': True, 'ping_code': None}]" "$(printf '%s' "$OUT" | jget - 'd["sites"]')"
+assert_eq "[{'name': 'v16dev', 'default': True, 'hosts_entry': True, 'ping_code': None, 'db_name': '_v16dev', 'db_port': 3306}]" "$(printf '%s' "$OUT" | jget - 'd["sites"]')"
+assert_not_contains "$OUT" "db_password" "(site list carries the database name and port, never the password)"
+assert_not_contains "$OUT" "fake-db-pw"
+# db_port from common_site_config.json when the bench's MariaDB is not on 3306; no db_name without one
+cp "$BENCH/sites/common_site_config.json" "$TMP_DIR/common_site_config.json.orig"
+printf '{\n "db_port": 3307,\n "default_site": "v16dev",\n "webserver_port": 8000\n}\n' >"$BENCH/sites/common_site_config.json"
+mkdir -p "$BENCH/sites/noname"; printf '{}\n' >"$BENCH/sites/noname/site_config.json"
+run_fm site list --json --bench-dir "$BENCH"
+assert_eq "noname:None:3307 v16dev:_v16dev:3307" "$(printf '%s' "$OUT" | jget - '" ".join("%s:%s:%s" % (s["name"], s["db_name"], s["db_port"]) for s in d["sites"])')"
+rm -r "$BENCH/sites/noname"; cp "$TMP_DIR/common_site_config.json.orig" "$BENCH/sites/common_site_config.json"
 
 # ---- add: refusals first
 run_fm site add "Bad_Name" --bench-dir "$BENCH"; assert_eq "1" "$CODE"; assert_contains "$OUT" "Invalid site name"

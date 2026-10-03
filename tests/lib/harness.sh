@@ -133,7 +133,8 @@ make_fake_bench() {
     "$dir/sites/$site" "$dir/sites/assets" "$dir/env/bin" "$dir/logs" "$dir/config" "$dir/apps/erpnext"
   printf 'frappe\nerpnext\n' >"$dir/sites/apps.txt"
   printf '%s\n' "$site" >"$dir/sites/currentsite.txt"
-  printf '{}\n' >"$dir/sites/$site/site_config.json"
+  # the database name and a password that must never reach any output
+  printf '{\n "db_name": "_%s",\n "db_password": "fake-db-pw"\n}\n' "$site" >"$dir/sites/$site/site_config.json"
   cat >"$dir/sites/common_site_config.json" <<JSON
 {
  "default_site": "$site",

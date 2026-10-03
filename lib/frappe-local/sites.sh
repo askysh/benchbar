@@ -57,14 +57,18 @@ fl_hosts_has_name() {
   return 1
 }
 
-# fl_sites_json_v VAR [PINGS]: [{"name":..,"default":..,"hosts_entry":..,"ping_code":..}]
+# fl_sites_json_v VAR [PINGS] [DB]: [{"name":..,"default":..,"hosts_entry":..,"ping_code":..}]
 #   none  ping_code null (list; status without --ping), no lsof, no curl
 #   ask   one curl per site; the default site reuses FL_DEFAULT_PING when set (status --ping)
 #   ping  one curl per site when something listens on the web port (site list)
+# DB=1 (site list) adds db_name (from the site's site_config.json, null when
+# missing) and db_port (the site's, else the bench's, else 3306); never the
+# password. list and status leave them out: they poll.
 FL_DEFAULT_PING=""
 fl_sites_json_v() {
-  local __mode="${2:-none}" __out="[" __sep="" __s __ping __listening=1 __jn __jd __jh __jp __def __hosts
+  local __mode="${2:-none}" __db="${3:-0}" __out="[" __sep="" __s __ping __listening=1 __jn __jd __jh __jp __def __hosts __dbn __dbp __dbj __bench_port
   if [[ "$__mode" == "ping" && -z "$(fl_port_listener_pid "$FL_WEB_PORT")" ]]; then __listening=0; fi
+  if [[ "$__db" == "1" ]]; then fl_site_config_value_v __bench_port db_port; fi
   while IFS= read -r __s; do
     [[ -n "$__s" ]] || continue
     __ping=""
@@ -75,14 +79,35 @@ fl_sites_json_v() {
     __def=0; [[ "$__s" == "$FL_SITE" ]] && __def=1
     __hosts=0; fl_hosts_has_name "$__s" && __hosts=1
     fl_json_str_v __jn "$__s"; fl_json_bool_v __jd "$__def"; fl_json_bool_v __jh "$__hosts"; fl_json_num_v __jp "$__ping"
-    __out="${__out}${__sep}{\"name\":${__jn},\"default\":${__jd},\"hosts_entry\":${__jh},\"ping_code\":${__jp}}"
+    __dbj=""
+    if [[ "$__db" == "1" ]]; then
+      fl_site_file_value_v __dbn "${FL_BENCH_DIR}/sites/${__s}/site_config.json" db_name
+      fl_site_file_value_v __dbp "${FL_BENCH_DIR}/sites/${__s}/site_config.json" db_port
+      [[ "$__dbp" =~ ^[0-9]+$ ]] || __dbp="$__bench_port"
+      [[ "$__dbp" =~ ^[0-9]+$ ]] || __dbp=3306
+      fl_json_str_v __dbn "$__dbn"
+      __dbj=",\"db_name\":${__dbn},\"db_port\":${__dbp}"
+    fi
+    __out="${__out}${__sep}{\"name\":${__jn},\"default\":${__jd},\"hosts_entry\":${__jh},\"ping_code\":${__jp}${__dbj}}"
     __sep=","
   done < <(fl_sites_list)
   printf -v "$1" '%s]' "$__out"
 }
 
-# fl_sites_json [PINGS]: the same, printed; site list asks every site
-fl_sites_json() { local j; fl_sites_json_v j "${1:-ping}"; printf '%s' "$j"; }
+# fl_site_file_value_v VAR FILE KEY: KEY's raw value from a site_config.json,
+# read a line at a time like common_site_config.json; empty when missing
+fl_site_file_value_v() {
+  local __line __v=""
+  if [[ -f "$2" && -r "$2" ]]; then
+    while IFS= read -r __line || [[ -n "$__line" ]]; do
+      [[ "$__line" =~ $FL_SCC_LINE_RE && "${BASH_REMATCH[1]}" == "$3" ]] && { __v="${BASH_REMATCH[2]}"; break; }
+    done <"$2"
+  fi
+  printf -v "$1" '%s' "$__v"
+}
+
+# fl_sites_json [PINGS]: the same, printed, with the database name and port; site list asks every site
+fl_sites_json() { local j; fl_sites_json_v j "${1:-ping}" 1; printf '%s' "$j"; }
 
 # fl_site_name_ok NAME: lowercase letters, digits, '-' and '.', starting
 # with a letter or digit; what a hosts line and a runner can carry
