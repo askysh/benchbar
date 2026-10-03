@@ -663,16 +663,20 @@ chk_cli_duplicate() {
 }
 
 # The app's CLI next to Homebrew's or the installer's copy is the normal
-# case: those hand off to it. Only a copy too old to hand off is worth a
-# word, since benchbar in Terminal then runs that older copy.
+# case: those hand off to it. Worth a word: a copy too old to hand off
+# (benchbar in Terminal then runs that older copy), a copy newer than this
+# CLI (it hands off to the older one until the app updates), and the
+# installer checkout's own state folder next to the user state, two states
+# that never merge (what chk_cli_duplicate says under Homebrew).
 chk_cli_duplicate_app() {
-  local brew script v found="" old="" fix=""
+  local brew script v found="" old="" fix="" newer="" legacy state="${HOME%/}/.local/state/benchbar" also=""
   brew="$(fl_brew_cli)"
   if [[ -n "$brew" ]]; then
     script="$(fl_cli_standalone_script "$brew")"
     v="$(fl_cli_version_at "$script")"
     found="Homebrew's benchbar ${v:-?}"
-    if [[ -z "$v" ]] || fl_version_lt "$v" "$FL_HANDOFF_SINCE"; then old="Homebrew's benchbar ${v:-?} (${brew})"; fix="brew upgrade askysh/tap/benchbar"; fi
+    if [[ -z "$v" ]] || fl_version_lt "$v" "$FL_HANDOFF_SINCE"; then old="Homebrew's benchbar ${v:-?} (${brew})"; fix="brew upgrade askysh/tap/benchbar"
+    elif fl_version_lt "${FL_VERSION:-0}" "$v"; then newer="Homebrew's benchbar ${v} (${brew})"; fi
   fi
   if [[ -f "${FL_MANAGED_HOME}/benchbar" ]]; then
     v="$(fl_cli_version_at "${FL_MANAGED_HOME}/benchbar")"
@@ -680,7 +684,35 @@ chk_cli_duplicate_app() {
     if [[ -z "$v" ]] || fl_version_lt "$v" "$FL_HANDOFF_SINCE"; then
       old="${old}${old:+ and }the one line installer's benchbar ${v:-?} (${FL_MANAGED_HOME})"
       fix="${fix}${fix:+ && }git -C ${FL_MANAGED_HOME} pull --ff-only"
+    elif fl_version_lt "${FL_VERSION:-0}" "$v"; then
+      newer="${newer}${newer:+ and }the one line installer's benchbar ${v} (${FL_MANAGED_HOME})"
     fi
+  fi
+  # a real state folder in the installer's checkout (state.sh leaves a link)
+  for legacy in "${FL_MANAGED_HOME}/.benchbar" "${FL_MANAGED_HOME}/.frappe-local" ""; do
+    [[ -n "$legacy" && -d "$legacy" && ! -L "$legacy" ]] && break
+  done
+  if [[ -n "$legacy" && "$FL_STATE_DIR" == "${FL_MANAGED_HOME}/"* ]]; then
+    # the move waits for a run of an older CLI (or failed): that folder still holds the state
+    chk__set warn "the state is still in ${FL_STATE_DIR}: a run of an older benchbar holds its lock, or the move to ${state} failed" "${FL_SELF} repair once no other benchbar run is active: the state moves to ${state} first"
+    return 0
+  elif [[ -n "$legacy" && -L "$state" ]]; then
+    # another volume: the state stayed in the checkout, behind the link
+    also="; ${FL_MANAGED_HOME} also holds the state (${state} leads to ${legacy}), so keep that folder"
+  elif [[ -n "$legacy" && "$FL_STATE_DIR" == "$state" && -d "$state" ]]; then
+    if [[ -d "${legacy}/bin" || -L "${legacy}/bin" ]] || fl_state_dir_shell_only "$state"; then
+      # a run cut short in the middle of the move (the app's bin/ already
+      # travelled into the old folder, or the new folder holds no state yet)
+      chk__set warn "the move of the state from ${legacy} to ${state} did not finish (a run was cut short); the next benchbar run completes it" "${FL_SELF} where   (any benchbar run completes the move; nothing to delete)"
+      return 0
+    fi
+    # two states: an older CLI made its folder again after the move, or the two were never merged
+    if [[ -f "${FL_MANAGED_HOME}/benchbar" ]]; then
+      chk__set warn "the one line installer's benchbar in ${FL_MANAGED_HOME} has started a state folder of its own (${legacy}) since the state moved to ${state}, so its runs no longer share this CLI's benches and settings" "mv ${FL_MANAGED_HOME} ~/.Trash/   (move anything you still need out of ${legacy} first; the benches and ${state} stay)"
+    else
+      chk__set warn "a second state folder (${legacy}) is left next to this CLI's (${state}): nothing runs from ${FL_MANAGED_HOME} any more, and the two never merge" "mv ${legacy} ~/.Trash/   (move anything you still need out of it first; the benches and ${state} stay)"
+    fi
+    return 0
   fi
   if [[ -z "$found" ]]; then
     chk__set ok "no other copy: this is the app's CLI, and nothing else is installed"
@@ -691,9 +723,15 @@ chk_cli_duplicate_app() {
       chk__set warn "${old} is too old to hand off to the app's CLI, so benchbar in Terminal may run it instead of this one (${FL_VERSION})" "$fix"
     fi
   elif [[ "$FL_SELF" != "$FL_APP_CLI" ]]; then
-    chk__set ok "${found} run on their own: this app's CLI (${SCRIPT_DIR}) is not the one BenchBar.app registered in ${FL_APP_CLI}"
+    chk__set ok "${found} run on their own: this app's CLI (${SCRIPT_DIR}) is not the one BenchBar.app registered in ${FL_APP_CLI}${also}"
+  elif [[ -n "$newer" ]]; then
+    if [[ "$newer" == *" and "* ]]; then
+      chk__set warn "${newer} are newer than the app's CLI (${FL_VERSION}) and hand off to it, so every benchbar runs the older one until the app updates" "Check for Updates in BenchBar, or: ${FL_SELFUPDATE_CASK_CMD:-brew upgrade askysh/tap/benchbar-app}"
+    else
+      chk__set warn "${newer} is newer than the app's CLI (${FL_VERSION}) and hands off to it, so every benchbar runs the older one until the app updates" "Check for Updates in BenchBar, or: ${FL_SELFUPDATE_CASK_CMD:-brew upgrade askysh/tap/benchbar-app}"
+    fi
   else
-    chk__set ok "${found} hand off to the app's CLI, so every benchbar runs ${FL_VERSION}"
+    chk__set ok "${found} hand off to the app's CLI, so every benchbar runs ${FL_VERSION}${also}"
   fi
 }
 

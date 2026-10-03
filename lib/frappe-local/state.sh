@@ -23,6 +23,13 @@
 # short would pass for the state, so the folder stays where it is and the
 # new path is a link to it. Nothing is copied or deleted.
 #
+# BenchBar.app makes ~/.local/state/benchbar/bin/benchbar at launch, often
+# before the first CLI run: a new folder that holds nothing but that bin/
+# (and a .DS_Store) is no state, and the checkout's folder still moves in.
+# One first run at a time: a guard folder (mkdir, with a pid file, like the
+# lock) is taken before the checks; a run that finds it held waits for it,
+# and one left by a dead run is reclaimed.
+#
 # The folder was .frappe-local before 0.3.0. The first run after the
 # upgrade renames it (one atomic mv in the checkout), unless a run holds
 # its lock right now; until then the old folder is used as is.
@@ -37,62 +44,205 @@ fl_state_dir_in_v() {
   if [[ -d "$__new" || ! -d "$__old" ]]; then printf -v "$1" '%s' "$__new"; else printf -v "$1" '%s' "$__old"; fi
 }
 
+# fl_state_dir_shell_only DIR: true when DIR holds no state, only bin/ (the
+# link BenchBar.app makes to its CLI at launch, before the first CLI run)
+# and perhaps a .DS_Store. Globs, no process.
+fl_state_dir_shell_only() {
+  local __e
+  for __e in "$1"/* "$1"/.[!.]* "$1"/..?*; do
+    [[ -e "$__e" || -L "$__e" ]] || continue
+    case "${__e##*/}" in bin|.DS_Store) ;; *) return 1 ;; esac
+  done
+  return 0
+}
+
+# fl_state_guard_stale GUARD: true when the run that made GUARD is gone (the
+# pid inside is dead) or GUARD is older than 60 s (a pid number reused by
+# another process would otherwise hold it for good). One cat, one stat and
+# one date, and only when a guard exists.
+fl_state_guard_stale() {
+  local __pid __m="" __now=""
+  __pid="$(cat "${1}/pid" 2>/dev/null || true)"
+  if [[ -n "$__pid" ]] && ! kill -0 "$__pid" 2>/dev/null; then return 0; fi
+  __m="$( (stat -c %Y "$1" || stat -f %m "$1") 2>/dev/null)"
+  __now="$(date +%s 2>/dev/null || true)"
+  [[ -n "$__m" && -n "$__now" && $((__now - __m)) -gt 60 ]]
+}
+
+# fl_state_guard_drop GUARD: removes what a run leaves in its guard: the pid
+# file, the app's link in bin/ (a symlink only) and empty folders. Anything
+# else stays, and the folder with it, never deleted.
+fl_state_guard_drop() {
+  local __d
+  rm -f "${1}/pid" 2>/dev/null || true
+  if [[ -L "${1}/bin/benchbar" ]]; then rm -f "${1}/bin/benchbar" 2>/dev/null || true; fi
+  for __d in bin shell; do
+    if [[ -d "${1}/${__d}" ]]; then rmdir "${1}/${__d}" 2>/dev/null || true; fi
+  done
+  rmdir "$1" 2>/dev/null || true
+}
+
+# fl_state_guard_reclaim GUARD: a stale guard goes, claimed by a rename
+# first (mv is atomic: of two runs that both saw the dead pid, one gets
+# it). Returns 1 when another run claimed it.
+fl_state_guard_reclaim() {
+  mv "$1" "${1}.stale.$$" 2>/dev/null || return 1
+  fl_state_guard_drop "${1}.stale.$$"
+  return 0
+}
+
+# fl_state_guard_take GUARD: one first run at a time. The guard is a folder
+# (mkdir is atomic) holding the owner's pid, made before any check of the
+# move. A run that finds it held waits up to 5 s for the owner to finish; a
+# stale one (fl_state_guard_stale, or no pid written by the end of the
+# wait) is reclaimed. Returns 1 while a live run still holds it: the caller
+# then uses the state where it is.
+fl_state_guard_take() {
+  local __g="$1" __i __round
+  if mkdir "$__g" 2>/dev/null; then printf '%s\n' "$$" >"${__g}/pid" 2>/dev/null || true; return 0; fi
+  for __round in 1 2; do
+    for ((__i = 0; __i < 50; __i++)); do
+      [[ -d "$__g" ]] || break
+      ! fl_state_guard_stale "$__g" || break
+      sleep 0.1
+    done
+    [[ -d "$__g" ]] || break
+    if [[ -s "${__g}/pid" ]] && ! fl_state_guard_stale "$__g"; then return 1; fi
+    fl_state_guard_reclaim "$__g" && break
+    # another waiter reclaimed it first and holds it now: one more wait
+  done
+  mkdir "$__g" 2>/dev/null || return 1
+  printf '%s\n' "$$" >"${__g}/pid" 2>/dev/null || true
+  return 0
+}
+
 # fl_state_dir_user_v VAR: the state folder of a packaged CLI, after the
 # one time move of the installer checkout's folder. A few tests on every
 # run but the first, and no process: status runs this on every poll.
+#
+# BenchBar.app makes ~/.local/state/benchbar/bin/benchbar at launch, before
+# the first CLI run, so the new folder may exist with nothing but that
+# link in it. That is no state: the checkout's folder still moves. bin/
+# goes into that folder first (one mv), the emptied folder is removed
+# (rmdir, atomic), and the rename that puts the state in place brings
+# bin/benchbar back with it. A run cut short after any step leaves a
+# layout the next run finishes from: a bin/ already in the checkout's
+# folder is part of the state folder now, not a state of its own.
 fl_state_dir_user_v() {
-  local __base="${HOME%/}/.local/state" __new legacy __mh="${FL_MANAGED_HOME:-${HOME%/}/.local/share/benchbar}" __d1="" __d2=""
+  local __base="${HOME%/}/.local/state" __new legacy __mh="${FL_MANAGED_HOME:-${HOME%/}/.local/share/benchbar}" __d1="" __d2="" __guard __shell=0 __bin_to=""
   __new="${__base}/benchbar"
+  __guard="${__base}/.benchbar-migrating"
   printf -v "$1" '%s' "$__new"
   if [[ -e "$__new" || -L "$__new" ]]; then
-    # moved before, but the link is gone (a run stopped between the mv and
-    # the ln): an older CLI there would start empty, so it is made again
-    if [[ -d "$__mh" && -d "$__new" && ! -L "$__new" && ! -e "${__mh}/.benchbar" && ! -L "${__mh}/.benchbar" && ! -e "${__mh}/.frappe-local" ]]; then
-      ln -s "$__new" "${__mh}/.benchbar" 2>/dev/null || true
+    if [[ -d "$__new" && ! -L "$__new" ]] \
+      && { [[ -d "${__mh}/.benchbar" && ! -L "${__mh}/.benchbar" ]] || [[ -d "${__mh}/.frappe-local" && ! -L "${__mh}/.frappe-local" ]]; } \
+      && fl_state_dir_shell_only "$__new"; then
+      : # the app's bin/ came first: the state is still in the checkout, and moves below
+    else
+      # moved before, but the link is gone (a run stopped between the mv and
+      # the ln): an older CLI there would start empty, so it is made again
+      if [[ -d "$__mh" && -d "$__new" && ! -L "$__new" && ! -e "${__mh}/.benchbar" && ! -L "${__mh}/.benchbar" && ! -e "${__mh}/.frappe-local" ]]; then
+        ln -sn "$__new" "${__mh}/.benchbar" 2>/dev/null || true
+      fi
+      # a guard a run killed after the move left: swept, so no later run
+      # waits on it (one -d test here; the rest only when there is one)
+      if [[ -d "$__guard" ]] && fl_state_guard_stale "$__guard"; then fl_state_guard_reclaim "$__guard" || true; fi
+      return 0
     fi
-    return 0
   fi
   fl_state_dir_in_v legacy "$__mh"
   # nothing to move; a symlink there is a move made before
   [[ -d "$legacy" && ! -L "$legacy" ]] || return 0
   if [[ -d "${legacy}/lock" ]]; then printf -v "$1" '%s' "$legacy"; return 0; fi
   mkdir -p "$__base" 2>/dev/null || true
-  # checked again after that process: another first run may have moved it
-  if [[ ! -d "$legacy" || -L "$legacy" || -e "$__new" || -L "$__new" ]]; then
-    [[ -d "$__new" ]] || printf -v "$1" '%s' "$legacy"
+  if ! fl_state_guard_take "$__guard"; then
+    # another first run still holds the guard after the wait: the state as
+    # it is now, the old folder unless the new one holds state already
+    if [[ -d "$legacy" && ! -L "$legacy" ]] && { [[ ! -d "$__new" ]] || fl_state_dir_shell_only "$__new"; }; then printf -v "$1" '%s' "$legacy"; fi
     return 0
+  fi
+  # checked again, holding the guard: another first run may have moved it
+  # while this one waited for the guard or made the base folder
+  if [[ ! -d "$legacy" || -L "$legacy" ]]; then
+    [[ -d "$__new" ]] || printf -v "$1" '%s' "$legacy"
+    fl_state_guard_drop "$__guard"
+    return 0
+  fi
+  # another volume? One stat of both, before anything moves.
+  { read -r __d1; read -r __d2; } < <( (stat -c %d "$__base" "$__mh" || stat -f %d "$__base" "$__mh") 2>/dev/null)
+  if [[ -e "$__new" || -L "$__new" ]]; then
+    if [[ -d "$__new" && ! -L "$__new" ]] && fl_state_dir_shell_only "$__new"; then
+      # the app's bin/ goes into the checkout's folder first, so the rename
+      # that puts that folder in place brings bin/benchbar back with it (a
+      # run cut short after this step leaves a layout the next run finishes
+      # from). When a run cut short left one there already, this one waits
+      # in the guard instead.
+      if [[ -d "${__new}/bin" ]]; then
+        if [[ ! -e "${legacy}/bin" && ! -L "${legacy}/bin" ]]; then __bin_to="${legacy}/bin"; else __bin_to="${__guard}/bin"; fi
+        if ! mv "${__new}/bin" "$__bin_to" 2>/dev/null; then fl_state_guard_drop "$__guard"; return 0; fi
+      fi
+      # the emptied folder goes (an empty folder and a Finder file, never
+      # state), so the rename is one step. When something appeared in it in
+      # between, bin/ goes back and the next run tries again.
+      rm -f "${__new}/.DS_Store" 2>/dev/null || true
+      if ! rmdir "$__new" 2>/dev/null; then
+        [[ -z "$__bin_to" ]] || mv "$__bin_to" "${__new}/bin" 2>/dev/null || true
+        fl_state_guard_drop "$__guard"
+        return 0
+      fi
+      __shell=1
+    else
+      # a state folder of its own: never merged into, the old one stays
+      fl_state_guard_drop "$__guard"
+      return 0
+    fi
   fi
   # another volume: mv would copy, and a copy cut short would pass for the
   # state. The folder stays, and the new path leads to it.
-  { read -r __d1; read -r __d2; } < <( (stat -c %d "$__base" "$__mh" || stat -f %d "$__base" "$__mh") 2>/dev/null)
   if [[ -z "$__d1" || "$__d1" != "$__d2" ]]; then
     ln -s "$legacy" "$__new" 2>/dev/null || true
     [[ -L "$__new" ]] || printf -v "$1" '%s' "$legacy"
-    return 0
-  fi
-  if mv "$legacy" "$__new" 2>/dev/null; then
-    # a second first run moved the first one's link into the new folder
-    # (mv puts it inside an existing folder): it goes back
+  elif mv "$legacy" "$__new" 2>/dev/null; then
     if [[ -L "${__new}/${legacy##*/}" ]]; then
+      # a second first run (an older CLI, which knows no guard) moved and
+      # linked in between, so this mv put its link inside the new folder: it
+      # goes back
       mv "${__new}/${legacy##*/}" "$legacy" 2>/dev/null || rm -f "${__new:?}/${legacy##*/}"
-      return 0
-    fi
-    ln -s "$__new" "$legacy" 2>/dev/null || true
-    if [[ ! -L "$legacy" ]]; then
-      if [[ -d "$legacy" ]]; then
-        # an older CLI made the folder again in between, and ln put the link
-        # inside it: that link goes, the folder stays (doctor's Second CLI
-        # names it), and this run uses the moved state
-        if [[ -L "${legacy}/${__new##*/}" ]]; then rm -f "${legacy:?}/${__new##*/}"; fi
-      elif mv "$__new" "$legacy" 2>/dev/null; then
-        # without the link an older CLI would start empty: the move is undone
-        printf -v "$1" '%s' "$legacy"
+    elif [[ -d "${__new}/${legacy##*/}" ]]; then
+      # the new folder came back in between (the app made bin/ again), so
+      # this mv put the state inside it: back where it was
+      mv "${__new}/${legacy##*/}" "$legacy" 2>/dev/null && printf -v "$1" '%s' "$legacy"
+    else
+      # -n: never through a link already at the old path (a waiting run's
+      # fast path made it in between), which would put a link to the state
+      # folder inside itself; one an older CLI put there goes
+      ln -sn "$__new" "$legacy" 2>/dev/null || true
+      if [[ -L "${__new}/${__new##*/}" ]]; then rm -f "${__new:?}/${__new##*/}"; fi
+      if [[ ! -L "$legacy" ]]; then
+        if [[ -d "$legacy" ]]; then
+          # an older CLI made the folder again in between, and ln put the link
+          # inside it: that link goes, the folder stays (doctor's Second CLI
+          # names it), and this run uses the moved state
+          if [[ -L "${legacy}/${__new##*/}" ]]; then rm -f "${legacy:?}/${__new##*/}"; fi
+        elif mv "$__new" "$legacy" 2>/dev/null; then
+          # without the link an older CLI would start empty: the move is undone
+          printf -v "$1" '%s' "$legacy"
+        fi
       fi
     fi
   elif [[ ! -d "$__new" ]]; then
     # not moved (when another run just moved it, the new folder is there)
     printf -v "$1" '%s' "$legacy"
   fi
+  if [[ "$__shell" == "1" && ! -e "$__new" && ! -L "$__new" ]]; then
+    # nothing took its place (the move was undone): the app's folder comes
+    # back, bin/ in it, so the app's link works
+    if mkdir "$__new" 2>/dev/null; then
+      if [[ -d "${__guard}/bin" ]]; then mv "${__guard}/bin" "${__new}/bin" 2>/dev/null || true
+      elif [[ -d "$legacy" && ! -L "$legacy" && -d "${legacy}/bin" ]]; then mv "${legacy}/bin" "${__new}/bin" 2>/dev/null || true; fi
+    fi
+  fi
+  fl_state_guard_drop "$__guard"
   return 0
 }
 

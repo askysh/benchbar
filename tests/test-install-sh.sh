@@ -296,6 +296,26 @@ run_install --uninstall --yes
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "nothing to remove (unchanged)"
 
+# ---- the other volume layout: the state stayed in the checkout and
+# ~/.local/state/benchbar is a link to it. Removing the checkout would take
+# the state with it, so the checkout is kept, with the reason
+rm -rf "$STATE_DIR"
+mkdir -p "$CLI_HOME/.benchbar/backups"; printf 'BENCH_DIR=%s\n' "$BENCH" >"$CLI_HOME/.benchbar/state.env"
+cp "$ROOT/benchbar" "$CLI_HOME/benchbar"
+ln -s "$CLI_HOME/.benchbar" "$STATE_DIR"
+run_install --uninstall --dry-run --yes
+assert_eq "0" "$CODE" "$OUT"
+assert_not_contains "$OUT" "rm -rf ${CLI_HOME}"
+assert_contains "$OUT" "${STATE_DIR} leads to ${CLI_HOME}/.benchbar"
+run_install --uninstall --yes
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "${STATE_DIR} leads to ${CLI_HOME}/.benchbar, which holds the state"
+assert_contains "$OUT" "kept ${CLI_HOME}"
+assert_file "$CLI_HOME/.benchbar/state.env"
+assert_eq "BENCH_DIR=$BENCH" "$(cat "$CLI_HOME/.benchbar/state.env")"
+[[ -L "$STATE_DIR" ]] || fail "the link to the state must stay"
+rm "$STATE_DIR"; rm -rf "$CLI_HOME"
+
 # ---- Homebrew has the CLI (the formula) and the app (the cask): this
 # installer leaves both halves to brew, says how to update them, writes
 # nothing and exits 0

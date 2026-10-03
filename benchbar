@@ -18,14 +18,28 @@ FL_VERSION="0.7.2"
 # (for example ~/.local/bin/frappe-mac).
 # dirname by parameter expansion: every status poll of the app starts here
 fl_resolve_self_dir() { case "$1" in */*) printf '%s' "${1%/*}" ;; *) printf '.' ;; esac; }
-fl_resolve_self() {
+fl_resolve_self_once() {
   local src="${BASH_SOURCE[0]}" dir
   while [[ -L "$src" ]]; do
-    dir="$(cd "$(fl_resolve_self_dir "$src")/" && pwd)"
-    src="$(readlink "$src")"
+    dir="$(cd "$(fl_resolve_self_dir "$src")/" 2>/dev/null && pwd)" || return 1
+    src="$(readlink "$src" 2>/dev/null)" || return 1
     [[ "$src" == /* ]] || src="${dir}/${src}"
   done
-  cd "$(fl_resolve_self_dir "$src")/" && pwd
+  dir="$(cd "$(fl_resolve_self_dir "$src")/" 2>/dev/null && pwd)" || return 1
+  # the folder of this CLI's files, not one a link passed through
+  [[ -f "${dir}/lib/frappe-local/install-kind.sh" ]] || return 1
+  printf '%s' "$dir"
+}
+fl_resolve_self() {
+  local i=0
+  # the app's link in ~/.local/state/benchbar/bin is away for a moment while
+  # the first run after an upgrade moves the state folder into place
+  # (state.sh): a start in that moment tries again, up to 2 s. A normal
+  # start resolves at the first try and starts no process for it.
+  until fl_resolve_self_once; do
+    if [[ "$i" -ge 20 ]]; then cd "$(fl_resolve_self_dir "${BASH_SOURCE[0]}")/" && pwd; return; fi
+    sleep 0.1; i=$((i + 1))
+  done
 }
 SCRIPT_DIR="$(fl_resolve_self)"
 # FL_INSTALL_KIND and FL_SELF, the stable path generated files record
@@ -676,7 +690,7 @@ cmd_repair() {
 # benchbar where [--json]: how this CLI was installed and where its things
 # are. Read only: no bench, no lock, no log.
 cmd_where() {
-  local info app_version="" app_path="" tab=$'\t' how
+  local info app_version="" app_path="" tab=$'\t' how via_version="" via_script="" state_real
   [[ "${#ARGS[@]}" == "0" ]] || fl_die "Unexpected argument for where: ${ARGS[0]}" "Usage: benchbar where [--json]"
   if [[ "$FL_INSTALL_KIND" == app ]]; then
     # the app this CLI is part of, not the first one found
@@ -685,11 +699,18 @@ cmd_where() {
     info="$(fl_app_bundle_info)"
     if [[ -n "$info" ]]; then app_version="${info%%"$tab"*}"; app_path="${info#*"$tab"}"; fi
   fi
+  # the version of the copy that handed off: an older app's CLI runs in its place
+  [[ -z "$FL_HANDOFF_FROM" ]] || via_script="$(fl_cli_standalone_script "$FL_HANDOFF_FROM")"
+  [[ -z "$via_script" || ! -f "$via_script" ]] || via_version="$(fl_cli_version_at "$via_script")"
+  # the folder behind the state path: the same, unless ~/.local/state/benchbar
+  # is a link to the installer checkout's folder on another volume (state.sh)
+  state_real="$FL_STATE_DIR"
+  if [[ -d "$FL_STATE_DIR" ]]; then state_real="$(cd "$FL_STATE_DIR" 2>/dev/null && pwd -P)" || state_real="$FL_STATE_DIR"; fi
   if [[ "$OPT_JSON" == "1" ]]; then
-    printf '{"schema_version":%d,"cli_version":%s,"install":%s,"self":%s,"state_dir":%s,"app_version":%s,"app_path":%s,"handoff_from":%s}\n' \
+    printf '{"schema_version":%d,"cli_version":%s,"install":%s,"self":%s,"state_dir":%s,"state_dir_real":%s,"app_version":%s,"app_path":%s,"handoff_from":%s,"handoff_from_version":%s}\n' \
       "$FL_SCHEMA_VERSION" "$(fl_json_str "$FL_VERSION")" "$(fl_json_str "$FL_INSTALL_KIND")" "$(fl_json_str "$FL_SELF")" \
-      "$(fl_json_str "$FL_STATE_DIR")" "$(fl_su_json_or_null "$app_version")" "$(fl_su_json_or_null "$app_path")" \
-      "$(fl_su_json_or_null "$FL_HANDOFF_FROM")"
+      "$(fl_json_str "$FL_STATE_DIR")" "$(fl_json_str "$state_real")" "$(fl_su_json_or_null "$app_version")" "$(fl_su_json_or_null "$app_path")" \
+      "$(fl_su_json_or_null "$FL_HANDOFF_FROM")" "$(fl_su_json_or_null "$via_version")"
     return 0
   fi
   case "$FL_INSTALL_KIND" in
@@ -702,8 +723,8 @@ cmd_where() {
   printf 'benchbar %s, installed %s\n' "$FL_VERSION" "$how"
   printf '  install  %s\n' "$FL_INSTALL_KIND"
   printf '  self     %s\n' "$FL_SELF"
-  [[ -z "$FL_HANDOFF_FROM" ]] || printf '  via      %s, which hands off to this CLI\n' "$FL_HANDOFF_FROM"
-  printf '  state    %s\n' "$FL_STATE_DIR"
+  [[ -z "$FL_HANDOFF_FROM" ]] || printf '  via      %s%s, which hands off to this CLI\n' "$FL_HANDOFF_FROM" "${via_version:+ (${via_version})}"
+  if [[ "$state_real" != "$FL_STATE_DIR" ]]; then printf '  state    %s -> %s\n' "$FL_STATE_DIR" "$state_real"; else printf '  state    %s\n' "$FL_STATE_DIR"; fi
   if [[ -n "$app_path" ]]; then printf '  app      %s (%s)\n' "$app_path" "$app_version"; else printf '  app      not installed\n'; fi
 }
 
