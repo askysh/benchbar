@@ -57,12 +57,46 @@ fl_mariadb_client() {
   printf '%s' "$bin"
 }
 
-# true when root@localhost accepts a login with no password (fresh Homebrew install)
+# true when root@localhost accepts a login with no password (an older
+# fresh install, or a server someone opened up)
 fl_mariadb_root_open() {
   local bin
   bin="$(fl_mariadb_client)"
   [[ -n "$bin" ]] || return 1
   MYSQL_PWD="" "$bin" -u root --connect-timeout=2 -e "SELECT 1" >/dev/null 2>&1
+}
+
+# The account that administers a server whose root has no password yet.
+# A fresh Homebrew MariaDB (10.4 and newer, mysql_install_db without
+# --auth-root-authentication-method) gives root@localhost unix_socket
+# authentication OR a native password of 'invalid', so the plain client
+# login as root is refused (ERROR 1698), and makes a
+# second account named after the macOS user that logs in over the socket
+# with the same privileges. That account is what secures root here; the
+# alternative, sudo for a root socket login, is more privilege than a
+# database setup needs, so a server that accepts neither is reported as
+# "root already has a password" and the run asks for it.
+FL_MARIADB_ADMIN_USER=""
+fl_mariadb_admin_open() {
+  local bin me
+  FL_MARIADB_ADMIN_USER=""
+  bin="$(fl_mariadb_client)"
+  [[ -n "$bin" ]] || return 1
+  if fl_mariadb_root_open; then FL_MARIADB_ADMIN_USER="root"; return 0; fi
+  # the macOS account name (FL_OS_USER: the tests, which may run as root)
+  me="${FL_OS_USER:-${USER:-$(id -un 2>/dev/null || true)}}"
+  [[ -n "$me" && "$me" != "root" ]] || return 1
+  MYSQL_PWD="" "$bin" -u "$me" --connect-timeout=2 -e "SELECT 1" >/dev/null 2>&1 || return 1
+  # the socket account outlives the setup, so it alone proves nothing about
+  # root: only the fresh install's root, whose native password is the
+  # literal 'invalid', is ours to set. A query that fails (an account that
+  # may not read mysql.user), an empty hash (unix_socket only, pam: a method
+  # someone chose) or a real hash all mean "not ours": root is then left
+  # alone and asked for, as before.
+  local hash
+  hash="$(MYSQL_PWD="" "$bin" -u "$me" --connect-timeout=2 -sNe "SELECT authentication_string FROM mysql.user WHERE User='root' AND Host='localhost'" 2>/dev/null)" || return 1
+  [[ "$(printf '%s\n' "$hash" | head -n1)" == "invalid" ]] || return 1
+  FL_MARIADB_ADMIN_USER="$me"
 }
 
 # fl_mariadb_root_verify PASSWORD
@@ -94,15 +128,15 @@ fl_sql_escape() { printf '%s' "$1" | sed "s/\\\\/\\\\\\\\/g; s/'/\\\\'/g"; }
 # password (native auth, as Frappe needs), drops anonymous users and the
 # test database, and limits root to this Mac.
 fl_mariadb_secure() {
-  local pw="$1" bin esc
+  local pw="$1" bin esc admin="${FL_MARIADB_ADMIN_USER:-root}"
   bin="$(fl_mariadb_client)"
   esc="$(fl_sql_escape "$pw")"
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
-    fl_info "dry-run: would set the root password, remove anonymous users and the test database, and block remote root"
+    fl_info "dry-run: would set the root password, remove anonymous users and the test database, and block remote root (as ${admin})"
     return 0
   fi
-  fl_log "mariadb: securing root@localhost (password not logged)"
-  MYSQL_PWD="" "$bin" -u root <<SQL
+  fl_log "mariadb: securing root@localhost as ${admin} (password not logged)"
+  MYSQL_PWD="" "$bin" -u "$admin" <<SQL
 DELETE FROM mysql.global_priv WHERE User='';
 DELETE FROM mysql.global_priv WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
 DROP DATABASE IF EXISTS test;
@@ -122,13 +156,17 @@ fl_mariadb_root_setup() {
   local pw source=""
   FL_MARIADB_ROOT_PW=""
   FL_MARIADB_ROOT_PW_SOURCE=""
-  if fl_mariadb_root_open; then
+  if fl_mariadb_admin_open; then
     if [[ -n "${MARIADB_ROOT_PASSWORD:-}" ]]; then
       pw="$MARIADB_ROOT_PASSWORD"; source="environment"
     else
       pw="$(fl_password_generate)"; source="generated"
     fi
-    fl_warn "MariaDB root@localhost has no password yet; setting one (${source})"
+    if [[ "$FL_MARIADB_ADMIN_USER" == "root" ]]; then
+      fl_warn "MariaDB root@localhost has no password yet; setting one (${source})"
+    else
+      fl_warn "MariaDB root@localhost uses socket login only (fresh Homebrew install); setting a password (${source}) through the ${FL_MARIADB_ADMIN_USER} socket account"
+    fi
     # the Keychain write comes first: a generated password that exists only
     # in this process must never be applied to the server
     if ! fl_keychain_set "$pw"; then
@@ -198,12 +236,27 @@ fl_mariadb_root_setup() {
 fl_mariadb_root_password_resolve() {
   local pw
   FL_MARIADB_ROOT_PW=""
+  # a password can only be judged against a running server: without one,
+  # every source would look wrong and the run would blame the password
+  if [[ "${FL_DRY_RUN:-0}" != "1" ]] && ! fl_port_listening 3306 && ! fl_process_running mariadbd; then
+    fl_die "MariaDB is not running, so the root password cannot be verified." "Run: brew services start ${FL_MARIADB_FORMULA:-mariadb}, then this command again"
+  fi
+  # the environment first, verified as fl_mariadb_root_setup does: a stale
+  # MARIADB_ROOT_PASSWORD (from an old shell) must not hide a Keychain
+  # password that works, nor fail the run later with "password is wrong"
   if [[ -n "${MARIADB_ROOT_PASSWORD:-}" ]]; then
-    FL_MARIADB_ROOT_PW="$MARIADB_ROOT_PASSWORD"; FL_MARIADB_ROOT_PW_SOURCE="environment"
-    fl_info "using env-provided MARIADB_ROOT_PASSWORD (hidden)"
-    # a password that works is worth remembering; a wrong one fails later with a clear message
-    if [[ "${FL_DRY_RUN:-0}" != "1" ]] && fl_mariadb_root_verify "$FL_MARIADB_ROOT_PW"; then fl_keychain_set "$FL_MARIADB_ROOT_PW" || true; fi
-    return 0
+    if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
+      FL_MARIADB_ROOT_PW="$MARIADB_ROOT_PASSWORD"; FL_MARIADB_ROOT_PW_SOURCE="environment"
+      fl_info "using env-provided MARIADB_ROOT_PASSWORD (hidden)"
+      return 0
+    fi
+    if fl_mariadb_root_verify "$MARIADB_ROOT_PASSWORD"; then
+      FL_MARIADB_ROOT_PW="$MARIADB_ROOT_PASSWORD"; FL_MARIADB_ROOT_PW_SOURCE="environment"
+      fl_info "using env-provided MARIADB_ROOT_PASSWORD (hidden, verified)"
+      fl_keychain_set "$FL_MARIADB_ROOT_PW" || true
+      return 0
+    fi
+    fl_warn "MARIADB_ROOT_PASSWORD from the environment does not work; trying the Keychain"
   fi
   pw="$(fl_keychain_get || true)"
   if [[ -n "$pw" ]]; then
@@ -220,7 +273,7 @@ fl_mariadb_root_password_resolve() {
     return 0
   fi
   if [[ "${FL_ASSUME_YES:-0}" == "1" || ! -t 0 ]]; then
-    fl_fail "MariaDB root password unknown: not in MARIADB_ROOT_PASSWORD and not in the Keychain"
+    fl_fail "MariaDB root password unknown: no working password in MARIADB_ROOT_PASSWORD or the Keychain"
     return 1
   fi
   fl_ask_secret pw "MariaDB root password"

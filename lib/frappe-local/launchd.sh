@@ -143,10 +143,24 @@ fl_agent_bootstrap() {
     fl_log "launchctl bootstrap $(fl_launchd_domain) ${plist} (try ${try})"
     launchctl bootstrap "$(fl_launchd_domain)" "$plist" 2>/dev/null || launchctl load -w "$plist" 2>/dev/null || true
     launchctl print "$target" >/dev/null 2>&1 && return 0
+    # a label launchd has on its disabled list (launchctl disable, or an old
+    # "launchctl remove" of a RunAtLoad job) refuses every bootstrap with 119
+    # until it is enabled again; nothing else about the job changes
+    if fl_agent_disabled "$target"; then
+      fl_info "launchd has $(basename "$plist" .plist) disabled; enabling it"
+      launchctl enable "$target" 2>/dev/null || true
+    fi
     sleep 1
   done
   fl_log "launchd does not list ${target} after 3 tries"
   return 1
+}
+
+# fl_agent_disabled TARGET: the label is on launchd's disabled list for the
+# domain ("launchctl print-disabled gui/UID" prints '"label" => disabled').
+fl_agent_disabled() {
+  local label="${1##*/}"
+  launchctl print-disabled "$(fl_launchd_domain)" 2>/dev/null | grep -q -F "\"${label}\" => disabled"
 }
 
 # launchctl bootout returns before a running job has stopped (the runner

@@ -44,6 +44,8 @@ export FL_EFFECTIVE_UID=501
 # the system part of the bench's (launchd) PATH: no /usr/local/bin, so a node
 # or yarn of the machine running the suite never stands in for the mocks'
 export FL_LAUNCHD_PATH_SYSTEM=/usr/bin:/bin:/usr/sbin:/sbin
+# the macOS account name the CLI uses (a MariaDB socket account is named after it)
+export FL_OS_USER=tester
 export SHELL=/bin/zsh
 unset BENCH_DIR SITE_NAME FL_DRY_RUN FL_ASSUME_YES 2>/dev/null || true
 

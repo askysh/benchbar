@@ -22,14 +22,24 @@ case "$cmd" in
     fi
     [[ -f "$f" ]] || { echo "Could not find service" >&2; exit 113; }
     printf '%s = {\n' "$1"; sed 's/^/\t/' "$f"; printf '}\n' ;;
+  print-disabled)
+    # one line per disabled label, like the real output
+    for f in "$agents"/*.disabled; do [[ -f "$f" ]] || continue; printf '\t"%s" => disabled\n' "$(basename "$f" .disabled)"; done
+    exit 0 ;;
+  enable)
+    rm -f "$agents/$(label_of_target "$1").disabled"; exit 0 ;;
+  disable)
+    : >"$agents/$(label_of_target "$1").disabled"; exit 0 ;;
   bootstrap)
     plist="$2"; label="$(basename "$plist" .plist)"
     [[ -f "$plist" ]] || exit 5
+    [[ -f "$agents/$label.disabled" ]] && { echo "Bootstrap failed: 119: Service is disabled" >&2; exit 119; }
     lingering "$label" && { echo "Bootstrap failed: 5: Input/output error" >&2; exit 5; }
     [[ -f "$agents/$label" ]] && { echo "already bootstrapped" >&2; exit 37; }
     printf 'state = not running\nlast exit code = 0\n' >"$agents/$label" ;;
   load)
     plist="${*: -1}"; label="$(basename "$plist" .plist)"
+    [[ -f "$agents/$label.disabled" ]] && { echo "Load failed: 119: Service is disabled" >&2; exit 0; }
     lingering "$label" && { echo "Load failed: 5: Input/output error" >&2; exit 0; }
     printf 'state = not running\nlast exit code = 0\n' >"$agents/$label" ;;
   bootout|remove)

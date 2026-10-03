@@ -139,6 +139,18 @@ fl_wkhtmltopdf_shadow_warn() {
 #   0  patched build present (already, or installed now)
 #   1  a step failed (message printed)
 #   2  skipped on purpose: Rosetta or the package declined, or no sudo
+# fl_wkhtmltopdf_will_install: true when fl_wkhtmltopdf_ensure would reach
+# the sudo step in this run: the patched build is missing, Rosetta is there
+# (or can be offered: --yes or a terminal), and the download can be agreed
+# to (--yes or a terminal). Without a terminal and without --yes every
+# question is "no", so nothing is installed and no sudo is needed for it.
+fl_wkhtmltopdf_will_install() {
+  [[ "$(fl_wkhtmltopdf_state)" != "patched" ]] || return 1
+  # the download, and Rosetta before it when missing, are questions: with
+  # --yes or a terminal they can be agreed to, otherwise both are "no"
+  [[ "${FL_ASSUME_YES:-0}" == "1" || -t 0 ]]
+}
+
 fl_wkhtmltopdf_ensure() {
   local state
   state="$(fl_wkhtmltopdf_state)"

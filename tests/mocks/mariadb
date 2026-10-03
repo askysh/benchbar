@@ -4,11 +4,30 @@
 # like a fresh Homebrew install). Logins use MYSQL_PWD, like the CLI.
 # SQL on stdin is recorded in $MOCK_STATE/mariadb_sql.log; an ALTER USER
 # statement sets the password.
+# MOCK_MARIADB_ROOT_SOCKET_ONLY=1: a fresh Homebrew MariaDB 10.4+, where root
+# has unix_socket authentication (a TCP login as root is refused with 1698)
+# and the macOS user ($USER) has a socket account with full privileges; once
+# ALTER USER gives root a native password, root logs in with it as usual.
 printf 'mariadb %s\n' "$*" >>"${MOCK_LOG:-/dev/null}"
 state="${MOCK_STATE:-/nonexistent}"
 pwfile="$state/mariadb_root_pw"
+user="root"; prev=""
+for a in "$@"; do [[ "$prev" == "-u" ]] && user="$a"; prev="$a"; done
 check_login() {
   local want=""
+  if [[ "$user" != "root" ]]; then
+    # only the OS user's socket account exists, only in socket mode, only without a password
+    [[ "${MOCK_MARIADB_ROOT_SOCKET_ONLY:-0}" == "1" && "$user" == "${FL_OS_USER:-${USER:-}}" && -z "${MYSQL_PWD:-}" ]] || return 1
+    # MOCK_MARIADB_USER_NO_GRANTS=1: that account may run SELECT 1 and nothing else
+    if [[ "${MOCK_MARIADB_USER_NO_GRANTS:-0}" == "1" ]]; then
+      case "$*" in *"SELECT 1"*) return 0 ;; *) echo "ERROR 1142 (42000): SELECT command denied to user '${user}'@'localhost'" >&2; return 1 ;; esac
+    fi
+    return 0
+  fi
+  if [[ ! -f "$pwfile" && "${MOCK_MARIADB_ROOT_SOCKET_ONLY:-0}" == "1" ]]; then
+    echo "ERROR 1698 (28000): Access denied for user 'root'@'localhost'" >&2
+    return 1
+  fi
   [[ -f "$pwfile" ]] && want="$(cat "$pwfile")"
   [[ "${MYSQL_PWD:-}" == "$want" ]]
 }
@@ -17,14 +36,16 @@ case "$*" in
 esac
 case "$*" in
   *"-e "*|*"-sNe "*)
-    check_login || { echo "ERROR 1045 (28000): Access denied for user 'root'@'localhost' (using password: $([[ -n "${MYSQL_PWD:-}" ]] && echo YES || echo NO))" >&2; exit 1; }
+    check_login || { echo "ERROR 1045 (28000): Access denied for user '${user}'@'localhost' (using password: $([[ -n "${MYSQL_PWD:-}" ]] && echo YES || echo NO))" >&2; exit 1; }
     case "$*" in
       *"character_set_server"*) printf 'character_set_server\tutf8mb4\n' ;;
+      # root's native hash: 'invalid' until ALTER USER gave it a password
+      *"SELECT authentication_string FROM mysql.user"*) if [[ -f "$pwfile" ]]; then printf '*%s\n' "$(printf '%s' "$(cat "$pwfile")" | shasum -a 1 | tr 'a-f' 'A-F' | cut -c1-40)"; else printf 'invalid\n'; fi ;;
     esac
     exit 0 ;;
   *)
     # SQL script on stdin
-    check_login || { echo "ERROR 1045 (28000): Access denied for user 'root'@'localhost'" >&2; exit 1; }
+    check_login || { echo "ERROR 1045 (28000): Access denied for user '${user}'@'localhost'" >&2; exit 1; }
     sql="$(cat)"
     printf '%s\n' "$sql" >>"$state/mariadb_sql.log"
     newpw="$(printf '%s\n' "$sql" | sed -n "s/.*ALTER USER 'root'@'localhost' IDENTIFIED VIA mysql_native_password USING PASSWORD('\([^']*\)').*/\1/p" | head -n1)"

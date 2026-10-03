@@ -49,7 +49,9 @@ or run without `--yes` and let them type it. `MARIADB_ROOT_PASSWORD` is
 optional: a fresh MariaDB gets a generated password, an existing password
 is read from the Keychain (`benchbar mariadb-password` prints it). Only
 when MariaDB already has a password that neither the environment nor the
-Keychain knows does the run stop with exit code 2 and say what to pass.
+Keychain knows does the run stop with exit code 2 and say what to pass. A
+fresh Homebrew MariaDB, whose root logs in over the socket only, is
+secured through the macOS user's socket account and needs no password.
 The patched wkhtmltopdf package and the `/etc/hosts` line need `sudo`;
 `install` asks for it once up front and says why. Re-running is always
 safe.
@@ -151,7 +153,11 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
   `.benchbar/backups/<timestamp>/`. For Homebrew and the one line
   installer, `.benchbar` here means `~/.local/state/benchbar`.
 - Exit codes: 0 success, 1 failure or a failing check, 2 the MariaDB root
-  password is unknown (phase 1 only; pass `MARIADB_ROOT_PASSWORD`).
+  password is unknown (install phase 00 or 01, `site add`, `site drop`,
+  `pull`; pass `MARIADB_ROOT_PASSWORD`). Only an explicit refusal exits 2:
+  a command that happens to fail with code 2 is reported as 1. An install
+  cancelled at its plan exits 1 and says `Cancelled. No bench or site was
+  created`; the system dependencies of step 1 stay in place.
 
 ## Daily operations for the user
 

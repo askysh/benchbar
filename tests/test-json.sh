@@ -149,6 +149,8 @@ assert set(live["checks"][0]) == set(fixture["checks"][0])
 # ---- site backup, backups and drop: the same keys as the app's fixtures
 mkdir -p "$BENCH/sites/bbtest.localhost"; printf '{}\n' >"$BENCH/sites/bbtest.localhost/site_config.json"
 printf '# >>> benchbar >>>\n127.0.0.1 bbtest.localhost\n# <<< benchbar <<<\n' >>"$FL_HOSTS_FILE"
+# the server has that password: an environment password is verified before it is used
+printf 'rootpw' >"$MOCK_STATE/mariadb_root_pw"
 export MARIADB_ROOT_PASSWORD=rootpw
 # same_keys FIXTURE: stdout of the last call against the fixture, one level into "backup" and the lists
 same_keys() {
