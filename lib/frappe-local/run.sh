@@ -82,7 +82,7 @@ fl_on_signal() {
 fl_run_phase_script() {
   local script="$1" code=0
   shift
-  FL_LAST_COMMAND="${script} $*"
+  fl_redact_url_v FL_LAST_COMMAND "${script} $*"
   fl_log "phase: ${script} $*"
   "$script" "$@" <&0 &
   FL_RUN_CHILD_PID="$!"
@@ -102,10 +102,13 @@ fl_require_cmd() {
   command -v "$cmd" >/dev/null 2>&1 || fl_die "Required command '$cmd' not found." "${hint:-Install it and re-run.}"
 }
 
+# FL_LAST_COMMAND is what fl_on_error and the failure notes print: it is set
+# with the credentials of any URL in the argv replaced (fl_redact_url_v), as
+# are the "run:" lines fl_log writes.
 fl_run() {
-  FL_LAST_COMMAND="$*"
+  fl_redact_url_v FL_LAST_COMMAND "$*"
   if [[ "$FL_DRY_RUN" == "1" ]]; then
-    fl_info "dry-run: $*"
+    fl_info "dry-run: ${FL_LAST_COMMAND}"
     return 0
   fi
   fl_log "run: $*"
@@ -118,7 +121,7 @@ fl_run() {
 fl_run_long() {
   local label="$1" log pid code=0 start
   shift
-  FL_LAST_COMMAND="$*"
+  fl_redact_url_v FL_LAST_COMMAND "$*"
   FL_LAST_COMMAND="${FL_LAST_COMMAND#fl_in_bench }"
   if [[ "$FL_DRY_RUN" == "1" ]]; then
     fl_info "dry-run: ${FL_LAST_COMMAND}"
@@ -151,7 +154,7 @@ fl_run_long() {
   if [[ "$code" -ne 0 ]]; then
     fl_fail "${label} failed with exit code ${code} after $(fl_fmt_secs $((SECONDS - start)))"
     fl_note "last 40 lines:"
-    tail -n 40 "$log" | sed 's/^/     /'
+    fl_tail_indented "$log"
     if [[ -n "$FL_LOG_FILE" ]]; then fl_note "full log: ${FL_LOG_FILE}"; fi
     fl_note "command: ${FL_LAST_COMMAND}"
   else
@@ -164,9 +167,9 @@ fl_run_long() {
 fl_run_with_timeout() {
   local timeout_seconds="$1" label="$2" log pid start elapsed code state
   shift 2
-  FL_LAST_COMMAND="$*"
+  fl_redact_url_v FL_LAST_COMMAND "$*"
   if [[ "$FL_DRY_RUN" == "1" ]]; then
-    fl_info "dry-run: $*"
+    fl_info "dry-run: ${FL_LAST_COMMAND}"
     return 0
   fi
   if [[ "$timeout_seconds" -le 0 ]]; then
@@ -201,7 +204,7 @@ fl_run_with_timeout() {
       fl_fail "${label} timed out after ${timeout_seconds}s."
       if [[ -s "$log" ]]; then
         fl_info "Last output:"
-        tail -n 40 "$log" | sed 's/^/     /' || true
+        fl_tail_indented "$log" || true
       fi
       fl_log_file_append "$log"
       rm -f "$log"
@@ -217,7 +220,7 @@ fl_run_with_timeout() {
   fl_log_file_append "$log"
   if [[ "$code" -ne 0 && -s "$log" ]]; then
     fl_fail "${label} failed with exit code ${code}"
-    tail -n 40 "$log" | sed 's/^/     /'
+    fl_tail_indented "$log"
     if [[ -n "$FL_LOG_FILE" ]]; then fl_note "full log: ${FL_LOG_FILE}"; fi
   elif [[ "$code" -eq 0 ]]; then
     fl_ok "${label} ($(fl_fmt_secs $((SECONDS - start))))"
@@ -227,7 +230,7 @@ fl_run_with_timeout() {
 }
 
 fl_capture() {
-  FL_LAST_COMMAND="$*"
+  fl_redact_url_v FL_LAST_COMMAND "$*"
   "$@"
 }
 
@@ -237,7 +240,7 @@ fl_retry() {
   while true; do
     "$@" && return 0
     [[ "$i" -ge "$attempts" ]] && return 1
-    fl_warn "command failed; retry ${i}/${attempts}: $*"
+    fl_warn "command failed; retry ${i}/${attempts}: $(fl_redact_url "$*")"
     sleep "$delay"
     i=$((i + 1))
   done

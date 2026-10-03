@@ -8,6 +8,14 @@
 #
 # Compatible with macOS /bin/bash 3.2: no associative arrays, no mapfile.
 
+# Every ${var//pattern/replacement} in this code base means bash 3.2's: the
+# replacement is text. bash 5.2 turns patsub_replacement on by default, which
+# reads an & or a backslash in the replacement (an expanded variable
+# included) as the match or an escape; off, so a value with an & in it
+# (&amp;, a path) renders the same on every bash. bash 3.2 does not know the
+# option and says so on stderr, hence the silence.
+shopt -u patsub_replacement 2>/dev/null || true
+
 FL_TTY=0
 FL_UTF8=0
 FL_COLS=80
@@ -82,14 +90,37 @@ fl_log_init() {
   export FL_LOG_FILE FL_BACKUP_STAMP
 }
 
+# fl_redact_url_v VAR TEXT: TEXT with the user:password (or :password) in
+# front of every URL's host replaced by ***, into VAR. An app URL with a
+# token in it must not reach the run log, the terminal or FL_LAST_COMMAND.
+# No process when TEXT has no "://...@" in it, which is nearly every line.
+FL_REDACT_URL_SED='s#://[^/@[:space:]]+@#://***@#g'
+fl_redact_url_v() {
+  case "$2" in
+    *://*@*) printf -v "$1" '%s' "$(printf '%s\n' "$2" | sed -E "$FL_REDACT_URL_SED")" ;;
+    *) printf -v "$1" '%s' "$2" ;;
+  esac
+}
+fl_redact_url() { local r; fl_redact_url_v r "$1"; printf '%s' "$r"; }
+
 fl_log() {
   [[ -n "$FL_LOG_FILE" ]] || return 0
-  printf '%s %s\n' "$(date '+%H:%M:%S')" "$*" >>"$FL_LOG_FILE" 2>/dev/null || true
+  local msg="$*"
+  fl_redact_url_v msg "$msg"
+  printf '%s %s\n' "$(date '+%H:%M:%S')" "$msg" >>"$FL_LOG_FILE" 2>/dev/null || true
 }
 
+# fl_log_file_append FILE: a command's captured output into the run log,
+# URL credentials masked (git names the URL it could not reach)
 fl_log_file_append() {
   [[ -n "$FL_LOG_FILE" && -f "$1" ]] || return 0
-  cat "$1" >>"$FL_LOG_FILE" 2>/dev/null || true
+  sed -E "$FL_REDACT_URL_SED" "$1" >>"$FL_LOG_FILE" 2>/dev/null || true
+}
+
+# fl_tail_indented FILE: the last 40 lines of a command's output for the
+# terminal, indented, URL credentials masked
+fl_tail_indented() {
+  tail -n 40 "$1" | sed -E -e "$FL_REDACT_URL_SED" -e 's/^/     /'
 }
 
 fl_strip_ansi() {
@@ -138,9 +169,13 @@ fl_see() {
 }
 
 fl_die() {
+  local msg hint
   fl_spinner_stop
-  fl_fail "$1"
-  printf '\n%sAborting.%s %s\n' "$FL_RED$FL_BOLD" "$FL_RESET" "${2:-Fix the above and re-run.}"
+  # a hint may quote the command that failed, URL and token included
+  fl_redact_url_v msg "$1"
+  fl_redact_url_v hint "${2:-Fix the above and re-run.}"
+  fl_fail "$msg"
+  printf '\n%sAborting.%s %s\n' "$FL_RED$FL_BOLD" "$FL_RESET" "$hint"
   fl_log "ABORT: ${2:-}"
   exit "${3:-1}"
 }
@@ -392,7 +427,7 @@ fl_step_run() {
   fl_log_file_append "$out"
   if [[ "$code" -ne 0 ]]; then
     fl_step_end failed
-    tail -n 40 "$out" | sed 's/^/     /'
+    fl_tail_indented "$out"
   else
     fl_step_end "$FL_STEP_RESULT"
     grep -E '^[[:space:]]*([^[:space:]]*\[(WARN|FAIL)\]|fix:)' "$out" 2>/dev/null | sed 's/^/   /' || true
@@ -453,7 +488,8 @@ fl_ask() {
   local __varname="$1" __prompt="$2" __default="${3:-}" __answer
   fl_spinner_pause
   if [[ -n "${!__varname:-}" ]]; then
-    fl_info "using env-provided ${__varname}=${!__varname}"
+    fl_redact_url_v __answer "${!__varname}"
+    fl_info "using env-provided ${__varname}=${__answer}"
     return 0
   fi
   if [[ "$FL_TTY" == "1" ]] && command -v gum >/dev/null 2>&1; then

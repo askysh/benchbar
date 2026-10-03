@@ -63,6 +63,30 @@ assert by[7]["error"]["code"] == -32602, by[7]
 assert by[6]["result"] == {}
 ' || fail "MCP replies: $REPLIES"
 
+# ---- benchbar_logs_tail clamps lines to 1..2000 before the CLI sees them
+i=1
+while [[ "$i" -le 2010 ]]; do printf '10:00:05 worker.1     | job %d\n' "$i"; i=$((i + 1)); done >>"$BENCH/logs/bench.log"
+REPLIES="$(mcp \
+  '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"benchbar_logs_tail","arguments":{"bench":"'"$BENCH"'","lines":5000}}}' \
+  '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"benchbar_logs_tail","arguments":{"bench":"'"$BENCH"'","lines":-5}}}' \
+  '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"benchbar_logs_tail","arguments":{"bench":"'"$BENCH"'","lines":0}}}')"
+printf '%s\n' "$REPLIES" | python3 -c '
+import json, sys
+by = {m["id"]: m for m in (json.loads(l) for l in sys.stdin if l.strip())}
+big = by[1]["result"]["structuredContent"]
+assert len(big["lines"]) == 2000 and "truncated_to" not in big, (len(big["lines"]), big.keys())  # clamped here, so the CLI had nothing to cut
+assert big["lines"][-1].endswith("job 2010"), big["lines"][-1]
+assert len(by[2]["result"]["structuredContent"]["lines"]) == 1, by[2]
+assert len(by[3]["result"]["structuredContent"]["lines"]) == 100, len(by[3]["result"]["structuredContent"]["lines"])
+' || fail "MCP logs clamp replies: $REPLIES"
+# the log tail is redacted like the report
+printf '10:00:06 redis_cache.1 | redis://:McpRedisPw@127.0.0.1:13000\n10:00:07 web.1 | {"api_key": "McpApiLeak"}\n' >>"$BENCH/logs/bench.log"
+R="$(mcp '{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"benchbar_logs_tail","arguments":{"bench":"'"$BENCH"'","lines":2}}}')"
+assert_not_contains "$R" "McpRedisPw"
+assert_not_contains "$R" "McpApiLeak"
+assert_contains "$(printf '%s' "$R" | jget - '" ".join(d["result"]["structuredContent"]["lines"])')" 'redis://***@127.0.0.1:13000'
+assert_contains "$(printf '%s' "$R" | jget - '" ".join(d["result"]["structuredContent"]["lines"])')" '{"api_key": "***"}'
+
 # ---- the profile read tools: list, and check (name required)
 mkdir -p "$HOME/.config/benchbar/profiles"
 printf 'base = "v15-lts"\n\n[[apps]]\nname = "gone"\nrepo = "file://%s/nothing.git"\nbranch = "main"\n' "$TMP_DIR" >"$HOME/.config/benchbar/profiles/acme.toml"

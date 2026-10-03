@@ -8,6 +8,14 @@
 #   #@version N            stripped on render, becomes the vN in the header
 #   #@unhashed KEY...      stripped on render; these keys' values are left
 #                          out of the hash (put it before their first use)
+#   #@quoted KEY... [# note]  stripped on render; these keys' values sit inside
+#                          bash double quotes, so " \ $ and ` in them are
+#                          escaped (put it before their first use; text
+#                          after a # on that line is a note). In a
+#                          .plist template every value is XML escaped
+#                          (& < > ") instead. Neither changes a value that
+#                          has none of those characters, so an ordinary
+#                          path renders byte for byte as before.
 #   __HEADER__             replaced by "benchbar-template: <name> vN <hash>"
 #   __KEY__                replaced by the value passed as KEY=value; a line
 #                          that is only __KEY__ and renders to nothing is
@@ -43,26 +51,67 @@ fl_template_version() {
   sed -n 's/^#@version[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$file" | head -n1
 }
 
+# The replacement of every ${var//pat/rep} here is a plain variable, never a
+# quoted literal: bash 3.2 to 4.2 keep the quotes of a quoted replacement
+# (BENCH=""..."" under /bin/bash). bash 5.2 would read an & or \ in the
+# replacement, an expanded variable included, as the match or an escape:
+# ui.sh turns patsub_replacement off for the whole program.
+
+# fl_xml_escape_v VAR TEXT: TEXT as XML element text (& < > " escaped)
+fl_xml_escape_v() {
+  local __s="$2" __amp='&amp;' __lt='&lt;' __gt='&gt;' __quot='&quot;'
+  __s="${__s//&/$__amp}"
+  __s="${__s//</$__lt}"
+  __s="${__s//>/$__gt}"
+  __s="${__s//\"/$__quot}"
+  printf -v "$1" '%s' "$__s"
+}
+
+# fl_bash_dq_escape_v VAR TEXT: TEXT as it must be written between bash
+# double quotes to mean itself (\ " $ ` escaped)
+fl_bash_dq_escape_v() {
+  local __s="$2" __bs="\\" __bt='`' __dq='"' __dl='$'
+  __s="${__s//"$__bs"/$__bs$__bs}"
+  __s="${__s//"$__dq"/$__bs$__dq}"
+  __s="${__s//"$__dl"/$__bs$__dl}"
+  __s="${__s//"$__bt"/$__bs$__bt}"
+  printf -v "$1" '%s' "$__s"
+}
+
 # fl_template_render NAME KEY=VALUE...  (NAME is the file under templates/, without .tmpl)
 # Prints the rendered content including the resolved header line.
 fl_template_render() {
-  local name="$1" file body hbody line hline pair key value hash version only_token unhashed=""
+  local name="$1" file body hbody line hline pair key value hash version only_token unhashed="" quoted="" fmt=bash i n=0 e
+  local keys=() vals=() evals=()
   shift
   file="${FL_TEMPLATE_DIR}/${name}.tmpl"
   [[ -f "$file" ]] || { fl_fail "template not found: ${file}"; return 1; }
   version="$(fl_template_version "$file")"
+  case "$name" in *.plist) fmt=xml ;; esac
+  # the values once, with their escaped form for where the template says
+  # they sit inside double quotes (or everywhere, in XML)
+  for pair in "$@"; do
+    keys[n]="${pair%%=*}"; vals[n]="${pair#*=}"
+    if [[ "$fmt" == xml ]]; then fl_xml_escape_v e "${vals[$n]}"; else fl_bash_dq_escape_v e "${vals[$n]}"; fi
+    evals[n]="$e"
+    n=$((n + 1))
+  done
   body=""; hbody=""
   while IFS= read -r line || [[ -n "$line" ]]; do
     case "$line" in
       '#@version'*) continue ;;
       '#@unhashed'*) unhashed="${unhashed} ${line#'#@unhashed'} "; continue ;;
+      '#@quoted'*) quoted="${line#'#@quoted'}"; quoted=" ${quoted%%#*} "; continue ;;
     esac
     only_token=0
     [[ "$line" =~ ^__[A-Z_]+__$ ]] && only_token=1
     hline="$line"
-    for pair in "$@"; do
-      key="${pair%%=*}"
-      value="${pair#*=}"
+    for ((i = 0; i < n; i++)); do
+      key="${keys[$i]}"
+      value="${vals[$i]}"
+      if [[ "$fmt" == xml ]]; then value="${evals[$i]}"
+      elif [[ -n "$quoted" ]]; then case "$quoted" in *" ${key} "*) value="${evals[$i]}" ;; esac
+      fi
       line="${line//__${key}__/$value}"
       # the hashed copy keeps an unhashed key's token
       if [[ -n "$unhashed" ]]; then

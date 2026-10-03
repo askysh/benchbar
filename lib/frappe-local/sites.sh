@@ -84,8 +84,11 @@ fl_sites_json_v() {
 # fl_sites_json [PINGS]: the same, printed; site list asks every site
 fl_sites_json() { local j; fl_sites_json_v j "${1:-ping}"; printf '%s' "$j"; }
 
+# fl_site_name_ok NAME: lowercase letters, digits, '-' and '.', starting
+# with a letter or digit; what a hosts line and a runner can carry
+fl_site_name_ok() { [[ "$1" =~ ^[a-z0-9][a-z0-9.-]*$ ]]; }
 fl_site_valid_name() {
-  [[ "$1" =~ ^[a-z0-9][a-z0-9.-]*$ ]] || fl_die "Invalid site name: '$1'." "Use lowercase letters, digits, '-' and '.' only."
+  fl_site_name_ok "$1" || fl_die "Invalid site name: '$1'." "Use lowercase letters, digits, '-' and '.' only."
 }
 
 fl_site_require() {
@@ -111,7 +114,11 @@ fl_cmd_site_list() {
 # question and one sudo prompt for all of them.
 fl_hosts_add_names() {
   local n missing=() site_saved="$FL_SITE" code=0
-  for n in "$@"; do fl_hosts_has_name "$n" || missing+=("$n"); done
+  for n in "$@"; do
+    # a folder name that is not a site name never reaches the hosts file (or sudo)
+    if ! fl_site_name_ok "$n"; then fl_warn "skipped sites/${n}: not a valid site name (lowercase letters, digits, '-' and '.' only); no hosts line for it"; continue; fi
+    fl_hosts_has_name "$n" || missing+=("$n")
+  done
   if [[ "${#missing[@]}" == "0" ]]; then fl_ok "unchanged: ${FL_HOSTS_FILE} maps every site to 127.0.0.1"; return 0; fi
   if [[ "${FL_DRY_RUN:-0}" != "1" ]] && ! fl_confirm "Add ${missing[*]} to ${FL_HOSTS_FILE} with sudo?"; then
     fl_warn "skipped; run: benchbar site hosts --bench-dir ${FL_BENCH_DIR}"
@@ -138,6 +145,7 @@ fl_cmd_site_hosts() {
 fl_cmd_site_default() {
   local name="$1"
   fl_require_bench
+  fl_require_plain_bench
   [[ -n "$name" ]] || fl_die "Usage: benchbar site default NAME"
   fl_site_require "$name"
   if [[ "$name" == "$FL_SITE" && "$(tr -d '[:space:]' <"${FL_BENCH_DIR}/sites/currentsite.txt" 2>/dev/null)" == "$name" ]]; then
@@ -173,6 +181,7 @@ fl_cmd_site_add() {
     esac
   done
   fl_require_bench
+  fl_require_plain_bench
   [[ -n "$name" ]] || fl_die "Usage: benchbar site add NAME [--bundle NAME | --apps \"app1 app2\"]"
   fl_site_valid_name "$name"
   [[ -n "$bundle" && -z "$apps" ]] && { apps="$(fl_bundle_apps "$bundle")"; [[ -n "$apps" ]] || fl_die "Unknown app bundle: ${bundle}"; }

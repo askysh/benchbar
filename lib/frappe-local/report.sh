@@ -15,14 +15,24 @@
 # Redaction, applied to every file before it is packed:
 #   - site_config.json and common_site_config.json are never copied; only
 #     their key names are listed
-#   - any value whose key matches password, secret, token, key, api or auth
-#     is replaced by ***
+#   - any value whose key matches password, passwd, secret, token, key, api
+#     or auth (and pwd= as a keyword argument) is replaced by ***
+#   - values that look like a secret whatever their key: credentials inside
+#     URLs (user:token@host, redis://:password@host), JWTs, GitHub, Slack,
+#     OpenAI and AWS tokens, and email addresses (<email>)
 #   - $HOME becomes ~, the username <user>, and every name of this Mac
 #     (hostname, Bonjour name, computer name) <host>
 #   - REDACTIONS.txt inside the bundle lists what was replaced
+#
+# fl_redact_stream (stdin to stdout) is the one set of rules for the key and
+# value shapes; the report applies it kind by kind to count, logs --json
+# applies it whole.
 
 FL_REPORT_TAIL_LINES="${FL_REPORT_TAIL_LINES:-200}"
-FL_REPORT_KEY_RE='[A-Za-z0-9_.-]*[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd][A-Za-z0-9_.-]*|[A-Za-z0-9_.-]*[Ss][Ee][Cc][Rr][Ee][Tt][A-Za-z0-9_.-]*|[A-Za-z0-9_.-]*[Tt][Oo][Kk][Ee][Nn][A-Za-z0-9_.-]*|[A-Za-z0-9_.-]*[Kk][Ee][Yy][A-Za-z0-9_.-]*|[A-Za-z0-9_.-]*[Aa][Pp][Ii][A-Za-z0-9_.-]*|[A-Za-z0-9_.-]*[Aa][Uu][Tt][Hh][A-Za-z0-9_.-]*'
+FL_REPORT_KEY_RE='[A-Za-z0-9_.-]*[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd][A-Za-z0-9_.-]*|[A-Za-z0-9_.-]*[Pp][Aa][Ss][Ss][Ww][Dd][A-Za-z0-9_.-]*|[A-Za-z0-9_.-]*[Ss][Ee][Cc][Rr][Ee][Tt][A-Za-z0-9_.-]*|[A-Za-z0-9_.-]*[Tt][Oo][Kk][Ee][Nn][A-Za-z0-9_.-]*|[A-Za-z0-9_.-]*[Kk][Ee][Yy][A-Za-z0-9_.-]*|[A-Za-z0-9_.-]*[Aa][Pp][Ii][A-Za-z0-9_.-]*|[A-Za-z0-9_.-]*[Aa][Uu][Tt][Hh][A-Za-z0-9_.-]*'
+# the kinds of redaction, in the order they are applied (the key forms first:
+# they know where a value ends; the value shapes then catch what has no key)
+FL_REDACT_KINDS="keys urls jwt tokens email"
 FL_REPORT_DIR=""
 FL_REPORT_REDACTIONS=""
 FL_REPORT_REDACTION_COUNT=0
@@ -200,39 +210,104 @@ fl_report_host_names() {
 # fl_report_sed_escape TEXT: TEXT as a literal sed pattern (delimiter #)
 fl_report_sed_escape() { printf '%s' "$1" | sed -e 's/[][\.*^$#]/\\&/g'; }
 
+# fl_redact_exprs KIND: the sed -E expressions of one kind of redaction, one
+# per line (none holds a newline).
+#   keys    values of keys that look like credentials, in JSON ("key": "value"
+#           or "key": 123), Python repr mappings ('key': 'value'), INI
+#           (key = value), shell and argv (key=value, --key=value), Python
+#           kwargs (fn(key='value')), URL query (?key=value&...) and header
+#           (Key: value) forms. The last one masks a quoted value whole
+#           (escaped quotes inside it included), otherwise to the end of the
+#           line or to the next quote or comma when the key sits inside a
+#           one line JSON document. pwd counts only as a keyword argument
+#           (fn(pwd=...)): PWD=/Users/... in an environment dump is a path.
+#   urls    the user:password or :password in front of a URL's host
+#   jwt     three base64url parts starting with eyJ
+#   tokens  GitHub (ghp_ gho_ ghu_ ghs_ ghr_ github_pat_), Slack (xox?-),
+#           OpenAI (sk-) and AWS access key (AKIA) shapes, at the start of a
+#           word (task-...-queue and .desk-sidebar-... classes are not tokens)
+#   email   addresses with a dotted domain become <email>; user@host: (an SSH
+#           clone URL), user@host (no dot) and user@host.local are kept
+fl_redact_exprs() {
+  local sq="'" dq='"' pyval
+  # a Python repr value: 'quoted', "quoted" (escapes allowed inside) or a number
+  pyval="(${sq}([^${sq}\\\\]|\\\\.)*${sq}|${dq}([^${dq}\\\\]|\\\\.)*${dq}|[0-9][0-9.]*)"
+  case "$1" in
+    keys)
+      printf '%s\n' \
+        's/("('"$FL_REPORT_KEY_RE"')"[[:space:]]*:[[:space:]]*)"([^"\\]|\\.)*"/\1"***"/g' \
+        's/("('"$FL_REPORT_KEY_RE"')"[[:space:]]*:[[:space:]]*)[0-9][0-9.]*/\1"***"/g' \
+        "s/(${sq}(${FL_REPORT_KEY_RE})${sq}[[:space:]]*:[[:space:]]*)${pyval}/\\1${sq}***${sq}/g" \
+        's/(^|[[:space:],;&?(])(('"$FL_REPORT_KEY_RE"')[[:space:]]*[=:][[:space:]]*)("([^"\\]|\\.)*"|'"'"'([^'"'"'\\]|\\.)*'"'"'|[^",;&})]*)/\1\2***/g' \
+        's/([(,][[:space:]]*[Pp][Ww][Dd][[:space:]]*=[[:space:]]*)("([^"\\]|\\.)*"|'"'"'([^'"'"'\\]|\\.)*'"'"'|[^",;&})]*)/\1***/g' ;;
+    urls) printf '%s\n' 's#(://)[^/@[:space:]]+@#\1***@#g' ;;
+    jwt) printf '%s\n' 's/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/***/g' ;;
+    tokens)
+      printf '%s\n' \
+        's/(^|[^A-Za-z0-9_-])gh[pousr]_[A-Za-z0-9]{20,}/\1***/g' \
+        's/(^|[^A-Za-z0-9_-])github_pat_[A-Za-z0-9_]{20,}/\1***/g' \
+        's/(^|[^A-Za-z0-9_-])xox[baprs]-[A-Za-z0-9-]{10,}/\1***/g' \
+        's/(^|[^A-Za-z0-9_-])sk-[A-Za-z0-9_-]{20,}/\1***/g' \
+        's/(^|[^A-Za-z0-9_-])AKIA[A-Z0-9]{16}/\1***/g' ;;
+    email)
+      # a .local host (worker@Bobs-MacBook.local) is set aside first, the
+      # address needs a dotted domain ending in letters, then .local comes back
+      printf '%s\n' \
+        's/(@[A-Za-z0-9.-]+)\.[Ll][Oo][Cc][Aa][Ll]([^A-Za-z0-9-]|$)/\1<DOTLOCAL>\2/g' \
+        's/[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}([^:A-Za-z0-9-]|$)/<email>\2/g' \
+        's/<DOTLOCAL>/.local/g' ;;
+  esac
+}
+
+# fl_redact_kind KIND: stdin to stdout, one kind of redaction
+fl_redact_kind() {
+  local args=() e
+  while IFS= read -r e; do args+=(-e "$e"); done < <(fl_redact_exprs "$1")
+  sed -E "${args[@]}"
+}
+
+# fl_redact_stream: stdin to stdout, every kind in order, one sed. The line
+# count never changes.
+fl_redact_stream() {
+  local args=() k e
+  for k in $FL_REDACT_KINDS; do
+    while IFS= read -r e; do args+=(-e "$e"); done < <(fl_redact_exprs "$k")
+  done
+  sed -E "${args[@]}"
+}
+
+# fl_redact_kind_note KIND: the REDACTIONS.txt wording of one kind
+fl_redact_kind_note() {
+  case "$1" in
+    keys) printf 'masked credential-like values' ;;
+    urls) printf 'masked credentials inside URLs' ;;
+    jwt) printf 'masked JWT-like tokens' ;;
+    tokens) printf 'masked API token-like values' ;;
+    email) printf 'replaced email addresses with <email>' ;;
+  esac
+}
+
 # fl_report_redact_file FILE: masks secret values and personal paths in place.
 # Appends one line per kind of replacement to FL_REPORT_REDACTIONS.
 fl_report_redact_file() {
-  local file="$1" name user host hosts tmp before after n
+  local file="$1" name user host hosts tmp before after n kind
   name="$(basename "$file")"
   user="$(id -un 2>/dev/null || printf '%s' "${USER:-user}")"
   hosts="$(fl_report_host_names)"
   tmp="${file}.redact"
-  # a Python repr value: 'quoted', "quoted" (escapes allowed inside) or a number
-  local sq="'" dq='"' pyval
-  pyval="(${sq}([^${sq}\\\\]|\\\\.)*${sq}|${dq}([^${dq}\\\\]|\\\\.)*${dq}|[0-9][0-9.]*)"
 
-  # 1. values of keys that look like credentials, in JSON ("key": "value" or "key": 123),
-  #    Python repr mappings ('key': 'value'),
-  #    INI (key = value), shell (key=value), URL query (?key=value&...) and
-  #    header (Key: value) forms. The
-  #    last one masks a quoted value whole (escaped quotes inside it included),
-  #    otherwise to the end of the line
-  #    or to the next quote or comma when the key sits inside a one line
-  #    JSON document.
+  # 1. the key and value shapes of fl_redact_stream, one kind at a time so
+  #    REDACTIONS.txt can say what was found
   before="$(wc -l <"$file" | tr -d ' ')"
-  sed -E \
-    -e 's/("('"$FL_REPORT_KEY_RE"')"[[:space:]]*:[[:space:]]*)"([^"\\]|\\.)*"/\1"***"/g' \
-    -e 's/("('"$FL_REPORT_KEY_RE"')"[[:space:]]*:[[:space:]]*)[0-9][0-9.]*/\1"***"/g' \
-    -e "s/(${sq}(${FL_REPORT_KEY_RE})${sq}[[:space:]]*:[[:space:]]*)${pyval}/\\1${sq}***${sq}/g" \
-    -e 's/(^|[[:space:],;&?])(('"$FL_REPORT_KEY_RE"')[[:space:]]*[=:][[:space:]]*)("([^"\\]|\\.)*"|'"'"'([^'"'"'\\]|\\.)*'"'"'|[^",;&}]*)/\1\2***/g' \
-    "$file" >"$tmp"
-  n="$(diff "$file" "$tmp" 2>/dev/null | grep -c '^>' || true)"
-  if [[ "${n:-0}" -gt 0 ]]; then
-    FL_REPORT_REDACTIONS="${FL_REPORT_REDACTIONS}${name}: masked credential-like values on ${n} line(s)"$'\n'
-    FL_REPORT_REDACTION_COUNT=$((FL_REPORT_REDACTION_COUNT + n))
-  fi
-  mv "$tmp" "$file"
+  for kind in $FL_REDACT_KINDS; do
+    fl_redact_kind "$kind" <"$file" >"$tmp"
+    n="$(diff "$file" "$tmp" 2>/dev/null | grep -c '^>' || true)"
+    if [[ "${n:-0}" -gt 0 ]]; then
+      FL_REPORT_REDACTIONS="${FL_REPORT_REDACTIONS}${name}: $(fl_redact_kind_note "$kind") on ${n} line(s)"$'\n'
+      FL_REPORT_REDACTION_COUNT=$((FL_REPORT_REDACTION_COUNT + n))
+    fi
+    mv "$tmp" "$file"
+  done
 
   # 2. home folder, the names of this Mac, username (the names first: a
   #    computer name like "Bob's MacBook" contains the username)
@@ -275,7 +350,10 @@ fl_report_redact_all() {
     printf 'benchbar report %s, redactions applied before packing\n\n' "${FL_VERSION:-0}"
     printf 'Rules:\n'
     printf -- '- site_config.json and common_site_config.json are not included; site-config-keys.txt lists their key names only\n'
-    printf -- '- values of keys matching password, secret, token, key, api or auth are replaced by ***\n'
+    printf -- '- values of keys matching password, passwd, secret, token, key, api or auth (and pwd= keyword arguments) are replaced by ***\n'
+    printf -- '- credentials inside URLs (user:password@ and ://:password@) are replaced by ***\n'
+    printf -- '- JWTs and GitHub, Slack, OpenAI and AWS token shapes are replaced by ***\n'
+    printf -- '- email addresses are replaced by <email>\n'
     printf -- '- the home folder is written as ~, the username as <user>, the hostname, Bonjour name and computer name as <host>\n\n'
     printf 'Applied:\n'
     if [[ -n "$FL_REPORT_REDACTIONS" ]]; then printf '%s' "$FL_REPORT_REDACTIONS"; else printf '(nothing matched)\n'; fi

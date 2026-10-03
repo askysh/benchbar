@@ -216,6 +216,12 @@ act_mariadb_utf8() {
 # PDFs are optional: a skip (Rosetta or the package declined, no sudo) is
 # not a failed step, only a real error is.
 act_wkhtmltopdf_install() {
+  # benchbar install ran this step up front: in a dry run the plan is already
+  # on the screen, once
+  if [[ "${FL_INSTALL_PDF_STEP:-}" == "dry-run" ]]; then
+    fl_info "dry-run: the wkhtmltopdf plan is above (shown once by install)"
+    return 0
+  fi
   local code=0
   fl_wkhtmltopdf_ensure || code=$?
   [[ "$code" == "2" ]] && { FL_STEP_RESULT="skipped"; return 0; }
@@ -391,12 +397,56 @@ act_write_cli_link() {
 FL_HOSTS_START="# >>> benchbar >>>"
 FL_HOSTS_END="# <<< benchbar <<<"
 
+# fl_hosts_rewrite DELTA AWK_PROGRAM [NAME=VALUE...]: FL_HOSTS_FILE rewritten
+# by AWK_PROGRAM, on the root side. awk runs as root with the NAME=VALUE
+# pairs in its environment (the program reads them through ENVIRON[], so no
+# backslash in a value is ever processed) and writes FL_HOSTS_FILE.benchbar.new
+# through sudo tee: the new content is never in a file this user could swap
+# under a copy. The new file is then checked, as root: every line empty, a
+# comment or "address names" (an IPv6 zone id, fe80::1%lo0, and a CRLF line
+# included), and exactly DELTA lines more (or fewer) than
+# before. Only then is it moved into place (same folder, one rename). Any
+# other outcome removes the new file and changes nothing.
+fl_hosts_rewrite() {
+  local delta="$1" prog="$2" new="${FL_HOSTS_FILE}.benchbar.new" before after bad
+  shift 2
+  # awk's count on both sides: wc -l would miss a last line without a newline
+  before="$(awk 'END { print NR }' "$FL_HOSTS_FILE")"
+  if ! sudo env "$@" awk "$prog" "$FL_HOSTS_FILE" | sudo tee "$new" >/dev/null; then
+    sudo rm -f "$new" 2>/dev/null || true
+    fl_fail "could not write ${new}; ${FL_HOSTS_FILE} is not written"
+    return 1
+  fi
+  bad="$(sudo awk 'NF == 0 { next } /^[[:space:]]*#/ { next } $1 ~ /^[0-9A-Fa-f.:]+(%[A-Za-z0-9_.-]+)?\r?$/ { next } { print; exit }' "$new" 2>/dev/null || true)"
+  after="$(sudo awk 'END { print NR }' "$new" 2>/dev/null || printf 'unknown')"
+  if [[ -n "$bad" ]]; then
+    sudo rm -f "$new" 2>/dev/null || true
+    fl_fail "${FL_HOSTS_FILE} is not written: the result holds a line that is not 'address names': ${bad}"
+    fl_note "fix that line in ${FL_HOSTS_FILE} by hand, then run the command again"
+    return 1
+  fi
+  if [[ "$after" != "$((before + delta))" ]]; then
+    sudo rm -f "$new" 2>/dev/null || true
+    fl_fail "${FL_HOSTS_FILE} is not written: expected ${before} + (${delta}) lines, the result has ${after}"
+    return 1
+  fi
+  sudo chmod 644 "$new" || { sudo rm -f "$new" 2>/dev/null || true; fl_fail "sudo chmod failed; ${FL_HOSTS_FILE} is not written"; return 1; }
+  sudo mv "$new" "$FL_HOSTS_FILE" || { sudo rm -f "$new" 2>/dev/null || true; fl_fail "sudo mv failed; ${FL_HOSTS_FILE} is not written"; return 1; }
+}
+
 # Adds "127.0.0.1 <site>" inside a marker block in /etc/hosts. Missing block:
 # appended with sudo tee -a. Existing block: the line goes inside it and the
-# whole file is rewritten from a temp copy (sudo cp). A backup comes first.
+# file is rewritten on the root side (fl_hosts_rewrite). A backup comes first.
+# A name that is not a site name is skipped with a warning and never reaches
+# sudo.
 act_hosts_entry() {
-  local line tmp
+  local line
   if fl_hosts_has_site; then
+    return 0
+  fi
+  if ! fl_site_name_ok "$FL_SITE"; then
+    fl_warn "no hosts line for sites/${FL_SITE}: not a valid site name (lowercase letters, digits, '-' and '.' only)"
+    FL_STEP_RESULT="skipped"
     return 0
   fi
   line="127.0.0.1 ${FL_SITE}"
@@ -418,11 +468,8 @@ act_hosts_entry() {
   fi
   fl_backup_file "$FL_HOSTS_FILE" || return 1
   if [[ "$(fl_rc_markers_state "$FL_HOSTS_FILE" "$FL_HOSTS_START" "$FL_HOSTS_END")" == "present" ]]; then
-    tmp="$(mktemp "${TMPDIR:-/tmp}/benchbar-hosts.XXXXXX")" || { fl_fail "could not create a temp file"; return 1; }
-    awk -v e="$FL_HOSTS_END" -v l="$line" '$0 == e { print l } { print }' "$FL_HOSTS_FILE" >"$tmp" || { rm -f "$tmp"; fl_fail "could not rewrite ${FL_HOSTS_FILE}; it is unchanged"; return 1; }
-    [[ -s "$tmp" ]] || { rm -f "$tmp"; fl_fail "the new ${FL_HOSTS_FILE} would be empty; not writing it"; return 1; }
-    sudo cp "$tmp" "$FL_HOSTS_FILE" || { rm -f "$tmp"; fl_fail "sudo cp failed"; return 1; }
-    rm -f "$tmp"
+    # shellcheck disable=SC2016  # an awk program
+    fl_hosts_rewrite 1 '$0 == ENVIRON["E"] { print ENVIRON["L"] } { print }' "L=${line}" "E=${FL_HOSTS_END}" || return 1
   else
     printf '\n%s\n%s\n%s\n' "$FL_HOSTS_START" "$line" "$FL_HOSTS_END" | sudo tee -a "$FL_HOSTS_FILE" >/dev/null || { fl_fail "sudo tee failed"; return 1; }
   fi

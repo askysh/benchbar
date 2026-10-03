@@ -1,2 +1,13 @@
 #!/usr/bin/env bash
+# yarn mock (copied into the fake node formula). Like the mocks in bin/ it
+# records the password variables it saw (MOCK_ENV_DUMP) and whether a cached
+# sudo credential was usable (MOCK_SUDO_PROBE); see bin/_mocklib.sh.
+if [[ -n "${MOCK_ENV_DUMP:-}" && -d "${MOCK_STATE:-/nonexistent}" ]]; then
+  mkdir -p "${MOCK_STATE}/env"
+  { printf 'call: %s\n' "$*"; env | grep -o -E '^(MARIADB_ROOT_PASSWORD|ADMIN_PASSWORD)=' || true; } >>"${MOCK_STATE}/env/yarn"
+fi
+if [[ -n "${MOCK_SUDO_PROBE:-}" && -d "${MOCK_STATE:-/nonexistent}" ]]; then
+  mkdir -p "${MOCK_STATE}/sudo_probe"
+  if MOCK_NO_LOG=1 sudo -n true 2>/dev/null; then printf 'ok\n'; else printf 'denied\n'; fi >>"${MOCK_STATE}/sudo_probe/yarn"
+fi
 printf '1.22.22\n'

@@ -205,8 +205,12 @@ fl_hosts_manual_removal() {
 # one sudo prompt, a backup first. Sets FL_HOSTS_REMOVED (1/0) and
 # FL_HOSTS_MANUAL (the command to run when it could not).
 fl_hosts_remove_name() {
-  local name="$1" place other tmp re
+  local name="$1" place other re
   FL_HOSTS_REMOVED=0; FL_HOSTS_MANUAL=""
+  if ! fl_site_name_ok "$name"; then
+    fl_warn "no hosts line to remove for sites/${name}: not a valid site name"
+    return 0
+  fi
   place="$(fl_hosts_line_place "$name")"
   if [[ -z "$place" ]]; then
     fl_ok "unchanged: ${FL_HOSTS_FILE} has no line for ${name}"
@@ -239,15 +243,14 @@ fl_hosts_remove_name() {
   fi
   fl_backup_file "$FL_HOSTS_FILE" || return 1
   re="$(printf '%s' "$name" | sed 's/\./\\./g')"
-  tmp="$(mktemp "${TMPDIR:-/tmp}/benchbar-hosts.XXXXXX")" || { fl_fail "could not create a temp file"; return 1; }
-  awk -v s="$FL_HOSTS_START" -v e="$FL_HOSTS_END" -v re="^[[:space:]]*127\\.0\\.0\\.1[[:space:]]+${re}[[:space:]]*$" '
-    $0 == s { inside = 1 }
-    $0 == e { inside = 0 }
-    inside && $0 ~ re { next }
-    { print }' "$FL_HOSTS_FILE" >"$tmp" || { rm -f "$tmp"; fl_fail "could not rewrite ${FL_HOSTS_FILE}; it is unchanged"; return 1; }
-  [[ -s "$tmp" ]] || { rm -f "$tmp"; fl_fail "the new ${FL_HOSTS_FILE} would be empty; not writing it"; return 1; }
-  sudo cp "$tmp" "$FL_HOSTS_FILE" || { rm -f "$tmp"; fl_fail "sudo cp failed"; FL_HOSTS_MANUAL="$(fl_hosts_manual_removal "$name")"; return 1; }
-  rm -f "$tmp"
+  # the one line inside the block goes (fl_hosts_rewrite checks it is one)
+  # shellcheck disable=SC2016  # an awk program
+  fl_hosts_rewrite -1 '
+    $0 == ENVIRON["S"] { inside = 1 }
+    $0 == ENVIRON["E"] { inside = 0 }
+    inside && $0 ~ ENVIRON["RE"] { next }
+    { print }' "S=${FL_HOSTS_START}" "E=${FL_HOSTS_END}" "RE=^[[:space:]]*127\\.0\\.0\\.1[[:space:]]+${re}[[:space:]]*\$" \
+    || { FL_HOSTS_MANUAL="$(fl_hosts_manual_removal "$name")"; return 1; }
   FL_HOSTS_REMOVED=1
   fl_ok "removed '127.0.0.1 ${name}' from ${FL_HOSTS_FILE} (backup: ${FL_LAST_BACKUP:-none})"
 }

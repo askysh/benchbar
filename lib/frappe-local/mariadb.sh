@@ -23,9 +23,22 @@ fl_keychain_get() {
   security find-generic-password -s "$FL_KEYCHAIN_SERVICE" -a "$FL_KEYCHAIN_ACCOUNT" -w 2>/dev/null
 }
 
-# fl_keychain_set PASSWORD: adds or updates the entry (-U). The password is
-# an argument of "security" for the moment of the call; there is no other
-# non interactive way to write a Keychain item.
+# fl__security_quote WORD: WORD as one word of a "security -i" command line.
+# That parser splits on blanks and takes double quotes, with a backslash
+# escaping the next character, so both are escaped here.
+fl__security_quote() {
+  local s="$1"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  printf '"%s"' "$s"
+}
+
+# fl_keychain_set PASSWORD: adds or updates the entry (-U). The command goes
+# to "security -i" on stdin, so the password is never an argument (ps). The
+# item trusts exactly one application, /usr/bin/security (-T): the same
+# access the implicit default gives, named on purpose. Any program running
+# as the user can still read it through that tool; SECURITY.md says so and
+# how to remove the trust. The write is checked by reading the item back.
 fl_keychain_set() {
   local pw="$1"
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
@@ -36,9 +49,11 @@ fl_keychain_set() {
   if [[ "$(fl_keychain_get || true)" == "$pw" ]]; then
     return 0
   fi
-  security add-generic-password -U -s "$FL_KEYCHAIN_SERVICE" -a "$FL_KEYCHAIN_ACCOUNT" \
-    -l "BenchBar MariaDB root" -j "MariaDB root password written by benchbar" -w "$pw" >/dev/null 2>&1 \
-    || { fl_warn "could not write the Keychain item ${FL_KEYCHAIN_SERVICE}"; return 1; }
+  printf 'add-generic-password -U -s %s -a %s -l %s -j %s -T /usr/bin/security -w %s\n' \
+    "$(fl__security_quote "$FL_KEYCHAIN_SERVICE")" "$(fl__security_quote "$FL_KEYCHAIN_ACCOUNT")" \
+    "$(fl__security_quote "BenchBar MariaDB root")" "$(fl__security_quote "MariaDB root password written by benchbar")" \
+    "$(fl__security_quote "$pw")" | security -i >/dev/null 2>&1 || true
+  [[ "$(fl_keychain_get || true)" == "$pw" ]] || { fl_warn "could not write the Keychain item ${FL_KEYCHAIN_SERVICE}"; return 1; }
   fl_ok "MariaDB root password saved to the Keychain (benchbar mariadb-password prints it)"
   fl_log "keychain: wrote ${FL_KEYCHAIN_SERVICE}/${FL_KEYCHAIN_ACCOUNT}"
 }
@@ -418,6 +433,11 @@ fl_cmd_mariadb_password() {
     return 1
   fi
   if [[ "${FL_ASSUME_YES:-0}" != "1" ]]; then
+    if [[ ! -t 0 ]]; then
+      fl_fail "not printed: there is no terminal to ask on, and only the --yes flag answers for you"
+      fl_fix "${FL_SELF} mariadb-password --yes"
+      return 1
+    fi
     fl_confirm "Print the MariaDB root password to this terminal?" || { fl_info "not printed"; return 1; }
   fi
   printf '%s\n' "$pw"

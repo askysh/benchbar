@@ -45,6 +45,8 @@ CHECK_UPDATES=0
 OFFLINE="${OFFLINE:-0}"; [[ "${BENCHBAR_OFFLINE:-0}" == "1" ]] && OFFLINE=1
 DRY_RUN=0
 PENDING_STEPS=()
+# --yes is a flag, never a value left in the environment
+FL_ASSUME_YES=0
 
 usage() {
   cat <<EOF
@@ -67,7 +69,7 @@ Environment:
                           Otherwise a strong one is generated. It is kept in the Keychain.
 
 Options:
-  -y, --yes            Do not ask; confirmations are accepted, sudo runs without a question
+  -y, --yes            Do not ask; confirmations are accepted (sudo still asks for its password)
   --profile VALUE      Use release profile (default: v15-lts)
   --list-profiles      Print known profiles and exit
   --check-updates      Check remote Frappe/ERPNext version branches
@@ -89,7 +91,10 @@ while [[ "$#" -gt 0 ]]; do
     *) fl_die "Unknown argument: $1" "Use --help for usage." ;;
   esac
 done
-export FL_ASSUME_YES FL_DRY_RUN
+export FL_DRY_RUN
+# the root password is read here (fl_mariadb_root_setup) and must not reach
+# brew, npm or the formulae's own scripts
+export -n MARIADB_ROOT_PASSWORD ADMIN_PASSWORD
 
 if [[ "$LIST_PROFILES" == "1" ]]; then
   fl_list_profiles
@@ -267,10 +272,23 @@ fl_section "PDF"
 # ok | skipped (declined on purpose, return 2) | failed (download, checksum,
 # installer). PDFs are optional either way, but a failure is said out loud
 # and listed at the end instead of looking like a choice.
+# BENCHBAR_PDF_STEP (from benchbar install, which runs the sudo steps first):
+# the package was skipped or failed there, or its dry-run plan was shown;
+# say so without asking (or printing the plan) again.
 WKHTML_STATE=ok
-if fl_wkhtmltopdf_ensure; then WKHTML_STATE=ok; else
+if [[ -n "${BENCHBAR_PDF_STEP:-}" && "$(fl_wkhtmltopdf_state)" != "patched" ]]; then
+  WKHTML_STATE="$BENCHBAR_PDF_STEP"
+  case "$WKHTML_STATE" in
+    dry-run) WKHTML_STATE=ok; fl_info "dry-run: the wkhtmltopdf plan is above (benchbar install showed it)" ;;
+    skipped) fl_warn "wkhtmltopdf was skipped above (benchbar install asked already): PDFs will not work until it is installed" ;;
+    *) WKHTML_STATE=failed; fl_fail "the wkhtmltopdf install failed above (see benchbar install's output)"; add_pending "WKHTMLTOPDF_FAILED" ;;
+  esac
+elif fl_wkhtmltopdf_ensure; then WKHTML_STATE=ok; else
   case "$?" in 2) WKHTML_STATE=skipped ;; *) WKHTML_STATE=failed; add_pending "WKHTMLTOPDF_FAILED" ;; esac
 fi
+# the package was the only step that runs as root: nothing after this (brew,
+# the shell block) may find a cached sudo credential
+fl_sudo_drop
 
 fl_section "BUILD DEPS"
 for formula in openssl@3 libffi zlib $FL_BUILD_FORMULAE; do

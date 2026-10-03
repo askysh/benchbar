@@ -105,6 +105,7 @@ fl_port_clashes_with_benches() {
 fl_ports_apply() {
   local n="$1" web sio queue cache
   read -r web sio queue cache <<<"$(fl_port_block "$n")"
+  fl_require_plain_bench
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
     fl_info "dry-run: cd ${FL_BENCH_DIR} && bench set-config -g -p webserver_port ${web} (and socketio_port ${sio}, redis_queue :${queue}, redis_cache and redis_socketio :${cache})"
     fl_info "dry-run: cd ${FL_BENCH_DIR} && bench setup redis"

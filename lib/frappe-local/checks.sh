@@ -11,7 +11,7 @@
 # Groups (used by "benchbar service" versus "benchbar repair"):
 #   system, bench, service, site
 
-FL_CHECK_ORDER="brew formula_dates python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac mole app_copies full_disk_access env_python env_setuptools bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy dependency_behind apps_behind lock_parse lock_drift profile_outdated logs honcho honcho_setuptools procfile runner agent runner_heartbeat fork_safety scheduler stop_flag helpers cli_link cli_duplicate legacy_agents dead_agents hosts port_clash orphans ping"
+FL_CHECK_ORDER="brew formula_dates python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac mole app_copies full_disk_access env_python env_setuptools bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy dependency_behind apps_behind lock_parse lock_drift profile_outdated logs bench_path honcho honcho_setuptools procfile runner agent runner_heartbeat fork_safety scheduler stop_flag helpers cli_link cli_duplicate legacy_agents dead_agents hosts port_clash orphans ping"
 FL_LOG_WARN_MB="${FL_LOG_WARN_MB:-50}"
 FL_HOSTS_FILE="${FL_HOSTS_FILE:-/etc/hosts}"
 
@@ -62,6 +62,7 @@ fl_check_label() {
     ping) printf 'Site ping' ;;
     hosts) printf '/etc/hosts entry' ;;
     logs) printf 'Log sizes' ;;
+    bench_path) printf 'Bench path' ;;
     cleanmymac) printf 'CleanMyMac' ;;
     mole) printf 'Mole' ;;
     port_clash) printf 'Port clash' ;;
@@ -335,6 +336,20 @@ chk__template() {
     outdated) chk__set warn "${label} is outdated (template or settings changed)" "${FL_SELF} repair" "$action" ;;
     foreign) chk__set warn "${label} exists but was not written by benchbar" "${FL_SELF} repair" "$action" ;;
   esac
+}
+
+# The bench path and the default site name land inside the runner's double
+# quotes, the agent's plist and a hosts line. Doctor names what is in the
+# way and stays read only; the commands that write refuse
+# (fl_require_plain_bench).
+chk_bench_path() {
+  if ! fl_text_plain_ok "$FL_BENCH_DIR"; then
+    chk__set fail "the bench path contains ${FL_TEXT_PROBLEM}, which the runner script and the launchd agent cannot carry as plain text" "move the bench to a folder without it, then: ${FL_SELF} adopt <new path>"
+  elif ! fl_text_plain_ok "$FL_SITE" || [[ "$FL_SITE" == *[[:space:]]* ]]; then
+    chk__set fail "the default site name '${FL_SITE}' contains ${FL_TEXT_PROBLEM:-whitespace}, which the runner script and the hosts file cannot carry" "${FL_SELF} site default <name>   (or rename the site folder; lowercase letters, digits, '-' and '.' are safe)"
+  else
+    chk__set ok "the bench path and the site name are plain text"
+  fi
 }
 
 chk_procfile() { chk__template "Procfile.lean" "$(fl_procfile_path)" "$FL_R_PROCFILE" write_procfile; }

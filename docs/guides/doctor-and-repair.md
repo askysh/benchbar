@@ -362,6 +362,20 @@ them, or `--port-offset` asked for it). Doctor never shows it.
 Fix: part of the plan: `benchbar service --port-offset <n>` moves the
 ports with `bench set-config -g`.
 
+### bench_path
+
+The bench path and the default site name are plain text to the runner
+script (`BENCH="..."`), the launchd agent's plist and a hosts line: no
+double quote, backslash, `$`, backtick, `<`, `>`, `&` or control
+character, and no whitespace in the site name. Spaces and apostrophes in
+the path are fine. Doctor only reports it; `service`, `repair`, `adopt`,
+`install`, `up`, `autostart` and `site add` refuse to write for such a
+bench and name the character.
+
+Fix: move the bench to a folder without that character, then
+`benchbar adopt <new path>`; for a site name, `benchbar site default
+<name>` or rename the site folder.
+
 ### honcho
 
 `honcho`, which runs the Procfile, is found on `PATH`, in the pipx venv of

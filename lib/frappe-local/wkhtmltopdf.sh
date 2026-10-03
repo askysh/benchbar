@@ -113,12 +113,52 @@ fl_wkhtmltopdf_download() {
 }
 
 # fl_wkhtmltopdf_install: sudo installer -pkg. Needs a sudo session.
+#
+# The download sits in a folder the user can write, so the file that was
+# verified is not necessarily the file root would install (another process
+# could swap it in between). Root therefore copies it into a fresh folder
+# only root can write, in /tmp (sticky: nobody else can rename or replace
+# that folder), hashes the copy itself, compares with the pin, installs that
+# copy, and removes the folder again. "sudo rm -rf" only ever gets this
+# fresh folder.
+FL_WKHTML_ROOT_TMP_TEMPLATE="/tmp/benchbar-wkhtmltopdf.XXXXXX"
+
 fl_wkhtmltopdf_install() {
+  local root_dir="" root_pkg sum code=0
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
-    fl_info "dry-run: sudo installer -pkg ${FL_WKHTML_PKG} -target /"
+    fl_info "dry-run: sudo mktemp -d ${FL_WKHTML_ROOT_TMP_TEMPLATE}"
+    fl_info "dry-run: sudo install -m 0644 -o root ${FL_WKHTML_PKG} <that folder>/${FL_WKHTML_FILE}"
+    fl_info "dry-run: sudo shasum -a 256 <that folder>/${FL_WKHTML_FILE}   (must be ${FL_WKHTML_SHA256})"
+    fl_info "dry-run: sudo installer -pkg <that folder>/${FL_WKHTML_FILE} -target /"
+    fl_info "dry-run: sudo rm -rf <that folder>"
     return 0
   fi
-  fl_run_long "installer -pkg ${FL_WKHTML_FILE}" sudo installer -pkg "$FL_WKHTML_PKG" -target / || return 1
+  root_dir="$(sudo mktemp -d "$FL_WKHTML_ROOT_TMP_TEMPLATE" 2>/dev/null || true)"
+  case "$root_dir" in
+    /tmp/benchbar-wkhtmltopdf.*) ;;
+    *) fl_fail "could not create a root owned folder for the package (sudo mktemp -d ${FL_WKHTML_ROOT_TMP_TEMPLATE})"; return 1 ;;
+  esac
+  root_pkg="${root_dir}/${FL_WKHTML_FILE}"
+  fl_log "run: sudo install -m 0644 -o root ${FL_WKHTML_PKG} ${root_pkg}"
+  if ! sudo install -m 0644 -o root "$FL_WKHTML_PKG" "$root_pkg"; then
+    fl_fail "could not copy ${FL_WKHTML_FILE} into ${root_dir}"
+    code=1
+  else
+    # the hash of the copy root will install, taken by root
+    sum="$(sudo shasum -a 256 "$root_pkg" 2>/dev/null | awk '{print $1}')"
+    if [[ "$sum" != "$FL_WKHTML_SHA256" ]]; then
+      fl_fail "checksum mismatch on the root owned copy of ${FL_WKHTML_FILE}: got ${sum:-nothing}, pinned ${FL_WKHTML_SHA256}"
+      fl_note "nothing was installed; the download in ${FL_WKHTML_DOWNLOAD_DIR} is discarded"
+      rm -f "$FL_WKHTML_PKG"
+      code=1
+    else
+      fl_ok "root owned copy verified (sha256 ok)"
+      fl_run_long "installer -pkg ${FL_WKHTML_FILE}" sudo installer -pkg "$root_pkg" -target / || code=1
+    fi
+  fi
+  fl_log "run: sudo rm -rf ${root_dir}"
+  sudo rm -rf "$root_dir" 2>/dev/null || fl_warn "could not remove ${root_dir}; run: sudo rm -rf ${root_dir}"
+  [[ "$code" == "0" ]] || return 1
   hash -r 2>/dev/null || true
   case "$(fl_wkhtmltopdf_state)" in
     patched) fl_ok "$("$(fl_wkhtmltopdf_bin)" --version 2>&1 | head -n1) at $(fl_wkhtmltopdf_bin)"; fl_wkhtmltopdf_shadow_warn ;;

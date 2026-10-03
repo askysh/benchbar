@@ -5,12 +5,16 @@
 #
 # fl_sudo_begin REASON... says why sudo is needed, runs "sudo -v" once and
 # keeps the credential fresh in the background until fl_sudo_end (or the
-# process exits). The session is exported as FL_SUDO_SESSION=1 so the phase
-# scripts started by "benchbar install" do not ask again: sudo's timestamp
-# is shared by the processes of one terminal.
+# process exits). The session is exported as FL_SUDO_SESSION=1 so a function
+# that needs sudo later in the same run does not ask again.
 #
 # Only two things ever need sudo: the wkhtmltopdf package (installer -pkg)
-# and the /etc/hosts line. Nothing else in benchbar runs as root.
+# and the /etc/hosts line. Nothing else in benchbar runs as root, and
+# fl_sudo_drop ("sudo -k") ends the credential as soon as those two are
+# done, before brew, pip, npm, yarn or bench run any third party code on
+# the same terminal: a package's install script must not find a cached
+# sudo. "benchbar install" does the two steps first and drops; a phase
+# script that needs sudo on its own asks itself and drops after.
 
 FL_SUDO_KEEPALIVE_PID=""
 FL_SUDO_SESSION="${FL_SUDO_SESSION:-0}"
@@ -66,4 +70,18 @@ fl_sudo_end() {
   wait "$FL_SUDO_KEEPALIVE_PID" 2>/dev/null || true
   FL_SUDO_KEEPALIVE_PID=""
   fl_log "sudo session ended"
+}
+
+# fl_sudo_drop: the privileged steps are done. Stops the keepalive and
+# invalidates the cached credential (sudo -k), so nothing that runs after
+# this, in this process or a child, can use sudo without a password. A run
+# that never obtained sudo leaves sudo alone.
+fl_sudo_drop() {
+  fl_sudo_end
+  if [[ "$FL_SUDO_SESSION" == "1" ]]; then
+    sudo -k 2>/dev/null || true
+    fl_log "sudo credential dropped (sudo -k)"
+  fi
+  FL_SUDO_SESSION=0
+  export FL_SUDO_SESSION
 }

@@ -516,7 +516,7 @@ cp "$ROOT/benchbar" "$CLONE/benchbar"
 mkdir -p "$CLONE/.benchbar"; printf 'BENCH_DIR=%s\n' "$BENCH" >"$CLONE/.benchbar/state.env"
 ln -sfn "$CLONE/benchbar" "$HOME/.local/bin/benchbar"
 # the block as the checkout wrote it: its path, and a hash of its own
-sed_inplace "s#^BENCHBAR=.*#BENCHBAR=\"$CLONE/benchbar\"#; s#^\(\# benchbar-template: shell-helpers v1 \).*#\1000000000000#" "$HOME/.zshrc"
+sed_inplace "s#^BENCHBAR=.*#BENCHBAR=\"$CLONE/benchbar\"#; s#^\(\# benchbar-template: shell-helpers v2 \).*#\1000000000000#" "$HOME/.zshrc"
 run_bb doctor --json --bench-dir "$BENCH"
 assert_eq "warn None" "$(check status cli_link) $(check action cli_link)"
 assert_contains "$(check message cli_link)" "$HOME/.local/bin/benchbar leads to a checkout with its own state ($CLONE/.benchbar)"
