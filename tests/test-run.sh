@@ -35,7 +35,7 @@ assert_status 125 fl_run_with_timeout 5 "stopped command" "$TMP_DIR/slow"
 # fl_on_error: exit 2 is reserved for "MariaDB root password unknown"; a
 # command that happens to fail with 2 ends the run with 1
 set +e
-out="$(bash -c '. "$0/lib/frappe-local/ui.sh"; . "$0/lib/frappe-local/run.sh"; set -e; trap fl_on_error ERR; FL_LAST_COMMAND="grep pattern file"; (exit 2)' "$ROOT" 2>&1)"
+out="$(bash -c '. "$0/lib/frappe-local/ui.sh"; . "$0/lib/frappe-local/run.sh"; set -e; trap fl_on_error ERR; FL_LAST_COMMAND="grep pattern file"; bash -c "exit 2"' "$ROOT" 2>&1)"
 code=$?
 set -e
 [[ "$code" == "1" ]] || { printf 'Expected exit 1 for an incidental exit 2, got %s: %s\n' "$code" "$out"; exit 1; }
