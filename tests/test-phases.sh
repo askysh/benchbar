@@ -333,7 +333,7 @@ MOCK_MARIADB_ROOT_SOCKET_ONLY=1 run00 --yes --profile v15-lts
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "root@localhost uses socket login only (fresh Homebrew install); setting a password (generated) through the tester socket account"
 assert_not_contains "$OUT" "MariaDB root already has a password"
-assert_calls_contain "^mariadb -u tester\$" "(the SQL goes through the user's socket account)"
+assert_calls_contain "^mariadb -u tester --protocol=socket\$" "(the SQL goes through the user's socket account, over the socket)"
 assert_calls_not_contain '^mariadb -u root -p' "(no password on a command line)"
 assert_calls_not_contain '^sudo mariadb'
 PW="$(keychain_get)"

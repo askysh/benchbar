@@ -63,7 +63,7 @@ fl_mariadb_root_open() {
   local bin
   bin="$(fl_mariadb_client)"
   [[ -n "$bin" ]] || return 1
-  MYSQL_PWD="" "$bin" -u root --connect-timeout=2 -e "SELECT 1" >/dev/null 2>&1
+  MYSQL_PWD="" "$bin" -u root --protocol=socket --connect-timeout=2 -e "SELECT 1" >/dev/null 2>&1
 }
 
 # The account that administers a server whose root has no password yet.
@@ -86,7 +86,9 @@ fl_mariadb_admin_open() {
   # the macOS account name (FL_OS_USER: the tests, which may run as root)
   me="${FL_OS_USER:-${USER:-$(id -un 2>/dev/null || true)}}"
   [[ -n "$me" && "$me" != "root" ]] || return 1
-  MYSQL_PWD="" "$bin" -u "$me" --connect-timeout=2 -e "SELECT 1" >/dev/null 2>&1 || return 1
+  # unix_socket authentication needs the socket: an option file that sets
+  # protocol=tcp or a host would send these logins over TCP and fail them
+  MYSQL_PWD="" "$bin" -u "$me" --protocol=socket --connect-timeout=2 -e "SELECT 1" >/dev/null 2>&1 || return 1
   # the socket account outlives the setup, so it alone proves nothing about
   # root: only the fresh install's root, whose native password is the
   # literal 'invalid', is ours to set. A query that fails (an account that
@@ -94,7 +96,7 @@ fl_mariadb_admin_open() {
   # someone chose) or a real hash all mean "not ours": root is then left
   # alone and asked for, as before.
   local hash
-  hash="$(MYSQL_PWD="" "$bin" -u "$me" --connect-timeout=2 -sNe "SELECT authentication_string FROM mysql.user WHERE User='root' AND Host='localhost'" 2>/dev/null)" || return 1
+  hash="$(MYSQL_PWD="" "$bin" -u "$me" --protocol=socket --connect-timeout=2 -sNe "SELECT authentication_string FROM mysql.user WHERE User='root' AND Host='localhost'" 2>/dev/null)" || return 1
   [[ "$(printf '%s\n' "$hash" | head -n1)" == "invalid" ]] || return 1
   FL_MARIADB_ADMIN_USER="$me"
 }
@@ -136,7 +138,7 @@ fl_mariadb_secure() {
     return 0
   fi
   fl_log "mariadb: securing root@localhost as ${admin} (password not logged)"
-  MYSQL_PWD="" "$bin" -u "$admin" <<SQL
+  MYSQL_PWD="" "$bin" -u "$admin" --protocol=socket <<SQL
 DELETE FROM mysql.global_priv WHERE User='';
 DELETE FROM mysql.global_priv WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
 DROP DATABASE IF EXISTS test;
