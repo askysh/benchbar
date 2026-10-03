@@ -116,6 +116,40 @@ R="$(mcp '{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"benchb
 assert_not_contains "$(printf '%s' "$R" | jget - 'd["result"]["content"][0]["text"]')" "is not a bench benchbar knows"
 : >"$MOCK_PROCS"
 
+# ---- a timeout ends the CLI and everything it started (its process group):
+# a fake benchbar that starts a grandchild (a setup Redis stands in) and hangs
+FAKE="$TMP_DIR/fake-benchbar"; GCPID="$TMP_DIR/mcp-grandchild.pid"
+cat >"$FAKE" <<SH
+#!/usr/bin/env bash
+# "status --json" hangs with a child, like a bench command that never ends
+case "\$*" in
+  "list --json") printf '{"benches":[]}\n'; exit 0 ;;
+esac
+sleep 60 &
+printf '%s\n' "\$!" >"$GCPID"
+trap 'kill "\$!" 2>/dev/null; exit 143' TERM
+wait
+SH
+chmod +x "$FAKE"
+R="$(printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"benchbar_status","arguments":{}}}' | BENCHBAR_MCP_CLI="$FAKE" BENCHBAR_MCP_TIMEOUT=1 BENCHBAR_MCP_KILL_GRACE=2 "$FM" mcp 2>/dev/null)"
+assert_eq "True" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')" "$R"
+assert_contains "$(printf '%s' "$R" | jget - 'd["result"]["content"][0]["text"]')" "did not answer in time (1.0s); it and everything it started were stopped"
+[[ -s "$GCPID" ]] || fail "test setup: the fake CLI did not start its child"
+sleep 0.5
+kill -0 "$(cat "$GCPID")" 2>/dev/null && fail "the grandchild (pid $(cat "$GCPID")) must be gone after the timeout"
+# a CLI that ignores TERM is killed after the grace period, with its child
+cat >"$FAKE" <<SH
+#!/usr/bin/env bash
+trap '' TERM
+sleep 60 &
+printf '%s\n' "\$!" >"$GCPID"
+wait
+SH
+R="$(printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"benchbar_status","arguments":{}}}' | BENCHBAR_MCP_CLI="$FAKE" BENCHBAR_MCP_TIMEOUT=1 BENCHBAR_MCP_KILL_GRACE=1 "$FM" mcp 2>/dev/null)"
+assert_eq "True" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')" "$R"
+sleep 0.5
+kill -0 "$(cat "$GCPID")" 2>/dev/null && fail "the grandchild of a CLI that ignores TERM must be killed with the group"
+
 # ---- app add over MCP: a read only plan with a token, then the approved plan
 # shellcheck source=tests/lib/apps-fixtures.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/apps-fixtures.sh"

@@ -72,7 +72,7 @@ assert_eq "0" "$CODE" "$OUT"
 assert_no_file "$old"
 moved="$(find "$HOME/Library/LaunchAgents-disabled" -name 'com.frappe-mac.frappe-bench.plist')"
 [[ -n "$moved" ]] || fail "old plist must be moved aside"
-[[ "$(basename "$(dirname "$moved")")" =~ ^[0-9]{8}-[0-9]{6}$ ]] || fail "old plist must land in LaunchAgents-disabled/<timestamp>/, got $moved"
+[[ "$(basename "$(dirname "$moved")")" =~ ^[0-9]{8}-[0-9]{6}-[0-9]+$ ]] || fail "old plist must land in LaunchAgents-disabled/<timestamp>-<pid>/, got $moved"
 assert_calls_contain '^launchctl bootout gui/[0-9]+/com.frappe-mac.frappe-bench$'
 assert_file "$new"
 grep -q '<string>com.benchbar.frappe-bench</string>' "$new" || fail "new label expected"

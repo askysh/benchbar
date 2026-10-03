@@ -15,8 +15,10 @@ humans.
 
 import json
 import os
+import signal
 import subprocess
 import sys
+import time
 
 SERVER = {"name": "benchbar", "version": os.environ.get("BENCHBAR_VERSION", "0")}
 PROTOCOLS = ["2025-06-18", "2025-03-26", "2024-11-05"]
@@ -165,8 +167,25 @@ TOOLS["benchbar_app_add"] = (
     (0,),
 )
 REQUIRED = {"benchbar_profile_check": ["name"], "benchbar_app_add_plan": ["url_or_name"], "benchbar_app_add": ["url_or_name", "token"]}
-# seconds per call; get-app, pip, yarn and a build take long on a slow network
+# seconds per call; get-app, pip, yarn and a build take long on a slow network.
+# BENCHBAR_MCP_TIMEOUT overrides every one of them (the tests use seconds).
 TIMEOUTS = {"benchbar_app_add_plan": 300, "benchbar_app_add": 3600}
+# after SIGTERM to the group, how long the CLI gets to run its EXIT trap
+# (the setup Redis goes, the lock is released) before SIGKILL
+try:
+    KILL_GRACE = float(os.environ.get("BENCHBAR_MCP_KILL_GRACE", "10"))
+except ValueError:
+    KILL_GRACE = 10.0
+
+
+def tool_timeout(name):
+    env = os.environ.get("BENCHBAR_MCP_TIMEOUT")
+    if env:
+        try:
+            return float(env)
+        except ValueError:
+            pass
+    return TIMEOUTS.get(name, 180)
 # what an action returns after its output: the fresh status, or the app list
 AFTER = {"benchbar_app_add": ("apps", lambda a: ["app", "list", "--json"] + bench_args(a))}
 
@@ -209,10 +228,50 @@ def unknown_bench_error(arguments):
 
 def run_cli(argv, timeout=180):
     env = dict(os.environ, NO_COLOR="1", TERM="dumb")
+    # The CLI leads its own process group (start_new_session): a timeout then
+    # reaches bench, pip, yarn, git and the setup Redis as well, not only
+    # benchbar. SIGTERM first, so the CLI's EXIT trap runs (the setup Redis
+    # stops, the lock is released), SIGKILL to the group after the grace.
     # stdin is closed: a question from the CLI is answered "no", never hangs
-    p = subprocess.run([BENCHBAR] + argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                       stderr=subprocess.PIPE, env=env, timeout=timeout)
-    return p.returncode, p.stdout.decode("utf-8", "replace"), p.stderr.decode("utf-8", "replace")
+    p = subprocess.Popen([BENCHBAR] + argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE, env=env, start_new_session=True)
+    try:
+        out, err = p.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        kill_group(p)
+        raise
+    return p.returncode, out.decode("utf-8", "replace"), err.decode("utf-8", "replace")
+
+
+def kill_group(p):
+    """SIGTERM to the CLI's process group, a grace period, then SIGKILL; the pipes are drained either way."""
+    try:
+        os.killpg(p.pid, signal.SIGTERM)
+    except OSError:
+        pass
+    try:
+        p.communicate(timeout=KILL_GRACE)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(p.pid, signal.SIGKILL)
+        except OSError:
+            pass
+        try:
+            p.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            pass
+    # stragglers of the group that re-parented but kept the group id
+    deadline = time.time() + 2
+    while time.time() < deadline:
+        try:
+            os.killpg(p.pid, 0)
+        except OSError:
+            return
+        time.sleep(0.1)
+    try:
+        os.killpg(p.pid, signal.SIGKILL)
+    except OSError:
+        pass
 
 
 def tool_list():
@@ -252,9 +311,9 @@ def tool_call(params):
         if refused is not None:
             return refused
     try:
-        code, out, err = run_cli(build(arguments), timeout=TIMEOUTS.get(name, 180))
+        code, out, err = run_cli(build(arguments), timeout=tool_timeout(name))
     except subprocess.TimeoutExpired:
-        return text_result("benchbar did not answer in time", is_error=True)
+        return text_result("benchbar did not answer in time (%ss); it and everything it started were stopped" % tool_timeout(name), is_error=True)
     except OSError as e:
         return text_result("could not run benchbar (%s): %s" % (BENCHBAR, e), is_error=True)
     if read_only:

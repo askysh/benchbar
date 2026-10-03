@@ -37,6 +37,9 @@ fl_context_init() {
   fl_ports_detect
   fl_known_benches_prime
   fl_agent_label_prime
+  # a mutating run (it holds the state lock) also takes this bench's own
+  # lock, so CLIs with different state folders meet on the bench
+  fl_lock_bench_acquire
   # a bench set up from a team profile keeps following it while the file
   # exists and parses; otherwise its base (stored as PROFILE) takes over
   if [[ -z "$profile" ]] && declare -F fl_team_profile_file >/dev/null; then
@@ -255,6 +258,9 @@ fl_cmd_up() {
   fl_state_json_write starting "" "" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "" ""
   fl_agent_kickstart || fl_die "launchctl kickstart failed." "Run: ${FL_SELF} doctor"
   [[ "${FL_DRY_RUN:-0}" == "1" ]] && return 0
+  # the state is written and the agent kicked: the wait for the site only
+  # reads, so other runs (another bench's repair, a site add) go ahead
+  fl_lock_release
   fl_spinner_start "starting bench ${FL_BENCH_NAME}" "$(fl_bench_log_path)"
   if fl_wait_for_ping "$FL_UP_WAIT_SECS"; then
     fl_spinner_stop
@@ -303,6 +309,7 @@ fl_cmd_restart() {
   fl_state_json_write starting "" "" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "" ""
   fl_agent_kickstart -k || fl_die "launchctl kickstart -k failed."
   [[ "${FL_DRY_RUN:-0}" == "1" ]] && return 0
+  fl_lock_release
   fl_spinner_start "restarting bench ${FL_BENCH_NAME}" "$(fl_bench_log_path)"
   if fl_wait_for_ping "$FL_UP_WAIT_SECS"; then
     fl_spinner_stop

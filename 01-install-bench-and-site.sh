@@ -33,6 +33,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/frappe-local/mariadb.sh
 . "${SCRIPT_DIR}/lib/frappe-local/mariadb.sh"
 trap fl_on_error ERR
+fl_signal_traps_install
 
 ASSUME_YES=0
 PROFILE="${PROFILE:-}"

@@ -83,6 +83,31 @@ All notable changes to this project are documented here.
   it, names the reinstall command for its owner when it does not, and
   warns when it is older than the profile's known minimum (`bench_min` in
   `config/release-profiles.tsv`).
+- Long and timed commands (bench init, pip, yarn, git, brew) run in their
+  own process group, and a timeout, a Ctrl+C or a TERM to benchbar stops
+  the whole group before the run ends and the lock is released; before,
+  only the top process was signalled and the rest kept writing into the
+  bench. The MCP server does the same for a tool call that runs out of
+  time, so a setup Redis never outlives it.
+- A long command that stops to read the terminal it does not have (a
+  password prompt inside `bench get-app` or `brew`) is ended with a clear
+  message instead of waiting for ever behind the spinner.
+- The run lock reclaims a stale lock by renaming it away, so several runs
+  that find one at once leave exactly one holder, and a lock whose pid is
+  not written yet is left alone for 5 seconds instead of being stolen.
+- Every mutating run also takes the bench's own lock
+  (`<bench>/.benchbar.lock`), so a Homebrew CLI, the app's CLI and a git
+  checkout working on one bench exclude each other.
+- `benchbar up` and `restart` release the locks once the agent is kicked,
+  before the wait for the site, so other benches' commands are not refused
+  for 45 seconds.
+- Writers of a state file build the new file under a private temp name and
+  a per file lock, so a status poll and a repair no longer lose each
+  other's keys.
+- `app focus` without an app name (the listing) takes no lock;
+  `self-update` and `register` take it and write a run log.
+- Log files and backup folders carry the run's pid in their name
+  (`<date>-<time>-<pid>`), so two runs in the same second never share one.
 
 ### Changed
 

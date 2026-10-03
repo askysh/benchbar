@@ -60,15 +60,26 @@ fl_ui_init
 
 # ---------------------------------------------------------------- logging
 
+# fl_log_init DIR: this run's log, DIR/<date>-<time>-<pid>.log. The pid
+# keeps two runs started in the same second (the app's and a terminal's)
+# from sharing one file, and the same stamp names this run's backup folder
+# (FL_BACKUP_STAMP, templates.sh), so a log and its backups match.
 fl_log_init() {
   local dir="$1" stamp
   [[ "${FL_DRY_RUN:-0}" == "1" ]] && return 0
   mkdir -p "$dir" 2>/dev/null || return 0
-  stamp="$(date +%Y%m%d-%H%M%S)"
+  stamp="$(date +%Y%m%d-%H%M%S)-$$"
   FL_LOG_FILE="${dir}/${stamp}.log"
-  : >"$FL_LOG_FILE" 2>/dev/null || FL_LOG_FILE=""
-  # the phase scripts are child processes: they log to the same file
-  export FL_LOG_FILE
+  # noclobber: a file of that name already exists only when the pid came
+  # round again inside the second; then the next suffix
+  if ! ( set -o noclobber; : >"$FL_LOG_FILE" ) 2>/dev/null; then
+    FL_LOG_FILE="${dir}/${stamp}-1.log"
+    ( set -o noclobber; : >"$FL_LOG_FILE" ) 2>/dev/null || FL_LOG_FILE=""
+  fi
+  [[ -n "${FL_BACKUP_STAMP:-}" ]] || FL_BACKUP_STAMP="$stamp"
+  # the phase scripts are child processes: they log to the same file and
+  # back up into the same folder
+  export FL_LOG_FILE FL_BACKUP_STAMP
 }
 
 fl_log() {

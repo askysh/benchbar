@@ -133,6 +133,23 @@ assert_calls_not_contain '^honcho'
 assert_no_file "$FL_STATE_DIR/lock"
 : >"$MOCK_LISTEN"; printf '3306 111 mariadbd 127.0.0.1\n' >"$MOCK_LISTEN"; rm -f "$MOCK_STATE/cwd/7777"
 
+# up releases the locks after the kickstart, before the wait for the site:
+# another run (a register here) goes ahead meanwhile
+run_fm down --bench-dir "$BENCH"; assert_eq "0" "$CODE" "$OUT"
+export MOCK_CURL_CODE=000
+FL_UP_WAIT_SECS=6 "$FM" up --bench-dir "$BENCH" >"$TMP_DIR/up.out" 2>&1 &
+UPPID=$!
+for _ in $(seq 1 40); do grep -q 'starting bench' "$TMP_DIR/up.out" 2>/dev/null && break; sleep 0.1; done
+mkdir -p "$HOME/parallel-bench"; make_fake_bench "$HOME/parallel-bench" par
+run_fm register "$HOME/parallel-bench"
+assert_eq "0" "$CODE" "$OUT"
+assert_not_contains "$OUT" "Another benchbar run is active"
+assert_no_file "$FL_STATE_DIR/lock" "(up holds no lock while it waits for the site)"
+set +e; wait "$UPPID"; UPCODE=$?; set -e
+assert_eq "1" "$UPCODE" "(no 200: up still reports the wait ran out)"
+grep -q 'may still be starting' "$TMP_DIR/up.out" || fail "up must say the site did not answer: $(cat "$TMP_DIR/up.out")"
+run_fm down --bench-dir "$BENCH"; assert_eq "0" "$CODE" "$OUT"
+
 # up without the service installed explains what to do
 NEW="$HOME/new"; make_fake_bench "$NEW" newsite
 run_fm up --bench-dir "$NEW"; assert_eq "1" "$CODE"; assert_contains "$OUT" "not installed"
