@@ -48,7 +48,7 @@ case "$*" in
     check_login || { echo "ERROR 1045 (28000): Access denied for user '${user}'@'localhost'" >&2; exit 1; }
     sql="$(cat)"
     printf '%s\n' "$sql" >>"$state/mariadb_sql.log"
-    newpw="$(printf '%s\n' "$sql" | sed -n "s/.*ALTER USER 'root'@'localhost' IDENTIFIED VIA mysql_native_password USING PASSWORD('\([^']*\)').*/\1/p" | head -n1)"
+    newpw="$(printf '%s\n' "$sql" | sed -n "s/.*ALTER USER 'root'@'localhost' IDENTIFIED VIA \(unix_socket OR \)\{0,1\}mysql_native_password USING PASSWORD('\([^']*\)').*/\2/p" | head -n1)"
     [[ -n "$newpw" ]] && printf '%s' "$newpw" >"$pwfile"
     exit 0 ;;
 esac

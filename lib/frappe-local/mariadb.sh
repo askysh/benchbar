@@ -130,9 +130,15 @@ fl_sql_escape() { printf '%s' "$1" | sed "s/\\\\/\\\\\\\\/g; s/'/\\\\'/g"; }
 # password (native auth, as Frappe needs), drops anonymous users and the
 # test database, and limits root to this Mac.
 fl_mariadb_secure() {
-  local pw="$1" bin esc admin="${FL_MARIADB_ADMIN_USER:-root}"
+  local pw="$1" bin esc admin="${FL_MARIADB_ADMIN_USER:-root}" via="mysql_native_password"
   bin="$(fl_mariadb_client)"
   esc="$(fl_sql_escape "$pw")"
+  # a server administered through the OS account's socket login has root on
+  # unix_socket too (a fresh Homebrew install, or a mariadb-secure-installation
+  # that chose it; the two look alike from mysql.user). That rule stays, and
+  # the password is added next to it: root socket clients keep working and
+  # bench gets its password
+  [[ "$admin" == "root" ]] || via="unix_socket OR mysql_native_password"
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
     fl_info "dry-run: would set the root password, remove anonymous users and the test database, and block remote root (as ${admin})"
     return 0
@@ -143,7 +149,7 @@ DELETE FROM mysql.global_priv WHERE User='';
 DELETE FROM mysql.global_priv WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
 DROP DATABASE IF EXISTS test;
 DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
-ALTER USER 'root'@'localhost' IDENTIFIED VIA mysql_native_password USING PASSWORD('${esc}');
+ALTER USER 'root'@'localhost' IDENTIFIED VIA ${via} USING PASSWORD('${esc}');
 FLUSH PRIVILEGES;
 SQL
 }

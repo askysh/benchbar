@@ -339,7 +339,7 @@ assert_calls_not_contain '^sudo mariadb'
 PW="$(keychain_get)"
 [[ "${#PW}" -ge 20 ]] || fail "a generated password is expected in the Keychain, got [$PW]"
 assert_eq "$PW" "$(mariadb_pw)" "(root now has the Keychain password)"
-assert_contains "$(cat "$MOCK_STATE/mariadb_sql.log")" "IDENTIFIED VIA mysql_native_password"
+assert_contains "$(cat "$MOCK_STATE/mariadb_sql.log")" "IDENTIFIED VIA unix_socket OR mysql_native_password" "(root keeps its socket login next to the new password)"
 # the rerun verifies root with that password, as on any set up machine
 reset_calls; : >"$MOCK_STATE/mariadb_sql.log"
 MOCK_MARIADB_ROOT_SOCKET_ONLY=1 run00 --yes --profile v15-lts
