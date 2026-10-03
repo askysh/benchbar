@@ -128,10 +128,8 @@ fl_doctor_print_fix_hints() {
 # fl_profile_display: the profile for a header, with its source when it is
 # only the default ("v15-lts (default: no profile matches this bench)")
 fl_profile_display() {
-  case "${FL_PROFILE_SOURCE:-}" in
-    default) printf '%s (default: no profile matches this bench)' "$FL_PROFILE" ;;
-    *) printf '%s' "$FL_PROFILE" ;;
-  esac
+  # a fresh install has no bench to match yet: its default is the choice, not a guess
+  if fl_profile_is_guess; then printf '%s (default: no profile matches this bench)' "$FL_PROFILE"; else printf '%s' "$FL_PROFILE"; fi
 }
 
 # Prints the distinct repair actions of flagged checks, in dependency order.

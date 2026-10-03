@@ -240,6 +240,10 @@ DEV="$HOME/work/develop-bench"; make_fake_bench "$DEV" devsite
 mkdir -p "$DEV/apps/frappe/frappe"; printf '__version__ = "17.0.0-dev"\n' >"$DEV/apps/frappe/frappe/__init__.py"
 run_fm doctor --bench-dir "$DEV"
 assert_contains "$OUT" "profile  v15-lts (default: no profile matches this bench)"
+# a fresh install has no bench to match: the default carries no note
+run_fm install --dry-run --yes --bench-dir "$HOME/work/fresh-bench"
+assert_contains "$OUT" "profile  v15-lts"
+assert_not_contains "$OUT" "no profile matches"
 # a stored profile is named without the note
 run_fm doctor --bench-dir "$BENCH"
 assert_contains "$OUT" "profile  v15-lts "
@@ -296,6 +300,12 @@ for t in "$ROOT"/tests/mocks/bin/*; do [[ "$(basename "$t")" == "bench" ]] || ln
 PATH="$NOBENCH:$(printf '%s' "$PATH" | sed "s#$ROOT/tests/mocks/bin:##")" run_fm doctor --json --bench-dir "$BENCH"
 r="$(printf '%s' "$OUT" | jget - '"|".join(str([c for c in d["checks"] if c["id"] == "bench_version"][0][k]) for k in ("level", "message", "fix_command", "action"))')"
 assert_contains "$r" "fail|the bench command is not on the bench's PATH (frappe-bench is not installed)|uv tool install frappe-bench|None"
+# without uv on the Mac the fix names pipx, which is there (the system
+# folders only: the machine running the tests may have a real uv)
+rm "$NOBENCH/uv"
+PATH="$NOBENCH:/usr/bin:/bin" run_fm doctor --json --bench-dir "$BENCH"
+r="$(printf '%s' "$OUT" | jget - '"|".join(str([c for c in d["checks"] if c["id"] == "bench_version"][0][k]) for k in ("level", "message", "fix_command", "action"))')"
+assert_contains "$r" "fail|the bench command is not on the bench's PATH (frappe-bench is not installed)|pipx install frappe-bench|None"
 # a bench whose own venv is broken (bad interpreter, exit 127)
 MOCK_BENCH_VERSION_EXIT=127 MOCK_BENCH_VERSION_OUT="bash: /Users/me/.local/bin/bench: /Users/me/.local/share/uv/tools/frappe-bench/bin/python: bad interpreter: No such file or directory" run_fm doctor --json --bench-dir "$BENCH"
 r="$(printf '%s' "$OUT" | jget - '"|".join(str([c for c in d["checks"] if c["id"] == "bench_version"][0][k]) for k in ("level", "fix_command", "action"))')"

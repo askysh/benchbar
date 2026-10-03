@@ -228,8 +228,12 @@ chk_env_setuptools() {
 # fl_bench_cli_fix: the command that reinstalls the bench CLI with the
 # tool that owns it (uv unless pipx does)
 fl_bench_cli_fix() {
-  local how="${1:-install}"
-  if [[ "$(fl_bench_owner)" == "pipx" ]]; then
+  local how="${1:-install}" owner
+  owner="$(fl_bench_owner)"
+  # no bench at all: the tool that is on the Mac installs it (uv first, as
+  # the installer does), so the fix line is a command that runs
+  if [[ -z "$owner" ]] && ! command -v uv >/dev/null 2>&1 && command -v pipx >/dev/null 2>&1; then owner="pipx"; fi
+  if [[ "$owner" == "pipx" ]]; then
     case "$how" in install) printf 'pipx install frappe-bench' ;; *) printf 'pipx reinstall frappe-bench' ;; esac
   else
     case "$how" in install) printf 'uv tool install frappe-bench' ;; *) printf 'uv tool install --reinstall frappe-bench' ;; esac
