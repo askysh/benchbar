@@ -233,6 +233,12 @@ fl_bench_cli_fix() {
   # no bench at all: the tool that is on the Mac installs it (uv first, as
   # the installer does), so the fix line is a command that runs
   if [[ -z "$owner" ]] && ! command -v uv >/dev/null 2>&1 && command -v pipx >/dev/null 2>&1; then owner="pipx"; fi
+  # a bench that neither uv nor pipx installed: uv's reinstall would land in
+  # uv's own folder and leave the broken one first on PATH, so no guess
+  if [[ "$owner" == "other" ]]; then
+    printf "the bench at %s was not installed by uv or pipx: reinstall it with the tool that did, or remove it and run: uv tool install frappe-bench" "$(command -v bench 2>/dev/null || printf bench)"
+    return 0
+  fi
   if [[ "$owner" == "pipx" ]]; then
     case "$how" in install) printf 'pipx install frappe-bench' ;; *) printf 'pipx reinstall frappe-bench' ;; esac
   else

@@ -309,7 +309,7 @@ assert_contains "$r" "fail|the bench command is not on the bench's PATH (frappe-
 # a bench whose own venv is broken (bad interpreter, exit 127)
 MOCK_BENCH_VERSION_EXIT=127 MOCK_BENCH_VERSION_OUT="bash: /Users/me/.local/bin/bench: /Users/me/.local/share/uv/tools/frappe-bench/bin/python: bad interpreter: No such file or directory" run_fm doctor --json --bench-dir "$BENCH"
 r="$(printf '%s' "$OUT" | jget - '"|".join(str([c for c in d["checks"] if c["id"] == "bench_version"][0][k]) for k in ("level", "fix_command", "action"))')"
-assert_contains "$r" "fail|uv tool install --reinstall frappe-bench|None"
+assert_contains "$r" "fail|the bench at $ROOT/tests/mocks/bin/bench was not installed by uv or pipx: reinstall it with the tool that did, or remove it and run: uv tool install frappe-bench|None"
 assert_contains "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "bench_version"][0]["message"]')" "its own venv is broken, not the bench env"
 # an app that does not import is named; frappe itself failing keeps the rebuild
 MOCK_BENCH_VERSION_EXIT=1 MOCK_BENCH_VERSION_OUT="ModuleNotFoundError: No module named 'erpnext'" run_fm doctor --json --bench-dir "$BENCH"
