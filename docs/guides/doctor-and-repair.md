@@ -347,7 +347,9 @@ Fix: `benchbar profile update NAME` (shows the changes and asks).
 
 `bench.log`, `worker.log` and `worker.error.log` are under 50 MB each.
 
-Fix: `benchbar repair` moves large logs aside.
+Fix: `benchbar repair` copies each large log to `<name>.old.<stamp>` and
+empties the live file in place, so the bench's processes keep writing to
+the file they have open. At most three copies are kept.
 
 ## Service checks
 
@@ -524,8 +526,8 @@ out the agent that points at the path and moves its plist to
 
 `/etc/hosts` maps the site to 127.0.0.1.
 
-Fix: `benchbar repair` adds the line (with `sudo`), or
-`printf '127.0.0.1 <site>\n' | sudo tee -a /etc/hosts`.
+Fix: `benchbar repair` adds the line inside its `/etc/hosts` block (with
+`sudo`). A declined question leaves the step `skipped`.
 
 ### port_clash
 

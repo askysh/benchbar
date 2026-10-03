@@ -113,7 +113,9 @@ share ([Sharing a profile](../guides/teams.md#sharing-a-profile)).
 The one line installer reads `BENCHBAR_HOME` (the checkout, default
 `~/.local/share/benchbar`), `BENCHBAR_BIN_DIR` (default `~/.local/bin`),
 `BENCHBAR_APP_DIR` (default `~/Applications`) and `BENCHBAR_RC_FILE`
-(default `~/.zshrc`).
+(default `~/.zshrc`). The CLI writes its helper block to `$ZDOTDIR/.zshrc`
+when `ZDOTDIR` is set, and remembers that file, so a run started by the
+app or launchd (without the terminal's variables) finds the same block.
 
 ## Bench discovery
 

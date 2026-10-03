@@ -9,6 +9,8 @@ FL_ACTION_ORDER="python_leaves node_install yarn_install env_rebuild env_setupto
 # actions whose check may stay a warning after a run without failing it:
 # the user may decline them (or sudo) on purpose
 FL_OPTIONAL_ACTIONS="wkhtmltopdf_install hosts_entry redis_stop"
+# actions that are only a question to the person (nothing to apply under --yes)
+fl_action_is_question() { [[ "$1" == "redis_stop" ]]; }
 FL_NEED_CLEAR_CACHE=0
 # set by legacy_migrate when it booted out an agent that was running the
 # bench, so write_plist starts the bench again under the new agent
@@ -39,7 +41,7 @@ fl_action_label() {
       if [[ -n "$(fl_brew_cli)" ]]; then printf 'point ~/.local/bin/benchbar and frappe-mac at %s' "$FL_SELF"
       else printf 'link benchbar and frappe-mac into ~/.local/bin'; fi ;;
     hosts_entry) printf 'add %s to /etc/hosts (sudo)' "$FL_SITE" ;;
-    rotate_logs) printf 'move large logs aside' ;;
+    rotate_logs) printf 'copy large logs aside and truncate them' ;;
     redis_stop) printf 'stop Homebrew redis on 6379' ;;
     *) printf '%s' "$1" ;;
   esac
@@ -113,7 +115,7 @@ act_env_rebuild() {
   [[ -x "$py" ]] || py="$(command -v "$FL_PYTHON_BIN_NAME" || true)"
   [[ -n "$py" ]] || { fl_fail "${FL_PYTHON_BIN_NAME} not found; run 00-mac-system-deps.sh first"; return 1; }
   fl_bench_env_exports
-  fl_move_aside "${FL_BENCH_DIR}/env" broken
+  fl_move_aside "${FL_BENCH_DIR}/env" broken || return 1
   fl_run_long "bench setup env --python ${py}" fl_in_bench bench setup env --python "$py" || return 1
   fl_run_long "bench setup requirements --python" fl_in_bench bench setup requirements --python || return 1
   # Frappe v15 imports pkg_resources, which setuptools 70+ no longer ships
@@ -198,14 +200,14 @@ act_clear_cache() {
 }
 
 act_mariadb_bind() {
-  fl_mariadb_dropin_apply mariadb-local-only.cnf "$(fl_mariadb_dropin_path)"
+  fl_mariadb_dropin_apply mariadb-local-only.cnf "$(fl_mariadb_dropin_path)" || return 1
   if [[ -n "$(fl_port_listen_addresses 3306)" ]]; then
     fl_mariadb_restart_if_running || return 1
   fi
 }
 
 act_mariadb_utf8() {
-  fl_mariadb_dropin_apply mariadb-frappe.cnf "$(fl_mariadb_utf8_dropin_path)"
+  fl_mariadb_dropin_apply mariadb-frappe.cnf "$(fl_mariadb_utf8_dropin_path)" || return 1
   if [[ "$FL_TEMPLATE_CHANGED" == "1" ]]; then
     fl_mariadb_restart_if_running || return 1
   fi
@@ -221,15 +223,20 @@ act_wkhtmltopdf_install() {
 }
 
 act_legacy_migrate() {
-  local list path label state code
+  local list path label state code failed=0
   list="$(fl_legacy_agents_list)"
   [[ -n "$list" ]] || return 0
   fl_bench_is_running && FL_MIGRATED_RUNNING=1
   while IFS='|' read -r path label state code; do
     [[ -n "$path" ]] || continue
     fl_info "${label}: ${state}, last exit code ${code}"
-    fl_legacy_agent_migrate "$path" "$label"
+    fl_legacy_agent_migrate "$path" "$label" || failed=1
   done <<<"$list"
+  [[ "$failed" == "0" ]] || { fl_fail "a legacy agent could not be migrated; run benchbar repair again once launchd has let go of it"; return 1; }
+  # the old runner is free once no legacy agent runs it (the write_runner
+  # and write_plist steps retire it too, but they may have nothing to write)
+  fl_runner_legacy_retire || return 1
+  return 0
 }
 
 # Runs before write_procfile and the runner: fl_ports_apply re-renders them
@@ -246,16 +253,16 @@ act_port_block() {
 }
 
 act_write_procfile() {
-  fl_template_apply "$(fl_procfile_path)" "$FL_R_PROCFILE" 644
+  fl_template_apply "$(fl_procfile_path)" "$FL_R_PROCFILE" 644 || return 1
   [[ "$FL_TEMPLATE_CHANGED" == "1" && "${FL_DRY_RUN:-0}" != "1" ]] && fl_ok "wrote $(fl_procfile_path)"
   return 0
 }
 
 act_write_runner() {
-  [[ "${FL_DRY_RUN:-0}" == "1" ]] || mkdir -p "${FL_BENCH_DIR}/logs"
-  fl_template_apply "$(fl_runner_path)" "$FL_R_RUNNER" 755
+  [[ "${FL_DRY_RUN:-0}" == "1" ]] || mkdir -p "${FL_BENCH_DIR}/logs" 2>/dev/null || { fl_fail "could not create ${FL_BENCH_DIR}/logs"; return 1; }
+  fl_template_apply "$(fl_runner_path)" "$FL_R_RUNNER" 755 || return 1
   [[ "$FL_TEMPLATE_CHANGED" == "1" && "${FL_DRY_RUN:-0}" != "1" ]] && fl_ok "wrote $(fl_runner_path)"
-  fl_runner_legacy_retire
+  fl_runner_legacy_retire || return 1
   return 0
 }
 
@@ -271,7 +278,7 @@ fl_runner_legacy_retire() {
     fl_info "dry-run: would move the old runner ${old} to the backups"
     return 0
   fi
-  fl_backup_file "$old"
+  fl_backup_file "$old" || return 1
   rm -f "$old"
   fl_ok "retired the old runner ${old} (backup: ${FL_LAST_BACKUP})"
 }
@@ -300,8 +307,8 @@ act_write_plist() {
       printf 'manual\n' >"$flag"
     fi
   fi
-  [[ "${FL_DRY_RUN:-0}" == "1" ]] || mkdir -p "$(dirname "$plist")"
-  fl_template_apply "$plist" "$FL_R_PLIST" 644
+  [[ "${FL_DRY_RUN:-0}" == "1" ]] || mkdir -p "$(dirname "$plist")" 2>/dev/null || { fl_fail "could not create $(dirname "$plist")"; return 1; }
+  fl_template_apply "$plist" "$FL_R_PLIST" 644 || return 1
   [[ "$FL_TEMPLATE_CHANGED" == "1" && "${FL_DRY_RUN:-0}" != "1" ]] && fl_ok "wrote ${plist}"
   if fl_agent_loaded; then
     [[ "$FL_TEMPLATE_CHANGED" == "1" ]] || return 0
@@ -334,7 +341,7 @@ act_write_helpers() {
       return 0
     fi
   fi
-  fl_rc_block_write "$rc" "$FL_R_HELPERS"
+  fl_rc_block_write "$rc" "$FL_R_HELPERS" || return 1
   [[ "${FL_DRY_RUN:-0}" == "1" ]] || fl_ok "helper block written to ${rc} (open a new shell or: source ${rc})"
 }
 
@@ -398,18 +405,22 @@ act_hosts_entry() {
     return 0
   fi
   if ! fl_confirm "Add '${line}' to ${FL_HOSTS_FILE} with sudo?"; then
-    fl_warn "skipped; run: printf '${line}\\n' | sudo tee -a ${FL_HOSTS_FILE}"
-    return 0
-  fi
-  if ! fl_sudo_begin "add '${line}' to ${FL_HOSTS_FILE}"; then
-    fl_warn "skipped without sudo; run: printf '${line}\\n' | sudo tee -a ${FL_HOSTS_FILE}"
+    # declined: the step is skipped, not done; the fix keeps the line inside
+    # benchbar's block, where site drop can remove it again
+    fl_warn "skipped; run: ${FL_SELF} repair --bench-dir ${FL_BENCH_DIR}   (adds '${line}' inside the benchbar block)"
     FL_STEP_RESULT="skipped"
     return 0
   fi
-  fl_backup_file "$FL_HOSTS_FILE"
+  if ! fl_sudo_begin "add '${line}' to ${FL_HOSTS_FILE}"; then
+    fl_warn "skipped without sudo; run: ${FL_SELF} repair --bench-dir ${FL_BENCH_DIR}   (adds '${line}' inside the benchbar block)"
+    FL_STEP_RESULT="skipped"
+    return 0
+  fi
+  fl_backup_file "$FL_HOSTS_FILE" || return 1
   if [[ "$(fl_rc_markers_state "$FL_HOSTS_FILE" "$FL_HOSTS_START" "$FL_HOSTS_END")" == "present" ]]; then
-    tmp="$(mktemp "${TMPDIR:-/tmp}/benchbar-hosts.XXXXXX")"
-    awk -v e="$FL_HOSTS_END" -v l="$line" '$0 == e { print l } { print }' "$FL_HOSTS_FILE" >"$tmp"
+    tmp="$(mktemp "${TMPDIR:-/tmp}/benchbar-hosts.XXXXXX")" || { fl_fail "could not create a temp file"; return 1; }
+    awk -v e="$FL_HOSTS_END" -v l="$line" '$0 == e { print l } { print }' "$FL_HOSTS_FILE" >"$tmp" || { rm -f "$tmp"; fl_fail "could not rewrite ${FL_HOSTS_FILE}; it is unchanged"; return 1; }
+    [[ -s "$tmp" ]] || { rm -f "$tmp"; fl_fail "the new ${FL_HOSTS_FILE} would be empty; not writing it"; return 1; }
     sudo cp "$tmp" "$FL_HOSTS_FILE" || { rm -f "$tmp"; fl_fail "sudo cp failed"; return 1; }
     rm -f "$tmp"
   else
@@ -419,12 +430,37 @@ act_hosts_entry() {
   fl_ok "added '${line}' to ${FL_HOSTS_FILE} (backup: ${FL_LAST_BACKUP:-none})"
 }
 
+# The logs are open while the bench runs (bench.log is launchd's
+# StandardOutPath, the worker logs are Procfile redirections), so a rename
+# would take the writers along and the live file would stay empty for good.
+# Copy, then truncate in place: the writers keep their file. At most
+# FL_LOG_KEEP_OLD copies stay; older ones go, oldest first.
+FL_LOG_KEEP_OLD="${FL_LOG_KEEP_OLD:-3}"
 act_rotate_logs() {
-  local f mb
+  local f mb src dest olds total i
   for f in bench.log worker.log worker.error.log; do
-    mb="$(fl_file_mb "${FL_BENCH_DIR}/logs/${f}")"
+    src="${FL_BENCH_DIR}/logs/${f}"
+    mb="$(fl_file_mb "$src")"
     [[ "$mb" -ge "$FL_LOG_WARN_MB" ]] || continue
-    fl_move_aside "${FL_BENCH_DIR}/logs/${f}" old
+    dest="${src}.old.$(fl_backup_stamp)"
+    if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
+      fl_info "dry-run: would copy ${src} to ${dest} and truncate it in place (the bench keeps writing to it)"
+      continue
+    fi
+    cp -p "$src" "$dest" 2>/dev/null || { fl_fail "could not copy ${src} to ${dest}"; return 1; }
+    : >"$src" 2>/dev/null || { fl_fail "could not truncate ${src}"; return 1; }
+    fl_log "rotated ${src} -> ${dest}"
+    fl_info "rotated: ${dest} (the live ${f} starts empty)"
+    # the oldest copies past the cap: the stamp in the name sorts by time,
+    # so the glob's order is oldest first
+    olds=("${src}".old.*)
+    total=0
+    [[ -e "${olds[0]}" ]] && total="${#olds[@]}"
+    i=0
+    while [[ $((total - i)) -gt "$FL_LOG_KEEP_OLD" ]]; do
+      rm -f "${olds[$i]}" && fl_info "removed the old copy ${olds[$i]} (keeping ${FL_LOG_KEEP_OLD})"
+      i=$((i + 1))
+    done
   done
 }
 
@@ -433,8 +469,10 @@ act_redis_stop() {
     fl_info "dry-run: would offer to stop Homebrew redis on 6379"
     return 0
   fi
-  if [[ "${FL_ASSUME_YES:-0}" == "1" ]]; then
-    fl_info "not stopping redis on 6379 automatically under --yes; run: brew services stop redis"
+  if [[ "${FL_ASSUME_YES:-0}" == "1" || ! -t 0 ]]; then
+    # a question nobody can answer: the step is skipped, never "done"
+    fl_info "not stopping redis on 6379 without being asked; run: brew services stop redis   (only if nothing else needs it)"
+    FL_STEP_RESULT="skipped"
     return 0
   fi
   if fl_confirm "Stop Homebrew redis on 6379? (only if nothing else on this Mac uses it)"; then
@@ -504,12 +542,19 @@ fl_log_step_message() {
 # Returns 0 when everything is healthy afterwards, 1 when something failed.
 fl_repair_engine() {
   shift
-  local actions action i n=0 rows=() unchanged remaining status labels step_from
+  local actions action i n=0 rows=() unchanged remaining status labels step_from optional_left=""
   fl_doctor_run "$@"
   actions=""
   for action in $(fl_doctor_actions); do
     # FL_ENGINE_SKIP_ACTIONS: actions a command refuses to run (adopt never installs into env)
     case " ${FL_ENGINE_SKIP_ACTIONS:-} " in *" $action "*) continue ;; esac
+    # an action that is only a question (stop the Homebrew redis?) is left
+    # out when nobody can answer it (--yes, no terminal): it would be
+    # "skipped" on every run and a second repair could never say unchanged
+    if fl_action_is_question "$action" && [[ "${FL_ASSUME_YES:-0}" == "1" || ! -t 0 ]] && [[ "${FL_DRY_RUN:-0}" != "1" ]]; then
+      optional_left="${optional_left}${optional_left:+, }$(fl_action_label "$action")"
+      continue
+    fi
     actions="${actions}${actions:+ }${action}"
   done
   unchanged=$(( ${#FL_D_IDS[@]} - $(fl_doctor_count warn) - $(fl_doctor_count fail) ))
@@ -527,6 +572,7 @@ fl_repair_engine() {
     fi
     if [[ "$(fl_doctor_count warn)" != "0" ]]; then
       fl_ok "unchanged: $(fl_doctor_count ok) checks pass, $(fl_doctor_count warn) warning(s) need a manual step (see above)"
+      [[ -z "$optional_left" ]] || fl_info "optional, not asked without a terminal or under --yes: ${optional_left}"
       return 0
     fi
     fl_ok "unchanged: all ${#FL_D_IDS[@]} checks pass, nothing to do"
@@ -581,7 +627,9 @@ fl_repair_engine() {
       fl_event_step "$action" failed "$(fl_log_step_message "${step_from:-0}")"
       status=1
       case "$action" in
-        env_rebuild|honcho_install|node_install) fl_warn "stopping: later steps depend on this one"; break ;;
+        # a legacy agent that is still loaded must not get a second agent for
+        # the same bench next to it (two runners, two honchos)
+        env_rebuild|honcho_install|node_install|legacy_migrate) fl_warn "stopping: later steps depend on this one"; break ;;
       esac
     fi
     i=$((i + 1))

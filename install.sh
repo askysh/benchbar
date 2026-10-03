@@ -47,7 +47,8 @@ BENCHBAR_HOME="${BENCHBAR_HOME:-$HOME/.local/share/benchbar}"
 BIN_DIR="${BENCHBAR_BIN_DIR:-$HOME/.local/bin}"
 APP_DIR="${BENCHBAR_APP_DIR:-$HOME/Applications}"
 APP="${APP_DIR}/BenchBar.app"
-RC_FILE="${BENCHBAR_RC_FILE:-$HOME/.zshrc}"
+# zsh reads $ZDOTDIR/.zshrc when ZDOTDIR is set
+RC_FILE="${BENCHBAR_RC_FILE:-${ZDOTDIR:-$HOME}/.zshrc}"
 RC_START="# >>> benchbar-path >>>"
 RC_END="# <<< benchbar-path <<<"
 
@@ -158,6 +159,33 @@ rc_block_content() {
     "$RC_END"
 }
 
+# rc_target: the file a symlinked rc file points at (a dotfiles repo), so
+# the write lands there and the link stays a link
+rc_target() {
+  local target="$RC_FILE" dir link
+  while [[ -L "$target" ]]; do
+    dir="$(cd "$(dirname "$target")" 2>/dev/null && pwd)" || break
+    link="$(readlink "$target")" || break
+    case "$link" in /*) target="$link" ;; *) target="${dir}/${link}" ;; esac
+  done
+  printf '%s' "$target"
+}
+
+# rc_replace TMP: TMP's content into the rc file: written next to the
+# resolved target with its mode, then renamed onto it in one step (a link
+# above it stays a link); the file is unchanged when anything fails
+rc_replace() {
+  local tmp="$1" target new mode
+  target="$(rc_target)"
+  [[ -s "$tmp" ]] || { rm -f "$tmp"; die "the new content for ${RC_FILE} is empty; not writing it"; }
+  new="$(mktemp "${target}.XXXXXX" 2>/dev/null)" || { rm -f "$tmp"; die "could not write next to ${RC_FILE}" "check the folder's permissions; the file is unchanged"; }
+  cat "$tmp" >"$new" 2>/dev/null || { rm -f "$tmp" "$new"; die "could not write ${RC_FILE}" "check its permissions; the file is unchanged"; }
+  if [[ -e "$target" ]]; then mode="$(stat -c '%a' "$target" 2>/dev/null || stat -f '%Lp' "$target" 2>/dev/null)"; else mode=644; fi
+  [[ -z "$mode" ]] || chmod "$mode" "$new" 2>/dev/null
+  mv -f "$new" "$target" 2>/dev/null || { rm -f "$tmp" "$new"; die "could not write ${RC_FILE}" "check its permissions; the file is unchanged"; }
+  rm -f "$tmp"
+}
+
 rc_block_write() {
   local want have tmp
   want="$(rc_block_content)"
@@ -165,15 +193,17 @@ rc_block_write() {
     have="$(awk -v s="$RC_START" -v e="$RC_END" '$0 == s {p = 1} p {print} $0 == e {p = 0}' "$RC_FILE")"
     if [[ "$have" == "$want" ]]; then same "PATH block in ${RC_FILE}"; return 0; fi
     if [[ "$DRY" == "1" ]]; then info "dry-run: would refresh the PATH block in ${RC_FILE}"; return 0; fi
-    tmp="$(mktemp "${TMPDIR:-/tmp}/benchbar-rc.XXXXXX")"
-    awk -v s="$RC_START" -v e="$RC_END" '$0 == s {skip = 1} !skip {print} $0 == e {skip = 0}' "$RC_FILE" >"$tmp"
-    { cat "$tmp"; printf '\n%s\n' "$want"; } >"$RC_FILE"
-    rm -f "$tmp"
+    tmp="$(mktemp "${TMPDIR:-/tmp}/benchbar-rc.XXXXXX")" || die "could not create a temp file"
+    { awk -v s="$RC_START" -v e="$RC_END" '$0 == s {skip = 1} !skip {print} $0 == e {skip = 0}' "$RC_FILE" && printf '\n%s\n' "$want"; } >"$tmp" \
+      || { rm -f "$tmp"; die "could not rewrite ${RC_FILE}" "the file is unchanged"; }
+    rc_replace "$tmp"
     ok "PATH block refreshed in ${RC_FILE}"
   else
     if [[ "$DRY" == "1" ]]; then info "dry-run: would append the PATH block to ${RC_FILE}"; return 0; fi
-    { [[ -f "$RC_FILE" ]] && cat "$RC_FILE"; printf '\n%s\n' "$want"; } >"${RC_FILE}.benchbar.tmp"
-    mv "${RC_FILE}.benchbar.tmp" "$RC_FILE"
+    tmp="$(mktemp "${TMPDIR:-/tmp}/benchbar-rc.XXXXXX")" || die "could not create a temp file"
+    { if [[ -f "$RC_FILE" ]]; then cat "$RC_FILE"; fi; printf '\n%s\n' "$want"; } >"$tmp" \
+      || { rm -f "$tmp"; die "could not read ${RC_FILE}" "the file is unchanged"; }
+    rc_replace "$tmp"
     ok "added ${BIN_DIR} to PATH in ${RC_FILE}"
   fi
   CHANGED=1
@@ -183,9 +213,11 @@ rc_block_remove() {
   [[ "$(rc_block_state)" == "present" ]] || { same "no PATH block in ${RC_FILE}"; return 0; }
   if [[ "$DRY" == "1" ]]; then info "dry-run: would remove the PATH block from ${RC_FILE}"; return 0; fi
   local tmp
-  tmp="$(mktemp "${TMPDIR:-/tmp}/benchbar-rc.XXXXXX")"
-  awk -v s="$RC_START" -v e="$RC_END" '$0 == s {skip = 1} !skip {print} $0 == e {skip = 0}' "$RC_FILE" >"$tmp"
-  mv "$tmp" "$RC_FILE"
+  tmp="$(mktemp "${TMPDIR:-/tmp}/benchbar-rc.XXXXXX")" || die "could not create a temp file"
+  awk -v s="$RC_START" -v e="$RC_END" '$0 == s {skip = 1} !skip {print} $0 == e {skip = 0}' "$RC_FILE" >"$tmp" \
+    || { rm -f "$tmp"; die "could not rewrite ${RC_FILE}" "the file is unchanged"; }
+  # a file that held only the block is empty afterwards
+  if [[ -s "$tmp" ]]; then rc_replace "$tmp"; else : >"$(rc_target)"; rm -f "$tmp"; fi
   ok "removed the PATH block from ${RC_FILE}"
   CHANGED=1
 }

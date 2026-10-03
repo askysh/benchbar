@@ -20,11 +20,20 @@ FL_RC_LEGACY_START="# >>> frappe-mac >>>"
 FL_RC_LEGACY_END="# <<< frappe-mac <<<"
 
 fl_rc_file() {
+  local stored
   if [[ -n "${FL_RC_FILE:-}" ]]; then printf '%s' "$FL_RC_FILE"; return 0; fi
   case "$(basename "${SHELL:-zsh}")" in
     bash)
       if [[ -f "$HOME/.bashrc" ]]; then printf '%s' "$HOME/.bashrc"; else printf '%s' "$HOME/.bash_profile"; fi ;;
-    *) printf '%s' "$HOME/.zshrc" ;;
+    *)
+      # zsh reads $ZDOTDIR/.zshrc when ZDOTDIR is set (dotfile managers do
+      # that). The app and launchd start the CLI without the terminal's
+      # variables, so the file a block was written to is remembered
+      # (RC_FILE in the state) and found again without ZDOTDIR.
+      if [[ -n "${ZDOTDIR:-}" ]]; then printf '%s/.zshrc' "$ZDOTDIR"; return 0; fi
+      stored="$(fl_state_get RC_FILE 2>/dev/null || true)"
+      if [[ -n "$stored" && -e "$stored" ]]; then printf '%s' "$stored"; return 0; fi
+      printf '%s/.zshrc' "$HOME" ;;
   esac
 }
 
@@ -81,7 +90,53 @@ fl_template_header_of_stdin() {
   fl_template_header_key
 }
 
+# fl_rc_target FILE: the file a symlinked rc file points at, resolved link by
+# link, so the write lands in the real file (a dotfiles repo) and the link
+# stays a link; FILE itself when it is no link.
+fl_rc_target() {
+  local target="$1" dir link
+  while [[ -L "$target" ]]; do
+    dir="$(cd "$(dirname "$target")" 2>/dev/null && pwd)" || break
+    link="$(readlink "$target")" || break
+    case "$link" in /*) target="$link" ;; *) target="${dir}/${link}" ;; esac
+  done
+  printf '%s' "$target"
+}
+
+# fl_rc_replace_file FILE TMP: puts TMP's content into FILE. The new file
+# is written next to the resolved target with the target's mode and renamed
+# onto it: the rename is one step (a write cut short leaves the old file),
+# and a symlink above the target stays a symlink. FILE is created when it
+# does not exist. TMP is removed. Fails without touching FILE when TMP is
+# not a complete file.
+fl_rc_replace_file() {
+  local file="$1" tmp="$2" target new mode
+  target="$(fl_rc_target "$file")"
+  [[ -s "$tmp" ]] || { rm -f "$tmp"; fl_fail "the new content for ${file} is empty; not writing it"; return 1; }
+  new="$(mktemp "${target}.XXXXXX" 2>/dev/null)" || { rm -f "$tmp"; fl_fail "could not write next to ${target}"; return 1; }
+  if ! cat "$tmp" >"$new" 2>/dev/null; then
+    rm -f "$tmp" "$new"
+    fl_fail "could not write ${target}"
+    return 1
+  fi
+  if [[ -e "$target" ]]; then
+    # GNU stat first: BSD stat has no -c and fails quietly, GNU's -f prints filesystem data
+    mode="$(stat -c '%a' "$target" 2>/dev/null || stat -f '%Lp' "$target" 2>/dev/null)"
+  else
+    mode=644
+  fi
+  [[ -z "$mode" ]] || chmod "$mode" "$new" 2>/dev/null
+  if ! mv -f "$new" "$target" 2>/dev/null; then
+    rm -f "$tmp" "$new"
+    fl_fail "could not write ${target}; it is as it was"
+    return 1
+  fi
+  rm -f "$tmp"
+}
+
 # fl_rc_block_write FILE CONTENT: replace in place or append. Backs up first.
+# Every stage is checked: a backup, a read or an awk that fails leaves the
+# file as it was (an unchecked temp copy wiped a ~/.zshrc before).
 fl_rc_block_write() {
   local file="$1" content="$2" state tmp body
   state="$(fl_rc_block_state "$file")"
@@ -94,31 +149,37 @@ fl_rc_block_write() {
     esac
     return 0
   fi
-  fl_backup_file "$file"
-  body="$(mktemp "${TMPDIR:-/tmp}/benchbar-rc.XXXXXX")"
-  printf '%s\n' "$content" >"$body"
-  tmp="$(mktemp "${TMPDIR:-/tmp}/benchbar-rc.XXXXXX")"
+  fl_backup_file "$file" || return 1
+  body="$(mktemp "${TMPDIR:-/tmp}/benchbar-rc.XXXXXX")" || return 1
+  printf '%s\n' "$content" >"$body" || { rm -f "$body"; return 1; }
+  tmp="$(mktemp "${TMPDIR:-/tmp}/benchbar-rc.XXXXXX")" || { rm -f "$body"; return 1; }
   case "$state" in
     present|legacy)
       local from_start="$FL_RC_START" from_end="$FL_RC_END"
       if [[ "$state" == "legacy" ]]; then from_start="$FL_RC_LEGACY_START"; from_end="$FL_RC_LEGACY_END"; fi
       # the new markers go where the old block was, so its place in the file is kept
-      awk -v s="$from_start" -v e="$from_end" -v ns="$FL_RC_START" -v ne="$FL_RC_END" -v body="$body" '
+      if ! awk -v s="$from_start" -v e="$from_end" -v ns="$FL_RC_START" -v ne="$FL_RC_END" -v body="$body" '
         $0 == s { print ns; while ((getline l < body) > 0) print l; close(body); skip = 1; next }
         $0 == e { skip = 0; print ne; next }
-        !skip { print }' "$file" >"$tmp"
+        !skip { print }' "$file" >"$tmp"; then
+        rm -f "$tmp" "$body"; fl_fail "could not rewrite the block in ${file}; the file is unchanged"; return 1
+      fi
       fl_log "replaced the ${state} block in ${file}"
       ;;
     *)
       if [[ "$state" == "broken" ]]; then
         fl_warn "${file} has malformed benchbar markers; appending a fresh block. Remove the old one by hand."
       fi
-      { [[ -f "$file" ]] && cat "$file"; printf '\n%s\n' "$FL_RC_START"; cat "$body"; printf '%s\n' "$FL_RC_END"; } >"$tmp"
+      if ! { if [[ -f "$file" ]]; then cat "$file"; fi; printf '\n%s\n' "$FL_RC_START"; cat "$body"; printf '%s\n' "$FL_RC_END"; } >"$tmp"; then
+        rm -f "$tmp" "$body"; fl_fail "could not read ${file}; the file is unchanged"; return 1
+      fi
       fl_log "appended benchbar block to ${file}"
       ;;
   esac
-  mv "$tmp" "$file"
   rm -f "$body"
+  fl_rc_replace_file "$file" "$tmp" || return 1
+  # the file this block lives in, for a run without the terminal's ZDOTDIR
+  fl_state_set RC_FILE "$file"
 }
 
 # fl_rc_block_remove FILE: removes the block, benchbar or legacy frappe-mac.
@@ -134,13 +195,17 @@ fl_rc_block_remove() {
     fl_info "dry-run: would remove the benchbar block from ${file}"
     return 0
   fi
-  fl_backup_file "$file"
-  tmp="$(mktemp "${TMPDIR:-/tmp}/benchbar-rc.XXXXXX")"
-  awk -v s="$start" -v e="$end" '
+  fl_backup_file "$file" || return 1
+  tmp="$(mktemp "${TMPDIR:-/tmp}/benchbar-rc.XXXXXX")" || return 1
+  if ! awk -v s="$start" -v e="$end" '
     $0 == s { skip = 1; next }
     $0 == e { skip = 0; next }
-    !skip { print }' "$file" >"$tmp"
-  mv "$tmp" "$file"
+    !skip { print }' "$file" >"$tmp"; then
+    rm -f "$tmp"; fl_fail "could not rewrite ${file}; the file is unchanged"; return 1
+  fi
+  # a file that held only the block is empty afterwards: that is a valid result
+  if [[ ! -s "$tmp" ]]; then : >"$(fl_rc_target "$file")" || { rm -f "$tmp"; return 1; }; rm -f "$tmp"
+  else fl_rc_replace_file "$file" "$tmp" || return 1; fi
   fl_log "removed benchbar block from ${file}"
 }
 

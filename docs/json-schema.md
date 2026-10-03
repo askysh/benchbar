@@ -50,7 +50,7 @@ Raycast extensions and the like can rely on it too.
 
 | `state` | Meaning | `stop_reason` |
 |---|---|---|
-| `stopped` | not running | `manual` after `benchdown`, `null` otherwise (never started, clean exit, restart in progress) |
+| `stopped` | not running | `manual` after `benchdown`, `null` otherwise (never started, logout or restart in progress) |
 | `starting` | processes are up, the site does not answer yet | `null` |
 | `running` | processes are up and the site answers HTTP | `null` |
 | `crashed` | honcho exited with an error; launchd retries after 20 seconds | `crash` |
@@ -774,7 +774,8 @@ Transitions the runner writes:
 | a process that is not this bench's still holds one of its ports after the cleanup | `paused` | `port_conflict` |
 | honcho started | `starting` | `null` |
 | the site answered 200 (checked every 2 seconds for 4 minutes) | `running` | `null` |
-| honcho exited 0, or the runner got SIGTERM without a stop flag | `stopped` | `null` |
+| the runner got SIGTERM without a stop flag (logout, restart, shutdown) | `stopped` | `null` |
+| honcho exited 0 without a stop flag (0.7.3: a bench never ends on its own, so launchd restarts it) | `crashed` | `crash` |
 | `benchdown` stopped it | `stopped` | `manual` |
 | honcho exited with an error | `crashed` | `crash` |
 

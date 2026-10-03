@@ -1,5 +1,5 @@
 #!/bin/bash
-#@version 5
+#@version 6
 #@unhashed CLI_VERSION
 # __HEADER__
 #
@@ -90,11 +90,28 @@ if [ ! -x "$BENCH/env/bin/python" ]; then
   exit 0
 fi
 
-# crash guard: at most MAX_STARTS starts inside WINDOW seconds
+# crash guard: at most MAX_STARTS starts inside WINDOW seconds. The guard
+# fails closed: when the start history or the stop flag cannot be written
+# (a full disk, a folder gone read only) nothing would ever stop launchd's
+# restarts, so the runner pauses with "broken" instead of starting.
+broken() {
+  echo "$(date '+%F %T') $1; run: benchbar doctor" >> "$LOG" 2>/dev/null
+  echo "broken" > "$STOPFLAG" 2>/dev/null
+  write_state paused broken "" "" "$(prev_exit)" ""
+  notify "$2"
+  exit 0
+}
 now=$(date +%s)
-touch "$HIST"
-awk -v n="$now" -v w="$WINDOW" '(n - $1) < w' "$HIST" > "$HIST.tmp" && mv "$HIST.tmp" "$HIST"
-echo "$now" >> "$HIST"
+touch "$HIST" 2>/dev/null || broken "cannot write $HIST" "The bench's logs folder is not writable. Run benchbar doctor."
+# the stop flag must be writable too: it is how a crash loop is stopped
+( : >> "$STOPFLAG.probe" && rm -f "$STOPFLAG.probe" ) 2>/dev/null || broken "cannot write $STOPFLAG" "The bench's logs folder is not writable. Run benchbar doctor."
+if awk -v n="$now" -v w="$WINDOW" '(n - $1) < w' "$HIST" > "$HIST.tmp" 2>/dev/null; then
+  mv -f "$HIST.tmp" "$HIST" 2>/dev/null || broken "cannot update $HIST" "The crash guard cannot keep its history. Run benchbar doctor."
+else
+  rm -f "$HIST.tmp"
+  broken "cannot read or update $HIST" "The crash guard cannot keep its history. Run benchbar doctor."
+fi
+echo "$now" >> "$HIST" 2>/dev/null || broken "cannot append to $HIST" "The crash guard cannot keep its history. Run benchbar doctor."
 if [ "$(wc -l < "$HIST" | tr -d ' ')" -gt "$MAX_STARTS" ]; then
   echo "$(date '+%F %T') crashed $MAX_STARTS times in $((WINDOW / 60)) min, auto-restart paused" >> "$LOG"
   echo "crash" > "$STOPFLAG"
@@ -214,10 +231,17 @@ if [ "$TERMED" = "1" ]; then
   write_state stopped "" "" "$started" "$code" ""
   exit 0
 fi
-if [ "$code" != "0" ]; then
-  echo "$(date '+%F %T') honcho exited with code $code" >> "$LOG"
-  write_state crashed crash "" "$started" "$code" ""
-  exit "$code"
+# Without a stop flag and without a signal, no exit of honcho is a stop the
+# person asked for: honcho leaves with the code of the first child that
+# ended, and a redis that took a TERM from elsewhere ends with 0. That used
+# to look like a clean stop (no restart, no word, the bench back only at
+# the next login). It is a crash: say so, and exit non-zero so launchd
+# restarts the bench under the crash guard.
+if [ "$code" = "0" ]; then
+  echo "$(date '+%F %T') honcho exited with code 0 without a stop request (a process of the bench ended); restarting" >> "$LOG"
+  write_state crashed crash "" "$started" 0 ""
+  exit 1
 fi
-write_state stopped "" "" "$started" 0 ""
-exit 0
+echo "$(date '+%F %T') honcho exited with code $code" >> "$LOG"
+write_state crashed crash "" "$started" "$code" ""
+exit "$code"

@@ -390,6 +390,14 @@ fl_lock_reach_commit() {
   esac
 }
 
+# fl_lock_detached_with_work APP: HEAD is detached and no local or remote
+# branch contains it, so a checkout would orphan those commits
+fl_lock_detached_with_work() {
+  local app="$1"
+  fl_app_git "$app" symbolic-ref -q HEAD >/dev/null 2>&1 && return 1
+  [[ -z "$(fl_app_git "$app" for-each-ref --contains HEAD refs/heads refs/remotes 2>/dev/null)" ]]
+}
+
 # fl_lock_switch_branch APP REMOTE BRANCH: a clean app onto BRANCH, its
 # local branch when it has one, else a new one tracking the remote's
 fl_lock_switch_branch() {
@@ -477,16 +485,26 @@ fl_cmd_lock_apply() {
           name="$FL_CLONED_DIR"; cloned+=("$name")
           # a clone made just now holds no local work: its branch may start at the pin
           if [[ -n "$sha" && "$(fl_lock_commit_state "$name" "$sha")" != "equal" ]]; then
-            fl_lock_reach_commit "$name" "$sha" || true
+            fl_lock_reach_commit "$name" "$sha" || state=$?
             if [[ "$(fl_lock_commit_state "$name" "$sha")" == "ahead" ]]; then
-              fl_run_long "git checkout -B ${LK_APP_BRANCH[$r]} ${sha:0:7} (${name}, fresh clone)" git -C "$(fl_app_path "$name")" checkout --quiet -B "${LK_APP_BRANCH[$r]}" "$sha" || state=1
+              fl_run_long "git checkout -B ${LK_APP_BRANCH[$r]} ${sha:0:7} (${name}, fresh clone)" git -C "$(fl_app_path "$name")" checkout --quiet -B "${LK_APP_BRANCH[$r]}" "$sha" && state=0 || state=1
+            fi
+            # the pin is the point of the clone: anything but "equal" is a failure
+            if [[ "$(fl_lock_commit_state "$name" "$sha")" != "equal" ]]; then
+              [[ "$state" == "0" ]] && fl_fail "${name}: cloned, but not at the pinned ${sha:0:7}"
+              state=1
             fi
           fi
+          # a clone that did not reach its pin is not built with the others
+          if [[ "$state" != "0" ]]; then unset 'cloned[${#cloned[@]}-1]'; fi
         else
           state=1
         fi ;;
       branch)
-        if fl_lock_switch_branch "$name" "$(fl_app_remote "$name")" "${LK_APP_BRANCH[$r]}"; then
+        if fl_lock_detached_with_work "$name"; then
+          fl_warn "${name}: HEAD is detached with commits no branch holds; create a branch first (cd $(fl_app_path "$name") && git switch -c NAME), then apply again"
+          state=2
+        elif fl_lock_switch_branch "$name" "$(fl_app_remote "$name")" "${LK_APP_BRANCH[$r]}"; then
           changed+=("$name")
           if [[ -n "$sha" ]]; then fl_lock_reach_commit "$name" "$sha" || state=$?; fi
         else

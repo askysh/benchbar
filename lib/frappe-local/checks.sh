@@ -855,7 +855,7 @@ chk_hosts() {
   if fl_hosts_has_site; then
     chk__set ok "${FL_HOSTS_FILE} maps ${FL_SITE} to 127.0.0.1"
   else
-    chk__set warn "${FL_HOSTS_FILE} has no entry for ${FL_SITE}" "printf '127.0.0.1 ${FL_SITE}\\n' | sudo tee -a ${FL_HOSTS_FILE}" hosts_entry
+    chk__set warn "${FL_HOSTS_FILE} has no entry for ${FL_SITE}" "${FL_SELF} repair --bench-dir ${FL_BENCH_DIR}   (adds '127.0.0.1 ${FL_SITE}' inside the benchbar block, with sudo)" hosts_entry
   fi
 }
 
@@ -874,7 +874,7 @@ chk_logs() {
     [[ "$mb" -ge "$FL_LOG_WARN_MB" ]] && big="${big} ${f} (${mb} MB)"
   done
   if [[ -n "$big" ]]; then
-    chk__set warn "large logs:${big}" "${FL_SELF} repair (moves them aside)" rotate_logs
+    chk__set warn "large logs:${big}" "${FL_SELF} repair (copies them aside and empties the live files)" rotate_logs
   else
     chk__set ok "bench.log and worker logs are under ${FL_LOG_WARN_MB} MB"
   fi

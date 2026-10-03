@@ -32,7 +32,9 @@ add_proc 111 "$BENCH/env/bin/python -m frappe.utils.bench_helper frappe serve --
 add_proc 222 "$BENCH/env/bin/python -m frappe.utils.bench_helper frappe --site macdev migrate"
 add_proc 333 "node apps/frappe/socketio.js" "$BENCH"
 add_proc 444 "node apps/frappe/socketio.js" "$HOME/another-bench"
-assert_status 0 "$runner"
+# honcho ends with 0 without a stop request: a process of the bench ended,
+# which is a crash to restart from, never a clean stop (exit 1 for launchd)
+assert_status 1 "$runner"
 grep -q '^444 ' "$MOCK_PROCS" || fail "another bench's socketio must survive this runner's cleanup"
 assert_calls_contain '^honcho start -f Procfile.lean$'
 grep -q '^222 ' "$MOCK_PROCS" || fail "bench migrate must survive the runner cleanup"
@@ -40,10 +42,11 @@ grep -q '^222 ' "$MOCK_PROCS" || fail "bench migrate must survive the runner cle
 ! grep -q '^333 ' "$MOCK_PROCS" || fail "stale socketio must be cleared"
 assert_eq "1" "$(wc -l <"$hist" | tr -d ' ')"
 assert_no_file "$flag"
-assert_eq "starting stopped" "$(transitions)" "(honcho exiting 0 is a clean stop)"
+assert_eq "starting crashed" "$(transitions)" "(honcho exiting 0 without a stop request is a crash)"
 assert_eq "1" "$(jget "$state" 'd["schema_version"]')"
 assert_eq "9.9.9" "$(jget "$state" 'd["cli_version"]')"
-assert_eq "None 0 http://macdev:8000 runner" "$(jget "$state" 'd["stop_reason"], d["last_exit_code"], d["web_url"], d["source"]' | tr -d "(),'")"
+assert_eq "crash 0 http://macdev:8000 runner" "$(jget "$state" 'd["stop_reason"], d["last_exit_code"], d["web_url"], d["source"]' | tr -d "(),'")"
+grep -q 'exited with code 0 without a stop request' "$BENCH/logs/bench.log" || fail "the unrequested exit must be logged"
 [[ -z "$(find "$BENCH/logs/.benchbar" -name '.state.json.*')" ]] || fail "no temp files may be left behind"
 
 # 1b. listeners on the bench's ports: only one whose working folder is this
@@ -101,7 +104,7 @@ grep -q 'auto-restart paused' "$BENCH/logs/bench.log" || fail "pause must be log
 # 4. old starts outside the window do not count
 reset_calls; rm -f "$flag"
 printf '%s\n%s\n%s\n' "$((now - 5000))" "$((now - 4000))" "$((now - 3000))" >"$hist"
-assert_status 0 "$runner"
+assert_status 1 "$runner"
 assert_calls_contain '^honcho start'
 assert_no_file "$flag"
 assert_eq "1" "$(wc -l <"$hist" | tr -d ' ')"
@@ -130,11 +133,12 @@ assert_eq "starting crashed" "$(transitions)"
 assert_eq "crash 1" "$(jget "$state" 'd["stop_reason"], d["last_exit_code"]' | tr -d "(),'")"
 grep -q 'honcho exited with code 1' "$BENCH/logs/bench.log" || fail "the crash exit code must be logged"
 
-# 8. the site answers: starting, then running with the runner pid, then a clean stop
+# 8. the site answers: starting, then running with the runner pid; honcho
+# then ends on its own (exit 0, no stop flag), which is a crash to restart from
 : >"$hist"; reset_transitions
 export MOCK_CURL_CODE=200
-MOCK_HONCHO_SLEEP=3 assert_status 0 "$runner"
-assert_eq "starting running stopped" "$(transitions)"
+MOCK_HONCHO_SLEEP=3 assert_status 1 "$runner"
+assert_eq "starting running crashed" "$(transitions)"
 python3 - "$BENCHBAR_STATE_LOG" <<'PYCHECK' || fail "running must carry the runner pid, started_at and ping 200"
 import json, sys
 rows = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
@@ -170,6 +174,23 @@ set +e; wait "$rpid"; rcode=$?; set -e
 assert_eq "0" "$rcode"
 assert_eq "starting stopped" "$(transitions)"
 assert_eq "None" "$(jget "$state" 'd["stop_reason"]')"
+
+# 10b. the crash guard fails closed: a logs folder that cannot be written
+# (full disk, permissions) pauses the bench with "broken" instead of letting
+# launchd restart it forever with no guard
+: >"$hist"; rm -f "$flag"; reset_transitions; reset_calls
+chmod 0555 "$BENCH/logs"
+if ! touch "$BENCH/logs/.probe" 2>/dev/null; then
+  assert_status 0 "$runner"
+  assert_eq "paused" "$(transitions)"
+  assert_eq "broken" "$(jget "$state" 'd["stop_reason"]')"
+  assert_calls_not_contain '^honcho'
+  assert_calls_contain '^osascript .*not writable'
+else
+  rm -f "$BENCH/logs/.probe"   # running as root: permissions do not bite
+fi
+chmod 0755 "$BENCH/logs"
+rm -f "$flag"
 
 # 11. no macOS notification while the BenchBar app runs (it notifies itself)
 reset_calls; : >"$flag"; rm -f "$flag"

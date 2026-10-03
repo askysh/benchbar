@@ -180,6 +180,7 @@ fl_cmd_site_add() {
     [[ -d "${FL_BENCH_DIR}/apps/${app}" ]] || fl_die "${app} is not in ${FL_BENCH_DIR}/apps." "Get it first: cd ${FL_BENCH_DIR} && bench get-app ${app}"
   done
   fl_header "benchbar site add" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "$name"
+  if fl_site_incomplete "$FL_BENCH_DIR" "$name"; then return 1; fi
   if [[ -d "${FL_BENCH_DIR}/sites/${name}" ]]; then
     fl_ok "site ${name} already exists"
   else

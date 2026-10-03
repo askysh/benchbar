@@ -317,8 +317,8 @@ fl_mariadb_includedir_ensure() {
     if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
       fl_info "dry-run: would append '!includedir ${brew}/etc/my.cnf.d' to ${mycnf}"
     else
-      fl_backup_file "$mycnf"
-      printf '\n!includedir %s/etc/my.cnf.d\n' "$brew" >>"$mycnf"
+      fl_backup_file "$mycnf" || return 1
+      printf '\n!includedir %s/etc/my.cnf.d\n' "$brew" >>"$mycnf" || { fl_fail "could not write ${mycnf}"; return 1; }
       FL_MYCNF_CHANGED=1
       fl_ok "added !includedir to ${mycnf}"
     fi
@@ -339,9 +339,9 @@ fl_mariadb_includedir_ensure() {
 # my.cnf written), so the caller knows a restart is due.
 fl_mariadb_dropin_apply() {
   local template="$1" path="$2" rendered
-  fl_mariadb_includedir_ensure
+  fl_mariadb_includedir_ensure || return 1
   rendered="$(fl_template_render "$template")"
-  fl_template_apply "$path" "$rendered" 644
+  fl_template_apply "$path" "$rendered" 644 || return 1
   [[ "$FL_TEMPLATE_CHANGED" == "1" && "${FL_DRY_RUN:-0}" != "1" ]] && fl_ok "wrote ${path}"
   [[ "${FL_MYCNF_CHANGED:-0}" == "1" ]] && FL_TEMPLATE_CHANGED=1
   return 0
