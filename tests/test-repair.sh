@@ -260,17 +260,18 @@ assert_eq "3" "$(old_copies)" "(at most three copies are kept)"
 assert_contains "$OUT" "removed the old copy"
 rm -f "$BENCH"/logs/worker.error.log.old.*
 
-# ---- a write that cannot happen is a failed step, not a done one, and the
-# old file stays as it was
+# ---- a read only bench fails closed: the bench's lock cannot be created,
+# the run stops before any step and says why, and the old file stays as it was
 sed_inplace 's/benchbar-template: Procfile.lean v[0-9]* [0-9a-f]*/benchbar-template: Procfile.lean v0 000000000000/' "$BENCH/Procfile.lean"
 chmod 0555 "$BENCH"
 if ! touch "$BENCH/.probe" 2>/dev/null; then
   before="$(cat "$BENCH/Procfile.lean")"
   run_fm repair --yes --bench-dir "$BENCH"
   assert_eq "1" "$CODE" "$OUT"
-  assert_contains "$OUT" "write Procfile.lean: failed"
-  assert_not_contains "$OUT" "write Procfile.lean: done"
+  assert_contains "$OUT" "Could not create the lock ${BENCH}/.benchbar.lock"
   assert_contains "$OUT" "read only?"
+  assert_not_contains "$OUT" "Another benchbar run keeps taking it"
+  assert_not_contains "$OUT" "write Procfile.lean: done"
   assert_eq "$before" "$(cat "$BENCH/Procfile.lean")" "(a failed write leaves the file as it was)"
 else
   rm -f "$BENCH/.probe"   # running as root: permissions do not bite, nothing to prove here

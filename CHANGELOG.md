@@ -141,6 +141,9 @@ All notable changes to this project are documented here.
   or the stop flag cannot be written. Existing runners are outdated once.
 - The legacy agent migration and `uninstall-service` keep the plist when
   launchd does not let go of the job, and report a move that failed.
+- A bench folder that cannot be written (read only) stops a run at once
+  with "Could not create the lock ... (read only?)", instead of five
+  retries that blamed another benchbar run.
 
 ### Changed
 
