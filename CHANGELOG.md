@@ -259,6 +259,11 @@ All notable changes to this project are documented here.
 
 ### Added
 
+- `benchbar doctor --json` says where the profile came from
+  (`profile_source`), and the app's Health page says when the profile is
+  only the default for a bench no profile matches.
+- BenchBar.app knows the `port_conflict` stop reason: "Paused: a port is in
+  use" with a link to Health, instead of "Paused after repeated crashes".
 - New doctor check `env_setuptools`: on Frappe v15 the env must import
   `pkg_resources` (setuptools 70 and later dropped it); `repair` installs
   `setuptools<70` into the env, and an env rebuild on v15 does the same.

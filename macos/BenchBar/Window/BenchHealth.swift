@@ -21,6 +21,11 @@ struct BenchHealth: View {
             }
             Section {
                 if let report = bench.doctor {
+                    if report.profileIsDefault, let profile = report.profile {
+                        Label("Profile \(profile) is only the default: no profile matches this bench's Frappe, so the env checks warn instead of offering a rebuild.",
+                              systemImage: "questionmark.circle")
+                            .foregroundStyle(.secondary)
+                    }
                     if report.needsAttention.isEmpty {
                         Label("Every check passes.", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
                     }

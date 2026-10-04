@@ -217,6 +217,7 @@ these two out: they are polled.
   "name": "frappe-bench",
   "site": "macdev",
   "profile": "v15-lts",
+  "profile_source": "stored",
   "checks": [
     {
       "id": "assets",
@@ -247,6 +248,7 @@ these two out: they are polled.
 
 | Field | Type | Notes |
 |---|---|---|
+| `profile_source` | string | added in 0.7.3: where `profile` came from, `flag` (`--profile`), `team`, `stored` (remembered for the bench), `detected` (from the bench's Frappe) or `default` (no profile matches this bench; the env checks warn instead of offering a rebuild) |
 | `checks[].id` | string | stable id, for example `env_python`, `assets`, `agent`, `legacy_agents`. 0.7.3 adds `env_setuptools` (group `bench`, action `env_setuptools`), `formula_dates` (group `system`, no action) and `bench_path` (group `service`, no action). `pdf_engine` replaced `wkhtmltopdf` in 0.4. 0.5 adds `apps_txt`, `app_branch_policy`, `lock_parse` and `lock_drift` (group `bench`, no repair action). 0.6 adds `dependency_behind`, `apps_behind` and `profile_outdated` (group `bench`, no repair action); `dependency_behind` is the one id that can appear several times, once per stale dependency. 0.7 adds `app_copies` (group `system`) and `cli_duplicate` (group `service`), both without a repair action, and `helpers` can be `fail` (the block's benchbar is gone) |
 | `checks[].group` | string | `system`, `bench`, `service` or `site` |
 | `checks[].label` | string | short name for humans |
