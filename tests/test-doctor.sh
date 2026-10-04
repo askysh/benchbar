@@ -233,6 +233,99 @@ printf '%s' "$OUT" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert
 run_fm status --json --bench-dir "$BENCH"
 printf '%s' "$OUT" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["stop_flag"]=="manual"' || fail "status --json must be valid JSON"
 
+# ---- a bench no profile matches (frappe 17.0.0-dev, nothing stored): the
+# default is named as such, the env checks warn without an action, and
+# nothing offers to rebuild the env with a guessed Python
+DEV="$HOME/work/develop-bench"; make_fake_bench "$DEV" devsite
+mkdir -p "$DEV/apps/frappe/frappe"; printf '__version__ = "17.0.0-dev"\n' >"$DEV/apps/frappe/frappe/__init__.py"
+run_fm doctor --bench-dir "$DEV"
+assert_contains "$OUT" "profile  v15-lts (default: no profile matches this bench)"
+# a fresh install has no bench to match: the default carries no note
+run_fm install --dry-run --yes --bench-dir "$HOME/work/fresh-bench"
+assert_contains "$OUT" "profile  v15-lts"
+assert_not_contains "$OUT" "no profile matches"
+# a stored profile is named without the note
+run_fm doctor --bench-dir "$BENCH"
+assert_contains "$OUT" "profile  v15-lts "
+assert_not_contains "$OUT" "(default:"
+cat >"$DEV/env/bin/python" <<'PY'
+#!/bin/bash
+case "$*" in *version_info*) echo "3.13" ;; --version) echo "Python 3.13.1" ;; *) exit 0 ;; esac
+PY
+run_fm doctor --json --bench-dir "$DEV"
+assert_eq "warn None" "$(printf '%s' "$OUT" | jget - '" ".join(str(x) for x in [[c for c in d["checks"] if c["id"] == "env_python"][0]["level"], [c for c in d["checks"] if c["id"] == "env_python"][0]["action"]])')"
+assert_contains "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "env_python"][0]["message"]')" "no profile matches this bench's Frappe (v15-lts is only the default), so the env is left as it is"
+assert_contains "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "env_python"][0]["fix_command"]')" "benchbar install --profile NAME"
+# env gone: still no rebuild offered, the fix names the way to set a profile
+mv "$DEV/env" "$DEV/env.gone"
+run_fm doctor --json --bench-dir "$DEV"
+assert_eq "fail None" "$(printf '%s' "$OUT" | jget - '" ".join(str(x) for x in [[c for c in d["checks"] if c["id"] == "env_python"][0]["level"], [c for c in d["checks"] if c["id"] == "env_python"][0]["action"]])')"
+assert_eq "None" "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "bench_version"][0]["action"]')"
+mv "$DEV/env.gone" "$DEV/env"
+printf 'keep\n' >"$DEV/env/marker"
+run_fm repair --yes --bench-dir "$DEV"
+assert_not_contains "$OUT" "rebuild the bench env"
+assert_file "$DEV/env/marker" "(the env of a bench no profile matches is never moved aside)"
+[[ -z "$(ls -d "$DEV"/env.broken.* 2>/dev/null)" ]] || fail "repair must not move the env of a bench no profile matches"
+# the setuptools check and action stay out of a bench no profile matches too
+MOCK_ENV_NO_PKG_RESOURCES=1 run_fm doctor --json --bench-dir "$DEV"
+assert_eq "ok None" "$(printf '%s' "$OUT" | jget - '" ".join(str(x) for x in [[c for c in d["checks"] if c["id"] == "env_setuptools"][0]["level"], [c for c in d["checks"] if c["id"] == "env_setuptools"][0]["action"]])')"
+reset_calls
+MOCK_ENV_NO_PKG_RESOURCES=1 run_fm repair --yes --bench-dir "$DEV"
+assert_calls_not_contain 'setuptools<70' "(no pip into an env whose Frappe is unknown)"
+# a bench whose apps/frappe is gone (a cleanup tool) with nothing stored is a guess too
+GONE="$HOME/work/gone-bench"; make_fake_bench "$GONE" gonesite
+rm -rf "$GONE/apps/frappe" "$GONE/env"
+run_fm doctor --json --bench-dir "$GONE"
+assert_eq "None" "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "env_python"][0]["action"]')"
+# the action itself refuses, whatever planned it
+set +e
+OUT="$(FL_BENCH_DIR="$DEV" FL_PROFILE=v15-lts FL_PROFILE_SOURCE=default FL_PYTHON_BIN_NAME=python3.11 FL_PYTHON_FORMULA=python@3.11 FL_BREW_PREFIX="$MOCK_BREW_PREFIX" FL_SELF=benchbar bash -c '
+  for f in ui run platform version-policy state templates benchinfo process launchd checks repair; do . "$0/lib/frappe-local/$f.sh"; done
+  act_env_rebuild' "$ROOT" 2>&1)"; CODE=$?
+set -e
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "refusing to rebuild env: no profile matches this bench's Frappe"
+assert_file "$DEV/env/marker"
+assert_calls_not_contain '^bench setup env'
+make_fake_env_python "$DEV"
+
+# ---- bench version failures are classified: the CLI's own problems and an
+# app that does not import never move the env aside
+run_fm doctor --json --bench-dir "$BENCH"
+assert_eq "ok" "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "bench_version"][0]["level"]')"
+# no bench command at all
+NOBENCH="$TMP_DIR/nobench"; mkdir -p "$NOBENCH"
+for t in "$ROOT"/tests/mocks/bin/*; do [[ "$(basename "$t")" == "bench" ]] || ln -s "$t" "$NOBENCH/$(basename "$t")"; done
+PATH="$NOBENCH:/usr/bin:/bin" run_fm doctor --json --bench-dir "$BENCH"
+r="$(printf '%s' "$OUT" | jget - '"|".join(str([c for c in d["checks"] if c["id"] == "bench_version"][0][k]) for k in ("level", "message", "fix_command", "action"))')"
+assert_contains "$r" "fail|the bench command is not on the bench's PATH (frappe-bench is not installed)|uv tool install frappe-bench|None"
+# without uv on the Mac the fix names pipx, which is there (the system
+# folders only: the machine running the tests may have a real uv)
+rm "$NOBENCH/uv"
+PATH="$NOBENCH:/usr/bin:/bin" run_fm doctor --json --bench-dir "$BENCH"
+r="$(printf '%s' "$OUT" | jget - '"|".join(str([c for c in d["checks"] if c["id"] == "bench_version"][0][k]) for k in ("level", "message", "fix_command", "action"))')"
+assert_contains "$r" "fail|the bench command is not on the bench's PATH (frappe-bench is not installed)|pipx install frappe-bench|None"
+# a bench whose own venv is broken (bad interpreter, exit 127)
+MOCK_BENCH_VERSION_EXIT=127 MOCK_BENCH_VERSION_OUT="bash: /Users/me/.local/bin/bench: /Users/me/.local/share/uv/tools/frappe-bench/bin/python: bad interpreter: No such file or directory" run_fm doctor --json --bench-dir "$BENCH"
+r="$(printf '%s' "$OUT" | jget - '"|".join(str([c for c in d["checks"] if c["id"] == "bench_version"][0][k]) for k in ("level", "fix_command", "action"))')"
+assert_contains "$r" "fail|the bench at $ROOT/tests/mocks/bin/bench was not installed by uv or pipx: reinstall it with the tool that did, or remove it and run: uv tool install frappe-bench|None"
+assert_contains "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "bench_version"][0]["message"]')" "its own venv is broken, not the bench env"
+# an app that does not import is named; frappe itself failing keeps the rebuild
+MOCK_BENCH_VERSION_EXIT=1 MOCK_BENCH_VERSION_OUT="ModuleNotFoundError: No module named 'erpnext'" run_fm doctor --json --bench-dir "$BENCH"
+r="$(printf '%s' "$OUT" | jget - '"|".join(str([c for c in d["checks"] if c["id"] == "bench_version"][0][k]) for k in ("level", "message", "fix_command", "action"))')"
+assert_contains "$r" "fail|bench version fails: the app erpnext does not import"
+assert_contains "$r" "bench setup requirements --python"
+assert_contains "$r" "|None"
+MOCK_BENCH_VERSION_EXIT=1 MOCK_BENCH_VERSION_OUT="ModuleNotFoundError: No module named 'frappe'" run_fm doctor --json --bench-dir "$BENCH"
+assert_eq "env_rebuild" "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "bench_version"][0]["action"]')"
+# with a classified failure, repair leaves the env alone
+printf 'keep\n' >"$BENCH/env/marker"
+MOCK_BENCH_VERSION_EXIT=127 MOCK_BENCH_VERSION_OUT="bad interpreter" run_fm repair --yes --bench-dir "$BENCH"
+assert_file "$BENCH/env/marker"
+assert_not_contains "$OUT" "rebuild the bench env"
+rm -f "$BENCH/env/marker"
+
 printf 'test-doctor: ok\n'
 
 # ---- utf8mb4: a current drop-in is not enough when my.cnf stopped including my.cnf.d

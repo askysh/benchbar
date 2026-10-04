@@ -5,7 +5,7 @@
 # the check -> plan -> apply -> verify engine shared by "repair" and
 # "service" (the background phase).
 
-FL_ACTION_ORDER="python_leaves node_install yarn_install env_rebuild honcho_install honcho_setuptools node_requirements build clear_cache mariadb_bind mariadb_utf8 wkhtmltopdf_install legacy_migrate port_block write_procfile write_runner write_plist write_helpers write_cli_link hosts_entry rotate_logs redis_stop"
+FL_ACTION_ORDER="python_leaves node_install yarn_install env_rebuild env_setuptools honcho_install honcho_setuptools node_requirements build clear_cache mariadb_bind mariadb_utf8 wkhtmltopdf_install legacy_migrate port_block write_procfile write_runner write_plist write_helpers write_cli_link hosts_entry rotate_logs redis_stop"
 # actions whose check may stay a warning after a run without failing it:
 # the user may decline them (or sudo) on purpose
 FL_OPTIONAL_ACTIONS="wkhtmltopdf_install hosts_entry redis_stop"
@@ -22,6 +22,7 @@ fl_action_label() {
     honcho_install) printf 'install honcho into the bench env' ;;
     honcho_setuptools) printf "install setuptools into honcho's venv" ;;
     env_rebuild) printf 'rebuild the bench env (old env moved aside)' ;;
+    env_setuptools) printf "install 'setuptools<70' into the bench env (pkg_resources for Frappe v15)" ;;
     node_requirements) printf 'bench setup requirements --node' ;;
     build) printf 'bench build' ;;
     clear_cache) printf 'bench clear-cache and clear-website-cache' ;;
@@ -88,8 +89,26 @@ act_honcho_setuptools() {
   fi
 }
 
+# The env is rebuilt with the profile's Python. Two refusals come first: a
+# profile that is only the default (no profile matches this bench's Frappe,
+# so its Python is a guess) and a running bench (its processes run from the
+# env that would move aside). Both are said, neither is worked around.
 act_env_rebuild() {
   local py
+  if fl_profile_is_guess; then
+    fl_fail "refusing to rebuild env: no profile matches this bench's Frappe, so ${FL_PROFILE} (the default) is a guess at its Python"
+    fl_fix "benchbar install --profile NAME --bench-dir ${FL_BENCH_DIR}   (or: cd ${FL_BENCH_DIR} && bench setup env --python /path/to/pythonX.Y)"
+    return 1
+  fi
+  if fl_bench_is_running; then
+    if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
+      fl_info "dry-run: would refuse to rebuild env while the bench runs (stop it first: ${FL_SELF} down)"
+      return 0
+    fi
+    fl_fail "refusing to rebuild env while the bench is running: its processes run from the env that would move aside"
+    fl_fix "${FL_SELF} down --bench-dir ${FL_BENCH_DIR}, then ${FL_SELF} repair, then benchup"
+    return 1
+  fi
   py="$(fl_python_bin)"
   [[ -x "$py" ]] || py="$(command -v "$FL_PYTHON_BIN_NAME" || true)"
   [[ -n "$py" ]] || { fl_fail "${FL_PYTHON_BIN_NAME} not found; run 00-mac-system-deps.sh first"; return 1; }
@@ -97,6 +116,8 @@ act_env_rebuild() {
   fl_move_aside "${FL_BENCH_DIR}/env" broken
   fl_run_long "bench setup env --python ${py}" fl_in_bench bench setup env --python "$py" || return 1
   fl_run_long "bench setup requirements --python" fl_in_bench bench setup requirements --python || return 1
+  # Frappe v15 imports pkg_resources, which setuptools 70+ no longer ships
+  [[ "$(fl_profile_major)" != "15" ]] || act_env_setuptools || return 1
   FL_NEED_CLEAR_CACHE=1
   if ! fl_honcho_resolve; then
     fl_info "honcho lived in the old env; installing it into the new one"
@@ -133,6 +154,28 @@ act_yarn_install() {
   [[ -x "$npm" || "${FL_DRY_RUN:-0}" == "1" ]] || { fl_fail "no npm at ${npm}; install ${FL_NODE_FORMULA} first"; return 1; }
   fl_run_long "npm install -g yarn (${FL_NODE_FORMULA})" "$npm" install -g yarn || return 1
   return 0
+}
+
+# 'setuptools<70' into the bench env: pkg_resources for honcho and bench on
+# Frappe v15 (a fresh env with Python 3.12+ has no setuptools at all)
+act_env_setuptools() {
+  local py="${FL_BENCH_DIR}/env/bin/python"
+  if fl_profile_is_guess; then
+    fl_fail "refusing to change the env: no profile matches this bench's Frappe"
+    return 1
+  fi
+  [[ -x "$py" || "${FL_DRY_RUN:-0}" == "1" ]] || { fl_fail "no env/bin/python to install setuptools into"; return 1; }
+  # already there (an env rebuild in this run installed it): nothing to do
+  if [[ -x "$py" ]] && "$py" -c 'import pkg_resources' >/dev/null 2>&1; then
+    FL_STEP_RESULT="unchanged"
+    return 0
+  fi
+  fl_bench_env_exports
+  if command -v uv >/dev/null 2>&1; then
+    fl_run_long "install setuptools<70 into env (uv)" uv pip install --python "$py" 'setuptools<70' || return 1
+  else
+    fl_run_long "install setuptools<70 into env (pip)" "$py" -m pip install 'setuptools<70' || return 1
+  fi
 }
 
 act_node_requirements() {

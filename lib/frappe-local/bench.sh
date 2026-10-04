@@ -26,11 +26,43 @@ fl_install_pipx_if_needed() {
   fl_state_set PIPX_BIN_DIR "$PIPX_BIN_DIR"
 }
 
+# Who installed the bench command on PATH: uv, pipx or other (nothing when
+# there is no bench). Existing pipx installs are reported, never migrated.
+fl_bench_owner() {
+  local bin dir target
+  bin="$(command -v bench 2>/dev/null || true)"
+  [[ -n "$bin" ]] || return 0
+  target="$bin"
+  while [[ -L "$target" ]]; do
+    dir="$(cd "$(dirname "$target")" && pwd)"
+    target="$(readlink "$target")"
+    [[ "$target" == /* ]] || target="${dir}/${target}"
+  done
+  case "$target" in
+    */uv/tools/*) printf 'uv' ;;
+    */pipx/venvs/*|*/pipx/*/venvs/*) printf 'pipx' ;;
+    *) printf 'other' ;;
+  esac
+}
+
 fl_install_bench_if_needed() {
   fl_section "BENCH CLI"
   fl_info "Checking frappe-bench CLI"
   if command -v bench >/dev/null 2>&1; then
-    fl_ok "bench at $(command -v bench)"
+    # a bench that is on PATH but does not run (its venv's Python was
+    # upgraded away) would fail at bench init with a stack trace; say so
+    # here with the reinstall for whichever tool owns it
+    local ver reinstall="uv tool install --reinstall frappe-bench"
+    [[ "$(fl_bench_owner)" == "pipx" ]] && reinstall="pipx reinstall frappe-bench"
+    if ! ver="$(bench --version 2>/dev/null)"; then
+      fl_die "bench at $(command -v bench) does not run (bench --version failed)." "Reinstall it: ${reinstall}"
+    fi
+    ver="$(printf '%s' "$ver" | tr -d '[:space:]')"
+    fl_ok "bench ${ver:-(version unknown)} at $(command -v bench)"
+    if [[ -n "$ver" && -n "${FL_BENCH_MIN:-}" ]] && fl_version_lt "$ver" "$FL_BENCH_MIN"; then
+      fl_warn "bench ${ver} is older than ${FL_BENCH_MIN}, the oldest known to handle profile ${FL_PROFILE}; a newer one is safer"
+      if [[ "$reinstall" == pipx* ]]; then fl_fix "pipx upgrade frappe-bench"; else fl_fix "uv tool upgrade frappe-bench"; fi
+    fi
     return 0
   fi
   if command -v uv >/dev/null 2>&1; then

@@ -14,6 +14,8 @@ FL_PROFILE_STATUS=""
 FL_SUPPORT_END=""
 FL_MARIADB_MIN=""
 FL_MARIADB_MAX=""
+# the oldest frappe-bench CLI known to handle the profile's Frappe
+FL_BENCH_MIN=""
 
 # every profile builds mysqlclient (pinned by frappe v16) against these
 FL_BUILD_FORMULAE="pkgconf mariadb-connector-c"
@@ -37,8 +39,9 @@ fl_load_profile() {
   IFS=$'\t' read -r FL_PROFILE FL_PROFILE_LABEL FL_FRAPPE_BRANCH FL_ERPNEXT_BRANCH \
     FL_PYTHON_FORMULA FL_PYTHON_BIN_NAME FL_NODE_FORMULA FL_NODE_MAJOR \
     FL_MARIADB_FORMULA FL_MARIADB_MAJOR_MINOR FL_PROFILE_STATUS FL_SUPPORT_END _default \
-    FL_MARIADB_MIN FL_MARIADB_MAX <<<"$row"
+    FL_MARIADB_MIN FL_MARIADB_MAX FL_BENCH_MIN <<<"$row"
   FL_MARIADB_MIN="${FL_MARIADB_MIN:-10.6}"; FL_MARIADB_MAX="${FL_MARIADB_MAX:-$FL_MARIADB_MAJOR_MINOR}"
+  FL_BENCH_MIN="${FL_BENCH_MIN:-}"
 }
 
 # ---------------------------------------------------------------- MariaDB source
@@ -83,6 +86,18 @@ fl_mariadb_prefer_running() {
   FL_MARIADB_FORMULA="$formula"
   FL_MARIADB_MAJOR_MINOR="$(printf '%s' "$ver" | awk -F. '{print $1 "." $2}')"
   FL_MARIADB_SOURCE="running"
+}
+
+# fl_version_lt A B: true when dotted version A is older than B (numbers only)
+fl_version_lt() {
+  local a="$1" b="$2" i x y
+  IFS=. read -r -a x <<<"${a%%[^0-9.]*}"
+  IFS=. read -r -a y <<<"${b%%[^0-9.]*}"
+  for i in 0 1 2; do
+    [[ "${x[$i]:-0}" -lt "${y[$i]:-0}" ]] && return 0
+    [[ "${x[$i]:-0}" -gt "${y[$i]:-0}" ]] && return 1
+  done
+  return 1
 }
 
 # The Frappe major version of the loaded profile: 15 for version-15.

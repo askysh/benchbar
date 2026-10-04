@@ -169,6 +169,32 @@ assert_contains "$OUT" "already exists: no passwords needed"
 assert_calls_not_contain '^bench (init|new-site|get-app)'
 assert_calls_not_contain '^mariadb -u root -p'
 
+# ---- 01: a bench on PATH that does not run stops with its owner's reinstall;
+# one older than the profile's minimum is a warning with the upgrade command
+rm -rf "$BENCH"; reset_calls
+BADBIN="$TMP_DIR/badbin"; mkdir -p "$BADBIN"
+printf '#!/usr/bin/env bash\nprintf "bad interpreter\\n" >&2; exit 127\n' >"$BADBIN/bench"; chmod +x "$BADBIN/bench"
+PATH="$BADBIN:$PATH" ADMIN_PASSWORD=adminpw run01 --yes --offline
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "does not run (bench --version failed)"
+assert_contains "$OUT" "uv tool install --reinstall frappe-bench"
+assert_calls_not_contain '^bench init'
+# a pipx owned bench gets pipx's reinstall
+PIPXBIN="$TMP_DIR/pipxbin"; mkdir -p "$PIPXBIN" "$TMP_DIR/pipx/venvs/frappe-bench/bin"
+cp "$BADBIN/bench" "$TMP_DIR/pipx/venvs/frappe-bench/bin/bench"; ln -s "$TMP_DIR/pipx/venvs/frappe-bench/bin/bench" "$PIPXBIN/bench"
+PATH="$PIPXBIN:$PATH" ADMIN_PASSWORD=adminpw run01 --yes --offline
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "pipx reinstall frappe-bench"
+MOCK_BENCH_VERSION=5.10.3 ADMIN_PASSWORD=adminpw run01 --yes --offline
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "[OK] bench 5.10.3 at"
+assert_contains "$OUT" "bench 5.10.3 is older than 5.22.0, the oldest known to handle profile v15-lts"
+assert_contains "$OUT" "uv tool upgrade frappe-bench"
+rm -rf "$BENCH"
+MOCK_BENCH_VERSION=5.25.1 ADMIN_PASSWORD=adminpw run01 --yes --offline
+assert_eq "0" "$CODE" "$OUT"
+assert_not_contains "$OUT" "is older than"
+
 # ---- 01: a fresh site with the root password from the Keychain only
 rm -rf "$BENCH"
 ADMIN_PASSWORD=adminpw run01 --yes --offline

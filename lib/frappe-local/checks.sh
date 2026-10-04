@@ -11,7 +11,7 @@
 # Groups (used by "benchbar service" versus "benchbar repair"):
 #   system, bench, service, site
 
-FL_CHECK_ORDER="brew formula_dates python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac mole app_copies full_disk_access env_python bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy dependency_behind apps_behind lock_parse lock_drift profile_outdated logs honcho honcho_setuptools procfile runner agent runner_heartbeat fork_safety scheduler stop_flag helpers cli_link cli_duplicate legacy_agents dead_agents hosts port_clash orphans ping"
+FL_CHECK_ORDER="brew formula_dates python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac mole app_copies full_disk_access env_python env_setuptools bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy dependency_behind apps_behind lock_parse lock_drift profile_outdated logs honcho honcho_setuptools procfile runner agent runner_heartbeat fork_safety scheduler stop_flag helpers cli_link cli_duplicate legacy_agents dead_agents hosts port_clash orphans ping"
 FL_LOG_WARN_MB="${FL_LOG_WARN_MB:-50}"
 FL_HOSTS_FILE="${FL_HOSTS_FILE:-/etc/hosts}"
 
@@ -28,7 +28,7 @@ chk_port_block() {
 fl_check_group() {
   case "$1" in
     brew|formula_dates|python_leaves|mariadb_bind|mariadb_utf8|pdf_engine|redis_6379|cleanmymac|mole|app_copies|full_disk_access) printf 'system' ;;
-    env_python|bench_version|toolchain_*|socketio|assets|apps_txt|app_branch_policy|dependency_behind|apps_behind|lock_parse|lock_drift|logs) printf 'bench' ;;
+    env_python|env_setuptools|bench_version|toolchain_*|socketio|assets|apps_txt|app_branch_policy|dependency_behind|apps_behind|lock_parse|lock_drift|logs) printf 'bench' ;;
     profile_outdated) printf 'bench' ;;
     ping) printf 'site' ;;
     *) printf 'service' ;;
@@ -70,6 +70,7 @@ fl_check_label() {
     full_disk_access) printf 'Full Disk Access' ;;
     toolchain_node) printf 'Node' ;;
     formula_dates) printf 'Formula lifecycle' ;;
+    env_setuptools) printf 'env setuptools' ;;
     toolchain_yarn) printf 'yarn' ;;
     mariadb_version) printf 'MariaDB server' ;;
     toolchain_pkgconfig) printf 'pkg-config' ;;
@@ -168,35 +169,122 @@ chk_python_leaves() {
   fi
 }
 
+# fl_profile_is_guess: the profile is only the default, with a Frappe in
+# apps/ that no profile matches (develop, v17, v14). The env then follows
+# that Frappe, not the default's Python, and an env rebuild with the
+# default's Python would break a working bench: no check offers it.
+fl_profile_is_guess() {
+  [[ "${FL_PROFILE_SOURCE:-}" == "default" ]] || return 1
+  # a bench with content: frappe in apps/ (even one whose version file is
+  # gone) or a site; a bench being installed has neither yet
+  [[ -d "${FL_BENCH_DIR}/apps/frappe" || -f "${FL_BENCH_DIR}/sites/apps.txt" ]]
+}
+
 chk_env_python() {
   local py="${FL_BENCH_DIR}/env/bin/python" ver want
   want="${FL_PYTHON_BIN_NAME#python}"
   if [[ ! -e "$py" && ! -L "$py" ]]; then
-    chk__set fail "env/bin/python is missing (env deleted, for example by a cleanup tool)" "${FL_SELF} repair" env_rebuild
+    if fl_profile_is_guess; then
+      chk__set fail "env/bin/python is missing, and no profile matches this bench's Frappe, so the Python to rebuild it with is unknown" "benchbar install --profile NAME --bench-dir ${FL_BENCH_DIR}   (or: cd ${FL_BENCH_DIR} && bench setup env --python /path/to/pythonX.Y)"
+    else
+      chk__set fail "env/bin/python is missing (env deleted, for example by a cleanup tool)" "${FL_SELF} repair" env_rebuild
+    fi
     return 0
   fi
   if ! ver="$("$py" -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null)"; then
-    chk__set fail "env/bin/python does not run (broken symlink or removed interpreter)" "${FL_SELF} repair" env_rebuild
+    if fl_profile_is_guess; then
+      chk__set fail "env/bin/python does not run, and no profile matches this bench's Frappe, so the Python to rebuild it with is unknown" "benchbar install --profile NAME --bench-dir ${FL_BENCH_DIR}   (or: cd ${FL_BENCH_DIR} && bench setup env --python /path/to/pythonX.Y)"
+    else
+      chk__set fail "env/bin/python does not run (broken symlink or removed interpreter)" "${FL_SELF} repair" env_rebuild
+    fi
     return 0
   fi
   if [[ "$ver" != "$want" ]]; then
-    chk__set fail "env uses Python ${ver}, profile ${FL_PROFILE} expects ${want}" "${FL_SELF} repair" env_rebuild
+    if fl_profile_is_guess; then
+      chk__set warn "env uses Python ${ver}; no profile matches this bench's Frappe (${FL_PROFILE} is only the default), so the env is left as it is" "benchbar install --profile NAME --bench-dir ${FL_BENCH_DIR}   (sets the profile; a team profile can name any Frappe branch)"
+    else
+      chk__set fail "env uses Python ${ver}, profile ${FL_PROFILE} expects ${want}" "${FL_SELF} repair" env_rebuild
+    fi
     return 0
   fi
   chk__set ok "env/bin/python runs (Python ${ver})"
 }
 
-chk_bench_version() {
-  local out
-  if [[ ! -e "${FL_BENCH_DIR}/env/bin/python" ]]; then
-    chk__set fail "skipped: env is missing" "${FL_SELF} repair" env_rebuild
+# honcho and bench on Frappe v15 import pkg_resources; setuptools 70 and
+# later drop it, and a fresh env made with Python 3.12+ has no setuptools
+# at all. Only v15 benches: v16 does not import it.
+chk_env_setuptools() {
+  local py="${FL_BENCH_DIR}/env/bin/python"
+  fl_profile_is_guess && { chk__set ok "skipped: no profile matches this bench, so its Frappe version is unknown"; return 0; }
+  [[ "$(fl_profile_major)" == "15" ]] || { chk__set ok "skipped: only Frappe v15 needs pkg_resources"; return 0; }
+  [[ -x "$py" ]] || { chk__set ok "skipped: env is missing (see the env check)"; return 0; }
+  if "$py" -c 'import pkg_resources' >/dev/null 2>&1; then
+    chk__set ok "env/bin/python imports pkg_resources"
+  else
+    chk__set warn "env/bin/python lacks pkg_resources (setuptools 70+ or none): bench and honcho fail on Frappe v15" "${FL_SELF} repair   (installs 'setuptools<70' into the env)" env_setuptools
+  fi
+}
+
+# fl_bench_cli_fix: the command that reinstalls the bench CLI with the
+# tool that owns it (uv unless pipx does)
+fl_bench_cli_fix() {
+  local how="${1:-install}" owner
+  owner="$(fl_bench_owner)"
+  # no bench at all: the tool that is on the Mac installs it (uv first, as
+  # the installer does), so the fix line is a command that runs
+  if [[ -z "$owner" ]] && ! command -v uv >/dev/null 2>&1 && command -v pipx >/dev/null 2>&1; then owner="pipx"; fi
+  # a bench that neither uv nor pipx installed: uv's reinstall would land in
+  # uv's own folder and leave the broken one first on PATH, so no guess
+  if [[ "$owner" == "other" ]]; then
+    printf "the bench at %s was not installed by uv or pipx: reinstall it with the tool that did, or remove it and run: uv tool install frappe-bench" "$(command -v bench 2>/dev/null || printf bench)"
     return 0
   fi
-  if out="$(cd "$FL_BENCH_DIR" && bench version 2>&1)"; then
-    chk__set ok "bench version works ($(printf '%s' "$out" | grep -m1 -E '^frappe' || printf 'ok'); bench installed by $(fl_bench_owner))"
+  if [[ "$owner" == "pipx" ]]; then
+    case "$how" in install) printf 'pipx install frappe-bench' ;; *) printf 'pipx reinstall frappe-bench' ;; esac
   else
-    chk__set fail "bench version fails: $(printf '%s' "$out" | tail -n1)" "${FL_SELF} repair" env_rebuild
+    case "$how" in install) printf 'uv tool install frappe-bench' ;; *) printf 'uv tool install --reinstall frappe-bench' ;; esac
   fi
+}
+
+# "bench version" fails for several reasons, and only one of them is the
+# env's: the CLI missing or not running is the CLI's, an app that does not
+# import is that app's, and an env rebuild (which moves a working env
+# aside) is offered for none of these.
+chk_bench_version() {
+  local out code=0 last mod
+  if [[ ! -e "${FL_BENCH_DIR}/env/bin/python" ]]; then
+    if fl_profile_is_guess; then
+      chk__set fail "skipped: env is missing and no profile matches this bench" "benchbar install --profile NAME --bench-dir ${FL_BENCH_DIR}"
+    else
+      chk__set fail "skipped: env is missing" "${FL_SELF} repair" env_rebuild
+    fi
+    return 0
+  fi
+  if ! command -v bench >/dev/null 2>&1; then
+    chk__set fail "the bench command is not on the bench's PATH (frappe-bench is not installed)" "$(fl_bench_cli_fix install)"
+    return 0
+  fi
+  out="$(cd "$FL_BENCH_DIR" && bench version 2>&1)" || code=$?
+  if [[ "$code" == "0" ]]; then
+    chk__set ok "bench version works ($(printf '%s' "$out" | grep -m1 -E '^frappe' || printf 'ok'); bench installed by $(fl_bench_owner))"
+    return 0
+  fi
+  last="$(printf '%s' "$out" | tail -n1)"
+  if [[ "$code" == "126" || "$code" == "127" ]] || [[ "$out" == *"bad interpreter"* ]]; then
+    chk__set fail "the bench command does not run (exit ${code}: ${last}); its own venv is broken, not the bench env" "$(fl_bench_cli_fix reinstall)"
+    return 0
+  fi
+  mod="$(printf '%s' "$out" | sed -n "s/.*No module named '\([A-Za-z0-9_.]*\)'.*/\1/p" | tail -n1)"
+  mod="${mod%%.*}"
+  if [[ -n "$mod" && "$mod" != "frappe" ]] && fl_apps_txt | grep -qx "$mod"; then
+    chk__set fail "bench version fails: the app ${mod} does not import (${last})" "cd ${FL_BENCH_DIR} && bench setup requirements --python   (or: ${FL_SELF} app add ${mod} --bench-dir ${FL_BENCH_DIR}, which re-clones it)"
+    return 0
+  fi
+  if fl_profile_is_guess; then
+    chk__set fail "bench version fails: ${last}" "cd ${FL_BENCH_DIR} && bench setup requirements --python   (no profile matches this bench, so no env rebuild is offered)"
+    return 0
+  fi
+  chk__set fail "bench version fails: ${last}" "${FL_SELF} repair" env_rebuild
 }
 
 chk_socketio() {

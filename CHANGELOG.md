@@ -62,6 +62,27 @@ All notable changes to this project are documented here.
 - A launchd agent that is on launchd's disabled list (after `launchctl
   disable` or an old `launchctl remove`) is enabled before the bootstrap
   is retried, instead of failing three times.
+- A bench whose Frappe no profile knows (develop, v17, v14) with no stored
+  profile no longer falls back to `v15-lts` silently: doctor's and
+  repair's header say the profile is only the default, the env checks say
+  so and warn instead of offering a rebuild, and `repair` refuses
+  to rebuild the env with a guessed Python. `benchbar install --profile
+  NAME` sets the profile.
+- `bench version` failures are classified before any fix is offered: a
+  missing or broken `bench` command gets `uv tool install frappe-bench`
+  (or the pipx equivalent), an app that does not import is named with
+  `bench setup requirements --python`, and only a failure inside the env
+  itself (frappe or a library that does not import) still leads to an env
+  rebuild. None of the classified cases moves the env aside.
+- `benchbar repair` refuses to rebuild the env while the bench is running
+  (its processes run from that env) and says to stop it first.
+- New doctor check `env_setuptools`: on Frappe v15 the env must import
+  `pkg_resources` (setuptools 70 and later dropped it); `repair` installs
+  `setuptools<70` into the env, and an env rebuild on v15 does the same.
+- The installer checks that `bench` runs (`bench --version`) before using
+  it, names the reinstall command for its owner when it does not, and
+  warns when it is older than the profile's known minimum (`bench_min` in
+  `config/release-profiles.tsv`).
 
 ### Changed
 

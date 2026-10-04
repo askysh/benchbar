@@ -7,6 +7,7 @@
 
 FL_R_RUNNER=""
 FL_R_PLIST=""
+FL_PROFILE_SOURCE=""
 FL_R_PROCFILE=""
 FL_R_HELPERS=""
 FL_CRASH_MAX_STARTS="${FL_CRASH_MAX_STARTS:-3}"
@@ -43,8 +44,24 @@ fl_context_init() {
     team="$(fl_bstate_get TEAM_PROFILE 2>/dev/null || true)"
     if [[ -n "$team" ]] && team_file="$(fl_team_profile_file "$team")" && fl_team_profile_read "$team_file"; then profile="$team"; fi
   fi
-  [[ -n "$profile" ]] || profile="$(fl_bstate_get PROFILE 2>/dev/null || true)"
-  [[ -n "$profile" ]] || profile="$(fl_profile_detect "$FL_BENCH_DIR")"
+  # FL_PROFILE_SOURCE says how the profile was chosen: flag, team, stored
+  # (the bench's state), detected (apps/frappe's major matched a profile) or
+  # default. "default" means no profile claims this bench: a Frappe major no
+  # profile knows (develop, v17, v14), or no apps/frappe yet. The checks
+  # that compare the env with the profile must not act on a default.
+  FL_PROFILE_SOURCE="default"
+  if [[ -n "$profile" ]]; then
+    FL_PROFILE_SOURCE="flag"
+    [[ -z "${3:-}" ]] && FL_PROFILE_SOURCE="team"
+  fi
+  if [[ -z "$profile" ]]; then
+    profile="$(fl_bstate_get PROFILE 2>/dev/null || true)"
+    [[ -n "$profile" ]] && FL_PROFILE_SOURCE="stored"
+  fi
+  if [[ -z "$profile" ]]; then
+    profile="$(fl_profile_detect "$FL_BENCH_DIR")"
+    [[ -n "$profile" ]] && FL_PROFILE_SOURCE="detected"
+  fi
   [[ -n "$profile" ]] || profile="$(fl_default_profile)"
   fl_load_profile "$profile"
   # the MariaDB formula this bench was set up with; detection of the running

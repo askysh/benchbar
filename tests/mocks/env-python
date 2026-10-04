@@ -8,6 +8,9 @@
 case "$*" in
   *version_info*) echo "3.11"; exit 0 ;;
   --version) echo "Python 3.11.9"; exit 0 ;;
+  # MOCK_ENV_NO_PKG_RESOURCES=1: an env whose setuptools is 70+ or absent
+  "-c import pkg_resources") [[ "${MOCK_ENV_NO_PKG_RESOURCES:-0}" == "1" ]] && { echo "ModuleNotFoundError: No module named 'pkg_resources'" >&2; exit 1; }; exit 0 ;;
+  "-m pip "*) printf 'env-python %s\n' "$*" >>"${MOCK_LOG:-/dev/null}"; exit 0 ;;
 esac
 if [[ "${1:-}" == "-c" && "${3:-}" == "benchbar-secrets" && "${4:-}" == "frappe" ]]; then
   shift 4
