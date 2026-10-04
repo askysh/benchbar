@@ -20,8 +20,9 @@ the argument `mcp`.
 | `benchbar_list` | Every bench benchbar knows: path, default site, sites, ports, whether its service is installed |
 | `benchbar_status` | Live state of one bench, with pid, ports, sites and site ping |
 | `benchbar_doctor` | The read only health report of one bench, every check with its level and fix |
-| `benchbar_logs_tail` | The last lines of the bench log, one process if asked |
-| `benchbar_site_list` | The sites of one bench, the default, the hosts line and the ping code |
+| `benchbar_logs_tail` | The last lines of one log file: `file` is `bench` (`logs/bench.log`, honcho's stream), `worker` (`logs/worker.log`, where the worker writes), `worker_error` or `previous`; `process` keeps one honcho process of `bench.log` |
+| `benchbar_site_list` | The sites of one bench, the default, the hosts line, the ping code, the database name and the MariaDB port (never the password) |
+| `benchbar_app_list` | Every app of one bench: repo, branch, commit, local changes, version, sites (from the last read, the database is not asked) and how far behind its dependencies it is |
 | `benchbar_profile_list` | Built in and team profiles: where each comes from, how far a subscription is behind, what hides what |
 | `benchbar_profile_check` | Whether git can read every repo of a team profile (`name`) with your credentials, and which apps `install --profile` would leave out |
 | `benchbar_up` | Start a bench and wait for its default site |
@@ -31,13 +32,23 @@ the argument `mcp`.
 | `benchbar_app_add` | Apply that plan: needs the token, returns the output and a fresh app list |
 
 `benchbar_list`, `benchbar_status`, `benchbar_doctor`,
-`benchbar_logs_tail` (last lines, one process if asked),
-`benchbar_site_list`, `benchbar_profile_list`, `benchbar_profile_check`
-and `benchbar_app_add_plan` read; `benchbar_up`,
-`benchbar_down`, `benchbar_restart` and `benchbar_app_add` act. Each one
-runs `benchbar ... --json` and returns what the CLI printed. Nothing that
+`benchbar_logs_tail`, `benchbar_site_list`, `benchbar_app_list`,
+`benchbar_profile_list`, `benchbar_profile_check` and
+`benchbar_app_add_plan` read; `benchbar_up`, `benchbar_down`,
+`benchbar_restart` and `benchbar_app_add` act. Each one runs
+`benchbar ... --json` and returns what the CLI printed. Nothing that
 repairs, installs a bench or needs `sudo` is offered. It needs only
 `python3`, which the Command Line Tools provide.
+
+Calls run side by side: a status answers while an app add runs, and the
+client can cancel a running call (`notifications/cancelled`), which
+stops the CLI and everything it started. Arguments are checked against
+the schema first; a bad value (`lines: 99999`, `process: "nope"`) is a
+tool error that names the rule. What the bench itself says, log lines,
+git output, `hooks.py`, profile files and the output of an action, comes
+back with a first line that labels it as data from the bench, not
+instructions, with terminal colors removed and a 200 kB cap; the
+[mcp reference](../reference/cli/mcp.md) has the details.
 
 ## Adding an app
 
@@ -53,8 +64,9 @@ add only repos you trust, and read the plan:
    the plan: repo, branch, the required apps and where each comes from,
    the sites, the steps, and a `token`. Nothing changes.
 2. The agent shows you that plan and waits for your OK. benchbar cannot
-   tell whether you saw it: the token proves only that nothing changed
-   since the plan, so ask your agent to show the plan before it applies.
+   tell whether you saw it: the token proves only that the bench has not
+   changed since the plan, and the tool says so, so ask your agent to
+   show the plan before it applies.
 3. `benchbar_app_add` with the same arguments and the `token` runs
    exactly that plan. If `sites/apps.txt`, `apps/` or the sites changed
    in between, the token is refused and the agent plans again.

@@ -176,7 +176,8 @@ Daily
   scan PATH           Find benches recursively in a folder (read only; --json).
   register PATH ...   Remember selected benches without changing their services.
   logs                Tail logs/bench.log. Flags: --worker, --worker-error, --previous, -n50, --no-follow,
-                      --process web|worker|socketio|schedule (with --json: the lines as JSON)
+                      --process web|socketio|schedule|worker (worker reads logs/worker.log; with --json:
+                      the lines as JSON)
   fg                  Stop the service and run honcho in the foreground.
   watch               Run bench watch for asset rebuilds.
   autostart on|off    Whether the bench may come back after login.
@@ -706,6 +707,28 @@ cmd_where() {
   if [[ -n "$app_path" ]]; then printf '  app      %s (%s)\n' "$app_path" "$app_version"; else printf '  app      not installed\n'; fi
 }
 
+# cmd_mcp: the MCP server, on a Python 3.9+ that imports only the standard
+# library. Apple's /usr/bin/python3 comes first when the Command Line Tools
+# are installed (xcode-select -p; without them it is a stub that only offers
+# to install them), then python3 from PATH: a GUI client (Claude Desktop)
+# starts us with a PATH that may lead to a pyenv shim or a project venv.
+# -I (isolated mode) ignores PYTHON* variables, the user site and the script
+# folder, so the server sees the same Python everywhere.
+# BENCHBAR_MCP_CLI: tests only, a fake CLI stands in (a timeout, a hang).
+cmd_mcp() {
+  local py candidates=() found="" ver
+  if xcode-select -p >/dev/null 2>&1 && [[ -x /usr/bin/python3 ]]; then candidates+=(/usr/bin/python3); fi
+  if command -v python3 >/dev/null 2>&1; then candidates+=("$(command -v python3)"); fi
+  for py in ${candidates[@]+"${candidates[@]}"}; do
+    if "$py" -I -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)' >/dev/null 2>&1; then
+      BENCHBAR="${BENCHBAR_MCP_CLI:-$FL_SELF}" BENCHBAR_VERSION="$FL_VERSION" exec "$py" -I "${SCRIPT_DIR}/lib/frappe-local/mcp.py"
+    fi
+    ver="$("$py" -I -c 'import sys; print("%d.%d.%d" % sys.version_info[:3])' 2>/dev/null || true)"
+    found="${found:+${found}, }${py} (${ver:-not runnable})"
+  done
+  fl_die "python3 3.9 or newer is needed for benchbar mcp; found: ${found:-no python3}." "Install the Xcode Command Line Tools: xcode-select --install"
+}
+
 cmd_status() {
   FL_CONTEXT_LIGHT=1
   fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
@@ -786,11 +809,7 @@ case "$COMMAND" in
   docs) fl_cmd_docs ${ARGS[@]+"${ARGS[@]}"} ;;
   self-update) fl_cmd_self_update ${ARGS[@]+"${ARGS[@]}"} || exit 1 ;;
   where) cmd_where ;;
-  mcp)
-    # stdlib only Python 3.9+; the Command Line Tools' python3 is enough
-    command -v python3 >/dev/null 2>&1 || fl_die "python3 is needed for benchbar mcp." "Install the Xcode Command Line Tools: xcode-select --install"
-    # BENCHBAR_MCP_CLI: the tests stand a fake CLI in (a timeout, a hang)
-    BENCHBAR="${BENCHBAR_MCP_CLI:-$FL_SELF}" BENCHBAR_VERSION="$FL_VERSION" exec python3 "${SCRIPT_DIR}/lib/frappe-local/mcp.py" ;;
+  mcp) cmd_mcp ;;
   help) usage ;;
   *) fl_die "Unknown command: ${COMMAND}" "Run: benchbar --help" ;;
 esac

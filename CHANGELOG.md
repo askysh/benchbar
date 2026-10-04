@@ -144,6 +144,16 @@ All notable changes to this project are documented here.
 - A bench folder that cannot be written (read only) stops a run at once
   with "Could not create the lock ... (read only?)", instead of five
   retries that blamed another benchbar run.
+- `benchbar logs --process worker` (and the MCP `benchbar_logs_tail`)
+  always returned no lines: `Procfile.lean` sends the worker to
+  `logs/worker.log`, not to `bench.log`. It now reads that file
+  (`--previous` with it is refused: there is no previous worker log).
+- `--json` output removes a terminal color code as a whole; before, the
+  escaping dropped only its ESC byte and left `[31m` in log lines and
+  messages.
+- An MCP action whose follow up status failed or hung lost the action's
+  result; the result now comes back with `after_error`. Invalid UTF-8 on
+  stdin no longer ends the server.
 
 ### Changed
 
@@ -208,6 +218,32 @@ All notable changes to this project are documented here.
 - The state store (`state.env`, the per bench files) decodes its values
   without `eval`: a hand edited `KEY=$(...)` line is read as text, runs
   nothing and expands no glob.
+- The MCP server runs every tool call on its own thread, so a status
+  answers while an app add runs; actions run one at a time; a
+  `notifications/cancelled` stops the running CLI and its process group
+  (a cancel during the status that follows an action still returns the
+  action's result, with `after_error`).
+  Arguments are checked against the schema and a bad value is a tool
+  error that names the rule. Log lines, git output, `hooks.py`, profile
+  files and action output come back with a first line that labels them
+  as data from the bench, not instructions, with terminal colors removed
+  and a 200 kB cap (`BENCHBAR_MCP_MAX_BYTES`). `tools/list` and
+  `tools/call` before `initialize` are refused (`-32002`). Each tool
+  says whether it is read only, destructive, idempotent or reads the
+  network, and the app add token is described as what it is: proof that
+  the bench has not changed since the plan.
+- `benchbar mcp` runs on `/usr/bin/python3 -I` when the Command Line
+  Tools are installed, else `python3` from `PATH`, and refuses anything
+  older than 3.9 with the versions it found; a GUI client's `PATH` no
+  longer picks the interpreter.
+
+### Added
+
+- `benchbar mcp` has a read only `benchbar_app_list` tool (`app list
+  --json --no-sites`), and `benchbar_logs_tail` takes `file`: `bench`,
+  `worker` (`logs/worker.log`), `worker_error` or `previous`.
+- `benchbar site list --json` carries each site's `db_name` and the
+  MariaDB `db_port` (never the password).
 
 ## 0.7.2 - 2026-10-02
 

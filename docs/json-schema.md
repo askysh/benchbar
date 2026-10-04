@@ -193,7 +193,16 @@ carry the bench's sites, read from `sites/*/site_config.json`:
 | `hosts_entry` | bool | `/etc/hosts` maps it to 127.0.0.1; `benchbar site hosts` adds the missing lines |
 | `ping_code` | number or null | HTTP code of `/api/method/ping` with this site as `Host`; `null` when nothing listens on the web port or nothing answered. Since 0.6.1 `list --json` and `status --json` leave it `null` (they are polled; `web_ping_code` is the default site's ping) unless `status --json --ping` asks every site once; `site list --json` always asks |
 
-`benchbar site list --json` prints `{"schema_version":1,"cli_version":..,"bench":..,"sites":[..]}`.
+`benchbar site list --json` prints `{"schema_version":1,"cli_version":..,"bench":..,"sites":[..]}`,
+and since 0.7.3 each of its sites also carries the database:
+
+| Field | Type | Notes |
+|---|---|---|
+| `db_name` | string or null | `db_name` from the site's `site_config.json`; `null` when the file has none |
+| `db_port` | number | the site's `db_port`, else the bench's (`common_site_config.json`), else 3306 |
+
+The password is never printed. `list --json` and `status --json` leave
+these two out: they are polled.
 
 ## `benchbar doctor --json`
 
@@ -254,11 +263,20 @@ carry the bench's sites, read from `sites/*/site_config.json`:
 ```
 
 `-nN` sets how many lines (after the filter), `--process NAME` keeps one
-honcho process (`web`, `worker`, `socketio`, `schedule`, `redis_queue`,
+honcho process (`web`, `socketio`, `schedule`, `redis_queue`,
 `redis_cache`); lines without a honcho prefix, such as a traceback, stay
 with the process above them. `process` is `null` without a filter.
-Control characters (terminal colors) are removed. `benchbar mcp` uses it
-for `benchbar_logs_tail`.
+`file` is the file that was read: `logs/bench.log`, or `logs/worker.log`,
+`logs/worker.error.log` and `logs/bench.previous.log` for `--worker`,
+`--worker-error` and `--previous`. Since 0.7.3 `--process worker` reads
+`logs/worker.log` unfiltered (and `process` is `null`): `Procfile.lean`
+sends the worker there, so it never appears in `bench.log`; with
+`--worker-error` that file is kept, and `--previous` is refused (there is
+no previous worker log). Control characters are removed, a terminal
+color code as a whole (`[31m` is never left behind). `benchbar mcp` uses it for `benchbar_logs_tail`, whose
+`file` argument (`bench`, `worker`, `worker_error`, `previous`) stands
+for these flags, and which adds `"truncated": true` when it had to drop
+lines to stay under its size cap.
 
 Since 0.7.3 the lines are redacted with the rules of `benchbar report`
 (values of credential-like keys, `user:password@` in URLs, JWT and API

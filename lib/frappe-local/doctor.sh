@@ -74,16 +74,40 @@ fl_doctor_print() {
 # needs; in bash, the same bytes `sed | tr -d '\000-\037'` gave. The control
 # characters are listed one by one: a range in bash 3.2 follows the locale.
 FL_JSON_CTRL=$'\001\002\003\004\005\006\007\010\011\012\013\014\015\016\017\020\021\022\023\024\025\026\027\030\031\032\033\034\035\036\037'
+# a whole terminal control sequence: ESC [ parameters (0x30-0x3F)
+# intermediates (0x20-0x2F) final byte (0x40-0x7E). The sets are spelled
+# out and tested by containment: a bracket range in a pattern or a regex
+# follows the locale's collation, and under en_US.UTF-8 "[@-~]" is not the
+# ASCII run it is under C (launchd runs the CLI in C, Terminal in UTF-8)
+FL_JSON_CSI_PARAM='0123456789:;<=>?'
+FL_JSON_CSI_INTER=' !"#$%&'"'"'()*+,-./'
+FL_JSON_CSI_FINAL='@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~'
+# fl__json_csi_len_v VAR TEXT: how many characters the control sequence at the
+# start of TEXT spans (0 when TEXT does not start with ESC [)
+fl__json_csi_len_v() {
+  # the locals carry names no caller uses: printf -v "$1" must reach the caller's variable
+  local __csi_s="$2" __csi_k=2 __csi_c
+  [[ "$__csi_s" == $'\033['* ]] || { printf -v "$1" 0; return 0; }
+  while __csi_c="${__csi_s:$__csi_k:1}"; [[ -n "$__csi_c" && "$FL_JSON_CSI_PARAM" == *"$__csi_c"* ]]; do __csi_k=$((__csi_k + 1)); done
+  while __csi_c="${__csi_s:$__csi_k:1}"; [[ -n "$__csi_c" && "$FL_JSON_CSI_INTER" == *"$__csi_c"* ]]; do __csi_k=$((__csi_k + 1)); done
+  __csi_c="${__csi_s:$__csi_k:1}"
+  [[ -n "$__csi_c" && "$FL_JSON_CSI_FINAL" == *"$__csi_c"* ]] && __csi_k=$((__csi_k + 1))
+  printf -v "$1" '%s' "$__csi_k"
+}
 fl_json_escape_v() {
-  local __e="$2" __o="" __p
+  local __e="$2" __o="" __p __n
   __e="${__e//\\/\\\\}"
   __e="${__e//\"/\\\"}"
   # cut at each control character: bash 3.2's ${x//[set]/} is quadratic in
-  # the string's length, and a colored 10 KB log line took 20 seconds
+  # the string's length, and a colored 10 KB log line took 20 seconds. A
+  # color code goes as a whole (ESC [ 3 1 m), not only its ESC: "[31m" left
+  # behind is not a word anyone wrote, and readers would have to guess it.
   while [[ "$__e" == *[$FL_JSON_CTRL]* ]]; do
     __p="${__e%%["$FL_JSON_CTRL"]*}"
     __o="${__o}${__p}"
-    __e="${__e:${#__p}+1}"
+    __e="${__e:${#__p}}"
+    fl__json_csi_len_v __n "$__e"
+    if [[ "$__n" -gt 0 ]]; then __e="${__e:$__n}"; else __e="${__e:1}"; fi
   done
   printf -v "$1" '%s' "${__o}${__e}"
 }

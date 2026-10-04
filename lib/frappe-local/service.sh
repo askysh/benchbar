@@ -379,6 +379,14 @@ fl_cmd_logs() {
   done
   [[ "$lines" =~ ^[0-9]+$ ]] || fl_die "logs -n takes a number of lines"
   [[ -z "$process" || "$process" =~ ^[a-z_]+$ ]] || fl_die "--process takes a honcho process name: web, worker, socketio, schedule, redis_queue, redis_cache"
+  # Procfile.lean sends the worker to logs/worker.log and logs/worker.error.log,
+  # not to honcho's stream, so "--process worker" reads that file, unfiltered
+  # (--worker-error keeps its file); the JSON's "file" says which one was read
+  if [[ "$process" == "worker" ]]; then
+    [[ "$file" != "${FL_BENCH_DIR}/logs/bench.previous.log" ]] || fl_die "--process worker reads logs/worker.log, which has no previous file." "Drop --previous, or use --worker."
+    process=""
+    [[ "$file" == "${FL_BENCH_DIR}/logs/worker.error.log" ]] || file="${FL_BENCH_DIR}/logs/worker.log"
+  fi
   if [[ "${OPT_JSON:-0}" == "1" ]]; then
     fl_logs_json "$file" "$lines" "$process"
     return 0
