@@ -64,6 +64,8 @@ cp "$ROOT/tests/mocks/bin/pkg-config" "$ROOT/tests/mocks/bin/_mocklib.sh" "$MOCK
 chmod +x "$MOCK_BREW_PREFIX"/opt/*/bin/*
 # MariaDB runs on 3306 on a set up machine (tests of a stopped server clear this)
 printf '3306 111 mariadbd 127.0.0.1\n' >"$MOCK_LISTEN"
+# the user typed a sudo password a moment ago: "sudo -n" works until something runs "sudo -k"
+touch "$MOCK_STATE/sudo_cred"
 printf '127.0.0.1 localhost\n' >"$FL_HOSTS_FILE"
 printf '[client-server]\n!includedir %s/etc/my.cnf.d\n' "$MOCK_BREW_PREFIX" >"$MOCK_BREW_PREFIX/etc/my.cnf.d/../my.cnf"
 printf '# test zshrc\nexport EDITOR=vim\n' >"$HOME/.zshrc"

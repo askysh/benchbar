@@ -37,7 +37,12 @@ It asks for two passwords, the MariaDB root password (generated unless
 you set `MARIADB_ROOT_PASSWORD`, kept in your Keychain) and the site's
 Administrator password (or `ADMIN_PASSWORD`). It asks for `sudo` once, up
 front, only when a step ahead needs it: the wkhtmltopdf package and the
-`/etc/hosts` line.
+`/etc/hosts` line. Those two steps run first, and the `sudo` credential
+is dropped (`sudo -k`) before Homebrew, pip, npm, yarn or `bench get-app`
+run anything, so no package's install script finds a cached `sudo`. The
+package is copied into a folder only root can write, hashed there and
+installed from there. The two passwords stay inside `benchbar` and the
+phase scripts: no other program started by the install sees them.
 
 | Flag | What it does |
 |---|---|
@@ -88,8 +93,14 @@ warns and does not install it into the bench env.
 | `--dry-run` | Print the plan, change nothing |
 | `-y`, `--yes` | Apply without asking |
 
-Exit codes: 0 adopted (or unchanged); 1 the path is not a bench, the plan
-was cancelled, or a step failed.
+A bench path with a double quote, backslash, `$`, backtick, `<`, `>`,
+`&` or a control character in it is refused before anything is written:
+the runner script and the launchd agent cannot carry it as plain text.
+Move the bench to a plainer folder (spaces and apostrophes are fine).
+
+Exit codes: 0 adopted (or unchanged); 1 the path is not a bench, the path
+has a character the service files cannot carry, the plan was cancelled,
+or a step failed.
 
 ```bash
 benchbar adopt ~/frappe-bench

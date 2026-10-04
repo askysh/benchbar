@@ -111,6 +111,9 @@ fl_autostart_enabled() {
 
 fl_render_all() {
   local honcho="${FL_HONCHO:-${FL_BENCH_DIR}/env/bin/honcho}" run_at_load=true
+  # a path or site the templates cannot carry renders escaped here (doctor
+  # reports it as bench_path); the commands that write or start call
+  # fl_require_plain_bench first and refuse
   fl_autostart_enabled || run_at_load=false
   FL_R_PROCFILE="$(fl_template_render Procfile.lean "WEB_PORT=${FL_WEB_PORT}" "SCHEDULE=$(fl_scheduler_enabled && printf 'schedule: bench schedule')")"
   FL_R_RUNNER="$(fl_template_render bench-run.sh \
@@ -244,6 +247,7 @@ fl_check_port_clash_or_confirm() {
 }
 
 fl_cmd_up() {
+  fl_require_plain_bench
   fl_require_service
   if fl_pm_running; then
     fl_ok "bench ${FL_BENCH_NAME} is already running at $(fl_site_url)"
@@ -300,6 +304,7 @@ fl_cmd_down() {
 }
 
 fl_cmd_restart() {
+  fl_require_plain_bench
   fl_require_service
   fl_check_port_clash_or_confirm || return 1
   fl_arm_start
@@ -388,11 +393,16 @@ fl_cmd_logs() {
 # logs --json [-nN] [--process NAME]: the last N lines of the log (after the
 # process filter), for scripts and the MCP server. honcho prefixes each line
 # with "HH:MM:SS <process>.<n> |"; lines without a prefix (tracebacks) stay
-# with the process line above them.
+# with the process line above them. The lines go through fl_redact_stream
+# (the report's rules: keys, URL credentials, token shapes, emails), since
+# the reader is a script or an agent, not the person whose log it is. N is
+# capped at FL_LOGS_JSON_MAX; "truncated_to" says so when it was.
+FL_LOGS_JSON_MAX=2000
 fl_logs_json() {
-  local file="$1" lines="$2" process="$3" sep="" line
-  printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"file":%s,"process":%s,"lines":[' \
-    "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$file")" "$(fl_json_str "$process")"
+  local file="$1" lines="$2" process="$3" sep="" line truncated=""
+  if [[ "$lines" -gt "$FL_LOGS_JSON_MAX" ]]; then lines="$FL_LOGS_JSON_MAX"; truncated=",\"truncated_to\":${FL_LOGS_JSON_MAX}"; fi
+  printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"file":%s,"process":%s%s,"lines":[' \
+    "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$file")" "$(fl_json_str "$process")" "$truncated"
   if [[ -f "$file" ]]; then
     while IFS= read -r line; do
       printf '%s"%s"' "$sep" "$(fl_json_escape "$line")"
@@ -400,7 +410,7 @@ fl_logs_json() {
     done < <(awk -v p="$process" '
       p == "" { print; next }
       /^[0-9][0-9]:[0-9][0-9]:[0-9][0-9] [A-Za-z_]+(\.[0-9]+)? +\|/ { split($2, a, "."); keep = (a[1] == p) }
-      keep { print }' "$file" | tail -n "$lines")
+      keep { print }' "$file" | tail -n "$lines" | fl_redact_stream)
   fi
   printf ']}\n'
 }
@@ -438,12 +448,12 @@ fl_cmd_watch() {
 
 fl_cmd_autostart() {
   local mode="${1:-}"
-  fl_require_service
   case "$mode" in
-    on|off) ;;
-    "") if fl_autostart_enabled; then fl_ok "autostart is on (bench returns after login if it was running)"; else fl_ok "autostart is off"; fi; return 0 ;;
+    on|off) fl_require_plain_bench ;;
+    "") fl_require_service; if fl_autostart_enabled; then fl_ok "autostart is on (bench returns after login if it was running)"; else fl_ok "autostart is off"; fi; return 0 ;;
     *) fl_die "Usage: benchbar autostart on|off" ;;
   esac
+  fl_require_service
   fl_bench_state_migrate "$FL_BENCH_DIR"
   fl_bstate_set AUTOSTART "$mode"
   fl_render_all

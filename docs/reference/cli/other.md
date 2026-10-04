@@ -18,9 +18,13 @@ the last 200 lines of `bench.log` and `worker.error.log`.
 
 Site config files are never copied, only their key names. Any value
 whose key looks like a password, secret, token, key, API or auth
-credential is replaced by `***`. Your home folder, user name and every
-name of the Mac are replaced by placeholders. `REDACTIONS.txt` inside the
-zip lists what was replaced.
+credential is replaced by `***`, and so is anything shaped like a secret
+whatever its key: `user:password@` in a URL (a redis URL, a git URL with
+a token), JWTs, GitHub, Slack, OpenAI and AWS tokens. Email addresses
+become `<email>`. Your home folder, user name and every name of the Mac
+are replaced by placeholders. `REDACTIONS.txt` inside the zip lists what
+was replaced. `benchbar logs --json` (and the MCP log tool) applies the
+same rules.
 
 | Flag | What it does |
 |---|---|

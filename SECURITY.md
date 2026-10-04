@@ -38,6 +38,28 @@ exploitable:
 - **The installer and releases.** A way to make `install.sh` or a
   release download run code it should not.
 
+## The Keychain item
+
+`benchbar` keeps the MariaDB root password in your login Keychain as the
+generic password `benchbar-mariadb` (account `root`). The item trusts one
+application, `/usr/bin/security`, which is how `benchbar` and
+`benchbar mariadb-password` read it without a prompt. That is also a
+limit: any program running as your user can read the item through
+`security find-generic-password -s benchbar-mariadb -w` without a prompt,
+because a command line tool has no code signature of its own for the
+Keychain to trust. The item is written through `security -i`, so the
+password is never a command line argument.
+
+If you want macOS to ask before every read, remove the trusted
+application: open Keychain Access, find `benchbar-mariadb`, open its
+Access Control tab and either choose "Confirm before allowing access" or
+remove `security` from the list of allowed applications. macOS then shows
+its password dialog each time `benchbar` needs the root password; a run
+with no window session to show it in (an agent over SSH, `--yes` in a
+pipeline) ends with the "MariaDB root password unknown" message and exit
+code 2, and `MARIADB_ROOT_PASSWORD='...'` in the environment is the way
+around it.
+
 Not a vulnerability: a bench's own Frappe or ERPNext code (report those
 to [Frappe](https://github.com/frappe/frappe/security)), and a dev bench
 reachable on your local network because you bound it there.

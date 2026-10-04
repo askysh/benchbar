@@ -1,12 +1,26 @@
 #!/usr/bin/env bash
 # sudo mock: runs the command as the current user (tests use a temp hosts file).
-# "sudo -v" and "sudo -n true" succeed unless $MOCK_STATE/sudo_refused exists.
+# The cached credential is the file $MOCK_STATE/sudo_cred: "sudo -v" and a
+# plain "sudo CMD" (the user typed the password) create it, "sudo -k" removes
+# it, and "sudo -n CMD" works only while it exists. Everything fails while
+# $MOCK_STATE/sudo_refused exists (the user cannot or will not type it).
 # shellcheck source=tests/mocks/bin/_mocklib.sh
 . "$(dirname "$0")/_mocklib.sh"
-mock_log "$@"
-[[ -f "${MOCK_STATE:-/nonexistent}/sudo_refused" ]] && { echo "sudo: a password is required" >&2; exit 1; }
+[[ -n "${MOCK_NO_LOG:-}" ]] || mock_log "$@"
+state="${MOCK_STATE:-/nonexistent}"
+cred="$state/sudo_cred"
+[[ "${1:-}" == "-k" ]] && { rm -f "$cred"; exit 0; }
+[[ -f "$state/sudo_refused" ]] && { echo "sudo: a password is required" >&2; exit 1; }
 case "${1:-}" in
-  -v) exit 0 ;;
-  -n) shift; [[ "${1:-}" == "true" ]] && exit 0 ;;
+  -v) [[ -d "$state" ]] && touch "$cred"; exit 0 ;;
+  -n) shift; [[ -f "$cred" ]] || { echo "sudo: a password is required" >&2; exit 1; } ;;
+  *) [[ -d "$state" ]] && touch "$cred" ;;
 esac
+[[ "${1:-}" == "true" ]] && exit 0
+if [[ "${1:-}" == "install" ]]; then
+  # the test user cannot give a file to root: drop -o OWNER and -g GROUP
+  shift; args=()
+  while [[ "$#" -gt 0 ]]; do case "$1" in -o|-g) shift 2 ;; *) args+=("$1"); shift ;; esac; done
+  exec install "${args[@]}"
+fi
 exec "$@"

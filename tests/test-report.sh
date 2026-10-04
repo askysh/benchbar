@@ -15,6 +15,10 @@ printf "__version__ = '15.48.0'\n" >"$BENCH/apps/erpnext/erpnext/__init__.py"
 DB_PW="SuperSecretDbPw1"; ENC_KEY="EncKeyXYZ987"; API_KEY="ApiKeyQQQ"; API_SECRET="ApiSecretZZZ"
 ROOT_PW="RootPwHidden"; TOKEN="TokenLeak123"; BEARER="BearerLeak456"; JSON_PW="JsonPwLeak789"; INI_PW="IniLeak000"
 DQ_PW="QuotedSecret123"; SQ_TOKEN="SingleQuoted456"; URL_KEY="UrlSecret789"; ESC_TAIL="EscapedTail321"; PY_PW="PyReprSecret654"
+# value shapes with no key in front of them (0.7.3)
+REDIS_PW="RedisUrlPw135"; GIT_TOKEN="ghp_GitTokenInUrl0123456789abcdef"; JWT="eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJVadQssw5c"
+PAT="github_pat_11ABCDEFG0123456789abcdefghijkl"; SLACK="xoxb-1234567890-abcdefghij"; OPENAI="sk-abcdefghijklmnopqrstuvwxyz1234"; AWS="AKIAIOSFODNN7EXAMPLE"
+EMAIL="bob.smith+dev@example.co.uk"; KW_PW="kwarg pw 246"; ARGV_PW="ArgvPw357"
 cat >"$BENCH/sites/macdev/site_config.json" <<JSON
 {
  "db_name": "_1234abcd",
@@ -43,6 +47,9 @@ while [[ "$i" -le 300 ]]; do printf 'line %d from %s/logs\n' "$i" "$HOME" >>"$BE
   printf 'GET /api/method/ping?api_key=%s&x=1 200\n' "$URL_KEY"
   printf '{"api_key":"abc\\"%s"} and secret="one\\"%s"\n' "$ESC_TAIL" "$ESC_TAIL"
   printf "conf = {'db_name': '_abc', 'password': '%s', 'port': 3306}\n" "$PY_PW"
+  printf 'redis_cache: redis://:%s@127.0.0.1:13000 ready\ncloning https://bob:%s@github.com/acme/app.git\n' "$REDIS_PW" "$GIT_TOKEN"
+  printf 'header %s end\n%s and %s\n%s %s %s\n' "$JWT" "$PAT" "$SLACK" "$OPENAI" "$AWS" "$EMAIL"
+  printf "frappe.connect(host='db', password='%s')\nbench new-site x --admin-password=%s done\n" "$KW_PW" "$ARGV_PW"
 } >>"$BENCH/logs/bench.log"
 printf 'worker boot\ndb_password = %s\n' "$INI_PW" >"$BENCH/logs/worker.error.log"
 # the names of the Mac (the scutil mock): a Bonjour name in an rq worker name and a
@@ -72,7 +79,8 @@ assert_not_contains "$listing" "site_config.json" "(site configs are never packe
 
 EX="$TMP_DIR/extract"; mkdir -p "$EX"; unzip -q "$ZIP" -d "$EX"
 all="$(cat "$EX"/*)"
-for secret in "$DB_PW" "$ENC_KEY" "$API_KEY" "$API_SECRET" "$ROOT_PW" "$TOKEN" "$BEARER" "$JSON_PW" "$INI_PW" "$DQ_PW" "$SQ_TOKEN" "$URL_KEY" "$ESC_TAIL" "$PY_PW"; do
+for secret in "$DB_PW" "$ENC_KEY" "$API_KEY" "$API_SECRET" "$ROOT_PW" "$TOKEN" "$BEARER" "$JSON_PW" "$INI_PW" "$DQ_PW" "$SQ_TOKEN" "$URL_KEY" "$ESC_TAIL" "$PY_PW" \
+  "$REDIS_PW" "$GIT_TOKEN" "$JWT" "$PAT" "$SLACK" "$OPENAI" "$AWS" "$EMAIL" "$KW_PW" "$ARGV_PW"; do
   assert_not_contains "$all" "$secret" "(secret must not reach the zip)"
 done
 assert_not_contains "$all" "$HOME" "(home folder must be written as ~)"
@@ -98,6 +106,12 @@ assert_contains "$(cat "$EX/bench.log.tail")" "export API_TOKEN=***"
 assert_contains "$(cat "$EX/bench.log.tail")" 'ping?api_key=***&x=1 200'
 assert_contains "$(cat "$EX/bench.log.tail")" '{"api_key":"***"} and secret=***'
 assert_contains "$(cat "$EX/bench.log.tail")" "'password': '***', 'port': 3306" 
+assert_contains "$(cat "$EX/bench.log.tail")" "redis://***@127.0.0.1:13000 ready"
+assert_contains "$(cat "$EX/bench.log.tail")" "https://***@github.com/acme/app.git"
+assert_contains "$(cat "$EX/bench.log.tail")" "header *** end"
+assert_contains "$(cat "$EX/bench.log.tail")" "*** *** <email>"
+assert_contains "$(cat "$EX/bench.log.tail")" "password=***)"
+assert_contains "$(cat "$EX/bench.log.tail")" "bench new-site x --admin-password=***"
 # the tail is 200 lines plus its heading
 assert_eq "201" "$(wc -l <"$EX/bench.log.tail" | tr -d ' ')"
 assert_contains "$(cat "$EX/bench.log.tail")" "line 300 from"
@@ -106,6 +120,12 @@ assert_not_contains "$(cat "$EX/bench.log.tail")" "line 100 from"
 red="$(cat "$EX/REDACTIONS.txt")"
 assert_contains "$red" "masked credential-like values"
 assert_contains "$red" "bench.log.tail:"
+assert_contains "$red" "bench.log.tail: masked credentials inside URLs on 2 line(s)"
+assert_contains "$red" "bench.log.tail: masked JWT-like tokens on 1 line(s)"
+assert_contains "$red" "bench.log.tail: masked API token-like values on 2 line(s)"
+assert_contains "$red" "bench.log.tail: replaced email addresses with <email> on 1 line(s)"
+assert_contains "$red" "credentials inside URLs (user:password@ and ://:password@) are replaced by ***"
+assert_contains "$red" "email addresses are replaced by <email>"
 assert_contains "$red" "replaced the home folder with ~"
 assert_contains "$red" "worker.error.log.tail: replaced a name of this Mac with <host>"
 # versions and JSON

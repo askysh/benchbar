@@ -63,7 +63,7 @@ TOOLS = {
                 "description": "Only lines from this process.",
             },
         },
-        lambda a: ["logs", "--json", "--no-follow", "-n%d" % int(a.get("lines") or 100)]
+        lambda a: ["logs", "--json", "--no-follow", "-n%d" % min(max(1, int(a.get("lines") or 100)), 2000)]
         + (["--process", a["process"]] if a.get("process") else [])
         + bench_args(a),
         True,

@@ -1,8 +1,62 @@
 #!/usr/bin/env bash
 
+# fl_text_plain_ok TEXT: true when TEXT is plain text to bash (inside double
+# quotes), to XML and to a hosts line: no double quote, backslash, dollar
+# sign, backtick, <, >, & and no control character. Otherwise
+# FL_TEXT_PROBLEM names the first character in the way.
+FL_TEXT_PROBLEM=""
+fl_text_plain_ok() {
+  local t="$1" nl=$'\n' tab=$'\t'
+  FL_TEXT_PROBLEM=""
+  case "$t" in
+    *'"'*) FL_TEXT_PROBLEM='a double quote (")' ;;
+    *"\\"*) FL_TEXT_PROBLEM="a backslash (\\)" ;;
+    *'$'*) FL_TEXT_PROBLEM='a dollar sign ($)' ;;
+    *'`'*) FL_TEXT_PROBLEM='a backtick (`)' ;;
+    *'<'*) FL_TEXT_PROBLEM='a less-than sign (<)' ;;
+    *'>'*) FL_TEXT_PROBLEM='a greater-than sign (>)' ;;
+    *'&'*) FL_TEXT_PROBLEM='an ampersand (&)' ;;
+    *"$nl"*) FL_TEXT_PROBLEM='a newline' ;;
+    *"$tab"*) FL_TEXT_PROBLEM='a tab' ;;
+    *[[:cntrl:]]*) FL_TEXT_PROBLEM='a control character' ;;
+  esac
+  [[ -z "$FL_TEXT_PROBLEM" ]]
+}
+
+# A bench path lands inside the runner's double quotes (BENCH="..."), in the
+# agent's plist and in pkill patterns: one check, before anything renders.
+fl_bench_path_ok() { fl_text_plain_ok "$1"; }
+fl_bench_path_valid() {
+  fl_bench_path_ok "$1" || fl_die "The bench path ${1} contains ${FL_TEXT_PROBLEM}, which the runner script, the launchd agent and the hosts file cannot carry as plain text." \
+    "Move the bench to a folder whose path has none of \" \\ \$ \` < > & and no control characters, then run the command again."
+}
+
+# The default site lands in the runner (SITE="...", the ping's Host header)
+# and in the hosts line: plain text, and no whitespace.
+fl_site_render_valid() {
+  local s="$1"
+  if ! fl_text_plain_ok "$s"; then
+    fl_die "The site name '${s}' contains ${FL_TEXT_PROBLEM}, which the runner script and the hosts file cannot carry as plain text." \
+      "Pick the site with --site NAME, or rename the site folder; lowercase letters, digits, '-' and '.' are safe."
+  fi
+  case "$s" in
+    *[[:space:]]*) fl_die "The site name '${s}' contains whitespace, which the runner script and the hosts file cannot carry." \
+      "Pick the site with --site NAME, or rename the site folder; lowercase letters, digits, '-' and '.' are safe." ;;
+  esac
+}
+
+# fl_require_plain_bench: the current bench's path and default site, refused
+# with a message when the service files cannot carry them. Called by the
+# commands that write them or start the bench; doctor only reports
+# (chk_bench_path), so it stays read only for every bench.
+fl_require_plain_bench() {
+  fl_bench_path_valid "$FL_BENCH_DIR"
+  fl_site_render_valid "$FL_SITE"
+}
+
 fl_bench_run() {
   local bench_dir="$1"; shift
-  FL_LAST_COMMAND="cd ${bench_dir} && $*"
+  fl_redact_url_v FL_LAST_COMMAND "cd ${bench_dir} && $*"
   if [[ "$FL_DRY_RUN" == "1" ]]; then
     fl_info "dry-run: ${FL_LAST_COMMAND}"
     return 0

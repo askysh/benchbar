@@ -148,8 +148,57 @@ fl_kv_set() {
   fl__kv_unlock "$file"
 }
 
+# fl_kv_decode_v VAR RAW: the value fl_kv_set wrote as RAW (printf %q),
+# decoded without eval, so a hand edited state file can run no command and
+# expand no glob or variable. The %q forms: plain text as it is; $'...'
+# (a control character somewhere) with \n \t \\ \' and \NNN octal escapes;
+# backslash before each space or metacharacter otherwise. A '...' form is
+# its inner text. Anything else is the literal text.
+fl_kv_decode_v() {
+  local __raw="$2" __out="" __rest __c __oct
+  case "$__raw" in
+    "") printf -v "$1" '%s' '' ;;
+    \$\'*\')
+      __rest="${__raw#\$\'}"; __rest="${__rest%\'}"
+      while [[ "$__rest" == *\\* ]]; do
+        __out="${__out}${__rest%%\\*}"
+        __rest="${__rest#*\\}"
+        __c="${__rest:0:1}"
+        case "$__c" in
+          n) __out="${__out}"$'\n'; __rest="${__rest:1}" ;;
+          t) __out="${__out}"$'\t'; __rest="${__rest:1}" ;;
+          r) __out="${__out}"$'\r'; __rest="${__rest:1}" ;;
+          a) __out="${__out}"$'\a'; __rest="${__rest:1}" ;;
+          b) __out="${__out}"$'\b'; __rest="${__rest:1}" ;;
+          f) __out="${__out}"$'\f'; __rest="${__rest:1}" ;;
+          v) __out="${__out}"$'\v'; __rest="${__rest:1}" ;;
+          e|E) __out="${__out}"$'\033'; __rest="${__rest:1}" ;;
+          [0-7])
+            __oct="$__c"; __rest="${__rest:1}"
+            while [[ "${#__oct}" -lt 3 && "${__rest:0:1}" == [0-7] ]]; do __oct="${__oct}${__rest:0:1}"; __rest="${__rest:1}"; done
+            printf -v __c '%b' "\\0${__oct}"
+            __out="${__out}${__c}" ;;
+          "") ;;
+          *) __out="${__out}${__c}"; __rest="${__rest:1}" ;;
+        esac
+      done
+      printf -v "$1" '%s' "${__out}${__rest}" ;;
+    \'*\') __rest="${__raw#\'}"; printf -v "$1" '%s' "${__rest%\'}" ;;
+    *\\*)
+      __rest="$__raw"
+      while [[ "$__rest" == *\\* ]]; do
+        __out="${__out}${__rest%%\\*}"
+        __rest="${__rest#*\\}"
+        __out="${__out}${__rest:0:1}"
+        __rest="${__rest:1}"
+      done
+      printf -v "$1" '%s' "${__out}${__rest}" ;;
+    *) printf -v "$1" '%s' "$__raw" ;;
+  esac
+}
+
 fl_kv_get() {
-  local file="$1" key="$2" raw="" line
+  local file="$1" key="$2" raw="" line v
   [[ -f "$file" && -r "$file" ]] || return 0
   # the last line for KEY wins (fl_kv_set appends); read in bash, as status
   # and list do this a dozen times per call
@@ -157,8 +206,8 @@ fl_kv_get() {
     [[ "$line" == "${key}="* ]] && raw="${line#"${key}="}"
   done <"$file"
   [[ -n "$raw" ]] || return 0
-  # values are stored with %q; unquote the common forms
-  eval "printf '%s\n' $raw"
+  fl_kv_decode_v v "$raw"
+  printf '%s\n' "$v"
 }
 
 fl_kv_del() {
@@ -284,8 +333,8 @@ fl_bstate_get_for() {
     for ((i = 0; i < ${#FL_BS_KEYS[@]}; i++)); do
       [[ "${FL_BS_KEYS[$i]}" == "$key" ]] && v="${FL_BS_VALS[$i]}"
     done
-    # values are stored with %q, as in fl_kv_get
-    [[ -n "$v" ]] && eval "printf -v v '%s' $v"
+    # values are stored with %q, decoded as in fl_kv_get
+    [[ -n "$v" ]] && fl_kv_decode_v v "$v"
     if [[ -z "$v" && "$FL_BS_DEFAULT" == "1" ]]; then
       case " $FL_BENCH_KEYS " in *" $key "*) v="$(fl_state_get "$key")" ;; esac
     fi

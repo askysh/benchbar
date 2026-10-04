@@ -159,6 +159,55 @@ All notable changes to this project are documented here.
   FAIL once it has or once brew no longer knows the formula.
   `scripts/check-profile-formulae.sh` runs the same
   check over every profile and stops a release in `release-local.sh`.
+- `benchbar install` does its two `sudo` steps (the wkhtmltopdf package,
+  the `/etc/hosts` line) first and drops the credential with `sudo -k`
+  before Homebrew, pip, npm, yarn or `bench get-app` run; it still asks
+  once, up front. `00-mac-system-deps.sh` run on its own drops it right
+  after the package step.
+- The wkhtmltopdf package is copied into a root owned folder under `/tmp`,
+  hashed there as root and installed from that copy, so the file that was
+  verified is the file that is installed. `--dry-run` prints those steps.
+- `MARIADB_ROOT_PASSWORD` and `ADMIN_PASSWORD` from the environment reach
+  only `benchbar` and the two phase scripts; no other child process (brew,
+  pip, npm, yarn, bench) sees them.
+- `--yes`, `--make-default` and an approved port plan are flags only: a
+  `FL_ASSUME_YES`, `FL_MAKE_DEFAULT` or `FL_PORT_PLAN_APPROVED` left in
+  the environment no longer answers a question. `benchbar
+  mariadb-password` without a terminal says that `--yes` is needed instead
+  of printing the password.
+- The Keychain item for the MariaDB root password is written through
+  `security -i` (the password is never a command line argument) and names
+  `/usr/bin/security` as its one trusted application. SECURITY.md says what
+  that means and how to make every read ask.
+- `benchbar report` also masks secrets that have no key in front of them:
+  `user:password@` inside URLs (redis, git with a token), JWTs, GitHub,
+  Slack, OpenAI and AWS token shapes, and email addresses (`<email>`);
+  `pwd` and `passwd` keys and Python keyword arguments (`password='...'`)
+  count as credential keys. `REDACTIONS.txt` lists each kind.
+- `benchbar logs --json` (and `benchbar_logs_tail` over MCP) redacts the
+  lines with the report's rules and caps `-n` at 2000 lines, saying so
+  with `"truncated_to":2000`. `benchbar logs` without `--json` is still the
+  file as it is.
+- A git URL with a token in it no longer reaches the run log, the "Last
+  command failed" line, a failed command's last 40 lines or the echo of
+  an env-provided answer: the `user:token@` part is written as `***@`.
+- `adopt`, `install`, `service`, `repair`, `up`, `autostart` and `site add`
+  refuse a bench path (and a default site name) with a double quote,
+  backslash, `$`, backtick, `<`, `>`, `&` or a control character before
+  writing anything, and say which character is in the way; spaces and
+  apostrophes stay fine. `doctor` stays read only and reports it as the new
+  `bench_path` check. Template values are also escaped for bash and XML as
+  a second guard.
+- The `/etc/hosts` rewrite (a line inside benchbar's block, or removing
+  one on `site drop`) happens on the root side: awk as root writes
+  `/etc/hosts.benchbar.new` through `sudo tee`, the result is checked
+  (every line an address and names, exactly one line more or fewer) and
+  moved into place; anything else leaves the file untouched. A site folder
+  whose name is not a valid site name is skipped with a warning and never
+  reaches sudo.
+- The state store (`state.env`, the per bench files) decodes its values
+  without `eval`: a hand edited `KEY=$(...)` line is read as text, runs
+  nothing and expands no glob.
 
 ## 0.7.2 - 2026-10-02
 

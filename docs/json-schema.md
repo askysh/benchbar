@@ -259,6 +259,13 @@ honcho process (`web`, `worker`, `socketio`, `schedule`, `redis_queue`,
 with the process above them. `process` is `null` without a filter.
 Control characters (terminal colors) are removed. `benchbar mcp` uses it
 for `benchbar_logs_tail`.
+
+Since 0.7.3 the lines are redacted with the rules of `benchbar report`
+(values of credential-like keys, `user:password@` in URLs, JWT and API
+token shapes become `***`, email addresses `<email>`); the plain
+`benchbar logs` is the file as it is. `-nN` is capped at 2000: when N was
+larger the object carries `"truncated_to":2000` (absent otherwise) and
+holds the newest 2000 lines before the process filter.
 ## `benchbar repair --json`
 
 A stream: one JSON object per line on stdout, as the run goes. The human

@@ -36,6 +36,9 @@ trap fl_on_error ERR
 fl_signal_traps_install
 
 ASSUME_YES=0
+# --yes and --make-default are flags, never values left in the environment
+FL_ASSUME_YES=0
+FL_MAKE_DEFAULT=0
 PROFILE="${PROFILE:-}"
 LIST_PROFILES=0
 CHECK_UPDATES=0
@@ -70,6 +73,7 @@ Options:
   --advanced            Prompt for custom branch/tag or commit pins
   --dry-run             Print mutating commands without running them
   --repair-bench        Move incomplete bench aside and re-init
+  --make-default        Make this bench the default even when another bench already is
   -h, --help            Show this help
 
 Exit codes:
@@ -90,10 +94,15 @@ while [[ "$#" -gt 0 ]]; do
     --advanced) ADVANCED=1; shift ;;
     --dry-run) DRY_RUN=1; FL_DRY_RUN=1; shift ;;
     --repair-bench) REPAIR_BENCH=1; shift ;;
+    --make-default) FL_MAKE_DEFAULT=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) fl_die "Unknown argument: $1" "Use --help for usage." ;;
   esac
 done
+# the passwords are read by this process (the site is created with them on
+# stdin, see bench.sh) and must not reach pip, yarn, bench get-app or any
+# other child
+export -n MARIADB_ROOT_PASSWORD ADMIN_PASSWORD
 
 if [[ "$LIST_PROFILES" == "1" ]]; then
   fl_list_profiles
@@ -238,6 +247,7 @@ case "$BENCH_DIR" in
   *) BENCH_DIR="${PWD}/${BENCH_DIR}" ;;
 esac
 BENCH_DIR="${BENCH_DIR%/}"
+fl_bench_path_valid "$BENCH_DIR"
 prompt_value SITE_NAME "Site name (lowercase, hostname-like)" "${FL_TEAM_SITE:-macdev}"
 if ! [[ "$SITE_NAME" =~ ^[a-z0-9][a-z0-9.-]*$ ]]; then
   fl_die "Invalid site name: '${SITE_NAME}'." "Use lowercase letters, digits, '-' and '.' only."

@@ -116,8 +116,11 @@ OPT_FIX_HINTS=0
 OPT_PING=0
 # --fetch: doctor and app focus fetch the focus apps' dependencies (freshness.sh)
 FL_FETCH=0
-FL_ASSUME_YES="${FL_ASSUME_YES:-0}"
-FL_MAKE_DEFAULT="${FL_MAKE_DEFAULT:-0}"
+# confirmations come from flags only: a value left in the environment must
+# never answer a question (--yes, --make-default, an approved port plan)
+FL_ASSUME_YES=0
+FL_MAKE_DEFAULT=0
+FL_PORT_PLAN_APPROVED=0
 # --offline, OFFLINE=1 or BENCHBAR_OFFLINE=1: install skips its remote
 # checks (the phase scripts get --offline), doctor --fetch fetches nothing
 OFFLINE="${OFFLINE:-0}"; [[ "${BENCHBAR_OFFLINE:-0}" == "1" ]] && OFFLINE=1
@@ -328,7 +331,11 @@ while [[ "$#" -gt 0 ]]; do
       shift ;;
   esac
 done
-export FL_DRY_RUN FL_ASSUME_YES FL_MAKE_DEFAULT
+export FL_DRY_RUN
+# the passwords stay shell variables of this process: the phase scripts get
+# them on their own command line below, no other child (brew, pip, npm,
+# yarn, bench get-app) sees them
+export -n MARIADB_ROOT_PASSWORD ADMIN_PASSWORD
 
 [[ -n "$COMMAND" ]] || { usage; exit 0; }
 
@@ -375,8 +382,9 @@ fl_next_steps_box() {
 }
 
 # One sudo prompt for the whole install: ask up front when a step ahead will
-# need it (the wkhtmltopdf package, the /etc/hosts line), keep it alive, and
-# let the phase scripts inherit the session.
+# need it (the wkhtmltopdf package, the /etc/hosts line). The two privileged
+# steps run right after (fl_install_privileged_steps) and the credential is
+# dropped before the phases run any third party code.
 fl_install_sudo_upfront() {
   local reasons=()
   [[ "$FL_DRY_RUN" == "1" ]] && return 0
@@ -387,6 +395,29 @@ fl_install_sudo_upfront() {
   fl_hosts_has_site || reasons+=("add '127.0.0.1 ${FL_SITE}' to ${FL_HOSTS_FILE}")
   [[ "${#reasons[@]}" -gt 0 ]] || return 0
   fl_sudo_begin "${reasons[@]}" || true
+}
+
+# The only two things that run as root, done first and together: the patched
+# wkhtmltopdf package and the /etc/hosts line. Same questions and skips as
+# phase 00 and repair (a declined Rosetta or package, a refused sudo); phase
+# 00 then finds the package in place and the service pass finds the line.
+# Sets FL_INSTALL_PDF_STEP to skipped or failed for phase 00's summary when
+# the package is not there afterwards.
+fl_install_privileged_steps() {
+  local code=0 state
+  FL_INSTALL_PDF_STEP=""
+  # nothing to do for a patched build (phase 00 reports it); otherwise the
+  # same Rosetta, download and install flow as phase 00 and repair
+  state="$(fl_wkhtmltopdf_state)"
+  [[ "$state" == "patched" ]] || fl_wkhtmltopdf_ensure || code=$?
+  case "$code" in
+    0) [[ "$FL_DRY_RUN" == "1" && "$state" != "patched" ]] && FL_INSTALL_PDF_STEP=dry-run ;;  # the plan was shown here, once
+    2) FL_INSTALL_PDF_STEP=skipped ;;
+    *) FL_INSTALL_PDF_STEP=failed ;;
+  esac
+  # a refused sudo is not asked again in this run: the line waits for a later repair
+  act_hosts_entry || fl_warn "the /etc/hosts line could not be added now; run '${FL_SELF} repair' later, it asks for sudo again"
+  return 0
 }
 
 # fl_remember_bench: this bench's own settings, and the default bench when
@@ -414,6 +445,7 @@ cmd_install() {
   local code=0 args00=() args01=() bundle
   local profile_name
   fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
+  fl_require_plain_bench
   profile_name="$FL_PROFILE"
   if [[ -n "$FL_TEAM_PROFILE" ]]; then
     # the team profile's site name, unless one was given or remembered
@@ -430,17 +462,23 @@ cmd_install() {
   fl_steps_define "System dependencies (00-mac-system-deps.sh)" "Bench and site (01-install-bench-and-site.sh)" "Background service"
   fl_steps_print_plan
   fl_install_sudo_upfront
+  fl_install_privileged_steps
+  # from here on nothing runs as root: brew, pip, npm, yarn and bench get-app
+  # must not find a cached sudo credential
+  fl_sudo_drop
 
   # the phases load a team profile themselves (its base for 00, its apps for 01)
   args00=(--profile "$profile_name"); args01=(--profile "$profile_name")
   [[ "$FL_DRY_RUN" == "1" ]] && { args00+=(--dry-run); args01+=(--dry-run); }
   [[ "$FL_ASSUME_YES" == "1" ]] && { args00+=(--yes); args01+=(--yes); }
   [[ "$OFFLINE" == "1" ]] && { args00+=(--offline); args01+=(--offline); }
+  [[ "$FL_MAKE_DEFAULT" == "1" ]] && args01+=(--make-default)
   bundle="${OPT_BUNDLE:-$(fl_bstate_get APP_BUNDLE 2>/dev/null || true)}"
   bundle="${bundle:-$FL_TEAM_BUNDLE}"
 
   fl_step_begin 0
-  if fl_run_phase_script "${SCRIPT_DIR}/00-mac-system-deps.sh" "${args00[@]}"; then
+  if MARIADB_ROOT_PASSWORD="${MARIADB_ROOT_PASSWORD:-}" BENCHBAR_PDF_STEP="$FL_INSTALL_PDF_STEP" \
+     fl_run_phase_script "${SCRIPT_DIR}/00-mac-system-deps.sh" "${args00[@]}"; then
     fl_step_end "done"
   else
     code=$?
@@ -460,6 +498,7 @@ cmd_install() {
   local web_port=""
   [[ "$OPT_PORT_OFFSET" =~ ^[0-9]+$ ]] && web_port=$((FL_PORT_BASE_WEB + OPT_PORT_OFFSET))
   if BENCH_DIR="$FL_BENCH_DIR" SITE_NAME="$FL_SITE" APP_BUNDLE="${bundle:-minimal}" BENCHBAR_WEB_PORT="$web_port" \
+     MARIADB_ROOT_PASSWORD="${MARIADB_ROOT_PASSWORD:-}" ADMIN_PASSWORD="${ADMIN_PASSWORD:-}" \
      fl_run_phase_script "${SCRIPT_DIR}/01-install-bench-and-site.sh" "${args01[@]}"; then
     fl_step_end "done"
   else
@@ -527,6 +566,7 @@ cmd_install() {
 cmd_service() {
   fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
   fl_require_bench
+  fl_require_plain_bench
   fl_header "benchbar service" "$(fl_mode_name)" "$(fl_profile_display)" "$FL_BENCH_DIR" "$FL_SITE"
   # validate a requested block before anything is remembered
   if [[ -n "$OPT_PORT_OFFSET" ]]; then
@@ -556,8 +596,10 @@ cmd_adopt() {
   local path="${1:-}"
   [[ -n "$path" ]] || fl_die "Usage: benchbar adopt <bench path>" "Example: benchbar adopt ~/frappe-bench"
   path="$(fl_abs_path "$path")"
+  fl_bench_path_valid "$path"
   fl_is_bench_dir "$path" || fl_die "${path} is not a bench (no sites/common_site_config.json and no apps/frappe)." "Point adopt at the folder that holds apps/, sites/ and env/."
   fl_context_init "$path" "$OPT_SITE" "$OPT_PROFILE"
+  fl_require_plain_bench
   fl_header "benchbar adopt" "$(fl_mode_name)" "$(fl_profile_display)" "$FL_BENCH_DIR" "$FL_SITE"
   fl_info "adopt only adds the background service files and remembers the bench."
   fl_info "apps/, env/, the sites and the databases are not touched; migrate, build and update never run."
@@ -613,6 +655,7 @@ cmd_repair() {
   local code=0
   fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
   fl_require_bench
+  fl_require_plain_bench
   if [[ "$OPT_JSON" == "1" ]]; then
     exec 3>&1 1>>"${FL_LOG_FILE:-/dev/null}" 2>&1
     FL_JSON_EVENTS=1
