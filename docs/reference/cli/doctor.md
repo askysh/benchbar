@@ -54,7 +54,9 @@ the first call.
 
 Exit codes: 0 repaired, or nothing to do; 1 a step failed or the plan was
 declined, a check that has a repair action still needs it after the run,
-or a check FAILs and nothing in the plan can repair it.
+or a check FAILs and the plan is empty (nothing can repair it). A run
+that applied its steps exits 0 even when a check without a repair action
+still FAILs; it says so, and `benchbar doctor` exits 1 while it does.
 
 The full output of every run is in `logs/<date>-<time>-<pid>.log` and the
 backups in `backups/<date>-<time>-<pid>/`, in benchbar's state folder:
