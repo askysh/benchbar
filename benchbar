@@ -332,6 +332,18 @@ export FL_DRY_RUN FL_ASSUME_YES FL_MAKE_DEFAULT
 
 [[ -n "$COMMAND" ]] || { usage; exit 0; }
 
+# fl_app_focus_is_listing ARGS...: "app focus" with no app name lists the
+# focus apps (a read), with any of --list, --json, --fetch
+fl_app_focus_is_listing() {
+  local a
+  [[ "$COMMAND" == "app" && "${1:-}" == "focus" ]] || return 1
+  shift
+  for a in "$@"; do
+    case "$a" in -*) ;; *) return 1 ;; esac
+  done
+  return 0
+}
+
 fl_mode_name() {
   if [[ "$FL_DRY_RUN" == "1" ]]; then printf 'dry-run'; else printf '%s' "$COMMAND"; fi
 }
@@ -348,6 +360,9 @@ fl_cleanup() {
 }
 trap fl_cleanup EXIT
 trap fl_on_error ERR
+# TERM, INT and HUP reach the running command's whole process group and the
+# phase script in the foreground, then the EXIT trap releases the lock
+fl_signal_traps_install
 
 fl_next_steps_box() {
   fl_box "Next steps" \
@@ -357,16 +372,6 @@ fl_next_steps_box() {
     "benchstatus / benchlogs     check on it" \
     "benchrestart                after changing Python code" \
     "benchwatch                  while editing JS or CSS"
-}
-
-fl_run_phase_script() {
-  # fl_run_phase_script SCRIPT ARGS... : streams the phase script's output
-  local script="$1" code=0
-  shift
-  FL_LAST_COMMAND="${script} $*"
-  fl_log "phase: ${script} $*"
-  "$script" "$@" || code=$?
-  return "$code"
 }
 
 # One sudo prompt for the whole install: ask up front when a step ahead will
@@ -670,11 +675,16 @@ case "$COMMAND" in
       fl_log_init "${FL_STATE_DIR}/logs"
       fl_lock_acquire "${FL_STATE_DIR}/lock"
     fi ;;
-  register) fl_lock_acquire "${FL_STATE_DIR}/lock" ;;
+  register|self-update)
+    fl_log_init "${FL_STATE_DIR}/logs"
+    fl_lock_acquire "${FL_STATE_DIR}/lock" ;;
   site|app|profile|lock)
-    # the list, show and check commands are read only, and so is a --plan; the others change things
+    # the list, show and check commands are read only, and so is a --plan
+    # and "app focus" without an app name (the focus listing, with or
+    # without --fetch: its one write, FETCHED_AT, goes through the key-value
+    # file's own lock); the others change things
     if [[ "${ARGS[0]:-list}" != "list" && "${ARGS[0]:-}" != "show" && "${ARGS[0]:-}" != "check" && "${ARGS[0]:-}" != "backups" \
-      && " ${ARGS[*]:-} " != *" --plan "* ]]; then
+      && " ${ARGS[*]:-} " != *" --plan "* ]] && ! fl_app_focus_is_listing "${ARGS[@]+"${ARGS[@]}"}"; then
       fl_log_init "${FL_STATE_DIR}/logs"
       fl_lock_acquire "${FL_STATE_DIR}/lock"
     fi
@@ -736,7 +746,8 @@ case "$COMMAND" in
   mcp)
     # stdlib only Python 3.9+; the Command Line Tools' python3 is enough
     command -v python3 >/dev/null 2>&1 || fl_die "python3 is needed for benchbar mcp." "Install the Xcode Command Line Tools: xcode-select --install"
-    BENCHBAR="${FL_SELF}" BENCHBAR_VERSION="$FL_VERSION" exec python3 "${SCRIPT_DIR}/lib/frappe-local/mcp.py" ;;
+    # BENCHBAR_MCP_CLI: the tests stand a fake CLI in (a timeout, a hang)
+    BENCHBAR="${BENCHBAR_MCP_CLI:-$FL_SELF}" BENCHBAR_VERSION="$FL_VERSION" exec python3 "${SCRIPT_DIR}/lib/frappe-local/mcp.py" ;;
   help) usage ;;
   *) fl_die "Unknown command: ${COMMAND}" "Run: benchbar --help" ;;
 esac

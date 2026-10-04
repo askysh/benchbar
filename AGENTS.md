@@ -104,7 +104,9 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
 ## Rules
 
 - Never `rm -rf` inside a bench, never drop databases, never edit
-  `sites/`. The tool moves broken folders aside; do the same.
+  `sites/`. The tool moves broken folders aside; do the same. The one
+  exception is its own lock folder, `<bench>/.benchbar.lock` (and the
+  `.benchbar.lock.stale.<pid>` name a stale one is renamed to).
 - Never run `bench update` unless the user asked for it by name.
 - Never write your own LaunchAgents or `Procfile`. Use `benchbar
   service`, which generates `Procfile.lean`, the runner and the agent

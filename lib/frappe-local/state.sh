@@ -110,20 +110,42 @@ fl_state_init() {
   touch "$FL_STATE_FILE"
 }
 
+# Writers of one key-value file serialize on FILE.lck (mkdir is atomic): a
+# status poll of the app and a repair writing the same bench file at once
+# must not lose each other's keys. A short wait, then the write goes ahead
+# anyway (a lock left by a killed writer must not block forever).
+fl__kv_lock() {
+  local lck="$1.lck" i=0
+  while ! mkdir "$lck" 2>/dev/null; do
+    i=$((i + 1))
+    [[ "$i" -lt 40 ]] || { rm -rf "$lck"; continue; }
+    sleep 0.05
+  done
+}
+fl__kv_unlock() { rmdir "$1.lck" 2>/dev/null || true; }
+
 # fl_kv_set FILE KEY VALUE and fl_kv_get FILE KEY: the store behind both
 # the checkout's state.env and the per bench files. Nothing is written in a
-# dry run, and an unchanged value is not written again.
+# dry run, and an unchanged value is not written again. The new content is
+# built in a temp file of its own (mktemp), never a fixed name two writers
+# would share, and renamed into place under the file's lock.
 fl_kv_set() {
-  local file="$1" key="$2" value="$3"
+  local file="$1" key="$2" value="$3" tmp
   [[ "${FL_DRY_RUN:-0}" == "1" ]] && return 0
   mkdir -p "$(dirname "$file")" 2>/dev/null || true
   [[ -f "$file" ]] || : >"$file"
   if [[ "$(fl_kv_get "$file" "$key")" == "$value" ]]; then
     return 0
   fi
-  grep -v "^${key}=" "$file" >"${file}.tmp" 2>/dev/null || true
-  printf '%s=%q\n' "$key" "$value" >>"${file}.tmp"
-  mv "${file}.tmp" "$file"
+  fl__kv_lock "$file"
+  if tmp="$(mktemp "${file}.XXXXXX" 2>/dev/null)"; then
+    if { grep -v "^${key}=" "$file" 2>/dev/null || true; printf '%s=%q\n' "$key" "$value"; } >"$tmp"; then
+      mv -f "$tmp" "$file" || rm -f "$tmp"
+    else
+      rm -f "$tmp"
+    fi
+  fi
+  fl__kv_unlock "$file"
 }
 
 fl_kv_get() {
@@ -140,11 +162,18 @@ fl_kv_get() {
 }
 
 fl_kv_del() {
-  local file="$1" key="$2"
+  local file="$1" key="$2" tmp
   [[ "${FL_DRY_RUN:-0}" == "1" ]] && return 0
   grep -q "^${key}=" "$file" 2>/dev/null || return 0
-  grep -v "^${key}=" "$file" >"${file}.tmp" 2>/dev/null || true
-  mv "${file}.tmp" "$file"
+  fl__kv_lock "$file"
+  if tmp="$(mktemp "${file}.XXXXXX" 2>/dev/null)"; then
+    if { grep -v "^${key}=" "$file" 2>/dev/null || true; } >"$tmp"; then
+      mv -f "$tmp" "$file" || rm -f "$tmp"
+    else
+      rm -f "$tmp"
+    fi
+  fi
+  fl__kv_unlock "$file"
 }
 
 fl_state_set() { fl_kv_set "$FL_STATE_FILE" "$1" "$2"; }

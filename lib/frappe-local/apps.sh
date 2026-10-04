@@ -459,7 +459,7 @@ fl_app_clone() {
   FL_CLONED_DIR=""
   before="$(fl__apps_dirs)"
   fl_bench_env_exports
-  if fl_run_long "bench get-app ${name} (${branch})" fl__in_dir "$FL_BENCH_DIR" bench get-app --skip-assets --branch "$branch" "$repo"; then
+  if fl_run_long "bench get-app ${name} (${branch})" fl__in_dir "$FL_BENCH_DIR" env GIT_TERMINAL_PROMPT=0 bench get-app --skip-assets --branch "$branch" "$repo"; then
     after="$(fl__apps_dirs)"
     new="$(comm -13 <(printf '%s\n' "$before") <(printf '%s\n' "$after") | head -n1)"
     FL_CLONED_DIR="${new:-$(fl_app_existing_dir "$name")}"

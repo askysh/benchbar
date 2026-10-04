@@ -35,6 +35,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/frappe-local/wkhtmltopdf.sh
 . "${SCRIPT_DIR}/lib/frappe-local/wkhtmltopdf.sh"
 trap fl_on_error ERR
+fl_signal_traps_install
 trap fl_sudo_end EXIT
 
 PROFILE="${PROFILE:-}"

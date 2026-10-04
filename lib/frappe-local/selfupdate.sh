@@ -280,6 +280,8 @@ fl_cmd_self_update() {
     # exec: the upgrade replaces the app this script runs from
     local cask_brew=brew
     [[ -x "${SU_CASK}/bin/brew" ]] && cask_brew="${SU_CASK}/bin/brew"
+    # exec skips the EXIT trap: the lock goes now, or brew would leave it behind
+    fl_lock_release
     exec "$cask_brew" upgrade askysh/tap/benchbar-app
   fi
   if [[ "$SU_KIND" == homebrew ]]; then
@@ -288,11 +290,14 @@ fl_cmd_self_update() {
     # the upgrade replaces the keg this script runs from
     local brew=brew
     [[ -x "${FL_SELF_PREFIX}/bin/brew" ]] && brew="${FL_SELF_PREFIX}/bin/brew"
+    fl_lock_release
     exec "$brew" upgrade askysh/tap/benchbar
   fi
   fl_confirm "Update BenchBar to ${latest} now?" || { fl_info "Cancelled. Nothing was changed. Later: benchbar self-update"; return 1; }
   [[ -n "$SU_APP_DIR" ]] && export BENCHBAR_APP_DIR="$SU_APP_DIR"
-  # exec: the installer may replace this very script with git pull
+  # exec: the installer may replace this very script with git pull; the lock
+  # goes first, since exec skips the EXIT trap
+  fl_lock_release
   # shellcheck disable=SC2016  # $1 and $@ belong to the inner bash
   exec bash -c 'set -o pipefail; url="$1"; shift; curl -fsSL "$url" | bash -s -- "$@"' _ "$SU_INSTALLER" "${SU_ARGS[@]}"
 }

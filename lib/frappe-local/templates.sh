@@ -105,8 +105,10 @@ fl_template_status() {
   if [[ "$have" == "$want" ]]; then printf 'current'; else printf 'outdated'; fi
 }
 
+# the backup folder of this run: the log's stamp when there is a log (set
+# by fl_log_init), else date, time and pid, unique per run either way
 fl_backup_stamp() {
-  [[ -n "$FL_BACKUP_STAMP" ]] || FL_BACKUP_STAMP="$(date +%Y%m%d-%H%M%S)"
+  [[ -n "$FL_BACKUP_STAMP" ]] || FL_BACKUP_STAMP="$(date +%Y%m%d-%H%M%S)-$$"
   printf '%s' "$FL_BACKUP_STAMP"
 }
 
