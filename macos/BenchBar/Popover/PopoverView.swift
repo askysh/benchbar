@@ -161,6 +161,9 @@ struct BenchPanel: View {
         } else if bench.machine.stopReason == .broken {
             Button("Bench needs repair — review in Health…") { commands.manage(bench, .health, true) }
                 .buttonStyle(.link)
+        } else if bench.machine.stopReason == .portConflict {
+            Button("Another program holds a port — review in Health…") { commands.manage(bench, .health, true) }
+                .buttonStyle(.link)
         }
         if let error = bench.lastError ?? bench.refreshError, bench.portConflict == nil {
             Text(error).font(.caption).foregroundStyle(.red).lineLimit(2)

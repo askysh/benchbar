@@ -3,8 +3,8 @@ title: "benchbar JSON API, schema version 1"
 description: "The versioned JSON that benchbar prints for list, status, doctor, logs, repair, apps, lock, profiles, pull and site backups, and the state file the runner writes."
 ---
 
-`benchbar` (and its alias `frappe-mac`) prints versioned JSON for three
-commands, and the runner writes one state file per bench. The BenchBar
+`benchbar` (and its alias `frappe-mac`) prints versioned JSON for the
+commands below, and the runner writes one state file per bench. The BenchBar
 app reads nothing else, so this is a public API: coding agents, scripts,
 Raycast extensions and the like can rely on it too.
 
@@ -57,7 +57,7 @@ Raycast extensions and the like can rely on it too.
 | `starting` | processes are up, the site does not answer yet | `null` |
 | `running` | processes are up and the site answers HTTP | `null` |
 | `crashed` | honcho exited with an error; launchd retries after 20 seconds | `crash` |
-| `paused` | auto-restart is off until `benchup` | `crash` (the crash guard tripped: 3 starts in 10 minutes), `broken` (honcho or the env is missing: run `benchbar repair`) or `port_conflict` (another process held the bench's ports when the runner started; it was not this bench's to stop: run `benchbar doctor`) |
+| `paused` | auto-restart is off until `benchup` | `crash` (the crash guard tripped: 3 starts in 10 minutes), `broken` (honcho or the env is missing, or the runner cannot write the crash history or the stop flag: run `benchbar repair` or `benchbar doctor`) or `port_conflict` (another process held the bench's ports when the runner started; it was not this bench's to stop: run `benchbar doctor`) |
 
 `stop_reason` can be `manual`, `crash`, `broken`, `port_conflict` or
 `null`. `broken` and `port_conflict` are additions to the original
@@ -173,7 +173,7 @@ bench (`state.env` in benchbar's state folder), the `WorkingDirectory` of every
 
 Kept from frappe-mac 0.2.0 for older readers: `url`, `agent`,
 `loaded` (`"yes"` or `"no"`), `stop_flag` (`"manual"`, `"crash"`,
-`"broken"` or `"none"`), `ping` (string, `"000"` for no answer). In
+`"broken"`, `"port_conflict"` or `"none"`), `ping` (string, `"000"` for no answer). In
 0.2.0 `state` held launchd's word (now `agent_state`), and `pid` and
 `last_exit_code` were strings.
 
@@ -217,6 +217,7 @@ these two out: they are polled.
   "name": "frappe-bench",
   "site": "macdev",
   "profile": "v15-lts",
+  "profile_source": "stored",
   "checks": [
     {
       "id": "assets",
@@ -247,7 +248,8 @@ these two out: they are polled.
 
 | Field | Type | Notes |
 |---|---|---|
-| `checks[].id` | string | stable id, for example `env_python`, `assets`, `agent`, `legacy_agents`. 0.7.3 adds `env_setuptools` (group `bench`, action `env_setuptools`). `pdf_engine` replaced `wkhtmltopdf` in 0.4. 0.5 adds `apps_txt`, `app_branch_policy`, `lock_parse` and `lock_drift` (group `bench`, no repair action). 0.6 adds `dependency_behind`, `apps_behind` and `profile_outdated` (group `bench`, no repair action); `dependency_behind` is the one id that can appear several times, once per stale dependency. 0.7 adds `app_copies` (group `system`) and `cli_duplicate` (group `service`), both without a repair action, and `helpers` can be `fail` (the block's benchbar is gone) |
+| `profile_source` | string | added in 0.7.3: where `profile` came from, `flag` (`--profile`), `team`, `stored` (remembered for the bench), `detected` (from the bench's Frappe) or `default` (no profile matches this bench; the env checks warn instead of offering a rebuild) |
+| `checks[].id` | string | stable id, for example `env_python`, `assets`, `agent`, `legacy_agents`. 0.7.3 adds `env_setuptools` (group `bench`, action `env_setuptools`), `formula_dates` (group `system`, no action) and `bench_path` (group `service`, no action). `pdf_engine` replaced `wkhtmltopdf` in 0.4. 0.5 adds `apps_txt`, `app_branch_policy`, `lock_parse` and `lock_drift` (group `bench`, no repair action). 0.6 adds `dependency_behind`, `apps_behind` and `profile_outdated` (group `bench`, no repair action); `dependency_behind` is the one id that can appear several times, once per stale dependency. 0.7 adds `app_copies` (group `system`) and `cli_duplicate` (group `service`), both without a repair action, and `helpers` can be `fail` (the block's benchbar is gone) |
 | `checks[].group` | string | `system`, `bench`, `service` or `site` |
 | `checks[].label` | string | short name for humans |
 | `checks[].level` | string | `ok`, `warn` or `fail` |
@@ -286,21 +288,21 @@ Since 0.7.3 the lines are redacted with the rules of `benchbar report`
 token shapes become `***`, email addresses `<email>`); the plain
 `benchbar logs` is the file as it is. `-nN` is capped at 2000: when N was
 larger the object carries `"truncated_to":2000` (absent otherwise) and
-holds the newest 2000 lines before the process filter.
+holds the newest 2000 lines after the process filter.
 ## `benchbar repair --json`
 
 A stream: one JSON object per line on stdout, as the run goes. The human
-text goes to the run's log, `logs/<timestamp>.log` in benchbar's state
+text goes to the run's log, `logs/<date>-<time>-<pid>.log` in benchbar's state
 folder: `~/.local/state/benchbar` for the one line installer and
 Homebrew since 0.7.0, `.benchbar/` in a git checkout.
 
 ```json
-{"event":"plan","schema_version":1,"cli_version":"0.5.0","bench":"/Users/you/frappe-bench","dry_run":false,"actions":[{"id":"build","label":"bench build","fixes":["Built assets"],"sudo":false},{"id":"hosts_entry","label":"add macdev to /etc/hosts (sudo)","fixes":["/etc/hosts entry"],"sudo":true}],"backups":"/Users/you/.local/state/benchbar/backups","log":"/Users/you/.local/state/benchbar/logs/20260926-101500.log"}
+{"event":"plan","schema_version":1,"cli_version":"0.5.0","bench":"/Users/you/frappe-bench","dry_run":false,"actions":[{"id":"build","label":"bench build","fixes":["Built assets"],"sudo":false},{"id":"hosts_entry","label":"add macdev to /etc/hosts (sudo)","fixes":["/etc/hosts entry"],"sudo":true}],"backups":"/Users/you/.local/state/benchbar/backups","log":"/Users/you/.local/state/benchbar/logs/20260926-101500-4242.log"}
 {"event":"step","action":"build","status":"running","message":"bench build"}
 {"event":"step","action":"build","status":"done","message":"bench build"}
 {"event":"step","action":"hosts_entry","status":"running","message":"add macdev to /etc/hosts (sudo)"}
-{"event":"step","action":"hosts_entry","status":"skipped","message":"[WARN] skipped without sudo; run: printf '127.0.0.1 macdev\n' | sudo tee -a /etc/hosts"}
-{"event":"done","exit_code":0,"log":"/Users/you/.local/state/benchbar/logs/20260926-101500.log"}
+{"event":"step","action":"hosts_entry","status":"skipped","message":"[WARN] skipped without sudo; run: benchbar repair --bench-dir /Users/you/frappe-bench   (adds '127.0.0.1 macdev' inside the benchbar block)"}
+{"event":"done","exit_code":0,"log":"/Users/you/.local/state/benchbar/logs/20260926-101500-4242.log"}
 ```
 
 | Event | Fields |
@@ -800,6 +802,7 @@ Transitions the runner writes:
 |---|---|---|
 | the agent starts while a stop flag exists | `stopped` or `paused` | from the flag |
 | honcho or `env/bin/python` is missing | `paused` | `broken` |
+| the runner cannot write the crash history or the stop flag | `paused` | `broken` |
 | the crash guard trips | `paused` | `crash` |
 | a process that is not this bench's still holds one of its ports after the cleanup | `paused` | `port_conflict` |
 | honcho started | `starting` | `null` |

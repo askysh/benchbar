@@ -122,9 +122,9 @@ fl_json_escape() {
 # names; "status" and "fix" are the frappe-mac 0.2.0 names, kept for older readers.
 fl_doctor_print_json() {
   local i=0 sep=""
-  printf '{"schema_version":%d,"cli_version":"%s","bench":"%s","name":"%s","site":"%s","profile":"%s","checks":[' \
+  printf '{"schema_version":%d,"cli_version":"%s","bench":"%s","name":"%s","site":"%s","profile":"%s","profile_source":"%s","checks":[' \
     "${FL_SCHEMA_VERSION:-1}" "${FL_VERSION:-0}" "$(fl_json_escape "$FL_BENCH_DIR")" "$(fl_json_escape "$FL_BENCH_NAME")" \
-    "$(fl_json_escape "$FL_SITE")" "$(fl_json_escape "$FL_PROFILE")"
+    "$(fl_json_escape "$FL_SITE")" "$(fl_json_escape "$FL_PROFILE")" "$(fl_doctor_profile_source)"
   while [[ "$i" -lt "${#FL_D_IDS[@]}" ]]; do
     printf '%s{"id":"%s","group":"%s","label":"%s","level":"%s","message":"%s","fix_command":%s,"action":%s,"status":"%s","fix":"%s"}' \
       "$sep" "${FL_D_IDS[$i]}" "$(fl_check_group "${FL_D_IDS[$i]}")" "$(fl_json_escape "$(fl_check_label "${FL_D_IDS[$i]}")")" \
@@ -151,6 +151,12 @@ fl_doctor_print_fix_hints() {
 
 # fl_profile_display: the profile for a header, with its source when it is
 # only the default ("v15-lts (default: no profile matches this bench)")
+# fl_doctor_profile_source: where the profile came from, for doctor --json
+# (flag, team, stored, detected or default; default means no profile matched)
+fl_doctor_profile_source() {
+  printf '%s' "${FL_PROFILE_SOURCE:-default}"
+}
+
 fl_profile_display() {
   # a fresh install has no bench to match yet: its default is the choice, not a guess
   if fl_profile_is_guess; then printf '%s (default: no profile matches this bench)' "$FL_PROFILE"; else printf '%s' "$FL_PROFILE"; fi

@@ -228,6 +228,34 @@ fl_get_app_if_needed() {
   fl_state_set "APP_${app}_CLONED" yes
 }
 
+# fl_bench_env_setuptools DIR: 'setuptools<70' into DIR's env, so Frappe v15
+# and honcho find pkg_resources (setuptools 70 dropped it, and a fresh env
+# with Python 3.12+ has none). uv when it is there, else the env's pip.
+fl_bench_env_setuptools() {
+  local py="$1/env/bin/python"
+  if command -v uv >/dev/null 2>&1; then
+    fl_run_long "install setuptools<70 into env (uv)" uv pip install --python "$py" 'setuptools<70'
+  else
+    fl_run_long "install setuptools<70 into env (pip)" "$py" -m pip install 'setuptools<70'
+  fi
+}
+
+# fl_bench_write_ports DIR WEB SOCKETIO QUEUE CACHE: the port block into
+# the bench's common_site_config.json with bench itself, and its
+# config/redis_*.conf regenerated. Output goes to the run log.
+fl_bench_write_ports() {
+  local dir="$1" web="$2" sio="$3" queue="$4" cache="$5"
+  (
+    cd "$dir" || exit 1
+    bench set-config -g -p webserver_port "$web" &&
+    bench set-config -g -p socketio_port "$sio" &&
+    bench set-config -g redis_queue "redis://127.0.0.1:${queue}" &&
+    bench set-config -g redis_cache "redis://127.0.0.1:${cache}" &&
+    bench set-config -g redis_socketio "redis://127.0.0.1:${cache}" &&
+    bench setup redis
+  ) >>"${FL_LOG_FILE:-/dev/null}" 2>&1
+}
+
 # ---------------------------------------------------------------- setup redis
 #
 # frappe v16 connects to the bench's Redis during new-site and install-app

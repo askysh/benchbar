@@ -100,7 +100,12 @@ chk_brew() {
   if [[ "$missing" == " ${FL_NODE_FORMULA}" ]]; then
     # only the Node formula: a profile that moved to a newer Node (v15-lts
     # from node@20 to node@22); repair installs it, the old one stays
-    chk__set fail "missing formula: ${FL_NODE_FORMULA} (the profile's Node moved; the bench still runs on the old one)" "${FL_SELF} repair" node_install
+    if [[ -d "${FL_BENCH_DIR}/apps/frappe" ]]; then
+      chk__set fail "missing formula: ${FL_NODE_FORMULA} (the profile's Node moved; the bench still runs on the old one)" "${FL_SELF} repair" node_install
+    else
+      # no bench yet (a fresh install): there is no old Node to run on
+      chk__set fail "missing formula: ${FL_NODE_FORMULA}" "${FL_SELF} repair" node_install
+    fi
     return 0
   fi
   if [[ -n "$missing" ]]; then
@@ -429,7 +434,11 @@ chk_stop_flag() {
     manual) chk__set ok "stopped on purpose (benchdown); start with benchup" ;;
     crash) chk__set warn "auto-restart paused after repeated crashes" "${FL_SELF} logs, fix the cause, then benchup" ;;
     broken) chk__set warn "auto-restart paused: honcho or env was missing" "${FL_SELF} repair, then benchup" ;;
-    port_conflict) chk__set warn "auto-restart paused: another process held this bench's ports at start (see the orphans check)" "${FL_SELF} doctor, free the port or move the bench (benchbar ports setup), then benchup" ;;
+    port_conflict)
+      # name what holds the ports now; nothing when it has gone since
+      local held
+      held="$(fl_port_current_listener_conflicts | tr '\n' ';' | sed 's/;$//; s/;/; /g')"
+      chk__set warn "auto-restart paused: another process held this bench's ports at start$([[ -n "$held" ]] && printf ' (now: %s)' "$held" || printf ' (the ports are free now)')" "free the port or move the bench (${FL_SELF} ports setup -- ${FL_BENCH_DIR}), then benchup" ;;
     *) chk__set warn "stop flag has unknown content '${reason}'" "rm ${flag}" ;;
   esac
 }

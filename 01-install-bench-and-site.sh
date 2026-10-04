@@ -389,6 +389,12 @@ fl_bstate_set_for "$BENCH_DIR" MARIADB_FORMULA "$FL_MARIADB_FORMULA"
 fl_install_pipx_if_needed
 fl_install_bench_if_needed
 fl_bench_init_if_needed "$BENCH_DIR" "$FRAPPE_REF" "$(command -v "$FL_PYTHON_BIN_NAME")" "$REPAIR_BENCH"
+# Frappe v15 imports pkg_resources: the env gets 'setuptools<70' now, as
+# repair would give it, so a new bench starts with no doctor warning
+if [[ "$(fl_profile_major)" == "15" && "$FL_DRY_RUN" != "1" && -x "$BENCH_DIR/env/bin/python" ]] \
+   && ! "$BENCH_DIR/env/bin/python" -c 'import pkg_resources' >/dev/null 2>&1; then
+  fl_bench_env_setuptools "$BENCH_DIR" || fl_die "could not install setuptools<70 into ${BENCH_DIR}/env (log: ${FL_LOG_FILE:-none})"
+fi
 
 if [[ -n "$FRAPPE_COMMIT" && -d "$BENCH_DIR/apps/frappe/.git" ]]; then
   fl_warn "Pinning frappe to ${FRAPPE_COMMIT}"
@@ -421,6 +427,19 @@ if [[ -n "$FRAPPE_COMMIT" || -n "$ERPNEXT_COMMIT" ]]; then
   fl_warn "Rebuilding bench after commit pinning"
   fl_bench_run_long "bench setup requirements" "$BENCH_DIR" bench setup requirements
   fl_bench_run_long "bench build" "$BENCH_DIR" bench build
+fi
+
+# the port block benchbar install chose (BENCHBAR_PORT_BLOCK, "web socketio
+# queue cache"), written before the bench's Redis starts on bench's defaults
+if [[ "${BENCHBAR_PORT_BLOCK:-}" =~ ^[0-9]+\ [0-9]+\ [0-9]+\ [0-9]+$ ]]; then
+  read -r _pb_web _pb_sio _pb_queue _pb_cache <<<"$BENCHBAR_PORT_BLOCK"
+  if [[ "$FL_DRY_RUN" == "1" ]]; then
+    fl_info "dry-run: bench set-config -g the port block (web ${_pb_web}, socketio ${_pb_sio}, redis ${_pb_queue} and ${_pb_cache}) and bench setup redis"
+  elif ! grep -Eq "\"webserver_port\"[[:space:]]*:[[:space:]]*${_pb_web}[,[:space:]]" "${BENCH_DIR}/sites/common_site_config.json" 2>/dev/null; then
+    fl_bench_write_ports "$BENCH_DIR" "$_pb_web" "$_pb_sio" "$_pb_queue" "$_pb_cache" \
+      || fl_die "could not write the port block with bench set-config (log: ${FL_LOG_FILE:-none})"
+    fl_ok "ports: web ${_pb_web}, socketio ${_pb_sio}, redis ${_pb_queue} and ${_pb_cache}"
+  fi
 fi
 
 # the bench's Redis runs for new-site and install-app (frappe v16 needs it)

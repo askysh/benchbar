@@ -287,7 +287,9 @@ It removes the app, the `benchbar` and `frappe-mac` links and the PATH
 block. Then it asks, for each bench's agent, whether to stop the bench
 and remove its agent, runner and `Procfile.lean`, and last whether to
 delete the checkout. Answer no to keep either. With `--yes` the answer
-to both is yes.
+to both is yes. When `~/.local/state/benchbar` is a link into the
+checkout, the checkout is kept even with `--yes`, and the run says to
+move the state first.
 
 ### One bench
 

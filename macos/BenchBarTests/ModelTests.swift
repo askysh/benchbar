@@ -64,6 +64,15 @@ struct ModelTests {
         #expect(paused.ports == nil)
     }
 
+    @Test func portConflictAndProfileSourceDecode() throws {
+        let json = #"{"schema_version":1,"bench":"/b","state":"paused","stop_reason":"port_conflict"}"#
+        let status = try BenchJSON.decode(BenchStatus.self, from: Data(json.utf8))
+        #expect(status.stopReason == .portConflict)
+        let doctor = try BenchJSON.decode(DoctorReport.self, from: Fixture.data("doctor"))
+        #expect(doctor.profileSource == "stored")
+        #expect(!doctor.profileIsDefault)
+    }
+
     @Test func unknownValuesAndFieldsAreTolerated() throws {
         let status = try BenchJSON.decode(BenchStatus.self, from: Fixture.data("status-future"))
         #expect(status.state == .unknown)

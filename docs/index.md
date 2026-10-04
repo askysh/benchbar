@@ -1,6 +1,24 @@
 ---
 title: "BenchBar"
 description: "Local Frappe and ERPNext development benches on macOS: a CLI that installs, runs and repairs them in the background, and a menu bar app."
+template: splash
+hero:
+  title: "Frappe benches on your Mac, in the background"
+  tagline: "One command installs a bench, launchd keeps it running, doctor and repair keep it healthy, and a menu bar app shows it all at a glance."
+  image:
+    file: ./images/app-icon.png
+    alt: "The BenchBar app icon"
+  actions:
+    - text: Install
+      link: /install/
+      icon: right-arrow
+    - text: Quick start
+      link: /quick-start/
+      variant: minimal
+    - text: GitHub
+      link: https://github.com/askysh/benchbar
+      icon: external
+      variant: minimal
 ---
 
 Local Frappe and ERPNext development benches on macOS. The `benchbar`
@@ -73,7 +91,7 @@ No Docker, no VM, no preinstalled Python, Node, MariaDB or Redis.
   full plan and changes nothing. A second run says `unchanged`.
 - Generated files carry a version and content hash header. They are
   rewritten only when their template or inputs changed, and the previous
-  copy goes to `backups/<timestamp>/` in benchbar's state folder first
+  copy goes to `backups/<date>-<time>-<pid>/` in benchbar's state folder first
   (`~/.local/state/benchbar`; `benchbar where` shows it).
 - `install`, `adopt`, `doctor` and `repair` never change your sites,
   databases, `apps/` or your own files; the one exception is the port
@@ -94,7 +112,7 @@ No Docker, no VM, no preinstalled Python, Node, MariaDB or Redis.
   wkhtmltopdf package, once per run and only after saying why.
 - The MariaDB root password lives in the Keychain and reaches the client
   through `MYSQL_PWD`, never on a command line.
-- Full logs of every mutating run: `logs/<timestamp>.log` in the same
+- Full logs of every mutating run: `logs/<date>-<time>-<pid>.log` in the same
   state folder.
 
 ## Documentation

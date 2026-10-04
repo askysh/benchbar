@@ -6,8 +6,8 @@ description: "Common stumbles with a local Frappe bench on macOS, the cleanup to
 Start with `benchbar doctor`. It is read only, every warning and failure
 names its fix, and `benchbar repair` applies the fixes it flagged. The
 full command output of every mutating run is in
-`logs/<timestamp>.log` of benchbar's state folder, and the backups of
-every replaced file in `backups/<timestamp>/`. The state folder is
+`logs/<date>-<time>-<pid>.log` of benchbar's state folder, and the backups of
+every replaced file in `backups/<date>-<time>-<pid>/`. The state folder is
 `~/.local/state/benchbar` with Homebrew, the one line installer and the
 CLI inside BenchBar.app, or `.benchbar` in the folder you cloned;
 `benchbar where` shows it.
@@ -21,11 +21,19 @@ new Terminal tab.
 ten minutes and paused itself. `benchlogs` shows why, and `--previous`
 shows the run before. Fix the cause, then `benchup`.
 
+**`benchstatus` says `stop flag port_conflict`.** When the runner
+started, a process that is not this bench's held one of its ports, so it
+paused instead of starting. `benchbar doctor` names the process. Free
+the port, or give the bench its own ports with `benchbar ports setup`,
+then `benchup`.
+
 **The site loads without styling.** Run `benchbar doctor`. If the built
 assets are missing, `benchbar repair` runs `bench build`.
 
-**`bench: command not found` after phase 2.** pipx installs to
-`~/.local/bin`. Run `pipx ensurepath` and open a new Terminal.
+**`bench: command not found` after phase 2.** benchbar installs `bench`
+with uv, or with pipx when uv is missing; both put it in `~/.local/bin`.
+Run `uv tool update-shell` (or `pipx ensurepath`) and open a new
+Terminal.
 
 **The browser cannot connect to `macdev`.** The site's line in
 `/etc/hosts`, which points the name at your own Mac, is missing. Run
@@ -228,6 +236,10 @@ are reported so you can remove them by hand.
   installer's `benchbar` hand off to
 - the Keychain item `benchbar-mariadb`
 - `<bench>/logs/.benchbar/state.json`, written by the runner
+- `<bench>/logs/.benchbar/creating-<site>`, a marker while `bench
+  new-site` runs, so an interrupted site is not taken for created
+- `<bench>/.benchbar.lock`, the bench's own lock folder during a
+  mutating run
 - the state folder, `~/.local/state/benchbar` (`.benchbar/` in a git
   checkout): the remembered benches (`benches/<folder>-<hash>.env`), and
   the logs and backups of every run
@@ -246,8 +258,10 @@ the hosts block: `repair` regenerates them.
 The phase scripts still work on their own: `00-mac-system-deps.sh`,
 `01-install-bench-and-site.sh` and `02-background-service.sh` keep their
 flags (`--yes`, `--profile`, `--dry-run`, `--offline`, `--repair-bench`).
-`00` exits with code 2 only when MariaDB already has a root password that
-neither the environment nor the Keychain knows. `--repair-bench` only
+`00` exits with code 2 when a manual step is pending, most often a
+MariaDB root password that neither the environment nor the Keychain
+knows. `01` exits with code 2 for that unknown root password and with
+code 3 when you cancel at its plan. `--repair-bench` only
 moves aside a folder that never became a bench; a bench with apps or
 sites is always kept and sent to `benchbar repair`.
 

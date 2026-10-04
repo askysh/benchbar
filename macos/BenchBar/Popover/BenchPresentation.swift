@@ -51,6 +51,7 @@ nonisolated enum BenchText {
         case .paused:
             switch reason {
             case .broken: return "Paused: needs repair"
+            case .portConflict: return "Paused: a port is in use"
             case .manual: return "Stopped"
             default: return "Paused after repeated crashes"
             }

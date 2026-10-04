@@ -78,7 +78,9 @@ shows the outcome.
 
 Every tool but `benchbar_list` and the two profile tools takes an
 optional `bench`, the absolute path from `benchbar_list`; without it the
-tool acts on the default bench.
+tool acts on the default bench. The tools that change a bench refuse a
+path that is not in `benchbar_list`; register it first in a terminal
+with `benchbar register PATH`.
 The JSON each one returns is described in the [JSON schema](../json-schema.md).
 
 ## Repairs and installs

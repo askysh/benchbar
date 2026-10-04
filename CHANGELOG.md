@@ -4,6 +4,15 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+## 0.7.3 - 2026-10-04
+
+A fix pass from a full review: benchbar stops only what it can prove is a
+bench's own, fails closed on every write, moves v15-lts to `node@22` before
+Homebrew disables `node@20` on 2026-10-28, installs cleanly on a fresh
+Homebrew MariaDB and next to other benches, and hardens the MCP server.
+Run `benchbar repair` once after updating: the runner and the helper block
+are rewritten.
+
 ### Fixed
 
 - The runner's pre-start cleanup stops only listeners whose working
@@ -11,8 +20,7 @@ All notable changes to this project are documented here.
   other program on the same ports are left alone. When such a process
   still holds a port, the runner pauses with the new stop reason
   `port_conflict` instead of starting honcho into ports it cannot bind
-  (run `benchbar doctor`). Existing runners are outdated once and
-  `benchbar repair` re-renders them.
+  (run `benchbar doctor`).
 - `benchbar down` no longer signals a process whose working folder lsof
   cannot read; doctor's orphans check names such a process and says why
   it is not stopped, and `ports plan` counts it as a conflict, as `up`
@@ -48,17 +56,17 @@ All notable changes to this project are documented here.
 - A stale `MARIADB_ROOT_PASSWORD` in the environment no longer makes the
   site step fail when the Keychain holds the working password: it is
   verified first and the Keychain is tried next, as phase 00 already did.
-- `OFFLINE=1`, `BENCHBAR_OFFLINE=1` and the new `benchbar install
-  --offline` reach both phase scripts; before, they reset it and ran the
-  remote branch checks anyway.
+- `OFFLINE=1` and `BENCHBAR_OFFLINE=1` reach both phase scripts; before,
+  they reset it and ran the remote branch checks anyway.
 - `benchbar install` asks for sudo up front only for steps that will run:
   no prompt for the wkhtmltopdf package when Rosetta is missing and
   nothing can agree to install it, or when the package would be skipped.
 - The message after a stopped install says what phase 00 did ("System
   dependencies were set up as far as possible; no bench or site was
   created") instead of "Nothing else changed".
-- Exit code 2 is only ever "the MariaDB root password is unknown": a
-  command that happens to fail with code 2 now ends the run with 1.
+- A command inside the run that fails with code 2 now ends the run with
+  1, so exit 2 keeps meaning that phase 00 or 01 stopped for a manual
+  step (most often the MariaDB root password).
 - A launchd agent that is on launchd's disabled list (after `launchctl
   disable` or an old `launchctl remove`) is enabled before the bootstrap
   is retried, instead of failing three times.
@@ -76,9 +84,6 @@ All notable changes to this project are documented here.
   rebuild. None of the classified cases moves the env aside.
 - `benchbar repair` refuses to rebuild the env while the bench is running
   (its processes run from that env) and says to stop it first.
-- New doctor check `env_setuptools`: on Frappe v15 the env must import
-  `pkg_resources` (setuptools 70 and later dropped it); `repair` installs
-  `setuptools<70` into the env, and an env rebuild on v15 does the same.
 - The installer checks that `bench` runs (`bench --version`) before using
   it, names the reinstall command for its owner when it does not, and
   warns when it is older than the profile's known minimum (`bench_min` in
@@ -138,14 +143,14 @@ All notable changes to this project are documented here.
   crash (a bench process ended, for example redis on a stray TERM), so
   launchd restarts it under the crash guard instead of leaving the bench
   silently down; and its crash guard fails closed when the start history
-  or the stop flag cannot be written. Existing runners are outdated once.
+  or the stop flag cannot be written.
 - The legacy agent migration and `uninstall-service` keep the plist when
   launchd does not let go of the job, and report a move that failed.
 - A bench folder that cannot be written (read only) stops a run at once
   with "Could not create the lock ... (read only?)", instead of five
   retries that blamed another benchbar run.
-- `benchbar logs --process worker` (and the MCP `benchbar_logs_tail`)
-  always returned no lines: `Procfile.lean` sends the worker to
+- `benchbar logs --process worker` (and `file: worker` in the MCP
+  `benchbar_logs_tail`) always returned no lines: `Procfile.lean` sends the worker to
   `logs/worker.log`, not to `bench.log`. It now reads that file
   (`--previous` with it is refused: there is no previous worker log).
 - `--json` output removes a terminal color code as a whole; before, the
@@ -179,9 +184,23 @@ All notable changes to this project are documented here.
   volume), and says to move the state first.
 - Docs: `status`, `list` and `doctor --json` are read only except for the
   one time move of the state folder, which renames and links.
+- `benchbar install` of a second bench while another bench or program
+  holds the default ports picks the next free port block (or the one
+  `--port-offset` names) and writes it before phase 01 starts the bench's
+  Redis; it stopped with "Port 11000 ... is held by another process".
+- A fresh v15 install puts `setuptools<70` into the new env, as repair
+  does, so the first `benchbar doctor` no longer warns about
+  `pkg_resources`.
+- Doctor's stop flag check names the process that holds the bench's ports
+  after a `port_conflict` pause, or says the ports are free now; it
+  pointed at the orphans check, which only lists the bench's own
+  processes.
 
 ### Changed
 
+- The runner (template v7) and the helper block (v2) changed; `benchbar
+  doctor` marks existing ones outdated once and `benchbar repair`
+  re-renders them.
 - `repair` says when a check still fails after the run and has no action of its own (a disabled formula, a missing tool); `doctor` exits 1 while it does.
 - The default profile `v15-lts` installs `node@22` instead of `node@20`,
   which Homebrew disables on 2026-10-28 (Frappe v15 needs Node 18 or
@@ -189,11 +208,6 @@ All notable changes to this project are documented here.
   flags its shell block, agent, Node and the missing formula, and `benchbar repair` installs
   `node@22`, puts yarn under it and re-renders both PATHs. `node@20` is
   not removed.
-- New doctor check "Formula lifecycle": a WARN when Homebrew disables one
-  of the profile's Python, Node or MariaDB formulae within 90 days, a
-  FAIL once it has or once brew no longer knows the formula.
-  `scripts/check-profile-formulae.sh` runs the same
-  check over every profile and stops a release in `release-local.sh`.
 - `benchbar install` does its two `sudo` steps (the wkhtmltopdf package,
   the `/etc/hosts` line) first and drops the credential with `sudo -k`
   before Homebrew, pip, npm, yarn or `bench get-app` run; it still asks
@@ -219,15 +233,16 @@ All notable changes to this project are documented here.
   Slack, OpenAI and AWS token shapes, and email addresses (`<email>`);
   `pwd` and `passwd` keys and Python keyword arguments (`password='...'`)
   count as credential keys. `REDACTIONS.txt` lists each kind.
-- `benchbar logs --json` (and `benchbar_logs_tail` over MCP) redacts the
-  lines with the report's rules and caps `-n` at 2000 lines, saying so
-  with `"truncated_to":2000`. `benchbar logs` without `--json` is still the
-  file as it is.
+- `benchbar logs --json` redacts the lines with the report's rules and
+  caps `-n` at 2000 lines, saying so with `"truncated_to":2000`.
+  `benchbar_logs_tail` over MCP redacts the same way and refuses `lines`
+  outside 1 to 2000. `benchbar logs` without `--json` is still the file as
+  it is.
 - A git URL with a token in it no longer reaches the run log, the "Last
   command failed" line, a failed command's last 40 lines or the echo of
   an env-provided answer: the `user:token@` part is written as `***@`.
-- `adopt`, `install`, `service`, `repair`, `up`, `autostart` and `site add`
-  refuse a bench path (and a default site name) with a double quote,
+- `adopt`, `install`, `service`, `repair`, `up`, `restart`, `autostart`,
+  `ports apply`, `site add` and `site default` refuse a bench path (and a default site name) with a double quote,
   backslash, `$`, backtick, `<`, `>`, `&` or a control character before
   writing anything, and say which character is in the way; spaces and
   apostrophes stay fine. `doctor` stays read only and reports it as the new
@@ -264,6 +279,21 @@ All notable changes to this project are documented here.
 
 ### Added
 
+- `benchbar doctor --json` says where the profile came from
+  (`profile_source`), and the app's Health page says when the profile is
+  only the default for a bench no profile matches.
+- BenchBar.app knows the `port_conflict` stop reason: "Paused: a port is in
+  use" with a link to Health, instead of "Paused after repeated crashes".
+- New doctor check `env_setuptools`: on Frappe v15 the env must import
+  `pkg_resources` (setuptools 70 and later dropped it); `repair` installs
+  `setuptools<70` into the env, and an env rebuild on v15 does the same.
+- New doctor check "Formula lifecycle": a WARN when Homebrew disables one
+  of the profile's Python, Node or MariaDB formulae within 90 days, a
+  FAIL once it has or once brew no longer knows the formula.
+  `scripts/check-profile-formulae.sh` runs the same
+  check over every profile and stops a release in `release-local.sh`.
+- `benchbar install --offline` skips the remote checks of both phase
+  scripts.
 - `benchbar mcp` has a read only `benchbar_app_list` tool (`app list
   --json --no-sites`), and `benchbar_logs_tail` takes `file`: `bench`,
   `worker` (`logs/worker.log`), `worker_error` or `previous`.

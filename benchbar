@@ -12,7 +12,7 @@
 
 set -euo pipefail
 
-FL_VERSION="0.7.2"
+FL_VERSION="0.7.3"
 
 # Resolve the real script location even when invoked through a symlink
 # (for example ~/.local/bin/frappe-mac).
@@ -510,9 +510,20 @@ cmd_install() {
   fi
 
   fl_step_begin 1
-  local web_port=""
-  [[ "$OPT_PORT_OFFSET" =~ ^[0-9]+$ ]] && web_port=$((FL_PORT_BASE_WEB + OPT_PORT_OFFSET))
+  # the port block of a new bench, chosen before phase 01 starts its Redis:
+  # --port-offset, else the next free block when another bench or program
+  # has the default one (phase 01 writes it right after bench init)
+  local web_port="" port_block="" free
+  if [[ "$OPT_PORT_OFFSET" =~ ^[0-9]+$ ]]; then
+    port_block="$(fl_port_block "$OPT_PORT_OFFSET")"
+  elif [[ ! -f "$FL_BENCH_DIR/sites/common_site_config.json" && -n "$(fl_port_block_conflicts 0)" ]]; then
+    free="$(fl_port_next_free_offset)" || { fl_step_end failed; fl_steps_summary; fl_die "no free port block between 0 and ${FL_PORT_MAX_OFFSET}"; }
+    port_block="$(fl_port_block "$free")"
+    fl_info "the default ports are taken; the new bench gets port block ${free} (web ${port_block%% *})"
+  fi
+  [[ -n "$port_block" ]] && web_port="${port_block%% *}"
   if BENCH_DIR="$FL_BENCH_DIR" SITE_NAME="$FL_SITE" APP_BUNDLE="${bundle:-minimal}" BENCHBAR_WEB_PORT="$web_port" \
+     BENCHBAR_PORT_BLOCK="$port_block" \
      MARIADB_ROOT_PASSWORD="${MARIADB_ROOT_PASSWORD:-}" ADMIN_PASSWORD="${ADMIN_PASSWORD:-}" \
      fl_run_phase_script "${SCRIPT_DIR}/01-install-bench-and-site.sh" "${args01[@]}"; then
     fl_step_end "done"

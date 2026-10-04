@@ -61,7 +61,8 @@ benchbar restart [--bench-dir DIR]
 Restarts every process and waits for the site. Needed after Python
 changes: the web server reloads by itself, the worker does not.
 
-Exit codes: 0 the site answers; 1 it did not answer in time.
+Exit codes: 0 the site answers; 1 it did not answer in time, a port is
+taken, or you declined the port question.
 
 ```bash
 benchbar restart
@@ -106,7 +107,8 @@ Tails `logs/bench.log` and follows it in a terminal.
 | `--process NAME` | Only the lines of one honcho process: `web`, `socketio`, `schedule`, `redis_queue`, `redis_cache`. `worker` reads `logs/worker.log` instead, where `Procfile.lean` sends the worker (it never writes to `bench.log`); `--previous` does not combine with it, since `worker.log` has no previous file |
 | `--json` | The lines as JSON ([schema](../../json-schema.md#benchbar-logs---json)) |
 
-Exit codes: 0; 1 for a bad `-n` or `--process` value.
+Exit codes: 0; 1 for a bad `-n` or `--process` value, or for
+`--process worker` with `--previous`.
 
 ```bash
 benchbar logs --json --no-follow -n100 --process worker
@@ -123,7 +125,8 @@ Stops the service and runs honcho, the process manager, with
 in the terminal.
 Ctrl+C stops it; `benchup` brings the background service back.
 
-Exit codes: honcho's; 1 when honcho or `Procfile.lean` is missing.
+Exit codes: honcho's; 1 when honcho or `Procfile.lean` is missing, a
+port is taken, or the background bench could not be stopped.
 
 ```bash
 benchbar fg

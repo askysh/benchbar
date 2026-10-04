@@ -116,15 +116,7 @@ fl_ports_apply() {
   fi
   fl_bench_env_exports
   fl_backup_file "${FL_BENCH_DIR}/sites/common_site_config.json" || return 1
-  (
-    cd "$FL_BENCH_DIR" || exit 1
-    bench set-config -g -p webserver_port "$web" &&
-    bench set-config -g -p socketio_port "$sio" &&
-    bench set-config -g redis_queue "redis://127.0.0.1:${queue}" &&
-    bench set-config -g redis_cache "redis://127.0.0.1:${cache}" &&
-    bench set-config -g redis_socketio "redis://127.0.0.1:${cache}" &&
-    bench setup redis
-  ) >>"${FL_LOG_FILE:-/dev/null}" 2>&1 || { fl_fail "could not write the port block with bench set-config (log: ${FL_LOG_FILE:-none})"; return 1; }
+  fl_bench_write_ports "$FL_BENCH_DIR" "$web" "$sio" "$queue" "$cache" || { fl_fail "could not write the port block with bench set-config (log: ${FL_LOG_FILE:-none})"; return 1; }
   fl_ports_detect
   fl_bstate_set PORT_OFFSET "$n"
   fl_render_all

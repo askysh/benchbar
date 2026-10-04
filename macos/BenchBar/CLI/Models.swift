@@ -18,6 +18,8 @@ nonisolated enum BenchState: String, Codable, Sendable, CaseIterable {
 
 nonisolated enum StopReason: String, Codable, Sendable {
     case manual, crash, broken, unknown
+    /// Added in 0.7.3: another program held one of the bench's ports when the runner started.
+    case portConflict = "port_conflict"
 
     init(from decoder: Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)
@@ -192,13 +194,20 @@ nonisolated struct DoctorReport: Codable, Sendable, Equatable {
     var bench: String
     var site: String?
     var profile: String?
+    /// Added in 0.7.3: where the profile came from (flag, team, stored,
+    /// detected, default). "default" means no profile matches the bench.
+    var profileSource: String? = nil
     var checks: [DoctorCheck]
     var summary: DoctorSummary
+
+    /// The profile is only the default: no profile matches this bench's Frappe.
+    var profileIsDefault: Bool { profileSource == "default" }
 
     enum CodingKeys: String, CodingKey {
         case bench, site, profile, checks, summary
         case schemaVersion = "schema_version"
         case cliVersion = "cli_version"
+        case profileSource = "profile_source"
     }
 }
 

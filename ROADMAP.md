@@ -89,11 +89,39 @@ its state in `~/.local/state/benchbar`, records paths that survive `brew
 upgrade`, and updates with `brew upgrade`; `benchbar repair` moves a one
 line install over, and doctor warns about a second CLI or app.
 
+**0.7.1, one CLI.** BenchBar.app carries the CLI of its own version, and
+Homebrew's and the one line installer's `benchbar` hand off to it, so
+every `benchbar` on the Mac is the app's and one update covers both.
+Update Now goes through Sparkle without Terminal; `benchbar where` names
+the copy that handed off.
+
+**0.7.2, a calmer window.** One main action per page, the rest in a ⋯
+menu, and one layout for every sheet (Return confirms, Esc cancels).
+
+**0.7.3, the fix pass.** Nine batches of review findings, checked on a
+real Mac before the release. benchbar stops only processes it can prove are the
+bench's, and the runner pauses with `port_conflict` instead of starting
+into a taken port. v15-lts moves to `node@22` before Homebrew disables
+`node@20` on 2026-10-28, with a Formula lifecycle check and a release
+gate. A fresh Homebrew MariaDB with a socket only root no longer stops
+the install. The env is never rebuilt on a guessed profile or while the
+bench runs. Long commands run in their own process group, and every run
+that changes a bench takes that bench's lock. Writes fail closed, step
+results say what really happened, secrets stay out of child processes
+and logs, and paths are checked before they reach root. The MCP server
+runs calls on threads, checks every argument against its schema and
+labels third party text. The installer's state moves in even when the
+app made the folder first. The app names a port conflict, and `doctor --json` says where the
+profile came from.
+
+**Launch.** The post on discuss.frappe.io went up on 2026-10-04:
+[BenchBar: local Frappe benches on macOS with a menu bar app](https://discuss.frappe.io/t/benchbar-local-frappe-benches-on-macos-with-a-menu-bar-app/165049).
+
 ## Later
 
-**0.7, public launch.** A launch post on discuss.frappe.io. The
-`askysh/homebrew-tap` formula and cask shipped in 0.7.0; Developer ID
-signing, notarization, the signed DMG and Sparkle updates in 0.6.1.
+**The app's runner and CLI link.** The app's own runner stops a
+command's whole process group, as the CLI does since 0.7.3, and the app
+makes its CLI link again when a poll finds it missing.
 
 **Management in its own target.** Team profiles, bench discovery and
 port setup move out of the menu bar app into a separate management

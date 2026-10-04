@@ -35,6 +35,7 @@ struct PresentationTests {
         #expect(BenchText.headline(.crashed, reason: .crash, exitCode: 3) == "Crashed (exit 3), restarting")
         #expect(BenchText.headline(.paused, reason: .crash, exitCode: nil) == "Paused after repeated crashes")
         #expect(BenchText.headline(.paused, reason: .broken, exitCode: nil) == "Paused: needs repair")
+        #expect(BenchText.headline(.paused, reason: .portConflict, exitCode: nil) == "Paused: a port is in use")
         #expect(BenchText.headline(.running, reason: nil, exitCode: nil) == "Running")
     }
 

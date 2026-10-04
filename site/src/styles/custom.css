@@ -1,6 +1,245 @@
-/* Screenshots in the docs are sized for GitHub with width attributes;
-   keep them inside the content column. */
+/* BenchBar docs theme: Bai Jamjuree for text, JetBrains Mono for code, and
+   the blue of the app icon as the accent. Starlight's own variables carry
+   the palette, so every component (search, asides, tabs) follows it. */
+
+:root {
+  --sl-font: 'Bai Jamjuree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --sl-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --sl-text-h1: 2.5rem;
+  --sl-text-h2: 1.75rem;
+  --sl-text-h3: 1.3rem;
+  --sl-line-height: 1.7;
+  --sl-content-width: 46rem;
+  --bb-radius: 0.75rem;
+  --bb-blue: #2a5cf0;
+
+  /* dark: a deep navy, not a flat grey */
+  --sl-color-accent-low: #0f1f4d;
+  --sl-color-accent: #4f7dff;
+  --sl-color-accent-high: #c4d3ff;
+  --sl-color-white: #ffffff;
+  --sl-color-gray-1: #e6e9f2;
+  --sl-color-gray-2: #c3c8d6;
+  --sl-color-gray-3: #8e95ab;
+  --sl-color-gray-4: #5a6178;
+  --sl-color-gray-5: #2b3146;
+  --sl-color-gray-6: #171c2c;
+  --sl-color-black: #0c1020;
+  --bb-surface: #121729;
+  --bb-border: #252c42;
+  --bb-glow: rgba(79, 125, 255, 0.18);
+}
+
+:root[data-theme='light'] {
+  --sl-color-accent-low: #dfe7ff;
+  --sl-color-accent: #2a5cf0;
+  --sl-color-accent-high: #12307f;
+  --sl-color-white: #0e1326;
+  --sl-color-gray-1: #1c2236;
+  --sl-color-gray-2: #343b52;
+  --sl-color-gray-3: #5b6278;
+  --sl-color-gray-4: #8b91a5;
+  --sl-color-gray-5: #c9cddb;
+  --sl-color-gray-6: #eceef5;
+  --sl-color-gray-7: #f5f6fa;
+  --sl-color-black: #ffffff;
+  --bb-surface: #f6f7fb;
+  --bb-border: #e1e4ee;
+  --bb-glow: rgba(42, 92, 240, 0.12);
+}
+
+body {
+  font-feature-settings: 'kern', 'liga';
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---- header: quiet, translucent, one hairline */
+.header {
+  background: color-mix(in srgb, var(--sl-color-black) 82%, transparent);
+  backdrop-filter: saturate(160%) blur(12px);
+  border-bottom: 1px solid var(--bb-border);
+}
+.site-title {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  gap: 0.6rem;
+}
+.site-title img {
+  border-radius: 0.45rem;
+}
+
+/* ---- sidebar: small caps group labels, a pill for the current page */
+.sidebar-pane {
+  border-inline-end: 1px solid var(--bb-border);
+}
+.sidebar-content .group-label .large,
+.sidebar-content summary .large {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--sl-color-gray-3);
+}
+.sidebar-content a {
+  border-radius: 0.5rem;
+  font-weight: 500;
+}
+.sidebar-content a[aria-current='page'],
+.sidebar-content a[aria-current='page']:hover,
+.sidebar-content a[aria-current='page']:focus {
+  background: var(--sl-color-accent-low);
+  color: var(--sl-color-accent-high);
+  font-weight: 600;
+}
+:root[data-theme='light'] .sidebar-content a[aria-current='page'] {
+  color: var(--sl-color-accent-high);
+}
+
+/* ---- page title and headings */
+.content-panel h1#_top {
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+.sl-markdown-content :is(h2, h3, h4) {
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+}
+.sl-markdown-content h2 {
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--bb-border);
+  margin-top: 2.75rem;
+}
+.sl-markdown-content strong {
+  font-weight: 650;
+  color: var(--sl-color-white);
+}
+
+/* ---- links: accent with a soft underline that firms up on hover */
+.sl-markdown-content a:not(.not-content a) {
+  color: var(--sl-color-accent);
+  text-decoration-color: color-mix(in srgb, var(--sl-color-accent) 35%, transparent);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 0.2em;
+  transition: text-decoration-color 120ms ease;
+}
+.sl-markdown-content a:not(.not-content a):hover {
+  text-decoration-color: currentColor;
+}
+
+/* ---- inline code and code blocks */
+.sl-markdown-content :not(pre) > code {
+  font-size: 0.85em;
+  padding: 0.12em 0.4em;
+  border-radius: 0.35rem;
+  background: var(--bb-surface);
+  border: 1px solid var(--bb-border);
+}
+.expressive-code {
+  --ec-brdRad: var(--bb-radius);
+  --ec-codeFontFml: var(--sl-font-mono);
+  --ec-uiFontFml: var(--sl-font);
+}
+.expressive-code .frame {
+  box-shadow: 0 1px 0 var(--bb-border), 0 8px 24px -16px rgba(0, 0, 0, 0.45);
+}
+
+/* ---- tables */
+.sl-markdown-content table {
+  display: table;
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid var(--bb-border);
+  border-radius: var(--bb-radius);
+  overflow: hidden;
+  font-size: 0.92em;
+}
+.sl-markdown-content :is(th, td) {
+  border: 0;
+  border-bottom: 1px solid var(--bb-border);
+  padding: 0.55rem 0.8rem;
+}
+.sl-markdown-content tr:last-child td {
+  border-bottom: 0;
+}
+.sl-markdown-content th {
+  background: var(--bb-surface);
+  font-weight: 650;
+}
+
+/* ---- asides: rounded cards instead of a bare left bar */
+.starlight-aside {
+  border-radius: var(--bb-radius);
+  border-inline-start-width: 4px;
+}
+
+/* ---- screenshots: sized for GitHub with width attributes, kept inside the
+   content column, framed like a window */
 .sl-markdown-content img {
   max-width: 100%;
   height: auto;
+  border-radius: var(--bb-radius);
+  border: 1px solid var(--bb-border);
+  box-shadow: 0 18px 40px -28px rgba(0, 0, 0, 0.55);
+}
+
+/* ---- the home page hero */
+.hero {
+  position: relative;
+  padding-block: clamp(2.5rem, 7vw, 5rem);
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: -20% -10% auto;
+  height: 120%;
+  background: radial-gradient(60% 55% at 70% 40%, var(--bb-glow), transparent 70%);
+  pointer-events: none;
+  z-index: -1;
+}
+.hero h1 {
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+}
+.hero .tagline {
+  font-size: clamp(1.05rem, 2.2vw, 1.3rem);
+  color: var(--sl-color-gray-2);
+  max-width: 34rem;
+}
+.hero img {
+  border: 0;
+  box-shadow: none;
+  filter: drop-shadow(0 24px 40px rgba(42, 92, 240, 0.35));
+}
+.hero .sl-link-button {
+  border-radius: 999px;
+  font-weight: 600;
+  padding-inline: 1.4rem;
+}
+.hero .sl-link-button.primary {
+  background: var(--bb-blue);
+  border-color: var(--bb-blue);
+  color: #ffffff;
+  box-shadow: 0 10px 24px -12px rgba(42, 92, 240, 0.8);
+}
+.hero .sl-link-button.primary:hover {
+  background: #1f4bd1;
+  border-color: #1f4bd1;
+}
+
+/* ---- footer meta (edit link, last updated) */
+.meta {
+  font-size: var(--sl-text-sm);
+  color: var(--sl-color-gray-3);
+}
+.pagination-links a {
+  border-radius: var(--bb-radius);
+  border-color: var(--bb-border);
+  box-shadow: none;
+}
+.pagination-links a:hover {
+  border-color: var(--sl-color-accent);
 }
