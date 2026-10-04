@@ -117,6 +117,15 @@ printf 'crash\n' >"$BENCH/logs/.bench-stopped"
 run_fm doctor --bench-dir "$BENCH"
 assert_contains "$OUT" "[WARN] Stop flag: auto-restart paused after repeated crashes"
 assert_contains "$OUT" "[WARN] Site ping: bench is paused (crash)"
+# port-conflict pause: the holder is named while it is there
+printf 'port_conflict\n' >"$BENCH/logs/.bench-stopped"
+cp "$MOCK_LISTEN" "$TMP_DIR/listen.before"
+add_listener 8000 7123 python3; mkdir -p "$MOCK_STATE/cwd"; printf '%s' "$HOME/elsewhere" >"$MOCK_STATE/cwd/7123"
+run_fm doctor --bench-dir "$BENCH"
+assert_contains "$OUT" "[WARN] Stop flag: auto-restart paused: another process held this bench's ports at start (now: 8000 has a listener: pid 7123"
+cp "$TMP_DIR/listen.before" "$MOCK_LISTEN"; rm -f "$MOCK_STATE/cwd/7123"
+run_fm doctor --bench-dir "$BENCH"
+assert_contains "$OUT" "held this bench's ports at start (the ports are free now)"
 printf 'manual\n' >"$BENCH/logs/.bench-stopped"
 
 # 9. our agent loaded but its last run failed

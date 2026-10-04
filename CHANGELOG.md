@@ -182,6 +182,10 @@ All notable changes to this project are documented here.
 - A fresh v15 install puts `setuptools<70` into the new env, as repair
   does, so the first `benchbar doctor` no longer warns about
   `pkg_resources`.
+- Doctor's stop flag check names the process that holds the bench's ports
+  after a `port_conflict` pause, or says the ports are free now; it
+  pointed at the orphans check, which only lists the bench's own
+  processes.
 
 ### Changed
 
