@@ -154,6 +154,31 @@ All notable changes to this project are documented here.
 - An MCP action whose follow up status failed or hung lost the action's
   result; the result now comes back with `after_error`. Invalid UTF-8 on
   stdin no longer ends the server.
+- The one line installer's state (default bench, port claims, per bench
+  settings in `~/.local/share/benchbar/.benchbar`) now moves to
+  `~/.local/state/benchbar` even when BenchBar.app made its
+  `bin/benchbar` link there before the first CLI run; before, the new
+  folder counted as moved and the old state was left behind. The move is
+  serialized with an atomic guard, so first runs started at once (the
+  app's polls) leave one state folder, a guard left by a killed run is
+  reclaimed, and a run cut short at any step leaves a layout the next
+  run completes (doctor's Second CLI check says so meanwhile).
+- The helper block (`benchup` and friends) written by the app's CLI names
+  Homebrew's or the installer's `benchbar` when one hands off to it, and
+  the app's link only when nothing else is installed: the link goes with
+  the app, that copy keeps running on its own.
+- Doctor's Second CLI check under the app's CLI reports a second state
+  folder in `~/.local/share/benchbar` next to the user state (never a
+  delete: the Trash is offered) and a Homebrew or installer copy newer
+  than the app's CLI, with the app update as the fix.
+- `benchbar where` shows the version of the copy that handed off
+  (`handoff_from_version` in the JSON) and the folder behind the state
+  path when it is a link (`state_dir_real`, `state LINK -> REAL`).
+- `install.sh --uninstall` keeps the checkout when
+  `~/.local/state/benchbar` is a link into it (the state on another
+  volume), and says to move the state first.
+- Docs: `status`, `list` and `doctor --json` are read only except for the
+  one time move of the state folder, which renames and links.
 
 ### Changed
 

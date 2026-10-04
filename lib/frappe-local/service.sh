@@ -141,15 +141,26 @@ fl_render_all() {
     "BENCHBAR=$(fl_helpers_cli)")"
 }
 
-# fl_helpers_cli: the benchbar the helper block runs. FL_SELF, except that
-# the app's CLI keeps a block naming Homebrew's or the installer's copy when
-# that copy hands off to it: both lead here, and rewriting the block on
-# every switch between them would only churn ~/.zshrc.
+# fl_helpers_cli: the benchbar the helper block runs. FL_SELF, except for
+# the app's CLI, whose FL_SELF is the link BenchBar.app keeps in
+# ~/.local/state/benchbar/bin: that link goes with the app (uninstalled, or
+# dragged to the Trash), and every helper with it. So the block names
+# Homebrew's or the installer's copy when one hands off to this CLI: it
+# runs the app's CLI while the app is there, and itself once it is gone. A
+# recorded copy that hands off is kept, whichever copy runs this (both lead
+# here, and rewriting the block on every switch between them would only
+# churn ~/.zshrc); with none recorded, the copy that handed off to this run
+# comes first, then Homebrew's, then the installer's. The link is the last
+# resort, when nothing else is installed.
 fl_helpers_cli() {
-  local recorded
+  local recorded c
   if [[ "${FL_INSTALL_KIND:-}" == app ]]; then
     recorded="$(fl_rc_block_extract "$(fl_rc_file)" 2>/dev/null | sed -n 's/^BENCHBAR="\(.*\)"$/\1/p' | head -n 1)"
     if [[ -n "$recorded" ]] && fl_cli_hands_off "$recorded"; then printf '%s' "$recorded"; return 0; fi
+    for c in "${FL_HANDOFF_FROM:-}" "$(fl_brew_cli)" "${FL_MANAGED_HOME}/benchbar"; do
+      [[ -n "$c" ]] || continue
+      if fl_cli_hands_off "$c"; then printf '%s' "$c"; return 0; fi
+    done
   fi
   printf '%s' "$FL_SELF"
 }

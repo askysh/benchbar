@@ -554,11 +554,23 @@ uninstall() {
   [[ "$any" == "1" ]] || same "no benchbar agents"
 
   step "Checkout"
-  local state own="${BENCHBAR_HOME}/.benchbar" keep=0
+  local state own="${BENCHBAR_HOME}/.benchbar" keep=0 user_state="${HOME%/}/.local/state/benchbar" leads=""
   state="$(state_dir)"
+  # the other volume layout (state.sh): the state stayed in the checkout
+  # and ~/.local/state/benchbar is a link to it, so the checkout holds
+  # the state of every CLI on the Mac
+  if [[ -L "$user_state" ]]; then
+    leads="$(readlink "$user_state" 2>/dev/null || true)"
+    [[ "$leads" == /* || -z "$leads" ]] || leads="${user_state%/*}/${leads}"
+    if [[ "$leads" == "${BENCHBAR_HOME}/"* ]] || [[ -d "$own" && "$user_state" -ef "$own" ]]; then :; else leads=""; fi
+  fi
   if [[ -d "$BENCHBAR_HOME" ]]; then
     if [[ -L "$own" ]]; then
       info "${BENCHBAR_HOME} holds the CLI; its logs, backups and remembered benches are in ${state}"
+    elif [[ -n "$leads" ]]; then
+      warn "${user_state} leads to ${leads}, which holds the state (logs, backups, remembered benches) of every benchbar on this Mac; kept ${BENCHBAR_HOME}"
+      info "move the state first, then run this again: rm ${user_state} && mv ${leads} ${user_state}"
+      keep=1
     elif [[ -d "$own" && -n "$BREW_CLI" && ! -e "$state" && ! -L "$state" ]]; then
       # Homebrew's CLI would have moved it on its first run. Through a name
       # of its own: across volumes mv copies, and a copy cut short must not

@@ -96,7 +96,7 @@ assert_eq "$APP" "$(where_field app_path)" "(the app it is part of)"
 assert_eq "0.7.2" "$(where_field app_version)"
 run "$PREFIX/bin/benchbar" where
 assert_contains "$OUT" "installed inside BenchBar.app"
-assert_contains "$OUT" "via      $OPT_SELF, which hands off to this CLI"
+assert_contains "$OUT" "via      $OPT_SELF (0.7.1), which hands off to this CLI"
 run "$PREFIX/bin/benchbar" no-such-command
 assert_eq "1" "$CODE" "(the app's CLI's exit code comes back)"
 assert_contains "$OUT" "Unknown command: no-such-command"
@@ -147,6 +147,67 @@ assert_eq "$OPT_SELF" "$(helper_path)" "(repair leaves that block alone)"
 run "$PREFIX/bin/benchbar" status --json --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 assert_eq "$before" "$(snapshot "$APP")" "(no run writes into the app)"
+
+# ---- the helper block names a copy that outlives the app: Homebrew's or
+# the installer's benchbar hands off to the app's CLI while the app is
+# there, and runs itself once the app is gone, so benchup keeps working
+# the block as a 0.7.1 app CLI wrote it: the app's link, with a hash of its own
+sed_inplace "s#^BENCHBAR=.*#BENCHBAR=\"$LINK\"#; s#^\(\# benchbar-template: shell-helpers v[0-9]* \).*#\1000000000000#" "$HOME/.zshrc"
+run "$LINK" doctor --json --bench-dir "$BENCH"
+assert_eq "warn" "$(check_status helpers)" "(a block naming the app's link is outdated while a standalone copy hands off)"
+run "$LINK" service --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "$OPT_SELF" "$(helper_path)" "(run directly: Homebrew's copy comes first)"
+run "$LINK" doctor --json --bench-dir "$BENCH"
+assert_eq "ok" "$(check_status helpers)"
+run "$LINK" service --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "unchanged: all"
+# no block yet, run through the installer's copy: the copy that handed off
+printf '# test zshrc\nexport EDITOR=vim\n' >"$HOME/.zshrc"
+run "$HOME/.local/share/benchbar/benchbar" service --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "$HOME/.local/share/benchbar/benchbar" "$(helper_path)" "(the copy that handed off)"
+run "$PREFIX/bin/benchbar" doctor --json --bench-dir "$BENCH"
+assert_eq "ok" "$(check_status helpers)" "(a recorded copy that hands off stays, whichever copy runs doctor)"
+run "$PREFIX/bin/benchbar" service --yes --bench-dir "$BENCH"
+assert_contains "$OUT" "unchanged: all"
+# no block yet, run through Homebrew's: brew's path; with the app in the
+# Trash, the helpers run Homebrew's copy itself
+printf '# test zshrc\nexport EDITOR=vim\n' >"$HOME/.zshrc"
+run "$PREFIX/bin/benchbar" service --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "$OPT_SELF" "$(helper_path)"
+mv "$APP" "$TMP_DIR/Trashed.app"
+assert_contains "$("$(helper_path)" --version 2>&1)" "benchbar 0.7.1" "(benchup still runs, through Homebrew's copy)"
+mv "$TMP_DIR/Trashed.app" "$APP"
+run "$PREFIX/bin/benchbar" doctor --json --bench-dir "$BENCH"
+assert_eq "ok" "$(check_status helpers)"
+run "$PREFIX/bin/benchbar" service --yes --bench-dir "$BENCH"
+assert_contains "$OUT" "unchanged: all"
+
+# ---- a standalone copy newer than the app's CLI: it hands off to the older
+# one, so doctor names the app update; where says which version handed off
+keg 9.9.9
+run "$PREFIX/bin/benchbar" doctor --json --bench-dir "$BENCH"
+assert_eq "warn" "$(check_status cli_duplicate)"
+assert_contains "$(check_msg cli_duplicate)" "Homebrew's benchbar 9.9.9"
+assert_contains "$(check_msg cli_duplicate)" "newer than"
+fix="$(printf '%s' "$OUT" | jget - "[c['fix'] for c in d['checks'] if c['id'] == 'cli_duplicate'][0]")"
+assert_contains "$fix" "Check for Updates in BenchBar"
+assert_contains "$fix" "brew upgrade askysh/tap/benchbar-app"
+run "$PREFIX/bin/benchbar" where --json
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "$OPT_SELF" "$(where_field handoff_from)"
+assert_eq "9.9.9" "$(where_field handoff_from_version)"
+assert_eq "$HOME/.local/state/benchbar" "$(where_field state_dir_real)" "(not a link: the same as state_dir)"
+run "$PREFIX/bin/benchbar" where
+assert_contains "$OUT" "via      $OPT_SELF (9.9.9), which hands off to this CLI"
+run "$LINK" where --json
+assert_eq "None" "$(where_field handoff_from_version)" "(run directly: nothing handed off)"
+keg 0.7.1
+run "$PREFIX/bin/benchbar" doctor --json --bench-dir "$BENCH"
+assert_eq "ok" "$(check_status cli_duplicate)"
 # a Homebrew copy too old to hand off is named, with the upgrade
 keg 0.7.0
 run "$LINK" doctor --json --bench-dir "$BENCH"
@@ -167,6 +228,41 @@ assert_contains "$(check_msg cli_duplicate)" "no other copy"
 run "$LINK" repair --yes --bench-dir "$BENCH"
 assert_eq "$LINK" "$(helper_path)" "(with nothing to hand off from, the block names the app's link)"
 assert_eq "$LINK" "$(readlink "$HOME/.local/bin/benchbar")" "(and ~/.local/bin leads to it)"
+
+# ---- a second state folder in the installer's checkout next to the user
+# state (an older CLI started one, or the two were never merged): a split,
+# named with the Trash for the folder, never a delete
+MANAGED="$HOME/.local/share/benchbar"
+mkdir -p "$MANAGED/.benchbar"; printf 'BENCH_DIR=%s\n' "$BENCH" >"$MANAGED/.benchbar/state.env"
+run "$LINK" doctor --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "warn" "$(check_status cli_duplicate)"
+assert_contains "$(check_msg cli_duplicate)" "$MANAGED/.benchbar"
+assert_contains "$(check_msg cli_duplicate)" "state folder"
+assert_contains "$(check_msg cli_duplicate)" "$HOME/.local/state/benchbar"
+fix="$(printf '%s' "$OUT" | jget - "[c['fix'] for c in d['checks'] if c['id'] == 'cli_duplicate'][0]")"
+assert_contains "$fix" "mv $MANAGED/.benchbar ~/.Trash/"
+assert_not_contains "$fix" "rm "
+assert_eq "None" "$(printf '%s' "$OUT" | jget - "[c['action'] for c in d['checks'] if c['id'] == 'cli_duplicate'][0]")" "(no repair action: nothing is deleted for the user)"
+# with the installer's CLI there too, the whole checkout is what goes
+tree "$MANAGED" 0.7.1
+run "$LINK" doctor --json --bench-dir "$BENCH"
+assert_eq "warn" "$(check_status cli_duplicate)"
+assert_contains "$(check_msg cli_duplicate)" "state folder of its own ($MANAGED/.benchbar)"
+assert_contains "$(printf '%s' "$OUT" | jget - "[c['fix'] for c in d['checks'] if c['id'] == 'cli_duplicate'][0]")" "mv $MANAGED ~/.Trash/"
+# the state still in the checkout, the new path a link to it (another
+# volume): no split, keep the folder
+mv "$HOME/.local/state/benchbar" "$HOME/.local/state/benchbar.saved"
+ln -s "$MANAGED/.benchbar" "$HOME/.local/state/benchbar"
+mkdir -p "$MANAGED/.benchbar/bin"; ln -s "$APP_CLI_DIR/benchbar" "$MANAGED/.benchbar/bin/benchbar"
+run "$MANAGED/benchbar" doctor --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "ok" "$(check_status cli_duplicate)"
+assert_contains "$(check_msg cli_duplicate)" "also holds the state"
+rm "$HOME/.local/state/benchbar"; mv "$HOME/.local/state/benchbar.saved" "$HOME/.local/state/benchbar"
+rm -rf "$MANAGED"
+run "$LINK" doctor --json --bench-dir "$BENCH"
+assert_eq "ok" "$(check_status cli_duplicate)"
 
 # ---- self-update: the app's CLI is the app's to update
 release() {

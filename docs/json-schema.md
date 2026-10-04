@@ -44,7 +44,10 @@ Raycast extensions and the like can rely on it too.
   check is `fail`; the JSON is still printed). A missing bench exits 1
   with a message on stderr and nothing on stdout.
 - `status --json`, `list --json` and `doctor --json` are read only. They
-  never start, stop or write anything, so they are safe to poll.
+  never start, stop or write anything, so they are safe to poll. The one
+  exception is the one time move of the state folder on the first run
+  after an upgrade (state.sh), which renames and links, and never copies
+  or deletes.
 
 ## States
 
@@ -687,7 +690,7 @@ and the app can use it to tell a Homebrew install from the others instead
 of guessing from paths.
 
 ```json
-{"schema_version":1,"cli_version":"0.7.1","install":"app","self":"/Users/you/.local/state/benchbar/bin/benchbar","state_dir":"/Users/you/.local/state/benchbar","app_version":"0.7.1","app_path":"/Applications/BenchBar.app","handoff_from":"/opt/homebrew/opt/benchbar/bin/benchbar"}
+{"schema_version":1,"cli_version":"0.7.2","install":"app","self":"/Users/you/.local/state/benchbar/bin/benchbar","state_dir":"/Users/you/.local/state/benchbar","state_dir_real":"/Users/you/.local/state/benchbar","app_version":"0.7.2","app_path":"/Applications/BenchBar.app","handoff_from":"/opt/homebrew/opt/benchbar/bin/benchbar","handoff_from_version":"0.7.2"}
 ```
 
 | Field | Type | Meaning |
@@ -695,9 +698,11 @@ of guessing from paths.
 | `install` | string | `homebrew` (the `benchbar` formula), `managed` (the one line installer's checkout, `~/.local/share/benchbar`), `app` (the CLI inside BenchBar.app, 0.7.1), `checkout` (another git clone, such as `./benchbar` in the repo) or `other`. Treat a value you do not know as `other` |
 | `self` | string | the path of this CLI that the helper block, the `~/.local/bin` links and every printed fix command use. Under Homebrew it is `<prefix>/opt/benchbar/bin/benchbar`, which `brew upgrade` keeps; never a versioned Cellar path. For `app` it is `~/.local/state/benchbar/bin/benchbar`, the link the app keeps to its CLI, or the CLI's own path in an app that is not installed (a build from Xcode) |
 | `state_dir` | string | the folder of the remembered benches, per bench settings, run logs, backups and the lock: `~/.local/state/benchbar` for `homebrew`, `managed` and `app` (a symlink to `~/.local/share/benchbar/.benchbar` when the two are on different volumes), `.benchbar` next to the CLI for the others, or `FL_STATE_DIR` when that is set |
+| `state_dir_real` | string | the folder behind `state_dir`, with every link resolved (0.7.3). The same as `state_dir` unless `~/.local/state/benchbar` is a link to the installer checkout's `.benchbar` on another volume; the human output then shows `state LINK -> REAL` |
 | `app_version` | string or null | the BenchBar app's version, `null` when no app is installed |
 | `app_path` | string or null | for `app`, the app this CLI is part of; otherwise the app it found first, `/Applications` before `~/Applications`; `null` when none |
 | `handoff_from` | string or null | the Homebrew or installer CLI that was run and handed off to this one (0.7.1), `null` when this CLI was run directly |
+| `handoff_from_version` | string or null | the version of that copy (0.7.3), `null` when this CLI was run directly or that copy's version is unknown. A copy newer than `cli_version` hands off to an older CLI: update the app (doctor's `cli_duplicate` says so) |
 
 Exit 0. An argument other than `--json` exits 1.
 

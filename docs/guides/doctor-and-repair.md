@@ -9,6 +9,11 @@ benchbar repair --dry-run    # show the plan, change nothing
 benchbar repair              # apply, with a confirmation prompt
 ```
 
+Doctor is read only, with one exception: the one time move of the state
+folder on the first run after an upgrade (`~/.local/share/benchbar/.benchbar`
+to `~/.local/state/benchbar`), which renames and links, and never copies
+or deletes.
+
 A few names used below: the **launchd agent** is the macOS background
 job that runs the bench; **honcho** is the process manager that starts
 the processes listed in **`Procfile.lean`**; the **runner** is the
@@ -467,6 +472,15 @@ reads that checkout's state, so `benchup` would lose its benches. A
 block that names Homebrew's or the one line installer's `benchbar`
 stays as it is when that copy hands off to the CLI inside BenchBar.app.
 
+The app's CLI writes a block that names Homebrew's or the installer's
+`benchbar` when one of them hands off to it (the copy that was run first,
+then Homebrew's, then the installer's), and the app's own link in
+`~/.local/state/benchbar/bin` only when nothing else is installed: that
+link goes with the app, and `benchup` would go with it, while a Homebrew
+or installer copy runs the app's CLI as long as the app is there and
+itself once it is gone. A block that names the link while such a copy is
+installed is outdated (0.7.3).
+
 Fix: `benchbar repair` writes the block. Remove an old block by hand.
 
 ### cli_link
@@ -513,7 +527,23 @@ installer's copy is the normal case: since 0.7.1 those hand off to it,
 so this check passes. A copy too old to hand off (before 0.7.1) is a
 warning, because `benchbar` in Terminal may run that older copy. Fix:
 `brew upgrade askysh/tap/benchbar` for Homebrew's, `git -C
-~/.local/share/benchbar pull --ff-only` for the installer's.
+~/.local/share/benchbar pull --ff-only` for the installer's. A copy newer
+than the app's CLI (0.7.3) is a warning too: it hands off to the older
+one, so every `benchbar` runs the older version until the app updates.
+Fix: Check for Updates in BenchBar, or `brew upgrade
+askysh/tap/benchbar-app` for the cask's app.
+
+From the app's CLI the check also looks for a second state folder (0.7.3):
+a real `.benchbar` (or `.frappe-local`) in `~/.local/share/benchbar` next
+to the state in `~/.local/state/benchbar` means two states that never
+merge, left by an older CLI or by a layout the move never saw. Fix: move
+anything you still need out of it, then move the folder (the installer's
+whole checkout when its `benchbar` is still there) to the Trash. When the
+new path is a link to that folder (the two are on different volumes) it
+holds the state and the check says to keep it. When the move was cut
+short (the old folder holds the app's `bin/`, or the new folder holds no
+state yet) the check says so and the next `benchbar` run completes it;
+nothing is offered for the Trash then. Nothing is ever deleted for you.
 
 ### legacy_agents
 
