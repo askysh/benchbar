@@ -1,6 +1,24 @@
 ---
 title: "BenchBar"
 description: "Local Frappe and ERPNext development benches on macOS: a CLI that installs, runs and repairs them in the background, and a menu bar app."
+template: splash
+hero:
+  title: "Frappe benches on your Mac, in the background"
+  tagline: "One command installs a bench, launchd keeps it running, doctor and repair keep it healthy, and a menu bar app shows it all at a glance."
+  image:
+    file: ./images/app-icon.png
+    alt: "The BenchBar app icon"
+  actions:
+    - text: Install
+      link: /install/
+      icon: right-arrow
+    - text: Quick start
+      link: /quick-start/
+      variant: minimal
+    - text: GitHub
+      link: https://github.com/askysh/benchbar
+      icon: external
+      variant: minimal
 ---
 
 Local Frappe and ERPNext development benches on macOS. The `benchbar`
