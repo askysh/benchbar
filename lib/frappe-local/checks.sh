@@ -100,7 +100,12 @@ chk_brew() {
   if [[ "$missing" == " ${FL_NODE_FORMULA}" ]]; then
     # only the Node formula: a profile that moved to a newer Node (v15-lts
     # from node@20 to node@22); repair installs it, the old one stays
-    chk__set fail "missing formula: ${FL_NODE_FORMULA} (the profile's Node moved; the bench still runs on the old one)" "${FL_SELF} repair" node_install
+    if [[ -d "${FL_BENCH_DIR}/apps/frappe" ]]; then
+      chk__set fail "missing formula: ${FL_NODE_FORMULA} (the profile's Node moved; the bench still runs on the old one)" "${FL_SELF} repair" node_install
+    else
+      # no bench yet (a fresh install): there is no old Node to run on
+      chk__set fail "missing formula: ${FL_NODE_FORMULA}" "${FL_SELF} repair" node_install
+    fi
     return 0
   fi
   if [[ -n "$missing" ]]; then
