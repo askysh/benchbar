@@ -263,11 +263,31 @@ fl__frappe_with_secrets() {
     fl__in_dir "${bench_dir}/sites" "${bench_dir}/env/bin/python" -c "$FL_PY_FRAPPE_SECRETS" benchbar-secrets frappe "$@"
 }
 
+# fl_site_creating_marker BENCH SITE: the file that says "bench new-site
+# SITE is running (or was cut short)". It lives in the bench's own
+# logs/.benchbar folder, never inside sites/.
+fl_site_creating_marker() { printf '%s/logs/.benchbar/creating-%s' "$1" "$2"; }
+
+# fl_site_incomplete BENCH SITE: true, with the recovery printed, when a
+# bench new-site for SITE was cut short (Ctrl+C, a crash): the folder is
+# there, the database may be half made, site_config.json may be missing. A
+# folder in sites/ is never moved by benchbar; the person does it.
+fl_site_incomplete() {
+  local bench_dir="$1" site_name="$2" marker
+  marker="$(fl_site_creating_marker "$bench_dir" "$site_name")"
+  [[ -d "$bench_dir/sites/$site_name" && -f "$marker" ]] || return 1
+  fl_fail "a previous bench new-site ${site_name} did not finish (started $(cat "$marker" 2>/dev/null || printf '?')); the site folder is incomplete"
+  fl_fix "mv ${bench_dir}/sites/${site_name} ~/${site_name}.incomplete   (then, if its database exists: cd ${bench_dir} && bench drop-site ${site_name} --force), then run this again; if the site works already (bench --site ${site_name} doctor), only remove ${marker}"
+  return 0
+}
+
 fl_new_site_if_needed() {
-  local bench_dir="$1" site_name="$2" db_password="$3" admin_password="$4"
+  local bench_dir="$1" site_name="$2" db_password="$3" admin_password="$4" marker
+  marker="$(fl_site_creating_marker "$bench_dir" "$site_name")"
   fl_section "CREATE SITE"
   fl_info "Checking site ${site_name}"
   if [[ -d "$bench_dir/sites/$site_name" ]]; then
+    fl_site_incomplete "$bench_dir" "$site_name" && return 1
     fl_ok "Site ${site_name} already exists"
     fl_state_set SITE_CREATED yes
     return 0
@@ -280,11 +300,19 @@ fl_new_site_if_needed() {
   # the passwords travel on stdin (see FL_PY_FRAPPE_SECRETS), never as
   # arguments; plain shell variables (not exported), cleared right after
   local code=0
+  if [[ "${FL_DRY_RUN:-0}" != "1" ]]; then
+    mkdir -p "$(dirname "$marker")" 2>/dev/null
+    date -u +%Y-%m-%dT%H:%M:%SZ >"$marker" 2>/dev/null || { fl_fail "could not write ${marker}; not starting new-site without it"; return 1; }
+  fi
   FL__DB_PW="$db_password"; FL__ADMIN_PW="$admin_password"
   fl_run_long "bench new-site ${site_name}" fl__frappe_with_secrets "$bench_dir" FL__DB_PW FL__ADMIN_PW -- \
     new-site "$site_name" --mariadb-root-password @secret0@ --admin-password @secret1@ "$scope" || code=$?
   FL__DB_PW=""; FL__ADMIN_PW=""
-  [[ "$code" == "0" ]] || fl_die "bench new-site failed." "Manual command: cd ${bench_dir} && bench new-site ${site_name} ${scope}   (it asks for both passwords)"
+  if [[ "$code" != "0" ]]; then
+    # the marker stays: a rerun must not take the half made site for done
+    fl_die "bench new-site failed." "Manual command: cd ${bench_dir} && bench new-site ${site_name} ${scope}   (it asks for both passwords). If sites/${site_name} was left behind, move it aside first."
+  fi
+  rm -f "$marker"
   fl_state_set SITE_CREATED yes
 }
 

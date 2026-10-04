@@ -61,6 +61,29 @@ assert_eq "1" "$CODE" "$OUT"
 assert_calls_contain '^redis-cli -p 11000 shutdown save$' "(cleanup after a failure)"
 ! grep -q -E '^(11000|13000) ' "$MOCK_LISTEN" || fail "no setup Redis may stay behind"
 
+# an interrupted new-site (the folder is there, the marker too) is a recovery,
+# never "already exists": the next run refuses and says how to move it aside
+mkdir -p "$BENCH/sites/v16half"
+mkdir -p "$BENCH/logs/.benchbar"; printf '2026-10-03T10:00:00Z\n' >"$BENCH/logs/.benchbar/creating-v16half"
+reset_calls
+ADMIN_PASSWORD=adminpw run_fm site add v16half --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "a previous bench new-site v16half did not finish (started 2026-10-03T10:00:00Z); the site folder is incomplete"
+assert_contains "$OUT" "mv ${BENCH}/sites/v16half ~/v16half.incomplete"
+assert_not_contains "$OUT" "already exists"
+assert_calls_not_contain '^bench (new-site|--site v16half install-app)'
+assert_file "$BENCH/sites/v16half" "(benchbar never moves a site folder itself)"
+rm -rf "$BENCH/sites/v16half"; rm -f "$BENCH/logs/.benchbar/creating-v16half"
+# a new-site that fails leaves the marker, so the half made site is caught next time
+MOCK_BENCH_NEW_SITE_EXIT=1 ADMIN_PASSWORD=adminpw run_fm site add v16fail --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"
+assert_file "$BENCH/logs/.benchbar/creating-v16fail" "(the marker stays after a failed new-site)"
+# a finished new-site leaves no marker
+ADMIN_PASSWORD=adminpw run_fm site add v16done --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_no_file "$BENCH/logs/.benchbar/creating-v16done"
+rm -rf "$BENCH/sites/v16done"; rm -f "$BENCH/logs/.benchbar/creating-v16fail"
+
 # another bench's Redis on these ports is refused: its workers would get our jobs
 add_listener 11000 5110 redis-server; mkdir -p "$MOCK_STATE/cwd"; printf '%s' "$HOME/other-bench" >"$MOCK_STATE/cwd/5110"
 reset_calls

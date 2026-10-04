@@ -237,14 +237,15 @@ fl_hosts_remove_name() {
     fl_warn "skipped without sudo; run: ${FL_HOSTS_MANUAL}"
     return 0
   fi
-  fl_backup_file "$FL_HOSTS_FILE"
+  fl_backup_file "$FL_HOSTS_FILE" || return 1
   re="$(printf '%s' "$name" | sed 's/\./\\./g')"
-  tmp="$(mktemp "${TMPDIR:-/tmp}/benchbar-hosts.XXXXXX")"
+  tmp="$(mktemp "${TMPDIR:-/tmp}/benchbar-hosts.XXXXXX")" || { fl_fail "could not create a temp file"; return 1; }
   awk -v s="$FL_HOSTS_START" -v e="$FL_HOSTS_END" -v re="^[[:space:]]*127\\.0\\.0\\.1[[:space:]]+${re}[[:space:]]*$" '
     $0 == s { inside = 1 }
     $0 == e { inside = 0 }
     inside && $0 ~ re { next }
-    { print }' "$FL_HOSTS_FILE" >"$tmp"
+    { print }' "$FL_HOSTS_FILE" >"$tmp" || { rm -f "$tmp"; fl_fail "could not rewrite ${FL_HOSTS_FILE}; it is unchanged"; return 1; }
+  [[ -s "$tmp" ]] || { rm -f "$tmp"; fl_fail "the new ${FL_HOSTS_FILE} would be empty; not writing it"; return 1; }
   sudo cp "$tmp" "$FL_HOSTS_FILE" || { rm -f "$tmp"; fl_fail "sudo cp failed"; FL_HOSTS_MANUAL="$(fl_hosts_manual_removal "$name")"; return 1; }
   rm -f "$tmp"
   FL_HOSTS_REMOVED=1
@@ -264,7 +265,7 @@ fl_site_archive_latest() {
 
 # site drop NAME --confirm-site NAME [--new-default OTHER]
 fl_cmd_site_drop() {
-  local name="" confirm="" new_default="" json="$OPT_JSON" others=() s st t c p sep="" steps=() archive_before archive="" stamp backup="null" code=0 is_default=0 hosts_place bench_default=""
+  local name="" confirm="" new_default="" json="$OPT_JSON" others=() s st t c p sep="" steps=() archive_before archive="" stamp backup="null" code=0 is_default=0 hosts_place bench_default="" default_failed=0
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
       --confirm-site) confirm="${2:-}"; shift 2 ;;
@@ -305,8 +306,8 @@ fl_cmd_site_drop() {
   hosts_place="$(fl_hosts_line_place "$name")"
 
   # the plan: the app shows it before asking, the terminal before running
-  [[ -n "$new_default" ]] && steps+=("Make ${new_default} the default site|bench use ${new_default}|0")
   steps+=("Back up ${name} with files, drop its database and user, move the folder to archived/sites|bench drop-site ${name}|0")
+  [[ -n "$new_default" ]] && steps+=("Make ${new_default} the default site|bench use ${new_default}|0")
   if [[ "$hosts_place" == "block" ]] && ! fl_site_name_elsewhere "$name" >/dev/null; then
     steps+=("Remove '127.0.0.1 ${name}' from ${FL_HOSTS_FILE}|sudo, backup first|1")
   fi
@@ -329,7 +330,6 @@ fl_cmd_site_drop() {
   fl_header "benchbar site drop" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "$name"
   fl_mariadb_root_password_resolve || fl_die "The MariaDB root password is needed to drop the database of ${name}." \
     "Re-run with: MARIADB_ROOT_PASSWORD='...' benchbar site drop ${name} --confirm-site ${name}" 2
-  if [[ -n "$new_default" ]]; then fl_cmd_site_default "$new_default"; fi
   fl_bench_env_exports
   fl_bench_redis_up "$FL_BENCH_DIR"
   archive_before="$(fl_site_archive_latest "$name")"
@@ -340,8 +340,19 @@ fl_cmd_site_drop() {
   FL__DB_PW=""
   fl_bench_redis_down
   if [[ "$code" != "0" ]]; then
-    fl_die "bench drop-site ${name} failed; the site is still there." \
+    fl_die "bench drop-site ${name} failed; the site is still there and stays the default." \
       "When the backup failed, fix that first. Manual command: cd ${FL_BENCH_DIR} && bench drop-site ${name}"
+  fi
+  # only now, with the site gone, does the default move: a failed drop left
+  # the default switched before, with the dropped site still there
+  if [[ -n "$new_default" ]]; then
+    # in a subshell: fl_cmd_site_default dies on a failed bench use, and the
+    # site is already gone, which the message must say
+    if ! (fl_cmd_site_default "$new_default"); then
+      fl_fail "${name} is dropped, but the default did not move to ${new_default}; currentsite.txt still names ${name}"
+      fl_fix "cd ${FL_BENCH_DIR} && bench use ${new_default}, then: ${FL_SELF} site default ${new_default} --bench-dir ${FL_BENCH_DIR}"
+      default_failed=1
+    fi
   fi
   archive="$(fl_site_archive_latest "$name")"
   if [[ -z "$archive" || "$archive" == "$archive_before" || -d "${FL_BENCH_DIR}/sites/${name}" ]]; then
@@ -358,12 +369,12 @@ fl_cmd_site_drop() {
     printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"site":%s,"dry_run":false,"dropped":true,"archived_path":%s,"backup":%s,"new_default":%s,"hosts_removed":%s,"manual_step":%s}\n' \
       "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$name")" "$(fl_json_str "$archive")" \
       "$backup" "$(fl_json_str "$new_default")" "$(fl_json_bool "$FL_HOSTS_REMOVED")" "$(fl_json_str "$FL_HOSTS_MANUAL")" >&3
-    return 0
+    return "$default_failed"
   fi
   fl_ok "dropped ${name}"
   if [[ "$backup" != "null" ]]; then
     fl_note "backup: $(fl_backup_field "$backup" path)"
   fi
   [[ -n "$archive" ]] && fl_note "the site folder is in ${archive}"
-  return 0
+  return "$default_failed"
 }

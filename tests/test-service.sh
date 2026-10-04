@@ -107,7 +107,7 @@ run_fm doctor --bench-dir "$BENCH"
 assert_contains "$OUT" "[WARN] Runner script: runner is outdated"
 run_fm repair --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
-grep -q 'benchbar-template: bench-run.sh v5' "$BENCH/benchbar-run.sh" || fail "runner must be regenerated"
+grep -q 'benchbar-template: bench-run.sh v6' "$BENCH/benchbar-run.sh" || fail "runner must be regenerated"
 
 # ---- reloading a running agent waits for launchd to let go of it
 # (real launchctl: bootout returns while the job still shuts down, and a
@@ -181,6 +181,23 @@ run_fm uninstall-service --yes --bench-dir "$HOME/nowhere"
 assert_eq "1" "$CODE"
 assert_contains "$OUT" "no com.benchbar agent points at it"
 
+# ---- uninstall-service on a bench whose job launchd keeps: the plist and the
+# runner stay (a job with nothing on disk to remove it by would restart for good)
+KEEP="$HOME/dev/keep-bench"; make_fake_bench "$KEEP" keepdev
+run_fm service --yes --bench-dir "$KEEP"; assert_eq "0" "$CODE" "$OUT"
+set_agent com.benchbar.keep-bench running 4300 0
+FL_BOOTOUT_WAIT_SECS=1 MOCK_BOOTOUT_LINGER=100 run_fm uninstall-service --yes --bench-dir "$KEEP"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "launchd still runs com.benchbar.keep-bench; the plist and the runner stay"
+assert_file "$HOME/Library/LaunchAgents/com.benchbar.keep-bench.plist"
+assert_file "$KEEP/benchbar-run.sh"
+assert_file "$KEEP/Procfile.lean"
+rm -f "$MOCK_STATE/agents/com.benchbar.keep-bench.linger"
+run_fm uninstall-service --yes --bench-dir "$KEEP"
+assert_eq "0" "$CODE" "$OUT"
+assert_no_file "$HOME/Library/LaunchAgents/com.benchbar.keep-bench.plist"
+assert_no_file "$KEEP/benchbar-run.sh"
+
 # ---- uninstall-service --all: every bench with a benchbar agent, after one
 # question (before brew uninstall, which cannot stop them); a folder that is
 # no bench any more loses only its agent, and the benches stay
@@ -205,7 +222,7 @@ assert_eq "1" "$CODE" "$OUT"
 assert_contains "$OUT" "takes --all or --bench-dir, not both"
 # launchd keeps the gone folder's job past the wait: that one fails, the
 # other two are still uninstalled, and the run says how many
-FL_BOOTOUT_WAIT_SECS=1 MOCK_BOOTOUT_LINGER=100 run_fm uninstall-service --all --yes
+FL_BOOTOUT_WAIT_SECS=1 MOCK_BOOTOUT_LINGER=100 MOCK_BOOTOUT_LINGER_LABEL=com.benchbar.all-gone run_fm uninstall-service --all --yes
 assert_eq "1" "$CODE" "$OUT"
 assert_contains "$OUT" "launchd still runs com.benchbar.all-gone"
 assert_contains "$OUT" "2 of 3 bench(es) uninstalled"

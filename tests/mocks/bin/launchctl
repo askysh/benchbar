@@ -44,7 +44,8 @@ case "$cmd" in
     printf 'state = not running\nlast exit code = 0\n' >"$agents/$label" ;;
   bootout|remove)
     label="$(label_of_target "$1")"
-    if [[ -n "${MOCK_BOOTOUT_LINGER:-}" && -f "$agents/$label" ]]; then
+    # MOCK_BOOTOUT_LINGER_LABEL limits the lingering to one label
+    if [[ -n "${MOCK_BOOTOUT_LINGER:-}" && -f "$agents/$label" ]] && [[ -z "${MOCK_BOOTOUT_LINGER_LABEL:-}" || "$label" == "${MOCK_BOOTOUT_LINGER_LABEL:-}" ]]; then
       printf '%s' "$MOCK_BOOTOUT_LINGER" >"$agents/$label.linger"
     else
       rm -f "$agents/$label"

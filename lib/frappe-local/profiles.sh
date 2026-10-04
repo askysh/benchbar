@@ -343,9 +343,9 @@ fl_write_reviewed() {
   printf '\n'
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then fl_info "dry-run: nothing was written"; return 0; fi
   fl_confirm "Write ${label} to ${file}?" || { fl_warn "Cancelled. Nothing was written."; return 1; }
-  if [[ -f "$file" ]]; then fl_backup_file "$file"; fi
-  mkdir -p "$(dirname "$file")"
-  cp "$new" "$file"
+  if [[ -f "$file" ]]; then fl_backup_file "$file" || return 1; fi
+  mkdir -p "$(dirname "$file")" 2>/dev/null || { fl_fail "could not create $(dirname "$file")"; return 1; }
+  cp "$new" "$file" 2>/dev/null || { fl_fail "could not write ${file}; it is as it was"; return 1; }
   fl_ok "wrote ${file}${FL_LAST_BACKUP:+ (backup: ${FL_LAST_BACKUP})}"
 }
 

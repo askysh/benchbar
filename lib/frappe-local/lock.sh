@@ -53,8 +53,13 @@ fl_lock_acquire() {
       elif [[ -d "$FL_LOCK_MAIN" ]]; then printf '%s\n' "$dir" >>"${FL_LOCK_MAIN}/held" 2>/dev/null || true; fi
       return 0
     fi
-    # gone between the mkdir and here (a reclaimer took it away): try again
-    [[ -d "$dir" ]] || continue
+    if [[ ! -d "$dir" ]]; then
+      # a folder that cannot be written never holds a lock: no other run is
+      # taking it, so say why instead of retrying
+      [[ -w "$(dirname "$dir")" ]] || fl_die "Could not create the lock ${dir}: $(dirname "$dir") is not writable (read only?)." "Make the folder writable, then run again."
+      # gone between the mkdir and here (a reclaimer took it away): try again
+      continue
+    fi
     owner="$(cat "$dir/pid" 2>/dev/null || true)"
     # our own (this run, or a subshell of it, which shares $$): held already
     if [[ "$owner" == "$$" ]]; then

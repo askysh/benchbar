@@ -65,6 +65,22 @@ assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "would bootout com.frappe-mac.frappe-bench"
 assert_eq "$snap_before" "$(snapshot "$HOME" "$BENCH")" "(dry-run wrote nothing)"
 
+# ---- launchd keeps the old job past the wait: the old plist stays where it
+# is (a job with nothing on disk to remove it by would run for good), the
+# step fails, and the run can be repeated
+reset_calls
+FL_BOOTOUT_WAIT_SECS=1 MOCK_BOOTOUT_LINGER=100 MOCK_BOOTOUT_LINGER_LABEL=com.frappe-mac.frappe-bench run_fm repair --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "launchd still runs com.frappe-mac.frappe-bench; its plist stays at ${old}"
+assert_contains "$OUT" "migrate legacy launchd agents: failed"
+assert_contains "$OUT" "stopping: later steps depend on this one"
+assert_file "$old"
+assert_no_file "$new" "(no second agent is written next to a legacy one launchd still runs)"
+assert_calls_not_contain '^launchctl bootstrap'
+[[ -z "$(find "$HOME/Library/LaunchAgents-disabled" -name 'com.frappe-mac.frappe-bench.plist' 2>/dev/null)" ]] || fail "the plist must not be moved while launchd runs the job"
+rm -f "$MOCK_STATE/agents/com.frappe-mac.frappe-bench.linger"
+set_agent com.frappe-mac.frappe-bench running 4242 0
+
 # ---- the real run
 reset_calls
 run_fm repair --yes --bench-dir "$BENCH"

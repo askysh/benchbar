@@ -114,7 +114,7 @@ fl_ports_apply() {
     return 0
   fi
   fl_bench_env_exports
-  fl_backup_file "${FL_BENCH_DIR}/sites/common_site_config.json"
+  fl_backup_file "${FL_BENCH_DIR}/sites/common_site_config.json" || return 1
   (
     cd "$FL_BENCH_DIR" || exit 1
     bench set-config -g -p webserver_port "$web" &&

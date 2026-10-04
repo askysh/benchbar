@@ -177,6 +177,37 @@ assert_calls_contain "^bench get-app --skip-assets --branch main file://${REMOTE
 assert_calls_contain '^bench build --app acme_new$'
 assert_calls_not_contain 'install-app|migrate|new-site'
 assert_eq "" "$(drift_kinds)"
+# a pinned commit the remote never had: the clone step fails, exit 1, no build of that app
+make_app_remote acme_pin
+add_policy acme_pin main
+printf '\n[[app]]\nname = "acme_pin"\nrepo = "file://%s/acme_pin.git"\nbranch = "main"\ncommit = "%s"\n' "$REMOTES" "0123456789abcdef0123456789abcdef01234567" >>"$LOCK"
+reset_calls
+run_fm lock apply --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "acme_pin: commit 0123456 is not on upstream"
+assert_contains "$OUT" "acme_pin: failed"
+assert_not_contains "$OUT" "acme_pin: done"
+assert_calls_not_contain '^bench build --app acme_pin'
+# the lock is corrected to the commit that exists: the clone is kept and built on the next apply
+sed_inplace "s/0123456789abcdef0123456789abcdef01234567/$(git -C "$REMOTES/acme_pin.git" rev-parse main)/" "$LOCK"
+run_fm lock apply --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+# an app on a detached HEAD with commits no branch holds is skipped, never checked out away from them
+git -C "$BENCH/apps/acme_base" checkout -q --detach
+git -C "$BENCH/apps/acme_base" commit -q --allow-empty -m "work on a detached head"
+DETACHED_SHA="$(git -C "$BENCH/apps/acme_base" rev-parse HEAD)"
+sed_inplace 's/^branch = "version-15"$/branch = "main"/' "$LOCK"
+run_fm lock apply --yes --bench-dir "$BENCH"
+assert_contains "$OUT" "acme_base: HEAD is detached with commits no branch holds; create a branch first"
+assert_contains "$OUT" "acme_base: skipped"
+assert_eq "$DETACHED_SHA" "$(git -C "$BENCH/apps/acme_base" rev-parse HEAD)" "(the detached commit stays checked out)"
+git -C "$BENCH/apps/acme_base" switch -q -c detached-work
+run_fm lock apply --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "main" "$(git -C "$BENCH/apps/acme_base" symbolic-ref --short HEAD)"
+[[ -n "$(git -C "$BENCH/apps/acme_base" branch --contains "$DETACHED_SHA")" ]] || fail "the work is kept on its branch"
+sed_inplace 's/^branch = "main"$/branch = "version-15"/' "$LOCK"
+run_fm lock write --yes --bench-dir "$BENCH"
 # extra: an app the lock does not have
 make_app_remote acme_extra
 add_policy acme_extra main

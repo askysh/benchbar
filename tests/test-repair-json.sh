@@ -67,4 +67,24 @@ assert_eq "True" "$(ev '[a["sudo"] for a in e[0]["actions"] if a["id"]=="hosts_e
 assert_eq "skipped" "$(ev '[x["status"] for x in e if x.get("action")=="hosts_entry"][-1]')"
 assert_contains "$(ev '[x["message"] for x in e if x.get("action")=="hosts_entry"][-1]')" "sudo"
 
+# ---- a declined hosts step (the person answers no) is skipped, not done, and
+# the fix it prints is a benchbar repair, which writes inside the marker block
+rm -f "$MOCK_STATE/sudo_refused"
+sed_inplace '/macdev/d' "$FL_HOSTS_FILE"
+before="$(cat "$FL_HOSTS_FILE")"
+set +e
+OUT="$(FL_BENCH_DIR="$BENCH" FL_SITE=macdev FL_SELF=benchbar FL_BREW_PREFIX="$MOCK_BREW_PREFIX" bash -c '
+  for f in ui run platform version-policy state templates shellrc benchinfo process launchd benchstate discovery ports checks sudo mariadb repair service sites; do . "$0/lib/frappe-local/$f.sh"; done
+  FL_PLAIN=1; fl_ui_init
+  fl_confirm() { fl_warn "declined: $1"; return 1; }
+  FL_STEP_RESULT=done
+  act_hosts_entry; code=$?
+  printf "code=%s result=%s\n" "$code" "$FL_STEP_RESULT"' "$ROOT" 2>&1)"; CODE=$?
+set -e
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "code=0 result=skipped"
+assert_contains "$OUT" "benchbar repair --bench-dir ${BENCH}   (adds '127.0.0.1 macdev' inside the benchbar block)"
+assert_not_contains "$OUT" "sudo tee -a"
+assert_eq "$before" "$(cat "$FL_HOSTS_FILE")" "(a declined step writes nothing)"
+
 printf 'test-repair-json: ok\n'

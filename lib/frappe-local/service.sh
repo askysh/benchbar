@@ -482,7 +482,9 @@ fl_uninstall_orphan_agents() {
       fl_ok "booted out ${label}"
     fi
     dest="${FL_LEGACY_DIR}/${label}-$(fl_backup_stamp)"
-    mkdir -p "$dest"; mv "$plist" "$dest/"
+    if ! mkdir -p "$dest" 2>/dev/null || ! mv "$plist" "$dest/" 2>/dev/null; then
+      fl_fail "could not move ${plist} to ${dest}/"; code=1; continue
+    fi
     fl_ok "moved ${plist} to ${dest}/"
   done <<<"$list"
   [[ "$code" == "0" ]] || return 1
@@ -504,14 +506,31 @@ fl_cmd_uninstall_service() {
   fl_info "The bench, its sites, apps and databases are not touched."
   [[ "${1:-}" == confirmed ]] || fl_confirm "Uninstall the background service for ${FL_BENCH_NAME}?" || { fl_warn "Cancelled."; return 1; }
   fl_cmd_down || true
-  if fl_agent_loaded; then fl_agent_bootout || true; fi
+  # a job launchd keeps must keep its plist too, or it would go on
+  # restarting with nothing left on disk to remove it by (the orphan path
+  # does the same)
+  if fl_agent_loaded && ! fl_agent_bootout; then
+    fl_fail "launchd still runs $(fl_agent_label); the plist and the runner stay"
+    fl_fix "launchctl bootout $(fl_agent_target), then run this command again"
+    return 1
+  fi
   if [[ -f "$plist" ]]; then
     dest="${FL_LEGACY_DIR}/$(basename "$plist" .plist)-$(fl_backup_stamp)"
-    if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then fl_info "dry-run: would move ${plist} to ${dest}/"; else mkdir -p "$dest"; mv "$plist" "$dest/"; fl_ok "moved ${plist} to ${dest}/"; fi
+    if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then fl_info "dry-run: would move ${plist} to ${dest}/"
+    else
+      if ! mkdir -p "$dest" 2>/dev/null || ! mv "$plist" "$dest/" 2>/dev/null; then
+        fl_fail "could not move ${plist} to ${dest}/"; return 1
+      fi
+      fl_ok "moved ${plist} to ${dest}/"
+    fi
   fi
-  fl_backup_file "$(fl_runner_path)"; [[ "${FL_DRY_RUN:-0}" == "1" || ! -f "$(fl_runner_path)" ]] || { rm -f "$(fl_runner_path)"; fl_ok "removed runner (backup: ${FL_LAST_BACKUP})"; }
-  fl_backup_file "$(fl_runner_path_legacy)"; [[ "${FL_DRY_RUN:-0}" == "1" || ! -f "$(fl_runner_path_legacy)" ]] || { rm -f "$(fl_runner_path_legacy)"; fl_ok "removed the old runner (backup: ${FL_LAST_BACKUP})"; }
-  fl_backup_file "$(fl_procfile_path)"; [[ "${FL_DRY_RUN:-0}" == "1" || ! -f "$(fl_procfile_path)" ]] || { rm -f "$(fl_procfile_path)"; fl_ok "removed Procfile.lean (backup: ${FL_LAST_BACKUP})"; }
+  # nothing goes without its backup
+  fl_backup_file "$(fl_runner_path)" || return 1
+  [[ "${FL_DRY_RUN:-0}" == "1" || ! -f "$(fl_runner_path)" ]] || { rm -f "$(fl_runner_path)"; fl_ok "removed runner (backup: ${FL_LAST_BACKUP})"; }
+  fl_backup_file "$(fl_runner_path_legacy)" || return 1
+  [[ "${FL_DRY_RUN:-0}" == "1" || ! -f "$(fl_runner_path_legacy)" ]] || { rm -f "$(fl_runner_path_legacy)"; fl_ok "removed the old runner (backup: ${FL_LAST_BACKUP})"; }
+  fl_backup_file "$(fl_procfile_path)" || return 1
+  [[ "${FL_DRY_RUN:-0}" == "1" || ! -f "$(fl_procfile_path)" ]] || { rm -f "$(fl_procfile_path)"; fl_ok "removed Procfile.lean (backup: ${FL_LAST_BACKUP})"; }
   fl_uninstall_helper_block "$rc"
   fl_ok "service uninstalled; start the bench by hand with: cd ${FL_BENCH_DIR} && bench start"
 }

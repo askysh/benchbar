@@ -130,8 +130,9 @@ fl_backup_file() {
     return 0
   fi
   dest="$(fl_backup_dest "$path")"
-  mkdir -p "$(dirname "$dest")"
-  cp -p "$path" "$dest"
+  # a backup that did not happen must stop the change it was meant to cover
+  mkdir -p "$(dirname "$dest")" 2>/dev/null || { fl_fail "could not create the backup folder $(dirname "$dest")"; return 1; }
+  cp -p "$path" "$dest" 2>/dev/null || { fl_fail "could not back up ${path} to ${dest}"; return 1; }
   FL_LAST_BACKUP="$dest"
   fl_log "backup: ${path} -> ${dest}"
 }
@@ -148,8 +149,8 @@ fl_backup_link() {
     return 0
   fi
   dest="$(fl_backup_dest "$link")"
-  mkdir -p "$(dirname "$dest")"
-  ln -sfn "$(readlink "$link")" "$dest"
+  mkdir -p "$(dirname "$dest")" 2>/dev/null || { fl_fail "could not create the backup folder $(dirname "$dest")"; return 1; }
+  ln -sfn "$(readlink "$link")" "$dest" 2>/dev/null || { fl_fail "could not back up the link ${link}"; return 1; }
   FL_LAST_BACKUP="$dest"
   fl_log "backup: ${link} -> ${dest} (a link to $(readlink "$link"))"
 }
@@ -164,14 +165,18 @@ fl_move_aside() {
     fl_info "dry-run: would move ${path} to ${dest}"
     return 0
   fi
-  mv "$path" "$dest"
+  mv "$path" "$dest" 2>/dev/null || { fl_fail "could not move ${path} aside to ${dest}"; return 1; }
   fl_log "moved aside: ${path} -> ${dest}"
   fl_info "moved aside: ${dest}"
 }
 
 # fl_template_apply PATH RENDERED [MODE]: backs up PATH when it exists, then
 # writes RENDERED atomically. Prints nothing when the file is already current.
-# Returns 0 and sets FL_TEMPLATE_CHANGED=1 when a write happened.
+# Returns 0 and sets FL_TEMPLATE_CHANGED=1 when a write happened; returns 1,
+# with the old file untouched, when any stage of the write fails (a read
+# only folder, a full disk, a backup that could not be made): the callers
+# run inside "if act_...; then", where a failure not returned would be
+# reported as done.
 fl_template_apply() {
   local path="$1" rendered="$2" mode="${3:-}" status tmp
   FL_TEMPLATE_CHANGED=0
@@ -183,12 +188,12 @@ fl_template_apply() {
     return 0
   fi
   [[ "$status" == "foreign" ]] && fl_warn "${path} was not written by benchbar; backing it up before replacing"
-  fl_backup_file "$path"
-  mkdir -p "$(dirname "$path")"
-  tmp="$(mktemp "${path}.tmp.XXXXXX")"
-  printf '%s' "$rendered" >"$tmp"
-  [[ -n "$mode" ]] && chmod "$mode" "$tmp"
-  mv "$tmp" "$path"
+  fl_backup_file "$path" || return 1
+  mkdir -p "$(dirname "$path")" 2>/dev/null || { fl_fail "could not create $(dirname "$path")"; return 1; }
+  tmp="$(mktemp "${path}.tmp.XXXXXX" 2>/dev/null)" || { fl_fail "could not write into $(dirname "$path") (read only?)"; return 1; }
+  printf '%s' "$rendered" >"$tmp" 2>/dev/null || { rm -f "$tmp"; fl_fail "could not write ${tmp} (disk full?)"; return 1; }
+  if [[ -n "$mode" ]]; then chmod "$mode" "$tmp" 2>/dev/null || { rm -f "$tmp"; fl_fail "could not set mode ${mode} on ${tmp}"; return 1; }; fi
+  mv -f "$tmp" "$path" 2>/dev/null || { rm -f "$tmp"; fl_fail "could not replace ${path}"; return 1; }
   fl_log "wrote ${path} (${status})"
   FL_TEMPLATE_CHANGED=1
 }

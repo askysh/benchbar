@@ -142,7 +142,7 @@ run_fm doctor --bench-dir "$BENCH"
 assert_contains "$OUT" "[WARN] MariaDB bind address: MariaDB listens on *:3306"
 assert_contains "$OUT" "[WARN] Homebrew redis: redis on 6379 (901 redis-server) is not used by the bench"
 assert_contains "$OUT" "[WARN] /etc/hosts entry"
-assert_contains "$OUT" "sudo tee -a"
+assert_contains "$OUT" "repair --bench-dir $BENCH   (adds '127.0.0.1 macdev' inside the benchbar block, with sudo)"
 : >"$MOCK_LISTEN"
 add_listener 3306 900 mariadbd 127.0.0.1
 run_fm doctor --bench-dir "$BENCH"

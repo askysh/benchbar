@@ -176,6 +176,25 @@ printf 'ref: refs/heads/main\n' >"$CLI_HOME/.git/HEAD"
 
 # ---- dry-run writes nothing, even from scratch
 rm -rf "$CLI_HOME" "$APP" "$HOME/.local/bin/benchbar" "$HOME/.local/bin/frappe-mac"
+# a symlinked ~/.zshrc (a dotfiles repo): the PATH block lands in the target, the link stays
+REAL_RC="$HOME/dotfiles/zshrc"; mkdir -p "$HOME/dotfiles"; printf 'export FROM_DOTFILES=1\n' >"$REAL_RC"
+rm -f "$HOME/.zshrc"; ln -s "$REAL_RC" "$HOME/.zshrc"
+run_install --yes
+assert_eq "0" "$CODE" "$OUT"
+[[ -L "$HOME/.zshrc" ]] || fail "install.sh must keep ~/.zshrc a symlink"
+grep -q -x -F "# >>> benchbar-path >>>" "$REAL_RC" || fail "the PATH block must land in the symlink's target"
+grep -q '^export FROM_DOTFILES=1$' "$REAL_RC" || fail "the target's own content must survive"
+run_install --uninstall --yes
+assert_eq "0" "$CODE" "$OUT"
+[[ -L "$HOME/.zshrc" ]] || fail "the uninstall must keep the symlink too"
+! grep -q -F "# >>> benchbar-path >>>" "$REAL_RC" || fail "the PATH block must be removed from the target"
+rm -f "$HOME/.zshrc"
+# ZDOTDIR names the rc file
+mkdir -p "$HOME/zdot"
+ZDOTDIR="$HOME/zdot" run_install --yes
+assert_eq "0" "$CODE" "$OUT"
+grep -q -x -F "# >>> benchbar-path >>>" "$HOME/zdot/.zshrc" || fail "with ZDOTDIR the block goes to \$ZDOTDIR/.zshrc"
+ZDOTDIR="$HOME/zdot" run_install --uninstall --yes
 printf '# fresh\n' >"$HOME/.zshrc"
 snap_before="$(snapshot "$HOME")"
 run_install --dry-run

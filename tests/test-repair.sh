@@ -120,7 +120,13 @@ assert_calls_contain '^brew services restart mariadb@10.11$'
 reset_calls
 run_fm repair --yes --bench-dir "$BENCH"
 assert_calls_not_contain '^brew services stop redis'
-assert_contains "$OUT" "not stopping redis on 6379 automatically"
+# a question nobody can answer is not a step: the run is unchanged and names it as optional
+assert_contains "$OUT" "unchanged:"
+assert_contains "$OUT" "optional, not asked without a terminal or under --yes: stop Homebrew redis on 6379"
+assert_not_contains "$OUT" "stop Homebrew redis on 6379: done"
+run_fm repair --bench-dir "$BENCH" </dev/null
+assert_contains "$OUT" "unchanged:"
+assert_calls_not_contain '^brew services stop redis'
 
 # python formula marked as installed on request
 printf 'node@22\n' >"$MOCK_BREW_LEAVES"
@@ -229,10 +235,66 @@ rm -f "$BENCH/env/marker"
 run_fm doctor --json --bench-dir "$BENCH"
 assert_eq "ok" "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "env_setuptools"][0]["level"]')"
 
-# large logs are moved aside, not deleted
+# large logs are rotated by copy and truncate: the live file stays (the
+# bench's processes keep writing to it) and starts empty, the copy keeps
+# the content, and at most three copies are kept
 dd if=/dev/zero of="$BENCH/logs/worker.error.log" bs=1048576 count=3 2>/dev/null
+inode() { stat -c %i "$1" 2>/dev/null || stat -f %i "$1"; }
+old_copies() { find "$BENCH/logs" -name 'worker.error.log.old.*' | wc -l | tr -d ' '; }
+ino_before="$(inode "$BENCH/logs/worker.error.log")"
 FL_LOG_WARN_MB=2 run_fm repair --yes --bench-dir "$BENCH"
-assert_no_file "$BENCH/logs/worker.error.log"
-[[ -n "$(ls "$BENCH"/logs/worker.error.log.old.* 2>/dev/null)" ]] || fail "large log must be moved aside"
+assert_eq "0" "$CODE" "$OUT"
+assert_file "$BENCH/logs/worker.error.log"
+[[ ! -s "$BENCH/logs/worker.error.log" ]] || fail "the live log must be truncated"
+assert_eq "$ino_before" "$(inode "$BENCH/logs/worker.error.log")" "(the live file keeps its inode: the writers keep it)"
+assert_eq "1" "$(old_copies)" "(one copy expected)"
+assert_eq "3145728" "$(wc -c <"$BENCH"/logs/worker.error.log.old.* | tr -d ' ')" "(the copy holds the content)"
+run_fm doctor --bench-dir "$BENCH"
+assert_contains "$OUT" "[OK] Log sizes"
+for i in 1 2 3; do
+  dd if=/dev/zero of="$BENCH/logs/worker.error.log" bs=1048576 count=3 2>/dev/null
+  sleep 1
+  FL_LOG_WARN_MB=2 run_fm repair --yes --bench-dir "$BENCH"; assert_eq "0" "$CODE" "$OUT"
+done
+assert_eq "3" "$(old_copies)" "(at most three copies are kept)"
+assert_contains "$OUT" "removed the old copy"
+rm -f "$BENCH"/logs/worker.error.log.old.*
+
+# ---- a read only bench fails closed: the bench's lock cannot be created,
+# the run stops before any step and says why, and the old file stays as it was
+sed_inplace 's/benchbar-template: Procfile.lean v[0-9]* [0-9a-f]*/benchbar-template: Procfile.lean v0 000000000000/' "$BENCH/Procfile.lean"
+chmod 0555 "$BENCH"
+if ! touch "$BENCH/.probe" 2>/dev/null; then
+  before="$(cat "$BENCH/Procfile.lean")"
+  run_fm repair --yes --bench-dir "$BENCH"
+  assert_eq "1" "$CODE" "$OUT"
+  assert_contains "$OUT" "Could not create the lock ${BENCH}/.benchbar.lock"
+  assert_contains "$OUT" "read only?"
+  assert_not_contains "$OUT" "Another benchbar run keeps taking it"
+  assert_not_contains "$OUT" "write Procfile.lean: done"
+  assert_eq "$before" "$(cat "$BENCH/Procfile.lean")" "(a failed write leaves the file as it was)"
+else
+  rm -f "$BENCH/.probe"   # running as root: permissions do not bite, nothing to prove here
+fi
+chmod 0755 "$BENCH"
+# writable again: the outdated Procfile.lean is rewritten
+run_fm repair --yes --bench-dir "$BENCH"; assert_eq "0" "$CODE" "$OUT"
+
+# ---- callers carry a writer's failure: a drop-in that cannot be written
+# is a failed action, a profile file that cannot be written stays as it was
+OUT="$(cd "$ROOT" && bash -c 'set -u; SCRIPT_DIR="$PWD"; . lib/frappe-local/ui.sh; . lib/frappe-local/run.sh; . lib/frappe-local/templates.sh; . lib/frappe-local/state.sh; . lib/frappe-local/mariadb.sh; . lib/frappe-local/repair.sh
+  fl_mariadb_dropin_path() { printf /nonexistent/local.cnf; }; fl_mariadb_utf8_dropin_path() { printf /nonexistent/utf8.cnf; }
+  fl_mariadb_dropin_apply() { return 1; }
+  act_mariadb_bind; printf "bind=%s\n" "$?"; act_mariadb_utf8; printf "utf8=%s\n" "$?"' 2>&1)"
+assert_contains "$OUT" "bind=1"
+assert_contains "$OUT" "utf8=1"
+printf 'old\n' >"$TMP_DIR/prof.toml"; printf 'new\n' >"$TMP_DIR/prof.new"
+OUT="$(cd "$ROOT" && bash -c 'set -u; SCRIPT_DIR="$PWD"; . lib/frappe-local/ui.sh; . lib/frappe-local/run.sh; . lib/frappe-local/templates.sh; . lib/frappe-local/state.sh; . lib/frappe-local/profiles.sh
+  TARGET="$1"; cp() { local last; for last in "$@"; do :; done; [[ "$last" != "$TARGET" ]] || return 1; command cp "$@"; }   # only the final write fails
+  FL_ASSUME_YES=1 fl_write_reviewed "$1" "$2" "the profile"; printf "code=%s\n" "$?"' x "$TMP_DIR/prof.toml" "$TMP_DIR/prof.new" 2>&1)"
+assert_contains "$OUT" "code=1"
+assert_contains "$OUT" "could not write $TMP_DIR/prof.toml; it is as it was"
+assert_not_contains "$OUT" "[OK] wrote"
+assert_eq "old" "$(cat "$TMP_DIR/prof.toml")"
 
 printf 'test-repair: ok\n'

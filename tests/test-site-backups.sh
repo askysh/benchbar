@@ -194,6 +194,22 @@ MOCK_DROP_SITE_EXIT=1 run_fm site drop fourth --confirm-site fourth --bench-dir 
 assert_eq "1" "$CODE"
 assert_contains "$OUT" "the site is still there"
 assert_file "$BENCH/sites/fourth/site_config.json"
+# dropping the default site: a failed drop leaves the default where it was
+run_fm site default fourth --bench-dir "$BENCH"; assert_eq "0" "$CODE" "$OUT"
+assert_eq "fourth" "$(tr -d '[:space:]' <"$BENCH/sites/currentsite.txt")"
+reset_calls
+MOCK_DROP_SITE_EXIT=1 run_fm site drop fourth --confirm-site fourth --new-default other --bench-dir "$BENCH"
+assert_eq "1" "$CODE"
+assert_contains "$OUT" "the site is still there and stays the default"
+assert_eq "fourth" "$(tr -d '[:space:]' <"$BENCH/sites/currentsite.txt")" "(a failed drop must not switch the default)"
+assert_calls_not_contain '^bench use '
+# a drop that works moves the default afterwards
+reset_calls
+run_fm site drop fourth --confirm-site fourth --new-default other --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "other" "$(tr -d '[:space:]' <"$BENCH/sites/currentsite.txt")"
+# bench use runs after drop-site, as the plan lists it
+assert_eq "drop-site use" "$(grep -oE '^bench (drop-site|use)' "$MOCK_LOG" | awk '{print $2}' | tr '\n' ' ' | sed 's/ $//')"
 
 # ---- the same name dropped again: bench numbers the archive, benchbar finds it
 reset_calls

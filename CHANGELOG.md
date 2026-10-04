@@ -108,6 +108,42 @@ All notable changes to this project are documented here.
   `self-update` and `register` take it and write a run log.
 - Log files and backup folders carry the run's pid in their name
   (`<date>-<time>-<pid>`), so two runs in the same second never share one.
+- Every write helper fails closed: a backup, temp file, awk or rename
+  that fails leaves the target untouched and the step is reported as
+  failed, not done. A read only folder or a full disk no longer shows a
+  green repair.
+- The shell rc block is written into the real file behind a symlinked
+  `~/.zshrc` (the link stays a link, the file keeps its mode), every stage
+  is checked so a failed rewrite leaves the file byte-identical, and
+  `$ZDOTDIR/.zshrc` is used when ZDOTDIR is set; the one line installer
+  does the same for its PATH block.
+- `benchbar repair` under `--yes` or without a terminal no longer reports
+  the "stop Homebrew redis" question as done: a question nobody can
+  answer is left out of the plan and listed as optional, so a second
+  repair says `unchanged`. A declined hosts entry is `skipped`, and its
+  fix adds the line inside the benchbar block.
+- Large logs are rotated by copy and truncate, so the bench keeps writing
+  to the live file (a rename took the writers along and left the live
+  file empty), and at most three `.old` copies are kept.
+- An interrupted `bench new-site` is remembered (a marker in the bench's
+  `logs/.benchbar`); the next run names the incomplete site and how to
+  move it aside instead of taking it for created.
+- `benchbar lock apply` fails when a fresh clone cannot reach its pinned
+  commit (it reported done), leaves that clone out of the build, and
+  skips an app whose detached HEAD holds commits no branch has instead
+  of orphaning them.
+- `site drop` moves the default site only after `drop-site` succeeded; a
+  failed drop leaves the default where it was.
+- The runner treats honcho ending with code 0 without a stop request as a
+  crash (a bench process ended, for example redis on a stray TERM), so
+  launchd restarts it under the crash guard instead of leaving the bench
+  silently down; and its crash guard fails closed when the start history
+  or the stop flag cannot be written. Existing runners are outdated once.
+- The legacy agent migration and `uninstall-service` keep the plist when
+  launchd does not let go of the job, and report a move that failed.
+- A bench folder that cannot be written (read only) stops a run at once
+  with "Could not create the lock ... (read only?)", instead of five
+  retries that blamed another benchbar run.
 
 ### Changed
 

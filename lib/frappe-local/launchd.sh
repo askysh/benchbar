@@ -295,9 +295,17 @@ fl_legacy_agent_migrate() {
     return 0
   fi
   [[ -f "$file" ]] || return 0
-  launchctl bootout "$(fl_launchd_domain)/${label}" 2>/dev/null || launchctl unload "$file" 2>/dev/null || true
-  mkdir -p "$dest"
-  mv "$file" "$dest/"
+  if launchctl print "$(fl_launchd_domain)/${label}" >/dev/null 2>&1; then
+    launchctl bootout "$(fl_launchd_domain)/${label}" 2>/dev/null || launchctl unload "$file" 2>/dev/null || true
+    # still loaded: the plist stays, or the job would go on with nothing
+    # left on disk to remove it by
+    if ! fl_agent_wait_gone "$(fl_launchd_domain)/${label}"; then
+      fl_fail "launchd still runs ${label}; its plist stays at ${file}"
+      return 1
+    fi
+  fi
+  mkdir -p "$dest" 2>/dev/null || { fl_fail "could not create ${dest}"; return 1; }
+  mv "$file" "$dest/" 2>/dev/null || { fl_fail "could not move ${file} to ${dest}/; it stays where it is"; return 1; }
   fl_log "migrated legacy agent ${label}: ${file} -> ${dest}/"
   fl_ok "moved ${label} to ${dest}/"
 }

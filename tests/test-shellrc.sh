@@ -5,6 +5,7 @@
 . "$ROOT/lib/frappe-local/ui.sh"
 . "$ROOT/lib/frappe-local/run.sh"
 . "$ROOT/lib/frappe-local/templates.sh"
+. "$ROOT/lib/frappe-local/state.sh"
 . "$ROOT/lib/frappe-local/shellrc.sh"
 
 rc="$TMP_DIR/zshrc"
@@ -36,6 +37,70 @@ grep -q '^export P=2$' "$rc" || fail "block content must be replaced"
 grep -q '^export Z=9$' "$rc" || fail "content after the block must survive"
 assert_eq "current" "$(fl_rc_block_status "$rc" "$c2")"
 [[ -n "$(find "$FL_BACKUP_ROOT" -type f | head -n1)" ]] || fail "rc file must be backed up before a write"
+
+# ---- a symlinked rc file (a dotfiles repo): the write lands in the target,
+# the link stays a link, the target keeps its mode
+real="$TMP_DIR/dotfiles/zshrc"; mkdir -p "$TMP_DIR/dotfiles"
+printf 'export FROM_DOTFILES=1\n' >"$real"; chmod 0644 "$real"
+link="$TMP_DIR/linked-zshrc"; ln -s "$real" "$link"
+fl_rc_block_write "$link" "$c1"
+[[ -L "$link" ]] || fail "the rc file must stay a symlink"
+assert_eq "$real" "$(readlink "$link")"
+grep -q -x -F "$FL_RC_START" "$real" || fail "the block must land in the symlink's target"
+grep -q '^export FROM_DOTFILES=1$' "$real" || fail "the target's own content must survive"
+mode() { if [[ "$STAT_GNU" == "1" ]]; then stat -c %a "$1"; else stat -f %Lp "$1"; fi; }
+assert_eq "644" "$(mode "$real")" "(the target keeps its mode)"
+fl_rc_block_write "$link" "$c2"
+[[ -L "$link" ]] || fail "a replace must keep the symlink too"
+assert_eq "current" "$(fl_rc_block_status "$link" "$c2")"
+fl_rc_block_remove "$link"
+[[ -L "$link" ]] || fail "a removal must keep the symlink"
+assert_eq "missing" "$(fl_rc_block_state "$link")"
+grep -q '^export FROM_DOTFILES=1$' "$real" || fail "the target's own content must survive the removal"
+
+# ---- ZDOTDIR: zsh reads $ZDOTDIR/.zshrc (the file remembered by the writes above is cleared first)
+fl_kv_del "$FL_STATE_FILE" RC_FILE
+assert_eq "$TMP_DIR/zdot/.zshrc" "$(FL_RC_FILE='' ZDOTDIR="$TMP_DIR/zdot" SHELL=/bin/zsh fl_rc_file)"
+assert_eq "$HOME/.zshrc" "$(FL_RC_FILE='' SHELL=/bin/zsh fl_rc_file)"
+
+# ---- a stage that fails leaves the file byte-identical: awk that cannot run
+printf 'export KEEP=1\n%s\nexport P=1\n%s\n' "$FL_RC_START" "$FL_RC_END" >"$rc"
+before="$(cat "$rc")"
+# shellcheck disable=SC2329  # called by fl_rc_block_write
+awk() { return 1; }
+set +e; fl_rc_block_write "$rc" "$c2" >/dev/null 2>&1; code=$?; set -e
+assert_eq "1" "$code" "(a failed rewrite is a failure)"
+assert_eq "$before" "$(cat "$rc")" "(a failed rewrite leaves the file as it was)"
+set +e; fl_rc_block_remove "$rc" >/dev/null 2>&1; code=$?; set -e
+unset -f awk
+assert_eq "1" "$code" "(a failed removal is a failure)"
+assert_eq "$before" "$(cat "$rc")" "(a failed removal leaves the file as it was)"
+
+# ---- the last stage failing (the rename onto the target) leaves the file
+# byte-identical too: no truncated rc file, nothing left next to it
+chmod 600 "$rc"
+# shellcheck disable=SC2329  # called by fl_rc_replace_file
+mv() { return 1; }
+set +e; fl_rc_block_write "$rc" "$c2" >/dev/null 2>&1; code=$?; set -e
+unset -f mv
+assert_eq "1" "$code" "(a failed rename is a failure)"
+assert_eq "$before" "$(cat "$rc")" "(a failed rename leaves the file as it was)"
+[[ -z "$(ls "$rc".* 2>/dev/null)" ]] || fail "no temp file may stay next to the rc file: $(ls "$rc".*)"
+# a successful write keeps the file's mode
+fl_rc_block_write "$rc" "$c2" >/dev/null
+assert_eq "600" "$(stat -c %a "$rc" 2>/dev/null || stat -f %Lp "$rc")" "(the rc file keeps its mode)"
+chmod 644 "$rc"
+
+# ---- the rc file a block was written to is remembered: a run without the
+# terminal's ZDOTDIR (the app, launchd) finds the same file
+mkdir -p "$TMP_DIR/zdot"
+ZDOTDIR="$TMP_DIR/zdot" FL_RC_FILE='' fl_rc_block_write "$(FL_RC_FILE='' ZDOTDIR="$TMP_DIR/zdot" SHELL=/bin/zsh fl_rc_file)" "$c2" >/dev/null
+assert_eq "$TMP_DIR/zdot/.zshrc" "$(FL_RC_FILE='' SHELL=/bin/zsh fl_rc_file)" "(the remembered rc file wins over ~/.zshrc without ZDOTDIR)"
+assert_eq "$TMP_DIR/zdot/.zshrc" "$(fl_state_get RC_FILE)"
+rm -f "$TMP_DIR/zdot/.zshrc"
+assert_eq "$HOME/.zshrc" "$(FL_RC_FILE='' SHELL=/bin/zsh fl_rc_file)" "(a remembered file that is gone is not used)"
+fl_kv_del "$FL_STATE_FILE" RC_FILE
+[[ -z "$(ls "${TMPDIR:-/tmp}"/benchbar-rc.* 2>/dev/null)" ]] || fail "no temp files may be left behind: $(ls "${TMPDIR:-/tmp}"/benchbar-rc.*)"
 
 # the block is valid zsh and bash
 fl_rc_block_extract "$rc" >"$TMP_DIR/block.sh"
