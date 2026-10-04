@@ -126,7 +126,7 @@ GitHub too, and `benchbar docs` opens them from the terminal.
 
 ## Roadmap
 
-0.6.1 is the first signed and notarized release, with Sparkle updates. 0.7.0 installs the CLI and the app with Homebrew, in 0.7.1 the app ships the CLI, so one update covers both, and 0.7.2 gives the window one main action per page and one layout for every sheet; the public launch and the rest are in [ROADMAP.md](ROADMAP.md).
+0.6.1 is the first signed and notarized release, with Sparkle updates. 0.7.0 installs the CLI and the app with Homebrew, in 0.7.1 the app ships the CLI, so one update covers both, 0.7.2 gives the window one main action per page and one layout for every sheet, and 0.7.3 is a fix pass from a full review (node@22 for v15, ownership checks, fail closed writes, MCP hardening); the rest is in [ROADMAP.md](ROADMAP.md).
 
 ## Contributing
 

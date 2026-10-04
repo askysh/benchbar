@@ -98,10 +98,8 @@ the copy that handed off.
 **0.7.2, a calmer window.** One main action per page, the rest in a ⋯
 menu, and one layout for every sheet (Return confirms, Esc cancels).
 
-## Next
-
-**0.7.3, the fix pass.** Nine batches of review findings, on main and not
-released yet. benchbar stops only processes it can prove are the
+**0.7.3, the fix pass.** Nine batches of review findings, checked on a
+real Mac before the release. benchbar stops only processes it can prove are the
 bench's, and the runner pauses with `port_conflict` instead of starting
 into a taken port. v15-lts moves to `node@22` before Homebrew disables
 `node@20` on 2026-10-28, with a Formula lifecycle check and a release
@@ -113,19 +111,17 @@ results say what really happened, secrets stay out of child processes
 and logs, and paths are checked before they reach root. The MCP server
 runs calls on threads, checks every argument against its schema and
 labels third party text. The installer's state moves in even when the
-app made the folder first.
+app made the folder first. The app names a port conflict, and `doctor --json` says where the
+profile came from.
 
-Left for 0.7.3 on the app side: a `port_conflict` stop reason with its
-own text, the `profile_source` key in `doctor --json` and its fixtures,
-the process group kill in the app's runner, and the app making its CLI
-link again when a poll finds it missing. On the release side: the
-Formula lifecycle gate in the signed release script.
+**Launch.** The post on discuss.frappe.io went up on 2026-10-04:
+[BenchBar: local Frappe benches on macOS with a menu bar app](https://discuss.frappe.io/t/benchbar-local-frappe-benches-on-macos-with-a-menu-bar-app/165049).
 
 ## Later
 
-**Public launch.** A launch post on discuss.frappe.io once 0.7.3 is out
-and checked on a real Mac. Homebrew (0.7.0), the signed and notarized
-app with Sparkle (0.6.1) and the app's own CLI (0.7.1) are in place.
+**The app's runner and CLI link.** The app's own runner stops a
+command's whole process group, as the CLI does since 0.7.3, and the app
+makes its CLI link again when a poll finds it missing.
 
 **Management in its own target.** Team profiles, bench discovery and
 port setup move out of the menu bar app into a separate management

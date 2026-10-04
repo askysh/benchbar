@@ -4,6 +4,15 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+## 0.7.3 - 2026-10-04
+
+A fix pass from a full review: benchbar stops only what it can prove is a
+bench's own, fails closed on every write, moves v15-lts to `node@22` before
+Homebrew disables `node@20` on 2026-10-28, installs cleanly on a fresh
+Homebrew MariaDB and next to other benches, and hardens the MCP server.
+Run `benchbar repair` once after updating: the runner and the helper block
+are rewritten.
+
 ### Fixed
 
 - The runner's pre-start cleanup stops only listeners whose working
