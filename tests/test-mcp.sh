@@ -191,22 +191,26 @@ assert sc["lines"][-1].endswith("line-0199") and 0 < len(sc["lines"]) < 200, sc[
 ' || fail "MCP cap keeps the newest lines: ${R:0:400}"
 rm -f "$BENCH/logs/bench.previous.log"
 
-# ---- benchbar_logs_tail clamps lines to 1..2000 before the CLI sees them
+# ---- benchbar_logs_tail bounds lines to 1..2000 before the CLI sees them
 i=1
 while [[ "$i" -le 2010 ]]; do printf '10:00:05 worker.1     | job %d\n' "$i"; i=$((i + 1)); done >>"$BENCH/logs/bench.log"
+# lines outside the schema's 1..2000 is a tool error naming the bound
+# (validated before argv is built); 2000 returns the newest 2000
 REPLIES="$(mcp \
   '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"benchbar_logs_tail","arguments":{"bench":"'"$BENCH"'","lines":5000}}}' \
   '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"benchbar_logs_tail","arguments":{"bench":"'"$BENCH"'","lines":-5}}}' \
-  '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"benchbar_logs_tail","arguments":{"bench":"'"$BENCH"'","lines":0}}}')"
+  '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"benchbar_logs_tail","arguments":{"bench":"'"$BENCH"'","lines":0}}}' \
+  '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"benchbar_logs_tail","arguments":{"bench":"'"$BENCH"'","lines":2000}}}')"
 printf '%s\n' "$REPLIES" | python3 -c '
 import json, sys
 by = {m["id"]: m for m in (json.loads(l) for l in sys.stdin if l.strip())}
-big = by[1]["result"]["structuredContent"]
-assert len(big["lines"]) == 2000 and "truncated_to" not in big, (len(big["lines"]), big.keys())  # clamped here, so the CLI had nothing to cut
+for i, bound in ((1, "at most 2000"), (2, "at least 1"), (3, "at least 1")):
+    r = by[i]["result"]
+    assert r["isError"] is True and bound in r["content"][0]["text"], (i, r)
+big = by[4]["result"]["structuredContent"]
+assert len(big["lines"]) == 2000 and "truncated_to" not in big, (len(big["lines"]), big.keys())
 assert big["lines"][-1].endswith("job 2010"), big["lines"][-1]
-assert len(by[2]["result"]["structuredContent"]["lines"]) == 1, by[2]
-assert len(by[3]["result"]["structuredContent"]["lines"]) == 100, len(by[3]["result"]["structuredContent"]["lines"])
-' || fail "MCP logs clamp replies: $REPLIES"
+' || fail "MCP logs bound replies: $REPLIES"
 # the log tail is redacted like the report
 printf '10:00:06 redis_cache.1 | redis://:McpRedisPw@127.0.0.1:13000\n10:00:07 web.1 | {"api_key": "McpApiLeak"}\n' >>"$BENCH/logs/bench.log"
 R="$(mcp '{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"benchbar_logs_tail","arguments":{"bench":"'"$BENCH"'","lines":2}}}')"
