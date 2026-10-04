@@ -179,6 +179,9 @@ All notable changes to this project are documented here.
   holds the default ports picks the next free port block (or the one
   `--port-offset` names) and writes it before phase 01 starts the bench's
   Redis; it stopped with "Port 11000 ... is held by another process".
+- A fresh v15 install puts `setuptools<70` into the new env, as repair
+  does, so the first `benchbar doctor` no longer warns about
+  `pkg_resources`.
 
 ### Changed
 

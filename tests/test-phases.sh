@@ -403,8 +403,10 @@ printf 'rootpw' >"$MOCK_STATE/mariadb_root_pw"; printf 'rootpw\n' >"$MOCK_STATE/
 SECOND="$HOME/second-bench"; rm -rf "$SECOND"
 add_listener 11000 5110 redis-server; mkdir -p "$MOCK_STATE/cwd"; printf '%s' "$HOME/other-bench" >"$MOCK_STATE/cwd/5110"
 reset_calls
-MARIADB_ROOT_PASSWORD=rootpw ADMIN_PASSWORD=adminpw run_fm install --yes --bench-dir "$SECOND" --site second
+# (its env lacks pkg_resources, as a fresh Python 3.12+ env does: v15 gets setuptools<70)
+MOCK_ENV_NO_PKG_RESOURCES=1 MARIADB_ROOT_PASSWORD=rootpw ADMIN_PASSWORD=adminpw run_fm install --yes --bench-dir "$SECOND" --site second
 assert_eq "0" "$CODE" "$OUT"
+assert_calls_contain "^uv pip install --python ${SECOND}/env/bin/python setuptools<70\$"
 assert_contains "$OUT" "the default ports are taken; the new bench gets port block"
 assert_not_contains "$OUT" "is held by another process"
 assert_calls_contain '^bench setup redis$'

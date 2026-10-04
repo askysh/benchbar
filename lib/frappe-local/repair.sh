@@ -173,11 +173,7 @@ act_env_setuptools() {
     return 0
   fi
   fl_bench_env_exports
-  if command -v uv >/dev/null 2>&1; then
-    fl_run_long "install setuptools<70 into env (uv)" uv pip install --python "$py" 'setuptools<70' || return 1
-  else
-    fl_run_long "install setuptools<70 into env (pip)" "$py" -m pip install 'setuptools<70' || return 1
-  fi
+  fl_bench_env_setuptools "$FL_BENCH_DIR"
 }
 
 act_node_requirements() {

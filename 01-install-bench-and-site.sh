@@ -389,6 +389,12 @@ fl_bstate_set_for "$BENCH_DIR" MARIADB_FORMULA "$FL_MARIADB_FORMULA"
 fl_install_pipx_if_needed
 fl_install_bench_if_needed
 fl_bench_init_if_needed "$BENCH_DIR" "$FRAPPE_REF" "$(command -v "$FL_PYTHON_BIN_NAME")" "$REPAIR_BENCH"
+# Frappe v15 imports pkg_resources: the env gets 'setuptools<70' now, as
+# repair would give it, so a new bench starts with no doctor warning
+if [[ "$(fl_profile_major)" == "15" && "$FL_DRY_RUN" != "1" && -x "$BENCH_DIR/env/bin/python" ]] \
+   && ! "$BENCH_DIR/env/bin/python" -c 'import pkg_resources' >/dev/null 2>&1; then
+  fl_bench_env_setuptools "$BENCH_DIR" || fl_die "could not install setuptools<70 into ${BENCH_DIR}/env (log: ${FL_LOG_FILE:-none})"
+fi
 
 if [[ -n "$FRAPPE_COMMIT" && -d "$BENCH_DIR/apps/frappe/.git" ]]; then
   fl_warn "Pinning frappe to ${FRAPPE_COMMIT}"
