@@ -152,7 +152,7 @@ assert_eq "$before" "$(snapshot "$APP")" "(no run writes into the app)"
 # the installer's benchbar hands off to the app's CLI while the app is
 # there, and runs itself once the app is gone, so benchup keeps working
 # the block as a 0.7.1 app CLI wrote it: the app's link, with a hash of its own
-sed_inplace "s#^BENCHBAR=.*#BENCHBAR=\"$LINK\"#; s#^\(\# benchbar-template: shell-helpers v1 \).*#\1000000000000#" "$HOME/.zshrc"
+sed_inplace "s#^BENCHBAR=.*#BENCHBAR=\"$LINK\"#; s#^\(\# benchbar-template: shell-helpers v[0-9]* \).*#\1000000000000#" "$HOME/.zshrc"
 run "$LINK" doctor --json --bench-dir "$BENCH"
 assert_eq "warn" "$(check_status helpers)" "(a block naming the app's link is outdated while a standalone copy hands off)"
 run "$LINK" service --yes --bench-dir "$BENCH"
