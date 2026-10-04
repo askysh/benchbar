@@ -297,7 +297,7 @@ assert_eq "ok" "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"
 # no bench command at all
 NOBENCH="$TMP_DIR/nobench"; mkdir -p "$NOBENCH"
 for t in "$ROOT"/tests/mocks/bin/*; do [[ "$(basename "$t")" == "bench" ]] || ln -s "$t" "$NOBENCH/$(basename "$t")"; done
-PATH="$NOBENCH:$(printf '%s' "$PATH" | sed "s#$ROOT/tests/mocks/bin:##")" run_fm doctor --json --bench-dir "$BENCH"
+PATH="$NOBENCH:/usr/bin:/bin" run_fm doctor --json --bench-dir "$BENCH"
 r="$(printf '%s' "$OUT" | jget - '"|".join(str([c for c in d["checks"] if c["id"] == "bench_version"][0][k]) for k in ("level", "message", "fix_command", "action"))')"
 assert_contains "$r" "fail|the bench command is not on the bench's PATH (frappe-bench is not installed)|uv tool install frappe-bench|None"
 # without uv on the Mac the fix names pipx, which is there (the system
