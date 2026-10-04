@@ -36,15 +36,26 @@ fl_pid_cwd() {
   lsof -a -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n1
 }
 
-# Reads pids on stdin, prints the ones running in this bench. A pid whose
-# folder cannot be read (it just exited) is kept: that is the pre 0.4
-# behaviour, and stopping an exiting process costs nothing.
+# fl_pid_is_bench_own_strict PID: the one ownership test. True only when
+# lsof reports the process's working folder as this bench or a folder inside
+# it. A folder that cannot be read proves nothing: the process may have just
+# exited (then there is nothing to stop) or belong to someone else (then it
+# is not ours to stop). Every kill in benchbar and the runner goes through
+# this test, and nothing is ever killed by pattern alone.
+fl_pid_is_bench_own_strict() {
+  local cwd
+  cwd="$(fl_pid_cwd "$1")"
+  [[ -n "$cwd" ]] && [[ "$cwd" == "$FL_BENCH_DIR" || "$cwd" == "$FL_BENCH_DIR"/* ]]
+}
+
+# Reads pids on stdin, prints the ones that provably run in this bench
+# (fl_pid_is_bench_own_strict). A pid whose folder cannot be read is left
+# out, so down never signals another bench's honcho or socketio.
 fl_pids_in_bench() {
-  local pid cwd
+  local pid
   while IFS= read -r pid; do
     [[ -n "$pid" ]] || continue
-    cwd="$(fl_pid_cwd "$pid")"
-    [[ -z "$cwd" || "$cwd" == "$FL_BENCH_DIR" ]] && printf '%s\n' "$pid"
+    fl_pid_is_bench_own_strict "$pid" && printf '%s\n' "$pid"
   done
   return 0
 }
@@ -80,6 +91,22 @@ fl_bench_process_pids() {
 
 fl_bench_is_running() {
   [[ -n "$(fl_bench_process_pids)" ]]
+}
+
+# honcho on any Procfile whose working folder is this bench: benchfg and the
+# agent run Procfile.lean, "bench start" runs the bench's own Procfile
+fl_bench_any_honcho_pids() {
+  { pgrep -f "honcho start" 2>/dev/null || true; } | fl_pids_in_bench
+}
+
+# fl_bench_running_outside_benchbar: the bench's honcho, serve, worker,
+# schedule or socketio is alive (a listener alone, such as a leftover setup
+# Redis, is not a session) and this bench's agent is not the one running
+# them (bench start, benchfg, a hand-run honcho). That is a person's
+# terminal session: nothing of benchbar may stop or restart it.
+fl_bench_running_outside_benchbar() {
+  [[ -n "$(fl_bench_any_honcho_pids)" || -n "$(fl_bench_socketio_pids)" || -n "$(pgrep -f "$(fl_bench_helper_pattern)" 2>/dev/null || true)" ]] || return 1
+  [[ "$(fl_agent_field state 2>/dev/null)" != "running" ]]
 }
 
 # fl_bench_status_pids: this bench's honcho, then its serve, worker,

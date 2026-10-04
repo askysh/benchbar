@@ -289,6 +289,7 @@ chk_stop_flag() {
     manual) chk__set ok "stopped on purpose (benchdown); start with benchup" ;;
     crash) chk__set warn "auto-restart paused after repeated crashes" "${FL_SELF} logs, fix the cause, then benchup" ;;
     broken) chk__set warn "auto-restart paused: honcho or env was missing" "${FL_SELF} repair, then benchup" ;;
+    port_conflict) chk__set warn "auto-restart paused: another process held this bench's ports at start (see the orphans check)" "${FL_SELF} doctor, free the port or move the bench (benchbar ports setup), then benchup" ;;
     *) chk__set warn "stop flag has unknown content '${reason}'" "rm ${flag}" ;;
   esac
 }
@@ -718,7 +719,7 @@ chk_ping() {
     chk__set fail "bench processes are running but ping returned ${code}" "${FL_SELF} logs"
   elif [[ "$reason" == "manual" || -z "$reason" && ! -f "$(fl_runner_path)" ]]; then
     chk__set ok "bench is stopped; start it with benchup"
-  elif [[ "$reason" == "crash" || "$reason" == "broken" ]]; then
+  elif [[ "$reason" == "crash" || "$reason" == "broken" || "$reason" == "port_conflict" ]]; then
     chk__set warn "bench is paused (${reason}); fix, then benchup" "${FL_SELF} logs"
   else
     chk__set warn "bench is not running (ping ${code})" "benchup"
@@ -1069,22 +1070,44 @@ chk_fork_safety() {
 # A killed "bench start" leaves redis, socketio or gunicorn on the bench's
 # ports; the agent then cannot start. honcho running (benchfg or the agent)
 # means the listeners are its own.
+# Listeners on the bench's ports while nothing of the bench runs. Only a
+# listener whose working folder is inside the bench is a leftover "down" may
+# stop. One whose folder lsof cannot read is reported, not stopped: it may be
+# another bench's or another program's, and benchbar never kills on a guess.
 chk_orphans() {
-  local port who held=""
+  local port who pid cwd held="" unknown="" foreign="" first_unknown=""
   [[ "$(fl_agent_field state)" == "running" ]] && { chk__set ok "the agent runs this bench"; return 0; }
-  if [[ -n "$(fl_bench_honcho_pids)" ]]; then
+  if [[ -n "$(fl_bench_any_honcho_pids)" ]]; then
     chk__set ok "honcho is running (benchfg or bench start)"
     return 0
   fi
   for port in $(fl_bench_ports_csv | tr ',' ' '); do
     who="$(fl_port_listener_summary "$port")"
-    [[ -n "$who" ]] && held="${held}${held:+, }${port} (pid ${who% *} ${who#* })"
+    [[ -n "$who" ]] || continue
+    pid="${who% *}"
+    cwd="$(fl_pid_cwd "$pid")"
+    if [[ -z "$cwd" ]]; then
+      unknown="${unknown}${unknown:+, }${port} (pid ${pid} ${who#* })"; first_unknown="${first_unknown:-$pid}"
+    elif [[ "$cwd" == "$FL_BENCH_DIR" || "$cwd" == "$FL_BENCH_DIR"/* ]]; then
+      held="${held}${held:+, }${port} (pid ${pid} ${who#* })"
+    else
+      foreign="${foreign}${foreign:+, }${port} (pid ${pid} ${who#* } in ${cwd})"
+    fi
   done
-  if [[ -n "$held" ]]; then
-    chk__set warn "stale processes hold this bench's ports: ${held}" "${FL_SELF} down   (or benchbar restart)"
-  else
+  # every holder is named in one line, so a second doctor is not needed to
+  # learn about the ones "down" will leave; the fix is for the first kind found
+  if [[ -z "$held$unknown$foreign" ]]; then
     chk__set ok "no stale process holds ${FL_WEB_PORT}, ${FL_SOCKETIO_PORT}, ${FL_REDIS_QUEUE_PORT} or ${FL_REDIS_CACHE_PORT}"
+    return 0
   fi
+  local msg="" fix=""
+  [[ -z "$held" ]] || msg="stale processes hold this bench's ports: ${held}"
+  [[ -z "$unknown" ]] || msg="${msg}${msg:+; }processes hold this bench's ports and their working folder cannot be read, so benchbar will not stop them: ${unknown}"
+  [[ -z "$foreign" ]] || msg="${msg}${msg:+; }other programs hold this bench's ports (not this bench's to stop): ${foreign}"
+  if [[ -n "$held" ]]; then fix="${FL_SELF} down   (or benchbar restart)"
+  elif [[ -n "$unknown" ]]; then fix="lsof -p ${first_unknown}   (check whose it is; kill it yourself if it is this bench's leftover)"
+  else fix="${FL_SELF} ports setup -- ${FL_BENCH_DIR}   (or stop that program)"; fi
+  chk__set warn "$msg" "$fix"
 }
 
 # Apps: local reads only (apps.txt, the folders, git), never bench or the

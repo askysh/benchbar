@@ -156,9 +156,24 @@ grep -q '^127.0.0.1 shared$' "$FL_HOSTS_FILE" || fail "the other bench's site ke
 run_json site list --json --bench-dir "$BENCH"
 assert_eq "other:True" "$(printf '%s' "$OUT" | jget - '" ".join("%s:%s" % (s["name"], s["default"]) for s in d["sites"])')"
 
-# ---- the last site is never dropped
+# ---- the last site is never dropped, whatever SITE_NAME or --site names
 run_fm site drop other --confirm-site other --bench-dir "$BENCH"
 assert_eq "1" "$CODE"; assert_contains "$OUT" "only site"
+reset_calls
+SITE_NAME=elsewhere run_fm site drop other --confirm-site other --bench-dir "$BENCH"
+assert_eq "1" "$CODE"; assert_contains "$OUT" "only site"
+run_fm site drop other --confirm-site other --site elsewhere --bench-dir "$BENCH"
+assert_eq "1" "$CODE"; assert_contains "$OUT" "only site"
+assert_calls_not_contain 'drop-site'
+assert_file "$BENCH/sites/other/site_config.json"
+# the bench's own default (currentsite.txt) counts as the default even when
+# SITE_NAME names another site: dropping it needs --new-default
+mkdir -p "$BENCH/sites/spare"; printf '{}\n' >"$BENCH/sites/spare/site_config.json"
+assert_eq "other" "$(tr -d '[:space:]' <"$BENCH/sites/currentsite.txt")"
+SITE_NAME=spare run_fm site drop other --confirm-site other --bench-dir "$BENCH"
+assert_eq "1" "$CODE"; assert_contains "$OUT" "is the default site"
+assert_calls_not_contain 'drop-site'
+rm -rf "$BENCH/sites/spare"
 
 # ---- without a terminal and without cached sudo (the app): the manual step
 mkdir -p "$BENCH/sites/third"; printf '{}\n' >"$BENCH/sites/third/site_config.json"

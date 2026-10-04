@@ -163,7 +163,7 @@ fl_wait_for_ping() {
   return 1
 }
 
-# fl_stop_flag_reason_v VAR: the stop flag's word (manual, crash, broken),
+# fl_stop_flag_reason_v VAR: the stop flag's word (manual, crash, broken, port_conflict),
 # whitespace removed, or empty without a flag
 fl_stop_flag_reason_v() {
   local __flag="${FL_BENCH_DIR}/logs/.bench-stopped" __v=""
@@ -325,6 +325,7 @@ fl_cmd_status() {
     case "$ST_FLAG" in
       crash) fl_warn "auto-restart paused after repeated crashes; run: ${FL_SELF} logs, fix, then benchup" ;;
       broken) fl_warn "auto-restart paused: run ${FL_SELF} repair, then benchup" ;;
+      port_conflict) fl_warn "auto-restart paused: another process held this bench's ports; run ${FL_SELF} doctor, then benchup" ;;
       *) fl_info "bench is stopped; start with benchup" ;;
     esac
   fi
@@ -385,13 +386,18 @@ fl_cmd_fg() {
   [[ -n "$FL_HONCHO" ]] || fl_die "honcho not found." "Run: ${FL_SELF} repair"
   [[ -f "$(fl_procfile_path)" ]] || fl_die "Procfile.lean missing." "Run: ${FL_SELF} service"
   fl_check_port_clash_or_confirm || return 1
-  fl_cmd_down >/dev/null 2>&1 || true
+  # the background bench is stopped under the CLI lock (benchbar took it for
+  # fg), so a site add or repair on this bench is never cut short
+  fl_cmd_down >/dev/null 2>&1 || fl_die "Could not stop the background bench; not starting it in the foreground." "Run: ${FL_SELF} down --bench-dir ${FL_BENCH_DIR}, then ${FL_SELF} fg again"
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
     fl_info "dry-run: cd ${FL_BENCH_DIR} && ${FL_HONCHO} start -f Procfile.lean"
     return 0
   fi
   fl_info "running in the foreground; Ctrl+C stops it (benchup brings the background service back)"
   cd "$FL_BENCH_DIR" || exit 1
+  # exec replaces this process and skips the EXIT trap: the lock goes now,
+  # so other benchbar runs are not blocked while honcho runs in front
+  fl_lock_release
   OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES NO_PROXY='*' exec "$FL_HONCHO" start -f Procfile.lean
 }
 

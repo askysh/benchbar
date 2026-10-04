@@ -64,14 +64,12 @@ fl_pm_known_reservations() {
     [[ -z "$reserved" || "$reserved" == "$current" ]] || fl_pm_reserve "$d" "$reserved"
   done < <(fl_known_benches)
 }
+# fl_pm_running: this bench's honcho, serve, worker, schedule or socketio is
+# alive. A listener alone (a leftover setup Redis, a foreign program on the
+# same port) is never a running bench: up would report "already running" and
+# start nothing. Listeners go to the clash check and the runner's cleanup.
 fl_pm_running() {
-  local pid
-  # A listening socket alone is not proof of ownership. Foreign listeners
-  # are conflicts to resolve, never a reason to claim this bench is running.
-  while IFS= read -r pid; do
-    [[ -n "$pid" ]] || continue
-    fl_pid_is_bench_own_strict "$pid" && return 0
-  done < <(fl_bench_process_pids)
+  [[ -n "$(fl_bench_honcho_pids)" || -n "$(fl_bench_socketio_pids)" ]] && return 0
   [[ -n "$(pgrep -f "$(fl_bench_helper_pattern)" 2>/dev/null || true)" ]]
 }
 # The caller captures this function with $(...), isolating the real planner: profile/port/render globals do

@@ -176,6 +176,37 @@ def bench_args(arguments):
     return ["--bench-dir", bench] if bench else []
 
 
+def known_bench_paths():
+    """The real paths of the benches `benchbar list --json` knows, or None when the list could not be read."""
+    try:
+        code, out, _err = run_cli(["list", "--json"], timeout=60)
+    except (subprocess.TimeoutExpired, OSError):
+        return None
+    if code != 0:
+        return None
+    try:
+        benches = json.loads(out).get("benches") or []
+    except ValueError:
+        return None
+    return set(os.path.realpath(b["path"]) for b in benches if isinstance(b, dict) and b.get("path"))
+
+
+def unknown_bench_error(arguments):
+    """For a tool that changes a bench: an error result when its bench argument is not a bench benchbar
+    knows (registered, remembered or with an agent). Any other folder is not this server's to stop, start or
+    write into. None when the argument is fine or absent (the default bench)."""
+    bench = arguments.get("bench")
+    if not bench:
+        return None
+    known = known_bench_paths()
+    if known is None:
+        return text_result("could not read the bench list (benchbar list --json); not touching %s" % bench, is_error=True)
+    if os.path.realpath(bench) not in known:
+        return text_result("%s is not a bench benchbar knows (see benchbar_list); nothing was changed. "
+                           "Register it first in a terminal: benchbar register %s" % (bench, bench), is_error=True)
+    return None
+
+
 def run_cli(argv, timeout=180):
     env = dict(os.environ, NO_COLOR="1", TERM="dumb")
     # stdin is closed: a question from the CLI is answered "no", never hangs
@@ -216,6 +247,10 @@ def tool_call(params):
     # a value is never an option: "--yes" as a URL must not reach the CLI's parser
     if any(isinstance(v, str) and v.startswith("-") for v in arguments.values()):
         raise RpcError(-32602, "argument values must not start with '-'")
+    if not read_only:
+        refused = unknown_bench_error(arguments)
+        if refused is not None:
+            return refused
     try:
         code, out, err = run_cli(build(arguments), timeout=TIMEOUTS.get(name, 180))
     except subprocess.TimeoutExpired:

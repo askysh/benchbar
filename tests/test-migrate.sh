@@ -36,7 +36,7 @@ old_plist com.frappe-mac.frappe-bench "$BENCH" >"$old"
 old_plist com.frappe-mac.other-bench "$OTHER" >"$other_old"
 set_agent com.frappe-mac.frappe-bench running 4242 0
 set_agent com.frappe-mac.other-bench running 5151 0
-add_proc 4242 "honcho start -f Procfile.lean"
+add_proc 4242 "honcho start -f Procfile.lean" "$BENCH"
 export MOCK_CURL_CODE=200
 
 # ---- doctor names the old agent, and only the one for this bench

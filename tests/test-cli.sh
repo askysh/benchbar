@@ -77,6 +77,20 @@ run_fm up --bench-dir "$BENCH"
 assert_contains "$OUT" "already running"
 assert_calls_not_contain '^launchctl kickstart'
 
+# a leftover Redis of this bench (a site add that was cut short) is not a
+# running bench: up must not say "already running" and start nothing
+run_fm down --bench-dir "$BENCH"; assert_eq "0" "$CODE" "$OUT"
+: >"$MOCK_PROCS"; : >"$MOCK_LISTEN"
+add_proc 5151 "redis-server config/redis_queue.conf" "$BENCH"
+add_listener 11001 5151 redis-server
+reset_calls
+run_fm up --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_not_contains "$OUT" "already running"
+assert_calls_contain '^launchctl kickstart gui/[0-9]+/com.benchbar.frappe-bench$'
+: >"$MOCK_LISTEN"; printf '3306 111 mariadbd 127.0.0.1\n' >"$MOCK_LISTEN"
+{ grep -v '^5151 ' "$MOCK_PROCS" || true; } >"$MOCK_PROCS.tmp"; mv "$MOCK_PROCS.tmp" "$MOCK_PROCS"
+
 # status while running
 run_fm status --bench-dir "$BENCH"
 assert_contains "$OUT" "state      running, pid 4242"
@@ -95,6 +109,29 @@ printf 'crash\n' >"$BENCH/logs/.bench-stopped"; printf '1\n2\n3\n' >"$BENCH/logs
 run_fm up --bench-dir "$BENCH"; assert_eq "0" "$CODE" "$OUT"
 [[ ! -s "$BENCH/logs/.bench-starts" ]] || fail "start history must be cleared by up"
 unset MOCK_KICKSTART_PING
+
+# fg: refused while another run holds the lock (a site add's setup Redis
+# must not be stopped under it); otherwise the lock is released before honcho
+# runs in front, so other benchbar runs are not blocked meanwhile
+mkdir -p "$FL_STATE_DIR/lock"; printf '%s\n' "$$" >"$FL_STATE_DIR/lock/pid"
+run_fm fg --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "Another benchbar run is active"
+rm -rf "$FL_STATE_DIR/lock"
+reset_calls
+run_fm fg --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_calls_contain '^honcho start -f Procfile.lean$'
+assert_no_file "$FL_STATE_DIR/lock" "(fg must release the lock before it execs honcho)"
+# a stop that fails (a process of this bench that will not die) means no fg
+: >"$MOCK_LISTEN"; printf '3306 111 mariadbd 127.0.0.1\n' >"$MOCK_LISTEN"
+mkdir -p "$MOCK_STATE/cwd"; printf '%s' "$BENCH" >"$MOCK_STATE/cwd/7777"
+add_listener 8001 7777 python
+reset_calls
+run_fm fg --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "Could not stop the background bench"
+assert_calls_not_contain '^honcho'
+assert_no_file "$FL_STATE_DIR/lock"
+: >"$MOCK_LISTEN"; printf '3306 111 mariadbd 127.0.0.1\n' >"$MOCK_LISTEN"; rm -f "$MOCK_STATE/cwd/7777"
 
 # up without the service installed explains what to do
 NEW="$HOME/new"; make_fake_bench "$NEW" newsite

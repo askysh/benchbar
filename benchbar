@@ -662,7 +662,9 @@ case "$COMMAND" in
       fl_lock_acquire "${FL_STATE_DIR}/lock"
     fi
     ;;
-  install|adopt|service|repair|up|down|restart|autostart|uninstall-service|pull)
+  # fg stops the background bench first (a down), so it holds the lock until
+  # just before it execs honcho (fl_cmd_fg releases it there)
+  install|adopt|service|repair|up|down|restart|autostart|uninstall-service|pull|fg)
     fl_log_init "${FL_STATE_DIR}/logs"
     fl_lock_acquire "${FL_STATE_DIR}/lock"
     ;;

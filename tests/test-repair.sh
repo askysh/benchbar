@@ -83,11 +83,22 @@ assert_eq "0" "$CODE" "$OUT"
 grep -q '^127.0.0.1 macdev$' "$FL_HOSTS_FILE" || fail "hosts entry expected"
 assert_calls_contain '^sudo tee -a '
 
-# MariaDB exposed: drop-in written and service restarted, my.cnf backed up
+# MariaDB exposed: drop-in written and service restarted, my.cnf backed up.
+# MariaDB is shared by every bench: the plan says so, and the restart names
+# the benches that are running, also under --yes
 add_listener 3306 900 mariadbd '*'
 printf 'mariadb@10.11 started akash file\n' >"$MOCK_BREW_SERVICES"
+OTHERB="$HOME/otherbench"; make_fake_bench "$OTHERB" othersite
+sed_inplace 's/8000/8100/; s/9000/9100/; s/11000/11100/; s/13000/13100/' "$OTHERB/sites/common_site_config.json"
+run_fm register "$OTHERB"; assert_eq "0" "$CODE" "$OUT"
+add_proc 9100 "/x/bin/honcho start -f Procfile.lean" "$OTHERB"
+run_fm repair --dry-run --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "bind MariaDB to 127.0.0.1 (restarts MariaDB, shared by 1 running bench)"
 run_fm repair --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "restarting MariaDB, which these running benches use: otherbench"
+{ grep -v '^9100 ' "$MOCK_PROCS" || true; } >"$MOCK_PROCS.tmp"; mv "$MOCK_PROCS.tmp" "$MOCK_PROCS"
 assert_file "$MOCK_BREW_PREFIX/etc/my.cnf.d/frappe-mac-local-only.cnf"
 grep -q 'bind-address = 127.0.0.1' "$MOCK_BREW_PREFIX/etc/my.cnf.d/frappe-mac-local-only.cnf" || fail "bind-address expected"
 assert_calls_contain '^brew services restart mariadb@10.11$'

@@ -60,7 +60,8 @@ fl_bench_detect() {
       FL_BENCH_DIR=""
       while IFS= read -r cand; do
         [[ -n "$cand" ]] || continue
-        if fl_is_bench_dir "$cand"; then FL_BENCH_DIR="$cand"; FL_BENCH_SOURCE="detected"; break; fi
+        # resolved like the other sources: the runner and the ownership test compare it with lsof's real folders
+        if fl_is_bench_dir "$cand"; then FL_BENCH_DIR="$(fl_abs_path "$cand")"; FL_BENCH_SOURCE="detected"; break; fi
       done < <(fl_bench_candidates)
       if [[ -z "$FL_BENCH_DIR" ]]; then
         FL_BENCH_DIR="$HOME/frappe-bench"; FL_BENCH_SOURCE="default"

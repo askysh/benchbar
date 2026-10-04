@@ -264,7 +264,7 @@ fl_site_archive_latest() {
 
 # site drop NAME --confirm-site NAME [--new-default OTHER]
 fl_cmd_site_drop() {
-  local name="" confirm="" new_default="" json="$OPT_JSON" others=() s st t c p sep="" steps=() archive_before archive="" stamp backup="null" code=0 is_default=0 hosts_place
+  local name="" confirm="" new_default="" json="$OPT_JSON" others=() s st t c p sep="" steps=() archive_before archive="" stamp backup="null" code=0 is_default=0 hosts_place bench_default=""
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
       --confirm-site) confirm="${2:-}"; shift 2 ;;
@@ -283,10 +283,15 @@ fl_cmd_site_drop() {
   [[ "$confirm" == "$name" ]] || fl_die "Refusing to drop ${name}: --confirm-site must repeat the site name exactly." \
     "benchbar site drop ${name} --confirm-site ${name}   (bench takes a backup first)"
   while IFS= read -r s; do [[ -n "$s" && "$s" != "$name" ]] && others+=("$s"); done < <(fl_sites_list)
-  [[ "$name" == "$FL_SITE" ]] && is_default=1
+  # the only site is never dropped, whatever SITE_NAME or --site says
+  [[ "${#others[@]}" -gt 0 ]] || fl_die "${name} is the only site of ${FL_BENCH_DIR}; benchbar does not drop it." \
+    "Add another site first (benchbar site add NAME), then drop ${name} with --new-default NAME"
+  # the default: the site benchbar uses (FL_SITE) and the one bench uses
+  # (currentsite.txt, else default_site); a SITE_NAME override hides neither
+  bench_default="$(tr -d '[:space:]' <"${FL_BENCH_DIR}/sites/currentsite.txt" 2>/dev/null || true)"
+  [[ -n "$bench_default" ]] || fl_site_config_value_v bench_default default_site
+  [[ "$name" == "$FL_SITE" || "$name" == "$bench_default" ]] && is_default=1
   if [[ "$is_default" == "1" ]]; then
-    [[ "${#others[@]}" -gt 0 ]] || fl_die "${name} is the only site of ${FL_BENCH_DIR}; benchbar does not drop it." \
-      "Add another site first (benchbar site add NAME), then drop ${name} with --new-default NAME"
     [[ -n "$new_default" ]] || fl_die "${name} is the default site; say which site takes its place." \
       "benchbar site drop ${name} --confirm-site ${name} --new-default $(printf '%s' "${others[0]}")   (sites: ${others[*]})"
   elif [[ -n "$new_default" ]]; then

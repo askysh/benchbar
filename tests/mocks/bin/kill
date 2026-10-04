@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# kill as a program (xargs kill, env kill): the test table, like mockkill.
+# The builtin kill of bash is unaffected; a kill that reaches a program must
+# never hit a real process of the machine running the suite.
+exec "$(dirname "$0")/mockkill" "$@"

@@ -107,7 +107,7 @@ run_fm doctor --bench-dir "$BENCH"
 assert_contains "$OUT" "[WARN] Runner script: runner is outdated"
 run_fm repair --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
-grep -q 'benchbar-template: bench-run.sh v4' "$BENCH/benchbar-run.sh" || fail "runner must be regenerated"
+grep -q 'benchbar-template: bench-run.sh v5' "$BENCH/benchbar-run.sh" || fail "runner must be regenerated"
 
 # ---- reloading a running agent waits for launchd to let go of it
 # (real launchctl: bootout returns while the job still shuts down, and a

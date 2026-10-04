@@ -4,6 +4,37 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+### Fixed
+
+- The runner's pre-start cleanup stops only listeners whose working
+  folder is this bench; another bench's Redis or web server and any
+  other program on the same ports are left alone. When such a process
+  still holds a port, the runner pauses with the new stop reason
+  `port_conflict` instead of starting honcho into ports it cannot bind
+  (run `benchbar doctor`). Existing runners are outdated once and
+  `benchbar repair` re-renders them.
+- `benchbar down` no longer signals a process whose working folder lsof
+  cannot read; doctor's orphans check names such a process and says why
+  it is not stopped, and `ports plan` counts it as a conflict, as `up`
+  already did.
+- `benchbar up` on a bench whose only live process is a leftover Redis
+  (a site add cut short) no longer reports "already running": it starts
+  the bench, and the runner clears that Redis first.
+- `benchbar adopt`, `repair` and `service` on a bench running under
+  `bench start` or `benchfg` leave its processes alone: the agent loads
+  stopped and benchup takes over once that session ends.
+- `benchbar site drop` never drops a bench's only site, also when
+  `SITE_NAME` or `--site` names another site, and treats the site in
+  `currentsite.txt` as the default too.
+- The repair plan says when a MariaDB step restarts the server shared by
+  every bench, and the restart names the running benches first.
+- The MCP tools that change a bench (`benchbar_up`, `benchbar_down`,
+  `benchbar_restart`, `benchbar_app_add`) refuse a folder that is not in
+  `benchbar_list`.
+- `benchbar fg` takes the CLI lock while it stops the background bench,
+  so it cannot cut a running site add short, and refuses to start when
+  the stop fails.
+
 ## 0.7.2 - 2026-10-02
 
 The BenchBar window has one main action per page and one layout for
