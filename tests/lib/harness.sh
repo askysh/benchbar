@@ -20,7 +20,7 @@ export MOCK_LOG="$MOCK_STATE/calls.log"
 export MOCK_PROCS="$MOCK_STATE/procs"
 export MOCK_LISTEN="$MOCK_STATE/listen"
 export MOCK_BREW_PREFIX="$TMP_DIR/brew"
-export MOCK_BREW_INSTALLED="python@3.11 node@20 mariadb@10.11 redis openssl@3 libffi zlib pipx pkgconf mariadb-connector-c"
+export MOCK_BREW_INSTALLED="python@3.11 node@22 mariadb@10.11 redis openssl@3 libffi zlib pipx pkgconf mariadb-connector-c"
 export MOCK_BREW_LEAVES="$MOCK_STATE/leaves"
 export MOCK_BREW_SERVICES="$MOCK_STATE/services"
 export MOCK_CURL_CODE="000"
@@ -41,17 +41,20 @@ export FL_MOLE_CMDS=benchbar-test-no-mole
 export NO_COLOR=1
 # the suite may run as root on a Linux machine; the CLI must still see a normal user
 export FL_EFFECTIVE_UID=501
+# the system part of the bench's (launchd) PATH: no /usr/local/bin, so a node
+# or yarn of the machine running the suite never stands in for the mocks'
+export FL_LAUNCHD_PATH_SYSTEM=/usr/bin:/bin:/usr/sbin:/sbin
 export SHELL=/bin/zsh
 unset BENCH_DIR SITE_NAME FL_DRY_RUN FL_ASSUME_YES 2>/dev/null || true
 
 mkdir -p "$HOME/Library/LaunchAgents" "$MOCK_STATE/agents" "$FL_STATE_DIR" "$MOCK_BREW_PREFIX/etc/my.cnf.d" \
   "$MOCK_BREW_PREFIX/opt/python@3.11/bin" "$MOCK_PIPX_HOME/venvs/frappe-bench/bin" "$HOME/.local/bin"
 : >"$MOCK_LOG"; : >"$MOCK_PROCS"; : >"$MOCK_LISTEN"; : >"$MOCK_BREW_SERVICES"
-printf 'python@3.11\nnode@20\nmariadb@10.11\nredis\n' >"$MOCK_BREW_LEAVES"
+printf 'python@3.11\nnode@22\nmariadb@10.11\nredis\n' >"$MOCK_BREW_LEAVES"
 printf "%s\\n" "$MOCK_BREW_INSTALLED" | tr " " "\\n" >"$MOCK_STATE/installed"
-mkdir -p "$MOCK_BREW_PREFIX/opt/node@20/bin" "$MOCK_BREW_PREFIX/opt/mariadb@10.11/bin"
+mkdir -p "$MOCK_BREW_PREFIX/opt/node@22/bin" "$MOCK_BREW_PREFIX/opt/mariadb@10.11/bin"
 cp "$ROOT/tests/mocks/python3.11" "$MOCK_BREW_PREFIX/opt/python@3.11/bin/python3.11"
-cp "$ROOT/tests/mocks/node" "$ROOT/tests/mocks/npm" "$ROOT/tests/mocks/yarn" "$MOCK_BREW_PREFIX/opt/node@20/bin/"
+cp "$ROOT/tests/mocks/node" "$ROOT/tests/mocks/npm" "$ROOT/tests/mocks/yarn" "$MOCK_BREW_PREFIX/opt/node@22/bin/"
 cp "$ROOT/tests/mocks/mariadb" "$MOCK_BREW_PREFIX/opt/mariadb@10.11/bin/mariadb"
 mkdir -p "$MOCK_BREW_PREFIX/bin"
 # on the bench's (launchd) PATH, which does not include tests/mocks/bin

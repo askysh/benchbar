@@ -35,6 +35,21 @@ All notable changes to this project are documented here.
   so it cannot cut a running site add short, and refuses to start when
   the stop fails.
 
+### Changed
+
+- `repair` says when a check still fails after the run and has no action of its own (a disabled formula, a missing tool); `doctor` exits 1 while it does.
+- The default profile `v15-lts` installs `node@22` instead of `node@20`,
+  which Homebrew disables on 2026-10-28 (Frappe v15 needs Node 18 or
+  newer). A bench set up with `node@20` keeps working; `benchbar doctor`
+  flags its shell block, agent, Node and the missing formula, and `benchbar repair` installs
+  `node@22`, puts yarn under it and re-renders both PATHs. `node@20` is
+  not removed.
+- New doctor check "Formula lifecycle": a WARN when Homebrew disables one
+  of the profile's Python, Node or MariaDB formulae within 90 days, a
+  FAIL once it has or once brew no longer knows the formula.
+  `scripts/check-profile-formulae.sh` runs the same
+  check over every profile and stops a release in `release-local.sh`.
+
 ## 0.7.2 - 2026-10-02
 
 The BenchBar window has one main action per page and one layout for

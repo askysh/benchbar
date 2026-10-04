@@ -13,7 +13,7 @@ and bundle it was installed with, and a few environment variables.
 
 | Profile | Frappe | ERPNext | Python | Node | MariaDB |
 |---|---|---|---|---|---|
-| `v15-lts` (default) | `version-15` | `version-15` | `python@3.11` | `node@20` | `mariadb@10.11` |
+| `v15-lts` (default) | `version-15` | `version-15` | `python@3.11` | `node@22` | `mariadb@10.11` |
 | `v16-lts` | `version-16` | `version-16` | `python@3.14` | `node@24` | `mariadb@11.8` |
 
 Every profile also installs `pkgconf` (pkg-config) and

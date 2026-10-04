@@ -2,5 +2,8 @@
 case "$*" in
   --version) printf '10.8.2\n' ;;
   "ls -g --depth=0") printf '/x/lib\n+-- yarn@1.22.22\n' ;;
+  "install -g yarn")
+    printf 'npm %s\n' "$*" >>"${MOCK_LOG:-/dev/null}"
+    [[ -e "$(dirname "$0")/yarn" ]] || { printf '#!/usr/bin/env bash\nprintf "1.22.22\\n"\n' >"$(dirname "$0")/yarn"; chmod +x "$(dirname "$0")/yarn"; } ;;
 esac
 exit 0

@@ -150,15 +150,15 @@ assert_contains "$OUT" "[OK] MariaDB bind address: MariaDB listens on 127.0.0.1 
 printf '127.0.0.1 macdev\n' >>"$FL_HOSTS_FILE"
 
 # 12. python formula not a leaf
-printf 'node@20\n' >"$MOCK_BREW_LEAVES"
+printf 'node@22\n' >"$MOCK_BREW_LEAVES"
 run_fm doctor --bench-dir "$BENCH"
 assert_contains "$OUT" "[WARN] Python formula: python@3.11 is only a dependency"
 assert_contains "$OUT" "brew tab --installed-on-request python@3.11"
-printf 'python@3.11\nnode@20\n' >"$MOCK_BREW_LEAVES"
+printf 'python@3.11\nnode@22\n' >"$MOCK_BREW_LEAVES"
 
 # 13. missing formula
 cp "$MOCK_STATE/installed" "$MOCK_STATE/installed.bak"
-printf 'python@3.11\nnode@20\n' >"$MOCK_STATE/installed"
+printf 'python@3.11\nnode@22\n' >"$MOCK_STATE/installed"
 run_fm doctor --bench-dir "$BENCH"
 assert_contains "$OUT" "[FAIL] Homebrew formulae: missing formulae: mariadb@10.11 redis"
 mv "$MOCK_STATE/installed.bak" "$MOCK_STATE/installed"

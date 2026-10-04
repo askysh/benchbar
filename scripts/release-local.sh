@@ -44,6 +44,9 @@ project_version() {
   sed -n 's/^ *MARKETING_VERSION: *"\{0,1\}\([^"]*\)"\{0,1\} *$/\1/p' "${ROOT}/macos/project.yml" | head -n 1
 }
 
+step "profile formulae"
+"${ROOT}/scripts/check-profile-formulae.sh" || die "a release profile names a formula Homebrew is about to disable" "move the profile in config/release-profiles.tsv (see docs/DECISIONS.md, 0.7.3)"
+
 step "check tools"
 for tool in xcodegen xcodebuild hdiutil ditto codesign shasum; do
   command -v "$tool" >/dev/null 2>&1 || die "$tool not found" "install Xcode and: brew install xcodegen"

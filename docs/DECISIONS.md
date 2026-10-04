@@ -17,6 +17,17 @@ runs come first, the 0.3 easy install run follows.
 - The MCP server checks a `bench` argument of a changing tool against `benchbar list --json` (real paths) and refuses the rest: the CLI itself accepts any folder for `--bench-dir`, which is right for a person in a terminal and wrong for a model that got a path from a log.
 - `fg` takes the CLI lock like `down` does, and releases it just before `exec honcho`: exec skips the EXIT trap, and a lock held for as long as honcho runs in front would block every other benchbar run.
 
+## 0.7.3: Node for v15
+
+- A failed `node_install` stops the repair run like a failed env rebuild: the plist and the shell block that follow would name a Node that is not there, and a working node@20 bench would stop. A formula brew lists whose node is missing gets `brew reinstall` (install is a no-op on an installed formula).
+- `repair` exits 0 when it did everything it could, even while a check without an action still fails (a disabled formula): its exit code says what repair did, and `doctor` is the command whose exit code says the state. The verify pass names the leftover once more.
+
+- `v15-lts` moves from `node@20` to `node@22`, not to `node@24`: Homebrew disables `node@20` on 2026-10-28 (deprecated a year earlier), Frappe version-15's `engines` says `node >=18`, and `node@22` is the LTS line with the longest Homebrew life that the v15 asset build is known to accept. It is checked on a Mac before each release; the cloud cannot build a bench.
+- The move is a repair, not a surprise: the shell block and the agent plist carry the formula in their PATH, so their hash changes and doctor marks them outdated; `toolchain_node` and `toolchain_yarn` gained the actions `node_install` (brew install of the profile's formula) and `yarn_install` (npm install -g yarn under it), so one `benchbar repair` completes the move. Nothing uninstalls `node@20`: another tool on the Mac may use it, and brew removes it on its own schedule.
+- The disable dates come from `brew info --json=v2`, one call per formula, read from the local tap: three Ruby starts in doctor, no network. One call for all three would be cheaper, but the JSON nests `name` keys (requirements), so pairing dates with formulae by position is the only way and a brew that reorders them would silently mislabel.
+- The tests shorten the system part of the bench's launchd PATH (`FL_LAUNCHD_PATH_SYSTEM`, no `/usr/local/bin`): CI runners carry a node and a yarn there, which stood in for the mocks' and made the yarn assertions pass or fail by host.
+- 90 days is the warning horizon in doctor and in the release check alike, so a release cut inside the window fails before users see the warning. The release check lives in `scripts/check-profile-formulae.sh` and `release-local.sh`; `macos-release.sh` is signing territory and was not touched.
+
 ## 0.7.0: Homebrew
 
 - The install kind comes from SCRIPT_DIR as a string: `*/opt/benchbar/libexec` or `*/Cellar/benchbar/*/libexec` is homebrew, exactly `~/.local/share/benchbar` is managed, a folder with `.git` a checkout, anything else other. No process, because status runs it on every poll of the app, and no variable from the formula's wrapper, because every child (bench, honcho, a nested benchbar of another kind) would inherit it.

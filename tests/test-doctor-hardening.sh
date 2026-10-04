@@ -20,7 +20,7 @@ check() {
 # ---- healthy: every new check passes
 run_fm doctor --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
-for label in "Full Disk Access: crontab is readable" "Node: Node 20.18.0 at ${MOCK_BREW_PREFIX}/opt/node@20/bin/node" "yarn: yarn" \
+for label in "Full Disk Access: crontab is readable" "Node: Node 22.19.0 at ${MOCK_BREW_PREFIX}/opt/node@22/bin/node" "yarn: yarn" \
   "MariaDB server: MariaDB" "pkg-config: pkg-config 2.5.1 finds mariadb-connector-c" "Fork safety env: the agent passes" "Stale processes: no stale process"; do
   assert_contains "$OUT" "[OK] ${label}"
 done
@@ -38,24 +38,115 @@ rm "$MOCK_STATE/crontab_denied"
 # ---- toolchain_node: env/bin/node wins; wrong major; nvm only
 printf '#!/bin/sh\necho v18.20.1\n' >"$BENCH/env/bin/node"; chmod +x "$BENCH/env/bin/node"
 r="$(check toolchain_node)"
-assert_contains "$r" "warn|Node 18.20.1 at env/bin/node, profile v15-lts expects 20"
-assert_contains "$r" "brew install node@20"
+assert_contains "$r" "warn|Node 18.20.1 at env/bin/node, profile v15-lts expects 22"
+assert_contains "$r" "brew install node@22"
 rm "$BENCH/env/bin/node"
-mv "$MOCK_BREW_PREFIX/opt/node@20/bin/node" "$TMP_DIR/node.aside"; mkdir -p "$HOME/.nvm"
+mv "$MOCK_BREW_PREFIX/opt/node@22/bin/node" "$TMP_DIR/node.aside"; mkdir -p "$HOME/.nvm"
 r="$(check toolchain_node)"
 if [[ ! -x /usr/local/bin/node && ! -x /usr/bin/node ]]; then
   assert_contains "$r" "warn|no node on the bench's PATH (nvm's node"
 fi
-mv "$TMP_DIR/node.aside" "$MOCK_BREW_PREFIX/opt/node@20/bin/node"; rmdir "$HOME/.nvm"
+mv "$TMP_DIR/node.aside" "$MOCK_BREW_PREFIX/opt/node@22/bin/node"; rmdir "$HOME/.nvm"
+
+# ---- formula_dates: WARN inside 90 days of a Homebrew disable date, FAIL after it
+r="$(check formula_dates)"
+assert_contains "$r" "ok|python@3.11, node@22, mariadb@10.11 are not near a Homebrew disable date"
+mkdir -p "$MOCK_STATE/brew-info"
+# brew info --json=v2 prints the formula as pretty JSON; the dates are what matter
+brew_info_json() {
+  printf '{\n  "formulae": [\n    {\n      "name": "%s",\n      "deprecated": %s,\n      "deprecation_date": %s,\n      "disabled": %s,\n      "disable_date": %s\n    }\n  ],\n  "casks": []\n}\n' "$@"
+}
+brew_info_json node@22 true '"2025-10-28"' false '"2026-10-28"' >"$MOCK_STATE/brew-info/node@22.json"
+# 2026-09-01: 57 days before the disable date
+r="$(FL_NOW=1788220800 check formula_dates)"
+assert_contains "$r" "warn|Homebrew disables node@22 (2026-10-28, in 57 days); after that brew install fails for this profile"
+assert_contains "$r" "update BenchBar"
+# 2026-06-01: 149 days before: fine
+r="$(FL_NOW=1780272000 check formula_dates)"
+assert_contains "$r" "ok|"
+# 2026-11-05: disabled a week ago
+r="$(FL_NOW=1793836800 check formula_dates)"
+assert_contains "$r" "fail|Homebrew has disabled node@22 (since 2026-10-28): brew install fails"
+# 2026-10-28 12:00: the disable day itself, brew install already fails
+r="$(FL_NOW=1793188800 check formula_dates)"
+assert_contains "$r" "fail|Homebrew has disabled node@22 (since 2026-10-28)"
+# a formula brew no longer knows (removed from the tap a year after disabling it)
+: >"$MOCK_STATE/brew-info/mariadb@10.11.missing"
+r="$(FL_NOW=1780272000 check formula_dates)"
+assert_contains "$r" "fail|Homebrew no longer has mariadb@10.11 (removed from the tap after being disabled)"
+rm -f "$MOCK_STATE/brew-info/mariadb@10.11.missing"
+# disabled without a date (an old formula) is a fail too
+brew_info_json python@3.11 true null true null >"$MOCK_STATE/brew-info/python@3.11.json"
+r="$(FL_NOW=1780272000 check formula_dates)"
+assert_contains "$r" "fail|Homebrew has disabled python@3.11"
+# a FAIL with no action survives a repair that fixed something else: the
+# run names it once more (its exit code says what repair did; doctor's
+# says the state), and the repair itself happened
+rm -f "$BENCH/Procfile.lean"
+FL_NOW=1793836800 run_fm repair --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_file "$BENCH/Procfile.lean"
+assert_contains "$OUT" "some checks still fail and need a manual step; see the fix lines above (doctor exits 1 while they do)"
+FL_NOW=1793836800 run_fm doctor --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"
+# with the formula back, the same run is clean
+rm -f "$MOCK_STATE/brew-info/python@3.11.json"
+FL_NOW=1780272000 run_fm repair --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+brew_info_json python@3.11 true null true null >"$MOCK_STATE/brew-info/python@3.11.json"
+# deprecated with no disable date yet: nothing to warn about
+brew_info_json python@3.11 true '"2026-01-01"' false null >"$MOCK_STATE/brew-info/python@3.11.json"
+rm -f "$MOCK_STATE/brew-info/node@22.json"
+r="$(FL_NOW=1780272000 check formula_dates)"
+assert_contains "$r" "ok|"
+rm -rf "$MOCK_STATE/brew-info"
+
+# ---- scripts/check-profile-formulae.sh: a profile formula within 90 days of
+# its Homebrew disable date fails the release, a far one passes
+set +e
+OUT="$("$ROOT/scripts/check-profile-formulae.sh" 2>&1)"; CODE=$?
+set -e
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "[OK] node@22 (profile v15-lts)"
+assert_contains "$OUT" "[OK] node@24 (profile v16-lts)"
+mkdir -p "$MOCK_STATE/brew-info"
+printf '{"formulae":[{"name":"node@22","deprecated":true,"deprecation_date":"2025-10-28","disabled":false,"disable_date":"2026-10-28"}],"casks":[]}\n' >"$MOCK_STATE/brew-info/node@22.json"
+reset_calls
+set +e
+OUT="$(FL_NOW=1788220800 "$ROOT/scripts/check-profile-formulae.sh" 2>&1)"; CODE=$?
+set -e
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "[FAIL] node@22 (profile v15-lts) is disabled by Homebrew on 2026-10-28, in 57 days; move the profile first"
+assert_eq "1" "$(grep -c '^brew info --json=v2 --formula node@22$' "$MOCK_LOG")" "(one brew info per formula)"
+: >"$MOCK_STATE/brew-info/python@3.14.missing"
+set +e
+OUT="$(FL_NOW=1780272000 "$ROOT/scripts/check-profile-formulae.sh" 2>&1)"; CODE=$?
+set -e
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "[FAIL] python@3.14 (profile v16-lts) is unknown to Homebrew (removed from the tap?)"
+rm -f "$MOCK_STATE/brew-info/python@3.14.missing"
+# 400 days away: only deprecated, a warning
+set +e
+OUT="$(FL_NOW=1758585600 "$ROOT/scripts/check-profile-formulae.sh" 2>&1)"; CODE=$?
+set -e
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "[WARN] node@22 (profile v15-lts) is deprecated since 2025-10-28, disabled on 2026-10-28"
+# a shorter horizon passes the same formula
+set +e
+OUT="$(FL_NOW=1788220800 "$ROOT/scripts/check-profile-formulae.sh" --days 30 2>&1)"; CODE=$?
+set -e
+assert_eq "0" "$CODE" "$OUT"
+rm -rf "$MOCK_STATE/brew-info"
+
 
 # ---- toolchain_yarn: missing
-mv "$MOCK_BREW_PREFIX/opt/node@20/bin/yarn" "$TMP_DIR/yarn.aside"
+mv "$MOCK_BREW_PREFIX/opt/node@22/bin/yarn" "$TMP_DIR/yarn.aside"
 r="$(check toolchain_yarn)"
 if [[ ! -x /usr/local/bin/yarn && ! -x /usr/bin/yarn ]]; then
   assert_contains "$r" "warn|no yarn on the bench's PATH"
   assert_contains "$r" "install -g yarn"
 fi
-mv "$TMP_DIR/yarn.aside" "$MOCK_BREW_PREFIX/opt/node@20/bin/yarn"
+mv "$TMP_DIR/yarn.aside" "$MOCK_BREW_PREFIX/opt/node@22/bin/yarn"
 
 # ---- mariadb_version: not running, too old, too new; never reads the Keychain
 reset_calls

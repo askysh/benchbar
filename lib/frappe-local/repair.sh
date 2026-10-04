@@ -5,7 +5,7 @@
 # the check -> plan -> apply -> verify engine shared by "repair" and
 # "service" (the background phase).
 
-FL_ACTION_ORDER="python_leaves env_rebuild honcho_install honcho_setuptools node_requirements build clear_cache mariadb_bind mariadb_utf8 wkhtmltopdf_install legacy_migrate port_block write_procfile write_runner write_plist write_helpers write_cli_link hosts_entry rotate_logs redis_stop"
+FL_ACTION_ORDER="python_leaves node_install yarn_install env_rebuild honcho_install honcho_setuptools node_requirements build clear_cache mariadb_bind mariadb_utf8 wkhtmltopdf_install legacy_migrate port_block write_procfile write_runner write_plist write_helpers write_cli_link hosts_entry rotate_logs redis_stop"
 # actions whose check may stay a warning after a run without failing it:
 # the user may decline them (or sudo) on purpose
 FL_OPTIONAL_ACTIONS="wkhtmltopdf_install hosts_entry redis_stop"
@@ -17,6 +17,8 @@ FL_MIGRATED_RUNNING=0
 fl_action_label() {
   case "$1" in
     python_leaves) printf 'mark %s as user-installed' "$FL_PYTHON_FORMULA" ;;
+    node_install) printf 'brew install %s (the Node of profile %s; an older node formula is not removed)' "$FL_NODE_FORMULA" "$FL_PROFILE" ;;
+    yarn_install) printf 'install yarn under %s (npm install -g yarn)' "$FL_NODE_FORMULA" ;;
     honcho_install) printf 'install honcho into the bench env' ;;
     honcho_setuptools) printf "install setuptools into honcho's venv" ;;
     env_rebuild) printf 'rebuild the bench env (old env moved aside)' ;;
@@ -102,6 +104,35 @@ act_env_rebuild() {
   fi
   [[ -n "$FL_HONCHO" ]] && fl_bstate_set HONCHO_BIN "$FL_HONCHO"
   fl_render_all
+}
+
+# The profile's Node formula (a profile that moved to a newer Node, for
+# example v15-lts from node@20 to node@22 before Homebrew disabled node@20).
+# Only an install: the old formula stays for whatever else uses it, and the
+# bench's PATH (shell block, agent plist) puts the profile's first.
+act_node_install() {
+  local verb="install"
+  if brew list --formula --versions "$FL_NODE_FORMULA" >/dev/null 2>&1; then
+    if [[ -x "$(fl_node_bin)" ]]; then
+      fl_info "${FL_NODE_FORMULA} is already installed"
+      return 0
+    fi
+    # brew knows the formula but its node is gone (a damaged keg or opt
+    # link): install would be a no-op, reinstall puts the files back
+    verb="reinstall"
+  fi
+  fl_run_long "brew ${verb} ${FL_NODE_FORMULA}" brew "$verb" "$FL_NODE_FORMULA" || return 1
+  [[ -x "$(fl_node_bin)" || "${FL_DRY_RUN:-0}" == "1" ]] || { fl_fail "${FL_NODE_FORMULA} installed, but $(fl_node_bin) is missing"; return 1; }
+  return 0
+}
+
+# yarn is global to a node formula: a new Node needs its own.
+act_yarn_install() {
+  local npm
+  npm="$(fl_npm_bin)"
+  [[ -x "$npm" || "${FL_DRY_RUN:-0}" == "1" ]] || { fl_fail "no npm at ${npm}; install ${FL_NODE_FORMULA} first"; return 1; }
+  fl_run_long "npm install -g yarn (${FL_NODE_FORMULA})" "$npm" install -g yarn || return 1
+  return 0
 }
 
 act_node_requirements() {
@@ -507,7 +538,7 @@ fl_repair_engine() {
       fl_event_step "$action" failed "$(fl_log_step_message "${step_from:-0}")"
       status=1
       case "$action" in
-        env_rebuild|honcho_install) fl_warn "stopping: later steps depend on this one"; break ;;
+        env_rebuild|honcho_install|node_install) fl_warn "stopping: later steps depend on this one"; break ;;
       esac
     fi
     i=$((i + 1))
@@ -540,6 +571,11 @@ fl_repair_engine() {
   if [[ -n "$remaining" && "${FL_DRY_RUN:-0}" != "1" ]]; then
     fl_warn "some checks still need attention; see the fix lines above"
     return 1
+  fi
+  # a FAIL with no action (a disabled formula, a missing tool) is named
+  # once more; the exit code says what repair did (doctor's says the state)
+  if [[ "${FL_DRY_RUN:-0}" != "1" && "$(fl_doctor_count fail)" != "0" ]]; then
+    fl_warn "some checks still fail and need a manual step; see the fix lines above (doctor exits 1 while they do)"
   fi
   return 0
 }

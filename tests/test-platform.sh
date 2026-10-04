@@ -17,12 +17,12 @@ assert_eq "12.2.0" "$(printf '%s\n' 'mariadb from 12.2.0-MariaDB, client 15.2' |
 FL_BREW_PREFIX="/opt/homebrew"
 FL_PYTHON_FORMULA="python@3.11"
 FL_PYTHON_BIN_NAME="python3.11"
-FL_NODE_FORMULA="node@20"
+FL_NODE_FORMULA="node@22"
 FL_MARIADB_FORMULA="mariadb@10.11"
 
 assert_eq "/opt/homebrew/opt/python@3.11/bin/python3.11" "$(fl_python_bin)"
-assert_eq "/opt/homebrew/opt/node@20/bin/node" "$(fl_node_bin)"
-assert_eq "/opt/homebrew/opt/node@20/bin/npm" "$(fl_npm_bin)"
+assert_eq "/opt/homebrew/opt/node@22/bin/node" "$(fl_node_bin)"
+assert_eq "/opt/homebrew/opt/node@22/bin/npm" "$(fl_npm_bin)"
 assert_eq "/opt/homebrew/opt/mariadb@10.11/bin/mariadb" "$(fl_mariadb_bin)"
 
 assert_fails() {

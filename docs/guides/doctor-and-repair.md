@@ -72,6 +72,19 @@ Fix: install Homebrew from <https://brew.sh> when it is missing; run
 formulae, or `brew install pkgconf mariadb-connector-c` for the build
 formulae.
 
+### formula_dates
+
+Homebrew deprecates a formula about a year before it disables it, and a
+disabled formula can no longer be installed, so a fresh install and every
+`brew install` fix of the profile fail from that day. This check reads the
+dates of the profile's Python, Node and MariaDB formulae from the local
+tap (`brew info --json`, no network): a WARN within 90 days of a disable
+date, a FAIL once it has passed.
+
+Fix: update BenchBar (`brew upgrade benchbar`, or Check for Updates in the
+app); a newer profile names the current formulae, and `benchbar repair`
+then moves the bench to them. A bench keeps the formulae it has.
+
 ### python_leaves
 
 The profile's Python (for example `python@3.11`) exists, has the version
@@ -196,12 +209,16 @@ has the major version the profile expects. nvm's node is only on your
 shell's `PATH`, so the bench does not see it.
 
 Fix: `brew install <node formula>`; the bench's `PATH` puts it first.
+When the profile's formula is not installed (a profile that moved to a
+newer Node), `benchbar repair` runs the install (`node_install`); the old
+formula is never removed.
 
 ### toolchain_yarn
 
 `yarn` is on the bench's `PATH`. `bench build` needs it.
 
-Fix: `npm install -g yarn` with the bench's npm.
+Fix: `npm install -g yarn` with the bench's npm; `benchbar repair` runs
+it (`yarn_install`), since yarn is global to one node formula.
 
 ### mariadb_version
 

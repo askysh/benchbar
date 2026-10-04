@@ -81,7 +81,9 @@ fl_launchd_path_value() {
   [[ -n "${FL_PYTHON_FORMULA:-}" ]] && p="${brew}/opt/${FL_PYTHON_FORMULA}/bin:"
   [[ -n "${FL_NODE_FORMULA:-}" ]] && p="${p}${brew}/opt/${FL_NODE_FORMULA}/bin:"
   [[ -n "${FL_MARIADB_FORMULA:-}" ]] && p="${p}${brew}/opt/${FL_MARIADB_FORMULA}/bin:"
-  p="${p}${HOME}/.local/bin:${brew}/bin:${brew}/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+  # FL_LAUNCHD_PATH_SYSTEM: the tests shorten it, so the node or yarn of the
+  # Mac running the suite never stands in for the bench's
+  p="${p}${HOME}/.local/bin:${brew}/bin:${brew}/sbin:${FL_LAUNCHD_PATH_SYSTEM:-/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin}"
   printf '%s' "$p"
 }
 
