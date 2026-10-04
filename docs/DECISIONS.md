@@ -25,7 +25,7 @@ runs come first, the 0.3 easy install run follows.
 - The move is a repair, not a surprise: the shell block and the agent plist carry the formula in their PATH, so their hash changes and doctor marks them outdated; `toolchain_node` and `toolchain_yarn` gained the actions `node_install` (brew install of the profile's formula) and `yarn_install` (npm install -g yarn under it), so one `benchbar repair` completes the move. Nothing uninstalls `node@20`: another tool on the Mac may use it, and brew removes it on its own schedule.
 - The disable dates come from `brew info --json=v2`, one call per formula, read from the local tap: three Ruby starts in doctor, no network. One call for all three would be cheaper, but the JSON nests `name` keys (requirements), so pairing dates with formulae by position is the only way and a brew that reorders them would silently mislabel.
 - The tests shorten the system part of the bench's launchd PATH (`FL_LAUNCHD_PATH_SYSTEM`, no `/usr/local/bin`): CI runners carry a node and a yarn there, which stood in for the mocks' and made the yarn assertions pass or fail by host.
-- 90 days is the warning horizon in doctor and in the release check alike, so a release cut inside the window fails before users see the warning. The release check lives in `scripts/check-profile-formulae.sh` and `release-local.sh`; `macos-release.sh` is signing territory and was not touched.
+- 90 days is the warning horizon in doctor and in the release check alike, so a release cut inside the window fails before users see the warning. The release check lives in `scripts/check-profile-formulae.sh` and runs from both `release-local.sh` and the signed `macos-release.sh`, before any signing or upload.
 
 ## 0.7.3: first install
 

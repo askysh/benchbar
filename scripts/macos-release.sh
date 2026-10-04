@@ -58,6 +58,7 @@ for tool in xcodegen xcodebuild xcrun hdiutil ditto codesign shasum; do
   command -v "$tool" >/dev/null 2>&1 || die "$tool not found" "install Xcode and: brew install xcodegen"
 done
 ok "tools present"
+"${ROOT}/scripts/check-profile-formulae.sh" || die "a release profile names a formula Homebrew is about to disable" "move the profile in config/release-profiles.tsv (see docs/DECISIONS.md, 0.7.3)"
 missing=()
 for var in BENCHBAR_SIGN_IDENTITY BENCHBAR_TEAM_ID NOTARY_KEY_PATH NOTARY_KEY_ID NOTARY_ISSUER_ID \
            SPARKLE_ED_KEY_PATH BENCHBAR_SPARKLE_PUBLIC_KEY; do
