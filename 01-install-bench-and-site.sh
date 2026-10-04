@@ -423,6 +423,19 @@ if [[ -n "$FRAPPE_COMMIT" || -n "$ERPNEXT_COMMIT" ]]; then
   fl_bench_run_long "bench build" "$BENCH_DIR" bench build
 fi
 
+# the port block benchbar install chose (BENCHBAR_PORT_BLOCK, "web socketio
+# queue cache"), written before the bench's Redis starts on bench's defaults
+if [[ "${BENCHBAR_PORT_BLOCK:-}" =~ ^[0-9]+\ [0-9]+\ [0-9]+\ [0-9]+$ ]]; then
+  read -r _pb_web _pb_sio _pb_queue _pb_cache <<<"$BENCHBAR_PORT_BLOCK"
+  if [[ "$FL_DRY_RUN" == "1" ]]; then
+    fl_info "dry-run: bench set-config -g the port block (web ${_pb_web}, socketio ${_pb_sio}, redis ${_pb_queue} and ${_pb_cache}) and bench setup redis"
+  elif ! grep -Eq "\"webserver_port\"[[:space:]]*:[[:space:]]*${_pb_web}[,[:space:]]" "${BENCH_DIR}/sites/common_site_config.json" 2>/dev/null; then
+    fl_bench_write_ports "$BENCH_DIR" "$_pb_web" "$_pb_sio" "$_pb_queue" "$_pb_cache" \
+      || fl_die "could not write the port block with bench set-config (log: ${FL_LOG_FILE:-none})"
+    fl_ok "ports: web ${_pb_web}, socketio ${_pb_sio}, redis ${_pb_queue} and ${_pb_cache}"
+  fi
+fi
+
 # the bench's Redis runs for new-site and install-app (frappe v16 needs it)
 fl_bench_redis_up "$BENCH_DIR"
 trap 'fl_bench_redis_down' EXIT

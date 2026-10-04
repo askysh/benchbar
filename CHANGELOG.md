@@ -175,6 +175,10 @@ All notable changes to this project are documented here.
   volume), and says to move the state first.
 - Docs: `status`, `list` and `doctor --json` are read only except for the
   one time move of the state folder, which renames and links.
+- `benchbar install` of a second bench while another bench or program
+  holds the default ports picks the next free port block (or the one
+  `--port-offset` names) and writes it before phase 01 starts the bench's
+  Redis; it stopped with "Port 11000 ... is held by another process".
 
 ### Changed
 

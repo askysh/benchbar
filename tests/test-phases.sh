@@ -398,4 +398,17 @@ assert_contains "$OUT" "mariadbd is not running"
 printf '3306 111 mariadbd 127.0.0.1\n' >"$MOCK_LISTEN"; add_proc 900 "mariadbd --datadir=/x"
 printf 'rootpw' >"$MOCK_STATE/mariadb_root_pw"; printf 'rootpw\n' >"$MOCK_STATE/keychain/benchbar-mariadb--root"
 
+# ---- a second bench while another program holds the default ports: install
+# picks the next free block and writes it before phase 01 starts the Redis
+SECOND="$HOME/second-bench"; rm -rf "$SECOND"
+add_listener 11000 5110 redis-server; mkdir -p "$MOCK_STATE/cwd"; printf '%s' "$HOME/other-bench" >"$MOCK_STATE/cwd/5110"
+reset_calls
+MARIADB_ROOT_PASSWORD=rootpw ADMIN_PASSWORD=adminpw run_fm install --yes --bench-dir "$SECOND" --site second
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "the default ports are taken; the new bench gets port block"
+assert_not_contains "$OUT" "is held by another process"
+assert_calls_contain '^bench setup redis$'
+grep -q '"webserver_port": *8000' "$SECOND/sites/common_site_config.json" && fail "the new bench must not keep the taken default block"
+rm -f "$MOCK_STATE/cwd/5110"; printf '3306 111 mariadbd 127.0.0.1\n' >"$MOCK_LISTEN"
+
 printf 'test-phases: ok\n'
