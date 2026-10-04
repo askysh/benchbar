@@ -38,7 +38,8 @@ ASSUME_YES=0
 PROFILE="${PROFILE:-}"
 LIST_PROFILES=0
 CHECK_UPDATES=0
-OFFLINE=0
+# --offline, OFFLINE=1 or BENCHBAR_OFFLINE=1: no remote checks
+OFFLINE="${OFFLINE:-0}"; [[ "${BENCHBAR_OFFLINE:-0}" == "1" ]] && OFFLINE=1
 ADVANCED=0
 DRY_RUN=0
 REPAIR_BENCH=0
@@ -69,6 +70,12 @@ Options:
   --dry-run             Print mutating commands without running them
   --repair-bench        Move incomplete bench aside and re-init
   -h, --help            Show this help
+
+Exit codes:
+  0  the bench and the site are in place
+  1  something failed
+  2  the MariaDB root password is unknown (pass MARIADB_ROOT_PASSWORD)
+  3  cancelled at the plan: no bench or site was created
 EOF
 }
 
@@ -343,7 +350,9 @@ if [[ "${#FL_PROFILE_SKIP_NOTES[@]}" -gt 0 ]]; then
 fi
 
 if [[ "$ASSUME_YES" != "1" && "$FL_DRY_RUN" != "1" ]]; then
-  fl_confirm "Proceed?" || { fl_warn "Cancelled."; exit 0; }
+  # exit 3, its own code: the caller (benchbar install) must not take a
+  # cancel for a finished phase and go on to register a bench that is not there
+  fl_confirm "Proceed?" || { fl_warn "Cancelled at the plan: no bench or site was created."; exit 3; }
 fi
 
 if [[ "$FL_DRY_RUN" != "1" && "$SITE_EXISTS" != "1" ]]; then

@@ -243,4 +243,23 @@ assert_eq "0" "$CODE" "$OUT"
 ! grep -q -x -F "# >>> benchbar >>>" "$HOME/.zshrc" || fail "the helper block goes with --all"
 grep -q '^export EDITOR=vim$' "$HOME/.zshrc" || fail "user zshrc content must survive"
 
+# ---- launchd has the label on its disabled list (launchctl disable, an old
+# "launchctl remove"): bootstrap fails with 119 until it is enabled again
+run_fm service --yes --bench-dir "$BENCH"; assert_eq "0" "$CODE" "$OUT"
+run_fm down --bench-dir "$BENCH"; assert_eq "0" "$CODE" "$OUT"
+rm -f "$MOCK_STATE/agents/com.benchbar.frappe-bench"
+launchctl disable "gui/$(id -u)/com.benchbar.frappe-bench"
+reset_calls
+MOCK_KICKSTART_PING=200 run_fm up --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "launchd has com.benchbar.frappe-bench disabled; enabling it"
+assert_calls_contain '^launchctl enable gui/[0-9]+/com.benchbar.frappe-bench$'
+assert_calls_contain '^launchctl kickstart gui/[0-9]+/com.benchbar.frappe-bench$'
+assert_file "$MOCK_STATE/agents/com.benchbar.frappe-bench"
+assert_no_file "$MOCK_STATE/agents/com.benchbar.frappe-bench.disabled"
+# enabled, nothing is enabled again
+reset_calls
+run_fm restart --bench-dir "$BENCH"
+assert_calls_not_contain '^launchctl enable'
+
 printf 'test-service: ok\n'

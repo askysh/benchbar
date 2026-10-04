@@ -118,6 +118,9 @@ OPT_PING=0
 FL_FETCH=0
 FL_ASSUME_YES="${FL_ASSUME_YES:-0}"
 FL_MAKE_DEFAULT="${FL_MAKE_DEFAULT:-0}"
+# --offline, OFFLINE=1 or BENCHBAR_OFFLINE=1: install skips its remote
+# checks (the phase scripts get --offline), doctor --fetch fetches nothing
+OFFLINE="${OFFLINE:-0}"; [[ "${BENCHBAR_OFFLINE:-0}" == "1" ]] && OFFLINE=1
 FL_SCHEDULER=""
 FL_SKIP_PLAN_CONFIRM=0
 COMMAND=""
@@ -266,6 +269,7 @@ Options
                       redis 11000+N and 13000+N). Default: keep the ports, or the next
                       free block when another bench already uses them
   --dry-run           Print the full plan, change nothing
+  --offline           install: skip the remote branch checks (also OFFLINE=1 or BENCHBAR_OFFLINE=1)
   -y, --yes           Do not ask; secrets must come from the environment
   --json              Versioned JSON for list, status and doctor; JSON lines for pull
                       (docs/json-schema.md)
@@ -301,6 +305,7 @@ while [[ "$#" -gt 0 ]]; do
     --bundle) OPT_BUNDLE="${2:-}"; shift 2 ;;
     --bundle=*) OPT_BUNDLE="${1#*=}"; shift ;;
     --dry-run) FL_DRY_RUN=1; shift ;;
+    --offline) OFFLINE=1; shift ;;
     --make-default) FL_MAKE_DEFAULT=1; shift ;;
     --with-schedule) FL_SCHEDULER=on; shift ;;
     --without-schedule) FL_SCHEDULER=off; shift ;;
@@ -370,7 +375,10 @@ fl_run_phase_script() {
 fl_install_sudo_upfront() {
   local reasons=()
   [[ "$FL_DRY_RUN" == "1" ]] && return 0
-  [[ "$(fl_wkhtmltopdf_state)" == "patched" ]] || reasons+=("install the patched wkhtmltopdf package (installer -pkg)")
+  # only when phase 00 will get as far as the installer in this run: without
+  # Rosetta and without a way to agree to it, or after a declined download,
+  # the package is skipped and a sudo prompt for it would be asked for nothing
+  fl_wkhtmltopdf_will_install && reasons+=("install the patched wkhtmltopdf package (installer -pkg)")
   fl_hosts_has_site || reasons+=("add '127.0.0.1 ${FL_SITE}' to ${FL_HOSTS_FILE}")
   [[ "${#reasons[@]}" -gt 0 ]] || return 0
   fl_sudo_begin "${reasons[@]}" || true
@@ -422,6 +430,7 @@ cmd_install() {
   args00=(--profile "$profile_name"); args01=(--profile "$profile_name")
   [[ "$FL_DRY_RUN" == "1" ]] && { args00+=(--dry-run); args01+=(--dry-run); }
   [[ "$FL_ASSUME_YES" == "1" ]] && { args00+=(--yes); args01+=(--yes); }
+  [[ "$OFFLINE" == "1" ]] && { args00+=(--offline); args01+=(--offline); }
   bundle="${OPT_BUNDLE:-$(fl_bstate_get APP_BUNDLE 2>/dev/null || true)}"
   bundle="${bundle:-$FL_TEAM_BUNDLE}"
 
@@ -433,7 +442,8 @@ cmd_install() {
     if [[ "$code" == "2" ]]; then
       fl_step_end warning "manual steps pending"
       fl_steps_summary
-      fl_box "Stopped" "Complete the PENDING MANUAL STEPS printed above," "then run this command again. Nothing else changed."
+      fl_box "Stopped" "Complete the PENDING MANUAL STEPS printed above, then run this command again." \
+        "System dependencies were set up as far as possible; no bench or site was created."
       return 2
     fi
     fl_step_end failed
@@ -452,8 +462,15 @@ cmd_install() {
     if [[ "$code" == "2" ]]; then
       fl_step_end warning "manual steps pending"
       fl_steps_summary
-      fl_box "Stopped" "The MariaDB root password is unknown; see above for how to pass it," "then run this command again. Nothing else changed."
+      fl_box "Stopped" "The MariaDB root password is unknown; see above for how to pass it," "then run this command again. No bench or site was created."
       return 2
+    fi
+    if [[ "$code" == "3" ]]; then
+      # declined at the plan: no bench, so nothing to remember and no service
+      fl_step_end skipped "cancelled"
+      fl_steps_summary
+      fl_warn "Cancelled. No bench or site was created; the system dependencies of step 1 stay in place."
+      return 1
     fi
     fl_step_end failed
     fl_steps_summary
@@ -672,7 +689,9 @@ case "$COMMAND" in
 esac
 
 case "$COMMAND" in
-  install) cmd_install ;;
+  # exit by hand: install's own codes (2 the password, 1 a cancel) must not
+  # pass through the ERR trap, which maps an incidental 2 to 1
+  install) cmd_install || exit $? ;;
   adopt) cmd_adopt "${ARGS[0]:-}" ;;
   service) cmd_service ;;
   mariadb-password) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_mariadb_password ;;

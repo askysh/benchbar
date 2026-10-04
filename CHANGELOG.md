@@ -34,6 +34,34 @@ All notable changes to this project are documented here.
 - `benchbar fg` takes the CLI lock while it stops the background bench,
   so it cannot cut a running site add short, and refuses to start when
   the stop fails.
+- A fresh Homebrew MariaDB (10.4 and newer) gives root a socket login and
+  no password; `benchbar install` read that as "root already has a
+  password" and stopped with exit 2. It now secures root through the
+  macOS user's socket account, as the Homebrew install leaves it, and
+  continues. A server that accepts neither login still stops and asks.
+- Cancelling `benchbar install` at "Proceed?" (or running it without a
+  terminal and without `--yes`) ends the run with exit 1 and "Cancelled.
+  No bench or site was created"; it no longer reported the phase as done
+  and loaded a launchd agent for a bench that was never created.
+- `site add`, `site drop` and the install stop with "MariaDB is not
+  running" when it is not, instead of blaming the root password.
+- A stale `MARIADB_ROOT_PASSWORD` in the environment no longer makes the
+  site step fail when the Keychain holds the working password: it is
+  verified first and the Keychain is tried next, as phase 00 already did.
+- `OFFLINE=1`, `BENCHBAR_OFFLINE=1` and the new `benchbar install
+  --offline` reach both phase scripts; before, they reset it and ran the
+  remote branch checks anyway.
+- `benchbar install` asks for sudo up front only for steps that will run:
+  no prompt for the wkhtmltopdf package when Rosetta is missing and
+  nothing can agree to install it, or when the package would be skipped.
+- The message after a stopped install says what phase 00 did ("System
+  dependencies were set up as far as possible; no bench or site was
+  created") instead of "Nothing else changed".
+- Exit code 2 is only ever "the MariaDB root password is unknown": a
+  command that happens to fail with code 2 now ends the run with 1.
+- A launchd agent that is on launchd's disabled list (after `launchctl
+  disable` or an old `launchctl remove`) is enabled before the bootstrap
+  is retried, instead of failing three times.
 
 ### Changed
 

@@ -186,7 +186,7 @@ assert_calls_not_contain '^bench new-site'
 rm -rf "$BENCH"; rm -f "$MOCK_STATE/keychain/benchbar-mariadb--root"
 ADMIN_PASSWORD=adminpw run01 --yes --offline
 assert_eq "2" "$CODE" "$OUT"
-assert_contains "$OUT" "not in MARIADB_ROOT_PASSWORD and not in the Keychain"
+assert_contains "$OUT" "no working password in MARIADB_ROOT_PASSWORD or the Keychain"
 
 # ---- benchbar install, twice
 rm -rf "$BENCH"; : >"$FL_STATE_FILE"; printf '# fresh\n' >"$HOME/.zshrc"
@@ -241,12 +241,25 @@ assert_contains "$OUT" "add macdev to /etc/hosts (sudo): skipped"
 assert_calls_not_contain '^sudo (installer|tee|cp)'
 rm -f "$MOCK_STATE/sudo_refused"; touch "$MOCK_STATE/wkhtml_installed"
 
-# a deliberately skipped wkhtmltopdf (no Rosetta, no terminal) does not fail the install
+# no Rosetta, no terminal, no --yes: phase 00 skips the package (every
+# question is "no") and asks for no sudo password, since nothing in this run
+# will install it and the hosts line is already there; the install then stops
+# at phase 01's plan, which nothing can confirm, and says so
 rm -f "$MOCK_STATE/rosetta" "$MOCK_STATE/wkhtml_installed"; touch "$MOCK_STATE/wkhtml_missing"
+grep -q '^127.0.0.1 macdev$' "$FL_HOSTS_FILE" || printf '127.0.0.1 macdev\n' >>"$FL_HOSTS_FILE"
+reset_calls
 run_fm install --bench-dir "$BENCH" --site macdev </dev/null
-assert_eq "0" "$CODE" "$OUT"
+assert_eq "1" "$CODE" "$OUT"
 assert_contains "$OUT" "PDFs will not work"
+assert_contains "$OUT" "Cancelled. No bench or site was created"
 assert_not_contains "$OUT" "still need attention"
+assert_calls_not_contain '^sudo' "(nothing in this run needs sudo, so it is not asked for)"
+# with --yes Rosetta and the package would be installed: sudo is asked up front, once
+reset_calls
+run_fm install --yes --bench-dir "$BENCH" --site macdev
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "1" "$(grep -c '^sudo -v$' "$MOCK_LOG")" "(one sudo prompt, for the package)"
+assert_calls_contain '^sudo installer -pkg'
 printf 'rosetta\n' >"$MOCK_STATE/rosetta"; touch "$MOCK_STATE/wkhtml_installed"
 
 # install stops cleanly when 00 leaves manual steps (unknown root password under --yes)
@@ -263,5 +276,100 @@ run_fm service --yes --bench-dir "$BENCH" --site second
 assert_eq "0" "$CODE" "$OUT"
 assert_eq "1" "$(grep -c -x -F "# >>> benchbar >>>" "$FL_HOSTS_FILE")" "(one block only)"
 awk '/^# >>> benchbar >>>$/{b=1;next} /^# <<< benchbar <<<$/{b=0} b' "$FL_HOSTS_FILE" | grep -q -x '127.0.0.1 second' || fail "second site inside the block"
+
+# ---- a stale MARIADB_ROOT_PASSWORD falls through to the Keychain password that works
+rm -rf "$BENCH"
+printf 'rootpw' >"$MOCK_STATE/mariadb_root_pw"; printf 'rootpw\n' >"$MOCK_STATE/keychain/benchbar-mariadb--root"
+reset_calls
+MARIADB_ROOT_PASSWORD=stale-from-an-old-shell ADMIN_PASSWORD=adminpw run01 --yes --offline
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "MARIADB_ROOT_PASSWORD from the environment does not work; trying the Keychain"
+assert_contains "$OUT" "MariaDB root password read from the Keychain"
+assert_calls_contain "^bench new-site macdev"
+# no source works: exit 2, as documented
+rm -rf "$BENCH"; reset_calls
+printf 'other\n' >"$MOCK_STATE/keychain/benchbar-mariadb--root"
+MARIADB_ROOT_PASSWORD=stale ADMIN_PASSWORD=adminpw run01 --yes --offline
+assert_eq "2" "$CODE" "$OUT"
+assert_contains "$OUT" "no working password in MARIADB_ROOT_PASSWORD or the Keychain"
+assert_calls_not_contain '^bench (init|new-site)'
+printf 'rootpw\n' >"$MOCK_STATE/keychain/benchbar-mariadb--root"
+
+# ---- cancelled at "Proceed?" with no terminal: nothing registered, no agent, exit 1
+CANCEL="$HOME/cancel-bench"
+before_default="$(sed -n 's/^BENCH_DIR=//p' "$FL_STATE_FILE")"
+reset_calls
+MARIADB_ROOT_PASSWORD=rootpw ADMIN_PASSWORD=adminpw run_fm install --bench-dir "$CANCEL" --site cancelsite </dev/null
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "Cancelled. No bench or site was created; the system dependencies of step 1 stay in place."
+assert_not_contains "$OUT" "Nothing was changed"
+assert_not_contains "$OUT" "Bench and site (01-install-bench-and-site.sh): done"
+assert_no_file "$CANCEL"
+assert_no_file "$HOME/Library/LaunchAgents/com.benchbar.cancel-bench.plist"
+assert_eq "$before_default" "$(sed -n 's/^BENCH_DIR=//p' "$FL_STATE_FILE")" "(a cancelled install must not change the default bench)"
+[[ -z "$(ls "$FL_STATE_DIR"/benches/cancel-bench-* 2>/dev/null)" ]] || fail "a cancelled install must leave no per bench state"
+assert_calls_not_contain '^(bench init|launchctl bootstrap)'
+assert_calls_not_contain 'cancelsite'
+
+# ---- OFFLINE=1 reaches both phases: no remote call in a dry run
+reset_calls
+OFFLINE=1 run_fm install --dry-run --bench-dir "$HOME/offline-bench" --site offsite
+assert_eq "0" "$CODE" "$OUT"
+assert_calls_not_contain '^(curl|git ls-remote)' "(OFFLINE=1 must stop every remote check)"
+assert_contains "$OUT" "Offline mode"
+reset_calls
+run_fm install --dry-run --offline --bench-dir "$HOME/offline-bench" --site offsite
+assert_eq "0" "$CODE" "$OUT"
+assert_calls_not_contain '^(curl|git ls-remote)' "(--offline must stop every remote check)"
+reset_calls
+run_fm install --dry-run --bench-dir "$HOME/offline-bench" --site offsite
+assert_calls_contain '^git ls-remote' "(without offline the branch checks run)"
+
+# ---- 00 on a fresh Homebrew MariaDB: root logs in over the socket only,
+# the macOS user's socket account secures it; no exit 2, no password asked
+rm -f "$MOCK_STATE/mariadb_root_pw" "$MOCK_STATE/keychain/benchbar-mariadb--root"; : >"$MOCK_STATE/mariadb_sql.log"
+reset_calls
+MOCK_MARIADB_ROOT_SOCKET_ONLY=1 run00 --yes --profile v15-lts
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "root@localhost uses socket login only (fresh Homebrew install); setting a password (generated) through the tester socket account"
+assert_not_contains "$OUT" "MariaDB root already has a password"
+assert_calls_contain "^mariadb -u tester --protocol=socket\$" "(the SQL goes through the user's socket account, over the socket)"
+assert_calls_not_contain '^mariadb -u root -p' "(no password on a command line)"
+assert_calls_not_contain '^sudo mariadb'
+PW="$(keychain_get)"
+[[ "${#PW}" -ge 20 ]] || fail "a generated password is expected in the Keychain, got [$PW]"
+assert_eq "$PW" "$(mariadb_pw)" "(root now has the Keychain password)"
+assert_contains "$(cat "$MOCK_STATE/mariadb_sql.log")" "IDENTIFIED VIA unix_socket OR mysql_native_password" "(root keeps its socket login next to the new password)"
+# the rerun verifies root with that password, as on any set up machine
+reset_calls; : >"$MOCK_STATE/mariadb_sql.log"
+MOCK_MARIADB_ROOT_SOCKET_ONLY=1 run00 --yes --profile v15-lts
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "[OK] MariaDB root password verified (Keychain, unchanged)"
+[[ ! -s "$MOCK_STATE/mariadb_sql.log" ]] || fail "no SQL on a rerun"
+# a server that accepts neither login still stops with exit 2 and asks
+rm -f "$MOCK_STATE/mariadb_root_pw" "$MOCK_STATE/keychain/benchbar-mariadb--root"
+printf 'someoneelses' >"$MOCK_STATE/mariadb_root_pw"
+MOCK_MARIADB_ROOT_SOCKET_ONLY=1 run00 --yes --profile v15-lts
+assert_eq "2" "$CODE" "$OUT"
+assert_contains "$OUT" "MariaDB root already has a password and no source knows it"
+# a socket account that may not read mysql.user proves nothing: root is not
+# touched, and a working Keychain password is neither overwritten nor skipped
+printf 'someoneelses\n' >"$MOCK_STATE/keychain/benchbar-mariadb--root"; : >"$MOCK_STATE/mariadb_sql.log"
+MOCK_MARIADB_ROOT_SOCKET_ONLY=1 MOCK_MARIADB_USER_NO_GRANTS=1 MARIADB_ROOT_PASSWORD=wrongenv run00 --yes --profile v15-lts
+assert_eq "0" "$CODE" "$OUT"
+assert_not_contains "$OUT" "uses socket login only"
+assert_contains "$OUT" "MARIADB_ROOT_PASSWORD from the environment does not work"
+assert_contains "$OUT" "[OK] MariaDB root password verified (Keychain, unchanged)"
+assert_eq "someoneelses" "$(keychain_get)" "(the working Keychain password stays)"
+assert_eq "someoneelses" "$(mariadb_pw)" "(root's password is not touched)"
+[[ ! -s "$MOCK_STATE/mariadb_sql.log" ]] || fail "no SQL may run through an account that cannot prove root is open"
+# a stopped server: the password is not blamed
+: >"$MOCK_LISTEN"; grep -v '^900 ' "$MOCK_PROCS" >"$MOCK_PROCS.tmp" || true; mv "$MOCK_PROCS.tmp" "$MOCK_PROCS"
+rm -rf "$BENCH"
+MARIADB_ROOT_PASSWORD=someoneelses ADMIN_PASSWORD=adminpw run01 --yes --offline
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "mariadbd is not running"
+printf '3306 111 mariadbd 127.0.0.1\n' >"$MOCK_LISTEN"; add_proc 900 "mariadbd --datadir=/x"
+printf 'rootpw' >"$MOCK_STATE/mariadb_root_pw"; printf 'rootpw\n' >"$MOCK_STATE/keychain/benchbar-mariadb--root"
 
 printf 'test-phases: ok\n'

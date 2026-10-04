@@ -143,6 +143,10 @@ fl_retry() {
 fl_on_error() {
   local code="$?"
   [[ "$code" -eq 0 ]] && return 0
+  # exit code 2 means "the MariaDB root password is unknown" and only an
+  # explicit fl_die ... 2 may produce it; a command that happened to exit 2
+  # (grep, awk, a usage error) is an ordinary failure
+  [[ "$code" -eq 2 ]] && code=1
   fl_spinner_stop
   # nothing to name: the command already said why it ended (a verify pass
   # with warnings), so a "[FAIL] Last command failed" line would only mislead
