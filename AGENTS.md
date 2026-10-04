@@ -50,7 +50,7 @@ MARIADB_ROOT_PASSWORD='...' ADMIN_PASSWORD='...' ./benchbar install --yes
 `ADMIN_PASSWORD` is the site's Administrator login; ask the user for it,
 or run without `--yes` and let them type it. `MARIADB_ROOT_PASSWORD` is
 optional: a fresh MariaDB gets a generated password, an existing password
-is read from the Keychain (`benchbar mariadb-password` prints it). Only
+is read from the Keychain (`benchbar mariadb-password --yes` prints it). Only
 when MariaDB already has a password that neither the environment nor the
 Keychain knows does the run stop with exit code 2 and say what to pass. A
 fresh Homebrew MariaDB, whose root logs in over the socket only, is
@@ -107,9 +107,11 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
 ## Rules
 
 - Never `rm -rf` inside a bench, never drop databases, never edit
-  `sites/`. The tool moves broken folders aside; do the same. The one
-  exception is its own lock folder, `<bench>/.benchbar.lock` (and the
-  `.benchbar.lock.stale.<pid>` name a stale one is renamed to).
+  `sites/`. The tool moves broken folders aside; do the same. The
+  exceptions are its own lock folders (the run lock and
+  `<bench>/.benchbar.lock`, with the `.stale.<pid>` name a stale one is
+  renamed to and the `.reclaim` guard) and the oldest `.old` log copies
+  beyond three.
 - Never run `bench update` unless the user asked for it by name.
 - Never write your own LaunchAgents or `Procfile`. Use `benchbar
   service`, which generates `Procfile.lean`, the runner and the agent
@@ -154,8 +156,8 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
 - "unchanged: all N checks pass, nothing to do" means the run was a
   no-op. That is the expected result of a second run.
 - Full command output of every mutating run is in
-  `.benchbar/logs/<timestamp>.log`. Backups are in
-  `.benchbar/backups/<timestamp>/`. For Homebrew and the one line
+  `.benchbar/logs/<date>-<time>-<pid>.log`. Backups are in
+  `.benchbar/backups/<date>-<time>-<pid>/`. For Homebrew and the one line
   installer, `.benchbar` here means `~/.local/state/benchbar`.
 - Exit codes: 0 success, 1 failure or a failing check, 2 the MariaDB root
   password is unknown (install phase 00 or 01, `site add`, `site drop`,

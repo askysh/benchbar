@@ -15,8 +15,9 @@ benchbar site list [--json] [--bench-dir DIR]
 
 Every site of the bench; the default one, the site `benchup` waits for,
 is marked. `benchbar site` alone does the same. With `--json`: each
-site's name, whether it is the default, whether `/etc/hosts` has it, and
-its ping code ([schema](../../json-schema.md#sites)).
+site's name, whether it is the default, whether `/etc/hosts` has it, its
+ping code, its `db_name` and its `db_port` (never the password)
+([schema](../../json-schema.md#sites)).
 
 Exit codes: 0; 1 when no bench is found.
 

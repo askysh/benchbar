@@ -53,10 +53,11 @@ the first call.
 | `--profile NAME` | Repair toward another release profile |
 
 Exit codes: 0 repaired, or nothing to do; 1 a step failed or the plan was
-declined.
+declined, a check that has a repair action still needs it after the run,
+or a check FAILs and nothing in the plan can repair it.
 
-The full output of every run is in `logs/<timestamp>.log` and the
-backups in `backups/<timestamp>/`, in benchbar's state folder:
+The full output of every run is in `logs/<date>-<time>-<pid>.log` and the
+backups in `backups/<date>-<time>-<pid>/`, in benchbar's state folder:
 `~/.local/state/benchbar` for Homebrew, the one line installer and the
 app's CLI, `.benchbar` in a git checkout. `benchbar where` shows it.
 

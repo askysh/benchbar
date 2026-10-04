@@ -26,7 +26,7 @@ These come from `benchbar --help` and work with every command below.
 ## install
 
 ```
-benchbar install [--profile NAME] [--bundle NAME] [--make-default] [--port-offset N] [--dry-run] [--yes]
+benchbar install [--profile NAME] [--bundle NAME] [--make-default] [--port-offset N] [--offline] [--dry-run] [--yes]
 ```
 
 Runs phase 00 (system dependencies), phase 01 (bench and site) and the
@@ -52,6 +52,7 @@ phase scripts: no other program started by the install sees them.
 | `--port-offset N` | Use port block N (web 8000+N, socketio 9000+N, redis 11000+N and 13000+N). Default: keep the ports, or the next free block when another bench already uses them |
 | `--with-schedule`, `--without-schedule` | Add the scheduler to `Procfile.lean`, or leave it out (the default) |
 | `--dry-run` | Print the plan of every phase, change nothing |
+| `--offline` | Skip the remote branch checks of both phase scripts (also `OFFLINE=1` or `BENCHBAR_OFFLINE=1`) |
 | `-y`, `--yes` | Accept every default and confirmation, including the `sudo` line for `/etc/hosts`; the passwords must be in the environment |
 
 With `--yes` the confirmation is skipped but the `sudo` password prompt
@@ -60,7 +61,7 @@ is not.
 Exit codes: 0 success; 1 a step failed; 2 phase 00 or 01 stopped for a
 manual step, most often a MariaDB root password that neither the
 environment nor the Keychain knows (pass `MARIADB_ROOT_PASSWORD`).
-Nothing else changed in that case.
+System dependencies may be set up; no bench or site was created.
 
 ```bash
 MARIADB_ROOT_PASSWORD='...' ADMIN_PASSWORD='...' benchbar install --profile v16-lts --bundle common --yes

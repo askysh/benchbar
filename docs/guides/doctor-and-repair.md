@@ -75,7 +75,8 @@ formulae `pkgconf` and `mariadb-connector-c` (needed to build
 Fix: install Homebrew from <https://brew.sh> when it is missing; run
 `00-mac-system-deps.sh --profile <profile>` from the checkout for missing
 formulae, or `brew install pkgconf mariadb-connector-c` for the build
-formulae.
+formulae. When only the profile's Node formula is missing (the profile
+moved to a newer Node), `benchbar repair` installs it.
 
 ### formula_dates
 
@@ -84,7 +85,8 @@ disabled formula can no longer be installed, so a fresh install and every
 `brew install` fix of the profile fail from that day. This check reads the
 dates of the profile's Python, Node and MariaDB formulae from the local
 tap (`brew info --json`, no network): a WARN within 90 days of a disable
-date, a FAIL once it has passed.
+date, a FAIL once it has passed or once Homebrew no longer knows the
+formula.
 
 Fix: update BenchBar (`brew upgrade benchbar`, or Check for Updates in the
 app); a newer profile names the current formulae, and `benchbar repair`
@@ -197,8 +199,9 @@ Terminal (or the app that runs benchbar), then open a new window.
 `env/bin/python` exists, runs, and is the Python version the profile
 expects.
 
-Fix: `benchbar repair` rebuilds the env; the old one is moved to
-`env.broken.<timestamp>`. When no profile matches the bench's Frappe (a
+Fix: stop the bench first (`benchdown`), then `benchbar repair` rebuilds
+the env; the old one is moved to `env.broken.<timestamp>`. Repair
+refuses to rebuild the env while the bench runs. When no profile matches the bench's Frappe (a
 `develop` or v17 bench with no stored profile: doctor's header then says
 `profile v15-lts (default: no profile matches this bench)`), the Python
 to rebuild with is unknown, so a version mismatch is only a warning, no
@@ -451,16 +454,20 @@ Fix: none needed. `benchbar service --with-schedule` turns it on,
 ### stop_flag
 
 No stop flag, or a stop on purpose (`benchdown`). A flag of `crash` (three
-crashes in ten minutes) or `broken` (honcho or env was missing) means
-auto restart is paused.
+crashes in ten minutes), `broken` (honcho or env was missing) or
+`port_conflict` (a process that is not this bench's held one of its
+ports when the runner started) means auto restart is paused.
 
 Fix: `benchbar logs`, fix the cause, then `benchup`. For `broken`:
-`benchbar repair`, then `benchup`.
+`benchbar repair`, then `benchup`. For `port_conflict`: `benchbar
+doctor` names the process; free the port or run `benchbar ports setup`,
+then `benchup`.
 
 ### helpers
 
-The `# >>> benchbar >>>` block in `~/.zshrc` with `benchup` and the other
-helpers is present and current. Old helper blocks from earlier setups are
+The `# >>> benchbar >>>` block in `~/.zshrc` (`$ZDOTDIR/.zshrc` when
+ZDOTDIR is set) with `benchup` and the other helpers is present and
+current. Old helper blocks from earlier setups are
 reported. A block whose `BENCHBAR` path is gone fails: every helper runs
 that path. That happens after `brew cleanup` deleted a versioned Cellar
 folder an old block named, or after the one line installer's checkout
