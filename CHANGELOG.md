@@ -6,6 +6,10 @@ All notable changes to this project are documented here.
 
 ### Added
 
+- Doctor warns in WSL when NTP inside the distro fights the Windows host
+  clock (`wsl_time_sync`): each NTP poll steps the clock when Windows has
+  drifted, and a step can stop a bench's worker. Fix: `sudo timedatectl
+  set-ntp false`.
 - Linux, Windows through WSL first: the same `benchbar` runs on Ubuntu
   24.04 (Debian based systems with apt), chosen at startup. Only the
   v15-lts profile so far; v16 on Linux comes later.
