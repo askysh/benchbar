@@ -2,7 +2,7 @@
 #
 # 01-install-bench-and-site.sh
 #
-# Phase 1 for local Frappe/ERPNext development on macOS.
+# Phase 1 for local Frappe/ERPNext development on macOS and Linux.
 # Creates or repairs a bench, resolves apps from policy, creates a site,
 # installs apps idempotently, and records resumable state.
 
@@ -113,6 +113,7 @@ fi
 [[ -n "$PROFILE" ]] || PROFILE="$(fl_default_profile)"
 fl_load_profile "$PROFILE"
 fl_mariadb_prefer_running
+if fl_is_linux; then fl_linux_profile_require; fi
 
 FRAPPE_REF="$FL_FRAPPE_BRANCH"
 ERPNEXT_REF="$FL_ERPNEXT_BRANCH"
@@ -195,10 +196,17 @@ fi
 fl_platform_init
 fl_section "PRECHECK"
 fl_preflight_basics "$OFFLINE" "$FL_MIN_DISK_GB" "$HOME"
-export PATH="${FL_BREW_PREFIX}/opt/${FL_PYTHON_FORMULA}/bin:${FL_BREW_PREFIX}/opt/${FL_NODE_FORMULA}/bin:${FL_BREW_PREFIX}/opt/${FL_MARIADB_FORMULA}/bin:$HOME/.local/bin:$PATH"
-export LDFLAGS="-L${FL_BREW_PREFIX}/opt/openssl@3/lib -L${FL_BREW_PREFIX}/opt/libffi/lib -L${FL_BREW_PREFIX}/opt/zlib/lib"
-export CPPFLAGS="-I${FL_BREW_PREFIX}/opt/openssl@3/include -I${FL_BREW_PREFIX}/opt/libffi/include -I${FL_BREW_PREFIX}/opt/zlib/include"
-export PKG_CONFIG_PATH="${FL_BREW_PREFIX}/opt/openssl@3/lib/pkgconfig:${FL_BREW_PREFIX}/opt/libffi/lib/pkgconfig:${FL_BREW_PREFIX}/opt/zlib/lib/pkgconfig:${FL_BREW_PREFIX}/opt/mariadb-connector-c/lib/pkgconfig"
+if fl_is_linux; then
+  # uv's Python, fnm's Node and ~/.local/bin; the apt -dev packages put
+  # headers and pkg-config files where the compiler looks
+  LINUX_TOOLCHAIN_PATH="$(fl_linux_toolchain_path)"
+  export PATH="${LINUX_TOOLCHAIN_PATH}:$PATH"
+else
+  export PATH="${FL_BREW_PREFIX}/opt/${FL_PYTHON_FORMULA}/bin:${FL_BREW_PREFIX}/opt/${FL_NODE_FORMULA}/bin:${FL_BREW_PREFIX}/opt/${FL_MARIADB_FORMULA}/bin:$HOME/.local/bin:$PATH"
+  export LDFLAGS="-L${FL_BREW_PREFIX}/opt/openssl@3/lib -L${FL_BREW_PREFIX}/opt/libffi/lib -L${FL_BREW_PREFIX}/opt/zlib/lib"
+  export CPPFLAGS="-I${FL_BREW_PREFIX}/opt/openssl@3/include -I${FL_BREW_PREFIX}/opt/libffi/include -I${FL_BREW_PREFIX}/opt/zlib/include"
+  export PKG_CONFIG_PATH="${FL_BREW_PREFIX}/opt/openssl@3/lib/pkgconfig:${FL_BREW_PREFIX}/opt/libffi/lib/pkgconfig:${FL_BREW_PREFIX}/opt/zlib/lib/pkgconfig:${FL_BREW_PREFIX}/opt/mariadb-connector-c/lib/pkgconfig"
+fi
 
 if [[ "$OFFLINE" != "1" ]]; then
   if [[ -z "$FRAPPE_COMMIT" ]]; then
@@ -221,22 +229,24 @@ if [[ "$FL_DRY_RUN" == "1" ]]; then
   done
   fl_info "dry-run: skipping service checks for mariadbd and redis-server"
 else
-  fl_require_cmd "$FL_PYTHON_BIN_NAME" "Run ./00-mac-system-deps.sh --profile ${FL_PROFILE}"
-  fl_require_cmd node "Run ./00-mac-system-deps.sh --profile ${FL_PROFILE}"
-  fl_require_cmd npm "Run ./00-mac-system-deps.sh --profile ${FL_PROFILE}"
-  fl_require_cmd yarn "Run ./00-mac-system-deps.sh --profile ${FL_PROFILE}"
-  fl_require_cmd mariadb "Run ./00-mac-system-deps.sh --profile ${FL_PROFILE}"
-  fl_require_cmd redis-server "Run ./00-mac-system-deps.sh --profile ${FL_PROFILE}"
+  fl_require_cmd "$FL_PYTHON_BIN_NAME" "Run ./$(fl_phase00_script) --profile ${FL_PROFILE}"
+  fl_require_cmd node "Run ./$(fl_phase00_script) --profile ${FL_PROFILE}"
+  fl_require_cmd npm "Run ./$(fl_phase00_script) --profile ${FL_PROFILE}"
+  fl_require_cmd yarn "Run ./$(fl_phase00_script) --profile ${FL_PROFILE}"
+  fl_require_cmd mariadb "Run ./$(fl_phase00_script) --profile ${FL_PROFILE}"
+  fl_require_cmd redis-server "Run ./$(fl_phase00_script) --profile ${FL_PROFILE}"
   if command -v wkhtmltopdf >/dev/null 2>&1; then
     fl_ok "wkhtmltopdf found"
   else
-    fl_warn "wkhtmltopdf is not installed: the bench works, PDF printing does not. Run ./00-mac-system-deps.sh to add it later."
+    fl_warn "wkhtmltopdf is not installed: the bench works, PDF printing does not. Run ./$(fl_phase00_script) to add it later."
   fi
-  if fl_port_listening 3306; then
+  # the apt MariaDB on Linux is this install's own: no existing-server note
+  if fl_port_listening 3306 && ! fl_is_linux; then
     fl_mariadb_safe_mode_note
   fi
-  fl_process_running mariadbd || fl_die "mariadbd is not running." "brew services start ${FL_MARIADB_FORMULA}"
-  fl_process_running redis-server || fl_die "redis-server is not running." "brew services start redis"
+  # (on Linux the systemd unit counts too)
+  fl_process_running mariadbd || { fl_is_linux && fl_brew_service_running mariadb; } || fl_die "mariadbd is not running." "$(fl_service_start_hint "${FL_MARIADB_FORMULA}")"
+  fl_process_running redis-server || { fl_is_linux && fl_brew_service_running redis; } || fl_die "redis-server is not running." "$(fl_service_start_hint redis)"
   fl_ok "system services are running"
 fi
 
@@ -335,18 +345,22 @@ else
   # environment, then the Keychain (written by phase 00), then a prompt
   # exit 2, the documented "root password unknown" code, not a generic failure
   fl_mariadb_root_password_resolve || fl_die "MariaDB root password needed to create the site." \
-    "Re-run with: MARIADB_ROOT_PASSWORD='...' $0 --yes, or run ./00-mac-system-deps.sh once to store it in the Keychain." 2
+    "Re-run with: MARIADB_ROOT_PASSWORD='...' $0 --yes, or run ./$(fl_phase00_script) once to store it in the ${FL_SECRET_STORE}." 2
   MARIADB_ROOT_PASSWORD="$FL_MARIADB_ROOT_PW"
   prompt_secret ADMIN_PASSWORD "Site admin password (Administrator login)"
 fi
 
 fl_section "PLAN"
+PLAN_PYTHON="$FL_PYTHON_FORMULA"; PLAN_NODE="$FL_NODE_FORMULA"; PLAN_MARIADB="$FL_MARIADB_FORMULA"
+if fl_is_linux; then
+  PLAN_PYTHON="${FL_PYTHON_BIN_NAME} (uv)"; PLAN_NODE="${FL_NODE_MAJOR} (fnm)"; PLAN_MARIADB="mariadb-server ${FL_MARIADB_MAJOR_MINOR} (apt)"
+fi
 cat <<EOF
   Profile: ${FL_PROFILE}, Frappe ${FRAPPE_REF}, ERPNext ${ERPNEXT_REF}
   Bundle: ${APP_BUNDLE}
-  Python: ${FL_PYTHON_FORMULA}
-  Node: ${FL_NODE_FORMULA}
-  MariaDB: ${FL_MARIADB_FORMULA}
+  Python: ${PLAN_PYTHON}
+  Node: ${PLAN_NODE}
+  MariaDB: ${PLAN_MARIADB}
   Bench directory: ${BENCH_DIR}
   Site: ${SITE_NAME}
   Apps: ${FL_SELECTED_APPS[*]}
@@ -372,7 +386,7 @@ if [[ "$FL_DRY_RUN" != "1" && "$SITE_EXISTS" != "1" ]]; then
   fl_mariadb_root_verify "$MARIADB_ROOT_PASSWORD" \
     || fl_die "MariaDB root password is wrong." "benchbar mariadb-password prints the stored one; MARIADB_ROOT_PASSWORD='...' overrides it."
   DB_CHARSET="$(fl_mariadb_server_charset "$MARIADB_ROOT_PASSWORD")"
-  [[ "$DB_CHARSET" == "utf8mb4" ]] || fl_die "MariaDB character_set_server is '${DB_CHARSET}', expected 'utf8mb4'." "Run ./00-mac-system-deps.sh again (it writes the utf8mb4 drop-in and restarts MariaDB)."
+  [[ "$DB_CHARSET" == "utf8mb4" ]] || fl_die "MariaDB character_set_server is '${DB_CHARSET}', expected 'utf8mb4'." "Run ./$(fl_phase00_script) again (it writes the utf8mb4 drop-in and restarts MariaDB)."
   fl_ok "MariaDB root password verified and charset is utf8mb4"
 fi
 
@@ -468,7 +482,13 @@ if ! [[ "$READY_WEB_PORT" =~ ^[0-9]+$ ]]; then
   READY_WEB_PORT="$(sed -E -n 's/^[[:space:]]*"webserver_port"[[:space:]]*:[[:space:]]*([0-9]+).*/\1/p' "${BENCH_DIR}/sites/common_site_config.json" 2>/dev/null | head -n1 || true)"
 fi
 [[ "$READY_WEB_PORT" =~ ^[0-9]+$ ]] || READY_WEB_PORT=8000
-if ! grep -qE "^[[:space:]]*127\.0\.0\.1[[:space:]]+(.*[[:space:]])?${SITE_NAME//./\\.}([[:space:]]|$)" "${FL_HOSTS_FILE:-/etc/hosts}" 2>/dev/null; then
+if fl_is_linux; then
+  # *.localhost needs no hosts line; any other name has to resolve by itself
+  if ! fl_linux_hosts_resolves "$SITE_NAME"; then
+    fl_warn "${SITE_NAME} does not resolve to this machine; add it to /etc/hosts yourself:"
+    printf '  printf "127.0.0.1 %s\\n" | sudo tee -a /etc/hosts\n\n' "$SITE_NAME"
+  fi
+elif ! grep -qE "^[[:space:]]*127\.0\.0\.1[[:space:]]+(.*[[:space:]])?${SITE_NAME//./\\.}([[:space:]]|$)" "${FL_HOSTS_FILE:-/etc/hosts}" 2>/dev/null; then
   fl_warn "No /etc/hosts entry for ${SITE_NAME} yet; benchbar install (or repair) adds it, or run:"
   printf '  printf "127.0.0.1 %s\\n" | sudo tee -a /etc/hosts\n\n' "$SITE_NAME"
 fi

@@ -2,7 +2,7 @@
 # sudo mock: runs the command as the current user (tests use a temp hosts file).
 # The cached credential is the file $MOCK_STATE/sudo_cred: "sudo -v" and a
 # plain "sudo CMD" (the user typed the password) create it, "sudo -k" removes
-# it, and "sudo -n CMD" works only while it exists. Everything fails while
+# it, and "sudo -n CMD" works only while it exists. The command sees MOCK_AS_ROOT=1. Everything fails while
 # $MOCK_STATE/sudo_refused exists (the user cannot or will not type it).
 # shellcheck source=tests/mocks/bin/_mocklib.sh
 . "$(dirname "$0")/_mocklib.sh"
@@ -23,4 +23,5 @@ if [[ "${1:-}" == "install" ]]; then
   while [[ "$#" -gt 0 ]]; do case "$1" in -o|-g) shift 2 ;; *) args+=("$1"); shift ;; esac; done
   exec install "${args[@]}"
 fi
-exec "$@"
+# the command runs as root: the mariadb mock then logs in over its unix socket
+exec env MOCK_AS_ROOT=1 "$@"

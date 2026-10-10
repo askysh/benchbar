@@ -403,8 +403,16 @@ fl_next_steps_box() {
 # steps run right after (fl_install_privileged_steps) and the credential is
 # dropped before the phases run any third party code.
 fl_install_sudo_upfront() {
-  local reasons=()
+  local reasons=() reason
   [[ "$FL_DRY_RUN" == "1" ]] && return 0
+  if fl_is_linux; then
+    # apt, the MariaDB admin step, its drop-in and the .deb: only what this
+    # run needs (a set up machine asks for nothing); no /etc/hosts line
+    while IFS= read -r reason; do [[ -n "$reason" ]] && reasons+=("$reason"); done < <(fl_linux_sudo_reasons)
+    [[ "${#reasons[@]}" -gt 0 ]] || return 0
+    fl_sudo_begin "${reasons[@]}" || true
+    return 0
+  fi
   # only when phase 00 will get as far as the installer in this run: without
   # Rosetta and without a way to agree to it, or after a declined download,
   # the package is skipped and a sudo prompt for it would be asked for nothing
@@ -433,6 +441,8 @@ fl_install_privileged_steps() {
     *) FL_INSTALL_PDF_STEP=failed ;;
   esac
   # a refused sudo is not asked again in this run: the line waits for a later repair
+  # (Linux has no hosts line: *.localhost resolves without one)
+  if fl_is_linux; then return 0; fi
   act_hosts_entry || fl_warn "the /etc/hosts line could not be added now; run '${FL_SELF} repair' later, it asks for sudo again"
   return 0
 }
@@ -459,11 +469,13 @@ fl_remember_bench() {
 }
 
 cmd_install() {
-  local code=0 args00=() args01=() bundle
+  local code=0 args00=() args01=() bundle phase00 phase_code=0
   local profile_name
   fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
   fl_require_plain_bench
   profile_name="$FL_PROFILE"
+  # a profile Linux cannot install yet is refused before any prompt or step
+  if fl_is_linux; then fl_linux_profile_require; fi
   if [[ -n "$FL_TEAM_PROFILE" ]]; then
     # the team profile's site name, unless one was given or remembered
     [[ -n "$FL_TEAM_SITE" && "$FL_SITE_SOURCE" == "default" ]] && FL_SITE="$FL_TEAM_SITE"
@@ -476,13 +488,16 @@ cmd_install() {
   else
     fl_header "benchbar install" "$(fl_mode_name)" "$(fl_profile_display)" "$FL_BENCH_DIR" "$FL_SITE"
   fi
-  fl_steps_define "System dependencies (00-mac-system-deps.sh)" "Bench and site (01-install-bench-and-site.sh)" "Background service"
+  phase00="$(fl_phase00_script)"
+  fl_steps_define "System dependencies (${phase00})" "Bench and site (01-install-bench-and-site.sh)" "Background service"
   fl_steps_print_plan
   fl_install_sudo_upfront
   fl_install_privileged_steps
   # from here on nothing runs as root: brew, pip, npm, yarn and bench get-app
-  # must not find a cached sudo credential
-  fl_sudo_drop
+  # must not find a cached sudo credential. On Linux the apt and MariaDB
+  # steps are phase 00 itself: it drops the credential when they are done
+  # (before the uv and fnm installers), and it is dropped again after it.
+  fl_is_linux || fl_sudo_drop
 
   # the phases load a team profile themselves (its base for 00, its apps for 01)
   args00=(--profile "$profile_name"); args01=(--profile "$profile_name")
@@ -495,10 +510,16 @@ cmd_install() {
 
   fl_step_begin 0
   if MARIADB_ROOT_PASSWORD="${MARIADB_ROOT_PASSWORD:-}" BENCHBAR_PDF_STEP="$FL_INSTALL_PDF_STEP" \
-     fl_run_phase_script "${SCRIPT_DIR}/00-mac-system-deps.sh" "${args00[@]}"; then
+     fl_run_phase_script "${SCRIPT_DIR}/${phase00}" "${args00[@]}"; then
+    phase_code=0
+  else
+    phase_code=$?
+  fi
+  if fl_is_linux; then fl_sudo_drop; fi
+  if [[ "$phase_code" == "0" ]]; then
     fl_step_end "done"
   else
-    code=$?
+    code="$phase_code"
     if [[ "$code" == "2" ]]; then
       fl_step_end warning "manual steps pending"
       fl_steps_summary

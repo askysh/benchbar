@@ -8,6 +8,8 @@
 # has unix_socket authentication (a TCP login as root is refused with 1698)
 # and the macOS user ($USER) has a socket account with full privileges; once
 # ALTER USER gives root a native password, root logs in with it as usual.
+# In that mode a command run through the sudo mock (MOCK_AS_ROOT=1, the OS root
+# user) logs in as root over the socket with no password, like Ubuntu's.
 printf 'mariadb %s\n' "$*" >>"${MOCK_LOG:-/dev/null}"
 state="${MOCK_STATE:-/nonexistent}"
 pwfile="$state/mariadb_root_pw"
@@ -15,6 +17,9 @@ user="root"; prev=""
 for a in "$@"; do [[ "$prev" == "-u" ]] && user="$a"; prev="$a"; done
 check_login() {
   local want=""
+  # Ubuntu's root is unix_socket: the OS root user (a command run through the
+  # sudo mock) logs in over the socket whatever the password is
+  if [[ "${MOCK_MARIADB_ROOT_SOCKET_ONLY:-0}" == "1" && "${MOCK_AS_ROOT:-0}" == "1" && "$user" == "root" ]]; then return 0; fi
   if [[ "$user" != "root" ]]; then
     # only the OS user's socket account exists, only in socket mode, only without a password
     [[ "${MOCK_MARIADB_ROOT_SOCKET_ONLY:-0}" == "1" && "$user" == "${FL_OS_USER:-${USER:-}}" && -z "${MYSQL_PWD:-}" ]] || return 1

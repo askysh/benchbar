@@ -45,7 +45,8 @@ fl_wkhtmltopdf_pin() {
   local file
   file="$(fl_config_file wkhtmltopdf.tsv)"
   [[ -f "$file" ]] || { fl_fail "missing ${file}"; return 1; }
-  IFS=$'\t' read -r FL_WKHTML_VERSION FL_WKHTML_FILE FL_WKHTML_URL FL_WKHTML_SHA256 _arch _note < <(awk -F '\t' 'NR == 2' "$file")
+  # the row of this platform (column 7; a row without one is the macOS package)
+  IFS=$'\t' read -r FL_WKHTML_VERSION FL_WKHTML_FILE FL_WKHTML_URL FL_WKHTML_SHA256 _arch _note _platform < <(awk -F '\t' -v p="${FL_PLATFORM:-macos}" 'NR > 1 && ($7 == p || ($7 == "" && p == "macos")) {print; exit}' "$file")
   [[ -n "$FL_WKHTML_SHA256" ]] || { fl_fail "no sha256 pinned in ${file}"; return 1; }
 }
 
@@ -172,7 +173,11 @@ fl_wkhtmltopdf_shadow_warn() {
   shadow="$(fl_wkhtmltopdf_shadow)"
   [[ -n "$shadow" ]] || return 0
   fl_warn "${shadow} comes before ${FL_WKHTML_PKG_BIN} on PATH and is not the patched build: Frappe would run it"
-  fl_fix "brew uninstall wkhtmltopdf   (the official package at ${FL_WKHTML_PKG_BIN} stays)"
+  if fl_is_linux; then
+    fl_fix "sudo apt-get remove wkhtmltopdf   (the official package at ${FL_WKHTML_PKG_BIN} stays)"
+  else
+    fl_fix "brew uninstall wkhtmltopdf   (the official package at ${FL_WKHTML_PKG_BIN} stays)"
+  fi
 }
 
 # The whole flow: detect, Rosetta, download, verify, install.
@@ -191,6 +196,10 @@ fl_wkhtmltopdf_will_install() {
   [[ "${FL_ASSUME_YES:-0}" == "1" || -t 0 ]]
 }
 
+# the sudo prompt's reason and the manual command, per platform
+fl_wkhtmltopdf_sudo_reason() { printf 'install the wkhtmltopdf package (installer -pkg %s -target /)' "$FL_WKHTML_FILE"; }
+fl_wkhtmltopdf_manual_install() { printf 'sudo installer -pkg %s -target /' "$FL_WKHTML_PKG"; }
+
 fl_wkhtmltopdf_ensure() {
   local state
   state="$(fl_wkhtmltopdf_state)"
@@ -205,20 +214,24 @@ fl_wkhtmltopdf_ensure() {
     fl_warn "wkhtmltopdf is not installed (Frappe needs it for PDF printing)"
   fi
   fl_wkhtmltopdf_pin || return 1
-  if [[ "${FL_ARCH:-$(uname -m)}" == "arm64" ]] && ! fl_rosetta_ensure; then
+  if fl_is_linux && [[ "${FL_ARCH:-$(uname -m)}" != "x86_64" ]]; then
+    fl_warn "skipping wkhtmltopdf: the official package is built for x86_64 only (this machine is ${FL_ARCH:-$(uname -m)}). PDFs will not work; everything else does."
+    return 2
+  fi
+  if ! fl_is_linux && [[ "${FL_ARCH:-$(uname -m)}" == "arm64" ]] && ! fl_rosetta_ensure; then
     fl_warn "skipping wkhtmltopdf: without Rosetta 2 the Intel binary cannot run. PDFs will not work; everything else does."
     fl_fix "softwareupdate --install-rosetta --agree-to-license, then run this again"
     return 2
   fi
   if [[ "${FL_DRY_RUN:-0}" != "1" ]] && ! fl_confirm "Download wkhtmltopdf ${FL_WKHTML_VERSION} (official patched Qt package, sha256 verified) and install it with sudo?"; then
     fl_warn "skipping wkhtmltopdf: PDFs will not work until it is installed; everything else does."
-    fl_fix "${FL_SELF_DIR}/00-mac-system-deps.sh   (asks again)"
+    fl_fix "${FL_SELF_DIR}/$(fl_phase00_script)   (asks again)"
     return 2
   fi
   fl_wkhtmltopdf_download || return 1
-  if [[ "${FL_DRY_RUN:-0}" != "1" ]] && ! fl_sudo_begin "install the wkhtmltopdf package (installer -pkg ${FL_WKHTML_FILE} -target /)"; then
+  if [[ "${FL_DRY_RUN:-0}" != "1" ]] && ! fl_sudo_begin "$(fl_wkhtmltopdf_sudo_reason)"; then
     fl_warn "skipping wkhtmltopdf: sudo was not available"
-    fl_fix "sudo installer -pkg ${FL_WKHTML_PKG} -target /"
+    fl_fix "$(fl_wkhtmltopdf_manual_install)"
     return 2
   fi
   fl_wkhtmltopdf_install

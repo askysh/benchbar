@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+- Linux install (Ubuntu, Debian, WSL): `benchbar install` runs `00-linux-system-deps.sh`: MariaDB and Redis from apt, Python from uv, Node from fnm, the pinned wkhtmltopdf .deb. The MariaDB root password is a 0600 file in the state folder; the default site is `linuxdev.localhost` and /etc/hosts is not touched. Only v15-lts for now.
+
 ## 0.7.3 - 2026-10-04
 
 A fix pass from a full review: benchbar stops only what it can prove is a

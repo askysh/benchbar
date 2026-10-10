@@ -31,6 +31,12 @@ fl_is_linux() { [[ "${FL_PLATFORM:-}" == "linux" ]]; }
 # the site name a fresh bench gets when nothing says otherwise
 fl_default_site() { printf 'macdev'; }
 
+# the phase 00 script of this platform (the hints name it)
+fl_phase00_script() { printf '00-mac-system-deps.sh'; }
+
+# fl_service_start_hint NAME: the command that starts a service by hand
+fl_service_start_hint() { printf 'brew services start %s' "$1"; }
+
 # fl_open_cmd: the program that opens a URL, by name (it may not be installed)
 fl_open_cmd() { printf 'open'; }
 
