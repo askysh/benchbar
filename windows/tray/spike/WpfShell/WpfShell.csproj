@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>BenchBarTray.Wpf</AssemblyName>
+    <RootNamespace>BenchBar.Tray.Wpf</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- ThemeMode (Fluent theme) is still marked experimental in WPF on .NET 10 -->
+    <NoWarn>$(NoWarn);WPF0001</NoWarn>
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="H.NotifyIcon.Wpf" />
+    <ProjectReference Include="..\Tray.Core\Tray.Core.csproj" />
+  </ItemGroup>
+</Project>

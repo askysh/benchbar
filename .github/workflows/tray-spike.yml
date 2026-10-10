@@ -1,0 +1,104 @@
+# Windows tray shell spike (windows/tray/spike): builds and tests both
+# shells, publishes them, then measures them with the harness so the
+# numbers in the spike's pull request can be reproduced. Not part of any
+# release; the decision and its numbers are in windows/tray/DECISIONS.md.
+#
+# Its own file so the shim session can own ci.yml. Path filtered: it is not
+# a required check, so a workflow that never starts blocks nothing.
+name: Tray spike
+
+on:
+  pull_request:
+    paths:
+      - 'windows/tray/**'
+      - '.github/workflows/tray-spike.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'windows/tray/**'
+      - '.github/workflows/tray-spike.yml'
+  workflow_dispatch:
+    inputs:
+      quick:
+        description: 'Smoke run: 2 runs, 10 second windows'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tray-spike-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: pwsh
+    working-directory: windows/tray/spike
+
+jobs:
+  build:
+    name: build and test
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      DOTNET_NOLOGO: '1'
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: windows/tray/spike/global.json
+      - name: Build
+        run: dotnet build TraySpike.slnx -c Release
+      - name: Test
+        run: dotnet test TraySpike.slnx -c Release --no-build
+      - name: Publish
+        run: ./publish.ps1 -Out out
+      - name: Sizes
+        run: |
+          Get-ChildItem out -Directory | ForEach-Object {
+            $files = Get-ChildItem $_.FullName -Recurse -File
+            '{0,-12} {1,8:N1} MB {2,5} files' -f $_.Name, (($files | Measure-Object Length -Sum).Sum / 1MB), $files.Count
+          }
+      - uses: actions/upload-artifact@v7
+        with:
+          name: tray-spike-shells
+          path: windows/tray/spike/out
+          retention-days: 14
+
+  measure:
+    name: measure
+    needs: build
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          name: tray-spike-shells
+          path: windows/tray/spike/out
+      - name: Measure
+        run: |
+          $quick = '${{ inputs.quick }}' -eq 'true'
+          $a = @('measure',
+            '--winui', 'out/winui-sc/BenchBarTray.WinUI.exe',
+            '--wpf', 'out/wpf-sc/BenchBarTray.Wpf.exe',
+            '--winui-fd-dir', 'out/winui-fd', '--wpf-fd-dir', 'out/wpf-fd',
+            '--fixtures', 'fixtures', '--out', 'results')
+          if ($quick) { $a += '--quick' }
+          ./out/harness/BenchBarTray.Harness.exe @a
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-Content results/results.md | Add-Content $env:GITHUB_STEP_SUMMARY
+      - name: Screenshots
+        if: always()
+        run: |
+          ./out/harness/BenchBarTray.Harness.exe screenshots `
+            --winui out/winui-sc/BenchBarTray.WinUI.exe --wpf out/wpf-sc/BenchBarTray.Wpf.exe `
+            --fixtures fixtures --out results/screenshots
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: tray-spike-results
+          path: windows/tray/spike/results
+          retention-days: 30

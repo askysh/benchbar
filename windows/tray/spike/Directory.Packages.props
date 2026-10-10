@@ -1,0 +1,18 @@
+<Project>
+  <!-- Central package versions for the whole spike. Every project takes its versions from here. -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Tray icon, both shells use the same 2.x release -->
+    <PackageVersion Include="H.NotifyIcon.WinUI" Version="2.4.1" />
+    <PackageVersion Include="H.NotifyIcon.Wpf" Version="2.4.1" />
+    <!-- WinUI shell -->
+    <PackageVersion Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
+    <!-- Tray.Core -->
+    <PackageVersion Include="System.Drawing.Common" Version="10.0.12" />
+    <!-- Tests -->
+    <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.10.0" />
+    <PackageVersion Include="xunit.v3" Version="4.0.2" />
+  </ItemGroup>
+</Project>
