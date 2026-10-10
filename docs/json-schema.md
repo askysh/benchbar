@@ -354,14 +354,16 @@ never read.
 | `plan` | `bench`, `site`, `profile` (the built in profile it runs on), `team_profile` (string or null), `bundle`, `port_offset` (the port block the bench gets), `web_url`, `dry_run`, `sudo_mode` (`terminal`, or `gui` under `BENCHBAR_SUDO=gui`), `steps[]`, `log` | once, first. `steps[]` lists the two privileged steps first (`n` null, `sudo` true, `will_run` false when nothing needs doing: the patched package is in place, the line is in `/etc/hosts`), then the three numbered steps of the terminal output |
 | `step` | `n`, `id`, `parent`, `name`, `status`, and on the end of a step `secs`; `message` for `failed`, `skipped` and `warning` (the CLI's `[FAIL]` or `[WARN]` line); `command` for a skipped privileged step (what to run by hand) | `status` is `running`, then `done`, `unchanged`, `skipped`, `warning` or `failed`. A step with a `parent` is a section of that phase script (`parent` is `system_deps` or `bench_site`) or an action of the service step (`parent` is `service`, the `id` is a [repair action](#benchbar-repair---json)); its `n` is null |
 | `progress` | `step`, `label`, `elapsed` (seconds), `bytes` and `total` (int or null) | every 10 seconds while a long command runs (a download, `bench init`, `bench get-app`, `bench build`, `bench new-site`); `bytes` only for a download |
-| `done` | `exit`, `bench`, `site`, `url` (null unless `exit` is 0), `skipped[]` (`id`, `command` of every privileged step that was skipped), `fix` (string or null), `log`, and `error` (only for a refusal before the plan) | always the last line, also after a failure or a signal. `exit` 2: the MariaDB root password is unknown, `fix` says what to pass (`MARIADB_ROOT_PASSWORD`); run again with it in the environment |
+| `done` | `exit`, `bench`, `site`, `url` (null unless `exit` is 0), `skipped[]` (`id`, `command` of every privileged step that was skipped), `fix` (string or null), `log`, and `error` (only for a refusal before the plan) | always the last line, also after a failure or a signal (`exit` is then 128 plus the signal, 143 for SIGTERM, and a step that was running gets no end line). `exit` 2: the MariaDB root password is unknown, `fix` says what to pass (`MARIADB_ROOT_PASSWORD`); run again with it in the environment |
 
 Section ids of the phase scripts: `profile`, `system`, `plan`, `dry_run`,
 `python`, `node`, `database`, `redis`, `pdf`, `build_deps`,
-`shell_config`, `summary`, `ready`, `pending_manual_steps` (phase 00);
+`shell_config`, `summary`, `ready`, `pending_manual_steps` (phase 00;
+on Linux `00-linux-system-deps.sh` adds `apt_packages` and has no
+`build_deps`);
 `profile`, `advanced_version_mode`, `precheck`, `inputs`, `plan`,
-`verify_db_credentials`, `get_apps`, `install_apps_on_site`, `ready`
-(phase 01). They are the section headings of the terminal output in
+`verify_db_credentials`, `pipx`, `bench_cli`, `bench_init`, `get_apps`,
+`create_site`, `verify_site`, `install_apps_on_site`, `ready` (phase 01). They are the section headings of the terminal output in
 lowercase with `_`, so a reader should show `name` and treat an `id` it
 does not know as any other section.
 

@@ -72,6 +72,44 @@ struct InstallStreamTests {
         #expect(p.progress(for: p.topLevel[0]) == nil)
     }
 
+    /// Captured from the real CLI on a Mac (the 0.8 end to end run, home
+    /// folder replaced): a v15 bench on port block 1, every step done.
+    @Test func aCapturedInstallDecodesEveryLine() throws {
+        let p = try progress("install-captured-success")
+        #expect(p.done?.exit == 0)
+        #expect(p.done?.url == "http://bbtest:8001")
+        #expect(p.plan?.portOffset == 1)
+        #expect(p.topLevel.filter { !$0.alreadyDone }.map(\.id) == ["system_deps", "bench_site", "service"])
+        #expect(p.children(of: "bench_site").map(\.id).contains("create_site"))
+        #expect(p.children(of: "service").map(\.id) == ["write_procfile", "write_runner", "write_plist"])
+        #expect(p.rows.allSatisfy { $0.status != .running })
+    }
+
+    /// Captured: phase 00 failed in its Node section (npm without node on
+    /// PATH, fixed since). The failed row is the nested one.
+    @Test func aCapturedFailureNamesTheNestedStep() throws {
+        let p = try progress("install-captured-failed")
+        #expect(p.done?.exit != 0)
+        #expect(p.failedStep?.id == "node")
+        #expect(p.failedStep?.parent == "system_deps")
+    }
+
+    @Test func theCapturedPlanAndPrerequisitesDecode() throws {
+        let plan = try events("install-captured-dry-run")
+        #expect(plan.count == 2)
+        let report = try BenchJSON.decode(PrerequisiteReport.self, from: Data(try Fixture.string("doctor-prerequisites-captured").utf8))
+        #expect(report.prerequisites.contains { $0.id == "default_ports" })
+    }
+
+    /// Captured from the real CLI on a Mac: install --yes --json stopped with
+    /// SIGTERM during the wkhtmltopdf download (the wizard's Stop).
+    @Test func aStoppedRunEndsTheStepThatRanAsStopped() throws {
+        let p = try progress("install-captured-stopped")
+        #expect(p.done?.exit == 143)
+        #expect(p.rows.first { $0.id == "wkhtmltopdf_install" }?.status == .stopped)
+        #expect(p.rows.allSatisfy { $0.status != .running }, "no spinner is left after the end")
+    }
+
     @Test func aFailedInstallNamesTheStepItsMessageAndTheFix() throws {
         let p = try progress("install-stream-failed")
         let failed = try #require(p.failedStep)

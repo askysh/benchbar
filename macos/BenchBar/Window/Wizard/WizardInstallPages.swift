@@ -154,6 +154,7 @@ struct InstallStepRow: View {
         case .warning: Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
         case .failed: Image(systemName: "xmark.circle.fill").foregroundStyle(.red)
         case .unknown: Image(systemName: "questionmark.circle").foregroundStyle(.secondary)
+        case .stopped: Image(systemName: "stop.circle.fill").foregroundStyle(.secondary)
         }
     }
 }

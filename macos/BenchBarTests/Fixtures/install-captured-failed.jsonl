@@ -1,0 +1,16 @@
+{"schema_version":1,"cli_version":"0.7.3","event":"plan","bench":"/Users/you/dev/bb-wizard-test","site":"bbtest","profile":"v15-lts","team_profile":null,"bundle":"minimal","port_offset":1,"web_url":"http://bbtest:8001","dry_run":false,"sudo_mode":"gui","steps":[{"n":null,"id":"wkhtmltopdf_install","name":"Install the patched wkhtmltopdf package","sudo":true,"will_run":false},{"n":null,"id":"hosts_entry","name":"Add 127.0.0.1 bbtest to /etc/hosts","sudo":true,"will_run":true},{"n":1,"id":"system_deps","name":"System dependencies (00-mac-system-deps.sh)","sudo":false,"will_run":true},{"n":2,"id":"bench_site","name":"Bench and site (01-install-bench-and-site.sh)","sudo":false,"will_run":true},{"n":3,"id":"service","name":"Background service","sudo":false,"will_run":true}],"log":"/Users/you/.local/state/benchbar/logs/20261010-202813-61907.log"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"hosts_entry","parent":null,"name":"Add 127.0.0.1 bbtest to /etc/hosts","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"hosts_entry","parent":null,"name":"Add 127.0.0.1 bbtest to /etc/hosts","status":"done","secs":12}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":1,"id":"system_deps","parent":null,"name":"System dependencies (00-mac-system-deps.sh)","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"profile","parent":"system_deps","name":"PROFILE","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"profile","parent":"system_deps","name":"PROFILE","status":"done","secs":0}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"system","parent":"system_deps","name":"SYSTEM","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"system","parent":"system_deps","name":"SYSTEM","status":"done","secs":1}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"plan","parent":"system_deps","name":"PLAN","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"plan","parent":"system_deps","name":"PLAN","status":"done","secs":0}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"python","parent":"system_deps","name":"PYTHON","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"python","parent":"system_deps","name":"PYTHON","status":"done","secs":1}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"node","parent":"system_deps","name":"NODE","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"node","parent":"system_deps","name":"NODE","status":"failed","secs":0}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":1,"id":"system_deps","parent":null,"name":"System dependencies (00-mac-system-deps.sh)","status":"failed","secs":2}
+{"schema_version":1,"cli_version":"0.7.3","event":"done","exit":127,"bench":"/Users/you/dev/bb-wizard-test","site":"bbtest","url":null,"skipped":[],"fix":null,"log":"/Users/you/.local/state/benchbar/logs/20261010-202813-61907.log"}

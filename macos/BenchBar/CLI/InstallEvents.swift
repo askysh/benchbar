@@ -8,6 +8,9 @@ import Foundation
 
 nonisolated enum InstallStepStatus: String, Codable, Sendable {
     case running, done, unchanged, skipped, warning, failed, unknown
+    /// The app's own word, never in the stream: the run ended (Stop, a
+    /// signal) while the step still ran, so no end line came for it.
+    case stopped
 
     init(from decoder: Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)

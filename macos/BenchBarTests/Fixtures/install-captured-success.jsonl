@@ -1,0 +1,70 @@
+{"schema_version":1,"cli_version":"0.7.3","event":"plan","bench":"/Users/you/dev/bb-wizard-test","site":"bbtest","profile":"v15-lts","team_profile":null,"bundle":"minimal","port_offset":1,"web_url":"http://bbtest:8001","dry_run":false,"sudo_mode":"gui","steps":[{"n":null,"id":"wkhtmltopdf_install","name":"Install the patched wkhtmltopdf package","sudo":true,"will_run":false},{"n":null,"id":"hosts_entry","name":"Add 127.0.0.1 bbtest to /etc/hosts","sudo":true,"will_run":false},{"n":1,"id":"system_deps","name":"System dependencies (00-mac-system-deps.sh)","sudo":false,"will_run":true},{"n":2,"id":"bench_site","name":"Bench and site (01-install-bench-and-site.sh)","sudo":false,"will_run":true},{"n":3,"id":"service","name":"Background service","sudo":false,"will_run":true}],"log":"/Users/you/.local/state/benchbar/logs/20261010-202958-63120.log"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":1,"id":"system_deps","parent":null,"name":"System dependencies (00-mac-system-deps.sh)","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"profile","parent":"system_deps","name":"PROFILE","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"profile","parent":"system_deps","name":"PROFILE","status":"done","secs":0}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"system","parent":"system_deps","name":"SYSTEM","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"system","parent":"system_deps","name":"SYSTEM","status":"done","secs":0}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"plan","parent":"system_deps","name":"PLAN","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"plan","parent":"system_deps","name":"PLAN","status":"done","secs":1}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"python","parent":"system_deps","name":"PYTHON","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"python","parent":"system_deps","name":"PYTHON","status":"done","secs":1}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"node","parent":"system_deps","name":"NODE","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"node","parent":"system_deps","name":"NODE","status":"done","secs":1}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"database","parent":"system_deps","name":"DATABASE","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"database","parent":"system_deps","name":"DATABASE","status":"warning","secs":1,"message":"[WARN] Existing MariaDB/MySQL may already be using port 3306."}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"redis","parent":"system_deps","name":"REDIS","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"redis","parent":"system_deps","name":"REDIS","status":"done","secs":0}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"pdf","parent":"system_deps","name":"PDF","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"pdf","parent":"system_deps","name":"PDF","status":"done","secs":0}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"build_deps","parent":"system_deps","name":"BUILD DEPS","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"build_deps","parent":"system_deps","name":"BUILD DEPS","status":"done","secs":3}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"shell_config","parent":"system_deps","name":"SHELL CONFIG","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"shell_config","parent":"system_deps","name":"SHELL CONFIG","status":"done","secs":0}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"summary","parent":"system_deps","name":"SUMMARY","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"summary","parent":"system_deps","name":"SUMMARY","status":"done","secs":0}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"ready","parent":"system_deps","name":"READY","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"ready","parent":"system_deps","name":"READY","status":"done","secs":0}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":1,"id":"system_deps","parent":null,"name":"System dependencies (00-mac-system-deps.sh)","status":"done","secs":7}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":2,"id":"bench_site","parent":null,"name":"Bench and site (01-install-bench-and-site.sh)","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"profile","parent":"bench_site","name":"PROFILE","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"profile","parent":"bench_site","name":"PROFILE","status":"done","secs":1}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"precheck","parent":"bench_site","name":"PRECHECK","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"precheck","parent":"bench_site","name":"PRECHECK","status":"warning","secs":2,"message":"[WARN] Existing MariaDB/MySQL may already be using port 3306."}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"inputs","parent":"bench_site","name":"INPUTS","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"inputs","parent":"bench_site","name":"INPUTS","status":"done","secs":0}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"plan","parent":"bench_site","name":"PLAN","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"plan","parent":"bench_site","name":"PLAN","status":"done","secs":0}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"verify_db_credentials","parent":"bench_site","name":"VERIFY DB CREDENTIALS","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"verify_db_credentials","parent":"bench_site","name":"VERIFY DB CREDENTIALS","status":"done","secs":0}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"bench_cli","parent":"bench_site","name":"BENCH CLI","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"bench_cli","parent":"bench_site","name":"BENCH CLI","status":"done","secs":0}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"bench_init","parent":"bench_site","name":"BENCH INIT","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"bench_init","parent":"bench_site","name":"BENCH INIT","status":"done","secs":26}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"get_apps","parent":"bench_site","name":"GET APPS","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"get_apps","parent":"bench_site","name":"GET APPS","status":"done","secs":14}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"create_site","parent":"bench_site","name":"CREATE SITE","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"progress","step":"create_site","label":"bench new-site bbtest","elapsed":10,"bytes":null,"total":null}
+{"schema_version":1,"cli_version":"0.7.3","event":"progress","step":"create_site","label":"bench new-site bbtest","elapsed":20,"bytes":null,"total":null}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"create_site","parent":"bench_site","name":"CREATE SITE","status":"done","secs":29}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"install_apps_on_site","parent":"bench_site","name":"INSTALL APPS ON SITE","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"progress","step":"install_apps_on_site","label":"bench install-app erpnext on bbtest","elapsed":10,"bytes":null,"total":null}
+{"schema_version":1,"cli_version":"0.7.3","event":"progress","step":"install_apps_on_site","label":"bench install-app erpnext on bbtest","elapsed":20,"bytes":null,"total":null}
+{"schema_version":1,"cli_version":"0.7.3","event":"progress","step":"install_apps_on_site","label":"bench install-app erpnext on bbtest","elapsed":30,"bytes":null,"total":null}
+{"schema_version":1,"cli_version":"0.7.3","event":"progress","step":"install_apps_on_site","label":"bench install-app erpnext on bbtest","elapsed":40,"bytes":null,"total":null}
+{"schema_version":1,"cli_version":"0.7.3","event":"progress","step":"install_apps_on_site","label":"bench install-app erpnext on bbtest","elapsed":50,"bytes":null,"total":null}
+{"schema_version":1,"cli_version":"0.7.3","event":"progress","step":"install_apps_on_site","label":"bench install-app erpnext on bbtest","elapsed":60,"bytes":null,"total":null}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"install_apps_on_site","parent":"bench_site","name":"INSTALL APPS ON SITE","status":"done","secs":62}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"verify_site","parent":"bench_site","name":"VERIFY SITE","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"verify_site","parent":"bench_site","name":"VERIFY SITE","status":"done","secs":3}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"ready","parent":"bench_site","name":"READY","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"ready","parent":"bench_site","name":"READY","status":"done","secs":0}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":2,"id":"bench_site","parent":null,"name":"Bench and site (01-install-bench-and-site.sh)","status":"done","secs":137}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":3,"id":"service","parent":null,"name":"Background service","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"write_procfile","parent":"service","name":"write Procfile.lean","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"write_procfile","parent":"service","name":"write Procfile.lean","status":"done","secs":1}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"write_runner","parent":"service","name":"write the runner script","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"write_runner","parent":"service","name":"write the runner script","status":"done","secs":0}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"write_plist","parent":"service","name":"write and load the launchd agent","status":"running"}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":null,"id":"write_plist","parent":"service","name":"write and load the launchd agent","status":"done","secs":0}
+{"schema_version":1,"cli_version":"0.7.3","event":"step","n":3,"id":"service","parent":null,"name":"Background service","status":"done","secs":8}
+{"schema_version":1,"cli_version":"0.7.3","event":"done","exit":0,"bench":"/Users/you/dev/bb-wizard-test","site":"bbtest","url":"http://bbtest:8001","skipped":[],"fix":null,"log":"/Users/you/.local/state/benchbar/logs/20261010-202958-63120.log"}

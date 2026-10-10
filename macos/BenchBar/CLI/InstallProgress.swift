@@ -89,6 +89,11 @@ nonisolated struct InstallProgress: Equatable, Sendable {
         case .done(let done):
             self.done = done
             progress = nil
+            // a run ended by a signal (Stop) sends no end line for the steps
+            // that ran: they stop spinning, as stopped, or failed otherwise
+            for i in rows.indices where rows[i].status == .running {
+                rows[i].status = done.exit >= 128 ? .stopped : (done.exit == 0 ? .done : .failed)
+            }
         }
     }
 
