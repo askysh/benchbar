@@ -72,7 +72,10 @@ fl_context_init() {
   # and 01), so daily commands never look at port 3306
   FL_MARIADB_FORMULA_PINNED="$(fl_bstate_get MARIADB_FORMULA 2>/dev/null || true)"
   [[ -n "$FL_MARIADB_FORMULA_PINNED" ]] && fl_mariadb_prefer_running
-  if command -v brew >/dev/null 2>&1; then
+  if fl_is_linux; then
+    # no Homebrew on Linux: the toolchain paths come from uv, fnm and apt
+    FL_BREW_PREFIX=""
+  elif command -v brew >/dev/null 2>&1; then
     FL_BREW_PREFIX="$(brew --prefix 2>/dev/null || printf '/opt/homebrew')"
   else
     FL_BREW_PREFIX="${FL_BREW_PREFIX:-/opt/homebrew}"
