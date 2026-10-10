@@ -149,6 +149,14 @@ scan --site mysite.test
 assert_eq "ok | - | -" "$(row hosts)"
 assert_calls_not_contain '^sudo'
 
+# ---- a *.localhost site on a glibc without nss-myhostname: the fix is the package
+touch "$MOCK_STATE/no_myhostname"
+scan
+assert_eq "fail" "$(field hosts level)"
+assert_contains "$(field hosts fix_command)" "libnss-myhostname"
+assert_not_contains "$(field hosts fix_command)" "/etc/hosts"
+rm -f "$MOCK_STATE/no_myhostname"
+
 # ---- MariaDB drop-in missing: WARN with the repair fix and the action, sudo in the plan
 mv "$CONF/99-frappe.cnf" "$TMP_DIR/99-frappe.cnf.gone"
 scan

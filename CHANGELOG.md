@@ -4,7 +4,34 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
-- Linux install (Ubuntu, Debian, WSL): `benchbar install` runs `00-linux-system-deps.sh`: MariaDB and Redis from apt, Python from uv, Node from fnm, the pinned wkhtmltopdf .deb. The MariaDB root password is a 0600 file in the state folder; the default site is `linuxdev.localhost` and /etc/hosts is not touched. Only v15-lts for now.
+### Added
+
+- Linux, Windows through WSL first: the same `benchbar` runs on Ubuntu
+  24.04 (Debian based systems with apt), chosen at startup. Only the
+  v15-lts profile so far; v16 on Linux comes later.
+- `benchbar install` on Linux runs `00-linux-system-deps.sh`: MariaDB and
+  Redis from apt, Python from uv, Node from fnm, the pinned wkhtmltopdf
+  .deb (checksum verified, installed through apt), and
+  `libnss-myhostname` so `*.localhost` resolves inside the machine. One
+  sudo prompt up front, none on a second run. A fresh apt MariaDB gets a
+  root password through `sudo mariadb`; the password lives in a 0600 file
+  in the state folder (`benchbar mariadb-password --yes` prints it).
+- Each bench runs as its own `systemd --user` unit with the same runner,
+  crash guard, stop flag and status as on the Mac; `loginctl
+  enable-linger` brings a running bench back after a reboot. `up`, `down`,
+  `restart`, `status --json`, `doctor --json`, `repair`, `adopt`, `site
+  add`, `site backup`, `logs`, the `bench*` helpers (in `~/.bashrc`) and
+  `benchbar mcp` work on Linux.
+- The default site on Linux is `linuxdev.localhost`; benchbar never edits
+  `/etc/hosts` there. Doctor checks that the site name resolves instead,
+  and leaves out the checks that only exist on a Mac.
+
+### Fixed
+
+- The shellcheck step of the test suite could never fail: it printed
+  "shellcheck: ok" whatever shellcheck found.
+- A NOPASSWD sudo rule next to a password rule no longer makes the install
+  ask for a password it does not need.
 
 ## 0.7.3 - 2026-10-04
 

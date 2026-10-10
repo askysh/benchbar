@@ -303,13 +303,22 @@ chk_agent() {
 # No /etc/hosts edit on Linux: *.localhost resolves to loopback by itself.
 # The name has to resolve to 127.0.0.1 or ::1, whichever way (nss-myhostname,
 # systemd-resolved, a hosts line the user made).
+# the fix for a site name that does not resolve: *.localhost needs
+# nss-myhostname (the install adds it); any other name needs a hosts line
+fl_linux_hosts_fix() {
+  case "$FL_SITE" in
+    *.localhost) printf "sudo apt-get install -y libnss-myhostname (it adds 'myhostname' to the hosts line of /etc/nsswitch.conf; check that line if the package is already there)" ;;
+    *) printf "use a *.localhost site name (%s site default <name>.localhost), or map this one yourself: echo '127.0.0.1 %s' | sudo tee -a /etc/hosts" "$FL_SELF" "$FL_SITE" ;;
+  esac
+}
+
 chk_hosts() {
   local first
   first="$(getent hosts "$FL_SITE" 2>/dev/null | awk 'NR == 1 {print $1}')"
   case "$first" in
     127.0.0.1|::1) chk__set ok "${FL_SITE} resolves to ${first}" ;;
-    "") chk__set fail "${FL_SITE} does not resolve (getent hosts finds nothing)" "use a *.localhost site name, which resolves to loopback by itself (${FL_SELF} site default <name>.localhost), or map this one yourself: echo '127.0.0.1 ${FL_SITE}' | sudo tee -a /etc/hosts" ;;
-    *) chk__set fail "${FL_SITE} resolves to ${first}, not to 127.0.0.1 or ::1" "use a *.localhost site name, which resolves to loopback by itself (${FL_SELF} site default <name>.localhost), or map this one yourself: echo '127.0.0.1 ${FL_SITE}' | sudo tee -a /etc/hosts" ;;
+    "") chk__set fail "${FL_SITE} does not resolve (getent hosts finds nothing)" "$(fl_linux_hosts_fix)" ;;
+    *) chk__set fail "${FL_SITE} resolves to ${first}, not to 127.0.0.1 or ::1" "$(fl_linux_hosts_fix)" ;;
   esac
 }
 

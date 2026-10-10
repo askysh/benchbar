@@ -353,8 +353,12 @@ fl_bench_status_pids() {
 # ------------------------------------------------------------- install (MariaDB, wkhtmltopdf, phase 00)
 
 # What the install needs from apt: the servers, the compiler and the -dev
-# packages a Frappe bench builds against, git, curl and zip.
-FL_LINUX_APT_PACKAGES="mariadb-server mariadb-client redis-server build-essential pkg-config libmariadb-dev libssl-dev libffi-dev zlib1g-dev git curl zip"
+# packages a Frappe bench builds against, git, curl and zip, and
+# libnss-myhostname: glibc on Ubuntu (WSL above all, whose DNS proxy does
+# not answer .localhost) does not resolve *.localhost by itself, so
+# wkhtmltopdf and Python could not reach the site by its name. The package
+# adds "myhostname" to the hosts line of /etc/nsswitch.conf on install.
+FL_LINUX_APT_PACKAGES="mariadb-server mariadb-client redis-server build-essential pkg-config libmariadb-dev libssl-dev libffi-dev zlib1g-dev git curl zip libnss-myhostname"
 # where Ubuntu reads MariaDB drop-ins (it includes the folder already), and
 # the folder systemd marks a booted system with; both overridable for the tests
 FL_MYSQL_CONF_DIR="${FL_MYSQL_CONF_DIR:-/etc/mysql/mariadb.conf.d}"
