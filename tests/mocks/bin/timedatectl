@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# timedatectl mock: `show -p NTP --value` prints $MOCK_NTP (default no, so a
+# test machine never leaks the real NTP setting); `set-ntp` is only logged
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "$(dirname "$0")/_mocklib.sh"
+mock_log "$@"
+case "${1:-}" in
+  show) printf '%s\n' "${MOCK_NTP:-no}" ;;
+  *) ;;
+esac
+exit 0
