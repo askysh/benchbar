@@ -23,13 +23,17 @@ cmd="$(printf '%s' "$input" | sed -nE 's/.*"command"[[:space:]]*:[[:space:]]*"((
 # JSON escapes for whitespace are what the shell sees: a tab or CR is a
 # space, a newline ends a command
 cmd="$(printf '%s' "$cmd" | sed -e 's/\\[tr]/ /g' -e 's/\\n/ ; /g')"
+# Quotes and backslashes join word fragments in the shell (g''h is gh), so
+# calls are found and checked with them dropped. Only the task name check
+# below reads the quoted original.
+flat="$(printf '%s' "$cmd" | tr -d "'\"\\\\")"
 
 # Prints each chunk that starts with the pattern, up to the next match, one
 # per line (newlines inside the command are JSON escaped, so none are real).
 # Lowercased: Windows finds SCHTASKS and Schtasks.exe as well, so the
 # patterns and every check below are lowercase or case-insensitive.
 chunks() {
-  printf '%s' "$cmd" | awk -v pat="$1" '{
+  printf '%s' "$flat" | awk -v pat="$1" '{
     s = tolower($0)
     while ((i = match(s, pat)) > 0) {
       rest = substr(s, i + RLENGTH)
@@ -68,6 +72,8 @@ done <<EOF
 $(chunks '(^|[^A-Za-z0-9_.-])gh(\.exe)?[[:space:]]+api([[:space:]]|$)')
 EOF
 
+tasks="$(chunks '(^|[^A-Za-z0-9_.-])schtasks(\.exe)?([[:space:]]|$)')"
+calls="$(printf '%s\n' "$tasks" | grep -c .)"
 while IFS= read -r call; do
   [ -n "$call" ] || continue
   if matches "$call" '[[:space:]][-/]+(delete|change)([[:space:]]|$)'; then
@@ -75,14 +81,17 @@ while IFS= read -r call; do
     exit 2
   fi
   if matches "$call" '[[:space:]][-/]+create([[:space:]]|$)'; then
+    # The name needs its quotes to end where it ends, so it is read from the
+    # original command, which must then hold this one schtasks call only.
     names="$(printf '%s' "$call" | grep -Eio -- '[[:space:]][-/]+tn([[:space:]]|$)' | wc -l | tr -d ' ')"
-    keepalive='[[:space:]][-/]+tn[[:space:]]+(\\"|'"'"')benchbar keepalive(\\"|'"'"')([[:space:]]|$)'
-    if [ "$names" != 1 ] || ! [[ $call =~ $keepalive ]]; then
+    keepalive='schtasks(\.exe)?[[:space:]][^;&|]*[[:space:]][-/]+tn[[:space:]]+(\\"|'"'"')benchbar keepalive(\\"|'"'"')([[:space:]]|$)'
+    original="$(printf '%s' "$cmd" | tr '[:upper:]' '[:lower:]')"
+    if [ "$calls" != 1 ] || [ "$names" != 1 ] || ! [[ $original =~ $keepalive ]]; then
       echo "Blocked: schtasks /Create is only allowed for the task named \"BenchBar Keepalive\"." >&2
       exit 2
     fi
   fi
 done <<EOF
-$(chunks '(^|[^A-Za-z0-9_.-])schtasks(\.exe)?([[:space:]]|$)')
+$tasks
 EOF
 exit 0

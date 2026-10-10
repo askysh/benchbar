@@ -68,7 +68,7 @@ func TestDoctorWslconfigWarning(t *testing.T) {
 	e.healthyWindows()
 	os.Remove(filepath.Join(e.ProfileDir, ".wslconfig"))
 	e.run("doctor")
-	if !strings.Contains(e.stdout(), "  [WARN] .wslconfig: ") || !strings.Contains(e.stdout(), "fix: benchbar.exe wslconfig --suggest") {
+	if !strings.Contains(e.stdout(), "  [WARN] .wslconfig: ") || !strings.Contains(e.stdout(), "fix: benchbar.exe wslconfig --apply --yes") {
 		t.Errorf("output:\n%s", e.stdout())
 	}
 }

@@ -243,7 +243,7 @@ func idleCheck(r wslReport) Check {
 	if len(bad) > 0 {
 		c.Status = "warn"
 		c.Message = "WSL can stop idle benches: " + strings.Join(bad, ", ")
-		c.Fix = "benchbar.exe wslconfig --suggest"
+		c.Fix = "benchbar.exe wslconfig --apply --yes"
 	}
 	return c
 }

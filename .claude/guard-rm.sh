@@ -151,8 +151,12 @@ for i in range(0, len(pieces), 2):
         continue
     via_xargs = via_xargs or any(base(w) == "xargs" for w in words[:at])
     words = words[at:]
-    flags = "".join(w.lstrip("-") for w in words[1:] if w.startswith("-") and not w.startswith("--"))
-    longs = [w for w in words[1:] if w.startswith("--")]
+    # options end at "--": every word after it is a target, even "-sites"
+    args = words[1:]
+    end = args.index("--") if "--" in args else len(args)
+    opts, operands = args[:end], args[end + 1:]
+    flags = "".join(w.lstrip("-") for w in opts if w.startswith("-") and not w.startswith("--"))
+    longs = [w for w in opts if w.startswith("--")]
     # GNU takes any unambiguous prefix of a long option (--recurs, --for)
     recursive = "r" in flags or "R" in flags or any(len(w) > 2 and "--recursive".startswith(w) for w in longs)
     force = "f" in flags or any(len(w) > 2 and "--force".startswith(w) for w in longs)
@@ -160,7 +164,7 @@ for i in range(0, len(pieces), 2):
         continue
     if via_xargs:
         block("rm -rf through xargs takes its targets from input the guard cannot see.")
-    for target in (w for w in words[1:] if not w.startswith("-")):
+    for target in [w for w in opts if not w.startswith("-")] + operands:
         # bash expands {a,b} and {1..3} before rm runs; the literal text the
         # guard resolves is not what gets deleted.
         if re.search(r"\{[^}]*(,|\.\.)[^}]*\}", target):

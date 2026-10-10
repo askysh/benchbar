@@ -296,7 +296,7 @@ func TestIdleCheck(t *testing.T) {
 		t.Errorf("%+v", ok)
 	}
 	bad := idleCheck(analyze("[wsl2]\nvmIdleTimeout=-1\n", 16<<30))
-	if bad.Status != "warn" || bad.Fix != "benchbar.exe wslconfig --suggest" || !strings.Contains(bad.Message, "instanceIdleTimeout not set") {
+	if bad.Status != "warn" || bad.Fix != "benchbar.exe wslconfig --apply --yes" || !strings.Contains(bad.Message, "instanceIdleTimeout not set") {
 		t.Errorf("%+v", bad)
 	}
 }
