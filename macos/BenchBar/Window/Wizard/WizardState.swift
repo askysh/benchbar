@@ -25,8 +25,12 @@ nonisolated struct ProfileChoice: Equatable, Sendable, Identifiable {
     static func choices(from profiles: [ProfileInfo]) -> [ProfileChoice] {
         profiles.filter { $0.valid && $0.shadowedBy == nil && ($0.kind == "builtin" || $0.isTeam) }
             .map { info in
-                let parts = [info.python.map { "Python \($0)" }, info.node.map { "Node \($0)" }, info.mariadb.map { "MariaDB \($0)" }]
-                    .compactMap { $0 }
+                // one typed step per part: as one expression it took the
+                // type checker too long on the Xcode 26 compiler
+                var parts: [String] = []
+                if let python = info.python { parts.append("Python " + python) }
+                if let node = info.node { parts.append("Node " + node) }
+                if let mariadb = info.mariadb { parts.append("MariaDB " + mariadb) }
                 return ProfileChoice(name: info.name, label: info.label ?? info.name,
                                      versions: parts.isEmpty ? nil : parts.joined(separator: ", "), isTeam: info.isTeam)
             }

@@ -2,6 +2,7 @@
 # xcode-select mock: MOCK_XCODE_DIR is the folder "-p" names, MOCK_XCODE_NONE=1 says there is none
 if [[ "${1:-}" == "-p" ]]; then
   [[ -z "${MOCK_XCODE_NONE:-}" ]] || { echo "xcode-select: error: unable to get active developer directory" >&2; exit 2; }
-  printf '%s\n' "${MOCK_XCODE_DIR:-/Library/Developer/CommandLineTools}"
+  # a folder that exists on every host (the Linux runners have no /Library)
+  printf '%s\n' "${MOCK_XCODE_DIR:-/tmp}"
 fi
 exit 0
