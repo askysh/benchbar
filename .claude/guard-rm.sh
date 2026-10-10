@@ -5,10 +5,15 @@
 # check lives here. Exit 2 blocks the call and shows the reason to Claude.
 # Runs on macOS /bin/bash 3.2 too.
 input="$(cat)"
-case "$input" in *rm*) ;; *) exit 0 ;; esac
+# Only "rm" as a word counts here, so "platform" or "guard-rm.sh" does not
+# need python3.
+word_rm='(^|[^A-Za-z0-9_.-])rm([[:space:]]|$)'
+[[ $input =~ $word_rm ]] || exit 0
 # The parsing needs python3. Without it (Git Bash, a Mac without the command
 # line tools) a call that mentions rm is blocked rather than let through.
-if ! command -v python3 >/dev/null 2>&1; then
+# Running it, not just finding it, catches the Windows Store stub, which is
+# on PATH but exits 9009; any exit but 0 or 2 would let the call through.
+if ! python3 -c '' >/dev/null 2>&1; then
   echo "Blocked: the rm guard needs python3 to check this command; install python3 or run it yourself." >&2
   exit 2
 fi
@@ -35,7 +40,24 @@ allowed = [repo, os.path.join(home, ".benchbar"), os.path.join(home, ".local/sta
 if os.environ.get("XDG_STATE_HOME"):
     allowed.append(os.path.join(os.environ["XDG_STATE_HOME"], "benchbar"))
 allowed = [os.path.realpath(a) for a in allowed]
-pieces = re.split(r"(&&|\|\||;|\||\n|\(|\))", text)
+assigned = {}
+def expand(word):
+    def lookup(m):
+        name = m.group(1) or m.group(2)
+        value = assigned[name] if name in assigned else os.environ.get(name)
+        return m.group(0) if value is None else value
+    out = re.sub(r"\$\{(\w+)\}|\$(\w+)", lookup, word)
+    if "$" in out or "`" in out:
+        return None
+    return os.path.expanduser(out)
+def in_scratchpad(path):
+    if not os.path.isabs(path):
+        return False
+    for p in (os.path.normpath(path), os.path.realpath(path)):
+        if re.match(r"^(/private)?/tmp/claude-[^/]+/.", p):
+            return True
+    return False
+pieces =re.split(r"(&&|\|\||;|\||\n|\(|\))", text)
 for i in range(0, len(pieces), 2):
     part = pieces[i]
     before = pieces[i - 1] if i > 0 else ";"
@@ -43,6 +65,14 @@ for i in range(0, len(pieces), 2):
     try:
         words = shlex.split(part)
     except ValueError:
+        continue
+    if not words:
+        continue
+    plain = words[1:] if words[0] in ("export", "local", "readonly") else words
+    if plain and all(re.match(r"^\w+=", w) for w in plain):
+        for w in plain:
+            name, value = w.split("=", 1)
+            assigned[name] = expand(value)
         continue
     while words and (words[0] in ("sudo", "command", "env", "exec") or "=" in words[0]):
         words = words[1:]
@@ -68,8 +98,14 @@ for i in range(0, len(pieces), 2):
         continue
     for target in (w for w in words[1:] if not w.startswith("-")):
         if "$" in target or "`" in target:
-            print("Blocked: rm -rf with a variable target (%s); spell the path out." % target, file=sys.stderr)
-            sys.exit(2)
+            # A variable target is let through only when it resolves, from
+            # the environment or a literal assignment earlier in the
+            # command, to a path inside a /tmp/claude-* session scratchpad.
+            path = expand(target)
+            if path is None or not in_scratchpad(path):
+                print("Blocked: rm -rf with a variable target (%s); spell the path out." % target, file=sys.stderr)
+                sys.exit(2)
+            continue
         target = os.path.expanduser(target)
         if os.path.isabs(target):
             candidates = [target]
@@ -86,3 +122,10 @@ for i in range(0, len(pieces), 2):
                 print("Blocked: rm -rf of a whole allowed root: %s" % path, file=sys.stderr)
                 sys.exit(2)
 ' "$repo" "$HOME"
+# A crash in the check would exit 1, which lets the call through: block it.
+rc=$?
+if [ "$rc" -ne 0 ] && [ "$rc" -ne 2 ]; then
+  echo "Blocked: the rm guard failed (exit $rc) while checking this command." >&2
+  rc=2
+fi
+exit "$rc"
