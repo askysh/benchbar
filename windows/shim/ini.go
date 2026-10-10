@@ -25,6 +25,7 @@ type iniLine struct {
 // line endings and a UTF-8 BOM stay.
 type ini struct {
 	bom   bool
+	enc   textEnc // how the file is stored on disk
 	lines []iniLine
 }
 
@@ -159,3 +160,16 @@ func (f *ini) insertAfter(i int, l iniLine, eol string) {
 	copy(f.lines[i+2:], f.lines[i+1:])
 	f.lines[i+1] = l
 }
+
+func (f *ini) hasSection(section string) bool {
+	section = strings.ToLower(section)
+	for _, l := range f.lines {
+		if l.kind == lineSection && l.section == section {
+			return true
+		}
+	}
+	return false
+}
+
+// bytes is the file as it goes to disk, in the encoding it was read in.
+func (f *ini) bytes() []byte { return f.enc.encode(f.render()) }

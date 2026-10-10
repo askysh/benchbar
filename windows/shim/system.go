@@ -52,6 +52,7 @@ type System struct {
 	Broadcast Broadcaster
 	Tasks     TaskRunner
 	Procs     ProcessControl
+	Locks     Locker
 
 	MemoryBytes func() (uint64, error)
 	WSLPath     func() (string, error)
@@ -81,4 +82,13 @@ type ProcessControl interface {
 	// Image is the full path of the process's program.
 	Image(pid int) (string, error)
 	Terminate(pid int) error
+	// Created is the process creation time, an opaque number that is
+	// different for two processes that share a pid over time.
+	Created(pid int) (uint64, error)
+}
+
+// Locker takes a machine wide name for as long as the process lives or
+// release is called. ok is false when another process holds it.
+type Locker interface {
+	TryLock(name string) (release func(), ok bool, err error)
 }

@@ -5,6 +5,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -206,8 +207,22 @@ func TestIntegrationMCP(t *testing.T) {
 	}
 }
 
+func wslconfigDigest() string {
+	data, err := os.ReadFile(filepath.Join(os.Getenv("USERPROFILE"), ".wslconfig"))
+	if err != nil {
+		return "absent"
+	}
+	return fmt.Sprintf("%x", sha256.Sum256(data))
+}
+
 func TestIntegrationWslconfigIsReadOnly(t *testing.T) {
 	in := newIntegration(t, "")
+	before := wslconfigDigest()
+	defer func() {
+		if after := wslconfigDigest(); after != before {
+			t.Errorf(".wslconfig changed: %s -> %s", before, after)
+		}
+	}()
 	for _, args := range [][]string{{"wslconfig"}, {"wslconfig", "--json"}} {
 		out, errs, code := in.run("", args...)
 		if code != 0 {

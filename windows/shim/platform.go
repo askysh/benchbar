@@ -40,6 +40,7 @@ func newSystem() *System {
 	}
 	sys.Distros, sys.Paths, sys.Broadcast = osServices()
 	sys.Procs = procControl{}
+	sys.Locks = mutexLocks{}
 	sys.StdinIsTerminal = isTerminal(os.Stdin)
 	return sys
 }

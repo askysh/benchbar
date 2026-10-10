@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/csv"
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"html"
@@ -20,6 +21,7 @@ import (
 
 const (
 	taskName      = "BenchBar Keepalive"
+	runLockName   = `Local\BenchBarKeepalive`
 	logLimit      = 1 << 20
 	backoffStart  = 10 * time.Second
 	backoffMax    = 5 * time.Minute
@@ -152,8 +154,9 @@ type keepaliveInfo struct {
 
 func queryKeepalive(sys *System) keepaliveInfo {
 	info := keepaliveInfo{Task: taskName}
-	info.RunPid = readPid(sys)
-	info.RunAlive = isKeepaliveProcess(sys, info.RunPid)
+	rec := readPidRecord(sys)
+	info.RunPid = rec.Pid
+	info.RunAlive = isKeepaliveProcess(sys, rec)
 	c := Check{ID: "keepalive", Label: "Keepalive"}
 	notInstalled := Check{ID: "keepalive", Label: "Keepalive", Status: "warn",
 		Message: "not installed", Fix: "benchbar.exe keepalive install"}
@@ -161,6 +164,7 @@ func queryKeepalive(sys *System) keepaliveInfo {
 	out, code, err := sys.Tasks.Schtasks("/Query", "/TN", taskName, "/XML")
 	if err != nil {
 		c.Status, c.Message = "warn", fmt.Sprintf("cannot run schtasks.exe: %v", err)
+		c.Fix = `schtasks.exe /Query /TN "BenchBar Keepalive"`
 		info.Checks = []Check{c}
 		return info
 	}
@@ -279,6 +283,15 @@ func keepaliveInstall(sys *System, distro string) int {
 		return 1
 	}
 	fmt.Fprintf(sys.Stdout, "Installed the task %q for %s.\n", taskName, distro)
+	// a run for another distro (or an older exe) would keep going and hold the lock
+	stopped, err := stopRun(sys)
+	if err != nil {
+		errorf(sys, "%v", err)
+		return 1
+	}
+	if stopped != 0 {
+		sys.Tasks.Schtasks("/End", "/TN", taskName)
+	}
 	if out, code, err := sys.Tasks.Schtasks("/Run", "/TN", taskName); err != nil || code != 0 {
 		errorf(sys, "the task is installed but did not start: %s", schtasksDetail(out, err))
 		return 1
@@ -303,49 +316,73 @@ func keepaliveRemove(sys *System) int {
 		fmt.Fprintln(sys.Stdout, "The task is not installed.")
 	}
 	// /End stops only the task's console; the run process outlives it
-	if pid := readPid(sys); isKeepaliveProcess(sys, pid) {
-		if err := sys.Procs.Terminate(pid); err != nil {
-			errorf(sys, "cannot stop the keepalive run process (pid %d): %v", pid, err)
-			return 1
-		}
-		fmt.Fprintf(sys.Stdout, "Stopped the keepalive run process (pid %d).\n", pid)
-	}
-	if sys.ConfigDir != "" {
-		os.Remove(pidFile(sys))
+	if _, err := stopRun(sys); err != nil {
+		errorf(sys, "%v", err)
+		return 1
 	}
 	return 0
 }
 
-// pidFile holds the pid of the live "keepalive run".
+// pidRecord is the keepalive.pid file: which process holds the run, and when
+// it was created, since a pid number can be reused later by another process.
+type pidRecord struct {
+	Pid     int    `json:"pid"`
+	Created uint64 `json:"created"`
+}
+
 func pidFile(sys *System) string { return filepath.Join(sys.ConfigDir, "keepalive.pid") }
 
-func readPid(sys *System) int {
+// readPidRecord returns the zero record for a missing or unreadable file. An
+// old plain number has no creation time and so never matches a process.
+func readPidRecord(sys *System) pidRecord {
+	var r pidRecord
 	if sys.ConfigDir == "" {
-		return 0
+		return r
 	}
 	data, err := os.ReadFile(pidFile(sys))
 	if err != nil {
-		return 0
+		return r
 	}
-	n, err := strconv.Atoi(strings.TrimSpace(string(data)))
-	if err != nil || n <= 0 {
-		return 0
+	if json.Unmarshal(data, &r) != nil {
+		if n, err := strconv.Atoi(strings.TrimSpace(string(data))); err == nil {
+			return pidRecord{Pid: n}
+		}
+		return pidRecord{}
 	}
-	return n
+	return r
 }
 
-// isKeepaliveProcess is true for a live process whose program is
-// benchbar.exe. A pid file can outlive its process and the number can be
-// reused, so the image is checked before anything acts on the pid.
-func isKeepaliveProcess(sys *System, pid int) bool {
-	if pid <= 0 || !sys.Procs.Alive(pid) {
+// isKeepaliveProcess is true only for the process the record names: alive,
+// program benchbar.exe, same creation time.
+func isKeepaliveProcess(sys *System, r pidRecord) bool {
+	if r.Pid <= 0 || r.Created == 0 || !sys.Procs.Alive(r.Pid) {
 		return false
 	}
-	img, err := sys.Procs.Image(pid)
-	if err != nil {
+	img, err := sys.Procs.Image(r.Pid)
+	if err != nil || !strings.EqualFold(img[strings.LastIndexAny(img, `\/`)+1:], "benchbar.exe") {
 		return false
 	}
-	return strings.EqualFold(img[strings.LastIndexAny(img, `\/`)+1:], "benchbar.exe")
+	created, err := sys.Procs.Created(r.Pid)
+	return err == nil && created == r.Created
+}
+
+// stopRun ends the process in the pid file, if it is the one that wrote it,
+// and removes the file. It reports the pid it ended, or 0.
+func stopRun(sys *System) (int, error) {
+	if sys.ConfigDir == "" {
+		return 0, nil
+	}
+	rec := readPidRecord(sys)
+	stopped := 0
+	if isKeepaliveProcess(sys, rec) {
+		if err := sys.Procs.Terminate(rec.Pid); err != nil {
+			return 0, fmt.Errorf("cannot stop the keepalive run process (pid %d): %v", rec.Pid, err)
+		}
+		fmt.Fprintf(sys.Stdout, "Stopped the keepalive run process (pid %d).\n", rec.Pid)
+		stopped = rec.Pid
+	}
+	os.Remove(pidFile(sys))
+	return stopped, nil
 }
 
 func schtasksDetail(out string, err error) string {
@@ -407,15 +444,23 @@ func keepaliveRun(sys *System, distro string) int {
 	defer stop()
 	log := keepaliveLog{sys}
 	log.printf("keepalive for %s started", distro)
-	if pid := readPid(sys); pid != sys.Pid && isKeepaliveProcess(sys, pid) {
-		log.printf("another keepalive run (pid %d) is active, exiting", pid)
+	release, ok, err := sys.Locks.TryLock(runLockName)
+	if err == nil && !ok {
+		log.printf("another keepalive run holds %s, exiting", runLockName)
 		return 0
 	}
-	if err := writeFileAtomic(pidFile(sys), []byte(strconv.Itoa(sys.Pid)+"\n")); err != nil {
+	if err != nil {
+		log.printf("cannot take %s: %v", runLockName, err)
+	} else {
+		defer release()
+	}
+	created, _ := sys.Procs.Created(sys.Pid)
+	rec, _ := json.Marshal(pidRecord{Pid: sys.Pid, Created: created})
+	if err := writeFileAtomic(pidFile(sys), append(rec, '\n')); err != nil {
 		log.printf("cannot write the pid file: %v", err)
 	} else {
 		defer func() {
-			if readPid(sys) == sys.Pid {
+			if readPidRecord(sys).Pid == sys.Pid {
 				os.Remove(pidFile(sys))
 			}
 		}()

@@ -436,11 +436,12 @@ func TestKeepaliveLogTruncatesPastOneMB(t *testing.T) {
 	}
 }
 
-func (e *env) writePid(pid int) string {
+func (e *env) writePid(pid int, created uint64) string {
 	e.t.Helper()
 	os.MkdirAll(e.ConfigDir, 0o755)
 	p := filepath.Join(e.ConfigDir, "keepalive.pid")
-	if err := os.WriteFile(p, []byte(fmt.Sprintf("%d\n", pid)), 0o644); err != nil {
+	data := fmt.Sprintf(`{"pid":%d,"created":%d}`+"\n", pid, created)
+	if err := os.WriteFile(p, []byte(data), 0o644); err != nil {
 		e.t.Fatal(err)
 	}
 	return p
@@ -452,7 +453,7 @@ func TestKeepaliveRemoveTerminatesMatchingRunProcess(t *testing.T) {
 	e := newEnv(t)
 	e.procs.add(777, `C:\tools\benchbar\BenchBar.exe`)
 	e.procs.add(888, `C:\Windows\notepad.exe`)
-	p := e.writePid(777)
+	p := e.writePid(777, 777000)
 	if code := e.run("keepalive", "remove"); code != 0 {
 		t.Fatalf("exit %d: %s", code, e.stderr())
 	}
@@ -467,7 +468,7 @@ func TestKeepaliveRemoveTerminatesMatchingRunProcess(t *testing.T) {
 func TestKeepaliveRemoveLeavesOtherImagesAlone(t *testing.T) {
 	e := newEnv(t)
 	e.procs.add(888, `C:\Windows\notepad.exe`)
-	p := e.writePid(888)
+	p := e.writePid(888, 888000)
 	if code := e.run("keepalive", "remove"); code != 0 {
 		t.Fatal(code)
 	}
@@ -479,10 +480,34 @@ func TestKeepaliveRemoveLeavesOtherImagesAlone(t *testing.T) {
 	}
 }
 
+func TestKeepaliveRemoveLeavesReusedPidAlone(t *testing.T) {
+	// another benchbar.exe now has the pid; its creation time differs
+	e := newEnv(t)
+	e.procs.add(777, testExe)
+	e.writePid(777, 12345)
+	if code := e.run("keepalive", "remove"); code != 0 {
+		t.Fatal(code)
+	}
+	if len(e.procs.terminated) != 0 {
+		t.Errorf("killed a process that reused the pid: %v", e.procs.terminated)
+	}
+}
+
+func TestKeepaliveLegacyPidFileIsNotTrusted(t *testing.T) {
+	e := newEnv(t)
+	e.procs.add(777, testExe)
+	os.MkdirAll(e.ConfigDir, 0o755)
+	os.WriteFile(filepath.Join(e.ConfigDir, "keepalive.pid"), []byte("777\n"), 0o644)
+	e.run("keepalive", "remove")
+	if len(e.procs.terminated) != 0 {
+		t.Errorf("terminated %v", e.procs.terminated)
+	}
+}
+
 func TestKeepaliveRemoveIgnoresStalePidFile(t *testing.T) {
 	e := newEnv(t)
 	e.taskNotInstalled()
-	p := e.writePid(999) // no such process
+	p := e.writePid(999, 999000) // no such process
 	if code := e.run("keepalive", "remove"); code != 0 {
 		t.Fatal(code)
 	}
@@ -495,50 +520,85 @@ func TestKeepaliveRemoveStopsOrphanWhenTaskIsGone(t *testing.T) {
 	e := newEnv(t)
 	e.taskNotInstalled()
 	e.procs.add(777, testExe)
-	e.writePid(777)
+	e.writePid(777, 777000)
 	e.run("keepalive", "remove")
 	if fmt.Sprint(e.procs.terminated) != "[777]" {
 		t.Errorf("terminated %v", e.procs.terminated)
 	}
 }
 
-func TestKeepaliveRunExitsWhenAnotherIsActive(t *testing.T) {
+func TestKeepaliveInstallReplacesRunningKeepalive(t *testing.T) {
+	e := newEnv(t)
+	e.distros.list = []Distro{ubuntu, {Name: "Debian", Version: 2}}
+	e.procs.add(777, testExe)
+	e.writePid(777, 777000)
+	if code := e.run("keepalive", "install", "--distro", "Debian"); code != 0 {
+		t.Fatalf("exit %d: %s", code, e.stderr())
+	}
+	if fmt.Sprint(e.procs.terminated) != "[777]" {
+		t.Errorf("old run not stopped: %v", e.procs.terminated)
+	}
+	var names []string
+	for _, c := range e.tasks.calls {
+		names = append(names, c[0])
+	}
+	if strings.Join(names, " ") != "/Create /End /Run" {
+		t.Errorf("schtasks calls %v", names)
+	}
+}
+
+func TestKeepaliveInstallLeavesReusedPidAlone(t *testing.T) {
 	e := newEnv(t)
 	e.procs.add(777, testExe)
-	p := e.writePid(777)
+	e.writePid(777, 1)
+	e.run("keepalive", "install")
+	if len(e.procs.terminated) != 0 {
+		t.Errorf("terminated %v", e.procs.terminated)
+	}
+}
+
+func TestKeepaliveRunExitsWhenAnotherHoldsTheLock(t *testing.T) {
+	e := newEnv(t)
+	e.locks.held[runLockName] = true
 	if code := e.run("keepalive", "run"); code != 0 {
 		t.Fatalf("exit %d", code)
 	}
 	if len(e.starts()) != 0 {
 		t.Error("a second run started wsl.exe")
 	}
-	if data, _ := os.ReadFile(p); strings.TrimSpace(string(data)) != "777" {
-		t.Errorf("pid file changed: %q", data)
+	if _, err := os.Stat(filepath.Join(e.ConfigDir, "keepalive.pid")); err == nil {
+		t.Error("the second run wrote a pid file")
 	}
 	log, _ := os.ReadFile(filepath.Join(e.ConfigDir, "keepalive.log"))
-	if !strings.Contains(string(log), "another keepalive run (pid 777) is active, exiting") {
+	if !strings.Contains(string(log), "another keepalive run holds "+runLockName+", exiting") {
 		t.Errorf("log %q", log)
 	}
 }
 
-func TestKeepaliveRunTakesOverStalePidFileAndCleansUp(t *testing.T) {
+func TestKeepaliveRunHoldsTheLockAndWritesJSONPid(t *testing.T) {
 	e := newEnv(t)
-	e.writePid(999) // dead
+	e.procs.add(4242, testExe)
+	e.writePid(999, 1) // stale file from a dead run
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	e.Ctx = ctx
 	p := filepath.Join(e.ConfigDir, "keepalive.pid")
 	var during string
+	var lockedDuring bool
 	e.Sleep = func(ctx context.Context, d time.Duration) {
 		data, _ := os.ReadFile(p)
 		during = strings.TrimSpace(string(data))
+		lockedDuring = e.locks.held[runLockName]
 		cancel()
 	}
 	if code := e.run("keepalive", "run"); code != 0 {
 		t.Fatal(code)
 	}
-	if during != "4242" {
+	if during != `{"pid":4242,"created":4242000}` {
 		t.Errorf("pid file during the run: %q", during)
+	}
+	if !lockedDuring || e.locks.held[runLockName] {
+		t.Errorf("lock held during %v, after %v", lockedDuring, e.locks.held[runLockName])
 	}
 	if !fileGone(p) {
 		t.Error("pid file left after a normal exit")
@@ -553,7 +613,7 @@ func TestKeepaliveStatusReportsRunProcess(t *testing.T) {
 	e.taskHandler(taskXMLOutput(installedArgs()), statusCSV)
 	e.FileExists = func(p string) bool { return p == testExe }
 	e.procs.add(777, testExe)
-	e.writePid(777)
+	e.writePid(777, 777000)
 	e.run("keepalive", "status")
 	if !strings.Contains(e.stdout(), "run process pid 777 is alive") {
 		t.Errorf("output %q", e.stdout())

@@ -315,12 +315,18 @@ jobs:
   # is off or logged out the job waits in the queue. Read only inside the
   # distro: status, exit codes through the hop, quoting, mcp over stdio and
   # wslconfig without --apply.
+  # Not a required check, so it skips as a whole when only docs/ or site/
+  # changed, and for Dependabot's branches, which are in this repo but not
+  # written by a person.
   wsl:
     name: Windows shim against real WSL (self hosted)
+    needs: changes
     if: >-
-      github.event_name == 'push' ||
-      (github.event_name == 'pull_request' &&
-       github.event.pull_request.head.repo.full_name == github.repository)
+      needs.changes.outputs.code == 'true' &&
+      github.actor != 'dependabot[bot]' &&
+      (github.event_name == 'push' ||
+       (github.event_name == 'pull_request' &&
+        github.event.pull_request.head.repo.full_name == github.repository))
     runs-on: [self-hosted, wsl]
     timeout-minutes: 30
     env:

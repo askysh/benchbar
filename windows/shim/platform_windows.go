@@ -164,7 +164,7 @@ func attachKillOnClose(pid int) func() {
 		return noop
 	}
 	var info windows.JOBOBJECT_EXTENDED_LIMIT_INFORMATION
-	info.BasicLimitInformation.LimitFlags = windows.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+	info.BasicLimitInformation.LimitFlags = windows.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | jobSilentBreakawayOK
 	_, err = windows.SetInformationJobObject(job, windows.JobObjectExtendedLimitInformation,
 		uintptr(unsafe.Pointer(&info)), uint32(unsafe.Sizeof(info)))
 	if err != nil {
@@ -221,4 +221,41 @@ func (procControl) Terminate(pid int) error {
 	}
 	defer windows.CloseHandle(h)
 	return windows.TerminateProcess(h, 1)
+}
+
+// With this flag a program that wsl.exe starts through interop (a browser,
+// ping) is not put in the job, so it outlives the shim.
+const jobSilentBreakawayOK = 0x00001000
+
+func (procControl) Created(pid int) (uint64, error) {
+	h, err := openProc(pid, windows.PROCESS_QUERY_LIMITED_INFORMATION)
+	if err != nil {
+		return 0, err
+	}
+	defer windows.CloseHandle(h)
+	var c, x, k, u windows.Filetime
+	if err := windows.GetProcessTimes(h, &c, &x, &k, &u); err != nil {
+		return 0, err
+	}
+	return uint64(c.HighDateTime)<<32 | uint64(c.LowDateTime), nil
+}
+
+type mutexLocks struct{}
+
+// TryLock takes a named mutex. The handle stays open until the process
+// ends or release is called.
+func (mutexLocks) TryLock(name string) (func(), bool, error) {
+	n, err := windows.UTF16PtrFromString(name)
+	if err != nil {
+		return nil, false, err
+	}
+	h, err := windows.CreateMutex(nil, false, n)
+	if h == 0 {
+		return nil, false, err
+	}
+	if err == windows.ERROR_ALREADY_EXISTS {
+		windows.CloseHandle(h)
+		return nil, false, nil
+	}
+	return func() { windows.CloseHandle(h) }, true, nil
 }

@@ -5,7 +5,20 @@ import (
 	"strings"
 )
 
-const installerLine = `wsl.exe -d %s -- bash -c "curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash"`
+// listDistros shows the names a --distro or adopt-distro argument takes.
+const listDistros = "wsl.exe --list --verbose"
+
+const installerURL = "https://raw.githubusercontent.com/askysh/benchbar/main/install.sh"
+
+// installerCommand runs the installer inside the distro; without a name it
+// goes to the default distro.
+func installerCommand(distro string) string {
+	dash := ""
+	if distro != "" {
+		dash = "-d " + distro + " "
+	}
+	return fmt.Sprintf(`wsl.exe %s-- bash -c "curl -fsSL %s | bash"`, dash, installerURL)
+}
 
 // target is the distro and CLI a command goes to.
 type target struct {

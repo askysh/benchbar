@@ -6,8 +6,9 @@
 # Runs on macOS /bin/bash 3.2 too.
 input="$(cat)"
 # Only "rm" as a word counts here, so "platform" or "guard-rm.sh" does not
-# need python3.
-word_rm='(^|[^A-Za-z0-9_.-])rm([[:space:]]|$)'
+# need python3. Anything after it but a name character counts, so rm'' and
+# a tab (\t in the JSON) still reach the parser.
+word_rm='(^|[^A-Za-z0-9_.-])rm([^A-Za-z0-9_.-]|$)'
 [[ $input =~ $word_rm ]] || exit 0
 # The parsing needs python3. Without it (Git Bash, a Mac without the command
 # line tools) a call that mentions rm is blocked rather than let through.
@@ -27,7 +28,7 @@ except ValueError:
     print("Blocked: the rm guard could not read the tool call.", file=sys.stderr)
     sys.exit(2)
 text = data.get("tool_input", {}).get("command", "") or ""
-if "rm" not in text:
+if not re.search(r"(^|[^\w.-])rm([^\w.-]|$)", text):
     sys.exit(0)
 # Relative targets resolve against every directory the shell could be in:
 # the tool call cwd, then each cd or pushd earlier in the same command. A cd
@@ -41,22 +42,34 @@ if os.environ.get("XDG_STATE_HOME"):
     allowed.append(os.path.join(os.environ["XDG_STATE_HOME"], "benchbar"))
 allowed = [os.path.realpath(a) for a in allowed]
 assigned = {}
+assignments = {}
+def known(name):
+    # A name the command also sets some other way (declare, read, for,
+    # printf -v, eval) cannot be followed: every mention of it must be a
+    # literal assignment the guard saw or a $NAME use.
+    mentions = len(re.findall(r"\b%s\b" % re.escape(name), text))
+    uses = len(re.findall(r"\$\{?%s\b" % re.escape(name), text))
+    return mentions == uses + assignments.get(name, 0)
 def expand(word):
     def lookup(m):
         name = m.group(1) or m.group(2)
+        if not known(name):
+            return m.group(0)
         value = assigned[name] if name in assigned else os.environ.get(name)
         return m.group(0) if value is None else value
     out = re.sub(r"\$\{(\w+)\}|\$(\w+)", lookup, word)
-    if "$" in out or "`" in out:
+    if "$" in out or "`" in out or re.search(r"\s", out):
         return None
     return os.path.expanduser(out)
 def in_scratchpad(path):
-    if not os.path.isabs(path):
+    # The resolved path only: a symlink inside the scratchpad may lead out.
+    if not os.path.isabs(path) or (re.search(r"[*?\[]", path) and ".." in path):
         return False
-    for p in (os.path.normpath(path), os.path.realpath(path)):
-        if re.match(r"^(/private)?/tmp/claude-[^/]+/.", p):
-            return True
-    return False
+    return re.match(r"^(/private)?/tmp/claude-[A-Za-z0-9._-]+/.", os.path.realpath(path)) is not None
+def block(msg):
+    print("Blocked: " + msg, file=sys.stderr)
+    sys.exit(2)
+word_rm = re.compile(r"(^|[^\w.-])rm([^\w.-]|$)")
 pieces =re.split(r"(&&|\|\||;|\||\n|\(|\))", text)
 for i in range(0, len(pieces), 2):
     part = pieces[i]
@@ -65,7 +78,10 @@ for i in range(0, len(pieces), 2):
     try:
         words = shlex.split(part)
     except ValueError:
-        continue
+        # The split above cuts quoted text at ; | ( and ), so a piece can be
+        # unbalanced. A command that mentions rm and cannot be followed is
+        # blocked rather than skipped.
+        block("the rm guard cannot follow the quoting in this command; run the rm on its own line.")
     if not words:
         continue
     plain = words[1:] if words[0] in ("export", "local", "readonly") else words
@@ -73,11 +89,19 @@ for i in range(0, len(pieces), 2):
         for w in plain:
             name, value = w.split("=", 1)
             assigned[name] = expand(value)
+            assignments[name] = assignments.get(name, 0) + 1
         continue
-    while words and (words[0] in ("sudo", "command", "env", "exec") or "=" in words[0]):
+    via_xargs = False
+    while words and (words[0] in ("sudo", "command", "env", "exec", "then", "do", "else", "elif",
+                                  "if", "while", "until", "!", "{", "time", "nohup", "nice", "xargs")
+                     or "=" in words[0]):
+        via_xargs = via_xargs or words[0] == "xargs"
         words = words[1:]
     if not words:
         continue
+    if os.path.basename(words[0]) in ("bash", "sh", "zsh", "dash", "ksh", "eval") and \
+            any(word_rm.search(w) for w in words[1:]):
+        block("rm inside a nested shell or eval; run it directly so the guard can check it.")
     if words[0] in ("cd", "pushd", "popd"):
         dest = words[1] if len(words) > 1 and words[0] != "popd" else None
         if dest is None or dest == "-" or "$" in dest or "`" in dest:
@@ -96,6 +120,8 @@ for i in range(0, len(pieces), 2):
     force = "f" in flags or "--force" in longs
     if not (recursive and force):
         continue
+    if via_xargs:
+        block("rm -rf through xargs takes its targets from input the guard cannot see.")
     for target in (w for w in words[1:] if not w.startswith("-")):
         if "$" in target or "`" in target:
             # A variable target is let through only when it resolves, from

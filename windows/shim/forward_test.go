@@ -461,3 +461,42 @@ func TestExitCodeFunction(t *testing.T) {
 		t.Errorf("plain error: %d", got)
 	}
 }
+
+func TestExit127FromTheCLIItselfIsPassedOn(t *testing.T) {
+	e := newEnv(t)
+	t.Setenv("FAKE_WSL_MODE", "seq:127,0") // the CLI exits 127, then the lookup finds it
+	if code := e.run("up"); code != 127 {
+		t.Errorf("exit %d, want 127", code)
+	}
+	if e.stderr() != "" {
+		t.Errorf("stderr %q", e.stderr())
+	}
+	st := e.starts()
+	if len(st) != 2 {
+		t.Fatalf("%d calls", len(st))
+	}
+	want := []string{"-d", "Ubuntu-24.04", "--exec", "/bin/sh", "-c", `PATH="$HOME/.local/bin:$PATH"; command -v "$0"`, "benchbar"}
+	if !reflect.DeepEqual(st[1].Args, want) {
+		t.Errorf("lookup args %q", st[1].Args)
+	}
+}
+
+func TestExit127WithoutDistroNameOmitsDash(t *testing.T) {
+	e := newEnv(t)
+	e.distros.list, e.distros.err = nil, fmt.Errorf("denied")
+	t.Setenv("FAKE_WSL_MODE", "exit:127")
+	if code := e.run("up"); code != 1 {
+		t.Errorf("exit %d", code)
+	}
+	if strings.Contains(e.stderr(), "-d ") || !strings.Contains(e.stderr(), "default WSL distro") ||
+		!strings.Contains(e.stderr(), `fix: install it inside the distro: wsl.exe -- bash -c "curl`) {
+		t.Errorf("stderr %q", e.stderr())
+	}
+	for _, s := range e.starts() {
+		for _, a := range s.Args {
+			if a == "-d" {
+				t.Errorf("-d passed: %q", s.Args)
+			}
+		}
+	}
+}

@@ -2,7 +2,7 @@
 //
 //	FAKE_WSL_RECORD        file that gets one JSON line per event
 //	FAKE_WSL_RECORD_STDIN  1: record the stdin bytes (echo-stdin mode)
-//	FAKE_WSL_MODE          exit:N | echo-stdin | run | wait-signal | probe:FILE
+//	FAKE_WSL_MODE          exit:N | seq:N,N,... | echo-stdin | run | wait-signal | probe:FILE
 //	FAKE_WSL_READY         wait-signal: file created once the handler is set
 //	FAKE_WSL_PROBE_AFTER   probe: file printed after a loginctl call was recorded
 package main
@@ -54,6 +54,15 @@ func loginctlSeen() bool {
 	return err == nil && bytes.Contains(data, []byte(`"exec":["loginctl"`))
 }
 
+// startCount is the number of start events recorded so far, this one included.
+func startCount() int {
+	data, err := os.ReadFile(os.Getenv("FAKE_WSL_RECORD"))
+	if err != nil {
+		return 1
+	}
+	return bytes.Count(data, []byte(`"event":"start"`))
+}
+
 func main() {
 	args := os.Args[1:]
 	r := record{Event: "start", Args: args, WSLUTF8: os.Getenv("WSL_UTF8")}
@@ -78,6 +87,15 @@ func main() {
 
 	mode := os.Getenv("FAKE_WSL_MODE")
 	switch {
+	case strings.HasPrefix(mode, "seq:"):
+		// seq:127,0 exits 127 on the first call, 0 on the second, then the last again
+		codes := strings.Split(strings.TrimPrefix(mode, "seq:"), ",")
+		n := startCount() - 1
+		if n >= len(codes) {
+			n = len(codes) - 1
+		}
+		c, _ := strconv.Atoi(codes[n])
+		os.Exit(c)
 	case strings.HasPrefix(mode, "exit:"):
 		n, _ := strconv.Atoi(strings.TrimPrefix(mode, "exit:"))
 		os.Exit(n)

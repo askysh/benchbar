@@ -18,10 +18,11 @@ type fakeDistros struct {
 func (f *fakeDistros) Distros() ([]Distro, error) { return f.list, f.err }
 
 type fakePaths struct {
-	user     PathValue
-	machine  string
-	userErr  error
-	setCalls int
+	user       PathValue
+	machine    string
+	userErr    error
+	machineErr error
+	setCalls   int
 }
 
 func (f *fakePaths) User() (PathValue, error) { return f.user, f.userErr }
@@ -30,7 +31,7 @@ func (f *fakePaths) SetUser(v string, expand bool) error {
 	f.setCalls++
 	return nil
 }
-func (f *fakePaths) Machine() (string, error) { return f.machine, nil }
+func (f *fakePaths) Machine() (string, error) { return f.machine, f.machineErr }
 
 type fakeBroadcast struct{ n int }
 
@@ -59,6 +60,7 @@ type env struct {
 	bcast   *fakeBroadcast
 	tasks   *fakeTasks
 	procs   *fakeProcs
+	locks   *fakeLocks
 	out     *bytes.Buffer
 	err     *bytes.Buffer
 	record  string
@@ -78,12 +80,14 @@ func newEnv(t *testing.T) *env {
 		bcast:   &fakeBroadcast{},
 		tasks:   &fakeTasks{},
 		procs:   newFakeProcs(),
+		locks:   &fakeLocks{held: map[string]bool{}},
 		out:     &bytes.Buffer{},
 		err:     &bytes.Buffer{},
 		record:  filepath.Join(root, "record.jsonl"),
 	}
 	e.Distros, e.Paths, e.Broadcast, e.Tasks = e.distros, e.paths, e.bcast, e.tasks
 	e.Procs = e.procs
+	e.Locks = e.locks
 	e.Stdout, e.Stderr = e.out, e.err
 	e.ConfigDir = filepath.Join(root, "LocalAppData", "BenchBar")
 	e.ProfileDir = filepath.Join(root, "Profile")
@@ -175,14 +179,25 @@ func (e *env) starts() []fakeEvent {
 type fakeProcs struct {
 	alive      map[int]bool
 	images     map[int]string
+	created    map[int]uint64
 	terminated []int
 }
 
 func newFakeProcs() *fakeProcs {
-	return &fakeProcs{alive: map[int]bool{}, images: map[int]string{}}
+	return &fakeProcs{alive: map[int]bool{}, images: map[int]string{}, created: map[int]uint64{}}
 }
 
-func (f *fakeProcs) add(pid int, image string) { f.alive[pid], f.images[pid] = true, image }
+// add makes a live process whose creation time is pid*1000.
+func (f *fakeProcs) add(pid int, image string) {
+	f.alive[pid], f.images[pid], f.created[pid] = true, image, uint64(pid)*1000
+}
+
+func (f *fakeProcs) Created(pid int) (uint64, error) {
+	if c, ok := f.created[pid]; ok {
+		return c, nil
+	}
+	return 0, errors.New("no such process")
+}
 
 func (f *fakeProcs) Alive(pid int) bool { return f.alive[pid] }
 func (f *fakeProcs) Image(pid int) (string, error) {
@@ -195,4 +210,14 @@ func (f *fakeProcs) Terminate(pid int) error {
 	f.terminated = append(f.terminated, pid)
 	f.alive[pid] = false
 	return nil
+}
+
+type fakeLocks struct{ held map[string]bool }
+
+func (f *fakeLocks) TryLock(name string) (func(), bool, error) {
+	if f.held[name] {
+		return nil, false, nil
+	}
+	f.held[name] = true
+	return func() { delete(f.held, name) }, true, nil
 }

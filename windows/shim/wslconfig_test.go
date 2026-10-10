@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -297,5 +298,70 @@ func TestIdleCheck(t *testing.T) {
 	bad := idleCheck(analyze("[wsl2]\nvmIdleTimeout=-1\n", 16<<30))
 	if bad.Status != "warn" || bad.Fix != "benchbar.exe wslconfig --suggest" || !strings.Contains(bad.Message, "instanceIdleTimeout not set") {
 		t.Errorf("%+v", bad)
+	}
+}
+
+func utf16File(t *testing.T, s string, big, bom bool) []byte {
+	t.Helper()
+	return textEnc{utf16: true, big: big, bom: bom}.encode([]byte(s))
+}
+
+func TestUTF16WslconfigIsRead(t *testing.T) {
+	text := "[wsl2]\r\nmemory=2GB\r\nvmIdleTimeout=-1\r\n"
+	for name, data := range map[string][]byte{
+		"LE with BOM": utf16File(t, text, false, true),
+		"BE with BOM": utf16File(t, text, true, true),
+		"LE without":  utf16File(t, text, false, false),
+		"BE without":  utf16File(t, text, true, false),
+	} {
+		e := newEnv(t)
+		os.WriteFile(filepath.Join(e.ProfileDir, ".wslconfig"), data, 0o644)
+		if code := e.run("wslconfig", "--json"); code != 0 {
+			t.Fatalf("%s: exit %d", name, code)
+		}
+		var rep wslReport
+		if err := json.Unmarshal(e.out.Bytes(), &rep); err != nil {
+			t.Fatal(err)
+		}
+		if !rep.Settings[0].Set || rep.Settings[0].Value != "2GB" || !rep.Settings[3].Set || rep.Settings[3].Value != "-1" {
+			t.Errorf("%s: settings %+v", name, rep.Settings)
+		}
+	}
+}
+
+func TestUTF16ApplyKeepsEncodingBOMAndCRLF(t *testing.T) {
+	e := newEnv(t)
+	path := filepath.Join(e.ProfileDir, ".wslconfig")
+	orig := utf16File(t, "# note\r\n[wsl2]\r\nmemory=2GB\r\n", false, true)
+	os.WriteFile(path, orig, 0o644)
+	if code := e.run("wslconfig", "--apply", "--yes"); code != 0 {
+		t.Fatalf("exit %d: %s", code, e.stderr())
+	}
+	got, _ := os.ReadFile(path)
+	want := utf16File(t, "# note\r\n[wsl2]\r\nmemory=4GB\r\nvmIdleTimeout=-1\r\n\r\n[general]\r\ninstanceIdleTimeout=-1\r\n", false, true)
+	if !bytes.Equal(got, want) {
+		t.Errorf("file\n got % x\nwant % x", got, want)
+	}
+	if got[0] != 0xFF || got[1] != 0xFE {
+		t.Error("BOM lost")
+	}
+	backups, _ := filepath.Glob(path + ".benchbar-backup-*")
+	if len(backups) != 1 {
+		t.Fatalf("backups %v", backups)
+	}
+	if b, _ := os.ReadFile(backups[0]); !bytes.Equal(b, orig) {
+		t.Error("backup is not the original bytes")
+	}
+
+	e.out.Reset()
+	if code := e.run("wslconfig", "--apply", "--yes"); code != 0 {
+		t.Fatal(code)
+	}
+	again, _ := os.ReadFile(path)
+	if !bytes.Equal(again, want) || e.stdout() != "Nothing to change.\n" {
+		t.Errorf("second apply changed things: %q", e.stdout())
+	}
+	if backups, _ = filepath.Glob(path + ".benchbar-backup-*"); len(backups) != 1 {
+		t.Errorf("second apply made a backup: %v", backups)
 	}
 }

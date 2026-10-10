@@ -97,7 +97,7 @@ func TestAdoptSystemdMissing(t *testing.T) {
 	}
 	out := e.stdout()
 	if !strings.Contains(out, "  [FAIL] systemd: ") ||
-		!strings.Contains(out, `fix: wsl.exe -d Ubuntu-24.04 -- sudo sh -c 'printf "[boot]\nsystemd=true\n" >> /etc/wsl.conf'; wsl.exe --terminate Ubuntu-24.04`) {
+		!strings.Contains(out, `fix: wsl.exe -d Ubuntu-24.04 -- sudo sh -c "printf '[boot]\nsystemd=true\n' >> /etc/wsl.conf"; wsl.exe --terminate Ubuntu-24.04`) {
 		t.Errorf("output:\n%s", out)
 	}
 	if e.configExists() {
@@ -165,7 +165,7 @@ func TestAdoptUnregisteredDistro(t *testing.T) {
 	if code := e.run("adopt-distro", "Nope"); code != 1 {
 		t.Fatalf("exit %d", code)
 	}
-	if !strings.Contains(e.stdout(), "[FAIL] Distro: ") || !strings.Contains(e.stdout(), "fix: wsl.exe --install -d Ubuntu-24.04") {
+	if !strings.Contains(e.stdout(), "[FAIL] Distro: ") || !strings.Contains(e.stdout(), "fix: benchbar.exe adopt-distro <NAME> (wsl.exe --list --verbose shows the names)") {
 		t.Errorf("output:\n%s", e.stdout())
 	}
 	if len(e.starts()) != 0 {
@@ -397,5 +397,24 @@ func TestParseProbeToleratesCRLF(t *testing.T) {
 		base64.StdEncoding.EncodeToString([]byte(goodConf)) + "\r\n")
 	if r.pid1 != "systemd" || r.user != "akash" || r.linger != "yes" || r.bench != "/x" || r.wslConf != goodConf {
 		t.Errorf("%+v", r)
+	}
+}
+
+func TestAdoptSystemdBootSectionExists(t *testing.T) {
+	e := newEnv(t)
+	e.useProbe(probeText("[boot]\ncommand=service x start\n", "init", "akash", "/x/benchbar", "yes"))
+	e.run("adopt-distro")
+	want := "fix: set systemd=true under [boot] in /etc/wsl.conf (wsl.exe -d Ubuntu-24.04 -- sudo nano /etc/wsl.conf), then wsl.exe --terminate Ubuntu-24.04"
+	if !strings.Contains(e.stdout(), want) || strings.Contains(e.stdout(), "printf") {
+		t.Errorf("output:\n%s", e.stdout())
+	}
+}
+
+func TestAdoptNoDistroAtAllSuggestsInstall(t *testing.T) {
+	e := newEnv(t)
+	e.distros.list = nil
+	e.run("adopt-distro")
+	if !strings.Contains(e.stdout(), "fix: wsl.exe --install -d Ubuntu-24.04") {
+		t.Errorf("output:\n%s", e.stdout())
 	}
 }

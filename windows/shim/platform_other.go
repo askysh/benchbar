@@ -6,6 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
+	"sync"
 	"syscall"
 )
 
@@ -52,4 +55,36 @@ func (procControl) Terminate(pid int) error {
 		return err
 	}
 	return p.Kill()
+}
+
+func (procControl) Created(pid int) (uint64, error) {
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+	if err != nil {
+		return 0, err
+	}
+	// the start time is field 22; the command name in field 2 may hold spaces
+	s := string(data)
+	f := strings.Fields(s[strings.LastIndex(s, ")")+1:])
+	if len(f) < 20 {
+		return 0, errors.New("short /proc stat")
+	}
+	return strconv.ParseUint(f[19], 10, 64)
+}
+
+// mutexLocks is per process here; only Windows has a real named mutex.
+type mutexLocks struct{}
+
+var (
+	heldMu sync.Mutex
+	held   = map[string]bool{}
+)
+
+func (mutexLocks) TryLock(name string) (func(), bool, error) {
+	heldMu.Lock()
+	defer heldMu.Unlock()
+	if held[name] {
+		return nil, false, nil
+	}
+	held[name] = true
+	return func() { heldMu.Lock(); delete(held, name); heldMu.Unlock() }, true, nil
 }

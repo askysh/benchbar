@@ -68,8 +68,11 @@ func runProbe(sys *System, distro, cli string) (probeResult, error) {
 	return parseProbe(out.String()), nil
 }
 
-func systemdFix(distro string) string {
-	return fmt.Sprintf(`wsl.exe -d %s -- sudo sh -c 'printf "[boot]\nsystemd=true\n" >> /etc/wsl.conf'; wsl.exe --terminate %s`, distro, distro)
+func systemdFix(distro string, hasBoot bool) string {
+	if hasBoot {
+		return fmt.Sprintf("set systemd=true under [boot] in /etc/wsl.conf (wsl.exe -d %s -- sudo nano /etc/wsl.conf), then wsl.exe --terminate %s", distro, distro)
+	}
+	return fmt.Sprintf(`wsl.exe -d %s -- sudo sh -c "printf '[boot]\nsystemd=true\n' >> /etc/wsl.conf"; wsl.exe --terminate %s`, distro, distro)
 }
 
 func lingerFix(distro, user string) string {
@@ -92,7 +95,7 @@ func probeChecks(distro, cli string, r probeResult) []Check {
 	default:
 		sd.Status = "fail"
 		sd.Message = "[boot] systemd=true is not set in /etc/wsl.conf"
-		sd.Fix = systemdFix(distro)
+		sd.Fix = systemdFix(distro, conf.hasSection("boot"))
 	}
 	cs = append(cs, sd)
 
@@ -100,7 +103,7 @@ func probeChecks(distro, cli string, r probeResult) []Check {
 	if r.bench == "" {
 		bc.Status = "fail"
 		bc.Message = fmt.Sprintf("%s is not found in %s", cli, distro)
-		bc.Fix = fmt.Sprintf(installerLine, distro)
+		bc.Fix = installerCommand(distro)
 	}
 	cs = append(cs, bc)
 
@@ -158,7 +161,7 @@ func cmdAdoptDistro(sys *System, args []string) int {
 	switch {
 	case t.prob != nil:
 		checks = append(checks, Check{ID: "distro", Label: "Distro", Status: "fail",
-			Message: t.prob.Msg, Fix: "wsl.exe --install -d Ubuntu-24.04"})
+			Message: t.prob.Msg, Fix: t.prob.Fix})
 	case t.distro == "":
 		checks = append(checks, Check{ID: "distro", Label: "Distro", Status: "fail",
 			Message: "no distro name is known and the WSL registry cannot be read",
@@ -166,8 +169,8 @@ func cmdAdoptDistro(sys *System, args []string) int {
 	default:
 		if t.info == nil {
 			checks = append(checks,
-				Check{ID: "distro", Label: "Distro", Status: "warn", Message: "cannot read the WSL registry, assuming " + t.distro + " is registered"},
-				Check{ID: "wsl2", Label: "WSL version", Status: "warn", Message: "unknown, the WSL registry cannot be read"})
+				Check{ID: "distro", Label: "Distro", Status: "warn", Message: "cannot read the WSL registry, assuming " + t.distro + " is registered", Fix: listDistros},
+				Check{ID: "wsl2", Label: "WSL version", Status: "warn", Message: "unknown, the WSL registry cannot be read", Fix: listDistros})
 		} else {
 			checks = append(checks, Check{ID: "distro", Label: "Distro", Status: "ok", Message: t.distro + " is registered"})
 			w := Check{ID: "wsl2", Label: "WSL version", Status: "ok", Message: "runs as WSL 2"}

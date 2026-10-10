@@ -57,14 +57,33 @@ func forward(sys *System, t target, args []string) int {
 		errorf(sys, "cannot run wsl.exe: %v", err)
 		return 1
 	}
-	if code == 127 {
+	if code == 127 && !cliExists(sys, t) {
+		where := "the default WSL distro"
+		if t.distro != "" {
+			where = fmt.Sprintf("WSL distro %q", t.distro)
+		}
 		(&problem{
-			Msg: fmt.Sprintf("benchbar was not found in WSL distro %q", t.distro),
-			Fix: "install it inside the distro: " + fmt.Sprintf(installerLine, t.distro),
+			Msg: fmt.Sprintf("%s was not found in %s", t.cli, where),
+			Fix: "install it inside the distro: " + installerCommand(t.distro),
 		}).print(sys)
 		return 1
 	}
 	return code
+}
+
+// cliExists asks the distro again, so that a 127 from the CLI itself (a
+// command it could not run) is not reported as a missing install.
+func cliExists(sys *System, t target) bool {
+	var a []string
+	if t.distro != "" {
+		a = append(a, "-d", t.distro)
+	}
+	a = append(a, "--exec", "/bin/sh", "-c", `PATH="$HOME/.local/bin:$PATH"; command -v "$0"`, t.cli)
+	cmd, err := wslCommand(sys, a...)
+	if err != nil {
+		return false
+	}
+	return cmd.Run() == nil
 }
 
 // runInterruptible starts cmd, waits for it and never returns before it

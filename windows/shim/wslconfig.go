@@ -51,7 +51,9 @@ func readWslconfig(sys *System) (*ini, wslReport, error) {
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, wslReport{}, fmt.Errorf("cannot read %s: %v", path, err)
 	}
-	f := parseINI(data)
+	text, enc := decodeText(data)
+	f := parseINI(text)
+	f.enc = enc
 	var host uint64
 	if sys.MemoryBytes != nil {
 		host, _ = sys.MemoryBytes()
@@ -213,7 +215,7 @@ func applyWslconfig(sys *System, f *ini, rep wslReport, yes bool) int {
 	for _, c := range rep.Suggest {
 		f.set(c.Section, c.Key, c.Value)
 	}
-	if err := writeFileAtomic(rep.Path, f.render()); err != nil {
+	if err := writeFileAtomic(rep.Path, f.bytes()); err != nil {
 		errorf(sys, "cannot write %s: %v", rep.Path, err)
 		return 1
 	}

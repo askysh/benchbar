@@ -78,6 +78,7 @@ func newFakeSystem() *System {
 		Broadcast:   &fakeBroadcast{},
 		Tasks:       &fakeTasks{},
 		Procs:       newFakeProcs(),
+		Locks:       &fakeLocks{held: map[string]bool{}},
 		Pid:         4242,
 		MemoryBytes: func() (uint64, error) { return 16 << 30, nil },
 		WSLPath:     func() (string, error) { return fakeWSL, nil },

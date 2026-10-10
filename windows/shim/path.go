@@ -85,13 +85,15 @@ func pathCheck(sys *System) Check {
 	c := Check{ID: "path", Label: "PATH", Fix: "benchbar.exe path install"}
 	user, err := sys.Paths.User()
 	if err != nil {
-		c.Status, c.Fix = "warn", ""
+		c.Status = "warn"
+		c.Fix = `reg query HKCU\Environment /v Path`
 		c.Message = fmt.Sprintf("cannot read the user PATH: %v", err)
 		return c
 	}
 	machine, err := sys.Paths.Machine()
 	if err != nil {
-		c.Status, c.Fix = "warn", ""
+		c.Status = "warn"
+		c.Fix = `reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v Path`
 		c.Message = fmt.Sprintf("cannot read the machine PATH: %v", err)
 		return c
 	}

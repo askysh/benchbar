@@ -10,6 +10,7 @@ func distroCheck(t target) Check {
 	case t.info == nil:
 		c.Status = "warn"
 		c.Message = "cannot read the WSL registry, so the distro is not checked"
+		c.Fix = listDistros
 	case t.info.Version != 2:
 		c.Status = "fail"
 		c.Message = fmt.Sprintf("%s runs as WSL %d, benches need WSL 2", t.distro, t.info.Version)
@@ -30,7 +31,7 @@ func cmdDoctor(sys *System, rest []string) int {
 	}
 	checks := []Check{pathCheck(sys), distroCheck(t)}
 	if _, rep, err := readWslconfig(sys); err != nil {
-		checks = append(checks, Check{ID: "wslconfig", Label: ".wslconfig", Status: "warn", Message: err.Error()})
+		checks = append(checks, Check{ID: "wslconfig", Label: ".wslconfig", Status: "warn", Message: err.Error(), Fix: `type "%USERPROFILE%\.wslconfig"`})
 	} else {
 		checks = append(checks, idleCheck(rep))
 	}
