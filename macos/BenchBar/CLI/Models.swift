@@ -365,25 +365,41 @@ nonisolated struct ProfileInfo: Codable, Sendable, Equatable, Identifiable {
     var subscription: ProfileSubscription?
     var shadowedBy: String?
     var schema: Int?
+    /// 0.8: the versions the profile brings ("3.11", "22", "10.11"); nil from an older CLI.
+    var python: String?
+    var node: String?
+    var mariadb: String?
 
     /// A shadowed file has the same name as the one that wins, so the file is part of the id.
     var id: String { "\(name)\t\(file)" }
     var isTeam: Bool { kind == "team" }
 
     enum CodingKeys: String, CodingKey {
-        case name, kind, source, file, base, label, valid, error, subscription, schema
+        case name, kind, source, file, base, label, valid, error, subscription, schema, python, node, mariadb
         case frappeBranch = "frappe_branch"
         case sourceURL = "source_url"
         case shadowedBy = "shadowed_by"
     }
 }
 
+/// One app bundle `install --bundle` takes (`profile list --json`, 0.8).
+nonisolated struct AppBundle: Codable, Sendable, Equatable, Identifiable {
+    var name: String
+    var label: String
+    var apps: [String]
+    var description: String?
+
+    var id: String { name }
+}
+
 nonisolated struct ProfileList: Codable, Sendable, Equatable {
     var schemaVersion: Int
     var profiles: [ProfileInfo]
+    /// 0.8; nil from an older CLI.
+    var bundles: [AppBundle]?
 
     enum CodingKeys: String, CodingKey {
-        case profiles
+        case profiles, bundles
         case schemaVersion = "schema_version"
     }
 }

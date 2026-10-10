@@ -16,31 +16,6 @@ FL_SCHEMA_VERSION=1
 
 fl_state_json_path() { printf '%s/logs/.benchbar/state.json' "$FL_BENCH_DIR"; }
 
-# fl_json_str_v VAR VALUE, fl_json_num_v and fl_json_bool_v put the JSON
-# for VALUE into VAR without the subshell of "$(fl_json_str ...)": status and
-# list build their documents with them, dozens of values per call.
-fl_json_str_v() {
-  local __s="$2"
-  if [[ -z "$__s" ]]; then printf -v "$1" 'null'; return 0; fi
-  fl_json_escape_v __s "$__s"
-  printf -v "$1" '"%s"' "$__s"
-}
-
-fl_json_num_v() {
-  case "$2" in
-    ''|-|*[!0-9-]*) printf -v "$1" 'null' ;;
-    *) printf -v "$1" '%s' "$2" ;;
-  esac
-}
-
-fl_json_bool_v() {
-  if [[ "$2" == "1" || "$2" == "yes" || "$2" == "true" ]]; then printf -v "$1" 'true'; else printf -v "$1" 'false'; fi
-}
-
-fl_json_str() { local j; fl_json_str_v j "$1"; printf '%s' "$j"; }
-fl_json_num() { local j; fl_json_num_v j "$1"; printf '%s' "$j"; }
-fl_json_bool() { local j; fl_json_bool_v j "$1"; printf '%s' "$j"; }
-
 # fl_json_field_v VAR LINE KEY: KEY's string or integer in the one line JSON
 # document LINE, empty for null or a missing key. state.json is one line we
 # wrote ourselves, so parameter expansion is enough.

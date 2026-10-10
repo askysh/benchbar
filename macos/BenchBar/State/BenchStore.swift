@@ -120,6 +120,9 @@ final class BenchStore {
     private(set) var cli: CLIAvailability = .searching
     private(set) var benches: [BenchModel] = []
     private(set) var isLoading = false
+    /// The bench list has been asked for once (it may have failed): the window
+    /// shows its first page, not a spinner.
+    private(set) var hasLoadedBenches = false
     /// Why the bench list could not be loaded, if it could not.
     private(set) var listError: String?
     private var changeAnchor: BenchModel?
@@ -307,7 +310,7 @@ final class BenchStore {
     func reloadBenches() async {
         guard let client else { return }
         isLoading = true
-        defer { isLoading = false }
+        defer { isLoading = false; hasLoadedBenches = true }
         do {
             let list = try await client.list()
             if listError != nil { listError = nil }

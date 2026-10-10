@@ -1,0 +1,7 @@
+{"schema_version":1,"cli_version":"0.8.0","event":"plan","bench":"/Users/you/frappe-bench","site":"macdev","profile":"v15-lts","port_offset":0,"ports_move":false,"dry_run":false,"sudo_mode":"gui","steps":[{"n":1,"id":"runner","name":"Write the runner","sudo":false,"will_run":true},{"n":2,"id":"launchagent","name":"Write and load the LaunchAgent","sudo":false,"will_run":true},{"n":3,"id":"hosts_entry","name":"Add 127.0.0.1 macdev to /etc/hosts","sudo":true,"will_run":true}],"log":"/Users/you/.local/state/benchbar/logs/20261010-101500-4242.log"}
+{"schema_version":1,"cli_version":"0.8.0","event":"step","n":1,"id":"runner","parent":null,"name":"Write the runner","status":"running"}
+{"schema_version":1,"cli_version":"0.8.0","event":"step","n":1,"id":"runner","parent":null,"name":"Write the runner","status":"done","secs":1}
+{"schema_version":1,"cli_version":"0.8.0","event":"step","n":2,"id":"launchagent","parent":null,"name":"Write and load the LaunchAgent","status":"done","secs":2}
+{"schema_version":1,"cli_version":"0.8.0","event":"step","n":3,"id":"hosts_entry","parent":null,"name":"Add 127.0.0.1 macdev to /etc/hosts","status":"running"}
+{"schema_version":1,"cli_version":"0.8.0","event":"step","n":3,"id":"hosts_entry","parent":null,"name":"Add 127.0.0.1 macdev to /etc/hosts","status":"done","secs":5}
+{"schema_version":1,"cli_version":"0.8.0","event":"done","exit":0,"bench":"/Users/you/frappe-bench","site":"macdev","url":"http://macdev:8000","skipped":[],"fix":null,"log":"/Users/you/.local/state/benchbar/logs/20261010-101500-4242.log"}

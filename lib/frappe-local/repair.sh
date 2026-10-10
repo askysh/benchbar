@@ -430,6 +430,72 @@ fl_hosts_rewrite() {
   sudo mv "$new" "$FL_HOSTS_FILE" || { sudo rm -f "$new" 2>/dev/null || true; fl_fail "sudo mv failed; ${FL_HOSTS_FILE} is not written"; return 1; }
 }
 
+# BENCHBAR_SUDO=gui: the root side of the /etc/hosts lines as one script
+# (fl_root_run), arguments: file, mode (append: no benchbar block yet, the
+# block is written at the end; rewrite: the lines go inside it), the block's
+# two marker lines, the lines (newline separated) and how many they are. The
+# checks are those of fl_hosts_rewrite, made by root on the new file: every
+# line empty, a comment or "address names", exactly the expected line count,
+# and only then one mv.
+fl_hosts_root_script() {
+  cat <<'ROOT'
+set -u
+f="$1" mode="$2" start="$3" end="$4" lines="$5" delta="$6"
+new="${f}.benchbar.new"
+bail() { /bin/rm -f "$new"; printf '%s\n' "$1" >&2; exit 1; }
+if [ "$mode" = append ]; then
+  printf '\n%s\n%s\n%s\n' "$start" "$lines" "$end" >>"$f" || bail "could not append to $f"
+  exit 0
+fi
+before="$(/usr/bin/awk 'END { print NR }' "$f")"
+L="$lines" E="$end" /usr/bin/awk '$0 == ENVIRON["E"] { print ENVIRON["L"] } { print }' "$f" >"$new" || bail "could not write $new; $f is not written"
+bad="$(/usr/bin/awk 'NF == 0 { next } /^[[:space:]]*#/ { next } $1 ~ /^[0-9A-Fa-f.:]+(%[A-Za-z0-9_.-]+)?\r?$/ { next } { print; exit }' "$new" 2>/dev/null || true)"
+after="$(/usr/bin/awk 'END { print NR }' "$new" 2>/dev/null || printf unknown)"
+[ -z "$bad" ] || bail "$f is not written: the result holds a line that is not 'address names': $bad"
+[ "$after" = "$((before + delta))" ] || bail "$f is not written: expected $before + ($delta) lines, the result has $after"
+/bin/chmod 644 "$new" || bail "chmod failed; $f is not written"
+/bin/mv "$new" "$f" || bail "mv failed; $f is not written"
+ROOT
+}
+
+# fl_hosts_gui_reason NAME...: the dialog's title, which is also the step's name
+fl_hosts_gui_reason() {
+  if [[ "$#" == "1" ]]; then printf 'Add 127.0.0.1 %s to /etc/hosts' "$1"; else printf 'Add 127.0.0.1 lines for %d sites to /etc/hosts' "$#"; fi
+}
+
+# fl_hosts_add_gui NAME...: the lines for every NAME (valid, not there yet)
+# in one dialog. Sets FL_STEP_RESULT=skipped, and FL_SKIP_COMMAND, when the
+# dialog is cancelled; returns 1 when the script fails.
+fl_hosts_add_gui() {
+  local reason lines="" n mode=rewrite code=0 last
+  reason="$(fl_hosts_gui_reason "$@")"
+  for n in "$@"; do lines="${lines}${lines:+$'\n'}127.0.0.1 ${n}"; done
+  if ! fl_root_was_cancelled "$reason"; then
+    fl_backup_file "$FL_HOSTS_FILE" || return 1
+    [[ "$(fl_rc_markers_state "$FL_HOSTS_FILE" "$FL_HOSTS_START" "$FL_HOSTS_END")" == "present" ]] || mode=append
+    fl_root_run "$reason" "$(fl_hosts_root_script)" "$FL_HOSTS_FILE" "$mode" "$FL_HOSTS_START" "$FL_HOSTS_END" "$lines" "$#" || code=$?
+  else
+    code=2
+  fi
+  case "$code" in
+    0) ;;
+    2)
+      FL_SKIP_COMMAND="${FL_SELF} site hosts --bench-dir ${FL_BENCH_DIR}"
+      fl_warn "the password dialog was cancelled; the line was not added"
+      fl_fix "$FL_SKIP_COMMAND"
+      FL_STEP_RESULT="skipped"
+      return 0 ;;
+    *)
+      last="$(printf '%s\n' "$FL_ROOT_OUTPUT" | grep -v '^[[:space:]]*$' | tail -n 1)"
+      fl_fail "could not write ${FL_HOSTS_FILE}${last:+: ${last}}"
+      return 1 ;;
+  esac
+  for n in "$@"; do
+    fl_hosts_has_name "$n" || { fl_fail "${FL_HOSTS_FILE} still has no entry for ${n}"; return 1; }
+  done
+  fl_ok "added $(printf "'127.0.0.1 %s' " "$@" | sed 's/ $//') to ${FL_HOSTS_FILE} (backup: ${FL_LAST_BACKUP:-none})"
+}
+
 # Adds "127.0.0.1 <site>" inside a marker block in /etc/hosts. Missing block:
 # appended with sudo tee -a. Existing block: the line goes inside it and the
 # file is rewritten on the root side (fl_hosts_rewrite). A backup comes first.
@@ -455,11 +521,15 @@ act_hosts_entry() {
     # benchbar's block, where site drop can remove it again
     fl_warn "skipped; run: ${FL_SELF} repair --bench-dir ${FL_BENCH_DIR}   (adds '${line}' inside the benchbar block)"
     FL_STEP_RESULT="skipped"
+    FL_SKIP_COMMAND="${FL_SELF} site hosts --bench-dir ${FL_BENCH_DIR}"
     return 0
   fi
+  # BENCHBAR_SUDO=gui: one password dialog, one root script
+  if fl_sudo_gui; then fl_hosts_add_gui "$FL_SITE"; return $?; fi
   if ! fl_sudo_begin "add '${line}' to ${FL_HOSTS_FILE}"; then
     fl_warn "skipped without sudo; run: ${FL_SELF} repair --bench-dir ${FL_BENCH_DIR}   (adds '${line}' inside the benchbar block)"
     FL_STEP_RESULT="skipped"
+    FL_SKIP_COMMAND="${FL_SELF} site hosts --bench-dir ${FL_BENCH_DIR}"
     return 0
   fi
   fl_backup_file "$FL_HOSTS_FILE" || return 1
@@ -566,26 +636,13 @@ fl_event_step() {
   fl_event "{\"event\":\"step\",\"action\":\"$1\",\"status\":\"$2\",\"message\":$(fl_json_str "$3")}"
 }
 
-# The most telling line the step wrote to the log since line $1: its last
-# [FAIL], else its last [WARN] or skip note, else nothing.
-fl_log_step_message() {
-  local from="$1" text
-  [[ -n "${FL_LOG_FILE:-}" && -f "$FL_LOG_FILE" ]] || return 0
-  text="$(tail -n +"$((from + 1))" "$FL_LOG_FILE" 2>/dev/null)"
-  local line
-  line="$(printf '%s\n' "$text" | grep -E '\[FAIL\]' | tail -n1)"
-  [[ -n "$line" ]] || line="$(printf '%s\n' "$text" | grep -E '\[WARN\]' | tail -n1)"
-  [[ -n "$line" ]] || line="$(printf '%s\n' "$text" | grep -E 'skipped' | grep -v -E '(^|[0-9:] )step [0-9]+ ' | tail -n1)"
-  printf '%s' "$line" | sed 's/^[0-9][0-9]:[0-9][0-9]:[0-9][0-9] //'
-}
-
 # ---------------------------------------------------------------- engine
 
 # fl_repair_engine TITLE [GROUP...]: check, plan, confirm, apply, verify.
 # Returns 0 when everything is healthy afterwards, 1 when something failed.
 fl_repair_engine() {
   shift
-  local actions action i n=0 rows=() unchanged remaining status labels step_from optional_left=""
+  local actions action i n=0 rows=() unchanged remaining status labels step_from optional_left="" ids
   fl_doctor_run "$@"
   actions=""
   for action in $(fl_doctor_actions); do
@@ -608,6 +665,7 @@ fl_repair_engine() {
   fl_doctor_print compact
   if [[ -z "$actions" ]]; then
     fl_event_plan ""
+    [[ -z "${FL_ENGINE_PLAN_HOOK:-}" ]] || "$FL_ENGINE_PLAN_HOOK" ""
     printf '\n'
     if [[ "$(fl_doctor_count fail)" != "0" ]]; then
       fl_warn "unchanged: nothing benchbar can repair automatically; follow the fix lines above"
@@ -623,7 +681,8 @@ fl_repair_engine() {
   fi
 
   fl_event_plan "$actions"
-  if [[ "$FL_JSON_EVENTS" == "1" && "${FL_DRY_RUN:-0}" == "1" ]]; then
+  [[ -z "${FL_ENGINE_PLAN_HOOK:-}" ]] || "$FL_ENGINE_PLAN_HOOK" "$actions"
+  if [[ ( "$FL_JSON_EVENTS" == "1" || "$FL_JSONL" == "1" ) && "${FL_DRY_RUN:-0}" == "1" ]]; then
     return 0
   fi
 
@@ -650,6 +709,16 @@ fl_repair_engine() {
   for action in $actions; do labels+=("$(fl_action_label "$action")"); done
   [[ "$FL_NEED_CLEAR_CACHE" == "1" ]] || true
   fl_steps_define "${labels[@]}"
+  if [[ "$FL_JSONL" == "1" ]]; then
+    # the stream gets one step line per action: numbered from 1 (adopt), or
+    # nested under FL_ENGINE_PARENT without a number (install's service
+    # step). An action in FL_ENGINE_QUIET_ACTIONS has its own step already.
+    ids=()
+    for action in $actions; do
+      case " ${FL_ENGINE_QUIET_ACTIONS:-} " in *" $action "*) ids+=("") ;; *) ids+=("$action") ;; esac
+    done
+    if [[ -n "${FL_ENGINE_PARENT:-}" ]]; then fl_steps_ids -n -p "$FL_ENGINE_PARENT" "${ids[@]}"; else fl_steps_ids "${ids[@]}"; fi
+  fi
   i=0
   status=0
   for action in $actions; do

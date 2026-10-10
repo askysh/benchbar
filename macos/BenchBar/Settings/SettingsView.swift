@@ -1,8 +1,8 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// The General and Menu Bar panes of the BenchBar window (the settings
-/// that belong to the app itself; per bench settings live on each bench's page).
+/// The General and Menu Bar tabs of the Settings window (the settings that
+/// belong to the app itself; per bench settings live on each bench's page).
 struct SettingsView: View {
     enum Part { case general, menuBar }
 
@@ -13,6 +13,8 @@ struct SettingsView: View {
     let notifier: Notifier
     var part: Part = .general
     var router: WindowRouter?
+    /// The pane title block; off in the Settings window, whose tab says it.
+    var showsHeader = true
     let chooseCLI: () -> Void
 
     @State private var previewState: BenchState = .running
@@ -22,7 +24,8 @@ struct SettingsView: View {
     @State private var runnerToRemove: Runner?
 
     init(settings: AppSettings, store: BenchStore, library: RunnerLibrary, launchAtLogin: LaunchAtLogin,
-         notifier: Notifier, part: Part = .general, router: WindowRouter? = nil, chooseCLI: @escaping () -> Void) {
+         notifier: Notifier, part: Part = .general, router: WindowRouter? = nil, showsHeader: Bool = true,
+         chooseCLI: @escaping () -> Void) {
         self.settings = settings
         self.store = store
         self.library = library
@@ -30,18 +33,21 @@ struct SettingsView: View {
         self.notifier = notifier
         self.part = part
         self.router = router
+        self.showsHeader = showsHeader
         self.chooseCLI = chooseCLI
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            switch part {
-            case .general:
-                PaneHeader(symbol: "gearshape.fill", tint: .gray, title: "General",
-                           subtitle: "Startup, notifications and the benchbar command BenchBar runs.")
-            case .menuBar:
-                PaneHeader(symbol: "menubar.rectangle", tint: .blue, title: "Menu Bar",
-                           subtitle: "The runner in the menu bar shows your bench's state at a glance.")
+            if showsHeader {
+                switch part {
+                case .general:
+                    PaneHeader(symbol: "gearshape.fill", tint: .gray, title: "General",
+                               subtitle: "Startup, notifications and the benchbar command BenchBar runs.")
+                case .menuBar:
+                    PaneHeader(symbol: "menubar.rectangle", tint: .blue, title: "Menu Bar",
+                               subtitle: "The runner in the menu bar shows your bench's state at a glance.")
+                }
             }
             ScrollViewReader { proxy in
                 Form {

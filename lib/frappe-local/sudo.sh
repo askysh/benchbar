@@ -16,6 +16,12 @@
 # sudo. "benchbar install" does the two steps first and drops; a phase
 # script that needs sudo on its own asks itself and drops after.
 
+# BENCHBAR_SUDO=gui (the BenchBar app sets it): the two root steps run
+# through osascript's administrator dialog instead of sudo, see fl_root_run.
+# Any other value is the terminal path. FL_OSASCRIPT is for the tests.
+FL_OSASCRIPT="${FL_OSASCRIPT:-/usr/bin/osascript}"
+fl_sudo_gui() { [[ "${BENCHBAR_SUDO:-}" == "gui" ]]; }
+
 FL_SUDO_KEEPALIVE_PID=""
 FL_SUDO_SESSION="${FL_SUDO_SESSION:-0}"
 # 1 once sudo was refused in this run: later steps skip instead of asking again
@@ -31,6 +37,8 @@ fl_sudo_available() {
 fl_sudo_begin() {
   local reason
   [[ "${FL_DRY_RUN:-0}" == "1" ]] && { fl_info "dry-run: would ask for your password once (sudo) to: $*"; return 0; }
+  # a macOS dialog asks, once per step, when the step runs (fl_root_run)
+  fl_sudo_gui && return 0
   [[ "$FL_SUDO_SESSION" == "1" ]] && return 0
   if [[ "$FL_SUDO_REFUSED" == "1" ]]; then
     fl_warn "sudo was refused earlier in this run; not asking again for: $*"
@@ -77,6 +85,7 @@ fl_sudo_end() {
 # this, in this process or a child, can use sudo without a password. A run
 # that never obtained sudo leaves sudo alone.
 fl_sudo_drop() {
+  fl_sudo_gui && return 0
   fl_sudo_end
   if [[ "$FL_SUDO_SESSION" == "1" ]]; then
     sudo -k 2>/dev/null || true
@@ -84,4 +93,39 @@ fl_sudo_drop() {
   fi
   FL_SUDO_SESSION=0
   export FL_SUDO_SESSION
+}
+
+# fl_root_run REASON SCRIPT ARG...: SCRIPT (bash source) runs as root with
+# ARG... as its $1..., behind one macOS password dialog titled REASON.
+# Returns 0 when the script succeeded, 2 when the person cancelled the
+# dialog (the same reason is not asked again in this run), 1 otherwise;
+# FL_ROOT_OUTPUT holds what the script or osascript said.
+#
+# The command line is /bin/bash -c 'SCRIPT' benchbar-root 'ARG'..., every
+# word in single quotes (fl_sq) and handed to AppleScript as an argument,
+# never inside an AppleScript string, so only shell quoting matters. The
+# script names every tool by its absolute path. benchbar never sees the
+# password and there is no cached credential afterwards.
+FL_ROOT_CANCELLED=""
+FL_ROOT_OUTPUT=""
+fl_root_was_cancelled() { case " $FL_ROOT_CANCELLED " in *" ${1// /_} "*) return 0 ;; esac; return 1; }
+fl_root_run() {
+  local reason="$1" script="$2" cmdline arg out err code=0
+  shift 2
+  if fl_root_was_cancelled "$reason"; then FL_ROOT_OUTPUT="the password dialog was cancelled earlier in this run"; return 2; fi
+  cmdline="/bin/bash -c $(fl_sq "$script") benchbar-root"
+  for arg in "$@"; do cmdline="${cmdline} $(fl_sq "$arg")"; done
+  out="$(mktemp "${TMPDIR:-/tmp}/benchbar-root.XXXXXX")"
+  err="$(mktemp "${TMPDIR:-/tmp}/benchbar-root.XXXXXX")"
+  fl_log "run: osascript, administrator dialog: ${reason}"
+  "$FL_OSASCRIPT" -e 'on run argv' -e 'do shell script (item 1 of argv) with prompt (item 2 of argv) with administrator privileges' -e 'end run' -- "$cmdline" "$reason" </dev/null >"$out" 2>"$err" 3>&- || code=$?
+  FL_ROOT_OUTPUT="$(cat "$out" "$err" 2>/dev/null)"
+  fl_log_file_append "$out"
+  fl_log_file_append "$err"
+  rm -f "$out" "$err"
+  [[ "$code" -ne 0 ]] || return 0
+  case "$FL_ROOT_OUTPUT" in
+    *"(-128)"*) FL_ROOT_CANCELLED="${FL_ROOT_CANCELLED} ${reason// /_}"; return 2 ;;
+  esac
+  return 1
 }

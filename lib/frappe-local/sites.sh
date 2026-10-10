@@ -149,6 +149,11 @@ fl_hosts_add_names() {
     fl_warn "skipped; run: benchbar site hosts --bench-dir ${FL_BENCH_DIR}"
     return 0
   fi
+  # BENCHBAR_SUDO=gui: every line in one dialog
+  if fl_sudo_gui && [[ "${FL_DRY_RUN:-0}" != "1" ]]; then
+    fl_hosts_add_gui "${missing[@]}" || code=1
+    return "$code"
+  fi
   for n in "${missing[@]}"; do
     FL_SITE="$n"
     FL_ASSUME_YES=1 act_hosts_entry || code=1

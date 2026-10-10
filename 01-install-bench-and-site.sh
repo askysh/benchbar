@@ -34,6 +34,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${SCRIPT_DIR}/lib/frappe-local/mariadb.sh"
 trap fl_on_error ERR
 fl_signal_traps_install
+# the last section of a --json install ends with the script
+trap 'fl_jsonl_section_exit "$?"' EXIT
 
 ASSUME_YES=0
 # --yes and --make-default are flags, never values left in the environment
@@ -444,7 +446,7 @@ fi
 
 # the bench's Redis runs for new-site and install-app (frappe v16 needs it)
 fl_bench_redis_up "$BENCH_DIR"
-trap 'fl_bench_redis_down' EXIT
+trap 'fl_jsonl_section_exit "$?"; fl_bench_redis_down' EXIT
 fl_new_site_if_needed "$BENCH_DIR" "$SITE_NAME" "$MARIADB_ROOT_PASSWORD" "$ADMIN_PASSWORD"
 
 fl_section "INSTALL APPS ON SITE"

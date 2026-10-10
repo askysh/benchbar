@@ -126,6 +126,8 @@ OPT_BUNDLE="${APP_BUNDLE:-}"
 OPT_JSON=0
 OPT_PORT_OFFSET=""
 OPT_FIX_HINTS=0
+# doctor --prerequisites: what a Mac needs before an install, no bench needed
+OPT_PREREQ=0
 # --ping: status asks every site (sites[].ping_code), not only the default one
 OPT_PING=0
 # --fetch: doctor and app focus fetch the focus apps' dependencies (freshness.sh)
@@ -152,11 +154,15 @@ Usage: benchbar <command> [options]
 Setup
   install             Run phase 00 (system deps), 01 (bench and site) and the
                       background service. Safe to re-run: only changes what changed.
+                      --json (with --yes or --dry-run): JSON lines for the BenchBar app.
   adopt PATH          Register an existing bench: Procfile.lean, runner, agent, helpers.
                       Shows the plan and asks; never runs migrate, build or update.
+                      --json (with --yes or --dry-run): JSON lines, as install.
   service             Install or refresh only the background service (phase 02).
   doctor              Read-only health report. Exit 1 when something FAILs.
                       --fix-hints: only the fix commands of FAIL and WARN checks, one per line.
+                      --prerequisites: what this Mac needs before an install, no bench needed
+                      (--json; --bench-dir names the folder a new bench would go to).
                       --fetch: git fetch the branches of the apps your focus apps need first
                       (without it doctor never touches the network).
   ports setup -- PATH ...
@@ -289,11 +295,14 @@ Options
   --dry-run           Print the full plan, change nothing
   --offline           install: skip the remote branch checks (also OFFLINE=1 or BENCHBAR_OFFLINE=1)
   -y, --yes           Do not ask; secrets must come from the environment
-  --json              Versioned JSON for list, status and doctor; JSON lines for pull
-                      (docs/json-schema.md)
+  --json              Versioned JSON for list, status and doctor; JSON lines for pull,
+                      install and adopt (docs/json-schema.md)
   --plain             No colors or spinners (also: NO_COLOR=1, or a non-TTY)
   -h, --help          This help
   --version           Print the version (and the BenchBar app's, when it is installed)
+
+Environment:
+  BENCHBAR_SUDO=gui   root steps (wkhtmltopdf, /etc/hosts) ask in a macOS password dialog, not sudo
 
 Shell helpers (written to your shell rc by install or repair):
   benchup benchdown benchrestart benchstatus benchlogs benchfg benchwatch benchdoctor benchcd
@@ -332,6 +341,7 @@ while [[ "$#" -gt 0 ]]; do
     -y|--yes) FL_ASSUME_YES=1; shift ;;
     --json) OPT_JSON=1; shift ;;
     --fix-hints) OPT_FIX_HINTS=1; shift ;;
+    --prerequisites) OPT_PREREQ=1; shift ;;
     --ping) OPT_PING=1; shift ;;
     --fetch) FL_FETCH=1; shift ;;
     --plain|--no-color) FL_PLAIN=1; fl_ui_init; shift ;;
@@ -379,12 +389,65 @@ fl_cleanup() {
   fl_bench_redis_down >/dev/null 2>&1 || true
   fl_sudo_end
   fl_lock_release
+  # install --json and adopt --json: always the last line, after the lock is free
+  fl_jsonl_on_exit "$code"
 }
 trap fl_cleanup EXIT
 trap fl_on_error ERR
 # TERM, INT and HUP reach the running command's whole process group and the
 # phase script in the foreground, then the EXIT trap releases the lock
 fl_signal_traps_install
+
+# ---------------------------------------------------------------- install --json and adopt --json
+#
+# The stream (docs/json-schema.md): one JSON object per line on fd 3, the
+# command's real stdout; every human line goes to the run's log. It starts
+# before the lock and the log are taken (fl_jsonl_start) so that even a
+# refusal or a busy lock ends in a done line, which fl_cleanup always sends.
+
+FL_JSONL_DONE=0
+FL_JSONL_PLAN_SENT=0
+FL_JSONL_BENCH=""
+FL_JSONL_SITE=""
+FL_JSONL_URL=""
+
+# fl_jsonl_start: install or adopt with --json. Without --yes (and without
+# --dry-run) nothing can answer a question: one done line, exit 1, nothing
+# written, no lock. Else the log, the saved stdout, the plain UI, stdin closed.
+fl_jsonl_start() {
+  FL_JSONL=1; FL_JSONL_VERSION="$FL_VERSION"
+  export FL_JSONL FL_JSONL_VERSION
+  exec 3>&1
+  if [[ "$FL_ASSUME_YES" != "1" && "$FL_DRY_RUN" != "1" ]]; then
+    FL_JSONL_BENCH="$OPT_BENCH_DIR"; FL_JSONL_SITE="$OPT_SITE"
+    [[ "$COMMAND" != "adopt" || -n "$FL_JSONL_BENCH" ]] || FL_JSONL_BENCH="${ARGS[0]:-}"
+    FL_DIE_MESSAGE="benchbar ${COMMAND} --json needs --yes (or --dry-run): no question can be answered on the stream"
+    exit 1
+  fi
+  # a dry run has a log here too: the human plan goes there
+  FL_DRY_RUN=0 fl_log_init "${FL_STATE_DIR}/logs"
+  exec 1>>"${FL_LOG_FILE:-/dev/null}" 2>&1 0</dev/null
+  FL_PLAIN=1; fl_ui_init
+  # a dry run streams the plan and done only; the phase scripts it runs
+  # (with --dry-run) stay quiet
+  if [[ "$FL_DRY_RUN" == "1" ]]; then FL_JSONL_QUIET=1; export FL_JSONL_QUIET; fi
+}
+
+# fl_jsonl_on_exit CODE: the done line, once, however the run ends
+fl_jsonl_on_exit() {
+  [[ "$FL_JSONL" == "1" && "$FL_JSONL_DONE" != "1" ]] || return 0
+  local code="${1:-0}" url="null" fix="null" extra=""
+  FL_JSONL_DONE=1
+  FL_JSONL_QUIET=0
+  [[ "$code" != "0" || -z "$FL_JSONL_URL" ]] || url="$(fl_json_str "$FL_JSONL_URL")"
+  FL_DIE_MESSAGE="${FL_DIE_MESSAGE:-$(fl_log_step_message 0)}"
+  [[ "$code" != "2" ]] || fix="$(fl_json_str "The MariaDB root password is unknown: run the command again with MARIADB_ROOT_PASSWORD='...' in the environment")"
+  if [[ "$FL_JSONL_PLAN_SENT" != "1" && "$code" != "0" ]]; then
+    extra=",\"error\":$(fl_json_str "${FL_DIE_MESSAGE:-the command stopped before it started; see the log}")"
+  fi
+  [[ "${FL_DRY_RUN:-0}" != "1" ]] || extra="${extra},\"dry_run\":true"
+  fl_jsonl done ",\"exit\":${code},\"bench\":$(fl_json_str "${FL_JSONL_BENCH:-${FL_BENCH_DIR:-}}"),\"site\":$(fl_json_str "${FL_JSONL_SITE:-${FL_SITE:-}}"),\"url\":${url},\"skipped\":[${FL_JSONL_SKIPPED}],\"fix\":${fix},\"log\":$(fl_json_str "${FL_LOG_FILE:-}")${extra}"
+}
 
 fl_next_steps_box() {
   fl_box "Next steps" \
@@ -403,6 +466,8 @@ fl_next_steps_box() {
 fl_install_sudo_upfront() {
   local reasons=()
   [[ "$FL_DRY_RUN" == "1" ]] && return 0
+  # BENCHBAR_SUDO=gui: each of the two steps asks in its own dialog, when it runs
+  fl_sudo_gui && return 0
   # only when phase 00 will get as far as the installer in this run: without
   # Rosetta and without a way to agree to it, or after a declined download,
   # the package is skipped and a sudo prompt for it would be asked for nothing
@@ -419,20 +484,57 @@ fl_install_sudo_upfront() {
 # Sets FL_INSTALL_PDF_STEP to skipped or failed for phase 00's summary when
 # the package is not there afterwards.
 fl_install_privileged_steps() {
-  local code=0 state
+  local code=0 state from start hosts_before=0
   FL_INSTALL_PDF_STEP=""
   # nothing to do for a patched build (phase 00 reports it); otherwise the
   # same Rosetta, download and install flow as phase 00 and repair
   state="$(fl_wkhtmltopdf_state)"
-  [[ "$state" == "patched" ]] || fl_wkhtmltopdf_ensure || code=$?
+  if [[ "$state" != "patched" ]]; then
+    fl_log_lines_v from; start="$SECONDS"
+    fl_jsonl_step "" wkhtmltopdf_install "" "$FL_INSTALL_PDF_NAME" running
+    FL_SKIP_COMMAND=""
+    fl_wkhtmltopdf_ensure || code=$?
+    fl_install_priv_end wkhtmltopdf_install "$FL_INSTALL_PDF_NAME" "$code" "$from" "$start"
+  fi
   case "$code" in
     0) [[ "$FL_DRY_RUN" == "1" && "$state" != "patched" ]] && FL_INSTALL_PDF_STEP=dry-run ;;  # the plan was shown here, once
     2) FL_INSTALL_PDF_STEP=skipped ;;
     *) FL_INSTALL_PDF_STEP=failed ;;
   esac
   # a refused sudo is not asked again in this run: the line waits for a later repair
-  act_hosts_entry || fl_warn "the /etc/hosts line could not be added now; run '${FL_SELF} repair' later, it asks for sudo again"
+  if fl_hosts_has_site || ! fl_site_name_ok "$FL_SITE"; then hosts_before=1; fi
+  if [[ "$hosts_before" == "0" ]]; then
+    fl_log_lines_v from; start="$SECONDS"
+    fl_jsonl_step "" hosts_entry "" "$(fl_install_hosts_name)" running
+  fi
+  code=0
+  FL_STEP_RESULT=done
+  FL_SKIP_COMMAND=""
+  act_hosts_entry || { code=$?; fl_warn "the /etc/hosts line could not be added now; run '${FL_SELF} repair' later, it asks for sudo again"; }
+  if [[ "$hosts_before" == "0" ]]; then
+    [[ "$code" != "0" || "$FL_STEP_RESULT" != "skipped" ]] || code=2
+    fl_install_priv_end hosts_entry "$(fl_install_hosts_name)" "$code" "$from" "$start"
+  fi
   return 0
+}
+
+# the two privileged steps, by name (the plan's and the dialog's)
+FL_INSTALL_PDF_NAME="Install the patched wkhtmltopdf package"
+fl_install_hosts_name() { fl_hosts_gui_reason "$FL_SITE"; }
+
+# fl_install_priv_end ID NAME CODE LOG_FROM START: the end of a privileged step on
+# the stream. CODE 0 done, 2 skipped (with the command to run by hand), else
+# failed; the message is the CLI's own [WARN] or [FAIL] line.
+fl_install_priv_end() {
+  local id="$1" name="$2" code="$3" from="$4" start="$5" status=done msg="" cmd=""
+  case "$code" in
+    0) ;;
+    2) status=skipped; cmd="$FL_SKIP_COMMAND" ;;
+    *) status=failed ;;
+  esac
+  [[ "$status" == "done" ]] || msg="$(fl_log_step_message "$from")"
+  [[ "$status" != "skipped" ]] || fl_jsonl_skipped_add "$id" "$cmd"
+  fl_jsonl_step "" "$id" "" "$name" "$status" "$((SECONDS - start))" "$msg" "$cmd"
 }
 
 # fl_remember_bench: this bench's own settings, and the default bench when
@@ -456,6 +558,52 @@ fl_remember_bench() {
   return "$code"
 }
 
+# fl_install_port_plan: the port block the new bench gets, chosen before any
+# step runs so that the plan knows it: --port-offset, else the next free
+# block when another bench or program has the default one (phase 01 writes
+# it right after bench init). Sets INSTALL_PORT_OFFSET, INSTALL_PORT_BLOCK
+# ("web socketio queue cache", empty for the bench's own ports),
+# INSTALL_PORT_FREE (the offset to announce when the defaults are taken) and
+# INSTALL_PORT_ERR=1 when no block is free. Prints nothing.
+fl_install_port_plan() {
+  local free
+  INSTALL_PORT_BLOCK=""; INSTALL_PORT_FREE=""; INSTALL_PORT_ERR=0
+  INSTALL_PORT_OFFSET=$((FL_WEB_PORT - FL_PORT_BASE_WEB))
+  if [[ "$OPT_PORT_OFFSET" =~ ^[0-9]+$ ]]; then
+    INSTALL_PORT_OFFSET="$OPT_PORT_OFFSET"
+    INSTALL_PORT_BLOCK="$(fl_port_block "$OPT_PORT_OFFSET")"
+  elif [[ ! -f "$FL_BENCH_DIR/sites/common_site_config.json" && -n "$(fl_port_block_conflicts 0)" ]]; then
+    if free="$(fl_port_next_free_offset)"; then
+      INSTALL_PORT_OFFSET="$free"; INSTALL_PORT_FREE="$free"
+      INSTALL_PORT_BLOCK="$(fl_port_block "$free")"
+    else
+      INSTALL_PORT_ERR=1; INSTALL_PORT_OFFSET=""
+    fi
+  fi
+}
+
+# fl_install_plan_json BUNDLE: the plan line of install --json
+fl_install_plan_json() {
+  local pdf_run=0 hosts_run=0 steps="" mode=terminal web_port team="null" label i=0 id sudo n
+  # the plan describes the --yes run that follows a dry run
+  if [[ "$(fl_wkhtmltopdf_state)" != "patched" ]] && FL_ASSUME_YES=1 fl_wkhtmltopdf_will_install; then pdf_run=1; fi
+  if ! fl_hosts_has_site && fl_site_name_ok "$FL_SITE"; then hosts_run=1; fi
+  fl_sudo_gui && mode=gui
+  web_port="${INSTALL_PORT_BLOCK%% *}"; [[ -n "$web_port" ]] || web_port="$FL_WEB_PORT"
+  [[ -z "$FL_TEAM_PROFILE" ]] || team="$(fl_json_str "$FL_TEAM_PROFILE")"
+  steps="{\"n\":null,\"id\":\"wkhtmltopdf_install\",\"name\":$(fl_json_str "$FL_INSTALL_PDF_NAME"),\"sudo\":true,\"will_run\":$(fl_json_bool "$pdf_run")}"
+  steps="${steps},{\"n\":null,\"id\":\"hosts_entry\",\"name\":$(fl_json_str "$(fl_install_hosts_name)"),\"sudo\":true,\"will_run\":$(fl_json_bool "$hosts_run")}"
+  for label in "${FL_STEP_LABELS[@]}"; do
+    id="${FL_STEP_IDS[$i]}"; i=$((i + 1)); n="$i"
+    steps="${steps},{\"n\":${n},\"id\":\"${id}\",\"name\":$(fl_json_str "$label"),\"sudo\":false,\"will_run\":true}"
+  done
+  FL_JSONL_URL="http://${FL_SITE}:${web_port}"
+  fl_jsonl plan ",\"bench\":$(fl_json_str "$FL_BENCH_DIR"),\"site\":$(fl_json_str "$FL_SITE"),\"profile\":$(fl_json_str "$FL_PROFILE"),\"team_profile\":${team},\"bundle\":$(fl_json_str "$1"),\"port_offset\":$(fl_json_num "$INSTALL_PORT_OFFSET"),\"web_url\":$(fl_json_str "$FL_JSONL_URL"),\"dry_run\":$(fl_json_bool "$FL_DRY_RUN"),\"sudo_mode\":\"${mode}\",\"steps\":[${steps}],\"log\":$(fl_json_str "${FL_LOG_FILE:-}")"
+  FL_JSONL_PLAN_SENT=1
+  [[ "$FL_DRY_RUN" != "1" ]] || FL_JSONL_QUIET=1
+  export FL_JSONL_QUIET
+}
+
 cmd_install() {
   local code=0 args00=() args01=() bundle
   local profile_name
@@ -474,7 +622,18 @@ cmd_install() {
   else
     fl_header "benchbar install" "$(fl_mode_name)" "$(fl_profile_display)" "$FL_BENCH_DIR" "$FL_SITE"
   fi
+  FL_JSONL_BENCH="$FL_BENCH_DIR"; FL_JSONL_SITE="$FL_SITE"
+  # the passwords of a stream cannot be asked for: refused before anything runs
+  if [[ "$FL_JSONL" == "1" && "$FL_DRY_RUN" != "1" && ! -d "${FL_BENCH_DIR}/sites/${FL_SITE}" && -z "${ADMIN_PASSWORD:-}" ]]; then
+    fl_die "ADMIN_PASSWORD is not set: the new site ${FL_SITE} needs the Administrator password." \
+      "Pass it in the environment: ADMIN_PASSWORD='...' benchbar install --json --yes"
+  fi
+  bundle="${OPT_BUNDLE:-$(fl_bstate_get APP_BUNDLE 2>/dev/null || true)}"
+  bundle="${bundle:-$FL_TEAM_BUNDLE}"
+  fl_install_port_plan
   fl_steps_define "System dependencies (00-mac-system-deps.sh)" "Bench and site (01-install-bench-and-site.sh)" "Background service"
+  fl_steps_ids system_deps bench_site service
+  fl_install_plan_json "${bundle:-minimal}"
   fl_steps_print_plan
   fl_install_sudo_upfront
   fl_install_privileged_steps
@@ -488,11 +647,9 @@ cmd_install() {
   [[ "$FL_ASSUME_YES" == "1" ]] && { args00+=(--yes); args01+=(--yes); }
   [[ "$OFFLINE" == "1" ]] && { args00+=(--offline); args01+=(--offline); }
   [[ "$FL_MAKE_DEFAULT" == "1" ]] && args01+=(--make-default)
-  bundle="${OPT_BUNDLE:-$(fl_bstate_get APP_BUNDLE 2>/dev/null || true)}"
-  bundle="${bundle:-$FL_TEAM_BUNDLE}"
 
   fl_step_begin 0
-  if MARIADB_ROOT_PASSWORD="${MARIADB_ROOT_PASSWORD:-}" BENCHBAR_PDF_STEP="$FL_INSTALL_PDF_STEP" \
+  if MARIADB_ROOT_PASSWORD="${MARIADB_ROOT_PASSWORD:-}" BENCHBAR_PDF_STEP="$FL_INSTALL_PDF_STEP" FL_JSONL_PARENT=system_deps \
      fl_run_phase_script "${SCRIPT_DIR}/00-mac-system-deps.sh" "${args00[@]}"; then
     fl_step_end "done"
   else
@@ -510,20 +667,15 @@ cmd_install() {
   fi
 
   fl_step_begin 1
-  # the port block of a new bench, chosen before phase 01 starts its Redis:
-  # --port-offset, else the next free block when another bench or program
-  # has the default one (phase 01 writes it right after bench init)
-  local web_port="" port_block="" free
-  if [[ "$OPT_PORT_OFFSET" =~ ^[0-9]+$ ]]; then
-    port_block="$(fl_port_block "$OPT_PORT_OFFSET")"
-  elif [[ ! -f "$FL_BENCH_DIR/sites/common_site_config.json" && -n "$(fl_port_block_conflicts 0)" ]]; then
-    free="$(fl_port_next_free_offset)" || { fl_step_end failed; fl_steps_summary; fl_die "no free port block between 0 and ${FL_PORT_MAX_OFFSET}"; }
-    port_block="$(fl_port_block "$free")"
-    fl_info "the default ports are taken; the new bench gets port block ${free} (web ${port_block%% *})"
+  # the port block of a new bench (chosen above, fl_install_port_plan)
+  local web_port="" port_block="$INSTALL_PORT_BLOCK"
+  if [[ "$INSTALL_PORT_ERR" == "1" ]]; then
+    fl_step_end failed; fl_steps_summary; fl_die "no free port block between 0 and ${FL_PORT_MAX_OFFSET}"
   fi
+  [[ -z "$INSTALL_PORT_FREE" ]] || fl_info "the default ports are taken; the new bench gets port block ${INSTALL_PORT_FREE} (web ${port_block%% *})"
   [[ -n "$port_block" ]] && web_port="${port_block%% *}"
   if BENCH_DIR="$FL_BENCH_DIR" SITE_NAME="$FL_SITE" APP_BUNDLE="${bundle:-minimal}" BENCHBAR_WEB_PORT="$web_port" \
-     BENCHBAR_PORT_BLOCK="$port_block" \
+     BENCHBAR_PORT_BLOCK="$port_block" FL_JSONL_PARENT=bench_site \
      MARIADB_ROOT_PASSWORD="${MARIADB_ROOT_PASSWORD:-}" ADMIN_PASSWORD="${ADMIN_PASSWORD:-}" \
      fl_run_phase_script "${SCRIPT_DIR}/01-install-bench-and-site.sh" "${args01[@]}"; then
     fl_step_end "done"
@@ -575,7 +727,8 @@ cmd_install() {
   # the engine lists and times its own actions; the install's three steps
   # come back afterwards for the one Summary at the end
   fl_steps_push
-  if FL_ENGINE_NO_SUMMARY=1 FL_PLAN_CHECKS="port_block" fl_repair_engine "Background service" system service; then
+  if FL_ENGINE_NO_SUMMARY=1 FL_PLAN_CHECKS="port_block" FL_ENGINE_PARENT=service FL_ENGINE_QUIET_ACTIONS="hosts_entry wkhtmltopdf_install" \
+     fl_repair_engine "Background service" system service; then
     fl_steps_pop
     fl_pm_remember
     fl_step_end "done"
@@ -618,6 +771,23 @@ cmd_service() {
 # benchbar adopt PATH: register an existing bench without touching its data.
 # Same engine as "service" (only the service group of checks and actions), so
 # it never runs migrate, build, update or an env rebuild.
+# adopt --json: the plan line, called by the repair engine once it knows the
+# actions (FL_ENGINE_PLAN_HOOK). Its steps are the actions, numbered from 1.
+fl_adopt_plan_json() {
+  local a n=0 steps="" move=false off mode=terminal
+  for a in $1; do
+    n=$((n + 1))
+    steps="${steps}${steps:+,}{\"n\":${n},\"id\":\"${a}\",\"name\":$(fl_json_str "$(fl_action_label "$a")"),\"sudo\":$(fl_json_bool "$(fl_action_needs_sudo "$a" && printf 1 || printf 0)"),\"will_run\":true}"
+  done
+  case " $1 " in *" port_block "*) move=true ;; esac
+  off="${FL_PORT_TARGET:-$((FL_WEB_PORT - FL_PORT_BASE_WEB))}"
+  fl_sudo_gui && mode=gui
+  fl_jsonl plan ",\"bench\":$(fl_json_str "$FL_BENCH_DIR"),\"site\":$(fl_json_str "$FL_SITE"),\"profile\":$(fl_json_str "$FL_PROFILE"),\"port_offset\":$(fl_json_num "$off"),\"ports_move\":${move},\"dry_run\":$(fl_json_bool "$FL_DRY_RUN"),\"sudo_mode\":\"${mode}\",\"steps\":[${steps}],\"log\":$(fl_json_str "${FL_LOG_FILE:-}")"
+  FL_JSONL_PLAN_SENT=1
+  [[ "$FL_DRY_RUN" != "1" ]] || FL_JSONL_QUIET=1
+  export FL_JSONL_QUIET
+}
+
 cmd_adopt() {
   local path="${1:-}"
   [[ -n "$path" ]] || fl_die "Usage: benchbar adopt <bench path>" "Example: benchbar adopt ~/frappe-bench"
@@ -626,6 +796,7 @@ cmd_adopt() {
   fl_is_bench_dir "$path" || fl_die "${path} is not a bench (no sites/common_site_config.json and no apps/frappe)." "Point adopt at the folder that holds apps/, sites/ and env/."
   fl_context_init "$path" "$OPT_SITE" "$OPT_PROFILE"
   fl_require_plain_bench
+  FL_JSONL_BENCH="$FL_BENCH_DIR"; FL_JSONL_SITE="$FL_SITE"
   fl_header "benchbar adopt" "$(fl_mode_name)" "$(fl_profile_display)" "$FL_BENCH_DIR" "$FL_SITE"
   fl_info "adopt only adds the background service files and remembers the bench."
   fl_info "apps/, env/, the sites and the databases are not touched; migrate, build and update never run."
@@ -636,7 +807,9 @@ cmd_adopt() {
   fi
   fl_ports_plan "$OPT_PORT_OFFSET" || return 1
   # the service group would install honcho into env when it is missing; adopt must not
-  if FL_PLAN_CHECKS="port_block" FL_ENGINE_SKIP_ACTIONS="honcho_install honcho_setuptools" fl_repair_engine "Adopt" service; then
+  if FL_PLAN_CHECKS="port_block" FL_ENGINE_SKIP_ACTIONS="honcho_install honcho_setuptools" FL_ENGINE_PLAN_HOOK=fl_adopt_plan_json \
+     fl_repair_engine "Adopt" service; then
+    FL_JSONL_URL="$(fl_site_url)"
     fl_pm_remember
     # remembered only now: a cancelled plan must not make this the default bench
     if fl_remember_bench; then
@@ -650,20 +823,38 @@ cmd_adopt() {
   return 1
 }
 
+# doctor --prerequisites: what a Mac needs before an install. No bench is
+# needed (and none is looked for): --bench-dir names the folder a new bench
+# would go to, ~/frappe-bench without it. Read only.
+cmd_doctor_prerequisites() {
+  FL_BENCH_DIR="$(fl_abs_path "${OPT_BENCH_DIR:-$HOME/frappe-bench}")"
+  fl_prereq_run
+  if [[ "$OPT_JSON" == "1" ]]; then
+    fl_prereq_print_json
+  else
+    fl_prereq_print
+    printf '\n  %s%d ok, %d warn, %d fail%s\n' "$FL_BOLD" "$(fl_prereq_count ok)" "$(fl_prereq_count warn)" "$(fl_prereq_count fail)" "$FL_RESET"
+  fi
+  [[ "$(fl_prereq_count fail)" == "0" ]]
+}
+
 cmd_doctor() {
   local fails
+  if [[ "$OPT_PREREQ" == "1" ]]; then cmd_doctor_prerequisites; return; fi
   # --fix-hints: only the fix commands on stdout (fd 3), everything else,
   # a missing bench included, on stderr
   if [[ "$OPT_FIX_HINTS" == "1" ]]; then exec 3>&1 1>&2; FL_PLAIN=1; fl_ui_init; fi
   fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
   fl_require_bench
   fl_doctor_run
+  [[ "$OPT_FIX_HINTS" == "1" ]] || fl_prereq_run
   if [[ "$OPT_FIX_HINTS" == "1" ]]; then
     fl_doctor_print_fix_hints >&3
   elif [[ "$OPT_JSON" == "1" ]]; then
     fl_doctor_print_json
   else
     fl_header "benchbar doctor" "read-only" "$(fl_profile_display)" "$FL_BENCH_DIR" "$FL_SITE"
+    fl_prereq_print
     fl_doctor_print
     if [[ -n "$(fl_doctor_actions)" ]]; then
       printf '\n'
@@ -767,6 +958,9 @@ cmd_status() {
   fl_cmd_status "$OPT_JSON"
 }
 
+# install and adopt with --json: the stream starts before the log and the lock
+if [[ "$OPT_JSON" == "1" && ( "$COMMAND" == "install" || "$COMMAND" == "adopt" ) ]]; then fl_jsonl_start; fi
+
 case "$COMMAND" in
   ports)
     if [[ "${ARGS[0]:-}" == apply || "${ARGS[0]:-}" == mode ]]; then
@@ -790,7 +984,7 @@ case "$COMMAND" in
   # fg stops the background bench first (a down), so it holds the lock until
   # just before it execs honcho (fl_cmd_fg releases it there)
   install|adopt|service|repair|up|down|restart|autostart|uninstall-service|pull|fg)
-    fl_log_init "${FL_STATE_DIR}/logs"
+    [[ "$FL_JSONL" == "1" ]] || fl_log_init "${FL_STATE_DIR}/logs"
     fl_lock_acquire "${FL_STATE_DIR}/lock"
     ;;
   *) ;;

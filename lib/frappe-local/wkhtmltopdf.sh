@@ -16,6 +16,10 @@
 FL_WKHTML_DOWNLOAD_DIR="${FL_WKHTML_DOWNLOAD_DIR:-${FL_STATE_DIR}/downloads}"
 # where the official package puts its binary
 FL_WKHTML_PKG_BIN="${FL_WKHTML_PKG_BIN:-/usr/local/bin/wkhtmltopdf}"
+# 1 when Rosetta 2 still has to be installed together with the package
+FL_WKHTML_NEED_ROSETTA=0
+# FL_SKIP_COMMAND (ui.sh) is set when the step is skipped on purpose: what to
+# run by hand, for the JSON stream's "command"
 
 fl__wkhtmltopdf_is_patched() {
   [[ -n "$1" && -x "$1" ]] || return 1
@@ -74,6 +78,13 @@ fl_rosetta_ensure() {
   if ! fl_confirm "Install Rosetta 2 now? (Apple's translation layer, about 300 MB, no restart)"; then
     return 1
   fi
+  # BENCHBAR_SUDO=gui: root installs it in the same script as the package,
+  # behind the one password dialog (fl_wkhtmltopdf_install_gui)
+  if fl_sudo_gui; then
+    FL_WKHTML_NEED_ROSETTA=1
+    fl_info "Rosetta 2 is installed in the same step as the package, behind one password dialog"
+    return 0
+  fi
   fl_run_long "softwareupdate --install-rosetta" softwareupdate --install-rosetta --agree-to-license || return 1
   fl_rosetta_installed || { fl_warn "Rosetta 2 still not detected"; return 1; }
   fl_ok "Rosetta 2 installed"
@@ -100,7 +111,8 @@ fl_wkhtmltopdf_download() {
   fi
   mkdir -p "$FL_WKHTML_DOWNLOAD_DIR"
   rm -f "$dest"
-  fl_run_long "download wkhtmltopdf ${FL_WKHTML_VERSION} (about 50 MB)" curl -fL --retry 3 -o "${dest}.part" "$FL_WKHTML_URL" || return 1
+  # the stream's progress lines read the size of the file being written
+  FL_PROGRESS_FILE="${dest}.part" fl_run_long "download wkhtmltopdf ${FL_WKHTML_VERSION} (about 50 MB)" curl -fL --retry 3 -o "${dest}.part" "$FL_WKHTML_URL" || return 1
   sum="$(fl_sha256_of "${dest}.part")"
   if [[ "$sum" != "$FL_WKHTML_SHA256" ]]; then
     rm -f "${dest}.part"
@@ -125,6 +137,7 @@ FL_WKHTML_ROOT_TMP_TEMPLATE="/tmp/benchbar-wkhtmltopdf.XXXXXX"
 
 fl_wkhtmltopdf_install() {
   local root_dir="" root_pkg sum code=0
+  if fl_sudo_gui && [[ "${FL_DRY_RUN:-0}" != "1" ]]; then fl_wkhtmltopdf_install_gui; return $?; fi
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
     fl_info "dry-run: sudo mktemp -d ${FL_WKHTML_ROOT_TMP_TEMPLATE}"
     fl_info "dry-run: sudo install -m 0644 -o root ${FL_WKHTML_PKG} <that folder>/${FL_WKHTML_FILE}"
@@ -159,6 +172,69 @@ fl_wkhtmltopdf_install() {
   fl_log "run: sudo rm -rf ${root_dir}"
   sudo rm -rf "$root_dir" 2>/dev/null || fl_warn "could not remove ${root_dir}; run: sudo rm -rf ${root_dir}"
   [[ "$code" == "0" ]] || return 1
+  hash -r 2>/dev/null || true
+  case "$(fl_wkhtmltopdf_state)" in
+    patched) fl_ok "$("$(fl_wkhtmltopdf_bin)" --version 2>&1 | head -n1) at $(fl_wkhtmltopdf_bin)"; fl_wkhtmltopdf_shadow_warn ;;
+    *) fl_fail "the package installed but 'wkhtmltopdf --version' does not say 'with patched qt'"; return 1 ;;
+  esac
+}
+
+# BENCHBAR_SUDO=gui: the same steps as fl_wkhtmltopdf_install, as one root
+# script behind one password dialog (fl_root_run). Root makes a fresh folder
+# in /tmp that only it can write, copies the package in, hashes the copy
+# against the pin, installs the copy and removes the folder; Rosetta 2, when
+# it is missing, is installed first in the same script. Returns 0, 1 failed,
+# 2 the dialog was cancelled (skipped).
+FL_WKHTML_GUI_REASON="Install the patched wkhtmltopdf package"
+fl_wkhtmltopdf_root_script() {
+  cat <<'ROOT'
+set -eu
+pkg="$1" file="$2" sha="$3" rosetta="$4"
+if [ "$rosetta" = 1 ]; then
+  /usr/sbin/softwareupdate --install-rosetta --agree-to-license || { echo "softwareupdate --install-rosetta failed" >&2; exit 20; }
+fi
+dir="$(/usr/bin/mktemp -d /tmp/benchbar-wkhtmltopdf.XXXXXX)" || exit 21
+case "$dir" in /tmp/benchbar-wkhtmltopdf.*) ;; *) echo "could not create a root owned folder for the package" >&2; exit 21 ;; esac
+trap '/bin/rm -rf "$dir"' EXIT
+/usr/bin/install -m 0644 "$pkg" "$dir/$file" || { echo "could not copy $file into $dir" >&2; exit 22; }
+sum="$(/usr/bin/shasum -a 256 "$dir/$file" | /usr/bin/awk '{print $1}')"
+if [ "$sum" != "$sha" ]; then
+  echo "checksum mismatch on the root owned copy of $file: got ${sum:-nothing}, pinned $sha" >&2
+  exit 23
+fi
+/usr/sbin/installer -pkg "$dir/$file" -target / || { echo "installer -pkg $file failed" >&2; exit 24; }
+ROOT
+}
+
+# the commands a person runs by hand when the dialog was cancelled
+fl_wkhtmltopdf_manual_command() {
+  local cmd="sudo installer -pkg $(fl_sq "$FL_WKHTML_PKG") -target /"
+  [[ "$FL_WKHTML_NEED_ROSETTA" != "1" ]] || cmd="softwareupdate --install-rosetta --agree-to-license && ${cmd}"
+  printf '%s' "$cmd"
+}
+
+fl_wkhtmltopdf_install_gui() {
+  local code=0 last
+  if fl_root_was_cancelled "$FL_WKHTML_GUI_REASON"; then code=2; else
+    fl_root_run "$FL_WKHTML_GUI_REASON" "$(fl_wkhtmltopdf_root_script)" "$FL_WKHTML_PKG" "$FL_WKHTML_FILE" "$FL_WKHTML_SHA256" "$FL_WKHTML_NEED_ROSETTA" || code=$?
+  fi
+  case "$code" in
+    0) ;;
+    2)
+      FL_SKIP_COMMAND="$(fl_wkhtmltopdf_manual_command)"
+      fl_warn "the password dialog was cancelled; wkhtmltopdf was not installed. PDFs will not work until it is; everything else does."
+      fl_fix "$FL_SKIP_COMMAND"
+      return 2 ;;
+    *)
+      last="$(printf '%s\n' "$FL_ROOT_OUTPUT" | grep -v '^[[:space:]]*$' | tail -n 1)"
+      fl_fail "could not install the wkhtmltopdf package${last:+: ${last}}"
+      case "$FL_ROOT_OUTPUT" in
+        *"checksum mismatch"*) fl_note "nothing was installed; the download in ${FL_WKHTML_DOWNLOAD_DIR} is discarded"; rm -f "$FL_WKHTML_PKG" ;;
+      esac
+      return 1 ;;
+  esac
+  [[ "$FL_WKHTML_NEED_ROSETTA" != "1" ]] || { fl_rosetta_installed && fl_ok "Rosetta 2 installed" || fl_warn "Rosetta 2 still not detected"; }
+  FL_WKHTML_NEED_ROSETTA=0
   hash -r 2>/dev/null || true
   case "$(fl_wkhtmltopdf_state)" in
     patched) fl_ok "$("$(fl_wkhtmltopdf_bin)" --version 2>&1 | head -n1) at $(fl_wkhtmltopdf_bin)"; fl_wkhtmltopdf_shadow_warn ;;
@@ -208,6 +284,7 @@ fl_wkhtmltopdf_ensure() {
   if [[ "${FL_ARCH:-$(uname -m)}" == "arm64" ]] && ! fl_rosetta_ensure; then
     fl_warn "skipping wkhtmltopdf: without Rosetta 2 the Intel binary cannot run. PDFs will not work; everything else does."
     fl_fix "softwareupdate --install-rosetta --agree-to-license, then run this again"
+    FL_SKIP_COMMAND="softwareupdate --install-rosetta --agree-to-license"
     return 2
   fi
   if [[ "${FL_DRY_RUN:-0}" != "1" ]] && ! fl_confirm "Download wkhtmltopdf ${FL_WKHTML_VERSION} (official patched Qt package, sha256 verified) and install it with sudo?"; then
@@ -219,6 +296,7 @@ fl_wkhtmltopdf_ensure() {
   if [[ "${FL_DRY_RUN:-0}" != "1" ]] && ! fl_sudo_begin "install the wkhtmltopdf package (installer -pkg ${FL_WKHTML_FILE} -target /)"; then
     fl_warn "skipping wkhtmltopdf: sudo was not available"
     fl_fix "sudo installer -pkg ${FL_WKHTML_PKG} -target /"
+    FL_SKIP_COMMAND="sudo installer -pkg $(fl_sq "$FL_WKHTML_PKG") -target /"
     return 2
   fi
   fl_wkhtmltopdf_install

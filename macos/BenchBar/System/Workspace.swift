@@ -17,6 +17,27 @@ enum Workspace {
         NSApp.activate()
         return panel.runModal() == .OK ? panel.url?.path : nil
     }
+    /// The folder for a new bench: an existing one, or one made in the panel.
+    static func chooseBenchFolder(previous: String) -> String? {
+        let panel = NSOpenPanel()
+        panel.title = "Choose the bench folder"
+        panel.message = "Choose or create the folder for the new bench."
+        panel.prompt = "Choose"
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        let parent = URL(fileURLWithPath: previous, isDirectory: true).deletingLastPathComponent()
+        panel.directoryURL = FileManager.default.fileExists(atPath: parent.path) ? parent : FileManager.default.homeDirectoryForCurrentUser
+        NSApp.activate()
+        return panel.runModal() == .OK ? panel.url?.path : nil
+    }
+
+    /// A file (the run log) in the app macOS chooses for it.
+    static func openFile(_ path: String) {
+        NSWorkspace.shared.open(URL(fileURLWithPath: path))
+    }
+
     static func openSite(_ bench: BenchModel) {
         let text = bench.status?.webURL ?? bench.summary.webURL
         guard let url = URL(string: text) else { return }

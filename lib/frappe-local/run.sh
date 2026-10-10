@@ -16,12 +16,14 @@ FL_RUN_CHILD_PID=""
 # leader of its own process group, output to LOG. bash 3.2 (macOS) has no
 # setsid, so job control (set -m) does it: a background job started under
 # job control gets a process group of its own. Sets FL_RUN_PID and
-# FL_RUN_PGID.
+# FL_RUN_PGID. The command does not get fd 3, the JSON stream of install and
+# adopt: bench, brew and npm must not write into it, and a daemon they start
+# must not keep it open.
 fl_run_bg_group() {
   local log="$1"
   shift
   set -m
-  "$@" </dev/null >"$log" 2>&1 &
+  "$@" </dev/null >"$log" 2>&1 3>&- &
   FL_RUN_PID="$!"
   set +m
   FL_RUN_PGID="$FL_RUN_PID"
@@ -119,7 +121,7 @@ fl_run() {
 # rolling tail of its output. On failure prints the last 40 lines and the
 # path of the full log.
 fl_run_long() {
-  local label="$1" log pid code=0 start
+  local label="$1" log pid code=0 start last_progress
   shift
   fl_redact_url_v FL_LAST_COMMAND "$*"
   FL_LAST_COMMAND="${FL_LAST_COMMAND#fl_in_bench }"
@@ -130,6 +132,7 @@ fl_run_long() {
   log="$(mktemp "${TMPDIR:-/tmp}/benchbar-cmd.XXXXXX")"
   fl_log "run: $* (log follows)"
   start="$SECONDS"
+  last_progress="$SECONDS"
   fl_run_bg_group "$log" "$@"
   pid="$FL_RUN_PID"
   fl_spinner_start "$label" "$log"
@@ -144,6 +147,11 @@ fl_run_long() {
       fl_log_file_append "$log"
       rm -f "$log"
       return 125
+    fi
+    # a progress line for the JSON stream every FL_PROGRESS_SECS (10)
+    if [[ "$FL_JSONL" == "1" && $((SECONDS - last_progress)) -ge "${FL_PROGRESS_SECS:-10}" ]]; then
+      last_progress="$SECONDS"
+      fl_jsonl_progress "$label" $((SECONDS - start))
     fi
     sleep 1
   done

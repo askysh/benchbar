@@ -60,7 +60,13 @@ has every route and ready to use Raycast and Shortcuts recipes.
 ## The BenchBar window
 
 Open it with ⌘M, **Manage Bench…** in the popover, or by
-opening BenchBar again from Finder or Spotlight. It has a page per bench:
+opening BenchBar again from Finder or Spotlight. The sidebar lists your
+benches first, each with its state dot and its sites beneath it (a site
+opens the bench's Sites tab), then **Team Profiles** and **Find
+Benches**. The **+** at the bottom of the sidebar has **New Bench…**,
+**Adopt Existing Bench…** and **Find Benches…**. On a Mac with no bench
+the window opens on the [first run wizard](#a-new-bench-from-the-app).
+Every bench has a page:
 
 - **Overview**: start, stop and restart (one group of buttons), **Open
   Site**, the site and ports, and the scheduler switch. **Open in VS
@@ -105,7 +111,7 @@ change runs. Drop Site is never on Return: it needs the site name typed.
 
 ![A bench's health: doctor's warnings with their fixes, Run Doctor and Repair](images/window-health.png)
 
-Above the benches:
+Settings (⌘,) is a small window of its own:
 
 - **General**: open at login, notifications, which `benchbar` the app
   runs (Automatic, or a path you choose), the editor for **Open in VS
@@ -113,6 +119,8 @@ Above the benches:
   (one you built yourself) also has **Check for updates automatically**.
 - **Menu Bar**: the runner, with a live preview and custom runners, see
   [Custom runners](runners.md).
+In the window, below the benches:
+
 - **Team Profiles**: every profile with where it comes from (built in,
   local, imported, subscribed), a badge when a subscription is behind and
   a warning when another file with the same name hides one. The **Add
@@ -126,11 +134,13 @@ Above the benches:
   subscription with every profile in it). Import and update show what changes
   before they write, and nothing is installed from this page. See
   [Teams](guides/teams.md#team-profiles).
-- **About**: the app's version and the command line tool's (with its
+**About BenchBar** in the app menu opens a small window with the app's
+version and the command line tool's (with its
   path), Check for Updates (with **Update Now** when a newer release is
   out, and Copy Update Command and Release Notes in its ⋯ menu), links to
-  the documentation, the release notes and the source, Report a Bug, and
-  the `claude mcp add` command for coding agents.
+the documentation, the release notes and the source, Report a Bug, and
+the `claude mcp add` command for coding agents. Report a Bug and Check
+for Updates are in the Help and app menus too.
 
 ![Team Profiles: the built in profiles and a team profile with where each comes from, and the Import and Subscribe buttons](images/window-profiles.png)
 
@@ -185,7 +195,45 @@ a Copy button.
 
 ![General settings: startup, notifications, Check for updates automatically and the command line tool](images/window-general.png)
 
-## First run
+## A new bench from the app
+
+A Mac with no bench opens the window on the first run wizard; later it is
+**New Bench…** under the **+** in the sidebar. Return goes on, Esc goes
+back.
+
+1. **Welcome**: **Set Up a New Bench**, or **I Already Have a Bench**,
+   which opens Find Benches to add it and set up its service. **Just the
+   Command Line Tool** shows the Homebrew and installer commands to copy.
+2. **Check Your Mac**: what `benchbar doctor --prerequisites` checks:
+   Apple Silicon, macOS 14 or later, the Xcode Command Line Tools,
+   Homebrew, free disk space, a bench folder outside iCloud Drive,
+   Desktop and Documents, CleanMyMac and Mole, and whether the default
+   ports are free. **Install Command Line Tools** opens Apple's
+   installer, and the row checks again on its own. Homebrew is installed
+   with the command shown, in Terminal; then **Check Again**.
+3. **New Bench**: the folder (`~/frappe-bench` by default), the profile
+   (v15-lts, v16-lts or a team profile, with the Python, Node and
+   MariaDB each brings), the app bundle, the site name and the
+   Administrator password. The password goes to that one `benchbar
+   install` and nowhere else. A port block appears only when another
+   bench has the default ports.
+4. **Review**: the plan from `benchbar install --dry-run`. The two steps
+   that need your password, the patched wkhtmltopdf package and the
+   `/etc/hosts` line, say **Asks for your password**.
+5. **Install**: each step and its own steps as they run, with their
+   times and the command output under **Show Output**. macOS asks for
+   your password in its own dialog, once for each of the two steps;
+   BenchBar never sees it. Cancel a dialog and that step is skipped, with
+   its command to run later. **Stop** ends the run; the wizard or
+   `benchbar repair` finishes it later. A failed step shows its fix,
+   **Retry** and **Open Log**. When MariaDB already has a root password
+   that BenchBar does not know, the page asks for it and tries again.
+6. **Done**: **Open Site**, a runner for the menu bar, **Open BenchBar
+   at Login**, **Allow Notifications**, and the shell helpers (`source
+   ~/.zshrc`, then `benchup`) to copy. A skipped step shows its command
+   here.
+
+## Finding the command line tool
 
 On Automatic the app runs the CLI inside it. A path chosen in General
 comes first; one that is gone, such as a Cellar folder after `brew
@@ -200,9 +248,14 @@ crash alerts.
 
 ## What the app does not do
 
-The app does not write plists, edit bench files, or run `bench`, `brew`
-or `launchctl`. Every button runs `benchbar ... --json` and reads the
-answer, plus the state file the runner writes on every transition. That
+The app does not write plists, edit bench files, or run `bench`, `brew`,
+`git` or `launchctl`. Every button runs `benchbar ... --json` and reads
+the answer, plus the state file the runner writes on every transition.
+The one other program it starts is `xcode-select --install`, from Check
+Your Mac, which only opens Apple's installer. It never asks for your
+password itself: for an install, a repair or a hosts line you confirmed,
+the CLI shows macOS's own password dialog (`BENCHBAR_SUDO=gui`, see the
+[JSON schema](json-schema.md#the-privileged-steps-and-benchbar_sudogui)). That
 JSON is a documented API: [JSON schema](json-schema.md).
 
 ## Energy
@@ -289,8 +342,11 @@ window. A port conflict similarly opens **Review Port Conflict…** there.
 The popover shows up to three sites: the default site first, then any
 site that still needs a hosts line, then the rest in name order (site-2
 before site-10). **Manage Sites…**, or **View All** when there are more,
-opens the complete Sites tab. A missing hosts line shows the `benchbar
-site hosts` command with a Copy button, and **Set Up…** on the site.
+opens the complete Sites tab. A missing hosts line shows **Set Up…** on
+the site, which opens the Sites tab and **Add Hosts Lines…**: after you
+confirm, macOS asks for your password and the line is added. When you
+cancel that dialog, the sheet shows the `benchbar site hosts` command to
+copy.
 Open is enabled once the bench is running.
 
 Health shows the failure and warning counts and the first two checks

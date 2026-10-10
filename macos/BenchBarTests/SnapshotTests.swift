@@ -152,11 +152,17 @@ struct SnapshotTests {
 
     private func window(_ store: BenchStore, _ workbench: Workbench, _ router: WindowRouter,
                         about: AboutModel? = nil) -> some View {
-        MainWindowView(store: store, router: router, workbench: workbench, about: about ?? AboutModel(store: store), discovery: BenchDiscovery(store: store)) { part in
-            SettingsView(settings: base.settings, store: store, library: RunnerLibrary(folder: base.dir.url.appendingPathComponent("Runners")),
-                         launchAtLogin: LaunchAtLogin(), notifier: Notifier(settings: base.settings), part: part, chooseCLI: {})
-        }
-        .frame(width: 900, height: 620)
+        MainWindowView(store: store, router: router, workbench: workbench, about: about ?? AboutModel(store: store),
+                       discovery: BenchDiscovery(store: store), wizard: wizardView(store, WizardRun(store: store)))
+            .frame(width: 900, height: 620)
+    }
+
+    private func library() -> RunnerLibrary {
+        RunnerLibrary(folder: base.dir.url.appendingPathComponent("Runners"))
+    }
+
+    private func wizardView(_ store: BenchStore, _ run: WizardRun) -> WizardView {
+        WizardView(run: run, settings: base.settings, library: library(), launchAtLogin: LaunchAtLogin(), notifier: Notifier(settings: base.settings))
     }
 
     @Test func windowBenchApps() async throws {
@@ -173,15 +179,13 @@ struct SnapshotTests {
         try render(window(store, workbench, router), "window-overview")
     }
 
-    @Test func windowProfilesAndGeneral() async throws {
+    @Test func windowProfiles() async throws {
         let store = try await windowStore()
         let workbench = Workbench(store: store)
         await workbench.loadProfiles()
         let router = WindowRouter()
         router.pane = .profiles
         try render(window(store, workbench, router), "window-profiles")
-        router.pane = .general
-        try render(window(store, workbench, router), "window-general")
     }
 
     @Test func profileSharing() async throws {
@@ -245,9 +249,8 @@ struct SnapshotTests {
         let about = AboutModel(store: store, updates: UpdateChecker(currentVersion: "0.5.5") { _ throws(UpdateCheckError) in release })
         await about.loadCLIVersion()
         await about.updates.check()
-        let router = WindowRouter()
-        router.pane = .about
-        try render(window(store, Workbench(store: store), router, about: about), "window-about")
+        try render(AboutPane(store: store, model: about, router: WindowRouter())
+            .frame(width: AboutWindowController.size.width, height: AboutWindowController.size.height), "window-about")
     }
 
     @Test func bugReportSheet() async throws {
@@ -297,10 +300,15 @@ struct SnapshotTests {
             makeClient: { CLIClient(executable: $0, runner: runner) },
             pinger: { _, _ in 200 })
         await store.start(polling: false)
-        let view = SettingsView(settings: base.settings, store: store,
-                                library: RunnerLibrary(folder: base.dir.url.appendingPathComponent("Runners")), launchAtLogin: LaunchAtLogin(),
-                                notifier: Notifier(settings: base.settings), chooseCLI: {})
-        try render(view, "settings")
+        let tabs = SettingsTabs()
+        func part(_ part: SettingsView.Part) -> SettingsView {
+            SettingsView(settings: base.settings, store: store, library: library(), launchAtLogin: LaunchAtLogin(),
+                         notifier: Notifier(settings: base.settings), part: part, showsHeader: false, chooseCLI: {})
+        }
+        let view = SettingsTabsView(tabs: tabs, general: part(.general), menuBar: part(.menuBar))
+        try render(view, "settings-general")
+        tabs.selected = .menuBar
+        try render(view, "settings-menubar")
     }
 
     // MARK: screens added in the 0.7 window pass, so every sheet renders
@@ -328,8 +336,6 @@ struct SnapshotTests {
         try render(window(store, workbench, router), "window-health")
         router.pane = .discovery
         try render(window(store, workbench, router), "window-discovery")
-        router.pane = .menuBar
-        try render(window(store, workbench, router), "window-menubar")
     }
 
     @Test func siteDropOutcomes() async throws {

@@ -8,6 +8,10 @@ struct AppCommands {
     var scanFolder: () -> Void = {}
     var openLogs: (BenchModel) -> Void = { _ in }
     var setup: (BenchModel, Bool) -> Void = { _, _ in }
+    /// The bench's Sites tab with the Add Hosts Lines sheet open.
+    var addHosts: (BenchModel) -> Void = { _ in }
+    /// The BenchBar window at the first run wizard.
+    var newBench: () -> Void = {}
     /// The BenchBar window at a bench's tab (true: open the Repair sheet too).
     var manage: (BenchModel, BenchTab, Bool) -> Void = { _, _, _ in }
     /// A newer release on offer: "Update to X…" in the footer.
@@ -55,7 +59,7 @@ struct PopoverView: View {
             }
         case .ready:
             if store.benches.isEmpty {
-                NoBenchView(error: store.listError, loading: store.isLoading) {
+                NoBenchView(error: store.listError, loading: store.isLoading, setUp: commands.newBench) {
                     Task { await store.reloadBenches() }
                 }
             } else {
@@ -124,7 +128,7 @@ struct BenchPanel: View {
                     .help("Apps, sites and settings in the BenchBar window (⌘M)")
             }
             .controlSize(.small)
-            SitesSection(bench: bench) { commands.manage(bench, .sites, false) }
+            SitesSection(bench: bench, manage: { commands.manage(bench, .sites, false) }, addHosts: { commands.addHosts(bench) })
             Divider()
             DoctorSection(store: store, bench: bench,
                           details: { commands.manage(bench, .health, false) },
@@ -195,10 +199,11 @@ struct BenchPanel: View {
 
 /// The bench's sites with an Open button each; the default one is what ⌘O
 /// opens and benchup waits for. Sites that need a hosts line come next, so
-/// they stay in view, and the command that adds the lines is one Copy away.
+/// they stay in view, and Add Hosts Lines opens the window at the sheet that adds them.
 struct SitesSection: View {
     let bench: BenchModel
     var manage: () -> Void = {}
+    var addHosts: () -> Void = {}
     static let visibleRows = 3
 
     var body: some View {
@@ -225,9 +230,10 @@ struct SitesSection: View {
                     siteAction(row)
                 }
             }
-            if let fix = SiteRow.hostsFix(rows, bench: bench.path) {
+            if SiteRow.hostsFix(rows, bench: bench.path) != nil {
                 Banner(systemImage: "network", tint: .orange,
-                       text: "A site has no /etc/hosts line, so its name does not resolve. Run:", command: fix)
+                       text: "A site has no /etc/hosts line, so its name does not resolve.", command: nil,
+                       action: ("Add Hosts Lines…", addHosts))
             }
         }
     }
@@ -239,11 +245,11 @@ struct SitesSection: View {
 
     private func siteButton(_ row: SiteRow) -> some View {
         Button(row.needsHosts ? "Set Up…" : "Open") {
-            if row.needsHosts { manage() } else { Workspace.open(row.url) }
+            if row.needsHosts { addHosts() } else { Workspace.open(row.url) }
         }
         .controlSize(.small)
         .disabled(!row.needsHosts && bench.state != .running)
-        .help(row.needsHosts ? "Review hostname setup in Sites" : row.url)
+        .help(row.needsHosts ? "Add the hosts line for this site in the BenchBar window" : row.url)
     }
 }
 
@@ -439,6 +445,8 @@ struct Banner: View {
     let tint: Color
     let text: String
     let command: String?
+    /// A button under the text: its title and what it does.
+    var action: (title: String, run: () -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -452,6 +460,9 @@ struct Banner: View {
                     Spacer()
                     Button("Copy") { Workspace.copy(command) }.controlSize(.mini)
                 }
+            }
+            if let action {
+                Button(action.title, action: action.run).controlSize(.small)
             }
         }
         .padding(8)
@@ -489,6 +500,7 @@ struct CLIMissingView: View {
 struct NoBenchView: View {
     let error: String?
     let loading: Bool
+    var setUp: () -> Void = {}
     let retry: () -> Void
 
     var body: some View {
@@ -501,8 +513,9 @@ struct NoBenchView: View {
                     .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
                 if error == nil {
-                    // first run: the one page that gets a bench going
-                    Link("New here? The Install guide sets up your first bench.", destination: BenchBarLinks.install)
+                    // first run: the wizard in the BenchBar window gets a bench going
+                    Button("Set Up a New Bench…", action: setUp).buttonStyle(.borderedProminent)
+                    Link("The Install guide has the same steps for Terminal.", destination: BenchBarLinks.install)
                         .font(.caption)
                 }
                 Button("Try Again", action: retry)

@@ -36,7 +36,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${SCRIPT_DIR}/lib/frappe-local/wkhtmltopdf.sh"
 trap fl_on_error ERR
 fl_signal_traps_install
-trap fl_sudo_end EXIT
+# the last section of a --json install ends with the script (done, warning
+# for the exit code 2 of pending manual steps, else failed)
+trap 'fl_jsonl_section_exit "$?"; fl_sudo_end' EXIT
 
 PROFILE="${PROFILE:-}"
 LIST_PROFILES=0

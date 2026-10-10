@@ -203,16 +203,44 @@ fl_team_profile_files() {
   done < <(fl_team_profile_dirs)
 }
 
+# fl_profile_versions_json_v VAR TSV BASE: the fields "python", "node" and
+# "mariadb" of a profile list entry, from the built in profile BASE (a team
+# profile's base): "3.11", "22" and "10.11"; null for no profile.
+fl_profile_versions_json_v() {
+  local __py="" __nd="" __db="" __row __j1 __j2 __j3
+  if [[ -n "$3" ]]; then
+    __row="$(awk -F '\t' -v p="$3" 'NR > 1 && $1 == p {print $6 "|" $8 "|" $10; exit}' "$2")"
+    IFS='|' read -r __py __nd __db <<<"$__row"
+    __py="${__py#python}"
+  fi
+  fl_json_str_v __j1 "$__py"; fl_json_str_v __j2 "$__nd"; fl_json_str_v __j3 "$__db"
+  printf -v "$1" ',"python":%s,"node":%s,"mariadb":%s' "$__j1" "$__j2" "$__j3"
+}
+
+# fl_bundles_json_v VAR: [{"name","label","apps":[...],"description"},...] from config/app-bundles.tsv
+fl_bundles_json_v() {
+  local __out="[" __sep="" __name __label __apps __notes __a __list __asep
+  while IFS=$'\t' read -r __name __label __apps __notes; do
+    [[ -n "$__name" ]] || continue
+    __list=""; __asep=""
+    for __a in $__apps; do __list="${__list}${__asep}$(fl_json_str "$__a")"; __asep=","; done
+    __out="${__out}${__sep}{\"name\":$(fl_json_str "$__name"),\"label\":$(fl_json_str "$__label"),\"apps\":[${__list}],\"description\":$(fl_json_str "$__notes")}"
+    __sep=","
+  done < <(awk -F '\t' 'NR > 1' "$(fl_config_file app-bundles.tsv)")
+  printf -v "$1" '%s]' "$__out"
+}
+
 fl_cmd_profile_list() {
   local json="$1" sep="" rows=() kind name file status err seen=$'\n' p label base tsv shadow skind src sub subjson schema warns=() line
-  local sname surl sdir behind days fetched
+  local sname surl sdir behind days fetched vers bundles
   tsv="$(fl_config_file release-profiles.tsv)"
   if [[ "$json" == "1" ]]; then
     printf '{"schema_version":%d,"cli_version":"%s","profiles":[' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}"
     while IFS=$'\t' read -r p label; do
-      printf '%s{"name":%s,"kind":"builtin","source":"builtin","source_url":null,"subscription":null,"shadowed_by":null,"schema":null,"file":%s,"base":null,"label":%s,"frappe_branch":%s,"valid":true,"error":null}' \
+      fl_profile_versions_json_v vers "$tsv" "$p"
+      printf '%s{"name":%s,"kind":"builtin","source":"builtin","source_url":null,"subscription":null,"shadowed_by":null,"schema":null,"file":%s,"base":null,"label":%s,"frappe_branch":%s,"valid":true,"error":null%s}' \
         "$sep" "$(fl_json_str "$p")" "$(fl_json_str "$tsv")" "$(fl_json_str "$label")" \
-        "$(fl_json_str "$(awk -F '\t' -v p="$p" 'NR > 1 && $1 == p {print $3}' "$tsv")")"
+        "$(fl_json_str "$(awk -F '\t' -v p="$p" 'NR > 1 && $1 == p {print $3}' "$tsv")")" "$vers"
       sep=","
     done < <(awk -F '\t' 'NR > 1 {printf "%s\t%s\n", $1, $2}' "$tsv")
   else
@@ -248,19 +276,20 @@ fl_cmd_profile_list() {
       [[ "${behind:-0}" =~ ^[1-9] ]] && status="ok, ${behind} commit(s) behind: benchbar profile update ${name}"
     fi
     if [[ "$json" == "1" ]]; then
-      printf '%s{"name":%s,"kind":"team","source":"%s","source_url":%s,"subscription":%s,"shadowed_by":%s,"schema":%s,"file":%s,"base":%s,"label":%s,"frappe_branch":%s,"valid":%s,"error":%s}' \
+      fl_profile_versions_json_v vers "$tsv" "$base"
+      printf '%s{"name":%s,"kind":"team","source":"%s","source_url":%s,"subscription":%s,"shadowed_by":%s,"schema":%s,"file":%s,"base":%s,"label":%s,"frappe_branch":%s,"valid":%s,"error":%s%s}' \
         "$sep" "$(fl_json_str "$name")" "$skind" "$(fl_json_str "$src")" "$subjson" "$(fl_json_str "$shadow")" "$(fl_json_num "$schema")" \
         "$(fl_json_str "$file")" "$(fl_json_str "$base")" \
         "$(fl_json_str "$([[ -z "$err" ]] && printf '%s' "$FL_TEAM_DESCRIPTION")")" \
         "$(fl_json_str "$([[ -z "$err" ]] && printf '%s' "$FL_TEAM_FRAPPE_BRANCH")")" \
-        "$(fl_json_bool "$([[ -z "$err" ]] && printf 1 || printf 0)")" "$(fl_json_str "$err")"
+        "$(fl_json_bool "$([[ -z "$err" ]] && printf 1 || printf 0)")" "$(fl_json_str "$err")" "$vers"
       sep=","
     else
       [[ -n "$err" ]] && status="invalid: ${err}"
       rows+=("${name}|${skind}: ${file}|${base:--}|${status}")
     fi
   done < <(fl_team_profile_files)
-  if [[ "$json" == "1" ]]; then printf ']}\n'; return 0; fi
+  if [[ "$json" == "1" ]]; then fl_bundles_json_v bundles; printf '],"bundles":%s}\n' "$bundles"; return 0; fi
   fl_table "${rows[@]}"
   printf '\n'
   for line in ${warns[@]+"${warns[@]}"}; do fl_warn "shadowed: ${line}"; done
