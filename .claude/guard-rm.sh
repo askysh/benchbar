@@ -56,14 +56,22 @@ def expand(word):
         if not known(name):
             return m.group(0)
         value = assigned[name] if name in assigned else os.environ.get(name)
-        return m.group(0) if value is None else value
+        # A glob in a value expands to names the guard cannot see.
+        if value is None or re.search(r"[*?\[]", value):
+            return m.group(0)
+        return value
     out = re.sub(r"\$\{(\w+)\}|\$(\w+)", lookup, word)
-    if "$" in out or "`" in out or re.search(r"\s", out):
+    # A changed IFS splits on other characters. A glob may only be in the
+    # last component: one before a slash could pass through a symlink, while
+    # rm -rf on a symlink itself removes only the link.
+    glob = re.search(r"[*?\[]", out)
+    if "$" in out or "`" in out or re.search(r"\s", out) or re.search(r"\bIFS\b", text) or \
+            (glob and "/" in out[glob.start():]):
         return None
     return os.path.expanduser(out)
 def in_scratchpad(path):
     # The resolved path only: a symlink inside the scratchpad may lead out.
-    if not os.path.isabs(path) or (re.search(r"[*?\[]", path) and ".." in path):
+    if not os.path.isabs(path):
         return False
     return re.match(r"^(/private)?/tmp/claude-[A-Za-z0-9._-]+/.", os.path.realpath(path)) is not None
 def block(msg):
@@ -102,6 +110,8 @@ for i in range(0, len(pieces), 2):
     if os.path.basename(words[0]) in ("bash", "sh", "zsh", "dash", "ksh", "eval") and \
             any(word_rm.search(w) for w in words[1:]):
         block("rm inside a nested shell or eval; run it directly so the guard can check it.")
+    if os.path.basename(words[0]) == "find" and any(os.path.basename(w) == "rm" for w in words[1:]):
+        block("find -exec rm deletes paths the guard cannot see; list them first, then rm them by name.")
     if words[0] in ("cd", "pushd", "popd"):
         dest = words[1] if len(words) > 1 and words[0] != "popd" else None
         if dest is None or dest == "-" or "$" in dest or "`" in dest:

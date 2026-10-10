@@ -42,8 +42,11 @@ while IFS= read -r call; do
   write=0
   # -X POST, -XPOST, -iX DELETE, --method=PUT ...
   matches "$call" '(^|[[:space:]])(-[A-Za-z]*X[[:space:]=]*|--method[[:space:]=]+)(POST|PUT|PATCH|DELETE)' && write=1
+  # An explicit GET counts only in this call itself, before any ; && || |
+  # or newline: a GET in a chained command must not excuse a body flag.
+  own="$(printf '%s' "$call" | sed -E 's/(;|&|\||\\n).*//')"
   explicit_get=0
-  matches "$call" '(^|[[:space:]])(-[A-Za-z]*X[[:space:]=]*|--method[[:space:]=]+)GET([^A-Za-z]|$)' && explicit_get=1
+  matches "$own" '(^|[[:space:]])(-[A-Za-z]*X[[:space:]=]*|--method[[:space:]=]+)GET([^A-Za-z]|$)' && explicit_get=1
   # -f x=y, -fx=y, -iF x=y, --field, --raw-field, --input
   if matches "$call" '(^|[[:space:]])(-[A-Za-z]*[fF]|--field|--raw-field|--input)' && [ "$explicit_get" = 0 ]; then
     write=1
@@ -62,13 +65,13 @@ EOF
 
 while IFS= read -r call; do
   [ -n "$call" ] || continue
-  if matches "$call" '[[:space:]][-/](delete|change)([[:space:]]|$)'; then
+  if matches "$call" '[[:space:]][-/]+(delete|change)([[:space:]]|$)'; then
     echo "Blocked: schtasks /Delete and /Change are not allowed here; run them yourself." >&2
     exit 2
   fi
-  if matches "$call" '[[:space:]][-/]create([[:space:]]|$)'; then
-    names="$(printf '%s' "$call" | grep -Eio -- '[[:space:]][-/]tn([[:space:]]|$)' | wc -l | tr -d ' ')"
-    keepalive='[[:space:]][-/][Tt][Nn][[:space:]]+(\\"|'"'"')BenchBar Keepalive(\\"|'"'"')([[:space:]]|$)'
+  if matches "$call" '[[:space:]][-/]+create([[:space:]]|$)'; then
+    names="$(printf '%s' "$call" | grep -Eio -- '[[:space:]][-/]+tn([[:space:]]|$)' | wc -l | tr -d ' ')"
+    keepalive='[[:space:]][-/]+[Tt][Nn][[:space:]]+(\\"|'"'"')BenchBar Keepalive(\\"|'"'"')([[:space:]]|$)'
     if [ "$names" != 1 ] || ! [[ $call =~ $keepalive ]]; then
       echo "Blocked: schtasks /Create is only allowed for the task named \"BenchBar Keepalive\"." >&2
       exit 2

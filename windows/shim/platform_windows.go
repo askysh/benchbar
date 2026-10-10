@@ -215,12 +215,18 @@ func (procControl) Image(pid int) (string, error) {
 }
 
 func (procControl) Terminate(pid int) error {
-	h, err := openProc(pid, windows.PROCESS_TERMINATE)
+	h, err := openProc(pid, windows.PROCESS_TERMINATE|windows.SYNCHRONIZE)
 	if err != nil {
 		return err
 	}
 	defer windows.CloseHandle(h)
-	return windows.TerminateProcess(h, 1)
+	if err := windows.TerminateProcess(h, 1); err != nil {
+		return err
+	}
+	// TerminateProcess returns before the process is gone; wait, so a
+	// keepalive run started next does not find the old one's mutex held.
+	windows.WaitForSingleObject(h, 5000)
+	return nil
 }
 
 // With this flag a program that wsl.exe starts through interop (a browser,
