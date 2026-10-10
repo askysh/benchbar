@@ -338,7 +338,9 @@ never read.
 The stream never prompts for a password. Without `BENCHBAR_SUDO=gui`, a
 cached `sudo` credential or a `NOPASSWD` rule is used (`sudo -n true`);
 otherwise the privileged steps are `skipped` with their `command`, exactly
-like a cancelled dialog (see [the privileged steps](#the-privileged-steps-and-benchbar_sudogui)).
+like a cancelled dialog (see [the privileged steps](#the-privileged-steps-and-benchbar_sudogui)). On Linux the apt step of phase 00 cannot be skipped: without a
+cached credential the stream ends with `done` and `exit` 1, saying sudo
+is needed.
 
 ```json
 {"schema_version":1,"cli_version":"0.8.0","event":"plan","bench":"/Users/you/frappe-bench","site":"macdev","profile":"v15-lts","team_profile":null,"bundle":"minimal","port_offset":0,"web_url":"http://macdev:8000","dry_run":false,"sudo_mode":"gui","steps":[{"n":null,"id":"wkhtmltopdf_install","name":"Install the patched wkhtmltopdf package","sudo":true,"will_run":true},{"n":null,"id":"hosts_entry","name":"Add 127.0.0.1 macdev to /etc/hosts","sudo":true,"will_run":true},{"n":1,"id":"system_deps","name":"System dependencies (00-mac-system-deps.sh)","sudo":false,"will_run":true},{"n":2,"id":"bench_site","name":"Bench and site (01-install-bench-and-site.sh)","sudo":false,"will_run":true},{"n":3,"id":"service","name":"Background service","sudo":false,"will_run":true}],"log":"/Users/you/.local/state/benchbar/logs/20261010-101500-4242.log"}

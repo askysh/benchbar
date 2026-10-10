@@ -189,7 +189,7 @@ fl_pm_hosts_batch() {
   done
   [[ "${#names[@]}" -gt 0 ]] || return 0
   FL_STEP_RESULT="done"
-  fl_hosts_add_gui "${names[@]}" || fl_warn "the /etc/hosts lines could not be added now; each bench's setup tries again"
+  fl_hosts_add_gui "${names[@]}" || fl_warn "the /etc/hosts lines could not be added; setup stops at the first bench that needs one (run: ${FL_SELF} site hosts --bench-dir PATH)"
   return 0
 }
 fl_cmd_ports() {

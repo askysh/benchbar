@@ -52,6 +52,9 @@ fl_sudo_begin() {
     if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
       FL_SUDO_SESSION=1
       export FL_SUDO_SESSION
+      # the later plain sudo calls (apt on Linux runs for minutes) must not
+      # outlive the cached timestamp and prompt on the terminal
+      fl__sudo_keepalive
       return 0
     fi
     FL_SUDO_REFUSED=1
@@ -82,9 +85,14 @@ fl_sudo_begin() {
   fi
   FL_SUDO_SESSION=1
   export FL_SUDO_SESSION
-  # Keep the timestamp fresh while this process lives. The loop owns no
-  # stdio (a caller capturing our output must not wait for it), sleeps in
-  # short slices so it notices the parent leaving, and dies on TERM.
+  fl__sudo_keepalive
+  return 0
+}
+
+# Keep the timestamp fresh while this process lives. The loop owns no
+# stdio (a caller capturing our output must not wait for it), sleeps in
+# short slices so it notices the parent leaving, and dies on TERM.
+fl__sudo_keepalive() {
   ( trap 'exit 0' TERM
     parent="$$"
     while kill -0 "$parent" 2>/dev/null; do
@@ -94,7 +102,6 @@ fl_sudo_begin() {
     done ) </dev/null >/dev/null 2>&1 &
   FL_SUDO_KEEPALIVE_PID="$!"
   fl_log "sudo session started (keepalive pid ${FL_SUDO_KEEPALIVE_PID})"
-  return 0
 }
 
 fl_sudo_end() {
