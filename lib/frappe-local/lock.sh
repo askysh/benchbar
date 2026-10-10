@@ -33,7 +33,10 @@ fl__lock_write_pid() {
 # age in seconds of a path, from its mtime (BSD and GNU stat)
 fl__lock_age() {
   local m
-  m="$(stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null || true)"
+  # each form counts only as a number: on Linux, GNU stat -f prints file
+  # system text and fails, and joined with the -c output the age read 0
+  m="$(stat -f %m "$1" 2>/dev/null)" || true
+  [[ "$m" =~ ^[0-9]+$ ]] || m="$(stat -c %Y "$1" 2>/dev/null)" || true
   [[ "$m" =~ ^[0-9]+$ ]] || { printf '0'; return 0; }
   printf '%s' "$(( $(date +%s) - m ))"
 }
