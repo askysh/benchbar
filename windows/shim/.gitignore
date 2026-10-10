@@ -1,0 +1,2 @@
+# Local builds of the shim; CI builds the released ones.
+*.exe
