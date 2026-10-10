@@ -7,6 +7,9 @@
 . "$ROOT/lib/frappe-local/templates.sh"
 . "$ROOT/lib/frappe-local/state.sh"
 . "$ROOT/lib/frappe-local/shellrc.sh"
+# a TMPDIR of its own: the leftover check below lists benchbar-rc.* files,
+# and the tests that run beside this one write theirs to the shared /tmp
+TMPDIR="$TMP_DIR/tmp"; mkdir -p "$TMPDIR"; export TMPDIR
 
 rc="$TMP_DIR/zshrc"
 printf 'export A=1\n' >"$rc"
