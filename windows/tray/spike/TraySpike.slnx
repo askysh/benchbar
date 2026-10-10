@@ -1,0 +1,10 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+  </Configurations>
+  <Project Path="Tray.Core/Tray.Core.csproj" />
+  <Project Path="Tray.Core.Tests/Tray.Core.Tests.csproj" />
+  <Project Path="Harness/Harness.csproj" />
+  <Project Path="WinUiShell/WinUiShell.csproj" />
+  <Project Path="WpfShell/WpfShell.csproj" />
+</Solution>
