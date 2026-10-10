@@ -85,7 +85,7 @@ assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "bench is up: http://linuxdev.localhost:8000"
 assert_no_file "$BENCH/logs/.bench-stopped"
 assert_calls_contain "^systemctl --user start ${uname_}\$"
-assert_calls_contain '^loginctl enable-linger tester$'
+assert_calls_contain '^loginctl --no-ask-password enable-linger tester$'
 assert_eq "yes" "$(cat "$MOCK_STATE/linger/tester")"
 assert_eq "active" "$(systemctl --user show -p ActiveState --value "$uname_")"
 
@@ -162,14 +162,14 @@ run_fm autostart on --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 grep -q -x '# benchbar-autostart: true' "$unit" || fail "autostart on is recorded in the unit"
 assert_calls_contain "^systemctl --user enable ${uname_}\$"
-assert_calls_contain '^loginctl enable-linger tester$'
+assert_calls_contain '^loginctl --no-ask-password enable-linger tester$'
 assert_eq "enabled" "$(systemctl --user show -p UnitFileState --value "$uname_")"
 assert_eq "manual" "$(cat "$BENCH/logs/.bench-stopped")" "(changing autostart does not start a stopped bench)"
 # lingering already on: asked, not set again
 reset_calls
 run_fm autostart on --bench-dir "$BENCH"
 assert_calls_contain '^loginctl show-user tester'
-assert_calls_not_contain '^loginctl enable-linger'
+assert_calls_not_contain '^loginctl( --no-ask-password)? enable-linger'
 # a refusal is a warning, not a failure
 rm -f "$MOCK_STATE/linger/tester"
 export MOCK_LINGER_DENIED=1
@@ -183,7 +183,7 @@ reset_calls
 run_fm up --dry-run --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 assert_calls_not_contain '^systemctl --user (start|restart|enable|disable|kill)'
-assert_calls_not_contain '^loginctl enable-linger'
+assert_calls_not_contain '^loginctl( --no-ask-password)? enable-linger'
 
 # ---- the shared helpers, on both platforms
 glob_home="$TMP_DIR/globhome"

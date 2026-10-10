@@ -116,6 +116,13 @@ fl__ver_num() {
 fl__uv_python_dir() { printf '%s' "${UV_PYTHON_INSTALL_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/uv/python}"; }
 fl__fnm_dir() { printf '%s' "${FNM_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/fnm}"; }
 
+# fl_fnm_bin: fnm itself; phase 00 installs it into its data folder with
+# --skip-shell, so it is usually not on PATH
+fl_fnm_bin() { command -v fnm 2>/dev/null || printf '%s/fnm' "$(fl__fnm_dir)"; }
+
+# fl_fnm_cmd: fnm as a fix line should spell it (the full path when not on PATH)
+fl_fnm_cmd() { if command -v fnm >/dev/null 2>&1; then printf 'fnm'; else printf '%s/fnm' "$(fl__fnm_dir)"; fi; }
+
 # fl__python_bin_for VERSION: the uv managed python3.X for a version like 3.11
 # (the newest patch release on disk), found without starting uv; uv itself is
 # asked only when nothing is there and the command is not a read only one.
@@ -199,6 +206,8 @@ fl_profile_path_exports() {
   printf 'export PATH="%s:$PATH"\n' "${bin%/*}"
   printf 'export PATH="%s:$PATH"\n' "$(fl__node_bindir_for "$nodemajor")"
   printf 'export PATH="$HOME/.local/bin:$PATH"\n'
+  # fnm itself (phase 00 installs it with --skip-shell, outside PATH)
+  printf 'export PATH="%s:$PATH"\n' "$(fl__fnm_dir)"
 }
 
 # ~/.local/pipx unless pipx says otherwise

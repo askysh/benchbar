@@ -6,6 +6,8 @@
 mock_log "$@"
 dir="${MOCK_STATE:?}/linger"
 mkdir -p "$dir"
+# options before the verb (--no-ask-password) are accepted and skipped
+while [[ "${1:-}" == --* ]]; do shift; done
 cmd="${1:-}"; shift || true
 case "$cmd" in
   show-user)

@@ -297,7 +297,9 @@ fl_linger_ensure() {
     return 0
   fi
   fl_log "loginctl enable-linger ${user}"
-  if loginctl enable-linger "$user" >/dev/null 2>&1; then
+  # --no-ask-password: polkit may want an admin password outside an active
+  # session; that is the sudo fix below, never a prompt in the middle of up
+  if loginctl --no-ask-password enable-linger "$user" >/dev/null 2>&1; then
     fl_info "lingering is on for ${user}: the bench can come back after a reboot, before you log in"
   else
     fl_warn "could not turn on lingering; the bench returns after a reboot only once you log in"

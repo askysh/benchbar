@@ -93,14 +93,14 @@ chk_brew() {
   fi
   node="$(fl_node_bin)"
   if [[ ! -x "$node" ]]; then
-    if [[ "$only_node" == "1" ]] && command -v fnm >/dev/null 2>&1 && [[ -d "${FL_BENCH_DIR}/apps/frappe" ]]; then
+    if [[ "$only_node" == "1" ]] && [[ -x "$(fl_fnm_bin)" ]] && [[ -d "${FL_BENCH_DIR}/apps/frappe" ]]; then
       # only Node: a profile that moved to a newer one; the bench still runs on the old
       msgs="Node ${major} (fnm) not found (the profile's Node moved; the bench still runs on the old one)"
     else
       msgs="${msgs}${msgs:+; }Node ${major} (fnm) not found"
     fi
-    if command -v fnm >/dev/null 2>&1; then
-      fixes="${fixes}${fixes:+ && }fnm install ${major}"
+    if [[ -x "$(fl_fnm_bin)" ]]; then
+      fixes="${fixes}${fixes:+ && }$(fl_fnm_cmd) install ${major}"
     else
       fixes="${fixes}${fixes:+ && }${FL_SELF_DIR}/00-linux-system-deps.sh --profile ${FL_PROFILE}   (installs fnm)"
       only_node=0
@@ -110,7 +110,7 @@ chk_brew() {
   fi
   if [[ -n "$msgs" ]]; then
     if [[ "$only_node" == "1" ]]; then
-      chk__set fail "$msgs" "fnm install ${major}" node_install
+      chk__set fail "$msgs" "$(fl_fnm_cmd) install ${major}" node_install
     else
       chk__set fail "$msgs" "$fixes"
     fi
@@ -134,9 +134,9 @@ chk_toolchain_node() {
   else node="$(fl_bench_which node)"; where="$node"; fi
   if [[ -z "$node" ]]; then
     if [[ -d "$HOME/.nvm" ]]; then
-      chk__set warn "no node on the bench's PATH (nvm's node is only on your shell's PATH, bench does not see it)" "fnm install ${FL_NODE_MAJOR}" node_install
+      chk__set warn "no node on the bench's PATH (nvm's node is only on your shell's PATH, bench does not see it)" "$(fl_fnm_cmd) install ${FL_NODE_MAJOR}" node_install
     else
-      chk__set warn "no node on the bench's PATH" "fnm install ${FL_NODE_MAJOR}" node_install
+      chk__set warn "no node on the bench's PATH" "$(fl_fnm_cmd) install ${FL_NODE_MAJOR}" node_install
     fi
     return 0
   fi
@@ -146,9 +146,9 @@ chk_toolchain_node() {
     chk__set ok "Node ${ver} at ${where}, profile ${FL_PROFILE} expects ${FL_NODE_MAJOR}"
   elif [[ "$where" == "env/bin/node" ]]; then
     # bench put it there; fnm cannot change it
-    chk__set warn "Node ${ver:-unknown} at ${where}, profile ${FL_PROFILE} expects ${FL_NODE_MAJOR}" "fnm install ${FL_NODE_MAJOR}, then remove ${FL_BENCH_DIR}/env/bin/node so the bench uses ${bindir}/node"
+    chk__set warn "Node ${ver:-unknown} at ${where}, profile ${FL_PROFILE} expects ${FL_NODE_MAJOR}" "$(fl_fnm_cmd) install ${FL_NODE_MAJOR}, then remove ${FL_BENCH_DIR}/env/bin/node so the bench uses ${bindir}/node"
   else
-    chk__set warn "Node ${ver:-unknown} at ${where}, profile ${FL_PROFILE} expects ${FL_NODE_MAJOR}" "fnm install ${FL_NODE_MAJOR}   (the bench's PATH puts ${bindir} first)" node_install
+    chk__set warn "Node ${ver:-unknown} at ${where}, profile ${FL_PROFILE} expects ${FL_NODE_MAJOR}" "$(fl_fnm_cmd) install ${FL_NODE_MAJOR}   (the bench's PATH puts ${bindir} first)" node_install
   fi
 }
 
@@ -274,7 +274,7 @@ chk_mariadb_utf8() {
   # live charset is not queried: doctor is read only and must never read the
   # password file (the app runs it on a timer).
   if ! fl__mariadb_includedir_present; then
-    chk__set warn "${FL_MYSQL_CNF} is missing or has no '!includedir ${FL_MARIADB_CONF_DIR}', so the utf8mb4 drop-in is ignored" "${FL_SELF} repair (with sudo)" mariadb_utf8
+    chk__set warn "${FL_MYSQL_CNF} is missing or has no '!includedir ${FL_MARIADB_CONF_DIR}', so the utf8mb4 drop-in is ignored" "add the line '!includedir ${FL_MARIADB_CONF_DIR}/' to ${FL_MYSQL_CNF} (sudo), then: sudo systemctl restart mariadb   (Ubuntu's own my.cnf has it; benchbar does not edit that file)"
   fi
 }
 
@@ -351,8 +351,8 @@ act_node_install() {
     fl_info "Node ${FL_NODE_MAJOR} is already installed"
     return 0
   fi
-  command -v fnm >/dev/null 2>&1 || { fl_fail "fnm is not installed; run ${FL_SELF_DIR}/00-linux-system-deps.sh --profile ${FL_PROFILE}"; return 1; }
-  fl_run_long "fnm install ${FL_NODE_MAJOR}" fnm install "$FL_NODE_MAJOR" || return 1
+  [[ -x "$(fl_fnm_bin)" ]] || { fl_fail "fnm is not installed; run ${FL_SELF_DIR}/00-linux-system-deps.sh --profile ${FL_PROFILE}"; return 1; }
+  FNM_DIR="$(fl__fnm_dir)" fl_run_long "fnm install ${FL_NODE_MAJOR}" "$(fl_fnm_bin)" install "$FL_NODE_MAJOR" || return 1
   [[ -x "$(fl_node_bin)" || "${FL_DRY_RUN:-0}" == "1" ]] || { fl_fail "Node ${FL_NODE_MAJOR} installed, but $(fl_node_bin) is missing"; return 1; }
   return 0
 }
@@ -361,7 +361,7 @@ act_node_install() {
 act_yarn_install() {
   local npm
   npm="$(fl_npm_bin)"
-  [[ -x "$npm" || "${FL_DRY_RUN:-0}" == "1" ]] || { fl_fail "no npm at ${npm}; install Node ${FL_NODE_MAJOR} first (fnm install ${FL_NODE_MAJOR})"; return 1; }
+  [[ -x "$npm" || "${FL_DRY_RUN:-0}" == "1" ]] || { fl_fail "no npm at ${npm}; install Node ${FL_NODE_MAJOR} first ($(fl_fnm_cmd) install ${FL_NODE_MAJOR})"; return 1; }
   fl_run_long "npm install -g yarn (Node ${FL_NODE_MAJOR})" "$npm" install -g yarn || return 1
   return 0
 }
@@ -382,7 +382,7 @@ fl_report_platform_versions() {
   # shellcheck disable=SC2016  # dpkg-query's own format string
   fl_report_cmd "$f" "apt packages" dpkg-query -W -f='${Package} ${Version}\n' mariadb-server redis-server pkg-config libmariadb-dev
   fl_report_cmd "$f" "uv" uv --version
-  fl_report_cmd "$f" "fnm" fnm --version
+  fl_report_cmd "$f" "fnm" "$(fl_fnm_bin)" --version
 }
 
 # the systemd user unit instead of the launchd agent

@@ -347,4 +347,12 @@ fi
   fl_sudo_end
 )
 
+# ---- fnm outside PATH (phase 00 installs it with --skip-shell): fix lines
+# and repair use the full path; with SHELL unset the rc file is still bashrc
+FNMHOME="$TMP_DIR/fnmhome"; mkdir -p "$FNMHOME"; printf '#!/bin/sh\nexit 0\n' >"$FNMHOME/fnm"; chmod +x "$FNMHOME/fnm"
+assert_eq "$FNMHOME/fnm" "$(PATH=/usr/bin:/bin FNM_DIR="$FNMHOME" fl_fnm_cmd)" "(fnm by its full path when it is not on PATH)"
+assert_eq "$FNMHOME/fnm" "$(PATH=/usr/bin:/bin FNM_DIR="$FNMHOME" fl_fnm_bin)"
+assert_contains "$(FNM_DIR="$FNMHOME" fl_profile_path_exports)" "export PATH=\"$FNMHOME:"
+assert_eq "$HOME/.bashrc" "$(env -u SHELL -u FL_RC_FILE bash -c 'set -u; FL_PLATFORM=linux; . "$1/lib/frappe-local/ui.sh"; . "$1/lib/frappe-local/state.sh"; . "$1/lib/frappe-local/shellrc.sh"; fl_rc_file' _ "$ROOT")" "(SHELL unset under set -u)"
+
 printf 'test-platform-linux: ok\n'

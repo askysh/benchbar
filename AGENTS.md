@@ -62,6 +62,16 @@ safe.
 When it finishes: tell the user to run `source ~/.zshrc` and `benchup`,
 then open `http://<site>:8000`.
 
+On Linux (Ubuntu 24.04, WSL included) the same command installs from apt,
+uv and fnm, runs each bench as a `systemd --user` unit, keeps the MariaDB
+root password in a 0600 file in the state folder (`$XDG_STATE_HOME/benchbar`)
+instead of the Keychain, uses the site `linuxdev.localhost` and never edits
+`/etc/hosts`. `sudo` there covers apt (the packages and the wkhtmltopdf
+.deb), the MariaDB admin step (`sudo mariadb`, its config drop-in and
+restart) and starting a stopped `mariadb` or `redis-server`; it is asked
+once up front. The helper block goes to `~/.bashrc`, so tell the user to
+run `source ~/.bashrc`. Only v15-lts is supported on Linux so far.
+
 ## Existing or broken bench
 
 ```bash
@@ -124,10 +134,12 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
   file. `repair` regenerates it.
 - Use `--dry-run` before any `repair` or `install` on a machine you have
   not seen before, and show the plan to the user.
-- `sudo` is only ever used for `/etc/hosts` and the wkhtmltopdf package.
+- On macOS `sudo` is only ever used for `/etc/hosts` and the wkhtmltopdf
+  package; on Linux for apt, the wkhtmltopdf .deb and MariaDB (see above).
   The run asks for it once up front; with `--yes` the confirmation is
   skipped but the password prompt is not, so say so.
-- Never print or log the MariaDB root password. It lives in the Keychain;
+- Never print or log the MariaDB root password. It lives in the Keychain
+  (a 0600 file on Linux);
   `benchbar mariadb-password --yes` prints it when a user asks for it.
 - When something is wrong, `./benchbar report --print` shows the redacted
   diagnostics; `./benchbar report` writes the zip for a bug report.

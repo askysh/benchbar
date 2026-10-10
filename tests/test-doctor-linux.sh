@@ -113,7 +113,7 @@ done
 assert_eq "[]" "$(ev '[a["id"] for a in e[0]["actions"] if a["sudo"]]')" "(no sudo here)"
 reset_calls
 run_fm repair --dry-run --bench-dir "$BENCH"
-assert_contains "$OUT" "dry-run: fnm install 22"
+assert_contains "$OUT" "fnm install 22"
 assert_calls_not_contain '^(fnm install|sudo|apt-get)'
 # repair --yes installs it through fnm
 # (without the systemd backend the unit cannot be written here: leave that action out)
@@ -171,6 +171,9 @@ mv "$TMP_DIR/99-frappe.cnf.gone" "$CONF/99-frappe.cnf"
 printf '[client-server]\n' >"$FL_MYSQL_CNF"
 scan
 assert_contains "$(msg mariadb_utf8)" "!includedir"
+# a manual step: repair would not edit Ubuntu's my.cnf, so no action is offered
+assert_eq "None" "$(field mariadb_utf8 action)"
+assert_contains "$(field mariadb_utf8 fix_command)" "sudo systemctl restart mariadb"
 printf '[client-server]\n!includedir %s/\n' "$CONF" >"$FL_MYSQL_CNF"
 
 # ---- MariaDB listening on every address: WARN mariadb_bind, sudo in the plan

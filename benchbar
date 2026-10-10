@@ -199,7 +199,7 @@ Daily
   autostart on|off    Whether the bench may come back after login.
   path                Print the bench directory (used by benchcd).
   site list           The bench's sites; the default one is what benchup waits for.
-  site add NAME       bench new-site (Keychain MariaDB password), the hosts line, and
+  site add NAME       bench new-site (MariaDB password from the Keychain, a file on Linux), the hosts line, and
                       --bundle NAME or --apps "a b" from apps/. The default stays.
   site default NAME   Make NAME the default site (bench use, runner, benchup, the app).
   site hosts          Add a 127.0.0.1 line for every site to /etc/hosts (sudo, once).
@@ -210,7 +210,7 @@ Daily
                       the default site also needs --new-default OTHER (--dry-run, --json).
   console             bench --site SITE console: a Python shell with frappe (--site S).
   db                  bench --site SITE mariadb: the site's database with its own user (--site S).
-  mariadb-password    Print the MariaDB root password kept in the Keychain (asks first).
+  mariadb-password    Print the MariaDB root password (Keychain; a 0600 file on Linux; asks first).
   mcp                 Model Context Protocol server on stdio for coding agents
                       (claude mcp add benchbar -- benchbar mcp). Read tools, up, down, restart,
                       app add from a reviewed plan.
