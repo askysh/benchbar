@@ -33,6 +33,28 @@ All notable changes to this project are documented here.
 - A NOPASSWD sudo rule next to a password rule no longer makes the install
   ask for a password it does not need.
 
+### Windows
+
+- `benchbar.exe`, a small shim for PowerShell: every command forwards to
+  `benchbar` inside WSL with its input, output and exit code unchanged, so
+  `benchbar.exe status --json`, `doctor --json`, `up`, `down` and
+  `benchbar.exe mcp` (`claude mcp add benchbar -- benchbar.exe mcp`) work
+  as on the Mac. The distro is the one in
+  `%LOCALAPPDATA%\BenchBar\config.json`, else the WSL default.
+- `benchbar.exe adopt-distro [NAME]` checks that a distro is WSL 2, runs
+  systemd, has `benchbar` and has linger on, offers to turn linger on, and
+  records it.
+- `benchbar.exe wslconfig` shows the `.wslconfig` settings a bench cares
+  about; `--suggest` prints what to add (at least 4 GB of memory, and no
+  idle shutdown while a bench runs); `--apply --yes` writes them after a
+  backup, keeping everything else in the file.
+- `benchbar.exe keepalive install` adds a hidden logon task, without admin
+  rights, that keeps the distro running, so benches come back after a
+  reboot without opening a terminal. `keepalive status` and `remove` too.
+- `benchbar.exe doctor` adds Windows checks (PATH, distro, `.wslconfig`,
+  keepalive) before the CLI's own; `benchbar.exe path install` puts the
+  shim on the user PATH.
+
 ## 0.7.3 - 2026-10-04
 
 A fix pass from a full review: benchbar stops only what it can prove is a
