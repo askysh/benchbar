@@ -31,6 +31,8 @@ powershell -ExecutionPolicy Bypass -File .\windows\runner\setup-runner.ps1
 
 Or pass a token from the repo's Settings, Actions, Runners, New runner
 page: `-Token <token>`. Re-running is safe; `-Reconfigure` registers again.
+It unregisters the old runner first with a removal token, which GitHub
+issues separately: pass `-RemoveToken <token>` or let gh fetch one.
 
 To remove it: `Unregister-ScheduledTask -TaskName 'GitHub Actions runner (benchbar, wsl)'`,
 then `C:\actions-runner\config.cmd remove --token <removal token>`.
