@@ -14,6 +14,26 @@ with its own database and its own address, such as `http://macdev:8000`.
 benchbar runs each bench as a **launchd agent**, the macOS way of
 keeping a program running in the background.
 
+## Without Terminal
+
+Open BenchBar. On a Mac with no bench, its window opens on a short
+wizard that does the steps below for you:
+
+1. **Check Your Mac** lists what is missing, with a button for the
+   Command Line Tools and the Homebrew command to copy.
+2. **New Bench** asks for the folder, the profile (v15-lts, v16-lts or a
+   team profile), the app bundle, the site name and the Administrator
+   password, and **Review** shows the plan before anything changes.
+3. **Install** shows each step as it runs. macOS asks for your password
+   in its own dialog for the wkhtmltopdf package and the `/etc/hosts`
+   line; BenchBar never sees it.
+4. **Done** opens the site and offers a four step walkthrough of the app.
+
+With a bench you already have, choose **I Already Have a Bench**: Find
+Benches finds it in a folder and sets up its service after showing the
+plan, as `benchbar adopt` does. The rest of this page is the same in
+Terminal.
+
 ## You already have a bench
 
 The examples use `~/frappe-bench`; put your bench's folder in its place.
