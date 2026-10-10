@@ -1,8 +1,10 @@
 import SwiftUI
 
-/// Where the BenchBar window is: an app pane, or one bench's page and tab.
+/// Where the BenchBar window is: an app pane, the first run wizard, or one
+/// bench's page and tab. General, Menu Bar and About are not panes any more:
+/// Settings (⌘,) and About BenchBar are their own small windows.
 nonisolated enum WindowPane: Hashable, Sendable {
-    case general, menuBar, profiles, about, discovery
+    case profiles, discovery, wizard
     case bench(String)
 }
 
@@ -14,17 +16,25 @@ nonisolated enum BenchTab: String, CaseIterable, Hashable, Sendable, Identifiabl
 /// Lets the popover, the menu and notifications open the window at a pane.
 @Observable
 final class WindowRouter {
-    var pane: WindowPane? = .general
+    /// nil: the window's own first page, the wizard on a Mac without a bench,
+    /// else the first bench (`MainWindowView.pane`).
+    var pane: WindowPane?
     var benchTab: BenchTab = .overview
+    /// The site row of the sidebar that opened the Sites tab, to draw it selected.
+    var sidebarSite: String?
     /// Set to open the Repair sheet on the bench page when it appears.
     var repairRequested = false
     var scanRequested = false
     var setupRequest: String?
     var startAfterSetup = false
-    /// Set by the Help menu: the About pane opens its Report a Bug sheet.
+    /// Set by the popover: the Sites tab of this bench opens its Add Hosts Lines sheet.
+    var hostsRequest: String?
+    /// Set by the Help menu: the About window opens its Report a Bug sheet.
     var bugReportRequested = false
-    /// Set by the app menu: the About pane checks for updates.
+    /// Set by the app menu: the About window checks for updates.
     var updateCheckRequested = false
+    /// Set by Help > Show Walkthrough and the wizard's Take the Tour: the window shows the sheet.
+    var walkthroughRequested = false
     /// Set by Help > Keyboard Shortcuts: General scrolls to that section.
     var scrollTarget: String?
     /// Why a benchbar:// link did nothing (no such bench, which bench):
@@ -36,54 +46,91 @@ final class WindowRouter {
     func show(bench path: String, tab: BenchTab = .overview) {
         pane = .bench(path)
         benchTab = tab
+        sidebarSite = nil
     }
 }
 
-/// The BenchBar window: the app's settings on top, every bench below, like
-/// System Settings. Everything here runs the CLI; the popover stays the
-/// quick path for start, stop and open.
+/// The BenchBar window: the benches (each with its sites), Team Profiles and
+/// Find Benches in the sidebar, the first run wizard as the empty state.
+/// Everything here runs the CLI; the popover stays the quick path for start,
+/// stop and open.
 struct MainWindowView: View {
     let store: BenchStore
     @Bindable var router: WindowRouter
     let workbench: Workbench
     let about: AboutModel
     let discovery: BenchDiscovery
-    let makeSettings: (SettingsView.Part) -> SettingsView
+    let wizard: WizardView
+    var settings: AppSettings?
+
+    /// The page shown: the router's, else the first bench, else the wizard.
+    /// nil while the bench list has not been read yet.
+    var pane: WindowPane? {
+        if let pane = router.pane { return pane }
+        if let first = store.benches.first { return .bench(first.path) }
+        return store.hasLoadedBenches || !cliReady ? .wizard : nil
+    }
+
+    /// Once, on its own: the first time the window shows a bench.
+    private func offerWalkthrough() {
+        guard let settings, WalkthroughModel.shouldShowOnItsOwn(
+            seen: settings.walkthroughSeen, benchCount: store.benches.count, onWizard: pane == .wizard || pane == nil) else { return }
+        settings.walkthroughSeen = true
+        router.walkthroughRequested = true
+    }
+
+    private var cliReady: Bool {
+        if case .ready = store.cli { return true }
+        return false
+    }
+
+    /// The sidebar's selected row.
+    var selection: SidebarItem? {
+        switch pane {
+        case .bench(let path):
+            if router.benchTab == .sites, let site = router.sidebarSite { return .site(bench: path, name: site) }
+            return .bench(path)
+        case .profiles: return .profiles
+        case .discovery: return .discovery
+        case .wizard, .none: return nil
+        }
+    }
+
+    private func select(_ item: SidebarItem?) {
+        switch item {
+        case .bench(let path): router.show(bench: path)
+        case .site(let path, let name):
+            router.show(bench: path, tab: .sites)
+            router.sidebarSite = name
+        case .profiles: router.pane = .profiles
+        case .discovery: router.pane = .discovery
+        case .none: break
+        }
+    }
 
     var body: some View {
+        content
+            // the page the window opens on becomes the router's: the window
+            // reports the bench whose Overview (with the charts) is shown
+            .onChange(of: pane, initial: true) { _, shown in
+                if router.pane == nil, let shown { router.pane = shown }
+                offerWalkthrough()
+            }
+            .onChange(of: store.benches.count) { offerWalkthrough() }
+            .sheet(isPresented: $router.walkthroughRequested) {
+                WalkthroughSheet { router.walkthroughRequested = false }
+            }
+    }
+
+    private var content: some View {
         NavigationSplitView {
-            List(selection: $router.pane) {
-                Section("BenchBar") {
-                    Label("General", systemImage: "gearshape").tag(WindowPane.general)
-                    Label("Menu Bar", systemImage: "menubar.rectangle").tag(WindowPane.menuBar)
-                    Label("Team Profiles", systemImage: "person.2").tag(WindowPane.profiles)
-                    Label("About", systemImage: "info.circle").tag(WindowPane.about)
-                }
-                Section("Benches") {
-                    Label("Find Benches", systemImage: "folder.badge.plus").tag(WindowPane.discovery)
-                    if store.benches.isEmpty {
-                        Text("No bench yet").foregroundStyle(.secondary)
-                    }
-                    ForEach(store.benches) { bench in
-                        HStack(spacing: 8) {
-                            Circle().fill(StatePill.color(for: bench.state)).frame(width: 8, height: 8)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(bench.name)
-                                if store.benches.filter({ $0.name == bench.name }).count > 1 {
-                                    Text(URL(fileURLWithPath: bench.path).deletingLastPathComponent().lastPathComponent)
-                                        .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-                                }
-                            }
-                            .help(bench.path)
-                            Spacer()
-                            if bench.isBusy {
-                                ProgressView().controlSize(.mini)
-                            }
-                        }
-                        .tag(WindowPane.bench(bench.path))
-                        .contextMenu { BenchContextMenu(store: store, bench: bench) }
-                    }
-                }
+            VStack(spacing: 0) {
+                // a closure, not the method reference select(_:): the Swift 6.3
+                // compiler of Xcode 26.6 crashed emitting its isolated thunk
+                MainSidebar(store: store, model: SidebarModel(benches: store.benches),
+                            selection: Binding(get: { selection }, set: { select($0) }))
+                Divider()
+                SidebarFooter(router: router, wizard: wizard.run)
             }
             .navigationSplitViewColumnWidth(min: 190, ideal: 210, max: 260)
         } detail: {
@@ -104,15 +151,13 @@ struct MainWindowView: View {
     }
 
     @ViewBuilder private var detail: some View {
-        switch router.pane {
-        case .general, .none:
-            makeSettings(.general).navigationTitle("General")
-        case .menuBar:
-            makeSettings(.menuBar).navigationTitle("Menu Bar")
+        switch pane {
+        case .none:
+            ProgressView().controlSize(.small).frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .wizard:
+            wizard
         case .profiles:
             ProfilesPane(store: store, workbench: workbench, router: router).navigationTitle("Team Profiles")
-        case .about:
-            AboutPane(store: store, model: about, router: router).navigationTitle("About BenchBar")
         case .discovery:
             DiscoveryPane(discovery: discovery, router: router).navigationTitle("Find Benches")
         case .bench(let path):
@@ -125,6 +170,95 @@ struct MainWindowView: View {
                                        description: Text("benchbar list no longer reports it."))
             }
         }
+    }
+}
+
+/// Benches first, each with its sites beneath, then Team Profiles and Find Benches.
+struct MainSidebar: View {
+    let store: BenchStore
+    let model: SidebarModel
+    @Binding var selection: SidebarItem?
+
+    var body: some View {
+        List(selection: $selection) {
+            Section("Benches") {
+                if model.isEmpty {
+                    Text(SidebarModel.emptyText).foregroundStyle(.secondary)
+                }
+                ForEach(model.benches) { row in
+                    HStack(spacing: WindowMetrics.rowSpacing) {
+                        Image(systemName: "circle.fill").font(.caption2).imageScale(.small)
+                            .foregroundStyle(StatePill.color(for: row.state))
+                            .environment(\.backgroundProminence, .standard)
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: WindowMetrics.lineSpacing) {
+                            Text(row.name)
+                            if let hint = row.hint {
+                                Text(hint).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                        }
+                        Spacer()
+                        if row.isBusy { ProgressView().controlSize(.mini) }
+                    }
+                    .help([row.path, row.guidance].compactMap { $0 }.joined(separator: "\n"))
+                    .tag(SidebarItem.bench(row.path))
+                    .contextMenu {
+                        if let bench = store.benches.first(where: { $0.path == row.path }) {
+                            BenchContextMenu(store: store, bench: bench)
+                        }
+                    }
+                    ForEach(row.sites) { site in
+                        HStack(spacing: 6) {
+                            Image(systemName: site.isDefault ? "star.fill" : "globe").font(.caption2)
+                                .foregroundStyle(site.isDefault ? Color.yellow : Color.secondary)
+                                .environment(\.backgroundProminence, .standard)
+                                .accessibilityLabel(site.isDefault ? "Default site" : "Site")
+                            Text(site.name)
+                        }
+                        .font(.callout)
+                        .lineLimit(1).truncationMode(.middle)
+                        .padding(.leading, WindowMetrics.paneInset - 4)
+                        .tag(SidebarItem.site(bench: row.path, name: site.name))
+                            .help("Sites of \(row.name)")
+                    }
+                }
+            }
+            Section {
+                Label("Team Profiles", systemImage: "person.2").tag(SidebarItem.profiles)
+                Label("Find Benches", systemImage: "folder.badge.plus").tag(SidebarItem.discovery)
+            }
+        }
+    }
+}
+
+/// The "+" pinned at the bottom of the sidebar.
+struct SidebarFooter: View {
+    @Bindable var router: WindowRouter
+    let wizard: WizardRun
+
+    var body: some View {
+        HStack {
+            Menu {
+                Button("New Bench…", systemImage: "plus.square") {
+                    wizard.reopen()
+                    router.pane = .wizard
+                }
+                Button("Adopt Existing Bench…", systemImage: "arrow.down.doc") {
+                    router.scanRequested = true
+                    router.pane = .discovery
+                }
+                Button("Find Benches…", systemImage: "folder.badge.plus") { router.pane = .discovery }
+            } label: {
+                Image(systemName: "plus")
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .accessibilityLabel("Add a bench")
+            .help("New Bench, Adopt Existing Bench, Find Benches")
+            Spacer()
+        }
+        .padding(.horizontal, WindowMetrics.spacing).padding(.vertical, WindowMetrics.rowSpacing)
     }
 }
 

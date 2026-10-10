@@ -27,7 +27,12 @@ Homebrew trusts a third party tap only for the names you type, so the
 cask alone cannot pull in its formula. `benchbar install` sets up the
 bench, the site and the background service as in the
 [Quick start](quick-start.md); with a bench you already have, run
-`benchbar adopt` instead.
+`benchbar adopt` instead. To check a Mac before installing, without a
+bench, run `benchbar doctor --prerequisites` (Apple Silicon, macOS 14,
+Command Line Tools, Homebrew, free disk, the bench folder, cleanup tools
+and the default ports; each check that is not ok names its fix). The BenchBar app drives `install` and `adopt`
+through `--json --yes`, which prints one JSON event per line; the format
+is in the [JSON API](json-schema.md).
 
 The cask needs Apple Silicon and macOS Sonoma or later. For the CLI
 alone, on an Intel Mac too:
@@ -145,6 +150,27 @@ site and the background service. It asks for passwords and `sudo`, and
 the first run takes a while. Skip it when you only want to work on the
 app or adopt a bench you have.
 
+## Linux
+
+From 0.8 the same CLI runs on Linux: Ubuntu 24.04 and other Debian based
+systems with apt, Windows through WSL first, with the v15-lts profile so
+far. There is no menu bar app on Linux; Windows gets a tray app later.
+
+```bash
+git clone https://github.com/askysh/benchbar.git && cd benchbar
+./benchbar install
+```
+
+`install` runs `00-linux-system-deps.sh`: MariaDB and Redis from apt,
+Python from uv, Node from fnm, the pinned wkhtmltopdf `.deb`, and
+`libnss-myhostname` so `*.localhost` names resolve. It asks for `sudo`
+once up front and not at all on a second run. Each bench runs as its own
+`systemd --user` unit, and `loginctl enable-linger` brings a running
+bench back after a reboot. The default site is `linuxdev.localhost`, and
+benchbar never edits `/etc/hosts` there. The `bench*` helpers go to
+`~/.bashrc`. `benchbar doctor --prerequisites` on Linux checks free
+disk, the bench folder and the default ports.
+
 ## Updating
 
 BenchBar.app carries its own copy of the CLI, and since 0.7.1 Homebrew's
@@ -242,7 +268,8 @@ the old one, and its CLI is the one every `benchbar` hands off to.
 
 Open a new Terminal tab, or run `source ~/.zshrc`, so `benchbar` and the
 `bench*` helpers are on your `PATH`. Then follow the
-[Quick start](quick-start.md).
+[Quick start](quick-start.md), or open BenchBar: on a Mac with no bench
+its window starts the [first run wizard](app.md#a-new-bench-from-the-app).
 
 ## Uninstall
 

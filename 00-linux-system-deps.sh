@@ -40,7 +40,8 @@ fl_platform_load
 fl_is_linux || fl_die "This script is for Linux." "On a Mac run ./00-mac-system-deps.sh"
 trap fl_on_error ERR
 fl_signal_traps_install
-trap fl_sudo_end EXIT
+# the last section of a --json install ends with the script
+trap 'fl_jsonl_section_exit "$?"; fl_sudo_end' EXIT
 
 PROFILE="${PROFILE:-}"
 LIST_PROFILES=0

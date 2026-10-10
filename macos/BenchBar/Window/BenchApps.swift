@@ -19,6 +19,11 @@ struct BenchApps: View {
                 if let list {
                     ForEach(list.apps) { app in row(app) }
                     if list.apps.isEmpty { Text("No apps").foregroundStyle(.secondary) }
+                    if list.apps.filter({ $0.name != "frappe" }).isEmpty {
+                        EmptyStateBlock(symbol: "square.stack.3d.up", title: "Only Frappe so far",
+                                        line: "Add ERPNext or any app from the registry or a git repository.",
+                                        actions: [("Add App…", { adding = true })], disabled: busy)
+                    }
                 } else if workbench.loadingApps.contains(bench.path) {
                     HStack { ProgressView().controlSize(.small); Text("Reading apps…").foregroundStyle(.secondary) }
                 }

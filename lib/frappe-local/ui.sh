@@ -28,6 +28,8 @@ FL_STEP_SECS=()
 FL_STEP_CURRENT=-1
 FL_STEP_START=0
 FL_RUN_START="${SECONDS}"
+# the message of the last fl_die, for the done line of a JSON stream
+FL_DIE_MESSAGE=""
 
 fl_ui_init() {
   local cols
@@ -127,10 +129,207 @@ fl_strip_ansi() {
   sed -e 's/\x1b\[[0-9;]*[A-Za-z]//g' -e 's/\x1b([AB]//g'
 }
 
+# a word for a POSIX shell, in single quotes
+fl_sq() { local q="'"; printf "'%s'" "${1//$q/$q\\$q$q}"; }
+
+# ---------------------------------------------------------------- JSON
+
+# fl_json_escape_v VAR TEXT: TEXT with backslashes and quotes escaped and
+# control characters (terminal colors in logs) dropped, as a JSON string
+# needs; in bash, the same bytes `sed | tr -d '\000-\037'` gave. The control
+# characters are listed one by one: a range in bash 3.2 follows the locale.
+FL_JSON_CTRL=$'\001\002\003\004\005\006\007\010\011\012\013\014\015\016\017\020\021\022\023\024\025\026\027\030\031\032\033\034\035\036\037'
+# a whole terminal control sequence: ESC [ parameters (0x30-0x3F)
+# intermediates (0x20-0x2F) final byte (0x40-0x7E). The sets are spelled
+# out and tested by containment: a bracket range in a pattern or a regex
+# follows the locale's collation, and under en_US.UTF-8 "[@-~]" is not the
+# ASCII run it is under C (launchd runs the CLI in C, Terminal in UTF-8)
+FL_JSON_CSI_PARAM='0123456789:;<=>?'
+FL_JSON_CSI_INTER=' !"#$%&'"'"'()*+,-./'
+FL_JSON_CSI_FINAL='@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~'
+# fl__json_csi_len_v VAR TEXT: how many characters the control sequence at the
+# start of TEXT spans (0 when TEXT does not start with ESC [)
+fl__json_csi_len_v() {
+  # the locals carry names no caller uses: printf -v "$1" must reach the caller's variable
+  local __csi_s="$2" __csi_k=2 __csi_c
+  [[ "$__csi_s" == $'\033['* ]] || { printf -v "$1" 0; return 0; }
+  while __csi_c="${__csi_s:$__csi_k:1}"; [[ -n "$__csi_c" && "$FL_JSON_CSI_PARAM" == *"$__csi_c"* ]]; do __csi_k=$((__csi_k + 1)); done
+  while __csi_c="${__csi_s:$__csi_k:1}"; [[ -n "$__csi_c" && "$FL_JSON_CSI_INTER" == *"$__csi_c"* ]]; do __csi_k=$((__csi_k + 1)); done
+  __csi_c="${__csi_s:$__csi_k:1}"
+  [[ -n "$__csi_c" && "$FL_JSON_CSI_FINAL" == *"$__csi_c"* ]] && __csi_k=$((__csi_k + 1))
+  printf -v "$1" '%s' "$__csi_k"
+}
+fl_json_escape_v() {
+  local __e="$2" __o="" __p __n
+  __e="${__e//\\/\\\\}"
+  __e="${__e//\"/\\\"}"
+  # cut at each control character: bash 3.2's ${x//[set]/} is quadratic in
+  # the string's length, and a colored 10 KB log line took 20 seconds. A
+  # color code goes as a whole (ESC [ 3 1 m), not only its ESC: "[31m" left
+  # behind is not a word anyone wrote, and readers would have to guess it.
+  while [[ "$__e" == *[$FL_JSON_CTRL]* ]]; do
+    __p="${__e%%["$FL_JSON_CTRL"]*}"
+    __o="${__o}${__p}"
+    __e="${__e:${#__p}}"
+    fl__json_csi_len_v __n "$__e"
+    if [[ "$__n" -gt 0 ]]; then __e="${__e:$__n}"; else __e="${__e:1}"; fi
+  done
+  printf -v "$1" '%s' "${__o}${__e}"
+}
+
+fl_json_escape() {
+  local e
+  fl_json_escape_v e "$1"
+  printf '%s' "$e"
+}
+
+# fl_json_str_v VAR VALUE, fl_json_num_v and fl_json_bool_v put the JSON
+# for VALUE into VAR without the subshell of "$(fl_json_str ...)": status and
+# list build their documents with them, dozens of values per call.
+fl_json_str_v() {
+  local __s="$2"
+  if [[ -z "$__s" ]]; then printf -v "$1" 'null'; return 0; fi
+  fl_json_escape_v __s "$__s"
+  printf -v "$1" '"%s"' "$__s"
+}
+
+fl_json_num_v() {
+  case "$2" in
+    ''|-|*[!0-9-]*) printf -v "$1" 'null' ;;
+    *) printf -v "$1" '%s' "$2" ;;
+  esac
+}
+
+fl_json_bool_v() {
+  if [[ "$2" == "1" || "$2" == "yes" || "$2" == "true" ]]; then printf -v "$1" 'true'; else printf -v "$1" 'false'; fi
+}
+
+fl_json_str() { local j; fl_json_str_v j "$1"; printf '%s' "$j"; }
+fl_json_num() { local j; fl_json_num_v j "$1"; printf '%s' "$j"; }
+fl_json_bool() { local j; fl_json_bool_v j "$1"; printf '%s' "$j"; }
+
+# ---------------------------------------------------------------- JSON lines
+#
+# install --json and adopt --json (docs/json-schema.md) stream one JSON
+# object per line on fd 3, the command's real stdout; the human text goes
+# to the run's log. FL_JSONL=1 turns the events on, in benchbar and in the
+# phase scripts it starts (they inherit fd 3 and the variable).
+
+FL_JSONL="${FL_JSONL:-0}"
+# the step a phase script's sections belong to (system_deps, bench_site);
+# set for the phase script's process only, so benchbar's own fl_section
+# calls stay out of the stream
+FL_JSONL_PARENT="${FL_JSONL_PARENT:-}"
+# the id of the step or section that runs now (progress lines name it)
+FL_JSONL_CUR=""
+# the open section of a phase script: id, heading, start, log line, warned
+FL_JSONL_SEC_ID=""
+FL_JSONL_SEC_NAME=""
+FL_JSONL_SEC_START=0
+FL_JSONL_SEC_LOG=0
+FL_JSONL_SEC_WARN=0
+
+# fl_jsonl EVENT [,"field":value...]: one line on fd 3. A closed fd 3 (a
+# command that was started without it) never ends the run.
+fl_jsonl() {
+  [[ "$FL_JSONL" == "1" ]] || return 0
+  # a dry run streams the plan and done only (FL_JSONL_QUIET)
+  [[ "${FL_JSONL_QUIET:-0}" != "1" || "$1" == "done" ]] || return 0
+  { printf '{"schema_version":%d,"cli_version":"%s","event":"%s"%s}\n' "${FL_SCHEMA_VERSION:-1}" "${FL_JSONL_VERSION:-${FL_VERSION:-0}}" "$1" "${2:-}" >&3; } 2>/dev/null || true
+}
+
+# fl_log_lines_v VAR: how many lines the run log has now (0 without one)
+fl_log_lines_v() {
+  local __n=0
+  if [[ -n "${FL_LOG_FILE:-}" && -f "$FL_LOG_FILE" ]]; then __n="$(wc -l <"$FL_LOG_FILE" 2>/dev/null | tr -d ' ')"; fi
+  printf -v "$1" '%s' "${__n:-0}"
+}
+
+# The most telling line the step wrote to the log since line $1: its last
+# [FAIL], else its last [WARN] or skip note, else nothing.
+fl_log_step_message() {
+  local from="$1" text
+  [[ -n "${FL_LOG_FILE:-}" && -f "$FL_LOG_FILE" ]] || return 0
+  text="$(tail -n +"$((from + 1))" "$FL_LOG_FILE" 2>/dev/null)"
+  local line
+  line="$(printf '%s\n' "$text" | grep -E '\[FAIL\]' | tail -n1)"
+  [[ -n "$line" ]] || line="$(printf '%s\n' "$text" | grep -E '\[WARN\]' | tail -n1)"
+  [[ -n "$line" ]] || line="$(printf '%s\n' "$text" | grep -E 'skipped' | grep -v -E '(^|[0-9:] )step [0-9]+ ' | tail -n1)"
+  printf '%s' "$line" | sed 's/^[0-9][0-9]:[0-9][0-9]:[0-9][0-9] //'
+}
+
+# fl_jsonl_step N ID PARENT NAME STATUS [SECS [MESSAGE [COMMAND]]]: a step
+# line; N, PARENT, SECS, MESSAGE and COMMAND may be empty (null or absent)
+fl_jsonl_step() {
+  [[ "$FL_JSONL" == "1" ]] || return 0
+  local n p f msg="${7:-}"
+  fl_json_num_v n "$1"
+  fl_json_str_v p "$3"
+  f=",\"n\":${n},\"id\":$(fl_json_str "$2"),\"parent\":${p},\"name\":$(fl_json_str "$4"),\"status\":\"$5\""
+  [[ -z "${6:-}" ]] || f="${f},\"secs\":$6"
+  [[ -z "$msg" ]] || f="${f},\"message\":$(fl_json_str "${msg:0:1000}")"
+  [[ -z "${8:-}" ]] || f="${f},\"command\":$(fl_json_str "$8")"
+  [[ "$5" != "running" ]] || FL_JSONL_CUR="$2"
+  fl_jsonl step "$f"
+}
+
+# the privileged steps that were skipped, for the done line: {"id","command"},...
+FL_JSONL_SKIPPED=""
+FL_SKIP_COMMAND="${FL_SKIP_COMMAND:-}"
+fl_jsonl_skipped_add() {
+  [[ -n "${2:-}" ]] || return 0
+  FL_JSONL_SKIPPED="${FL_JSONL_SKIPPED}${FL_JSONL_SKIPPED:+,}{\"id\":$(fl_json_str "$1"),\"command\":$(fl_json_str "$2")}"
+}
+
+# fl_jsonl_progress LABEL ELAPSED: a progress line for the step that runs
+# now; the size of the file in FL_PROGRESS_FILE is the bytes of a download
+fl_jsonl_progress() {
+  [[ "$FL_JSONL" == "1" ]] || return 0
+  local bytes=""
+  if [[ -n "${FL_PROGRESS_FILE:-}" && -f "$FL_PROGRESS_FILE" ]]; then
+    bytes="$(stat -c %s "$FL_PROGRESS_FILE" 2>/dev/null || stat -f %z "$FL_PROGRESS_FILE" 2>/dev/null || true)"
+  fi
+  fl_jsonl progress ",\"step\":$(fl_json_str "$FL_JSONL_CUR"),\"label\":$(fl_json_str "$1"),\"elapsed\":$2,\"bytes\":$(fl_json_num "$bytes"),\"total\":null"
+}
+
+# fl_jsonl_section_end STATUS: closes the open section of a phase script
+fl_jsonl_section_end() {
+  [[ -n "$FL_JSONL_SEC_ID" ]] || return 0
+  local status="$1" msg=""
+  if [[ "$status" != "done" ]]; then msg="$(fl_log_step_message "$FL_JSONL_SEC_LOG")"; fi
+  fl_jsonl_step "" "$FL_JSONL_SEC_ID" "$FL_JSONL_PARENT" "$FL_JSONL_SEC_NAME" "$status" "$((SECONDS - FL_JSONL_SEC_START))" "$msg"
+  FL_JSONL_SEC_ID=""
+}
+
+# fl_jsonl_section_begin HEADING: ends the section before (done, or warning
+# when it printed a [WARN] or [FAIL] line) and begins this one. Only in a
+# phase script (FL_JSONL_PARENT set).
+fl_jsonl_section_begin() {
+  [[ "$FL_JSONL" == "1" && -n "$FL_JSONL_PARENT" ]] || return 0
+  local id
+  if [[ "$FL_JSONL_SEC_WARN" == "1" ]]; then fl_jsonl_section_end warning; else fl_jsonl_section_end "done"; fi
+  id="$(printf '%s' "$1" | tr '[:upper:] ' '[:lower:]_')"
+  FL_JSONL_SEC_ID="$id"; FL_JSONL_SEC_NAME="$1"; FL_JSONL_SEC_START="$SECONDS"; FL_JSONL_SEC_WARN=0
+  fl_log_lines_v FL_JSONL_SEC_LOG
+  fl_jsonl_step "" "$id" "$FL_JSONL_PARENT" "$1" running
+}
+
+# fl_jsonl_section_exit CODE: the EXIT trap of a phase script closes the
+# last section: done on 0, warning on 2 (manual steps pending), else failed
+fl_jsonl_section_exit() {
+  [[ -n "$FL_JSONL_SEC_ID" ]] || return 0
+  case "$1" in
+    0) fl_jsonl_section_end "done" ;;
+    2) fl_jsonl_section_end warning ;;
+    *) fl_jsonl_section_end failed ;;
+  esac
+}
+
 # ---------------------------------------------------------------- status lines
 
 fl_section() {
   fl_spinner_pause
+  fl_jsonl_section_begin "$1"
   printf '\n%s%s %s%s\n' "$FL_BOLD$FL_BLUE" "==========" "$1 ==========" "$FL_RESET"
   fl_log "== $1 =="
 }
@@ -138,6 +337,7 @@ fl_section() {
 fl_status_line() {
   local color="$1" label="$2" msg="$3"
   fl_spinner_pause
+  case "$label" in WARN|FAIL) FL_JSONL_SEC_WARN=1 ;; esac
   printf '  %s[%s]%s %s\n' "$color" "$label" "$FL_RESET" "$msg"
   fl_log "[$label] $msg"
 }
@@ -174,6 +374,7 @@ fl_die() {
   # a hint may quote the command that failed, URL and token included
   fl_redact_url_v msg "$1"
   fl_redact_url_v hint "${2:-Fix the above and re-run.}"
+  FL_DIE_MESSAGE="$msg"
   fl_fail "$msg"
   printf '\n%sAborting.%s %s\n' "$FL_RED$FL_BOLD" "$FL_RESET" "$hint"
   fl_log "ABORT: ${2:-}"
@@ -335,7 +536,27 @@ fl_table() {
 
 # ---------------------------------------------------------------- numbered steps
 
-fl_steps_reset() { FL_STEP_LABELS=(); FL_STEP_STATUS=(); FL_STEP_SECS=(); FL_STEP_CURRENT=-1; FL_RUN_START="$SECONDS"; }
+# Under --json a step with an id is announced on the stream: FL_STEP_IDS has
+# one id per label (fl_steps_ids), FL_STEP_PARENT is the parent of every
+# step (the repair engine inside install), FL_STEP_NUMBERED 0 leaves n null.
+FL_STEP_IDS=()
+FL_STEP_PARENT=""
+FL_STEP_NUMBERED=1
+FL_STEP_LOG_FROM=0
+fl_steps_reset() { FL_STEP_LABELS=(); FL_STEP_STATUS=(); FL_STEP_SECS=(); FL_STEP_IDS=(); FL_STEP_PARENT=""; FL_STEP_NUMBERED=1; FL_STEP_CURRENT=-1; FL_RUN_START="$SECONDS"; }
+
+# fl_steps_ids [-n] [-p PARENT] ID...: the ids of the steps just defined
+fl_steps_ids() {
+  FL_STEP_NUMBERED=1
+  while [[ "${1:-}" == -* ]]; do
+    case "$1" in
+      -n) FL_STEP_NUMBERED=0; shift ;;
+      -p) FL_STEP_PARENT="$2"; shift 2 ;;
+      *) break ;;
+    esac
+  done
+  FL_STEP_IDS=("$@")
+}
 
 fl_steps_define() {
   local label
@@ -351,12 +572,16 @@ fl_steps_push() {
   FL_SAVED_LABELS=(${FL_STEP_LABELS[@]+"${FL_STEP_LABELS[@]}"})
   FL_SAVED_STATUS=(${FL_STEP_STATUS[@]+"${FL_STEP_STATUS[@]}"})
   FL_SAVED_SECS=(${FL_STEP_SECS[@]+"${FL_STEP_SECS[@]}"})
+  FL_SAVED_IDS=(${FL_STEP_IDS[@]+"${FL_STEP_IDS[@]}"})
+  FL_SAVED_PARENT="$FL_STEP_PARENT"; FL_SAVED_NUMBERED="$FL_STEP_NUMBERED"
   FL_SAVED_CURRENT="$FL_STEP_CURRENT"; FL_SAVED_START="$FL_STEP_START"; FL_SAVED_RUN_START="$FL_RUN_START"
 }
 fl_steps_pop() {
   FL_STEP_LABELS=(${FL_SAVED_LABELS[@]+"${FL_SAVED_LABELS[@]}"})
   FL_STEP_STATUS=(${FL_SAVED_STATUS[@]+"${FL_SAVED_STATUS[@]}"})
   FL_STEP_SECS=(${FL_SAVED_SECS[@]+"${FL_SAVED_SECS[@]}"})
+  FL_STEP_IDS=(${FL_SAVED_IDS[@]+"${FL_SAVED_IDS[@]}"})
+  FL_STEP_PARENT="$FL_SAVED_PARENT"; FL_STEP_NUMBERED="$FL_SAVED_NUMBERED"
   FL_STEP_CURRENT="$FL_SAVED_CURRENT"; FL_STEP_START="$FL_SAVED_START"; FL_RUN_START="$FL_SAVED_RUN_START"
 }
 
@@ -383,18 +608,41 @@ fl_step_glyph() {
   esac
 }
 
+# fl_step_json STATUS INDEX [SECS [DETAIL [COMMAND]]]: the stream's line for
+# step INDEX, when it has an id. The message of a failed, skipped or warning
+# step is the CLI's own [FAIL] or [WARN] line, so terminal and stream agree.
+fl_step_json() {
+  [[ "$FL_JSONL" == "1" && -n "${FL_STEP_IDS[$2]:-}" ]] || return 0
+  local n="" msg="" cmd="${5:-}"
+  [[ "$FL_STEP_NUMBERED" != "1" ]] || n=$(($2 + 1))
+  case "$1" in
+    failed|skipped|warning) msg="$(fl_log_step_message "$FL_STEP_LOG_FROM")"; msg="${msg:-${4:-}}" ;;
+  esac
+  # a step that skipped itself says what to run by hand (FL_SKIP_COMMAND)
+  if [[ "$1" == "skipped" ]]; then
+    cmd="${cmd:-$FL_SKIP_COMMAND}"
+    fl_jsonl_skipped_add "${FL_STEP_IDS[$2]}" "$cmd"
+  else
+    cmd=""
+  fi
+  fl_jsonl_step "$n" "${FL_STEP_IDS[$2]}" "$FL_STEP_PARENT" "${FL_STEP_LABELS[$2]}" "$1" "${3:-}" "$msg" "$cmd"
+}
+
 # fl_step_begin INDEX: announces a step whose output streams to the terminal.
 fl_step_begin() {
   local i="$1"
   FL_STEP_CURRENT="$i"
   FL_STEP_START="$SECONDS"
   FL_STEP_STATUS[i]="running"
+  FL_SKIP_COMMAND=""
+  fl_log_lines_v FL_STEP_LOG_FROM
   fl_spinner_pause
   printf '\n%s%s %d. %s%s\n' "$FL_BOLD" "$(fl_step_glyph running)" $((i + 1)) "${FL_STEP_LABELS[$i]}" "$FL_RESET"
   fl_log "step $((i + 1)) start: ${FL_STEP_LABELS[$i]}"
+  fl_step_json running "$i"
 }
 
-# fl_step_end STATUS [DETAIL]
+# fl_step_end STATUS [DETAIL [COMMAND]]: COMMAND is for the stream only
 fl_step_end() {
   local status="$1" detail="${2:-}" i="$FL_STEP_CURRENT" secs
   [[ "$i" -ge 0 ]] || return 0
@@ -404,6 +652,7 @@ fl_step_end() {
   fl_spinner_pause
   printf '  %s %d. %s: %s%s %s(%s)%s\n' "$(fl_step_glyph "$status")" $((i + 1)) "${FL_STEP_LABELS[$i]}" "$status" "${detail:+ ($detail)}" "$FL_DIM" "$(fl_fmt_secs "$secs")" "$FL_RESET"
   fl_log "step $((i + 1)) $status ${detail} ($(fl_fmt_secs "$secs"))"
+  fl_step_json "$status" "$i" "$secs" "$detail" "${3:-}"
   FL_STEP_CURRENT=-1
 }
 
@@ -421,6 +670,8 @@ fl_step_run() {
   FL_STEP_RESULT="done"
   out="$(mktemp "${TMPDIR:-/tmp}/benchbar-step.XXXXXX")"
   fl_log "step $((i + 1)) start: $label"
+  fl_log_lines_v FL_STEP_LOG_FROM
+  fl_step_json running "$i"
   fl_spinner_start "$((i + 1)). $label" "$out"
   "$fn" "$@" >"$out" 2>&1 || code=$?
   fl_spinner_stop

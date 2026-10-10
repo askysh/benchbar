@@ -644,7 +644,7 @@ struct BenchStoreTests {
         cli.answer("status", json: runningJSON())
         let store = makeStore(snapshotter: { pid in clock.next(pid) })
         await store.start(polling: false)
-        let controller = SettingsWindowController { _ in fatalError("the test shows no window") }
+        let controller = MainWindowController { _ in fatalError("the test shows no window") }
         controller.onSight = { store.setWindow($0) }
 
         store.setWindow(WindowSight(isOpen: true, isVisible: true, overview: benchPath))

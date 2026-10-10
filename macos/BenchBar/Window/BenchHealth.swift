@@ -122,7 +122,7 @@ struct RepairSheet: View {
             if run.phase == .review {
                 SheetNote("A backup is taken before every change (.benchbar/backups). Broken folders are moved aside, never deleted.")
                 if run.hasSudoSteps {
-                    SheetNote("Steps that need your password are skipped here; run them in Terminal with benchbar repair afterwards.", tint: .orange)
+                    SheetNote("Steps that ask for your password show macOS's own dialog; BenchBar never sees the password. Cancel it and that step is skipped, with the command to run yourself.", tint: .orange)
                 }
             }
             if let log = run.log, run.phase != .review {
@@ -158,7 +158,7 @@ struct RepairSheet: View {
                     VStack(alignment: .leading, spacing: WindowMetrics.lineSpacing) {
                         HStack(spacing: 6) {
                             Text(step.label)
-                            if step.sudo { Tag(text: "needs password", color: .orange) }
+                            if step.sudo { Tag(text: "Asks for your password", color: .orange) }
                         }
                         if !step.message.isEmpty, step.status != "done" {
                             Text(step.message).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)

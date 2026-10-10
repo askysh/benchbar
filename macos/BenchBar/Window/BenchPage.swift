@@ -22,7 +22,7 @@ struct BenchPage: View {
             Group {
                 switch router.benchTab {
                 case .overview: BenchOverview(store: store, workbench: workbench, bench: bench, router: router)
-                case .sites: BenchSites(store: store, workbench: workbench, bench: bench)
+                case .sites: BenchSites(store: store, workbench: workbench, bench: bench, router: router)
                 case .apps: BenchApps(store: store, workbench: workbench, bench: bench)
                 case .health: BenchHealth(store: store, bench: bench, router: router)
                 }
@@ -36,6 +36,9 @@ struct BenchPage: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(bench.name).font(.title2.weight(.semibold))
                 Text(bench.path).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                if let guidance = bench.guidance {
+                    GuidanceLine(guidance: guidance, enabled: guidance.action == .start ? store.controls(for: bench).canStart : store.busyBench == nil) { act($0) }
+                }
             }
             Spacer()
             if let activity = bench.activity {
@@ -44,6 +47,23 @@ struct BenchPage: View {
             }
             StatePill(state: bench.state, text: BenchText.headline(bench.state, reason: bench.machine.stopReason,
                                                                     exitCode: bench.status?.lastExitCode))
+        }
+    }
+}
+
+extension BenchPage {
+    /// The guidance line's action: the same ones the buttons and the popover have.
+    fileprivate func act(_ action: BenchGuidance.Action) {
+        switch action {
+        case .start: Task { await store.perform(.up, on: bench) }
+        case .viewHealth: router.benchTab = .health
+        case .repair:
+            router.repairRequested = true
+            router.benchTab = .health
+        case .reviewPortConflict, .setUpManagement:
+            router.startAfterSetup = action == .reviewPortConflict
+            router.setupRequest = bench.path
+            router.benchTab = .overview
         }
     }
 }
@@ -195,8 +215,10 @@ struct BenchSites: View {
     let store: BenchStore
     let workbench: Workbench
     let bench: BenchModel
+    /// Set by the popover's hosts hint: the Add Hosts Lines sheet opens at once.
+    var router: WindowRouter?
     @State private var addingSite = false
-    @State private var showHostsInstructions = false
+    @State private var hosts: HostsRun?
     @State private var dropping: String?
 
     private var busy: Bool { !store.canChange(bench) }
@@ -222,7 +244,7 @@ struct BenchSites: View {
                             ProgressView().controlSize(.small)
                         }
                         Button(row.needsHosts ? "Set Up…" : "Open") {
-                            if row.needsHosts { showHostsInstructions = true }
+                            if row.needsHosts { openHosts() }
                             else { Workspace.open(row.url) }
                         }
                         .disabled(!row.needsHosts && bench.state != .running)
@@ -242,20 +264,33 @@ struct BenchSites: View {
                 Text("The default site is the one benchup waits for, the runner pings and ⌘O opens.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            if let fix = SiteRow.hostsFix(rows, bench: bench.path) {
+            if rows.count == 1 {
                 Section {
-                    DisclosureGroup("Terminal instructions", isExpanded: $showHostsInstructions) {
-                        CopyableCommand(command: fix, copyLabel: "Copy the command that adds the hosts lines")
+                    EmptyStateBlock(symbol: "globe", title: "One site so far",
+                                    line: "A second site shares this bench and its MariaDB, with only Frappe installed.",
+                                    actions: [("Add Site…", { addingSite = true })], disabled: busy)
+                }
+            }
+            if SiteRow.hostsFix(rows, bench: bench.path) != nil {
+                Section {
+                    LabeledContent {
+                        Button("Add Hosts Lines…", action: openHosts)
+                            .disabled(busy)
+                            .help("Asks for your password")
+                    } label: {
+                        Text("Some site names need a hosts line")
+                        Text("A local /etc/hosts entry makes the name open in your browser. Asks for your password.")
                     }
                 } header: {
                     Text("Hosts")
-                } footer: {
-                    Text("Some site names need a local hosts entry. This step requires your Mac password in Terminal.")
                 }
             }
         }
         .formStyle(.grouped)
         .task(id: bench.siteRows.map(\.name)) { await workbench.loadBackups(bench) }
+        .task { openRequestedHosts() }
+        .onChange(of: router?.hostsRequest) { openRequestedHosts() }
+        .sheet(item: $hosts) { run in HostsSheet(run: run) { hosts = nil } }
         .sheet(item: Binding(get: { dropping.map(DropTarget.init) }, set: { dropping = $0?.site })) { target in
             SiteDropSheet(workbench: workbench, bench: bench, site: target.site) { dropping = nil }
         }
@@ -265,6 +300,18 @@ struct BenchSites: View {
                 Task { await workbench.addSite(name, adminPassword: password, on: bench) }
             } cancel: { addingSite = false }
         }
+    }
+}
+
+extension BenchSites {
+    fileprivate func openHosts() {
+        hosts = HostsRun(bench: bench, store: store)
+    }
+
+    fileprivate func openRequestedHosts() {
+        guard router?.hostsRequest == bench.path else { return }
+        router?.hostsRequest = nil
+        openHosts()
     }
 }
 
@@ -346,7 +393,7 @@ struct AddSiteSheet: View {
             Form {
                 TextField("Site name", text: $name, prompt: Text("mysite"))
                 if !name.isEmpty && !SiteName.isValid(name) {
-                    Text("Lowercase letters, digits, '-' and '.' only.").font(.caption).foregroundStyle(.red)
+                    Text(SiteName.rule).font(.caption).foregroundStyle(.red)
                 }
                 SecureField("Administrator password", text: $password)
                 SecureField("Confirm password", text: $confirm)
@@ -359,14 +406,6 @@ struct AddSiteSheet: View {
                 .keyboardShortcut(.defaultAction)
                 .disabled(!nameValid || !passwordValid)
         }
-    }
-}
-
-nonisolated enum SiteName {
-    /// The CLI's own rule (fl_site_valid_name).
-    static func isValid(_ name: String) -> Bool {
-        guard let first = name.first, first.isLowercase || first.isNumber else { return false }
-        return name.allSatisfy { ($0.isASCII && ($0.isLowercase || $0.isNumber)) || $0 == "-" || $0 == "." }
     }
 }
 

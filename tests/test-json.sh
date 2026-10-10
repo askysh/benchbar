@@ -142,7 +142,8 @@ run_fm doctor --json --bench-dir "$BENCH"
 printf '%s' "$OUT" | python3 -c '
 import json, sys
 live = json.load(sys.stdin); fixture = json.load(open(sys.argv[1]))
-assert set(live) == set(fixture), set(live) ^ set(fixture)
+# 0.8 adds "prerequisites" (doctor-prerequisites.json is the fixture for it)
+assert set(live) - {"prerequisites"} == set(fixture) - {"prerequisites"}, set(live) ^ set(fixture)
 assert set(live["checks"][0]) == set(fixture["checks"][0])
 ' "$FIX/doctor.json" || fail "doctor --json and the app fixture disagree"
 

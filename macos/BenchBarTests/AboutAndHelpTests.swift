@@ -212,7 +212,7 @@ struct MenuTests {
         let menu = AppDelegate().makeMainMenu()
         #expect(menu.items.map(\.title) == ["BenchBar", "Edit", "Window", "Help"])
         let help = try #require(menu.items.last?.submenu)
-        #expect(help.items.filter { !$0.isSeparatorItem }.map(\.title) == ["BenchBar Documentation", "Keyboard Shortcuts", "Release Notes", "Report a Bug…"])
+        #expect(help.items.filter { !$0.isSeparatorItem }.map(\.title) == ["BenchBar Documentation", "Keyboard Shortcuts", "Show Walkthrough", "Release Notes", "Report a Bug…"])
         let docs = try #require(help.items.first)
         #expect(docs.keyEquivalent == "?")
         #expect(docs.keyEquivalentModifierMask.contains(.command))

@@ -9,6 +9,8 @@ final class PortSetupRun: Identifiable {
     private(set) var plan: PortPlan?
     private(set) var output = ""
     private(set) var modeError: String?
+    /// After a cancelled password dialog: the commands to run in Terminal instead.
+    private(set) var hostsFallbacks: [String] = []
     let summaries: [BenchSummary]
     let startAfterSetup: Bool
     let store: BenchStore
@@ -53,6 +55,7 @@ final class PortSetupRun: Identifiable {
         let error = await store.runChange("Setting up benches", on: anchor) { client throws(CLIError) in
             let result = try await client.applyPortPlan(plan)
             self.output = result.stdout + result.stderr
+            self.hostsFallbacks = PortSetupHints.dialogCancelled(output: self.output) ? PortSetupHints.fallbacks(entries: plan.entries) : []
             guard result.exitCode == 0 else {
                 let failures = self.output.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { $0.hasPrefix("[FAIL]") }.suffix(3)
                 throw CLIError.failed(command: "ports apply", exitCode: result.exitCode,

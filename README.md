@@ -68,6 +68,12 @@ in Terminal, add the CLI with Homebrew or the one line installer. Or
 build from source: `git clone`
 this repository and run `./benchbar install`; the app needs Xcode 26.
 
+**Linux and Windows.** From 0.8 the same CLI runs on Linux (Ubuntu 24.04
+and other apt based systems, the v15-lts profile so far), with each bench
+under `systemd --user`; clone the repository and run `./benchbar install`.
+Windows comes next, through WSL, with a tray app in place of the menu
+bar app. See [Install](https://benchbar.akashmishra.com/install/#linux).
+
 ## Quick start
 
 ```bash
@@ -96,12 +102,21 @@ opens the BenchBar window, with a page per bench for its sites, apps and
 health. The app never writes to a bench itself; every button runs
 `benchbar ... --json` and reads the answer.
 
+You can also skip Terminal. On a Mac with no bench, the BenchBar window
+opens on a short wizard: it checks your Mac, creates a bench from a
+profile (or finds the one you have), and shows each step as it runs.
+macOS asks for your password in its own dialog for the two steps that
+need it. A four step walkthrough of the app follows, and every page says
+what it is for and what to do next.
+
 ## Features
 
 - **One command installs everything:** Homebrew formulae, a MariaDB root password in your Keychain, wkhtmltopdf, a bench and a site.
 - **Runs in the background:** one launchd agent per bench, restarted after a crash, paused after three crashes in ten minutes.
 - **Doctor and repair:** read only checks that name the fix, then only the flagged fixes, with a backup before each change.
 - **A menu bar app:** a runner that shows the state, start and stop, logs, doctor, and a window for each bench's sites, apps and health.
+- **A new bench without Terminal:** a first run wizard in the app checks the Mac, installs a bench from a profile and adopts the ones you have.
+- **Linux too:** the same CLI on Ubuntu 24.04 with `systemd --user`; Windows through WSL is next.
 - **Several benches side by side:** a v15 and a v16 bench, each with its own ports, sites and scheduler, on one MariaDB.
 - **Apps from anywhere:** the app registry or any GitHub repository, private ones too, with a changelog before every update.
 - **Made for teams:** team profiles, the `benchbar.toml` lockfile, and `benchbar pull` for a local copy of production.
@@ -126,7 +141,7 @@ GitHub too, and `benchbar docs` opens them from the terminal.
 
 ## Roadmap
 
-0.6.1 is the first signed and notarized release, with Sparkle updates. 0.7.0 installs the CLI and the app with Homebrew, in 0.7.1 the app ships the CLI, so one update covers both, 0.7.2 gives the window one main action per page and one layout for every sheet, and 0.7.3 is a fix pass from a full review (node@22 for v15, ownership checks, fail closed writes, MCP hardening); the rest is in [ROADMAP.md](ROADMAP.md).
+0.6.1 is the first signed and notarized release, with Sparkle updates. 0.7.0 installs the CLI and the app with Homebrew, in 0.7.1 the app ships the CLI, so one update covers both, 0.7.2 gives the window one main action per page and one layout for every sheet, and 0.7.3 is a fix pass from a full review (node@22 for v15, ownership checks, fail closed writes, MCP hardening). 0.8.0, in progress, brings the first run wizard and a new bench from the app, and the CLI on Linux; Windows through WSL follows. The rest is in [ROADMAP.md](ROADMAP.md).
 
 ## Contributing
 

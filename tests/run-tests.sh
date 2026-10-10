@@ -29,7 +29,7 @@ bash -n "${SCRIPTS[@]}"
 # never waits on a slow test that started last. Shards take every Nth test
 # of this list, which balances them. A new test file must be added here;
 # the check below enforces it.
-ALL_TESTS="test-doctor test-phases test-lock test-apps test-pull test-repair test-install-linux test-port-management
+ALL_TESTS="test-doctor test-phases test-install-json test-lock test-apps test-pull test-repair test-install-linux test-port-management
 test-profiles test-service test-homebrew test-multi-bench test-ports test-sites test-input-hygiene test-doctor-hardening
 test-cli test-freshness test-hygiene test-mcp test-site-backups test-app-cli test-process test-doctor-linux test-install-sh
 test-adopt test-systemd test-migrate test-repair-json test-json test-report test-profile-v16 test-state-migrate test-run-lock

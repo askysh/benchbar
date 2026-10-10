@@ -30,12 +30,61 @@ All notable changes to this project are documented here.
   `/etc/hosts` there. Doctor checks that the site name resolves instead,
   and leaves out the checks that only exist on a Mac.
 
+- The BenchBar app has a first run wizard. A Mac with no bench opens the
+  window on it, and **New Bench…** under the new **+** in the sidebar
+  opens it later. **Check Your Mac** shows what is missing, with a button
+  for the Command Line Tools and the Homebrew command to copy. **New
+  Bench** takes the folder, a built in or team profile (with its Python,
+  Node and MariaDB), the app bundle, the site and the Administrator
+  password, and **Review** shows the plan first. **Install** streams every
+  step and its own steps with their times, the command output, Stop,
+  Retry and Open Log, and asks for the MariaDB root password when it is
+  unknown. **Done** opens the site and offers the walkthrough. **I Already
+  Have a Bench** goes to Find Benches and its setup, as `benchbar adopt`.
+- The two steps that need your password, the wkhtmltopdf package and the
+  `/etc/hosts` line, ask in macOS's own dialog when the app runs them
+  (install, repair, Add Hosts Lines… and Find Benches' setup): BenchBar
+  never sees the password and nothing stays cached. Cancel a dialog and
+  that step is skipped with its command to copy; the run goes on. The
+  popover's **Set Up…** for a missing hosts line opens **Add Hosts
+  Lines…** instead of a command.
+- Benches are the home of the BenchBar window: the sidebar lists each
+  bench with its sites beneath it, then Team Profiles and Find Benches.
+  General and Menu Bar moved to a Settings window (⌘,), and **About
+  BenchBar** in the app menu opens a window of its own.
+- The app explains itself where you are: a four step walkthrough (from
+  Done, Help > Show Walkthrough, and once on its own), a line under every
+  bench that is not running saying why and offering the one next step
+  (Start, View Health, Review Port Conflict…, Repair…, Set Up
+  Management…), empty lists that say how to fill them, the keyboard
+  shortcut in every button's tooltip, and "Asks for your password" on
+  every action that will.
+- `benchbar install --json` and `benchbar adopt PATH --json` print one
+  JSON event per line (`plan`, `step`, `progress`, `done`), the same
+  steps as the terminal output with the phase scripts' sections nested
+  under their phase. They need `--yes` or `--dry-run`, take every value
+  from a flag or the environment and never ask; exit 2 (the MariaDB root
+  password is unknown) arrives as a `done` line with the fix.
+- `BENCHBAR_SUDO=gui` runs each privileged step as one root script
+  through a macOS password dialog instead of `sudo`, at most two per run;
+  `ports apply` and `ports setup` ask once for every bench's hosts line.
+  macOS only; without it nothing changes in a terminal.
+- `benchbar doctor --prerequisites [--json]` checks a Mac before an
+  install, without a bench: Apple Silicon, macOS 14, the Command Line
+  Tools, Homebrew, free disk, a bench folder outside iCloud Drive,
+  Desktop and Documents, CleanMyMac, Mole and the default ports (on
+  Linux: disk, folder and ports). `doctor --json` carries it as `prerequisites`.
+- `benchbar profile list --json` gives each profile's Python, Node and
+  MariaDB versions and lists the app bundles.
+
 ### Fixed
 
 - The shellcheck step of the test suite could never fail: it printed
   "shellcheck: ok" whatever shellcheck found.
 - A NOPASSWD sudo rule next to a password rule no longer makes the install
   ask for a password it does not need.
+- A path with a single quote is quoted correctly for the shell under
+  macOS's bash 3.2 (it broke `pull` with such a remote bench folder).
 - On Linux a lock's age always read 0, so a lock left behind was never seen
   as stale by its age, and two runs at once could stop with "File: unbound
   variable": GNU `stat -f` prints file system text where BSD `stat -f`

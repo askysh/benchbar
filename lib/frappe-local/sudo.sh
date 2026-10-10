@@ -9,7 +9,8 @@
 # that needs sudo later in the same run does not ask again.
 #
 # On macOS only two things ever need sudo: the wkhtmltopdf package
-# (installer -pkg) and the /etc/hosts line. On Linux: apt (the packages and
+# (installer -pkg, with Rosetta 2 installed by the same root script when the
+# package needs it and it is missing) and the /etc/hosts line. On Linux: apt (the packages and
 # the wkhtmltopdf .deb), the MariaDB admin step, its drop-in and restart, and
 # starting a stopped mariadb or redis-server (platform-linux.sh). Nothing
 # else in benchbar runs as root, and fl_sudo_drop ("sudo -k") ends the
@@ -18,6 +19,13 @@
 # package's install script must not find a cached sudo. "benchbar install"
 # does those steps first and drops; a phase script that needs sudo on its
 # own asks itself and drops after.
+
+# BENCHBAR_SUDO=gui (the BenchBar app sets it): the two root steps run
+# through osascript's administrator dialog instead of sudo, see fl_root_run.
+# Any other value is the terminal path. FL_OSASCRIPT is for the tests.
+FL_OSASCRIPT="${FL_OSASCRIPT:-/usr/bin/osascript}"
+# macOS only: Linux has no osascript, and BENCHBAR_SUDO is ignored there
+fl_sudo_gui() { [[ "${BENCHBAR_SUDO:-}" == "gui" && "${FL_PLATFORM:-}" != "linux" ]]; }
 
 FL_SUDO_KEEPALIVE_PID=""
 FL_SUDO_SESSION="${FL_SUDO_SESSION:-0}"
@@ -34,7 +42,26 @@ fl_sudo_available() {
 fl_sudo_begin() {
   local reason
   [[ "${FL_DRY_RUN:-0}" == "1" ]] && { fl_info "dry-run: would ask for your password once (sudo) to: $*"; return 0; }
+  # a macOS dialog asks, once per step, when the step runs (fl_root_run)
+  fl_sudo_gui && return 0
   [[ "$FL_SUDO_SESSION" == "1" ]] && return 0
+  # install --json and adopt --json without the dialogs: nothing can type a
+  # password, so a cached credential or a NOPASSWD rule is used and anything
+  # else skips the steps (with their manual command), as a cancelled dialog does
+  if [[ "${FL_JSONL:-0}" == "1" ]]; then
+    if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+      FL_SUDO_SESSION=1
+      export FL_SUDO_SESSION
+      # the later plain sudo calls (apt on Linux runs for minutes) must not
+      # outlive the cached timestamp and prompt on the terminal
+      fl__sudo_keepalive
+      return 0
+    fi
+    FL_SUDO_REFUSED=1
+    export FL_SUDO_REFUSED
+    fl_warn "sudo needs a password and this run cannot ask for one; the steps that need it are skipped: $*"
+    return 1
+  fi
   if [[ "$FL_SUDO_REFUSED" == "1" ]]; then
     fl_warn "sudo was refused earlier in this run; not asking again for: $*"
     return 1
@@ -58,19 +85,23 @@ fl_sudo_begin() {
   fi
   FL_SUDO_SESSION=1
   export FL_SUDO_SESSION
-  # Keep the timestamp fresh while this process lives. The loop owns no
-  # stdio (a caller capturing our output must not wait for it), sleeps in
-  # short slices so it notices the parent leaving, and dies on TERM.
+  fl__sudo_keepalive
+  return 0
+}
+
+# Keep the timestamp fresh while this process lives. The loop owns no
+# stdio and not fd 3, the JSON stream (a reader must not wait for it), sleeps in
+# short slices so it notices the parent leaving, and dies on TERM.
+fl__sudo_keepalive() {
   ( trap 'exit 0' TERM
     parent="$$"
     while kill -0 "$parent" 2>/dev/null; do
       sudo -n true 2>/dev/null || exit 0
       slice=0
       while [[ "$slice" -lt 10 ]]; do sleep 5; kill -0 "$parent" 2>/dev/null || exit 0; slice=$((slice + 1)); done
-    done ) </dev/null >/dev/null 2>&1 &
+    done ) </dev/null >/dev/null 2>&1 3>&- &
   FL_SUDO_KEEPALIVE_PID="$!"
   fl_log "sudo session started (keepalive pid ${FL_SUDO_KEEPALIVE_PID})"
-  return 0
 }
 
 fl_sudo_end() {
@@ -86,6 +117,7 @@ fl_sudo_end() {
 # this, in this process or a child, can use sudo without a password. A run
 # that never obtained sudo leaves sudo alone.
 fl_sudo_drop() {
+  fl_sudo_gui && return 0
   fl_sudo_end
   if [[ "$FL_SUDO_SESSION" == "1" ]]; then
     sudo -k 2>/dev/null || true
@@ -93,4 +125,49 @@ fl_sudo_drop() {
   fi
   FL_SUDO_SESSION=0
   export FL_SUDO_SESSION
+}
+
+# fl_root_run REASON SCRIPT ARG...: SCRIPT (bash source) runs as root with
+# ARG... as its $1..., behind one macOS password dialog titled REASON.
+# Returns 0 when the script succeeded, 2 when the person cancelled the
+# dialog (the same reason is not asked again in this run), 1 otherwise;
+# FL_ROOT_OUTPUT holds what the script or osascript said.
+#
+# The command line is /bin/bash -c 'SCRIPT' benchbar-root 'ARG'..., every
+# word in single quotes (fl_sq) and handed to AppleScript as an argument,
+# never inside an AppleScript string, so only shell quoting matters. The
+# script names every tool by its absolute path. benchbar never sees the
+# password and there is no cached credential afterwards.
+FL_ROOT_CANCELLED=""
+FL_ROOT_FAILED=""
+FL_ROOT_OUTPUT=""
+# FL_ROOT_KIND names the kind of step a dialog is for (hosts: all the lines,
+# whoever asks); without it the dialog's title is the kind. A cancelled or
+# failed kind is not asked for again in the same run.
+FL_ROOT_KIND=""
+fl_root_was_cancelled() { case " $FL_ROOT_CANCELLED " in *" ${1// /_} "*) return 0 ;; esac; return 1; }
+fl_root_was_failed() { case " $FL_ROOT_FAILED " in *" ${1// /_} "*) return 0 ;; esac; return 1; }
+fl_root_run() {
+  local reason="$1" script="$2" key cmdline arg out err code=0
+  shift 2
+  key="${FL_ROOT_KIND:-$reason}"
+  if fl_root_was_cancelled "$key"; then FL_ROOT_OUTPUT="the password dialog was cancelled earlier in this run"; return 2; fi
+  # a step that failed behind its dialog is not tried again by a later pass (the service step)
+  if fl_root_was_failed "$key"; then FL_ROOT_OUTPUT="this step failed earlier in this run"; return 1; fi
+  cmdline="/bin/bash -c $(fl_sq "$script") benchbar-root"
+  for arg in "$@"; do cmdline="${cmdline} $(fl_sq "$arg")"; done
+  out="$(mktemp "${TMPDIR:-/tmp}/benchbar-root.XXXXXX")"
+  err="$(mktemp "${TMPDIR:-/tmp}/benchbar-root.XXXXXX")"
+  fl_log "run: osascript, administrator dialog: ${reason}"
+  "$FL_OSASCRIPT" -e 'on run argv' -e 'do shell script (item 1 of argv) with prompt (item 2 of argv) with administrator privileges' -e 'end run' -- "$cmdline" "$reason" </dev/null >"$out" 2>"$err" 3>&- || code=$?
+  FL_ROOT_OUTPUT="$(cat "$out" "$err" 2>/dev/null)"
+  fl_log_file_append "$out"
+  fl_log_file_append "$err"
+  rm -f "$out" "$err"
+  [[ "$code" -ne 0 ]] || return 0
+  case "$FL_ROOT_OUTPUT" in
+    *"(-128)"*) FL_ROOT_CANCELLED="${FL_ROOT_CANCELLED} ${key// /_}"; return 2 ;;
+  esac
+  FL_ROOT_FAILED="${FL_ROOT_FAILED} ${key// /_}"
+  return 1
 }

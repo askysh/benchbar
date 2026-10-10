@@ -297,7 +297,7 @@ fl_bench_redis_up() {
         "Give this bench its own ports first: benchbar service --port-offset N --bench-dir ${bench_dir}, then run this again."
     fi
     # its complaints (a bad config, a folder it cannot write) go to the run log
-    if (cd "$bench_dir" && redis-server "config/$(basename "$conf")" --daemonize yes) >>"${FL_LOG_FILE:-/dev/null}" 2>&1; then
+    if (cd "$bench_dir" && redis-server "config/$(basename "$conf")" --daemonize yes) >>"${FL_LOG_FILE:-/dev/null}" 2>&1 3>&-; then
       FL_SETUP_REDIS_PORTS="${FL_SETUP_REDIS_PORTS} ${port}:$(basename "$conf" .conf)"
       fl_info "started the bench's Redis on ${port} for the site setup"
     else

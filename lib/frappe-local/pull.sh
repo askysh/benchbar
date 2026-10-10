@@ -141,9 +141,6 @@ fl_pull_warn() {
   FL_PULL_WARNINGS="${FL_PULL_WARNINGS}${FL_PULL_WARNINGS:+,}$(fl_json_str "$1")"
 }
 
-# a word for a POSIX shell, in single quotes
-fl_sq() { printf "'%s'" "${1//\'/\'\\\'\'}"; }
-
 # The remote bench as a shell expression: "~/x" expands on the server.
 fl_pull_rbench_expr() {
   # shellcheck disable=SC2016  # $HOME is for the remote shell

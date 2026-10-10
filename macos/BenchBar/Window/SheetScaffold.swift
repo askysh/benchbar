@@ -31,6 +31,8 @@ nonisolated enum WindowMetrics {
     static let bannerPadding: CGFloat = 10
     /// A sheet's content scrolls past this height; title and footer stay.
     static let sheetMaxContentHeight: CGFloat = 520
+    /// The column of a wizard page, centered in the window.
+    static let wizardWidth: CGFloat = 640
 
     /// Two sheet widths: forms and plans, and the wider plans with tables.
     enum SheetWidth: CGFloat, Sendable {

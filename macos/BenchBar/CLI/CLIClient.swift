@@ -18,7 +18,15 @@ nonisolated struct CLIClient: Sendable {
         static let action: Duration = .seconds(120)
         /// get-app, new-site, an update with migrate and build: minutes, not seconds
         static let long: Duration = .seconds(45 * 60)
+        /// A whole install: Homebrew packages, bench init, get-app, new-site, build
+        static let install: Duration = .seconds(3 * 60 * 60)
     }
+
+    /// The environment word that makes the CLI ask for the Mac's password in
+    /// macOS's own dialog (`osascript`) instead of a terminal. Only an
+    /// install, an adopt, a repair or `site hosts` run that the user
+    /// confirmed in the app gets it, and no other call.
+    static let guiSudo = ["BENCHBAR_SUDO": "gui"]
 
     /// Environment for the CLI: an explicit PATH (Finder launched apps do
     /// not get the shell's), no colors, no spinners.
@@ -60,7 +68,7 @@ nonisolated struct CLIClient: Sendable {
         // it alongside the failure rather than losing completed-entry details.
         try await runner.run(executable: executable,
             arguments: ["ports", "apply", plan.token, "--yes", "--plain", "--"] + plan.entries.map(\.path),
-            environment: environment(), timeout: Timeout.long)
+            environment: environment().merging(Self.guiSudo) { _, new in new }, timeout: Timeout.long)
     }
 
     func setPortMode(_ mode: PortMode, bench: String) async throws(CLIError) {
@@ -186,7 +194,8 @@ nonisolated struct CLIClient: Sendable {
     /// benchbar site add NAME: the Administrator password goes in the
     /// environment of that one process (ADMIN_PASSWORD, as the CLI reads it),
     /// never on a command line. The hosts line needs sudo, which a process
-    /// without a terminal cannot ask for: the CLI skips it and says so.
+    /// without a terminal cannot ask for: the CLI skips it and says so (the
+    /// Sites tab's Add Hosts Lines sheet runs `site hosts` for that).
     @discardableResult
     func addSite(_ name: String, adminPassword: String, bench: String) async throws(CLIError) -> CommandOutput {
         try await run(["site", "add", name, "--yes", "--plain", "--bench-dir", bench],
@@ -257,10 +266,12 @@ nonisolated struct CLIClient: Sendable {
         throw .failed(command: "repair", exitCode: output.exitCode, message: Self.summarize(output))
     }
 
-    /// repair --yes --json, with every event handed over as it arrives.
+    /// repair --yes --json, with every event handed over as it arrives. The
+    /// steps that need the Mac's password ask in macOS's dialog (BENCHBAR_SUDO=gui);
+    /// a cancelled dialog comes back as a skipped step with its command.
     func repair(bench: String, onEvent: @escaping @Sendable (RepairEvent) -> Void) async throws(CLIError) -> Int32 {
         try await runner.stream(executable: executable, arguments: ["repair", "--yes", "--json", "--bench-dir", bench],
-                                environment: environment(), timeout: Timeout.long) { line in
+                                environment: environment().merging(Self.guiSudo) { _, new in new }, timeout: Timeout.long) { line in
             if let event = RepairEvent.parse(line) { onEvent(event) }
         }
     }

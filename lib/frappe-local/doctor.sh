@@ -69,53 +69,165 @@ fl_doctor_print() {
   printf '\n  %s%d ok, %d warn, %d fail%s\n' "$FL_BOLD" "$(fl_doctor_count ok)" "$(fl_doctor_count warn)" "$(fl_doctor_count fail)" "$FL_RESET"
 }
 
-# fl_json_escape_v VAR TEXT: TEXT with backslashes and quotes escaped and
-# control characters (terminal colors in logs) dropped, as a JSON string
-# needs; in bash, the same bytes `sed | tr -d '\000-\037'` gave. The control
-# characters are listed one by one: a range in bash 3.2 follows the locale.
-FL_JSON_CTRL=$'\001\002\003\004\005\006\007\010\011\012\013\014\015\016\017\020\021\022\023\024\025\026\027\030\031\032\033\034\035\036\037'
-# a whole terminal control sequence: ESC [ parameters (0x30-0x3F)
-# intermediates (0x20-0x2F) final byte (0x40-0x7E). The sets are spelled
-# out and tested by containment: a bracket range in a pattern or a regex
-# follows the locale's collation, and under en_US.UTF-8 "[@-~]" is not the
-# ASCII run it is under C (launchd runs the CLI in C, Terminal in UTF-8)
-FL_JSON_CSI_PARAM='0123456789:;<=>?'
-FL_JSON_CSI_INTER=' !"#$%&'"'"'()*+,-./'
-FL_JSON_CSI_FINAL='@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~'
-# fl__json_csi_len_v VAR TEXT: how many characters the control sequence at the
-# start of TEXT spans (0 when TEXT does not start with ESC [)
-fl__json_csi_len_v() {
-  # the locals carry names no caller uses: printf -v "$1" must reach the caller's variable
-  local __csi_s="$2" __csi_k=2 __csi_c
-  [[ "$__csi_s" == $'\033['* ]] || { printf -v "$1" 0; return 0; }
-  while __csi_c="${__csi_s:$__csi_k:1}"; [[ -n "$__csi_c" && "$FL_JSON_CSI_PARAM" == *"$__csi_c"* ]]; do __csi_k=$((__csi_k + 1)); done
-  while __csi_c="${__csi_s:$__csi_k:1}"; [[ -n "$__csi_c" && "$FL_JSON_CSI_INTER" == *"$__csi_c"* ]]; do __csi_k=$((__csi_k + 1)); done
-  __csi_c="${__csi_s:$__csi_k:1}"
-  [[ -n "$__csi_c" && "$FL_JSON_CSI_FINAL" == *"$__csi_c"* ]] && __csi_k=$((__csi_k + 1))
-  printf -v "$1" '%s' "$__csi_k"
-}
-fl_json_escape_v() {
-  local __e="$2" __o="" __p __n
-  __e="${__e//\\/\\\\}"
-  __e="${__e//\"/\\\"}"
-  # cut at each control character: bash 3.2's ${x//[set]/} is quadratic in
-  # the string's length, and a colored 10 KB log line took 20 seconds. A
-  # color code goes as a whole (ESC [ 3 1 m), not only its ESC: "[31m" left
-  # behind is not a word anyone wrote, and readers would have to guess it.
-  while [[ "$__e" == *[$FL_JSON_CTRL]* ]]; do
-    __p="${__e%%["$FL_JSON_CTRL"]*}"
-    __o="${__o}${__p}"
-    __e="${__e:${#__p}}"
-    fl__json_csi_len_v __n "$__e"
-    if [[ "$__n" -gt 0 ]]; then __e="${__e:$__n}"; else __e="${__e:1}"; fi
-  done
-  printf -v "$1" '%s' "${__o}${__e}"
+# ---------------------------------------------------------------- prerequisites
+#
+# What a Mac needs before an install, without a bench (doctor --prerequisites,
+# the BenchBar app's Check Your Mac page; docs/json-schema.md). The same list
+# is the first group of a plain doctor and the "prerequisites" array of
+# doctor --json; it is not counted in summary or in the exit code there.
+# Parallel arrays like the checks above. FL_BENCH_DIR names the folder a
+# new bench would go to; it does not have to exist.
+
+FL_P_IDS=()
+FL_P_LEVEL=()
+FL_P_MSG=()
+FL_P_FIX=()
+FL_P_EXTRA=()
+FL_P_RAN=0
+# where Homebrew lives when it is not on PATH yet, and how to install it
+FL_BREW_ALT_BIN="${FL_BREW_ALT_BIN:-/opt/homebrew/bin/brew}"
+# shellcheck disable=SC2016  # the command is for a person to run
+FL_BREW_INSTALL_CMD='/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
+# free space (GB) from which the disk check is ok and from which it only warns
+FL_PREREQ_DISK_OK_GB="${FL_PREREQ_DISK_OK_GB:-20}"
+FL_PREREQ_DISK_WARN_GB="${FL_PREREQ_DISK_WARN_GB:-10}"
+
+fl_prereq_label() {
+  case "$1" in
+    apple_silicon) printf 'Apple Silicon' ;;
+    macos_version) printf 'macOS version' ;;
+    command_line_tools) printf 'Command Line Tools' ;;
+    homebrew) printf 'Homebrew' ;;
+    disk_free) printf 'Free disk space' ;;
+    bench_folder) printf 'Bench folder' ;;
+    cleanmymac) printf 'CleanMyMac' ;;
+    mole) printf 'Mole' ;;
+    default_ports) printf 'Default ports' ;;
+    *) printf '%s' "$1" ;;
+  esac
 }
 
-fl_json_escape() {
-  local e
-  fl_json_escape_v e "$1"
-  printf '%s' "$e"
+# fl_prereq_add ID LEVEL MESSAGE [FIX [EXTRA_JSON]]
+fl_prereq_add() {
+  FL_P_IDS+=("$1"); FL_P_LEVEL+=("$2"); FL_P_MSG+=("$3"); FL_P_FIX+=("${4:-}"); FL_P_EXTRA+=("${5:-}")
+  fl_log "prerequisite ${1}: ${2} ${3}"
+}
+
+fl_prereq_count() {
+  local want="$1" n=0 l
+  for l in ${FL_P_LEVEL[@]+"${FL_P_LEVEL[@]}"}; do [[ "$l" == "$want" ]] && n=$((n + 1)); done
+  printf '%d' "$n"
+}
+
+# fl_prereq_run: fills FL_P_*. The target folder is FL_BENCH_DIR.
+fl_prereq_run() {
+  local arch os major clt kb gb level dir p offset conflicts brew_bin
+  FL_P_IDS=(); FL_P_LEVEL=(); FL_P_MSG=(); FL_P_FIX=(); FL_P_EXTRA=(); FL_P_RAN=1
+
+  # the Mac only checks stay out on Linux instead of reporting what cannot exist
+  if ! fl_is_linux; then
+    arch="${FL_ARCH:-$(uname -m)}"
+    if [[ "$arch" == "arm64" ]]; then fl_prereq_add apple_silicon ok "arm64"
+    else fl_prereq_add apple_silicon fail "this Mac is ${arch}; BenchBar and its Homebrew setup are for Apple Silicon" "BenchBar needs an Apple Silicon Mac"; fi
+
+    os="$(sw_vers -productVersion 2>/dev/null || true)"; major="${os%%.*}"
+    if [[ ! "$major" =~ ^[0-9]+$ ]]; then fl_prereq_add macos_version fail "could not read the macOS version" "update macOS in System Settings, Software Update"
+    elif [[ "$major" -ge 14 ]]; then fl_prereq_add macos_version ok "macOS ${os}"
+    else fl_prereq_add macos_version fail "macOS ${os}; macOS 14 or later is needed" "update macOS in System Settings, Software Update"; fi
+
+    clt="$(xcode-select -p 2>/dev/null || true)"
+    if [[ -n "$clt" && -d "$clt" ]]; then fl_prereq_add command_line_tools ok "$clt"
+    else fl_prereq_add command_line_tools fail "the Xcode Command Line Tools are not installed" "xcode-select --install"; fi
+
+    brew_bin="$(command -v brew 2>/dev/null || true)"
+    [[ -n "$brew_bin" ]] || { [[ -x "$FL_BREW_ALT_BIN" ]] && brew_bin="$FL_BREW_ALT_BIN"; }
+    if [[ -n "$brew_bin" ]]; then fl_prereq_add homebrew ok "brew at ${brew_bin}"
+    else fl_prereq_add homebrew fail "brew was not found" "$FL_BREW_INSTALL_CMD"; fi
+
+  fi
+
+  kb="$(df -Pk "$HOME" 2>/dev/null | awk 'NR == 2 { print $4 }')"
+  if [[ "$kb" =~ ^[0-9]+$ ]]; then
+    gb=$((kb / 1024 / 1024))
+    level=ok
+    [[ "$gb" -ge "$FL_PREREQ_DISK_OK_GB" ]] || level=warn
+    [[ "$gb" -ge "$FL_PREREQ_DISK_WARN_GB" ]] || level=fail
+    fl_prereq_add disk_free "$level" "${gb} GB free" "$([[ "$level" == ok ]] || printf 'free space on the volume of %s' "$HOME")" ",\"free_gb\":${gb}"
+  else
+    fl_prereq_add disk_free warn "could not read the free disk space" "free space on the volume of ${HOME}" ",\"free_gb\":null"
+  fi
+
+  # the folder: a path benchbar can carry, and not in a place iCloud syncs
+  dir="$FL_BENCH_DIR"
+  if ! fl_bench_path_ok "$dir"; then
+    fl_prereq_add bench_folder fail "${dir} contains ${FL_TEXT_PROBLEM}, which benchbar cannot carry as plain text" "choose a folder outside iCloud Drive, Desktop and Documents, such as ~/frappe-bench"
+  else
+    level=ok; p=""
+    case "$dir" in
+      "$HOME/Library/Mobile Documents"|"$HOME/Library/Mobile Documents/"*|"$HOME/Library/CloudStorage/iCloud"*) level=fail; p="iCloud Drive" ;;
+      "$HOME/Desktop"|"$HOME/Desktop/"*) level=warn; p="Desktop" ;;
+      "$HOME/Documents"|"$HOME/Documents/"*) level=warn; p="Documents" ;;
+    esac
+    case "$level" in
+      ok) fl_prereq_add bench_folder ok "$dir" ;;
+      warn) fl_prereq_add bench_folder warn "${dir} is in ${p}, which iCloud can sync and evict from" "choose a folder outside iCloud Drive, Desktop and Documents, such as ~/frappe-bench" ;;
+      *) fl_prereq_add bench_folder fail "${dir} is in ${p}, whose files are evicted to the cloud and break a bench" "choose a folder outside iCloud Drive, Desktop and Documents, such as ~/frappe-bench" ;;
+    esac
+  fi
+
+  if ! fl_is_linux; then
+    # CleanMyMac and Mole: doctor's own checks, for this folder
+    CHK_STATUS=""; CHK_MSG=""; CHK_FIX=""; chk_cleanmymac
+    fl_prereq_add cleanmymac "$CHK_STATUS" "$CHK_MSG" "$CHK_FIX"
+    CHK_STATUS=""; CHK_MSG=""; CHK_FIX=""; chk_mole
+    fl_prereq_add mole "$CHK_STATUS" "$CHK_MSG" "$CHK_FIX"
+  fi
+
+  # the default block 0: ports 8000, 9000, 11000 and 13000
+  conflicts="$(fl_port_block_conflicts 0)"
+  if [[ -z "$conflicts" ]]; then
+    fl_prereq_add default_ports ok "ports 8000, 9000, 11000 and 13000 are free" "" ",\"port_offset\":0"
+  elif offset="$(fl_port_next_free_offset)"; then
+    fl_prereq_add default_ports warn "$(printf '%s' "$conflicts" | tr '\n' ';' | sed 's/;$//; s/;/; /g'); a new bench gets port block ${offset}" "the new bench gets port block ${offset} (--port-offset ${offset})" ",\"port_offset\":${offset}"
+  else
+    # every block is taken: install would fail after its system steps, so
+    # this stops the wizard here, and no --port-offset can help
+    fl_prereq_add default_ports fail "$(printf '%s' "$conflicts" | tr '\n' ';' | sed 's/;$//; s/;/; /g'); no port block up to ${FL_PORT_MAX_OFFSET} is free" "stop or remove a bench, or the program on these ports, to free a port block" ",\"port_offset\":null"
+  fi
+}
+
+# fl_prereq_print: the group, in the shape of doctor's own
+fl_prereq_print() {
+  local i=0
+  printf '\n%sPREREQUISITES%s\n' "$FL_BOLD" "$FL_RESET"
+  while [[ "$i" -lt "${#FL_P_IDS[@]}" ]]; do
+    case "${FL_P_LEVEL[$i]}" in
+      ok) fl_ok "$(fl_prereq_label "${FL_P_IDS[$i]}"): ${FL_P_MSG[$i]}" ;;
+      warn) fl_warn "$(fl_prereq_label "${FL_P_IDS[$i]}"): ${FL_P_MSG[$i]}"; [[ -z "${FL_P_FIX[$i]}" ]] || fl_fix "${FL_P_FIX[$i]}" ;;
+      *) fl_fail "$(fl_prereq_label "${FL_P_IDS[$i]}"): ${FL_P_MSG[$i]}"; [[ -z "${FL_P_FIX[$i]}" ]] || fl_fix "${FL_P_FIX[$i]}" ;;
+    esac
+    i=$((i + 1))
+  done
+}
+
+# fl_prereq_json_v VAR: the array of checks, [{...},...]
+fl_prereq_json_v() {
+  local __out="[" __sep="" __i=0 __m __f
+  while [[ "$__i" -lt "${#FL_P_IDS[@]}" ]]; do
+    fl_json_str_v __m "${FL_P_MSG[$__i]}"; fl_json_str_v __f "${FL_P_FIX[$__i]}"
+    __out="${__out}${__sep}{\"id\":\"${FL_P_IDS[$__i]}\",\"label\":$(fl_json_str "$(fl_prereq_label "${FL_P_IDS[$__i]}")"),\"level\":\"${FL_P_LEVEL[$__i]}\",\"message\":${__m},\"fix_command\":${__f}${FL_P_EXTRA[$__i]}}"
+    __sep=","; __i=$((__i + 1))
+  done
+  printf -v "$1" '%s]' "$__out"
+}
+
+# doctor --prerequisites --json: its own document
+fl_prereq_print_json() {
+  local arr
+  fl_prereq_json_v arr
+  printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"prerequisites":%s,"summary":{"ok":%d,"warn":%d,"fail":%d}}\n' \
+    "${FL_SCHEMA_VERSION:-1}" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$arr" \
+    "$(fl_prereq_count ok)" "$(fl_prereq_count warn)" "$(fl_prereq_count fail)"
 }
 
 # Schema 1 (docs/json-schema.md). "level" and "fix_command" are the contract
@@ -133,7 +245,14 @@ fl_doctor_print_json() {
     sep=","
     i=$((i + 1))
   done
-  printf '],"summary":{"ok":%d,"warn":%d,"fail":%d}}\n' "$(fl_doctor_count ok)" "$(fl_doctor_count warn)" "$(fl_doctor_count fail)"
+  # the prerequisites of this Mac, next to the checks and not counted in the summary
+  if [[ "$FL_P_RAN" == "1" ]]; then
+    local prereq
+    fl_prereq_json_v prereq
+    printf '],"prerequisites":%s,"summary":{"ok":%d,"warn":%d,"fail":%d}}\n' "$prereq" "$(fl_doctor_count ok)" "$(fl_doctor_count warn)" "$(fl_doctor_count fail)"
+  else
+    printf '],"summary":{"ok":%d,"warn":%d,"fail":%d}}\n' "$(fl_doctor_count ok)" "$(fl_doctor_count warn)" "$(fl_doctor_count fail)"
+  fi
 }
 
 # doctor --fix-hints: the fix command of every failing and warning check,

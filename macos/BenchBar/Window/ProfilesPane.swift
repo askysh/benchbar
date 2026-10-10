@@ -136,6 +136,12 @@ struct ProfilesPane: View {
         Form {
             Section {
                 ForEach(workbench.profiles) { profile in row(profile) }
+                if !workbench.profiles.isEmpty, !workbench.profiles.contains(where: \.isTeam) {
+                    EmptyStateBlock(symbol: "person.2", title: "Only the built in profiles",
+                                    line: "A team profile pins your team's apps and branches, so everyone sets up the same bench.",
+                                    actions: [("Import…", { sheet = .importing(ProfileImportRun(workbench: workbench), autoReview: false) }),
+                                              ("Create from Bench…", { sheet = .create })])
+                }
                 if let error = workbench.profilesError {
                     Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled)
                 }

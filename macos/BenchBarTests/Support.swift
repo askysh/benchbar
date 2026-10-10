@@ -17,6 +17,13 @@ nonisolated enum Fixture {
         String(decoding: try data(name), as: UTF8.self)
     }
 
+    /// A JSON lines stream (install and adopt): BenchBarTests/Fixtures/NAME.jsonl.
+    static func lines(_ name: String) throws -> String {
+        let bundle = Bundle(for: Token.self)
+        guard let url = bundle.url(forResource: name, withExtension: "jsonl") else { throw FixtureError.missing(name) }
+        return String(decoding: try Data(contentsOf: url), as: UTF8.self)
+    }
+
     enum FixtureError: Error { case missing(String) }
 }
 
