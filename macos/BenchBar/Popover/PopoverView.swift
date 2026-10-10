@@ -119,13 +119,15 @@ struct BenchPanel: View {
             Divider()
             HStack {
                 Button("Logs", systemImage: "text.alignleft") { commands.openLogs(bench) }
-                    .keyboardShortcut("l", modifiers: .command)
+                    .shortcut(.logs)
+                    .help(BenchShortcut.logs.help("Follow bench.log"))
                 Button("Folder", systemImage: "folder") { Workspace.openFolder(bench) }
-                    .keyboardShortcut("f", modifiers: .command)
+                    .shortcut(.folder)
+                    .help(BenchShortcut.folder.help("Show the bench folder in Finder"))
                 Spacer()
                 Button("Manage Bench…") { commands.manage(bench, .overview, false) }
-                    .keyboardShortcut("m", modifiers: .command)
-                    .help("Apps, sites and settings in the BenchBar window (⌘M)")
+                    .shortcut(.manage)
+                    .help(BenchShortcut.manage.help("Apps, sites and settings in the BenchBar window"))
             }
             .controlSize(.small)
             SitesSection(bench: bench, manage: { commands.manage(bench, .sites, false) }, addHosts: { commands.addHosts(bench) })
@@ -159,20 +161,27 @@ struct BenchPanel: View {
     }
 
     @ViewBuilder private var banners: some View {
-        if bench.needsService {
-            Label("Set up management to enable Start, Stop and Restart.", systemImage: "wrench.and.screwdriver")
-                .font(.callout).foregroundStyle(.secondary)
-        } else if bench.machine.stopReason == .broken {
-            Button("Bench needs repair — review in Health…") { commands.manage(bench, .health, true) }
-                .buttonStyle(.link)
-        } else if bench.machine.stopReason == .portConflict {
-            Button("Another program holds a port — review in Health…") { commands.manage(bench, .health, true) }
-                .buttonStyle(.link)
+        if let guidance = bench.guidance {
+            GuidanceLine(guidance: guidance, enabled: guidanceEnabled(guidance)) { perform($0) }
         }
         if let error = bench.lastError ?? bench.refreshError, bench.portConflict == nil {
             Text(error).font(.caption).foregroundStyle(.red).lineLimit(2)
                 .help(error)
             Button("View Health…") { commands.manage(bench, .health, false) }.controlSize(.small)
+        }
+    }
+
+    private func guidanceEnabled(_ guidance: BenchGuidance) -> Bool {
+        guidance.action == .start ? store.controls(for: bench).canStart : store.busyBench == nil
+    }
+
+    private func perform(_ action: BenchGuidance.Action) {
+        switch action {
+        case .start: Task { await store.perform(.up, on: bench) }
+        case .viewHealth: commands.manage(bench, .health, false)
+        case .reviewPortConflict: commands.setup(bench, true)
+        case .repair: commands.manage(bench, .health, true)
+        case .setUpManagement: commands.setup(bench, false)
         }
     }
 
@@ -182,15 +191,18 @@ struct BenchPanel: View {
             ActionButton(title: "Start", systemImage: "play.fill", busy: controls.busy == .up, enabled: controls.canStart) {
                 Task { await store.perform(.up, on: bench) }
             }
-            .keyboardShortcut("u", modifiers: .command)
+            .help(BenchShortcut.start.help())
+            .shortcut(.start)
             ActionButton(title: "Stop", systemImage: "stop.fill", busy: controls.busy == .down, enabled: controls.canStop) {
                 Task { await store.perform(.down, on: bench) }
             }
-            .keyboardShortcut("d", modifiers: .command)
+            .help(BenchShortcut.stop.help())
+            .shortcut(.stop)
             ActionButton(title: "Restart", systemImage: "arrow.clockwise", busy: controls.busy == .restart, enabled: controls.canRestart) {
                 Task { await store.perform(.restart, on: bench) }
             }
-            .keyboardShortcut("r", modifiers: .command)
+            .help(BenchShortcut.restart.help())
+            .shortcut(.restart)
         }
     }
 }
@@ -232,14 +244,14 @@ struct SitesSection: View {
             }
             if SiteRow.hostsFix(rows, bench: bench.path) != nil {
                 Banner(systemImage: "network", tint: .orange,
-                       text: "A site has no /etc/hosts line, so its name does not resolve.", command: nil,
+                       text: "A site has no /etc/hosts line, so its name does not resolve. Adding it asks for your password.", command: nil,
                        action: ("Add Hosts Lines…", addHosts))
             }
         }
     }
 
     @ViewBuilder private func siteAction(_ row: SiteRow) -> some View {
-        if row.isDefault { siteButton(row).keyboardShortcut("o", modifiers: .command) }
+        if row.isDefault { siteButton(row).shortcut(.openSite) }
         else { siteButton(row) }
     }
 
@@ -249,7 +261,8 @@ struct SitesSection: View {
         }
         .controlSize(.small)
         .disabled(!row.needsHosts && bench.state != .running)
-        .help(row.needsHosts ? "Add the hosts line for this site in the BenchBar window" : row.url)
+        .help(row.needsHosts ? "Add the hosts line for this site in the BenchBar window. Asks for your password."
+              : (row.isDefault ? BenchShortcut.openSite.help("Open \(row.url)") : row.url))
     }
 }
 
@@ -285,7 +298,8 @@ struct DoctorSection: View {
                     }
                 }
                 Button("View Health…", action: details).controlSize(.small)
-                    .keyboardShortcut("k", modifiers: .command)
+                    .shortcut(.health)
+                    .help(BenchShortcut.health.help("Every check, with its fix"))
             }
             if bench.doctorError != nil {
                 Label("Health refresh failed. Previous results may be out of date.", systemImage: "exclamationmark.triangle")

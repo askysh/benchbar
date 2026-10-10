@@ -43,7 +43,13 @@ struct PortSetupSheet: View {
                             Text("Web \(String(entry.proposed.web)) · Socket.IO \(String(entry.proposed.socketio)) · Redis \(String(entry.proposed.redisQueue))/\(String(entry.proposed.redisCache))")
                                 .font(.caption).monospacedDigit()
                             if let setupPlan = entry.setupPlan, !setupPlan.isEmpty {
-                                Text("Service changes").font(.subheadline.bold()).padding(.top, 6)
+                                HStack(spacing: 6) {
+                                    Text("Service changes").font(.subheadline.bold())
+                                    if PortSetupHints.asksForPassword(setupPlan: setupPlan) {
+                                        Tag(text: "Asks for your password", color: .orange)
+                                    }
+                                }
+                                .padding(.top, 6)
                                 Text(setupPlan)
                                     .font(.system(.caption, design: .monospaced))
                                     .textSelection(.enabled)
@@ -81,7 +87,14 @@ struct PortSetupSheet: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            SheetNote("Changing the mode saves your preference immediately; ports change only when you apply. Hosts entries that need a password are reported as a Terminal command.")
+            if !run.hostsFallbacks.isEmpty {
+                VStack(alignment: .leading, spacing: WindowMetrics.rowSpacing) {
+                    Text("The password dialog was cancelled, so the hosts lines are not in. Run this in Terminal instead:")
+                        .font(.callout).foregroundStyle(.secondary)
+                    ForEach(run.hostsFallbacks, id: \.self) { CopyableCommand(command: $0, copyLabel: "Copy the command that adds the hosts lines") }
+                }
+            }
+            SheetNote("Changing the mode saves your preference immediately; ports change only when you apply. A hosts line asks for your password in macOS's own dialog, after you apply; cancel it and the line is left for you to add.")
         } leading: {
             if !run.isBusy && run.phase != .finished {
                 Button("Refresh Preview") { Task { await run.loadPlan() } }

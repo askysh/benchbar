@@ -195,12 +195,12 @@ struct SettingsView: View {
     }
 
     static let shortcuts: [(action: String, keys: String)] = [
-        ("Start, stop, restart", "⌘U  ⌘D  ⌘R"),
-        ("Open the site", "⌘O"),
-        ("Logs", "⌘L"),
-        ("Show in Finder", "⌘F"),
-        ("View Health", "⌘K"),
-        ("Apps, sites and settings", "⌘M"),
+        ("Start, stop, restart", [BenchShortcut.start, .stop, .restart].map(\.display).joined(separator: "  ")),
+        (BenchShortcut.openSite.action, BenchShortcut.openSite.display),
+        (BenchShortcut.logs.action, BenchShortcut.logs.display),
+        (BenchShortcut.folder.action, BenchShortcut.folder.display),
+        (BenchShortcut.health.action, BenchShortcut.health.display),
+        (BenchShortcut.manage.action, BenchShortcut.manage.display),
     ]
 
     // MARK: general

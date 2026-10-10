@@ -129,15 +129,25 @@ target that runs only while it is open. The reason is scope: the menu
 bar app should start, stop and show benches. Not energy: 0.6.1 brought
 the app to under 0.1 percent of a core at rest with these in it.
 
-**0.8, the app for sites.** Restore from the app (backup and drop
-shipped in 0.5.8), pull and lock apply in the app, a first run wizard,
-new bench from a profile.
+**0.8.0, a bench without Terminal, and Linux.** In progress. A first
+run wizard in the app: check the Mac (doctor's new prerequisites), create
+a bench from a built in or team profile, or find and adopt the ones you
+have, with every step streamed (`install --json`, `adopt --json`) and the
+two privileged steps in macOS's own password dialog instead of `sudo`
+in Terminal. Benches become the home of the BenchBar window, Settings
+and About get windows of their own, and the app explains itself where
+you are: a four step walkthrough, why a bench is stopped and what to do
+next, empty lists that say how to fill them. The CLI runs on Linux
+(Ubuntu 24.04, v15-lts) with each bench under `systemd --user`.
 
-**Linux, then Windows through WSL.** A Linux platform layer runs the same
-CLI with each bench under `systemd --user`, uv Python, fnm Node and
-MariaDB and Redis from apt. On Windows the benches run inside WSL, with a
-small `benchbar.exe` shim that forwards to the CLI there and a tray app
-that shows and starts them like the menu bar app does on the Mac.
+**0.8.x, the app for sites.** Restore from the app (backup and drop
+shipped in 0.5.8), and pull and lock apply in the app.
+
+**Windows through WSL.** The benches run inside WSL with the Linux
+platform layer of 0.8.0 (uv Python, fnm Node, MariaDB and Redis from apt,
+each bench under `systemd --user`), with a small `benchbar.exe` shim
+that forwards to the CLI there and a tray app that shows and starts them
+like the menu bar app does on the Mac.
 
 **1.0.** A stable JSON API and runner format, an official Homebrew cask,
 full doctor coverage for v15 and v16. Vouch

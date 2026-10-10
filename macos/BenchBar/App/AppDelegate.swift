@@ -82,6 +82,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.mainWindow.router.scanRequested = true
             self?.mainWindow.show(.discovery)
         }
+        wizard.tour = { [weak self] in self?.mainWindow.router.walkthroughRequested = true }
         wizard.leave = { [weak self] in
             // the first page's Esc: back to the first bench, when there is one
             guard let self, let first = store.benches.first else { return }
@@ -99,7 +100,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mainWindow = MainWindowController { [unowned self] router in
             MainWindowView(store: store, router: router, workbench: workbench, about: about, discovery: discovery,
                            wizard: WizardView(run: wizard, settings: settings, library: library,
-                                              launchAtLogin: launchAtLogin, notifier: notifier))
+                                              launchAtLogin: launchAtLogin, notifier: notifier),
+                           settings: settings)
         }
         // open, close, occlusion and the page: the window's views stay alive
         // when it closes, so the store hears of them from the controller
@@ -285,6 +287,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsWindow.show(.general)
     }
 
+    @objc private func showWalkthroughAction() {
+        mainWindow.router.walkthroughRequested = true
+        openMainWindow()
+    }
+
     @objc private func reportBugAction() {
         aboutWindow.router.bugReportRequested = true
         openAboutAction()
@@ -393,6 +400,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let help = NSMenu(title: "Help")
         help.addItem(withTitle: "BenchBar Documentation", action: #selector(openDocsAction), keyEquivalent: "?").target = self
         help.addItem(withTitle: "Keyboard Shortcuts", action: #selector(showShortcutsAction), keyEquivalent: "").target = self
+        help.addItem(withTitle: "Show Walkthrough", action: #selector(showWalkthroughAction), keyEquivalent: "").target = self
         help.addItem(.separator())
         help.addItem(withTitle: "Release Notes", action: #selector(openReleaseNotesAction), keyEquivalent: "").target = self
         help.addItem(withTitle: "Report a Bug…", action: #selector(reportBugAction), keyEquivalent: "").target = self

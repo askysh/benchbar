@@ -18,6 +18,7 @@ final class AppSettings {
         static let askedForNotifications = "askedForNotifications"
         static let editorBundleID = "editorBundleID"
         static let checkUpdatesAutomatically = "checkUpdatesAutomatically"
+        static let walkthroughSeen = "walkthroughSeen"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -41,6 +42,9 @@ final class AppSettings {
     var editorBundleID: String { didSet { defaults.set(editorBundleID, forKey: Key.editorBundleID) } }
     /// Ask GitHub for the latest release once a day (UpdateOffer).
     var checkUpdatesAutomatically: Bool { didSet { defaults.set(checkUpdatesAutomatically, forKey: Key.checkUpdatesAutomatically) } }
+
+    /// The walkthrough has been shown once on its own (never again after that).
+    var walkthroughSeen: Bool { didSet { defaults.set(walkthroughSeen, forKey: Key.walkthroughSeen) } }
 
     /// The editors that are installed. Launch Services answers from disk, so
     /// it is asked once at launch and again when any app launches or quits
@@ -70,6 +74,7 @@ final class AppSettings {
         askedForNotifications = defaults.bool(forKey: Key.askedForNotifications)
         editorBundleID = defaults.string(forKey: Key.editorBundleID) ?? ""
         checkUpdatesAutomatically = defaults.bool(forKey: Key.checkUpdatesAutomatically)
+        walkthroughSeen = defaults.bool(forKey: Key.walkthroughSeen)
         installedEditors = findEditors()
         let workspace = NSWorkspace.shared.notificationCenter
         for name in [NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification] {

@@ -137,7 +137,7 @@ struct SnapshotTests {
 
     // MARK: the BenchBar window
 
-    private func windowStore() async throws -> BenchStore {
+    func windowStore() async throws -> BenchStore {
         let v15 = "/Users/you/frappe-bench"
         base.cli.answer("list", json: try Fixture.string("list-two-benches"))
         base.cli.answer("status", bench: v15, json: #"{"schema_version":1,"bench":"\#(v15)","state":"running","stop_reason":null,"pid":4242,"started_at":"2026-09-26T01:00:00Z","last_exit_code":null,"web_url":"http://macdev:8000","web_ping_code":200,"scheduler":false}"#)
@@ -150,18 +150,18 @@ struct SnapshotTests {
         return store
     }
 
-    private func window(_ store: BenchStore, _ workbench: Workbench, _ router: WindowRouter,
+    func window(_ store: BenchStore, _ workbench: Workbench, _ router: WindowRouter,
                         about: AboutModel? = nil) -> some View {
         MainWindowView(store: store, router: router, workbench: workbench, about: about ?? AboutModel(store: store),
                        discovery: BenchDiscovery(store: store), wizard: wizardView(store, WizardRun(store: store)))
             .frame(width: 900, height: 620)
     }
 
-    private func library() -> RunnerLibrary {
+    func library() -> RunnerLibrary {
         RunnerLibrary(folder: base.dir.url.appendingPathComponent("Runners"))
     }
 
-    private func wizardView(_ store: BenchStore, _ run: WizardRun) -> WizardView {
+    func wizardView(_ store: BenchStore, _ run: WizardRun) -> WizardView {
         WizardView(run: run, settings: base.settings, library: library(), launchAtLogin: LaunchAtLogin(), notifier: Notifier(settings: base.settings))
     }
 
@@ -371,7 +371,7 @@ struct SnapshotTests {
         try render(UpdateBanner(offer: offer).frame(width: 640).padding(), "update-banner")
     }
 
-    private func render(_ view: some View, _ name: String) throws {
+    func render(_ view: some View, _ name: String) throws {
         for (suffix, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             let look = try #require(NSAppearance(named: appearance))
             let hosting = NSHostingView(rootView: view.padding(0).environment(\.drawsGlass, false))

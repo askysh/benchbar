@@ -33,6 +33,8 @@ final class WindowRouter {
     var bugReportRequested = false
     /// Set by the app menu: the About window checks for updates.
     var updateCheckRequested = false
+    /// Set by Help > Show Walkthrough and the wizard's Take the Tour: the window shows the sheet.
+    var walkthroughRequested = false
     /// Set by Help > Keyboard Shortcuts: General scrolls to that section.
     var scrollTarget: String?
     /// Why a benchbar:// link did nothing (no such bench, which bench):
@@ -59,6 +61,7 @@ struct MainWindowView: View {
     let about: AboutModel
     let discovery: BenchDiscovery
     let wizard: WizardView
+    var settings: AppSettings?
 
     /// The page shown: the router's, else the first bench, else the wizard.
     /// nil while the bench list has not been read yet.
@@ -66,6 +69,14 @@ struct MainWindowView: View {
         if let pane = router.pane { return pane }
         if let first = store.benches.first { return .bench(first.path) }
         return store.hasLoadedBenches || !cliReady ? .wizard : nil
+    }
+
+    /// Once, on its own: the first time the window shows a bench.
+    private func offerWalkthrough() {
+        guard let settings, WalkthroughModel.shouldShowOnItsOwn(
+            seen: settings.walkthroughSeen, benchCount: store.benches.count, onWizard: pane == .wizard || pane == nil) else { return }
+        settings.walkthroughSeen = true
+        router.walkthroughRequested = true
     }
 
     private var cliReady: Bool {
@@ -103,6 +114,11 @@ struct MainWindowView: View {
             // reports the bench whose Overview (with the charts) is shown
             .onChange(of: pane, initial: true) { _, shown in
                 if router.pane == nil, let shown { router.pane = shown }
+                offerWalkthrough()
+            }
+            .onChange(of: store.benches.count) { offerWalkthrough() }
+            .sheet(isPresented: $router.walkthroughRequested) {
+                WalkthroughSheet { router.walkthroughRequested = false }
             }
     }
 
@@ -177,10 +193,10 @@ struct MainSidebar: View {
                                 Text(hint).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                             }
                         }
-                        .help(row.path)
                         Spacer()
                         if row.isBusy { ProgressView().controlSize(.mini) }
                     }
+                    .help([row.path, row.guidance].compactMap { $0 }.joined(separator: "\n"))
                     .tag(SidebarItem.bench(row.path))
                     .contextMenu {
                         if let bench = store.benches.first(where: { $0.path == row.path }) {

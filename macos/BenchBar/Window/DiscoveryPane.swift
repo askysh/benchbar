@@ -65,8 +65,13 @@ struct DiscoveryPane: View {
                 }
             }
             if discovery.hasScanned && discovery.results.isEmpty {
-                ContentUnavailableView("No benches found", systemImage: "folder.badge.questionmark",
-                    description: Text("Choose a folder containing a bench or its parent projects. Hidden folders, dependencies, tests and symlinks are skipped."))
+                ContentUnavailableView {
+                    Label("No benches found", systemImage: "folder.badge.questionmark")
+                } description: {
+                    Text("Choose a folder containing a bench or its parent projects. Hidden folders, dependencies, tests and symlinks are skipped.")
+                } actions: {
+                    Button("Choose Another Folder…", action: chooseFolder)
+                }
             } else if !discovery.results.isEmpty {
                 HStack {
                     Text("\(discovery.results.count) benches found").font(.headline)

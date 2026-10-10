@@ -36,6 +36,9 @@ struct BenchPage: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(bench.name).font(.title2.weight(.semibold))
                 Text(bench.path).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                if let guidance = bench.guidance {
+                    GuidanceLine(guidance: guidance, enabled: guidance.action == .start ? store.controls(for: bench).canStart : store.busyBench == nil) { act($0) }
+                }
             }
             Spacer()
             if let activity = bench.activity {
@@ -44,6 +47,23 @@ struct BenchPage: View {
             }
             StatePill(state: bench.state, text: BenchText.headline(bench.state, reason: bench.machine.stopReason,
                                                                     exitCode: bench.status?.lastExitCode))
+        }
+    }
+}
+
+extension BenchPage {
+    /// The guidance line's action: the same ones the buttons and the popover have.
+    fileprivate func act(_ action: BenchGuidance.Action) {
+        switch action {
+        case .start: Task { await store.perform(.up, on: bench) }
+        case .viewHealth: router.benchTab = .health
+        case .repair:
+            router.repairRequested = true
+            router.benchTab = .health
+        case .reviewPortConflict, .setUpManagement:
+            router.startAfterSetup = action == .reviewPortConflict
+            router.setupRequest = bench.path
+            router.benchTab = .overview
         }
     }
 }
@@ -244,14 +264,22 @@ struct BenchSites: View {
                 Text("The default site is the one benchup waits for, the runner pings and ⌘O opens.")
                     .font(.caption).foregroundStyle(.secondary)
             }
+            if rows.count == 1 {
+                Section {
+                    EmptyStateBlock(symbol: "globe", title: "One site so far",
+                                    line: "A second site shares this bench and its MariaDB, with only Frappe installed.",
+                                    actions: [("Add Site…", { addingSite = true })], disabled: busy)
+                }
+            }
             if SiteRow.hostsFix(rows, bench: bench.path) != nil {
                 Section {
                     LabeledContent {
                         Button("Add Hosts Lines…", action: openHosts)
                             .disabled(busy)
+                            .help("Asks for your password")
                     } label: {
                         Text("Some site names need a hosts line")
-                        Text("A local /etc/hosts entry makes the name open in your browser. macOS asks for your password.")
+                        Text("A local /etc/hosts entry makes the name open in your browser. Asks for your password.")
                     }
                 } header: {
                     Text("Hosts")

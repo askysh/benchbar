@@ -24,6 +24,8 @@ final class WizardRun {
     /// Esc on the first page.
     @ObservationIgnored var leave: () -> Void = {}
     /// The wizard is over; the path is the new bench, when there is one.
+    /// Done page: Take the Tour.
+    @ObservationIgnored var tour: () -> Void = {}
     @ObservationIgnored var finished: (String?) -> Void = { _ in }
     @ObservationIgnored var openURL: (String) -> Void = { Workspace.open($0) }
     /// `xcode-select --install`, the one command that is not benchbar.

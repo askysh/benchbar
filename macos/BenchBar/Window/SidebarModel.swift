@@ -18,6 +18,8 @@ nonisolated struct SidebarModel: Equatable, Sendable {
         var state: BenchState
         var isBusy: Bool
         var sites: [Site]
+        /// Why it is not running and what to do (BenchGuidance), for the tooltip.
+        var guidance: String?
         var id: String { path }
     }
 
@@ -28,6 +30,7 @@ nonisolated struct SidebarModel: Equatable, Sendable {
         var state: BenchState
         var isBusy: Bool
         var sites: [Site]
+        var guidance: BenchGuidance? = nil
     }
 
     var benches: [Row]
@@ -37,7 +40,8 @@ nonisolated struct SidebarModel: Equatable, Sendable {
             let twins = inputs.filter { $0.name == input.name }.count > 1
             return Row(path: input.path, name: input.name,
                        hint: twins ? URL(fileURLWithPath: input.path).deletingLastPathComponent().lastPathComponent : nil,
-                       state: input.state, isBusy: input.isBusy, sites: input.sites)
+                       state: input.state, isBusy: input.isBusy, sites: input.sites,
+                       guidance: input.guidance.map { [$0.reason, $0.action.map { "Next: \($0.title)" }].compactMap { $0 }.joined(separator: " ") })
         }
     }
 
@@ -60,7 +64,7 @@ extension SidebarModel {
     @MainActor init(benches: [BenchModel]) {
         self.init(benches.map { bench in
             Input(path: bench.path, name: bench.name, state: bench.state, isBusy: bench.isBusy,
-                  sites: bench.siteRows.map { Site(name: $0.name, isDefault: $0.isDefault) })
+                  sites: bench.siteRows.map { Site(name: $0.name, isDefault: $0.isDefault) }, guidance: bench.guidance)
         })
     }
 }

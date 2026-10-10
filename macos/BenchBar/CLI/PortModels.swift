@@ -43,3 +43,24 @@ nonisolated struct PortPlan: Codable, Sendable {
         }
     }
 }
+
+/// What the setup plan and its output say about the Mac's password.
+nonisolated enum PortSetupHints {
+    /// The plan adds a hosts line, which asks for the password.
+    static func asksForPassword(setupPlan: String?) -> Bool {
+        setupPlan?.localizedCaseInsensitiveContains("hosts") == true
+    }
+
+    /// A [WARN] line says the password dialog was cancelled or a step skipped.
+    static func dialogCancelled(output: String) -> Bool {
+        output.split(separator: "\n").contains { line in
+            let l = line.trimmingCharacters(in: .whitespaces)
+            return l.hasPrefix("[WARN]") && (l.localizedCaseInsensitiveContains("cancel") || l.localizedCaseInsensitiveContains("skipped"))
+        }
+    }
+
+    /// The commands to run by hand for the benches whose plan adds hosts lines.
+    static func fallbacks(entries: [PortPlan.Entry]) -> [String] {
+        entries.filter { asksForPassword(setupPlan: $0.setupPlan) }.map { BenchText.command("site hosts", bench: $0.path) }
+    }
+}

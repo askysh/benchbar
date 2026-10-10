@@ -216,6 +216,9 @@ struct DonePage: View {
                     CopyableCommand(command: Self.helperCommand, copyLabel: "Copy the command that loads the shell helpers")
                 }
             }
+        } leading: {
+            Button("Take the Tour") { run.tour() }
+                .help("Four short steps: the runner, the popover, the window and Terminal")
         } actions: {
             WizardBackButton(run: run)
             WizardPrimaryButton(run: run)

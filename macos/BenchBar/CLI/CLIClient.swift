@@ -68,7 +68,7 @@ nonisolated struct CLIClient: Sendable {
         // it alongside the failure rather than losing completed-entry details.
         try await runner.run(executable: executable,
             arguments: ["ports", "apply", plan.token, "--yes", "--plain", "--"] + plan.entries.map(\.path),
-            environment: environment(), timeout: Timeout.long)
+            environment: environment().merging(Self.guiSudo) { _, new in new }, timeout: Timeout.long)
     }
 
     func setPortMode(_ mode: PortMode, bench: String) async throws(CLIError) {
