@@ -7,6 +7,26 @@ One line per non obvious choice: the decision, then the reason. The
 decisions of the app work live in `macos/DECISIONS.md`. The 0.5.5, 0.5 and 0.4
 runs come first, the 0.3 easy install run follows.
 
+## 0.8: the install stream and the privilege path
+
+- `install --json` and `adopt --json` share one emitter in `ui.sh` (`fl_jsonl`, fd 3) instead of growing `pull`'s: the phase scripts are child processes and need the same lines, and they inherit fd 3 and `FL_JSONL` for free. `pull` keeps its own emitter.
+- The numbered steps announce themselves from `fl_step_begin` and `fl_step_end` (ids in `FL_STEP_IDS`), so the terminal line and the stream line come from one call and cannot drift; the message of a failed, skipped or warning step is the last `[FAIL]` or `[WARN]` line the step wrote to the log.
+- Sections of the phase scripts are the stream's nested steps: `fl_section` ends the one before (warning if a `[WARN]` or `[FAIL]` was printed in it) and an EXIT trap closes the last. Only a process with `FL_JSONL_PARENT` set does this, and benchbar sets it for the phase script's environment only, so benchbar's own `fl_section` calls stay out of the stream.
+- The repair engine inside install emits its actions as steps with parent `service` and no number; inside adopt as numbered steps. Its own `plan` line is never emitted there (a plan hook is: adopt's plan is built once the engine knows its actions).
+- The stream starts before the log and the lock are taken, and `fl_cleanup` sends `done` after the lock is released, so a refusal, a busy lock, a signal or a failure all end in exactly one `done`, and a reader that starts the next command on `done` finds the lock free.
+- `--json` without `--yes` (or `--dry-run`) is refused before anything is written, and so is a missing `ADMIN_PASSWORD` for a new site: nothing on the stream can answer a question, and the phases would otherwise stop on one.
+- A dry run with `--json` gets a log (no other dry run does): the contract puts the human plan there. The plan line turns every later event off (`FL_JSONL_QUIET`), so a dry run streams `plan` and `done` only.
+- Commands run by `fl_run_long` and the setup Redis get no fd 3: a program must not write into the stream, and a daemon must not hold the pipe open and keep the app waiting for the end of the stream.
+- The port block of a new bench is chosen before the plan (`fl_install_port_plan`) and used by step 2 as it is, so the plan's `port_offset` and `web_url` are what the run uses; the human note about taken default ports still prints where it did.
+- `BENCHBAR_SUDO=gui` runs each root step as one script through `osascript ... with administrator privileges`, handed to AppleScript as an argument (never inside a script string), so only shell quoting matters (`fl_sq`). Root scripts name every tool by absolute path and keep the safety properties of the terminal path: a fresh root-only folder in /tmp for the package, the hash of the copy against the pin, the awk rewrite with the "address names" and line count checks, one `mv`.
+- Rosetta 2 is installed inside the package's root script when it is missing, so the step stays one dialog. The dialog's title is the step's name.
+- A cancelled dialog (`(-128)` in osascript's error) and a failed one are remembered by title for the run: the service step's engine would otherwise plan `hosts_entry` and `wkhtmltopdf_install` again and show a second dialog. Their nested events are left out of the stream for the same reason.
+- `fl_sudo_begin` and `fl_sudo_drop` do nothing in gui mode (no `sudo -v`, no keepalive): there is no cached credential to keep or to drop, and the up front prompt is skipped.
+- `ports apply` batches the hosts lines of all benches into one dialog before the first adopt; a cancelled dialog makes each bench's `hosts_entry` skip with its `site hosts --bench-dir` command instead of asking again.
+- The tests' fake osascript runs the command line with `/bin/sh` as the test user and maps the absolute tool paths to the mocks: the production script has no environment hook that would let a variable redirect what root runs.
+- `doctor --prerequisites` calls no `fl_context_init` and no `fl_require_bench`: it must work before a bench exists. On Linux it reports `disk_free`, `bench_folder` and `default_ports` only. In a bench's `doctor` the prerequisites are a separate array and group, not counted in the summary or the exit code.
+- `fl_sq` quotes with a variable holding the quote (`${1//$q/$q\\$q$q}`): the form with backslash escaped quotes in the replacement quoted wrongly under bash 3.2 when the root scripts went through it.
+
 ## 0.7.3: ownership
 
 - One ownership test, `fl_pid_is_bench_own_strict`, decides every kill of a process found by its working folder (honcho, socketio, port listeners) in the CLI and the runner: lsof must report the folder as the bench or a folder inside it. An unreadable folder is "not ours", not "just exited": the old lenient reading let `down` signal another bench's honcho when lsof lagged, and a leftover that really is ours costs nothing when it is left for the next cleanup. The one other kill is the `pkill` of serve, worker and schedule by their command line, which starts with the bench's own absolute `env/bin/python` path: the path is the proof there.

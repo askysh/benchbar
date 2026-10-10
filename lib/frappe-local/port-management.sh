@@ -176,6 +176,22 @@ fl_pm_check() {
   PM_TAKEN=""; PM_SOFT=""; fl_pm_known_reservations
   PM_CONFLICTS="$(fl_pm_conflicts "$(fl_pm_current)" | awk '!seen[$0]++')"
 }
+# fl_pm_hosts_batch: the hosts lines every selected bench's site still lacks,
+# in one password dialog (BENCHBAR_SUDO=gui, fl_hosts_add_gui)
+fl_pm_hosts_batch() {
+  local d n names=() seen=" "
+  for d in "${PM_PATHS[@]}"; do
+    fl_bench_load "$d"; n="$FL_SITE"
+    fl_site_name_ok "$n" || continue
+    fl_hosts_has_name "$n" && continue
+    case "$seen" in *" $n "*) continue ;; esac
+    seen="${seen}${n} "; names+=("$n")
+  done
+  [[ "${#names[@]}" -gt 0 ]] || return 0
+  FL_STEP_RESULT="done"
+  fl_hosts_add_gui "${names[@]}" || fl_warn "the /etc/hosts lines could not be added now; each bench's setup tries again"
+  return 0
+}
 fl_cmd_ports() {
   local sub="${1:-}" token mode i d current offset running
   [[ "$#" == 0 ]] || shift
@@ -223,6 +239,9 @@ fl_cmd_ports() {
         fl_bench_load "$d"; fl_context_init "$d" "" ""
         [[ -n "$FL_HONCHO" ]] || { fl_fail "Honcho is missing for $d. Install it before setting up management; nothing was changed."; return 1; }
       done
+      # BENCHBAR_SUDO=gui: the hosts lines of every bench in one dialog; each
+      # adopt then finds its line, or (cancelled) skips the step with its command
+      if fl_sudo_gui && [[ "${FL_DRY_RUN:-0}" != 1 ]]; then fl_pm_hosts_batch; fi
       for ((i=0; i<${#PM_PATHS[@]}; i++)); do
         d="${PM_PATHS[$i]}"; fl_bench_load "$d"; current="$(fl_pm_current)"; offset=""
         if [[ "$current" != "${PM_TARGETS[$i]}" ]]; then read -r offset _ <<<"${PM_TARGETS[$i]}"; offset=$((offset - FL_PORT_BASE_WEB)); fi

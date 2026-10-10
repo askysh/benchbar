@@ -380,7 +380,17 @@ user confirmed), each of the two runs as one script through
 password dialog with the step's name, benchbar never sees the password,
 and there is no cached credential afterwards. At most two dialogs per
 run. A cancelled dialog makes that step `skipped` with its `command`,
-and the run goes on.
+and the run goes on; a step that failed behind its dialog is not asked
+again by a later pass of the same run. Only the value `gui` switches the
+mode, on macOS (on Linux it is ignored).
+
+The commands that read `BENCHBAR_SUDO`: `install`, `adopt`, `repair` (the
+`hosts_entry` and `wkhtmltopdf_install` actions), `site hosts`, `site add`,
+`ports setup` and `ports apply`. `ports apply` puts the missing hosts lines
+of every bench of the batch in one dialog (titled `Add 127.0.0.1 lines for N
+sites to /etc/hosts`); if it is cancelled, each bench's setup prints
+`benchbar site hosts --bench-dir PATH` as its manual step and the run goes
+on. `site drop` still needs a terminal for the line it removes.
 
 ## `benchbar adopt PATH --json`
 
@@ -419,7 +429,9 @@ exist.
 | `default_ports` | ports 8000, 9000, 11000 and 13000 are free; the check carries `port_offset`, the block `install` would give a new bench | `ok`, `warn` (taken: the new bench gets `port_offset`) |
 
 Every object has the fields of a doctor check (`id`, `label`, `level`,
-`message`, `fix_command`). Exit 1 when one is `fail`. `benchbar doctor
+`message`, `fix_command`). On Linux only `disk_free`, `bench_folder` and
+`default_ports` are reported: the others are Mac only and would be
+`ok` for something that cannot exist there. Exit 1 when one is `fail`. `benchbar doctor
 --prerequisites` prints the same list for a person, and a plain `doctor`
 prints it as its first group; `doctor --json` of a bench carries the same
 array as `prerequisites` next to `checks` (it does not count in
@@ -992,7 +1004,10 @@ detected site/profile and reject `--site` or `--profile` overrides.
 a changed token or any blocked entry fails before adoption. It emits human
 progress, including completed paths and any failing path, and exits nonzero on
 failure. Earlier completed entries remain configured. A new preview is required
-before retrying. Apply does not start services. Socket availability cannot be
+before retrying. With `BENCHBAR_SUDO=gui` it asks for the `/etc/hosts`
+lines of all benches in one macOS password dialog, as `adopt` does for one
+(see [the privileged steps](#the-privileged-steps-and-benchbar_sudogui)).
+Apply does not start services. Socket availability cannot be
 reserved against unrelated programs; start checks again before launching.
 
 `ports check --json --bench-dir PATH` returns `schema_version: 1`, `conflicts`

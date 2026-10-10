@@ -1,3 +1,7 @@
 #!/usr/bin/env bash
-[[ "${1:-}" == "-p" ]] && printf '/Library/Developer/CommandLineTools\n'
+# xcode-select mock: MOCK_XCODE_DIR is the folder "-p" names, MOCK_XCODE_NONE=1 says there is none
+if [[ "${1:-}" == "-p" ]]; then
+  [[ -z "${MOCK_XCODE_NONE:-}" ]] || { echo "xcode-select: error: unable to get active developer directory" >&2; exit 2; }
+  printf '%s\n' "${MOCK_XCODE_DIR:-/Library/Developer/CommandLineTools}"
+fi
 exit 0

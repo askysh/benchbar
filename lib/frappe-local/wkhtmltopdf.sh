@@ -209,7 +209,8 @@ ROOT
 
 # the commands a person runs by hand when the dialog was cancelled
 fl_wkhtmltopdf_manual_command() {
-  local cmd="sudo installer -pkg $(fl_sq "$FL_WKHTML_PKG") -target /"
+  local cmd
+  cmd="sudo installer -pkg $(fl_sq "$FL_WKHTML_PKG") -target /"
   [[ "$FL_WKHTML_NEED_ROSETTA" != "1" ]] || cmd="softwareupdate --install-rosetta --agree-to-license && ${cmd}"
   printf '%s' "$cmd"
 }
@@ -234,7 +235,7 @@ fl_wkhtmltopdf_install_gui() {
       esac
       return 1 ;;
   esac
-  [[ "$FL_WKHTML_NEED_ROSETTA" != "1" ]] || { fl_rosetta_installed && fl_ok "Rosetta 2 installed" || fl_warn "Rosetta 2 still not detected"; }
+  [[ "$FL_WKHTML_NEED_ROSETTA" != "1" ]] || { if fl_rosetta_installed; then fl_ok "Rosetta 2 installed"; else fl_warn "Rosetta 2 still not detected"; fi; }
   FL_WKHTML_NEED_ROSETTA=0
   hash -r 2>/dev/null || true
   case "$(fl_wkhtmltopdf_state)" in

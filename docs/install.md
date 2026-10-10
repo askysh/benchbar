@@ -27,7 +27,12 @@ Homebrew trusts a third party tap only for the names you type, so the
 cask alone cannot pull in its formula. `benchbar install` sets up the
 bench, the site and the background service as in the
 [Quick start](quick-start.md); with a bench you already have, run
-`benchbar adopt` instead.
+`benchbar adopt` instead. To check a Mac before installing, without a
+bench, run `benchbar doctor --prerequisites` (Apple Silicon, macOS 14,
+Command Line Tools, Homebrew, free disk, the bench folder, cleanup tools
+and the default ports). The BenchBar app drives `install` and `adopt`
+through `--json --yes`, which prints one JSON event per line; the format
+is in the [JSON API](json-schema.md).
 
 The cask needs Apple Silicon and macOS Sonoma or later. For the CLI
 alone, on an Intel Mac too:

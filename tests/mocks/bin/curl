@@ -45,5 +45,7 @@ esac
 if [[ -n "$out" ]]; then
   [[ -f "${MOCK_STATE:-/nonexistent}/download_fail" ]] && { echo "curl: (22) The requested URL returned error: 404" >&2; exit 22; }
   if [[ -f "${MOCK_STATE:-/nonexistent}/download_payload" ]]; then cp "${MOCK_STATE}/download_payload" "$out"; else printf 'stub download\n' >"$out"; fi
+  # MOCK_DOWNLOAD_SLEEP=N: a download that takes N seconds (progress lines)
+  [[ -z "${MOCK_DOWNLOAD_SLEEP:-}" ]] || sleep "$MOCK_DOWNLOAD_SLEEP"
 fi
 exit 0

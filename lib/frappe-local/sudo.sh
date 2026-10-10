@@ -117,12 +117,15 @@ fl_sudo_drop() {
 # script names every tool by its absolute path. benchbar never sees the
 # password and there is no cached credential afterwards.
 FL_ROOT_CANCELLED=""
+FL_ROOT_FAILED=""
 FL_ROOT_OUTPUT=""
 fl_root_was_cancelled() { case " $FL_ROOT_CANCELLED " in *" ${1// /_} "*) return 0 ;; esac; return 1; }
 fl_root_run() {
   local reason="$1" script="$2" cmdline arg out err code=0
   shift 2
   if fl_root_was_cancelled "$reason"; then FL_ROOT_OUTPUT="the password dialog was cancelled earlier in this run"; return 2; fi
+  # a step that failed behind its dialog is not tried again by a later pass (the service step)
+  case " $FL_ROOT_FAILED " in *" ${reason// /_} "*) return 1 ;; esac
   cmdline="/bin/bash -c $(fl_sq "$script") benchbar-root"
   for arg in "$@"; do cmdline="${cmdline} $(fl_sq "$arg")"; done
   out="$(mktemp "${TMPDIR:-/tmp}/benchbar-root.XXXXXX")"
@@ -137,5 +140,6 @@ fl_root_run() {
   case "$FL_ROOT_OUTPUT" in
     *"(-128)"*) FL_ROOT_CANCELLED="${FL_ROOT_CANCELLED} ${reason// /_}"; return 2 ;;
   esac
+  FL_ROOT_FAILED="${FL_ROOT_FAILED} ${reason// /_}"
   return 1
 }

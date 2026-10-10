@@ -59,7 +59,10 @@ A fresh MariaDB gets a generated root password, kept in your Keychain
 own. When MariaDB already has a root password that the Keychain does
 not know, `install` asks for it once and saves it.
 It asks for `sudo` once, only when a step ahead needs it: the
-wkhtmltopdf package and the `/etc/hosts` line.
+wkhtmltopdf package and the `/etc/hosts` line. Started by the BenchBar
+app (`BENCHBAR_SUDO=gui`), each of the two shows macOS's own password
+dialog instead; cancel one and that step is skipped, with the command to
+run it by hand, and the install goes on.
 
 The first run downloads a lot and takes a while. Each step ends as
 `done`, `unchanged` or `skipped`; a `failed` step stops the run, and

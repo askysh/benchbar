@@ -430,9 +430,8 @@ fl_jsonl_start() {
   FL_DRY_RUN=0 fl_log_init "${FL_STATE_DIR}/logs"
   exec 1>>"${FL_LOG_FILE:-/dev/null}" 2>&1 0</dev/null
   FL_PLAIN=1; fl_ui_init
-  # a dry run streams the plan and done only; the phase scripts it runs
-  # (with --dry-run) stay quiet
-  if [[ "$FL_DRY_RUN" == "1" ]]; then FL_JSONL_QUIET=1; export FL_JSONL_QUIET; fi
+  # a dry run streams the plan and done only: the plan line turns the rest
+  # off (FL_JSONL_QUIET), the phase scripts it runs inherit that
 }
 
 # fl_jsonl_on_exit CODE: the done line, once, however the run ends
@@ -448,7 +447,7 @@ fl_jsonl_on_exit() {
     extra=",\"error\":$(fl_json_str "${FL_DIE_MESSAGE:-the command stopped before it started; see the log}")"
   fi
   [[ "${FL_DRY_RUN:-0}" != "1" ]] || extra="${extra},\"dry_run\":true"
-  fl_jsonl done ",\"exit\":${code},\"bench\":$(fl_json_str "${FL_JSONL_BENCH:-${FL_BENCH_DIR:-}}"),\"site\":$(fl_json_str "${FL_JSONL_SITE:-${FL_SITE:-}}"),\"url\":${url},\"skipped\":[${FL_JSONL_SKIPPED}],\"fix\":${fix},\"log\":$(fl_json_str "${FL_LOG_FILE:-}")${extra}"
+  fl_jsonl "done" ",\"exit\":${code},\"bench\":$(fl_json_str "${FL_JSONL_BENCH:-${FL_BENCH_DIR:-}}"),\"site\":$(fl_json_str "${FL_JSONL_SITE:-${FL_SITE:-}}"),\"url\":${url},\"skipped\":[${FL_JSONL_SKIPPED}],\"fix\":${fix},\"log\":$(fl_json_str "${FL_LOG_FILE:-}")${extra}"
 }
 
 fl_next_steps_box() {
@@ -520,7 +519,7 @@ fl_install_privileged_steps() {
     fl_jsonl_step "" hosts_entry "" "$(fl_install_hosts_name)" running
   fi
   code=0
-  FL_STEP_RESULT=done
+  FL_STEP_RESULT="done"
   FL_SKIP_COMMAND=""
   act_hosts_entry || { code=$?; fl_warn "the /etc/hosts line could not be added now; run '${FL_SELF} repair' later, it asks for sudo again"; }
   if [[ "$hosts_before" == "0" ]]; then
@@ -538,7 +537,7 @@ fl_install_hosts_name() { fl_hosts_gui_reason "$FL_SITE"; }
 # the stream. CODE 0 done, 2 skipped (with the command to run by hand), else
 # failed; the message is the CLI's own [WARN] or [FAIL] line.
 fl_install_priv_end() {
-  local id="$1" name="$2" code="$3" from="$4" start="$5" status=done msg="" cmd=""
+  local id="$1" name="$2" code="$3" from="$4" start="$5" status="done" msg="" cmd=""
   case "$code" in
     0) ;;
     2) status=skipped; cmd="$FL_SKIP_COMMAND" ;;
@@ -596,21 +595,21 @@ fl_install_port_plan() {
 
 # fl_install_plan_json BUNDLE: the plan line of install --json
 fl_install_plan_json() {
-  local pdf_run=0 hosts_run=0 steps="" mode=terminal web_port team="null" label i=0 id sudo n
+  local pdf_run=0 hosts_run=0 pl_steps="" mode=terminal web_port team="null" label i=0 id sudo n
   # the plan describes the --yes run that follows a dry run
   if [[ "$(fl_wkhtmltopdf_state)" != "patched" ]] && FL_ASSUME_YES=1 fl_wkhtmltopdf_will_install; then pdf_run=1; fi
-  if ! fl_hosts_has_site && fl_site_name_ok "$FL_SITE"; then hosts_run=1; fi
+  if ! fl_is_linux && ! fl_hosts_has_site && fl_site_name_ok "$FL_SITE"; then hosts_run=1; fi
   fl_sudo_gui && mode=gui
   web_port="${INSTALL_PORT_BLOCK%% *}"; [[ -n "$web_port" ]] || web_port="$FL_WEB_PORT"
   [[ -z "$FL_TEAM_PROFILE" ]] || team="$(fl_json_str "$FL_TEAM_PROFILE")"
-  steps="{\"n\":null,\"id\":\"wkhtmltopdf_install\",\"name\":$(fl_json_str "$FL_INSTALL_PDF_NAME"),\"sudo\":true,\"will_run\":$(fl_json_bool "$pdf_run")}"
-  steps="${steps},{\"n\":null,\"id\":\"hosts_entry\",\"name\":$(fl_json_str "$(fl_install_hosts_name)"),\"sudo\":true,\"will_run\":$(fl_json_bool "$hosts_run")}"
+  pl_steps="{\"n\":null,\"id\":\"wkhtmltopdf_install\",\"name\":$(fl_json_str "$FL_INSTALL_PDF_NAME"),\"sudo\":true,\"will_run\":$(fl_json_bool "$pdf_run")}"
+  pl_steps="${pl_steps},{\"n\":null,\"id\":\"hosts_entry\",\"name\":$(fl_json_str "$(fl_install_hosts_name)"),\"sudo\":true,\"will_run\":$(fl_json_bool "$hosts_run")}"
   for label in "${FL_STEP_LABELS[@]}"; do
     id="${FL_STEP_IDS[$i]}"; i=$((i + 1)); n="$i"
-    steps="${steps},{\"n\":${n},\"id\":\"${id}\",\"name\":$(fl_json_str "$label"),\"sudo\":false,\"will_run\":true}"
+    pl_steps="${pl_steps},{\"n\":${n},\"id\":\"${id}\",\"name\":$(fl_json_str "$label"),\"sudo\":false,\"will_run\":true}"
   done
   FL_JSONL_URL="http://${FL_SITE}:${web_port}"
-  fl_jsonl plan ",\"bench\":$(fl_json_str "$FL_BENCH_DIR"),\"site\":$(fl_json_str "$FL_SITE"),\"profile\":$(fl_json_str "$FL_PROFILE"),\"team_profile\":${team},\"bundle\":$(fl_json_str "$1"),\"port_offset\":$(fl_json_num "$INSTALL_PORT_OFFSET"),\"web_url\":$(fl_json_str "$FL_JSONL_URL"),\"dry_run\":$(fl_json_bool "$FL_DRY_RUN"),\"sudo_mode\":\"${mode}\",\"steps\":[${steps}],\"log\":$(fl_json_str "${FL_LOG_FILE:-}")"
+  fl_jsonl plan ",\"bench\":$(fl_json_str "$FL_BENCH_DIR"),\"site\":$(fl_json_str "$FL_SITE"),\"profile\":$(fl_json_str "$FL_PROFILE"),\"team_profile\":${team},\"bundle\":$(fl_json_str "$1"),\"port_offset\":$(fl_json_num "$INSTALL_PORT_OFFSET"),\"web_url\":$(fl_json_str "$FL_JSONL_URL"),\"dry_run\":$(fl_json_bool "$FL_DRY_RUN"),\"sudo_mode\":\"${mode}\",\"steps\":[${pl_steps}],\"log\":$(fl_json_str "${FL_LOG_FILE:-}")"
   FL_JSONL_PLAN_SENT=1
   [[ "$FL_DRY_RUN" != "1" ]] || FL_JSONL_QUIET=1
   export FL_JSONL_QUIET
@@ -797,15 +796,15 @@ cmd_service() {
 # adopt --json: the plan line, called by the repair engine once it knows the
 # actions (FL_ENGINE_PLAN_HOOK). Its steps are the actions, numbered from 1.
 fl_adopt_plan_json() {
-  local a n=0 steps="" move=false off mode=terminal
+  local a n=0 pl_steps="" move=false off mode=terminal
   for a in $1; do
     n=$((n + 1))
-    steps="${steps}${steps:+,}{\"n\":${n},\"id\":\"${a}\",\"name\":$(fl_json_str "$(fl_action_label "$a")"),\"sudo\":$(fl_json_bool "$(fl_action_needs_sudo "$a" && printf 1 || printf 0)"),\"will_run\":true}"
+    pl_steps="${pl_steps}${pl_steps:+,}{\"n\":${n},\"id\":\"${a}\",\"name\":$(fl_json_str "$(fl_action_label "$a")"),\"sudo\":$(fl_json_bool "$(fl_action_needs_sudo "$a" && printf 1 || printf 0)"),\"will_run\":true}"
   done
   case " $1 " in *" port_block "*) move=true ;; esac
   off="${FL_PORT_TARGET:-$((FL_WEB_PORT - FL_PORT_BASE_WEB))}"
   fl_sudo_gui && mode=gui
-  fl_jsonl plan ",\"bench\":$(fl_json_str "$FL_BENCH_DIR"),\"site\":$(fl_json_str "$FL_SITE"),\"profile\":$(fl_json_str "$FL_PROFILE"),\"port_offset\":$(fl_json_num "$off"),\"ports_move\":${move},\"dry_run\":$(fl_json_bool "$FL_DRY_RUN"),\"sudo_mode\":\"${mode}\",\"steps\":[${steps}],\"log\":$(fl_json_str "${FL_LOG_FILE:-}")"
+  fl_jsonl plan ",\"bench\":$(fl_json_str "$FL_BENCH_DIR"),\"site\":$(fl_json_str "$FL_SITE"),\"profile\":$(fl_json_str "$FL_PROFILE"),\"port_offset\":$(fl_json_num "$off"),\"ports_move\":${move},\"dry_run\":$(fl_json_bool "$FL_DRY_RUN"),\"sudo_mode\":\"${mode}\",\"steps\":[${pl_steps}],\"log\":$(fl_json_str "${FL_LOG_FILE:-}")"
   FL_JSONL_PLAN_SENT=1
   [[ "$FL_DRY_RUN" != "1" ]] || FL_JSONL_QUIET=1
   export FL_JSONL_QUIET

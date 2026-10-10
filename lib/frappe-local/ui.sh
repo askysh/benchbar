@@ -130,7 +130,7 @@ fl_strip_ansi() {
 }
 
 # a word for a POSIX shell, in single quotes
-fl_sq() { printf "'%s'" "${1//\'/\'\\\'\'}"; }
+fl_sq() { local q="'"; printf "'%s'" "${1//$q/$q\\$q$q}"; }
 
 # ---------------------------------------------------------------- JSON
 
@@ -287,7 +287,7 @@ fl_jsonl_progress() {
   [[ "$FL_JSONL" == "1" ]] || return 0
   local bytes=""
   if [[ -n "${FL_PROGRESS_FILE:-}" && -f "$FL_PROGRESS_FILE" ]]; then
-    bytes="$(stat -f %z "$FL_PROGRESS_FILE" 2>/dev/null || stat -c %s "$FL_PROGRESS_FILE" 2>/dev/null || true)"
+    bytes="$(stat -c %s "$FL_PROGRESS_FILE" 2>/dev/null || stat -f %z "$FL_PROGRESS_FILE" 2>/dev/null || true)"
   fi
   fl_jsonl progress ",\"step\":$(fl_json_str "$FL_JSONL_CUR"),\"label\":$(fl_json_str "$1"),\"elapsed\":$2,\"bytes\":$(fl_json_num "$bytes"),\"total\":null"
 }
@@ -307,7 +307,7 @@ fl_jsonl_section_end() {
 fl_jsonl_section_begin() {
   [[ "$FL_JSONL" == "1" && -n "$FL_JSONL_PARENT" ]] || return 0
   local id
-  if [[ "$FL_JSONL_SEC_WARN" == "1" ]]; then fl_jsonl_section_end warning; else fl_jsonl_section_end done; fi
+  if [[ "$FL_JSONL_SEC_WARN" == "1" ]]; then fl_jsonl_section_end warning; else fl_jsonl_section_end "done"; fi
   id="$(printf '%s' "$1" | tr '[:upper:] ' '[:lower:]_')"
   FL_JSONL_SEC_ID="$id"; FL_JSONL_SEC_NAME="$1"; FL_JSONL_SEC_START="$SECONDS"; FL_JSONL_SEC_WARN=0
   fl_log_lines_v FL_JSONL_SEC_LOG
@@ -319,7 +319,7 @@ fl_jsonl_section_begin() {
 fl_jsonl_section_exit() {
   [[ -n "$FL_JSONL_SEC_ID" ]] || return 0
   case "$1" in
-    0) fl_jsonl_section_end done ;;
+    0) fl_jsonl_section_end "done" ;;
     2) fl_jsonl_section_end warning ;;
     *) fl_jsonl_section_end failed ;;
   esac

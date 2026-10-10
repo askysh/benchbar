@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 case "${1:-}" in
-  -productVersion|--productVersion) printf '15.1\n' ;;
+  -productVersion|--productVersion) printf '%s\n' "${MOCK_SW_VERS:-15.1}" ;;
   -productName|--productName) printf 'macOS\n' ;;
   *) printf 'ProductName:\tmacOS\nProductVersion:\t15.1\nBuildVersion:\t24B83\n' ;;
 esac

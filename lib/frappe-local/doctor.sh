@@ -86,6 +86,7 @@ FL_P_EXTRA=()
 FL_P_RAN=0
 # where Homebrew lives when it is not on PATH yet, and how to install it
 FL_BREW_ALT_BIN="${FL_BREW_ALT_BIN:-/opt/homebrew/bin/brew}"
+# shellcheck disable=SC2016  # the command is for a person to run
 FL_BREW_INSTALL_CMD='/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
 # free space (GB) from which the disk check is ok and from which it only warns
 FL_PREREQ_DISK_OK_GB="${FL_PREREQ_DISK_OK_GB:-20}"
@@ -123,23 +124,27 @@ fl_prereq_run() {
   local arch os major clt kb gb level dir p offset conflicts brew_bin
   FL_P_IDS=(); FL_P_LEVEL=(); FL_P_MSG=(); FL_P_FIX=(); FL_P_EXTRA=(); FL_P_RAN=1
 
-  arch="${FL_ARCH:-$(uname -m)}"
-  if [[ "$arch" == "arm64" ]]; then fl_prereq_add apple_silicon ok "arm64"
-  else fl_prereq_add apple_silicon fail "this Mac is ${arch}; BenchBar and its Homebrew setup are for Apple Silicon"; fi
+  # the Mac only checks stay out on Linux instead of reporting what cannot exist
+  if ! fl_is_linux; then
+    arch="${FL_ARCH:-$(uname -m)}"
+    if [[ "$arch" == "arm64" ]]; then fl_prereq_add apple_silicon ok "arm64"
+    else fl_prereq_add apple_silicon fail "this Mac is ${arch}; BenchBar and its Homebrew setup are for Apple Silicon"; fi
 
-  os="$(sw_vers -productVersion 2>/dev/null || true)"; major="${os%%.*}"
-  if [[ ! "$major" =~ ^[0-9]+$ ]]; then fl_prereq_add macos_version fail "could not read the macOS version"
-  elif [[ "$major" -ge 14 ]]; then fl_prereq_add macos_version ok "macOS ${os}"
-  else fl_prereq_add macos_version fail "macOS ${os}; macOS 14 or later is needed (System Settings, General, Software Update)"; fi
+    os="$(sw_vers -productVersion 2>/dev/null || true)"; major="${os%%.*}"
+    if [[ ! "$major" =~ ^[0-9]+$ ]]; then fl_prereq_add macos_version fail "could not read the macOS version"
+    elif [[ "$major" -ge 14 ]]; then fl_prereq_add macos_version ok "macOS ${os}"
+    else fl_prereq_add macos_version fail "macOS ${os}; macOS 14 or later is needed (System Settings, General, Software Update)"; fi
 
-  clt="$(xcode-select -p 2>/dev/null || true)"
-  if [[ -n "$clt" && -d "$clt" ]]; then fl_prereq_add command_line_tools ok "$clt"
-  else fl_prereq_add command_line_tools fail "the Xcode Command Line Tools are not installed" "xcode-select --install"; fi
+    clt="$(xcode-select -p 2>/dev/null || true)"
+    if [[ -n "$clt" && -d "$clt" ]]; then fl_prereq_add command_line_tools ok "$clt"
+    else fl_prereq_add command_line_tools fail "the Xcode Command Line Tools are not installed" "xcode-select --install"; fi
 
-  brew_bin="$(command -v brew 2>/dev/null || true)"
-  [[ -n "$brew_bin" ]] || { [[ -x "$FL_BREW_ALT_BIN" ]] && brew_bin="$FL_BREW_ALT_BIN"; }
-  if [[ -n "$brew_bin" ]]; then fl_prereq_add homebrew ok "brew at ${brew_bin}"
-  else fl_prereq_add homebrew fail "brew was not found" "$FL_BREW_INSTALL_CMD"; fi
+    brew_bin="$(command -v brew 2>/dev/null || true)"
+    [[ -n "$brew_bin" ]] || { [[ -x "$FL_BREW_ALT_BIN" ]] && brew_bin="$FL_BREW_ALT_BIN"; }
+    if [[ -n "$brew_bin" ]]; then fl_prereq_add homebrew ok "brew at ${brew_bin}"
+    else fl_prereq_add homebrew fail "brew was not found" "$FL_BREW_INSTALL_CMD"; fi
+
+  fi
 
   kb="$(df -Pk "$HOME" 2>/dev/null | awk 'NR == 2 { print $4 }')"
   if [[ "$kb" =~ ^[0-9]+$ ]]; then
@@ -170,11 +175,13 @@ fl_prereq_run() {
     esac
   fi
 
-  # CleanMyMac and Mole: doctor's own checks, for this folder
-  CHK_STATUS=""; CHK_MSG=""; CHK_FIX=""; chk_cleanmymac
-  fl_prereq_add cleanmymac "$CHK_STATUS" "$CHK_MSG" "$CHK_FIX"
-  CHK_STATUS=""; CHK_MSG=""; CHK_FIX=""; chk_mole
-  fl_prereq_add mole "$CHK_STATUS" "$CHK_MSG" "$CHK_FIX"
+  if ! fl_is_linux; then
+    # CleanMyMac and Mole: doctor's own checks, for this folder
+    CHK_STATUS=""; CHK_MSG=""; CHK_FIX=""; chk_cleanmymac
+    fl_prereq_add cleanmymac "$CHK_STATUS" "$CHK_MSG" "$CHK_FIX"
+    CHK_STATUS=""; CHK_MSG=""; CHK_FIX=""; chk_mole
+    fl_prereq_add mole "$CHK_STATUS" "$CHK_MSG" "$CHK_FIX"
+  fi
 
   # the default block 0: ports 8000, 9000, 11000 and 13000
   conflicts="$(fl_port_block_conflicts 0)"
