@@ -58,6 +58,7 @@
       "Bash(gh api -X POST repos/*/pulls/*/ccr/comments/*/resolve)",
       "Bash(gh api --method POST repos/*/pulls/*/ccr/comments/*/resolve)",
       "Bash(gh api -X POST repos/askysh/benchbar/pulls/*/comments/*/replies -F body=@*)",
+      "Bash(gh api -X POST repos/askysh/benchbar/pulls/*/comments/*/replies -F body=@* --silent)",
       "Bash(gh api graphql -F query=@*)",
       "Bash(git *)",
       "Bash(go *)",

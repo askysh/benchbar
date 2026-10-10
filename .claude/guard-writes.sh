@@ -56,7 +56,7 @@ matches() { printf '%s' "$1" | grep -Eiq -- "$2"; }
 allowed_write() {
   local resolve reply gql q
   resolve='^gh api (-X|--method) POST repos/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/pulls/[0-9]+/ccr/comments/[A-Za-z0-9_-]+/resolve$'
-  reply='^gh api (-X|--method) POST repos/askysh/benchbar/pulls/[0-9]+/comments/[0-9]+/replies -F body=@[^[:space:];&|<>$`'"'"'"]+$'
+  reply='^gh api (-X|--method) POST repos/askysh/benchbar/pulls/[0-9]+/comments/[0-9]+/replies -F body=@[^[:space:];&|<>$`'"'"'"]+( --silent)?$'
   gql='^gh api graphql -F query=@([^[:space:];&|<>$`'"'"'"]+)$'
   [[ $cmd =~ $resolve ]] && return 0
   [[ $cmd =~ $reply ]] && return 0
@@ -91,10 +91,10 @@ while IFS= read -r call; do
     exit 2
   fi
 done <<EOF
-$(chunks '(^|[^A-Za-z0-9_.-])gh(\.exe)?[[:space:]]+api([[:space:]]|$)')
+$(chunks '(^|[^A-Za-z0-9_.-])gh([.]exe)?[[:space:]]+api([[:space:]]|$)')
 EOF
 
-tasks="$(chunks '(^|[^A-Za-z0-9_.-])schtasks(\.exe)?([[:space:]]|$)')"
+tasks="$(chunks '(^|[^A-Za-z0-9_.-])schtasks([.]exe)?([[:space:]]|$)')"
 calls="$(printf '%s\n' "$tasks" | grep -c .)"
 while IFS= read -r call; do
   [ -n "$call" ] || continue
