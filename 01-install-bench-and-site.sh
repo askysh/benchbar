@@ -32,6 +32,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${SCRIPT_DIR}/lib/frappe-local/templates.sh"
 # shellcheck source=lib/frappe-local/mariadb.sh
 . "${SCRIPT_DIR}/lib/frappe-local/mariadb.sh"
+fl_platform_load
 trap fl_on_error ERR
 fl_signal_traps_install
 
@@ -248,7 +249,7 @@ case "$BENCH_DIR" in
 esac
 BENCH_DIR="${BENCH_DIR%/}"
 fl_bench_path_valid "$BENCH_DIR"
-prompt_value SITE_NAME "Site name (lowercase, hostname-like)" "${FL_TEAM_SITE:-macdev}"
+prompt_value SITE_NAME "Site name (lowercase, hostname-like)" "${FL_TEAM_SITE:-$(fl_default_site)}"
 if ! [[ "$SITE_NAME" =~ ^[a-z0-9][a-z0-9.-]*$ ]]; then
   fl_die "Invalid site name: '${SITE_NAME}'." "Use lowercase letters, digits, '-' and '.' only."
 fi

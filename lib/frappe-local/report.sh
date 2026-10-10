@@ -399,7 +399,7 @@ fl_cmd_report() {
     return 0
   fi
 
-  fl_require_cmd zip "zip ships with macOS; check your PATH"
+  fl_require_cmd zip "install zip (macOS ships it; on Ubuntu: sudo apt-get install zip)"
   stamp="$(date +%Y%m%d-%H%M%S)"
   zip="${out}/benchbar-report-${stamp}.zip"
   mkdir -p "$out"

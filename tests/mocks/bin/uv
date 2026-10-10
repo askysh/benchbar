@@ -18,6 +18,22 @@ if [[ "${1:-} ${2:-}" == "tool install" ]]; then
   ln -sfn "$tools/bench" "$bindir/bench"
   exit 0
 fi
+# "python install VER" puts the mock python3.11 where uv keeps its pythons;
+# "python find VER" prints the newest one there (exit 2 and an error when none)
+pydir="${UV_PYTHON_INSTALL_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/uv/python}"
+if [[ "${1:-} ${2:-}" == "python install" && -n "${3:-}" ]]; then
+  ver="${3#python}"; ver="${ver%%.*}.$(printf '%s' "$ver" | cut -d. -f2)"
+  mkdir -p "$pydir/cpython-${ver}.9-linux-x86_64-gnu/bin"
+  cp "$(dirname "$0")/../python3.11" "$pydir/cpython-${ver}.9-linux-x86_64-gnu/bin/python${ver}"
+  chmod +x "$pydir/cpython-${ver}.9-linux-x86_64-gnu/bin/python${ver}"
+  exit 0
+fi
+if [[ "${1:-} ${2:-}" == "python find" ]]; then
+  ver="${3:-3}"
+  for d in "$pydir"/cpython-"${ver}"*-linux-*; do [[ -x "$d/bin/python${ver}" ]] && found="$d/bin/python${ver}"; done
+  [[ -n "${found:-}" ]] && { printf '%s\n' "$found"; exit 0; }
+  echo "error: No interpreter found for Python ${ver}" >&2; exit 2
+fi
 py=""
 while [[ "$#" -gt 0 ]]; do case "$1" in --python) py="$2"; shift 2 ;; *) shift ;; esac; done
 [[ -n "$py" ]] && { cp "$(dirname "$0")/../honcho" "$(dirname "$py")/honcho"; chmod +x "$(dirname "$py")/honcho"; }

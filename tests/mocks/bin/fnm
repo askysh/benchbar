@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# fnm mock: "install MAJOR" creates node-versions/vMAJOR.0.0 with the mock node, npm and yarn
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "$(dirname "$0")/_mocklib.sh"
+mock_log "$@"
+dir="${FNM_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/fnm}"
+if [[ "${1:-}" == "install" && -n "${2:-}" ]]; then
+  ver="${2#v}"; [[ "$ver" == *.* ]] || ver="${ver}.0.0"
+  bin="$dir/node-versions/v${ver}/installation/bin"
+  mkdir -p "$bin"
+  src="$(dirname "$0")/.."
+  cp "$src/node" "$src/npm" "$src/yarn" "$bin/"
+  chmod +x "$bin"/*
+fi
+exit 0

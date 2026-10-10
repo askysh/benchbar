@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# dpkg-query mock: "-W -f=FORMAT PKG" answers from $MOCK_STATE/apt_installed
+# (one package per line); a package that is not there exits 1 like dpkg-query
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "$(dirname "$0")/_mocklib.sh"
+mock_log "$@"
+fmt=""; pkgs=()
+for a in "$@"; do
+  case "$a" in
+    -f=*) fmt="${a#-f=}" ;;
+    -*) ;;
+    *) pkgs+=("$a") ;;
+  esac
+done
+rc=0
+for p in ${pkgs[@]+"${pkgs[@]}"}; do
+  if grep -qx "$p" "${MOCK_STATE:?}/apt_installed" 2>/dev/null; then
+    if [[ -n "$fmt" ]]; then
+      out="${fmt//\$\{Status\}/install ok installed}"; out="${out//\$\{Package\}/$p}"; out="${out//\$\{Version\}/1.0}"
+      printf '%s' "$out"
+    else
+      printf '%s\t1.0\n' "$p"
+    fi
+  else
+    echo "dpkg-query: no packages found matching $p" >&2; rc=1
+  fi
+done
+exit "$rc"

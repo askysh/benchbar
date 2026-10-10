@@ -110,7 +110,10 @@ fl_cmd_docs() {
     fl_warn "${url} is not there (404); opening the start page instead"
     url="$(fl_docs_url /)"
   fi
-  command -v open >/dev/null 2>&1 || { printf '%s\n' "$url"; return 0; }
-  open "$url" || fl_die "could not open ${url}" "Open it in your browser by hand."
+  fl_open_url "$url" || {
+    # 127: no opener on this machine, so the address is the answer
+    [[ "$?" == "127" ]] && { printf '%s\n' "$url"; return 0; }
+    fl_die "could not open ${url}" "Open it in your browser by hand."
+  }
   printf '%s\n' "$url"
 }

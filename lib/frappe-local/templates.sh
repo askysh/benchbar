@@ -41,6 +41,9 @@ FL_LAST_BACKUP=""
 fl_content_hash() {
   if command -v shasum >/dev/null 2>&1; then
     shasum -a 256 | cut -c1-12
+  elif command -v sha256sum >/dev/null 2>&1; then
+    # the same 12 hex digits as shasum -a 256 (no shasum on a minimal Linux)
+    sha256sum | cut -c1-12
   else
     cksum | awk '{print $1}'
   fi

@@ -142,7 +142,7 @@ fl_site_detect() {
     [[ -f "$d" ]] || continue
     FL_SITE="$(basename "$(dirname "$d")")"; FL_SITE_SOURCE="detected"; return 0
   done
-  FL_SITE="macdev"; FL_SITE_SOURCE="default"
+  FL_SITE="$(fl_default_site)"; FL_SITE_SOURCE="default"
 }
 
 fl_ports_detect() {

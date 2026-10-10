@@ -118,6 +118,8 @@ SCRIPT_DIR="$(fl_resolve_self)"
 . "${SCRIPT_DIR}/lib/frappe-local/pull.sh"
 # shellcheck source=lib/frappe-local/selfupdate.sh
 . "${SCRIPT_DIR}/lib/frappe-local/selfupdate.sh"
+# the platform layer goes over the macOS functions last (Linux only)
+fl_platform_load service
 
 OPT_BENCH_DIR=""
 OPT_SITE=""
@@ -390,7 +392,7 @@ fl_next_steps_box() {
   fl_box "Next steps" \
     "source $(fl_rc_file)      (once, so benchup and friends exist)" \
     "benchup                     start the bench in the background" \
-    "open $(fl_site_url)" \
+    "$(fl_open_cmd) $(fl_site_url)" \
     "benchstatus / benchlogs     check on it" \
     "benchrestart                after changing Python code" \
     "benchwatch                  while editing JS or CSS"
