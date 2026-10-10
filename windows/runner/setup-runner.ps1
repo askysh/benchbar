@@ -75,12 +75,17 @@ if (-not (Test-Path (Join-Path $RunnerDir 'config.cmd'))) {
   $zip = Join-Path $env:TEMP $asset.name
   Write-Host "Downloading $($asset.name)"
   Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip -UseBasicParsing
-  # GitHub publishes the SHA-256 in the release body; check it when present
-  $expected = [regex]::Match($release.body, "$([regex]::Escape($asset.name))[^0-9a-f]*([0-9a-f]{64})").Groups[1].Value
-  if ($expected) {
-    $actual = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower()
-    if ($actual -ne $expected) { Remove-Item $zip; throw "Checksum mismatch for $($asset.name)." }
+  # The SHA-256 comes from the asset's digest field, else from the release
+  # body's line for this asset; no checksum means no install
+  $expected = ''
+  $digest = $asset.PSObject.Properties['digest']
+  if ($digest -and "$($digest.Value)" -match '^sha256:([0-9a-f]{64})$') { $expected = $Matches[1] }
+  if (-not $expected) {
+    $expected = [regex]::Match($release.body, "$([regex]::Escape($asset.name))[^\r\n]*?([0-9a-f]{64})").Groups[1].Value
   }
+  if (-not $expected) { Remove-Item $zip; throw "No SHA-256 published for $($asset.name); not installing an unverified runner." }
+  $actual = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower()
+  if ($actual -ne $expected) { Remove-Item $zip; throw "Checksum mismatch for $($asset.name)." }
   Expand-Archive -Path $zip -DestinationPath $RunnerDir -Force
   Remove-Item $zip
 }
