@@ -195,7 +195,9 @@ fl_agent_bootstrap() {
     fl_log "systemctl --user enable ${unit}"
     systemctl --user enable "$unit" >/dev/null 2>&1 || { fl_log "systemctl --user enable ${unit} failed"; return 1; }
     fl_log "systemctl --user start ${unit}"
-    systemctl --user start "$unit" >/dev/null 2>&1 || fl_log "systemctl --user start ${unit} failed"
+    # a refused start job (masked unit, start limit) is a failed load, not a
+    # loaded agent: the caller reports it instead of "agent loaded"
+    systemctl --user start "$unit" >/dev/null 2>&1 || { fl_log "systemctl --user start ${unit} failed"; return 1; }
   else
     fl_log "systemctl --user disable ${unit}"
     systemctl --user disable "$unit" >/dev/null 2>&1 || true

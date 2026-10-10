@@ -48,18 +48,8 @@ fl__apt_missing() {
   printf '%s' "$out"
 }
 
-# The tools as the bench's processes see them: the uv Python and fnm Node
-# folders and ~/.local/bin (what fl_profile_path_exports puts in the shell
-# block), then the system folders. nvm's node lives in a shell PATH only.
-fl_bench_which() {
-  local p="" line
-  while IFS= read -r line; do
-    line="${line#export PATH=\"}"; line="${line%%:\$PATH\"}"
-    p="${p}${line}:"
-  done < <(fl_profile_path_exports "$FL_PROFILE" | grep '^export PATH=')
-  p="${p}${FL_LAUNCHD_PATH_SYSTEM:-/usr/local/bin:/usr/bin:/bin}"
-  PATH="$p" command -v "$1" 2>/dev/null || true
-}
+# fl_bench_which is the shared one (checks.sh): it reads the unit's own PATH
+# (fl_launchd_path_value in systemd.sh), the PATH the bench's processes run with.
 
 fl__mariadb_conf_dir() { printf '%s' "${FL_MARIADB_CONF_DIR%/}"; }
 

@@ -353,6 +353,9 @@ FNMHOME="$TMP_DIR/fnmhome"; mkdir -p "$FNMHOME"; printf '#!/bin/sh\nexit 0\n' >"
 assert_eq "$FNMHOME/fnm" "$(PATH=/usr/bin:/bin FNM_DIR="$FNMHOME" fl_fnm_cmd)" "(fnm by its full path when it is not on PATH)"
 assert_eq "$FNMHOME/fnm" "$(PATH=/usr/bin:/bin FNM_DIR="$FNMHOME" fl_fnm_bin)"
 assert_contains "$(FNM_DIR="$FNMHOME" fl_profile_path_exports)" "export PATH=\"$FNMHOME:"
+# the profile's Node is prepended last, so nothing in ~/.local/bin shadows it
+assert_contains "$(fl_profile_path_exports | tail -n1)" "/node-versions/v22."
+assert_contains "$(fl_profile_path_exports | sed -n 2p)" '$HOME/.local/bin'
 assert_eq "$HOME/.bashrc" "$(env -u SHELL -u FL_RC_FILE bash -c 'set -u; FL_PLATFORM=linux; . "$1/lib/frappe-local/ui.sh"; . "$1/lib/frappe-local/state.sh"; . "$1/lib/frappe-local/shellrc.sh"; fl_rc_file' _ "$ROOT")" "(SHELL unset under set -u)"
 
 printf 'test-platform-linux: ok\n'

@@ -127,7 +127,11 @@ case "$cmd" in
       [[ "$now" == 1 ]] && do_stop "$u"
     done
     exit 0 ;;
-  start) u="$(unit_arg "${args[0]:-}")"; do_start "$u"; exit 0 ;;
+  # $MOCK_STATE/start_refused: systemd refuses the start job (a masked unit,
+  # a start limit); the unit stays loaded and inactive
+  start) u="$(unit_arg "${args[0]:-}")"
+    [[ -f "${MOCK_STATE}/start_refused" ]] && { echo "Job for ${u} failed." >&2; exit 1; }
+    do_start "$u"; exit 0 ;;
   stop) u="$(unit_arg "${args[0]:-}")"; [[ -f "$(file_of "$u")" ]] && do_stop "$u"; exit 0 ;;
   restart|reload-or-restart)
     u="$(unit_arg "${args[0]:-}")"; need_loaded "$u"

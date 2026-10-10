@@ -77,6 +77,14 @@ assert_contains "$OUT" "unchanged: all"
 assert_eq "$snap_before" "$(snapshot "$udir" "$BENCH")" "(a second run writes nothing)"
 assert_calls_not_contain '^systemctl --user (enable|start|disable|restart)'
 
+# ---- a start systemd refuses (masked, start limit) is a failed bootstrap
+printf '# benchbar-autostart: true\n[Service]\nExecStart=/bin/true\n' >"$udir/benchbar-refused.service"
+touch "$MOCK_STATE/start_refused"
+rc=0; XDG_CONFIG_HOME="$HOME/.config" bash -c '. "$1/lib/frappe-local/ui.sh"; . "$1/lib/frappe-local/launchd.sh"; . "$1/lib/frappe-local/systemd.sh"; fl_agent_bootstrap "$2"' _ "$ROOT" "$udir/benchbar-refused.service" >/dev/null 2>&1 || rc=$?
+assert_eq "1" "$rc" "(a refused start is not reported as loaded)"
+rm -f "$MOCK_STATE/start_refused" "$udir/benchbar-refused.service"
+systemctl --user daemon-reload
+
 # ---- up: arms the start, starts the unit, turns lingering on
 reset_calls
 export MOCK_KICKSTART_PING=200

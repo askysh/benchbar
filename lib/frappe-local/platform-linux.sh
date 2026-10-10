@@ -203,11 +203,13 @@ fl_profile_path_exports() {
     fi
   fi
   bin="$(fl__python_bin_for "$pyver")"
+  # each line prepends, so the last one wins: the generic folders first, then
+  # the profile's Python and Node, which an older node or python in
+  # ~/.local/bin must not shadow. fnm itself is installed with --skip-shell.
+  printf 'export PATH="%s:$PATH"\n' "$(fl__fnm_dir)"
+  printf 'export PATH="$HOME/.local/bin:$PATH"\n'
   printf 'export PATH="%s:$PATH"\n' "${bin%/*}"
   printf 'export PATH="%s:$PATH"\n' "$(fl__node_bindir_for "$nodemajor")"
-  printf 'export PATH="$HOME/.local/bin:$PATH"\n'
-  # fnm itself (phase 00 installs it with --skip-shell, outside PATH)
-  printf 'export PATH="%s:$PATH"\n' "$(fl__fnm_dir)"
 }
 
 # ~/.local/pipx unless pipx says otherwise
