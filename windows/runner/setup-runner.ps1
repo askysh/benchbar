@@ -19,6 +19,12 @@
   (gh api -X POST repos/OWNER/REPO/actions/runners/registration-token), so
   gh must be installed and logged in on Windows with admin rights on the repo.
 
+.PARAMETER RemoveToken
+  A runner removal token, used with -Reconfigure to unregister the existing
+  runner first. GitHub issues it separately from the registration token
+  (repos/OWNER/REPO/actions/runners/remove-token); without it the script asks
+  gh for one.
+
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File .\setup-runner.ps1
 #>
@@ -26,6 +32,7 @@
 param(
   [string]$Repo = 'askysh/benchbar',
   [string]$Token = '',
+  [string]$RemoveToken = '',
   [string]$RunnerName = "$env:COMPUTERNAME-wsl",
   [string]$Labels = 'wsl',
   [string]$RunnerDir = 'C:\actions-runner',
@@ -81,10 +88,17 @@ if (-not (Test-Path (Join-Path $RunnerDir 'config.cmd'))) {
 # 3. Registration (kept unless -Reconfigure)
 $configured = Test-Path (Join-Path $RunnerDir '.runner')
 if ($configured -and $Reconfigure) {
-  if (-not $Token) { $Token = (gh api -X POST "repos/$Repo/actions/runners/remove-token" --jq .token) }
-  & (Join-Path $RunnerDir 'config.cmd') remove --token $Token
+  # Removal takes its own token; a registration token passed as -Token is kept for step 3
+  if (-not $RemoveToken) {
+    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { throw 'Pass -RemoveToken, or install and log in to gh on Windows.' }
+    $RemoveToken = (gh api -X POST "repos/$Repo/actions/runners/remove-token" --jq .token)
+  }
+  Push-Location $RunnerDir
+  try {
+    & .\config.cmd remove --token $RemoveToken
+    if ($LASTEXITCODE -ne 0) { throw "config.cmd remove failed with exit code $LASTEXITCODE; the old registration is still in place." }
+  } finally { Pop-Location }
   $configured = $false
-  $Token = ''
 }
 if (-not $configured) {
   if (-not $Token) {
