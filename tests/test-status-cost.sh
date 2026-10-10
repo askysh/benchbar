@@ -257,7 +257,19 @@ cat >"$TMP_DIR/scc.json" <<'JSON'
 }
 JSON
 export ROOT TMP_DIR FL_STATE_DIR
-for loc in en_US.UTF-8 C; do
+# The UTF-8 leg needs a locale the host has (bash runs as C when the named one
+# is missing, which makes the leg test nothing): en_US.UTF-8 on a Mac, and on
+# Linux whatever `locale -a` lists (en_US.utf8 or C.UTF-8), spelled as listed.
+UTF8_LOC=""
+for want in en_us.utf8 c.utf8; do
+  while IFS= read -r have; do
+    norm="$(printf '%s' "$have" | tr '[:upper:]' '[:lower:]' | tr -d '-')"
+    if [[ "$norm" == "$want" ]]; then UTF8_LOC="$have"; break; fi
+  done < <(locale -a 2>/dev/null)
+  [[ -n "$UTF8_LOC" ]] && break
+done
+[[ -n "$UTF8_LOC" ]] || fail "no en_US.UTF-8 or C.UTF-8 locale on this host (locale -a); the UTF-8 leg of this test cannot run"
+for loc in "$UTF8_LOC" C; do
   # the names a non-ASCII folder had in 0.6.0 on macOS, whose tr reads
   # characters in UTF-8 and bytes in C (GNU tr would give bytes in both)
   if [[ "$loc" == C ]]; then names='b--nch-dir.x_y-Z-1|------'; else names='b-nch-dir.x_y-Z-1|--'; fi

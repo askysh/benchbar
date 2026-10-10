@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# sha256sum shim: the Linux tests run on macOS hosts too, where coreutils'
+# sha256sum is missing. The real one when it exists outside tests/mocks,
+# else "shasum -a 256" (same output format). Not logged: it is a tool, not
+# a system change.
+here="$(cd "$(dirname "$0")" && pwd)"
+IFS=: read -r -a dirs <<<"$PATH"
+for d in "${dirs[@]}"; do
+  [[ -n "$d" && "$(cd "$d" 2>/dev/null && pwd)" != "$here" && -x "$d/sha256sum" ]] && exec "$d/sha256sum" "$@"
+done
+exec shasum -a 256 "$@"

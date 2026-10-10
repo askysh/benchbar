@@ -16,6 +16,10 @@
 #                          (& < > ") instead. Neither changes a value that
 #                          has none of those characters, so an ordinary
 #                          path renders byte for byte as before.
+#   #@default KEY text     stripped on render; the text stands for __KEY__ when no
+#                          KEY=value is passed (a \n in it is a line break). A
+#                          template can grow a per platform variable and still
+#                          render byte for byte as before where none is given.
 #   __HEADER__             replaced by "benchbar-template: <name> vN <hash>"
 #   __KEY__                replaced by the value passed as KEY=value; a line
 #                          that is only __KEY__ and renders to nothing is
@@ -41,6 +45,9 @@ FL_LAST_BACKUP=""
 fl_content_hash() {
   if command -v shasum >/dev/null 2>&1; then
     shasum -a 256 | cut -c1-12
+  elif command -v sha256sum >/dev/null 2>&1; then
+    # the same 12 hex digits as shasum -a 256 (no shasum on a minimal Linux)
+    sha256sum | cut -c1-12
   else
     cksum | awk '{print $1}'
   fi
@@ -82,7 +89,7 @@ fl_bash_dq_escape_v() {
 # Prints the rendered content including the resolved header line.
 fl_template_render() {
   local name="$1" file body hbody line hline pair key value hash version only_token unhashed="" quoted="" fmt=bash i n=0 e
-  local keys=() vals=() evals=()
+  local keys=() vals=() evals=() dkeys=() dvals=() nd=0 given dk dv nl=$'\n' bsn='\n'
   shift
   file="${FL_TEMPLATE_DIR}/${name}.tmpl"
   [[ -f "$file" ]] || { fl_fail "template not found: ${file}"; return 1; }
@@ -102,9 +109,20 @@ fl_template_render() {
       '#@version'*) continue ;;
       '#@unhashed'*) unhashed="${unhashed} ${line#'#@unhashed'} "; continue ;;
       '#@quoted'*) quoted="${line#'#@quoted'}"; quoted=" ${quoted%%#*} "; continue ;;
+      '#@default '*)
+        dk="${line#'#@default '}"; dv="${dk#* }"; dk="${dk%% *}"
+        given=0
+        for ((i = 0; i < n; i++)); do [[ "${keys[$i]}" == "$dk" ]] && given=1; done
+        if [[ "$given" == "0" ]]; then dkeys[nd]="$dk"; dvals[nd]="${dv//"$bsn"/$nl}"; nd=$((nd + 1)); fi
+        continue ;;
     esac
     only_token=0
     [[ "$line" =~ ^__[A-Z_]+__$ ]] && only_token=1
+    # a default stands in first, so the tokens inside it are filled below
+    for ((i = 0; i < nd; i++)); do
+      dv="${dvals[$i]}"
+      line="${line//__${dkeys[$i]}__/$dv}"
+    done
     hline="$line"
     for ((i = 0; i < n; i++)); do
       key="${keys[$i]}"

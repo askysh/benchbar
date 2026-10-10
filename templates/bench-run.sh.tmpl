@@ -1,6 +1,9 @@
 #!/bin/bash
 #@version 7
 #@unhashed CLI_VERSION
+#@default NOTIFY_BODY pgrep -xq BenchBar 2>/dev/null && return 0\n  osascript -e "display notification \"$1\" with title \"BenchBar: __BENCH_NAME__\"" >/dev/null 2>&1
+#@default CWD_OF lsof -a -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n1
+#@default LISTENER_PIDS lsof -ti "tcp:$PORTS" -sTCP:LISTEN 2>/dev/null
 #@quoted BENCH_DIR HONCHO PORTS SITE WEB_PORT  # not BENCH_NAME and LABEL: they also sit in write_state's single quoted printf format, where a backslash would be wrong; benchbar refuses their metacharacters instead
 # __HEADER__
 #
@@ -62,8 +65,7 @@ prev_exit() {
 
 # the macOS notification is a fallback for people who do not run the app
 notify() {
-  pgrep -xq BenchBar 2>/dev/null && return 0
-  osascript -e "display notification \"$1\" with title \"BenchBar: __BENCH_NAME__\"" >/dev/null 2>&1
+  __NOTIFY_BODY__
 }
 
 # stopped on purpose (benchdown) or paused after repeated crashes
@@ -127,7 +129,7 @@ fi
 # bench's redis, web or socketio and any other program on the same ports
 # stay, and so does a process whose folder cannot be read (no proof).
 is_ours() {
-  case "$(lsof -a -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n1)" in
+  case "$(__CWD_OF__)" in
     "$BENCH"|"$BENCH"/*) return 0 ;;
   esac
   return 1
@@ -137,14 +139,14 @@ pkill -f "^__BENCH_RE__/env/bin/python -m frappe.utils.bench_helper frappe (serv
 for pid in $(pgrep -f "apps/frappe/socketio.js" 2>/dev/null); do
   is_ours "$pid" && "${BENCHBAR_KILL_CMD:-kill}" "$pid" 2>/dev/null
 done
-for pid in $(lsof -ti "tcp:$PORTS" -sTCP:LISTEN 2>/dev/null); do
+for pid in $(__LISTENER_PIDS__); do
   is_ours "$pid" && "${BENCHBAR_KILL_CMD:-kill}" "$pid" 2>/dev/null
 done
 # a port still held after that is not this bench's to free: honcho would only
 # fail to bind and trip the crash guard, so pause with the reason instead
 i=0; held=""
 while [ "$i" -lt 5 ]; do
-  held="$(lsof -ti "tcp:$PORTS" -sTCP:LISTEN 2>/dev/null | tr '\n' ' ')"
+  held="$(__LISTENER_PIDS__ | tr '\n' ' ')"
   [ -n "$held" ] || break
   sleep 1
   i=$((i + 1))

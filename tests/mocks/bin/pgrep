@@ -8,7 +8,9 @@ while [[ "$#" -gt 0 ]]; do
     -f) pattern="$2"; shift 2 ;;
     # -l with -f: "pid command line", like the real pgrep -lf
     -l) long=1; shift ;;
-    -lf|-fl) long=1; pattern="$2"; shift 2 ;;
+    -lf|-fl|-af|-fa) long=1; pattern="$2"; shift 2 ;;
+    # -a: the whole command line, like procps
+    -a) long=1; shift ;;
     -q*) quiet=1; [[ "$1" == *f* ]] && { pattern="$2"; shift; }; shift ;;
     -*) shift ;;
     *) pattern="$1"; shift ;;

@@ -1,5 +1,51 @@
 #!/usr/bin/env bash
 
+# fl_platform_load [service]: picks the platform once, at startup. FL_PLATFORM
+# (macos or linux) wins; else the shell's OSTYPE decides (no uname process:
+# status polls are cost tested). On Linux the Linux layer is sourced over this
+# file: it redefines functions with the same names, so callers never branch.
+# "service" also loads the systemd backend (benchbar and phase 02 only).
+FL_PLATFORM="${FL_PLATFORM:-}"
+fl_platform_load() {
+  if [[ -z "$FL_PLATFORM" ]]; then
+    case "${OSTYPE:-}" in
+      darwin*) FL_PLATFORM=macos ;;
+      linux*) FL_PLATFORM=linux ;;
+      *) FL_PLATFORM=macos ;;
+    esac
+  fi
+  [[ "$FL_PLATFORM" == "linux" ]] || return 0
+  # shellcheck source=lib/frappe-local/platform-linux.sh
+  . "${SCRIPT_DIR}/lib/frappe-local/platform-linux.sh"
+  if [[ "${1:-}" == "service" && -f "${SCRIPT_DIR}/lib/frappe-local/systemd.sh" ]]; then
+    # shellcheck source=lib/frappe-local/systemd.sh
+    # shellcheck disable=SC1091  # written by the systemd backend
+    . "${SCRIPT_DIR}/lib/frappe-local/systemd.sh"
+  fi
+  return 0
+}
+
+# true on Linux: for the rare place where a whole Mac-only feature is skipped
+fl_is_linux() { [[ "${FL_PLATFORM:-}" == "linux" ]]; }
+
+# the site name a fresh bench gets when nothing says otherwise
+fl_default_site() { printf 'macdev'; }
+
+# the phase 00 script of this platform (the hints name it)
+fl_phase00_script() { printf '00-mac-system-deps.sh'; }
+
+# fl_service_start_hint NAME: the command that starts a service by hand
+fl_service_start_hint() { printf 'brew services start %s' "$1"; }
+
+# fl_open_cmd: the program that opens a URL, by name (it may not be installed)
+fl_open_cmd() { printf 'open'; }
+
+# fl_open_url URL: opens it in the user's browser; 127 when there is no opener
+fl_open_url() {
+  command -v open >/dev/null 2>&1 || return 127
+  open "$1"
+}
+
 FL_BREW_PREFIX="${FL_BREW_PREFIX:-}"
 FL_ARCH="${FL_ARCH:-}"
 FL_MIN_DISK_GB="${FL_MIN_DISK_GB:-10}"

@@ -1,0 +1,205 @@
+#!/usr/bin/env bash
+# systemctl mock: units live as key=value files in $MOCK_STATE/units/<unit>
+# (LoadState, ActiveState, MainPID, ExecMainStatus, UnitFileState). A unit
+# file in the user unit folder becomes "loaded" at daemon-reload, like the
+# real one; start needs a loaded unit. --system units keep their state under
+# $MOCK_STATE/units/system/.
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "$(dirname "$0")/_mocklib.sh"
+mock_log "$@"
+scope=system; args=()
+for a in "$@"; do
+  case "$a" in
+    --user) scope=user ;;
+    --system) scope=system ;;
+    --no-pager|--no-legend|--plain|--quiet|-q|--no-ask-password) [[ "$a" == "--quiet" || "$a" == "-q" ]] && quiet=1 ;;
+    *) args+=("$a") ;;
+  esac
+done
+quiet="${quiet:-0}"
+udir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+if [[ "$scope" == user ]]; then sdir="${MOCK_STATE:?}/units"; else sdir="${MOCK_STATE:?}/units/system"; fi
+mkdir -p "$sdir"
+cmd="${args[0]:-}"; args=("${args[@]:1}")
+
+file_of() { printf '%s/%s' "$sdir" "$1"; }
+get() { sed -n "s/^$2=//p" "$(file_of "$1")" 2>/dev/null | head -n1; }
+put() {
+  local f; f="$(file_of "$1")"
+  [[ -f "$f" ]] || return 0
+  grep -v "^$2=" "$f" >"$f.tmp" || true
+  printf '%s=%s\n' "$2" "$3" >>"$f.tmp"
+  mv "$f.tmp" "$f"
+}
+new_unit() {
+  [[ -f "$(file_of "$1")" ]] && return 0
+  printf 'LoadState=loaded\nActiveState=inactive\nMainPID=0\nExecMainStatus=0\nUnitFileState=disabled\n' >"$(file_of "$1")"
+}
+# the system units a set up machine has: loaded, running
+if [[ "$scope" == system ]]; then
+  for u in mariadb.service redis-server.service; do
+    [[ -f "$(file_of "$u")" ]] || printf 'LoadState=loaded\nActiveState=active\nMainPID=111\nExecMainStatus=0\nUnitFileState=enabled\n' >"$(file_of "$u")"
+  done
+fi
+unit_arg() { local u="${1:-}"; case "$u" in *.service|*.socket|*.target) printf '%s' "$u" ;; *) printf '%s.service' "$u" ;; esac; }
+workdir_of() { sed -n 's/^WorkingDirectory=//p' "$udir/$1" 2>/dev/null | head -n1; }
+# a missing or not yet loaded unit: the message the real one prints
+need_loaded() {
+  [[ "$(get "$1" LoadState)" == loaded ]] && return 0
+  echo "Failed to start $1: Unit $1 not found." >&2
+  exit 5
+}
+# the stop of a runner: honcho of that bench goes with it
+drop_procs() {
+  local wd cwd pid cmdline
+  wd="$(workdir_of "$1")"
+  [[ -f "${MOCK_PROCS:-}" ]] || return 0
+  : >"${MOCK_PROCS}.tmp"
+  while read -r pid cmdline; do
+    [[ -n "$pid" ]] || continue
+    if [[ "$cmdline" == *"honcho start"* ]]; then
+      cwd="$(cat "${MOCK_STATE}/cwd/${pid}" 2>/dev/null || true)"
+      [[ -z "$cwd" || "$cwd" == "$wd" ]] && continue
+    fi
+    printf '%s %s\n' "$pid" "$cmdline" >>"${MOCK_PROCS}.tmp"
+  done <"${MOCK_PROCS}"
+  mv "${MOCK_PROCS}.tmp" "${MOCK_PROCS}"
+  rm -f "${MOCK_STATE}/curl_code"
+}
+do_stop() {
+  # MOCK_STOP_STUCK=1: the runner does not let go
+  [[ -n "${MOCK_STOP_STUCK:-}" ]] && return 0
+  put "$1" ActiveState inactive; put "$1" MainPID 0
+  [[ "$scope" == user ]] && drop_procs "$1"
+  return 0
+}
+do_start() {
+  local u="$1" wd
+  need_loaded "$u"
+  [[ "$(get "$u" ActiveState)" == active ]] && return 0
+  wd="$(workdir_of "$u")"
+  # the runner exits at once when the bench carries a stop flag
+  if [[ -n "$wd" && -f "$wd/logs/.bench-stopped" ]]; then
+    put "$u" ActiveState inactive; put "$u" MainPID 0
+    return 0
+  fi
+  put "$u" ActiveState active; put "$u" MainPID 4242; put "$u" ExecMainStatus 0
+  if [[ "$scope" == user ]]; then
+    printf '4242 honcho start -f Procfile.lean\n' >>"${MOCK_PROCS:?}"
+    printf '4242 honcho start -f Procfile.lean\n' >>"${MOCK_STATE}/ever_procs"
+    # its working folder, as lsof (macOS) and /proc/PID/cwd (Linux) report it
+    if [[ -n "$wd" ]]; then
+      mkdir -p "${MOCK_STATE}/cwd" "${MOCK_STATE}/proc/4242"
+      printf '%s' "$wd" >"${MOCK_STATE}/cwd/4242"
+      ln -sfn "$wd" "${MOCK_STATE}/proc/4242/cwd"
+    fi
+    [[ -n "${MOCK_KICKSTART_PING:-}" ]] && printf '%s' "$MOCK_KICKSTART_PING" >"${MOCK_STATE}/curl_code"
+  fi
+  return 0
+}
+
+case "$cmd" in
+  daemon-reload)
+    for f in "$udir"/*.service; do
+      [[ -f "$f" ]] || continue
+      new_unit "$(basename "$f")"; put "$(basename "$f")" LoadState loaded
+    done
+    for f in "$sdir"/*.service; do
+      [[ -f "$f" ]] || continue
+      [[ -f "$udir/$(basename "$f")" ]] || put "$(basename "$f")" LoadState not-found
+    done
+    exit 0 ;;
+  enable)
+    now=0; units=()
+    for a in "${args[@]}"; do case "$a" in --now) now=1 ;; -*) ;; *) units+=("$(unit_arg "$a")") ;; esac; done
+    for u in "${units[@]}"; do
+      [[ "$scope" == user && ! -f "$udir/$u" ]] && { echo "Failed to enable unit: Unit file $u does not exist." >&2; exit 1; }
+      new_unit "$u"; put "$u" UnitFileState enabled
+      [[ "$now" == 1 ]] && do_start "$u"
+    done
+    exit 0 ;;
+  disable)
+    now=0; units=()
+    for a in "${args[@]}"; do case "$a" in --now) now=1 ;; -*) ;; *) units+=("$(unit_arg "$a")") ;; esac; done
+    for u in "${units[@]}"; do
+      [[ -f "$(file_of "$u")" ]] || continue
+      put "$u" UnitFileState disabled
+      [[ "$now" == 1 ]] && do_stop "$u"
+    done
+    exit 0 ;;
+  # $MOCK_STATE/start_refused: systemd refuses the start job (a masked unit,
+  # a start limit); the unit stays loaded and inactive
+  start) u="$(unit_arg "${args[0]:-}")"
+    [[ -f "${MOCK_STATE}/start_refused" ]] && { echo "Job for ${u} failed." >&2; exit 1; }
+    do_start "$u"; exit 0 ;;
+  stop) u="$(unit_arg "${args[0]:-}")"; [[ -f "$(file_of "$u")" ]] && do_stop "$u"; exit 0 ;;
+  restart|reload-or-restart)
+    u="$(unit_arg "${args[0]:-}")"; need_loaded "$u"
+    put "$u" ActiveState inactive; [[ "$scope" == user ]] && drop_procs "$u"
+    do_start "$u"; exit 0 ;;
+  kill)
+    u=""; sig=SIGTERM
+    i=0
+    while [[ $i -lt ${#args[@]} ]]; do
+      case "${args[$i]}" in
+        -s|--signal) i=$((i + 1)); sig="${args[$i]}" ;;
+        --signal=*) sig="${args[$i]#--signal=}" ;;
+        -*) ;;
+        *) u="$(unit_arg "${args[$i]}")" ;;
+      esac
+      i=$((i + 1))
+    done
+    [[ -f "$(file_of "$u")" ]] || { echo "Failed to kill unit $u: Unit $u not loaded." >&2; exit 5; }
+    [[ "$(get "$u" ActiveState)" == active ]] || { echo "Failed to kill unit $u: Unit $u is not active" >&2; exit 1; }
+    # the runner takes TERM, INT and HUP as a stop and exits 0
+    case "$sig" in SIGTERM|TERM|15|SIGINT|INT|2|SIGHUP|HUP|1|SIGKILL|KILL|9) do_stop "$u" ;; esac
+    exit 0 ;;
+  is-active)
+    u="$(unit_arg "${args[$((${#args[@]} - 1))]:-}")"
+    st="$(get "$u" ActiveState)"; st="${st:-inactive}"
+    [[ "$quiet" == 1 ]] || printf '%s\n' "$st"
+    [[ "$st" == active ]] ;;
+  is-enabled)
+    u="$(unit_arg "${args[$((${#args[@]} - 1))]:-}")"
+    st="$(get "$u" UnitFileState)"
+    [[ "$quiet" == 1 ]] || printf '%s\n' "${st:-disabled}"
+    [[ "$st" == enabled ]] ;;
+  show)
+    props=""; value=0; u=""
+    i=0
+    while [[ $i -lt ${#args[@]} ]]; do
+      case "${args[$i]}" in
+        -p) i=$((i + 1)); props="${args[$i]}" ;;
+        -p*) props="${args[$i]#-p}" ;;
+        --property=*) props="${args[$i]#--property=}" ;;
+        --value) value=1 ;;
+        -*) ;;
+        *) u="$(unit_arg "${args[$i]}")" ;;
+      esac
+      i=$((i + 1))
+    done
+    [[ -n "$props" ]] || props="LoadState,ActiveState,MainPID,ExecMainStatus,UnitFileState"
+    IFS=, read -r -a plist <<<"$props"
+    for p in "${plist[@]}"; do
+      v="$(get "$u" "$p")"
+      if [[ -z "$v" ]]; then
+        case "$p" in LoadState) v=not-found ;; ActiveState) v=inactive ;; MainPID|ExecMainStatus) v=0 ;; UnitFileState) v="" ;; esac
+      fi
+      if [[ "$value" == 1 ]]; then printf '%s\n' "$v"; else printf '%s=%s\n' "$p" "$v"; fi
+    done
+    exit 0 ;;
+  list-units)
+    pat="*"
+    for a in "${args[@]}"; do case "$a" in -*) ;; *) pat="$a" ;; esac; done
+    for f in "$sdir"/*; do
+      [[ -f "$f" ]] || continue
+      case "$(basename "$f")" in *.tmp) continue ;; esac
+      # shellcheck disable=SC2254  # the pattern is the caller's glob
+      case "$(basename "$f")" in $pat|${pat}.service) ;; *) continue ;; esac
+      b="$(basename "$f")"
+      st="$(get "$b" ActiveState)"
+      printf '%s loaded %s %s BenchBar\n' "$b" "$st" "$([[ "$st" == active ]] && echo running || echo dead)"
+    done
+    exit 0 ;;
+  *) exit 0 ;;
+esac

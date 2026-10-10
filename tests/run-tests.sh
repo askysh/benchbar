@@ -6,29 +6,35 @@
 #   PARALLEL=1 tests/run-tests.sh       one after another
 #   SHARD=2/3 tests/run-tests.sh        only the second third (CI matrix)
 #   tests/run-tests.sh test-doctor ...  only the named tests
+#   tests/run-tests.sh shellcheck       only the lint
+#   SHELLCHECK=0 tests/run-tests.sh     the tests without the lint
+#   SKIP_TESTS="test-a test-b" ...      all but those (before sharding)
 #
 # PARALLEL defaults to the number of CPUs. Every test builds its own HOME
 # and mock state under mktemp, so they run side by side; each test's output
 # is buffered and printed whole, in list order, once it finishes. A failing
 # test does not stop the others: the run reports every failure at the end
 # and exits 1. shellcheck runs in the pool as one more job when it is
-# installed (in shard 1 only when sharded).
+# installed (in shard 1 only when sharded) unless SHELLCHECK=0.
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-SCRIPTS=("$ROOT"/benchbar "$ROOT"/00-mac-system-deps.sh "$ROOT"/01-install-bench-and-site.sh "$ROOT"/02-background-service.sh "$ROOT"/lib/frappe-local/*.sh)
+SCRIPTS=("$ROOT"/benchbar "$ROOT"/00-mac-system-deps.sh "$ROOT"/00-linux-system-deps.sh "$ROOT"/01-install-bench-and-site.sh "$ROOT"/02-background-service.sh "$ROOT"/lib/frappe-local/*.sh)
 
 bash -n "${SCRIPTS[@]}"
 
-# Longest first (measured), so the pool never waits on a slow test that
-# started last. Shards take every Nth test of this list, which balances
-# them. A new test file must be added here; the check below enforces it.
-ALL_TESTS="test-phases test-hygiene test-multi-bench test-doctor test-install-sh test-sites test-site-backups test-apps test-ports test-doctor-hardening
-test-profiles test-pull test-lock test-run-lock test-repair-json test-mcp test-homebrew test-app-cli test-state-migrate
-test-process test-adopt test-repair test-service test-cli test-migrate test-json test-report test-runner
-test-input-hygiene test-redact test-freshness test-profile-v16 test-run test-bench-flow test-version-policy test-templates test-shellrc test-ui test-platform test-docs test-docs-command test-self-update test-release-notes test-discovery test-port-management test-status-cost test-packaging"
+# Longest first (measured in CI, macOS and Linux together), so the pool
+# never waits on a slow test that started last. Shards take every Nth test
+# of this list, which balances them. A new test file must be added here;
+# the check below enforces it.
+ALL_TESTS="test-doctor test-phases test-lock test-apps test-pull test-repair test-install-linux test-port-management
+test-profiles test-service test-homebrew test-multi-bench test-ports test-sites test-input-hygiene test-doctor-hardening
+test-cli test-freshness test-hygiene test-mcp test-site-backups test-app-cli test-process test-doctor-linux test-install-sh
+test-adopt test-systemd test-migrate test-repair-json test-json test-report test-profile-v16 test-state-migrate test-run-lock
+test-runner test-redact test-docs-command test-status-cost test-bench-flow test-run test-platform-linux test-self-update
+test-templates test-discovery test-shellrc test-docs test-platform test-packaging test-ui test-release-notes test-version-policy"
 
 for f in "$ROOT"/tests/test-*.sh; do
   n="$(basename "$f" .sh)"
@@ -100,17 +106,22 @@ JOBS=()
 if [[ "$#" -gt 0 ]]; then
   for t in "$@"; do
     t="$(basename "$t" .sh)"
-    [[ -f "$ROOT/tests/$t.sh" ]] || { printf 'no such test: %s\n' "$t" >&2; exit 1; }
+    if [[ "$t" == "shellcheck" ]]; then
+      command -v shellcheck >/dev/null 2>&1 || { printf 'shellcheck not installed\n' >&2; exit 1; }
+    else
+      [[ -f "$ROOT/tests/$t.sh" ]] || { printf 'no such test: %s\n' "$t" >&2; exit 1; }
+    fi
     JOBS+=("$t")
   done
 else
   i=0
   for t in $ALL_TESTS; do
+    case " ${SKIP_TESTS:-} " in *" $t "*) continue ;; esac
     [[ $((i % SHARD_N + 1)) -eq "$SHARD_I" ]] && JOBS+=("$t")
     i=$((i + 1))
   done
 fi
-if [[ "$#" -eq 0 && "$SHARD_I" -eq 1 ]]; then
+if [[ "$#" -eq 0 && "$SHARD_I" -eq 1 && "${SHELLCHECK:-1}" != "0" ]]; then
   if command -v shellcheck >/dev/null 2>&1; then JOBS+=(shellcheck); else
     printf 'shellcheck not installed; skipped lint (brew install shellcheck)\n'
   fi

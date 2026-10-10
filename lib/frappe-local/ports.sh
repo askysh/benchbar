@@ -128,10 +128,10 @@ fl_ports_apply() {
 fl_bench_established() {
   local dir="$1" plist
   fl_same_path "$(fl_state_get BENCH_DIR 2>/dev/null || true)" "$dir" && return 0
-  for plist in "$HOME"/Library/LaunchAgents/com.benchbar.*.plist; do
-    [[ -f "$plist" ]] || continue
+  while IFS= read -r plist; do
+    [[ -n "$plist" ]] || continue
     fl_same_path "$(fl_plist_working_dir "$plist")" "$dir" && return 0
-  done
+  done < <(fl_agent_files)
   return 1
 }
 

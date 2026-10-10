@@ -13,7 +13,7 @@ here are test material, not anyone's real work.
   against real MariaDB, Redis, uv Python and fnm Node, with each bench under `systemd --user`
   (`systemctl --user status 'benchbar-*'`, `journalctl --user -u <unit>`).
 - Opening a URL in Windows: `wslview URL`. A site at `http://<name>.localhost:8000` answers from
-  Windows Edge because WSL forwards localhost.
+  Chrome on Windows because WSL forwards localhost.
 - GitHub: `gh` for runs, PRs, logs and artifacts (`gh run view --log-failed`).
 
 ## What does not run here

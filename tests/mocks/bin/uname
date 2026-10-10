@@ -1,8 +1,19 @@
 #!/usr/bin/env bash
-# uname mock: the suite always sees an Apple Silicon Mac, on any host
-case "${1:-}" in
-  -m) printf 'arm64\n' ;;
-  -s|"") printf 'Darwin\n' ;;
-  -r) printf '24.1.0\n' ;;
-  *) printf 'Darwin mac 24.1.0 Darwin Kernel Version 24.1.0 arm64\n' ;;
+# uname mock: the suite always sees an Apple Silicon Mac, on any host;
+# MOCK_UNAME=Linux (tests/lib/harness.sh use_linux) makes it an Ubuntu x86_64
+case "${MOCK_UNAME:-Darwin}" in
+  Linux)
+    case "${1:-}" in
+      -m) printf 'x86_64\n' ;;
+      -s|"") printf 'Linux\n' ;;
+      -r) printf '6.6.0-microsoft-standard-WSL2\n' ;;
+      *) printf 'Linux ubuntu 6.6.0-microsoft-standard-WSL2 #1 SMP x86_64 GNU/Linux\n' ;;
+    esac ;;
+  *)
+    case "${1:-}" in
+      -m) printf 'arm64\n' ;;
+      -s|"") printf 'Darwin\n' ;;
+      -r) printf '24.1.0\n' ;;
+      *) printf 'Darwin mac 24.1.0 Darwin Kernel Version 24.1.0 arm64\n' ;;
+    esac ;;
 esac

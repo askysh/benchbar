@@ -15,6 +15,9 @@ TMP_DIR="$(cd "$(mktemp -d "${TMPDIR:-/tmp}/benchbar-test.XXXXXX")" && pwd -P)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 export HOME="$TMP_DIR/home"
+# the platform the CLI sees: a Mac, whatever the host (use_linux, or
+# BENCHBAR_TEST_PLATFORM=linux before sourcing this file, switches)
+export FL_PLATFORM=macos
 export MOCK_STATE="$TMP_DIR/mock"
 export MOCK_LOG="$MOCK_STATE/calls.log"
 export MOCK_PROCS="$MOCK_STATE/procs"
@@ -77,7 +80,9 @@ export FL_CONFIG_DIR="$TMP_DIR/config"
 mkdir -p "$FL_CONFIG_DIR"; cp "$ROOT"/config/*.tsv "$FL_CONFIG_DIR/"
 printf 'stub download\n' >"$MOCK_STATE/download_payload"
 STUB_SHA="$(shasum -a 256 "$MOCK_STATE/download_payload" | awk '{print $1}')"
-sed "s/81a66b77b508fede8dbcaa67127203748376568b3673a17f6611b6d51e9894f8/${STUB_SHA}/" "$ROOT/config/wkhtmltopdf.tsv" >"$FL_CONFIG_DIR/wkhtmltopdf.tsv"
+# (the macOS row and the Linux .deb row alike)
+sed -e "s/81a66b77b508fede8dbcaa67127203748376568b3673a17f6611b6d51e9894f8/${STUB_SHA}/" \
+    -e "s/4f723b2691ad8638a9df960e0421d346d7315083e3583a334f33362280ddba15/${STUB_SHA}/" "$ROOT/config/wkhtmltopdf.tsv" >"$FL_CONFIG_DIR/wkhtmltopdf.tsv"
 cp "$ROOT/tests/mocks/honcho" "$MOCK_PIPX_HOME/venvs/frappe-bench/bin/honcho"
 chmod +x "$MOCK_PIPX_HOME/venvs/frappe-bench/bin/honcho"
 export PATH="$ROOT/tests/mocks/bin:$PATH"
@@ -85,6 +90,42 @@ export PATH="$ROOT/tests/mocks/bin:$PATH"
 FM="$ROOT/benchbar"
 # the CLI's own version, so a release bump needs no test edits
 VER="$(sed -n 's/^FL_VERSION="\(.*\)"$/\1/p' "$FM")"
+
+# ---------------------------------------------------------------- platform
+
+# use_linux: the CLI sees Ubuntu on x86_64 under WSL. Call it right after
+# sourcing this file, before any CLI run (or set BENCHBAR_TEST_PLATFORM=linux
+# before sourcing). Sets FL_PLATFORM, MOCK_UNAME, FL_PROC_VERSION (mentions
+# microsoft), FL_PROC_DIR (add_proc's third argument is /proc/PID/cwd),
+# FL_OS_RELEASE, XDG_CONFIG_HOME with the systemd user unit folder, SHELL and
+# FL_RC_FILE (bash), a fake uv Python and fnm Node (the mocks copied to where
+# fl_python_bin and fl_node_bin look) and the apt package set dpkg-query reads.
+use_linux() {
+  local v m
+  export FL_PLATFORM=linux MOCK_UNAME=Linux
+  export FL_PROC_VERSION="$MOCK_STATE/proc_version" FL_PROC_DIR="$MOCK_STATE/proc" FL_OS_RELEASE="$MOCK_STATE/os-release"
+  mkdir -p "$FL_PROC_DIR"
+  printf 'Linux version 6.6.0-microsoft-standard-WSL2 (root@build) (gcc) #1 SMP\n' >"$FL_PROC_VERSION"
+  printf 'NAME="Ubuntu"\nID=ubuntu\nID_LIKE=debian\nVERSION_ID="24.04"\n' >"$FL_OS_RELEASE"
+  export XDG_CONFIG_HOME="$HOME/.config"
+  unset XDG_STATE_HOME XDG_DATA_HOME UV_PYTHON_INSTALL_DIR FNM_DIR 2>/dev/null || true
+  mkdir -p "$XDG_CONFIG_HOME/systemd/user"
+  export SHELL=/bin/bash
+  export FL_RC_FILE="$HOME/.bashrc"
+  [[ -f "$FL_RC_FILE" ]] || printf '# test bashrc\nexport EDITOR=vim\n' >"$FL_RC_FILE"
+  for v in 3.11 3.14; do
+    mkdir -p "$HOME/.local/share/uv/python/cpython-${v}.9-linux-x86_64-gnu/bin"
+    cp "$ROOT/tests/mocks/python3.11" "$HOME/.local/share/uv/python/cpython-${v}.9-linux-x86_64-gnu/bin/python${v}"
+  done
+  for v in 22 24; do
+    m="$HOME/.local/share/fnm/node-versions/v${v}.11.0/installation/bin"
+    mkdir -p "$m"
+    cp "$ROOT/tests/mocks/node" "$ROOT/tests/mocks/npm" "$ROOT/tests/mocks/yarn" "$m/"
+  done
+  chmod +x "$HOME"/.local/share/uv/python/*/bin/* "$HOME"/.local/share/fnm/node-versions/*/installation/bin/*
+  printf '%s\n' mariadb-server mariadb-client redis-server build-essential pkg-config libmariadb-dev libssl-dev libffi-dev zlib1g-dev git curl zip >"$MOCK_STATE/apt_installed"
+}
+if [[ "${BENCHBAR_TEST_PLATFORM:-}" == "linux" ]]; then use_linux; fi
 
 # ---------------------------------------------------------------- asserts
 
@@ -168,7 +209,11 @@ make_fake_env_python() {
 # add_proc PID CMDLINE [CWD]: CWD is what lsof reports as its working folder
 add_proc() {
   printf '%s %s\n' "$1" "$2" >>"$MOCK_PROCS"; printf '%s %s\n' "$1" "$2" >>"$MOCK_STATE/ever_procs"
-  if [[ -n "${3:-}" ]]; then mkdir -p "$MOCK_STATE/cwd"; printf '%s' "$3" >"$MOCK_STATE/cwd/$1"; fi
+  if [[ -n "${3:-}" ]]; then
+    mkdir -p "$MOCK_STATE/cwd" "$MOCK_STATE/proc/$1"; printf '%s' "$3" >"$MOCK_STATE/cwd/$1"
+    # what /proc/PID/cwd is on Linux (use_linux points FL_PROC_DIR here)
+    ln -sfn "$3" "$MOCK_STATE/proc/$1/cwd"
+  fi
 }
 # add_listener PORT PID CMD ADDR: a fake TCP listener for the lsof mock
 add_listener() { printf '%s %s %s %s\n' "$1" "$2" "$3" "${4:-127.0.0.1}" >>"$MOCK_LISTEN"; }

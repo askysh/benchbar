@@ -7,10 +7,12 @@
 # versions do not know. The CLI jobs run on macos-latest, where /bin/bash
 # is the same 3.2 the CLI targets.
 #
-# Speed (docs/DECISIONS.md, "CI speed"): the macOS CLI tests run in three
-# shards, each running its tests in parallel; shellcheck runs in shard 1
-# alongside its tests; the release bundle is built in the app job from the
-# same checkout and DerivedData instead of a second job.
+# Speed (docs/DECISIONS.md, "CI speed"): the CLI tests run in four shards
+# on macOS and four on Linux, each running its tests in parallel; shellcheck
+# is its own Linux job; the macOS shards leave out the tests of the Linux
+# platform layer, which the Linux shards run on the bash Linux users have;
+# the release bundle is built in the app job from the same checkout and
+# DerivedData instead of a second job.
 #
 # A change that touches only docs/** or site/** skips the CLI and app jobs
 # (the "changes" job decides; the docs site has its own workflow, docs.yml).
@@ -58,15 +60,17 @@ jobs:
   # as a whole reports one check under its unexpanded name, so a required
   # "shard 1/3" check would wait forever. A skipped shard runs on a cheap
   # Linux runner for a few seconds and passes.
+  # Four shards plus the app job are the five concurrent macOS jobs of the
+  # free plan.
   cli-macos:
-    name: CLI tests (macOS, shard ${{ matrix.shard }}/3${{ matrix.shard == 1 && ', shellcheck' || '' }})
+    name: CLI tests (macOS, shard ${{ matrix.shard }}/4)
     needs: changes
     runs-on: ${{ needs.changes.outputs.code == 'true' && 'macos-latest' || 'ubuntu-latest' }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4]
     env:
       CODE: ${{ needs.changes.outputs.code }}
     steps:
@@ -76,43 +80,35 @@ jobs:
 
       - uses: actions/checkout@v7
         if: env.CODE == 'true'
-
-      - name: Cache Homebrew downloads
-        if: env.CODE == 'true' && matrix.shard == 1
-        uses: actions/cache@v6
-        with:
-          path: ~/Library/Caches/Homebrew
-          key: brew-${{ runner.os }}-${{ runner.arch }}-shellcheck
-          restore-keys: brew-${{ runner.os }}-${{ runner.arch }}-
-
-      - name: Install shellcheck
-        if: env.CODE == 'true' && matrix.shard == 1
-        run: command -v shellcheck >/dev/null 2>&1 || brew install shellcheck
 
       - name: Versions
         if: env.CODE == 'true'
         run: |
           /bin/bash --version | head -n 1
           sysctl -n hw.ncpu
-          if command -v shellcheck >/dev/null 2>&1; then shellcheck --version | sed -n 2p; fi
 
       # run-tests.sh runs its share of the tests PARALLEL (the CPU count) at a
-      # time, and shellcheck as one more job in shard 1
+      # time; the Linux platform tests run in the Linux shards
       - name: CLI tests (macOS /bin/bash 3.2)
         if: env.CODE == 'true'
         env:
-          SHARD: ${{ matrix.shard }}/3
+          SHARD: ${{ matrix.shard }}/4
+          SHELLCHECK: '0'
+          SKIP_TESTS: test-install-linux test-doctor-linux test-systemd test-platform-linux
         run: /bin/bash tests/run-tests.sh
 
-  # The mocked suite and shellcheck on Linux, for the Linux platform layer
-  # (docs/DECISIONS.md, "Linux"). Same skip rule as the macOS shards: it
-  # skips step by step when only docs/ or site/ changed. One job, no shards:
-  # ubuntu-latest has more cores than the macOS runners.
+  # The mocked suite on Linux, for the Linux platform layer
+  # (docs/DECISIONS.md, "Linux"), in four shards. Same skip rule as the
+  # macOS shards: it skips step by step when only docs/ or site/ changed.
   cli-linux:
-    name: CLI tests (Linux, shellcheck)
+    name: CLI tests (Linux, shard ${{ matrix.shard }}/4)
     needs: changes
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     env:
       CODE: ${{ needs.changes.outputs.code }}
     steps:
@@ -123,7 +119,37 @@ jobs:
       - uses: actions/checkout@v7
         if: env.CODE == 'true'
 
-      # the same shellcheck as the macOS shard (Homebrew's 0.11.0): Ubuntu's
+      - name: Versions
+        if: env.CODE == 'true'
+        run: |
+          bash --version | head -n 1
+          nproc
+
+      - name: CLI tests (Linux bash)
+        if: env.CODE == 'true'
+        env:
+          SHARD: ${{ matrix.shard }}/4
+          SHELLCHECK: '0'
+        run: bash tests/run-tests.sh
+
+  # shellcheck once, on its own runner, for every platform's scripts. Same
+  # skip rule as the shards.
+  shellcheck:
+    name: shellcheck
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CODE: ${{ needs.changes.outputs.code }}
+    steps:
+      - name: Skipped (only docs/ or site/ changed)
+        if: env.CODE != 'true'
+        run: echo "Only docs/ or site/ changed; shellcheck does not run."
+
+      - uses: actions/checkout@v7
+        if: env.CODE == 'true'
+
+      # Homebrew's 0.11.0, the version contributors run on a Mac: Ubuntu's
       # apt package is older and reports findings 0.11.0 does not
       - name: Install shellcheck 0.11.0
         if: env.CODE == 'true'
@@ -133,16 +159,88 @@ jobs:
           echo "4da528ddb3a4d1b7b24a59d4e16eb2f5fd960f4bd9a3708a15baddbdf1d5a55b  $RUNNER_TEMP/shellcheck-v0.11.0/shellcheck" | sha256sum -c -
           echo "$RUNNER_TEMP/shellcheck-v0.11.0" >>"$GITHUB_PATH"
 
-      - name: Versions
+      - name: shellcheck
         if: env.CODE == 'true'
         run: |
-          bash --version | head -n 1
-          nproc
           shellcheck --version | sed -n 2p
+          bash tests/run-tests.sh shellcheck
 
-      - name: CLI tests (Linux bash)
-        if: env.CODE == 'true'
-        run: bash tests/run-tests.sh
+  # A real install on Linux: phase 00 from apt, uv and fnm, a v15 bench and
+  # site, the bench under systemd --user, up, the site answering, status and
+  # doctor, down. Slow (a bench build), so only on pushes to main and on pull
+  # requests labelled test-linux. GitHub's Ubuntu runners boot systemd, but
+  # the runner user has no user manager until linger starts one
+  # (docs/DECISIONS.md, "Linux").
+  cli-linux-real:
+    name: Real install (Linux, v15, systemd --user)
+    if: >-
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'test-linux')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      ADMIN_PASSWORD: admin-ci-only
+      SITE: linuxdev.localhost
+    steps:
+      - uses: actions/checkout@v7
+
+      # The image ships MySQL (stopped) and its /etc/mysql: mariadb-server
+      # cannot install over them. A throwaway VM, so purging is safe here.
+      - name: Remove the image's MySQL
+        run: |
+          sudo systemctl stop mysql 2>/dev/null || true
+          sudo apt-get purge -y 'mysql-*' >/dev/null
+          sudo rm -rf /etc/mysql /var/lib/mysql
+
+      - name: Start a systemd user manager for the runner user
+        run: |
+          sudo loginctl enable-linger "$USER"
+          sudo systemctl start "user@$(id -u).service"
+          echo "XDG_RUNTIME_DIR=/run/user/$(id -u)" >>"$GITHUB_ENV"
+          for _ in $(seq 1 20); do
+            XDG_RUNTIME_DIR="/run/user/$(id -u)" systemctl --user is-system-running 2>/dev/null && break
+            sleep 1
+          done
+          XDG_RUNTIME_DIR="/run/user/$(id -u)" systemctl --user is-system-running || true
+
+      - name: benchbar install --yes
+        run: ./benchbar install --yes --site "$SITE"
+
+      - name: A second install is unchanged
+        run: ./benchbar install --yes --site "$SITE" 2>&1 | tee "$RUNNER_TEMP/second.log"
+
+      - name: benchbar up and wait for the site
+        run: |
+          ./benchbar up
+          for _ in $(seq 1 90); do
+            curl -fsS "http://$SITE:8000/api/method/ping" && exit 0
+            sleep 2
+          done
+          ./benchbar status --json || true
+          tail -n 100 ~/frappe-bench/logs/bench.log || true
+          exit 1
+
+      - name: status --json and doctor --json
+        run: |
+          ./benchbar status --json | tee "$RUNNER_TEMP/status.json"
+          python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["state"] == "running" and d["web_ping_code"] == 200, d' "$RUNNER_TEMP/status.json"
+          ./benchbar doctor --json >"$RUNNER_TEMP/doctor.json"
+          ./benchbar repair --dry-run
+
+      - name: benchbar down
+        run: |
+          ./benchbar down
+          ! curl -fsS --max-time 3 "http://$SITE:8000/api/method/ping"
+
+      - name: Logs on failure
+        if: failure()
+        run: |
+          systemctl --user status 'benchbar-*' --no-pager || true
+          journalctl --user --no-pager -n 200 || true
+          ls -la ~/.local/state/benchbar/logs || true
+          tail -n 200 ~/.local/state/benchbar/logs/*.log || true
+          cat "$RUNNER_TEMP/doctor.json" 2>/dev/null || true
 
   app:
     name: App build, Swift tests and unsigned release bundle (macOS)

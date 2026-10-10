@@ -44,7 +44,7 @@ LOG_FILES = {"bench": [], "worker": ["--worker"], "worker_error": ["--worker-err
 # name -> (description, extra input properties, argv builder, read only, exit codes that still carry JSON)
 TOOLS = {
     "benchbar_list": (
-        "Every Frappe bench benchbar knows on this Mac: path, default site, sites, ports, whether its service is installed.",
+        "Every Frappe bench benchbar knows on this machine: path, default site, sites, ports, whether its service is installed.",
         {},
         lambda a: ["list", "--json"],
         True,
@@ -123,7 +123,7 @@ TOOLS = {
         (0,),
     ),
     "benchbar_up": (
-        "Start a bench in the background (launchd) and wait for its default site to answer.",
+        "Start a bench in the background (as a service) and wait for its default site to answer.",
         {"bench": BENCH},
         lambda a: ["up", "--plain"] + bench_args(a),
         False,

@@ -40,6 +40,11 @@ fl_scan_walk() {
     # system folders of the disk itself: only at /, so ~/dev is still scanned
     if [[ "$dir" == "/" || -z "$dir" ]]; then
       case "$name" in Volumes|System|private|cores|dev|usr|bin|sbin|opt) continue ;; esac
+      # Linux: the kernel's pseudo folders, and under WSL /mnt, where the
+      # Windows drives are (a scan there is slow and finds nothing of ours)
+      if fl_is_linux; then
+        case "$name" in proc|sys|run|snap|mnt) continue ;; esac
+      fi
     fi
     fl_scan_walk "$child" $((depth + 1))
   done

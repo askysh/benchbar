@@ -8,13 +8,16 @@
 # process exits). The session is exported as FL_SUDO_SESSION=1 so a function
 # that needs sudo later in the same run does not ask again.
 #
-# Only two things ever need sudo: the wkhtmltopdf package (installer -pkg)
-# and the /etc/hosts line. Nothing else in benchbar runs as root, and
-# fl_sudo_drop ("sudo -k") ends the credential as soon as those two are
-# done, before brew, pip, npm, yarn or bench run any third party code on
-# the same terminal: a package's install script must not find a cached
-# sudo. "benchbar install" does the two steps first and drops; a phase
-# script that needs sudo on its own asks itself and drops after.
+# On macOS only two things ever need sudo: the wkhtmltopdf package
+# (installer -pkg) and the /etc/hosts line. On Linux: apt (the packages and
+# the wkhtmltopdf .deb), the MariaDB admin step, its drop-in and restart, and
+# starting a stopped mariadb or redis-server (platform-linux.sh). Nothing
+# else in benchbar runs as root, and fl_sudo_drop ("sudo -k") ends the
+# credential as soon as those steps are done, before brew, pip, npm, yarn,
+# uv, fnm or bench run any third party code on the same terminal: a
+# package's install script must not find a cached sudo. "benchbar install"
+# does those steps first and drops; a phase script that needs sudo on its
+# own asks itself and drops after.
 
 FL_SUDO_KEEPALIVE_PID=""
 FL_SUDO_SESSION="${FL_SUDO_SESSION:-0}"
@@ -41,7 +44,13 @@ fl_sudo_begin() {
   printf '\n  %ssudo%s is needed once for this run, to:\n' "$FL_BOLD" "$FL_RESET"
   for reason in "$@"; do printf '     %s %s\n' "$FL_G_PEND" "$reason"; done
   printf '     nothing else runs as root; the password is not stored\n'
-  if ! sudo -v; then
+  # A NOPASSWD rule needs no prompt, but "sudo -v" still asks for a password
+  # when another rule for the same user wants one (sudo's verifypw=all, the
+  # default with Ubuntu's %sudo line). "-k" with a command ignores a cached
+  # credential, so this succeeds only when no password is needed at all.
+  if sudo -n -k true 2>/dev/null; then
+    fl_log "sudo: no password needed (NOPASSWD)"
+  elif ! sudo -v; then
     FL_SUDO_REFUSED=1
     export FL_SUDO_REFUSED
     fl_warn "sudo was refused; the steps above are skipped, and this run will not ask again"

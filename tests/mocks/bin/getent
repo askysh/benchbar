@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# getent mock: "getent hosts NAME" answers 127.0.0.1 for localhost and *.localhost,
+# and for every name listed in $MOCK_STATE/hosts_resolve; anything else is not
+# found (exit 2). $MOCK_STATE/no_myhostname: *.localhost does not resolve
+# either (glibc without nss-myhostname, as on a fresh Ubuntu in WSL)
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "$(dirname "$0")/_mocklib.sh"
+mock_log "$@"
+[[ "${1:-}" == "hosts" ]] || exit 2
+name="${2:-}"
+case "$name" in
+  *.localhost) [[ -f "${MOCK_STATE:-/nonexistent}/no_myhostname" ]] && exit 2
+    printf '127.0.0.1       %s\n' "$name"; exit 0 ;;
+  localhost) printf '127.0.0.1       %s\n' "$name"; exit 0 ;;
+esac
+if grep -qx "$name" "${MOCK_STATE:-/nonexistent}/hosts_resolve" 2>/dev/null; then printf '127.0.0.1       %s\n' "$name"; exit 0; fi
+exit 2

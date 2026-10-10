@@ -72,7 +72,10 @@ fl_context_init() {
   # and 01), so daily commands never look at port 3306
   FL_MARIADB_FORMULA_PINNED="$(fl_bstate_get MARIADB_FORMULA 2>/dev/null || true)"
   [[ -n "$FL_MARIADB_FORMULA_PINNED" ]] && fl_mariadb_prefer_running
-  if command -v brew >/dev/null 2>&1; then
+  if fl_is_linux; then
+    # no Homebrew on Linux: the toolchain paths come from uv, fnm and apt
+    FL_BREW_PREFIX=""
+  elif command -v brew >/dev/null 2>&1; then
     FL_BREW_PREFIX="$(brew --prefix 2>/dev/null || printf '/opt/homebrew')"
   else
     FL_BREW_PREFIX="${FL_BREW_PREFIX:-/opt/homebrew}"
@@ -116,6 +119,7 @@ fl_render_all() {
   # fl_require_plain_bench first and refuse
   fl_autostart_enabled || run_at_load=false
   FL_R_PROCFILE="$(fl_template_render Procfile.lean "WEB_PORT=${FL_WEB_PORT}" "SCHEDULE=$(fl_scheduler_enabled && printf 'schedule: bench schedule')")"
+  fl_runner_extra_args
   FL_R_RUNNER="$(fl_template_render bench-run.sh \
     "BENCH_DIR=${FL_BENCH_DIR}" \
     "BENCH_RE=$(fl_regex_escape "$FL_BENCH_DIR")" \
@@ -127,15 +131,10 @@ fl_render_all() {
     "CLI_VERSION=${FL_VERSION:-0}" \
     "LABEL=$(fl_agent_label)" \
     "MAX_STARTS=${FL_CRASH_MAX_STARTS}" \
-    "WINDOW=${FL_CRASH_WINDOW}")"
-  FL_R_PLIST="$(fl_template_render launchagent.plist \
-    "LABEL=$(fl_agent_label)" \
-    "APP_BUNDLE_ID=${FL_APP_BUNDLE_ID}" \
-    "RUNNER=$(fl_runner_path)" \
-    "BENCH_DIR=${FL_BENCH_DIR}" \
-    "PATH=$(fl_launchd_path_value)" \
-    "RUN_AT_LOAD=${run_at_load}" \
-    "LOG=$(fl_bench_log_path)")"
+    "WINDOW=${FL_CRASH_WINDOW}" \
+    ${FL_RUNNER_EXTRA[@]+"${FL_RUNNER_EXTRA[@]}"})"
+  # the agent's plist, or the systemd unit on Linux
+  fl_render_agent "$run_at_load"
   FL_R_HELPERS="$(fl_template_render shell-helpers \
     "PROFILE_EXPORTS=$(fl_profile_path_exports "$(fl_rc_profile)")" \
     "BENCHBAR=$(fl_helpers_cli)")"
@@ -268,10 +267,11 @@ fl_cmd_up() {
   fl_arm_start
   if ! fl_agent_loaded; then
     fl_info "agent not loaded; loading $(fl_agent_plist_path)"
-    fl_agent_bootstrap "$(fl_agent_plist_path)" || fl_die "launchctl could not load the agent." "Run: ${FL_SELF} repair"
+    fl_agent_bootstrap "$(fl_agent_plist_path)" || fl_die "${FL_AGENT_CTL} could not load the agent." "Run: ${FL_SELF} repair"
   fi
   fl_state_json_write starting "" "" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "" ""
-  fl_agent_kickstart || fl_die "launchctl kickstart failed." "Run: ${FL_SELF} doctor"
+  fl_agent_kickstart || fl_die "${FL_AGENT_CTL_START} failed." "Run: ${FL_SELF} doctor"
+  fl_autostart_enabled && fl_linger_ensure
   [[ "${FL_DRY_RUN:-0}" == "1" ]] && return 0
   # the state is written and the agent kicked: the wait for the site only
   # reads, so other runs (another bench's repair, a site add) go ahead
@@ -320,10 +320,11 @@ fl_cmd_restart() {
   fl_check_port_clash_or_confirm || return 1
   fl_arm_start
   if ! fl_agent_loaded; then
-    fl_agent_bootstrap "$(fl_agent_plist_path)" || fl_die "launchctl could not load the agent."
+    fl_agent_bootstrap "$(fl_agent_plist_path)" || fl_die "${FL_AGENT_CTL} could not load the agent."
   fi
   fl_state_json_write starting "" "" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "" ""
-  fl_agent_kickstart -k || fl_die "launchctl kickstart -k failed."
+  fl_agent_kickstart -k || fl_die "${FL_AGENT_CTL_RESTART} failed."
+  fl_autostart_enabled && fl_linger_ensure
   [[ "${FL_DRY_RUN:-0}" == "1" ]] && return 0
   fl_lock_release
   fl_spinner_start "restarting bench ${FL_BENCH_NAME}" "$(fl_bench_log_path)"
@@ -477,6 +478,7 @@ fl_cmd_autostart() {
   fl_bstate_set AUTOSTART "$mode"
   fl_render_all
   act_write_plist || return 1
+  [[ "$mode" == "on" ]] && fl_linger_ensure
   fl_ok "autostart ${mode}"
 }
 
@@ -488,7 +490,7 @@ fl_uninstall_orphan_agents() {
   local list plist label dest code=0
   list="$(fl_agents_for_dir "$FL_BENCH_DIR")"
   [[ -n "$list" ]] || fl_die "No bench at ${FL_BENCH_DIR}, and no com.benchbar agent points at it." \
-    "Check the path, or list the agents: ls ~/Library/LaunchAgents/com.benchbar.*"
+    "Check the path, or list the agents: $(fl_agent_list_hint)"
   fl_warn "${FL_BENCH_DIR} is not a bench (any more), but its agent is still installed."
   fl_info "This boots out and moves aside: $(printf '%s\n' "$list" | cut -d'|' -f2 | tr '\n' ' ')"
   [[ "${1:-}" == confirmed ]] || fl_confirm "Remove the agent for ${FL_BENCH_DIR}?" || { fl_warn "Cancelled."; return 1; }
@@ -498,13 +500,12 @@ fl_uninstall_orphan_agents() {
       fl_info "dry-run: would boot out ${label} and move ${plist} to ${FL_LEGACY_DIR}/"
       continue
     fi
-    if launchctl print "$(fl_launchd_domain)/${label}" >/dev/null 2>&1; then
-      launchctl bootout "$(fl_launchd_domain)/${label}" 2>/dev/null || launchctl unload -w "$plist" 2>/dev/null || true
+    if fl_agent_listed "$(fl_launchd_domain)/${label}"; then
       # still loaded: keep the plist, or the job would go on restarting
       # with nothing left on disk to remove it by
-      if ! fl_agent_wait_gone "$(fl_launchd_domain)/${label}"; then
-        fl_fail "launchd still runs ${label}; its plist stays at ${plist}"
-        fl_fix "launchctl bootout $(fl_launchd_domain)/${label}, then run this command again"
+      if ! fl_agent_unload "$(fl_launchd_domain)/${label}" "$plist"; then
+        fl_fail "${FL_AGENT_MANAGER} still runs ${label}; its plist stays at ${plist}"
+        fl_fix "$(fl_agent_bootout_hint "$(fl_launchd_domain)/${label}"), then run this command again"
         code=1
         continue
       fi
@@ -515,6 +516,7 @@ fl_uninstall_orphan_agents() {
       fl_fail "could not move ${plist} to ${dest}/"; code=1; continue
     fi
     fl_ok "moved ${plist} to ${dest}/"
+    fl_agent_files_changed
   done <<<"$list"
   [[ "$code" == "0" ]] || return 1
   fl_ok "agent removed; nothing else in ${FL_BENCH_DIR} was touched"
@@ -539,18 +541,19 @@ fl_cmd_uninstall_service() {
   # restarting with nothing left on disk to remove it by (the orphan path
   # does the same)
   if fl_agent_loaded && ! fl_agent_bootout; then
-    fl_fail "launchd still runs $(fl_agent_label); the plist and the runner stay"
-    fl_fix "launchctl bootout $(fl_agent_target), then run this command again"
+    fl_fail "${FL_AGENT_MANAGER} still runs $(fl_agent_label); the plist and the runner stay"
+    fl_fix "$(fl_agent_bootout_hint "$(fl_agent_target)"), then run this command again"
     return 1
   fi
   if [[ -f "$plist" ]]; then
-    dest="${FL_LEGACY_DIR}/$(basename "$plist" .plist)-$(fl_backup_stamp)"
+    dest="${FL_LEGACY_DIR}/$(basename "${plist%.*}")-$(fl_backup_stamp)"
     if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then fl_info "dry-run: would move ${plist} to ${dest}/"
     else
       if ! mkdir -p "$dest" 2>/dev/null || ! mv "$plist" "$dest/" 2>/dev/null; then
         fl_fail "could not move ${plist} to ${dest}/"; return 1
       fi
       fl_ok "moved ${plist} to ${dest}/"
+      fl_agent_files_changed
     fi
   fi
   # nothing goes without its backup
@@ -578,14 +581,14 @@ fl_uninstall_helper_block() {
 # brew uninstall cannot do this itself: a formula has no uninstall hook.
 fl_cmd_uninstall_service_all() {
   local plist dir dirs=() seen=$'\n' rc code=0 n=0 one
-  for plist in "$HOME"/Library/LaunchAgents/com.benchbar.*.plist; do
-    [[ -f "$plist" ]] || continue
+  while IFS= read -r plist; do
+    [[ -n "$plist" ]] || continue
     dir="$(fl_plist_working_dir "$plist")"
     if [[ -z "$dir" ]]; then fl_warn "$(basename "$plist") names no bench folder; left alone"; continue; fi
     case "$seen" in *$'\n'"${dir}"$'\n'*) continue ;; esac
     seen="${seen}${dir}"$'\n'
     dirs+=("$dir")
-  done
+  done < <(fl_agent_files)
   rc="$(fl_rc_file)"
   if [[ "${#dirs[@]}" == "0" ]]; then
     case "$(fl_rc_block_state "$rc")" in
