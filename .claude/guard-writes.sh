@@ -23,9 +23,11 @@ cmd="$(printf '%s' "$input" | sed -nE 's/.*"command"[[:space:]]*:[[:space:]]*"((
 
 # Prints each chunk that starts with the pattern, up to the next match, one
 # per line (newlines inside the command are JSON escaped, so none are real).
+# Lowercased: Windows finds SCHTASKS and Schtasks.exe as well, so the
+# patterns and every check below are lowercase or case-insensitive.
 chunks() {
   printf '%s' "$cmd" | awk -v pat="$1" '{
-    s = $0
+    s = tolower($0)
     while ((i = match(s, pat)) > 0) {
       rest = substr(s, i + RLENGTH)
       j = match(rest, pat)
@@ -71,7 +73,7 @@ while IFS= read -r call; do
   fi
   if matches "$call" '[[:space:]][-/]+create([[:space:]]|$)'; then
     names="$(printf '%s' "$call" | grep -Eio -- '[[:space:]][-/]+tn([[:space:]]|$)' | wc -l | tr -d ' ')"
-    keepalive='[[:space:]][-/]+[Tt][Nn][[:space:]]+(\\"|'"'"')BenchBar Keepalive(\\"|'"'"')([[:space:]]|$)'
+    keepalive='[[:space:]][-/]+tn[[:space:]]+(\\"|'"'"')benchbar keepalive(\\"|'"'"')([[:space:]]|$)'
     if [ "$names" != 1 ] || ! [[ $call =~ $keepalive ]]; then
       echo "Blocked: schtasks /Create is only allowed for the task named \"BenchBar Keepalive\"." >&2
       exit 2

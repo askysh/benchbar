@@ -97,7 +97,7 @@ func TestAdoptSystemdMissing(t *testing.T) {
 	}
 	out := e.stdout()
 	if !strings.Contains(out, "  [FAIL] systemd: ") ||
-		!strings.Contains(out, `fix: wsl.exe -d Ubuntu-24.04 -- sudo sh -c "printf '[boot]\nsystemd=true\n' >> /etc/wsl.conf"; wsl.exe --terminate Ubuntu-24.04`) {
+		!strings.Contains(out, `fix: wsl.exe -d Ubuntu-24.04 -- sudo sh -c "printf '\n[boot]\nsystemd=true\n' >> /etc/wsl.conf"; wsl.exe --terminate Ubuntu-24.04`) {
 		t.Errorf("output:\n%s", out)
 	}
 	if e.configExists() {

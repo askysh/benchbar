@@ -72,7 +72,7 @@ func systemdFix(distro string, hasBoot bool) string {
 	if hasBoot {
 		return fmt.Sprintf("set systemd=true under [boot] in /etc/wsl.conf (wsl.exe -d %s -- sudo nano /etc/wsl.conf), then wsl.exe --terminate %s", distro, distro)
 	}
-	return fmt.Sprintf(`wsl.exe -d %s -- sudo sh -c "printf '[boot]\nsystemd=true\n' >> /etc/wsl.conf"; wsl.exe --terminate %s`, distro, distro)
+	return fmt.Sprintf(`wsl.exe -d %s -- sudo sh -c "printf '\n[boot]\nsystemd=true\n' >> /etc/wsl.conf"; wsl.exe --terminate %s`, distro, distro)
 }
 
 func lingerFix(distro, user string) string {

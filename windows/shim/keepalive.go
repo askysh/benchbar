@@ -191,17 +191,21 @@ func queryKeepalive(sys *System) keepaliveInfo {
 		c.Status, c.Message = "warn", "installed, but its action is not a BenchBar keepalive"
 	case !info.ExeExists:
 		c.Status, c.Message = "warn", fmt.Sprintf("installed, but %s does not exist", exe)
+	case !info.RunAlive:
+		// a disabled task, one that failed to start or a run that died: WSL
+		// can stop the distro, so this is not healthy; install restarts it
+		c.Status = "warn"
+		c.Message = fmt.Sprintf("installed for %s via %s, but its run process is not running", distro, exe)
+		if info.Status != "" {
+			c.Message += fmt.Sprintf(" (task status %s, last result %s)", info.Status, info.LastResult)
+		}
 	default:
 		c.Status, c.Fix = "ok", ""
 		c.Message = fmt.Sprintf("installed for %s via %s", distro, exe)
 		if info.Status != "" {
 			c.Message += fmt.Sprintf(" (status %s, last result %s)", info.Status, info.LastResult)
 		}
-		if info.RunAlive {
-			c.Message += fmt.Sprintf("; run process pid %d is alive", info.RunPid)
-		} else {
-			c.Message += "; run process is not running"
-		}
+		c.Message += fmt.Sprintf("; run process pid %d is alive", info.RunPid)
 	}
 	info.Checks = []Check{c}
 	return info

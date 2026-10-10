@@ -223,7 +223,9 @@ func TestKeepaliveStatusInstalled(t *testing.T) {
 		if code := e.run("keepalive", "status"); code != 0 {
 			t.Fatalf("exit %d", code)
 		}
-		want := "  [OK] Keepalive: installed for Ubuntu-24.04 via " + testExe + " (status Running, last result 267009); run process is not running\n"
+		// the task exists but no run process is alive: not healthy
+		want := "  [WARN] Keepalive: installed for Ubuntu-24.04 via " + testExe + ", but its run process is not running (task status Running, last result 267009)\n" +
+			"     fix: benchbar.exe keepalive install\n"
 		if e.stdout() != want {
 			t.Errorf("got  %q\nwant %q", e.stdout(), want)
 		}
