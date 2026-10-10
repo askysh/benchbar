@@ -66,7 +66,10 @@ fl_state_guard_stale() {
   if [[ -n "$__pid" ]] && ! kill -0 "$__pid" 2>/dev/null; then return 0; fi
   __m="$( (stat -c %Y "$1" || stat -f %m "$1") 2>/dev/null)"
   __now="$(date +%s 2>/dev/null || true)"
-  [[ -n "$__m" && -n "$__now" && $((__now - __m)) -gt 60 ]]
+  # numbers only: when the guard goes away meanwhile (another run took it
+  # down), GNU stat fails and its -f fallback prints a "File:" report
+  [[ "$__m" =~ ^[0-9]+$ && "$__now" =~ ^[0-9]+$ ]] || return 1
+  [[ $((__now - __m)) -gt 60 ]]
 }
 
 # fl_state_guard_drop GUARD: removes what a run leaves in its guard: the pid
