@@ -130,6 +130,11 @@ func main() {
 		os.Exit(130)
 	case strings.HasPrefix(mode, "probe:"):
 		if len(r.Exec) > 0 && r.Exec[0] == "loginctl" {
+			// FAKE_WSL_LINGER_REFUSE: refuse as polkit does outside a session
+			if os.Getenv("FAKE_WSL_LINGER_REFUSE") != "" {
+				fmt.Fprintln(os.Stderr, "Could not enable linger: Interactive authentication required.")
+				os.Exit(1)
+			}
 			os.Exit(0)
 		}
 		file := strings.TrimPrefix(mode, "probe:")

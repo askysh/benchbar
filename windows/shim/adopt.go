@@ -79,6 +79,12 @@ func lingerFix(distro, user string) string {
 	return fmt.Sprintf("wsl.exe -d %s -- loginctl enable-linger %s", quoteArg(distro), user)
 }
 
+// sudoLingerFix is the fix once polkit has refused the unprivileged form
+// (outside an active session), as the Linux layer's own fix says.
+func sudoLingerFix(distro, user string) string {
+	return fmt.Sprintf("wsl.exe -d %s -- sudo loginctl enable-linger %s", quoteArg(distro), user)
+}
+
 func probeChecks(t target, r probeResult) []Check {
 	distro, cli := t.distro, t.cli
 	var cs []Check
@@ -279,6 +285,7 @@ func applyLinger(sys *System, t target, user string) (Check, bool) {
 			detail = err.Error()
 		}
 		warn.Message += fmt.Sprintf(" (enabling failed: %s)", detail)
+		warn.Fix = sudoLingerFix(t.distro, user)
 		return warn, false
 	}
 	r, err := runProbe(sys, t.distro, t.cli)

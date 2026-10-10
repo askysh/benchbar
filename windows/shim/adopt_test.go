@@ -289,6 +289,20 @@ func TestAdoptLingerFixWithYes(t *testing.T) {
 	}
 }
 
+func TestAdoptLingerRefusedEscalatesToSudo(t *testing.T) {
+	e := newEnv(t)
+	e.useProbe(lingerOff())
+	t.Setenv("FAKE_WSL_LINGER_REFUSE", "1")
+	if code := e.run("adopt-distro", "--yes"); code != 0 {
+		t.Fatalf("exit %d, a WARN is not a failure\n%s", code, e.stdout())
+	}
+	out := e.stdout()
+	if !strings.Contains(out, "Interactive authentication required") ||
+		!strings.Contains(out, "fix: wsl.exe -d Ubuntu-24.04 -- sudo loginctl enable-linger akash") {
+		t.Errorf("output:\n%s", out)
+	}
+}
+
 func TestAdoptLingerYesNeverTouchesOtherFailures(t *testing.T) {
 	e := newEnv(t)
 	e.useProbe(probeText("", "init", "akash", "/x/benchbar", "no"))

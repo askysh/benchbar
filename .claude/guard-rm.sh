@@ -116,7 +116,14 @@ for i in range(0, len(pieces), 2):
     if os.path.basename(words[0]) == "find" and any(os.path.basename(w) == "rm" for w in words[1:]):
         block("find -exec rm deletes paths the guard cannot see; list them first, then rm them by name.")
     if words[0] in ("cd", "pushd", "popd"):
-        dest = words[1] if len(words) > 1 and words[0] != "popd" else None
+        # Options (-L, -P, -e, -@) come before the folder; "-" alone is the
+        # previous folder, which the guard cannot know.
+        args = words[1:]
+        while args and args[0].startswith("-") and args[0] != "-":
+            done = args.pop(0) == "--"
+            if done:
+                break
+        dest = args[0] if args and words[0] != "popd" else None
         if dest is None or dest == "-" or "$" in dest or "`" in dest:
             new = [None]
         else:
@@ -125,8 +132,13 @@ for i in range(0, len(pieces), 2):
         certain = before in (";", "\n", "&&") and after == "&&"
         cwds = new if certain else cwds + new
         continue
-    if os.path.basename(words[0]) != "rm":
+    # Any wrapper with any options can run rm (nice -n 5, sudo -u x,
+    # timeout 5, env -i), so rm is checked wherever it is in the command.
+    at = next((k for k, w in enumerate(words) if os.path.basename(w) == "rm"), None)
+    if at is None:
         continue
+    via_xargs = via_xargs or any(os.path.basename(w) == "xargs" for w in words[:at])
+    words = words[at:]
     flags = "".join(w.lstrip("-") for w in words[1:] if w.startswith("-") and not w.startswith("--"))
     longs = [w for w in words[1:] if w.startswith("--")]
     recursive = "r" in flags or "R" in flags or "--recursive" in longs
