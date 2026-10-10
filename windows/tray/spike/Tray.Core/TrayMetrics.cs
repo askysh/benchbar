@@ -54,6 +54,14 @@ public static class TrayMetrics
     }
 
     /// <summary>"Show animations in Windows" off means reduce motion.</summary>
-    public static bool ReduceMotion() =>
-        Native.SystemParametersInfo(Native.SPI_GETCLIENTAREAANIMATION, 0, out var enabled, 0) && enabled == 0;
+    /// <summary>
+    /// The system's "animation effects" switch, unless BENCHBAR_TRAY_REDUCE_MOTION says 0 or 1: the harness
+    /// sets 0 for both shells, because a CI runner has animations off and would measure a still frame.
+    /// </summary>
+    public static bool ReduceMotion() => Environment.GetEnvironmentVariable("BENCHBAR_TRAY_REDUCE_MOTION") switch
+    {
+        "0" => false,
+        "1" => true,
+        _ => Native.SystemParametersInfo(Native.SPI_GETCLIENTAREAANIMATION, 0, out var enabled, 0) && enabled == 0,
+    };
 }

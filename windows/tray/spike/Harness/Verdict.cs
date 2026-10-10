@@ -43,10 +43,13 @@ internal static class Verdict
         int wc = Metric(lines, "CPU while animating", a.Name, b.Name, a.Cpu?.Median, b.Cpu?.Median, "% of one core", "0.00", ref incomplete);
 
         // A CPU number only compares if both shells drew the same frames.
-        bool fpsOk = a.Fps is { } fa && b.Fps is { } fb && Compare(fa.Median, fb.Median).Winner == 0;
+        // Both must really animate (the timer gives 21.3 fps at the 30 fps target) and at the same rate.
+        const double MinFps = 15;
+        bool fpsOk = a.Fps is { } fa && b.Fps is { } fb && fa.Median >= MinFps && fb.Median >= MinFps
+            && Compare(fa.Median, fb.Median).Winner == 0;
         lines.Add(fpsOk
             ? $"- Achieved frame rate: {a.Name} {F(a.Fps!.Median, "0.0")} fps, {b.Name} {F(b.Fps!.Median, "0.0")} fps; within 10%, so the CPU numbers compare"
-            : "- Achieved frame rate: missing or more than 10% apart, so the CPU numbers do not compare");
+            : $"- Achieved frame rate: missing, under {F(MinFps, "0")} fps or more than 10% apart, so the CPU numbers do not compare");
 
         // Step 3: the outcome.
         lines.Add("");

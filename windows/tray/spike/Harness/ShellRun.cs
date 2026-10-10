@@ -55,6 +55,8 @@ internal sealed class ShellRun : IDisposable
         };
         psi.Environment["BENCHBAR_TRAY_HARNESS_PIPE"] = pipeName;
         psi.Environment["BENCHBAR_TRAY_FIXTURES"] = fixturesDir;
+        // Animate whatever the machine's animation setting is (a CI runner has it off), the same for both shells.
+        psi.Environment["BENCHBAR_TRAY_REDUCE_MOTION"] = "0";
         if (theme is not null) psi.Environment["BENCHBAR_TRAY_THEME"] = theme;
         Process = new Process { StartInfo = psi, EnableRaisingEvents = true };
         Process.Exited += (_, _) =>
