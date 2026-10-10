@@ -198,8 +198,14 @@ public sealed class FrameSequencer
     private Step Rest(RunnerPose pose) =>
         new(pose, pose == RunnerPose.Alert ? Math.Max(_frameCount(pose) - 1, 0) : 0, pose.BaseFps());
 
+    private static long s_framesShown;
+
+    /// <summary>Frames shown by every sequencer in this process, for the harness's achieved fps.</summary>
+    public static long FramesShown => Interlocked.Read(ref s_framesShown);
+
     private void Show()
     {
+        Interlocked.Increment(ref s_framesShown);
         var step = _steps[_index];
         _showFrame(step.Pose, step.Frame);
     }

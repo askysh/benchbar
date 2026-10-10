@@ -17,6 +17,7 @@ internal sealed class ShellResults(string name, string exe, string? dir, string?
     public List<double> PrivateBytes { get; } = [];
     public List<double> WorkingSetBytes { get; } = [];
     public List<double> CpuPercent { get; } = [];
+    public List<double> AchievedFps { get; } = [];
     public List<ClickSample> Clicks { get; } = [];
     public List<double> LogonWarmMs { get; } = [];
     public List<double> LogonColdMs { get; } = [];
@@ -28,6 +29,7 @@ internal sealed class ShellResults(string name, string exe, string? dir, string?
     public Summary? Rest => Stats.Of(PrivateBytes);
     public Summary? WorkingSet => Stats.Of(WorkingSetBytes);
     public Summary? Cpu => Stats.Of(CpuPercent);
+    public Summary? Fps => Stats.Of(AchievedFps);
     public Summary? Click => Stats.Of(Clicks.Select(c => c.Ms).ToList());
     public Summary? LogonWarm => Stats.Of(LogonWarmMs);
     public Summary? LogonCold => Stats.Of(LogonColdMs);

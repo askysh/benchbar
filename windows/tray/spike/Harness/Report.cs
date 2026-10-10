@@ -96,6 +96,7 @@ internal static class Report
             WriteDoubles(w, "private_bytes", s.PrivateBytes);
             WriteDoubles(w, "working_set_bytes", s.WorkingSetBytes);
             WriteDoubles(w, "cpu_percent", s.CpuPercent);
+            WriteDoubles(w, "achieved_fps", s.AchievedFps);
             w.WriteStartArray("click");
             foreach (ClickSample c in s.Clicks)
             {
@@ -215,6 +216,11 @@ internal static class Report
         sb.AppendLine("## CPU while animating (% of one core)").AppendLine();
         sb.AppendLine(Head).AppendLine("|---|---|---|---|---|");
         sb.Append(Row(s => s.Cpu, v => F(v, "0.00"), _ => ""));
+        sb.AppendLine();
+
+        sb.AppendLine("## Achieved frame rate while animating (frames per second, target 30)").AppendLine();
+        sb.AppendLine(Head).AppendLine("|---|---|---|---|---|");
+        sb.Append(Row(s => s.Fps, v => F(v, "0.0"), _ => ""));
         sb.AppendLine();
 
         sb.AppendLine("## Click to flyout (ms)").AppendLine();

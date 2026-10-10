@@ -265,6 +265,14 @@ internal sealed class Measure : ShellCommand
         }
     }
 
+    /// <summary>Frames the shell has shown so far, answered by Tray.Core's HarnessLink; null if it does not answer.</summary>
+    private async Task<long?> FramesAsync(ShellRun run)
+    {
+        run.Send("stats");
+        Msg? m = await run.WaitForAsync("stats", TimeSpan.FromSeconds(5), Ct);
+        return m?.GetLong("frames");
+    }
+
     private async Task RunCpu()
     {
         for (int i = 1; i <= _info.RunsCpu; i++)
@@ -279,6 +287,7 @@ internal sealed class Measure : ShellCommand
                 await Task.Delay(TimeSpan.FromSeconds(_info.CpuWarmupSeconds), Ct);
                 try
                 {
+                    long? f1 = await FramesAsync(run);
                     run.Process.Refresh();
                     TimeSpan t1 = run.Process.TotalProcessorTime;
                     long w1 = Stopwatch.GetTimestamp();
@@ -286,7 +295,10 @@ internal sealed class Measure : ShellCommand
                     run.Process.Refresh();
                     TimeSpan t2 = run.Process.TotalProcessorTime;
                     long w2 = Stopwatch.GetTimestamp();
+                    long? f2 = await FramesAsync(run);
                     s.CpuPercent.Add((t2 - t1).TotalMilliseconds / QpcMs(w1, w2) * 100.0);
+                    // Both shells must animate at the same rate, or a cheaper number only means fewer frames.
+                    if (f1 is long a && f2 is long b) s.AchievedFps.Add((b - a) / (QpcMs(w1, w2) / 1000.0));
                 }
                 catch (InvalidOperationException)
                 {

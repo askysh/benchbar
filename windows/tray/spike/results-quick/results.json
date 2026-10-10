@@ -1,0 +1,134 @@
+{
+  "quick": true,
+  "interrupted": false,
+  "started": "2026-10-10T20:25:54.2410554+05:30",
+  "machine": {
+    "cpu": "AMD Ryzen 7 6800H with Radeon Graphics",
+    "logical_cores": "16",
+    "ram": "15.2 GB",
+    "os": "Microsoft Windows 10.0.26300",
+    "os_build": "10.0.26300.0",
+    "primary_monitor_dpi": "96",
+    "elevated": "false",
+    "dotnet_runtime": ".NET 10.0.12"
+  },
+  "method": {
+    "cold_method": "empty-working-set",
+    "click_method": "the shell\u0027s own open flyout entry point over the harness pipe; a synthesized click is not used because Windows 11 puts a new icon in the overflow area",
+    "publish_mode": "self contained, ReadyToRun, not trimmed, x64 for the measured builds (winui-sc, wpf-sc); framework dependent builds are sized only",
+    "runs_rest": 1,
+    "runs_cpu": 2,
+    "runs_click": 3,
+    "runs_logon": 1,
+    "rest_seconds": 10,
+    "cpu_seconds": 10,
+    "cpu_warmup_seconds": 3
+  },
+  "shells": {
+    "WinUI": {
+      "exe": "C:\\Users\\akash\\win-dev\\benchbar-tray\\windows\\tray\\spike\\out\\winui-sc\\BenchBarTray.WinUI.exe",
+      "size_sc": {
+        "dir": "C:\\Users\\akash\\win-dev\\benchbar-tray\\windows\\tray\\spike\\out\\winui-sc",
+        "bytes": 289512411,
+        "files": 527
+      },
+      "size_fd": null,
+      "private_bytes": [
+        103215104
+      ],
+      "working_set_bytes": [
+        134230016
+      ],
+      "cpu_percent": [
+        0.468604390557722,
+        1.0933617909625009
+      ],
+      "achieved_fps": [
+        21.3933524435952,
+        21.192475399684586
+      ],
+      "click": [
+        {
+          "ms": 124.2575,
+          "cold": true
+        },
+        {
+          "ms": 15.2873,
+          "cold": false
+        },
+        {
+          "ms": 13.2671,
+          "cold": false
+        }
+      ],
+      "logon_warm_ms": [
+        415.7659
+      ],
+      "logon_cold_ms": [
+        424.0444
+      ],
+      "median": {
+        "private_bytes": 103215104,
+        "working_set_bytes": 134230016,
+        "cpu_percent": 0.7809830907601114,
+        "click_ms": 15.2873,
+        "logon_warm_ms": 415.7659,
+        "logon_cold_ms": 424.0444
+      },
+      "failures": []
+    },
+    "WPF": {
+      "exe": "C:\\Users\\akash\\win-dev\\benchbar-tray\\windows\\tray\\spike\\out\\wpf-sc\\BenchBarTray.Wpf.exe",
+      "size_sc": {
+        "dir": "C:\\Users\\akash\\win-dev\\benchbar-tray\\windows\\tray\\spike\\out\\wpf-sc",
+        "bytes": 204202251,
+        "files": 407
+      },
+      "size_fd": null,
+      "private_bytes": [
+        17657856
+      ],
+      "working_set_bytes": [
+        66924544
+      ],
+      "cpu_percent": [
+        0.7811767021900335,
+        1.404735568630815
+      ],
+      "achieved_fps": [
+        21.298001608509075,
+        21.17716910575877
+      ],
+      "click": [
+        {
+          "ms": 706.3898,
+          "cold": true
+        },
+        {
+          "ms": 13.019,
+          "cold": false
+        },
+        {
+          "ms": 14.7103,
+          "cold": false
+        }
+      ],
+      "logon_warm_ms": [
+        329.0409
+      ],
+      "logon_cold_ms": [
+        357.9057
+      ],
+      "median": {
+        "private_bytes": 17657856,
+        "working_set_bytes": 66924544,
+        "cpu_percent": 1.0929561354104242,
+        "click_ms": 14.7103,
+        "logon_warm_ms": 329.0409,
+        "logon_cold_ms": 357.9057
+      },
+      "failures": []
+    }
+  },
+  "verdict": "Split: WPF is lower on private bytes, WinUI is lower on CPU. The rule does not say how to weigh the two: decided by the lead."
+}

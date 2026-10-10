@@ -91,7 +91,10 @@ public sealed class HarnessLink : IDisposable
             using var reader = new StreamReader(_pipe, new UTF8Encoding(false), false, 1024, leaveOpen: true);
             while (await reader.ReadLineAsync(_cts.Token).ConfigureAwait(false) is { } line)
             {
-                try { Command?.Invoke(line.Trim()); }
+                var command = line.Trim();
+                // Answered here, the same in both shells: frames shown so far, for the achieved fps.
+                if (command == "stats") { Send($"stats frames={FrameSequencer.FramesShown} qpc={Qpc()}"); continue; }
+                try { Command?.Invoke(command); }
                 catch (Exception) { /* a handler must not end the link */ }
             }
         }
