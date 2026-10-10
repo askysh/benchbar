@@ -106,6 +106,14 @@ nonisolated struct InstallProgress: Equatable, Sendable {
 
 /// Words for the install page.
 nonisolated enum InstallText {
+    /// The CLI names the sections of a phase script in capitals (PYTHON,
+    /// BUILD DEPS): "Python", "Build deps". Any other name stays as it is.
+    static func sentenceCase(_ name: String) -> String {
+        guard name.contains(where: \.isLetter), name == name.uppercased() else { return name }
+        let words = name.replacingOccurrences(of: "_", with: " ").lowercased()
+        return words.prefix(1).uppercased() + words.dropFirst()
+    }
+
     /// "41 s", "1 min 35 s", "1 h 05 min".
     static func duration(_ seconds: Int) -> String {
         let s = max(0, seconds)

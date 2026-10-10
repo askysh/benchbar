@@ -148,16 +148,21 @@ struct WelcomePage: View {
                     PaneBanner(symbol: "questionmark.folder", tint: .orange, title: error.localizedDescription,
                                detail: error.recoverySuggestion)
                 }
+                // the page is a choice: one prominent button (Return), one plain
+                VStack(spacing: WindowMetrics.rowSpacing) {
+                    WizardPrimaryButton(run: run).controlSize(.large)
+                    Button("I Already Have a Bench") { run.send(.chooseExistingBench) }
+                        .controlSize(.large)
+                        .help("Find the benches in a folder and set them up")
+                }
+                .padding(.top, WindowMetrics.rowSpacing)
                 Button("Just the Command Line Tool") { run.send(.chooseCLIOnly) }
                     .buttonStyle(.link)
                     .help("Install benchbar without the app's wizard: the Homebrew line and the one line installer")
             }
-        } leading: {
-            Button("I Already Have a Bench") { run.send(.chooseExistingBench) }
-                .help("Find the benches in a folder and set them up")
+            .frame(maxWidth: .infinity)
         } actions: {
             WizardBackButton(run: run)
-            WizardPrimaryButton(run: run)
         }
     }
 }

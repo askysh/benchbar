@@ -185,7 +185,9 @@ struct MainSidebar: View {
                 }
                 ForEach(model.benches) { row in
                     HStack(spacing: WindowMetrics.rowSpacing) {
-                        Circle().fill(StatePill.color(for: row.state)).frame(width: 8, height: 8)
+                        Image(systemName: "circle.fill").font(.system(size: 8))
+                            .foregroundStyle(StatePill.color(for: row.state))
+                            .environment(\.backgroundProminence, .standard)
                             .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: WindowMetrics.lineSpacing) {
                             Text(row.name)
@@ -204,12 +206,17 @@ struct MainSidebar: View {
                         }
                     }
                     ForEach(row.sites) { site in
-                        Label(site.name, systemImage: site.isDefault ? "star.fill" : "globe")
-                            .labelStyle(SiteLabelStyle(isDefault: site.isDefault))
-                            .font(.callout)
-                            .lineLimit(1).truncationMode(.middle)
-                            .padding(.leading, WindowMetrics.paneInset - 4)
-                            .tag(SidebarItem.site(bench: row.path, name: site.name))
+                        HStack(spacing: 6) {
+                            Image(systemName: site.isDefault ? "star.fill" : "globe").font(.caption2)
+                                .foregroundStyle(site.isDefault ? Color.yellow : Color.secondary)
+                                .environment(\.backgroundProminence, .standard)
+                                .accessibilityLabel(site.isDefault ? "Default site" : "Site")
+                            Text(site.name)
+                        }
+                        .font(.callout)
+                        .lineLimit(1).truncationMode(.middle)
+                        .padding(.leading, WindowMetrics.paneInset - 4)
+                        .tag(SidebarItem.site(bench: row.path, name: site.name))
                             .help("Sites of \(row.name)")
                     }
                 }
@@ -218,18 +225,6 @@ struct MainSidebar: View {
                 Label("Team Profiles", systemImage: "person.2").tag(SidebarItem.profiles)
                 Label("Find Benches", systemImage: "folder.badge.plus").tag(SidebarItem.discovery)
             }
-        }
-    }
-}
-
-/// A site row: the symbol small and quiet, the star yellow for the default.
-private struct SiteLabelStyle: LabelStyle {
-    let isDefault: Bool
-
-    func makeBody(configuration: Configuration) -> some View {
-        HStack(spacing: 6) {
-            configuration.icon.font(.caption2).foregroundStyle(isDefault ? Color.yellow : Color.secondary)
-            configuration.title
         }
     }
 }

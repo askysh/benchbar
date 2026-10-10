@@ -67,7 +67,7 @@ struct PopoverView: View {
                     Picker("Bench", selection: Binding(get: { store.selected?.path ?? "" }, set: { store.selectedPath = $0 })) {
                         ForEach(store.benches) { bench in
                             Text(bench.name + (store.benches.filter { $0.name == bench.name }.count > 1
-                                ? " — " + URL(fileURLWithPath: bench.path).deletingLastPathComponent().lastPathComponent : ""))
+                                ? ": " + URL(fileURLWithPath: bench.path).deletingLastPathComponent().lastPathComponent : ""))
                                 .tag(bench.path)
                         }
                     }

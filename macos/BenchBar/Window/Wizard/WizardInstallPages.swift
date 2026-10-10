@@ -118,7 +118,7 @@ struct InstallStepRow: View {
             glyph.frame(width: 16)
             VStack(alignment: .leading, spacing: WindowMetrics.lineSpacing) {
                 HStack(spacing: 6) {
-                    Text(row.name).font(depth == 0 ? .body : .callout)
+                    Text(depth == 0 ? row.name : InstallText.sentenceCase(row.name)).font(depth == 0 ? .body : .callout)
                         .foregroundStyle(row.status == nil ? .secondary : .primary)
                     if row.sudo, row.status == nil || row.status == .running {
                         Tag(text: "Asks for your password", color: .orange)

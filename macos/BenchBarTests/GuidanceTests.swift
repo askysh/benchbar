@@ -83,6 +83,14 @@ struct GuidanceTests {
         #expect(!PortSetupHints.dialogCancelled(output: "[OK] done\n"))
     }
 
+    @Test func sectionNamesReadInSentenceCase() {
+        #expect(InstallText.sentenceCase("PYTHON") == "Python")
+        #expect(InstallText.sentenceCase("BUILD DEPS") == "Build deps")
+        #expect(InstallText.sentenceCase("PENDING_MANUAL_STEPS") == "Pending manual steps")
+        #expect(InstallText.sentenceCase("Install the patched wkhtmltopdf package") == "Install the patched wkhtmltopdf package")
+        #expect(InstallText.sentenceCase("00") == "00")
+    }
+
     @Test func theSidebarTooltipCarriesTheGuidance() {
         let guidance = BenchGuidance(reason: "You stopped it.", action: .start)
         let m = SidebarModel([.init(path: "/b", name: "b", state: .stopped, isBusy: false, sites: [], guidance: guidance)])
