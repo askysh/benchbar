@@ -122,13 +122,32 @@ fl_app_bundle_version() {
   if [[ -n "$info" ]]; then printf '%s (%s)' "${info%%"$tab"*}" "${info#*"$tab"}"; else printf 'not installed'; fi
 }
 
+# the machine and package manager part of versions.txt (Linux: doctor-linux.sh)
+fl_report_platform_versions() {
+  local f="$1"
+  fl_report_cmd "$f" "macOS" sw_vers
+  fl_report_cmd "$f" "chip" uname -m
+  fl_report_cmd "$f" "chip name" sysctl -n machdep.cpu.brand_string
+  fl_report_cmd "$f" "Homebrew" brew --version
+}
+
+# the service manager's view of this bench's agent (Linux: doctor-linux.sh)
+fl_report_agent() {
+  local plist target
+  plist="$(fl_agent_plist_path)"
+  target="$(fl_agent_target)"
+  : >"${FL_REPORT_DIR}/launchctl.txt"
+  fl_report_cmd launchctl.txt "launchctl print ${target}" launchctl print "$target"
+  fl_report_copy "$plist" agent.plist
+}
+
 fl_report_versions() {
   local f="versions.txt" py mariadb_bin node_bin
   py="$(fl_python_bin)"; mariadb_bin="$(fl_mariadb_bin)"; node_bin="$(fl_node_bin)"
   {
     printf 'benchbar CLI: %s (%s, %s)\n' "${FL_VERSION:-0}" "$FL_INSTALL_KIND" "$FL_SELF"
     printf 'benchbar state: %s\n' "$FL_STATE_DIR"
-    printf 'BenchBar app: %s\n' "$(fl_app_bundle_version)"
+    fl_is_linux || printf 'BenchBar app: %s\n' "$(fl_app_bundle_version)"
     printf 'profile: %s\n' "$FL_PROFILE"
     printf 'bench: %s\n' "$FL_BENCH_DIR"
     printf 'site: %s\n' "$FL_SITE"
@@ -136,10 +155,7 @@ fl_report_versions() {
     printf 'erpnext: %s\n' "$(fl_app_version erpnext)"
     printf 'date: %s\n\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   } >"${FL_REPORT_DIR}/${f}"
-  fl_report_cmd "$f" "macOS" sw_vers
-  fl_report_cmd "$f" "chip" uname -m
-  fl_report_cmd "$f" "chip name" sysctl -n machdep.cpu.brand_string
-  fl_report_cmd "$f" "Homebrew" brew --version
+  fl_report_platform_versions "$f"
   fl_report_cmd "$f" "python (${py})" "$py" --version
   fl_report_cmd "$f" "node (${node_bin})" "$node_bin" --version
   fl_report_cmd "$f" "mariadb (${mariadb_bin})" "$mariadb_bin" --version
@@ -150,9 +166,7 @@ fl_report_versions() {
 }
 
 fl_report_collect() {
-  local plist target common site_cfg
-  plist="$(fl_agent_plist_path)"
-  target="$(fl_agent_target)"
+  local common site_cfg
   common="${FL_BENCH_DIR}/sites/common_site_config.json"
 
   fl_report_versions
@@ -167,9 +181,7 @@ fl_report_collect() {
     printf '{"error":"no bench at %s"}\n' "$(fl_json_escape "$FL_BENCH_DIR")" >"${FL_REPORT_DIR}/status.json"
   fi
 
-  : >"${FL_REPORT_DIR}/launchctl.txt"
-  fl_report_cmd launchctl.txt "launchctl print ${target}" launchctl print "$target"
-  fl_report_copy "$plist" agent.plist
+  fl_report_agent
   fl_report_copy "$(fl_procfile_path)" Procfile.lean
   fl_report_copy "$(fl_state_json_path)" state.json
   fl_report_tail "$(fl_bench_log_path)" bench.log.tail
@@ -362,7 +374,7 @@ fl_report_redact_all() {
 
 fl_report_print() {
   local f
-  for f in versions.txt doctor.json status.json launchctl.txt agent.plist Procfile.lean state.json bench.log.tail worker.error.log.tail site-config-keys.txt REDACTIONS.txt; do
+  for f in versions.txt doctor.json status.json launchctl.txt agent.plist systemd.txt journal.txt agent.service Procfile.lean state.json bench.log.tail worker.error.log.tail site-config-keys.txt REDACTIONS.txt; do
     [[ -f "${FL_REPORT_DIR}/${f}" ]] || continue
     printf '\n%s===== %s =====%s\n' "$FL_BOLD" "$f" "$FL_RESET"
     cat "${FL_REPORT_DIR}/${f}"

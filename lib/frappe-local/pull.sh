@@ -524,16 +524,24 @@ fl_pull_require_frappe_version() {
   fi
 }
 
+# the hints of the two missing-tool failures below, per platform
+fl_pull_mariadb_start_hint() {
+  if fl_is_linux; then printf 'sudo systemctl start mariadb'; else printf 'brew services start %s' "${FL_MARIADB_FORMULA:-mariadb}"; fi
+}
+fl_pull_gpg_install_hint() {
+  if fl_is_linux; then printf 'sudo apt-get install gnupg'; else printf 'brew install gnupg'; fi
+}
+
 fl_pull_check_local() {
   if [[ -d "${FL_BENCH_DIR}/sites/${FL_PULL_AS}" ]]; then
     FL_PULL_SITE_EXISTS=1
     [[ "$FL_PULL_REPLACE" == "1" ]] || fl_die "Site ${FL_PULL_AS} already exists in ${FL_BENCH_DIR}." "Pick another name with --as NAME, or pass --replace (backs the site up first, then restores over it)."
     fl_warn "site ${FL_PULL_AS} exists and will be replaced (--replace): it is backed up first"
   fi
-  fl_port_listening 3306 || fl_die "MariaDB is not running (nothing listens on 3306)." "Start it: brew services start ${FL_MARIADB_FORMULA:-mariadb}"
+  fl_port_listening 3306 || fl_die "MariaDB is not running (nothing listens on 3306)." "Start it: $(fl_pull_mariadb_start_hint)"
   fl_mariadb_root_password_resolve || fl_die "The MariaDB root password is needed for the restore." "Re-run with: MARIADB_ROOT_PASSWORD='...' benchbar pull ..." 2
   if [[ "$FL_PULL_ENCRYPTED" == "1" ]]; then
-    command -v gpg >/dev/null 2>&1 || fl_die "The backup is encrypted and gpg is not installed." "Install it: brew install gnupg"
+    command -v gpg >/dev/null 2>&1 || fl_die "The backup is encrypted and gpg is not installed." "Install it: $(fl_pull_gpg_install_hint)"
     [[ "$FL_PULL_HAS_BACKUP_KEY" == "1" ]] || fl_die "The backup is encrypted but the production site config has no backup_encryption_key." "Decrypt the files by hand, or copy the key from the server's site_config.json."
   fi
   fl_pull_check_disk

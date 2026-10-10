@@ -303,7 +303,9 @@ run_fm install --yes --bench-dir "$BENCH" --site linuxdev.localhost
 assert_contains "$OUT" "1. System dependencies (00-linux-system-deps.sh)"
 assert_contains "$OUT" "install the apt packages: mariadb-server"
 assert_eq "1" "$(before_service | grep -c '^sudo -v$')" "(one sudo prompt for phases 00 and 01)"
-assert_not_contains "$(before_service)" "hosts"
+# no /etc/hosts write (doctor's read only "getent hosts" is fine)
+assert_not_contains "$(before_service)" "/etc/hosts"
+assert_not_contains "$(before_service)" "tee -a"
 assert_not_contains "$(cat "$MOCK_LOG")" "softwareupdate"
 assert_not_contains "$(cat "$MOCK_LOG")" "installer -pkg"
 assert_calls_contain '^bench new-site linuxdev.localhost'

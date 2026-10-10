@@ -13,7 +13,14 @@ cred="$state/sudo_cred"
 [[ -f "$state/sudo_refused" ]] && { echo "sudo: a password is required" >&2; exit 1; }
 case "${1:-}" in
   -v) [[ -d "$state" ]] && touch "$cred"; exit 0 ;;
-  -n) shift; [[ -f "$cred" ]] || { echo "sudo: a password is required" >&2; exit 1; } ;;
+  # "-n -k CMD" ignores the cached credential: only a NOPASSWD rule
+  # ($MOCK_STATE/sudo_nopasswd) lets it run
+  -n) shift
+      if [[ "${1:-}" == "-k" ]]; then
+        shift; [[ -f "$state/sudo_nopasswd" ]] || { echo "sudo: a password is required" >&2; exit 1; }
+      else
+        [[ -f "$cred" || -f "$state/sudo_nopasswd" ]] || { echo "sudo: a password is required" >&2; exit 1; }
+      fi ;;
   *) [[ -d "$state" ]] && touch "$cred" ;;
 esac
 [[ "${1:-}" == "true" ]] && exit 0

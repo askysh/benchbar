@@ -772,7 +772,7 @@ cmd_where() {
 # BENCHBAR_MCP_CLI: tests only, a fake CLI stands in (a timeout, a hang).
 cmd_mcp() {
   local py candidates=() found="" ver
-  if xcode-select -p >/dev/null 2>&1 && [[ -x /usr/bin/python3 ]]; then candidates+=(/usr/bin/python3); fi
+  if ! fl_is_linux && xcode-select -p >/dev/null 2>&1 && [[ -x /usr/bin/python3 ]]; then candidates+=(/usr/bin/python3); fi
   if command -v python3 >/dev/null 2>&1; then candidates+=("$(command -v python3)"); fi
   for py in ${candidates[@]+"${candidates[@]}"}; do
     if "$py" -I -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)' >/dev/null 2>&1; then
@@ -781,7 +781,7 @@ cmd_mcp() {
     ver="$("$py" -I -c 'import sys; print("%d.%d.%d" % sys.version_info[:3])' 2>/dev/null || true)"
     found="${found:+${found}, }${py} (${ver:-not runnable})"
   done
-  fl_die "python3 3.9 or newer is needed for benchbar mcp; found: ${found:-no python3}." "Install the Xcode Command Line Tools: xcode-select --install"
+  fl_die "python3 3.9 or newer is needed for benchbar mcp; found: ${found:-no python3}." "$(fl_is_linux && printf 'Install it: sudo apt-get install python3' || printf 'Install the Xcode Command Line Tools: xcode-select --install')"
 }
 
 cmd_status() {

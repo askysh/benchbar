@@ -36,6 +36,14 @@ fl_check_group() {
 }
 
 fl_check_label() {
+  # Linux names three checks differently; the ids stay
+  if fl_is_linux; then
+    case "$1" in
+      brew) printf 'System packages'; return 0 ;;
+      agent) printf 'systemd unit'; return 0 ;;
+      hosts) printf 'Site name resolves'; return 0 ;;
+    esac
+  fi
   case "$1" in
     brew) printf 'Homebrew formulae' ;;
     python_leaves) printf 'Python formula' ;;
@@ -842,6 +850,9 @@ fl_chromium_path() {
     printf '%s' "$p"
     return 0
   fi
+  # the folder inside the download is named for the platform (Linux: not
+  # checked against a real "bench setup-chrome", no frappe checkout was at hand)
+  if fl_is_linux; then printf '%s/chromium/chrome-linux/headless_shell' "$FL_BENCH_DIR"; return 0; fi
   printf '%s/chromium/chrome-mac/headless_shell' "$FL_BENCH_DIR"
 }
 
@@ -857,7 +868,7 @@ chk_pdf_engine() {
     patched)
       shadow="$(fl_wkhtmltopdf_shadow)"
       if [[ -n "$shadow" ]]; then
-        chk__set warn "patched build at $(fl_wkhtmltopdf_bin), but ${shadow} comes first on PATH and is not patched${chrome}" "brew uninstall wkhtmltopdf"
+        chk__set warn "patched build at $(fl_wkhtmltopdf_bin), but ${shadow} comes first on PATH and is not patched${chrome}" "$(fl_is_linux && printf 'sudo apt-get remove wkhtmltopdf' || printf 'brew uninstall wkhtmltopdf')"
       elif [[ "$chrome_ok" == "0" ]]; then
         chk__set warn "wkhtmltopdf: patched Qt build at $(fl_wkhtmltopdf_bin)${chrome}" "cd ${FL_BENCH_DIR} && bench setup-chrome"
       else
@@ -1300,7 +1311,7 @@ chk_orphans() {
   [[ -z "$unknown" ]] || msg="${msg}${msg:+; }processes hold this bench's ports and their working folder cannot be read, so benchbar will not stop them: ${unknown}"
   [[ -z "$foreign" ]] || msg="${msg}${msg:+; }other programs hold this bench's ports (not this bench's to stop): ${foreign}"
   if [[ -n "$held" ]]; then fix="${FL_SELF} down   (or benchbar restart)"
-  elif [[ -n "$unknown" ]]; then fix="lsof -p ${first_unknown}   (check whose it is; kill it yourself if it is this bench's leftover)"
+  elif [[ -n "$unknown" ]]; then fix="$(fl_is_linux && printf 'ss -ltnp' || printf 'lsof -p %s' "$first_unknown")   (check whose it is; kill it yourself if it is this bench's leftover)"
   else fix="${FL_SELF} ports setup -- ${FL_BENCH_DIR}   (or stop that program)"; fi
   chk__set warn "$msg" "$fix"
 }

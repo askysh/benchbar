@@ -41,7 +41,13 @@ fl_sudo_begin() {
   printf '\n  %ssudo%s is needed once for this run, to:\n' "$FL_BOLD" "$FL_RESET"
   for reason in "$@"; do printf '     %s %s\n' "$FL_G_PEND" "$reason"; done
   printf '     nothing else runs as root; the password is not stored\n'
-  if ! sudo -v; then
+  # A NOPASSWD rule needs no prompt, but "sudo -v" still asks for a password
+  # when another rule for the same user wants one (sudo's verifypw=all, the
+  # default with Ubuntu's %sudo line). "-k" with a command ignores a cached
+  # credential, so this succeeds only when no password is needed at all.
+  if sudo -n -k true 2>/dev/null; then
+    fl_log "sudo: no password needed (NOPASSWD)"
+  elif ! sudo -v; then
     FL_SUDO_REFUSED=1
     export FL_SUDO_REFUSED
     fl_warn "sudo was refused; the steps above are skipped, and this run will not ask again"

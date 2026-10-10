@@ -705,3 +705,9 @@ fl_hosts_add_names() {
 fl_hosts_line_place() { return 0; }
 fl_hosts_manual_removal() { return 0; }
 fl_hosts_remove_name() { FL_HOSTS_REMOVED=0; FL_HOSTS_MANUAL=""; return 0; }
+
+# ------------------------------------------------------------- doctor, repair, report
+
+# the Linux checks, repair actions and report pieces live in their own file
+# shellcheck source=lib/frappe-local/doctor-linux.sh
+. "${SCRIPT_DIR}/lib/frappe-local/doctor-linux.sh"

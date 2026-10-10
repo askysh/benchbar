@@ -325,4 +325,24 @@ else
   printf 'test-platform-linux: SKIP the sha256sum comparison (needs both shasum and sha256sum)\n'
 fi
 
+# ---- sudo: a NOPASSWD rule next to a password rule (Ubuntu's %sudo line)
+# makes "sudo -v" ask even though commands need no password; the session
+# starts without "sudo -v" then. A cached credential alone still goes
+# through "sudo -v", as before.
+(
+  # shellcheck source=lib/frappe-local/sudo.sh
+  . "$ROOT/lib/frappe-local/sudo.sh"
+  rm -f "$MOCK_STATE/sudo_cred"; touch "$MOCK_STATE/sudo_nopasswd"; reset_calls
+  FL_SUDO_SESSION=0; FL_SUDO_REFUSED=0
+  fl_sudo_begin "test reason" >/dev/null 2>&1 || fail "fl_sudo_begin refused under NOPASSWD"
+  assert_eq "1" "$FL_SUDO_SESSION" "(NOPASSWD starts a session)"
+  assert_calls_not_contain '^sudo -v' "(no sudo -v under NOPASSWD)"
+  fl_sudo_end
+  rm -f "$MOCK_STATE/sudo_nopasswd"; touch "$MOCK_STATE/sudo_cred"; reset_calls
+  FL_SUDO_SESSION=0; FL_SUDO_REFUSED=0
+  fl_sudo_begin "test reason" >/dev/null 2>&1 || fail "fl_sudo_begin refused with a cached credential"
+  assert_calls_contain '^sudo -v' "(a cached credential still goes through sudo -v)"
+  fl_sudo_end
+)
+
 printf 'test-platform-linux: ok\n'

@@ -28,7 +28,7 @@ bash -n "${SCRIPTS[@]}"
 ALL_TESTS="test-phases test-hygiene test-multi-bench test-doctor test-install-sh test-sites test-site-backups test-apps test-ports test-doctor-hardening
 test-profiles test-pull test-lock test-run-lock test-repair-json test-mcp test-homebrew test-app-cli test-state-migrate
 test-process test-adopt test-repair test-service test-cli test-migrate test-json test-report test-runner
-test-input-hygiene test-redact test-freshness test-profile-v16 test-run test-bench-flow test-version-policy test-templates test-shellrc test-ui test-platform test-platform-linux test-install-linux test-docs test-docs-command test-self-update test-release-notes test-discovery test-port-management test-status-cost test-packaging test-systemd"
+test-input-hygiene test-redact test-freshness test-profile-v16 test-run test-bench-flow test-version-policy test-templates test-shellrc test-ui test-platform test-platform-linux test-install-linux test-docs test-docs-command test-self-update test-release-notes test-discovery test-port-management test-status-cost test-packaging test-systemd test-doctor-linux"
 
 for f in "$ROOT"/tests/test-*.sh; do
   n="$(basename "$f" .sh)"
