@@ -125,8 +125,10 @@ struct MainWindowView: View {
     private var content: some View {
         NavigationSplitView {
             VStack(spacing: 0) {
+                // a closure, not the method reference select(_:): the Swift 6.3
+                // compiler of Xcode 26.6 crashed emitting its isolated thunk
                 MainSidebar(store: store, model: SidebarModel(benches: store.benches),
-                            selection: Binding(get: { selection }, set: select(_:)))
+                            selection: Binding(get: { selection }, set: { select($0) }))
                 Divider()
                 SidebarFooter(router: router, wizard: wizard.run)
             }
