@@ -6,6 +6,10 @@ All notable changes to this project are documented here.
 
 ### Added
 
+- Doctor warns in WSL when NTP inside the distro fights the Windows host
+  clock (`wsl_time_sync`): each NTP poll steps the clock when Windows has
+  drifted, and a step can stop a bench's worker. Fix: `sudo timedatectl
+  set-ntp false`.
 - Linux, Windows through WSL first: the same `benchbar` runs on Ubuntu
   24.04 (Debian based systems with apt), chosen at startup. Only the
   v15-lts profile so far; v16 on Linux comes later.
@@ -37,7 +41,10 @@ All notable changes to this project are documented here.
   variable": GNU `stat -f` prints file system text where BSD `stat -f`
   prints a time.
 
-### Windows
+### Windows (preview)
+
+Built from source for now: a signed `benchbar.exe` with an installer and
+the tray app follow in 0.9.
 
 - `benchbar.exe`, a small shim for PowerShell: every command forwards to
   `benchbar` inside WSL with its input, output and exit code unchanged, so

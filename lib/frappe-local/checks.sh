@@ -27,7 +27,7 @@ chk_port_block() {
 
 fl_check_group() {
   case "$1" in
-    brew|formula_dates|python_leaves|mariadb_bind|mariadb_utf8|pdf_engine|redis_6379|cleanmymac|mole|app_copies|full_disk_access) printf 'system' ;;
+    brew|formula_dates|python_leaves|mariadb_bind|mariadb_utf8|pdf_engine|redis_6379|cleanmymac|mole|app_copies|full_disk_access|wsl_time_sync) printf 'system' ;;
     env_python|env_setuptools|bench_version|toolchain_*|socketio|assets|apps_txt|app_branch_policy|dependency_behind|apps_behind|lock_parse|lock_drift|logs) printf 'bench' ;;
     profile_outdated) printf 'bench' ;;
     ping) printf 'site' ;;
@@ -73,6 +73,7 @@ fl_check_label() {
     bench_path) printf 'Bench path' ;;
     cleanmymac) printf 'CleanMyMac' ;;
     mole) printf 'Mole' ;;
+    wsl_time_sync) printf 'WSL time sync' ;;
     port_clash) printf 'Port clash' ;;
     port_block) printf 'Port block' ;;
     scheduler) printf 'Scheduler' ;;
