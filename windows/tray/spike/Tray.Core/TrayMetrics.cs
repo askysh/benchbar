@@ -13,6 +13,12 @@ public static class TaskbarTheme
     /// </summary>
     public static bool IsLight()
     {
+        // The app's own light or dark setting wins over the taskbar's (for now an environment variable).
+        switch (HarnessLink.ForcedTheme())
+        {
+            case "light": return true;
+            case "dark": return false;
+        }
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(PersonalizeKey);

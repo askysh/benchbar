@@ -40,6 +40,7 @@ public partial class App : Application, ITrayHost
             if (added) return;
             added = true;
             _link?.Send($"icon-added qpc={HarnessLink.Qpc()}");
+            LogonLog.IconAdded("WPF");
         }
         _icon.TrayIcon.Created += (_, _) => IconAdded();
         _icon.TrayIcon.UpdateIcon(_controller.Icons.Get(RunnerPose.Unknown, 0));
