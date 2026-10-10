@@ -94,9 +94,12 @@ for i in range(0, len(pieces), 2):
         continue
     plain = words[1:] if words[0] in ("export", "local", "readonly") else words
     if plain and all(re.match(r"^\w+=", w) for w in plain):
+        # Only an assignment sure to run counts: one after && || | or inside
+        # ( ) may not happen (or not in this shell), so the value is unknown.
+        sure = before in (";", "\n")
         for w in plain:
             name, value = w.split("=", 1)
-            assigned[name] = expand(value)
+            assigned[name] = expand(value) if sure else None
             assignments[name] = assignments.get(name, 0) + 1
         continue
     via_xargs = False

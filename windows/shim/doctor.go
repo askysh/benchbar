@@ -14,7 +14,7 @@ func distroCheck(t target) Check {
 	case t.info.Version != 2:
 		c.Status = "fail"
 		c.Message = fmt.Sprintf("%s runs as WSL %d, benches need WSL 2", t.distro, t.info.Version)
-		c.Fix = fmt.Sprintf("wsl.exe --set-version %s 2", t.distro)
+		c.Fix = fmt.Sprintf("wsl.exe --set-version %s 2", quoteArg(t.distro))
 	default:
 		c.Status = "ok"
 		c.Message = t.distro + " is registered and runs WSL 2"
@@ -35,7 +35,11 @@ func cmdDoctor(sys *System, rest []string) int {
 	} else {
 		checks = append(checks, idleCheck(rep))
 	}
-	checks = append(checks, queryKeepalive(sys).Checks...)
+	ka := queryKeepalive(sys)
+	if t.prob == nil {
+		checkKeepaliveTarget(&ka, t.distro)
+	}
+	checks = append(checks, ka.Checks...)
 
 	fmt.Fprint(sys.Stdout, "\nWINDOWS\n")
 	printChecks(sys.Stdout, checks)

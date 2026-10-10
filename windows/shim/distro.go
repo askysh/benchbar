@@ -15,17 +15,46 @@ const installerURL = "https://raw.githubusercontent.com/askysh/benchbar/main/ins
 func installerCommand(distro string) string {
 	dash := ""
 	if distro != "" {
-		dash = "-d " + distro + " "
+		dash = "-d " + quoteArg(distro) + " "
 	}
 	return fmt.Sprintf(`wsl.exe %s-- bash -c "curl -fsSL %s | bash"`, dash, installerURL)
 }
 
+// quoteArg quotes a distro name for a command the user pastes into cmd or
+// PowerShell. Plain names stay as they are.
+func quoteArg(s string) string {
+	plain := s != ""
+	for _, r := range s {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '.' || r == '_' || r == '-' || r > 127) {
+			plain = false
+		}
+	}
+	if plain {
+		return s
+	}
+	return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"`
+}
+
+// missingCLIFix is the fix for a CLI that is not found in the distro. The
+// installer only provides "benchbar", so a custom cli_path is a config error.
+func missingCLIFix(t target) string {
+	if t.cli != "" && t.cli != "benchbar" {
+		p := t.cfgPath
+		if p == "" {
+			p = "config.json"
+		}
+		return fmt.Sprintf(`correct or remove "cli_path" (%s) in %s`, t.cli, p)
+	}
+	return installerCommand(t.distro)
+}
+
 // target is the distro and CLI a command goes to.
 type target struct {
-	distro string // empty when no name is known
-	info   *Distro
-	cli    string
-	prob   *problem
+	distro  string // empty when no name is known
+	info    *Distro
+	cli     string
+	cfgPath string // config.json, for messages
+	prob    *problem
 }
 
 func resolveTarget(sys *System, want string) (target, error) {
@@ -33,7 +62,7 @@ func resolveTarget(sys *System, want string) (target, error) {
 	if err != nil {
 		return target{}, err
 	}
-	t := target{cli: cfg.str("cli_path")}
+	t := target{cli: cfg.str("cli_path"), cfgPath: cfg.path}
 	if t.cli == "" {
 		t.cli = "benchbar"
 	}

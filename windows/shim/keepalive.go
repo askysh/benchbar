@@ -256,6 +256,9 @@ func cmdKeepalive(sys *System, args []string) int {
 
 func keepaliveStatus(sys *System, asJSON bool) int {
 	info := queryKeepalive(sys)
+	if t, err := resolveTarget(sys, ""); err == nil && t.prob == nil {
+		checkKeepaliveTarget(&info, t.distro)
+	}
 	if asJSON {
 		printJSON(sys.Stdout, info)
 	} else {
@@ -509,4 +512,15 @@ func exitText(err error) string {
 		return fmt.Sprintf("exit %d", ee.ExitCode())
 	}
 	return err.Error()
+}
+
+// checkKeepaliveTarget turns the keepalive line into a WARN when the task
+// keeps another distro alive than the one BenchBar uses.
+func checkKeepaliveTarget(info *keepaliveInfo, target string) {
+	if !info.Installed || info.Distro == "" || target == "" || strings.EqualFold(info.Distro, target) || len(info.Checks) != 1 {
+		return
+	}
+	info.Checks[0].Status = "warn"
+	info.Checks[0].Message = fmt.Sprintf("keepalive keeps %s alive, but BenchBar uses %s", info.Distro, target)
+	info.Checks[0].Fix = "benchbar.exe keepalive install"
 }

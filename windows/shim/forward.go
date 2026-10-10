@@ -62,9 +62,13 @@ func forward(sys *System, t target, args []string) int {
 		if t.distro != "" {
 			where = fmt.Sprintf("WSL distro %q", t.distro)
 		}
+		fix := missingCLIFix(t)
+		if t.cli == "benchbar" {
+			fix = "install it inside the distro: " + fix
+		}
 		(&problem{
 			Msg: fmt.Sprintf("%s was not found in %s", t.cli, where),
-			Fix: "install it inside the distro: " + installerCommand(t.distro),
+			Fix: fix,
 		}).print(sys)
 		return 1
 	}

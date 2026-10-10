@@ -70,16 +70,17 @@ func runProbe(sys *System, distro, cli string) (probeResult, error) {
 
 func systemdFix(distro string, hasBoot bool) string {
 	if hasBoot {
-		return fmt.Sprintf("set systemd=true under [boot] in /etc/wsl.conf (wsl.exe -d %s -- sudo nano /etc/wsl.conf), then wsl.exe --terminate %s", distro, distro)
+		return fmt.Sprintf("set systemd=true under [boot] in /etc/wsl.conf (wsl.exe -d %s -- sudo nano /etc/wsl.conf), then wsl.exe --terminate %s", quoteArg(distro), quoteArg(distro))
 	}
-	return fmt.Sprintf(`wsl.exe -d %s -- sudo sh -c "printf '\n[boot]\nsystemd=true\n' >> /etc/wsl.conf"; wsl.exe --terminate %s`, distro, distro)
+	return fmt.Sprintf(`wsl.exe -d %s -- sudo sh -c "printf '\n[boot]\nsystemd=true\n' >> /etc/wsl.conf"; wsl.exe --terminate %s`, quoteArg(distro), quoteArg(distro))
 }
 
 func lingerFix(distro, user string) string {
-	return fmt.Sprintf("wsl.exe -d %s -- loginctl enable-linger %s", distro, user)
+	return fmt.Sprintf("wsl.exe -d %s -- loginctl enable-linger %s", quoteArg(distro), user)
 }
 
-func probeChecks(distro, cli string, r probeResult) []Check {
+func probeChecks(t target, r probeResult) []Check {
+	distro, cli := t.distro, t.cli
 	var cs []Check
 	conf := parseINI([]byte(r.wslConf))
 	v, _ := conf.get("boot", "systemd")
@@ -91,7 +92,7 @@ func probeChecks(distro, cli string, r probeResult) []Check {
 	case confOn:
 		sd.Status = "fail"
 		sd.Message = fmt.Sprintf("enabled in /etc/wsl.conf, but pid 1 is %q: the distro has not restarted since", r.pid1)
-		sd.Fix = fmt.Sprintf("wsl.exe --terminate %s", distro)
+		sd.Fix = fmt.Sprintf("wsl.exe --terminate %s", quoteArg(distro))
 	default:
 		sd.Status = "fail"
 		sd.Message = "[boot] systemd=true is not set in /etc/wsl.conf"
@@ -103,7 +104,7 @@ func probeChecks(distro, cli string, r probeResult) []Check {
 	if r.bench == "" {
 		bc.Status = "fail"
 		bc.Message = fmt.Sprintf("%s is not found in %s", cli, distro)
-		bc.Fix = installerCommand(distro)
+		bc.Fix = missingCLIFix(t)
 	}
 	cs = append(cs, bc)
 
@@ -177,7 +178,7 @@ func cmdAdoptDistro(sys *System, args []string) int {
 			if t.info.Version != 2 {
 				w.Status = "fail"
 				w.Message = fmt.Sprintf("runs as WSL %d, systemd needs WSL 2", t.info.Version)
-				w.Fix = fmt.Sprintf("wsl.exe --set-version %s 2", t.distro)
+				w.Fix = fmt.Sprintf("wsl.exe --set-version %s 2", quoteArg(t.distro))
 			}
 			checks = append(checks, w)
 		}
@@ -185,10 +186,10 @@ func cmdAdoptDistro(sys *System, args []string) int {
 		if err != nil {
 			checks = append(checks, Check{ID: "probe", Label: "WSL access", Status: "fail",
 				Message: fmt.Sprintf("cannot run a command in %s: %v", t.distro, err),
-				Fix:     fmt.Sprintf("wsl.exe -d %s -- true", t.distro)})
+				Fix:     fmt.Sprintf("wsl.exe -d %s -- true", quoteArg(t.distro))})
 		} else {
 			probed = true
-			checks = append(checks, probeChecks(t.distro, t.cli, probe)...)
+			checks = append(checks, probeChecks(t, probe)...)
 		}
 	}
 
@@ -264,7 +265,7 @@ func (sys *System) offerLinger(yes, asJSON bool, user, distro string) bool {
 // applyLinger runs the one fix adopt-distro may apply, then reads the
 // setting again. The returned check is the linger line afterwards.
 func applyLinger(sys *System, t target, user string) (Check, bool) {
-	warn := probeChecks(t.distro, t.cli, probeResult{linger: "no", user: user})[2]
+	warn := probeChecks(t, probeResult{linger: "no", user: user})[2]
 	cmd, err := wslCommand(sys, "-d", t.distro, "--exec", "loginctl", "--no-ask-password", "enable-linger", user)
 	if err != nil {
 		warn.Message += fmt.Sprintf(" (enabling failed: %v)", err)
@@ -285,5 +286,5 @@ func applyLinger(sys *System, t target, user string) (Check, bool) {
 		warn.Message += fmt.Sprintf(" (enabled, but the recheck failed: %v)", err)
 		return warn, false
 	}
-	return probeChecks(t.distro, t.cli, r)[2], true
+	return probeChecks(t, r)[2], true
 }
