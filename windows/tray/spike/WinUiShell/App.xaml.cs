@@ -46,7 +46,7 @@ public partial class App : Application, ITrayHost, IFrameClock
         {
             ToolTipText = "BenchBar",
             NoLeftClickDelay = true,
-            ContextMenuMode = ContextMenuMode.SecondWindow,
+            ContextMenuMode = ContextMenuMode.PopupMenu,
             ContextFlyout = BuildMenu(),
             LeftClickCommand = new Command(OnTrayClick),
         };

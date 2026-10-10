@@ -78,6 +78,10 @@ jobs:
         with:
           name: tray-spike-shells
           path: windows/tray/spike/out
+      # the harness is framework dependent and needs the .NET 10 runtime
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: windows/tray/spike/global.json
       - name: Measure
         run: |
           $quick = '${{ inputs.quick }}' -eq 'true'
@@ -88,8 +92,9 @@ jobs:
             '--fixtures', 'fixtures', '--out', 'results')
           if ($quick) { $a += '--quick' }
           ./out/harness/BenchBarTray.Harness.exe @a
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Get-Content results/results.md | Add-Content $env:GITHUB_STEP_SUMMARY
+          $code = $LASTEXITCODE
+          if (Test-Path results/results.md) { Get-Content results/results.md | Add-Content $env:GITHUB_STEP_SUMMARY }
+          exit $code
       - name: Screenshots
         if: always()
         run: |

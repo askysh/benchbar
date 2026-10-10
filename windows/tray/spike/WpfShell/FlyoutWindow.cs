@@ -110,9 +110,14 @@ internal sealed class FlyoutWindow : Window
         }
     }
 
+    private BenchStatus[]? _shown;
+
     public void SetBenches(IReadOnlyList<BenchStatus> benches, string upText)
     {
         _upText.Text = upText;
+        // Same as the WinUI shell: a poll that changed nothing rebuilds nothing.
+        if (_shown is not null && _shown.SequenceEqual(benches)) return;
+        _shown = benches.ToArray();
         _rows.Children.Clear();
         foreach (var bench in benches) _rows.Children.Add(BuildRow(bench));
     }
@@ -225,7 +230,8 @@ internal sealed class FlyoutWindow : Window
         Top = y * 96.0 / dpi;
 
         _renderPending = true;
-        if (_shownOnce) CompositionTarget.Rendering += OnFirstRender;
+        // Same stamp as the WinUI shell on every open, the first included: the first Rendering after Show.
+        CompositionTarget.Rendering += OnFirstRender;
         Show();
         // a new handle may have taken another DPI; put the window exactly where computed
         NativeMethods.SetWindowPos(Hwnd, IntPtr.Zero, x, y, 0, 0,
@@ -270,15 +276,15 @@ internal sealed class FlyoutWindow : Window
 
     private void OnContentRendered(object? sender, EventArgs e)
     {
-        if (_shownOnce) return;
-        _shownOnce = true;
-        ReportRendered(cold: true);
+        // diagnostic hook only: the stamp comes from OnFirstRender, as in the WinUI shell
     }
 
     private void OnFirstRender(object? sender, EventArgs e)
     {
         CompositionTarget.Rendering -= OnFirstRender;
-        ReportRendered(cold: false);
+        var cold = !_shownOnce;
+        _shownOnce = true;
+        ReportRendered(cold);
     }
 
     private void ReportRendered(bool cold)

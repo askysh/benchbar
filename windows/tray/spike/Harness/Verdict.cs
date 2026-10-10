@@ -42,10 +42,20 @@ internal static class Verdict
         int wp = Metric(lines, "Private bytes at rest", a.Name, b.Name, a.Rest?.Median / 1048576.0, b.Rest?.Median / 1048576.0, "MB", "0.0", ref incomplete);
         int wc = Metric(lines, "CPU while animating", a.Name, b.Name, a.Cpu?.Median, b.Cpu?.Median, "% of one core", "0.00", ref incomplete);
 
+        // A CPU number only compares if both shells drew the same frames.
+        bool fpsOk = a.Fps is { } fa && b.Fps is { } fb && Compare(fa.Median, fb.Median).Winner == 0;
+        lines.Add(fpsOk
+            ? $"- Achieved frame rate: {a.Name} {F(a.Fps!.Median, "0.0")} fps, {b.Name} {F(b.Fps!.Median, "0.0")} fps; within 10%, so the CPU numbers compare"
+            : "- Achieved frame rate: missing or more than 10% apart, so the CPU numbers do not compare");
+
         // Step 3: the outcome.
         lines.Add("");
         string outcome;
-        if (incomplete)
+        if (!fpsOk)
+        {
+            outcome = "Not comparable: the shells did not animate at the same frame rate, so CPU while animating says nothing. See the frame rate table.";
+        }
+        else if (incomplete)
         {
             outcome = "Incomplete: at least one metric has no samples, so the rule cannot be applied. See Failures.";
         }
@@ -78,6 +88,7 @@ internal static class Verdict
                 : "lower on CPU, tie on private bytes";
             outcome = $"{chosen}: {why}, and within both gate limits.";
         }
+        if (a.Failures.Count + b.Failures.Count > 0) outcome += " (With failures: some runs gave no sample, see Failures.)";
         lines.Add($"**Step 3, outcome: {outcome}**");
         return (lines, outcome);
     }

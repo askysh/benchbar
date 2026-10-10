@@ -15,5 +15,7 @@
     <Deterministic>true</Deterministic>
     <InvariantGlobalization>true</InvariantGlobalization>
     <NeutralLanguage>en</NeutralLanguage>
+    <!-- English resources only, for both shells: the size comparison is like for like. -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
 </Project>

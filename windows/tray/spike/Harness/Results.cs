@@ -30,7 +30,8 @@ internal sealed class ShellResults(string name, string exe, string? dir, string?
     public Summary? WorkingSet => Stats.Of(WorkingSetBytes);
     public Summary? Cpu => Stats.Of(CpuPercent);
     public Summary? Fps => Stats.Of(AchievedFps);
-    public Summary? Click => Stats.Of(Clicks.Select(c => c.Ms).ToList());
+    /// <summary>Warm opens only: the cold first open is reported on its own and does not gate.</summary>
+    public Summary? Click => Stats.Of(Clicks.Where(c => !c.Cold).Select(c => c.Ms).ToList());
     public Summary? LogonWarm => Stats.Of(LogonWarmMs);
     public Summary? LogonCold => Stats.Of(LogonColdMs);
 }

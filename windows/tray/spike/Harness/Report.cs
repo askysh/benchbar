@@ -171,7 +171,7 @@ internal static class Report
         sb.AppendLine("## Verdict").AppendLine();
         sb.AppendLine("Rule (windows/tray/DECISIONS.md): choose the shell with the lower private bytes at rest and CPU while animating, unless click to flyout is above 150 ms or logon to icon is above 2 s for that shell. A difference under 10% of the larger value is a tie. On an overall tie, deployment friction: decided by the lead.");
         sb.AppendLine();
-        sb.AppendLine("The gate uses the median over all opens for click to flyout (the cold first open is listed apart), and the cold median for logon to icon when it was measured, else the warm one.");
+        sb.AppendLine("The gate uses the median over the warm opens for click to flyout (the cold first open is listed apart and does not gate), and the cold median for logon to icon when it was measured, else the warm one.");
         sb.AppendLine();
         foreach (string line in verdictLines) sb.AppendLine(line);
         sb.AppendLine();
@@ -185,7 +185,7 @@ internal static class Report
         sb.AppendLine($"- Click to flyout: {ClickNote}.");
         sb.AppendLine($"- Logon to icon, cold: {info.ColdMethod}.");
         sb.AppendLine("- Logon to icon, warm: QPC before Process.Start to QPC when Shell_NotifyIcon(NIM_ADD) returned success, reported by the shell.");
-        sb.AppendLine($"- Runs: rest {info.RunsRest} x {info.RestSeconds} s, cpu {info.RunsCpu} x {info.CpuSeconds} s after a {info.CpuWarmupSeconds} s warm up, click {info.RunsClick} opens per shell, logon {info.RunsLogon} warm and {info.RunsLogon} cold. Shells alternate run by run; medians use the mean of the two middle values for an even count.");
+        sb.AppendLine($"- Runs: rest {info.RunsRest} x {info.RestSeconds} s, cpu {info.RunsCpu} x {info.CpuSeconds} s after a {info.CpuWarmupSeconds} s warm up, click {info.RunsClick} opens per shell, logon {info.RunsLogon} warm and {info.RunsLogon} cold. Rest, cpu and logon runs alternate the shells run by run; the click opens are one session per shell, WinUI then WPF. Private bytes are read the rest time after icon-added. Medians use the mean of the two middle values for an even count.");
         sb.AppendLine();
 
         string Row(Func<ShellResults, Summary?> pick, Func<double, string> fmt, Func<ShellResults, string> first)
