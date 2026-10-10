@@ -3,6 +3,11 @@
 # numbers in the spike's pull request can be reproduced. Not part of any
 # release; the decision and its numbers are in windows/tray/DECISIONS.md.
 #
+# Pull requests and pushes only build and test (about 4 minutes); the
+# measurement takes about 25 minutes, so it runs only when started by hand
+# (Actions, Tray spike, Run workflow). Path filtered to the spike, so the
+# real tray app under windows/tray does not trigger it.
+#
 # Its own file so the shim session can own ci.yml. Path filtered: it is not
 # a required check, so a workflow that never starts blocks nothing.
 name: Tray spike
@@ -10,12 +15,12 @@ name: Tray spike
 on:
   pull_request:
     paths:
-      - 'windows/tray/**'
+      - 'windows/tray/spike/**'
       - '.github/workflows/tray-spike.yml'
   push:
     branches: [main]
     paths:
-      - 'windows/tray/**'
+      - 'windows/tray/spike/**'
       - '.github/workflows/tray-spike.yml'
   workflow_dispatch:
     inputs:
@@ -70,6 +75,7 @@ jobs:
   measure:
     name: measure
     needs: build
+    if: github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
