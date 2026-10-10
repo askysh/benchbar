@@ -869,14 +869,15 @@ cmd_doctor() {
   fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
   fl_require_bench
   fl_doctor_run
-  [[ "$OPT_FIX_HINTS" == "1" ]] || fl_prereq_run
+  # the prerequisites ride in doctor --json only: a plain doctor keeps its
+  # promise of a fix line after every WARN and FAIL, and of exit 1 on a FAIL
+  [[ "$OPT_JSON" != "1" || "$OPT_FIX_HINTS" == "1" ]] || fl_prereq_run
   if [[ "$OPT_FIX_HINTS" == "1" ]]; then
     fl_doctor_print_fix_hints >&3
   elif [[ "$OPT_JSON" == "1" ]]; then
     fl_doctor_print_json
   else
     fl_header "benchbar doctor" "read-only" "$(fl_profile_display)" "$FL_BENCH_DIR" "$FL_SITE"
-    fl_prereq_print
     fl_doctor_print
     if [[ -n "$(fl_doctor_actions)" ]]; then
       printf '\n'

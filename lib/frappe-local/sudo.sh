@@ -9,7 +9,8 @@
 # that needs sudo later in the same run does not ask again.
 #
 # On macOS only two things ever need sudo: the wkhtmltopdf package
-# (installer -pkg) and the /etc/hosts line. On Linux: apt (the packages and
+# (installer -pkg, with Rosetta 2 installed by the same root script when the
+# package needs it and it is missing) and the /etc/hosts line. On Linux: apt (the packages and
 # the wkhtmltopdf .deb), the MariaDB admin step, its drop-in and restart, and
 # starting a stopped mariadb or redis-server (platform-linux.sh). Nothing
 # else in benchbar runs as root, and fl_sudo_drop ("sudo -k") ends the
@@ -44,6 +45,20 @@ fl_sudo_begin() {
   # a macOS dialog asks, once per step, when the step runs (fl_root_run)
   fl_sudo_gui && return 0
   [[ "$FL_SUDO_SESSION" == "1" ]] && return 0
+  # install --json and adopt --json without the dialogs: nothing can type a
+  # password, so a cached credential or a NOPASSWD rule is used and anything
+  # else skips the steps (with their manual command), as a cancelled dialog does
+  if [[ "${FL_JSONL:-0}" == "1" ]]; then
+    if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+      FL_SUDO_SESSION=1
+      export FL_SUDO_SESSION
+      return 0
+    fi
+    FL_SUDO_REFUSED=1
+    export FL_SUDO_REFUSED
+    fl_warn "sudo needs a password and this run cannot ask for one; the steps that need it are skipped: $*"
+    return 1
+  fi
   if [[ "$FL_SUDO_REFUSED" == "1" ]]; then
     fl_warn "sudo was refused earlier in this run; not asking again for: $*"
     return 1
@@ -119,13 +134,19 @@ fl_sudo_drop() {
 FL_ROOT_CANCELLED=""
 FL_ROOT_FAILED=""
 FL_ROOT_OUTPUT=""
+# FL_ROOT_KIND names the kind of step a dialog is for (hosts: all the lines,
+# whoever asks); without it the dialog's title is the kind. A cancelled or
+# failed kind is not asked for again in the same run.
+FL_ROOT_KIND=""
 fl_root_was_cancelled() { case " $FL_ROOT_CANCELLED " in *" ${1// /_} "*) return 0 ;; esac; return 1; }
+fl_root_was_failed() { case " $FL_ROOT_FAILED " in *" ${1// /_} "*) return 0 ;; esac; return 1; }
 fl_root_run() {
-  local reason="$1" script="$2" cmdline arg out err code=0
+  local reason="$1" script="$2" key cmdline arg out err code=0
   shift 2
-  if fl_root_was_cancelled "$reason"; then FL_ROOT_OUTPUT="the password dialog was cancelled earlier in this run"; return 2; fi
+  key="${FL_ROOT_KIND:-$reason}"
+  if fl_root_was_cancelled "$key"; then FL_ROOT_OUTPUT="the password dialog was cancelled earlier in this run"; return 2; fi
   # a step that failed behind its dialog is not tried again by a later pass (the service step)
-  case " $FL_ROOT_FAILED " in *" ${reason// /_} "*) return 1 ;; esac
+  if fl_root_was_failed "$key"; then FL_ROOT_OUTPUT="this step failed earlier in this run"; return 1; fi
   cmdline="/bin/bash -c $(fl_sq "$script") benchbar-root"
   for arg in "$@"; do cmdline="${cmdline} $(fl_sq "$arg")"; done
   out="$(mktemp "${TMPDIR:-/tmp}/benchbar-root.XXXXXX")"
@@ -138,8 +159,8 @@ fl_root_run() {
   rm -f "$out" "$err"
   [[ "$code" -ne 0 ]] || return 0
   case "$FL_ROOT_OUTPUT" in
-    *"(-128)"*) FL_ROOT_CANCELLED="${FL_ROOT_CANCELLED} ${reason// /_}"; return 2 ;;
+    *"(-128)"*) FL_ROOT_CANCELLED="${FL_ROOT_CANCELLED} ${key// /_}"; return 2 ;;
   esac
-  FL_ROOT_FAILED="${FL_ROOT_FAILED} ${reason// /_}"
+  FL_ROOT_FAILED="${FL_ROOT_FAILED} ${key// /_}"
   return 1
 }

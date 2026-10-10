@@ -480,23 +480,22 @@ fl_hosts_gui_reason() {
 # fl_hosts_add_gui NAME...: the lines for every NAME (valid, not there yet)
 # in one dialog. Sets FL_STEP_RESULT=skipped, and FL_SKIP_COMMAND, when the
 # dialog is cancelled; returns 1 when the script fails.
-FL_HOSTS_GUI_DECLINED=0
 fl_hosts_add_gui() {
   local reason lines="" n mode=rewrite code=0 last
   reason="$(fl_hosts_gui_reason "$@")"
   for n in "$@"; do lines="${lines}${lines:+$'\n'}127.0.0.1 ${n}"; done
-  # one dialog per run: a cancelled one is not asked again for any lines
-  if [[ "$FL_HOSTS_GUI_DECLINED" != "1" ]] && ! fl_root_was_cancelled "$reason"; then
+  # one dialog per run for the lines, whoever asks: a cancelled or failed one
+  # is not asked again (FL_ROOT_KIND=hosts)
+  if fl_root_was_cancelled hosts; then code=2
+  elif fl_root_was_failed hosts; then code=1; FL_ROOT_OUTPUT="the script failed earlier in this run"
+  else
     fl_backup_file "$FL_HOSTS_FILE" || return 1
     [[ "$(fl_rc_markers_state "$FL_HOSTS_FILE" "$FL_HOSTS_START" "$FL_HOSTS_END")" == "present" ]] || mode=append
-    fl_root_run "$reason" "$(fl_hosts_root_script)" "$FL_HOSTS_FILE" "$mode" "$FL_HOSTS_START" "$FL_HOSTS_END" "$lines" "$#" || code=$?
-  else
-    code=2
+    FL_ROOT_KIND=hosts fl_root_run "$reason" "$(fl_hosts_root_script)" "$FL_HOSTS_FILE" "$mode" "$FL_HOSTS_START" "$FL_HOSTS_END" "$lines" "$#" || code=$?
   fi
   case "$code" in
     0) ;;
     2)
-      FL_HOSTS_GUI_DECLINED=1
       FL_SKIP_COMMAND="${FL_SELF} site hosts --bench-dir ${FL_BENCH_DIR}"
       fl_warn "the password dialog was cancelled; the line was not added"
       fl_fix "$FL_SKIP_COMMAND"

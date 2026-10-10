@@ -69,8 +69,7 @@ All notable changes to this project are documented here.
   install, without a bench: Apple Silicon, macOS 14, the Command Line
   Tools, Homebrew, free disk, a bench folder outside iCloud Drive,
   Desktop and Documents, CleanMyMac, Mole and the default ports (on
-  Linux: disk, folder and ports). A plain `doctor` shows the same list
-  first, and `doctor --json` carries it as `prerequisites`.
+  Linux: disk, folder and ports). `doctor --json` carries it as `prerequisites`.
 - `benchbar profile list --json` gives each profile's Python, Node and
   MariaDB versions and lists the app bundles.
 

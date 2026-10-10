@@ -48,7 +48,7 @@ assert_eq "0" "$(osa_calls)"
 # ---- doctor --prerequisites: no bench needed, each id, levels from the mocked conditions
 PRE="$TMP_DIR/pre-home"; mkdir -p "$PRE"
 pre() { set +e; OUT="$(cd "$PRE" && "$FM" doctor --prerequisites --json "$@" 2>"$TMP_DIR/pre.err")"; CODE=$?; set -e; }
-pq() { printf '%s' "$OUT" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); c={x["id"]:x for x in d["prerequisites"]}; print('"$1"')'; }
+pq() { printf '%s' "$OUT" | python3 -I -c 'import json,re,sys; d=json.load(sys.stdin); c={x["id"]:x for x in d["prerequisites"]}; print('"$1"')'; }
 printf '%s' 52428800 >"$MOCK_STATE/df_avail_kb"
 export MOCK_XCODE_DIR="$TMP_DIR"
 snap="$(snapshot "$HOME" "$FL_STATE_DIR")"
@@ -220,6 +220,106 @@ BENCHBAR_SUDO=other stream install --json --dry-run --bench-dir "$HOME/term-benc
 assert_eq "terminal" "$(sx 'e[0]["sudo_mode"]')"
 assert_eq "0" "$(osa_calls)"
 
+# ---- without the gui mode the stream never prompts: sudo -n only, else the steps are skipped
+fresh_pdf; osa_reset
+unset BENCHBAR_SUDO
+rm -f "$MOCK_STATE/sudo_cred"
+reset_calls
+stream install --json --yes --bench-dir "$HOME/nogui-bench" --site noguisite
+assert_eq "0" "$CODE" "$(cat "$STREAM.err")"
+assert_eq "terminal" "$(sx 'e[0]["sudo_mode"]')"
+assert_eq "wkhtmltopdf_install hosts_entry" "$(sx '" ".join(s["id"] for s in e[-1]["skipped"])')"
+assert_contains "$(sx 'e[-1]["skipped"][0]["command"]')" "sudo installer -pkg"
+assert_contains "$(sx 'e[-1]["skipped"][1]["command"]')" "site hosts --bench-dir"
+assert_eq "skipped skipped" "$(sx '" ".join(x["status"] for x in e if x.get("id") in ("wkhtmltopdf_install","hosts_entry") and x["status"]=="skipped")')"
+assert_eq "0" "$(osa_calls)"
+# only the probe: nothing that could ask for a password (sudo -v, sudo CMD) was run
+if grep '^sudo ' "$MOCK_LOG" | grep -v -x 'sudo -n true' | grep -q .; then fail "the stream must not run sudo beyond the probe: $(grep '^sudo ' "$MOCK_LOG")"; fi
+# a cached credential works without asking
+fresh_pdf; touch "$MOCK_STATE/sudo_cred"
+stream install --json --yes --bench-dir "$HOME/nogui-bench2" --site nogui2
+assert_eq "0" "$CODE"
+assert_eq "[]" "$(sx 'e[-1]["skipped"]')"
+assert_calls_contain '^sudo installer -pkg'
+grep -qx '127.0.0.1 nogui2' "$FL_HOSTS_FILE" || fail "the hosts line with a cached credential"
+export BENCHBAR_SUDO=gui
+
+# ---- the root scripts' safety bails, run by the fake osascript as the test user
+cat >"$TMP_DIR/bail.sh" <<'BAILSH'
+#!/usr/bin/env bash
+# bail.sh FUNCTION ARGS...: a CLI function with the libraries loaded
+set -o pipefail
+SCRIPT_DIR="$ROOT"
+. "$ROOT/lib/frappe-local/install-kind.sh"
+for f in ui run platform version-policy state templates shellrc benchinfo process launchd benchstate discovery ports checks sudo mariadb repair service sites wkhtmltopdf; do . "$ROOT/lib/frappe-local/$f.sh"; done
+FL_PLAIN=1; fl_ui_init
+FL_SELF=benchbar; FL_BENCH_DIR="$BENCH_FOR_BAIL"; FL_SITE=bailsite
+FL_STEP_RESULT=done
+wrong_delta() { fl_root_run "Add" "$(fl_hosts_root_script)" "$FL_HOSTS_FILE" rewrite "$FL_HOSTS_START" "$FL_HOSTS_END" "127.0.0.1 a" 2; }
+"$@"
+code=$?
+printf 'code=%s result=%s\n' "$code" "$FL_STEP_RESULT"
+printf 'output=%s\n' "${FL_ROOT_OUTPUT:-}" | head -n 3
+BAILSH
+bail() { set +e; OUT="$(ROOT="$ROOT" BENCH_FOR_BAIL="$HOME/bail-bench" bash "$TMP_DIR/bail.sh" "$@" 2>&1)"; CODE=$?; set -e; }
+osa_reset
+# checksum mismatch of the root owned copy: nothing installed, the download deleted, the folder gone
+BPKG="$TMP_DIR/bail dl/wkhtmltox-0.12.6-2.macos-cocoa.pkg"
+mkdir -p "$(dirname "$BPKG")"; printf 'not the pinned package\n' >"$BPKG"
+count_root_tmp() { find /tmp -maxdepth 1 -name 'benchbar-wkhtmltopdf.*' | wc -l | tr -d ' '; }
+before_tmp="$(count_root_tmp)"
+reset_calls
+FL_WKHTML_PKG="$BPKG" FL_WKHTML_FILE="wkhtmltox-0.12.6-2.macos-cocoa.pkg" FL_WKHTML_SHA256="0000000000000000000000000000000000000000000000000000000000000000" \
+  FL_WKHTML_DOWNLOAD_DIR="$(dirname "$BPKG")" bail fl_wkhtmltopdf_install_gui
+assert_contains "$OUT" "code=1"
+assert_contains "$OUT" "checksum mismatch on the root owned copy"
+assert_no_file "$BPKG"
+assert_calls_not_contain '^installer'
+assert_eq "$before_tmp" "$(count_root_tmp)" "(the root folder is removed)"
+assert_eq "1" "$(osa_calls)"
+
+# /etc/hosts: a line that is not "address names" in the result: nothing is written
+osa_reset
+BH="$TMP_DIR/bail hosts"
+printf '127.0.0.1 localhost\n# >>> benchbar >>>\nsomehost 127.0.0.1\n# <<< benchbar <<<\n' >"$BH"
+cp "$BH" "$BH.before"
+FL_HOSTS_FILE="$BH" bail fl_hosts_add_gui bailsite
+assert_contains "$OUT" "code=1"
+assert_contains "$OUT" "address names"
+assert_eq "$(cat "$BH.before")" "$(cat "$BH")" "(the address names bail leaves the file as it was)"
+assert_no_file "$BH.benchbar.new"
+
+# the line count: a script told to expect two lines while the rewrite adds one
+osa_reset
+printf '127.0.0.1 localhost\n# >>> benchbar >>>\n# <<< benchbar <<<\n' >"$BH"
+cp "$BH" "$BH.before"
+FL_HOSTS_FILE="$BH" bail wrong_delta
+assert_contains "$OUT" "code=1"
+assert_contains "$OUT" "expected 3 + (2) lines, the result has 4"
+assert_eq "$(cat "$BH.before")" "$(cat "$BH")"
+assert_no_file "$BH.benchbar.new"
+
+# no benchbar block yet: the block is appended with the line inside
+osa_reset
+printf '127.0.0.1 localhost\n::1 localhost\n' >"$BH"
+FL_HOSTS_FILE="$BH" bail fl_hosts_add_gui bailsite
+assert_contains "$OUT" "code=0"
+assert_eq "$(printf '127.0.0.1 localhost\n::1 localhost\n\n# >>> benchbar >>>\n127.0.0.1 bailsite\n# <<< benchbar <<<')" "$(cat "$BH")"
+osa_reset
+
+# a failed batch dialog is remembered: the second bench opens no dialog of its own
+QA="$HOME/Qa/frappe-bench"; QB="$HOME/Qb/frappe-bench"
+make_fake_bench "$QA" qalpha; make_fake_bench "$QB" qbeta
+sed_inplace 's/8000/8001/; s/9000/9001/; s/11000/11001/; s/13000/13001/' "$QB/sites/common_site_config.json"
+touch "$MOCK_STATE/osa_fail"
+run_fm ports plan --json -- "$QA" "$QB"
+token="$(printf '%s' "$OUT" | jget - 'd["token"]')"
+run_fm ports apply "$token" --yes -- "$QA" "$QB"
+assert_eq "1" "$(osa_calls)" "(a failed batch dialog is not repeated for a bench)"
+assert_contains "$OUT" "could not write"
+if grep -q 'qalpha' "$FL_HOSTS_FILE"; then fail "a failed dialog writes nothing"; fi
+osa_reset
+
 # ---- adopt --json
 AB="$HOME/adopt-bench"
 make_fake_bench "$AB" adoptsite
@@ -284,11 +384,23 @@ if grep -q 'palpha' "$FL_HOSTS_FILE"; then fail "no line without the password"; 
 osa_reset
 unset BENCHBAR_SUDO
 
-# plain text, and the group in a bench's doctor
+# every check that is not ok names its fix, and the exit code follows the fails
+FL_ARCH=x86_64 pre; assert_eq "fail 1 BenchBar needs an Apple Silicon Mac" "$(pq 'c["apple_silicon"]["level"]') $CODE $(pq 'c["apple_silicon"]["fix_command"]')"
+MOCK_SW_VERS=13.4 pre; assert_eq "update macOS in System Settings, Software Update" "$(pq 'c["macos_version"]["fix_command"]')"
+printf '%s' 5242880 >"$MOCK_STATE/df_avail_kb"; pre; assert_eq "free space on the volume of $HOME" "$(pq 'c["disk_free"]["fix_command"]')"
+printf '%s' 52428800 >"$MOCK_STATE/df_avail_kb"
+pre --bench-dir "$HOME/Desktop/x"; assert_eq "choose a folder outside iCloud Drive, Desktop and Documents, such as ~/frappe-bench" "$(pq 'c["bench_folder"]["fix_command"]')"
+add_listener 8000 4242 ForeignApp
+pre; assert_eq "True" "$(pq 're.fullmatch(r"the new bench gets port block (\d+) \(--port-offset \1\)", c["default_ports"]["fix_command"]) is not None')"
+printf '3306 111 mariadbd 127.0.0.1\n' >"$MOCK_LISTEN"
+mkdir -p "$HOME/Applications/CleanMyMac X.app"; pre
+assert_eq "True" "$(pq 'all(x["level"] == "ok" or bool(x["fix_command"]) for x in d["prerequisites"])')"
+rmdir "$HOME/Applications/CleanMyMac X.app"
+# plain text and the bench's doctor
 run_fm doctor --prerequisites --bench-dir "$HOME/pre-x"
 assert_contains "$OUT" "PREREQUISITES"; assert_contains "$OUT" "[OK] Apple Silicon: arm64"
 run_fm doctor --bench-dir "$PA"
-case "$OUT" in *PREREQUISITES*) ;; *) fail "doctor prints the prerequisites first" ;; esac
+assert_not_contains "$OUT" "PREREQUISITES" "(a plain doctor keeps its fix line promise: no prerequisites group)"
 run_fm doctor --json --bench-dir "$PA"
 assert_eq "True" "$(printf '%s' "$OUT" | jget - 'len(d["prerequisites"]) == 9 and sum(d["summary"].values()) == len(d["checks"])')"
 # Linux: only the checks that mean something there

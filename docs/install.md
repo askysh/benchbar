@@ -30,7 +30,7 @@ bench, the site and the background service as in the
 `benchbar adopt` instead. To check a Mac before installing, without a
 bench, run `benchbar doctor --prerequisites` (Apple Silicon, macOS 14,
 Command Line Tools, Homebrew, free disk, the bench folder, cleanup tools
-and the default ports). The BenchBar app drives `install` and `adopt`
+and the default ports; each check that is not ok names its fix). The BenchBar app drives `install` and `adopt`
 through `--json --yes`, which prints one JSON event per line; the format
 is in the [JSON API](json-schema.md).
 

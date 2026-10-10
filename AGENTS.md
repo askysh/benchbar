@@ -135,7 +135,8 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
 - Use `--dry-run` before any `repair` or `install` on a machine you have
   not seen before, and show the plan to the user.
 - On macOS `sudo` is only ever used for `/etc/hosts` and the wkhtmltopdf
-  package; on Linux for apt, the wkhtmltopdf .deb and MariaDB (see above).
+  package (which includes Rosetta 2, when the package needs it and it is
+  missing); on Linux for apt, the wkhtmltopdf .deb and MariaDB (see above).
   The run asks for it once up front; with `--yes` the confirmation is
   skipped but the password prompt is not, so say so.
 - Never print or log the MariaDB root password. It lives in the Keychain

@@ -128,12 +128,12 @@ fl_prereq_run() {
   if ! fl_is_linux; then
     arch="${FL_ARCH:-$(uname -m)}"
     if [[ "$arch" == "arm64" ]]; then fl_prereq_add apple_silicon ok "arm64"
-    else fl_prereq_add apple_silicon fail "this Mac is ${arch}; BenchBar and its Homebrew setup are for Apple Silicon"; fi
+    else fl_prereq_add apple_silicon fail "this Mac is ${arch}; BenchBar and its Homebrew setup are for Apple Silicon" "BenchBar needs an Apple Silicon Mac"; fi
 
     os="$(sw_vers -productVersion 2>/dev/null || true)"; major="${os%%.*}"
-    if [[ ! "$major" =~ ^[0-9]+$ ]]; then fl_prereq_add macos_version fail "could not read the macOS version"
+    if [[ ! "$major" =~ ^[0-9]+$ ]]; then fl_prereq_add macos_version fail "could not read the macOS version" "update macOS in System Settings, Software Update"
     elif [[ "$major" -ge 14 ]]; then fl_prereq_add macos_version ok "macOS ${os}"
-    else fl_prereq_add macos_version fail "macOS ${os}; macOS 14 or later is needed (System Settings, General, Software Update)"; fi
+    else fl_prereq_add macos_version fail "macOS ${os}; macOS 14 or later is needed" "update macOS in System Settings, Software Update"; fi
 
     clt="$(xcode-select -p 2>/dev/null || true)"
     if [[ -n "$clt" && -d "$clt" ]]; then fl_prereq_add command_line_tools ok "$clt"
@@ -152,15 +152,15 @@ fl_prereq_run() {
     level=ok
     [[ "$gb" -ge "$FL_PREREQ_DISK_OK_GB" ]] || level=warn
     [[ "$gb" -ge "$FL_PREREQ_DISK_WARN_GB" ]] || level=fail
-    fl_prereq_add disk_free "$level" "${gb} GB free" "" ",\"free_gb\":${gb}"
+    fl_prereq_add disk_free "$level" "${gb} GB free" "$([[ "$level" == ok ]] || printf 'free space on the volume of %s' "$HOME")" ",\"free_gb\":${gb}"
   else
-    fl_prereq_add disk_free warn "could not read the free disk space" "" ",\"free_gb\":null"
+    fl_prereq_add disk_free warn "could not read the free disk space" "free space on the volume of ${HOME}" ",\"free_gb\":null"
   fi
 
   # the folder: a path benchbar can carry, and not in a place iCloud syncs
   dir="$FL_BENCH_DIR"
   if ! fl_bench_path_ok "$dir"; then
-    fl_prereq_add bench_folder fail "${dir} contains ${FL_TEXT_PROBLEM}, which benchbar cannot carry as plain text; choose another folder, for example ~/frappe-bench"
+    fl_prereq_add bench_folder fail "${dir} contains ${FL_TEXT_PROBLEM}, which benchbar cannot carry as plain text" "choose a folder outside iCloud Drive, Desktop and Documents, such as ~/frappe-bench"
   else
     level=ok; p=""
     case "$dir" in
@@ -170,8 +170,8 @@ fl_prereq_run() {
     esac
     case "$level" in
       ok) fl_prereq_add bench_folder ok "$dir" ;;
-      warn) fl_prereq_add bench_folder warn "${dir} is in ${p}, which iCloud can sync and evict from; choose a folder outside it, for example ~/frappe-bench" ;;
-      *) fl_prereq_add bench_folder fail "${dir} is in ${p}, whose files are evicted to the cloud and break a bench; choose a folder outside it, for example ~/frappe-bench" ;;
+      warn) fl_prereq_add bench_folder warn "${dir} is in ${p}, which iCloud can sync and evict from" "choose a folder outside iCloud Drive, Desktop and Documents, such as ~/frappe-bench" ;;
+      *) fl_prereq_add bench_folder fail "${dir} is in ${p}, whose files are evicted to the cloud and break a bench" "choose a folder outside iCloud Drive, Desktop and Documents, such as ~/frappe-bench" ;;
     esac
   fi
 
@@ -188,9 +188,9 @@ fl_prereq_run() {
   if [[ -z "$conflicts" ]]; then
     fl_prereq_add default_ports ok "ports 8000, 9000, 11000 and 13000 are free" "" ",\"port_offset\":0"
   elif offset="$(fl_port_next_free_offset)"; then
-    fl_prereq_add default_ports warn "$(printf '%s' "$conflicts" | tr '\n' ';' | sed 's/;$//; s/;/; /g'); a new bench gets port block ${offset}" "" ",\"port_offset\":${offset}"
+    fl_prereq_add default_ports warn "$(printf '%s' "$conflicts" | tr '\n' ';' | sed 's/;$//; s/;/; /g'); a new bench gets port block ${offset}" "the new bench gets port block ${offset} (--port-offset ${offset})" ",\"port_offset\":${offset}"
   else
-    fl_prereq_add default_ports warn "$(printf '%s' "$conflicts" | tr '\n' ';' | sed 's/;$//; s/;/; /g'); no port block up to ${FL_PORT_MAX_OFFSET} is free" "" ",\"port_offset\":null"
+    fl_prereq_add default_ports warn "$(printf '%s' "$conflicts" | tr '\n' ';' | sed 's/;$//; s/;/; /g'); no port block up to ${FL_PORT_MAX_OFFSET} is free" "free one of these ports, or give the bench its own block with --port-offset" ",\"port_offset\":null"
   fi
 }
 

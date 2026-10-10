@@ -335,6 +335,11 @@ the site exists) and the optional `MARIADB_ROOT_PASSWORD`. A missing
 `ADMIN_PASSWORD` is refused the same way, before anything runs. stdin is
 never read.
 
+The stream never prompts for a password. Without `BENCHBAR_SUDO=gui`, a
+cached `sudo` credential or a `NOPASSWD` rule is used (`sudo -n true`);
+otherwise the privileged steps are `skipped` with their `command`, exactly
+like a cancelled dialog (see [the privileged steps](#the-privileged-steps-and-benchbar_sudogui)).
+
 ```json
 {"schema_version":1,"cli_version":"0.8.0","event":"plan","bench":"/Users/you/frappe-bench","site":"macdev","profile":"v15-lts","team_profile":null,"bundle":"minimal","port_offset":0,"web_url":"http://macdev:8000","dry_run":false,"sudo_mode":"gui","steps":[{"n":null,"id":"wkhtmltopdf_install","name":"Install the patched wkhtmltopdf package","sudo":true,"will_run":true},{"n":null,"id":"hosts_entry","name":"Add 127.0.0.1 macdev to /etc/hosts","sudo":true,"will_run":true},{"n":1,"id":"system_deps","name":"System dependencies (00-mac-system-deps.sh)","sudo":false,"will_run":true},{"n":2,"id":"bench_site","name":"Bench and site (01-install-bench-and-site.sh)","sudo":false,"will_run":true},{"n":3,"id":"service","name":"Background service","sudo":false,"will_run":true}],"log":"/Users/you/.local/state/benchbar/logs/20261010-101500-4242.log"}
 {"schema_version":1,"cli_version":"0.8.0","event":"step","n":null,"id":"wkhtmltopdf_install","parent":null,"name":"Install the patched wkhtmltopdf package","status":"running"}
@@ -384,7 +389,11 @@ and there is no cached credential afterwards. At most two dialogs per
 run. A cancelled dialog makes that step `skipped` with its `command`,
 and the run goes on; a step that failed behind its dialog is not asked
 again by a later pass of the same run. Only the value `gui` switches the
-mode, on macOS (on Linux it is ignored).
+mode, on macOS (on Linux it is ignored). Rosetta 2, when the package
+needs it and it is missing, is installed by the package's own script, in
+the same dialog. Without `gui`, `install --json` and `adopt --json` never
+prompt: they use `sudo` only when it needs no password (a cached
+credential, a `NOPASSWD` rule) and skip the steps otherwise.
 
 The commands that read `BENCHBAR_SUDO`: `install`, `adopt`, `repair` (the
 `hosts_entry` and `wkhtmltopdf_install` actions), `site hosts`, `site add`,
@@ -431,13 +440,18 @@ exist.
 | `default_ports` | ports 8000, 9000, 11000 and 13000 are free; the check carries `port_offset`, the block `install` would give a new bench | `ok`, `warn` (taken: the new bench gets `port_offset`) |
 
 Every object has the fields of a doctor check (`id`, `label`, `level`,
-`message`, `fix_command`). On Linux only `disk_free`, `bench_folder` and
-`default_ports` are reported: the others are Mac only and would be
-`ok` for something that cannot exist there. Exit 1 when one is `fail`. `benchbar doctor
---prerequisites` prints the same list for a person, and a plain `doctor`
-prints it as its first group; `doctor --json` of a bench carries the same
-array as `prerequisites` next to `checks` (it does not count in
-`summary` or in the exit code).
+`message`, `fix_command`), and every check that is not `ok` has a
+`fix_command`: the command to run, or a plain instruction where there is
+none ("BenchBar needs an Apple Silicon Mac", "update macOS in System
+Settings, Software Update", "free space on the volume of ..."). On Linux
+only `disk_free`, `bench_folder` and `default_ports` are reported: the
+others are Mac only and would be `ok` for something that cannot exist
+there. Exit 1 when one is `fail`. `benchbar doctor --prerequisites` prints
+the same list for a person. A plain `doctor` does not print it (its WARN
+and FAIL lines promise a fix line and its exit code the state of the
+bench); `doctor --json` of a bench carries the same array as
+`prerequisites` next to `checks`, not counted in `summary` or in the exit
+code.
 
 ## `benchbar app list --json`
 
