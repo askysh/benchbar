@@ -312,9 +312,11 @@ assert_no_file "$SECRET"
 fl_keychain_delete   # again: nothing to do, no error
 
 # ---- the content hash is the same 12 hex digits with sha256sum as with shasum
-if command -v sha256sum >/dev/null 2>&1 && command -v shasum >/dev/null 2>&1; then
+# the real sha256sum, not the tests/mocks shim (macOS hosts have none: skipped)
+REAL_SHA256SUM="$(type -ap sha256sum | grep -v '/tests/mocks/' | head -n1 || true)"
+if [[ -n "$REAL_SHA256SUM" ]] && command -v shasum >/dev/null 2>&1; then
   NOSHA="$TMP_DIR/nosha"; mkdir -p "$NOSHA"
-  ln -s "$(command -v sha256sum)" "$NOSHA/sha256sum"; ln -s "$(command -v cut)" "$NOSHA/cut"
+  ln -s "$REAL_SHA256SUM" "$NOSHA/sha256sum"; ln -s "$(command -v cut)" "$NOSHA/cut"
   for text in "hello" "" "a longer text with spaces and $(printf 'a\tb')"; do
     a="$(printf '%s' "$text" | fl_content_hash)"
     b="$(printf '%s' "$text" | PATH="$NOSHA" fl_content_hash)"

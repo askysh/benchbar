@@ -36,7 +36,7 @@ case "$verb" in
 esac
 exit 0
 MOCK
-sed -i "s#__ROOT__#$ROOT#" "$XBIN/systemctl"
+sed_inplace "s#__ROOT__#$ROOT#" "$XBIN/systemctl"; chmod +x "$XBIN/systemctl"
 chmod +x "$XBIN/systemctl" "$XBIN/mariadb"
 # the mock tools minus uv and fnm: the installers below put those in place
 for f in "$ROOT"/tests/mocks/bin/*; do
