@@ -122,6 +122,10 @@ if [[ "$CHECK_UPDATES" == "1" ]]; then
 fi
 
 fl_platform_init
+# the profile's keg only formulae first on PATH, as phase 01 does: npm and
+# yarn start with "#!/usr/bin/env node", and a shell without the helper
+# block (a fresh Mac, or the BenchBar app) has no node@NN on PATH
+export PATH="${FL_BREW_PREFIX}/opt/${FL_PYTHON_FORMULA}/bin:${FL_BREW_PREFIX}/opt/${FL_NODE_FORMULA}/bin:${FL_BREW_PREFIX}/opt/${FL_MARIADB_FORMULA}/bin:$PATH"
 
 add_pending() { PENDING_STEPS+=("$1"); }
 

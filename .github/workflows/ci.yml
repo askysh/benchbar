@@ -307,5 +307,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: swift-test-log
-          path: macos/build/test.log
+          # the build log too: xcbeautify --quiet can hide an error that has
+          # no file and line (exit 65 with an empty job log)
+          path: |
+            macos/build/test.log
+            macos/build/build.log
           if-no-files-found: ignore
