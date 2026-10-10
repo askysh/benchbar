@@ -122,6 +122,20 @@ struct WizardRunTests {
         #expect(run.store.busyBench == nil)
     }
 
+    @Test func aStopBeforeTheProcessStartsMeansNoInstallCall() async throws {
+        let (run, fake) = await makeRun()
+        base.cli.answer("install", try stream("install-dry-run"))
+        try await reachReview(run)
+        base.cli.answer("install", try stream("install-stream-success"))
+        run.send(.primary)
+        run.send(.stop)
+        await base.waitUntil { run.state.installPhase == .stopped }
+        #expect(run.state.installPhase == .stopped)
+        #expect(!fake.calls.contains { $0.arguments.starts(with: ["install", "--yes"]) }, "the install never started")
+        await base.waitUntil { run.store.busyBench == nil }
+        #expect(run.store.busyBench == nil)
+    }
+
     @Test func commandLineToolsArePolledOnlyWhileTheRowFailsAndThePageShows() async throws {
         let (run, _) = await makeRun()
         run.pollInterval = .milliseconds(20)

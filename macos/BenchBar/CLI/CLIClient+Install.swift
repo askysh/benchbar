@@ -70,9 +70,10 @@ extension CLIClient {
 
     /// `site hosts --yes`: adds the missing hosts lines. The password dialog is
     /// macOS's own (BENCHBAR_SUDO=gui); a cancelled dialog is a [WARN] line, not
-    /// a failed command. The caller classifies the output (`HostsOutcome`).
+    /// a failed command. The caller classifies the output (`HostsOutcome`). It waits on a
+    /// person at the dialog, so it gets the long timeout: a timeout would kill the dialog.
     func siteHosts(bench: String) async throws(CLIError) -> CommandOutput {
-        try await run(["site", "hosts", "--yes", "--bench-dir", bench], timeout: Timeout.action, acceptExitCodes: [0, 1],
+        try await run(["site", "hosts", "--yes", "--bench-dir", bench], timeout: Timeout.install, acceptExitCodes: [0, 1],
                       extraEnvironment: Self.guiSudo)
     }
 

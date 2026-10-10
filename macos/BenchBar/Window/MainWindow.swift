@@ -187,7 +187,7 @@ struct MainSidebar: View {
                 }
                 ForEach(model.benches) { row in
                     HStack(spacing: WindowMetrics.rowSpacing) {
-                        Image(systemName: "circle.fill").font(.system(size: 8))
+                        Image(systemName: "circle.fill").font(.caption2).imageScale(.small)
                             .foregroundStyle(StatePill.color(for: row.state))
                             .environment(\.backgroundProminence, .standard)
                             .accessibilityHidden(true)

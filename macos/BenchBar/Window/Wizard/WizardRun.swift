@@ -35,6 +35,8 @@ final class WizardRun {
     @ObservationIgnored var windowIsVisible: (() -> Bool)?
 
     @ObservationIgnored private var runTask: Task<Void, Never>?
+    /// Stop was pressed before the install process started: it must not start.
+    @ObservationIgnored private var stopBeforeStart = false
     @ObservationIgnored private var installTask: Task<Result<Int32, CLIError>, Never>?
     @ObservationIgnored private var pollTask: Task<Void, Never>?
     @ObservationIgnored private var tailer: LogTailer?
@@ -91,7 +93,9 @@ final class WizardRun {
         case .loadProfiles: loadProfiles()
         case .planInstall(let request): plan(request)
         case .startInstall(let request, let withRoot): startInstall(request, withRootPassword: withRoot)
-        case .stopInstall: installTask?.cancel()
+        case .stopInstall:
+            stopBeforeStart = true
+            installTask?.cancel()
         case .openFindBenches: openFindBenches()
         case .openSite(let url): openURL(url)
         case .leave: leave()
@@ -161,6 +165,7 @@ final class WizardRun {
         let root = withRootPassword ? state.rootPassword.value : nil
         stopTailing()
         logLines = []
+        stopBeforeStart = false
         let anchor = BenchModel(summary: Self.placeholder(request))
         runTask = Task { @MainActor in
             let (events, continuation) = AsyncStream<InstallEvent>.makeStream()
@@ -175,6 +180,8 @@ final class WizardRun {
             // the install runs in a task of its own: Stop cancels that one, and
             // the change slot is still released and the bench list read after it
             let busy = await store.runChange("Installing \(request.site)", on: anchor) { client throws(CLIError) in
+                // a Stop that came before this point: no process at all
+                if self.stopBeforeStart { return }
                 let work = Task { () async -> Result<Int32, CLIError> in
                     do throws(CLIError) {
                         return .success(try await client.install(request, adminPassword: admin, rootPassword: root) { event in
