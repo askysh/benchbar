@@ -91,6 +91,13 @@ internal static partial class Native
     [LibraryImport("user32.dll")]
     public static partial uint GetDpiForSystem();
 
+    [StructLayout(LayoutKind.Sequential)]
+    public struct Rect { public int Left, Top, Right, Bottom; }
+
+    /// <summary>The window's visible bounds without the invisible resize border (DWMWA_EXTENDED_FRAME_BOUNDS = 9).</summary>
+    [LibraryImport("dwmapi.dll")]
+    public static partial int DwmGetWindowAttribute(IntPtr window, int attribute, out Rect rect, int size);
+
     [LibraryImport("user32.dll")]
     public static partial IntPtr GetDC(IntPtr window);
 

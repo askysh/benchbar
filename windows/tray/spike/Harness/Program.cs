@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Diagnostics;
 using System.Globalization;
 
@@ -395,6 +396,16 @@ internal sealed class Screenshots(Options o, CancellationToken ct) : ShellComman
                     {
                         s.Failures.Add($"{what}: bad rect '{rendered.Get("rect")}'");
                         continue;
+                    }
+                    // The rect in flyout-rendered is from the first frame, before the benches may have
+                    // sized the window; capture where the window is now.
+                    string? hex = rendered.Get("hwnd");
+                    if (hex is not null && long.TryParse(hex.Replace("0x", "", StringComparison.OrdinalIgnoreCase),
+                            System.Globalization.NumberStyles.HexNumber, null, out long hwnd)
+                        && Native.DwmGetWindowAttribute((IntPtr)hwnd, 9, out Native.Rect now, Marshal.SizeOf<Native.Rect>()) == 0
+                        && now.Right > now.Left && now.Bottom > now.Top)
+                    {
+                        (l, t, w, h) = (now.Left, now.Top, now.Right - now.Left, now.Bottom - now.Top);
                     }
                     byte[]? pixels = Screen.Capture(l, t, w, h);
                     if (pixels is null)
