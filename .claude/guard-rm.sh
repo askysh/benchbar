@@ -8,8 +8,12 @@ input="$(cat)"
 # Only "rm" as a word counts here, so "platform" or "guard-rm.sh" does not
 # need python3. Anything after it but a name character counts, so rm'' and
 # a tab (\t in the JSON) still reach the parser.
-word_rm='(^|[^A-Za-z0-9_.-])rm([^A-Za-z0-9_.-]|$)'
+# Git Bash runs rm.exe too, and Windows finds RM as rm, so case and a .exe
+# suffix do not matter.
+word_rm='(^|[^A-Za-z0-9_.-])rm(\.exe)?([^A-Za-z0-9_.-]|$)'
+shopt -s nocasematch
 [[ $input =~ $word_rm ]] || exit 0
+shopt -u nocasematch
 # The parsing needs python3. Without it (Git Bash, a Mac without the command
 # line tools) a call that mentions rm is blocked rather than let through.
 # Running it, not just finding it, catches the Windows Store stub, which is
@@ -28,8 +32,13 @@ except ValueError:
     print("Blocked: the rm guard could not read the tool call.", file=sys.stderr)
     sys.exit(2)
 text = data.get("tool_input", {}).get("command", "") or ""
-if not re.search(r"(^|[^\w.-])rm([^\w.-]|$)", text):
+word_rm = re.compile(r"(^|[^\w.-])rm(\.exe)?([^\w.-]|$)", re.I)
+if not word_rm.search(text):
     sys.exit(0)
+def base(word):
+    # a command name as Windows and Git Bash find it: rm, RM and rm.exe alike
+    b = os.path.basename(word).lower()
+    return b[:-4] if b.endswith(".exe") else b
 # Relative targets resolve against every directory the shell could be in:
 # the tool call cwd, then each cd or pushd earlier in the same command. A cd
 # replaces the old directory only when it is sure to have run and succeeded
@@ -77,7 +86,6 @@ def in_scratchpad(path):
 def block(msg):
     print("Blocked: " + msg, file=sys.stderr)
     sys.exit(2)
-word_rm = re.compile(r"(^|[^\w.-])rm([^\w.-]|$)")
 pieces =re.split(r"(&&|\|\||;|\||\n|\(|\))", text)
 for i in range(0, len(pieces), 2):
     part = pieces[i]
@@ -103,19 +111,19 @@ for i in range(0, len(pieces), 2):
             assignments[name] = assignments.get(name, 0) + 1
         continue
     via_xargs = False
-    while words and (words[0] in ("sudo", "command", "env", "exec", "then", "do", "else", "elif",
+    while words and (base(words[0]) in ("sudo", "command", "builtin", "env", "exec", "then", "do", "else", "elif",
                                   "if", "while", "until", "!", "{", "time", "nohup", "nice", "xargs")
                      or "=" in words[0]):
         via_xargs = via_xargs or words[0] == "xargs"
         words = words[1:]
     if not words:
         continue
-    if os.path.basename(words[0]) in ("bash", "sh", "zsh", "dash", "ksh", "eval") and \
+    if base(words[0]) in ("bash", "sh", "zsh", "dash", "ksh", "eval") and \
             any(word_rm.search(w) for w in words[1:]):
         block("rm inside a nested shell or eval; run it directly so the guard can check it.")
-    if os.path.basename(words[0]) == "find" and any(os.path.basename(w) == "rm" for w in words[1:]):
+    if base(words[0]) == "find" and any(base(w) == "rm" for w in words[1:]):
         block("find -exec rm deletes paths the guard cannot see; list them first, then rm them by name.")
-    if words[0] in ("cd", "pushd", "popd"):
+    if base(words[0]) in ("cd", "pushd", "popd"):
         # Options (-L, -P, -e, -@) come before the folder; "-" alone is the
         # previous folder, which the guard cannot know.
         args = words[1:]
@@ -123,7 +131,7 @@ for i in range(0, len(pieces), 2):
             done = args.pop(0) == "--"
             if done:
                 break
-        dest = args[0] if args and words[0] != "popd" else None
+        dest = args[0] if args and base(words[0]) != "popd" else None
         if dest is None or dest == "-" or "$" in dest or "`" in dest:
             new = [None]
         else:
@@ -134,10 +142,10 @@ for i in range(0, len(pieces), 2):
         continue
     # Any wrapper with any options can run rm (nice -n 5, sudo -u x,
     # timeout 5, env -i), so rm is checked wherever it is in the command.
-    at = next((k for k, w in enumerate(words) if os.path.basename(w) == "rm"), None)
+    at = next((k for k, w in enumerate(words) if base(w) == "rm"), None)
     if at is None:
         continue
-    via_xargs = via_xargs or any(os.path.basename(w) == "xargs" for w in words[:at])
+    via_xargs = via_xargs or any(base(w) == "xargs" for w in words[:at])
     words = words[at:]
     flags = "".join(w.lstrip("-") for w in words[1:] if w.startswith("-") and not w.startswith("--"))
     longs = [w for w in words[1:] if w.startswith("--")]

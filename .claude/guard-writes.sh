@@ -62,7 +62,7 @@ while IFS= read -r call; do
     fi
   fi
 done <<EOF
-$(chunks '(^|[^A-Za-z0-9_.-])gh[[:space:]]+api([[:space:]]|$)')
+$(chunks '(^|[^A-Za-z0-9_.-])gh(\.exe)?[[:space:]]+api([[:space:]]|$)')
 EOF
 
 while IFS= read -r call; do
