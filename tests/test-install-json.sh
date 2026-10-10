@@ -81,6 +81,9 @@ mkdir -p "$TMP_DIR/molebin"; printf '#!/bin/sh\nexit 0\n' >"$TMP_DIR/molebin/mol
 PATH="$TMP_DIR/molebin:$PATH" FL_MOLE_CMDS=mole pre; assert_eq "warn" "$(pq 'c["mole"]["level"]')"
 add_listener 8000 4242 ForeignApp
 pre; assert_eq "warn 1" "$(pq 'c["default_ports"]["level"]') $(pq 'c["default_ports"]["port_offset"]')"; assert_eq "0" "$CODE"
+# every block taken (only block 0 allowed here): a fail, no --port-offset remedy
+FL_PORT_MAX_OFFSET=0 pre; assert_eq "fail None 1" "$(pq 'c["default_ports"]["level"]') $(pq 'c["default_ports"]["port_offset"]') $CODE"
+assert_not_contains "$(pq 'c["default_ports"]["fix_command"]')" "--port-offset"
 printf '3306 111 mariadbd 127.0.0.1\n' >"$MOCK_LISTEN"
 FL_BREW_ALT_BIN="$TMP_DIR/nobrew" PATH="/usr/bin:/bin" pre; assert_eq "fail" "$(pq 'c["homebrew"]["level"]')"
 assert_contains "$(pq 'c["homebrew"]["fix_command"]')" "Homebrew/install"

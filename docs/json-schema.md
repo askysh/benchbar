@@ -439,7 +439,7 @@ exist.
 | `bench_folder` | the folder is a valid bench path and not under iCloud Drive, Desktop or Documents | `ok`, `warn` (Desktop, Documents), `fail` (iCloud Drive, a path benchbar refuses) |
 | `cleanmymac` | as doctor's `cleanmymac` check, for that folder | `ok`, `warn` |
 | `mole` | as doctor's `mole` check, for that folder | `ok`, `warn` |
-| `default_ports` | ports 8000, 9000, 11000 and 13000 are free; the check carries `port_offset`, the block `install` would give a new bench | `ok`, `warn` (taken: the new bench gets `port_offset`) |
+| `default_ports` | ports 8000, 9000, 11000 and 13000 are free; the check carries `port_offset`, the block `install` would give a new bench | `ok`, `warn` (taken: the new bench gets `port_offset`), `fail` (no block up to the last offset is free; `port_offset` is null) |
 
 Every object has the fields of a doctor check (`id`, `label`, `level`,
 `message`, `fix_command`), and every check that is not `ok` has a

@@ -38,10 +38,15 @@ extension CLIClient {
         let output = try await run(args, timeout: Timeout.doctor, acceptExitCodes: [0, 1],
                                    extraEnvironment: ["ADMIN_PASSWORD": adminPassword])
         let events = try InstallEvent.decodeAll(output.stdout)
-        for case .plan(let plan) in events { return plan }
-        for case .done(let done) in events {
+        // a dry run that ends unsuccessfully (no free port block, a profile
+        // ref that is gone) has no plan to review, even when it sent one
+        for case .done(let done) in events where done.exit != 0 {
             throw .failed(command: "install", exitCode: Int32(done.exit), message: done.error ?? done.fix ?? Self.summarize(output))
         }
+        guard output.exitCode == 0 else {
+            throw .failed(command: "install", exitCode: output.exitCode, message: Self.summarize(output))
+        }
+        for case .plan(let plan) in events { return plan }
         throw .failed(command: "install", exitCode: output.exitCode, message: Self.summarize(output))
     }
 

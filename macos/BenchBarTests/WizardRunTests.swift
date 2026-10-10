@@ -54,6 +54,24 @@ struct WizardRunTests {
         CommandOutput(exitCode: exit, stdout: try Fixture.lines(name), stderr: "")
     }
 
+    /// A dry run that sends its plan and then ends with exit 1 (no free port
+    /// block, a profile ref that is gone) gives nothing to review.
+    @Test func aDryRunThatEndsInAFailureIsNoPlan() async throws {
+        let (run, _) = await makeRun()
+        let plan = try Fixture.lines("install-dry-run").split(separator: "\n").first.map(String.init) ?? ""
+        let done = #"{"schema_version":1,"cli_version":"0.8.0","event":"done","exit":1,"bench":"/Users/you/frappe-bench","site":"macdev","url":null,"skipped":[],"fix":"no port block between 0 and 50 is free","log":null}"#
+        base.cli.answer("install", CommandOutput(exitCode: 1, stdout: plan + "\n" + done + "\n", stderr: ""))
+        run.send(.chooseNewBench)
+        await base.waitUntil { run.state.prerequisites != nil }
+        run.send(.primary)
+        await base.waitUntil { run.state.profilesLoaded }
+        run.send(.setAdminPassword("s3cret pw"))
+        run.send(.primary)
+        await base.waitUntil { run.state.planError != nil }
+        #expect(run.state.plan == nil)
+        #expect(run.state.planError?.contains("no port block") == true)
+    }
+
     @Test func thePasswordAndGuiSudoGoToTheInstallProcessOnly() async throws {
         let (run, fake) = await makeRun()
         base.cli.answer("install", try stream("install-dry-run"))

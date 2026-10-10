@@ -29,6 +29,7 @@ runs come first, the 0.3 easy install run follows.
 - The dialog memory is per kind of step (`FL_ROOT_KIND`, `hosts`), not per title: the batch dialog of `ports apply` and each bench's own hosts step have different titles but are the same question, and a cancelled or failed one must not be asked again for the next bench.
 - `doctor --prerequisites` calls no `fl_context_init` and no `fl_require_bench`: it must work before a bench exists. On Linux it reports `disk_free`, `bench_folder` and `default_ports` only. In a bench's `doctor` the prerequisites are a separate array and group, not counted in the summary or the exit code.
 - `fl_sq` quotes with a variable holding the quote (`${1//$q/$q\\$q$q}`): the form with backslash escaped quotes in the replacement quoted wrongly under bash 3.2 when the root scripts went through it.
+- `default_ports` fails when no block up to the last offset is free: install would fail only after the privileged and system steps, and no `--port-offset` can help, so the wizard stops on Check Your Mac (Codex review). A dry run that ends with exit 1 is no plan, even when it sent one.
 
 ## 0.7.3: ownership
 

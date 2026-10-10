@@ -190,7 +190,9 @@ fl_prereq_run() {
   elif offset="$(fl_port_next_free_offset)"; then
     fl_prereq_add default_ports warn "$(printf '%s' "$conflicts" | tr '\n' ';' | sed 's/;$//; s/;/; /g'); a new bench gets port block ${offset}" "the new bench gets port block ${offset} (--port-offset ${offset})" ",\"port_offset\":${offset}"
   else
-    fl_prereq_add default_ports warn "$(printf '%s' "$conflicts" | tr '\n' ';' | sed 's/;$//; s/;/; /g'); no port block up to ${FL_PORT_MAX_OFFSET} is free" "free one of these ports, or give the bench its own block with --port-offset" ",\"port_offset\":null"
+    # every block is taken: install would fail after its system steps, so
+    # this stops the wizard here, and no --port-offset can help
+    fl_prereq_add default_ports fail "$(printf '%s' "$conflicts" | tr '\n' ';' | sed 's/;$//; s/;/; /g'); no port block up to ${FL_PORT_MAX_OFFSET} is free" "stop or remove a bench, or the program on these ports, to free a port block" ",\"port_offset\":null"
   fi
 }
 
