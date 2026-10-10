@@ -14,6 +14,11 @@
 # the release bundle is built in the app job from the same checkout and
 # DerivedData instead of a second job.
 #
+# The Windows shim (windows/shim, Go) is vetted, tested and built for
+# windows/amd64 and windows/arm64 on Linux in the "shim" job; the "wsl" job
+# runs its tests on Windows and against a real WSL distro on the self hosted
+# runner (windows/runner/README.md), never for a fork's pull request.
+#
 # A change that touches only docs/** or site/** skips the CLI and app jobs
 # (the "changes" job decides; the docs site has its own workflow, docs.yml).
 # The skip happens inside the run, not with a workflow "paths-ignore": a
@@ -241,6 +246,115 @@ jobs:
           ls -la ~/.local/state/benchbar/logs || true
           tail -n 200 ~/.local/state/benchbar/logs/*.log || true
           cat "$RUNNER_TEMP/doctor.json" 2>/dev/null || true
+
+  # The Windows shim: vet, unit tests (a fake wsl.exe, so Linux is enough)
+  # and both Windows builds, uploaded as one artifact. Same skip rule as the
+  # shards.
+  shim:
+    name: Windows shim (go vet, go test, amd64 and arm64 builds)
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CODE: ${{ needs.changes.outputs.code }}
+    defaults:
+      run:
+        working-directory: windows/shim
+    steps:
+      - name: Skipped (only docs/ or site/ changed)
+        if: env.CODE != 'true'
+        working-directory: .
+        run: echo "Only docs/ or site/ changed; the shim does not build."
+
+      - uses: actions/checkout@v7
+        if: env.CODE == 'true'
+
+      - uses: actions/setup-go@v7
+        if: env.CODE == 'true'
+        with:
+          go-version-file: windows/shim/go.mod
+          cache-dependency-path: windows/shim/go.sum
+
+      - name: gofmt and go vet
+        if: env.CODE == 'true'
+        run: |
+          go version
+          test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+          go vet ./...
+          GOOS=windows go vet ./...
+
+      - name: go test
+        if: env.CODE == 'true'
+        run: go test ./...
+
+      - name: Build windows/amd64 and windows/arm64
+        if: env.CODE == 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/shim/amd64" "$RUNNER_TEMP/shim/arm64"
+          for arch in amd64 arm64; do
+            CGO_ENABLED=0 GOOS=windows GOARCH=$arch go build -trimpath \
+              -ldflags "-s -w -X main.version=${GITHUB_SHA::12}" \
+              -o "$RUNNER_TEMP/shim/$arch/benchbar.exe" .
+          done
+          ls -l "$RUNNER_TEMP"/shim/*/benchbar.exe
+
+      - name: Upload the exes
+        if: env.CODE == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: benchbar-shim-${{ github.sha }}
+          path: ${{ runner.temp }}/shim
+          if-no-files-found: error
+          retention-days: 14
+
+  # The shim against a real WSL distro on Akash's Windows laptop (the self
+  # hosted runner, label wsl). This repo is public and the runner runs what a
+  # workflow tells it to, so only pushes to main and pull requests whose head
+  # is this repo, never a fork's, and never pull_request_target
+  # (windows/runner/README.md). The runner is a logon task: while the laptop
+  # is off or logged out the job waits in the queue. Read only inside the
+  # distro: status, exit codes through the hop, quoting, mcp over stdio and
+  # wslconfig without --apply.
+  # Not a required check, so it skips as a whole when only docs/ or site/
+  # changed, and for Dependabot's branches, which are in this repo but not
+  # written by a person.
+  wsl:
+    name: Windows shim against real WSL (self hosted)
+    needs: changes
+    if: >-
+      needs.changes.outputs.code == 'true' &&
+      github.actor != 'dependabot[bot]' &&
+      (github.event_name == 'push' ||
+       (github.event_name == 'pull_request' &&
+        github.event.pull_request.head.repo.full_name == github.repository))
+    runs-on: [self-hosted, wsl]
+    timeout-minutes: 30
+    env:
+      BENCHBAR_TEST_DISTRO: ${{ vars.WSL_DISTRO || 'Ubuntu-24.04' }}
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: windows/shim
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Versions
+        run: |
+          go version
+          wsl.exe --version
+          wsl.exe -d $env:BENCHBAR_TEST_DISTRO --exec /bin/sh -c 'PATH="$HOME/.local/bin:$PATH"; benchbar --version'
+
+      - name: go vet and unit tests on Windows
+        run: |
+          go vet ./...
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          go test ./...
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Integration tests against the real distro
+        run: |
+          go test -count=1 -v -tags wslintegration -run Integration ./...
+          if ($LASTEXITCODE -ne 0) { exit 1 }
 
   app:
     name: App build, Swift tests and unsigned release bundle (macOS)

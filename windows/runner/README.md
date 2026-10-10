@@ -50,4 +50,8 @@ tells it to on this laptop. So the `wsl` job:
 - keeps the repo setting "Require approval for all outside collaborators"
   on, as a second fence.
 
-The `wsl` job is not in `ci.yml` yet; it comes with the Windows shim.
+The `wsl` job in `ci.yml` runs the Windows shim's tests on this machine:
+its unit tests on Windows, then integration tests against the distro named
+by the repo variable `WSL_DISTRO` (default `Ubuntu-24.04`). They only read
+inside the distro: `status --json`, exit codes, quoting, `mcp` over stdio
+and `wslconfig` without `--apply`.
