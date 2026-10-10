@@ -50,6 +50,7 @@ fl_site_render_valid() {
 # commands that write them or start the bench; doctor only reports
 # (chk_bench_path), so it stays read only for every bench.
 fl_require_plain_bench() {
+  # shellcheck disable=SC2153  # set by fl_context_init (state.sh)
   fl_bench_path_valid "$FL_BENCH_DIR"
   fl_site_render_valid "$FL_SITE"
 }

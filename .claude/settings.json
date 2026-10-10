@@ -1,4 +1,57 @@
 {
+  "env": {
+    "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet"
+  },
+  "subagentPromptCacheTtl": "1h",
+  "permissions": {
+    "allow": [
+      "Bash(bash tests/run-tests.sh)",
+      "Bash(bash tests/run-tests.sh *)",
+      "Bash(./benchbar)",
+      "Bash(./benchbar *)",
+      "Bash(benchbar *)",
+      "Bash(shellcheck *)",
+      "Bash(apt-get *)",
+      "Bash(sudo apt-get *)",
+      "Bash(systemctl --user *)",
+      "Bash(journalctl --user *)",
+      "Bash(uv *)",
+      "Bash(fnm *)",
+      "Bash(node *)",
+      "Bash(npm *)",
+      "Bash(yarn *)",
+      "Bash(bench *)",
+      "Bash(mariadb *)",
+      "Bash(redis-cli *)",
+      "Bash(ss *)",
+      "Bash(curl http://localhost*)",
+      "Bash(curl -s http://localhost*)",
+      "Bash(curl http://127.0.0.1*)",
+      "Bash(curl -s http://127.0.0.1*)",
+      "Bash(curl http://*.localhost:*)",
+      "Bash(curl -s http://*.localhost:*)",
+      "Bash(gh run *)",
+      "Bash(gh pr *)",
+      "Bash(gh api repos/*)",
+      "Bash(git *)"
+    ],
+    "deny": [
+      "Bash(gh api -X *)",
+      "Bash(gh api --method *)",
+      "Bash(wsl.exe --unregister*)",
+      "Bash(wsl.exe * --unregister*)",
+      "Bash(wsl --unregister*)",
+      "Bash(* /mnt/c*)",
+      "Bash(*~/.ssh*)",
+      "Bash(*/.ssh/*)",
+      "Read(//mnt/c/**)",
+      "Edit(//mnt/c/**)",
+      "Write(//mnt/c/**)",
+      "Read(~/.ssh/**)",
+      "Edit(~/.ssh/**)",
+      "Write(~/.ssh/**)"
+    ]
+  },
   "hooks": {
     "SessionStart": [
       {
@@ -7,6 +60,17 @@
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/cloud-context.sh\""
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/guard-rm.sh\""
           }
         ]
       }

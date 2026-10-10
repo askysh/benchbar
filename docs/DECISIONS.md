@@ -711,3 +711,10 @@ Measured on five PR runs (September 2026): 11 to 14 minutes wall clock, all of i
 ## Cloud sessions
 
 - Cloud only agent notes live in .claude/cloud-context.md and reach Claude Code cloud sessions through a SessionStart hook gated on CLAUDE_CODE_REMOTE; local sessions and AGENTS.md are unchanged.
+
+## Linux and Windows
+
+- The SessionStart hook prints linux-context.md in a local Linux session (WSL included) and windows-context.md when OS is Windows_NT; the Mac still prints nothing and cloud sessions still get cloud-context.md, checked first.
+- "rm -rf outside the repo and the state folders" is a PreToolUse hook (.claude/guard-rm.sh), not a deny rule: permission rules match a command's prefix and cannot express "outside", so a deny rule would either block the repo too or miss `rm -fr`. A variable target is blocked because the hook cannot know where it points.
+- The `cli-linux` CI job is back (it was dropped in 0.5 when BenchBar was Mac only): the Linux platform layer is a supported target now, so a Linux regression is a user bug, not a GNU tool curiosity. One unsharded job on ubuntu-latest; the macOS shards are unchanged.
+- The Windows self hosted runner is a logon task, not a service: it runs only while Akash is logged on, so a laptop that is off or logged out simply queues jobs, and nothing runs repo code as SYSTEM. Public repo safety comes from the job's `if` (pushes to main, same repo PRs), not from the runner.

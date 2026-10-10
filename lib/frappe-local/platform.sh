@@ -109,7 +109,7 @@ fl_formula_disable_days_from() {
   [[ -n "$at" ]] || return 0
   # FL_NOW: the tests' clock (freshness.sh's fl_now reads it too)
   now="${FL_NOW:-$(date +%s)}"
-  if [[ "$now" -ge "$at" ]]; then printf '%s' "$(( (now - at) / 86400 * -1 - 1 ))"; else printf '%s' "$(( (at - now) / 86400 ))"; fi
+  if [[ "$now" -ge "$at" ]]; then printf '%s' "$(( -((now - at) / 86400) - 1 ))"; else printf '%s' "$(( (at - now) / 86400 ))"; fi
 }
 
 # fl_formula_disable_days FORMULA: the same, from one brew info call
