@@ -6,6 +6,11 @@
 
 FL_HONCHO=""
 FL_LEGACY_DIR="${FL_LEGACY_DIR:-$HOME/Library/LaunchAgents-disabled}"
+# what the messages call the supervisor and its tool; systemd.sh sets its own
+FL_AGENT_MANAGER="launchd"
+FL_AGENT_CTL="launchctl"
+FL_AGENT_CTL_START="launchctl kickstart"
+FL_AGENT_CTL_RESTART="launchctl kickstart -k"
 
 # ------------------------------------------------------------- honcho
 
@@ -68,6 +73,63 @@ fl_launchd_path_value() {
   p="${p}${HOME}/.local/bin:${brew}/bin:${brew}/sbin:${FL_LAUNCHD_PATH_SYSTEM:-/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin}"
   printf '%s' "$p"
 }
+
+# fl_agent_files [all]: the benchbar agents' plists, one path per line; "all"
+# adds the frappe-mac ones from before the rename. The one place that knows
+# the agent folder's glob (systemd.sh answers for Linux).
+fl_agent_files() {
+  local f
+  for f in "$HOME"/Library/LaunchAgents/com.benchbar.*.plist; do
+    [[ -f "$f" ]] && printf '%s\n' "$f"
+  done
+  [[ "${1:-}" == all ]] || return 0
+  for f in "$HOME"/Library/LaunchAgents/com.frappe-mac.*.plist; do
+    [[ -f "$f" ]] && printf '%s\n' "$f"
+  done
+  return 0
+}
+
+# fl_agent_file_v VAR LABEL: the plist of a label
+fl_agent_file_v() { printf -v "$1" '%s/Library/LaunchAgents/%s.plist' "$HOME" "$2"; }
+
+# fl_agent_listed TARGET: launchd lists the job
+fl_agent_listed() { launchctl print "$1" >/dev/null 2>&1; }
+
+# fl_agent_unload TARGET PLIST: boots a job out and waits until launchd has
+# forgotten it; non zero when it has not
+fl_agent_unload() {
+  launchctl bootout "$1" 2>/dev/null || launchctl unload -w "$2" 2>/dev/null || true
+  fl_agent_wait_gone "$1"
+}
+
+# the plist or unit changed on disk: nothing to tell launchd (systemd.sh reloads)
+fl_agent_files_changed() { return 0; }
+
+# the commands doctor and the error messages suggest
+fl_agent_load_hint() { printf 'launchctl bootstrap %s %s' "$(fl_launchd_domain)" "$1"; }
+fl_agent_bootout_hint() { printf 'launchctl bootout %s' "$1"; }
+fl_agent_list_hint() { printf 'ls ~/Library/LaunchAgents/com.benchbar.*'; }
+
+# Whether a bench started with autostart on survives a reboot is the user
+# manager's business on Linux (systemd.sh); launchd has RunAtLoad.
+fl_linger_ensure() { return 0; }
+
+# fl_render_agent RUN_AT_LOAD: FL_R_PLIST gets the agent's plist
+fl_render_agent() {
+  FL_R_PLIST="$(fl_template_render launchagent.plist \
+    "LABEL=$(fl_agent_label)" \
+    "APP_BUNDLE_ID=${FL_APP_BUNDLE_ID}" \
+    "RUNNER=$(fl_runner_path)" \
+    "BENCH_DIR=${FL_BENCH_DIR}" \
+    "PATH=$(fl_launchd_path_value)" \
+    "RUN_AT_LOAD=$1" \
+    "LOG=$(fl_bench_log_path)")"
+}
+
+# The runner's per platform lines (templates/bench-run.sh.tmpl): none on the
+# Mac, whose template defaults are the osascript and lsof lines.
+FL_RUNNER_EXTRA=()
+fl_runner_extra_args() { FL_RUNNER_EXTRA=(); }
 
 fl_agent_target() {
   printf '%s/%s' "$(fl_launchd_domain)" "$(fl_agent_label)"
@@ -239,25 +301,25 @@ fl_plist_runner() {
 # longer a bench (its folder was emptied): "plist|label" lines.
 fl_agents_for_dir() {
   local f
-  for f in "$HOME"/Library/LaunchAgents/com.benchbar.*.plist; do
-    [[ -f "$f" ]] || continue
+  while IFS= read -r f; do
+    [[ -n "$f" ]] || continue
     fl_same_path "$(fl_plist_working_dir "$f")" "$1" || continue
     printf '%s|%s\n' "$f" "$(basename "$f" .plist)"
-  done
+  done < <(fl_agent_files)
 }
 
 # Loaded com.benchbar agents whose runner script is gone: launchd starts
 # them every 20 seconds, they exit 127 and fill bench.log. "plist|label|dir".
 fl_dead_agents_list() {
   local f label runner
-  for f in "$HOME"/Library/LaunchAgents/com.benchbar.*.plist; do
-    [[ -f "$f" ]] || continue
+  while IFS= read -r f; do
+    [[ -n "$f" ]] || continue
     runner="$(fl_plist_runner "$f")"
     [[ -n "$runner" && ! -f "$runner" ]] || continue
     label="$(basename "$f" .plist)"
     launchctl print "$(fl_launchd_domain)/${label}" >/dev/null 2>&1 || continue
     printf '%s|%s|%s\n' "$f" "$label" "$(fl_plist_working_dir "$f")"
-  done
+  done < <(fl_agent_files)
 }
 
 # Lists LaunchAgents to migrate for this bench. Prints "path|label|state|last-exit" lines.

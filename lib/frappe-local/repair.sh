@@ -315,11 +315,11 @@ act_write_plist() {
   if fl_agent_loaded; then
     [[ "$FL_TEMPLATE_CHANGED" == "1" ]] || return 0
     fl_agent_bootout || {
-      fl_fail "launchd did not let go of $(fl_agent_label) within ${FL_BOOTOUT_WAIT_SECS} s; run benchbar repair again"
+      fl_fail "${FL_AGENT_MANAGER} did not let go of $(fl_agent_label) within ${FL_BOOTOUT_WAIT_SECS} s; run benchbar repair again"
       return 1
     }
   fi
-  fl_agent_bootstrap "$plist" || { fl_fail "launchctl could not load ${plist}"; return 1; }
+  fl_agent_bootstrap "$plist" || { fl_fail "${FL_AGENT_CTL} could not load ${plist}"; return 1; }
   if [[ "$was_running" == "1" ]]; then
     # RunAtLoad starts it unless autostart is off; kickstart is a no-op when it already runs
     fl_agent_kickstart >/dev/null 2>&1 || true

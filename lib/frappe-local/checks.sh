@@ -372,7 +372,7 @@ chk_agent() {
   chk__template "agent plist" "$plist" "$FL_R_PLIST" write_plist
   [[ "$CHK_STATUS" == "ok" ]] || return 0
   if ! fl_agent_loaded; then
-    chk__set warn "agent $(fl_agent_label) is written but not loaded" "launchctl bootstrap $(fl_launchd_domain) ${plist}" write_plist
+    chk__set warn "agent $(fl_agent_label) is written but not loaded" "$(fl_agent_load_hint "$plist")" write_plist
     return 0
   fi
   state="$(fl_agent_field state)"; pid="$(fl_agent_field pid)"; code="$(fl_agent_field 'last exit code')"
@@ -1048,8 +1048,8 @@ chk_app_copies() {
 # " label:port" words; "benchbar up" asks before starting next to one.
 fl_port_clash_running() {
   local f other label state wd ports clash=""
-  for f in "$HOME"/Library/LaunchAgents/com.benchbar.*.plist "$HOME"/Library/LaunchAgents/com.frappe-mac.*.plist; do
-    [[ -f "$f" ]] || continue
+  while IFS= read -r f; do
+    [[ -n "$f" ]] || continue
     label="$(fl_plist_label "$f")"
     [[ "$label" == "$(fl_agent_label)" || "$label" == "$(fl_agent_label_legacy)" ]] && continue
     state="$(fl_agent_field state "$(fl_launchd_domain)/${label}")"
@@ -1060,7 +1060,7 @@ fl_port_clash_running() {
     for other in $ports; do
       if [[ "$other" == "$FL_WEB_PORT" || "$other" == "$FL_SOCKETIO_PORT" ]]; then clash="${clash} ${label}:${other}"; fi
     done
-  done
+  done < <(fl_agent_files all)
   printf '%s' "$clash"
 }
 
@@ -1246,6 +1246,8 @@ chk_honcho_setuptools() {
 # forked workers; the agent plist sets them and honcho's children inherit.
 chk_fork_safety() {
   local plist missing=""
+  # the unit sets NO_PROXY itself and macOS' fork check does not exist on Linux
+  if declare -F fl_is_linux >/dev/null && fl_is_linux; then chk__set ok "skipped: macOS only"; return 0; fi
   plist="$(fl_agent_plist_path)"
   if [[ ! -f "$plist" ]]; then
     chk__set ok "skipped: no agent plist yet"
