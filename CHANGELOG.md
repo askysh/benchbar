@@ -6,6 +6,10 @@ All notable changes to this project are documented here.
 
 ### Added
 
+- Doctor warns in WSL when NTP inside the distro fights the Windows host
+  clock (`wsl_time_sync`): each NTP poll steps the clock when Windows has
+  drifted, and a step can stop a bench's worker. Fix: `sudo timedatectl
+  set-ntp false`.
 - Linux, Windows through WSL first: the same `benchbar` runs on Ubuntu
   24.04 (Debian based systems with apt), chosen at startup. Only the
   v15-lts profile so far; v16 on Linux comes later.
@@ -81,6 +85,10 @@ All notable changes to this project are documented here.
   ask for a password it does not need.
 - A path with a single quote is quoted correctly for the shell under
   macOS's bash 3.2 (it broke `pull` with such a remote bench folder).
+- On Linux a lock's age always read 0, so a lock left behind was never seen
+  as stale by its age, and two runs at once could stop with "File: unbound
+  variable": GNU `stat -f` prints file system text where BSD `stat -f`
+  prints a time.
 
 ## 0.7.3 - 2026-10-04
 

@@ -146,6 +146,21 @@ Fix: `brew services stop redis`, only if nothing else on this Mac needs
 it. `benchbar repair` offers the same and asks first; under `--yes` it
 leaves Redis running and prints the command.
 
+### wsl_time_sync
+
+Linux in WSL only; it is left out elsewhere. Two clocks set the time of a
+WSL distro: the Windows host (Hyper-V time sync) and NTP inside the distro
+(`systemd-timesyncd`). Windows syncs its own clock about once a week; while
+it is off from NTP by more than a fraction of a second, every NTP poll
+(about every 32 seconds) steps the clock back. A step can end the worker's
+blocking Redis wait, and then the whole bench stops and restarts. The host
+sync cannot be turned off from inside WSL, so NTP in the distro is the one
+to turn off. The check is OK when `timedatectl show -p NTP --value` says
+`no` or `timedatectl` is missing, and a warning when it says `yes`.
+
+Fix: `sudo timedatectl set-ntp false`. Repair does not run it, because
+`sudo` on Linux is kept for apt, the wkhtmltopdf package and MariaDB.
+
 ### cleanmymac
 
 CleanMyMac is not installed in `/Applications` or `~/Applications`, or in

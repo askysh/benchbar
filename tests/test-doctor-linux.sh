@@ -78,6 +78,28 @@ assert_eq "$snap_before" "$(snapshot "$HOME" "$BENCH" "$CONF")" "(doctor must no
 assert_not_contains "$OUT" "DoNotReadMe"
 assert_calls_not_contain '^(sudo|apt-get|systemctl (start|restart|stop|enable)|mariadb )'
 
+# ---- WSL: two clocks (the Windows host and NTP in the distro)
+assert_eq "ok | - | -" "$(row wsl_time_sync)" "(NTP off: OK)"
+MOCK_NTP=yes scan
+assert_eq "0" "$SCAN_CODE" "(a warning does not fail doctor)"
+assert_eq "warn | sudo timedatectl set-ntp false | -" "$(row wsl_time_sync)"
+assert_contains "$(msg wsl_time_sync)" "two clocks set this distro's time"
+assert_contains "$(msg wsl_time_sync)" "a step can stop a bench's worker"
+assert_eq "WSL time sync" "$(field wsl_time_sync label)"
+MOCK_NTP=yes run_fm doctor --bench-dir "$BENCH"
+assert_contains "$OUT" "[WARN] WSL time sync: two clocks set this distro's time"
+assert_contains "$OUT" "fix: sudo timedatectl set-ntp false"
+# no repair action: repair neither plans nor runs it
+MOCK_NTP=yes events --dry-run
+assert_not_contains "$EV" "timedatectl"
+# outside WSL the check is left out, with NTP on or off
+printf 'Linux version 6.8.0-generic (buildd@lcy02) (gcc 13.2.0)\n' >"$FL_PROC_VERSION"
+MOCK_NTP=yes scan
+assert_eq "0" "$(count wsl_time_sync)" "(not emitted outside WSL)"
+printf 'Linux version 6.6.0-microsoft-standard-WSL2 (root@build) (gcc) #1 SMP\n' >"$FL_PROC_VERSION"
+scan
+assert_eq "1" "$(count wsl_time_sync)"
+
 # ---- a missing apt package: FAIL, the exact apt command, no repair action
 cp "$MOCK_STATE/apt_installed" "$MOCK_STATE/apt_installed.good"
 grep -vx redis-server "$MOCK_STATE/apt_installed.good" >"$MOCK_STATE/apt_installed"

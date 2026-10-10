@@ -64,12 +64,14 @@ fl_state_guard_stale() {
   local __pid __m="" __now=""
   __pid="$(cat "${1}/pid" 2>/dev/null || true)"
   if [[ -n "$__pid" ]] && ! kill -0 "$__pid" 2>/dev/null; then return 0; fi
-  __m="$( (stat -c %Y "$1" || stat -f %m "$1") 2>/dev/null)"
+  # each form counts only as a number: GNU stat -f prints file system text,
+  # and a guard dropped and made again between the two calls got it into
+  # the arithmetic ("File: unbound variable"). No number: not stale.
+  __m="$(stat -c %Y "$1" 2>/dev/null)" || true
+  [[ "$__m" =~ ^[0-9]+$ ]] || __m="$(stat -f %m "$1" 2>/dev/null)" || true
+  [[ "$__m" =~ ^[0-9]+$ ]] || return 1
   __now="$(date +%s 2>/dev/null || true)"
-  # numbers only: when the guard goes away meanwhile (another run took it
-  # down), GNU stat fails and its -f fallback prints a "File:" report
-  [[ "$__m" =~ ^[0-9]+$ && "$__now" =~ ^[0-9]+$ ]] || return 1
-  [[ $((__now - __m)) -gt 60 ]]
+  [[ -n "$__now" && $((__now - __m)) -gt 60 ]]
 }
 
 # fl_state_guard_drop GUARD: removes what a run leaves in its guard: the pid
@@ -177,6 +179,9 @@ fl_state_dir_user_v() {
   fi
   # another volume? One stat of both, before anything moves.
   { read -r __d1; read -r __d2; } < <( (stat -c %d "$__base" "$__mh" || stat -f %d "$__base" "$__mh") 2>/dev/null)
+  # two numbers or nothing: with one folder missing, GNU stat -f adds file
+  # system text; unknown takes the other-volume path, as before
+  [[ "$__d1" =~ ^[0-9]+$ && "$__d2" =~ ^[0-9]+$ ]] || __d1=""
   if [[ -e "$__new" || -L "$__new" ]]; then
     if [[ -d "$__new" && ! -L "$__new" ]] && fl_state_dir_shell_only "$__new"; then
       # the app's bin/ goes into the checkout's folder first, so the rename

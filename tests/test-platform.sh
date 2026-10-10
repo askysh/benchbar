@@ -55,4 +55,27 @@ curl() {
 assert_fails fl_preflight_internet 0
 fl_preflight_internet 1
 
+# stat on both systems: GNU stat -f prints file system text and BSD stat -c
+# fails, so each form counts only as a number
+STAT_DIR="$(mktemp -d)"
+FL_STATE_DIR="$STAT_DIR/state"
+. "$ROOT/lib/frappe-local/lock.sh"
+. "$ROOT/lib/frappe-local/state.sh"
+. "$ROOT/lib/frappe-local/site-backups.sh"
+OLD="$STAT_DIR/old"
+mkdir "$OLD"
+touch -t 202001010000 "$OLD"
+age="$(fl__lock_age "$OLD")"
+[[ "$age" =~ ^[0-9]+$ && "$age" -gt 100000 ]] || { printf 'lock age of an old folder: [%s]\n' "$age"; exit 1; }
+assert_eq "0" "$(fl__lock_age "$OLD/missing")"
+mtime="$(fl_file_mtime "$OLD")"
+[[ "$mtime" =~ ^[0-9]+$ ]] || { printf 'mtime of a folder: [%s]\n' "$mtime"; exit 1; }
+assert_fails fl_file_mtime "$OLD/missing"
+fl_state_guard_stale "$OLD" || { printf 'an old guard without a pid is not stale\n'; exit 1; }
+assert_fails fl_state_guard_stale "$OLD/missing"
+fresh="$STAT_DIR/fresh"
+mkdir "$fresh"
+assert_fails fl_state_guard_stale "$fresh"
+rm -rf "$STAT_DIR"
+
 printf 'test-platform: ok\n'

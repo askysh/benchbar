@@ -11,9 +11,15 @@
 # is expected here). The ids that stay keep their ids and action ids, so
 # doctor --json and repair --json keep their shape.
 #
+# wsl_time_sync is added to the list only inside WSL (below), so elsewhere it
+# is left out like the Mac checks.
+#
 # Doctor stays read only and never reads the MariaDB password file.
 
 FL_CHECK_ORDER="brew mariadb_bind mariadb_utf8 pdf_engine env_python env_setuptools bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy dependency_behind apps_behind lock_parse lock_drift profile_outdated logs bench_path honcho honcho_setuptools procfile runner agent runner_heartbeat scheduler stop_flag helpers cli_link cli_duplicate dead_agents hosts port_clash orphans ping"
+
+# WSL only: the Windows host and NTP in the distro both set its clock
+if fl_is_wsl; then FL_CHECK_ORDER="${FL_CHECK_ORDER/ mariadb_bind/ wsl_time_sync mariadb_bind}"; fi
 
 # repair: no python_leaves, legacy_migrate, hosts_entry or redis_stop
 FL_ACTION_ORDER="node_install yarn_install env_rebuild env_setuptools honcho_install honcho_setuptools node_requirements build clear_cache mariadb_bind mariadb_utf8 wkhtmltopdf_install port_block write_procfile write_runner write_plist write_helpers write_cli_link rotate_logs"
@@ -310,6 +316,22 @@ chk_hosts() {
     "") chk__set fail "${FL_SITE} does not resolve (getent hosts finds nothing)" "$(fl_linux_hosts_fix)" ;;
     *) chk__set fail "${FL_SITE} resolves to ${first}, not to 127.0.0.1 or ::1" "$(fl_linux_hosts_fix)" ;;
   esac
+}
+
+# wsl_time_sync: Hyper-V sets the clock of a WSL distro from Windows. When
+# systemd-timesyncd also runs NTP there, a Windows clock that has drifted is
+# stepped back by every NTP poll (about every 32 s), and one step can stop a
+# blocking Redis wait in the worker, which ends the whole bench. One time
+# source is the guidance and the host one cannot be turned off from the guest.
+# No repair action: it needs sudo, which this tool keeps for apt and MariaDB.
+chk_wsl_time_sync() {
+  local ntp=""
+  command -v timedatectl >/dev/null 2>&1 && ntp="$(timedatectl show -p NTP --value 2>/dev/null || true)"
+  if [[ "$ntp" == "yes" ]]; then
+    chk__set warn "two clocks set this distro's time: the Windows host and NTP (systemd-timesyncd); when Windows drifts, each NTP poll steps the clock, and a step can stop a bench's worker" "sudo timedatectl set-ntp false"
+  else
+    chk__set ok "NTP is off in this distro; the Windows host sets the clock"
+  fi
 }
 
 # Homebrew and the installer's app hand-off do not exist here; only the
