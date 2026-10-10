@@ -144,6 +144,83 @@ jobs:
         if: env.CODE == 'true'
         run: bash tests/run-tests.sh
 
+  # A real install on Linux: phase 00 from apt, uv and fnm, a v15 bench and
+  # site, the bench under systemd --user, up, the site answering, status and
+  # doctor, down. Slow (a bench build), so only on pushes to main and on pull
+  # requests labelled test-linux. GitHub's Ubuntu runners boot systemd, but
+  # the runner user has no user manager until linger starts one
+  # (docs/DECISIONS.md, "Linux").
+  cli-linux-real:
+    name: Real install (Linux, v15, systemd --user)
+    if: >-
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'test-linux')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      ADMIN_PASSWORD: admin-ci-only
+      SITE: linuxdev.localhost
+    steps:
+      - uses: actions/checkout@v7
+
+      # The image ships MySQL (stopped) and its /etc/mysql: mariadb-server
+      # cannot install over them. A throwaway VM, so purging is safe here.
+      - name: Remove the image's MySQL
+        run: |
+          sudo systemctl stop mysql 2>/dev/null || true
+          sudo apt-get purge -y 'mysql-*' >/dev/null
+          sudo rm -rf /etc/mysql /var/lib/mysql
+
+      - name: Start a systemd user manager for the runner user
+        run: |
+          sudo loginctl enable-linger "$USER"
+          sudo systemctl start "user@$(id -u).service"
+          echo "XDG_RUNTIME_DIR=/run/user/$(id -u)" >>"$GITHUB_ENV"
+          for _ in $(seq 1 20); do
+            XDG_RUNTIME_DIR="/run/user/$(id -u)" systemctl --user is-system-running 2>/dev/null && break
+            sleep 1
+          done
+          XDG_RUNTIME_DIR="/run/user/$(id -u)" systemctl --user is-system-running || true
+
+      - name: benchbar install --yes
+        run: ./benchbar install --yes --site "$SITE"
+
+      - name: A second install is unchanged
+        run: ./benchbar install --yes --site "$SITE" 2>&1 | tee "$RUNNER_TEMP/second.log"
+
+      - name: benchbar up and wait for the site
+        run: |
+          ./benchbar up
+          for _ in $(seq 1 90); do
+            curl -fsS "http://$SITE:8000/api/method/ping" && exit 0
+            sleep 2
+          done
+          ./benchbar status --json || true
+          tail -n 100 ~/frappe-bench/logs/bench.log || true
+          exit 1
+
+      - name: status --json and doctor --json
+        run: |
+          ./benchbar status --json | tee "$RUNNER_TEMP/status.json"
+          python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["state"] == "running" and d["web_ping_code"] == 200, d' "$RUNNER_TEMP/status.json"
+          ./benchbar doctor --json >"$RUNNER_TEMP/doctor.json"
+          ./benchbar repair --dry-run
+
+      - name: benchbar down
+        run: |
+          ./benchbar down
+          ! curl -fsS --max-time 3 "http://$SITE:8000/api/method/ping"
+
+      - name: Logs on failure
+        if: failure()
+        run: |
+          systemctl --user status 'benchbar-*' --no-pager || true
+          journalctl --user --no-pager -n 200 || true
+          ls -la ~/.local/state/benchbar/logs || true
+          tail -n 200 ~/.local/state/benchbar/logs/*.log || true
+          cat "$RUNNER_TEMP/doctor.json" 2>/dev/null || true
+
   app:
     name: App build, Swift tests and unsigned release bundle (macOS)
     needs: changes
