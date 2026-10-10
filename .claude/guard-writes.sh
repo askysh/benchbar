@@ -46,6 +46,31 @@ chunks() {
 
 matches() { printf '%s' "$1" | grep -Eiq -- "$2"; }
 
+# The writes allowed anyway, each only as the whole command. Text comes from
+# a file (-F field=@FILE), so no free text on the command line can chain
+# another command, and FILE may not hold whitespace or ; & | < > $ `.
+#   review thread resolve:  gh api -X POST repos/O/R/pulls/N/ccr/comments/ID/resolve
+#   review thread reply:    gh api -X POST repos/askysh/benchbar/pulls/N/comments/ID/replies -F body=@FILE
+#   GraphQL from a file:    gh api graphql -F query=@FILE, a read, or a mutation
+#                           whose one operation is resolveReviewThread
+allowed_write() {
+  local resolve reply gql q
+  resolve='^gh api (-X|--method) POST repos/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/pulls/[0-9]+/ccr/comments/[A-Za-z0-9_-]+/resolve$'
+  reply='^gh api (-X|--method) POST repos/askysh/benchbar/pulls/[0-9]+/comments/[0-9]+/replies -F body=@[^[:space:];&|<>$`'"'"'"]+$'
+  gql='^gh api graphql -F query=@([^[:space:];&|<>$`'"'"'"]+)$'
+  [[ $cmd =~ $resolve ]] && return 0
+  [[ $cmd =~ $reply ]] && return 0
+  [[ $cmd =~ $gql ]] || return 1
+  [ -f "${BASH_REMATCH[1]}" ] || return 1
+  q="$(tr '[:upper:]' '[:lower:]' <"${BASH_REMATCH[1]}")"
+  case "$q" in *mutation*) ;; *) return 0 ;; esac
+  # a mutation: one operation, resolveReviewThread (every GitHub mutation
+  # takes input:, so a second operation or an alias adds a second input:)
+  [ "$(printf '%s' "$q" | grep -o 'mutation' | wc -l | tr -d ' ')" = 1 ] || return 1
+  [ "$(printf '%s' "$q" | grep -Eo 'input[[:space:]]*:' | wc -l | tr -d ' ')" = 1 ] || return 1
+  printf '%s' "$q" | grep -Eq 'resolvereviewthread[[:space:]]*\([[:space:]]*input[[:space:]]*:'
+}
+
 while IFS= read -r call; do
   [ -n "$call" ] || continue
   write=0
@@ -61,12 +86,9 @@ while IFS= read -r call; do
     write=1
   fi
   matches "$call" 'graphql' && matches "$call" 'mutation' && write=1
-  if [ "$write" = 1 ]; then
-    resolve='^gh api (-X|--method) POST repos/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/pulls/[0-9]+/ccr/comments/[A-Za-z0-9_-]+/resolve$'
-    if ! [[ $cmd =~ $resolve ]]; then
-      echo "Blocked: gh api writes are not allowed here, except resolving a review thread (gh api -X POST repos/O/R/pulls/N/ccr/comments/ID/resolve)." >&2
-      exit 2
-    fi
+  if [ "$write" = 1 ] && ! allowed_write; then
+    echo "Blocked: gh api writes are not allowed here, except: gh api -X POST repos/O/R/pulls/N/ccr/comments/ID/resolve; gh api -X POST repos/askysh/benchbar/pulls/N/comments/ID/replies -F body=@FILE; gh api graphql -F query=@FILE that only reads or resolves review threads." >&2
+    exit 2
   fi
 done <<EOF
 $(chunks '(^|[^A-Za-z0-9_.-])gh(\.exe)?[[:space:]]+api([[:space:]]|$)')
