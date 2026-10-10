@@ -199,10 +199,10 @@ fl_known_benches() {
   if [[ -f "${FL_STATE_DIR}/registered-benches.txt" ]]; then
     while IFS= read -r d || [[ -n "$d" ]]; do cands+=("$d"); done <"${FL_STATE_DIR}/registered-benches.txt"
   fi
-  for f in "$HOME"/Library/LaunchAgents/com.benchbar.*.plist "$HOME"/Library/LaunchAgents/com.frappe-mac.*.plist; do
-    [[ -f "$f" ]] || continue
+  while IFS= read -r f; do
+    [[ -n "$f" ]] || continue
     cands+=("$(fl_plist_working_dir "$f")")
-  done
+  done < <(fl_agent_files all)
   while IFS= read -r d; do cands+=("$d"); done < <(fl_bench_candidates)
   for d in "${cands[@]}"; do
     if [[ -z "$d" ]] || ! fl_is_bench_dir "$d"; then continue; fi
@@ -234,9 +234,10 @@ fl_bench_load() {
 # One bench of list --json. Sites are listed with ping_code null: list never
 # asks a site or looks for listeners (status does, for one bench).
 fl_list_entry_json() {
-  local default="$1" installed=0 lock="" label j_path j_name j_site j_url j_ports j_sites j_default j_installed j_file j_lock
+  local default="$1" installed=0 lock="" label f j_path j_name j_site j_url j_ports j_sites j_default j_installed j_file j_lock
   fl_agent_label_v label
-  [[ -f "$HOME/Library/LaunchAgents/${label}.plist" ]] && installed=1
+  fl_agent_file_v f "$label"
+  [[ -f "$f" ]] && installed=1
   # the bench's lockfile: remembered or <bench>/benchbar.toml (BENCHBAR_LOCK names one bench, not all)
   if declare -F fl_lock_file_resolve >/dev/null; then
     fl_lock_file_resolve "" no-env

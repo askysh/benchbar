@@ -34,6 +34,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${SCRIPT_DIR}/lib/frappe-local/mariadb.sh"
 # shellcheck source=lib/frappe-local/wkhtmltopdf.sh
 . "${SCRIPT_DIR}/lib/frappe-local/wkhtmltopdf.sh"
+fl_platform_load
 trap fl_on_error ERR
 fl_signal_traps_install
 # the last section of a --json install ends with the script (done, warning

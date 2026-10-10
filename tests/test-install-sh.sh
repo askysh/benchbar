@@ -20,7 +20,13 @@ make_release() {
   rm -rf "$stage"; mkdir -p "$stage/BenchBar.app/Contents/MacOS"
   printf '<plist><dict>\n<key>CFBundleShortVersionString</key>\n<string>%s</string>\n</dict></plist>\n' "$version" >"$stage/BenchBar.app/Contents/Info.plist"
   printf '#!/bin/sh\necho BenchBar %s\n' "$version" >"$stage/BenchBar.app/Contents/MacOS/BenchBar"
-  (cd "$stage" && zip -q -r "$MOCK_STATE/release.zip" BenchBar.app)
+  rm -f "$MOCK_STATE/release.zip"
+  if command -v zip >/dev/null 2>&1; then
+    (cd "$stage" && zip -q -r "$MOCK_STATE/release.zip" BenchBar.app)
+  else
+    # a Linux host without zip: the same archive from Python's zipfile
+    (cd "$stage" && python3 -m zipfile -c "$MOCK_STATE/release.zip" BenchBar.app)
+  fi
   printf '%s  BenchBar-%s.zip\n' "$(shasum -a 256 "$MOCK_STATE/release.zip" | awk '{print $1}')" "$version" >"$MOCK_STATE/release.sums"
   cat >"$MOCK_STATE/release.json" <<JSON
 {

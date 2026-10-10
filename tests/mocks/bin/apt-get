@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# apt-get mock: "install PKG..." adds to $MOCK_STATE/apt_installed (the set
+# dpkg-query reads); "-s" only simulates; "update", "remove" and the rest succeed.
+# a .deb named wkhtmltox* also marks the patched wkhtmltopdf as installed.
+# $MOCK_STATE/apt_fail makes every call fail; names listed in
+# $MOCK_STATE/apt_unavailable cannot be installed.
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "$(dirname "$0")/_mocklib.sh"
+mock_log "$@"
+simulate=0; verb=""; pkgs=()
+for a in "$@"; do
+  case "$a" in
+    -s|--simulate|--dry-run) simulate=1 ;;
+    -*) ;;
+    *) if [[ -z "$verb" ]]; then verb="$a"; else pkgs+=("$a"); fi ;;
+  esac
+done
+[[ -f "${MOCK_STATE:?}/apt_fail" ]] && { echo "E: apt-get failed" >&2; exit 100; }
+if [[ "$verb" == "install" ]]; then
+  for p in ${pkgs[@]+"${pkgs[@]}"}; do
+    if [[ -f "$MOCK_STATE/apt_unavailable" ]] && grep -qx "$p" "$MOCK_STATE/apt_unavailable"; then
+      echo "E: Unable to locate package $p" >&2; exit 100
+    fi
+    [[ "$simulate" == "1" ]] && continue
+    # the official wkhtmltopdf .deb puts the patched build in place
+    case "$p" in *wkhtmltox*) printf 'installed\n' >"$MOCK_STATE/wkhtml_installed" ;; esac
+    p="$(basename "$p" .deb)"; p="${p%%_*}"
+    grep -qx "$p" "$MOCK_STATE/apt_installed" 2>/dev/null || printf '%s\n' "$p" >>"$MOCK_STATE/apt_installed"
+  done
+fi
+if [[ "$verb" == "remove" || "$verb" == "purge" ]] && [[ "$simulate" == "0" ]]; then
+  for p in ${pkgs[@]+"${pkgs[@]}"}; do
+    grep -vx "$p" "$MOCK_STATE/apt_installed" >"$MOCK_STATE/apt_installed.tmp" 2>/dev/null || true
+    mv "$MOCK_STATE/apt_installed.tmp" "$MOCK_STATE/apt_installed"
+  done
+fi
+exit 0

@@ -50,6 +50,7 @@ fl_site_render_valid() {
 # commands that write them or start the bench; doctor only reports
 # (chk_bench_path), so it stays read only for every bench.
 fl_require_plain_bench() {
+  # shellcheck disable=SC2153  # set by fl_context_init (state.sh)
   fl_bench_path_valid "$FL_BENCH_DIR"
   fl_site_render_valid "$FL_SITE"
 }
@@ -72,6 +73,8 @@ fl_install_pipx_if_needed() {
   if command -v pipx >/dev/null 2>&1; then
     fl_ok "pipx already installed - $(pipx --version)"
   else
+    # Linux has uv from phase 00 and never uses Homebrew
+    if fl_is_linux; then fl_die "Neither uv nor pipx is installed." "Run ./$(fl_phase00_script) (it installs uv)"; fi
     fl_warn "pipx is missing; installing with Homebrew"
     fl_run brew install pipx || fl_die "pipx install failed." "Manual command: brew install pipx"
   fi

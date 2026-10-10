@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# loginctl mock: lingering is one file per user, $MOCK_STATE/linger/<user>
+# containing yes or no (a user without a file does not linger)
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "$(dirname "$0")/_mocklib.sh"
+mock_log "$@"
+dir="${MOCK_STATE:?}/linger"
+mkdir -p "$dir"
+# options before the verb (--no-ask-password) are accepted and skipped
+while [[ "${1:-}" == --* ]]; do shift; done
+cmd="${1:-}"; shift || true
+case "$cmd" in
+  show-user)
+    user=""; value=0
+    for a in "$@"; do
+      case "$a" in --value) value=1 ;; -p) ;; Linger) ;; -*) ;; *) user="$a" ;; esac
+    done
+    st="$(cat "$dir/$user" 2>/dev/null || echo no)"
+    if [[ "$value" == 1 ]]; then printf '%s\n' "$st"; else printf 'Linger=%s\n' "$st"; fi ;;
+  enable-linger)
+    # MOCK_LINGER_DENIED=1: polkit says no
+    [[ -n "${MOCK_LINGER_DENIED:-}" ]] && { echo "Failed to enable linger: Access denied" >&2; exit 1; }
+    printf 'yes' >"$dir/${1:-}" ;;
+  disable-linger) printf 'no' >"$dir/${1:-}" ;;
+  *) ;;
+esac
+exit 0

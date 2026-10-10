@@ -17,6 +17,15 @@ FL_NEED_CLEAR_CACHE=0
 FL_MIGRATED_RUNNING=0
 
 fl_action_label() {
+  # Linux words the actions that name a package manager or the service manager
+  if fl_is_linux; then
+    case "$1" in
+      node_install) printf 'fnm install %s (the Node of profile %s; an older Node is not removed)' "$FL_NODE_MAJOR" "$FL_PROFILE"; return 0 ;;
+      yarn_install) printf 'install yarn under Node %s (npm install -g yarn)' "$FL_NODE_MAJOR"; return 0 ;;
+      wkhtmltopdf_install) printf 'install the patched wkhtmltopdf package (apt, sudo)'; return 0 ;;
+      write_plist) printf 'write and load the systemd user unit'; return 0 ;;
+    esac
+  fi
   case "$1" in
     python_leaves) printf 'mark %s as user-installed' "$FL_PYTHON_FORMULA" ;;
     node_install) printf 'brew install %s (the Node of profile %s; an older node formula is not removed)' "$FL_NODE_FORMULA" "$FL_PROFILE" ;;
@@ -28,8 +37,8 @@ fl_action_label() {
     node_requirements) printf 'bench setup requirements --node' ;;
     build) printf 'bench build' ;;
     clear_cache) printf 'bench clear-cache and clear-website-cache' ;;
-    mariadb_bind) printf 'bind MariaDB to 127.0.0.1%s' "$(fl_mariadb_restart_note)" ;;
-    mariadb_utf8) printf 'write the utf8mb4 MariaDB drop-in%s' "$(fl_mariadb_restart_note)" ;;
+    mariadb_bind) printf 'bind MariaDB to 127.0.0.1%s%s' "$(fl_is_linux && printf ' (sudo)')" "$(fl_mariadb_restart_note)" ;;
+    mariadb_utf8) printf 'write the utf8mb4 MariaDB drop-in%s%s' "$(fl_is_linux && printf ' (sudo)')" "$(fl_mariadb_restart_note)" ;;
     wkhtmltopdf_install) printf 'install the patched wkhtmltopdf package (sudo)' ;;
     legacy_migrate) printf 'migrate legacy launchd agents' ;;
     port_block) printf 'move the bench to port block %s (bench set-config, bench setup redis)' "${FL_PORT_TARGET:-?}" ;;
@@ -112,8 +121,13 @@ act_env_rebuild() {
     return 1
   fi
   py="$(fl_python_bin)"
+  # Linux: the profile's Python comes from uv, which can fetch it now (no sudo)
+  if fl_is_linux && [[ ! -x "$py" ]] && command -v uv >/dev/null 2>&1; then
+    fl_run_long "uv python install ${FL_PYTHON_BIN_NAME#python}" uv python install "${FL_PYTHON_BIN_NAME#python}" || return 1
+    py="$(fl_python_bin)"
+  fi
   [[ -x "$py" ]] || py="$(command -v "$FL_PYTHON_BIN_NAME" || true)"
-  [[ -n "$py" ]] || { fl_fail "${FL_PYTHON_BIN_NAME} not found; run 00-mac-system-deps.sh first"; return 1; }
+  [[ -n "$py" ]] || { fl_fail "${FL_PYTHON_BIN_NAME} not found; run $(fl_is_linux && printf '00-linux-system-deps.sh' || printf '00-mac-system-deps.sh') first"; return 1; }
   fl_bench_env_exports
   fl_move_aside "${FL_BENCH_DIR}/env" broken || return 1
   fl_run_long "bench setup env --python ${py}" fl_in_bench bench setup env --python "$py" || return 1
@@ -315,11 +329,11 @@ act_write_plist() {
   if fl_agent_loaded; then
     [[ "$FL_TEMPLATE_CHANGED" == "1" ]] || return 0
     fl_agent_bootout || {
-      fl_fail "launchd did not let go of $(fl_agent_label) within ${FL_BOOTOUT_WAIT_SECS} s; run benchbar repair again"
+      fl_fail "${FL_AGENT_MANAGER} did not let go of $(fl_agent_label) within ${FL_BOOTOUT_WAIT_SECS} s; run benchbar repair again"
       return 1
     }
   fi
-  fl_agent_bootstrap "$plist" || { fl_fail "launchctl could not load ${plist}"; return 1; }
+  fl_agent_bootstrap "$plist" || { fl_fail "${FL_AGENT_CTL} could not load ${plist}"; return 1; }
   if [[ "$was_running" == "1" ]]; then
     # RunAtLoad starts it unless autostart is off; kickstart is a no-op when it already runs
     fl_agent_kickstart >/dev/null 2>&1 || true

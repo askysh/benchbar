@@ -11,3 +11,4 @@ macos/DerivedData/
 macos/BenchBar/Resources/Info.plist
 dist/
 __pycache__/
+.claude/worktrees/

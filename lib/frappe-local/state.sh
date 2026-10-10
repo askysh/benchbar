@@ -130,6 +130,10 @@ fl_state_guard_take() {
 # folder is part of the state folder now, not a state of its own.
 fl_state_dir_user_v() {
   local __base="${HOME%/}/.local/state" __new legacy __mh="${FL_MANAGED_HOME:-${HOME%/}/.local/share/benchbar}" __d1="" __d2="" __guard __shell=0 __bin_to=""
+  # Linux keeps it under XDG_STATE_HOME (the Mac is unchanged)
+  case "${FL_PLATFORM:-${OSTYPE:-}}" in
+    linux*) [[ "${XDG_STATE_HOME:-}" == /* ]] && __base="${XDG_STATE_HOME%/}" ;;
+  esac
   __new="${__base}/benchbar"
   __guard="${__base}/.benchbar-migrating"
   printf -v "$1" '%s' "$__new"

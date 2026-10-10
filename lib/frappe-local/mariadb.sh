@@ -15,6 +15,24 @@ FL_KEYCHAIN_SERVICE="${FL_KEYCHAIN_SERVICE:-benchbar-mariadb}"
 FL_KEYCHAIN_ACCOUNT="root"
 FL_MARIADB_ROOT_PW=""
 FL_MARIADB_ROOT_PW_SOURCE=""
+# what the messages call the place the password is kept (Linux: the password file)
+FL_SECRET_STORE="Keychain"
+
+# Wording the platforms differ in, so the setup below reads the same on both.
+# fl_mariadb_admin_note SOURCE: said before root gets its password.
+fl_mariadb_admin_note() {
+  if [[ "$FL_MARIADB_ADMIN_USER" == "root" ]]; then
+    fl_warn "MariaDB root@localhost has no password yet; setting one ($1)"
+  else
+    fl_warn "MariaDB root@localhost uses socket login only (fresh Homebrew install); setting a password ($1) through the ${FL_MARIADB_ADMIN_USER} socket account"
+  fi
+}
+# said when the new generated password could not be stored (and MariaDB was not touched)
+fl_secret_store_locked_hint() {
+  fl_fail "the Keychain refused the new password, so MariaDB was left unchanged (is the login Keychain locked?)"
+  fl_fix "unlock the Keychain (security unlock-keychain), or pass MARIADB_ROOT_PASSWORD='...' to use a password you keep yourself"
+}
+fl_mariadb_password_missing_msg() { printf 'no MariaDB root password in the Keychain (service %s)' "$FL_KEYCHAIN_SERVICE"; }
 
 # ------------------------------------------------------------- keychain
 
@@ -140,14 +158,28 @@ fl_password_generate() {
 
 fl_sql_escape() { printf '%s' "$1" | sed "s/\\\\/\\\\\\\\/g; s/'/\\\\'/g"; }
 
+# fl_mariadb_secure_sql PASSWORD VIA: the SQL of the secure installation, on
+# stdout (the password only ever travels on a pipe, never in an argument)
+fl_mariadb_secure_sql() {
+  local esc
+  esc="$(fl_sql_escape "$1")"
+  cat <<SQL
+DELETE FROM mysql.global_priv WHERE User='';
+DELETE FROM mysql.global_priv WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
+DROP DATABASE IF EXISTS test;
+DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
+ALTER USER 'root'@'localhost' IDENTIFIED VIA ${2} USING PASSWORD('${esc}');
+FLUSH PRIVILEGES;
+SQL
+}
+
 # fl_mariadb_secure PASSWORD: what mariadb-secure-installation does, in SQL,
 # on a server that still accepts root without a password. Sets the root
 # password (native auth, as Frappe needs), drops anonymous users and the
 # test database, and limits root to this Mac.
 fl_mariadb_secure() {
-  local pw="$1" bin esc admin="${FL_MARIADB_ADMIN_USER:-root}" via="mysql_native_password"
+  local pw="$1" bin admin="${FL_MARIADB_ADMIN_USER:-root}" via="mysql_native_password"
   bin="$(fl_mariadb_client)"
-  esc="$(fl_sql_escape "$pw")"
   # a server administered through the OS account's socket login has root on
   # unix_socket too (a fresh Homebrew install, or a mariadb-secure-installation
   # that chose it; the two look alike from mysql.user). That rule stays, and
@@ -159,14 +191,7 @@ fl_mariadb_secure() {
     return 0
   fi
   fl_log "mariadb: securing root@localhost as ${admin} (password not logged)"
-  MYSQL_PWD="" "$bin" -u "$admin" --protocol=socket <<SQL
-DELETE FROM mysql.global_priv WHERE User='';
-DELETE FROM mysql.global_priv WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
-DROP DATABASE IF EXISTS test;
-DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
-ALTER USER 'root'@'localhost' IDENTIFIED VIA ${via} USING PASSWORD('${esc}');
-FLUSH PRIVILEGES;
-SQL
+  fl_mariadb_secure_sql "$pw" "$via" | MYSQL_PWD="" "$bin" -u "$admin" --protocol=socket
 }
 
 # ------------------------------------------------------------- setup
@@ -185,20 +210,15 @@ fl_mariadb_root_setup() {
     else
       pw="$(fl_password_generate)"; source="generated"
     fi
-    if [[ "$FL_MARIADB_ADMIN_USER" == "root" ]]; then
-      fl_warn "MariaDB root@localhost has no password yet; setting one (${source})"
-    else
-      fl_warn "MariaDB root@localhost uses socket login only (fresh Homebrew install); setting a password (${source}) through the ${FL_MARIADB_ADMIN_USER} socket account"
-    fi
+    fl_mariadb_admin_note "$source"
     # the Keychain write comes first: a generated password that exists only
     # in this process must never be applied to the server
     if ! fl_keychain_set "$pw"; then
       if [[ "$source" == "generated" ]]; then
-        fl_fail "the Keychain refused the new password, so MariaDB was left unchanged (is the login Keychain locked?)"
-        fl_fix "unlock the Keychain (security unlock-keychain), or pass MARIADB_ROOT_PASSWORD='...' to use a password you keep yourself"
+        fl_secret_store_locked_hint
         return 1
       fi
-      fl_warn "the password from MARIADB_ROOT_PASSWORD could not be saved to the Keychain; keep it, later runs need it in the environment"
+      fl_warn "the password from MARIADB_ROOT_PASSWORD could not be saved to the ${FL_SECRET_STORE}; keep it, later runs need it in the environment"
     fi
     if ! fl_mariadb_secure "$pw"; then
       fl_fail "could not set the MariaDB root password"
@@ -227,13 +247,13 @@ fl_mariadb_root_setup() {
   if [[ -n "$pw" ]]; then
     if fl_mariadb_root_verify "$pw"; then
       FL_MARIADB_ROOT_PW="$pw"; FL_MARIADB_ROOT_PW_SOURCE="keychain"
-      fl_ok "MariaDB root password verified (Keychain, unchanged)"
+      fl_ok "MariaDB root password verified (${FL_SECRET_STORE}, unchanged)"
       return 0
     fi
-    fl_warn "the password in the Keychain does not work any more"
+    fl_warn "the password in the ${FL_SECRET_STORE} does not work any more"
   fi
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
-    fl_info "dry-run: would ask for the existing MariaDB root password and save it to the Keychain"
+    fl_info "dry-run: would ask for the existing MariaDB root password and save it to the ${FL_SECRET_STORE}"
     return 0
   fi
   if [[ "${FL_ASSUME_YES:-0}" == "1" || ! -t 0 ]]; then
@@ -262,7 +282,7 @@ fl_mariadb_root_password_resolve() {
   # a password can only be judged against a running server: without one,
   # every source would look wrong and the run would blame the password
   if [[ "${FL_DRY_RUN:-0}" != "1" ]] && ! fl_port_listening 3306 && ! fl_process_running mariadbd; then
-    fl_die "MariaDB is not running, so the root password cannot be verified." "Run: brew services start ${FL_MARIADB_FORMULA:-mariadb}, then this command again"
+    fl_die "MariaDB is not running, so the root password cannot be verified." "Run: $(fl_service_start_hint "${FL_MARIADB_FORMULA:-mariadb}"), then this command again"
   fi
   # the environment first, verified as fl_mariadb_root_setup does: a stale
   # MARIADB_ROOT_PASSWORD (from an old shell) must not hide a Keychain
@@ -279,16 +299,16 @@ fl_mariadb_root_password_resolve() {
       fl_keychain_set "$FL_MARIADB_ROOT_PW" || true
       return 0
     fi
-    fl_warn "MARIADB_ROOT_PASSWORD from the environment does not work; trying the Keychain"
+    fl_warn "MARIADB_ROOT_PASSWORD from the environment does not work; trying the ${FL_SECRET_STORE}"
   fi
   pw="$(fl_keychain_get || true)"
   if [[ -n "$pw" ]]; then
     if [[ "${FL_DRY_RUN:-0}" == "1" ]] || fl_mariadb_root_verify "$pw"; then
       FL_MARIADB_ROOT_PW="$pw"; FL_MARIADB_ROOT_PW_SOURCE="keychain"
-      fl_info "MariaDB root password read from the Keychain"
+      fl_info "MariaDB root password read from the ${FL_SECRET_STORE}"
       return 0
     fi
-    fl_warn "the MariaDB root password in the Keychain does not work; asking"
+    fl_warn "the MariaDB root password in the ${FL_SECRET_STORE} does not work; asking"
   fi
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
     FL_MARIADB_ROOT_PW="dry-run-placeholder"; FL_MARIADB_ROOT_PW_SOURCE="dry-run"
@@ -296,7 +316,7 @@ fl_mariadb_root_password_resolve() {
     return 0
   fi
   if [[ "${FL_ASSUME_YES:-0}" == "1" || ! -t 0 ]]; then
-    fl_fail "MariaDB root password unknown: no working password in MARIADB_ROOT_PASSWORD or the Keychain"
+    fl_fail "MariaDB root password unknown: no working password in MARIADB_ROOT_PASSWORD or the ${FL_SECRET_STORE}"
     return 1
   fi
   fl_ask_secret pw "MariaDB root password"
@@ -428,7 +448,7 @@ fl_cmd_mariadb_password() {
   local pw
   pw="$(fl_keychain_get || true)"
   if [[ -z "$pw" ]]; then
-    fl_fail "no MariaDB root password in the Keychain (service ${FL_KEYCHAIN_SERVICE})"
+    fl_fail "$(fl_mariadb_password_missing_msg)"
     fl_fix "MARIADB_ROOT_PASSWORD='...' ${FL_SELF} install    (verifies it and saves it)"
     return 1
   fi

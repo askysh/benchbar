@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# ss mock: listeners come from $MOCK_LISTEN lines "port pid cmd addr" (the lsof
+# mock's table) and print like "ss -Hltnp" (the "p" flag adds the users column).
+# A filter "sport = :PORT" keeps one port. A pid of "-" hides the owner, like
+# a socket of another user.
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "$(dirname "$0")/_mocklib.sh"
+mock_log "$@"
+withpid=0; want=""
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    -*p*) withpid=1; shift ;;
+    -*) shift ;;
+    "sport = :"*) want="${1#sport = :}"; shift ;;
+    *) shift ;;
+  esac
+done
+while read -r port pid cmd addr; do
+  [[ -n "$port" ]] || continue
+  [[ -z "$want" || "$want" == "$port" ]] || continue
+  # a listener whose pid was killed (removed from the fake process table) is gone;
+  # pids that were never in the table (mariadbd, other apps) are always shown
+  if grep -q "^${pid} " "${MOCK_PROCS:-/dev/null}" 2>/dev/null || ! grep -q "^${pid} " "${MOCK_STATE:?}/ever_procs" 2>/dev/null; then :; else continue; fi
+  case "$addr" in
+    "") addr="127.0.0.1" ;;
+    \[*) ;;
+    *:*) addr="[${addr}]" ;;
+  esac
+  users=""
+  if [[ "$withpid" == "1" && "$pid" != "-" ]]; then users="users:((\"${cmd}\",pid=${pid},fd=3))"; fi
+  printf 'LISTEN 0      4096   %s:%s   0.0.0.0:*   %s\n' "$addr" "$port" "$users"
+done <"${MOCK_LISTEN:?}"
+exit 0

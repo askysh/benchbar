@@ -354,7 +354,11 @@ fl_repo_access_hint() {
   if fl_url_is_ssh "$repo"; then
     host="$(printf '%s' "$repo" | sed -E 's#^ssh://##; s#^[^@]*@##; s#[:/].*##')"
     fl_fix "ssh -T git@${host}   (checks the key; for a host alias from ~/.ssh/config use the alias)"
-    fl_fix "ssh-add --apple-use-keychain ~/.ssh/id_ed25519   (loads the key into the agent)"
+    if fl_is_linux; then
+      fl_fix "ssh-add ~/.ssh/id_ed25519   (loads the key into the agent)"
+    else
+      fl_fix "ssh-add --apple-use-keychain ~/.ssh/id_ed25519   (loads the key into the agent)"
+    fi
   else
     fl_fix "use the SSH URL instead (git@HOST:OWNER/REPO.git), or let git use your GitHub login: gh auth setup-git"
   fi

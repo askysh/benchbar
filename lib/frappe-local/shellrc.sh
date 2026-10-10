@@ -22,6 +22,8 @@ FL_RC_LEGACY_END="# <<< frappe-mac <<<"
 fl_rc_file() {
   local stored
   if [[ -n "${FL_RC_FILE:-}" ]]; then printf '%s' "$FL_RC_FILE"; return 0; fi
+  # Linux: bash unless the user's shell is zsh
+  if [[ "${FL_PLATFORM:-}" == "linux" && "${SHELL:-}" != *zsh ]]; then printf '%s/.bashrc' "$HOME"; return 0; fi
   case "$(basename "${SHELL:-zsh}")" in
     bash)
       if [[ -f "$HOME/.bashrc" ]]; then printf '%s' "$HOME/.bashrc"; else printf '%s' "$HOME/.bash_profile"; fi ;;

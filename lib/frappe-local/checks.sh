@@ -36,6 +36,14 @@ fl_check_group() {
 }
 
 fl_check_label() {
+  # Linux names three checks differently; the ids stay
+  if fl_is_linux; then
+    case "$1" in
+      brew) printf 'System packages'; return 0 ;;
+      agent) printf 'systemd unit'; return 0 ;;
+      hosts) printf 'Site name resolves'; return 0 ;;
+    esac
+  fi
   case "$1" in
     brew) printf 'Homebrew formulae' ;;
     python_leaves) printf 'Python formula' ;;
@@ -372,7 +380,7 @@ chk_agent() {
   chk__template "agent plist" "$plist" "$FL_R_PLIST" write_plist
   [[ "$CHK_STATUS" == "ok" ]] || return 0
   if ! fl_agent_loaded; then
-    chk__set warn "agent $(fl_agent_label) is written but not loaded" "launchctl bootstrap $(fl_launchd_domain) ${plist}" write_plist
+    chk__set warn "agent $(fl_agent_label) is written but not loaded" "$(fl_agent_load_hint "$plist")" write_plist
     return 0
   fi
   state="$(fl_agent_field state)"; pid="$(fl_agent_field pid)"; code="$(fl_agent_field 'last exit code')"
@@ -842,6 +850,9 @@ fl_chromium_path() {
     printf '%s' "$p"
     return 0
   fi
+  # the folder inside the download is named for the platform (Linux: not
+  # checked against a real "bench setup-chrome", no frappe checkout was at hand)
+  if fl_is_linux; then printf '%s/chromium/chrome-linux/headless_shell' "$FL_BENCH_DIR"; return 0; fi
   printf '%s/chromium/chrome-mac/headless_shell' "$FL_BENCH_DIR"
 }
 
@@ -857,7 +868,7 @@ chk_pdf_engine() {
     patched)
       shadow="$(fl_wkhtmltopdf_shadow)"
       if [[ -n "$shadow" ]]; then
-        chk__set warn "patched build at $(fl_wkhtmltopdf_bin), but ${shadow} comes first on PATH and is not patched${chrome}" "brew uninstall wkhtmltopdf"
+        chk__set warn "patched build at $(fl_wkhtmltopdf_bin), but ${shadow} comes first on PATH and is not patched${chrome}" "$(fl_is_linux && printf 'sudo apt-get remove wkhtmltopdf' || printf 'brew uninstall wkhtmltopdf')"
       elif [[ "$chrome_ok" == "0" ]]; then
         chk__set warn "wkhtmltopdf: patched Qt build at $(fl_wkhtmltopdf_bin)${chrome}" "cd ${FL_BENCH_DIR} && bench setup-chrome"
       else
@@ -1048,8 +1059,8 @@ chk_app_copies() {
 # " label:port" words; "benchbar up" asks before starting next to one.
 fl_port_clash_running() {
   local f other label state wd ports clash=""
-  for f in "$HOME"/Library/LaunchAgents/com.benchbar.*.plist "$HOME"/Library/LaunchAgents/com.frappe-mac.*.plist; do
-    [[ -f "$f" ]] || continue
+  while IFS= read -r f; do
+    [[ -n "$f" ]] || continue
     label="$(fl_plist_label "$f")"
     [[ "$label" == "$(fl_agent_label)" || "$label" == "$(fl_agent_label_legacy)" ]] && continue
     state="$(fl_agent_field state "$(fl_launchd_domain)/${label}")"
@@ -1060,7 +1071,7 @@ fl_port_clash_running() {
     for other in $ports; do
       if [[ "$other" == "$FL_WEB_PORT" || "$other" == "$FL_SOCKETIO_PORT" ]]; then clash="${clash} ${label}:${other}"; fi
     done
-  done
+  done < <(fl_agent_files all)
   printf '%s' "$clash"
 }
 
@@ -1246,6 +1257,8 @@ chk_honcho_setuptools() {
 # forked workers; the agent plist sets them and honcho's children inherit.
 chk_fork_safety() {
   local plist missing=""
+  # the unit sets NO_PROXY itself and macOS' fork check does not exist on Linux
+  if declare -F fl_is_linux >/dev/null && fl_is_linux; then chk__set ok "skipped: macOS only"; return 0; fi
   plist="$(fl_agent_plist_path)"
   if [[ ! -f "$plist" ]]; then
     chk__set ok "skipped: no agent plist yet"
@@ -1298,7 +1311,7 @@ chk_orphans() {
   [[ -z "$unknown" ]] || msg="${msg}${msg:+; }processes hold this bench's ports and their working folder cannot be read, so benchbar will not stop them: ${unknown}"
   [[ -z "$foreign" ]] || msg="${msg}${msg:+; }other programs hold this bench's ports (not this bench's to stop): ${foreign}"
   if [[ -n "$held" ]]; then fix="${FL_SELF} down   (or benchbar restart)"
-  elif [[ -n "$unknown" ]]; then fix="lsof -p ${first_unknown}   (check whose it is; kill it yourself if it is this bench's leftover)"
+  elif [[ -n "$unknown" ]]; then fix="$(fl_is_linux && printf 'ss -ltnp' || printf 'lsof -p %s' "$first_unknown")   (check whose it is; kill it yourself if it is this bench's leftover)"
   else fix="${FL_SELF} ports setup -- ${FL_BENCH_DIR}   (or stop that program)"; fi
   chk__set warn "$msg" "$fix"
 }
