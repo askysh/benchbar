@@ -1,4 +1,4 @@
-# CI for BenchBar: the CLI tests and lint on macOS, the app build
+# CI for BenchBar: the CLI tests and lint on macOS and Linux, the app build
 # and Swift tests on macOS, and an unsigned release bundle you can download
 # from the run to try the app without a GitHub release.
 #
@@ -103,6 +103,46 @@ jobs:
         env:
           SHARD: ${{ matrix.shard }}/3
         run: /bin/bash tests/run-tests.sh
+
+  # The mocked suite and shellcheck on Linux, for the Linux platform layer
+  # (docs/DECISIONS.md, "Linux"). Same skip rule as the macOS shards: it
+  # skips step by step when only docs/ or site/ changed. One job, no shards:
+  # ubuntu-latest has more cores than the macOS runners.
+  cli-linux:
+    name: CLI tests (Linux, shellcheck)
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CODE: ${{ needs.changes.outputs.code }}
+    steps:
+      - name: Skipped (only docs/ or site/ changed)
+        if: env.CODE != 'true'
+        run: echo "Only docs/ or site/ changed; the CLI tests do not run."
+
+      - uses: actions/checkout@v7
+        if: env.CODE == 'true'
+
+      # the same shellcheck as the macOS shard (Homebrew's 0.11.0): Ubuntu's
+      # apt package is older and reports findings 0.11.0 does not
+      - name: Install shellcheck 0.11.0
+        if: env.CODE == 'true'
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/sc.tar.xz" https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz
+          tar -xJf "$RUNNER_TEMP/sc.tar.xz" -C "$RUNNER_TEMP"
+          echo "4da528ddb3a4d1b7b24a59d4e16eb2f5fd960f4bd9a3708a15baddbdf1d5a55b  $RUNNER_TEMP/shellcheck-v0.11.0/shellcheck" | sha256sum -c -
+          echo "$RUNNER_TEMP/shellcheck-v0.11.0" >>"$GITHUB_PATH"
+
+      - name: Versions
+        if: env.CODE == 'true'
+        run: |
+          bash --version | head -n 1
+          nproc
+          shellcheck --version | sed -n 2p
+
+      - name: CLI tests (Linux bash)
+        if: env.CODE == 'true'
+        run: bash tests/run-tests.sh
 
   app:
     name: App build, Swift tests and unsigned release bundle (macOS)

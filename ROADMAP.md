@@ -133,6 +133,12 @@ the app to under 0.1 percent of a core at rest with these in it.
 shipped in 0.5.8), pull and lock apply in the app, a first run wizard,
 new bench from a profile.
 
+**Linux, then Windows through WSL.** A Linux platform layer runs the same
+CLI with each bench under `systemd --user`, uv Python, fnm Node and
+MariaDB and Redis from apt. On Windows the benches run inside WSL, with a
+small `benchbar.exe` shim that forwards to the CLI there and a tray app
+that shows and starts them like the menu bar app does on the Mac.
+
 **1.0.** A stable JSON API and runner format, an official Homebrew cask,
 full doctor coverage for v15 and v16. Vouch
 ([github.com/mitchellh/vouch](https://github.com/mitchellh/vouch)) when
@@ -167,5 +173,3 @@ Not scheduled, kept because they came up more than once.
   in your home folder. BenchBar ships as a signed, notarized download and
   a Homebrew cask instead.
 - **Production deployment.** BenchBar is for development benches.
-- **Windows or Linux.** The Windows and WSL path lives in
-  [askysh/frappe_wsl_dev_server](https://github.com/askysh/frappe_wsl_dev_server).

@@ -90,7 +90,7 @@ run_shellcheck() {
   local extra=()
   [[ -f "$ROOT/install.sh" ]] && extra+=("$ROOT/install.sh")
   shellcheck -x "${SCRIPTS[@]}" ${extra[@]+"${extra[@]}"} "$ROOT"/tests/*.sh "$ROOT"/tests/lib/*.sh \
-    "$ROOT"/tests/mocks/bin/* "$ROOT"/scripts/*.sh
+    "$ROOT"/tests/mocks/bin/* "$ROOT"/scripts/*.sh || return 1
   printf 'shellcheck: ok\n'
 }
 
