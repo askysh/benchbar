@@ -101,7 +101,7 @@ func TestPathCheck(t *testing.T) {
 
 	e.pathSetup(`C:\Other`, `C:\tools\benchbar`, `C:\Other\benchbar.exe`, `C:\tools\benchbar\benchbar.exe`)
 	c = pathCheck(e.System)
-	if c.Status != "warn" || c.Fix != "benchbar.exe path install" || !strings.Contains(c.Message, `C:\Other\benchbar.exe`) {
+	if c.Status != "warn" || !strings.HasPrefix(c.Fix, `remove C:\Other from the system PATH`) || !strings.Contains(c.Message, `C:\Other\benchbar.exe`) {
 		t.Errorf("other copy: %+v", c)
 	}
 
@@ -189,5 +189,83 @@ func TestDirOf(t *testing.T) {
 		if got := dirOf(in); got != want {
 			t.Errorf("dirOf(%q) = %q", in, got)
 		}
+	}
+}
+
+func TestPlaceBefore(t *testing.T) {
+	const dir = `C:\tools\benchbar`
+	cases := []struct {
+		name, list string
+		before     int
+		want       string
+		changed    bool
+	}{
+		{"not there yet", `C:\a;C:\other;C:\b`, 1, `C:\a;` + dir + `;C:\other;C:\b`, true},
+		{"moved from later, kept once", `C:\other;C:\b;` + dir + `;C:\c`, 0, dir + `;C:\other;C:\b;C:\c`, true},
+		{"later spelling is kept", `C:\other;C:\TOOLS\Benchbar\`, 0, `C:\TOOLS\Benchbar\;C:\other`, true},
+		{"two later copies become one", `C:\other;` + dir + `;C:\b;` + dir, 0, dir + `;C:\other;C:\b`, true},
+		{"already in front", dir + `;C:\other`, 1, dir + `;C:\other`, false},
+		{"trailing semicolon kept", `C:\other;C:\b;`, 0, dir + `;C:\other;C:\b;`, true},
+		{"odd entries untouched", `C:\a ; ;C:\other;;`, 2, `C:\a ; ;` + dir + `;C:\other;;`, true},
+		{"moving keeps a trailing semicolon", `C:\other;` + dir + `;`, 0, dir + `;C:\other;`, true},
+	}
+	for _, c := range cases {
+		got, changed := placeBefore(c.list, dir, c.before, testEnvVars)
+		if got != c.want || changed != c.changed {
+			t.Errorf("%s: got %q, %v; want %q, %v", c.name, got, changed, c.want, c.changed)
+		}
+	}
+}
+
+func TestPathInstallMovesInFrontOfAnotherUserCopy(t *testing.T) {
+	e := newEnv(t)
+	e.pathSetup(`C:\Windows`, `%USERPROFILE%\bin;C:\Other\;C:\z;C:\tools\benchbar;`,
+		`C:\Other\benchbar.exe`, testExe)
+	if c := pathCheck(e.System); c.Status != "warn" || c.Fix != "benchbar.exe path install" {
+		t.Fatalf("before: %+v", c)
+	}
+	if code := e.run("path", "install"); code != 0 {
+		t.Fatalf("exit %d: %s", code, e.stderr())
+	}
+	if got, want := e.paths.user.Value, `%USERPROFILE%\bin;C:\tools\benchbar;C:\Other\;C:\z;`; got != want {
+		t.Errorf("PATH %q want %q", got, want)
+	}
+	if !e.paths.user.Expand || e.bcast.n != 1 {
+		t.Errorf("expand %v broadcasts %d", e.paths.user.Expand, e.bcast.n)
+	}
+	if c := pathCheck(e.System); c.Status != "ok" {
+		t.Errorf("after: %+v", c)
+	}
+	// again: nothing to do
+	e.run("path", "install")
+	if e.paths.setCalls != 1 {
+		t.Errorf("second run wrote again")
+	}
+}
+
+func TestPathInstallInsertsInFrontWhenAbsent(t *testing.T) {
+	e := newEnv(t)
+	e.pathSetup(`C:\Windows`, `C:\a;C:\Other`, `C:\Other\benchbar.exe`, testExe)
+	e.paths.user.Expand = false
+	e.run("path", "install")
+	if e.paths.user.Value != `C:\a;C:\tools\benchbar;C:\Other` || e.paths.user.Expand {
+		t.Errorf("%+v", e.paths.user)
+	}
+}
+
+func TestMachineCopyWinsAndPathInstallCannotFixIt(t *testing.T) {
+	e := newEnv(t)
+	e.pathSetup(`C:\Windows;C:\Other\`, `C:\tools\benchbar`, `C:\Other\benchbar.exe`, testExe)
+	c := pathCheck(e.System)
+	want := `remove C:\Other from the system PATH (an elevated prompt: System Properties, Environment Variables) or delete C:\Other\benchbar.exe`
+	if c.Status != "warn" || c.Fix != want {
+		t.Errorf("%+v", c)
+	}
+	e.run("path", "install")
+	if e.paths.setCalls != 0 {
+		t.Error("path install changed the user PATH although the folder is already there")
+	}
+	if !strings.Contains(e.stdout(), "fix: "+want) {
+		t.Errorf("output %q", e.stdout())
 	}
 }

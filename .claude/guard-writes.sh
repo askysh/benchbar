@@ -20,6 +20,9 @@ input="$(cat)"
 # only be the real key; the description is never looked at.
 cmd="$(printf '%s' "$input" | sed -nE 's/.*"command"[[:space:]]*:[[:space:]]*"(([^"\\]|\\.)*)".*/\1/p' | head -n 1)"
 [ -n "$cmd" ] || exit 0
+# JSON escapes for whitespace are what the shell sees: a tab or CR is a
+# space, a newline ends a command
+cmd="$(printf '%s' "$cmd" | sed -e 's/\\[tr]/ /g' -e 's/\\n/ ; /g')"
 
 # Prints each chunk that starts with the pattern, up to the next match, one
 # per line (newlines inside the command are JSON escaped, so none are real).

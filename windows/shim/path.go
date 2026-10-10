@@ -67,18 +67,66 @@ func dirOf(path string) string {
 // firstBenchbar walks the machine PATH, then the user PATH, and returns the
 // first folder holding benchbar.exe.
 func firstBenchbar(machine, user string, getenv func(string) string, exists func(string) bool) (string, bool) {
-	for _, list := range []string{machine, user} {
-		for _, e := range strings.Split(list, ";") {
-			dir := strings.Trim(strings.TrimSpace(expandPercent(e, getenv)), `"`)
-			if dir == "" {
-				continue
+	dir, _, found := firstBenchbarFrom(machine, user, getenv, exists)
+	return dir, found
+}
+
+// firstBenchbarFrom also says which list holds the winner: "machine" or "user".
+func firstBenchbarFrom(machine, user string, getenv func(string) string, exists func(string) bool) (dir, from string, found bool) {
+	if i := firstBenchbarIndex(machine, getenv, exists); i >= 0 {
+		return pathEntryDir(strings.Split(machine, ";")[i], getenv), "machine", true
+	}
+	if i := firstBenchbarIndex(user, getenv, exists); i >= 0 {
+		return pathEntryDir(strings.Split(user, ";")[i], getenv), "user", true
+	}
+	return "", "", false
+}
+
+func pathEntryDir(entry string, getenv func(string) string) string {
+	return strings.Trim(strings.TrimSpace(expandPercent(entry, getenv)), `"`)
+}
+
+// firstBenchbarIndex is the index of the first entry of a PATH value whose
+// folder holds benchbar.exe, or -1.
+func firstBenchbarIndex(list string, getenv func(string) string, exists func(string) bool) int {
+	for i, e := range strings.Split(list, ";") {
+		dir := pathEntryDir(e, getenv)
+		if dir != "" && exists(strings.TrimRight(dir, `\/`)+`\benchbar.exe`) {
+			return i
+		}
+	}
+	return -1
+}
+
+// placeBefore puts dir in front of the entry at index before. A later entry
+// for the same folder is moved (keeping its spelling), not copied. Every
+// other entry, and a trailing ";", stay as they were. changed is false when
+// the folder is already in front.
+func placeBefore(list, dir string, before int, getenv func(string) string) (string, bool) {
+	want := normDir(dir, getenv)
+	parts := strings.Split(list, ";")
+	entry, found := dir, false
+	for j, e := range parts {
+		if e != "" && normDir(e, getenv) == want {
+			if j < before {
+				return list, false
 			}
-			if exists(strings.TrimRight(dir, `\/`) + `\benchbar.exe`) {
-				return dir, true
+			if !found {
+				entry, found = e, true
 			}
 		}
 	}
-	return "", false
+	var out []string
+	for j, e := range parts {
+		if j == before {
+			out = append(out, entry)
+		}
+		if e != "" && normDir(e, getenv) == want {
+			continue
+		}
+		out = append(out, e)
+	}
+	return strings.Join(out, ";"), true
 }
 
 func pathCheck(sys *System) Check {
@@ -98,7 +146,7 @@ func pathCheck(sys *System) Check {
 		return c
 	}
 	exeDir := dirOf(sys.ExePath)
-	dir, found := firstBenchbar(machine, user.Value, sys.Getenv, sys.FileExists)
+	dir, from, found := firstBenchbarFrom(machine, user.Value, sys.Getenv, sys.FileExists)
 	switch {
 	case found && normDir(dir, sys.Getenv) == normDir(exeDir, sys.Getenv):
 		c.Status, c.Fix = "ok", ""
@@ -106,6 +154,11 @@ func pathCheck(sys *System) Check {
 	case found:
 		c.Status = "warn"
 		c.Message = fmt.Sprintf("another copy comes first: %s\\benchbar.exe (this one is %s)", strings.TrimRight(dir, `\/`), sys.ExePath)
+		if from == "machine" {
+			// the user PATH comes after the machine PATH, so path install cannot win
+			other := strings.TrimRight(dir, `\/`)
+			c.Fix = fmt.Sprintf(`remove %s from the system PATH (an elevated prompt: System Properties, Environment Variables) or delete %s\benchbar.exe`, other, other)
+		}
 	default:
 		c.Status = "warn"
 		c.Message = exeDir + " is not on PATH"
@@ -122,6 +175,14 @@ func cmdPath(sys *System, sub string) int {
 		}
 		exeDir := dirOf(sys.ExePath)
 		next, changed := appendPathDir(user.Value, exeDir, sys.Getenv)
+		machine, _ := sys.Paths.Machine()
+		if dir, from, found := firstBenchbarFrom(machine, user.Value, sys.Getenv, sys.FileExists); found && from == "user" &&
+			normDir(dir, sys.Getenv) != normDir(exeDir, sys.Getenv) {
+			// another copy earlier in the user PATH: go in front of it
+			if i := firstBenchbarIndex(user.Value, sys.Getenv, sys.FileExists); i >= 0 {
+				next, changed = placeBefore(user.Value, exeDir, i, sys.Getenv)
+			}
+		}
 		if changed {
 			expand := user.Expand || !user.Exists
 			if err := sys.Paths.SetUser(next, expand); err != nil {

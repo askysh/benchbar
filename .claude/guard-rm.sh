@@ -11,8 +11,11 @@ input="$(cat)"
 # Git Bash runs rm.exe too, and Windows finds RM as rm, so case and a .exe
 # suffix do not matter.
 word_rm='(^|[^A-Za-z0-9_.-])rm(\.exe)?([^A-Za-z0-9_.-]|$)'
+# JSON escapes for whitespace count as spaces; quotes and backslashes join
+# word fragments in the shell (r''m, r\m), so they are dropped.
+flat="$(printf '%s' "$input" | sed -e 's/\\[tnr]/ /g' | tr -d "'\"\\\\")"
 shopt -s nocasematch
-[[ $input =~ $word_rm ]] || exit 0
+[[ $flat =~ $word_rm ]] || exit 0
 shopt -u nocasematch
 # The parsing needs python3. Without it (Git Bash, a Mac without the command
 # line tools) a call that mentions rm is blocked rather than let through.
@@ -33,7 +36,8 @@ except ValueError:
     sys.exit(2)
 text = data.get("tool_input", {}).get("command", "") or ""
 word_rm = re.compile(r"(^|[^\w.-])rm(\.exe)?([^\w.-]|$)", re.I)
-if not word_rm.search(text):
+# quotes and backslashes join word fragments (r''m is rm)
+if not word_rm.search(re.sub(r"[\"\x27\\]", "", text)):
     sys.exit(0)
 def base(word):
     # a command name as Windows and Git Bash find it: rm, RM and rm.exe alike
@@ -149,8 +153,9 @@ for i in range(0, len(pieces), 2):
     words = words[at:]
     flags = "".join(w.lstrip("-") for w in words[1:] if w.startswith("-") and not w.startswith("--"))
     longs = [w for w in words[1:] if w.startswith("--")]
-    recursive = "r" in flags or "R" in flags or "--recursive" in longs
-    force = "f" in flags or "--force" in longs
+    # GNU takes any unambiguous prefix of a long option (--recurs, --for)
+    recursive = "r" in flags or "R" in flags or any(len(w) > 2 and "--recursive".startswith(w) for w in longs)
+    force = "f" in flags or any(len(w) > 2 and "--force".startswith(w) for w in longs)
     if not (recursive and force):
         continue
     if via_xargs:
