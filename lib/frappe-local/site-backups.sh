@@ -18,7 +18,12 @@
 
 # fl_file_mtime FILE: seconds since the epoch (BSD stat on macOS, GNU on Linux CI).
 fl_file_mtime() {
-  stat -c %Y "$1" 2>/dev/null || stat -f %m "$1"
+  local m
+  # each form counts only as a number (GNU stat -f prints file system text)
+  m="$(stat -c %Y "$1" 2>/dev/null)" || true
+  [[ "$m" =~ ^[0-9]+$ ]] || m="$(stat -f %m "$1" 2>/dev/null)" || true
+  [[ "$m" =~ ^[0-9]+$ ]] || return 1
+  printf '%s\n' "$m"
 }
 
 # fl_iso_from_epoch SECONDS: 2026-09-29T10:15:00Z

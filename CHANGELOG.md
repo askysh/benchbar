@@ -32,6 +32,10 @@ All notable changes to this project are documented here.
   "shellcheck: ok" whatever shellcheck found.
 - A NOPASSWD sudo rule next to a password rule no longer makes the install
   ask for a password it does not need.
+- On Linux a lock's age always read 0, so a lock left behind was never seen
+  as stale by its age, and two runs at once could stop with "File: unbound
+  variable": GNU `stat -f` prints file system text where BSD `stat -f`
+  prints a time.
 
 ## 0.7.3 - 2026-10-04
 
