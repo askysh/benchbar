@@ -19,6 +19,12 @@
   (gh api -X POST repos/OWNER/REPO/actions/runners/registration-token), so
   gh must be installed and logged in on Windows with admin rights on the repo.
 
+.PARAMETER RemoveToken
+  A runner removal token, used with -Reconfigure to unregister the existing
+  runner first. GitHub issues it separately from the registration token
+  (repos/OWNER/REPO/actions/runners/remove-token); without it the script asks
+  gh for one.
+
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File .\setup-runner.ps1
 #>
@@ -26,6 +32,7 @@
 param(
   [string]$Repo = 'askysh/benchbar',
   [string]$Token = '',
+  [string]$RemoveToken = '',
   [string]$RunnerName = "$env:COMPUTERNAME-wsl",
   [string]$Labels = 'wsl',
   [string]$RunnerDir = 'C:\actions-runner',
@@ -68,12 +75,17 @@ if (-not (Test-Path (Join-Path $RunnerDir 'config.cmd'))) {
   $zip = Join-Path $env:TEMP $asset.name
   Write-Host "Downloading $($asset.name)"
   Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip -UseBasicParsing
-  # GitHub publishes the SHA-256 in the release body; check it when present
-  $expected = [regex]::Match($release.body, "$([regex]::Escape($asset.name))[^0-9a-f]*([0-9a-f]{64})").Groups[1].Value
-  if ($expected) {
-    $actual = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower()
-    if ($actual -ne $expected) { Remove-Item $zip; throw "Checksum mismatch for $($asset.name)." }
+  # The SHA-256 comes from the asset's digest field, else from the release
+  # body's line for this asset; no checksum means no install
+  $expected = ''
+  $digest = $asset.PSObject.Properties['digest']
+  if ($digest -and "$($digest.Value)" -match '^sha256:([0-9a-f]{64})$') { $expected = $Matches[1] }
+  if (-not $expected) {
+    $expected = [regex]::Match($release.body, "$([regex]::Escape($asset.name))[^\r\n]*?([0-9a-f]{64})").Groups[1].Value
   }
+  if (-not $expected) { Remove-Item $zip; throw "No SHA-256 published for $($asset.name); not installing an unverified runner." }
+  $actual = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower()
+  if ($actual -ne $expected) { Remove-Item $zip; throw "Checksum mismatch for $($asset.name)." }
   Expand-Archive -Path $zip -DestinationPath $RunnerDir -Force
   Remove-Item $zip
 }
@@ -81,10 +93,17 @@ if (-not (Test-Path (Join-Path $RunnerDir 'config.cmd'))) {
 # 3. Registration (kept unless -Reconfigure)
 $configured = Test-Path (Join-Path $RunnerDir '.runner')
 if ($configured -and $Reconfigure) {
-  if (-not $Token) { $Token = (gh api -X POST "repos/$Repo/actions/runners/remove-token" --jq .token) }
-  & (Join-Path $RunnerDir 'config.cmd') remove --token $Token
+  # Removal takes its own token; a registration token passed as -Token is kept for step 3
+  if (-not $RemoveToken) {
+    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { throw 'Pass -RemoveToken, or install and log in to gh on Windows.' }
+    $RemoveToken = (gh api -X POST "repos/$Repo/actions/runners/remove-token" --jq .token)
+  }
+  Push-Location $RunnerDir
+  try {
+    & .\config.cmd remove --token $RemoveToken
+    if ($LASTEXITCODE -ne 0) { throw "config.cmd remove failed with exit code $LASTEXITCODE; the old registration is still in place." }
+  } finally { Pop-Location }
   $configured = $false
-  $Token = ''
 }
 if (-not $configured) {
   if (-not $Token) {
