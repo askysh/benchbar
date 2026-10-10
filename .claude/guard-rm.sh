@@ -133,6 +133,10 @@ for i in range(0, len(pieces), 2):
     if via_xargs:
         block("rm -rf through xargs takes its targets from input the guard cannot see.")
     for target in (w for w in words[1:] if not w.startswith("-")):
+        # bash expands {a,b} and {1..3} before rm runs; the literal text the
+        # guard resolves is not what gets deleted.
+        if re.search(r"\{[^}]*(,|\.\.)[^}]*\}", target):
+            block("rm -rf with a brace expansion (%s); list the paths one by one." % target)
         if "$" in target or "`" in target:
             # A variable target is let through only when it resolves, from
             # the environment or a literal assignment earlier in the
