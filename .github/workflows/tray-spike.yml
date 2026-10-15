@@ -51,7 +51,7 @@ jobs:
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: windows/tray/spike/global.json
       - name: Build
@@ -85,7 +85,7 @@ jobs:
           name: tray-spike-shells
           path: windows/tray/spike/out
       # the harness is framework dependent and needs the .NET 10 runtime
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: windows/tray/spike/global.json
       - name: Measure
