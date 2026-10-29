@@ -90,7 +90,11 @@ nonisolated struct PrerequisiteRow: Equatable, Sendable, Identifiable {
         /// The one command the app starts that is not benchbar: opens Apple's dialog.
         case installCommandLineTools
         /// A command the app never runs: shown with Copy and Check Again.
-        case copy(String)
+        /// `note` is the step before it, in words.
+        case copy(String, note: String? = nil)
+        /// What to do in words (CleanMyMac's Ignore List, free disk space):
+        /// shown as text, with nothing to copy.
+        case advice(String)
     }
 
     var id: String
@@ -110,11 +114,38 @@ nonisolated struct PrerequisiteRow: Equatable, Sendable, Identifiable {
             // what the New Bench page does by itself, not a command to copy
             action = .none
         } else if let fix = check.fixCommand, !fix.isEmpty {
-            action = .copy(fix)
+            action = FixText.action(fix)
         } else {
             action = .none
         }
         return PrerequisiteRow(id: check.id, label: check.label, message: check.message, level: check.level, action: action)
+    }
+}
+
+/// A prerequisite's `fix_command` is a command or a sentence: Mole's, with no
+/// whitelist file yet, is both ("run 'mo clean --whitelist' and save once
+/// (...), then: echo ... >> ~/.config/mole/whitelist").
+nonisolated enum FixText {
+    /// The first words of the fixes that are commands; any other fix is advice.
+    static let commandNames: Set<String> = ["echo", "xcode-select", "brew", "benchbar", "curl", "sudo", "mo", "mole", "git", "mkdir", "open"]
+
+    static func isCommand(_ text: String) -> Bool {
+        guard let first = text.split(separator: " ").first else { return false }
+        return first.hasPrefix("/") || commandNames.contains(String(first))
+    }
+
+    static func action(_ fix: String) -> PrerequisiteRow.Action {
+        if let then = fix.range(of: ", then: "), isCommand(String(fix[then.upperBound...])) {
+            return .copy(String(fix[then.upperBound...]), note: sentence(String(fix[..<then.lowerBound])) + ", then:")
+        }
+        if isCommand(fix) { return .copy(fix) }
+        let text = sentence(fix)
+        return .advice(text.hasSuffix(".") ? text : text + ".")
+    }
+
+    /// The CLI's fix starts lowercase ("free space on ..."): a sentence does not.
+    private static func sentence(_ text: String) -> String {
+        text.prefix(1).uppercased() + text.dropFirst()
     }
 }
 

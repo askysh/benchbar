@@ -320,6 +320,21 @@ struct PrerequisiteTests {
         #expect(r.failing.map(\.id) == ["command_line_tools", "homebrew"])
     }
 
+    /// Only a command gets the copy box: a fix in words is text, and Mole's
+    /// "do this, then: COMMAND" is both.
+    @Test func onlyCommandsAreCopied() {
+        #expect(FixText.action("xcode-select --install") == .copy("xcode-select --install"))
+        #expect(FixText.action("echo '/Users/you/frappe-bench' >> ~/.config/mole/whitelist")
+                == .copy("echo '/Users/you/frappe-bench' >> ~/.config/mole/whitelist"))
+        #expect(FixText.action("run 'mo clean --whitelist' and save once (it writes Mole's defaults), then: echo '/Users/you/frappe-bench' >> ~/.config/mole/whitelist")
+                == .copy("echo '/Users/you/frappe-bench' >> ~/.config/mole/whitelist",
+                         note: "Run 'mo clean --whitelist' and save once (it writes Mole's defaults), then:"))
+        #expect(FixText.action("In CleanMyMac, add /Users/you/frappe-bench to the Ignore List before running any cleanup")
+                == .advice("In CleanMyMac, add /Users/you/frappe-bench to the Ignore List before running any cleanup."))
+        #expect(FixText.action("free space on the volume of /Users/you") == .advice("Free space on the volume of /Users/you."))
+        #expect(FixText.action("update macOS in System Settings, Software Update") == .advice("Update macOS in System Settings, Software Update."))
+    }
+
     @Test func theRunnerWakesAsRowsPass() throws {
         func state(_ levels: [CheckLevel]) -> BenchState {
             PrerequisiteRows.runnerState(levels.enumerated().map { Prerequisite(id: "c\($0.offset)", label: "", level: $0.element, message: "") })

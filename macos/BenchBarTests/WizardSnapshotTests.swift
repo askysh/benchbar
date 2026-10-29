@@ -63,6 +63,22 @@ extension SnapshotTests {
         try render(page(run), "wizard-check-failing")
         let (_, ok) = try await wizardRun([.chooseNewBench, .prerequisites(try report(ok: true))])
         try render(page(ok), "wizard-check-ok")
+        var cleanup = try report(ok: true)
+        // a fix in words and Mole's "then:" fix: only the command is in a copy box
+        for (id, message, fix) in [
+            ("cleanmymac", "CleanMyMac X.app is installed; its cleanup can delete env/, node_modules and public/dist",
+             "In CleanMyMac, add /Users/you/frappe-bench to the Ignore List before running any cleanup"),
+            ("mole", "Mole is installed (/opt/homebrew/bin/mo); 'mo purge' can delete env/, node_modules and dist folders inside the bench",
+             "run 'mo clean --whitelist' and save once (it writes Mole's defaults), then: echo '/Users/you/frappe-bench' >> ~/.config/mole/whitelist"),
+        ] {
+            if let i = cleanup.prerequisites.firstIndex(where: { $0.id == id }) {
+                cleanup.prerequisites[i].level = .warn
+                cleanup.prerequisites[i].message = message
+                cleanup.prerequisites[i].fixCommand = fix
+            }
+        }
+        let (_, warned) = try await wizardRun([.chooseNewBench, .prerequisites(cleanup)])
+        try render(page(warned), "wizard-check-cleanup-tools")
     }
 
     @Test func wizardNewBenchReviewAndInstall() async throws {

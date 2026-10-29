@@ -288,9 +288,16 @@ struct PrerequisiteRowView: View {
                     if let message = run.commandLineToolsMessage {
                         Text(message).font(.caption).foregroundStyle(.red).textSelection(.enabled)
                     }
-                case .copy(let command):
+                case .copy(let command, let note):
+                    if let note {
+                        Text(note).font(.callout).textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     CopyableCommand(command: command, copyLabel: "Copy the command for \(row.label)")
                     SheetNote("BenchBar never runs this. Run it in Terminal, then Check Again.")
+                case .advice(let text):
+                    Text(text).font(.callout).textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer(minLength: 0)
