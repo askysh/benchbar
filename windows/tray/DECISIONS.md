@@ -64,3 +64,16 @@ One line per non obvious choice. The spike's code is in `spike/` and is not ship
 - The unused Doctor console (`cmd /k`) was removed; the Doctor window is the only doctor in the tray.
 - `config.json` is replaced with up to ten short retries: Windows refuses the replace while another process holds the file without delete sharing (an antivirus scan, the indexer, the shim reading it). Found as a test that failed one run in twenty.
 - Controller tests dispose the controller and advance the fake clock only after a poll has reported (its timer is armed by then), on the same lock that stands in for the UI thread; three tests failed one run in about seven before that, and none in 30 runs after.
+
+## The release path (0.9)
+
+- A zip per CPU plus `install.ps1`, no MSI and no Inno Setup in v1: both add a toolchain and a second file to sign, and a zip plus a script matches `install.sh`. winget comes after the first signed release (an unsigned package gets SmartScreen warnings there too).
+- `release-windows.yml` is its own workflow; release.yml stays as it is. It attaches to the draft release.yml creates for the tag, waiting up to 20 minutes, and creates a draft only when none appears; it never publishes.
+- The Windows sums file is `benchbar-windows-X.Y.Z-SHA256SUMS.txt`, not `SHA256SUMS`: the Mac release already has an asset with that name, and `install.sh` takes the first asset whose name ends in `SHA256SUMS`.
+- Signing through SignPath runs only when `SIGNPATH_API_TOKEN` and `SIGNPATH_ORGANIZATION_ID` exist, never on pull requests, and is best effort: a signed file replaces the unsigned one only when `Get-AuthenticodeSignature` says Valid and its PE machine type matches the zip's CPU. Otherwise the unsigned exe ships and the notes say so. A broken signature never ships.
+- Every exe's PE machine type (0x8664, 0xAA64) is checked before packing, so an amd64 build cannot land in the Arm64 zip.
+- The workflow skips the tray with a warning when `windows/tray/BenchBarTray` is missing on the checked out ref, so it does not depend on the order the tray and release pull requests merge.
+- `workflow_dispatch` works only once the file is on main, so pull requests that change the workflow or `install.ps1` build both zips and run the installer on windows-latest (PowerShell 7, then Windows PowerShell 5.1 as an update, plus a refused bad checksum) without touching releases.
+- `install.ps1` replaces only files an earlier install wrote (`.installed-files.txt` in the install folder), renames a locked exe (a running keepalive holds `benchbar.exe`) to `.old` before the new copy goes in, and closes a running tray only by its exact path, never by name. Native programs run with `ErrorActionPreference=Continue`, because Windows PowerShell 5.1 turns their stderr into a terminating error under `Stop`.
+- Shim: `benchbar.exe doctor` gains `dotnet_desktop` and `tray_logon` (text form only) when `BenchBarTray.exe` sits next to it, about 50 lines. A missing runtime is a warning, so the optional tray never makes doctor exit 1; the check proves the shortcut and the tray exe exist and does not read the shortcut's target. Recorded here because docs/DECISIONS.md belongs to the CLI session this week.
+- The code signing policy in docs/windows.md is written in SignPath Foundation's required form and marked pending until the application is approved.
