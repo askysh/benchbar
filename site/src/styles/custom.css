@@ -1,128 +1,344 @@
-/* BenchBar docs theme: Bai Jamjuree for text, JetBrains Mono for code, and
-   the blue of the app icon as the accent. Starlight's own variables carry
-   the palette, so every component (search, asides, tabs) follows it. */
+/* BenchBar docs theme, after akashmishra.com (personal-site app/globals.css):
+   warm cream and near black, one brown accent, the system font stack with
+   a serif for section headings, hairlines instead of boxes. Starlight's own
+   variables carry the palette, so every component (search, asides, code)
+   follows it. */
 
 :root {
-  --sl-font: 'Bai Jamjuree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --sl-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
-  --sl-text-h1: 2.5rem;
-  --sl-text-h2: 1.75rem;
-  --sl-text-h3: 1.3rem;
+  --sl-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --sl-font-mono: ui-monospace, 'SF Mono', Menlo, Monaco, 'Cascadia Mono', Consolas, monospace;
+  --bb-font-serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, 'Times New Roman', serif;
+  --sl-text-h1: 1.75rem;
+  --sl-text-h2: 1.625rem;
+  --sl-text-h3: 1.25rem;
+  --sl-text-h4: 1.0625rem;
+  --sl-text-body: 1rem;
   --sl-line-height: 1.7;
-  --sl-content-width: 46rem;
-  --bb-radius: 0.75rem;
-  --bb-blue: #2a5cf0;
+  --sl-line-height-headings: 1.25;
+  --sl-content-width: 42rem;
+  --bb-radius: 6px;
 
-  /* dark: a deep navy, not a flat grey */
-  --sl-color-accent-low: #0f1f4d;
-  --sl-color-accent: #4f7dff;
-  --sl-color-accent-high: #c4d3ff;
-  --sl-color-white: #ffffff;
-  --sl-color-gray-1: #e6e9f2;
-  --sl-color-gray-2: #c3c8d6;
-  --sl-color-gray-3: #8e95ab;
-  --sl-color-gray-4: #5a6178;
-  --sl-color-gray-5: #2b3146;
-  --sl-color-gray-6: #171c2c;
-  --sl-color-black: #0c1020;
-  --bb-surface: #121729;
-  --bb-border: #252c42;
-  --bb-glow: rgba(79, 125, 255, 0.18);
+  /* dark: the personal site's near black and parchment */
+  --bb-bg: #0d0c0a;
+  --bb-fg: #ece7db;
+  --bb-muted: #a7a095;
+  --bb-border: rgba(236, 231, 219, 0.1);
+  --bb-accent: #d4b483;
+  --bb-code-bg: rgba(236, 231, 219, 0.06);
+
+  --sl-color-accent-low: #3b2f1d;
+  --sl-color-accent: var(--bb-accent);
+  --sl-color-accent-high: #ecdcbf;
+  --sl-color-white: var(--bb-fg);
+  --sl-color-gray-1: #ddd7ca;
+  --sl-color-gray-2: #c4bdb0;
+  --sl-color-gray-3: var(--bb-muted);
+  --sl-color-gray-4: #6f695f;
+  --sl-color-gray-5: #34312b;
+  --sl-color-gray-6: #1b1916;
+  --sl-color-black: var(--bb-bg);
+  --sl-color-text: var(--bb-fg);
+  --sl-color-text-accent: var(--bb-accent);
+  --sl-color-bg-nav: color-mix(in srgb, var(--bb-bg) 80%, transparent);
+  --sl-color-bg-sidebar: var(--bb-bg);
+  --sl-color-bg-inline-code: var(--bb-code-bg);
+  --sl-color-hairline-light: var(--bb-border);
+  --sl-color-hairline: var(--bb-border);
+  --sl-color-hairline-shade: var(--bb-border);
+  --sl-color-backdrop-overlay: rgba(13, 12, 10, 0.6);
 }
 
 :root[data-theme='light'] {
-  --sl-color-accent-low: #dfe7ff;
-  --sl-color-accent: #2a5cf0;
-  --sl-color-accent-high: #12307f;
-  --sl-color-white: #0e1326;
-  --sl-color-gray-1: #1c2236;
-  --sl-color-gray-2: #343b52;
-  --sl-color-gray-3: #5b6278;
-  --sl-color-gray-4: #8b91a5;
-  --sl-color-gray-5: #c9cddb;
-  --sl-color-gray-6: #eceef5;
-  --sl-color-gray-7: #f5f6fa;
-  --sl-color-black: #ffffff;
-  --bb-surface: #f6f7fb;
-  --bb-border: #e1e4ee;
-  --bb-glow: rgba(42, 92, 240, 0.12);
+  /* light: warm cream, as on akashmishra.com */
+  --bb-bg: #fbf7ee;
+  --bb-fg: #1c1a16;
+  --bb-muted: #6e665a;
+  --bb-border: rgba(28, 26, 22, 0.12);
+  --bb-accent: #8a5a24;
+  --bb-code-bg: rgba(28, 26, 22, 0.05);
+
+  --sl-color-accent-low: #f1e4cd;
+  --sl-color-accent-high: #6b4419;
+  --sl-color-gray-1: #2a2721;
+  --sl-color-gray-2: #3f3a32;
+  --sl-color-gray-4: #9b9384;
+  --sl-color-gray-5: #ddd6c8;
+  --sl-color-gray-6: #f1ece2;
+  --sl-color-gray-7: #f4efe5;
+  --sl-color-backdrop-overlay: rgba(28, 26, 22, 0.25);
+}
+
+@media (min-width: 40rem) {
+  :root {
+    --sl-text-body: 1.0625rem;
+  }
+}
+@media (min-width: 50em) {
+  :root {
+    --sl-text-h1: 2rem;
+  }
 }
 
 body {
-  font-feature-settings: 'kern', 'liga';
+  font-feature-settings: 'kern', 'liga', 'calt';
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+::selection {
+  background: rgba(212, 180, 131, 0.3);
+  color: var(--sl-color-white);
 }
 
-/* ---- header: quiet, translucent, one hairline */
-.header {
-  background: color-mix(in srgb, var(--sl-color-black) 82%, transparent);
-  backdrop-filter: saturate(160%) blur(12px);
-  border-bottom: 1px solid var(--bb-border);
+/* ---- header: the name left, quiet text links right, one gradient hairline
+   below (the personal site's .glass-nav::after). Only the outer <header>
+   gets it: Starlight's inner div is also called .header, and a border on
+   both drew two lines. */
+header.header {
+  border-bottom: 0;
+  background: var(--sl-color-bg-nav);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  backdrop-filter: blur(20px) saturate(1.4);
+}
+header.header::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--sl-color-accent) 20%, transparent) 50%,
+    transparent
+  );
+  pointer-events: none;
 }
 .site-title {
-  font-weight: 700;
-  letter-spacing: -0.01em;
   gap: 0.6rem;
+  font-size: 0.95rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--sl-color-white);
+  transition: color 0.15s ease;
+}
+.site-title:hover {
+  color: var(--sl-color-accent);
 }
 .site-title img {
-  border-radius: 0.45rem;
+  height: 1.5rem;
+  border-radius: 0.35rem;
+}
+.right-group,
+.social-icons {
+  gap: 1.5rem;
+}
+.social-icons::after {
+  display: none;
+}
+.social-icons a {
+  color: var(--sl-color-gray-3);
+  transition: color 0.15s ease;
+}
+.social-icons a:hover {
+  color: var(--sl-color-white);
 }
 
-/* ---- sidebar: small caps group labels, a pill for the current page */
+/* ---- search: a hairline field that stays out of the way */
+@media (min-width: 50rem) {
+  button[data-open-modal] {
+    max-width: 17rem;
+    border-color: var(--bb-border);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--sl-color-gray-3);
+    padding-inline: 0.9rem 0.6rem;
+  }
+  button[data-open-modal]:hover {
+    border-color: var(--sl-color-gray-4);
+    color: var(--sl-color-white);
+  }
+}
+button[data-open-modal] > kbd {
+  background: var(--bb-code-bg);
+  color: var(--sl-color-gray-3);
+}
+dialog {
+  border-color: var(--bb-border);
+  background-color: var(--sl-color-black);
+  box-shadow: 0 24px 60px -30px rgba(0, 0, 0, 0.45);
+}
+@media (min-width: 50rem) {
+  dialog {
+    border-radius: 10px;
+  }
+}
+#starlight__search {
+  --pagefind-ui-border: var(--bb-border);
+  --pagefind-ui-tag: var(--bb-code-bg);
+}
+#starlight__search .pagefind-ui__result-title:not(:where(.pagefind-ui__result-nested *)),
+#starlight__search .pagefind-ui__result-nested {
+  background-color: var(--bb-code-bg);
+}
+#starlight__search input:focus {
+  outline: none;
+}
+#starlight__search mark {
+  background: color-mix(in srgb, var(--sl-color-accent) 22%, transparent);
+  color: inherit;
+}
+
+/* ---- mobile: the menu button and the "On this page" bar join the header,
+   so there is still one line between the header and the page */
+.sl-menu-button {
+  background: transparent;
+  color: var(--sl-color-gray-3);
+  box-shadow: none;
+}
+:root[data-theme] .sl-menu-button:has(~ :popover-open) {
+  background: var(--bb-code-bg);
+  color: var(--sl-color-white);
+}
+mobile-starlight-toc nav {
+  border-top: 0;
+}
+mobile-starlight-toc summary {
+  border-bottom-color: var(--bb-border);
+}
+mobile-starlight-toc .toggle {
+  border-color: var(--bb-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--sl-color-gray-3);
+}
+mobile-starlight-toc .dropdown {
+  border-color: var(--bb-border);
+  box-shadow: 0 18px 40px -28px rgba(0, 0, 0, 0.45);
+}
+@media (max-width: 71.99rem) {
+  :root[data-has-toc] header.header::after {
+    display: none;
+  }
+}
+.mobile-preferences {
+  align-items: center;
+  border-top-color: var(--bb-border);
+}
+
+/* ---- sidebar: spaced small caps labels (the "NOW" of the personal site),
+   muted links, the current page in the text colour, no boxes or rules */
 .sidebar-pane {
-  border-inline-end: 1px solid var(--bb-border);
+  border-inline-end: 0;
 }
 .sidebar-content .group-label .large,
 .sidebar-content summary .large {
   font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.09em;
+  font-weight: 500;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--sl-color-gray-3);
 }
+.sidebar-content summary .caret {
+  color: var(--sl-color-gray-4);
+}
 .sidebar-content a {
-  border-radius: 0.5rem;
-  font-weight: 500;
+  color: var(--sl-color-gray-3);
+  transition: color 0.15s ease;
+}
+.sidebar-content a:hover,
+.sidebar-content a:focus {
+  color: var(--sl-color-white);
 }
 .sidebar-content a[aria-current='page'],
 .sidebar-content a[aria-current='page']:hover,
 .sidebar-content a[aria-current='page']:focus {
-  background: var(--sl-color-accent-low);
-  color: var(--sl-color-accent-high);
-  font-weight: 600;
+  background: transparent;
+  color: var(--sl-color-white);
+  font-weight: 500;
 }
-:root[data-theme='light'] .sidebar-content a[aria-current='page'] {
-  color: var(--sl-color-accent-high);
+.sidebar-content ul ul li:has(> a[aria-current='page']) {
+  border-inline-start-color: var(--sl-color-accent);
 }
 
-/* ---- page title and headings */
-.content-panel h1#_top {
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  line-height: 1.15;
+/* ---- on this page: the same label, muted links */
+.right-sidebar {
+  border-inline-start: 0;
 }
-.sl-markdown-content :is(h2, h3, h4) {
-  font-weight: 650;
-  letter-spacing: -0.015em;
-  line-height: 1.25;
+.right-sidebar-panel h2 {
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--sl-color-gray-3);
+  margin-bottom: 0.75rem;
+}
+.right-sidebar-panel a {
+  transition: color 0.15s ease;
+}
+starlight-toc a[aria-current='true'] {
+  color: var(--sl-color-white);
+}
+
+/* ---- page title: no rule under the title band, and less air below it */
+.content-panel + .content-panel {
+  border-top: 0;
+  padding-top: 0.5rem;
+}
+.content-panel h1#_top {
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+}
+
+/* ---- headings: section headings in the serif of the personal site's notes */
+.sl-markdown-content {
+  line-height: 1.75;
+}
+.sl-markdown-content :is(h2, h3) {
+  font-family: var(--bb-font-serif);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
 }
 .sl-markdown-content h2 {
-  padding-top: 0.5rem;
-  border-top: 1px solid var(--bb-border);
-  margin-top: 2.75rem;
+  margin-top: 2.5em;
+}
+.sl-markdown-content :is(h4, h5, h6) {
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 .sl-markdown-content strong {
-  font-weight: 650;
+  font-weight: 600;
   color: var(--sl-color-white);
+}
+.sl-markdown-content li::marker {
+  color: var(--sl-color-gray-3);
+}
+.sl-markdown-content blockquote {
+  border-inline-start: 2px solid var(--sl-color-accent);
+  padding-inline-start: 1.25rem;
+  color: var(--sl-color-gray-3);
+  font-style: italic;
+}
+.sl-markdown-content hr {
+  height: 1px;
+  border: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--bb-border) 30%,
+    var(--bb-border) 70%,
+    transparent
+  );
 }
 
 /* ---- links: accent with a soft underline that firms up on hover */
 .sl-markdown-content a:not(.not-content a) {
   color: var(--sl-color-accent);
-  text-decoration-color: color-mix(in srgb, var(--sl-color-accent) 35%, transparent);
-  text-decoration-thickness: 1.5px;
-  text-underline-offset: 0.2em;
-  transition: text-decoration-color 120ms ease;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--sl-color-accent) 40%, transparent);
+  text-underline-offset: 3px;
+  transition: text-decoration-color 0.15s ease;
 }
 .sl-markdown-content a:not(.not-content a):hover {
   text-decoration-color: currentColor;
@@ -131,115 +347,231 @@ body {
 /* ---- inline code and code blocks */
 .sl-markdown-content :not(pre) > code {
   font-size: 0.85em;
-  padding: 0.12em 0.4em;
-  border-radius: 0.35rem;
-  background: var(--bb-surface);
+  padding: 0.15em 0.4em;
+  border-radius: 3px;
+  background: var(--bb-code-bg);
   border: 1px solid var(--bb-border);
 }
 .expressive-code {
-  --ec-brdRad: var(--bb-radius);
   --ec-codeFontFml: var(--sl-font-mono);
   --ec-uiFontFml: var(--sl-font);
 }
-.expressive-code .frame {
-  box-shadow: 0 1px 0 var(--bb-border), 0 8px 24px -16px rgba(0, 0, 0, 0.45);
+.expressive-code .frame pre {
+  border-color: var(--bb-border);
 }
 
-/* ---- tables */
+/* ---- tables: rows split by hairlines, no outer box */
 .sl-markdown-content table {
-  display: table;
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  border: 1px solid var(--bb-border);
-  border-radius: var(--bb-radius);
-  overflow: hidden;
-  font-size: 0.92em;
+  font-size: 0.9375rem;
+  line-height: 1.6;
 }
 .sl-markdown-content :is(th, td) {
-  border: 0;
   border-bottom: 1px solid var(--bb-border);
-  padding: 0.55rem 0.8rem;
+  padding: 0.6rem 0.75rem;
+  vertical-align: top;
 }
-.sl-markdown-content tr:last-child td {
-  border-bottom: 0;
+.sl-markdown-content :is(th, td):first-child {
+  padding-inline-start: 0;
+}
+.sl-markdown-content :is(th, td):last-child {
+  padding-inline-end: 0;
+}
+.sl-markdown-content td {
+  color: var(--sl-color-gray-2);
 }
 .sl-markdown-content th {
-  background: var(--bb-surface);
-  font-weight: 650;
+  border-bottom-color: color-mix(in srgb, var(--sl-color-white) 22%, transparent);
+  font-weight: 600;
+  text-align: start;
 }
 
-/* ---- asides: rounded cards instead of a bare left bar */
+/* ---- asides: a thin rule and a small label, like the personal site's
+   blockquote, tinted by kind instead of filled */
 .starlight-aside {
-  border-radius: var(--bb-radius);
-  border-inline-start-width: 4px;
+  border-inline-start-width: 2px;
+  border-radius: 0;
+  background: transparent;
+  padding: 0.25rem 0 0.25rem 1.25rem;
+  color: var(--sl-color-text);
+}
+.starlight-aside__title {
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.starlight-aside__icon {
+  font-size: 1.15rem;
+}
+.starlight-aside--note {
+  --sl-color-asides-border: var(--sl-color-accent);
+  --sl-color-asides-text-accent: var(--sl-color-accent);
+}
+.starlight-aside--tip {
+  --sl-color-asides-border: #9cb588;
+  --sl-color-asides-text-accent: #9cb588;
+}
+.starlight-aside--caution {
+  --sl-color-asides-border: #e0b060;
+  --sl-color-asides-text-accent: #e0b060;
+}
+.starlight-aside--danger {
+  --sl-color-asides-border: #e08a76;
+  --sl-color-asides-text-accent: #e08a76;
+}
+:root[data-theme='light'] .starlight-aside--tip {
+  --sl-color-asides-border: #5f7a4a;
+  --sl-color-asides-text-accent: #5f7a4a;
+}
+:root[data-theme='light'] .starlight-aside--caution {
+  --sl-color-asides-border: #a26a12;
+  --sl-color-asides-text-accent: #a26a12;
+}
+:root[data-theme='light'] .starlight-aside--danger {
+  --sl-color-asides-border: #a3402f;
+  --sl-color-asides-text-accent: #a3402f;
+}
+
+/* ---- badges: the outlined small caps tag of the personal site's projects */
+.sl-badge {
+  border-radius: 999px;
+  background: transparent;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* ---- tabs: a hairline under the list, the current tab in the text colour */
+starlight-tabs .tablist-wrapper {
+  border-bottom: 1px solid var(--bb-border);
+}
+starlight-tabs [role='tab'] {
+  color: var(--sl-color-gray-3);
+}
+starlight-tabs [role='tab'][aria-selected='true'] {
+  color: var(--sl-color-white);
+  border-color: var(--sl-color-accent);
 }
 
 /* ---- screenshots: sized for GitHub with width attributes, kept inside the
-   content column, framed like a window */
+   content column, a hairline and a small radius */
 .sl-markdown-content img {
   max-width: 100%;
   height: auto;
   border-radius: var(--bb-radius);
   border: 1px solid var(--bb-border);
-  box-shadow: 0 18px 40px -28px rgba(0, 0, 0, 0.55);
 }
 
-/* ---- the home page hero */
-.hero {
-  position: relative;
-  padding-block: clamp(2.5rem, 7vw, 5rem);
-}
-.hero::before {
-  content: '';
-  position: absolute;
-  inset: -20% -10% auto;
-  height: 120%;
-  background: radial-gradient(60% 55% at 70% 40%, var(--bb-glow), transparent 70%);
-  pointer-events: none;
-  z-index: -1;
-}
-.hero h1 {
-  font-weight: 700;
-  letter-spacing: -0.035em;
-  line-height: 1.05;
-}
-.hero .tagline {
-  font-size: clamp(1.05rem, 2.2vw, 1.3rem);
-  color: var(--sl-color-gray-2);
-  max-width: 34rem;
-}
-.hero img {
-  border: 0;
-  box-shadow: none;
-  filter: drop-shadow(0 24px 40px rgba(42, 92, 240, 0.35));
-}
-.hero .sl-link-button {
-  border-radius: 999px;
-  font-weight: 600;
-  padding-inline: 1.4rem;
-}
-.hero .sl-link-button.primary {
-  background: var(--bb-blue);
-  border-color: var(--bb-blue);
-  color: #ffffff;
-  box-shadow: 0 10px 24px -12px rgba(42, 92, 240, 0.8);
-}
-.hero .sl-link-button.primary:hover {
-  background: #1f4bd1;
-  border-color: #1f4bd1;
-}
-
-/* ---- footer meta (edit link, last updated) */
+/* ---- footer meta (edit link, last updated) and plain previous/next links */
 .meta {
   font-size: var(--sl-text-sm);
   color: var(--sl-color-gray-3);
 }
-.pagination-links a {
-  border-radius: var(--bb-radius);
-  border-color: var(--bb-border);
-  box-shadow: none;
+.meta a {
+  color: var(--sl-color-gray-3);
 }
-.pagination-links a:hover {
-  border-color: var(--sl-color-accent);
+.meta a:hover {
+  color: var(--sl-color-white);
+}
+.pagination-links a {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0.75rem 0;
+  color: var(--sl-color-gray-3);
+  font-size: var(--sl-text-sm);
+}
+.pagination-links a:hover .link-title {
+  color: var(--sl-color-accent);
+}
+.pagination-links .link-title {
+  font-size: var(--sl-text-base);
+  transition: color 0.15s ease;
+}
+
+/* ---- the home page: one calm column like akashmishra.com, the app icon
+   small above the title, sections opened by a spaced label after a
+   gradient divider */
+:root[data-has-hero] {
+  --sl-content-width: 38rem;
+}
+.hero {
+  grid-template-columns: 100%;
+  gap: 1.5rem;
+  padding-block: clamp(2rem, 6vw, 3.5rem) 0.5rem;
+}
+.hero > img {
+  order: 0;
+  width: 3.5rem;
+  margin-inline: 0;
+  border-radius: 0.8rem;
+}
+.hero .stack {
+  text-align: start;
+  gap: 1.75rem;
+}
+.hero .copy {
+  align-items: flex-start;
+  gap: 1.25rem;
+}
+.hero .copy > * {
+  max-width: none;
+}
+.hero h1 {
+  font-size: clamp(1.75rem, 1.2rem + 2vw, 2.25rem);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+}
+.hero .tagline {
+  font-size: var(--sl-text-body);
+  line-height: 1.7;
+  color: var(--sl-color-gray-3);
+}
+.hero .actions {
+  justify-content: flex-start;
+  align-items: center;
+  gap: 0.75rem 1.75rem;
+}
+.hero .sl-link-button {
+  border: 0;
+  border-radius: var(--bb-radius);
+  padding: 0;
+  background: transparent;
+  color: var(--sl-color-gray-3);
+  font-size: var(--sl-text-sm);
+  font-weight: 400;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+.hero .sl-link-button:hover {
+  color: var(--sl-color-accent);
+}
+.hero .sl-link-button.primary {
+  padding: 0.55rem 1rem;
+  background: var(--sl-color-white);
+  color: var(--sl-color-black);
+  font-weight: 500;
+}
+.hero .sl-link-button.primary:hover {
+  background: color-mix(in srgb, var(--sl-color-white) 85%, var(--sl-color-black));
+  color: var(--sl-color-black);
+}
+[data-has-hero] .sl-markdown-content h2 {
+  margin-top: 3rem;
+  padding-top: 2.5rem;
+  background: linear-gradient(
+      90deg,
+      transparent 20%,
+      color-mix(in srgb, var(--sl-color-accent) 15%, transparent) 50%,
+      transparent 80%
+    ),
+    linear-gradient(90deg, transparent, var(--bb-border) 30%, var(--bb-border) 70%, transparent);
+  background-size: 100% 1px;
+  background-repeat: no-repeat;
+  font-family: var(--sl-font);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--sl-color-gray-3);
 }

@@ -1,0 +1,76 @@
+---
+// Replaces Starlight's theme select with the icon button of akashmishra.com:
+// a moon in light mode, a sun in dark mode. The choice is stored under
+// Starlight's own key, so its inline script in <head> still sets the theme
+// before the first paint. With nothing stored the page follows the system.
+---
+
+<button type="button" class="theme-toggle" data-theme-toggle aria-label="Switch theme">
+  <svg class="moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+  </svg>
+  <svg class="sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="4"></circle>
+    <path d="M12 2v2M12 20v2m-7.07-17.07 1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
+  </svg>
+</button>
+
+<script>
+  const storageKey = 'starlight-theme';
+  const system = matchMedia('(prefers-color-scheme: light)');
+  const root = document.documentElement;
+
+  function label() {
+    const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
+    document.querySelectorAll<HTMLButtonElement>('[data-theme-toggle]').forEach((button) => {
+      button.setAttribute('aria-label', `Switch to ${next} mode`);
+      button.title = `Switch to ${next} mode`;
+    });
+  }
+
+  function apply(theme: 'light' | 'dark', store: boolean) {
+    root.dataset.theme = theme;
+    if (store) {
+      try {
+        localStorage.setItem(storageKey, theme);
+      } catch {
+        // no storage (private mode): the page still switches
+      }
+    }
+    label();
+  }
+
+  document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
+    button.addEventListener('click', () => apply(root.dataset.theme === 'dark' ? 'light' : 'dark', true));
+  });
+  system.addEventListener('change', () => {
+    if (!localStorage.getItem(storageKey)) apply(system.matches ? 'light' : 'dark', false);
+  });
+  label();
+</script>
+
+<style>
+  .theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--sl-color-gray-3);
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: color 0.15s ease, background-color 0.15s ease;
+  }
+  .theme-toggle:hover {
+    color: var(--sl-color-white);
+    background: color-mix(in srgb, var(--sl-color-white) 6%, transparent);
+  }
+  :global(:root[data-theme='dark']) .moon,
+  :global(:root[data-theme='light']) .sun {
+    display: none;
+  }
+</style>

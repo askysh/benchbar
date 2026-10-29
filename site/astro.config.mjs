@@ -27,18 +27,19 @@ export default defineConfig({
       editLink: { baseUrl: 'https://github.com/askysh/benchbar/edit/main/site/' },
       lastUpdated: true,
       customCss: ['./src/styles/custom.css'],
-      components: { SocialIcons: './src/components/TopNav.astro' },
+      components: {
+        SocialIcons: './src/components/TopNav.astro',
+        ThemeSelect: './src/components/ThemeToggle.astro',
+      },
+      // code blocks take the page's surface colours (src/styles/custom.css);
+      // shell snippets get a plain frame instead of a terminal window
+      expressiveCode: {
+        themes: ['vitesse-dark', 'vitesse-light'],
+        useStarlightUiThemeColors: true,
+        defaultProps: { frame: 'code' },
+        styleOverrides: { borderRadius: '6px', frames: { frameBoxShadowCssValue: 'none' } },
+      },
       head: [
-        // Bai Jamjuree for text, JetBrains Mono for code (src/styles/custom.css)
-        { tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.googleapis.com' } },
-        { tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: true } },
-        {
-          tag: 'link',
-          attrs: {
-            rel: 'stylesheet',
-            href: 'https://fonts.googleapis.com/css2?family=Bai+Jamjuree:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap',
-          },
-        },
         { tag: 'meta', attrs: { property: 'og:image', content: `${site}/og.png` } },
         { tag: 'meta', attrs: { property: 'og:image:width', content: '1200' } },
         { tag: 'meta', attrs: { property: 'og:image:height', content: '630' } },

@@ -162,6 +162,10 @@ All notable changes to this project are documented here.
   merged in older history no longer count from the oldest commit of that
   history (an app read "5439 days behind", from a commit of 2011): they
   count from the first commit the branch got after yours.
+- The docs site header drew two lines at its bottom edge; it now has one.
+  The site also takes the look of <https://akashmishra.com>: warm cream
+  and near black, system fonts, hairlines instead of boxes, and a moon and
+  sun button for the theme.
 
 ### Windows (preview)
 
