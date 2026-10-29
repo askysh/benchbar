@@ -31,6 +31,14 @@ export default defineConfig({
         SocialIcons: './src/components/TopNav.astro',
         ThemeSelect: './src/components/ThemeToggle.astro',
       },
+      // code blocks take the page's surface colours (src/styles/custom.css);
+      // shell snippets get a plain frame instead of a terminal window
+      expressiveCode: {
+        themes: ['vitesse-dark', 'vitesse-light'],
+        useStarlightUiThemeColors: true,
+        defaultProps: { frame: 'code' },
+        styleOverrides: { borderRadius: '6px', frames: { frameBoxShadowCssValue: 'none' } },
+      },
       head: [
         { tag: 'meta', attrs: { property: 'og:image', content: `${site}/og.png` } },
         { tag: 'meta', attrs: { property: 'og:image:width', content: '1200' } },
