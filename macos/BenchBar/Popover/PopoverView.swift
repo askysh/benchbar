@@ -47,6 +47,7 @@ struct PopoverView: View {
         }
         .padding(14)
         .frame(width: 370)
+        .background { PopoverBacking() }
     }
 
     @ViewBuilder private var content: some View {
@@ -465,6 +466,23 @@ struct ActionButton: View {
         }
         .controlSize(.large)
         .disabled(!enabled)
+        // the system's disabled look on the popover's glass was close to
+        // the enabled one: Start beside Stop on a running bench read as two
+        // live buttons
+        .opacity(enabled || busy ? 1 : 0.45)
+    }
+}
+
+/// Behind the popover's content in light mode. macOS 26 draws the popover
+/// as clear glass, and with a dark window behind it the window's text showed
+/// through ours. Dark mode keeps the glass: light text stays readable on it.
+struct PopoverBacking: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        if colorScheme == .light {
+            Color(nsColor: .windowBackgroundColor).opacity(0.92).ignoresSafeArea()
+        }
     }
 }
 

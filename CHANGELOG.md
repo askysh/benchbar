@@ -164,6 +164,9 @@ All notable changes to this project are documented here.
 - The app's log window shows werkzeug's coloured lines as text: "WARNING:
   This is a development server" read `[31m[1mWARNING`, and search
   matches what you see.
+- The app's popover in light mode has a solid background: on macOS 26 a
+  dark window behind it showed through its text. A disabled Start, Stop or
+  Restart button is clearly faded next to the ones that work.
 - `repair` run by a copy of BenchBar.app that the app did not register (a
   development build, a second copy of the app) no longer points the shell
   helpers at that copy's own CLI, which goes away with the build. The
