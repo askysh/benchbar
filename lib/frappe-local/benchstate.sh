@@ -180,6 +180,19 @@ fl_status_print_json() {
     "$j_url" "$j_label" "$([[ "$ST_LOADED" == "1" ]] && printf yes || printf no)" "${ST_FLAG:-none}" "$ST_PING"
 }
 
+# fl_state_after_v VAR: the bench's status --json object as it is now, for the
+# state_after of a done (no per site ping), "null" without a bench. A subshell:
+# it changes nothing of the run it ends and cannot end it.
+fl_state_after_v() {
+  local __j="null"
+  if [[ "${FL_CONTEXT_READY:-0}" == "1" ]] && fl_is_bench_dir "${FL_BENCH_DIR:-}"; then
+    __j="$( set +e; trap - ERR; { fl_status_compute; fl_status_print_json; } 2>/dev/null )" || __j="null"
+    __j="${__j//$'\n'/}"
+    [[ "$__j" == "{"*"}" ]] || __j="null"
+  fi
+  printf -v "$1" '%s' "$__j"
+}
+
 fl_ports_json_v() {
   printf -v "$1" '{"web":%s,"socketio":%s,"redis_queue":%s,"redis_socketio":%s,"redis_cache":%s}' \
     "$FL_WEB_PORT" "$FL_SOCKETIO_PORT" "$FL_REDIS_QUEUE_PORT" "${FL_REDIS_SOCKETIO_PORT:-$FL_REDIS_CACHE_PORT}" "$FL_REDIS_CACHE_PORT"

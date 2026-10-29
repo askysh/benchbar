@@ -338,7 +338,7 @@ fl_cmd_app_add_planned() {
     esac
   done
   # JSON on fd 3, every line of text on stderr
-  if [[ "$json" == "1" ]]; then exec 3>&1 1>&2; FL_PLAIN=1; fl_ui_init; else exec 3>&1; fi
+  if [[ "$json" == "1" ]]; then fl_json_doc_begin; elif [[ "${FL_JSONL:-0}" != "1" ]]; then exec 3>&1; fi
   fl_require_bench
   [[ -n "$target" ]] || fl_die "Usage: benchbar app add NAME|URL [--branch B] [--name N] [--site S | --all-sites] --dry-run --json"
   if [[ "$apply" == "1" ]]; then
@@ -352,7 +352,7 @@ fl_cmd_app_add_planned() {
   exec 0</dev/null
   fl_app_add_plan "$target" "$branch" "$name" "$all"
   if [[ "$apply" == "0" ]]; then
-    printf '%s\n' "$AP_JSON" >&3
+    fl_doc_emit 0 "$AP_JSON" plan
     return 0
   fi
 
@@ -363,7 +363,7 @@ fl_cmd_app_add_planned() {
   [[ "$AP_CAN_APPLY" == "1" ]] || fl_die "The plan cannot be applied (see above). Nothing was changed."
   if [[ "${#AP_STEPS[@]}" == "0" ]]; then
     printf '\n'; fl_ok "unchanged: ${AP_NAME} is on ${AP_BRANCH}${AP_SITES[*]:+ and installed on ${AP_SITES[*]}}, nothing to do"
-    [[ "$json" == "1" ]] && fl__ap_result_json 0 >&3
+    [[ "$json" == "1" ]] && fl_doc_emit 0 "$(fl__ap_result_json 0)"
     return 0
   fi
 
@@ -389,17 +389,17 @@ fl_cmd_app_add_planned() {
           fl_step_end failed; code=1; stop=1
           fl_fail "${arg}: ${br} moved after the plan was made (planned ${sha:0:12}, cloned ${AP__GOT:0:12}); nothing was built or installed."
           fl_fix "Review a fresh plan: benchbar app add ${target} ... --dry-run --json"
-        else built+=("$FL_CLONED_DIR"); fl_step_end "done"; fi ;;
+        else built+=("$FL_CLONED_DIR"); fl_step_end "done"; fl_changed app "$FL_CLONED_DIR" "cloned at ${br}"; fi ;;
       build)
         s="$arg"
         [[ "${#built[@]}" -gt 0 ]] && s="$(IFS=,; printf '%s' "${built[*]}")"
         if fl_app_build "$s"; then fl_step_end "done"; else fl_step_end failed; fl_fix "cd ${FL_BENCH_DIR} && bench build --apps ${s}"; code=1; fi ;;
       install)
-        if fl_app_install_on_sites "$AP_NAME" "$arg"; then fl_step_end "done"; else fl_step_end failed; code=1; fi ;;
+        if fl_app_install_on_sites "$AP_NAME" "$arg"; then fl_step_end "done"; fl_changed app "$AP_NAME" "installed on ${arg}"; else fl_step_end failed; code=1; fi ;;
       restart)
         fl_bench_redis_down
         if ! fl_bench_is_running; then fl_step_end skipped "not running"
-        elif fl_app_restart_if_running; then fl_step_end "done"
+        elif fl_app_restart_if_running; then fl_step_end "done"; fl_changed process "$FL_BENCH_NAME" "restarted"
         else fl_step_end failed; code=1; fi ;;
     esac
     i=$((i + 1))
@@ -412,7 +412,7 @@ fl_cmd_app_add_planned() {
     fl_app_verify "$AP_NAME" "$s" ${AP_INSTALL[@]+"${AP_INSTALL[@]}"} || code=1
   fi
   fl_steps_summary
-  [[ "$json" == "1" ]] && fl__ap_result_json "$code" >&3
+  [[ "$json" == "1" ]] && fl_doc_emit "$code" "$(fl__ap_result_json "$code")"
   return "$code"
 }
 

@@ -242,21 +242,30 @@ fl_cmd_ports() {
       # BENCHBAR_SUDO=gui: the hosts lines of every bench in one dialog; each
       # adopt then finds its line, or (cancelled) skips the step with its command
       if fl_sudo_gui && [[ "${FL_DRY_RUN:-0}" != 1 ]]; then fl_pm_hosts_batch; fi
+      # the stream: one plan line for the whole batch, one step per bench; the
+      # adopt of each bench keeps its own step lines under that step
+      fl_jsonl plan ",\"benches\":$(fl_json_str_array "${PM_PATHS[@]}"),\"token\":$(fl_json_str "$token"),\"dry_run\":false"
+      FL_JSONL_PLAN_SENT=1; FL_PM_APPLYING=1
       for ((i=0; i<${#PM_PATHS[@]}; i++)); do
         d="${PM_PATHS[$i]}"; fl_bench_load "$d"; current="$(fl_pm_current)"; offset=""
+        fl_jsonl_step "$((i + 1))" "bench_$((i + 1))" "" "Set up $d" running
         if [[ "$current" != "${PM_TARGETS[$i]}" ]]; then read -r offset _ <<<"${PM_TARGETS[$i]}"; offset=$((offset - FL_PORT_BASE_WEB)); fi
         if fl_pm_running || [[ -n "$(fl_pm_conflicts "${PM_TARGETS[$i]}")" ]]; then
+          fl_jsonl_step "$((i + 1))" "bench_$((i + 1))" "" "Set up $d" failed "" "ports or running state changed"
           fl_fail "Ports or running state changed for $d. Review a fresh plan; earlier completed benches remain configured."; return 1
         fi
         fl_info "Setting up $((i + 1))/${#PM_PATHS[@]}: $d"
         # Do not let adopt silently pick a different block from the approved
         # batch. The entire selection was validated under this same lock.
-        if ! FL_PORT_PLAN_APPROVED=1 OPT_PORT_OFFSET="$offset" cmd_adopt "$d"; then
+        if ! FL_ENGINE_PARENT="bench_$((i + 1))" FL_PORT_PLAN_APPROVED=1 OPT_PORT_OFFSET="$offset" cmd_adopt "$d"; then
+          fl_jsonl_step "$((i + 1))" "bench_$((i + 1))" "" "Set up $d" failed "" "adopt failed"
           fl_fail "Setup failed: $d. Earlier completed benches remain configured; review a fresh plan to continue."; return 1
         fi
         OPT_JSON=0 fl_cmd_register "$d"
         fl_bstate_set PORT_MODE "$(fl_pm_mode "$d")"
         fl_bstate_set PORT_RESERVATION "$(fl_pm_current)"
+        fl_changed ports "$d" "$([[ -n "$offset" ]] && printf 'moved to port block %s' "$offset" || printf 'management set up, ports kept')"
+        fl_jsonl_step "$((i + 1))" "bench_$((i + 1))" "" "Set up $d" "done"
         fl_ok "Completed: $d"
       done ;;
     *) fl_fail 'Usage: benchbar ports plan|setup|apply|check|mode'; return 1 ;;

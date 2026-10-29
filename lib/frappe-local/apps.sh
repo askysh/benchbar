@@ -779,7 +779,7 @@ fl_app_fetch() {
 }
 
 fl_cmd_app_update() {
-  local app="" a skip_backup=0 branch remote old new total sites=() s rows=() labels=() steps=() i code=0 running=0 sep log
+  local app="" a skip_backup=0 branch remote old new total sites=() s rows=() labels=() steps=() i code=0 running=0 sep log doc ids=()
   for a in "$@"; do
     case "$a" in
       --skip-backup) skip_backup=1 ;;
@@ -788,16 +788,17 @@ fl_cmd_app_update() {
       *) [[ -z "$app" ]] && app="$a" ;;
     esac
   done
+  # the document (or the stream) is on fd 3; every line of text goes to stderr
+  [[ "$OPT_JSON" != "1" ]] || fl_json_doc_begin
   fl_require_bench
   [[ -n "$app" ]] || fl_die "Usage: benchbar app update NAME [--skip-backup]"
-  [[ "$OPT_JSON" != "1" || "${FL_DRY_RUN:-0}" == "1" ]] || fl_die "--json shows the plan only; add --dry-run." "benchbar app update ${app} --dry-run --json"
   if ! fl_app_has_git "$app" || ! fl_app_in_apps_txt "$app"; then fl_die "${app} is not a git app of this bench." "benchbar app list shows the apps."; fi
   fl_app_dirty "$app" && fl_die "apps/${app} has local changes; update refuses to touch them." "cd ${FL_BENCH_DIR}/apps/${app} && git status   (commit or stash them first)"
   branch="$(fl_app_branch "$app")"
   [[ -n "$branch" ]] || fl_die "apps/${app} is on a detached HEAD; update follows a branch." "cd ${FL_BENCH_DIR}/apps/${app} && git checkout BRANCH"
   remote="$(fl_app_remote "$app")"
   [[ -n "$remote" ]] || fl_die "apps/${app} has no git remote." "cd ${FL_BENCH_DIR}/apps/${app} && git remote add upstream URL"
-  if [[ "$OPT_JSON" == "1" ]]; then fl_app_fetch "$app" "$remote" "$branch" >&2 || exit 1; else fl_app_fetch "$app" "$remote" "$branch" || exit 1; fi
+  fl_app_fetch "$app" "$remote" "$branch" || exit 1
   old="$(fl_app_commit "$app")"
   new="$(fl_app_git "$app" rev-parse -q --verify 'FETCH_HEAD^{commit}' 2>/dev/null || true)"
   [[ -n "$new" ]] || fl_die "git fetch gave no FETCH_HEAD for ${remote}/${branch}."
@@ -830,22 +831,27 @@ fl_cmd_app_update() {
   fi
 
   if [[ "$OPT_JSON" == "1" ]]; then
-    printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"app":%s,"remote":%s,"branch":%s,"from":%s,"to":%s,"commits":[' \
-      "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$app")" "$(fl_json_str "$remote")" \
-      "$(fl_json_str "$branch")" "$(fl_json_str "$old")" "$(fl_json_str "$new")"
-    sep=""
-    if [[ "$total" != "0" ]]; then
-      while IFS=' ' read -r a log; do
-        printf '%s{"sha":%s,"subject":%s}' "$sep" "$(fl_json_str "$a")" "$(fl_json_str "$log")"; sep=","
-      done < <(fl_app_git "$app" log --format='%h %s' -n 30 "${old}..${new}")
-    fi
-    printf '],"commits_total":%d,"sites":%s,"skip_backup":%s,"steps":[' "$total" "$(fl_json_str_array ${sites[@]+"${sites[@]}"})" "$(fl_json_bool "$skip_backup")"
-    sep=""
-    for a in ${steps[@]+"${steps[@]}"}; do
-      printf '%s{"name":%s,"command":%s}' "$sep" "$(fl_json_str "${a%%|*}")" "$(fl_json_str "${a#*|}")"; sep=","
-    done
-    printf ']}\n'
-    return 0
+    doc="$(
+      printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"app":%s,"remote":%s,"branch":%s,"from":%s,"to":%s,"commits":[' \
+        "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$app")" "$(fl_json_str "$remote")" \
+        "$(fl_json_str "$branch")" "$(fl_json_str "$old")" "$(fl_json_str "$new")"
+      sep=""
+      if [[ "$total" != "0" ]]; then
+        while IFS=' ' read -r a log; do
+          printf '%s{"sha":%s,"subject":%s}' "$sep" "$(fl_json_str "$a")" "$(fl_json_str "$log")"; sep=","
+        done < <(fl_app_git "$app" log --format='%h %s' -n 30 "${old}..${new}")
+      fi
+      printf '],"commits_total":%d,"sites":%s,"skip_backup":%s,"steps":[' "$total" "$(fl_json_str_array ${sites[@]+"${sites[@]}"})" "$(fl_json_bool "$skip_backup")"
+      sep=""
+      for a in ${steps[@]+"${steps[@]}"}; do
+        printf '%s{"name":%s,"command":%s}' "$sep" "$(fl_json_str "${a%%|*}")" "$(fl_json_str "${a#*|}")"; sep=","
+      done
+      printf ']}'
+    )"
+    # the plan: the one document of a dry run, the plan line of a real run's stream
+    fl_doc_emit 0 "$doc" plan
+    [[ "${FL_DRY_RUN:-0}" != "1" ]] && FL_JSONL_PLAN_SENT=1
+    [[ "${FL_DRY_RUN:-0}" == "1" ]] && return 0
   fi
 
   fl_header "benchbar app update" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "${sites[*]:-no site}"
@@ -871,6 +877,8 @@ fl_cmd_app_update() {
 
   fl_bench_env_exports
   fl_steps_define "${labels[@]}"
+  for a in "${steps[@]}"; do ids+=("$(printf '%s' "${a%%|*}" | tr '[:upper:] ' '[:lower:]_')"); done
+  fl_steps_ids "${ids[@]}"
   i=0
   for a in "${steps[@]}"; do
     fl_step_begin "$i"
@@ -895,12 +903,21 @@ fl_cmd_app_update() {
       return 1
     fi
     fl_step_end "done"
+    case "${a%%|*}" in
+      "Back up "*) fl_changed backup "${a%%|*}" "bench --site backup" ;;
+      "Migrate "*) fl_changed site "${a%%|*}" "migrated" ;;
+      "Fast forward") fl_changed app "$app" "${old:0:7} to ${new:0:7}" ;;
+    esac
     i=$((i + 1))
   done
   fl_bench_redis_down
   printf '\n%sVerify%s\n' "$FL_BOLD" "$FL_RESET"
   if [[ "$(fl_app_commit "$app")" == "$new" ]]; then fl_ok "apps/${app} is at ${new:0:7} (${remote}/${branch})"; else fl_fail "apps/${app} is not at ${new:0:7}"; code=1; fi
   fl_steps_summary
+  if [[ "$OPT_JSON" == "1" ]]; then
+    fl_doc_emit "$code" "$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"app":%s,"from":%s,"to":%s,"updated":%s}' \
+      "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$app")" "$(fl_json_str "$old")" "$(fl_json_str "$new")" "$(fl_json_bool "$([[ "$code" == 0 ]] && printf 1 || printf 0)")")"
+  fi
   return "$code"
 }
 

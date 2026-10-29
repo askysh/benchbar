@@ -31,6 +31,7 @@ fl_context_init() {
     fl_site_detect "${2:-}"
     fl_ports_detect
     fl_agent_label_prime
+    FL_CONTEXT_READY=1
     return 0
   fi
   fl_site_detect "${2:-}"
@@ -83,6 +84,7 @@ fl_context_init() {
   FL_ARCH="$(uname -m)"
   fl_honcho_resolve || true
   fl_render_all
+  FL_CONTEXT_READY=1
 }
 
 # The profile the shell block's PATH follows: the default bench's, so
@@ -256,6 +258,16 @@ fl_check_port_clash_or_confirm() {
   fl_confirm "Other stopped benches use these ports. Start this bench without changing its address?"
 }
 
+# fl_daily_steps ID:LABEL...: the steps of up, down and restart for the
+# stream (step lines with ids); the terminal keeps the one line each prints
+fl_daily_steps() {
+  local item labels=() ids=()
+  for item in "$@"; do ids+=("${item%%:*}"); labels+=("${item#*:}"); done
+  fl_steps_define "${labels[@]}"
+  fl_steps_ids "${ids[@]}"
+  FL_STEP_QUIET=1
+}
+
 fl_cmd_up() {
   fl_require_plain_bench
   fl_require_service
@@ -264,6 +276,8 @@ fl_cmd_up() {
     return 0
   fi
   fl_check_port_clash_or_confirm || return 1
+  fl_daily_steps start_service:"Start the service" wait_site:"Wait for the site"
+  fl_step_begin 0
   fl_arm_start
   if ! fl_agent_loaded; then
     fl_info "agent not loaded; loading $(fl_agent_plist_path)"
@@ -272,16 +286,21 @@ fl_cmd_up() {
   fl_state_json_write starting "" "" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "" ""
   fl_agent_kickstart || fl_die "${FL_AGENT_CTL_START} failed." "Run: ${FL_SELF} doctor"
   fl_autostart_enabled && fl_linger_ensure
+  fl_step_end "done"
+  fl_changed process "$FL_BENCH_NAME" "started"
   [[ "${FL_DRY_RUN:-0}" == "1" ]] && return 0
   # the state is written and the agent kicked: the wait for the site only
   # reads, so other runs (another bench's repair, a site add) go ahead
   fl_lock_release
+  fl_step_begin 1
   fl_spinner_start "starting bench ${FL_BENCH_NAME}" "$(fl_bench_log_path)"
   if fl_wait_for_ping "$FL_UP_WAIT_SECS"; then
     fl_spinner_stop
+    fl_step_end "done"
     fl_ok "bench is up: $(fl_site_url)"
   else
     fl_spinner_stop
+    fl_step_end warning "no 200 yet"
     fl_warn "no 200 from $(fl_site_url)/api/method/ping after ${FL_UP_WAIT_SECS}s; it may still be starting"
     fl_fix "${FL_SELF} logs"
     return 1
@@ -296,6 +315,8 @@ fl_cmd_down() {
     fl_info "dry-run: would write 'manual' to ${flag}, send SIGTERM to the agent, then stop leftover bench processes"
     return 0
   fi
+  fl_daily_steps stop_processes:"Stop the bench's processes"
+  fl_step_begin 0
   mkdir -p "$(dirname "$flag")"
   printf 'manual\n' >"$flag"
   if fl_agent_loaded; then fl_agent_signal SIGTERM; fi
@@ -307,10 +328,13 @@ fl_cmd_down() {
     fi
   fi
   if fl_bench_is_running; then
+    fl_step_end failed
     fl_fail "some bench processes are still alive: $(fl_bench_process_pids | tr '\n' ' ')"
     return 1
   fi
   fl_state_json_write stopped manual "" "$(fl_state_json_get started_at)" "$(fl_state_json_get last_exit_code)" ""
+  fl_step_end "done"
+  fl_changed process "$FL_BENCH_NAME" "stopped"
   fl_ok "bench ${FL_BENCH_NAME} stopped (auto-restart off until benchup)"
 }
 
@@ -318,6 +342,8 @@ fl_cmd_restart() {
   fl_require_plain_bench
   fl_require_service
   fl_check_port_clash_or_confirm || return 1
+  fl_daily_steps restart_service:"Restart the service" wait_site:"Wait for the site"
+  fl_step_begin 0
   fl_arm_start
   if ! fl_agent_loaded; then
     fl_agent_bootstrap "$(fl_agent_plist_path)" || fl_die "${FL_AGENT_CTL} could not load the agent."
@@ -325,14 +351,19 @@ fl_cmd_restart() {
   fl_state_json_write starting "" "" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "" ""
   fl_agent_kickstart -k || fl_die "${FL_AGENT_CTL_RESTART} failed."
   fl_autostart_enabled && fl_linger_ensure
+  fl_step_end "done"
+  fl_changed process "$FL_BENCH_NAME" "restarted"
   [[ "${FL_DRY_RUN:-0}" == "1" ]] && return 0
   fl_lock_release
+  fl_step_begin 1
   fl_spinner_start "restarting bench ${FL_BENCH_NAME}" "$(fl_bench_log_path)"
   if fl_wait_for_ping "$FL_UP_WAIT_SECS"; then
     fl_spinner_stop
+    fl_step_end "done"
     fl_ok "bench restarted: $(fl_site_url)"
   else
     fl_spinner_stop
+    fl_step_end warning "no 200 yet"
     fl_warn "no 200 from $(fl_site_url)/api/method/ping after ${FL_UP_WAIT_SECS}s"
     fl_fix "${FL_SELF} logs"
     return 1
