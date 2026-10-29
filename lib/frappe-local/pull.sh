@@ -483,10 +483,11 @@ fl_pull_apps_from_dump() {
   [[ "$1" == *.gz ]] && reader="gzip -dc"
   apps="$($reader "$1" 2>/dev/null | grep -o -m1 "'installed_apps','[^']*'" 2>/dev/null | head -n1 | sed -e "s/^'installed_apps','//" -e "s/'\$//" | tr -d '[]\\" ' | tr ',' ' ' || true)"
   [[ -n "$apps" ]] || { fl_pull_warn "the app list could not be read from the dump; missing apps show up only at migrate"; return 0; }
-  # frappe's version, from the first row of its Installed Application table
+  # frappe's version, from its row in the Installed Application table (every
+  # INSERT of it: a dump made with --skip-extended-insert has one per row)
   # (streamed, the dump is never held in memory): the version gate needs it
   # shellcheck disable=SC2016  # the backticks are SQL quoting
-  fver="$($reader "$1" 2>/dev/null | grep -m1 -F 'INSERT INTO `tabInstalled Application`' | grep -o -m1 -E "'frappe','[0-9][^']*'" | head -n1 | cut -d"'" -f4 || true)"
+  fver="$($reader "$1" 2>/dev/null | grep -F 'INSERT INTO `tabInstalled Application`' | grep -o -m1 -E "'frappe','[0-9][^']*'" | head -n1 | cut -d"'" -f4 || true)"
   FL_PULL_R_APPS=""
   for a in $apps; do
     if [[ "$a" == "frappe" ]]; then FL_PULL_R_APPS="${FL_PULL_R_APPS}${a}|${fver}||"$'\n'; else FL_PULL_R_APPS="${FL_PULL_R_APPS}${a}|||"$'\n'; fi

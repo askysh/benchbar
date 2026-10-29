@@ -342,13 +342,17 @@ fl_srestore_result_json() {
 # copies after a free space check), checked by size, and the run goes on with
 # that copy. Bench's backup deletes backups older than keep_backups_for_hours in
 # that folder, which can hold the set; a set from anywhere else is left where it
-# is. The copy stays after the run; the three newest copies are kept.
+# is. The copy stays after the run; the three newest copies of this bench are
+# kept. The folders are compared as files (-ef), so a backups folder reached
+# through a link is still the target's own.
 fl_srestore_copy_set() {
   local root dest f src a b need=0 avail copied=()
-  [[ "$SR_SET_DIR" == "$(fl_site_backup_dir "$SR_TARGET")" ]] || return 0
+  [[ "$SR_SET_DIR" -ef "$(fl_site_backup_dir "$SR_TARGET")" ]] || return 0
   root="${FL_BACKUP_ROOT:-${FL_STATE_DIR}/backups}"
   dest="${root}/$(fl_backup_stamp)/restore-set"
   mkdir -p "$dest" 2>/dev/null || { fl_fail "could not make ${dest}"; return 1; }
+  # whose copy it is: the pruning below keeps three per bench, not three in all
+  printf '%s\n' "$FL_BENCH_DIR" >"${dest}/.bench" 2>/dev/null || { fl_fail "could not write ${dest}/.bench"; return 1; }
   for f in "$FL_PULL_DB" "$FL_PULL_PUB" "$FL_PULL_PRIV" "$FL_PULL_CONF"; do
     [[ -n "$f" ]] || continue
     [[ "$FL_PULL_NO_FILES" != "1" || "$f" == "$FL_PULL_DB" || "$f" == "$FL_PULL_CONF" ]] || continue
@@ -380,20 +384,23 @@ fl_srestore_copy_set() {
 fl_srestore_copy_undo() {
   local dest="$1" f
   shift
-  for f in "$@"; do rm -f "${dest}/${f}"; done
+  for f in "$@" .bench; do rm -f "${dest}/${f}"; done
   rmdir "$dest" "$(dirname "$dest")" 2>/dev/null || true
 }
 
-# fl_srestore_copy_prune ROOT KEEP: older restore-set copies beyond the three
-# newest (this run's included) go; only files this command made, then the folders
+# fl_srestore_copy_prune ROOT KEEP: this bench's older restore-set copies beyond
+# the three newest (this run's included) go; only files this command made, then
+# the folders. Another bench's copies are never touched.
 fl_srestore_copy_prune() {
-  local root="$1" keep="$2" d n=0 f
+  local root="$1" keep="$2" d n=0 f owner
   # shellcheck disable=SC2012  # folder names this command made
   while IFS= read -r d; do
     [[ -n "$d" && -d "$d" ]] || continue
+    owner=""; [[ -r "${d}/.bench" ]] && IFS= read -r owner <"${d}/.bench"
+    [[ "$owner" == "$FL_BENCH_DIR" ]] || continue
     n=$((n + 1))
     [[ "$n" -gt 3 && "$d" != "$keep" ]] || continue
-    for f in "$d"/*; do [[ -f "$f" ]] && rm -f "$f"; done
+    for f in "$d"/* "${d}/.bench"; do [[ -f "$f" ]] && rm -f "$f"; done
     rmdir "$d" "$(dirname "$d")" 2>/dev/null || true
   done < <(ls -1d "${root}"/*/restore-set 2>/dev/null | sort -r)
 }

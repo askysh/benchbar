@@ -436,15 +436,36 @@ assert d["source"]["site"] == "acme.localhost", d["source"]
   assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "MariaDB is not running"
   printf '3306 111 mariadbd 127.0.0.1\n' >>"$MOCK_LISTEN"
 
+  # another bench's copy in the shared backups folder, older than all of this bench's
+  mkdir -p "$FL_BACKUP_ROOT/19990101-000000-1/restore-set"
+  printf '/elsewhere/other-bench\n' >"$FL_BACKUP_ROOT/19990101-000000-1/restore-set/.bench"
+  printf 'x\n' >"$FL_BACKUP_ROOT/19990101-000000-1/restore-set/other-database.sql.gz"
+
   # ---- the default site itself can be restored into; it stays the default
   make_set macdev 20260905_090000
   reset_calls
   run_fm site restore macdev --from 20260905_090000 --yes --bench-dir "$BENCH"
   assert_eq "0" "$CODE" "$OUT"
   assert_eq "macdev" "$(default_site)"
-  # the copies of the sets are pruned: the three newest stay
+  # the copies of the sets are pruned: the three newest of this bench stay,
+  # another bench's copy is never touched
   # shellcheck disable=SC2012  # folder names the command made
-  [[ "$(ls -d "$FL_BACKUP_ROOT"/*/restore-set | wc -l | tr -d ' ')" -le 3 ]] || fail "more than three restore-set copies are kept"
+  n="$(grep -l -E "/restore-${tag}\$" "$FL_BACKUP_ROOT"/*/restore-set/.bench 2>/dev/null | wc -l | tr -d ' ')"
+  [[ "$n" -ge 1 && "$n" -le 3 ]] || fail "this bench keeps ${n} restore-set copies, expected 1 to 3"
+  assert_file "$FL_BACKUP_ROOT/19990101-000000-1/restore-set/other-database.sql.gz" "(another bench's copy is kept)"
+
+  # ---- a backups folder reached through a link is still the target's own: the set is copied first
+  mv "$BENCH/sites/acme.localhost/private/backups" "$TMP_DIR/acme-backups-real-$1"
+  ln -s "$TMP_DIR/acme-backups-real-$1" "$BENCH/sites/acme.localhost/private/backups"
+  make_set acme.localhost 20260906_090000
+  reset_calls
+  run_json site restore acme.localhost --from "$TMP_DIR/acme-backups-real-$1/20260906_090000-acme_localhost-database.sql.gz" --dry-run --json --bench-dir "$BENCH"
+  token="$(printf '%s' "$OUT" | jget - 'd["token"]')"
+  MOCK_BENCH_BACKUP_PRUNE=1 run_json site restore acme.localhost --from "$TMP_DIR/acme-backups-real-$1/20260906_090000-acme_localhost-database.sql.gz" --apply "$token" --yes --json --bench-dir "$BENCH"
+  assert_eq "0" "$CODE" "$OUT$ERR"
+  assert_calls_contain "^python benchbar-frappe acme.localhost restore --mariadb-root-password [^ ]*/restore-set/20260906_090000-acme_localhost-database.sql.gz\$"
+  rm "$BENCH/sites/acme.localhost/private/backups"
+  mv "$TMP_DIR/acme-backups-real-$1" "$BENCH/sites/acme.localhost/private/backups"
 }
 
 suite mac fresh.localhost
