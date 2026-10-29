@@ -30,6 +30,12 @@ All notable changes to this project are documented here.
 
 ### Added
 
+- The BenchBar app shows the plan before Add App and Add Site run:
+  Review reads the CLI's `app add --dry-run --json` plan (the clones, the
+  build, the installs on each site, the restart, what it touches) and Add
+  App applies it by its token. A plan the bench has outgrown asks to
+  Review Again instead of running. Add Site shows its steps and runs the
+  CLI's `--dry-run` checks first.
 - Doctor warns in WSL when NTP inside the distro fights the Windows host
   clock (`wsl_time_sync`): each NTP poll steps the clock when Windows has
   drifted, and a step can stop a bench's worker. Fix: `sudo timedatectl
