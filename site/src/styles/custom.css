@@ -488,3 +488,90 @@ starlight-tabs [role='tab'][aria-selected='true'] {
   font-size: var(--sl-text-base);
   transition: color 0.15s ease;
 }
+
+/* ---- the home page: one calm column like akashmishra.com, the app icon
+   small above the title, sections opened by a spaced label after a
+   gradient divider */
+:root[data-has-hero] {
+  --sl-content-width: 38rem;
+}
+.hero {
+  grid-template-columns: 100%;
+  gap: 1.5rem;
+  padding-block: clamp(2rem, 6vw, 3.5rem) 0.5rem;
+}
+.hero > img {
+  order: 0;
+  width: 3.5rem;
+  margin-inline: 0;
+  border-radius: 0.8rem;
+}
+.hero .stack {
+  text-align: start;
+  gap: 1.75rem;
+}
+.hero .copy {
+  align-items: flex-start;
+  gap: 1.25rem;
+}
+.hero .copy > * {
+  max-width: none;
+}
+.hero h1 {
+  font-size: clamp(1.75rem, 1.2rem + 2vw, 2.25rem);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+}
+.hero .tagline {
+  font-size: var(--sl-text-body);
+  line-height: 1.7;
+  color: var(--sl-color-gray-3);
+}
+.hero .actions {
+  justify-content: flex-start;
+  align-items: center;
+  gap: 0.75rem 1.75rem;
+}
+.hero .sl-link-button {
+  border: 0;
+  border-radius: var(--bb-radius);
+  padding: 0;
+  background: transparent;
+  color: var(--sl-color-gray-3);
+  font-size: var(--sl-text-sm);
+  font-weight: 400;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+.hero .sl-link-button:hover {
+  color: var(--sl-color-accent);
+}
+.hero .sl-link-button.primary {
+  padding: 0.55rem 1rem;
+  background: var(--sl-color-white);
+  color: var(--sl-color-black);
+  font-weight: 500;
+}
+.hero .sl-link-button.primary:hover {
+  background: color-mix(in srgb, var(--sl-color-white) 85%, var(--sl-color-black));
+  color: var(--sl-color-black);
+}
+[data-has-hero] .sl-markdown-content h2 {
+  margin-top: 3rem;
+  padding-top: 2.5rem;
+  background: linear-gradient(
+      90deg,
+      transparent 20%,
+      color-mix(in srgb, var(--sl-color-accent) 15%, transparent) 50%,
+      transparent 80%
+    ),
+    linear-gradient(90deg, transparent, var(--bb-border) 30%, var(--bb-border) 70%, transparent);
+  background-size: 100% 1px;
+  background-repeat: no-repeat;
+  font-family: var(--sl-font);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--sl-color-gray-3);
+}
