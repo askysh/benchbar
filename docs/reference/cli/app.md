@@ -109,7 +109,7 @@ benchbar app install crm --site v16two
 ## app update
 
 ```
-benchbar app update NAME [--skip-backup] [--dry-run] [--json]
+benchbar app update NAME [--skip-backup] [--discard-pending] [--dry-run] [--json]
 ```
 
 Fast forwards one app with a changelog first, backs up the sites that
@@ -119,6 +119,7 @@ app is refused; it never rebases or resets.
 | Flag | What it does |
 |---|---|
 | `--skip-backup` | Do not back up the sites first |
+| `--discard-pending` | Drop the record of an update or add that stopped part way and stop: none of its steps and no update runs |
 | `--dry-run` | Show the changelog and the plan, change nothing |
 | `--json` | With `--dry-run`: the plan as JSON ([schema](../../json-schema.md#benchbar-app-update-name---dry-run---json)) |
 

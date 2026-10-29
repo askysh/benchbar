@@ -11,7 +11,7 @@
 # Groups (used by "benchbar service" versus "benchbar repair"):
 #   system, bench, service, site
 
-FL_CHECK_ORDER="brew formula_dates python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac mole app_copies full_disk_access env_python env_setuptools bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy dependency_behind apps_behind lock_parse lock_drift profile_outdated logs bench_path honcho honcho_setuptools procfile runner agent runner_heartbeat fork_safety scheduler stop_flag helpers cli_link cli_duplicate legacy_agents dead_agents hosts port_clash orphans ping site_not_served"
+FL_CHECK_ORDER="brew formula_dates python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac mole app_copies full_disk_access env_python env_setuptools bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy app_update_pending app_add_pending dependency_behind apps_behind lock_parse lock_drift profile_outdated logs bench_path honcho honcho_setuptools procfile runner agent runner_heartbeat fork_safety scheduler stop_flag helpers cli_link cli_duplicate legacy_agents dead_agents hosts port_clash orphans ping site_not_served"
 FL_LOG_WARN_MB="${FL_LOG_WARN_MB:-50}"
 FL_HOSTS_FILE="${FL_HOSTS_FILE:-/etc/hosts}"
 
@@ -28,7 +28,7 @@ chk_port_block() {
 fl_check_group() {
   case "$1" in
     brew|formula_dates|python_leaves|mariadb_bind|mariadb_utf8|pdf_engine|redis_6379|cleanmymac|mole|app_copies|full_disk_access|wsl_time_sync) printf 'system' ;;
-    env_python|env_setuptools|bench_version|toolchain_*|socketio|assets|apps_txt|app_branch_policy|dependency_behind|apps_behind|lock_parse|lock_drift|logs) printf 'bench' ;;
+    env_python|env_setuptools|bench_version|toolchain_*|socketio|assets|apps_txt|app_branch_policy|app_update_pending|app_add_pending|dependency_behind|apps_behind|lock_parse|lock_drift|logs) printf 'bench' ;;
     profile_outdated) printf 'bench' ;;
     ping|site_not_served) printf 'site' ;;
     *) printf 'service' ;;
@@ -90,6 +90,8 @@ fl_check_label() {
     orphans) printf 'Stale processes' ;;
     apps_txt) printf 'Apps in apps.txt' ;;
     app_branch_policy) printf 'App branches' ;;
+    app_update_pending) printf 'Unfinished app updates' ;;
+    app_add_pending) printf 'Unfinished app adds' ;;
     dependency_behind) printf 'Dependencies of focus apps' ;;
     apps_behind) printf 'Other apps' ;;
     lock_parse) printf 'benchbar.toml' ;;
@@ -1391,3 +1393,34 @@ chk_app_branch_policy() {
     chk__set ok "${n} app(s) on the branch config/apps.tsv names for ${FL_PROFILE}"
   fi
 }
+
+# An app update or app add that stopped half way leaves a record (apps.sh,
+# "pending operations"); one row per record. Local reads only: the record
+# itself, no git and no bench.
+# fl__chk_pending OP WHAT COMMAND
+fl__chk_pending() {
+  local dir f n=0 kinds st kind msg
+  dir="$(fl_pending_dir)"
+  if [[ -d "$dir" ]]; then
+    for f in "$dir"/*.json; do
+      # the pattern itself when the folder holds no record (a temp file left
+      # by a write that failed): nothing to report
+      [[ -e "$f" ]] || continue
+      if ! fl_pending_read "$f"; then
+        # an unreadable record is reported once, by the update check
+        [[ "$1" != "app_update" ]] || { n=$((n + 1)); msg="${f##*/}"; msg="${msg%.json}"; CHK_MORE+=("warn"$'\037'"the pending record of ${msg} cannot be read; no step runs from it"$'\037'"benchbar app update ${msg} --discard-pending --bench-dir ${FL_BENCH_DIR}"$'\037'); }
+        continue
+      fi
+      [[ "$PD_OP" == "$1" ]] || continue
+      n=$((n + 1))
+      kinds=""
+      for st in ${PD_STEPS[@]+"${PD_STEPS[@]}"}; do kind="${st%%|*}"; kinds="${kinds}${kinds:+, }${kind}"; done
+      msg="${2} of ${PD_APP} did not finish${PD_FAILED:+: stopped at ${PD_FAILED}}${PD_REASON:+ (${PD_REASON})}; ${#PD_STEPS[@]} step(s) left${kinds:+ (${kinds})}"
+      CHK_MORE+=("warn"$'\037'"${msg}"$'\037'"benchbar ${3} ${PD_APP} --bench-dir ${FL_BENCH_DIR}"$'\037')
+    done
+  fi
+  [[ "$n" -gt 0 ]] || chk__set ok "no unfinished ${2}"
+}
+
+chk_app_update_pending() { fl__chk_pending app_update "app update" "app update"; }
+chk_app_add_pending() { fl__chk_pending app_add "app add" "app add"; }

@@ -44,6 +44,11 @@ if [[ "${1:-}" == "ls-remote" && -f "${MOCK_STATE:-/nonexistent}/git_remotes" ]]
   done
   set -- __real__ "${mapped[@]}"
 fi
+# MOCK_GIT_MERGE_EXIT: a fast forward (git merge) that fails, as with a full disk
+if [[ "${1:-}" == "merge" && -n "${MOCK_GIT_MERGE_EXIT:-}" ]]; then
+  printf 'error: unable to write the working tree\n' >&2
+  exit "$MOCK_GIT_MERGE_EXIT"
+fi
 [[ "${MOCK_GIT_REAL:-0}" == "1" && "${1:-}" != "__real__" ]] && set -- __real__ "$@"
 case "${1:-}" in
   __real__) shift ;;

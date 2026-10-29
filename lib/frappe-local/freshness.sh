@@ -211,6 +211,7 @@ fl_freshness_fetch() {
   local app up remote branch dir ts args codes ok=0 failed=0 pids=()
   [[ "${FL_DRY_RUN:-0}" == "1" ]] && return 0
   codes="$(mktemp -d "${TMPDIR:-/tmp}/benchbar-fresh.XXXXXX")"
+  mkdir "$codes/err"
   for app in "$@"; do
     up="$(fl_app_upstream "$app")"; [[ -n "$up" ]] || continue
     remote="${up%% *}"; branch="${up#* }"; dir="$(fl_app_path "$app")"; args=()
@@ -220,13 +221,14 @@ fl_freshness_fetch() {
     fi
     (
       code=0
-      fl_capture_timeout "$FL_FRESHNESS_FETCH_TIMEOUT" /dev/null env GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes -o ConnectTimeout=10' \
+      fl_run_capture_timeout "$FL_FRESHNESS_FETCH_TIMEOUT" /dev/null "${codes}/err/${app}" fl__in_dir "$FL_BENCH_DIR" env GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes -o ConnectTimeout=10' \
         git -C "$dir" fetch --quiet --no-tags ${args[@]+"${args[@]}"} "$remote" "+refs/heads/${branch}:refs/remotes/${remote}/${branch}" || code=$?
       printf '%s' "$code" >"${codes}/${app}"
     ) &
     pids+=("$!")
   done
   for app in ${pids[@]+"${pids[@]}"}; do wait "$app" 2>/dev/null || true; done
+  for app in "$codes"/err/*; do fl_log_file_append "$app"; done
   for app in "$codes"/*; do
     [[ -f "$app" ]] || continue
     if [[ "$(cat "$app")" == "0" ]]; then ok=1; else failed=1; fi
