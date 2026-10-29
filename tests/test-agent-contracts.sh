@@ -797,10 +797,13 @@ assert_eq "0" "$CODE" "$(cat "$STREAM.err")"
 assert_eq "True" "$(sx '{"kind": "site", "name": "macdev", "detail": "now the default site"} in e[-1]["changed"]')" "$(cat "$STREAM")"
 assert_eq "macdev macdev" "$(sx '"%s %s" % (e[-1]["default_site"], e[-1]["state_after"]["site"])')" "$(cat "$STREAM")"
 
-# site add NEW --dry-run --json: nothing was created, and the done line says it was a dry run
-stream site add drynew --dry-run --json --bench-dir "$BENCH"
+# site add NEW --dry-run: nothing was created, and the done line of the stream says it was a dry run
+# (--json is the one document plan, which claims nothing either)
+ADMIN_PASSWORD=pw stream site add drynew --dry-run --jsonl --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$(cat "$STREAM.err")"
-assert_eq "False True" "$(sx '"%s %s" % (e[-1]["created"], e[-1].get("dry_run"))')" "$(cat "$STREAM")"
+assert_eq "False True" "$(sx '"%s %s" % (e[-1].get("created", False), e[-1].get("dry_run"))')" "$(cat "$STREAM")"
+run_json site add drynew --dry-run --json --bench-dir "$BENCH"
+assert_eq "0 False" "$CODE $(printf '%s' "$OUT" | jget - 'd.get("created", False)')" "$OUT"
 assert_no_file "$BENCH/sites/drynew"
 
 printf 'test-agent-contracts: ok\n'
