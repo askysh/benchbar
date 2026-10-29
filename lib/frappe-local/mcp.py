@@ -717,7 +717,16 @@ ANSI_CSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 # (a search for the words, then line by line: a pattern spanning a whole line
 # is quadratic on a long one, and a JSON envelope is one long line)
 SECRET_HINT = re.compile(r"mariadb-password|benchbar-mariadb|secrets/mariadb-root|find-generic-password", re.IGNORECASE)
+# a line that names the store (the Keychain, the password file) and speaks of a password: "MariaDB root
+# password read from the Keychain", "no working password in MARIADB_ROOT_PASSWORD or the Keychain"
+SECRET_STORE = re.compile(r"\bkeychain\b|password file", re.IGNORECASE)
+SECRET_WORD = re.compile(r"password", re.IGNORECASE)
 SECRET_NOTE = "(a line about where the MariaDB root password is kept was withheld; benchbar uses it itself)"
+
+
+def secret_line(line):
+    """Whether a line of CLI text points at the MariaDB root password's store."""
+    return bool(SECRET_HINT.search(line) or (SECRET_STORE.search(line) and SECRET_WORD.search(line)))
 
 
 def scrub(obj):
@@ -725,9 +734,9 @@ def scrub(obj):
     string in obj (lists and dicts recursed)."""
     if isinstance(obj, str):
         text = ANSI_CSI.sub("", obj)
-        if not SECRET_HINT.search(text):
+        if not (SECRET_HINT.search(text) or (SECRET_STORE.search(text) and SECRET_WORD.search(text))):
             return text
-        return "\n".join(SECRET_NOTE if SECRET_HINT.search(line) else line for line in text.split("\n"))
+        return "\n".join(SECRET_NOTE if secret_line(line) else line for line in text.split("\n"))
     if isinstance(obj, list):
         return [scrub(x) for x in obj]
     if isinstance(obj, dict):

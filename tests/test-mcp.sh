@@ -544,6 +544,15 @@ assert "mariadb-password" not in out["output"] and "Keychain" not in out["output
 assert out["output"].startswith("ok\n") and out["output"].endswith("\nlast"), out
 # a Keychain line that is not about the store of benchbar stays (a git credential helper error)
 assert "osxkeychain" in m.scrub("git: credential-osxkeychain is not a git command"), "too broad"
+# a line that says where the root password is kept (the CLI own wording) is withheld, on either platform
+for line in ("MariaDB root password read from the Keychain",
+             "no working password in MARIADB_ROOT_PASSWORD or the Keychain",
+             "the MariaDB root password in the Keychain does not work; asking",
+             "MARIADB_ROOT_PASSWORD from the environment does not work; trying the password file",
+             "MariaDB root password read from the password file"):
+    out = m.scrub("before\n" + line + "\nafter")
+    assert out == "before\n" + m.SECRET_NOTE + "\nafter", (line, out)
+assert "unlock the Keychain" in m.scrub("unlock the Keychain (security unlock-keychain)"), "too broad"
 # the whole result: text and structuredContent, whatever path built them
 r = m.scrub_result({"content": [{"type": "text", "text": "{\"w\": \"see /x/secrets/mariadb-root\"}"}], "structuredContent": {"warnings": ["could not write /x/secrets/mariadb-root"]}})
 assert "secrets/mariadb-root" not in r["content"][0]["text"] and "secrets/mariadb-root" not in str(r["structuredContent"]), r
