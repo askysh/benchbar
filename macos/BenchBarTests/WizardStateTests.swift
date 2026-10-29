@@ -120,6 +120,26 @@ struct WizardStateTests {
         #expect(s.primary?.enabled == false, "the folder's own failure stops Review")
     }
 
+    /// The form suggests a folder and a site name nothing uses yet, and
+    /// never replaces what the person typed.
+    @Test func theFormSuggestsAFreeFolderAndSite() {
+        var s = WizardState(home: "/Users/you")
+        s.send(.suggest(WizardState.Taken(folders: ["/Users/you/frappe-bench", "/Users/you/frappe-bench-2"], sites: ["macdev", "pm.localhost"])))
+        #expect(s.form.folder == "/Users/you/frappe-bench-3")
+        #expect(s.form.site == "macdev2")
+        #expect(s.send(.chooseNewBench) == [.checkPrerequisites(folder: "/Users/you/frappe-bench-3")])
+
+        var typed = WizardState(home: "/Users/you")
+        typed.send(.setFolder("/Users/you/work/b"))
+        typed.send(.setSite("mine"))
+        typed.send(.suggest(WizardState.Taken(folders: ["/Users/you/frappe-bench"], sites: ["macdev"])))
+        #expect(typed.form.folder == "/Users/you/work/b" && typed.form.site == "mine")
+
+        var fresh = WizardState(home: "/Users/you")
+        fresh.send(.suggest(WizardState.Taken()))
+        #expect(fresh.form.folder == "/Users/you/frappe-bench" && fresh.form.site == "macdev")
+    }
+
     @Test func profilesOfferTheBuiltInAndTheValidTeamOnes() throws {
         let s = try filled()
         #expect(s.profileChoices.map(\.name) == ["v15-lts", "v16-lts", "acme"])

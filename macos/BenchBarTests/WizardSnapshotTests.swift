@@ -34,7 +34,15 @@ extension SnapshotTests {
     }
 
     private func formEvents() throws -> [WizardState.Event] {
-        [.chooseNewBench, .prerequisites(try report()), .primary,
+        // the CLI's words when another bench holds the default ports: long, and they must wrap
+        var ports = try report()
+        if let i = ports.prerequisites.firstIndex(where: { $0.id == "default_ports" }) {
+            ports.prerequisites[i].message = ["8000", "9000", "11000", "13000"].map { "\($0) used by /Users/you/dev/frappe-bench" }
+                .joined(separator: "; ") + "; a new bench gets port block 1"
+        }
+        // a bench already has ~/frappe-bench and macdev
+        return [.suggest(WizardState.Taken(folders: ["/Users/you/frappe-bench"], sites: ["macdev"])),
+                .chooseNewBench, .prerequisites(ports), .primary,
          .profiles(try BenchJSON.decode(ProfileList.self, from: try Fixture.data("profile-list-wizard"))),
          .setAdminPassword("s3cret")]
     }

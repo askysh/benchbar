@@ -23,7 +23,7 @@ struct NewBenchPage: View {
                 if let problem = state.prerequisites?.folderProblem {
                     Label(problem.message, systemImage: problem.level == .fail ? "xmark.octagon.fill" : "exclamationmark.triangle.fill")
                         .font(.caption).foregroundStyle(problem.level == .fail ? .red : .orange)
-                        .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled).wrapsInFormColumn()
                 }
                 profilePicker(state)
                 bundlePicker(state)
@@ -45,7 +45,7 @@ struct NewBenchPage: View {
                 if state.showsPortField {
                     TextField("Port offset", text: Binding(get: { state.form.portOffset }, set: { run.send(.setPortOffset($0)) }))
                     if let taken = state.prerequisites?.check("default_ports") {
-                        Text(taken.message).font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+                        Text(taken.message).font(.caption).foregroundStyle(.orange).wrapsInFormColumn()
                     }
                 }
             }
@@ -84,6 +84,16 @@ struct NewBenchPage: View {
         guard let path = Workspace.chooseBenchFolder(previous: run.state.resolvedFolder) else { return }
         run.send(.setFolder(path))
         run.send(.commitFolder)
+    }
+}
+
+extension View {
+    /// A note under a field of a `.columns` form wraps at the column's width.
+    /// With only `fixedSize(vertical:)` its one line ideal width widened the
+    /// column past the page, and the fields and the note were cut at the right.
+    func wrapsInFormColumn() -> some View {
+        fixedSize(horizontal: false, vertical: true)
+            .frame(minWidth: 0, idealWidth: 0, maxWidth: .infinity, alignment: .leading)
     }
 }
 

@@ -49,10 +49,21 @@ nonisolated struct WizardState: Equatable, Sendable {
         var profile = "v15-lts"
         var bundle = "minimal"
         var site = "macdev"
+        /// The person typed or chose these: a suggestion no longer replaces them.
+        var folderEdited = false
+        var siteEdited = false
         /// The text of the port offset field.
         var portOffset = ""
         var portOffsetEdited = false
         var adminPassword = Secret()
+    }
+
+    /// What this Mac already uses, so the form suggests something else: the
+    /// bench folders and the folders that exist among the candidates, and
+    /// the site names of every bench.
+    struct Taken: Equatable, Sendable {
+        var folders: Set<String> = []
+        var sites: Set<String> = []
     }
 
     struct Failure: Equatable, Sendable {
@@ -81,6 +92,8 @@ nonisolated struct WizardState: Equatable, Sendable {
     }
 
     enum Event: Equatable, Sendable {
+        /// Before the Check page: what is taken, for the folder and site the form suggests.
+        case suggest(Taken)
         case chooseNewBench, chooseExistingBench, chooseCLIOnly
         /// Return.
         case primary
@@ -148,9 +161,20 @@ nonisolated struct WizardState: Equatable, Sendable {
     private(set) var installPhase: InstallPhase = .idle
     private(set) var stopRequested = false
 
+    let home: String
+
     init(home: String = NSHomeDirectory()) {
-        form = Form(folder: home + "/frappe-bench")
+        self.home = home
+        form = Form(folder: Self.folderCandidates(home: home)[0])
     }
+
+    /// ~/frappe-bench, then ~/frappe-bench-2 and on: the folders the form suggests, in order.
+    static func folderCandidates(home: String) -> [String] {
+        [home + "/frappe-bench"] + (2...20).map { home + "/frappe-bench-\($0)" }
+    }
+
+    /// macdev, then macdev2 and on.
+    static let siteCandidates = ["macdev"] + (2...20).map { "macdev\($0)" }
 
     /// A page already on screen, for the snapshots and the tests.
     init(home: String = NSHomeDirectory(), page: Page) {
@@ -242,6 +266,15 @@ nonisolated struct WizardState: Equatable, Sendable {
     @discardableResult
     mutating func send(_ event: Event) -> [Effect] {
         switch event {
+        case .suggest(let taken):
+            guard page == .welcome else { return [] }
+            if !form.folderEdited, let free = Self.folderCandidates(home: home).first(where: { !taken.folders.contains($0) }) {
+                form.folder = free
+            }
+            if !form.siteEdited, let free = Self.siteCandidates.first(where: { !taken.sites.contains($0) }) {
+                form.site = free
+            }
+            return []
         case .chooseNewBench: return startCheck()
         case .chooseExistingBench: return [.openFindBenches]
         case .chooseCLIOnly:
@@ -276,6 +309,7 @@ nonisolated struct WizardState: Equatable, Sendable {
             return []
         case .setFolder(let folder):
             form.folder = folder
+            form.folderEdited = true
             return []
         case .commitFolder:
             guard page == .newBench else { return [] }
@@ -283,7 +317,10 @@ nonisolated struct WizardState: Equatable, Sendable {
             return [.checkPrerequisites(folder: resolvedFolder)]
         case .setProfile(let name): form.profile = name; return []
         case .setBundle(let name): form.bundle = name; return []
-        case .setSite(let name): form.site = name; return []
+        case .setSite(let name):
+            form.site = name
+            form.siteEdited = true
+            return []
         case .setPortOffset(let text):
             form.portOffset = text
             form.portOffsetEdited = true

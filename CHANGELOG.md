@@ -126,6 +126,10 @@ All notable changes to this project are documented here.
   ports opens as Port Settings: the address, the ports and the port mode,
   with Done. Before, it opened as "Set Up Selected Benches" with a red
   "Stop this bench" and a disabled setup button.
+- The app's New Bench form suggests a folder and a site name no bench uses
+  (`~/frappe-bench-2` and `macdev2` next to an existing `~/frappe-bench`
+  with `macdev`), and the note about taken ports wraps instead of running
+  off the right edge.
 
 ### Windows (preview)
 
