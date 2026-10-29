@@ -218,7 +218,7 @@ fl_site_default_file_v() {
 # MariaDB with the Keychain password, its hosts line, and apps that are
 # already in apps/. The default site does not change.
 fl_cmd_site_add() {
-  local name="" apps="" bundle="${OPT_BUNDLE:-}" app created=false default_before default_after
+  local name="" apps="" bundle="${OPT_BUNDLE:-}" app created=false default_before default_after remembered
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
       --apps) apps="${2:-}"; shift 2 ;;
@@ -259,18 +259,27 @@ fl_cmd_site_add() {
     fl_site_default_file_v default_before
     fl_new_site_if_needed "$FL_BENCH_DIR" "$name" "$FL_MARIADB_ROOT_PW" "$ADMIN_PASSWORD" || { fl_bench_redis_down; return 1; }
     created=true
-    fl_changed site "$name" "created"
     # a new site never becomes the default: if bench moved it, it goes back
     fl_site_default_file_v default_after
     if [[ "${FL_DRY_RUN:-0}" != "1" && "$default_after" != "$default_before" ]]; then
-      fl_warn "bench moved the default site to ${default_after}; putting it back to ${default_before:-none}"
-      if [[ -n "$default_before" ]]; then (cd "$FL_BENCH_DIR" && bench use "$default_before") >>"${FL_LOG_FILE:-/dev/null}" 2>&1 || fl_warn "bench use ${default_before} failed; run it by hand"; fi
+      if [[ -z "$default_before" ]]; then
+        fl_warn "bench set the default site to ${default_after}; the bench had none before, so nothing is put back"
+      else
+        fl_warn "bench moved the default site to ${default_after}; putting it back to ${default_before}"
+        (cd "$FL_BENCH_DIR" && bench use "$default_before") >>"${FL_LOG_FILE:-/dev/null}" 2>&1 || true
+        fl_site_default_file_v default_after
+        remembered="$(fl_bstate_get SITE_NAME)"
+        if [[ "$default_after" != "$default_before" || ( -n "$remembered" && "$remembered" != "$default_before" ) ]]; then
+          fl_fail "could not put the default site back to ${default_before} (currentsite.txt says ${default_after:-nothing})"
+          fl_fix "cd ${FL_BENCH_DIR} && bench use ${default_before}"
+          return 1
+        fi
+      fi
     fi
   fi
   [[ -n "$apps" && -z "$FL_SETUP_REDIS_PORTS" ]] && fl_bench_redis_up "$FL_BENCH_DIR"
   for app in $apps; do
     fl_install_app_if_needed "$FL_BENCH_DIR" "$name" "$app"
-    fl_changed app "$app" "installed on ${name}"
   done
   fl_bench_redis_down
   fl_hosts_add_names "$name"

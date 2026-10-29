@@ -295,7 +295,7 @@ rm -rf "$MOCK_STATE/keychain"
 unset MARIADB_ROOT_PASSWORD
 n_logs="$(logs_now)"; reset_calls
 noni site add noniuser --bench-dir "$BENCH"
-assert_eq "1" "$CODE" "$OUT"
+assert_eq "2" "$CODE" "$OUT" "(exit 2: the MariaDB root password is among the missing)"
 assert_contains "$OUT" "missing:"
 assert_contains "$OUT" "ADMIN_PASSWORD"
 assert_contains "$OUT" "MARIADB_ROOT_PASSWORD"
@@ -327,7 +327,7 @@ rm -rf "$MOCK_STATE/keychain"
 mkdir -p "$BENCH/sites/dropme2"; printf '{}\n' >"$BENCH/sites/dropme2/site_config.json"
 reset_calls; n_logs="$(logs_now)"
 noni site drop dropme2 --confirm-site dropme2 --bench-dir "$BENCH"
-assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "MARIADB_ROOT_PASSWORD"
+assert_eq "2" "$CODE" "$OUT"; assert_contains "$OUT" "MARIADB_ROOT_PASSWORD"
 assert_calls_not_contain '^bench '; assert_no_file "$FL_STATE_DIR/lock"; assert_eq "$n_logs" "$(logs_now)"
 assert_file "$BENCH/sites/dropme2"
 # install: --yes, the Administrator password and a sudo that would ask, all in one
@@ -357,7 +357,7 @@ assert_not_contains "$OUT" "rootpw"
 rm -rf "$MOCK_STATE/keychain"
 # the flag sets the mode: --for-agent
 run_fm site add noniuser3 --for-agent --bench-dir "$BENCH"
-assert_eq "1" "$CODE"; assert_contains "$OUT" "ADMIN_PASSWORD"
+assert_eq "2" "$CODE"; assert_contains "$OUT" "ADMIN_PASSWORD"
 
 # ---------------------------------------------------------------- 4. honest state fields
 
@@ -632,5 +632,76 @@ stream ports apply 0000 --dry-run --json --yes --bench-dir "$BENCH" -- "$BENCH"
 assert_eq "done 1" "$(sx '"%s %s" % (e[-1]["event"], e[-1]["exit"])')" "(a refused ports apply still ends with its done line)"
 run_events repair --json --dry-run --bench-dir "$BENCH"
 assert_eq "plan" "$(ev '" ".join(x["event"] for x in e)')"
+
+# ---------------------------------------------------------------- 8. refusals end the stream; honest changed[]; ack; repair
+
+rm -rf "$MOCK_STATE/keychain"
+unset MARIADB_ROOT_PASSWORD
+export BENCHBAR_NONINTERACTIVE=1
+n_logs="$(logs_now)"; reset_calls
+# install --json --yes without ADMIN_PASSWORD: the stream ends with a done naming it, nothing else happened
+stream install --json --yes --bench-dir "$HOME/noni2" --site noni2.localhost
+assert_eq "1" "$CODE" "$(cat "$STREAM.err")"
+assert_eq "done" "$(sx '" ".join(x["event"] for x in e)')"
+assert_eq "1 ['ADMIN_PASSWORD']" "$(sx '"%s %s" % (e[-1]["exit"], e[-1]["missing"])')"
+assert_contains "$(sx 'e[-1]["error"]')" "ADMIN_PASSWORD"
+assert_calls_not_contain '^(bench|brew install|brew services|launchctl)'
+assert_no_file "$FL_STATE_DIR/lock"; assert_eq "$n_logs" "$(logs_now)" "(no log)"; assert_no_file "$HOME/noni2"
+# site add --for-agent with nothing: every missing input, exit 2 because the MariaDB password is one of them
+stream site add noni3 --for-agent --bench-dir "$BENCH"
+assert_eq "2" "$CODE"
+assert_eq "done 2" "$(sx '"%s %s" % (e[-1]["event"], e[-1]["exit"])')"
+assert_eq "True" "$(sx '{"ADMIN_PASSWORD", "MARIADB_ROOT_PASSWORD", "--yes"} <= set(e[-1]["missing"])')"
+assert_eq "$n_logs" "$(logs_now)"; assert_no_file "$FL_STATE_DIR/lock"
+# a one document command under --json: the one document, with exit, error and missing
+mkdir -p "$BENCH/sites/dropme3"; printf '{}\n' >"$BENCH/sites/dropme3/site_config.json"
+run_json site drop dropme3 --confirm-site dropme3 --json --bench-dir "$BENCH"
+assert_eq "2" "$CODE"
+assert_eq "1" "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')"
+assert_eq "2 ['MARIADB_ROOT_PASSWORD']" "$(printf '%s' "$OUT" | jget - '"%s %s" % (d["exit"], d["missing"])')"
+assert_contains "$(printf '%s' "$OUT" | jget - 'd["error"]')" "MARIADB_ROOT_PASSWORD"
+assert_calls_not_contain '^bench '
+# the plain refusal is exit 2 too (AGENTS.md)
+run_fm site add noni3 --bench-dir "$BENCH"
+assert_eq "2" "$CODE" "$OUT"
+unset BENCHBAR_NONINTERACTIVE
+
+# repair --json with no bench: a done line with exit 1 and an error, not silence
+run_events repair --json --yes --bench-dir "$HOME/no-such-bench"
+assert_eq "1" "$CODE"
+assert_eq "done 1" "$(ev '"%s %s" % (e[-1]["event"], e[-1]["exit"])')"
+assert_contains "$(ev 'e[-1]["error"]')" "No bench"
+
+# changed[] says only what changed: an app already on the site is not a change
+export MARIADB_ROOT_PASSWORD=rootpw
+ADMIN_PASSWORD=pw stream site add appsite1 --apps erpnext --json --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$(cat "$STREAM.err")"
+assert_eq "app site" "$(sx '" ".join(sorted(set(x["kind"] for x in e[-1]["changed"] if x["kind"] in ("site", "app"))))')"
+ADMIN_PASSWORD=pw stream site add appsite1 --apps erpnext --json --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$(cat "$STREAM.err")"
+assert_eq "[]" "$(sx '[x for x in e[-1]["changed"] if x["kind"] in ("site", "app")]')" "(a second run changes nothing)"
+
+# doctor --ack under --json: one small document, under the lock, and an ack does not adopt a bench
+mkdir -p "$HOME/Applications/CleanMyMac X.app"
+run_json doctor --ack cleanmymac --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$ERR"
+assert_eq "1" "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')"
+assert_eq "ack cleanmymac True 0" "$(printf '%s' "$OUT" | jget - '" ".join(str(x) for x in (d["action"], d["check"], "cleanmymac" in d["acked"], d["exit"]))')"
+assert_eq "state" "$(printf '%s' "$OUT" | jget - 'd["changed"][0]["kind"]')"
+run_json doctor --unack cleanmymac --json --bench-dir "$BENCH"
+assert_eq "unack []" "$(printf '%s' "$OUT" | jget - '"%s %s" % (d["action"], d["acked"])')"
+HOLD=$$   # a live process: this test shell
+mkdir -p "$FL_STATE_DIR/lock"; printf '%s\n' "$HOLD" >"$FL_STATE_DIR/lock/pid"
+run_fm doctor --ack cleanmymac --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "Another benchbar run is active"
+run_fm doctor --bench-dir "$BENCH"
+assert_not_contains "$OUT" "Another benchbar run"
+rm -rf "$FL_STATE_DIR/lock"
+NA2="$HOME/elsewhere/na2-bench"; make_fake_bench "$NA2" na2-site
+run_fm doctor --ack cleanmymac --bench-dir "$NA2"
+assert_eq "0" "$CODE" "$OUT"
+run_fm status --json --bench-dir "$NA2"
+assert_eq "not_adopted" "$(printf '%s' "$OUT" | jget - 'd["state"]')" "(an ack alone does not make a bench known)"
+rm -rf "$HOME/Applications/CleanMyMac X.app"
 
 printf 'test-agent-contracts: ok\n'

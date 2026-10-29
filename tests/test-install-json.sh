@@ -116,6 +116,9 @@ assert_eq "2" "$(sx 'sum(1 for x in e if x["event"]=="step" and x["status"]=="ru
 assert_eq "True" "$(sx 'all("secs" in x for x in e if x["event"]=="step" and x["status"] in ("done","unchanged","warning","failed","skipped"))')"
 assert_file "$BENCH/benchbar-run.sh"
 cp "$STREAM" "$TMP_DIR/stream-success.jsonl"
+# changed[] names what the phase scripts created: the bench and the site (children report through FL_CHANGED_FILE)
+assert_eq "True" "$(sx '{"bench", "site"} <= {x["kind"] for x in e[-1]["changed"]} and all(x["name"] for x in e[-1]["changed"])')"
+assert_eq "True" "$(sx 'any(x["kind"] == "site" and x["name"] == "macdev" for x in e[-1]["changed"])')"
 
 # a second install changes nothing and asks nothing
 osa_reset
@@ -123,6 +126,8 @@ stream install --json --yes --bench-dir "$BENCH" --site macdev
 assert_eq "0" "$CODE"
 assert_eq "0" "$(osa_calls)"
 assert_eq "False False" "$(sx '" ".join(str(s["will_run"]) for s in e[0]["steps"][:2])')"
+# nothing was created the second time: no bench, site or app in changed[]
+assert_eq "[]" "$(sx '[x for x in e[-1]["changed"] if x["kind"] in ("bench", "site", "app")]')"
 
 
 # ---- a cancelled dialog: the step is skipped with its command, the run goes on, each step asks once

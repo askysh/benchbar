@@ -463,6 +463,7 @@ fl_cleanup() {
   fl_jsonl_on_exit "$code"
   # repair --json: its done line, when the run ended before it could send one
   fl_repair_done "$code"
+  [[ -z "${FL_CHANGED_FILE:-}" || "${FL_CHANGED_OWNER:-}" != "$$" ]] || rm -f "$FL_CHANGED_FILE"
 }
 trap fl_cleanup EXIT
 trap fl_on_error ERR
@@ -492,7 +493,9 @@ FL_JSONL_URL=""
 fl_jsonl_start() {
   FL_JSONL=1; FL_JSONL_VERSION="$FL_VERSION"; FL_JSONL_KIND=own
   export FL_JSONL FL_JSONL_VERSION
-  exec 3>&1
+  exec 3>&1 1>&2
+  # the inputs a non interactive run lacks: a done line with exit 1, before the log and the lock
+  fl_noninteractive_preflight
   if [[ "$FL_ASSUME_YES" != "1" && "$FL_DRY_RUN" != "1" ]]; then
     FL_JSONL_BENCH="$OPT_BENCH_DIR"; FL_JSONL_SITE="$OPT_SITE"
     [[ "$COMMAND" != "adopt" || -n "$FL_JSONL_BENCH" ]] || FL_JSONL_BENCH="${ARGS[0]:-}"
@@ -762,6 +765,10 @@ cmd_install() {
     fl_header "benchbar install" "$(fl_mode_name)" "$(fl_profile_display)" "$FL_BENCH_DIR" "$FL_SITE"
   fi
   phase00="$(fl_phase00_script)"
+  # the phase scripts are child processes: what they create (the bench, the site,
+  # its apps) comes back through this file into changed[]
+  FL_CHANGED_FILE="$(mktemp "${TMPDIR:-/tmp}/benchbar-changed.XXXXXX")"; FL_CHANGED_OWNER="$$"
+  export FL_CHANGED_FILE FL_CHANGED_OWNER
   FL_JSONL_BENCH="$FL_BENCH_DIR"; FL_JSONL_SITE="$FL_SITE"
   # the passwords of a stream cannot be asked for: refused before anything runs
   if [[ "$FL_JSONL" == "1" && "$FL_DRY_RUN" != "1" && ! -d "${FL_BENCH_DIR}/sites/${FL_SITE}" && -z "${ADMIN_PASSWORD:-}" ]]; then
@@ -990,17 +997,19 @@ cmd_doctor_prerequisites() {
 cmd_doctor() {
   local fails
   if [[ "$OPT_PREREQ" == "1" ]]; then cmd_doctor_prerequisites; return; fi
+  # --ack and --unack under --json: the document on fd 3, every line of text on stderr
+  if [[ -n "$OPT_ACK$OPT_UNACK" && "$OPT_JSON" == "1" ]]; then fl_json_doc_begin; fi
   # --fix-hints: only the fix commands on stdout (fd 3), everything else,
   # a missing bench included, on stderr
   if [[ "$OPT_FIX_HINTS" == "1" ]]; then exec 3>&1 1>&2; FL_PLAIN=1; fl_ui_init; fi
   fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
   fl_require_bench
-  # doctor --unack CHECK: no report needed
-  if [[ -n "$OPT_UNACK" ]]; then fl_doctor_unack "$OPT_UNACK"; return 0; fi
+  # doctor --unack CHECK: no report needed; under --json one small document
+  if [[ -n "$OPT_UNACK" ]]; then fl_doctor_unack "$OPT_UNACK"; fl_doctor_ack_doc unack "$OPT_UNACK"; return 0; fi
   [[ "$OPT_QUICK" != "1" || -n "$OPT_ACK" ]] || FL_DOCTOR_QUICK=1
   fl_doctor_run
   # doctor --ack CHECK: records the warning it is about, then stops
-  if [[ -n "$OPT_ACK" ]]; then fl_doctor_ack "$OPT_ACK"; return 0; fi
+  if [[ -n "$OPT_ACK" ]]; then fl_doctor_ack "$OPT_ACK"; fl_doctor_ack_doc ack "$OPT_ACK"; return 0; fi
   fl_doctor_apply_acks
   # the prerequisites ride in doctor --json only: a plain doctor keeps its
   # promise of a fix line after every WARN and FAIL, and of exit 1 on a FAIL
@@ -1026,9 +1035,7 @@ cmd_doctor() {
 # that cannot answer the question gets the plan and exit code 1.
 cmd_repair() {
   local code=0
-  fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
-  fl_require_bench
-  fl_require_plain_bench
+  # the events start first: a missing bench is a done line with exit 1, not silence
   if [[ "$OPT_JSON" == "1" ]]; then
     exec 3>&1 1>>"${FL_LOG_FILE:-/dev/null}" 2>&1
     FL_JSON_EVENTS=1
@@ -1037,6 +1044,9 @@ cmd_repair() {
     # --yes it is answered no
     [[ "$FL_ASSUME_YES" == "1" ]] || exec 0</dev/null
   fi
+  fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
+  fl_require_bench
+  fl_require_plain_bench
   fl_header "benchbar repair" "$(fl_mode_name)" "$(fl_profile_display)" "$FL_BENCH_DIR" "$FL_SITE"
   fl_repair_engine "Repair" || code=$?
   return "$code"
@@ -1047,11 +1057,12 @@ cmd_repair() {
 # 0.8, exit the shared one: both carry the process exit code.
 FL_REPAIR_DONE_SENT=0
 fl_repair_done() {
-  local code="$1" f
+  local code="$1" f err=""
   [[ "$FL_JSON_EVENTS" == "1" && "${FL_DRY_RUN:-0}" != "1" && "$FL_REPAIR_DONE_SENT" != "1" ]] || return 0
   FL_REPAIR_DONE_SENT=1
   fl_done_fields_v f "$code"
-  fl_event "{\"event\":\"done\",\"exit_code\":${code},${f},\"log\":$(fl_json_str "${FL_LOG_FILE:-}")}"
+  [[ "$code" == "0" ]] || err=",\"error\":$(fl_json_str "${FL_DIE_MESSAGE:-$(fl_log_step_message 0)}")"
+  fl_event "{\"event\":\"done\",\"exit_code\":${code},${f},\"log\":$(fl_json_str "${FL_LOG_FILE:-}")${err}}"
 }
 
 # benchbar where [--json]: how this CLI was installed and where its things
@@ -1199,12 +1210,16 @@ fl_noninteractive_preflight() {
   esac
   fl_need_check
 }
-fl_noninteractive_preflight
 
-# install and adopt with --json: the stream starts before the log and the lock
-if [[ "$OPT_JSON" == "1" && ( "$COMMAND" == "install" || "$COMMAND" == "adopt" ) ]]; then fl_jsonl_start; fi
-# the other commands that stream (or whose document the stream wraps)
-if [[ "$FL_JSON_MODE" == "stream" || ( "$FL_JSON_MODE" == "doc" && "$OPT_JSONL" == "1" ) ]]; then fl_jsonl_begin_generic; fi
+# the stream starts first, so that a refusal (the preflight) is a done line and not silence:
+# install and adopt with --json before the log and the lock (fl_jsonl_start runs the preflight)
+if [[ "$OPT_JSON" == "1" && ( "$COMMAND" == "install" || "$COMMAND" == "adopt" ) ]]; then
+  fl_jsonl_start
+else
+  # the other commands that stream (or whose document the stream wraps)
+  if [[ "$FL_JSON_MODE" == "stream" || ( "$FL_JSON_MODE" == "doc" && "$OPT_JSONL" == "1" ) ]]; then fl_jsonl_begin_generic; fi
+  fl_noninteractive_preflight
+fi
 
 case "$COMMAND" in
   ports)
@@ -1215,6 +1230,12 @@ case "$COMMAND" in
   register|self-update)
     fl_log_init "${FL_STATE_DIR}/logs"
     fl_lock_acquire "${FL_STATE_DIR}/lock" ;;
+  # doctor reads; --ack and --unack write the bench's state file, under the lock
+  doctor)
+    if [[ -n "$OPT_ACK" || -n "$OPT_UNACK" ]]; then
+      fl_log_init "${FL_STATE_DIR}/logs"
+      fl_lock_acquire "${FL_STATE_DIR}/lock"
+    fi ;;
   site|app|profile|lock)
     # the list, show and check commands are read only, and so is a --plan
     # and "app focus" without an app name (the focus listing, with or

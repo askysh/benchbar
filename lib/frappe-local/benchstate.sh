@@ -174,6 +174,17 @@ fl_bench_bin_v() {
   fl_json_str_v "$1" "$__found"
 }
 
+# fl_bstate_file_substantive FILE: the bench's state file holds something besides
+# acknowledged doctor warnings (ACK_*): an ack is not a service, not a registration
+fl_bstate_file_substantive() {
+  local line
+  [[ -r "$1" ]] || return 1
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -z "$line" || "$line" == ACK_* ]] || return 0
+  done <"$1"
+  return 1
+}
+
 # fl_bench_adopted: benchbar knows this bench: it has a service (agent or
 # unit), or it is remembered (the default bench, its own state file, or
 # `register`). A folder that is a bench and neither is "not_adopted". Builtins only.
@@ -183,7 +194,7 @@ fl_bench_adopted() {
   fl_agent_file_v f "$label"
   [[ ! -f "$f" ]] || return 0
   if [[ "$FL_BS_DIR" == "$FL_BENCH_DIR" && "$FL_BS_DEFAULT" == "1" ]]; then return 0; fi
-  [[ ! -f "$(fl_bench_state_file_for "$FL_BENCH_DIR")" ]] || return 0
+  fl_bstate_file_substantive "$(fl_bench_state_file_for "$FL_BENCH_DIR")" && return 0
   if [[ -r "${FL_STATE_DIR}/registered-benches.txt" ]]; then
     while IFS= read -r line || [[ -n "$line" ]]; do
       [[ -z "$line" ]] || ! fl_same_path "$line" "$FL_BENCH_DIR" || return 0

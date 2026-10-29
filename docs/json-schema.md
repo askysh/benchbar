@@ -62,19 +62,22 @@ command that read only prints none of them.
 | field | meaning |
 |---|---|
 | `exit` | the exit code; the process exits with the same number, so a pipe cannot hide a failure |
-| `changed[]` | what the run changed: `{"kind": "site"\|"app"\|"service"\|"ports"\|"hosts"\|"backup"\|"process", "name", "detail"}`. Empty when nothing changed (a second run), and in a dry run |
+| `changed[]` | what the run changed: `{"kind": "bench"\|"site"\|"app"\|"service"\|"ports"\|"hosts"\|"backup"\|"process"\|"state", "name", "detail"}`. Only what the run really changed: empty on a second run, and in a dry run. `install` reports the bench, the site and the apps its phase scripts create |
 | `warnings[]` | the run's `[WARN]` lines, as text |
 | `next_actions[]` | `{"command", "why"}`: the fix lines and next steps the text output prints |
-| `state_after` | the bench's `status --json` object after the run (no per site ping), `null` when there is no bench, in a dry run, or when the run touched several benches (`ports apply`) |
+| `state_after` | the bench's `status --json` object after the run (no per site ping), `null` when there is no bench, in a dry run, or when the run touched several benches (`ports apply`). A stream's is read after the CLI's locks are released; a one document command's and `pull`'s while its lock is still held (a read, so nothing waits on it) |
+| `missing[]` | only on a refusal of the non interactive mode: the inputs the command lacked (`ADMIN_PASSWORD`, `--yes`, `sudo`, ...) |
 
 Which shape a command prints:
 
 - A command that printed one document before keeps printing exactly that
-  one line with `--json` (`site backup`, `site drop`, `site backups`,
-  `app add --apply`, `app update --dry-run`, `ports plan` and the profile
-  commands): the `done` fields are added to it, and a plan or dry run
-  document gets none. A failed run prints nothing on stdout and a
-  message on stderr.
+  one line with `--json`. The ones that change things (`site backup`,
+  `site drop`, `app add --apply`, `doctor --ack` and `--unack`) get the
+  `done` fields added to it; a plan or dry run document gets none; the
+  ones that only read (`site backups`, `ports plan`, the profile commands)
+  have none of them. A run that fails prints nothing on stdout and a
+  message on stderr, except the refusal of the non interactive mode, which
+  is one document with `exit`, `error` and `missing`.
 - `--jsonl` asks any command that changes things for the stream (`plan`,
   `step`, `progress`, `done`): the `done` line carries the same fields and
   the fields of the document the command would have printed (`site backup`,
@@ -96,8 +99,11 @@ Which shape a command prints:
   starts): nothing is ever asked. A command that needs an input it does
   not have (`ADMIN_PASSWORD`, `MARIADB_ROOT_PASSWORD` when benchbar has none
   stored, `--yes` for a confirmation, a `sudo` that would ask) names all of
-  them in one error and exit 1, before it takes the lock or touches a
-  bench. In the stream that is a `done` with `exit` 1 and an `error`.
+  them in one error and exit 1 (exit 2 when the MariaDB root password is
+  one of them), before it takes the lock, writes a log or touches a bench.
+  In a stream that is a `done` with `exit`, an `error` and `missing`; under
+  `--json` on a one document command, one document with the same fields.
+  `repair --json` also ends with a `done` when it stops early (no bench).
 - `benchbar commands --json` lists every command and subcommand with its
   flags, environment variables and what it needs (`tty`, `sudo`, `network`,
   `mutating`, `json`: `document`, `stream` or `none`); `benchbar COMMAND
@@ -342,8 +348,12 @@ Since 0.9: every check has `"acked"`, and the document has `"acked": [ids]`,
   check stays in the JSON at level `warn` with `"acked": true`; the text
   output prints one dim `acked:` line instead of the `[WARN]` and its fix
   line, and `--fix-hints` leaves it out. `doctor --unack CHECK` undoes it.
-  These two write one line to the state file; `doctor` itself still writes
-  nothing. `repair` does not look at acknowledgements.
+  These two write one line to the state file under the CLI lock; `doctor`
+  itself still writes nothing. Under `--json` they print one small
+  document: `action` (`ack` or `unack`), `check`, `acked` (every id with a
+  stored acknowledgement) and the done fields. An acknowledgement does not
+  make a `not_adopted` bench look adopted. `repair` does not look at
+  acknowledgements.
 - `doctor --quick` leaves out the slow checks (those that start brew,
   python, node, bench or git, or ask the site) and says which:
   `"quick": true` and the ids in `skipped_checks`.
@@ -627,7 +637,7 @@ fetches without the flag). `fetched_at` is benchbar's last such fetch.
 Since 0.9 `app update NAME --json` without `--dry-run` streams: the plan line (this document's fields), a step per plan step, and a `done` with `updated` and the [done fields](#the-done-fields-09). `--dry-run --json` is still this one document; `--dry-run --jsonl` is the same fields as a `plan` line, then `done`.
 
 Added in 0.5. The plan of an update, after `git fetch` (which changes
-only the app's `.git`). `--json` without `--dry-run` is refused.
+only the app's `.git`). Without `--dry-run`, `--json` streams (see the top of this section).
 
 ```json
 {"schema_version":1,"cli_version":"0.5.0","bench":"/Users/you/frappe-bench","app":"erpnext","remote":"upstream","branch":"version-15",

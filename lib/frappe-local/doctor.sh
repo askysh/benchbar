@@ -120,6 +120,7 @@ fl_doctor_ack() {
     return 0
   fi
   fl_doctor_id_msg_v msg "$id"
+  [[ "$(fl_bstate_get "ACK_${id}")" == "$msg" ]] || fl_changed state "ack:${id}" "acknowledged: ${msg}"
   fl_bstate_set "ACK_${id}" "$msg"
   fl_ok "acknowledged ${id} for ${FL_BENCH_NAME}: ${msg}"
   fl_note "it lapses when the message changes; undo it: ${FL_SELF} doctor --unack ${id} --bench-dir ${FL_BENCH_DIR}"
@@ -134,7 +135,24 @@ fl_doctor_unack() {
     return 0
   fi
   fl_bstate_del "ACK_${id}"
+  fl_changed state "ack:${id}" "no longer acknowledged"
   fl_ok "${id} is no longer acknowledged"
+}
+
+# fl_doctor_ack_doc ACTION ID: under --json the result of --ack and --unack is
+# one small document: the check and every id with a stored acknowledgement
+fl_doctor_ack_doc() {
+  local file line ids=()
+  [[ "${OPT_JSON:-0}" == "1" ]] || return 0
+  file="$(fl_bench_state_file_for "$FL_BENCH_DIR")"
+  if [[ -r "$file" ]]; then
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      [[ "$line" == ACK_*=* ]] || continue
+      line="${line#ACK_}"; ids+=("${line%%=*}")
+    done <"$file"
+  fi
+  fl_doc_emit 0 "$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"action":%s,"check":%s,"acked":%s}' \
+    "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$1")" "$(fl_json_str "$2")" "$(fl_json_str_array ${ids[@]+"${ids[@]}"})")"
 }
 
 # fl_doctor_print [compact]: compact mode hides [OK] lines and empty groups.

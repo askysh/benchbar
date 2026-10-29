@@ -205,6 +205,7 @@ fl_bench_init_if_needed() {
   fl_run_with_timeout "$timeout_seconds" "bench init" bench init "$bench_dir" --frappe-branch "$frappe_ref" --python "$python_bin" --no-backups --verbose \
     || fl_die "bench init failed." "Manual command: bench init ${bench_dir} --frappe-branch ${frappe_ref} --python ${python_bin} --no-backups --verbose"
   fl_state_set BENCH_INIT complete
+  fl_changed bench "$bench_dir" "created with frappe ${frappe_ref}"
 }
 
 fl_get_app_if_needed() {
@@ -221,6 +222,7 @@ fl_get_app_if_needed() {
       fl_bench_run_long "bench get-app ${app} (${branch})" "$bench_dir" bench get-app --branch "$branch" "$app" \
         || fl_die "bench get-app failed for ${app}." "Manual command: cd ${bench_dir} && bench get-app --branch ${branch} ${app}"
     fi
+    fl_changed app "$app" "cloned at ${branch}"
   fi
   if [[ "$pin" == "1" && -n "$commit" && -d "$bench_dir/apps/$app/.git" ]]; then
     fl_warn "Pinning ${app} to commit ${commit}"
@@ -399,6 +401,7 @@ fl_new_site_if_needed() {
   fi
   rm -f "$marker"
   fl_state_set SITE_CREATED yes
+  fl_changed site "$site_name" "created"
 }
 
 fl_install_app_if_needed() {
@@ -415,6 +418,7 @@ fl_install_app_if_needed() {
   else
     fl_bench_run_long "bench install-app ${app} on ${site_name}" "$bench_dir" bench --site "$site_name" install-app "$app" \
       || fl_die "bench install-app failed for ${app}." "Manual command: cd ${bench_dir} && bench --site ${site_name} install-app ${app}"
+    fl_changed app "$app" "installed on ${site_name}"
   fi
   fl_state_set "APP_${app}_INSTALLED" yes
 }

@@ -313,7 +313,24 @@ fl_next_action() {
 # app, service, ports, hosts, backup or process. Not recorded in a dry run.
 fl_changed() {
   [[ "${FL_DRY_RUN:-0}" != "1" ]] || return 0
+  # a phase script is a child process: it hands its changes to the parent through
+  # the file FL_CHANGED_FILE names (install), which fl_changed_fold reads
+  if [[ -n "${FL_CHANGED_FILE:-}" && "${FL_CHANGED_OWNER:-}" != "$$" ]]; then
+    printf '%s\t%s\t%s\n' "$1" "$2" "${3:-}" >>"$FL_CHANGED_FILE" 2>/dev/null || true
+    return 0
+  fi
   FL_DONE_CHANGED="${FL_DONE_CHANGED}${FL_DONE_CHANGED:+,}{\"kind\":\"$1\",\"name\":$(fl_json_str "$2"),\"detail\":$(fl_json_str "${3:-}")}"
+}
+
+# fl_changed_fold: what the children recorded joins changed[] (once)
+fl_changed_fold() {
+  local kind name detail
+  [[ -n "${FL_CHANGED_FILE:-}" && "${FL_CHANGED_OWNER:-}" == "$$" && -s "$FL_CHANGED_FILE" ]] || return 0
+  while IFS=$'\t' read -r kind name detail; do
+    [[ -n "$kind" ]] || continue
+    FL_DONE_CHANGED="${FL_DONE_CHANGED}${FL_DONE_CHANGED:+,}{\"kind\":\"${kind}\",\"name\":$(fl_json_str "$name"),\"detail\":$(fl_json_str "$detail")}"
+  done <"$FL_CHANGED_FILE"
+  : >"$FL_CHANGED_FILE"
 }
 
 # fl_done_fields_v VAR [CODE]: `"exit":N,"changed":[..],"warnings":[..],"next_actions":[..],"state_after":{..}`
@@ -321,6 +338,8 @@ fl_changed() {
 fl_done_fields_v() {
   local __f="" __tail
   [[ -z "${2:-}" ]] || __f="\"exit\":${2},"
+  [[ -z "$FL_NEED_MISSING_JSON" ]] || __f="${__f}\"missing\":[${FL_NEED_MISSING_JSON}],"
+  fl_changed_fold
   fl_done_tail_v __tail
   printf -v "$1" '%s"changed":[%s],"warnings":[%s],%s' "$__f" "$FL_DONE_CHANGED" "$FL_DONE_WARNINGS" "$__tail"
 }
@@ -825,18 +844,43 @@ fl_steps_counts() {
 fl_noninteractive() { [[ "${BENCHBAR_NONINTERACTIVE:-0}" == "1" ]]; }
 
 FL_NEED_LIST=""
+# the names alone, as JSON strings: the "missing" field of the refusal
+FL_NEED_JSON=""
+FL_NEED_MISSING_JSON=""
 # fl_need INPUT WHY: the run cannot go on without INPUT (an environment
 # variable, a flag, sudo); the caller has already seen it is missing
-fl_need() { FL_NEED_LIST="${FL_NEED_LIST}${FL_NEED_LIST:+; }$1 ($2)"; }
-# fl_need_check [always]: dies once, naming everything fl_need collected, in
-# the non interactive mode (or with "always": nothing can be asked here whatever the mode)
+fl_need() {
+  FL_NEED_LIST="${FL_NEED_LIST}${FL_NEED_LIST:+; }$1 ($2)"
+  FL_NEED_JSON="${FL_NEED_JSON}${FL_NEED_JSON:+,}$(fl_json_str "$1")"
+}
+# fl_need_check [always]: refuses once, naming everything fl_need collected, in
+# the non interactive mode (or with "always": nothing can be asked here whatever the mode).
+# Exit 1, or 2 when the MariaDB root password is among them (AGENTS.md). A stream
+# ends with its done line (error, missing); a command with one document under
+# --json prints that document with exit and error; else the text, as fl_die.
 fl_need_check() {
-  local list="$FL_NEED_LIST" why="BENCHBAR_NONINTERACTIVE=1: nothing can be asked"
-  FL_NEED_LIST=""
+  local list="$FL_NEED_LIST" names="$FL_NEED_JSON" why="BENCHBAR_NONINTERACTIVE=1: nothing can be asked" code=1 msg f
+  FL_NEED_LIST=""; FL_NEED_JSON=""
   [[ -n "$list" ]] || return 0
   [[ "${1:-}" == "always" ]] && why="no terminal to ask in"
   [[ "${1:-}" == "always" ]] || fl_noninteractive || return 0
-  fl_die "Cannot start, missing: ${list}." "${why}; pass them (flags before the command's arguments, secrets in the environment) and run the command again. Nothing was changed."
+  case "$names" in *'"MARIADB_ROOT_PASSWORD"'*) code=2 ;; esac
+  msg="Cannot start, missing: ${list}."
+  FL_NEED_MISSING_JSON="$names"
+  if [[ "${FL_JSONL:-0}" == "1" ]]; then
+    # the done line comes from the exit trap
+    FL_DIE_MESSAGE="$msg"
+    fl_log "ABORT: ${msg}"
+    exit "$code"
+  fi
+  if [[ "${OPT_JSON:-0}" == "1" ]]; then
+    printf '%s %s\n' "$msg" "${why}; pass them and run the command again. Nothing was changed." >&2
+    FL_DONE_NO_BENCH=1
+    fl_done_fields_v f "$code"
+    printf '{"schema_version":%d,"cli_version":"%s",%s,"error":%s}\n' "${FL_SCHEMA_VERSION:-1}" "${FL_VERSION:-0}" "$f" "$(fl_json_str "$msg")"
+    exit "$code"
+  fi
+  fl_die "$msg" "${why}; pass them (flags before the command's arguments, secrets in the environment) and run the command again. Nothing was changed." "$code"
 }
 
 fl_confirm() {
