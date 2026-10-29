@@ -774,4 +774,13 @@ assert_calls_not_contain '^sudo -v' "(--for-agent repair must not prompt for sud
 assert_eq "done" "$(ev 'e[-1]["event"]')"
 cp "$TMP_DIR/hosts.keep" "$FL_HOSTS_FILE"; touch "$MOCK_STATE/sudo_cred"
 
+# warnings[] and next_actions[] say what is still wrong after the verify pass,
+# not what the plan found before the run fixed it
+mv "$BENCH/Procfile.lean" "$TMP_DIR/Procfile.lean.aside"
+run_events repair --yes --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$(cat "$STREAM.err")"
+assert_eq "done 0 True" "$(ev '"%s %s %s" % (e[-1]["event"], e[-1]["exit"], any(c["name"] == "write_procfile" for c in e[-1]["changed"]))')"
+assert_eq "[]" "$(ev '[w for w in e[-1]["warnings"] if "Procfile" in w]')" "(a fixed problem is not a warning)"
+assert_eq "[]" "$(ev '[a for a in e[-1]["next_actions"] if "repair" in a["command"]]')" "(nothing left for repair to do)"
+
 printf 'test-agent-contracts: ok\n'

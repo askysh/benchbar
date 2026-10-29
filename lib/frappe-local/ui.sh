@@ -309,6 +309,26 @@ fl_next_action() {
   FL_DONE_NEXT="${FL_DONE_NEXT}${FL_DONE_NEXT:+,}{\"command\":$(fl_json_str "${1:0:500}"),\"why\":$(fl_json_str "${2:0:500}")}"
 }
 
+# fl_done_mark_v VAR: where warnings[] and next_actions[] stand now, for fl_done_forget
+fl_done_mark_v() {
+  printf -v "$1" '%s %s %s %s' "$FL_DONE_WARNINGS_N" "${#FL_DONE_WARNINGS}" "$FL_DONE_NEXT_N" "${#FL_DONE_NEXT}"
+}
+
+# fl_done_forget FROM TO: drops the warnings and next actions collected between
+# two marks (a check print that a later one replaces, the repair engine's plan
+# after its verify pass); what came before FROM and after TO stays
+fl_done_forget() {
+  local fwn fwl fxn fxl twn twl txn txl head tail
+  read -r fwn fwl fxn fxl <<<"$1"
+  read -r twn twl txn txl <<<"$2"
+  head="${FL_DONE_WARNINGS:0:$fwl}"; tail="${FL_DONE_WARNINGS:$twl}"; tail="${tail#,}"
+  FL_DONE_WARNINGS="${head}${head:+${tail:+,}}${tail}"
+  FL_DONE_WARNINGS_N=$((fwn + FL_DONE_WARNINGS_N - twn))
+  head="${FL_DONE_NEXT:0:$fxl}"; tail="${FL_DONE_NEXT:$txl}"; tail="${tail#,}"
+  FL_DONE_NEXT="${head}${head:+${tail:+,}}${tail}"
+  FL_DONE_NEXT_N=$((fxn + FL_DONE_NEXT_N - txn))
+}
+
 # fl_changed KIND NAME [DETAIL]: something this run changed. KIND is site,
 # app, service, ports, hosts, backup or process. Not recorded in a dry run.
 fl_changed() {
