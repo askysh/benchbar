@@ -129,9 +129,10 @@ internal sealed class FlyoutWindow : Window
         // The stamp is the first Rendering after Show, on every open, the first included.
         CompositionTarget.Rendering += OnFirstRender;
         Show();
-        // a new handle may have taken another DPI; put the window exactly where computed
-        NativeMethods.SetWindowPos(Hwnd, IntPtr.Zero, x, y, 0, 0,
-            NativeMethods.SwpNoSize | NativeMethods.SwpNoZOrder | NativeMethods.SwpNoActivate);
+        // The measure above runs before the first show applied the theme's template, so it can be short (80 DIP
+        // against 123 for one bench), and a new handle may have taken another DPI: anchor the real window.
+        UpdateLayout();
+        Reanchor();
         Activate();
         Dispatcher.BeginInvoke(View.FocusFirst, System.Windows.Threading.DispatcherPriority.Loaded);
         Opened?.Invoke();
@@ -151,8 +152,18 @@ internal sealed class FlyoutWindow : Window
     private void OnSizeChanged(object sender, SizeChangedEventArgs e)
     {
         if (!IsVisible || _dpi == 0) return;
-        var scale = VisualTreeHelper.GetDpi(this).DpiScaleX;
-        var (x, y) = Anchor((int)Math.Round(ActualWidth * scale), (int)Math.Round(ActualHeight * scale));
+        Reanchor();
+    }
+
+    /// <summary>
+    /// Puts the window's real rectangle (GetWindowRect, which the Fluent window chrome can make larger than
+    /// ActualHeight) in the anchor corner.
+    /// </summary>
+    private void Reanchor()
+    {
+        if (!NativeMethods.GetWindowRect(Hwnd, out var r)) return;
+        var (x, y) = Anchor(r.Right - r.Left, r.Bottom - r.Top);
+        if (x == r.Left && y == r.Top) return;
         NativeMethods.SetWindowPos(Hwnd, IntPtr.Zero, x, y, 0, 0,
             NativeMethods.SwpNoSize | NativeMethods.SwpNoZOrder | NativeMethods.SwpNoActivate);
     }

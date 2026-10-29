@@ -116,8 +116,8 @@ All notable changes to this project are documented here.
 
 ### Windows (preview)
 
-Built from source for now: a signed `benchbar.exe` with an installer and
-the tray app follow in 0.9.
+Built from source for now: a signed `benchbar.exe` with an installer
+follows in 0.9.
 
 - `benchbar.exe`, a small shim for PowerShell: every command forwards to
   `benchbar` inside WSL with its input, output and exit code unchanged, so
@@ -138,6 +138,17 @@ the tray app follow in 0.9.
 - `benchbar.exe doctor` adds Windows checks (PATH, distro, `.wslconfig`,
   keepalive) before the CLI's own; `benchbar.exe path install` puts the
   shim on the user PATH.
+- BenchBar Tray, a notification area app (WPF, needs the .NET 10 Desktop
+  Runtime): the runner shows your benches' state, tinted for the taskbar,
+  with still poses when animation effects are off. A click opens a flyout
+  with Start, Stop and Restart per bench, Open site, the bench log, Open
+  in VS Code through the WSL extension and a read only Doctor. The right
+  click menu has Open at logon, Appearance, Runner (Bench, Coffee cup and
+  custom runners from `%LOCALAPPDATA%\BenchBar\runners`), Check for
+  Updates, Help and Report a Bug. A Windows notification tells you once
+  when a bench crashes, is paused by the crash guard or meets a port
+  conflict. It never starts a stopped distro on its own: the flyout says
+  the distro is stopped and offers Start. See [Windows](docs/windows.md).
 
 ## 0.7.3 - 2026-10-04
 
