@@ -76,6 +76,16 @@ hand with a version and `draft_release` off: the zips land as workflow
 artifacts only. A pull request that changes `release-windows.yml` or
 `install.ps1` builds both zips and runs the installer on windows-latest.
 
+To give testers a build before a release: run Release Windows by hand
+from main with a version such as `0.9.0` and `draft_release` off, then
+download the `windows-amd64` (and `windows-arm64`) artifact from the
+run's summary page. Each holds the zip and its `sums-<arch>.txt`. Send
+the zip; the tester unpacks it and runs its own `install.ps1`, as
+[Windows](windows.md#a-test-build-you-were-sent) describes. The
+programs are unsigned, so SmartScreen warns on first start and Smart
+App Control in enforce mode blocks them: testers need it off or in
+evaluation mode.
+
 ### Trying a build without a release
 
 Every pull request run of CI (`ci.yml`, job "Unsigned release bundle")

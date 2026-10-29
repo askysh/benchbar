@@ -61,6 +61,26 @@ Without the script: download `benchbar-windows-<version>-amd64.zip` (or
 check it with `Get-FileHash`, unpack it into a folder of your choice and
 run `benchbar.exe path install` from there.
 
+### A test build you were sent
+
+Every zip carries `install.ps1`, so a build that is not on a release
+installs the same way, from its own folder:
+
+1. Unpack the whole zip (right click, Extract All) into a new folder, for
+   example in Downloads. `benchbar-windows-<version>-amd64.zip` is for
+   Intel and AMD PCs, `-arm64.zip` for Arm PCs.
+2. Open PowerShell in that folder and run:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\install.ps1
+   ```
+
+It checks every file against the `SHA256SUMS` in the zip, installs to
+`%LOCALAPPDATA%\Programs\BenchBar` as above, and ends with
+`benchbar.exe doctor`. To keep the zip unpacked, pass it instead:
+`.\install.ps1 -Zip .\benchbar-windows-<version>-amd64.zip`. A checksums
+file next to the zip is checked too when there is one.
+
 Every program in the zip is unsigned until the signing application is
 approved: SmartScreen shows "Windows protected your PC" on first start
 (More info, Run anyway), and Smart App Control in enforce mode blocks

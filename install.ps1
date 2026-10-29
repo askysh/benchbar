@@ -17,6 +17,15 @@
        offers a Startup shortcut for it
     7. runs "benchbar.exe doctor" and prints what it says
 
+  By hand, without a GitHub release (a test build you were sent):
+    - unpack the zip, then in that folder:
+        powershell -ExecutionPolicy Bypass -File .\install.ps1
+      run like this, from a folder that holds benchbar.exe and SHA256SUMS, it
+      installs the build in that folder instead of downloading one
+    - or keep the zip and point at it:
+        powershell -ExecutionPolicy Bypass -File .\install.ps1 -Zip .\benchbar-windows-X-amd64.zip
+  Either way every file is checked against the SHA256SUMS inside the zip.
+
   It installs per user and never asks for administrator rights. It never
   writes anything inside a WSL distro and never runs "wsl --shutdown". The
   final doctor starts the distro if it is stopped. Your benches, sites and
@@ -32,6 +41,7 @@
     BENCHBAR_VERSION=0.9.0   the same as -Version
     BENCHBAR_NO_TRAY=1       the same as -NoTray
     BENCHBAR_YES=1           the same as -Yes
+    BENCHBAR_ZIP=PATH        the same as -Zip
     BENCHBAR_SOURCE=DIR      the same as -Source (CI only)
 
 .PARAMETER Version
@@ -44,6 +54,11 @@
 .PARAMETER Yes
   Accept every default, ask nothing. A running tray app from the install
   folder is closed (by its exact path) and started again at the end.
+
+.PARAMETER Zip
+  Install this zip (benchbar-windows-VERSION-ARCH.zip) instead of downloading
+  one. A checksums file next to it (the release's benchbar-windows-VERSION-
+  SHA256SUMS.txt, or sums-ARCH.txt from a workflow artifact) is checked too.
 
 .PARAMETER Source
   For CI and tests only: take the zip and the checksums file from this
@@ -59,7 +74,8 @@
     [string]$Version = '',
     [switch]$NoTray,
     [switch]$Yes,
-    [string]$Source = ''
+    [string]$Source = '',
+    [string]$Zip = ''
   )
 
 function Install-BenchBar {
@@ -68,7 +84,8 @@ function Install-BenchBar {
     [string]$Version = '',
     [switch]$NoTray,
     [switch]$Yes,
-    [string]$Source = ''
+    [string]$Source = '',
+    [string]$Zip = ''
   )
 
   # scoped to this function, so piping into iex leaves your session alone
@@ -159,6 +176,28 @@ function Install-BenchBar {
 
   # Copy-IntoPlace SRC DST: a running exe cannot be overwritten but can be
   # renamed, so a locked file moves aside to NAME.old (removed on the next run)
+  # Checks every file listed in the folder's SHA256SUMS (written when the zip
+  # was built) and refuses a program file the list does not name.
+  function Test-InnerSums([string]$Folder) {
+    $list = Join-Path $Folder 'SHA256SUMS'
+    if (-not (Test-Path -LiteralPath $list)) { Stop-Install "SHA256SUMS is missing from the build in $Folder; refusing to install unchecked files." }
+    $root = (Resolve-Path -LiteralPath $Folder).Path.TrimEnd('\')
+    $listed = @{}
+    foreach ($line in Get-Content -LiteralPath $list) {
+      $m = [regex]::Match($line, '^\s*([0-9A-Fa-f]{64})\s+\*?(.+?)\s*$')
+      if (-not $m.Success) { continue }
+      $rel = $m.Groups[2].Value.Replace('/', '\')
+      $listed[$rel.ToLowerInvariant()] = $true
+      $path = Join-Path $root $rel
+      if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { Stop-Install "$rel is missing from the build in $Folder." 'unpack the whole zip again' }
+      if ((Get-FileSha256 $path) -ne $m.Groups[1].Value.ToLowerInvariant()) { Stop-Install "$rel does not match SHA256SUMS; refusing to install." 'download and unpack the zip again' }
+    }
+    $strangers = @(Get-ChildItem -LiteralPath $root -Recurse -File | Where-Object { $_.Extension -in '.exe', '.dll' } |
+        ForEach-Object { $_.FullName.Substring($root.Length + 1) } | Where-Object { -not $listed.ContainsKey($_.ToLowerInvariant()) })
+    if ($strangers.Count -gt 0) { Stop-Install "Program files that SHA256SUMS does not list: $($strangers -join ', '); refusing to install." 'unpack the zip into an empty folder' }
+    Say-Ok "$($listed.Count) files match SHA256SUMS"
+  }
+
   function Copy-IntoPlace([string]$From, [string]$To) {
     $dir = Split-Path -Parent $To
     if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
@@ -189,6 +228,15 @@ function Install-BenchBar {
   if (-not $NoTray -and (Test-Flag $env:BENCHBAR_NO_TRAY)) { $NoTray = [switch]$true }
   if (-not $Yes -and (Test-Flag $env:BENCHBAR_YES)) { $Yes = [switch]$true }
   if (-not $Source -and $env:BENCHBAR_SOURCE) { $Source = $env:BENCHBAR_SOURCE }
+  if (-not $Zip -and $env:BENCHBAR_ZIP) { $Zip = $env:BENCHBAR_ZIP }
+  # Run as a file from an unpacked zip (benchbar.exe and SHA256SUMS beside the
+  # script) and given nothing else: install the build in this folder.
+  $fromFolder = ''
+  if ($PSScriptRoot -and -not $Zip -and -not $Source -and -not $Version -and
+      (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'benchbar.exe')) -and
+      (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'SHA256SUMS'))) {
+    $fromFolder = $PSScriptRoot
+  }
   if ($Version) {
     $Version = $Version.Trim()
     if ($Version -notmatch '^v?\d+\.\d+\.\d+$') { Stop-Install "'$Version' is not a version." 'use X.Y.Z, for example -Version 0.9.0' }
@@ -238,7 +286,58 @@ function Install-BenchBar {
     $sumsName = ''
     $zipUrl = ''
     $sumsUrl = ''
-    if ($Source) {
+    $releaseVersion = 'unknown'
+    $staging = Join-Path $work 'staging'
+    if ($fromFolder) {
+      # run from an unpacked zip: install what is in this folder
+      Say-Step "Installing the build unpacked in $fromFolder"
+      if ((Resolve-Path -LiteralPath $fromFolder).Path.TrimEnd('\') -ieq $installDir.TrimEnd('\')) {
+        Stop-Install 'This is the install folder itself.' 'unpack the zip somewhere else (Downloads is fine) and run its install.ps1 from there'
+      }
+      $readmePath = Join-Path $fromFolder 'README.txt'
+      if (Test-Path -LiteralPath $readmePath) {
+        $head = [regex]::Match((Get-Content -LiteralPath $readmePath -TotalCount 1), 'BenchBar for Windows (\S+) \((amd64|arm64)\)')
+        if ($head.Success) {
+          $releaseVersion = $head.Groups[1].Value
+          if ($head.Groups[2].Value -ne $arch) { Stop-Install "This build is for $($head.Groups[2].Value), this PC is $arch." "download benchbar-windows-$releaseVersion-$arch.zip instead" }
+        }
+      }
+      $staging = $fromFolder
+      Say-Ok "build $releaseVersion"
+    } elseif ($Zip) {
+      # a zip downloaded by hand (a release asset, or a workflow artifact you were sent)
+      Say-Step "Checking the zip $Zip"
+      if (-not (Test-Path -LiteralPath $Zip -PathType Leaf)) { Stop-Install "There is no file '$Zip'." }
+      $zipFull = (Resolve-Path -LiteralPath $Zip).Path
+      $zipName = Split-Path -Leaf $zipFull
+      $found = [regex]::Match($zipName, '^benchbar-windows-(.+)-(amd64|arm64)\.zip$')
+      if (-not $found.Success) { Stop-Install "'$zipName' is not a BenchBar Windows zip (benchbar-windows-VERSION-ARCH.zip)." }
+      $releaseVersion = $found.Groups[1].Value
+      if ($found.Groups[2].Value -ne $arch) { Stop-Install "$zipName is for $($found.Groups[2].Value), this PC is $arch." "use benchbar-windows-$releaseVersion-$arch.zip" }
+      # a checksums file next to it is checked when there is one: the release's, or a workflow artifact's
+      $zipDir = Split-Path -Parent $zipFull
+      $sumsPath = ''
+      foreach ($candidate in @("benchbar-windows-$releaseVersion-SHA256SUMS.txt", "sums-$arch.txt")) {
+        $p = Join-Path $zipDir $candidate
+        if (Test-Path -LiteralPath $p) { $sumsPath = $p; $sumsName = $candidate; break }
+      }
+      if ($sumsPath) {
+        $expected = ''
+        foreach ($line in Get-Content -LiteralPath $sumsPath) {
+          $m = [regex]::Match($line, '^\s*([0-9A-Fa-f]{64})\s+\*?(.+?)\s*$')
+          if ($m.Success -and $m.Groups[2].Value -eq $zipName) { $expected = $m.Groups[1].Value.ToLowerInvariant(); break }
+        }
+        if (-not $expected) { Stop-Install "$sumsName has no line for $zipName; refusing to install an unchecked file." }
+        $actual = Get-FileSha256 $zipFull
+        if ($actual -ne $expected) { Stop-Install "SHA256 of $zipName does not match $sumsName (expected $expected, got $actual); refusing to install." 'download the zip again' }
+        Say-Ok "SHA256 matches $sumsName ($($actual.Substring(0, 12))...)"
+      } else {
+        Say-Warn "No checksums file next to the zip: only the zip's own SHA256SUMS is checked, which finds a damaged download, not a swapped one. Install zips only from someone you trust."
+      }
+      Expand-Archive -LiteralPath $zipFull -DestinationPath $staging -Force
+      if (-not (Test-Path -LiteralPath (Join-Path $staging 'benchbar.exe'))) { Stop-Install "$zipName holds no benchbar.exe." }
+      Say-Ok 'Unpacked'
+    } elseif ($Source) {
       Say-Step "Looking for the release files in $Source (test mode)"
       if (-not (Test-Path -LiteralPath $Source -PathType Container)) { Stop-Install "-Source folder '$Source' does not exist." }
       $zips = @(Get-ChildItem -LiteralPath $Source -File -Filter "benchbar-windows-*-$arch.zip")
@@ -274,6 +373,7 @@ function Install-BenchBar {
     }
 
     # ---------------------------------------------------------- 3. download, verify, unpack
+    if (-not $fromFolder -and -not $Zip) {
     Say-Step 'Downloading and checking the files'
     $zipPath = Join-Path $work $zipName
     $sumsPath = Join-Path $work $sumsName
@@ -299,10 +399,14 @@ function Install-BenchBar {
     if ($actual -ne $expected) { Stop-Install "SHA256 of $zipName does not match $sumsName (expected $expected, got $actual); refusing to install." 'run the installer again; if it repeats, report it at https://github.com/askysh/benchbar/issues' }
     Say-Ok "SHA256 matches ($($actual.Substring(0, 12))...)"
 
-    $staging = Join-Path $work 'staging'
     Expand-Archive -LiteralPath $zipPath -DestinationPath $staging -Force
     if (-not (Test-Path -LiteralPath (Join-Path $staging 'benchbar.exe'))) { Stop-Install "$zipName holds no benchbar.exe." }
     Say-Ok 'Unpacked'
+    }
+
+    # every file against the SHA256SUMS inside the zip: a damaged download or a
+    # half unpacked folder stops here
+    Test-InnerSums $staging
 
     # ---------------------------------------------------------- 4. install
     Say-Step "Installing to $installDir"
@@ -452,7 +556,7 @@ function Install-BenchBar {
 # file, a failure sets the exit code.
 $benchbarOk = $false
 try {
-  $benchbarOk = Install-BenchBar -Version $Version -NoTray:$NoTray -Yes:$Yes -Source $Source
+  $benchbarOk = Install-BenchBar -Version $Version -NoTray:$NoTray -Yes:$Yes -Source $Source -Zip $Zip
 } catch {
   Write-Host "  [FAIL] $($_.Exception.Message)" -ForegroundColor Red
 }

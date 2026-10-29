@@ -158,7 +158,9 @@ approved.
   `%LOCALAPPDATA%\Programs\BenchBar`, puts it on your PATH, checks the
   .NET 10 Desktop Runtime, offers the tray at logon and ends with
   `benchbar.exe doctor`. Re-running updates in place; `-Version`,
-  `-NoTray` and `-Yes`.
+  `-NoTray` and `-Yes`. Each zip carries `install.ps1` too: run from the
+  unpacked zip it installs that build, and `-Zip PATH` installs a zip you
+  downloaded, so a test build installs without a release.
 - `benchbar.exe doctor` checks the .NET 10 Desktop Runtime and the tray's
   logon shortcut when the tray app sits next to it.
 - The Windows binaries are unsigned until the code signing application

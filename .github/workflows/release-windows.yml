@@ -289,7 +289,9 @@ jobs:
           $pkg = 'pkg'
           New-Item -ItemType Directory -Force $pkg, dist | Out-Null
           Copy-Item out/benchbar.exe $pkg/
-          $hasTray = ($env:HAS_TRAY -eq 'true') -and (Test-Path out/tray/BenchBarTray.exe)
+          # the installer rides along, so a build sent by hand installs from its unpacked folder
+          Copy-Item install.ps1 $pkg/
+          $hasTray =($env:HAS_TRAY -eq 'true') -and (Test-Path out/tray/BenchBarTray.exe)
           if ($hasTray) { Copy-Item out/tray/* $pkg/ -Recurse -Force }
           $root = (Resolve-Path $pkg).Path
 
@@ -343,7 +345,14 @@ jobs:
 
           $programs
 
-          Install (per user, no administrator rights):
+          Install from this folder (per user, no administrator rights): unpack
+          the whole zip, open PowerShell in the unpacked folder and run
+            powershell -ExecutionPolicy Bypass -File .\install.ps1
+          It checks every file against SHA256SUMS, installs to
+          %LOCALAPPDATA%\Programs\BenchBar, puts benchbar.exe on your PATH and
+          ends with benchbar.exe doctor. Running it again updates in place.
+
+          From a published release, the one liner does the same:
             irm https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1 | iex
 
           Code signing, as checked with Get-AuthenticodeSignature when this zip was built:
@@ -457,6 +466,43 @@ jobs:
           pwsh -NoProfile -File install.ps1 -Source $bad -NoTray -Yes
           if ($LASTEXITCODE -eq 0) { throw 'install.ps1 accepted a wrong checksum' }
           if (Test-Path (Join-Path $fresh 'Programs/BenchBar/benchbar.exe')) { throw 'a refused install left files behind' }
+          $global:LASTEXITCODE = 0
+
+      - name: By hand, from the unpacked zip with its own install.ps1
+        run: |
+          $unpacked = Join-Path $env:RUNNER_TEMP 'unpacked'
+          Expand-Archive (Get-ChildItem source -Filter *.zip).FullName -DestinationPath $unpacked -Force
+          if (-not (Test-Path (Join-Path $unpacked 'install.ps1'))) { throw 'the zip carries no install.ps1' }
+          $fresh = Join-Path $env:RUNNER_TEMP 'localappdata-folder'
+          New-Item -ItemType Directory -Force $fresh | Out-Null
+          $env:LOCALAPPDATA = $fresh
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $unpacked 'install.ps1') -NoTray -Yes
+          if ($LASTEXITCODE -ne 0) { throw "install.ps1 from the unpacked folder exited with $LASTEXITCODE" }
+          if (-not (Test-Path (Join-Path $fresh 'Programs/BenchBar/benchbar.exe'))) { throw 'the folder install did not install' }
+
+      - name: By hand, -Zip without a checksums file
+        run: |
+          $alone = Join-Path $env:RUNNER_TEMP 'zip-alone'
+          New-Item -ItemType Directory -Force $alone | Out-Null
+          Copy-Item source/*.zip $alone
+          $fresh = Join-Path $env:RUNNER_TEMP 'localappdata-zip'
+          New-Item -ItemType Directory -Force $fresh | Out-Null
+          $env:LOCALAPPDATA = $fresh
+          pwsh -NoProfile -File install.ps1 -Zip (Get-ChildItem $alone -Filter *.zip).FullName -NoTray -Yes
+          if ($LASTEXITCODE -ne 0) { throw "install.ps1 -Zip exited with $LASTEXITCODE" }
+          if (-not (Test-Path (Join-Path $fresh 'Programs/BenchBar/benchbar.exe'))) { throw 'the -Zip install did not install' }
+
+      - name: By hand, a changed file in the unpacked folder must be refused
+        run: |
+          $changed = Join-Path $env:RUNNER_TEMP 'changed'
+          Expand-Archive (Get-ChildItem source -Filter *.zip).FullName -DestinationPath $changed -Force
+          Add-Content (Join-Path $changed 'README.txt') 'changed'
+          $fresh = Join-Path $env:RUNNER_TEMP 'localappdata-changed'
+          New-Item -ItemType Directory -Force $fresh | Out-Null
+          $env:LOCALAPPDATA = $fresh
+          pwsh -NoProfile -File (Join-Path $changed 'install.ps1') -NoTray -Yes
+          if ($LASTEXITCODE -eq 0) { throw 'install.ps1 installed a folder whose files do not match SHA256SUMS' }
+          if (Test-Path (Join-Path $fresh 'Programs/BenchBar/benchbar.exe')) { throw 'a refused folder install left files behind' }
           $global:LASTEXITCODE = 0
 
   release:
