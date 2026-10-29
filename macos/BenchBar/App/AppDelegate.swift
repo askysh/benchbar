@@ -120,6 +120,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             AboutPane(store: store, model: about, router: router)
         }
 
+        mainWindow.router.openSettings = { [weak self] in self?.openSettings() }
+        mainWindow.router.openAbout = { [weak self] in self?.openAboutAction() }
+
         logWindows = LogWindowController { [weak self] path in self?.openLogsInTerminal(path) }
 
         if Updater.isAvailable { updater = Updater() }
