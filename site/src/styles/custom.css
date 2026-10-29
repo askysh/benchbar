@@ -53,8 +53,10 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* ---- header: quiet, translucent, one hairline */
-.header {
+/* ---- header: quiet, translucent, one hairline. Only the outer <header>:
+   Starlight's inner div is also called .header, and a border on both drew
+   two lines. */
+header.header {
   background: color-mix(in srgb, var(--sl-color-black) 82%, transparent);
   backdrop-filter: saturate(160%) blur(12px);
   border-bottom: 1px solid var(--bb-border);
@@ -95,7 +97,10 @@ body {
   color: var(--sl-color-accent-high);
 }
 
-/* ---- page title and headings */
+/* ---- page title and headings, no rule under the title band */
+.content-panel + .content-panel {
+  border-top: 0;
+}
 .content-panel h1#_top {
   font-weight: 700;
   letter-spacing: -0.025em;
