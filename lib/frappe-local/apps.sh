@@ -480,10 +480,12 @@ fl_app_build() {
   fl_run_long "bench build ${args[*]}" fl__in_dir "$FL_BENCH_DIR" bench build "${args[@]}"
 }
 
-# restart a running bench so the new code is served; a stopped one stays stopped
+# restart a running bench so the new code is served; a stopped one stays stopped.
+# The caller's own step is the restart in the stream: restart's step lines
+# (restart_service, wait_site) are left out of it (FL_JSONL=0 in the subshell)
 fl_app_restart_if_running() {
   fl_bench_is_running || { fl_info "the bench is not running; the change is live on the next benchup"; return 0; }
-  ( fl_cmd_restart ) || { fl_warn "restart failed; run: benchbar restart --bench-dir ${FL_BENCH_DIR}"; return 1; }
+  ( FL_JSONL=0; fl_cmd_restart ) || { fl_warn "restart failed; run: benchbar restart --bench-dir ${FL_BENCH_DIR}"; return 1; }
 }
 
 # fl_app_verify APP BRANCH SITE...: apps.txt, the branch, the sites.

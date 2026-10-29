@@ -762,4 +762,45 @@ assert_eq "1" "$CODE" "$OUT"
 )
 assert_eq "broken" "$(cat "$TMP_DIR/kv.result")" "(a lock from the future is broken)"
 
+# ---------------------------------------------------------------- 10. third review
+
+# the non interactive mode never lets sudo prompt: a hosts line that needs a
+# password is skipped with its command, as under --json, and sudo -v never runs
+cp "$FL_HOSTS_FILE" "$TMP_DIR/hosts.keep"
+grep -v ' macdev$' "$TMP_DIR/hosts.keep" >"$FL_HOSTS_FILE"
+rm -f "$MOCK_STATE/sudo_cred"; reset_calls
+BENCHBAR_NONINTERACTIVE=1 run_fm repair --yes --bench-dir "$BENCH"
+assert_calls_not_contain '^sudo -v' "(BENCHBAR_NONINTERACTIVE=1 repair must not prompt for sudo)"
+assert_contains "$OUT" "cannot ask for one"
+assert_eq "0" "$(grep -c ' macdev$' "$FL_HOSTS_FILE" || true)" "(the hosts step was skipped)"
+reset_calls
+stream --for-agent repair --yes --bench-dir "$BENCH"
+assert_calls_not_contain '^sudo -v' "(--for-agent repair must not prompt for sudo)"
+assert_eq "done" "$(ev 'e[-1]["event"]')"
+cp "$TMP_DIR/hosts.keep" "$FL_HOSTS_FILE"; touch "$MOCK_STATE/sudo_cred"
+
+# warnings[] and next_actions[] say what is still wrong after the verify pass,
+# not what the plan found before the run fixed it
+mv "$BENCH/Procfile.lean" "$TMP_DIR/Procfile.lean.aside"
+run_events repair --yes --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$(cat "$STREAM.err")"
+assert_eq "done 0 True" "$(ev '"%s %s %s" % (e[-1]["event"], e[-1]["exit"], any(c["name"] == "write_procfile" for c in e[-1]["changed"]))')"
+assert_eq "[]" "$(ev '[w for w in e[-1]["warnings"] if "Procfile" in w]')" "(a fixed problem is not a warning)"
+assert_eq "[]" "$(ev '[a for a in e[-1]["next_actions"] if "repair" in a["command"]]')" "(nothing left for repair to do)"
+
+# site drop --new-default: the default's move is in changed[] too (it ran in a subshell)
+mkdir -p "$BENCH/sites/dropdef"; printf '{}\n' >"$BENCH/sites/dropdef/site_config.json"
+run_fm site default dropdef --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+stream site drop dropdef --confirm-site dropdef --new-default macdev --jsonl --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$(cat "$STREAM.err")"
+assert_eq "True" "$(sx '{"kind": "site", "name": "macdev", "detail": "now the default site"} in e[-1]["changed"]')" "$(cat "$STREAM")"
+assert_eq "macdev macdev" "$(sx '"%s %s" % (e[-1]["default_site"], e[-1]["state_after"]["site"])')" "$(cat "$STREAM")"
+
+# site add NEW --dry-run --json: nothing was created, and the done line says it was a dry run
+stream site add drynew --dry-run --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$(cat "$STREAM.err")"
+assert_eq "False True" "$(sx '"%s %s" % (e[-1]["created"], e[-1].get("dry_run"))')" "$(cat "$STREAM")"
+assert_no_file "$BENCH/sites/drynew"
+
 printf 'test-agent-contracts: ok\n'

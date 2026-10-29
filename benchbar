@@ -579,7 +579,10 @@ fl_jsonl_done_generic() {
   if [[ -n "$FL_DOC" ]]; then rest="$(fl_doc_rest "$FL_DOC"),"; else
     rest="\"bench\":$(fl_json_str "${FL_BENCH_DIR:-}"),"
     [[ "${FL_DONE_NO_BENCH:-0}" != "1" ]] || rest="\"bench\":null,"
-    [[ "$FL_DRY_RUN" != "1" ]] || extra="${extra},\"dry_run\":true"
+  fi
+  # a dry run says so, also when the command's document does not
+  if [[ "$FL_DRY_RUN" == "1" ]]; then
+    case "$rest" in *'"dry_run":'*) ;; *) extra="${extra},\"dry_run\":true" ;; esac
   fi
   fl_jsonl "done" ",${rest}${f},\"log\":$(fl_json_str "${FL_LOG_FILE:-}")${extra}"
 }

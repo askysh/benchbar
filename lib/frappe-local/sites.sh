@@ -366,7 +366,8 @@ fl_cmd_site_add() {
     fl_bench_redis_up "$FL_BENCH_DIR"
     fl_site_default_file_v default_before
     fl_new_site_if_needed "$FL_BENCH_DIR" "$name" "$FL_MARIADB_ROOT_PW" "$ADMIN_PASSWORD" || { fl_bench_redis_down; return 1; }
-    created=true
+    # a dry run creates nothing (its done line says dry_run)
+    [[ "${FL_DRY_RUN:-0}" == "1" ]] || created=true
     # a new site never becomes the default: if bench moved it, it goes back
     fl_site_default_file_v default_after
     if [[ "${FL_DRY_RUN:-0}" != "1" && "$default_after" != "$default_before" ]]; then

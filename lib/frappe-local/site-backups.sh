@@ -357,7 +357,11 @@ fl_cmd_site_drop() {
   if [[ -n "$new_default" ]]; then
     # in a subshell: fl_cmd_site_default dies on a failed bench use, and the
     # site is already gone, which the message must say
-    if ! (fl_cmd_site_default "$new_default"); then
+    if (fl_cmd_site_default "$new_default"); then
+      # what the subshell recorded is gone with it
+      FL_SITE="$new_default"
+      fl_changed site "$new_default" "now the default site"
+    else
       fl_fail "${name} is dropped, but the default did not move to ${new_default}; currentsite.txt still names ${name}"
       fl_fix "cd ${FL_BENCH_DIR} && bench use ${new_default}, then: ${FL_SELF} site default ${new_default} --bench-dir ${FL_BENCH_DIR}"
       default_failed=1
