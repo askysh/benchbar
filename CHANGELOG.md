@@ -113,6 +113,12 @@ All notable changes to this project are documented here.
   as stale by its age, and two runs at once could stop with "File: unbound
   variable": GNU `stat -f` prints file system text where BSD `stat -f`
   prints a time.
+- `repair` run by a copy of BenchBar.app that the app did not register (a
+  development build, a second copy of the app) no longer points the shell
+  helpers at that copy's own CLI, which goes away with the build. The
+  block keeps the benchbar it names, or names Homebrew's copy, the
+  installer's or the app's link, and doctor run from such a copy no longer
+  says the block is outdated.
 
 ### Windows (preview)
 

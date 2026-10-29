@@ -151,10 +151,24 @@ fl_render_all() {
 # churn ~/.zshrc); with none recorded, the copy that handed off to this run
 # comes first, then Homebrew's, then the installer's. The link is the last
 # resort, when nothing else is installed.
+# An app copy BenchBar.app did not register (a build in Xcode's folder, a
+# second copy of the app) records its own path, which goes with that
+# build. The block keeps what it names, unless that is gone or an app's
+# own CLI, and otherwise names what benchbar in Terminal runs: Homebrew's
+# copy, the installer's, or the app's link. Only with none of them does it
+# name this copy.
 fl_helpers_cli() {
   local recorded c
   if [[ "${FL_INSTALL_KIND:-}" == app ]]; then
     recorded="$(fl_rc_block_extract "$(fl_rc_file)" 2>/dev/null | sed -n 's/^BENCHBAR="\(.*\)"$/\1/p' | head -n 1)"
+    if [[ "$FL_SELF" != "$FL_APP_CLI" ]]; then
+      case "$recorded" in */BenchBar.app/Contents/Resources/cli/benchbar) recorded="" ;; esac
+      for c in "$recorded" "$(fl_brew_cli)" "${FL_MANAGED_HOME}/benchbar" "$FL_APP_CLI"; do
+        if [[ -n "$c" && -x "$c" ]]; then printf '%s' "$c"; return 0; fi
+      done
+      printf '%s' "$FL_SELF"
+      return 0
+    fi
     if [[ -n "$recorded" ]] && fl_cli_hands_off "$recorded"; then printf '%s' "$recorded"; return 0; fi
     for c in "${FL_HANDOFF_FROM:-}" "$(fl_brew_cli)" "${FL_MANAGED_HOME}/benchbar"; do
       [[ -n "$c" ]] || continue
