@@ -93,7 +93,7 @@ public sealed class HarnessLink : IDisposable
             {
                 var command = line.Trim();
                 // Answered here, the same in both shells: frames shown so far, for the achieved fps.
-                if (command == "stats") { Send($"stats frames={FrameSequencer.FramesShown} qpc={Qpc()}"); continue; }
+                if (command == "stats") { var gc = GC.GetGCMemoryInfo(); Send($"stats frames={FrameSequencer.FramesShown} qpc={Qpc()} gc_heap={gc.HeapSizeBytes} gc_committed={gc.TotalCommittedBytes}"); continue; }
                 try { Command?.Invoke(command); }
                 catch (Exception) { /* a handler must not end the link */ }
             }

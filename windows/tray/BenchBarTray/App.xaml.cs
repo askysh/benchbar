@@ -31,6 +31,8 @@ public partial class App : Application, ITrayHost
     private FlyoutWindow? _flyout;
     private TrayMenu? _menu;
     private IBenchSource? _source;
+    private static readonly TimeSpan FlyoutKeepAlive = TimeSpan.FromSeconds(30);
+    private readonly System.Windows.Threading.DispatcherTimer _releaseFlyout = new(System.Windows.Threading.DispatcherPriority.Background) { Interval = FlyoutKeepAlive };
     private long _flyoutHiddenAt;
     private int _awake;
     private bool _quitting;
@@ -38,6 +40,10 @@ public partial class App : Application, ITrayHost
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        // Software rendering: the flyout is plain 2D, and a Direct3D device (with the GPU driver behind it)
+        // stayed in memory after the first open, 62.6 MB private instead of 17 MB at rest.
+        if (Environment.GetEnvironmentVariable("BENCHBAR_TRAY_GPU") != "1")
+            System.Windows.Media.RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
         DispatcherUnhandledException += (_, args) =>
         {
             _log.Write("ui", args.Exception);
@@ -77,10 +83,13 @@ public partial class App : Application, ITrayHost
         };
         // The controller and the first frame exist before NIM_ADD, so "icon-added" means a runner is visible.
         _controller = new TrayController(_source, new DispatcherFrameClock(), this, TimeProvider.System, options);
-        _menu = new TrayMenu(BuildMenuModel());
-
-        _icon = new TaskbarIcon { ToolTipText = "BenchBar", NoLeftClickDelay = true, ContextMenu = _menu.Menu };
+        _icon = new TaskbarIcon { ToolTipText = "BenchBar", NoLeftClickDelay = true };
         _icon.TrayLeftMouseUp += (_, _) => ToggleFlyout();
+        // The menu is built on the first right click: built at startup it loaded WPF's render stack
+        // (wpfgfx, d3d9, the GPU driver) and doubled private bytes at rest.
+        _icon.TrayRightMouseDown += (_, _) => EnsureMenu();
+        _icon.TrayKeyboardContextMenu += (_, _) => EnsureMenu();
+        _icon.PreviewTrayContextMenuOpen += (_, _) => EnsureMenu();
         _icon.TrayBalloonTipClicked += (_, _) => ShowFlyout();
 
         // NIM_ADD succeeded when the core TrayIcon raises Created; IsCreated is the fallback.
@@ -97,6 +106,7 @@ public partial class App : Application, ITrayHost
         _icon.ForceCreate(); // puts the process in efficiency mode; the windows leave it while open
         if (_icon.IsCreated) IconAdded();
 
+        _releaseFlyout.Tick += (_, _) => ReleaseFlyout();
         _controller.Start();
     }
 
@@ -186,10 +196,26 @@ public partial class App : Application, ITrayHost
             {
                 _flyoutHiddenAt = Environment.TickCount64;
                 Awake(false);
+                _releaseFlyout.Stop();
+                _releaseFlyout.Start();
             };
             view.SetSnapshot(_controller.Snapshot, TrayController.UpText(_controller.Snapshot, _controller.Benches.Select(b => b.State).ToList()));
         }
         _flyout.ShowAtTray();
+    }
+
+    /// <summary>
+    /// A flyout hidden for <see cref="FlyoutKeepAlive"/> is closed and its memory handed back, so the tray
+    /// returns to its at rest size; a click within that time reopens the warm window.
+    /// </summary>
+    private void ReleaseFlyout()
+    {
+        _releaseFlyout.Stop();
+        if (_flyout is null || _flyout.IsVisible) return;
+        _flyout.Close();
+        _flyout = null;
+        System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
+        GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
     }
 
     /// <summary>
@@ -291,6 +317,13 @@ public partial class App : Application, ITrayHost
     }
 
     // --- context menu ---
+
+    private void EnsureMenu()
+    {
+        if (_menu is not null || _icon is null || _quitting) return;
+        _menu = new TrayMenu(BuildMenuModel());
+        _icon.ContextMenu = _menu.Menu;
+    }
 
     private TrayMenuModel BuildMenuModel() => new()
     {

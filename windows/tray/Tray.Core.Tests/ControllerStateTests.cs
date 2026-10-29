@@ -37,7 +37,7 @@ public class ControllerStateTests
         source.ListFails = new SetupProblemException(ShimBenchSource.NotFoundMessage);
         using (controller)
         {
-            controller.Start();
+            host.Ui(controller.Start);
             await UntilAsync(() => host.Changes.Count > 0);
 
             Assert.Contains(controller.Sequencer.Plan, new RunnerPlan?[]
@@ -64,7 +64,7 @@ public class ControllerStateTests
         });
         using (controller)
         {
-            controller.Start();
+            host.Ui(controller.Start);
             await UntilAsync(() => host.Changes.Count > 0);
 
             Assert.True(controller.Snapshot.DistroStopped);
@@ -91,11 +91,11 @@ public class ControllerStateTests
         });
         using (controller)
         {
-            controller.Start();
+            host.Ui(controller.Start);
             await UntilAsync(() => host.Changes.Count > 0);
             var calls = distro.Calls;
 
-            Assert.True(controller.StartDistro());
+            Assert.True(host.Ui(controller.StartDistro));
             Assert.Equal(1, source.DistroStarts);
             await UntilAsync(() => distro.Calls > calls);
 
@@ -116,7 +116,7 @@ public class ControllerStateTests
         var (controller, host, source, _) = Make(BenchState.Running);
         using (controller)
         {
-            controller.Start();
+            host.Ui(controller.Start);
             await UntilAsync(() => host.Changes.Count > 0);
             var lists = source.Lists;
             await controller.RestartAsync(Status(BenchState.Running));
@@ -131,7 +131,7 @@ public class ControllerStateTests
         var (controller, host, source, time) = Make(BenchState.Stopped);
         using (controller)
         {
-            controller.Start();
+            host.Ui(controller.Start);
             await UntilAsync(() => host.Changes.Count > 0);
             await controller.StartStopAsync(Status(BenchState.Stopped));
             await UntilAsync(() => host.Changes.Count > 1);
@@ -148,7 +148,7 @@ public class ControllerStateTests
         var (controller, host, source, time) = Make(BenchState.Running);
         using (controller)
         {
-            controller.Start();
+            host.Ui(controller.Start);
             await UntilAsync(() => host.Changes.Count > 0);
             Assert.Empty(host.Toasts); // the first snapshot only seeds
 
@@ -171,11 +171,11 @@ public class ControllerStateTests
         var (controller, host, _, _) = Make();
         using (controller)
         {
-            controller.Start();
-            controller.SetRunner("cup");
+            host.Ui(controller.Start);
+            host.Ui(() => controller.SetRunner("cup"));
             Assert.Equal("cup", controller.Icons.Runner.Id);
             Assert.NotEmpty(host.Icons);
-            controller.SetRunner("no-such-runner");
+            host.Ui(() => controller.SetRunner("no-such-runner"));
             Assert.Equal("bench", controller.Icons.Runner.Id);
         }
     }

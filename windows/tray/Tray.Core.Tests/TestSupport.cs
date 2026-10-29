@@ -80,7 +80,14 @@ internal sealed class FakeHost : ITrayHost
 
     public void SetIcon(IntPtr hicon) { lock (_gate) _icons.Add(hicon); }
     public void SetTooltip(string text) { lock (_gate) _tooltip = text; }
-    public void Post(Action action) => action();
+    /// <summary>Stands in for the UI thread: posted work and the test's own UI calls never overlap, as on a dispatcher.</summary>
+    public object UiThread { get; } = new();
+
+    public void Post(Action action) { lock (UiThread) action(); }
+
+    public void Ui(Action action) { lock (UiThread) action(); }
+
+    public T Ui<T>(Func<T> action) { lock (UiThread) return action(); }
     public void BenchesChanged(TraySnapshot snapshot, string upText) { lock (_gate) _changes.Add((snapshot, upText)); }
     public void ShowToast(Toast toast) { lock (_gate) _toastsShown.Add(toast); }
 }

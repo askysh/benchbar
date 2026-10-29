@@ -34,7 +34,7 @@ public class ControllerTests
         var (controller, host, clock, _, _) = Make(BenchState.Stopped);
         using (controller)
         {
-            controller.Start();
+            host.Ui(controller.Start);
             Assert.NotEmpty(host.Icons);
             await UntilAsync(() => host.Changes.Count > 0);
 
@@ -59,7 +59,7 @@ public class ControllerTests
         source.CpuPercent = 250;
         using (controller)
         {
-            controller.Start();
+            host.Ui(controller.Start);
             await UntilAsync(() => host.Changes.Count > 0);
             Assert.Equal("1 of 1 up", host.Changes[0].UpText);
             Assert.Equal(0.35 * 12 + 0.65, controller.Sequencer.Speed, 6);
@@ -72,7 +72,7 @@ public class ControllerTests
         var (controller, host, _, source, _) = Make(BenchState.Stopped);
         using (controller)
         {
-            controller.Start();
+            host.Ui(controller.Start);
             await UntilAsync(() => host.Changes.Count > 0);
             var lists = source.Lists;
 
@@ -91,17 +91,17 @@ public class ControllerTests
         var (controller, host, _, source, time) = Make(BenchState.Stopped);
         using (controller)
         {
-            controller.Start();
+            host.Ui(controller.Start);
             await UntilAsync(() => host.Changes.Count > 0);
             var lists = source.Lists;
 
-            controller.FlyoutOpened();
+            host.Ui(controller.FlyoutOpened);
             await UntilAsync(() => source.Lists > lists);
 
             lists = source.Lists;
             time.Advance(TimeSpan.FromSeconds(5)); // the 5 s flyout interval
             await UntilAsync(() => source.Lists > lists);
-            controller.FlyoutClosed();
+            host.Ui(controller.FlyoutClosed);
         }
     }
 
@@ -111,7 +111,7 @@ public class ControllerTests
         var (controller, host, clock, _, _) = Make(BenchState.Paused);
         using (controller)
         {
-            controller.Start();
+            host.Ui(controller.Start);
             await UntilAsync(() => host.Changes.Count > 0);
             Assert.Equal(new RunnerPlan.Still(RunnerPose.Alert), controller.Sequencer.Plan);
             Assert.False(clock.HasPending);
