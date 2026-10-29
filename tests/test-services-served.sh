@@ -103,9 +103,18 @@ suite() {
   assert_eq "orphans=ok ping=ok site_not_served=ok" "$(printf '%s' "$levels" | tr ' ' '\n' | sort | tr '\n' ' ' | sed 's/ $//')" "(services only: $levels)"
   assert_contains "$(printf '%s' "$OUT" | jget - '[c["message"] for c in d["checks"] if c["id"] == "ping"][0]')" "services only"
   assert_contains "$(printf '%s' "$OUT" | jget - '[c["message"] for c in d["checks"] if c["id"] == "orphans"][0]')" "services only"
-  # down stops it
-  run_fm down --bench-dir "$BENCH"
+  # down stops it, and the manual stop flag is there before anything is signalled or killed
+  # (a restart between the signal and the flag would bring the bench back)
+  cat >"$TMP_DIR/kill-check" <<'KILL'
+#!/usr/bin/env bash
+if [[ -s "$KILL_CHECK_FLAG" ]]; then printf 'flag\n' >>"$MOCK_STATE/kill-saw"; else printf 'noflag\n' >>"$MOCK_STATE/kill-saw"; fi
+exec mockkill "$@"
+KILL
+  chmod +x "$TMP_DIR/kill-check"
+  KILL_CHECK_FLAG="$BENCH/logs/.bench-stopped" FL_KILL_CMD="$TMP_DIR/kill-check" run_fm down --bench-dir "$BENCH"
   assert_eq "0" "$CODE" "$OUT"
+  assert_eq "flag" "$(sort -u "$MOCK_STATE/kill-saw")" "(the manual flag exists before the first kill)"
+  assert_eq "manual" "$(tr -d '[:space:]' <"$BENCH/logs/.bench-stopped")"
   assert_eq "" "$(lsof -ti tcp:11000,13000 -sTCP:LISTEN || true)" "(down stops the Redis servers of the bench)"
   rm -f "$BENCH/logs/.bench-stopped"; rm -f "$BENCH/logs/.benchbar/state.json"
   # down after up --services-only stops that Redis, keeps a crash flag as it is, and does not wait

@@ -373,6 +373,12 @@ fl_cmd_down() {
   # one; an existing stop flag (crash, broken, port_conflict) and the state file
   # stay as they are, and there is nothing to wait for.
   if ! fl_pm_running && [[ "$(fl_agent_field state 2>/dev/null || true)" != "running" ]]; then
+    # the flag first: a restart in the window between the signal and the flag would bring the bench back
+    if [[ ! -s "$flag" ]]; then
+      mkdir -p "$(dirname "$flag")"
+      printf 'manual\n' >"$flag"
+      fl_state_json_write stopped manual "" "$(fl_state_json_get started_at)" "$(fl_state_json_get last_exit_code)" ""
+    fi
     if fl_agent_loaded; then fl_agent_signal SIGTERM || true; fi
     fl_bench_kill_processes TERM
     fl_bench_wait_stopped 3 || fl_bench_kill_processes KILL
@@ -380,11 +386,6 @@ fl_cmd_down() {
       fl_step_end failed
       fl_fail "some bench processes are still alive: $(fl_bench_process_pids | tr '\n' ' ')"
       return 1
-    fi
-    if [[ ! -s "$flag" ]]; then
-      mkdir -p "$(dirname "$flag")"
-      printf 'manual\n' >"$flag"
-      fl_state_json_write stopped manual "" "$(fl_state_json_get started_at)" "$(fl_state_json_get last_exit_code)" ""
     fi
     fl_step_end "done"
     fl_changed process "$FL_BENCH_NAME" "stopped"
