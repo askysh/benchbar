@@ -11,7 +11,8 @@ Terminal. Building from source is for contributors.
 
 Check the [requirements](index.md#requirements) first: macOS 14 or later
 on Apple Silicon, Homebrew and the Xcode Command Line Tools, about 5 GB
-of free disk.
+of free disk. On Linux and Windows, see [Linux](#linux) and
+[Windows](#windows).
 
 ## Homebrew
 
@@ -171,6 +172,22 @@ bench back after a reboot. The default site is `linuxdev.localhost`, and
 benchbar never edits `/etc/hosts` there. The `bench*` helpers go to
 `~/.bashrc`. `benchbar doctor --prerequisites` on Linux checks free
 disk, the bench folder and the default ports.
+
+## Windows
+
+A preview. The benches run inside WSL 2 with the Linux install above.
+In PowerShell, as yourself, without administrator rights:
+
+```powershell
+irm https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1 | iex
+```
+
+This installs `benchbar.exe`, which forwards every command to the
+distro, and BenchBar Tray, the notification area app. It checks the zip
+against its SHA256, puts the folder on your PATH and ends with `benchbar.exe
+doctor`. Run it again to update. The programs are unsigned until the
+signing application is approved. [Windows](windows.md) has the
+requirements, the flags, the tray and the signing policy.
 
 ## Updating
 

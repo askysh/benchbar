@@ -18,9 +18,9 @@ the argument `mcp`.
 | Tool | What it does |
 |---|---|
 | `benchbar_list` | Every bench benchbar knows: path, default site, sites, ports, whether its service is installed |
-| `benchbar_status` | Live state of one bench, with pid, ports, sites and site ping |
+| `benchbar_status` | Live state of one bench, with pid, ports, the `bench` its service runs (`bench_bin`), sites and the ping of every site while the bench runs. A bench folder benchbar does not manage has `state` `not_adopted` |
 | `benchbar_doctor` | The read only health report of one bench, every check with its level and fix |
-| `benchbar_logs_tail` | The last lines of one log file: `file` is `bench` (`logs/bench.log`, honcho's stream), `worker` (`logs/worker.log`, where the worker writes), `worker_error` or `previous`; `process` keeps one honcho process of `bench.log` |
+| `benchbar_logs_tail` | The last lines of one log file: `file` is `bench` (`logs/bench.log`, honcho's stream), `worker` (`logs/worker.log`, where the worker writes), `worker_error` or `previous`; `process` keeps one honcho process of `bench.log`. Each line has a time in `ts`; `since` (ISO 8601, a date or `HH:MM:SS` today) and `since_restart` keep only the newer lines |
 | `benchbar_site_list` | The sites of one bench, the default, the hosts line, the ping code, the database name and the MariaDB port (never the password) |
 | `benchbar_app_list` | Every app of one bench: repo, branch, commit, local changes, version, sites (from the last read, the database is not asked) and how far behind its dependencies it is |
 | `benchbar_profile_list` | Built in and team profiles: where each comes from, how far a subscription is behind, what hides what |
@@ -36,7 +36,11 @@ the argument `mcp`.
 `benchbar_profile_list`, `benchbar_profile_check` and
 `benchbar_app_add_plan` read; `benchbar_up`, `benchbar_down`,
 `benchbar_restart` and `benchbar_app_add` act. Each one runs
-`benchbar ... --json` and returns what the CLI printed. Nothing that
+`benchbar ... --json` and returns what the CLI printed. The server sets
+`BENCHBAR_NONINTERACTIVE=1`, so a command that needs an answer it cannot
+ask for stops and names the missing input. An action also returns the
+CLI's `done` line as `result`, with `changed`, `warnings` and
+`next_actions`, next to the fresh status. Nothing that
 repairs, installs a bench or needs `sudo` is offered. It needs only
 `python3`, which the Command Line Tools provide.
 
@@ -82,6 +86,41 @@ tool acts on the default bench. The tools that change a bench refuse a
 path that is not in `benchbar_list`; register it first in a terminal
 with `benchbar register PATH`.
 The JSON each one returns is described in the [JSON schema](../json-schema.md).
+
+## The CLI as an agent contract
+
+An agent that runs `benchbar` in a terminal gets the same contract as the
+MCP tools:
+
+```bash
+benchbar COMMAND --help      # flags, what the command needs, whether it changes things
+benchbar commands --json     # the same for every command, flag and environment variable
+benchbar up --for-agent      # JSON lines, nothing is ever asked
+benchbar doctor --for-agent  # one JSON document
+```
+
+- `--for-agent` prints JSON lines (`plan`, `step`, `progress`, `done`) for
+  a command that changes things, and one document for a command that
+  only reads. It also sets `BENCHBAR_NONINTERACTIVE=1`, `NO_COLOR=1` and
+  `--plain`. `--jsonl` asks for the stream alone.
+- The `done` line ends every command that changes things. It has `exit`,
+  `changed[]` (what the run really changed), `warnings[]`,
+  `next_actions[]` (the commands to run next, each with a reason) and
+  `state_after` (the bench's `status --json` after the run). A second run
+  that has nothing to do has an empty `changed`. The
+  [JSON schema](../json-schema.md#the-done-fields-08) has every field.
+- With `--json` stdout holds JSON and nothing else. A refusal is text on
+  stderr.
+- With `BENCHBAR_NONINTERACTIVE=1` a command that lacks an input
+  (`ADMIN_PASSWORD`, `MARIADB_ROOT_PASSWORD`, `--yes`, a `sudo` that would
+  ask) names all of them in one error before it takes the lock or touches
+  the bench. It exits 2 when the MariaDB root password is one of them.
+- `benchbar doctor --quick` skips the slow checks and names them.
+  `doctor --ack CHECK` silences one warning until its message changes;
+  `--unack CHECK` undoes it. A failure cannot be acknowledged, and
+  `repair` ignores acknowledgements.
+- `benchbar logs --json --since TIME` and `--since-restart` return the
+  new lines only, each with its time in `ts`.
 
 ## Repairs and installs
 

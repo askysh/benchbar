@@ -122,6 +122,15 @@ twice and the second run says `unchanged`.
 - **The BenchBar window**: ⌘M in the popover (or open BenchBar again from
   Spotlight). Each bench has Overview, Sites, Apps and Health. Right
   click a bench in the sidebar for its actions.
+- **A new bench from the app**: in the sidebar footer, **Add Bench**,
+  then **New Bench…**. The wizard checks your Mac, shows the plan from
+  `benchbar install --dry-run`, and streams each step. macOS asks for
+  your password in its own dialog for two steps. **Settings** (⌘,) and
+  **About BenchBar** are the other two buttons of the footer.
+- **Windows**: install as in [Windows](windows.md#install), then open
+  the tray flyout and try Start, Stop and Doctor. A test build comes
+  with its own `install.ps1`: see
+  [A test build you were sent](windows.md#a-test-build-you-were-sent).
 - **Add an app**: Apps, then **Add App…**. Pick one from the list or
   paste a GitHub URL; a private repo works when `git clone` of it works
   in your Terminal (SSH key or `gh auth login`). It shows the plan, then
@@ -141,7 +150,8 @@ twice and the second run says `unchanged`.
   a bench you already have (it only reads the bench). A teammate with
   that file runs `benchbar install --profile myteam`.
 - **A coding agent**: `claude mcp add benchbar -- benchbar mcp`, then ask
-  it how your benches are doing.
+  it how your benches are doing. In Terminal, `benchbar status --for-agent`
+  and `benchbar commands --json` show what an agent reads.
 
 Coming from an older version: update as in
 [Updating](install.md#updating), then run `benchbar doctor`. If it says

@@ -116,12 +116,20 @@ Fast forwards one app with a changelog first, backs up the sites that
 have it, then runs requirements, migrate and build. A dirty or diverged
 app is refused; it never rebases or resets.
 
+When a run stops after it changed something (a failed backup,
+requirements, migrate, build or restart), benchbar keeps a record of the
+steps that did not finish. The next `app update NAME` runs those steps
+and nothing else, even though the app is already at its new commit.
+`status --json` lists the record in `pending_operations`, and doctor
+warns with `app_update_pending`. An `app add` that stopped the same way
+leaves one too (`app_add_pending`).
+
 | Flag | What it does |
 |---|---|
 | `--skip-backup` | Do not back up the sites first |
 | `--discard-pending` | Drop the record of an update or add that stopped part way and stop: none of its steps and no update runs |
 | `--dry-run` | Show the changelog and the plan, change nothing |
-| `--json` | With `--dry-run`: the plan as JSON ([schema](../../json-schema.md#benchbar-app-update-name---dry-run---json)) |
+| `--json` | With `--dry-run`: the plan as JSON ([schema](../../json-schema.md#benchbar-app-update-name---dry-run---json)). Without it: JSON lines, the plan, a line per step and a `done` with `updated` and the [done fields](../../json-schema.md#the-done-fields-08) |
 
 Exit codes: 0 updated or already current; 1 refused or a step failed.
 

@@ -114,6 +114,28 @@ labels third party text. The installer's state moves in even when the
 app made the folder first. The app names a port conflict, and `doctor --json` says where the
 profile came from.
 
+**0.8.0, a bench without Terminal, Linux, a Windows preview and agent
+contracts.** A first run wizard in the app: check the Mac (doctor's new
+prerequisites), create a bench from a built in or team profile, or find
+and adopt the ones you have, with every step streamed (`install --json`,
+`adopt --json`) and the two privileged steps in macOS's own password
+dialog instead of `sudo` in Terminal. Benches are the home of the BenchBar
+window, with an Add Bench menu, Settings and About in the sidebar footer
+(Settings and About are windows of their own), and the app explains itself where
+you are: a four step walkthrough, why a bench is stopped and what to do
+next, empty lists that say how to fill them. The CLI runs on Linux
+(Ubuntu 24.04, v15-lts) with each bench under `systemd --user`. On
+Windows, a preview: `benchbar.exe` forwards the CLI from PowerShell to
+WSL, BenchBar Tray shows the benches in the notification area, and a zip
+per CPU with a one line installer is attached to each release (unsigned
+until the signing application is approved). Agents get a contract: `benchbar COMMAND --help`
+and `commands --json`, one JSON stream for every command that changes
+things ending in a `done` line (`exit`, `changed`, `warnings`,
+`next_actions`, `state_after`), `--for-agent`, a non interactive mode
+that names every missing input, `doctor --ack` and `--quick`, and logs
+with a time per line. An `app update` that stops half way is finished by
+the next one.
+
 **Launch.** The post on discuss.frappe.io went up on 2026-10-04:
 [BenchBar: local Frappe benches on macOS with a menu bar app](https://discuss.frappe.io/t/benchbar-local-frappe-benches-on-macos-with-a-menu-bar-app/165049).
 
@@ -128,17 +150,6 @@ port setup move out of the menu bar app into a separate management
 target that runs only while it is open. The reason is scope: the menu
 bar app should start, stop and show benches. Not energy: 0.6.1 brought
 the app to under 0.1 percent of a core at rest with these in it.
-
-**0.8.0, a bench without Terminal, and Linux.** In progress. A first
-run wizard in the app: check the Mac (doctor's new prerequisites), create
-a bench from a built in or team profile, or find and adopt the ones you
-have, with every step streamed (`install --json`, `adopt --json`) and the
-two privileged steps in macOS's own password dialog instead of `sudo`
-in Terminal. Benches become the home of the BenchBar window, Settings
-and About get windows of their own, and the app explains itself where
-you are: a four step walkthrough, why a bench is stopped and what to do
-next, empty lists that say how to fill them. The CLI runs on Linux
-(Ubuntu 24.04, v15-lts) with each bench under `systemd --user`.
 
 **0.8.x, the app for sites.** Restore from the app (backup and drop
 shipped in 0.5.8), and pull and lock apply in the app.
@@ -157,11 +168,11 @@ native versus container benches (idle memory, build time, file watch
 latency, startup) before the README keeps its performance wording, and a
 four week pilot with about ten developers across three teams.
 
-**Windows through WSL.** The benches run inside WSL with the Linux
-platform layer of 0.8.0 (uv Python, fnm Node, MariaDB and Redis from apt,
-each bench under `systemd --user`), with a small `benchbar.exe` shim
-that forwards to the CLI there and a tray app that shows and starts them
-like the menu bar app does on the Mac.
+**Windows past the preview.** Signed binaries once the SignPath
+Foundation application is approved. The preview of 0.8.0 runs the
+benches inside WSL with the Linux platform layer (uv Python, fnm Node,
+MariaDB and Redis from apt, each bench under `systemd --user`), a
+`benchbar.exe` shim and a tray app.
 
 **1.0.** A stable JSON API and runner format, an official Homebrew cask,
 full doctor coverage for v15 and v16. Vouch

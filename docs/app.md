@@ -63,9 +63,19 @@ Open it with ⌘M, **Manage Bench…** in the popover, or by
 opening BenchBar again from Finder or Spotlight. The sidebar lists your
 benches first, each with its state dot and its sites beneath it (a site
 opens the bench's Sites tab), then **Team Profiles** and **Find
-Benches**. The **+** at the bottom of the sidebar has **New Bench…**,
-**Adopt Existing Bench…** and **Find Benches…**. On a Mac with no bench
-the window opens on the [first run wizard](#a-new-bench-from-the-app).
+Benches**. A bench that is not running has one line under its name that
+says why and offers the next step: Start, View Health, Review Port
+Conflict…, Repair… or Set Up Management….
+
+The footer of the sidebar has three buttons:
+
+- **Add Bench** is a menu with **New Bench…**, **Adopt Existing
+  Bench…** and **Find Benches…**.
+- The gear opens **Settings** (⌘,).
+- The **i** opens **About BenchBar**.
+
+On a Mac with no bench the window opens on the [first run
+wizard](#a-new-bench-from-the-app).
 Every bench has a page:
 
 - **Overview**: start, stop and restart (one group of buttons), **Open
@@ -111,7 +121,9 @@ change runs. Drop Site is never on Return: it needs the site name typed.
 
 ![A bench's health: doctor's warnings with their fixes, Run Doctor and Repair](images/window-health.png)
 
-Settings (⌘,) is a small window of its own:
+**Settings** (⌘,) and **About BenchBar** (the app menu, or the sidebar
+footer) are windows of their own. Settings can be resized, from 480 by
+400 points, and remembers its size.
 
 - **General**: open at login, notifications, which `benchbar` the app
   runs (Automatic, or a path you choose), the editor for **Open in VS
@@ -119,7 +131,15 @@ Settings (⌘,) is a small window of its own:
   (one you built yourself) also has **Check for updates automatically**.
 - **Menu Bar**: the runner, with a live preview and custom runners, see
   [Custom runners](runners.md).
-In the window, below the benches:
+
+**About BenchBar** shows the app's version and the command line tool's
+(with its path), **Check for Updates** (with **Update Now** when a newer
+release is out, and Copy Update Command and Release Notes in its ⋯
+menu), links to the documentation, the release notes and the source,
+**Report a Bug…**, and the `claude mcp add` command for coding agents.
+Report a Bug and Check for Updates are in the Help and app menus too.
+
+In the sidebar, below the benches:
 
 - **Team Profiles**: every profile with where it comes from (built in,
   local, imported, subscribed), a badge when a subscription is behind and
@@ -134,13 +154,6 @@ In the window, below the benches:
   subscription with every profile in it). Import and update show what changes
   before they write, and nothing is installed from this page. See
   [Teams](guides/teams.md#team-profiles).
-**About BenchBar** in the app menu opens a small window with the app's
-version and the command line tool's (with its
-  path), Check for Updates (with **Update Now** when a newer release is
-  out, and Copy Update Command and Release Notes in its ⋯ menu), links to
-the documentation, the release notes and the source, Report a Bug, and
-the `claude mcp add` command for coding agents. Report a Bug and Check
-for Updates are in the Help and app menus too.
 
 ![Team Profiles: the built in profiles and a team profile with where each comes from, and the Import and Subscribe buttons](images/window-profiles.png)
 
@@ -232,6 +245,11 @@ back.
    at Login**, **Allow Notifications**, and the shell helpers (`source
    ~/.zshrc`, then `benchup`) to copy. A skipped step shows its command
    here.
+
+A four step walkthrough of the app follows the wizard: the runner, the
+popover, the window, and Terminal with coding agents. **Take the Tour**
+on the Done page opens it, and it opens once on its own. Open it again
+with **Help > Show Walkthrough**.
 
 ## Finding the command line tool
 

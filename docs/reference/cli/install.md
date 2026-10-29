@@ -18,15 +18,25 @@ These come from `benchbar --help` and work with every command below.
 | `--site NAME` | Site name (default: remembered, or from the bench) |
 | `--dry-run` | Print the full plan, change nothing |
 | `-y`, `--yes` | Do not ask; secrets must come from the environment |
-| `--json` | Versioned JSON where a command supports it ([JSON schema](../../json-schema.md)) |
+| `--json` | Versioned JSON: one document for a command that reads, JSON lines for one that changes things ([JSON schema](../../json-schema.md)) |
+| `--jsonl` | JSON lines (`plan`, `step`, `progress`, `done`) for any command that changes things |
+| `--for-agent` | `--jsonl` for a command that changes things, `--json` for one that reads, plus `BENCHBAR_NONINTERACTIVE=1`, `NO_COLOR=1` and `--plain` |
 | `--plain` | No colors or spinners (also: `NO_COLOR=1`, or a non TTY) |
-| `-h`, `--help` | The help |
+| `-h`, `--help` | The help. `benchbar COMMAND --help` prints that command's flags, what it needs (a terminal, `sudo`, the network) and whether it changes things |
 | `--version` | Print the version, and the BenchBar app's when it is installed |
+
+The environment variable `BENCHBAR_NONINTERACTIVE=1` makes a command
+refuse to ask. One that needs an input it does not have names all of
+them in one error, before it takes the lock or touches a bench. See
+[Coding agents and MCP](../../guides/agents.md#the-cli-as-an-agent-contract).
+
+`benchbar commands --json` lists every command with its flags, its
+environment variables and what each needs, as one document.
 
 ## install
 
 ```
-benchbar install [--profile NAME] [--bundle NAME] [--make-default] [--port-offset N] [--offline] [--dry-run] [--yes]
+benchbar install [--profile NAME] [--bundle NAME] [--make-default] [--port-offset N] [--offline] [--dry-run] [--yes] [--json]
 ```
 
 Runs phase 00 (system dependencies), phase 01 (bench and site) and the
@@ -54,9 +64,12 @@ phase scripts: no other program started by the install sees them.
 | `--dry-run` | Print the plan of every phase, change nothing |
 | `--offline` | Skip the remote branch checks of both phase scripts (also `OFFLINE=1` or `BENCHBAR_OFFLINE=1`) |
 | `-y`, `--yes` | Accept every default and confirmation, including the `sudo` line for `/etc/hosts`; the passwords must be in the environment |
+| `--json` | JSON lines for the BenchBar app and agents: `plan`, `step`, `progress` and a closing `done` ([schema](../../json-schema.md#benchbar-install---json)). Needs `--yes` or `--dry-run`, takes every value from a flag or the environment and never asks |
 
 With `--yes` the confirmation is skipped but the `sudo` password prompt
-is not.
+is not. When the BenchBar app runs it, `BENCHBAR_SUDO=gui` is set, and each of
+the two steps that need root asks in macOS's own password dialog, at
+most two per run ([the privileged steps](../../json-schema.md#the-privileged-steps-and-benchbar_sudogui)).
 
 Exit codes: 0 success; 1 a step failed; 2 phase 00 or 01 stopped for a
 manual step, most often a MariaDB root password that neither the
@@ -70,7 +83,7 @@ MARIADB_ROOT_PASSWORD='...' ADMIN_PASSWORD='...' benchbar install --profile v16-
 ## adopt
 
 ```
-benchbar adopt PATH [--make-default] [--port-offset N] [--site NAME] [--dry-run] [--yes]
+benchbar adopt PATH [--make-default] [--port-offset N] [--site NAME] [--dry-run] [--yes] [--json]
 ```
 
 Registers an existing bench: `Procfile.lean`, the runner, the agent, the
@@ -93,6 +106,7 @@ warns and does not install it into the bench env.
 | `--site NAME` | The site `benchup` waits for, when the bench has several |
 | `--dry-run` | Print the plan, change nothing |
 | `-y`, `--yes` | Apply without asking |
+| `--json` | JSON lines, as for `install` ([schema](../../json-schema.md#benchbar-install---json)); needs `--yes` or `--dry-run` |
 
 A bench path with a double quote, backslash, `$`, backtick, `<`, `>`,
 `&` or a control character in it is refused before anything is written:
@@ -110,7 +124,7 @@ benchbar adopt ~/frappe-bench
 ## service
 
 ```
-benchbar service [--with-schedule | --without-schedule] [--port-offset N] [--make-default] [--bench-dir DIR]
+benchbar service [--with-schedule | --without-schedule] [--port-offset N] [--make-default] [--json] [--bench-dir DIR]
 ```
 
 Installs or refreshes only the background service (phase 02): the lean
@@ -123,6 +137,7 @@ Procfile, the runner, the launchd agent and the shell helpers.
 | `--port-offset N` | Move the bench to port block N |
 | `--make-default` | Make this the default bench |
 | `--dry-run` | Print the plan, change nothing |
+| `--json` | JSON lines ending in a `done` ([the done fields](../../json-schema.md#the-done-fields-08)) |
 
 After a scheduler change on a running bench, run `benchbar restart`.
 

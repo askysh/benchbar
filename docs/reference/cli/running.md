@@ -12,7 +12,7 @@ most often `--bench-dir DIR` for a bench that is not the default.
 ## up
 
 ```
-benchbar up [--bench-dir DIR]
+benchbar up [--json] [--bench-dir DIR]
 ```
 
 Starts the bench in the background and waits for the site's ping. It
@@ -22,6 +22,10 @@ running bench, or any other program, listens on one of them (it never
 takes their ports), and asks when only a stopped bench shares them.
 Both print `benchbar ports setup -- PATH` as the fix. A running bench is
 left as it is.
+
+With `--json` (or `--jsonl`, `--for-agent`) it prints JSON lines: the
+steps, then a `done` with `exit`, `changed`, `warnings`, `next_actions`
+and `state_after` ([the done fields](../../json-schema.md#the-done-fields-08)).
 
 Exit codes: 0 the bench is up (or already was); 1 the site did not answer
 in time (it may still be starting: `benchbar logs`), a port is taken, or
@@ -34,7 +38,7 @@ benchbar up --bench-dir ~/dev/v16-bench
 ## down
 
 ```
-benchbar down [--bench-dir DIR] [--dry-run]
+benchbar down [--json] [--bench-dir DIR] [--dry-run]
 ```
 
 Stops the bench and keeps it stopped, also across reboots: it writes
@@ -46,6 +50,8 @@ elsewhere, such as another bench or an unrelated server, is left alone;
 `benchbar ports check --bench-dir DIR` shows whether one holds the
 ports. Your own `bench migrate` or `bench console` keeps running.
 
+With `--json` it prints the same JSON lines as `up`.
+
 Exit codes: 0 stopped; 1 some bench processes are still alive.
 
 ```bash
@@ -55,11 +61,12 @@ benchbar down
 ## restart
 
 ```
-benchbar restart [--bench-dir DIR]
+benchbar restart [--json] [--bench-dir DIR]
 ```
 
 Restarts every process and waits for the site. Needed after Python
-changes: the web server reloads by itself, the worker does not.
+changes: the web server reloads by itself, the worker does not. With
+`--json` it prints the same JSON lines as `up`.
 
 Exit codes: 0 the site answers; 1 it did not answer in time, a port is
 taken, or you declined the port question.
@@ -75,13 +82,18 @@ benchbar status [--json] [--ping] [--bench-dir DIR]
 ```
 
 Agent state, pid, stop reason, last exit code, the processes, the site
-ping, the ports and the log path. `--json` prints the versioned JSON in
+ping, the ports and the log path. In `--json`, `bench_bin` is the
+`bench` its service runs, `pending_operations` lists an `app update` or
+`app add` that stopped half way, and `state` is `not_adopted` for a bench
+folder that benchbar does not manage yet (`benchbar adopt PATH` changes
+that). `--json` prints the versioned JSON in
 [the schema](../../json-schema.md#benchbar-status---json).
 
 The app runs `status` for every bench, so it is cheap: one `launchctl`
 call, and one ping of the default site while the bench runs. The other
 sites are not asked; `--ping` asks each of them once and fills
-`ping_code` in the JSON's `sites`.
+`ping_code` in the JSON's `sites`, but only while the bench runs. A
+stopped bench is never pinged.
 
 Exit codes: 0 always, whatever the state; 1 only when no bench is found.
 
@@ -92,7 +104,7 @@ benchbar status --json
 ## logs
 
 ```
-benchbar logs [--worker | --worker-error | --previous] [-n50] [--no-follow] [--process NAME] [--json]
+benchbar logs [--worker | --worker-error | --previous] [-n50] [--no-follow] [--process NAME] [--since TIME] [--since-restart] [--json]
 ```
 
 Tails `logs/bench.log` and follows it in a terminal.
@@ -105,7 +117,9 @@ Tails `logs/bench.log` and follows it in a terminal.
 | `-n50` | The last 50 lines (the default); any number works, `-n` then the count |
 | `--no-follow` | Print and exit |
 | `--process NAME` | Only the lines of one honcho process: `web`, `socketio`, `schedule`, `redis_queue`, `redis_cache`. `worker` reads `logs/worker.log` instead, where `Procfile.lean` sends the worker (it never writes to `bench.log`); `--previous` does not combine with it, since `worker.log` has no previous file |
-| `--json` | The lines as JSON ([schema](../../json-schema.md#benchbar-logs---json)) |
+| `--since TIME` | With `--json`: only the lines at or after TIME (ISO 8601, `YYYY-MM-DD HH:MM:SS`, a date, or `HH:MM:SS` today; a time with no zone is local time) |
+| `--since-restart` | With `--json`: only the lines after the bench's last start |
+| `--json` | The lines as JSON, with `mtime` and one time per line in `ts` ([schema](../../json-schema.md#benchbar-logs---json)) |
 
 Exit codes: 0; 1 for a bad `-n` or `--process` value, or for
 `--process worker` with `--previous`.

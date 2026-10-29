@@ -53,7 +53,8 @@ sites or databases.
   its ports clash with another bench does it move them, after asking.
 - **A menu bar app.** State at a glance, start, stop, restart, the site,
   the logs, a read only doctor, and crash notifications. The BenchBar
-  window adds a page per bench: sites, apps, doctor and Repair. The app
+  window adds a page per bench: sites, apps, doctor and Repair. On a Mac
+  with no bench it opens on a wizard that creates one. The app
   never writes to a bench itself; it runs the CLI and reads its JSON. It
   carries a CLI of its own version, so one update covers both. See
   [The menu bar app](app.md).
@@ -68,9 +69,14 @@ sites or databases.
   same; `benchbar pull` copies a production site into a local one, email
   muted and scheduler paused. See
   [Teams: profiles, lockfile and pull](guides/teams.md).
+- **Linux and Windows.** The same CLI runs on Ubuntu 24.04 with each
+  bench under `systemd --user`. On Windows (a preview) the benches run in
+  WSL, `benchbar.exe` runs the CLI from PowerShell and a tray app shows
+  them. See [Install](install.md#linux) and [Windows](windows.md).
 - **For coding agents.** `benchbar mcp` lets Claude Code, Cursor and
-  other agents read and drive your benches. See
-  [Coding agents and MCP](guides/agents.md).
+  other agents read and drive your benches. In Terminal, `--for-agent`
+  prints JSON and asks nothing, and every change ends in one `done`
+  line. See [Coding agents and MCP](guides/agents.md).
 - **Shell helpers.** `benchup`, `benchdown`, `benchrestart`,
   `benchstatus`, `benchlogs`, `benchwatch` and friends.
 - **Bug reports without secrets.** `benchbar report` writes a redacted
@@ -79,7 +85,8 @@ sites or databases.
 ## Requirements
 
 - macOS 14 or later on Apple Silicon. On Intel Macs the CLI works and the
-  app is skipped.
+  app is skipped. On Linux, Ubuntu 24.04; on Windows, WSL 2 with such a
+  distro.
 - Homebrew and the Xcode Command Line Tools. The installer offers both.
 - About 5 GB of free disk under your home folder, and internet access.
 
@@ -120,6 +127,7 @@ No Docker, no VM, no preinstalled Python, Node, MariaDB or Redis.
 - [Install](install.md): Homebrew, the one line installer, the DMG,
   building from source, moving to Homebrew, and uninstalling.
 - [Quick start](quick-start.md): adopt a bench or install a new one.
+- [Windows](windows.md): benches in WSL, `benchbar.exe` and the tray.
 - [Benches and sites](guides/benches-and-sites.md): daily use, sites,
   several benches, ports and the scheduler.
 - [CLI reference](reference/cli/install.md): every command, flag and exit

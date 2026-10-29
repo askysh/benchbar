@@ -1,6 +1,6 @@
 ---
 title: "report and other commands"
-description: "benchbar report, self-update, where, list, console, db, autostart, mariadb-password, uninstall-service and help: the remaining commands with flags, exit codes and examples."
+description: "benchbar report, self-update, where, list, commands, console, db, autostart, mariadb-password, uninstall-service and help: the remaining commands with flags, exit codes and examples."
 ---
 
 Every command takes the [options for every command](install.md#options-for-every-command).
@@ -156,8 +156,8 @@ benchbar list [--json]
 ```
 
 Every bench benchbar knows about: path, default site, sites, ports, and
-whether its service is installed. With `--json`, the
-[list schema](../../json-schema.md#benchbar-list---json).
+whether its service is installed. It never pings a site. With `--json`,
+the [list schema](../../json-schema.md#benchbar-list---json).
 
 Exit codes: 0.
 
@@ -223,7 +223,8 @@ benchbar mariadb-password [--yes]
 ```
 
 Prints the MariaDB root password kept in the Keychain (item
-`benchbar-mariadb`), after asking. `--yes` skips the question.
+`benchbar-mariadb`; on Linux a 0600 file in the state folder), after
+asking. `--yes` skips the question.
 
 Exit codes: 0 printed; 1 declined, or no password in the Keychain.
 
@@ -234,7 +235,7 @@ benchbar mariadb-password
 ## uninstall-service
 
 ```
-benchbar uninstall-service [--bench-dir DIR | --all] [--dry-run]
+benchbar uninstall-service [--bench-dir DIR | --all] [--yes] [--dry-run]
 ```
 
 Stops the bench (like `benchbar down`), then removes its launchd agent,
@@ -264,9 +265,10 @@ the others; run it again for what is left.
 | Flag | What it does |
 |---|---|
 | `--all` | Every bench with a benchbar agent, after one question; not with `--bench-dir` |
+| `--yes` | Do not ask. Required without a terminal: a run with no terminal and no `--yes` is refused |
 | `--dry-run` | Show the steps, change nothing |
 
-Exit codes: 0; 1 declined, no bench and no agent at the path, or with
+Exit codes: 0; 1 declined, refused for lack of a terminal, no bench and no agent at the path, or with
 `--all` a bench that could not be uninstalled.
 
 ```bash
@@ -276,12 +278,35 @@ benchbar uninstall-service --all
 
 To remove BenchBar itself, see [Uninstall](../../install.md#uninstall).
 
+## commands
+
+```
+benchbar commands --json
+```
+
+Every command and subcommand as one JSON document: its usage line, a
+summary, its flags with a line of help each, its environment variables,
+and what it needs. The needs are `tty` (it may ask a question), `sudo`
+and `network`. The document also says whether the command changes things
+(`mutating`) and what `--json` gives (`json`: `document`, `stream` or
+`none`). The same table prints `benchbar COMMAND --help`. Agents use it
+to find out what a command does before they run it.
+
+Exit codes: 0.
+
+```bash
+benchbar commands --json
+```
+
 ## help and version
 
 ```
 benchbar --help
+benchbar COMMAND --help
 benchbar --version
 ```
 
 `--help` (or `-h`, or `benchbar help`) prints every command and option.
-`--version` prints `benchbar` and the version.
+`benchbar COMMAND --help` prints the usage, the flags and the needs of
+one command (for example `benchbar logs --help`). `--version` prints
+`benchbar` and the version.
