@@ -83,6 +83,7 @@ func newFakeSystem() *System {
 		MemoryBytes: func() (uint64, error) { return 16 << 30, nil },
 		WSLPath:     func() (string, error) { return fakeWSL, nil },
 		FileExists:  func(string) bool { return false },
+		ListDir:     func(string) []string { return nil },
 		Getenv:      os.Getenv,
 		Environ:     os.Environ,
 		ExePath:     `C:\tools\benchbar\benchbar.exe`,

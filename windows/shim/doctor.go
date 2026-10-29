@@ -40,6 +40,7 @@ func cmdDoctor(sys *System, rest []string) int {
 		checkKeepaliveTarget(&ka, t.distro)
 	}
 	checks = append(checks, ka.Checks...)
+	checks = append(checks, trayChecks(sys)...)
 
 	fmt.Fprint(sys.Stdout, "\nWINDOWS\n")
 	printChecks(sys.Stdout, checks)

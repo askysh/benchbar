@@ -57,6 +57,7 @@ type System struct {
 	MemoryBytes func() (uint64, error)
 	WSLPath     func() (string, error)
 	FileExists  func(path string) bool
+	ListDir     func(path string) []string // entry names, nil when unreadable
 	Getenv      func(key string) string
 	Environ     func() []string
 

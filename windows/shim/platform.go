@@ -23,6 +23,7 @@ func newSystem() *System {
 		Tasks:       schtasksRunner{},
 		WSLPath:     defaultWSLPath,
 		FileExists:  fileExists,
+		ListDir:     listDir,
 		Getenv:      os.Getenv,
 		Environ:     os.Environ,
 		ConfigDir:   configDir,
@@ -88,4 +89,13 @@ func (schtasksRunner) Schtasks(args ...string) (string, int, error) {
 		return string(out), ee.ExitCode(), nil
 	}
 	return string(out), -1, err
+}
+
+func listDir(path string) []string {
+	entries, _ := os.ReadDir(path)
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	return names
 }
