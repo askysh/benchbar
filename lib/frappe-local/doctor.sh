@@ -345,9 +345,12 @@ fl_doctor_print_json() {
     i=$((i + 1))
   done
   # the acknowledged warnings, and what --quick left out
-  local acked quick=false skipped
-  acked="$(fl_json_str_array $(fl_doctor_acked_ids))"
-  skipped="$(fl_json_str_array $FL_D_SKIPPED)"
+  local acked quick=false skipped ids=() id
+  while IFS= read -r id; do [[ -z "$id" ]] || ids+=("$id"); done < <(fl_doctor_acked_ids)
+  acked="$(fl_json_str_array ${ids[@]+"${ids[@]}"})"
+  ids=()
+  for id in $FL_D_SKIPPED; do ids+=("$id"); done
+  skipped="$(fl_json_str_array ${ids[@]+"${ids[@]}"})"
   [[ "$FL_DOCTOR_QUICK" != "1" ]] || quick=true
   # the prerequisites of this Mac, next to the checks and not counted in the summary
   if [[ "$FL_P_RAN" == "1" ]]; then

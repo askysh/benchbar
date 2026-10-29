@@ -329,7 +329,7 @@ fl_done_fields_v() {
 # own changed and warnings (pull). state_after is null in a dry run: nothing changed.
 fl_done_tail_v() {
   local __after="null"
-  if [[ "${FL_DRY_RUN:-0}" != "1" ]] && declare -F fl_state_after_v >/dev/null; then fl_state_after_v __after; fi
+  if [[ "${FL_DRY_RUN:-0}" != "1" && "${FL_DONE_NO_BENCH:-0}" != "1" ]] && declare -F fl_state_after_v >/dev/null; then fl_state_after_v __after; fi
   printf -v "$1" '"next_actions":[%s],"state_after":%s' "$FL_DONE_NEXT" "$__after"
 }
 
@@ -469,6 +469,9 @@ fl_die() {
   fl_redact_url_v msg "$1"
   fl_redact_url_v hint "${2:-Fix the above and re-run.}"
   FL_DIE_MESSAGE="$msg"
+  # a command run with --json prints JSON on stdout and nothing else: its
+  # refusal is text on stderr
+  if [[ "${OPT_JSON:-0}" == "1" ]]; then exec 1>&2; fi
   fl_fail "$msg"
   printf '\n%sAborting.%s %s\n' "$FL_RED$FL_BOLD" "$FL_RESET" "$hint"
   fl_log "ABORT: ${2:-}"

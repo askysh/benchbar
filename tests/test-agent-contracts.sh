@@ -501,4 +501,136 @@ run_fm service --yes --bench-dir "$B2"
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "Reclaiming stale lock left by pid 999999 (benchbar site add, started 2026-10-29T10:00:00Z)"
 
+# ---------------------------------------------------------------- 6. logs with time
+
+LB="$HOME/log-bench"
+make_fake_bench "$LB" logsite
+cat >"$LB/logs/bench.log" <<'LOG'
+23:59:58 system | web.1 started (pid=11)
+23:59:59 web.1        | * Running on http://127.0.0.1:8000
+00:00:02 worker.1     | job done
+00:00:03 web.1        | Traceback (most recent call last):
+  File "x.py", line 1, in <module>
+00:00:04 socketio.1   | listening on 9000
+LOG
+# the file's time: 2026-10-29 00:00:10 UTC, so the first two lines are from the day before
+TZ=UTC touch -t 202610290000.10 "$LB/logs/bench.log"
+tlogs() { TZ=UTC run_json logs --json --no-follow --bench-dir "$LB" "$@"; }
+tlogs
+assert_eq "0" "$CODE" "$ERR"
+assert_eq "2026-10-29T00:00:10Z" "$(printf '%s' "$OUT" | jget - 'd["mtime"]')"
+assert_eq "[None, None]" "$(printf '%s' "$OUT" | jget - '[d["since"], d.get("truncated_to")]')"
+assert_eq "6 6" "$(printf '%s' "$OUT" | jget - '"%d %d" % (len(d["lines"]), len(d["ts"]))')" "(one ts per line)"
+assert_eq "['2026-10-28T23:59:58Z', '2026-10-28T23:59:59Z', '2026-10-29T00:00:02Z', '2026-10-29T00:00:03Z', None, '2026-10-29T00:00:04Z']" "$(printf '%s' "$OUT" | jget - 'd["ts"]')" "(a line without a time has none, and inherits none)"
+# --since: at or after, the untimed line under a kept line stays
+tlogs --since 2026-10-29T00:00:03Z
+assert_eq "['00:00:03 web.1        | Traceback (most recent call last):', '  File \"x.py\", line 1, in <module>', '00:00:04 socketio.1   | listening on 9000'] 2026-10-29T00:00:03Z" "$(printf '%s' "$OUT" | jget - 'str(d["lines"]) + " " + d["since"]')"
+assert_eq "['2026-10-29T00:00:03Z', None, '2026-10-29T00:00:04Z']" "$(printf '%s' "$OUT" | jget - 'd["ts"]')"
+tlogs --since 2026-10-29T00:00:05Z
+assert_eq "[] []" "$(printf '%s' "$OUT" | jget - 'str(d["lines"]) + " " + str(d["ts"])')"
+# local time without a zone; a zone; a date; the last lines after the filter
+tlogs --since "2026-10-29 00:00:04"
+assert_eq "1" "$(printf '%s' "$OUT" | jget - 'len(d["lines"])')"
+tlogs --since 2026-10-29T05:30:03+05:30
+assert_eq "3" "$(printf '%s' "$OUT" | jget - 'len(d["lines"])')"
+tlogs --since 2026-10-29
+assert_eq "0" "$(printf '%s' "$OUT" | jget - 'len([t for t in d["ts"] if t and t < "2026-10-29"])')"
+tlogs -n2 --since 2026-10-28T23:59:59Z
+assert_eq "2 2" "$(printf '%s' "$OUT" | jget - '"%d %d" % (len(d["lines"]), len(d["ts"]))')"
+# a process filter keeps its own lines' times
+tlogs --process web
+assert_eq "['2026-10-28T23:59:59Z', '2026-10-29T00:00:03Z', None]" "$(printf '%s' "$OUT" | jget - 'd["ts"]')"
+# --since-restart: after the start state.json recorded
+mkdir -p "$LB/logs/.benchbar"
+printf '{"schema_version":1,"state":"running","started_at":"2026-10-29T00:00:02Z"}\n' >"$LB/logs/.benchbar/state.json"
+tlogs --since-restart
+assert_eq "4 2026-10-29T00:00:02Z" "$(printf '%s' "$OUT" | jget - '"%d %s" % (len(d["lines"]), d["since"])')"
+rm -f "$LB/logs/.benchbar/state.json"
+tlogs --since-restart
+assert_eq "1" "$CODE"; assert_contains "$ERR" "no recorded start"; assert_eq "" "$OUT" "(a refusal under --json is text on stderr, stdout stays empty)"
+tlogs --since nonsense
+assert_eq "1" "$CODE"; assert_contains "$ERR" "Cannot read the time"
+run_fm logs --since 2026-10-29T00:00:03Z --no-follow --bench-dir "$LB"
+assert_eq "1" "$CODE"; assert_contains "$OUT" "need --json"
+# the dates a line can carry itself (worker logs): local time
+printf '2026-10-28 23:59:58,123 first\ncontinued\n2026-10-29 00:00:01,456 second\n' >"$LB/logs/worker.log"
+TZ=UTC touch -t 202610290000.10 "$LB/logs/worker.log"
+tlogs --worker
+assert_eq "['2026-10-28T23:59:58Z', None, '2026-10-29T00:00:01Z']" "$(printf '%s' "$OUT" | jget - 'd["ts"]')"
+# a zone east of UTC: the line's local time is converted, not read as UTC
+if [[ "$(TZ=Asia/Kolkata date +%z)" == "+0530" ]]; then
+  printf '05:29:58 web.1 | late\n05:30:03 web.1 | later\n' >"$LB/logs/bench.log"
+  TZ=Asia/Kolkata touch -t 202610290530.10 "$LB/logs/bench.log"
+  TZ=Asia/Kolkata run_json logs --json --no-follow --bench-dir "$LB"
+  assert_eq "['2026-10-28T23:59:58Z', '2026-10-29T00:00:03Z']" "$(printf '%s' "$OUT" | jget - 'd["ts"]')"
+fi
+# no file: empty, no times, no mtime
+run_json logs --json --no-follow --previous --bench-dir "$LB"
+assert_eq "None [] []" "$(printf '%s' "$OUT" | jget - '"%s %s %s" % (d["mtime"], d["lines"], d["ts"])')"
+# the redaction keeps the line count: ts stays in step
+printf '10:00:01 web.1 | password=hunter2 ok\n10:00:02 web.1 | fine\n' >"$LB/logs/bench.log"
+tlogs
+assert_eq "2 2" "$(printf '%s' "$OUT" | jget - '"%d %d" % (len(d["lines"]), len(d["ts"]))')"
+assert_not_contains "$OUT" "hunter2"
+
+# ---------------------------------------------------------------- 7. the MCP server
+
+FAKE="$TMP_DIR/fake-benchbar-contracts"
+cat >"$FAKE" <<SH
+#!/usr/bin/env bash
+# records what the server runs and with which environment
+printf '%s|%s\n' "\$*" "\${BENCHBAR_NONINTERACTIVE:-unset}" >>"$TMP_DIR/mcp-argv.log"
+case "\$*" in
+  "up --plain --json"*) printf '%s\n' '{"schema_version":1,"cli_version":"x","event":"step","id":"start_service","status":"done"}' '{"schema_version":1,"cli_version":"x","event":"done","exit":0,"changed":[{"kind":"process","name":"b","detail":"started"}],"warnings":[],"next_actions":[],"state_after":null}'; echo "[OK] bench is up" >&2; exit 0 ;;
+  "list --json") printf '{"benches":[]}\n'; exit 0 ;;
+  *) printf '{"state":"running"}\n'; exit 0 ;;
+esac
+SH
+chmod +x "$FAKE"
+INIT='{"jsonrpc":"2.0","id":"init","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}'
+mcp_call() { printf '%s\n' "$INIT" "$1" | BENCHBAR_MCP_CLI="$FAKE" "$FM" mcp 2>/dev/null | tail -n +2; }
+: >"$TMP_DIR/mcp-argv.log"
+R="$(mcp_call '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"benchbar_status","arguments":{}}}')"
+assert_contains "$(cat "$TMP_DIR/mcp-argv.log")" "status --json --ping|1" "(status pings every site; the CLI is told nothing can be asked)"
+R="$(mcp_call '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"benchbar_up","arguments":{}}}')"
+assert_contains "$(cat "$TMP_DIR/mcp-argv.log")" "up --plain --json|1"
+assert_contains "$(cat "$TMP_DIR/mcp-argv.log")" "status --json --ping|1" "(the status after an action pings too)"
+assert_eq "0 [OK] bench is up True" "$(printf '%s' "$R" | jget - '" ".join(str(x) for x in (d["result"]["structuredContent"]["exit_code"], d["result"]["structuredContent"]["output"], d["result"]["structuredContent"]["result"]["changed"][0]["kind"] == "process"))')" "(the result keeps its fields; the done line is added)"
+: >"$TMP_DIR/mcp-argv.log"
+R="$(mcp_call '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"benchbar_logs_tail","arguments":{"since":"2026-10-29T00:00:03Z","since_restart":true,"lines":5}}}')"
+assert_contains "$(cat "$TMP_DIR/mcp-argv.log")" "logs --json --no-follow -n5 --since 2026-10-29T00:00:03Z --since-restart"
+# the real CLI through the real server: times come through, and a size cap drops lines and times together
+R="$(printf '%s\n' "$INIT" '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"benchbar_logs_tail","arguments":{"bench":"'"$LB"'","lines":10}}}' | "$FM" mcp 2>/dev/null | tail -n +2)"
+assert_eq "2 2 True" "$(printf '%s' "$R" | jget - '"%d %d %s" % (len(d["result"]["structuredContent"]["lines"]), len(d["result"]["structuredContent"]["ts"]), d["result"]["structuredContent"]["mtime"] is not None)')"
+for i in $(seq 1 400); do printf '10:00:%02d web.1 | filler line number %d to make this log bigger\n' $((i % 60)) "$i"; done >"$LB/logs/bench.log"
+R="$(printf '%s\n' "$INIT" '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"benchbar_logs_tail","arguments":{"bench":"'"$LB"'","lines":400}}}' | BENCHBAR_MCP_MAX_BYTES=6000 "$FM" mcp 2>/dev/null | tail -n +2)"
+assert_eq "True True" "$(printf '%s' "$R" | jget - 'str(d["result"]["structuredContent"].get("truncated")) + " " + str(len(d["result"]["structuredContent"]["lines"]) == len(d["result"]["structuredContent"]["ts"]) < 400)')"
+
+# ---------------------------------------------------------------- 2b. every command with --json: JSON and nothing else
+
+# the commands that print one document: one line, parses, and a refusal leaves stdout empty
+for c in "status" "list" "doctor" "site list" "site backups newsite" "logs --no-follow" "where" "app list --no-sites" "ports check" "profile list" "commands" "doctor --prerequisites"; do
+  # shellcheck disable=SC2086
+  run_json $c --json --bench-dir "$BENCH"
+  assert_eq "1" "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')" "$c: one line (exit $CODE)"
+  assert_eq "ok" "$(printf '%s' "$OUT" | jget - '"ok" if isinstance(d, dict) else "no"')" "$c"
+done
+for c in "status" "doctor" "logs --no-follow" "site list" "app list"; do
+  # shellcheck disable=SC2086
+  run_json $c --json --bench-dir "$HOME/no-such-bench"
+  assert_eq "1" "$CODE" "$c"; assert_eq "" "$OUT" "$c: a refusal under --json leaves stdout empty"
+  assert_contains "$ERR" "No bench at"
+done
+# every dry run with --json: the plan alone (a stream: plan, then done), never text on stdout
+ADMIN_PASSWORD=pw stream site add dryrunsite --dry-run --json --bench-dir "$BENCH"
+assert_eq "plan done" "$(sx '" ".join(x["event"] for x in e)')"
+stream adopt "$B2" --dry-run --json --bench-dir "$B2"
+assert_eq "plan done" "$(sx '" ".join(x["event"] for x in e)')"
+stream install --dry-run --json --bench-dir "$HOME/dry-install" --site dry.localhost
+assert_eq "plan done" "$(sx '" ".join(x["event"] for x in e)')"
+stream ports apply 0000 --dry-run --json --yes --bench-dir "$BENCH" -- "$BENCH"
+assert_eq "done 1" "$(sx '"%s %s" % (e[-1]["event"], e[-1]["exit"])')" "(a refused ports apply still ends with its done line)"
+run_events repair --json --dry-run --bench-dir "$BENCH"
+assert_eq "plan" "$(ev '" ".join(x["event"] for x in e)')"
+
 printf 'test-agent-contracts: ok\n'

@@ -178,6 +178,8 @@ Setup
                       (--json; --bench-dir names the folder a new bench would go to).
                       --fetch: git fetch the branches of the apps your focus apps need first
                       (without it doctor never touches the network).
+                      --ack CHECK / --unack CHECK: silence one warning until its message
+                      changes, or undo that. --quick: skip the slow checks and say which.
   ports setup -- PATH ...
                       Preview management/port changes, confirm once, then apply (--dry-run: preview only)
   ports plan -- PATH ...
@@ -309,7 +311,11 @@ Options
   --offline           install: skip the remote branch checks (also OFFLINE=1 or BENCHBAR_OFFLINE=1)
   -y, --yes           Do not ask; secrets must come from the environment
   --json              Versioned JSON for list, status and doctor; JSON lines for pull,
-                      install and adopt (docs/json-schema.md)
+                      install, adopt, repair, up, down, restart, service, site add,
+                      app update and ports apply (docs/json-schema.md)
+  --jsonl             JSON lines (plan, step, done) from any command that changes things
+  --for-agent         --jsonl or --json, no questions (BENCHBAR_NONINTERACTIVE=1), no colors
+  benchbar COMMAND --help prints that command's flags and needs; benchbar commands --json lists them all
   --plain             No colors or spinners (also: NO_COLOR=1, or a non-TTY)
   -h, --help          This help
   --version           Print the version (and the BenchBar app's, when it is installed)
@@ -538,7 +544,11 @@ fl_jsonl_done_generic() {
     [[ "$code" != "2" ]] || fl_next_action "Run the command again with MARIADB_ROOT_PASSWORD='...' in the environment" "The MariaDB root password is unknown"
   fi
   fl_done_fields_v f "$code"
-  if [[ -n "$FL_DOC" ]]; then rest="$(fl_doc_rest "$FL_DOC"),"; else rest="\"bench\":$(fl_json_str "${FL_BENCH_DIR:-}"),"; [[ "$FL_DRY_RUN" != "1" ]] || extra="${extra},\"dry_run\":true"; fi
+  if [[ -n "$FL_DOC" ]]; then rest="$(fl_doc_rest "$FL_DOC"),"; else
+    rest="\"bench\":$(fl_json_str "${FL_BENCH_DIR:-}"),"
+    [[ "${FL_DONE_NO_BENCH:-0}" != "1" ]] || rest="\"bench\":null,"
+    [[ "$FL_DRY_RUN" != "1" ]] || extra="${extra},\"dry_run\":true"
+  fi
   fl_jsonl "done" ",${rest}${f},\"log\":$(fl_json_str "${FL_LOG_FILE:-}")${extra}"
 }
 
