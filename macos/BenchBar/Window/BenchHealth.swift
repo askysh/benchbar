@@ -49,6 +49,10 @@ struct BenchHealth: View {
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
+                    // a report on screen hides the "Running doctor…" row: the spinner says it runs again
+                    if bench.isRunningDoctor && bench.doctor != nil {
+                        ProgressView().controlSize(.small).accessibilityLabel("Running doctor")
+                    }
                     Button("Run Doctor") { Task { await store.runDoctor(on: bench) } }
                         .disabled(bench.isRunningDoctor)
                     // the main action only when doctor found something repair can fix

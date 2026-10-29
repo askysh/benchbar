@@ -72,6 +72,8 @@ struct PopoverView: View {
                         }
                     }
                     .pickerStyle(.menu)
+                    .accessibilityLabel("Bench")
+                    .help("The bench this popover shows; its shortcuts act on it")
                     Divider()
                 }
                 if let bench = store.selected {
@@ -348,6 +350,7 @@ struct CompactCheckRow: View {
                 Button("Copy Fix") { Workspace.copy(fix) }
                     .controlSize(.mini)
                     .help(fix)
+                    .accessibilityLabel("Copy the fix for \(check.label)")
             }
         }
     }
@@ -364,9 +367,13 @@ struct CheckRow: View {
                 if check.level != .ok {
                     Text(check.message).font(.caption).foregroundStyle(.secondary)
                     if let fix = check.fixCommand, !fix.isEmpty {
-                        DisclosureGroup("Terminal instructions") {
+                        // the label in the row's caption size, not the body size of a plain title
+                        DisclosureGroup {
                             Text(fix).font(.caption.monospaced()).textSelection(.enabled)
                             Button("Copy Command") { Workspace.copy(fix) }.controlSize(.small)
+                                .accessibilityLabel("Copy the fix for \(check.label)")
+                        } label: {
+                            Text("Terminal instructions").font(.caption)
                         }
                     }
                 }

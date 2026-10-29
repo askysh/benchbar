@@ -140,6 +140,10 @@ All notable changes to this project are documented here.
   a mark instead of a checkbox.
 - The Add App sheet's placeholder is plain text: its example URL rendered
   as a link and the start of the placeholder was cut.
+- Health tab: "Terminal instructions" is in the size of the check it
+  belongs to, and Run Doctor shows a spinner while doctor runs again.
+  VoiceOver names the popover's bench picker and each Copy Fix button by
+  its check.
 
 ### Windows (preview)
 
