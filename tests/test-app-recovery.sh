@@ -171,6 +171,16 @@ run_fm app update acme_crm --yes --discard-pending --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "no unfinished update or add of acme_crm to discard"
 assert_calls_not_contain '^bench |merge|fetch'
+# the discard prints text only: --json with it is refused, never a text line on a JSON stdout
+run_fm app update acme_crm --dry-run --json --discard-pending --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "leave out --json"
+# a record folder holding only a temp file of a failed write: doctor reports no record
+mkdir -p "$(pending_dir_for)"
+: >"$(pending_dir_for)/acme_crm.json.tmp.999"
+run_fm doctor --json --bench-dir "$BENCH"
+assert_not_contains "$OUT" "pending record of *"
+assert_not_contains "$OUT" "app update * --discard-pending"
 run_fm status --json --bench-dir "$BENCH"
 assert_eq "[]" "$(printf '%s' "$OUT" | jget - 'd["pending_operations"]')"
 

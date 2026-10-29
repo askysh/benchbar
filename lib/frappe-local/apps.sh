@@ -796,6 +796,7 @@ fl_cmd_app_update() {
   # update runs, and a dirty tree or a detached HEAD (an app added from a tag)
   # does not matter. Run benchbar app update again for the update itself.
   if [[ "$discard" == "1" ]]; then
+    [[ "$OPT_JSON" != "1" ]] || fl_die "--discard-pending prints text only; leave out --json." "benchbar app update ${app} --discard-pending [--dry-run]"
     f="$(fl_pending_file "$app")"
     if [[ -z "$f" || ! -e "$f" ]]; then
       fl_info "no unfinished update or add of ${app} to discard"

@@ -1370,6 +1370,9 @@ fl__chk_pending() {
   dir="$(fl_pending_dir)"
   if [[ -d "$dir" ]]; then
     for f in "$dir"/*.json; do
+      # the pattern itself when the folder holds no record (a temp file left
+      # by a write that failed): nothing to report
+      [[ -e "$f" ]] || continue
       if ! fl_pending_read "$f"; then
         # an unreadable record is reported once, by the update check
         [[ "$1" != "app_update" ]] || { n=$((n + 1)); msg="${f##*/}"; msg="${msg%.json}"; CHK_MORE+=("warn"$'\037'"the pending record of ${msg} cannot be read; no step runs from it"$'\037'"benchbar app update ${msg} --discard-pending --bench-dir ${FL_BENCH_DIR}"$'\037'); }
