@@ -920,8 +920,10 @@ chk_ping() {
     return 0
   fi
   reason="$(fl_stop_flag_reason)"
-  if fl_bench_is_running; then
+  if fl_bench_is_serving; then
     chk__set fail "bench processes are running but ping returned ${code}" "${FL_SELF} logs"
+  elif fl_bench_is_running; then
+    chk__set ok "services only: the bench's Redis runs, nothing serves the site (ping ${code}); ${FL_SELF} down stops it, benchup starts the bench"
   elif [[ "$reason" == "manual" || -z "$reason" && ! -f "$(fl_runner_path)" ]]; then
     chk__set ok "bench is stopped; start it with benchup"
   elif [[ "$reason" == "crash" || "$reason" == "broken" || "$reason" == "port_conflict" ]]; then
@@ -936,7 +938,7 @@ chk_ping() {
 # never pinged), one GET per site, in bash.
 chk_site_not_served() {
   local s served bad="" n=0 code end
-  if ! fl_bench_is_running; then
+  if ! fl_bench_is_serving; then
     chk__set ok "the bench is not running; no site is asked"
     return 0
   fi
@@ -1320,7 +1322,7 @@ chk_fork_safety() {
 # stop. One whose folder lsof cannot read is reported, not stopped: it may be
 # another bench's or another program's, and benchbar never kills on a guess.
 chk_orphans() {
-  local port who pid cwd held="" unknown="" foreign="" first_unknown=""
+  local port who pid cwd held="" redis_held="" unknown="" foreign="" first_unknown=""
   [[ "$(fl_agent_field state)" == "running" ]] && { chk__set ok "the agent runs this bench"; return 0; }
   if [[ -n "$(fl_bench_any_honcho_pids)" ]]; then
     chk__set ok "honcho is running (benchfg or bench start)"
@@ -1334,13 +1336,23 @@ chk_orphans() {
     if [[ -z "$cwd" ]]; then
       unknown="${unknown}${unknown:+, }${port} (pid ${pid} ${who#* })"; first_unknown="${first_unknown:-$pid}"
     elif [[ "$cwd" == "$FL_BENCH_DIR" || "$cwd" == "$FL_BENCH_DIR"/* ]]; then
-      held="${held}${held:+, }${port} (pid ${pid} ${who#* })"
+      if [[ "$port" == "$FL_REDIS_QUEUE_PORT" || "$port" == "$FL_REDIS_CACHE_PORT" ]]; then
+        redis_held="${redis_held}${redis_held:+, }${port} (pid ${pid} ${who#* })"
+      else
+        held="${held}${held:+, }${port} (pid ${pid} ${who#* })"
+      fi
     else
       foreign="${foreign}${foreign:+, }${port} (pid ${pid} ${who#* } in ${cwd})"
     fi
   done
   # every holder is named in one line, so a second doctor is not needed to
   # learn about the ones "down" will leave; the fix is for the first kind found
+  if [[ -z "$held$unknown$foreign" && -n "$redis_held" ]]; then
+    # the bench's own Redis and nothing else: up --services-only, which down stops
+    chk__set ok "services only: the bench's Redis runs on ${redis_held}; ${FL_SELF} down stops it"
+    return 0
+  fi
+  held="${held}${held:+${redis_held:+, }}${redis_held}"
   if [[ -z "$held$unknown$foreign" ]]; then
     chk__set ok "no stale process holds ${FL_WEB_PORT}, ${FL_SOCKETIO_PORT}, ${FL_REDIS_QUEUE_PORT} or ${FL_REDIS_CACHE_PORT}"
     return 0

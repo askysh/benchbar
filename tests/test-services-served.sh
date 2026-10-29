@@ -67,7 +67,7 @@ requests() { if [[ -f "$REQUESTS" ]]; then wc -l <"$REQUESTS" | tr -d ' '; else 
 status_json() { run_fm status --json --bench-dir "$BENCH"; assert_eq "0" "$CODE" "$OUT"; }
 
 suite() {
-  local tag="$1" n
+  local tag="$1" n levels
   BENCH="$HOME/dev/served-$tag"
   make_fake_bench "$BENCH" macdev
   cp "$ROOT/tests/mocks/frappe-python" "$BENCH/env/bin/python"; chmod +x "$BENCH/env/bin/python"
@@ -97,6 +97,12 @@ suite() {
   run_fm up --services-only --bench-dir "$BENCH"
   assert_eq "0" "$CODE" "$OUT"
   assert_calls_not_contain '^redis-server'
+  # doctor knows a bench with only its Redis is not a running bench: no failed ping, no stale process warning
+  run_fm doctor --json --bench-dir "$BENCH"
+  levels="$(printf '%s' "$OUT" | jget - '" ".join("%s=%s" % (c["id"], c["level"]) for c in d["checks"] if c["id"] in ("ping", "orphans", "site_not_served"))')"
+  assert_eq "orphans=ok ping=ok site_not_served=ok" "$(printf '%s' "$levels" | tr ' ' '\n' | sort | tr '\n' ' ' | sed 's/ $//')" "(services only: $levels)"
+  assert_contains "$(printf '%s' "$OUT" | jget - '[c["message"] for c in d["checks"] if c["id"] == "ping"][0]')" "services only"
+  assert_contains "$(printf '%s' "$OUT" | jget - '[c["message"] for c in d["checks"] if c["id"] == "orphans"][0]')" "services only"
   # down stops it
   run_fm down --bench-dir "$BENCH"
   assert_eq "0" "$CODE" "$OUT"
@@ -213,7 +219,9 @@ two.localhost" "$(sort "$REQUESTS")" "(the default site is not asked again, the 
   run_fm doctor --json --bench-dir "$BENCH"
   assert_eq "ok" "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "site_not_served"][0]["level"]')"
   assert_contains "$OUT" "serves every site it was asked about (3)"
-  # a stopped bench is not asked
+  # a stopped bench is not asked: no process and no web listener (a listener
+  # on the web port alone counts as serving, fl_bench_is_serving)
+  kill "$WEB_PID"; wait "$WEB_PID" 2>/dev/null || true
   : >"$MOCK_PROCS"; : >"$REQUESTS"
   run_fm doctor --json --bench-dir "$BENCH"
   assert_eq "ok" "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "site_not_served"][0]["level"]')"
@@ -221,7 +229,7 @@ two.localhost" "$(sort "$REQUESTS")" "(the default site is not asked again, the 
   assert_eq "0" "$(requests)" "(doctor never pings a stopped bench's sites)"
   # a web port nobody answers on is no 404: nothing is reported
   add_proc 4242 "honcho start -f Procfile.lean" "$BENCH"
-  kill "$WEB_PID"; wait "$WEB_PID" 2>/dev/null || true
+  kill "$WEB_PID" 2>/dev/null || true; wait "$WEB_PID" 2>/dev/null || true
   export MOCK_CURL_CODE=000
   status_json
   assert_eq "None None None" "$(printf '%s' "$OUT" | jget - '" ".join(str(s["served"]) for s in d["sites"])')" "$OUT"

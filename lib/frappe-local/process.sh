@@ -74,7 +74,7 @@ fl_bench_socketio_pids() {
 # neither is one whose folder cannot be read: stopping needs proof.
 fl_bench_listener_pids() {
   local pid
-  { lsof -ti "tcp:$(fl_bench_ports_csv)" -sTCP:LISTEN 2>/dev/null || true; } | while IFS= read -r pid; do
+  { lsof -ti "tcp:${1:-$(fl_bench_ports_csv)}" -sTCP:LISTEN 2>/dev/null || true; } | while IFS= read -r pid; do
     [[ -n "$pid" ]] && fl_pid_is_bench_own_strict "$pid" && printf '%s\n' "$pid"
   done
   return 0
@@ -91,6 +91,17 @@ fl_bench_process_pids() {
 
 fl_bench_is_running() {
   [[ -n "$(fl_bench_process_pids)" ]]
+}
+
+# fl_bench_is_serving: something that serves the site is alive: honcho, serve,
+# worker, schedule, socketio or a listener on the web or socketio port. The
+# bench's Redis alone (up --services-only, a leftover setup Redis) is not a
+# bench that should answer a ping; fl_bench_is_running still counts it, for
+# down and the waits that must see it gone.
+fl_bench_is_serving() {
+  [[ -n "$(fl_bench_honcho_pids)" || -n "$(fl_bench_socketio_pids)" ]] && return 0
+  [[ -n "$(pgrep -f "$(fl_bench_helper_pattern)" 2>/dev/null || true)" ]] && return 0
+  [[ -n "$(fl_bench_listener_pids "${FL_WEB_PORT},${FL_SOCKETIO_PORT}")" ]]
 }
 
 # honcho on any Procfile whose working folder is this bench: benchfg and the
