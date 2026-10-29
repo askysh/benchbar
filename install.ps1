@@ -38,7 +38,7 @@
 
   When piped into iex there is no way to pass parameters, so these
   environment variables work too (set them first):
-    BENCHBAR_VERSION=0.9.0   the same as -Version
+    BENCHBAR_VERSION=0.8.0   the same as -Version
     BENCHBAR_NO_TRAY=1       the same as -NoTray
     BENCHBAR_YES=1           the same as -Yes
     BENCHBAR_ZIP=PATH        the same as -Zip
@@ -239,7 +239,7 @@ function Install-BenchBar {
   }
   if ($Version) {
     $Version = $Version.Trim()
-    if ($Version -notmatch '^v?\d+\.\d+\.\d+$') { Stop-Install "'$Version' is not a version." 'use X.Y.Z, for example -Version 0.9.0' }
+    if ($Version -notmatch '^v?\d+\.\d+\.\d+$') { Stop-Install "'$Version' is not a version." 'use X.Y.Z, for example -Version 0.8.0' }
     $Version = $Version.TrimStart('v')
   }
 

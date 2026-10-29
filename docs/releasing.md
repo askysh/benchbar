@@ -77,7 +77,7 @@ artifacts only. A pull request that changes `release-windows.yml` or
 `install.ps1` builds both zips and runs the installer on windows-latest.
 
 To give testers a build before a release: run Release Windows by hand
-from main with a version such as `0.9.0` and `draft_release` off, then
+from main with a version such as `0.8.0` and `draft_release` off, then
 download the `windows-amd64` (and `windows-arm64`) artifact from the
 run's summary page. Each holds the zip and its `sums-<arch>.txt`. Send
 the zip; the tester unpacks it and runs its own `install.ps1`, as

@@ -23,7 +23,7 @@ One line per non obvious choice. The spike's code is in `spike/` and is not ship
 - Real logon to icon is measured across a real sign in: each shell started from the Startup folder with `--logon-log <file>` appends when its icon was added, and the sign in time is the Winlogon 7001 event in the System log (logged when the session starts, 0.7 s before Explorer here). It leaves out the moment between pressing Enter and Windows accepting the password.
 - CI runs the 25 minute measurement only when started by hand (Tray spike, Run workflow); pull requests and pushes build and test only, and the workflow is path filtered to `windows/tray/spike/**`, so the real tray app's pull requests never wait on it (Akash, 2026-10-10).
 
-## v1: the tray app (0.9)
+## v1: the tray app (0.8.0)
 
 - The app is `windows/tray/BenchBarTray` with `Tray.Core` promoted out of the spike (copied, then grown); the spike stays as measured and keeps building under its own workflow. One solution, `BenchBarTray.sln`, classic format as asked.
 - The promoted `PollerTests.StartPollsAtOnceAndReportsTheBenches` failed every time on the laptop (2026-10-29) and passed on CI by timing: the probe's `Updated` handler was subscribed before the test's own, released the waiting test, and the test read the result before its handler ran. The promoted test reads `poller.Last`; the spike keeps the bug (Akash, 2026-10-29: the spike stays untouched).
@@ -65,7 +65,7 @@ One line per non obvious choice. The spike's code is in `spike/` and is not ship
 - `config.json` is replaced with up to ten short retries: Windows refuses the replace while another process holds the file without delete sharing (an antivirus scan, the indexer, the shim reading it). Found as a test that failed one run in twenty.
 - Controller tests dispose the controller and advance the fake clock only after a poll has reported (its timer is armed by then), on the same lock that stands in for the UI thread; three tests failed one run in about seven before that, and none in 30 runs after.
 
-## The release path (0.9)
+## The release path (0.8.0)
 
 - A zip per CPU plus `install.ps1`, no MSI and no Inno Setup in v1: both add a toolchain and a second file to sign, and a zip plus a script matches `install.sh`. winget comes after the first signed release (an unsigned package gets SmartScreen warnings there too).
 - `release-windows.yml` is its own workflow; release.yml stays as it is. It attaches to the draft release.yml creates for the tag. On a tag push it waits up to 130 minutes (release.yml's macOS job allows 120) and creates a draft only when none appears, with a warning that a later release.yml run replaces the notes, so this workflow must be re-run afterwards. A manual run needs the draft to exist and fails otherwise. It never publishes.
