@@ -26,7 +26,7 @@ These come from `benchbar --help` and work with every command below.
 ## install
 
 ```
-benchbar install [--profile NAME] [--bundle NAME] [--make-default] [--port-offset N] [--offline] [--dry-run] [--yes]
+benchbar install [--profile NAME] [--bundle NAME] [--make-default] [--port-offset N] [--frappe-commit SHA] [--erpnext-commit SHA] [--offline] [--dry-run] [--yes]
 ```
 
 Runs phase 00 (system dependencies), phase 01 (bench and site) and the
@@ -52,6 +52,7 @@ phase scripts: no other program started by the install sees them.
 | `--port-offset N` | Use port block N (web 8000+N, socketio 9000+N, redis 11000+N and 13000+N). Default: keep the ports, or the next free block when another bench already uses them |
 | `--with-schedule`, `--without-schedule` | Add the scheduler to `Procfile.lean`, or leave it out (the default) |
 | `--dry-run` | Print the plan of every phase, change nothing |
+| `--frappe-commit SHA`, `--erpnext-commit SHA` | Pin frappe or erpnext to a commit (7 to 40 hex characters; a team profile can say `frappe_commit` and `erpnext_commit`). The flag wins over the profile. A pinned clone is fetched without its first build, the commit is checked out, and one build follows. A commit the clone does not reach stops the install before anything is built or created |
 | `--offline` | Skip the remote branch checks of both phase scripts (also `OFFLINE=1` or `BENCHBAR_OFFLINE=1`) |
 | `-y`, `--yes` | Accept every default and confirmation, including the `sudo` line for `/etc/hosts`; the passwords must be in the environment |
 

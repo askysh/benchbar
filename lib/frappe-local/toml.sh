@@ -75,8 +75,8 @@ fl_toml_parse() {
       if (t != ktype[sec "." key]) fail(key " must be " (ktype[sec "." key] == "s" ? "a string" : ktype[sec "." key] == "b" ? "true or false" : ktype[sec "." key] == "i" ? "an integer" : "an array of strings"))
       if (key == "repo" && val ~ /^[a-zA-Z+]+:\/\/[^\/]*@/ && val !~ /^ssh:\/\//) fail("a user name or token in a repo URL (the file gets committed)")
       # a value git would read as an option (--upload-pack=...) runs commands: never accepted
-      if ((key == "repo" || key == "branch" || key == "commit" || key == "name") && val ~ /^-/) fail("\"" key "\" must not start with \"-\"")
-      if (key == "commit" && (val !~ /^[0-9a-f]+$/ || length(val) < 7 || length(val) > 40)) fail("commit must be 7 to 40 lower case hex characters")
+      if ((key == "repo" || key == "branch" || key == "commit" || key == "frappe_commit" || key == "erpnext_commit" || key == "name") && val ~ /^-/) fail("\"" key "\" must not start with \"-\"")
+      if ((key == "commit" || key == "frappe_commit" || key == "erpnext_commit") && (val !~ /^[0-9a-f]+$/ || length(val) < 7 || length(val) > 40)) fail(key " must be 7 to 40 lower case hex characters")
       if (key == "name" && val !~ /^[A-Za-z0-9][A-Za-z0-9._-]*$/) fail("name " val)
       printf "%s\t%d\t%s\t%s\n", sec, idx, key, val
     }

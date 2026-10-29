@@ -78,6 +78,25 @@ benchbar site backups v16two                # every backup, newest first
 A backup lands inside the bench, in `sites/NAME/private/backups/`. Copy
 it somewhere else when you need it to outlive the bench.
 
+`site restore` puts a backup back, into the site it came from or into a
+new site (`--new`), with the encryption key of the set. A site that is
+there is backed up with its files first, and the default site never
+moves. Look at the plan first; it ends in a token that `--apply` takes:
+
+```bash
+benchbar site restore v16two --from 20260902_090000 --with-files --dry-run --json
+benchbar site restore v16two --from 20260902_090000 --with-files --apply TOKEN --yes
+benchbar site restore copy --from 20260902_090000 --from-site v16two --new --yes
+```
+
+`--no-migrate` stops after the restore, `--before-migrate SCRIPT` runs a
+script of yours between the two. The restore starts the bench's Redis
+itself when the bench is stopped and stops it again; for your own
+`bench restore` or `bench migrate` on a stopped bench,
+`benchbar up --services-only` starts that Redis and nothing else, and
+`benchbar down` stops it. See
+[site restore](../reference/cli/site.md#site-restore).
+
 `site drop` removes a site for good: its database and database user are
 dropped, and only the backup it takes first can bring them back. Before
 you drop one, check that it is the site you mean (`benchbar site list`)

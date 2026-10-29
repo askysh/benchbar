@@ -12,7 +12,7 @@ most often `--bench-dir DIR` for a bench that is not the default.
 ## up
 
 ```
-benchbar up [--bench-dir DIR]
+benchbar up [--services-only] [--bench-dir DIR]
 ```
 
 Starts the bench in the background and waits for the site's ping. It
@@ -22,6 +22,13 @@ running bench, or any other program, listens on one of them (it never
 takes their ports), and asks when only a stopped bench shares them.
 Both print `benchbar ports setup -- PATH` as the fix. A running bench is
 left as it is.
+
+`--services-only` starts the bench's Redis (queue and cache) and nothing
+else: no agent, no web process, no stop flag, and no service needs to be
+installed. It is for a `site restore`, a `pull` or a `bench migrate` on a
+bench that is not running, which need that Redis. It stays up until
+`benchbar down`. A Redis port held by another program is refused.
+`benchbar status --json` shows both in `redis`.
 
 Exit codes: 0 the bench is up (or already was); 1 the site did not answer
 in time (it may still be starting: `benchbar logs`), a port is taken, or

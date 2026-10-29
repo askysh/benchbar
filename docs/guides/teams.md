@@ -204,9 +204,13 @@ benchbar pull --from-dir ~/Downloads/erp-backup --as erpcopy   # a Frappe Cloud 
 already exists on the server, so nothing is written there (`--new-backup`
 runs `bench backup` first, which also deletes older backups on the server,
 so it asks you to type the site name). The download resumes when the link
-drops. The copy goes into a new local site: pull refuses a site name
+drops. The copy goes into a new local site, which pull creates
+(`bench new-site`) as a step of its plan: pull refuses a site name
 that exists. `--replace` overwrites that site's database and files
-instead, after backing it up and asking again. The copy gets the
+instead, after backing it up and asking again. A name that cannot be
+restored into (a folder in `sites/` that is no site) stops the check,
+`--dry-run` included. `--no-migrate` stops after the restore, and
+`--before-migrate SCRIPT` runs a script of yours between the two. The copy gets the
 production `encryption_key` so stored passwords still decrypt, has email muted and the scheduler paused before it
 ever starts, and runs `bench migrate` when your apps are newer. When the
 bench lacks an app production has, pull stops and prints the

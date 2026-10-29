@@ -90,6 +90,36 @@ All notable changes to this project are documented here.
   variable": GNU `stat -f` prints file system text where BSD `stat -f`
   prints a time.
 
+### Agents and recovery
+
+- `benchbar site restore TARGET --from STAMP|PATH` restores a backup set
+  into a site of the bench (backed up with its files first) or, with
+  `--new`, into a site it creates. The encryption key of the set comes
+  along, the default site never moves, and the run ends with a check that
+  the site answers `list-apps`. `--dry-run --json` prints the plan, what
+  it touches and a token; `--apply TOKEN --yes` runs exactly that plan and
+  refuses a stale one. `--no-migrate` stops after the restore and
+  `--before-migrate SCRIPT` runs a script of yours before migrate (no
+  secret in its environment; a failing script stops the run).
+- `benchbar pull` creates the local site when it does not exist, takes
+  `--no-migrate` and `--before-migrate` too, and a dry run now refuses a
+  target the restore cannot go into (a folder in `sites/` without a
+  `site_config.json`, a `bench new-site` that did not finish, no MariaDB
+  root password) instead of printing a plan that fails at its first step.
+- `benchbar up --services-only` starts the bench's Redis and nothing else,
+  for a restore or a migrate on a stopped bench; `down` stops it.
+  `status --json` gains `redis` (`queue` and `cache`: `port`, `running`).
+- `status --json` gains `sites[].served`: whether the running bench
+  serves the site (`null` while it is stopped, and a stopped bench is
+  never pinged), and doctor warns with `site_not_served` about a site
+  folder the running web process answers 404 for.
+- Commit pins for frappe and erpnext: `install --frappe-commit SHA
+  --erpnext-commit SHA`, `frappe_commit` and `erpnext_commit` in a team
+  profile (`profile show` and `profile check` print them), and `commit`
+  for any app as before. A pinned clone is fetched without its first
+  build; a commit it does not reach stops the install before anything is
+  built or created.
+
 ### Windows (preview)
 
 Built from source for now: a signed `benchbar.exe` with an installer and

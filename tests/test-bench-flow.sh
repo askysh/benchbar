@@ -105,4 +105,39 @@ esac
 
 fl_verify_site_health "$BENCH_DIR" macdev
 
+# ---- commit pins (install --frappe-commit, --erpnext-commit, a profile's pins)
+G=(git -c user.name=t -c user.email=t@example.com)
+PINNED="$BENCH_DIR/apps/pinned"
+mkdir -p "$PINNED"
+"${G[@]}" -C "$PINNED" init -q -b main
+printf 'one\n' >"$PINNED/f"; "${G[@]}" -C "$PINNED" add f; "${G[@]}" -C "$PINNED" commit -q -m one
+FIRST="$("${G[@]}" -C "$PINNED" rev-parse HEAD)"
+printf 'two\n' >"$PINNED/f"; "${G[@]}" -C "$PINNED" commit -q -a -m two
+SECOND="$("${G[@]}" -C "$PINNED" rev-parse HEAD)"
+: >"$BENCH_LOG"
+# a commit the clone reaches is checked out
+assert_eq "0" "$FL_PINS_APPLIED"
+fl_get_app_if_needed "$BENCH_DIR" pinned main "" "${FIRST:0:10}" 1 >/dev/null
+assert_eq "$FIRST" "$("${G[@]}" -C "$PINNED" rev-parse HEAD)"
+assert_eq "1" "$FL_PINS_APPLIED"
+# a commit it does not reach stops the run before anything is built, the clone stays where it was
+"${G[@]}" -C "$PINNED" checkout -q "$SECOND"
+out="$( (fl_get_app_if_needed "$BENCH_DIR" pinned main "" deadbeefdeadbeef 1) 2>&1 || true)"
+case "$out" in *"The pinned commit deadbeefdeadbeef of pinned is not in its clone (branch main); nothing was built."*) ;; *) printf 'Expected the unreachable pin to be refused, got:\n%s\n' "$out"; exit 1 ;; esac
+assert_fails fl_get_app_if_needed "$BENCH_DIR" pinned main "" deadbeefdeadbeef 1
+assert_eq "$SECOND" "$("${G[@]}" -C "$PINNED" rev-parse HEAD)"
+if grep -q -E '^bench (build|setup)' "$BENCH_LOG"; then printf 'Expected no build after a refused pin\n'; exit 1; fi
+# a fresh clone with a pin is fetched without the first build (the caller builds once, after the checkout)
+fl_get_app_if_needed "$BENCH_DIR" freshpin main "" "$FIRST" 1 >/dev/null
+grep -q -- '^bench get-app --branch main --skip-assets freshpin$' "$BENCH_LOG" || { printf 'Expected get-app --skip-assets for a pinned app\n'; cat "$BENCH_LOG"; exit 1; }
+fl_get_app_if_needed "$BENCH_DIR" unpinned main "" "" 0 >/dev/null
+grep -q -- '^bench get-app --branch main unpinned$' "$BENCH_LOG" || { printf 'Expected a plain get-app for an unpinned app\n'; cat "$BENCH_LOG"; exit 1; }
+# bench init for a frappe pin builds nothing until the pin is checked out
+PINBENCH="$TMP_DIR/pin-bench"
+fl_bench_init_if_needed "$PINBENCH" version-15 /usr/bin/python3 0 1 >/dev/null
+grep -q -- "^bench init ${PINBENCH} .* --skip-assets\$" "$BENCH_LOG" || { printf 'Expected bench init --skip-assets\n'; cat "$BENCH_LOG"; exit 1; }
+# the same repo checked through fl_commit_reach: reachable, not reachable
+fl_commit_reach "$PINNED" "$FIRST" || { printf 'Expected the first commit to be reachable\n'; exit 1; }
+assert_fails fl_commit_reach "$PINNED" 0123456789abcdef0123456789abcdef01234567
+
 printf 'test-bench-flow: ok\n'

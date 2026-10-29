@@ -91,6 +91,18 @@ the default bench never moves on its own.
 backup before each change. The bench path is remembered after the first
 call, so later commands do not need `--bench-dir`.
 
+To put a site back from a backup (`benchbar site backups NAME` lists the
+stamps), plan first, show it to the user, then apply with the token:
+
+```bash
+./benchbar site restore NAME --from STAMP [--new --from-site SITE] --dry-run --json
+./benchbar site restore NAME --from STAMP [--new --from-site SITE] --apply TOKEN --yes --json
+```
+
+It backs the site up first, never moves the default site and ends with a
+check. Do not run `bench restore` or `mariadb -u root` yourself.
+`benchbar up --services-only` starts only the bench's Redis.
+
 ## Port setup and conflicts
 
 ```bash

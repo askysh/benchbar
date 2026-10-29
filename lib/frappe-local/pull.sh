@@ -12,12 +12,18 @@
 #     deletes older backups there)
 #   - the download resumes (rsync --partial), encrypted backups are decrypted
 #     here with gpg, the passphrase on stdin
-#   - restore goes into a new local site only (--replace backs the old up)
+#   - restore goes into a new local site only, which pull creates (bench
+#     new-site) when it is not there; --replace backs an old one up first
+#   - --no-migrate ends the run after the restore, --before-migrate SCRIPT
+#     runs between the restore and migrate (no secret in its environment)
 #   - the site's encryption_key comes over on stdin, never on a command line,
 #     in the output or in the log; the rest of the production config stays
 #   - apps the bench lacks stop the run with the bench get-app commands,
 #     unless --skip-app names them
 #   - email is muted and the scheduler paused before the copy ever starts
+#
+# The restore steps (fl_pull_step_*) are shared with site-restore.sh, which
+# restores a backup set of this bench the same way.
 #
 # The MariaDB root password and the Administrator password reach frappe
 # through a small Python wrapper that reads them on stdin and calls frappe's
@@ -61,6 +67,19 @@ FL_PULL_ADMIN_PW=""
 FL_PULL_STEPS=()
 FL_PULL_QUIESCE=0
 FL_PULL_QUIESCED=0
+# the target does not exist yet: a new_site step creates it before the restore
+FL_PULL_SITE_CREATE=0
+# --no-migrate: the restore ends the run before bench migrate would start
+FL_PULL_NO_MIGRATE=0
+# --before-migrate SCRIPT: runs after the restore, before migrate (or where
+# it would be); a failing script stops the run
+FL_PULL_HOOK=""
+# pull's own JSON lines (plan, step, done); site restore shares the restore
+# steps below and has its own output, so it sets this to 0
+FL_PULL_EMIT=1
+# the question after the backup of an existing target (site restore asked
+# once already, at its plan)
+FL_PULL_CONFIRM_BACKUP=1
 
 # Python snippets (they contain no single quotes, so they travel over SSH as
 # one quoted word). None of them takes a secret as an argument.
@@ -132,7 +151,7 @@ print("benchbar-probe %d %d" % (ok, bad))'
 
 # fl_pull_emit EVENT [,"field":value...]: one JSON line on the saved stdout (fd 3)
 fl_pull_emit() {
-  [[ "${OPT_JSON:-0}" == "1" ]] || return 0
+  [[ "${OPT_JSON:-0}" == "1" && "$FL_PULL_EMIT" == "1" ]] || return 0
   printf '{"schema_version":%d,"cli_version":"%s","event":"%s"%s}\n' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$1" "${2:-}" >&3
 }
 
@@ -294,7 +313,7 @@ fl_pull_parse_args() {
   local src=""
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
-      --as|--from-dir|--remote-bench|--skip-app|--confirm-site)
+      --as|--from-dir|--remote-bench|--skip-app|--confirm-site|--before-migrate)
         [[ "$#" -ge 2 && -n "$2" ]] || fl_die "$1 needs a value." "Run: benchbar --help"
         case "$1" in
           --as) FL_PULL_AS="$2" ;;
@@ -302,8 +321,11 @@ fl_pull_parse_args() {
           --remote-bench) FL_PULL_RBENCH="$2" ;;
           --skip-app) FL_PULL_SKIP_APPS="${FL_PULL_SKIP_APPS}${FL_PULL_SKIP_APPS:+ }$2" ;;
           --confirm-site) FL_PULL_CONFIRM_SITE="$2" ;;
+          --before-migrate) FL_PULL_HOOK="$2" ;;
         esac
         shift 2 ;;
+      --before-migrate=*) FL_PULL_HOOK="${1#*=}"; shift ;;
+      --no-migrate) FL_PULL_NO_MIGRATE=1; shift ;;
       --as=*) FL_PULL_AS="${1#*=}"; shift ;;
       --from-dir=*) FL_PULL_FROM_DIR="${1#*=}"; shift ;;
       --remote-bench=*) FL_PULL_RBENCH="${1#*=}"; shift ;;
@@ -341,6 +363,7 @@ fl_pull_parse_args() {
     [[ -n "$FL_PULL_AS" ]] || FL_PULL_AS="$(printf '%s.local' "$FL_PULL_RSITE" | tr '[:upper:]' '[:lower:]')"
   fi
   fl_site_valid_name "$FL_PULL_AS"
+  [[ -z "$FL_PULL_HOOK" ]] || fl_pull_hook_resolve
   local a
   for a in $FL_PULL_SKIP_APPS; do
     [[ "$a" =~ ^[a-z0-9_]+$ ]] || fl_die "Invalid app name for --skip-app: '${a}'."
@@ -422,10 +445,18 @@ fl_pull_set_sizes() {
 
 # The same facts from a folder of downloaded backup files.
 fl_pull_check_dir() {
-  local names out f
+  local names
   names="$(ls -1 "$FL_PULL_FROM_DIR" 2>/dev/null || true)"
   fl_pull_pick_set "$names"
   [[ -n "$FL_PULL_DB" ]] || fl_die "No database backup (*-database.sql.gz) in ${FL_PULL_FROM_DIR}." "Download the backup set (database, files, private files, site config) into one folder."
+  fl_pull_check_set
+}
+
+# The facts of the picked set (FL_PULL_DB and its files in FL_PULL_FROM_DIR):
+# sizes, whether the site config carries the keys, the apps of the dump.
+# site restore picks its own set and calls this.
+fl_pull_check_set() {
+  local out f
   out=""
   for f in "$FL_PULL_DB" "$FL_PULL_PUB" "$FL_PULL_PRIV"; do
     [[ -n "$f" ]] && out="${out}$(wc -c <"${FL_PULL_FROM_DIR}/${f}" | tr -d ' ') ${f}"$'\n'
@@ -529,14 +560,46 @@ fl_pull_gpg_install_hint() {
   if fl_is_linux; then printf 'sudo apt-get install gnupg'; else printf 'brew install gnupg'; fi
 }
 
-fl_pull_check_local() {
-  if [[ -d "${FL_BENCH_DIR}/sites/${FL_PULL_AS}" ]]; then
+# fl_pull_check_target: can the restore go into FL_PULL_AS? Sets
+# FL_PULL_SITE_EXISTS (a site there, backed up first and replaced) or
+# FL_PULL_SITE_CREATE (none there: a new_site step makes it). A target the
+# restore cannot go into stops the run here, the dry run included, instead
+# of failing at its first step: a folder without a site_config.json is no
+# site (bench backup, the first step of a replace, fails on it), and a
+# new-site cut short leaves its marker.
+fl_pull_check_target() {
+  local sdir="${FL_BENCH_DIR}/sites/${FL_PULL_AS}"
+  fl_site_incomplete "$FL_BENCH_DIR" "$FL_PULL_AS" && fl_die "Site ${FL_PULL_AS} cannot be restored into: an earlier bench new-site did not finish." "Move sites/${FL_PULL_AS} aside as said above, then run this again."
+  if [[ -d "$sdir" ]]; then
+    [[ -f "${sdir}/site_config.json" ]] || fl_die "Site ${FL_PULL_AS} cannot be restored into: sites/${FL_PULL_AS} exists but has no site_config.json, so it is no site." \
+      "Move it aside (mv ${sdir} ~/${FL_PULL_AS}.incomplete), then run this again; pull creates the site."
     FL_PULL_SITE_EXISTS=1
     [[ "$FL_PULL_REPLACE" == "1" ]] || fl_die "Site ${FL_PULL_AS} already exists in ${FL_BENCH_DIR}." "Pick another name with --as NAME, or pass --replace (backs the site up first, then restores over it)."
     fl_warn "site ${FL_PULL_AS} exists and will be replaced (--replace): it is backed up first"
+  else
+    FL_PULL_SITE_CREATE=1
+    [[ "$FL_PULL_REPLACE" != "1" ]] || fl_info "--replace: there is no site ${FL_PULL_AS} to replace; it is created"
   fi
+}
+
+# fl_pull_hook_resolve: FL_PULL_HOOK as an absolute path of an executable
+# file, or a refusal (the same for pull and site restore)
+fl_pull_hook_resolve() {
+  local h="$FL_PULL_HOOK"
+  case "$h" in /*) ;; '~/'*) h="${HOME}/${h#'~/'}" ;; *) h="${PWD}/${h}" ;; esac
+  [[ -f "$h" ]] || fl_die "--before-migrate: no file ${FL_PULL_HOOK}." "Pass the path of an executable script."
+  [[ -x "$h" ]] || fl_die "--before-migrate: ${FL_PULL_HOOK} is not executable." "chmod +x ${FL_PULL_HOOK}"
+  FL_PULL_HOOK="$h"
+}
+
+fl_pull_check_local() {
+  fl_pull_check_target
   fl_port_listening 3306 || fl_die "MariaDB is not running (nothing listens on 3306)." "Start it: $(fl_pull_mariadb_start_hint)"
   fl_mariadb_root_password_resolve || fl_die "The MariaDB root password is needed for the restore." "Re-run with: MARIADB_ROOT_PASSWORD='...' benchbar pull ..." 2
+  # a dry run does not verify the password; it can still say that none is known
+  if [[ "${FL_DRY_RUN:-0}" == "1" ]] && ! fl_mariadb_root_password_known; then
+    fl_die "The MariaDB root password is needed for the restore." "Re-run with: MARIADB_ROOT_PASSWORD='...' benchbar pull ..." 2
+  fi
   if [[ "$FL_PULL_ENCRYPTED" == "1" ]]; then
     command -v gpg >/dev/null 2>&1 || fl_die "The backup is encrypted and gpg is not installed." "Install it: $(fl_pull_gpg_install_hint)"
     [[ "$FL_PULL_HAS_BACKUP_KEY" == "1" ]] || fl_die "The backup is encrypted but the production site config has no backup_encryption_key." "Decrypt the files by hand, or copy the key from the server's site_config.json."
@@ -585,12 +648,14 @@ fl_pull_plan_steps() {
   FL_PULL_QUIESCE=0
   fl_bench_is_running && ! fl_pull_common_paused && FL_PULL_QUIESCE=1
   [[ "$FL_PULL_QUIESCE" == "1" ]] && FL_PULL_STEPS+=("quiesce|Pause this bench's scheduler during the restore")
+  [[ "$FL_PULL_SITE_CREATE" == "1" ]] && FL_PULL_STEPS+=("new_site|Create the site ${FL_PULL_AS} (bench new-site)")
   FL_PULL_STEPS+=("restore|Restore into ${FL_PULL_AS}")
   FL_PULL_STEPS+=("encryption_key|Carry the encryption key over")
   FL_PULL_STEPS+=("dev_safety|Mute email and pause the scheduler")
   [[ "$FL_PULL_QUIESCE" == "1" ]] && FL_PULL_STEPS+=("resume|Resume this bench's scheduler")
   [[ -n "$FL_PULL_SKIP_APPS" ]] && FL_PULL_STEPS+=("skip_apps|Remove skipped apps from the site: ${FL_PULL_SKIP_APPS}")
-  FL_PULL_STEPS+=("migrate|bench migrate")
+  [[ -n "$FL_PULL_HOOK" ]] && FL_PULL_STEPS+=("before_migrate|Run ${FL_PULL_HOOK##*/} (--before-migrate)")
+  [[ "$FL_PULL_NO_MIGRATE" == "1" ]] || FL_PULL_STEPS+=("migrate|bench migrate")
   FL_PULL_STEPS+=("clear_cache|Clear caches")
   FL_PULL_STEPS+=("admin_password|Administrator password")
   FL_PULL_STEPS+=("hosts|Hosts line for ${FL_PULL_AS}")
@@ -605,7 +670,7 @@ fl_pull_print_plan() {
   fl_box "Pull" \
     "from     $(fl_pull_source_label)$([[ -z "$FL_PULL_FROM_DIR" ]] && printf ' (bench %s)' "$FL_PULL_RBENCH")" \
     "backup   $(fl_pull_backup_label)" \
-    "into     ${FL_PULL_AS} in ${FL_BENCH_DIR}$([[ "$FL_PULL_SITE_EXISTS" == "1" ]] && printf ' (replaced, backup first)')" \
+    "into     ${FL_PULL_AS} in ${FL_BENCH_DIR}$([[ "$FL_PULL_SITE_EXISTS" == "1" ]] && printf ' (replaced, backup first)')$([[ "$FL_PULL_SITE_CREATE" == "1" ]] && printf ' (a new site)')" \
     "key      $([[ "$FL_PULL_HAS_KEY" == "1" ]] && printf 'encryption_key carried over (never shown)' || printf 'none on production: stored passwords will not decrypt')" \
     "safety   mute_emails$([[ "$FL_PULL_KEEP_SCHEDULER" == "1" ]] && printf ', scheduler kept' || printf ', scheduler paused'), host_name http://${FL_PULL_AS}:${FL_WEB_PORT}"
   if [[ "$FL_PULL_NEW_BACKUP" == "1" ]]; then
@@ -620,7 +685,7 @@ fl_pull_print_plan() {
     json_steps="${json_steps}${json_steps:+,}$(fl_json_str "${s#*|}")"
     i=$((i + 1))
   done
-  fl_pull_emit plan ",\"source\":$(fl_json_str "$(fl_pull_source_label)"),\"host\":$(fl_json_str "$FL_PULL_HOST"),\"remote_site\":$(fl_json_str "$FL_PULL_RSITE"),\"remote_bench\":$(fl_json_str "$FL_PULL_RBENCH"),\"from_dir\":$(fl_json_str "$FL_PULL_FROM_DIR"),\"bench\":$(fl_json_str "$FL_BENCH_DIR"),\"site\":$(fl_json_str "$FL_PULL_AS"),\"replace\":$(fl_json_bool "$FL_PULL_SITE_EXISTS"),\"backup\":{\"name\":$(fl_json_str "$([[ "$FL_PULL_NEW_BACKUP" == "1" ]] || printf '%s' "$FL_PULL_DB")"),\"new\":$(fl_json_bool "$FL_PULL_NEW_BACKUP"),\"bytes\":$(fl_json_num "$([[ "$FL_PULL_NEW_BACKUP" == "1" ]] || printf '%s' "$FL_PULL_TOTAL_BYTES")"),\"age_hours\":$(fl_json_num "$([[ "$FL_PULL_NEW_BACKUP" == "1" ]] || fl_pull_age_hours "${FL_PULL_DB%%-*}")"),\"encrypted\":$(fl_json_bool "$FL_PULL_ENCRYPTED")},\"encryption_key\":$(fl_json_bool "$FL_PULL_HAS_KEY"),\"apps\":[${FL_PULL_APPS_JSON:-}],\"migrate\":$(fl_json_bool "$FL_PULL_NEED_MIGRATE"),\"steps\":[${json_steps}],\"dry_run\":$(fl_json_bool "${FL_DRY_RUN:-0}")"
+  fl_pull_emit plan ",\"source\":$(fl_json_str "$(fl_pull_source_label)"),\"host\":$(fl_json_str "$FL_PULL_HOST"),\"remote_site\":$(fl_json_str "$FL_PULL_RSITE"),\"remote_bench\":$(fl_json_str "$FL_PULL_RBENCH"),\"from_dir\":$(fl_json_str "$FL_PULL_FROM_DIR"),\"bench\":$(fl_json_str "$FL_BENCH_DIR"),\"site\":$(fl_json_str "$FL_PULL_AS"),\"replace\":$(fl_json_bool "$FL_PULL_SITE_EXISTS"),\"backup\":{\"name\":$(fl_json_str "$([[ "$FL_PULL_NEW_BACKUP" == "1" ]] || printf '%s' "$FL_PULL_DB")"),\"new\":$(fl_json_bool "$FL_PULL_NEW_BACKUP"),\"bytes\":$(fl_json_num "$([[ "$FL_PULL_NEW_BACKUP" == "1" ]] || printf '%s' "$FL_PULL_TOTAL_BYTES")"),\"age_hours\":$(fl_json_num "$([[ "$FL_PULL_NEW_BACKUP" == "1" ]] || fl_pull_age_hours "${FL_PULL_DB%%-*}")"),\"encrypted\":$(fl_json_bool "$FL_PULL_ENCRYPTED")},\"encryption_key\":$(fl_json_bool "$FL_PULL_HAS_KEY"),\"apps\":[${FL_PULL_APPS_JSON:-}],\"migrate\":$(fl_json_bool "$([[ "$FL_PULL_NO_MIGRATE" == "1" ]] && printf 0 || printf '%s' "$FL_PULL_NEED_MIGRATE")"),\"create_site\":$(fl_json_bool "$FL_PULL_SITE_CREATE"),\"before_migrate\":$(fl_json_str "$FL_PULL_HOOK"),\"steps\":[${json_steps}],\"dry_run\":$(fl_json_bool "${FL_DRY_RUN:-0}")"
 }
 
 # ---------------------------------------------------------------- gates
@@ -756,7 +821,7 @@ fl_pull_step_local_backup() {
   fl_bench_env_exports
   fl_run_long "bench --site ${FL_PULL_AS} backup --with-files" fl__in_dir "$FL_BENCH_DIR" bench --site "$FL_PULL_AS" backup --with-files || return 1
   fl_ok "backup of the old ${FL_PULL_AS} in sites/${FL_PULL_AS}/private/backups"
-  if [[ "${FL_ASSUME_YES:-0}" != "1" ]] && ! fl_confirm "The old ${FL_PULL_AS} is backed up. Replace it now?"; then
+  if [[ "${FL_ASSUME_YES:-0}" != "1" && "$FL_PULL_CONFIRM_BACKUP" == "1" ]] && ! fl_confirm "The old ${FL_PULL_AS} is backed up. Replace it now?"; then
     fl_pull_emit gate ",\"name\":\"replace\",\"answer\":\"no\""
     fl_warn "Cancelled after the backup. ${FL_PULL_AS} is unchanged."
     exit 1
@@ -769,6 +834,24 @@ fl__pull_frappe_secret() {
   local var="$1"
   shift
   printf '%s\n' "${!var}" | fl__in_dir "${FL_BENCH_DIR}/sites" "${FL_BENCH_DIR}/env/bin/python" -c "$FL_PULL_PY_FRAPPE" benchbar-frappe "$@"
+}
+
+# The target site, made empty by bench new-site, for the restore to go into.
+# The restore brings the Administrator password of the backup, so the one
+# new-site needs (ADMIN_PASSWORD when given) only lives until then; a
+# generated one is never shown or kept.
+fl_pull_step_new_site() {
+  local pw="${ADMIN_PASSWORD:-}" code=0
+  [[ -n "$pw" ]] || pw="$(fl_password_generate)"
+  fl_bench_env_exports
+  [[ -n "$FL_SETUP_REDIS_PORTS" ]] || fl_bench_redis_up "$FL_BENCH_DIR"
+  fl_new_site_create "$FL_BENCH_DIR" "$FL_PULL_AS" "$FL_MARIADB_ROOT_PW" "$pw" || code=$?
+  pw=""
+  if [[ "$code" != "0" ]]; then
+    fl_fix "cd ${FL_BENCH_DIR} && bench new-site ${FL_PULL_AS} $(fl_new_site_scope)   (it asks for both passwords). If sites/${FL_PULL_AS} was left behind, move it aside first."
+    return 1
+  fi
+  [[ -f "${FL_BENCH_DIR}/sites/${FL_PULL_AS}/site_config.json" ]] || { fl_fail "bench new-site left no sites/${FL_PULL_AS}/site_config.json"; return 1; }
 }
 
 fl_pull_step_restore() {
@@ -850,6 +933,35 @@ fl_pull_step_skip_apps() {
     fl_pull_bench_site remove-from-installed-apps "$a" || { fl_fail "remove-from-installed-apps ${a} failed"; return 1; }
     fl_warn "${a} removed from the site's app list; its doctypes and tables stay behind"
   done
+}
+
+# The names of the variables a hook must not inherit: benchbar's own
+# passwords and anything else in the environment named like a secret.
+fl_pull_hook_secret_names() {
+  env | sed -n 's/=.*//p' | grep -E -i -- '(PASSWORD|PASSWD|SECRET|TOKEN|PASSPHRASE|CREDENTIAL|(^|_)KEY$)' || true
+  printf '%s\n' MARIADB_ROOT_PASSWORD ADMIN_PASSWORD
+}
+
+# fl_pull_hook_run: the --before-migrate script, in the bench folder, with
+# BENCHBAR_SITE, BENCHBAR_BENCH and BENCHBAR_DB_NAME. It gets neither the
+# MariaDB root password nor the Administrator password, and no variable
+# named like a secret: those are removed from its environment.
+fl_pull_hook_run() {
+  local db_name unset_args=() v
+  db_name="$("${FL_BENCH_DIR}/env/bin/python" -c "$FL_PULL_PY_CONF" "${FL_BENCH_DIR}/sites/${FL_PULL_AS}/site_config.json" value db_name 2>/dev/null || true)"
+  while IFS= read -r v; do
+    [[ "$v" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] && unset_args+=(-u "$v")
+  done < <(fl_pull_hook_secret_names | sort -u)
+  (cd "$FL_BENCH_DIR" && env ${unset_args[@]+"${unset_args[@]}"} BENCHBAR_SITE="$FL_PULL_AS" BENCHBAR_BENCH="$FL_BENCH_DIR" BENCHBAR_DB_NAME="$db_name" "$FL_PULL_HOOK")
+}
+
+fl_pull_step_before_migrate() {
+  fl_bench_env_exports
+  fl_run_long "${FL_PULL_HOOK##*/} (before migrate)" fl_pull_hook_run || {
+    fl_fail "the --before-migrate script failed; ${FL_PULL_AS} is restored but not migrated"
+    fl_fix "fix the script and run it by hand, then: cd ${FL_BENCH_DIR} && bench --site ${FL_PULL_AS} migrate"
+    return 1
+  }
 }
 
 fl_pull_step_migrate() {

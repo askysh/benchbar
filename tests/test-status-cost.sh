@@ -99,6 +99,11 @@ assert_eq "running 4241 200 True True running" \
 # without --ping no site is asked beyond the default's web_ping_code
 assert_eq "macdev:True:True:None two.localhost:False:True:None" \
   "$(printf '%s' "$OUT" | jget - '" ".join("%s:%s:%s:%s" % (s["name"], s["default"], s["hosts_entry"], s["ping_code"]) for s in d["sites"])')"
+# redis and sites[].served are in it, and the budgets below hold with them:
+# the Redis ports and the other sites are asked in bash (/dev/tcp), which
+# starts no program (the probes are off in the suite, so nothing answers)
+assert_eq "11000 False 13000 False" "$(printf '%s' "$OUT" | jget - '" ".join(str(x) for x in (d["redis"]["queue"]["port"], d["redis"]["queue"]["running"], d["redis"]["cache"]["port"], d["redis"]["cache"]["running"]))')"
+assert_eq "macdev:True two.localhost:None" "$(printf '%s' "$OUT" | jget - '" ".join("%s:%s" % (s["name"], s["served"]) for s in d["sites"])')" "(the default site reuses the ping, the other is not asked)"
 # the runner and launchd agree: no process scan at all (the brief's budget is
 # at most one of each; the trusted path needs none)
 budget lsof 0 "status, running"
@@ -113,6 +118,12 @@ budget pipx 0 "status, running"
 assert_calls_not_contain '^exec (python3|perl|ruby|shasum|uname|dirname|sed|awk|tr|head|tail|basename|grep|cat|id)( |$)'
 printf 'status --json, running: %s programs (%s)\n' "$(execs)" "$(summary)"
 checkout_programs="$(summary)"
+# with the probes on (what a real run does) the same programs run: the Redis
+# ports and the other sites are asked by bash itself
+reset_calls
+FL_LOCAL_PROBES=1 shimmed run_fm status --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "$checkout_programs" "$(summary)" "(the probes start no program)"
 
 # ---- the same status from a Homebrew CLI (a keg copy run by its opt path,
 # its state folder ~/.local/state/benchbar, here a link to the pinned one,

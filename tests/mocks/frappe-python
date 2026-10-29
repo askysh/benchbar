@@ -7,6 +7,10 @@
 #                                   benchbar's wrapper that reads a secret on
 #                                   stdin: the secret is saved to
 #                                   $MOCK_STATE/stdin-CMD, never logged
+#   -c SNIPPET benchbar-secrets frappe new-site SITE ARGS...
+#                                   benchbar's new-site wrapper (secrets on stdin,
+#                                   saved to $MOCK_STATE/stdin-new-site, never
+#                                   logged): makes the site folder like bench new-site
 #   -c SNIPPET benchbar-probe SITE  the decrypt probe: "5 0" when the site
 #                                   holds $MOCK_STATE/site_key, else "0 5"
 #   -c SNIPPET ARGS...              any other snippet runs in the real python3
@@ -43,7 +47,8 @@ if [[ "${1:-}" == "-c" ]]; then
       [[ -n "${MOCK_FRAPPE_FAIL:-}" && "$MOCK_FRAPPE_FAIL" == "$cmd" ]] && { echo "mock: ${cmd} failed" >&2; exit 1; }
       if [[ "$cmd" == "restore" ]]; then
         dump="$4"
-        mkdir -p "$site"
+        # like frappe: the site is there (bench new-site made it) or the restore stops
+        [[ -f "${site}/site_config.json" ]] || { echo "mock: Site ${site} does not exist" >&2; exit 1; }
         # frappe writes a fresh site config with a key of its own
         printf '{\n "db_name": "_mock%s",\n "db_password": "localdbpw",\n "encryption_key": "generated-local-key"\n}\n' "$RANDOM" >"${site}/site_config.json"
         gzip -dc "$dump" 2>/dev/null | python3 -c '
@@ -53,6 +58,18 @@ for app in (m.group(1) if m else "").replace("\\", "").replace("\"", "").split("
     if app:
         print(app + " 1.0.0")' >"${site}/installed_apps"
         printf '%s\n' "$*" >"${MOCK_STATE}/restore_args"
+      fi
+      exit 0 ;;
+    benchbar-secrets)
+      shift 2
+      cmd="${1:-}"
+      cat >"${MOCK_STATE:?}/stdin-${cmd}"
+      printf 'bench %s\n' "$*" >>"${MOCK_LOG:-/dev/null}"
+      if [[ "$cmd" == "new-site" ]]; then
+        [[ -n "${MOCK_BENCH_NEW_SITE_EXIT:-}" ]] && exit "$MOCK_BENCH_NEW_SITE_EXIT"
+        site="$2"
+        mkdir -p "$site"; touch "$site/installed_apps"
+        printf '{\n "db_name": "_new%s",\n "db_password": "newdbpw",\n "encryption_key": "new-site-key"\n}\n' "$RANDOM" >"$site/site_config.json"
       fi
       exit 0 ;;
     benchbar-probe)

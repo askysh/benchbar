@@ -273,6 +273,14 @@ fl_mariadb_root_setup() {
   return 0
 }
 
+# fl_mariadb_root_password_known: a password to try exists (the environment or
+# the store), tried against nothing. For plans and dry runs, which must say
+# "the root password is unknown" before anything is applied.
+fl_mariadb_root_password_known() {
+  [[ -n "${MARIADB_ROOT_PASSWORD:-}" ]] && return 0
+  [[ -n "$(fl_keychain_get || true)" ]]
+}
+
 # fl_mariadb_root_password_resolve: for phase 01 and anything that only
 # needs the password. Environment, then Keychain (verified), then a
 # prompt. Sets FL_MARIADB_ROOT_PW or returns 1.

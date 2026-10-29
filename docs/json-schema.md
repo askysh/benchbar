@@ -172,6 +172,7 @@ bench (`state.env` in benchbar's state folder), the `WorkingDirectory` of every
 | `processes_running` | bool | any honcho, serve, worker, schedule or socketio process of this bench (before 0.6.1 a port listener counted too) |
 | `sites` | array | added in 0.4, see [Sites](#sites) |
 | `scheduler` | bool | added in 0.4: `Procfile.lean` runs `bench schedule` (`benchbar service --with-schedule`) |
+| `redis` | object | added in 0.8: `{"queue": {"port", "running"}, "cache": {"port", "running"}}`. `running` is whether something accepts a connection on the port, read by bash itself (`/dev/tcp`), so status starts no program for it. `benchbar up --services-only` starts these two and nothing else, `benchbar down` stops them |
 
 Kept from frappe-mac 0.2.0 for older readers: `url`, `agent`,
 `loaded` (`"yes"` or `"no"`), `stop_flag` (`"manual"`, `"crash"`,
@@ -197,6 +198,7 @@ carry the bench's sites, read from `sites/*/site_config.json`:
 | `default` | bool | the site `benchup` waits for, the runner pings and the app opens; `benchbar site default NAME` changes it (and runs `bench use`) |
 | `hosts_entry` | bool | `/etc/hosts` maps it to 127.0.0.1; `benchbar site hosts` adds the missing lines |
 | `ping_code` | number or null | HTTP code of `/api/method/ping` with this site as `Host`; `null` when nothing listens on the web port or nothing answered. Since 0.6.1 `list --json` and `status --json` leave it `null` (they are polled; `web_ping_code` is the default site's ping) unless `status --json --ping` asks every site once; `site list --json` always asks |
+| `served` | bool or null | `status --json` only, added in 0.8: does the running web process serve this site (its `Host` is not answered with a 404). `null` while the bench is stopped (a stopped bench is never pinged) or when nothing answered. The default site's ping, and with `--ping` every site's, is reused; any other site is asked once, in bash. `false` is a site folder in `sites/` that the running bench does not serve: doctor's `site_not_served` warns about it |
 
 `benchbar site list --json` prints `{"schema_version":1,"cli_version":..,"bench":..,"sites":[..]}`,
 and since 0.7.3 each of its sites also carries the database:
@@ -773,8 +775,11 @@ the reviewed commit, not a newer one.
 
 ### `benchbar profile check NAME --json`
 
-`{"name","repos":[{"app","repo","reachable","reason"}],"skipped_apps":[...]}`,
-as in the import plan.
+`{"name","repos":[{"app","repo","reachable","reason","commit"}],"skipped_apps":[...],"frappe_commit","erpnext_commit"}`,
+as in the import plan. Since 0.8 each repo carries the `commit` the profile pins it to (`null` for none), and
+`frappe_commit` and `erpnext_commit` are the profile's pins for the two apps it does not list
+as `[[apps]]` (`null` for none). A pin is read, not tried against the server: whether the clone
+reaches it is checked by `install`, before anything is built.
 
 ## `benchbar pull --json`
 
@@ -794,7 +799,7 @@ answered counts as no). Each line carries `schema_version`,
 
 | Event | Fields | Notes |
 |---|---|---|
-| `plan` | `source`, `host`, `remote_site`, `remote_bench`, `from_dir`, `bench`, `site`, `replace`, `backup`, `encryption_key`, `apps`, `migrate`, `steps`, `dry_run` | once, after the read only checks. `backup.name`, `bytes` and `age_hours` are `null` with `--new-backup` (that backup does not exist yet). `encryption_key` says whether production has one to carry over, never its value |
+| `plan` | `source`, `host`, `remote_site`, `remote_bench`, `from_dir`, `bench`, `site`, `replace`, `backup`, `encryption_key`, `apps`, `migrate`, `create_site`, `before_migrate`, `steps`, `dry_run` | once, after the read only checks. `backup.name`, `bytes` and `age_hours` are `null` with `--new-backup` (that backup does not exist yet). `encryption_key` says whether production has one to carry over, never its value. Since 0.8 `create_site` says the target does not exist and a `new_site` step makes it, `before_migrate` is the path of the `--before-migrate` script or `null`, and `migrate` is `false` with `--no-migrate`. A target the restore cannot go into (a folder without a `site_config.json`, a `bench new-site` that did not finish, no MariaDB root password) ends the run before this line, in a dry run too |
 | `gate` | `name` (`new_backup`, `apply`, `replace`), `answer` (`yes`, `no`) | a question the run asked. `new_backup` is `yes` only when the typed (or `--confirm-site`) name matches |
 | `progress` | `file`, `bytes`, `total` | after each downloaded file; `bytes` counts the files so far |
 | `step` | `n`, `id`, `name`, `status` | `n` counts from 1 in the order of `plan.steps`; `status` is `done`, `unchanged`, `skipped` or `failed` |
@@ -805,9 +810,10 @@ differs`, `local older` or `local newer`. `decrypt.ok` and
 `decrypt.failed` count the encrypted `__Auth` rows that do and do not
 decrypt with the site's `encryption_key`; `failed` above 0 means stored
 passwords must be entered again. Step ids: `new_backup`, `download`,
-`decrypt`, `local_backup`, `restore`, `encryption_key`, `dev_safety`,
-`skip_apps`, `migrate`, `clear_cache`, `admin_password`, `hosts`,
-`cleanup`, `verify`; a run lists only the ones it needs.
+`decrypt`, `local_backup`, `quiesce`, `new_site`, `restore`,
+`encryption_key`, `resume`, `dev_safety`, `skip_apps`, `before_migrate`,
+`migrate`, `clear_cache`, `admin_password`, `hosts`, `cleanup`, `verify`;
+a run lists only the ones it needs.
 
 No event ever holds a password, the encryption key or a token from an
 app's remote URL.
@@ -916,6 +922,70 @@ And the result, without `--dry-run`:
 | `new_default` | the site that became the default, or `null` |
 | `hosts_removed` | the `/etc/hosts` line was removed |
 | `manual_step` | the command that removes the hosts line by hand when benchbar could not (no terminal for `sudo`, a line outside benchbar's block), else `null` |
+
+### `benchbar site restore --json`
+
+Added in 0.8. The plan of a restore from a backup set, read only, with a
+token. `--apply TOKEN --yes` runs exactly that plan:
+
+```json
+{
+  "schema_version": 1, "cli_version": "0.8.0",
+  "bench": "/Users/you/frappe-bench", "site": "acme.localhost",
+  "new": false, "exists": true,
+  "source": {
+    "site": "acme.localhost",
+    "set": { "stamp": "20260902_090000", "...": "a backup, as above" },
+    "restores_files": true, "encryption_key": true
+  },
+  "backup_first": { "will_run": true, "with_files": true, "folder": "/Users/you/frappe-bench/sites/acme.localhost/private/backups" },
+  "migrate": true, "before_migrate": null, "before_migrate_sha256": null,
+  "touches": ["database", "files", "site_config"],
+  "steps": [
+    { "id": "local_backup", "name": "Back up acme.localhost with its files", "touches": ["backup"] },
+    { "id": "restore", "name": "Restore 20260902_090000 into acme.localhost with its files", "touches": ["database", "files"] },
+    { "id": "encryption_key", "name": "Carry the encryption key of the set over", "touches": ["site_config"] },
+    { "id": "migrate", "name": "bench migrate", "touches": ["database"] },
+    { "id": "clear_cache", "name": "Clear caches", "touches": ["cache"] },
+    { "id": "verify", "name": "Verify acme.localhost", "touches": [] }
+  ],
+  "warnings": [], "errors": [], "can_apply": true,
+  "token": "8f1c...64 hex characters"
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `site`, `new`, `exists` | the target; `new` is `--new` (the site is created first, with `bench new-site`), `exists` that a site of that name is there |
+| `source.site` | the site whose backups the stamp names (`--from-site`, else the target); `null` for a path |
+| `source.set` | the backup set, as in [Site backups](#site-backups) |
+| `source.restores_files` | `--with-files` was given: the public and private files are restored too |
+| `source.encryption_key` | the set's `site_config_backup.json` has an `encryption_key`, which is carried into the target (never printed) |
+| `backup_first` | an existing target is backed up with its files before anything changes (`will_run`); `folder` is where the set lands |
+| `migrate`, `before_migrate`, `before_migrate_sha256` | `migrate` is `false` with `--no-migrate`; `before_migrate` is the path of the `--before-migrate` script and `before_migrate_sha256` its hash (a changed script makes the token stale) |
+| `touches` | what the run changes: `database`, `files`, `site_config`, and `hosts` for a new site whose `/etc/hosts` line is missing |
+| `steps` | in the order they run, each with the `touches` of that step. Ids: `local_backup`, `quiesce`, `new_site`, `restore`, `encryption_key`, `resume`, `before_migrate`, `migrate`, `clear_cache`, `hosts`, `verify` |
+| `errors`, `can_apply` | what stops the plan (no such site, a set that is not there, an encrypted or file-less set, MariaDB down, the root password unknown to benchbar, apps the bench lacks, a hook that is not an executable file); `can_apply` is `false` when there is one. The command still exits 0 with `--json` |
+| `token` | a hash of the plan and of what it was made against: the sites, the default site, the hook and the set's files. `--apply` recomputes it and refuses a different one: `The site restore plan changed since it was shown`, nothing changed |
+
+The result of `--apply TOKEN --yes --json`:
+
+| Field | Meaning |
+|---|---|
+| `applied`, `ok` | `ok` is `false` when a step failed (exit 1); the steps after it stay `pending` or `skipped` |
+| `site`, `new`, `token` | as in the plan |
+| `backup` | the backup taken before an existing target was touched (a [backup](#site-backups)), `null` for a new site or when it did not get that far. Put it back with `site restore TARGET --from STAMP --with-files --yes` |
+| `steps` | `[{"id","name","status"}]`, `status` is `done`, `unchanged`, `skipped`, `failed` or `pending` |
+| `verify` | what the end check found: `apps` (what `bench --site TARGET list-apps` answers), `default_site` (the default site after the run, which is never changed: if a step moved it, it is put back with `bench use` and a warning says so) and `answers` (the web ping of the target while the bench runs, else `null`) |
+| `warnings` | for example `migrate was skipped (--no-migrate)` |
+
+Exit 0 only after the end check passed: the target answers `list-apps`
+with frappe in it, and the default site is where it was. Exit 2 is
+the MariaDB root password unknown to benchbar. The hook (`--before-migrate`)
+runs in the bench folder with `BENCHBAR_SITE`, `BENCHBAR_BENCH` and
+`BENCHBAR_DB_NAME`; variables named like a secret (`*PASSWORD*`, `*SECRET*`,
+`*TOKEN*`, `*PASSPHRASE*`, `*_KEY`) are removed from its environment, and a
+failing hook ends the run before migrate.
 
 ## `logs/.benchbar/state.json`
 

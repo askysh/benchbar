@@ -13,7 +13,16 @@ case "$1" in
     mkdir -p "$2/apps/frappe" "$2/env/bin" "$2/sites" "$2/config"
     cp "$(dirname "$0")/../env-python" "$2/env/bin/python"; chmod +x "$2/env/bin/python"
     printf 'port 11000\n' >"$2/config/redis_queue.conf"; printf 'port 13000\n' >"$2/config/redis_cache.conf"
-    touch "$2/sites/apps.txt"; exit 0 ;;
+    touch "$2/sites/apps.txt"
+    # MOCK_BENCH_INIT_GIT=1: apps/frappe is a real clone with one commit (the
+    # same hash everywhere: fixed author, date and message), as bench init makes
+    if [[ -n "${MOCK_BENCH_INIT_GIT:-}" ]]; then
+      git -C "$2/apps/frappe" init -q
+      GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@example.com GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@example.com \
+        GIT_AUTHOR_DATE="2026-01-01T00:00:00Z" GIT_COMMITTER_DATE="2026-01-01T00:00:00Z" \
+        git -C "$2/apps/frappe" commit -q --allow-empty -m frappe
+    fi
+    exit 0 ;;
   --version) [[ -n "${MOCK_BENCH_VERSION:-}" ]] && printf '%s\n' "$MOCK_BENCH_VERSION"; exit 0 ;;
   get-app)
     app="${*: -1}"; app="${app##*/}"; app="${app%.git}"

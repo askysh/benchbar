@@ -11,7 +11,7 @@
 # Groups (used by "benchbar service" versus "benchbar repair"):
 #   system, bench, service, site
 
-FL_CHECK_ORDER="brew formula_dates python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac mole app_copies full_disk_access env_python env_setuptools bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy dependency_behind apps_behind lock_parse lock_drift profile_outdated logs bench_path honcho honcho_setuptools procfile runner agent runner_heartbeat fork_safety scheduler stop_flag helpers cli_link cli_duplicate legacy_agents dead_agents hosts port_clash orphans ping"
+FL_CHECK_ORDER="brew formula_dates python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac mole app_copies full_disk_access env_python env_setuptools bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy dependency_behind apps_behind lock_parse lock_drift profile_outdated logs bench_path honcho honcho_setuptools procfile runner agent runner_heartbeat fork_safety scheduler stop_flag helpers cli_link cli_duplicate legacy_agents dead_agents hosts port_clash orphans ping site_not_served"
 FL_LOG_WARN_MB="${FL_LOG_WARN_MB:-50}"
 FL_HOSTS_FILE="${FL_HOSTS_FILE:-/etc/hosts}"
 
@@ -30,7 +30,7 @@ fl_check_group() {
     brew|formula_dates|python_leaves|mariadb_bind|mariadb_utf8|pdf_engine|redis_6379|cleanmymac|mole|app_copies|full_disk_access|wsl_time_sync) printf 'system' ;;
     env_python|env_setuptools|bench_version|toolchain_*|socketio|assets|apps_txt|app_branch_policy|dependency_behind|apps_behind|lock_parse|lock_drift|logs) printf 'bench' ;;
     profile_outdated) printf 'bench' ;;
-    ping) printf 'site' ;;
+    ping|site_not_served) printf 'site' ;;
     *) printf 'service' ;;
   esac
 }
@@ -68,6 +68,7 @@ fl_check_label() {
     pdf_engine) printf 'PDF engine' ;;
     redis_6379) printf 'Homebrew redis' ;;
     ping) printf 'Site ping' ;;
+    site_not_served) printf 'Sites served' ;;
     hosts) printf '/etc/hosts entry' ;;
     logs) printf 'Log sizes' ;;
     bench_path) printf 'Bench path' ;;
@@ -922,6 +923,29 @@ chk_ping() {
     chk__set warn "bench is paused (${reason}); fix, then benchup" "${FL_SELF} logs"
   else
     chk__set warn "bench is not running (ping ${code})" "benchup"
+  fi
+}
+
+# A site folder on the bench that the running web process does not serve: its
+# Host header gets a 404. Asked only while the bench runs (a stopped bench is
+# never pinged), one GET per site, in bash.
+chk_site_not_served() {
+  local s served bad="" n=0
+  if ! fl_bench_is_running; then
+    chk__set ok "the bench is not running; no site is asked"
+    return 0
+  fi
+  while IFS= read -r s; do
+    [[ -n "$s" ]] || continue
+    fl_site_served_v served "$s"
+    [[ "$served" == "false" ]] && bad="${bad}${bad:+, }${s}"
+    n=$((n + 1))
+  done < <(fl_sites_list)
+  if [[ -n "$bad" ]]; then
+    chk__set warn "the web process on port ${FL_WEB_PORT} answers 404 for ${bad}: the site is in ${FL_BENCH_DIR}/sites, the running bench does not serve it" \
+      "${FL_SELF} restart --bench-dir ${FL_BENCH_DIR}   (then: ${FL_SELF} status --json shows sites[].served)"
+  else
+    chk__set ok "the running bench serves every site it was asked about (${n})"
   fi
 }
 

@@ -64,17 +64,32 @@ fl_hosts_has_name() {
 # DB=1 (site list) adds db_name (from the site's site_config.json, null when
 # missing) and db_port (the site's, else the bench's, else 3306); never the
 # password. list and status leave them out: they poll.
+# SERVED=1 (status) adds "served": true, false (the web process answers 404 for
+# the site's Host) or null (the bench is stopped, or nothing answered). The
+# default site's answer and a --ping answer are reused; any other site gets one
+# GET in bash (fl_http_code_v), no program started, and only while the bench runs.
 FL_DEFAULT_PING=""
 fl_sites_json_v() {
-  local __mode="${2:-none}" __db="${3:-0}" __out="[" __sep="" __s __ping __listening=1 __jn __jd __jh __jp __def __hosts __dbn __dbp __dbj __bench_port
+  local __mode="${2:-none}" __db="${3:-0}" __served="${4:-0}" __out="[" __sep="" __s __ping __listening=1 __jn __jd __jh __jp __def __hosts __dbn __dbp __dbj __bench_port __code __sv __sj
   if [[ "$__mode" == "ping" && -z "$(fl_port_listener_pid "$FL_WEB_PORT")" ]]; then __listening=0; fi
   if [[ "$__db" == "1" ]]; then fl_site_config_value_v __bench_port db_port; fi
   while IFS= read -r __s; do
     [[ -n "$__s" ]] || continue
-    __ping=""
+    __ping=""; __code=""
     if [[ "$__mode" == "ask" || ( "$__mode" == "ping" && "$__listening" == "1" ) ]]; then
       if [[ "$__s" == "$FL_SITE" && -n "$FL_DEFAULT_PING" ]]; then __ping="$FL_DEFAULT_PING"; else __ping="$(fl_site_curl_code "$__s" 3)"; fi
+      __code="$__ping"
       [[ "$__ping" == "000" ]] && __ping=""
+    fi
+    __sj=""
+    if [[ "$__served" == "1" ]]; then
+      __sv=null
+      if [[ "${ST_PROCS:-0}" == "1" ]]; then
+        if [[ "$__s" == "$FL_SITE" && -n "$FL_DEFAULT_PING" ]]; then fl_site_served_v __sv "$__s" "$FL_DEFAULT_PING"
+        elif [[ "$__mode" == "ask" ]]; then fl_site_served_v __sv "$__s" "$__code"
+        else fl_site_served_v __sv "$__s"; fi
+      fi
+      __sj=",\"served\":${__sv}"
     fi
     __def=0; [[ "$__s" == "$FL_SITE" ]] && __def=1
     __hosts=0; fl_hosts_has_name "$__s" && __hosts=1
@@ -88,10 +103,26 @@ fl_sites_json_v() {
       fl_json_str_v __dbn "$__dbn"
       __dbj=",\"db_name\":${__dbn},\"db_port\":${__dbp}"
     fi
-    __out="${__out}${__sep}{\"name\":${__jn},\"default\":${__jd},\"hosts_entry\":${__jh},\"ping_code\":${__jp}${__dbj}}"
+    __out="${__out}${__sep}{\"name\":${__jn},\"default\":${__jd},\"hosts_entry\":${__jh},\"ping_code\":${__jp}${__sj}${__dbj}}"
     __sep=","
   done < <(fl_sites_list)
   printf -v "$1" '%s]' "$__out"
+}
+
+# fl_site_served_v VAR SITE [CODE]: "true", "false" or "null" for whether the
+# bench's web process serves SITE. CODE is a ping answer already at hand
+# (empty or 000: nothing answered); without it SITE is asked once, in bash.
+# Frappe answers 404 for a Host it has no site folder for, so 404 is the one
+# code that says "not served"; every other answer (500 included) is a site
+# that is served, however badly. Callers ask only while the bench runs.
+fl_site_served_v() {
+  local __c="${3:-}"
+  if [[ "$#" -lt 3 ]]; then fl_http_code_v __c "$2" "$FL_WEB_PORT" /api/method/ping 2; fi
+  case "$__c" in
+    404) printf -v "$1" '%s' false ;;
+    ""|000) printf -v "$1" '%s' null ;;
+    *) printf -v "$1" '%s' true ;;
+  esac
 }
 
 # fl_site_file_value_v VAR FILE KEY: KEY's raw value from a site_config.json,
@@ -252,7 +283,8 @@ fl_cmd_site() {
     hosts) fl_cmd_site_hosts ;;
     backup) fl_cmd_site_backup "$@" ;;
     backups) fl_cmd_site_backups "$@" ;;
+    restore) fl_cmd_site_restore "$@" ;;
     drop) fl_cmd_site_drop "$@" ;;
-    *) fl_die "Unknown site command: ${sub}" "Use: benchbar site list | add NAME | default NAME | hosts | backup NAME | backups NAME | drop NAME" ;;
+    *) fl_die "Unknown site command: ${sub}" "Use: benchbar site list | add NAME | default NAME | hosts | backup NAME | backups NAME | restore NAME | drop NAME" ;;
   esac
 }

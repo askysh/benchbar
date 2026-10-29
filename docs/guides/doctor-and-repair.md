@@ -30,7 +30,7 @@ frappe can use), a stray Homebrew Redis on 6379, Full Disk Access for
 `crontab`, the toolchain as the bench sees it (Node, yarn, the MariaDB
 server, pkg-config), honcho without `pkg_resources`, the fork safety
 variables, stale processes on the bench's ports, the site
-ping, `/etc/hosts`, log sizes, CleanMyMac, Mole, and port clashes with
+ping, whether the running bench serves every site, `/etc/hosts`, log sizes, CleanMyMac, Mole, and port clashes with
 other benches. Every warning and failure names its fix.
 
 Repair runs only the flagged fixes, in dependency order, and shows the
@@ -622,3 +622,15 @@ leftovers.
 fine; processes that run but do not answer fail.
 
 Fix: `benchbar logs` shows why; `benchup` starts a stopped bench.
+
+### site_not_served
+
+Every site folder in `sites/` is served by the running web process. The
+check asks each site once with its own `Host` header; a 404 means the
+folder is on the bench but the process does not serve it (it was started
+before the folder appeared, or something else holds the port). It asks
+only while the bench runs: a stopped bench is never pinged or woken, and
+the check passes with "the bench is not running".
+
+Fix: `benchbar restart`. `benchbar status --json` shows `sites[].served`
+(`true`, `false`, or `null` when the bench is stopped or did not answer).

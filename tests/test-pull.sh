@@ -126,6 +126,38 @@ assert_calls_not_contain '^python benchbar-frappe'
 assert_calls_not_contain '^bench '
 assert_calls_not_contain ' backup( --with-files)?$'
 assert_remote_allowlist
+assert_contains "$OUT" "Create the site copy1 (bench new-site)"
+
+# ---- a target the restore cannot go into stops the dry run too, instead of
+# failing at its first step (--replace on a folder that is no site used to
+# print [OK] and fail at "bench backup", step 1)
+mkdir -p "$BENCH/sites/halfmade"
+reset_calls
+snap="$(snapshot "$BENCH" "$FL_HOSTS_FILE" "$FL_STATE_DIR" "$MOCK_STATE/remote")"
+for flags in "--replace" ""; do
+  # shellcheck disable=SC2086  # the flag is a word or nothing
+  run_fm pull "$SRC" --as halfmade --skip-app hrms $flags --dry-run --bench-dir "$BENCH"
+  assert_eq "1" "$CODE" "$OUT"
+  assert_contains "$OUT" "[FAIL] Site halfmade cannot be restored into: sites/halfmade exists but has no site_config.json"
+  assert_contains "$OUT" "mv ${BENCH}/sites/halfmade"
+done
+assert_eq "$snap" "$(snapshot "$BENCH" "$FL_HOSTS_FILE" "$FL_STATE_DIR" "$MOCK_STATE/remote")" "(a refused dry run writes nothing)"
+assert_calls_not_contain '^(rsync|scp|gpg|sudo|bench) '
+rmdir "$BENCH/sites/halfmade"
+# a new-site cut short before leaves its marker: the same refusal, with its recovery
+mkdir -p "$BENCH/sites/cutshort" "$BENCH/logs/.benchbar"
+printf '2026-10-03T10:00:00Z\n' >"$BENCH/logs/.benchbar/creating-cutshort"
+run_fm pull "$SRC" --as cutshort --skip-app hrms --dry-run --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "an earlier bench new-site did not finish"
+assert_contains "$OUT" "mv ${BENCH}/sites/cutshort ~/cutshort.incomplete"
+rmdir "$BENCH/sites/cutshort"; rm -f "$BENCH/logs/.benchbar/creating-cutshort"
+# no root password anywhere: a dry run says so (exit 2), it does not pass with a placeholder
+saved_pw="$(cat "$MOCK_STATE/keychain/benchbar-mariadb--root")"
+rm -f "$MOCK_STATE/keychain/benchbar-mariadb--root"
+run_fm pull "$SRC" --as copy1 --skip-app hrms --dry-run --bench-dir "$BENCH"
+assert_eq "2" "$CODE" "$OUT"; assert_contains "$OUT" "The MariaDB root password is needed for the restore"
+printf '%s\n' "$saved_pw" >"$MOCK_STATE/keychain/benchbar-mariadb--root"
 
 # ---- the real thing: latest existing backup, key carried, email muted
 reset_calls
@@ -134,6 +166,13 @@ assert_eq "0" "$CODE" "$OUT"
 assert_calls_contain '^rsync -a --partial --append-verify --info=progress2 -e ssh -o BatchMode=yes -o ControlPath=[^ ]*/cm -o ControlMaster=auto -o ControlPersist=60 prod:frappe-bench/sites/erp.example.com/private/backups/20260925_020000-erp_example_com-database.sql.gz '
 assert_calls_contain '^python benchbar-frappe copy1 restore --mariadb-root-password [^ ]*/.benchbar/pulls/erp.example.com-20260925_020000/20260925_020000-erp_example_com-database.sql.gz --with-public-files [^ ]*-files.tar --with-private-files [^ ]*-private-files.tar$'
 assert_eq "rootpw" "$(cat "$MOCK_STATE/stdin-restore")" "(the root password reaches restore on stdin)"
+# the target did not exist: pull made it first, with the passwords on stdin
+n="$(grep -n '^bench new-site copy1 ' "$MOCK_LOG" | head -n1 | cut -d: -f1)"
+r="$(grep -n '^python benchbar-frappe copy1 restore' "$MOCK_LOG" | head -n1 | cut -d: -f1)"
+[[ -n "$n" && -n "$r" && "$n" -lt "$r" ]] || fail "pull creates the site before the restore (${n} ${r})"$'\n'"$(cat "$MOCK_LOG")"
+assert_eq "rootpw" "$(sed -n 1p "$MOCK_STATE/stdin-new-site")" "(the root password reaches new-site on stdin)"
+assert_eq "adminpw" "$(sed -n 2p "$MOCK_STATE/stdin-new-site")" "(ADMIN_PASSWORD is the new site's Administrator password)"
+assert_contains "$OUT" "Create the site copy1 (bench new-site)"
 assert_calls_contain '^redis-server config/redis_queue.conf --daemonize yes$' "(v16 restore needs the bench's Redis)"
 assert_calls_contain '^redis-cli -p 11000 shutdown save$'
 assert_eq "$ENC_KEY" "$(conf_get copy1 encryption_key)" "(the production key)"
@@ -313,5 +352,76 @@ run_fm pull --from-dir "$DL" --as livecopy2 --skip-app hrms --yes --bench-dir "$
 assert_eq "0" "$CODE" "$OUT"
 assert_calls_not_contain 'remove-common-config'
 assert_eq "1" "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["pause_scheduler"])' "$BENCH/sites/common_site_config.json")"
+(cd "$BENCH" && bench config remove-common-config pause_scheduler)
+
+# ---- --replace of a site that is there makes no site; of one that is not, creates it
+: >"$MOCK_PROCS"
+reset_calls
+run_fm pull --from-dir "$DL" --as livecopy --skip-app hrms --replace --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_calls_not_contain '^bench new-site'
+reset_calls
+run_fm pull --from-dir "$DL" --as replacednew --skip-app hrms --replace --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "--replace: there is no site replacednew to replace; it is created"
+assert_calls_contain '^bench new-site replacednew '
+assert_calls_not_contain 'replacednew backup'
+
+# ---- --no-migrate: the run ends after the restore, before bench migrate
+reset_calls
+run_fm pull --from-dir "$DL" --as nomig --skip-app hrms --no-migrate --dry-run --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_not_contains "$OUT" "bench migrate"
+JOUT="$("$FM" pull --from-dir "$DL" --as nomig --skip-app hrms --no-migrate --dry-run --json --bench-dir "$BENCH" 2>/dev/null)" || fail "pull --dry-run --json"
+assert_eq "False True" "$(printf '%s\n' "$JOUT" | head -n1 | jget - 'str(d["migrate"]) + " " + str(d["create_site"])')"
+reset_calls
+run_fm pull --from-dir "$DL" --as nomig --skip-app hrms --no-migrate --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_calls_contain '^python benchbar-frappe nomig restore '
+assert_calls_not_contain 'nomig migrate$'
+assert_calls_contain '^bench --site nomig clear-cache$'
+
+# ---- --before-migrate: after the restore and the dev safety, before migrate; no secret in its environment
+HOOK="$TMP_DIR/hook.sh"
+cat >"$HOOK" <<'HOOK'
+#!/bin/bash
+printf 'hook ran\n' >>"$MOCK_LOG"
+{ printf 'cwd=%s\n' "$PWD"; env; } >"$MOCK_STATE/hook_env"
+exit "${HOOK_EXIT:-0}"
+HOOK
+chmod +x "$HOOK"
+run_fm pull --from-dir "$DL" --as hooked --skip-app hrms --before-migrate "$TMP_DIR/nosuch.sh" --dry-run --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "--before-migrate: no file"
+reset_calls
+export MY_API_TOKEN=tok1 DB_PASSWORD=pw1 KEEP_ME=kept
+MARIADB_ROOT_PASSWORD=rootpw ADMIN_PASSWORD=adminpw run_fm pull --from-dir "$DL" --as hooked --skip-app hrms --before-migrate "$HOOK" --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+r="$(grep -n 'benchbar-frappe hooked restore' "$MOCK_LOG" | head -n1 | cut -d: -f1)"
+p="$(grep -n 'bench --site hooked set-config -p pause_scheduler 1$' "$MOCK_LOG" | head -n1 | cut -d: -f1)"
+h="$(grep -n '^hook ran$' "$MOCK_LOG" | head -n1 | cut -d: -f1)"
+m="$(grep -n 'bench --site hooked migrate$' "$MOCK_LOG" | head -n1 | cut -d: -f1)"
+[[ -n "$r" && -n "$p" && -n "$h" && -n "$m" && "$r" -lt "$p" && "$p" -lt "$h" && "$h" -lt "$m" ]] || fail "restore, dev safety, hook, migrate in order (${r} ${p} ${h} ${m})"$'\n'"$(cat "$MOCK_LOG")"
+grep -q "^cwd=$BENCH\$" "$MOCK_STATE/hook_env" || fail "the hook runs in the bench folder"
+grep -q '^BENCHBAR_SITE=hooked$' "$MOCK_STATE/hook_env" || fail "BENCHBAR_SITE"
+grep -q "^BENCHBAR_BENCH=$BENCH\$" "$MOCK_STATE/hook_env" || fail "BENCHBAR_BENCH"
+grep -q '^BENCHBAR_DB_NAME=_mock[0-9]*$' "$MOCK_STATE/hook_env" || fail "BENCHBAR_DB_NAME"
+grep -q '^KEEP_ME=kept$' "$MOCK_STATE/hook_env" || fail "the rest of the environment stays"
+for v in MARIADB_ROOT_PASSWORD ADMIN_PASSWORD MY_API_TOKEN DB_PASSWORD; do
+  ! grep -q "^${v}=" "$MOCK_STATE/hook_env" || fail "${v} is in the hook's environment"
+done
+assert_no_secrets "(hook)"
+# a failing hook stops before migrate
+reset_calls
+HOOK_EXIT=3 run_fm pull --from-dir "$DL" --as hookfail --skip-app hrms --before-migrate "$HOOK" --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "the --before-migrate script failed; hookfail is restored but not migrated"
+assert_calls_contain '^hook ran$'
+assert_calls_not_contain 'hookfail migrate$'
+assert_calls_not_contain 'hookfail clear-cache$'
+unset MY_API_TOKEN DB_PASSWORD KEEP_ME
+# the plan names the hook and the site it creates
+JOUT="$("$FM" pull --from-dir "$DL" --as hookplan --skip-app hrms --before-migrate "$HOOK" --dry-run --json --bench-dir "$BENCH" 2>/dev/null)" || fail "pull --dry-run --json"
+assert_eq "$HOOK True True" "$(printf '%s\n' "$JOUT" | head -n1 | jget - 'd["before_migrate"] + " " + str(d["migrate"]) + " " + str(d["create_site"])')"
+assert_eq "devsite" "$(cat "$BENCH/sites/currentsite.txt")" "(the default site never moves)"
 
 printf 'test-pull: ok\n'

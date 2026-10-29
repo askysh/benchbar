@@ -256,7 +256,51 @@ fl_check_port_clash_or_confirm() {
   fl_confirm "Other stopped benches use these ports. Start this bench without changing its address?"
 }
 
+# up --services-only: the bench's Redis (queue and cache) and nothing else, for
+# a restore or a migrate on a bench that is not running. No agent, runner, web
+# process or stop flag is touched, and the service need not be installed.
+# The Redis stays up after the command; down stops it (it stops every
+# listener that runs in the bench).
+fl_cmd_up_services_only() {
+  local port i
+  fl_require_bench
+  if fl_pm_running; then
+    fl_ok "bench ${FL_BENCH_NAME} is running; its Redis is up already"
+    return 0
+  fi
+  if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
+    fl_bench_redis_up "$FL_BENCH_DIR"
+    return 0
+  fi
+  FL_SETUP_REDIS_PORTS=""
+  fl_bench_redis_up "$FL_BENCH_DIR"
+  # it stays running: not the setup Redis of a command that stops it again
+  FL_SETUP_REDIS_PORTS=""
+  for port in "$FL_REDIS_QUEUE_PORT" "$FL_REDIS_CACHE_PORT"; do
+    i=0
+    until fl_port_listening "$port"; do
+      i=$((i + 1))
+      if [[ "$i" -gt 10 ]]; then
+        fl_fail "nothing listens on port ${port} after starting the Redis of ${FL_BENCH_NAME}"
+        fl_fix "cd ${FL_BENCH_DIR} && redis-server config/redis_queue.conf --daemonize yes   (and config/redis_cache.conf)"
+        return 1
+      fi
+      sleep 0.5
+    done
+  done
+  fl_ok "Redis of ${FL_BENCH_NAME} is up (queue ${FL_REDIS_QUEUE_PORT}, cache ${FL_REDIS_CACHE_PORT}); nothing else was started"
+  fl_info "stop it with: ${FL_SELF} down --bench-dir ${FL_BENCH_DIR}"
+}
+
 fl_cmd_up() {
+  local a services_only=0
+  for a in "$@"; do
+    case "$a" in
+      --services-only) services_only=1 ;;
+      *) fl_die "Unknown option for up: $a" "Use: benchbar up [--services-only]" ;;
+    esac
+  done
+  if [[ "$services_only" == "1" ]]; then fl_cmd_up_services_only; return; fi
   fl_require_plain_bench
   fl_require_service
   if fl_pm_running; then

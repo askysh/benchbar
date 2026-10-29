@@ -1,6 +1,6 @@
 ---
 title: "site"
-description: "benchbar site list, add, default, hosts, backup, backups and drop: the sites of a bench, their backups, and dropping one safely."
+description: "benchbar site list, add, default, hosts, backup, backups, restore and drop: the sites of a bench, their backups, restoring one, and dropping one safely."
 ---
 
 The sites of a bench. The guide is
@@ -121,6 +121,59 @@ Exit codes: 0; 1 when the site does not exist.
 
 ```bash
 benchbar site backups macdev --json
+```
+
+## site restore
+
+```
+benchbar site restore TARGET --from STAMP|PATH [--from-site SITE] [--new] [--no-migrate]
+  [--before-migrate SCRIPT] [--with-files] --dry-run [--json] | --apply TOKEN --yes [--json] | --yes
+```
+
+Restores a backup set that `site backup` (bench) made into a site of this
+bench. TARGET is a site that is there, which is backed up with its files
+first, or, with `--new`, a site that is created first (`bench new-site`,
+with the MariaDB root password benchbar holds and a generated
+Administrator password, or `ADMIN_PASSWORD`; the restore brings the
+Administrator password of the backup). The `encryption_key` of the set is
+carried into the target, so stored passwords decrypt. After the restore
+come the `--before-migrate` script, `bench migrate` and the cache; the
+run ends with a check that the site answers `list-apps` and that the
+default site is where it was. The default site never moves, and a
+restored site is not muted: it is the same site, not a copy of
+production.
+
+`--from` is a stamp from `benchbar site backups` (of `--from-site`, else of
+TARGET), the path of a set's database file (its other files are found
+next to it), or a folder (the newest set in it). Encrypted sets are not
+taken: `benchbar pull --from-dir DIR --as NAME` decrypts one.
+
+Run `--dry-run --json` first: it prints the plan, what it touches, the
+backup it takes first and a `token`. `--apply TOKEN --yes` then runs exactly
+that plan without a question, and refuses it when the sites, the default
+site, the hook or the set changed meanwhile
+([schema](../../json-schema.md#benchbar-site-restore---json)).
+A plain `--yes` from a terminal shows the plan and runs it.
+
+| Flag | What it does |
+|---|---|
+| `--from STAMP\|PATH` | The backup set |
+| `--from-site SITE` | The site a stamp belongs to (needed with `--new`) |
+| `--new` | Create TARGET first |
+| `--with-files` | Restore the public and private files too (the set must have them) |
+| `--no-migrate` | Stop after the restore and the key, before `bench migrate` |
+| `--before-migrate SCRIPT` | Run the executable SCRIPT after the restore, before migrate, in the bench folder, with `BENCHBAR_SITE`, `BENCHBAR_BENCH` and `BENCHBAR_DB_NAME`. Variables named like a secret are removed from its environment. A failing script stops the run before migrate |
+| `--dry-run`, `--json` | The plan, with its token |
+| `--apply TOKEN` | Run the reviewed plan (needs `--yes`) |
+
+Exit codes: 0 restored and verified; 1 a refusal or a failed step (the
+output names the backup taken first, to put back); 2 the MariaDB root
+password is unknown (pass `MARIADB_ROOT_PASSWORD`).
+
+```bash
+benchbar site restore acme.localhost --from 20260902_090000 --with-files --dry-run --json
+benchbar site restore acme.localhost --from 20260902_090000 --with-files --apply TOKEN --yes
+benchbar site restore copy.localhost --from 20260902_090000 --from-site acme.localhost --new --yes
 ```
 
 ## site drop

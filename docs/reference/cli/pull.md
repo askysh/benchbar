@@ -28,11 +28,19 @@ restore asks first. `--dry-run` stops after the plan.
 | `--replace` | Restore over an existing local site, after backing it up |
 | `--skip-app APP` | Restore without APP (its tables stay behind as orphans); repeat for more apps |
 | `--no-files` | Database only |
+| `--no-migrate` | Stop after the restore and the dev safety, before `bench migrate` |
+| `--before-migrate SCRIPT` | Run the executable SCRIPT after the restore, before migrate, in the bench folder, with `BENCHBAR_SITE`, `BENCHBAR_BENCH` and `BENCHBAR_DB_NAME`; variables named like a secret are removed from its environment, and a failing script stops the run |
 | `--keep-scheduler` | Leave the scheduler as production has it |
 | `--keep-staging` | Keep the downloaded backup in `<bench>/.benchbar/pulls/` after a successful run |
 | `--dry-run` | Print the plan, change nothing |
 | `-y`, `--yes` | Do not ask |
 | `--json` | JSON lines while it runs ([schema](../../json-schema.md#benchbar-pull---json)) |
+
+The local site is created (`bench new-site`) when it does not exist, as
+a step of the plan. A target the restore cannot go into stops the check,
+`--dry-run` included, instead of failing at its first step: a folder in
+`sites/` without a `site_config.json` (move it aside), a `new-site` that
+did not finish, MariaDB not running, or no MariaDB root password.
 
 When the bench lacks an app production has, pull stops and prints the
 `bench get-app` command. Encrypted backups are decrypted locally with

@@ -121,30 +121,31 @@ make_fake_bench "$QUOTED" odd
 run_fm status --json --bench-dir "$QUOTED"
 assert_eq "$QUOTED" "$(printf '%s' "$OUT" | jget - 'd["bench"]')"
 
-# ---- the app's fixtures (macos/BenchBarTests/Fixtures) have exactly the keys the CLI prints
+# ---- every key of the app's fixtures (macos/BenchBarTests/Fixtures) is still printed: the CLI
+# may add fields (docs/json-schema.md, Rules for readers), never rename or remove one
 FIX="$ROOT/macos/BenchBarTests/Fixtures"
 run_fm status --json --bench-dir "$BENCH"
 printf '%s' "$OUT" | python3 -c '
 import json, sys
 live = json.load(sys.stdin)
 fixture = json.load(open(sys.argv[1]))
-assert set(live) == set(fixture), ("status keys drifted", set(live) ^ set(fixture))
-assert set(live["ports"]) == set(fixture["ports"])
+assert set(fixture) <= set(live), ("status keys removed", set(fixture) - set(live))
+assert set(fixture["ports"]) <= set(live["ports"])
 ' "$FIX/status-running.json" || fail "status --json and the app fixture disagree"
 run_fm list --json
 printf '%s' "$OUT" | python3 -c '
 import json, sys
 live = json.load(sys.stdin); fixture = json.load(open(sys.argv[1]))
-assert set(live) == set(fixture)
-assert set(live["benches"][0]) == set(fixture["benches"][0]), set(live["benches"][0]) ^ set(fixture["benches"][0])
+assert set(fixture) <= set(live), set(fixture) - set(live)
+assert set(fixture["benches"][0]) <= set(live["benches"][0]), set(fixture["benches"][0]) - set(live["benches"][0])
 ' "$FIX/list.json" || fail "list --json and the app fixture disagree"
 run_fm doctor --json --bench-dir "$BENCH"
 printf '%s' "$OUT" | python3 -c '
 import json, sys
 live = json.load(sys.stdin); fixture = json.load(open(sys.argv[1]))
 # 0.8 adds "prerequisites" (doctor-prerequisites.json is the fixture for it)
-assert set(live) - {"prerequisites"} == set(fixture) - {"prerequisites"}, set(live) ^ set(fixture)
-assert set(live["checks"][0]) == set(fixture["checks"][0])
+assert set(fixture) - {"prerequisites"} <= set(live), set(fixture) - set(live)
+assert set(fixture["checks"][0]) <= set(live["checks"][0])
 ' "$FIX/doctor.json" || fail "doctor --json and the app fixture disagree"
 
 # ---- site backup, backups and drop: the same keys as the app's fixtures
@@ -159,13 +160,13 @@ same_keys() {
 import json, sys
 live = json.load(sys.stdin); fixture = json.load(open(sys.argv[1]))
 assert live["schema_version"] == 1
-assert set(live) == set(fixture), set(live) ^ set(fixture)
+assert set(fixture) <= set(live), set(fixture) - set(live)
 for key in ("backup",):
     if isinstance(live.get(key), dict) and isinstance(fixture.get(key), dict):
-        assert set(live[key]) == set(fixture[key]), set(live[key]) ^ set(fixture[key])
+        assert set(fixture[key]) <= set(live[key]), set(fixture[key]) - set(live[key])
 for key in ("backups", "steps"):
     if live.get(key) and fixture.get(key):
-        assert set(live[key][0]) == set(fixture[key][0]), set(live[key][0]) ^ set(fixture[key][0])
+        assert set(fixture[key][0]) <= set(live[key][0]), set(fixture[key][0]) - set(live[key][0])
 ' "$FIX/$1" || fail "$2 and the app fixture $1 disagree"
 }
 json_call() { "$FM" "$@" 2>/dev/null >"$MOCK_STATE/json-out" || fail "$* failed"; }
