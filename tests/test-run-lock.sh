@@ -161,6 +161,17 @@ assert_contains "$(cat "$WINS")" "slow=1" "(the slow reclaimer is refused by the
 assert_no_file "$LOCK" "(the quick holder released its lock, nobody took it away)"
 rm -rf "$LOCK" "$LOCK".reclaim
 
+# ---- a subshell of the run shares $$: its release (restart inside app update)
+# leaves the parent's locks, the state folder's and the bench's, with the parent
+BLOCK="$TMP_DIR/bench-sub/.benchbar.lock"; mkdir -p "$(dirname "$BLOCK")"
+SUBR="$(lockshell 'fl_lock_acquire "$1" >/dev/null 2>&1 && fl_lock_acquire "$2" >/dev/null 2>&1 || exit 1
+  ( fl_lock_release )
+  printf "after-subshell=%s,%s " "$([[ -d "$1" ]] && echo held || echo gone)" "$([[ -d "$2" ]] && echo held || echo gone)"
+  fl_lock_release
+  printf "after-release=%s,%s" "$([[ -d "$1" ]] && echo held || echo gone)" "$([[ -d "$2" ]] && echo held || echo gone)"' "$LOCK" "$BLOCK")"
+assert_eq "after-subshell=held,held after-release=gone,gone" "$SUBR"
+rm -rf "$LOCK" "$BLOCK"
+
 # ---- two runs started in the same second: their own log file and backup folder each
 LOGS="$TMP_DIR/logs"
 read -r L1 B1 < <(bash -c '. "$0/lib/frappe-local/ui.sh"; . "$0/lib/frappe-local/templates.sh"; fl_log_init "$1"; printf "%s %s\n" "$FL_LOG_FILE" "$(fl_backup_stamp)"' "$ROOT" "$LOGS")
