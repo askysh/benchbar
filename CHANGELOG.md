@@ -113,6 +113,9 @@ All notable changes to this project are documented here.
   as stale by its age, and two runs at once could stop with "File: unbound
   variable": GNU `stat -f` prints file system text where BSD `stat -f`
   prints a time.
+- The app's popover: ⌘D, ⌘F and the other shortcuts act on the bench the
+  picker shows. Before, after switching to a second bench they still
+  stopped or opened the first one.
 
 ### Windows (preview)
 

@@ -444,3 +444,7 @@ Asked for after the phases, to stop naming drift before the first release.
 - The popover's shortcuts are one table (`BenchShortcut`): the buttons bind their key from it, their tooltips and Settings list it, so they cannot drift. Every action that will show macOS's password dialog says "Asks for your password" before the click: the repair plan rows, Add Hosts Lines…, the wizard's Review and the setup sheet's service changes when they add hosts lines.
 - Find Benches' setup honors BENCHBAR_SUDO=gui from Apply, the confirmation; the plan tags a hosts line as asking for the password, and after a cancelled dialog the sheet shows `benchbar site hosts --bench-dir PATH` to copy. This replaces the earlier "reported for Terminal" behavior.
 - `site hosts` gets the install timeout (3 hours, like `ports apply`'s 45 minutes it waits on a person): a timeout would kill macOS's password dialog. A Stop pressed before the install process starts is remembered and the process is never started.
+
+## 0.8.0: release QA
+
+- The popover's bench panel has `.id(bench.path)`: in the same place in the view tree SwiftUI keeps a button's keyboard shortcut with the action of its first render, so the picker changed the panel's text but not what ⌘D stopped. `PopoverShortcutTests` sends ⌘D to a hosted popover after each switch.

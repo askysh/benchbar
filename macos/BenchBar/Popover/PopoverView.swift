@@ -75,7 +75,11 @@ struct PopoverView: View {
                     Divider()
                 }
                 if let bench = store.selected {
+                    // a new panel per bench: without the id SwiftUI kept the ⌘ shortcuts
+                    // (and their actions) of the bench first shown, so ⌘D after the
+                    // picker changed stopped the other bench
                     BenchPanel(store: store, bench: bench, commands: commands)
+                        .id(bench.path)
                 }
             }
         }
