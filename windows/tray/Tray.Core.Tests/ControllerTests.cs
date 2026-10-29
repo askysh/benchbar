@@ -32,7 +32,7 @@ public class ControllerTests
     public async Task StartShowsTheUnknownPoseThenFollowsTheFirstPoll()
     {
         var (controller, host, clock, _, _) = Make(BenchState.Stopped);
-        using (controller)
+        using (host.Owning(controller))
         {
             host.Ui(controller.Start);
             Assert.NotEmpty(host.Icons);
@@ -57,7 +57,7 @@ public class ControllerTests
     {
         var (controller, host, _, source, _) = Make(BenchState.Running);
         source.CpuPercent = 250;
-        using (controller)
+        using (host.Owning(controller))
         {
             host.Ui(controller.Start);
             await UntilAsync(() => host.Changes.Count > 0);
@@ -70,7 +70,7 @@ public class ControllerTests
     public async Task StartStopAsyncRunsUpOrDownAndPollsAtOnce()
     {
         var (controller, host, _, source, _) = Make(BenchState.Stopped);
-        using (controller)
+        using (host.Owning(controller))
         {
             host.Ui(controller.Start);
             await UntilAsync(() => host.Changes.Count > 0);
@@ -89,14 +89,16 @@ public class ControllerTests
     public async Task OpeningTheFlyoutKicksThePoller()
     {
         var (controller, host, _, source, time) = Make(BenchState.Stopped);
-        using (controller)
+        using (host.Owning(controller))
         {
             host.Ui(controller.Start);
             await UntilAsync(() => host.Changes.Count > 0);
             var lists = source.Lists;
 
+            // Wait for the kicked poll to report, not just to list: its timer is armed only when it ends.
+            var changes = host.Changes.Count;
             host.Ui(controller.FlyoutOpened);
-            await UntilAsync(() => source.Lists > lists);
+            await UntilAsync(() => source.Lists > lists && host.Changes.Count > changes);
 
             lists = source.Lists;
             time.Advance(TimeSpan.FromSeconds(5)); // the 5 s flyout interval
@@ -109,7 +111,7 @@ public class ControllerTests
     public async Task APausedBenchStandsAlertWithoutStumbling()
     {
         var (controller, host, clock, _, _) = Make(BenchState.Paused);
-        using (controller)
+        using (host.Owning(controller))
         {
             host.Ui(controller.Start);
             await UntilAsync(() => host.Changes.Count > 0);

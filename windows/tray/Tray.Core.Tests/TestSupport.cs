@@ -88,6 +88,14 @@ internal sealed class FakeHost : ITrayHost
     public void Ui(Action action) { lock (UiThread) action(); }
 
     public T Ui<T>(Func<T> action) { lock (UiThread) return action(); }
+
+    /// <summary>Disposes on the "UI thread" too: the app disposes the controller on its dispatcher.</summary>
+    public IDisposable Owning(IDisposable owned) => new UiOwned(this, owned);
+
+    private sealed class UiOwned(FakeHost host, IDisposable owned) : IDisposable
+    {
+        public void Dispose() => host.Ui(owned.Dispose);
+    }
     public void BenchesChanged(TraySnapshot snapshot, string upText) { lock (_gate) _changes.Add((snapshot, upText)); }
     public void ShowToast(Toast toast) { lock (_gate) _toastsShown.Add(toast); }
 }

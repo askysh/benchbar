@@ -35,7 +35,7 @@ public class ControllerStateTests
     {
         var (controller, host, source, _) = Make();
         source.ListFails = new SetupProblemException(ShimBenchSource.NotFoundMessage);
-        using (controller)
+        using (host.Owning(controller))
         {
             host.Ui(controller.Start);
             await UntilAsync(() => host.Changes.Count > 0);
@@ -62,7 +62,7 @@ public class ControllerStateTests
             DistroProbe = distro,
             Distro = () => "Ubuntu-24.04",
         });
-        using (controller)
+        using (host.Owning(controller))
         {
             host.Ui(controller.Start);
             await UntilAsync(() => host.Changes.Count > 0);
@@ -89,22 +89,25 @@ public class ControllerStateTests
             DistroProbe = distro,
             Distro = () => "Ubuntu-24.04",
         });
-        using (controller)
+        using (host.Owning(controller))
         {
             host.Ui(controller.Start);
             await UntilAsync(() => host.Changes.Count > 0);
             var calls = distro.Calls;
 
+            // Wait for each poll's reported change, not its probe call: the poller arms the next timer only
+            // when the poll has ended (before it reports), so advancing the clock earlier would fire nothing.
+            var changes = host.Changes.Count;
             Assert.True(host.Ui(controller.StartDistro));
             Assert.Equal(1, source.DistroStarts);
-            await UntilAsync(() => distro.Calls > calls);
+            await UntilAsync(() => distro.Calls > calls && host.Changes.Count > changes);
 
             calls = distro.Calls;
+            changes = host.Changes.Count;
             time.Advance(TimeSpan.FromSeconds(2));
-            await UntilAsync(() => distro.Calls > calls);
+            await UntilAsync(() => distro.Calls > calls && host.Changes.Count > changes);
 
             distro.Running = true;
-            calls = distro.Calls;
             time.Advance(TimeSpan.FromSeconds(2));
             await UntilAsync(() => !controller.Snapshot.DistroStopped && controller.Snapshot.Benches.Count == 1);
         }
@@ -114,7 +117,7 @@ public class ControllerStateTests
     public async Task ARestartRunsRestartAndPollsAtOnce()
     {
         var (controller, host, source, _) = Make(BenchState.Running);
-        using (controller)
+        using (host.Owning(controller))
         {
             host.Ui(controller.Start);
             await UntilAsync(() => host.Changes.Count > 0);
@@ -129,7 +132,7 @@ public class ControllerStateTests
     public async Task ActionsKeepPollingFastForAMinute()
     {
         var (controller, host, source, time) = Make(BenchState.Stopped);
-        using (controller)
+        using (host.Owning(controller))
         {
             host.Ui(controller.Start);
             await UntilAsync(() => host.Changes.Count > 0);
@@ -146,7 +149,7 @@ public class ControllerStateTests
     public async Task ACrashShowsOneToastAndNotificationsCanBeTurnedOff()
     {
         var (controller, host, source, time) = Make(BenchState.Running);
-        using (controller)
+        using (host.Owning(controller))
         {
             host.Ui(controller.Start);
             await UntilAsync(() => host.Changes.Count > 0);
@@ -169,7 +172,7 @@ public class ControllerStateTests
     public void ARunnerCanBeSwitchedAndAnUnknownIdFallsBackToTheBench()
     {
         var (controller, host, _, _) = Make();
-        using (controller)
+        using (host.Owning(controller))
         {
             host.Ui(controller.Start);
             host.Ui(() => controller.SetRunner("cup"));

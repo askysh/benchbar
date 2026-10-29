@@ -104,6 +104,27 @@ public sealed class TrayConfig
     }
 
     /// <summary>
+    /// Replaces the file with the temp copy. Windows refuses the replace while another process has the target
+    /// open without delete sharing (an antivirus scan, the search indexer, the shim reading it), for a moment:
+    /// a few short retries instead of losing the write.
+    /// </summary>
+    private static void ReplaceWithRetry(string temp, string path)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                File.Move(temp, path, overwrite: true);
+                return;
+            }
+            catch (Exception ex) when (attempt < 10 && ex is UnauthorizedAccessException or IOException)
+            {
+                Thread.Sleep(20 * attempt);
+            }
+        }
+    }
+
+    /// <summary>
     /// Writes the <c>tray</c> object into the file as it is on disk now: a temp file in the same folder, then a move over
     /// the old one. Throws <see cref="IOException"/> without writing when the file cannot be read (the shim's keys would be lost).
     /// </summary>
@@ -145,7 +166,7 @@ public sealed class TrayConfig
             using (var stream = File.Create(temp))
             using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
                 root.WriteTo(writer);
-            File.Move(temp, Path, overwrite: true);
+            ReplaceWithRetry(temp, Path);
         }
         finally
         {

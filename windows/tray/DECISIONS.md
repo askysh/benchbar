@@ -62,3 +62,5 @@ One line per non obvious choice. The spike's code is in `spike/` and is not ship
 - Toasts seed only from a snapshot with at least one bench in a known state.
 - The flyout raises Opened before `Show` and Hidden only after an Opened, so a deactivation during `Show` cannot leave efficiency mode off or the poller at the flyout rate. Report a Bug asks the probe afresh before running `report`, which would boot a stopped distro.
 - The unused Doctor console (`cmd /k`) was removed; the Doctor window is the only doctor in the tray.
+- `config.json` is replaced with up to ten short retries: Windows refuses the replace while another process holds the file without delete sharing (an antivirus scan, the indexer, the shim reading it). Found as a test that failed one run in twenty.
+- Controller tests dispose the controller and advance the fake clock only after a poll has reported (its timer is armed by then), on the same lock that stands in for the UI thread; three tests failed one run in about seven before that, and none in 30 runs after.
