@@ -757,4 +757,21 @@ assert_eq "1" "$CODE" "$OUT"
 )
 assert_eq "broken" "$(cat "$TMP_DIR/kv.result")" "(a lock from the future is broken)"
 
+# ---------------------------------------------------------------- 10. third review
+
+# the non interactive mode never lets sudo prompt: a hosts line that needs a
+# password is skipped with its command, as under --json, and sudo -v never runs
+cp "$FL_HOSTS_FILE" "$TMP_DIR/hosts.keep"
+grep -v ' macdev$' "$TMP_DIR/hosts.keep" >"$FL_HOSTS_FILE"
+rm -f "$MOCK_STATE/sudo_cred"; reset_calls
+BENCHBAR_NONINTERACTIVE=1 run_fm repair --yes --bench-dir "$BENCH"
+assert_calls_not_contain '^sudo -v' "(BENCHBAR_NONINTERACTIVE=1 repair must not prompt for sudo)"
+assert_contains "$OUT" "cannot ask for one"
+assert_eq "0" "$(grep -c ' macdev$' "$FL_HOSTS_FILE" || true)" "(the hosts step was skipped)"
+reset_calls
+stream --for-agent repair --yes --bench-dir "$BENCH"
+assert_calls_not_contain '^sudo -v' "(--for-agent repair must not prompt for sudo)"
+assert_eq "done" "$(ev 'e[-1]["event"]')"
+cp "$TMP_DIR/hosts.keep" "$FL_HOSTS_FILE"; touch "$MOCK_STATE/sudo_cred"
+
 printf 'test-agent-contracts: ok\n'
