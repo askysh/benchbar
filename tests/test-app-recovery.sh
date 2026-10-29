@@ -48,7 +48,13 @@ calls() { grep -c -E "$1" "$MOCK_LOG" || true; }
 # pending_file APP: the app's record in the bench's state folder
 pending_file() { find "$FL_STATE_DIR/benches" -path "*.pending/$1.json" 2>/dev/null | head -n1; }
 pending_get() { jget "$(pending_file "$1")" "$2"; }
-pending_dir_for() { local e; e="$(find "$FL_STATE_DIR/benches" -maxdepth 1 -name 'frappe-bench-*.env' | head -n1)"; printf '%s.pending' "${e%.env}"; }
+pending_dir_for() {
+  local e
+  e="$(find "$FL_STATE_DIR/benches" -maxdepth 1 -name 'frappe-bench-*.env' | head -n1)"
+  # without the bench's state file the path would be relative to the test's folder
+  [[ -n "$e" ]] || fail "pending_dir_for: no bench state file in $FL_STATE_DIR/benches"
+  printf '%s.pending' "${e%.env}"
+}
 # write_record APP STEPS_JSON FAILED: an app_add record as benchbar writes it
 write_record() {
   mkdir -p "$(pending_dir_for)"
@@ -156,6 +162,8 @@ assert_calls_not_contain '^bench --site'
 run_fm app update acme_crm --dry-run --bench-dir "$BENCH" --discard-pending
 assert_file "$(pending_file acme_crm)" "(a dry run discards nothing)"
 # the discard drops the record and stops: even with --yes no step, no merge, no fetch
+pdir="$(dirname "$(pending_file acme_crm)")"
+[[ "$pdir" == "$FL_STATE_DIR"/benches/*.pending ]] || fail "the record folder is not in the state folder: $pdir"
 head_before="$(app_head "$BENCH/apps/acme_crm")"
 reset_calls
 run_fm app update acme_crm --yes --discard-pending --bench-dir "$BENCH"
@@ -176,11 +184,12 @@ run_fm app update acme_crm --dry-run --json --discard-pending --bench-dir "$BENC
 assert_eq "1" "$CODE" "$OUT"
 assert_contains "$OUT" "leave out --json"
 # a record folder holding only a temp file of a failed write: doctor reports no record
-mkdir -p "$(pending_dir_for)"
-: >"$(pending_dir_for)/acme_crm.json.tmp.999"
+mkdir -p "$pdir"
+: >"${pdir}/acme_crm.json.tmp.999"
 run_fm doctor --json --bench-dir "$BENCH"
 assert_not_contains "$OUT" "pending record of *"
 assert_not_contains "$OUT" "app update * --discard-pending"
+rm -f "${pdir}/acme_crm.json.tmp.999"
 run_fm status --json --bench-dir "$BENCH"
 assert_eq "[]" "$(printf '%s' "$OUT" | jget - 'd["pending_operations"]')"
 
