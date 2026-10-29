@@ -348,7 +348,7 @@ fl_done_fields_v() {
 # own changed and warnings (pull). state_after is null in a dry run: nothing changed.
 fl_done_tail_v() {
   local __after="null"
-  if [[ "${FL_DRY_RUN:-0}" != "1" && "${FL_DONE_NO_BENCH:-0}" != "1" ]] && declare -F fl_state_after_v >/dev/null; then fl_state_after_v __after; fi
+  if [[ "${FL_DRY_RUN:-0}" != "1" && "${FL_DONE_NO_BENCH:-0}" != "1" && "${FL_DONE_NO_STATE:-0}" != "1" ]] && declare -F fl_state_after_v >/dev/null; then fl_state_after_v __after; fi
   printf -v "$1" '"next_actions":[%s],"state_after":%s' "$FL_DONE_NEXT" "$__after"
 }
 
@@ -868,14 +868,16 @@ fl_need_check() {
   msg="Cannot start, missing: ${list}."
   FL_NEED_MISSING_JSON="$names"
   if [[ "${FL_JSONL:-0}" == "1" ]]; then
-    # the done line comes from the exit trap
+    # the done line comes from the exit trap; no status is computed for a refusal
     FL_DIE_MESSAGE="$msg"
+    FL_DONE_NO_STATE=1
     fl_log "ABORT: ${msg}"
+    printf '[FAIL] %s\n' "$msg" >&2
     exit "$code"
   fi
   if [[ "${OPT_JSON:-0}" == "1" ]]; then
     printf '%s %s\n' "$msg" "${why}; pass them and run the command again. Nothing was changed." >&2
-    FL_DONE_NO_BENCH=1
+    FL_DONE_NO_BENCH=1; FL_DONE_NO_STATE=1
     fl_done_fields_v f "$code"
     printf '{"schema_version":%d,"cli_version":"%s",%s,"error":%s}\n' "${FL_SCHEMA_VERSION:-1}" "${FL_VERSION:-0}" "$f" "$(fl_json_str "$msg")"
     exit "$code"

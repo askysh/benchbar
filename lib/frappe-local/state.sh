@@ -287,7 +287,9 @@ fl__kv_lock() {
       born="$(stat -c %Y "$lck" 2>/dev/null || true)"
       [[ "$born" =~ ^[0-9]+$ ]] || born="$(stat -f %m "$lck" 2>/dev/null || true)"
       now="$(date +%s)"
-      if [[ ! "$born" =~ ^[0-9]+$ ]] || [[ $((now - born)) -ge 10 ]]; then rm -rf "$lck"; continue; fi
+      # 10 s old, or born in the future (the clock stepped back: a VM resumed), or
+      # held for good: 600 rounds (about 30 s and the stats) is the last resort
+      if [[ ! "$born" =~ ^[0-9]+$ ]] || [[ $((now - born)) -ge 10 || $((now - born)) -lt -10 || "$i" -ge 600 ]]; then rm -rf "$lck"; i=0; continue; fi
     fi
     sleep 0.05
   done

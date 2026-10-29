@@ -704,4 +704,47 @@ run_fm status --json --bench-dir "$NA2"
 assert_eq "not_adopted" "$(printf '%s' "$OUT" | jget - 'd["state"]')" "(an ack alone does not make a bench known)"
 rm -rf "$HOME/Applications/CleanMyMac X.app"
 
+# ---------------------------------------------------------------- 9. second review
+
+# repair --dry-run --json with the app's arguments on a missing bench: a reason on stderr, a done line on stdout
+run_events repair --dry-run --json --bench-dir "$HOME/no-such-bench-either"
+assert_eq "1" "$CODE"
+assert_eq "done 1" "$(ev '"%s %s" % (e[-1]["event"], e[-1]["exit"])')"
+assert_contains "$(ev 'e[-1]["error"]')" "No bench"
+assert_contains "$(cat "$STREAM.err")" "No bench" "(the app summarizes stderr and stdout: the reason is there)"
+# a dry run that works is still the plan alone
+run_events repair --dry-run --json --bench-dir "$BENCH"
+assert_eq "plan" "$(ev '" ".join(x["event"] for x in e)')"
+
+# a stream refusal: state_after is null, and the reason is on stderr too
+export BENCHBAR_NONINTERACTIVE=1
+rm -rf "$MOCK_STATE/keychain"; unset MARIADB_ROOT_PASSWORD
+stream site add refused1 --json --bench-dir "$BENCH"
+assert_eq "None" "$(sx 'e[-1]["state_after"]')"
+assert_contains "$(cat "$STREAM.err")" "[FAIL] Cannot start, missing:"
+unset BENCHBAR_NONINTERACTIVE
+# without the mode: neither password known is exit 2 too (a missing ADMIN_PASSWORD came first and said 1)
+run_fm site add refused2 --bench-dir "$BENCH" </dev/null
+assert_eq "2" "$CODE" "$OUT"
+export MARIADB_ROOT_PASSWORD=rootpw
+run_fm site add refused2 --bench-dir "$BENCH" </dev/null
+assert_eq "1" "$CODE" "$OUT"
+
+# a key-value lock born in the future (the clock stepped back) is broken, not waited on for good
+(
+  set +e
+  # shellcheck source=lib/frappe-local/ui.sh
+  . "$ROOT/lib/frappe-local/ui.sh"
+  # shellcheck source=lib/frappe-local/state.sh
+  . "$ROOT/lib/frappe-local/state.sh"
+  mkdir -p "$TMP_DIR/kv.d"; : >"$TMP_DIR/kv.d/f"; mkdir "$TMP_DIR/kv.d/f.lck"
+  touch -t 203501010000 "$TMP_DIR/kv.d/f.lck"
+  fl__kv_lock "$TMP_DIR/kv.d/f" >/dev/null 2>&1 &
+  waiter=$!
+  n=0
+  while kill -0 "$waiter" 2>/dev/null && [[ "$n" -lt 400 ]]; do sleep 0.1; n=$((n + 1)); done
+  if kill -0 "$waiter" 2>/dev/null; then kill "$waiter" 2>/dev/null; echo hung >"$TMP_DIR/kv.result"; else echo broken >"$TMP_DIR/kv.result"; fi
+)
+assert_eq "broken" "$(cat "$TMP_DIR/kv.result")" "(a lock from the future is broken)"
+
 printf 'test-agent-contracts: ok\n'

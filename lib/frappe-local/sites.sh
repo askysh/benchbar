@@ -218,7 +218,7 @@ fl_site_default_file_v() {
 # MariaDB with the Keychain password, its hosts line, and apps that are
 # already in apps/. The default site does not change.
 fl_cmd_site_add() {
-  local name="" apps="" bundle="${OPT_BUNDLE:-}" app created=false default_before default_after remembered
+  local name="" apps="" bundle="${OPT_BUNDLE:-}" app created=false default_before default_after code msg
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
       --apps) apps="${2:-}"; shift 2 ;;
@@ -237,7 +237,12 @@ fl_cmd_site_add() {
   # a run that cannot ask says so before it checks anything else
   if [[ ! -d "${FL_BENCH_DIR}/sites/${name}" && -z "${ADMIN_PASSWORD:-}" && "${FL_DRY_RUN:-0}" != "1" ]]; then
     if [[ "${FL_ASSUME_YES:-0}" == "1" || ! -t 0 ]] || fl_noninteractive; then
-      fl_die "The Administrator password for ${name} is needed." "Re-run with: ADMIN_PASSWORD='...' benchbar site add ${name} --yes"
+      # exit 2 when the MariaDB root password is unknown too (AGENTS.md), whatever the mode
+      code=1
+      [[ -n "${MARIADB_ROOT_PASSWORD:-}" || -n "$(fl_keychain_get 2>/dev/null || true)" ]] || code=2
+      msg="The Administrator password for ${name} is needed."
+      [[ "$code" != "2" ]] || msg="${msg} The MariaDB root password is unknown too."
+      fl_die "$msg" "Re-run with: ADMIN_PASSWORD='...' MARIADB_ROOT_PASSWORD='...' benchbar site add ${name} --yes" "$code"
     fi
   fi
   [[ -n "$bundle" && -z "$apps" ]] && { apps="$(fl_bundle_apps "$bundle")"; [[ -n "$apps" ]] || fl_die "Unknown app bundle: ${bundle}"; }
@@ -268,8 +273,9 @@ fl_cmd_site_add() {
         fl_warn "bench moved the default site to ${default_after}; putting it back to ${default_before}"
         (cd "$FL_BENCH_DIR" && bench use "$default_before") >>"${FL_LOG_FILE:-/dev/null}" 2>&1 || true
         fl_site_default_file_v default_after
-        remembered="$(fl_bstate_get SITE_NAME)"
-        if [[ "$default_after" != "$default_before" || ( -n "$remembered" && "$remembered" != "$default_before" ) ]]; then
+        # what bench says (currentsite.txt) is compared with what it said before; the
+        # remembered site is the user's own business (a "bench use other" is fine)
+        if [[ "$default_after" != "$default_before" ]]; then
           fl_fail "could not put the default site back to ${default_before} (currentsite.txt says ${default_after:-nothing})"
           fl_fix "cd ${FL_BENCH_DIR} && bench use ${default_before}"
           return 1

@@ -1037,7 +1037,8 @@ cmd_repair() {
   local code=0
   # the events start first: a missing bench is a done line with exit 1, not silence
   if [[ "$OPT_JSON" == "1" ]]; then
-    exec 3>&1 1>>"${FL_LOG_FILE:-/dev/null}" 2>&1
+    # fd 4 keeps the real stderr: a refusal says why there too (the app summarizes it)
+    exec 4>&2 3>&1 1>>"${FL_LOG_FILE:-/dev/null}" 2>&1
     FL_JSON_EVENTS=1
     FL_PLAIN=1; fl_ui_init
     # the question would be invisible (the text goes to the log): without
@@ -1057,11 +1058,17 @@ cmd_repair() {
 # 0.8, exit the shared one: both carry the process exit code.
 FL_REPAIR_DONE_SENT=0
 fl_repair_done() {
-  local code="$1" f err=""
-  [[ "$FL_JSON_EVENTS" == "1" && "${FL_DRY_RUN:-0}" != "1" && "$FL_REPAIR_DONE_SENT" != "1" ]] || return 0
+  local code="$1" f err="" msg
+  [[ "$FL_JSON_EVENTS" == "1" && "$FL_REPAIR_DONE_SENT" != "1" ]] || return 0
+  # a dry run that worked is the plan alone; one that was refused ends with its done line
+  [[ "${FL_DRY_RUN:-0}" != "1" || "$code" != "0" ]] || return 0
   FL_REPAIR_DONE_SENT=1
   fl_done_fields_v f "$code"
-  [[ "$code" == "0" ]] || err=",\"error\":$(fl_json_str "${FL_DIE_MESSAGE:-$(fl_log_step_message 0)}")"
+  if [[ "$code" != "0" ]]; then
+    msg="${FL_DIE_MESSAGE:-$(fl_log_step_message 0)}"
+    err=",\"error\":$(fl_json_str "$msg")"
+    { printf '[FAIL] %s\n' "${msg:-benchbar repair failed; see the log}" >&4; } 2>/dev/null || true
+  fi
   fl_event "{\"event\":\"done\",\"exit_code\":${code},${f},\"log\":$(fl_json_str "${FL_LOG_FILE:-}")${err}}"
 }
 
