@@ -409,6 +409,44 @@ assert d["source"]["site"] == "acme.localhost", d["source"]
   assert_eq "True" "$(printf '%s' "$OUT" | jget - 'd["can_apply"]')" "$OUT"
   rm -f "$BENCH"/sites/acme.localhost/private/backups/20260907_*
   assert_calls_not_contain 'restore --mariadb-root-password [^ ]*20260907'
+  # a dump in the shape frappe v15 writes (a fixture, not a real dump): the metadata head, the value before
+  # the key in tabDefaultValue, escaped quotes, multi row INSERTs with VALUES alone on its line and one row per line
+  for v in 15.50.0 15.41.0; do
+    cat >"$TMP_DIR/frappe15.sql" <<SQL
+-- begin frappe metadata
+-- [frappe]
+-- version = ${v}
+-- branch = version-15
+-- [erpnext]
+-- version = 15.30.0
+-- end frappe metadata
+--
+/*M!999999\\- enable the sandbox mode */
+LOCK TABLES \`tabDefaultValue\` WRITE;
+INSERT INTO \`tabDefaultValue\` VALUES
+('a1','2026-10-30 02:25:10.695134','2026-10-30 02:25:10.695134','Administrator','Administrator',0,'__global','system_defaults','__default',0,'en','language'),
+('a2','2026-10-30 02:25:10.695134','2026-10-30 02:25:10.695134','Administrator','Administrator',0,'__global','system_defaults','__default',0,'[\\"frappe\\", \\"erpnext\\"]','installed_apps');
+UNLOCK TABLES;
+INSERT INTO \`tabInstalled Application\` VALUES
+('h1','2026-10-30 02:25:51.143343','2026-10-30 02:25:51.143343','Administrator','Administrator',0,1,'frappe','${v}','version-15',1,0,'Installed Applications','installed_applications','Installed Applications'),
+('h2','2026-10-30 02:25:51.143343','2026-10-30 02:25:51.143343','Administrator','Administrator',0,2,'erpnext','15.30.0','version-15',0,0,'Installed Applications','installed_applications','Installed Applications');
+UNLOCK TABLES;
+SQL
+    gzip -c "$TMP_DIR/frappe15.sql" >"$BENCH/sites/acme.localhost/private/backups/20260908_${v//./}0-acme_localhost-database.sql.gz"
+  done
+  run_json site restore acme.localhost --from 20260908_154100 --dry-run --json --bench-dir "$BENCH"
+  assert_eq "True" "$(printf '%s' "$OUT" | jget - 'd["can_apply"]')" "$OUT"
+  assert_not_contains "$OUT" "app list could not be read"
+  run_json site restore acme.localhost --from 20260908_155000 --dry-run --json --bench-dir "$BENCH"
+  assert_eq "False" "$(printf '%s' "$OUT" | jget - 'd["can_apply"]')" "$OUT"
+  assert_contains "$OUT" "15.50.0, this bench frappe 15.41.0: the dump is newer than the code"
+  # the apps and the version, read by the parser itself (the row first, the metadata head when there is no row)
+  n="$(bash -c '. "$1/lib/frappe-local/ui.sh"; . "$1/lib/frappe-local/pull.sh"; FL_PULL_R_APPS=""; fl_pull_apps_from_dump "$2"; printf "%s" "$FL_PULL_R_APPS" | tr "\n" " "' _ "$ROOT" "$BENCH/sites/acme.localhost/private/backups/20260908_154100-acme_localhost-database.sql.gz")"
+  assert_eq "frappe|15.41.0|| erpnext||| " "$n"
+  grep -v 'tabInstalled Application\|^(.h[12].,' "$TMP_DIR/frappe15.sql" >"$TMP_DIR/frappe15-norow.sql"
+  n="$(bash -c '. "$1/lib/frappe-local/ui.sh"; . "$1/lib/frappe-local/pull.sh"; FL_PULL_R_APPS=""; fl_pull_apps_from_dump "$2"; printf "%s" "$FL_PULL_R_APPS" | tr "\n" " "' _ "$ROOT" "$TMP_DIR/frappe15-norow.sql")"
+  assert_eq "frappe|15.41.0|| erpnext||| " "$n" "(no Installed Application row: the version comes from the metadata head)"
+  rm -f "$BENCH"/sites/acme.localhost/private/backups/20260908_*
 
   # ---- a running bench: its scheduler is paused for the restore and resumed
   add_proc 4242 "honcho start -f Procfile.lean" "$BENCH"

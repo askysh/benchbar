@@ -484,22 +484,42 @@ fl_pull_check_set() {
   return 0
 }
 
-# fl_pull_apps_from_dump FILE: the installed_apps global of a dump
+# fl_pull_apps_from_dump FILE: the installed_apps global of a dump. The row
+# is "... 'installed_apps','[\"frappe\"]'" in some dumps and "...
+# '[\"frappe\"]','installed_apps'" in others (frappe v15 writes the value
+# first), so both are read.
 fl_pull_apps_from_dump() {
   local reader=cat apps a fver
   [[ "$1" == *.gz ]] && reader="gzip -dc"
-  apps="$($reader "$1" 2>/dev/null | grep -o -m1 "'installed_apps','[^']*'" 2>/dev/null | head -n1 | sed -e "s/^'installed_apps','//" -e "s/'\$//" | tr -d '[]\\" ' | tr ',' ' ' || true)"
+  apps="$($reader "$1" 2>/dev/null | grep -o -m1 -E "'installed_apps','\[[^']*\]'|'\[[^']*\]','installed_apps'" 2>/dev/null | head -n1 | sed -e "s/'installed_apps'//" | tr -d '[]\\" '"'" | tr ',' ' ' || true)"
   [[ -n "$apps" ]] || { fl_pull_warn "the app list could not be read from the dump; missing apps show up only at migrate"; return 0; }
-  # frappe's version, from its row in the Installed Application table (every
-  # INSERT of it: a dump made with --skip-extended-insert has one per row)
-  # (streamed, the dump is never held in memory): the version gate needs it
-  # shellcheck disable=SC2016  # the backticks are SQL quoting
-  fver="$($reader "$1" 2>/dev/null | grep -F 'INSERT INTO `tabInstalled Application`' | grep -o -m1 -E "'frappe','[0-9][^']*'" | head -n1 | cut -d"'" -f4 || true)"
+  fver="$(fl_pull_dump_frappe_version "$1")"
   FL_PULL_R_APPS=""
   for a in $apps; do
     if [[ "$a" == "frappe" ]]; then FL_PULL_R_APPS="${FL_PULL_R_APPS}${a}|${fver}||"$'\n'; else FL_PULL_R_APPS="${FL_PULL_R_APPS}${a}|||"$'\n'; fi
   done
   FL_PULL_APPS_KNOWN=1
+}
+
+# fl_pull_dump_frappe_version FILE: frappe's version in a dump, from its row in
+# the Installed Application table (a row of its own line after "VALUES" in a
+# frappe dump, or on the INSERT line itself, one per row with
+# --skip-extended-insert), else from the metadata frappe writes at the head
+# ("-- [frappe]" then "-- version = 15.0.0"). Streamed: the dump is never held
+# in memory, and the stream is cut at the first answer.
+fl_pull_dump_frappe_version() {
+  local reader=cat v
+  [[ "$1" == *.gz ]] && reader="gzip -dc"
+  v="$($reader "$1" 2>/dev/null | awk -v q="'" '
+    /^INSERT INTO `tabInstalled Application`/ { on = 1 }
+    on {
+      if (match($0, q "frappe" q "," q "[0-9][^" q "]*" q)) { split(substr($0, RSTART, RLENGTH), p, q); print p[4]; exit }
+      if ($0 ~ /;[ \t]*$/) on = 0
+    }' 2>/dev/null | head -n1 || true)"
+  if [[ -z "$v" ]]; then
+    v="$($reader "$1" 2>/dev/null | head -n 40 | awk '/^-- \[frappe\]/ { f = 1; next } /^-- \[/ { f = 0 } f && /^-- version = / { print $4; exit }' 2>/dev/null | head -n1 || true)"
+  fi
+  printf '%s' "$v"
 }
 
 # The app table: production apps against this bench. Sets FL_PULL_MISSING
