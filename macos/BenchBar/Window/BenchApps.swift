@@ -138,7 +138,8 @@ struct AddAppSheet: View {
         SheetScaffold("Add an App to \(bench.name)",
                       explanation: "Clones an app from the app registry or a git repository and installs it.") {
             Form {
-                TextField("App or repository", text: $source, prompt: Text("erpnext, or https://github.com/org/app"))
+                // verbatim: a string literal Text reads markdown and turns the URL into a link
+                TextField("App or repository", text: $source, prompt: Text(verbatim: "erpnext or https://github.com/org/app"))
                 TextField("Branch", text: $branch, prompt: Text(AppSource.isURL(source) ? "the repository's default" : "the profile's branch"))
                 Picker("Install on", selection: $site) {
                     Text("No site yet").tag("")

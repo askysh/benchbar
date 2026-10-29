@@ -138,6 +138,8 @@ All notable changes to this project are documented here.
   are one line, left aligned; before a scan it offers the folder it shows
   instead of "Start with a folder"; benches BenchBar already manages show
   a mark instead of a checkbox.
+- The Add App sheet's placeholder is plain text: its example URL rendered
+  as a link and the start of the placeholder was cut.
 
 ### Windows (preview)
 
