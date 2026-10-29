@@ -333,8 +333,9 @@ assert d["source"]["site"] == "acme.localhost", d["source"]
   reset_calls
   run_fm site restore acme.localhost --from "$TMP_DIR/downloaded" --with-files --yes --bench-dir "$BENCH"
   assert_eq "0" "$CODE" "$OUT"
-  assert_calls_contain "^python benchbar-frappe acme.localhost restore --mariadb-root-password [^ ]*/restore-set/${SET2}-acme_localhost-database.sql.gz --with-public-files"
+  assert_calls_contain "^python benchbar-frappe acme.localhost restore --mariadb-root-password [^ ]*/downloaded/${SET2}-acme_localhost-database.sql.gz --with-public-files"
   assert_file "$TMP_DIR/downloaded/${SET2}-acme_localhost-database.sql.gz" "(the folder is left as it was)"
+  assert_calls_not_contain 'restore-set/.*downloaded|downloaded.*restore-set' "(a set outside the target's backup folder is restored where it is)"
 
   # ---- the end state is checked: a restore that leaves no apps fails verify
   reset_calls
@@ -391,6 +392,20 @@ assert d["source"]["site"] == "acme.localhost", d["source"]
   assert_eq "15.50.0, this bench frappe 15.41.0: the dump is newer than the code" "$n"
   n="$(bash -c '. "$1/lib/frappe-local/ui.sh"; . "$1/lib/frappe-local/pull.sh"; FL_BENCH_DIR="$2"; FL_PULL_R_APPS="frappe|15.41.0||"; fl_pull_frappe_too_new' _ "$ROOT" "$BENCH" || true)"
   assert_eq "" "$n"
+  # through the CLI: a set whose dump says frappe 15.50.0 is refused in the plan, one at 15.41.0 is not
+  for v in 15.50.0 15.41.0; do
+    { printf '%s\n' "INSERT INTO \`tabDefaultValue\` VALUES ('a','__default','installed_apps','[\\\"frappe\\\",\\\"erpnext\\\"]');"
+      printf '%s\n' "INSERT INTO \`tabInstalled Application\` VALUES ('h1','2026-01-01','2026-01-01','Administrator','Administrator',0,1,'frappe','${v}','version-15'),('h2','2026-01-01','2026-01-01','Administrator','Administrator',0,2,'erpnext','15.30.0','version-15');"; } | gzip -c >"$BENCH/sites/acme.localhost/private/backups/20260907_${v//./}0-acme_localhost-database.sql.gz"
+  done
+  run_json site restore acme.localhost --from 20260907_155000 --dry-run --json --bench-dir "$BENCH"
+  assert_eq "False" "$(printf '%s' "$OUT" | jget - 'd["can_apply"]')" "$OUT"
+  assert_contains "$OUT" "15.50.0, this bench frappe 15.41.0: the dump is newer than the code"
+  run_fm site restore acme.localhost --from 20260907_155000 --yes --bench-dir "$BENCH"
+  assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "the dump is newer than the code"
+  run_json site restore acme.localhost --from 20260907_154100 --dry-run --json --bench-dir "$BENCH"
+  assert_eq "True" "$(printf '%s' "$OUT" | jget - 'd["can_apply"]')" "$OUT"
+  rm -f "$BENCH"/sites/acme.localhost/private/backups/20260907_*
+  assert_calls_not_contain 'restore --mariadb-root-password [^ ]*20260907'
 
   # ---- a running bench: its scheduler is paused for the restore and resumed
   add_proc 4242 "honcho start -f Procfile.lean" "$BENCH"
@@ -409,6 +424,8 @@ assert d["source"]["site"] == "acme.localhost", d["source"]
   assert_eq "False" "$(printf '%s' "$OUT" | jget - 'd["can_apply"]')"
   assert_contains "$OUT" "MariaDB root password is unknown to benchbar"
   assert_eq "['MARIADB_ROOT_PASSWORD']" "$(printf '%s' "$OUT" | jget - 'd["needs"]')" "(the plan names the input it needs)"
+  run_fm site restore acme.localhost --from "$SET1" --dry-run --bench-dir "$BENCH"
+  assert_eq "2" "$CODE" "$OUT"
   run_fm site restore acme.localhost --from "$SET1" --yes --bench-dir "$BENCH"
   assert_eq "2" "$CODE" "$OUT"
   assert_calls_not_contain '^(bench|python benchbar|redis-server)'
@@ -425,6 +442,9 @@ assert d["source"]["site"] == "acme.localhost", d["source"]
   run_fm site restore macdev --from 20260905_090000 --yes --bench-dir "$BENCH"
   assert_eq "0" "$CODE" "$OUT"
   assert_eq "macdev" "$(default_site)"
+  # the copies of the sets are pruned: the three newest stay
+  # shellcheck disable=SC2012  # folder names the command made
+  [[ "$(ls -d "$FL_BACKUP_ROOT"/*/restore-set | wc -l | tr -d ' ')" -le 3 ]] || fail "more than three restore-set copies are kept"
 }
 
 suite mac fresh.localhost

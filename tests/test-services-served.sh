@@ -113,6 +113,20 @@ suite() {
   assert_eq "crash" "$(tr -d '[:space:]' <"$BENCH/logs/.bench-stopped")" "(the crash flag is not overwritten)"
   assert_eq "" "$(lsof -ti tcp:11000,13000 -sTCP:LISTEN || true)"
   rm -f "$BENCH/logs/.bench-stopped"; rm -f "$BENCH/logs/.benchbar/state.json"
+  # the same with an installed service: its agent stays loaded, and a crash flag is not overwritten
+  run_fm service --yes --bench-dir "$BENCH"
+  assert_eq "0" "$CODE" "$OUT"
+  rm -f "$BENCH/logs/.bench-stopped"
+  run_fm up --services-only --bench-dir "$BENCH"
+  assert_eq "0" "$CODE" "$OUT"
+  printf 'crash\n' >"$BENCH/logs/.bench-stopped"
+  t0="$SECONDS"
+  run_fm down --bench-dir "$BENCH"
+  assert_eq "0" "$CODE" "$OUT"
+  [[ $((SECONDS - t0)) -lt 8 ]] || fail "down waited $((SECONDS - t0)) seconds with an installed agent"
+  assert_eq "crash" "$(tr -d '[:space:]' <"$BENCH/logs/.bench-stopped")" "(an installed agent does not make down overwrite the crash flag)"
+  assert_eq "" "$(lsof -ti tcp:11000,13000 -sTCP:LISTEN || true)"
+  rm -f "$BENCH/logs/.bench-stopped"; rm -f "$BENCH/logs/.benchbar/state.json"
   # a Redis that never comes up is stopped again, not left half started
   reset_calls
   MOCK_REDIS_NOLISTEN=1 run_fm up --services-only --bench-dir "$BENCH"

@@ -930,14 +930,23 @@ chk_ping() {
 # Host header gets a 404. Asked only while the bench runs (a stopped bench is
 # never pinged), one GET per site, in bash.
 chk_site_not_served() {
-  local s served bad="" n=0
+  local s served bad="" n=0 code end
   if ! fl_bench_is_running; then
     chk__set ok "the bench is not running; no site is asked"
     return 0
   fi
+  # as status: nobody is asked when the default site does not answer, and all the
+  # probes share a 2 second budget (what is left is not judged)
+  code="$(fl_site_ping_code)"
+  if [[ "$code" == "000" ]]; then
+    chk__set ok "the default site does not answer its ping; no other site is asked"
+    return 0
+  fi
+  end=$((SECONDS + 2))
   while IFS= read -r s; do
-    [[ -n "$s" ]] || continue
-    fl_site_served_v served "$s"
+    [[ -n "$s" && "$SECONDS" -lt "$end" ]] || continue
+    fl_http_code_v code "$s" "$FL_WEB_PORT" /api/method/ping 1
+    fl_site_served_v served "$s" "$code"
     [[ "$served" == "false" ]] && bad="${bad}${bad:+, }${s}"
     n=$((n + 1))
   done < <(fl_sites_list)

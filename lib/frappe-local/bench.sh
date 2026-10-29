@@ -267,7 +267,7 @@ fl_pin_app_commit() {
   fi
   fl_warn "Pinning ${app} to commit ${sha}"
   fl_commit_reach "$dir" "$sha" || fl_die "The pinned commit ${sha} of ${app} is not in its clone${branch:+ (branch ${branch})} and its remote did not hand it out; nothing was built." \
-    "Check the commit (it must be on a branch or tag of that repo), or drop the pin: the next install builds what is there. The clone is ${dir}."
+    "Check the commit (it must be on a branch or tag of that repo)$([[ "${#sha}" -ge 40 ]] || printf '; a remote cannot hand out an abbreviated hash, so use the full 40 character hash'), or drop the pin: the next install builds what is there. The clone is ${dir}."
   fl_run git -C "$dir" checkout --quiet "$sha" \
     || fl_die "commit checkout failed for ${app}." "Manual command: git -C ${dir} checkout ${sha}"
   FL_PINS_APPLIED=1

@@ -337,27 +337,65 @@ fl_srestore_result_json() {
   printf '%s],"verify":%s,"warnings":[%s]}\n' "$out" "$SR_VERIFY_JSON" "${FL_PULL_WARNINGS}"
 }
 
-# fl_srestore_copy_set: the files of the set into this run's own folder under
-# the state backups (hard links, else copies), checked by size, and the run
-# goes on with that copy. Bench's backup deletes backups older than
-# keep_backups_for_hours in the target's backup folder, which can hold the set.
-# The copy stays after the run.
+# fl_srestore_copy_set: when the set is in the target's own backup folder, its
+# files go into this run's folder under the state backups (hard links, else
+# copies after a free space check), checked by size, and the run goes on with
+# that copy. Bench's backup deletes backups older than keep_backups_for_hours in
+# that folder, which can hold the set; a set from anywhere else is left where it
+# is. The copy stays after the run; the three newest copies are kept.
 fl_srestore_copy_set() {
-  local dest f src a b
-  dest="${FL_BACKUP_ROOT:-${FL_STATE_DIR}/backups}/$(fl_backup_stamp)/restore-set"
+  local root dest f src a b need=0 avail copied=()
+  [[ "$SR_SET_DIR" == "$(fl_site_backup_dir "$SR_TARGET")" ]] || return 0
+  root="${FL_BACKUP_ROOT:-${FL_STATE_DIR}/backups}"
+  dest="${root}/$(fl_backup_stamp)/restore-set"
   mkdir -p "$dest" 2>/dev/null || { fl_fail "could not make ${dest}"; return 1; }
   for f in "$FL_PULL_DB" "$FL_PULL_PUB" "$FL_PULL_PRIV" "$FL_PULL_CONF"; do
     [[ -n "$f" ]] || continue
     [[ "$FL_PULL_NO_FILES" != "1" || "$f" == "$FL_PULL_DB" || "$f" == "$FL_PULL_CONF" ]] || continue
     src="${SR_SET_DIR}/${f}"
     rm -f "${dest}/${f}"
-    ln "$src" "${dest}/${f}" 2>/dev/null || cp -p "$src" "${dest}/${f}" 2>/dev/null || { fl_fail "could not copy ${src} to ${dest}"; return 1; }
+    if ! ln "$src" "${dest}/${f}" 2>/dev/null; then
+      # no hard link (another volume): a real copy needs the room
+      a="$(wc -c <"$src" | tr -d '[:space:]')"
+      need=$((need + a))
+      avail="$(df -k "$dest" 2>/dev/null | awk 'NR == 2 { print $4 }')"
+      if [[ "$avail" =~ ^[0-9]+$ && $((avail * 1024)) -lt "$need" ]]; then
+        fl_srestore_copy_undo "$dest" ${copied[@]+"${copied[@]}"}
+        fl_fail "not enough free space for a copy of the set in ${dest}: $(fl_pull_human "$((avail * 1024))") free, $(fl_pull_human "$need") needed"
+        return 1
+      fi
+      cp -p "$src" "${dest}/${f}" 2>/dev/null || { fl_srestore_copy_undo "$dest" ${copied[@]+"${copied[@]}"} "$f"; fl_fail "could not copy ${src} to ${dest}"; return 1; }
+    fi
+    copied+=("$f")
     a="$(wc -c <"$src" | tr -d '[:space:]')"; b="$(wc -c <"${dest}/${f}" | tr -d '[:space:]')"
-    [[ "$a" == "$b" ]] || { fl_fail "the copy of ${f} in ${dest} has another size than the original"; return 1; }
+    [[ "$a" == "$b" ]] || { fl_srestore_copy_undo "$dest" ${copied[@]+"${copied[@]}"}; fl_fail "the copy of ${f} in ${dest} has another size than the original"; return 1; }
   done
   SR_SET_COPY="$dest"
   FL_PULL_FROM_DIR="$dest"; SR_SET_DIR="$dest"
   fl_info "the set is restored from a copy in ${dest}, so the backup of ${SR_TARGET} cannot prune it"
+  fl_srestore_copy_prune "$root" "$dest"
+}
+
+# fl_srestore_copy_undo DEST FILE...: a partial copy removed
+fl_srestore_copy_undo() {
+  local dest="$1" f
+  shift
+  for f in "$@"; do rm -f "${dest}/${f}"; done
+  rmdir "$dest" "$(dirname "$dest")" 2>/dev/null || true
+}
+
+# fl_srestore_copy_prune ROOT KEEP: older restore-set copies beyond the three
+# newest (this run's included) go; only files this command made, then the folders
+fl_srestore_copy_prune() {
+  local root="$1" keep="$2" d n=0 f
+  # shellcheck disable=SC2012  # folder names this command made
+  while IFS= read -r d; do
+    [[ -n "$d" && -d "$d" ]] || continue
+    n=$((n + 1))
+    [[ "$n" -gt 3 && "$d" != "$keep" ]] || continue
+    for f in "$d"/*; do [[ -f "$f" ]] && rm -f "$f"; done
+    rmdir "$d" "$(dirname "$d")" 2>/dev/null || true
+  done < <(ls -1d "${root}"/*/restore-set 2>/dev/null | sort -r)
 }
 
 # fl_srestore_verify_backup: the backup taken first is a new set with its
@@ -449,7 +487,12 @@ fl_cmd_site_restore() {
     fl_header "benchbar site restore" "dry-run" "$FL_PROFILE" "$FL_BENCH_DIR" "$SR_TARGET"
     fl_srestore_print_plan
     printf '\n'
-    if [[ "$SR_CAN_APPLY" != "1" ]]; then fl_fail "this plan cannot be applied; nothing was changed"; return 1; fi
+    if [[ "$SR_CAN_APPLY" != "1" ]]; then
+      fl_fail "this plan cannot be applied; nothing was changed"
+      # an unknown root password is the documented exit 2, as in pull
+      case "${SR_ERRORS[*]}" in *"MariaDB root password"*) exit 2 ;; esac
+      return 1
+    fi
     fl_info "dry-run: nothing was backed up, created or restored"
     return 0
   fi
@@ -471,6 +514,8 @@ fl_cmd_site_restore() {
   fi
   # the password is resolved (and tried against the server) before anything changes
   fl_mariadb_root_password_resolve || fl_die "The MariaDB root password is needed for the restore." "Re-run with: MARIADB_ROOT_PASSWORD='...' benchbar site restore ..." 2
+  # nothing below may ask a question: frappe's downgrade prompt would hang a terminal
+  exec 0</dev/null
   fl_srestore_run || code=$?
   fl_steps_summary
   [[ -z "$SR_SET_COPY" ]] || fl_info "a copy of the backup set is kept in ${SR_SET_COPY}"

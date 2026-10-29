@@ -342,10 +342,12 @@ fl_cmd_down() {
     fl_info "dry-run: would write 'manual' to ${flag}, send SIGTERM to the agent, then stop leftover bench processes"
     return 0
   fi
-  # no agent and no bench process: only a Redis from up --services-only is left.
-  # Stop that one; an existing stop flag (crash, broken, port_conflict) and the
-  # state file stay as they are, and there is nothing to wait for.
-  if ! fl_agent_loaded && ! fl_pm_running; then
+  # no bench process and no running agent: at most a Redis from up --services-only
+  # is left (an installed agent stays loaded, so "loaded" says nothing). Stop that
+  # one; an existing stop flag (crash, broken, port_conflict) and the state file
+  # stay as they are, and there is nothing to wait for.
+  if ! fl_pm_running && [[ "$(fl_agent_field state 2>/dev/null || true)" != "running" ]]; then
+    if fl_agent_loaded; then fl_agent_signal SIGTERM || true; fi
     fl_bench_kill_processes TERM
     fl_bench_wait_stopped 3 || fl_bench_kill_processes KILL
     if fl_bench_is_running; then
