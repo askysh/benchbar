@@ -116,6 +116,9 @@ All notable changes to this project are documented here.
 - The app's popover: ⌘D, ⌘F and the other shortcuts act on the bench the
   picker shows. Before, after switching to a second bench they still
   stopped or opened the first one.
+- The app's install wizard asks for the MariaDB root password in a field
+  labelled "MariaDB root password", with help that says it is not the
+  site's Administrator password. It read "Administrator password".
 
 ### Windows (preview)
 

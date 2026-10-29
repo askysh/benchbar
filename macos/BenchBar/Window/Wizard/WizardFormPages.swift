@@ -33,7 +33,8 @@ struct NewBenchPage: View {
                 }
                 LabeledContent("Administrator password") {
                     HStack(spacing: WindowMetrics.rowSpacing) {
-                        PasswordField(text: Binding(get: { state.form.adminPassword.value }, set: { run.send(.setAdminPassword($0)) }),
+                        PasswordField(label: "Administrator password",
+                                      text: Binding(get: { state.form.adminPassword.value }, set: { run.send(.setAdminPassword($0)) }),
                                       reveal: revealPassword)
                         Toggle(isOn: $revealPassword) { Image(systemName: revealPassword ? "eye.slash" : "eye") }
                             .toggleStyle(.button)
@@ -87,15 +88,17 @@ struct NewBenchPage: View {
 }
 
 /// The password field with a reveal toggle: a secure field, or a plain one while revealed.
+/// `label` names the secret it asks for (its placeholder and VoiceOver label).
 struct PasswordField: View {
+    let label: String
     @Binding var text: String
     let reveal: Bool
 
     var body: some View {
         if reveal {
-            TextField("Administrator password", text: $text).labelsHidden()
+            TextField(label, text: $text).labelsHidden()
         } else {
-            SecureField("Administrator password", text: $text).labelsHidden()
+            SecureField(label, text: $text).labelsHidden()
         }
     }
 }

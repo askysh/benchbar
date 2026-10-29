@@ -56,12 +56,14 @@ struct InstallPage: View {
                          title: failure.step.map { "\($0) failed" } ?? "The install failed",
                          detail: [failure.message, failure.fix].compactMap { $0 }.joined(separator: "\n\n"),
                          monospaced: false)
-        case .needsRootPassword(let fix):
+        case .needsRootPassword:
+            // the CLI's fix names the environment variable for Terminal; here the field below is the fix
             SheetOutcome(symbol: "lock.trianglebadge.exclamationmark.fill", tint: .orange, title: "Needs the MariaDB root password",
-                         detail: fix)
+                         detail: "Type the password of MariaDB's root user on this Mac, then Retry. It is not the site's Administrator password.")
             VStack(alignment: .leading, spacing: WindowMetrics.rowSpacing) {
                 HStack(spacing: WindowMetrics.rowSpacing) {
-                    PasswordField(text: Binding(get: { rootPassword }, set: { rootPassword = $0; run.send(.setRootPassword($0)) }),
+                    PasswordField(label: "MariaDB root password",
+                                  text: Binding(get: { rootPassword }, set: { rootPassword = $0; run.send(.setRootPassword($0)) }),
                                   reveal: revealRootPassword)
                         .frame(maxWidth: 280)
                     Toggle(isOn: $revealRootPassword) { Image(systemName: revealRootPassword ? "eye.slash" : "eye") }

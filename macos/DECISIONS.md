@@ -448,3 +448,4 @@ Asked for after the phases, to stop naming drift before the first release.
 ## 0.8.0: release QA
 
 - The popover's bench panel has `.id(bench.path)`: in the same place in the view tree SwiftUI keeps a button's keyboard shortcut with the action of its first render, so the picker changed the panel's text but not what ⌘D stopped. `PopoverShortcutTests` sends ⌘D to a hosted popover after each switch.
+- The exit 2 page no longer shows the CLI's fix ("Run again with MARIADB_ROOT_PASSWORD in the environment"): that is the Terminal way, and the field under it is the app's. `PasswordField` takes the name of the secret it asks for.
