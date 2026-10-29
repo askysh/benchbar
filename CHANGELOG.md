@@ -169,6 +169,10 @@ All notable changes to this project are documented here.
   Restart button is clearly faded next to the ones that work.
 - While a bench starts or restarts, the app shows no uptime until the new
   run reports; it showed the previous run's ("up 42m").
+- **Add Bench > Adopt Existing Bench…** asks for one bench's folder and
+  opens its setup plan (the service files and the ports, as `benchbar
+  adopt`), instead of the same folder search as Find Benches. The setup
+  sheet for one bench is titled by its name.
 - `repair` run by a copy of BenchBar.app that the app did not register (a
   development build, a second copy of the app) no longer points the shell
   helpers at that copy's own CLI, which goes away with the build. The

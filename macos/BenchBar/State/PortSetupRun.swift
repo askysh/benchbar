@@ -27,7 +27,9 @@ final class PortSetupRun: Identifiable {
 
     var title: String {
         if startAfterSetup { return "Resolve Port Conflict" }
-        return opensSettings ? "Port Settings" : "Set Up Selected Benches"
+        if opensSettings { return "Port Settings" }
+        // one bench (Adopt Existing Bench…, Set Up Management…) by its name
+        return summaries.count == 1 ? "Set Up \(summaries[0].name)" : "Set Up Selected Benches"
     }
 
     /// The plan has nothing to set up (`PortPlan.Entry.needsSetup`): Port

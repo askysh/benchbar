@@ -19,9 +19,13 @@ struct DiscoveryPane: View {
         }
         .task {
             if router.scanRequested { router.scanRequested = false; chooseFolder() }
+            if router.adoptRequested { router.adoptRequested = false; adopt() }
         }
         .onChange(of: router.scanRequested) { _, requested in
             if requested { router.scanRequested = false; chooseFolder() }
+        }
+        .onChange(of: router.adoptRequested) { _, requested in
+            if requested { router.adoptRequested = false; adopt() }
         }
         .sheet(item: $setup) { run in PortSetupSheet(run: run) { setup = nil } }
     }
@@ -141,6 +145,18 @@ struct DiscoveryPane: View {
         guard !discovery.isScanning, !discovery.isAdding,
               let path = Workspace.chooseScanFolder(previous: discovery.folder) else { return }
         discovery.scan(folder: path)
+    }
+
+    /// Adopt Existing Bench…: one bench's folder, then its setup plan. A
+    /// folder with several benches, none, or one already managed stays as
+    /// Find Benches shows it.
+    private func adopt() {
+        guard !discovery.isScanning, !discovery.isAdding,
+              let path = Workspace.chooseExistingBench(previous: discovery.folder) else { return }
+        Task {
+            await discovery.scan(folder: path, remember: false).value
+            if let bench = discovery.adoptCandidate { preview([bench]) }
+        }
     }
 
     private func resultRow(_ result: BenchSummary) -> some View {

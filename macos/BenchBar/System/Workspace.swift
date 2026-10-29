@@ -17,6 +17,22 @@ enum Workspace {
         NSApp.activate()
         return panel.runModal() == .OK ? panel.url?.path : nil
     }
+    /// Adopt Existing Bench: the folder of one bench (with apps and sites).
+    static func chooseExistingBench(previous: String) -> String? {
+        let panel = NSOpenPanel()
+        panel.title = "Adopt an existing bench"
+        panel.message = "Choose the bench folder, the one with apps and sites in it. BenchBar shows the setup plan before it changes anything."
+        panel.prompt = "Choose Bench"
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = previous.isEmpty
+            ? FileManager.default.homeDirectoryForCurrentUser
+            : URL(fileURLWithPath: previous, isDirectory: true)
+        NSApp.activate()
+        return panel.runModal() == .OK ? panel.url?.path : nil
+    }
+
     /// The folder for a new bench: an existing one, or one made in the panel.
     static func chooseBenchFolder(previous: String) -> String? {
         let panel = NSOpenPanel()
