@@ -1,0 +1,650 @@
+# Builds the Windows download of BenchBar (benchbar.exe and the tray app) and
+# attaches it to the same draft GitHub release the Mac workflow (release.yml)
+# creates.
+#
+# Triggers:
+#   tag v*             build the tag, package, attach to the draft release
+#   workflow_dispatch  same, for a version you type, but only when
+#                      "draft_release" is on (off by default). That run builds
+#                      refs/tags/vX.Y.Z, never the commit you dispatched from,
+#                      and fails when the tag does not exist. With it off the
+#                      run builds the dispatched ref and only uploads a
+#                      workflow artifact, unsigned. (Dispatch works only once
+#                      this file is on main, so the pull request path exists.)
+#   pull_request       when this file or install.ps1 changes: build, package
+#                      and run the installer against the zip. Never touches a
+#                      release.
+#
+# What it ships, per architecture (amd64 and arm64):
+#   benchbar-windows-<version>-<arch>.zip   benchbar.exe, the tray app (when
+#                      windows/tray is on the ref), README.txt, SHA256SUMS
+#   benchbar-windows-<version>-SHA256SUMS.txt   one file for both zips. The
+#                      name must not end in SHA256SUMS: the Mac release has an
+#                      asset named exactly that and install.sh takes the first
+#                      asset whose name ends in it.
+#
+# Signing is best effort and only for a build of the release tag. With the
+# SignPath secrets (SIGNPATH_API_TOKEN, SIGNPATH_ORGANIZATION_ID) the project's
+# own binaries go through SignPath (third party DLLs are not ours to sign); a
+# signature that does not verify is thrown away and the unsigned file ships.
+# README.txt and the release notes list what Get-AuthenticodeSignature says
+# about every .exe and .dll in the zip.
+#
+# The release job only ever creates or edits a DRAFT. A published release gets
+# its assets but its notes are left alone. Publishing is a human step.
+name: Release Windows
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build (X.Y.Z); with a release, the tag vX.Y.Z must exist"
+        required: true
+        type: string
+      draft_release:
+        description: "Build the tag and attach to its existing draft release (off: build this ref, upload a workflow artifact only)"
+        required: false
+        default: false
+        type: boolean
+  pull_request:
+    paths:
+      - ".github/workflows/release-windows.yml"
+      - "install.ps1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-windows-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      release: ${{ steps.v.outputs.release }}
+    steps:
+      - id: v
+        env:
+          EVENT: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_DRAFT: ${{ inputs.draft_release }}
+          PR_NUMBER: ${{ github.event.number }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release=false
+          case "$EVENT" in
+            push) v="${REF_NAME#v}"; release=true ;;
+            workflow_dispatch)
+              v="${INPUT_VERSION#v}"
+              [ "$INPUT_DRAFT" = "true" ] && release=true
+              ;;
+            *) v="0.0.0-pr${PR_NUMBER}" ;;
+          esac
+          if [ "$EVENT" != "pull_request" ] && ! [[ "$v" =~ ^[0-9]+[.][0-9]+[.][0-9]+$ ]]; then
+            echo "::error::'$v' is not a version (expected X.Y.Z)"; exit 1
+          fi
+          if [ "$release" = "true" ] && ! git ls-remote --exit-code --tags "https://github.com/${GITHUB_REPOSITORY}.git" "refs/tags/v${v}" >/dev/null 2>&1; then
+            echo "::error::The tag v${v} does not exist. A run that attaches to a release builds that tag, so push it first (release.yml builds the Mac side from the same tag)."
+            exit 1
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+          echo "Windows build of version $v (attach to a release: $release)"
+
+  package:
+    name: Package (${{ matrix.arch }})
+    needs: version
+    runs-on: windows-latest
+    timeout-minutes: 40
+    # actions: read is for SignPath's action, which reads this run and
+    # downloads the unsigned artifact with the GitHub token
+    permissions:
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            rid: win-x64
+            machine: "0x8664"
+          - arch: arm64
+            rid: win-arm64
+            machine: "0xAA64"
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      ARCH: ${{ matrix.arch }}
+      RID: ${{ matrix.rid }}
+      MACHINE: ${{ matrix.machine }}
+      # true when this run builds the release tag and both SignPath secrets
+      # exist (the values themselves go only to the signing step). An artifact
+      # only dispatch and a pull request never sign.
+      SIGNING_CONFIGURED: ${{ needs.version.outputs.release == 'true' && secrets.SIGNPATH_API_TOKEN != '' && secrets.SIGNPATH_ORGANIZATION_ID != '' }}
+    steps:
+      # a run that attaches to a release builds the tag, not the dispatched commit
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.version.outputs.release == 'true' && format('refs/tags/v{0}', needs.version.outputs.version) || '' }}
+
+      - name: Say which commit this builds
+        run: |
+          Write-Host "Building $(git rev-parse HEAD) for version $env:VERSION"
+
+      - name: Helper to read a binary's CPU type
+        run: |
+          # dot sourced by later steps: Get-PeMachine FILE -> 0x8664 (amd64) or 0xAA64 (arm64)
+          @'
+          function Get-PeMachine([string]$Path) {
+            $b = [IO.File]::ReadAllBytes($Path)
+            if ($b.Length -lt 0x40 -or $b[0] -ne 0x4D -or $b[1] -ne 0x5A) { throw "$Path is not a Windows executable" }
+            $pe = [BitConverter]::ToInt32($b, 0x3C)
+            if ($b[$pe] -ne 0x50 -or $b[$pe + 1] -ne 0x45) { throw "$Path has no PE header" }
+            return ('0x{0:X4}' -f [BitConverter]::ToUInt16($b, $pe + 4))
+          }
+          function Assert-PeMachine([string]$Path, [string]$Expected) {
+            $got = Get-PeMachine $Path
+            if ($got -ne $Expected) { throw "$Path is built for CPU type $got, expected $Expected ($env:ARCH)" }
+            Write-Host "$Path is $env:ARCH ($got)"
+          }
+          '@ | Set-Content -Path "$env:RUNNER_TEMP/pe.ps1" -Encoding utf8
+
+      # ------------------------------------------------------------- shim
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: windows/shim/go.mod
+          cache-dependency-path: windows/shim/go.sum
+
+      - name: Test the shim
+        if: matrix.arch == 'amd64'
+        working-directory: windows/shim
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          go vet ./...
+          go test ./...
+
+      - name: Build benchbar.exe
+        working-directory: windows/shim
+        env:
+          GOOS: windows
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: "0"
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          . "$env:RUNNER_TEMP/pe.ps1"
+          $out = Join-Path $env:GITHUB_WORKSPACE 'out/benchbar.exe'
+          $ldflags = "-s -w -X main.version=$env:VERSION"
+          go build -trimpath -ldflags $ldflags -o $out .
+          Assert-PeMachine $out $env:MACHINE
+
+      # ------------------------------------------------------------- tray
+      # An older tag may predate the tray app: then the zip is shim only.
+      - name: Is the tray app on this ref
+        id: tray
+        run: |
+          if (Test-Path 'windows/tray/BenchBarTray/BenchBarTray.csproj') {
+            "present=true" >> $env:GITHUB_OUTPUT
+          } else {
+            "present=false" >> $env:GITHUB_OUTPUT
+            Write-Host "::warning title=No tray app::windows/tray/BenchBarTray is not on this ref. Shipping a shim only zip."
+          }
+
+      - uses: actions/setup-dotnet@v6
+        if: steps.tray.outputs.present == 'true'
+        with:
+          global-json-file: windows/tray/global.json
+
+      - name: Publish the tray app
+        if: steps.tray.outputs.present == 'true'
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          . "$env:RUNNER_TEMP/pe.ps1"
+          # Directory.Build.props pins win-x64 and Platform x64; arm64 overrides all three
+          $extra = @()
+          if ($env:ARCH -eq 'arm64') { $extra = @('-p:Platform=arm64', '-p:PlatformTarget=arm64') }
+          dotnet publish windows/tray/BenchBarTray/BenchBarTray.csproj -c Release -r $env:RID --self-contained false "-p:Version=$env:VERSION" @extra -o out/tray
+          $exe = 'out/tray/BenchBarTray.exe'
+          if (-not (Test-Path $exe)) { throw "dotnet publish did not produce $exe" }
+          # fail loudly rather than ship amd64 bits in the arm64 zip
+          Assert-PeMachine $exe $env:MACHINE
+
+      # ------------------------------------------------------------- signing
+      # Only the project's own binaries: SignPath Foundation signs a project's
+      # own code, not the NuGet libraries it ships.
+      - name: Stage the first party binaries for signing
+        if: env.SIGNING_CONFIGURED == 'true'
+        run: |
+          New-Item -ItemType Directory -Force sign-in | Out-Null
+          Copy-Item out/benchbar.exe sign-in/
+          foreach ($n in 'BenchBarTray.exe', 'BenchBarTray.dll', 'BenchBar.Tray.Core.dll') {
+            if (Test-Path "out/tray/$n") { Copy-Item "out/tray/$n" sign-in/ }
+          }
+          Get-ChildItem sign-in | Format-Table Name, Length
+
+      - name: Upload the unsigned files
+        id: upload-unsigned
+        if: env.SIGNING_CONFIGURED == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: unsigned-${{ matrix.arch }}
+          path: sign-in/*
+          if-no-files-found: error
+
+      - name: Sign with SignPath
+        id: sign
+        if: env.SIGNING_CONFIGURED == 'true'
+        continue-on-error: true
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'benchbar' }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG || 'release-signing' }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG || 'windows-exe' }}
+          github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed
+
+      - name: Use signed files that verify
+        env:
+          SIGN_OUTCOME: ${{ steps.sign.outcome }}
+        run: |
+          . "$env:RUNNER_TEMP/pe.ps1"
+          $targets = [ordered]@{ 'benchbar.exe' = 'out/benchbar.exe' }
+          foreach ($n in 'BenchBarTray.exe', 'BenchBarTray.dll', 'BenchBar.Tray.Core.dll') {
+            if (Test-Path "out/tray/$n") { $targets[$n] = "out/tray/$n" }
+          }
+          if ($env:SIGN_OUTCOME -eq 'failure') { Write-Host "::warning title=Signing failed::SignPath did not finish; shipping unsigned binaries." }
+          foreach ($name in $targets.Keys) {
+            $candidate = Join-Path 'signed' $name
+            if ($env:SIGN_OUTCOME -ne 'success') { continue }
+            if (-not (Test-Path $candidate)) { Write-Host "::warning::SignPath returned no $name; shipping it unsigned."; continue }
+            $sig = Get-AuthenticodeSignature -FilePath $candidate
+            $same = $true
+            if ($name -like '*.exe') { $same = (Get-PeMachine $candidate) -eq $env:MACHINE }
+            if ($sig.Status -eq 'Valid' -and $same) {
+              Copy-Item $candidate $targets[$name] -Force
+              Write-Host "$name is signed: $($sig.SignerCertificate.Subject)"
+            } else {
+              # never ship a broken signature: keep the unsigned build
+              Write-Host "::warning::The signature on $name is '$($sig.Status)' (CPU match: $same); shipping it unsigned."
+            }
+          }
+          foreach ($name in $targets.Keys) { if ($name -like '*.exe') { Assert-PeMachine $targets[$name] $env:MACHINE } }
+
+      # ------------------------------------------------------------- package
+      - name: Write README.txt and SHA256SUMS, build the zip
+        env:
+          HAS_TRAY: ${{ steps.tray.outputs.present }}
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $pkg = 'pkg'
+          New-Item -ItemType Directory -Force $pkg, dist | Out-Null
+          Copy-Item out/benchbar.exe $pkg/
+          # the installer rides along, so a build sent by hand installs from its unpacked folder
+          Copy-Item install.ps1 $pkg/
+          $hasTray =($env:HAS_TRAY -eq 'true') -and (Test-Path out/tray/BenchBarTray.exe)
+          if ($hasTray) { Copy-Item out/tray/* $pkg/ -Recurse -Force }
+          $root = (Resolve-Path $pkg).Path
+
+          # what Get-AuthenticodeSignature says about every .exe and .dll that ships
+          $firstParty = @('benchbar.exe', 'BenchBarTray.exe', 'BenchBarTray.dll', 'BenchBar.Tray.Core.dll')
+          $files = @(Get-ChildItem $root -Recurse -File | Where-Object { $_.Extension -in '.exe', '.dll' } | Sort-Object FullName | ForEach-Object {
+              $rel = $_.FullName.Substring($root.Length + 1).Replace('\', '/')
+              $sig = Get-AuthenticodeSignature -FilePath $_.FullName
+              $signer = ''
+              if ($sig.Status -eq 'Valid') {
+                $signer = $sig.SignerCertificate.Subject
+                if ($signer -match 'CN=([^,]+)') { $signer = $Matches[1].Trim('"') }
+              }
+              [ordered]@{ name = $rel; signed = ($sig.Status -eq 'Valid'); status = [string]$sig.Status; signer = $signer; firstParty = ($firstParty -contains $rel) }
+            })
+          [ordered]@{ arch = $env:ARCH; version = $env:VERSION; tray = $hasTray; files = $files } |
+            ConvertTo-Json -Depth 5 | Set-Content -Path "dist/signing-$env:ARCH.json" -Encoding utf8
+          Get-Content "dist/signing-$env:ARCH.json" | Select-Object -First 60
+
+          $signedList = @($files | Where-Object { $_.signed } | ForEach-Object { if ($_.signer) { "$($_.name) ($($_.signer))" } else { $_.name } })
+          $unsignedList = @($files | Where-Object { -not $_.signed } | ForEach-Object { $_.name })
+          $ownUnsigned = @($files | Where-Object { $_.firstParty -and -not $_.signed } | ForEach-Object { $_.name })
+          $signedText = 'none'
+          if ($signedList.Count -gt 0) { $signedText = $signedList -join ', ' }
+          if ($unsignedList.Count -eq 0) {
+            $signing = 'Every .exe and .dll in this download carries a valid signature.'
+          } else {
+            $signing = "Signed:     $signedText`nNot signed: $($unsignedList -join ', ')`n(Third party libraries are signed by their authors or not at all; this`nproject signs only its own programs.)"
+            if ($ownUnsigned.Count -gt 0) {
+              $signing += "`nThis project's own programs not signed yet: $($ownUnsigned -join ', '). Windows SmartScreen may warn when you first run them (More info, then Run anyway). With Smart App Control on, an unsigned program can be blocked."
+            }
+          }
+
+          if ($hasTray) {
+            $programs = @"
+          benchbar.exe      The command line. Runs the BenchBar CLI inside your WSL 2
+                            distro, so "benchbar status" works from PowerShell and cmd.
+          BenchBarTray.exe  The tray app: shows your benches and starts and stops them.
+                            It needs the .NET 10 Desktop Runtime:
+                              winget install Microsoft.DotNet.DesktopRuntime.10
+          "@
+          } else {
+            $programs = @"
+          benchbar.exe      The command line. Runs the BenchBar CLI inside your WSL 2
+                            distro, so "benchbar status" works from PowerShell and cmd.
+          This download has no tray app.
+          "@
+          }
+          $readme = @"
+          BenchBar for Windows $env:VERSION ($env:ARCH)
+
+          $programs
+
+          Install from this folder (per user, no administrator rights): unpack
+          the whole zip, open PowerShell in the unpacked folder and run
+            powershell -ExecutionPolicy Bypass -File .\install.ps1
+          It checks every file against SHA256SUMS, installs to
+          %LOCALAPPDATA%\Programs\BenchBar, puts benchbar.exe on your PATH and
+          ends with benchbar.exe doctor. Running it again updates in place.
+
+          From a published release, the one liner does the same:
+            irm https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1 | iex
+
+          Code signing, as checked with Get-AuthenticodeSignature when this zip was built:
+          $signing
+
+          Your benches, sites and databases stay inside the WSL distro. Nothing
+          here writes inside a distro.
+
+          Documentation: https://benchbar.akashmishra.com/windows/
+          "@
+          $readme = $readme -replace "`r?`n", "`r`n"
+          [IO.File]::WriteAllText((Join-Path $root 'README.txt'), $readme + "`r`n", (New-Object Text.UTF8Encoding $false))
+
+          # hashes of every file in the zip (except the list itself), LF endings
+          $lines = Get-ChildItem $root -Recurse -File | Where-Object { $_.Name -ne 'SHA256SUMS' } | Sort-Object FullName | ForEach-Object {
+            $rel = $_.FullName.Substring($root.Length + 1).Replace('\', '/')
+            '{0}  {1}' -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $rel
+          }
+          [IO.File]::WriteAllText((Join-Path $root 'SHA256SUMS'), (($lines -join "`n") + "`n"), (New-Object Text.UTF8Encoding $false))
+
+          $zip = Join-Path (Resolve-Path dist).Path "benchbar-windows-$env:VERSION-$env:ARCH.zip"
+          if (Test-Path $zip) { Remove-Item $zip }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          [IO.Compression.ZipFile]::CreateFromDirectory($root, $zip, [IO.Compression.CompressionLevel]::Optimal, $false)
+
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          [IO.File]::WriteAllText((Join-Path (Resolve-Path dist).Path "sums-$env:ARCH.txt"), ("{0}  {1}`n" -f $hash, (Split-Path $zip -Leaf)), (New-Object Text.UTF8Encoding $false))
+          Get-ChildItem dist | Format-Table Name, Length
+          Get-Content "dist/sums-$env:ARCH.txt"
+          Get-Content (Join-Path $root 'README.txt')
+
+      - name: Upload the zip, its sums line and the signing record
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
+
+  installer-test:
+    name: Installer test
+    needs: [version, package]
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: windows-amd64
+          path: source
+
+      - name: Make the sums file the release job would write
+        run: |
+          Copy-Item source/sums-amd64.txt "source/benchbar-windows-$env:VERSION-SHA256SUMS.txt"
+          Get-ChildItem source | Format-Table Name, Length
+
+      - name: Install into a fresh LOCALAPPDATA (PowerShell 7)
+        run: |
+          $fresh = Join-Path $env:RUNNER_TEMP 'localappdata-pwsh'
+          New-Item -ItemType Directory -Force $fresh | Out-Null
+          $env:LOCALAPPDATA = $fresh
+          pwsh -NoProfile -File install.ps1 -Source (Resolve-Path source).Path -NoTray -Yes
+          # doctor finds no WSL on this runner; the install itself must still succeed
+          if ($LASTEXITCODE -ne 0) { throw "install.ps1 exited with $LASTEXITCODE" }
+          $exe = Join-Path $fresh 'Programs/BenchBar/benchbar.exe'
+          if (-not (Test-Path $exe)) { throw "$exe is missing" }
+          $said = (& $exe --shim-version) -join "`n"
+          Write-Host $said
+          if ($said -notmatch [regex]::Escape($env:VERSION)) { throw "--shim-version did not print $env:VERSION" }
+
+      - name: Install again with Windows PowerShell 5.1 (an update in place)
+        shell: powershell
+        run: |
+          $fresh = Join-Path $env:RUNNER_TEMP 'localappdata-pwsh'
+          $env:LOCALAPPDATA = $fresh
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File install.ps1 -Source (Resolve-Path source).Path -NoTray -Yes
+          if ($LASTEXITCODE -ne 0) { throw "install.ps1 exited with $LASTEXITCODE" }
+          $exe = Join-Path $fresh 'Programs\BenchBar\benchbar.exe'
+          $said = (& $exe --shim-version) -join "`n"
+          Write-Host $said
+          if ($said -notmatch [regex]::Escape($env:VERSION)) { throw "--shim-version did not print $env:VERSION" }
+
+      - name: Piped into iex leaves the session alone
+        run: |
+          $fresh = Join-Path $env:RUNNER_TEMP 'localappdata-iex'
+          New-Item -ItemType Directory -Force $fresh | Out-Null
+          $env:LOCALAPPDATA = $fresh
+          $env:BENCHBAR_NO_TRAY = '1'; $env:BENCHBAR_YES = '1'
+          $env:BENCHBAR_SOURCE = (Resolve-Path source).Path
+          $Version = 'mine'; $Source = 'mine'
+          Get-Content install.ps1 -Raw | Invoke-Expression
+          if ($Version -ne 'mine' -or $Source -ne 'mine') { throw 'the installer overwrote variables of the calling session' }
+          if (-not (Test-Path (Join-Path $fresh 'Programs/BenchBar/benchbar.exe'))) { throw 'the iex install did not install' }
+
+      - name: A wrong checksum must be refused
+        run: |
+          $bad = Join-Path $env:RUNNER_TEMP 'bad-source'
+          New-Item -ItemType Directory -Force $bad | Out-Null
+          Copy-Item source/*.zip $bad
+          $zip = (Get-ChildItem $bad -Filter *.zip).Name
+          Set-Content "$bad/benchbar-windows-$env:VERSION-SHA256SUMS.txt" ("{0}  {1}" -f ('0' * 64), $zip)
+          $fresh = Join-Path $env:RUNNER_TEMP 'localappdata-bad'
+          New-Item -ItemType Directory -Force $fresh | Out-Null
+          $env:LOCALAPPDATA = $fresh
+          pwsh -NoProfile -File install.ps1 -Source $bad -NoTray -Yes
+          if ($LASTEXITCODE -eq 0) { throw 'install.ps1 accepted a wrong checksum' }
+          if (Test-Path (Join-Path $fresh 'Programs/BenchBar/benchbar.exe')) { throw 'a refused install left files behind' }
+          $global:LASTEXITCODE = 0
+
+      - name: By hand, from the unpacked zip with its own install.ps1
+        run: |
+          $unpacked = Join-Path $env:RUNNER_TEMP 'unpacked'
+          Expand-Archive (Get-ChildItem source -Filter *.zip).FullName -DestinationPath $unpacked -Force
+          if (-not (Test-Path (Join-Path $unpacked 'install.ps1'))) { throw 'the zip carries no install.ps1' }
+          $fresh = Join-Path $env:RUNNER_TEMP 'localappdata-folder'
+          New-Item -ItemType Directory -Force $fresh | Out-Null
+          $env:LOCALAPPDATA = $fresh
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $unpacked 'install.ps1') -NoTray -Yes
+          if ($LASTEXITCODE -ne 0) { throw "install.ps1 from the unpacked folder exited with $LASTEXITCODE" }
+          if (-not (Test-Path (Join-Path $fresh 'Programs/BenchBar/benchbar.exe'))) { throw 'the folder install did not install' }
+
+      - name: By hand, -Zip without a checksums file
+        run: |
+          $alone = Join-Path $env:RUNNER_TEMP 'zip-alone'
+          New-Item -ItemType Directory -Force $alone | Out-Null
+          Copy-Item source/*.zip $alone
+          $fresh = Join-Path $env:RUNNER_TEMP 'localappdata-zip'
+          New-Item -ItemType Directory -Force $fresh | Out-Null
+          $env:LOCALAPPDATA = $fresh
+          pwsh -NoProfile -File install.ps1 -Zip (Get-ChildItem $alone -Filter *.zip).FullName -NoTray -Yes
+          if ($LASTEXITCODE -ne 0) { throw "install.ps1 -Zip exited with $LASTEXITCODE" }
+          if (-not (Test-Path (Join-Path $fresh 'Programs/BenchBar/benchbar.exe'))) { throw 'the -Zip install did not install' }
+
+      - name: By hand, a changed file in the unpacked folder must be refused
+        run: |
+          $changed = Join-Path $env:RUNNER_TEMP 'changed'
+          Expand-Archive (Get-ChildItem source -Filter *.zip).FullName -DestinationPath $changed -Force
+          Add-Content (Join-Path $changed 'README.txt') 'changed'
+          $fresh = Join-Path $env:RUNNER_TEMP 'localappdata-changed'
+          New-Item -ItemType Directory -Force $fresh | Out-Null
+          $env:LOCALAPPDATA = $fresh
+          pwsh -NoProfile -File (Join-Path $changed 'install.ps1') -NoTray -Yes
+          if ($LASTEXITCODE -eq 0) { throw 'install.ps1 installed a folder whose files do not match SHA256SUMS' }
+          if (Test-Path (Join-Path $fresh 'Programs/BenchBar/benchbar.exe')) { throw 'a refused folder install left files behind' }
+          $global:LASTEXITCODE = 0
+
+  release:
+    name: Attach to the draft release
+    needs: [version, package]
+    if: needs.version.outputs.release == 'true'
+    # ubuntu: waiting for the Mac draft costs almost nothing there
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    permissions:
+      contents: write
+    concurrency:
+      group: release-windows-attach-${{ needs.version.outputs.version }}
+      cancel-in-progress: false
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      EVENT: ${{ github.event_name }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: windows-*
+          merge-multiple: true
+          path: dist
+
+      - name: Write the combined checksums file
+        run: |
+          # not named *SHA256SUMS: install.sh picks the first asset ending in that
+          $sums = "dist/benchbar-windows-$env:VERSION-SHA256SUMS.txt"
+          $lines = foreach ($zip in Get-ChildItem dist -Filter 'benchbar-windows-*.zip' | Sort-Object Name) {
+            '{0}  {1}' -f (Get-FileHash $zip.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $zip.Name
+          }
+          if (@($lines).Count -ne 2) { throw "expected 2 zips (amd64, arm64), found $(@($lines).Count)" }
+          # the zips must be the ones the package jobs hashed
+          foreach ($one in Get-ChildItem dist -Filter 'sums-*.txt') {
+            $want = (Get-Content $one.FullName -Raw).Trim()
+            if ($lines -notcontains $want) { throw "$($one.Name) does not match the zip on disk: $want" }
+          }
+          [IO.File]::WriteAllText((Join-Path $PWD $sums), (($lines -join "`n") + "`n"), (New-Object Text.UTF8Encoding $false))
+          Get-Content $sums
+
+      - name: Find or create the draft release, upload, update the notes
+        run: |
+          $tag = "v$env:VERSION"
+          $utf8 = New-Object Text.UTF8Encoding $false
+
+          # the Windows paragraph, between markers so a re-run replaces it
+          $records = @(Get-ChildItem dist -Filter 'signing-*.json' | Sort-Object Name | ForEach-Object { Get-Content $_.FullName -Raw | ConvertFrom-Json })
+          $zipLines = @()
+          foreach ($zip in Get-ChildItem dist -Filter 'benchbar-windows-*.zip' | Sort-Object Name) {
+            $rec = $records | Where-Object { $zip.Name -like "*-$($_.arch).zip" } | Select-Object -First 1
+            $what = 'benchbar.exe and the tray app'
+            if ($rec -and -not $rec.tray) { $what = 'shim only: benchbar.exe, no tray app' }
+            $zipLines += "- $($zip.Name) ($what)"
+          }
+          $allFiles = @($records | ForEach-Object { @($_.files) })
+          $ownUnsigned = @($allFiles | Where-Object { $_.firstParty -and -not $_.signed } | ForEach-Object { $_.name } | Sort-Object -Unique)
+          $otherUnsigned = @($allFiles | Where-Object { -not $_.firstParty -and -not $_.signed } | ForEach-Object { $_.name } | Sort-Object -Unique)
+          $ownAll = @($allFiles | Where-Object { $_.firstParty } | ForEach-Object { $_.name } | Sort-Object -Unique)
+          $signLines = @()
+          if ($allFiles.Count -eq 0) {
+            $signLines += 'Code signing status is not known for this build.'
+          } elseif ($ownUnsigned.Count -eq 0 -and $otherUnsigned.Count -eq 0) {
+            $signLines += 'Every .exe and .dll in the zips carries a valid signature.'
+          } else {
+            if ($ownUnsigned.Count -eq 0) {
+              $signLines += "This project's own programs are signed ($($ownAll -join ', '))."
+            } else {
+              $signLines += "Not code signed yet: $($ownUnsigned -join ', '). SmartScreen may warn, and Smart App Control can block unsigned programs."
+            }
+            if ($otherUnsigned.Count -gt 0) {
+              $signLines += "Third party files without a signature (not signed by this project): $($otherUnsigned -join ', ')."
+            }
+          }
+          $block = @(
+            '<!-- windows -->'
+            '### Windows'
+            ''
+            'Install for the current user (needs WSL 2 with Ubuntu 24.04):'
+            ''
+            '```powershell'
+            'irm https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1 | iex'
+            '```'
+            ''
+            'Downloads (each zip also holds README.txt and SHA256SUMS):'
+            ''
+            $zipLines
+            "- benchbar-windows-$env:VERSION-SHA256SUMS.txt"
+            ''
+            ($signLines -join "`n`n")
+            '<!-- /windows -->'
+          ) | ForEach-Object { $_ }
+          $blockText = $block -join "`n"
+
+          # find the release (release.yml creates it). A tag push waits for it:
+          # its macOS job allows 120 minutes. A manual run needs it to exist.
+          $rel = $null
+          $waits = 0
+          if ($env:EVENT -eq 'push') { $waits = 130 }
+          for ($i = 0; $i -le $waits; $i++) {
+            $out = gh release view $tag --json isDraft,body 2>$null
+            if ($LASTEXITCODE -eq 0) { $rel = $out | ConvertFrom-Json; break }
+            if ($i -lt $waits) { Write-Host "No release $tag yet (the Mac workflow creates it). Waiting 60 s ($($i + 1)/$waits)."; Start-Sleep -Seconds 60 }
+          }
+
+          $notes = Join-Path $env:RUNNER_TEMP 'notes.md'
+          $created = $false
+          if ($null -eq $rel) {
+            if ($env:EVENT -ne 'push') {
+              Write-Host "::error::There is no release $tag. A manual run attaches to an existing draft: run release.yml for this tag first, then this workflow again."
+              exit 1
+            }
+            Write-Host "::warning title=Draft created here::No release $tag appeared in 130 minutes, so this run created a draft with the Windows notes only. A later release.yml run will replace the notes (and this paragraph): re-run this workflow afterwards."
+            [IO.File]::WriteAllText($notes, $blockText + "`n", $utf8)
+            gh release create $tag --draft --title "BenchBar $env:VERSION" --target $env:GITHUB_SHA --notes-file $notes
+            if ($LASTEXITCODE -ne 0) { throw 'gh release create failed' }
+            $isDraft = $true
+            $created = $true
+          } else {
+            $isDraft = [bool]$rel.isDraft
+          }
+
+          gh release upload $tag (Get-ChildItem dist -File | Where-Object { $_.Name -like 'benchbar-windows-*' } | ForEach-Object { $_.FullName }) --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'gh release upload failed' }
+
+          if (-not $isDraft) {
+            Write-Host "::warning::Release $tag is already published. Assets uploaded; its notes are left alone."
+          } elseif (-not $created) {
+            $body = [string]$rel.body
+            $start = $body.IndexOf('<!-- windows -->')
+            $end = $body.IndexOf('<!-- /windows -->')
+            if ($start -ge 0 -and $end -gt $start) {
+              $new = $body.Substring(0, $start) + $blockText + $body.Substring($end + '<!-- /windows -->'.Length)
+            } else {
+              $new = $body.TrimEnd() + "`n`n" + $blockText + "`n"
+            }
+            [IO.File]::WriteAllText($notes, $new, $utf8)
+            gh release edit $tag --notes-file $notes
+            if ($LASTEXITCODE -ne 0) { throw 'gh release edit failed' }
+          }
+          Write-Host "::notice title=Windows assets::https://github.com/$env:GH_REPO/releases/tag/$tag (draft: review, then publish)"

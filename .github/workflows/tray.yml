@@ -1,0 +1,73 @@
+# Windows tray app (windows/tray): builds, tests and publishes BenchBarTray
+# framework dependent as an artifact. Nothing is measured here; the cost at
+# rest numbers come from the development laptop (windows/tray/DECISIONS.md).
+#
+# Path filtered to the app and its library. The spike under
+# windows/tray/spike has its own workflow (tray-spike.yml) and does not
+# trigger this one.
+name: Tray
+
+on:
+  pull_request:
+    paths:
+      - 'windows/tray/**'
+      - '!windows/tray/spike/**'
+      - '.github/workflows/tray.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'windows/tray/**'
+      - '!windows/tray/spike/**'
+      - '.github/workflows/tray.yml'
+  workflow_dispatch:
+    inputs:
+      self_contained:
+        description: 'Also publish a self contained build (no .NET runtime needed, about 190 MB)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tray-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: pwsh
+    working-directory: windows/tray
+
+jobs:
+  build:
+    name: build, test, publish
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      DOTNET_NOLOGO: '1'
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: windows/tray/global.json
+      - name: Build
+        run: dotnet build BenchBarTray.sln -c Release
+      - name: Test
+        run: dotnet test BenchBarTray.sln -c Release --no-build
+      - name: Publish (framework dependent)
+        run: dotnet publish BenchBarTray/BenchBarTray.csproj -c Release -o out/fd --self-contained false
+      - name: Publish (self contained)
+        if: ${{ inputs.self_contained }}
+        run: dotnet publish BenchBarTray/BenchBarTray.csproj -c Release -o out/sc --self-contained true
+      - uses: actions/upload-artifact@v7
+        with:
+          name: BenchBarTray-win-x64
+          path: windows/tray/out/fd
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        if: ${{ inputs.self_contained }}
+        with:
+          name: BenchBarTray-win-x64-self-contained
+          path: windows/tray/out/sc
+          if-no-files-found: error

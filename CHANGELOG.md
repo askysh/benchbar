@@ -179,8 +179,8 @@ All notable changes to this project are documented here.
 
 ### Windows (preview)
 
-Built from source for now: a signed `benchbar.exe` with an installer and
-the tray app follow in 0.9.
+A preview: the binaries are unsigned until the signing application is
+approved.
 
 - `benchbar.exe`, a small shim for PowerShell: every command forwards to
   `benchbar` inside WSL with its input, output and exit code unchanged, so
@@ -201,6 +201,35 @@ the tray app follow in 0.9.
 - `benchbar.exe doctor` adds Windows checks (PATH, distro, `.wslconfig`,
   keepalive) before the CLI's own; `benchbar.exe path install` puts the
   shim on the user PATH.
+- BenchBar Tray, a notification area app (WPF, needs the .NET 10 Desktop
+  Runtime): the runner shows your benches' state, tinted for the taskbar,
+  with still poses when animation effects are off. A click opens a flyout
+  with Start, Stop and Restart per bench, Open site, the bench log, Open
+  in VS Code through the WSL extension and a read only Doctor. The right
+  click menu has Open at logon, Appearance, Runner (Bench, Coffee cup and
+  custom runners from `%LOCALAPPDATA%\BenchBar\runners`), Check for
+  Updates, Help and Report a Bug. A Windows notification tells you once
+  when a bench crashes, is paused by the crash guard or meets a port
+  conflict. It never starts a stopped distro on its own: the flyout says
+  the distro is stopped and offers Start. See [Windows](docs/windows.md).
+- A release zip per CPU, `benchbar-windows-X.Y.Z-amd64.zip` and
+  `-arm64.zip`, with `benchbar.exe`, the tray app, a README and checksums,
+  attached to each GitHub release.
+- `install.ps1`, a one line installer for PowerShell
+  (`irm https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1 | iex`):
+  per user, no administrator rights, checks the zip's SHA256, installs to
+  `%LOCALAPPDATA%\Programs\BenchBar`, puts it on your PATH, checks the
+  .NET 10 Desktop Runtime, offers the tray at logon and ends with
+  `benchbar.exe doctor`. Re-running updates in place; `-Version`,
+  `-NoTray` and `-Yes`. Each zip carries `install.ps1` too: run from the
+  unpacked zip it installs that build, and `-Zip PATH` installs a zip you
+  downloaded, so a test build installs without a release.
+- `benchbar.exe doctor` checks the .NET 10 Desktop Runtime and the tray's
+  logon shortcut when the tray app sits next to it.
+- The Windows binaries are unsigned until the code signing application
+  (SignPath Foundation) is approved: SmartScreen warns on first start and
+  Smart App Control in enforce mode blocks them. The release pipeline
+  signs them as soon as the signing secrets exist.
 
 ## 0.7.3 - 2026-10-04
 
