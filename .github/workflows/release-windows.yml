@@ -3,9 +3,13 @@
 # creates.
 #
 # Triggers:
-#   tag v*             build, package, attach to the draft release
-#   workflow_dispatch  same, for a version you type; "draft_release" off only
-#                      uploads a workflow artifact. (Dispatch works only once
+#   tag v*             build the tag, package, attach to the draft release
+#   workflow_dispatch  same, for a version you type, but only when
+#                      "draft_release" is on (off by default). That run builds
+#                      refs/tags/vX.Y.Z, never the commit you dispatched from,
+#                      and fails when the tag does not exist. With it off the
+#                      run builds the dispatched ref and only uploads a
+#                      workflow artifact, unsigned. (Dispatch works only once
 #                      this file is on main, so the pull request path exists.)
 #   pull_request       when this file or install.ps1 changes: build, package
 #                      and run the installer against the zip. Never touches a
@@ -19,10 +23,12 @@
 #                      asset named exactly that and install.sh takes the first
 #                      asset whose name ends in it.
 #
-# Signing is best effort. With the SignPath secrets (SIGNPATH_API_TOKEN,
-# SIGNPATH_ORGANIZATION_ID) the exes go through SignPath; a signature that does
-# not verify is thrown away and the unsigned file ships, marked unsigned in the
-# README and the release notes. Without the secrets everything ships unsigned.
+# Signing is best effort and only for a build of the release tag. With the
+# SignPath secrets (SIGNPATH_API_TOKEN, SIGNPATH_ORGANIZATION_ID) the project's
+# own binaries go through SignPath (third party DLLs are not ours to sign); a
+# signature that does not verify is thrown away and the unsigned file ships.
+# README.txt and the release notes list what Get-AuthenticodeSignature says
+# about every .exe and .dll in the zip.
 #
 # The release job only ever creates or edits a DRAFT. A published release gets
 # its assets but its notes are left alone. Publishing is a human step.
@@ -34,13 +40,13 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to build (X.Y.Z)"
+        description: "Version to build (X.Y.Z); with a release, the tag vX.Y.Z must exist"
         required: true
         type: string
       draft_release:
-        description: "Attach to a draft release (off: only upload a workflow artifact)"
+        description: "Build the tag and attach to its existing draft release (off: build this ref, upload a workflow artifact only)"
         required: false
-        default: true
+        default: false
         type: boolean
   pull_request:
     paths:
@@ -69,6 +75,7 @@ jobs:
           INPUT_VERSION: ${{ inputs.version }}
           INPUT_DRAFT: ${{ inputs.draft_release }}
           PR_NUMBER: ${{ github.event.number }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           release=false
           case "$EVENT" in
@@ -82,6 +89,10 @@ jobs:
           if [ "$EVENT" != "pull_request" ] && ! [[ "$v" =~ ^[0-9]+[.][0-9]+[.][0-9]+$ ]]; then
             echo "::error::'$v' is not a version (expected X.Y.Z)"; exit 1
           fi
+          if [ "$release" = "true" ] && ! git ls-remote --exit-code --tags "https://github.com/${GITHUB_REPOSITORY}.git" "refs/tags/v${v}" >/dev/null 2>&1; then
+            echo "::error::The tag v${v} does not exist. A run that attaches to a release builds that tag, so push it first (release.yml builds the Mac side from the same tag)."
+            exit 1
+          fi
           echo "version=$v" >> "$GITHUB_OUTPUT"
           echo "release=$release" >> "$GITHUB_OUTPUT"
           echo "Windows build of version $v (attach to a release: $release)"
@@ -91,6 +102,11 @@ jobs:
     needs: version
     runs-on: windows-latest
     timeout-minutes: 40
+    # actions: read is for SignPath's action, which reads this run and
+    # downloads the unsigned artifact with the GitHub token
+    permissions:
+      contents: read
+      actions: read
     strategy:
       fail-fast: false
       matrix:
@@ -109,11 +125,19 @@ jobs:
       ARCH: ${{ matrix.arch }}
       RID: ${{ matrix.rid }}
       MACHINE: ${{ matrix.machine }}
-      # true when both SignPath secrets exist (the values themselves are only
-      # handed to the signing step); never on a pull request
-      SIGNING_CONFIGURED: ${{ github.event_name != 'pull_request' && secrets.SIGNPATH_API_TOKEN != '' && secrets.SIGNPATH_ORGANIZATION_ID != '' }}
+      # true when this run builds the release tag and both SignPath secrets
+      # exist (the values themselves go only to the signing step). An artifact
+      # only dispatch and a pull request never sign.
+      SIGNING_CONFIGURED: ${{ needs.version.outputs.release == 'true' && secrets.SIGNPATH_API_TOKEN != '' && secrets.SIGNPATH_ORGANIZATION_ID != '' }}
     steps:
+      # a run that attaches to a release builds the tag, not the dispatched commit
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.version.outputs.release == 'true' && format('refs/tags/v{0}', needs.version.outputs.version) || '' }}
+
+      - name: Say which commit this builds
+        run: |
+          Write-Host "Building $(git rev-parse HEAD) for version $env:VERSION"
 
       - name: Helper to read a binary's CPU type
         run: |
@@ -134,7 +158,7 @@ jobs:
           '@ | Set-Content -Path "$env:RUNNER_TEMP/pe.ps1" -Encoding utf8
 
       # ------------------------------------------------------------- shim
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: windows/shim/go.mod
           cache-dependency-path: windows/shim/go.sum
@@ -162,9 +186,7 @@ jobs:
           Assert-PeMachine $out $env:MACHINE
 
       # ------------------------------------------------------------- tray
-      # The tray project lands in its own pull request. Until it is on the
-      # checked out ref this workflow ships a shim only zip, so the two
-      # branches can merge in either order.
+      # An older tag may predate the tray app: then the zip is shim only.
       - name: Is the tray app on this ref
         id: tray
         run: |
@@ -172,7 +194,7 @@ jobs:
             "present=true" >> $env:GITHUB_OUTPUT
           } else {
             "present=false" >> $env:GITHUB_OUTPUT
-            Write-Host "::warning title=No tray app::windows/tray/BenchBarTray is not on this ref yet. Shipping a shim only zip."
+            Write-Host "::warning title=No tray app::windows/tray/BenchBarTray is not on this ref. Shipping a shim only zip."
           }
 
       - uses: actions/setup-dotnet@v6
@@ -195,14 +217,19 @@ jobs:
           Assert-PeMachine $exe $env:MACHINE
 
       # ------------------------------------------------------------- signing
-      - name: Stage the exes for signing
+      # Only the project's own binaries: SignPath Foundation signs a project's
+      # own code, not the NuGet libraries it ships.
+      - name: Stage the first party binaries for signing
         if: env.SIGNING_CONFIGURED == 'true'
         run: |
           New-Item -ItemType Directory -Force sign-in | Out-Null
           Copy-Item out/benchbar.exe sign-in/
-          if (Test-Path out/tray/BenchBarTray.exe) { Copy-Item out/tray/BenchBarTray.exe sign-in/ }
+          foreach ($n in 'BenchBarTray.exe', 'BenchBarTray.dll', 'BenchBar.Tray.Core.dll') {
+            if (Test-Path "out/tray/$n") { Copy-Item "out/tray/$n" sign-in/ }
+          }
+          Get-ChildItem sign-in | Format-Table Name, Length
 
-      - name: Upload the unsigned exes
+      - name: Upload the unsigned files
         id: upload-unsigned
         if: env.SIGNING_CONFIGURED == 'true'
         uses: actions/upload-artifact@v7
@@ -226,54 +253,76 @@ jobs:
           wait-for-completion: true
           output-artifact-directory: signed
 
-      - name: Use signed exes that verify, record the result
+      - name: Use signed files that verify
         env:
           SIGN_OUTCOME: ${{ steps.sign.outcome }}
         run: |
           . "$env:RUNNER_TEMP/pe.ps1"
-          New-Item -ItemType Directory -Force dist | Out-Null
           $targets = [ordered]@{ 'benchbar.exe' = 'out/benchbar.exe' }
-          if (Test-Path out/tray/BenchBarTray.exe) { $targets['BenchBarTray.exe'] = 'out/tray/BenchBarTray.exe' }
-          $result = [ordered]@{}
+          foreach ($n in 'BenchBarTray.exe', 'BenchBarTray.dll', 'BenchBar.Tray.Core.dll') {
+            if (Test-Path "out/tray/$n") { $targets[$n] = "out/tray/$n" }
+          }
+          if ($env:SIGN_OUTCOME -eq 'failure') { Write-Host "::warning title=Signing failed::SignPath did not finish; shipping unsigned binaries." }
           foreach ($name in $targets.Keys) {
-            $result[$name] = $false
             $candidate = Join-Path 'signed' $name
             if ($env:SIGN_OUTCOME -ne 'success') { continue }
             if (-not (Test-Path $candidate)) { Write-Host "::warning::SignPath returned no $name; shipping it unsigned."; continue }
             $sig = Get-AuthenticodeSignature -FilePath $candidate
-            $same = (Get-PeMachine $candidate) -eq $env:MACHINE
+            $same = $true
+            if ($name -like '*.exe') { $same = (Get-PeMachine $candidate) -eq $env:MACHINE }
             if ($sig.Status -eq 'Valid' -and $same) {
               Copy-Item $candidate $targets[$name] -Force
-              $result[$name] = $true
               Write-Host "$name is signed: $($sig.SignerCertificate.Subject)"
             } else {
               # never ship a broken signature: keep the unsigned build
               Write-Host "::warning::The signature on $name is '$($sig.Status)' (CPU match: $same); shipping it unsigned."
             }
           }
-          if ($env:SIGN_OUTCOME -eq 'failure') { Write-Host "::warning title=Signing failed::SignPath did not finish; shipping unsigned binaries." }
-          foreach ($name in $targets.Keys) { Assert-PeMachine $targets[$name] $env:MACHINE }
-          [ordered]@{ arch = $env:ARCH; version = $env:VERSION; signed = $result } |
-            ConvertTo-Json -Depth 4 | Set-Content -Path "dist/signed-$env:ARCH.json" -Encoding utf8
-          Get-Content "dist/signed-$env:ARCH.json"
+          foreach ($name in $targets.Keys) { if ($name -like '*.exe') { Assert-PeMachine $targets[$name] $env:MACHINE } }
 
       # ------------------------------------------------------------- package
       - name: Write README.txt and SHA256SUMS, build the zip
+        env:
+          HAS_TRAY: ${{ steps.tray.outputs.present }}
         run: |
           $PSNativeCommandUseErrorActionPreference = $true
           $pkg = 'pkg'
-          New-Item -ItemType Directory -Force $pkg | Out-Null
+          New-Item -ItemType Directory -Force $pkg, dist | Out-Null
           Copy-Item out/benchbar.exe $pkg/
-          $hasTray = Test-Path out/tray/BenchBarTray.exe
+          $hasTray = ($env:HAS_TRAY -eq 'true') -and (Test-Path out/tray/BenchBarTray.exe)
           if ($hasTray) { Copy-Item out/tray/* $pkg/ -Recurse -Force }
+          $root = (Resolve-Path $pkg).Path
 
-          $signed = Get-Content "dist/signed-$env:ARCH.json" -Raw | ConvertFrom-Json
-          $unsigned = @($signed.signed.PSObject.Properties | Where-Object { -not $_.Value } | ForEach-Object { $_.Name })
-          if ($unsigned.Count -eq 0) {
-            $signing = 'All programs in this download are code signed.'
+          # what Get-AuthenticodeSignature says about every .exe and .dll that ships
+          $firstParty = @('benchbar.exe', 'BenchBarTray.exe', 'BenchBarTray.dll', 'BenchBar.Tray.Core.dll')
+          $files = @(Get-ChildItem $root -Recurse -File | Where-Object { $_.Extension -in '.exe', '.dll' } | Sort-Object FullName | ForEach-Object {
+              $rel = $_.FullName.Substring($root.Length + 1).Replace('\', '/')
+              $sig = Get-AuthenticodeSignature -FilePath $_.FullName
+              $signer = ''
+              if ($sig.Status -eq 'Valid') {
+                $signer = $sig.SignerCertificate.Subject
+                if ($signer -match 'CN=([^,]+)') { $signer = $Matches[1].Trim('"') }
+              }
+              [ordered]@{ name = $rel; signed = ($sig.Status -eq 'Valid'); status = [string]$sig.Status; signer = $signer; firstParty = ($firstParty -contains $rel) }
+            })
+          [ordered]@{ arch = $env:ARCH; version = $env:VERSION; tray = $hasTray; files = $files } |
+            ConvertTo-Json -Depth 5 | Set-Content -Path "dist/signing-$env:ARCH.json" -Encoding utf8
+          Get-Content "dist/signing-$env:ARCH.json" | Select-Object -First 60
+
+          $signedList = @($files | Where-Object { $_.signed } | ForEach-Object { if ($_.signer) { "$($_.name) ($($_.signer))" } else { $_.name } })
+          $unsignedList = @($files | Where-Object { -not $_.signed } | ForEach-Object { $_.name })
+          $ownUnsigned = @($files | Where-Object { $_.firstParty -and -not $_.signed } | ForEach-Object { $_.name })
+          $signedText = 'none'
+          if ($signedList.Count -gt 0) { $signedText = $signedList -join ', ' }
+          if ($unsignedList.Count -eq 0) {
+            $signing = 'Every .exe and .dll in this download carries a valid signature.'
           } else {
-            $signing = "Not code signed: $($unsigned -join ', '). Windows SmartScreen may warn when you first run an unsigned program (More info, then Run anyway). With Smart App Control on, an unsigned program can be blocked."
+            $signing = "Signed:     $signedText`nNot signed: $($unsignedList -join ', ')`n(Third party libraries are signed by their authors or not at all; this`nproject signs only its own programs.)"
+            if ($ownUnsigned.Count -gt 0) {
+              $signing += "`nThis project's own programs not signed yet: $($ownUnsigned -join ', '). Windows SmartScreen may warn when you first run them (More info, then Run anyway). With Smart App Control on, an unsigned program can be blocked."
+            }
           }
+
           if ($hasTray) {
             $programs = @"
           benchbar.exe      The command line. Runs the BenchBar CLI inside your WSL 2
@@ -297,19 +346,19 @@ jobs:
           Install (per user, no administrator rights):
             irm https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1 | iex
 
-          Code signing: $signing
+          Code signing, as checked with Get-AuthenticodeSignature when this zip was built:
+          $signing
 
           Your benches, sites and databases stay inside the WSL distro. Nothing
-          here touches a distro.
+          here writes inside a distro.
 
           Documentation: https://benchbar.akashmishra.com/windows/
           "@
           $readme = $readme -replace "`r?`n", "`r`n"
-          [IO.File]::WriteAllText((Join-Path (Resolve-Path $pkg) 'README.txt'), $readme + "`r`n", (New-Object Text.UTF8Encoding $false))
+          [IO.File]::WriteAllText((Join-Path $root 'README.txt'), $readme + "`r`n", (New-Object Text.UTF8Encoding $false))
 
           # hashes of every file in the zip (except the list itself), LF endings
-          $root = (Resolve-Path $pkg).Path
-          $lines = Get-ChildItem $root -Recurse -File | Sort-Object FullName | ForEach-Object {
+          $lines = Get-ChildItem $root -Recurse -File | Where-Object { $_.Name -ne 'SHA256SUMS' } | Sort-Object FullName | ForEach-Object {
             $rel = $_.FullName.Substring($root.Length + 1).Replace('\', '/')
             '{0}  {1}' -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $rel
           }
@@ -324,6 +373,7 @@ jobs:
           [IO.File]::WriteAllText((Join-Path (Resolve-Path dist).Path "sums-$env:ARCH.txt"), ("{0}  {1}`n" -f $hash, (Split-Path $zip -Leaf)), (New-Object Text.UTF8Encoding $false))
           Get-ChildItem dist | Format-Table Name, Length
           Get-Content "dist/sums-$env:ARCH.txt"
+          Get-Content (Join-Path $root 'README.txt')
 
       - name: Upload the zip, its sums line and the signing record
         uses: actions/upload-artifact@v7
@@ -382,6 +432,18 @@ jobs:
           Write-Host $said
           if ($said -notmatch [regex]::Escape($env:VERSION)) { throw "--shim-version did not print $env:VERSION" }
 
+      - name: Piped into iex leaves the session alone
+        run: |
+          $fresh = Join-Path $env:RUNNER_TEMP 'localappdata-iex'
+          New-Item -ItemType Directory -Force $fresh | Out-Null
+          $env:LOCALAPPDATA = $fresh
+          $env:BENCHBAR_NO_TRAY = '1'; $env:BENCHBAR_YES = '1'
+          $env:BENCHBAR_SOURCE = (Resolve-Path source).Path
+          $Version = 'mine'; $Source = 'mine'
+          Get-Content install.ps1 -Raw | Invoke-Expression
+          if ($Version -ne 'mine' -or $Source -ne 'mine') { throw 'the installer overwrote variables of the calling session' }
+          if (-not (Test-Path (Join-Path $fresh 'Programs/BenchBar/benchbar.exe'))) { throw 'the iex install did not install' }
+
       - name: A wrong checksum must be refused
         run: |
           $bad = Join-Path $env:RUNNER_TEMP 'bad-source'
@@ -401,8 +463,9 @@ jobs:
     name: Attach to the draft release
     needs: [version, package]
     if: needs.version.outputs.release == 'true'
+    # ubuntu: waiting for the Mac draft costs almost nothing there
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 150
     permissions:
       contents: write
     concurrency:
@@ -415,6 +478,7 @@ jobs:
       VERSION: ${{ needs.version.outputs.version }}
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
+      EVENT: ${{ github.event_name }}
     steps:
       - uses: actions/download-artifact@v8
         with:
@@ -444,14 +508,33 @@ jobs:
           $utf8 = New-Object Text.UTF8Encoding $false
 
           # the Windows paragraph, between markers so a re-run replaces it
-          $zips = @(Get-ChildItem dist -Filter 'benchbar-windows-*.zip' | Sort-Object Name | ForEach-Object { $_.Name })
-          $unsigned = @()
-          foreach ($f in Get-ChildItem dist -Filter 'signed-*.json' | Sort-Object Name) {
-            $j = Get-Content $f.FullName -Raw | ConvertFrom-Json
-            foreach ($p in $j.signed.PSObject.Properties) { if (-not $p.Value) { $unsigned += "$($p.Name) ($($j.arch))" } }
+          $records = @(Get-ChildItem dist -Filter 'signing-*.json' | Sort-Object Name | ForEach-Object { Get-Content $_.FullName -Raw | ConvertFrom-Json })
+          $zipLines = @()
+          foreach ($zip in Get-ChildItem dist -Filter 'benchbar-windows-*.zip' | Sort-Object Name) {
+            $rec = $records | Where-Object { $zip.Name -like "*-$($_.arch).zip" } | Select-Object -First 1
+            $what = 'benchbar.exe and the tray app'
+            if ($rec -and -not $rec.tray) { $what = 'shim only: benchbar.exe, no tray app' }
+            $zipLines += "- $($zip.Name) ($what)"
           }
-          if ($unsigned.Count -eq 0) { $signLine = 'All Windows binaries are code signed.' }
-          else { $signLine = "Not code signed yet: $($unsigned -join ', '). SmartScreen may warn, and Smart App Control can block unsigned programs." }
+          $allFiles = @($records | ForEach-Object { @($_.files) })
+          $ownUnsigned = @($allFiles | Where-Object { $_.firstParty -and -not $_.signed } | ForEach-Object { $_.name } | Sort-Object -Unique)
+          $otherUnsigned = @($allFiles | Where-Object { -not $_.firstParty -and -not $_.signed } | ForEach-Object { $_.name } | Sort-Object -Unique)
+          $ownAll = @($allFiles | Where-Object { $_.firstParty } | ForEach-Object { $_.name } | Sort-Object -Unique)
+          $signLines = @()
+          if ($allFiles.Count -eq 0) {
+            $signLines += 'Code signing status is not known for this build.'
+          } elseif ($ownUnsigned.Count -eq 0 -and $otherUnsigned.Count -eq 0) {
+            $signLines += 'Every .exe and .dll in the zips carries a valid signature.'
+          } else {
+            if ($ownUnsigned.Count -eq 0) {
+              $signLines += "This project's own programs are signed ($($ownAll -join ', '))."
+            } else {
+              $signLines += "Not code signed yet: $($ownUnsigned -join ', '). SmartScreen may warn, and Smart App Control can block unsigned programs."
+            }
+            if ($otherUnsigned.Count -gt 0) {
+              $signLines += "Third party files without a signature (not signed by this project): $($otherUnsigned -join ', ')."
+            }
+          }
           $block = @(
             '<!-- windows -->'
             '### Windows'
@@ -462,27 +545,35 @@ jobs:
             'irm https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1 | iex'
             '```'
             ''
-            'Downloads (each zip holds benchbar.exe, the tray app, README.txt and SHA256SUMS):'
+            'Downloads (each zip also holds README.txt and SHA256SUMS):'
             ''
-            ($zips | ForEach-Object { "- $_" })
+            $zipLines
             "- benchbar-windows-$env:VERSION-SHA256SUMS.txt"
             ''
-            $signLine
+            ($signLines -join "`n`n")
             '<!-- /windows -->'
           ) | ForEach-Object { $_ }
           $blockText = $block -join "`n"
 
-          # find the release (release.yml creates it), wait for it
+          # find the release (release.yml creates it). A tag push waits for it:
+          # its macOS job allows 120 minutes. A manual run needs it to exist.
           $rel = $null
-          for ($i = 0; $i -le 20; $i++) {
+          $waits = 0
+          if ($env:EVENT -eq 'push') { $waits = 130 }
+          for ($i = 0; $i -le $waits; $i++) {
             $out = gh release view $tag --json isDraft,body 2>$null
             if ($LASTEXITCODE -eq 0) { $rel = $out | ConvertFrom-Json; break }
-            if ($i -lt 20) { Write-Host "No release $tag yet (the Mac workflow creates it). Waiting 60 s ($($i + 1)/20)."; Start-Sleep -Seconds 60 }
+            if ($i -lt $waits) { Write-Host "No release $tag yet (the Mac workflow creates it). Waiting 60 s ($($i + 1)/$waits)."; Start-Sleep -Seconds 60 }
           }
 
           $notes = Join-Path $env:RUNNER_TEMP 'notes.md'
+          $created = $false
           if ($null -eq $rel) {
-            Write-Host "::warning::No release $tag after 20 minutes. Creating a draft with the Windows notes only."
+            if ($env:EVENT -ne 'push') {
+              Write-Host "::error::There is no release $tag. A manual run attaches to an existing draft: run release.yml for this tag first, then this workflow again."
+              exit 1
+            }
+            Write-Host "::warning title=Draft created here::No release $tag appeared in 130 minutes, so this run created a draft with the Windows notes only. A later release.yml run will replace the notes (and this paragraph): re-run this workflow afterwards."
             [IO.File]::WriteAllText($notes, $blockText + "`n", $utf8)
             gh release create $tag --draft --title "BenchBar $env:VERSION" --target $env:GITHUB_SHA --notes-file $notes
             if ($LASTEXITCODE -ne 0) { throw 'gh release create failed' }
@@ -490,7 +581,6 @@ jobs:
             $created = $true
           } else {
             $isDraft = [bool]$rel.isDraft
-            $created = $false
           }
 
           gh release upload $tag (Get-ChildItem dist -File | Where-Object { $_.Name -like 'benchbar-windows-*' } | ForEach-Object { $_.FullName }) --clobber

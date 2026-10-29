@@ -149,7 +149,7 @@ approved.
   when a bench crashes, is paused by the crash guard or meets a port
   conflict. It never starts a stopped distro on its own: the flyout says
   the distro is stopped and offers Start. See [Windows](docs/windows.md).
-- A release zip per CPU, `benchbar-windows-X.Y.Z-x64.zip` and
+- A release zip per CPU, `benchbar-windows-X.Y.Z-amd64.zip` and
   `-arm64.zip`, with `benchbar.exe`, the tray app, a README and checksums,
   attached to each GitHub release.
 - `install.ps1`, a one line installer for PowerShell

@@ -18,8 +18,9 @@
     7. runs "benchbar.exe doctor" and prints what it says
 
   It installs per user and never asks for administrator rights. It never
-  touches a WSL distro: no writes inside one, no "wsl --shutdown". Your
-  benches, sites and databases stay where they are.
+  writes anything inside a WSL distro and never runs "wsl --shutdown". The
+  final doctor starts the distro if it is stopped. Your benches, sites and
+  databases stay where they are.
 
   The binaries are unsigned until the code signing application is approved,
   so Windows SmartScreen may warn the first time you run them (More info,
@@ -31,6 +32,7 @@
     BENCHBAR_VERSION=0.9.0   the same as -Version
     BENCHBAR_NO_TRAY=1       the same as -NoTray
     BENCHBAR_YES=1           the same as -Yes
+    BENCHBAR_SOURCE=DIR      the same as -Source (CI only)
 
 .PARAMETER Version
   Install this release (X.Y.Z) instead of the latest.
@@ -47,13 +49,18 @@
   For CI and tests only: take the zip and the checksums file from this
   folder instead of GitHub.
 #>
-[CmdletBinding()]
-param(
-  [string]$Version = '',
-  [switch]$NoTray,
-  [switch]$Yes,
-  [string]$Source = ''
-)
+
+# The whole script runs in one script block, called at the very end with the
+# command line arguments. Piped into iex it therefore defines no variable and
+# no function in your session and cannot overwrite yours. (A top level param
+# block would leave $Version, $Yes and the rest behind.)
+& {
+  param(
+    [string]$Version = '',
+    [switch]$NoTray,
+    [switch]$Yes,
+    [string]$Source = ''
+  )
 
 function Install-BenchBar {
   [CmdletBinding()]
@@ -73,6 +80,7 @@ function Install-BenchBar {
   }
 
   $repoApi = 'https://api.github.com/repos/askysh/benchbar'
+  $startFailedMarker = 'BENCHBAR_START_FAILED: '
 
   # ------------------------------------------------------------ output
   function Say-Step([string]$Text) { Write-Host ''; Write-Host "==> $Text" -ForegroundColor Cyan }
@@ -111,9 +119,21 @@ function Install-BenchBar {
     try {
       & $Exe @ExeArgs 2>&1 | ForEach-Object { Write-Host "      $_" }
       return $LASTEXITCODE
+    } catch {
+      # the program did not start at all (not an exit code): Smart App Control
+      # or an antivirus (Win32 error 4551, 0x800711C7) or something else
+      $detail = ($_.Exception.Message -replace '(?s)\s*At [A-Za-z]:[\\/].*$', '').Trim()
+      throw ("$startFailedMarker" + (Get-StartFailureText (Split-Path -Leaf $Exe) $detail))
     } finally {
       $ErrorActionPreference = $previous
     }
+  }
+
+  function Get-StartFailureText([string]$Name, [string]$Detail) {
+    return ("$Name could not be started: $Detail`n" +
+      "  This is most likely Smart App Control (Windows Security, App and browser control) or an antivirus blocking the file ('Application Control policy blocked this file', error 0x800711C7 or 4551).`n" +
+      "  The BenchBar programs are unsigned until the code signing application is approved, and Smart App Control blocks unsigned programs.`n" +
+      "  The files are in place, but the PATH was not changed. Allow the file in your antivirus, or turn Smart App Control off (it cannot be turned back on without reinstalling Windows), then run the installer again.")
   }
 
   function Get-JsonFromGitHub([string]$Url) {
@@ -155,17 +175,11 @@ function Install-BenchBar {
   }
 
   function Test-DotNetDesktop10 {
-    $roots = @($env:DOTNET_ROOT, $(if ($env:ProgramFiles) { Join-Path $env:ProgramFiles 'dotnet' }), $(if (${env:ProgramFiles(x86)}) { Join-Path ${env:ProgramFiles(x86)} 'dotnet' })) | Where-Object { $_ }
+    # the same two places "benchbar.exe doctor" looks, so the two agree
+    $roots = @($env:DOTNET_ROOT, $(if ($env:ProgramFiles) { Join-Path $env:ProgramFiles 'dotnet' })) | Where-Object { $_ }
     foreach ($root in $roots) {
-      $shared = Join-Path $root 'shared\Microsoft.WindowsDesktop.App'
+      $shared = Join-Path $root.TrimEnd('\', '/') 'shared\Microsoft.WindowsDesktop.App'
       if ((Test-Path -LiteralPath $shared) -and (Get-ChildItem -LiteralPath $shared -Directory -Filter '10.*' -ErrorAction SilentlyContinue)) { return $true }
-    }
-    $dotnet = Get-Command dotnet -ErrorAction SilentlyContinue
-    if ($dotnet) {
-      try {
-        $listed = & $dotnet.Source --list-runtimes 2>$null
-        if ($listed -match '^Microsoft\.WindowsDesktop\.App 10\.') { return $true }
-      } catch { }
     }
     return $false
   }
@@ -174,6 +188,7 @@ function Install-BenchBar {
   if (-not $Version -and $env:BENCHBAR_VERSION) { $Version = $env:BENCHBAR_VERSION }
   if (-not $NoTray -and (Test-Flag $env:BENCHBAR_NO_TRAY)) { $NoTray = [switch]$true }
   if (-not $Yes -and (Test-Flag $env:BENCHBAR_YES)) { $Yes = [switch]$true }
+  if (-not $Source -and $env:BENCHBAR_SOURCE) { $Source = $env:BENCHBAR_SOURCE }
   if ($Version) {
     $Version = $Version.Trim()
     if ($Version -notmatch '^v?\d+\.\d+\.\d+$') { Stop-Install "'$Version' is not a version." 'use X.Y.Z, for example -Version 0.9.0' }
@@ -182,11 +197,25 @@ function Install-BenchBar {
 
   # ------------------------------------------------------------ 1. architecture
   Say-Step 'Checking this PC'
-  $cpu = $env:PROCESSOR_ARCHITEW6432
-  if (-not $cpu) { $cpu = $env:PROCESSOR_ARCHITECTURE }
+  # the CPU of the machine, not of this process: x64 PowerShell running
+  # emulated on Arm64 must still get the arm64 zip
+  $cpu = ''
+  try { $cpu = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() } catch { $cpu = '' }
+  if (-not $cpu) {
+    # older Windows PowerShell 5.1 without that type: the environment, then the registry
+    $cpu = $env:PROCESSOR_ARCHITEW6432
+    if (-not $cpu) { $cpu = $env:PROCESSOR_ARCHITECTURE }
+  }
+  if ($cpu -match '^(X64|AMD64)$') {
+    # an emulated process can report X64 on an Arm64 PC; the machine's own value is in the registry
+    try {
+      $native = (Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment' -Name 'PROCESSOR_ARCHITECTURE' -ErrorAction Stop).PROCESSOR_ARCHITECTURE
+      if ($native -match '^ARM64$') { $cpu = 'ARM64' }
+    } catch { }
+  }
   $arch = ''
   switch -Regex ("$cpu") {
-    '^AMD64$' { $arch = 'amd64' }
+    '^(X64|AMD64)$' { $arch = 'amd64' }
     '^ARM64$' { $arch = 'arm64' }
   }
   if (-not $arch) { Stop-Install "BenchBar for Windows needs a 64 bit Intel/AMD or ARM processor; this one reports '$cpu'." }
@@ -198,6 +227,7 @@ function Install-BenchBar {
 
   $work = Join-Path ([IO.Path]::GetTempPath()) ('benchbar-install-' + [guid]::NewGuid().ToString('N'))
   $restartTray = $false
+  $trayStarted = $false
   $installed = $false
 
   try {
@@ -379,6 +409,7 @@ function Install-BenchBar {
         if ($restartTray) {
           Say-Info 'starting the tray app again'
           Start-Process -FilePath $trayExe -WorkingDirectory $installDir
+          $trayStarted = $true
         }
       }
     }
@@ -396,11 +427,20 @@ function Install-BenchBar {
     Write-Host "BenchBar $releaseVersion is installed in $installDir." -ForegroundColor Green
     if (-not $NoTray -and (Test-Path -LiteralPath $trayExe)) { Write-Host "Tray app: $trayExe" }
   } catch {
+    $message = $_.Exception.Message
+    # a tray app this run closed comes back, old or new, whatever failed
+    if ($restartTray -and -not $trayStarted -and (Test-Path -LiteralPath $trayExe)) {
+      try { Start-Process -FilePath $trayExe -WorkingDirectory $installDir; Say-Info 'started the tray app again' } catch { }
+    }
+    if ($message.StartsWith($startFailedMarker)) {
+      Write-Host "  [FAIL] $($message.Substring($startFailedMarker.Length))" -ForegroundColor Red
+      return $false
+    }
     if ($installed) {
-      Write-Host "  [WARN] The files are installed, but a later step failed: $($_.Exception.Message)" -ForegroundColor Yellow
+      Write-Host "  [WARN] The files are installed, but a later step failed: $message" -ForegroundColor Yellow
       return $true
     }
-    Write-Host "  [FAIL] $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "  [FAIL] $message" -ForegroundColor Red
     return $false
   } finally {
     Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
@@ -408,11 +448,14 @@ function Install-BenchBar {
   return $true
 }
 
-# The installer never calls exit: piped into iex that would close your window.
-# Run as a file it sets the exit code instead.
-$benchbarParams = @{ Version = $Version; NoTray = $NoTray; Yes = $Yes; Source = $Source }
-$benchbarOk = Install-BenchBar @benchbarParams
-$benchbarIsFile = $false
-if ($MyInvocation.MyCommand -and $MyInvocation.MyCommand.PSObject.Properties.Name -contains 'Path' -and $MyInvocation.MyCommand.Path) { $benchbarIsFile = $true }
-Remove-Item Function:\Install-BenchBar -ErrorAction SilentlyContinue
-if ($benchbarIsFile -and -not $benchbarOk) { exit 1 }
+# Never "exit" when piped into iex: that would close your window. Run as a
+# file, a failure sets the exit code.
+$benchbarOk = $false
+try {
+  $benchbarOk = Install-BenchBar -Version $Version -NoTray:$NoTray -Yes:$Yes -Source $Source
+} catch {
+  Write-Host "  [FAIL] $($_.Exception.Message)" -ForegroundColor Red
+}
+if ($PSCommandPath -and -not $benchbarOk) { exit 1 }
+
+} @args

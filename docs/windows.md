@@ -46,13 +46,17 @@ GitHub release, checks it against the release's
 PATH (`benchbar.exe path install`), checks the .NET 10 Desktop Runtime and
 prints the `winget` line when it is missing, offers to open the tray at
 logon, and ends with `benchbar.exe doctor`. Running it again updates in
-place. It never touches a WSL distro.
+place. It writes nothing inside a WSL distro; the final doctor starts the distro if it is stopped.
 
 Run as a file it takes `-Version X.Y.Z` (a given release), `-NoTray`
 (only `benchbar.exe`) and `-Yes` (no questions). Piped into `iex`, set
 `BENCHBAR_VERSION`, `BENCHBAR_NO_TRAY=1` or `BENCHBAR_YES=1` first.
 
-Without the script: download `benchbar-windows-<version>-x64.zip` (or
+To run it as a file, download `install.ps1` and run `Unblock-File .\install.ps1`
+first (a downloaded script is blocked by the default execution policy), or
+start it with `powershell -ExecutionPolicy Bypass -File .\install.ps1 ...`.
+
+Without the script: download `benchbar-windows-<version>-amd64.zip` (or
 `-arm64.zip`) from the [releases](https://github.com/askysh/benchbar/releases),
 check it with `Get-FileHash`, unpack it into a folder of your choice and
 run `benchbar.exe path install` from there.
@@ -67,7 +71,7 @@ it. The `README.txt` in the zip says which programs are signed.
 Pending: this section takes effect when the SignPath Foundation
 application is approved. Until then the Windows binaries are unsigned.
 
-- Free code signing for `benchbar.exe` and `BenchBarTray.exe` is provided
+- Free code signing for the project's own binaries (`benchbar.exe`, `BenchBarTray.exe`, `BenchBarTray.dll`, `BenchBar.Tray.Core.dll`) is provided
   by [SignPath.io](https://about.signpath.io), with a certificate by
   [SignPath Foundation](https://signpath.org). The signature names
   SignPath Foundation as the publisher.
