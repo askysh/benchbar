@@ -247,6 +247,8 @@ Apps
   app install NAME    Install an app of the bench on a site (--site S).
   app update NAME     Fast forward one app with a changelog first, back up the sites
                       that have it, then requirements, migrate and build (--skip-backup).
+                      A run that stopped half way is finished by the next one (only the steps
+                      left); --discard-pending drops that record and stops (nothing runs).
   app focus [NAME]    Focus apps (the ones you work on: local changes, another branch, a
                       commit of yours in 14 days): doctor warns when an app they need falls
                       behind. No NAME lists them (--list, --json, --fetch); NAME pins it as

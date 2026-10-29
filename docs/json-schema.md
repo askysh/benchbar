@@ -234,6 +234,7 @@ listener: it is polled at rest (0.6.1).
 | `processes_running` | bool | any honcho, serve, worker, schedule or socketio process of this bench (before 0.6.1 a port listener counted too) |
 | `sites` | array | added in 0.4, see [Sites](#sites) |
 | `scheduler` | bool | added in 0.4: `Procfile.lean` runs `bench schedule` (`benchbar service --with-schedule`) |
+| `pending_operations` | array | `[]` when none. An `app update` or planned `app add` that stopped part way, one entry per app: `op` (`app_update` or `app_add`), `app`, `branch`, `from`, `to` (commits; `from` is null for an add), `steps[]` (`kind`, `target`, `name` of the steps not done yet), `failed_step` (the kind it stopped at, or null), `reason` (that step's own failure line, or null) and `updated_at`. Read from a record file in the bench's state folder: no extra process on the status path |
 
 Kept from frappe-mac 0.2.0 for older readers: `url`, `agent`,
 `loaded` (`"yes"` or `"no"`), `stop_flag` (`"manual"`, `"crash"`,
@@ -642,8 +643,8 @@ only the app's `.git`). Without `--dry-run`, `--json` streams (see the top of th
 ```json
 {"schema_version":1,"cli_version":"0.5.0","bench":"/Users/you/frappe-bench","app":"erpnext","remote":"upstream","branch":"version-15",
  "from":"a1b2c3d...","to":"b5f7846...","commits":[{"sha":"b5f7846","subject":"fix: ..."}],"commits_total":12,
- "sites":["macdev"],"skip_backup":false,
- "steps":[{"name":"Back up macdev","command":"bench --site macdev backup"},{"name":"Fast forward","command":"git -C apps/erpnext merge --ff-only b5f784612d5b"}]}
+ "newer_commits":0,"pending":null,"sites":["macdev"],"skip_backup":false,
+ "steps":[{"name":"Back up macdev","command":"bench --site macdev backup","kind":"backup","target":"macdev"},{"name":"Fast forward","command":"git -C apps/erpnext merge --ff-only b5f784612d5b","kind":"fast_forward","target":""}]}
 ```
 
 | Field | Type | Notes |
@@ -652,7 +653,14 @@ only the app's `.git`). Without `--dry-run`, `--json` streams (see the top of th
 | `commits` | array | newest first, at most 30, `sha` short |
 | `commits_total` | number | all commits in `from..to` |
 | `sites` | array of strings | the sites that have the app: each is backed up (unless `skip_backup`) and migrated |
-| `steps` | array | in order: `Back up S`, `Fast forward`, `Python requirements`, `Node requirements`, `Migrate S`, `Build`, and `Restart` when the bench runs; empty when there is nothing to do |
+| `steps` | array | in order: `Back up S`, `Fast forward`, `Python requirements`, `Node requirements`, `Migrate S`, `Build`, and `Restart` when the bench runs; empty when there is nothing to do. Each has `kind` (`backup`, `fast_forward`, `requirements_python`, `requirements_node`, `migrate`, `build`, `restart`) and `target` (a site, the app, or `""`) besides `name` and `command` |
+| `pending` | object or null | the record of an earlier run of this update that stopped part way (the same object `status --json` lists in `pending_operations`, plus `schema_version`, `started_at`), or `null`. With a record, `from` and `to` are the range that run reviewed, `steps` are only the steps it did not finish (the run takes them even when the app is already at `to`), and `commits` is `from..to` |
+| `newer_commits` | number | with a record: commits the remote has beyond `to`; they wait for the next run. `0` otherwise |
+
+An app moved by hand since the record was written (its HEAD is neither
+`from` nor `to`; or, once the fast forward is done, not `to`) exits 1 and
+names `--discard-pending`, which drops the record (and logs what it
+dropped) and stops: nothing else runs.
 
 A dirty tree, a detached HEAD or a diverged branch exits 1 with the
 reason as text.
@@ -676,13 +684,13 @@ branch) exits 1 with the reason as text; anything else is a plan, with
  "sites":[{"name":"macdev","installed":false}],"sites_error":null,
  "required_apps":[{"name":"acme_base","required_by":"acme_crm","present":false,"resolves":true,
    "source":"apps_tsv","repo":"https://github.com/acme/acme_base","branch":"main","commit":"4e07aa..."}],
- "missing_required":["acme_base"],
+ "missing_required":["acme_base"],"order":["acme_base"],
  "steps":[{"kind":"clone_required","name":"Clone acme_base","command":"bench get-app --skip-assets --branch main https://github.com/acme/acme_base","note":"..."},
   {"kind":"clone","name":"Clone acme_crm","command":"bench get-app --skip-assets --branch main https://github.com/acme/acme_crm","note":"..."},
   {"kind":"build","name":"Build","command":"bench build --apps acme_base,acme_crm","note":"..."},
   {"kind":"install","name":"Install on macdev","command":"bench --site macdev install-app acme_crm","note":"..."},
   {"kind":"restart","name":"Restart","command":"benchbar restart","note":"only when the bench is running, ..."}],
- "errors":[],"changes":true,"can_apply":true,
+ "errors":[],"changes":true,"can_apply":true,"reason":null,
  "token":"3f9c0e...64 hex characters"}
 ```
 
@@ -701,7 +709,9 @@ branch) exits 1 with the reason as text; anything else is a plan, with
 | `sites_error` | string or null | as in `app list --json` |
 | `required_apps[]` | array | every app `hooks.py` requires, followed through the ones that get cloned; `present` in the bench, `resolves` through `source` (`apps_tsv` or `team_profile`) with its `repo`, `branch` and `commit` |
 | `missing_required` | array of strings | the required apps the plan clones or cannot resolve |
-| `steps[]` | array | in the order `--apply` runs them; `kind` is `clone_required`, `clone`, `build`, `install` or `restart` (run only when the bench is running); `note` says what else the step does, for `install` that it changes the site's database like a migrate of these apps |
+| `order` | array of strings | the apps the plan clones, each after the apps it requires (ties keep the order the plan always had), the app being added last when it is cloned. A cycle in `required_apps` is an `errors` entry, `required_apps cycle: a -> b -> a`, with `can_apply` false |
+| `reason` | string or null | set when a record of an earlier, unfinished add of this app is merged into the plan (the build, installs and restart it did not finish are `steps`, `changes` is true); otherwise `null` |
+| `steps[]` | array | in the order `--apply` runs them; `kind` is `clone_required`, `clone`, `requirements_python` (only when an earlier run left a cloned app without its pip install), `build`, `install` or `restart` (run only when the bench is running); `note` says what else the step does, for `install` that it changes the site's database like a migrate of these apps |
 | `errors` | array of strings | why the plan cannot run: an unreadable repo, a missing branch, no `hooks.py`, a required app nothing resolves |
 | `changes` | bool | `false` when there is nothing to do |
 | `can_apply` | bool | `false` when `errors` is not empty |
@@ -709,9 +719,12 @@ branch) exits 1 with the reason as text; anything else is a plan, with
 
 `benchbar app add URL --apply TOKEN --yes --json`, the result:
 `{"schema_version", "cli_version", "bench", "app", "branch", "token",
-"applied": true, "ok", "steps": [{"kind", "name", "status"}]}`, where
-`status` is `done`, `failed`, `skipped` (after a failed clone, or a
-restart of a stopped bench) or `pending`. Exit 0 when `ok`. A stale
+"applied": true, "ok", "steps": [{"kind", "name", "status", "reason"}]}`, where
+`status` is `done`, `failed`, `skipped` (after a failed step it depends on:
+clone, then build, then install and restart; or a restart of a stopped
+bench) or `pending`. `reason` is `after failed <kind>` for a step skipped
+because of a failure, else null. A failed or skipped step stays in the
+app's pending record, which the next plan merges. Exit 0 when `ok`. A stale
 token or a plan that cannot run exits 1 with no JSON and the reason on
 stderr.
 

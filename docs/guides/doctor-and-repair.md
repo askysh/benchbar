@@ -309,6 +309,33 @@ Each git app is on the branch `config/apps.tsv` names for the profile.
 Fix: `git fetch` and `git checkout` the policy branch in the app, only if
 you meant to follow the policy. Repair has no action here.
 
+### app_update_pending
+
+One warning for each `benchbar app update` that stopped after it had
+started changing things (a failed backup, requirements, migrate, build or
+restart). The row names the step it stopped at, why, and how many steps
+are left. Nothing is wrong with the bench's files: the update is simply
+not finished, and an app that is already at its new commit would otherwise
+look up to date while its migrate never ran.
+
+Fix: run `benchbar app update <app>` again. It runs the steps that did
+not finish and nothing else, then removes the record. `--discard-pending`
+drops the record and stops: no step and no update runs, so run the update
+again afterwards if you still want it. An unreadable (cut short) record is
+kept, nothing runs from it, and doctor says so. Doctor reads the record only, no
+git and no bench. Repair has no action here.
+
+### app_add_pending
+
+The same for the planned `benchbar app add` (`--dry-run --json`, then
+`--apply`): a build, an install or a restart that did not finish. A failed
+build also skips the install, so the app is not installed on a site whose
+assets were never built.
+
+Fix: `benchbar app add <app>` again. The next plan lists the steps that
+are left, with the reason, and applying it runs them. Repair has no action
+here.
+
 ### dependency_behind
 
 One warning for each app a focus app needs (its `required_apps` in

@@ -17,6 +17,8 @@ case "$1" in
   --version) [[ -n "${MOCK_BENCH_VERSION:-}" ]] && printf '%s\n' "$MOCK_BENCH_VERSION"; exit 0 ;;
   get-app)
     app="${*: -1}"; app="${app##*/}"; app="${app%.git}"
+    # MOCK_BENCH_GET_APP_EARLY_EXIT: fails before anything is cloned (the network went away)
+    [[ -n "${MOCK_BENCH_GET_APP_EARLY_EXIT:-}" ]] && exit "$MOCK_BENCH_GET_APP_EARLY_EXIT"
     if [[ "${MOCK_GIT_REAL:-0}" == "1" ]]; then
       # like bench: clone with --origin upstream (shallow when asked), apps.txt
       shift; branch=""; repo=""
@@ -96,7 +98,9 @@ PY
         exit 0 ;;
       requirements)
         case "$3" in
-          --node) mkdir -p apps/frappe/node_modules/socket.io; exit 0 ;;
+          --node) [[ -n "${MOCK_BENCH_REQUIREMENTS_NODE_EXIT:-}" ]] && exit "$MOCK_BENCH_REQUIREMENTS_NODE_EXIT"
+            mkdir -p apps/frappe/node_modules/socket.io; exit 0 ;;
+          --python) exit "${MOCK_BENCH_REQUIREMENTS_PYTHON_EXIT:-0}" ;;
           *) exit 0 ;;
         esac ;;
     esac
@@ -116,7 +120,7 @@ PY
       install-app)
         [[ -n "${MOCK_BENCH_INSTALL_APP_EXIT:-}" ]] && exit "$MOCK_BENCH_INSTALL_APP_EXIT"
         mkdir -p "sites/$2"; printf '%s 1.0.0\n' "$4" >>"sites/$2/installed_apps"; exit 0 ;;
-      migrate) exit "${MOCK_BENCH_MIGRATE_EXIT:-0}" ;;
+      migrate) [[ -n "${MOCK_BENCH_MIGRATE_SLEEP:-}" ]] && sleep "$MOCK_BENCH_MIGRATE_SLEEP"; exit "${MOCK_BENCH_MIGRATE_EXIT:-0}" ;;
       doctor|clear-cache|clear-website-cache) exit 0 ;;
       disable-scheduler) exit 0 ;;
       set-config)

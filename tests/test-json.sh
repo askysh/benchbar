@@ -121,21 +121,22 @@ make_fake_bench "$QUOTED" odd
 run_fm status --json --bench-dir "$QUOTED"
 assert_eq "$QUOTED" "$(printf '%s' "$OUT" | jget - 'd["bench"]')"
 
-# ---- the app's fixtures (macos/BenchBarTests/Fixtures): every key they have the CLI still prints (it may add keys, never drop or rename one)
+# ---- every key of the app's fixtures (macos/BenchBarTests/Fixtures) is still printed: the CLI
+# may add fields (docs/json-schema.md, Rules for readers), never rename or remove one
 FIX="$ROOT/macos/BenchBarTests/Fixtures"
 run_fm status --json --bench-dir "$BENCH"
 printf '%s' "$OUT" | python3 -c '
 import json, sys
 live = json.load(sys.stdin)
 fixture = json.load(open(sys.argv[1]))
-assert set(fixture) <= set(live), ("status keys drifted", set(fixture) - set(live))
+assert set(fixture) <= set(live), ("status keys removed", set(fixture) - set(live))
 assert set(fixture["ports"]) <= set(live["ports"])
 ' "$FIX/status-running.json" || fail "status --json and the app fixture disagree"
 run_fm list --json
 printf '%s' "$OUT" | python3 -c '
 import json, sys
 live = json.load(sys.stdin); fixture = json.load(open(sys.argv[1]))
-assert set(fixture) <= set(live)
+assert set(fixture) <= set(live), set(fixture) - set(live)
 assert set(fixture["benches"][0]) <= set(live["benches"][0]), set(fixture["benches"][0]) - set(live["benches"][0])
 ' "$FIX/list.json" || fail "list --json and the app fixture disagree"
 run_fm doctor --json --bench-dir "$BENCH"
