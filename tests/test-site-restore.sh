@@ -384,9 +384,13 @@ assert d["source"]["site"] == "acme.localhost", d["source"]
   # a set without a site config has no key to carry: the warning is about the backup
   make_set acme.localhost 20260906_090000
   rm -f "$BENCH"/sites/acme.localhost/private/backups/20260906_090000-acme_localhost-site_config_backup.json
-  # the plan document says it is a dry run
+  # the plan agrees with the run: no key in the set, so the plan names the step as a skip
   run_json site restore acme.localhost --from 20260906_090000 --dry-run --json --bench-dir "$BENCH"
-  assert_eq "True" "$(printf '%s' "$OUT" | jget - 'd["dry_run"]')" "$OUT"
+  assert_eq "False" "$(printf '%s' "$OUT" | jget - 'd["source"]["encryption_key"]')" "$OUT"
+  assert_eq "True" "$(printf '%s' "$OUT" | jget - '"Skip the encryption key (the set has none)" in [s["name"] for s in d["steps"]] and not any("Carry" in s["name"] for s in d["steps"])')" "$OUT"
+  assert_eq "True" "$(printf '%s' "$OUT" | jget - 'd["dry_run"]')" "(the plan document says it is a dry run)"
+  run_json site restore acme.localhost --from "$SET2" --dry-run --json --bench-dir "$BENCH"
+  assert_eq "True" "$(printf '%s' "$OUT" | jget - '"Carry the encryption key of the set over" in [s["name"] for s in d["steps"]]')" "$OUT"
   run_fm site restore acme.localhost --from 20260906_090000 --yes --bench-dir "$BENCH"
   assert_eq "0" "$CODE" "$OUT"
   assert_contains "$OUT" "the backup has no encryption_key"

@@ -205,7 +205,9 @@ fl_srestore_plan() {
   [[ "$FL_PULL_QUIESCE" == "1" ]] && FL_PULL_STEPS+=("quiesce|Pause this bench's scheduler during the restore")
   [[ "$FL_PULL_SITE_CREATE" == "1" ]] && FL_PULL_STEPS+=("new_site|Create the site ${SR_TARGET} (bench new-site)")
   FL_PULL_STEPS+=("restore|Restore ${SR_SET_STAMP:-the set} into ${SR_TARGET}$([[ "$FL_PULL_NO_FILES" == "1" ]] || printf ' with its files')")
-  FL_PULL_STEPS+=("encryption_key|Carry the encryption key of the set over")
+  # the run skips this step when the set has no key: the plan says so, so plan and run agree
+  if [[ "$FL_PULL_HAS_KEY" == "1" ]]; then FL_PULL_STEPS+=("encryption_key|Carry the encryption key of the set over")
+  else FL_PULL_STEPS+=("encryption_key|Skip the encryption key (the set has none)"); fi
   [[ "$FL_PULL_QUIESCE" == "1" ]] && FL_PULL_STEPS+=("resume|Resume this bench's scheduler")
   [[ -n "$FL_PULL_HOOK" ]] && FL_PULL_STEPS+=("before_migrate|Run ${FL_PULL_HOOK##*/} (--before-migrate)")
   [[ "$FL_PULL_NO_MIGRATE" == "1" ]] || FL_PULL_STEPS+=("migrate|bench migrate")
