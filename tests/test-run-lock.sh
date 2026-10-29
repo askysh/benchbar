@@ -204,4 +204,26 @@ for i in 1 2 3 4 5 6 7 8; do
 done
 [[ -z "$(ls "$KV".* 2>/dev/null)" ]] || fail "no temp file or lock may be left behind: $(ls "$KV".*)"
 
+# ---- two waiters that judged one key-value lock stale: the slower one leaves
+# the lock the faster one took next, and the forced break after 600 rounds
+# is for the same lock only too
+KV2="$TMP_DIR/kv2.env"; : >"$KV2"
+KVR="$(bash -c '. "$0/lib/frappe-local/ui.sh"; . "$0/lib/frappe-local/state.sh"
+  lck="$1.lck"
+  mkdir "$lck"; : >"$lck/dead.1"; touch -t 202001010000 "$lck"
+  seen="$(ls -A "$lck")"
+  fl__kv_stale "$lck" && printf "stale "
+  fl__kv_reclaim "$lck" "$seen"          # the faster waiter breaks it
+  fl__kv_lock "$1"                       # and takes the next lock
+  mine="$FL__KV_TOKEN"
+  touch -t 202001010000 "$lck"           # however old it looks now
+  fl__kv_reclaim "$lck" "$seen"          # the slower waiter, with what it saw
+  fl__kv_reclaim "$lck" "$seen" force    # and its last resort
+  [[ -e "$lck/$mine" ]] && printf "kept " || printf "lost "
+  FL__KV_TOKEN="someone.else"; fl__kv_unlock "$1"
+  [[ -e "$lck/$mine" ]] && printf "kept-by-unlock " || printf "removed-by-unlock "
+  FL__KV_TOKEN="$mine"; fl__kv_unlock "$1"
+  [[ -e "$lck" || -e "$lck.reclaim" ]] && printf "left" || printf "clean"' "$ROOT" "$KV2")"
+assert_eq "stale kept kept-by-unlock clean" "$KVR"
+
 printf 'test-run-lock: ok\n'
