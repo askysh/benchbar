@@ -151,13 +151,29 @@ nonisolated struct CLIClient: Sendable {
         return try BenchJSON.decode(AppList.self, from: Data(output.stdout.utf8))
     }
 
-    /// benchbar app add SOURCE: a name from the app registry or any git URL.
+    /// benchbar app add SOURCE --dry-run --json: the plan and its token. Read
+    /// only; it reads the remote (a shallow clone of hooks.py), so a private
+    /// repository is checked here and a missing key fails in seconds.
+    func addAppPlan(_ source: String, branch: String?, site: String?, bench: String) async throws(CLIError) -> AppAddPlan {
+        let output = try await run(["app", "add", source, "--dry-run", "--json", "--bench-dir", bench] + Self.addAppOptions(branch: branch, site: site),
+                                   timeout: Timeout.doctor, acceptExitCodes: [0])
+        return try BenchJSON.decode(AppAddPlan.self, from: Data(output.stdout.utf8))
+    }
+
+    /// benchbar app add SOURCE --apply TOKEN: runs the plan the person saw.
+    /// The CLI recomputes it under its lock and refuses a token that no
+    /// longer matches the bench; the arguments are the plan's.
     @discardableResult
-    func addApp(_ source: String, branch: String?, site: String?, bench: String) async throws(CLIError) -> CommandOutput {
-        var args = ["app", "add", source, "--yes", "--plain", "--bench-dir", bench]
+    func addApp(_ source: String, branch: String?, site: String?, token: String, bench: String) async throws(CLIError) -> CommandOutput {
+        let args = ["app", "add", source, "--apply", token, "--yes", "--plain", "--bench-dir", bench] + Self.addAppOptions(branch: branch, site: site)
+        return try await run(args, timeout: Timeout.long, acceptExitCodes: [0])
+    }
+
+    private static func addAppOptions(branch: String?, site: String?) -> [String] {
+        var args: [String] = []
         if let branch, !branch.isEmpty { args += ["--branch", branch] }
         if let site, !site.isEmpty { args += ["--site", site] }
-        return try await run(args, timeout: Timeout.long, acceptExitCodes: [0])
+        return args
     }
 
     @discardableResult
@@ -200,6 +216,13 @@ nonisolated struct CLIClient: Sendable {
     func addSite(_ name: String, adminPassword: String, bench: String) async throws(CLIError) -> CommandOutput {
         try await run(["site", "add", name, "--yes", "--plain", "--bench-dir", bench],
                       timeout: Timeout.long, acceptExitCodes: [0], extraEnvironment: ["ADMIN_PASSWORD": adminPassword])
+    }
+
+    /// benchbar site add NAME --dry-run: the CLI's own checks (a name that is
+    /// taken or half made, MariaDB's password) with nothing created. Text
+    /// only: `site add` has no JSON plan, so the sheet's steps are the app's.
+    func checkSiteAdd(_ name: String, bench: String) async throws(CLIError) {
+        _ = try await run(["site", "add", name, "--dry-run", "--plain", "--bench-dir", bench], timeout: Timeout.query, acceptExitCodes: [0])
     }
 
     @discardableResult
