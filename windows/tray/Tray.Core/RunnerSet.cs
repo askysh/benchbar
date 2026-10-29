@@ -57,7 +57,7 @@ public sealed class RunnerSet
                 if (!seen.Add(id)) throw new RunnerException($"Another runner already has the id \"{id}\".");
                 list.Add(new RunnerInfo(id, runner.Name, runner.Author, false, runner, null, dir));
             }
-            catch (Exception ex) when (ex is RunnerException or IOException or UnauthorizedAccessException)
+            catch (Exception ex) when (ex is RunnerException or IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
             {
                 list.Add(new RunnerInfo(id, name, null, false, null, ex.Message, dir));
             }

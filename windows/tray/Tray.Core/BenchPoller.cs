@@ -35,6 +35,9 @@ public sealed class BenchPoller : IDisposable
         return IdleSteps[Math.Clamp(idleStep, 0, IdleSteps.Count - 1)];
     }
 
+    public const string WslSilentMessage = "wsl.exe did not answer: WSL may be starting or stuck. Run wsl.exe --status.";
+    public const string WslMissingMessage = "WSL is not installed: wsl.exe --install";
+
     private readonly IBenchSource _source;
     private readonly TimeProvider _time;
     private readonly IDistroProbe? _probe;
@@ -217,9 +220,13 @@ public sealed class BenchPoller : IDisposable
             {
                 return TraySnapshot.Empty;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                running = true; // the probe itself failed: let the shim answer, it prints the fix
+                // The probe failed or timed out. Asking the CLI now could boot the distro, so it is not asked:
+                // a problem line, the known benches as unknown, and the idle back off until a kick.
+                return new TraySnapshot(
+                    _entries.Select(UnknownStatus).ToList(), DistroStopped: false, Distro: distro,
+                    Problem: ex is System.ComponentModel.Win32Exception ? WslMissingMessage : WslSilentMessage);
             }
             if (!running) return new TraySnapshot([], DistroStopped: true, Distro: distro);
             lock (_gate)
@@ -232,7 +239,6 @@ public sealed class BenchPoller : IDisposable
             }
         }
 
-        string? problem = null;
         IReadOnlyList<BenchEntry> entries;
         try
         {
@@ -259,8 +265,8 @@ public sealed class BenchPoller : IDisposable
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {
-                result.Add(UnknownStatus(entry));
-                if (ex is SourceProblemException) problem ??= ex.Message;
+                // this bench's own line, shown under its row; the snapshot's Problem stays for the shim, list and probe
+                result.Add(UnknownStatus(entry) with { Problem = ex is SourceProblemException ? ex.Message : "benchbar.exe status gave no usable answer." });
             }
             catch (OperationCanceledException)
             {
@@ -268,7 +274,7 @@ public sealed class BenchPoller : IDisposable
             }
         }
         CpuPercent = (_source as ILoadSource)?.CpuPercent;
-        return new TraySnapshot(result, false, distro, problem);
+        return new TraySnapshot(result, false, distro);
     }
 
     private static BenchStatus UnknownStatus(BenchEntry entry) =>

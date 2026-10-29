@@ -107,6 +107,7 @@ internal sealed class ScriptedSource : IBenchSource, ILoadSource
     public TimeSpan Latency { get; set; } = TimeSpan.Zero;
     public Dictionary<string, BenchStatus> Overrides { get; } = [];
     public Exception? ListFails { get; set; }
+    public Exception? StatusFails { get; set; }
     public int Statuses => Volatile.Read(ref _statuses);
     public int DistroStarts { get; private set; }
     private int _statuses;
@@ -130,6 +131,7 @@ internal sealed class ScriptedSource : IBenchSource, ILoadSource
         try
         {
             Interlocked.Increment(ref _statuses);
+            if (StatusFails is not null) throw StatusFails;
             if (Overrides.TryGetValue(bench.Name, out var status)) return Task.FromResult(status);
             return Task.FromResult(new BenchStatus(bench.Name, bench.Path, States[bench.Name], null, bench.WebUrl, null));
         }
@@ -191,11 +193,13 @@ internal sealed class FakeProcessRunner : IProcessRunner
     public Func<string, string[], ProcessResult> Answer { get; set; } = (_, _) => new ProcessResult(0, "", "");
     public Exception? Throws { get; set; }
     public Encoding? LastEncoding { get; private set; }
+    public TimeSpan? LastTimeout { get; private set; }
 
     public Task<ProcessResult> RunAsync(string fileName, IReadOnlyList<string> args, CancellationToken ct, TimeSpan? timeout = null, Encoding? outputEncoding = null)
     {
         Calls.Add((fileName, [.. args]));
         LastEncoding = outputEncoding;
+        LastTimeout = timeout;
         if (Throws is not null) throw Throws;
         return Task.FromResult(Answer(fileName, [.. args]));
     }

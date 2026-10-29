@@ -125,17 +125,6 @@ public class ShimSourceTests
     }
 
     [Fact]
-    public void TheConsoleStartInfoKeepsTheWindowOpen()
-    {
-        var (source, _) = Make();
-        var info = source.ConsoleStartInfo("doctor");
-        Assert.NotNull(info);
-        Assert.Equal("cmd.exe", info.FileName);
-        Assert.Equal(["/k", $"\"{Shim}\" doctor"], info.ArgumentList);
-        Assert.Null(Make(shim: null).Source.ConsoleStartInfo("doctor"));
-    }
-
-    [Fact]
     public void TheShimIsFoundNextToTheExeBeforeOnPath()
     {
         var present = new HashSet<string>(StringComparer.OrdinalIgnoreCase)

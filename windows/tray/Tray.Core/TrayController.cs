@@ -217,17 +217,6 @@ public sealed class TrayController : IDisposable
         Process.Start(new ProcessStartInfo(bench.WebUrl) { UseShellExecute = true })?.Dispose();
     }
 
-    /// <summary>Opens a console window running <c>benchbar.exe doctor</c>.</summary>
-    public async Task RunDoctorAsync()
-    {
-        if (_source is ShimBenchSource shim)
-        {
-            if (shim.ConsoleStartInfo("doctor") is { } info) Process.Start(info)?.Dispose();
-            return;
-        }
-        await _source.RunAsync(["doctor"], _cts.Token).ConfigureAwait(false);
-    }
-
     // --- poll results ---
 
     private void OnPolled(TraySnapshot snapshot)

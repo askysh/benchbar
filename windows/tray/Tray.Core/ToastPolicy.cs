@@ -23,8 +23,10 @@ public sealed class ToastPolicy
 
     public IReadOnlyList<Toast> Observe(TraySnapshot snapshot)
     {
-        // no data (distro stopped, shim missing): nothing is learned, nothing is forgotten
-        if (snapshot.DistroStopped || snapshot.Problem is not null) return [];
+        // An unknown bench (it did not answer) is skipped on its own: nothing is learned, nothing is forgotten.
+        // A snapshot with no known bench at all (distro stopped, shim missing, every bench silent) teaches nothing,
+        // so it does not seed either.
+        if (snapshot.DistroStopped || snapshot.Benches.All(b => b.State == BenchState.Unknown)) return [];
 
         var toasts = new List<Toast>();
         foreach (var bench in snapshot.Benches)

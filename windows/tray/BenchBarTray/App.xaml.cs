@@ -31,6 +31,7 @@ public partial class App : Application, ITrayHost
     private FlyoutWindow? _flyout;
     private TrayMenu? _menu;
     private IBenchSource? _source;
+    private IDistroProbe? _probe;
     private static readonly TimeSpan FlyoutKeepAlive = TimeSpan.FromSeconds(30);
     private readonly System.Windows.Threading.DispatcherTimer _releaseFlyout = new(System.Windows.Threading.DispatcherPriority.Background) { Interval = FlyoutKeepAlive };
     private long _flyoutHiddenAt;
@@ -78,7 +79,7 @@ public partial class App : Application, ITrayHost
             RunnerId = _config.RunnerId,
             Appearance = _config.Appearance,
             Notifications = _config.Notifications,
-            DistroProbe = BenchSourceFactory.DistroProbeFromEnvironment(),
+            DistroProbe = _probe = BenchSourceFactory.DistroProbeFromEnvironment(),
             Distro = () => DistroName.Resolve(_config.Distro),
         };
         // The controller and the first frame exist before NIM_ADD, so "icon-added" means a runner is visible.
@@ -254,12 +255,13 @@ public partial class App : Application, ITrayHost
         OpenUrl = OpenUrl,
     };
 
-    private bool OpenVsCode(BenchStatus bench)
+    private VsCodeOutcome OpenVsCode(BenchStatus bench)
     {
         var code = VsCode.Find();
-        if (code is null) return false;
+        if (code is null) return VsCodeOutcome.NotFound;
         var distro = DistroName.Resolve(_config.Distro) ?? _controller?.Snapshot.Distro;
-        if (distro is null) return false;
+        if (distro is null) return VsCodeOutcome.NotFound;
+        if (!VsCode.CanLaunch(distro, bench.Path)) return VsCodeOutcome.BadPath;
         try
         {
             Process.Start(VsCode.StartInfo(code, distro, bench.Path))?.Dispose();
@@ -267,9 +269,9 @@ public partial class App : Application, ITrayHost
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
             _log.Write("vscode", ex);
-            return false;
+            return VsCodeOutcome.NotFound;
         }
-        return true;
+        return VsCodeOutcome.Launched;
     }
 
     // --- Logs and Doctor ---
@@ -447,9 +449,9 @@ public partial class App : Application, ITrayHost
             info.ArgumentList.Add("/select," + TextFormats.WslToWindows(distro, zip));
             Process.Start(info)?.Dispose();
         }
-        catch (Exception ex) when (ex is SourceProblemException or System.Text.Json.JsonException or System.ComponentModel.Win32Exception)
+        catch (Exception ex) when (ex is SourceProblemException or System.Text.Json.JsonException or System.ComponentModel.Win32Exception or OperationCanceledException)
         {
-            MessageBox.Show(ex.Message, "BenchBar report", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(ex is OperationCanceledException ? BenchPoller.WslSilentMessage : ex.Message, "BenchBar report", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 

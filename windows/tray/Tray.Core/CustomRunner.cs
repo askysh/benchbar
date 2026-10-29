@@ -109,9 +109,10 @@ public static class RunnerLoader
         if (IsReparsePoint(folder))
             throw new RunnerException("The runner folder is a link; links are not allowed.");
 
+        // the folder first: no link is followed and nothing is read before the size and reparse rules hold
+        CheckFolder(folder);
         var manifest = ReadManifest(folder);
         CheckStates(manifest);
-        CheckFolder(folder);
 
         var frames = new Dictionary<RunnerPose, IReadOnlyList<string>>();
         (int Width, int Height)? size = null;
@@ -141,17 +142,19 @@ public static class RunnerLoader
     {
         var path = Path.Combine(folder, ManifestName);
         if (!File.Exists(path)) throw new RunnerException("There is no manifest.json in the runner folder.");
+        // the size is checked before a single byte is read
+        if (new FileInfo(path).Length > MaxManifestBytes) throw new RunnerException("manifest.json could not be read: it is larger than 64 KB.");
         var bytes = File.ReadAllBytes(path);
-        if (bytes.Length > MaxManifestBytes) throw new RunnerException("manifest.json could not be read: it is larger than 64 KB.");
 
         JsonObject root;
         try
         {
             var text = new UTF8Encoding(false).GetString(bytes).TrimStart('﻿');
-            root = JsonNode.Parse(text) as JsonObject ?? throw new RunnerException("manifest.json could not be read: it is not a JSON object.");
+            root = JsonStrict.Parse(text) as JsonObject ?? throw new RunnerException("manifest.json could not be read: it is not a JSON object.");
         }
-        catch (JsonException)
+        catch (Exception ex) when (ex is JsonException or ArgumentException)
         {
+            // ArgumentException: a duplicate key
             throw new RunnerException("manifest.json could not be read: it is not valid JSON.");
         }
 

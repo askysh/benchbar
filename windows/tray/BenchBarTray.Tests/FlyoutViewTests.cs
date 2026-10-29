@@ -141,7 +141,7 @@ public class FlyoutViewTests
     [Fact]
     public void VsCodeNotFoundShowsTheInstallMessageInTheFlyout() => Sta.Run(() =>
     {
-        var view = new FlyoutView(new FlyoutActions { OpenVsCode = _ => false, VsCodeAvailable = () => false });
+        var view = new FlyoutView(new FlyoutActions { OpenVsCode = _ => VsCodeOutcome.NotFound, VsCodeAvailable = () => false });
         view.SetSnapshot(new TraySnapshot([Status("b", "running")]), "1 of 1 up");
         var code = view.Rows[0].Buttons.Single(b => b.Content as string == "VS Code");
         Assert.Equal(VsCode.InstallMessage, code.ToolTip);
@@ -162,7 +162,7 @@ public class FlyoutViewTests
             OpenSite = b => calls.Add("site " + b.Name),
             ShowLogs = b => calls.Add("logs " + b.Name),
             ShowDoctor = b => calls.Add("doctor " + b.Name),
-            OpenVsCode = b => { calls.Add("code " + b.Name); return true; },
+            OpenVsCode = b => { calls.Add("code " + b.Name); return VsCodeOutcome.Launched; },
         });
         view.SetSnapshot(new TraySnapshot([Status("b", "running")]), "1 of 1 up");
         foreach (var label in new[] { "Open site", "Logs", "VS Code", "Doctor" })

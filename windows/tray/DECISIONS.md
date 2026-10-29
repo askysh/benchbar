@@ -52,3 +52,13 @@ One line per non obvious choice. The spike's code is in `spike/` and is not ship
 - The harness `stats` reply also carries `gc_heap` and `gc_committed`, so a measurement can split managed from native memory without a diagnostics tool.
 - The test host's `Post` takes a lock that the tests' own UI calls take too, as a dispatcher would serialize them: `RunnerIcons` is UI thread only, and running posted work inline on the poller's thread made two controller tests fail now and then with "Collection was modified".
 - The flyout is placed again from its real window rectangle after `Show`: the measure before the first show ran without the theme's template and gave 80 DIP for a 123 DIP flyout, so the bottom of the flyout covered the taskbar. Found in the first screenshot.
+- A distro probe that fails or times out is a snapshot problem ("wsl.exe did not answer"), never a reason to call the shim: calling it would boot the distro. A missing `wsl.exe` says "WSL is not installed: wsl.exe --install".
+- Timeouts per command: `up`, `down` and `restart` 180 s (a cold `up` waits up to 45 s for the site, `restart` adds the stop), `report` and `doctor` 120 s, `list`, `status` and `logs` 30 s. A timed out action is a failure line under its row ("may still be starting"), and the fast poll window keeps running.
+- The snapshot's problem is only a missing shim, a failing `list` or a failing probe. One bench whose `status` fails is unknown with its own line under its row, so the other benches keep their icon state and their toasts.
+- `TrayConfig.Save` re-reads `config.json` and replaces only the `tray` object, and `distro` is read again whenever the file changes: an `adopt-distro` while the tray runs is never reverted, and the probe follows the new distro. A file that cannot be read is never overwritten.
+- A duplicate JSON key counts as invalid JSON (`JsonStrict`): System.Text.Json reports it only when the member is first read.
+- Runner folders are checked for links and size before the manifest is read, and the manifest's size before it is read.
+- Open in VS Code refuses a distro name or bench path with a cmd metacharacter or a quote: `code.cmd` runs inside cmd.exe, where argument quoting does not stop `&`, `|`, `^` or `%VAR%`.
+- Toasts seed only from a snapshot with at least one bench in a known state.
+- The flyout raises Opened before `Show` and Hidden only after an Opened, so a deactivation during `Show` cannot leave efficiency mode off or the poller at the flyout rate. Report a Bug asks the probe afresh before running `report`, which would boot a stopped distro.
+- The unused Doctor console (`cmd /k`) was removed; the Doctor window is the only doctor in the tray.

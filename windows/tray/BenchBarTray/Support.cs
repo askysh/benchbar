@@ -41,6 +41,9 @@ internal sealed class ErrorLog(string? path = null, long maxBytes = 256 * 1024)
     }
 }
 
+/// <summary>The result of the VS Code button.</summary>
+internal enum VsCodeOutcome { Launched, NotFound, BadPath }
+
 /// <summary>Finding VS Code and building the command that opens a bench inside the distro.</summary>
 internal static class VsCode
 {
@@ -69,10 +72,24 @@ internal static class VsCode
         return null;
     }
 
-    /// <summary>Hidden, no shell string: <c>code.cmd --remote wsl+DISTRO PATH</c> through an argument list.</summary>
+    /// <summary>False for the characters cmd.exe acts on (<c>&amp; | ^ &lt; &gt; % ! ( )</c>), for quotes, and for control characters.</summary>
+    private static bool IsCmdSafe(string text) =>
+        text.Length > 0 && !text.Any(c => c is '&' or '|' or '^' or '<' or '>' or '%' or '!' or '(' or ')' or '"' or '\'' || char.IsControl(c));
+
+    /// <summary>
+    /// True when both values can go through <c>code.cmd</c>. It runs inside cmd.exe, and an argument list only quotes for
+    /// CreateProcess: cmd still acts on the characters above even inside quotes (<c>%VAR%</c> expands, <c>^</c> and <c>"</c> break out),
+    /// so such a distro name or bench path is refused rather than escaped.
+    /// </summary>
+    public static bool CanLaunch(string distro, string benchPath) => IsCmdSafe(distro) && IsCmdSafe(benchPath);
+
+    /// <summary>What to tell the user for a path that cannot be launched.</summary>
+    public static string BadPathMessage(string benchPath) =>
+        "This bench path has characters VS Code's launcher cannot take; open it from a WSL terminal: code " + benchPath;
+
+    /// <summary>Hidden: <c>code.cmd --remote wsl+DISTRO PATH</c>. Check <see cref="CanLaunch"/> first.</summary>
     public static ProcessStartInfo StartInfo(string codeCmd, string distro, string benchPath)
     {
-        // a .cmd needs cmd.exe; ArgumentList quotes each argument for it
         var info = new ProcessStartInfo(codeCmd)
         {
             UseShellExecute = false,

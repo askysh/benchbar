@@ -112,17 +112,69 @@ public class PollerDistroTests
     }
 
     [Fact]
-    public async Task AProbeThatFailsLetsTheShimAnswer()
+    public async Task AProbeThatFailsIsAProblemAndTheCliIsNeverAsked()
     {
-        var (poller, source, _, probe, distro) = Make(running: false);
-        distro.Throws = new InvalidOperationException("no wsl.exe");
+        var (poller, source, time, probe, distro) = Make(running: true, BenchState.Running);
         using (poller)
         using (probe)
         {
             poller.Start();
             await probe.NextAsync();
-            Assert.False(poller.Last.DistroStopped);
             Assert.Equal(1, source.Lists);
+
+            distro.Throws = new TimeoutException("wsl.exe hung");
+            time.Advance(S(30));
+            await probe.NextAsync();
+
+            Assert.Equal(BenchPoller.WslSilentMessage, poller.Last.Problem);
+            Assert.Equal("wsl.exe did not answer: WSL may be starting or stuck. Run wsl.exe --status.", poller.Last.Problem);
+            Assert.False(poller.Last.DistroStopped);
+            Assert.Equal(BenchState.Unknown, Assert.Single(poller.Last.Benches).State); // the last benches, as unknown
+            Assert.Equal(1, source.Lists); // no list or status call: that could boot the distro
+            Assert.Equal(1, source.Statuses);
+        }
+    }
+
+    [Fact]
+    public async Task AMissingWslExeIsItsOwnProblem()
+    {
+        var (poller, source, _, probe, distro) = Make(running: true);
+        distro.Throws = new System.ComponentModel.Win32Exception("The system cannot find the file specified");
+        using (poller)
+        using (probe)
+        {
+            poller.Start();
+            await probe.NextAsync();
+            Assert.Equal("WSL is not installed: wsl.exe --install", poller.Last.Problem);
+            Assert.Equal(0, source.Lists);
+        }
+    }
+
+    [Fact]
+    public async Task AFailingProbeBacksOffOnTheIdleStepsAndAKickResetsIt()
+    {
+        var (poller, source, time, probe, distro) = Make(running: true);
+        distro.Throws = new TimeoutException();
+        using (poller)
+        using (probe)
+        {
+            poller.Start();
+            await probe.NextAsync();
+            foreach (var seconds in new double[] { 30, 60, 120 })
+            {
+                time.Advance(S(seconds - 0.5));
+                await probe.NoneForAsync(100);
+                time.Advance(S(0.5));
+                await probe.NextAsync();
+            }
+
+            poller.Kick();
+            await probe.NextAsync();
+            time.Advance(S(29.5)); // reset: 30 s again, not 300
+            await probe.NoneForAsync(100);
+            time.Advance(S(0.5));
+            await probe.NextAsync();
+            Assert.Equal(0, source.Lists);
         }
     }
 
@@ -210,6 +262,39 @@ public class PollerDistroTests
             Assert.Equal(ShimBenchSource.NotFoundMessage, poller.Last.Problem);
             Assert.Empty(poller.Last.Benches);
             Assert.False(poller.Last.DistroStopped);
+        }
+    }
+
+    [Fact]
+    public async Task OneBenchThatCannotBeReadIsUnknownWithItsOwnLineAndTheSnapshotHasNoProblem()
+    {
+        var (poller, source, _, probe) = PollerTests.Make(BenchState.Crashed);
+        source.Entries.Add(new BenchEntry("b", "/b", false, null)); // no state for b: its status call throws
+        using (poller)
+        using (probe)
+        {
+            poller.Start();
+            await probe.NextAsync();
+            Assert.Null(poller.Last.Problem);
+            Assert.Equal(BenchState.Crashed, poller.Last.Benches[0].State);
+            Assert.Null(poller.Last.Benches[0].Problem);
+            Assert.Equal(BenchState.Unknown, poller.Last.Benches[1].State);
+            Assert.Equal("benchbar.exe status gave no usable answer.", poller.Last.Benches[1].Problem);
+        }
+    }
+
+    [Fact]
+    public async Task ASourceProblemOfOneBenchKeepsItsMessage()
+    {
+        var (poller, source, _, probe) = PollerTests.Make();
+        source.StatusFails = new CliProblemException("bench dir is gone");
+        using (poller)
+        using (probe)
+        {
+            poller.Start();
+            await probe.NextAsync();
+            Assert.Null(poller.Last.Problem);
+            Assert.Equal("bench dir is gone", Assert.Single(poller.Last.Benches).Problem);
         }
     }
 

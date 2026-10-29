@@ -264,3 +264,55 @@ public class SupportTests : IDisposable
         log.Write("ui", new InvalidOperationException("x"));
     }
 }
+
+public class VsCodeValidationTests
+{
+    [Theory]
+    [InlineData("/home/a/frappe-bench")]
+    [InlineData("/home/a/my bench")]
+    [InlineData("/home/a/bench-v15.1_x+y@z")]
+    public void PlainPathsAreAllowed(string path) => Assert.True(VsCode.CanLaunch("Ubuntu-24.04", path));
+
+    [Theory]
+    [InlineData("/home/a/b&c")]
+    [InlineData("/home/a/b|c")]
+    [InlineData("/home/a/b^c")]
+    [InlineData("/home/a/b<c")]
+    [InlineData("/home/a/b>c")]
+    [InlineData("/home/a/%PATH%")]
+    [InlineData("/home/a/b!c")]
+    [InlineData("/home/a/(b)")]
+    [InlineData("/home/a/\"b")]
+    [InlineData("/home/a/it's")]
+    [InlineData("/home/a/b\nc")]
+    [InlineData("")]
+    public void ACmdMetacharacterOrAQuoteInThePathIsRefused(string path) => Assert.False(VsCode.CanLaunch("Ubuntu-24.04", path));
+
+    [Theory]
+    [InlineData("Ubuntu&calc")]
+    [InlineData("Ub%x%")]
+    [InlineData("a\"b")]
+    [InlineData("")]
+    public void TheSameGoesForTheDistroName(string distro) => Assert.False(VsCode.CanLaunch(distro, "/home/a/bench"));
+
+    [Fact]
+    public void TheFlyoutExplainsARefusedPathWithoutALink() => Sta.Run(() =>
+    {
+        var view = new FlyoutView(new FlyoutActions { OpenVsCode = _ => VsCodeOutcome.BadPath });
+        var bench = BenchJson.ParseStatus("""{"bench":"/home/a/b&c","name":"b&c","site":"x.localhost","state":"running"}""");
+        view.SetSnapshot(new TraySnapshot([bench]), "1 of 1 up");
+        view.Rows[0].Buttons.Single(b => b.Content as string == "VS Code").RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+        Assert.Equal("This bench path has characters VS Code's launcher cannot take; open it from a WSL terminal: code /home/a/b&c", view.MessageText);
+    });
+
+    [Fact]
+    public void ABenchThatCouldNotBeReadShowsItsOwnLineUnderItsRow() => Sta.Run(() =>
+    {
+        var view = new FlyoutView(new FlyoutActions());
+        var bad = new BenchStatus("b", "/b", BenchState.Unknown, null, null, null) { Problem = "bench dir is gone" };
+        var ok = BenchJson.ParseStatus("""{"bench":"/a","name":"a","site":"x.localhost","state":"running"}""");
+        view.SetSnapshot(new TraySnapshot([ok, bad]), "1 of 2 up");
+        Assert.Null(view.Rows[0].FailureText);
+        Assert.Equal("bench dir is gone", view.Rows[1].FailureText);
+    });
+}

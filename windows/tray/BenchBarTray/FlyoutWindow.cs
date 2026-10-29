@@ -24,6 +24,7 @@ internal sealed class FlyoutWindow : Window
     private uint _dpi;
     private bool _shownOnce;
     private bool _renderPending;
+    private bool _open;
 
     public FlyoutWindow(TrayController controller, FlyoutView view, HarnessLink? link)
     {
@@ -128,6 +129,11 @@ internal sealed class FlyoutWindow : Window
         _renderPending = true;
         // The stamp is the first Rendering after Show, on every open, the first included.
         CompositionTarget.Rendering += OnFirstRender;
+        // Opened and Hidden are strictly paired: _open is set and Opened raised before Show, so a Deactivated that fires
+        // during Show hides through OnVisibleChanged with a matching Hidden, and a hide when not open raises nothing.
+        _open = true;
+        Opened?.Invoke();
+        _controller.FlyoutOpened();
         Show();
         // The measure above runs before the first show applied the theme's template, so it can be short (80 DIP
         // against 123 for one bench), and a new handle may have taken another DPI: anchor the real window.
@@ -135,8 +141,6 @@ internal sealed class FlyoutWindow : Window
         Reanchor();
         Activate();
         Dispatcher.BeginInvoke(View.FocusFirst, System.Windows.Threading.DispatcherPriority.Loaded);
-        Opened?.Invoke();
-        _controller.FlyoutOpened();
     }
 
     /// <summary>The corner nearest the notification area, for a window of this physical size.</summary>
@@ -175,7 +179,8 @@ internal sealed class FlyoutWindow : Window
 
     private void OnVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
-        if (IsVisible) return;
+        if (IsVisible || !_open) return;
+        _open = false;
         _controller.FlyoutClosed();
         _link?.Send("flyout-hidden");
         Hidden?.Invoke();

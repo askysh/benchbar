@@ -29,6 +29,9 @@ public sealed record BenchStatus(
     public string? LogPath { get; init; }
 
     public IReadOnlyList<SiteInfo> Sites { get; init; } = [];
+
+    /// <summary>Why this one bench could not be read (its status call failed); null when it answered. Shown under its row.</summary>
+    public string? Problem { get; init; }
 }
 
 /// <summary>One bench from <c>list --json</c> (<c>benches[]</c>).</summary>

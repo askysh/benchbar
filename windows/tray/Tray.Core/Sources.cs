@@ -152,6 +152,26 @@ public sealed class ShimBenchSource : IBenchSource
     public const string NotFoundMessage =
         "benchbar.exe was not found. Put it next to BenchBarTray.exe or on PATH (benchbar.exe path install).";
 
+    /// <summary>up, down and restart wait for the bench: 3 minutes.</summary>
+    public static readonly TimeSpan ActionTimeout = TimeSpan.FromSeconds(180);
+
+    /// <summary>doctor and report run many checks: 2 minutes.</summary>
+    public static readonly TimeSpan SlowReadTimeout = TimeSpan.FromSeconds(120);
+
+    /// <summary>list, status and logs: 30 seconds.</summary>
+    public static readonly TimeSpan ReadTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>The time a command may take: by its first argument.</summary>
+    public static TimeSpan TimeoutFor(IReadOnlyList<string> args) => args.Count > 0 ? args[0] switch
+    {
+        "up" or "down" or "restart" => ActionTimeout,
+        "report" or "doctor" => SlowReadTimeout,
+        _ => ReadTimeout,
+    } : ReadTimeout;
+
+    private static string Words(TimeSpan t) =>
+        t.TotalSeconds >= 120 ? $"{(int)t.TotalMinutes} minutes" : t.TotalSeconds >= 60 ? "1 minute" : $"{(int)t.TotalSeconds} seconds";
+
     private readonly IProcessRunner _runner;
     private readonly Func<string?> _locate;
 
@@ -186,10 +206,17 @@ public sealed class ShimBenchSource : IBenchSource
         var shim = _locate() ?? throw new SetupProblemException(NotFoundMessage);
         try
         {
-            var result = await _runner.RunAsync(shim, args, ct).ConfigureAwait(false);
+            var result = await _runner.RunAsync(shim, args, ct, TimeoutFor(args)).ConfigureAwait(false);
             if (result.ExitCode == 0) return ActionResult.Success;
             var line = FirstLine(result.Error) ?? FirstLine(result.Output) ?? $"benchbar.exe exited with code {result.ExitCode}.";
             return new ActionResult(result.ExitCode, line);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // the runner's own timeout, not a caller cancel: never "A task was canceled."
+            var verb = args.Length > 0 ? args[0] : "command";
+            var state = verb == "down" ? "stopping" : "starting";
+            return ActionResult.Failure($"benchbar.exe {verb} did not finish in {Words(TimeoutFor(args))}; the bench may still be {state}. Run benchbar.exe status.");
         }
         catch (Win32Exception ex)
         {
@@ -226,27 +253,13 @@ public sealed class ShimBenchSource : IBenchSource
         }
     }
 
-    /// <summary>
-    /// A start info that opens a visible console running <c>benchbar.exe ARGS</c> and keeps it open;
-    /// null when the shim is missing.
-    /// </summary>
-    public ProcessStartInfo? ConsoleStartInfo(params string[] args)
-    {
-        var shim = _locate();
-        if (shim is null) return null;
-        var info = new ProcessStartInfo("cmd.exe") { UseShellExecute = false, CreateNoWindow = false };
-        info.ArgumentList.Add("/k");
-        info.ArgumentList.Add($"\"{shim}\" {string.Join(' ', args)}");
-        return info;
-    }
-
     private async Task<ProcessResult> RunCliAsync(IReadOnlyList<string> args, CancellationToken ct)
     {
         var shim = _locate() ?? throw new SetupProblemException(NotFoundMessage);
         ProcessResult result;
         try
         {
-            result = await _runner.RunAsync(shim, args, ct).ConfigureAwait(false);
+            result = await _runner.RunAsync(shim, args, ct, TimeoutFor(args)).ConfigureAwait(false);
         }
         catch (Win32Exception ex)
         {
@@ -254,7 +267,7 @@ public sealed class ShimBenchSource : IBenchSource
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            throw new CliProblemException("benchbar.exe did not answer in 30 seconds.");
+            throw new CliProblemException($"benchbar.exe {(args.Count > 0 ? args[0] : "command")} did not answer in {Words(TimeoutFor(args))}.");
         }
 
         if (result.ExitCode != 0 && string.IsNullOrWhiteSpace(result.Output))

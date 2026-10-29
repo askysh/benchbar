@@ -18,8 +18,8 @@ internal sealed class FlyoutActions
     public Action<BenchStatus> ShowDoctor { get; set; } = _ => { };
     public Action<BenchStatus> CopyPath { get; set; } = _ => { };
 
-    /// <summary>Opens the bench in VS Code; false when VS Code was not found.</summary>
-    public Func<BenchStatus, bool> OpenVsCode { get; set; } = _ => true;
+    /// <summary>Opens the bench in VS Code, or says why it did not.</summary>
+    public Func<BenchStatus, VsCodeOutcome> OpenVsCode { get; set; } = _ => VsCodeOutcome.Launched;
 
     public Func<bool> VsCodeAvailable { get; set; } = () => true;
     public Action StartDistro { get; set; } = () => { };
@@ -128,6 +128,8 @@ internal sealed class FlyoutView : UserControl
 
     public void ShowVsCodeMissing() => ShowMessage(VsCode.InstallMessage, "Learn more", VsCode.HelpUrl);
 
+    public void ShowVsCodeBadPath(string benchPath) => ShowMessage(VsCode.BadPathMessage(benchPath), null, null);
+
     public void ClearMessage()
     {
         MessageText = "";
@@ -159,7 +161,7 @@ internal sealed class FlyoutView : UserControl
         s.DistroStopped ? $"stopped|{s.Distro}|{_distroStarting}" : "up",
         s.Problem ?? "",
         string.Join('\n', s.Benches.Select(b =>
-            $"{b.Path}|{b.Name}|{b.State}|{b.RawState}|{b.StopReason}|{b.Site}|{b.WebUrl}|{_busy.Contains(b.Path)}|{(_failures.TryGetValue(b.Path, out var f) ? f.Message : "")}")));
+            $"{b.Path}|{b.Name}|{b.State}|{b.RawState}|{b.StopReason}|{b.Site}|{b.WebUrl}|{_busy.Contains(b.Path)}|{(_failures.TryGetValue(b.Path, out var f) ? f.Message : "")}|{b.Problem}")));
 
     private void Rebuild()
     {
@@ -302,7 +304,13 @@ internal sealed class FlyoutView : UserControl
         var strip = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(18, 2, 0, 0) };
         var site = TextButton("Open site", () => _actions.OpenSite(bench), enabled: !string.IsNullOrWhiteSpace(bench.WebUrl));
         var logs = TextButton("Logs", () => _actions.ShowLogs(bench));
-        var code = TextButton("VS Code", () => { if (!_actions.OpenVsCode(bench)) ShowVsCodeMissing(); });
+        var code = TextButton("VS Code", () => {
+            switch (_actions.OpenVsCode(bench))
+            {
+                case VsCodeOutcome.NotFound: ShowVsCodeMissing(); break;
+                case VsCodeOutcome.BadPath: ShowVsCodeBadPath(bench.Path); break;
+            }
+        });
         code.ToolTip = _actions.VsCodeAvailable() ? "Open the bench in VS Code" : VsCode.InstallMessage;
         var doctor = TextButton("Doctor", () => _actions.ShowDoctor(bench));
         foreach (var b in new[] { site, logs, code, doctor }) strip.Children.Add(b);
@@ -312,12 +320,14 @@ internal sealed class FlyoutView : UserControl
         var stack = new StackPanel();
         stack.Children.Add(grid);
         stack.Children.Add(strip);
-        if (_failures.TryGetValue(bench.Path, out var failure))
+        // an action's failure line wins; else the line of a bench whose status call failed
+        var line = _failures.TryGetValue(bench.Path, out var failure) ? failure.Message : bench.Problem;
+        if (line is not null)
         {
-            row.FailureText = failure.Message;
+            row.FailureText = line;
             stack.Children.Add(new TextBlock
             {
-                Text = failure.Message,
+                Text = line,
                 Foreground = ErrorBrush,
                 FontSize = 12,
                 TextWrapping = TextWrapping.Wrap,
@@ -391,19 +401,22 @@ internal sealed class FlyoutView : UserControl
         return string.IsNullOrWhiteSpace(bench.Site) ? "no site" : bench.Site;
     }
 
-    private void ShowMessage(string text, string linkText, string url)
+    private void ShowMessage(string text, string? linkText, string? url)
     {
         MessageText = text;
         _message.Children.Clear();
         var block = new TextBlock { TextWrapping = TextWrapping.Wrap, FontSize = 12 };
-        block.Inlines.Add(new Run(text + " "));
-        var link = new Hyperlink(new Run(linkText)) { NavigateUri = new Uri(url) };
-        link.RequestNavigate += (_, e) =>
+        block.Inlines.Add(new Run(linkText is null ? text : text + " "));
+        if (linkText is not null && url is not null)
         {
-            e.Handled = true;
-            _actions.OpenUrl(e.Uri.AbsoluteUri);
-        };
-        block.Inlines.Add(link);
+            var link = new Hyperlink(new Run(linkText)) { NavigateUri = new Uri(url) };
+            link.RequestNavigate += (_, e) =>
+            {
+                e.Handled = true;
+                _actions.OpenUrl(e.Uri.AbsoluteUri);
+            };
+            block.Inlines.Add(link);
+        }
         _message.Children.Add(block);
         _message.Visibility = Visibility.Visible;
     }
