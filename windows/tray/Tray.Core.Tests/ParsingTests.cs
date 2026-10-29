@@ -85,7 +85,7 @@ public class ParsingTests
         var dir = Fixtures.Copy("rest");
         var before = File.ReadAllText(Path.Combine(dir, "status-frappe-bench.json"));
         var source = new FixtureBenchSource(dir);
-        Assert.Equal(0, await source.RunAsync(["up", "--bench-dir", "/home/akash/frappe-bench"], Ct));
+        Assert.True((await source.RunAsync(["up", "--bench-dir", "/home/akash/frappe-bench"], Ct)).Ok);
         Assert.Equal(before, File.ReadAllText(Path.Combine(dir, "status-frappe-bench.json")));
         Assert.Equal(["up --bench-dir /home/akash/frappe-bench"], source.Actions);
     }

@@ -129,10 +129,12 @@ internal sealed class ScriptedSource : IBenchSource, ILoadSource
         finally { Leave(); }
     }
 
-    public Task<int> RunAsync(string[] args, CancellationToken ct)
+    public ActionResult Result { get; set; } = ActionResult.Success;
+
+    public Task<ActionResult> RunAsync(string[] args, CancellationToken ct)
     {
         lock (Actions) Actions.Add(string.Join(' ', args));
-        return Task.FromResult(0);
+        return Task.FromResult(Result);
     }
 
     public Task<DoctorReport> DoctorAsync(string benchPath, CancellationToken ct) => Task.FromResult(new DoctorReport(benchPath, null, [], 0, 0, 0));

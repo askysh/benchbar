@@ -11,8 +11,8 @@ public interface IBenchSource
     Task<IReadOnlyList<BenchEntry>> ListAsync(CancellationToken ct);
     Task<BenchStatus> StatusAsync(BenchEntry bench, CancellationToken ct);
 
-    /// <summary>Runs an action (<c>up</c>, <c>down</c>, <c>restart</c> with <c>--bench-dir</c>) and returns the exit code.</summary>
-    Task<int> RunAsync(string[] args, CancellationToken ct);
+    /// <summary>Runs an action (<c>up</c>, <c>down</c>, <c>restart</c> with <c>--bench-dir</c>) and returns its exit code and, on failure, the first useful line it printed.</summary>
+    Task<ActionResult> RunAsync(string[] args, CancellationToken ct);
 
     /// <summary><c>doctor --json --bench-dir PATH</c>. Read only.</summary>
     Task<DoctorReport> DoctorAsync(string benchPath, CancellationToken ct);
@@ -35,6 +35,16 @@ public interface IBenchSource
 public interface ILoadSource
 {
     double? CpuPercent { get; }
+}
+
+/// <summary>The outcome of an action: <see cref="Message"/> is the first useful stderr line when it failed, else null.</summary>
+public readonly record struct ActionResult(int ExitCode, string? Message)
+{
+    public bool Ok => ExitCode == 0;
+
+    public static ActionResult Success { get; } = new(0, null);
+
+    public static ActionResult Failure(string message) => new(1, message);
 }
 
 /// <summary>Result of one child process.</summary>
@@ -171,12 +181,15 @@ public sealed class ShimBenchSource : IBenchSource
         };
     }
 
-    public async Task<int> RunAsync(string[] args, CancellationToken ct)
+    public async Task<ActionResult> RunAsync(string[] args, CancellationToken ct)
     {
         var shim = _locate() ?? throw new SetupProblemException(NotFoundMessage);
         try
         {
-            return (await _runner.RunAsync(shim, args, ct).ConfigureAwait(false)).ExitCode;
+            var result = await _runner.RunAsync(shim, args, ct).ConfigureAwait(false);
+            if (result.ExitCode == 0) return ActionResult.Success;
+            var line = FirstLine(result.Error) ?? FirstLine(result.Output) ?? $"benchbar.exe exited with code {result.ExitCode}.";
+            return new ActionResult(result.ExitCode, line);
         }
         catch (Win32Exception ex)
         {
@@ -298,11 +311,11 @@ public sealed class FixtureBenchSource(string directory) : IBenchSource, ILoadSo
         return status with { WebUrl = status.WebUrl ?? bench.WebUrl };
     }
 
-    public Task<int> RunAsync(string[] args, CancellationToken ct)
+    public Task<ActionResult> RunAsync(string[] args, CancellationToken ct)
     {
         // up and down rewrite nothing: a scenario stays what the folder says
         lock (_log) _log.Add(string.Join(' ', args));
-        return Task.FromResult(0);
+        return Task.FromResult(ActionResult.Success);
     }
 
     public async Task<DoctorReport> DoctorAsync(string benchPath, CancellationToken ct)

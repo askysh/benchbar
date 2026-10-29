@@ -176,24 +176,24 @@ public sealed class TrayController : IDisposable
 
     // --- actions ---
 
-    /// <summary>Stops a running or starting bench, starts any other, then polls at once and keeps polling fast for a minute.</summary>
-    public async Task StartStopAsync(BenchStatus bench)
+    /// <summary>Stops a running or starting bench, starts any other (the result says why a refusal failed), then polls at once and keeps polling fast for a minute.</summary>
+    public async Task<ActionResult> StartStopAsync(BenchStatus bench)
     {
         var verb = bench.State is BenchState.Running or BenchState.Starting ? "down" : "up";
-        await RunActionAsync(verb, bench).ConfigureAwait(false);
+        return await RunActionAsync(verb, bench).ConfigureAwait(false);
     }
 
-    public Task RestartAsync(BenchStatus bench) => RunActionAsync("restart", bench);
+    public Task<ActionResult> RestartAsync(BenchStatus bench) => RunActionAsync("restart", bench);
 
-    private async Task RunActionAsync(string verb, BenchStatus bench)
+    private async Task<ActionResult> RunActionAsync(string verb, BenchStatus bench)
     {
         try
         {
-            await _source.RunAsync([verb, "--bench-dir", bench.Path], _cts.Token).ConfigureAwait(false);
+            return await _source.RunAsync([verb, "--bench-dir", bench.Path], _cts.Token).ConfigureAwait(false);
         }
-        catch (SourceProblemException)
+        catch (SourceProblemException ex)
         {
-            // the next poll shows the problem line
+            return ActionResult.Failure(ex.Message);
         }
         finally
         {
@@ -263,7 +263,8 @@ public sealed class TrayController : IDisposable
         : snapshot.DistroStopped ? BenchState.Stopped
         : BenchAggregate.State(states);
 
-    private static string UpText(TraySnapshot snapshot, IReadOnlyList<BenchState> states) =>
+    /// <summary>The short summary beside the title: "2 of 3 up", "none up", "distro stopped" or "needs attention".</summary>
+    public static string UpText(TraySnapshot snapshot, IReadOnlyList<BenchState> states) =>
         snapshot.Problem is not null ? "needs attention"
         : snapshot.DistroStopped ? "distro stopped"
         : BenchAggregate.UpText(states);

@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>BenchBarTray</AssemblyName>
+    <RootNamespace>BenchBar.Tray</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>BenchBarTray.ico</ApplicationIcon>
+    <!-- 0.0.0-dev unless a build passes -p:Version=X.Y.Z -->
+    <Version Condition="'$(Version)' == ''">0.0.0-dev</Version>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <SelfContained>false</SelfContained>
+    <!-- ThemeMode (Fluent theme) is still marked experimental in WPF on .NET 10 -->
+    <NoWarn>$(NoWarn);WPF0001</NoWarn>
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="BenchBarTray.Tests" />
+    <Using Include="System.IO" />
+    <Using Include="System.Net.Http" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="H.NotifyIcon.Wpf" />
+    <ProjectReference Include="..\Tray.Core\Tray.Core.csproj" />
+  </ItemGroup>
+</Project>

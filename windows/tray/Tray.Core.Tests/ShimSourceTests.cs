@@ -68,7 +68,7 @@ public class ShimSourceTests
         Assert.Equal(BenchState.Running, (await source.StatusAsync(entry, Ct)).State);
         Assert.Equal(["x"], (await source.LogsAsync("/b", Ct)).Lines);
         Assert.Equal("/home/a/Desktop/r.zip", await source.ReportAsync("/b", Ct));
-        Assert.Equal(0, await source.RunAsync(["restart", "--bench-dir", "/b"], Ct));
+        Assert.True((await source.RunAsync(["restart", "--bench-dir", "/b"], Ct)).Ok);
 
         Assert.All(runner.Calls, c => Assert.Equal(Shim, c.File));
         Assert.Equal(
