@@ -41,6 +41,8 @@ case "$1" in
       app="$(printf '%s' "$app" | tr '[:upper:]-' '[:lower:]_')"
       depth=(); [[ "${MOCK_BENCH_SHALLOW:-0}" == "1" ]] && depth=(--depth 1)
       git clone -q --origin upstream ${depth[@]+"${depth[@]}"} ${branch:+--branch "$branch"} "$repo" "apps/$app" || exit 1
+      # MOCK_BENCH_GET_APP_NO_REMOTE=1: the clone cannot fetch anything more (a remote that hands out no other commit)
+      [[ -z "${MOCK_BENCH_GET_APP_NO_REMOTE:-}" ]] || git -C "apps/$app" remote remove upstream
       [[ -n "$(tail -c1 sites/apps.txt 2>/dev/null)" ]] && printf '\n' >>sites/apps.txt
       printf '%s\n' "$app" >>sites/apps.txt
       [[ -n "${MOCK_BENCH_GET_APP_EXIT:-}" ]] && exit "$MOCK_BENCH_GET_APP_EXIT"

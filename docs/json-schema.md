@@ -564,7 +564,7 @@ branch) exits 1 with the reason as text; anything else is a plan, with
 ```json
 {"schema_version":1,"cli_version":"0.6.0","bench":"/Users/you/frappe-bench","profile":"v15-lts",
  "target":"https://github.com/acme/acme_crm","app":"acme_crm","package":"acme_crm",
- "repo":"https://github.com/acme/acme_crm","branch":"main","commit":"9b1d2c...40 hex characters","branch_source":"remote_default",
+ "repo":"https://github.com/acme/acme_crm","branch":"main","commit":"9b1d2c...40 hex characters","commit_source":"branch","branch_source":"remote_default",
  "present":false,"reachable":true,
  "sites":[{"name":"macdev","installed":false}],"sites_error":null,
  "required_apps":[{"name":"acme_base","required_by":"acme_crm","present":false,"resolves":true,
@@ -586,25 +586,38 @@ branch) exits 1 with the reason as text; anything else is a plan, with
 | `package` | string or null | that package folder; `null` when `hooks.py` could not be read |
 | `repo` | string | the URL `get-app` gets |
 | `branch` | string or null | `null` when it could not be told (then `errors` says so) |
-| `commit` | string or null | the commit the plan read `hooks.py` from; `--apply` stops before build and install when `get-app` checks out another one |
+| `commit` | string or null | the commit the plan read `hooks.py` from: the pin (always the full hash) when `--commit` is given, else the branch tip; `--apply` stops before build and install when `get-app` checks out another one, and when a pinned commit is not reached by the clone |
+| `commit_source` | string | `pin` (`--commit`; for an app already in the bench, it is at the pin) or `branch` |
 | `branch_source` | string or null | `given` (`--branch`), `policy` (`config/apps.tsv` or the team profile), `remote_default` (the remote's HEAD) or `present` (the branch of the app already in the bench) |
 | `present` | bool | the bench already has the app; then no clone and no build, only installs |
 | `reachable` | bool or null | git could read the repo without a prompt, within the timeout; `null` when the app is present (nothing is fetched) |
-| `sites[]` | array | the target sites (`--site`, `--all-sites`) and whether each has the app already |
+| `sites[]` | array | the target sites (`--site`, `--all-sites`, `--install-on`) and whether each has the app already (in a batch: the union over the apps, `installed` true when no app of the batch needs an install there) |
+| `apps[]` | array | present only when several apps were given: one entry per target, in the order given, with its own `app`, `package`, `target`, `repo`, `branch`, `branch_source`, `commit`, `commit_source`, `present`, `reachable`, `install_on` (the sites of its `--install-on`, empty when it has none), `sites[]` (its own sites and whether it is installed there) and `required_apps` (the names its `hooks.py` requires). The fields above describe the first target; `required_apps[]`, `missing_required`, `order` and `steps[]` cover the whole batch |
 | `sites_error` | string or null | as in `app list --json` |
 | `required_apps[]` | array | every app `hooks.py` requires, followed through the ones that get cloned; `present` in the bench, `resolves` through `source` (`apps_tsv` or `team_profile`) with its `repo`, `branch` and `commit` |
 | `missing_required` | array of strings | the required apps the plan clones or cannot resolve |
-| `order` | array of strings | the apps the plan clones, each after the apps it requires (ties keep the order the plan always had), the app being added last when it is cloned. A cycle in `required_apps` is an `errors` entry, `required_apps cycle: a -> b -> a`, with `can_apply` false |
+| `order` | array of strings | the apps the plan clones, each after the apps it requires (ties keep the order the plan always had), the apps being added after the ones they need when they are cloned; the required apps of every target are one graph, an app two targets require is cloned once. A cycle in `required_apps` is an `errors` entry, `required_apps cycle: a -> b -> a`, with `can_apply` false |
 | `reason` | string or null | set when a record of an earlier, unfinished add of this app is merged into the plan (the build, installs and restart it did not finish are `steps`, `changes` is true); otherwise `null` |
-| `steps[]` | array | in the order `--apply` runs them; `kind` is `clone_required`, `clone`, `requirements_python` (only when an earlier run left a cloned app without its pip install), `build`, `install` or `restart` (run only when the bench is running); `note` says what else the step does, for `install` that it changes the site's database like a migrate of these apps |
+| `steps[]` | array | in the order `--apply` runs them; `kind` is `clone_required`, `clone`, `requirements_python` (only when an earlier run left a cloned app without its pip install), `build` (one for every app that is cloned), `install` (one per app and site, site by site, each site in dependency order; named `Install APP on SITE` when several apps were given) or `restart` (once, run only when the bench is running); `note` says what else the step does, for `install` that it changes the site's database like a migrate of these apps |
 | `errors` | array of strings | why the plan cannot run: an unreadable repo, a missing branch, no `hooks.py`, a required app nothing resolves |
 | `changes` | bool | `false` when there is nothing to do |
 | `can_apply` | bool | `false` when `errors` is not empty |
 | `token` | string | SHA-256 of the plan (the commits included, so a branch that moves makes it stale) and of the bench's `sites/apps.txt`, `apps/` folders and site list |
 
 `benchbar app add URL --apply TOKEN --yes --json`, the result:
-`{"schema_version", "cli_version", "bench", "app", "branch", "token",
-"applied": true, "ok", "steps": [{"kind", "name", "status", "reason"}]}`, where
+`{"schema_version", "cli_version", "bench", "app", "branch", "commit",
+"commit_source", "token", "applied": true, "ok", "steps": [{"kind", "name",
+"status", "reason"}], "apps": [...], "required_apps": [...]}`. `apps[]` has one
+entry per target (always, also for one app) and `required_apps[]` one per
+required app that was cloned: `{"app", "cloned", "clone", "build",
+"installs": [{"site", "status", "migrate", "reason"}]}`. `cloned` is true when
+this run cloned the app; `clone` and `build` are the status of that step
+(`null` when the app had none, for example `build` of an app that was
+already there); each install has the status of its step and the same
+status as `migrate`, because `install-app` is what runs the app's patches
+and syncs its DocTypes (there is no separate migrate step). An install
+skipped because an app it requires failed to install on that site has
+`reason` `after failed install of APP`. Where
 `status` is `done`, `failed`, `skipped` (after a failed step it depends on:
 clone, then build, then install and restart; or a restart of a stopped
 bench) or `pending`. `reason` is `after failed <kind>` for a step skipped

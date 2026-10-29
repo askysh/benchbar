@@ -241,8 +241,11 @@ Apps
   app list            Every app: branch, commit, local changes, the sites that have it
                       (--json; --no-sites reads the last site lists instead of asking bench).
   app add NAME|URL    bench get-app from config/apps.tsv or any git URL (GitHub, SSH, a
-                      host alias), after checking access; --branch B, --name N, and
-                      --site S or --all-sites to install it. Never replaces an app.
+                      host alias), after checking access; --branch B, --name N, --commit SHA
+                      (pin the clone to a commit), and --site S or --all-sites to install it.
+                      Several apps in one plan: app add A --commit SHA B --install-on s1,s2
+                      (--branch, --name, --commit and --install-on belong to the app before
+                      them). Never replaces an app.
                       --dry-run --json: the plan with its token (required apps read from
                       hooks.py); --apply TOKEN --yes runs exactly that plan, no questions.
   app install NAME    Install an app of the bench on a site (--site S).

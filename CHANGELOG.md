@@ -20,6 +20,17 @@ All notable changes to this project are documented here.
   next plan lists the build and the install again (`reason` in the plan
   JSON). Required apps are cloned in dependency order (`order` in the
   plan; a cycle in `required_apps` is a plan error that names it).
+- `app add` pins and batches: `--commit SHA` (7 to 40 hex characters) clones
+  the app and checks the commit out before the build, reads `hooks.py` at
+  that commit, and refuses a clone that does not reach it (`nothing was
+  built or installed`); the plan JSON has `commit_source` (`pin` or
+  `branch`). Several apps in one plan and one token:
+  `app add A --commit SHA B --install-on s1,s2 --dry-run --json` (the
+  options belong to the app before them); their required apps are one
+  dependency graph with one clone each, one build and one restart, and the
+  JSON gains `apps[]`. The `--apply` result reports each app: `cloned`,
+  `clone`, `build` and `installs[]` with the install's `status` and the
+  `migrate` that `install-app` runs.
 - `app add` in a terminal shows the same plan agents review, asks once and
   applies it with the same steps, instead of its own flow with a second
   question for required apps.
