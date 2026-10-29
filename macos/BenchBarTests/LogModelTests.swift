@@ -28,6 +28,25 @@ struct LogModelTests {
         #expect(lines.map(\.isError) == [false, true, true, true, false])
     }
 
+    /// werkzeug's coloured banner, as bench.log has it: the viewer shows and
+    /// searches the text without the escape sequences.
+    @Test func colourCodesAreDropped() {
+        let esc = "\u{1B}"
+        #expect(LogParser.plain("\(esc)[31m\(esc)[1mWARNING: dev server\(esc)[0m") == "WARNING: dev server")
+        #expect(LogParser.plain("\(esc)[33mPress CTRL+C to quit\(esc)[0m") == "Press CTRL+C to quit")
+        #expect(LogParser.plain("a\(esc)[2Kb\(esc)]0;title\u{07}c\(esc)(Bd") == "abcd")
+        #expect(LogParser.plain("[31m stays: no escape") == "[31m stays: no escape")
+        #expect(LogParser.plain("cut at the end \(esc)[3") == "cut at the end ")
+
+        var buffer = LogBuffer()
+        buffer.append("01:41:27 web.1 | \(esc)[31m\(esc)[1mWARNING: This is a development server.\(esc)[0m\n")
+        #expect(buffer.lines.map(\.text) == ["01:41:27 web.1 | WARNING: This is a development server."])
+        #expect(buffer.lines.first?.process == "web")
+        var query = LogQuery()
+        query.search = "warning: this"
+        #expect(query.matches(in: buffer.lines) == [0])
+    }
+
     @Test func partialLinesWaitForTheirEnd() {
         var buffer = LogBuffer()
         #expect(buffer.append("10:00:01 web.1 | hel").isEmpty)

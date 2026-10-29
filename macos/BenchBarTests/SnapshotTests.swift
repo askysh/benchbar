@@ -116,6 +116,7 @@ struct SnapshotTests {
         10:00:01 system      | redis_cache.1 started (pid=4101)
         10:00:01 redis_cache.1 | Ready to accept connections tcp
         10:00:02 web.1       | * Running on http://127.0.0.1:8000
+        10:00:02 web.1       | \u{1B}[33mPress CTRL+C to quit\u{1B}[0m
         10:00:03 socketio.1  | Realtime service listening on: ws://0.0.0.0:9000
         10:00:05 web.1       | 127.0.0.1 - - "GET /api/method/ping HTTP/1.1" 200 -
         10:00:09 worker.1    | 10:00:09 default: frappe.utils.background_jobs.run_doc_method (job-1)
