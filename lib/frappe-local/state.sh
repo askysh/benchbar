@@ -274,13 +274,21 @@ fl_state_init() {
 
 # Writers of one key-value file serialize on FILE.lck (mkdir is atomic): a
 # status poll of the app and a repair writing the same bench file at once
-# must not lose each other's keys. A short wait, then the write goes ahead
-# anyway (a lock left by a killed writer must not block forever).
+# must not lose each other's keys. A lock left by a killed writer must not
+# block for ever, so one 10 seconds old is broken; a younger one is waited
+# for, however long the queue of live writers in front is (on a loaded
+# machine eight writers took more than the 2 seconds this once waited).
 fl__kv_lock() {
-  local lck="$1.lck" i=0
+  local lck="$1.lck" i=0 born now
   while ! mkdir "$lck" 2>/dev/null; do
     i=$((i + 1))
-    [[ "$i" -lt 40 ]] || { rm -rf "$lck"; continue; }
+    if [[ $((i % 40)) -eq 0 ]]; then
+      # its age from the mtime (GNU stat, then BSD), each only when it is a number
+      born="$(stat -c %Y "$lck" 2>/dev/null || true)"
+      [[ "$born" =~ ^[0-9]+$ ]] || born="$(stat -f %m "$lck" 2>/dev/null || true)"
+      now="$(date +%s)"
+      if [[ ! "$born" =~ ^[0-9]+$ ]] || [[ $((now - born)) -ge 10 ]]; then rm -rf "$lck"; continue; fi
+    fi
     sleep 0.05
   done
 }
