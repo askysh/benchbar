@@ -113,8 +113,9 @@ All notable changes to this project are documented here.
   Review reads the CLI's `app add --dry-run --json` plan (the clones, the
   build, the installs on each site, the restart, what it touches) and Add
   App applies it by its token. A plan the bench has outgrown asks to
-  Review Again instead of running. Add Site shows its steps and runs the
-  CLI's `--dry-run` checks first.
+  Review Again instead of running. Add Site does the same with the CLI's
+  `site add --dry-run --json` plan: its steps, what it touches, the default
+  site that stays and the hosts line.
 - Doctor warns in WSL when NTP inside the distro fights the Windows host
   clock (`wsl_time_sync`): each NTP poll steps the clock when Windows has
   drifted, and a step can stop a bench's worker. Fix: `sudo timedatectl

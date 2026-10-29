@@ -362,9 +362,16 @@ struct SnapshotTests {
         try render(AddAppSheet(workbench: workbench, bench: bench, sites: sites,
                                start: appStart("app-add-plan") { _ in .stale("The app add plan changed since it was shown.") }) {},
                    "add-app-plan-stale")
-        let sitePlan = SiteAddPlan.make(site: "v16three", defaultSite: bench.siteRows.first { $0.isDefault }?.name)
+        func siteStart(_ fixture: String, _ stage: (SiteAddPlan) -> PlanReviewFlow<SiteAddPlan>.Stage) throws -> AddSiteSheet.Start {
+            let plan = try BenchJSON.decode(SiteAddPlan.self, from: Fixture.data(fixture))
+            return .init(name: plan.site, password: "pw", flow: .init(stage: stage(plan)))
+        }
+        try render(AddSiteSheet(workbench: workbench, bench: bench, start: siteStart("site-add-plan") { .reviewing($0) }) {}, "add-site-plan")
+        try render(AddSiteSheet(workbench: workbench, bench: bench, start: siteStart("site-add-plan-exists") { .reviewing($0) }) {},
+                   "add-site-plan-nothing")
         try render(AddSiteSheet(workbench: workbench, bench: bench,
-                                start: .init(name: "v16three", password: "pw", flow: .init(stage: .reviewing(sitePlan)))) {}, "add-site-plan")
+                                start: siteStart("site-add-plan") { _ in .stale("The site add plan changed since it was shown.") }) {},
+                   "add-site-plan-stale")
         base.cli.answer("app update", json: try Fixture.string("app-update-plan"))
         await workbench.loadApps(bench)
         let app = try #require(workbench.apps[bench.path]?.apps.first { $0.name != "frappe" } ?? workbench.apps[bench.path]?.apps.first)

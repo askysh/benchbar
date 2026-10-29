@@ -207,22 +207,25 @@ nonisolated struct CLIClient: Sendable {
         try await run(["app", "update", app, "--yes", "--plain", "--bench-dir", bench], timeout: Timeout.long, acceptExitCodes: [0])
     }
 
-    /// benchbar site add NAME: the Administrator password goes in the
-    /// environment of that one process (ADMIN_PASSWORD, as the CLI reads it),
-    /// never on a command line. The hosts line needs sudo, which a process
-    /// without a terminal cannot ask for: the CLI skips it and says so (the
-    /// Sites tab's Add Hosts Lines sheet runs `site hosts` for that).
-    @discardableResult
-    func addSite(_ name: String, adminPassword: String, bench: String) async throws(CLIError) -> CommandOutput {
-        try await run(["site", "add", name, "--yes", "--plain", "--bench-dir", bench],
-                      timeout: Timeout.long, acceptExitCodes: [0], extraEnvironment: ["ADMIN_PASSWORD": adminPassword])
+    /// benchbar site add NAME --dry-run --json: the plan and its token. Read
+    /// only: nothing is created, and it needs no password.
+    func addSitePlan(_ name: String, bench: String) async throws(CLIError) -> SiteAddPlan {
+        let output = try await run(["site", "add", name, "--dry-run", "--json", "--bench-dir", bench],
+                                   timeout: Timeout.query, acceptExitCodes: [0])
+        return try BenchJSON.decode(SiteAddPlan.self, from: Data(output.stdout.utf8))
     }
 
-    /// benchbar site add NAME --dry-run: the CLI's own checks (a name that is
-    /// taken or half made, MariaDB's password) with nothing created. Text
-    /// only: `site add` has no JSON plan, so the sheet's steps are the app's.
-    func checkSiteAdd(_ name: String, bench: String) async throws(CLIError) {
-        _ = try await run(["site", "add", name, "--dry-run", "--plain", "--bench-dir", bench], timeout: Timeout.query, acceptExitCodes: [0])
+    /// benchbar site add NAME --apply TOKEN: runs the plan the person saw. The
+    /// CLI recomputes it and refuses a token that no longer matches the bench.
+    /// The Administrator password goes in the environment of that one process
+    /// (ADMIN_PASSWORD, as the CLI reads it), never on a command line. The
+    /// hosts line needs sudo, which a process without a terminal cannot ask
+    /// for: the CLI skips it and says so (the Sites tab's Add Hosts Lines
+    /// sheet runs `site hosts` for that).
+    @discardableResult
+    func addSite(_ name: String, adminPassword: String, token: String, bench: String) async throws(CLIError) -> CommandOutput {
+        try await run(["site", "add", name, "--apply", token, "--yes", "--plain", "--bench-dir", bench],
+                      timeout: Timeout.long, acceptExitCodes: [0], extraEnvironment: ["ADMIN_PASSWORD": adminPassword])
     }
 
     @discardableResult

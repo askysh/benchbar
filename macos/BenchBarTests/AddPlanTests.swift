@@ -62,8 +62,31 @@ struct AddPlanTests {
         #expect(plan.touches.isEmpty && !plan.restarts)
     }
 
+    @Test func decodesTheSitePlan() throws {
+        let plan = try BenchJSON.decode(SiteAddPlan.self, from: Fixture.data("site-add-plan"))
+        #expect(plan.site == "v16three" && !plan.exists && plan.apps.isEmpty && plan.bench == "/Users/you/frappe-bench")
+        #expect(plan.steps.map(\.kind) == ["new_site", "hosts"])
+        #expect(plan.steps.last?.name == "Add 127.0.0.1 v16three to /etc/hosts")
+        #expect(plan.token.count == 64 && plan.changes && plan.canRun)
+        #expect(plan.keptDefaultSite == "macdev" && !plan.defaultMoves && !plan.hostsEntry)
+        #expect(plan.touches == ["database", "site_folder", "hosts"])
+        #expect(plan.touchesText == ["a new MariaDB database and user", "sites/v16three"], "the app never writes /etc/hosts")
+    }
+
+    @Test func aSitePlanWithNothingToDoCannotRun() throws {
+        let plan = try BenchJSON.decode(SiteAddPlan.self, from: Fixture.data("site-add-plan-exists"))
+        #expect(plan.exists && plan.hostsEntry && plan.steps.isEmpty && !plan.changes && !plan.canRun)
+        #expect(plan.touchesText.isEmpty)
+        var flow = PlanReviewFlow<SiteAddPlan>()
+        _ = flow.review()
+        flow.read(.success(plan))
+        let applied = flow.apply()
+        #expect(applied == nil && !flow.isRunning)
+    }
+
     @Test func theStaleTokenMessageIsTheCLIs() {
         #expect(StalePlan.isStale("The app add plan changed since it was shown (apps.txt, apps/, the sites or the remote). Nothing was changed."))
+        #expect(StalePlan.isStale("The site add plan changed since it was shown (the sites, apps.txt or the default site). Nothing was changed."))
         #expect(!StalePlan.isStale("[FAIL] cannot read git@github.com:acme/private.git (no SSH key)"))
     }
 
@@ -101,18 +124,42 @@ struct AddPlanTests {
         #expect(error.map(StalePlan.isStale) == true)
     }
 
-    @Test func theSitePlanIsTheCLIsChecksThenTheAppsSteps() async throws {
+    @Test func theSitePlanIsTheCLIsDryRunAndTheApplyCarriesItsToken() async throws {
         let (store, runner) = try await store()
-        base.cli.answer("site add", .ok("[OK] site v16three: http://v16three:8001"))
+        base.cli.answer("site add", json: try Fixture.string("site-add-plan"))
         let bench = try #require(store.benches.first { $0.path == v16 })
         let workbench = Workbench(store: store)
         guard case .success(let plan) = await workbench.addSitePlan("v16three", on: bench) else { Issue.record("no plan"); return }
-        #expect(base.cli.calls.contains(["site", "add", "v16three", "--dry-run", "--plain", "--bench-dir", v16]))
-        #expect(plan.site == "v16three" && plan.defaultSite == bench.siteRows.first { $0.isDefault }?.name)
-        #expect(plan.steps.count == 3 && plan.steps.last?.note.contains("Terminal") == true)
+        #expect(base.cli.calls.contains(["site", "add", "v16three", "--dry-run", "--json", "--bench-dir", v16]))
+        #expect(bench.activity == nil && workbench.result == nil, "reading a plan takes no change slot and leaves no banner")
         #expect(runner.calls.allSatisfy { $0.environment["ADMIN_PASSWORD"] == nil }, "the review has no password to carry")
-        base.cli.answer("site add", .init(exitCode: 1, stdout: "[FAIL] Invalid site name", stderr: ""))
-        #expect(await workbench.addSitePlan("Bad_Name", on: bench) == .failure(.init(message: "Invalid site name")))
+        await workbench.addSite("v16three", adminPassword: "s3cret pw", token: plan.token, on: bench)
+        let apply = try #require(runner.calls.first { $0.arguments.contains("--apply") })
+        #expect(apply.arguments == ["site", "add", "v16three", "--apply", plan.token, "--yes", "--plain", "--bench-dir", v16])
+        #expect(apply.environment["ADMIN_PASSWORD"] == "s3cret pw" && !apply.arguments.joined(separator: " ").contains("s3cret"))
+        #expect(base.cli.calls.filter { $0.starts(with: ["site", "add"]) && !$0.contains("--dry-run") }.count == 1,
+                "the only run of site add without --dry-run is the apply")
+    }
+
+    @Test func aRefusedSiteDryRunIsTheCLIsMessage() async throws {
+        let (store, _) = try await store()
+        base.cli.answer("site add", .init(exitCode: 1, stdout: "", stderr: "[FAIL] Invalid site name"))
+        let bench = try #require(store.benches.first { $0.path == v16 })
+        #expect(await Workbench(store: store).addSitePlan("Bad_Name", on: bench) == .failure(.init(message: "Invalid site name")))
+    }
+
+    @Test func aStaleSiteTokenComesBackAsTheCLIsMessage() async throws {
+        let (store, _) = try await store()
+        // the CLI's own words, captured from the mock run
+        let stale = """
+          [FAIL] The site add plan changed since it was shown (the sites, apps.txt or the default site). Nothing was changed.
+
+        Aborting. Review a fresh plan: benchbar site add v16three --dry-run --json, then pass its token.
+        """
+        base.cli.answer("site add", .init(exitCode: 1, stdout: stale, stderr: ""))
+        let bench = try #require(store.benches.first { $0.path == v16 })
+        let error = await Workbench(store: store).addSite("v16three", adminPassword: "pw", token: "old", on: bench)
+        #expect(error.map(StalePlan.isStale) == true)
     }
 
     // MARK: the sheet's state machine
@@ -186,5 +233,20 @@ struct AddPlanTests {
         var flow = PlanReviewFlow<AppAddPlan>()
         flow.read(.success(try plan()))
         #expect(flow.stage == .form)
+    }
+
+    @Test func aStaleSiteTokenKeepsTheSheetOpenAndReviewAgainReadsANewPlan() throws {
+        let plan = try BenchJSON.decode(SiteAddPlan.self, from: Fixture.data("site-add-plan"))
+        var flow = PlanReviewFlow<SiteAddPlan>()
+        _ = flow.review()
+        flow.read(.success(plan))
+        #expect(flow.apply() == plan)
+        let message = "The site add plan changed since it was shown. Nothing was changed."
+        let closes = flow.finish(error: message)
+        #expect(!closes && flow.stage == .stale(message) && flow.plan == nil)
+        let again = flow.review()
+        #expect(again && flow.stage == .reading)
+        flow.read(.success(plan))
+        #expect(flow.plan == plan)
     }
 }

@@ -397,8 +397,10 @@ struct SiteMenu: View {
     }
 }
 
-/// Fill in the site, Review runs the CLI's checks and shows the steps, Add
-/// Site runs `site add`. The CLI has no token for it, so nothing can go stale.
+/// Fill in the site, Review reads the CLI's plan (`site add --dry-run
+/// --json`), Add Site runs it by its token. A token the CLI refuses (the
+/// bench changed since) shows here, with Review Again; any other failure
+/// closes the sheet and the change banner has it.
 struct AddSiteSheet: View {
     /// What the sheet starts with: empty for a person, filled for a render.
     struct Start {
@@ -432,9 +434,10 @@ struct AddSiteSheet: View {
         switch flow.stage {
         case .form:
             if let error = flow.readError { .failed(error, title: "\(name) cannot be added") } else { .ready }
-        case .reading: .loading("Checking \(name) with benchbar…")
-        case .reviewing, .stale: .ready
+        case .reading: .loading("Reading the plan from benchbar…")
+        case .reviewing: .ready
         case .applying: .running("Creating \(name)…")
+        case .stale: .failed("Nothing was changed. Review the plan again to see what it is now.", title: "The bench changed since this plan was shown")
         }
     }
 
@@ -442,11 +445,11 @@ struct AddSiteSheet: View {
         SheetScaffold("Add a Site to \(bench.name)",
                       explanation: flow.plan == nil
                           ? "A new site on the same MariaDB, with only Frappe installed. Add apps from the Apps tab afterwards."
-                          : "Nothing has run yet. These are the steps; Add Site runs them.",
+                          : "Nothing has run yet. These are the steps; Add Site runs exactly this plan.",
                       phase: phase, width: flow.plan == nil ? .regular : .wide) {
             if let plan = flow.plan {
                 SiteAddPlanView(plan: plan)
-            } else if flow.stage != .reading {
+            } else if flow.stage != .reading, !isStale {
                 form
             }
         } leading: {
@@ -455,19 +458,26 @@ struct AddSiteSheet: View {
             }
         } actions: {
             switch flow.stage {
-            case .form, .reading, .stale:
+            case .form, .reading:
                 CancelButton(action: close)
                 Button("Review") { review() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(!nameValid || !passwordValid || flow.stage == .reading)
-            case .reviewing:
+            case .reviewing(let plan):
                 CancelButton(action: close)
-                Button("Add Site") { apply() }.keyboardShortcut(.defaultAction)
+                Button("Add Site") { apply() }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!plan.canRun)
             case .applying:
                 EmptyView()
+            case .stale:
+                CancelButton(action: close)
+                Button("Review Again") { review() }.keyboardShortcut(.defaultAction)
             }
         }
     }
+
+    private var isStale: Bool { if case .stale = flow.stage { true } else { false } }
 
     @ViewBuilder private var form: some View {
         Form {
@@ -488,10 +498,11 @@ struct AddSiteSheet: View {
     }
 
     private func apply() {
-        guard flow.apply() != nil else { return }
+        guard let plan = flow.apply() else { return }
         Task {
-            let error = await workbench.addSite(name, adminPassword: password, on: bench)
-            if flow.finish(error: error) { close() }
+            let error = await workbench.addSite(name, adminPassword: password, token: plan.token, on: bench)
+            // a stale token is answered here, with Review Again, not in the banner
+            if flow.finish(error: error) { close() } else { workbench.result = nil }
         }
     }
 }

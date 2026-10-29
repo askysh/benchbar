@@ -99,7 +99,8 @@ nonisolated struct AppAddPlan: Codable, Sendable, Equatable {
 }
 
 /// The CLI refuses a token whose plan no longer matches the bench: another
-/// change to apps.txt, apps/ or the sites, or a branch that moved.
+/// change to apps.txt, apps/ or the sites, or a branch that moved. Add App's
+/// and Add Site's refusals share the sentence.
 nonisolated enum StalePlan {
     static func isStale(_ message: String) -> Bool { message.contains("plan changed since it was shown") }
 }

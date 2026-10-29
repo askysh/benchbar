@@ -157,22 +157,23 @@ final class Workbench {
 
     // MARK: sites
 
-    /// The CLI's own checks for a new site (`site add --dry-run`), then the
-    /// steps it would take. Nothing is created.
+    /// The reviewed plan of a site add, read only. Nothing is created and no
+    /// change slot is taken; the person looks at it before `addSite`.
     func addSitePlan(_ name: String, on bench: BenchModel) async -> Result<SiteAddPlan, ChangeError> {
         guard let client = store.cliClient else { return .failure(ChangeError(message: "The benchbar command line tool is not available.")) }
         do {
-            try await client.checkSiteAdd(name, bench: bench.path)
-            return .success(SiteAddPlan.make(site: name, defaultSite: bench.siteRows.first { $0.isDefault }?.name))
+            return .success(try await client.addSitePlan(name, bench: bench.path))
         } catch {
             return .failure(ChangeError(message: error.localizedDescription))
         }
     }
 
+    /// Runs the plan the person saw, by its token. Returns the CLI's message
+    /// when it failed (a stale token among them), nil when it worked.
     @discardableResult
-    func addSite(_ name: String, adminPassword: String, on bench: BenchModel) async -> String? {
+    func addSite(_ name: String, adminPassword: String, token: String, on bench: BenchModel) async -> String? {
         await change("Add site \(name)", on: bench) { client throws(CLIError) in
-            try await client.addSite(name, adminPassword: adminPassword, bench: bench.path)
+            try await client.addSite(name, adminPassword: adminPassword, token: token, bench: bench.path)
         }
     }
 

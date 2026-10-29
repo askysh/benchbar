@@ -88,9 +88,9 @@ struct WorkbenchTests {
         let (store, runner) = try await store()
         base.cli.answer("site", json: "")
         let bench = try #require(store.benches.first { $0.path == v16 })
-        await Workbench(store: store).addSite("v16three", adminPassword: "s3cret pw", on: bench)
+        await Workbench(store: store).addSite("v16three", adminPassword: "s3cret pw", token: "tok", on: bench)
         let call = try #require(runner.calls.first { $0.arguments.starts(with: ["site", "add"]) })
-        #expect(call.arguments == ["site", "add", "v16three", "--yes", "--plain", "--bench-dir", v16])
+        #expect(call.arguments == ["site", "add", "v16three", "--apply", "tok", "--yes", "--plain", "--bench-dir", v16])
         #expect(!call.arguments.joined(separator: " ").contains("s3cret"))
         #expect(call.environment["ADMIN_PASSWORD"] == "s3cret pw")
         #expect(!runner.calls.filter { !$0.arguments.starts(with: ["site", "add"]) }.contains { $0.environment["ADMIN_PASSWORD"] != nil },
@@ -289,7 +289,7 @@ struct OnDemandTests {
         await show(store, workbench, bench)
         var doctor = 1, apps = 1
         let changes: [(name: String, listsApps: Bool, run: () async -> Void)] = [
-            ("a site", false, { await workbench.addSite("two.localhost", adminPassword: "x", on: bench) }),
+            ("a site", false, { await workbench.addSite("two.localhost", adminPassword: "x", token: "tok", on: bench) }),
             ("a raw change", false, { _ = await store.runChange("Something", on: bench) { _ throws(CLIError) in } }),
             ("the scheduler", false, { await store.setScheduler(true, on: bench) }),
             ("a focus pin", true, { await workbench.setFocus(.ignore, app: "erpnext", on: bench) }),

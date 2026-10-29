@@ -123,10 +123,23 @@ struct AppAddPlanView: View {
 struct SiteAddPlanView: View {
     let plan: SiteAddPlan
 
+    /// The hosts step needs sudo, which a process without a terminal cannot
+    /// ask for: the CLI skips it there, so the row says Add Site does not run it.
+    private var rows: [PlanStepList.Row] {
+        plan.steps.map { step in
+            PlanStepList.Row(name: step.name, command: step.command,
+                             note: step.kind == "hosts" ? "Add Site does not run this step." : nil)
+        }
+    }
+
     private var facts: [(label: String, text: String)] {
-        var out: [(label: String, text: String)] = [("Touches", plan.touches.joined(separator: ", "))]
+        var out: [(label: String, text: String)] = []
+        if !plan.touchesText.isEmpty { out.append(("Touches", plan.touchesText.joined(separator: ", "))) }
+        out.append(("Hosts line", plan.hostsEntry
+                    ? "127.0.0.1 \(plan.site) is already in /etc/hosts."
+                    : "Needs your Mac's password, which BenchBar never asks for, so it is not added here. The Sites tab's Add Hosts Lines shows the command for Terminal."))
         out.append(("Password", "The Administrator password you typed goes to the benchbar process only."))
-        out.append(("Left alone", plan.defaultSite.map { "The default site stays \($0). Other sites and apps are not changed." }
+        out.append(("Left alone", plan.keptDefaultSite.map { "The default site stays \($0). Other sites and apps are not changed." }
                     ?? "Other sites and apps are not changed."))
         return out
     }
@@ -134,9 +147,15 @@ struct SiteAddPlanView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: WindowMetrics.spacing) {
             Text(plan.site).font(.headline)
+            if !plan.changes {
+                SheetOutcome(symbol: "checkmark.circle.fill", tint: .green, title: "Nothing to do",
+                             detail: "\(plan.site) is already on the bench\(plan.hostsEntry ? " and in /etc/hosts" : "").")
+            }
             PlanFacts(facts: facts)
-            Text("In order:").font(.callout)
-            PlanStepList(rows: plan.steps.map { PlanStepList.Row(name: $0.name, command: nil, note: $0.note) })
+            if !plan.steps.isEmpty {
+                Text("In order:").font(.callout)
+                PlanStepList(rows: rows)
+            }
         }
     }
 }
