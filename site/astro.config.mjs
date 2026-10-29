@@ -27,7 +27,10 @@ export default defineConfig({
       editLink: { baseUrl: 'https://github.com/askysh/benchbar/edit/main/site/' },
       lastUpdated: true,
       customCss: ['./src/styles/custom.css'],
-      components: { SocialIcons: './src/components/TopNav.astro' },
+      components: {
+        SocialIcons: './src/components/TopNav.astro',
+        ThemeSelect: './src/components/ThemeToggle.astro',
+      },
       head: [
         { tag: 'meta', attrs: { property: 'og:image', content: `${site}/og.png` } },
         { tag: 'meta', attrs: { property: 'og:image:width', content: '1200' } },
