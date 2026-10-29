@@ -456,6 +456,9 @@ try {
 } catch {
   Write-Host "  [FAIL] $($_.Exception.Message)" -ForegroundColor Red
 }
+# The last native program was doctor, whose exit code says nothing about the install; leave the
+# install's own result in $LASTEXITCODE (a CI step or a calling script reads it).
+if ($benchbarOk) { $global:LASTEXITCODE = 0 } else { $global:LASTEXITCODE = 1 }
 if ($PSCommandPath -and -not $benchbarOk) { exit 1 }
 
 } @args
