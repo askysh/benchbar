@@ -27,6 +27,8 @@ fi
 # shellcheck source=tests/lib/apps-fixtures.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/apps-fixtures.sh"
 
+# say where an assertion failed (the harness only prints what it expected)
+fail() { printf "FAIL (line %s): %s\n" "${BASH_LINENO[1]}" "$*" >&2; exit 1; }
 BENCH="$HOME/frappe-bench"
 make_fake_bench "$BENCH" macdev
 printf 'frappe\n' >"$BENCH/sites/apps.txt"
@@ -153,10 +155,22 @@ assert_eq "1" "$CODE"; assert_contains "$OUT" "--discard-pending"
 assert_calls_not_contain '^bench --site'
 run_fm app update acme_crm --dry-run --bench-dir "$BENCH" --discard-pending
 assert_file "$(pending_file acme_crm)" "(a dry run discards nothing)"
+# the discard drops the record and stops: even with --yes no step, no merge, no fetch
+head_before="$(app_head "$BENCH/apps/acme_crm")"
+reset_calls
 run_fm app update acme_crm --yes --discard-pending --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "dropping the unfinished app_update of acme_crm"
 assert_eq "" "$(pending_file acme_crm)"
+assert_calls_not_contain '^bench '
+assert_calls_not_contain 'merge|fetch'
+assert_eq "$head_before" "$(app_head "$BENCH/apps/acme_crm")" "(the discard moves nothing)"
+# with no record there is nothing to discard, and still nothing runs
+reset_calls
+run_fm app update acme_crm --yes --discard-pending --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "no unfinished update or add of acme_crm to discard"
+assert_calls_not_contain '^bench |merge|fetch'
 run_fm status --json --bench-dir "$BENCH"
 assert_eq "[]" "$(printf '%s' "$OUT" | jget - 'd["pending_operations"]')"
 
@@ -204,10 +218,18 @@ assert_eq "1" "$CODE"; assert_contains "$OUT" "--discard-pending"
 assert_calls_not_contain '^bench '
 # --discard-pending works even on a dirty tree or a detached HEAD
 printf 'local\n' >>"$BENCH/apps/acme_crm/acme_crm/__init__.py"
+reset_calls
 run_fm app update acme_crm --yes --discard-pending --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "dropping the unfinished app_update of acme_crm"
-assert_contains "$OUT" "has local changes"
+assert_not_contains "$OUT" "has local changes"
 assert_eq "" "$(pending_file acme_crm)"
+assert_calls_not_contain '^bench |merge'
+# the discard looks only at benchbar's own record: a name that is a path reaches nothing
+printf 'keep\n' >"$TMP_DIR/decoy.json"
+run_fm app update "../../../../${TMP_DIR#/}/decoy" --discard-pending --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_file "$TMP_DIR/decoy.json"
 git -C "$BENCH/apps/acme_crm" checkout -q -- .
 # a record whose only entry is a failed verify: re-verified, never a loop
 to="$(git -C "$REMOTES/acme_crm.git" rev-parse main)"
@@ -255,6 +277,34 @@ assert_eq "0" "$CODE" "$OUT"
 assert_eq "1" "$(calls '^bench --site macdev migrate$')"
 assert_eq "0" "$(calls 'merge --ff-only|backup$')"
 assert_eq "" "$(pending_file acme_crm)"
+
+# ---- a record that cannot be read (cut short): kept, nothing runs from it, --discard-pending is the way out
+push_commits acme_crm 1
+run_with MOCK_BENCH_MIGRATE_EXIT 1 app update acme_crm --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"
+cut="$(pending_file acme_crm)"
+head -c 90 "$cut" >"$cut.cut"; mv "$cut.cut" "$cut"
+reset_calls
+run_fm app update acme_crm --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE"; assert_contains "$OUT" "cannot be read"; assert_contains "$OUT" "--discard-pending"
+assert_calls_not_contain '^bench '
+assert_file "$cut" "(the cut record is kept)"
+run_fm doctor --json --bench-dir "$BENCH"
+assert_contains "$(printf '%s' "$OUT" | jget - '" ".join(c["message"] for c in d["checks"] if c["id"]=="app_update_pending")')" "cannot be read"
+run_fm app update acme_crm --yes --discard-pending --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "" "$(pending_file acme_crm)"
+
+# ---- a record that cannot be written: nothing runs, since a stop could not be finished
+dir="$(pending_dir_for)"
+mkdir -p "$(dirname "$dir")"; printf 'in the way\n' >"$dir"
+push_commits acme_crm 1
+reset_calls
+run_fm app update acme_crm --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE"; assert_contains "$OUT" "could not write the pending record"
+assert_calls_not_contain '^bench (--site macdev (backup|migrate)|setup|build)'
+assert_calls_not_contain 'merge --ff-only'
+unlink "$dir"
 
 # ---------------------------------------------------------------- planned app add
 make_app_remote acme_site
@@ -335,6 +385,17 @@ assert_eq "requirements_python,build,restart" "$(pending_get acme_bad '",".join(
 plan_json acme_bad --site macdev
 assert_eq "requirements_python,build,install,restart" "$(steps_of "$OUT")"
 AP_TOKEN="$(printf '%s' "$OUT" | jget - 'd["token"]')"
+# a failed requirements step skips the build, the install and the restart, and the record keeps them
+reset_calls
+run_with MOCK_BENCH_REQUIREMENTS_PYTHON_EXIT 1 app add acme_bad --site macdev --apply "$AP_TOKEN" --yes --json --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"
+assert_calls_not_contain 'build --app|install-app'
+doc="$(printf '%s\n' "$OUT" | grep '"applied"' | tail -n1)"
+assert_eq "failed skipped skipped skipped" "$(printf '%s' "$doc" | jget - '" ".join(s["status"] for s in d["steps"])')"
+assert_eq "after failed requirements_python" "$(printf '%s' "$doc" | jget - 'd["steps"][1]["reason"]')"
+assert_eq "requirements_python,build,install,restart" "$(pending_get acme_bad '",".join(s["kind"] for s in d["steps"])')"
+plan_json acme_bad --site macdev
+AP_TOKEN="$(printf '%s' "$OUT" | jget - 'd["token"]')"
 reset_calls
 apply_json acme_bad --site macdev
 assert_eq "0" "$CODE" "$OUT"
@@ -347,6 +408,10 @@ assert_eq "" "$(pending_file acme_bad)"
 # an app_add record with nothing left to run (the install was done by hand): the
 write_record acme_crm '{"kind":"install","target":"macdev","name":"Install on macdev"}' '"install"'
 [[ -n "$(pending_file acme_crm)" ]] || fail "the hand written record is found"
+run_fm app add acme_crm --site macdev --dry-run --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "its record would be removed"
+assert_file "$(pending_file acme_crm)" "(a dry run removes nothing)"
 run_fm app add acme_crm --site macdev --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "the unfinished app add of acme_crm is complete"
@@ -393,6 +458,14 @@ sed_inplace 's/required_apps = \[\]/required_apps = ["pres_y"]/' "$BENCH/apps/pr
 plan_json pres_top
 assert_eq "0" "$CODE" "$OUT"
 assert_eq "['pres_y', 'pres_x', 'pres_top']" "$(printf '%s' "$OUT" | jget - 'd["order"]')"
+
+# an app that requires itself is a cycle of one
+make_app_remote selfy selfy
+add_policy selfy main
+plan_json selfy
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$(printf '%s' "$OUT" | jget - '" ".join(d["errors"])')" "required_apps cycle: selfy -> selfy"
+assert_eq "False" "$(printf '%s' "$OUT" | jget - 'd["can_apply"]')"
 
 # a cycle is refused and named
 make_app_remote cyc_a cyc_b

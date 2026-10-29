@@ -320,7 +320,9 @@ look up to date while its migrate never ran.
 
 Fix: run `benchbar app update <app>` again. It runs the steps that did
 not finish and nothing else, then removes the record. `--discard-pending`
-drops the record without running them. Doctor reads the record only, no
+drops the record and stops: no step and no update runs, so run the update
+again afterwards if you still want it. An unreadable (cut short) record is
+kept, nothing runs from it, and doctor says so. Doctor reads the record only, no
 git and no bench. Repair has no action here.
 
 ### app_add_pending

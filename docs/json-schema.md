@@ -543,8 +543,9 @@ only the app's `.git`). `--json` without `--dry-run` is refused.
 | `newer_commits` | number | with a record: commits the remote has beyond `to`; they wait for the next run. `0` otherwise |
 
 An app moved by hand since the record was written (its HEAD is neither
-`from` nor `to`) exits 1 and names `--discard-pending`, which drops the
-record (and logs what it dropped) without running its steps.
+`from` nor `to`; or, once the fast forward is done, not `to`) exits 1 and
+names `--discard-pending`, which drops the record (and logs what it
+dropped) and stops: nothing else runs.
 
 A dirty tree, a detached HEAD or a diverged branch exits 1 with the
 reason as text.

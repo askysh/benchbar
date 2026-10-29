@@ -182,6 +182,8 @@ fl__ap_blockers() {
     for edge in ${AP_EDGES[@]+"${AP_EDGES[@]}"}; do
       [[ "${edge%%|*}" == "$cur" ]] || continue
       d="${edge#*|}"
+      # an app that requires itself is a cycle of one
+      if [[ "$d" == "$1" && "$cur" == "$1" ]]; then AP_BLK="${AP_BLK}${d} "; continue; fi
       case "$seen" in *" $d "*) continue ;; esac
       seen="${seen}${d} "
       case "$2" in *" $d "*) AP_BLK="${AP_BLK}${d} " ;; *) queue+=("$d") ;; esac
@@ -325,7 +327,9 @@ fl_app_add_plan() {
 
   # an earlier app add of this app that stopped half way: what it did not
   # finish (build, install, restart) is part of this plan
-  if [[ -n "$AP_NAME" ]] && fl_pending_load "$AP_NAME" && [[ "$PD_OP" == "app_add" ]]; then
+  if [[ -n "$AP_NAME" ]] && fl_pending_corrupt "$AP_NAME"; then
+    fl__ap_err "the pending record of ${AP_NAME} cannot be read (cut short or from another version); it is kept and nothing runs from it: benchbar app update ${AP_NAME} --discard-pending drops it and stops"
+  elif [[ -n "$AP_NAME" ]] && fl_pending_load "$AP_NAME" && [[ "$PD_OP" == "app_add" ]]; then
     AP_PENDING=1
     AP_REASON="an earlier app add of ${AP_NAME} stopped at ${PD_FAILED:-an unknown step}${PD_REASON:+ (${PD_REASON})}; the steps it did not finish are in this plan"
     # shellcheck disable=SC2153  # PD_STEPS is set by fl_pending_load (apps.sh)
@@ -588,11 +592,12 @@ fl__ap_settle() {
   [[ "$AP_PENDING" == "1" && "${#AP_STEPS[@]}" == "0" ]] || return 0
   if [[ -d "$(fl_app_path "$AP_NAME")" ]] && fl__ap_verify ${AP_SITES[@]+"${AP_SITES[@]}"}; then
     fl_pending_remove "$AP_NAME"
-    fl_ok "the unfinished app add of ${AP_NAME} is complete; its record is removed"
+    if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then fl_ok "the unfinished app add of ${AP_NAME} is complete; its record would be removed"
+    else fl_ok "the unfinished app add of ${AP_NAME} is complete; its record is removed"; fi
     return 0
   fi
   fl_fail "the unfinished app add of ${AP_NAME} has no step left, but ${AP_NAME} does not verify (above)"
-  fl_fix "benchbar app update ${AP_NAME} --discard-pending   (drops the record without running anything)"
+  fl_fix "benchbar app update ${AP_NAME} --discard-pending   (drops the record and stops; nothing else runs)"
   return 1
 }
 
@@ -605,16 +610,17 @@ fl__ap_settle() {
 # Returns 1 when a step or the verify pass failed.
 fl__ap_apply() {
   local target="$1" labels=() entry kind arg label i=0 code=0 e rp br sha s a res fail_from reason
-  local clone_failed="" build_failed="" first_kind="" first_reason="" done_set=" " cloned=()
+  local clone_failed="" build_failed="" py_failed="" first_kind="" first_reason="" done_set=" " cloned=()
   AP_STEP_NOTE=()
   for entry in "${AP_STEPS[@]}"; do IFS='|' read -r _ _ label _ <<<"$entry"; labels+=("$label"); done
   fl_steps_define "${labels[@]}"
   # the record first: whatever stops this run leaves what is still to do
-  fl__ap_record "" "" "$done_set"
+  fl__ap_record "" "" "$done_set" || { fl_fail "nothing was run: without its record a stop could not be finished later"; return 1; }
   for entry in "${AP_STEPS[@]}"; do
     IFS='|' read -r kind arg label _ <<<"$entry"
     res=""
     if [[ -n "$clone_failed" ]]; then res="after failed ${clone_failed}"
+    elif [[ -n "$py_failed" && ( "$kind" == "build" || "$kind" == "install" || "$kind" == "restart" ) ]]; then res="after failed requirements_python"
     elif [[ -n "$build_failed" && ( "$kind" == "install" || "$kind" == "restart" ) ]]; then res="after failed build"; fi
     if [[ -n "$res" ]]; then
       FL_STEP_CURRENT="$i"; FL_STEP_START="$SECONDS"
@@ -667,7 +673,7 @@ fl__ap_apply() {
         code=1
         fl_pending_reason_v reason "$fail_from"
         if [[ -z "$first_kind" ]]; then first_kind="$kind"; first_reason="${reason:-${label} failed}"; fi
-        case "$kind" in clone_required|clone) clone_failed="$kind" ;; build) build_failed=1 ;; esac ;;
+        case "$kind" in clone_required|clone) clone_failed="$kind" ;; build) build_failed=1 ;; requirements_python) py_failed=1 ;; esac ;;
     esac
     if [[ -n "$clone_failed" && "$res" == "failed" && ( "$kind" == "clone_required" || "$kind" == "clone" ) ]]; then
       # a clone that failed was rolled back: the record keeps only the build
@@ -678,14 +684,15 @@ fl__ap_apply() {
       e="$(fl_app_existing_dir "$arg")"
       [[ -z "$e" ]] || { case ",${s}," in *",${e},"*) ;; *) s="${s}${s:+,}${e}" ;; esac; }
       if [[ -n "$s" && -n "$e" ]]; then
-        fl_pending_write app_add "$AP_NAME" "$AP_BRANCH" "" "$AP_COMMIT" "$first_kind" "$first_reason" "requirements_python|${e}|Python requirements" "build|${s}|Build" "restart||Restart"
+        fl_pending_write app_add "$AP_NAME" "$AP_BRANCH" "" "$AP_COMMIT" "$first_kind" "$first_reason" "requirements_python|${e}|Python requirements" "build|${s}|Build" "restart||Restart" || code=1
       elif [[ -n "$s" ]]; then
-        fl_pending_write app_add "$AP_NAME" "$AP_BRANCH" "" "$AP_COMMIT" "$first_kind" "$first_reason" "build|${s}|Build" "restart||Restart"
+        fl_pending_write app_add "$AP_NAME" "$AP_BRANCH" "" "$AP_COMMIT" "$first_kind" "$first_reason" "build|${s}|Build" "restart||Restart" || code=1
       else
         fl_pending_remove "$AP_NAME"
       fi
-    else
-      fl__ap_record "$first_kind" "$first_reason" "$done_set"
+    elif ! fl__ap_record "$first_kind" "$first_reason" "$done_set"; then
+      # the record is what a retry runs from: a step that cannot be recorded is a failed step
+      code=1; clone_failed="pending record"
     fi
     i=$((i + 1))
   done
