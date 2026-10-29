@@ -152,6 +152,10 @@ All notable changes to this project are documented here.
   without the CLI's `[FAIL]` and `[WARN]` markers, and doctor's counts
   read the same in the popover and the Health tab ("1 failure · 1
   warning").
+- The app opens its window on the first run wizard when it starts on a
+  Mac with no bench. Before, a new user saw only the menu bar icon. The
+  popover's empty state leads with Set Up a New Bench…; the Terminal
+  commands are a hint below it.
 - `repair` run by a copy of BenchBar.app that the app did not register (a
   development build, a second copy of the app) no longer points the shell
   helpers at that copy's own CLI, which goes away with the build. The

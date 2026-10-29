@@ -538,14 +538,25 @@ struct NoBenchView: View {
                 ProgressView("Loading benches").controlSize(.small)
             } else {
                 Label("No bench found", systemImage: "tray").font(.headline)
-                Text(error ?? "Create one with the installer (benchbar install), or register one you already have with benchbar adopt <path>.")
-                    .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
-                if error == nil {
+                if let error {
+                    Text(error)
+                        .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
                     // first run: the wizard in the BenchBar window gets a bench going
+                    Text("The BenchBar window sets up a new bench step by step, or finds one you already have.")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                     Button("Set Up a New Bench…", action: setUp).buttonStyle(.borderedProminent)
-                    Link("The Install guide has the same steps for Terminal.", destination: BenchBarLinks.install)
-                        .font(.caption)
+                    // Terminal second: the same steps without the app
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("In Terminal: benchbar install, or benchbar adopt PATH for a bench you have.")
+                            .foregroundStyle(.secondary).textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Link("Install guide", destination: BenchBarLinks.install)
+                    }
+                    .font(.caption)
+                    .padding(.top, 2)
                 }
                 Button("Try Again", action: retry)
             }

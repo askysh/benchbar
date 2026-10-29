@@ -735,6 +735,32 @@ struct BenchStoreTests {
         #expect(menuBarUpdates == afterLaunch)
     }
 
+    /// The launch opens the wizard on a Mac without a bench, with or without
+    /// a CLI, but not when the list failed: the benches may be there.
+    @Test func noBenchIsAnAnswerNotAFailure() async throws {
+        cli.answer("list", json: try Fixture.string("list-empty"))
+        let empty = makeStore()
+        await empty.start(polling: false)
+        #expect(empty.hasNoBench)
+
+        cli.answer("list", CommandOutput(exitCode: 1, stdout: "", stderr: "[FAIL] list broke"))
+        let failed = makeStore()
+        await failed.start(polling: false)
+        #expect(failed.benches.isEmpty)
+        #expect(!failed.hasNoBench)
+
+        cli.answer("list", json: listJSON())
+        cli.answer("status", json: statusJSON("stopped", reason: "manual"))
+        let one = makeStore()
+        await one.start(polling: false)
+        #expect(!one.hasNoBench)
+
+        settings.cliPath = ""
+        let noCLI = makeStore()
+        await noCLI.start(polling: false)
+        #expect(noCLI.hasNoBench)
+    }
+
     @Test func doctorReportIsKept() async throws {
         cli.answer("list", json: listJSON())
         cli.answer("status", json: statusJSON("stopped", reason: "manual"))

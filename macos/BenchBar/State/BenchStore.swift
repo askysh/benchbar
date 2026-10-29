@@ -125,6 +125,9 @@ final class BenchStore {
     private(set) var hasLoadedBenches = false
     /// Why the bench list could not be loaded, if it could not.
     private(set) var listError: String?
+    /// Started without a bench: the CLI listed none, or there is no CLI to
+    /// ask. A list that failed is not an answer, the benches may be there.
+    var hasNoBench: Bool { benches.isEmpty && listError == nil }
     private var changeAnchor: BenchModel?
 
     var selectedPath: String? {

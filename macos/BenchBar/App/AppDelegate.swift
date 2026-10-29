@@ -136,6 +136,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let waiting = pendingURLs
             pendingURLs = []
             waiting.forEach(handle)
+            // a menu bar icon alone says nothing to someone who just
+            // installed BenchBar: no bench, the window opens on the wizard
+            // (unless a link launched the app and said where to go)
+            if store.hasNoBench && waiting.isEmpty { openWizard() }
             askForCLIOnce()
             updateOffer.startAutomaticChecks()
         }
