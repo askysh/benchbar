@@ -632,7 +632,12 @@ for c in "status" "doctor" "logs --no-follow" "site list" "app list"; do
   assert_contains "$ERR" "No bench at"
 done
 # every dry run with --json: the plan alone (a stream: plan, then done), never text on stdout
-ADMIN_PASSWORD=pw stream site add dryrunsite --dry-run --json --bench-dir "$BENCH"
+# site add's dry run is its plan with a token, one document like app update's;
+# --jsonl makes it the stream
+run_json site add dryrunsite --dry-run --json --bench-dir "$BENCH"
+assert_eq "1" "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')" "site add --dry-run --json: one line"
+[[ "$(printf '%s' "$OUT" | jget - 'd["token"]')" =~ ^[0-9a-f]{64}$ ]] || fail "site add plan without a token: $OUT"
+ADMIN_PASSWORD=pw stream site add dryrunsite --dry-run --jsonl --bench-dir "$BENCH"
 assert_eq "plan done" "$(sx '" ".join(x["event"] for x in e)')"
 stream adopt "$B2" --dry-run --json --bench-dir "$B2"
 assert_eq "plan done" "$(sx '" ".join(x["event"] for x in e)')"

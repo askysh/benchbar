@@ -252,17 +252,60 @@ fl_site_default_file_v() {
   printf -v "$1" '%s' "${__v//[[:space:]]/}"
 }
 
+# fl__site_apps_json "a b": the space separated app names as a JSON array
+fl__site_apps_json() {
+  local a out="" sep=""
+  for a in $1; do out="${out}${sep}$(fl_json_str "$a")"; sep=","; done
+  printf '[%s]' "$out"
+}
+
+# fl_site_add_plan NAME APPS: the plan of a site add, read only. Sets SA_JSON
+# (one document with its token) and SA_TOKEN. The token is a hash of the
+# plan and of the bench's site list, apps.txt and default site, so a site
+# that appeared or a default that moved since makes it stale.
+fl_site_add_plan() {
+  local name="$1" apps="$2" exists=0 app steps="" sep="" touches="" default state body hosts=0
+  fl_site_default_file_v default
+  [[ -d "${FL_BENCH_DIR}/sites/${name}" ]] && exists=1
+  if [[ "$exists" == "0" ]]; then
+    steps="{\"kind\":\"new_site\",\"name\":$(fl_json_str "Create ${name}"),\"command\":$(fl_json_str "bench new-site ${name} --no-mariadb-socket (the MariaDB root password stays inside benchbar)")}"; sep=","
+    touches="\"database\",\"site_folder\""
+  fi
+  for app in $apps; do
+    # a new site has none; an existing one is asked from the last list-apps read
+    if [[ "$exists" == "1" ]] && fl_site_has_app "$name" "$app" 2>/dev/null; then continue; fi
+    steps="${steps}${sep}{\"kind\":\"install\",\"name\":$(fl_json_str "Install ${app}"),\"command\":$(fl_json_str "bench --site ${name} install-app ${app}")}"; sep=","
+    case ",${touches}," in *'"database"'*) ;; *) touches="${touches}${touches:+,}\"database\"" ;; esac
+  done
+  if ! fl_hosts_has_name "$name" 2>/dev/null; then
+    hosts=1
+    if ! fl_is_linux; then
+      steps="${steps}${sep}{\"kind\":\"hosts\",\"name\":$(fl_json_str "Add 127.0.0.1 ${name} to ${FL_HOSTS_FILE}"),\"command\":$(fl_json_str "benchbar site hosts (sudo)")}"; sep=","
+      touches="${touches}${touches:+,}\"hosts\""
+    fi
+  fi
+  body="$(printf '"bench":%s,"site":%s,"exists":%s,"apps":%s,"default_site":%s,"default_moves":false,"backup":null,"hosts_entry":%s,"steps":[%s],"touches":[%s],"changes":%s' \
+    "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$name")" "$(fl_json_bool "$exists")" "$(fl__site_apps_json "$apps")" \
+    "$(fl_json_str "$default")" "$(fl_json_bool "$([[ "$hosts" == "0" ]] && printf 1 || printf 0)")" "$steps" "$touches" "$(fl_json_bool "$([[ -n "$steps" ]] && printf 1 || printf 0)")")"
+  state="$(printf 'sites\n%s\napps.txt\n%s\ndefault\n%s\n' "$(fl_sites_list)" "$(fl_apps_txt 2>/dev/null)" "$default")"
+  SA_TOKEN="$(printf '%s\n%s\n' "$body" "$state" | shasum -a 256 | awk '{print $1}')"
+  SA_JSON="$(printf '{"schema_version":%d,"cli_version":"%s",%s,"token":"%s"}' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$body" "$SA_TOKEN")"
+}
+
 # site add NAME [--bundle B | --apps "a b"]: a new site on the bench's
 # MariaDB with the Keychain password, its hosts line, and apps that are
-# already in apps/. The default site does not change.
+# already in apps/. The default site does not change. --dry-run --json is
+# the plan with its token; --apply TOKEN --yes runs it, refused when stale.
 fl_cmd_site_add() {
-  local name="" apps="" bundle="${OPT_BUNDLE:-}" app created=false default_before default_after code msg
+  local name="" apps="" bundle="${OPT_BUNDLE:-}" app created=false default_before default_after code msg token="" apply=0
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
       --apps) apps="${2:-}"; shift 2 ;;
       --apps=*) apps="${1#*=}"; shift ;;
       --bundle) bundle="${2:-}"; shift 2 ;;
       --bundle=*) bundle="${1#*=}"; shift ;;
+      --apply) apply=1; token="${2:-}"; shift 2 || shift ;;
+      --apply=*) apply=1; token="${1#*=}"; shift ;;
       -*) fl_die "Unknown option for site add: $1" ;;
       *) [[ -z "$name" ]] && name="$1"; shift ;;
     esac
@@ -271,6 +314,24 @@ fl_cmd_site_add() {
   fl_require_plain_bench
   [[ -n "$name" ]] || fl_die "Usage: benchbar site add NAME [--bundle NAME | --apps \"app1 app2\"]"
   fl_site_valid_name "$name"
+  if [[ "$apply" == "1" ]]; then
+    [[ "$token" =~ ^[0-9a-f]{64}$ ]] || fl_die "--apply needs the token of a plan." "benchbar site add ${name} --dry-run --json prints it"
+    [[ "${FL_DRY_RUN:-0}" != "1" ]] || fl_die "--apply runs the plan; --dry-run shows it. Pass one of them."
+    [[ "${FL_ASSUME_YES:-0}" == "1" ]] || fl_die "Review the plan (site add ${name} --dry-run --json), then pass its token with --apply TOKEN --yes."
+  fi
+  # the plan: a dry run with --json prints it (one document, the text on
+  # stderr); --apply compares its token first
+  [[ "$apply" == "1" || "${FL_DRY_RUN:-0}" != "1" || "$OPT_JSON" != "1" ]] || fl_json_doc_begin
+  if [[ "$apply" == "1" || ( "${FL_DRY_RUN:-0}" == "1" && "$OPT_JSON" == "1" ) ]]; then
+    [[ -n "$bundle" && -z "$apps" ]] && { apps="$(fl_bundle_apps "$bundle")"; [[ -n "$apps" ]] || fl_die "Unknown app bundle: ${bundle}"; }
+    fl_site_add_plan "$name" "$apps"
+    if [[ "$apply" == "0" ]]; then
+      fl_doc_emit 0 "$SA_JSON" plan
+      return 0
+    fi
+    [[ "$token" == "$SA_TOKEN" ]] || fl_die "The site add plan changed since it was shown (the sites, apps.txt or the default site). Nothing was changed." \
+      "Review a fresh plan: benchbar site add ${name} --dry-run --json, then pass its token."
+  fi
   # the Administrator password of a new site is the first thing asked for:
   # a run that cannot ask says so before it checks anything else
   if [[ ! -d "${FL_BENCH_DIR}/sites/${name}" && -z "${ADMIN_PASSWORD:-}" && "${FL_DRY_RUN:-0}" != "1" ]]; then

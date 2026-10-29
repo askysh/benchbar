@@ -288,6 +288,55 @@ puts it back if `bench new-site` did); only `site default` does.
 `site add`, `site default` and `site drop` end with the [done fields](#the-done-fields-09),
 `site add` and `site default` with `site`, `default_site` and `created`.
 
+## `benchbar site add NAME --dry-run --json`
+
+The plan of a site add, read only, with the token that `--apply TOKEN --yes`
+(and `benchbar_site_add` over MCP) needs. One document; the text goes to
+stderr.
+
+```json
+{"schema_version":1,"cli_version":"0.8.0","bench":"/Users/you/frappe-bench","site":"qa1.localhost","exists":false,
+ "apps":["erpnext"],"default_site":"macdev","default_moves":false,"backup":null,"hosts_entry":false,
+ "steps":[{"kind":"new_site","name":"Create qa1.localhost","command":"bench new-site qa1.localhost ..."},
+  {"kind":"install","name":"Install erpnext","command":"bench --site qa1.localhost install-app erpnext"}],
+ "touches":["database","site_folder"],"changes":true,"token":"3f9c0e...64 hex characters"}
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `exists` | bool | the site folder is already there (then no `new_site` step) |
+| `default_site` | string | the default site now (`sites/currentsite.txt`); `default_moves` is always `false` |
+| `steps[]` | array | `kind` is `new_site`, `install` or `hosts` (macOS, when the line is missing) |
+| `touches` | array of strings | `database`, `site_folder`, `hosts` |
+| `token` | string | SHA-256 of the plan and of the bench's site list, `apps.txt` and default site |
+
+`--apply TOKEN --yes` recomputes the plan and refuses a token that no longer
+matches before anything changes; then it is a normal `site add` and its
+stream ends in the usual `done` line.
+
+## `benchbar service --dry-run --json`
+
+The plan line of the service stream (as for `adopt --json`) carries a `token`:
+a SHA-256 of the planned actions, the bench, the port block, the scheduler
+choice and the site. `benchbar service --apply TOKEN --yes [--json]` runs that
+plan and refuses, before any action, a token that no longer matches.
+
+## MCP results of the site and service tools
+
+`benchbar_site_add_plan`, `benchbar_site_restore_plan` and
+`benchbar_service_install_plan` return the CLI's plan (for the service, the
+plan line of its stream) as `structuredContent`. The apply tools and
+`benchbar_site_backup` return `exit_code`, `output` (stderr text), `result`
+(the `done` line, or the one document with the done fields) and the state
+after: `sites` (`site list --json`) for `benchbar_site_add` and
+`benchbar_site_restore`, `status` for the others. `benchbar_site_add` adds
+`admin_password` and `admin_password_generated: true` when it generated the
+new site's Administrator password. `benchbar_up` on a bench whose `state` is
+`not_adopted` returns `service: "missing"`, `started: false`, `next_tool:
+"benchbar_service_install_plan"` and the `status` instead of starting it.
+Any line of CLI text that would name where the MariaDB root password is kept
+is replaced by a note in every result and error.
+
 ## `benchbar doctor --json`
 
 ```json

@@ -39,11 +39,12 @@ flag~adopt~--port-offset~N~Move the bench to port block N.
 flag~adopt~--make-default~~Make this the default bench.
 flag~adopt~--dry-run~~Print the plan, change nothing.
 flag~adopt~--yes~~Do not ask.
-cmd~service~benchbar service [--with-schedule|--without-schedule] [--port-offset N] [--dry-run] [--json]~Install or refresh only the background service (phase 02).~yes~no~no~yes~stream
+cmd~service~benchbar service [--with-schedule|--without-schedule] [--port-offset N] [--dry-run|--apply TOKEN --yes] [--json]~Install or refresh only the background service (phase 02).~yes~no~no~yes~stream
 flag~service~--with-schedule~~Add the scheduler to Procfile.lean.
 flag~service~--without-schedule~~Remove it again.
 flag~service~--port-offset~N~Use port block N.
-flag~service~--dry-run~~Print the plan, change nothing.
+flag~service~--dry-run~~Print the plan and its token, change nothing.
+flag~service~--apply~TOKEN~Run exactly that plan (with --yes).
 cmd~mariadb-password~benchbar mariadb-password [--yes]~Print the MariaDB root password (asks first).~yes~no~no~no~none
 flag~mariadb-password~--yes~~Do not ask.
 cmd~doctor~benchbar doctor [--json] [--fix-hints] [--quick] [--ack CHECK] [--unack CHECK] [--prerequisites] [--fetch]~Read only health report. Exit 1 when something FAILs.~no~no~no~no~document
@@ -96,7 +97,8 @@ cmd~docs~benchbar docs [TOPIC] [--print]~Open the documentation, or one topic's 
 cmd~self-update~benchbar self-update [--check] [--dry-run] [--json]~Update the benchbar CLI and the BenchBar app.~yes~no~yes~yes~document
 flag~self-update~--check~~This version against the latest.
 cmd~where~benchbar where [--json]~How this CLI was installed, its state folder and the app.~no~no~no~no~document
-cmd~mcp~benchbar mcp~Model Context Protocol server on stdio for coding agents.~no~no~no~no~none
+cmd~mcp~benchbar mcp [--print-agents-md]~Model Context Protocol server on stdio for coding agents.~no~no~no~no~none
+flag~mcp~--print-agents-md~~Print a snippet for a project's AGENTS.md or CLAUDE.md and exit.
 cmd~help~benchbar help~The global help text.~no~no~no~no~none
 cmd~commands~benchbar commands --json~This table: every command, flag and environment variable.~no~no~no~no~document
 cmd~ports~benchbar ports plan|setup|apply|check|mode ...~Port allocation for several benches.~no~no~no~no~none
@@ -108,9 +110,11 @@ cmd~ports check~benchbar ports check [--json]~Port conflicts of the bench.~no~no
 cmd~ports mode~benchbar ports mode automatic|fixed~Keep automatic or fixed ports for the bench.~no~no~no~yes~none
 cmd~site~benchbar site list|add|default|hosts|backup|backups|restore|drop ...~The sites of a bench.~no~no~no~no~none
 cmd~site list~benchbar site list [--json]~The bench's sites; the default one is what benchup waits for.~no~no~no~no~document
-cmd~site add~benchbar site add NAME [--bundle NAME|--apps "a b"] [--yes] [--json]~bench new-site, the hosts line and apps from apps/. The default site stays.~yes~yes~no~yes~stream
+cmd~site add~benchbar site add NAME [--bundle NAME|--apps "a b"] [--dry-run|--apply TOKEN] [--yes] [--json]~bench new-site, the hosts line and apps from apps/. The default site stays.~yes~yes~no~yes~stream
 flag~site add~--bundle~NAME~App bundle to install.
 flag~site add~--apps~"a b"~Apps of apps/ to install.
+flag~site add~--dry-run~~Print the plan and its token, change nothing.
+flag~site add~--apply~TOKEN~Run exactly that plan (with --yes).
 flag~site add~--yes~~Do not ask.
 env~site add~ADMIN_PASSWORD~The new site's Administrator password.
 env~site add~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
