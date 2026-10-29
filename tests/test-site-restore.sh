@@ -16,6 +16,9 @@ cat >"$HOOK" <<'HOOK'
 #!/bin/bash
 printf 'hook ran\n' >>"$MOCK_LOG"
 { printf 'cwd=%s\n' "$PWD"; env; } >"$MOCK_STATE/hook_env"
+# the JSON stream (fd 3) is closed and stdin is empty
+if { true >&3; } 2>/dev/null; then printf 'fd3_open\n' >>"$MOCK_STATE/hook_env"; fi
+printf 'stdin_bytes=%s\n' "$(cat | wc -c | tr -d ' ')" >>"$MOCK_STATE/hook_env"
 # HOOK_MOVE_DEFAULT=site: something that moves the default site
 [[ -z "${HOOK_MOVE_DEFAULT:-}" ]] || printf '%s\n' "$HOOK_MOVE_DEFAULT" >sites/currentsite.txt
 exit "${HOOK_EXIT:-0}"
@@ -117,7 +120,8 @@ d = json.load(sys.stdin)
 assert d["schema_version"] == 1 and d["can_apply"] is True and d["errors"] == [], d
 assert len(d["token"]) == 64 and d["new"] is False and d["exists"] is True, d
 assert [s["id"] for s in d["steps"]] == ["local_backup", "restore", "encryption_key", "migrate", "clear_cache", "verify"], [s["id"] for s in d["steps"]]
-assert d["touches"] == ["database", "files", "site_config"], d["touches"]
+assert d["touches"] == ["backup", "database", "files", "site_config"], d["touches"]
+assert d["needs"] == [], d["needs"]
 assert d["backup_first"]["will_run"] is True and d["backup_first"]["with_files"] is True, d
 assert d["source"]["set"]["stamp"] == "20260902_090000" and d["source"]["restores_files"] is True and d["source"]["encryption_key"] is True, d["source"]
 assert d["migrate"] is True and d["before_migrate"] is None, d
@@ -230,6 +234,7 @@ assert "frappe" in d["verify"]["apps"] and d["verify"]["default_site"] == "macde
   assert_eq "restore encryption_key before_migrate migrate" "$(printf '%s' "$OUT" | jget - '" ".join(s["id"] for s in d["steps"] if s["id"] in ("restore","encryption_key","before_migrate","migrate"))')"
   token="$(printf '%s' "$OUT" | jget - 'd["token"]')"
   export ACME_API_TOKEN=tok1 MY_PASSWORD=pw1 DB_SECRET=s1 SSH_PASSPHRASE=pp1 STRIPE_KEY=k1 KEEP_ME=kept
+  export MYSQL_PWD=mpw1 DB_PASS=dp1 DB_PWD=dpw1 OPENAI_APIKEY=ak1 GH_PAT=gp1 REGISTRY_URL=https://user:urlpw1@registry.example.com/x
   MARIADB_ROOT_PASSWORD=rootpw ADMIN_PASSWORD=adminpw run_json site restore acme.localhost --from "$SET1" --before-migrate "$HOOK" --apply "$token" --yes --json --bench-dir "$BENCH"
   assert_eq "0" "$CODE" "$OUT$ERR"
   r="$(at '^python benchbar-frappe acme.localhost restore ')"; h="$(at '^hook ran$')"; m="$(at '^bench --site acme.localhost migrate$')"
@@ -240,10 +245,12 @@ assert "frappe" in d["verify"]["apps"] and d["verify"]["default_site"] == "macde
   grep -q "^BENCHBAR_BENCH=$BENCH\$" "$MOCK_STATE/hook_env" || fail "BENCHBAR_BENCH"
   grep -q '^BENCHBAR_DB_NAME=_mock[0-9]*$' "$MOCK_STATE/hook_env" || fail "BENCHBAR_DB_NAME is the site's database"$'\n'"$(cat "$MOCK_STATE/hook_env")"
   grep -q '^KEEP_ME=kept$' "$MOCK_STATE/hook_env" || fail "the rest of the environment stays"
-  for v in MARIADB_ROOT_PASSWORD ADMIN_PASSWORD ACME_API_TOKEN MY_PASSWORD DB_SECRET SSH_PASSPHRASE STRIPE_KEY; do
+  ! grep -q '^fd3_open$' "$MOCK_STATE/hook_env" || fail "the hook inherits the JSON stream (fd 3)"
+  grep -q '^stdin_bytes=0$' "$MOCK_STATE/hook_env" || fail "the hook's stdin is empty"
+  for v in MARIADB_ROOT_PASSWORD ADMIN_PASSWORD ACME_API_TOKEN MY_PASSWORD DB_SECRET SSH_PASSPHRASE STRIPE_KEY MYSQL_PWD DB_PASS DB_PWD OPENAI_APIKEY GH_PAT REGISTRY_URL; do
     ! grep -q "^${v}=" "$MOCK_STATE/hook_env" || fail "${v} is in the hook's environment"
   done
-  for v in rootpw adminpw tok1 pw1 s1 pp1 k1; do
+  for v in rootpw adminpw tok1 pw1 s1 pp1 k1 mpw1 dp1 dpw1 ak1 gp1 urlpw1; do
     ! grep -q -F -- "=${v}" "$MOCK_STATE/hook_env" || fail "the value ${v} is in the hook's environment"
   done
   # a failing hook stops before migrate: the restore is done, nothing after it
@@ -258,7 +265,7 @@ assert "frappe" in d["verify"]["apps"] and d["verify"]["default_site"] == "macde
   assert_eq "False" "$(printf '%s' "$OUT" | jget - 'd["ok"]')"
   assert_eq "done done failed skipped skipped skipped" "$(printf '%s' "$OUT" | jget - '" ".join(s["status"] for s in d["steps"][1:])')" "$(printf '%s' "$OUT" | jget - '[s["id"] + ":" + s["status"] for s in d["steps"]]')"
   assert_calls_contain '^redis-cli -p 11000 shutdown save$' "(the Redis this run started is stopped when it fails)"
-  unset ACME_API_TOKEN MY_PASSWORD DB_SECRET SSH_PASSPHRASE STRIPE_KEY KEEP_ME
+  unset ACME_API_TOKEN MY_PASSWORD DB_SECRET SSH_PASSPHRASE STRIPE_KEY KEEP_ME MYSQL_PWD DB_PASS DB_PWD OPENAI_APIKEY GH_PAT REGISTRY_URL
   # a hook that moves the default site: the end check puts it back
   reset_calls
   HOOK_MOVE_DEFAULT=acme.localhost run_json site restore acme.localhost --from "$SET1" --before-migrate "$HOOK" --apply "$token" --yes --json --bench-dir "$BENCH"
@@ -326,7 +333,7 @@ assert d["source"]["site"] == "acme.localhost", d["source"]
   reset_calls
   run_fm site restore acme.localhost --from "$TMP_DIR/downloaded" --with-files --yes --bench-dir "$BENCH"
   assert_eq "0" "$CODE" "$OUT"
-  assert_calls_contain "^python benchbar-frappe acme.localhost restore --mariadb-root-password [^ ]*/downloaded/${SET2}-acme_localhost-database.sql.gz --with-public-files"
+  assert_calls_contain "^python benchbar-frappe acme.localhost restore --mariadb-root-password [^ ]*/restore-set/${SET2}-acme_localhost-database.sql.gz --with-public-files"
   assert_file "$TMP_DIR/downloaded/${SET2}-acme_localhost-database.sql.gz" "(the folder is left as it was)"
 
   # ---- the end state is checked: a restore that leaves no apps fails verify
@@ -339,6 +346,51 @@ assert d["source"]["site"] == "acme.localhost", d["source"]
   assert_contains "$ERR" "does not answer list-apps with frappe"
   assert_eq "False" "$(printf '%s' "$OUT" | jget - 'd["ok"]')"
   rm -f "$BENCH"/sites/acme.localhost/private/backups/20260904_090000-*
+
+  # ---- the backup taken first prunes old files of the folder the set is in: the set is restored from a copy
+  reset_calls
+  run_json site restore acme.localhost --from "$SET1" --dry-run --json --bench-dir "$BENCH"
+  token="$(printf '%s' "$OUT" | jget - 'd["token"]')"
+  MOCK_BENCH_BACKUP_PRUNE=1 run_json site restore acme.localhost --from "$SET1" --apply "$token" --yes --json --bench-dir "$BENCH"
+  assert_eq "0" "$CODE" "$OUT$ERR"
+  assert_calls_contain "^python benchbar-frappe acme.localhost restore --mariadb-root-password [^ ]*/restore-set/${SET1}-acme_localhost-database.sql.gz\$"
+  copy="$(printf '%s' "$OUT" | jget - 'd["set_copy"]')"
+  case "$copy" in "$FL_BACKUP_ROOT"/*/restore-set) ;; *) fail "the copy is under the state backups, not sites/: ${copy}" ;; esac
+  assert_file "$copy/${SET1}-acme_localhost-database.sql.gz" "(the copy is kept after the run)"
+  assert_no_file "$BENCH/sites/acme.localhost/private/backups/${SET1}-acme_localhost-database.sql.gz" "(the prune did delete the original: the case is real)"
+  assert_contains "$ERR" "a copy of the backup set is kept in ${copy}"
+  make_set acme.localhost "$SET1"; make_set acme.localhost "$SET2" files
+  # the backup taken first has to be complete, and new: otherwise nothing is overwritten
+  reset_calls
+  run_json site restore acme.localhost --from "$SET1" --dry-run --json --bench-dir "$BENCH"
+  token="$(printf '%s' "$OUT" | jget - 'd["token"]')"
+  MOCK_BENCH_BACKUP_NOFILES=1 run_json site restore acme.localhost --from "$SET1" --apply "$token" --yes --json --bench-dir "$BENCH"
+  assert_eq "1" "$CODE" "$OUT$ERR"
+  assert_contains "$ERR" "has no files part; nothing was overwritten"
+  assert_calls_not_contain 'benchbar-frappe acme.localhost restore'
+  assert_eq "failed skipped skipped skipped skipped skipped" "$(printf '%s' "$OUT" | jget - '" ".join(s["status"] for s in d["steps"])')"
+  reset_calls
+  run_json site restore acme.localhost --from "$SET1" --dry-run --json --bench-dir "$BENCH"
+  token="$(printf '%s' "$OUT" | jget - 'd["token"]')"
+  MOCK_BENCH_BACKUP_STAMP="$SET2" run_json site restore acme.localhost --from "$SET1" --apply "$token" --yes --json --bench-dir "$BENCH"
+  assert_eq "1" "$CODE" "$OUT$ERR"
+  assert_contains "$ERR" "no new backup is in"
+  assert_calls_not_contain 'benchbar-frappe acme.localhost restore'
+  make_set acme.localhost "$SET2" files
+  # a set without a site config has no key to carry: the warning is about the backup
+  make_set acme.localhost 20260906_090000
+  rm -f "$BENCH"/sites/acme.localhost/private/backups/20260906_090000-acme_localhost-site_config_backup.json
+  run_fm site restore acme.localhost --from 20260906_090000 --yes --bench-dir "$BENCH"
+  assert_eq "0" "$CODE" "$OUT"
+  assert_contains "$OUT" "the backup has no encryption_key"
+  assert_not_contains "$OUT" "production has no"
+  rm -f "$BENCH"/sites/acme.localhost/private/backups/20260906_090000-*
+  # the frappe version gate: a backup of a newer frappe than the code here is refused in the plan
+  mkdir -p "$BENCH/apps/frappe/frappe"; printf '__version__ = "15.41.0"\n' >"$BENCH/apps/frappe/frappe/__init__.py"
+  n="$(bash -c '. "$1/lib/frappe-local/ui.sh"; . "$1/lib/frappe-local/pull.sh"; FL_BENCH_DIR="$2"; FL_PULL_R_APPS="frappe|15.50.0||"; fl_pull_frappe_too_new' _ "$ROOT" "$BENCH" || true)"
+  assert_eq "15.50.0, this bench frappe 15.41.0: the dump is newer than the code" "$n"
+  n="$(bash -c '. "$1/lib/frappe-local/ui.sh"; . "$1/lib/frappe-local/pull.sh"; FL_BENCH_DIR="$2"; FL_PULL_R_APPS="frappe|15.41.0||"; fl_pull_frappe_too_new' _ "$ROOT" "$BENCH" || true)"
+  assert_eq "" "$n"
 
   # ---- a running bench: its scheduler is paused for the restore and resumed
   add_proc 4242 "honcho start -f Procfile.lean" "$BENCH"
@@ -356,6 +408,7 @@ assert d["source"]["site"] == "acme.localhost", d["source"]
   run_json site restore acme.localhost --from "$SET1" --dry-run --json --bench-dir "$BENCH"
   assert_eq "False" "$(printf '%s' "$OUT" | jget - 'd["can_apply"]')"
   assert_contains "$OUT" "MariaDB root password is unknown to benchbar"
+  assert_eq "['MARIADB_ROOT_PASSWORD']" "$(printf '%s' "$OUT" | jget - 'd["needs"]')" "(the plan names the input it needs)"
   run_fm site restore acme.localhost --from "$SET1" --yes --bench-dir "$BENCH"
   assert_eq "2" "$CODE" "$OUT"
   assert_calls_not_contain '^(bench|python benchbar|redis-server)'

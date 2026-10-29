@@ -99,8 +99,8 @@ while [[ "$#" -gt 0 ]]; do
     --check-updates) CHECK_UPDATES=1; shift ;;
     --offline) OFFLINE=1; shift ;;
     --advanced) ADVANCED=1; shift ;;
-    --frappe-commit) FRAPPE_COMMIT_FLAG="${2:-}"; shift 2 || shift ;;
-    --erpnext-commit) ERPNEXT_COMMIT_FLAG="${2:-}"; shift 2 || shift ;;
+    --frappe-commit) [[ -n "${2:-}" && "${2:-}" != -* ]] || fl_die "--frappe-commit needs a commit hash."; FRAPPE_COMMIT_FLAG="$2"; shift 2 ;;
+    --erpnext-commit) [[ -n "${2:-}" && "${2:-}" != -* ]] || fl_die "--erpnext-commit needs a commit hash."; ERPNEXT_COMMIT_FLAG="$2"; shift 2 ;;
     --dry-run) DRY_RUN=1; FL_DRY_RUN=1; shift ;;
     --repair-bench) REPAIR_BENCH=1; shift ;;
     --make-default) FL_MAKE_DEFAULT=1; shift ;;
@@ -320,6 +320,10 @@ else
   fl_resolve_selected_apps "$FL_PROFILE" "$APP_BUNDLE" "$APPS"
 fi
 
+if [[ -n "$ERPNEXT_COMMIT" && " ${FL_SELECTED_APPS[*]} " != *" erpnext "* ]]; then
+  fl_warn "an erpnext commit pin is set, but erpnext is not among the apps to install (${FL_SELECTED_APPS[*]}); the pin does nothing"
+fi
+
 CUSTOMIZED_SPECS=()
 for spec in "${FL_INSTALL_SPECS[@]}"; do
   IFS='|' read -r app branch repo priority notes <<<"$spec"
@@ -443,10 +447,13 @@ for spec in "${FL_INSTALL_SPECS[@]}"; do
   fi
 done
 
-if [[ "$FL_PINS_APPLIED" == "1" ]]; then
-  fl_warn "Rebuilding bench after commit pinning"
+# one build after a pin, or after an earlier run that left it for later (a pinned
+# clone is fetched without its first build, and a run can stop before this point)
+if [[ "$FL_PINS_APPLIED" == "1" || -f "$(fl_needs_build_marker "$BENCH_DIR")" ]]; then
+  fl_warn "Building the bench: assets were left for after the commit pins"
   fl_bench_run_long "bench setup requirements" "$BENCH_DIR" bench setup requirements
   fl_bench_run_long "bench build" "$BENCH_DIR" bench build
+  [[ "$FL_DRY_RUN" == "1" ]] || rm -f "$(fl_needs_build_marker "$BENCH_DIR")"
 fi
 
 # the port block benchbar install chose (BENCHBAR_PORT_BLOCK, "web socketio

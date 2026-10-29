@@ -71,6 +71,8 @@ FL_PULL_QUIESCED=0
 FL_PULL_SITE_CREATE=0
 # --no-migrate: the restore ends the run before bench migrate would start
 FL_PULL_NO_MIGRATE=0
+# inputs a run in a terminal asks for and the plan names (JSON strings)
+FL_PULL_NEEDS=""
 # --before-migrate SCRIPT: runs after the restore, before migrate (or where
 # it would be); a failing script stops the run
 FL_PULL_HOOK=""
@@ -540,16 +542,22 @@ fl_pull_require_apps() {
 }
 
 # Production frappe newer than this bench: restore would ask about a
-# downgrade and migrate cannot go backwards.
-fl_pull_require_frappe_version() {
+# downgrade and migrate cannot go backwards. fl_pull_frappe_too_new prints the
+# reason (and succeeds) when the backup's frappe is newer than the code here.
+fl_pull_frappe_too_new() {
   local rver lver
   rver="$(printf '%s\n' "$FL_PULL_R_APPS" | awk -F'|' '$1 == "frappe" { print $2; exit }')"
   lver="$(fl_pull_local_version frappe)"
-  [[ -n "$rver" && -n "$lver" ]] || return 0
-  if [[ "$(fl_ver_cmp "$rver" "$lver")" == "1" ]]; then
-    fl_die "Production runs frappe ${rver}, this bench frappe ${lver}: the dump is newer than the code." \
-      "Update this bench's apps to the production versions first (bench update is your call), or pull into a bench on the same version."
-  fi
+  [[ -n "$rver" && -n "$lver" ]] || return 1
+  [[ "$(fl_ver_cmp "$rver" "$lver")" == "1" ]] || return 1
+  printf '%s, this bench frappe %s: the dump is newer than the code' "$rver" "$lver"
+}
+
+fl_pull_require_frappe_version() {
+  local why
+  why="$(fl_pull_frappe_too_new)" || return 0
+  fl_die "Production runs frappe ${why}." \
+    "Update this bench's apps to the production versions first (bench update is your call), or pull into a bench on the same version."
 }
 
 # the hints of the two missing-tool failures below, per platform
@@ -597,8 +605,14 @@ fl_pull_check_local() {
   fl_port_listening 3306 || fl_die "MariaDB is not running (nothing listens on 3306)." "Start it: $(fl_pull_mariadb_start_hint)"
   fl_mariadb_root_password_resolve || fl_die "The MariaDB root password is needed for the restore." "Re-run with: MARIADB_ROOT_PASSWORD='...' benchbar pull ..." 2
   # a dry run does not verify the password; it can still say that none is known
+  # and a run in a terminal asks for it, so its dry run only says that it will
   if [[ "${FL_DRY_RUN:-0}" == "1" ]] && ! fl_mariadb_root_password_known; then
-    fl_die "The MariaDB root password is needed for the restore." "Re-run with: MARIADB_ROOT_PASSWORD='...' benchbar pull ..." 2
+    if [[ -t 0 && "${FL_ASSUME_YES:-0}" != "1" && "${OPT_JSON:-0}" != "1" ]]; then
+      FL_PULL_NEEDS='"MARIADB_ROOT_PASSWORD"'
+      fl_info "the MariaDB root password is not stored: the run asks for it (or pass MARIADB_ROOT_PASSWORD)"
+    else
+      fl_die "The MariaDB root password is needed for the restore." "Re-run with: MARIADB_ROOT_PASSWORD='...' benchbar pull ..." 2
+    fi
   fi
   if [[ "$FL_PULL_ENCRYPTED" == "1" ]]; then
     command -v gpg >/dev/null 2>&1 || fl_die "The backup is encrypted and gpg is not installed." "Install it: $(fl_pull_gpg_install_hint)"
@@ -685,7 +699,7 @@ fl_pull_print_plan() {
     json_steps="${json_steps}${json_steps:+,}$(fl_json_str "${s#*|}")"
     i=$((i + 1))
   done
-  fl_pull_emit plan ",\"source\":$(fl_json_str "$(fl_pull_source_label)"),\"host\":$(fl_json_str "$FL_PULL_HOST"),\"remote_site\":$(fl_json_str "$FL_PULL_RSITE"),\"remote_bench\":$(fl_json_str "$FL_PULL_RBENCH"),\"from_dir\":$(fl_json_str "$FL_PULL_FROM_DIR"),\"bench\":$(fl_json_str "$FL_BENCH_DIR"),\"site\":$(fl_json_str "$FL_PULL_AS"),\"replace\":$(fl_json_bool "$FL_PULL_SITE_EXISTS"),\"backup\":{\"name\":$(fl_json_str "$([[ "$FL_PULL_NEW_BACKUP" == "1" ]] || printf '%s' "$FL_PULL_DB")"),\"new\":$(fl_json_bool "$FL_PULL_NEW_BACKUP"),\"bytes\":$(fl_json_num "$([[ "$FL_PULL_NEW_BACKUP" == "1" ]] || printf '%s' "$FL_PULL_TOTAL_BYTES")"),\"age_hours\":$(fl_json_num "$([[ "$FL_PULL_NEW_BACKUP" == "1" ]] || fl_pull_age_hours "${FL_PULL_DB%%-*}")"),\"encrypted\":$(fl_json_bool "$FL_PULL_ENCRYPTED")},\"encryption_key\":$(fl_json_bool "$FL_PULL_HAS_KEY"),\"apps\":[${FL_PULL_APPS_JSON:-}],\"migrate\":$(fl_json_bool "$([[ "$FL_PULL_NO_MIGRATE" == "1" ]] && printf 0 || printf '%s' "$FL_PULL_NEED_MIGRATE")"),\"create_site\":$(fl_json_bool "$FL_PULL_SITE_CREATE"),\"before_migrate\":$(fl_json_str "$FL_PULL_HOOK"),\"steps\":[${json_steps}],\"dry_run\":$(fl_json_bool "${FL_DRY_RUN:-0}")"
+  fl_pull_emit plan ",\"source\":$(fl_json_str "$(fl_pull_source_label)"),\"host\":$(fl_json_str "$FL_PULL_HOST"),\"remote_site\":$(fl_json_str "$FL_PULL_RSITE"),\"remote_bench\":$(fl_json_str "$FL_PULL_RBENCH"),\"from_dir\":$(fl_json_str "$FL_PULL_FROM_DIR"),\"bench\":$(fl_json_str "$FL_BENCH_DIR"),\"site\":$(fl_json_str "$FL_PULL_AS"),\"replace\":$(fl_json_bool "$FL_PULL_SITE_EXISTS"),\"backup\":{\"name\":$(fl_json_str "$([[ "$FL_PULL_NEW_BACKUP" == "1" ]] || printf '%s' "$FL_PULL_DB")"),\"new\":$(fl_json_bool "$FL_PULL_NEW_BACKUP"),\"bytes\":$(fl_json_num "$([[ "$FL_PULL_NEW_BACKUP" == "1" ]] || printf '%s' "$FL_PULL_TOTAL_BYTES")"),\"age_hours\":$(fl_json_num "$([[ "$FL_PULL_NEW_BACKUP" == "1" ]] || fl_pull_age_hours "${FL_PULL_DB%%-*}")"),\"encrypted\":$(fl_json_bool "$FL_PULL_ENCRYPTED")},\"encryption_key\":$(fl_json_bool "$FL_PULL_HAS_KEY"),\"apps\":[${FL_PULL_APPS_JSON:-}],\"migrate\":$(fl_json_bool "$([[ "$FL_PULL_NO_MIGRATE" == "1" ]] && printf 0 || printf '%s' "$FL_PULL_NEED_MIGRATE")"),\"create_site\":$(fl_json_bool "$FL_PULL_SITE_CREATE"),\"before_migrate\":$(fl_json_str "$FL_PULL_HOOK"),\"needs\":[${FL_PULL_NEEDS}],\"steps\":[${json_steps}],\"dry_run\":$(fl_json_bool "${FL_DRY_RUN:-0}")"
 }
 
 # ---------------------------------------------------------------- gates
@@ -874,7 +888,7 @@ fl_pull_step_encryption_key() {
   local out
   if [[ "$FL_PULL_HAS_KEY" != "1" ]]; then
     FL_STEP_RESULT=skipped
-    fl_pull_warn "production has no encryption_key: passwords stored in the site (email accounts, integrations) must be entered again"
+    fl_pull_warn "$([[ -n "$FL_PULL_RSITE" ]] && printf production || printf "the backup") has no encryption_key: passwords stored in the site (email accounts, integrations) must be entered again"
     return 0
   fi
   out="$(fl_pull_key_stream encryption_key | "${FL_BENCH_DIR}/env/bin/python" -c "$FL_PULL_PY_SETKEY" "${FL_BENCH_DIR}/sites/${FL_PULL_AS}/site_config.json" 2>>"${FL_LOG_FILE:-/dev/null}")" || {
@@ -938,21 +952,25 @@ fl_pull_step_skip_apps() {
 # The names of the variables a hook must not inherit: benchbar's own
 # passwords and anything else in the environment named like a secret.
 fl_pull_hook_secret_names() {
-  env | sed -n 's/=.*//p' | grep -E -i -- '(PASSWORD|PASSWD|SECRET|TOKEN|PASSPHRASE|CREDENTIAL|(^|_)KEY$)' || true
-  printf '%s\n' MARIADB_ROOT_PASSWORD ADMIN_PASSWORD
+  env | sed -n 's/=.*//p' | grep -E -i -- '(PASSWORD|PASSWD|SECRET|TOKEN|PASSPHRASE|CREDENTIAL|APIKEY|(^|_)(KEY|PASS|PWD|PAT)$)' || true
+  # a value that is a URL with a user name and password in it
+  env | sed -n -E 's/^([A-Za-z_][A-Za-z0-9_]*)=[A-Za-z][A-Za-z0-9+.-]*:\/\/[^\/@[:space:]]+:[^\/@[:space:]]*@.*/\1/p' || true
+  printf '%s\n' MARIADB_ROOT_PASSWORD ADMIN_PASSWORD MYSQL_PWD
 }
 
 # fl_pull_hook_run: the --before-migrate script, in the bench folder, with
 # BENCHBAR_SITE, BENCHBAR_BENCH and BENCHBAR_DB_NAME. It gets neither the
 # MariaDB root password nor the Administrator password, and no variable
-# named like a secret: those are removed from its environment.
+# named like a secret (or holding a URL with a password) are removed from its
+# environment, it runs with stdin on /dev/null and the JSON stream (fd 3)
+# closed. That is hygiene, not a boundary: the hook runs as the user.
 fl_pull_hook_run() {
   local db_name unset_args=() v
   db_name="$("${FL_BENCH_DIR}/env/bin/python" -c "$FL_PULL_PY_CONF" "${FL_BENCH_DIR}/sites/${FL_PULL_AS}/site_config.json" value db_name 2>/dev/null || true)"
   while IFS= read -r v; do
     [[ "$v" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] && unset_args+=(-u "$v")
   done < <(fl_pull_hook_secret_names | sort -u)
-  (cd "$FL_BENCH_DIR" && env ${unset_args[@]+"${unset_args[@]}"} BENCHBAR_SITE="$FL_PULL_AS" BENCHBAR_BENCH="$FL_BENCH_DIR" BENCHBAR_DB_NAME="$db_name" "$FL_PULL_HOOK")
+  (cd "$FL_BENCH_DIR" && env ${unset_args[@]+"${unset_args[@]}"} BENCHBAR_SITE="$FL_PULL_AS" BENCHBAR_BENCH="$FL_BENCH_DIR" BENCHBAR_DB_NAME="$db_name" "$FL_PULL_HOOK" </dev/null 3>&-)
 }
 
 fl_pull_step_before_migrate() {

@@ -172,7 +172,7 @@ bench (`state.env` in benchbar's state folder), the `WorkingDirectory` of every
 | `processes_running` | bool | any honcho, serve, worker, schedule or socketio process of this bench (before 0.6.1 a port listener counted too) |
 | `sites` | array | added in 0.4, see [Sites](#sites) |
 | `scheduler` | bool | added in 0.4: `Procfile.lean` runs `bench schedule` (`benchbar service --with-schedule`) |
-| `redis` | object | added in 0.8: `{"queue": {"port", "running"}, "cache": {"port", "running"}}`. `running` is whether something accepts a connection on the port, read by bash itself (`/dev/tcp`), so status starts no program for it. `benchbar up --services-only` starts these two and nothing else, `benchbar down` stops them |
+| `redis` | object | added in 0.8: `{"queue": {"port", "running"}, "cache": {"port", "running"}}`. `running` is whether something accepts a connection on the port, read by bash itself (`/dev/tcp`), so status starts no new program for it (a subshell for the probe). `benchbar up --services-only` starts these two and nothing else, `benchbar down` stops them |
 
 Kept from frappe-mac 0.2.0 for older readers: `url`, `agent`,
 `loaded` (`"yes"` or `"no"`), `stop_flag` (`"manual"`, `"crash"`,
@@ -940,7 +940,7 @@ token. `--apply TOKEN --yes` runs exactly that plan:
   },
   "backup_first": { "will_run": true, "with_files": true, "folder": "/Users/you/frappe-bench/sites/acme.localhost/private/backups" },
   "migrate": true, "before_migrate": null, "before_migrate_sha256": null,
-  "touches": ["database", "files", "site_config"],
+  "touches": ["backup", "database", "files", "site_config"],
   "steps": [
     { "id": "local_backup", "name": "Back up acme.localhost with its files", "touches": ["backup"] },
     { "id": "restore", "name": "Restore 20260902_090000 into acme.localhost with its files", "touches": ["database", "files"] },
@@ -949,7 +949,7 @@ token. `--apply TOKEN --yes` runs exactly that plan:
     { "id": "clear_cache", "name": "Clear caches", "touches": ["cache"] },
     { "id": "verify", "name": "Verify acme.localhost", "touches": [] }
   ],
-  "warnings": [], "errors": [], "can_apply": true,
+  "warnings": [], "needs": [], "errors": [], "can_apply": true,
   "token": "8f1c...64 hex characters"
 }
 ```
@@ -963,7 +963,8 @@ token. `--apply TOKEN --yes` runs exactly that plan:
 | `source.encryption_key` | the set's `site_config_backup.json` has an `encryption_key`, which is carried into the target (never printed) |
 | `backup_first` | an existing target is backed up with its files before anything changes (`will_run`); `folder` is where the set lands |
 | `migrate`, `before_migrate`, `before_migrate_sha256` | `migrate` is `false` with `--no-migrate`; `before_migrate` is the path of the `--before-migrate` script and `before_migrate_sha256` its hash (a changed script makes the token stale) |
-| `touches` | what the run changes: `database`, `files`, `site_config`, and `hosts` for a new site whose `/etc/hosts` line is missing |
+| `touches` | what the run changes: `backup` (an existing target is backed up first), `database`, `files`, `site_config`, `hosts` for a new site whose `/etc/hosts` line is missing, and `common_site_config` when the scheduler of a running bench is paused for the restore |
+| `needs` | inputs a run in a terminal would ask for, for example `["MARIADB_ROOT_PASSWORD"]` when none is stored. In a terminal (no `--json`, no `--yes`) the plan stays applicable; for `--json` it is an error as well, because nothing can answer |
 | `steps` | in the order they run, each with the `touches` of that step. Ids: `local_backup`, `quiesce`, `new_site`, `restore`, `encryption_key`, `resume`, `before_migrate`, `migrate`, `clear_cache`, `hosts`, `verify` |
 | `errors`, `can_apply` | what stops the plan (no such site, a set that is not there, an encrypted or file-less set, MariaDB down, the root password unknown to benchbar, apps the bench lacks, a hook that is not an executable file); `can_apply` is `false` when there is one. The command still exits 0 with `--json` |
 | `token` | a hash of the plan and of what it was made against: the sites, the default site, the hook and the set's files. `--apply` recomputes it and refuses a different one: `The site restore plan changed since it was shown`, nothing changed |
@@ -974,7 +975,8 @@ The result of `--apply TOKEN --yes --json`:
 |---|---|
 | `applied`, `ok` | `ok` is `false` when a step failed (exit 1); the steps after it stay `pending` or `skipped` |
 | `site`, `new`, `token` | as in the plan |
-| `backup` | the backup taken before an existing target was touched (a [backup](#site-backups)), `null` for a new site or when it did not get that far. Put it back with `site restore TARGET --from STAMP --with-files --yes` |
+| `backup` | the backup taken before an existing target was touched (a [backup](#site-backups)), `null` for a new site or when it did not get that far. It must be a new set with its database and both file archives, or the run stops before anything is overwritten. Put it back with `site restore TARGET --from STAMP --with-files --yes` |
+| `set_copy` | for an existing target: the folder under the state backups that holds a copy (hard links, else copies) of the set that was restored. Bench's own backup deletes old backups in the target's folder, so the restore reads the copy, which stays after the run. `null` for a new site |
 | `steps` | `[{"id","name","status"}]`, `status` is `done`, `unchanged`, `skipped`, `failed` or `pending` |
 | `verify` | what the end check found: `apps` (what `bench --site TARGET list-apps` answers), `default_site` (the default site after the run, which is never changed: if a step moved it, it is put back with `bench use` and a warning says so) and `answers` (the web ping of the target while the bench runs, else `null`) |
 | `warnings` | for example `migrate was skipped (--no-migrate)` |

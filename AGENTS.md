@@ -188,7 +188,7 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
   installer, `.benchbar` here means `~/.local/state/benchbar`.
 - Exit codes: 0 success, 1 failure or a failing check, 2 the MariaDB root
   password is unknown (install phase 00 or 01, `site add`, `site drop`,
-  `pull`; pass `MARIADB_ROOT_PASSWORD`). Only an explicit refusal exits 2:
+  `pull`, `site restore`; pass `MARIADB_ROOT_PASSWORD`). Only an explicit refusal exits 2:
   a command that happens to fail with code 2 is reported as 1. An install
   cancelled at its plan exits 1 and says `Cancelled. No bench or site was
   created`; the system dependencies of step 1 stay in place.

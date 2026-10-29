@@ -67,12 +67,14 @@ fl_hosts_has_name() {
 # SERVED=1 (status) adds "served": true, false (the web process answers 404 for
 # the site's Host) or null (the bench is stopped, or nothing answered). The
 # default site's answer and a --ping answer are reused; any other site gets one
-# GET in bash (fl_http_code_v), no program started, and only while the bench runs.
+# GET in bash (fl_http_code_v, a subshell, no other program), only while the bench
+# runs and its default site answered, one second each within a shared 2 second budget.
 FL_DEFAULT_PING=""
 fl_sites_json_v() {
-  local __mode="${2:-none}" __db="${3:-0}" __served="${4:-0}" __out="[" __sep="" __s __ping __listening=1 __jn __jd __jh __jp __def __hosts __dbn __dbp __dbj __bench_port __code __sv __sj
+  local __mode="${2:-none}" __db="${3:-0}" __served="${4:-0}" __out="[" __sep="" __s __ping __listening=1 __jn __jd __jh __jp __def __hosts __dbn __dbp __dbj __bench_port __code __sv __sj __end __c
   if [[ "$__mode" == "ping" && -z "$(fl_port_listener_pid "$FL_WEB_PORT")" ]]; then __listening=0; fi
   if [[ "$__db" == "1" ]]; then fl_site_config_value_v __bench_port db_port; fi
+  __end=$((SECONDS + 2))
   while IFS= read -r __s; do
     [[ -n "$__s" ]] || continue
     __ping=""; __code=""
@@ -87,7 +89,12 @@ fl_sites_json_v() {
       if [[ "${ST_PROCS:-0}" == "1" ]]; then
         if [[ "$__s" == "$FL_SITE" && -n "$FL_DEFAULT_PING" ]]; then fl_site_served_v __sv "$__s" "$FL_DEFAULT_PING"
         elif [[ "$__mode" == "ask" ]]; then fl_site_served_v __sv "$__s" "$__code"
-        else fl_site_served_v __sv "$__s"; fi
+        elif [[ -n "$FL_DEFAULT_PING" && "$FL_DEFAULT_PING" != "000" && "$SECONDS" -lt "$__end" ]]; then
+          # the web process answers the default site: ask the others, one second
+          # each, within one shared budget (what is left stays null)
+          fl_http_code_v __c "$__s" "$FL_WEB_PORT" /api/method/ping 1
+          fl_site_served_v __sv "$__s" "$__c"
+        fi
       fi
       __sj=",\"served\":${__sv}"
     fi

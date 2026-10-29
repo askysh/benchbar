@@ -274,13 +274,13 @@ fl_cmd_up_services_only() {
   fi
   FL_SETUP_REDIS_PORTS=""
   fl_bench_redis_up "$FL_BENCH_DIR"
-  # it stays running: not the setup Redis of a command that stops it again
-  FL_SETUP_REDIS_PORTS=""
   for port in "$FL_REDIS_QUEUE_PORT" "$FL_REDIS_CACHE_PORT"; do
     i=0
     until fl_port_listening "$port"; do
       i=$((i + 1))
       if [[ "$i" -gt 10 ]]; then
+        # what this run started does not stay half up
+        fl_bench_redis_down
         fl_fail "nothing listens on port ${port} after starting the Redis of ${FL_BENCH_NAME}"
         fl_fix "cd ${FL_BENCH_DIR} && redis-server config/redis_queue.conf --daemonize yes   (and config/redis_cache.conf)"
         return 1
@@ -288,6 +288,8 @@ fl_cmd_up_services_only() {
       sleep 0.5
     done
   done
+  # it stays running: not the setup Redis of a command that stops it again
+  FL_SETUP_REDIS_PORTS=""
   fl_ok "Redis of ${FL_BENCH_NAME} is up (queue ${FL_REDIS_QUEUE_PORT}, cache ${FL_REDIS_CACHE_PORT}); nothing else was started"
   fl_info "stop it with: ${FL_SELF} down --bench-dir ${FL_BENCH_DIR}"
 }
@@ -338,6 +340,24 @@ fl_cmd_down() {
   flag="$(fl_stop_flag_path)"
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
     fl_info "dry-run: would write 'manual' to ${flag}, send SIGTERM to the agent, then stop leftover bench processes"
+    return 0
+  fi
+  # no agent and no bench process: only a Redis from up --services-only is left.
+  # Stop that one; an existing stop flag (crash, broken, port_conflict) and the
+  # state file stay as they are, and there is nothing to wait for.
+  if ! fl_agent_loaded && ! fl_pm_running; then
+    fl_bench_kill_processes TERM
+    fl_bench_wait_stopped 3 || fl_bench_kill_processes KILL
+    if fl_bench_is_running; then
+      fl_fail "some bench processes are still alive: $(fl_bench_process_pids | tr '\n' ' ')"
+      return 1
+    fi
+    if [[ ! -s "$flag" ]]; then
+      mkdir -p "$(dirname "$flag")"
+      printf 'manual\n' >"$flag"
+      fl_state_json_write stopped manual "" "$(fl_state_json_get started_at)" "$(fl_state_json_get last_exit_code)" ""
+    fi
+    fl_ok "bench ${FL_BENCH_NAME} is stopped (nothing but its Redis was running)"
     return 0
   fi
   mkdir -p "$(dirname "$flag")"

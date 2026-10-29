@@ -44,8 +44,9 @@ SR_HOOK_SHA=""
 SR_DEFAULT_BEFORE=""
 SR_BACKUP_JSON="null"
 SR_BACKUP_STAMP=""
-SR_FINGERPRINT=""
+SR_SET_COPY=""
 SR_PLAN_BODY=""
+SR_NEEDS=""
 SR_PLAN_JSON=""
 SR_TOKEN=""
 SR_CAN_APPLY=0
@@ -138,16 +139,10 @@ fl_srestore_resolve_source() {
   return 0
 }
 
-# fl_srestore_fingerprint: size and age of the database file of the set, so
-# a backup that overwrites it (bench names a backup by the second) is seen.
-fl_srestore_fingerprint() {
-  printf '%s:%s' "$(wc -c <"${SR_SET_DIR}/${FL_PULL_DB}" 2>/dev/null | tr -d '[:space:]')" "$(fl_file_mtime "${SR_SET_DIR}/${FL_PULL_DB}" 2>/dev/null || true)"
-}
-
 # fl_srestore_plan: errors, steps, JSON and token, from reads only.
 fl_srestore_plan() {
-  local sdir s id json_steps="" sep="" touches missing a branch origin
-  SR_ERRORS=(); SR_EXISTS=0; SR_CAN_APPLY=0
+  local sdir s id json_steps="" sep="" touches missing a branch origin why
+  SR_ERRORS=(); SR_EXISTS=0; SR_CAN_APPLY=0; SR_NEEDS=""
   FL_PULL_AS="$SR_TARGET"; FL_PULL_WARNINGS=""; FL_PULL_MISSING=""
   FL_PULL_SITE_CREATE=0; FL_PULL_SITE_EXISTS=0
   FL_PULL_EMIT=0; FL_PULL_CONFIRM_BACKUP=0
@@ -170,7 +165,12 @@ fl_srestore_plan() {
   # the database server and its password, judged without trying them
   if [[ "${#SR_ERRORS[@]}" == "0" || -n "$FL_PULL_DB" ]]; then
     fl_port_listening 3306 || fl_srestore_err "MariaDB is not running (nothing listens on 3306); start it: $(fl_pull_mariadb_start_hint)"
-    fl_mariadb_root_password_known || fl_srestore_err "the MariaDB root password is unknown to benchbar; run the command with MARIADB_ROOT_PASSWORD='...' in the environment"
+    if ! fl_mariadb_root_password_known; then
+      SR_NEEDS='"MARIADB_ROOT_PASSWORD"'
+      # a run in a terminal asks for it; any other run cannot
+      [[ -t 0 && "${FL_ASSUME_YES:-0}" != "1" && "${OPT_JSON:-0}" != "1" && "$SR_APPLY" != "1" ]] \
+        || fl_srestore_err "the MariaDB root password is unknown to benchbar; run the command with MARIADB_ROOT_PASSWORD='...' in the environment"
+    fi
   fi
   # the hook
   if [[ -n "$FL_PULL_HOOK" ]]; then
@@ -188,6 +188,11 @@ fl_srestore_plan() {
       while IFS='|' read -r a branch origin; do [[ -n "$a" ]] && missing="${missing}${missing:+, }${a}"; done <<<"$FL_PULL_MISSING"
       fl_srestore_err "this bench lacks apps the backup has installed: ${missing} (bench get-app them first; a restored site with a missing app fails at migrate)"
     fi
+  fi
+  # a backup of a newer frappe than the code here cannot be migrated backwards
+  if [[ -n "$FL_PULL_DB" ]]; then
+    why="$(fl_pull_frappe_too_new)" || why=""
+    [[ -z "$why" ]] || fl_srestore_err "$why; update this bench's apps first (bench update is your call)"
   fi
   # the apps' versions say nothing here: a restore is followed by a migrate
   FL_PULL_NEED_MIGRATE=1
@@ -208,20 +213,23 @@ fl_srestore_plan() {
   if [[ "$SR_NEW" == "1" ]] && ! fl_hosts_has_name "$SR_TARGET"; then FL_PULL_STEPS+=("hosts|Hosts line for ${SR_TARGET}"); fi
   FL_PULL_STEPS+=("verify|Verify ${SR_TARGET}")
 
-  touches='"database"'
+  touches=""
+  case " ${FL_PULL_STEPS[*]} " in *"|Back up "*) touches='"backup",' ;; esac
+  touches="${touches}\"database\""
   [[ "$FL_PULL_NO_FILES" == "1" ]] || touches="${touches},\"files\""
   touches="${touches},\"site_config\""
   case " ${FL_PULL_STEPS[*]} " in *"|Hosts line"*) touches="${touches},\"hosts\"" ;; esac
+  [[ "$FL_PULL_QUIESCE" != "1" ]] || touches="${touches},\"common_site_config\""
   for s in "${FL_PULL_STEPS[@]}"; do
     id="${s%%|*}"
     json_steps="${json_steps}${sep}{\"id\":$(fl_json_str "$id"),\"name\":$(fl_json_str "${s#*|}"),\"touches\":$(fl_srestore_step_touches "$id")}"; sep=","
   done
-  SR_PLAN_BODY="$(printf '"bench":%s,"site":%s,"new":%s,"exists":%s,"source":{"site":%s,"set":%s,"restores_files":%s,"encryption_key":%s},"backup_first":{"will_run":%s,"with_files":true,"folder":%s},"migrate":%s,"before_migrate":%s,"before_migrate_sha256":%s,"touches":[%s],"steps":[%s],"warnings":[%s],"errors":%s' \
+  SR_PLAN_BODY="$(printf '"bench":%s,"site":%s,"new":%s,"exists":%s,"source":{"site":%s,"set":%s,"restores_files":%s,"encryption_key":%s},"backup_first":{"will_run":%s,"with_files":true,"folder":%s},"migrate":%s,"before_migrate":%s,"before_migrate_sha256":%s,"touches":[%s],"steps":[%s],"warnings":[%s],"needs":[%s],"errors":%s' \
     "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$SR_TARGET")" "$(fl_json_bool "$SR_NEW")" "$(fl_json_bool "$SR_EXISTS")" \
     "$(fl_json_str "$SR_SET_SITE")" "$SR_SET_JSON" "$(fl_json_bool "$([[ "$FL_PULL_NO_FILES" == "1" ]] && printf 0 || printf 1)")" "$(fl_json_bool "$FL_PULL_HAS_KEY")" \
     "$(fl_json_bool "$SR_EXISTS")" "$(fl_json_str "$(fl_site_backup_dir "$SR_TARGET")")" \
     "$(fl_json_bool "$([[ "$FL_PULL_NO_MIGRATE" == "1" ]] && printf 0 || printf 1)")" "$(fl_json_str "$FL_PULL_HOOK")" "$(fl_json_str "$SR_HOOK_SHA")" \
-    "$touches" "$json_steps" "${FL_PULL_WARNINGS}" "$(fl_json_str_array ${SR_ERRORS[@]+"${SR_ERRORS[@]}"})")"
+    "$touches" "$json_steps" "${FL_PULL_WARNINGS}" "$SR_NEEDS" "$(fl_json_str_array ${SR_ERRORS[@]+"${SR_ERRORS[@]}"})")"
   [[ "${#SR_ERRORS[@]}" == "0" ]] && SR_CAN_APPLY=1
   SR_PLAN_BODY="${SR_PLAN_BODY},\"can_apply\":$(fl_json_bool "$SR_CAN_APPLY")"
   # the bench state the plan was made against: the site list, the default
@@ -319,14 +327,57 @@ fl_srestore_step_verify() {
 fl_srestore_result_json() {
   local ok=1 i=0 sep="" out s st
   [[ "$1" == "0" ]] || ok=0
-  out="$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"site":%s,"token":"%s","applied":true,"ok":%s,"new":%s,"backup":%s,"steps":[' \
-    "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$SR_TARGET")" "$SR_TOKEN" "$(fl_json_bool "$ok")" "$(fl_json_bool "$SR_NEW")" "$SR_BACKUP_JSON")"
+  out="$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"site":%s,"token":"%s","applied":true,"ok":%s,"new":%s,"backup":%s,"set_copy":%s,"steps":[' \
+    "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$SR_TARGET")" "$SR_TOKEN" "$(fl_json_bool "$ok")" "$(fl_json_bool "$SR_NEW")" "$SR_BACKUP_JSON" "$(fl_json_str "$SR_SET_COPY")")"
   for s in "${FL_PULL_STEPS[@]}"; do
     st="${FL_STEP_STATUS[$i]:-pending}"
     out="${out}${sep}{\"id\":$(fl_json_str "${s%%|*}"),\"name\":$(fl_json_str "${s#*|}"),\"status\":$(fl_json_str "$st")}"; sep=","
     i=$((i + 1))
   done
   printf '%s],"verify":%s,"warnings":[%s]}\n' "$out" "$SR_VERIFY_JSON" "${FL_PULL_WARNINGS}"
+}
+
+# fl_srestore_copy_set: the files of the set into this run's own folder under
+# the state backups (hard links, else copies), checked by size, and the run
+# goes on with that copy. Bench's backup deletes backups older than
+# keep_backups_for_hours in the target's backup folder, which can hold the set.
+# The copy stays after the run.
+fl_srestore_copy_set() {
+  local dest f src a b
+  dest="${FL_BACKUP_ROOT:-${FL_STATE_DIR}/backups}/$(fl_backup_stamp)/restore-set"
+  mkdir -p "$dest" 2>/dev/null || { fl_fail "could not make ${dest}"; return 1; }
+  for f in "$FL_PULL_DB" "$FL_PULL_PUB" "$FL_PULL_PRIV" "$FL_PULL_CONF"; do
+    [[ -n "$f" ]] || continue
+    [[ "$FL_PULL_NO_FILES" != "1" || "$f" == "$FL_PULL_DB" || "$f" == "$FL_PULL_CONF" ]] || continue
+    src="${SR_SET_DIR}/${f}"
+    rm -f "${dest}/${f}"
+    ln "$src" "${dest}/${f}" 2>/dev/null || cp -p "$src" "${dest}/${f}" 2>/dev/null || { fl_fail "could not copy ${src} to ${dest}"; return 1; }
+    a="$(wc -c <"$src" | tr -d '[:space:]')"; b="$(wc -c <"${dest}/${f}" | tr -d '[:space:]')"
+    [[ "$a" == "$b" ]] || { fl_fail "the copy of ${f} in ${dest} has another size than the original"; return 1; }
+  done
+  SR_SET_COPY="$dest"
+  FL_PULL_FROM_DIR="$dest"; SR_SET_DIR="$dest"
+  fl_info "the set is restored from a copy in ${dest}, so the backup of ${SR_TARGET} cannot prune it"
+}
+
+# fl_srestore_verify_backup: the backup taken first is a new set with its
+# database and both file archives; no fallback to an older set.
+fl_srestore_verify_backup() {
+  local dir set f
+  dir="$(fl_site_backup_dir "$SR_TARGET")"
+  if [[ -z "$SR_BACKUP_STAMP" ]]; then
+    fl_fail "bench reported the backup of ${SR_TARGET} done, but no new backup is in ${dir}; nothing was overwritten"
+    return 1
+  fi
+  set="$(fl_backup_set_json "$dir" "$SR_BACKUP_STAMP")"
+  for f in database files private_files; do
+    case "$(fl_backup_field "$set" "$f")" in
+      ""|null)
+        fl_fail "the backup ${SR_BACKUP_STAMP} of ${SR_TARGET} has no ${f} part; nothing was overwritten"
+        return 1 ;;
+    esac
+  done
+  SR_BACKUP_JSON="$set"
 }
 
 # fl_srestore_run: the steps, one after the other; the first failure stops
@@ -337,7 +388,9 @@ fl_srestore_run() {
   for s in "${FL_PULL_STEPS[@]}"; do labels+=("${s#*|}"); done
   fl_steps_define "${labels[@]}"
   SR_DEFAULT_BEFORE="$(tr -d '[:space:]' <"${FL_BENCH_DIR}/sites/currentsite.txt" 2>/dev/null || true)"
-  SR_FINGERPRINT="$(fl_srestore_fingerprint)"
+  # the backup first prunes old files in the target's backup folder, which is
+  # where the set may be: restore from a copy of it outside sites/
+  if [[ "$SR_EXISTS" == "1" ]]; then fl_srestore_copy_set || { fl_bench_redis_down; return 1; }; fi
   while [[ "$i" -lt "$n" ]]; do
     id="${FL_PULL_STEPS[$i]%%|*}"
     fl_step_begin "$i"
@@ -352,14 +405,8 @@ fl_srestore_run() {
     if [[ "$code" == "0" && "$id" == "local_backup" ]]; then
       now="$(fl_backup_stamps "$(fl_site_backup_dir "$SR_TARGET")")"
       SR_BACKUP_STAMP="$(printf '%s\n' "$now" | grep -v -x -F -- "$before" | head -n1 || true)"
-      [[ -n "$SR_BACKUP_STAMP" ]] || SR_BACKUP_STAMP="$(printf '%s\n' "$now" | head -n1)"
-      [[ -z "$SR_BACKUP_STAMP" ]] || SR_BACKUP_JSON="$(fl_backup_set_json "$(fl_site_backup_dir "$SR_TARGET")" "$SR_BACKUP_STAMP")"
-      # bench names a backup by the second: one taken in the second of the set
-      # being restored would have overwritten it
-      if [[ "$(fl_srestore_fingerprint)" != "$SR_FINGERPRINT" ]]; then
-        fl_fail "the backup of ${SR_TARGET} overwrote the set ${SR_SET_STAMP} that is being restored (the same second)"
-        code=1
-      fi
+      # nothing is overwritten until the backup is there with all its parts
+      fl_srestore_verify_backup || code=1
     fi
     if [[ "$code" != "0" ]]; then
       fl_step_end failed
@@ -426,6 +473,7 @@ fl_cmd_site_restore() {
   fl_mariadb_root_password_resolve || fl_die "The MariaDB root password is needed for the restore." "Re-run with: MARIADB_ROOT_PASSWORD='...' benchbar site restore ..." 2
   fl_srestore_run || code=$?
   fl_steps_summary
+  [[ -z "$SR_SET_COPY" ]] || fl_info "a copy of the backup set is kept in ${SR_SET_COPY}"
   if [[ "$code" != "0" ]]; then
     [[ -z "$SR_BACKUP_STAMP" ]] || fl_info "${SR_TARGET} was backed up first; put that back with: benchbar site restore ${SR_TARGET} --from ${SR_BACKUP_STAMP} --with-files --yes"
     if [[ "${FL_PULL_QUIESCED:-0}" == "1" ]]; then

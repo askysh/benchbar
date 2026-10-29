@@ -43,6 +43,12 @@ elif mode == "web":
         def log_message(self, *a):
             pass
     http.server.HTTPServer(("127.0.0.1", port), H).serve_forever()
+elif mode == "hang":
+    # accepts and never answers
+    s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); s.bind(("127.0.0.1", int(sys.argv[2]))); s.listen(5)
+    held = []
+    while True:
+        conn, _ = s.accept(); held.append(conn)
 else:
     s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); s.bind(("127.0.0.1", int(sys.argv[2]))); s.listen(5)
     while True:
@@ -96,6 +102,22 @@ suite() {
   assert_eq "0" "$CODE" "$OUT"
   assert_eq "" "$(lsof -ti tcp:11000,13000 -sTCP:LISTEN || true)" "(down stops the Redis servers of the bench)"
   rm -f "$BENCH/logs/.bench-stopped"; rm -f "$BENCH/logs/.benchbar/state.json"
+  # down after up --services-only stops that Redis, keeps a crash flag as it is, and does not wait
+  run_fm up --services-only --bench-dir "$BENCH"
+  assert_eq "0" "$CODE" "$OUT"
+  printf 'crash\n' >"$BENCH/logs/.bench-stopped"
+  t0="$SECONDS"
+  run_fm down --bench-dir "$BENCH"
+  assert_eq "0" "$CODE" "$OUT"
+  [[ $((SECONDS - t0)) -lt 8 ]] || fail "down waited $((SECONDS - t0)) seconds for a bench with only its Redis"
+  assert_eq "crash" "$(tr -d '[:space:]' <"$BENCH/logs/.bench-stopped")" "(the crash flag is not overwritten)"
+  assert_eq "" "$(lsof -ti tcp:11000,13000 -sTCP:LISTEN || true)"
+  rm -f "$BENCH/logs/.bench-stopped"; rm -f "$BENCH/logs/.benchbar/state.json"
+  # a Redis that never comes up is stopped again, not left half started
+  reset_calls
+  MOCK_REDIS_NOLISTEN=1 run_fm up --services-only --bench-dir "$BENCH"
+  assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "nothing listens on port 11000"
+  assert_calls_contain '^redis-cli -p 11000 shutdown'
   # a running bench has its Redis already
   add_proc 4242 "honcho start -f Procfile.lean" "$BENCH"
   reset_calls
@@ -191,6 +213,23 @@ two.localhost" "$(sort "$REQUESTS")" "(the default site is not asked again, the 
   assert_eq "None None None" "$(printf '%s' "$OUT" | jget - '" ".join(str(s["served"]) for s in d["sites"])')" "$OUT"
   run_fm doctor --json --bench-dir "$BENCH"
   assert_eq "ok" "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "site_not_served"][0]["level"]')"
+  # a web process that accepts and never answers: the answer comes within the budget, the rest is null
+  kill "$WEB_PID" 2>/dev/null || true; wait "$WEB_PID" 2>/dev/null || true
+  python3 "$TMP_DIR/listeners.py" hang "$WEB" & WEB_PID="$!"; PIDS+=("$WEB_PID")
+  wait_port "$WEB"
+  export MOCK_CURL_CODE=200
+  t0="$SECONDS"
+  status_json
+  [[ $((SECONDS - t0)) -le 4 ]] || fail "status took $((SECONDS - t0)) seconds with a web process that never answers"
+  assert_eq "ghost.localhost:None macdev:True two.localhost:None" "$(printf '%s' "$OUT" | jget - '" ".join("%s:%s" % (s["name"], s["served"]) for s in d["sites"])')"
+  # the default site does not answer its ping: nobody else is asked
+  export MOCK_CURL_CODE=000
+  kill "$WEB_PID" 2>/dev/null || true; wait "$WEB_PID" 2>/dev/null || true
+  python3 "$TMP_DIR/listeners.py" web "$WEB" "macdev,two.localhost" "$REQUESTS" & WEB_PID="$!"; PIDS+=("$WEB_PID")
+  wait_port "$WEB"; : >"$REQUESTS"
+  status_json
+  assert_eq "None None None" "$(printf '%s' "$OUT" | jget - '" ".join(str(s["served"]) for s in d["sites"])')"
+  assert_eq "0" "$(requests)" "(no site is asked when the default site did not answer)"
   # back to the other tests' state: probes off, no listeners, no processes
   export FL_LOCAL_PROBES=0
   : >"$MOCK_PROCS"

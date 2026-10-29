@@ -114,10 +114,8 @@ assert_calls_contain "^bench init ${BENCH} --frappe-branch version-15 --python "
 assert_calls_contain "^git ls-remote --exit-code --heads --tags -- file://${REMOTES}/acme_crm.git main$"
 assert_calls_contain "^bench get-app --branch main file://${REMOTES}/acme_crm.git$"
 assert_calls_contain "^bench get-app --branch version-15 --skip-assets file://${REMOTES}/acme_tools.git$" "(a pinned app is built once, after its checkout)"
-assert_calls_contain "checkout --quiet ${PIN}$"
-c="$(grep -n "checkout --quiet ${PIN}\$" "$MOCK_LOG" | head -n1 | cut -d: -f1)"
-b="$(grep -n '^bench build$' "$MOCK_LOG" | tail -n1 | cut -d: -f1)"
-[[ -n "$c" && -n "$b" && "$c" -lt "$b" ]] || fail "the pinned checkout comes before the build (${c} ${b})"$'\n'"$(cat "$MOCK_LOG")"
+assert_calls_not_contain "checkout --quiet" "(the clone is at the pin already: nothing to check out)"
+assert_calls_contain '^bench build$' "(a pinned app is fetched without assets, so one build follows)"
 assert_calls_not_contain 'get-app .*erpnext'
 assert_calls_contain '^bench new-site acme.localhost '
 assert_calls_contain '^bench --site acme.localhost install-app acme_tools$'
@@ -519,6 +517,10 @@ assert_contains "$OUT" "Commit pins: frappe=${FSHA} erpnext=${ESHA}"
 BENCHBAR_OFFLINE=1 run_fm install --dry-run --profile pinned --frappe-commit abc1234 --erpnext-commit def5678 --bench-dir "$HOME/pin-dry"
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "Commit pins: frappe=abc1234 erpnext=def5678"
+run_fm install --dry-run --frappe-commit --bench-dir "$HOME/pin-dry"
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "--frappe-commit needs a commit hash"
+BENCHBAR_OFFLINE=1 run_fm install --dry-run --profile pinned --bench-dir "$HOME/pin-dry"
+assert_contains "$OUT" "an erpnext commit pin is set, but erpnext is not among the apps to install"
 # a pin the clone reaches: bench init builds nothing, the checkout comes first, then one build
 export MOCK_BENCH_INIT_GIT=1
 BENCH3="$HOME/pin-bench"
@@ -530,6 +532,13 @@ assert_eq "$FSHA" "$(git -C "$BENCH3/apps/frappe" rev-parse HEAD)"
 c="$(grep -n "git -C ${BENCH3}/apps/frappe checkout --quiet ${FSHA}\$" "$MOCK_LOG" | head -n1 | cut -d: -f1)"
 b="$(grep -n '^bench build$' "$MOCK_LOG" | tail -n1 | cut -d: -f1)"
 [[ -n "$c" && -n "$b" && "$c" -lt "$b" ]] || fail "frappe is checked out before the one build (${c} ${b})"
+assert_no_file "$BENCH3/logs/.benchbar/needs-build" "(the build was done)"
+# a second install is a no-op: the pin is already there, nothing is checked out or built again
+reset_calls
+MARIADB_ROOT_PASSWORD=rootpw ADMIN_PASSWORD=adminpw run_fm install --yes --profile pinned --bench-dir "$BENCH3"
+assert_eq "0" "$CODE" "$OUT"
+assert_calls_not_contain '^bench (build|setup requirements|init|get-app)'
+assert_calls_not_contain 'checkout --quiet'
 # a pin the clone does not reach is refused before anything is built or created
 BENCH4="$HOME/pin-bench-bad"
 reset_calls
@@ -538,6 +547,14 @@ assert_eq "1" "$CODE" "$OUT"
 assert_contains "$OUT" "The pinned commit ${BADSHA} of frappe is not in its clone"
 assert_contains "$OUT" "nothing was built"
 assert_calls_not_contain '^bench (build|new-site|get-app|setup requirements)'
+[[ -f "$BENCH4/logs/.benchbar/needs-build" ]] || fail "the refused install left no needs-build marker"
+# a rerun without the pin notices the unbuilt assets and builds
+printf 'base = "v15-lts"\n\n[[apps]]\nname = "acme_crm"\nrepo = "file://%s/acme_crm.git"\nbranch = "main"\n' "$REMOTES" >"$USER_DIR/plain.toml"
+reset_calls
+MARIADB_ROOT_PASSWORD=rootpw ADMIN_PASSWORD=adminpw run_fm install --yes --profile plain --bench-dir "$BENCH4"
+assert_eq "0" "$CODE" "$OUT"
+assert_calls_contain '^bench build$'
+assert_no_file "$BENCH4/logs/.benchbar/needs-build"
 # the same for an app of the profile
 sed_inplace "s/^commit = \".*\"\$/commit = \"${BADSHA}\"/" "$USER_DIR/pinned.toml"
 sed_inplace '/^frappe_commit/d; /^erpnext_commit/d' "$USER_DIR/pinned.toml"
@@ -545,7 +562,7 @@ BENCH5="$HOME/pin-bench-app"
 reset_calls
 MARIADB_ROOT_PASSWORD=rootpw ADMIN_PASSWORD=adminpw run_fm install --yes --profile pinned --bench-dir "$BENCH5"
 assert_eq "1" "$CODE" "$OUT"
-assert_contains "$OUT" "The pinned commit ${BADSHA} of acme_crm is not in its clone (branch main); nothing was built."
+assert_contains "$OUT" "The pinned commit ${BADSHA} of acme_crm is not in its clone (branch main) and its remote did not hand it out; nothing was built."
 assert_calls_not_contain '^bench (build|new-site|setup requirements)'
 unset MOCK_BENCH_INIT_GIT
 

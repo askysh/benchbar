@@ -365,9 +365,9 @@ while [[ "$#" -gt 0 ]]; do
     --prerequisites) OPT_PREREQ=1; shift ;;
     --ping) OPT_PING=1; shift ;;
     --fetch) FL_FETCH=1; shift ;;
-    --frappe-commit) OPT_FRAPPE_COMMIT="${2:-}"; shift 2 || shift ;;
+    --frappe-commit) [[ -n "${2:-}" && "${2:-}" != -* ]] || fl_die "--frappe-commit needs a commit hash." "Example: benchbar install --frappe-commit 0123abc"; OPT_FRAPPE_COMMIT="$2"; shift 2 ;;
     --frappe-commit=*) OPT_FRAPPE_COMMIT="${1#*=}"; shift ;;
-    --erpnext-commit) OPT_ERPNEXT_COMMIT="${2:-}"; shift 2 || shift ;;
+    --erpnext-commit) [[ -n "${2:-}" && "${2:-}" != -* ]] || fl_die "--erpnext-commit needs a commit hash." "Example: benchbar install --erpnext-commit 0123abc"; OPT_ERPNEXT_COMMIT="$2"; shift 2 ;;
     --erpnext-commit=*) OPT_ERPNEXT_COMMIT="${1#*=}"; shift ;;
     --plain|--no-color) FL_PLAIN=1; fl_ui_init; shift ;;
     --version) fl_print_version; exit 0 ;;

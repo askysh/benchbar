@@ -11,7 +11,8 @@ mock_log "$@"
 if [[ -f "${1:-}" && " $* " == *" --daemonize yes "* ]]; then
   port="$(awk '$1 == "port" {print $2; exit}' "$1")"
   pid="$((RANDOM + 20000))"
-  [[ -n "$port" ]] && printf '%s %s redis-server 127.0.0.1\n' "$port" "$pid" >>"${MOCK_LISTEN:?}"
+  # MOCK_REDIS_NOLISTEN=1: a server that starts and never listens
+  [[ -n "$port" && -z "${MOCK_REDIS_NOLISTEN:-}" ]] && printf '%s %s redis-server 127.0.0.1\n' "$port" "$pid" >>"${MOCK_LISTEN:?}"
   if [[ -n "${MOCK_REDIS_PROC:-}" && -n "$port" ]]; then
     printf '%s redis-server %s\n' "$pid" "$1" >>"${MOCK_PROCS:?}"
     printf '%s redis-server %s\n' "$pid" "$1" >>"${MOCK_STATE:?}/ever_procs"

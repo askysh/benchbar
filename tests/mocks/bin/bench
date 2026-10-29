@@ -21,6 +21,10 @@ case "$1" in
       GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@example.com GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@example.com \
         GIT_AUTHOR_DATE="2026-01-01T00:00:00Z" GIT_COMMITTER_DATE="2026-01-01T00:00:00Z" \
         git -C "$2/apps/frappe" commit -q --allow-empty -m frappe
+      # a second commit on top: HEAD is not the first one, which a test pins
+      GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@example.com GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@example.com \
+        GIT_AUTHOR_DATE="2026-01-02T00:00:00Z" GIT_COMMITTER_DATE="2026-01-02T00:00:00Z" \
+        git -C "$2/apps/frappe" commit -q --allow-empty -m "frappe two"
     fi
     exit 0 ;;
   --version) [[ -n "${MOCK_BENCH_VERSION:-}" ]] && printf '%s\n' "$MOCK_BENCH_VERSION"; exit 0 ;;
@@ -150,9 +154,17 @@ PY
         n="$(cat "${MOCK_STATE:?}/backup_n" 2>/dev/null || printf 0)"; n=$((n + 1)); printf '%s' "$n" >"${MOCK_STATE}/backup_n"
         base="sites/$2/private/backups/${MOCK_BENCH_BACKUP_STAMP:-20260929_1000$(printf '%02d' "$n")}-${2//./_}"
         mkdir -p "sites/$2/private/backups"
+        # MOCK_BENCH_BACKUP_PRUNE=1: frappe's delete_temp_backups, which removes the
+        # older backups of the folder (here: every file that is not part of this one)
+        if [[ -n "${MOCK_BENCH_BACKUP_PRUNE:-}" ]]; then
+          for old in sites/"$2"/private/backups/*; do
+            [[ -f "$old" && "$old" != "${base}"-* ]] && rm -f "$old"
+          done
+        fi
         printf 'local backup\n' >"${base}-database.sql.gz"
         printf '{}\n' >"${base}-site_config_backup.json"
-        if [[ "${4:-}" == "--with-files" ]]; then printf 'public\n' >"${base}-files.tar"; printf 'private\n' >"${base}-private-files.tar"; fi
+        # MOCK_BENCH_BACKUP_NOFILES=1: a backup that has no file archives
+        if [[ "${4:-}" == "--with-files" && -z "${MOCK_BENCH_BACKUP_NOFILES:-}" ]]; then printf 'public\n' >"${base}-files.tar"; printf 'private\n' >"${base}-private-files.tar"; fi
         exit 0 ;;
     esac
     exit 0 ;;
