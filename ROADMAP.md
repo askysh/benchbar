@@ -143,6 +143,20 @@ next, empty lists that say how to fill them. The CLI runs on Linux
 **0.8.x, the app for sites.** Restore from the app (backup and drop
 shipped in 0.5.8), and pull and lock apply in the app.
 
+**0.9, agents.** What the agent contracts round of 0.8 left out on
+purpose, so nobody reopens it in a pull request: operation handles for
+long jobs (an `op_id`, `benchbar op status`, MCP progress notifications
+fed by the stream's `progress` lines; the MCP 2025-11-25 tasks primitive
+is the eventual home), `benchbar run --site X -- migrate|run-tests|...`
+with an allow list, site snapshots and rollback, scratch benches pinned to
+commits with a TTL and `bench gc`, leases per bench or site, `benchbar
+history --json`, `bench remove`, `bench forget`, `site move --to-bench`,
+`site hosts --prune`, `db orphans`, and `uninstall-service` scoped to one
+bench. Two measurements come first as well: a comparative benchmark of
+native versus container benches (idle memory, build time, file watch
+latency, startup) before the README keeps its performance wording, and a
+four week pilot with about ten developers across three teams.
+
 **Windows through WSL.** The benches run inside WSL with the Linux
 platform layer of 0.8.0 (uv Python, fnm Node, MariaDB and Redis from apt,
 each bench under `systemd --user`), with a small `benchbar.exe` shim
