@@ -113,6 +113,10 @@ All notable changes to this project are documented here.
   as stale by its age, and two runs at once could stop with "File: unbound
   variable": GNU `stat -f` prints file system text where BSD `stat -f`
   prints a time.
+- The docs site header drew two lines at its bottom edge; it now has one.
+  The site also takes the look of <https://akashmishra.com>: warm cream
+  and near black, system fonts, hairlines instead of boxes, and a moon and
+  sun button for the theme.
 
 ### Windows (preview)
 
