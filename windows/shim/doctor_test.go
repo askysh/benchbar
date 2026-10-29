@@ -135,3 +135,69 @@ func TestDoctorRegistryUnreadable(t *testing.T) {
 		t.Errorf("starts %+v", st)
 	}
 }
+
+func TestDoctorTrayChecks(t *testing.T) {
+	const tray = `C:\tools\benchbar\BenchBarTray.exe`
+	const lnk = `C:\Users\u\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\BenchBar Tray.lnk`
+	cases := []struct {
+		name  string
+		files []string
+		dirs  map[string][]string
+		env   map[string]string
+		want  []string
+		not   []string
+	}{
+		{"no tray, no checks", []string{lnk}, nil, nil, nil, []string{"Desktop Runtime", "Tray at logon"}},
+		{"runtime missing, no shortcut", []string{tray}, nil, nil, []string{
+			"  [WARN] .NET Desktop Runtime: ", "fix: winget install Microsoft.DotNet.DesktopRuntime.10\n",
+			"  [OK] Tray at logon: not set to open at logon\n"}, nil},
+		{"runtime in Program Files, shortcut set", []string{tray, lnk},
+			map[string][]string{`C:\Program Files\dotnet\shared\Microsoft.WindowsDesktop.App`: {"8.0.1", "10.0.0"}}, nil,
+			[]string{"  [OK] .NET Desktop Runtime: ", "  [OK] Tray at logon: opens at logon\n"}, []string{"winget"}},
+		{"only version 8", []string{tray},
+			map[string][]string{`C:\Program Files\dotnet\shared\Microsoft.WindowsDesktop.App`: {"8.0.1"}}, nil,
+			[]string{"  [WARN] .NET Desktop Runtime: "}, nil},
+		{"DOTNET_ROOT", []string{tray},
+			map[string][]string{`D:\sdk\shared\Microsoft.WindowsDesktop.App`: {"10.0.2"}},
+			map[string]string{"DOTNET_ROOT": `D:\sdk\`}, []string{"  [OK] .NET Desktop Runtime: "}, []string{"winget"}},
+	}
+	for _, c := range cases {
+		e := newEnv(t)
+		e.healthyWindows()
+		vars := map[string]string{"ProgramFiles": `C:\Program Files`, "APPDATA": `C:\Users\u\AppData\Roaming`}
+		for k, v := range c.env {
+			vars[k] = v
+		}
+		e.Getenv = func(k string) string { return vars[k] }
+		e.FileExists = func(p string) bool {
+			for _, f := range append(c.files, testExe) {
+				if f == p {
+					return true
+				}
+			}
+			return false
+		}
+		e.ListDir = func(p string) []string { return c.dirs[p] }
+		e.run("doctor")
+		for _, w := range c.want {
+			if !strings.Contains(e.stdout(), w) {
+				t.Errorf("%s: missing %q in:\n%s", c.name, w, e.stdout())
+			}
+		}
+		for _, w := range c.not {
+			if strings.Contains(e.stdout(), w) {
+				t.Errorf("%s: unexpected %q in:\n%s", c.name, w, e.stdout())
+			}
+		}
+	}
+}
+
+func TestDoctorTrayChecksStayOutOfJSON(t *testing.T) {
+	e := newEnv(t)
+	e.healthyWindows()
+	e.FileExists = func(p string) bool { return p == testExe || strings.HasSuffix(p, "BenchBarTray.exe") }
+	e.run("doctor", "--json")
+	if e.stdout() != "" {
+		t.Errorf("leaked: %q", e.stdout())
+	}
+}

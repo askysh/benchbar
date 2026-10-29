@@ -35,6 +35,57 @@ release.
 `CFBundleShortVersionString` is set from the tag and `CFBundleVersion`
 from the commit count, so the checkout is never edited by CI.
 
+### The Windows zips
+
+The same tag starts `release-windows.yml`. It builds `benchbar.exe` (Go)
+and the tray app (framework dependent .NET 10) for x64 and Arm64, packs
+`benchbar-windows-X.Y.Z-amd64.zip` and `-arm64.zip` (both programs, the
+tray's files, `README.txt` and a `SHA256SUMS` inside), and attaches them
+with `benchbar-windows-X.Y.Z-SHA256SUMS.txt` to the draft that
+release.yml creates for the tag. On a tag push it waits up to 130 minutes for that
+draft (the Mac job allows 120) and creates one only if none appears; a manual run attaches only to an existing draft. The sums file must not end
+in `SHA256SUMS`: `install.sh` picks the first asset with that ending for
+the Mac app. The workflow never publishes. Re-run it after a re-run of
+release.yml, which replaces the notes and with them the Windows
+paragraph.
+
+When `SIGNPATH_API_TOKEN` and `SIGNPATH_ORGANIZATION_ID` are set (repo
+secrets; `SIGNPATH_PROJECT_SLUG`, `SIGNPATH_SIGNING_POLICY_SLUG` and
+`SIGNPATH_ARTIFACT_CONFIGURATION_SLUG` variables override `benchbar`,
+`release-signing` and `windows-exe`), the project's own exe and DLLs (not NuGet packages) go through SignPath, only for a tag build, and each is
+checked with `Get-AuthenticodeSignature`. A missing secret, a failed
+request or a signature that does not check leaves that exe unsigned;
+the release still completes, and its notes say which binaries are
+unsigned.
+
+Before publishing the draft, check:
+
+1. Both zips and the sums file are attached, and the Windows paragraph
+   of the notes names the unsigned binaries (all of them until SignPath
+   approves the project).
+2. `install.ps1 -Version X.Y.Z` cannot be tried on a draft (its assets
+   answer 404): download the amd64 zip from the draft instead, unpack it,
+   run `benchbar.exe --shim-version` and start `BenchBarTray.exe`
+   against a distro with a bench.
+3. After publishing, run the one liner from
+   [Windows](windows.md#install) on a clean Windows 11 (a VM or Windows
+   Sandbox) and note what SmartScreen says.
+
+To try the Windows build without a release, run Release Windows by
+hand with a version and `draft_release` off: the zips land as workflow
+artifacts only. A pull request that changes `release-windows.yml` or
+`install.ps1` builds both zips and runs the installer on windows-latest.
+
+To give testers a build before a release: run Release Windows by hand
+from main with a version such as `0.8.0` and `draft_release` off, then
+download the `windows-amd64` (and `windows-arm64`) artifact from the
+run's summary page. Each holds the zip and its `sums-<arch>.txt`. Send
+the zip; the tester unpacks it and runs its own `install.ps1`, as
+[Windows](windows.md#a-test-build-you-were-sent) describes. The
+programs are unsigned, so SmartScreen warns on first start and Smart
+App Control in enforce mode blocks them: testers need it off or in
+evaluation mode.
+
 ### Trying a build without a release
 
 Every pull request run of CI (`ci.yml`, job "Unsigned release bundle")

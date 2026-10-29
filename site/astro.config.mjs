@@ -64,6 +64,7 @@ export default defineConfig({
             { label: 'Install', slug: 'install' },
             { label: 'Quick start', slug: 'quick-start' },
             { label: 'The menu bar app', slug: 'app' },
+            { label: 'Windows', slug: 'windows' },
           ],
         },
         {
