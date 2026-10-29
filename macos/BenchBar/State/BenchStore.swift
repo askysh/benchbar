@@ -62,6 +62,9 @@ final class BenchModel: Identifiable {
         guard state == .running || state == .starting else { return nil }
         return status?.startedAt
     }
+    /// The uptime's start: only while running. A start or restart shows
+    /// "starting" at once, while the status is still the previous run's.
+    var upSince: Date? { state == .running ? status?.startedAt : nil }
 
     /// One libproc snapshot of the bench's tree: every 2 seconds from the
     /// runner's speed loop for the bench that sets the speed, every 5 for

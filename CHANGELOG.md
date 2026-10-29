@@ -167,6 +167,8 @@ All notable changes to this project are documented here.
 - The app's popover in light mode has a solid background: on macOS 26 a
   dark window behind it showed through its text. A disabled Start, Stop or
   Restart button is clearly faded next to the ones that work.
+- While a bench starts or restarts, the app shows no uptime until the new
+  run reports; it showed the previous run's ("up 42m").
 - `repair` run by a copy of BenchBar.app that the app did not register (a
   development build, a second copy of the app) no longer points the shell
   helpers at that copy's own CLI, which goes away with the build. The

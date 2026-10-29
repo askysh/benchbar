@@ -85,7 +85,7 @@ struct BenchOverview: View {
         Form {
             Section {
                 controlRow
-                if let since = bench.runningSince {
+                if let since = bench.upSince {
                     Uptime(since: since) { LabeledContent("Up for", value: $0) }
                 }
                 if let error = bench.lastError ?? bench.refreshError {
