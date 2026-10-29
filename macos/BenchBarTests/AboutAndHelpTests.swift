@@ -226,6 +226,7 @@ struct MenuTests {
         let titles = AppDelegate().makeStatusMenu().items.map(\.title)
         #expect(titles.contains("Documentation"))
         #expect(titles.contains("About BenchBar"))
+        #expect(titles.contains("Check for Updates…"), "a build without Sparkle checks in the About window")
         #expect(titles.last == "Quit BenchBar")
     }
 }

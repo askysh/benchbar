@@ -179,7 +179,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(withTitle: "Settings…", action: #selector(openSettingsAction), keyEquivalent: ",").target = self
         menu.addItem(withTitle: "About BenchBar", action: #selector(openAboutAction), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Documentation", action: #selector(openDocsAction), keyEquivalent: "").target = self
-        if let item = updater?.menuItem() { menu.addItem(item) }
+        // as in the app menu: Sparkle's item, else the About window's check
+        if let item = updater?.menuItem() {
+            menu.addItem(item)
+        } else {
+            menu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdatesAction), keyEquivalent: "").target = self
+        }
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit BenchBar", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         return menu
