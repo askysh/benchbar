@@ -792,4 +792,10 @@ assert_eq "0" "$CODE" "$(cat "$STREAM.err")"
 assert_eq "True" "$(sx '{"kind": "site", "name": "macdev", "detail": "now the default site"} in e[-1]["changed"]')" "$(cat "$STREAM")"
 assert_eq "macdev macdev" "$(sx '"%s %s" % (e[-1]["default_site"], e[-1]["state_after"]["site"])')" "$(cat "$STREAM")"
 
+# site add NEW --dry-run --json: nothing was created, and the done line says it was a dry run
+stream site add drynew --dry-run --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$(cat "$STREAM.err")"
+assert_eq "False True" "$(sx '"%s %s" % (e[-1]["created"], e[-1].get("dry_run"))')" "$(cat "$STREAM")"
+assert_no_file "$BENCH/sites/drynew"
+
 printf 'test-agent-contracts: ok\n'
