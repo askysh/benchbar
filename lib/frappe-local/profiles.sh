@@ -350,7 +350,7 @@ fl_team_profile_render() {
   fb="$(fl_app_branch frappe)"
   [[ -n "$fb" && "$fb" != "$FL_FRAPPE_BRANCH" ]] && printf 'frappe_branch = "%s"\n' "$fb"
   site="$(fl_bstate_get SITE_NAME)"
-  [[ -n "$site" ]] || site="$(tr -d '[:space:]' <"${FL_BENCH_DIR}/sites/currentsite.txt" 2>/dev/null || true)"
+  [[ -n "$site" ]] || site="$({ tr -d '[:space:]' <"${FL_BENCH_DIR}/sites/currentsite.txt"; } 2>/dev/null || true)"
   [[ "$site" =~ ^[a-z0-9][a-z0-9.-]*$ ]] && printf 'site = "%s"\n' "$site"
   scheduler="$(fl_bstate_get SCHEDULER)"
   [[ "$scheduler" == "on" ]] && printf 'scheduler = true\n'

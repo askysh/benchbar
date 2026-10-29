@@ -448,6 +448,17 @@ SQL
   assert_eq "frappe|15.41.0|| erpnext||| " "$n" "(no Installed Application row: the version comes from the metadata head)"
   rm -f "$BENCH"/sites/acme.localhost/private/backups/20260908_*
 
+  # ---- a bench without sites/currentsite.txt: no complaint of the shell on stderr, in the plan or in the run
+  mv "$BENCH/sites/currentsite.txt" "$TMP_DIR/currentsite.aside"
+  run_json site restore acme.localhost --from "$SET2" --dry-run --json --bench-dir "$BENCH"
+  assert_eq "0" "$CODE" "$OUT$ERR"
+  assert_not_contains "$ERR" "No such file"
+  token="$(printf '%s' "$OUT" | jget - 'd["token"]')"
+  MARIADB_ROOT_PASSWORD=rootpw ADMIN_PASSWORD=adminpw run_json site restore acme.localhost --from "$SET2" --apply "$token" --yes --json --bench-dir "$BENCH"
+  assert_eq "0" "$CODE" "$OUT$ERR"
+  assert_not_contains "$ERR" "No such file"
+  mv "$TMP_DIR/currentsite.aside" "$BENCH/sites/currentsite.txt"
+
   # ---- a running bench: its scheduler is paused for the restore and resumed
   add_proc 4242 "honcho start -f Procfile.lean" "$BENCH"
   reset_calls

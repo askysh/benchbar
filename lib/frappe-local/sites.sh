@@ -216,7 +216,7 @@ fl_cmd_site_default() {
   fl_require_plain_bench
   [[ -n "$name" ]] || fl_die "Usage: benchbar site default NAME"
   fl_site_require "$name"
-  if [[ "$name" == "$FL_SITE" && "$(tr -d '[:space:]' <"${FL_BENCH_DIR}/sites/currentsite.txt" 2>/dev/null)" == "$name" ]]; then
+  if [[ "$name" == "$FL_SITE" && "$({ tr -d '[:space:]' <"${FL_BENCH_DIR}/sites/currentsite.txt"; } 2>/dev/null)" == "$name" ]]; then
     fl_ok "unchanged: ${name} is already the default site"
     fl_site_result_doc 0 "$name" false
     return 0

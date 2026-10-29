@@ -141,7 +141,7 @@ fl_srestore_resolve_source() {
 
 # fl_srestore_plan: errors, steps, JSON and token, from reads only.
 fl_srestore_plan() {
-  local sdir s id json_steps="" sep="" touches missing a branch origin why
+  local sdir s id json_steps="" sep="" touches missing a branch origin why default
   SR_ERRORS=(); SR_EXISTS=0; SR_CAN_APPLY=0; SR_NEEDS=""
   FL_PULL_AS="$SR_TARGET"; FL_PULL_WARNINGS=""; FL_PULL_MISSING=""
   FL_PULL_SITE_CREATE=0; FL_PULL_SITE_EXISTS=0
@@ -234,7 +234,8 @@ fl_srestore_plan() {
   SR_PLAN_BODY="${SR_PLAN_BODY},\"can_apply\":$(fl_json_bool "$SR_CAN_APPLY")"
   # the bench state the plan was made against: the site list, the default
   # site, the hook and the set's files; a change of any makes the token stale
-  s="$(printf 'sites\n%s\ndefault\n%s\nhook\n%s\nset\n%s\nbench-running\n%s\n' "$(fl_sites_list)" "$(tr -d '[:space:]' <"${FL_BENCH_DIR}/sites/currentsite.txt" 2>/dev/null || true)" "$SR_HOOK_SHA" "$SR_SET_JSON" "$FL_PULL_QUIESCE")"
+  fl_site_default_file_v default
+  s="$(printf 'sites\n%s\ndefault\n%s\nhook\n%s\nset\n%s\nbench-running\n%s\n' "$(fl_sites_list)" "$default" "$SR_HOOK_SHA" "$SR_SET_JSON" "$FL_PULL_QUIESCE")"
   SR_TOKEN="$(printf '%s\n%s\n' "$SR_PLAN_BODY" "$s" | shasum -a 256 | awk '{print $1}')"
   SR_PLAN_JSON="$(printf '{"schema_version":%d,"cli_version":"%s",%s,"token":"%s"}' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$SR_PLAN_BODY" "$SR_TOKEN")"
 }
@@ -299,7 +300,7 @@ fl_srestore_step_verify() {
     fi
   fi
   # the default site stays where it was
-  now="$(tr -d '[:space:]' <"${FL_BENCH_DIR}/sites/currentsite.txt" 2>/dev/null || true)"
+  fl_site_default_file_v now
   if [[ "$now" == "$SR_DEFAULT_BEFORE" ]]; then
     fl_ok "the default site is still ${SR_DEFAULT_BEFORE:-unset}"
   elif [[ -n "$SR_DEFAULT_BEFORE" ]] && (cd "$FL_BENCH_DIR" && bench use "$SR_DEFAULT_BEFORE") >>"${FL_LOG_FILE:-/dev/null}" 2>&1; then
@@ -434,7 +435,7 @@ fl_srestore_run() {
   for s in "${FL_PULL_STEPS[@]}"; do labels+=("${s#*|}"); ids+=("${s%%|*}"); done
   fl_steps_define "${labels[@]}"
   fl_steps_ids "${ids[@]}"
-  SR_DEFAULT_BEFORE="$(tr -d '[:space:]' <"${FL_BENCH_DIR}/sites/currentsite.txt" 2>/dev/null || true)"
+  fl_site_default_file_v SR_DEFAULT_BEFORE
   # the backup first prunes old files in the target's backup folder, which is
   # where the set may be: restore from a copy of it outside sites/
   if [[ "$SR_EXISTS" == "1" ]]; then fl_srestore_copy_set || { fl_bench_redis_down; return 1; }; fi
