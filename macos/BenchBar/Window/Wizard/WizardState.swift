@@ -60,10 +60,10 @@ nonisolated struct WizardState: Equatable, Sendable {
 
     /// What this Mac already uses, so the form suggests something else: the
     /// bench folders and the folders that exist among the candidates, and
-    /// the site names of every bench.
+    /// the site names of every bench (with the bench's name).
     struct Taken: Equatable, Sendable {
         var folders: Set<String> = []
-        var sites: Set<String> = []
+        var sites: [String: String] = [:]
     }
 
     struct Failure: Equatable, Sendable {
@@ -142,6 +142,8 @@ nonisolated struct WizardState: Equatable, Sendable {
 
     private(set) var page: Page = .welcome
     private(set) var form: Form
+    /// The site names other benches use, from the suggestion.
+    private(set) var takenSites: [String: String] = [:]
     private(set) var rootPassword = Secret()
 
     private(set) var prerequisites: PrerequisiteReport?
@@ -193,6 +195,18 @@ nonisolated struct WizardState: Equatable, Sendable {
 
     var siteProblem: String? {
         form.site.isEmpty || SiteName.isValid(form.site) ? nil : SiteName.rule
+    }
+
+    /// The bench that already has a site of this name.
+    func bench(usingSite site: String) -> String? { takenSites[site] }
+
+    /// The site name another bench has: allowed, but both share the
+    /// hostname, and cookies ignore the port, so a login on one bench logs
+    /// out of the other.
+    var siteClash: String? {
+        bench(usingSite: form.site).map {
+            "\($0) already has a site named \(form.site). Cookies ignore the port, so logging in to one bench logs you out of the other. Choose another name."
+        }
     }
 
     var portOffsetValue: Int? {
@@ -268,10 +282,11 @@ nonisolated struct WizardState: Equatable, Sendable {
         switch event {
         case .suggest(let taken):
             guard page == .welcome else { return [] }
+            takenSites = taken.sites
             if !form.folderEdited, let free = Self.folderCandidates(home: home).first(where: { !taken.folders.contains($0) }) {
                 form.folder = free
             }
-            if !form.siteEdited, let free = Self.siteCandidates.first(where: { !taken.sites.contains($0) }) {
+            if !form.siteEdited, let free = Self.siteCandidates.first(where: { taken.sites[$0] == nil }) {
                 form.site = free
             }
             return []

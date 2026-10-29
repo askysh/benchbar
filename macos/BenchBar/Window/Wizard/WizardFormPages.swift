@@ -30,6 +30,9 @@ struct NewBenchPage: View {
                 TextField("Site name", text: Binding(get: { state.form.site }, set: { run.send(.setSite($0)) }), prompt: Text("macdev"))
                 if let problem = state.siteProblem {
                     Text(problem).font(.caption).foregroundStyle(.red)
+                } else if let clash = state.siteClash {
+                    Label(clash, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption).foregroundStyle(.orange).wrapsInFormColumn()
                 }
                 LabeledContent("Administrator password") {
                     HStack(spacing: WindowMetrics.rowSpacing) {
@@ -123,7 +126,7 @@ struct ReviewPage: View {
         WizardScaffold("Review", explanation: "This is what BenchBar will do. Nothing has changed yet.", phase: phase(state)) {
             if let plan = state.plan {
                 summary(state, plan)
-                stepList(plan)
+                stepList(plan, sharedWith: state.bench(usingSite: plan.site))
                 SheetNote("Install starts it, and that is your confirmation. Steps that ask for your password show macOS's own dialog: BenchBar never sees the password. Cancel a dialog and that step is skipped with the command to run yourself.")
             }
         } actions: {
@@ -143,6 +146,12 @@ struct ReviewPage: View {
         return VStack(alignment: .leading, spacing: WindowMetrics.lineSpacing + 2) {
             LabeledContent("Folder") { Text((plan.bench as NSString).abbreviatingWithTildeInPath).textSelection(.enabled) }
             LabeledContent("Site") { Text(plan.webURL ?? plan.site).textSelection(.enabled) }
+            if let bench = state.bench(usingSite: plan.site) {
+                Label("\(bench) has a site of the same name: logging in to one bench logs you out of the other.",
+                      systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption).foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             LabeledContent("Profile") {
                 Text(([plan.profile] + [profile?.versions]).compactMap { $0 }.joined(separator: ": ")).textSelection(.enabled)
             }
@@ -155,7 +164,9 @@ struct ReviewPage: View {
         }
     }
 
-    private func stepList(_ plan: InstallPlan) -> some View {
+    /// `sharedWith`: the bench whose site has this name. Its hosts line is
+    /// in place, but it is that bench's line, not this install's work done.
+    private func stepList(_ plan: InstallPlan, sharedWith bench: String?) -> some View {
         VStack(alignment: .leading, spacing: WindowMetrics.rowSpacing) {
             Text("Steps").font(.headline)
             ForEach(plan.steps) { step in
@@ -166,6 +177,8 @@ struct ReviewPage: View {
                     if step.sudo {
                         if step.willRun {
                             Tag(text: "Asks for your password", color: .orange)
+                        } else if step.id == "hosts_entry", let bench {
+                            Tag(text: "Already there for \(bench)", color: .orange)
                         } else {
                             Tag(text: "Already done", color: .secondary)
                         }

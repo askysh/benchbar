@@ -124,7 +124,7 @@ struct WizardStateTests {
     /// never replaces what the person typed.
     @Test func theFormSuggestsAFreeFolderAndSite() {
         var s = WizardState(home: "/Users/you")
-        s.send(.suggest(WizardState.Taken(folders: ["/Users/you/frappe-bench", "/Users/you/frappe-bench-2"], sites: ["macdev", "pm.localhost"])))
+        s.send(.suggest(WizardState.Taken(folders: ["/Users/you/frappe-bench", "/Users/you/frappe-bench-2"], sites: ["macdev": "frappe-bench", "pm.localhost": "pm-bench"])))
         #expect(s.form.folder == "/Users/you/frappe-bench-3")
         #expect(s.form.site == "macdev2")
         #expect(s.send(.chooseNewBench) == [.checkPrerequisites(folder: "/Users/you/frappe-bench-3")])
@@ -132,12 +132,31 @@ struct WizardStateTests {
         var typed = WizardState(home: "/Users/you")
         typed.send(.setFolder("/Users/you/work/b"))
         typed.send(.setSite("mine"))
-        typed.send(.suggest(WizardState.Taken(folders: ["/Users/you/frappe-bench"], sites: ["macdev"])))
+        typed.send(.suggest(WizardState.Taken(folders: ["/Users/you/frappe-bench"], sites: ["macdev": "frappe-bench"])))
         #expect(typed.form.folder == "/Users/you/work/b" && typed.form.site == "mine")
+        #expect(typed.siteClash == nil)
 
         var fresh = WizardState(home: "/Users/you")
         fresh.send(.suggest(WizardState.Taken()))
         #expect(fresh.form.folder == "/Users/you/frappe-bench" && fresh.form.site == "macdev")
+    }
+
+    /// A typed name another bench's site has is flagged with that bench;
+    /// it does not stop Review.
+    @Test func aSiteNameOfAnotherBenchIsFlagged() throws {
+        var s = WizardState(home: Self.home)
+        s.send(.suggest(WizardState.Taken(folders: [], sites: ["macdev": "frappe-bench"])))
+        s.send(.chooseNewBench)
+        s.send(.prerequisites(try report()))
+        s.send(.primary)
+        s.send(.profiles(try profileList()))
+        s.send(.setAdminPassword("pw"))
+        #expect(s.form.site == "macdev2" && s.siteClash == nil)
+        s.send(.setSite("macdev"))
+        #expect(s.bench(usingSite: "macdev") == "frappe-bench")
+        #expect(s.siteClash?.hasPrefix("frappe-bench already has a site named macdev.") == true)
+        #expect(s.siteProblem == nil)
+        #expect(s.primary == WizardState.Primary(title: "Review", enabled: true))
     }
 
     @Test func profilesOfferTheBuiltInAndTheValidTeamOnes() throws {

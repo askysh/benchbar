@@ -41,7 +41,7 @@ extension SnapshotTests {
                 .joined(separator: "; ") + "; a new bench gets port block 1"
         }
         // a bench already has ~/frappe-bench and macdev
-        return [.suggest(WizardState.Taken(folders: ["/Users/you/frappe-bench"], sites: ["macdev"])),
+        return [.suggest(WizardState.Taken(folders: ["/Users/you/frappe-bench"], sites: ["macdev": "frappe-bench"])),
                 .chooseNewBench, .prerequisites(ports), .primary,
          .profiles(try BenchJSON.decode(ProfileList.self, from: try Fixture.data("profile-list-wizard"))),
          .setAdminPassword("s3cret")]
@@ -68,7 +68,7 @@ extension SnapshotTests {
     @Test func wizardNewBenchReviewAndInstall() async throws {
         let (_, run) = try await wizardRun(try formEvents())
         try render(page(run), "wizard-new-bench")
-        run.preview([.primary, .planned(try plan())])
+        run.preview([.primary, .planned(try plan(site: "macdev2"))])
         try render(page(run), "wizard-review")
 
         run.preview([.primary])
@@ -86,9 +86,31 @@ extension SnapshotTests {
         try render(page(done), "wizard-done-skipped")
     }
 
-    private func plan() throws -> InstallPlan {
-        guard case .plan(let plan)? = try InstallEvent.decodeAll(try Fixture.lines("install-dry-run")).first else { throw Fixture.FixtureError.missing("plan") }
+    /// The dry run's plan (site macdev); another site gets port block 1, and
+    /// `hostsInPlace` its hosts line already in /etc/hosts.
+    private func plan(site: String? = nil, hostsInPlace: Bool = false) throws -> InstallPlan {
+        guard case .plan(var plan)? = try InstallEvent.decodeAll(try Fixture.lines("install-dry-run")).first else { throw Fixture.FixtureError.missing("plan") }
+        if let site {
+            plan.site = site
+            plan.webURL = "http://\(site):8001"
+            plan.portOffset = 1
+        }
+        if let i = plan.steps.firstIndex(where: { $0.id == "hosts_entry" }) {
+            plan.steps[i].name = "Add 127.0.0.1 \(plan.site) to /etc/hosts"
+            plan.steps[i].willRun = !hostsInPlace
+        }
         return plan
+    }
+
+    /// A typed site name another bench uses: flagged in the form, and the
+    /// Review does not call that bench's hosts line done.
+    @Test func wizardSiteNameOfAnotherBench() async throws {
+        let (_, run) = try await wizardRun(try formEvents() + [.setSite("macdev")])
+        try render(page(run), "wizard-new-bench-site-taken")
+        var shared = try plan(site: "macdev", hostsInPlace: true)
+        shared.webURL = "http://macdev:8001"
+        run.preview([.primary, .planned(shared)])
+        try render(page(run), "wizard-review-site-taken")
     }
 
     @Test func sidebarZeroOneAndSeveral() async throws {

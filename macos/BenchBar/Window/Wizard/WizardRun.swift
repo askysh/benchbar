@@ -70,8 +70,11 @@ final class WizardRun {
     /// The benches' folders and site names, and the candidate folders that exist.
     private func taken() -> WizardState.Taken {
         let existing = WizardState.folderCandidates(home: state.home).filter { FileManager.default.fileExists(atPath: $0) }
-        let sites = store.benches.flatMap { [$0.summary.site] + $0.siteRows.map(\.name) }
-        return WizardState.Taken(folders: Set(store.benches.map(\.path) + existing), sites: Set(sites))
+        var sites: [String: String] = [:]
+        for bench in store.benches {
+            for site in [bench.summary.site] + bench.siteRows.map(\.name) where sites[site] == nil { sites[site] = bench.name }
+        }
+        return WizardState.Taken(folders: Set(store.benches.map(\.path) + existing), sites: sites)
     }
 
     /// Return and Esc, and the buttons: the same events.
