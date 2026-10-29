@@ -271,6 +271,16 @@ run_json app add acme_crm --site appsite --apply "$TOKEN" --yes --json --bench-d
 assert_eq "0" "$CODE" "$ERR"
 assert_eq "1" "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')" "(the document the Mac app decodes is one line)"
 assert_eq "True 0 app" "$(printf '%s' "$OUT" | jget - '" ".join([str(d["ok"]), str(d["exit"]), d["changed"][0]["kind"]])')"
+# the apply as a stream: every step line has an id, KIND_TARGET as app update's
+make_app_remote acme_two
+add_policy acme_two main
+run_json app add acme_two --site appsite --dry-run --json --bench-dir "$APPB"
+TOKEN="$(printf '%s' "$OUT" | jget - 'd["token"]')"
+stream app add acme_two --site appsite --apply "$TOKEN" --yes --jsonl --bench-dir "$APPB"
+assert_eq "0" "$CODE" "$(cat "$STREAM.err")"
+assert_eq "1" "$(done_count)"
+assert_eq "True" "$(sx 'all(x.get("id") for x in e if x["event"] == "step") and any(x["event"] == "step" for x in e)')"
+assert_eq "True" "$(sx 'any(x.get("id") == "install_appsite" for x in e if x["event"] == "step")')"
 # update: a dry run as a document and as a stream, then the real stream
 push_commits acme_crm 2
 run_json app update acme_crm --dry-run --json --bench-dir "$APPB"

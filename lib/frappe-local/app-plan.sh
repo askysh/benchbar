@@ -610,10 +610,16 @@ fl__ap_settle() {
 # Returns 1 when a step or the verify pass failed.
 fl__ap_apply() {
   local target="$1" labels=() entry kind arg label i=0 code=0 e rp br sha s a res fail_from reason
-  local clone_failed="" build_failed="" py_failed="" first_kind="" first_reason="" done_set=" " cloned=()
+  local clone_failed="" build_failed="" py_failed="" first_kind="" first_reason="" done_set=" " cloned=() ids=()
   AP_STEP_NOTE=()
-  for entry in "${AP_STEPS[@]}"; do IFS='|' read -r _ _ label _ <<<"$entry"; labels+=("$label"); done
+  for entry in "${AP_STEPS[@]}"; do
+    IFS='|' read -r kind arg label _ <<<"$entry"
+    labels+=("$label")
+    # the stream's step ids, KIND_TARGET as app update names its own
+    ids+=("${kind}${arg:+_${arg}}")
+  done
   fl_steps_define "${labels[@]}"
+  fl_steps_ids "${ids[@]}"
   # the record first: whatever stops this run leaves what is still to do
   fl__ap_record "" "" "$done_set" || { fl_fail "nothing was run: without its record a stop could not be finished later"; return 1; }
   for entry in "${AP_STEPS[@]}"; do
