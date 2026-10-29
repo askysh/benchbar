@@ -25,6 +25,9 @@ final class WindowRouter {
     /// Set to open the Repair sheet on the bench page when it appears.
     var repairRequested = false
     var scanRequested = false
+    /// Set by Add Bench > Adopt Existing Bench…: Find Benches asks for one
+    /// bench's folder and opens its setup plan.
+    var adoptRequested = false
     var setupRequest: String?
     var startAfterSetup = false
     /// Set by the popover: the Sites tab of this bench opens its Add Hosts Lines sheet.
@@ -249,7 +252,7 @@ struct SidebarFooter: View {
                     router.pane = .wizard
                 }
                 Button("Adopt Existing Bench…", systemImage: "arrow.down.doc") {
-                    router.scanRequested = true
+                    router.adoptRequested = true
                     router.pane = .discovery
                 }
                 Button("Find Benches…", systemImage: "folder.badge.plus") { router.pane = .discovery }

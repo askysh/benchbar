@@ -116,6 +116,7 @@ struct SnapshotTests {
         10:00:01 system      | redis_cache.1 started (pid=4101)
         10:00:01 redis_cache.1 | Ready to accept connections tcp
         10:00:02 web.1       | * Running on http://127.0.0.1:8000
+        10:00:02 web.1       | \u{1B}[33mPress CTRL+C to quit\u{1B}[0m
         10:00:03 socketio.1  | Realtime service listening on: ws://0.0.0.0:9000
         10:00:05 web.1       | 127.0.0.1 - - "GET /api/method/ping HTTP/1.1" 200 -
         10:00:09 worker.1    | 10:00:09 default: frappe.utils.background_jobs.run_doc_method (job-1)
@@ -177,6 +178,22 @@ struct SnapshotTests {
         try render(window(store, workbench, router), "window-sites")
         router.benchTab = .overview
         try render(window(store, workbench, router), "window-overview")
+    }
+
+    /// A wide window: the header and tabs keep to the Form's centered
+    /// column. The narrowest: "Open in VS Code" moves into the "…" menu.
+    @Test func windowWidths() async throws {
+        let store = try await windowStore()
+        let workbench = Workbench(store: store)
+        let router = WindowRouter()
+        router.show(bench: "/Users/you/frappe-bench", tab: .overview)
+        func sized(_ width: CGFloat) -> some View {
+            MainWindowView(store: store, router: router, workbench: workbench, about: AboutModel(store: store),
+                           discovery: BenchDiscovery(store: store), wizard: wizardView(store, WizardRun(store: store)))
+                .frame(width: width, height: 620)
+        }
+        try render(sized(1500), "window-overview-wide")
+        try render(sized(770), "window-overview-narrowest")
     }
 
     @Test func windowProfiles() async throws {

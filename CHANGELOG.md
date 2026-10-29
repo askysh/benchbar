@@ -152,6 +152,39 @@ All notable changes to this project are documented here.
   without the CLI's `[FAIL]` and `[WARN]` markers, and doctor's counts
   read the same in the popover and the Health tab ("1 failure · 1
   warning").
+- The app opens its window on the first run wizard when it starts on a
+  Mac with no bench. Before, a new user saw only the menu bar icon. The
+  popover's empty state leads with Set Up a New Bench…; the Terminal
+  commands are a hint below it.
+- The app's New Bench form flags a site name another bench already has:
+  both sites share the hostname, and cookies ignore the port, so logging
+  in to one bench logs you out of the other. Review says so too, and no
+  longer marks the hosts line "Already done" when the line is that other
+  bench's.
+- The app's log window shows werkzeug's coloured lines as text: "WARNING:
+  This is a development server" read `[31m[1mWARNING`, and search
+  matches what you see.
+- The app's popover in light mode has a solid background: on macOS 26 a
+  dark window behind it showed through its text. A disabled Start, Stop or
+  Restart button is clearly faded next to the ones that work.
+- While a bench starts or restarts, the app shows no uptime until the new
+  run reports; it showed the previous run's ("up 42m").
+- **Add Bench > Adopt Existing Bench…** asks for one bench's folder and
+  opens its setup plan (the service files and the ports, as `benchbar
+  adopt`), instead of the same folder search as Find Benches. The setup
+  sheet for one bench is titled by its name.
+- The wizard's Check Your Mac page puts only commands in a box with Copy.
+  A fix in words (CleanMyMac's Ignore List, free disk space) is text, and
+  Mole's fix is its first step in words with the `echo` line to copy.
+- Opening BenchBar again (Finder, Spotlight) shows the BenchBar window
+  while About or Settings is open; before, it did nothing then.
+- The menu bar icon's right click menu has **Check for Updates…** in a
+  build without Sparkle too, as the app menu has: it opens About and
+  checks.
+- In a wide BenchBar window a bench's name, path and tabs line up with
+  its centered content instead of staying at the left edge. In the
+  narrowest window **Open in VS Code** moves into the "…" menu instead of
+  shrinking to "Open…".
 - `repair` run by a copy of BenchBar.app that the app did not register (a
   development build, a second copy of the app) no longer points the shell
   helpers at that copy's own CLI, which goes away with the build. The

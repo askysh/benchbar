@@ -41,7 +41,7 @@ extension SnapshotTests {
                 .joined(separator: "; ") + "; a new bench gets port block 1"
         }
         // a bench already has ~/frappe-bench and macdev
-        return [.suggest(WizardState.Taken(folders: ["/Users/you/frappe-bench"], sites: ["macdev"])),
+        return [.suggest(WizardState.Taken(folders: ["/Users/you/frappe-bench"], sites: ["macdev": "frappe-bench"])),
                 .chooseNewBench, .prerequisites(ports), .primary,
          .profiles(try BenchJSON.decode(ProfileList.self, from: try Fixture.data("profile-list-wizard"))),
          .setAdminPassword("s3cret")]
@@ -63,12 +63,28 @@ extension SnapshotTests {
         try render(page(run), "wizard-check-failing")
         let (_, ok) = try await wizardRun([.chooseNewBench, .prerequisites(try report(ok: true))])
         try render(page(ok), "wizard-check-ok")
+        var cleanup = try report(ok: true)
+        // a fix in words and Mole's "then:" fix: only the command is in a copy box
+        for (id, message, fix) in [
+            ("cleanmymac", "CleanMyMac X.app is installed; its cleanup can delete env/, node_modules and public/dist",
+             "In CleanMyMac, add /Users/you/frappe-bench to the Ignore List before running any cleanup"),
+            ("mole", "Mole is installed (/opt/homebrew/bin/mo); 'mo purge' can delete env/, node_modules and dist folders inside the bench",
+             "run 'mo clean --whitelist' and save once (it writes Mole's defaults), then: echo '/Users/you/frappe-bench' >> ~/.config/mole/whitelist"),
+        ] {
+            if let i = cleanup.prerequisites.firstIndex(where: { $0.id == id }) {
+                cleanup.prerequisites[i].level = .warn
+                cleanup.prerequisites[i].message = message
+                cleanup.prerequisites[i].fixCommand = fix
+            }
+        }
+        let (_, warned) = try await wizardRun([.chooseNewBench, .prerequisites(cleanup)])
+        try render(page(warned), "wizard-check-cleanup-tools")
     }
 
     @Test func wizardNewBenchReviewAndInstall() async throws {
         let (_, run) = try await wizardRun(try formEvents())
         try render(page(run), "wizard-new-bench")
-        run.preview([.primary, .planned(try plan())])
+        run.preview([.primary, .planned(try plan(site: "macdev2"))])
         try render(page(run), "wizard-review")
 
         run.preview([.primary])
@@ -86,9 +102,31 @@ extension SnapshotTests {
         try render(page(done), "wizard-done-skipped")
     }
 
-    private func plan() throws -> InstallPlan {
-        guard case .plan(let plan)? = try InstallEvent.decodeAll(try Fixture.lines("install-dry-run")).first else { throw Fixture.FixtureError.missing("plan") }
+    /// The dry run's plan (site macdev); another site gets port block 1, and
+    /// `hostsInPlace` its hosts line already in /etc/hosts.
+    private func plan(site: String? = nil, hostsInPlace: Bool = false) throws -> InstallPlan {
+        guard case .plan(var plan)? = try InstallEvent.decodeAll(try Fixture.lines("install-dry-run")).first else { throw Fixture.FixtureError.missing("plan") }
+        if let site {
+            plan.site = site
+            plan.webURL = "http://\(site):8001"
+            plan.portOffset = 1
+        }
+        if let i = plan.steps.firstIndex(where: { $0.id == "hosts_entry" }) {
+            plan.steps[i].name = "Add 127.0.0.1 \(plan.site) to /etc/hosts"
+            plan.steps[i].willRun = !hostsInPlace
+        }
         return plan
+    }
+
+    /// A typed site name another bench uses: flagged in the form, and the
+    /// Review does not call that bench's hosts line done.
+    @Test func wizardSiteNameOfAnotherBench() async throws {
+        let (_, run) = try await wizardRun(try formEvents() + [.setSite("macdev")])
+        try render(page(run), "wizard-new-bench-site-taken")
+        var shared = try plan(site: "macdev", hostsInPlace: true)
+        shared.webURL = "http://macdev:8001"
+        run.preview([.primary, .planned(shared)])
+        try render(page(run), "wizard-review-site-taken")
     }
 
     @Test func sidebarZeroOneAndSeveral() async throws {

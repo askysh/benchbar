@@ -735,6 +735,56 @@ struct BenchStoreTests {
         #expect(menuBarUpdates == afterLaunch)
     }
 
+    /// A restart shows "starting" without the old run's uptime; the uptime
+    /// comes back with the new run's start time.
+    @Test func uptimeWaitsForTheNewRun() async throws {
+        cli.answer("list", json: listJSON())
+        cli.answer("status", json: runningJSON())
+        let store = makeStore()
+        await store.start(polling: false)
+        let bench = try #require(store.selected)
+        let old = try #require(bench.upSince)
+
+        _ = bench.machine.handle(.actionStarted(.restart))
+        #expect(bench.state == .starting)
+        #expect(bench.upSince == nil)
+        #expect(bench.runningSince == old, "resources still sample while it starts")
+
+        var next = try #require(bench.status)
+        next.startedAt = old.addingTimeInterval(3600)
+        next.pid = 4343
+        _ = bench.machine.handle(.actionFinished(.restart, succeeded: true))
+        _ = bench.machine.handle(.observed(next, .status))
+        #expect(bench.state == .running)
+        #expect(bench.upSince == next.startedAt)
+    }
+
+    /// The launch opens the wizard on a Mac without a bench, with or without
+    /// a CLI, but not when the list failed: the benches may be there.
+    @Test func noBenchIsAnAnswerNotAFailure() async throws {
+        cli.answer("list", json: try Fixture.string("list-empty"))
+        let empty = makeStore()
+        await empty.start(polling: false)
+        #expect(empty.hasNoBench)
+
+        cli.answer("list", CommandOutput(exitCode: 1, stdout: "", stderr: "[FAIL] list broke"))
+        let failed = makeStore()
+        await failed.start(polling: false)
+        #expect(failed.benches.isEmpty)
+        #expect(!failed.hasNoBench)
+
+        cli.answer("list", json: listJSON())
+        cli.answer("status", json: statusJSON("stopped", reason: "manual"))
+        let one = makeStore()
+        await one.start(polling: false)
+        #expect(!one.hasNoBench)
+
+        settings.cliPath = ""
+        let noCLI = makeStore()
+        await noCLI.start(polling: false)
+        #expect(noCLI.hasNoBench)
+    }
+
     @Test func doctorReportIsKept() async throws {
         cli.answer("list", json: listJSON())
         cli.answer("status", json: statusJSON("stopped", reason: "manual"))

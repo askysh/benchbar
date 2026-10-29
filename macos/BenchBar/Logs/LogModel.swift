@@ -32,6 +32,33 @@ nonisolated enum LogParser {
         return base.allSatisfy { $0.isLetter || $0 == "_" } ? base : nil
     }
 
+    /// The line without terminal escape sequences: werkzeug colours its
+    /// banner ("ESC[31mESC[1mWARNING"), and the viewer shows text. Drops a
+    /// CSI sequence (ESC [, parameters, one final byte from @ to ~), an OSC
+    /// one (ESC ], up to BEL or ESC \), and any other escape (ESC, its
+    /// intermediates from space to /, one final character).
+    static func plain(_ line: String) -> String {
+        guard line.contains("\u{1B}") else { return line }
+        var out = String.UnicodeScalarView()
+        var scalars = line.unicodeScalars.makeIterator()
+        while let scalar = scalars.next() {
+            guard scalar == "\u{1B}" else { out.append(scalar); continue }
+            switch scalars.next() {
+            case "["?:
+                while let next = scalars.next(), !(0x40...0x7E).contains(next.value) {}
+            case "]"?:
+                var previous: Unicode.Scalar?
+                while let next = scalars.next(), next != "\u{07}", !(previous == "\u{1B}" && next == "\\") { previous = next }
+            case let next? where (0x20...0x2F).contains(next.value):
+                // ESC ( B and the like: intermediates, then one final byte
+                while let next = scalars.next(), (0x20...0x2F).contains(next.value) {}
+            default:
+                break
+            }
+        }
+        return String(out)
+    }
+
     static let errorMarkers = ["ERROR", "CRITICAL", "Traceback (most recent call last)", "Exception:", "Error:"]
 
     static func looksLikeError(_ line: String) -> Bool {
@@ -62,7 +89,7 @@ nonisolated struct LogBuffer: Sendable {
         partial = pieces.removeLast()
         var added: [LogLine] = []
         for raw in pieces {
-            let line = raw.hasSuffix("\r") ? String(raw.dropLast()) : raw
+            let line = LogParser.plain(raw.hasSuffix("\r") ? String(raw.dropLast()) : raw)
             let process = LogParser.process(of: line)
             if process != nil {
                 lastProcess = process

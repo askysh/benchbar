@@ -136,6 +136,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let waiting = pendingURLs
             pendingURLs = []
             waiting.forEach(handle)
+            // a menu bar icon alone says nothing to someone who just
+            // installed BenchBar: no bench, the window opens on the wizard
+            // (unless a link launched the app and said where to go)
+            if store.hasNoBench && waiting.isEmpty { openWizard() }
             askForCLIOnce()
             updateOffer.startAutomaticChecks()
         }
@@ -175,7 +179,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(withTitle: "Settings…", action: #selector(openSettingsAction), keyEquivalent: ",").target = self
         menu.addItem(withTitle: "About BenchBar", action: #selector(openAboutAction), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Documentation", action: #selector(openDocsAction), keyEquivalent: "").target = self
-        if let item = updater?.menuItem() { menu.addItem(item) }
+        // as in the app menu: Sparkle's item, else the About window's check
+        if let item = updater?.menuItem() {
+            menu.addItem(item)
+        } else {
+            menu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdatesAction), keyEquivalent: "").target = self
+        }
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit BenchBar", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         return menu
@@ -302,8 +311,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Opening BenchBar again (Finder, Spotlight, the Dock while a window is
     /// open) shows the window: a menu bar app has nothing else to show.
+    /// About or Settings on screen do not count: `hasVisibleWindows` is true
+    /// for them, and the BenchBar window stayed closed.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if !flag { openMainWindow() }
+        if !mainWindow.isVisible { openMainWindow() }
         return true
     }
 

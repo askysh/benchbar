@@ -115,7 +115,7 @@ struct PortSetupSheet: View {
                 DoneButton(action: close)
             } else if run.phase == .review {
                 CancelButton(action: close)
-                Button(run.startAfterSetup ? "Resolve & Start" : (run.opensSettings ? "Set Up Bench" : "Set Up Selected Benches")) { Task { await run.apply() } }
+                Button(run.startAfterSetup ? "Resolve & Start" : (run.opensSettings || run.summaries.count == 1 ? "Set Up Bench" : "Set Up Selected Benches")) { Task { await run.apply() } }
                     .keyboardShortcut(.defaultAction)
                     .disabled(run.plan?.canApply != true || run.store.busyBench != nil)
             } else if run.phase == .planning {

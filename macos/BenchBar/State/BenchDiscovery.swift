@@ -43,6 +43,14 @@ final class BenchDiscovery {
         return [summary] + others
     }
 
+    /// Adopt Existing Bench: the bench a scan of its own folder found, when
+    /// it found one that BenchBar does not manage yet. Its setup plan (the
+    /// service files and the ports) is what `benchbar adopt` would do.
+    var adoptCandidate: BenchSummary? {
+        guard results.count == 1, let bench = results.first, !managedPaths.contains(bench.path) else { return nil }
+        return bench
+    }
+
     func hasPortConflict(_ result: BenchSummary) -> Bool {
         let own = Set([result.ports.web, result.ports.socketio, result.ports.redisQueue, result.ports.redisCache])
         let others = results + store.benches.map(\.summary)
@@ -52,13 +60,15 @@ final class BenchDiscovery {
         }
     }
 
+    /// `remember`: the folder is the one Find Benches offers next time (an
+    /// adopted bench's own folder is not).
     @discardableResult
-    func scan(folder: String) -> Task<Void, Never> {
+    func scan(folder: String, remember: Bool = true) -> Task<Void, Never> {
         scanTask?.cancel()
         let token = UUID()
         generation = token
         self.folder = folder
-        store.settings.scanFolder = folder
+        if remember { store.settings.scanFolder = folder }
         results = []; warnings = []; selected = []
         error = nil; message = nil; hasScanned = false; isScanning = true
         let task = Task { [weak self] in

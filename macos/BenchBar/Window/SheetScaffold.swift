@@ -31,6 +31,10 @@ nonisolated enum WindowMetrics {
     static let bannerPadding: CGFloat = 10
     /// A sheet's content scrolls past this height; title and footer stay.
     static let sheetMaxContentHeight: CGFloat = 520
+    /// The widest a grouped Form draws its sections (measured on macOS 27),
+    /// centered past it: a bench page's header and tabs keep to the same
+    /// column, or they stayed at the left of a wide window.
+    static let groupedFormMaxWidth: CGFloat = 704
     /// The column of a wizard page, centered in the window.
     static let wizardWidth: CGFloat = 640
     /// Room inside a scrolling content area for the bezel and focus ring a

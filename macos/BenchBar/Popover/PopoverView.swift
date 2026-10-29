@@ -47,6 +47,7 @@ struct PopoverView: View {
         }
         .padding(14)
         .frame(width: 370)
+        .background { PopoverBacking() }
     }
 
     @ViewBuilder private var content: some View {
@@ -159,7 +160,7 @@ struct BenchPanel: View {
             VStack(alignment: .trailing, spacing: 3) {
                 StatePill(state: bench.state, text: BenchText.headline(
                     bench.state, reason: bench.machine.stopReason, exitCode: bench.status?.lastExitCode))
-                if let since = bench.runningSince {
+                if let since = bench.upSince {
                     Uptime(since: since) { Text("up \($0)").font(.caption).monospacedDigit().foregroundStyle(.secondary) }
                 }
             }
@@ -465,6 +466,23 @@ struct ActionButton: View {
         }
         .controlSize(.large)
         .disabled(!enabled)
+        // the system's disabled look on the popover's glass was close to
+        // the enabled one: Start beside Stop on a running bench read as two
+        // live buttons
+        .opacity(enabled || busy ? 1 : 0.45)
+    }
+}
+
+/// Behind the popover's content in light mode. macOS 26 draws the popover
+/// as clear glass, and with a dark window behind it the window's text showed
+/// through ours. Dark mode keeps the glass: light text stays readable on it.
+struct PopoverBacking: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        if colorScheme == .light {
+            Color(nsColor: .windowBackgroundColor).opacity(0.92).ignoresSafeArea()
+        }
     }
 }
 
@@ -538,14 +556,25 @@ struct NoBenchView: View {
                 ProgressView("Loading benches").controlSize(.small)
             } else {
                 Label("No bench found", systemImage: "tray").font(.headline)
-                Text(error ?? "Create one with the installer (benchbar install), or register one you already have with benchbar adopt <path>.")
-                    .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
-                if error == nil {
+                if let error {
+                    Text(error)
+                        .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
                     // first run: the wizard in the BenchBar window gets a bench going
+                    Text("The BenchBar window sets up a new bench step by step, or finds one you already have.")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                     Button("Set Up a New Bench…", action: setUp).buttonStyle(.borderedProminent)
-                    Link("The Install guide has the same steps for Terminal.", destination: BenchBarLinks.install)
-                        .font(.caption)
+                    // Terminal second: the same steps without the app
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("In Terminal: benchbar install, or benchbar adopt PATH for a bench you have.")
+                            .foregroundStyle(.secondary).textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Link("Install guide", destination: BenchBarLinks.install)
+                    }
+                    .font(.caption)
+                    .padding(.top, 2)
                 }
                 Button("Try Again", action: retry)
             }
