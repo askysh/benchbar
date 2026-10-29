@@ -158,10 +158,12 @@ All notable changes to this project are documented here.
   block keeps the benchbar it names, or names Homebrew's copy, the
   installer's or the app's link, and doctor run from such a copy no longer
   says the block is outdated.
-- The days behind in doctor and `app focus` for an app whose remote branch
-  merged in older history no longer count from the oldest commit of that
-  history (an app read "5439 days behind", from a commit of 2011): they
-  count from the first commit the branch got after yours.
+- The commits and days behind in doctor, `app focus` and the JSON of
+  `app list` for an app whose remote branch merges in other history no
+  longer count every commit of that history (an app read "5541 commits"
+  and "5439 days behind", from a commit of 2011, where the branch was 14
+  commits ahead): both count along the branch itself, the commits it got
+  after yours (a merged release is one commit, not everything in it).
 
 ### Windows (preview)
 

@@ -514,8 +514,8 @@ fetches without the flag). `fetched_at` is benchbar's last such fetch.
 | `apps[].requires` | array of strings | `required_apps` from the app's `hooks.py`, frappe left out |
 | `apps[].needed_by` | array of strings | the focus apps that need it, directly or through another app; empty for a focus app |
 | `apps[].upstream` | string or null | `REMOTE/BRANCH` the app's branch follows; `null` on a detached HEAD |
-| `apps[].behind` | number or null | commits on the upstream (as last fetched) that HEAD lacks; `null` when unknown (never fetched) |
-| `apps[].behind_days` | number or null | the age in days of the oldest of those commits |
+| `apps[].behind` | number or null | commits on the upstream (as last fetched) that HEAD lacks, counted along the upstream's first parent line, so the commits a merge brings in count as the merge (0.8); `null` when unknown (never fetched) |
+| `apps[].behind_days` | number or null | the age in days of the first of those commits (0.8: the first on the first parent line, never a commit a merge brought in) |
 
 `app focus NAME [--auto] --json` and `app unfocus NAME --json` print
 `{"schema_version","cli_version","bench","app","pin","focus","reasons"}`.
