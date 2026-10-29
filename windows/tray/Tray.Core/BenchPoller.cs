@@ -5,6 +5,8 @@ namespace BenchBar.Tray.Core;
 /// from Windows, so this is one re-armed one shot timer that backs off when
 /// nothing is up. Source calls never overlap, a kick during a poll becomes one
 /// more poll right after it, and a suspended poller holds no timer at all.
+/// When a distro probe is given it asks first on every poll; while the distro is
+/// stopped it makes no CLI call (that would boot it) and backs off the probe on the idle steps.
 /// </summary>
 public sealed class BenchPoller : IDisposable
 {
@@ -12,17 +14,21 @@ public sealed class BenchPoller : IDisposable
     public static readonly TimeSpan StartingDelay = TimeSpan.FromSeconds(2);
     public static readonly TimeSpan RunningDelay = TimeSpan.FromSeconds(30);
 
+    /// <summary>How long polling stays fast after an up, down or restart.</summary>
+    public static readonly TimeSpan ActionBoost = TimeSpan.FromSeconds(60);
+
     /// <summary>The back off for a poller with nothing up: 30, 60, 120, then 300 s for good.</summary>
     public static readonly IReadOnlyList<TimeSpan> IdleSteps =
         [TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(120), TimeSpan.FromSeconds(300)];
 
     /// <summary>
-    /// The time to the next poll. Flyout open 5 s; any bench starting 2 s; any
-    /// running 30 s; else (stopped, paused, crashed, unknown) the back off,
+    /// The time to the next poll. Boosted (just after an action) 2 s; flyout open 5 s; any bench starting 2 s;
+    /// any running 30 s; else (stopped, paused, crashed, unknown, distro stopped) the back off,
     /// where <paramref name="idleStep"/> counts the idle polls so far.
     /// </summary>
-    public static TimeSpan NextDelay(IReadOnlyCollection<BenchState> states, bool flyoutOpen, int idleStep)
+    public static TimeSpan NextDelay(IReadOnlyCollection<BenchState> states, bool flyoutOpen, int idleStep, bool boost = false)
     {
+        if (boost) return StartingDelay;
         if (flyoutOpen) return FlyoutOpenDelay;
         if (states.Contains(BenchState.Starting)) return StartingDelay;
         if (states.Contains(BenchState.Running)) return RunningDelay;
@@ -31,6 +37,8 @@ public sealed class BenchPoller : IDisposable
 
     private readonly IBenchSource _source;
     private readonly TimeProvider _time;
+    private readonly IDistroProbe? _probe;
+    private readonly Func<string?>? _distro;
     private readonly ITimer _timer;
     private readonly CancellationTokenSource _cts = new();
     private readonly object _gate = new();
@@ -42,24 +50,30 @@ public sealed class BenchPoller : IDisposable
     private bool _flyoutOpen;
     private bool _disposed;
     private int _idleStep;
+    private DateTimeOffset _boostUntil;
+    private bool _boostEndsWhenDistroUp;
     private IReadOnlyList<BenchEntry> _entries = [];
-    private IReadOnlyList<BenchStatus> _last = [];
+    private TraySnapshot _last = TraySnapshot.Empty;
 
-    public BenchPoller(IBenchSource source, TimeProvider time)
+    /// <param name="probe">Asked first on every poll; null means no distro gate (fixtures).</param>
+    /// <param name="distro">The distro name to ask about, read on every poll; null or empty skips the gate.</param>
+    public BenchPoller(IBenchSource source, TimeProvider time, IDistroProbe? probe = null, Func<string?>? distro = null)
     {
         _source = source;
         _time = time;
+        _probe = probe;
+        _distro = distro;
         _timer = time.CreateTimer(_ => Trigger(resetBackoff: false), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
     }
 
-    /// <summary>Raised on a thread pool thread after every poll, with the benches in list order.</summary>
-    public event Action<IReadOnlyList<BenchStatus>>? Updated;
+    /// <summary>Raised on a thread pool thread after every poll.</summary>
+    public event Action<TraySnapshot>? Updated;
 
     /// <summary>The load the source reported with the last poll, when it reports one.</summary>
     public double? CpuPercent { get; private set; }
 
-    /// <summary>The benches of the last poll.</summary>
-    public IReadOnlyList<BenchStatus> Last
+    /// <summary>The snapshot of the last poll (empty before the first).</summary>
+    public TraySnapshot Last
     {
         get { lock (_gate) return _last; }
     }
@@ -73,6 +87,20 @@ public sealed class BenchPoller : IDisposable
 
     /// <summary>An action, the flyout opening, resume or unlock: reset the back off and poll now.</summary>
     public void Kick() => Trigger(resetBackoff: true);
+
+    /// <summary>
+    /// Poll every 2 s for <paramref name="duration"/> (an up, down or restart has no state of its own while it
+    /// works), and now. With <paramref name="untilDistroUp"/> the window ends as soon as a poll finds the distro running.
+    /// </summary>
+    public void BoostFor(TimeSpan duration, bool untilDistroUp = false)
+    {
+        lock (_gate)
+        {
+            _boostUntil = _time.GetUtcNow() + duration;
+            _boostEndsWhenDistroUp = untilDistroUp;
+        }
+        Trigger(resetBackoff: true);
+    }
 
     public void SetFlyoutOpen(bool open)
     {
@@ -136,14 +164,14 @@ public sealed class BenchPoller : IDisposable
     {
         while (true)
         {
-            var statuses = await PollOnceAsync().ConfigureAwait(false);
+            var snapshot = await PollOnceAsync().ConfigureAwait(false);
             lock (_gate)
             {
                 if (_disposed) return;
-                _last = statuses;
+                _last = snapshot;
                 if (!_suspended && !_kickPending) Arm(advanceBackoff: true);
             }
-            RaiseUpdated(statuses);
+            RaiseUpdated(snapshot);
             lock (_gate)
             {
                 if (_disposed) return;
@@ -163,31 +191,63 @@ public sealed class BenchPoller : IDisposable
     /// <summary>Re-arms the one shot timer for <see cref="NextDelay"/>. Call with the gate held.</summary>
     private void Arm(bool advanceBackoff)
     {
-        var states = _last.Select(s => s.State).ToList();
-        var delay = NextDelay(states, _flyoutOpen, _idleStep);
-        var idle = !_flyoutOpen && !states.Contains(BenchState.Starting) && !states.Contains(BenchState.Running);
+        var states = _last.Benches.Select(s => s.State).ToList();
+        var boost = _time.GetUtcNow() < _boostUntil;
+        var delay = NextDelay(states, _flyoutOpen, _idleStep, boost);
+        var idle = !boost && !_flyoutOpen && !states.Contains(BenchState.Starting) && !states.Contains(BenchState.Running);
         if (!idle) _idleStep = 0;
         else if (advanceBackoff) _idleStep = Math.Min(_idleStep + 1, IdleSteps.Count - 1);
         _timer.Change(delay, Timeout.InfiniteTimeSpan);
     }
 
-    private async Task<IReadOnlyList<BenchStatus>> PollOnceAsync()
+    private async Task<TraySnapshot> PollOnceAsync()
     {
         var ct = _cts.Token;
+
+        string? distro = null;
+        if (_probe is not null && _distro?.Invoke() is { } name && !string.IsNullOrWhiteSpace(name))
+        {
+            distro = name.Trim();
+            bool running;
+            try
+            {
+                running = await _probe.IsRunningAsync(distro, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                return TraySnapshot.Empty;
+            }
+            catch (Exception)
+            {
+                running = true; // the probe itself failed: let the shim answer, it prints the fix
+            }
+            if (!running) return new TraySnapshot([], DistroStopped: true, Distro: distro);
+            lock (_gate)
+            {
+                if (_boostEndsWhenDistroUp)
+                {
+                    _boostEndsWhenDistroUp = false;
+                    _boostUntil = default;
+                }
+            }
+        }
+
+        string? problem = null;
         IReadOnlyList<BenchEntry> entries;
         try
         {
             entries = await _source.ListAsync(ct).ConfigureAwait(false);
             _entries = entries;
         }
-        catch (Exception) when (!ct.IsCancellationRequested)
+        catch (Exception ex) when (!ct.IsCancellationRequested)
         {
             // the CLI did not answer: show what was known as unknown, never a stale "running"
-            entries = _entries;
+            return new TraySnapshot(
+                _entries.Select(e => UnknownStatus(e)).ToList(), DistroStopped: false, Distro: distro, Problem: ProblemText(ex));
         }
         catch (OperationCanceledException)
         {
-            return [];
+            return TraySnapshot.Empty;
         }
 
         var result = new List<BenchStatus>(entries.Count);
@@ -197,22 +257,30 @@ public sealed class BenchPoller : IDisposable
             {
                 result.Add(await _source.StatusAsync(entry, ct).ConfigureAwait(false));
             }
-            catch (Exception) when (!ct.IsCancellationRequested)
+            catch (Exception ex) when (!ct.IsCancellationRequested)
             {
-                result.Add(new BenchStatus(entry.Name, entry.Path, BenchState.Unknown, null, entry.WebUrl, null));
+                result.Add(UnknownStatus(entry));
+                if (ex is SourceProblemException) problem ??= ex.Message;
             }
             catch (OperationCanceledException)
             {
-                return result;
+                return new TraySnapshot(result, false, distro);
             }
         }
         CpuPercent = (_source as ILoadSource)?.CpuPercent;
-        return result;
+        return new TraySnapshot(result, false, distro, problem);
     }
 
-    private void RaiseUpdated(IReadOnlyList<BenchStatus> statuses)
+    private static BenchStatus UnknownStatus(BenchEntry entry) =>
+        new(entry.Name, entry.Path, BenchState.Unknown, null, entry.WebUrl, null);
+
+    private static string ProblemText(Exception ex) => ex is SourceProblemException
+        ? ex.Message
+        : "benchbar.exe gave no usable answer. Run benchbar.exe doctor.";
+
+    private void RaiseUpdated(TraySnapshot snapshot)
     {
-        try { Updated?.Invoke(statuses); }
+        try { Updated?.Invoke(snapshot); }
         catch (Exception) { /* a handler must not stop the polling */ }
     }
 }

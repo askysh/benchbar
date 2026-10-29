@@ -49,8 +49,9 @@ public abstract record RunnerPlan
         (BenchState.Starting, true) => new Still(RunnerPose.Starting),
         (BenchState.Running, false) => new Loop(RunnerPose.Running),
         (BenchState.Running, true) => new Still(RunnerPose.Running),
-        (BenchState.Crashed or BenchState.Paused, false) => new Stumble(StumbleTimes, RunnerPose.Alert),
-        (BenchState.Crashed or BenchState.Paused, true) => new Still(RunnerPose.Alert),
+        (BenchState.Crashed, false) => new Stumble(StumbleTimes, RunnerPose.Alert),
+        // paused (crash guard, port conflict, broken) does not trip over anything: it stands there alert
+        (BenchState.Crashed or BenchState.Paused, _) => new Still(RunnerPose.Alert),
         (_, false) => new Settle(RunnerPose.Unknown, SettleTimes),
         (_, true) => new Still(RunnerPose.Unknown),
     };
@@ -139,6 +140,15 @@ public sealed class FrameSequencer
         if (!_paused) return;
         _paused = false;
         ScheduleNext();
+    }
+
+    /// <summary>Plays the current plan again from its start, for example after the runner or its frame counts changed.</summary>
+    public void Rebuild()
+    {
+        var plan = _plan;
+        if (plan is null) return;
+        _plan = null;
+        Play(plan);
     }
 
     /// <summary>Shows the current frame again, for example after the icon handles were rebuilt.</summary>

@@ -61,15 +61,19 @@ public class PlanTests
         Assert.Equal(expected, plan);
     }
 
+    [Fact]
+    public void CrashedStumblesThreeTimesThenHoldsAlert() =>
+        Assert.Equal(new RunnerPlan.Stumble(3, RunnerPose.Alert), RunnerPlan.ForState(BenchState.Crashed, false));
+
     [Theory]
-    [InlineData(BenchState.Crashed)]
-    [InlineData(BenchState.Paused)]
-    public void CrashedAndPausedStumbleThreeTimesThenAlert(BenchState state) =>
-        Assert.Equal(new RunnerPlan.Stumble(3, RunnerPose.Alert), RunnerPlan.ForState(state, false));
+    [InlineData(false)]
+    [InlineData(true)]
+    public void PausedHoldsTheAlertPoseWithoutAStumble(bool reduceMotion) =>
+        Assert.Equal(new RunnerPlan.Still(RunnerPose.Alert), RunnerPlan.ForState(BenchState.Paused, reduceMotion));
 
     [Fact]
-    public void CrashedAndPausedAreTheSamePlan() =>
-        Assert.Equal(RunnerPlan.ForState(BenchState.Crashed, false), RunnerPlan.ForState(BenchState.Paused, false));
+    public void CrashedToPausedIsANewPlanSoTheStumbleIsCutShort() =>
+        Assert.NotEqual(RunnerPlan.ForState(BenchState.Crashed, false), RunnerPlan.ForState(BenchState.Paused, false));
 
     [Fact]
     public void OnlyTheRunningLoopFollowsSpeed()

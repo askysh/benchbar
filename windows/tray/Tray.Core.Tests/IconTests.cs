@@ -224,7 +224,8 @@ public class IconTests
     public void TheTaskbarProbesReturnSomething()
     {
         Assert.True(TrayMetrics.TaskbarDpi() >= 96);
-        _ = TaskbarTheme.IsLight();
+        _ = TaskbarTheme.SystemUsesLightTheme();
+        _ = TaskbarTheme.AppsUseLightTheme();
         _ = TrayMetrics.ReduceMotion();
     }
 }

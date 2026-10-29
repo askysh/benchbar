@@ -28,7 +28,7 @@ public class PollerTests
         Assert.Equal(S(seconds), BenchPoller.NextDelay(states, flyoutOpen, step));
 
     /// <summary>Counts polls as they end; the timer is already re-armed when the event fires.</summary>
-    private sealed class Probe : IDisposable
+    internal sealed class Probe : IDisposable
     {
         private readonly SemaphoreSlim _updates = new(0);
         private int _count;
@@ -53,12 +53,13 @@ public class PollerTests
         public void Dispose() => _updates.Dispose();
     }
 
-    private static (BenchPoller Poller, ScriptedSource Source, FakeTimeProvider Time, Probe Probe) Make(BenchState state = BenchState.Stopped)
+    internal static (BenchPoller Poller, ScriptedSource Source, FakeTimeProvider Time, Probe Probe) Make(
+        BenchState state = BenchState.Stopped, IDistroProbe? distroProbe = null)
     {
         var source = new ScriptedSource();
         source.States["a"] = state;
         var time = new FakeTimeProvider();
-        var poller = new BenchPoller(source, time);
+        var poller = new BenchPoller(source, time, distroProbe, distroProbe is null ? null : () => "Ubuntu-24.04");
         return (poller, source, time, new Probe(poller));
     }
 
@@ -67,16 +68,16 @@ public class PollerTests
     {
         var (poller, source, _, probe) = Make(BenchState.Running);
         source.CpuPercent = 40;
-        IReadOnlyList<BenchStatus>? seen = null;
-        poller.Updated += s => seen = s;
         using (poller)
         using (probe)
         {
             poller.Start();
             await probe.NextAsync();
-            Assert.Equal(BenchState.Running, Assert.Single(seen!).State);
+            // read poller.Last, not a handler added here: Make already subscribed the probe, which releases
+            // the semaphore before a second handler would run (the spike's test had that race)
+            Assert.Equal(BenchState.Running, Assert.Single(poller.Last.Benches).State);
             Assert.Equal(40, poller.CpuPercent);
-            Assert.Single(poller.Last);
+            Assert.Single(poller.Last.Benches);
         }
     }
 
@@ -243,15 +244,13 @@ public class PollerTests
     public async Task ABenchThatFailsToAnswerIsUnknown()
     {
         var (poller, source, _, probe) = Make(BenchState.Running);
-        IReadOnlyList<BenchStatus>? seen = null;
-        poller.Updated += s => seen = s;
         using (poller)
         using (probe)
         {
             source.States.Clear(); // StatusAsync now throws
             poller.Start();
             await probe.NextAsync();
-            var status = Assert.Single(seen!);
+            var status = Assert.Single(poller.Last.Benches);
             Assert.Equal(BenchState.Unknown, status.State);
             Assert.Equal("a", status.Name);
         }

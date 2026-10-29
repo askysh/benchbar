@@ -1,3 +1,4 @@
+using System.Text;
 using BenchBar.Tray.Core;
 
 namespace Tray.Core.Tests;
@@ -68,17 +69,20 @@ internal sealed class FakeHost : ITrayHost
 {
     private readonly object _gate = new();
     private readonly List<IntPtr> _icons = [];
-    private readonly List<(IReadOnlyList<BenchStatus> Benches, string UpText)> _changes = [];
+    private readonly List<(TraySnapshot Snapshot, string UpText)> _changes = [];
+    private readonly List<Toast> _toastsShown = [];
     private string _tooltip = "";
 
     public IReadOnlyList<IntPtr> Icons { get { lock (_gate) return [.. _icons]; } }
     public string Tooltip { get { lock (_gate) return _tooltip; } }
-    public IReadOnlyList<(IReadOnlyList<BenchStatus> Benches, string UpText)> Changes { get { lock (_gate) return [.. _changes]; } }
+    public IReadOnlyList<(TraySnapshot Snapshot, string UpText)> Changes { get { lock (_gate) return [.. _changes]; } }
+    public IReadOnlyList<Toast> Toasts { get { lock (_gate) return [.. _toastsShown]; } }
 
     public void SetIcon(IntPtr hicon) { lock (_gate) _icons.Add(hicon); }
     public void SetTooltip(string text) { lock (_gate) _tooltip = text; }
     public void Post(Action action) => action();
-    public void BenchesChanged(IReadOnlyList<BenchStatus> benches, string upText) { lock (_gate) _changes.Add((benches, upText)); }
+    public void BenchesChanged(TraySnapshot snapshot, string upText) { lock (_gate) _changes.Add((snapshot, upText)); }
+    public void ShowToast(Toast toast) { lock (_gate) _toastsShown.Add(toast); }
 }
 
 /// <summary>A source whose answers a test controls and whose calls it can count.</summary>
@@ -94,6 +98,11 @@ internal sealed class ScriptedSource : IBenchSource, ILoadSource
     public int Lists => Volatile.Read(ref _lists);
     public List<string> Actions { get; } = [];
     public TimeSpan Latency { get; set; } = TimeSpan.Zero;
+    public Dictionary<string, BenchStatus> Overrides { get; } = [];
+    public Exception? ListFails { get; set; }
+    public int Statuses => Volatile.Read(ref _statuses);
+    public int DistroStarts { get; private set; }
+    private int _statuses;
 
     public async Task<IReadOnlyList<BenchEntry>> ListAsync(CancellationToken ct)
     {
@@ -101,6 +110,7 @@ internal sealed class ScriptedSource : IBenchSource, ILoadSource
         try
         {
             Interlocked.Increment(ref _lists);
+            if (ListFails is not null) throw ListFails;
             if (Latency > TimeSpan.Zero) await Task.Delay(Latency, ct);
             return [.. Entries];
         }
@@ -112,6 +122,8 @@ internal sealed class ScriptedSource : IBenchSource, ILoadSource
         Enter();
         try
         {
+            Interlocked.Increment(ref _statuses);
+            if (Overrides.TryGetValue(bench.Name, out var status)) return Task.FromResult(status);
             return Task.FromResult(new BenchStatus(bench.Name, bench.Path, States[bench.Name], null, bench.WebUrl, null));
         }
         finally { Leave(); }
@@ -123,6 +135,18 @@ internal sealed class ScriptedSource : IBenchSource, ILoadSource
         return Task.FromResult(0);
     }
 
+    public Task<DoctorReport> DoctorAsync(string benchPath, CancellationToken ct) => Task.FromResult(new DoctorReport(benchPath, null, [], 0, 0, 0));
+
+    public Task<LogTail> LogsAsync(string benchPath, CancellationToken ct, int lines = 300) => Task.FromResult(new LogTail(null, []));
+
+    public Task<string> ReportAsync(string? benchPath, CancellationToken ct) => Task.FromResult("/tmp/report.zip");
+
+    public bool StartDistro()
+    {
+        DistroStarts++;
+        return true;
+    }
+
     private void Enter()
     {
         var now = Interlocked.Increment(ref _active);
@@ -131,4 +155,45 @@ internal sealed class ScriptedSource : IBenchSource, ILoadSource
 
     private void Leave() => Interlocked.Decrement(ref _active);
 
+}
+
+/// <summary>A distro probe whose answer a test sets and whose calls it counts.</summary>
+internal sealed class FakeProbe : IDistroProbe
+{
+    private int _calls;
+
+    public bool Running { get; set; } = true;
+    public Exception? Throws { get; set; }
+    public int Calls => Volatile.Read(ref _calls);
+
+    public Task<bool> IsRunningAsync(string distro, CancellationToken ct)
+    {
+        Interlocked.Increment(ref _calls);
+        if (Throws is not null) throw Throws;
+        return Task.FromResult(Running);
+    }
+}
+
+/// <summary>A process runner that starts nothing: it answers from a script and records what it was asked.</summary>
+internal sealed class FakeProcessRunner : IProcessRunner
+{
+    public List<(string File, string[] Args)> Calls { get; } = [];
+    public List<(string File, string[] Args)> Detached { get; } = [];
+    public Func<string, string[], ProcessResult> Answer { get; set; } = (_, _) => new ProcessResult(0, "", "");
+    public Exception? Throws { get; set; }
+    public Encoding? LastEncoding { get; private set; }
+
+    public Task<ProcessResult> RunAsync(string fileName, IReadOnlyList<string> args, CancellationToken ct, TimeSpan? timeout = null, Encoding? outputEncoding = null)
+    {
+        Calls.Add((fileName, [.. args]));
+        LastEncoding = outputEncoding;
+        if (Throws is not null) throw Throws;
+        return Task.FromResult(Answer(fileName, [.. args]));
+    }
+
+    public void StartDetached(string fileName, IReadOnlyList<string> args)
+    {
+        if (Throws is not null) throw Throws;
+        Detached.Add((fileName, [.. args]));
+    }
 }

@@ -20,6 +20,57 @@ internal sealed class RunnerCanvas
 
     public RunnerCanvas(Graphics g) => _g = g;
 
+    /// <summary>
+    /// A <paramref name="side"/> by <paramref name="side"/> bitmap (32 bpp, straight alpha) with the 24 by 18 pt
+    /// canvas scaled to the full width and centred vertically, y up, for <paramref name="draw"/> to paint on.
+    /// </summary>
+    public static Bitmap Render(int side, Action<RunnerCanvas> draw)
+    {
+        var bitmap = new Bitmap(side, side, PixelFormat.Format32bppArgb);
+        using var g = Graphics.FromImage(bitmap);
+        g.Clear(Color.Transparent);
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+        g.CompositingQuality = CompositingQuality.HighQuality;
+
+        var scale = side / BenchRunnerArt.Width;
+        var top = (side - BenchRunnerArt.Height * scale) / 2f;
+        g.TranslateTransform(0, top + BenchRunnerArt.Height * scale);
+        g.ScaleTransform(scale, -scale); // points, y up
+
+        draw(new RunnerCanvas(g));
+        return bitmap;
+    }
+
+    /// <summary>Fills a closed shape built in canvas points.</summary>
+    public void FillShape(Action<GraphicsPath> build)
+    {
+        using var path = new GraphicsPath();
+        build(path);
+        _g.FillPath(_ink, path);
+    }
+
+    /// <summary>
+    /// An arc of a circle, stroked. Angles are radians in y up terms, counterclockwise positive
+    /// (CGContext.addArc with clockwise false); <paramref name="sweepRadians"/> is the signed length.
+    /// </summary>
+    public void Arc(PointF center, float radius, float startRadians, float sweepRadians, float width)
+    {
+        using var path = new GraphicsPath();
+        path.AddArc(center.X - radius, center.Y - radius, radius * 2, radius * 2,
+            startRadians * 180 / MathF.PI, sweepRadians * 180 / MathF.PI);
+        using var pen = NewPen(width, _inkColor);
+        _g.DrawPath(pen, path);
+    }
+
+    /// <summary>A quadratic curve as the cubic GDI+ draws: from <paramref name="p0"/> through control <paramref name="c"/> to <paramref name="p1"/>.</summary>
+    public static void QuadTo(GraphicsPath path, PointF p0, PointF c, PointF p1) =>
+        path.AddBezier(
+            p0,
+            new PointF(p0.X + 2f / 3 * (c.X - p0.X), p0.Y + 2f / 3 * (c.Y - p0.Y)),
+            new PointF(p1.X + 2f / 3 * (c.X - p1.X), p1.Y + 2f / 3 * (c.Y - p1.Y)),
+            p1);
+
     private Pen NewPen(float width, Color color) => new(color, width)
     {
         StartCap = LineCap.Round,
@@ -199,29 +250,18 @@ public static class BenchRunnerArt
         var count = FrameCount(pose);
         frame = ((frame % count) + count) % count;
 
-        var bitmap = new Bitmap(side, side, PixelFormat.Format32bppArgb);
-        using var g = Graphics.FromImage(bitmap);
-        g.Clear(Color.Transparent);
-        g.SmoothingMode = SmoothingMode.AntiAlias;
-        g.PixelOffsetMode = PixelOffsetMode.HighQuality;
-        g.CompositingQuality = CompositingQuality.HighQuality;
-
-        var scale = side / Width;
-        var top = (side - Height * scale) / 2f;
-        g.TranslateTransform(0, top + Height * scale);
-        g.ScaleTransform(scale, -scale); // points, y up
-
-        var c = new RunnerCanvas(g);
-        switch (pose)
+        return RunnerCanvas.Render(side, c =>
         {
-            case RunnerPose.Sleeping: Sleeping(c, frame); break;
-            case RunnerPose.Starting: Walking(c, frame, 6); break;
-            case RunnerPose.Running: Running(c, frame, 6); break;
-            case RunnerPose.Crashed: Stumbling(c, frame); break;
-            case RunnerPose.Alert: Alert(c); break;
-            default: Question(c); break;
-        }
-        return bitmap;
+            switch (pose)
+            {
+                case RunnerPose.Sleeping: Sleeping(c, frame); break;
+                case RunnerPose.Starting: Walking(c, frame, 6); break;
+                case RunnerPose.Running: Running(c, frame, 6); break;
+                case RunnerPose.Crashed: Stumbling(c, frame); break;
+                case RunnerPose.Alert: Alert(c); break;
+                default: Question(c); break;
+            }
+        });
     }
 
     /// <summary>The seat, the posts and the backrest, above the hips.</summary>
@@ -312,7 +352,7 @@ public static class BenchRunnerArt
     }
 
     /// <summary>Two z's floating up and away, frame <paramref name="i"/> of 4.</summary>
-    private static void SleepMarks(RunnerCanvas c, int i, float x)
+    internal static void SleepMarks(RunnerCanvas c, int i, float x)
     {
         var rise = i * 0.7f;
         c.SleepZ(new PointF(x, 7.2f + rise), 2.2f);

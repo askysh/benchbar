@@ -17,14 +17,15 @@ public class ControllerTests
     }
 
     private static (TrayController Controller, FakeHost Host, FakeFrameClock Clock, ScriptedSource Source, FakeTimeProvider Time) Make(
-        BenchState state)
+        BenchState state, TrayOptions? options = null)
     {
         var source = new ScriptedSource();
         source.States["a"] = state;
         var host = new FakeHost();
         var clock = new FakeFrameClock();
         var time = new FakeTimeProvider();
-        return (new TrayController(source, clock, host, time, listenToSystemEvents: false), host, clock, source, time);
+        options ??= new TrayOptions { ListenToSystemEvents = false };
+        return (new TrayController(source, clock, host, time, options), host, clock, source, time);
     }
 
     [Fact]
@@ -105,19 +106,14 @@ public class ControllerTests
     }
 
     [Fact]
-    public async Task APausedBenchStumbles()
+    public async Task APausedBenchStandsAlertWithoutStumbling()
     {
         var (controller, host, clock, _, _) = Make(BenchState.Paused);
         using (controller)
         {
             controller.Start();
             await UntilAsync(() => host.Changes.Count > 0);
-            Assert.Contains(controller.Sequencer.Plan, new RunnerPlan?[]
-            {
-                new RunnerPlan.Stumble(3, RunnerPose.Alert),
-                new RunnerPlan.Still(RunnerPose.Alert),
-            });
-            while (clock.HasPending) clock.Fire();
+            Assert.Equal(new RunnerPlan.Still(RunnerPose.Alert), controller.Sequencer.Plan);
             Assert.False(clock.HasPending);
         }
     }

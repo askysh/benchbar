@@ -14,21 +14,25 @@ namespace BenchBar.Tray.Core;
 public sealed class RunnerIcons : IDisposable
 {
     /// <summary>White on a dark taskbar.</summary>
-    public static readonly Color DarkTaskbarTint = Color.FromArgb(255, 255, 255);
+    public static readonly Color DarkTaskbarTint = RunnerTint.Dark;
 
     /// <summary>Near black on a light taskbar.</summary>
-    public static readonly Color LightTaskbarTint = Color.FromArgb(0x1B, 0x1B, 0x1B);
+    public static readonly Color LightTaskbarTint = RunnerTint.Light;
 
     private readonly Dictionary<(RunnerPose Pose, int Frame), IntPtr> _cache = [];
+    private IRunnerArt _art;
     private int _side;
     private bool _light;
     private bool _disposed;
 
-    public RunnerIcons(int side = 16, bool lightTaskbar = false)
+    public RunnerIcons(int side = 16, bool lightTaskbar = false, IRunnerArt? art = null)
     {
         _side = side;
         _light = lightTaskbar;
+        _art = art ?? BuiltInRunners.Bench;
     }
+
+    public IRunnerArt Runner => _art;
 
     public int Side => _side;
 
@@ -37,7 +41,7 @@ public sealed class RunnerIcons : IDisposable
     /// <summary>The number of icons currently cached.</summary>
     public int CachedCount => _cache.Count;
 
-    public int FrameCount(RunnerPose pose) => BenchRunnerArt.FrameCount(pose);
+    public int FrameCount(RunnerPose pose) => _art.FrameCount(pose);
 
     /// <summary>The cached HICON for a frame; it stays valid until the slot changes or this is disposed.</summary>
     public IntPtr Get(RunnerPose pose, int frame)
@@ -47,10 +51,18 @@ public sealed class RunnerIcons : IDisposable
         frame = ((frame % count) + count) % count;
         if (_cache.TryGetValue((pose, frame), out var handle)) return handle;
 
-        using var bitmap = RenderTinted(pose, frame, _side, _light);
+        using var bitmap = RunnerTint.Frame(_art, pose, frame, _side, _light);
         handle = CreateHIcon(bitmap);
         _cache[(pose, frame)] = handle;
         return handle;
+    }
+
+    /// <summary>Another runner: drops the cache and destroys every handle. The same runner is a no op.</summary>
+    public void SetRunner(IRunnerArt art)
+    {
+        if (ReferenceEquals(art, _art)) return;
+        _art = art;
+        DestroyAll();
     }
 
     /// <summary>Drops the cache (and destroys every handle) when the side or the tint changed.</summary>
@@ -75,34 +87,9 @@ public sealed class RunnerIcons : IDisposable
         _cache.Clear();
     }
 
-    /// <summary>The frame drawn in black, then every pixel's colour set to the taskbar's foreground (alpha kept).</summary>
-    internal static Bitmap RenderTinted(RunnerPose pose, int frame, int side, bool lightTaskbar)
-    {
-        var bitmap = BenchRunnerArt.Render(pose, frame, side);
-        var tint = lightTaskbar ? LightTaskbarTint : DarkTaskbarTint;
-        var data = bitmap.LockBits(new Rectangle(0, 0, side, side), ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
-        try
-        {
-            var row = new byte[side * 4];
-            for (var y = 0; y < side; y++)
-            {
-                var line = data.Scan0 + y * data.Stride;
-                Marshal.Copy(line, row, 0, row.Length);
-                for (var x = 0; x < side; x++)
-                {
-                    row[x * 4] = tint.B;
-                    row[x * 4 + 1] = tint.G;
-                    row[x * 4 + 2] = tint.R;
-                }
-                Marshal.Copy(row, 0, line, row.Length);
-            }
-        }
-        finally
-        {
-            bitmap.UnlockBits(data);
-        }
-        return bitmap;
-    }
+    /// <summary>The Bench frame drawn as the tray shows it (tinted).</summary>
+    internal static Bitmap RenderTinted(RunnerPose pose, int frame, int side, bool lightTaskbar) =>
+        RunnerTint.Frame(BuiltInRunners.Bench, pose, frame, side, lightTaskbar);
 
     /// <summary>
     /// An HICON from a 32 bpp top down DIB section with straight alpha plus a
@@ -162,15 +149,16 @@ public sealed class RunnerIcons : IDisposable
     /// taskbar tint, so the port can be compared to the Mac art by eye.
     /// Returns the paths written.
     /// </summary>
-    public static IReadOnlyList<string> ExportPng(string dir, int side, bool light)
+    public static IReadOnlyList<string> ExportPng(string dir, int side, bool light, IRunnerArt? art = null)
     {
+        art ??= BuiltInRunners.Bench;
         Directory.CreateDirectory(dir);
         var written = new List<string>();
         foreach (var pose in Enum.GetValues<RunnerPose>())
         {
-            for (var f = 0; f < BenchRunnerArt.FrameCount(pose); f++)
+            for (var f = 0; f < art.FrameCount(pose); f++)
             {
-                using var bitmap = RenderTinted(pose, f, side, light);
+                using var bitmap = RunnerTint.Frame(art, pose, f, side, light);
                 var path = Path.Combine(dir, $"{pose.ToString().ToLowerInvariant()}-{f + 1}.png");
                 bitmap.Save(path, ImageFormat.Png);
                 written.Add(path);
@@ -185,14 +173,15 @@ public sealed class RunnerIcons : IDisposable
     /// geometry (to compare with the Mac art); otherwise the <paramref name="side"/> px frame is
     /// enlarged without smoothing (to see the pixels the tray really gets).
     /// </summary>
-    public static IReadOnlyList<string> ExportContactSheets(string dir, int side, bool light, int height = 96, bool vector = true)
+    public static IReadOnlyList<string> ExportContactSheets(string dir, int side, bool light, int height = 96, bool vector = true, IRunnerArt? art = null)
     {
+        art ??= BuiltInRunners.Bench;
         Directory.CreateDirectory(dir);
         var written = new List<string>();
         var background = light ? Color.FromArgb(0xF3, 0xF3, 0xF3) : Color.FromArgb(0x20, 0x20, 0x20);
         foreach (var pose in Enum.GetValues<RunnerPose>())
         {
-            var count = BenchRunnerArt.FrameCount(pose);
+            var count = art.FrameCount(pose);
             using var sheet = new Bitmap(height * count, height, PixelFormat.Format32bppArgb);
             using (var g = Graphics.FromImage(sheet))
             {
@@ -201,7 +190,7 @@ public sealed class RunnerIcons : IDisposable
                 g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.Half;
                 for (var f = 0; f < count; f++)
                 {
-                    using var frame = RenderTinted(pose, f, vector ? height : side, light);
+                    using var frame = RunnerTint.Frame(art, pose, f, vector ? height : side, light);
                     g.DrawImage(frame, new Rectangle(f * height, 0, height, height));
                 }
             }

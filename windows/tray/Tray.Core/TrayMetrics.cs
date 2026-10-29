@@ -2,31 +2,52 @@ using Microsoft.Win32;
 
 namespace BenchBar.Tray.Core;
 
-/// <summary>Whether the taskbar is light or dark, which decides the template runner's tint.</summary>
+/// <summary>The two light or dark answers the app needs: the flyout follows the apps theme, the runner's tint the taskbar's.</summary>
+public readonly record struct ResolvedTheme(bool FlyoutLight, bool TaskbarLight);
+
+/// <summary>
+/// Appearance: System follows Windows (the flyout <c>AppsUseLightTheme</c>, the runner tint <c>SystemUsesLightTheme</c>);
+/// Light and Dark force both. <c>BENCHBAR_TRAY_THEME</c> (light or dark) beats the setting, for tests and screenshots.
+/// </summary>
+public static class ThemeResolver
+{
+    public static ResolvedTheme Resolve(
+        AppearanceMode mode, Func<bool>? appsLight = null, Func<bool>? systemLight = null, string? forced = null)
+    {
+        var env = forced ?? HarnessLink.ForcedTheme();
+        var force = env is "light" or "dark" ? env : mode switch
+        {
+            AppearanceMode.Light => "light",
+            AppearanceMode.Dark => "dark",
+            _ => null,
+        };
+        if (force == "light") return new ResolvedTheme(true, true);
+        if (force == "dark") return new ResolvedTheme(false, false);
+        return new ResolvedTheme((appsLight ?? TaskbarTheme.AppsUseLightTheme)(), (systemLight ?? TaskbarTheme.SystemUsesLightTheme)());
+    }
+}
+
+/// <summary>The Windows light or dark settings, read from HKCU.</summary>
 public static class TaskbarTheme
 {
     private const string PersonalizeKey = @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize";
 
-    /// <summary>
-    /// True when <c>SystemUsesLightTheme</c> is 1. Dark (0) or missing counts as
-    /// dark, which is the Windows 11 default.
-    /// </summary>
-    public static bool IsLight()
+    /// <summary>True when <c>SystemUsesLightTheme</c> is 1 (the taskbar). Dark (0) or missing counts as dark, the Windows 11 default.</summary>
+    public static bool SystemUsesLightTheme() => ReadFlag("SystemUsesLightTheme", missing: false);
+
+    /// <summary>True when <c>AppsUseLightTheme</c> is 1 (app windows). Missing counts as light.</summary>
+    public static bool AppsUseLightTheme() => ReadFlag("AppsUseLightTheme", missing: true);
+
+    private static bool ReadFlag(string name, bool missing)
     {
-        // The app's own light or dark setting wins over the taskbar's (for now an environment variable).
-        switch (HarnessLink.ForcedTheme())
-        {
-            case "light": return true;
-            case "dark": return false;
-        }
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(PersonalizeKey);
-            return key?.GetValue("SystemUsesLightTheme") is int value && value == 1;
+            return key?.GetValue(name) is int value ? value == 1 : missing;
         }
         catch (Exception)
         {
-            return false;
+            return missing;
         }
     }
 }

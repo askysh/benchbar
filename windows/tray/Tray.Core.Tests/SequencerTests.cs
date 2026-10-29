@@ -150,12 +150,36 @@ public class SequencerTests
         _clock.Fire();
         var shown = _shown.Count;
 
-        _sequencer.Play(RunnerPlan.ForState(BenchState.Paused, false)); // crashed to paused: same plan
+        _sequencer.Play(RunnerPlan.ForState(BenchState.Crashed, false)); // crashed again: same plan
 
         Assert.Equal(shown, _shown.Count);
         Assert.True(_clock.HasPending);
         Assert.Equal(Fps(8), _clock.PendingDelay);
         Assert.Equal(3, _shown.Count);
+    }
+
+    [Fact]
+    public void CrashedToPausedCutsTheStumbleShortAndHoldsTheAlertPose()
+    {
+        _sequencer.Play(RunnerPlan.ForState(BenchState.Crashed, false));
+        _clock.Fire();
+
+        _sequencer.Play(RunnerPlan.ForState(BenchState.Paused, false));
+
+        Assert.Equal((RunnerPose.Alert, 0), _shown[^1]);
+        Assert.False(_clock.HasPending);
+        Assert.False(_sequencer.IsAnimating);
+    }
+
+    [Fact]
+    public void RebuildPlaysThePlanAgainFromItsStart()
+    {
+        _sequencer.Play(new RunnerPlan.Loop(RunnerPose.Starting));
+        _clock.Fire();
+        _clock.Fire();
+        _sequencer.Rebuild();
+        Assert.Equal((RunnerPose.Starting, 0), _shown[^1]);
+        Assert.True(_clock.HasPending);
     }
 
     [Fact]

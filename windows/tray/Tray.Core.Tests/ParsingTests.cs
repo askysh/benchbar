@@ -140,7 +140,7 @@ public class ParsingTests
             Environment.SetEnvironmentVariable(BenchSourceFactory.FixturesVariable, Fixtures.Dir("rest"));
             Assert.IsType<FixtureBenchSource>(BenchSourceFactory.FromEnvironment());
             Environment.SetEnvironmentVariable(BenchSourceFactory.FixturesVariable, null);
-            Assert.IsType<CliBenchSource>(BenchSourceFactory.FromEnvironment());
+            Assert.IsType<ShimBenchSource>(BenchSourceFactory.FromEnvironment());
         }
         finally
         {
@@ -148,18 +148,4 @@ public class ParsingTests
         }
     }
 
-    [Fact]
-    public void CliSourceBuildsTheShimAndTheWslCommand()
-    {
-        var shim = new CliBenchSource(@"C:\bin\benchbar.exe", null).Command(["status", "--json", "--bench-dir", "/home/a b/bench"]);
-        Assert.Equal(@"C:\bin\benchbar.exe", shim.File);
-        Assert.Equal(["status", "--json", "--bench-dir", "/home/a b/bench"], shim.Args);
-
-        var wsl = new CliBenchSource(null, null).Command(["status", "--json", "--bench-dir", "/home/a b/it's"]);
-        Assert.Equal("wsl.exe", wsl.File);
-        Assert.Equal(["-d", "Ubuntu-24.04", "--", "bash", "-lc", "benchbar status --json --bench-dir '/home/a b/it'\\''s'"], wsl.Args);
-
-        var custom = new CliBenchSource(null, "Debian").Command(["list", "--json"]);
-        Assert.Equal("Debian", custom.Args[1]);
-    }
 }
