@@ -176,6 +176,8 @@ All notable changes to this project are documented here.
 - The wizard's Check Your Mac page puts only commands in a box with Copy.
   A fix in words (CleanMyMac's Ignore List, free disk space) is text, and
   Mole's fix is its first step in words with the `echo` line to copy.
+- Opening BenchBar again (Finder, Spotlight) shows the BenchBar window
+  while About or Settings is open; before, it did nothing then.
 - `repair` run by a copy of BenchBar.app that the app did not register (a
   development build, a second copy of the app) no longer points the shell
   helpers at that copy's own CLI, which goes away with the build. The

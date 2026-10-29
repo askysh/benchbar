@@ -27,6 +27,9 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         observeRouter()
     }
 
+    /// On screen: open and not minimized.
+    var isVisible: Bool { window?.isVisible == true }
+
     func show(_ pane: WindowPane? = nil, tab: BenchTab? = nil, repair: Bool = false) {
         if let pane { router.pane = pane }
         if let tab { router.benchTab = tab; router.sidebarSite = nil }

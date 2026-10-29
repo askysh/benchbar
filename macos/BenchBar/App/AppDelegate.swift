@@ -306,8 +306,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Opening BenchBar again (Finder, Spotlight, the Dock while a window is
     /// open) shows the window: a menu bar app has nothing else to show.
+    /// About or Settings on screen do not count: `hasVisibleWindows` is true
+    /// for them, and the BenchBar window stayed closed.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if !flag { openMainWindow() }
+        if !mainWindow.isVisible { openMainWindow() }
         return true
     }
 
