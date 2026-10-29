@@ -305,7 +305,10 @@ fl_kv_set() {
   local file="$1" key="$2" value="$3" tmp
   [[ "${FL_DRY_RUN:-0}" == "1" ]] && return 0
   mkdir -p "$(dirname "$file")" 2>/dev/null || true
-  [[ -f "$file" ]] || : >"$file"
+  # created by appending nothing: two first writers both find no file, and a
+  # truncating ": >" from the slower one emptied what the faster one had
+  # already written under the lock (a lost key, test-run-lock)
+  [[ -f "$file" ]] || : >>"$file"
   if [[ "$(fl_kv_get "$file" "$key")" == "$value" ]]; then
     return 0
   fi
