@@ -132,6 +132,8 @@ All notable changes to this project are documented here.
   off the right edge.
 - The app's Settings window can be resized (from 480 by 400 points) and
   remembers its size; it opens a little larger than the fixed 560 by 560.
+- The wizard's Check Your Mac page shows the port block a new bench gets
+  as information, not as a command to copy.
 
 ### Windows (preview)
 

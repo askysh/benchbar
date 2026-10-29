@@ -105,6 +105,10 @@ nonisolated struct PrerequisiteRow: Equatable, Sendable, Identifiable {
             action = .none
         } else if check.id == "command_line_tools", check.level == .fail {
             action = .installCommandLineTools
+        } else if check.id == "default_ports" {
+            // its fix ("the new bench gets port block 1 (--port-offset 1)") is
+            // what the New Bench page does by itself, not a command to copy
+            action = .none
         } else if let fix = check.fixCommand, !fix.isEmpty {
             action = .copy(fix)
         } else {

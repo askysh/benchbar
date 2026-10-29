@@ -288,11 +288,15 @@ struct PrerequisiteTests {
                                           message: "not installed", fixCommand: "xcode-select --install")
         r.prerequisites[3] = Prerequisite(id: "homebrew", label: "Homebrew", level: .fail, message: "brew was not found",
                                           fixCommand: "/bin/bash -c \"$(curl -fsSL https://example.test/install.sh)\"")
+        let portsIndex = try #require(r.prerequisites.firstIndex { $0.id == "default_ports" })
+        r.prerequisites[portsIndex].fixCommand = "the new bench gets port block 1 (--port-offset 1)"
         let rows = PrerequisiteRows.rows(r)
         #expect(rows[2].action == .installCommandLineTools)
         #expect(rows[3].action == .copy("/bin/bash -c \"$(curl -fsSL https://example.test/install.sh)\""))
         #expect(rows[3].message == "brew was not found")
         #expect(rows[0].action == .none)
+        let ports = try #require(rows.first { $0.id == "default_ports" })
+        #expect(ports.level == .warn && ports.action == .none, "information, not a command to copy")
         #expect(!r.canContinue)
         #expect(r.failing.map(\.id) == ["command_line_tools", "homebrew"])
     }
