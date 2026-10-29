@@ -342,8 +342,9 @@ One warning for each app a focus app needs (its `required_apps` in
 `hooks.py`, followed through other apps) that is behind its remote
 branch, for example `exponent_custom_v1 (needed by exponent_ecr) is 30
 commits / 12 days behind upstream/develop`. The days are the age of the
-oldest commit you do not have yet. A focus app itself never gets this
-warning: you pull the app you work on yourself. See
+first commit the remote branch got after yours: commits that a merge
+brought in from older history do not count. A focus app itself never gets
+this warning: you pull the app you work on yourself. See
 [focus apps](apps.md#focus-apps-and-their-dependencies).
 
 Doctor stays read only and never fetches on its own: the numbers come

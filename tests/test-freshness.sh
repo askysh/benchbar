@@ -223,4 +223,25 @@ run_fm app focus --fetch --json --bench-dir "$BENCH" >/dev/null
 OFFLINE=1 run_fm doctor --json --bench-dir "$BENCH"
 assert_contains "$(check "$OUT" dependency_behind)" "git status   (commit or stash the changes, then: benchbar app update mid_dep"
 
+# ---- an old history merged in (an app that took in another repository):
+# the days count from the first commit of the remote branch after HEAD,
+# the merge, never from the 2011 commit it brought along
+make_app_remote merged_app
+add_policy merged_app main
+git clone -q --origin upstream --branch main "file://${REMOTES}/merged_app.git" "$BENCH/apps/merged_app"
+printf 'merged_app\n' >>"$BENCH/sites/apps.txt"
+(
+  cd "$WORK/merged_app" || exit 1
+  git checkout -q --orphan old && git rm -rqf . && printf 'old\n' >old.txt && git add old.txt
+  GIT_AUTHOR_DATE="2011-12-08T12:00:00Z" GIT_COMMITTER_DATE="2011-12-08T12:00:00Z" git commit -q -m "a commit from 2011"
+  git checkout -q main
+  GIT_COMMITTER_DATE="@$((NOW - 5 * DAY)) +0000" git merge -q --no-ff --allow-unrelated-histories -m "merge the old history" old
+  git push -q origin main
+)
+git -C "$BENCH/apps/merged_app" fetch -q upstream
+OFFLINE=1 FL_NOW="$NOW" run_fm app focus --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "2" "$(app_field "$OUT" merged_app behind)"
+assert_eq "5" "$(app_field "$OUT" merged_app behind_days)" "(the age of the merge, not of the 2011 commit)"
+
 printf 'test-freshness: ok\n'

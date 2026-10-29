@@ -4,7 +4,8 @@
 # ~/.local/state/benchbar/bin; Homebrew's and the installer's copy handing
 # off to it (and not when told not to, when the link dangles, or from a
 # checkout); where; doctor's view of the copies next to it; the helper block
-# kept when it names a copy that hands off; nothing written into the app;
+# kept when it names a copy that hands off, and never naming an app copy
+# BenchBar.app did not register; nothing written into the app;
 # and self-update, which leaves the app's CLI to the app's own channel.
 # shellcheck source=tests/lib/harness.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
@@ -185,6 +186,40 @@ run "$PREFIX/bin/benchbar" doctor --json --bench-dir "$BENCH"
 assert_eq "ok" "$(check_status helpers)"
 run "$PREFIX/bin/benchbar" service --yes --bench-dir "$BENCH"
 assert_contains "$OUT" "unchanged: all"
+
+# ---- an app copy BenchBar.app did not register (a build in Xcode's
+# folder): its own path goes with that build, so the block keeps a stable
+# entry point, and doctor run from it finds nothing to rewrite
+run "$other/benchbar" doctor --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "ok" "$(check_status helpers)" "(a block naming Homebrew's copy is current from that build too)"
+assert_contains "$(check_msg cli_duplicate)" "is not the one BenchBar.app registered"
+run "$other/benchbar" repair --yes --bench-dir "$BENCH"
+assert_eq "$OPT_SELF" "$(helper_path)" "(repair from that build keeps Homebrew's path)"
+# no block yet: the stable path, never the build's
+printf '# test zshrc\nexport EDITOR=vim\n' >"$HOME/.zshrc"
+run "$other/benchbar" service --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "$OPT_SELF" "$(helper_path)" "(a fresh block from that build names Homebrew's copy)"
+# a block naming the build's own path (what 0.8.0 wrote): replaced
+sed_inplace "s#^BENCHBAR=.*#BENCHBAR=\"$other/benchbar\"#; s#^\(\# benchbar-template: shell-helpers v[0-9]* \).*#\1000000000000#" "$HOME/.zshrc"
+run "$other/benchbar" doctor --json --bench-dir "$BENCH"
+assert_eq "warn" "$(check_status helpers)" "(a block naming an app copy's own CLI is outdated)"
+run "$other/benchbar" service --yes --bench-dir "$BENCH"
+assert_eq "$OPT_SELF" "$(helper_path)"
+# with neither Homebrew's nor the installer's copy: the app's link
+mv "$PREFIX/opt/benchbar" "$TMP_DIR/opt-benchbar.saved"
+mv "$HOME/.local/share/benchbar" "$TMP_DIR/managed.saved"
+printf '# test zshrc\nexport EDITOR=vim\n' >"$HOME/.zshrc"
+run "$other/benchbar" service --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "$LINK" "$(helper_path)" "(the link BenchBar.app keeps, not the build's path)"
+run "$LINK" doctor --json --bench-dir "$BENCH"
+assert_eq "ok" "$(check_status helpers)" "(and the registered CLI agrees)"
+mv "$TMP_DIR/opt-benchbar.saved" "$PREFIX/opt/benchbar"
+mv "$TMP_DIR/managed.saved" "$HOME/.local/share/benchbar"
+run "$PREFIX/bin/benchbar" service --yes --bench-dir "$BENCH"
+assert_eq "$OPT_SELF" "$(helper_path)"
 
 # ---- a standalone copy newer than the app's CLI: it hands off to the older
 # one, so doctor names the app update; where says which version handed off

@@ -159,8 +159,11 @@ fl_app_upstream() {
 }
 
 # fl_app_behind APP: "COUNT DAYS REMOTE/BRANCH" from the remote tracking ref
-# as last fetched (DAYS: the age of the oldest commit HEAD lacks); nothing
-# when it cannot tell (no upstream, never fetched).
+# as last fetched; nothing when it cannot tell (no upstream, never fetched).
+# DAYS is the age of the first commit on the branch after HEAD, its
+# first parent line: a merge can bring in commits of any age (another
+# repository's history from 2011), and those say nothing about how long
+# HEAD has been behind.
 fl_app_behind() {
   local app="$1" up remote branch ref n ct days=0
   up="$(fl_app_upstream "$app")"; [[ -n "$up" ]] || return 0
@@ -170,7 +173,7 @@ fl_app_behind() {
   n="$(fl_app_git "$app" rev-list --count "HEAD..${ref}" 2>/dev/null || true)"
   [[ "$n" =~ ^[0-9]+$ ]] || return 0
   if [[ "$n" -gt 0 ]]; then
-    ct="$(fl_app_git "$app" log --format=%ct "HEAD..${ref}" 2>/dev/null | tail -n1)"
+    ct="$(fl_app_git "$app" log --first-parent --format=%ct "HEAD..${ref}" 2>/dev/null | tail -n1)"
     [[ "$ct" =~ ^[0-9]+$ ]] && days=$((($(fl_now) - ct) / 86400))
     [[ "$days" -lt 0 ]] && days=0
   fi
