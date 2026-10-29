@@ -268,7 +268,7 @@ fl_site_add_plan() {
   fl_site_default_file_v default
   [[ -d "${FL_BENCH_DIR}/sites/${name}" ]] && exists=1
   if [[ "$exists" == "0" ]]; then
-    steps="{\"kind\":\"new_site\",\"name\":$(fl_json_str "Create ${name}"),\"command\":$(fl_json_str "bench new-site ${name} --no-mariadb-socket (the MariaDB root password stays inside benchbar)")}"; sep=","
+    steps="{\"kind\":\"new_site\",\"name\":$(fl_json_str "Create ${name}"),\"command\":$(fl_json_str "bench new-site ${name} (with the MariaDB root password benchbar keeps; it is never shown)")}"; sep=","
     touches="\"database\",\"site_folder\""
   fi
   for app in $apps; do
@@ -324,6 +324,10 @@ fl_cmd_site_add() {
   [[ "$apply" == "1" || "${FL_DRY_RUN:-0}" != "1" || "$OPT_JSON" != "1" ]] || fl_json_doc_begin
   if [[ "$apply" == "1" || ( "${FL_DRY_RUN:-0}" == "1" && "$OPT_JSON" == "1" ) ]]; then
     [[ -n "$bundle" && -z "$apps" ]] && { apps="$(fl_bundle_apps "$bundle")"; [[ -n "$apps" ]] || fl_die "Unknown app bundle: ${bundle}"; }
+    # the same refusal as the run itself, before a plan that could not apply
+    for app in $apps; do
+      [[ -d "${FL_BENCH_DIR}/apps/${app}" ]] || fl_die "${app} is not in ${FL_BENCH_DIR}/apps." "Get it first: cd ${FL_BENCH_DIR} && bench get-app ${app}"
+    done
     fl_site_add_plan "$name" "$apps"
     if [[ "$apply" == "0" ]]; then
       fl_doc_emit 0 "$SA_JSON" plan

@@ -461,10 +461,10 @@ printf '%s\n' "$R" | python3 -c '
 import json, sys
 by = {m["id"]: m for m in (json.loads(l) for l in sys.stdin if l.strip())}
 assert "result" in by[1], by[1]                        # a plan (the pin is checked by the CLI)
+assert "abcdef1" in json.dumps(by[1]["result"]), by[1]    # the pin reached the CLI (its plan names it)
 assert by[2]["error"]["code"] == -32602, by[2]          # url_or_name and apps together
 assert by[3]["error"]["code"] == -32602, by[3]          # an option inside an entry
 ' || fail "MCP app add batch arguments: $R"
-assert_calls_contain '^git .*abcdef1|^benchbar|commit' 2>/dev/null || true
 
 # ---- site add over MCP: plan with a token, a stale token, the apply, the state after
 # the root password lives in benchbar's own store (the Keychain mock): benchbar
@@ -495,6 +495,12 @@ assert_contains "$(printf '%s' "$SC" | jget - '[s["name"] for s in d["sites"]["s
 R="$(mcp "$(call 4 benchbar_site_add_plan '{"site":"qa1.localhost","bench":"'"$BENCH"'"}')")"
 assert_eq "True False" "$(printf '%s' "$R" | jget - '" ".join(str(x) for x in [d["result"]["structuredContent"]["exists"], any(s["kind"] == "new_site" for s in d["result"]["structuredContent"]["steps"])])')"
 
+# an apply on a site that exists already returns no generated password: none was used
+R="$(mcp "$(call 5 benchbar_site_add_plan '{"site":"qa1.localhost","bench":"'"$BENCH"'"}')")"
+ETOK="$(printf '%s' "$R" | jget - 'd["result"]["structuredContent"]["token"]')"
+R="$(mcp "$(call 6 benchbar_site_add '{"site":"qa1.localhost","token":"'"$ETOK"'","bench":"'"$BENCH"'"}')")"
+assert_eq "False False" "$(printf '%s' "$R" | jget - '" ".join(str(x) for x in [d["result"]["isError"], "admin_password" in d["result"]["structuredContent"]])')" "$R"
+
 # ---- site backup, then a restore plan and a stale restore token
 R="$(mcp "$(call 1 benchbar_site_backup '{"site":"qa1.localhost","bench":"'"$BENCH"'"}')")"
 assert_eq "False" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')" "$R"
@@ -523,6 +529,11 @@ spec = importlib.util.spec_from_file_location("mcp", sys.argv[1]); m = importlib
 out = m.scrub({"output": "ok\nrun: benchbar mariadb-password --yes\nthe Keychain item benchbar-mariadb\nlast"})
 assert "mariadb-password" not in out["output"] and "Keychain" not in out["output"], out
 assert out["output"].startswith("ok\n") and out["output"].endswith("\nlast"), out
+# a Keychain line that is not about the store of benchbar stays (a git credential helper error)
+assert "osxkeychain" in m.scrub("git: credential-osxkeychain is not a git command"), "too broad"
+# the whole result: text and structuredContent, whatever path built them
+r = m.scrub_result({"content": [{"type": "text", "text": "{\"w\": \"see /x/secrets/mariadb-root\"}"}], "structuredContent": {"warnings": ["could not write /x/secrets/mariadb-root"]}})
+assert "secrets/mariadb-root" not in r["content"][0]["text"] and "secrets/mariadb-root" not in str(r["structuredContent"]), r
 ' "$ROOT/lib/frappe-local/mcp.py" || fail "the MCP scrub keeps a line about the root password store"
 
 # ---- progress notifications: a call with a progressToken streams steps
@@ -554,6 +565,7 @@ SVTOK="$(printf '%s' "$R" | jget - 'd["result"]["structuredContent"]["token"]')"
 R="$(mcp "$(call 3 benchbar_service_install '{"token":"'"$(printf '0%.0s' $(seq 64))"'","bench":"'"$NOSVC"'"}')")"
 assert_eq "True" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')" "$R"
 assert_contains "$R" "The service plan changed"
+assert_no_file "$NOSVC/Procfile.lean" "(a stale service token writes nothing)"
 R="$(mcp "$(call 4 benchbar_service_install '{"token":"'"$SVTOK"'","bench":"'"$NOSVC"'"}')")"
 assert_eq "False" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')" "$R"
 assert_file "$NOSVC/Procfile.lean"

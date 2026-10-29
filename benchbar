@@ -948,6 +948,10 @@ cmd_service() {
     [[ "$FL_SERVICE_APPLY_TOKEN" =~ ^[0-9a-f]{64}$ ]] || fl_die "--apply needs the token of a plan." "benchbar service --dry-run --json prints it"
     [[ "${FL_DRY_RUN:-0}" != "1" ]] || fl_die "--apply runs the plan; --dry-run shows it. Pass one of them."
     [[ "${FL_ASSUME_YES:-0}" == "1" ]] || fl_die "Review the plan (service --dry-run --json), then pass its token with --apply TOKEN --yes."
+    # the scheduler choice is stored before the plan is made: with a token it
+    # would be written even when the token turns out stale. It belongs to a
+    # plain service run (or the dry run's flags reviewed, then a plain run).
+    [[ -z "${FL_SCHEDULER:-}" ]] || fl_die "--apply runs a reviewed plan as it is; --with-schedule and --without-schedule cannot come with it." "Run benchbar service --with-schedule (or --without-schedule) without --apply."
   fi
   fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
   fl_require_bench

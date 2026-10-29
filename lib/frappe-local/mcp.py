@@ -614,8 +614,15 @@ def run_cli_lines(argv, timeout, call, env, on_line):
             kill_group(p)
             raise Cancelled()
         time.sleep(POLL)
-    for r in readers:
-        r.join(5)
+    # after the CLI exits: the rest of its output, until its done line arrived
+    # or, without one, until the deadline. A daemon it started (a Redis) may
+    # hold stdout open for good, so the done line, not the end of the pipe,
+    # says the stream is complete.
+    while any(r.is_alive() for r in readers) and time.time() < deadline:
+        if out_lines and stream_done("".join(out_lines)) is not None:
+            break
+        for r in readers:
+            r.join(0.2)
     if call is not None and call.cancelled:
         reap_group(p.pid, KILL_GRACE)
         raise Cancelled()
@@ -707,7 +714,9 @@ ANSI_CSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
 # a line of CLI text that would tell an agent where the MariaDB root password
 # is kept, or how to print it: withheld (benchbar uses the password itself)
-SECRET_HINT = re.compile(r"[^\n]*(mariadb-password|keychain|secrets/mariadb-root|find-generic-password)[^\n]*", re.IGNORECASE)
+# (a search for the words, then line by line: a pattern spanning a whole line
+# is quadratic on a long one, and a JSON envelope is one long line)
+SECRET_HINT = re.compile(r"mariadb-password|benchbar-mariadb|secrets/mariadb-root|find-generic-password", re.IGNORECASE)
 SECRET_NOTE = "(a line about where the MariaDB root password is kept was withheld; benchbar uses it itself)"
 
 
@@ -715,12 +724,37 @@ def scrub(obj):
     """Strip terminal control sequences, and lines that point at the MariaDB root password's store, from every
     string in obj (lists and dicts recursed)."""
     if isinstance(obj, str):
-        return SECRET_HINT.sub(SECRET_NOTE, ANSI_CSI.sub("", obj))
+        text = ANSI_CSI.sub("", obj)
+        if not SECRET_HINT.search(text):
+            return text
+        return "\n".join(SECRET_NOTE if SECRET_HINT.search(line) else line for line in text.split("\n"))
     if isinstance(obj, list):
         return [scrub(x) for x in obj]
     if isinstance(obj, dict):
         return dict((k, scrub(v)) for k, v in obj.items())
     return obj
+
+
+def scrub_result(result):
+    """The last pass over a tool result before it goes out: every text and the structured content scrubbed."""
+    if not isinstance(result, dict):
+        return result
+    data = result.get("structuredContent")
+    if data is not None:
+        clean = scrub(data)
+        result["structuredContent"] = clean
+        if clean != data:
+            # the text is that data as JSON (one long line, or the data envelope):
+            # rebuilt from the scrubbed data, never blanked as a whole
+            for item in result.get("content") or []:
+                if isinstance(item, dict) and isinstance(item.get("text"), str):
+                    head, sep, _rest = item["text"].partition("\n")
+                    item["text"] = (head + sep if sep and head.startswith("Data from the bench") else "") + json.dumps(clean)
+        return result
+    for item in result.get("content") or []:
+        if isinstance(item, dict) and isinstance(item.get("text"), str):
+            item["text"] = scrub(item["text"])
+    return result
 
 
 def envelope_text(label, data):
@@ -822,7 +856,7 @@ def tool_call(params, call=None):
     if notify is not None and not read_only and "--json" in argv:
         # the client asked for progress: the stream, one notification per step or progress line
         argv = [x if x != "--json" else "--jsonl" for x in argv]
-        on_line = progress_relay(notify)
+        on_line = progress_relay(call)
     try:
         if read_only:
             code, out, err = run_cli(argv, timeout=timeout, call=call)
@@ -843,6 +877,10 @@ def tool_call(params, call=None):
                 if data is None:
                     return cap(text_result(scrub(out + err), is_error=True))
                 data = scrub(data)
+            if name == "benchbar_service_install_plan" and code != 0 and isinstance(data, dict):
+                # the dry run itself failed: something benchbar cannot set up on its own
+                data["can_apply"] = False
+                data["error"] = scrub((err or "").strip()) or "the service plan reports a check benchbar cannot repair; see benchbar_doctor"
             if name in UNTRUSTED:
                 return cap(envelope(UNTRUSTED[name], scrub(data)), UNTRUSTED[name])
             result = text_result(out.strip())
@@ -856,8 +894,6 @@ def tool_call(params, call=None):
     # actions print text; the fresh status follows, so the agent sees the outcome
     key, after = AFTER.get(name, ("status", lambda a: ["status", "--json", "--ping"] + bench_args(a)))
     summary = {"exit_code": code, "output": scrub((out + err).strip())}
-    if code == 0:
-        summary.update(extra_result)
     if out.strip().startswith("{"):
         try:  # an action run with --json: its result, and the text from stderr
             summary["result"] = json.loads(out)
@@ -867,6 +903,10 @@ def tool_call(params, call=None):
             if done is not None:  # JSON lines: the done line is the result
                 summary["result"] = scrub(done)
                 summary["output"] = scrub(err.strip())
+    # a generated Administrator password is returned only for a site this run
+    # created: a site that existed keeps its own, and the generated one was unused
+    if code == 0 and extra_result and isinstance(summary.get("result"), dict) and summary["result"].get("created") is True:
+        summary.update(extra_result)
     # the action's result stands whatever happens to the status after it
     what = " ".join(after(arguments)[:2])
     after_timeout = tool_timeout(AFTER_TOOL[key])
@@ -912,11 +952,15 @@ def service_missing_result(status):
     return envelope(ACTION_DATA, summary)
 
 
-def progress_relay(notify):
-    """on_line for a stream: each step and progress line becomes one MCP progress notification."""
+def progress_relay(call):
+    """on_line for a stream: each step and progress line becomes one MCP progress notification, while the call
+    has not been answered (run_call clears call.notify before the reply)."""
     count = [0]
 
     def relay(line):
+        notify = call.notify
+        if notify is None:
+            return
         try:
             event = json.loads(line)
         except ValueError:
@@ -1077,9 +1121,11 @@ class Server:
                 traceback.print_exc(file=sys.stderr)
                 self.error(call.id, -32603, "internal error (see the server's stderr)")
                 return
+            # no progress after the reply: a reader thread of the CLI may still run
+            call.notify = None
             # a result that came back is worth sending, also after a late cancel
             # (an action that ran to the end, a validation error)
-            self.reply(call.id, result)
+            self.reply(call.id, scrub_result(result))
         finally:
             with self.inflight_lock:
                 self.inflight.pop(call.id, None)
