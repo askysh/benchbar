@@ -27,6 +27,28 @@ All notable changes to this project are documented here.
   and the plan's clone, `bench list-apps`, `bench --version`): the whole
   process group gets TERM, then KILL a second later, so a child or a
   command that ignores TERM no longer runs past its timeout.
+- Every command that changes things now ends with one `done` carrying `exit`,
+  `changed`, `warnings`, `next_actions` and `state_after`, as a stream
+  (`--jsonl`, or plain `--json` for `up`, `down`, `restart`, `service`,
+  `site add`, `site default`, `app update` and `ports apply`) or added to the
+  one document the command already printed. With `--json` stdout is JSON and
+  nothing else; refusals go to stderr. `--for-agent` asks for all of it.
+- `BENCHBAR_NONINTERACTIVE=1` (the MCP server sets it): a command that needs
+  an input it cannot ask for names all of them in one error, before it takes
+  the lock or touches a bench. `site add` asks for the Administrator password
+  first, and `uninstall-service` without a terminal and without `--yes` is
+  refused instead of ending as "no".
+- `benchbar COMMAND --help` and `benchbar commands --json` come from one table
+  of every command, flag and environment variable.
+- `status --json` has `bench_bin` and a new state, `not_adopted`, for a bench
+  folder benchbar does not manage; `default_site` is in every site result.
+  `benchbar_status` and the status after an action ask every site.
+- `doctor --ack CHECK` silences one warning until its message changes
+  (`--unack` undoes it), and `doctor --quick` skips the slow checks and
+  names them.
+- `logs --json` and `benchbar_logs_tail` return `mtime`, a time per line
+  (`ts`), `--since TIME` and `--since-restart`.
+- The line that reclaims a stale lock says which command held it and since when.
 
 ### Added
 

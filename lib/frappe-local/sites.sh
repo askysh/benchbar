@@ -72,7 +72,7 @@ fl_sites_json_v() {
   while IFS= read -r __s; do
     [[ -n "$__s" ]] || continue
     __ping=""
-    if [[ "$__mode" == "ask" || ( "$__mode" == "ping" && "$__listening" == "1" ) ]]; then
+    if [[ "$__mode" == "ask" && "${ST_PROCS:-1}" == "1" ]] || [[ "$__mode" == "ping" && "$__listening" == "1" ]]; then
       if [[ "$__s" == "$FL_SITE" && -n "$FL_DEFAULT_PING" ]]; then __ping="$FL_DEFAULT_PING"; else __ping="$(fl_site_curl_code "$__s" 3)"; fi
       [[ "$__ping" == "000" ]] && __ping=""
     fi
@@ -124,7 +124,7 @@ fl_cmd_site_list() {
   local json="$1" s rows=()
   fl_require_bench
   if [[ "$json" == "1" ]]; then
-    printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"sites":%s}\n' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_sites_json)"
+    printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"default_site":%s,"sites":%s}\n' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$FL_SITE")" "$(fl_sites_json)"
     return 0
   fi
   rows+=("Site|Default|Hosts|URL")
@@ -180,6 +180,7 @@ fl_cmd_site_default() {
   fl_site_require "$name"
   if [[ "$name" == "$FL_SITE" && "$(tr -d '[:space:]' <"${FL_BENCH_DIR}/sites/currentsite.txt" 2>/dev/null)" == "$name" ]]; then
     fl_ok "unchanged: ${name} is already the default site"
+    fl_site_result_doc 0 "$name" false
     return 0
   fi
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
@@ -192,14 +193,32 @@ fl_cmd_site_default() {
   fl_bstate_set SITE_NAME "$name"
   fl_render_all
   act_write_runner
+  fl_changed site "$name" "now the default site"
   fl_ok "default site is ${name}: $(fl_site_url)"
+  fl_site_result_doc 0 "$name" false
+}
+
+# fl_site_result_doc CODE NAME CREATED: the document of a site command's
+# stream (the done line merges it): the site and the bench's default site
+# after the run, which only "site default" ever moves
+fl_site_result_doc() {
+  [[ "${FL_JSONL:-0}" == "1" ]] || return 0
+  fl_doc_emit "$1" "$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"site":%s,"default_site":%s,"created":%s}' \
+    "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$2")" "$(fl_json_str "$FL_SITE")" "$(fl_json_bool "$3")")"
+}
+
+# fl_site_default_file_v VAR: the default site as bench has it (currentsite.txt)
+fl_site_default_file_v() {
+  local __v=""
+  if [[ -r "${FL_BENCH_DIR}/sites/currentsite.txt" ]]; then IFS= read -r -d '' __v <"${FL_BENCH_DIR}/sites/currentsite.txt" || true; fi
+  printf -v "$1" '%s' "${__v//[[:space:]]/}"
 }
 
 # site add NAME [--bundle B | --apps "a b"]: a new site on the bench's
 # MariaDB with the Keychain password, its hosts line, and apps that are
 # already in apps/. The default site does not change.
 fl_cmd_site_add() {
-  local name="" apps="" bundle="${OPT_BUNDLE:-}" app
+  local name="" apps="" bundle="${OPT_BUNDLE:-}" app created=false default_before default_after code msg
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
       --apps) apps="${2:-}"; shift 2 ;;
@@ -214,6 +233,18 @@ fl_cmd_site_add() {
   fl_require_plain_bench
   [[ -n "$name" ]] || fl_die "Usage: benchbar site add NAME [--bundle NAME | --apps \"app1 app2\"]"
   fl_site_valid_name "$name"
+  # the Administrator password of a new site is the first thing asked for:
+  # a run that cannot ask says so before it checks anything else
+  if [[ ! -d "${FL_BENCH_DIR}/sites/${name}" && -z "${ADMIN_PASSWORD:-}" && "${FL_DRY_RUN:-0}" != "1" ]]; then
+    if [[ "${FL_ASSUME_YES:-0}" == "1" || ! -t 0 ]] || fl_noninteractive; then
+      # exit 2 when the MariaDB root password is unknown too (AGENTS.md), whatever the mode
+      code=1
+      [[ -n "${MARIADB_ROOT_PASSWORD:-}" || -n "$(fl_keychain_get 2>/dev/null || true)" ]] || code=2
+      msg="The Administrator password for ${name} is needed."
+      [[ "$code" != "2" ]] || msg="${msg} The MariaDB root password is unknown too."
+      fl_die "$msg" "Re-run with: ADMIN_PASSWORD='...' MARIADB_ROOT_PASSWORD='...' benchbar site add ${name} --yes" "$code"
+    fi
+  fi
   [[ -n "$bundle" && -z "$apps" ]] && { apps="$(fl_bundle_apps "$bundle")"; [[ -n "$apps" ]] || fl_die "Unknown app bundle: ${bundle}"; }
   for app in $apps; do
     [[ -d "${FL_BENCH_DIR}/apps/${app}" ]] || fl_die "${app} is not in ${FL_BENCH_DIR}/apps." "Get it first: cd ${FL_BENCH_DIR} && bench get-app ${app}"
@@ -226,12 +257,32 @@ fl_cmd_site_add() {
     fl_mariadb_root_password_resolve || fl_die "MariaDB root password needed to create the site." "Re-run with: MARIADB_ROOT_PASSWORD='...' benchbar site add ${name}" 2
     if [[ -z "${ADMIN_PASSWORD:-}" ]]; then
       if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then ADMIN_PASSWORD="dry-run-placeholder"
-      elif [[ "${FL_ASSUME_YES:-0}" == "1" || ! -t 0 ]]; then fl_die "The Administrator password for ${name} is needed." "Re-run with: ADMIN_PASSWORD='...' benchbar site add ${name} --yes"
       else fl_ask_secret ADMIN_PASSWORD "Administrator password for ${name}"; fi
     fi
     fl_bench_env_exports
     fl_bench_redis_up "$FL_BENCH_DIR"
+    fl_site_default_file_v default_before
     fl_new_site_if_needed "$FL_BENCH_DIR" "$name" "$FL_MARIADB_ROOT_PW" "$ADMIN_PASSWORD" || { fl_bench_redis_down; return 1; }
+    # a dry run creates nothing (its done line says dry_run)
+    [[ "${FL_DRY_RUN:-0}" == "1" ]] || created=true
+    # a new site never becomes the default: if bench moved it, it goes back
+    fl_site_default_file_v default_after
+    if [[ "${FL_DRY_RUN:-0}" != "1" && "$default_after" != "$default_before" ]]; then
+      if [[ -z "$default_before" ]]; then
+        fl_warn "bench set the default site to ${default_after}; the bench had none before, so nothing is put back"
+      else
+        fl_warn "bench moved the default site to ${default_after}; putting it back to ${default_before}"
+        (cd "$FL_BENCH_DIR" && bench use "$default_before") >>"${FL_LOG_FILE:-/dev/null}" 2>&1 || true
+        fl_site_default_file_v default_after
+        # what bench says (currentsite.txt) is compared with what it said before; the
+        # remembered site is the user's own business (a "bench use other" is fine)
+        if [[ "$default_after" != "$default_before" ]]; then
+          fl_fail "could not put the default site back to ${default_before} (currentsite.txt says ${default_after:-nothing})"
+          fl_fix "cd ${FL_BENCH_DIR} && bench use ${default_before}"
+          return 1
+        fi
+      fi
+    fi
   fi
   [[ -n "$apps" && -z "$FL_SETUP_REDIS_PORTS" ]] && fl_bench_redis_up "$FL_BENCH_DIR"
   for app in $apps; do
@@ -240,6 +291,7 @@ fl_cmd_site_add() {
   fl_bench_redis_down
   fl_hosts_add_names "$name"
   fl_ok "site ${name}: http://${name}:${FL_WEB_PORT} (the default site stays ${FL_SITE}; benchbar site default ${name} changes it)"
+  fl_site_result_doc 0 "$name" "$created"
 }
 
 fl_cmd_site() {

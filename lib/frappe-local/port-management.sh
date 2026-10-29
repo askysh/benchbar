@@ -192,6 +192,9 @@ fl_pm_hosts_batch() {
   fl_hosts_add_gui "${names[@]}" || fl_warn "the /etc/hosts lines could not be added; setup stops at the first bench that needs one (run: ${FL_SELF} site hosts --bench-dir PATH)"
   return 0
 }
+# the stream helpers, when the full CLI is loaded (a test sources this file alone)
+fl_pm_jstep() { if declare -F fl_jsonl_step >/dev/null; then fl_jsonl_step "$@"; fi; }
+fl_pm_changed() { if declare -F fl_changed >/dev/null; then fl_changed "$@"; fi; }
 fl_cmd_ports() {
   local sub="${1:-}" token mode i d current offset running
   [[ "$#" == 0 ]] || shift
@@ -230,7 +233,10 @@ fl_cmd_ports() {
     apply)
       token="${1:-}"; [[ "$#" == 0 ]] || shift
       [[ "${FL_ASSUME_YES:-0}" == 1 ]] || { fl_fail 'Review ports plan, then pass its token with --yes.'; return 1; }
-      fl_pm_build "$@" || return 1
+      # the previews of the plan run adopt dry runs: they are not this stream's lines
+      local jl="${FL_JSONL:-0}"; FL_JSONL=0
+      fl_pm_build "$@" || { FL_JSONL="$jl"; return 1; }
+      FL_JSONL="$jl"
       [[ "$token" == "$PM_TOKEN" ]] || { fl_fail 'The port plan changed. Review a fresh preview before applying.'; return 1; }
       [[ "$PM_CAN_APPLY" == 1 ]] || { fl_fail 'The port plan contains blocked benches. Nothing was changed.'; return 1; }
       # Resolve every selected bench's profile/tools before the first write.
@@ -242,21 +248,34 @@ fl_cmd_ports() {
       # BENCHBAR_SUDO=gui: the hosts lines of every bench in one dialog; each
       # adopt then finds its line, or (cancelled) skips the step with its command
       if fl_sudo_gui && [[ "${FL_DRY_RUN:-0}" != 1 ]]; then fl_pm_hosts_batch; fi
+      # the stream: one plan line for the whole batch, one step per bench; the
+      # adopt of each bench keeps its own step lines under that step
+      if [[ "${FL_JSONL:-0}" == "1" ]]; then
+        fl_jsonl plan ",\"benches\":$(fl_json_str_array "${PM_PATHS[@]}"),\"token\":$(fl_json_str "$token"),\"dry_run\":false"
+      fi
+      FL_JSONL_PLAN_SENT=1; FL_PM_APPLYING=1
+      # the benches change one after the other: the done line names none of them
+      FL_DONE_NO_BENCH=1
       for ((i=0; i<${#PM_PATHS[@]}; i++)); do
         d="${PM_PATHS[$i]}"; fl_bench_load "$d"; current="$(fl_pm_current)"; offset=""
+        fl_pm_jstep "$((i + 1))" "bench_$((i + 1))" "" "Set up $d" running
         if [[ "$current" != "${PM_TARGETS[$i]}" ]]; then read -r offset _ <<<"${PM_TARGETS[$i]}"; offset=$((offset - FL_PORT_BASE_WEB)); fi
         if fl_pm_running || [[ -n "$(fl_pm_conflicts "${PM_TARGETS[$i]}")" ]]; then
+          fl_pm_jstep "$((i + 1))" "bench_$((i + 1))" "" "Set up $d" failed "" "ports or running state changed"
           fl_fail "Ports or running state changed for $d. Review a fresh plan; earlier completed benches remain configured."; return 1
         fi
         fl_info "Setting up $((i + 1))/${#PM_PATHS[@]}: $d"
         # Do not let adopt silently pick a different block from the approved
         # batch. The entire selection was validated under this same lock.
-        if ! FL_PORT_PLAN_APPROVED=1 OPT_PORT_OFFSET="$offset" cmd_adopt "$d"; then
+        if ! FL_ENGINE_PARENT="bench_$((i + 1))" FL_PORT_PLAN_APPROVED=1 OPT_PORT_OFFSET="$offset" cmd_adopt "$d"; then
+          fl_pm_jstep "$((i + 1))" "bench_$((i + 1))" "" "Set up $d" failed "" "adopt failed"
           fl_fail "Setup failed: $d. Earlier completed benches remain configured; review a fresh plan to continue."; return 1
         fi
         OPT_JSON=0 fl_cmd_register "$d"
         fl_bstate_set PORT_MODE "$(fl_pm_mode "$d")"
         fl_bstate_set PORT_RESERVATION "$(fl_pm_current)"
+        fl_pm_changed ports "$d" "$([[ -n "$offset" ]] && printf 'moved to port block %s' "$offset" || printf 'management set up, ports kept')"
+        fl_pm_jstep "$((i + 1))" "bench_$((i + 1))" "" "Set up $d" "done"
         fl_ok "Completed: $d"
       done ;;
     *) fl_fail 'Usage: benchbar ports plan|setup|apply|check|mode'; return 1 ;;

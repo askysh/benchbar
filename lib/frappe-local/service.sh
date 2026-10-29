@@ -31,6 +31,7 @@ fl_context_init() {
     fl_site_detect "${2:-}"
     fl_ports_detect
     fl_agent_label_prime
+    FL_CONTEXT_READY=1
     return 0
   fi
   fl_site_detect "${2:-}"
@@ -83,6 +84,7 @@ fl_context_init() {
   FL_ARCH="$(uname -m)"
   fl_honcho_resolve || true
   fl_render_all
+  FL_CONTEXT_READY=1
 }
 
 # The profile the shell block's PATH follows: the default bench's, so
@@ -270,6 +272,16 @@ fl_check_port_clash_or_confirm() {
   fl_confirm "Other stopped benches use these ports. Start this bench without changing its address?"
 }
 
+# fl_daily_steps ID:LABEL...: the steps of up, down and restart for the
+# stream (step lines with ids); the terminal keeps the one line each prints
+fl_daily_steps() {
+  local item labels=() ids=()
+  for item in "$@"; do ids+=("${item%%:*}"); labels+=("${item#*:}"); done
+  fl_steps_define "${labels[@]}"
+  fl_steps_ids "${ids[@]}"
+  FL_STEP_QUIET=1
+}
+
 fl_cmd_up() {
   fl_require_plain_bench
   fl_require_service
@@ -278,6 +290,8 @@ fl_cmd_up() {
     return 0
   fi
   fl_check_port_clash_or_confirm || return 1
+  fl_daily_steps start_service:"Start the service" wait_site:"Wait for the site"
+  fl_step_begin 0
   fl_arm_start
   if ! fl_agent_loaded; then
     fl_info "agent not loaded; loading $(fl_agent_plist_path)"
@@ -286,16 +300,21 @@ fl_cmd_up() {
   fl_state_json_write starting "" "" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "" ""
   fl_agent_kickstart || fl_die "${FL_AGENT_CTL_START} failed." "Run: ${FL_SELF} doctor"
   fl_autostart_enabled && fl_linger_ensure
+  fl_step_end "done"
+  fl_changed process "$FL_BENCH_NAME" "started"
   [[ "${FL_DRY_RUN:-0}" == "1" ]] && return 0
   # the state is written and the agent kicked: the wait for the site only
   # reads, so other runs (another bench's repair, a site add) go ahead
   fl_lock_release
+  fl_step_begin 1
   fl_spinner_start "starting bench ${FL_BENCH_NAME}" "$(fl_bench_log_path)"
   if fl_wait_for_ping "$FL_UP_WAIT_SECS"; then
     fl_spinner_stop
+    fl_step_end "done"
     fl_ok "bench is up: $(fl_site_url)"
   else
     fl_spinner_stop
+    fl_step_end warning "no 200 yet"
     fl_warn "no 200 from $(fl_site_url)/api/method/ping after ${FL_UP_WAIT_SECS}s; it may still be starting"
     fl_fix "${FL_SELF} logs"
     return 1
@@ -310,6 +329,8 @@ fl_cmd_down() {
     fl_info "dry-run: would write 'manual' to ${flag}, send SIGTERM to the agent, then stop leftover bench processes"
     return 0
   fi
+  fl_daily_steps stop_processes:"Stop the bench's processes"
+  fl_step_begin 0
   mkdir -p "$(dirname "$flag")"
   printf 'manual\n' >"$flag"
   if fl_agent_loaded; then fl_agent_signal SIGTERM; fi
@@ -321,10 +342,13 @@ fl_cmd_down() {
     fi
   fi
   if fl_bench_is_running; then
+    fl_step_end failed
     fl_fail "some bench processes are still alive: $(fl_bench_process_pids | tr '\n' ' ')"
     return 1
   fi
   fl_state_json_write stopped manual "" "$(fl_state_json_get started_at)" "$(fl_state_json_get last_exit_code)" ""
+  fl_step_end "done"
+  fl_changed process "$FL_BENCH_NAME" "stopped"
   fl_ok "bench ${FL_BENCH_NAME} stopped (auto-restart off until benchup)"
 }
 
@@ -332,6 +356,8 @@ fl_cmd_restart() {
   fl_require_plain_bench
   fl_require_service
   fl_check_port_clash_or_confirm || return 1
+  fl_daily_steps restart_service:"Restart the service" wait_site:"Wait for the site"
+  fl_step_begin 0
   fl_arm_start
   if ! fl_agent_loaded; then
     fl_agent_bootstrap "$(fl_agent_plist_path)" || fl_die "${FL_AGENT_CTL} could not load the agent."
@@ -339,14 +365,19 @@ fl_cmd_restart() {
   fl_state_json_write starting "" "" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "" ""
   fl_agent_kickstart -k || fl_die "${FL_AGENT_CTL_RESTART} failed."
   fl_autostart_enabled && fl_linger_ensure
+  fl_step_end "done"
+  fl_changed process "$FL_BENCH_NAME" "restarted"
   [[ "${FL_DRY_RUN:-0}" == "1" ]] && return 0
   fl_lock_release
+  fl_step_begin 1
   fl_spinner_start "restarting bench ${FL_BENCH_NAME}" "$(fl_bench_log_path)"
   if fl_wait_for_ping "$FL_UP_WAIT_SECS"; then
     fl_spinner_stop
+    fl_step_end "done"
     fl_ok "bench restarted: $(fl_site_url)"
   else
     fl_spinner_stop
+    fl_step_end warning "no 200 yet"
     fl_warn "no 200 from $(fl_site_url)/api/method/ping after ${FL_UP_WAIT_SECS}s"
     fl_fix "${FL_SELF} logs"
     return 1
@@ -376,6 +407,8 @@ fl_cmd_status() {
     fl_ok "site responds"
   elif [[ "$ST_PROCS" == "1" ]]; then
     fl_warn "processes are running but the site does not respond (ping ${ST_PING}); see: ${FL_SELF} logs"
+  elif [[ "$ST_STATE" == "not_adopted" ]]; then
+    fl_info "benchbar does not manage this bench yet (no service, not remembered); register it with: ${FL_SELF} adopt ${FL_BENCH_DIR}"
   else
     case "$ST_FLAG" in
       crash) fl_warn "auto-restart paused after repeated crashes; run: ${FL_SELF} logs, fix, then benchup" ;;
@@ -387,12 +420,16 @@ fl_cmd_status() {
 }
 
 fl_cmd_logs() {
-  local file lines=50 follow=1 arg process="" prev=""
+  local file lines=50 follow=1 arg process="" prev="" since="" since_restart=0 since_epoch=""
   fl_require_bench
   file="$(fl_bench_log_path)"
   for arg in "$@"; do
     if [[ "$prev" == "--process" ]]; then process="$arg"; prev=""; continue; fi
+    if [[ "$prev" == "--since" ]]; then since="$arg"; prev=""; continue; fi
     case "$arg" in
+      --since) prev="--since" ;;
+      --since=*) since="${arg#*=}" ;;
+      --since-restart) since_restart=1 ;;
       --worker) file="${FL_BENCH_DIR}/logs/worker.log" ;;
       --worker-error) file="${FL_BENCH_DIR}/logs/worker.error.log" ;;
       --previous) file="${FL_BENCH_DIR}/logs/bench.previous.log" ;;
@@ -413,8 +450,19 @@ fl_cmd_logs() {
     process=""
     [[ "$file" == "${FL_BENCH_DIR}/logs/worker.error.log" ]] || file="${FL_BENCH_DIR}/logs/worker.log"
   fi
+  [[ "$prev" != "--since" ]] || fl_die "logs --since takes a time" "Example: benchbar logs --json --since 2026-10-29T10:00:00Z"
+  if [[ -n "$since" || "$since_restart" == "1" ]]; then
+    [[ "${OPT_JSON:-0}" == "1" ]] || fl_die "logs --since and --since-restart need --json: the lines carry their times there" "benchbar logs --json --since TIME"
+    if [[ -n "$since" ]]; then
+      fl_ts_epoch_v since_epoch "$since"
+      [[ -n "$since_epoch" ]] || fl_die "Cannot read the time '${since}'." "Use ISO 8601 (2026-10-29T10:00:00Z, or without the Z for local time), 'YYYY-MM-DD HH:MM:SS', a date, or HH:MM:SS for today"
+    else
+      fl_ts_epoch_v since_epoch "$(fl_state_json_get started_at)"
+      [[ -n "$since_epoch" ]] || fl_die "This bench has no recorded start (logs/.benchbar/state.json has no started_at)." "Use --since TIME instead"
+    fi
+  fi
   if [[ "${OPT_JSON:-0}" == "1" ]]; then
-    fl_logs_json "$file" "$lines" "$process"
+    fl_logs_json "$file" "$lines" "$process" "$since_epoch"
     return 0
   fi
   [[ -f "$file" ]] || { fl_warn "no log yet at ${file}"; return 0; }
@@ -424,27 +472,126 @@ fl_cmd_logs() {
   tail -n "$lines" "$file"
 }
 
-# logs --json [-nN] [--process NAME]: the last N lines of the log (after the
-# process filter), for scripts and the MCP server. honcho prefixes each line
-# with "HH:MM:SS <process>.<n> |"; lines without a prefix (tracebacks) stay
-# with the process line above them. The lines go through fl_redact_stream
-# (the report's rules: keys, URL credentials, token shapes, emails), since
-# the reader is a script or an agent, not the person whose log it is. N is
-# capped at FL_LOGS_JSON_MAX; "truncated_to" says so when it was.
+# logs --json [-nN] [--process NAME] [--since TS] [--since-restart]: the last
+# N lines of the log (after the process filter), for scripts and the MCP
+# server. honcho prefixes each line with "HH:MM:SS <process>.<n> |"; lines
+# without a prefix (tracebacks) stay with the process line above them. The
+# lines go through fl_redact_stream (the report's rules: keys, URL
+# credentials, token shapes, emails), since the reader is a script or an
+# agent, not the person whose log it is. N is capped at FL_LOGS_JSON_MAX;
+# "truncated_to" says so when it was.
+#
+# Time (0.9): "mtime" is the file's. "ts" has one entry per line, an ISO 8601
+# UTC time where the line carries one (honcho's HH:MM:SS, with the day worked
+# out backwards from the file's mtime, or a leading YYYY-MM-DD HH:MM:SS, both
+# local time) and null where it does not; a line without a time inherits
+# none. --since TS keeps the lines at or after it, and the untimed lines under
+# a kept line; --since-restart is --since the bench's last start (state.json
+# started_at). Only the newest FL_LOGS_SCAN_MAX lines are looked at.
 FL_LOGS_JSON_MAX=2000
+FL_LOGS_SCAN_MAX=20000
+
+# fl_ts_epoch_v VAR TEXT: seconds since the epoch of an ISO 8601 time (Z or
+# +HH:MM: that zone; none: local time), "YYYY-MM-DD HH:MM:SS", a date, or
+# HH:MM:SS (today, local); empty when TEXT is none of them
+fl_ts_epoch_v() {
+  local __r __off __now
+  __off="$(date +%z)"; __now="$(date +%s)"
+  __r="$(awk -v t="$2" -v off="$__off" -v now="$__now" "$FL_AWK_CIVIL"'
+    BEGIN {
+      o = (substr(off, 1, 1) == "-" ? -1 : 1) * (substr(off, 2, 2) * 3600 + substr(off, 4, 2) * 60)
+      if (match(t, /^[0-9][0-9]:[0-9][0-9]:[0-9][0-9]$/)) {
+        d = int((now + o) / 86400); print d * 86400 + substr(t, 1, 2) * 3600 + substr(t, 4, 2) * 60 + substr(t, 7, 2) - o; exit
+      }
+      if (!match(t, /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/)) exit
+      d = dfc(substr(t, 1, 4) + 0, substr(t, 6, 2) + 0, substr(t, 9, 2) + 0)
+      rest = substr(t, 11); sod = 0; zone = o
+      if (rest != "") {
+        if (!match(rest, /^[T ][0-9][0-9]:[0-9][0-9]:[0-9][0-9]/)) exit
+        sod = substr(rest, 2, 2) * 3600 + substr(rest, 5, 2) * 60 + substr(rest, 8, 2)
+        z = substr(rest, 10)
+        if (z == "Z") zone = 0
+        else if (z ~ /^[+-][0-9][0-9]:?[0-9][0-9]$/) { zone = (substr(z, 1, 1) == "-" ? -1 : 1) * (substr(z, 2, 2) * 3600 + substr(z, length(z) - 1, 2) * 60) }
+        else if (z != "") exit
+      }
+      print d * 86400 + sod - zone
+    }')"
+  printf -v "$1" '%s' "$__r"
+}
+
+# calendar arithmetic for the awk programs above and below (no strftime in BSD awk)
+FL_AWK_CIVIL='
+function dfc(y, m, d,   era, yoe, doy, doe) {
+  y -= (m <= 2); era = int((y >= 0 ? y : y - 399) / 400); yoe = y - era * 400
+  doy = int((153 * (m + (m > 2 ? -3 : 9)) + 2) / 5) + d - 1
+  doe = yoe * 365 + int(yoe / 4) - int(yoe / 100) + doy
+  return era * 146097 + doe - 719468
+}
+function civil(z,   era, doe, yoe, y, doy, mp, d, m) {
+  z += 719468; era = int((z >= 0 ? z : z - 146096) / 146097); doe = z - era * 146097
+  yoe = int((doe - int(doe / 1460) + int(doe / 36524) - int(doe / 146096)) / 365)
+  y = yoe + era * 400; doy = doe - (365 * yoe + int(yoe / 4) - int(yoe / 100))
+  mp = int((5 * doy + 2) / 153); d = doy - int((153 * mp + 2) / 5) + 1; m = mp + (mp < 10 ? 3 : -9)
+  return sprintf("%04d-%02d-%02d", y + (m <= 2), m, d)
+}
+function iso(e,   z) { z = int(e / 86400); e -= z * 86400; return sprintf("%sT%02d:%02d:%02dZ", civil(z), int(e / 3600), int((e % 3600) / 60), e % 60) }
+'
+
 fl_logs_json() {
-  local file="$1" lines="$2" process="$3" sep="" line truncated=""
+  local file="$1" lines="$2" process="$3" since="${4:-}" sep="" line t truncated="" mtime="" mt_epoch="" off tmp since_json="null"
   if [[ "$lines" -gt "$FL_LOGS_JSON_MAX" ]]; then lines="$FL_LOGS_JSON_MAX"; truncated=",\"truncated_to\":${FL_LOGS_JSON_MAX}"; fi
-  printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"file":%s,"process":%s%s,"lines":[' \
-    "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$file")" "$(fl_json_str "$process")" "$truncated"
   if [[ -f "$file" ]]; then
+    mt_epoch="$(fl_file_mtime "$file" || true)"
+    [[ -z "$mt_epoch" ]] || mtime="$(fl_iso_from_epoch "$mt_epoch")"
+  fi
+  [[ -z "$since" ]] || since_json="$(fl_json_str "$(fl_iso_from_epoch "$since")")"
+  printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"file":%s,"process":%s%s,"mtime":%s,"since":%s,"lines":[' \
+    "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$file")" "$(fl_json_str "$process")" "$truncated" \
+    "$(fl_json_str "$mtime")" "$since_json"
+  tmp=""
+  if [[ -f "$file" ]]; then
+    off="$(date +%z)"
+    tmp="$(mktemp "${TMPDIR:-/tmp}/benchbar-logs.XXXXXX")"
+    # the lines (redacted) to stdout, their times to $tmp, one per line, empty for none
     while IFS= read -r line; do
       printf '%s"%s"' "$sep" "$(fl_json_escape "$line")"
       sep=","
     done < <(awk -v p="$process" '
       p == "" { print; next }
       /^[0-9][0-9]:[0-9][0-9]:[0-9][0-9] [A-Za-z_]+(\.[0-9]+)? +\|/ { split($2, a, "."); keep = (a[1] == p) }
-      keep { print }' "$file" | tail -n "$lines" | fl_redact_stream)
+      keep { print }' "$file" | tail -n "$FL_LOGS_SCAN_MAX" | awk -v n="$lines" -v since="$since" -v mt="${mt_epoch:-0}" -v off="$off" -v tsfile="$tmp" "$FL_AWK_CIVIL"'
+        { L[++cnt] = $0 }
+        END {
+          o = (substr(off, 1, 1) == "-" ? -1 : 1) * (substr(off, 2, 2) * 3600 + substr(off, 4, 2) * 60)
+          day = int((mt + o) / 86400); msod = (mt + o) - day * 86400 + 2; prev = msod
+          for (i = cnt; i >= 1; i--) {
+            line = L[i]; E[i] = ""
+            if (line ~ /^[0-9][0-9]:[0-9][0-9]:[0-9][0-9] [A-Za-z_]+(\.[0-9]+)? +\|/) {
+              sod = substr(line, 1, 2) * 3600 + substr(line, 4, 2) * 60 + substr(line, 7, 2)
+              if (sod > prev) day--
+              E[i] = day * 86400 + sod - o; prev = sod
+            } else if (line ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9][ T][0-9][0-9]:[0-9][0-9]:[0-9][0-9]/) {
+              sod = substr(line, 12, 2) * 3600 + substr(line, 15, 2) * 60 + substr(line, 18, 2)
+              day = dfc(substr(line, 1, 4) + 0, substr(line, 6, 2) + 0, substr(line, 9, 2) + 0)
+              E[i] = day * 86400 + sod - o; prev = sod
+            }
+          }
+          kept = 0; last = (since == "")
+          for (i = 1; i <= cnt; i++) {
+            if (E[i] != "") last = (since == "" || E[i] + 0 >= since + 0)
+            if (last) K[++kept] = i
+          }
+          from = kept - n + 1; if (from < 1) from = 1
+          for (k = from; k <= kept; k++) { i = K[k]; print L[i]; print (E[i] == "" ? "" : iso(E[i])) > tsfile }
+        }' | fl_redact_stream)
+  fi
+  printf '],"ts":['
+  if [[ -n "$tmp" ]]; then
+    sep=""
+    while IFS= read -r t || [[ -n "$t" ]]; do
+      printf '%s%s' "$sep" "$(fl_json_str "$t")"; sep=","
+    done <"$tmp"
+    rm -f "$tmp"
   fi
   printf ']}\n'
 }

@@ -161,6 +161,17 @@ assert_contains "$(cat "$WINS")" "slow=1" "(the slow reclaimer is refused by the
 assert_no_file "$LOCK" "(the quick holder released its lock, nobody took it away)"
 rm -rf "$LOCK" "$LOCK".reclaim
 
+# ---- a subshell of the run shares $$: its release (restart inside app update)
+# leaves the parent's locks, the state folder's and the bench's, with the parent
+BLOCK="$TMP_DIR/bench-sub/.benchbar.lock"; mkdir -p "$(dirname "$BLOCK")"
+SUBR="$(lockshell 'fl_lock_acquire "$1" >/dev/null 2>&1 && fl_lock_acquire "$2" >/dev/null 2>&1 || exit 1
+  ( fl_lock_release )
+  printf "after-subshell=%s,%s " "$([[ -d "$1" ]] && echo held || echo gone)" "$([[ -d "$2" ]] && echo held || echo gone)"
+  fl_lock_release
+  printf "after-release=%s,%s" "$([[ -d "$1" ]] && echo held || echo gone)" "$([[ -d "$2" ]] && echo held || echo gone)"' "$LOCK" "$BLOCK")"
+assert_eq "after-subshell=held,held after-release=gone,gone" "$SUBR"
+rm -rf "$LOCK" "$BLOCK"
+
 # ---- two runs started in the same second: their own log file and backup folder each
 LOGS="$TMP_DIR/logs"
 read -r L1 B1 < <(bash -c '. "$0/lib/frappe-local/ui.sh"; . "$0/lib/frappe-local/templates.sh"; fl_log_init "$1"; printf "%s %s\n" "$FL_LOG_FILE" "$(fl_backup_stamp)"' "$ROOT" "$LOGS")
@@ -172,13 +183,47 @@ assert_file "$L1"; assert_file "$L2"
 
 # ---- concurrent writers of one key-value file lose no key
 KV="$TMP_DIR/kv.env"
+KVW="$TMP_DIR/kv-writers"; mkdir -p "$KVW"
+pids=()
 for i in 1 2 3 4 5 6 7 8; do
-  bash -c '. "$0/lib/frappe-local/ui.sh"; . "$0/lib/frappe-local/state.sh"; fl_kv_set "$1" "KEY$2" "value $2"' "$ROOT" "$KV" "$i" &
+  bash -c '. "$0/lib/frappe-local/ui.sh"; . "$0/lib/frappe-local/state.sh"; fl_kv_set "$1" "KEY$2" "value $2"' "$ROOT" "$KV" "$i" 2>"$KVW/$i.err" &
+  pids+=("$!")
 done
-wait
+# each writer's own exit code: a writer killed from outside (by a signal)
+# is told apart from a key the store itself lost
 for i in 1 2 3 4 5 6 7 8; do
-  assert_eq "value $i" "$(bash -c '. "$0/lib/frappe-local/ui.sh"; . "$0/lib/frappe-local/state.sh"; fl_kv_get "$1" "KEY$2"' "$ROOT" "$KV" "$i")" "(KEY$i survives the other writers)"
+  code=0; wait "${pids[$((i - 1))]}" || code=$?
+  printf '%s\n' "$code" >"$KVW/$i.code"
+done
+for i in 1 2 3 4 5 6 7 8; do
+  got="$(bash -c '. "$0/lib/frappe-local/ui.sh"; . "$0/lib/frappe-local/state.sh"; fl_kv_get "$1" "KEY$2"' "$ROOT" "$KV" "$i")"
+  if [[ "$got" != "value $i" ]]; then
+    printf 'writer %s exited %s; its stderr: %s\nthe file:\n%s\n' "$i" "$(cat "$KVW/$i.code")" "$(cat "$KVW/$i.err")" "$(cat "$KV" 2>&1)" >&2
+  fi
+  assert_eq "value $i" "$got" "(KEY$i survives the other writers)"
 done
 [[ -z "$(ls "$KV".* 2>/dev/null)" ]] || fail "no temp file or lock may be left behind: $(ls "$KV".*)"
+
+# ---- two waiters that judged one key-value lock stale: the slower one leaves
+# the lock the faster one took next, and the forced break after 600 rounds
+# is for the same lock only too
+KV2="$TMP_DIR/kv2.env"; : >"$KV2"
+KVR="$(bash -c '. "$0/lib/frappe-local/ui.sh"; . "$0/lib/frappe-local/state.sh"
+  lck="$1.lck"
+  mkdir "$lck"; : >"$lck/dead.1"; touch -t 202001010000 "$lck"
+  seen="$(ls -A "$lck")"
+  fl__kv_stale "$lck" && printf "stale "
+  fl__kv_reclaim "$lck" "$seen"          # the faster waiter breaks it
+  fl__kv_lock "$1"                       # and takes the next lock
+  mine="$FL__KV_TOKEN"
+  touch -t 202001010000 "$lck"           # however old it looks now
+  fl__kv_reclaim "$lck" "$seen"          # the slower waiter, with what it saw
+  fl__kv_reclaim "$lck" "$seen" force    # and its last resort
+  [[ -e "$lck/$mine" ]] && printf "kept " || printf "lost "
+  FL__KV_TOKEN="someone.else"; fl__kv_unlock "$1"
+  [[ -e "$lck/$mine" ]] && printf "kept-by-unlock " || printf "removed-by-unlock "
+  FL__KV_TOKEN="$mine"; fl__kv_unlock "$1"
+  [[ -e "$lck" || -e "$lck.reclaim" ]] && printf "left" || printf "clean"' "$ROOT" "$KV2")"
+assert_eq "stale kept kept-by-unlock clean" "$KVR"
 
 printf 'test-run-lock: ok\n'

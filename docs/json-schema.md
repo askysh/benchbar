@@ -25,9 +25,11 @@ Raycast extensions and the like can rely on it too.
 | `benchbar install --json`, `benchbar adopt PATH --json` | JSON lines while a bench is created or adopted (0.8), see [install](#benchbar-install---json) |
 | `benchbar doctor --prerequisites --json` | what the Mac needs before an install, without a bench (0.8), see [prerequisites](#benchbar-doctor---prerequisites---json) |
 | `benchbar report --json` | where the redacted diagnostics zip went (0.5.5), see [report](#benchbar-report---json) |
+| `benchbar commands --json` | every command, flag and what it needs (0.9), see [the done fields](#the-done-fields-09) |
 | `benchbar where --json` | how this CLI was installed, the path it records for itself, its state folder and the app (0.7), see [where](#benchbar-where---json) |
 | `benchbar site backup NAME --json` | the backup just taken (0.5.8), see [site backups](#site-backups) |
 | `benchbar site backups NAME --json` | every backup of a site (0.5.8) |
+| `benchbar up\|down\|restart\|service\|site add\|site default --json` | JSON lines ending in one `done` (0.9), see [the done fields](#the-done-fields-09) |
 | `benchbar site drop NAME --json` | the plan (with `--dry-run`) or the result of dropping a site (0.5.8) |
 
 ## Rules for readers
@@ -51,6 +53,62 @@ Raycast extensions and the like can rely on it too.
   after an upgrade (state.sh), which renames and links, and never copies
   or deletes.
 
+### The `done` fields (0.9)
+
+Every command that changes things ends with the same fields, once: in the
+`done` line of its stream, or added to the one document it prints. A
+command that read only prints none of them.
+
+| field | meaning |
+|---|---|
+| `exit` | the exit code; the process exits with the same number, so a pipe cannot hide a failure |
+| `changed[]` | what the run changed: `{"kind": "bench"\|"site"\|"app"\|"service"\|"ports"\|"hosts"\|"backup"\|"process"\|"state", "name", "detail"}`. Only what the run really changed: empty on a second run, and in a dry run. `install` reports the bench, the site and the apps its phase scripts create |
+| `warnings[]` | the run's `[WARN]` lines, as text |
+| `next_actions[]` | `{"command", "why"}`: the fix lines and next steps the text output prints |
+| `state_after` | the bench's `status --json` object after the run (no per site ping), `null` when there is no bench, in a dry run, or when the run touched several benches (`ports apply`). A stream's is read after the CLI's locks are released; a one document command's and `pull`'s while its lock is still held (a read, so nothing waits on it) |
+| `missing[]` | only on a refusal of the non interactive mode: the inputs the command lacked (`ADMIN_PASSWORD`, `--yes`, `sudo`, ...) |
+
+Which shape a command prints:
+
+- A command that printed one document before keeps printing exactly that
+  one line with `--json`. The ones that change things (`site backup`,
+  `site drop`, `app add --apply`, `doctor --ack` and `--unack`) get the
+  `done` fields added to it; a plan or dry run document gets none; the
+  ones that only read (`site backups`, `ports plan`, the profile commands)
+  have none of them. A run that fails prints nothing on stdout and a
+  message on stderr, except the refusal of the non interactive mode, which
+  is one document with `exit`, `error` and `missing`.
+- `--jsonl` asks any command that changes things for the stream (`plan`,
+  `step`, `progress`, `done`): the `done` line carries the same fields and
+  the fields of the document the command would have printed (`site backup`,
+  `site drop`, `app add`, `app update`). On a command that only reads,
+  `--jsonl` is `--json`.
+- `up`, `down`, `restart`, `service`, `site add`, `site default`,
+  `app update` (without `--dry-run`) and `ports apply` had no JSON before
+  and stream with plain `--json`, as `install`, `adopt`, `repair` and
+  `pull` do. A dry run streams the `plan` line and the `done` line only.
+- `--for-agent` is `--jsonl` for a command that changes things, `--json` for
+  one that reads, plus `BENCHBAR_NONINTERACTIVE=1`, `NO_COLOR=1` and
+  `--plain`.
+- stdout carries JSON and nothing else under `--json` and `--jsonl`: the
+  `[OK]`, `[WARN]` and `[FAIL]` lines and the step lines go to the run's
+  log and stderr, a refusal included.
+- `repair --json` keeps `exit_code` in its `done` and adds `exit` with the
+  same value. `install`, `adopt` and `pull` add the fields to their `done`.
+- `BENCHBAR_NONINTERACTIVE=1` (set by `benchbar mcp` for every CLI it
+  starts): nothing is ever asked. A command that needs an input it does
+  not have (`ADMIN_PASSWORD`, `MARIADB_ROOT_PASSWORD` when benchbar has none
+  stored, `--yes` for a confirmation, a `sudo` that would ask) names all of
+  them in one error and exit 1 (exit 2 when the MariaDB root password is
+  one of them), before it takes the lock, writes a log or touches a bench.
+  In a stream that is a `done` with `exit`, an `error` and `missing`; under
+  `--json` on a one document command, one document with the same fields.
+  `repair --json` also ends with a `done` when it stops early (no bench).
+- `benchbar commands --json` lists every command and subcommand with its
+  flags, environment variables and what it needs (`tty`, `sudo`, `network`,
+  `mutating`, `json`: `document`, `stream` or `none`); `benchbar COMMAND
+  --help` prints that entry.
+
 ## States
 
 | `state` | Meaning | `stop_reason` |
@@ -59,6 +117,7 @@ Raycast extensions and the like can rely on it too.
 | `starting` | processes are up, the site does not answer yet | `null` |
 | `running` | processes are up and the site answers HTTP | `null` |
 | `crashed` | honcho exited with an error; launchd retries after 20 seconds | `crash` |
+| `not_adopted` | (0.9) a folder that is a bench, with no benchbar service and not remembered (not the default bench, no state of its own, not registered), and nothing running. `site` and `web_url` are `null`: the site of the default bench is never named for it. `benchbar adopt PATH` or `register` changes it | `null` |
 | `paused` | auto-restart is off until `benchup` | `crash` (the crash guard tripped: 3 starts in 10 minutes), `broken` (honcho or the env is missing, or the runner cannot write the crash history or the stop flag: run `benchbar repair` or `benchbar doctor`) or `port_conflict` (another process held the bench's ports when the runner started; it was not this bench's to stop: run `benchbar doctor`) |
 
 `stop_reason` can be `manual`, `crash`, `broken`, `port_conflict` or
@@ -123,6 +182,9 @@ bench (`state.env` in benchbar's state folder), the `WorkingDirectory` of every
 `~/dev/frappe-bench` and any `~/*` or `~/dev/*` folder with
 `sites/common_site_config.json`.
 
+`list --json` never pings a site (every `ping_code` is `null`) and looks for no
+listener: it is polled at rest (0.6.1).
+
 ## `benchbar status --json`
 
 ```json
@@ -180,6 +242,13 @@ Kept from frappe-mac 0.2.0 for older readers: `url`, `agent`,
 0.2.0 `state` held launchd's word (now `agent_state`), and `pid` and
 `last_exit_code` were strings.
 
+Since 0.9, `bench_bin` is the `bench` executable the bench's service runs:
+the first one on the PATH its agent (unit) bakes in, `null` without a
+service or when no such file is there. It is read from the agent file in
+bash, so `status` still starts no process for it. With `--ping`, every
+site is asked only while the bench's processes run; a stopped bench is
+never pinged and never started.
+
 ## Sites
 
 `list --json` (per bench), `status --json` and `benchbar site list --json`
@@ -209,6 +278,13 @@ and since 0.7.3 each of its sites also carries the database:
 
 The password is never printed. `list --json` and `status --json` leave
 these two out: they are polled.
+
+Since 0.9 every site result carries `default_site`, the bench's default
+site after the run: `site list` at the top level, and `site add`, `site
+default` and `site drop` in their result. `site add` never moves it (it
+puts it back if `bench new-site` did); only `site default` does.
+`site add`, `site default` and `site drop` end with the [done fields](#the-done-fields-09),
+`site add` and `site default` with `site`, `default_site` and `created`.
 
 ## `benchbar doctor --json`
 
@@ -264,6 +340,25 @@ these two out: they are polled.
 `status` and `fix` are the 0.2.0 names of `level` and `fix_command` (with
 `""` instead of `null`), kept for older readers.
 
+Since 0.9: every check has `"acked"`, and the document has `"acked": [ids]`,
+`"quick"` and `"skipped_checks": [ids]`.
+
+- `doctor --ack CHECK` silences one named `warn` for this bench: it is
+  recorded in the bench's state file with the message it acknowledged, and
+  lapses when the message changes. A `fail` cannot be acknowledged. The
+  check stays in the JSON at level `warn` with `"acked": true`; the text
+  output prints one dim `acked:` line instead of the `[WARN]` and its fix
+  line, and `--fix-hints` leaves it out. `doctor --unack CHECK` undoes it.
+  These two write one line to the state file under the CLI lock; `doctor`
+  itself still writes nothing. Under `--json` they print one small
+  document: `action` (`ack` or `unack`), `check`, `acked` (every id with a
+  stored acknowledgement) and the done fields. An acknowledgement does not
+  make a `not_adopted` bench look adopted. `repair` does not look at
+  acknowledgements.
+- `doctor --quick` leaves out the slow checks (those that start brew,
+  python, node, bench or git, or ask the site) and says which:
+  `"quick": true` and the ids in `skipped_checks`.
+
 ## `benchbar logs --json`
 
 ```json
@@ -292,7 +387,23 @@ token shapes become `***`, email addresses `<email>`); the plain
 `benchbar logs` is the file as it is. `-nN` is capped at 2000: when N was
 larger the object carries `"truncated_to":2000` (absent otherwise) and
 holds the newest 2000 lines after the process filter.
+
+Since 0.9 the object also has `mtime` (the file's, `null` without one),
+`since` (the cut off as an ISO time, `null` without one) and `ts`: one entry
+per line of `lines`, in step, an ISO 8601 UTC time where the line carries
+one and `null` where it does not (a traceback line inherits nothing). A
+honcho line's `HH:MM:SS` and the leading `YYYY-MM-DD HH:MM:SS` of other logs
+are local times; the day of a honcho line is worked out backwards from the
+file's `mtime`. `--since TIME` keeps the lines at or after TIME (ISO 8601, a
+zone or none for local time, `YYYY-MM-DD HH:MM:SS`, a date, or `HH:MM:SS`
+today) and the untimed lines under a kept line; `--since-restart` is
+`--since` the bench's last start (`started_at` of `state.json`; without one
+the command refuses). Only the newest 20000 lines of the file are looked
+at. `benchbar_logs_tail` takes `since` and `since_restart`.
+
 ## `benchbar repair --json`
+
+Since 0.9 its `done` also carries `exit` (the same number as `exit_code`) and the [done fields](#the-done-fields-09).
 
 A stream: one JSON object per line on stdout, as the run goes. The human
 text goes to the run's log, `logs/<date>-<time>-<pid>.log` in benchbar's state
@@ -319,6 +430,8 @@ nothing. Without `--yes` (and without `--dry-run`) nothing is applied:
 the plan is printed, then `done` with exit code 1, because the question
 cannot be answered. An empty `actions` means nothing needs repairing.
 ## `benchbar install --json`
+
+Since 0.9 the `done` line also carries `changed`, `warnings`, `next_actions` and `state_after` ([done fields](#the-done-fields-09)); `adopt` the same.
 
 Added in 0.8. A stream, like `pull --json`: one JSON object per line on
 stdout as the run goes, the human text in the run's log
@@ -522,8 +635,10 @@ fetches without the flag). `fetched_at` is benchbar's last such fetch.
 
 ## `benchbar app update NAME --dry-run --json`
 
+Since 0.9 `app update NAME --json` without `--dry-run` streams: the plan line (this document's fields), a step per plan step, and a `done` with `updated` and the [done fields](#the-done-fields-09). `--dry-run --json` is still this one document; `--dry-run --jsonl` is the same fields as a `plan` line, then `done`.
+
 Added in 0.5. The plan of an update, after `git fetch` (which changes
-only the app's `.git`). `--json` without `--dry-run` is refused.
+only the app's `.git`). Without `--dry-run`, `--json` streams (see the top of this section).
 
 ```json
 {"schema_version":1,"cli_version":"0.5.0","bench":"/Users/you/frappe-bench","app":"erpnext","remote":"upstream","branch":"version-15",
@@ -551,6 +666,8 @@ A dirty tree, a detached HEAD or a diverged branch exits 1 with the
 reason as text.
 
 ## `benchbar app add URL --dry-run --json`
+
+Since 0.9 the result of `--apply TOKEN --yes --json` (one line) also carries the [done fields](#the-done-fields-09); with `--jsonl` it is a `done` line with the same fields.
 
 Added in 0.6.0. The plan of an app add, read only, with the token that
 `--apply TOKEN --yes` (and `benchbar_app_add` over MCP) needs. The text
@@ -791,6 +908,8 @@ as in the import plan.
 
 ## `benchbar pull --json`
 
+Since 0.9 the `done` line also carries `changed`, `next_actions` and `state_after` ([done fields](#the-done-fields-09)); its `warnings` are as before.
+
 Added in 0.5. Unlike the commands above, `pull` changes things, so it
 streams: one JSON object per line on stdout, written as the run goes, and
 every human line on stderr. Use it with `--yes` (a gate that cannot be
@@ -867,6 +986,8 @@ of guessing from paths.
 Exit 0. An argument other than `--json` exits 1.
 
 ## Site backups
+
+Since 0.9 the results of `site backup` and `site drop` (not their plans) also carry the [done fields](#the-done-fields-09), and `site drop`'s plan and result `default_site`. `--jsonl` turns either into a stream whose `done` carries the document's fields.
 
 `site backup`, `site backups` and `site drop` (0.5.8) describe a backup
 the same way. A backup is the files in the site's backup folder that

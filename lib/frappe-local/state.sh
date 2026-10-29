@@ -274,17 +274,83 @@ fl_state_init() {
 
 # Writers of one key-value file serialize on FILE.lck (mkdir is atomic): a
 # status poll of the app and a repair writing the same bench file at once
-# must not lose each other's keys. A short wait, then the write goes ahead
-# anyway (a lock left by a killed writer must not block forever).
+# must not lose each other's keys. A lock left by a killed writer must not
+# block for ever, so one 10 seconds old is broken; a younger one is waited
+# for, however long the queue of live writers in front is (on a loaded
+# machine eight writers took more than the 2 seconds this once waited).
+#
+# The holder leaves a token in its lock (FILE.lck/PID.RANDOM). A stale lock
+# is reclaimed as fl_lock_acquire does: under a guard (FILE.lck.reclaim) one
+# waiter at a time checks again that the lock still holds the token it
+# judged stale and is still stale, renames it away and removes it. Two
+# waiters that saw the same stale lock never remove the lock the faster one
+# took next, and unlock removes only the caller's own lock.
+FL__KV_TOKEN=""
+
+# fl__kv_age_v VAR PATH: the age of PATH in seconds from its mtime (GNU stat,
+# then BSD, each only when it is a number); empty when it cannot be read
+fl__kv_age_v() {
+  local __born
+  __born="$(stat -c %Y "$2" 2>/dev/null || true)"
+  [[ "$__born" =~ ^[0-9]+$ ]] || __born="$(stat -f %m "$2" 2>/dev/null || true)"
+  if [[ "$__born" =~ ^[0-9]+$ ]]; then printf -v "$1" '%s' "$(( $(date +%s) - __born ))"; else printf -v "$1" '%s' ""; fi
+}
+
+# fl__kv_stale PATH [force]: 10 s old, or born in the future (the clock
+# stepped back: a VM resumed), or "force". An age that cannot be read is no
+# reason: under contention it is mostly a lock released a moment ago, and
+# breaking then removes the lock the next writer has just taken (a lost key,
+# test-run-lock)
+fl__kv_stale() {
+  local age
+  [[ "${2:-}" != "force" ]] || return 0
+  fl__kv_age_v age "$1"
+  [[ -n "$age" ]] && [[ "$age" -ge 10 || "$age" -lt -10 ]]
+}
+
+# fl__kv_reclaim LCK SEEN [force]: removes LCK when it still holds SEEN (what
+# was in it when it was judged stale) and is still stale, under the guard
+fl__kv_reclaim() {
+  local lck="$1" seen="$2" guard="$1.reclaim" stale="$1.stale.$$"
+  if mkdir "$guard" 2>/dev/null; then
+    if [[ -d "$lck" && "$(ls -A "$lck" 2>/dev/null)" == "$seen" ]] && fl__kv_stale "$lck" "${3:-}" && mv "$lck" "$stale" 2>/dev/null; then
+      rm -rf "$stale"
+    fi
+    rmdir "$guard" 2>/dev/null || true
+    return 0
+  fi
+  # a reclaimer that died with the guard (a live one holds it for moments)
+  if fl__kv_stale "$guard" "${3:-}"; then rmdir "$guard" 2>/dev/null || true; fi
+}
+
 fl__kv_lock() {
-  local lck="$1.lck" i=0
+  local lck="$1.lck" i=0 seen
   while ! mkdir "$lck" 2>/dev/null; do
     i=$((i + 1))
-    [[ "$i" -lt 40 ]] || { rm -rf "$lck"; continue; }
+    if [[ $((i % 40)) -eq 0 ]]; then
+      # what is in it first, then its age: a lock taken anew in between is young
+      seen="$(ls -A "$lck" 2>/dev/null || true)"
+      # held for good: 600 rounds (about 30 s and the stats) is the last
+      # resort, through the guard and for the same lock only, as the rest
+      if [[ "$i" -ge 600 ]]; then fl__kv_reclaim "$lck" "$seen" force; i=0
+      elif fl__kv_stale "$lck"; then fl__kv_reclaim "$lck" "$seen"; fi
+    fi
     sleep 0.05
   done
+  FL__KV_TOKEN="$$.${RANDOM}${RANDOM}"
+  # a lock that takes no file: unlock removes it as before, without the token
+  : >"${lck}/${FL__KV_TOKEN}" 2>/dev/null || FL__KV_TOKEN=""
 }
-fl__kv_unlock() { rmdir "$1.lck" 2>/dev/null || true; }
+fl__kv_unlock() {
+  local lck="$1.lck"
+  if [[ -z "$FL__KV_TOKEN" ]]; then rmdir "$lck" 2>/dev/null || true; return 0; fi
+  # only the caller's own lock: one broken as stale and taken by another writer stays
+  if [[ -e "${lck}/${FL__KV_TOKEN}" ]]; then
+    rm -f "${lck}/${FL__KV_TOKEN}"
+    rmdir "$lck" 2>/dev/null || true
+  fi
+  FL__KV_TOKEN=""
+}
 
 # fl_kv_set FILE KEY VALUE and fl_kv_get FILE KEY: the store behind both
 # the checkout's state.env and the per bench files. Nothing is written in a
@@ -295,7 +361,10 @@ fl_kv_set() {
   local file="$1" key="$2" value="$3" tmp
   [[ "${FL_DRY_RUN:-0}" == "1" ]] && return 0
   mkdir -p "$(dirname "$file")" 2>/dev/null || true
-  [[ -f "$file" ]] || : >"$file"
+  # created by appending nothing: two first writers both find no file, and a
+  # truncating ": >" from the slower one emptied what the faster one had
+  # already written under the lock (a lost key, test-run-lock)
+  [[ -f "$file" ]] || : >>"$file"
   if [[ "$(fl_kv_get "$file" "$key")" == "$value" ]]; then
     return 0
   fi
@@ -554,6 +623,11 @@ fl_bstate_prime() {
 # The current bench (FL_BENCH_DIR).
 fl_bstate_get() { fl_bstate_get_for "$FL_BENCH_DIR" "$1"; }
 fl_bstate_set() { fl_bstate_set_for "$FL_BENCH_DIR" "$1" "$2"; }
+# fl_bstate_del KEY: the key leaves the current bench's own file
+fl_bstate_del() {
+  [[ "$FL_BENCH_DIR" == "$FL_BS_DIR" ]] && FL_BS_DIR=""
+  fl_kv_del "$(fl_bench_state_file_for "$FL_BENCH_DIR")" "$1"
+}
 
 # fl_bench_state_migrate DIR: moves the pre 0.4 per bench keys from
 # state.env into DIR's own file (only when DIR is the default bench they

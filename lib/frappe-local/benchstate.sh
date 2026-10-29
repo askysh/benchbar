@@ -67,6 +67,7 @@ fl_state_core_json() {
   fl_agent_label_v j_label
   fl_json_str_v j_reason "$2"; fl_json_num_v j_pid "$3"; fl_json_str_v j_started "$4"; fl_json_num_v j_exit "$5"
   fl_json_str_v j_url "http://${FL_SITE}:${FL_WEB_PORT}"
+  [[ -n "$FL_SITE" ]] || j_url="null"
   fl_json_num_v j_ping "$ping"
   printf '"schema_version":%d,"cli_version":"%s","bench":%s,"name":%s,"site":%s,"label":"%s","state":"%s","stop_reason":%s,"pid":%s,"started_at":%s,"last_exit_code":%s,"web_url":%s,"web_ping_code":%s' \
     "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$j_bench" "$j_name" "$j_site" "$j_label" \
@@ -147,7 +148,9 @@ fl_status_compute() {
       crash) ST_STATE=paused; ST_REASON=crash ;;
       port_conflict) ST_STATE=paused; ST_REASON=port_conflict ;;
       "")
-        if [[ "$SJ_STATE" == "crashed" ]]; then ST_STATE=crashed; ST_REASON=crash; else ST_STATE=stopped; fi ;;
+        if [[ "$SJ_STATE" == "crashed" ]]; then ST_STATE=crashed; ST_REASON=crash
+        elif fl_bench_adopted; then ST_STATE=stopped
+        else ST_STATE=not_adopted; fi ;;
       *) ST_STATE=paused; ST_REASON=broken ;;
     esac
   fi
@@ -156,10 +159,59 @@ fl_status_compute() {
 # fl_pid_alive PID: kill -0, the builtin (FL_KILL_CMD stands in for it in the tests)
 fl_pid_alive() { "${FL_KILL_CMD:-kill}" -0 "$1" 2>/dev/null; }
 
+# fl_bench_bin_v VAR: the `bench` executable the bench's service runs: the
+# first one on the PATH its agent (unit) bakes in, as a JSON string; null
+# without a service or when no such file is there. Bash builtins only: status
+# is polled and starts no process for it.
+fl_bench_bin_v() {
+  local __p __d __found=""
+  fl_service_path_v __p
+  while [[ -n "$__p" ]]; do
+    __d="${__p%%:*}"
+    if [[ "$__p" == *:* ]]; then __p="${__p#*:}"; else __p=""; fi
+    if [[ -n "$__d" && -f "$__d/bench" && -x "$__d/bench" ]]; then __found="$__d/bench"; break; fi
+  done
+  fl_json_str_v "$1" "$__found"
+}
+
+# fl_bstate_file_substantive FILE: the bench's state file holds something besides
+# acknowledged doctor warnings (ACK_*): an ack is not a service, not a registration
+fl_bstate_file_substantive() {
+  local line
+  [[ -r "$1" ]] || return 1
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -z "$line" || "$line" == ACK_* ]] || return 0
+  done <"$1"
+  return 1
+}
+
+# fl_bench_adopted: benchbar knows this bench: it has a service (agent or
+# unit), or it is remembered (the default bench, its own state file, or
+# `register`). A folder that is a bench and neither is "not_adopted". Builtins only.
+fl_bench_adopted() {
+  local label f line
+  fl_agent_label_v label
+  fl_agent_file_v f "$label"
+  [[ ! -f "$f" ]] || return 0
+  if [[ "$FL_BS_DIR" == "$FL_BENCH_DIR" && "$FL_BS_DEFAULT" == "1" ]]; then return 0; fi
+  fl_bstate_file_substantive "$(fl_bench_state_file_for "$FL_BENCH_DIR")" && return 0
+  if [[ -r "${FL_STATE_DIR}/registered-benches.txt" ]]; then
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      [[ -z "$line" ]] || ! fl_same_path "$line" "$FL_BENCH_DIR" || return 0
+    done <"${FL_STATE_DIR}/registered-benches.txt"
+  fi
+  # a primed read (status, list) answered for the default bench above already
+  [[ "$FL_BS_DIR" != "$FL_BENCH_DIR" ]] || return 1
+  fl_same_path "$(fl_state_get BENCH_DIR 2>/dev/null || true)" "$FL_BENCH_DIR"
+}
+
 # fl_status_print_json [PINGS]: PINGS "ping" asks every site (status --ping);
 # without it only web_ping_code, the default site's, is known.
 fl_status_print_json() {
-  local mode="${1:-none}" j_ports j_sites j_sched j_file j_log j_loaded j_astate j_procs j_url j_label j_pending sched=0
+  local mode="${1:-none}" j_ports j_sites j_sched j_file j_log j_loaded j_astate j_procs j_url j_label j_bin j_pending sched=0
+  # a folder benchbar does not know has no site of its own to name: never the
+  # default bench's, never one it guessed
+  [[ "$ST_STATE" != "not_adopted" ]] || FL_SITE=""
   fl_ports_json_v j_ports
   FL_DEFAULT_PING=""; [[ "$ST_PROCS" == "1" ]] && FL_DEFAULT_PING="$ST_PING"
   fl_sites_json_v j_sites "$mode"
@@ -169,11 +221,13 @@ fl_status_print_json() {
   fl_json_str_v j_log "${FL_BENCH_DIR}/logs/bench.log"
   fl_json_bool_v j_loaded "$ST_LOADED"; fl_json_str_v j_astate "$ST_AGENT_STATE"; fl_json_bool_v j_procs "$ST_PROCS"
   fl_json_str_v j_url "http://${FL_SITE}:${FL_WEB_PORT}"
+  [[ -n "$FL_SITE" ]] || j_url="null"
   fl_agent_label_v j_label
   fl_pending_json_v j_pending
   printf '{'
   fl_state_core_json "$ST_STATE" "$ST_REASON" "$ST_PID" "$ST_STARTED" "$ST_EXIT" "$ST_PING"
-  printf ',"ports":%s,"sites":%s,"scheduler":%s' "$j_ports" "$j_sites" "$j_sched"
+  fl_bench_bin_v j_bin
+  printf ',"ports":%s,"sites":%s,"scheduler":%s,"bench_bin":%s' "$j_ports" "$j_sites" "$j_sched" "$j_bin"
   printf ',"state_file":%s,"log":%s,"agent_loaded":%s,"agent_state":%s,"processes_running":%s' \
     "$j_file" "$j_log" "$j_loaded" "$j_astate" "$j_procs"
   # fields from frappe-mac 0.2.0, kept for older readers
@@ -181,6 +235,19 @@ fl_status_print_json() {
     "$j_url" "$j_label" "$([[ "$ST_LOADED" == "1" ]] && printf yes || printf no)" "${ST_FLAG:-none}" "$ST_PING"
   # app update or app add runs that stopped half way, with the steps left
   printf ',"pending_operations":%s}\n' "$j_pending"
+}
+
+# fl_state_after_v VAR: the bench's status --json object as it is now, for the
+# state_after of a done (no per site ping), "null" without a bench. A subshell:
+# it changes nothing of the run it ends and cannot end it.
+fl_state_after_v() {
+  local __j="null"
+  if [[ "${FL_CONTEXT_READY:-0}" == "1" ]] && fl_is_bench_dir "${FL_BENCH_DIR:-}"; then
+    __j="$( set +e; trap - ERR; { fl_status_compute; fl_status_print_json; } 2>/dev/null )" || __j="null"
+    __j="${__j//$'\n'/}"
+    [[ "$__j" == "{"*"}" ]] || __j="null"
+  fi
+  printf -v "$1" '%s' "$__j"
 }
 
 fl_ports_json_v() {

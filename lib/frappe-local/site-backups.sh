@@ -72,7 +72,7 @@ fl_backup_set_json() {
 # In JSON mode only the JSON goes to stdout (on fd 3); every line of text,
 # refusals included, goes to stderr.
 fl_site_json_begin() {
-  if [[ "$OPT_JSON" == "1" ]]; then exec 3>&1 1>&2; FL_PLAIN=1; fl_ui_init; fi
+  if [[ "$OPT_JSON" == "1" ]]; then fl_json_doc_begin; fi
   return 0
 }
 
@@ -146,8 +146,8 @@ fl_cmd_site_backup() {
   [[ "$with_files" == "1" ]] && args+=(--with-files)
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
     fl_info "dry-run: cd ${FL_BENCH_DIR} && ${args[*]}  (into ${dir})"
-    [[ "$json" == "1" ]] && printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"site":%s,"dry_run":true,"backup":null}\n' \
-      "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$name")" >&3
+    [[ "$json" == "1" ]] && fl_doc_emit 0 "$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"site":%s,"dry_run":true,"backup":null}' \
+      "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$name")")" plan
     return 0
   fi
   # what bench writes from now on is the new backup: two backups in one
@@ -167,9 +167,10 @@ fl_cmd_site_backup() {
   rm -f "$before"
   [[ -n "$stamp" ]] || fl_die "bench reported success, but ${dir} has no new backup." "Look in ${dir}"
   set="$(fl_backup_set_json "$dir" "$stamp")"
+  fl_changed backup "$name" "$(fl_backup_field "$set" path)"
   if [[ "$json" == "1" ]]; then
-    printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"site":%s,"dry_run":false,"backup":%s}\n' \
-      "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$name")" "$set" >&3
+    fl_doc_emit 0 "$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"site":%s,"dry_run":false,"backup":%s}' \
+      "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$name")" "$set")"
     return 0
   fi
   fl_ok "backup of ${name}: $(fl_backup_field "$set" path) ($(fl_fmt_bytes "$(fl_backup_field "$set" size_bytes)")$([[ "$with_files" == "1" ]] && printf ', with files'))"
@@ -235,8 +236,8 @@ fl_hosts_remove_name() {
     fl_info "dry-run: would remove '127.0.0.1 ${name}' from ${FL_HOSTS_FILE} (sudo, backup first)"
     return 0
   fi
-  # sudo needs a terminal to ask; without one (the app) say what to run
-  if [[ ! -t 0 ]] && ! fl_sudo_available; then
+  # sudo needs a terminal to ask; without one (the app, the non interactive mode) say what to run
+  if { [[ ! -t 0 ]] || fl_noninteractive; } && ! fl_sudo_available; then
     FL_HOSTS_MANUAL="$(fl_hosts_manual_removal "$name")"
     fl_warn "the ${FL_HOSTS_FILE} line for ${name} needs sudo; run in Terminal: ${FL_HOSTS_MANUAL}"
     return 0
@@ -273,7 +274,7 @@ fl_site_archive_latest() {
 
 # site drop NAME --confirm-site NAME [--new-default OTHER]
 fl_cmd_site_drop() {
-  local name="" confirm="" new_default="" json="$OPT_JSON" others=() s st t c p sep="" steps=() archive_before archive="" stamp backup="null" code=0 is_default=0 hosts_place bench_default="" default_failed=0
+  local name="" confirm="" new_default="" json="$OPT_JSON" plan_doc="" others=() s st t c p sep="" steps=() archive_before archive="" stamp backup="null" code=0 is_default=0 hosts_place bench_default="" default_failed=0
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
       --confirm-site) confirm="${2:-}"; shift 2 ;;
@@ -321,13 +322,13 @@ fl_cmd_site_drop() {
   fi
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
     if [[ "$json" == "1" ]]; then
-      printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"site":%s,"dry_run":true,"is_default":%s,"new_default":%s,"steps":[' \
-        "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$name")" "$(fl_json_bool "$is_default")" "$(fl_json_str "$new_default")" >&3
+      plan_doc="$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"site":%s,"dry_run":true,"is_default":%s,"new_default":%s,"default_site":%s,"steps":[' \
+        "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$name")" "$(fl_json_bool "$is_default")" "$(fl_json_str "$new_default")" "$(fl_json_str "$FL_SITE")")"
       for st in "${steps[@]}"; do
         IFS='|' read -r t c p <<<"$st"
-        printf '%s{"title":%s,"command":%s,"needs_password":%s}' "$sep" "$(fl_json_str "$t")" "$(fl_json_str "$c")" "$(fl_json_bool "$p")" >&3; sep=","
+        plan_doc="${plan_doc}${sep}$(printf '{"title":%s,"command":%s,"needs_password":%s}' "$(fl_json_str "$t")" "$(fl_json_str "$c")" "$(fl_json_bool "$p")")"; sep=","
       done
-      printf ']}\n' >&3
+      fl_doc_emit 0 "${plan_doc}]}" plan
       return 0
     fi
     fl_info "dry-run: benchbar site drop ${name} would:"
@@ -356,7 +357,11 @@ fl_cmd_site_drop() {
   if [[ -n "$new_default" ]]; then
     # in a subshell: fl_cmd_site_default dies on a failed bench use, and the
     # site is already gone, which the message must say
-    if ! (fl_cmd_site_default "$new_default"); then
+    if (fl_cmd_site_default "$new_default"); then
+      # what the subshell recorded is gone with it
+      FL_SITE="$new_default"
+      fl_changed site "$new_default" "now the default site"
+    else
       fl_fail "${name} is dropped, but the default did not move to ${new_default}; currentsite.txt still names ${name}"
       fl_fix "cd ${FL_BENCH_DIR} && bench use ${new_default}, then: ${FL_SELF} site default ${new_default} --bench-dir ${FL_BENCH_DIR}"
       default_failed=1
@@ -372,11 +377,16 @@ fl_cmd_site_drop() {
     [[ -n "$stamp" ]] && backup="$(fl_backup_set_json "${archive}/private/backups" "$stamp")"
   fi
   fl_hosts_remove_name "$name" || true
+  fl_changed site "$name" "dropped${archive:+, archived to ${archive}}"
+  [[ "$backup" == "null" ]] || fl_changed backup "$name" "$(fl_backup_field "$backup" path)"
+  [[ "$FL_HOSTS_REMOVED" != "1" ]] || fl_changed hosts "$name" "line removed"
+  [[ -z "$FL_HOSTS_MANUAL" ]] || fl_next_action "$FL_HOSTS_MANUAL" "the hosts line of ${name} needs sudo"
 
   if [[ "$json" == "1" ]]; then
-    printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"site":%s,"dry_run":false,"dropped":true,"archived_path":%s,"backup":%s,"new_default":%s,"hosts_removed":%s,"manual_step":%s}\n' \
+    fl_site_default_file_v bench_default
+    fl_doc_emit "$default_failed" "$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"site":%s,"dry_run":false,"dropped":true,"archived_path":%s,"backup":%s,"new_default":%s,"default_site":%s,"hosts_removed":%s,"manual_step":%s}' \
       "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$name")" "$(fl_json_str "$archive")" \
-      "$backup" "$(fl_json_str "$new_default")" "$(fl_json_bool "$FL_HOSTS_REMOVED")" "$(fl_json_str "$FL_HOSTS_MANUAL")" >&3
+      "$backup" "$(fl_json_str "$new_default")" "$(fl_json_str "${bench_default:-$FL_SITE}")" "$(fl_json_bool "$FL_HOSTS_REMOVED")" "$(fl_json_str "$FL_HOSTS_MANUAL")")"
     return "$default_failed"
   fi
   fl_ok "dropped ${name}"

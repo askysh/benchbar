@@ -198,7 +198,9 @@ assert_eq "$NODEDIR/v20/installation/bin/node" "$(FL_NODE_MAJOR=20 fl_node_bin)"
 reset_calls
 FL_PYTHON_BIN_NAME=python3.9 fl_python_bin >/dev/null
 assert_calls_contain '^uv python find 3.9$'
-case "$(fl_mariadb_bin)" in /usr/bin/mariadb) ;; *) fail "mariadb is /usr/bin/mariadb" ;; esac
+# a PATH without Homebrew's mariadb (a Mac running the suite has one): on
+# Linux the client is /usr/bin/mariadb, installed or not
+case "$(PATH=/usr/bin:/bin fl_mariadb_bin)" in /usr/bin/mariadb) ;; *) fail "mariadb is /usr/bin/mariadb" ;; esac
 
 exports="$(fl_profile_path_exports)"
 assert_contains "$exports" "export PATH=\"$PYDIR/cpython-3.11.10-linux-x86_64-gnu/bin:\$PATH\""
@@ -356,6 +358,7 @@ assert_contains "$(FNM_DIR="$FNMHOME" fl_profile_path_exports)" "export PATH=\"$
 # the profile's Node is prepended last, so nothing in ~/.local/bin shadows it
 assert_contains "$(fl_profile_path_exports | tail -n1)" "/node-versions/v22."
 assert_contains "$(fl_profile_path_exports | sed -n 2p)" '$HOME/.local/bin'
-assert_eq "$HOME/.bashrc" "$(env -u SHELL -u FL_RC_FILE bash -c 'set -u; FL_PLATFORM=linux; . "$1/lib/frappe-local/ui.sh"; . "$1/lib/frappe-local/state.sh"; . "$1/lib/frappe-local/shellrc.sh"; fl_rc_file' _ "$ROOT")" "(SHELL unset under set -u)"
+# (unset inside too: bash fills an unset SHELL from the login shell, zsh on a Mac)
+assert_eq "$HOME/.bashrc" "$(env -u SHELL -u FL_RC_FILE bash -c 'set -u; unset SHELL; FL_PLATFORM=linux; . "$1/lib/frappe-local/ui.sh"; . "$1/lib/frappe-local/state.sh"; . "$1/lib/frappe-local/shellrc.sh"; fl_rc_file' _ "$ROOT")" "(SHELL unset under set -u)"
 
 printf 'test-platform-linux: ok\n'
