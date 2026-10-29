@@ -42,7 +42,9 @@ print(eval(sys.argv[2]))' "$STREAM" "$1" "$VER"
 stream_keys() {
   python3 -I -c '
 import json, sys
-ignore = {"error", "dry_run"}
+# the done fields of every command (changed, warnings, next_actions, state_after)
+# are additions the fixtures predate
+ignore = {"error", "dry_run", "changed", "warnings", "next_actions", "state_after"}
 u = {}
 for f in sys.argv[1:]:
     for line in open(f):

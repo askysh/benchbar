@@ -274,13 +274,23 @@ fl_state_init() {
 
 # Writers of one key-value file serialize on FILE.lck (mkdir is atomic): a
 # status poll of the app and a repair writing the same bench file at once
-# must not lose each other's keys. A short wait, then the write goes ahead
-# anyway (a lock left by a killed writer must not block forever).
+# must not lose each other's keys. A lock left by a killed writer must not
+# block for ever, so one 10 seconds old is broken; a younger one is waited
+# for, however long the queue of live writers in front is (on a loaded
+# machine eight writers took more than the 2 seconds this once waited).
 fl__kv_lock() {
-  local lck="$1.lck" i=0
+  local lck="$1.lck" i=0 born now
   while ! mkdir "$lck" 2>/dev/null; do
     i=$((i + 1))
-    [[ "$i" -lt 40 ]] || { rm -rf "$lck"; continue; }
+    if [[ $((i % 40)) -eq 0 ]]; then
+      # its age from the mtime (GNU stat, then BSD), each only when it is a number
+      born="$(stat -c %Y "$lck" 2>/dev/null || true)"
+      [[ "$born" =~ ^[0-9]+$ ]] || born="$(stat -f %m "$lck" 2>/dev/null || true)"
+      now="$(date +%s)"
+      # 10 s old, or born in the future (the clock stepped back: a VM resumed), or
+      # held for good: 600 rounds (about 30 s and the stats) is the last resort
+      if [[ ! "$born" =~ ^[0-9]+$ ]] || [[ $((now - born)) -ge 10 || $((now - born)) -lt -10 || "$i" -ge 600 ]]; then rm -rf "$lck"; i=0; continue; fi
+    fi
     sleep 0.05
   done
 }
@@ -295,7 +305,10 @@ fl_kv_set() {
   local file="$1" key="$2" value="$3" tmp
   [[ "${FL_DRY_RUN:-0}" == "1" ]] && return 0
   mkdir -p "$(dirname "$file")" 2>/dev/null || true
-  [[ -f "$file" ]] || : >"$file"
+  # created by appending nothing: two first writers both find no file, and a
+  # truncating ": >" from the slower one emptied what the faster one had
+  # already written under the lock (a lost key, test-run-lock)
+  [[ -f "$file" ]] || : >>"$file"
   if [[ "$(fl_kv_get "$file" "$key")" == "$value" ]]; then
     return 0
   fi
@@ -554,6 +567,11 @@ fl_bstate_prime() {
 # The current bench (FL_BENCH_DIR).
 fl_bstate_get() { fl_bstate_get_for "$FL_BENCH_DIR" "$1"; }
 fl_bstate_set() { fl_bstate_set_for "$FL_BENCH_DIR" "$1" "$2"; }
+# fl_bstate_del KEY: the key leaves the current bench's own file
+fl_bstate_del() {
+  [[ "$FL_BENCH_DIR" == "$FL_BS_DIR" ]] && FL_BS_DIR=""
+  fl_kv_del "$(fl_bench_state_file_for "$FL_BENCH_DIR")" "$1"
+}
 
 # fl_bench_state_migrate DIR: moves the pre 0.4 per bench keys from
 # state.env into DIR's own file (only when DIR is the default bench they

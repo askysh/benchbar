@@ -758,7 +758,7 @@ fl_cmd_app_add() {
 fl_cmd_app_add_planned() {
   local json="$OPT_JSON" code=0 target usage="Use: benchbar app add NAME|URL [--branch B] [--name N] [--commit SHA] [--install-on SITES] [NAME|URL ...] [--site S | --all-sites] --dry-run --json, then --apply TOKEN --yes"
   # JSON on fd 3, every line of text on stderr
-  if [[ "$json" == "1" ]]; then exec 3>&1 1>&2; FL_PLAIN=1; fl_ui_init; else exec 3>&1; fi
+  if [[ "$json" == "1" ]]; then fl_json_doc_begin; elif [[ "${FL_JSONL:-0}" != "1" ]]; then exec 3>&1; fi
   fl__ap_parse "$usage" "$@"
   target="${AP_T_TARGET[0]}"
   fl_require_bench
@@ -774,7 +774,7 @@ fl_cmd_app_add_planned() {
   exec 0</dev/null
   fl_app_add_plan "$AP_ALL"
   if [[ "$AP_APPLY" == "0" ]]; then
-    printf '%s\n' "$AP_JSON" >&3
+    fl_doc_emit 0 "$AP_JSON" plan
     return 0
   fi
 
@@ -784,14 +784,14 @@ fl_cmd_app_add_planned() {
   fl__ap_print_plan
   [[ "$AP_CAN_APPLY" == "1" ]] || fl_die "The plan cannot be applied (see above). Nothing was changed."
   if [[ "${#AP_STEPS[@]}" == "0" ]]; then
-    fl__ap_settle || { [[ "$json" == "1" ]] && fl__ap_result_json 1 >&3; return 1; }
+    fl__ap_settle || { [[ "$json" == "1" ]] && fl_doc_emit 1 "$(fl__ap_result_json 1)"; return 1; }
     printf '\n'; fl__ap_unchanged
-    [[ "$json" == "1" ]] && fl__ap_result_json 0 >&3
+    [[ "$json" == "1" ]] && fl_doc_emit 0 "$(fl__ap_result_json 0)"
     return 0
   fi
 
   fl__ap_apply "$target" || code=$?
-  [[ "$json" == "1" ]] && fl__ap_result_json "$code" >&3
+  [[ "$json" == "1" ]] && fl_doc_emit "$code" "$(fl__ap_result_json "$code")"
   return "$code"
 }
 
@@ -895,12 +895,20 @@ fl__ap_pin_checkout() {
 # pending records, which go away only when all are done and verify is green.
 # Returns 1 when a step or the verify pass failed.
 fl__ap_apply() {
-  local target="$1" labels=() entry kind arg label i=0 code=0 e s a m nm res fail_from reason ia is
+  local target="$1" labels=() ids=() entry kind arg label i=0 code=0 e s a m nm res fail_from reason ia is
   local clone_failed="" build_failed="" py_failed="" first_kind="" first_reason="" done_set=" " cloned=() inst_failed=" " mains=" " vfail=""
   AP_STEP_NOTE=()
   for ((m = 0; m < ${#M_NAME[@]}; m++)); do mains="${mains}${M_NAME[$m]} "; done
-  for entry in "${AP_STEPS[@]}"; do IFS='|' read -r _ _ label _ <<<"$entry"; labels+=("$label"); done
+  for entry in "${AP_STEPS[@]}"; do
+    IFS='|' read -r kind arg label _ <<<"$entry"
+    labels+=("$label")
+    # the stream's step ids, KIND_TARGET as app update names its own
+    # (an install is APP@SITE: install_SITE for one app, install_APP_SITE for a batch)
+    if [[ "$kind" == "install" && "${#M_NAME[@]}" -le 1 ]]; then ids+=("install_${arg#*@}")
+    else ids+=("${kind}${arg:+_${arg//@/_}}"); fi
+  done
   fl_steps_define "${labels[@]}"
+  fl_steps_ids "${ids[@]}"
   # the records first: whatever stops this run leaves what is still to do
   fl__ap_record "" "" "$done_set" || { fl_fail "nothing was run: without its record a stop could not be finished later"; return 1; }
   for entry in "${AP_STEPS[@]}"; do
@@ -963,7 +971,14 @@ fl__ap_apply() {
         else fl_app_restart_if_running || res="failed"; fi ;;
     esac
     case "$res" in
-      done) fl_step_end "done"; done_set="${done_set}${i} " ;;
+      done)
+        fl_step_end "done"; done_set="${done_set}${i} "
+        # what the run changed, for the done line
+        case "$kind" in
+          clone_required|clone) fl_changed app "$arg" "cloned" ;;
+          install) fl_changed app "${arg%%@*}" "installed on ${arg#*@}" ;;
+          restart) fl_changed process "$FL_BENCH_NAME" "restarted" ;;
+        esac ;;
       skipped) fl_step_end skipped "not running"; done_set="${done_set}${i} " ;;
       *)
         fl_step_end failed

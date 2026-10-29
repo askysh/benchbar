@@ -89,6 +89,22 @@ fl_agent_files() {
   return 0
 }
 
+# fl_service_path_v VAR: the PATH the installed agent's plist gives the bench's
+# processes, empty without a plist. Read in bash, no process: status asks it.
+fl_service_path_v() {
+  local __f __line __v="" __label
+  fl_agent_label_v __label
+  fl_agent_file_v __f "$__label"
+  if [[ -r "$__f" ]]; then
+    while IFS= read -r __line || [[ -n "$__line" ]]; do
+      case "$__line" in
+        *"<key>PATH</key><string>"*) __v="${__line#*"<key>PATH</key><string>"}"; __v="${__v%%"</string>"*}"; break ;;
+      esac
+    done <"$__f"
+  fi
+  printf -v "$1" '%s' "$__v"
+}
+
 # fl_agent_file_v VAR LABEL: the plist of a label
 fl_agent_file_v() { printf -v "$1" '%s/Library/LaunchAgents/%s.plist' "$HOME" "$2"; }
 

@@ -632,6 +632,15 @@ fl_action_needs_sudo() {
   return 1
 }
 
+# fl_action_changed_kind ACTION: the kind of the changed[] entry an action makes
+fl_action_changed_kind() {
+  case "$1" in
+    hosts_entry) printf 'hosts' ;;
+    port_block) printf 'ports' ;;
+    *) printf 'service' ;;
+  esac
+}
+
 fl_event_plan() {
   local actions="$1" a sep="" fixes f fsep
   [[ "$FL_JSON_EVENTS" == "1" ]] || return 0
@@ -746,6 +755,7 @@ fl_repair_engine() {
     if "act_${action}"; then
       fl_step_end "$FL_STEP_RESULT"
       if [[ "$FL_STEP_RESULT" == "done" ]]; then
+        fl_changed "$(fl_action_changed_kind "$action")" "$action" "$(fl_action_label "$action")"
         fl_event_step "$action" "done" "$(fl_action_label "$action")"
       else
         fl_event_step "$action" "$FL_STEP_RESULT" "$(fl_log_step_message "${step_from:-0}")"

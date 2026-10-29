@@ -42,6 +42,22 @@ fl_agent_plist_path() {
   printf '%s/%s.service' "$(fl_unit_dir)" "$(fl_agent_label)"
 }
 
+# fl_service_path_v VAR: the PATH of the installed unit (Environment="PATH=..."),
+# empty without a unit. Read in bash, no process: status asks it.
+fl_service_path_v() {
+  local __f __line __v="" __label
+  fl_agent_label_v __label
+  fl_agent_file_v __f "$__label"
+  if [[ -r "$__f" ]]; then
+    while IFS= read -r __line || [[ -n "$__line" ]]; do
+      case "$__line" in
+        'Environment="PATH='*) __v="${__line#'Environment="PATH='}"; __v="${__v%\"}"; break ;;
+      esac
+    done <"$__f"
+  fi
+  printf -v "$1" '%s' "$__v"
+}
+
 # fl_agent_file_v VAR LABEL: the unit file of a label
 fl_agent_file_v() { printf -v "$1" '%s/%s.service' "$(fl_unit_dir)" "$2"; }
 

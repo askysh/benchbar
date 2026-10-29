@@ -211,6 +211,7 @@ fl_bench_init_if_needed() {
     || fl_die "bench init failed." "Manual command: bench init ${bench_dir} --frappe-branch ${frappe_ref} --python ${python_bin} --no-backups --verbose${init_extra[*]:+ ${init_extra[*]}}"
   [[ "$skip_assets" != "1" ]] || fl_needs_build_mark "$bench_dir"
   fl_state_set BENCH_INIT complete
+  fl_changed bench "$bench_dir" "created with frappe ${frappe_ref}"
 }
 
 # fl_commit_present DIR SHA: SHA is a commit of the clone in DIR
@@ -292,6 +293,7 @@ fl_get_app_if_needed() {
       fl_bench_run_long "bench get-app ${app} (${branch})" "$bench_dir" bench get-app --branch "$branch" ${skip_flag[@]+"${skip_flag[@]}"} "$app" \
         || fl_die "bench get-app failed for ${app}." "Manual command: cd ${bench_dir} && bench get-app --branch ${branch}${skip_flag[*]:+ ${skip_flag[*]}} ${app}"
     fi
+    fl_changed app "$app" "cloned at ${branch}"
   fi
   [[ "${#skip_flag[@]}" -eq 0 || "$was_there" == "1" ]] || fl_needs_build_mark "$bench_dir"
   if [[ "$pin" == "1" && -n "$commit" ]]; then
@@ -481,6 +483,7 @@ fl_new_site_if_needed() {
     *) fl_die "bench new-site failed." "Manual command: cd ${bench_dir} && bench new-site ${site_name} $(fl_new_site_scope)   (it asks for both passwords). If sites/${site_name} was left behind, move it aside first." ;;
   esac
   fl_state_set SITE_CREATED yes
+  fl_changed site "$site_name" "created"
 }
 
 fl_install_app_if_needed() {
@@ -497,6 +500,7 @@ fl_install_app_if_needed() {
   else
     fl_bench_run_long "bench install-app ${app} on ${site_name}" "$bench_dir" bench --site "$site_name" install-app "$app" \
       || fl_die "bench install-app failed for ${app}." "Manual command: cd ${bench_dir} && bench --site ${site_name} install-app ${app}"
+    fl_changed app "$app" "installed on ${site_name}"
   fi
   fl_state_set "APP_${app}_INSTALLED" yes
 }

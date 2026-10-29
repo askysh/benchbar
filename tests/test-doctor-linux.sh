@@ -245,7 +245,7 @@ printf '#!/usr/bin/env bash\necho "journal for $*"\necho "db_password=Hunter2Sec
 chmod +x "$EXTRA"/*
 printf 'processor\t: 0\nmodel name\t: Test CPU 9000 @ 3.00GHz\n' >"$MOCK_STATE/cpuinfo"
 export FL_CPUINFO="$MOCK_STATE/cpuinfo"
-printf 'start on ubuntu-box-77 as %s\ndb_password=Hunter2Secret\n' "$USER" >>"$BENCH/logs/bench.log"
+printf 'start on ubuntu-box-77 as %s\ndb_password=Hunter2Secret\n' "${USER:-$(id -un)}" >>"$BENCH/logs/bench.log"
 OUT="$(PATH="$EXTRA:$PATH" "$FM" report --print --bench-dir "$BENCH" 2>&1)"
 assert_contains "$OUT" "Ubuntu"
 assert_contains "$OUT" "6.6.0-microsoft-standard-WSL2"

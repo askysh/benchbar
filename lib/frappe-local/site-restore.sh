@@ -334,7 +334,8 @@ fl_srestore_result_json() {
     out="${out}${sep}{\"id\":$(fl_json_str "${s%%|*}"),\"name\":$(fl_json_str "${s#*|}"),\"status\":$(fl_json_str "$st")}"; sep=","
     i=$((i + 1))
   done
-  printf '%s],"verify":%s,"warnings":[%s]}\n' "$out" "$SR_VERIFY_JSON" "${FL_PULL_WARNINGS}"
+  # warnings[] comes with the done fields (fl_pull_warn is a fl_warn too)
+  printf '%s],"verify":%s}\n' "$out" "$SR_VERIFY_JSON"
 }
 
 # fl_srestore_copy_set: when the set is in the target's own backup folder, its
@@ -428,10 +429,11 @@ fl_srestore_verify_backup() {
 # fl_srestore_run: the steps, one after the other; the first failure stops
 # the run and the rest stay pending. Returns the exit code.
 fl_srestore_run() {
-  local i=0 n labels=() s id code=0 before now
+  local i=0 n labels=() ids=() s id code=0 before now
   n="${#FL_PULL_STEPS[@]}"
-  for s in "${FL_PULL_STEPS[@]}"; do labels+=("${s#*|}"); done
+  for s in "${FL_PULL_STEPS[@]}"; do labels+=("${s#*|}"); ids+=("${s%%|*}"); done
   fl_steps_define "${labels[@]}"
+  fl_steps_ids "${ids[@]}"
   SR_DEFAULT_BEFORE="$(tr -d '[:space:]' <"${FL_BENCH_DIR}/sites/currentsite.txt" 2>/dev/null || true)"
   # the backup first prunes old files in the target's backup folder, which is
   # where the set may be: restore from a copy of it outside sites/
@@ -488,7 +490,7 @@ fl_cmd_site_restore() {
 
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
     if [[ "$json" == "1" ]]; then
-      printf '%s\n' "$SR_PLAN_JSON" >&3
+      fl_doc_emit 0 "$SR_PLAN_JSON" plan
       return 0
     fi
     fl_header "benchbar site restore" "dry-run" "$FL_PROFILE" "$FL_BENCH_DIR" "$SR_TARGET"
@@ -532,10 +534,12 @@ fl_cmd_site_restore() {
       fl_warn "the scheduler of every site on this bench stays paused (pause_scheduler in common_site_config.json)"
       fl_fix "cd ${FL_BENCH_DIR} && bench config remove-common-config pause_scheduler"
     fi
-    [[ "$json" != "1" ]] || fl_srestore_result_json "$code" >&3
+    [[ "$json" != "1" ]] || fl_doc_emit "$code" "$(fl_srestore_result_json "$code")"
     return "$code"
   fi
-  [[ "$json" != "1" ]] || fl_srestore_result_json 0 >&3
+  fl_changed site "$SR_TARGET" "restored from ${SR_SET_STAMP}"
+  [[ -z "$SR_BACKUP_STAMP" ]] || fl_changed backup "$SR_TARGET" "$SR_BACKUP_STAMP"
+  [[ "$json" != "1" ]] || fl_doc_emit 0 "$(fl_srestore_result_json 0)"
   fl_ok "${SR_TARGET} is restored from ${SR_SET_STAMP}$([[ "$FL_PULL_NO_MIGRATE" == "1" ]] && printf ' (not migrated)'); the default site stays ${SR_DEFAULT_BEFORE:-unset}"
   return 0
 }
