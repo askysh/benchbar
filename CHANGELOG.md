@@ -134,6 +134,10 @@ All notable changes to this project are documented here.
   remembers its size; it opens a little larger than the fixed 560 by 560.
 - The wizard's Check Your Mac page shows the port block a new bench gets
   as information, not as a command to copy.
+- Find Benches: the "Stopped at 6 folders deep" warnings of a large scan
+  are one line, left aligned; before a scan it offers the folder it shows
+  instead of "Start with a folder"; benches BenchBar already manages show
+  a mark instead of a checkbox.
 
 ### Windows (preview)
 

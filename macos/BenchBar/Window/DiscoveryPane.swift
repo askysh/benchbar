@@ -60,8 +60,14 @@ struct DiscoveryPane: View {
                 Text(message).foregroundStyle(.secondary).accessibilityLabel(message)
             }
             if !discovery.warnings.isEmpty {
-                DisclosureGroup("\(discovery.warnings.count) scan warning(s)") {
-                    ForEach(discovery.warnings, id: \.self) { Text($0).font(.caption).textSelection(.enabled) }
+                let lines = discovery.warningLines
+                DisclosureGroup(lines.count == 1 ? "1 scan warning" : "\(lines.count) scan warnings") {
+                    VStack(alignment: .leading, spacing: WindowMetrics.lineSpacing) {
+                        ForEach(lines, id: \.self) {
+                            Text($0).font(.caption).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
             if discovery.hasScanned && discovery.results.isEmpty {
@@ -105,8 +111,19 @@ struct DiscoveryPane: View {
                     .disabled(discovery.selected.isEmpty || discovery.isAdding || discovery.store.busyBench != nil)
                 }
             } else if !discovery.isScanning {
-                ContentUnavailableView("Your benches, in one place", systemImage: "folder.badge.plus",
-                    description: Text("Start with a folder such as Developer. Review the results, then add the benches you want to manage."))
+                if discovery.folder.isEmpty {
+                    ContentUnavailableView("Your benches, in one place", systemImage: "folder.badge.plus",
+                        description: Text("Start with a folder such as Developer. Review the results, then add the benches you want to manage."))
+                } else {
+                    // a folder from the last scan is shown above: offer it, not "start with a folder"
+                    ContentUnavailableView {
+                        Label("Your benches, in one place", systemImage: "folder.badge.plus")
+                    } description: {
+                        Text("Scan \((discovery.folder as NSString).abbreviatingWithTildeInPath) for benches, or choose another folder. Review the results, then add the benches you want to manage.")
+                    } actions: {
+                        Button("Scan Folder") { discovery.scan(folder: discovery.folder) }
+                    }
+                }
             }
             Spacer(minLength: 0)
             Text("Scanning only reads folders. Add Selected remembers your benches; Set Up Management previews the service changes before you apply them.")
@@ -129,13 +146,19 @@ struct DiscoveryPane: View {
     private func resultRow(_ result: BenchSummary) -> some View {
         let known = discovery.store.benches.first { $0.path == result.path }
         return HStack(alignment: .top, spacing: WindowMetrics.spacing) {
-            Toggle(isOn: Binding(
-                get: { discovery.selected.contains(result.path) },
-                set: { if $0 { discovery.selected.insert(result.path) } else { discovery.selected.remove(result.path) } }
-            )) { Text("Select \(result.name) at \(result.path)") }
-                .toggleStyle(.checkbox).labelsHidden()
-                .accessibilityLabel("Select \(result.name) at \(result.path)")
-                .disabled(discovery.isAdding)
+            if discovery.managedPaths.contains(result.path) {
+                // nothing to add or set up: a mark where the checkbox would be
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                    .accessibilityLabel("\(result.name) is managed by BenchBar")
+            } else {
+                Toggle(isOn: Binding(
+                    get: { discovery.selected.contains(result.path) },
+                    set: { if $0 { discovery.selected.insert(result.path) } else { discovery.selected.remove(result.path) } }
+                )) { Text("Select \(result.name) at \(result.path)") }
+                    .toggleStyle(.checkbox).labelsHidden()
+                    .accessibilityLabel("Select \(result.name) at \(result.path)")
+                    .disabled(discovery.isAdding)
+            }
             VStack(alignment: .leading, spacing: WindowMetrics.lineSpacing + 2) {
                 Text(result.name).font(.headline)
                 Text(result.path).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)

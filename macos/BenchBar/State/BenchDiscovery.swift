@@ -23,8 +23,25 @@ final class BenchDiscovery {
     }
 
     var knownPaths: Set<String> { Set(store.benches.map(\.path)) }
-    var selectablePaths: Set<String> { Set(results.map(\.path)) }
+    /// Benches BenchBar already manages: shown as managed, without a checkbox.
+    var managedPaths: Set<String> { Set(store.benches.filter { !$0.needsService }.map(\.path)) }
+    var selectablePaths: Set<String> { Set(results.map(\.path)).subtracting(managedPaths) }
     var availablePaths: Set<String> { Set(results.map(\.path)).subtracting(knownPaths) }
+
+    /// The scan's warnings as the pane lists them: every "Stopped at N
+    /// folders deep: PATH" in one line (a scan of ~ has hundreds), then the
+    /// others as they are.
+    var warningLines: [String] { Self.warningLines(warnings) }
+
+    static func warningLines(_ warnings: [String]) -> [String] {
+        let deep = warnings.filter { $0.hasPrefix("Stopped at ") && $0.contains(" folders deep: ") }
+        let others = warnings.filter { !deep.contains($0) }
+        guard let first = deep.first else { return others }
+        let depth = first.dropFirst("Stopped at ".count).prefix { $0.isNumber }
+        let summary = deep.count == 1 ? first
+            : "Stopped at \(depth) folders deep in \(deep.count) folders: a bench deeper than that is not found. Choose a folder closer to it."
+        return [summary] + others
+    }
 
     func hasPortConflict(_ result: BenchSummary) -> Bool {
         let own = Set([result.ports.web, result.ports.socketio, result.ports.redisQueue, result.ports.redisCache])

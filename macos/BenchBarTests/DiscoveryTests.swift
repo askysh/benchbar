@@ -48,6 +48,25 @@ struct DiscoveryTests {
         #expect(discovery.selected.isEmpty, "Known benches are not selected for adding again")
     }
 
+    /// Hundreds of "Stopped at 6 folders deep" are one line; other warnings stay.
+    @Test func deepFolderWarningsAreOneLine() {
+        let deep = (1...117).map { "Stopped at 6 folders deep: /Users/you/dev/a/b/c/d/e/f\($0)" }
+        let lines = BenchDiscovery.warningLines(deep + ["Cannot read folder: /Users/you/dev/private"])
+        #expect(lines == ["Stopped at 6 folders deep in 117 folders: a bench deeper than that is not found. Choose a folder closer to it.",
+                          "Cannot read folder: /Users/you/dev/private"])
+        #expect(BenchDiscovery.warningLines([deep[0]]) == [deep[0]])
+    }
+
+    /// A bench BenchBar already manages is shown as managed: not selectable.
+    @Test func managedBenchesAreNotSelectable() async throws {
+        let (store, discovery) = try await makeDiscovery()
+        base.cli.answer("list", json: base.listJSON(installed: true))
+        await store.reloadBenches()
+        await discovery.scan(folder: "/Projects with spaces").value
+        #expect(discovery.managedPaths == [base.benchPath])
+        #expect(discovery.selectablePaths.isEmpty && discovery.selected.isEmpty)
+    }
+
     @Test func aFailedScanClearsOldResultsAndShowsAnError() async throws {
         let (_, discovery) = try await makeDiscovery()
         await discovery.scan(folder: "/Projects with spaces").value
