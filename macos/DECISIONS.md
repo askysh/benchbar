@@ -449,3 +449,4 @@ Asked for after the phases, to stop naming drift before the first release.
 
 - The popover's bench panel has `.id(bench.path)`: in the same place in the view tree SwiftUI keeps a button's keyboard shortcut with the action of its first render, so the picker changed the panel's text but not what ⌘D stopped. `PopoverShortcutTests` sends ⌘D to a hosted popover after each switch.
 - The exit 2 page no longer shows the CLI's fix ("Run again with MARIADB_ROOT_PASSWORD in the environment"): that is the Terminal way, and the field under it is the app's. `PasswordField` takes the name of the secret it asks for.
+- A `--no-sites` app list with `sites_checked_at` null is no answer about sites: the Apps page then reads the live lists once per stamp (its own `OnDemandCalls`), and until they come the rows show no site line and the app menu offers no Install on a site.

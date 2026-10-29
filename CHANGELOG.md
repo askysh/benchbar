@@ -119,6 +119,9 @@ All notable changes to this project are documented here.
 - The app's install wizard asks for the MariaDB root password in a field
   labelled "MariaDB root password", with help that says it is not the
   site's Administrator password. It read "Administrator password".
+- The app's Apps tab no longer says "on no site yet" for every app,
+  frappe included, on a bench whose site lists were never read: it asks
+  bench for them once and shows nothing about sites until it knows.
 
 ### Windows (preview)
 

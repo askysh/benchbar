@@ -17,7 +17,7 @@ struct BenchApps: View {
         Form {
             Section {
                 if let list {
-                    ForEach(list.apps) { app in row(app) }
+                    ForEach(list.apps) { app in row(app, sitesKnown: list.sitesKnown) }
                     if list.apps.isEmpty { Text("No apps").foregroundStyle(.secondary) }
                     if list.apps.filter({ $0.name != "frappe" }).isEmpty {
                         EmptyStateBlock(symbol: "square.stack.3d.up", title: "Only Frappe so far",
@@ -73,7 +73,9 @@ struct BenchApps: View {
         }
     }
 
-    private func row(_ app: AppInfo) -> some View {
+    /// `sitesKnown` false: bench was never asked which sites have the app,
+    /// so the row says nothing about sites rather than "on no site".
+    private func row(_ app: AppInfo, sitesKnown: Bool) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
@@ -93,14 +95,16 @@ struct BenchApps: View {
                 }
                 Text([app.branch.map { "branch \($0)" } ?? "detached", app.repo].compactMap { $0 }.joined(separator: "  ·  "))
                     .font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
-                Text(app.sites.isEmpty ? "on no site yet" : "on \(app.sites.joined(separator: ", "))")
-                    .font(.caption).foregroundStyle(.secondary)
+                if sitesKnown {
+                    Text(app.sites.isEmpty ? "on no site yet" : "on \(app.sites.joined(separator: ", "))")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
             Spacer()
             Button("Update…") { updating = app }
                 .disabled(busy || app.branch == nil || app.dirty)
                 .help(app.dirty ? "The app has local changes; commit or stash them first" : "Shows the changelog before anything changes")
-            AppMenu(app: app, missingSites: app.name == "frappe" ? [] : AppSource.sitesWithout(app, among: siteNames), busy: busy) { site in
+            AppMenu(app: app, missingSites: app.name == "frappe" || !sitesKnown ? [] : AppSource.sitesWithout(app, among: siteNames), busy: busy) { site in
                 Task { await workbench.installApp(app.name, site: site, on: bench) }
             } setFocus: { pin in
                 Task { await workbench.setFocus(pin, app: app.name, on: bench) }

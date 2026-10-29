@@ -306,12 +306,18 @@ nonisolated struct AppInfo: Codable, Sendable, Equatable, Identifiable {
 nonisolated struct AppList: Codable, Sendable, Equatable {
     var schemaVersion: Int
     var bench: String
+    /// When bench was last asked which sites have which app; nil when it
+    /// never was, and then every app's `sites` is empty, not known.
+    var sitesCheckedAt: String?
     var sitesError: String?
     var apps: [AppInfo]
+
+    var sitesKnown: Bool { sitesCheckedAt != nil }
 
     enum CodingKeys: String, CodingKey {
         case bench, apps
         case schemaVersion = "schema_version"
+        case sitesCheckedAt = "sites_checked_at"
         case sitesError = "sites_error"
     }
 }

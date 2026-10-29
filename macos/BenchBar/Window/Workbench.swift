@@ -24,6 +24,8 @@ final class Workbench {
     /// The last change's outcome, for the banner at the top of the pane.
     var result: ChangeResult?
     @ObservationIgnored private let appCalls = OnDemandCalls()
+    /// The live read of site lists that were never read, once per stamp.
+    @ObservationIgnored private let unknownSiteCalls = OnDemandCalls()
 
     nonisolated struct ChangeResult: Equatable, Sendable {
         var title: String
@@ -49,15 +51,19 @@ final class Workbench {
 
     /// The Apps page is on screen: the list is read (cached site lists)
     /// unless there is one from this window session and nothing was done to
-    /// the bench since.
+    /// the bench since. A cache that was never filled is filled once by
+    /// asking bench, so the page does not say an app is on no site.
     func showApps(_ bench: BenchModel) async {
         guard store.pageMayAsk(about: bench) else { return }
         await askApps(bench, liveSites: false, force: false)
+        if apps[bench.path]?.sitesKnown == false {
+            await askApps(bench, liveSites: true, force: false, calls: unknownSiteCalls)
+        }
     }
 
-    private func askApps(_ bench: BenchModel, liveSites: Bool, force: Bool) async {
+    private func askApps(_ bench: BenchModel, liveSites: Bool, force: Bool, calls: OnDemandCalls? = nil) async {
         guard let client = store.cliClient else { return }
-        await appCalls.ask(bench.path, force: force, stamp: { store.stamp(for: bench) }) {
+        await (calls ?? appCalls).ask(bench.path, force: force, stamp: { store.stamp(for: bench) }) {
             self.loadingApps.insert(bench.path)
             defer { self.loadingApps.remove(bench.path) }
             do {

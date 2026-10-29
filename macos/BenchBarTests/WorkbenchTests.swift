@@ -28,6 +28,7 @@ struct WorkbenchTests {
     @Test func decodesTheAppList() throws {
         let list = try BenchJSON.decode(AppList.self, from: Fixture.data("app-list"))
         #expect(list.apps.map(\.name) == ["frappe", "erpnext", "acme_erp"])
+        #expect(list.sitesKnown)
         let custom = list.apps[2]
         #expect(custom.dirty && custom.policyBranch == nil && custom.sites.isEmpty)
         #expect(AppSource.sitesWithout(list.apps[1], among: ["v16dev", "v16two"]) == ["v16two"])
@@ -317,6 +318,24 @@ struct OnDemandTests {
         let lists = base.cli.calls.filter { $0.starts(with: ["app", "list"]) }
         #expect(lists.count == 2)
         #expect(lists.last == ["app", "list", "--json", "--bench-dir", base.benchPath])
+    }
+
+    /// A site cache that was never filled (`sites_checked_at` null) is no
+    /// answer: the page asks bench once, and the rows say nothing until then.
+    @Test func neverCheckedSitesAreReadLiveOnce() async throws {
+        let (store, workbench, bench) = try await store()
+        let unchecked = try Fixture.string("app-list").replacingOccurrences(of: #""sites_checked_at":"2026-09-26T10:00:00Z""#,
+                                                                             with: #""sites_checked_at":null"#)
+        base.cli.answer("app list", .ok(unchecked))
+        #expect(try !BenchJSON.decode(AppList.self, from: Data(unchecked.utf8)).sitesKnown)
+        store.setWindow(WindowSight(isOpen: true, isVisible: true))
+        await workbench.showApps(bench)
+        #expect(base.cli.calls.filter { $0.starts(with: ["app", "list"]) }
+            == [["app", "list", "--json", "--no-sites", "--bench-dir", base.benchPath],
+                ["app", "list", "--json", "--bench-dir", base.benchPath]])
+        #expect(workbench.apps[bench.path]?.sitesKnown == false, "the scripted CLI answers the same")
+        await workbench.showApps(bench)
+        #expect(appLists() == 2, "shown again: nothing new to ask")
     }
 
     /// The person switches tab while doctor runs: SwiftUI cancels the page's
