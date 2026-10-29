@@ -416,6 +416,9 @@ ANNOTATIONS = {
 UNTRUSTED = {
     "benchbar_logs_tail": "log lines",
     "benchbar_app_add_plan": "git output, hooks.py",
+    "benchbar_site_restore_plan": "backup and bench file names",
+    "benchbar_site_add_plan": "backup and bench file names",
+    "benchbar_service_install_plan": "backup and bench file names",
     "benchbar_profile_list": "profile files",
     "benchbar_profile_check": "git output, profile files",
 }
