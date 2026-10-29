@@ -47,7 +47,7 @@ default_site() { tr -d '[:space:]' <"$BENCH/sites/currentsite.txt"; }
 at() { grep -n -E -- "$1" "$MOCK_LOG" | head -n1 | cut -d: -f1; }
 
 suite() {
-  local tag="$1" fresh="$2" plan token snap n r m h
+  local tag="$1" fresh="$2" plan token snap n r m h rs
   BENCH="$HOME/dev/restore-$tag"
   make_fake_bench "$BENCH" macdev
   cp "$ROOT/tests/mocks/frappe-python" "$BENCH/env/bin/python"; chmod +x "$BENCH/env/bin/python"
@@ -185,6 +185,9 @@ assert "frappe" in d["verify"]["apps"] and d["verify"]["default_site"] == "macde
   r="$(at '^python benchbar-frappe acme.localhost restore ')"
   m="$(at '^bench --site acme.localhost migrate$')"
   [[ -n "$b" && -n "$r" && -n "$m" && "$b" -lt "$r" && "$r" -lt "$m" ]] || fail "backup, restore, migrate in order (${b} ${r} ${m})"$'\n'"$(cat "$MOCK_LOG")"
+  # the bench was stopped: its Redis is up before the safety backup, not only before the restore
+  rs="$(at '^redis-server config/redis_queue.conf --daemonize yes$')"
+  [[ -n "$rs" && "$rs" -lt "$b" ]] || fail "Redis starts before the backup (redis ${rs}, backup ${b})"$'\n'"$(cat "$MOCK_LOG")"
   assert_calls_contain "^python benchbar-frappe acme.localhost restore --mariadb-root-password [^ ]*/20260902_090000-acme_localhost-database.sql.gz --with-public-files [^ ]*-files.tar --with-private-files [^ ]*-private-files.tar$"
   assert_eq "rootpw" "$(cat "$MOCK_STATE/stdin-restore")" "(the root password reaches restore on stdin)"
   assert_eq "$SETKEY" "$(conf_get acme.localhost encryption_key)" "(the key of the set)"

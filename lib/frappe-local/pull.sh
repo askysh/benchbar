@@ -847,6 +847,8 @@ fl_pull_step_decrypt() {
 
 fl_pull_step_local_backup() {
   fl_bench_env_exports
+  # frappe reads the site's settings through the bench's Redis cache (a stopped bench has none running)
+  [[ -n "$FL_SETUP_REDIS_PORTS" ]] || fl_bench_redis_up "$FL_BENCH_DIR"
   fl_run_long "bench --site ${FL_PULL_AS} backup --with-files" fl__in_dir "$FL_BENCH_DIR" bench --site "$FL_PULL_AS" backup --with-files || return 1
   fl_ok "backup of the old ${FL_PULL_AS} in sites/${FL_PULL_AS}/private/backups"
   if [[ "${FL_ASSUME_YES:-0}" != "1" && "$FL_PULL_CONFIRM_BACKUP" == "1" ]] && ! fl_confirm "The old ${FL_PULL_AS} is backed up. Replace it now?"; then
