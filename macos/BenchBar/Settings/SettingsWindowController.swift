@@ -18,14 +18,16 @@ struct SettingsTabsView: View {
     let general: SettingsView
     let menuBar: SettingsView
 
-    static let size = CGSize(width: 560, height: 560)
+    /// The first size; the window is resizable down to `minSize`.
+    static let size = CGSize(width: 600, height: 640)
+    static let minSize = CGSize(width: 480, height: 400)
 
     var body: some View {
         TabView(selection: $tabs.selected) {
             general.tabItem { Label("General", systemImage: "gearshape") }.tag(SettingsTab.general)
             menuBar.tabItem { Label("Menu Bar", systemImage: "menubar.rectangle") }.tag(SettingsTab.menuBar)
         }
-        .frame(width: Self.size.width, height: Self.size.height)
+        .frame(minWidth: Self.minSize.width, maxWidth: .infinity, minHeight: Self.minSize.height, maxHeight: .infinity)
     }
 }
 
@@ -50,13 +52,16 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         if let tab { tabs.selected = tab }
         if window == nil {
             let hosting = NSHostingController(rootView: makeView(tabs, router))
-            hosting.sizingOptions = [.preferredContentSize]
+            hosting.sizingOptions = [.minSize]
             let window = NSWindow(contentViewController: hosting)
             window.title = "BenchBar Settings"
-            window.styleMask = [.titled, .closable]
+            window.styleMask = [.titled, .closable, .resizable]
             window.isReleasedWhenClosed = false
             window.delegate = self
+            window.setContentSize(SettingsTabsView.size)
             window.center()
+            // after center: a saved frame wins over the first size
+            window.setFrameAutosaveName("BenchBarSettings")
             self.window = window
         }
         if window?.isVisible != true { WindowPresence.opened() }

@@ -130,6 +130,8 @@ All notable changes to this project are documented here.
   (`~/frappe-bench-2` and `macdev2` next to an existing `~/frappe-bench`
   with `macdev`), and the note about taken ports wraps instead of running
   off the right edge.
+- The app's Settings window can be resized (from 480 by 400 points) and
+  remembers its size; it opens a little larger than the fixed 560 by 560.
 
 ### Windows (preview)
 

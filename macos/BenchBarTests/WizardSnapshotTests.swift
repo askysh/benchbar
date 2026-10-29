@@ -119,7 +119,8 @@ extension SnapshotTests {
             SettingsView(settings: base.settings, store: store, library: library(), launchAtLogin: LaunchAtLogin(),
                          notifier: Notifier(settings: base.settings), part: part, showsHeader: false, chooseCLI: {})
         }
-        try render(SettingsTabsView(tabs: tabs, general: part(.general), menuBar: part(.menuBar)), "settings-window")
+        try render(SettingsTabsView(tabs: tabs, general: part(.general), menuBar: part(.menuBar))
+            .frame(width: SettingsTabsView.size.width, height: SettingsTabsView.size.height), "settings-window")
     }
 
     // MARK: the teaching surfaces

@@ -314,7 +314,9 @@ struct SnapshotTests {
             SettingsView(settings: base.settings, store: store, library: library(), launchAtLogin: LaunchAtLogin(),
                          notifier: Notifier(settings: base.settings), part: part, showsHeader: false, chooseCLI: {})
         }
+        // the window's first size; the window can be resized from there
         let view = SettingsTabsView(tabs: tabs, general: part(.general), menuBar: part(.menuBar))
+            .frame(width: SettingsTabsView.size.width, height: SettingsTabsView.size.height)
         try render(view, "settings-general")
         tabs.selected = .menuBar
         try render(view, "settings-menubar")
