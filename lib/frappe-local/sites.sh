@@ -289,7 +289,7 @@ fl_site_add_plan() {
     "$(fl_json_str "$default")" "$(fl_json_bool "$([[ "$hosts" == "0" ]] && printf 1 || printf 0)")" "$steps" "$touches" "$(fl_json_bool "$([[ -n "$steps" ]] && printf 1 || printf 0)")")"
   state="$(printf 'sites\n%s\napps.txt\n%s\ndefault\n%s\n' "$(fl_sites_list)" "$(fl_apps_txt 2>/dev/null)" "$default")"
   SA_TOKEN="$(printf '%s\n%s\n' "$body" "$state" | shasum -a 256 | awk '{print $1}')"
-  SA_JSON="$(printf '{"schema_version":%d,"cli_version":"%s",%s,"token":"%s"}' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$body" "$SA_TOKEN")"
+  SA_JSON="$(printf '{"schema_version":%d,"cli_version":"%s","dry_run":true,%s,"token":"%s"}' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$body" "$SA_TOKEN")"
 }
 
 # site add NAME [--bundle B | --apps "a b"]: a new site on the bench's

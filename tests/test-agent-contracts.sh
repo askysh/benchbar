@@ -637,6 +637,7 @@ done
 run_json site add dryrunsite --dry-run --json --bench-dir "$BENCH"
 assert_eq "1" "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')" "site add --dry-run --json: one line"
 [[ "$(printf '%s' "$OUT" | jget - 'd["token"]')" =~ ^[0-9a-f]{64}$ ]] || fail "site add plan without a token: $OUT"
+assert_eq "True" "$(printf '%s' "$OUT" | jget - 'd["dry_run"]')" "(the plan document says it is a dry run)"
 ADMIN_PASSWORD=pw stream site add dryrunsite --dry-run --jsonl --bench-dir "$BENCH"
 assert_eq "plan done" "$(sx '" ".join(x["event"] for x in e)')"
 stream adopt "$B2" --dry-run --json --bench-dir "$B2"

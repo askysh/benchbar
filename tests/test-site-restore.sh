@@ -384,6 +384,9 @@ assert d["source"]["site"] == "acme.localhost", d["source"]
   # a set without a site config has no key to carry: the warning is about the backup
   make_set acme.localhost 20260906_090000
   rm -f "$BENCH"/sites/acme.localhost/private/backups/20260906_090000-acme_localhost-site_config_backup.json
+  # the plan document says it is a dry run
+  run_json site restore acme.localhost --from 20260906_090000 --dry-run --json --bench-dir "$BENCH"
+  assert_eq "True" "$(printf '%s' "$OUT" | jget - 'd["dry_run"]')" "$OUT"
   run_fm site restore acme.localhost --from 20260906_090000 --yes --bench-dir "$BENCH"
   assert_eq "0" "$CODE" "$OUT"
   assert_contains "$OUT" "the backup has no encryption_key"

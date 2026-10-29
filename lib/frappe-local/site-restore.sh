@@ -237,7 +237,7 @@ fl_srestore_plan() {
   fl_site_default_file_v default
   s="$(printf 'sites\n%s\ndefault\n%s\nhook\n%s\nset\n%s\nbench-running\n%s\n' "$(fl_sites_list)" "$default" "$SR_HOOK_SHA" "$SR_SET_JSON" "$FL_PULL_QUIESCE")"
   SR_TOKEN="$(printf '%s\n%s\n' "$SR_PLAN_BODY" "$s" | shasum -a 256 | awk '{print $1}')"
-  SR_PLAN_JSON="$(printf '{"schema_version":%d,"cli_version":"%s",%s,"token":"%s"}' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$SR_PLAN_BODY" "$SR_TOKEN")"
+  SR_PLAN_JSON="$(printf '{"schema_version":%d,"cli_version":"%s","dry_run":true,%s,"token":"%s"}' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$SR_PLAN_BODY" "$SR_TOKEN")"
 }
 
 # fl_srestore_step_touches ID: what a step changes, as a JSON array
