@@ -19,8 +19,9 @@
 # tests/test-agent-contracts.sh fails when a label of a dispatcher has no
 # cmd record here.
 
-fl_cmd_table() {
-  cat <<'TABLE'
+# The table is read into a variable with the read builtin: status and list
+# are polled and start no process, and `cat` is one.
+read -r -d '' FL_CMD_TABLE <<'TABLE' || true
 cmd~install~benchbar install [--profile NAME] [--bundle NAME] [--dry-run] [--yes] [--json]~Phase 00 (system dependencies), 01 (bench and site) and the background service, idempotent.~yes~yes~yes~yes~stream
 flag~install~--profile~NAME~Release profile (default v15-lts) or a team profile.
 flag~install~--bundle~NAME~App bundle: minimal, common or extended.
@@ -150,7 +151,8 @@ cmd~profile update~benchbar profile update NAME|--all [--plan] [--json]~Fetch an
 cmd~profile remove~benchbar profile remove NAME [--yes] [--json]~Move an import or subscription aside.~yes~no~no~yes~document
 cmd~profile check~benchbar profile check NAME [--json]~Can git read every repo with your credentials?~no~no~yes~no~document
 TABLE
-}
+
+fl_cmd_table() { printf '%s\n' "$FL_CMD_TABLE"; }
 
 # Options every command takes, for the help text and `commands --json`.
 fl_cmd_global_flags() {

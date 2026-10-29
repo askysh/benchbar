@@ -72,7 +72,7 @@ fl_sites_json_v() {
   while IFS= read -r __s; do
     [[ -n "$__s" ]] || continue
     __ping=""
-    if [[ "$__mode" == "ask" || ( "$__mode" == "ping" && "$__listening" == "1" ) ]]; then
+    if [[ "$__mode" == "ask" && "${ST_PROCS:-1}" == "1" ]] || [[ "$__mode" == "ping" && "$__listening" == "1" ]]; then
       if [[ "$__s" == "$FL_SITE" && -n "$FL_DEFAULT_PING" ]]; then __ping="$FL_DEFAULT_PING"; else __ping="$(fl_site_curl_code "$__s" 3)"; fi
       [[ "$__ping" == "000" ]] && __ping=""
     fi

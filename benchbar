@@ -421,7 +421,12 @@ fl_json_mode_resolve() {
     "site backup"|"site drop"|"app add") FL_JSON_MODE=doc ;;
   esac
 }
-fl_json_mode_resolve
+# status, list and the other readers are polled: they skip the table unless
+# --for-agent asks for it
+case "$COMMAND" in
+  install|adopt|repair|pull|up|down|restart|service|site|app|ports) fl_json_mode_resolve ;;
+  *) if [[ "$OPT_FOR_AGENT" == "1" ]]; then fl_json_mode_resolve; fi ;;
+esac
 
 # fl_app_focus_is_listing ARGS...: "app focus" with no app name lists the
 # focus apps (a read), with any of --list, --json, --fetch
@@ -980,7 +985,13 @@ cmd_doctor() {
   if [[ "$OPT_FIX_HINTS" == "1" ]]; then exec 3>&1 1>&2; FL_PLAIN=1; fl_ui_init; fi
   fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
   fl_require_bench
+  # doctor --unack CHECK: no report needed
+  if [[ -n "$OPT_UNACK" ]]; then fl_doctor_unack "$OPT_UNACK"; return 0; fi
+  [[ "$OPT_QUICK" != "1" || -n "$OPT_ACK" ]] || FL_DOCTOR_QUICK=1
   fl_doctor_run
+  # doctor --ack CHECK: records the warning it is about, then stops
+  if [[ -n "$OPT_ACK" ]]; then fl_doctor_ack "$OPT_ACK"; return 0; fi
+  fl_doctor_apply_acks
   # the prerequisites ride in doctor --json only: a plain doctor keeps its
   # promise of a fix line after every WARN and FAIL, and of exit 1 on a FAIL
   [[ "$OPT_JSON" != "1" || "$OPT_FIX_HINTS" == "1" ]] || fl_prereq_run

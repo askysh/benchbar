@@ -27,7 +27,23 @@ fl__lock_write_pid() {
   local dir="$1" tmp
   tmp="$(mktemp "${dir}/.pid.XXXXXX" 2>/dev/null)" || return 1
   printf '%s\n' "$$" >"$tmp" || { rm -f "$tmp"; return 1; }
-  mv -f "$tmp" "${dir}/pid"
+  mv -f "$tmp" "${dir}/pid" || return 1
+  # what holds the lock and since when, for the line that reclaims it once the
+  # holder is dead (the command word and its subcommand only, never an argument)
+  printf '%s %s\t%s\n' "${COMMAND:-benchbar}" "${ARGS[0]:-}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"${dir}/info" 2>/dev/null || true
+}
+
+# fl__lock_info DIR: "benchbar site add, started 2026-10-29T10:00:00Z" from the
+# lock's info file, nothing without one
+fl__lock_info() {
+  local line cmd when
+  [[ -r "${1}/info" ]] || return 0
+  IFS= read -r line <"${1}/info" || true
+  cmd="${line%%$'\t'*}"; when="${line#*$'\t'}"
+  cmd="${cmd% }"
+  [[ -n "$cmd" ]] || return 0
+  printf 'benchbar %s' "$cmd"
+  [[ "$when" == "$line" || -z "$when" ]] || printf ', started %s' "$when"
 }
 
 # age in seconds of a path, from its mtime (BSD and GNU stat)
@@ -44,7 +60,7 @@ fl__lock_age() {
 # fl_lock_acquire [DIR] [WHAT]: takes the lock DIR (default: the state
 # folder's) or dies naming the live owner. WHAT names it in messages.
 fl_lock_acquire() {
-  local dir="${1:-${FL_STATE_DIR}/lock}" what="${2:-}" owner try stale guard now
+  local dir="${1:-${FL_STATE_DIR}/lock}" what="${2:-}" owner try stale guard now held_by
   [[ "${FL_DRY_RUN:-0}" == "1" ]] && return 0
   mkdir -p "$(dirname "$dir")" 2>/dev/null || true
   for try in 1 2 3 4 5; do
@@ -84,8 +100,9 @@ fl_lock_acquire() {
     if mkdir "$guard" 2>/dev/null; then
       now="$(cat "$dir/pid" 2>/dev/null || true)"
       stale="${dir}.stale.$$"
+      held_by="$(fl__lock_info "$dir")"
       if [[ "$now" == "$owner" ]] && mv "$dir" "$stale" 2>/dev/null; then
-        fl_warn "Reclaiming stale lock left by pid ${owner:-unknown}"
+        fl_warn "Reclaiming stale lock left by pid ${owner:-unknown}${held_by:+ (${held_by})}"
         rm -rf "$stale"
       fi
       rmdir "$guard" 2>/dev/null || true

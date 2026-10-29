@@ -359,4 +359,146 @@ rm -rf "$MOCK_STATE/keychain"
 run_fm site add noniuser3 --for-agent --bench-dir "$BENCH"
 assert_eq "1" "$CODE"; assert_contains "$OUT" "ADMIN_PASSWORD"
 
+# ---------------------------------------------------------------- 4. honest state fields
+
+# bench_bin: the bench the service runs, from the PATH its agent bakes in; null when there is none
+run_fm status --json --bench-dir "$BENCH"
+assert_eq "None" "$(printf '%s' "$OUT" | jget - 'd["bench_bin"]')"
+printf '#!/bin/sh\nexit 0\n' >"$HOME/.local/bin/bench"; chmod +x "$HOME/.local/bin/bench"
+reset_calls
+run_fm status --json --bench-dir "$BENCH"
+assert_eq "$HOME/.local/bin/bench" "$(printf '%s' "$OUT" | jget - 'd["bench_bin"]')"
+# it costs the status path no process (launchctl is the one the state already needs)
+assert_calls_not_contain '^(bench|which|command) ' "(bench_bin starts nothing)"
+rm -f "$HOME/.local/bin/bench"
+# the same state_after of a done carries it
+printf '#!/bin/sh\nexit 0\n' >"$HOME/.local/bin/bench"; chmod +x "$HOME/.local/bin/bench"
+stream down --json --bench-dir "$BENCH"
+assert_eq "$HOME/.local/bin/bench" "$(sx 'e[-1]["state_after"]["bench_bin"]')"
+rm -f "$HOME/.local/bin/bench"
+
+# not_adopted: a folder that is a bench, with no service of benchbar's and not remembered
+NA="$HOME/elsewhere/na-bench"
+make_fake_bench "$NA" na-site
+mkdir -p "$HOME/elsewhere/empty-bench/sites" "$HOME/elsewhere/empty-bench/apps/frappe"
+printf '{}\n' >"$HOME/elsewhere/empty-bench/sites/common_site_config.json"
+run_fm status --json --bench-dir "$NA"
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "not_adopted None None" "$(printf '%s' "$OUT" | jget - '" ".join(str(x) for x in (d["state"], d["site"], d["web_url"]))')"
+assert_eq "False" "$(printf '%s' "$OUT" | jget - 'any(s["default"] for s in d["sites"])')" "(no site of this bench is marked default)"
+assert_not_contains "$OUT" "macdev" "(the default bench's site never leaks into another bench's status)"
+run_fm status --json --bench-dir "$HOME/elsewhere/empty-bench"
+assert_eq "not_adopted None" "$(printf '%s' "$OUT" | jget - '" ".join(str(x) for x in (d["state"], d["site"]))')"
+assert_not_contains "$OUT" "macdev"
+run_fm status --bench-dir "$NA"
+assert_contains "$OUT" "does not manage this bench yet"
+# remembered (register), or with a service of its own: no longer not_adopted
+run_fm register "$NA"
+run_fm status --json --bench-dir "$NA"
+assert_eq "stopped na-site" "$(printf '%s' "$OUT" | jget - '" ".join(str(x) for x in (d["state"], d["site"]))')"
+# the default bench and a bench with a service are never not_adopted
+run_fm status --json --bench-dir "$BENCH"
+assert_eq "stopped" "$(printf '%s' "$OUT" | jget - 'd["state"]')"
+# list --json still lists it, and it costs the same
+run_fm list --json
+assert_eq "True" "$(printf '%s' "$OUT" | jget - 'any(b["path"] == "'"$NA"'" for b in d["benches"])')"
+
+# the ping rules: status --ping asks every site only while the bench runs; a stopped bench starts nothing and asks nothing
+reset_calls
+stream down --json --bench-dir "$BENCH"
+reset_calls
+run_fm status --json --ping --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_calls_not_contain '^curl ' "(a stopped bench is not pinged, site by site)"
+assert_calls_not_contain '^launchctl (kickstart|bootstrap)' "(status never starts)"
+assert_eq "True" "$(printf '%s' "$OUT" | jget - 'all(s["ping_code"] is None for s in d["sites"])')"
+reset_calls
+run_fm list --json
+assert_calls_not_contain '^curl ' "(list never pings, at rest or running)"
+add_proc 4242 "honcho start -f Procfile.lean" "$BENCH"
+export MOCK_CURL_CODE=200
+reset_calls
+run_fm status --json --ping --bench-dir "$BENCH"
+assert_eq "200" "$(printf '%s' "$OUT" | jget - '[s["ping_code"] for s in d["sites"] if s["default"]][0]')"
+assert_calls_contain '^curl ' "(a running bench is pinged)"
+reset_calls
+run_fm list --json
+assert_calls_not_contain '^curl ' "(list never pings)"
+: >"$MOCK_PROCS"; unset MOCK_CURL_CODE
+
+# ---------------------------------------------------------------- 5. doctor --ack, --quick and the lock's owner
+
+mkdir -p "$HOME/Applications/CleanMyMac X.app"
+dj() { run_json doctor --json --bench-dir "$BENCH"; }
+dj
+assert_eq "warn False []" "$(printf '%s' "$OUT" | jget - '" ".join(str(x) for x in ([c for c in d["checks"] if c["id"] == "cleanmymac"][0]["level"], [c for c in d["checks"] if c["id"] == "cleanmymac"][0]["acked"], d["acked"]))')"
+WARNS_BEFORE="$(printf '%s' "$OUT" | jget - 'd["summary"]["warn"]')"
+# ack: recorded, with the message it acknowledged
+run_fm doctor --ack cleanmymac --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "acknowledged cleanmymac"
+dj
+assert_eq "warn True cleanmymac" "$(printf '%s' "$OUT" | jget - '" ".join(str(x) for x in ([c for c in d["checks"] if c["id"] == "cleanmymac"][0]["level"], [c for c in d["checks"] if c["id"] == "cleanmymac"][0]["acked"], ",".join(d["acked"])))')"
+assert_eq "$WARNS_BEFORE" "$(printf '%s' "$OUT" | jget - 'd["summary"]["warn"]')" "(the check is kept at level warn)"
+run_fm doctor --bench-dir "$BENCH"
+assert_contains "$OUT" "acked: CleanMyMac"
+assert_not_contains "$OUT" "[WARN] CleanMyMac"
+run_fm doctor --fix-hints --bench-dir "$BENCH"
+assert_not_contains "$OUT" "Ignore List" "(--fix-hints leaves an acked warning out)"
+# ack is per bench
+run_json doctor --json --bench-dir "$B2"
+assert_eq "False" "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "cleanmymac"][0]["acked"]')"
+# the message changes: the ack lapses
+mv "$HOME/Applications/CleanMyMac X.app" "$HOME/Applications/CleanMyMac Pro.app"
+dj
+assert_eq "False" "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "cleanmymac"][0]["acked"]')"
+run_fm doctor --bench-dir "$BENCH"
+assert_contains "$OUT" "[WARN] CleanMyMac"
+# unack, twice
+run_fm doctor --unack cleanmymac --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "no longer acknowledged"
+run_fm doctor --unack cleanmymac --bench-dir "$BENCH"
+assert_contains "$OUT" "was not acknowledged"
+# a FAIL cannot be acked; an unknown id and an ok check say so
+mv "$BENCH/env/bin/python" "$BENCH/env/bin/python.x"
+run_fm doctor --ack env_python --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "cannot be acknowledged"
+mv "$BENCH/env/bin/python.x" "$BENCH/env/bin/python"
+run_fm doctor --ack nosuchcheck --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "No check named"
+run_fm doctor --ack honcho --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "nothing to acknowledge"
+rm -rf "$HOME/Applications/CleanMyMac Pro.app"
+
+# --quick: the slow checks are left out and named
+export MOCK_CURL_CODE=200
+reset_calls
+run_json doctor --json --quick --bench-dir "$BENCH"
+assert_eq "True" "$(printf '%s' "$OUT" | jget - 'd["quick"] and "ping" in d["skipped_checks"] and "bench_version" in d["skipped_checks"] and not any(c["id"] in d["skipped_checks"] for c in d["checks"])')"
+assert_calls_not_contain '^curl ' "(the site ping is a slow check)"
+dj
+assert_eq "False []" "$(printf '%s' "$OUT" | jget - '" ".join(str(x) for x in (d["quick"], d["skipped_checks"]))')"
+run_fm doctor --quick --bench-dir "$BENCH"
+assert_contains "$OUT" "quick: skipped the slow checks:"
+unset MOCK_CURL_CODE
+
+# the lock: "Reclaiming stale lock left by pid N" says what held it and since when
+(
+  set +e
+  # shellcheck source=lib/frappe-local/ui.sh
+  . "$ROOT/lib/frappe-local/ui.sh"
+  # shellcheck source=lib/frappe-local/lock.sh
+  . "$ROOT/lib/frappe-local/lock.sh"
+  COMMAND=site; ARGS=(add x)
+  fl_lock_acquire "$TMP_DIR/lockinfo" >/dev/null 2>&1
+  printf '%s' "$(cat "$TMP_DIR/lockinfo/info")" >"$TMP_DIR/lockinfo.txt"
+  fl_lock_release
+)
+assert_contains "$(cat "$TMP_DIR/lockinfo.txt")" "site add"
+assert_not_contains "$(cat "$TMP_DIR/lockinfo.txt")" " x" "(the subcommand only, never an argument)"
+mkdir -p "$FL_STATE_DIR/lock"; printf '999999\n' >"$FL_STATE_DIR/lock/pid"
+printf 'site add\t2026-10-29T10:00:00Z\n' >"$FL_STATE_DIR/lock/info"
+run_fm service --yes --bench-dir "$B2"
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "Reclaiming stale lock left by pid 999999 (benchbar site add, started 2026-10-29T10:00:00Z)"
+
 printf 'test-agent-contracts: ok\n'

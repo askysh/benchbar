@@ -554,6 +554,11 @@ fl_bstate_prime() {
 # The current bench (FL_BENCH_DIR).
 fl_bstate_get() { fl_bstate_get_for "$FL_BENCH_DIR" "$1"; }
 fl_bstate_set() { fl_bstate_set_for "$FL_BENCH_DIR" "$1" "$2"; }
+# fl_bstate_del KEY: the key leaves the current bench's own file
+fl_bstate_del() {
+  [[ "$FL_BENCH_DIR" == "$FL_BS_DIR" ]] && FL_BS_DIR=""
+  fl_kv_del "$(fl_bench_state_file_for "$FL_BENCH_DIR")" "$1"
+}
 
 # fl_bench_state_migrate DIR: moves the pre 0.4 per bench keys from
 # state.env into DIR's own file (only when DIR is the default bench they

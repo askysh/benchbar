@@ -393,6 +393,8 @@ fl_cmd_status() {
     fl_ok "site responds"
   elif [[ "$ST_PROCS" == "1" ]]; then
     fl_warn "processes are running but the site does not respond (ping ${ST_PING}); see: ${FL_SELF} logs"
+  elif [[ "$ST_STATE" == "not_adopted" ]]; then
+    fl_info "benchbar does not manage this bench yet (no service, not remembered); register it with: ${FL_SELF} adopt ${FL_BENCH_DIR}"
   else
     case "$ST_FLAG" in
       crash) fl_warn "auto-restart paused after repeated crashes; run: ${FL_SELF} logs, fix, then benchup" ;;
