@@ -11,7 +11,7 @@
 # Groups (used by "benchbar service" versus "benchbar repair"):
 #   system, bench, service, site
 
-FL_CHECK_ORDER="brew formula_dates python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac mole app_copies full_disk_access env_python env_setuptools bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy app_update_pending app_add_pending dependency_behind apps_behind lock_parse lock_drift profile_outdated logs bench_path honcho honcho_setuptools procfile runner agent runner_heartbeat fork_safety scheduler stop_flag helpers cli_link cli_duplicate legacy_agents dead_agents hosts port_clash orphans ping"
+FL_CHECK_ORDER="brew formula_dates python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac mole app_copies full_disk_access env_python env_setuptools bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy app_update_pending app_add_pending dependency_behind apps_behind lock_parse lock_drift profile_outdated logs bench_path honcho honcho_setuptools procfile runner agent runner_heartbeat fork_safety scheduler stop_flag helpers cli_link cli_duplicate legacy_agents dead_agents hosts port_clash orphans ping site_not_served"
 FL_LOG_WARN_MB="${FL_LOG_WARN_MB:-50}"
 # doctor --quick leaves these out: they start brew, python, node, bench, git
 # or ask the site, which takes seconds each; the JSON names them (skipped_checks)
@@ -33,7 +33,7 @@ fl_check_group() {
     brew|formula_dates|python_leaves|mariadb_bind|mariadb_utf8|pdf_engine|redis_6379|cleanmymac|mole|app_copies|full_disk_access|wsl_time_sync) printf 'system' ;;
     env_python|env_setuptools|bench_version|toolchain_*|socketio|assets|apps_txt|app_branch_policy|app_update_pending|app_add_pending|dependency_behind|apps_behind|lock_parse|lock_drift|logs) printf 'bench' ;;
     profile_outdated) printf 'bench' ;;
-    ping) printf 'site' ;;
+    ping|site_not_served) printf 'site' ;;
     *) printf 'service' ;;
   esac
 }
@@ -71,6 +71,7 @@ fl_check_label() {
     pdf_engine) printf 'PDF engine' ;;
     redis_6379) printf 'Homebrew redis' ;;
     ping) printf 'Site ping' ;;
+    site_not_served) printf 'Sites served' ;;
     hosts) printf '/etc/hosts entry' ;;
     logs) printf 'Log sizes' ;;
     bench_path) printf 'Bench path' ;;
@@ -919,14 +920,48 @@ chk_ping() {
     return 0
   fi
   reason="$(fl_stop_flag_reason)"
-  if fl_bench_is_running; then
+  if fl_bench_is_serving; then
     chk__set fail "bench processes are running but ping returned ${code}" "${FL_SELF} logs"
+  elif fl_bench_is_running; then
+    chk__set ok "services only: the bench's Redis runs, nothing serves the site (ping ${code}); ${FL_SELF} down stops it, benchup starts the bench"
   elif [[ "$reason" == "manual" || -z "$reason" && ! -f "$(fl_runner_path)" ]]; then
     chk__set ok "bench is stopped; start it with benchup"
   elif [[ "$reason" == "crash" || "$reason" == "broken" || "$reason" == "port_conflict" ]]; then
     chk__set warn "bench is paused (${reason}); fix, then benchup" "${FL_SELF} logs"
   else
     chk__set warn "bench is not running (ping ${code})" "benchup"
+  fi
+}
+
+# A site folder on the bench that the running web process does not serve: its
+# Host header gets a 404. Asked only while the bench runs (a stopped bench is
+# never pinged), one GET per site, in bash.
+chk_site_not_served() {
+  local s served bad="" n=0 code end
+  if ! fl_bench_is_serving; then
+    chk__set ok "the bench is not running; no site is asked"
+    return 0
+  fi
+  # as status: nobody is asked when the default site does not answer, and all the
+  # probes share a 2 second budget (what is left is not judged)
+  code="$(fl_site_ping_code)"
+  if [[ "$code" == "000" ]]; then
+    chk__set ok "the default site does not answer its ping; no other site is asked"
+    return 0
+  fi
+  end=$((SECONDS + 2))
+  while IFS= read -r s; do
+    [[ -n "$s" && "$SECONDS" -lt "$end" ]] || continue
+    fl_http_code_v code "$s" "$FL_WEB_PORT" /api/method/ping 1
+    fl_site_served_v served "$s" "$code"
+    [[ "$served" == "false" ]] && bad="${bad}${bad:+, }${s}"
+    n=$((n + 1))
+  done < <(fl_sites_list)
+  if [[ -n "$bad" ]]; then
+    chk__set warn "the web process on port ${FL_WEB_PORT} answers 404 for ${bad}: the site is in ${FL_BENCH_DIR}/sites, the running bench does not serve it" \
+      "${FL_SELF} restart --bench-dir ${FL_BENCH_DIR}   (then: ${FL_SELF} status --json shows sites[].served)"
+  else
+    chk__set ok "the running bench serves every site it was asked about (${n})"
   fi
 }
 
@@ -1287,7 +1322,7 @@ chk_fork_safety() {
 # stop. One whose folder lsof cannot read is reported, not stopped: it may be
 # another bench's or another program's, and benchbar never kills on a guess.
 chk_orphans() {
-  local port who pid cwd held="" unknown="" foreign="" first_unknown=""
+  local port who pid cwd held="" redis_held="" unknown="" foreign="" first_unknown=""
   [[ "$(fl_agent_field state)" == "running" ]] && { chk__set ok "the agent runs this bench"; return 0; }
   if [[ -n "$(fl_bench_any_honcho_pids)" ]]; then
     chk__set ok "honcho is running (benchfg or bench start)"
@@ -1301,13 +1336,23 @@ chk_orphans() {
     if [[ -z "$cwd" ]]; then
       unknown="${unknown}${unknown:+, }${port} (pid ${pid} ${who#* })"; first_unknown="${first_unknown:-$pid}"
     elif [[ "$cwd" == "$FL_BENCH_DIR" || "$cwd" == "$FL_BENCH_DIR"/* ]]; then
-      held="${held}${held:+, }${port} (pid ${pid} ${who#* })"
+      if [[ "$port" == "$FL_REDIS_QUEUE_PORT" || "$port" == "$FL_REDIS_CACHE_PORT" ]]; then
+        redis_held="${redis_held}${redis_held:+, }${port} (pid ${pid} ${who#* })"
+      else
+        held="${held}${held:+, }${port} (pid ${pid} ${who#* })"
+      fi
     else
       foreign="${foreign}${foreign:+, }${port} (pid ${pid} ${who#* } in ${cwd})"
     fi
   done
   # every holder is named in one line, so a second doctor is not needed to
   # learn about the ones "down" will leave; the fix is for the first kind found
+  if [[ -z "$held$unknown$foreign" && -n "$redis_held" ]]; then
+    # the bench's own Redis and nothing else: up --services-only, which down stops
+    chk__set ok "services only: the bench's Redis runs on ${redis_held}; ${FL_SELF} down stops it"
+    return 0
+  fi
+  held="${held}${held:+${redis_held:+, }}${redis_held}"
   if [[ -z "$held$unknown$foreign" ]]; then
     chk__set ok "no stale process holds ${FL_WEB_PORT}, ${FL_SOCKETIO_PORT}, ${FL_REDIS_QUEUE_PORT} or ${FL_REDIS_CACHE_PORT}"
     return 0

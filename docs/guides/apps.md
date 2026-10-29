@@ -40,6 +40,11 @@ apps from `hooks.py` included, with a token; `--apply TOKEN --yes` runs
 exactly that plan without a question. Coding agents add apps this way
 (see [Coding agents and MCP](agents.md#adding-an-app)).
 
+`--commit SHA` pins an app to a commit, and several apps can share one
+plan and one token: `app add A --commit SHA B --install-on s1,s2`. The
+options belong to the app before them. See
+[app add](../reference/cli/app.md#app-add).
+
 ## Installing on a site
 
 `app install NAME --site S` installs an app the bench already has on one

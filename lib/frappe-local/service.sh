@@ -272,6 +272,49 @@ fl_check_port_clash_or_confirm() {
   fl_confirm "Other stopped benches use these ports. Start this bench without changing its address?"
 }
 
+# up --services-only: the bench's Redis (queue and cache) and nothing else, for
+# a restore or a migrate on a bench that is not running. No agent, runner, web
+# process or stop flag is touched, and the service need not be installed.
+# The Redis stays up after the command; down stops it (it stops every
+# listener that runs in the bench).
+fl_cmd_up_services_only() {
+  local port i
+  fl_require_bench
+  if fl_pm_running; then
+    fl_ok "bench ${FL_BENCH_NAME} is running; its Redis is up already"
+    return 0
+  fi
+  if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
+    fl_bench_redis_up "$FL_BENCH_DIR"
+    return 0
+  fi
+  fl_daily_steps start_redis:"Start the bench's Redis"
+  fl_step_begin 0
+  FL_SETUP_REDIS_PORTS=""
+  fl_bench_redis_up "$FL_BENCH_DIR"
+  for port in "$FL_REDIS_QUEUE_PORT" "$FL_REDIS_CACHE_PORT"; do
+    i=0
+    until fl_port_listening "$port"; do
+      i=$((i + 1))
+      if [[ "$i" -gt 10 ]]; then
+        # what this run started does not stay half up
+        fl_bench_redis_down
+        fl_step_end failed
+        fl_fail "nothing listens on port ${port} after starting the Redis of ${FL_BENCH_NAME}"
+        fl_fix "cd ${FL_BENCH_DIR} && redis-server config/redis_queue.conf --daemonize yes   (and config/redis_cache.conf)"
+        return 1
+      fi
+      sleep 0.5
+    done
+  done
+  # it stays running: not the setup Redis of a command that stops it again
+  FL_SETUP_REDIS_PORTS=""
+  fl_step_end "done"
+  fl_changed process "$FL_BENCH_NAME" "Redis started (queue ${FL_REDIS_QUEUE_PORT}, cache ${FL_REDIS_CACHE_PORT})"
+  fl_ok "Redis of ${FL_BENCH_NAME} is up (queue ${FL_REDIS_QUEUE_PORT}, cache ${FL_REDIS_CACHE_PORT}); nothing else was started"
+  fl_info "stop it with: ${FL_SELF} down --bench-dir ${FL_BENCH_DIR}"
+}
+
 # fl_daily_steps ID:LABEL...: the steps of up, down and restart for the
 # stream (step lines with ids); the terminal keeps the one line each prints
 fl_daily_steps() {
@@ -283,6 +326,14 @@ fl_daily_steps() {
 }
 
 fl_cmd_up() {
+  local a services_only=0
+  for a in "$@"; do
+    case "$a" in
+      --services-only) services_only=1 ;;
+      *) fl_die "Unknown option for up: $a" "Use: benchbar up [--services-only]" ;;
+    esac
+  done
+  if [[ "$services_only" == "1" ]]; then fl_cmd_up_services_only; return; fi
   fl_require_plain_bench
   fl_require_service
   if fl_pm_running; then
@@ -331,6 +382,30 @@ fl_cmd_down() {
   fi
   fl_daily_steps stop_processes:"Stop the bench's processes"
   fl_step_begin 0
+  # no bench process and no running agent: at most a Redis from up --services-only
+  # is left (an installed agent stays loaded, so "loaded" says nothing). Stop that
+  # one; an existing stop flag (crash, broken, port_conflict) and the state file
+  # stay as they are, and there is nothing to wait for.
+  if ! fl_pm_running && [[ "$(fl_agent_field state 2>/dev/null || true)" != "running" ]]; then
+    # the flag first: a restart in the window between the signal and the flag would bring the bench back
+    if [[ ! -s "$flag" ]]; then
+      mkdir -p "$(dirname "$flag")"
+      printf 'manual\n' >"$flag"
+      fl_state_json_write stopped manual "" "$(fl_state_json_get started_at)" "$(fl_state_json_get last_exit_code)" ""
+    fi
+    if fl_agent_loaded; then fl_agent_signal SIGTERM || true; fi
+    fl_bench_kill_processes TERM
+    fl_bench_wait_stopped 3 || fl_bench_kill_processes KILL
+    if fl_bench_is_running; then
+      fl_step_end failed
+      fl_fail "some bench processes are still alive: $(fl_bench_process_pids | tr '\n' ' ')"
+      return 1
+    fi
+    fl_step_end "done"
+    fl_changed process "$FL_BENCH_NAME" "stopped"
+    fl_ok "bench ${FL_BENCH_NAME} is stopped (nothing but its Redis was running)"
+    return 0
+  fi
   mkdir -p "$(dirname "$flag")"
   printf 'manual\n' >"$flag"
   if fl_agent_loaded; then fl_agent_signal SIGTERM; fi

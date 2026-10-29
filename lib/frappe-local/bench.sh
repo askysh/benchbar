@@ -171,8 +171,13 @@ fl__in_dir() {
   (cd "$dir" && "$@")
 }
 
+# fl_bench_init_if_needed DIR FRAPPE_REF PYTHON [REPAIR] [SKIP_ASSETS]: SKIP_ASSETS=1
+# (a frappe commit pin) leaves the first build to the caller, which builds
+# once the pinned commit is checked out, so a commit the clone does not
+# reach is found before anything is built.
 fl_bench_init_if_needed() {
-  local bench_dir="$1" frappe_ref="$2" python_bin="$3" repair="${4:-0}" timestamp backup
+  local bench_dir="$1" frappe_ref="$2" python_bin="$3" repair="${4:-0}" skip_assets="${5:-0}" timestamp backup init_extra=()
+  [[ "$skip_assets" == "1" ]] && init_extra+=(--skip-assets)
   local timeout_seconds="${BENCH_INIT_TIMEOUT_SECONDS:-2700}"
   fl_section "BENCH INIT"
   fl_info "Checking bench directory ${bench_dir}"
@@ -202,33 +207,97 @@ fl_bench_init_if_needed() {
   fi
   fl_info "Running bench init for frappe ref ${frappe_ref}"
   fl_info "bench init timeout: $((timeout_seconds / 60)) minutes"
-  fl_run_with_timeout "$timeout_seconds" "bench init" bench init "$bench_dir" --frappe-branch "$frappe_ref" --python "$python_bin" --no-backups --verbose \
-    || fl_die "bench init failed." "Manual command: bench init ${bench_dir} --frappe-branch ${frappe_ref} --python ${python_bin} --no-backups --verbose"
+  fl_run_with_timeout "$timeout_seconds" "bench init" bench init "$bench_dir" --frappe-branch "$frappe_ref" --python "$python_bin" --no-backups --verbose ${init_extra[@]+"${init_extra[@]}"} \
+    || fl_die "bench init failed." "Manual command: bench init ${bench_dir} --frappe-branch ${frappe_ref} --python ${python_bin} --no-backups --verbose${init_extra[*]:+ ${init_extra[*]}}"
+  [[ "$skip_assets" != "1" ]] || fl_needs_build_mark "$bench_dir"
   fl_state_set BENCH_INIT complete
   fl_changed bench "$bench_dir" "created with frappe ${frappe_ref}"
 }
 
+# fl_commit_present DIR SHA: SHA is a commit of the clone in DIR
+fl_commit_present() {
+  git -C "$1" cat-file -e "${2}^{commit}" >/dev/null 2>&1
+}
+
+# fl_commit_reach DIR SHA: true when the clone in DIR has commit SHA, after
+# fetching it when it does not (every remote's branches and tags, then the
+# rest of a shallow history). Git never asks a question here.
+fl_commit_reach() {
+  local dir="$1" sha="$2" remote
+  fl_commit_present "$dir" "$sha" && return 0
+  env GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes' git -C "$dir" fetch --all --tags --quiet >>"${FL_LOG_FILE:-/dev/null}" 2>&1 || true
+  fl_commit_present "$dir" "$sha" && return 0
+  if [[ "$(git -C "$dir" rev-parse --is-shallow-repository 2>/dev/null || true)" == "true" ]]; then
+    env GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes' git -C "$dir" fetch --all --tags --unshallow --quiet >>"${FL_LOG_FILE:-/dev/null}" 2>&1 || true
+  fi
+  fl_commit_present "$dir" "$sha" && return 0
+  # a single branch clone has not seen a commit that is on another branch: the
+  # remote may hand out a commit it has by its hash (GitHub does)
+  for remote in $(git -C "$dir" remote 2>/dev/null || true); do
+    env GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes' git -C "$dir" fetch --quiet "$remote" "$sha" >>"${FL_LOG_FILE:-/dev/null}" 2>&1 || true
+    fl_commit_present "$dir" "$sha" && return 0
+  done
+  return 1
+}
+
+# A build that was left for later (bench init or get-app with --skip-assets,
+# then a refused pin or a failure): the marker tells the next run to build.
+fl_needs_build_marker() { printf '%s/logs/.benchbar/needs-build' "$1"; }
+fl_needs_build_mark() {
+  [[ "${FL_DRY_RUN:-0}" == "1" || ! -d "$1" ]] && return 0
+  mkdir -p "${1}/logs/.benchbar" 2>/dev/null && date -u +%Y-%m-%dT%H:%M:%SZ >"$(fl_needs_build_marker "$1")" 2>/dev/null || true
+}
+
+# fl_pin_app_commit BENCH APP SHA BRANCH: APP's clone onto the pinned commit.
+# A commit the clone does not reach stops the run here, before the build
+# that follows a pin (the callers get-app with --skip-assets for it).
+fl_pin_app_commit() {
+  local bench_dir="$1" app="$2" sha="$3" branch="${4:-}" dir full head
+  dir="${bench_dir}/apps/${app}"
+  [[ -d "${dir}/.git" ]] || return 0
+  if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
+    fl_info "dry-run: git -C ${dir} fetch --all --tags, then git checkout ${sha}"
+    return 0
+  fi
+  # already there: nothing to do, and no rebuild
+  full="$(git -C "$dir" rev-parse -q --verify "${sha}^{commit}" 2>/dev/null || true)"
+  head="$(git -C "$dir" rev-parse -q HEAD 2>/dev/null || true)"
+  if [[ -n "$full" && "$full" == "$head" ]]; then
+    fl_ok "${app} is at the pinned commit ${sha}"
+    return 0
+  fi
+  fl_warn "Pinning ${app} to commit ${sha}"
+  fl_commit_reach "$dir" "$sha" || fl_die "The pinned commit ${sha} of ${app} is not in its clone${branch:+ (branch ${branch})} and its remote did not hand it out; nothing was built." \
+    "Check the commit (it must be on a branch or tag of that repo)$([[ "${#sha}" -ge 40 ]] || printf '; a remote cannot hand out an abbreviated hash, so use the full 40 character hash'), or drop the pin: the next install builds what is there. The clone is ${dir}."
+  fl_run git -C "$dir" checkout --quiet "$sha" \
+    || fl_die "commit checkout failed for ${app}." "Manual command: git -C ${dir} checkout ${sha}"
+  FL_PINS_APPLIED=1
+  fl_needs_build_mark "$bench_dir"
+}
+FL_PINS_APPLIED=0
+
 fl_get_app_if_needed() {
-  local bench_dir="$1" app="$2" branch="$3" repo="${4:-}" commit="${5:-}" pin="${6:-0}"
+  local bench_dir="$1" app="$2" branch="$3" repo="${4:-}" commit="${5:-}" pin="${6:-0}" skip_flag=() was_there=0
+  [[ -d "$bench_dir/apps/$app" ]] && was_there=1
   fl_info "Checking app ${app}"
+  # a pinned app is built once, after its checkout (see fl_pin_app_commit)
+  [[ "$pin" == "1" && -n "$commit" ]] && skip_flag+=(--skip-assets)
   if [[ -d "$bench_dir/apps/$app" ]]; then
     fl_ok "apps/${app} already cloned"
   else
     fl_info "Getting ${app} at ${branch}"
     if [[ -n "$repo" ]]; then
-      fl_bench_run_long "bench get-app ${app} (${branch})" "$bench_dir" bench get-app --branch "$branch" "$repo" \
-        || fl_die "bench get-app failed for ${app}." "Manual command: cd ${bench_dir} && bench get-app --branch ${branch} ${repo}"
+      fl_bench_run_long "bench get-app ${app} (${branch})" "$bench_dir" bench get-app --branch "$branch" ${skip_flag[@]+"${skip_flag[@]}"} "$repo" \
+        || fl_die "bench get-app failed for ${app}." "Manual command: cd ${bench_dir} && bench get-app --branch ${branch}${skip_flag[*]:+ ${skip_flag[*]}} ${repo}"
     else
-      fl_bench_run_long "bench get-app ${app} (${branch})" "$bench_dir" bench get-app --branch "$branch" "$app" \
-        || fl_die "bench get-app failed for ${app}." "Manual command: cd ${bench_dir} && bench get-app --branch ${branch} ${app}"
+      fl_bench_run_long "bench get-app ${app} (${branch})" "$bench_dir" bench get-app --branch "$branch" ${skip_flag[@]+"${skip_flag[@]}"} "$app" \
+        || fl_die "bench get-app failed for ${app}." "Manual command: cd ${bench_dir} && bench get-app --branch ${branch}${skip_flag[*]:+ ${skip_flag[*]}} ${app}"
     fi
     fl_changed app "$app" "cloned at ${branch}"
   fi
-  if [[ "$pin" == "1" && -n "$commit" && -d "$bench_dir/apps/$app/.git" ]]; then
-    fl_warn "Pinning ${app} to commit ${commit}"
-    fl_run git -C "$bench_dir/apps/$app" fetch --all --tags
-    fl_run git -C "$bench_dir/apps/$app" checkout "$commit" \
-      || fl_die "commit checkout failed for ${app}." "Manual command: git -C ${bench_dir}/apps/${app} checkout ${commit}"
+  [[ "${#skip_flag[@]}" -eq 0 || "$was_there" == "1" ]] || fl_needs_build_mark "$bench_dir"
+  if [[ "$pin" == "1" && -n "$commit" ]]; then
+    fl_pin_app_commit "$bench_dir" "$app" "$commit" "$branch"
   fi
   fl_state_set "APP_${app}_CLONED" yes
 }
@@ -368,25 +437,23 @@ fl_site_incomplete() {
   return 0
 }
 
-fl_new_site_if_needed() {
-  local bench_dir="$1" site_name="$2" db_password="$3" admin_password="$4" marker
+# The site's database user may log in from any host (bench connects over TCP
+# to 127.0.0.1): v16 names this --mariadb-user-host-login-scope and calls
+# --no-mariadb-socket deprecated; v15 knows only the old flag.
+fl_new_site_scope() {
+  if [[ "$(fl_profile_major)" -ge 16 ]]; then printf '%s' "--mariadb-user-host-login-scope=%"; else printf '%s' "--no-mariadb-socket"; fi
+}
+
+# fl_new_site_create BENCH SITE DB_PASSWORD ADMIN_PASSWORD: bench new-site
+# inside the "creating" marker (see fl_site_creating_marker). 0 done, 1 the
+# marker could not be written (nothing was started), 2 new-site failed (the
+# marker stays: a rerun must not take the half made site for done).
+fl_new_site_create() {
+  local bench_dir="$1" site_name="$2" db_password="$3" admin_password="$4" marker scope code=0
   marker="$(fl_site_creating_marker "$bench_dir" "$site_name")"
-  fl_section "CREATE SITE"
-  fl_info "Checking site ${site_name}"
-  if [[ -d "$bench_dir/sites/$site_name" ]]; then
-    fl_site_incomplete "$bench_dir" "$site_name" && return 1
-    fl_ok "Site ${site_name} already exists"
-    fl_state_set SITE_CREATED yes
-    return 0
-  fi
-  # the site's database user may log in from any host (bench connects over
-  # TCP to 127.0.0.1): v16 names this --mariadb-user-host-login-scope and
-  # calls --no-mariadb-socket deprecated; v15 knows only the old flag
-  local scope="--no-mariadb-socket"
-  [[ "$(fl_profile_major)" -ge 16 ]] && scope="--mariadb-user-host-login-scope=%"
+  scope="$(fl_new_site_scope)"
   # the passwords travel on stdin (see FL_PY_FRAPPE_SECRETS), never as
   # arguments; plain shell variables (not exported), cleared right after
-  local code=0
   if [[ "${FL_DRY_RUN:-0}" != "1" ]]; then
     mkdir -p "$(dirname "$marker")" 2>/dev/null
     date -u +%Y-%m-%dT%H:%M:%SZ >"$marker" 2>/dev/null || { fl_fail "could not write ${marker}; not starting new-site without it"; return 1; }
@@ -395,11 +462,26 @@ fl_new_site_if_needed() {
   fl_run_long "bench new-site ${site_name}" fl__frappe_with_secrets "$bench_dir" FL__DB_PW FL__ADMIN_PW -- \
     new-site "$site_name" --mariadb-root-password @secret0@ --admin-password @secret1@ "$scope" || code=$?
   FL__DB_PW=""; FL__ADMIN_PW=""
-  if [[ "$code" != "0" ]]; then
-    # the marker stays: a rerun must not take the half made site for done
-    fl_die "bench new-site failed." "Manual command: cd ${bench_dir} && bench new-site ${site_name} ${scope}   (it asks for both passwords). If sites/${site_name} was left behind, move it aside first."
-  fi
+  [[ "$code" == "0" ]] || return 2
   rm -f "$marker"
+}
+
+fl_new_site_if_needed() {
+  local bench_dir="$1" site_name="$2" db_password="$3" admin_password="$4" code=0
+  fl_section "CREATE SITE"
+  fl_info "Checking site ${site_name}"
+  if [[ -d "$bench_dir/sites/$site_name" ]]; then
+    fl_site_incomplete "$bench_dir" "$site_name" && return 1
+    fl_ok "Site ${site_name} already exists"
+    fl_state_set SITE_CREATED yes
+    return 0
+  fi
+  fl_new_site_create "$bench_dir" "$site_name" "$db_password" "$admin_password" || code=$?
+  case "$code" in
+    0) ;;
+    1) return 1 ;;
+    *) fl_die "bench new-site failed." "Manual command: cd ${bench_dir} && bench new-site ${site_name} $(fl_new_site_scope)   (it asks for both passwords). If sites/${site_name} was left behind, move it aside first." ;;
+  esac
   fl_state_set SITE_CREATED yes
   fl_changed site "$site_name" "created"
 }
@@ -436,7 +518,7 @@ fl_verify_site_health() {
     fl_warn "bench doctor reported issues; the site may still be usable."
   fi
   # bench use rewrites currentsite.txt every time; a rerun must write nothing
-  if [[ "$(tr -d '[:space:]' <"$bench_dir/sites/currentsite.txt" 2>/dev/null)" != "$site_name" ]]; then
+  if [[ "$({ tr -d '[:space:]' <"$bench_dir/sites/currentsite.txt"; } 2>/dev/null)" != "$site_name" ]]; then
     fl_bench_run "$bench_dir" bench use "$site_name"
   fi
 }

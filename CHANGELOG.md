@@ -20,6 +20,17 @@ All notable changes to this project are documented here.
   next plan lists the build and the install again (`reason` in the plan
   JSON). Required apps are cloned in dependency order (`order` in the
   plan; a cycle in `required_apps` is a plan error that names it).
+- `app add` pins and batches: `--commit SHA` (7 to 40 hex characters) clones
+  the app and checks the commit out before the build, reads `hooks.py` at
+  that commit, and refuses a clone that does not reach it (`nothing was
+  built or installed`); the plan JSON has `commit_source` (`pin` or
+  `branch`). Several apps in one plan and one token:
+  `app add A --commit SHA B --install-on s1,s2 --dry-run --json` (the
+  options belong to the app before them); their required apps are one
+  dependency graph with one clone each, one build and one restart, and the
+  JSON gains `apps[]`. The `--apply` result reports each app: `cloned`,
+  `clone`, `build` and `installs[]` with the install's `status` and the
+  `migrate` that `install-app` runs.
 - `app add` in a terminal shows the same plan agents review, asks once and
   applies it with the same steps, instead of its own flow with a second
   question for required apps.
@@ -49,6 +60,52 @@ All notable changes to this project are documented here.
 - `logs --json` and `benchbar_logs_tail` return `mtime`, a time per line
   (`ts`), `--since TIME` and `--since-restart`.
 - The line that reclaims a stale lock says which command held it and since when.
+
+- `benchbar site restore TARGET --from STAMP|PATH` restores a backup set
+  into a site of the bench (backed up with its files first) or, with
+  `--new`, into a site it creates. The encryption key of the set comes
+  along, the default site never moves, and the run ends with a check that
+  the site answers `list-apps`. `--dry-run --json` prints the plan, what
+  it touches and a token; `--apply TOKEN --yes` runs exactly that plan and
+  refuses a stale one. `--no-migrate` stops after the restore and
+  `--before-migrate SCRIPT` runs a script of yours before migrate (no
+  secret in its environment; a failing script stops the run).
+- `benchbar pull` creates the local site when it does not exist, takes
+  `--no-migrate` and `--before-migrate` too, and a dry run now refuses a
+  target the restore cannot go into (a folder in `sites/` without a
+  `site_config.json`, a `bench new-site` that did not finish, no MariaDB
+  root password) instead of printing a plan that fails at its first step.
+- `benchbar up --services-only` starts the bench's Redis and nothing else,
+  for a restore or a migrate on a stopped bench; `down` stops it.
+  `status --json` gains `redis` (`queue` and `cache`: `port`, `running`).
+- `status --json` gains `sites[].served`: whether the running bench
+  serves the site (`null` while it is stopped, and a stopped bench is
+  never pinged), and doctor warns with `site_not_served` about a site
+  folder the running web process answers 404 for.
+- Commit pins for frappe and erpnext: `install --frappe-commit SHA
+  --erpnext-commit SHA`, `frappe_commit` and `erpnext_commit` in a team
+  profile (`profile show` and `profile check` print them), and `commit`
+  for any app as before. A pinned clone is fetched without its first
+  build; a commit it does not reach stops the install before anything is
+  built or created.
+
+- MCP tools for sites and services, each a reviewed plan with a token
+  like `benchbar_app_add`: `benchbar_site_add_plan` and `benchbar_site_add`
+  (a throwaway site; the Administrator password is passed or generated and
+  returned once; the default site never moves), `benchbar_site_backup`,
+  `benchbar_site_restore_plan` and `benchbar_site_restore` (`new` for a copy
+  of a site), `benchbar_service_install_plan` and `benchbar_service_install`.
+  `benchbar_app_add_plan` and `benchbar_app_add` take `commit`, `apps` (a
+  batch) and `install_on`. `benchbar_up` takes `services_only`, and on a bench
+  without a service says `service: "missing"` and names the plan tool. Long
+  calls send MCP progress notifications when the client passes a
+  `progressToken`. No tool result or error says where the MariaDB root
+  password is kept. A value that starts with `-` is refused in every
+  argument, the ones inside `apps` too. `benchbar mcp --print-agents-md`
+  prints a snippet for a project's AGENTS.md or CLAUDE.md.
+- `benchbar site add NAME --dry-run --json` prints the plan with a token, and
+  `--apply TOKEN --yes` runs it; `benchbar service --dry-run --json` gains a
+  token, and `service --apply TOKEN --yes` runs that plan.
 
 ### Added
 

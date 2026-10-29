@@ -52,6 +52,8 @@ DRY_RUN=0
 REPAIR_BENCH=0
 APP_BUNDLE="${APP_BUNDLE:-}"
 APPS="${APPS:-}"
+FRAPPE_COMMIT_FLAG=""
+ERPNEXT_COMMIT_FLAG=""
 
 usage() {
   cat <<EOF
@@ -74,6 +76,8 @@ Options:
   --check-updates       Check remote Frappe/ERPNext version branches
   --offline             Skip remote checks
   --advanced            Prompt for custom branch/tag or commit pins
+  --frappe-commit SHA   Pin frappe to a commit (a team profile: frappe_commit)
+  --erpnext-commit SHA  Pin erpnext to a commit (a team profile: erpnext_commit)
   --dry-run             Print mutating commands without running them
   --repair-bench        Move incomplete bench aside and re-init
   --make-default        Make this bench the default even when another bench already is
@@ -95,6 +99,8 @@ while [[ "$#" -gt 0 ]]; do
     --check-updates) CHECK_UPDATES=1; shift ;;
     --offline) OFFLINE=1; shift ;;
     --advanced) ADVANCED=1; shift ;;
+    --frappe-commit) [[ -n "${2:-}" && "${2:-}" != -* ]] || fl_die "--frappe-commit needs a commit hash."; FRAPPE_COMMIT_FLAG="$2"; shift 2 ;;
+    --erpnext-commit) [[ -n "${2:-}" && "${2:-}" != -* ]] || fl_die "--erpnext-commit needs a commit hash."; ERPNEXT_COMMIT_FLAG="$2"; shift 2 ;;
     --dry-run) DRY_RUN=1; FL_DRY_RUN=1; shift ;;
     --repair-bench) REPAIR_BENCH=1; shift ;;
     --make-default) FL_MAKE_DEFAULT=1; shift ;;
@@ -119,8 +125,11 @@ if fl_is_linux; then fl_linux_profile_require; fi
 
 FRAPPE_REF="$FL_FRAPPE_BRANCH"
 ERPNEXT_REF="$FL_ERPNEXT_BRANCH"
-FRAPPE_COMMIT="${FRAPPE_COMMIT:-}"
-ERPNEXT_COMMIT="${ERPNEXT_COMMIT:-}"
+# a pin: the flag, else the environment, else the team profile's
+FRAPPE_COMMIT="${FRAPPE_COMMIT_FLAG:-${FRAPPE_COMMIT:-$FL_TEAM_FRAPPE_COMMIT}}"
+ERPNEXT_COMMIT="${ERPNEXT_COMMIT_FLAG:-${ERPNEXT_COMMIT:-$FL_TEAM_ERPNEXT_COMMIT}}"
+[[ -z "$FRAPPE_COMMIT" ]] || fl_validate_custom_commit "$FRAPPE_COMMIT"
+[[ -z "$ERPNEXT_COMMIT" ]] || fl_validate_custom_commit "$ERPNEXT_COMMIT"
 
 prompt_value() {
   local varname="$1" prompt="$2" default="$3"
@@ -311,6 +320,10 @@ else
   fl_resolve_selected_apps "$FL_PROFILE" "$APP_BUNDLE" "$APPS"
 fi
 
+if [[ -n "$ERPNEXT_COMMIT" && " ${FL_SELECTED_APPS[*]} " != *" erpnext "* ]]; then
+  fl_warn "an erpnext commit pin is set, but erpnext is not among the apps to install (${FL_SELECTED_APPS[*]}); the pin does nothing"
+fi
+
 CUSTOMIZED_SPECS=()
 for spec in "${FL_INSTALL_SPECS[@]}"; do
   IFS='|' read -r app branch repo priority notes <<<"$spec"
@@ -405,7 +418,7 @@ fl_bstate_set_for "$BENCH_DIR" MARIADB_FORMULA "$FL_MARIADB_FORMULA"
 
 fl_install_pipx_if_needed
 fl_install_bench_if_needed
-fl_bench_init_if_needed "$BENCH_DIR" "$FRAPPE_REF" "$(command -v "$FL_PYTHON_BIN_NAME")" "$REPAIR_BENCH"
+fl_bench_init_if_needed "$BENCH_DIR" "$FRAPPE_REF" "$(command -v "$FL_PYTHON_BIN_NAME")" "$REPAIR_BENCH" "$([[ -n "$FRAPPE_COMMIT" ]] && printf 1 || printf 0)"
 # Frappe v15 imports pkg_resources: the env gets 'setuptools<70' now, as
 # repair would give it, so a new bench starts with no doctor warning
 if [[ "$(fl_profile_major)" == "15" && "$FL_DRY_RUN" != "1" && -x "$BENCH_DIR/env/bin/python" ]] \
@@ -413,20 +426,20 @@ if [[ "$(fl_profile_major)" == "15" && "$FL_DRY_RUN" != "1" && -x "$BENCH_DIR/en
   fl_bench_env_setuptools "$BENCH_DIR" || fl_die "could not install setuptools<70 into ${BENCH_DIR}/env (log: ${FL_LOG_FILE:-none})"
 fi
 
-if [[ -n "$FRAPPE_COMMIT" && -d "$BENCH_DIR/apps/frappe/.git" ]]; then
-  fl_warn "Pinning frappe to ${FRAPPE_COMMIT}"
-  fl_run git -C "$BENCH_DIR/apps/frappe" fetch --all --tags
-  fl_run git -C "$BENCH_DIR/apps/frappe" checkout "$FRAPPE_COMMIT"
+# a pinned commit the clone does not reach stops the run here, before any build
+if [[ -n "$FRAPPE_COMMIT" ]]; then
+  fl_pin_app_commit "$BENCH_DIR" frappe "$FRAPPE_COMMIT" "$FRAPPE_REF"
 fi
 
 fl_section "GET APPS"
 for spec in "${FL_INSTALL_SPECS[@]}"; do
   IFS='|' read -r app branch repo _priority _notes <<<"$spec"
-  # a team profile may pin a commit
+  # a team profile may pin a commit; erpnext also by --erpnext-commit or the profile's erpnext_commit
   pin_commit=""
   for team_spec in ${FL_TEAM_APPS[@]+"${FL_TEAM_APPS[@]}"}; do
     [[ -n "$FL_TEAM_PROFILE" && "${team_spec%%|*}" == "$app" ]] && pin_commit="${team_spec##*|}"
   done
+  [[ "$app" == "erpnext" && -n "$ERPNEXT_COMMIT" ]] && pin_commit="$ERPNEXT_COMMIT"
   if [[ -n "$pin_commit" ]]; then
     fl_get_app_if_needed "$BENCH_DIR" "$app" "$branch" "$repo" "$pin_commit" "1"
   else
@@ -434,16 +447,13 @@ for spec in "${FL_INSTALL_SPECS[@]}"; do
   fi
 done
 
-if [[ -n "$ERPNEXT_COMMIT" && -d "$BENCH_DIR/apps/erpnext/.git" ]]; then
-  fl_warn "Pinning erpnext to ${ERPNEXT_COMMIT}"
-  fl_run git -C "$BENCH_DIR/apps/erpnext" fetch --all --tags
-  fl_run git -C "$BENCH_DIR/apps/erpnext" checkout "$ERPNEXT_COMMIT"
-fi
-
-if [[ -n "$FRAPPE_COMMIT" || -n "$ERPNEXT_COMMIT" ]]; then
-  fl_warn "Rebuilding bench after commit pinning"
+# one build after a pin, or after an earlier run that left it for later (a pinned
+# clone is fetched without its first build, and a run can stop before this point)
+if [[ "$FL_PINS_APPLIED" == "1" || -f "$(fl_needs_build_marker "$BENCH_DIR")" ]]; then
+  fl_warn "Building the bench: assets were left for after the commit pins"
   fl_bench_run_long "bench setup requirements" "$BENCH_DIR" bench setup requirements
   fl_bench_run_long "bench build" "$BENCH_DIR" bench build
+  [[ "$FL_DRY_RUN" == "1" ]] || rm -f "$(fl_needs_build_marker "$BENCH_DIR")"
 fi
 
 # the port block benchbar install chose (BENCHBAR_PORT_BLOCK, "web socketio

@@ -12,7 +12,7 @@ most often `--bench-dir DIR` for a bench that is not the default.
 ## up
 
 ```
-benchbar up [--json] [--bench-dir DIR]
+benchbar up [--services-only] [--json] [--bench-dir DIR]
 ```
 
 Starts the bench in the background and waits for the site's ping. It
@@ -26,6 +26,13 @@ left as it is.
 With `--json` (or `--jsonl`, `--for-agent`) it prints JSON lines: the
 steps, then a `done` with `exit`, `changed`, `warnings`, `next_actions`
 and `state_after` ([the done fields](../../json-schema.md#the-done-fields-08)).
+
+`--services-only` starts the bench's Redis (queue and cache) and nothing
+else: no agent, no web process, no stop flag, and no service needs to be
+installed. It is for a `site restore`, a `pull` or a `bench migrate` on a
+bench that is not running, which need that Redis. It stays up until
+`benchbar down`. A Redis port held by another program is refused.
+`benchbar status --json` shows both in `redis`.
 
 Exit codes: 0 the bench is up (or already was); 1 the site did not answer
 in time (it may still be starting: `benchbar logs`), a port is taken, or

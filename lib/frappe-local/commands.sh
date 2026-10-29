@@ -28,6 +28,8 @@ flag~install~--bundle~NAME~App bundle: minimal, common or extended.
 flag~install~--port-offset~N~Use port block N (web 8000+N).
 flag~install~--make-default~~Make this the default bench even when another one is.
 flag~install~--offline~~Skip the remote branch checks.
+flag~install~--frappe-commit~SHA~Pin the frappe clone to this commit (or FRAPPE_COMMIT, or the team profile).
+flag~install~--erpnext-commit~SHA~Pin the erpnext clone to this commit.
 flag~install~--dry-run~~Print the plan, change nothing.
 flag~install~--yes~~Do not ask; secrets come from the environment.
 env~install~ADMIN_PASSWORD~The new site's Administrator password.
@@ -37,11 +39,12 @@ flag~adopt~--port-offset~N~Move the bench to port block N.
 flag~adopt~--make-default~~Make this the default bench.
 flag~adopt~--dry-run~~Print the plan, change nothing.
 flag~adopt~--yes~~Do not ask.
-cmd~service~benchbar service [--with-schedule|--without-schedule] [--port-offset N] [--dry-run] [--json]~Install or refresh only the background service (phase 02).~yes~no~no~yes~stream
+cmd~service~benchbar service [--with-schedule|--without-schedule] [--port-offset N] [--dry-run|--apply TOKEN --yes] [--json]~Install or refresh only the background service (phase 02).~yes~no~no~yes~stream
 flag~service~--with-schedule~~Add the scheduler to Procfile.lean.
 flag~service~--without-schedule~~Remove it again.
 flag~service~--port-offset~N~Use port block N.
-flag~service~--dry-run~~Print the plan, change nothing.
+flag~service~--dry-run~~Print the plan and its token, change nothing.
+flag~service~--apply~TOKEN~Run exactly that plan (with --yes).
 cmd~mariadb-password~benchbar mariadb-password [--yes]~Print the MariaDB root password (asks first).~yes~no~no~no~none
 flag~mariadb-password~--yes~~Do not ask.
 cmd~doctor~benchbar doctor [--json] [--fix-hints] [--quick] [--ack CHECK] [--unack CHECK] [--prerequisites] [--fetch]~Read only health report. Exit 1 when something FAILs.~no~no~no~no~document
@@ -60,7 +63,8 @@ flag~status~--ping~~Ask every site, not only the default one.
 cmd~list~benchbar list [--json]~Every bench benchbar knows about. Never pings a site.~no~no~no~no~document
 cmd~scan~benchbar scan PATH [--json]~Find benches recursively in a folder (read only).~no~no~no~no~document
 cmd~register~benchbar register PATH...~Remember selected benches without changing their services.~no~no~no~yes~none
-cmd~up~benchbar up [--json]~Start the bench in the background.~yes~no~no~yes~stream
+cmd~up~benchbar up [--services-only] [--json]~Start the bench in the background.~yes~no~no~yes~stream
+flag~up~--services-only~~Start only the bench's Redis (for a restore or a migrate); down stops it.
 cmd~down~benchbar down [--json]~Stop the bench and keep it stopped across reboots.~no~no~no~yes~stream
 cmd~restart~benchbar restart [--json]~Restart the bench, for example after changing Python code.~yes~no~no~yes~stream
 cmd~logs~benchbar logs [-nN] [--worker|--worker-error|--previous] [--process NAME] [--since TIMESTAMP] [--since-restart] [--no-follow] [--json]~Tail logs/bench.log.~no~no~no~no~document
@@ -93,7 +97,8 @@ cmd~docs~benchbar docs [TOPIC] [--print]~Open the documentation, or one topic's 
 cmd~self-update~benchbar self-update [--check] [--dry-run] [--json]~Update the benchbar CLI and the BenchBar app.~yes~no~yes~yes~document
 flag~self-update~--check~~This version against the latest.
 cmd~where~benchbar where [--json]~How this CLI was installed, its state folder and the app.~no~no~no~no~document
-cmd~mcp~benchbar mcp~Model Context Protocol server on stdio for coding agents.~no~no~no~no~none
+cmd~mcp~benchbar mcp [--print-agents-md]~Model Context Protocol server on stdio for coding agents.~no~no~no~no~none
+flag~mcp~--print-agents-md~~Print a snippet for a project's AGENTS.md or CLAUDE.md and exit.
 cmd~help~benchbar help~The global help text.~no~no~no~no~none
 cmd~commands~benchbar commands --json~This table: every command, flag and environment variable.~no~no~no~no~document
 cmd~ports~benchbar ports plan|setup|apply|check|mode ...~Port allocation for several benches.~no~no~no~no~none
@@ -103,11 +108,13 @@ cmd~ports apply~benchbar ports apply TOKEN --yes [--json] -- PATH ...~Apply a re
 flag~ports apply~--yes~~Required: the plan was reviewed.
 cmd~ports check~benchbar ports check [--json]~Port conflicts of the bench.~no~no~no~no~document
 cmd~ports mode~benchbar ports mode automatic|fixed~Keep automatic or fixed ports for the bench.~no~no~no~yes~none
-cmd~site~benchbar site list|add|default|hosts|backup|backups|drop ...~The sites of a bench.~no~no~no~no~none
+cmd~site~benchbar site list|add|default|hosts|backup|backups|restore|drop ...~The sites of a bench.~no~no~no~no~none
 cmd~site list~benchbar site list [--json]~The bench's sites; the default one is what benchup waits for.~no~no~no~no~document
-cmd~site add~benchbar site add NAME [--bundle NAME|--apps "a b"] [--yes] [--json]~bench new-site, the hosts line and apps from apps/. The default site stays.~yes~yes~no~yes~stream
+cmd~site add~benchbar site add NAME [--bundle NAME|--apps "a b"] [--dry-run|--apply TOKEN] [--yes] [--json]~bench new-site, the hosts line and apps from apps/. The default site stays.~yes~yes~no~yes~stream
 flag~site add~--bundle~NAME~App bundle to install.
 flag~site add~--apps~"a b"~Apps of apps/ to install.
+flag~site add~--dry-run~~Print the plan and its token, change nothing.
+flag~site add~--apply~TOKEN~Run exactly that plan (with --yes).
 flag~site add~--yes~~Do not ask.
 env~site add~ADMIN_PASSWORD~The new site's Administrator password.
 env~site add~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
@@ -116,6 +123,16 @@ cmd~site hosts~benchbar site hosts~Add a 127.0.0.1 line for every site to /etc/h
 cmd~site backup~benchbar site backup NAME [--with-files] [--json]~bench --site NAME backup.~no~no~no~yes~document
 flag~site backup~--with-files~~Include the uploads.
 cmd~site backups~benchbar site backups NAME [--json]~The site's backups, newest first.~no~no~no~no~document
+cmd~site restore~benchbar site restore NAME --from STAMP|PATH [--from-site S] [--new] [--no-migrate] [--before-migrate SCRIPT] [--with-files] --dry-run --json, then --apply TOKEN --yes~Restore a local backup set into a site (a new one with --new), after a backup of the target; a reviewed plan.~no~yes~no~yes~document
+flag~site restore~--from~STAMP|PATH~The backup set: its stamp in the target's (or --from-site's) backup folder, or the database file's path.
+flag~site restore~--from-site~S~Read the stamp from this site's backups.
+flag~site restore~--new~~Create the site (bench new-site) first.
+flag~site restore~--no-migrate~~Stop after the restore, before bench migrate.
+flag~site restore~--before-migrate~SCRIPT~An executable run after the restore, before migrate.
+flag~site restore~--with-files~~Restore the uploads too.
+flag~site restore~--dry-run~~Print the plan and its token.
+flag~site restore~--apply~TOKEN~Run exactly that plan (with --yes).
+env~site restore~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
 cmd~site drop~benchbar site drop NAME --confirm-site NAME [--new-default OTHER] [--dry-run] [--json]~bench drop-site: a backup with files first, the folder moved to archived/sites.~no~yes~no~yes~document
 flag~site drop~--confirm-site~NAME~Repeat the site name exactly.
 flag~site drop~--new-default~OTHER~Required when NAME is the default site.
@@ -123,9 +140,11 @@ flag~site drop~--dry-run~~Print the plan, change nothing.
 env~site drop~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
 cmd~app~benchbar app list|add|install|update|focus|unfocus ...~The apps of a bench.~no~no~no~no~none
 cmd~app list~benchbar app list [--json] [--no-sites]~Every app: branch, commit, local changes, the sites that have it.~no~no~no~no~document
-cmd~app add~benchbar app add NAME|URL [--branch B] [--site S|--all-sites] --dry-run --json, then --apply TOKEN --yes~bench get-app from config/apps.tsv or any git URL, as a reviewed plan.~no~no~yes~yes~document
+cmd~app add~benchbar app add NAME|URL [--branch B] [--name N] [--commit SHA] [--install-on S,S] [NAME|URL ...] [--site S|--all-sites] --dry-run --json, then --apply TOKEN --yes~bench get-app from config/apps.tsv or any git URL, as a reviewed plan.~no~no~yes~yes~document
 flag~app add~--branch~B~Branch or tag.
 flag~app add~--name~N~The app's package name.
+flag~app add~--commit~SHA~Pin the app to this commit (7 to 40 hex characters).
+flag~app add~--install-on~S,S~Install this app on these sites only.
 flag~app add~--site~S~Install it on this site.
 flag~app add~--all-sites~~Install it on every site.
 flag~app add~--dry-run~~Print the plan and its token.

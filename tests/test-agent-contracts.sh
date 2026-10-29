@@ -632,7 +632,13 @@ for c in "status" "doctor" "logs --no-follow" "site list" "app list"; do
   assert_contains "$ERR" "No bench at"
 done
 # every dry run with --json: the plan alone (a stream: plan, then done), never text on stdout
-ADMIN_PASSWORD=pw stream site add dryrunsite --dry-run --json --bench-dir "$BENCH"
+# site add's dry run is its plan with a token, one document like app update's;
+# --jsonl makes it the stream
+run_json site add dryrunsite --dry-run --json --bench-dir "$BENCH"
+assert_eq "1" "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')" "site add --dry-run --json: one line"
+[[ "$(printf '%s' "$OUT" | jget - 'd["token"]')" =~ ^[0-9a-f]{64}$ ]] || fail "site add plan without a token: $OUT"
+assert_eq "True" "$(printf '%s' "$OUT" | jget - 'd["dry_run"]')" "(the plan document says it is a dry run)"
+ADMIN_PASSWORD=pw stream site add dryrunsite --dry-run --jsonl --bench-dir "$BENCH"
 assert_eq "plan done" "$(sx '" ".join(x["event"] for x in e)')"
 stream adopt "$B2" --dry-run --json --bench-dir "$B2"
 assert_eq "plan done" "$(sx '" ".join(x["event"] for x in e)')"
@@ -792,10 +798,13 @@ assert_eq "0" "$CODE" "$(cat "$STREAM.err")"
 assert_eq "True" "$(sx '{"kind": "site", "name": "macdev", "detail": "now the default site"} in e[-1]["changed"]')" "$(cat "$STREAM")"
 assert_eq "macdev macdev" "$(sx '"%s %s" % (e[-1]["default_site"], e[-1]["state_after"]["site"])')" "$(cat "$STREAM")"
 
-# site add NEW --dry-run --json: nothing was created, and the done line says it was a dry run
-stream site add drynew --dry-run --json --bench-dir "$BENCH"
+# site add NEW --dry-run: nothing was created, and the done line of the stream says it was a dry run
+# (--json is the one document plan, which claims nothing either)
+ADMIN_PASSWORD=pw stream site add drynew --dry-run --jsonl --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$(cat "$STREAM.err")"
-assert_eq "False True" "$(sx '"%s %s" % (e[-1]["created"], e[-1].get("dry_run"))')" "$(cat "$STREAM")"
+assert_eq "False True" "$(sx '"%s %s" % (e[-1].get("created", False), e[-1].get("dry_run"))')" "$(cat "$STREAM")"
+run_json site add drynew --dry-run --json --bench-dir "$BENCH"
+assert_eq "0 False" "$CODE $(printf '%s' "$OUT" | jget - 'd.get("created", False)')" "$OUT"
 assert_no_file "$BENCH/sites/drynew"
 
 printf 'test-agent-contracts: ok\n'

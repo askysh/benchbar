@@ -30,7 +30,8 @@ benchbar app list --json
 ## app add
 
 ```
-benchbar app add NAME|URL [--branch B] [--name N] [--site S | --all-sites]
+benchbar app add NAME|URL [--branch B] [--name N] [--commit SHA] [--install-on S[,S]]
+                 [NAME|URL ...] [--site S | --all-sites]
 ```
 
 `bench get-app` from `config/apps.tsv` or any git URL (GitHub, SSH, a
@@ -44,8 +45,29 @@ The app's own code runs on your Mac, so add only repos you trust.
 |---|---|
 | `--branch B` | Clone this branch instead of the registry's |
 | `--name N` | The app's folder name, when it differs from the URL |
-| `--site S` | Install the app on this site afterwards |
+| `--commit SHA` | Pin the clone to this commit (7 to 40 hex characters). The plan reads `hooks.py` there, `get-app` checks it out before the build, and a clone that does not reach it is refused before build and install. An app already in the bench must be at it |
+| `--install-on S[,S]` | Install the app on these sites (comma separated), instead of `--site` or `--all-sites` |
+| `--site S` | Install every app (without `--install-on`) on this site afterwards |
 | `--all-sites` | Install it on every site |
+
+### Several apps at once
+
+Give more than one app and they are one plan with one token. `--branch`,
+`--name`, `--commit` and `--install-on` belong to the app before them
+(to the first app when they come before all of them); `--site` and
+`--all-sites` apply to every app without its own `--install-on`.
+
+```bash
+benchbar app add acme_crm --commit 9b1d2c4e acme_hr --install-on macdev,v16two --dry-run --json
+```
+
+The required apps of all of them are one dependency graph: an app two
+of them need is cloned once, and an app that another one needs comes
+first. The plan has one build for everything it clones, an install per
+app and site (site by site, each in dependency order; an install is
+skipped when an app it requires failed on that site) and one restart.
+An unfinished run leaves one record per app, so `benchbar app add NAME`
+finishes that app.
 
 Exit codes: 0 added (or already there); 1 the repo is not readable, the
 app exists, or a step failed.
@@ -64,14 +86,19 @@ benchbar app add NAME|URL [same flags] --apply TOKEN --yes [--json]
 `--dry-run --json` prints the plan and changes nothing: the resolved app,
 repo and branch, whether git can read the repo (without a prompt, with a
 timeout), the sites, the required apps from `hooks.py` (read from a
-shallow clone in a temp folder, then removed) and whether each resolves
+shallow clone in a temp folder, then removed; at the pinned commit with
+`--commit`) and whether each resolves
 through `config/apps.tsv` or the team profile, the steps, and a `token`.
+`commit_source` says whether `commit` is the `pin` or the `branch` tip,
+and with several apps `apps[]` has one entry each.
 See the [JSON schema](../../json-schema.md#benchbar-app-add-url---dry-run---json).
 
 `--apply TOKEN --yes`, with the same arguments, recomputes the plan
 under the CLI lock and runs exactly that plan, including the planned
-required apps, without asking anything. `benchbar_app_add` in
-[benchbar mcp](mcp.md) uses it.
+required apps, without asking anything. The result says, for each app,
+whether it was cloned, how the build went and, per site, the install
+and its migrate (`install-app` runs the app's patches).
+`benchbar_app_add` in [benchbar mcp](mcp.md) uses it.
 
 | Flag | What it does |
 |---|---|

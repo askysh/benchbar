@@ -22,6 +22,8 @@
 #   schema = 2                       # optional, 1 when absent
 #   base = "v15-lts"
 #   frappe_branch = "version-15"     # optional
+#   frappe_commit = "0123abc"        # optional pin (7 to 40 lower case hex)
+#   erpnext_commit = "0123abc"       # optional pin; install clones, then checks out
 #   bundle = "minimal"               # or [[apps]] entries, never both
 #   site = "acme.localhost"          # optional default site name
 #   scheduler = false                # optional
@@ -43,6 +45,8 @@ FL_TEAM_SITE=""
 FL_TEAM_SCHEDULER=""
 FL_TEAM_DESCRIPTION=""
 FL_TEAM_FRAPPE_BRANCH=""
+FL_TEAM_FRAPPE_COMMIT=""
+FL_TEAM_ERPNEXT_COMMIT=""
 FL_TEAM_APPS=()
 FL_TEAM_ERROR=""
 # schema 2 (0.6): where an imported file came from, who exported it, and
@@ -53,7 +57,7 @@ FL_TEAM_EXPORTED_FROM=""
 FL_TEAM_APP_ACCESS=()
 FL_TEAM_APP_REQUIRES=()
 
-FL_TEAM_KEYS="top.schema=i top.base=s top.description=s top.frappe_branch=s top.bundle=s top.site=s top.scheduler=b top.source=s top.exported_from=s apps.name=s apps.repo=s apps.branch=s apps.commit=s apps.access=s apps.requires=a"
+FL_TEAM_KEYS="top.schema=i top.base=s top.description=s top.frappe_branch=s top.frappe_commit=s top.erpnext_commit=s top.bundle=s top.site=s top.scheduler=b top.source=s top.exported_from=s apps.name=s apps.repo=s apps.branch=s apps.commit=s apps.access=s apps.requires=a"
 FL_TEAM_REQUIRED="top.base apps.name apps.repo apps.branch"
 
 fl_team_profile_user_dir() { printf '%s/.config/benchbar/profiles' "$HOME"; }
@@ -104,6 +108,7 @@ fl_team__app_add() {
 fl_team_profile_read() {
   local file="$1" out err sec idx key val cur=0 name="" repo="" branch="" commit="" access="" requires="" v2="" r
   FL_TEAM_BASE=""; FL_TEAM_BUNDLE=""; FL_TEAM_SITE=""; FL_TEAM_SCHEDULER=""; FL_TEAM_DESCRIPTION=""; FL_TEAM_FRAPPE_BRANCH=""
+  FL_TEAM_FRAPPE_COMMIT=""; FL_TEAM_ERPNEXT_COMMIT=""
   FL_TEAM_SCHEMA=""; FL_TEAM_SOURCE=""; FL_TEAM_EXPORTED_FROM=""
   FL_TEAM_APPS=(); FL_TEAM_APP_ACCESS=(); FL_TEAM_APP_REQUIRES=(); FL_TEAM_ERROR=""
   err="$(mktemp "${TMPDIR:-/tmp}/benchbar-toml.XXXXXX")"
@@ -145,6 +150,8 @@ fl_team_profile_read() {
       base) FL_TEAM_BASE="$val" ;;
       description) FL_TEAM_DESCRIPTION="$val" ;;
       frappe_branch) FL_TEAM_FRAPPE_BRANCH="$val" ;;
+      frappe_commit) FL_TEAM_FRAPPE_COMMIT="$val" ;;
+      erpnext_commit) FL_TEAM_ERPNEXT_COMMIT="$val" ;;
       bundle) FL_TEAM_BUNDLE="$val" ;;
       site) FL_TEAM_SITE="$val" ;;
       scheduler) FL_TEAM_SCHEDULER="$val" ;;
@@ -311,7 +318,9 @@ fl_cmd_profile_show() {
   [[ -n "$FL_TEAM_FRAPPE_BRANCH" ]] && FL_FRAPPE_BRANCH="$FL_TEAM_FRAPPE_BRANCH"
   rows+=("Field|Value" "profile|${name} (team)" "file|${file}" "base|${FL_TEAM_BASE}")
   [[ -n "$FL_TEAM_DESCRIPTION" ]] && rows+=("description|${FL_TEAM_DESCRIPTION}")
-  rows+=("frappe|${FL_FRAPPE_BRANCH}" "python|${FL_PYTHON_FORMULA}" "node|${FL_NODE_FORMULA}" "mariadb|${FL_MARIADB_FORMULA}")
+  rows+=("frappe|${FL_FRAPPE_BRANCH}${FL_TEAM_FRAPPE_COMMIT:+ at ${FL_TEAM_FRAPPE_COMMIT}}")
+  [[ -z "$FL_TEAM_ERPNEXT_COMMIT" ]] || rows+=("erpnext|pinned at ${FL_TEAM_ERPNEXT_COMMIT}")
+  rows+=("python|${FL_PYTHON_FORMULA}" "node|${FL_NODE_FORMULA}" "mariadb|${FL_MARIADB_FORMULA}")
   [[ -n "$FL_TEAM_BUNDLE" ]] && rows+=("bundle|${FL_TEAM_BUNDLE}: $(fl_bundle_apps "$FL_TEAM_BUNDLE")")
   [[ -n "$FL_TEAM_SITE" ]] && rows+=("site|${FL_TEAM_SITE}")
   [[ -n "$FL_TEAM_SCHEDULER" ]] && rows+=("scheduler|${FL_TEAM_SCHEDULER}")
@@ -341,7 +350,7 @@ fl_team_profile_render() {
   fb="$(fl_app_branch frappe)"
   [[ -n "$fb" && "$fb" != "$FL_FRAPPE_BRANCH" ]] && printf 'frappe_branch = "%s"\n' "$fb"
   site="$(fl_bstate_get SITE_NAME)"
-  [[ -n "$site" ]] || site="$(tr -d '[:space:]' <"${FL_BENCH_DIR}/sites/currentsite.txt" 2>/dev/null || true)"
+  [[ -n "$site" ]] || site="$({ tr -d '[:space:]' <"${FL_BENCH_DIR}/sites/currentsite.txt"; } 2>/dev/null || true)"
   [[ "$site" =~ ^[a-z0-9][a-z0-9.-]*$ ]] && printf 'site = "%s"\n' "$site"
   scheduler="$(fl_bstate_get SCHEDULER)"
   [[ "$scheduler" == "on" ]] && printf 'scheduler = true\n'
@@ -649,11 +658,11 @@ fl_profile_access() {
 # and every app that requires one), CK_SKIP_WHY says why, same index.
 fl_profile_check_loaded() {
   local spec n b r c i skip=" " changed req why
-  CK_APPS=(); CK_REPOS=(); CK_REACH=(); CK_REASON=(); CK_SKIPPED=(); CK_SKIP_WHY=()
+  CK_APPS=(); CK_REPOS=(); CK_REACH=(); CK_REASON=(); CK_SKIPPED=(); CK_SKIP_WHY=(); CK_COMMIT=()
   for spec in ${FL_TEAM_APPS[@]+"${FL_TEAM_APPS[@]}"}; do
     IFS='|' read -r n b r c <<<"$spec"
     fl_profile_reach "$r" "$b"
-    CK_APPS+=("$n"); CK_REPOS+=("$r"); CK_REACH+=("$FL_REACH"); CK_REASON+=("$FL_REACH_REASON")
+    CK_APPS+=("$n"); CK_REPOS+=("$r"); CK_REACH+=("$FL_REACH"); CK_REASON+=("$FL_REACH_REASON"); CK_COMMIT+=("$c")
     [[ "$FL_REACH" == "false" ]] && skip="${skip}${n} "
   done
   changed=1
@@ -686,23 +695,25 @@ fl_profile_check_repos_json() {
   local i=0 sep=""
   printf '['
   while [[ "$i" -lt "${#CK_APPS[@]}" ]]; do
-    printf '%s{"app":%s,"repo":%s,"reachable":%s,"reason":%s}' "$sep" "$(fl_json_str "${CK_APPS[$i]}")" "$(fl_json_str "${CK_REPOS[$i]}")" \
-      "${CK_REACH[$i]}" "$(fl_json_str "${CK_REASON[$i]}")"
+    printf '%s{"app":%s,"repo":%s,"reachable":%s,"reason":%s,"commit":%s}' "$sep" "$(fl_json_str "${CK_APPS[$i]}")" "$(fl_json_str "${CK_REPOS[$i]}")" \
+      "${CK_REACH[$i]}" "$(fl_json_str "${CK_REASON[$i]}")" "$(fl_json_str "${CK_COMMIT[$i]}")"
     sep=","; i=$((i + 1))
   done
   printf ']'
 }
 
 fl_profile_check_print() {
-  local i=0 rows=("App|Reachable|Repo|Why") word
+  local i=0 rows=("App|Reachable|Repo|Why|Commit") word
   while [[ "$i" -lt "${#CK_APPS[@]}" ]]; do
     word="not known"
     [[ "${CK_REACH[$i]}" == "true" ]] && word="yes"
     [[ "${CK_REACH[$i]}" == "false" ]] && word="no"
-    rows+=("${CK_APPS[$i]}|${word}|${CK_REPOS[$i]}|${CK_REASON[$i]:--}")
+    rows+=("${CK_APPS[$i]}|${word}|${CK_REPOS[$i]}|${CK_REASON[$i]:--}|${CK_COMMIT[$i]:--}")
     i=$((i + 1))
   done
   [[ "${#CK_APPS[@]}" -gt 0 ]] && fl_table "${rows[@]}"
+  [[ -z "$FL_TEAM_FRAPPE_COMMIT" ]] || fl_info "frappe is pinned at ${FL_TEAM_FRAPPE_COMMIT}: install checks that the clone reaches it before it builds"
+  [[ -z "$FL_TEAM_ERPNEXT_COMMIT" ]] || fl_info "erpnext is pinned at ${FL_TEAM_ERPNEXT_COMMIT}: install checks that the clone reaches it before it builds"
   i=0
   while [[ "$i" -lt "${#CK_SKIPPED[@]}" ]]; do
     fl_warn "install --profile leaves out ${CK_SKIPPED[$i]} (${CK_SKIP_WHY[$i]})"
@@ -734,11 +745,16 @@ fl_cmd_profile_check() {
   fl_profile_need "$name"
   fl_profile_check_loaded
   if [[ "${OPT_JSON:-0}" == "1" ]]; then
-    printf '{"schema_version":%d,"cli_version":"%s","name":%s,"repos":%s,"skipped_apps":%s}\n' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" \
-      "$(fl_json_str "$name")" "$(fl_profile_check_repos_json)" "$(fl_profile_json_list ${CK_SKIPPED[@]+"${CK_SKIPPED[@]}"})" >&3
+    printf '{"schema_version":%d,"cli_version":"%s","name":%s,"repos":%s,"skipped_apps":%s,"frappe_commit":%s,"erpnext_commit":%s}\n' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" \
+      "$(fl_json_str "$name")" "$(fl_profile_check_repos_json)" "$(fl_profile_json_list ${CK_SKIPPED[@]+"${CK_SKIPPED[@]}"})" \
+      "$(fl_json_str "$FL_TEAM_FRAPPE_COMMIT")" "$(fl_json_str "$FL_TEAM_ERPNEXT_COMMIT")" >&3
     return 0
   fi
-  [[ "${#CK_APPS[@]}" -gt 0 ]] || { fl_ok "${name} lists no repos of its own (its apps come from a bundle)"; return 0; }
+  if [[ "${#CK_APPS[@]}" -eq 0 ]]; then
+    fl_ok "${name} lists no repos of its own (its apps come from a bundle)"
+    fl_profile_check_print
+    return 0
+  fi
   fl_profile_check_print
   [[ "${#CK_SKIPPED[@]}" -eq 0 ]] && fl_ok "every repo of ${name} can be read with your credentials"
   return 0
@@ -835,6 +851,8 @@ fl_profile_export_render() {
   printf 'base = "%s"\n' "$FL_TEAM_BASE"
   [[ -n "$FL_TEAM_DESCRIPTION" ]] && printf 'description = "%s"\n' "$FL_TEAM_DESCRIPTION"
   [[ -n "$FL_TEAM_FRAPPE_BRANCH" ]] && printf 'frappe_branch = "%s"\n' "$FL_TEAM_FRAPPE_BRANCH"
+  [[ -n "$FL_TEAM_FRAPPE_COMMIT" ]] && printf 'frappe_commit = "%s"\n' "$FL_TEAM_FRAPPE_COMMIT"
+  [[ -n "$FL_TEAM_ERPNEXT_COMMIT" ]] && printf 'erpnext_commit = "%s"\n' "$FL_TEAM_ERPNEXT_COMMIT"
   [[ -n "$FL_TEAM_BUNDLE" ]] && printf 'bundle = "%s"\n' "$FL_TEAM_BUNDLE"
   [[ -n "$FL_TEAM_SITE" ]] && printf 'site = "%s"\n' "$FL_TEAM_SITE"
   [[ -n "$FL_TEAM_SCHEDULER" ]] && printf 'scheduler = %s\n' "$FL_TEAM_SCHEDULER"

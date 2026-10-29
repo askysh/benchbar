@@ -64,17 +64,39 @@ fl_hosts_has_name() {
 # DB=1 (site list) adds db_name (from the site's site_config.json, null when
 # missing) and db_port (the site's, else the bench's, else 3306); never the
 # password. list and status leave them out: they poll.
+# SERVED=1 (status) adds "served": true, false (the web process answers 404 for
+# the site's Host) or null (the bench is stopped, or nothing answered). The
+# default site's answer and a --ping answer are reused; any other site gets one
+# GET in bash (fl_http_code_v, a subshell, no other program), only while the bench
+# runs and its default site answered, one second each within a shared 2 second budget.
 FL_DEFAULT_PING=""
 fl_sites_json_v() {
-  local __mode="${2:-none}" __db="${3:-0}" __out="[" __sep="" __s __ping __listening=1 __jn __jd __jh __jp __def __hosts __dbn __dbp __dbj __bench_port
+  local __mode="${2:-none}" __db="${3:-0}" __served="${4:-0}" __out="[" __sep="" __s __ping __listening=1 __jn __jd __jh __jp __def __hosts __dbn __dbp __dbj __bench_port __code __sv __sj __end __c
   if [[ "$__mode" == "ping" && -z "$(fl_port_listener_pid "$FL_WEB_PORT")" ]]; then __listening=0; fi
   if [[ "$__db" == "1" ]]; then fl_site_config_value_v __bench_port db_port; fi
+  __end=$((SECONDS + 2))
   while IFS= read -r __s; do
     [[ -n "$__s" ]] || continue
-    __ping=""
+    __ping=""; __code=""
     if [[ "$__mode" == "ask" && "${ST_PROCS:-1}" == "1" ]] || [[ "$__mode" == "ping" && "$__listening" == "1" ]]; then
       if [[ "$__s" == "$FL_SITE" && -n "$FL_DEFAULT_PING" ]]; then __ping="$FL_DEFAULT_PING"; else __ping="$(fl_site_curl_code "$__s" 3)"; fi
+      __code="$__ping"
       [[ "$__ping" == "000" ]] && __ping=""
+    fi
+    __sj=""
+    if [[ "$__served" == "1" ]]; then
+      __sv=null
+      if [[ "${ST_PROCS:-0}" == "1" ]]; then
+        if [[ "$__s" == "$FL_SITE" && -n "$FL_DEFAULT_PING" ]]; then fl_site_served_v __sv "$__s" "$FL_DEFAULT_PING"
+        elif [[ "$__mode" == "ask" ]]; then fl_site_served_v __sv "$__s" "$__code"
+        elif [[ -n "$FL_DEFAULT_PING" && "$FL_DEFAULT_PING" != "000" && "$SECONDS" -lt "$__end" ]]; then
+          # the web process answers the default site: ask the others, one second
+          # each, within one shared budget (what is left stays null)
+          fl_http_code_v __c "$__s" "$FL_WEB_PORT" /api/method/ping 1
+          fl_site_served_v __sv "$__s" "$__c"
+        fi
+      fi
+      __sj=",\"served\":${__sv}"
     fi
     __def=0; [[ "$__s" == "$FL_SITE" ]] && __def=1
     __hosts=0; fl_hosts_has_name "$__s" && __hosts=1
@@ -88,10 +110,26 @@ fl_sites_json_v() {
       fl_json_str_v __dbn "$__dbn"
       __dbj=",\"db_name\":${__dbn},\"db_port\":${__dbp}"
     fi
-    __out="${__out}${__sep}{\"name\":${__jn},\"default\":${__jd},\"hosts_entry\":${__jh},\"ping_code\":${__jp}${__dbj}}"
+    __out="${__out}${__sep}{\"name\":${__jn},\"default\":${__jd},\"hosts_entry\":${__jh},\"ping_code\":${__jp}${__sj}${__dbj}}"
     __sep=","
   done < <(fl_sites_list)
   printf -v "$1" '%s]' "$__out"
+}
+
+# fl_site_served_v VAR SITE [CODE]: "true", "false" or "null" for whether the
+# bench's web process serves SITE. CODE is a ping answer already at hand
+# (empty or 000: nothing answered); without it SITE is asked once, in bash.
+# Frappe answers 404 for a Host it has no site folder for, so 404 is the one
+# code that says "not served"; every other answer (500 included) is a site
+# that is served, however badly. Callers ask only while the bench runs.
+fl_site_served_v() {
+  local __c="${3:-}"
+  if [[ "$#" -lt 3 ]]; then fl_http_code_v __c "$2" "$FL_WEB_PORT" /api/method/ping 2; fi
+  case "$__c" in
+    404) printf -v "$1" '%s' false ;;
+    ""|000) printf -v "$1" '%s' null ;;
+    *) printf -v "$1" '%s' true ;;
+  esac
 }
 
 # fl_site_file_value_v VAR FILE KEY: KEY's raw value from a site_config.json,
@@ -178,7 +216,7 @@ fl_cmd_site_default() {
   fl_require_plain_bench
   [[ -n "$name" ]] || fl_die "Usage: benchbar site default NAME"
   fl_site_require "$name"
-  if [[ "$name" == "$FL_SITE" && "$(tr -d '[:space:]' <"${FL_BENCH_DIR}/sites/currentsite.txt" 2>/dev/null)" == "$name" ]]; then
+  if [[ "$name" == "$FL_SITE" && "$({ tr -d '[:space:]' <"${FL_BENCH_DIR}/sites/currentsite.txt"; } 2>/dev/null)" == "$name" ]]; then
     fl_ok "unchanged: ${name} is already the default site"
     fl_site_result_doc 0 "$name" false
     return 0
@@ -214,17 +252,60 @@ fl_site_default_file_v() {
   printf -v "$1" '%s' "${__v//[[:space:]]/}"
 }
 
+# fl__site_apps_json "a b": the space separated app names as a JSON array
+fl__site_apps_json() {
+  local a out="" sep=""
+  for a in $1; do out="${out}${sep}$(fl_json_str "$a")"; sep=","; done
+  printf '[%s]' "$out"
+}
+
+# fl_site_add_plan NAME APPS: the plan of a site add, read only. Sets SA_JSON
+# (one document with its token) and SA_TOKEN. The token is a hash of the
+# plan and of the bench's site list, apps.txt and default site, so a site
+# that appeared or a default that moved since makes it stale.
+fl_site_add_plan() {
+  local name="$1" apps="$2" exists=0 app steps="" sep="" touches="" default state body hosts=0
+  fl_site_default_file_v default
+  [[ -d "${FL_BENCH_DIR}/sites/${name}" ]] && exists=1
+  if [[ "$exists" == "0" ]]; then
+    steps="{\"kind\":\"new_site\",\"name\":$(fl_json_str "Create ${name}"),\"command\":$(fl_json_str "bench new-site ${name} (with the MariaDB root password benchbar keeps; it is never shown)")}"; sep=","
+    touches="\"database\",\"site_folder\""
+  fi
+  for app in $apps; do
+    # a new site has none; an existing one is asked from the last list-apps read
+    if [[ "$exists" == "1" ]] && fl_site_has_app "$name" "$app" 2>/dev/null; then continue; fi
+    steps="${steps}${sep}{\"kind\":\"install\",\"name\":$(fl_json_str "Install ${app}"),\"command\":$(fl_json_str "bench --site ${name} install-app ${app}")}"; sep=","
+    case ",${touches}," in *'"database"'*) ;; *) touches="${touches}${touches:+,}\"database\"" ;; esac
+  done
+  if ! fl_hosts_has_name "$name" 2>/dev/null; then
+    hosts=1
+    if ! fl_is_linux; then
+      steps="${steps}${sep}{\"kind\":\"hosts\",\"name\":$(fl_json_str "Add 127.0.0.1 ${name} to ${FL_HOSTS_FILE}"),\"command\":$(fl_json_str "benchbar site hosts (sudo)")}"; sep=","
+      touches="${touches}${touches:+,}\"hosts\""
+    fi
+  fi
+  body="$(printf '"bench":%s,"site":%s,"exists":%s,"apps":%s,"default_site":%s,"default_moves":false,"backup":null,"hosts_entry":%s,"steps":[%s],"touches":[%s],"changes":%s' \
+    "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$name")" "$(fl_json_bool "$exists")" "$(fl__site_apps_json "$apps")" \
+    "$(fl_json_str "$default")" "$(fl_json_bool "$([[ "$hosts" == "0" ]] && printf 1 || printf 0)")" "$steps" "$touches" "$(fl_json_bool "$([[ -n "$steps" ]] && printf 1 || printf 0)")")"
+  state="$(printf 'sites\n%s\napps.txt\n%s\ndefault\n%s\n' "$(fl_sites_list)" "$(fl_apps_txt 2>/dev/null)" "$default")"
+  SA_TOKEN="$(printf '%s\n%s\n' "$body" "$state" | shasum -a 256 | awk '{print $1}')"
+  SA_JSON="$(printf '{"schema_version":%d,"cli_version":"%s","dry_run":true,%s,"token":"%s"}' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$body" "$SA_TOKEN")"
+}
+
 # site add NAME [--bundle B | --apps "a b"]: a new site on the bench's
 # MariaDB with the Keychain password, its hosts line, and apps that are
-# already in apps/. The default site does not change.
+# already in apps/. The default site does not change. --dry-run --json is
+# the plan with its token; --apply TOKEN --yes runs it, refused when stale.
 fl_cmd_site_add() {
-  local name="" apps="" bundle="${OPT_BUNDLE:-}" app created=false default_before default_after code msg
+  local name="" apps="" bundle="${OPT_BUNDLE:-}" app created=false default_before default_after code msg token="" apply=0
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
       --apps) apps="${2:-}"; shift 2 ;;
       --apps=*) apps="${1#*=}"; shift ;;
       --bundle) bundle="${2:-}"; shift 2 ;;
       --bundle=*) bundle="${1#*=}"; shift ;;
+      --apply) apply=1; token="${2:-}"; shift 2 || shift ;;
+      --apply=*) apply=1; token="${1#*=}"; shift ;;
       -*) fl_die "Unknown option for site add: $1" ;;
       *) [[ -z "$name" ]] && name="$1"; shift ;;
     esac
@@ -233,6 +314,28 @@ fl_cmd_site_add() {
   fl_require_plain_bench
   [[ -n "$name" ]] || fl_die "Usage: benchbar site add NAME [--bundle NAME | --apps \"app1 app2\"]"
   fl_site_valid_name "$name"
+  if [[ "$apply" == "1" ]]; then
+    [[ "$token" =~ ^[0-9a-f]{64}$ ]] || fl_die "--apply needs the token of a plan." "benchbar site add ${name} --dry-run --json prints it"
+    [[ "${FL_DRY_RUN:-0}" != "1" ]] || fl_die "--apply runs the plan; --dry-run shows it. Pass one of them."
+    [[ "${FL_ASSUME_YES:-0}" == "1" ]] || fl_die "Review the plan (site add ${name} --dry-run --json), then pass its token with --apply TOKEN --yes."
+  fi
+  # the plan: a dry run with --json prints it (one document, the text on
+  # stderr); --apply compares its token first
+  [[ "$apply" == "1" || "${FL_DRY_RUN:-0}" != "1" || "$OPT_JSON" != "1" ]] || fl_json_doc_begin
+  if [[ "$apply" == "1" || ( "${FL_DRY_RUN:-0}" == "1" && "$OPT_JSON" == "1" ) ]]; then
+    [[ -n "$bundle" && -z "$apps" ]] && { apps="$(fl_bundle_apps "$bundle")"; [[ -n "$apps" ]] || fl_die "Unknown app bundle: ${bundle}"; }
+    # the same refusal as the run itself, before a plan that could not apply
+    for app in $apps; do
+      [[ -d "${FL_BENCH_DIR}/apps/${app}" ]] || fl_die "${app} is not in ${FL_BENCH_DIR}/apps." "Get it first: cd ${FL_BENCH_DIR} && bench get-app ${app}"
+    done
+    fl_site_add_plan "$name" "$apps"
+    if [[ "$apply" == "0" ]]; then
+      fl_doc_emit 0 "$SA_JSON" plan
+      return 0
+    fi
+    [[ "$token" == "$SA_TOKEN" ]] || fl_die "The site add plan changed since it was shown (the sites, apps.txt or the default site). Nothing was changed." \
+      "Review a fresh plan: benchbar site add ${name} --dry-run --json, then pass its token."
+  fi
   # the Administrator password of a new site is the first thing asked for:
   # a run that cannot ask says so before it checks anything else
   if [[ ! -d "${FL_BENCH_DIR}/sites/${name}" && -z "${ADMIN_PASSWORD:-}" && "${FL_DRY_RUN:-0}" != "1" ]]; then
@@ -304,7 +407,8 @@ fl_cmd_site() {
     hosts) fl_cmd_site_hosts ;;
     backup) fl_cmd_site_backup "$@" ;;
     backups) fl_cmd_site_backups "$@" ;;
+    restore) fl_cmd_site_restore "$@" ;;
     drop) fl_cmd_site_drop "$@" ;;
-    *) fl_die "Unknown site command: ${sub}" "Use: benchbar site list | add NAME | default NAME | hosts | backup NAME | backups NAME | drop NAME" ;;
+    *) fl_die "Unknown site command: ${sub}" "Use: benchbar site list | add NAME | default NAME | hosts | backup NAME | backups NAME | restore NAME | drop NAME" ;;
   esac
 }

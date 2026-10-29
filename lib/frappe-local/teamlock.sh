@@ -102,6 +102,18 @@ fl_lock_load() {
 
 fl_lock_app_commit() { printf '%s' "${LK_APP_COMMIT[$1]:-}"; }
 
+# ", N commit pins (frappe, erpnext)": the apps of the loaded lock that carry
+# a commit pin, frappe and erpnext among them; nothing without a pin
+fl_lock_pins_note() {
+  local i=0 n=0 names="" c
+  for c in ${LK_APP_COMMIT[@]+"${LK_APP_COMMIT[@]}"}; do
+    if [[ -n "$c" ]]; then n=$((n + 1)); names="${names}${names:+, }${LK_APP_NAME[$i]}"; fi
+    i=$((i + 1))
+  done
+  [[ "$n" -gt 0 ]] || return 0
+  printf ', %d commit pin%s (%s)' "$n" "$([[ "$n" == "1" ]] || printf s)" "$names"
+}
+
 # A repo URL reduced to host/path, so https and SSH spellings of one repo
 # compare equal (github.com/frappe/erpnext).
 fl_repo_key() {
@@ -360,7 +372,7 @@ fl_cmd_lock_check() {
     fl_lock_print_drift_json
   else
     fl_header "benchbar lock check" "read-only" "$FL_PROFILE" "$FL_BENCH_DIR" "$FL_SITE"
-    fl_info "lockfile ${FL_LOCK_FILE} (${#LK_APP_NAME[@]} apps, ${#LK_SITE_NAME[@]} sites)"
+    fl_info "lockfile ${FL_LOCK_FILE} (${#LK_APP_NAME[@]} apps, ${#LK_SITE_NAME[@]} sites$(fl_lock_pins_note))"
     while [[ "$i" -lt "${#DR_KIND[@]}" ]]; do
       if [[ "${DR_LEVEL[$i]}" == "fail" ]]; then fl_fail "$(fl_lock_drift_line "$i")"; else fl_warn "$(fl_lock_drift_line "$i")"; fi
       [[ -n "${DR_FIX[$i]}" ]] && fl_fix "${DR_FIX[$i]}"

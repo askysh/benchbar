@@ -59,6 +59,7 @@ run_fm lock write --yes --bench-dir "$BENCH"
 assert_contains "$OUT" "unchanged"
 run_fm lock check --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "in sync"
+assert_contains "$OUT" "3 commit pins (frappe, acme_crm, acme_base)" "(frappe is pinned like any app)"
 run_fm lock check --json --bench-dir "$BENCH"
 assert_eq "True 0" "$(printf '%s' "$OUT" | jget - 'str(d["in_sync"]) + " " + str(len(d["drift"]))')"
 # the app's fixture has the same keys (the drift entries are checked where there is drift)
@@ -73,6 +74,19 @@ run_fm lock check --bench-dir "$BENCH"
 assert_eq "$snap" "$(snapshot "$BENCH" "$FL_STATE_DIR")" "(check writes nothing)"
 assert_calls_not_contain '^git (fetch|ls-remote|clone|pull)|^bench --site'
 cp "$LOCK" "$TMP_DIR/lock.good"
+
+# ---- frappe's pin: one the clone never saw is drift, and apply stops before it builds anything
+sed_inplace '/name = "frappe"/,/^$/s/^commit = ".*"$/commit = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"/' "$LOCK"
+assert_eq "commit_unknown:frappe" "$(drift_kinds)"
+run_fm lock check --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "commit_unknown: frappe (lock: deadbee"
+reset_calls
+run_fm lock apply --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "frappe: commit deadbee is not on"
+assert_calls_not_contain '^bench (setup|build)'
+cp "$TMP_DIR/lock.good" "$LOCK"
+assert_eq "" "$(drift_kinds)"
 
 # ---- every drift kind
 sed_inplace 's/^profile = "v15-lts"$/profile = "v16-lts"/' "$LOCK"

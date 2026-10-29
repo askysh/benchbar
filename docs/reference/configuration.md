@@ -69,6 +69,8 @@ escapes, no inline tables.
 | `base` | yes | The built in profile for Python, Node and MariaDB, for example `"v15-lts"` |
 | `description` | no | One line shown by `profile list` |
 | `frappe_branch` | no | Another Frappe branch than the base's |
+| `frappe_commit` | no | A commit to pin frappe to (7 to 40 lower case hex characters). `install` checks that the clone has it before it builds, and stops otherwise |
+| `erpnext_commit` | no | The same for erpnext (also `[[apps]]` `commit` for an erpnext listed there) |
 | `bundle` | no | An app bundle, instead of `[[apps]]`: a file with both is refused |
 | `site` | no | The default site name for `install` |
 | `scheduler` | no | `true` to run the scheduler |
@@ -77,7 +79,7 @@ escapes, no inline tables.
 | `[[apps]]` `name` | yes, per app | The app's folder name |
 | `[[apps]]` `repo` | yes, per app | Its git URL. A URL with a user name or token is refused |
 | `[[apps]]` `branch` | yes, per app | The branch to clone |
-| `[[apps]]` `commit` | no | A commit to pin |
+| `[[apps]]` `commit` | no | A commit to pin; a clone that does not reach it stops `install` before anything is built |
 | `[[apps]]` `access` | no, schema 2 | `public`, `private`, `personal` or `unknown`: who can read the repo, as `profile export` found it |
 | `[[apps]]` `requires` | no, schema 2 | The apps this one needs, for example `["acme_base"]`. `install --profile` leaves an app out when one it requires cannot be read |
 

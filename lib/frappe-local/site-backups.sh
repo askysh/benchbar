@@ -298,7 +298,7 @@ fl_cmd_site_drop() {
     "Add another site first (benchbar site add NAME), then drop ${name} with --new-default NAME"
   # the default: the site benchbar uses (FL_SITE) and the one bench uses
   # (currentsite.txt, else default_site); a SITE_NAME override hides neither
-  bench_default="$(tr -d '[:space:]' <"${FL_BENCH_DIR}/sites/currentsite.txt" 2>/dev/null || true)"
+  bench_default="$({ tr -d '[:space:]' <"${FL_BENCH_DIR}/sites/currentsite.txt"; } 2>/dev/null || true)"
   [[ -n "$bench_default" ]] || fl_site_config_value_v bench_default default_site
   [[ "$name" == "$FL_SITE" || "$name" == "$bench_default" ]] && is_default=1
   if [[ "$is_default" == "1" ]]; then

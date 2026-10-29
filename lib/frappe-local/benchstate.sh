@@ -208,13 +208,14 @@ fl_bench_adopted() {
 # fl_status_print_json [PINGS]: PINGS "ping" asks every site (status --ping);
 # without it only web_ping_code, the default site's, is known.
 fl_status_print_json() {
-  local mode="${1:-none}" j_ports j_sites j_sched j_file j_log j_loaded j_astate j_procs j_url j_label j_bin j_pending sched=0
+  local mode="${1:-none}" j_ports j_sites j_redis j_sched j_file j_log j_loaded j_astate j_procs j_url j_label j_bin j_pending sched=0
   # a folder benchbar does not know has no site of its own to name: never the
   # default bench's, never one it guessed
   [[ "$ST_STATE" != "not_adopted" ]] || FL_SITE=""
   fl_ports_json_v j_ports
   FL_DEFAULT_PING=""; [[ "$ST_PROCS" == "1" ]] && FL_DEFAULT_PING="$ST_PING"
-  fl_sites_json_v j_sites "$mode"
+  fl_sites_json_v j_sites "$mode" 0 1
+  fl_redis_json_v j_redis
   fl_scheduler_enabled && sched=1
   fl_json_bool_v j_sched "$sched"
   fl_json_str_v j_file "${FL_BENCH_DIR}/logs/.benchbar/state.json"
@@ -227,7 +228,7 @@ fl_status_print_json() {
   printf '{'
   fl_state_core_json "$ST_STATE" "$ST_REASON" "$ST_PID" "$ST_STARTED" "$ST_EXIT" "$ST_PING"
   fl_bench_bin_v j_bin
-  printf ',"ports":%s,"sites":%s,"scheduler":%s,"bench_bin":%s' "$j_ports" "$j_sites" "$j_sched" "$j_bin"
+  printf ',"ports":%s,"sites":%s,"scheduler":%s,"redis":%s,"bench_bin":%s' "$j_ports" "$j_sites" "$j_sched" "$j_redis" "$j_bin"
   printf ',"state_file":%s,"log":%s,"agent_loaded":%s,"agent_state":%s,"processes_running":%s' \
     "$j_file" "$j_log" "$j_loaded" "$j_astate" "$j_procs"
   # fields from frappe-mac 0.2.0, kept for older readers
@@ -235,6 +236,18 @@ fl_status_print_json() {
     "$j_url" "$j_label" "$([[ "$ST_LOADED" == "1" ]] && printf yes || printf no)" "${ST_FLAG:-none}" "$ST_PING"
   # app update or app add runs that stopped half way, with the steps left
   printf ',"pending_operations":%s}\n' "$j_pending"
+}
+
+# fl_redis_json_v VAR: {"queue":{"port","running"},"cache":{...}}. running is whether
+# something accepts a connection on the port (bash's /dev/tcp: status starts
+# no program for it); a bench's own Redis, started by up --services-only or
+# by the service, and a stranger on the port look the same here, as they
+# do to the web server that would use them.
+fl_redis_json_v() {
+  local __q=false __c=false
+  fl_tcp_open "$FL_REDIS_QUEUE_PORT" && __q=true
+  fl_tcp_open "$FL_REDIS_CACHE_PORT" && __c=true
+  printf -v "$1" '{"queue":{"port":%s,"running":%s},"cache":{"port":%s,"running":%s}}' "$FL_REDIS_QUEUE_PORT" "$__q" "$FL_REDIS_CACHE_PORT" "$__c"
 }
 
 # fl_state_after_v VAR: the bench's status --json object as it is now, for the

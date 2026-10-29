@@ -116,6 +116,8 @@ SCRIPT_DIR="$(fl_resolve_self)"
 . "${SCRIPT_DIR}/lib/frappe-local/teamlock.sh"
 # shellcheck source=lib/frappe-local/pull.sh
 . "${SCRIPT_DIR}/lib/frappe-local/pull.sh"
+# shellcheck source=lib/frappe-local/site-restore.sh
+. "${SCRIPT_DIR}/lib/frappe-local/site-restore.sh"
 # shellcheck source=lib/frappe-local/selfupdate.sh
 . "${SCRIPT_DIR}/lib/frappe-local/selfupdate.sh"
 # shellcheck source=lib/frappe-local/commands.sh
@@ -145,6 +147,9 @@ OPT_PREREQ=0
 OPT_PING=0
 # --fetch: doctor and app focus fetch the focus apps' dependencies (freshness.sh)
 FL_FETCH=0
+# install --frappe-commit SHA --erpnext-commit SHA: pin the clones
+OPT_FRAPPE_COMMIT=""
+OPT_ERPNEXT_COMMIT=""
 # confirmations come from flags only: a value left in the environment must
 # never answer a question (--yes, --make-default, an approved port plan)
 FL_ASSUME_YES=0
@@ -168,7 +173,10 @@ Setup
   install             Run phase 00 (system deps), 01 (bench and site) and the
                       background service. Safe to re-run: only changes what changed.
                       --json (with --yes or --dry-run): JSON lines for the BenchBar app.
-  adopt PATH          Register an existing bench: Procfile.lean, runner, agent, helpers.
+                      --frappe-commit SHA, --erpnext-commit SHA: pin the clones (or frappe_commit
+                      and erpnext_commit in a team profile); a commit the clone does not reach
+                      stops the install before anything is built.
+  adopt PATH         Register an existing bench: Procfile.lean, runner, agent, helpers.
                       Shows the plan and asks; never runs migrate, build or update.
                       --json (with --yes or --dry-run): JSON lines, as install.
   service             Install or refresh only the background service (phase 02).
@@ -204,9 +212,11 @@ Setup
 
 Daily
   up                  Start the bench in the background (benchup).
+                      --services-only: only its Redis, for a restore or a migrate (down stops it).
   down                Stop it and keep it stopped across reboots (benchdown).
   restart             Restart it, for example after changing Python code.
-  status              State, pid, stop reason, site ping (benchstatus).
+  status              State, pid, stop reason, site ping, Redis (benchstatus). --json adds
+                      redis and sites[].served (does the running bench serve the site).
   list                Every bench benchbar knows about.
   scan PATH           Find benches recursively in a folder (read only; --json).
   register PATH ...   Remember selected benches without changing their services.
@@ -224,6 +234,10 @@ Daily
   site hosts          Add a 127.0.0.1 line for every site to /etc/hosts (sudo, once).
   site backup NAME    bench --site NAME backup (--with-files for the uploads too; --json).
   site backups NAME   The site's backups, newest first: time, size, with files (--json).
+  site restore NAME   Restore a backup set (--from STAMP or the database file's PATH, --from-site S)
+                      into a site: it is backed up first, or --new creates it. --no-migrate,
+                      --before-migrate SCRIPT, --with-files. --dry-run --json prints the plan with
+                      its token; --apply TOKEN --yes [--json] runs exactly that plan.
   site drop NAME      bench drop-site: a backup with files first, the folder moved to
                       archived/sites, the hosts line removed. Needs --confirm-site NAME;
                       the default site also needs --new-default OTHER (--dry-run, --json).
@@ -240,8 +254,11 @@ Apps
   app list            Every app: branch, commit, local changes, the sites that have it
                       (--json; --no-sites reads the last site lists instead of asking bench).
   app add NAME|URL    bench get-app from config/apps.tsv or any git URL (GitHub, SSH, a
-                      host alias), after checking access; --branch B, --name N, and
-                      --site S or --all-sites to install it. Never replaces an app.
+                      host alias), after checking access; --branch B, --name N, --commit SHA
+                      (pin the clone to a commit), and --site S or --all-sites to install it.
+                      Several apps in one plan: app add A --commit SHA B --install-on s1,s2
+                      (--branch, --name, --commit and --install-on belong to the app before
+                      them). Never replaces an app.
                       --dry-run --json: the plan with its token (required apps read from
                       hooks.py); --apply TOKEN --yes runs exactly that plan, no questions.
   app install NAME    Install an app of the bench on a site (--site S).
@@ -295,6 +312,11 @@ Production copy
     --replace         Restore over an existing local site, after backing it up
     --skip-app APP    Restore without APP (its tables stay behind as orphans)
     --no-files        Database only; --keep-scheduler, --keep-staging
+    --no-migrate      Stop after the restore, before bench migrate
+    --before-migrate S  Run the executable SCRIPT after the restore, before migrate (with
+                      BENCHBAR_SITE, BENCHBAR_BENCH, BENCHBAR_DB_NAME; no secret in its
+                      environment); a failing script stops the run
+                      The local site is created when it does not exist.
 
 Options
   --bench-dir DIR     Bench to act on (default: remembered, or auto-detected)
@@ -372,6 +394,10 @@ while [[ "$#" -gt 0 ]]; do
     --prerequisites) OPT_PREREQ=1; shift ;;
     --ping) OPT_PING=1; shift ;;
     --fetch) FL_FETCH=1; shift ;;
+    --frappe-commit) [[ -n "${2:-}" && "${2:-}" != -* ]] || fl_die "--frappe-commit needs a commit hash." "Example: benchbar install --frappe-commit 0123abc"; OPT_FRAPPE_COMMIT="$2"; shift 2 ;;
+    --frappe-commit=*) OPT_FRAPPE_COMMIT="${1#*=}"; shift ;;
+    --erpnext-commit) [[ -n "${2:-}" && "${2:-}" != -* ]] || fl_die "--erpnext-commit needs a commit hash." "Example: benchbar install --erpnext-commit 0123abc"; OPT_ERPNEXT_COMMIT="$2"; shift 2 ;;
+    --erpnext-commit=*) OPT_ERPNEXT_COMMIT="${1#*=}"; shift ;;
     --plain|--no-color) FL_PLAIN=1; fl_ui_init; shift ;;
     --version) fl_print_version; exit 0 ;;
     # benchbar docs --help lists the topics; a command's --help is its entry in
@@ -424,9 +450,10 @@ fl_json_mode_resolve() {
     install|adopt|repair|pull) FL_JSON_MODE=own; return 0 ;;
   esac
   case "$FL_JSON_KEY" in
-    up|down|restart|service|"site add"|"site default"|"ports apply") FL_JSON_MODE=stream ;;
-    "app update") if [[ "$FL_DRY_RUN" == "1" ]]; then FL_JSON_MODE=doc; else FL_JSON_MODE=stream; fi ;;
-    "site backup"|"site drop"|"app add") FL_JSON_MODE=doc ;;
+    up|down|restart|service|"site default"|"ports apply") FL_JSON_MODE=stream ;;
+    # a dry run of these is their plan, one document with its token
+    "app update"|"site add") if [[ "$FL_DRY_RUN" == "1" ]]; then FL_JSON_MODE=doc; else FL_JSON_MODE=stream; fi ;;
+    "site backup"|"site drop"|"site restore"|"app add") FL_JSON_MODE=doc ;;
   esac
 }
 # status, list and the other readers are polled: they skip the table unless
@@ -527,7 +554,7 @@ fl_jsonl_begin_generic() {
   # plan of their own (once they know it); for the others the plan is the command.
   if [[ "$FL_DRY_RUN" == "1" ]]; then
     case "$FL_JSON_KEY" in
-      service|"site backup"|"site drop"|"app update"|"app add") ;;
+      service|"site add"|"site backup"|"site drop"|"site restore"|"app update"|"app add") ;;
       *)
         fl_bench_detect "$OPT_BENCH_DIR"
         fl_jsonl plan ",\"command\":$(fl_json_str "$FL_JSON_KEY"),\"bench\":$(fl_json_str "$FL_BENCH_DIR"),\"dry_run\":true"
@@ -754,6 +781,9 @@ cmd_install() {
   local profile_name
   fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
   fl_require_plain_bench
+  # a malformed pin is refused before any prompt or step
+  [[ -z "$OPT_FRAPPE_COMMIT" ]] || fl_validate_custom_commit "$OPT_FRAPPE_COMMIT"
+  [[ -z "$OPT_ERPNEXT_COMMIT" ]] || fl_validate_custom_commit "$OPT_ERPNEXT_COMMIT"
   profile_name="$FL_PROFILE"
   # a profile Linux cannot install yet is refused before any prompt or step
   if fl_is_linux; then fl_linux_profile_require; fi
@@ -801,6 +831,8 @@ cmd_install() {
   [[ "$FL_ASSUME_YES" == "1" ]] && { args00+=(--yes); args01+=(--yes); }
   [[ "$OFFLINE" == "1" ]] && { args00+=(--offline); args01+=(--offline); }
   [[ "$FL_MAKE_DEFAULT" == "1" ]] && args01+=(--make-default)
+  [[ -z "$OPT_FRAPPE_COMMIT" ]] || args01+=(--frappe-commit "$OPT_FRAPPE_COMMIT")
+  [[ -z "$OPT_ERPNEXT_COMMIT" ]] || args01+=(--erpnext-commit "$OPT_ERPNEXT_COMMIT")
 
   fl_step_begin 0
   if MARIADB_ROOT_PASSWORD="${MARIADB_ROOT_PASSWORD:-}" BENCHBAR_PDF_STEP="$FL_INSTALL_PDF_STEP" FL_JSONL_PARENT=system_deps \
@@ -903,6 +935,27 @@ cmd_install() {
 }
 
 cmd_service() {
+  local i=0
+  # --apply TOKEN: run the plan a dry run showed, refused when it changed since
+  # (fl_adopt_plan_json compares, before any action runs)
+  FL_SERVICE_APPLY_TOKEN=""
+  while [[ "$i" -lt "${#ARGS[@]}" ]]; do
+    case "${ARGS[$i]}" in
+      --apply) FL_SERVICE_APPLY_TOKEN="${ARGS[$((i + 1))]:-}"; i=$((i + 2)) ;;
+      --apply=*) FL_SERVICE_APPLY_TOKEN="${ARGS[$i]#*=}"; i=$((i + 1)) ;;
+      # anything else was ignored before; it still is
+      *) i=$((i + 1)) ;;
+    esac
+  done
+  if [[ -n "$FL_SERVICE_APPLY_TOKEN" || " ${ARGS[*]:-} " == *" --apply "* ]]; then
+    [[ "$FL_SERVICE_APPLY_TOKEN" =~ ^[0-9a-f]{64}$ ]] || fl_die "--apply needs the token of a plan." "benchbar service --dry-run --json prints it"
+    [[ "${FL_DRY_RUN:-0}" != "1" ]] || fl_die "--apply runs the plan; --dry-run shows it. Pass one of them."
+    [[ "${FL_ASSUME_YES:-0}" == "1" ]] || fl_die "Review the plan (service --dry-run --json), then pass its token with --apply TOKEN --yes."
+    # the scheduler choice is stored before the plan is made: with a token it
+    # would be written even when the token turns out stale. It belongs to a
+    # plain service run (or the dry run's flags reviewed, then a plain run).
+    [[ -z "${FL_SCHEDULER:-}" ]] || fl_die "--apply runs a reviewed plan as it is; --with-schedule and --without-schedule cannot come with it." "Run benchbar service --with-schedule (or --without-schedule) without --apply."
+  fi
   fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
   fl_require_bench
   fl_require_plain_bench
@@ -934,16 +987,24 @@ cmd_service() {
 # adopt --json: the plan line, called by the repair engine once it knows the
 # actions (FL_ENGINE_PLAN_HOOK). Its steps are the actions, numbered from 1.
 fl_adopt_plan_json() {
-  local a n=0 pl_steps="" move=false off mode=terminal
+  local a n=0 pl_steps="" move=false off mode=terminal token
   [[ "${FL_PM_APPLYING:-0}" != "1" ]] || return 0
+  # the token of the plan: its actions and what they are made from (the
+  # bench, the port block, the scheduler choice); service --apply TOKEN is
+  # refused here, before any action runs, when it no longer matches
+  off="${FL_PORT_TARGET:-$((FL_WEB_PORT - FL_PORT_BASE_WEB))}"
+  token="$(printf '%s\n' "$FL_BENCH_DIR" "$1" "$off" "${FL_SCHEDULER:-}" "$FL_SITE" | shasum -a 256 | awk '{print $1}')"
+  if [[ -n "${FL_SERVICE_APPLY_TOKEN:-}" && "$FL_SERVICE_APPLY_TOKEN" != "$token" ]]; then
+    fl_die "The service plan changed since it was shown (its actions, the ports or the scheduler). Nothing was changed." \
+      "Review a fresh plan: benchbar service --dry-run --json --bench-dir ${FL_BENCH_DIR}, then pass its token."
+  fi
   for a in $1; do
     n=$((n + 1))
     pl_steps="${pl_steps}${pl_steps:+,}{\"n\":${n},\"id\":\"${a}\",\"name\":$(fl_json_str "$(fl_action_label "$a")"),\"sudo\":$(fl_json_bool "$(fl_action_needs_sudo "$a" && printf 1 || printf 0)"),\"will_run\":true}"
   done
   case " $1 " in *" port_block "*) move=true ;; esac
-  off="${FL_PORT_TARGET:-$((FL_WEB_PORT - FL_PORT_BASE_WEB))}"
   fl_sudo_gui && mode=gui
-  fl_jsonl plan ",\"bench\":$(fl_json_str "$FL_BENCH_DIR"),\"site\":$(fl_json_str "$FL_SITE"),\"profile\":$(fl_json_str "$FL_PROFILE"),\"port_offset\":$(fl_json_num "$off"),\"ports_move\":${move},\"dry_run\":$(fl_json_bool "$FL_DRY_RUN"),\"sudo_mode\":\"${mode}\",\"steps\":[${pl_steps}],\"log\":$(fl_json_str "${FL_LOG_FILE:-}")"
+  fl_jsonl plan ",\"bench\":$(fl_json_str "$FL_BENCH_DIR"),\"site\":$(fl_json_str "$FL_SITE"),\"profile\":$(fl_json_str "$FL_PROFILE"),\"port_offset\":$(fl_json_num "$off"),\"ports_move\":${move},\"dry_run\":$(fl_json_bool "$FL_DRY_RUN"),\"sudo_mode\":\"${mode}\",\"steps\":[${pl_steps}],\"token\":\"${token}\",\"log\":$(fl_json_str "${FL_LOG_FILE:-}")"
   FL_JSONL_PLAN_SENT=1
   [[ "$FL_DRY_RUN" != "1" ]] || FL_JSONL_QUIET=1
   export FL_JSONL_QUIET
@@ -1132,7 +1193,7 @@ cmd_mcp() {
   if command -v python3 >/dev/null 2>&1; then candidates+=("$(command -v python3)"); fi
   for py in ${candidates[@]+"${candidates[@]}"}; do
     if "$py" -I -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)' >/dev/null 2>&1; then
-      BENCHBAR="${BENCHBAR_MCP_CLI:-$FL_SELF}" BENCHBAR_VERSION="$FL_VERSION" exec "$py" -I "${SCRIPT_DIR}/lib/frappe-local/mcp.py"
+      BENCHBAR="${BENCHBAR_MCP_CLI:-$FL_SELF}" BENCHBAR_VERSION="$FL_VERSION" exec "$py" -I "${SCRIPT_DIR}/lib/frappe-local/mcp.py" ${ARGS[@]+"${ARGS[@]}"}
     fi
     ver="$("$py" -I -c 'import sys; print("%d.%d.%d" % sys.version_info[:3])' 2>/dev/null || true)"
     found="${found:+${found}, }${py} (${ver:-not runnable})"
@@ -1154,7 +1215,7 @@ fl_site_arg_name() {
     i=$((i + 1)); [[ "$i" -gt 1 ]] || continue
     if [[ "$skip" == "1" ]]; then skip=0; continue; fi
     case "$a" in
-      --apps|--bundle|--confirm-site|--new-default) skip=1 ;;
+      --apps|--bundle|--confirm-site|--new-default|--from|--from-site|--before-migrate|--apply) skip=1 ;;
       -*) ;;
       *) printf '%s' "$a"; return 0 ;;
     esac
@@ -1213,6 +1274,20 @@ fl_noninteractive_preflight() {
           fl_need "sudo" "the ${FL_HOSTS_FILE} line would ask for a password; cache the credential first, or pass --json to skip it"
         fi
       fi ;;
+    "site restore")
+      # the restore needs the root password (to create or replace the database) and a yes
+      [[ "$FL_ASSUME_YES" == "1" ]] || fl_need "--yes" "to confirm the restore plan (or --apply TOKEN --yes)"
+      name="$(fl_site_arg_name)"
+      fl_site_name_ok "$name" || return 0
+      fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
+      fl_is_bench_dir "$FL_BENCH_DIR" || return 0
+      fl_need_mariadb_password ;;
+    "pull "*)
+      # a --json pull answers its own gates; the root password is the only input it cannot guess
+      [[ "$FL_ASSUME_YES" == "1" || "$OPT_JSON" == "1" ]] || fl_need "--yes" "to confirm the pull plan"
+      fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
+      fl_is_bench_dir "$FL_BENCH_DIR" || return 0
+      fl_need_mariadb_password ;;
     "site drop")
       name="$(fl_site_arg_name)"
       fl_site_name_ok "$name" || return 0
@@ -1286,7 +1361,7 @@ case "$COMMAND" in
     fl_cmd_ports ${ARGS[@]+"${ARGS[@]}"} || exit $? ;;
   scan) fl_cmd_scan "${ARGS[0]:-}" ;;
   register) fl_cmd_register ${ARGS[@]+"${ARGS[@]}"} ;;
-  up) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_up ;;
+  up) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_up ${ARGS[@]+"${ARGS[@]}"} ;;
   down) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_down ;;
   restart) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_restart ;;
   logs) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_logs ${ARGS[@]+"${ARGS[@]}"} ;;

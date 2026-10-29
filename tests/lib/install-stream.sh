@@ -57,3 +57,26 @@ for k in sorted(u):
 
 osa_calls() { [[ -f "$MOCK_STATE/osa_reasons" ]] && wc -l <"$MOCK_STATE/osa_reasons" | tr -d ' ' || printf 0; }
 osa_reset() { rm -f "$MOCK_STATE"/osa_reasons "$MOCK_STATE"/osa_cmd.* "$MOCK_STATE"/osa_cancel "$MOCK_STATE"/osa_cancel_all "$MOCK_STATE"/osa_fail; }
+
+# stream_keys_missing WANT GOT: what the fixture's stream_keys (WANT) has and
+# the live one (GOT) lacks, one "event:key" per line; empty when every event
+# and key of the fixture is still printed. Fields may be added, never removed
+# or renamed (docs/json-schema.md, Rules for readers).
+stream_keys_missing() {
+  python3 -I -c '
+import sys
+def parse(text):
+    out = {}
+    for line in text.splitlines():
+        if ":" in line:
+            ev, keys = line.split(":", 1)
+            out[ev] = set(k for k in keys.split(",") if k)
+    return out
+want, got = parse(sys.argv[1]), parse(sys.argv[2])
+for ev in sorted(want):
+    if ev not in got:
+        print(ev + ": (event missing)")
+        continue
+    for k in sorted(want[ev] - got[ev]):
+        print(ev + ":" + k)' "$1" "$2"
+}

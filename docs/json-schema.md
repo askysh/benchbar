@@ -234,6 +234,7 @@ listener: it is polled at rest (0.6.1).
 | `processes_running` | bool | any honcho, serve, worker, schedule or socketio process of this bench (before 0.6.1 a port listener counted too) |
 | `sites` | array | added in 0.4, see [Sites](#sites) |
 | `scheduler` | bool | added in 0.4: `Procfile.lean` runs `bench schedule` (`benchbar service --with-schedule`) |
+| `redis` | object | added in 0.8: `{"queue": {"port", "running"}, "cache": {"port", "running"}}`. `running` is whether something accepts a connection on the port, read by bash itself (`/dev/tcp`), so status starts no new program for it (a subshell for the probe). `benchbar up --services-only` starts these two and nothing else, `benchbar down` stops them |
 | `pending_operations` | array | `[]` when none. An `app update` or planned `app add` that stopped part way, one entry per app: `op` (`app_update` or `app_add`), `app`, `branch`, `from`, `to` (commits; `from` is null for an add), `steps[]` (`kind`, `target`, `name` of the steps not done yet), `failed_step` (the kind it stopped at, or null), `reason` (that step's own failure line, or null) and `updated_at`. Read from a record file in the bench's state folder: no extra process on the status path |
 
 Kept from frappe-mac 0.2.0 for older readers: `url`, `agent`,
@@ -267,6 +268,7 @@ carry the bench's sites, read from `sites/*/site_config.json`:
 | `default` | bool | the site `benchup` waits for, the runner pings and the app opens; `benchbar site default NAME` changes it (and runs `bench use`) |
 | `hosts_entry` | bool | `/etc/hosts` maps it to 127.0.0.1; `benchbar site hosts` adds the missing lines |
 | `ping_code` | number or null | HTTP code of `/api/method/ping` with this site as `Host`; `null` when nothing listens on the web port or nothing answered. Since 0.6.1 `list --json` and `status --json` leave it `null` (they are polled; `web_ping_code` is the default site's ping) unless `status --json --ping` asks every site once; `site list --json` always asks |
+| `served` | bool or null | `status --json` only, added in 0.8: does the running web process serve this site (its `Host` is not answered with a 404). `null` while the bench is stopped (a stopped bench is never pinged) or when nothing answered. The default site's ping, and with `--ping` every site's, is reused; any other site is asked once, in bash. `false` is a site folder in `sites/` that the running bench does not serve: doctor's `site_not_served` warns about it |
 
 `benchbar site list --json` prints `{"schema_version":1,"cli_version":..,"bench":..,"sites":[..]}`,
 and since 0.7.3 each of its sites also carries the database:
@@ -285,6 +287,55 @@ default` and `site drop` in their result. `site add` never moves it (it
 puts it back if `bench new-site` did); only `site default` does.
 `site add`, `site default` and `site drop` end with the [done fields](#the-done-fields-08),
 `site add` and `site default` with `site`, `default_site` and `created`.
+
+## `benchbar site add NAME --dry-run --json`
+
+The plan of a site add, read only, with the token that `--apply TOKEN --yes`
+(and `benchbar_site_add` over MCP) needs. One document; the text goes to
+stderr.
+
+```json
+{"schema_version":1,"cli_version":"0.8.0","bench":"/Users/you/frappe-bench","site":"qa1.localhost","exists":false,
+ "apps":["erpnext"],"default_site":"macdev","default_moves":false,"backup":null,"hosts_entry":false,
+ "steps":[{"kind":"new_site","name":"Create qa1.localhost","command":"bench new-site qa1.localhost ..."},
+  {"kind":"install","name":"Install erpnext","command":"bench --site qa1.localhost install-app erpnext"}],
+ "touches":["database","site_folder"],"changes":true,"token":"3f9c0e...64 hex characters"}
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `exists` | bool | the site folder is already there (then no `new_site` step) |
+| `default_site` | string | the default site now (`sites/currentsite.txt`); `default_moves` is always `false` |
+| `steps[]` | array | `kind` is `new_site`, `install` or `hosts` (macOS, when the line is missing) |
+| `touches` | array of strings | `database`, `site_folder`, `hosts` |
+| `token` | string | SHA-256 of the plan and of the bench's site list, `apps.txt` and default site |
+
+`--apply TOKEN --yes` recomputes the plan and refuses a token that no longer
+matches before anything changes; then it is a normal `site add` and its
+stream ends in the usual `done` line.
+
+## `benchbar service --dry-run --json`
+
+The plan line of the service stream (as for `adopt --json`) carries a `token`:
+a SHA-256 of the planned actions, the bench, the port block, the scheduler
+choice and the site. `benchbar service --apply TOKEN --yes [--json]` runs that
+plan and refuses, before any action, a token that no longer matches.
+
+## MCP results of the site and service tools
+
+`benchbar_site_add_plan`, `benchbar_site_restore_plan` and
+`benchbar_service_install_plan` return the CLI's plan (for the service, the
+plan line of its stream) as `structuredContent`. The apply tools and
+`benchbar_site_backup` return `exit_code`, `output` (stderr text), `result`
+(the `done` line, or the one document with the done fields) and the state
+after: `sites` (`site list --json`) for `benchbar_site_add` and
+`benchbar_site_restore`, `status` for the others. `benchbar_site_add` adds
+`admin_password` and `admin_password_generated: true` when it generated the
+new site's Administrator password. `benchbar_up` on a bench whose `state` is
+`not_adopted` returns `service: "missing"`, `started: false`, `next_tool:
+"benchbar_service_install_plan"` and the `status` instead of starting it.
+Any line of CLI text that would name where the MariaDB root password is kept
+is replaced by a note in every result and error.
 
 ## `benchbar doctor --json`
 
@@ -679,7 +730,7 @@ branch) exits 1 with the reason as text; anything else is a plan, with
 ```json
 {"schema_version":1,"cli_version":"0.6.0","bench":"/Users/you/frappe-bench","profile":"v15-lts",
  "target":"https://github.com/acme/acme_crm","app":"acme_crm","package":"acme_crm",
- "repo":"https://github.com/acme/acme_crm","branch":"main","commit":"9b1d2c...40 hex characters","branch_source":"remote_default",
+ "repo":"https://github.com/acme/acme_crm","branch":"main","commit":"9b1d2c...40 hex characters","commit_source":"branch","branch_source":"remote_default",
  "present":false,"reachable":true,
  "sites":[{"name":"macdev","installed":false}],"sites_error":null,
  "required_apps":[{"name":"acme_base","required_by":"acme_crm","present":false,"resolves":true,
@@ -701,25 +752,38 @@ branch) exits 1 with the reason as text; anything else is a plan, with
 | `package` | string or null | that package folder; `null` when `hooks.py` could not be read |
 | `repo` | string | the URL `get-app` gets |
 | `branch` | string or null | `null` when it could not be told (then `errors` says so) |
-| `commit` | string or null | the commit the plan read `hooks.py` from; `--apply` stops before build and install when `get-app` checks out another one |
+| `commit` | string or null | the commit the plan read `hooks.py` from: the pin (always the full hash) when `--commit` is given, else the branch tip; `--apply` stops before build and install when `get-app` checks out another one, and when a pinned commit is not reached by the clone |
+| `commit_source` | string | `pin` (`--commit`; for an app already in the bench, it is at the pin) or `branch` |
 | `branch_source` | string or null | `given` (`--branch`), `policy` (`config/apps.tsv` or the team profile), `remote_default` (the remote's HEAD) or `present` (the branch of the app already in the bench) |
 | `present` | bool | the bench already has the app; then no clone and no build, only installs |
 | `reachable` | bool or null | git could read the repo without a prompt, within the timeout; `null` when the app is present (nothing is fetched) |
-| `sites[]` | array | the target sites (`--site`, `--all-sites`) and whether each has the app already |
+| `sites[]` | array | the target sites (`--site`, `--all-sites`, `--install-on`) and whether each has the app already (in a batch: the union over the apps, `installed` true when no app of the batch needs an install there) |
+| `apps[]` | array | present only when several apps were given: one entry per target, in the order given, with its own `app`, `package`, `target`, `repo`, `branch`, `branch_source`, `commit`, `commit_source`, `present`, `reachable`, `install_on` (the sites of its `--install-on`, empty when it has none), `sites[]` (its own sites and whether it is installed there) and `required_apps` (the names its `hooks.py` requires). The fields above describe the first target; `required_apps[]`, `missing_required`, `order` and `steps[]` cover the whole batch |
 | `sites_error` | string or null | as in `app list --json` |
 | `required_apps[]` | array | every app `hooks.py` requires, followed through the ones that get cloned; `present` in the bench, `resolves` through `source` (`apps_tsv` or `team_profile`) with its `repo`, `branch` and `commit` |
 | `missing_required` | array of strings | the required apps the plan clones or cannot resolve |
-| `order` | array of strings | the apps the plan clones, each after the apps it requires (ties keep the order the plan always had), the app being added last when it is cloned. A cycle in `required_apps` is an `errors` entry, `required_apps cycle: a -> b -> a`, with `can_apply` false |
+| `order` | array of strings | the apps the plan clones, each after the apps it requires (ties keep the order the plan always had), the apps being added after the ones they need when they are cloned; the required apps of every target are one graph, an app two targets require is cloned once. A cycle in `required_apps` is an `errors` entry, `required_apps cycle: a -> b -> a`, with `can_apply` false |
 | `reason` | string or null | set when a record of an earlier, unfinished add of this app is merged into the plan (the build, installs and restart it did not finish are `steps`, `changes` is true); otherwise `null` |
-| `steps[]` | array | in the order `--apply` runs them; `kind` is `clone_required`, `clone`, `requirements_python` (only when an earlier run left a cloned app without its pip install), `build`, `install` or `restart` (run only when the bench is running); `note` says what else the step does, for `install` that it changes the site's database like a migrate of these apps |
+| `steps[]` | array | in the order `--apply` runs them; `kind` is `clone_required`, `clone`, `requirements_python` (only when an earlier run left a cloned app without its pip install), `build` (one for every app that is cloned), `install` (one per app and site, site by site, each site in dependency order; named `Install APP on SITE` when several apps were given) or `restart` (once, run only when the bench is running); `note` says what else the step does, for `install` that it changes the site's database like a migrate of these apps |
 | `errors` | array of strings | why the plan cannot run: an unreadable repo, a missing branch, no `hooks.py`, a required app nothing resolves |
 | `changes` | bool | `false` when there is nothing to do |
 | `can_apply` | bool | `false` when `errors` is not empty |
 | `token` | string | SHA-256 of the plan (the commits included, so a branch that moves makes it stale) and of the bench's `sites/apps.txt`, `apps/` folders and site list |
 
 `benchbar app add URL --apply TOKEN --yes --json`, the result:
-`{"schema_version", "cli_version", "bench", "app", "branch", "token",
-"applied": true, "ok", "steps": [{"kind", "name", "status", "reason"}]}`, where
+`{"schema_version", "cli_version", "bench", "app", "branch", "commit",
+"commit_source", "token", "applied": true, "ok", "steps": [{"kind", "name",
+"status", "reason"}], "apps": [...], "required_apps": [...]}`. `apps[]` has one
+entry per target (always, also for one app) and `required_apps[]` one per
+required app that was cloned: `{"app", "cloned", "clone", "build",
+"installs": [{"site", "status", "migrate", "reason"}]}`. `cloned` is true when
+this run cloned the app; `clone` and `build` are the status of that step
+(`null` when the app had none, for example `build` of an app that was
+already there); each install has the status of its step and the same
+status as `migrate`, because `install-app` is what runs the app's patches
+and syncs its DocTypes (there is no separate migrate step). An install
+skipped because an app it requires failed to install on that site has
+`reason` `after failed install of APP`. Where
 `status` is `done`, `failed`, `skipped` (after a failed step it depends on:
 clone, then build, then install and restart; or a restart of a stopped
 bench) or `pending`. `reason` is `after failed <kind>` for a step skipped
@@ -903,8 +967,11 @@ the reviewed commit, not a newer one.
 
 ### `benchbar profile check NAME --json`
 
-`{"name","repos":[{"app","repo","reachable","reason"}],"skipped_apps":[...]}`,
-as in the import plan.
+`{"name","repos":[{"app","repo","reachable","reason","commit"}],"skipped_apps":[...],"frappe_commit","erpnext_commit"}`,
+as in the import plan. Since 0.8 each repo carries the `commit` the profile pins it to (`null` for none), and
+`frappe_commit` and `erpnext_commit` are the profile's pins for the two apps it does not list
+as `[[apps]]` (`null` for none). A pin is read, not tried against the server: whether the clone
+reaches it is checked by `install`, before anything is built.
 
 ## `benchbar pull --json`
 
@@ -926,7 +993,7 @@ answered counts as no). Each line carries `schema_version`,
 
 | Event | Fields | Notes |
 |---|---|---|
-| `plan` | `source`, `host`, `remote_site`, `remote_bench`, `from_dir`, `bench`, `site`, `replace`, `backup`, `encryption_key`, `apps`, `migrate`, `steps`, `dry_run` | once, after the read only checks. `backup.name`, `bytes` and `age_hours` are `null` with `--new-backup` (that backup does not exist yet). `encryption_key` says whether production has one to carry over, never its value |
+| `plan` | `source`, `host`, `remote_site`, `remote_bench`, `from_dir`, `bench`, `site`, `replace`, `backup`, `encryption_key`, `apps`, `migrate`, `create_site`, `before_migrate`, `steps`, `dry_run` | once, after the read only checks. `backup.name`, `bytes` and `age_hours` are `null` with `--new-backup` (that backup does not exist yet). `encryption_key` says whether production has one to carry over, never its value. Since 0.8 `create_site` says the target does not exist and a `new_site` step makes it, `before_migrate` is the path of the `--before-migrate` script or `null`, and `migrate` is `false` with `--no-migrate`. A target the restore cannot go into (a folder without a `site_config.json`, a `bench new-site` that did not finish, no MariaDB root password) ends the run before this line, in a dry run too |
 | `gate` | `name` (`new_backup`, `apply`, `replace`), `answer` (`yes`, `no`) | a question the run asked. `new_backup` is `yes` only when the typed (or `--confirm-site`) name matches |
 | `progress` | `file`, `bytes`, `total` | after each downloaded file; `bytes` counts the files so far |
 | `step` | `n`, `id`, `name`, `status` | `n` counts from 1 in the order of `plan.steps`; `status` is `done`, `unchanged`, `skipped` or `failed` |
@@ -937,9 +1004,10 @@ differs`, `local older` or `local newer`. `decrypt.ok` and
 `decrypt.failed` count the encrypted `__Auth` rows that do and do not
 decrypt with the site's `encryption_key`; `failed` above 0 means stored
 passwords must be entered again. Step ids: `new_backup`, `download`,
-`decrypt`, `local_backup`, `restore`, `encryption_key`, `dev_safety`,
-`skip_apps`, `migrate`, `clear_cache`, `admin_password`, `hosts`,
-`cleanup`, `verify`; a run lists only the ones it needs.
+`decrypt`, `local_backup`, `quiesce`, `new_site`, `restore`,
+`encryption_key`, `resume`, `dev_safety`, `skip_apps`, `before_migrate`,
+`migrate`, `clear_cache`, `admin_password`, `hosts`, `cleanup`, `verify`;
+a run lists only the ones it needs.
 
 No event ever holds a password, the encryption key or a token from an
 app's remote URL.
@@ -1050,6 +1118,72 @@ And the result, without `--dry-run`:
 | `new_default` | the site that became the default, or `null` |
 | `hosts_removed` | the `/etc/hosts` line was removed |
 | `manual_step` | the command that removes the hosts line by hand when benchbar could not (no terminal for `sudo`, a line outside benchbar's block), else `null` |
+
+### `benchbar site restore --json`
+
+Added in 0.8. The plan of a restore from a backup set, read only, with a
+token. `--apply TOKEN --yes` runs exactly that plan:
+
+```json
+{
+  "schema_version": 1, "cli_version": "0.8.0",
+  "bench": "/Users/you/frappe-bench", "site": "acme.localhost",
+  "new": false, "exists": true,
+  "source": {
+    "site": "acme.localhost",
+    "set": { "stamp": "20260902_090000", "...": "a backup, as above" },
+    "restores_files": true, "encryption_key": true
+  },
+  "backup_first": { "will_run": true, "with_files": true, "folder": "/Users/you/frappe-bench/sites/acme.localhost/private/backups" },
+  "migrate": true, "before_migrate": null, "before_migrate_sha256": null,
+  "touches": ["backup", "database", "files", "site_config"],
+  "steps": [
+    { "id": "local_backup", "name": "Back up acme.localhost with its files", "touches": ["backup"] },
+    { "id": "restore", "name": "Restore 20260902_090000 into acme.localhost with its files", "touches": ["database", "files"] },
+    { "id": "encryption_key", "name": "Carry the encryption key of the set over", "touches": ["site_config"] },
+    { "id": "migrate", "name": "bench migrate", "touches": ["database"] },
+    { "id": "clear_cache", "name": "Clear caches", "touches": ["cache"] },
+    { "id": "verify", "name": "Verify acme.localhost", "touches": [] }
+  ],
+  "warnings": [], "needs": [], "errors": [], "can_apply": true,
+  "token": "8f1c...64 hex characters"
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `site`, `new`, `exists` | the target; `new` is `--new` (the site is created first, with `bench new-site`), `exists` that a site of that name is there |
+| `source.site` | the site whose backups the stamp names (`--from-site`, else the target); `null` for a path |
+| `source.set` | the backup set, as in [Site backups](#site-backups) |
+| `source.restores_files` | `--with-files` was given: the public and private files are restored too |
+| `source.encryption_key` | the set's `site_config_backup.json` has an `encryption_key`, which is carried into the target (never printed) |
+| `backup_first` | an existing target is backed up with its files before anything changes (`will_run`); `folder` is where the set lands |
+| `migrate`, `before_migrate`, `before_migrate_sha256` | `migrate` is `false` with `--no-migrate`; `before_migrate` is the path of the `--before-migrate` script and `before_migrate_sha256` its hash (a changed script makes the token stale) |
+| `touches` | what the run changes: `backup` (an existing target is backed up first), `database`, `files`, `site_config`, `hosts` for a new site whose `/etc/hosts` line is missing, and `common_site_config` when the scheduler of a running bench is paused for the restore |
+| `needs` | inputs a run in a terminal would ask for, for example `["MARIADB_ROOT_PASSWORD"]` when none is stored. In a terminal (no `--json`, no `--yes`) the plan stays applicable; for `--json` it is an error as well, because nothing can answer |
+| `steps` | in the order they run, each with the `touches` of that step. Ids: `local_backup`, `quiesce`, `new_site`, `restore`, `encryption_key`, `resume`, `before_migrate`, `migrate`, `clear_cache`, `hosts`, `verify` |
+| `errors`, `can_apply` | what stops the plan (no such site, a set that is not there, an encrypted or file-less set, MariaDB down, the root password unknown to benchbar, apps the bench lacks, a hook that is not an executable file); `can_apply` is `false` when there is one. The command still exits 0 with `--json` |
+| `token` | a hash of the plan and of what it was made against: the sites, the default site, the hook and the set's files. `--apply` recomputes it and refuses a different one: `The site restore plan changed since it was shown`, nothing changed |
+
+The result of `--apply TOKEN --yes --json`:
+
+| Field | Meaning |
+|---|---|
+| `applied`, `ok` | `ok` is `false` when a step failed (exit 1); the steps after it stay `pending` or `skipped` |
+| `site`, `new`, `token` | as in the plan |
+| `backup` | the backup taken before an existing target was touched (a [backup](#site-backups)), `null` for a new site or when it did not get that far. It must be a new set with its database and both file archives, or the run stops before anything is overwritten. Put it back with `site restore TARGET --from STAMP --with-files --yes` |
+| `set_copy` | for an existing target: the folder under the state backups that holds a copy (hard links, else copies) of the set that was restored. Bench's own backup deletes old backups in the target's folder, so the restore reads the copy, which stays after the run. `null` for a new site |
+| `steps` | `[{"id","name","status"}]`, `status` is `done`, `unchanged`, `skipped`, `failed` or `pending` |
+| `verify` | what the end check found: `apps` (what `bench --site TARGET list-apps` answers), `default_site` (the default site after the run, which is never changed: if a step moved it, it is put back with `bench use` and a warning says so) and `answers` (the web ping of the target while the bench runs, else `null`) |
+| `warnings` | for example `migrate was skipped (--no-migrate)` |
+
+Exit 0 only after the end check passed: the target answers `list-apps`
+with frappe in it, and the default site is where it was. Exit 2 is
+the MariaDB root password unknown to benchbar. The hook (`--before-migrate`)
+runs in the bench folder with `BENCHBAR_SITE`, `BENCHBAR_BENCH` and
+`BENCHBAR_DB_NAME`; variables named like a secret (`*PASSWORD*`, `*SECRET*`,
+`*TOKEN*`, `*PASSPHRASE*`, `*_KEY`) are removed from its environment, and a
+failing hook ends the run before migrate.
 
 ## `logs/.benchbar/state.json`
 

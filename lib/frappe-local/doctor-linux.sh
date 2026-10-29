@@ -16,7 +16,7 @@
 #
 # Doctor stays read only and never reads the MariaDB password file.
 
-FL_CHECK_ORDER="brew mariadb_bind mariadb_utf8 pdf_engine env_python env_setuptools bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy app_update_pending app_add_pending dependency_behind apps_behind lock_parse lock_drift profile_outdated logs bench_path honcho honcho_setuptools procfile runner agent runner_heartbeat scheduler stop_flag helpers cli_link cli_duplicate dead_agents hosts port_clash orphans ping"
+FL_CHECK_ORDER="brew mariadb_bind mariadb_utf8 pdf_engine env_python env_setuptools bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy app_update_pending app_add_pending dependency_behind apps_behind lock_parse lock_drift profile_outdated logs bench_path honcho honcho_setuptools procfile runner agent runner_heartbeat scheduler stop_flag helpers cli_link cli_duplicate dead_agents hosts port_clash orphans ping site_not_served"
 
 # WSL only: the Windows host and NTP in the distro both set its clock
 if fl_is_wsl; then FL_CHECK_ORDER="${FL_CHECK_ORDER/ mariadb_bind/ wsl_time_sync mariadb_bind}"; fi

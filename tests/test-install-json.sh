@@ -309,7 +309,10 @@ same_stream_keys() {
   for f in "$FIX"/$pattern; do [[ -e "$f" ]] && fixtures+=("$f"); done
   [[ "${#fixtures[@]}" -gt 0 ]] || { printf 'skipped: no fixture %s yet\n' "$pattern"; return 0; }
   want="$(stream_keys "${fixtures[@]}")"; got="$(stream_keys "$@")"
-  [[ "$want" == "$got" ]] || fail "the keys of $pattern and the live stream differ:"$'\n'"fixture: ${want}"$'\n'"live:    ${got}"
+  # every event and key of the fixture is still printed; new keys are fine
+  local missing
+  missing="$(stream_keys_missing "$want" "$got")"
+  [[ -z "$missing" ]] || fail "the live stream lacks keys of $pattern:"$'\n'"${missing}"$'\n'"fixture: ${want}"$'\n'"live:    ${got}"
 }
 same_stream_keys 'install-stream-*.jsonl' "$TMP_DIR/stream-success.jsonl" "$TMP_DIR/stream-cancelled.jsonl" "$TMP_DIR/stream-failed.jsonl" "$TMP_DIR/stream-exit2.jsonl" "$TMP_DIR/stream-progress.jsonl"
 if [[ -e "$FIX/doctor-prerequisites.json" ]]; then

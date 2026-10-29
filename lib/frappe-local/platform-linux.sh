@@ -325,7 +325,7 @@ fl_pid_cwd() {
 
 fl_bench_listener_pids() {
   local port pid cmd addr
-  fl__ss_listeners "$(fl_bench_ports_csv)" | while read -r port pid cmd addr; do
+  fl__ss_listeners "${1:-$(fl_bench_ports_csv)}" | while read -r port pid cmd addr; do
     [[ "$pid" =~ ^[1-9][0-9]*$ ]] && fl_pid_is_bench_own_strict "$pid" && printf '%s\n' "$pid"
   done
   return 0
