@@ -181,6 +181,10 @@ All notable changes to this project are documented here.
 - The menu bar icon's right click menu has **Check for Updates…** in a
   build without Sparkle too, as the app menu has: it opens About and
   checks.
+- In a wide BenchBar window a bench's name, path and tabs line up with
+  its centered content instead of staying at the left edge. In the
+  narrowest window **Open in VS Code** moves into the "…" menu instead of
+  shrinking to "Open…".
 - `repair` run by a copy of BenchBar.app that the app did not register (a
   development build, a second copy of the app) no longer points the shell
   helpers at that copy's own CLI, which goes away with the build. The

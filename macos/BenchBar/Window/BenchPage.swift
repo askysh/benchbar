@@ -9,16 +9,21 @@ struct BenchPage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header
-                .padding(.horizontal, WindowMetrics.paneInset).padding(.top, 16).padding(.bottom, 10)
-            Picker("", selection: $router.benchTab) {
-                ForEach(BenchTab.allCases) { Text($0.rawValue).tag($0) }
+            // the column of the tab's Form below, which centers past its widest
+            VStack(alignment: .leading, spacing: 0) {
+                header
+                    .padding(.top, 16).padding(.bottom, 10)
+                Picker("", selection: $router.benchTab) {
+                    ForEach(BenchTab.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pageTabs()
+                .labelsHidden()
+                ChangeResultBanner(workbench: workbench, scope: bench.path)
+                    .padding(.top, 10)
             }
-            .pageTabs()
-            .labelsHidden()
+            .frame(maxWidth: WindowMetrics.groupedFormMaxWidth, alignment: .leading)
             .padding(.horizontal, WindowMetrics.paneInset)
-            ChangeResultBanner(workbench: workbench, scope: bench.path)
-                .padding(.horizontal, WindowMetrics.paneInset).padding(.top, 10)
+            .frame(maxWidth: .infinity)
             Group {
                 switch router.benchTab {
                 case .overview: BenchOverview(store: store, workbench: workbench, bench: bench, router: router)
@@ -146,8 +151,16 @@ struct BenchOverview: View {
 
     /// Start, stop and restart side by side, the site as the main action,
     /// the editor beside it and the rest in the "…" menu. Before the bench
-    /// is managed, Set Up Management… is the main action instead.
-    @ViewBuilder private var controlRow: some View {
+    /// is managed, Set Up Management… is the main action instead. Where
+    /// "Open in VS Code" does not fit whole, it moves into the "…" menu.
+    private var controlRow: some View {
+        ViewThatFits(in: .horizontal) {
+            controls(editorInMenu: false)
+            controls(editorInMenu: true)
+        }
+    }
+
+    @ViewBuilder private func controls(editorInMenu: Bool) -> some View {
         let defaultNeedsHosts = bench.siteRows.first(where: \.isDefault)?.needsHosts == true
         let editor = store.settings.editor
         HStack(spacing: WindowMetrics.rowSpacing) {
@@ -170,19 +183,22 @@ struct BenchOverview: View {
                 }
                 .fixedSize()
             }
-            Spacer()
-            Button { if let editor { Workspace.openInEditor(bench, editor: editor) } } label: {
-                Label(editor.map { "Open in \($0.name)" } ?? "Open in Editor", systemImage: "chevron.left.forwardslash.chevron.right")
+            Spacer(minLength: WindowMetrics.rowSpacing)
+            if !editorInMenu {
+                editorButton(editor).fixedSize()
             }
-            .disabled(editor == nil)
-            .help(editor == nil ? "Install VS Code or Cursor to open the bench folder in it." : bench.path)
             Button(defaultNeedsHosts ? "Set Up Site…" : "Open Site") {
                 if defaultNeedsHosts { router.benchTab = .sites }
                 else { Workspace.openSite(bench) }
             }
             .primaryAction(!bench.needsService)
             .disabled(bench.state != .running && !defaultNeedsHosts)
-            MoreMenu(help: "Console, database, Finder and the bench path") {
+            .fixedSize()
+            MoreMenu(help: editorInMenu ? "The editor, console, database, Finder and the bench path" : "Console, database, Finder and the bench path") {
+                if editorInMenu {
+                    editorButton(editor)
+                    Divider()
+                }
                 Button { Workspace.openShell(.console, site: bench.summary.site, bench: bench, store: store) } label: {
                     Label("Open Console", systemImage: "terminal")
                 }
@@ -196,6 +212,14 @@ struct BenchOverview: View {
                 Button("Copy Path", systemImage: "doc.on.doc") { Workspace.copy(bench.path) }
             }
         }
+    }
+
+    private func editorButton(_ editor: Editor?) -> some View {
+        Button { if let editor { Workspace.openInEditor(bench, editor: editor) } } label: {
+            Label(editor.map { "Open in \($0.name)" } ?? "Open in Editor", systemImage: "chevron.left.forwardslash.chevron.right")
+        }
+        .disabled(editor == nil)
+        .help(editor == nil ? "Install VS Code or Cursor to open the bench folder in it." : bench.path)
     }
 
     private func openRequestedSetup() {

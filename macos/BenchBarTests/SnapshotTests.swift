@@ -180,6 +180,22 @@ struct SnapshotTests {
         try render(window(store, workbench, router), "window-overview")
     }
 
+    /// A wide window: the header and tabs keep to the Form's centered
+    /// column. The narrowest: "Open in VS Code" moves into the "…" menu.
+    @Test func windowWidths() async throws {
+        let store = try await windowStore()
+        let workbench = Workbench(store: store)
+        let router = WindowRouter()
+        router.show(bench: "/Users/you/frappe-bench", tab: .overview)
+        func sized(_ width: CGFloat) -> some View {
+            MainWindowView(store: store, router: router, workbench: workbench, about: AboutModel(store: store),
+                           discovery: BenchDiscovery(store: store), wizard: wizardView(store, WizardRun(store: store)))
+                .frame(width: width, height: 620)
+        }
+        try render(sized(1500), "window-overview-wide")
+        try render(sized(770), "window-overview-narrowest")
+    }
+
     @Test func windowProfiles() async throws {
         let store = try await windowStore()
         let workbench = Workbench(store: store)
