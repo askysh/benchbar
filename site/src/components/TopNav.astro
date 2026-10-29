@@ -1,6 +1,7 @@
 ---
 // The top bar's links: the changelog (GitHub releases), then the social
-// icons Starlight renders by default (GitHub).
+// icons Starlight renders by default (GitHub). Plain muted text, as in the
+// top nav of akashmishra.com.
 import Default from '@astrojs/starlight/components/SocialIcons.astro';
 ---
 
@@ -9,11 +10,11 @@ import Default from '@astrojs/starlight/components/SocialIcons.astro';
 
 <style>
   .top-link {
-    color: var(--sl-color-text-accent);
+    color: var(--sl-color-gray-3);
     font-size: var(--sl-text-sm);
     text-decoration: none;
-    margin-inline-end: 0.5rem;
     white-space: nowrap;
+    transition: color 0.15s ease;
   }
   .top-link:hover {
     color: var(--sl-color-white);
