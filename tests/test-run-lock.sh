@@ -172,12 +172,24 @@ assert_file "$L1"; assert_file "$L2"
 
 # ---- concurrent writers of one key-value file lose no key
 KV="$TMP_DIR/kv.env"
+KVW="$TMP_DIR/kv-writers"; mkdir -p "$KVW"
+pids=()
 for i in 1 2 3 4 5 6 7 8; do
-  bash -c '. "$0/lib/frappe-local/ui.sh"; . "$0/lib/frappe-local/state.sh"; fl_kv_set "$1" "KEY$2" "value $2"' "$ROOT" "$KV" "$i" &
+  bash -c '. "$0/lib/frappe-local/ui.sh"; . "$0/lib/frappe-local/state.sh"; fl_kv_set "$1" "KEY$2" "value $2"' "$ROOT" "$KV" "$i" 2>"$KVW/$i.err" &
+  pids+=("$!")
 done
-wait
+# each writer's own exit code: a writer killed from outside (by a signal)
+# is told apart from a key the store itself lost
 for i in 1 2 3 4 5 6 7 8; do
-  assert_eq "value $i" "$(bash -c '. "$0/lib/frappe-local/ui.sh"; . "$0/lib/frappe-local/state.sh"; fl_kv_get "$1" "KEY$2"' "$ROOT" "$KV" "$i")" "(KEY$i survives the other writers)"
+  code=0; wait "${pids[$((i - 1))]}" || code=$?
+  printf '%s\n' "$code" >"$KVW/$i.code"
+done
+for i in 1 2 3 4 5 6 7 8; do
+  got="$(bash -c '. "$0/lib/frappe-local/ui.sh"; . "$0/lib/frappe-local/state.sh"; fl_kv_get "$1" "KEY$2"' "$ROOT" "$KV" "$i")"
+  if [[ "$got" != "value $i" ]]; then
+    printf 'writer %s exited %s; its stderr: %s\nthe file:\n%s\n' "$i" "$(cat "$KVW/$i.code")" "$(cat "$KVW/$i.err")" "$(cat "$KV" 2>&1)" >&2
+  fi
+  assert_eq "value $i" "$got" "(KEY$i survives the other writers)"
 done
 [[ -z "$(ls "$KV".* 2>/dev/null)" ]] || fail "no temp file or lock may be left behind: $(ls "$KV".*)"
 
