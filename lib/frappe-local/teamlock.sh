@@ -215,7 +215,7 @@ fl_bench_cli_version() {
   local out v
   command -v bench >/dev/null 2>&1 || return 0
   out="$(mktemp "${TMPDIR:-/tmp}/benchbar-benchver.XXXXXX")"
-  fl_capture_timeout 15 "$out" bench --version || true
+  fl_run_capture_timeout 15 "$out" /dev/null fl__in_dir "$FL_BENCH_DIR" bench --version || true
   v="$(grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' "$out" | head -n1)"
   rm -f "$out"
   printf '%s' "$v"

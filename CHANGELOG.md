@@ -4,6 +4,30 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+### Agents and recovery
+
+- An `app update` that stops after it changed something (a failed backup,
+  requirements, migrate, build or restart) now leaves a record, and the
+  next `app update` runs the steps that did not finish and nothing else.
+  Before, the app was already at its new commit, so the next run said
+  "unchanged" and the migrate never happened. `--discard-pending` drops
+  the record. `app update --dry-run --json` adds `pending`,
+  `newer_commits` and `kind`/`target` on each step; `status --json` adds
+  `pending_operations`; doctor warns with `app_update_pending` and
+  `app_add_pending`.
+- A failed build in `app add` no longer lets `install-app` run on a site
+  whose assets were never built: install and restart are skipped, and the
+  next plan lists the build and the install again (`reason` in the plan
+  JSON). Required apps are cloned in dependency order (`order` in the
+  plan; a cycle in `required_apps` is a plan error that names it).
+- `app add` in a terminal shows the same plan agents review, asks once and
+  applies it with the same steps, instead of its own flow with a second
+  question for required apps.
+- One timeout for the commands benchbar reads output from (`git ls-remote`
+  and the plan's clone, `bench list-apps`, `bench --version`): the whole
+  process group gets TERM, then KILL a second later, so a child or a
+  command that ignores TERM no longer runs past its timeout.
+
 ### Added
 
 - Doctor warns in WSL when NTP inside the distro fights the Windows host

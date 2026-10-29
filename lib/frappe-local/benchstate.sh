@@ -159,7 +159,7 @@ fl_pid_alive() { "${FL_KILL_CMD:-kill}" -0 "$1" 2>/dev/null; }
 # fl_status_print_json [PINGS]: PINGS "ping" asks every site (status --ping);
 # without it only web_ping_code, the default site's, is known.
 fl_status_print_json() {
-  local mode="${1:-none}" j_ports j_sites j_sched j_file j_log j_loaded j_astate j_procs j_url j_label sched=0
+  local mode="${1:-none}" j_ports j_sites j_sched j_file j_log j_loaded j_astate j_procs j_url j_label j_pending sched=0
   fl_ports_json_v j_ports
   FL_DEFAULT_PING=""; [[ "$ST_PROCS" == "1" ]] && FL_DEFAULT_PING="$ST_PING"
   fl_sites_json_v j_sites "$mode"
@@ -170,14 +170,17 @@ fl_status_print_json() {
   fl_json_bool_v j_loaded "$ST_LOADED"; fl_json_str_v j_astate "$ST_AGENT_STATE"; fl_json_bool_v j_procs "$ST_PROCS"
   fl_json_str_v j_url "http://${FL_SITE}:${FL_WEB_PORT}"
   fl_agent_label_v j_label
+  fl_pending_json_v j_pending
   printf '{'
   fl_state_core_json "$ST_STATE" "$ST_REASON" "$ST_PID" "$ST_STARTED" "$ST_EXIT" "$ST_PING"
   printf ',"ports":%s,"sites":%s,"scheduler":%s' "$j_ports" "$j_sites" "$j_sched"
   printf ',"state_file":%s,"log":%s,"agent_loaded":%s,"agent_state":%s,"processes_running":%s' \
     "$j_file" "$j_log" "$j_loaded" "$j_astate" "$j_procs"
   # fields from frappe-mac 0.2.0, kept for older readers
-  printf ',"url":%s,"agent":"%s","loaded":"%s","stop_flag":"%s","ping":"%s"}\n' \
+  printf ',"url":%s,"agent":"%s","loaded":"%s","stop_flag":"%s","ping":"%s"' \
     "$j_url" "$j_label" "$([[ "$ST_LOADED" == "1" ]] && printf yes || printf no)" "${ST_FLAG:-none}" "$ST_PING"
+  # app update or app add runs that stopped half way, with the steps left
+  printf ',"pending_operations":%s}\n' "$j_pending"
 }
 
 fl_ports_json_v() {

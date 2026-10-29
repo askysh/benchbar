@@ -131,17 +131,16 @@ assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "acme_payroll requires apps that are not in the bench yet"
 assert_calls_contain '^bench get-app --skip-assets --branch main .*acme_base2.git$'
 assert_calls_contain '^bench build --apps acme_base2,acme_payroll$'
-assert_eq "frappe acme_crm acme_base acme_payroll acme_base2" "$(tr '\n' ' ' <"$BENCH/sites/apps.txt" | sed 's/ $//')"
+assert_eq "frappe acme_crm acme_base acme_base2 acme_payroll" "$(tr '\n' ' ' <"$BENCH/sites/apps.txt" | sed 's/ $//')"
 # an unknown required app stops before its install
 reset_calls
 run_fm app add acme_orphan --site macdev --yes --bench-dir "$BENCH"
 assert_eq "1" "$CODE"
 assert_contains "$OUT" "acme_orphan requires nosuchapp"
 assert_calls_not_contain 'install-app acme_orphan'
-# the clone stays (it is a real app), and a second add names the missing app
-run_fm app add acme_orphan --site macdev --yes --bench-dir "$BENCH"
-assert_eq "1" "$CODE"
-assert_contains "$OUT" "benchbar app add nosuchapp"
+# the plan refuses before cloning anything, and names the missing app
+[[ ! -d "$BENCH/apps/acme_orphan" ]] || fail "nothing is cloned for a plan that cannot be applied"
+assert_contains "$OUT" "benchbar app add <git URL of nosuchapp>"
 
 # ---- get-app failing half way after bench listed the app: benchbar never edits
 # sites/ (AGENTS.md), so the folder and the apps.txt line stay and the fix is printed
@@ -250,6 +249,14 @@ MOCK_BENCH_MIGRATE_EXIT=1 run_fm app update acme_crm --yes --bench-dir "$BENCH"
 assert_eq "1" "$CODE"
 assert_contains "$OUT" "git -C ${BENCH}/apps/acme_crm reset --hard ${before}"
 assert_calls_not_contain 'reset --hard'
+# the next run finishes what is left (migrate, build) and nothing else; the
+# unchanged line a plain old == new would print is the bug it replaces
+reset_calls
+run_fm app update acme_crm --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_calls_contain '^bench --site macdev migrate$'
+assert_calls_contain '^bench build --app acme_crm$'
+assert_calls_not_contain 'backup$|merge --ff-only|setup requirements'
 
 # ---- refusals: dirty, detached, diverged
 printf 'local\n' >>"$BENCH/apps/acme_crm/acme_crm/__init__.py"

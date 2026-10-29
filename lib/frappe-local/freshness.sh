@@ -220,7 +220,7 @@ fl_freshness_fetch() {
     fi
     (
       code=0
-      fl_capture_timeout "$FL_FRESHNESS_FETCH_TIMEOUT" /dev/null env GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes -o ConnectTimeout=10' \
+      fl_run_capture_timeout "$FL_FRESHNESS_FETCH_TIMEOUT" /dev/null /dev/null fl__in_dir "$FL_BENCH_DIR" env GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes -o ConnectTimeout=10' \
         git -C "$dir" fetch --quiet --no-tags ${args[@]+"${args[@]}"} "$remote" "+refs/heads/${branch}:refs/remotes/${remote}/${branch}" || code=$?
       printf '%s' "$code" >"${codes}/${app}"
     ) &

@@ -13,17 +13,22 @@ FL_RUN_PGID=""
 FL_RUN_CHILD_PID=""
 
 # fl_run_bg_group LOG COMMAND...: starts COMMAND in the background as the
-# leader of its own process group, output to LOG. bash 3.2 (macOS) has no
-# setsid, so job control (set -m) does it: a background job started under
-# job control gets a process group of its own. Sets FL_RUN_PID and
-# FL_RUN_PGID. The command does not get fd 3, the JSON stream of install and
-# adopt: bench, brew and npm must not write into it, and a daemon they start
-# must not keep it open.
+# leader of its own process group, output to LOG (stderr too, unless
+# FL_RUN_ERR_FILE names a file for it). bash 3.2 (macOS) has no setsid, so
+# job control (set -m) does it: a background job started under job control
+# gets a process group of its own. Sets FL_RUN_PID and FL_RUN_PGID. The
+# command does not get fd 3, the JSON stream of install and adopt: bench,
+# brew and npm must not write into it, and a daemon they start must not
+# keep it open.
 fl_run_bg_group() {
-  local log="$1"
+  local log="$1" err="${FL_RUN_ERR_FILE:-}"
   shift
   set -m
-  "$@" </dev/null >"$log" 2>&1 3>&- &
+  if [[ -n "$err" ]]; then
+    "$@" </dev/null >"$log" 2>"$err" 3>&- &
+  else
+    "$@" </dev/null >"$log" 2>&1 3>&- &
+  fi
   FL_RUN_PID="$!"
   set +m
   FL_RUN_PGID="$FL_RUN_PID"
@@ -36,12 +41,12 @@ fl_run_group_stop() {
   kill "-$1" -- "-${FL_RUN_PGID}" 2>/dev/null || kill "-$1" "$FL_RUN_PGID" 2>/dev/null || true
 }
 
-# fl_run_group_kill: TERM to the group, a second for it to go, then KILL;
-# then the group is forgotten
+# fl_run_group_kill: TERM to the group, FL_KILL_GRACE seconds (default 1)
+# for it to go, then KILL; then the group is forgotten
 fl_run_group_kill() {
   [[ -n "$FL_RUN_PGID" ]] || return 0
   fl_run_group_stop TERM
-  sleep 1
+  sleep "${FL_KILL_GRACE:-1}"
   fl_run_group_stop KILL
   wait "$FL_RUN_PGID" 2>/dev/null || true
   FL_RUN_PGID=""
@@ -234,6 +239,34 @@ fl_run_with_timeout() {
     fl_ok "${label} ($(fl_fmt_secs $((SECONDS - start))))"
   fi
   rm -f "$log"
+  return "$code"
+}
+
+# fl_run_capture_timeout SECS OUT ERR COMMAND...: COMMAND with stdin closed,
+# stdout to OUT and stderr to ERR, in a process group of its own. At the
+# deadline the whole group gets TERM, then KILL after FL_KILL_GRACE
+# (fl_run_group_kill), so neither a child nor a command that ignores TERM
+# runs on; exit 124. FL_RUN_PGID is put back afterwards: a signal that
+# arrives later still reaches the right group.
+fl_run_capture_timeout() {
+  local secs="$1" out="$2" saved_pgid="$FL_RUN_PGID" pid ticks=0 code=0
+  local FL_RUN_ERR_FILE="$3"
+  shift 3
+  FL_RUN_PGID=""
+  fl_run_bg_group "$out" "$@"
+  pid="$FL_RUN_PID"
+  while kill -0 "$pid" 2>/dev/null; do
+    if [[ "$ticks" -ge $((secs * 10)) ]]; then
+      fl_run_group_kill
+      printf 'timed out after %ss\n' "$secs" >>"$FL_RUN_ERR_FILE"
+      FL_RUN_PGID="$saved_pgid"
+      return 124
+    fi
+    sleep 0.1
+    ticks=$((ticks + 1))
+  done
+  wait "$pid" || code=$?
+  FL_RUN_PGID="$saved_pgid"
   return "$code"
 }
 
