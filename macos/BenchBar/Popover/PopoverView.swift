@@ -28,7 +28,7 @@ struct AppCommands {
 struct PopoverView: View {
     let store: BenchStore
     let commands: AppCommands
-    static let maxContentHeight: CGFloat = 470
+    static let maxContentHeight: CGFloat = 540
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -167,7 +167,7 @@ struct BenchPanel: View {
     }
 
     @ViewBuilder private var banners: some View {
-        if let guidance = bench.guidance {
+        if let guidance = bench.guidance?.without(panelAction) {
             GuidanceLine(guidance: guidance, enabled: guidanceEnabled(guidance)) { perform($0) }
         }
         if let error = bench.lastError ?? bench.refreshError, bench.portConflict == nil {
@@ -175,6 +175,12 @@ struct BenchPanel: View {
                 .help(error)
             Button("View Health…") { commands.manage(bench, .health, false) }.controlSize(.small)
         }
+    }
+
+    /// What the button under the header does: Set Up Management…, Review
+    /// Port Conflict… or Start (among Stop and Restart).
+    private var panelAction: BenchGuidance.Action {
+        bench.needsService ? .setUpManagement : (bench.portConflict != nil ? .reviewPortConflict : .start)
     }
 
     private func guidanceEnabled(_ guidance: BenchGuidance) -> Bool {
@@ -315,10 +321,7 @@ struct DoctorSection: View {
                 if report.needsAttention.isEmpty {
                     Label("All checks passed", systemImage: "checkmark.circle").font(.caption).foregroundStyle(.secondary)
                 } else {
-                    Text([
-                        report.summary.fail > 0 ? "\(report.summary.fail) " + (report.summary.fail == 1 ? "failure" : "failures") : nil,
-                        report.summary.warn > 0 ? "\(report.summary.warn) " + (report.summary.warn == 1 ? "warning" : "warnings") : nil
-                    ].compactMap { $0 }.joined(separator: " · "))
+                    Text(report.summary.attention ?? "")
                         .font(.caption.weight(.medium)).foregroundStyle(report.summary.fail > 0 ? .red : .orange)
                     ForEach(Array(report.needsAttention.prefix(Self.visibleChecks)), id: \.rowKey) { CompactCheckRow(check: $0) }
                     if report.needsAttention.count > Self.visibleChecks {
@@ -509,14 +512,15 @@ struct CLIMissingView: View {
                 Text(hint).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            // three buttons do not fit the popover's width: Copy goes to a row of its own
             HStack {
                 Button("Choose benchbar…", action: choose)
                 Button("Try Again", action: retry)
-                if case .notFound = error {
-                    Button("Copy brew Command") { Workspace.copy(Homebrew.installCLI) }
-                        .help(Homebrew.installCLI)
-                        .accessibilityLabel("Copy \(Homebrew.installCLI)")
-                }
+            }
+            if case .notFound = error {
+                Button("Copy brew Command") { Workspace.copy(Homebrew.installCLI) }
+                    .help(Homebrew.installCLI)
+                    .accessibilityLabel("Copy \(Homebrew.installCLI)")
             }
         }
     }

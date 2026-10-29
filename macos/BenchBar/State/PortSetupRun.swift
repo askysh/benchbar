@@ -72,7 +72,7 @@ final class PortSetupRun: Identifiable {
             guard result.exitCode == 0 else {
                 let failures = self.output.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { $0.hasPrefix("[FAIL]") }.suffix(3)
                 throw CLIError.failed(command: "ports apply", exitCode: result.exitCode,
-                    message: failures.isEmpty ? CLIClient.summarize(result) : failures.joined(separator: "\n"))
+                    message: failures.isEmpty ? CLIClient.summarize(result) : CLIText.plain(failures.joined(separator: "\n")))
             }
         }
         if let error {

@@ -398,7 +398,7 @@ struct SnapshotTests {
             hosting.layoutSubtreeIfNeeded()
             let size = hosting.fittingSize
             if name.hasPrefix("popover-") {
-                #expect(size.height <= 620, "Popover height must remain bounded with diagnostics and many sites")
+                #expect(size.height <= 690, "Popover height must remain bounded with diagnostics and many sites")
                 #expect(size.width <= 400)
             }
             window.setContentSize(size)

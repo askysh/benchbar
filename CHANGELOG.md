@@ -144,6 +144,14 @@ All notable changes to this project are documented here.
   belongs to, and Run Doctor shows a spinner while doctor runs again.
   VoiceOver names the popover's bench picker and each Copy Fix button by
   its check.
+- App layout: the popover's CLI missing buttons no longer truncate, the
+  Health rows fit in a popover with many sites (its content may now be
+  540 points tall before it scrolls), Set Up Management… shows once, the
+  passing checks of Check Your Mac are one line each, and a field at the
+  edge of a sheet or wizard page keeps its whole border. Messages show
+  without the CLI's `[FAIL]` and `[WARN]` markers, and doctor's counts
+  read the same in the popover and the Health tab ("1 failure · 1
+  warning").
 
 ### Windows (preview)
 

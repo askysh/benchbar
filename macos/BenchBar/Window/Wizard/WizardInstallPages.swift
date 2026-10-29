@@ -54,7 +54,7 @@ struct InstallPage: View {
         case .failed(let failure):
             SheetOutcome(symbol: "exclamationmark.triangle.fill", tint: .red,
                          title: failure.step.map { "\($0) failed" } ?? "The install failed",
-                         detail: [failure.message, failure.fix].compactMap { $0 }.joined(separator: "\n\n"),
+                         detail: CLIText.plain([failure.message, failure.fix].compactMap { $0 }.joined(separator: "\n\n")),
                          monospaced: false)
         case .needsRootPassword:
             // the CLI's fix names the environment variable for Terminal; here the field below is the fix
@@ -135,7 +135,7 @@ struct InstallStepRow: View {
                     Text(InstallText.progress(progress)).font(.caption).foregroundStyle(.secondary)
                 }
                 if let message = row.message, row.status == .failed || row.status == .skipped || row.status == .warning {
-                    Text(message).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                    Text(CLIText.plain(message)).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if let command = row.command, row.status == .skipped {

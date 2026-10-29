@@ -43,8 +43,11 @@ struct WizardScaffold<Content: View, Leading: View, Actions: View>: View {
                     content
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(WindowMetrics.focusRingRoom)
             }
             .scrollBounceBehavior(.basedOnSize)
+            // the room is inside the scroll view: the content still lines up with the title
+            .padding(-WindowMetrics.focusRingRoom)
             footer.padding(.top, WindowMetrics.spacing)
         }
         .padding(WindowMetrics.sheetPadding)
@@ -248,6 +251,21 @@ struct PrerequisiteRowView: View {
     let run: WizardRun
 
     var body: some View {
+        if row.level == .ok {
+            // a passing check is one line, so the nine of them fit without scrolling
+            HStack(alignment: .firstTextBaseline, spacing: WindowMetrics.rowSpacing) {
+                Image(systemName: symbol).foregroundStyle(tint).accessibilityLabel(levelWord)
+                Text(row.label).font(.body.weight(.medium))
+                Spacer(minLength: WindowMetrics.spacing)
+                Text(row.message).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
+                    .lineLimit(1).truncationMode(.middle).help(row.message)
+            }
+        } else {
+            detailed
+        }
+    }
+
+    private var detailed: some View {
         HStack(alignment: .firstTextBaseline, spacing: WindowMetrics.rowSpacing) {
             Image(systemName: symbol).foregroundStyle(tint).accessibilityLabel(levelWord)
             VStack(alignment: .leading, spacing: WindowMetrics.lineSpacing + 2) {

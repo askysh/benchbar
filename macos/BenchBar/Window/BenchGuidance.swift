@@ -25,6 +25,12 @@ nonisolated struct BenchGuidance: Equatable, Sendable {
     var reason: String
     var action: Action?
 
+    /// The same reason without `shown` as its action: a button next to the
+    /// line already offers it (the popover's Set Up Management… or Start).
+    func without(_ shown: Action) -> BenchGuidance {
+        action == shown ? BenchGuidance(reason: reason, action: nil) : self
+    }
+
     /// nil while the bench runs or while an action is under way: nothing to say.
     static func make(state: BenchState, reason: StopReason?, needsService: Bool, portConflict: Bool, pending: Bool = false) -> BenchGuidance? {
         if pending { return nil }

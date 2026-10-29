@@ -185,6 +185,20 @@ nonisolated struct DoctorSummary: Codable, Sendable, Equatable {
     var ok: Int
     var warn: Int
     var fail: Int
+
+    /// "1 failure · 2 warnings", nil when nothing needs attention: the
+    /// popover and the Health tab say it the same way.
+    var attention: String? {
+        let parts = [Self.count(fail, "failure"), Self.count(warn, "warning")].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// "45 passing · 1 failure · 2 warnings", for the Health tab's header.
+    var text: String { (["\(ok) passing"] + [attention].compactMap { $0 }).joined(separator: " · ") }
+
+    private static func count(_ n: Int, _ word: String) -> String? {
+        n > 0 ? "\(n) \(word)\(n == 1 ? "" : "s")" : nil
+    }
 }
 
 /// `benchbar doctor --json`.

@@ -4,6 +4,21 @@ import Testing
 
 @Suite("JSON models")
 struct ModelTests {
+    /// The app shows a check's level by its symbol: the CLI's marker goes.
+    @Test func cliTextLosesItsMarkers() {
+        #expect(CLIText.plain("[FAIL] the MariaDB root password is not known") == "the MariaDB root password is not known")
+        #expect(CLIText.plain("[WARN] one\n  [OK] two\nthree [FAIL] stays") == "one\ntwo\nthree [FAIL] stays")
+        #expect(CLIClient.summarize(CommandOutput(exitCode: 1, stdout: "", stderr: "[FAIL] no sudo")) == "no sudo")
+    }
+
+    /// One wording for doctor's counts, in the popover and the Health tab.
+    @Test func doctorCountsReadTheSameEverywhere() {
+        #expect(DoctorSummary(ok: 45, warn: 1, fail: 1).attention == "1 failure · 1 warning")
+        #expect(DoctorSummary(ok: 45, warn: 4, fail: 0).text == "45 passing · 4 warnings")
+        #expect(DoctorSummary(ok: 3, warn: 0, fail: 0).attention == nil)
+        #expect(DoctorSummary(ok: 3, warn: 0, fail: 0).text == "3 passing")
+    }
+
     @Test func decodesList() throws {
         let list = try BenchJSON.decode(BenchList.self, from: Fixture.data("list"))
         #expect(list.schemaVersion == 1)

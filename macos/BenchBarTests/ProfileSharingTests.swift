@@ -295,7 +295,7 @@ struct ProfileSharingTests {
 
         base.cli.answer("profile remove", CommandOutput(exitCode: 1, stdout: "", stderr: "[FAIL] acme is a local profile"))
         await workbench.removeProfile("acme")
-        #expect(workbench.result?.error == "[FAIL] acme is a local profile")
+        #expect(workbench.result?.error == "acme is a local profile")
     }
 
     @Test func checkAccessListsEachRepository() async throws {

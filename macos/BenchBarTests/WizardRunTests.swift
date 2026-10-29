@@ -211,7 +211,7 @@ struct HostsTests {
     @Test func classifiesTheOutput() {
         #expect(HostsOutcome.classify(.ok("[OK] added\n")) == .added)
         #expect(HostsOutcome.classify(.ok("[WARN] the password dialog was cancelled; the line was not added\n")) != .added)
-        #expect(HostsOutcome.classify(CommandOutput(exitCode: 1, stdout: "", stderr: "[FAIL] no sudo")) == .failed("[FAIL] no sudo"))
+        #expect(HostsOutcome.classify(CommandOutput(exitCode: 1, stdout: "", stderr: "[FAIL] no sudo")) == .failed("no sudo"))
     }
 
     @Test func runsSiteHostsWithTheDialogAndFallsBackToTheCommand() async throws {

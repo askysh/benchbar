@@ -33,6 +33,10 @@ nonisolated enum WindowMetrics {
     static let sheetMaxContentHeight: CGFloat = 520
     /// The column of a wizard page, centered in the window.
     static let wizardWidth: CGFloat = 640
+    /// Room inside a scrolling content area for the bezel and focus ring a
+    /// field draws past its frame: the scroll view clips at its edge, and a
+    /// field at the edge lost a side of its border.
+    static let focusRingRoom: CGFloat = 3
 
     /// Two sheet widths: forms and plans, and the wider plans with tables.
     enum SheetWidth: CGFloat, Sendable {
@@ -104,7 +108,7 @@ struct SheetScaffold<Content: View, Leading: View, Actions: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             header
                 .padding([.horizontal, .top], WindowMetrics.sheetPadding)
-                .padding(.bottom, WindowMetrics.spacing)
+                .padding(.bottom, WindowMetrics.spacing - WindowMetrics.focusRingRoom)
             ScrollView {
                 VStack(alignment: .leading, spacing: WindowMetrics.spacing) {
                     SheetStatus(phase: phase)
@@ -112,6 +116,7 @@ struct SheetScaffold<Content: View, Leading: View, Actions: View>: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, WindowMetrics.sheetPadding)
+                .padding(.vertical, WindowMetrics.focusRingRoom)
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
             }
             .scrollBounceBehavior(.basedOnSize)

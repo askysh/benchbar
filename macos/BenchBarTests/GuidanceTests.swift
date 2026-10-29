@@ -28,6 +28,13 @@ struct GuidanceTests {
         #expect(guide(.stopped, .manual, pending: true) == nil, "while a start is under way")
     }
 
+    /// The popover's line keeps its reason but not an action its own button offers.
+    @Test func theLineDropsTheActionOfTheButtonBesideIt() {
+        let setup = guide(.stopped, .manual, service: true)
+        #expect(setup?.without(.setUpManagement) == BenchGuidance(reason: "BenchBar does not manage this bench yet, so it cannot start it.", action: nil))
+        #expect(guide(.paused, .crash)?.without(.start).action == .viewHealth)
+    }
+
     @Test func actionTitlesAreTheOnesTheAppAlreadyUses() {
         #expect(BenchGuidance.Action.allTitles == ["Start", "View Health…", "Review Port Conflict…", "Repair…", "Set Up Management…"])
     }

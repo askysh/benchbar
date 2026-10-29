@@ -292,13 +292,29 @@ nonisolated struct CLIClient: Sendable {
     }
 
     /// The most useful lines of a failed run: [FAIL] and [WARN] lines first,
-    /// then the last lines of stderr and stdout.
+    /// then the last lines of stderr and stdout. Without the markers: the
+    /// app shows the level with its own symbol and color.
     static func summarize(_ output: CommandOutput) -> String {
         let lines = (output.stderr + "\n" + output.stdout)
             .split(separator: "\n", omittingEmptySubsequences: true)
             .map { $0.trimmingCharacters(in: .whitespaces) }
         let flagged = lines.filter { $0.hasPrefix("[FAIL]") || $0.hasPrefix("[WARN]") || $0.hasPrefix("Aborting.") }
         let chosen = flagged.isEmpty ? Array(lines.suffix(3)) : Array(flagged.prefix(3))
-        return chosen.joined(separator: "\n")
+        return CLIText.plain(chosen.joined(separator: "\n"))
+    }
+}
+
+/// The CLI's text as the app shows it.
+nonisolated enum CLIText {
+    static let markers = ["[OK]", "[WARN]", "[FAIL]"]
+
+    /// Each line without a leading `[OK]`, `[WARN]` or `[FAIL]`: those are
+    /// for Terminal and agents, and the app shows the level its own way.
+    static func plain(_ text: String) -> String {
+        text.split(separator: "\n", omittingEmptySubsequences: false).map { line -> String in
+            let trimmed = line.drop { $0 == " " }
+            guard let marker = markers.first(where: { trimmed.hasPrefix($0) }) else { return String(line) }
+            return String(trimmed.dropFirst(marker.count).drop { $0 == " " })
+        }.joined(separator: "\n")
     }
 }
