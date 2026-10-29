@@ -13,15 +13,28 @@ final class PortSetupRun: Identifiable {
     private(set) var hostsFallbacks: [String] = []
     let summaries: [BenchSummary]
     let startAfterSetup: Bool
+    /// Opened from Port Settings & Setup…: the sheet shows the ports and mode
+    /// first, and setup only when there is something to set up.
+    let opensSettings: Bool
     let store: BenchStore
 
-    init(summaries: [BenchSummary], store: BenchStore, startAfterSetup: Bool = false) {
+    init(summaries: [BenchSummary], store: BenchStore, startAfterSetup: Bool = false, opensSettings: Bool = false) {
         self.summaries = summaries
         self.store = store
         self.startAfterSetup = startAfterSetup && summaries.count == 1
+        self.opensSettings = opensSettings && !self.startAfterSetup
     }
 
-    var title: String { startAfterSetup ? "Resolve Port Conflict" : "Set Up Selected Benches" }
+    var title: String {
+        if startAfterSetup { return "Resolve Port Conflict" }
+        return opensSettings ? "Port Settings" : "Set Up Selected Benches"
+    }
+
+    /// The plan has nothing to set up (`PortPlan.Entry.needsSetup`): Port
+    /// Settings shows the ports and mode only, and no setup action.
+    var nothingToSetUp: Bool {
+        opensSettings && plan.map { !$0.entries.contains(where: \.needsSetup) } == true
+    }
     var isBusy: Bool { phase == .planning || phase == .running }
 
     func loadPlan() async {

@@ -286,6 +286,15 @@ struct SnapshotTests {
         try render(PortSetupSheet(run: run, close: {}), "port-setup-preview")
     }
 
+    @Test func portSettingsOnAHealthyBench() async throws {
+        let tests = try PortSetupTests()
+        let (store, _) = try await tests.setup()
+        tests.base.cli.answer("ports plan", json: tests.settledPlanJSON())
+        let run = PortSetupRun(summaries: [try #require(store.selected).summary], store: store, opensSettings: true)
+        await run.loadPlan()
+        try render(PortSetupSheet(run: run, close: {}), "port-settings-healthy")
+    }
+
     @Test func settingsWindow() async throws {
         base.cli.answer("list", json: base.listJSON())
         // a 0.4 CLI reports the scheduler, so the switch is live in the screenshot

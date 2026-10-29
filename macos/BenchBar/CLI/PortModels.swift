@@ -36,6 +36,9 @@ nonisolated struct PortPlan: Codable, Sendable {
             current.web != proposed.web || current.socketio != proposed.socketio ||
             current.redisQueue != proposed.redisQueue || current.redisCache != proposed.redisCache
         }
+        /// Something to set up: no service yet, a conflict, or new ports. A
+        /// managed bench on its own ports has none, running or not.
+        var needsSetup: Bool { !serviceInstalled || !conflicts.isEmpty || changesPorts }
         enum CodingKeys: String, CodingKey {
             case path, name, site, mode, current, proposed, conflicts, blocked
             case serviceInstalled = "service_installed"

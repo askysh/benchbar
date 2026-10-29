@@ -30,6 +30,41 @@ struct PortSetupTests {
         return (store, PortSetupRun(summaries: [bench.summary], store: store, startAfterSetup: start))
     }
 
+    /// What `ports plan` says about a managed bench that runs on its own ports.
+    func settledPlanJSON() -> String {
+        """
+        {"schema_version":1,"token":"t","can_apply":false,"entries":[
+        {"path":"\(base.benchPath)","name":"frappe-bench","site":"macdev","mode":"automatic",
+        "current":{"web":8000,"socketio":9000,"redis_queue":11000,"redis_cache":13000},
+        "proposed":{"web":8000,"socketio":9000,"redis_queue":11000,"redis_cache":13000},
+        "conflicts":[],"blocked":"Stop this bench before setting up management or changing its ports.","service_installed":true,"setup_plan":""}]}
+        """
+    }
+
+    /// Port Settings on a healthy running bench has nothing to set up: no
+    /// blocked bench, no setup action. A conflict or a missing service has.
+    @Test func portSettingsOnAHealthyBenchIsCalm() async throws {
+        let (store, _) = try await setup()
+        let bench = try #require(store.selected)
+        base.cli.answer("ports plan", json: settledPlanJSON())
+        let settings = PortSetupRun(summaries: [bench.summary], store: store, opensSettings: true)
+        #expect(settings.title == "Port Settings")
+        await settings.loadPlan()
+        #expect(settings.phase == .review)
+        #expect(settings.nothingToSetUp)
+
+        let setup = PortSetupRun(summaries: [bench.summary], store: store)
+        await setup.loadPlan()
+        #expect(!setup.nothingToSetUp, "Set Up Management keeps the setup flow")
+
+        base.cli.answer("ports plan", json: planJSON())
+        await settings.loadPlan()
+        #expect(!settings.nothingToSetUp, "a conflict is something to set up")
+        base.cli.answer("ports plan", json: settledPlanJSON().replacingOccurrences(of: #""service_installed":true"#, with: #""service_installed":false"#))
+        await settings.loadPlan()
+        #expect(!settings.nothingToSetUp, "so is a bench without its service")
+    }
+
     @Test func previewDoesNotApplyAndApplyRequiresReview() async throws {
         let (_, run) = try await setup()
         await run.apply()

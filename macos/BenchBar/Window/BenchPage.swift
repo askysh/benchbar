@@ -110,7 +110,7 @@ struct BenchOverview: View {
                     Text("Site and ports")
                     Spacer()
                     Button("Port Settings & Setup…") {
-                        let run = PortSetupRun(summaries: [bench.summary], store: store)
+                        let run = PortSetupRun(summaries: [bench.summary], store: store, opensSettings: true)
                         portSetup = run
                         Task { await run.loadPlan() }
                     }

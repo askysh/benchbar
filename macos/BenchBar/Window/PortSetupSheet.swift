@@ -19,13 +19,15 @@ struct PortSetupSheet: View {
     let close: () -> Void
 
     var body: some View {
+        let calm = run.nothingToSetUp
         SheetScaffold(run.title,
-                      explanation: "Review the addresses and service changes before applying. Existing apps and databases are preserved.",
+                      explanation: calm ? "The ports this bench uses, and whether BenchBar may move them. Nothing needs setting up."
+                          : "Review the addresses and service changes before applying. Existing apps and databases are preserved.",
                       phase: run.sheetPhase, width: .wide) {
             if let error = run.modeError {
                 Text(error).foregroundStyle(.red).textSelection(.enabled)
             }
-            if run.phase == .review {
+            if run.phase == .review && !calm {
                 SheetNote("Stop any previous manager's automatic startup first.")
             }
             if let plan = run.plan {
@@ -38,11 +40,15 @@ struct PortSetupSheet: View {
                                 .lineLimit(1).truncationMode(.middle)
                                 .help(entry.path)
                                 .textSelection(.enabled)
-                            LabeledContent("Current address", value: entry.currentURL)
-                            LabeledContent(entry.changesPorts ? "New address" : "Address stays", value: entry.proposedURL)
+                            if calm {
+                                LabeledContent("Address", value: entry.currentURL)
+                            } else {
+                                LabeledContent("Current address", value: entry.currentURL)
+                                LabeledContent(entry.changesPorts ? "New address" : "Address stays", value: entry.proposedURL)
+                            }
                             Text("Web \(String(entry.proposed.web)) · Socket.IO \(String(entry.proposed.socketio)) · Redis \(String(entry.proposed.redisQueue))/\(String(entry.proposed.redisCache))")
                                 .font(.caption).monospacedDigit()
-                            if let setupPlan = entry.setupPlan, !setupPlan.isEmpty {
+                            if !calm, let setupPlan = entry.setupPlan, !setupPlan.isEmpty {
                                 HStack(spacing: 6) {
                                     Text("Service changes").font(.subheadline.bold())
                                     if PortSetupHints.asksForPassword(setupPlan: setupPlan) {
@@ -62,7 +68,8 @@ struct PortSetupSheet: View {
                             }
                             .disabled(run.phase != .review || run.store.busyBench != nil)
                             .help("Fixed keeps the current ports. Automatic can propose new ports for your approval.")
-                            if let blocked = entry.blocked, !blocked.isEmpty {
+                            // a calm entry is blocked only because it runs, which matters to setup alone
+                            if !calm, let blocked = entry.blocked, !blocked.isEmpty {
                                 Label(blocked, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
                             } else if entry.changesPorts {
                                 Label("Port conflict resolved by the proposed allocation", systemImage: "arrow.triangle.swap").foregroundStyle(.secondary)
@@ -76,7 +83,7 @@ struct PortSetupSheet: View {
                         Divider()
                     }
                 }
-                if run.phase == .review && !plan.canApply {
+                if run.phase == .review && !plan.canApply && !calm {
                     Text("Resolve the blocked benches before applying. Fixed mode keeps the current ports; Automatic allows a new allocation after review.")
                         .font(.callout).foregroundStyle(.secondary)
                 }
@@ -94,15 +101,21 @@ struct PortSetupSheet: View {
                     ForEach(run.hostsFallbacks, id: \.self) { CopyableCommand(command: $0, copyLabel: "Copy the command that adds the hosts lines") }
                 }
             }
-            SheetNote("Changing the mode saves your preference immediately; ports change only when you apply. A hosts line asks for your password in macOS's own dialog, after you apply; cancel it and the line is left for you to add.")
+            if calm {
+                SheetNote("Fixed keeps these ports. Automatic lets BenchBar propose new ones, for your approval, when another bench or app takes them. A change of mode is saved at once.")
+            } else {
+                SheetNote("Changing the mode saves your preference immediately; ports change only when you apply. A hosts line asks for your password in macOS's own dialog, after you apply; cancel it and the line is left for you to add.")
+            }
         } leading: {
             if !run.isBusy && run.phase != .finished {
-                Button("Refresh Preview") { Task { await run.loadPlan() } }
+                Button(calm ? "Check Again" : "Refresh Preview") { Task { await run.loadPlan() } }
             }
         } actions: {
-            if run.phase == .review {
+            if run.phase == .review && calm {
+                DoneButton(action: close)
+            } else if run.phase == .review {
                 CancelButton(action: close)
-                Button(run.startAfterSetup ? "Resolve & Start" : "Set Up Selected Benches") { Task { await run.apply() } }
+                Button(run.startAfterSetup ? "Resolve & Start" : (run.opensSettings ? "Set Up Bench" : "Set Up Selected Benches")) { Task { await run.apply() } }
                     .keyboardShortcut(.defaultAction)
                     .disabled(run.plan?.canApply != true || run.store.busyBench != nil)
             } else if run.phase == .planning {

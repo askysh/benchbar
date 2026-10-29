@@ -122,6 +122,10 @@ All notable changes to this project are documented here.
 - The app's Apps tab no longer says "on no site yet" for every app,
   frappe included, on a bench whose site lists were never read: it asks
   bench for them once and shows nothing about sites until it knows.
+- The app's Port Settings & Setup… on a managed bench that runs on its own
+  ports opens as Port Settings: the address, the ports and the port mode,
+  with Done. Before, it opened as "Set Up Selected Benches" with a red
+  "Stop this bench" and a disabled setup button.
 
 ### Windows (preview)
 
