@@ -209,11 +209,12 @@ for b in "$A" "$B" "$GONE"; do
 done
 find "$GONE" -mindepth 1 -delete
 snap_before="$(snapshot "$HOME")"
+# no terminal and no --yes: refused before it asks, naming --yes (it used to read the
+# missing terminal as "no")
 run_fm uninstall-service --all </dev/null
 assert_eq "1" "$CODE" "$OUT"
-assert_contains "$OUT" "This removes the background service of 3 bench(es)"
-assert_contains "$OUT" "${GONE}   (no bench there any more: only its agent goes)"
-assert_contains "$OUT" "Cancelled."
+assert_contains "$OUT" "missing: --yes"
+assert_not_contains "$OUT" "This removes the background service"
 run_fm uninstall-service --all --dry-run --yes
 assert_eq "0" "$CODE" "$OUT"
 assert_eq "$snap_before" "$(snapshot "$HOME")" "(no answer and a dry run change nothing)"

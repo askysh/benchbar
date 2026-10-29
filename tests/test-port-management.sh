@@ -69,6 +69,20 @@ reset_calls
 run_fm ports apply "$token" --yes -- "$A" "$B"
 assert_eq 0 "$CODE" "$OUT"
 assert_calls_not_contain '^bench set-config'
+# apply with --json streams: one plan line for the batch, a step per bench, one done
+# whose exit is the process exit code (docs/json-schema.md)
+run_fm ports plan --json -- "$A" "$B"
+token="$(printf '%s' "$OUT" | jget - 'd["token"]')"
+set +e; "$FM" ports apply "$token" --yes --json -- "$A" "$B" >"$TMP_DIR/pm-apply.jsonl" 2>/dev/null </dev/null; CODE=$?; set -e
+assert_eq 0 "$CODE"
+python3 -I - "$TMP_DIR/pm-apply.jsonl" "$A" "$B" <<'PY' || fail "ports apply --json stream"
+import json, sys
+e = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
+assert e[0]["event"] == "plan" and e[0]["benches"] == sys.argv[2:4], e[0]
+assert [x["event"] for x in e].count("done") == 1 and e[-1]["event"] == "done" and e[-1]["exit"] == 0, e[-1]
+assert [x["status"] for x in e if x["event"] == "step" and x["id"].startswith("bench_")] == ["running", "done", "running", "done"], e
+assert all(k in e[-1] for k in ("changed", "warnings", "next_actions", "state_after")) and e[-1]["bench"] is None and [c["kind"] for c in e[-1]["changed"]] == ["ports", "ports"], e[-1]
+PY
 # A positively identified process blocks setup; a foreign listener does not.
 add_proc 12345 "honcho start -f Procfile.lean" "$A"
 run_fm ports plan --json -- "$A"

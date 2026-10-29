@@ -281,6 +281,135 @@ fl_jsonl_skipped_add() {
   FL_JSONL_SKIPPED="${FL_JSONL_SKIPPED}${FL_JSONL_SKIPPED:+,}{\"id\":$(fl_json_str "$1"),\"command\":$(fl_json_str "$2")}"
 }
 
+# ---------------------------------------------------------------- the fields of every done
+
+# Every command that changes things ends with the same fields, in its done
+# line (a stream) or added to its one document (docs/json-schema.md, "Rules
+# for readers"): exit, changed[], warnings[], next_actions[] and state_after.
+# They are collected as the run goes: fl_warn lines, fl_fix lines, and the
+# fl_changed calls of the code that changed something.
+FL_LAST_PROBLEM=""
+FL_DONE_WARNINGS=""
+FL_DONE_WARNINGS_N=0
+FL_DONE_CHANGED=""
+FL_DONE_NEXT=""
+FL_DONE_NEXT_N=0
+
+# fl_done_warning_add TEXT: one [WARN] line of the run (at most 50, 500 characters each)
+fl_done_warning_add() {
+  [[ "$FL_DONE_WARNINGS_N" -lt 50 ]] || return 0
+  FL_DONE_WARNINGS_N=$((FL_DONE_WARNINGS_N + 1))
+  FL_DONE_WARNINGS="${FL_DONE_WARNINGS}${FL_DONE_WARNINGS:+,}$(fl_json_str "${1:0:500}")"
+}
+
+# fl_next_action COMMAND [WHY]: a fix line or next step, as {"command","why"}
+fl_next_action() {
+  [[ "$FL_DONE_NEXT_N" -lt 20 ]] || return 0
+  FL_DONE_NEXT_N=$((FL_DONE_NEXT_N + 1))
+  FL_DONE_NEXT="${FL_DONE_NEXT}${FL_DONE_NEXT:+,}{\"command\":$(fl_json_str "${1:0:500}"),\"why\":$(fl_json_str "${2:0:500}")}"
+}
+
+# fl_done_mark_v VAR: where warnings[] and next_actions[] stand now, for fl_done_forget
+fl_done_mark_v() {
+  printf -v "$1" '%s %s %s %s' "$FL_DONE_WARNINGS_N" "${#FL_DONE_WARNINGS}" "$FL_DONE_NEXT_N" "${#FL_DONE_NEXT}"
+}
+
+# fl_done_forget FROM TO: drops the warnings and next actions collected between
+# two marks (a check print that a later one replaces, the repair engine's plan
+# after its verify pass); what came before FROM and after TO stays
+fl_done_forget() {
+  local fwn fwl fxn fxl twn twl txn txl head tail
+  read -r fwn fwl fxn fxl <<<"$1"
+  read -r twn twl txn txl <<<"$2"
+  head="${FL_DONE_WARNINGS:0:$fwl}"; tail="${FL_DONE_WARNINGS:$twl}"; tail="${tail#,}"
+  FL_DONE_WARNINGS="${head}${head:+${tail:+,}}${tail}"
+  FL_DONE_WARNINGS_N=$((fwn + FL_DONE_WARNINGS_N - twn))
+  head="${FL_DONE_NEXT:0:$fxl}"; tail="${FL_DONE_NEXT:$txl}"; tail="${tail#,}"
+  FL_DONE_NEXT="${head}${head:+${tail:+,}}${tail}"
+  FL_DONE_NEXT_N=$((fxn + FL_DONE_NEXT_N - txn))
+}
+
+# fl_changed KIND NAME [DETAIL]: something this run changed. KIND is site,
+# app, service, ports, hosts, backup or process. Not recorded in a dry run.
+fl_changed() {
+  [[ "${FL_DRY_RUN:-0}" != "1" ]] || return 0
+  # a phase script is a child process: it hands its changes to the parent through
+  # the file FL_CHANGED_FILE names (install), which fl_changed_fold reads
+  if [[ -n "${FL_CHANGED_FILE:-}" && "${FL_CHANGED_OWNER:-}" != "$$" ]]; then
+    printf '%s\t%s\t%s\n' "$1" "$2" "${3:-}" >>"$FL_CHANGED_FILE" 2>/dev/null || true
+    return 0
+  fi
+  FL_DONE_CHANGED="${FL_DONE_CHANGED}${FL_DONE_CHANGED:+,}{\"kind\":\"$1\",\"name\":$(fl_json_str "$2"),\"detail\":$(fl_json_str "${3:-}")}"
+}
+
+# fl_changed_fold: what the children recorded joins changed[] (once)
+fl_changed_fold() {
+  local kind name detail
+  [[ -n "${FL_CHANGED_FILE:-}" && "${FL_CHANGED_OWNER:-}" == "$$" && -s "$FL_CHANGED_FILE" ]] || return 0
+  while IFS=$'\t' read -r kind name detail; do
+    [[ -n "$kind" ]] || continue
+    FL_DONE_CHANGED="${FL_DONE_CHANGED}${FL_DONE_CHANGED:+,}{\"kind\":\"${kind}\",\"name\":$(fl_json_str "$name"),\"detail\":$(fl_json_str "$detail")}"
+  done <"$FL_CHANGED_FILE"
+  : >"$FL_CHANGED_FILE"
+}
+
+# fl_done_fields_v VAR [CODE]: `"exit":N,"changed":[..],"warnings":[..],"next_actions":[..],"state_after":{..}`
+# (without CODE: no exit, for a done line that has its own)
+fl_done_fields_v() {
+  local __f="" __tail
+  [[ -z "${2:-}" ]] || __f="\"exit\":${2},"
+  [[ -z "$FL_NEED_MISSING_JSON" ]] || __f="${__f}\"missing\":[${FL_NEED_MISSING_JSON}],"
+  fl_changed_fold
+  fl_done_tail_v __tail
+  printf -v "$1" '%s"changed":[%s],"warnings":[%s],%s' "$__f" "$FL_DONE_CHANGED" "$FL_DONE_WARNINGS" "$__tail"
+}
+
+# fl_done_tail_v VAR: `"next_actions":[..],"state_after":{..}`, for a done that has its
+# own changed and warnings (pull). state_after is null in a dry run: nothing changed.
+fl_done_tail_v() {
+  local __after="null"
+  if [[ "${FL_DRY_RUN:-0}" != "1" && "${FL_DONE_NO_BENCH:-0}" != "1" && "${FL_DONE_NO_STATE:-0}" != "1" ]] && declare -F fl_state_after_v >/dev/null; then fl_state_after_v __after; fi
+  printf -v "$1" '"next_actions":[%s],"state_after":%s' "$FL_DONE_NEXT" "$__after"
+}
+
+# fl_json_doc_begin: a command with a one document --json keeps the document
+# on fd 3 (the real stdout) and every line of text on stderr. Under --jsonl
+# the stream is open already (benchbar, fl_jsonl_begin_generic).
+fl_json_doc_begin() {
+  [[ "${FL_JSONL:-0}" != "1" ]] || return 0
+  exec 3>&1 1>&2
+  FL_PLAIN=1; fl_ui_init
+}
+
+# fl_doc_emit CODE DOC [plan]: the end of a command with a one document
+# --json. DOC is the document on one line (schema_version and cli_version
+# first). Under --json it is printed with the done fields added (a plan:
+# as it is); under --jsonl a plan becomes the plan line, a result is kept
+# for the done line, which merges it with the done fields.
+FL_DOC=""
+fl_doc_emit() {
+  local code="$1" doc="$2" kind="${3:-result}" f
+  if [[ "${FL_JSONL:-0}" == "1" ]]; then
+    if [[ "$kind" == "plan" ]]; then
+      fl_jsonl plan ",$(fl_doc_rest "$doc")"
+      FL_JSONL_PLAN_SENT=1
+      [[ "${FL_DRY_RUN:-0}" != "1" ]] || FL_JSONL_QUIET=1
+    else
+      FL_DOC="$doc"
+    fi
+    return 0
+  fi
+  if [[ "$kind" == "plan" ]]; then printf '%s\n' "$doc" >&3; return 0; fi
+  fl_done_fields_v f "$code"
+  printf '%s,%s}\n' "${doc%\}}" "$f" >&3
+}
+
+# fl_doc_rest DOC: the fields after schema_version and cli_version, without braces
+fl_doc_rest() {
+  local r="${1#\{\"schema_version\":*,\"cli_version\":\"*\",}"
+  printf '%s' "${r%\}}"
+}
+
 # fl_jsonl_progress LABEL ELAPSED: a progress line for the step that runs
 # now; the size of the file in FL_PROGRESS_FILE is the bytes of a download
 fl_jsonl_progress() {
@@ -337,7 +466,10 @@ fl_section() {
 fl_status_line() {
   local color="$1" label="$2" msg="$3"
   fl_spinner_pause
-  case "$label" in WARN|FAIL) FL_JSONL_SEC_WARN=1 ;; esac
+  case "$label" in
+    WARN|FAIL) FL_JSONL_SEC_WARN=1; FL_LAST_PROBLEM="$msg" ;;
+  esac
+  [[ "$label" != "WARN" ]] || fl_done_warning_add "$msg"
   printf '  %s[%s]%s %s\n' "$color" "$label" "$FL_RESET" "$msg"
   fl_log "[$label] $msg"
 }
@@ -359,6 +491,7 @@ fl_fix() {
   fl_spinner_pause
   printf '     %sfix:%s %s\n' "$FL_CYAN" "$FL_RESET" "$1"
   fl_log "   fix: $1"
+  fl_next_action "$1" "$FL_LAST_PROBLEM"
 }
 
 # fl_see URL: the documentation for the line above, under its fix: line
@@ -375,6 +508,9 @@ fl_die() {
   fl_redact_url_v msg "$1"
   fl_redact_url_v hint "${2:-Fix the above and re-run.}"
   FL_DIE_MESSAGE="$msg"
+  # a command run with --json prints JSON on stdout and nothing else: its
+  # refusal is text on stderr
+  if [[ "${OPT_JSON:-0}" == "1" ]]; then exec 1>&2; fi
   fl_fail "$msg"
   printf '\n%sAborting.%s %s\n' "$FL_RED$FL_BOLD" "$FL_RESET" "$hint"
   fl_log "ABORT: ${2:-}"
@@ -543,6 +679,9 @@ FL_STEP_IDS=()
 FL_STEP_PARENT=""
 FL_STEP_NUMBERED=1
 FL_STEP_LOG_FROM=0
+# FL_STEP_QUIET=1: the steps go to the stream and the log only, not to the
+# terminal (up, down, restart, which print one line of their own)
+FL_STEP_QUIET=0
 fl_steps_reset() { FL_STEP_LABELS=(); FL_STEP_STATUS=(); FL_STEP_SECS=(); FL_STEP_IDS=(); FL_STEP_PARENT=""; FL_STEP_NUMBERED=1; FL_STEP_CURRENT=-1; FL_RUN_START="$SECONDS"; }
 
 # fl_steps_ids [-n] [-p PARENT] ID...: the ids of the steps just defined
@@ -637,7 +776,7 @@ fl_step_begin() {
   FL_SKIP_COMMAND=""
   fl_log_lines_v FL_STEP_LOG_FROM
   fl_spinner_pause
-  printf '\n%s%s %d. %s%s\n' "$FL_BOLD" "$(fl_step_glyph running)" $((i + 1)) "${FL_STEP_LABELS[$i]}" "$FL_RESET"
+  [[ "$FL_STEP_QUIET" == "1" ]] || printf '\n%s%s %d. %s%s\n' "$FL_BOLD" "$(fl_step_glyph running)" $((i + 1)) "${FL_STEP_LABELS[$i]}" "$FL_RESET"
   fl_log "step $((i + 1)) start: ${FL_STEP_LABELS[$i]}"
   fl_step_json running "$i"
 }
@@ -650,7 +789,7 @@ fl_step_end() {
   FL_STEP_STATUS[i]="$status"
   FL_STEP_SECS[i]="$secs"
   fl_spinner_pause
-  printf '  %s %d. %s: %s%s %s(%s)%s\n' "$(fl_step_glyph "$status")" $((i + 1)) "${FL_STEP_LABELS[$i]}" "$status" "${detail:+ ($detail)}" "$FL_DIM" "$(fl_fmt_secs "$secs")" "$FL_RESET"
+  [[ "$FL_STEP_QUIET" == "1" ]] || printf '  %s %d. %s: %s%s %s(%s)%s\n' "$(fl_step_glyph "$status")" $((i + 1)) "${FL_STEP_LABELS[$i]}" "$status" "${detail:+ ($detail)}" "$FL_DIM" "$(fl_fmt_secs "$secs")" "$FL_RESET"
   fl_log "step $((i + 1)) $status ${detail} ($(fl_fmt_secs "$secs"))"
   fl_step_json "$status" "$i" "$secs" "$detail" "${3:-}"
   FL_STEP_CURRENT=-1
@@ -716,12 +855,65 @@ fl_steps_counts() {
 
 # ---------------------------------------------------------------- prompts
 
+# BENCHBAR_NONINTERACTIVE=1 (benchbar mcp sets it for every CLI it starts,
+# --for-agent sets it too): nothing can be asked. A command lists the inputs
+# it needs up front (fl_need, then fl_need_check) and is refused before it
+# takes the lock or touches a bench; fl_confirm, fl_ask and fl_ask_secret are
+# the only places that prompt, and under the mode they stop naming the input
+# instead of waiting, reading end of input as "no", or guessing a default.
+fl_noninteractive() { [[ "${BENCHBAR_NONINTERACTIVE:-0}" == "1" ]]; }
+
+FL_NEED_LIST=""
+# the names alone, as JSON strings: the "missing" field of the refusal
+FL_NEED_JSON=""
+FL_NEED_MISSING_JSON=""
+# fl_need INPUT WHY: the run cannot go on without INPUT (an environment
+# variable, a flag, sudo); the caller has already seen it is missing
+fl_need() {
+  FL_NEED_LIST="${FL_NEED_LIST}${FL_NEED_LIST:+; }$1 ($2)"
+  FL_NEED_JSON="${FL_NEED_JSON}${FL_NEED_JSON:+,}$(fl_json_str "$1")"
+}
+# fl_need_check [always]: refuses once, naming everything fl_need collected, in
+# the non interactive mode (or with "always": nothing can be asked here whatever the mode).
+# Exit 1, or 2 when the MariaDB root password is among them (AGENTS.md). A stream
+# ends with its done line (error, missing); a command with one document under
+# --json prints that document with exit and error; else the text, as fl_die.
+fl_need_check() {
+  local list="$FL_NEED_LIST" names="$FL_NEED_JSON" why="BENCHBAR_NONINTERACTIVE=1: nothing can be asked" code=1 msg f
+  FL_NEED_LIST=""; FL_NEED_JSON=""
+  [[ -n "$list" ]] || return 0
+  [[ "${1:-}" == "always" ]] && why="no terminal to ask in"
+  [[ "${1:-}" == "always" ]] || fl_noninteractive || return 0
+  case "$names" in *'"MARIADB_ROOT_PASSWORD"'*) code=2 ;; esac
+  msg="Cannot start, missing: ${list}."
+  FL_NEED_MISSING_JSON="$names"
+  if [[ "${FL_JSONL:-0}" == "1" ]]; then
+    # the done line comes from the exit trap; no status is computed for a refusal
+    FL_DIE_MESSAGE="$msg"
+    FL_DONE_NO_STATE=1
+    fl_log "ABORT: ${msg}"
+    printf '[FAIL] %s\n' "$msg" >&2
+    exit "$code"
+  fi
+  if [[ "${OPT_JSON:-0}" == "1" ]]; then
+    printf '%s %s\n' "$msg" "${why}; pass them and run the command again. Nothing was changed." >&2
+    FL_DONE_NO_BENCH=1; FL_DONE_NO_STATE=1
+    fl_done_fields_v f "$code"
+    printf '{"schema_version":%d,"cli_version":"%s",%s,"error":%s}\n' "${FL_SCHEMA_VERSION:-1}" "${FL_VERSION:-0}" "$f" "$(fl_json_str "$msg")"
+    exit "$code"
+  fi
+  fl_die "$msg" "${why}; pass them (flags before the command's arguments, secrets in the environment) and run the command again. Nothing was changed." "$code"
+}
+
 fl_confirm() {
   local prompt="$1" answer
   fl_spinner_pause
   if [[ "${FL_ASSUME_YES:-0}" == "1" ]]; then
     fl_info "auto-confirmed: ${prompt}"
     return 0
+  fi
+  if fl_noninteractive; then
+    fl_die "'${prompt}' needs an answer, and BENCHBAR_NONINTERACTIVE=1 says nothing can ask." "Pass --yes to confirm it, or run without the mode in a terminal."
   fi
   if [[ ! -t 0 ]]; then
     fl_warn "Not a terminal and --yes not given; treating '${prompt}' as no."
@@ -742,6 +934,10 @@ fl_ask() {
     fl_redact_url_v __answer "${!__varname}"
     fl_info "using env-provided ${__varname}=${__answer}"
     return 0
+  fi
+  if fl_noninteractive; then
+    fl_die "Cannot ask for ${__varname}: BENCHBAR_NONINTERACTIVE=1 says nothing can ask." \
+      "Pass it in the environment (${__varname}='...' before the command)"
   fi
   if [[ "$FL_TTY" == "1" ]] && command -v gum >/dev/null 2>&1; then
     __answer="$(gum input --prompt "  ${__prompt}: " --value "$__default" </dev/tty)" || __answer="$__default"
@@ -772,6 +968,10 @@ fl_ask_secret() {
   if [[ -n "${!__varname:-}" ]]; then
     fl_info "using env-provided ${__varname} (hidden)"
     return 0
+  fi
+  if fl_noninteractive; then
+    fl_die "Cannot ask for ${__varname}: BENCHBAR_NONINTERACTIVE=1 says nothing can ask." \
+      "Pass it in the environment (${__varname}='...' before the command)"
   fi
   # no terminal: read hits end of input, and under set -e the run would
   # end right here without a word

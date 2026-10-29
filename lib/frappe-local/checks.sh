@@ -13,6 +13,9 @@
 
 FL_CHECK_ORDER="brew formula_dates python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac mole app_copies full_disk_access env_python env_setuptools bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy app_update_pending app_add_pending dependency_behind apps_behind lock_parse lock_drift profile_outdated logs bench_path honcho honcho_setuptools procfile runner agent runner_heartbeat fork_safety scheduler stop_flag helpers cli_link cli_duplicate legacy_agents dead_agents hosts port_clash orphans ping"
 FL_LOG_WARN_MB="${FL_LOG_WARN_MB:-50}"
+# doctor --quick leaves these out: they start brew, python, node, bench, git
+# or ask the site, which takes seconds each; the JSON names them (skipped_checks)
+FL_QUICK_SKIP="brew formula_dates python_leaves pdf_engine app_copies env_python env_setuptools bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio dependency_behind apps_behind ping"
 FL_HOSTS_FILE="${FL_HOSTS_FILE:-/etc/hosts}"
 
 # port_block only exists while a plan moves this bench's ports

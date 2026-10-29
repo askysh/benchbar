@@ -480,10 +480,12 @@ fl_app_build() {
   fl_run_long "bench build ${args[*]}" fl__in_dir "$FL_BENCH_DIR" bench build "${args[@]}"
 }
 
-# restart a running bench so the new code is served; a stopped one stays stopped
+# restart a running bench so the new code is served; a stopped one stays stopped.
+# The caller's own step is the restart in the stream: restart's step lines
+# (restart_service, wait_site) are left out of it (FL_JSONL=0 in the subshell)
 fl_app_restart_if_running() {
   fl_bench_is_running || { fl_info "the bench is not running; the change is live on the next benchup"; return 0; }
-  ( fl_cmd_restart ) || { fl_warn "restart failed; run: benchbar restart --bench-dir ${FL_BENCH_DIR}"; return 1; }
+  ( FL_JSONL=0; fl_cmd_restart ) || { fl_warn "restart failed; run: benchbar restart --bench-dir ${FL_BENCH_DIR}"; return 1; }
 }
 
 # fl_app_verify APP BRANCH SITE...: apps.txt, the branch, the sites.
@@ -779,7 +781,7 @@ fl__au_run() {
 fl_cmd_app_update() {
   local app="" a skip_backup=0 discard=0 branch remote old new head total=0 newer=0 from to sites=() s rows=() labels=() steps=() i code=0 running=0 sep log
   local ff_left f s pending=0 fetched=1 kind target name cmd reason fail_from
-  local pd_failed="" pd_reason="" pd_started="" pd_line="" pd_steps=()
+  local pd_failed="" pd_reason="" pd_started="" pd_line="" pd_steps=() doc ids=()
   for a in "$@"; do
     case "$a" in
       --skip-backup) skip_backup=1 ;;
@@ -789,9 +791,10 @@ fl_cmd_app_update() {
       *) [[ -z "$app" ]] && app="$a" ;;
     esac
   done
+  # the document (or the stream) is on fd 3; every line of text goes to stderr
+  [[ "$OPT_JSON" != "1" ]] || fl_json_doc_begin
   fl_require_bench
   [[ -n "$app" ]] || fl_die "Usage: benchbar app update NAME [--skip-backup]"
-  [[ "$OPT_JSON" != "1" || "${FL_DRY_RUN:-0}" == "1" ]] || fl_die "--json shows the plan only; add --dry-run." "benchbar app update ${app} --dry-run --json"
   # --discard-pending only removes benchbar's own record and then stops: no
   # update runs, and a dirty tree or a detached HEAD (an app added from a tag)
   # does not matter. Run benchbar app update again for the update itself.
@@ -901,26 +904,31 @@ fl_cmd_app_update() {
   fi
 
   if [[ "$OPT_JSON" == "1" ]]; then
-    if [[ "$pending" == "1" && "$pd_line" != *"}" ]]; then fl_warn "the record of ${app} looks cut short; pending is null here" >&2; fi
-    printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"app":%s,"remote":%s,"branch":%s,"from":%s,"to":%s,"commits":[' \
-      "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$app")" "$(fl_json_str "$remote")" \
-      "$(fl_json_str "$branch")" "$(fl_json_str "$from")" "$(fl_json_str "$to")"
-    sep=""
-    if [[ "$total" != "0" ]]; then
-      while IFS=' ' read -r a log; do
-        printf '%s{"sha":%s,"subject":%s}' "$sep" "$(fl_json_str "$a")" "$(fl_json_str "$log")"; sep=","
-      done < <(fl_app_git "$app" log --format='%h %s' -n 30 "${old}..${new}")
-    fi
-    printf '],"commits_total":%d,"newer_commits":%d,"pending":%s,"sites":%s,"skip_backup":%s,"steps":[' "$total" "$newer" \
-      "$(if [[ "$pending" == "1" && "$pd_line" == *"}" ]]; then printf '%s' "$pd_line"; else printf null; fi)" \
-      "$(fl_json_str_array ${sites[@]+"${sites[@]}"})" "$(fl_json_bool "$skip_backup")"
-    sep=""
-    for a in ${steps[@]+"${steps[@]}"}; do
-      IFS='|' read -r kind target name cmd <<<"$a"
-      printf '%s{"name":%s,"command":%s,"kind":%s,"target":%s}' "$sep" "$(fl_json_str "$name")" "$(fl_json_str "$cmd")" "$(fl_json_str "$kind")" "\"$(fl_json_escape "$target")\""; sep=","
-    done
-    printf ']}\n'
-    return 0
+    if [[ "$pending" == "1" && "$pd_line" != *"}" ]]; then fl_warn "the record of ${app} looks cut short; pending is null here"; fi
+    doc="$(
+      printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"app":%s,"remote":%s,"branch":%s,"from":%s,"to":%s,"commits":[' \
+        "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$app")" "$(fl_json_str "$remote")" \
+        "$(fl_json_str "$branch")" "$(fl_json_str "$from")" "$(fl_json_str "$to")"
+      sep=""
+      if [[ "$total" != "0" ]]; then
+        while IFS=' ' read -r a log; do
+          printf '%s{"sha":%s,"subject":%s}' "$sep" "$(fl_json_str "$a")" "$(fl_json_str "$log")"; sep=","
+        done < <(fl_app_git "$app" log --format='%h %s' -n 30 "${old}..${new}")
+      fi
+      printf '],"commits_total":%d,"newer_commits":%d,"pending":%s,"sites":%s,"skip_backup":%s,"steps":[' "$total" "$newer" \
+        "$(if [[ "$pending" == "1" && "$pd_line" == *"}" ]]; then printf '%s' "$pd_line"; else printf null; fi)" \
+        "$(fl_json_str_array ${sites[@]+"${sites[@]}"})" "$(fl_json_bool "$skip_backup")"
+      sep=""
+      for a in ${steps[@]+"${steps[@]}"}; do
+        IFS='|' read -r kind target name cmd <<<"$a"
+        printf '%s{"name":%s,"command":%s,"kind":%s,"target":%s}' "$sep" "$(fl_json_str "$name")" "$(fl_json_str "$cmd")" "$(fl_json_str "$kind")" "\"$(fl_json_escape "$target")\""; sep=","
+      done
+      printf ']}'
+    )"
+    # the plan: the one document of a dry run, the plan line of a real run's stream
+    fl_doc_emit 0 "$doc" plan
+    [[ "${FL_DRY_RUN:-0}" == "1" ]] || FL_JSONL_PLAN_SENT=1
+    [[ "${FL_DRY_RUN:-0}" != "1" ]] || return 0
   fi
 
   fl_header "benchbar app update" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "${sites[*]:-no site}"
@@ -962,6 +970,8 @@ fl_cmd_app_update() {
   # the record first: a stop anywhere below leaves the steps that did not finish
   fl_pending_write app_update "$app" "$branch" "$from" "$to" "$pd_failed" "$pd_reason" ${steps[@]+"${steps[@]}"} || { fl_fail "nothing was run: without its record a stop could not be finished later"; return 1; }
   fl_steps_define ${labels[@]+"${labels[@]}"}
+  for a in ${steps[@]+"${steps[@]}"}; do IFS='|' read -r kind target name cmd <<<"$a"; ids+=("${kind}${target:+_${target}}"); done
+  fl_steps_ids ${ids[@]+"${ids[@]}"}
   i=0
   for a in ${steps[@]+"${steps[@]}"}; do
     IFS='|' read -r kind target name cmd <<<"$a"
@@ -986,6 +996,12 @@ fl_cmd_app_update() {
         return 1
       fi
       fl_step_end "done"
+      case "$kind" in
+        backup) fl_changed backup "$target" "bench --site backup" ;;
+        migrate) fl_changed site "$target" "migrated" ;;
+        fast_forward) fl_changed app "$app" "${from:0:7} to ${to:0:7}" ;;
+        restart) fl_changed process "$FL_BENCH_NAME" "restarted" ;;
+      esac
     fi
     i=$((i + 1))
     if ! fl_pending_write app_update "$app" "$branch" "$from" "$to" "" "" ${steps[@]+"${steps[@]:$i}"}; then
@@ -1005,6 +1021,10 @@ fl_cmd_app_update() {
     fl_fix "look at apps/${app} yourself; benchbar app update ${app} --discard-pending drops this record and stops (the update itself is a separate run)"
   fi
   fl_steps_summary
+  if [[ "$OPT_JSON" == "1" ]]; then
+    fl_doc_emit "$code" "$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"app":%s,"from":%s,"to":%s,"updated":%s}' \
+      "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$app")" "$(fl_json_str "$old")" "$(fl_json_str "$new")" "$(fl_json_bool "$([[ "$code" == 0 ]] && printf 1 || printf 0)")")"
+  fi
   return "$code"
 }
 

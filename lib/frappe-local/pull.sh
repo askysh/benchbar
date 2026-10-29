@@ -136,6 +136,13 @@ fl_pull_emit() {
   printf '{"schema_version":%d,"cli_version":"%s","event":"%s"%s}\n' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$1" "${2:-}" >&3
 }
 
+# the done fields pull adds to its own (exit, site, warnings): changed, next_actions, state_after
+fl_pull_done_extra() {
+  local tail
+  fl_done_tail_v tail
+  printf ',"changed":[%s],%s' "$FL_DONE_CHANGED" "$tail"
+}
+
 fl_pull_warn() {
   fl_warn "$1"
   FL_PULL_WARNINGS="${FL_PULL_WARNINGS}${FL_PULL_WARNINGS:+,}$(fl_json_str "$1")"
@@ -186,7 +193,7 @@ fl_pull_on_exit() {
   fi
   if [[ "$FL_PULL_DONE_SENT" == "0" ]]; then
     FL_PULL_DONE_SENT=1
-    fl_pull_emit "done" ",\"exit\":${code},\"site\":$(fl_json_str "$FL_PULL_AS"),\"warnings\":[${FL_PULL_WARNINGS}]"
+    fl_pull_emit "done" ",\"exit\":${code},\"site\":$(fl_json_str "$FL_PULL_AS"),\"warnings\":[${FL_PULL_WARNINGS}]$(fl_pull_done_extra)"
   fi
 }
 
@@ -1005,7 +1012,7 @@ fl_cmd_pull() {
     printf '\n'
     fl_info "dry-run: nothing was downloaded, restored or written, here or on ${FL_PULL_HOST:-the server}"
     FL_PULL_DONE_SENT=1
-    fl_pull_emit "done" ",\"exit\":0,\"site\":$(fl_json_str "$FL_PULL_AS"),\"dry_run\":true,\"warnings\":[${FL_PULL_WARNINGS}]"
+    fl_pull_emit "done" ",\"exit\":0,\"site\":$(fl_json_str "$FL_PULL_AS"),\"dry_run\":true,\"warnings\":[${FL_PULL_WARNINGS}]$(fl_pull_done_extra)"
     return 0
   fi
 
@@ -1039,5 +1046,6 @@ fl_cmd_pull() {
     "email    muted (mute_emails)$([[ "$FL_PULL_KEEP_SCHEDULER" == "1" ]] || printf ', scheduler paused')" \
     "default  stays ${FL_SITE}; benchbar site default ${FL_PULL_AS} changes it"
   FL_PULL_DONE_SENT=1
-  fl_pull_emit "done" ",\"exit\":0,\"site\":$(fl_json_str "$FL_PULL_AS"),\"url\":$(fl_json_str "http://${FL_PULL_AS}:${FL_WEB_PORT}"),\"decrypt\":{\"ok\":$(fl_json_num "$FL_PULL_PROBE_OK"),\"failed\":$(fl_json_num "$FL_PULL_PROBE_BAD")},\"warnings\":[${FL_PULL_WARNINGS}]"
+  fl_changed site "$FL_PULL_AS" "restored from ${FL_PULL_HOST:-a backup set}"
+  fl_pull_emit "done" ",\"exit\":0,\"site\":$(fl_json_str "$FL_PULL_AS"),\"url\":$(fl_json_str "http://${FL_PULL_AS}:${FL_WEB_PORT}"),\"decrypt\":{\"ok\":$(fl_json_num "$FL_PULL_PROBE_OK"),\"failed\":$(fl_json_num "$FL_PULL_PROBE_BAD")},\"warnings\":[${FL_PULL_WARNINGS}]$(fl_pull_done_extra)"
 }

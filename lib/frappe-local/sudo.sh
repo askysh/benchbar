@@ -45,10 +45,12 @@ fl_sudo_begin() {
   # a macOS dialog asks, once per step, when the step runs (fl_root_run)
   fl_sudo_gui && return 0
   [[ "$FL_SUDO_SESSION" == "1" ]] && return 0
-  # install --json and adopt --json without the dialogs: nothing can type a
-  # password, so a cached credential or a NOPASSWD rule is used and anything
-  # else skips the steps (with their manual command), as a cancelled dialog does
-  if [[ "${FL_JSONL:-0}" == "1" ]]; then
+  # install --json and adopt --json without the dialogs, and any run under
+  # BENCHBAR_NONINTERACTIVE=1 (sudo -v would read the terminal and wait):
+  # nothing can type a password, so a cached credential or a NOPASSWD rule is
+  # used and anything else skips the steps (with their manual command), as a
+  # cancelled dialog does
+  if [[ "${FL_JSONL:-0}" == "1" ]] || fl_noninteractive; then
     if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
       FL_SUDO_SESSION=1
       export FL_SUDO_SESSION

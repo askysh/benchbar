@@ -198,8 +198,10 @@ assert_eq "Back up macdev,Back up site2,Fast forward,Python requirements,Node re
 assert_eq "$old" "$(printf '%s' "$OUT" | jget - 'd["from"]')"
 assert_eq "$old" "$(app_head "$BENCH/apps/acme_crm")" "(dry run keeps the code)"
 assert_calls_not_contain '^bench --site .* (backup|migrate)'
+# without --dry-run, --json streams (docs/json-schema.md): no --yes means nothing is applied, the done line says so
 run_fm app update acme_crm --json --bench-dir "$BENCH"
-assert_eq "1" "$CODE"; assert_contains "$OUT" "add --dry-run"
+assert_eq "1" "$CODE"; assert_contains "$OUT" '"event":"done"'; assert_contains "$OUT" '"exit":1'
+assert_calls_not_contain '^bench --site .* (backup|migrate)'
 # human dry run shows the changelog
 run_fm app update acme_crm --dry-run --bench-dir "$BENCH"
 assert_contains "$OUT" "2 commit(s)"

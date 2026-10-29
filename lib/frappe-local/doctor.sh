@@ -8,8 +8,13 @@ FL_D_STATUS=()
 FL_D_MSG=()
 FL_D_FIX=()
 FL_D_ACTION=()
+# parallel to the checks: "1" for a WARN the person acknowledged (doctor --ack)
+FL_D_ACKED=()
+# doctor --quick: the ids it left out
+FL_D_SKIPPED=""
+FL_DOCTOR_QUICK="${FL_DOCTOR_QUICK:-0}"
 
-fl_doctor_reset() { FL_D_IDS=(); FL_D_STATUS=(); FL_D_MSG=(); FL_D_FIX=(); FL_D_ACTION=(); }
+fl_doctor_reset() { FL_D_IDS=(); FL_D_STATUS=(); FL_D_MSG=(); FL_D_FIX=(); FL_D_ACTION=(); FL_D_ACKED=(); FL_D_SKIPPED=""; }
 
 # fl_doctor_run [GROUP...]: runs every check (or only the given groups).
 CHK_MORE=()
@@ -21,6 +26,9 @@ fl_doctor_run() {
     g="$(fl_check_group "$id")"
     if [[ -n "$groups" ]]; then
       case " $groups " in *" $g "*) ;; *) continue ;; esac
+    fi
+    if [[ "$FL_DOCTOR_QUICK" == "1" ]]; then
+      case " $FL_QUICK_SKIP " in *" $id "*) FL_D_SKIPPED="${FL_D_SKIPPED}${FL_D_SKIPPED:+ }${id}"; continue ;; esac
     fi
     CHK_STATUS=""; CHK_MSG=""; CHK_FIX=""; CHK_ACTION=""; CHK_MORE=()
     "chk_${id}" || true
@@ -44,6 +52,109 @@ fl_doctor_count() {
   printf '%d' "$n"
 }
 
+# ---------------------------------------------------------------- acknowledged warnings
+#
+# doctor --ack CHECK silences one named WARN for this bench. The record is
+# the bench's own state file, ACK_<id>=<the message it acknowledged>; when the
+# check's message changes the ack lapses (the warning is a different one now).
+# A FAIL cannot be acked. The check stays in doctor --json at level warn with
+# "acked": true; the text output prints one dim line for it, and --fix-hints
+# leaves it out. repair does not look at acks.
+
+# fl_doctor_id_msg_v VAR ID: the messages of ID's rows that are not ok, joined with " | "
+fl_doctor_id_msg_v() {
+  local __i=0 __m=""
+  while [[ "$__i" -lt "${#FL_D_IDS[@]}" ]]; do
+    if [[ "${FL_D_IDS[$__i]}" == "$2" && "${FL_D_STATUS[$__i]}" != "ok" ]]; then __m="${__m}${__m:+ | }${FL_D_MSG[$__i]}"; fi
+    __i=$((__i + 1))
+  done
+  printf -v "$1" '%s' "$__m"
+}
+
+# fl_doctor_apply_acks: marks the WARN rows whose id has an ack with the same message
+fl_doctor_apply_acks() {
+  local i=0 id stored msg
+  FL_D_ACKED=()
+  while [[ "$i" -lt "${#FL_D_IDS[@]}" ]]; do
+    FL_D_ACKED[i]=0
+    if [[ "${FL_D_STATUS[$i]}" == "warn" ]]; then
+      id="${FL_D_IDS[$i]}"
+      stored="$(fl_bstate_get "ACK_${id}")"
+      if [[ -n "$stored" ]]; then
+        fl_doctor_id_msg_v msg "$id"
+        [[ "$stored" != "$msg" ]] || FL_D_ACKED[i]=1
+      fi
+    fi
+    i=$((i + 1))
+  done
+}
+
+fl_doctor_is_acked() { [[ "${FL_D_ACKED[$1]:-0}" == "1" ]]; }
+
+# fl_doctor_acked_ids: the ids of acked warnings, one per line, each once
+fl_doctor_acked_ids() {
+  local i=0 seen=" "
+  while [[ "$i" -lt "${#FL_D_IDS[@]}" ]]; do
+    if fl_doctor_is_acked "$i"; then
+      case "$seen" in *" ${FL_D_IDS[$i]} "*) ;; *) seen="${seen}${FL_D_IDS[$i]} "; printf '%s\n' "${FL_D_IDS[$i]}" ;; esac
+    fi
+    i=$((i + 1))
+  done
+}
+
+# fl_doctor_ack ID: doctor --ack ID
+fl_doctor_ack() {
+  local id="$1" i=0 known=0 level="" msg
+  [[ "$id" =~ ^[a-z][a-z0-9_]*$ ]] || fl_die "doctor --ack takes a check id (benchbar doctor --json lists them): '${id}'" "Example: benchbar doctor --ack cleanmymac"
+  while [[ "$i" -lt "${#FL_D_IDS[@]}" ]]; do
+    if [[ "${FL_D_IDS[$i]}" == "$id" ]]; then
+      known=1
+      case "${FL_D_STATUS[$i]}" in fail) level=fail ;; warn) [[ "$level" == fail ]] || level=warn ;; esac
+    fi
+    i=$((i + 1))
+  done
+  [[ "$known" == "1" ]] || fl_die "No check named '${id}' in this bench's doctor report." "benchbar doctor --json lists the check ids"
+  [[ "$level" != "fail" ]] || fl_die "${id} FAILs: a failing check cannot be acknowledged." "Fix it: benchbar doctor --fix-hints"
+  if [[ "$level" != "warn" ]]; then
+    fl_ok "${id} is ok: nothing to acknowledge"
+    return 0
+  fi
+  fl_doctor_id_msg_v msg "$id"
+  [[ "$(fl_bstate_get "ACK_${id}")" == "$msg" ]] || fl_changed state "ack:${id}" "acknowledged: ${msg}"
+  fl_bstate_set "ACK_${id}" "$msg"
+  fl_ok "acknowledged ${id} for ${FL_BENCH_NAME}: ${msg}"
+  fl_note "it lapses when the message changes; undo it: ${FL_SELF} doctor --unack ${id} --bench-dir ${FL_BENCH_DIR}"
+}
+
+# fl_doctor_unack ID: doctor --unack ID
+fl_doctor_unack() {
+  local id="$1"
+  [[ "$id" =~ ^[a-z][a-z0-9_]*$ ]] || fl_die "doctor --unack takes a check id: '${id}'"
+  if [[ -z "$(fl_bstate_get "ACK_${id}")" ]]; then
+    fl_ok "unchanged: ${id} was not acknowledged"
+    return 0
+  fi
+  fl_bstate_del "ACK_${id}"
+  fl_changed state "ack:${id}" "no longer acknowledged"
+  fl_ok "${id} is no longer acknowledged"
+}
+
+# fl_doctor_ack_doc ACTION ID: under --json the result of --ack and --unack is
+# one small document: the check and every id with a stored acknowledgement
+fl_doctor_ack_doc() {
+  local file line ids=()
+  [[ "${OPT_JSON:-0}" == "1" ]] || return 0
+  file="$(fl_bench_state_file_for "$FL_BENCH_DIR")"
+  if [[ -r "$file" ]]; then
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      [[ "$line" == ACK_*=* ]] || continue
+      line="${line#ACK_}"; ids+=("${line%%=*}")
+    done <"$file"
+  fi
+  fl_doc_emit 0 "$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"action":%s,"check":%s,"acked":%s}' \
+    "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$1")" "$(fl_json_str "$2")" "$(fl_json_str_array ${ids[@]+"${ids[@]}"})")"
+}
+
 # fl_doctor_print [compact]: compact mode hides [OK] lines and empty groups.
 # A [FAIL] gets a "see:" line with its section of the doctor guide, after
 # the fix line (the [OK], [WARN], [FAIL] and fix: lines stay as they were
@@ -60,13 +171,19 @@ fl_doctor_print() {
     label="$(fl_check_label "${FL_D_IDS[$i]}")"
     case "${FL_D_STATUS[$i]}" in
       ok) fl_ok "${label}: ${FL_D_MSG[$i]}" ;;
-      warn) fl_warn "${label}: ${FL_D_MSG[$i]}"; [[ -n "${FL_D_FIX[$i]}" ]] && fl_fix "${FL_D_FIX[$i]}" ;;
+      warn)
+        if fl_doctor_is_acked "$i"; then
+          fl_info "acked: ${label}: ${FL_D_MSG[$i]}   (benchbar doctor --unack ${FL_D_IDS[$i]} undoes it)"
+        else
+          fl_warn "${label}: ${FL_D_MSG[$i]}"; [[ -n "${FL_D_FIX[$i]}" ]] && fl_fix "${FL_D_FIX[$i]}"
+        fi ;;
       fail) fl_fail "${label}: ${FL_D_MSG[$i]}"; [[ -n "${FL_D_FIX[$i]}" ]] && fl_fix "${FL_D_FIX[$i]}"
             fl_see "$(fl_docs_check_url "${FL_D_IDS[$i]}")" ;;
     esac
     i=$((i + 1))
   done
   printf '\n  %s%d ok, %d warn, %d fail%s\n' "$FL_BOLD" "$(fl_doctor_count ok)" "$(fl_doctor_count warn)" "$(fl_doctor_count fail)" "$FL_RESET"
+  [[ -z "$FL_D_SKIPPED" ]] || fl_info "quick: skipped the slow checks: ${FL_D_SKIPPED}"
 }
 
 # ---------------------------------------------------------------- prerequisites
@@ -238,20 +355,28 @@ fl_doctor_print_json() {
     "${FL_SCHEMA_VERSION:-1}" "${FL_VERSION:-0}" "$(fl_json_escape "$FL_BENCH_DIR")" "$(fl_json_escape "$FL_BENCH_NAME")" \
     "$(fl_json_escape "$FL_SITE")" "$(fl_json_escape "$FL_PROFILE")" "$(fl_doctor_profile_source)"
   while [[ "$i" -lt "${#FL_D_IDS[@]}" ]]; do
-    printf '%s{"id":"%s","group":"%s","label":"%s","level":"%s","message":"%s","fix_command":%s,"action":%s,"status":"%s","fix":"%s"}' \
+    printf '%s{"id":"%s","group":"%s","label":"%s","level":"%s","message":"%s","fix_command":%s,"action":%s,"status":"%s","fix":"%s","acked":%s}' \
       "$sep" "${FL_D_IDS[$i]}" "$(fl_check_group "${FL_D_IDS[$i]}")" "$(fl_json_escape "$(fl_check_label "${FL_D_IDS[$i]}")")" \
       "${FL_D_STATUS[$i]}" "$(fl_json_escape "${FL_D_MSG[$i]}")" "$(fl_json_str "${FL_D_FIX[$i]}")" "$(fl_json_str "${FL_D_ACTION[$i]}")" \
-      "${FL_D_STATUS[$i]}" "$(fl_json_escape "${FL_D_FIX[$i]}")"
+      "${FL_D_STATUS[$i]}" "$(fl_json_escape "${FL_D_FIX[$i]}")" "$(fl_doctor_is_acked "$i" && printf true || printf false)"
     sep=","
     i=$((i + 1))
   done
+  # the acknowledged warnings, and what --quick left out
+  local acked quick=false skipped ids=() id
+  while IFS= read -r id; do [[ -z "$id" ]] || ids+=("$id"); done < <(fl_doctor_acked_ids)
+  acked="$(fl_json_str_array ${ids[@]+"${ids[@]}"})"
+  ids=()
+  for id in $FL_D_SKIPPED; do ids+=("$id"); done
+  skipped="$(fl_json_str_array ${ids[@]+"${ids[@]}"})"
+  [[ "$FL_DOCTOR_QUICK" != "1" ]] || quick=true
   # the prerequisites of this Mac, next to the checks and not counted in the summary
   if [[ "$FL_P_RAN" == "1" ]]; then
     local prereq
     fl_prereq_json_v prereq
-    printf '],"prerequisites":%s,"summary":{"ok":%d,"warn":%d,"fail":%d}}\n' "$prereq" "$(fl_doctor_count ok)" "$(fl_doctor_count warn)" "$(fl_doctor_count fail)"
+    printf '],"acked":%s,"quick":%s,"skipped_checks":%s,"prerequisites":%s,"summary":{"ok":%d,"warn":%d,"fail":%d}}\n' "$acked" "$quick" "$skipped" "$prereq" "$(fl_doctor_count ok)" "$(fl_doctor_count warn)" "$(fl_doctor_count fail)"
   else
-    printf '],"summary":{"ok":%d,"warn":%d,"fail":%d}}\n' "$(fl_doctor_count ok)" "$(fl_doctor_count warn)" "$(fl_doctor_count fail)"
+    printf '],"acked":%s,"quick":%s,"skipped_checks":%s,"summary":{"ok":%d,"warn":%d,"fail":%d}}\n' "$acked" "$quick" "$skipped" "$(fl_doctor_count ok)" "$(fl_doctor_count warn)" "$(fl_doctor_count fail)"
   fi
 }
 
@@ -262,7 +387,7 @@ fl_doctor_print_fix_hints() {
   for want in fail warn; do
     i=0
     while [[ "$i" -lt "${#FL_D_IDS[@]}" ]]; do
-      if [[ "${FL_D_STATUS[$i]}" == "$want" && -n "${FL_D_FIX[$i]}" ]]; then printf '%s\n' "${FL_D_FIX[$i]}"; fi
+      if [[ "${FL_D_STATUS[$i]}" == "$want" && -n "${FL_D_FIX[$i]}" ]] && ! fl_doctor_is_acked "$i"; then printf '%s\n' "${FL_D_FIX[$i]}"; fi
       i=$((i + 1))
     done
   done | awk '!seen[$0]++'

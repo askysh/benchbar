@@ -632,6 +632,15 @@ fl_action_needs_sudo() {
   return 1
 }
 
+# fl_action_changed_kind ACTION: the kind of the changed[] entry an action makes
+fl_action_changed_kind() {
+  case "$1" in
+    hosts_entry) printf 'hosts' ;;
+    port_block) printf 'ports' ;;
+    *) printf 'service' ;;
+  esac
+}
+
 fl_event_plan() {
   local actions="$1" a sep="" fixes f fsep
   [[ "$FL_JSON_EVENTS" == "1" ]] || return 0
@@ -658,7 +667,7 @@ fl_event_step() {
 # Returns 0 when everything is healthy afterwards, 1 when something failed.
 fl_repair_engine() {
   shift
-  local actions action i n=0 rows=() unchanged remaining status labels step_from optional_left="" ids
+  local actions action i n=0 rows=() unchanged remaining status labels step_from optional_left="" ids plan_from plan_to
   fl_doctor_run "$@"
   actions=""
   for action in $(fl_doctor_actions); do
@@ -678,7 +687,11 @@ fl_repair_engine() {
   case " $actions " in *" mariadb_"*) fl_mariadb_running_benches_prime ;; esac
 
   printf '\n%sPlan%s\n' "$FL_BOLD" "$FL_RESET"
+  # the plan's WARN and fix lines name what is wrong before the run; the
+  # verify pass replaces them in warnings[] and next_actions[]
+  fl_done_mark_v plan_from
   fl_doctor_print compact
+  fl_done_mark_v plan_to
   if [[ -z "$actions" ]]; then
     fl_event_plan ""
     [[ -z "${FL_ENGINE_PLAN_HOOK:-}" ]] || "$FL_ENGINE_PLAN_HOOK" ""
@@ -746,6 +759,7 @@ fl_repair_engine() {
     if "act_${action}"; then
       fl_step_end "$FL_STEP_RESULT"
       if [[ "$FL_STEP_RESULT" == "done" ]]; then
+        fl_changed "$(fl_action_changed_kind "$action")" "$action" "$(fl_action_label "$action")"
         fl_event_step "$action" "done" "$(fl_action_label "$action")"
       else
         fl_event_step "$action" "$FL_STEP_RESULT" "$(fl_log_step_message "${step_from:-0}")"
@@ -775,6 +789,7 @@ fl_repair_engine() {
     # every action finished; a failure from here on is a check, not a command
     FL_LAST_COMMAND=""
     fl_doctor_run "$@"
+    fl_done_forget "$plan_from" "$plan_to"
     fl_doctor_print compact
     remaining=""
     for action in $(fl_doctor_actions); do

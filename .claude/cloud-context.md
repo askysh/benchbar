@@ -8,6 +8,7 @@ You are in a Claude Code cloud session: Ubuntu 24.04 x86_64, no macOS. AGENTS.md
   associative arrays, no mapfile/readarray, no ${var,,}, no negative array indexes, no &>>.
 - Docs site: `cd site && bun install --frozen-lockfile && bun run build && bun run linkcheck`.
   If `bun --version` differs from site/.bun-version, stop: never commit a rewritten bun.lock.
+- Go: `cd windows/shim && go vet ./... && go test ./...` runs here; windows/tray builds only on Windows.
 - GitHub: use gh for runs, PRs, logs and artifacts (`gh run view --log-failed`,
   `gh run download`). Ignore `gh auth status`; it misreports the proxy's placeholder token.
 

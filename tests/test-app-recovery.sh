@@ -211,6 +211,18 @@ run_fm app update acme_crm --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 assert_eq "0" "$(calls '^bench ')" "(the retry runs the restart and no bench command)"
 assert_eq "" "$(pending_file acme_crm)"
+# in the stream the restart is one step of app update's own: restart's step
+# lines (restart_service, wait_site, numbered from 1 again) stay out of it
+push_commits acme_crm 1
+set +e; "$FM" app update acme_crm --yes --json --bench-dir "$BENCH" >"$TMP_DIR/au.jsonl" 2>"$TMP_DIR/au.err" </dev/null; CODE=$?; set -e
+assert_eq "0" "$CODE" "$(cat "$TMP_DIR/au.err")"
+au_steps() { python3 -I -c '
+import json, sys
+e = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
+print(eval(sys.argv[2]))' "$TMP_DIR/au.jsonl" "$1"; }
+assert_eq "[]" "$(au_steps '[x["id"] for x in e if x["event"] == "step" and x["id"] in ("restart_service", "wait_site")]')" "$(cat "$TMP_DIR/au.jsonl")"
+assert_eq "['running', 'done']" "$(au_steps '[x["status"] for x in e if x["event"] == "step" and x["id"].startswith("restart")]')" "$(cat "$TMP_DIR/au.jsonl")"
+assert_eq "1" "$(au_steps 'len([x for x in e if x["event"] == "done"])')"
 # the same, and the bench is stopped before the retry: the restart is skipped
 push_commits acme_crm 1
 export MOCK_CURL_CODE=000

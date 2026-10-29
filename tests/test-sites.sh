@@ -30,7 +30,8 @@ rm -r "$BENCH/sites/noname"; cp "$TMP_DIR/common_site_config.json.orig" "$BENCH/
 
 # ---- add: refusals first
 run_fm site add "Bad_Name" --bench-dir "$BENCH"; assert_eq "1" "$CODE"; assert_contains "$OUT" "Invalid site name"
-run_fm site add v16two --apps "nosuchapp" --bench-dir "$BENCH"; assert_eq "1" "$CODE"; assert_contains "$OUT" "nosuchapp is not in"
+run_fm site add v16two --apps "nosuchapp" --bench-dir "$BENCH"; assert_eq "1" "$CODE"; assert_contains "$OUT" "ADMIN_PASSWORD="
+ADMIN_PASSWORD=x run_fm site add v16two --apps "nosuchapp" --bench-dir "$BENCH"; assert_eq "1" "$CODE"; assert_contains "$OUT" "nosuchapp is not in"
 run_fm site add v16two --yes --bench-dir "$BENCH"; assert_eq "1" "$CODE"; assert_contains "$OUT" "ADMIN_PASSWORD="
 # dry run: nothing is created, nothing asked
 reset_calls; snap="$(snapshot "$BENCH/sites" "$FL_HOSTS_FILE")"
