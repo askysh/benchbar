@@ -46,6 +46,13 @@ calls() { grep -c -E "$1" "$MOCK_LOG" || true; }
 # pending_file APP: the app's record in the bench's state folder
 pending_file() { find "$FL_STATE_DIR/benches" -path "*.pending/$1.json" 2>/dev/null | head -n1; }
 pending_get() { jget "$(pending_file "$1")" "$2"; }
+pending_dir_for() { local e; e="$(find "$FL_STATE_DIR/benches" -maxdepth 1 -name 'frappe-bench-*.env' | head -n1)"; printf '%s.pending' "${e%.env}"; }
+# write_record APP STEPS_JSON FAILED: an app_add record as benchbar writes it
+write_record() {
+  mkdir -p "$(pending_dir_for)"
+  printf '{"schema_version":1,"op":"app_add","app":"%s","branch":"main","from":"","to":"","steps":[%s],"failed_step":%s,"reason":"left over","started_at":"2026-10-29T10:00:00Z","updated_at":"2026-10-29T10:00:00Z"}\n' \
+    "$1" "$2" "$3" >"$(pending_dir_for)/$1.json"
+}
 # steps_of OUT: the kinds in the steps of a JSON document, comma separated
 steps_of() { printf '%s' "$1" | jget - '",".join(s["kind"] for s in d["steps"])'; }
 
@@ -184,6 +191,71 @@ assert_contains "$OUT" "1. Restart: skipped (not running)"
 assert_eq "" "$(pending_file acme_crm)"
 export MOCK_CURL_CODE=000
 
+# ---- after the fast forward, `from` is no longer a place the app may be: the
+# `git reset --hard` we print for the way back leaves a record that refuses
+push_commits acme_crm 1
+from="$(app_head "$BENCH/apps/acme_crm")"
+run_with MOCK_BENCH_MIGRATE_EXIT 1 app update acme_crm --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"
+git -C "$BENCH/apps/acme_crm" reset -q --hard "$from"
+reset_calls
+run_fm app update acme_crm --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE"; assert_contains "$OUT" "--discard-pending"
+assert_calls_not_contain '^bench '
+# --discard-pending works even on a dirty tree or a detached HEAD
+printf 'local\n' >>"$BENCH/apps/acme_crm/acme_crm/__init__.py"
+run_fm app update acme_crm --yes --discard-pending --bench-dir "$BENCH"
+assert_contains "$OUT" "dropping the unfinished app_update of acme_crm"
+assert_contains "$OUT" "has local changes"
+assert_eq "" "$(pending_file acme_crm)"
+git -C "$BENCH/apps/acme_crm" checkout -q -- .
+# a record whose only entry is a failed verify: re-verified, never a loop
+to="$(git -C "$REMOTES/acme_crm.git" rev-parse main)"
+git -C "$BENCH/apps/acme_crm" merge -q --ff-only "$to"
+write_record acme_crm '' '"verify"'
+sed_inplace 's/"op":"app_add"/"op":"app_update"/; s/"from":""/"from":"'"$from"'"/; s/"to":""/"to":"'"$to"'"/' "$(pending_file acme_crm)"
+run_fm app update acme_crm --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "" "$(pending_file acme_crm)"
+write_record acme_crm '' '"verify"'
+sed_inplace 's/"op":"app_add"/"op":"app_update"/; s/"from":""/"from":"'"$from"'"/; s/"to":""/"to":"'"$to"'"/' "$(pending_file acme_crm)"
+git -C "$BENCH/apps/acme_crm" reset -q --hard "$from"
+run_fm app update acme_crm --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE"; assert_contains "$OUT" "--discard-pending"
+run_fm app update acme_crm --yes --discard-pending --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "" "$(pending_file acme_crm)"
+
+# ---- --skip-backup on a retry leaves the backups in the record out
+push_commits acme_crm 1
+run_with MOCK_BENCH_BACKUP_EXIT 1 app update acme_crm --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"
+reset_calls
+run_fm app update acme_crm --skip-backup --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "0" "$(calls 'backup$')"
+assert_eq "1" "$(calls '^bench --site macdev migrate$')"
+assert_eq "" "$(pending_file acme_crm)"
+
+# ---- a TERM to the CLI in the middle of a step: the record still holds that step
+push_commits acme_crm 1
+export MOCK_BENCH_MIGRATE_SLEEP=30
+reset_calls
+"$FM" app update acme_crm --yes --bench-dir "$BENCH" >"$TMP_DIR/term.out" 2>&1 </dev/null &
+cli=$!
+for _ in $(seq 1 100); do grep -q -E '^bench --site macdev migrate$' "$MOCK_LOG" && break; sleep 0.2; done
+grep -q -E '^bench --site macdev migrate$' "$MOCK_LOG" || fail "the migrate started: $(cat "$TMP_DIR/term.out")"
+kill -TERM "$cli"
+wait "$cli" || true
+unset MOCK_BENCH_MIGRATE_SLEEP
+assert_eq "migrate,build" "$(pending_get acme_crm '",".join(s["kind"] for s in d["steps"])')"
+reset_calls
+run_fm app update acme_crm --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "1" "$(calls '^bench --site macdev migrate$')"
+assert_eq "0" "$(calls 'merge --ff-only|backup$')"
+assert_eq "" "$(pending_file acme_crm)"
+
 # ---------------------------------------------------------------- planned app add
 make_app_remote acme_site
 add_policy acme_site main
@@ -255,12 +327,41 @@ assert_eq "1" "$CODE" "$OUT"
 assert_eq "" "$(pending_file acme_bad)"
 [[ ! -d "$BENCH/apps/acme_bad" ]] || fail "the failed clone was rolled back"
 # get-app that cloned and listed the app, then failed: the folder stays (benchbar
-# does not edit sites/), and the record keeps the build for the next plan
+# does not edit sites/), and the record keeps the requirements the failed pip
+# install did not get to and the build for the next plan
 run_with MOCK_BENCH_GET_APP_EXIT 1 app add acme_bad --site macdev --apply "$AP_TOKEN" --yes --json --bench-dir "$BENCH"
 assert_eq "1" "$CODE" "$OUT"
-assert_eq "build,restart" "$(pending_get acme_bad '",".join(s["kind"] for s in d["steps"])')"
+assert_eq "requirements_python,build,restart" "$(pending_get acme_bad '",".join(s["kind"] for s in d["steps"])')"
 plan_json acme_bad --site macdev
-assert_eq "build,install,restart" "$(steps_of "$OUT")"
+assert_eq "requirements_python,build,install,restart" "$(steps_of "$OUT")"
+AP_TOKEN="$(printf '%s' "$OUT" | jget - 'd["token"]')"
+reset_calls
+apply_json acme_bad --site macdev
+assert_eq "0" "$CODE" "$OUT"
+r="$(grep -n 'setup requirements --python acme_bad' "$MOCK_LOG" | head -n1 | cut -d: -f1)"
+b="$(grep -n 'build --app acme_bad' "$MOCK_LOG" | head -n1 | cut -d: -f1)"
+i="$(grep -n 'install-app acme_bad' "$MOCK_LOG" | head -n1 | cut -d: -f1)"
+[[ -n "$r" && -n "$b" && -n "$i" && "$r" -lt "$b" && "$b" -lt "$i" ]] || fail "requirements, build, install in that order: $r $b $i"
+assert_eq "" "$(pending_file acme_bad)"
+
+# an app_add record with nothing left to run (the install was done by hand): the
+write_record acme_crm '{"kind":"install","target":"macdev","name":"Install on macdev"}' '"install"'
+[[ -n "$(pending_file acme_crm)" ]] || fail "the hand written record is found"
+run_fm app add acme_crm --site macdev --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "the unfinished app add of acme_crm is complete"
+assert_eq "" "$(pending_file acme_crm)"
+write_record acme_crm '{"kind":"install","target":"macdev","name":"Install on macdev"}' '"install"'
+plan_json acme_crm --site macdev
+AP_TOKEN="$(printf '%s' "$OUT" | jget - 'd["token"]')"
+apply_json acme_crm --site macdev
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "" "$(pending_file acme_crm)"
+# a record that names a site that is gone is cleared too
+write_record acme_crm '{"kind":"install","target":"nosuchsite","name":"Install on nosuchsite"}' '"install"'
+run_fm app add acme_crm --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "" "$(pending_file acme_crm)"
 
 # ---------------------------------------------------------------- dependency order
 make_app_remote dep_b
@@ -277,6 +378,21 @@ apply_json dep_top
 assert_eq "0" "$CODE" "$OUT"
 assert_eq "dep_b dep_c dep_top" "$(grep '^bench get-app' "$MOCK_LOG" | sed 's#.*/\([a-z_]*\)\.git$#\1#' | tr '\n' ' ' | sed 's/ $//')"
 assert_eq "frappe acme_crm acme_site acme_shop acme_bad dep_b dep_c dep_top" "$(tr '\n' ' ' <"$BENCH/sites/apps.txt" | sed 's/ $//')"
+
+# an app already in the bench between two to clone passes the order through:
+# pres_x requires pres_p (in the bench), pres_p requires pres_y (not), so
+# pres_y goes before pres_x
+make_app_remote pres_y
+make_app_remote pres_p
+make_app_remote pres_x pres_p
+make_app_remote pres_top pres_y pres_x
+for n in pres_y pres_p pres_x pres_top; do add_policy "$n" main; done
+run_fm app add pres_p --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+sed_inplace 's/required_apps = \[\]/required_apps = ["pres_y"]/' "$BENCH/apps/pres_p/pres_p/hooks.py"
+plan_json pres_top
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "['pres_y', 'pres_x', 'pres_top']" "$(printf '%s' "$OUT" | jget - 'd["order"]')"
 
 # a cycle is refused and named
 make_app_remote cyc_a cyc_b

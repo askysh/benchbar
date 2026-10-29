@@ -120,7 +120,7 @@ PY
       install-app)
         [[ -n "${MOCK_BENCH_INSTALL_APP_EXIT:-}" ]] && exit "$MOCK_BENCH_INSTALL_APP_EXIT"
         mkdir -p "sites/$2"; printf '%s 1.0.0\n' "$4" >>"sites/$2/installed_apps"; exit 0 ;;
-      migrate) exit "${MOCK_BENCH_MIGRATE_EXIT:-0}" ;;
+      migrate) [[ -n "${MOCK_BENCH_MIGRATE_SLEEP:-}" ]] && sleep "$MOCK_BENCH_MIGRATE_SLEEP"; exit "${MOCK_BENCH_MIGRATE_EXIT:-0}" ;;
       doctor|clear-cache|clear-website-cache) exit 0 ;;
       disable-scheduler) exit 0 ;;
       set-config)

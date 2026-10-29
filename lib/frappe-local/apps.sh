@@ -563,12 +563,21 @@ fl_cmd_app_install() {
 # with quotes and backslashes turned into ' and /), so the reader below needs
 # no JSON parser, which bash 3.2 does not have.
 
-fl_pending_dir() {
-  local f
+# fl_pending_dir_v VAR: the folder of this bench's records. The current bench
+# is canonical already and its hash primed, so the name is built here without
+# the subshell of fl_bench_state_file_for (status calls this on every poll).
+fl_pending_dir_v() {
+  local pdn pdf
   fl_bench_hash_prime
-  f="$(fl_bench_state_file_for "$FL_BENCH_DIR")"
-  printf '%s.pending' "${f%.env}"
+  if [[ -n "${FL_BENCH_DIR_CANON:-}" && "$FL_BENCH_DIR" == "$FL_BENCH_DIR_CANON" && -n "$FL_BENCH_HASH" ]]; then
+    fl_bench_name_v pdn "$FL_BENCH_DIR"
+    printf -v "$1" '%s/benches/%s-%s.pending' "$FL_STATE_DIR" "$pdn" "$FL_BENCH_HASH"
+  else
+    pdf="$(fl_bench_state_file_for "$FL_BENCH_DIR")"
+    printf -v "$1" '%s.pending' "${pdf%.env}"
+  fi
 }
+fl_pending_dir() { local d; fl_pending_dir_v d; printf '%s' "$d"; }
 
 fl_pending_file() { printf '%s/%s.json' "$(fl_pending_dir)" "$1"; }
 
@@ -678,20 +687,21 @@ fl_pending_load() { fl_pending_read "$(fl_pending_file "$1")"; }
 # fl_pending_json_v VAR: the records of this bench as a JSON array for
 # status --json ("[]" when there are none)
 fl_pending_json_v() {
-  local __out="[" __sep="" dir f st kind target name ssep j_from j_to j_failed j_reason j_updated j_branch
-  fl_bench_hash_prime
-  dir="$(fl_bench_state_file_for "$FL_BENCH_DIR")"; dir="${dir%.env}.pending"
+  local __out="[" __sep="" dir f st kind target name ssep j_from j_to j_failed j_reason j_updated j_branch j_app j_target j_name
+  fl_pending_dir_v dir
   if [[ -d "$dir" ]]; then
     for f in "$dir"/*.json; do
       [[ -f "$f" ]] || continue
       fl_pending_read "$f" || continue
       fl_json_str_v j_branch "$PD_BRANCH"; fl_json_str_v j_from "$PD_FROM"; fl_json_str_v j_to "$PD_TO"
       fl_json_str_v j_failed "$PD_FAILED"; fl_json_str_v j_reason "$PD_REASON"; fl_json_str_v j_updated "$PD_UPDATED"
-      __out="${__out}${__sep}{\"op\":\"${PD_OP}\",\"app\":\"${PD_APP}\",\"branch\":${j_branch},\"from\":${j_from},\"to\":${j_to},\"steps\":["
+      fl_json_escape_v j_app "$PD_APP"
+      __out="${__out}${__sep}{\"op\":\"${PD_OP}\",\"app\":\"${j_app}\",\"branch\":${j_branch},\"from\":${j_from},\"to\":${j_to},\"steps\":["
       ssep=""
       for st in ${PD_STEPS[@]+"${PD_STEPS[@]}"}; do
         IFS='|' read -r kind target name <<<"$st"
-        __out="${__out}${ssep}{\"kind\":\"${kind}\",\"target\":\"${target}\",\"name\":\"${name}\"}"; ssep=","
+        fl_json_escape_v j_target "$target"; fl_json_escape_v j_name "$name"
+        __out="${__out}${ssep}{\"kind\":\"${kind}\",\"target\":\"${j_target}\",\"name\":\"${j_name}\"}"; ssep=","
       done
       __out="${__out}],\"failed_step\":${j_failed},\"reason\":${j_reason},\"updated_at\":${j_updated}}"; __sep=","
     done
@@ -752,7 +762,7 @@ fl__au_run() {
 
 fl_cmd_app_update() {
   local app="" a skip_backup=0 discard=0 branch remote old new head total=0 newer=0 from to sites=() s rows=() labels=() steps=() i code=0 running=0 sep log
-  local pending=0 fetched=1 kind target name cmd reason fail_from
+  local ff_left s pending=0 dropped=0 fetched=1 kind target name cmd reason fail_from
   local pd_failed="" pd_reason="" pd_started="" pd_line="" pd_steps=()
   for a in "$@"; do
     case "$a" in
@@ -766,6 +776,17 @@ fl_cmd_app_update() {
   fl_require_bench
   [[ -n "$app" ]] || fl_die "Usage: benchbar app update NAME [--skip-backup]"
   [[ "$OPT_JSON" != "1" || "${FL_DRY_RUN:-0}" == "1" ]] || fl_die "--json shows the plan only; add --dry-run." "benchbar app update ${app} --dry-run --json"
+  # --discard-pending only removes benchbar's own record, so it works first:
+  # a dirty tree or a detached HEAD (an app added from a tag) must not stop it
+  if [[ "$discard" == "1" ]] && fl_pending_load "$app"; then
+    dropped=1
+    if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then fl_info "dry-run: --discard-pending would drop the unfinished ${PD_OP} of ${app} (${#PD_STEPS[@]} step(s) not run)" >&2
+    else
+      fl_warn "dropping the unfinished ${PD_OP} of ${app} (started ${PD_STARTED}, stopped at ${PD_FAILED:-no step}); its ${#PD_STEPS[@]} step(s) will not run"
+      fl_log "pending record dropped: ${PD_LINE}"
+      fl_pending_remove "$app"
+    fi
+  fi
   if ! fl_app_has_git "$app" || ! fl_app_in_apps_txt "$app"; then fl_die "${app} is not a git app of this bench." "benchbar app list shows the apps."; fi
   fl_app_dirty "$app" && fl_die "apps/${app} has local changes; update refuses to touch them." "cd ${FL_BENCH_DIR}/apps/${app} && git status   (commit or stash them first)"
   branch="$(fl_app_branch "$app")"
@@ -775,20 +796,17 @@ fl_cmd_app_update() {
   head="$(fl_app_commit "$app")"
 
   # an earlier run that stopped half way: its record is the truth, not Git's position
-  if fl_pending_load "$app"; then
+  if [[ "$dropped" == "0" ]] && fl_pending_load "$app"; then
     pd_failed="$PD_FAILED"; pd_reason="$PD_REASON"; pd_started="$PD_STARTED"; pd_line="$PD_LINE"; pd_steps=(${PD_STEPS[@]+"${PD_STEPS[@]}"})
-    if [[ "$discard" == "1" ]]; then
-      if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then fl_info "dry-run: --discard-pending would drop the unfinished ${PD_OP} of ${app} (${#PD_STEPS[@]} step(s) not run)" >&2
-      else
-        fl_warn "dropping the unfinished ${PD_OP} of ${app} (started ${PD_STARTED}, stopped at ${PD_FAILED:-no step}); its ${#PD_STEPS[@]} step(s) will not run"
-        fl_log "pending record dropped: ${PD_LINE}"
-        fl_pending_remove "$app"
-      fi
-    elif [[ "$PD_OP" != "app_update" ]]; then
+    # where the app may be: at `from` only while the fast forward is still to do;
+    # after it, `from` means someone went back (the reset --hard we print)
+    ff_left=0
+    for s in ${pd_steps[@]+"${pd_steps[@]}"}; do [[ "${s%%|*}" == "fast_forward" ]] && ff_left=1; done
+    if [[ "$PD_OP" != "app_update" ]]; then
       fl_die "apps/${app} has an unfinished app add (stopped at ${PD_FAILED:-?}); update would not finish it." \
         "benchbar app add ${app} ... (the plan lists the steps left), or drop the record: benchbar app update ${app} --discard-pending"
-    elif [[ "$head" != "$PD_FROM" && "$head" != "$PD_TO" ]]; then
-      fl_die "apps/${app} is at ${head:0:12}, neither where the unfinished update started (${PD_FROM:0:12}) nor where it was going (${PD_TO:0:12}); it was moved after that update stopped." \
+    elif [[ "$head" != "$PD_TO" && ( "$ff_left" == "0" || "$head" != "$PD_FROM" ) ]]; then
+      fl_die "apps/${app} is at ${head:0:12}, not where the unfinished update was going (${PD_TO:0:12})$([[ "$ff_left" == "1" ]] && printf ' or started (%s)' "${PD_FROM:0:12}"); it was moved after that update stopped." \
         "Look at the app yourself, then: benchbar app update ${app} --discard-pending   (drops the record; the steps it lists are not run)"
     else
       pending=1; from="$PD_FROM"; to="$PD_TO"
@@ -851,6 +869,7 @@ fl_cmd_app_update() {
   fi
 
   if [[ "$OPT_JSON" == "1" ]]; then
+    if [[ "$pending" == "1" && "$pd_line" != *"}" ]]; then fl_warn "the record of ${app} looks cut short; pending is null here" >&2; fi
     printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"app":%s,"remote":%s,"branch":%s,"from":%s,"to":%s,"commits":[' \
       "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$app")" "$(fl_json_str "$remote")" \
       "$(fl_json_str "$branch")" "$(fl_json_str "$from")" "$(fl_json_str "$to")"
@@ -861,12 +880,12 @@ fl_cmd_app_update() {
       done < <(fl_app_git "$app" log --format='%h %s' -n 30 "${old}..${new}")
     fi
     printf '],"commits_total":%d,"newer_commits":%d,"pending":%s,"sites":%s,"skip_backup":%s,"steps":[' "$total" "$newer" \
-      "$(if [[ "$pending" == "1" ]]; then printf '%s' "$pd_line"; else printf null; fi)" \
+      "$(if [[ "$pending" == "1" && "$pd_line" == *"}" ]]; then printf '%s' "$pd_line"; else printf null; fi)" \
       "$(fl_json_str_array ${sites[@]+"${sites[@]}"})" "$(fl_json_bool "$skip_backup")"
     sep=""
     for a in ${steps[@]+"${steps[@]}"}; do
       IFS='|' read -r kind target name cmd <<<"$a"
-      printf '%s{"name":%s,"command":%s,"kind":%s,"target":%s}' "$sep" "$(fl_json_str "$name")" "$(fl_json_str "$cmd")" "$(fl_json_str "$kind")" "\"${target}\""; sep=","
+      printf '%s{"name":%s,"command":%s,"kind":%s,"target":%s}' "$sep" "$(fl_json_str "$name")" "$(fl_json_str "$cmd")" "$(fl_json_str "$kind")" "\"$(fl_json_escape "$target")\""; sep=","
     done
     printf ']}\n'
     return 0
@@ -946,6 +965,7 @@ fl_cmd_app_update() {
     fl_pending_remove "$app"
   else
     fl_pending_write app_update "$app" "$branch" "$from" "$to" "verify" "apps/${app} is not at ${new:0:7}"
+    fl_fix "look at apps/${app} yourself; benchbar app update ${app} --discard-pending drops this record"
   fi
   fl_steps_summary
   return "$code"

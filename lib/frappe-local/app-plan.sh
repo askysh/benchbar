@@ -170,6 +170,25 @@ fl__ap_required() {
   FL_RES_NAME="$saved_name"; FL_RES_REPO="$saved_repo"; FL_RES_BRANCH="$saved_branch"
 }
 
+# fl__ap_blockers NODE ALL: sets AP_BLK to the apps to clone that NODE has to
+# wait for: the ones it requires, and the ones an app already in the bench
+# between them requires (A requires P, P is in the bench, P requires B: B
+# goes in before A)
+fl__ap_blockers() {
+  local queue=("$1") qi=0 seen=" $1 " cur edge d
+  AP_BLK=""
+  while [[ "$qi" -lt "${#queue[@]}" ]]; do
+    cur="${queue[$qi]}"; qi=$((qi + 1))
+    for edge in ${AP_EDGES[@]+"${AP_EDGES[@]}"}; do
+      [[ "${edge%%|*}" == "$cur" ]] || continue
+      d="${edge#*|}"
+      case "$seen" in *" $d "*) continue ;; esac
+      seen="${seen}${d} "
+      case "$2" in *" $d "*) AP_BLK="${AP_BLK}${d} " ;; *) queue+=("$d") ;; esac
+    done
+  done
+}
+
 # fl__ap_toposort: puts AP_DEPS in an order where every app comes after the
 # apps it requires (Kahn's algorithm over AP_EDGES; get-app pip installs as it
 # clones, so a dependency has to be in the bench first). Among the apps that
@@ -178,7 +197,7 @@ fl__ap_required() {
 # order does not change. Sets AP_ORDER (names, the main app last when it is
 # cloned). A cycle is a plan error that names it.
 fl__ap_toposort() {
-  local nodes=() placed=" " all=" " entry n pick edge p d blocked total deps=()
+  local nodes=() placed=" " all=" " entry n pick d blocked total deps=()
   for entry in ${AP_DEPS[@]+"${AP_DEPS[@]}"}; do nodes+=("${entry%%|*}"); done
   [[ "$AP_PRESENT" == "1" ]] || nodes+=("$AP_NAME")
   AP_ORDER=()
@@ -189,10 +208,8 @@ fl__ap_toposort() {
     for n in "${nodes[@]}"; do
       case "$placed" in *" $n "*) continue ;; esac
       blocked=0
-      for edge in ${AP_EDGES[@]+"${AP_EDGES[@]}"}; do
-        p="${edge%%|*}"; d="${edge#*|}"
-        [[ "$p" == "$n" ]] || continue
-        case "$all" in *" $d "*) ;; *) continue ;; esac
+      fl__ap_blockers "$n" "$all"
+      for d in $AP_BLK; do
         case "$placed" in *" $d "*) ;; *) blocked=1; break ;; esac
       done
       if [[ "$blocked" == "0" ]]; then pick="$n"; break; fi
@@ -221,17 +238,15 @@ fl__ap_toposort() {
 # the requirements that could not be placed either until one repeats, and
 # names the loop: "a -> b -> a"
 fl__ap_cycle() {
-  local placed="$1" all="$2" start="" n path="" cur next edge p d seen loop=""
+  local placed="$1" all="$2" start="" n path="" cur next p d seen loop=""
   for n in $all; do
     case "$placed" in *" $n "*) ;; *) start="$n"; break ;; esac
   done
   cur="$start"; path="$start"
   while true; do
     next=""
-    for edge in ${AP_EDGES[@]+"${AP_EDGES[@]}"}; do
-      p="${edge%%|*}"; d="${edge#*|}"
-      [[ "$p" == "$cur" ]] || continue
-      case "$all" in *" $d "*) ;; *) continue ;; esac
+    fl__ap_blockers "$cur" "$all"
+    for d in $AP_BLK; do
       case "$placed" in *" $d "*) continue ;; esac
       next="$d"; break
     done
@@ -254,7 +269,7 @@ fl__ap_cycle() {
 # Refusals that the plain app add also refuses exit 1 with the reason.
 fl_app_add_plan() {
   local target="$1" branch="$2" name="$3" all="$4" s policy cur reqs="" sep i entry body state default
-  local n by pr rs src rp br kind label cmd note st pd_build="" pd_restart=0 pd_sites=() a
+  local n by pr rs src rp br kind label cmd note st pd_build="" pd_py="" pd_restart=0 pd_sites=() a
   AP_NAME=""; AP_REPO=""; AP_BRANCH=""; AP_BRANCH_SOURCE=""; AP_PRESENT=0; AP_REACHABLE=""; AP_PKG=""; AP_COMMIT=""
   AP_SITES=(); AP_INSTALL=(); AP_REQ=(); AP_DEPS=(); AP_ERRORS=(); AP_STEPS=(); AP_CAN_APPLY=1
   AP_EDGES=(); AP_ORDER=(); AP_PENDING=0; AP_REASON=""
@@ -319,6 +334,7 @@ fl_app_add_plan() {
       case "$kind" in
         build) for a in ${n//,/ }; do [[ -z "$(fl_app_existing_dir "$a")" ]] || pd_build="${pd_build}${pd_build:+,}$(fl_app_existing_dir "$a")"; done ;;
         install) fl_sites_list | grep -qxF "$n" && pd_sites+=("$n") ;;
+        requirements_python) for a in ${n//,/ }; do [[ -z "$(fl_app_existing_dir "$a")" ]] || pd_py="${pd_py}${pd_py:+,}$(fl_app_existing_dir "$a")"; done ;;
         restart) pd_restart=1 ;;
       esac
     done
@@ -349,6 +365,11 @@ fl_app_add_plan() {
     # the required apps first, like app add
     for entry in ${AP_DEPS[@]+"${AP_DEPS[@]}"}; do s="${s:+${s},}${entry%%|*}"; done
     [[ "$AP_PRESENT" == "0" ]] && s="${s:+${s},}${AP_NAME}"
+  fi
+  # an app whose get-app cloned it and then failed (its pip install, typically)
+  # has no Python requirements in the env yet: they come before the build
+  if [[ -n "$pd_py" ]]; then
+    AP_STEPS+=("requirements_python|${pd_py}|Python requirements|bench setup requirements --python ${pd_py//,/ && bench setup requirements --python }|a get-app that failed after the clone may not have installed the app into the bench env")
   fi
   # apps a stopped run cloned but never built come first
   for a in ${pd_build//,/ }; do
@@ -463,6 +484,7 @@ fl_cmd_app_add() {
     fl_app_dirty "$AP_NAME" && fl_warn "apps/${AP_NAME} has local changes; add only installs it on sites (app update and lock apply refuse a dirty app)"
   fi
   if [[ "${#AP_STEPS[@]}" == "0" && "${#AP_ERRORS[@]}" == "0" ]]; then
+    fl__ap_settle || return 1
     printf '\n'
     fl_ok "unchanged: ${AP_NAME} is on ${AP_BRANCH}${AP_SITES[*]:+ and installed on ${AP_SITES[*]}}, nothing to do"
     [[ "${#AP_SITES[@]}" != "0" ]] || fl_info "install it on a site with: benchbar app install ${AP_NAME} --site SITE"
@@ -527,6 +549,7 @@ fl_cmd_app_add_planned() {
   fl__ap_print_plan
   [[ "$AP_CAN_APPLY" == "1" ]] || fl_die "The plan cannot be applied (see above). Nothing was changed."
   if [[ "${#AP_STEPS[@]}" == "0" ]]; then
+    fl__ap_settle || { [[ "$json" == "1" ]] && fl__ap_result_json 1 >&3; return 1; }
     printf '\n'; fl_ok "unchanged: ${AP_NAME} is on ${AP_BRANCH}${AP_SITES[*]:+ and installed on ${AP_SITES[*]}}, nothing to do"
     [[ "$json" == "1" ]] && fl__ap_result_json 0 >&3
     return 0
@@ -546,6 +569,31 @@ fl__ap_record() {
     i=$((i + 1))
   done
   fl_pending_write app_add "$AP_NAME" "$AP_BRANCH" "" "$AP_COMMIT" "$1" "$2" ${left[@]+"${left[@]}"}
+}
+
+# fl__ap_verify SITE...: the verify pass of the app: apps.txt, its branch (or
+# tag) and the sites
+fl__ap_verify() {
+  local b="$AP_BRANCH"
+  # a tag is checked out detached: its commit is the check, not a branch name
+  if fl__ap_on_tag "$AP_NAME" "$AP_BRANCH"; then fl_ok "apps/${AP_NAME} is at tag ${AP_BRANCH}"; b=""; fi
+  fl_app_verify "$AP_NAME" "$b" "$@"
+}
+
+# fl__ap_settle: a record of an earlier add and no step left to run (the
+# install was done by hand, a site was dropped, or only the verify failed):
+# verify, and clear the record when it passes; otherwise say what is wrong.
+# Returns 1 when the app does not verify.
+fl__ap_settle() {
+  [[ "$AP_PENDING" == "1" && "${#AP_STEPS[@]}" == "0" ]] || return 0
+  if [[ -d "$(fl_app_path "$AP_NAME")" ]] && fl__ap_verify ${AP_SITES[@]+"${AP_SITES[@]}"}; then
+    fl_pending_remove "$AP_NAME"
+    fl_ok "the unfinished app add of ${AP_NAME} is complete; its record is removed"
+    return 0
+  fi
+  fl_fail "the unfinished app add of ${AP_NAME} has no step left, but ${AP_NAME} does not verify (above)"
+  fl_fix "benchbar app update ${AP_NAME} --discard-pending   (drops the record without running anything)"
+  return 1
 }
 
 # fl__ap_apply TARGET: runs AP_STEPS in order, with the dependencies
@@ -600,6 +648,10 @@ fl__ap_apply() {
         done
         s="${s:-$arg}"
         fl_app_build "$s" || { res="failed"; fl_fix "cd ${FL_BENCH_DIR} && bench build --apps ${s}"; } ;;
+      requirements_python)
+        for a in ${arg//,/ }; do
+          fl_run_long "bench setup requirements --python ${a}" fl__in_dir "$FL_BENCH_DIR" bench setup requirements --python "$a" || { res="failed"; break; }
+        done ;;
       install)
         fl_app_install_on_sites "$AP_NAME" "$arg" || res="failed" ;;
       restart)
@@ -622,8 +674,12 @@ fl__ap_apply() {
       # of the apps this run did clone, or goes away when there are none
       s=""
       for a in ${cloned[@]+"${cloned[@]}"}; do s="${s}${s:+,}${a}"; done
-      [[ -z "$(fl_app_existing_dir "$AP_NAME")" ]] || { case ",${s}," in *",${AP_NAME},"*) ;; *) s="${s}${s:+,}$(fl_app_existing_dir "$AP_NAME")" ;; esac; }
-      if [[ -n "$s" ]]; then
+      # a folder get-app left behind (listed in apps.txt) was not pip installed
+      e="$(fl_app_existing_dir "$arg")"
+      [[ -z "$e" ]] || { case ",${s}," in *",${e},"*) ;; *) s="${s}${s:+,}${e}" ;; esac; }
+      if [[ -n "$s" && -n "$e" ]]; then
+        fl_pending_write app_add "$AP_NAME" "$AP_BRANCH" "" "$AP_COMMIT" "$first_kind" "$first_reason" "requirements_python|${e}|Python requirements" "build|${s}|Build" "restart||Restart"
+      elif [[ -n "$s" ]]; then
         fl_pending_write app_add "$AP_NAME" "$AP_BRANCH" "" "$AP_COMMIT" "$first_kind" "$first_reason" "build|${s}|Build" "restart||Restart"
       else
         fl_pending_remove "$AP_NAME"
@@ -635,10 +691,7 @@ fl__ap_apply() {
   done
   fl_bench_redis_down
   if [[ -d "$(fl_app_path "$AP_NAME")" ]]; then
-    s="$AP_BRANCH"
-    # a tag is checked out detached: its commit is the check, not a branch name
-    if fl__ap_on_tag "$AP_NAME" "$AP_BRANCH"; then fl_ok "apps/${AP_NAME} is at tag ${AP_BRANCH}"; s=""; fi
-    if ! fl_app_verify "$AP_NAME" "$s" ${AP_INSTALL[@]+"${AP_INSTALL[@]}"}; then
+    if ! fl__ap_verify ${AP_INSTALL[@]+"${AP_INSTALL[@]}"}; then
       code=1
       # a failed step is already in the record; a verify that fails on its own is the news
       [[ -n "$first_kind" ]] || fl__ap_record "verify" "apps/${AP_NAME} did not pass the verify pass after the steps" "$done_set"

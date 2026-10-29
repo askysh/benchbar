@@ -593,7 +593,7 @@ branch) exits 1 with the reason as text; anything else is a plan, with
 | `missing_required` | array of strings | the required apps the plan clones or cannot resolve |
 | `order` | array of strings | the apps the plan clones, each after the apps it requires (ties keep the order the plan always had), the app being added last when it is cloned. A cycle in `required_apps` is an `errors` entry, `required_apps cycle: a -> b -> a`, with `can_apply` false |
 | `reason` | string or null | set when a record of an earlier, unfinished add of this app is merged into the plan (the build, installs and restart it did not finish are `steps`, `changes` is true); otherwise `null` |
-| `steps[]` | array | in the order `--apply` runs them; `kind` is `clone_required`, `clone`, `build`, `install` or `restart` (run only when the bench is running); `note` says what else the step does, for `install` that it changes the site's database like a migrate of these apps |
+| `steps[]` | array | in the order `--apply` runs them; `kind` is `clone_required`, `clone`, `requirements_python` (only when an earlier run left a cloned app without its pip install), `build`, `install` or `restart` (run only when the bench is running); `note` says what else the step does, for `install` that it changes the site's database like a migrate of these apps |
 | `errors` | array of strings | why the plan cannot run: an unreadable repo, a missing branch, no `hooks.py`, a required app nothing resolves |
 | `changes` | bool | `false` when there is nothing to do |
 | `can_apply` | bool | `false` when `errors` is not empty |
