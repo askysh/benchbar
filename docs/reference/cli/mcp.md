@@ -14,8 +14,11 @@ read tools (`benchbar_list`, `benchbar_status`, `benchbar_doctor`,
 `benchbar_app_add_plan`), `up`, `down` and `restart`, and app add from a
 reviewed plan (`benchbar_app_add_plan`, then `benchbar_app_add` with the
 plan's token); nothing that repairs, installs a bench or needs `sudo`.
-Each tool runs `benchbar ... --json` with stdin closed, so a question
-from the CLI is answered no and never hangs. A call may take 3 minutes,
+Each tool runs `benchbar ... --json` with stdin closed and
+`BENCHBAR_NONINTERACTIVE=1`, so a command that needs an answer it cannot
+ask for stops and names the missing input, and never hangs. `up`, `down`
+and `restart` return the CLI's `done` line as `result` (`changed`,
+`warnings`, `next_actions`) next to the fresh status. A call may take 3 minutes,
 the plan 5 and `benchbar_app_add` an hour; on a timeout the CLI and
 everything it started are stopped.
 

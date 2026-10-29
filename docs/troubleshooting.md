@@ -90,6 +90,24 @@ inside BenchBar.app. A copy from before 0.7.1 cannot, and doctor's
 "Second CLI" check names it with the command that updates it.
 `benchbar where` shows which CLI runs and which one handed off to it.
 
+**An app update stopped half way.** The app is already at its new
+commit, but the migrate or the build did not run. Doctor warns with
+`app_update_pending`, and `benchbar status --json` lists the record in
+`pending_operations`. Run `benchbar app update NAME` again: it runs the
+steps that did not finish and nothing else. `--discard-pending` drops
+the record without running anything.
+
+**The install in the app stopped.** The page shows the failed step with
+its fix. **Retry** runs it again, **Open Log** shows the full output, and
+a finished step is skipped on the second run. The same run in Terminal is
+`benchbar install`, or `benchbar repair` for a bench that exists. Cancel
+a password dialog and that step is skipped, with its command to run
+yourself.
+
+**`status` says `not_adopted`.** The folder is a bench, but benchbar does
+not manage it: it has no service and no other state. `benchbar adopt
+PATH` registers it, and shows the plan first.
+
 **PDFs do not print.** wkhtmltopdf was skipped or is the Homebrew build.
 `benchbar doctor` says which; `benchbar repair` installs the official
 patched Qt package (Intel binary, Rosetta 2 offered on Apple Silicon,

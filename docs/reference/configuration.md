@@ -91,7 +91,7 @@ share ([Sharing a profile](../guides/teams.md#sharing-a-profile)).
 
 | What | Where it lives | When you need it |
 |---|---|---|
-| MariaDB root | your Keychain, item `benchbar-mariadb`; `benchbar mariadb-password` prints it after a confirmation | rarely: another `bench new-site`, or `mariadb -u root -p` |
+| MariaDB root | your Keychain, item `benchbar-mariadb` (on Linux a 0600 file in the state folder); `benchbar mariadb-password` prints it after a confirmation | rarely: another `bench new-site`, or `mariadb -u root -p` |
 | Administrator | you choose it during `benchbar install` or `site add`, or `ADMIN_PASSWORD` | every login at `http://<site>:<port>`, by default `http://macdev:8000` |
 
 ## Environment variables
@@ -109,6 +109,8 @@ share ([Sharing a profile](../guides/teams.md#sharing-a-profile)).
 | `BENCHBAR_REPORT_DIR` | `report` | Where the zip goes instead of `~/Desktop` |
 | `NO_COLOR` | every command | `NO_COLOR=1` turns off colors and spinners, like `--plain` |
 | `BENCHBAR_NO_HANDOFF` | every command | `BENCHBAR_NO_HANDOFF=1`: Homebrew's or the one line installer's `benchbar` runs itself instead of handing off to the CLI inside BenchBar.app (0.7.1) |
+| `BENCHBAR_NONINTERACTIVE` | every command | `BENCHBAR_NONINTERACTIVE=1`: nothing is asked. A command that lacks an input names all of them in one error before it takes the lock. `--for-agent` and `benchbar mcp` set it |
+| `BENCHBAR_SUDO` | `install`, `adopt`, `repair`, `ports apply`, `site hosts` | `BENCHBAR_SUDO=gui` (macOS): each root step asks in macOS's own password dialog, at most two per run. The BenchBar app sets it |
 
 The one line installer reads `BENCHBAR_HOME` (the checkout, default
 `~/.local/share/benchbar`), `BENCHBAR_BIN_DIR` (default `~/.local/bin`),

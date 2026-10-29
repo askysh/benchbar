@@ -58,6 +58,15 @@ changes nothing.
 `app update` never runs `bench update`, never rebases and never resets: a
 dirty or diverged app is refused.
 
+When a run stops after it changed something, benchbar keeps the steps
+that did not finish. The next `app update NAME` runs those steps and
+nothing else, although the app is already at its new commit. Doctor
+warns with `app_update_pending` until then. `--discard-pending` drops the
+record. The same holds for an `app add` that stopped at a build, an
+install or a restart (`app_add_pending`): run `app add` again and the new
+plan lists what is left. A failed build skips the install, so an app is
+never installed on a site whose assets were not built.
+
 ## Focus apps and their dependencies
 
 You pull the app you work on yourself, so a warning about it is noise.

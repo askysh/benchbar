@@ -84,6 +84,7 @@ what `setup` does, without asking.
 | Flag | What it does |
 |---|---|
 | `-y`, `--yes` | Required: the plan was already reviewed |
+| `--json` | JSON lines (`plan`, `step`, `progress`, `done`) ending in the [done fields](../../json-schema.md#the-done-fields-08). `state_after` is `null`, because one apply can change several benches |
 
 Exit codes: 0 applied; 1 the token is stale, a bench is blocked, or a
 bench failed.

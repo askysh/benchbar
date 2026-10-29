@@ -25,11 +25,11 @@ Raycast extensions and the like can rely on it too.
 | `benchbar install --json`, `benchbar adopt PATH --json` | JSON lines while a bench is created or adopted (0.8), see [install](#benchbar-install---json) |
 | `benchbar doctor --prerequisites --json` | what the Mac needs before an install, without a bench (0.8), see [prerequisites](#benchbar-doctor---prerequisites---json) |
 | `benchbar report --json` | where the redacted diagnostics zip went (0.5.5), see [report](#benchbar-report---json) |
-| `benchbar commands --json` | every command, flag and what it needs (0.9), see [the done fields](#the-done-fields-09) |
+| `benchbar commands --json` | every command, flag and what it needs (0.8), see [the done fields](#the-done-fields-08) |
 | `benchbar where --json` | how this CLI was installed, the path it records for itself, its state folder and the app (0.7), see [where](#benchbar-where---json) |
 | `benchbar site backup NAME --json` | the backup just taken (0.5.8), see [site backups](#site-backups) |
 | `benchbar site backups NAME --json` | every backup of a site (0.5.8) |
-| `benchbar up\|down\|restart\|service\|site add\|site default --json` | JSON lines ending in one `done` (0.9), see [the done fields](#the-done-fields-09) |
+| `benchbar up\|down\|restart\|service\|site add\|site default --json` | JSON lines ending in one `done` (0.8), see [the done fields](#the-done-fields-08) |
 | `benchbar site drop NAME --json` | the plan (with `--dry-run`) or the result of dropping a site (0.5.8) |
 
 ## Rules for readers
@@ -53,7 +53,7 @@ Raycast extensions and the like can rely on it too.
   after an upgrade (state.sh), which renames and links, and never copies
   or deletes.
 
-### The `done` fields (0.9)
+### The `done` fields (0.8)
 
 Every command that changes things ends with the same fields, once: in the
 `done` line of its stream, or added to the one document it prints. A
@@ -117,7 +117,7 @@ Which shape a command prints:
 | `starting` | processes are up, the site does not answer yet | `null` |
 | `running` | processes are up and the site answers HTTP | `null` |
 | `crashed` | honcho exited with an error; launchd retries after 20 seconds | `crash` |
-| `not_adopted` | (0.9) a folder that is a bench, with no benchbar service and not remembered (not the default bench, no state of its own, not registered), and nothing running. `site` and `web_url` are `null`: the site of the default bench is never named for it. `benchbar adopt PATH` or `register` changes it | `null` |
+| `not_adopted` | (0.8) a folder that is a bench, with no benchbar service and not remembered (not the default bench, no state of its own, not registered), and nothing running. `site` and `web_url` are `null`: the site of the default bench is never named for it. `benchbar adopt PATH` or `register` changes it | `null` |
 | `paused` | auto-restart is off until `benchup` | `crash` (the crash guard tripped: 3 starts in 10 minutes), `broken` (honcho or the env is missing, or the runner cannot write the crash history or the stop flag: run `benchbar repair` or `benchbar doctor`) or `port_conflict` (another process held the bench's ports when the runner started; it was not this bench's to stop: run `benchbar doctor`) |
 
 `stop_reason` can be `manual`, `crash`, `broken`, `port_conflict` or
@@ -242,7 +242,7 @@ Kept from frappe-mac 0.2.0 for older readers: `url`, `agent`,
 0.2.0 `state` held launchd's word (now `agent_state`), and `pid` and
 `last_exit_code` were strings.
 
-Since 0.9, `bench_bin` is the `bench` executable the bench's service runs:
+Since 0.8, `bench_bin` is the `bench` executable the bench's service runs:
 the first one on the PATH its agent (unit) bakes in, `null` without a
 service or when no such file is there. It is read from the agent file in
 bash, so `status` still starts no process for it. With `--ping`, every
@@ -279,11 +279,11 @@ and since 0.7.3 each of its sites also carries the database:
 The password is never printed. `list --json` and `status --json` leave
 these two out: they are polled.
 
-Since 0.9 every site result carries `default_site`, the bench's default
+Since 0.8 every site result carries `default_site`, the bench's default
 site after the run: `site list` at the top level, and `site add`, `site
 default` and `site drop` in their result. `site add` never moves it (it
 puts it back if `bench new-site` did); only `site default` does.
-`site add`, `site default` and `site drop` end with the [done fields](#the-done-fields-09),
+`site add`, `site default` and `site drop` end with the [done fields](#the-done-fields-08),
 `site add` and `site default` with `site`, `default_site` and `created`.
 
 ## `benchbar doctor --json`
@@ -340,7 +340,7 @@ puts it back if `bench new-site` did); only `site default` does.
 `status` and `fix` are the 0.2.0 names of `level` and `fix_command` (with
 `""` instead of `null`), kept for older readers.
 
-Since 0.9: every check has `"acked"`, and the document has `"acked": [ids]`,
+Since 0.8: every check has `"acked"`, and the document has `"acked": [ids]`,
 `"quick"` and `"skipped_checks": [ids]`.
 
 - `doctor --ack CHECK` silences one named `warn` for this bench: it is
@@ -388,7 +388,7 @@ token shapes become `***`, email addresses `<email>`); the plain
 larger the object carries `"truncated_to":2000` (absent otherwise) and
 holds the newest 2000 lines after the process filter.
 
-Since 0.9 the object also has `mtime` (the file's, `null` without one),
+Since 0.8 the object also has `mtime` (the file's, `null` without one),
 `since` (the cut off as an ISO time, `null` without one) and `ts`: one entry
 per line of `lines`, in step, an ISO 8601 UTC time where the line carries
 one and `null` where it does not (a traceback line inherits nothing). A
@@ -403,7 +403,7 @@ at. `benchbar_logs_tail` takes `since` and `since_restart`.
 
 ## `benchbar repair --json`
 
-Since 0.9 its `done` also carries `exit` (the same number as `exit_code`) and the [done fields](#the-done-fields-09).
+Since 0.8 its `done` also carries `exit` (the same number as `exit_code`) and the [done fields](#the-done-fields-08).
 
 A stream: one JSON object per line on stdout, as the run goes. The human
 text goes to the run's log, `logs/<date>-<time>-<pid>.log` in benchbar's state
@@ -431,7 +431,7 @@ the plan is printed, then `done` with exit code 1, because the question
 cannot be answered. An empty `actions` means nothing needs repairing.
 ## `benchbar install --json`
 
-Since 0.9 the `done` line also carries `changed`, `warnings`, `next_actions` and `state_after` ([done fields](#the-done-fields-09)); `adopt` the same.
+Since 0.8 the `done` line also carries `changed`, `warnings`, `next_actions` and `state_after` ([done fields](#the-done-fields-08)); `adopt` the same.
 
 Added in 0.8. A stream, like `pull --json`: one JSON object per line on
 stdout as the run goes, the human text in the run's log
@@ -635,7 +635,7 @@ fetches without the flag). `fetched_at` is benchbar's last such fetch.
 
 ## `benchbar app update NAME --dry-run --json`
 
-Since 0.9 `app update NAME --json` without `--dry-run` streams: the plan line (this document's fields), a step per plan step, and a `done` with `updated` and the [done fields](#the-done-fields-09). `--dry-run --json` is still this one document; `--dry-run --jsonl` is the same fields as a `plan` line, then `done`.
+Since 0.8 `app update NAME --json` without `--dry-run` streams: the plan line (this document's fields), a step per plan step, and a `done` with `updated` and the [done fields](#the-done-fields-08). `--dry-run --json` is still this one document; `--dry-run --jsonl` is the same fields as a `plan` line, then `done`.
 
 Added in 0.5. The plan of an update, after `git fetch` (which changes
 only the app's `.git`). Without `--dry-run`, `--json` streams (see the top of this section).
@@ -667,7 +667,7 @@ reason as text.
 
 ## `benchbar app add URL --dry-run --json`
 
-Since 0.9 the result of `--apply TOKEN --yes --json` (one line) also carries the [done fields](#the-done-fields-09); with `--jsonl` it is a `done` line with the same fields.
+Since 0.8 the result of `--apply TOKEN --yes --json` (one line) also carries the [done fields](#the-done-fields-08); with `--jsonl` it is a `done` line with the same fields.
 
 Added in 0.6.0. The plan of an app add, read only, with the token that
 `--apply TOKEN --yes` (and `benchbar_app_add` over MCP) needs. The text
@@ -908,7 +908,7 @@ as in the import plan.
 
 ## `benchbar pull --json`
 
-Since 0.9 the `done` line also carries `changed`, `next_actions` and `state_after` ([done fields](#the-done-fields-09)); its `warnings` are as before.
+Since 0.8 the `done` line also carries `changed`, `next_actions` and `state_after` ([done fields](#the-done-fields-08)); its `warnings` are as before.
 
 Added in 0.5. Unlike the commands above, `pull` changes things, so it
 streams: one JSON object per line on stdout, written as the run goes, and
@@ -987,7 +987,7 @@ Exit 0. An argument other than `--json` exits 1.
 
 ## Site backups
 
-Since 0.9 the results of `site backup` and `site drop` (not their plans) also carry the [done fields](#the-done-fields-09), and `site drop`'s plan and result `default_site`. `--jsonl` turns either into a stream whose `done` carries the document's fields.
+Since 0.8 the results of `site backup` and `site drop` (not their plans) also carry the [done fields](#the-done-fields-08), and `site drop`'s plan and result `default_site`. `--jsonl` turns either into a stream whose `done` carries the document's fields.
 
 `site backup`, `site backups` and `site drop` (0.5.8) describe a backup
 the same way. A backup is the files in the site's backup folder that

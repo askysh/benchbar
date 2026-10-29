@@ -28,7 +28,7 @@ benchbar site list --json
 ## site add
 
 ```
-benchbar site add NAME [--bundle NAME | --apps "a b"] [--dry-run] [--yes]
+benchbar site add NAME [--bundle NAME | --apps "a b"] [--dry-run] [--yes] [--json]
 ```
 
 `bench new-site` on the bench's MariaDB with the root password from the
@@ -42,10 +42,15 @@ site's Administrator password, or reads `ADMIN_PASSWORD`.
 | `--apps "a b"` | Install these apps, which must be in `apps/` already |
 | `--dry-run` | Print the plan, change nothing |
 | `-y`, `--yes` | Do not ask; `ADMIN_PASSWORD` must be set |
+| `--json` | JSON lines ending in a `done` with the site and the default site ([the done fields](../../json-schema.md#the-done-fields-08)) |
+
+With `BENCHBAR_NONINTERACTIVE=1` (or `--for-agent`) it asks for nothing.
+It first names every missing input in one error: `ADMIN_PASSWORD`,
+`MARIADB_ROOT_PASSWORD` when benchbar has none stored, and `--yes`.
 
 Exit codes: 0 the site exists; 1 a step failed or an app is not in
-`apps/`; 2 the MariaDB root password is unknown (pass
-`MARIADB_ROOT_PASSWORD`).
+`apps/`, or `ADMIN_PASSWORD` is missing; 2 the MariaDB root password is
+unknown (pass `MARIADB_ROOT_PASSWORD`).
 
 ```bash
 ADMIN_PASSWORD='...' benchbar site add v16two --bundle minimal --yes
@@ -54,11 +59,12 @@ ADMIN_PASSWORD='...' benchbar site add v16two --bundle minimal --yes
 ## site default
 
 ```
-benchbar site default NAME
+benchbar site default NAME [--json]
 ```
 
 Makes NAME the default site: `bench use`, the runner's ping, `benchup` and
-the app all follow it. The processes keep running.
+the app all follow it. The processes keep running. With `--json` it
+prints JSON lines ending in a `done`.
 
 Exit codes: 0; 1 when the site does not exist or `bench use` fails.
 

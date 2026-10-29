@@ -77,8 +77,8 @@ All notable changes to this project are documented here.
   and leaves out the checks that only exist on a Mac.
 
 - The BenchBar app has a first run wizard. A Mac with no bench opens the
-  window on it, and **New Bench…** under the new **+** in the sidebar
-  opens it later. **Check Your Mac** shows what is missing, with a button
+  window on it, and **New Bench…** in the **Add Bench** menu at the foot
+  of the sidebar opens it later. **Check Your Mac** shows what is missing, with a button
   for the Command Line Tools and the Homebrew command to copy. **New
   Bench** takes the folder, a built in or team profile (with its Python,
   Node and MariaDB), the app bundle, the site and the Administrator
@@ -97,7 +97,9 @@ All notable changes to this project are documented here.
 - Benches are the home of the BenchBar window: the sidebar lists each
   bench with its sites beneath it, then Team Profiles and Find Benches.
   General and Menu Bar moved to a Settings window (⌘,), and **About
-  BenchBar** in the app menu opens a window of its own.
+  BenchBar** opens a window of its own. The foot of the sidebar has
+  **Add Bench** (New Bench…, Adopt Existing Bench…, Find Benches…) and
+  buttons for Settings and About.
 - The app explains itself where you are: a four step walkthrough (from
   Done, Help > Show Walkthrough, and once on its own), a line under every
   bench that is not running saying why and offering the one next step

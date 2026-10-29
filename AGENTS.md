@@ -41,6 +41,39 @@ installed (`install`, `app` for the app's CLI), the path it records for
 itself (`self`), its state folder (`state_dir`) and the copy it was
 handed off from (`handoff_from`).
 
+## Drive a command without a person
+
+```bash
+benchbar COMMAND --help           # flags, what it needs, whether it changes things
+benchbar commands --json          # the same for every command, one document
+benchbar up --for-agent           # JSON lines, nothing is ever asked
+benchbar status --for-agent       # one JSON document
+```
+
+`--for-agent` prints JSON lines (`plan`, `step`, `progress`, `done`) for a
+command that changes things and one document for a command that only
+reads. It also sets `BENCHBAR_NONINTERACTIVE=1`, `NO_COLOR=1` and
+`--plain`. `--jsonl` asks for the stream alone.
+
+Every command that changes things ends with one `done` line (or adds
+the same fields to its one document): `exit`, `changed[]`, `warnings[]`,
+`next_actions[]` and `state_after`. Read `exit` and `next_actions` first.
+With `--json` stdout holds JSON and nothing else. A refusal goes to
+stderr.
+
+With `BENCHBAR_NONINTERACTIVE=1` a command that needs an input it cannot
+ask for stops before it takes the lock, and names all missing inputs in
+one error (`ADMIN_PASSWORD`, `MARIADB_ROOT_PASSWORD`, `--yes`, `sudo`).
+It does not guess an answer. `benchbar mcp` sets it for every command it
+starts.
+
+Two more flags help an agent that polls. `doctor --quick` skips the slow
+checks and names them. `doctor --ack CHECK` silences one warning you and
+the user have seen, until its message changes (`--unack` undoes it). `logs
+--json --since TIME` and `--since-restart` return only the new lines,
+each with a time in `ts`. A bench folder that benchbar does not manage
+shows `state: "not_adopted"` in `status --json`.
+
 ## Fresh install
 
 ```bash
@@ -71,6 +104,14 @@ instead of the Keychain, uses the site `linuxdev.localhost` and never edits
 restart) and starting a stopped `mariadb` or `redis-server`; it is asked
 once up front. The helper block goes to `~/.bashrc`, so tell the user to
 run `source ~/.bashrc`. Only v15-lts is supported on Linux so far.
+
+On Windows the benches run inside WSL 2, so run `benchbar` in the distro
+and follow the Linux notes above. From PowerShell, `benchbar.exe` forwards
+every command to the distro with its input, output and exit code
+unchanged, so `benchbar.exe status --json` and `benchbar.exe mcp` give
+what the CLI inside gives. `benchbar.exe doctor` adds the Windows checks
+(PATH, the distro, `.wslconfig`, keepalive) first. Windows is a preview:
+the programs are unsigned. See `docs/windows.md`.
 
 ## Existing or broken bench
 

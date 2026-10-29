@@ -24,6 +24,8 @@ Security problems go through a private report, never a public issue: see
 ```bash
 tests/run-tests.sh              # the CLI, under mocks, in parallel; shellcheck when installed
 scripts/macos-build.sh --test   # the app and its Swift tests
+(cd windows/shim && go test ./...)                     # benchbar.exe, any OS
+dotnet test windows/tray/BenchBarTray.sln -c Release   # the tray, on Windows
 ```
 
 The CLI tests never touch your real benches, MariaDB or launchd: every
@@ -31,8 +33,9 @@ test builds its own `HOME` and mock state. `tests/run-tests.sh test-doctor`
 runs one file. [docs/testing.md](docs/testing.md) is the guide for
 trying a build on a real Mac.
 
-CI runs the suite on macOS, builds the app, and uploads an unsigned
-bundle for every pull request.
+CI runs the suite on macOS and on Linux, installs a real bench on Ubuntu
+under `systemd --user`, builds the app, builds and tests the Windows shim
+and tray, and uploads an unsigned bundle for every pull request.
 
 ## How the code is written
 
