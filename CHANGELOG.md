@@ -100,8 +100,9 @@ All notable changes to this project are documented here.
   without a service says `service: "missing"` and names the plan tool. Long
   calls send MCP progress notifications when the client passes a
   `progressToken`. No tool result or error says where the MariaDB root
-  password is kept. `benchbar mcp --print-agents-md` prints a snippet for a
-  project's AGENTS.md or CLAUDE.md.
+  password is kept. A value that starts with `-` is refused in every
+  argument, the ones inside `apps` too. `benchbar mcp --print-agents-md`
+  prints a snippet for a project's AGENTS.md or CLAUDE.md.
 - `benchbar site add NAME --dry-run --json` prints the plan with a token, and
   `--apply TOKEN --yes` runs it; `benchbar service --dry-run --json` gains a
   token, and `service --apply TOKEN --yes` runs that plan.

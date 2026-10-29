@@ -820,6 +820,17 @@ def cap(result, label=None):
     return result
 
 
+def any_option_like(value):
+    """True when a string anywhere in value (lists and dicts recursed) starts with '-'."""
+    if isinstance(value, str):
+        return value.startswith("-")
+    if isinstance(value, dict):
+        return any(any_option_like(v) for v in value.values())
+    if isinstance(value, list):
+        return any(any_option_like(v) for v in value)
+    return False
+
+
 def tool_call(params, call=None):
     name = params.get("name")
     arguments = params.get("arguments") or {}
@@ -835,7 +846,8 @@ def tool_call(params, call=None):
     if missing:
         raise RpcError(-32602, "missing argument(s) for %s: %s" % (name, ", ".join(missing)))
     # a value is never an option: "--yes" as a URL must not reach the CLI's parser
-    if any(isinstance(v, str) and v.startswith("-") for v in arguments.values()):
+    # (the strings inside apps[] too: they become words of the same command line)
+    if any_option_like(arguments):
         raise RpcError(-32602, "argument values must not start with '-'")
     problem = validate(props, arguments)
     if problem:

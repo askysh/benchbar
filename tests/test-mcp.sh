@@ -466,6 +466,19 @@ assert by[2]["error"]["code"] == -32602, by[2]          # url_or_name and apps t
 assert by[3]["error"]["code"] == -32602, by[3]          # an option inside an entry
 ' || fail "MCP app add batch arguments: $R"
 
+# an option hidden in a nested string is refused like a top level one: apps[].url_or_name
+# "--bench-dir" would otherwise join the line and skip the bench check
+reset_calls
+R="$(mcp \
+  "$(call 1 benchbar_app_add_plan '{"apps":[{"url_or_name":"erpnext"},{"url_or_name":"--bench-dir"},{"url_or_name":"/x/other"}]}')" \
+  "$(call 2 benchbar_app_add_plan '{"apps":[{"url_or_name":"--yes"}]}')" \
+  "$(call 3 benchbar_app_add_plan '{"apps":[{"url_or_name":"y","branch":"--site"}]}')" \
+  "$(call 4 benchbar_app_add_plan '{"apps":[{"url_or_name":"y","name":"--dry-run"}]}')" \
+  "$(call 5 benchbar_app_add_plan '{"apps":[{"url_or_name":"y","install_on":"--all-sites"}]}')" \
+  "$(call 6 benchbar_app_add_plan '{"apps":[{"url_or_name":"y","commit":"--yes"}]}')" \
+  "$(call 7 benchbar_app_add '{"apps":[{"url_or_name":"y"},{"url_or_name":"--yes"}],"token":"x"}')")"
+assert_eq "-32602 -32602 -32602 -32602 -32602 -32602 -32602" "$(printf '%s\n' "$R" | python3 -c 'import json,sys; print(" ".join(str(json.loads(l)["error"]["code"]) for l in sys.stdin if l.strip()))')" "$R"
+
 # ---- site add over MCP: plan with a token, a stale token, the apply, the state after
 # the root password lives in benchbar's own store (the Keychain mock): benchbar
 # takes MARIADB_ROOT_PASSWORD out of the environment before the server starts,
