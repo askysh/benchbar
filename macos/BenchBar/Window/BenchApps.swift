@@ -63,10 +63,7 @@ struct BenchApps: View {
         // kept for the window session, like Health's doctor report
         .task(id: store.stamp(for: bench)) { await workbench.showApps(bench) }
         .sheet(isPresented: $adding) {
-            AddAppSheet(bench: bench, sites: siteNames) { source, branch, site in
-                adding = false
-                Task { await workbench.addApp(source, branch: branch, site: site, on: bench) }
-            } cancel: { adding = false }
+            AddAppSheet(workbench: workbench, bench: bench, sites: siteNames) { adding = false }
         }
         .sheet(item: $updating) { app in
             UpdateAppSheet(workbench: workbench, bench: bench, app: app) { updating = nil }
@@ -125,37 +122,119 @@ struct Tag: View {
     }
 }
 
+/// Fill in the app, Review reads the CLI's plan (`app add --dry-run --json`),
+/// Add App runs it by its token. A token the CLI refuses (the bench changed
+/// since) shows here, with Review Again; any other failure closes the sheet
+/// and the change banner has it.
 struct AddAppSheet: View {
+    /// What the sheet starts with: empty for a person, filled for a render.
+    struct Start {
+        var source = ""
+        var branch = ""
+        var site = ""
+        var flow = PlanReviewFlow<AppAddPlan>()
+    }
+
+    let workbench: Workbench
     let bench: BenchModel
     let sites: [String]
-    let add: (String, String, String?) -> Void
-    let cancel: () -> Void
-    @State private var source = ""
-    @State private var branch = ""
-    @State private var site = ""
+    let close: () -> Void
+    @State private var source: String
+    @State private var branch: String
+    @State private var site: String
+    @State private var flow: PlanReviewFlow<AppAddPlan>
+
+    init(workbench: Workbench, bench: BenchModel, sites: [String], start: Start = Start(), close: @escaping () -> Void) {
+        self.workbench = workbench
+        self.bench = bench
+        self.sites = sites
+        self.close = close
+        _source = State(initialValue: start.source)
+        _branch = State(initialValue: start.branch)
+        _site = State(initialValue: start.site)
+        _flow = State(initialValue: start.flow)
+    }
+
+    private var siteArgument: String? { site.isEmpty ? nil : site }
+    private var name: String { AppSource.displayName(source) }
+
+    private var phase: SheetPhase {
+        switch flow.stage {
+        case .form:
+            if let error = flow.readError { .failed(error, title: "No plan for \(name)") } else { .ready }
+        case .reading: .loading("Reading the repository and the bench…")
+        case .reviewing: .ready
+        case .applying: .running("Adding \(name)…")
+        case .stale: .failed("Nothing was changed. Review the plan again to see what it is now.", title: "The bench changed since this plan was shown")
+        }
+    }
 
     var body: some View {
         SheetScaffold("Add an App to \(bench.name)",
-                      explanation: "Clones an app from the app registry or a git repository and installs it.") {
-            Form {
-                // verbatim: a string literal Text reads markdown and turns the URL into a link
-                TextField("App or repository", text: $source, prompt: Text(verbatim: "erpnext or https://github.com/org/app"))
-                TextField("Branch", text: $branch, prompt: Text(AppSource.isURL(source) ? "the repository's default" : "the profile's branch"))
-                Picker("Install on", selection: $site) {
-                    Text("No site yet").tag("")
-                    ForEach(sites, id: \.self) { Text($0).tag($0) }
-                }
+                      explanation: flow.plan == nil
+                          ? "Clones an app from the app registry or a git repository and installs it. You see the plan first."
+                          : "Nothing has run yet. These are the steps; Add App runs exactly this plan.",
+                      phase: phase, width: flow.plan == nil ? .regular : .wide) {
+            if let plan = flow.plan {
+                AppAddPlanView(plan: plan)
+            } else if flow.stage != .reading, !isStale {
+                form
             }
-            .formStyle(.columns)
-            SheetNote(AppSource.isURL(source)
-                      ? "Private repositories work when your SSH key (or a git credential helper) can read them; BenchBar checks access first, so a missing key fails in seconds."
-                      : "A name from the app registry gets the branch that matches this bench's profile.")
-            SheetNote("benchbar app add runs bench get-app, installs the app's requirements and builds its assets. This can take several minutes; the bench keeps running.")
+        } leading: {
+            if case .reviewing = flow.stage {
+                Button("Back") { flow.edit() }
+            }
         } actions: {
-            CancelButton(action: cancel)
-            Button("Add App") { add(source, branch, site.isEmpty ? nil : site) }
-                .keyboardShortcut(.defaultAction)
-                .disabled(source.trimmingCharacters(in: .whitespaces).isEmpty)
+            switch flow.stage {
+            case .form, .reading:
+                CancelButton(action: close)
+                Button("Review") { review() }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(source.trimmingCharacters(in: .whitespaces).isEmpty || flow.stage == .reading)
+            case .reviewing(let plan):
+                CancelButton(action: close)
+                Button("Add App") { apply() }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!plan.canRun)
+            case .applying:
+                EmptyView()
+            case .stale:
+                CancelButton(action: close)
+                Button("Review Again") { review() }.keyboardShortcut(.defaultAction)
+            }
+        }
+    }
+
+    private var isStale: Bool { if case .stale = flow.stage { true } else { false } }
+
+    @ViewBuilder private var form: some View {
+        Form {
+            // verbatim: a string literal Text reads markdown and turns the URL into a link
+            TextField("App or repository", text: $source, prompt: Text(verbatim: "erpnext or https://github.com/org/app"))
+            TextField("Branch", text: $branch, prompt: Text(AppSource.isURL(source) ? "the repository's default" : "the profile's branch"))
+            Picker("Install on", selection: $site) {
+                Text("No site yet").tag("")
+                ForEach(sites, id: \.self) { Text($0).tag($0) }
+            }
+        }
+        .formStyle(.columns)
+        SheetNote(AppSource.isURL(source)
+                  ? "Private repositories work when your SSH key (or a git credential helper) can read them; BenchBar checks access first, so a missing key fails in seconds."
+                  : "A name from the app registry gets the branch that matches this bench's profile.")
+        SheetNote("Review reads the repository and shows the steps. Adding runs bench get-app, installs the app's requirements and builds its assets, which can take several minutes; the bench keeps running.")
+    }
+
+    private func review() {
+        guard flow.review() else { return }
+        Task { flow.read(await workbench.addAppPlan(source, branch: branch, site: siteArgument, on: bench)) }
+    }
+
+    private func apply() {
+        guard let plan = flow.apply() else { return }
+        Task {
+            let error = await workbench.addApp(source, branch: branch, site: siteArgument, token: plan.token, on: bench)
+            // a stale token is answered here, with Review Again, not in the banner
+            if flow.finish(error: error) { close() } else { workbench.result = nil }
         }
     }
 }

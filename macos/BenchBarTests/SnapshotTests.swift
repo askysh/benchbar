@@ -345,8 +345,26 @@ struct SnapshotTests {
         let store = try await windowStore()
         let workbench = Workbench(store: store)
         let bench = try #require(store.benches.last)
-        try render(AddSiteSheet(bench: bench) { _, _ in } cancel: {}, "add-site-sheet")
-        try render(AddAppSheet(bench: bench, sites: bench.siteRows.map(\.name)) { _, _, _ in } cancel: {}, "add-app-sheet")
+        let sites = bench.siteRows.map(\.name)
+        try render(AddSiteSheet(workbench: workbench, bench: bench) {}, "add-site-sheet")
+        try render(AddAppSheet(workbench: workbench, bench: bench, sites: sites) {}, "add-app-sheet")
+        // the plan states: the CLI's dry run (fixtures from its real output), then the stale token
+        func appStart(_ fixture: String, _ stage: (AppAddPlan) -> PlanReviewFlow<AppAddPlan>.Stage) throws -> AddAppSheet.Start {
+            let plan = try BenchJSON.decode(AppAddPlan.self, from: Fixture.data(fixture))
+            return .init(source: plan.repo, branch: "", site: plan.sites.first?.name ?? "", flow: .init(stage: stage(plan)))
+        }
+        try render(AddAppSheet(workbench: workbench, bench: bench, sites: sites, start: appStart("app-add-plan-required") { .reviewing($0) }) {},
+                   "add-app-plan")
+        try render(AddAppSheet(workbench: workbench, bench: bench, sites: sites, start: appStart("app-add-plan") { .reviewing($0) }) {},
+                   "add-app-plan-simple")
+        try render(AddAppSheet(workbench: workbench, bench: bench, sites: sites, start: appStart("app-add-plan-errors") { .reviewing($0) }) {},
+                   "add-app-plan-errors")
+        try render(AddAppSheet(workbench: workbench, bench: bench, sites: sites,
+                               start: appStart("app-add-plan") { _ in .stale("The app add plan changed since it was shown.") }) {},
+                   "add-app-plan-stale")
+        let sitePlan = SiteAddPlan.make(site: "v16three", defaultSite: bench.siteRows.first { $0.isDefault }?.name)
+        try render(AddSiteSheet(workbench: workbench, bench: bench,
+                                start: .init(name: "v16three", password: "pw", flow: .init(stage: .reviewing(sitePlan)))) {}, "add-site-plan")
         base.cli.answer("app update", json: try Fixture.string("app-update-plan"))
         await workbench.loadApps(bench)
         let app = try #require(workbench.apps[bench.path]?.apps.first { $0.name != "frappe" } ?? workbench.apps[bench.path]?.apps.first)

@@ -319,10 +319,7 @@ struct BenchSites: View {
             SiteDropSheet(workbench: workbench, bench: bench, site: target.site) { dropping = nil }
         }
         .sheet(isPresented: $addingSite) {
-            AddSiteSheet(bench: bench) { name, password in
-                addingSite = false
-                Task { await workbench.addSite(name, adminPassword: password, on: bench) }
-            } cancel: { addingSite = false }
+            AddSiteSheet(workbench: workbench, bench: bench) { addingSite = false }
         }
     }
 }
@@ -400,35 +397,101 @@ struct SiteMenu: View {
     }
 }
 
+/// Fill in the site, Review runs the CLI's checks and shows the steps, Add
+/// Site runs `site add`. The CLI has no token for it, so nothing can go stale.
 struct AddSiteSheet: View {
+    /// What the sheet starts with: empty for a person, filled for a render.
+    struct Start {
+        var name = ""
+        var password = ""
+        var flow = PlanReviewFlow<SiteAddPlan>()
+    }
+
+    let workbench: Workbench
     let bench: BenchModel
-    let add: (String, String) -> Void
-    let cancel: () -> Void
-    @State private var name = ""
-    @State private var password = ""
-    @State private var confirm = ""
+    let close: () -> Void
+    @State private var name: String
+    @State private var password: String
+    @State private var confirm: String
+    @State private var flow: PlanReviewFlow<SiteAddPlan>
+
+    init(workbench: Workbench, bench: BenchModel, start: Start = Start(), close: @escaping () -> Void) {
+        self.workbench = workbench
+        self.bench = bench
+        self.close = close
+        _name = State(initialValue: start.name)
+        _password = State(initialValue: start.password)
+        _confirm = State(initialValue: start.password)
+        _flow = State(initialValue: start.flow)
+    }
 
     private var nameValid: Bool { SiteName.isValid(name) && !bench.siteRows.contains { $0.name == name } }
     private var passwordValid: Bool { !password.isEmpty && password == confirm }
 
+    private var phase: SheetPhase {
+        switch flow.stage {
+        case .form:
+            if let error = flow.readError { .failed(error, title: "\(name) cannot be added") } else { .ready }
+        case .reading: .loading("Checking \(name) with benchbar…")
+        case .reviewing, .stale: .ready
+        case .applying: .running("Creating \(name)…")
+        }
+    }
+
     var body: some View {
         SheetScaffold("Add a Site to \(bench.name)",
-                      explanation: "A new site on the same MariaDB, with only Frappe installed. Add apps from the Apps tab afterwards.") {
-            Form {
-                TextField("Site name", text: $name, prompt: Text("mysite"))
-                if !name.isEmpty && !SiteName.isValid(name) {
-                    Text(SiteName.rule).font(.caption).foregroundStyle(.red)
-                }
-                SecureField("Administrator password", text: $password)
-                SecureField("Confirm password", text: $confirm)
+                      explanation: flow.plan == nil
+                          ? "A new site on the same MariaDB, with only Frappe installed. Add apps from the Apps tab afterwards."
+                          : "Nothing has run yet. These are the steps; Add Site runs them.",
+                      phase: phase, width: flow.plan == nil ? .regular : .wide) {
+            if let plan = flow.plan {
+                SiteAddPlanView(plan: plan)
+            } else if flow.stage != .reading {
+                form
             }
-            .formStyle(.columns)
-            SheetNote("The password goes to the benchbar process only, never on a command line or to disk. The MariaDB password comes from your Keychain.")
+        } leading: {
+            if case .reviewing = flow.stage {
+                Button("Back") { flow.edit() }
+            }
         } actions: {
-            CancelButton(action: cancel)
-            Button("Add Site") { add(name, password) }
-                .keyboardShortcut(.defaultAction)
-                .disabled(!nameValid || !passwordValid)
+            switch flow.stage {
+            case .form, .reading, .stale:
+                CancelButton(action: close)
+                Button("Review") { review() }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!nameValid || !passwordValid || flow.stage == .reading)
+            case .reviewing:
+                CancelButton(action: close)
+                Button("Add Site") { apply() }.keyboardShortcut(.defaultAction)
+            case .applying:
+                EmptyView()
+            }
+        }
+    }
+
+    @ViewBuilder private var form: some View {
+        Form {
+            TextField("Site name", text: $name, prompt: Text("mysite"))
+            if !name.isEmpty && !SiteName.isValid(name) {
+                Text(SiteName.rule).font(.caption).foregroundStyle(.red)
+            }
+            SecureField("Administrator password", text: $password)
+            SecureField("Confirm password", text: $confirm)
+        }
+        .formStyle(.columns)
+        SheetNote("The password goes to the benchbar process only, never on a command line or to disk. The MariaDB password comes from your Keychain.")
+    }
+
+    private func review() {
+        guard flow.review() else { return }
+        Task { flow.read(await workbench.addSitePlan(name, on: bench)) }
+    }
+
+    private func apply() {
+        guard flow.apply() != nil else { return }
+        Task {
+            let error = await workbench.addSite(name, adminPassword: password, on: bench)
+            if flow.finish(error: error) { close() }
         }
     }
 }
