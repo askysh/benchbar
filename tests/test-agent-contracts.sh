@@ -783,4 +783,13 @@ assert_eq "done 0 True" "$(ev '"%s %s %s" % (e[-1]["event"], e[-1]["exit"], any(
 assert_eq "[]" "$(ev '[w for w in e[-1]["warnings"] if "Procfile" in w]')" "(a fixed problem is not a warning)"
 assert_eq "[]" "$(ev '[a for a in e[-1]["next_actions"] if "repair" in a["command"]]')" "(nothing left for repair to do)"
 
+# site drop --new-default: the default's move is in changed[] too (it ran in a subshell)
+mkdir -p "$BENCH/sites/dropdef"; printf '{}\n' >"$BENCH/sites/dropdef/site_config.json"
+run_fm site default dropdef --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+stream site drop dropdef --confirm-site dropdef --new-default macdev --jsonl --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$(cat "$STREAM.err")"
+assert_eq "True" "$(sx '{"kind": "site", "name": "macdev", "detail": "now the default site"} in e[-1]["changed"]')" "$(cat "$STREAM")"
+assert_eq "macdev macdev" "$(sx '"%s %s" % (e[-1]["default_site"], e[-1]["state_after"]["site"])')" "$(cat "$STREAM")"
+
 printf 'test-agent-contracts: ok\n'
