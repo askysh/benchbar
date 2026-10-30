@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -559,6 +560,9 @@ func TestSetupRunWslEnableElevated(t *testing.T) {
 }
 
 func TestSetupRunWslEnableExitCode3010(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("exit codes above 255 exist only on Windows")
+	}
 	e := newEnv(t)
 	e.readyEnv()
 	e.elevatedChild()
