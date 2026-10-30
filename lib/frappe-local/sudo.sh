@@ -222,7 +222,12 @@ fl__sudo_env_call() {
   if ! command sudo -n true 2>/dev/null; then
     fl__sudo_env_feed || { printf 'sudo: the password from BENCHBAR_SUDO_PASSWORD was not accepted\n' >&2; return 1; }
   fi
-  command sudo "$@"
+  # never the last command: bash may exec a last command in place of a
+  # $(...) subshell, and sudo's parent would then not be the shell that
+  # holds the ticket
+  local code=0
+  command sudo "$@" || code=$?
+  return "$code"
 }
 
 fl__sudo_env_wrap() {
