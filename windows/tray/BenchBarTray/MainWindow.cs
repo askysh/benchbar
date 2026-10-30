@@ -10,6 +10,9 @@ namespace BenchBar.Tray;
 internal sealed class MainActions
 {
     public OverviewActions Overview { get; set; } = new();
+
+    /// <summary>The CLI client and shared sheets every page uses.</summary>
+    public PageServices Services { get; set; } = new();
     public Action StartDistro { get; set; } = () => { };
     public Action ShowSettings { get; set; } = () => { };
     public Action ShowAbout { get; set; } = () => { };
@@ -35,7 +38,11 @@ internal sealed class MainWindow : Window
     private readonly TextBlock _summary = Ui.Text("", 12, opacity: 0.7, margin: new Thickness(16, 0, 16, 8));
     private readonly Border _banner = new() { Visibility = Visibility.Collapsed, Margin = new Thickness(24, 16, 24, 0) };
     private readonly ContentControl _content = new() { Margin = new Thickness(24, 20, 24, 20), IsTabStop = false };
-    private readonly OverviewView _overview;
+    private readonly BenchPage _page;
+    private readonly DiscoveryView _discovery;
+    private readonly ProfilesView _profiles;
+    private readonly Dictionary<SidebarTool, Button> _toolButtons = [];
+    private SidebarTool _tool = SidebarTool.None;
     private TraySnapshot _snapshot = TraySnapshot.Empty;
     private IReadOnlyList<SidebarItem> _items = [];
     private string? _selectedKey;
@@ -48,7 +55,10 @@ internal sealed class MainWindow : Window
     public MainWindow(MainActions actions, ResolvedTheme theme)
     {
         _actions = actions;
-        _overview = new OverviewView(actions.Overview);
+        _page = new BenchPage(actions.Services, new OverviewView(actions.Overview));
+        _page.TabChanged += _ => SyncContentKey();
+        _discovery = new DiscoveryView(actions.Services);
+        _profiles = new ProfilesView(actions.Services);
 
         Title = "BenchBar";
         Width = 1000;
@@ -91,7 +101,17 @@ internal sealed class MainWindow : Window
     /// <summary>The rows of the sidebar (for tests).</summary>
     public IReadOnlyList<SidebarItem> Items => _items;
 
-    public OverviewView Overview => _overview;
+    public OverviewView Overview => _page.Overview;
+
+    /// <summary>The bench page (tabs) shown for the selected bench or site.</summary>
+    public BenchPage Page => _page;
+
+    public DiscoveryView Discovery => _discovery;
+
+    public ProfilesView Profiles => _profiles;
+
+    /// <summary>The pane below the benches that is open now, or None.</summary>
+    public SidebarTool Tool => _tool;
 
     public string ContentKind => _contentKey;
 
@@ -132,14 +152,24 @@ internal sealed class MainWindow : Window
         foot.Children.Add(settings);
         foot.Children.Add(about);
 
+        var tools = new StackPanel { Margin = new Thickness(12, 4, 12, 0) };
+        foreach (var tool in SidebarTools.All)
+        {
+            var button = FootButton(SidebarTools.Title(tool), tool == SidebarTool.FindBenches ? "" : "", () => ShowTool(tool));
+            _toolButtons[tool] = button;
+            tools.Children.Add(button);
+        }
+
         Ui.Name(_list, "Benches");
         var panel = new DockPanel();
         DockPanel.SetDock(head, Dock.Top);
         DockPanel.SetDock(_summary, Dock.Top);
         DockPanel.SetDock(foot, Dock.Bottom);
+        DockPanel.SetDock(tools, Dock.Bottom);
         panel.Children.Add(head);
         panel.Children.Add(_summary);
         panel.Children.Add(foot);
+        panel.Children.Add(tools);
         panel.Children.Add(_list);
         return panel;
     }
@@ -209,7 +239,7 @@ internal sealed class MainWindow : Window
             foreach (var item in _items) _list.Items.Add(ItemFor(item));
             var selected = _items.FirstOrDefault(i => i.Key == _selectedKey) ?? _items.FirstOrDefault(i => i.Kind == SidebarKind.Bench);
             _selectedKey = selected?.Key;
-            if (selected is not null) _list.SelectedIndex = _items.ToList().IndexOf(selected);
+            if (selected is not null && _tool == SidebarTool.None) _list.SelectedIndex = _items.ToList().IndexOf(selected);
         }
         finally
         {
@@ -221,8 +251,43 @@ internal sealed class MainWindow : Window
     {
         if (_syncing || _list.SelectedItem is not ListBoxItem { Tag: SidebarItem item }) return;
         _selectedKey = item.Key;
-        if (Mode == MainMode.Home) ShowHome();
+        _tool = SidebarTool.None;
+        MarkTools();
+        if (Mode == MainMode.Home) ShowHome(navigate: true);
     }
+
+    /// <summary>Opens the Health tab of the bench page that is showing (the Overview's Health button).</summary>
+    public void ShowHealth()
+    {
+        if (_page.Context is null) return;
+        _page.Select(BenchTab.Health);
+        SyncContentKey();
+    }
+
+    /// <summary>Selects a bench or site row as a click would (for tests and for deep links from other panes).</summary>
+    public void Select(SidebarItem item)
+    {
+        var index = _items.ToList().FindIndex(i => i.Key == item.Key);
+        if (index >= 0) _list.SelectedIndex = index;
+    }
+
+    /// <summary>Opens the Find Benches or Team Profiles pane and clears the bench selection in the sidebar.</summary>
+    public void ShowTool(SidebarTool tool)
+    {
+        _tool = tool;
+        _syncing = true;
+        try { _list.SelectedIndex = -1; }
+        finally { _syncing = false; }
+        MarkTools();
+        if (Mode == MainMode.Home) ShowHome(navigate: true);
+    }
+
+    private void MarkTools()
+    {
+        foreach (var (tool, button) in _toolButtons) button.Background = tool == _tool ? Ui.Card : Brushes.Transparent;
+    }
+
+    private void SyncContentKey() => _contentKey = _page.Tab == BenchTab.Overview ? "overview" : "bench|" + _page.Tab.ToString().ToLowerInvariant();
 
     // --- content ---
 
@@ -232,7 +297,8 @@ internal sealed class MainWindow : Window
         ShowHome();
     }
 
-    public void ShowHome()
+    /// <summary>Shows what the sidebar selected. <paramref name="navigate"/> is true when the selection just changed (a poll passes false and keeps the tab).</summary>
+    public void ShowHome(bool navigate = false)
     {
         Mode = MainMode.Home;
         var selected = _items.FirstOrDefault(i => i.Key == _selectedKey);
@@ -245,15 +311,29 @@ internal sealed class MainWindow : Window
             var distro = _snapshot.Distro ?? "The WSL distro";
             SetContent("stopped|" + distro, () => CardPage($"{distro} is stopped", FlyoutView.DistroHint, "Start", _actions.StartDistro));
         }
+        else if (_tool != SidebarTool.None)
+        {
+            var key = "tool|" + _tool;
+            var pane = _tool == SidebarTool.FindBenches ? (UserControl)_discovery : _profiles;
+            var changed = _contentKey != key || !ReferenceEquals(_content.Content, pane);
+            _contentKey = key;
+            _content.Content = pane;
+            if (changed && navigate)
+            {
+                if (_tool == SidebarTool.FindBenches) _discovery.OnShown();
+                else _profiles.OnShown();
+            }
+        }
         else if (_snapshot.Benches.Count == 0)
         {
             SetContent("empty", () => CardPage("No benches yet", "Set up Frappe in WSL with a few clicks, or point BenchBar at a bench you already have.", "Set Up a New Bench", _actions.NewBench));
         }
         else if (selected is not null && _snapshot.Benches.FirstOrDefault(b => b.Path == selected.BenchPath) is { } bench)
         {
-            _contentKey = "overview";
-            _overview.Bind(bench, selected.Kind == SidebarKind.Site ? selected.Title : null);
-            if (!ReferenceEquals(_content.Content, _overview)) _content.Content = _overview;
+            var shown = ReferenceEquals(_content.Content, _page);
+            if (!shown) _content.Content = _page;
+            _page.Bind(bench, selected.Kind == SidebarKind.Site ? selected.Title : null, navigate || !shown);
+            SyncContentKey();
         }
     }
 

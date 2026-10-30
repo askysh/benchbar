@@ -1,0 +1,1 @@
+{"schema_version":1,"cli_version":"0.8.0","bench":"/home/akash/frappe-bench","app":"erpnext","remote":"upstream","branch":"version-15","from":"b5f784612d5b7969b72848dda5b22f10d3a8f764","to":"b5f784612d5b7969b72848dda5b22f10d3a8f764","commits":[],"commits_total":0,"newer_commits":0,"pending":null,"sites":["one.localhost"],"skip_backup":false,"steps":[]}

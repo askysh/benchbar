@@ -73,25 +73,50 @@ public partial class App
                 return;
             }
         }
+        if (PageServicesInstance.HasRunInFlight)
+        {
+            // the run keeps going in the background (the CLI is not stopped) and its result comes as a notification
+            var answer = MessageBox.Show(_main, "A change is still running (a site drop, an app update or an add). If you close the window it keeps running and BenchBar tells you the result in a notification. Close the window anyway?",
+                "BenchBar", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
+            if (answer != MessageBoxResult.Yes)
+            {
+                e.Cancel = true;
+                return;
+            }
+        }
         // closing the window ends the wizard; a pending restart keeps its one shot flag so the wizard comes back after it
         _wizard?.Dispose();
         _wizard = null;
+    }
+
+    private PageServices? _pageServices;
+
+    /// <summary>The CLI client and sheets every page of the main window and the log windows share.</summary>
+    private PageServices PageServicesInstance => _pageServices ??= NewPageServices();
+
+    private PageServices NewPageServices()
+    {
+        var services = PageServices.ForApp(_cli, () => Theme, () => _main, CopyText, OpenUrl, () => _controller?.Poller.Kick());
+        services.Distro = () => DistroName.Resolve(_config.Distro) ?? _controller?.Snapshot.Distro;
+        services.Notify = text => _icon?.TrayIcon.ShowNotification("BenchBar", text, H.NotifyIcon.Core.NotificationIcon.Info);
+        return services;
     }
 
     private MainActions BuildMainActions() => new()
     {
         Overview = new OverviewActions
         {
-            StartStop = bench => _controller!.StartStopAsync(bench),
-            Restart = bench => _controller!.RestartAsync(bench),
+            StartStop = bench => _controller!.StartStopAsync(bench, checkPorts: false),
+            Restart = bench => _controller!.RestartAsync(bench, checkPorts: false),
             OpenSite = bench => _controller!.OpenSite(bench),
             ShowLogs = ShowLogs,
-            ShowDoctor = ShowDoctor,
+            ShowHealth = _ => _main?.ShowHealth(),
             OpenEditor = OpenEditor,
             EditorName = () => EditorKind.DisplayName(_config.Editor),
             CopyText = CopyText,
             OpenUrl = OpenUrl,
         },
+        Services = PageServicesInstance,
         StartDistro = () => _controller!.StartDistro(),
         ShowSettings = ShowSettings,
         ShowAbout = ShowAbout,

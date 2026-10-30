@@ -1,0 +1,1 @@
+{"schema_version":1,"cli_version":"0.8.0","bench":"/home/akash/frappe-bench","site":"two.localhost","dry_run":true,"is_default":false,"new_default":null,"default_site":"one.localhost","steps":[{"title":"Back up two.localhost with files, drop its database and user, move the folder to archived/sites","command":"bench drop-site two.localhost","needs_password":false}]}

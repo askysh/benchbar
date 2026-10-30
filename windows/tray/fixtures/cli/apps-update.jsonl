@@ -1,0 +1,3 @@
+{"schema_version":1,"cli_version":"0.8.0","event":"step","id":"fast_forward","name":"Fast forward","status":"done"}
+{"schema_version":1,"cli_version":"0.8.0","event":"step","id":"migrate","name":"Migrate one.localhost","status":"done"}
+{"schema_version":1,"cli_version":"0.8.0","event":"done","exit":0,"updated":true,"changed":[{"kind":"app","name":"erpnext","detail":"updated"}],"warnings":[],"next_actions":[]}

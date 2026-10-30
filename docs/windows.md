@@ -197,11 +197,44 @@ cup, and your own), Check for Updates, Help, Report a Bug and Quit.
 
 Open BenchBar (the tray menu, the button at the top of the flyout, or a
 double click on the tray icon) opens the window. The sidebar lists your
-benches with their sites, a **+** menu (New Bench, I Already Have a
-Bench), and Settings and About at the foot. A bench shows its state and
-address, Start or Stop, Restart, Open Site, Logs, Doctor and Open in
-editor. A banner says when a newer release is out. Ctrl+N starts a new
+benches with their sites, then Find Benches and Team Profiles, a **+**
+menu (New Bench, I Already Have a Bench), and Settings and About at the
+foot. A banner says when a newer release is out. Ctrl+N starts a new
 bench, Ctrl+, opens Settings and F5 checks again.
+
+A bench has four tabs:
+
+- **Overview**: state, address and uptime, Start or Stop, Restart, Open
+  Site, Logs, Health and Open in editor, and a line that says why a bench
+  is stopped and what to do next. The Scheduler switch, the lockfile state,
+  Port Settings and Setup, and Console and Database (in Windows Terminal)
+  are here too.
+- **Sites**: Add Site (the plan first, then the Administrator password
+  goes to the CLI in its environment), Make Default, Back Up (with or
+  without files), Backups, Restore, Drop Site (type the site's name to
+  confirm) and Open. Windows resolves `*.localhost` itself, so BenchBar
+  never edits a hosts file.
+- **Apps**: Add App (from a git URL, with a branch or a commit, and the
+  sites to install it on), Update after the dry run, Install on a site,
+  focus pins and Check Remotes. An app with local changes cannot be
+  updated from the window.
+- **Health**: the doctor checks with the Windows setup checks, Copy fix,
+  and Repair, which shows the plan first and asks for your Linux password
+  once when a step uses sudo.
+
+Start and Restart check the bench's ports first, from the window and from
+the flyout. A port another program holds stops the start with the reason
+and Review Port Conflict; BenchBar never stops that program.
+
+**Find Benches** scans a folder inside the distro (default your Linux
+home), adds the benches it finds, sets up their ports and their
+management. **Team Profiles** creates a profile from a bench, imports or
+subscribes to one, exports, updates, checks access and removes. A Windows
+file path for import or export is converted with `wslpath`.
+
+The log window filters by process, searches, follows the log (while the
+window is open), shows the previous log and opens `tail -f` in Windows
+Terminal.
 
 Settings: open at logon, notifications, check for updates, the distro
 (switching runs `benchbar.exe adopt-distro`), the editor (VS Code, Cursor
@@ -243,9 +276,8 @@ loaded and the tray stays at about 43 MB.
 
 ## What the tray does not do
 
-- It creates benches only from the first run wizard. Sites, apps, ports
-  and profiles are not in the window yet: use the CLI.
-- It does not repair a bench. Doctor shows the fix lines; you run them.
 - It does not update itself. Check for Updates opens the release page.
+- It has no `benchbar://` links yet, and no CPU source for the runner, so
+  the runner runs at one speed.
 - It never reads files inside the distro: every fact comes from
   `benchbar.exe`.

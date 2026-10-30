@@ -1,0 +1,1 @@
+{"schema_version":1,"cli_version":"0.5.0","bench":"/home/akash/frappe-bench","profile":"v15-lts","sites_checked_at":"2026-09-25T10:00:00Z","sites_error":"MariaDB is down","apps":[{"name":"erpnext","in_apps_txt":false,"repo":null,"remote":null,"branch":null,"policy_branch":null,"commit":null,"dirty":false,"shallow":false,"version":null,"sites":["one.localhost"]}]}

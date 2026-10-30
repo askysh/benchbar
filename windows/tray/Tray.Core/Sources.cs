@@ -372,6 +372,10 @@ public static class BenchSourceFactory
     public static ISetupService SetupFromEnvironment() =>
         Fixtures is { } fixtures ? new FixtureSetupService(fixtures) : new ShimSetupService();
 
+    /// <summary>The CLI client of the pages: the real shim, or with fixtures the recorded read only answers (see <see cref="FixtureCliRunner"/>).</summary>
+    public static ICliClient CliFromEnvironment() =>
+        Fixtures is { } fixtures ? new CliClient(new FixtureCliRunner(fixtures), () => "benchbar.exe") : new CliClient();
+
     /// <summary>The distro probe for the real source; null with fixtures, which have no distro.</summary>
     public static IDistroProbe? DistroProbeFromEnvironment() => Fixtures is null ? new WslDistroProbe() : null;
 }

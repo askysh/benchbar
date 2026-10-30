@@ -57,6 +57,33 @@ internal static class Ui
 
     public static TextBlock Caption(string text) => Text(text, 12, opacity: 0.7);
 
+    /// <summary>A problem line in the critical color.</summary>
+    public static TextBlock CriticalText(string text)
+    {
+        var block = Text(text, 14, margin: new Thickness(0, 8, 0, 0));
+        block.Foreground = CriticalBrush;
+        block.TextWrapping = TextWrapping.Wrap;
+        return block;
+    }
+
+    /// <summary>Selectable monospace text (a command to copy, tool output).</summary>
+    public static TextBox Mono(string text)
+    {
+        var box = new TextBox
+        {
+            Text = text,
+            IsReadOnly = true,
+            BorderThickness = new Thickness(0),
+            Background = Brushes.Transparent,
+            FontFamily = new FontFamily("Cascadia Mono, Consolas"),
+            FontSize = 12,
+            TextWrapping = TextWrapping.Wrap,
+            Padding = new Thickness(0),
+        };
+        Name(box, text.Length > 40 ? text[..40] : text);
+        return box;
+    }
+
     public static Button Button(string label, Action click, string? automationName = null, bool primary = false, double minWidth = 88)
     {
         var button = new Button { Content = label, MinWidth = minWidth, Padding = new Thickness(14, 6, 14, 6), Margin = new Thickness(0, 0, 8, 0) };

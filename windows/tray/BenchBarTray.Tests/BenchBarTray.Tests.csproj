@@ -17,4 +17,10 @@
     <ProjectReference Include="..\BenchBarTray\BenchBarTray.csproj" />
     <ProjectReference Include="..\Tray.Core\Tray.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- One fixture lookup for both test projects (compiled into each). -->
+    <Compile Include="..\Tray.Core.Tests\FixtureFiles.cs" Link="FixtureFiles.cs" />
+    <!-- Fixtures travel with the test binaries, so a build with an artifacts path elsewhere still finds them. -->
+    <None Include="..\fixtures\**\*" Link="fixtures\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
