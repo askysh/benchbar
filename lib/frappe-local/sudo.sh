@@ -193,7 +193,8 @@ fl_root_run() {
 # "sudo" becomes a shell function for this process (and its subshells, not
 # for programs it starts). Before each call it tries "sudo -n true"; when
 # that fails it validates the password with "sudo -S -p '' -v", the password
-# on stdin through a pipe from the printf builtin (never argv, never a file),
+# on stdin through a process substitution running the printf builtin (never
+# argv, never a file),
 # and then runs the real sudo from the same shell, so a ticket that sudo ties
 # to the parent process (no terminal) is found. The command keeps its own
 # stdin. The run log gets "run:" lines of commands and none carries the
@@ -209,7 +210,11 @@ fl_sudo_env_has_password() { fl_sudo_env && [[ -n "${FL_SUDO_PW:+x}" ]]; }
 fl__sudo_env_feed() {
   local xt=0 code=0
   case "$-" in *x*) xt=1; { set +x; } 2>/dev/null ;; esac
-  printf '%s\n' "$FL_SUDO_PW" | command sudo -S -p '' -v >/dev/null 2>&1 || code=$?
+  # not "printf | sudo": every pipeline element is a forked subshell, and bash
+  # 3.2 runs the command in a child of it, so the parent of sudo would be that
+  # subshell and not this shell, and the ticket (tied to the parent pid without
+  # a terminal) would be lost for the call that follows
+  "$FL_SUDO_BIN" -S -p '' -v 0< <(printf '%s\n' "$FL_SUDO_PW") >/dev/null 2>&1 || code=$?
   if [[ "$xt" == "1" ]]; then set -x; fi
   return "$code"
 }
@@ -217,20 +222,26 @@ fl__sudo_env_feed() {
 # fl__sudo_env_call ARGS...: what the sudo function runs
 fl__sudo_env_call() {
   case "${1:-}" in
-    -k|-K|-V|--version|-h|--help) command sudo "$@"; return $? ;;
+    -k|-K|-V|--version|-h|--help) "$FL_SUDO_BIN" "$@"; return $? ;;
   esac
-  if ! command sudo -n true 2>/dev/null; then
+  if ! "$FL_SUDO_BIN" -n true 2>/dev/null; then
     fl__sudo_env_feed || { printf 'sudo: the password from BENCHBAR_SUDO_PASSWORD was not accepted\n' >&2; return 1; }
   fi
   # never the last command: bash may exec a last command in place of a
   # $(...) subshell, and sudo's parent would then not be the shell that
   # holds the ticket
   local code=0
-  command sudo "$@" || code=$?
+  "$FL_SUDO_BIN" "$@" || code=$?
   return "$code"
 }
 
+# fl__sudo_env_wrap: define the sudo function. The real sudo is called by its
+# path (found before the function exists), not as "command sudo": bash 3.2 with
+# "set -e" ends the shell when "command CMD" fails, even in "if", "!" or "||".
 fl__sudo_env_wrap() {
+  FL_SUDO_BIN="$(type -P sudo 2>/dev/null || true)"
+  FL_SUDO_BIN="${FL_SUDO_BIN:-/usr/bin/sudo}"
+  # shellcheck disable=SC2329  # the callers run it as "sudo"
   sudo() { fl__sudo_env_call "$@"; }
 }
 
@@ -253,7 +264,7 @@ fl_sudo_env_wrong() {
 # password pass.
 fl_sudo_env_check() {
   command -v sudo >/dev/null 2>&1 || return 2
-  command sudo -k 2>/dev/null || true
+  "$FL_SUDO_BIN" -k 2>/dev/null || true
   fl__sudo_env_feed
 }
 
