@@ -13,11 +13,18 @@
 #                                   logged): makes the site folder like bench new-site
 #   -c SNIPPET benchbar-probe SITE  the decrypt probe: "5 0" when the site
 #                                   holds $MOCK_STATE/site_key, else "0 5"
+#   -c 'import pkg_resources'       doctor's setuptools probe, as env-python
+#                                   answers it (MOCK_ENV_NO_PKG_RESOURCES=1:
+#                                   missing), never the real python3
 #   -c SNIPPET ARGS...              any other snippet runs in the real python3
 # Calls are logged to $MOCK_LOG as "python ARGS" (the snippet left out).
 log() { printf 'python %s\n' "$*" >>"${MOCK_LOG:-/dev/null}"; }
 case "$*" in *version_info*) echo "3.11"; exit 0 ;; esac
 [[ "${1:-}" == "--version" ]] && { echo "Python 3.11.9"; exit 0; }
+if [[ "$*" == "-c import pkg_resources" ]]; then
+  [[ "${MOCK_ENV_NO_PKG_RESOURCES:-0}" == "1" ]] && { echo "ModuleNotFoundError: No module named 'pkg_resources'" >&2; exit 1; }
+  exit 0
+fi
 
 if [[ "${1:-}" == "-m" && "${2:-}" == "frappe.utils.bench_helper" ]]; then
   shift 2
