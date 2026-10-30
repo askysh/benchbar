@@ -20,6 +20,7 @@ public sealed class TrayConfig
     private bool _corrupt;
     private bool _unreadable;
     private string? _distro;
+    private string? _cliPath;
     private (DateTime Written, long Length)? _stamp;
     private readonly object _gate = new();
 
@@ -46,7 +47,9 @@ public sealed class TrayConfig
                     (DateTime, long)? stamp = info.Exists ? (info.LastWriteTimeUtc, info.Length) : null;
                     if (stamp == _stamp) return _distro;
                     _stamp = stamp;
-                    _distro = stamp is null ? null : ReadString(ParseRoot(File.ReadAllText(Path)) ?? [], "distro");
+                    var root = (stamp is null ? null : ParseRoot(File.ReadAllText(Path))) ?? [];
+                    _distro = stamp is null ? null : ReadString(root, "distro");
+                    _cliPath = stamp is null ? null : ReadString(root, "cli_path");
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
@@ -58,11 +61,30 @@ public sealed class TrayConfig
         }
     }
 
+    /// <summary>The shim's <c>cli_path</c> key (the Linux CLI it calls); null when absent. Read only, like <see cref="Distro"/>.</summary>
+    public string? CliPath
+    {
+        get
+        {
+            _ = Distro; // one read of the file fills both
+            lock (_gate) return _cliPath;
+        }
+    }
+
     public AppearanceMode Appearance { get; set; } = AppearanceMode.System;
 
     public string RunnerId { get; set; } = DefaultRunnerId;
 
     public bool Notifications { get; set; } = true;
+
+    /// <summary>The editor Open in Editor starts: <c>code</c> (VS Code), <c>cursor</c> or <c>insiders</c>.</summary>
+    public string Editor { get; set; } = EditorKind.DefaultId;
+
+    /// <summary>Look for a newer release when the BenchBar window opens (once in a few hours). Off: only the menu item asks.</summary>
+    public bool CheckForUpdates { get; set; } = true;
+
+    /// <summary>The person closed the first run wizard with Cancel: it no longer opens by itself at launch.</summary>
+    public bool WizardDismissed { get; set; }
 
     /// <summary>True when the file existed but was not valid JSON; Save then keeps it as <c>config.json.bad</c> first.</summary>
     public bool WasCorrupt => _corrupt;
@@ -99,6 +121,9 @@ public sealed class TrayConfig
             config.Appearance = ParseAppearance(ReadString(tray, "appearance"));
             config.RunnerId = ReadString(tray, "runner") is { Length: > 0 } id ? id : DefaultRunnerId;
             if (tray["notifications"] is JsonValue v && v.TryGetValue<bool>(out var on)) config.Notifications = on;
+            config.Editor = EditorKind.Normalize(ReadString(tray, "editor"));
+            if (tray["check_for_updates"] is JsonValue u && u.TryGetValue<bool>(out var check)) config.CheckForUpdates = check;
+            if (tray["wizard_dismissed"] is JsonValue w && w.TryGetValue<bool>(out var dismissed)) config.WizardDismissed = dismissed;
         }
         return config;
     }
@@ -158,6 +183,9 @@ public sealed class TrayConfig
         tray["appearance"] = AppearanceText(Appearance);
         tray["runner"] = RunnerId;
         tray["notifications"] = Notifications;
+        tray["editor"] = EditorKind.Normalize(Editor);
+        tray["check_for_updates"] = CheckForUpdates;
+        tray["wizard_dismissed"] = WizardDismissed;
         root["tray"] = tray;
 
         var temp = Path + "." + Environment.ProcessId + ".tmp";

@@ -71,6 +71,9 @@ var ubuntu = Distro{Name: "Ubuntu-24.04", Version: 2, Default: true}
 func newEnv(t *testing.T) *env {
 	t.Helper()
 	root := t.TempDir()
+	if r, err := filepath.EvalSymlinks(root); err == nil {
+		root = r // the real spelling, as the elevated child compares it
+	}
 	e := &env{
 		System:  newFakeSystem(),
 		t:       t,
@@ -137,6 +140,8 @@ type fakeEvent struct {
 	WSLUTF8 string   `json:"wsl_utf8"`
 	Stdin   string   `json:"stdin_b64"`
 	Signal  string   `json:"signal"`
+	Wslenv  string   `json:"wslenv"`
+	EnvSet  []string `json:"env_set"`
 }
 
 // events reads what the fake wsl.exe recorded; none if it never ran.

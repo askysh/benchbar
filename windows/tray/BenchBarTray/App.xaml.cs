@@ -15,6 +15,7 @@ public partial class App : Application, ITrayHost
 {
     private const string MutexName = @"Local\BenchBarTray";
     private const string OpenEventName = @"Local\BenchBarTray.Open";
+    private const string SetupEventName = @"Local\BenchBarTray.Setup";
     private const string HelpUrl = "https://benchbar.akashmishra.com/windows/";
 
     private readonly ErrorLog _log = new();
@@ -31,7 +32,20 @@ public partial class App : Application, ITrayHost
     private FlyoutWindow? _flyout;
     private TrayMenu? _menu;
     private IBenchSource? _source;
+    private ISetupService? _setup;
     private IDistroProbe? _probe;
+    private MainWindow? _main;
+    private SettingsWindow? _settingsWindow;
+    private AboutWindow? _aboutWindow;
+    private WizardModel? _wizard;
+    private readonly StartupShortcut _resumeFlag = new(fileName: StartupShortcut.ResumeFileName, arguments: StartupShortcut.ResumeArgument);
+    private EventWaitHandle? _setupEvent;
+    private RegisteredWaitHandle? _setupWait;
+    private bool _launchChecked;
+    private int _viewers;
+    private long _updateCheckedAt;
+    private UpdateOffer? _updateOffer;
+    private string? _updateDismissed;
     private static readonly TimeSpan FlyoutKeepAlive = TimeSpan.FromSeconds(30);
     private readonly System.Windows.Threading.DispatcherTimer _releaseFlyout = new(System.Windows.Threading.DispatcherPriority.Background) { Interval = FlyoutKeepAlive };
     private long _flyoutHiddenAt;
@@ -60,7 +74,8 @@ public partial class App : Application, ITrayHost
             args.SetObserved();
         };
 
-        if (!TakeSingleInstance())
+        var resume = e.Args.Contains(StartupShortcut.ResumeArgument, StringComparer.OrdinalIgnoreCase);
+        if (!TakeSingleInstance(resume))
         {
             Shutdown();
             return;
@@ -73,6 +88,7 @@ public partial class App : Application, ITrayHost
         _config = TrayConfig.Load();
         ApplyThemeMode();
         _source = BenchSourceFactory.FromEnvironment();
+        _setup = BenchSourceFactory.SetupFromEnvironment();
         var options = new TrayOptions
         {
             Runners = RunnerSet.Load(),
@@ -107,21 +123,28 @@ public partial class App : Application, ITrayHost
         _icon.ForceCreate(); // puts the process in efficiency mode; the windows leave it while open
         if (_icon.IsCreated) IconAdded();
 
+        _icon.TrayMouseDoubleClick += (_, _) => OpenMain();
         _releaseFlyout.Tick += (_, _) => ReleaseFlyout();
         _controller.Start();
+        if (resume)
+        {
+            // the one shot flag did its job: take it away before anything can fail
+            try { _resumeFlag.Disable(); } catch (Exception ex) { _log.Write("resume-flag", ex); }
+            Dispatcher.BeginInvoke(() => OpenWizard(resume: true));
+        }
     }
 
     // --- single instance ---
 
-    private bool TakeSingleInstance()
+    private bool TakeSingleInstance(bool resume)
     {
         _mutex = new Mutex(true, MutexName, out var first);
         if (!first)
         {
-            // ask the running one to open its flyout; quietly nothing if it cannot be reached
+            // ask the running one to open its flyout (or the wizard, after a restart); quietly nothing if it cannot be reached
             try
             {
-                using var existing = EventWaitHandle.OpenExisting(OpenEventName);
+                using var existing = EventWaitHandle.OpenExisting(resume ? SetupEventName : OpenEventName);
                 existing.Set();
             }
             catch (Exception ex) when (ex is WaitHandleCannotBeOpenedException or UnauthorizedAccessException or IOException) { }
@@ -131,6 +154,8 @@ public partial class App : Application, ITrayHost
         }
         _openEvent = new EventWaitHandle(false, EventResetMode.AutoReset, OpenEventName);
         _openWait = ThreadPool.RegisterWaitForSingleObject(_openEvent, (_, _) => Dispatcher.BeginInvoke(ShowFlyout), null, Timeout.Infinite, executeOnlyOnce: false);
+        _setupEvent = new EventWaitHandle(false, EventResetMode.AutoReset, SetupEventName);
+        _setupWait = ThreadPool.RegisterWaitForSingleObject(_setupEvent, (_, _) => Dispatcher.BeginInvoke(() => OpenWizard(resume: true)), null, Timeout.Infinite, executeOnlyOnce: false);
         return true;
     }
 
@@ -138,6 +163,8 @@ public partial class App : Application, ITrayHost
     {
         _openWait?.Unregister(null);
         _openEvent?.Dispose();
+        _setupWait?.Unregister(null);
+        _setupEvent?.Dispose();
         if (_mutex is not null)
         {
             try { _mutex.ReleaseMutex(); } catch (ApplicationException) { }
@@ -157,7 +184,36 @@ public partial class App : Application, ITrayHost
 
     public void Post(Action action) => Dispatcher.BeginInvoke(action);
 
-    public void BenchesChanged(TraySnapshot snapshot, string upText) => _flyout?.View.SetSnapshot(snapshot, upText);
+    public void BenchesChanged(TraySnapshot snapshot, string upText)
+    {
+        _flyout?.View.SetSnapshot(snapshot, upText);
+        _main?.SetSnapshot(snapshot, upText);
+        if (!_launchChecked)
+        {
+            _launchChecked = true;
+            _ = LaunchCheckAsync(snapshot);
+        }
+    }
+
+    /// <summary>
+    /// A PC with no bench and no finished setup opens the wizard by itself. The read only <c>setup check</c> never boots a
+    /// stopped distro, and a stopped distro is skipped entirely: it exists, so this is not a new user.
+    /// </summary>
+    private async Task LaunchCheckAsync(TraySnapshot snapshot)
+    {
+        if (_setup is null || !LaunchPlanner.NeedsSetupCheck(snapshot, _config.WizardDismissed)) return;
+        SetupReport? report = null;
+        try
+        {
+            report = await _setup.CheckAsync(DistroName.Resolve(_config.Distro), CancellationToken.None);
+        }
+        catch (Exception ex) when (ex is SourceProblemException or System.Text.Json.JsonException)
+        {
+            _log.Write("setup-check", ex); // no shim or an old one: the flyout already says so
+        }
+        if (LaunchPlanner.AtLaunch(snapshot, report, _config.WizardDismissed, resumeFlag: false) == LaunchAction.OpenWizard)
+            OpenWizard(resume: false);
+    }
 
     public void ShowToast(Toast toast)
     {
@@ -248,16 +304,17 @@ public partial class App : Application, ITrayHost
         ShowLogs = ShowLogs,
         ShowDoctor = ShowDoctor,
         CopyPath = bench => CopyText(bench.Path),
-        OpenVsCode = OpenVsCode,
-        VsCodeAvailable = () => VsCode.Find() is not null,
+        OpenVsCode = OpenEditor,
+        VsCodeAvailable = () => VsCode.FindEditor(_config.Editor) is not null,
         StartDistro = () => _controller!.StartDistro(),
         CopyText = CopyText,
         OpenUrl = OpenUrl,
+        OpenMain = OpenMain,
     };
 
-    private VsCodeOutcome OpenVsCode(BenchStatus bench)
+    private VsCodeOutcome OpenEditor(BenchStatus bench)
     {
-        var code = VsCode.Find();
+        var code = VsCode.FindEditor(_config.Editor);
         if (code is null) return VsCodeOutcome.NotFound;
         var distro = DistroName.Resolve(_config.Distro) ?? _controller?.Snapshot.Distro;
         if (distro is null) return VsCodeOutcome.NotFound;
@@ -365,6 +422,8 @@ public partial class App : Application, ITrayHost
             if (_controller is not null) _controller.Notifications = on;
         },
         Theme = () => Theme,
+        OpenMain = OpenMain,
+        OpenSettings = ShowSettings,
         CheckForUpdates = () => _ = CheckForUpdatesAsync(),
         Help = () => OpenUrl(HelpUrl),
         ReportBug = () => _ = ReportBugAsync(),
@@ -432,7 +491,7 @@ public partial class App : Application, ITrayHost
         var snapshot = _controller.Snapshot;
         if (snapshot.DistroStopped)
         {
-            MessageBox.Show($"{snapshot.Distro} is stopped. Start it from the BenchBar window first; the report is written inside it.",
+            MessageBox.Show(TextFormats.ReportNeedsDistro(snapshot.Distro ?? "The distro"),
                 "BenchBar", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
@@ -477,6 +536,11 @@ public partial class App : Application, ITrayHost
         _flyout?.Close();
         foreach (var w in _logs.Values.ToList()) w.Close();
         foreach (var w in _doctors.Values.ToList()) w.Close();
+        _wizard?.Dispose();
+        _wizard = null;
+        _main?.Close();
+        _settingsWindow?.Close();
+        _aboutWindow?.Close();
         _icon?.Dispose(); // NIM_DELETE
         _link?.Dispose(); // sends bye
         Shutdown();

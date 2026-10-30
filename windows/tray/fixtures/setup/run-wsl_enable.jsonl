@@ -1,0 +1,4 @@
+{"event":"step","id":"wsl_enable","status":"running","message":"Turning on WSL"}
+{"event":"log","line":"Installing: Windows Subsystem for Linux"}
+{"event":"step","id":"wsl_enable","status":"done","message":"WSL is on"}
+{"event":"done","exit":0,"changed":true,"reboot_required":true,"cancelled":false,"warnings":[],"next_actions":["reboot"]}

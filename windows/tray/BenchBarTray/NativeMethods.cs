@@ -43,4 +43,30 @@ internal static partial class NativeMethods
 
     [LibraryImport("user32.dll", EntryPoint = "SetWindowLongW")]
     internal static partial int SetWindowLong(IntPtr hwnd, int index, int value);
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal unsafe struct StockIconInfo
+    {
+        public uint Size;
+        public IntPtr Icon;
+        public int SysImageIndex;
+        public int IconIndex;
+        public fixed char Path[260];
+    }
+
+    internal const int AsfwAny = -1;
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool AllowSetForegroundWindow(int processId);
+
+    internal const int SiidShield = 77;
+    internal const uint ShgsiIcon = 0x100, ShgsiSmallIcon = 0x1;
+
+    [LibraryImport("shell32.dll")]
+    internal static partial int SHGetStockIconInfo(int id, uint flags, ref StockIconInfo info);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool DestroyIcon(IntPtr icon);
 }

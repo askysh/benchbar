@@ -1,0 +1,10 @@
+{"schema_version":1,"event":"plan","bench":"/home/akash/frappe-bench","site":"linuxdev.localhost","profile":"v15-lts","bundle":"minimal","web_url":"http://linuxdev.localhost:8000","dry_run":false,"sudo_mode":"env","steps":[{"n":null,"id":"wkhtmltopdf_install","name":"Install the patched wkhtmltopdf package","sudo":true,"will_run":true},{"n":1,"id":"system_deps","name":"System dependencies","sudo":true,"will_run":true},{"n":2,"id":"bench_site","name":"Bench and site","sudo":false,"will_run":true},{"n":3,"id":"service","name":"Background service","sudo":false,"will_run":true}],"log":"/home/akash/.local/state/benchbar/logs/20261030-101500-4242.log"}
+{"schema_version":1,"event":"step","n":null,"id":"wkhtmltopdf_install","parent":null,"name":"Install the patched wkhtmltopdf package","status":"running"}
+{"schema_version":1,"event":"progress","step":"wkhtmltopdf_install","label":"download wkhtmltopdf (about 50 MB)","elapsed":10}
+{"schema_version":1,"event":"step","n":null,"id":"wkhtmltopdf_install","parent":null,"name":"Install the patched wkhtmltopdf package","status":"done","secs":41}
+{"schema_version":1,"event":"step","n":1,"id":"system_deps","parent":null,"name":"System dependencies","status":"running"}
+{"schema_version":1,"event":"step","n":null,"id":"python","parent":"system_deps","name":"PYTHON","status":"done","secs":3}
+{"schema_version":1,"event":"step","n":1,"id":"system_deps","parent":null,"name":"System dependencies","status":"done","secs":95}
+{"schema_version":1,"event":"step","n":2,"id":"bench_site","parent":null,"name":"Bench and site","status":"done","secs":300}
+{"schema_version":1,"event":"step","n":3,"id":"service","parent":null,"name":"Background service","status":"done","secs":4}
+{"schema_version":1,"event":"done","exit":0,"bench":"/home/akash/frappe-bench","site":"linuxdev.localhost","url":"http://linuxdev.localhost:8000","skipped":[],"fix":null,"log":"/home/akash/.local/state/benchbar/logs/20261030-101500-4242.log"}

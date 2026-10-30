@@ -1,0 +1,2 @@
+{"schema_version":1,"event":"step","n":2,"id":"bench_site","parent":null,"name":"Bench and site","status":"failed","secs":12,"message":"[FAIL] bench init failed"}
+{"schema_version":1,"event":"done","exit":1,"bench":"/home/akash/frappe-bench","site":"linuxdev.localhost","url":null,"skipped":[],"fix":"benchbar doctor --fix-hints","log":"/home/akash/.local/state/benchbar/logs/x.log"}

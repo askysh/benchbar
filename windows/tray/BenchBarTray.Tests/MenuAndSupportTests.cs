@@ -20,6 +20,7 @@ public class TrayMenuTests : IDisposable
         var menu = new TrayMenu(new TrayMenuModel());
         Assert.Equal(
             [
+                "Open BenchBar", "Settings...", "-",
                 "Open BenchBar at logon", "Appearance", "Runner", "Notifications", "-",
                 "Check for Updates", "Help", "Report a Bug", "-", "Quit",
             ],
@@ -37,12 +38,12 @@ public class TrayMenuTests : IDisposable
         };
         var menu = new TrayMenu(model);
         var items = menu.Menu.Items.OfType<MenuItem>().ToList();
-        Assert.False(items[0].IsChecked); // nothing is read before the menu opens
+        Assert.False(items[2].IsChecked); // nothing is read before the menu opens
 
         menu.RefreshChecks();
-        Assert.True(items[0].IsChecked);
-        Assert.False(items[3].IsChecked);
-        var appearance = items[1].Items.OfType<MenuItem>().ToList();
+        Assert.True(items[2].IsChecked);
+        Assert.False(items[5].IsChecked);
+        var appearance = items[3].Items.OfType<MenuItem>().ToList();
         Assert.Equal(["System", "Light", "Dark"], appearance.Select(i => i.Header));
         Assert.Equal([false, false, true], appearance.Select(i => i.IsChecked));
     });
@@ -65,16 +66,16 @@ public class TrayMenuTests : IDisposable
         void Click(MenuItem item) => item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
         var items = menu.Menu.Items.OfType<MenuItem>().ToList();
 
-        items[0].IsChecked = true; // a checkable item toggles itself before Click
-        Click(items[0]);
-        Click(items[1].Items.OfType<MenuItem>().Single(i => (string)i.Header == "Light"));
-        items[3].IsChecked = false;
-        Click(items[3]);
+        items[2].IsChecked = true; // a checkable item toggles itself before Click
+        Click(items[2]);
+        Click(items[3].Items.OfType<MenuItem>().Single(i => (string)i.Header == "Light"));
+        items[5].IsChecked = false;
+        Click(items[5]);
         foreach (var header in new[] { "Check for Updates", "Help", "Report a Bug", "Quit" })
             Click(items.Single(i => (string)i.Header == header));
 
         Assert.Equal(["logon True", "appearance Light", "notifications False", "update", "help", "report", "quit"], seen);
-        var appearance = items[1].Items.OfType<MenuItem>().ToList();
+        var appearance = items[3].Items.OfType<MenuItem>().ToList();
         Assert.Equal([false, true, false], appearance.Select(i => i.IsChecked)); // radio behaviour
     });
 

@@ -1,0 +1,2 @@
+{"event":"step","id":"distro_user","status":"done","message":"The user already existed"}
+{"event":"done","exit":0,"changed":false,"reboot_required":false,"cancelled":false,"warnings":[],"next_actions":["systemd"],"user_existed":true}

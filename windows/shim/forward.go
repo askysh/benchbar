@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"strings"
 )
 
 // wrapper puts ~/.local/bin on PATH (the installer puts the CLI there; a
@@ -44,6 +45,57 @@ func wslCommand(sys *System, args ...string) (*exec.Cmd, error) {
 	return cmd, nil
 }
 
+// forwardedEnv are the only variables the forwarder hands to the CLI in the
+// distro. The BenchBar tray sets them in the child's environment for one
+// run, so a password never sits on a command line.
+var forwardedEnv = []string{
+	"ADMIN_PASSWORD",
+	"MARIADB_ROOT_PASSWORD",
+	"BENCHBAR_SUDO",
+	"BENCHBAR_SUDO_PASSWORD",
+	"BENCHBAR_NONINTERACTIVE",
+}
+
+// withForwardedEnv returns env with WSLENV extended by the forwarded names
+// that are set. It changes the child's copy only, never the user's own
+// WSLENV. Values are never read here; WSL copies them across.
+func withForwardedEnv(sys *System, env []string) []string {
+	var names []string
+	for _, n := range forwardedEnv {
+		if sys.Getenv(n) != "" {
+			names = append(names, n)
+		}
+	}
+	if len(names) == 0 {
+		return env
+	}
+	current := ""
+	out := make([]string, 0, len(env)+1)
+	for _, kv := range env {
+		if k, v, ok := strings.Cut(kv, "="); ok && strings.EqualFold(k, "WSLENV") {
+			current = v
+			continue
+		}
+		out = append(out, kv)
+	}
+	have := map[string]bool{}
+	var parts []string
+	for _, p := range strings.Split(current, ":") {
+		if p == "" {
+			continue
+		}
+		parts = append(parts, p)
+		base, _, _ := strings.Cut(p, "/")
+		have[strings.ToUpper(base)] = true
+	}
+	for _, n := range names {
+		if !have[n] {
+			parts = append(parts, n)
+		}
+	}
+	return append(out, "WSLENV="+strings.Join(parts, ":"))
+}
+
 // forward runs the CLI in the distro with the shim's own standard handles.
 func forward(sys *System, t target, args []string) int {
 	cmd, err := wslCommand(sys, forwardArgs(t.distro, t.cli, args)...)
@@ -52,6 +104,7 @@ func forward(sys *System, t target, args []string) int {
 		return 1
 	}
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = sys.Stdin, sys.Stdout, sys.Stderr
+	cmd.Env = withForwardedEnv(sys, cmd.Env)
 	code, err := runInterruptible(cmd)
 	if err != nil {
 		errorf(sys, "cannot run wsl.exe: %v", err)

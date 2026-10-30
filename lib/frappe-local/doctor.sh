@@ -219,6 +219,15 @@ fl_prereq_label() {
     bench_folder) printf 'Bench folder' ;;
     cleanmymac) printf 'CleanMyMac' ;;
     mole) printf 'Mole' ;;
+    linux_distro) printf 'Linux distribution' ;;
+    architecture) printf 'CPU architecture' ;;
+    regular_user) printf 'Regular user' ;;
+    sudo) printf 'sudo' ;;
+    apt) printf 'apt' ;;
+    systemd) printf 'systemd' ;;
+    linger) printf 'Linger' ;;
+    memory) printf 'Memory' ;;
+    mariadb_password) printf 'MariaDB root password' ;;
     default_ports) printf 'Default ports' ;;
     *) printf '%s' "$1" ;;
   esac
@@ -236,32 +245,44 @@ fl_prereq_count() {
   printf '%d' "$n"
 }
 
+# The checks that depend on the platform, in two places of the list: first
+# (the machine itself) and extra (after the bench folder). doctor-linux.sh
+# replaces both with the Linux ones.
+fl_prereq_platform_first() {
+  local arch os major clt brew_bin
+  arch="${FL_ARCH:-$(uname -m)}"
+  if [[ "$arch" == "arm64" ]]; then fl_prereq_add apple_silicon ok "arm64"
+  else fl_prereq_add apple_silicon fail "this Mac is ${arch}; BenchBar and its Homebrew setup are for Apple Silicon" "BenchBar needs an Apple Silicon Mac"; fi
+
+  os="$(sw_vers -productVersion 2>/dev/null || true)"; major="${os%%.*}"
+  if [[ ! "$major" =~ ^[0-9]+$ ]]; then fl_prereq_add macos_version fail "could not read the macOS version" "update macOS in System Settings, Software Update"
+  elif [[ "$major" -ge 14 ]]; then fl_prereq_add macos_version ok "macOS ${os}"
+  else fl_prereq_add macos_version fail "macOS ${os}; macOS 14 or later is needed" "update macOS in System Settings, Software Update"; fi
+
+  clt="$(xcode-select -p 2>/dev/null || true)"
+  if [[ -n "$clt" && -d "$clt" ]]; then fl_prereq_add command_line_tools ok "$clt"
+  else fl_prereq_add command_line_tools fail "the Xcode Command Line Tools are not installed" "xcode-select --install"; fi
+
+  brew_bin="$(command -v brew 2>/dev/null || true)"
+  [[ -n "$brew_bin" ]] || { [[ -x "$FL_BREW_ALT_BIN" ]] && brew_bin="$FL_BREW_ALT_BIN"; }
+  if [[ -n "$brew_bin" ]]; then fl_prereq_add homebrew ok "brew at ${brew_bin}"
+  else fl_prereq_add homebrew fail "brew was not found" "$FL_BREW_INSTALL_CMD"; fi
+}
+
+fl_prereq_platform_extra() {
+  # CleanMyMac and Mole: doctor's own checks, for this folder
+  CHK_STATUS=""; CHK_MSG=""; CHK_FIX=""; chk_cleanmymac
+  fl_prereq_add cleanmymac "$CHK_STATUS" "$CHK_MSG" "$CHK_FIX"
+  CHK_STATUS=""; CHK_MSG=""; CHK_FIX=""; chk_mole
+  fl_prereq_add mole "$CHK_STATUS" "$CHK_MSG" "$CHK_FIX"
+}
+
 # fl_prereq_run: fills FL_P_*. The target folder is FL_BENCH_DIR.
 fl_prereq_run() {
-  local arch os major clt kb gb level dir p offset conflicts brew_bin
+  local kb gb level dir p offset conflicts
   FL_P_IDS=(); FL_P_LEVEL=(); FL_P_MSG=(); FL_P_FIX=(); FL_P_EXTRA=(); FL_P_RAN=1
 
-  # the Mac only checks stay out on Linux instead of reporting what cannot exist
-  if ! fl_is_linux; then
-    arch="${FL_ARCH:-$(uname -m)}"
-    if [[ "$arch" == "arm64" ]]; then fl_prereq_add apple_silicon ok "arm64"
-    else fl_prereq_add apple_silicon fail "this Mac is ${arch}; BenchBar and its Homebrew setup are for Apple Silicon" "BenchBar needs an Apple Silicon Mac"; fi
-
-    os="$(sw_vers -productVersion 2>/dev/null || true)"; major="${os%%.*}"
-    if [[ ! "$major" =~ ^[0-9]+$ ]]; then fl_prereq_add macos_version fail "could not read the macOS version" "update macOS in System Settings, Software Update"
-    elif [[ "$major" -ge 14 ]]; then fl_prereq_add macos_version ok "macOS ${os}"
-    else fl_prereq_add macos_version fail "macOS ${os}; macOS 14 or later is needed" "update macOS in System Settings, Software Update"; fi
-
-    clt="$(xcode-select -p 2>/dev/null || true)"
-    if [[ -n "$clt" && -d "$clt" ]]; then fl_prereq_add command_line_tools ok "$clt"
-    else fl_prereq_add command_line_tools fail "the Xcode Command Line Tools are not installed" "xcode-select --install"; fi
-
-    brew_bin="$(command -v brew 2>/dev/null || true)"
-    [[ -n "$brew_bin" ]] || { [[ -x "$FL_BREW_ALT_BIN" ]] && brew_bin="$FL_BREW_ALT_BIN"; }
-    if [[ -n "$brew_bin" ]]; then fl_prereq_add homebrew ok "brew at ${brew_bin}"
-    else fl_prereq_add homebrew fail "brew was not found" "$FL_BREW_INSTALL_CMD"; fi
-
-  fi
+  fl_prereq_platform_first
 
   kb="$(df -Pk "$HOME" 2>/dev/null | awk 'NR == 2 { print $4 }')"
   if [[ "$kb" =~ ^[0-9]+$ ]]; then
@@ -292,13 +313,7 @@ fl_prereq_run() {
     esac
   fi
 
-  if ! fl_is_linux; then
-    # CleanMyMac and Mole: doctor's own checks, for this folder
-    CHK_STATUS=""; CHK_MSG=""; CHK_FIX=""; chk_cleanmymac
-    fl_prereq_add cleanmymac "$CHK_STATUS" "$CHK_MSG" "$CHK_FIX"
-    CHK_STATUS=""; CHK_MSG=""; CHK_FIX=""; chk_mole
-    fl_prereq_add mole "$CHK_STATUS" "$CHK_MSG" "$CHK_FIX"
-  fi
+  fl_prereq_platform_extra
 
   # the default block 0: ports 8000, 9000, 11000 and 13000
   conflicts="$(fl_port_block_conflicts 0)"
