@@ -26,6 +26,14 @@ cp "$ROOT/tests/mocks/frappe-python" "$BENCH/env/bin/python"; chmod +x "$BENCH/e
 printf 'port 11000\n' >"$BENCH/config/redis_queue.conf"; printf 'port 13000\n' >"$BENCH/config/redis_cache.conf"
 mkdir -p "$TMP_DIR/xbin"; cp "$ROOT/tests/mocks/mariadb" "$TMP_DIR/xbin/mariadb"; chmod +x "$TMP_DIR/xbin/mariadb"
 export FL_MARIADB_BIN="$TMP_DIR/xbin/mariadb"
+# the machine's MariaDB and systemd folders, in the test folder: never the
+# host's /etc or /run. The utf8mb4 drop-in is in place, so repair has
+# nothing to write as root
+export FL_MYSQL_CONF_DIR="$MOCK_STATE/mysql-conf.d" FL_SYSTEMD_RUN_DIR="$MOCK_STATE/run-systemd" FL_MARIADB_DATA_DIR="$MOCK_STATE/var-lib-mysql"
+export FL_MYSQL_CNF="$MOCK_STATE/my.cnf"
+mkdir -p "$FL_MYSQL_CONF_DIR" "$FL_SYSTEMD_RUN_DIR" "$FL_MARIADB_DATA_DIR"
+printf '[client-server]\n!includedir %s/\n' "$FL_MYSQL_CONF_DIR" >"$FL_MYSQL_CNF"
+printf '[mysqld]\ncharacter-set-server = utf8mb4\ncollation-server = utf8mb4_unicode_ci\n' >"$FL_MYSQL_CONF_DIR/99-frappe.cnf"
 printf 'rootpw' >"$MOCK_STATE/mariadb_root_pw"
 mkdir -p "$FL_STATE_DIR/secrets"; printf 'rootpw\n' >"$FL_STATE_DIR/secrets/mariadb-root"; chmod 600 "$FL_STATE_DIR/secrets/mariadb-root"
 unset MARIADB_ROOT_PASSWORD ADMIN_PASSWORD
