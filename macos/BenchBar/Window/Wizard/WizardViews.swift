@@ -138,7 +138,7 @@ struct WelcomePage: View {
     let library: RunnerLibrary
 
     var body: some View {
-        WizardScaffold("BenchBar",
+        WizardScaffold("Welcome to BenchBar",
                        explanation: "Sets up a Frappe bench on this Mac, keeps it running and tells you when it crashes.") {
             VStack(spacing: WindowMetrics.spacing) {
                 RunnerPreview(runner: library.runner(settings.runnerID), state: .running, scale: 3)
@@ -151,23 +151,36 @@ struct WelcomePage: View {
                     PaneBanner(symbol: "questionmark.folder", tint: .orange, title: error.localizedDescription,
                                detail: error.recoverySuggestion)
                 }
-                // the page is a choice: one prominent button (Return), one plain
+                // the page is a choice: one prominent button (Return), one plain,
+                // each with a line on what it does (the Windows wizard's cards say the
+                // same; the lines used to be tooltips only)
                 VStack(spacing: WindowMetrics.rowSpacing) {
                     WizardPrimaryButton(run: run).controlSize(.large)
+                    choiceLine("Check this Mac, install what is missing, then set up Frappe.")
                     Button("I Already Have a Bench") { run.send(.chooseExistingBench) }
                         .controlSize(.large)
                         .help("Find the benches in a folder and set them up")
+                        .padding(.top, WindowMetrics.rowSpacing)
+                    choiceLine("Find a bench BenchBar did not create. You review the plan before anything changes.")
                 }
                 .padding(.top, WindowMetrics.rowSpacing)
-                Button("Just the Command Line Tool") { run.send(.chooseCLIOnly) }
-                    .buttonStyle(.link)
-                    .help("Install benchbar without the app's wizard: the Homebrew line and the one line installer")
+                VStack(spacing: 2) {
+                    Button("Just the Command Line Tool") { run.send(.chooseCLIOnly) }
+                        .buttonStyle(.link)
+                        .help("Install benchbar without the app's wizard: the Homebrew line and the one line installer")
+                    choiceLine("Only use benchbar from Terminal.")
+                }
             }
             .frame(maxWidth: .infinity)
         } actions: {
             WizardBackButton(run: run)
         }
     }
+}
+
+private func choiceLine(_ text: String) -> some View {
+    Text(text).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
+        .fixedSize(horizontal: false, vertical: true)
 }
 
 // MARK: Just the command line tool

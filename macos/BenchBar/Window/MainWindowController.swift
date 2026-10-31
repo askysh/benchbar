@@ -45,6 +45,7 @@ final class MainWindowController: NSObject, NSWindowDelegate {
             window.toolbarStyle = .unified
             window.setContentSize(NSSize(width: 860, height: 600))
             window.isReleasedWhenClosed = false
+            window.tabbingMode = .disallowed
             window.delegate = self
             window.setFrameAutosaveName("BenchBarWindow")
             window.center()

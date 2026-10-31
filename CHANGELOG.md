@@ -121,6 +121,18 @@ does. Report a Bug sends a redacted report in about a minute.
   General and Menu Bar, the **i** opens About, and Settings… (⌘,) opens
   the window on General.
 
+- Mac app, from a live pass on a Mac: the popover is readable over a
+  white web page in dark mode (it kept clear glass, so white text sat on
+  light grey); the BenchBar window reloads the benches when you come
+  back to it, so `developer_mode` set in a terminal shows at once instead
+  of up to five minutes later; Find User keeps one height as you type,
+  no longer closes on Return in a label field and drops the "System User"
+  badge from every row; the Allow Open as alert reads in three short
+  paragraphs; Open as… looks like the buttons beside it; About keeps the
+  command line tool's path under its row; the Window menu has no tab
+  items; the first run wizard says in a line what each of its three
+  choices does.
+
 - On Linux, `benchbar install` checks ports 3306 (MariaDB) and 6379 (the system Redis) before it asks for sudo or changes anything. In WSL 2 all distros share one network, so a second distro failed after 43 seconds with "systemctl start mariadb failed" because another distro's MariaDB held 3306. The plan now lists the port as a blocker, and the run stops at once with `port_3306_in_use` (or `port_6379_in_use`), a message and a fix. Nothing is stopped for you. A rerun on the distro that owns MariaDB is not a blocker.
 - `benchbar install --dry-run` on a fresh Linux machine (no uv, no pipx yet) exits 0 with its plan. Step 2 used to stop with "Neither uv nor pipx is installed" before step 1 had installed them, which the Windows tray read as "the plan could not be made". The dry run now says that step 1 will install uv, Python, Node and the rest. A real blocker, such as too little disk, still fails the dry run.
 - The one line installer works on Linux and WSL. `curl ... install.sh | bash` in Ubuntu 24.04 installs the command line tool (a clone in `~/.local/share/benchbar`, a link in `~/.local/bin`, `PATH` in `~/.bashrc`) without sudo or questions, and names `sudo apt install -y git` when git is missing. It stopped with "This installer is for macOS" before, which broke the Windows tray's command line tool step. `benchbar.exe` now runs the installer of its own release (`v<version>`, with `--version`); a development build uses `main`.

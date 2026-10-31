@@ -488,16 +488,18 @@ struct ActionButton: View {
     }
 }
 
-/// Behind the popover's content in light mode. macOS 26 draws the popover
-/// as clear glass, and with a dark window behind it the window's text showed
-/// through ours. Dark mode keeps the glass: light text stays readable on it.
+/// Behind the popover's content. macOS 26 draws the popover as clear glass,
+/// so whatever sits behind it shows through the text: a dark window's text in
+/// light mode, and in dark mode a white web page turned the glass light grey
+/// under white text. The window background colour at 92% (88% in dark mode,
+/// which keeps a little of the glass) keeps the text readable on either.
 struct PopoverBacking: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        if colorScheme == .light {
-            Color(nsColor: .windowBackgroundColor).opacity(0.92).ignoresSafeArea()
-        }
+        Color(nsColor: .windowBackgroundColor)
+            .opacity(colorScheme == .light ? 0.92 : 0.88)
+            .ignoresSafeArea()
     }
 }
 

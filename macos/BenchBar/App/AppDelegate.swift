@@ -36,10 +36,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // before the first CLI call: Homebrew's and the installer's
         // benchbar hand off to the CLI this link leads to
         AppCLILink.register()
+        // one window, no tabs: the Window menu offered Merge All Windows, Show Tab Bar and more
+        NSWindow.allowsAutomaticWindowTabbing = false
         settings = AppSettings()
         store = BenchStore(settings: settings)
         statusItemController = StatusItemController(store: store, settings: settings, library: library)
         store.onChange = { [weak self] in self?.statusItemController.update() }
+        NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.store.appBecameActive() }
+        }
 
         notifier = Notifier(settings: settings)
         store.onAlert = { [weak self] bench, alert in self?.notifier.post(alert, bench: bench) }

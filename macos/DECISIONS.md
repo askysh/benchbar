@@ -497,3 +497,14 @@ Asked for after the phases, to stop naming drift before the first release.
 - The row subtitle "as NE" is BenchBar's own record of its last switch (memory only), not the browser's live user.
 - `bench.lastError` is cleared by a successful Open as only when the text is the one an earlier Open as put there (`OpenAsStore.lastError(afterSwitchOn:)`).
 - Won't do in this version: Keep the page I'm on, a global hot key panel, and a tab host rewrite. They need the Automation permission or an extra key, and the CLI's `--path` plus the new tab cover the common case.
+
+## 0.8.1 live QA
+
+- `PopoverBacking` now draws in dark mode too (88%, light mode stays 92%). This reverses the 0.8.0 line that left dark mode on clear glass: over a white web page the glass turned light grey under white text, and the site rows were hard to read.
+- The window reloads the bench list when the app becomes active with the window open, at most every 15 s (`BenchStore.appBecameActive`). A site's `developer_mode` lives in `site_config.json`, which no watcher reads, so the Sites tab kept "not in developer mode" for the 5 minute poll after the person fixed it in Terminal. Opening the popover already reloaded; this covers coming back to a window that stayed open.
+- Find User holds the scaffold's maximum content height (`FindUserSheet.listHeight`): a sheet is re-centred when its height changes, and it jumped on every keystroke. A text field with `.onSubmit { }` keeps Return, since the sheet's Close is the default button and closed the sheet on Return in the label field. The user type badge shows only when it is not "System User".
+- Open as… sets `.buttonStyle(.bordered)` itself: in a Form row a `.menuStyle(.button)` menu drew plain next to the bordered Open.
+- The Allow Open as text keeps its words (a test checks the parts) and breaks into three paragraphs with `\n\n`.
+- `NSWindow.allowsAutomaticWindowTabbing = false` and `tabbingMode = .disallowed`: the Window menu listed Merge All Windows, Show Tab Bar and Move Tab to New Window for a window with no tabs.
+- The first run wizard's Welcome has the title "Welcome to BenchBar" and one caption under each choice, as the Windows wizard's cards do. The captions used to be tooltips only.
+- Not changed, for the record: qa1 and qa2 `.localhost` sites show "no /etc/hosts line yet" and no Open button, but macOS resolves `*.localhost` to loopback without a line (checked with ping). The CLI's `hosts_entry` decides this; the app follows it. Report to the CLI side.
