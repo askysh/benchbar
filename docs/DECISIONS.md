@@ -901,3 +901,4 @@ Measured on five PR runs (September 2026): 11 to 14 minutes wall clock, all of i
 ## Test cost
 
 - The mocks find `_mocklib.sh` with `${0%/*}` and name themselves with `${0##*/}`, and run under `#!/bin/bash`, not `/usr/bin/env bash`: a mock call started env, bash, dirname and basename before it did anything, and now starts bash alone. `/bin/bash` is the 3.2 the CLI targets on macOS and exists on the Linux runners. What a mock logs and prints is unchanged, and test-status-cost no longer needs its dirname exception.
+- `test-command-cost` keeps a program budget for `doctor`, `doctor --json`, `install --dry-run`, `adopt --dry-run` and `app list`, counted with test-status-cost's shims on two registered benches and one to adopt. Each budget is the larger of the macOS and Linux counts plus about 10 percent, so the test documents today's cost and fails when a change makes a command start more programs; a change that makes one cheaper lowers its budget.

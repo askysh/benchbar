@@ -33,7 +33,7 @@ ALL_TESTS="test-doctor test-phases test-install-json test-install-json-2 test-lo
 test-profiles test-service test-homebrew test-multi-bench test-ports test-sites test-input-hygiene test-doctor-hardening
 test-cli test-open-as test-freshness test-hygiene test-mcp test-site-backups test-app-cli test-process test-doctor-linux test-install-sh
 test-adopt test-systemd test-migrate test-repair-json test-json test-report test-profile-v16 test-state-migrate test-run-lock
-test-runner test-redact test-docs-command test-status-cost test-bench-flow test-run test-platform-linux test-self-update
+test-runner test-redact test-docs-command test-status-cost test-command-cost test-bench-flow test-run test-platform-linux test-self-update
 test-site-restore test-services-served test-templates test-discovery test-shellrc test-docs test-platform test-packaging test-ui test-release-notes test-version-policy test-affected
 test-agent-contracts"
 
