@@ -11,7 +11,7 @@ internal sealed partial class WizardView
 
     private PageParts WelcomePage()
     {
-        var panel = new StackPanel { MaxWidth = 560, HorizontalAlignment = HorizontalAlignment.Left };
+        var panel = new StackPanel();
         Button Choice(string title, string detail, Action click)
         {
             var text = new StackPanel();
@@ -49,7 +49,7 @@ internal sealed partial class WizardView
 
     private PageParts CliOnlyPage()
     {
-        var panel = new StackPanel { MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
+        var panel = new StackPanel();
         panel.Children.Add(Ui.Text("benchbar.exe is already on this PC. It calls the Linux command line tool inside Ubuntu. If that is missing, run this inside Ubuntu:", 14, margin: new Thickness(0, 0, 0, 10)));
         CopyRow("Linux install line", WizardModel.LinuxCliInstallLine, _model.Copy, panel);
         panel.Children.Add(Ui.Text("To let an AI assistant use it, run this in a terminal:", 14, margin: new Thickness(0, 10, 0, 10)));
@@ -87,7 +87,7 @@ internal sealed partial class WizardView
         };
         Ui.Name(logBox, "Output of the running step");
 
-        var panel = new StackPanel { MaxWidth = 720, HorizontalAlignment = HorizontalAlignment.Left };
+        var panel = new StackPanel();
         panel.Children.Add(error);
         panel.Children.Add(reportCheck);
         panel.Children.Add(status);
@@ -127,7 +127,7 @@ internal sealed partial class WizardView
             next.IsEnabled = _model.CanContinueFromCheck;
 
             var key = string.Join('\n', _model.Rows.Select(r =>
-                $"{r.Step.Id}|{r.Step.Status}|{r.Step.Detail}|{r.Busy}|{r.Message}|{r.ButtonLabel}|{busy}"))
+                $"{r.Step.Id}|{r.Step.Status}|{r.Detail}|{r.Busy}|{r.Message}|{r.ButtonLabel}|{busy}"))
                 + "|" + _model.RestartNeeded + "|" + _model.RestartRequested + "|" + _model.RestartHint;
             if (key != lastKey)
             {
@@ -167,7 +167,9 @@ internal sealed partial class WizardView
 
         var text = new StackPanel();
         text.Children.Add(Ui.Text(row.Step.Title, 14, FontWeights.SemiBold));
-        if (row.Step.Detail.Length > 0) text.Children.Add(Ui.Text(row.Step.Detail, 13, opacity: 0.8, margin: new Thickness(0, 2, 0, 0)));
+        if (row.Detail.Length > 0) text.Children.Add(Ui.Text(row.Detail, 13, opacity: 0.8, margin: new Thickness(0, 2, 0, 0)));
+        if (!row.Step.Blocking && row.Step.Status == SetupStatus.Warn && !row.Step.Waits)
+            text.Children.Add(Ui.Text("Advice only. You can continue without it.", 12, opacity: 0.7, margin: new Thickness(0, 2, 0, 0)));
         if (row.Busy)
             text.Children.Add(Ui.Text(row.Message is { Length: > 0 } running ? running : "Working...", 13, opacity: 0.8, margin: new Thickness(0, 2, 0, 0)));
         else if (row.Message is { Length: > 0 } message)
@@ -274,14 +276,16 @@ internal sealed partial class WizardView
         var passProblem = Note(error: true);
         var error = Note(error: true);
         var working = Ui.Text("", 13, opacity: 0.75, margin: new Thickness(0, 6, 0, 0));
+        var userHint = Note(); // says what Create User is waiting for
 
-        var panel = new StackPanel { MaxWidth = 560, HorizontalAlignment = HorizontalAlignment.Left };
+        var panel = new StackPanel();
         panel.Children.Add(Ui.Labeled("User name", name, "Lowercase letters, digits, '-' and '_'."));
         panel.Children.Add(nameProblem);
         panel.Children.Add(Ui.Labeled("Password", pass, "This is what sudo asks for later. BenchBar keeps it in memory while this window is open and never saves it."));
         panel.Children.Add(Ui.Labeled("Confirm password", confirm));
         panel.Children.Add(passProblem);
         panel.Children.Add(error);
+        panel.Children.Add(userHint);
         panel.Children.Add(working);
 
         var back = BackButton(escapes: false); // two password boxes: Esc must not throw them away
@@ -307,6 +311,7 @@ internal sealed partial class WizardView
             reportUser.Visibility = _model.UserError is { Length: > 0 } ? Visibility.Visible : Visibility.Collapsed;
             working.Text = _model.CreatingUser ? "Creating the user..." : "";
             create.IsEnabled = _model.CanCreateUser;
+            Show(userHint, _model.CanCreateUser || _model.CreatingUser ? null : "Create User is off. " + (_model.UserNameProblem ?? _model.PasswordProblem));
             back.IsEnabled = !_model.CreatingUser;
             name.IsEnabled = pass.IsEnabled = confirm.IsEnabled = !_model.CreatingUser;
         };
@@ -319,7 +324,7 @@ internal sealed partial class WizardView
     {
         var path = Ui.Field("Bench folder", _model.ExistingPath, _model.SetExistingPath, 480);
         var problem = Note(error: true);
-        var panel = new StackPanel { MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
+        var panel = new StackPanel();
         panel.Children.Add(Ui.Labeled("Bench folder in Ubuntu", path, "BenchBar adds its service files and does not change your sites, apps or database."));
         panel.Children.Add(problem);
 
@@ -347,13 +352,15 @@ internal sealed partial class WizardView
         Ui.Name(bundle, "App bundle");
         var admin = Ui.Password("Administrator password", s => SetSecret(_model.SetAdminPassword, s), 320);
         var problem = Note(error: true);
+        var formHint = Note(); // says what Review is waiting for
 
-        var panel = new StackPanel { MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
+        var panel = new StackPanel();
         panel.Children.Add(Ui.Labeled("Bench folder", folder, "Inside Ubuntu. The default is in your Linux home folder."));
         panel.Children.Add(Ui.Labeled("Site name", site, "Open it later at http://" + WizardModel.DefaultSite + ":8000. Windows resolves .localhost names by itself."));
         panel.Children.Add(Ui.Labeled("Apps", bundle, "minimal is Frappe only; common and extended add more apps."));
         panel.Children.Add(Ui.Labeled("Administrator password", admin, "The login of the new site. It is used for this install only and never saved."));
         panel.Children.Add(problem);
+        panel.Children.Add(formHint);
 
         var back = BackButton(escapes: false); // the Administrator password is typed here
         var review = Primary("Review", () => _model.ReviewAsync().Forget());
@@ -362,7 +369,10 @@ internal sealed partial class WizardView
         page.Right.Add(review);
         page.Refresh = () =>
         {
-            Show(problem, _model.FormProblem is { } p && !_model.AdminPassword.IsEmpty ? p : null);
+            // a typed form shows its problem in red; an empty password only says what Review is waiting for
+            var typed = !_model.AdminPassword.IsEmpty;
+            Show(problem, _model.FormProblem is { } p && typed ? p : null);
+            Show(formHint, _model.FormProblem is { } waiting && !typed ? "Review is off. " + waiting : null);
             review.IsEnabled = _model.FormProblem is null;
             if (!folder.IsKeyboardFocusWithin && folder.Text != _model.Folder) folder.Text = _model.Folder;
         };
@@ -379,7 +389,7 @@ internal sealed partial class WizardView
         reportPlan.Visibility = Visibility.Collapsed;
         reportPlan.Margin = new Thickness(0, 0, 0, 10);
         var plan = new StackPanel();
-        var panel = new StackPanel { MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
+        var panel = new StackPanel();
         panel.Children.Add(working);
         panel.Children.Add(error);
         panel.Children.Add(reportPlan);
@@ -408,6 +418,7 @@ internal sealed partial class WizardView
             if (p.WebUrl is not null) summary.Children.Add(Summary("Address", p.WebUrl));
             summary.Children.Add(Summary("Apps", p.Bundle ?? _model.Bundle));
             plan.Children.Add(Ui.CardOf(summary));
+            plan.Children.Add(Ui.Text("The install takes about 15 to 30 minutes, most of it downloads.", 13, opacity: 0.8, margin: new Thickness(0, 0, 0, 8)));
 
             var steps = new StackPanel();
             foreach (var step in p.Steps)
@@ -450,7 +461,7 @@ internal sealed partial class WizardView
         var rootPanel = Ui.Labeled("MariaDB root password", root, "MariaDB in Ubuntu already has a root password that BenchBar does not know. Enter it and retry.");
         rootPanel.Visibility = Visibility.Collapsed;
 
-        var panel = new StackPanel { MaxWidth = 720, HorizontalAlignment = HorizontalAlignment.Left };
+        var panel = new StackPanel();
         panel.Children.Add(rows);
         panel.Children.Add(progress);
         panel.Children.Add(failure);
@@ -475,6 +486,8 @@ internal sealed partial class WizardView
         parts.Refresh = () =>
         {
             var running = _model.Phase == InstallPhase.Running;
+            var (heading, line) = InstallHeading(_model.Phase);
+            parts.SetHeading(heading, line);
             back.IsEnabled = !running;
             stop.IsEnabled = running && !_model.StopRequested;
             stop.Visibility = running ? Visibility.Visible : Visibility.Collapsed;
@@ -515,6 +528,15 @@ internal sealed partial class WizardView
         };
         return parts;
     }
+
+    private static (string Title, string Subtitle) InstallHeading(InstallPhase phase) => phase switch
+    {
+        InstallPhase.Failed => ("Install Failed", "A step did not finish. Retry it, tell us with Report This Problem, or open the log."),
+        InstallPhase.Stopped => ("Install Stopped", "Run Again continues where it can. Finished steps are not repeated."),
+        InstallPhase.NeedsLinuxPassword => ("Wrong Linux Password", "Linux did not accept the password. Type it again and press Retry."),
+        InstallPhase.NeedsRootPassword => ("MariaDB Needs Its Password", "MariaDB in Ubuntu already has a root password. Enter it and press Retry."),
+        _ => ("Installing", "This takes a while the first time. You can leave this window open and do something else."),
+    };
 
     private UIElement InstallRowView(InstallRow row)
     {
@@ -573,10 +595,23 @@ internal sealed partial class WizardView
         panel.Children.Add(Ui.Text(f.Step is null ? "The install did not finish" : $"{f.Step} failed", 14, FontWeights.SemiBold));
         panel.Children.Add(Ui.Text(f.Message, 13, margin: new Thickness(0, 4, 0, 0)));
         panel.Children.Add(ReportProblemLink(f.Step is null ? f.Message : $"{f.Step} failed: {f.Message}"));
-        if (f.Fix is { Length: > 0 } fix)
+        var todo = Ui.Text("What to do:", 13, FontWeights.SemiBold, margin: new Thickness(0, 8, 0, 2));
+        if (_model.Phase == InstallPhase.NeedsLinuxPassword)
         {
-            panel.Children.Add(Ui.Text("What to do:", 13, FontWeights.SemiBold, margin: new Thickness(0, 8, 0, 2)));
-            CopyRow("Fix", fix, _model.Copy, panel);
+            panel.Children.Add(todo);
+            panel.Children.Add(Ui.Text("The Linux password is the one you chose for your Linux user. Type it again.", 13));
+        }
+        else if (f.Fix is { Length: > 0 } fix)
+        {
+            panel.Children.Add(todo);
+            // a command can be copied; a sentence ("Pass MARIADB_ROOT_PASSWORD.") is only read
+            if (f.FixIsCommand) CopyRow("Fix", fix, _model.Copy, panel);
+            else panel.Children.Add(Ui.Text(fix, 13));
+        }
+        else if (_model.Phase == InstallPhase.Failed)
+        {
+            panel.Children.Add(todo);
+            panel.Children.Add(Ui.Text("Press Retry to run the install again; finished steps are not repeated. If it fails again, press Report This Problem or Open Log.", 13));
         }
         return Ui.CardOf(panel);
     }
@@ -585,7 +620,7 @@ internal sealed partial class WizardView
 
     private PageParts DonePage()
     {
-        var panel = new StackPanel { MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
+        var panel = new StackPanel();
         var address = new StackPanel();
         address.Children.Add(Ui.Text("Your bench is running at", 13, opacity: 0.75));
         address.Children.Add(Ui.Text(_model.SiteUrl ?? _model.Site, 18, FontWeights.SemiBold, margin: new Thickness(0, 2, 0, 0)));
@@ -607,6 +642,7 @@ internal sealed partial class WizardView
         }
         panel.Children.Add(Ui.Text("To let an AI assistant use this bench, run this in a terminal:", 13, margin: new Thickness(0, 6, 0, 6)));
         CopyRow("MCP line", WizardModel.McpLine, _model.Copy, panel);
+        panel.Children.Add(Ui.Text("Cannot see the BenchBar icon? Windows may hide it under the ^ arrow in the taskbar. To keep it in view, open Settings, Personalization, Taskbar, Other system tray icons, and turn BenchBar on.", 13, opacity: 0.85, margin: new Thickness(0, 10, 0, 0)));
 
         var open = Primary("Open Site", _model.OpenSite);
         var done = Ui.Button("Done", _model.Finish, "Close the wizard");
