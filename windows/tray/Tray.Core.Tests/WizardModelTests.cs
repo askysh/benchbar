@@ -206,7 +206,10 @@ public class WizardModelTests
         model.SetUserName("akash");
         model.SetPassword(Pass("typed-here"));
         model.SetConfirm(Pass("typed-here"));
-        fixture.Check("check.json", ready: true);
+        // the user is there now, and the shim says so
+        File.WriteAllText(Path.Combine(fixture.Setup, "check.json"), File.ReadAllText(Path.Combine(fixture.Setup, "check.json"))
+            .Replace("\"ready\":false", "\"ready\":true")
+            .Replace("{\"id\":\"distro_user\",\"status\":\"missing\",\"title\":\"Linux user\",\"detail\":\"no user\",\"action\":\"distro_user\"", "{\"id\":\"distro_user\",\"status\":\"ok\",\"title\":\"Linux user\",\"detail\":\"akash\",\"action\":null"));
         await model.CreateUserAsync();
 
         Assert.True(model.UserExisted);

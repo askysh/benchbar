@@ -19,6 +19,9 @@ public interface ITrayHost
 
     /// <summary>Show one Windows notification. Called on the UI thread, only while notifications are on.</summary>
     void ShowToast(Toast toast);
+
+    /// <summary>Tell the person one thing now, whatever the notification setting (a Start that did not work). Called on the UI thread.</summary>
+    void ShowNotice(string text) { }
 }
 
 /// <summary>What the controller starts with. Everything has a default that works without a config file.</summary>
@@ -56,6 +59,8 @@ public sealed class TrayController : IDisposable
 {
     private readonly IBenchSource _source;
     private readonly ITrayHost _host;
+    private readonly TimeProvider _time;
+    private readonly Func<string?> _distroName;
     private readonly BenchPoller _poller;
     private readonly RunnerIcons _icons;
     private readonly FrameSequencer _sequencer;
@@ -81,6 +86,8 @@ public sealed class TrayController : IDisposable
         options ??= new TrayOptions();
         _source = source;
         _host = host;
+        _time = time;
+        _distroName = options.Distro ?? (() => DistroName.Resolve(null));
         _listenToSystemEvents = options.ListenToSystemEvents;
         _portCheck = options.PortCheck;
         _runners = options.Runners;
@@ -90,7 +97,7 @@ public sealed class TrayController : IDisposable
         _toasts = new ToastPolicy { Enabled = options.Notifications };
         _icons = new RunnerIcons(TrayMetrics.IconSide(TrayMetrics.TaskbarDpi()), _theme.TaskbarLight, _runners.Resolve(_runnerId));
         _sequencer = new FrameSequencer(clock, (pose, frame) => _host.SetIcon(_icons.Get(pose, frame)), _icons.FrameCount);
-        _poller = new BenchPoller(source, time, options.DistroProbe, options.Distro ?? (() => DistroName.Resolve(null)));
+        _poller = new BenchPoller(source, time, options.DistroProbe, _distroName);
         _poller.Updated += OnPolled;
     }
 
@@ -128,7 +135,7 @@ public sealed class TrayController : IDisposable
     {
         if (_started) return;
         _started = true;
-        _host.SetTooltip("BenchBar: starting");
+        _host.SetTooltip(TooltipName + ": starting");
         _sequencer.Play(RunnerPlan.ForState(BenchState.Unknown, TrayMetrics.ReduceMotion()));
         if (_listenToSystemEvents)
         {
@@ -229,9 +236,39 @@ public sealed class TrayController : IDisposable
     public bool StartDistro()
     {
         var started = _source.StartDistro();
-        if (started) _poller.BoostFor(BenchPoller.ActionBoost, untilDistroUp: true);
-        else _poller.Kick();
+        if (started)
+        {
+            _poller.BoostFor(BenchPoller.ActionBoost, untilDistroUp: true);
+            CheckStartedAfterWaitAsync().Forget();
+        }
+        else
+        {
+            _poller.Kick();
+            _host.ShowNotice(StartFailedText(_snapshot.Distro ?? _distroName()));
+        }
         return started;
+    }
+
+    /// <summary>How long Start waits before it checks that the distro is up. The keepalive can refuse (another one holds the mutex) and then nothing starts.</summary>
+    public TimeSpan StartCheckAfter { get; set; } = TimeSpan.FromSeconds(30);
+
+    public static string StartFailedText(string? distro) => $"{distro ?? "The distro"} did not start. Open the log or try again.";
+
+    private async Task CheckStartedAfterWaitAsync()
+    {
+        try
+        {
+            await Task.Delay(StartCheckAfter, _time, _cts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        _host.Post(() =>
+        {
+            if (_disposed || !_snapshot.DistroStopped) return;
+            _host.ShowNotice(StartFailedText(_snapshot.Distro ?? _distroName()));
+        });
     }
 
     public void OpenSite(BenchStatus bench)
@@ -278,18 +315,23 @@ public sealed class TrayController : IDisposable
     /// <summary>The short summary beside the title: "2 of 3 up", "none up", "distro stopped" or "needs attention".</summary>
     public static string UpText(TraySnapshot snapshot, IReadOnlyList<BenchState> states) =>
         snapshot.Problem is not null ? "needs attention"
+        : snapshot.DistroMissing ? "distro not installed"
         : snapshot.DistroStopped ? "distro stopped"
         : BenchAggregate.UpText(states);
 
-    /// <summary>"BenchBar: 2 benches, none up".</summary>
+    /// <summary>The name at the start of every tooltip: BenchBar for Windows is a beta.</summary>
+    public const string TooltipName = "BenchBar" + BetaText.TooltipSuffix;
+
+    /// <summary>"BenchBar (Beta): 2 benches, none up".</summary>
     public static string Tooltip(int benchCount, string upText) =>
-        $"BenchBar: {benchCount} {(benchCount == 1 ? "bench" : "benches")}, {upText}";
+        $"{TooltipName}: {benchCount} {(benchCount == 1 ? "bench" : "benches")}, {upText}";
 
     /// <summary>The tooltip for a snapshot, at most 127 characters (the shell's limit).</summary>
     public static string Tooltip(TraySnapshot snapshot, string upText)
     {
-        var text = snapshot.Problem is { } problem ? $"BenchBar: {problem}"
-            : snapshot.DistroStopped ? $"BenchBar: {snapshot.Distro ?? "WSL distro"} is not running"
+        var text = snapshot.Problem is { } problem ? $"{TooltipName}: {problem}"
+            : snapshot.DistroMissing ? $"{TooltipName}: {snapshot.Distro ?? "WSL distro"} is not installed"
+            : snapshot.DistroStopped ? $"{TooltipName}: {snapshot.Distro ?? "WSL distro"} is not running"
             : Tooltip(snapshot.Benches.Count, upText);
         return text.Length <= 127 ? text : text[..126] + "…";
     }

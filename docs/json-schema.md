@@ -67,7 +67,7 @@ command that read only prints none of them.
 | `next_actions[]` | `{"command", "why"}`: the fix lines and next steps the text output prints |
 | `state_after` | the bench's `status --json` object after the run (no per site ping), `null` when there is no bench, in a dry run, or when the run touched several benches (`ports apply`). A stream's is read after the CLI's locks are released; a one document command's and `pull`'s while its lock is still held (a read, so nothing waits on it) |
 | `missing[]` | only on a refusal of the non interactive mode: the inputs the command lacked (`ADMIN_PASSWORD`, `--yes`, `sudo`, `BENCHBAR_SUDO_PASSWORD`, ...) |
-| `error_id` | only on a failure that has a stable id, for programs to match instead of the text. So far: `sudo_password_wrong` (the password in `BENCHBAR_SUDO_PASSWORD` was refused, before any change) |
+| `error_id` | only on a failure that has a stable id, for programs to match instead of the text. Every CLI done line can carry it. So far: `sudo_password_wrong` (the password in `BENCHBAR_SUDO_PASSWORD` was refused, before any change). `port_3306_in_use` and `port_6379_in_use` (Linux, `install` only: another program, or on WSL another distro, already listens on the MariaDB or the system Redis port; the plan's `blockers[]` names them, the done line has `exit` 1, the `fix` and the `error`, and nothing was changed, no sudo asked). Docker, a native MariaDB or a second WSL distro are the usual cause: WSL distros share one network, so only one of them can run MariaDB on port 3306. Stop it in the other distro (`sudo systemctl stop mariadb`) and run `install` again; benchbar never stops it. The Windows shim adds `distro_running`, see [Windows shim](#windows-shim) |
 
 Which shape a command prints:
 
@@ -527,7 +527,7 @@ is needed.
 
 | Event | Fields | Notes |
 |---|---|---|
-| `plan` | `bench`, `site`, `profile` (the built in profile it runs on), `team_profile` (string or null), `bundle`, `port_offset` (the port block the bench gets), `web_url`, `dry_run`, `sudo_mode` (`terminal`, or `gui` under `BENCHBAR_SUDO=gui`), `steps[]`, `log` | once, first. `steps[]` lists the two privileged steps first (`n` null, `sudo` true, `will_run` false when nothing needs doing: the patched package is in place, the line is in `/etc/hosts`), then the three numbered steps of the terminal output |
+| `plan` | `bench`, `site`, `profile` (the built in profile it runs on), `team_profile` (string or null), `bundle`, `port_offset` (the port block the bench gets), `web_url`, `dry_run`, `sudo_mode` (`terminal`, or `gui` under `BENCHBAR_SUDO=gui`), `steps[]`, `blockers[]`, `log` | once, first. `blockers[]` is `{id, message, fix}` per thing that would stop the run before it changes anything (the `error_id` values above); empty on macOS and on a free Linux machine. `steps[]` lists the two privileged steps first (`n` null, `sudo` true, `will_run` false when nothing needs doing: the patched package is in place, the line is in `/etc/hosts`), then the three numbered steps of the terminal output |
 | `step` | `n`, `id`, `parent`, `name`, `status`, and on the end of a step `secs`; `message` for `failed`, `skipped` and `warning` (the CLI's `[FAIL]` or `[WARN]` line); `command` for a skipped privileged step (what to run by hand) | `status` is `running`, then `done`, `unchanged`, `skipped`, `warning` or `failed`. A step with a `parent` is a section of that phase script (`parent` is `system_deps` or `bench_site`) or an action of the service step (`parent` is `service`, the `id` is a [repair action](#benchbar-repair---json)); its `n` is null |
 | `progress` | `step`, `label`, `elapsed` (seconds), `bytes` and `total` (int or null) | every 10 seconds while a long command runs (a download, `bench init`, `bench get-app`, `bench build`, `bench new-site`); `bytes` only for a download |
 | `done` | `exit`, `bench`, `site`, `url` (null unless `exit` is 0), `skipped[]` (`id`, `command` of every privileged step that was skipped), `fix` (string or null), `log`, and `error` (only for a refusal before the plan) | always the last line, also after a failure or a signal (`exit` is then 128 plus the signal, 143 for SIGTERM, and a step that was running gets no end line). `exit` 2: the MariaDB root password is unknown, `fix` says what to pass (`MARIADB_ROOT_PASSWORD`); run again with it in the environment |
@@ -579,12 +579,15 @@ on. `site drop` still needs a terminal for the line it removes.
 On Linux, a program without a terminal (the Windows tray, an agent)
 passes the user's sudo password in `BENCHBAR_SUDO_PASSWORD` with
 `BENCHBAR_SUDO=env`. The CLI takes it out of its environment before
-anything else runs, checks it once with `sudo -k` and `sudo -S -v`
+anything else runs (it starts itself once more without the variable, so
+the running process has no copy in `/proc/PID/environ`), checks it once with `sudo -k` and `sudo -S -v`
 before any change, and then runs its sudo steps without a prompt. A
 wrong password ends the run with `exit` 1 and `error_id`
 `sudo_password_wrong`. The password never goes into arguments, `bash -x`
 output, the run log or a child process: in `install` only phase 00 gets
-it, on a file descriptor, and it is forgotten after that phase. Without a
+it, on a file descriptor. Every command forgets it, and drops the sudo
+credential, when its sudo steps are done, before any bench, pip or npm
+step runs. Without a
 password and without a terminal, `install --json` with
 `BENCHBAR_NONINTERACTIVE=1` names `BENCHBAR_SUDO_PASSWORD` in `missing`;
 other commands skip their sudo step with a warning. The commands that
@@ -1336,3 +1339,24 @@ ignoring only listeners positively identified as belonging to that bench.
 current ports without moving them. `--dry-run` does not save it. New benches
 default to automatic. Fixed mode means the current allocation stays pinned until
 the policy changes or an explicit CLI `--port-offset` override is requested.
+
+## Windows shim
+
+`benchbar.exe` runs on Windows and forwards to the CLI in the WSL distro. Its
+own JSON is not the CLI's: the setup and report commands are answered by the
+shim itself. The full contract, with the step ids, is in
+[windows/shim/README.md](https://github.com/askysh/benchbar/blob/main/windows/shim/README.md).
+
+- `benchbar.exe setup check --json` prints one document: `schema_version`,
+  `distro`, `ready`, `reboot_pending` and `steps`. Each step has `id`,
+  `status` (`ok`, `missing`, `warn` or `fail`), `title`, `detail`, `action`
+  (the `setup run` action that fixes it, or null), `needs_admin` and
+  `blocking`. It is read only.
+- `benchbar.exe setup run ACTION --jsonl` prints JSON lines: `step` and `log`
+  events, then one `done` line. In the `done` line `changed` is a boolean (the
+  action changed something), not the CLI's `changed[]` list. The line also has
+  `exit`, `reboot_required`, `cancelled`, `warnings` and `next_actions`, and
+  `error_id` when the action failed with a stable id (`distro_running`: the
+  action must stop the running distro, and nothing was changed).
+- `benchbar.exe report-windows --json` prints one line: `schema_version`,
+  `zip`, `included`, `skipped` (what was left out, and why) and `issue_url`.

@@ -7,6 +7,9 @@ namespace BenchBar.Tray.Core;
 public interface IDistroProbe
 {
     Task<bool> IsRunningAsync(string distro, CancellationToken ct);
+
+    /// <summary>Whether WSL has this distro at all (running or not). Asked only after <see cref="IsRunningAsync"/> said no; it must not start one. A probe that cannot tell says yes.</summary>
+    Task<bool> IsInstalledAsync(string distro, CancellationToken ct) => Task.FromResult(true);
 }
 
 /// <summary>
@@ -22,6 +25,13 @@ public sealed class WslDistroProbe(IProcessRunner? runner = null) : IDistroProbe
         // a missing wsl.exe throws; the poller then asks the shim, which says so with its own fix line
         var result = await _runner.RunAsync("wsl.exe", ["--list", "--running", "--quiet"], ct, TimeSpan.FromSeconds(10), Encoding.Unicode)
             .ConfigureAwait(false);
+        return ParseRunning(result.Output).Contains(distro.Trim(), StringComparer.OrdinalIgnoreCase);
+    }
+
+    public async Task<bool> IsInstalledAsync(string distro, CancellationToken ct)
+    {
+        var result = await _runner.RunAsync("wsl.exe", ["--list", "--quiet"], ct, TimeSpan.FromSeconds(10), Encoding.Unicode).ConfigureAwait(false);
+        // a failing list (no distro at all makes wsl.exe exit non zero with a sentence) lists nothing: the distro is not there
         return ParseRunning(result.Output).Contains(distro.Trim(), StringComparer.OrdinalIgnoreCase);
     }
 

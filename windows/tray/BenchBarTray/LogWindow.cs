@@ -95,7 +95,8 @@ internal sealed class LogWindow : ToolWindow
         _follow.Checked += (_, _) => OnFollow(true);
         _follow.Unchecked += (_, _) => OnFollow(false);
 
-        var bar = new DockPanel { Margin = new Thickness(10, 8, 10, 8), LastChildFill = false };
+        // a wrap panel, not a dock panel: at the default width the right group (Clear, Copy, Open in Terminal) did not fit and was cut off
+        var bar = new WrapPanel { Margin = new Thickness(10, 8, 10, 4), Orientation = Orientation.Horizontal };
         var left = new StackPanel { Orientation = Orientation.Horizontal };
         left.Children.Add(_process);
         _search.Margin = new Thickness(8, 0, 0, 0);
@@ -107,7 +108,7 @@ internal sealed class LogWindow : ToolWindow
         PreviousMatch.Padding = NextMatch.Padding = new Thickness(8, 2, 8, 2);
         left.Children.Add(PreviousMatch);
         left.Children.Add(NextMatch);
-        DockPanel.SetDock(left, Dock.Left);
+        left.Margin = new Thickness(0, 0, 12, 4);
         bar.Children.Add(left);
         var right = new StackPanel { Orientation = Orientation.Horizontal };
         right.Children.Add(_previous);
@@ -122,7 +123,7 @@ internal sealed class LogWindow : ToolWindow
             right.Children.Add(b);
         }
         ClearButton.ToolTip = "Empty the view; the file is not touched";
-        DockPanel.SetDock(right, Dock.Right);
+        right.Margin = new Thickness(0, 0, 0, 4);
         bar.Children.Add(right);
 
         _list.ItemsSource = _rows;
@@ -164,7 +165,7 @@ internal sealed class LogWindow : ToolWindow
             Model.Changed -= OnModelChanged;
             Model.Dispose();
         };
-        Loaded += (_, _) => _ = StartAsync();
+        Loaded += (_, _) => StartAsync().Forget();
         Sync();
     }
 

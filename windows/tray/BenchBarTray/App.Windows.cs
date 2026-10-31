@@ -36,7 +36,7 @@ public partial class App
             main.SetSnapshot(_controller.Snapshot, TrayController.UpText(_controller.Snapshot, _controller.Benches.Select(b => b.State).ToList()));
             if (_wizard is not null) main.ShowWizard(new WizardView(_wizard, BuildWizardActions()));
             main.Show();
-            if (_config.CheckForUpdates) _ = CheckBannerAsync();
+            if (_config.CheckForUpdates) CheckBannerAsync().Forget();
             else if (_updateOffer is not null) main.SetUpdate(_updateOffer, DismissUpdate);
         }
         else
@@ -99,6 +99,7 @@ public partial class App
         var services = PageServices.ForApp(_cli, () => Theme, () => _main, CopyText, OpenUrl, () => _controller?.Poller.Kick());
         services.Distro = () => DistroName.Resolve(_config.Distro) ?? _controller?.Snapshot.Distro;
         services.Notify = text => _icon?.TrayIcon.ShowNotification("BenchBar", text, H.NotifyIcon.Core.NotificationIcon.Info);
+        services.ReportBug = (entry, problem) => ReportBugAsync(entry, problem).Forget();
         return services;
     }
 
@@ -120,11 +121,18 @@ public partial class App
         StartDistro = () => _controller!.StartDistro(),
         ShowSettings = ShowSettings,
         ShowAbout = ShowAbout,
-        NewBench = () => OpenWizard(resume: false),
+        NewBench = () => OpenWizard(resume: false, newBench: true), // asked for by name: no Welcome page to click through
         ExistingBench = () => OpenWizard(resume: false, existing: true),
         CopyText = CopyText,
         OpenUrl = OpenUrl,
         RefreshNow = () => _controller?.Poller.Kick(),
+        ReportBug = (entry, problem) => ReportBugAsync(entry, problem).Forget(),
+        BetaBannerVisible = () => !_config.BetaBannerDismissed,
+        DismissBetaBanner = () =>
+        {
+            _config.BetaBannerDismissed = true;
+            SaveConfig();
+        },
     };
 
     // --- the update banner ---
@@ -162,7 +170,7 @@ public partial class App
 
     // --- the first run wizard ---
 
-    private void OpenWizard(bool resume, bool existing = false)
+    private void OpenWizard(bool resume, bool existing = false, bool newBench = false)
     {
         ResumeGate.Opening(resume);
         if (_quitting || _controller is null || _setup is null) return;
@@ -170,16 +178,22 @@ public partial class App
         if (_main is null) return;
         if (_wizard is not null)
         {
+            // the wizard is already open: bring it forward, and switch to the flow that was asked for unless something runs
             if (_main.Mode != MainMode.Wizard) _main.ShowWizard(new WizardView(_wizard, BuildWizardActions()));
+            if (!resume) _wizard.SwitchFlowAsync(existing ? WizardFlow.ExistingBench : WizardFlow.NewBench).Forget();
+            _main.Activate();
             return;
         }
         var model = new WizardModel(_setup, new WizardHost(this), DistroName.Resolve(_config.Distro));
         model.AskLinuxPassword = request => Task.FromResult(LinuxPasswordDialog.Ask(request, Theme, _main));
+        model.ConfirmRestartDistro = question => Task.FromResult(
+            MessageBox.Show(_main, question, "BenchBar", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes);
         model.CloseRequested += reason => CloseWizard(model, reason);
         _wizard = model;
         _main.ShowWizard(new WizardView(model, BuildWizardActions()));
-        if (resume) _ = model.ResumeAtCheck();
-        else if (existing) _ = model.ChooseExistingBench();
+        if (resume) model.ResumeAtCheck().Forget();
+        else if (existing) model.ChooseExistingBench().Forget();
+        else if (newBench) model.ChooseNewBench().Forget();
     }
 
     private void CloseWizard(WizardModel model, WizardClose reason)
@@ -203,9 +217,10 @@ public partial class App
 
     private WizardActions BuildWizardActions() => new()
     {
-        ConfirmRestart = () => MessageBox.Show(_main, "Restart Windows now? Save your work in other programs first.\n\nBenchBar opens again after you sign in and carries on with the setup.",
-            "BenchBar", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) == MessageBoxResult.Yes,
+        ConfirmRestart = () => ConfirmDialog.Ask("Restart Windows", "Windows restarts in 15 seconds. Save your work first.\n\nBenchBar opens again after you sign in and carries on with the setup.",
+            "Restart Now", Theme, _main),
         OpenLog = OpenInstallLog,
+        ReportBug = (entry, problem) => ReportBugAsync(entry, problem).Forget(),
     };
 
     private void OpenInstallLog(string linuxPath)
@@ -267,6 +282,8 @@ public partial class App
         public void AllowForeground() => NativeMethods.AllowSetForegroundWindow(NativeMethods.AsfwAny);
 
         public string WindowsUserName => Environment.UserName;
+
+        public string? ConfiguredDistro => app._config.Distro;
 
         public bool Notifications
         {
@@ -342,6 +359,8 @@ public partial class App
         }
 
         public string? ShimPath => (app._source as ShimBenchSource)?.ShimPath;
+
+        public void DistroSwitched() => app._controller?.Poller.Kick();
     }
 
     private void ShowAbout()
@@ -358,7 +377,7 @@ public partial class App
             ShimVersion = () => _setup.ShimVersionAsync(CancellationToken.None),
             CliVersion = ReadCliVersionAsync,
             CheckForUpdates = CheckUpdatesTextAsync,
-            ReportBug = () => _ = ReportBugAsync(),
+            ReportBug = () => ReportBugAsync("About").Forget(),
             OpenUrl = OpenUrl,
             CopyText = CopyText,
         }, Theme);
@@ -372,18 +391,22 @@ public partial class App
         window.Show();
     }
 
-    /// <summary>The Linux CLI's version from the read only setup check, which never boots a stopped distro. Null while the distro is stopped.</summary>
-    private async Task<string?> ReadCliVersionAsync()
+    /// <summary>
+    /// The Linux CLI's version from the read only setup check, which never boots a stopped distro. The answer says why when there is none:
+    /// "not installed yet" when WSL, the distro or the CLI is missing, and the stopped distro otherwise.
+    /// </summary>
+    private async Task<AboutCli> ReadCliVersionAsync()
     {
-        if (_setup is null || _controller is null || _controller.Snapshot.DistroStopped) return null;
+        if (_setup is null || _controller is null) return AboutCli.Unknown;
+        if (_controller.Snapshot.DistroStopped) return AboutCli.Stopped;
         try
         {
             var report = await _setup.CheckAsync(DistroName.Resolve(_config.Distro), CancellationToken.None);
-            return report.Step(SetupIds.Cli) is { IsOk: true } cli && cli.Detail.Length > 0 ? cli.Detail : null;
+            return AboutCli.From(report);
         }
         catch (Exception ex) when (ex is SourceProblemException or System.Text.Json.JsonException)
         {
-            return null;
+            return AboutCli.Unknown;
         }
     }
 

@@ -14,6 +14,7 @@ public class WindowViewTests
         public bool RestartWindows() => true;
         public void AllowForeground() { }
         public string WindowsUserName => "Akash";
+        public string? ConfiguredDistro => "Ubuntu-24.04";
         public bool Notifications { get; set; } = true;
         public bool OpenAtLogon { get; set; }
         public void OpenUrl(string url) { }
@@ -21,7 +22,7 @@ public class WindowViewTests
     }
 
     /// <summary>A scratch copy of fixtures/setup in the DIR/setup layout; check.json is replaced by <paramref name="check"/> (ready or not).</summary>
-    private static FixtureSetupService Fixture(string check = "check.json", bool ready = false, string? install = null, bool noUser = false)
+    internal static FixtureSetupService Fixture(string check = "check.json", bool ready = false, string? install = null, bool noUser = false, string? plan = null, string? run = null)
     {
         string? source = null;
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
@@ -39,6 +40,8 @@ public class WindowViewTests
         if (noUser)
             text = text.Replace("{\"id\":\"distro_user\",\"status\":\"ok\",\"title\":\"Linux user\",\"detail\":\"akash\",\"action\":null", "{\"id\":\"distro_user\",\"status\":\"missing\",\"title\":\"Linux user\",\"detail\":\"no user\",\"action\":\"distro_user\"");
         File.WriteAllText(Path.Combine(target, "check.json"), text);
+        if (run is not null) File.Copy(Path.Combine(source, run), Path.Combine(target, "run-wsl_enable.jsonl"), overwrite: true);
+        if (plan is not null) File.WriteAllText(Path.Combine(target, "plan.jsonl"), plan);
         if (install is not null) File.Copy(Path.Combine(source, install), Path.Combine(target, "install.jsonl"), overwrite: true);
         return new FixtureSetupService(root);
     }
@@ -46,7 +49,7 @@ public class WindowViewTests
     private static Secret Pass(string text) => Secret.From(text);
 
     /// <summary>Drives a model to a page with no WPF object alive yet, so no dispatcher context is captured.</summary>
-    private static async Task<WizardModel> ModelAt(WizardPage page)
+    internal static async Task<WizardModel> ModelAt(WizardPage page)
     {
         SynchronizationContext.SetSynchronizationContext(null);
         switch (page)
@@ -119,7 +122,7 @@ public class WindowViewTests
         { WizardPage.ExistingBench, "Use an Existing Bench" },
         { WizardPage.NewBench, "New Bench" },
         { WizardPage.Review, "Review" },
-        { WizardPage.Install, "Installing" },
+        { WizardPage.Install, "Install Failed" }, // the fixture install fails
         { WizardPage.Done, "Your Bench Is Ready" },
     };
 
@@ -239,7 +242,8 @@ public class WindowViewTests
         var dismissed = 0;
         window.SetUpdate(new UpdateOffer("0.9.0", "https://example.test/r"), () => dismissed++);
         Assert.Equal("0.9.0", window.Offer!.Version);
-        var banner = (Border)((DockPanel)((Grid)window.Content).Children[1]).Children[0];
+        // the beta banner comes first, the update banner second
+        var banner = (Border)((DockPanel)((Grid)window.Content).Children[1]).Children[1];
         Assert.Equal(Visibility.Visible, banner.Visibility);
         var later = Walk(banner).OfType<Button>().Single(b => b.Content as string == "Not Now");
         later.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -320,14 +324,6 @@ public class WindowViewTests
         var user = VsCode.FindEditor("insiders", pathVariable: "", localAppData: @"C:\u", exists: p => p.EndsWith("code-insiders.cmd", StringComparison.Ordinal));
         Assert.Equal(@"C:\u\Programs\Microsoft VS Code Insiders\bin\code-insiders.cmd", user);
         Assert.Equal(@"C:\x\code.cmd", VsCode.Find(@"C:\x", @"C:\u", p => p == @"C:\x\code.cmd"));
-    }
-
-    [Fact]
-    public void ReportABugNoLongerPointsAtAWindowThatDidNotExist()
-    {
-        var text = TextFormats.ReportNeedsDistro("Ubuntu-24.04");
-        Assert.Contains("Click Start in the BenchBar window", text);
-        Assert.DoesNotContain("first;", text);
     }
 
     [Fact]

@@ -56,8 +56,12 @@ On `next-release`, then into `main`:
 7. Publishing starts the Homebrew tap workflow (`homebrew-tap.yml`,
    below). Check that its pull request on `askysh/homebrew-tap` merged.
 
-`CFBundleShortVersionString` is set from the tag and `CFBundleVersion`
-from the commit count, so the checkout is never edited by CI.
+The version comes from the tag, so the checkout is never edited by CI:
+
+- `CFBundleShortVersionString` is set from the tag.
+- `CFBundleVersion` is set from the commit count.
+- The Windows zips and the tray take the version from the tag too:
+  `main.version` for `benchbar.exe`, `-p:Version` for the tray.
 
 ### The Windows zips
 

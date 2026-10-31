@@ -60,6 +60,7 @@ public partial class App : Application, ITrayHost
         // stayed in memory after the first open, 62.6 MB private instead of 17 MB at rest.
         if (Environment.GetEnvironmentVariable("BENCHBAR_TRAY_GPU") != "1")
             System.Windows.Media.RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
+        Observe.OnFault = ex => _log.Write("task", ex);
         DispatcherUnhandledException += (_, args) =>
         {
             _log.Write("ui", args.Exception);
@@ -103,7 +104,7 @@ public partial class App : Application, ITrayHost
         };
         // The controller and the first frame exist before NIM_ADD, so "icon-added" means a runner is visible.
         _controller = new TrayController(_source, new DispatcherFrameClock(), this, TimeProvider.System, options);
-        _icon = new TaskbarIcon { ToolTipText = "BenchBar", NoLeftClickDelay = true };
+        _icon = new TaskbarIcon { ToolTipText = TrayController.TooltipName, NoLeftClickDelay = true };
         _icon.TrayLeftMouseUp += (_, _) => ToggleFlyout();
         // The menu is built on the first right click: built at startup it loaded WPF's render stack
         // (wpfgfx, d3d9, the GPU driver) and doubled private bytes at rest.
@@ -194,7 +195,7 @@ public partial class App : Application, ITrayHost
         if (!_launchChecked)
         {
             _launchChecked = true;
-            _ = LaunchCheckAsync(snapshot);
+            LaunchCheckAsync(snapshot).Forget();
         }
     }
 
@@ -227,6 +228,18 @@ public partial class App : Application, ITrayHost
         catch (Exception ex)
         {
             _log.Write("toast", ex);
+        }
+    }
+
+    public void ShowNotice(string text)
+    {
+        try
+        {
+            _icon?.TrayIcon.ShowNotification("BenchBar", text, NotificationIcon.Warning);
+        }
+        catch (Exception ex)
+        {
+            _log.Write("notice", ex);
         }
     }
 
@@ -313,6 +326,7 @@ public partial class App : Application, ITrayHost
         CopyText = CopyText,
         OpenUrl = OpenUrl,
         OpenMain = OpenMain,
+        SetUpBench = () => OpenWizard(resume: false),
     };
 
     private VsCodeOutcome OpenEditor(BenchStatus bench)
@@ -362,7 +376,7 @@ public partial class App : Application, ITrayHost
         if (_doctors.TryGetValue(bench.Path, out var existing))
         {
             existing.Activate();
-            _ = existing.RunAsync();
+            existing.RunAsync().Forget();
             return;
         }
         var window = new DoctorWindow(_source, bench, Theme, CopyText);
@@ -425,9 +439,9 @@ public partial class App : Application, ITrayHost
         Theme = () => Theme,
         OpenMain = OpenMain,
         OpenSettings = ShowSettings,
-        CheckForUpdates = () => _ = CheckForUpdatesAsync(),
+        CheckForUpdates = () => CheckForUpdatesAsync().Forget(),
         Help = () => OpenUrl(HelpUrl),
-        ReportBug = () => _ = ReportBugAsync(),
+        ReportBug = () => ReportBugAsync("Tray menu").Forget(),
         Quit = Quit,
     };
 
@@ -486,33 +500,80 @@ public partial class App : Application, ITrayHost
         }
     }
 
-    private async Task ReportBugAsync()
+    // --- Report a Bug ---
+
+    private ReportFlow? _reportFlow;
+
+    private ReportFlow ReportFlowInstance => _reportFlow ??= new ReportFlow(
+        new BugReporter(new SystemProcessRunner(), () => ShimLocator.Find(), TrayOnlyReport.ForThisPc()), BuildReportSeams());
+
+    private ReportBusyWindow? _reportBusy;
+
+    private ReportSeams BuildReportSeams() => new()
     {
-        if (_controller is null || _source is null) return;
-        var snapshot = _controller.Snapshot;
-        if (snapshot.DistroStopped)
+        ShowBusy = () =>
         {
-            MessageBox.Show(TextFormats.ReportNeedsDistro(snapshot.Distro ?? "The distro"),
-                "BenchBar", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-        try
-        {
-            var zip = await _source.ReportAsync(snapshot.Benches.FirstOrDefault()?.Path, CancellationToken.None);
-            var distro = DistroName.Resolve(_config.Distro) ?? snapshot.Distro;
-            if (distro is null)
+            var window = _reportBusy = new ReportBusyWindow(Theme, VisibleMain);
+            Awake(true);
+            window.Show();
+            return new Busy(() =>
             {
-                MessageBox.Show("The report was written inside the distro:\n" + zip, "BenchBar");
-                return;
-            }
-            var info = new ProcessStartInfo("explorer.exe") { UseShellExecute = false };
-            info.ArgumentList.Add("/select," + TextFormats.WslToWindows(distro, zip));
-            Process.Start(info)?.Dispose();
-        }
-        catch (Exception ex) when (ex is SourceProblemException or System.Text.Json.JsonException or System.ComponentModel.Win32Exception or OperationCanceledException)
+                _reportBusy = null;
+                window.Dispose();
+                Awake(false);
+            });
+        },
+        Refocus = () => _reportBusy?.Activate(),
+        ShowReady = outcome =>
         {
-            MessageBox.Show(ex is OperationCanceledException ? BenchPoller.WslSilentMessage : ex.Message, "BenchBar report", MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
+            // not modal: a modal dialog blocks the other BenchBar windows, and the click that finds it open must be able to bring it forward
+            var dialog = new ReportReadyDialog(outcome, Theme, VisibleMain, CopyText, RevealInExplorer, OpenUrl);
+            Awake(true);
+            dialog.Closed += (_, _) => Awake(false);
+            dialog.Show();
+            return new ReadyHandle(() => dialog.IsVisible, dialog.BringToFront);
+        },
+        ShowFailure = text => MessageBox.Show(text, "BenchBar", MessageBoxButton.OK, MessageBoxImage.Warning),
+        Log = _log.Write,
+    };
+
+    /// <summary>The main window as an owner: only when it is on screen (a window that was never shown cannot own one).</summary>
+    private Window? VisibleMain => _main is { IsVisible: true } main ? main : null;
+
+    private sealed class Busy(Action done) : IDisposable
+    {
+        public void Dispose() => done();
+    }
+
+    private void RevealInExplorer(string file)
+    {
+        try { Process.Start(ReportFlow.RevealInfo(file))?.Dispose(); }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { _log.Write("reveal", ex); }
+    }
+
+    /// <summary>
+    /// Report a Bug, from the tray menu, About, the beta banner, the wizard footer or a Report This Problem button. The context names
+    /// the entry point, the window or wizard page, and the failure next to the button. A second click while one runs is ignored.
+    /// </summary>
+    internal async Task ReportBugAsync(string entry, string? problem = null)
+    {
+        if (_quitting) return;
+        var snapshot = _controller?.Snapshot ?? TraySnapshot.Empty;
+        string where;
+        var inWizard = _main is { Mode: MainMode.Wizard } && _wizard is not null;
+        if (inWizard) where = _wizard!.ReportWhere;
+        else if (_main is not null) where = _main.ReportWhere;
+        else where = "No BenchBar window open";
+        problem ??= inWizard ? _wizard!.ReportProblem : null;
+        var distro = DistroName.Resolve(_config.Distro) ?? snapshot.Distro;
+        // the last poll's benches belong to the distro it polled: after a switch of distro (or while it is missing) they are not this one's
+        var pollIsCurrent = !snapshot.DistroStopped && snapshot.Problem is null
+            && string.Equals(snapshot.Distro ?? distro, distro, StringComparison.OrdinalIgnoreCase);
+        var benchPath = _main?.SelectedBenchPath ?? (pollIsCurrent && snapshot.Benches.Count == 1 ? snapshot.Benches[0].Path : null);
+        var includes = File.Exists(_log.Path) ? new[] { _log.Path } : [];
+        var request = new ReportRequest(distro, benchPath,
+            ReportContext.Compose(entry, where, problem), UpdateCheck.CurrentVersion().Split('+')[0], includes);
+        await ReportFlowInstance.RunAsync(request);
     }
 
     // --- small helpers ---

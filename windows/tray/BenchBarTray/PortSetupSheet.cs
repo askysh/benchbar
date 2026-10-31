@@ -51,7 +51,7 @@ internal sealed class PortSetupSheet : Window
             model.Dispose();
         };
         Rebuild();
-        if (load) Loaded += (_, _) => _ = model.LoadPlanAsync();
+        if (load) Loaded += (_, _) => model.LoadPlanAsync().Forget();
     }
 
     public PortSetupModel Model { get; }
@@ -135,7 +135,7 @@ internal sealed class PortSetupSheet : Window
         if (!Model.IsBusy && Model.Phase != PortSetupPhase.Finished)
         {
             var refresh = calm ? "Check Again" : "Refresh Preview";
-            var button = Ui.Button(refresh, () => _ = Model.LoadPlanAsync(), refresh);
+            var button = Ui.Button(refresh, () => Model.LoadPlanAsync().Forget(), refresh);
             DockPanel.SetDock(button, Dock.Left);
             _bar.Children.Add(button);
             labels.Add(refresh);
@@ -155,7 +155,7 @@ internal sealed class PortSetupSheet : Window
                 break;
             case PortSetupPhase.Review:
                 Right("Cancel", Close, dismiss: true);
-                Right(Model.ApplyLabel, () => _ = Model.ApplyAsync(), true, Model.CanApply);
+                Right(Model.ApplyLabel, () => Model.ApplyAsync().Forget(), true, Model.CanApply);
                 break;
             case PortSetupPhase.Planning:
                 Right("Cancel", Close, dismiss: true);
@@ -204,7 +204,7 @@ internal sealed class PortSetupSheet : Window
         picker.SelectionChanged += (_, e) =>
         {
             if (e.AddedItems.Count == 1 && e.RemovedItems.Count == 1 && e.AddedItems[0] is ComboBoxItem { Tag: PortMode chosen })
-                _ = Model.SetModeAsync(chosen, entry.Path);
+                Model.SetModeAsync(chosen, entry.Path).Forget();
         };
         Ui.Name(picker, "Port mode " + entry.Name, "Fixed keeps the current ports. Automatic can propose new ports for your approval.");
         pickers[entry.Path] = picker;

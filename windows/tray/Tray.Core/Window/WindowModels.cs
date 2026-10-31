@@ -42,14 +42,16 @@ public static class LaunchPlanner
     /// <summary>
     /// The wizard opens by itself only for a PC that has no bench and is not set up: no bench in the first poll, the distro
     /// is not merely stopped (a stopped distro exists, so this is not a new user), the person did not dismiss the wizard, and the
-    /// shim's read only check says the PC is not ready.
+    /// shim's read only check has a blocking step that is not done (advice rows do not count). A poll that failed on a PC where
+    /// benchbar is installed in the distro is a returning user having a bad moment, not a new one: nothing opens.
     /// </summary>
     public static LaunchAction AtLaunch(TraySnapshot snapshot, SetupReport? report, bool dismissed, bool resumeFlag)
     {
         if (resumeFlag) return LaunchAction.OpenWizard;
         if (dismissed || snapshot.Benches.Count > 0 || snapshot.DistroStopped) return LaunchAction.Nothing;
-        if (report is null) return LaunchAction.Nothing;
-        return report.Ready ? LaunchAction.Nothing : LaunchAction.OpenWizard;
+        if (report is null || !report.HasBlockingFailure) return LaunchAction.Nothing;
+        if (snapshot.Problem is not null && report.Step(SetupIds.Cli) is { IsOk: true }) return LaunchAction.Nothing;
+        return LaunchAction.OpenWizard;
     }
 
     /// <summary>Whether the setup check is worth running for this first snapshot (no bench, a distro that is not just stopped).</summary>

@@ -169,8 +169,10 @@ var watched = []string{
 
 type reply struct {
 	Stdout string `json:"stdout"`
-	Stderr string `json:"stderr"`
-	Exit   int    `json:"exit"`
+	// StdoutB64 is written as raw bytes, after Stdout (a zip is not text)
+	StdoutB64 string `json:"stdout_b64"`
+	Stderr    string `json:"stderr"`
+	Exit      int    `json:"exit"`
 }
 
 type rule struct {
@@ -216,6 +218,10 @@ func runScript(file string, args []string) {
 			out = r.Seq[n]
 		}
 		os.Stdout.WriteString(out.Stdout)
+		if out.StdoutB64 != "" {
+			raw, _ := base64.StdEncoding.DecodeString(out.StdoutB64)
+			os.Stdout.Write(raw)
+		}
 		os.Stderr.WriteString(out.Stderr)
 		os.Exit(out.Exit)
 	}

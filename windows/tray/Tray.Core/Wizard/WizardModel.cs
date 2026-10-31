@@ -28,6 +28,9 @@ public interface IWizardHost
 
     bool OpenAtLogon { get; set; }
 
+    /// <summary>The <c>distro</c> key of the shim's config, null when it has none. The wizard makes the distro it checked the one the shim uses.</summary>
+    string? ConfiguredDistro { get; }
+
     void OpenUrl(string url);
 
     void CopyText(string text);
@@ -37,7 +40,20 @@ public interface IWizardHost
 public sealed record LinuxPasswordRequest(int SudoSteps, bool WasWrong, bool UserExisted = false);
 
 /// <summary>Why an install or adopt run ended without success.</summary>
-public sealed record WizardFailure(string? Step, string Message, string? Fix, string? Log);
+public sealed record WizardFailure(string? Step, string Message, string? Fix, string? Log)
+{
+    /// <summary>The fix is a command to copy, not a sentence ("Pass MARIADB_ROOT_PASSWORD." is advice and has no Copy).</summary>
+    public bool FixIsCommand => Fix is { Length: > 0 } fix && FixCommand.IsCommand(fix);
+}
+
+public static partial class FixCommand
+{
+    [GeneratedRegex(@"^(?:(?:benchbar(?:\.exe)?|wsl(?:\.exe)?|sudo|bash|sh|apt|apt-get|systemctl|winget|powershell|pwsh|setx|cd)(?=\s|$)|\./|[A-Z][A-Z0-9_]*=)", RegexOptions.CultureInvariant)]
+    private static partial Regex CommandStart();
+
+    /// <summary>True for a line that starts like a command; a sentence (starts with a capital word, ends with a period) is not.</summary>
+    public static bool IsCommand(string text) => CommandStart().IsMatch(text.Trim());
+}
 
 public enum InstallPhase { Idle, Running, Succeeded, Failed, NeedsRootPassword, NeedsLinuxPassword, Stopped }
 
@@ -45,7 +61,11 @@ public enum InstallPhase { Idle, Running, Succeeded, Failed, NeedsRootPassword, 
 public sealed record InstallRow(string Id, string? Parent, string Name, InstallStepStatus Status, int? Secs, string? Message, string? Command);
 
 /// <summary>A row of the Check Your PC page, as the page draws it.</summary>
-public sealed record CheckRow(SetupStepInfo Step, bool Busy, string? Message, string? ButtonLabel, bool ShowsShield, string? AdminNote, bool Waiting = false);
+public sealed record CheckRow(SetupStepInfo Step, bool Busy, string? Message, string? ButtonLabel, bool ShowsShield, string? AdminNote, bool Waiting = false, string? DetailText = null)
+{
+    /// <summary>The detail line to show: the shim's, with step ids turned into titles.</summary>
+    public string Detail => DetailText ?? Step.Detail;
+}
 
 /// <summary>
 /// The first run wizard as a value you can drive: pages, the form fields, and the calls to the shim. No window code:
@@ -55,14 +75,33 @@ public sealed record CheckRow(SetupStepInfo Step, bool Busy, string? Message, st
 /// </summary>
 public sealed partial class WizardModel : IDisposable
 {
-    public const string LinuxCliInstallLine = "curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash";
+    /// <summary>The line that installs the Linux CLI inside the distro: a release tray pins the same release, as benchbar.exe does.</summary>
+    public static string LinuxCliInstallLine => LinuxCliInstallLineFor(
+        (System.Reflection.Assembly.GetEntryAssembly() ?? typeof(WizardModel).Assembly)
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion);
+
+    /// <summary>X.Y.Z uses the v X.Y.Z installer and asks for that version; anything else (0.0.0-dev, a pre release) uses main.</summary>
+    public static string LinuxCliInstallLineFor(string? version) =>
+        version is { } v && System.Text.RegularExpressions.Regex.IsMatch(v, @"^\d+\.\d+\.\d+$") && v != "0.0.0"
+            ? $"curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/v{v}/install.sh | bash -s -- --version v{v}"
+            : "curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash";
     public const string McpLine = "claude mcp add benchbar -- benchbar.exe mcp";
     public const string DefaultSite = "linuxdev.localhost";
     public const string DefaultProfile = "v15-lts";
     public const string RestartRefusedMessage = "Windows did not allow the restart. Restart from the Start menu.";
     public const string CancelledMessage = "You said no to the Windows prompt. Try again when ready.";
+    public const string StoppedMessage = "Stopped. Click the button to try again.";
     public const string AdminNote = "Windows will ask for permission";
-    public const string RestartBlurb = "Windows has to restart to finish turning on WSL. BenchBar opens again after you sign in and picks up here.";
+    public const string RestartBlurb = "Windows has to restart to finish turning on WSL. BenchBar opens again after you sign in and picks up here. Shut down does not count. Use Restart.";
+    public const string RestartAgainHint = "If Windows did not restart, click Restart Now again.";
+    public const string WaitingForPromptMessage = "Waiting for you to answer the Windows prompt. It may be behind other windows.";
+    public const string HomeUnknownMessage = "BenchBar could not read your Linux home folder. Make sure Ubuntu starts, then check again.";
+    public const string DistroRunningQuestion = "Ubuntu is running. Setting this up restarts it, which stops any benches and MariaDB inside it. Restart Ubuntu now?";
+    public const string StoppedWaitingMessage = "Stopped waiting. If you already answered the Windows prompt, WSL keeps installing. Restart Windows when it finishes, then check again.";
+
+    /// <summary>How long Restart Now stays off after a restart was requested. A shutdown that was aborted must not leave the button dead.</summary>
+    public TimeSpan RestartRetryAfter { get; set; } = TimeSpan.FromSeconds(30);
 
     public static readonly IReadOnlyList<string> Bundles = ["minimal", "common", "extended"];
 
@@ -77,12 +116,18 @@ public sealed partial class WizardModel : IDisposable
     private Secret _rootPassword = Secret.Empty();
     private bool _disposed;
     private bool _probe;
+    private readonly CancellationTokenSource _lifetime = new();
+    private bool _restartFromAction;
+    private string? _alignedDistro;
+    private string? _seenConfigured;
+    private string? _busyAction;
 
     public WizardModel(ISetupService setup, IWizardHost host, string? distro = null)
     {
         _setup = setup;
         _host = host;
         Distro = distro;
+        _seenConfigured = host.ConfiguredDistro;
         UserName = SuggestUserName(host.WindowsUserName);
     }
 
@@ -91,6 +136,9 @@ public sealed partial class WizardModel : IDisposable
 
     /// <summary>Asks for the Linux password in a small dialog; null when cancelled. Set by the view.</summary>
     public Func<LinuxPasswordRequest, Task<Secret?>> AskLinuxPassword { get; set; } = _ => Task.FromResult<Secret?>(null);
+
+    /// <summary>Asks "Ubuntu is running. Restart it now?" before an action is run again with --force. Set by the view; the default says no.</summary>
+    public Func<string, Task<bool>> ConfirmRestartDistro { get; set; } = _ => Task.FromResult(false);
 
     public event Action<WizardClose>? CloseRequested;
 
@@ -132,12 +180,20 @@ public sealed partial class WizardModel : IDisposable
 
     public bool RestartRequested { get; private set; }
 
+    /// <summary>Shown under Restart Now once the 30 seconds are over and Windows has not restarted.</summary>
+    public string? RestartHint { get; private set; }
+
+    /// <summary>Ends when the "Restart Now is off" wait is over (for tests).</summary>
+    internal Task? RestartWatch { get; private set; }
+
     public IReadOnlyList<CheckRow> Rows => Report.Steps.Select(MakeRow).ToList();
 
     private CheckRow MakeRow(SetupStepInfo step)
     {
         _messages.TryGetValue(step.Id, out var message);
-        var actionable = !step.IsSatisfied && step.Action is { Length: > 0 };
+        // a finished step says nothing more: "Turning on WSL" must not stay under a row that is done
+        if (step.Status == SetupStatus.Ok && BusyStepId != step.Id) message = null;
+        var actionable = step.OffersAction;
         var waiting = step.Waits;
         var label = !actionable ? null : step.Action switch
         {
@@ -146,11 +202,14 @@ public sealed partial class WizardModel : IDisposable
             SetupIds.ActionWslEnable => "Turn On",
             _ => "Set Up",
         };
-        return new CheckRow(step, BusyStepId == step.Id, message, label, actionable && !waiting && step.NeedsAdmin, actionable && !waiting && step.NeedsAdmin ? AdminNote : null, waiting);
+        return new CheckRow(step, BusyStepId == step.Id, message, label, actionable && !waiting && step.NeedsAdmin, actionable && !waiting && step.NeedsAdmin ? AdminNote : null, waiting, StepText.Detail(step, Report.Steps));
     }
 
-    /// <summary>Continue is possible once the shim says the PC is ready.</summary>
-    public bool CanContinueFromCheck => !Checking && BusyStepId is null && Report.Ready;
+    /// <summary>Why the shim cannot use the distro the wizard checked (it could not be recorded), or null.</summary>
+    public string? DistroAlignError { get; private set; }
+
+    /// <summary>Continue is possible once every blocking step is done. Advice rows (linger, keep awake, .wslconfig, PATH) never hold it back.</summary>
+    public bool CanContinueFromCheck => !Checking && BusyStepId is null && Report.CanContinue && DistroAlignError is null;
 
     // --- linux user ---
 
@@ -202,7 +261,8 @@ public sealed partial class WizardModel : IDisposable
 
     // --- new bench ---
 
-    public string Home { get; private set; } = "/home/user";
+    /// <summary>The Linux home folder, read from the distro. Empty until it is known; the wizard never guesses one.</summary>
+    public string Home { get; private set; } = "";
 
     public string Folder { get; private set; } = "";
 
@@ -251,6 +311,14 @@ public sealed partial class WizardModel : IDisposable
 
     public string? PlanError { get; private set; }
 
+    /// <summary>The fix line of a failed plan ("In the other distro run: sudo systemctl stop mariadb"); null when none or when it only repeats the message.</summary>
+    public string? PlanFix { get; private set; }
+
+    public bool PlanFixIsCommand => PlanFix is { Length: > 0 } fix && FixCommand.IsCommand(fix);
+
+    /// <summary>What the plan found in the way (<c>blockers[]</c>), each with its message and fix.</summary>
+    public IReadOnlyList<PlanBlocker> PlanBlockers { get; private set; } = [];
+
     public InstallRequest Request => new(Folder, DefaultProfile, Bundle, Site);
 
     // --- install ---
@@ -276,6 +344,39 @@ public sealed partial class WizardModel : IDisposable
     public bool IsInstalling => Page == WizardPage.Install && Phase == InstallPhase.Running;
 
     public Secret RootPassword => _rootPassword;
+
+    // --- bug report ---
+
+    /// <summary>The page's plain name, for the window title of a report and the bug report context.</summary>
+    public static string PageName(WizardPage page) => page switch
+    {
+        WizardPage.Welcome => "Welcome",
+        WizardPage.CliOnly => "Command line tool only",
+        WizardPage.Check => "Check Your PC",
+        WizardPage.LinuxUser => "Linux user",
+        WizardPage.ExistingBench => "Existing bench",
+        WizardPage.NewBench => "New bench",
+        WizardPage.Review => "Review",
+        WizardPage.Install => "Install",
+        _ => "Done",
+    };
+
+    /// <summary>Where the person is, as a sentence for a bug report.</summary>
+    public string ReportWhere => ReportContext.Wizard(Page, Flow, BusyStepId);
+
+    /// <summary>The problem the page shows now, if any (a check error, a failed step, a failed install, a plan error), for a bug report.</summary>
+    public string? ReportProblem
+    {
+        get
+        {
+            if (Failure is { } f && Page == WizardPage.Install) return f.Step is null ? f.Message : $"{f.Step} failed: {f.Message}";
+            if (PlanError is { Length: > 0 } plan && Page == WizardPage.Review) return plan;
+            if (UserError is { Length: > 0 } user && Page == WizardPage.LinuxUser) return user;
+            if (CheckError is { Length: > 0 } check) return check;
+            var failed = Report.Steps.FirstOrDefault(s => s.StopsTheWizard && !s.Waits);
+            return failed is null ? null : ReportContext.Step(failed, _messages.GetValueOrDefault(failed.Id));
+        }
+    }
 
     // --- helpers ---
 
@@ -369,10 +470,43 @@ public sealed partial class WizardModel : IDisposable
         }
     }
 
+    /// <summary>A step, a check or the install runs now: the wizard cannot change flow, and its window should not close without asking.</summary>
+    public bool IsRunning => BusyStepId is not null || CreatingUser || FixingAll || Planning || IsInstalling;
+
+    /// <summary>
+    /// "New Bench" or "I Already Have a Bench" asked for while the wizard is already open: go to the Check page of that flow, unless
+    /// something runs (then nothing changes and false comes back). Typed values stay; a finished or failed install is left behind.
+    /// </summary>
+    public Task<bool> SwitchFlowAsync(WizardFlow flow)
+    {
+        if (_disposed || IsRunning) return Task.FromResult(false);
+        if (Flow == flow && Page == WizardPage.Check) return Task.FromResult(true);
+        CancelRun();
+        Flow = flow;
+        if (Page is WizardPage.Install or WizardPage.Done)
+        {
+            Phase = InstallPhase.Idle;
+            Failure = null;
+            _rows.Clear();
+        }
+        Go(WizardPage.Check);
+        return SwitchChecked();
+    }
+
+    private async Task<bool> SwitchChecked()
+    {
+        await CheckAsync().ConfigureAwait(true);
+        return true;
+    }
+
     // --- check ---
 
-    public async Task CheckAsync()
+    /// <summary>Runs the check. Check Again clears a "Stopped" or "You said no" line; the check after an action keeps it (<paramref name="keepStopped"/>).</summary>
+    public async Task CheckAsync(bool keepStopped = false)
     {
+        if (_disposed) return;
+        if (!keepStopped) ForgetStopped();
+        FollowConfiguredDistro();
         _checkCts?.Cancel();
         var cts = _checkCts = new CancellationTokenSource();
         Checking = true;
@@ -392,13 +526,15 @@ public sealed partial class WizardModel : IDisposable
             Report = report;
             if (report.Distro is { Length: > 0 } d) Distro = d;
             if (report.RebootPending) NoteRestartNeeded();
-            else if (RestartNeeded && !report.RebootPending && report.Step(SetupIds.Reboot) is { IsSatisfied: true }) ClearRestart();
+            // a restart an action asked for stays until Windows restarts (the wizard then starts again): the check may not know of it yet
+            else if (RestartNeeded && !_restartFromAction && report.Step(SetupIds.Reboot) is { IsSatisfied: true }) ClearRestart();
+            await AlignDistroAsync(report, cts.Token).ConfigureAwait(true);
         }
         catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
             return;
         }
-        catch (Exception ex) when (ex is SourceProblemException or System.Text.Json.JsonException)
+        catch (Exception ex) when (ex is SourceProblemException or System.Text.Json.JsonException or TimeoutException or System.ComponentModel.Win32Exception or IOException)
         {
             CheckError = ex.Message;
         }
@@ -407,6 +543,44 @@ public sealed partial class WizardModel : IDisposable
             if (ReferenceEquals(_checkCts, cts)) Checking = false;
             Raise();
         }
+    }
+
+    private void ForgetStopped()
+    {
+        foreach (var id in _messages.Where(m => m.Value is CancelledMessage or StoppedMessage).Select(m => m.Key).ToList()) _messages.Remove(id);
+    }
+
+    /// <summary>The shim's config can change outside the wizard (Settings, adopt-distro by hand): a new name there is the one the next check uses.</summary>
+    private void FollowConfiguredDistro()
+    {
+        var configured = _host.ConfiguredDistro;
+        if (string.Equals(configured, _seenConfigured, StringComparison.Ordinal)) return;
+        _seenConfigured = configured;
+        if (configured is { Length: > 0 } name) Distro = name.Trim();
+    }
+
+    /// <summary>
+    /// Once the distro, systemd and CLI steps pass, the distro the wizard checked becomes the one the shim uses (<c>adopt-distro NAME --json</c>), so the
+    /// install, adopt and report that follow all go to the same distro. Asked once per name; a failure blocks Continue and says why.
+    /// </summary>
+    private async Task AlignDistroAsync(SetupReport report, CancellationToken ct)
+    {
+        DistroAlignError = null;
+        if (report.Step(SetupIds.Distro) is not { IsOk: true } || report.Distro is not { Length: > 0 } name) return;
+        // adopt-distro records the distro only when its probe passes, and the probe needs systemd and the CLI:
+        // asking earlier fails on every fresh PC, between distro_install and cli_install
+        if (report.Step(SetupIds.Systemd) is not { IsOk: true } || report.Step(SetupIds.Cli) is not { IsOk: true }) return;
+        if (_alignedDistro == name) return;
+        if (string.Equals(_host.ConfiguredDistro, name, StringComparison.OrdinalIgnoreCase))
+        {
+            _alignedDistro = name;
+            return;
+        }
+        var result = await _setup.UseDistroAsync(name, ct).ConfigureAwait(true);
+        if (ct.IsCancellationRequested || _disposed) return;
+        if (result.Ok) _alignedDistro = name;
+        else DistroAlignError = $"BenchBar could not make {name} its distro: {result.Message ?? "adopt-distro failed"}";
+        if (DistroAlignError is not null) CheckError = DistroAlignError;
     }
 
     private void NoteRestartNeeded()
@@ -419,6 +593,8 @@ public sealed partial class WizardModel : IDisposable
     {
         RestartNeeded = false;
         RestartRequested = false;
+        RestartHint = null;
+        _restartFromAction = false;
         _host.SetResumeAfterLogon(false);
     }
 
@@ -427,11 +603,33 @@ public sealed partial class WizardModel : IDisposable
     {
         _host.SetResumeAfterLogon(true);
         RestartRequested = _host.RestartWindows();
+        RestartHint = null;
         // a refused restart keeps the flag: it is still useful when the person restarts by hand
-        if (RestartRequested) _messages.Remove(SetupIds.Reboot);
+        if (RestartRequested)
+        {
+            _messages.Remove(SetupIds.Reboot);
+            RestartWatch = WatchRestartAsync();
+        }
         else _messages[SetupIds.Reboot] = RestartRefusedMessage;
         Raise();
         return RestartRequested;
+    }
+
+    /// <summary>The restart was asked for. If Windows is still here after the wait (the shutdown was aborted), Restart Now comes back.</summary>
+    private async Task WatchRestartAsync()
+    {
+        try
+        {
+            await Task.Delay(RestartRetryAfter, _lifetime.Token).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        if (_disposed || !RestartRequested) return;
+        RestartRequested = false;
+        RestartHint = RestartAgainHint;
+        Raise();
     }
 
     /// <summary>Runs the action of one row. <c>reboot</c> is not run here (the view confirms, then calls <see cref="RestartNow"/>); <c>distro_user</c> without a user opens the Linux User page.</summary>
@@ -447,46 +645,70 @@ public sealed partial class WizardModel : IDisposable
             return;
         }
         await RunActionAsync(step, action).ConfigureAwait(true);
-        await CheckAsync().ConfigureAwait(true);
+        if (_disposed) return;
+        await CheckAsync(keepStopped: true).ConfigureAwait(true);
     }
 
-    private async Task<SetupRunResult> RunActionAsync(SetupStepInfo step, string action)
+    private async Task<SetupRunResult> RunActionAsync(SetupStepInfo step, string action, bool force = false)
     {
         var cts = _runCts = new CancellationTokenSource();
         BusyStepId = step.Id;
+        _busyAction = action;
         if (step.NeedsAdmin || action == SetupIds.ActionWslEnable) _host.AllowForeground();
         _messages.Remove(step.Id);
+        if (action == SetupIds.ActionWslEnable) _messages[step.Id] = WaitingForPromptMessage;
         _actionLog.Clear();
         Raise();
         SetupRunResult result;
+        var stoppedWaiting = false;
         try
         {
             var request = new SetupRunRequest(action, Distro, action == SetupIds.ActionDistroUser ? UserName : null,
-                action == SetupIds.ActionDistroUser ? _linuxPassword : null);
+                action == SetupIds.ActionDistroUser ? _linuxPassword : null, force);
             result = await _setup.RunActionAsync(request, OnSetupEvent, cts.Token).ConfigureAwait(true);
         }
         catch (OperationCanceledException)
         {
+            stoppedWaiting = action == SetupIds.ActionWslEnable;
             result = new SetupRunResult(1, false, false, true, [], [], "Cancelled.");
-        }
-        catch (SourceProblemException ex)
-        {
-            result = new SetupRunResult(1, false, false, false, [], [], ex.Message);
         }
         catch (TimeoutException ex)
         {
+            stoppedWaiting = action == SetupIds.ActionWslEnable;
+            result = new SetupRunResult(1, false, false, false, [], [], ex.Message);
+        }
+        catch (Exception ex) when (ex is SourceProblemException or System.ComponentModel.Win32Exception or IOException or InvalidOperationException)
+        {
+            // a blocked or missing benchbar.exe ends the step with a line; it never leaves the row on Working forever
             result = new SetupRunResult(1, false, false, false, [], [], ex.Message);
         }
         finally
         {
             BusyStepId = null;
+            _busyAction = null;
         }
 
-        if (result.Cancelled) _messages[step.Id] = CancelledMessage;
-        else if (!result.Ok) _messages[step.Id] = result.Error ?? "It did not work. Open the log for details.";
+        if (stoppedWaiting)
+        {
+            // the elevated wsl.exe belongs to Windows, not to us: it may still run. The next check says what it finished.
+            _messages[step.Id] = StoppedWaitingMessage;
+        }
+        else if (result.Cancelled && !result.RebootRequired) _messages[step.Id] = action == SetupIds.ActionWslEnable ? CancelledMessage : StoppedMessage;
+        else if (!result.Ok && !result.RebootRequired) _messages[step.Id] = result.Error ?? "It did not work. Open the log for details.";
         else if (result.Warnings.Count > 0) _messages[step.Id] = result.Warnings[0];
-        if (result.RebootRequired) NoteRestartNeeded();
+        if (result.RebootRequired)
+        {
+            // also for a run the shim reports as stopped but still going: Restart Now stays until Windows has restarted
+            _restartFromAction = true;
+            NoteRestartNeeded();
+        }
         Raise();
+
+        if (!_disposed && result.ErrorId == SetupIds.ErrorDistroRunning && !force && action is SetupIds.ActionSystemd or SetupIds.ActionDistroUser)
+        {
+            if (await ConfirmRestartDistro(DistroRunningQuestion).ConfigureAwait(true) && !_disposed)
+                return await RunActionAsync(step, action, force: true).ConfigureAwait(true);
+        }
         return result;
     }
 
@@ -498,7 +720,10 @@ public sealed partial class WizardModel : IDisposable
                 _actionLog.Add(log.Line);
                 if (_actionLog.Count > LogLimit) _actionLog.RemoveRange(0, _actionLog.Count - LogLimit);
                 break;
-            case SetupEvent.Step { Status: "running" } step when BusyStepId is not null && step.Message.Length > 0:
+            // the Windows prompt wait keeps its own words; every other step shows what the shim says it is doing, and how it ended
+            case SetupEvent.Step { Status: "running" } when _busyAction == SetupIds.ActionWslEnable:
+                break;
+            case SetupEvent.Step { Status: "running" or "done" or "skipped" } step when BusyStepId is not null && step.Message.Length > 0:
                 _messages[BusyStepId] = step.Message;
                 break;
         }
@@ -508,7 +733,7 @@ public sealed partial class WizardModel : IDisposable
     /// <summary>Runs every step that needs only a click, in order, until one needs the person (a user name, a restart) or fails.</summary>
     public async Task FixAllAsync()
     {
-        if (FixingAll || BusyStepId is not null) return;
+        if (_disposed || FixingAll || BusyStepId is not null) return;
         FixingAll = true;
         Raise();
         try
@@ -524,8 +749,9 @@ public sealed partial class WizardModel : IDisposable
                     break;
                 }
                 var result = await RunActionAsync(next, next.Action!).ConfigureAwait(true);
-                await CheckAsync().ConfigureAwait(true);
-                if (!result.Ok || RestartNeeded) break;
+                if (_disposed) break;
+                await CheckAsync(keepStopped: true).ConfigureAwait(true);
+                if (!result.Ok || RestartNeeded || _disposed) break;
             }
         }
         finally
@@ -541,25 +767,42 @@ public sealed partial class WizardModel : IDisposable
     public async Task ContinueFromCheckAsync()
     {
         if (!CanContinueFromCheck) return;
+        // the home folder is read, never guessed: a wrong guess would put the bench in a folder that does not exist
+        if (!await EnsureHomeAsync().ConfigureAwait(true)) return;
         if (Flow == WizardFlow.ExistingBench)
         {
-            if (ExistingPath.Length == 0) await EnsureHomeAsync().ConfigureAwait(true);
             if (ExistingPath.Length == 0) ExistingPath = Home + "/frappe-bench";
             Go(WizardPage.ExistingBench);
             return;
         }
-        await EnsureHomeAsync().ConfigureAwait(true);
         Go(WizardPage.NewBench);
     }
 
-    private async Task EnsureHomeAsync()
+    private async Task<bool> EnsureHomeAsync()
     {
-        if (_homeLoaded) return;
-        var home = await _setup.HomeAsync(Distro, CancellationToken.None).ConfigureAwait(true);
-        _homeLoaded = true;
+        if (_homeLoaded) return true;
+        string? home;
+        try
+        {
+            home = await _setup.HomeAsync(Distro, CancellationToken.None).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is SourceProblemException or System.ComponentModel.Win32Exception or IOException)
+        {
+            home = null;
+        }
+        if (_disposed) return false;
         if (home is not null) Home = home.TrimEnd('/');
-        else if (UserCreated) Home = "/home/" + UserName;
+        else if (UserCreated) Home = "/home/" + UserName; // the user this wizard just made: its home is known
+        else
+        {
+            CheckError = HomeUnknownMessage;
+            Raise();
+            return false;
+        }
+        _homeLoaded = true;
+        if (CheckError == HomeUnknownMessage) CheckError = null;
         if (!_folderEdited) Folder = Home + "/frappe-bench";
+        return true;
     }
 
     // --- linux user ---
@@ -613,7 +856,6 @@ public sealed partial class WizardModel : IDisposable
                 _confirmPassword = Secret.Empty();
             }
             _homeLoaded = false;
-            Home = "/home/" + UserName;
             Go(WizardPage.Check);
             await CheckAsync().ConfigureAwait(true);
         }
@@ -673,6 +915,8 @@ public sealed partial class WizardModel : IDisposable
         Page = WizardPage.Review;
         Plan = null;
         PlanError = null;
+        PlanFix = null;
+        PlanBlockers = [];
         Planning = true;
         Raise();
         var cts = _runCts = new CancellationTokenSource();
@@ -682,12 +926,14 @@ public sealed partial class WizardModel : IDisposable
             if (Page != WizardPage.Review) return;
             Plan = result.Plan;
             PlanError = result.Error;
+            PlanFix = result.Fix is { Length: > 0 } f && f != result.Error ? f : null;
+            PlanBlockers = result.Blockers ?? result.Plan?.Blockers ?? [];
         }
         catch (OperationCanceledException)
         {
             return;
         }
-        catch (Exception ex) when (ex is SourceProblemException or TimeoutException)
+        catch (Exception ex) when (ex is SourceProblemException or TimeoutException or System.ComponentModel.Win32Exception or IOException)
         {
             PlanError = ex.Message;
         }
@@ -724,13 +970,29 @@ public sealed partial class WizardModel : IDisposable
         await RunInstallAsync(adopt: Flow == WizardFlow.ExistingBench, retrying: true).ConfigureAwait(true);
     }
 
-    private int SudoSteps => Flow == WizardFlow.ExistingBench ? 1 : Plan?.PrivilegedSteps.Count ?? 0;
+    private int SudoSteps => Flow == WizardFlow.ExistingBench ? _adoptSudoSteps ?? 1 : Plan?.PrivilegedSteps.Count ?? 0;
+
+    /// <summary>The adopt dry run's sudo steps; null when not read (then the password is asked for, as one step).</summary>
+    private int? _adoptSudoSteps;
 
     private async Task RunInstallAsync(bool adopt, bool retrying = false)
     {
-        // The Linux password: asked here only when the wizard did not create the user (or the last one was refused).
+        if (adopt)
+        {
+            try
+            {
+                _adoptSudoSteps = await _setup.AdoptSudoStepsAsync(ExistingPath, CancellationToken.None).ConfigureAwait(true);
+            }
+            catch (Exception ex) when (ex is SourceProblemException or System.ComponentModel.Win32Exception or IOException)
+            {
+                _adoptSudoSteps = null;
+            }
+            if (_disposed) return;
+        }
+        // The Linux password: asked here only when the plan has sudo steps and the wizard did not create the user (or the last one was refused).
         var wrong = Phase == InstallPhase.NeedsLinuxPassword;
-        if (_linuxPassword.IsEmpty || wrong)
+        var needsPassword = !adopt || _adoptSudoSteps is null or > 0 || wrong;
+        if (needsPassword && (_linuxPassword.IsEmpty || wrong))
         {
             var asked = await AskLinuxPassword(new LinuxPasswordRequest(Math.Max(SudoSteps, 1), wrong, UserExisted)).ConfigureAwait(true);
             if (asked is null || asked.IsEmpty) return;
@@ -761,10 +1023,12 @@ public sealed partial class WizardModel : IDisposable
         {
             // Stop was pressed
         }
-        catch (Exception ex) when (ex is SourceProblemException or TimeoutException)
+        catch (Exception ex) when (ex is SourceProblemException or TimeoutException or System.ComponentModel.Win32Exception or IOException or InvalidOperationException)
         {
+            // a blocked benchbar.exe ends the run with a line; the page never stays on Running
             problem = ex.Message;
         }
+        if (_disposed) return;
         Conclude(result, problem, cts.IsCancellationRequested);
     }
 
@@ -839,6 +1103,7 @@ public sealed partial class WizardModel : IDisposable
             SkippedCommands = done.Skipped;
             Page = WizardPage.Done;
             ClearRestart();
+            ForgetPasswords(); // the bench is installed: nothing needs them again
         }
         else if ((done?.Exit ?? result?.ExitCode) == 2)
         {
@@ -853,6 +1118,18 @@ public sealed partial class WizardModel : IDisposable
             Failure = new WizardFailure(failedStep?.Name, message, done?.Fix, done?.Log ?? LogPath);
         }
         Raise();
+    }
+
+    private void ForgetPasswords()
+    {
+        _adminPassword.Dispose();
+        _adminPassword = Secret.Empty();
+        _linuxPassword.Dispose();
+        _linuxPassword = Secret.Empty();
+        _confirmPassword.Dispose();
+        _confirmPassword = Secret.Empty();
+        _rootPassword.Dispose();
+        _rootPassword = Secret.Empty();
     }
 
     /// <summary>Stop: ends the run. The Linux CLI is told to stop when its process tree is killed; run Retry to continue where it can.</summary>
@@ -893,6 +1170,8 @@ public sealed partial class WizardModel : IDisposable
 
     public void Copy(string text) => _host.CopyText(text);
 
+    public void OpenUrl(string url) => _host.OpenUrl(url);
+
     public void CopyMcp() => _host.CopyText(McpLine);
 
     public void CopyCliInstallLine() => _host.CopyText(LinuxCliInstallLine);
@@ -908,6 +1187,7 @@ public sealed partial class WizardModel : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        _lifetime.Cancel();
         _checkCts?.Cancel();
         _runCts?.Cancel();
         _linuxPassword.Dispose();

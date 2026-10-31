@@ -228,7 +228,23 @@ public sealed class BenchPoller : IDisposable
                     _entries.Select(UnknownStatus).ToList(), DistroStopped: false, Distro: distro,
                     Problem: ex is System.ComponentModel.Win32Exception ? WslMissingMessage : WslSilentMessage);
             }
-            if (!running) return new TraySnapshot([], DistroStopped: true, Distro: distro);
+            if (!running)
+            {
+                var installed = true;
+                try
+                {
+                    installed = await _probe.IsInstalledAsync(distro, ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    return TraySnapshot.Empty;
+                }
+                catch (Exception)
+                {
+                    // cannot tell: say "stopped", as before
+                }
+                return new TraySnapshot([], DistroStopped: true, Distro: distro, DistroMissing: !installed);
+            }
             lock (_gate)
             {
                 if (_boostEndsWhenDistroUp)

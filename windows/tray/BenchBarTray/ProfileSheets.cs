@@ -256,7 +256,7 @@ internal sealed class ImportProfileSheet : SheetWindow
         Fixed.Children.Add(Ui.Labeled("Save as", _saveAs, "Optional: the name in the file."));
         run.Changed += Draw;
         Draw();
-        if (autoReview) Loaded += (_, _) => _ = run.ReviewAsync();
+        if (autoReview) Loaded += (_, _) => run.ReviewAsync().Forget();
     }
 
     internal ProfileImportRun Run => _run;
@@ -266,7 +266,7 @@ internal sealed class ImportProfileSheet : SheetWindow
         if (_pickFile() is not { Length: > 0 } file) return;
         _source.Text = file;
         _run.Source = file;
-        _ = _run.ReviewAsync();
+        _run.ReviewAsync().Forget();
     }
 
     private void Draw()
@@ -288,9 +288,9 @@ internal sealed class ImportProfileSheet : SheetWindow
             if (_run.Phase == ProfileRunPhase.Failed && _run.Error is { } error) Failure("The profile was not imported. " + error);
             if (_run.Plan is { } plan) Review(plan);
             Note("BenchBar reads the file, checks that it parses and whether this machine can reach each repository, and shows it before anything is saved. Nothing is installed from here.");
-            Bar("Review", () => _ = _run.ReviewAsync(), enabled: _run.CanReview, left: true);
+            Bar("Review", () => _run.ReviewAsync().Forget(), enabled: _run.CanReview, left: true);
             Bar("Cancel", () => End(false), cancel: true, enabled: _run.Phase != ProfileRunPhase.Running);
-            Bar(_run.Plan?.Exists == true ? "Replace Profile" : "Add Profile", () => _ = _run.AddAsync(), primary: true, enabled: _run.CanAdd);
+            Bar(_run.Plan?.Exists == true ? "Replace Profile" : "Add Profile", () => _run.AddAsync().Forget(), primary: true, enabled: _run.CanAdd);
         });
     }
 
@@ -354,7 +354,7 @@ internal sealed class SubscribeProfilesSheet : SheetWindow
             if (_run.Phase == ProfileRunPhase.Failed && _run.Error is { } error) Failure("The repository was not added. " + error);
             Note("BenchBar clones the repository into ~/.config/benchbar/sources with your own git credentials and reads only its .toml files; no code from it runs. It never updates on its own: the list shows when it is behind, and Update shows the changes first.");
             Bar("Cancel", () => End(false), cancel: true, enabled: _run.Phase != ProfileRunPhase.Running);
-            Bar("Subscribe", () => _ = _run.SubscribeAsync(), primary: true, enabled: _run.CanSubscribe);
+            Bar("Subscribe", () => _run.SubscribeAsync().Forget(), primary: true, enabled: _run.CanSubscribe);
         });
     }
 }
@@ -398,7 +398,7 @@ internal sealed class ExportProfileSheet : SheetWindow
 
     private void Save()
     {
-        if (_pickSave($"{_run.Name}.toml") is { Length: > 0 } file) _ = _run.ExportAsync(file);
+        if (_pickSave($"{_run.Name}.toml") is { Length: > 0 } file) _run.ExportAsync(file).Forget();
     }
 
     private void BuildRows(ProfileExportPlan plan, ProfileExportChoices choices)
@@ -561,7 +561,7 @@ internal sealed class UpdateProfileSheet : SheetWindow
             if (update.Diff is { Length: > 0 } diff) DiffView(diff);
         }
         Bar("Cancel", () => End(false), cancel: true, enabled: _run.Phase != ProfileRunPhase.Running);
-        Bar("Update", () => _ = _run.ApplyAsync(), primary: true, enabled: _run.CanApply);
+        Bar("Update", () => _run.ApplyAsync().Forget(), primary: true, enabled: _run.CanApply);
     });
 }
 
@@ -603,7 +603,7 @@ internal sealed class CheckAccessSheet : SheetWindow
                 }
                 break;
         }
-        Bar("Check Again", () => _ = _run.LoadAsync(), enabled: !_run.IsBusy, left: true);
+        Bar("Check Again", () => _run.LoadAsync().Forget(), enabled: !_run.IsBusy, left: true);
         Bar("Done", () => End(true), primary: true);
     });
 }

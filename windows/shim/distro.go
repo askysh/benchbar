@@ -2,13 +2,38 @@ package main
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
 // listDistros shows the names a --distro or adopt-distro argument takes.
 const listDistros = "wsl.exe --list --verbose"
 
-const installerURL = "https://raw.githubusercontent.com/askysh/benchbar/main/install.sh"
+const installerBase = "https://raw.githubusercontent.com/askysh/benchbar/"
+
+// releaseRE matches the version of a release build (X.Y.Z). A dev build, a
+// commit id or a pull request build (0.0.0-pr12) is not one.
+var releaseRE = regexp.MustCompile(`^\d+\.\d+\.\d+$`)
+
+// installerURL is the installer of this shim's own release, so the CLI in
+// the distro matches the shim; a dev build uses main.
+func installerURL() string {
+	if releaseRE.MatchString(version) {
+		return installerBase + "v" + version + "/install.sh"
+	}
+	return installerBase + "main/install.sh"
+}
+
+// installerPipe is the shell line that downloads the installer and runs it.
+// A release build passes --version, so install.sh checks out that release
+// of the CLI too.
+func installerPipe() string {
+	line := "curl -fsSL " + installerURL() + " | bash"
+	if releaseRE.MatchString(version) {
+		line += " -s -- --version v" + version
+	}
+	return line
+}
 
 // installerCommand runs the installer inside the distro; without a name it
 // goes to the default distro.
@@ -17,7 +42,7 @@ func installerCommand(distro string) string {
 	if distro != "" {
 		dash = "-d " + quoteArg(distro) + " "
 	}
-	return fmt.Sprintf(`wsl.exe %s-- bash -c "curl -fsSL %s | bash"`, dash, installerURL)
+	return fmt.Sprintf(`wsl.exe %s-- bash -c "%s"`, dash, installerPipe())
 }
 
 // quoteArg quotes a distro name for a command the user pastes into cmd or

@@ -8,7 +8,55 @@ public class LaunchPlannerTests
 {
     private static BenchStatus Bench(string name = "a") => new(name, "/" + name, BenchState.Running, null, "http://a:8000", "a");
 
-    private static SetupReport Report(bool ready) => new("Ubuntu-24.04", ready, false, []);
+    private static SetupReport Report(bool ready) => new("Ubuntu-24.04", ready, false,
+        [new SetupStepInfo(SetupIds.WslFeature, ready ? SetupStatus.Ok : SetupStatus.Missing, "WSL", "", ready ? null : SetupIds.ActionWslEnable, true)]);
+
+    private static SetupReport CliOkButSystemdMissing() => new("Ubuntu-24.04", false, false,
+    [
+        new SetupStepInfo(SetupIds.Systemd, SetupStatus.Missing, "systemd", "not enabled", SetupIds.ActionSystemd, false),
+        new SetupStepInfo(SetupIds.Cli, SetupStatus.Ok, "benchbar", "benchbar 0.8.0", null, false),
+    ]);
+
+    [Fact]
+    public void AReturningUserWhoseFirstPollFailedIsLeftAlone()
+    {
+        var failedPoll = new TraySnapshot([], Problem: "benchbar.exe did not answer in 30 seconds.");
+        Assert.Equal(LaunchAction.Nothing, LaunchPlanner.AtLaunch(failedPoll, CliOkButSystemdMissing(), false, false));
+        // the same open step on a PC where the poll worked and found nothing still opens it
+        Assert.Equal(LaunchAction.OpenWizard, LaunchPlanner.AtLaunch(new TraySnapshot([]), CliOkButSystemdMissing(), false, false));
+    }
+
+    [Fact]
+    public void OnlyAdviceFailingNeverOpensTheWizard()
+    {
+        var advice = new SetupReport("Ubuntu-24.04", true, false,
+        [
+            new SetupStepInfo(SetupIds.Cli, SetupStatus.Ok, "benchbar", "benchbar 0.8.0", null, false),
+            new SetupStepInfo(SetupIds.ShimPath, SetupStatus.Warn, "PATH", "another copy first", null, false, Blocking: false),
+            new SetupStepInfo(SetupIds.WslConfig, SetupStatus.Missing, "wslconfig", "", "wslconfig", false, Blocking: false),
+        ]);
+        Assert.Equal(LaunchAction.Nothing, LaunchPlanner.AtLaunch(new TraySnapshot([]), advice, false, false));
+    }
+
+    [Fact]
+    public void ANewPcWithoutWslOpensEvenThoughThePollFailed()
+    {
+        var wslMissing = new SetupReport(null, false, false,
+        [
+            new SetupStepInfo(SetupIds.WslFeature, SetupStatus.Missing, "WSL", "WSL is not installed", SetupIds.ActionWslEnable, true),
+            new SetupStepInfo(SetupIds.Cli, SetupStatus.Missing, "benchbar", "waits for wsl_feature", null, false),
+        ]);
+        Assert.Equal(LaunchAction.OpenWizard, LaunchPlanner.AtLaunch(new TraySnapshot([], Problem: BenchPoller.WslMissingMessage), wslMissing, false, false));
+    }
+
+    [Fact]
+    public void AboutSaysWhyThereIsNoCliVersion()
+    {
+        Assert.Equal("benchbar 0.8.0", AboutCli.From(SetupJson.ParseCheck(File.ReadAllText(Path.Combine(Fixtures.Dir("setup"), "check.json")))).Text);
+        Assert.Equal("not installed yet", AboutCli.From(SetupJson.ParseCheck(File.ReadAllText(Path.Combine(Fixtures.Dir("setup"), "check-fresh.json")))).Text);
+        Assert.Equal("unknown (the distro may be stopped)", AboutCli.From(SetupJson.ParseCheck(File.ReadAllText(Path.Combine(Fixtures.Dir("setup"), "check-stopped.json")))).Text);
+        Assert.Equal("unknown", AboutCli.From(SetupReport.Empty).Text);
+    }
 
     [Fact]
     public void ANewPcWithNothingSetUpOpensTheWizard()

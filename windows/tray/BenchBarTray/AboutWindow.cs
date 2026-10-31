@@ -11,7 +11,7 @@ internal sealed class AboutActions
     public Func<Task<string?>> ShimVersion { get; set; } = () => Task.FromResult<string?>(null);
 
     /// <summary>The Linux CLI's version from the read only setup check (it never boots a stopped distro); null when unknown.</summary>
-    public Func<Task<string?>> CliVersion { get; set; } = () => Task.FromResult<string?>(null);
+    public Func<Task<AboutCli>> CliVersion { get; set; } = () => Task.FromResult(AboutCli.Unknown);
 
     /// <summary>Asks GitHub; the answer is the line to show.</summary>
     public Func<Task<string>> CheckForUpdates { get; set; } = () => Task.FromResult("");
@@ -40,15 +40,19 @@ internal sealed class AboutWindow : ToolWindow
         Ui.Name(this, "About BenchBar");
 
         var panel = new StackPanel { Margin = new Thickness(28, 24, 28, 24) };
-        panel.Children.Add(Ui.Text("BenchBar", 28, FontWeights.SemiBold));
-        panel.Children.Add(Ui.Text("Frappe benches in WSL, from the notification area.", 14, opacity: 0.75, margin: new Thickness(0, 2, 0, 16)));
+        var name = new StackPanel { Orientation = Orientation.Horizontal };
+        name.Children.Add(Ui.Text("BenchBar", 28, FontWeights.SemiBold));
+        name.Children.Add(Ui.Pill());
+        panel.Children.Add(name);
+        panel.Children.Add(Ui.Text("Frappe benches in WSL, from the notification area.", 14, opacity: 0.75, margin: new Thickness(0, 2, 0, 8)));
+        panel.Children.Add(Ui.Text(BetaText.AboutText, 13, opacity: 0.9, margin: new Thickness(0, 0, 0, 16)));
 
         var versions = new StackPanel();
         versions.Children.Add(Row("BenchBar", Ui.Text(actions.AppVersion.Split('+')[0], 14)));
         versions.Children.Add(Row("benchbar.exe", _shim));
         versions.Children.Add(Row("Linux command line tool", _cli));
         var update = new StackPanel();
-        var check = Ui.Button("Check for Updates", () => _ = CheckAsync(), "Check for updates");
+        var check = Ui.Button("Check for Updates", () => CheckAsync().Forget(), "Check for updates");
         update.Children.Add(check);
         update.Children.Add(_update);
         versions.Children.Add(Row("Updates", update));
@@ -61,7 +65,7 @@ internal sealed class AboutWindow : ToolWindow
         var bug = Ui.Button("Report a Bug", () => _actions.ReportBug(), "Report a bug", minWidth: 120);
         bug.Margin = new Thickness(0, 10, 0, 0);
         links.Children.Add(bug);
-        links.Children.Add(Ui.Caption("Writes a redacted diagnostics zip and opens its folder."));
+        links.Children.Add(Ui.Caption("Writes a redacted report zip, opens its folder and opens a GitHub issue to attach it to."));
         panel.Children.Add(Section("Help", Ui.CardOf(links)));
 
         var mcp = new StackPanel();
@@ -81,7 +85,7 @@ internal sealed class AboutWindow : ToolWindow
         panel.Children.Add(Ui.Text("Frappe and ERPNext are trademarks of Frappe Technologies; BenchBar is not affiliated with or endorsed by them.", 12, opacity: 0.7));
 
         Content = new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-        Loaded += (_, _) => _ = LoadVersionsAsync();
+        Loaded += (_, _) => LoadVersionsAsync().Forget();
     }
 
     private static UIElement Section(string title, UIElement body)
@@ -107,7 +111,7 @@ internal sealed class AboutWindow : ToolWindow
     private async Task LoadVersionsAsync()
     {
         _shim.Text = await _actions.ShimVersion() ?? "not found";
-        _cli.Text = await _actions.CliVersion() ?? "unknown (the distro may be stopped)";
+        _cli.Text = (await _actions.CliVersion()).Text;
     }
 
     private async Task CheckAsync()

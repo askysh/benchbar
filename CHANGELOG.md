@@ -2,7 +2,26 @@
 
 All notable changes to this project are documented here.
 
-## Unreleased
+## 0.8.1 - 2026-10-31
+
+BenchBar for Windows is now a beta. The tray takes a new PC from no WSL to
+a running bench, and manages benches from its own window, as the Mac app
+does. Report a Bug sends a redacted report in about a minute.
+
+### Windows beta
+
+- The window title, a Beta pill and a banner that you can dismiss say that
+  Windows is a beta. The banner has Report a Bug.
+- Report a Bug is in the tray menu, About, the beta banner and the footer
+  of every wizard page, and Report This Problem is next to each failure.
+  It writes a zip to `%LOCALAPPDATA%\BenchBar\reports`, then a small
+  window selects the zip in Explorer and opens a GitHub issue with the versions, the Windows build
+  and the distro filled in. It works before WSL or Ubuntu is installed and
+  while the distro is stopped, and never starts the distro. User names and
+  home paths are replaced with `<user>`.
+- `benchbar.exe report-windows --json` writes that zip from the command
+  line.
+- New issue form for Windows bugs.
 
 ### Added
 
@@ -29,14 +48,6 @@ All notable changes to this project are documented here.
   says what a sign in does) and **Turn Off Open as**. The menu lists
   Switch Back, pinned users with labels, Administrator and **Find User…**; the
   row then reads `as NAME`. Nothing shows until a site is opted in.
-
-### Fixed
-
-- General, Menu Bar and About are panes of the BenchBar window again.
-  0.8.0 gave them windows of their own, and from Settings there was no
-  way back to the BenchBar window. The gear in the sidebar footer lists
-  General and Menu Bar, the **i** opens About, and Settings… (⌘,) opens
-  the window on General.
 
 ### Windows
 
@@ -101,6 +112,61 @@ All notable changes to this project are documented here.
   `/etc/hosts` command as a next action for a name that does not.
 - A command that needs `--yes` and runs without a terminal says so in the
   error of its JSON output.
+
+### Fixed
+
+- General, Menu Bar and About are panes of the BenchBar window again.
+  0.8.0 gave them windows of their own, and from Settings there was no
+  way back to the BenchBar window. The gear in the sidebar footer lists
+  General and Menu Bar, the **i** opens About, and Settings… (⌘,) opens
+  the window on General.
+
+- On Linux, `benchbar install` checks ports 3306 (MariaDB) and 6379 (the system Redis) before it asks for sudo or changes anything. In WSL 2 all distros share one network, so a second distro failed after 43 seconds with "systemctl start mariadb failed" because another distro's MariaDB held 3306. The plan now lists the port as a blocker, and the run stops at once with `port_3306_in_use` (or `port_6379_in_use`), a message and a fix. Nothing is stopped for you. A rerun on the distro that owns MariaDB is not a blocker.
+- `benchbar install --dry-run` on a fresh Linux machine (no uv, no pipx yet) exits 0 with its plan. Step 2 used to stop with "Neither uv nor pipx is installed" before step 1 had installed them, which the Windows tray read as "the plan could not be made". The dry run now says that step 1 will install uv, Python, Node and the rest. A real blocker, such as too little disk, still fails the dry run.
+- The one line installer works on Linux and WSL. `curl ... install.sh | bash` in Ubuntu 24.04 installs the command line tool (a clone in `~/.local/share/benchbar`, a link in `~/.local/bin`, `PATH` in `~/.bashrc`) without sudo or questions, and names `sudo apt install -y git` when git is missing. It stopped with "This installer is for macOS" before, which broke the Windows tray's command line tool step. `benchbar.exe` now runs the installer of its own release (`v<version>`, with `--version`); a development build uses `main`.
+- Turning on WSL asks Windows to elevate only `System32\wsl.exe`, never
+  `benchbar.exe` from a folder that the user can write to. Only one
+  elevation runs at a time. If you stop waiting, the install keeps running
+  in Windows and the wizard asks for a restart.
+- The wizard no longer stops for ever on Install or a bench page on
+  Loading when Windows blocks `benchbar.exe`. It says to allow it in
+  SmartScreen or the antivirus.
+- Check Your PC: linger, keepalive, `.wslconfig` and PATH are advice and
+  never block Continue (`blocking` in `setup check`). Each row without a
+  button shows its fix command with Copy. A running step has Cancel.
+- Setting up systemd or the Linux user no longer stops a running distro
+  without asking: `setup run` refuses with `error_id` `distro_running`
+  until you confirm (`--force`).
+- A restart that the Ubuntu install needs keeps Restart Now on screen.
+  Restart Now comes back if Windows did not restart.
+- The wizard, install, adopt and Report a Bug all use the same distro.
+- The plan review sheet always has Stop Waiting.
+- Esc no longer clears typed passwords. Keyboard focus stays on the
+  control you used, and screen readers hear status changes.
+- The wizard opens by itself only on a PC that needs setup, not for a
+  returning user whose first check failed.
+- `benchbar report` works without `zip` installed and without a bench.
+- The sudo password of `BENCHBAR_SUDO=env` is no longer in
+  `/proc/PID/environ` of the running command, and every command forgets it
+  after its sudo steps. On Linux, repair runs its sudo steps first.
+- `setup run cli_install` names a failed download (for example a 404)
+  instead of saying that benchbar is not on the PATH.
+- Advice rows with an action, such as `.wslconfig`, have a Set Up button.
+  Set Up Everything runs only the steps that block.
+- The Review page shows the fix for a plan that cannot run, and each
+  blocker with its fix.
+- Stopping a step says "Stopped" instead of talking about a Windows
+  prompt that never came.
+- `doctor --prerequisites` on Linux warns, not fails, when the user is not
+  in the `sudo` group.
+- The Windows tray: Check Your PC draws again (it spun at 100 percent CPU
+  on a culture error and laid out wider than the window). Icon buttons
+  (More actions, the sidebar) show their icons. The log toolbar fits the
+  window. A finished step drops its "Turning on WSL" text, waiting rows
+  name the step they wait for, and a distro override is explained as
+  advice. A failed install says "Install Failed" and what to do. Create
+  User and Review say what they wait for. An empty flyout has Set Up a
+  Bench, and a distro that WSL does not have shows "not installed".
 
 ## 0.8.0 - 2026-10-30
 

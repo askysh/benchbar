@@ -6,6 +6,7 @@ using Xunit;
 
 namespace Tray.Core.Tests;
 
+[Collection(GdiCollection.Name)]
 public class IconTests
 {
     private static readonly Dictionary<RunnerPose, int> MacFrameCounts = new()

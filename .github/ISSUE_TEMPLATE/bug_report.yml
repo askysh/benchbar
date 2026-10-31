@@ -1,5 +1,5 @@
-name: Bug report
-description: Something in the CLI or the app does not work as it should.
+name: Bug report (macOS or Linux)
+description: Something in the CLI or the Mac app does not work as it should on macOS or Ubuntu.
 labels: [bug]
 body:
   - type: markdown
@@ -7,19 +7,20 @@ body:
       value: |
         Thanks for reporting. Please search the open issues first.
         A security problem goes through a private report instead: see SECURITY.md.
+        On Windows, use the Windows form or Report a Bug in the tray.
   - type: input
     id: macos
     attributes:
-      label: macOS version
-      description: Apple menu, About This Mac. Say Intel if it is not Apple Silicon.
-      placeholder: macOS 26.1, Apple Silicon
+      label: OS version
+      description: "macOS: Apple menu, About This Mac. Say Intel if it is not Apple Silicon. Ubuntu: `lsb_release -ds`."
+      placeholder: macOS 26.1, Apple Silicon, or Ubuntu 24.04.3 LTS
     validations:
       required: true
   - type: input
     id: version
     attributes:
       label: benchbar --version
-      placeholder: benchbar 0.5.0
+      placeholder: benchbar 0.8.1
     validations:
       required: true
   - type: dropdown
@@ -28,7 +29,8 @@ body:
       label: Install method
       options:
         - The one line installer (install.sh)
-        - A git clone
+        - A git clone (macOS)
+        - Linux (git clone)
         - A release download of the app
         - Built from source (scripts/macos-install-local.sh)
         - Other
@@ -38,10 +40,10 @@ body:
     id: profile
     attributes:
       label: Profile
-      description: v15-lts, v16-lts or the name of a team profile. `benchbar status` shows it.
+      description: v15-lts, v16-lts or the name of a team profile. `benchbar status` shows it. Say "not set yet" if you have no bench yet.
       placeholder: v16-lts
     validations:
-      required: true
+      required: false
   - type: textarea
     id: what
     attributes:

@@ -12,6 +12,9 @@ every replaced file in `backups/<date>-<time>-<pid>/`. The state folder is
 CLI inside BenchBar.app, or `.benchbar` in the folder you cloned;
 `benchbar where` shows it.
 
+On Linux and Windows, see [Install: Linux](install.md#linux) and
+[Windows and WSL](#windows-and-wsl) below.
+
 ## Common stumbles
 
 **`benchup: command not found`.** Run `source ~/.zshrc` once, or open a
@@ -353,6 +356,36 @@ bench. To remove the Homebrew formulae as well, when no other bench
 needs them: `brew uninstall mariadb@10.11 redis node@22 python@3.11`.
 That keeps MariaDB's data folder, `$(brew --prefix)/var/mysql`, with
 every other database on the Mac.
+
+## Windows and WSL
+
+BenchBar for Windows is a beta. The first place to look is the setup
+check, read only:
+
+```powershell
+benchbar.exe setup check --json
+```
+
+Each step has a `status` and an `action`. The tray's **Check Your PC**
+shows the same steps with their buttons. `setup run` changes the PC, so
+run its actions one at a time, and ask first when you do this on someone
+else's PC. Steps that are advice (linger, keepalive, the WSL idle settings
+and PATH) do not stop you.
+
+- **The bench checks.** `benchbar.exe doctor` runs the Windows checks, then
+  the CLI's doctor inside the distro. Each warning names its fix.
+- **A stopped distro.** WSL stops a distro after its idle time. The tray
+  shows a **Start** button for it. `benchbar.exe setup check --probe` starts
+  it to check inside. Report a Bug does not start it.
+- **A restart is pending.** When the `reboot` step is missing, restart
+  Windows, then run `setup check` again. The tray's **Restart Now** asks
+  first.
+- **Something else.** Use **Report a Bug** in the tray menu, the wizard
+  footer or next to a failed step. It writes a redacted zip and opens the
+  bug form. See [Report a bug](windows.md#report-a-bug).
+- **SmartScreen blocks `benchbar.exe`.** The program is unsigned until the
+  signing application is approved. Choose **More info**, then **Run
+  anyway**, and try the command again.
 
 ## Things to avoid
 

@@ -13,7 +13,8 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Deterministic>true</Deterministic>
-    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Not invariant: the Fluent ScrollViewer template asks for a specific culture and fails with "Cannot find non-neutral culture related to 'en-us'" (see DECISIONS.md). -->
+    <InvariantGlobalization>false</InvariantGlobalization>
     <NeutralLanguage>en</NeutralLanguage>
     <!-- English resources only, for both shells: the size comparison is like for like. -->
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>

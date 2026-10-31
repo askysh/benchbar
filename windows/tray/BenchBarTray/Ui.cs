@@ -41,6 +41,62 @@ internal static class Ui
         if (help is not null) AutomationProperties.SetHelpText(element, help);
     }
 
+    /// <summary>Screen readers read this text when it changes, without taking the focus.</summary>
+    public static TextBlock Live(TextBlock block)
+    {
+        AutomationProperties.SetLiveSetting(block, AutomationLiveSetting.Polite);
+        return block;
+    }
+
+    /// <summary>The small rounded "Beta" label next to the app name.</summary>
+    public static Border Pill(string text = BetaText.Pill)
+    {
+        var pill = new Border
+        {
+            Child = new TextBlock { Text = text, FontSize = 11, FontWeight = FontWeights.SemiBold, Margin = new Thickness(7, 1, 7, 1) },
+            BorderBrush = Accent,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(9),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(8, 0, 0, 0),
+        };
+        Name(pill, "Beta: BenchBar for Windows is in beta");
+        return pill;
+    }
+
+    /// <summary>The automation name of the control that has the keyboard focus inside <paramref name="root"/>, or null.</summary>
+    public static string? FocusedName(DependencyObject root)
+    {
+        if (Keyboard.FocusedElement is not DependencyObject focused) return null;
+        for (DependencyObject? node = focused; node is not null; node = node is Visual or System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(node) : LogicalTreeHelper.GetParent(node))
+        {
+            if (ReferenceEquals(node, root))
+            {
+                var name = AutomationProperties.GetName(focused);
+                return string.IsNullOrEmpty(name) ? null : name;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>Rebuilding a list destroys the control that had the focus. Call this with the name taken before the rebuild to put the focus on its replacement.</summary>
+    public static void RestoreFocus(FrameworkElement root, string? name)
+    {
+        if (name is null) return;
+        if (FindByName(root, name) is not { } target) return;
+        root.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () => { if (target.IsEnabled) target.Focus(); });
+    }
+
+    public static IInputElement? FindByName(DependencyObject node, string name)
+    {
+        foreach (var child in LogicalTreeHelper.GetChildren(node).OfType<DependencyObject>())
+        {
+            if (child is IInputElement { Focusable: true } input && AutomationProperties.GetName(child) == name) return input;
+            if (FindByName(child, name) is { } found) return found;
+        }
+        return null;
+    }
+
     public static TextBlock Text(string text, double size = 14, FontWeight? weight = null, double opacity = 1, Thickness? margin = null) => new()
     {
         Text = text,
@@ -135,6 +191,40 @@ internal static class Ui
         return panel;
     }
 
+    /// <summary>
+    /// Puts <paramref name="content"/> at the left in a column that is as wide as the space allows, up to <paramref name="maxWidth"/>. A
+    /// left aligned panel with a MaxWidth shrinks to its widest child, so rows changed width from one state to the next; this one does not.
+    /// </summary>
+    public static Grid Constrain(UIElement content, double maxWidth)
+    {
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MaxWidth = maxWidth });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(content, 0);
+        grid.Children.Add(content);
+        return grid;
+    }
+
+    /// <summary>
+    /// Takes the focus rectangle off the containers of a page (panels, borders, scroll viewers, plain content hosts): after a key press
+    /// the theme drew one big rounded rectangle around the whole page. Buttons, boxes and the other controls keep theirs.
+    /// </summary>
+    public static void QuietFocus(DependencyObject root)
+    {
+        if (root is FrameworkElement element && IsContainer(element))
+        {
+            element.FocusVisualStyle = null;
+            if (element is ScrollViewer or UserControl || element.GetType() == typeof(ContentControl)) element.Focusable = false;
+        }
+        foreach (var child in LogicalTreeHelper.GetChildren(root))
+        {
+            if (child is DependencyObject d) QuietFocus(d);
+        }
+    }
+
+    private static bool IsContainer(FrameworkElement element) =>
+        element is Panel or Border or ScrollViewer or UserControl or ContentPresenter || element.GetType() == typeof(ContentControl);
+
     public static Border CardOf(UIElement content, Thickness? margin = null) => new()
     {
         Background = Card,
@@ -187,8 +277,9 @@ internal static class Ui
             FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
             FontSize = size,
             VerticalAlignment = VerticalAlignment.Center,
-            Foreground = brush,
         };
+        // never assign null: a local null Foreground beats the inherited one and the glyph is drawn in no color at all
+        if (brush is not null) block.Foreground = brush;
         if (name is not null) Name(block, name);
         return block;
     }

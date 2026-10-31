@@ -26,11 +26,48 @@ public static class SetupIds
     public const string ActionReboot = "reboot";
     public const string ActionWslEnable = "wsl_enable";
     public const string ActionDistroUser = "distro_user";
+    public const string ActionSystemd = "systemd";
+
+    /// <summary>The <c>error_id</c> of a done line: the action must restart the distro and the distro runs. Ask, then run again with <c>--force</c>.</summary>
+    public const string ErrorDistroRunning = "distro_running";
 }
 
 /// <summary>One row of the Check Your PC page.</summary>
-public sealed record SetupStepInfo(string Id, SetupStatus Status, string Title, string Detail, string? Action, bool NeedsAdmin)
+public sealed record SetupStepInfo(string Id, SetupStatus Status, string Title, string Detail, string? Action, bool NeedsAdmin, bool Blocking = true)
 {
+    /// <summary>The steps that are advice only: they never block the PC being ready, and an older shim does not say so.</summary>
+    public static bool IsAdvisoryId(string id) => id is SetupIds.Linger or SetupIds.Keepalive or SetupIds.WslConfig or SetupIds.ShimPath;
+
+    /// <summary>This step stops the wizard from going on: a blocking step that is not done (a warning counts as done), or one that was not looked at.</summary>
+    public bool StopsTheWizard => Blocking && (!IsSatisfied || NotChecked);
+
+    /// <summary>A blocking step the page cannot fix with a button (Windows too old, virtualization off, a WSL 1 distro): the person has to act.</summary>
+    public bool NeedsManualFix => Blocking && !IsSatisfied && !Waits && Action is not { Length: > 0 };
+
+    /// <summary>Advice with a command to run by hand: a non blocking warning the page has no button for.</summary>
+    public bool HasAdviceCommand => !Blocking && Status == SetupStatus.Warn && Action is not { Length: > 0 } && !Waits;
+
+    /// <summary>
+    /// What the Copy button puts on the clipboard: the command at the end of the detail ("message: benchbar.exe path install") when
+    /// it looks like one, else the whole detail.
+    /// </summary>
+    public string CopyText
+    {
+        get
+        {
+            var cut = Detail.LastIndexOf(": ", StringComparison.Ordinal);
+            if (cut < 0) return Detail;
+            var tail = Detail[(cut + 2)..].Trim();
+            return tail.StartsWith("benchbar.exe ", StringComparison.OrdinalIgnoreCase) || tail.StartsWith("wsl.exe ", StringComparison.OrdinalIgnoreCase)
+                || tail.StartsWith("wsl ", StringComparison.OrdinalIgnoreCase) || tail.StartsWith("setx ", StringComparison.OrdinalIgnoreCase)
+                ? tail
+                : Detail;
+        }
+    }
+
+    /// <summary>The row shows its action button: the step is open, or it is advice that warns and has an action (<c>wslconfig</c>).</summary>
+    public bool OffersAction => Action is { Length: > 0 } && (!IsSatisfied || (!Blocking && Status == SetupStatus.Warn));
+
     public bool IsOk => Status is SetupStatus.Ok;
 
     /// <summary>Done or only advice: the page may continue past it.</summary>
@@ -48,11 +85,20 @@ public sealed record SetupReport(string? Distro, bool Ready, bool RebootPending,
 {
     public SetupStepInfo? Step(string id) => Steps.FirstOrDefault(s => s.Id == id);
 
-    /// <summary>The first step that is not done and has something the page can run for it.</summary>
-    public SetupStepInfo? NextActionable => Steps.FirstOrDefault(s => !s.IsSatisfied && !s.Waits && s.Action is { Length: > 0 });
+    /// <summary>The first blocking step that is not done and has something the page can run for it. Set Up Everything runs these only; advice rows keep their own button.</summary>
+    public SetupStepInfo? NextActionable => Steps.FirstOrDefault(s => s.Blocking && !s.IsSatisfied && !s.Waits && s.Action is { Length: > 0 });
 
     /// <summary>The first step that is not done, whether or not it has an action (a step that waits has none).</summary>
-    public SetupStepInfo? FirstBlocking => Steps.FirstOrDefault(s => !s.IsSatisfied);
+    public SetupStepInfo? FirstBlocking => Steps.FirstOrDefault(s => s.StopsTheWizard);
+
+    /// <summary>
+    /// The wizard may go on: there are steps, and none that is blocking is open. The shim's <c>ready</c> says the same; this is read
+    /// from the steps so an advisory row (<c>blocking: false</c>) can never hold Continue back.
+    /// </summary>
+    public bool CanContinue => Steps.Count > 0 && !Steps.Any(s => s.StopsTheWizard);
+
+    /// <summary>A blocking step is open: the PC is not set up.</summary>
+    public bool HasBlockingFailure => Steps.Any(s => s.StopsTheWizard);
 
     public static SetupReport Empty { get; } = new(null, false, false, []);
 }
@@ -65,7 +111,7 @@ public abstract record SetupEvent
     public sealed record Log(string Line) : SetupEvent;
 
     public sealed record Done(int Exit, bool Changed, bool RebootRequired, bool Cancelled,
-        IReadOnlyList<string> Warnings, IReadOnlyList<string> NextActions, bool UserExisted = false) : SetupEvent;
+        IReadOnlyList<string> Warnings, IReadOnlyList<string> NextActions, bool UserExisted = false, string? ErrorId = null) : SetupEvent;
 }
 
 /// <summary>Parsing of the shim's setup JSON. Tolerant: unknown fields are ignored, a line it does not know is null.</summary>
@@ -98,7 +144,8 @@ public static class SetupJson
                     JsonRead.Str(item, "title") ?? id,
                     JsonRead.Str(item, "detail") ?? "",
                     JsonRead.Str(item, "action") is { Length: > 0 } a ? a : null,
-                    JsonRead.Bool(item, "needs_admin")));
+                    JsonRead.Bool(item, "needs_admin"),
+                    item["blocking"] is JsonValue b && b.TryGetValue<bool>(out var blocking) ? blocking : !SetupStepInfo.IsAdvisoryId(id)));
             }
         }
         return new SetupReport(JsonRead.Str(root, "distro"), JsonRead.Bool(root, "ready"), JsonRead.Bool(root, "reboot_pending"), steps);
@@ -123,7 +170,8 @@ public static class SetupJson
                     JsonRead.Bool(obj, "cancelled"),
                     JsonRead.Strings(obj, "warnings"),
                     JsonRead.Strings(obj, "next_actions"),
-                    JsonRead.Bool(obj, "user_existed"));
+                    JsonRead.Bool(obj, "user_existed"),
+                    JsonRead.Str(obj, "error_id") is { Length: > 0 } errorId ? errorId : null);
             default:
                 return null;
         }

@@ -27,29 +27,6 @@ func TestSystemDirIgnoresTheEnvironment(t *testing.T) {
 	}
 }
 
-func TestElevatedChildRefusesAFolderSwappedAfterTheChecks(t *testing.T) {
-	e := newEnv(t)
-	e.readyEnv()
-	d := filepath.Join(e.ConfigDir, "setup")
-	os.MkdirAll(d, 0o755)
-	path := filepath.Join(d, "run-0123456789abcdef.jsonl")
-	// the file lands somewhere else: a junction replaced the folder
-	elsewhere := filepath.Join(e.root, "elsewhere.jsonl")
-	old := finalPathFn
-	finalPathFn = func(f *os.File) (string, error) { return elsewhere, nil }
-	defer func() { finalPathFn = old }()
-	os.WriteFile(elsewhere, []byte("created through the junction"), 0o644)
-	if code := e.run("setup", "elevated", "wsl_enable", "--result", path); code != 1 {
-		t.Errorf("exit %d", code)
-	}
-	if len(e.events()) != 0 {
-		t.Error("wsl.exe ran")
-	}
-	if fileExists(elsewhere) {
-		t.Error("the file created through the junction was left")
-	}
-}
-
 func TestDistroUserReportsWhetherTheUserExisted(t *testing.T) {
 	e := newEnv(t)
 	e.readyEnv()

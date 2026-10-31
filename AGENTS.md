@@ -129,8 +129,11 @@ and follow the Linux notes above. From PowerShell, `benchbar.exe` forwards
 every command to the distro with its input, output and exit code
 unchanged, so `benchbar.exe status --json` and `benchbar.exe mcp` give
 what the CLI inside gives. `benchbar.exe doctor` adds the Windows checks
-(PATH, the distro, `.wslconfig`, keepalive) first. Windows is a preview:
-the programs are unsigned. See `docs/windows.md`.
+(PATH, the distro, `.wslconfig`, keepalive) first, and when the tray is
+installed also the .NET Desktop Runtime and the tray at logon. Windows is
+a beta: the programs are unsigned. On a fresh Windows PC, start with the
+read only `benchbar.exe setup check --json`. Its setup actions change the
+PC, so run them with the user. See `docs/windows.md`.
 
 ## Existing or broken bench
 

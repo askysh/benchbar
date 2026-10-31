@@ -114,6 +114,15 @@ In the browser, log in as `Administrator` with the password you gave
 `install` (or your existing one), and walk through the setup wizard. You
 can close Terminal; the bench keeps running until `benchdown`.
 
+## Linux and Windows
+
+On Ubuntu 24.04, clone the repository and run `./benchbar install`, then
+`source ~/.bashrc` and `benchup`. See [Install: Linux](install.md#linux).
+
+On Windows, install BenchBar for Windows (a beta) with the one line in
+[Install: Windows](install.md#windows). Its tray opens a first run wizard
+that sets up WSL, the distro and the bench. See [Windows](windows.md#first-run).
+
 ## What next
 
 - Learn the daily helpers in [Benches and sites](guides/benches-and-sites.md).

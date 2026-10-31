@@ -59,6 +59,8 @@ case "${1:-}" in
     : >"$dest/.git/mock-checkout"
     printf 'ref: refs/heads/main\n' >"$dest/.git/HEAD"
     exit 0 ;;
+  fetch)
+    [[ -f "${dir:-.}/.git/mock-checkout" ]] && exit 0 ;;
   symbolic-ref|status|checkout)
     fake="${dir:-.}/.git"
     if [[ -f "$fake/mock-checkout" ]]; then
@@ -69,7 +71,13 @@ case "${1:-}" in
           cat "$fake/dirty" 2>/dev/null || true
           [[ " $* " == *" --untracked-files=no "* || " $* " == *" -uno "* ]] || cat "$fake/untracked" 2>/dev/null || true
           exit 0 ;;
-        checkout) printf 'ref: refs/heads/%s\n' "${*: -1}" >"$fake/HEAD"; exit 0 ;;
+        checkout)
+          # a tag (v1.2.3) is a detached HEAD, a branch name a branch
+          case "${*: -1}" in
+            v[0-9]*) printf 'deadbee\n' >"$fake/HEAD" ;;
+            *) printf 'ref: refs/heads/%s\n' "${*: -1}" >"$fake/HEAD" ;;
+          esac
+          exit 0 ;;
       esac
     fi ;;
   pull)

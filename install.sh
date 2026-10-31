@@ -16,6 +16,14 @@
 #      into ~/Applications); skipped when no release exists yet
 #   4. offers "benchbar adopt" for a bench it finds, or "benchbar install"
 #
+# On Linux (Ubuntu 24.04, WSL included) it does the CLI half only, in the
+# same place: it checks git, clones the CLI into ~/.local/share/benchbar (or
+# pulls), links benchbar into ~/.local/bin and adds that folder to PATH in
+# ~/.bashrc (~/.zshrc for zsh). There is no app on Linux, and it never runs
+# sudo: a missing git is reported with the apt command. It needs no terminal
+# and no questions; BENCHBAR_NONINTERACTIVE=1 asks for the same. Next:
+# benchbar install (on WSL the Windows tray continues the setup on its own).
+#
 # Homebrew owns a half it installed: with the benchbar formula
 # (<prefix>/opt/benchbar) the CLI half is skipped, with the benchbar-app
 # cask (<prefix>/Caskroom/benchbar-app) the app half. Each prints the brew
@@ -29,7 +37,9 @@
 #   --dry-run         print the plan and every command, change nothing
 #   --no-app          CLI only
 #   --app-only        app only
-#   --version vX.Y.Z  install that release of the app instead of the latest
+#   --version vX.Y.Z  install that release of the app instead of the latest;
+#                     on Linux, check out that release of the CLI (a detached
+#                     checkout, a rerun without it goes back to main)
 #   --uninstall       remove the app, the links and the PATH block; offer to
 #                     stop and remove the launchd agents and the checkout
 #                     (with --yes: yes to both). Benches, sites and databases
@@ -47,8 +57,15 @@ BENCHBAR_HOME="${BENCHBAR_HOME:-$HOME/.local/share/benchbar}"
 BIN_DIR="${BENCHBAR_BIN_DIR:-$HOME/.local/bin}"
 APP_DIR="${BENCHBAR_APP_DIR:-$HOME/Applications}"
 APP="${APP_DIR}/BenchBar.app"
-# zsh reads $ZDOTDIR/.zshrc when ZDOTDIR is set
-RC_FILE="${BENCHBAR_RC_FILE:-${ZDOTDIR:-$HOME}/.zshrc}"
+# zsh reads $ZDOTDIR/.zshrc when ZDOTDIR is set; Linux uses bash unless the
+# login shell is zsh (the same rule as the CLI's own rc block)
+IS_LINUX=0
+[[ "$(uname -s)" == "Linux" ]] && IS_LINUX=1
+if [[ "$IS_LINUX" == "1" && "${SHELL:-}" != *zsh ]]; then
+  RC_FILE="${BENCHBAR_RC_FILE:-$HOME/.bashrc}"
+else
+  RC_FILE="${BENCHBAR_RC_FILE:-${ZDOTDIR:-$HOME}/.zshrc}"
+fi
 RC_START="# >>> benchbar-path >>>"
 RC_END="# <<< benchbar-path <<<"
 
@@ -96,7 +113,10 @@ run() {
   "$@"
 }
 
-has_tty() { [[ -r /dev/tty ]] && { true </dev/tty; } 2>/dev/null; }
+has_tty() {
+  [[ "${BENCHBAR_NONINTERACTIVE:-}" != "1" ]] || return 1
+  [[ -r /dev/tty ]] && { true </dev/tty; } 2>/dev/null
+}
 
 # confirm QUESTION DEFAULT(y|n): --yes takes the default; no TTY takes the default
 confirm() {
@@ -154,7 +174,7 @@ rc_block_content() {
   local dir
   dir="$(rc_bin_dir)"
   printf '%s\n' "$RC_START" \
-    "# Added by the BenchBar installer so that benchbar and frappe-mac are on PATH." \
+    "# Added by the BenchBar installer so that benchbar is on PATH." \
     "case \":\$PATH:\" in *\":${dir}:\"*) ;; *) export PATH=\"${dir}:\$PATH\" ;; esac" \
     "$RC_END"
 }
@@ -227,9 +247,37 @@ json_field() { sed -n 's/.*"'"$1"'"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' 
 
 # ---------------------------------------------------------------- checks
 
-check_system() {
+# check_system_linux: Ubuntu, WSL included. Nothing here changes the machine.
+check_system_linux() {
   step "System"
-  [[ "$(uname -s)" == "Darwin" ]] || die "This installer is for macOS." "For Windows and WSL see github.com/askysh/frappe_wsl_dev_server"
+  local id="" ver="" line osr="${FL_OS_RELEASE:-/etc/os-release}" proc="${FL_PROC_VERSION:-/proc/version}"
+  if [[ -r "$osr" ]]; then
+    while IFS= read -r line; do
+      case "$line" in
+        ID=*) id="${line#ID=}"; id="${id//\"/}" ;;
+        VERSION_ID=*) ver="${line#VERSION_ID=}"; ver="${ver//\"/}" ;;
+      esac
+    done <"$osr"
+  fi
+  if [[ "$id" == "ubuntu" && "$ver" == "24.04" ]]; then
+    ok "Ubuntu ${ver}"
+  else
+    warn "${id:-Linux} ${ver} is not Ubuntu 24.04, the tested system; the CLI is installed, benchbar install may stop on it"
+  fi
+  if [[ -r "$proc" ]] && grep -qi microsoft "$proc" 2>/dev/null; then ok "WSL"; fi
+  if [[ "$(id -u)" == "0" ]]; then
+    warn "running as root; benchbar install refuses root, run this as your normal user"
+  fi
+  if [[ "$DO_CLI" == "1" ]]; then
+    command -v git >/dev/null 2>&1 || die "git is not installed" "sudo apt update && sudo apt install -y git"
+    ok "git $(git --version 2>/dev/null | awk '{print $3}')"
+  fi
+}
+
+check_system() {
+  if [[ "$IS_LINUX" == "1" ]]; then check_system_linux; return 0; fi
+  step "System"
+  [[ "$(uname -s)" == "Darwin" ]] || die "This installer is for macOS and Linux (Ubuntu 24.04, WSL included)." "on Windows use the BenchBar tray or https://github.com/askysh/benchbar/blob/main/docs/windows.md"
   ok "macOS $(sw_vers -productVersion 2>/dev/null || printf '?')"
   if [[ "$(uname -m)" == "arm64" ]]; then
     ok "Apple Silicon"
@@ -335,8 +383,26 @@ brew_guard() {
 
 install_cli() {
   step "Command line tool"
-  command -v git >/dev/null 2>&1 || die "git not found" "install the Xcode Command Line Tools: xcode-select --install"
-  if [[ -d "${BENCHBAR_HOME}/.git" ]]; then
+  if [[ "$IS_LINUX" == "1" ]]; then
+    command -v git >/dev/null 2>&1 || die "git not found" "sudo apt update && sudo apt install -y git"
+  else
+    command -v git >/dev/null 2>&1 || die "git not found" "install the Xcode Command Line Tools: xcode-select --install"
+  fi
+  if [[ -d "${BENCHBAR_HOME}/.git" && "$IS_LINUX" == "1" && -n "$PIN" ]]; then
+    # pinned: this release exactly, a detached checkout (a run without
+    # --version goes back to main)
+    local before after out
+    before="$(git -C "$BENCHBAR_HOME" rev-parse --short HEAD 2>/dev/null || true)"
+    if [[ "$DRY" == "1" ]]; then
+      info "dry-run: git -C ${BENCHBAR_HOME} fetch --quiet --tags"
+      info "dry-run: git -C ${BENCHBAR_HOME} checkout --quiet ${PIN}"
+    else
+      out="$(git -C "$BENCHBAR_HOME" fetch --quiet --tags 2>&1)" || { printf '%s\n' "$out"; die "git fetch failed in ${BENCHBAR_HOME}" "check the network, then run this again"; }
+      out="$(git -C "$BENCHBAR_HOME" checkout --quiet "$PIN" 2>&1)" || { printf '%s\n' "$out"; die "no release ${PIN} in ${BENCHBAR_HOME}, or the checkout has changes" "fix the checkout or move it aside"; }
+      after="$(git -C "$BENCHBAR_HOME" rev-parse --short HEAD 2>/dev/null || true)"
+      if [[ "$before" == "$after" ]]; then same "CLI ${PIN} at ${BENCHBAR_HOME} (${after})"; else ok "CLI ${PIN} checked out in ${BENCHBAR_HOME} (${before} to ${after})"; CHANGED=1; fi
+    fi
+  elif [[ -d "${BENCHBAR_HOME}/.git" ]]; then
     local before after out ref=0 changes
     before="$(git -C "$BENCHBAR_HOME" rev-parse --short HEAD 2>/dev/null || true)"
     # a detached HEAD (a tag or commit checked out by hand) has no branch to
@@ -364,13 +430,19 @@ install_cli() {
     die "${BENCHBAR_HOME} exists but is not a git checkout" "move it aside and run this again"
   else
     run mkdir -p "$(dirname "$BENCHBAR_HOME")"
-    run git clone --quiet "$BENCHBAR_REPO" "$BENCHBAR_HOME"
-    [[ "$DRY" == "1" ]] || ok "CLI cloned into ${BENCHBAR_HOME}"
+    if [[ "$IS_LINUX" == "1" && -n "$PIN" ]]; then
+      run git clone --quiet --branch "$PIN" "$BENCHBAR_REPO" "$BENCHBAR_HOME" || die "could not clone ${PIN} from ${BENCHBAR_REPO}" "check the network and that the release exists"
+      [[ "$DRY" == "1" ]] || ok "CLI ${PIN} cloned into ${BENCHBAR_HOME}"
+    else
+      run git clone --quiet "$BENCHBAR_REPO" "$BENCHBAR_HOME" || die "could not clone ${BENCHBAR_REPO}" "check the network, then run this again"
+      [[ "$DRY" == "1" ]] || ok "CLI cloned into ${BENCHBAR_HOME}"
+    fi
     CHANGED=1
   fi
 
-  local name link target="${BENCHBAR_HOME}/benchbar"
-  for name in benchbar frappe-mac; do
+  local name link target="${BENCHBAR_HOME}/benchbar" names="benchbar frappe-mac"
+  [[ "$IS_LINUX" != "1" ]] || names="benchbar"
+  for name in $names; do
     link="${BIN_DIR}/${name}"
     if [[ -L "$link" && "$(readlink "$link")" == "$target" ]]; then
       same "${link}"
@@ -468,6 +540,10 @@ offer_bench() {
   found="$("$cli" list --json 2>/dev/null | tr ',' '\n' | sed -n 's/.*"path":"\([^"]*\)".*/\1/p' | head -n 1 || true)"
   if [[ -n "$found" ]]; then
     ok "found a bench at ${found}"
+    if [[ "${BENCHBAR_NONINTERACTIVE:-}" == "1" ]]; then
+      info "next: benchbar adopt ${found} --yes"
+      return 0
+    fi
     info "benchbar adopt registers it: Procfile.lean, runner, launchd agent and the bench* helpers, nothing inside sites/ or apps/"
     if [[ "$DRY" == "1" ]]; then info "dry-run: would offer: benchbar adopt ${found}"; return 0; fi
     if confirm "Run 'benchbar adopt ${found}' now? (it shows its plan and asks again before writing)" y; then
@@ -481,9 +557,16 @@ offer_bench() {
     return 0
   fi
   ok "no bench found under ~ or ~/dev"
-  info "benchbar install sets up Homebrew packages, MariaDB, a bench and a site; it asks for two passwords"
+  if [[ "$IS_LINUX" == "1" ]]; then
+    info "benchbar install sets up apt packages, MariaDB, a bench and a site; it asks for sudo once and for the Administrator password"
+  else
+    info "benchbar install sets up Homebrew packages, MariaDB, a bench and a site; it asks for two passwords"
+  fi
   if [[ "$DRY" == "1" || "$YES" == "1" ]] || ! has_tty; then
     info "next: open a new terminal and run: benchbar install"
+    if [[ "$IS_LINUX" == "1" ]] && grep -qi microsoft "${FL_PROC_VERSION:-/proc/version}" 2>/dev/null; then
+      info "or let the BenchBar tray on Windows continue: it runs benchbar install for you"
+    fi
     return 0
   fi
   if confirm "Run 'benchbar install' now? (takes 15 to 30 minutes)" n; then
@@ -506,7 +589,9 @@ uninstall() {
   step "Uninstall BenchBar"
   info "removes: the app, the benchbar and frappe-mac links, the PATH block"
   info "keeps: every bench, site, database and Homebrew package"
-  if [[ -d "$APP" ]]; then
+  if [[ "$IS_LINUX" == "1" ]]; then
+    :
+  elif [[ -d "$APP" ]]; then
     quit_app
     run rm -rf "$APP"
     [[ "$DRY" == "1" ]] || ok "removed ${APP}"
@@ -531,6 +616,10 @@ uninstall() {
 
   step "Background agents"
   local plist wd cli="${BENCHBAR_HOME}/benchbar" any=0
+  if [[ "$IS_LINUX" == "1" ]]; then
+    info "each bench runs as a systemd --user unit; stop and remove them first with: benchbar uninstall-service --all"
+    any=1
+  fi
   for plist in "$HOME"/Library/LaunchAgents/com.benchbar.*.plist; do
     [[ -f "$plist" ]] || continue
     any=1
@@ -629,17 +718,25 @@ uninstall() {
 # ---------------------------------------------------------------- main
 
 printf '\n%sBenchBar installer%s%s\n' "$B" "$R" "$([[ "$DRY" == "1" ]] && printf ' (dry-run: nothing is changed)')"
-brew_detect
+BREW_CLI=""; BREW_APP=""
+if [[ "$IS_LINUX" == "1" ]]; then
+  # no Homebrew half and no app on Linux
+  [[ "$DO_CLI" == "1" ]] || die "there is no BenchBar app on Linux; --app-only has nothing to do" "run this without --app-only to install the command line tool"
+  DO_APP=0
+else
+  brew_detect
+fi
 if [[ "$UNINSTALL" == "1" ]]; then
   uninstall
   exit 0
 fi
 brew_guard
 printf '  Plan:\n'
-[[ "$DO_CLI" == "1" ]] && printf '   1. check macOS, the Command Line Tools and Homebrew\n   2. clone or update the CLI in %s, link it into %s, add that folder to PATH in %s\n' "$BENCHBAR_HOME" "$BIN_DIR" "$RC_FILE"
+[[ "$DO_CLI" == "1" && "$IS_LINUX" == "1" ]] && printf '   1. check Linux and git\n   2. clone or update the CLI in %s, link it into %s, add that folder to PATH in %s\n   3. offer benchbar adopt for an existing bench, or benchbar install\n' "$BENCHBAR_HOME" "$BIN_DIR" "$RC_FILE"
+[[ "$DO_CLI" == "1" && "$IS_LINUX" != "1" ]] && printf '   1. check macOS, the Command Line Tools and Homebrew\n   2. clone or update the CLI in %s, link it into %s, add that folder to PATH in %s\n' "$BENCHBAR_HOME" "$BIN_DIR" "$RC_FILE"
 [[ "$DO_APP" == "1" ]] && printf '   3. install or update the BenchBar app in %s from the %s GitHub release (sha256 checked)\n' "$APP_DIR" "${PIN:-latest}"
-[[ "$DO_CLI" == "1" ]] && printf '   4. offer benchbar adopt for an existing bench, or benchbar install\n'
-if [[ "$DO_CLI" == "1" ]]; then
+[[ "$DO_CLI" == "1" && "$IS_LINUX" != "1" ]] && printf '   4. offer benchbar adopt for an existing bench, or benchbar install\n'
+if [[ "$DO_CLI" == "1" && "$IS_LINUX" != "1" ]]; then
   printf '  This script never runs sudo. Homebrew'"'"'s installer, if you accept it, asks for your password itself.\n'
 else
   printf '  This script never runs sudo.\n'

@@ -36,7 +36,7 @@ internal sealed class DiscoveryView : UserControl
         root.Children.Add(Ui.Text("BenchBar searches a folder inside Linux for existing Frappe benches.", 14, opacity: 0.75, margin: new Thickness(0, 6, 0, 12)));
 
         var folderRow = new DockPanel { Margin = new Thickness(0, 0, 0, 8), LastChildFill = true };
-        _scanButton = Ui.Button("Scan", () => _ = _model.ScanAsync(), "Scan this folder", minWidth: 64);
+        _scanButton = Ui.Button("Scan", () => _model.ScanAsync().Forget(), "Scan this folder", minWidth: 64);
         _scanButton.Margin = new Thickness(8, 0, 0, 0);
         _chooseButton = Ui.Button("Choose Folder...", ShowFolderMenu, "Choose Folder", minWidth: 0);
         _chooseButton.Margin = new Thickness(8, 0, 0, 0);
@@ -46,7 +46,7 @@ internal sealed class DiscoveryView : UserControl
         _folderBox.HorizontalAlignment = HorizontalAlignment.Stretch;
         _folderBox.KeyDown += (_, e) =>
         {
-            if (e.Key == Key.Enter && !_model.IsBusy && !_working) _ = _model.ScanAsync();
+            if (e.Key == Key.Enter && !_model.IsBusy && !_working) _model.ScanAsync().Forget();
         };
         folderRow.Children.Add(_scanButton);
         folderRow.Children.Add(_chooseButton);
@@ -68,7 +68,7 @@ internal sealed class DiscoveryView : UserControl
     internal string FolderText => _folderBox.Text;
 
     /// <summary>Called each time the pane is selected in the sidebar (fills the folder box the first time; a scan starts only when asked).</summary>
-    public void OnShown() => _ = EnterAsync();
+    public void OnShown() => EnterAsync().Forget();
 
     internal async Task EnterAsync()
     {
@@ -139,7 +139,7 @@ internal sealed class DiscoveryView : UserControl
         if (_model.IsBusy || _working) return;
         _model.Folder = folder;
         SyncFolderBox();
-        _ = _model.ScanAsync();
+        _model.ScanAsync().Forget();
     }
 
     private void SyncFolderBox()
@@ -203,7 +203,7 @@ internal sealed class DiscoveryView : UserControl
         {
             AddEmpty("Your benches, in one place",
                 "Scan a folder such as your home to find benches, then add the ones you want BenchBar to manage.",
-                "Scan Folder", () => _ = _model.ScanAsync(), lines, buttons, !busy);
+                "Scan Folder", () => _model.ScanAsync().Forget(), lines, buttons, !busy);
         }
 
         Line("Scanning only reads folders. Add Selected remembers your benches; Set Up Management previews the service changes before you apply them.",
@@ -262,10 +262,10 @@ internal sealed class DiscoveryView : UserControl
         foreach (var bench in _model.Results) _body.Children.Add(ResultRow(bench, lines, buttons, busy));
 
         var bar = new DockPanel { Margin = new Thickness(0, 10, 0, 0) };
-        var setUp = Ui.Button("Set Up Selected...", () => _ = SetUpSelectedAsync(), "Set Up Selected", primary: true, minWidth: 0);
+        var setUp = Ui.Button("Set Up Selected...", () => SetUpSelectedAsync().Forget(), "Set Up Selected", primary: true, minWidth: 0);
         setUp.Margin = new Thickness(0);
         setUp.IsEnabled = _model.CanSetUp && !_working;
-        var add = Ui.Button("Add Selected", () => _ = AddSelectedAsync(), "Add Selected", minWidth: 0);
+        var add = Ui.Button("Add Selected", () => AddSelectedAsync().Forget(), "Add Selected", minWidth: 0);
         add.Margin = new Thickness(0, 0, 8, 0);
         add.IsEnabled = _model.CanAdd && !_working;
         var selected = $"{_model.Selected.Count} selected";
@@ -335,7 +335,7 @@ internal sealed class DiscoveryView : UserControl
 
         if (state != FoundState.Managed)
         {
-            var setup = Ui.Button("Set Up Management...", () => _ = SetUpManagementAsync(bench), $"Set Up Management for {bench.Name}", minWidth: 0);
+            var setup = Ui.Button("Set Up Management...", () => SetUpManagementAsync(bench).Forget(), $"Set Up Management for {bench.Name}", minWidth: 0);
             setup.Margin = new Thickness(12, 0, 0, 0);
             setup.VerticalAlignment = VerticalAlignment.Top;
             setup.IsEnabled = !busy;

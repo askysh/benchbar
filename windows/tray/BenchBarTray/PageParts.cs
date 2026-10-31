@@ -111,6 +111,7 @@ internal static class PagePanels
             menu.IsOpen = true;
         };
         Ui.Name(button, automationName);
+        button.ToolTip = "More actions";
         return button;
     }
 }
