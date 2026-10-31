@@ -34,6 +34,8 @@ func run(sys *System, args []string) int {
 			if len(args) > 1 && (args[1] == "install" || args[1] == "status") {
 				return cmdPath(sys, args[1])
 			}
+		case "report-windows":
+			return cmdReportWindows(sys, args[1:])
 		case "setup":
 			return cmdSetup(sys, args[1:])
 		case "doctor":

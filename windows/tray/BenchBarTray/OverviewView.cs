@@ -198,8 +198,8 @@ internal sealed class OverviewView : UserControl
 
         var labels = new List<string>();
         var strip = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
-        StartStopButton = Add(strip, labels, buttons.StartStopLabel, () => _ = RunAsync(bench, Guarded(_actions.StartStop, b => b.State is BenchState.Running or BenchState.Starting ? null : PortGuardAction.Start)), canStartStop, primary: true);
-        Add(strip, labels, "Restart", () => _ = RunAsync(bench, Guarded(_actions.Restart, _ => PortGuardAction.Restart)), canRestart);
+        StartStopButton = Add(strip, labels, buttons.StartStopLabel, () => RunAsync(bench, Guarded(_actions.StartStop, b => b.State is BenchState.Running or BenchState.Starting ? null : PortGuardAction.Start)).Forget(), canStartStop, primary: true);
+        Add(strip, labels, "Restart", () => RunAsync(bench, Guarded(_actions.Restart, _ => PortGuardAction.Restart)).Forget(), canRestart);
         Add(strip, labels, "Open Site", () => _actions.OpenSite(bench), buttons.CanOpenSite);
         Add(strip, labels, "Logs", () => _actions.ShowLogs(bench), true);
         Add(strip, labels, "Health", () => _actions.ShowHealth(bench), true);
@@ -242,7 +242,7 @@ internal sealed class OverviewView : UserControl
         switch (action)
         {
             case GuidanceAction.Start:
-                _ = RunAsync(bench, Guarded(_actions.StartStop, _ => PortGuardAction.Start));
+                RunAsync(bench, Guarded(_actions.StartStop, _ => PortGuardAction.Start)).Forget();
                 break;
             case GuidanceAction.ViewHealth:
                 _navigate(BenchTab.Health, false);
@@ -355,7 +355,7 @@ internal sealed class OverviewView : UserControl
 
         var panel = new StackPanel();
         var row = new DockPanel();
-        var again = Ui.Button("Check Again", () => _ = CheckLockAsync(bench), "Check the lockfile again " + bench.Name, minWidth: 0);
+        var again = Ui.Button("Check Again", () => CheckLockAsync(bench).Forget(), "Check the lockfile again " + bench.Name, minWidth: 0);
         again.Margin = new Thickness(12, 0, 0, 0);
         again.IsEnabled = !running;
         DockPanel.SetDock(again, Dock.Right);
@@ -420,7 +420,7 @@ internal sealed class OverviewView : UserControl
         {
             var want = toggle.IsChecked == true;
             toggle.IsChecked = !want; // the status says what it is; the poll shows the new value
-            _ = SetSchedulerAsync(bench, want);
+            SetSchedulerAsync(bench, want).Forget();
         };
         SchedulerToggle = toggle;
         var panel = new StackPanel();

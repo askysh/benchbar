@@ -58,8 +58,9 @@ FL_ARCH=aarch64 pre; assert_eq "warn 0" "$(lv architecture) $CODE"; assert_conta
 FL_EFFECTIVE_UID=0 pre; assert_eq "fail 1" "$(lv regular_user) $CODE"
 
 # sudo: the group decides, nothing is run as root
-FL_PREREQ_GROUPS="tester users" pre; assert_eq "fail 1" "$(lv sudo) $CODE"
+FL_PREREQ_GROUPS="tester users" pre; assert_eq "warn 0" "$(lv sudo) $CODE" "(not in the group: a sudoers rule may still allow it)"
 assert_contains "$(pq 'c["sudo"]["fix_command"]')" "usermod -aG sudo"
+assert_contains "$(pq 'c["sudo"]["message"]')" "sudoers rule"
 FL_PREREQ_GROUPS="tester admin" pre; assert_eq "ok" "$(lv sudo)"
 NOSUDO="$TMP_DIR/nosudo"; mkdir -p "$NOSUDO"
 for t in awk sed head cat df id uname basename dirname date grep tr cut sort mkdir ls dpkg-query systemctl loginctl curl getent ss lsof mariadb bash env; do

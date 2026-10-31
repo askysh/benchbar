@@ -73,17 +73,20 @@ and other apt based systems, the v15-lts profile so far), with each bench
 under `systemd --user`; clone the repository and run `./benchbar install`.
 See [Install](https://benchbar.akashmishra.com/install/#linux).
 
-On Windows (a preview) the benches run in WSL, `benchbar.exe` runs the
+On Windows (a beta) the benches run in WSL, `benchbar.exe` runs the
 CLI from PowerShell, and BenchBar Tray shows the benches in the
 notification area in place of the menu bar app. Install both with one
-line in PowerShell:
+line in PowerShell. The tray's first run wizard then sets up WSL, the
+Linux distro and the bench:
 
 ```powershell
 irm https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1 | iex
 ```
 
 The Windows programs are unsigned until the signing application is
-approved. See [Windows](https://benchbar.akashmishra.com/windows/).
+approved. For a bug, use **Report a Bug** in the tray: it writes a
+redacted zip and opens the bug form. See
+[Windows](https://benchbar.akashmishra.com/windows/).
 
 ## Quick start
 
@@ -127,7 +130,7 @@ what it is for and what to do next.
 - **Doctor and repair:** read only checks that name the fix, then only the flagged fixes, with a backup before each change.
 - **A menu bar app:** a runner that shows the state, start and stop, logs, doctor, and a window for each bench's sites, apps and health.
 - **A new bench without Terminal:** a first run wizard in the app checks the Mac, installs a bench from a profile and adopts the ones you have.
-- **Linux and Windows:** the same CLI on Ubuntu 24.04 with `systemd --user`, and on Windows through WSL with `benchbar.exe` and a tray app (a preview).
+- **Linux and Windows:** the same CLI on Ubuntu 24.04 with `systemd --user`, and on Windows through WSL with `benchbar.exe` and a tray app (a beta).
 - **Several benches side by side:** a v15 and a v16 bench, each with its own ports, sites and scheduler, on one MariaDB.
 - **Apps from anywhere:** the app registry or any GitHub repository, private ones too, with a changelog before every update.
 - **Made for teams:** team profiles, the `benchbar.toml` lockfile, and `benchbar pull` for a local copy of production.
@@ -157,7 +160,7 @@ GitHub too, and `benchbar docs` opens them from the terminal.
 ## Contributing
 
 Issues and pull requests are welcome: read [CONTRIBUTING.md](CONTRIBUTING.md) first.
-For a bug, attach the zip from `benchbar report`; it has no secrets, paths or names.
+For a bug, attach the zip from `benchbar report`; it has no secrets, paths or names. On Windows, use Report a Bug in the tray instead.
 
 ## Security
 

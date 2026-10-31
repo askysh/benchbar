@@ -84,6 +84,28 @@ command asks for it once too, for the `/etc/hosts` line and the
 wkhtmltopdf package. Prompts read from the terminal, so the installer
 works when piped from `curl`.
 
+### The installer on Linux
+
+The same line works on Ubuntu 24.04 and in WSL. It installs the command
+line tool only, since there is no app on Linux:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash
+```
+
+It needs `git`; when `git` is missing it stops and prints
+`sudo apt update && sudo apt install -y git`. It never runs `sudo`. It
+clones the CLI into `~/.local/share/benchbar` (or pulls), links
+`benchbar` into `~/.local/bin` and adds that folder to `PATH` in
+`~/.bashrc` (`~/.zshrc` when your login shell is zsh) inside the same
+`# >>> benchbar-path >>>` block. It asks nothing, with or without a
+terminal, and `BENCHBAR_NONINTERACTIVE=1` says so explicitly. It then
+prints the next step: open a new terminal and run `benchbar install`. In
+WSL it adds that the BenchBar tray on Windows can continue the setup.
+`--version vX.Y.Z` checks out that release of the CLI instead of `main`
+(a detached checkout; a run without it goes back to `main`). `--dry-run`
+and `--uninstall` work as on a Mac; `--app-only` is refused.
+
 ### Installer flags
 
 Pass flags after `bash -s --`, for example
@@ -95,7 +117,7 @@ Pass flags after `bash -s --`, for example
 | `--dry-run` | Print the plan and every command, change nothing |
 | `--no-app` | The CLI only |
 | `--app-only` | The app only |
-| `--version vX.Y.Z` | Install that release of the app instead of the latest |
+| `--version vX.Y.Z` | Install that release of the app instead of the latest. On Linux: check out that release of the CLI |
 | `--uninstall` | Remove the app, the links and the PATH block; see [Uninstall](#uninstall) |
 
 ## The app from the DMG
@@ -170,12 +192,28 @@ once up front and not at all on a second run. Each bench runs as its own
 `systemd --user` unit, and `loginctl enable-linger` brings a running
 bench back after a reboot. The default site is `linuxdev.localhost`, and
 benchbar never edits `/etc/hosts` there. The `bench*` helpers go to
-`~/.bashrc`. `benchbar doctor --prerequisites` on Linux checks free
-disk, the bench folder and the default ports.
+`~/.bashrc`. `benchbar doctor --prerequisites` on Linux checks, without a bench and
+without sudo: the distro (Ubuntu 24.04 is tested, others warn), the CPU
+(x86_64 is needed for the PDF package), that you are not root, sudo (your
+user is in the sudo group), apt, systemd, linger, memory, free disk, the
+bench folder, the default ports and the MariaDB root password state. Each
+check that is not ok names its fix.
+
+`install` first checks that ports 3306 (MariaDB) and 6379 (the system
+Redis) are free, or held by this distro's own services. In WSL 2 every
+distro shares one network, so only one of them can run MariaDB. When
+another distro or program holds the port, the plan lists it as a blocker
+and the run stops before it asks for sudo, with error id
+`port_3306_in_use` (or `port_6379_in_use`) and the fix: stop MariaDB in
+the other distro (`sudo systemctl stop mariadb`), or install in that
+distro. benchbar stops nothing for you.
+
+After the install, run `source ~/.bashrc` (or open a new terminal), then
+`benchup`. The helpers are in `~/.bashrc`, not in `~/.zshrc`.
 
 ## Windows
 
-A preview. The benches run inside WSL 2 with the Linux install above.
+A beta. The benches run inside WSL 2, with the same CLI as on Linux.
 In PowerShell, as yourself, without administrator rights:
 
 ```powershell
@@ -186,8 +224,13 @@ This installs `benchbar.exe`, which forwards every command to the
 distro, and BenchBar Tray, the notification area app. It checks the zip
 against its SHA256, puts the folder on your PATH and ends with `benchbar.exe
 doctor`. Run it again to update. The programs are unsigned until the
-signing application is approved. [Windows](windows.md) has the
-requirements, the flags, the tray and the signing policy.
+signing application is approved.
+
+When the tray starts and finds no bench, its
+[first run wizard](windows.md#first-run) checks the PC and sets up WSL,
+the Linux distro, the bench and the keepalive. [Windows](windows.md) has
+the requirements, the flags, the tray, Report a Bug, uninstall and the
+signing policy.
 
 ## Updating
 

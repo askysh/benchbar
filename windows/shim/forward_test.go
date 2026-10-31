@@ -334,7 +334,9 @@ func TestShellWrapperExit127WhenCLIMissing(t *testing.T) {
 		t.Skip("needs /bin/sh")
 	}
 	home := t.TempDir()
-	r := runShimProc(t, []string{"FAKE_WSL_MODE=run", "HOME=" + home}, nil, "up")
+	// A bare PATH: a benchbar on the developer's own PATH (for example
+	// ~/.local/bin of the real user) would otherwise be found by the wrapper.
+	r := runShimProc(t, []string{"FAKE_WSL_MODE=run", "HOME=" + home, "PATH=/usr/bin:/bin"}, nil, "up")
 	if r.code != 1 {
 		t.Errorf("exit %d, want 1", r.code)
 	}

@@ -68,6 +68,10 @@ internal sealed class FakeHost : ITrayHost
     public string Tooltip { get { lock (_gate) return _tooltip; } }
     public IReadOnlyList<(TraySnapshot Snapshot, string UpText)> Changes { get { lock (_gate) return [.. _changes]; } }
     public IReadOnlyList<Toast> Toasts { get { lock (_gate) return [.. _toastsShown]; } }
+    private readonly List<string> _notices = [];
+    public IReadOnlyList<string> Notices { get { lock (_gate) return [.. _notices]; } }
+
+    public void ShowNotice(string text) { lock (_gate) _notices.Add(text); }
 
     public void SetIcon(IntPtr hicon) { lock (_gate) _icons.Add(hicon); }
     public void SetTooltip(string text) { lock (_gate) _tooltip = text; }
@@ -173,6 +177,7 @@ internal sealed class FakeProbe : IDistroProbe
     private int _calls;
 
     public bool Running { get; set; } = true;
+    public bool Installed { get; set; } = true;
     public Exception? Throws { get; set; }
     public int Calls => Volatile.Read(ref _calls);
 
@@ -182,6 +187,8 @@ internal sealed class FakeProbe : IDistroProbe
         if (Throws is not null) throw Throws;
         return Task.FromResult(Running);
     }
+
+    public Task<bool> IsInstalledAsync(string distro, CancellationToken ct) => Task.FromResult(Installed);
 }
 
 /// <summary>A process runner that starts nothing: it answers from a script and records what it was asked.</summary>

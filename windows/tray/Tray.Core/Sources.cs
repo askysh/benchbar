@@ -152,6 +152,9 @@ public sealed class ShimBenchSource : IBenchSource
     public const string NotFoundMessage =
         "benchbar.exe was not found. Put it next to BenchBarTray.exe or on PATH (benchbar.exe path install).";
 
+    public const string BlockedMessage =
+        "Windows blocked benchbar.exe. If SmartScreen or your antivirus asked, allow it, then try again.";
+
     /// <summary>up, down and restart wait for the bench: 3 minutes.</summary>
     public static readonly TimeSpan ActionTimeout = TimeSpan.FromSeconds(180);
 

@@ -235,7 +235,11 @@ if [[ "$FL_DRY_RUN" == "1" ]]; then
     if command -v "$cmd" >/dev/null 2>&1; then
       fl_ok "${cmd} found"
     else
-      fl_warn "dry-run: ${cmd} not found; real install would stop here"
+      if [[ -n "${BENCHBAR_PLAN_STEP1:-}" ]]; then
+        fl_info "dry-run: ${cmd} is not installed yet; step 1 (${BENCHBAR_PLAN_STEP1}) will install it"
+      else
+        fl_warn "dry-run: ${cmd} not found; real install would stop here"
+      fi
     fi
   done
   fl_info "dry-run: skipping service checks for mariadbd and redis-server"

@@ -338,13 +338,16 @@ fl_bench_listener_pids() {
   local port pid cmd addr
   fl__ss_listeners "${1:-$(fl_bench_ports_csv)}" | while read -r port pid cmd addr; do
     [[ "$pid" =~ ^[1-9][0-9]*$ ]] && fl_pid_is_bench_own_strict "$pid" && printf '%s\n' "$pid"
-  done
+  done | awk '!seen[$0]++'
   return 0
 }
 
 fl_port_listener_pid() {
   local port pid cmd addr
-  fl__ss_listeners "$1" | { read -r port pid cmd addr && printf '%s\n' "$pid"; } || true
+  # a pid of 0 is an owner ss does not show: skipped, the next listener may be visible
+  fl__ss_listeners "$1" | while read -r port pid cmd addr; do
+    [[ "$pid" =~ ^[1-9][0-9]*$ ]] && { printf '%s\n' "$pid"; break; }
+  done || true
 }
 
 # fl_port_listener_pids PORT: the pid of every listener on PORT, once each, one
@@ -367,6 +370,31 @@ fl_port_listener_summary() {
 fl_port_listen_addresses() {
   # prints the local address:port of every listener on a port, one per line
   fl__ss_listeners "$1" | awk '{print $4}' | sort -u || true
+}
+
+# fl_install_port_blockers: lines "id|message|fix", one per port that
+# something else holds and that this install needs: 3306 (MariaDB) and 6379
+# (the system Redis, which phase 00 starts). A listener is this install's own
+# when the unit (mariadb, redis-server) of this distro is active, so a rerun
+# passes. ss may not show the owner (another user's process, or another WSL
+# distro, whose processes are in a PID space of their own), so the unit is
+# the test, not the pid. Nothing is stopped.
+fl_install_port_blockers() {
+  local spec port unit what id msg fix
+  for spec in "3306 mariadb MariaDB" "6379 redis-server Redis"; do
+    read -r port unit what <<<"$spec"
+    fl_port_listening "$port" || continue
+    fl_linux_unit_active "$unit" && continue
+    id="port_${port}_in_use"
+    if fl_is_wsl; then
+      msg="Another WSL distro or program already uses port ${port} (${what}). WSL distros share one network, so only one can run ${what} on it. Stop ${what} in the other distro, or install in that distro."
+      fix="In the other distro run: sudo systemctl stop ${unit} (wsl.exe --list --running names the distros that run), then run benchbar install again"
+    else
+      msg="Another program already uses port ${port} (${what}), so the ${what} of this install could not start. Stop it, or install on a machine where the port is free."
+      fix="Find it with: ss -ltnp 'sport = :${port}', stop it, then run benchbar install again"
+    fi
+    printf '%s|%s|%s\n' "$id" "$msg" "$fix"
+  done
 }
 
 # fl_bench_status_pids: as on the Mac, from `pgrep -af` (procps prints the

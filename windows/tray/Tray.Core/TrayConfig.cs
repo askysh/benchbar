@@ -86,6 +86,9 @@ public sealed class TrayConfig
     /// <summary>The person closed the first run wizard with Cancel: it no longer opens by itself at launch.</summary>
     public bool WizardDismissed { get; set; }
 
+    /// <summary>The person closed the beta banner at the top of the BenchBar window; it stays away from then on.</summary>
+    public bool BetaBannerDismissed { get; set; }
+
     /// <summary>True when the file existed but was not valid JSON; Save then keeps it as <c>config.json.bad</c> first.</summary>
     public bool WasCorrupt => _corrupt;
 
@@ -124,6 +127,7 @@ public sealed class TrayConfig
             config.Editor = EditorKind.Normalize(ReadString(tray, "editor"));
             if (tray["check_for_updates"] is JsonValue u && u.TryGetValue<bool>(out var check)) config.CheckForUpdates = check;
             if (tray["wizard_dismissed"] is JsonValue w && w.TryGetValue<bool>(out var dismissed)) config.WizardDismissed = dismissed;
+            if (tray["beta_banner_dismissed"] is JsonValue bb && bb.TryGetValue<bool>(out var betaDismissed)) config.BetaBannerDismissed = betaDismissed;
         }
         return config;
     }
@@ -186,6 +190,7 @@ public sealed class TrayConfig
         tray["editor"] = EditorKind.Normalize(Editor);
         tray["check_for_updates"] = CheckForUpdates;
         tray["wizard_dismissed"] = WizardDismissed;
+        tray["beta_banner_dismissed"] = BetaBannerDismissed;
         root["tray"] = tray;
 
         var temp = Path + "." + Environment.ProcessId + ".tmp";

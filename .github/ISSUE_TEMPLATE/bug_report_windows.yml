@@ -1,0 +1,65 @@
+name: Bug report (Windows beta)
+description: Something in BenchBar for Windows, the tray or benchbar.exe does not work as it should.
+labels: [bug, windows]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. The easy way: open BenchBar, then **Report a Bug** (tray menu, About, or the beta banner). It writes a redacted zip, selects it in Explorer and opens this form with the first fields filled in.
+        Please search the open issues first.
+        A security problem goes through a private report instead: see SECURITY.md.
+  - type: input
+    id: versions
+    attributes:
+      label: benchbar.exe, tray and CLI versions
+      description: "The tray's About window shows all three. Report a Bug fills this in too."
+      placeholder: benchbar.exe 0.8.1, tray 0.8.1, CLI 0.8.1
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows edition, build and arch
+      description: Settings, System, About. Say Windows 10 or Windows 11, and x64 or Arm64.
+      placeholder: Windows 11 Pro, build 26100, x64
+    validations:
+      required: true
+  - type: input
+    id: distro
+    attributes:
+      label: WSL distro, WSL version, running or stopped
+      description: "`wsl.exe --list --verbose` shows them. Say none yet if you have no distro."
+      placeholder: Ubuntu-24.04, WSL 2, running
+    validations:
+      required: false
+  - type: dropdown
+    id: stage
+    attributes:
+      label: Where it happened
+      options:
+        - First run wizard
+        - A bench page
+        - Tray menu or flyout
+        - The command line (benchbar.exe)
+        - Other
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you clicked or ran, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: report
+    attributes:
+      label: The report zip
+      description: "Drag the zip that Report a Bug selected in Explorer into this box. It holds no passwords; user names and home paths are replaced with `<user>`."
+    validations:
+      required: true
+  - type: checkboxes
+    id: ai
+    attributes:
+      label: Written by you
+      options:
+        - label: I wrote this report in my own words (CONTRIBUTING.md, AI assisted contributions).
+          required: true

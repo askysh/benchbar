@@ -21,6 +21,14 @@ internal sealed class MainActions
     public Action<string> CopyText { get; set; } = _ => { };
     public Action<string> OpenUrl { get; set; } = _ => { };
     public Action RefreshNow { get; set; } = () => { };
+
+    /// <summary>Report a Bug: the entry point ("Beta banner") and a problem text when the button sits next to one.</summary>
+    public Action<string, string?> ReportBug { get; set; } = (_, _) => { };
+
+    /// <summary>The beta notice at the top shows until it is dismissed once; the app remembers that in the config.</summary>
+    public Func<bool> BetaBannerVisible { get; set; } = () => false;
+
+    public Action DismissBetaBanner { get; set; } = () => { };
 }
 
 /// <summary>A newer release the banner offers.</summary>
@@ -37,6 +45,7 @@ internal sealed class MainWindow : Window
     private readonly ListBox _list = new() { BorderThickness = new Thickness(0), Background = Brushes.Transparent, Margin = new Thickness(4, 0, 4, 0) };
     private readonly TextBlock _summary = Ui.Text("", 12, opacity: 0.7, margin: new Thickness(16, 0, 16, 8));
     private readonly Border _banner = new() { Visibility = Visibility.Collapsed, Margin = new Thickness(24, 16, 24, 0) };
+    private readonly Border _beta = new() { Visibility = Visibility.Collapsed, Margin = new Thickness(24, 16, 24, 0) };
     private readonly ContentControl _content = new() { Margin = new Thickness(24, 20, 24, 20), IsTabStop = false };
     private readonly BenchPage _page;
     private readonly DiscoveryView _discovery;
@@ -60,7 +69,7 @@ internal sealed class MainWindow : Window
         _discovery = new DiscoveryView(actions.Services);
         _profiles = new ProfilesView(actions.Services);
 
-        Title = "BenchBar";
+        Title = BetaText.WindowTitle;
         Width = 1000;
         Height = 680;
         MinWidth = 760;
@@ -68,11 +77,14 @@ internal sealed class MainWindow : Window
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         Ui.ApplyTheme(this, theme);
         Ui.ApplyMica(this);
-        Ui.Name(this, "BenchBar");
+        Ui.Name(this, BetaText.WindowTitle);
 
         var sidebar = BuildSidebar();
+        BuildBetaBanner();
         var right = new DockPanel();
+        DockPanel.SetDock(_beta, Dock.Top);
         DockPanel.SetDock(_banner, Dock.Top);
+        right.Children.Add(_beta);
         right.Children.Add(_banner);
         right.Children.Add(_content);
 
@@ -84,6 +96,8 @@ internal sealed class MainWindow : Window
         root.Children.Add(sidebar);
         root.Children.Add(right);
         Content = root;
+        // a key press must not draw a focus rectangle around a whole pane: only controls take the focus visual
+        Ui.QuietFocus(root);
 
         InputBindings.Add(new KeyBinding(new RelayCommand(_actions.NewBench), Key.N, ModifierKeys.Control));
         InputBindings.Add(new KeyBinding(new RelayCommand(_actions.ShowSettings), Key.OemComma, ModifierKeys.Control));
@@ -117,12 +131,77 @@ internal sealed class MainWindow : Window
 
     public UpdateOffer? Offer => _offer;
 
+    /// <summary>The beta notice: shown until dismissed, with Report a Bug and Dismiss.</summary>
+    public bool BetaBannerShown => _beta.Visibility == Visibility.Visible;
+
+    private void BuildBetaBanner()
+    {
+        // one slim line: it must not take the room the wizard rows need
+        var line = new DockPanel();
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+        var report = Ui.Button(BetaText.ReportABug, () => _actions.ReportBug("Beta banner", null), "Report a bug", primary: true);
+        var dismiss = Ui.Button("Dismiss", () =>
+        {
+            _betaWanted = false;
+            SyncBetaBanner();
+            _actions.DismissBetaBanner();
+        }, "Dismiss the beta notice");
+        dismiss.Margin = new Thickness(0);
+        foreach (var b in new[] { report, dismiss })
+        {
+            b.Padding = new Thickness(10, 2, 10, 2);
+            b.MinHeight = 0;
+            b.MinWidth = 0;
+        }
+        buttons.Children.Add(report);
+        buttons.Children.Add(dismiss);
+        DockPanel.SetDock(buttons, Dock.Right);
+        line.Children.Add(buttons);
+        line.Children.Add(new TextBlock
+        {
+            Text = BetaText.Banner,
+            FontSize = 12,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextWrapping = TextWrapping.NoWrap,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            ToolTip = BetaText.Banner,
+            Margin = new Thickness(0, 0, 12, 0),
+        });
+        _beta.Background = Ui.Card;
+        _beta.CornerRadius = new CornerRadius(6);
+        _beta.Padding = new Thickness(12, 3, 8, 3);
+        _beta.Margin = new Thickness(24, 8, 24, 0);
+        _beta.Child = line;
+        Ui.Name(_beta, "Beta notice: " + BetaText.Banner);
+        _betaWanted = _actions.BetaBannerVisible();
+        SyncBetaBanner();
+    }
+
+    private bool _betaWanted;
+
+    /// <summary>The beta notice shows until dismissed, but not while the wizard is open: the wizard needs the room.</summary>
+    private void SyncBetaBanner() => _beta.Visibility = _betaWanted && Mode != MainMode.Wizard ? Visibility.Visible : Visibility.Collapsed;
+
+    /// <summary>Where the person is in this window, for a bug report. No bench names or paths.</summary>
+    public string ReportWhere =>
+        Mode == MainMode.Wizard ? (_wizard is null ? "Main window, setup wizard" : ReportContext.Wizard(_wizard.Model.Page, _wizard.Model.Flow, _wizard.Model.BusyStepId))
+        : _snapshot.Problem is not null ? "Main window, problem card"
+        : _snapshot.DistroMissing ? "Main window, distro not installed card"
+        : _snapshot.DistroStopped ? "Main window, distro stopped card"
+        : _tool != SidebarTool.None ? "Main window, " + SidebarTools.Title(_tool)
+        : _snapshot.Benches.Count == 0 ? "Main window, no benches yet"
+        : "Main window, " + _page.Tab + " tab";
+
+    /// <summary>The bench the sidebar has selected (a bench row, or the bench of a site row); null in a tool pane or with no bench.</summary>
+    public string? SelectedBenchPath => _tool == SidebarTool.None ? _items.FirstOrDefault(i => i.Key == _selectedKey)?.BenchPath : null;
+
     // --- sidebar ---
 
     private UIElement BuildSidebar()
     {
         var head = new DockPanel { Margin = new Thickness(16, 16, 12, 8) };
         var add = Ui.Button("+", () => { }, "Add a bench", minWidth: 36);
+        add.ToolTip = "Add a Bench";
         add.Margin = new Thickness(0);
         add.Padding = new Thickness(8, 2, 8, 2);
         add.FontSize = 16;
@@ -132,7 +211,7 @@ internal sealed class MainWindow : Window
         var existing = new MenuItem { Header = "I Already Have a Bench..." };
         existing.Click += (_, _) => _actions.ExistingBench();
         Ui.Name(fresh, "New Bench");
-        Ui.Name(existing, "I already have a bench");
+        Ui.Name(existing, "I Already Have a Bench");
         menu.Items.Add(fresh);
         menu.Items.Add(existing);
         add.ContextMenu = menu;
@@ -145,6 +224,11 @@ internal sealed class MainWindow : Window
         DockPanel.SetDock(add, Dock.Right);
         head.Children.Add(add);
         head.Children.Add(Ui.Text("Benches", 18, FontWeights.SemiBold));
+
+        var app = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(16, 16, 12, 0) };
+        app.Children.Add(Ui.Text("BenchBar", 13, FontWeights.SemiBold, 0.8));
+        app.Children.Add(Ui.Pill());
+        head.Margin = new Thickness(16, 8, 12, 8);
 
         var foot = new StackPanel { Margin = new Thickness(12, 8, 12, 16) };
         var settings = FootButton("Settings", "", _actions.ShowSettings);
@@ -162,10 +246,12 @@ internal sealed class MainWindow : Window
 
         Ui.Name(_list, "Benches");
         var panel = new DockPanel();
+        DockPanel.SetDock(app, Dock.Top);
         DockPanel.SetDock(head, Dock.Top);
         DockPanel.SetDock(_summary, Dock.Top);
         DockPanel.SetDock(foot, Dock.Bottom);
         DockPanel.SetDock(tools, Dock.Bottom);
+        panel.Children.Add(app);
         panel.Children.Add(head);
         panel.Children.Add(_summary);
         panel.Children.Add(foot);
@@ -274,6 +360,7 @@ internal sealed class MainWindow : Window
     /// <summary>Opens the Find Benches or Team Profiles pane and clears the bench selection in the sidebar.</summary>
     public void ShowTool(SidebarTool tool)
     {
+        if (Mode == MainMode.Wizard) return; // the buttons are off then; a shortcut must not change what is hidden behind the wizard
         _tool = tool;
         _syncing = true;
         try { _list.SelectedIndex = -1; }
@@ -285,6 +372,19 @@ internal sealed class MainWindow : Window
     private void MarkTools()
     {
         foreach (var (tool, button) in _toolButtons) button.Background = tool == _tool ? Ui.Card : Brushes.Transparent;
+    }
+
+    public const string ToolsOffWhileSetupTip = "Finish or close the setup first.";
+
+    /// <summary>Find Benches and Team Profiles do nothing while the wizard covers the window, so they are off, with the reason.</summary>
+    private void UpdateToolButtons()
+    {
+        var off = Mode == MainMode.Wizard;
+        foreach (var button in _toolButtons.Values)
+        {
+            button.IsEnabled = !off;
+            button.ToolTip = off ? ToolsOffWhileSetupTip : null;
+        }
     }
 
     private void SyncContentKey() => _contentKey = _page.Tab == BenchTab.Overview ? "overview" : "bench|" + _page.Tab.ToString().ToLowerInvariant();
@@ -304,12 +404,15 @@ internal sealed class MainWindow : Window
         var selected = _items.FirstOrDefault(i => i.Key == _selectedKey);
         if (_snapshot.Problem is { } problem)
         {
-            SetContent("problem", () => CardPage("BenchBar needs attention", problem, "Copy", () => _actions.CopyText(problem)));
+            SetContent("problem", () => CardPage("BenchBar needs attention", problem, "Copy", () => _actions.CopyText(problem), "Set Up BenchBar", _actions.NewBench));
         }
         else if (_snapshot.DistroStopped)
         {
             var distro = _snapshot.Distro ?? "The WSL distro";
-            SetContent("stopped|" + distro, () => CardPage($"{distro} is stopped", FlyoutView.DistroHint, "Start", _actions.StartDistro));
+            if (_snapshot.DistroMissing)
+                SetContent("missing|" + distro, () => CardPage($"{distro} is not installed", FlyoutView.MissingDistroHint, "Open Settings", _actions.ShowSettings, "Set Up BenchBar", _actions.NewBench));
+            else
+                SetContent("stopped|" + distro, () => CardPage($"{distro} is stopped", FlyoutView.DistroHint, "Start", _actions.StartDistro));
         }
         else if (_tool != SidebarTool.None)
         {
@@ -344,12 +447,15 @@ internal sealed class MainWindow : Window
         _content.Content = build();
     }
 
-    private UIElement CardPage(string title, string text, string button, Action click)
+    private UIElement CardPage(string title, string text, string button, Action click, string? second = null, Action? secondClick = null)
     {
         var panel = new StackPanel { MaxWidth = 560, HorizontalAlignment = HorizontalAlignment.Left };
         panel.Children.Add(Ui.Text(title, 24, FontWeights.SemiBold));
         panel.Children.Add(Ui.Text(text, 14, opacity: 0.8, margin: new Thickness(0, 6, 0, 16)));
-        panel.Children.Add(Ui.Button(button, click, button, primary: true));
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+        buttons.Children.Add(Ui.Button(button, click, button, primary: second is null));
+        if (second is not null && secondClick is not null) buttons.Children.Add(Ui.Button(second, secondClick, second, primary: true));
+        panel.Children.Add(buttons);
         return panel;
     }
 
@@ -359,6 +465,8 @@ internal sealed class MainWindow : Window
         _wizard = wizard;
         _contentKey = "wizard";
         _content.Content = wizard;
+        SyncBetaBanner();
+        UpdateToolButtons();
     }
 
     public void CloseWizard()
@@ -366,6 +474,8 @@ internal sealed class MainWindow : Window
         _wizard = null;
         _contentKey = "";
         Mode = MainMode.Home;
+        SyncBetaBanner();
+        UpdateToolButtons();
         ShowHome();
     }
 
@@ -400,7 +510,7 @@ internal sealed class MainWindow : Window
         });
         _banner.Background = Ui.Card;
         _banner.CornerRadius = new CornerRadius(8);
-        _banner.Padding = new Thickness(16, 10, 12, 10);
+        _banner.Padding = new Thickness(12, 4, 8, 4);
         _banner.Child = line;
         Ui.Name(_banner, $"BenchBar {offer.Version} is out");
         _banner.Visibility = Visibility.Visible;

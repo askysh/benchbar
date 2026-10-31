@@ -12,12 +12,64 @@ public class SetupParsingTests
     {
         var report = SetupJson.ParseCheck(Read("check.json"));
         Assert.Equal("Ubuntu-24.04", report.Distro);
-        Assert.False(report.Ready);
+        Assert.True(report.Ready);
         Assert.Equal(13, report.Steps.Count);
         Assert.Equal(SetupStatus.Warn, report.Step(SetupIds.WslConfig)!.Status);
-        Assert.Equal("path", report.Step(SetupIds.ShimPath)!.Action);
+        Assert.Equal(SetupStatus.Warn, report.Step(SetupIds.ShimPath)!.Status);
+        Assert.Null(report.Step(SetupIds.ShimPath)!.Action);
         Assert.True(report.Step(SetupIds.WslConfig)!.IsSatisfied);
-        Assert.Equal("path", report.NextActionable!.Action); // wslconfig is only advice
+        Assert.Null(report.NextActionable); // wslconfig and shim_path are only advice
+        Assert.True(report.CanContinue);
+    }
+
+    [Fact]
+    public void AdviceRowsAreNotBlockingAndNeverHoldContinueBack()
+    {
+        var report = SetupJson.ParseCheck(Read("check.json"));
+        Assert.All(new[] { SetupIds.Linger, SetupIds.Keepalive, SetupIds.WslConfig, SetupIds.ShimPath }, id => Assert.False(report.Step(id)!.Blocking));
+        Assert.True(report.Step(SetupIds.Cli)!.Blocking);
+        var path = report.Step(SetupIds.ShimPath)!;
+        Assert.True(path.HasAdviceCommand);
+        Assert.Equal("benchbar.exe path install", path.CopyText);
+        Assert.False(path.StopsTheWizard);
+    }
+
+    [Fact]
+    public void AMissingBlockingFieldFallsBackToTheStepId()
+    {
+        var report = SetupJson.ParseCheck("{\"steps\":[{\"id\":\"linger\",\"status\":\"warn\"},{\"id\":\"cli\",\"status\":\"missing\"}]}");
+        Assert.False(report.Step("linger")!.Blocking);
+        Assert.True(report.Step("cli")!.Blocking);
+        Assert.False(report.CanContinue);
+        Assert.Equal("cli", report.FirstBlocking!.Id);
+    }
+
+    [Fact]
+    public void ABlockingFailureWithNoActionNeedsAManualFix()
+    {
+        var report = SetupJson.ParseCheck("{\"steps\":[{\"id\":\"distro\",\"status\":\"fail\",\"detail\":\"Ubuntu runs as WSL 1, benches need WSL 2: wsl.exe --set-version Ubuntu 2\",\"action\":null,\"blocking\":true}]}");
+        var step = report.Step("distro")!;
+        Assert.True(step.NeedsManualFix);
+        Assert.Equal("wsl.exe --set-version Ubuntu 2", step.CopyText);
+        Assert.False(report.CanContinue);
+    }
+
+    [Fact]
+    public void AWarningOnABlockingStepDoesNotBlockButNotCheckedDoes()
+    {
+        var warn = SetupJson.ParseCheck("{\"steps\":[{\"id\":\"virtualization\",\"status\":\"warn\",\"detail\":\"cannot tell\",\"blocking\":true}]}");
+        Assert.True(warn.CanContinue);
+        var unchecked1 = SetupJson.ParseCheck("{\"steps\":[{\"id\":\"systemd\",\"status\":\"warn\",\"detail\":\"not checked: the distro is stopped\",\"blocking\":true}]}");
+        Assert.False(unchecked1.CanContinue);
+    }
+
+    [Fact]
+    public void TheDoneLineCarriesTheErrorId()
+    {
+        var done = Assert.IsType<SetupEvent.Done>(SetupJson.ParseLine("{\"event\":\"done\",\"exit\":1,\"error_id\":\"distro_running\"}"));
+        Assert.Equal(SetupIds.ErrorDistroRunning, done.ErrorId);
+        var plain = Assert.IsType<SetupEvent.Done>(SetupJson.ParseLine("{\"event\":\"done\",\"exit\":0}"));
+        Assert.Null(plain.ErrorId);
     }
 
     [Fact]

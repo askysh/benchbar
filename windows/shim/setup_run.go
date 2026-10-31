@@ -37,7 +37,19 @@ type doneEvent struct {
 	// UserExisted is set by distro_user only: true when the Linux user was
 	// there already, so the typed password was not applied.
 	UserExisted *bool `json:"user_existed,omitempty"`
+	// ErrorID names why a failed action failed, when the caller can act on
+	// it: "distro_running" (see setupError). Absent otherwise.
+	ErrorID string `json:"error_id,omitempty"`
 }
+
+// errDistroRunning is the error_id of an action that would stop a distro
+// that is running, without --force.
+const errDistroRunning = "distro_running"
+
+// setupError is a failure with an id for the done event.
+type setupError struct{ id, msg string }
+
+func (e *setupError) Error() string { return e.msg }
 
 // emitter writes the event stream: JSON lines, or plain text for a person.
 // It sends exactly one done event.
@@ -136,7 +148,11 @@ type runCtx struct {
 	em     *emitter
 	distro string
 	user   string
-	child  bool // the elevated half of wsl_enable
+	force  bool // --force: allow stopping a running distro
+
+	// wasRunning is whether the distro ran before the action touched it,
+	// read first because the action's own commands start it.
+	wasRunning bool
 
 	// results
 	msg         string // the finishing message
@@ -172,7 +188,7 @@ var setupActions = map[string]setupAction{
 }
 
 func cmdSetupRun(sys *System, args []string) int {
-	p, err := parseFlags(args, []string{"--jsonl"}, []string{"--distro", "--user"})
+	p, err := parseFlags(args, []string{"--jsonl", "--force"}, []string{"--distro", "--user"})
 	em := &emitter{w: sys.Stdout, jsonl: p != nil && p.bools["--jsonl"]}
 	fail := func(id, msg string) int {
 		if em.jsonl {
@@ -205,7 +221,7 @@ func cmdSetupRun(sys *System, args []string) int {
 	if id == "distro_user" && !validLinuxUser(user) {
 		return fail(id, fmt.Sprintf("%q is not a usable Linux user name", user))
 	}
-	rc := &runCtx{sys: sys, em: em, distro: distro, user: user}
+	rc := &runCtx{sys: sys, em: em, distro: distro, user: user, force: p.bools["--force"]}
 	if id == "wsl_enable" && !sys.Host.IsAdmin() {
 		return runWslEnableElevated(rc)
 	}
@@ -216,8 +232,16 @@ func cmdSetupRun(sys *System, args []string) int {
 func runAction(rc *runCtx, id string) int {
 	act := setupActions[id]
 	rc.em.step(id, "running", act.title)
+	if id == "distro_user" || id == "systemd" {
+		rc.wasRunning = distroRunning(rc.sys, rc.distro)
+	}
 	err := act.run(rc)
 	exit := 0
+	errorID := ""
+	var se *setupError
+	if errors.As(err, &se) {
+		errorID = se.id
+	}
 	next := act.next
 	switch {
 	case err != nil:
@@ -233,15 +257,18 @@ func runAction(rc *runCtx, id string) int {
 		next = []string{"wsl_update"}
 		if rc.reboot {
 			next = []string{"reboot"}
-			if !rc.child {
-				if werr := writeRebootMarker(rc.sys); werr != nil {
-					rc.warn("could not remember that a restart is pending: " + werr.Error())
-				}
-			}
+		}
+	}
+	if id == "distro_install" && err == nil && rc.reboot {
+		next = []string{"reboot"}
+	}
+	if rc.reboot && err == nil && (id == "wsl_enable" || id == "distro_install") {
+		if werr := writeRebootMarker(rc.sys, id); werr != nil {
+			rc.warn("could not remember that a restart is pending: " + werr.Error())
 		}
 	}
 	rc.em.done(doneEvent{Exit: exit, Changed: rc.changed && err == nil, RebootRequired: rc.reboot && err == nil,
-		Cancelled: rc.cancel, Warnings: rc.warnings, NextActions: next, UserExisted: rc.userExisted})
+		Cancelled: rc.cancel, Warnings: rc.warnings, NextActions: next, UserExisted: rc.userExisted, ErrorID: errorID})
 	return exit
 }
 
@@ -287,8 +314,8 @@ func (rc *runCtx) stream(stdin string, args ...string) (int, []string, error) {
 	var mu sync.Mutex
 	w := &lineWriter{emit: func(s string) {
 		mu.Lock()
-		if len(lines) < 400 {
-			lines = append(lines, s)
+		if lines = append(lines, s); len(lines) > 400 {
+			lines = lines[len(lines)-400:] // keep the newest
 		}
 		mu.Unlock()
 		rc.em.log(s)
@@ -343,6 +370,15 @@ func actWslEnable(rc *runCtx) error {
 	if err != nil {
 		return fmt.Errorf("cannot run wsl.exe: %v", err)
 	}
+	return rc.wslEnableResult(code, lines)
+}
+
+// wslEnableResult reads the outcome of `wsl.exe --install --no-distribution`:
+// its exit code, the lines it printed (none when it ran elevated and hidden)
+// and, when both are silent about a restart, whether WSL answers now. The
+// generic Windows Update and CBS restart flags are not used: an unrelated
+// update would block onboarding.
+func (rc *runCtx) wslEnableResult(code int, lines []string) error {
 	reboot := rebootCode(code)
 	if code != 0 && !reboot {
 		msg := fmt.Sprintf("wsl.exe --install --no-distribution failed with exit code %d", code)
@@ -362,8 +398,6 @@ func actWslEnable(rc *runCtx) error {
 		if res, err := wslExec(rc.sys, "", "--status"); err != nil || res.Code != 0 {
 			reboot = true
 			rc.warn("WSL does not answer yet, so Windows probably needs a restart")
-		} else if pending, _ := rc.sys.Host.RebootPending(); pending {
-			reboot = true
 		}
 	}
 	if reboot {
@@ -554,6 +588,37 @@ func (rc *runCtx) setWslConf(section, key, value string) (bool, error) {
 	return true, nil
 }
 
+// distroRunning is whether the distro runs now. Like setup check it asks the
+// quiet running list, so it never starts anything.
+func distroRunning(sys *System, name string) bool {
+	for _, n := range runningNames(sys) {
+		if strings.EqualFold(n, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// refuseRunning stops an action that would restart a distro that was
+// running when it began, unless --force was given. What runs in it (benches,
+// MariaDB) stops with it.
+func (rc *runCtx) refuseRunning() error {
+	if !rc.wasRunning || rc.force {
+		return nil
+	}
+	return &setupError{errDistroRunning, rc.distro + " is running. This change restarts it and stops everything inside it, such as your benches and MariaDB. Stop them first (benchbar down), or run this action again with --force."}
+}
+
+// confDiffers is whether /etc/wsl.conf lacks section.key = value.
+func (rc *runCtx) confDiffers(section, key, value string) (bool, error) {
+	old, err := rc.readWslConf()
+	if err != nil {
+		return false, err
+	}
+	cur, ok := parseINI([]byte(old)).get(section, key)
+	return !ok || cur != value, nil
+}
+
 // terminate stops this one distro, so /etc/wsl.conf is read at its next
 // start. It never touches other distros and never shuts WSL down.
 func (rc *runCtx) terminate() error {
@@ -578,6 +643,14 @@ func actDistroUser(rc *runCtx) error {
 	rc.userExisted = &exists
 	if exists && strings.TrimSpace(res.Stdout) == "0" {
 		return errors.New("that user is root")
+	}
+	// decide before anything is created: a refusal must change nothing
+	if need, err := rc.confDiffers("user", "default", user); err != nil {
+		return err
+	} else if need {
+		if err := rc.refuseRunning(); err != nil {
+			return err
+		}
 	}
 	if !exists {
 		switch {
@@ -627,13 +700,19 @@ func (rc *runCtx) pid1() string {
 }
 
 func actSystemd(rc *runCtx) error {
-	changed, err := rc.setWslConf("boot", "systemd", "true")
+	differs, err := rc.confDiffers("boot", "systemd", "true")
 	if err != nil {
 		return err
 	}
-	if !changed && rc.pid1() == "systemd" {
+	if !differs && rc.pid1() == "systemd" {
 		rc.skipped, rc.msg = true, "systemd is already running"
 		return nil
+	}
+	if err := rc.refuseRunning(); err != nil {
+		return err
+	}
+	if _, err := rc.setWslConf("boot", "systemd", "true"); err != nil {
+		return err
 	}
 	rc.em.log("stopping " + rc.distro + " so systemd starts (other distros keep running)")
 	if err := rc.terminate(); err != nil {
@@ -677,13 +756,18 @@ func actCLIInstall(rc *runCtx) error {
 	if t.cli != "benchbar" {
 		return errors.New(missingCLIFix(t))
 	}
-	script := "curl -fsSL " + installerURL + " | bash"
-	code, _, err := rc.stream("", "-d", rc.distro, "--cd", "~", "--exec", "/bin/bash", "-c", script)
+	// pipefail: a failed download (curl exit 22 on a 404) is the exit code, not bash's 0
+	script := "set -o pipefail; export BENCHBAR_NONINTERACTIVE=1; " + installerPipe()
+	code, lines, err := rc.stream("", "-d", rc.distro, "--cd", "~", "--exec", "/bin/bash", "-c", script)
 	if err != nil {
 		return fmt.Errorf("cannot run wsl.exe: %v", err)
 	}
 	if code != 0 {
-		return fmt.Errorf("the installer failed with exit code %d", code)
+		msg := fmt.Sprintf("the installer failed with exit code %d", code)
+		if l := lastLine(lines); l != "" {
+			msg += ": " + l
+		}
+		return errors.New(msg)
 	}
 	// curl | bash hides a failed download, so look for the result
 	pr, err = runProbeScript(rc.sys, rc.distro, t.cli, setupProbeScript)

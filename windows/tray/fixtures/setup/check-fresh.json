@@ -1,8 +1,8 @@
 {"schema_version":1,"distro":"Ubuntu-24.04","ready":false,"reboot_pending":false,"steps":[
-{"id":"windows_build","status":"ok","title":"Windows version","detail":"Windows build 26220","action":null,"needs_admin":false},
-{"id":"virtualization","status":"ok","title":"Virtualization","detail":"enabled in firmware","action":null,"needs_admin":false},
-{"id":"wsl_feature","status":"missing","title":"Windows Subsystem for Linux","detail":"WSL is not installed","action":"wsl_enable","needs_admin":true},
-{"id":"reboot","status":"missing","title":"Restart","detail":"waits for wsl_feature","action":null,"needs_admin":false},
-{"id":"wsl_version","status":"missing","title":"WSL version","detail":"waits for wsl_feature","action":"wsl_update","needs_admin":false},
-{"id":"distro","status":"missing","title":"Ubuntu 24.04","detail":"waits for wsl_feature","action":"distro_install","needs_admin":false}
+{"id":"windows_build","status":"ok","title":"Windows version","detail":"Windows build 26220","action":null,"needs_admin":false,"blocking":true},
+{"id":"virtualization","status":"ok","title":"Virtualization","detail":"enabled in firmware","action":null,"needs_admin":false,"blocking":true},
+{"id":"wsl_feature","status":"missing","title":"Windows Subsystem for Linux","detail":"WSL is not installed","action":"wsl_enable","needs_admin":true,"blocking":true},
+{"id":"reboot","status":"missing","title":"Restart","detail":"waits for wsl_feature","action":null,"needs_admin":false,"blocking":true},
+{"id":"wsl_version","status":"missing","title":"WSL version","detail":"waits for wsl_feature","action":"wsl_update","needs_admin":false,"blocking":true},
+{"id":"distro","status":"missing","title":"Ubuntu 24.04","detail":"waits for wsl_feature","action":"distro_install","needs_admin":false,"blocking":true}
 ]}

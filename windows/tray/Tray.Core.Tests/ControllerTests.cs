@@ -38,7 +38,7 @@ public class ControllerTests
             Assert.NotEmpty(host.Icons);
             await UntilAsync(() => host.Changes.Count > 0);
 
-            Assert.Equal("BenchBar: 1 bench, none up", host.Tooltip);
+            Assert.Equal("BenchBar (Beta): 1 bench, none up", host.Tooltip);
             Assert.Equal("none up", host.Changes[0].UpText);
             Assert.Contains(controller.Sequencer.Plan, new RunnerPlan?[]
             {

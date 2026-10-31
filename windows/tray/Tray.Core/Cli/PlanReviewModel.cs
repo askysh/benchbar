@@ -81,6 +81,31 @@ public sealed class PlanReviewModel : IDisposable
 
     public bool CanStop => Phase == PlanPhase.Running && Request.CanStop;
 
+    /// <summary>There is always a way out of a running apply: Stop Waiting closes the sheet and the run goes on (see <see cref="Detach"/>).</summary>
+    public bool CanStopWaiting => Phase == PlanPhase.Running;
+
+    private Action<string>? _onDetachedFinish;
+
+    /// <summary>The sheet was closed while the apply runs. It is no longer cancelled by <see cref="Dispose"/>, and <paramref name="finished"/> gets one line when it ends.</summary>
+    public void Detach(Action<string> finished)
+    {
+        if (!CanStopWaiting) return;
+        _onDetachedFinish = finished;
+    }
+
+    public bool IsDetached => _onDetachedFinish is not null;
+
+    /// <summary>One line for a notification: what the run did, or why it did not.</summary>
+    public string SummaryLine
+    {
+        get
+        {
+            var title = Request.Title;
+            if (Result is not { } result) return Message ?? $"{title}: no result.";
+            return result.Ok ? $"{title}: {result.Headline.ToLowerInvariant()}." : $"{title}: {result.Headline.ToLowerInvariant()}. {result.Error}".TrimEnd();
+        }
+    }
+
     /// <summary>The plan can be applied: it has no errors, it changes something, and it has a token to apply it with.</summary>
     public bool CanConfirm => Phase == PlanPhase.Review && Plan is { CanApply: true, HasChanges: true } && (!Request.RequiresToken || Plan.Token is { Length: > 0 });
 
@@ -173,6 +198,11 @@ public sealed class PlanReviewModel : IDisposable
             Phase = PlanPhase.Finished;
         }
         Raise();
+        if (_onDetachedFinish is { } finished)
+        {
+            _onDetachedFinish = null;
+            finished(SummaryLine);
+        }
     }
 
     public void Stop()
@@ -228,6 +258,8 @@ public sealed class PlanReviewModel : IDisposable
 
     public void Dispose()
     {
+        // a detached run keeps going: closing the sheet must not kill a restore part way
+        if (IsDetached) return;
         _disposed = true;
         lock (_gate)
         {

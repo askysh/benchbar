@@ -276,18 +276,3 @@ func systemDir() string {
 	}
 	return d
 }
-
-// finalPathOf is the real path of an open file, after links and junctions.
-func finalPathOf(f *os.File) (string, error) {
-	buf := make([]uint16, windows.MAX_LONG_PATH)
-	n, err := windows.GetFinalPathNameByHandle(windows.Handle(f.Fd()), &buf[0], uint32(len(buf)), 0)
-	if err != nil {
-		return "", err
-	}
-	if int(n) > len(buf) {
-		return "", errors.New("path too long")
-	}
-	p := windows.UTF16ToString(buf[:n])
-	bs := string(rune(92))
-	return strings.TrimPrefix(p, bs+bs+"?"+bs), nil
-}

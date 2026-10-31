@@ -91,5 +91,3 @@ func (mutexLocks) TryLock(name string) (func(), bool, error) {
 
 // systemDir is the Windows system folder; there is none here.
 func systemDir() string { return "" }
-
-func finalPathOf(f *os.File) (string, error) { return f.Name(), nil }

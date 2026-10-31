@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # apt-get mock: "install PKG..." adds to $MOCK_STATE/apt_installed (the set
 # dpkg-query reads); "-s" only simulates; "update", "remove" and the rest succeed.
+# installing mariadb-server makes it listen on 3306 (the $MOCK_LISTEN table).
 # a .deb named wkhtmltox* also marks the patched wkhtmltopdf as installed.
 # $MOCK_STATE/apt_fail makes every call fail; names listed in
 # $MOCK_STATE/apt_unavailable cannot be installed.
@@ -25,6 +26,10 @@ if [[ "$verb" == "install" ]]; then
     # the official wkhtmltopdf .deb puts the patched build in place
     case "$p" in *wkhtmltox*) printf 'installed\n' >"$MOCK_STATE/wkhtml_installed" ;; esac
     p="$(basename "$p" .deb)"; p="${p%%_*}"
+    # the package starts the server: MariaDB listens on 3306 (the lsof and ss mocks' table)
+    if [[ "$p" == "mariadb-server" && -n "${MOCK_LISTEN:-}" ]] && ! grep -q '^3306 ' "$MOCK_LISTEN" 2>/dev/null; then
+      printf '3306 111 mariadbd 127.0.0.1\n' >>"$MOCK_LISTEN"
+    fi
     grep -qx "$p" "$MOCK_STATE/apt_installed" 2>/dev/null || printf '%s\n' "$p" >>"$MOCK_STATE/apt_installed"
   done
 fi

@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -15,9 +16,8 @@ type HostInfo interface {
 	VirtualizationEnabled() (bool, error)
 	// BootTime is when Windows last started.
 	BootTime() (time.Time, error)
-	// RebootPending is true when Windows itself says a restart is pending
-	// (Component Based Servicing or Windows Update flags).
-	RebootPending() (bool, error)
+	// ProductName is the Windows edition, such as "Windows 11 Pro".
+	ProductName() (string, error)
 	// IsAdmin is true when this process runs elevated.
 	IsAdmin() bool
 }
@@ -26,7 +26,8 @@ type HostInfo interface {
 // the UAC prompt with No (ERROR_CANCELLED, 1223).
 var ErrElevationDeclined = errors.New("the Windows permission prompt was declined")
 
-// Elevator starts a program through the UAC prompt.
+// Elevator starts a program through the UAC prompt. The shim only ever
+// passes the system folder's wsl.exe.
 type Elevator interface {
 	Start(exe string, args []string) (ElevatedProc, error)
 }
@@ -36,4 +37,13 @@ type ElevatedProc interface {
 	// Wait waits up to d. done is false when the program still runs.
 	Wait(d time.Duration) (done bool, exit int, err error)
 	Close()
+}
+
+// fixProductName turns the registry's "Windows 10 Pro" into "Windows 11 Pro"
+// on build 22000 and later, where Windows 11 keeps the old text.
+func fixProductName(name string, build int) string {
+	if build >= 22000 {
+		return strings.Replace(name, "Windows 10", "Windows 11", 1)
+	}
+	return name
 }

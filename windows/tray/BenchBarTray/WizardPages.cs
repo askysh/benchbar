@@ -11,7 +11,7 @@ internal sealed partial class WizardView
 
     private PageParts WelcomePage()
     {
-        var panel = new StackPanel { MaxWidth = 560, HorizontalAlignment = HorizontalAlignment.Left };
+        var panel = new StackPanel();
         Button Choice(string title, string detail, Action click)
         {
             var text = new StackPanel();
@@ -29,8 +29,9 @@ internal sealed partial class WizardView
             panel.Children.Add(button);
             return button;
         }
-        var first = Choice("Set Up a New Bench", "Check this PC, turn on WSL and Ubuntu if they are missing, then install Frappe.", () => _ = _model.ChooseNewBench());
-        Choice("I Already Have a Bench", "Use a bench inside WSL that BenchBar did not create.", () => _ = _model.ChooseExistingBench());
+        panel.Children.Add(Ui.Text(BetaText.WizardLine, 13, opacity: 0.8, margin: new Thickness(0, 0, 0, 14)));
+        var first = Choice("Set Up a New Bench", "Check this PC, turn on WSL and Ubuntu if they are missing, then install Frappe.", () => _model.ChooseNewBench().Forget());
+        Choice("I Already Have a Bench", "Use a bench inside WSL that BenchBar did not create.", () => _model.ChooseExistingBench().Forget());
         Choice("Just the Command Line Tool", "Only use benchbar from a terminal.", _model.ChooseCommandLineOnly);
 
         var page = new PageParts
@@ -48,7 +49,7 @@ internal sealed partial class WizardView
 
     private PageParts CliOnlyPage()
     {
-        var panel = new StackPanel { MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
+        var panel = new StackPanel();
         panel.Children.Add(Ui.Text("benchbar.exe is already on this PC. It calls the Linux command line tool inside Ubuntu. If that is missing, run this inside Ubuntu:", 14, margin: new Thickness(0, 0, 0, 10)));
         CopyRow("Linux install line", WizardModel.LinuxCliInstallLine, _model.Copy, panel);
         panel.Children.Add(Ui.Text("To let an AI assistant use it, run this in a terminal:", 14, margin: new Thickness(0, 10, 0, 10)));
@@ -66,7 +67,10 @@ internal sealed partial class WizardView
     private PageParts CheckPage()
     {
         var error = Note(error: true);
-        var status = Ui.Text("", 13, opacity: 0.75, margin: new Thickness(0, 0, 0, 10));
+        var reportCheck = Ui.Link(BetaText.ReportThisProblem, () => _actions.ReportBug(BetaText.ReportThisProblem, _model.CheckError), "Report this problem");
+        reportCheck.Visibility = Visibility.Collapsed;
+        reportCheck.Margin = new Thickness(0, 0, 0, 10);
+        var status = Ui.Live(Ui.Text("", 13, opacity: 0.75, margin: new Thickness(0, 0, 0, 10)));
         var rows = new StackPanel();
         var restart = new StackPanel { Visibility = Visibility.Collapsed };
         var logBox = new TextBox
@@ -83,17 +87,19 @@ internal sealed partial class WizardView
         };
         Ui.Name(logBox, "Output of the running step");
 
-        var panel = new StackPanel { MaxWidth = 720, HorizontalAlignment = HorizontalAlignment.Left };
+        var panel = new StackPanel();
         panel.Children.Add(error);
+        panel.Children.Add(reportCheck);
         panel.Children.Add(status);
         panel.Children.Add(rows);
         panel.Children.Add(restart);
         panel.Children.Add(logBox);
 
         var back = BackButton();
-        var again = Ui.Button("Check Again", () => _ = _model.CheckAsync(), "Check this PC again");
-        var all = Ui.Button("Set Up Everything", () => _ = _model.FixAllAsync(), "Set up everything that is missing");
-        var next = Primary("Continue", () => _ = _model.ContinueFromCheckAsync());
+        var again = Ui.Button("Check Again", () => _model.CheckAsync().Forget(), "Check this PC again");
+        var cancel = Ui.Button("Cancel", () => _model.CancelRun(), "Cancel the running step");
+        var all = Ui.Button("Set Up Everything", () => _model.FixAllAsync().Forget(), "Set up everything that is missing");
+        var next = Primary("Continue", () => _model.ContinueFromCheckAsync().Forget());
 
         string lastKey = "";
         var parts = new PageParts
@@ -104,31 +110,37 @@ internal sealed partial class WizardView
         };
         parts.Left.Add(back);
         parts.Left.Add(again);
+        parts.Right.Add(cancel);
         parts.Right.Add(all);
         parts.Right.Add(next);
         parts.Refresh = () =>
         {
+            cancel.Visibility = _model.BusyStepId is not null ? Visibility.Visible : Visibility.Collapsed;
             Show(error, _model.CheckError);
+            reportCheck.Visibility = _model.CheckError is { Length: > 0 } ? Visibility.Visible : Visibility.Collapsed;
             status.Text = _model.Checking ? "Checking this PC..." : _model.FixingAll ? "Setting things up..." : "";
             status.Visibility = status.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
             var busy = _model.Checking || _model.BusyStepId is not null || _model.FixingAll;
             again.IsEnabled = !busy;
             back.IsEnabled = _model.BusyStepId is null;
-            all.IsEnabled = !busy && _model.Report.Steps.Count > 0 && !_model.Report.Ready && _model.Report.NextActionable is not null;
+            all.IsEnabled = !busy && _model.Report.Steps.Count > 0 && _model.Report.NextActionable is not null;
             next.IsEnabled = _model.CanContinueFromCheck;
 
             var key = string.Join('\n', _model.Rows.Select(r =>
-                $"{r.Step.Id}|{r.Step.Status}|{r.Step.Detail}|{r.Busy}|{r.Message}|{r.ButtonLabel}|{busy}"))
-                + "|" + _model.RestartNeeded + "|" + _model.RestartRequested;
+                $"{r.Step.Id}|{r.Step.Status}|{r.Detail}|{r.Busy}|{r.Message}|{r.ButtonLabel}|{busy}"))
+                + "|" + _model.RestartNeeded + "|" + _model.RestartRequested + "|" + _model.RestartHint;
             if (key != lastKey)
             {
                 lastKey = key;
+                // a rebuild destroys the control that had the focus: remember it by name and put it back
+                var focused = Ui.FocusedName(panel);
                 rows.Children.Clear();
                 foreach (var row in _model.Rows) rows.Children.Add(CheckRowView(row, busy));
                 restart.Children.Clear();
                 if (_model.RestartNeeded && _model.Report.Step(SetupIds.Reboot) is null or { IsSatisfied: true })
                     restart.Children.Add(RestartCard());
                 restart.Visibility = restart.Children.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+                Ui.RestoreFocus(panel, focused);
             }
             var log = string.Join(Environment.NewLine, _model.ActionLog);
             if (logBox.Text != log)
@@ -155,14 +167,18 @@ internal sealed partial class WizardView
 
         var text = new StackPanel();
         text.Children.Add(Ui.Text(row.Step.Title, 14, FontWeights.SemiBold));
-        if (row.Step.Detail.Length > 0) text.Children.Add(Ui.Text(row.Step.Detail, 13, opacity: 0.8, margin: new Thickness(0, 2, 0, 0)));
-        if (row.Busy) text.Children.Add(Ui.Text("Working...", 13, opacity: 0.8, margin: new Thickness(0, 2, 0, 0)));
+        if (row.Detail.Length > 0) text.Children.Add(Ui.Text(row.Detail, 13, opacity: 0.8, margin: new Thickness(0, 2, 0, 0)));
+        if (!row.Step.Blocking && row.Step.Status == SetupStatus.Warn && !row.Step.Waits)
+            text.Children.Add(Ui.Text("Advice only. You can continue without it.", 12, opacity: 0.7, margin: new Thickness(0, 2, 0, 0)));
+        if (row.Busy)
+            text.Children.Add(Ui.Text(row.Message is { Length: > 0 } running ? running : "Working...", 13, opacity: 0.8, margin: new Thickness(0, 2, 0, 0)));
         else if (row.Message is { Length: > 0 } message)
         {
             var line = Ui.Text(message, 13, margin: new Thickness(0, 2, 0, 0));
             if (row.Step.Status != SetupStatus.Ok) line.Foreground = Ui.CriticalBrush;
             text.Children.Add(line);
         }
+        if (!row.Busy && !row.Waiting) AddHelp(text, row);
         if (row.AdminNote is { } note)
         {
             var shield = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0) };
@@ -193,6 +209,36 @@ internal sealed partial class WizardView
         return Ui.CardOf(grid, new Thickness(0, 0, 0, 6));
     }
 
+    /// <summary>
+    /// What a row with no button offers. A blocking step the person must fix by hand: the detail, Copy, a How to fix link and Report This
+    /// Problem. Advice with a command: Copy. A step that failed when it ran: Report This Problem.
+    /// </summary>
+    private void AddHelp(StackPanel text, CheckRow row)
+    {
+        var step = row.Step;
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
+        if (step.NeedsManualFix || step.HasAdviceCommand)
+        {
+            var copy = Ui.Button("Copy", () => _model.Copy(step.CopyText), "Copy the fix: " + step.Title, minWidth: 64);
+            buttons.Children.Add(copy);
+        }
+        if (step.NeedsManualFix)
+        {
+            var how = Ui.Link("How to fix", () => _model.OpenUrl(BetaText.HowToFixUrl), "How to fix: " + step.Title);
+            how.VerticalAlignment = VerticalAlignment.Center;
+            buttons.Children.Add(how);
+        }
+        // the person's own Stop is not a problem to report
+        var userStop = row.Message is WizardModel.StoppedMessage or WizardModel.CancelledMessage or WizardModel.StoppedWaitingMessage;
+        if (step.NeedsManualFix || (row.Message is { Length: > 0 } && step.Status != SetupStatus.Ok && !userStop))
+        {
+            var report = Ui.Link(BetaText.ReportThisProblem, () => _actions.ReportBug(BetaText.ReportThisProblem, ReportContext.Step(step, row.Message)), "Report this problem: " + step.Title);
+            report.VerticalAlignment = VerticalAlignment.Center;
+            buttons.Children.Add(report);
+        }
+        if (buttons.Children.Count > 0) text.Children.Add(buttons);
+    }
+
     private void OnRowClicked(CheckRow row)
     {
         if (row.Step.Action == SetupIds.ActionReboot)
@@ -200,7 +246,7 @@ internal sealed partial class WizardView
             if (_actions.ConfirmRestart()) _model.RestartNow();
             return;
         }
-        _ = _model.RunStepAsync(row.Step.Id);
+        _model.RunStepAsync(row.Step.Id).Forget();
     }
 
     private UIElement RestartCard()
@@ -214,6 +260,7 @@ internal sealed partial class WizardView
             warn.Foreground = Ui.CriticalBrush;
             panel.Children.Add(warn);
         }
+        if (_model.RestartHint is { Length: > 0 } hint) panel.Children.Add(Ui.Live(Ui.Text(hint, 13, margin: new Thickness(0, 0, 0, 8))));
         var button = Ui.Button("Restart Now", () => { if (_actions.ConfirmRestart()) _model.RestartNow(); }, "Restart Windows now", primary: true);
         button.IsEnabled = !_model.RestartRequested;
         panel.Children.Add(button);
@@ -231,18 +278,23 @@ internal sealed partial class WizardView
         var passProblem = Note(error: true);
         var error = Note(error: true);
         var working = Ui.Text("", 13, opacity: 0.75, margin: new Thickness(0, 6, 0, 0));
+        var userHint = Note(); // says what Create User is waiting for
 
-        var panel = new StackPanel { MaxWidth = 560, HorizontalAlignment = HorizontalAlignment.Left };
+        var panel = new StackPanel();
         panel.Children.Add(Ui.Labeled("User name", name, "Lowercase letters, digits, '-' and '_'."));
         panel.Children.Add(nameProblem);
         panel.Children.Add(Ui.Labeled("Password", pass, "This is what sudo asks for later. BenchBar keeps it in memory while this window is open and never saves it."));
         panel.Children.Add(Ui.Labeled("Confirm password", confirm));
         panel.Children.Add(passProblem);
         panel.Children.Add(error);
+        panel.Children.Add(userHint);
         panel.Children.Add(working);
 
-        var back = BackButton();
-        var create = Primary("Create User", () => _ = _model.CreateUserAsync());
+        var back = BackButton(escapes: false); // two password boxes: Esc must not throw them away
+        var create = Primary("Create User", () => _model.CreateUserAsync().Forget());
+        var reportUser = Ui.Link(BetaText.ReportThisProblem, () => _actions.ReportBug(BetaText.ReportThisProblem, _model.UserError), "Report this problem");
+        reportUser.Visibility = Visibility.Collapsed;
+        panel.Children.Add(reportUser);
         var page = new PageParts
         {
             Title = "Create Your Linux User",
@@ -258,8 +310,10 @@ internal sealed partial class WizardView
             Show(nameProblem, _model.UserNameProblem);
             Show(passProblem, _model.LinuxPassword.IsEmpty ? null : _model.PasswordProblem);
             Show(error, _model.UserError);
+            reportUser.Visibility = _model.UserError is { Length: > 0 } ? Visibility.Visible : Visibility.Collapsed;
             working.Text = _model.CreatingUser ? "Creating the user..." : "";
             create.IsEnabled = _model.CanCreateUser;
+            Show(userHint, _model.CanCreateUser || _model.CreatingUser ? null : "Create User is off. " + (_model.UserNameProblem ?? _model.PasswordProblem));
             back.IsEnabled = !_model.CreatingUser;
             name.IsEnabled = pass.IsEnabled = confirm.IsEnabled = !_model.CreatingUser;
         };
@@ -272,12 +326,12 @@ internal sealed partial class WizardView
     {
         var path = Ui.Field("Bench folder", _model.ExistingPath, _model.SetExistingPath, 480);
         var problem = Note(error: true);
-        var panel = new StackPanel { MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
+        var panel = new StackPanel();
         panel.Children.Add(Ui.Labeled("Bench folder in Ubuntu", path, "BenchBar adds its service files and does not change your sites, apps or database."));
         panel.Children.Add(problem);
 
         var back = BackButton();
-        var adopt = Primary("Use This Bench", () => _ = _model.StartAdoptAsync());
+        var adopt = Primary("Use This Bench", () => _model.StartAdoptAsync().Forget());
         var page = new PageParts { Title = "Use an Existing Bench", Subtitle = "Point BenchBar at a bench that already exists in WSL.", Content = panel, Focus = path };
         page.Left.Add(back);
         page.Right.Add(adopt);
@@ -300,22 +354,27 @@ internal sealed partial class WizardView
         Ui.Name(bundle, "App bundle");
         var admin = Ui.Password("Administrator password", s => SetSecret(_model.SetAdminPassword, s), 320);
         var problem = Note(error: true);
+        var formHint = Note(); // says what Review is waiting for
 
-        var panel = new StackPanel { MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
+        var panel = new StackPanel();
         panel.Children.Add(Ui.Labeled("Bench folder", folder, "Inside Ubuntu. The default is in your Linux home folder."));
         panel.Children.Add(Ui.Labeled("Site name", site, "Open it later at http://" + WizardModel.DefaultSite + ":8000. Windows resolves .localhost names by itself."));
         panel.Children.Add(Ui.Labeled("Apps", bundle, "minimal is Frappe only; common and extended add more apps."));
         panel.Children.Add(Ui.Labeled("Administrator password", admin, "The login of the new site. It is used for this install only and never saved."));
         panel.Children.Add(problem);
+        panel.Children.Add(formHint);
 
-        var back = BackButton();
-        var review = Primary("Review", () => _ = _model.ReviewAsync());
+        var back = BackButton(escapes: false); // the Administrator password is typed here
+        var review = Primary("Review", () => _model.ReviewAsync().Forget());
         var page = new PageParts { Title = "New Bench", Subtitle = "Where the bench goes and how its first site is named.", Content = panel, Focus = folder };
         page.Left.Add(back);
         page.Right.Add(review);
         page.Refresh = () =>
         {
-            Show(problem, _model.FormProblem is { } p && !_model.AdminPassword.IsEmpty ? p : null);
+            // a typed form shows its problem in red; an empty password only says what Review is waiting for
+            var typed = !_model.AdminPassword.IsEmpty;
+            Show(problem, _model.FormProblem is { } p && typed ? p : null);
+            Show(formHint, _model.FormProblem is { } waiting && !typed ? "Review is off. " + waiting : null);
             review.IsEnabled = _model.FormProblem is null;
             if (!folder.IsKeyboardFocusWithin && folder.Text != _model.Folder) folder.Text = _model.Folder;
         };
@@ -328,22 +387,39 @@ internal sealed partial class WizardView
     {
         var working = Ui.Text("Reading the plan...", 14, opacity: 0.75);
         var error = Note(error: true);
+        var reportPlan = Ui.Link(BetaText.ReportThisProblem, () => _actions.ReportBug(BetaText.ReportThisProblem, _model.PlanError), "Report this problem");
+        reportPlan.Visibility = Visibility.Collapsed;
+        reportPlan.Margin = new Thickness(0, 0, 0, 10);
         var plan = new StackPanel();
-        var panel = new StackPanel { MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
+        var problems = new StackPanel(); // the fix of a failed plan and what the plan found in the way
+        var panel = new StackPanel();
         panel.Children.Add(working);
         panel.Children.Add(error);
+        panel.Children.Add(problems);
+        panel.Children.Add(reportPlan);
         panel.Children.Add(plan);
 
         var back = BackButton();
-        var install = Primary("Install", () => _ = _model.StartInstallAsync());
+        var install = Primary("Install", () => _model.StartInstallAsync().Forget());
         var page = new PageParts { Title = "Review", Subtitle = "Nothing has changed yet. This is what Install will do.", Content = panel, Focus = install };
         page.Left.Add(back);
         page.Right.Add(install);
         string lastKey = "";
+        string lastProblems = "";
         page.Refresh = () =>
         {
             working.Visibility = _model.Planning ? Visibility.Visible : Visibility.Collapsed;
-            Show(error, _model.PlanError);
+            // blockers say it better than the red line: with them the page shows their cards only
+            var hasBlockers = _model.PlanBlockers.Count > 0;
+            Show(error, hasBlockers ? null : _model.PlanError);
+            var problemKey = _model.PlanFix + "|" + string.Join('|', _model.PlanBlockers.Select(b => b.Id + b.Message + b.Fix));
+            if (problemKey != lastProblems)
+            {
+                lastProblems = problemKey;
+                problems.Children.Clear();
+                FillPlanProblems(problems);
+            }
+            reportPlan.Visibility = _model.PlanError is { Length: > 0 } ? Visibility.Visible : Visibility.Collapsed;
             install.IsEnabled = _model.CanInstall;
             var key = _model.Plan is null ? "-" : string.Join('|', _model.Plan.Steps.Select(s => s.Id + s.WillRun)) + _model.Plan.Site;
             if (key == lastKey) return;
@@ -356,6 +432,7 @@ internal sealed partial class WizardView
             if (p.WebUrl is not null) summary.Children.Add(Summary("Address", p.WebUrl));
             summary.Children.Add(Summary("Apps", p.Bundle ?? _model.Bundle));
             plan.Children.Add(Ui.CardOf(summary));
+            plan.Children.Add(Ui.Text("The install takes about 15 to 30 minutes, most of it downloads.", 13, opacity: 0.8, margin: new Thickness(0, 0, 0, 8)));
 
             var steps = new StackPanel();
             foreach (var step in p.Steps)
@@ -387,27 +464,57 @@ internal sealed partial class WizardView
         return line;
     }
 
+    /// <summary>
+    /// Under the plan's error: what the plan found in the way, each with its fix, then the fix of the failure itself. A fix that is a
+    /// command gets Copy; a sentence is only read.
+    /// </summary>
+    private void FillPlanProblems(StackPanel into)
+    {
+        var n = 0;
+        foreach (var blocker in _model.PlanBlockers)
+        {
+            n++;
+            var card = new StackPanel();
+            card.Children.Add(Ui.Text(blocker.Message, 14, FontWeights.SemiBold));
+            AddFix(card, blocker.Fix, blocker.FixIsCommand, "the fix for problem " + n);
+            into.Children.Add(Ui.CardOf(card, new Thickness(0, 0, 0, 8)));
+        }
+        if (_model.PlanBlockers.Count == 0 && _model.PlanFix is { Length: > 0 } fix)
+        {
+            var card = new StackPanel();
+            AddFix(card, fix, _model.PlanFixIsCommand, "the fix");
+            into.Children.Add(Ui.CardOf(card, new Thickness(0, 0, 0, 8)));
+        }
+    }
+
+    private void AddFix(StackPanel into, string? fix, bool isCommand, string copyLabel)
+    {
+        if (fix is not { Length: > 0 }) return;
+        if (isCommand) CopyRow(copyLabel, fix, _model.Copy, into);
+        else into.Children.Add(Ui.Text(fix, 13, margin: new Thickness(0, 4, 0, 0)));
+    }
+
     // --- 6 Install ---
 
     private PageParts InstallPage()
     {
         var rows = new StackPanel();
-        var progress = Ui.Text("", 13, opacity: 0.75, margin: new Thickness(0, 8, 0, 0));
+        var progress = Ui.Live(Ui.Text("", 13, opacity: 0.75, margin: new Thickness(0, 8, 0, 0)));
         var failure = new StackPanel { Visibility = Visibility.Collapsed };
         var root = Ui.Password("MariaDB root password", s => SetSecret(_model.SetRootPassword, s), 320);
         var rootPanel = Ui.Labeled("MariaDB root password", root, "MariaDB in Ubuntu already has a root password that BenchBar does not know. Enter it and retry.");
         rootPanel.Visibility = Visibility.Collapsed;
 
-        var panel = new StackPanel { MaxWidth = 720, HorizontalAlignment = HorizontalAlignment.Left };
+        var panel = new StackPanel();
         panel.Children.Add(rows);
         panel.Children.Add(progress);
         panel.Children.Add(failure);
         panel.Children.Add(rootPanel);
 
-        var back = BackButton();
+        var back = BackButton(escapes: false); // the MariaDB root password box can be on this page
         var log = Ui.Button("Open Log", () => { if (_model.LogPath is { } path) _actions.OpenLog(path); }, "Open the install log");
         var stop = Ui.Button("Stop", _model.Stop, "Stop the install");
-        var retry = Primary("Retry", () => _ = _model.RetryAsync());
+        var retry = Primary("Retry", () => _model.RetryAsync().Forget());
         string lastKey = "";
         var parts = new PageParts
         {
@@ -423,8 +530,9 @@ internal sealed partial class WizardView
         parts.Refresh = () =>
         {
             var running = _model.Phase == InstallPhase.Running;
+            var (heading, line) = InstallHeading(_model.Phase);
+            parts.SetHeading(heading, line);
             back.IsEnabled = !running;
-            back.IsCancel = !running;
             stop.IsEnabled = running && !_model.StopRequested;
             stop.Visibility = running ? Visibility.Visible : Visibility.Collapsed;
             retry.Visibility = _model.Phase is InstallPhase.Failed or InstallPhase.Stopped or InstallPhase.NeedsRootPassword or InstallPhase.NeedsLinuxPassword ? Visibility.Visible : Visibility.Collapsed;
@@ -439,6 +547,7 @@ internal sealed partial class WizardView
                 + "|" + _model.Phase + "|" + _model.Failure?.Message;
             if (key == lastKey) return;
             lastKey = key;
+            var focusedRow = Ui.FocusedName(panel);
             rows.Children.Clear();
             var runningTop = _model.InstallRows.FirstOrDefault(r => r.Parent is null && r.Status == InstallStepStatus.Running)?.Id;
             foreach (var row in _model.InstallRows)
@@ -459,9 +568,19 @@ internal sealed partial class WizardView
                 failure.Children.Add(Ui.CardOf(Ui.Text("The install was stopped. Run Again continues where it can; finished steps are not repeated.", 14)));
                 failure.Visibility = Visibility.Visible;
             }
+            Ui.RestoreFocus(panel, focusedRow);
         };
         return parts;
     }
+
+    private static (string Title, string Subtitle) InstallHeading(InstallPhase phase) => phase switch
+    {
+        InstallPhase.Failed => ("Install Failed", "A step did not finish. Retry it, tell us with Report This Problem, or open the log."),
+        InstallPhase.Stopped => ("Install Stopped", "Run Again continues where it can. Finished steps are not repeated."),
+        InstallPhase.NeedsLinuxPassword => ("Wrong Linux Password", "Linux did not accept the password. Type it again and press Retry."),
+        InstallPhase.NeedsRootPassword => ("MariaDB Needs Its Password", "MariaDB in Ubuntu already has a root password. Enter it and press Retry."),
+        _ => ("Installing", "This takes a while the first time. You can leave this window open and do something else."),
+    };
 
     private UIElement InstallRowView(InstallRow row)
     {
@@ -519,10 +638,24 @@ internal sealed partial class WizardView
         var panel = new StackPanel();
         panel.Children.Add(Ui.Text(f.Step is null ? "The install did not finish" : $"{f.Step} failed", 14, FontWeights.SemiBold));
         panel.Children.Add(Ui.Text(f.Message, 13, margin: new Thickness(0, 4, 0, 0)));
-        if (f.Fix is { Length: > 0 } fix)
+        panel.Children.Add(ReportProblemLink(f.Step is null ? f.Message : $"{f.Step} failed: {f.Message}"));
+        var todo = Ui.Text("What to do:", 13, FontWeights.SemiBold, margin: new Thickness(0, 8, 0, 2));
+        if (_model.Phase == InstallPhase.NeedsLinuxPassword)
         {
-            panel.Children.Add(Ui.Text("What to do:", 13, FontWeights.SemiBold, margin: new Thickness(0, 8, 0, 2)));
-            CopyRow("Fix", fix, _model.Copy, panel);
+            panel.Children.Add(todo);
+            panel.Children.Add(Ui.Text("The Linux password is the one you chose for your Linux user. Type it again.", 13));
+        }
+        else if (f.Fix is { Length: > 0 } fix)
+        {
+            panel.Children.Add(todo);
+            // a command can be copied; a sentence ("Pass MARIADB_ROOT_PASSWORD.") is only read
+            if (f.FixIsCommand) CopyRow("Fix", fix, _model.Copy, panel);
+            else panel.Children.Add(Ui.Text(fix, 13));
+        }
+        else if (_model.Phase == InstallPhase.Failed)
+        {
+            panel.Children.Add(todo);
+            panel.Children.Add(Ui.Text("Press Retry to run the install again; finished steps are not repeated. If it fails again, press Report This Problem or Open Log.", 13));
         }
         return Ui.CardOf(panel);
     }
@@ -531,7 +664,7 @@ internal sealed partial class WizardView
 
     private PageParts DonePage()
     {
-        var panel = new StackPanel { MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
+        var panel = new StackPanel();
         var address = new StackPanel();
         address.Children.Add(Ui.Text("Your bench is running at", 13, opacity: 0.75));
         address.Children.Add(Ui.Text(_model.SiteUrl ?? _model.Site, 18, FontWeights.SemiBold, margin: new Thickness(0, 2, 0, 0)));
@@ -553,6 +686,7 @@ internal sealed partial class WizardView
         }
         panel.Children.Add(Ui.Text("To let an AI assistant use this bench, run this in a terminal:", 13, margin: new Thickness(0, 6, 0, 6)));
         CopyRow("MCP line", WizardModel.McpLine, _model.Copy, panel);
+        panel.Children.Add(Ui.Text("Cannot see the BenchBar icon? Windows may hide it under the ^ arrow in the taskbar. To keep it in view, open Settings, Personalization, Taskbar, Other system tray icons, and turn BenchBar on.", 13, opacity: 0.85, margin: new Thickness(0, 10, 0, 0)));
 
         var open = Primary("Open Site", _model.OpenSite);
         var done = Ui.Button("Done", _model.Finish, "Close the wizard");

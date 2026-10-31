@@ -8,6 +8,19 @@ using Xunit;
 
 namespace Tray.Core.Tests;
 
+/// <summary>
+/// GDI+ builds its list of image codecs on first use and System.Drawing looks the PNG encoder up on every Save. Two test classes doing
+/// that at the same moment made <c>Image.Save</c> fail now and then with ArgumentNullException (encoder): the lookup came back empty.
+/// Every class that draws or saves a bitmap is in this one collection, so xunit runs them one after another.
+/// </summary>
+public static class GdiCollection
+{
+    public const string Name = "GDI+";
+
+    /// <summary>Held around Save by helpers that other collections may call.</summary>
+    public static readonly object Gate = new();
+}
+
 public sealed class RunnerFolder : IDisposable
 {
     public string Root { get; } = Path.Combine(Path.GetTempPath(), "benchbar-tray-tests", Guid.NewGuid().ToString("N"));
@@ -19,9 +32,20 @@ public sealed class RunnerFolder : IDisposable
     /// <summary>A PNG of the given size, solid <paramref name="color"/>, with a transparent 2 px border when asked.</summary>
     public static void Png(string path, int width, int height, Color color)
     {
-        using var bitmap = new Bitmap(width, height, PixelFormat.Format32bppArgb);
-        using (var g = Graphics.FromImage(bitmap)) g.Clear(color);
-        bitmap.Save(path, ImageFormat.Png);
+        lock (GdiCollection.Gate)
+        {
+            using var bitmap = new Bitmap(width, height, PixelFormat.Format32bppArgb);
+            using (var g = Graphics.FromImage(bitmap)) g.Clear(color);
+            // look the encoder up here and retry: an empty codec list is what failed, and it fills a moment later
+            ImageCodecInfo? png = null;
+            for (var attempt = 0; attempt < 20 && png is null; attempt++)
+            {
+                png = ImageCodecInfo.GetImageEncoders().FirstOrDefault(e => e.FormatID == ImageFormat.Png.Guid);
+                if (png is null) Thread.Sleep(25);
+            }
+            if (png is null) throw new InvalidOperationException("GDI+ has no PNG encoder.");
+            bitmap.Save(path, png, null);
+        }
     }
 
     public static void Manifest(string folder, string json) => File.WriteAllText(Path.Combine(folder, "manifest.json"), json);
@@ -46,6 +70,7 @@ public sealed class RunnerFolder : IDisposable
     }
 }
 
+[Collection(GdiCollection.Name)]
 public class RunnerLoaderTests : IDisposable
 {
     private readonly RunnerFolder _runners = new();
@@ -294,6 +319,7 @@ public class RunnerLoaderTests : IDisposable
         Assert.Equal(id, RunnerLoader.IdFor(folder));
 }
 
+[Collection(GdiCollection.Name)]
 public class RunnerSetTests : IDisposable
 {
     private readonly RunnerFolder _runners = new();
@@ -352,6 +378,7 @@ public class RunnerSetTests : IDisposable
     }
 }
 
+[Collection(GdiCollection.Name)]
 public class RunnerRenderingTests : IDisposable
 {
     private readonly RunnerFolder _runners = new();
@@ -479,6 +506,7 @@ public class RunnerRenderingTests : IDisposable
     }
 }
 
+[Collection(GdiCollection.Name)]
 public class CupRunnerTests
 {
     private static readonly Dictionary<RunnerPose, int> Counts = new()

@@ -70,7 +70,7 @@ sites or databases.
   muted and scheduler paused. See
   [Teams: profiles, lockfile and pull](guides/teams.md).
 - **Linux and Windows.** The same CLI runs on Ubuntu 24.04 with each
-  bench under `systemd --user`. On Windows (a preview) the benches run in
+  bench under `systemd --user`. On Windows (a beta) the benches run in
   WSL, `benchbar.exe` runs the CLI from PowerShell and a tray app shows
   them. See [Install](install.md#linux) and [Windows](windows.md).
 - **For coding agents.** `benchbar mcp` lets Claude Code, Cursor and

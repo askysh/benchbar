@@ -32,6 +32,8 @@ FL_RUN_START="${SECONDS}"
 FL_DIE_MESSAGE=""
 # a stable id for the failure (sudo_password_wrong), the "error_id" of the done line
 FL_ERROR_ID=""
+# the fix that goes with that id, for the "fix" of the done line
+FL_ERROR_FIX=""
 
 fl_ui_init() {
   local cols

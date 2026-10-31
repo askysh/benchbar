@@ -46,7 +46,7 @@ public class ControllerStateTests
                 new RunnerPlan.Still(RunnerPose.Unknown),
             });
             Assert.Equal(ShimBenchSource.NotFoundMessage, host.Changes[0].Snapshot.Problem);
-            Assert.StartsWith("BenchBar: benchbar.exe was not found", host.Tooltip);
+            Assert.StartsWith("BenchBar (Beta): benchbar.exe was not found", host.Tooltip);
             Assert.InRange(host.Tooltip.Length, 1, 127);
             Assert.Equal("needs attention", host.Changes[0].UpText);
         }
@@ -73,7 +73,7 @@ public class ControllerStateTests
                 new RunnerPlan.Settle(RunnerPose.Sleeping, 3),
                 new RunnerPlan.Still(RunnerPose.Sleeping),
             });
-            Assert.Equal("BenchBar: Ubuntu-24.04 is not running", host.Tooltip);
+            Assert.Equal("BenchBar (Beta): Ubuntu-24.04 is not running", host.Tooltip);
             Assert.Equal("distro stopped", host.Changes[0].UpText);
             Assert.Equal(0, source.Lists);
         }
@@ -110,6 +110,28 @@ public class ControllerStateTests
             distro.Running = true;
             time.Advance(TimeSpan.FromSeconds(2));
             await UntilAsync(() => !controller.Snapshot.DistroStopped && controller.Snapshot.Benches.Count == 1);
+        }
+    }
+
+    [Fact]
+    public async Task AStartThatLeavesTheDistroStoppedSaysSo()
+    {
+        var distro = new FakeProbe { Running = false };
+        var (controller, host, _, time) = Make(options: new TrayOptions
+        {
+            ListenToSystemEvents = false,
+            DistroProbe = distro,
+            Distro = () => "BenchBarQA",
+        });
+        using (host.Owning(controller))
+        {
+            host.Ui(controller.Start);
+            await UntilAsync(() => host.Changes.Count > 0);
+            Assert.True(host.Ui(controller.StartDistro)); // the shim ran keepalive, but it was refused: the distro stays stopped
+            Assert.Empty(host.Notices);
+            time.Advance(TimeSpan.FromSeconds(31));
+            await UntilAsync(() => host.Notices.Count > 0);
+            Assert.Equal("BenchBarQA did not start. Open the log or try again.", host.Notices[0]);
         }
     }
 

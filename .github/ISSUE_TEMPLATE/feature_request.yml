@@ -32,6 +32,8 @@ body:
       options:
         - The CLI
         - The menu bar app
+        - Windows (benchbar.exe or the tray)
+        - Linux
         - The docs
         - Not sure
     validations:

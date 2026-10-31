@@ -96,7 +96,7 @@ internal sealed class ProfilesView : UserControl
     internal Func<string?> Distro { get; set; } = () => DistroName.Resolve(TrayConfig.Load().Distro);
 
     /// <summary>Called each time the pane is selected in the sidebar (reads the profiles here, not in the constructor).</summary>
-    public void OnShown() => _ = _model.LoadAsync();
+    public void OnShown() => _model.LoadAsync().Forget();
 
     // --- the Add Profile menu ---
 
@@ -125,7 +125,7 @@ internal sealed class ProfilesView : UserControl
         var sheet = new CreateProfileSheet(_model.Benches, _services.Theme(), _services.Owner());
         ShowSheet(sheet);
         if (sheet.Accepted && sheet.SelectedBenchPath is { } bench && ProfileName.IsValid(sheet.ProfileNameText.Trim()))
-            _ = _model.CreateAsync(sheet.ProfileNameText.Trim(), bench);
+            _model.CreateAsync(sheet.ProfileNameText.Trim(), bench).Forget();
     }
 
     internal ImportProfileSheet Import(string source = "", bool autoReview = false)
@@ -133,7 +133,7 @@ internal sealed class ProfilesView : UserControl
         var run = new ProfileImportRun(_services.Cli, _wsl, source);
         var sheet = new ImportProfileSheet(run, _services.Theme(), _services.Owner(), PickImportFile, RevealLinuxPath, autoReview);
         ShowSheet(sheet);
-        _ = _model.ReloadAsync();
+        _model.ReloadAsync().Forget();
         return sheet;
     }
 
@@ -142,7 +142,7 @@ internal sealed class ProfilesView : UserControl
         var run = new ProfileSubscribeRun(_services.Cli, _wsl);
         var sheet = new SubscribeProfilesSheet(run, _services.Theme(), _services.Owner(), RevealLinuxPath);
         ShowSheet(sheet);
-        _ = _model.ReloadAsync();
+        _model.ReloadAsync().Forget();
         return sheet;
     }
 
@@ -152,7 +152,7 @@ internal sealed class ProfilesView : UserControl
     {
         var run = new ProfileExportRun(_services.Cli, _wsl, profile.Name);
         var sheet = new ExportProfileSheet(run, _services.Theme(), _services.Owner(), PickExportFile, RevealWindowsOrLinux, _services.CopyText);
-        _ = run.LoadAsync();
+        run.LoadAsync().Forget();
         ShowSheet(sheet);
         return sheet;
     }
@@ -161,9 +161,9 @@ internal sealed class ProfilesView : UserControl
     {
         var run = new ProfileUpdateRun(_services.Cli, _wsl, profile.Name);
         var sheet = new UpdateProfileSheet(run, _services.Theme(), _services.Owner());
-        _ = run.LoadAsync();
+        run.LoadAsync().Forget();
         ShowSheet(sheet);
-        _ = _model.ReloadAsync();
+        _model.ReloadAsync().Forget();
         return sheet;
     }
 
@@ -171,7 +171,7 @@ internal sealed class ProfilesView : UserControl
     {
         var run = new ProfileCheckRun(_services.Cli, _wsl, profile.Name);
         var sheet = new CheckAccessSheet(run, _services.Theme(), _services.Owner());
-        _ = run.LoadAsync();
+        run.LoadAsync().Forget();
         ShowSheet(sheet);
         return sheet;
     }
@@ -237,7 +237,7 @@ internal sealed class ProfilesView : UserControl
         }
         else if (_model.Profiles.Count == 0 && _model.Error is { } error)
         {
-            AddEmpty("The profiles could not be read", error, "Try Again", () => _ = _model.LoadAsync(), lines, buttons);
+            AddEmpty("The profiles could not be read", error, "Try Again", () => _model.LoadAsync().Forget(), lines, buttons);
         }
         else
         {
@@ -353,7 +353,7 @@ internal sealed class ProfilesView : UserControl
         if (profile.CanRemove)
         {
             menu.Items.Add(new Separator());
-            Item(profile.Origin == ProfileOrigin.Subscribed ? "Remove Subscription..." : "Remove...", () => _ = RemoveAsync(profile), !_model.IsRemoving);
+            Item(profile.Origin == ProfileOrigin.Subscribed ? "Remove Subscription..." : "Remove...", () => RemoveAsync(profile).Forget(), !_model.IsRemoving);
         }
         return menu;
     }

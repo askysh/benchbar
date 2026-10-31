@@ -121,7 +121,7 @@ internal sealed class BenchPage : UserControl
         if (Tab == BenchTab.Overview)
         {
             Overview.Bind(_context.Bench, _context.Site);
-            _ = Overview.EnsureLockChecked(); // once per bench, only while the Overview is the tab shown
+            Overview.EnsureLockChecked().Forget(); // once per bench, only while the Overview is the tab shown
         }
     }
 

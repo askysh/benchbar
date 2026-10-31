@@ -1,11 +1,11 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -33,6 +33,7 @@ func (f *fakeHost) WindowsBuild() (int, error)           { return f.build, f.bui
 func (f *fakeHost) VirtualizationEnabled() (bool, error) { return f.virt, f.virtErr }
 func (f *fakeHost) BootTime() (time.Time, error)         { return f.boot, nil }
 func (f *fakeHost) RebootPending() (bool, error)         { return f.pending, nil }
+func (f *fakeHost) ProductName() (string, error)         { return "Windows 11 Pro", nil }
 func (f *fakeHost) IsAdmin() bool                        { return f.admin }
 
 // fakeElevator runs the elevated child in this process, at once.
@@ -68,16 +69,39 @@ func (f *fakeElevator) Start(exe string, args []string) (ElevatedProc, error) {
 func (e *env) host() *fakeHost         { return e.Host.(*fakeHost) }
 func (e *env) elevator() *fakeElevator { return e.Elevate.(*fakeElevator) }
 
-// elevatedChild makes the fake UAC prompt start the shim in a copy of the
-// system, as the elevated process would run, and records its stdout.
-func (e *env) elevatedChild() *bytes.Buffer {
-	out := &bytes.Buffer{}
+// elevatedChild makes the fake UAC prompt run the elevated program (the
+// fake wsl.exe) with the given arguments, as Windows would, and return its
+// exit code.
+func (e *env) elevatedChild() {
 	e.elevator().child = func(args []string) int {
-		c := *e.System
-		c.Stdout, c.Stderr = out, out
-		return run(&c, args)
+		cmd, err := wslCommand(e.System, args...)
+		if err != nil {
+			e.t.Fatal(err)
+		}
+		if err := cmd.Run(); err != nil {
+			if ee, ok := err.(*exec.ExitError); ok {
+				return ee.ExitCode()
+			}
+			e.t.Fatal(err)
+		}
+		return 0
 	}
-	return out
+}
+
+// rawEvent is any event line of the setup run stream.
+type rawEvent struct {
+	Event          string   `json:"event"`
+	ID             string   `json:"id"`
+	Status         string   `json:"status"`
+	Message        string   `json:"message"`
+	Line           string   `json:"line"`
+	Exit           int      `json:"exit"`
+	Changed        bool     `json:"changed"`
+	RebootRequired bool     `json:"reboot_required"`
+	Cancelled      bool     `json:"cancelled"`
+	ErrorID        string   `json:"error_id"`
+	Warnings       []string `json:"warnings"`
+	NextActions    []string `json:"next_actions"`
 }
 
 // script sets what the fake wsl.exe answers; the first matching rule wins.
@@ -215,7 +239,7 @@ func TestSetupCheckReady(t *testing.T) {
 	if len(rep.Steps) != len(stepIDs) {
 		t.Errorf("%d steps", len(rep.Steps))
 	}
-	want := `{"schema_version":1,"distro":"Ubuntu-24.04","ready":true,"reboot_pending":false,"steps":[{"id":"windows_build","status":"ok","title":"Windows version","detail":"Windows build 26100","action":null,"needs_admin":false},`
+	want := `{"schema_version":1,"distro":"Ubuntu-24.04","ready":true,"reboot_pending":false,"steps":[{"id":"windows_build","status":"ok","title":"Windows version","detail":"Windows build 26100","action":null,"needs_admin":false,"blocking":true},`
 	if !strings.HasPrefix(e.stdout(), want) {
 		t.Errorf("shape:\n%s", e.stdout())
 	}
@@ -293,7 +317,7 @@ func TestSetupCheckRebootMarker(t *testing.T) {
 	e := newEnv(t)
 	e.readyEnv()
 	// WSL was enabled after the last start of Windows
-	if err := writeRebootMarker(e.System); err != nil {
+	if err := writeRebootMarker(e.System, "wsl_enable"); err != nil {
 		t.Fatal(err)
 	}
 	rep := e.report()
@@ -441,9 +465,68 @@ func TestSetupCheckLingerKeepaliveWslconfigPath(t *testing.T) {
 			t.Errorf("%s: %+v", id, s)
 		}
 	}
-	// wslconfig is advice only: warn, and it does not make the setup unready by itself
-	if rep.step(t, "wslconfig").Status != "warn" || rep.step(t, "linger").Status != "missing" {
-		t.Errorf("%+v", rep.Steps)
+	// all four are advice only: warn, never blocking, and ready stays true
+	for _, id := range []string{"linger", "keepalive", "wslconfig", "shim_path"} {
+		if s := rep.step(t, id); s.Status != "warn" || s.Blocking {
+			t.Errorf("%s: %+v", id, s)
+		}
+	}
+	if !rep.Ready {
+		t.Errorf("an advisory step made the setup unready: %+v", rep.Steps)
+	}
+}
+
+func TestSetupCheckBlockingFlag(t *testing.T) {
+	e := newEnv(t)
+	e.readyEnv()
+	rep := e.report()
+	want := map[string]bool{"windows_build": true, "virtualization": true, "wsl_feature": true, "reboot": true,
+		"wsl_version": true, "distro": true, "distro_user": true, "systemd": true, "cli": true,
+		"linger": false, "keepalive": false, "wslconfig": false, "shim_path": false}
+	for _, s := range rep.Steps {
+		if s.Blocking != want[s.ID] {
+			t.Errorf("%s: blocking %v", s.ID, s.Blocking)
+		}
+	}
+	// the waiting rows say it too
+	e.host().build = 18362
+	for _, s := range e.report().Steps {
+		if s.Blocking != want[s.ID] {
+			t.Errorf("waiting %s: blocking %v", s.ID, s.Blocking)
+		}
+	}
+	if !strings.Contains(e.stdout(), `"blocking":false`) {
+		t.Errorf("field missing: %s", e.stdout())
+	}
+}
+
+func TestSetupCheckShimPathWithoutActionNamesTheFix(t *testing.T) {
+	e := newEnv(t)
+	e.readyEnv()
+	// another benchbar.exe comes first on PATH, or PATH cannot be read
+	e.paths.userErr = os.ErrPermission
+	rep := e.report()
+	s := rep.step(t, "shim_path")
+	if s.Status != "warn" || s.Blocking || rep.Ready == false {
+		t.Errorf("%+v ready %v", s, rep.Ready)
+	}
+	if s.Action == nil && !strings.Contains(s.Detail, ": ") {
+		t.Errorf("no action and no fix in the detail: %+v", s)
+	}
+}
+
+func TestSetupCheckCustomCLIPathIsBlockingWithTheFixInTheDetail(t *testing.T) {
+	e := newEnv(t)
+	e.readyEnv()
+	e.writeConfig(`{"cli_path":"/opt/nope/benchbar"}`)
+	e.script(
+		rule("--status", 0, ""), rule("--version", 0, "WSL version: 2.4.8.0\n"),
+		rule("--list --running --quiet", 0, "Ubuntu-24.04\n"),
+		rule("--cd ~", 0, probeOut("alice", "1000", "systemd", "yes", setupGoodConf, "", "")),
+	)
+	s := e.report().step(t, "cli")
+	if s.Status != "missing" || s.Action != nil || !s.Blocking || !strings.Contains(s.Detail, "cli_path") {
+		t.Errorf("%+v", s)
 	}
 }
 
@@ -513,10 +596,11 @@ func lastEvent(evs []rawEvent) rawEvent { return evs[len(evs)-1] }
 func TestSetupRunWslEnableElevated(t *testing.T) {
 	e := newEnv(t)
 	e.readyEnv()
-	child := e.elevatedChild()
+	e.elevatedChild()
+	// WSL does not answer before, and still not after the install
 	e.script(
-		ruleSeq("--status", reply(1, ""), reply(1, ""), reply(1, "")),
-		rule("--install --no-distribution", 0, "Installing: Virtual Machine Platform\nThe requested operation is successful. Changes will not be effective until the system is rebooted.\n"),
+		rule("--status", 1, ""),
+		rule("--install --no-distribution", 0, "Installing: Virtual Machine Platform\n"),
 	)
 	code := e.run("setup", "run", "wsl_enable", "--jsonl")
 	evs := jsonLines(t, e.stdout())
@@ -524,39 +608,158 @@ func TestSetupRunWslEnableElevated(t *testing.T) {
 	if code != 0 || d.Exit != 0 || !d.Changed || !d.RebootRequired || strings.Join(d.NextActions, ",") != "reboot" {
 		t.Fatalf("code %d, done %+v\n%s", code, d, e.stdout())
 	}
-	var logs []string
 	for _, ev := range evs {
 		if ev.Event == "log" {
-			logs = append(logs, ev.Line)
+			t.Errorf("the hidden elevated wsl.exe has no output to relay: %+v", ev)
 		}
 	}
-	if len(logs) != 2 || logs[0] != "Installing: Virtual Machine Platform" {
-		t.Errorf("logs %q", logs)
-	}
-	if child.Len() != 0 {
-		t.Errorf("the elevated child printed to stdout: %q", child.String())
-	}
-	// one prompt, for this exe, with the fixed command line
+	// one prompt, for the system wsl.exe and nothing else, with fixed words
 	el := e.elevator()
-	if len(el.calls) != 1 || el.exes[0] != e.ExePath {
+	if len(el.calls) != 1 || el.exes[0] != fakeWSL {
 		t.Fatalf("%v %v", el.calls, el.exes)
 	}
-	a := el.calls[0]
-	if len(a) != 5 || strings.Join(a[:4], " ") != "setup elevated wsl_enable --result" ||
-		filepath.Dir(a[4]) != filepath.Join(e.ConfigDir, "setup") || !resultNameRE.MatchString(filepath.Base(a[4])) {
-		t.Errorf("args %v", a)
+	if strings.Join(el.calls[0], " ") != "--install --no-distribution" {
+		t.Errorf("args %v", el.calls[0])
 	}
-	if fileExists(a[4]) {
-		t.Error("the result file was left behind")
+	if el.exes[0] == e.ExePath {
+		t.Error("the shim must not elevate itself")
 	}
 	// the restart is remembered
 	if !rebootMarkerPending(e.System) {
 		t.Error("no reboot marker")
 	}
-	if !hasArg(e.events(), "--install --no-distribution") {
-		t.Error("wsl.exe --install --no-distribution did not run")
-	}
 	neverDestructive(t, e.events())
+}
+
+func TestSetupRunWslEnableNeverElevatesThePathWSL(t *testing.T) {
+	e := newEnv(t)
+	e.readyEnv()
+	e.elevatedChild()
+	e.WSLPath = func() (string, error) { return "/somewhere/else/wsl.exe", nil }
+	e.script(rule("--status", 1, ""))
+	e.ElevatedWSLPath = nil
+	if code := e.run("setup", "run", "wsl_enable", "--jsonl"); code != 1 {
+		t.Errorf("exit %d", code)
+	}
+	if len(e.elevator().calls) != 0 {
+		t.Error("elevated without a trusted wsl.exe")
+	}
+}
+
+func TestSetupRunWslEnableSecondElevationIsRefused(t *testing.T) {
+	e := newEnv(t)
+	e.readyEnv()
+	e.elevatedChild()
+	e.script(rule("--status", 1, ""))
+	e.locks.held[wslEnableLock] = true
+	code := e.run("setup", "run", "wsl_enable", "--jsonl")
+	d := lastEvent(jsonLines(t, e.stdout()))
+	if code != 1 || d.Exit != 1 || len(e.elevator().calls) != 0 {
+		t.Errorf("code %d %+v, prompts %d", code, d, len(e.elevator().calls))
+	}
+	// the lock is released at the end of a normal run
+	delete(e.locks.held, wslEnableLock)
+	e.out.Reset()
+	e.run("setup", "run", "wsl_enable", "--jsonl")
+	if e.locks.held[wslEnableLock] {
+		t.Error("the lock was not released")
+	}
+}
+
+// slowProc is an elevated program that runs until release is closed.
+type slowProc struct{ release chan struct{} }
+
+func (p slowProc) Wait(d time.Duration) (bool, int, error) {
+	select {
+	case <-p.release:
+		return true, 0, nil
+	case <-time.After(time.Millisecond):
+		return false, 0, nil
+	}
+}
+func (p slowProc) Close() {}
+
+type slowElevator struct {
+	fakeElevator
+	proc slowProc
+}
+
+func (f *slowElevator) Start(exe string, args []string) (ElevatedProc, error) {
+	f.calls = append(f.calls, args)
+	return f.proc, nil
+}
+
+func TestSetupRunWslEnableCancelledWhileItRuns(t *testing.T) {
+	e := newEnv(t)
+	e.readyEnv()
+	e.script(rule("--status", 1, ""))
+	ctx, cancel := context.WithCancel(context.Background())
+	el := &slowElevator{proc: slowProc{release: make(chan struct{})}}
+	e.Elevate, e.Ctx = el, ctx
+	cancel() // the caller stops while wsl.exe still runs
+	code := e.run("setup", "run", "wsl_enable", "--jsonl")
+	evs := jsonLines(t, e.stdout())
+	d := lastEvent(evs)
+	if code != 0 || d.Exit != 0 || !d.RebootRequired || d.Cancelled || strings.Join(d.NextActions, ",") != "reboot" {
+		t.Fatalf("code %d %+v\n%s", code, d, e.stdout())
+	}
+	var msg string
+	for _, ev := range evs {
+		if ev.Event == "step" && ev.Status == "failed" {
+			t.Errorf("a clean failure was reported: %+v", ev)
+		}
+		if ev.Event == "step" && ev.Status == "done" {
+			msg = ev.Message
+		}
+	}
+	if !strings.Contains(msg, "keeps running in Windows") || !strings.Contains(msg, "Restart Windows") {
+		t.Errorf("message %q", msg)
+	}
+	if !rebootMarkerPending(e.System) {
+		t.Error("no reboot marker")
+	}
+	if e.locks.held[wslEnableLock] {
+		t.Error("the lock was not released")
+	}
+}
+
+func TestSetupRunWslEnableWaitsForTheNaturalEnd(t *testing.T) {
+	e := newEnv(t)
+	e.readyEnv()
+	e.script(ruleSeq("--status", reply(1, ""), reply(0, "ok")))
+	el := &slowElevator{proc: slowProc{release: make(chan struct{})}}
+	e.Elevate = el
+	go func() { time.Sleep(20 * time.Millisecond); close(el.proc.release) }()
+	code := e.run("setup", "run", "wsl_enable", "--jsonl")
+	d := lastEvent(jsonLines(t, e.stdout()))
+	if code != 0 || !d.Changed || d.RebootRequired || strings.Join(d.NextActions, ",") != "wsl_update" {
+		t.Errorf("code %d %+v", code, d)
+	}
+}
+
+func TestSetupRunWslEnableUACCancelIsCancelled(t *testing.T) {
+	e := newEnv(t)
+	e.readyEnv()
+	e.script(rule("--status", 1, ""))
+	e.elevator().startErr = ErrElevationDeclined
+	e.run("setup", "run", "wsl_enable", "--jsonl")
+	if d := lastEvent(jsonLines(t, e.stdout())); !d.Cancelled || d.Exit != 1 {
+		t.Errorf("%+v", d)
+	}
+}
+
+func TestSetupRunWslEnableRestartExitCodes(t *testing.T) {
+	for _, code := range []int{3010, 1641} {
+		e := newEnv(t)
+		e.readyEnv()
+		e.elevator().child = func([]string) int { return code }
+		e.script(ruleSeq("--status", reply(1, ""), reply(0, "ok")))
+		e.run("setup", "run", "wsl_enable", "--jsonl")
+		d := lastEvent(jsonLines(t, e.stdout()))
+		if !d.RebootRequired || !d.Changed || d.Exit != 0 || !rebootMarkerPending(e.System) {
+			t.Errorf("exit %d: %+v", code, d)
+		}
+	}
 }
 
 func TestSetupRunWslEnableExitCode3010(t *testing.T) {
@@ -581,7 +784,7 @@ func TestSetupRunWslEnableNoRestartNeeded(t *testing.T) {
 	e.elevatedChild()
 	// parent check fails, child check fails, after the install WSL answers
 	e.script(
-		ruleSeq("--status", reply(1, ""), reply(1, ""), reply(0, "ok")),
+		ruleSeq("--status", reply(1, ""), reply(0, "ok")),
 		rule("--install --no-distribution", 0, "done\n"),
 	)
 	if code := e.run("setup", "run", "wsl_enable", "--jsonl"); code != 0 {
@@ -596,17 +799,18 @@ func TestSetupRunWslEnableNoRestartNeeded(t *testing.T) {
 	}
 }
 
-func TestSetupRunWslEnableCbsFlagMeansRestart(t *testing.T) {
+func TestSetupRunWslEnableIgnoresGenericRestartFlags(t *testing.T) {
+	// the decision: an unrelated Windows Update must not report a restart
 	e := newEnv(t)
 	e.readyEnv()
 	e.elevatedChild()
 	e.host().pending = true
 	e.script(
-		ruleSeq("--status", reply(1, ""), reply(1, ""), reply(0, "ok")),
+		ruleSeq("--status", reply(1, ""), reply(0, "ok")),
 		rule("--install --no-distribution", 0, "done\n"),
 	)
 	e.run("setup", "run", "wsl_enable", "--jsonl")
-	if d := lastEvent(jsonLines(t, e.stdout())); !d.RebootRequired {
+	if d := lastEvent(jsonLines(t, e.stdout())); d.RebootRequired {
 		t.Errorf("%+v", d)
 	}
 }
@@ -655,7 +859,7 @@ func TestSetupRunWslEnableFailure(t *testing.T) {
 			failed = ev.Message
 		}
 	}
-	if !strings.Contains(failed, "exit code 1") || !strings.Contains(failed, "0x80370102") {
+	if !strings.Contains(failed, "exit code 1") {
 		t.Errorf("failed message %q", failed)
 	}
 }
@@ -699,67 +903,6 @@ func TestSetupRunWslEnableAlreadyAdminDoesNotPrompt(t *testing.T) {
 	}
 	if d := lastEvent(jsonLines(t, e.stdout())); !d.Changed {
 		t.Errorf("%+v", d)
-	}
-}
-
-func TestSetupElevatedRefusesAnythingElse(t *testing.T) {
-	setupDirPath := func(e *env) string {
-		d := filepath.Join(e.ConfigDir, "setup")
-		os.MkdirAll(d, 0o755)
-		return d
-	}
-	good := func(e *env) string { return filepath.Join(setupDirPath(e), "run-0123456789abcdef.jsonl") }
-	cases := []struct {
-		name string
-		args func(e *env) []string
-	}{
-		{"other action", func(e *env) []string { return []string{"distro_user", "--result", good(e)} }},
-		{"no action", func(e *env) []string { return []string{} }},
-		{"extra argument", func(e *env) []string { return []string{"wsl_enable", "--result", good(e), "--distro", "x"} }},
-		{"free text", func(e *env) []string { return []string{"wsl_enable", "--result", good(e), "rm"} }},
-		{"flag order", func(e *env) []string { return []string{"--result", good(e), "wsl_enable"} }},
-		{"relative path", func(e *env) []string { return []string{"wsl_enable", "--result", "run-0123456789abcdef.jsonl"} }},
-		{"wrong file name", func(e *env) []string {
-			return []string{"wsl_enable", "--result", filepath.Join(setupDirPath(e), "evil.jsonl")}
-		}},
-		{"wrong folder", func(e *env) []string {
-			return []string{"wsl_enable", "--result", filepath.Join(e.root, "run-0123456789abcdef.jsonl")}
-		}},
-		{"traversal", func(e *env) []string {
-			return []string{"wsl_enable", "--result", setupDirPath(e) + `\..\setup\run-0123456789abcdef.jsonl`}
-		}},
-		{"existing file", func(e *env) []string {
-			p := good(e)
-			os.WriteFile(p, []byte("keep"), 0o644)
-			return []string{"wsl_enable", "--result", p}
-		}},
-	}
-	for _, c := range cases {
-		e := newEnv(t)
-		e.readyEnv()
-		args := c.args(e)
-		if code := e.run(append([]string{"setup", "elevated"}, args...)...); code != 1 {
-			t.Errorf("%s: exit %d", c.name, code)
-		}
-		if len(e.events()) != 0 {
-			t.Errorf("%s: wsl.exe ran", c.name)
-		}
-		if c.name == "existing file" {
-			if data, _ := os.ReadFile(good(e)); string(data) != "keep" {
-				t.Errorf("an existing result file was overwritten: %q", data)
-			}
-		}
-	}
-}
-
-func TestSetupElevatedRunsOnlyTheSystemWSL(t *testing.T) {
-	e := newEnv(t)
-	e.readyEnv()
-	e.ElevatedWSLPath = nil
-	d := filepath.Join(e.ConfigDir, "setup")
-	os.MkdirAll(d, 0o755)
-	if code := e.run("setup", "elevated", "wsl_enable", "--result", filepath.Join(d, "run-0123456789abcdef.jsonl")); code != 1 || len(e.events()) != 0 {
-		t.Errorf("exit %d, %+v", code, e.starts())
 	}
 }
 
@@ -1157,7 +1300,7 @@ func TestSetupRunCLIInstall(t *testing.T) {
 	if !found {
 		t.Error("installer output not streamed as log events")
 	}
-	want := `-d Ubuntu-24.04 --cd ~ --exec /bin/bash -c curl -fsSL ` + installerURL + ` | bash`
+	want := `-d Ubuntu-24.04 --cd ~ --exec /bin/bash -c set -o pipefail; export BENCHBAR_NONINTERACTIVE=1; curl -fsSL ` + installerURL() + ` | bash`
 	if got := e.starts()[1].Args; strings.Join(got, " ") != want {
 		t.Errorf("installer call %q", strings.Join(got, " "))
 	}
@@ -1342,20 +1485,208 @@ func TestLineWriter(t *testing.T) {
 	}
 }
 
-func TestTailerKeepsPartialLines(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "r.jsonl")
-	tl := &tailer{path: p}
-	if l := tl.pump(); l != nil {
-		t.Errorf("%v", l)
+// --- a running distro is not stopped without --force -----------------------
+
+func doneErrorID(t *testing.T, out string) rawEvent {
+	t.Helper()
+	return lastEvent(jsonLines(t, out))
+}
+
+func TestSetupRunSystemdRefusesARunningDistro(t *testing.T) {
+	e := newEnv(t)
+	e.readyEnv()
+	e.script(
+		rule("--list --running --quiet", 0, "Ubuntu-24.04\r\n"),
+		rule(rReadConf, 0, "[interop]\nenabled=true\n"),
+		rule("/proc/1/comm", 0, "init\n"),
+	)
+	code := e.run("setup", "run", "systemd", "--jsonl")
+	d := doneErrorID(t, e.stdout())
+	if code != 1 || d.Exit != 1 || d.ErrorID != "distro_running" || d.Changed {
+		t.Fatalf("code %d %+v", code, d)
 	}
-	os.WriteFile(p, []byte("a\nb"), 0o644)
-	if l := tl.pump(); strings.Join(l, ",") != "a" {
-		t.Errorf("%v", l)
+	var msg string
+	for _, ev := range jsonLines(t, e.stdout()) {
+		if ev.Event == "step" && ev.Status == "failed" {
+			msg = ev.Message
+		}
 	}
-	f, _ := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0)
-	f.WriteString("c\n\nd\n")
-	f.Close()
-	if l := tl.pump(); strings.Join(l, ",") != "bc,d" {
-		t.Errorf("%v", l)
+	if !strings.Contains(msg, "benches") || !strings.Contains(msg, "MariaDB") || !strings.Contains(msg, "--force") {
+		t.Errorf("message %q", msg)
+	}
+	if hasArg(e.events(), "--terminate") || hasArg(e.events(), "cat > ") {
+		t.Error("changed a running distro without --force")
+	}
+}
+
+func TestSetupRunSystemdForceStopsARunningDistro(t *testing.T) {
+	e := newEnv(t)
+	e.readyEnv()
+	e.script(
+		rule("--list --running --quiet", 0, "Ubuntu-24.04\r\n"),
+		rule(rReadConf, 0, "[interop]\nenabled=true\n"),
+		rule(rBackup, 0, ""),
+		ruleStdin(rWriteConf, 0),
+		rule("--terminate Ubuntu-24.04", 0, ""),
+		ruleSeq("/proc/1/comm", reply(0, "init\n"), reply(0, "init\n"), reply(0, "systemd\n")),
+	)
+	if code := e.run("setup", "run", "systemd", "--force", "--jsonl"); code != 0 {
+		t.Fatalf("%d %s", code, e.stdout())
+	}
+	if d := doneErrorID(t, e.stdout()); d.ErrorID != "" || !d.Changed {
+		t.Errorf("%+v", d)
+	}
+	if !hasArg(e.events(), "--terminate Ubuntu-24.04") {
+		t.Error("did not stop the distro")
+	}
+}
+
+func TestSetupRunSystemdRunningButNothingToDoNeedsNoForce(t *testing.T) {
+	e := newEnv(t)
+	e.readyEnv()
+	e.script(rule("--list --running --quiet", 0, "Ubuntu-24.04\r\n"), rule(rReadConf, 0, setupGoodConf), rule("/proc/1/comm", 0, "systemd\n"))
+	if code := e.run("setup", "run", "systemd", "--jsonl"); code != 0 {
+		t.Fatalf("%d %s", code, e.stdout())
+	}
+}
+
+func TestSetupRunDistroUserRefusesARunningDistroBeforeChangingAnything(t *testing.T) {
+	e := newEnv(t)
+	e.readyEnv()
+	e.withPassword("pw")
+	e.script(
+		rule("--list --running --quiet", 0, "Ubuntu-24.04\r\n"),
+		rule("/usr/bin/id -u", 1, ""),
+		rule(rReadConf, 3, ""),
+	)
+	code := e.run("setup", "run", "distro_user", "--user", "alice", "--jsonl")
+	d := doneErrorID(t, e.stdout())
+	if code != 1 || d.ErrorID != "distro_running" {
+		t.Fatalf("code %d %+v", code, d)
+	}
+	for _, w := range []string{"useradd", "chpasswd", "cat > ", "--terminate"} {
+		if hasArg(e.events(), w) {
+			t.Errorf("%s ran before the refusal", w)
+		}
+	}
+}
+
+func TestSetupRunDistroUserStoppedDistroNeedsNoForce(t *testing.T) {
+	e := newEnv(t)
+	e.readyEnv()
+	e.withPassword("pw")
+	e.script(
+		rule("--list --running --quiet", 0, "\r\n"),
+		rule("/usr/bin/id -u", 1, ""), rule("useradd", 0, ""), ruleStdin("chpasswd", 0),
+		rule(rReadConf, 3, ""), rule(rBackup, 0, ""), ruleStdin(rWriteConf, 0), rule("--terminate", 0, ""),
+	)
+	if code := e.run("setup", "run", "distro_user", "--user", "alice", "--jsonl"); code != 0 {
+		t.Fatalf("%d %s", code, e.stdout())
+	}
+}
+
+func TestSetupRunOtherFailuresHaveNoErrorID(t *testing.T) {
+	e := newEnv(t)
+	e.readyEnv()
+	e.script(rule("--status", 1, ""))
+	e.host().admin = true
+	e.script(rule("--status", 1, ""), rule("--install", 1, "boom\n"))
+	e.run("setup", "run", "wsl_enable", "--jsonl")
+	if strings.Contains(e.stdout(), "error_id") {
+		t.Errorf("error_id on an unrelated failure: %s", e.stdout())
+	}
+}
+
+// --- distro_install and cli_install ----------------------------------------
+
+func TestSetupRunDistroInstallNeedsRestart(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("exit codes above 255 exist only on Windows")
+	}
+	e := newEnv(t)
+	e.readyEnv()
+	e.distros.list = nil
+	e.script(rule("--install -d Ubuntu-24.04", 3010, "restart needed\n"))
+	if code := e.run("setup", "run", "distro_install", "--jsonl"); code != 0 {
+		t.Fatalf("%d %s", code, e.stdout())
+	}
+	d := lastEvent(jsonLines(t, e.stdout()))
+	if !d.RebootRequired || strings.Join(d.NextActions, ",") != "reboot" || !rebootMarkerPending(e.System) {
+		t.Errorf("%+v", d)
+	}
+}
+
+func TestSetupRunDistroInstallRestartTextWritesTheMarker(t *testing.T) {
+	// the same path without a 3010 exit code: use the stream hook directly
+	e := newEnv(t)
+	e.readyEnv()
+	rc := &runCtx{sys: e.System, em: &emitter{w: e.out, jsonl: true}, distro: "Ubuntu-24.04"}
+	setupActions["distro_install"] = setupAction{"Install the Linux distro", func(rc *runCtx) error {
+		rc.reboot, rc.msg = true, "restart Windows, then install the distro again"
+		return nil
+	}, []string{"distro_user"}}
+	defer func() {
+		setupActions["distro_install"] = setupAction{"Install the Linux distro", actDistroInstall, []string{"distro_user"}}
+	}()
+	runAction(rc, "distro_install")
+	d := lastEvent(jsonLines(t, e.stdout()))
+	if !d.RebootRequired || strings.Join(d.NextActions, ",") != "reboot" || !rebootMarkerPending(e.System) {
+		t.Errorf("%+v", d)
+	}
+}
+
+func TestSetupRunCLIInstallFailureNamesTheLastLine(t *testing.T) {
+	e := newEnv(t)
+	e.readyEnv()
+	e.script(
+		rule("--cd ~ --exec /bin/sh", 0, probeOut("alice", "1000", "systemd", "no", setupGoodConf, "", "")),
+		rule("/bin/bash -c", 1, "Cloning...\ncurl: (6) Could not resolve host: raw.githubusercontent.com\n"),
+	)
+	if code := e.run("setup", "run", "cli_install", "--jsonl"); code != 1 {
+		t.Fatalf("exit %d", code)
+	}
+	var msg string
+	for _, ev := range jsonLines(t, e.stdout()) {
+		if ev.Event == "step" && ev.Status == "failed" {
+			msg = ev.Message
+		}
+	}
+	if !strings.Contains(msg, "exit code 1") || !strings.HasSuffix(msg, "Could not resolve host: raw.githubusercontent.com") {
+		t.Errorf("message %q", msg)
+	}
+}
+
+func TestSetupRunWslEnableNoSecondPromptWhileARestartIsPending(t *testing.T) {
+	e := newEnv(t)
+	e.readyEnv()
+	e.script(rule("--status", 1, ""))
+	ctx, cancel := context.WithCancel(context.Background())
+	el := &slowElevator{proc: slowProc{release: make(chan struct{})}}
+	e.Elevate, e.Ctx = el, ctx
+	cancel() // the first run stops waiting: the install keeps going in Windows
+	e.run("setup", "run", "wsl_enable", "--jsonl")
+	if len(el.calls) != 1 {
+		t.Fatalf("first run prompts %d", len(el.calls))
+	}
+	e.Ctx = context.Background()
+	e.out.Reset()
+	code := e.run("setup", "run", "wsl_enable", "--jsonl")
+	d := lastEvent(jsonLines(t, e.stdout()))
+	if code != 0 || !d.RebootRequired || len(el.calls) != 1 {
+		t.Errorf("code %d %+v, prompts %d", code, d, len(el.calls))
+	}
+}
+
+func TestSetupRunCLIInstallReportsAFailedDownload(t *testing.T) {
+	e := newEnv(t)
+	e.readyEnv()
+	e.script(
+		rule("--cd ~ --exec /bin/sh", 0, probeOut("alice", "1000", "systemd", "no", setupGoodConf, "", "")),
+		rule("/bin/bash -c", 22, "curl: (22) The requested URL returned error: 404\n"),
+	)
+	e.run("setup", "run", "cli_install", "--jsonl")
+	out := e.stdout()
+	if !strings.Contains(out, "exit code 22") || !strings.Contains(out, "404") {
+		t.Errorf("the download failure is not named:\n%s", out)
 	}
 }

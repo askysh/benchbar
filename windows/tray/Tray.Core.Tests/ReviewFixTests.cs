@@ -245,6 +245,7 @@ public class ControllerReviewTests
     }
 }
 
+[Collection(GdiCollection.Name)]
 public class RunnerReviewTests : IDisposable
 {
     private readonly RunnerFolder _runners = new();

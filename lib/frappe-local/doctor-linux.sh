@@ -21,8 +21,10 @@ FL_CHECK_ORDER="brew mariadb_bind mariadb_utf8 pdf_engine env_python env_setupto
 # WSL only: the Windows host and NTP in the distro both set its clock
 if fl_is_wsl; then FL_CHECK_ORDER="${FL_CHECK_ORDER/ mariadb_bind/ wsl_time_sync mariadb_bind}"; fi
 
-# repair: no python_leaves, legacy_migrate, hosts_entry or redis_stop
-FL_ACTION_ORDER="node_install yarn_install env_rebuild env_setuptools honcho_install honcho_setuptools node_requirements build clear_cache mariadb_bind mariadb_utf8 wkhtmltopdf_install port_block write_procfile write_runner write_plist write_helpers write_cli_link rotate_logs"
+# repair: no python_leaves, legacy_migrate, hosts_entry or redis_stop. The sudo
+# steps come first: the credential is dropped right after them
+# (fl_sudo_phase_done), before pip, npm and bench run
+FL_ACTION_ORDER="mariadb_bind mariadb_utf8 wkhtmltopdf_install node_install yarn_install env_rebuild env_setuptools honcho_install honcho_setuptools node_requirements build clear_cache port_block write_procfile write_runner write_plist write_helpers write_cli_link rotate_logs"
 FL_OPTIONAL_ACTIONS="wkhtmltopdf_install"
 
 # the apt packages a bench needs: the first two groups fail, the build ones warn
@@ -505,7 +507,8 @@ fl_prereq_platform_first() {
   elif [[ " $groups " == *" sudo "* || " $groups " == *" admin "* ]]; then
     fl_prereq_add sudo ok "${user} is in the sudo group; sudo asks for its password (BENCHBAR_SUDO=env passes it without a terminal)"
   else
-    fl_prereq_add sudo fail "${user} is not in the sudo group, so apt and MariaDB cannot be set up" "add the user as root: usermod -aG sudo ${user}"
+    # a sudoers rule can still allow it (nothing here runs sudo to find out)
+    fl_prereq_add sudo warn "${user} is not in the sudo or admin group; apt and MariaDB can be set up only if a sudoers rule allows ${user}" "if sudo is refused, add the user as root: usermod -aG sudo ${user}"
   fi
 
   # apt: the program, and a reachable archive (a warning: a mirror or a proxy may differ)

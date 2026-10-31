@@ -12,7 +12,27 @@
 
 set -euo pipefail
 
-FL_VERSION="0.8.0"
+# BENCHBAR_SUDO_PASSWORD must not stay in the initial environment of this
+# process: Linux keeps that copy in /proc/PID/environ for the whole run, and
+# the pip, npm and bench get-app scripts of the same user could read it. So
+# the first image reads the password, starts the second without the variable
+# and hands it over on an inherited pipe (fd 9, a printf builtin writes it,
+# never argv or a file); sudo-env.sh reads and closes it. The variable is
+# gone in the second image, so this runs once. xtrace is off around it.
+# (:+x, so an xtrace line shows "x" and not the value)
+if [[ -n "${BENCHBAR_SUDO_PASSWORD:+x}" ]]; then
+  FL__XT=0
+  case "$-" in *x*) FL__XT=1; { set +x; } 2>/dev/null ;; esac
+  if [[ "${BENCHBAR_SUDO:-}" == "env" ]]; then
+    exec 9< <(printf '%s\n' "$BENCHBAR_SUDO_PASSWORD")
+    export FL_SUDO_PW_FD=9
+  fi
+  unset BENCHBAR_SUDO_PASSWORD
+  if [[ "$FL__XT" == "1" ]]; then exec "$BASH" -x "${BASH_SOURCE[0]}" "$@"; fi
+  exec "$BASH" "${BASH_SOURCE[0]}" "$@"
+fi
+
+FL_VERSION="0.8.1"
 
 # Resolve the real script location even when invoked through a symlink
 # (for example ~/.local/bin/frappe-mac).
@@ -601,6 +621,11 @@ fl_jsonl_on_exit() {
   [[ "$code" != "0" || -z "$FL_JSONL_URL" ]] || url="$(fl_json_str "$FL_JSONL_URL")"
   FL_DIE_MESSAGE="${FL_DIE_MESSAGE:-$(fl_log_step_message 0)}"
   [[ "$code" != "2" ]] || fix="$(fl_json_str "The MariaDB root password is unknown: run the command again with MARIADB_ROOT_PASSWORD='...' in the environment")"
+  # a failure with a stable id and a fix of its own (a port that is taken)
+  if [[ "$code" != "0" && -n "$FL_ERROR_FIX" ]]; then
+    fix="$(fl_json_str "$FL_ERROR_FIX")"
+    extra=",\"error\":$(fl_json_str "${FL_DIE_MESSAGE:-}")"
+  fi
   if [[ "$FL_JSONL_PLAN_SENT" != "1" && "$code" != "0" ]]; then
     extra=",\"error\":$(fl_json_str "${FL_DIE_MESSAGE:-the command stopped before it started; see the log}")"
   fi
@@ -767,6 +792,11 @@ fl_install_plan_json() {
   fl_sudo_gui && mode=gui
   web_port="${INSTALL_PORT_BLOCK%% *}"; [[ -n "$web_port" ]] || web_port="$FL_WEB_PORT"
   [[ -z "$FL_TEAM_PROFILE" ]] || team="$(fl_json_str "$FL_TEAM_PROFILE")"
+  local blockers="" bl_id bl_msg bl_fix
+  while IFS='|' read -r bl_id bl_msg bl_fix; do
+    [[ -n "$bl_id" ]] || continue
+    blockers="${blockers}${blockers:+,}{\"id\":$(fl_json_str "$bl_id"),\"message\":$(fl_json_str "$bl_msg"),\"fix\":$(fl_json_str "$bl_fix")}"
+  done <<<"$FL_INSTALL_BLOCKERS"
   pl_steps="{\"n\":null,\"id\":\"wkhtmltopdf_install\",\"name\":$(fl_json_str "$FL_INSTALL_PDF_NAME"),\"sudo\":true,\"will_run\":$(fl_json_bool "$pdf_run")}"
   pl_steps="${pl_steps},{\"n\":null,\"id\":\"hosts_entry\",\"name\":$(fl_json_str "$(fl_install_hosts_name)"),\"sudo\":true,\"will_run\":$(fl_json_bool "$hosts_run")}"
   for label in "${FL_STEP_LABELS[@]}"; do
@@ -774,10 +804,25 @@ fl_install_plan_json() {
     pl_steps="${pl_steps},{\"n\":${n},\"id\":\"${id}\",\"name\":$(fl_json_str "$label"),\"sudo\":false,\"will_run\":true}"
   done
   FL_JSONL_URL="http://${FL_SITE}:${web_port}"
-  fl_jsonl plan ",\"bench\":$(fl_json_str "$FL_BENCH_DIR"),\"site\":$(fl_json_str "$FL_SITE"),\"profile\":$(fl_json_str "$FL_PROFILE"),\"team_profile\":${team},\"bundle\":$(fl_json_str "$1"),\"port_offset\":$(fl_json_num "$INSTALL_PORT_OFFSET"),\"web_url\":$(fl_json_str "$FL_JSONL_URL"),\"dry_run\":$(fl_json_bool "$FL_DRY_RUN"),\"sudo_mode\":\"${mode}\",\"steps\":[${pl_steps}],\"log\":$(fl_json_str "${FL_LOG_FILE:-}")"
+  fl_jsonl plan ",\"bench\":$(fl_json_str "$FL_BENCH_DIR"),\"site\":$(fl_json_str "$FL_SITE"),\"profile\":$(fl_json_str "$FL_PROFILE"),\"team_profile\":${team},\"bundle\":$(fl_json_str "$1"),\"port_offset\":$(fl_json_num "$INSTALL_PORT_OFFSET"),\"web_url\":$(fl_json_str "$FL_JSONL_URL"),\"dry_run\":$(fl_json_bool "$FL_DRY_RUN"),\"sudo_mode\":\"${mode}\",\"steps\":[${pl_steps}],\"blockers\":[${blockers}],\"log\":$(fl_json_str "${FL_LOG_FILE:-}")"
   FL_JSONL_PLAN_SENT=1
   [[ "$FL_DRY_RUN" != "1" ]] || FL_JSONL_QUIET=1
   export FL_JSONL_QUIET
+}
+
+# fl_install_blockers_die: every blocker is listed, the first one ends the run
+# with its error_id and fix (the done line carries both); nothing was changed
+fl_install_blockers_die() {
+  local id msg fix first_id="" first_msg="" first_fix=""
+  [[ -n "$FL_INSTALL_BLOCKERS" ]] || return 0
+  while IFS='|' read -r id msg fix; do
+    [[ -n "$id" ]] || continue
+    fl_fail "blocker ${id}: ${msg}"
+    fl_info "fix: ${fix}"
+    [[ -n "$first_id" ]] || { first_id="$id"; first_msg="$msg"; first_fix="$fix"; }
+  done <<<"$FL_INSTALL_BLOCKERS"
+  FL_ERROR_ID="$first_id"; FL_ERROR_FIX="$first_fix"
+  fl_die "$first_msg" "$first_fix"
 }
 
 cmd_install() {
@@ -817,10 +862,13 @@ cmd_install() {
   bundle="${OPT_BUNDLE:-$(fl_bstate_get APP_BUNDLE 2>/dev/null || true)}"
   bundle="${bundle:-$FL_TEAM_BUNDLE}"
   fl_install_port_plan
+  # a port another program holds stops the run here, before sudo and step 1
+  FL_INSTALL_BLOCKERS="$(fl_install_port_blockers)"
   fl_steps_define "System dependencies (${phase00})" "Bench and site (01-install-bench-and-site.sh)" "Background service"
   fl_steps_ids system_deps bench_site service
   fl_install_plan_json "${bundle:-minimal}"
   fl_steps_print_plan
+  fl_install_blockers_die
   fl_install_sudo_upfront
   fl_install_privileged_steps
   # from here on nothing runs as root: brew, pip, npm, yarn and bench get-app
@@ -845,7 +893,7 @@ cmd_install() {
   else
     phase_code=$?
   fi
-  if fl_is_linux; then fl_sudo_drop; fl_sudo_env_forget; fi
+  fl_sudo_phase_done
   if [[ "$phase_code" == "0" ]]; then
     fl_step_end "done"
   else
@@ -871,7 +919,7 @@ cmd_install() {
   [[ -z "$INSTALL_PORT_FREE" ]] || fl_info "the default ports are taken; the new bench gets port block ${INSTALL_PORT_FREE} (web ${port_block%% *})"
   [[ -n "$port_block" ]] && web_port="${port_block%% *}"
   if BENCH_DIR="$FL_BENCH_DIR" SITE_NAME="$FL_SITE" APP_BUNDLE="${bundle:-minimal}" BENCHBAR_WEB_PORT="$web_port" \
-     BENCHBAR_PORT_BLOCK="$port_block" FL_JSONL_PARENT=bench_site \
+     BENCHBAR_PORT_BLOCK="$port_block" FL_JSONL_PARENT=bench_site BENCHBAR_PLAN_STEP1="$([[ "$FL_DRY_RUN" == "1" ]] && printf '%s' "$phase00")" \
      MARIADB_ROOT_PASSWORD="${MARIADB_ROOT_PASSWORD:-}" ADMIN_PASSWORD="${ADMIN_PASSWORD:-}" \
      fl_run_phase_script "${SCRIPT_DIR}/01-install-bench-and-site.sh" "${args01[@]}"; then
     fl_step_end "done"
@@ -1360,6 +1408,10 @@ esac
 # (repair does it in cmd_repair, once its events have started)
 case "$COMMAND ${ARGS[0]:-}" in
   "install "*|"adopt "*|"service "*|"site add"|"ports apply") fl_sudo_env_preflight ;;
+esac
+# site add and ports apply run no sudo step on Linux (no /etc/hosts line): the checked password is not kept
+case "$COMMAND ${ARGS[0]:-}" in
+  "site add"|"ports apply") fl_sudo_phase_done ;;
 esac
 
 case "$COMMAND" in
