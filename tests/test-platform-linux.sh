@@ -65,6 +65,10 @@ fl_port_listening 9000 || fail "9000 listens"
 assert_calls_contain '^ss -Hltn sport = :8000$'
 assert_eq "4242" "$(fl_port_listener_pid 8000)"
 assert_eq "" "$(fl_port_listener_pid 8001)"
+assert_eq "" "$(fl_port_listener_pid 13000)" "(an owner ss does not show is pid 0: skipped)"
+add_listener 14000 - hidden '*'
+add_listener 14000 4545 node '[::]'
+assert_eq "4545" "$(fl_port_listener_pid 14000)" "(the first listener whose owner is visible)"
 assert_eq "4242 node" "$(fl_port_listener_summary 8000)"
 assert_eq "0 ?" "$(fl_port_listener_summary 13000)" "(an owner ss may not show is pid 0, still a listener)"
 assert_eq "*:8000" "$(fl_port_listen_addresses 8000)" "(a wildcard reads *:PORT, as lsof prints it)"
@@ -117,8 +121,9 @@ add_listener 9000 4242 node '*'
 add_listener 11000 4343 redis-server 127.0.0.1
 add_listener 8000 4444 python 127.0.0.1
 add_listener 13000 - redis-server 127.0.0.1
+add_listener 9000 4242 node '[::]'
 assert_eq "4242
-4343" "$(fl_bench_listener_pids | sort)" "(only listeners that provably run in the bench; not the foreign 8000, not the hidden owner)"
+4343" "$(fl_bench_listener_pids | sort)" "(a pid on IPv4 and IPv6 once; only listeners that provably run in the bench; not the foreign 8000, not the hidden owner)"
 
 # pgrep -af: "PID command line", the shape fl_bench_status_pids parses
 reset_calls

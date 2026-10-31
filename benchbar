@@ -12,6 +12,26 @@
 
 set -euo pipefail
 
+# BENCHBAR_SUDO_PASSWORD must not stay in the initial environment of this
+# process: Linux keeps that copy in /proc/PID/environ for the whole run, and
+# the pip, npm and bench get-app scripts of the same user could read it. So
+# the first image reads the password, starts the second without the variable
+# and hands it over on an inherited pipe (fd 9, a printf builtin writes it,
+# never argv or a file); sudo-env.sh reads and closes it. The variable is
+# gone in the second image, so this runs once. xtrace is off around it.
+# (:+x, so an xtrace line shows "x" and not the value)
+if [[ -n "${BENCHBAR_SUDO_PASSWORD:+x}" ]]; then
+  FL__XT=0
+  case "$-" in *x*) FL__XT=1; { set +x; } 2>/dev/null ;; esac
+  if [[ "${BENCHBAR_SUDO:-}" == "env" ]]; then
+    exec 9< <(printf '%s\n' "$BENCHBAR_SUDO_PASSWORD")
+    export FL_SUDO_PW_FD=9
+  fi
+  unset BENCHBAR_SUDO_PASSWORD
+  if [[ "$FL__XT" == "1" ]]; then exec "$BASH" -x "${BASH_SOURCE[0]}" "$@"; fi
+  exec "$BASH" "${BASH_SOURCE[0]}" "$@"
+fi
+
 FL_VERSION="0.8.0"
 
 # Resolve the real script location even when invoked through a symlink
@@ -845,7 +865,7 @@ cmd_install() {
   else
     phase_code=$?
   fi
-  if fl_is_linux; then fl_sudo_drop; fl_sudo_env_forget; fi
+  fl_sudo_phase_done
   if [[ "$phase_code" == "0" ]]; then
     fl_step_end "done"
   else
@@ -1360,6 +1380,10 @@ esac
 # (repair does it in cmd_repair, once its events have started)
 case "$COMMAND ${ARGS[0]:-}" in
   "install "*|"adopt "*|"service "*|"site add"|"ports apply") fl_sudo_env_preflight ;;
+esac
+# site add and ports apply run no sudo step on Linux (no /etc/hosts line): the checked password is not kept
+case "$COMMAND ${ARGS[0]:-}" in
+  "site add"|"ports apply") fl_sudo_phase_done ;;
 esac
 
 case "$COMMAND" in

@@ -505,7 +505,8 @@ fl_prereq_platform_first() {
   elif [[ " $groups " == *" sudo "* || " $groups " == *" admin "* ]]; then
     fl_prereq_add sudo ok "${user} is in the sudo group; sudo asks for its password (BENCHBAR_SUDO=env passes it without a terminal)"
   else
-    fl_prereq_add sudo fail "${user} is not in the sudo group, so apt and MariaDB cannot be set up" "add the user as root: usermod -aG sudo ${user}"
+    # a sudoers rule can still allow it (nothing here runs sudo to find out)
+    fl_prereq_add sudo warn "${user} is not in the sudo or admin group; apt and MariaDB can be set up only if a sudoers rule allows ${user}" "if sudo is refused, add the user as root: usermod -aG sudo ${user}"
   fi
 
   # apt: the program, and a reachable archive (a warning: a mirror or a proxy may differ)

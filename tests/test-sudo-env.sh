@@ -138,6 +138,31 @@ assert_contains "$trace" "done"
 assert_not_contains "$trace" "$SECRET" "(sudo-env.sh under xtrace)"
 assert_not_contains "$trace" "Zq7"
 
+# ---- the long running process never has the password in its initial environment:
+# benchbar starts itself again (same pid) without the variable, the password on an inherited pipe
+fresh_machine
+trace="$(env BENCHBAR_SUDO=env BENCHBAR_NONINTERACTIVE=1 BENCHBAR_SUDO_PASSWORD="$SECRET" bash -x "$FM" install --dry-run --yes --json --bench-dir "$BENCH" --site linuxdev.localhost 2>&1 </dev/null | grep -v '^{"schema' || true)"
+assert_contains "$trace" "+ [[ -n x ]]" "(first image: the password variable was set)"
+assert_eq "2" "$(printf '%s\n' "$trace" | grep -c '^+ set -euo pipefail')" "(benchbar started twice: the second image has no variable)"
+assert_contains "$trace" "+ [[ -n '' ]]" "(second image: the variable is gone)"
+assert_not_contains "$trace" "$SECRET" "(re-exec under xtrace)"
+if [[ -r /proc/self/environ ]]; then
+  # BASH_ENV runs at the start of every bash image: it records whether the variable is in /proc/PID/environ
+  cat >"$TMP_DIR/environ-probe.sh" <<'PROBE'
+if [[ -r /proc/$$/environ ]]; then printf '%s %s\n' "$$" "$(tr '\0' '\n' </proc/$$/environ | grep -c '^BENCHBAR_SUDO_PASSWORD=')" >>"$PROBE_OUT"; fi
+PROBE
+  : >"$TMP_DIR/environ-probe.out"
+  set +e
+  env BENCHBAR_SUDO=env BENCHBAR_NONINTERACTIVE=1 BENCHBAR_SUDO_PASSWORD="$SECRET" BASH_ENV="$TMP_DIR/environ-probe.sh" \
+    PROBE_OUT="$TMP_DIR/environ-probe.out" "$FM" install --dry-run --yes --json --bench-dir "$BENCH" --site linuxdev.localhost >/dev/null 2>&1 </dev/null
+  set -e
+  main_pid="$(head -n1 "$TMP_DIR/environ-probe.out" | cut -d' ' -f1)"
+  mine="$(grep "^${main_pid} " "$TMP_DIR/environ-probe.out")"
+  assert_eq "2" "$(printf '%s\n' "$mine" | wc -l | tr -d ' ')" "(two images, one pid: $mine)"
+  assert_eq "${main_pid} 1" "$(printf '%s\n' "$mine" | head -n1)" "(the first image had the secret)"
+  assert_eq "${main_pid} 0" "$(printf '%s\n' "$mine" | tail -n1)" "(the running image does not)"
+fi
+
 # ---- install --json, the right password: every sudo step runs, nothing leaks
 fresh_machine
 run_env "$SECRET" install --yes --json --bench-dir "$BENCH" --site linuxdev.localhost
@@ -281,6 +306,11 @@ assert_not_contains "$done_line" "error_id" "$OUT"
 assert_calls_contain "^sudo install -m 0644 .* ${FL_MYSQL_CONF_DIR}/99-frappe.cnf\$" "(repair used sudo for the drop-in)"
 assert_file "$FL_MYSQL_CONF_DIR/99-frappe.cnf"
 assert_no_secret "repair --json"
+# the credential is dropped when the sudo steps are done, whatever repair runs after them
+assert_calls_contain '^sudo -k$' "(repair dropped the credential)"
+last_k="$(grep -n '^sudo -k$' "$MOCK_LOG" | tail -n1 | cut -d: -f1)"
+last_sudo="$(grep -n '^sudo ' "$MOCK_LOG" | tail -n1 | cut -d: -f1)"
+[[ "$last_sudo" -le "$last_k" ]] || fail "repair used sudo after it dropped the credential (sudo -k line $last_k, last sudo line $last_sudo)"
 
 # adopt with the right password runs and leaks nothing
 run_env "$SECRET" adopt "$BENCH" --yes --json

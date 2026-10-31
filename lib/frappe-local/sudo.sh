@@ -137,6 +137,15 @@ fl_sudo_drop() {
   export FL_SUDO_SESSION
 }
 
+# fl_sudo_phase_done: the sudo steps of a command are over (Linux). The
+# credential and, with BENCHBAR_SUDO=env, the password and the sudo function
+# go, before any bench, pip or npm step runs.
+fl_sudo_phase_done() {
+  fl_is_linux || return 0
+  fl_sudo_drop
+  fl_sudo_env_forget
+}
+
 # fl_root_run REASON SCRIPT ARG...: SCRIPT (bash source) runs as root with
 # ARG... as its $1..., behind one macOS password dialog titled REASON.
 # Returns 0 when the script succeeded, 2 when the person cancelled the
