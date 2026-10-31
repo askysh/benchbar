@@ -91,6 +91,7 @@ public sealed partial class WizardModel : IDisposable
     public const string DefaultProfile = "v15-lts";
     public const string RestartRefusedMessage = "Windows did not allow the restart. Restart from the Start menu.";
     public const string CancelledMessage = "You said no to the Windows prompt. Try again when ready.";
+    public const string StoppedMessage = "Stopped. Click the button to try again.";
     public const string AdminNote = "Windows will ask for permission";
     public const string RestartBlurb = "Windows has to restart to finish turning on WSL. BenchBar opens again after you sign in and picks up here. Shut down does not count. Use Restart.";
     public const string RestartAgainHint = "If Windows did not restart, click Restart Now again.";
@@ -118,6 +119,7 @@ public sealed partial class WizardModel : IDisposable
     private readonly CancellationTokenSource _lifetime = new();
     private bool _restartFromAction;
     private string? _alignedDistro;
+    private string? _seenConfigured;
     private string? _busyAction;
 
     public WizardModel(ISetupService setup, IWizardHost host, string? distro = null)
@@ -125,6 +127,7 @@ public sealed partial class WizardModel : IDisposable
         _setup = setup;
         _host = host;
         Distro = distro;
+        _seenConfigured = host.ConfiguredDistro;
         UserName = SuggestUserName(host.WindowsUserName);
     }
 
@@ -190,7 +193,7 @@ public sealed partial class WizardModel : IDisposable
         _messages.TryGetValue(step.Id, out var message);
         // a finished step says nothing more: "Turning on WSL" must not stay under a row that is done
         if (step.Status == SetupStatus.Ok && BusyStepId != step.Id) message = null;
-        var actionable = !step.IsSatisfied && step.Action is { Length: > 0 };
+        var actionable = step.OffersAction;
         var waiting = step.Waits;
         var label = !actionable ? null : step.Action switch
         {
@@ -307,6 +310,14 @@ public sealed partial class WizardModel : IDisposable
     public bool Planning { get; private set; }
 
     public string? PlanError { get; private set; }
+
+    /// <summary>The fix line of a failed plan ("In the other distro run: sudo systemctl stop mariadb"); null when none or when it only repeats the message.</summary>
+    public string? PlanFix { get; private set; }
+
+    public bool PlanFixIsCommand => PlanFix is { Length: > 0 } fix && FixCommand.IsCommand(fix);
+
+    /// <summary>What the plan found in the way (<c>blockers[]</c>), each with its message and fix.</summary>
+    public IReadOnlyList<PlanBlocker> PlanBlockers { get; private set; } = [];
 
     public InstallRequest Request => new(Folder, DefaultProfile, Bundle, Site);
 
@@ -490,9 +501,12 @@ public sealed partial class WizardModel : IDisposable
 
     // --- check ---
 
-    public async Task CheckAsync()
+    /// <summary>Runs the check. Check Again clears a "Stopped" or "You said no" line; the check after an action keeps it (<paramref name="keepStopped"/>).</summary>
+    public async Task CheckAsync(bool keepStopped = false)
     {
         if (_disposed) return;
+        if (!keepStopped) ForgetStopped();
+        FollowConfiguredDistro();
         _checkCts?.Cancel();
         var cts = _checkCts = new CancellationTokenSource();
         Checking = true;
@@ -529,6 +543,20 @@ public sealed partial class WizardModel : IDisposable
             if (ReferenceEquals(_checkCts, cts)) Checking = false;
             Raise();
         }
+    }
+
+    private void ForgetStopped()
+    {
+        foreach (var id in _messages.Where(m => m.Value is CancelledMessage or StoppedMessage).Select(m => m.Key).ToList()) _messages.Remove(id);
+    }
+
+    /// <summary>The shim's config can change outside the wizard (Settings, adopt-distro by hand): a new name there is the one the next check uses.</summary>
+    private void FollowConfiguredDistro()
+    {
+        var configured = _host.ConfiguredDistro;
+        if (string.Equals(configured, _seenConfigured, StringComparison.Ordinal)) return;
+        _seenConfigured = configured;
+        if (configured is { Length: > 0 } name) Distro = name.Trim();
     }
 
     /// <summary>
@@ -618,7 +646,7 @@ public sealed partial class WizardModel : IDisposable
         }
         await RunActionAsync(step, action).ConfigureAwait(true);
         if (_disposed) return;
-        await CheckAsync().ConfigureAwait(true);
+        await CheckAsync(keepStopped: true).ConfigureAwait(true);
     }
 
     private async Task<SetupRunResult> RunActionAsync(SetupStepInfo step, string action, bool force = false)
@@ -665,7 +693,7 @@ public sealed partial class WizardModel : IDisposable
             // the elevated wsl.exe belongs to Windows, not to us: it may still run. The next check says what it finished.
             _messages[step.Id] = StoppedWaitingMessage;
         }
-        else if (result.Cancelled && !result.RebootRequired) _messages[step.Id] = CancelledMessage;
+        else if (result.Cancelled && !result.RebootRequired) _messages[step.Id] = action == SetupIds.ActionWslEnable ? CancelledMessage : StoppedMessage;
         else if (!result.Ok && !result.RebootRequired) _messages[step.Id] = result.Error ?? "It did not work. Open the log for details.";
         else if (result.Warnings.Count > 0) _messages[step.Id] = result.Warnings[0];
         if (result.RebootRequired)
@@ -722,7 +750,7 @@ public sealed partial class WizardModel : IDisposable
                 }
                 var result = await RunActionAsync(next, next.Action!).ConfigureAwait(true);
                 if (_disposed) break;
-                await CheckAsync().ConfigureAwait(true);
+                await CheckAsync(keepStopped: true).ConfigureAwait(true);
                 if (!result.Ok || RestartNeeded || _disposed) break;
             }
         }
@@ -887,6 +915,8 @@ public sealed partial class WizardModel : IDisposable
         Page = WizardPage.Review;
         Plan = null;
         PlanError = null;
+        PlanFix = null;
+        PlanBlockers = [];
         Planning = true;
         Raise();
         var cts = _runCts = new CancellationTokenSource();
@@ -896,6 +926,8 @@ public sealed partial class WizardModel : IDisposable
             if (Page != WizardPage.Review) return;
             Plan = result.Plan;
             PlanError = result.Error;
+            PlanFix = result.Fix is { Length: > 0 } f && f != result.Error ? f : null;
+            PlanBlockers = result.Blockers ?? result.Plan?.Blockers ?? [];
         }
         catch (OperationCanceledException)
         {

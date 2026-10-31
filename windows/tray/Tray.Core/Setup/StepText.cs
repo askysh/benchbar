@@ -17,8 +17,8 @@ public static partial class StepText
         var detail = step.Detail;
         if (step.Id == SetupIds.Keepalive && OtherDistroPattern().Match(detail.Trim()) is { Success: true } m)
         {
-            return $"The keep awake task keeps {m.Groups["have"].Value} running, but BenchBar uses {m.Groups["want"].Value}. "
-                + $"Set Up points the task at {m.Groups["want"].Value}.";
+            return $"The keep awake task serves {m.Groups["have"].Value}. "
+                + $"Set Up moves it to {m.Groups["want"].Value}, and {m.Groups["have"].Value} can then go idle.";
         }
         if (step.Waits)
         {

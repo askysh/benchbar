@@ -85,6 +85,7 @@ internal sealed partial class WizardView : UserControl
             Content = _body,
             Padding = new Thickness(40, 0, 40, 0),
             Focusable = false,
+            FocusVisualStyle = null,
         };
         Grid.SetRow(header, 0);
         Grid.SetRow(scroll, 1);
@@ -98,6 +99,7 @@ internal sealed partial class WizardView : UserControl
         root.Children.Add(bar);
         root.Children.Add(footer);
         Content = root;
+        Ui.QuietFocus(root);
 
         _model.Changed += OnChanged;
         Unloaded += (_, _) => _model.Changed -= OnChanged;
@@ -141,6 +143,7 @@ internal sealed partial class WizardView : UserControl
         page.SetHeading = SetHeading;
         SetHeading(page.Title, page.Subtitle);
         _body.Content = Ui.Constrain(page.Content, MaxWidthOf(_model.Page));
+        Ui.QuietFocus(_body);
         _left.Children.Clear();
         _right.Children.Clear();
         foreach (var b in page.Left) _left.Children.Add(b);

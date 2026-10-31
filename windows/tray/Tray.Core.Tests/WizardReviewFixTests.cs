@@ -140,7 +140,11 @@ public class WizardReviewFixTests
         await holding.Started.Task;
         model.CancelRun();
         await run;
-        Assert.Equal(WizardModel.CancelledMessage, model.StepMessages[SetupIds.Distro]);
+        // not the Windows prompt: the words are about the step, not about a prompt that never came up
+        Assert.Equal("Stopped. Click the button to try again.", model.StepMessages[SetupIds.Distro]);
+        Assert.Equal(WizardModel.StoppedMessage, model.Rows.Single(r => r.Step.Id == SetupIds.Distro).Message);
+        await model.CheckAsync(); // Check Again clears it
+        Assert.False(model.StepMessages.ContainsKey(SetupIds.Distro));
     }
 
     [Fact]

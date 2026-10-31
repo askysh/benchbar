@@ -24,7 +24,7 @@ public sealed record InstallRunResult(int ExitCode, InstallDone? Done, string? E
 }
 
 /// <summary>The dry run: the plan to review, or why there is none.</summary>
-public sealed record PlanResult(InstallPlan? Plan, string? Error, string? Fix = null);
+public sealed record PlanResult(InstallPlan? Plan, string? Error, string? Fix = null, IReadOnlyList<PlanBlocker>? Blockers = null);
 
 /// <summary>One line of <c>wsl.exe --list --verbose</c>.</summary>
 public sealed record DistroInfo(string Name, bool IsDefault, string State, int Version);
@@ -184,7 +184,7 @@ public sealed class ShimSetupService : ISetupService
             catch (UnsupportedSchemaException) { }
         }
         var result = await RunStreamAsync(["install", "--dry-run", "--json", .. request.Flags], env, OnLine, PlanTimeout, ct).ConfigureAwait(false);
-        if (done is { Exit: not 0 } failed) return new PlanResult(null, failed.Error ?? failed.Fix ?? "The plan could not be made.", failed.Fix);
+        if (done is { Exit: not 0 } failed) return new PlanResult(null, failed.Error ?? failed.Fix ?? "The plan could not be made.", failed.Fix, plan?.Blockers);
         if (plan is null) return new PlanResult(null, redact.Clean(result.Error ?? "The plan could not be made."));
         return new PlanResult(plan, null);
     }

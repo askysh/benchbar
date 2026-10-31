@@ -389,9 +389,11 @@ internal sealed partial class WizardView
         reportPlan.Visibility = Visibility.Collapsed;
         reportPlan.Margin = new Thickness(0, 0, 0, 10);
         var plan = new StackPanel();
+        var problems = new StackPanel(); // the fix of a failed plan and what the plan found in the way
         var panel = new StackPanel();
         panel.Children.Add(working);
         panel.Children.Add(error);
+        panel.Children.Add(problems);
         panel.Children.Add(reportPlan);
         panel.Children.Add(plan);
 
@@ -401,10 +403,18 @@ internal sealed partial class WizardView
         page.Left.Add(back);
         page.Right.Add(install);
         string lastKey = "";
+        string lastProblems = "";
         page.Refresh = () =>
         {
             working.Visibility = _model.Planning ? Visibility.Visible : Visibility.Collapsed;
             Show(error, _model.PlanError);
+            var problemKey = _model.PlanFix + "|" + string.Join('|', _model.PlanBlockers.Select(b => b.Id + b.Message + b.Fix));
+            if (problemKey != lastProblems)
+            {
+                lastProblems = problemKey;
+                problems.Children.Clear();
+                FillPlanProblems(problems);
+            }
             reportPlan.Visibility = _model.PlanError is { Length: > 0 } ? Visibility.Visible : Visibility.Collapsed;
             install.IsEnabled = _model.CanInstall;
             var key = _model.Plan is null ? "-" : string.Join('|', _model.Plan.Steps.Select(s => s.Id + s.WillRun)) + _model.Plan.Site;
@@ -448,6 +458,36 @@ internal sealed partial class WizardView
         line.Children.Add(l);
         line.Children.Add(v);
         return line;
+    }
+
+    /// <summary>
+    /// Under the plan's error: what the plan found in the way, each with its fix, then the fix of the failure itself. A fix that is a
+    /// command gets Copy; a sentence is only read.
+    /// </summary>
+    private void FillPlanProblems(StackPanel into)
+    {
+        var n = 0;
+        foreach (var blocker in _model.PlanBlockers)
+        {
+            n++;
+            var card = new StackPanel();
+            card.Children.Add(Ui.Text(blocker.Message, 14, FontWeights.SemiBold));
+            AddFix(card, blocker.Fix, blocker.FixIsCommand, "the fix for problem " + n);
+            into.Children.Add(Ui.CardOf(card, new Thickness(0, 0, 0, 8)));
+        }
+        if (_model.PlanFix is { Length: > 0 } fix)
+        {
+            var card = new StackPanel();
+            AddFix(card, fix, _model.PlanFixIsCommand, "the fix");
+            into.Children.Add(Ui.CardOf(card, new Thickness(0, 0, 0, 8)));
+        }
+    }
+
+    private void AddFix(StackPanel into, string? fix, bool isCommand, string copyLabel)
+    {
+        if (fix is not { Length: > 0 }) return;
+        if (isCommand) CopyRow(copyLabel, fix, _model.Copy, into);
+        else into.Children.Add(Ui.Text(fix, 13, margin: new Thickness(0, 4, 0, 0)));
     }
 
     // --- 6 Install ---

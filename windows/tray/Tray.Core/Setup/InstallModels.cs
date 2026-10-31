@@ -13,10 +13,20 @@ public enum InstallStepStatus { Unknown, Running, Done, Unchanged, Skipped, Warn
 /// <summary>One step of the plan (<c>plan.steps[]</c>); the privileged ones are <see cref="Sudo"/>.</summary>
 public sealed record InstallPlanStep(int? N, string Id, string Name, bool Sudo, bool WillRun);
 
+/// <summary>Something the plan found in the way (<c>plan.blockers[]</c>): a port in use, a missing tool. It says what to do in <see cref="Fix"/>.</summary>
+public sealed record PlanBlocker(string Id, string Message, string? Fix)
+{
+    /// <summary>The fix is a command to copy (see <see cref="FixCommand"/>).</summary>
+    public bool FixIsCommand => Fix is { Length: > 0 } fix && FixCommand.IsCommand(fix);
+}
+
 /// <summary>The <c>plan</c> line of <c>install --json</c>.</summary>
 public sealed record InstallPlan(string Bench, string Site, string? Profile, string? Bundle, string? WebUrl, string? SudoMode,
-    bool DryRun, IReadOnlyList<InstallPlanStep> Steps, string? Log)
+    bool DryRun, IReadOnlyList<InstallPlanStep> Steps, string? Log, IReadOnlyList<PlanBlocker>? PlanBlockers = null)
 {
+    /// <summary>What the plan found in the way; empty when nothing.</summary>
+    public IReadOnlyList<PlanBlocker> Blockers => PlanBlockers ?? [];
+
     /// <summary>The steps that ask for the Linux password, and will run.</summary>
     public IReadOnlyList<InstallPlanStep> PrivilegedSteps => Steps.Where(s => s.Sudo && s.WillRun).ToList();
 }
@@ -101,9 +111,24 @@ public static class InstallJson
                 steps.Add(new InstallPlanStep(JsonRead.Int(s, "n"), id, JsonRead.Str(s, "name") ?? id, JsonRead.Bool(s, "sudo"), willRun));
             }
         }
+        var blockers = new List<PlanBlocker>();
+        if (o["blockers"] is JsonArray found)
+        {
+            foreach (var item in found)
+            {
+                if (item is JsonObject b)
+                {
+                    var message = JsonRead.Str(b, "message") ?? JsonRead.Str(b, "error");
+                    var fix = JsonRead.Str(b, "fix");
+                    if (message is not { Length: > 0 } && fix is not { Length: > 0 }) continue;
+                    blockers.Add(new PlanBlocker(JsonRead.Str(b, "id") ?? "", message ?? fix!, message is { Length: > 0 } ? fix : null));
+                }
+                else if (item is JsonValue v && v.TryGetValue<string>(out var text) && text.Length > 0) blockers.Add(new PlanBlocker("", text, null));
+            }
+        }
         return new InstallPlan(
             JsonRead.Str(o, "bench") ?? "", JsonRead.Str(o, "site") ?? "", JsonRead.Str(o, "profile"), JsonRead.Str(o, "bundle"),
-            JsonRead.Str(o, "web_url"), JsonRead.Str(o, "sudo_mode"), JsonRead.Bool(o, "dry_run"), steps, JsonRead.Str(o, "log"));
+            JsonRead.Str(o, "web_url"), JsonRead.Str(o, "sudo_mode"), JsonRead.Bool(o, "dry_run"), steps, JsonRead.Str(o, "log"), blockers);
     }
 
     private static InstallDone ParseDone(JsonObject o)
