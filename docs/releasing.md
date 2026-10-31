@@ -22,14 +22,25 @@ release.
    `benchbar`. The workflow refuses a tag that does not match both.
 2. Add the `## X.Y.Z` section to `CHANGELOG.md`. The workflow refuses a
    version without one, and uses the section as the release notes.
-3. Commit, tag, push:
+3. Refresh the screenshots in `docs/images` for every screen the release
+   changed, and add new ones where a page still has none:
+   - The Mac first run wizard and the walkthrough: `WizardSnapshotTests`
+     renders their pages with fixture data, in light and dark (the
+     Snapshots workflow, `snapshots.yml`, uploads them as an artifact).
+     Use them in `quick-start.md`, `install.md` and `app.md`.
+   - The Windows first run wizard: take the screenshots on a Windows PC
+     and use them in `windows.md`.
+   - The BenchBar window panes: `window-general.png`, and a new
+     `window-about.png`, since General and About moved back into the
+     window in 0.8.1.
+4. Commit, tag, push:
    ```bash
    git tag v0.3.0
    git push origin v0.3.0
    ```
-4. Wait for the Release workflow, open the draft on the Releases page,
+5. Wait for the Release workflow, open the draft on the Releases page,
    check the files, publish.
-5. Publishing starts the Homebrew tap workflow (`homebrew-tap.yml`,
+6. Publishing starts the Homebrew tap workflow (`homebrew-tap.yml`,
    below). Check that its pull request on `askysh/homebrew-tap` merged.
 
 `CFBundleShortVersionString` is set from the tag and `CFBundleVersion`
