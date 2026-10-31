@@ -932,7 +932,8 @@ Measured on five PR runs (September 2026): 11 to 14 minutes wall clock, all of i
 
 - Linux carries the suite: 8 Linux shards, 4 bash 3.2 shards and 2 macOS shards, not 4 and 4. Linux runners start faster, cost less and run more jobs at once than macOS runners. The slowest shard is what a pull request waits for, and more Linux shards shorten it.
 - A job runs the suite under bash 3.2.57 (the `bash:3.2.57` image) on Linux runners: the bash-ism risk, a 4.x feature that the macOS `/bin/bash` does not have, is a property of the interpreter, not of the OS, so a Linux runner covers it. The image is Alpine, where JavaScript actions such as checkout do not run in a job container, so the job checks out on the runner and runs the suite with `docker run`. It adds the GNU tools the suite expects and a `/bin/bash` link for the mocks, and runs as a user from a copy of the checkout.
-- The macOS shards stay, at 2, for what only a Mac has: the BSD versions of sed, awk, date, stat and find, and the `/bin/bash` users really run. They skip the Linux platform tests, as before. Fewer macOS shards also leave macOS runners free for the app job.
+- The macOS shards stay for what only a Mac has: the BSD versions of sed, awk, date, stat and find, and the `/bin/bash` users really run. They skip the Linux platform tests, as before. 
+- macOS stays at 4 shards, not 2: on the first run with 2 the whole run took 17.3 minutes instead of 14.1, because the slowest test files take 8 to 10 minutes each on a macOS runner and one shard held several of them (1,002 s against 552 s for the other). No shard count gets below the slowest single file; splitting those files is what would.
 
 ## Release branches
 

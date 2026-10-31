@@ -9,7 +9,7 @@
 #
 # Speed (docs/DECISIONS.md, "CI speed" and "CI speed, round 3"): the CLI
 # tests run in eight shards on Linux, four in a bash 3.2.57 container on
-# Linux and two on macOS, each running its tests in parallel; shellcheck is
+# Linux and four on macOS, each running its tests in parallel; shellcheck is
 # its own Linux job; the macOS and bash 3.2 shards leave out the tests of
 # the Linux platform layer, which the Linux shards run on the bash Linux
 # users have;
@@ -67,18 +67,19 @@ jobs:
   # as a whole reports one check under its unexpanded name, so a required
   # "shard 1/3" check would wait forever. A skipped shard runs on a cheap
   # Linux runner for a few seconds and passes.
-  # Two shards: the bash 3.2 shards on Linux carry the bash-ism risk, so
-  # macOS keeps what only a Mac has (BSD tools, the /bin/bash users have)
-  # and leaves macOS runners free for the app job.
+  # Four shards plus the app job are the five concurrent macOS jobs of the
+  # free plan. Two shards were tried (CI speed, round 3): the slowest test
+  # files take 8 to 10 minutes on a macOS runner, and two of them in one
+  # shard made the run longer.
   cli-macos:
-    name: CLI tests (macOS, shard ${{ matrix.shard }}/2)
+    name: CLI tests (macOS, shard ${{ matrix.shard }}/4)
     needs: changes
     runs-on: ${{ needs.changes.outputs.code == 'true' && 'macos-latest' || 'ubuntu-latest' }}
-    timeout-minutes: 35
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3, 4]
     env:
       CODE: ${{ needs.changes.outputs.code }}
     steps:
@@ -100,7 +101,7 @@ jobs:
       - name: CLI tests (macOS /bin/bash 3.2)
         if: env.CODE == 'true'
         env:
-          SHARD: ${{ matrix.shard }}/2
+          SHARD: ${{ matrix.shard }}/4
           SHELLCHECK: '0'
           SKIP_TESTS: test-install-linux test-doctor-linux test-systemd test-platform-linux
         run: /bin/bash tests/run-tests.sh
