@@ -1,0 +1,4 @@
+{"event":"plan","schema_version":1,"actions":[{"id":"build","label":"bench build","sudo":false}],"log":"/l.log"}
+{"event":"step","action":"build","status":"running","message":"bench build"}
+{"event":"step","action":"build","status":"failed","message":"[FAIL] bench build exited 1"}
+{"event":"done","exit_code":1,"log":"/l.log"}

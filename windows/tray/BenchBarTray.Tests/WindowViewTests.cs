@@ -216,7 +216,7 @@ public class WindowViewTests
         window.SetSnapshot(new TraySnapshot([bench]), "1 of 1 up");
         Assert.Equal(3, window.Items.Count);
         Assert.Equal("overview", window.ContentKind);
-        Assert.Equal(["Stop", "Restart", "Open Site", "Logs", "Doctor", "Open in VS Code"], window.Overview.ButtonLabels);
+        Assert.Equal(["Stop", "Restart", "Open Site", "Logs", "Health", "Open in VS Code"], window.Overview.ButtonLabels);
         AssertEveryControlIsNamed(window);
     });
 

@@ -1,0 +1,1 @@
+{"schema_version":1,"cli_version":"0.8.0","event":"done","exit":1,"error":"erpnext has diverged from its remote.","fix":"git -C apps/erpnext status","changed":[],"warnings":[],"next_actions":[]}

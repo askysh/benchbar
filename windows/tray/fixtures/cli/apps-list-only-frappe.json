@@ -1,0 +1,1 @@
+{"schema_version":1,"cli_version":"0.8.0","bench":"/home/akash/frappe-bench","profile":"v15-lts","sites_checked_at":null,"sites_error":null,"apps":[{"name":"frappe","in_apps_txt":true,"repo":"https://github.com/frappe/frappe","remote":"upstream","branch":"version-15","policy_branch":"version-15","commit":"aaaa","dirty":false,"shallow":true,"version":"15.50.0","sites":[]}]}

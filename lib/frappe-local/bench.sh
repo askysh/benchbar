@@ -340,15 +340,6 @@ fl_bench_write_ports() {
 
 FL_SETUP_REDIS_PORTS=""
 
-# The working folder of whatever listens on PORT (the bench's own Redis runs
-# inside the bench), or nothing when nothing listens or it cannot be read.
-fl_port_owner_cwd() {
-  local pid
-  pid="$(lsof -ti "tcp:$1" -sTCP:LISTEN 2>/dev/null | head -n1 || true)"
-  [[ -n "$pid" ]] || return 0
-  lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n1
-}
-
 fl_bench_redis_up() {
   local bench_dir="$1" conf port owner
   [[ "$FL_DRY_RUN" == "1" ]] && { fl_info "dry-run: start the bench's Redis (config/redis_queue.conf, config/redis_cache.conf) for the site setup"; return 0; }

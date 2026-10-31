@@ -6,19 +6,10 @@ namespace Tray.Core.Tests;
 internal static class Fixtures
 {
     /// <summary>The spike's fixtures folder, found by walking up from the test binaries.</summary>
-    public static string Root { get; } = Find();
+    public static string Root => BenchBar.Tray.TestSupport.FixtureFiles.Root;
 
     public static string Dir(string name) => Path.Combine(Root, name);
 
-    private static string Find()
-    {
-        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
-        {
-            var candidate = Path.Combine(dir.FullName, "fixtures");
-            if (Directory.Exists(Path.Combine(candidate, "recorded"))) return candidate;
-        }
-        throw new DirectoryNotFoundException("fixtures folder not found above " + AppContext.BaseDirectory);
-    }
 
     /// <summary>A scratch copy of a fixture folder that a test may change.</summary>
     public static string Copy(string name)

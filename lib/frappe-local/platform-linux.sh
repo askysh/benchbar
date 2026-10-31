@@ -323,6 +323,17 @@ fl_pid_cwd() {
   readlink "${FL_PROC_DIR}/$1/cwd" 2>/dev/null || true
 }
 
+fl_port_owner_cwd() {
+  local pid
+  # the first listener whose owner is visible (a hidden one is pid 0)
+  while IFS= read -r pid; do
+    [[ "$pid" =~ ^[1-9][0-9]*$ ]] || continue
+    fl_pid_cwd "$pid"
+    return 0
+  done < <(fl_port_listener_pids "$1")
+  return 0
+}
+
 fl_bench_listener_pids() {
   local port pid cmd addr
   fl__ss_listeners "${1:-$(fl_bench_ports_csv)}" | while read -r port pid cmd addr; do
@@ -334,6 +345,17 @@ fl_bench_listener_pids() {
 fl_port_listener_pid() {
   local port pid cmd addr
   fl__ss_listeners "$1" | { read -r port pid cmd addr && printf '%s\n' "$pid"; } || true
+}
+
+# fl_port_listener_pids PORT: the pid of every listener on PORT, once each, one
+# per line. A socket whose owner ss does not show (another user's, docker-proxy)
+# is the pid 0: a listener that is never ours.
+fl_port_listener_pids() {
+  local port pid cmd addr
+  fl__ss_listeners "$1" | while read -r port pid cmd addr; do
+    printf '%s\n' "$pid"
+  done | awk '!seen[$0]++'
+  return 0
 }
 
 fl_port_listener_summary() {
@@ -707,13 +729,17 @@ fl_hosts_has_name() { fl_linux_hosts_resolves "$1"; }
 
 # a name that does not resolve gets the command to run; benchbar never edits /etc/hosts here
 fl_hosts_add_names() {
-  local n
+  local n cmd missing=0
   for n in "$@"; do
     fl_site_name_ok "$n" || continue
     fl_linux_hosts_resolves "$n" && continue
+    missing=1
+    cmd="$(printf 'printf "127.0.0.1 %s\\n" | sudo tee -a /etc/hosts' "$n")"
     fl_warn "${n} does not resolve to this machine; add it to /etc/hosts yourself:"
-    printf '  printf "127.0.0.1 %s\\n" | sudo tee -a /etc/hosts\n\n' "$n"
+    printf '  %s\n\n' "$cmd"
+    fl_next_action "$cmd" "${n} does not resolve to this machine"
   done
+  [[ "$missing" == "1" ]] || fl_ok "unchanged: every site name resolves to this machine (benchbar does not edit /etc/hosts on Linux)"
   return 0
 }
 

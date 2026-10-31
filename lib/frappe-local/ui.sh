@@ -916,7 +916,7 @@ fl_confirm() {
     return 0
   fi
   if fl_noninteractive; then
-    fl_die "'${prompt}' needs an answer, and BENCHBAR_NONINTERACTIVE=1 says nothing can ask." "Pass --yes to confirm it, or run without the mode in a terminal."
+    fl_die "'${prompt}' needs an answer, and BENCHBAR_NONINTERACTIVE=1 says nothing can ask; pass --yes to confirm it." "Pass --yes to confirm it, or run without the mode in a terminal."
   fi
   if [[ ! -t 0 ]]; then
     fl_warn "Not a terminal and --yes not given; treating '${prompt}' as no."

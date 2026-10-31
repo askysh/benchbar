@@ -43,6 +43,9 @@ public sealed class TrayOptions
     /// of SystemEvents starts a hidden message window and a thread. Tests turn it off.
     /// </summary>
     public bool ListenToSystemEvents { get; init; } = true;
+
+    /// <summary>The CLI client that runs <c>ports check</c> before a start or restart; null skips the check (fixtures, tests that do not care).</summary>
+    public ICliClient? PortCheck { get; init; }
 }
 
 /// <summary>
@@ -58,6 +61,7 @@ public sealed class TrayController : IDisposable
     private readonly FrameSequencer _sequencer;
     private readonly ToastPolicy _toasts;
     private readonly bool _listenToSystemEvents;
+    private readonly ICliClient? _portCheck;
     private readonly CancellationTokenSource _cts = new();
     private readonly object _powerGate = new();
 
@@ -78,6 +82,7 @@ public sealed class TrayController : IDisposable
         _source = source;
         _host = host;
         _listenToSystemEvents = options.ListenToSystemEvents;
+        _portCheck = options.PortCheck;
         _runners = options.Runners;
         _runnerId = options.RunnerId;
         _appearance = options.Appearance;
@@ -176,19 +181,30 @@ public sealed class TrayController : IDisposable
 
     // --- actions ---
 
-    /// <summary>Stops a running or starting bench, starts any other (the result says why a refusal failed), then polls at once and keeps polling fast for a minute.</summary>
-    public async Task<ActionResult> StartStopAsync(BenchStatus bench)
+    /// <summary>
+    /// Stops a running or starting bench, starts any other (the result says why a refusal failed), then polls at once and keeps polling
+    /// fast for a minute. A start first runs <c>ports check</c> (unless <paramref name="checkPorts"/> is false because the caller did): a
+    /// conflict refuses with the reason and the fix, and nothing is killed.
+    /// </summary>
+    public async Task<ActionResult> StartStopAsync(BenchStatus bench, bool checkPorts = true)
     {
         var verb = bench.State is BenchState.Running or BenchState.Starting ? "down" : "up";
-        return await RunActionAsync(verb, bench).ConfigureAwait(false);
+        return await RunActionAsync(verb, bench, checkPorts).ConfigureAwait(false);
     }
 
-    public Task<ActionResult> RestartAsync(BenchStatus bench) => RunActionAsync("restart", bench);
+    /// <summary>Restarts a bench after the same port check as a start.</summary>
+    public Task<ActionResult> RestartAsync(BenchStatus bench, bool checkPorts = true) => RunActionAsync("restart", bench, checkPorts);
 
-    private async Task<ActionResult> RunActionAsync(string verb, BenchStatus bench)
+    private async Task<ActionResult> RunActionAsync(string verb, BenchStatus bench, bool checkPorts)
     {
         try
         {
+            if (checkPorts && verb != "down" && _portCheck is not null)
+            {
+                var action = verb == "restart" ? PortGuardAction.Restart : PortGuardAction.Start;
+                var guard = await PortGuard.CheckAsync(_portCheck, bench.Path, action, _cts.Token).ConfigureAwait(false);
+                if (!guard.Allowed) return ActionResult.Failure(PortRefusalLine(guard));
+            }
             return await _source.RunAsync([verb, "--bench-dir", bench.Path], _cts.Token).ConfigureAwait(false);
         }
         catch (SourceProblemException ex)
@@ -200,6 +216,13 @@ public sealed class TrayController : IDisposable
             // stopping has no state of its own, so a short fast window is the only way to see it end
             _poller.BoostFor(BenchPoller.ActionBoost);
         }
+    }
+
+    /// <summary>The refusal of the port check as the one line a flyout row shows, with where the fix is.</summary>
+    public static string PortRefusalLine(PortGuardResult guard)
+    {
+        var text = (guard.Refusal ?? "The ports could not be checked.").Replace("\r", "").Replace('\n', ' ');
+        return guard.Conflict ? text + " Open BenchBar, then Health, to review the ports." : text;
     }
 
     /// <summary>Boots the distro (<c>keepalive run</c>, detached) and polls every 2 s until it is up, for at most a minute.</summary>

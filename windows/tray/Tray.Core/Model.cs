@@ -32,6 +32,12 @@ public sealed record BenchStatus(
 
     /// <summary>Why this one bench could not be read (its status call failed); null when it answered. Shown under its row.</summary>
     public string? Problem { get; init; }
+
+    /// <summary><c>scheduler</c> in the JSON: <c>Procfile.lean</c> runs <c>bench schedule</c>. Null for a CLI older than 0.4.</summary>
+    public bool? Scheduler { get; init; }
+
+    /// <summary><c>started_at</c> in the JSON: when the current (or last) run started. Null when the CLI gave none.</summary>
+    public DateTimeOffset? StartedAt { get; init; }
 }
 
 /// <summary>One bench from <c>list --json</c> (<c>benches[]</c>).</summary>
@@ -126,6 +132,8 @@ internal sealed class StatusDto
     [JsonPropertyName("web_url")] public string? WebUrl { get; set; }
     [JsonPropertyName("log")] public string? Log { get; set; }
     [JsonPropertyName("sites")] public List<SiteDto>? Sites { get; set; }
+    [JsonPropertyName("scheduler")] public bool? Scheduler { get; set; }
+    [JsonPropertyName("started_at")] public string? StartedAt { get; set; }
 }
 
 internal sealed class SiteDto
@@ -225,6 +233,8 @@ public static class BenchJson
             RawState = dto.State?.Trim() ?? "",
             LogPath = dto.Log,
             Sites = sites,
+            Scheduler = dto.Scheduler,
+            StartedAt = DateTimeOffset.TryParse(dto.StartedAt, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal, out var started) ? started : null,
         };
     }
 

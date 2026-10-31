@@ -894,3 +894,5 @@ Measured on five PR runs (September 2026): 11 to 14 minutes wall clock, all of i
 - `BENCHBAR_SUDO_PASSWORD` is taken out of the environment before anything else runs (`sudo-env.sh`). It reaches only phase 00, as one line on fd 8; phases 01 and 02 and every other child never get it, and install forgets it right after phase 00.
 - A wrong sudo password is checked up front with `sudo -k` first, so a cached ticket cannot make it pass. Its id is `sudo_password_wrong`, in `error_id` of every done line.
 - Linux prerequisites read no root-only state: the sudo check uses group membership, not `sudo -n`, so the check never runs sudo.
+- The Linux layer never calls `lsof`: listeners and the owner's working folder come from `fl_port_listener_pid`, `fl_port_listener_pids` and `fl_port_owner_cwd` in `platform-linux.sh` (ss and /proc), so a Ubuntu without the `lsof` package behaves the same.
+- `tests/test-windows-commands.sh` runs the Windows tray's command list under `BENCHBAR_NONINTERACTIVE=1` with a failing `lsof` first on PATH, so a later direct `lsof` call fails the suite.

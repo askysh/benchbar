@@ -20,7 +20,7 @@ public partial class App : Application, ITrayHost
 
     private readonly ErrorLog _log = new();
     private readonly StartupShortcut _startup = new();
-    private readonly Dictionary<string, LogsWindow> _logs = [];
+    private readonly Dictionary<string, LogWindow> _logs = [];
     private readonly Dictionary<string, DoctorWindow> _doctors = [];
     private Mutex? _mutex;
     private EventWaitHandle? _openEvent;
@@ -33,6 +33,7 @@ public partial class App : Application, ITrayHost
     private TrayMenu? _menu;
     private IBenchSource? _source;
     private ISetupService? _setup;
+    private ICliClient _cli = new CliClient();
     private IDistroProbe? _probe;
     private MainWindow? _main;
     private SettingsWindow? _settingsWindow;
@@ -89,6 +90,7 @@ public partial class App : Application, ITrayHost
         ApplyThemeMode();
         _source = BenchSourceFactory.FromEnvironment();
         _setup = BenchSourceFactory.SetupFromEnvironment();
+        _cli = BenchSourceFactory.CliFromEnvironment();
         var options = new TrayOptions
         {
             Runners = RunnerSet.Load(),
@@ -97,6 +99,7 @@ public partial class App : Application, ITrayHost
             Notifications = _config.Notifications,
             DistroProbe = _probe = BenchSourceFactory.DistroProbeFromEnvironment(),
             Distro = () => DistroName.Resolve(_config.Distro),
+            PortCheck = _cli,
         };
         // The controller and the first frame exist before NIM_ADD, so "icon-added" means a runner is visible.
         _controller = new TrayController(_source, new DispatcherFrameClock(), this, TimeProvider.System, options);
@@ -337,14 +340,12 @@ public partial class App : Application, ITrayHost
 
     private void ShowLogs(BenchStatus bench)
     {
-        if (_source is null) return;
         if (_logs.TryGetValue(bench.Path, out var existing))
         {
-            existing.Activate();
-            _ = existing.LoadAsync();
+            existing.Reopen();
             return;
         }
-        var window = new LogsWindow(_source, bench, Theme, CopyText);
+        var window = new LogWindow(PageServicesInstance, bench, Theme);
         _logs[bench.Path] = window;
         window.Closed += (_, _) =>
         {

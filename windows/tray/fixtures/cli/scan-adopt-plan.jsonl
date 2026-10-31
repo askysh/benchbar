@@ -1,0 +1,2 @@
+{"schema_version":1,"cli_version":"0.8.0","event":"plan","bench":"/home/akash/projects/added-bench","site":"added.localhost","profile":"v15-lts","port_offset":0,"ports_move":false,"dry_run":true,"sudo_mode":"env","steps":[{"id":"unit","name":"Write the systemd unit","sudo":false,"will_run":true}],"log":"x"}
+{"schema_version":1,"cli_version":"0.8.0","event":"done","exit":0,"dry_run":true}

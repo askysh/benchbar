@@ -1,0 +1,1 @@
+{"schema_version":1,"bench":"/home/akash/frappe-bench","checks":[{"id":"assets","group":"bench","label":"Built assets","status":"fail","message":"missing","fix":"bench build"},{"id":"agent","group":"service","label":"Unit","status":"ok","message":"running","fix":""}]}

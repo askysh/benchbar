@@ -1,0 +1,1 @@
+{"schema_version":1,"bench":"/home/akash/frappe-bench","file":"/home/akash/frappe-bench/logs/bench.log","process":null,"since":"2026-10-30T10:00:04Z","lines":["10:00:04 socketio.1 | listening","10:00:06 web.1     | GET /app 200","10:00:07 web.1     | GET /api 500"],"ts":["2026-10-30T10:00:04Z","2026-10-30T10:00:06Z","2026-10-30T10:00:07Z"]}

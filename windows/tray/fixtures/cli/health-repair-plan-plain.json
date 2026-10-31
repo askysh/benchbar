@@ -1,0 +1,1 @@
+{"event":"plan","schema_version":1,"bench":"/home/akash/frappe-bench","dry_run":true,"actions":[{"id":"build","label":"bench build","fixes":["Built assets"],"sudo":false}],"log":"/home/akash/.local/state/benchbar/logs/20261030-101501-4243.log"}

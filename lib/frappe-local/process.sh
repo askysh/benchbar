@@ -193,6 +193,11 @@ fl_port_listener_pid() {
   lsof -ti "tcp:$1" -sTCP:LISTEN 2>/dev/null | head -n1 || true
 }
 
+# fl_port_listener_pids PORT: the pid of every listener on PORT, one per line
+fl_port_listener_pids() {
+  lsof -ti "tcp:$1" -sTCP:LISTEN 2>/dev/null || true
+}
+
 fl_port_listener_summary() {
   # prints "pid command" for the first listener on a port, or nothing
   lsof -nP -iTCP:"$1" -sTCP:LISTEN 2>/dev/null | awk 'NR == 2 {print $2 " " $1}' || true

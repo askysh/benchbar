@@ -1,0 +1,1 @@
+{"schema_version":1,"token":"ffff6666","can_apply":true,"entries":[{"path":"/home/akash/b1","name":"b1","site":"b1.localhost","mode":"automatic","current":{"web":8000,"socketio":9000,"redis_queue":11000,"redis_cache":13000},"proposed":{"web":8001,"socketio":9001,"redis_queue":11001,"redis_cache":13001},"conflicts":[],"blocked":null,"service_installed":false,"setup_plan":""}]}

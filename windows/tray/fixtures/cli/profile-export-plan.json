@@ -1,0 +1,5 @@
+{"schema_version":1,"cli_version":"0.8.0","name":"acme","base":"v15-lts","apps":[
+ {"name":"acme_base","repo":"git@github-work:acme/acme_base.git","exported_repo":"git@github.com:acme/acme_base.git","current_branch":"main","exported_branch":"main","default_branch":"main","branch_verified":true,"access":"private","requires":[],"keep":true},
+ {"name":"acme_ecr","repo":"git@github-work:acme/acme_ecr.git","exported_repo":"git@github.com:acme/acme_ecr.git","current_branch":"wip","exported_branch":"develop","default_branch":"develop","branch_verified":true,"access":"private","requires":["acme_base"],"keep":true}],
+ "warnings":["acme_ecr: git@github-work:acme/acme_ecr.git is written as git@github.com:acme/acme_ecr.git"],
+ "digest":"5d41402abc4b2a76b9719d911017c5925d41402abc4b2a76b9719d911017c592"}

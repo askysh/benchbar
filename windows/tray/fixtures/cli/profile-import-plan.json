@@ -1,0 +1,4 @@
+{"schema_version":1,"cli_version":"0.8.0","name":"acme","source":"/mnt/c/Users/akash/Downloads/acme.toml","exists":true,"diff":"@@ -3 +3 @@\n-description = \"Acme\"\n+description = \"Acme ERP\"","base":"v15-lts",
+ "apps":[{"name":"acme_ecr","repo":"git@github.com:acme/acme_ecr.git","branch":"develop","access":"private","requires":["acme_base"]}],
+ "check":{"repos":[{"app":"acme_ecr","repo":"git@github.com:acme/acme_ecr.git","reachable":false,"reason":"Permission denied (publickey)."}]},
+ "skipped_apps":["acme_ecr"],"digest":"c2a1f0c2a1f0c2a1f0c2a1f0c2a1f0c2a1f0c2a1f0c2a1f0c2a1f0c2a1f0c2a1"}

@@ -1,0 +1,1 @@
+{"schema_version":1,"cli_version":"0.8.0","event":"done","exit":1,"error":"sudo did not accept the password.","error_id":"sudo_password_wrong","changed":[],"warnings":[],"next_actions":[]}

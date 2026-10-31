@@ -105,6 +105,8 @@ jobs:
             echo "::warning::HOMEBREW_TAP_TOKEN is not set: checking only, no pull request."
             git clone https://github.com/askysh/homebrew-tap.git "$tap" || brew tap-new --no-git askysh/tap
           fi
+          # newer Homebrew loads formulae only from a tap marked as trusted
+          if brew trust --help >/dev/null 2>&1; then brew trust askysh/tap; fi
           args=(--version "$VERSION" --cli "$DIR/benchbar-cli-${VERSION}.tar.gz")
           [ "$SIGNED" != "true" ] || args+=(--dmg "$DIR/BenchBar-${VERSION}.dmg")
           scripts/homebrew-render.sh "${args[@]}" "$tap"
