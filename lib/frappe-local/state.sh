@@ -521,8 +521,15 @@ fl_bench_canonical() {
   # printf, not pwd's own output: the hash must not depend on a newline
   if [[ -d "$1" ]] && real="$(cd "$1" 2>/dev/null && pwd -P)"; then printf '%s' "$real"; return 0; fi
   # not created yet (phase 01 records it before bench init): resolve the parent
-  parent="$(dirname "$1")"
-  if [[ -d "$parent" ]]; then printf '%s/%s' "$(cd "$parent" && pwd -P)" "$(basename "$1")"; else printf '%s' "$1"; fi
+  # dirname and basename by parameter expansion (trailing slashes first, as they do)
+  local path="$1" base
+  while [[ "$path" == */ && "$path" != / ]]; do path="${path%/}"; done
+  case "$path" in
+    /) parent=/ base=/ ;;
+    */*) parent="${path%/*}" base="${path##*/}"; [[ -n "$parent" ]] || parent=/ ;;
+    *) parent=. base="$path" ;;
+  esac
+  if [[ -d "$parent" ]]; then printf '%s/%s' "$(cd "$parent" && pwd -P)" "$base"; else printf '%s' "$1"; fi
 }
 
 fl_bench_state_file_for() {

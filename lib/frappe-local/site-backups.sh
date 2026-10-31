@@ -48,7 +48,7 @@ fl_backup_set_json() {
   local dir="$1" stamp="$2" f name db="" pub="" priv="" conf="" size=0 bytes enc=0 partial=0 first="" mtime
   for f in "$dir/${stamp}"-*; do
     [[ -f "$f" ]] || continue
-    name="$(basename "$f")"
+    name="${f##*/}"
     [[ -n "$first" ]] || first="$f"
     case "$name" in
       *-database.sql.gz|*-database-enc.sql.gz) db="$f" ;;

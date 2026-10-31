@@ -201,11 +201,11 @@ fl_team_app_policy() {
 
 # Each team profile file once, in lookup order: KIND<TAB>NAME<TAB>FILE
 fl_team_profile_files() {
-  local kind d f
+  local kind d f n
   while IFS=$'\t' read -r kind d; do
     for f in "$d"/*.toml; do
       [[ -f "$f" ]] || continue
-      printf '%s\t%s\t%s\n' "$kind" "$(basename "$f" .toml)" "$f"
+      n="${f##*/}"; printf '%s\t%s\t%s\n' "$kind" "${n%.toml}" "$f"
     done
   done < <(fl_team_profile_dirs)
 }
@@ -478,7 +478,7 @@ fl_profile_subscription_named() {
 fl_profile_sub_names() {
   local f out=""
   for f in "$(fl_profile_sub_profdir "$1")"/*.toml; do
-    [[ -f "$f" ]] && out="${out}${out:+ }$(basename "$f" .toml)"
+    [[ -f "$f" ]] && { f="${f##*/}"; out="${out}${out:+ }${f%.toml}"; }
   done
   printf '%s' "$out"
 }
@@ -1217,7 +1217,7 @@ fl_cmd_profile_subscribe() {
   fi
   for f in "$(fl_profile_sub_profdir "$tmp/clone")"/*.toml; do
     [[ -f "$f" ]] || continue
-    n="$(basename "$f" .toml)"
+    n="${f##*/}"; n="${n%.toml}"
     if ! fl_team_profile_valid_name "$n"; then fl_warn "${n}.toml: not a valid profile name, ignored"; continue; fi
     if fl_builtin_profile_exists "$n"; then fl_warn "${n}.toml: shadows a built in profile, ignored"; continue; fi
     if ! fl_team_profile_read "$f"; then fl_warn "${n}.toml is invalid: ${FL_TEAM_ERROR}"; continue; fi

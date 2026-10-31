@@ -316,11 +316,11 @@ fl_plist_runner() {
 # com.benchbar agents whose WorkingDirectory is DIR, even when DIR is no
 # longer a bench (its folder was emptied): "plist|label" lines.
 fl_agents_for_dir() {
-  local f
+  local f label
   while IFS= read -r f; do
     [[ -n "$f" ]] || continue
     fl_same_path "$(fl_plist_working_dir "$f")" "$1" || continue
-    printf '%s|%s\n' "$f" "$(basename "$f" .plist)"
+    label="${f##*/}"; printf '%s|%s\n' "$f" "${label%.plist}"
   done < <(fl_agent_files)
 }
 
@@ -332,7 +332,7 @@ fl_dead_agents_list() {
     [[ -n "$f" ]] || continue
     runner="$(fl_plist_runner "$f")"
     [[ -n "$runner" && ! -f "$runner" ]] || continue
-    label="$(basename "$f" .plist)"
+    label="${f##*/}"; label="${label%.plist}"
     launchctl print "$(fl_launchd_domain)/${label}" >/dev/null 2>&1 || continue
     printf '%s|%s|%s\n' "$f" "$label" "$(fl_plist_working_dir "$f")"
   done < <(fl_agent_files)
@@ -347,7 +347,7 @@ fl_legacy_agents_list() {
   [[ -d "$dir" ]] || return 0
   for f in "$dir"/*.plist; do
     [[ -f "$f" ]] || continue
-    case "$(basename "$f")" in
+    case "${f##*/}" in
       com.benchbar.*|sh.brew.*|homebrew.mxcl.*|com.apple.*) continue ;;
       com.frappe-mac.*)
         [[ "$(fl_plist_working_dir "$f")" == "$FL_BENCH_DIR" ]] || continue ;;

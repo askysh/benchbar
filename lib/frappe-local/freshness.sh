@@ -113,7 +113,7 @@ fl_focus_apps() {
   printf '%s' "$out"
 }
 
-fl_is_focus_app() { printf '%s' "$FL_FOCUS_APPS" | grep -qxF "$1"; }
+fl_is_focus_app() { [[ $'\n'"$FL_FOCUS_APPS"$'\n' == *$'\n'"$1"$'\n'* ]]; }
 
 # fl_focus_dependencies: "DEP NEEDED_BY,NEEDED_BY" per line: every app of the
 # bench a focus app needs through required_apps (transitively), the focus

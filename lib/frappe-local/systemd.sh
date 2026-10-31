@@ -372,11 +372,11 @@ fl_plist_runner() {
 # benchbar units whose WorkingDirectory is DIR, even when DIR is no longer a
 # bench: "unit|label" lines.
 fl_agents_for_dir() {
-  local f
+  local f label
   while IFS= read -r f; do
     [[ -n "$f" ]] || continue
     fl_same_path "$(fl_plist_working_dir "$f")" "$1" || continue
-    printf '%s|%s\n' "$f" "$(basename "$f" .service)"
+    label="${f##*/}"; printf '%s|%s\n' "$f" "${label%.service}"
   done < <(fl_agent_files)
 }
 
@@ -388,7 +388,7 @@ fl_dead_agents_list() {
     [[ -n "$f" ]] || continue
     runner="$(fl_plist_runner "$f")"
     [[ -n "$runner" && ! -f "$runner" ]] || continue
-    label="$(basename "$f" .service)"
+    label="${f##*/}"; label="${label%.service}"
     fl_unit_show "$label.service"
     case "$U_ACTIVE" in active|activating|reloading) ;; *) continue ;; esac
     printf '%s|%s|%s\n' "$f" "$label" "$(fl_plist_working_dir "$f")"

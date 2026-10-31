@@ -43,9 +43,9 @@ fl_apps_unlisted() {
   listed="$(fl_apps_txt)"
   for d in "${FL_BENCH_DIR}"/apps/*/; do
     [[ -d "$d" ]] || continue
-    n="$(basename "$d")"
+    d="${d%/}"; n="${d##*/}"
     fl_app_is_git_app "$n" || continue
-    printf '%s\n' "$listed" | grep -qxF "$n" || printf '%s\n' "$n"
+    case $'\n'"${listed}"$'\n' in *$'\n'"${n}"$'\n'*) ;; *) printf '%s\n' "$n" ;; esac
   done
 }
 
@@ -58,7 +58,7 @@ fl_app_existing_dir() {
   want="$(printf '%s' "$1" | tr '[:upper:]-' '[:lower:]_')"
   for d in "${FL_BENCH_DIR}"/apps/*/; do
     [[ -d "$d" ]] || continue
-    n="$(basename "$d")"
+    d="${d%/}"; n="${d##*/}"
     [[ "$(printf '%s' "$n" | tr '[:upper:]-' '[:lower:]_')" == "$want" ]] && { printf '%s' "$n"; return 0; }
   done
   return 0
