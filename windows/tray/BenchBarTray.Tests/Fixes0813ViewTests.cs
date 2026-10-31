@@ -163,6 +163,10 @@ public class Fixes0813ViewTests
             var parent = (Grid)System.Windows.Media.VisualTreeHelper.GetParent(footer);
             var order = parent.Children.OfType<UIElement>().OrderBy(System.Windows.Input.KeyboardNavigation.GetTabIndex).Last();
             Assert.Same(footer, order);
+            // the indexes only order the subtrees when the grid cycles and each part is its own Local scope
+            Assert.Equal(System.Windows.Input.KeyboardNavigationMode.Cycle, System.Windows.Input.KeyboardNavigation.GetTabNavigation(parent));
+            foreach (var part in parent.Children.OfType<UIElement>().Where(p => !ReferenceEquals(p, footer)))
+                Assert.Equal(System.Windows.Input.KeyboardNavigationMode.Local, System.Windows.Input.KeyboardNavigation.GetTabNavigation(part));
         });
     }
 }

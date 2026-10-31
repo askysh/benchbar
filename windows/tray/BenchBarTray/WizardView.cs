@@ -100,6 +100,9 @@ internal sealed partial class WizardView : UserControl
         KeyboardNavigation.SetTabIndex(scroll, 1);
         KeyboardNavigation.SetTabIndex(bar, 2);
         KeyboardNavigation.SetTabIndex(footer, 3);
+        // TabIndex on a panel orders its subtree only when the panel is its own Local tab scope
+        KeyboardNavigation.SetTabNavigation(root, KeyboardNavigationMode.Cycle);
+        foreach (var part in new UIElement[] { header, scroll, bar }) KeyboardNavigation.SetTabNavigation(part, KeyboardNavigationMode.Local);
         root.Children.Add(header);
         root.Children.Add(scroll);
         root.Children.Add(bar);
