@@ -225,6 +225,9 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
 
 ## Contributing a change
 
+- Branch from `next-release` and open the pull request against it.
+  `main` holds the last release and moves only when one is cut
+  (docs/releasing.md).
 - Do not commit your own working notes: design briefs, plans, specs,
   state or progress files, or anything your tooling writes for itself
   (for example `design-state.md`, `docs/designpowers/`, `docs/plans/`,

@@ -16,7 +16,17 @@ The `check` job decides: it looks for the secrets and prints which path
 runs as a notice. Nothing else differs for you: same tag, same draft
 release.
 
+## Branches
+
+Work lands on `next-release`: every pull request targets it. `main` moves
+only when a release is cut, so it always holds the last release, and so do
+the one line installers and the docs site, which read from `main`. A push
+to `main` with a new version tags it and starts the release builds
+(`auto-tag.yml`).
+
 ## Cutting a release
+
+On `next-release`, then into `main`:
 
 1. Bump `MARKETING_VERSION` in `macos/project.yml` and `FL_VERSION` in
    `benchbar`. The workflow refuses a tag that does not match both.
@@ -33,14 +43,17 @@ release.
    - The BenchBar window panes: `window-general.png`, and a new
      `window-about.png`, since General and About moved back into the
      window in 0.8.1.
-4. Commit, tag, push:
-   ```bash
-   git tag v0.3.0
-   git push origin v0.3.0
-   ```
-5. Wait for the Release workflow, open the draft on the Releases page,
+4. Merge those changes into `next-release`, then open a pull request
+   from `next-release` into `main` and **squash merge** it (`main` keeps a
+   linear history: one commit per release).
+5. `auto-tag.yml` checks that `FL_VERSION` and `MARKETING_VERSION` agree
+   and that CHANGELOG.md has the section, tags `vX.Y.Z` on that commit,
+   starts `release.yml` and `release-windows.yml` for the tag, and merges
+   `main` back into `next-release`. A push to `main` that keeps the version
+   tags nothing. A tag pushed by hand still starts both release workflows.
+6. Wait for the release workflows, open the draft on the Releases page,
    check the files, publish.
-6. Publishing starts the Homebrew tap workflow (`homebrew-tap.yml`,
+7. Publishing starts the Homebrew tap workflow (`homebrew-tap.yml`,
    below). Check that its pull request on `askysh/homebrew-tap` merged.
 
 `CFBundleShortVersionString` is set from the tag and `CFBundleVersion`
