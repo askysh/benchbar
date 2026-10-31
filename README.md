@@ -155,7 +155,7 @@ GitHub too, and `benchbar docs` opens them from the terminal.
 
 ## Roadmap
 
-0.6.1 is the first signed and notarized release, with Sparkle updates. 0.7.0 installs the CLI and the app with Homebrew, in 0.7.1 the app ships the CLI, so one update covers both, 0.7.2 gives the window one main action per page and one layout for every sheet, and 0.7.3 is a fix pass from a full review (node@22 for v15, ownership checks, fail closed writes, MCP hardening). 0.8.0 brings the first run wizard and a new bench from the app, the CLI on Linux, a Windows preview (`benchbar.exe` and a tray app), and commands that agents can drive: one JSON stream with a closing `done` line and a non interactive mode. The rest is in [ROADMAP.md](ROADMAP.md).
+0.6.1 is the first signed and notarized release, with Sparkle updates. 0.7.0 installs the CLI and the app with Homebrew, in 0.7.1 the app ships the CLI, so one update covers both, 0.7.2 gives the window one main action per page and one layout for every sheet, and 0.7.3 is a fix pass from a full review (node@22 for v15, ownership checks, fail closed writes, MCP hardening). 0.8.0 brings the first run wizard and a new bench from the app, the CLI on Linux, a Windows preview (`benchbar.exe` and a tray app), and commands that agents can drive: one JSON stream with a closing `done` line and a non interactive mode. 0.8.1 makes Windows a beta: the tray takes a PC from no WSL to a running bench. The rest is in [ROADMAP.md](ROADMAP.md).
 
 ## Contributing
 

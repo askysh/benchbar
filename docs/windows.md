@@ -377,3 +377,8 @@ of the distro first. `wsl --list --verbose` shows the distro names.
   handler for that address yet, so the link does not open BenchBar.
 - It never reads files inside the distro: every fact comes from
   `benchbar.exe`.
+- It has no Open as menu yet. From PowerShell, `benchbar.exe site open-as on
+  NAME` turns it on for a site (it asks first), then `benchbar.exe open --as
+  USER` opens the site signed in as that user in your Windows browser. The
+  site needs a `*.localhost` name, which the Windows browser reaches without
+  a hosts line. See [benchbar open](reference/cli/other.md).

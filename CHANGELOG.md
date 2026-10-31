@@ -8,6 +8,11 @@ BenchBar for Windows is now a beta. The tray takes a new PC from no WSL to
 a running bench, and manages benches from its own window, as the Mac app
 does. Report a Bug sends a redacted report in about a minute.
 
+On the Mac, Open as signs a development site in as any of its users, so
+you can check what each role sees, once you turn it on for that site.
+Settings and About are back in the BenchBar window, the popover reads
+over a white page in dark mode, and the menu bar has new runners.
+
 ### Windows beta
 
 - The window title, a Beta pill and a banner that you can dismiss say that

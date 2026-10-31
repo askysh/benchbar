@@ -216,6 +216,9 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
   skipped but the password prompt is not, so say so. Started by the app
   (`BENCHBAR_SUDO=gui`), macOS asks in its own dialog once per step instead,
   at most two per run.
+- Open as is the person's choice. Never run `benchbar site open-as on`
+  (it refuses an agent anyway) and never ask for or use an
+  `open --as --print-url` link: it holds a login session for that user.
 - Never print or log the MariaDB root password. It lives in the Keychain
   (a 0600 file on Linux);
   `benchbar mariadb-password --yes` prints it when a user asks for it.
@@ -228,6 +231,8 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
 
 ## Contributing a change
 
+- Run `bash tests/affected.sh` for the tests your change touches; the full
+  suite (`bash tests/run-tests.sh`) before you hand the work back.
 - Branch from `next-release` and open the pull request against it.
   `main` holds the last release and moves only when one is cut
   (docs/releasing.md).
