@@ -44,6 +44,8 @@ tag, with `--version v<version>`); a development build uses `main`. To
 do it by hand, run in Ubuntu:
 `curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash`.
 
+![The first run wizard at Welcome](images/windows-wizard-welcome.png)
+
 1. **Check Your PC** lists every step with its state and a button to fix
    it: Windows version, virtualization, WSL, a pending restart, WSL
    version, the distro, the Linux user, systemd, the command line tool,
@@ -71,8 +73,14 @@ Some rows in Check Your PC are advice: linger, keepalive, the WSL idle
 settings and PATH. They never block **Continue**. The other rows must be
 ok first.
 
+![Check Your PC with every step ok](images/windows-wizard-check.png)
+
 For a distro whose user the wizard did not create, BenchBar asks for
 your Linux password right before the steps that use sudo.
+
+![The New Bench page](images/windows-wizard-bench.png)
+
+![Review, the plan before Install](images/windows-wizard-review.png)
 
 Every wizard page has a **Report a Bug** button in its footer, and a
 failed step has **Report This Problem** next to it. See
@@ -225,6 +233,8 @@ foot. A banner says when a newer release is out, and a beta banner stays
 until you dismiss it once. Ctrl+N starts a new bench, Ctrl+, opens
 Settings and F5 checks again.
 
+![The BenchBar window with a bench open on Overview](images/windows-window.png)
+
 A bench has four tabs:
 
 - **Overview**: state, address and uptime, Start or Stop, Restart, Open
@@ -244,6 +254,8 @@ A bench has four tabs:
 - **Health**: the doctor checks with the Windows setup checks, Copy fix,
   and Repair, which shows the plan first and asks for your Linux password
   once when a step uses sudo.
+
+![A bench on its Sites tab](images/windows-bench.png)
 
 Start and Restart check the bench's ports first, from the window and from
 the flyout. A port another program holds stops the start with the reason
