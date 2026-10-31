@@ -115,6 +115,32 @@ assert_contains "$OUT" "linuxdev.localhost"
 assert_calls_not_contain '^(sudo|apt-get|uv|fnm)'
 assert_eq "127.0.0.1 localhost" "$(cat "$FL_HOSTS_FILE")" "(no hosts line on Linux)"
 
+# ---- a dry run on a fresh machine (no uv, no pipx) is a plan: exit 0, and what step 1
+# installs is "will be installed by step 1", not a failure of step 2
+fresh_machine
+unlink "$FRESHBIN/pipx"
+run_fm install --dry-run --json --yes --bench-dir "$HOME/frappe-bench"
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" '"event":"done","exit":0'
+assert_contains "$OUT" '"dry_run":true'
+assert_calls_not_contain '^(sudo|apt-get|uv|fnm|pipx)'
+run_fm install --dry-run --yes --bench-dir "$HOME/frappe-bench"
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "uv is not installed yet; step 1 (00-linux-system-deps.sh) will install it"
+assert_contains "$OUT" "node is not installed yet; step 1 (00-linux-system-deps.sh) will install it"
+assert_not_contains "$OUT" "Neither uv nor pipx"
+assert_not_contains "$OUT" "real install would stop here"
+# a real blocker still fails the dry run: not enough disk
+FL_DISK_AVAILABLE_GB=1 run_fm install --dry-run --json --yes --bench-dir "$HOME/frappe-bench"
+assert_eq "1" "$CODE" "$OUT"
+FL_DISK_AVAILABLE_GB=1 run_fm install --dry-run --yes --bench-dir "$HOME/frappe-bench"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "free disk space is required"
+# and a real run without uv or pipx still stops with the fix
+run01 --yes
+assert_eq "1" "$CODE" "$OUT"
+ln -sf "$ROOT/tests/mocks/bin/pipx" "$FRESHBIN/pipx"
+
 # ---- 00 on a fresh machine: apt, uv, fnm, the socket-only root, the drop-in, the .deb
 fresh_machine
 run00 --yes --profile v15-lts

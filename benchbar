@@ -891,7 +891,7 @@ cmd_install() {
   [[ -z "$INSTALL_PORT_FREE" ]] || fl_info "the default ports are taken; the new bench gets port block ${INSTALL_PORT_FREE} (web ${port_block%% *})"
   [[ -n "$port_block" ]] && web_port="${port_block%% *}"
   if BENCH_DIR="$FL_BENCH_DIR" SITE_NAME="$FL_SITE" APP_BUNDLE="${bundle:-minimal}" BENCHBAR_WEB_PORT="$web_port" \
-     BENCHBAR_PORT_BLOCK="$port_block" FL_JSONL_PARENT=bench_site \
+     BENCHBAR_PORT_BLOCK="$port_block" FL_JSONL_PARENT=bench_site BENCHBAR_PLAN_STEP1="$([[ "$FL_DRY_RUN" == "1" ]] && printf '%s' "$phase00")" \
      MARIADB_ROOT_PASSWORD="${MARIADB_ROOT_PASSWORD:-}" ADMIN_PASSWORD="${ADMIN_PASSWORD:-}" \
      fl_run_phase_script "${SCRIPT_DIR}/01-install-bench-and-site.sh" "${args01[@]}"; then
     fl_step_end "done"

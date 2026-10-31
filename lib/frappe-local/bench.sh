@@ -65,9 +65,20 @@ fl_bench_run() {
   (cd "$bench_dir" && "$@")
 }
 
+# fl_dry_run_pending TOOL: true in a dry run when TOOL is missing and step 1
+# of benchbar install (BENCHBAR_PLAN_STEP1 names its script) would install it;
+# says so as a note, not a warning, so the plan stays a plan
+fl_dry_run_pending() {
+  [[ "${FL_DRY_RUN:-0}" == "1" ]] || return 1
+  fl_info "dry-run: $1 is not installed yet; step 1 (${BENCHBAR_PLAN_STEP1:-the system dependencies}) will install it"
+}
+
 fl_install_pipx_if_needed() {
   # uv is preferred for bench itself; pipx is only needed without it
   command -v uv >/dev/null 2>&1 && return 0
+  if [[ -n "${BENCHBAR_PLAN_STEP1:-}" ]] && ! command -v pipx >/dev/null 2>&1; then
+    fl_dry_run_pending uv && return 0
+  fi
   fl_section "PIPX"
   fl_info "Checking pipx"
   if command -v pipx >/dev/null 2>&1; then
@@ -121,6 +132,9 @@ fl_install_bench_if_needed() {
       if [[ "$reinstall" == pipx* ]]; then fl_fix "pipx upgrade frappe-bench"; else fl_fix "uv tool upgrade frappe-bench"; fi
     fi
     return 0
+  fi
+  if [[ -n "${BENCHBAR_PLAN_STEP1:-}" ]] && ! command -v uv >/dev/null 2>&1 && ! command -v pipx >/dev/null 2>&1; then
+    fl_dry_run_pending uv && { fl_info "dry-run: frappe-bench is then installed with: uv tool install frappe-bench"; return 0; }
   fi
   if command -v uv >/dev/null 2>&1; then
     # the official docs install bench with uv; uv says where its executables

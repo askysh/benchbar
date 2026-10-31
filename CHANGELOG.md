@@ -89,6 +89,7 @@ does. Report a Bug sends a redacted report in about a minute.
 
 ### Fixed
 
+- `benchbar install --dry-run` on a fresh Linux machine (no uv, no pipx yet) exits 0 with its plan. Step 2 used to stop with "Neither uv nor pipx is installed" before step 1 had installed them, which the Windows tray read as "the plan could not be made". The dry run now says that step 1 will install uv, Python, Node and the rest. A real blocker, such as too little disk, still fails the dry run.
 - The one line installer works on Linux and WSL. `curl ... install.sh | bash` in Ubuntu 24.04 installs the command line tool (a clone in `~/.local/share/benchbar`, a link in `~/.local/bin`, `PATH` in `~/.bashrc`) without sudo or questions, and names `sudo apt install -y git` when git is missing. It stopped with "This installer is for macOS" before, which broke the Windows tray's command line tool step. `benchbar.exe` now runs the installer of its own release (`v<version>`, with `--version`); a development build uses `main`.
 - Turning on WSL asks Windows to elevate only `System32\wsl.exe`, never
   `benchbar.exe` from a folder that the user can write to. Only one
