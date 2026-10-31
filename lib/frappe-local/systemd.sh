@@ -331,8 +331,8 @@ fl_linger_ensure() {
 # The label of a unit: the benchbar-label comment, else Description's name.
 fl_plist_label() {
   local label
-  label="$(sed -n 's/^# benchbar-label: *//p' "$1" 2>/dev/null | head -n1)"
-  [[ -n "$label" ]] || label="$(sed -n 's/^Description=BenchBar bench //p' "$1" 2>/dev/null | head -n1)"
+  label="$(sed -n 's/^# benchbar-label: *//p' "$1" 2>/dev/null | awk 'NR==1')"
+  [[ -n "$label" ]] || label="$(sed -n 's/^Description=BenchBar bench //p' "$1" 2>/dev/null | awk 'NR==1')"
   [[ -n "$label" ]] || return 0
   printf '%s\n' "$label"
 }

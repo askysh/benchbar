@@ -90,6 +90,15 @@ assert_contains "$OUT" "fl_new_thing"; assert_contains "$OUT" "fl_site_three"
 assert_not_contains "$OUT" "test-ports"
 reset
 
+# ---- a test split into parts: a change to its lib file picks every part
+for t in sites-2 sites-3 agent-contracts-2; do printf '# test\n' >"$REPO/tests/test-$t.sh"; done
+printf '\n# touched\n' >>"$REPO/lib/frappe-local/sites.sh"
+aff --base main --list
+assert_eq "0" "$CODE" "$OUT"
+for t in test-sites test-sites-2 test-sites-3 test-agent-contracts test-agent-contracts-2 test-cli; do assert_contains "$OUT" " $t"; done
+assert_not_contains "$OUT" "test-ports"
+reset
+
 # ---- a test file alone: that test and shellcheck
 printf '# changed\n' >>"$REPO/tests/test-ports.sh"
 aff --base main --list

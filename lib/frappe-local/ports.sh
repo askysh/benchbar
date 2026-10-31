@@ -36,7 +36,7 @@ fl_ports_of_bench() {
   local f="$1/sites/common_site_config.json" v out=""
   [[ -f "$f" ]] || return 0
   for v in webserver_port socketio_port redis_queue redis_cache; do
-    v="$(sed -n "s/^[[:space:]]*\"${v}\"[[:space:]]*:[[:space:]]*\"\{0,1\}\([^\",]*\)\"\{0,1\},\{0,1\}[[:space:]]*$/\1/p" "$f" | head -n1)"
+    v="$(sed -n "s/^[[:space:]]*\"${v}\"[[:space:]]*:[[:space:]]*\"\{0,1\}\([^\",]*\)\"\{0,1\},\{0,1\}[[:space:]]*$/\1/p" "$f" | awk 'NR==1')"
     v="${v##*:}"
     [[ "$v" =~ ^[0-9]+$ ]] && out="${out} ${v}"
   done

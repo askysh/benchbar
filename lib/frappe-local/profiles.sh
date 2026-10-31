@@ -159,7 +159,7 @@ fl_team_profile_read() {
   done <<<"$out"
   [[ "$cur" != "0" ]] && fl_team__app_add "$name" "$branch" "$repo" "$commit" "$access" "$requires"
   # one entry per app: install, export and the app would each pick a different one
-  r="$(printf '%s\n' ${FL_TEAM_APPS[@]+"${FL_TEAM_APPS[@]}"} | cut -d'|' -f1 | sort | uniq -d | head -n1)"
+  r="$(printf '%s\n' ${FL_TEAM_APPS[@]+"${FL_TEAM_APPS[@]}"} | cut -d'|' -f1 | sort | uniq -d | awk 'NR==1')"
   [[ -z "$r" ]] || { FL_TEAM_ERROR="$(basename "$file"): app \"${r}\" is listed twice in [[apps]]"; return 1; }
   if [[ -n "$v2" && "$FL_TEAM_SCHEMA" != "2" ]]; then
     FL_TEAM_ERROR="$(basename "$file"): ${v2} needs schema = 2 (source, exported_from, access and requires are schema 2 keys)"
@@ -499,7 +499,14 @@ fl_profile_git_net() { env GIT_TERMINAL_PROMPT=0 GIT_LFS_SKIP_SMUDGE=1 GIT_SSH_C
 fl_profile_git_anon() { env GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=true SSH_ASKPASS=true GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -c credential.helper= "$@"; }
 
 fl_profile_offline_mode() { [[ "${BENCHBAR_OFFLINE:-0}" == "1" || "${OFFLINE:-0}" == "1" ]]; }
-fl_profile_offline_msg() { printf '%s' "$1" | grep -qiE 'could not resolve|network is unreachable|timed out|failed to connect|no route to host'; }
+fl_profile_offline_msg() {
+  local t
+  t="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+  case "$t" in
+    *'could not resolve'*|*'network is unreachable'*|*'timed out'*|*'failed to connect'*|*'no route to host'*) return 0 ;;
+  esac
+  return 1
+}
 
 # fl_profile_timed SECS OUT COMMAND...: stdout to OUT, the first line of
 # stderr in FL_PROFILE_ERR; exit 124 after SECS
@@ -521,7 +528,7 @@ fl_profile_timed() {
     ticks=$((ticks + 1))
   done
   wait "$pid" || code=$?
-  FL_PROFILE_ERR="$(grep -v '^[[:space:]]*$' "$err" | head -n1 | sed -E 's/^(fatal|remote|error): *//' || true)"
+  FL_PROFILE_ERR="$(grep -v '^[[:space:]]*$' "$err" | awk 'NR==1' | sed -E 's/^(fatal|remote|error): *//' || true)"
   rm -f "$err"
   return "$code"
 }
@@ -644,7 +651,7 @@ fl_profile_access() {
   if [[ "$code" == "124" ]] || fl_profile_offline_msg "$FL_PROFILE_ERR"; then printf 'unknown'; return 0; fi
   if [[ "$https" =~ $re ]]; then
     type="$(curl -fsSL --max-time "$FL_PROFILE_NET_SECS" -H 'Accept: application/vnd.github+json' "https://api.github.com/users/${BASH_REMATCH[1]}" 2>/dev/null \
-      | sed -n 's/.*"type"[[:space:]]*:[[:space:]]*"\([A-Za-z]*\)".*/\1/p' | head -n1 || true)"
+      | sed -n 's/.*"type"[[:space:]]*:[[:space:]]*"\([A-Za-z]*\)".*/\1/p' | awk 'NR==1' || true)"
     [[ "$type" == "User" ]] && { printf 'personal'; return 0; }
   fi
   printf 'private'

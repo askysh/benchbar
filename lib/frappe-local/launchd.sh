@@ -220,7 +220,9 @@ fl_agent_bootstrap() {
 # domain ("launchctl print-disabled gui/UID" prints '"label" => disabled').
 fl_agent_disabled() {
   local label="${1##*/}"
-  launchctl print-disabled "$(fl_launchd_domain)" 2>/dev/null | grep -q -F "\"${label}\" => disabled"
+  local disabled
+  disabled="$(launchctl print-disabled "$(fl_launchd_domain)" 2>/dev/null || true)"
+  [[ "$disabled" == *"\"${label}\" => disabled"* ]]
 }
 
 # launchctl bootout returns before a running job has stopped (the runner
