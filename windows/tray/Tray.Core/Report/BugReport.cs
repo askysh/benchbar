@@ -11,7 +11,7 @@ public static class BugReportText
 {
     public const string Working = "Writing the report...";
     public const string StillWorking = "Still writing the report. A distro that does not answer can take up to a minute.";
-    public const string ReadyMessage = "Your report is ready. Drag the selected zip into the GitHub issue that just opened, describe what happened, and submit.";
+    public const string ReadyMessage = "Your report is ready. 1. Click Open GitHub Issue. 2. Click Show Zip in Explorer and drag the zip into the issue. 3. Say what happened and submit.";
     public const string ReadyTitle = "Report a Bug";
     public const string IssueTemplate = "bug_report_windows.yml";
     public const string IssueBase = "https://github.com/askysh/benchbar/issues/new?template=" + IssueTemplate;

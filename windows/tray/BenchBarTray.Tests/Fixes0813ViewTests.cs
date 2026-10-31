@@ -73,9 +73,15 @@ public class Fixes0813ViewTests
             + "{\"schema_version\":1,\"event\":\"done\",\"exit\":1,\"error\":\"The plan has blockers.\"}\n", []);
         Sta.Run(() =>
         {
-            var texts = Texts(ViewOf(model));
-            Assert.Contains("Port 3306 is in use.", texts);
-            Assert.Contains("sudo systemctl stop mariadb", texts);
+            var view = ViewOf(model);
+            // a command fix sits in a read only box, so look at the text boxes too
+            var all = string.Join("\n", Texts(view).Concat(Walk(view).OfType<TextBox>().Select(t => t.Text)));
+            Assert.Contains("Port 3306 is in use.", all);
+            Assert.Contains("sudo systemctl stop mariadb", all);
+            // each once: the red error line and the plan fix are not repeated next to the blocker card
+            Assert.Equal(1, all.Split("Port 3306 is in use.").Length - 1);
+            Assert.Equal(1, all.Split("sudo systemctl stop mariadb").Length - 1);
+            Assert.DoesNotContain("The plan has blockers.", all);
         });
     }
 
@@ -127,6 +133,36 @@ public class Fixes0813ViewTests
             Assert.False(window.BetaBannerShown); // the wizard needs the room
             window.CloseWizard();
             Assert.True(window.BetaBannerShown); // and it comes back, not dismissed
+        });
+    }
+
+    [Fact]
+    public async Task AStepTheUserStoppedOffersNoReportThisProblem()
+    {
+        SynchronizationContext.SetSynchronizationContext(null);
+        var model = new WizardModel(WindowViewTests.Fixture("check-fresh.json", run: "run-wsl_enable-cancelled.jsonl"), new Host([]));
+        await model.ChooseNewBench();
+        await model.RunStepAsync(SetupIds.WslFeature);
+        Assert.Equal(WizardModel.CancelledMessage, model.StepMessages[SetupIds.WslFeature]);
+        Sta.Run(() =>
+        {
+            var view = ViewOf(model);
+            Assert.Contains(WizardModel.CancelledMessage, Texts(view)); // the row still says it
+            Assert.Null(FindButton(view, "Report this problem: Windows Subsystem for Linux"));
+        });
+    }
+
+    [Fact]
+    public async Task TheReportABugFooterIsLastInTheTabOrder()
+    {
+        var model = await WindowViewTests.ModelAt(WizardPage.Check);
+        Sta.Run(() =>
+        {
+            var view = ViewOf(model);
+            var footer = ButtonNamed(view, "Report a Bug");
+            var parent = (Grid)System.Windows.Media.VisualTreeHelper.GetParent(footer);
+            var order = parent.Children.OfType<UIElement>().OrderBy(System.Windows.Input.KeyboardNavigation.GetTabIndex).Last();
+            Assert.Same(footer, order);
         });
     }
 }

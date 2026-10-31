@@ -228,7 +228,9 @@ internal sealed partial class WizardView
             how.VerticalAlignment = VerticalAlignment.Center;
             buttons.Children.Add(how);
         }
-        if (step.NeedsManualFix || (row.Message is { Length: > 0 } && step.Status != SetupStatus.Ok))
+        // the person's own Stop is not a problem to report
+        var userStop = row.Message is WizardModel.StoppedMessage or WizardModel.CancelledMessage or WizardModel.StoppedWaitingMessage;
+        if (step.NeedsManualFix || (row.Message is { Length: > 0 } && step.Status != SetupStatus.Ok && !userStop))
         {
             var report = Ui.Link(BetaText.ReportThisProblem, () => _actions.ReportBug(BetaText.ReportThisProblem, ReportContext.Step(step, row.Message)), "Report this problem: " + step.Title);
             report.VerticalAlignment = VerticalAlignment.Center;
@@ -407,7 +409,9 @@ internal sealed partial class WizardView
         page.Refresh = () =>
         {
             working.Visibility = _model.Planning ? Visibility.Visible : Visibility.Collapsed;
-            Show(error, _model.PlanError);
+            // blockers say it better than the red line: with them the page shows their cards only
+            var hasBlockers = _model.PlanBlockers.Count > 0;
+            Show(error, hasBlockers ? null : _model.PlanError);
             var problemKey = _model.PlanFix + "|" + string.Join('|', _model.PlanBlockers.Select(b => b.Id + b.Message + b.Fix));
             if (problemKey != lastProblems)
             {
@@ -475,7 +479,7 @@ internal sealed partial class WizardView
             AddFix(card, blocker.Fix, blocker.FixIsCommand, "the fix for problem " + n);
             into.Children.Add(Ui.CardOf(card, new Thickness(0, 0, 0, 8)));
         }
-        if (_model.PlanFix is { Length: > 0 } fix)
+        if (_model.PlanBlockers.Count == 0 && _model.PlanFix is { Length: > 0 } fix)
         {
             var card = new StackPanel();
             AddFix(card, fix, _model.PlanFixIsCommand, "the fix");

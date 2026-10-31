@@ -231,6 +231,18 @@ public partial class App : Application, ITrayHost
         }
     }
 
+    public void ShowNotice(string text)
+    {
+        try
+        {
+            _icon?.TrayIcon.ShowNotification("BenchBar", text, NotificationIcon.Warning);
+        }
+        catch (Exception ex)
+        {
+            _log.Write("notice", ex);
+        }
+    }
+
     // --- efficiency mode ---
 
     /// <summary>The icon alone runs in efficiency mode; any open window of ours leaves it until the last one closes.</summary>

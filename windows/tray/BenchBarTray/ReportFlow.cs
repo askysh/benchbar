@@ -147,32 +147,18 @@ internal sealed class ReportBusyWindow : Window, IDisposable
 }
 
 /// <summary>
-/// The one dialog after a report: Open Issue, Show Zip, Copy Path. Once it is on screen it opens the GitHub issue and Explorer (once)
-/// and then brings itself back in front, because both steal the focus and used to cover it.
+/// The one dialog after a report: the steps, then Open GitHub Issue (the default button) and Show Zip in Explorer, and Copy Path.
+/// It opens nothing by itself: the browser and Explorer took the foreground from it within a second, whatever it did to win it back.
 /// </summary>
 internal sealed class ReportReadyDialog : Window
 {
-    /// <summary>How long the dialog keeps winning the focus back from the browser and Explorer.</summary>
-    public static readonly TimeSpan SettleTime = TimeSpan.FromSeconds(3);
-
-    private readonly ReportOutcome _outcome;
-    private readonly Action<string> _reveal;
-    private readonly Action<string> _openUrl;
-    private readonly System.Windows.Threading.DispatcherTimer _settle = new() { Interval = SettleTime };
-    private bool _launched;
-    private bool _settling;
-
     public ReportReadyDialog(ReportOutcome outcome, ResolvedTheme theme, Window? owner, Action<string> copy, Action<string> reveal, Action<string> openUrl)
     {
-        _outcome = outcome;
-        _reveal = reveal;
-        _openUrl = openUrl;
         Title = BugReportText.ReadyTitle;
-        Width = 480;
+        Width = 520;
         SizeToContent = SizeToContent.Height;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = true;
-        Topmost = true; // until the browser and Explorer have settled; then it is an ordinary window
         Owner = owner;
         WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner;
         Ui.ApplyTheme(this, theme);
@@ -187,56 +173,26 @@ internal sealed class ReportReadyDialog : Window
             panel.Children.Add(Ui.Text("benchbar.exe could not run, so this zip holds the tray's details only. " + note, 12, opacity: 0.8, margin: new Thickness(0, 8, 0, 0)));
         var bar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 16, 0, 0) };
         bar.Children.Add(Ui.Button("Copy Path", () => copy(outcome.ZipPath), "Copy the path of the report zip"));
-        bar.Children.Add(Ui.Button("Show Zip", () => reveal(outcome.ZipPath), "Show the report zip in Explorer"));
-        bar.Children.Add(Ui.Button("Open Issue", () => openUrl(outcome.IssueUrl), "Open the GitHub issue"));
-        var close = Ui.Button("Close", Close, "Close", primary: true);
-        close.IsDefault = close.IsCancel = true;
+        bar.Children.Add(Ui.Button("Show Zip in Explorer", () => reveal(outcome.ZipPath), "Show the report zip in Explorer", primary: true, minWidth: 140));
+        var issue = Ui.Button("Open GitHub Issue", () => openUrl(outcome.IssueUrl), "Open the GitHub issue", primary: true, minWidth: 140);
+        issue.IsDefault = true;
+        bar.Children.Add(issue);
+        var close = Ui.Button("Close", Close, "Close");
+        close.IsCancel = true;
         close.Margin = new Thickness(0);
         bar.Children.Add(close);
         panel.Children.Add(bar);
         Content = panel;
-
-        ContentRendered += (_, _) =>
-        {
-            Activate();
-            LaunchOnce();
-        };
-        Deactivated += (_, _) =>
-        {
-            if (_settling) Activate();
-        };
-        _settle.Tick += (_, _) => Settled();
-        Closed += (_, _) => _settle.Stop();
+        ContentRendered += (_, _) => issue.Focus();
     }
 
-    /// <summary>Opens Explorer with the zip selected and the GitHub issue, the first time only, then holds the front for <see cref="SettleTime"/>.</summary>
-    internal void LaunchOnce()
-    {
-        if (_launched) return;
-        _launched = true;
-        _settling = true;
-        _reveal(_outcome.ZipPath);
-        _openUrl(_outcome.IssueUrl);
-        _settle.Start();
-        BringToFront();
-    }
-
-    private void Settled()
-    {
-        _settle.Stop();
-        _settling = false;
-        BringToFront();
-        Topmost = false;
-    }
-
-    /// <summary>In front of everything, even of a window that was opened after it.</summary>
+    /// <summary>In front of the other windows (a second Report a Bug click while this is open).</summary>
     public void BringToFront()
     {
         if (!IsVisible) return;
         if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
         Topmost = true;
         Activate();
-        if (!_settling) Topmost = false; // topmost for the activation only
-
+        Topmost = false; // topmost for the activation only
     }
 }

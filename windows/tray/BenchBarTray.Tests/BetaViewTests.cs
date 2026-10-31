@@ -374,7 +374,7 @@ public class ReportFlowTests
     }
 
     [Fact]
-    public async Task WhenItIsDoneOnlyTheDialogIsShownAndItOpensExplorerAndTheBrowser()
+    public async Task WhenItIsDoneOnlyTheDialogIsShown()
     {
         var reporter = new FakeReporter();
         reporter.Gate.SetResult(Outcome());
@@ -393,7 +393,7 @@ public class ReportFlowTests
             },
         });
         await flow.RunAsync(Request());
-        // the flow opens nothing itself: Explorer and the browser opened first used to cover the dialog
+        // the flow opens nothing; neither does the dialog until a button is clicked
         Assert.Equal(["busy on", "busy off", @"ready C:\r\x.zip"], steps);
     }
 
@@ -440,7 +440,7 @@ public class ReportFlowTests
     [Fact]
     public void TheDialogTextAndTheExplorerCommandAreTheAgreedOnes()
     {
-        Assert.Equal("Your report is ready. Drag the selected zip into the GitHub issue that just opened, describe what happened, and submit.", BugReportText.ReadyMessage);
+        Assert.Equal("Your report is ready. 1. Click Open GitHub Issue. 2. Click Show Zip in Explorer and drag the zip into the issue. 3. Say what happened and submit.", BugReportText.ReadyMessage);
         Assert.Equal("Writing the report...", BugReportText.Working);
         var info = ReportFlow.RevealInfo(@"C:\r\x.zip");
         Assert.Equal("explorer.exe", info.FileName);
@@ -451,28 +451,27 @@ public class ReportFlowTests
     }
 
     [Fact]
-    public void TheReadyDialogHasOpenIssueShowZipAndCopyPathAndOpensBothOnlyOnce() => Sta.Run(() =>
+    public void TheReadyDialogOpensNothingByItselfAndHasTwoPrimaryButtonsAndCopyPath() => Sta.Run(() =>
     {
         var copied = new List<string>();
         var revealed = new List<string>();
         var opened = new List<string>();
         var dialog = new ReportReadyDialog(Outcome(), PageKit.Theme, null, copied.Add, revealed.Add, opened.Add);
         Assert.Contains(BugReportText.ReadyMessage, PageKit.Texts(dialog));
-        Assert.True(dialog.Topmost); // in front of the browser and Explorer until they have settled
-        PageKit.Click(PageKit.ButtonNamed(dialog, "Copy the path of the report zip"));
-        Assert.Equal([@"C:\r\x.zip"], copied);
-        Assert.Empty(revealed); // nothing opens until the dialog is on screen
+        Assert.Empty(revealed); // the browser and Explorer took the focus from the dialog: only a click opens them
         Assert.Empty(opened);
 
-        dialog.LaunchOnce();
-        dialog.LaunchOnce();
+        var issue = PageKit.ButtonNamed(dialog, "Open the GitHub issue");
+        Assert.Equal("Open GitHub Issue", issue.Content);
+        Assert.True(issue.IsDefault);
+        Assert.Equal("Show Zip in Explorer", PageKit.ButtonNamed(dialog, "Show the report zip in Explorer").Content);
+
+        PageKit.Click(PageKit.ButtonNamed(dialog, "Copy the path of the report zip"));
+        PageKit.Click(PageKit.ButtonNamed(dialog, "Show the report zip in Explorer"));
+        PageKit.Click(issue);
+        Assert.Equal([@"C:\r\x.zip"], copied);
         Assert.Equal([@"C:\r\x.zip"], revealed);
         Assert.Equal(["https://github.com/askysh/benchbar/issues/new?template=bug_report_windows.yml"], opened);
-
-        PageKit.Click(PageKit.ButtonNamed(dialog, "Show the report zip in Explorer"));
-        PageKit.Click(PageKit.ButtonNamed(dialog, "Open the GitHub issue"));
-        Assert.Equal(2, revealed.Count);
-        Assert.Equal(2, opened.Count);
         PageKit.AssertEveryControlIsNamed(dialog);
     });
 }
