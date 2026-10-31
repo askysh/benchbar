@@ -338,13 +338,16 @@ fl_bench_listener_pids() {
   local port pid cmd addr
   fl__ss_listeners "${1:-$(fl_bench_ports_csv)}" | while read -r port pid cmd addr; do
     [[ "$pid" =~ ^[1-9][0-9]*$ ]] && fl_pid_is_bench_own_strict "$pid" && printf '%s\n' "$pid"
-  done
+  done | awk '!seen[$0]++'
   return 0
 }
 
 fl_port_listener_pid() {
   local port pid cmd addr
-  fl__ss_listeners "$1" | { read -r port pid cmd addr && printf '%s\n' "$pid"; } || true
+  # a pid of 0 is an owner ss does not show: skipped, the next listener may be visible
+  fl__ss_listeners "$1" | while read -r port pid cmd addr; do
+    [[ "$pid" =~ ^[1-9][0-9]*$ ]] && { printf '%s\n' "$pid"; break; }
+  done || true
 }
 
 # fl_port_listener_pids PORT: the pid of every listener on PORT, once each, one
