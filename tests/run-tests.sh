@@ -4,11 +4,12 @@
 #
 #   tests/run-tests.sh                  all tests, PARALLEL at a time
 #   PARALLEL=1 tests/run-tests.sh       one after another
-#   SHARD=2/3 tests/run-tests.sh        only the second third (CI matrix)
+#   SHARD=2/3 tests/run-tests.sh        only the second third, balanced by TEST_SECS (CI matrix)
 #   tests/run-tests.sh test-doctor ...  only the named tests
 #   tests/run-tests.sh shellcheck       only the lint
 #   SHELLCHECK=0 tests/run-tests.sh     the tests without the lint
 #   SKIP_TESTS="test-a test-b" ...      all but those (before sharding)
+#   LIST_ONLY=1 SHARD=2/4 ...           print the chosen tests, run nothing
 #
 # PARALLEL defaults to the number of CPUs. Every test builds its own HOME
 # and mock state under mktemp, so they run side by side; each test's output
@@ -25,17 +26,15 @@ SCRIPTS=("$ROOT"/benchbar "$ROOT"/00-mac-system-deps.sh "$ROOT"/00-linux-system-
 
 bash -n "${SCRIPTS[@]}"
 
-# Longest first (measured in CI, macOS and Linux together), so the pool
-# never waits on a slow test that started last. Shards take every Nth test
-# of this list, which balances them. A new test file must be added here;
-# the check below enforces it.
-ALL_TESTS="test-doctor test-phases test-install-json test-install-json-2 test-lock test-apps test-app-recovery test-app-batch test-pull test-repair test-install-linux test-port-management
-test-profiles test-service test-homebrew test-multi-bench test-ports test-sites test-input-hygiene test-doctor-hardening
+# Every test file. Shards are filled from TEST_SECS below, not from this
+# order. A new test file must be added here; the check below enforces it.
+ALL_TESTS="test-doctor test-phases test-install-json test-install-json-2 test-lock test-apps test-app-recovery test-app-recovery-2 test-app-recovery-3 test-app-batch test-pull test-repair test-install-linux test-port-management
+test-profiles test-profiles-2 test-profiles-3 test-service test-homebrew test-multi-bench test-ports test-sites test-input-hygiene test-doctor-hardening
 test-cli test-open-as test-freshness test-hygiene test-mcp test-site-backups test-app-cli test-process test-doctor-linux test-install-sh test-install-sh-linux
 test-adopt test-systemd test-migrate test-repair-json test-json test-report test-profile-v16 test-state-migrate test-run-lock
 test-runner test-redact test-docs-command test-status-cost test-command-cost test-bench-flow test-run test-platform-linux test-self-update
-test-site-restore test-services-served test-templates test-discovery test-shellrc test-docs test-platform test-packaging test-ui test-release-notes test-version-policy test-affected
-test-agent-contracts test-sudo-env test-prerequisites-linux test-windows-commands"
+test-site-restore test-site-restore-2 test-services-served test-templates test-discovery test-shellrc test-docs test-platform test-packaging test-ui test-release-notes test-version-policy test-affected
+test-agent-contracts test-agent-contracts-2 test-agent-contracts-3 test-sudo-env test-prerequisites-linux test-windows-commands"
 
 for f in "$ROOT"/tests/test-*.sh; do
   n="$(basename "$f" .sh)"
@@ -44,6 +43,36 @@ for f in "$ROOT"/tests/test-*.sh; do
     *) printf 'FAIL: %s is not in the test list of tests/run-tests.sh\n' "$n" >&2; exit 1 ;;
   esac
 done
+
+# Seconds each test takes in a macOS CI shard (3 at a time), from CI runs and
+# local runs; a test not named here counts as 10. Only the proportions matter.
+# Shards are filled from this table (see "the jobs"): after a test is added,
+# split or sped up, put its new time here.
+TEST_SECS="test-app-recovery-2=135 test-app-recovery-3=120 test-app-recovery=70
+test-services-served=260 test-port-management=205 test-install-json-2=198 test-pull=189 test-install-json=181 test-doctor=181
+test-site-restore=165 test-site-restore-2=123 test-apps=164 test-app-batch=158 test-sudo-env=157 test-lock=153
+test-profiles-2=114 test-profiles-3=74 test-profiles=42
+test-agent-contracts=83 test-agent-contracts-2=80 test-agent-contracts-3=89
+test-repair=100 test-phases=100 test-homebrew=90 test-freshness=80 test-app-cli=75 test-windows-commands=65 test-service=65
+test-input-hygiene=60 test-sites=50 test-site-backups=40 test-adopt=35 test-command-cost=30 test-report=28 test-open-as=25 test-json=20
+test-run-lock=15 test-runner=14"
+test_secs() {
+  local w
+  w=" $(printf '%s' "$TEST_SECS" | tr '\n' ' ') "
+  case "$w" in
+    *" $1="*) w="${w#*" $1="}"; printf '%s' "${w%% *}" ;;
+    *) printf '10' ;;
+  esac
+}
+
+# weighted_tests: "SECS NAME" for every test that SKIP_TESTS leaves in
+weighted_tests() {
+  local t
+  for t in $ALL_TESTS; do
+    case " ${SKIP_TESTS:-} " in *" $t "*) continue ;; esac
+    printf '%s %s\n' "$(test_secs "$t")" "$t"
+  done
+}
 
 ncpu() { sysctl -n hw.ncpu 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2; }
 PARALLEL="${PARALLEL:-$(ncpu)}"
@@ -115,18 +144,30 @@ if [[ "$#" -gt 0 ]]; then
     JOBS+=("$t")
   done
 else
-  i=0
-  for t in $ALL_TESTS; do
-    case " ${SKIP_TESTS:-} " in *" $t "*) continue ;; esac
-    [[ $((i % SHARD_N + 1)) -eq "$SHARD_I" ]] && JOBS+=("$t")
-    i=$((i + 1))
-  done
+  # Shards are balanced by weight: the tests, heaviest first, each go to the
+  # shard with the least work so far (ties to the lowest number). Every shard
+  # runs the same arithmetic on the same list, so together they cover each
+  # test once; a shard runs its tests heaviest first.
+  SHARD_LOAD=()
+  k=0
+  while [[ "$k" -lt "$SHARD_N" ]]; do SHARD_LOAD[k]=0; k=$((k + 1)); done
+  while read -r secs t; do
+    best=0; k=1
+    while [[ "$k" -lt "$SHARD_N" ]]; do
+      if [[ "${SHARD_LOAD[k]}" -lt "${SHARD_LOAD[best]}" ]]; then best="$k"; fi
+      k=$((k + 1))
+    done
+    SHARD_LOAD[best]=$((SHARD_LOAD[best] + secs))
+    if [[ $((best + 1)) -eq "$SHARD_I" ]]; then JOBS+=("$t"); fi
+  done < <(weighted_tests | sort -k1,1nr -k2,2)
 fi
 if [[ "$#" -eq 0 && "$SHARD_I" -eq 1 && "${SHELLCHECK:-1}" != "0" ]]; then
   if command -v shellcheck >/dev/null 2>&1; then JOBS+=(shellcheck); else
     printf 'shellcheck not installed; skipped lint (brew install shellcheck)\n'
   fi
 fi
+
+if [[ -n "${LIST_ONLY:-}" ]]; then printf '%s\n' ${JOBS[@]+"${JOBS[@]}"}; exit 0; fi
 
 OUT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/benchbar-run-tests.XXXXXX")"
 PIDS=()
