@@ -29,8 +29,8 @@ nonisolated enum PlaneRunnerArt {
 
     /// The upper wing and the keel, with the fold between them cut out.
     static func body(_ c: RunnerCanvas) {
-        c.shape([CGPoint(x: 5.0, y: 14.0), CGPoint(x: 20.4, y: 9.2), CGPoint(x: 8.6, y: 8.9)])
-        c.shape([CGPoint(x: 8.6, y: 8.9), CGPoint(x: 20.4, y: 9.2), CGPoint(x: 9.6, y: 4.8)])
+        c.shape([CGPoint(x: 4.6, y: 14.6), CGPoint(x: 20.4, y: 9.2), CGPoint(x: 8.6, y: 8.9)])
+        c.shape([CGPoint(x: 8.6, y: 8.9), CGPoint(x: 20.4, y: 9.2), CGPoint(x: 9.2, y: 4.2)])
         c.cutLine([CGPoint(x: 8.2, y: 8.9), CGPoint(x: 18.2, y: 9.13)], width: 0.45)
     }
 
@@ -61,7 +61,7 @@ nonisolated enum PlaneRunnerArt {
         RunnerCanvas.render(width: width) { c in
             // a run along the ground with little hops, not quite airborne
             let hops: [CGFloat] = [0, 0.3, 1.2, 2.0, 1.2, 0.3]
-            plane(c, pitch: -4 - hops[i] * 3, offset: CGPoint(x: -1, y: -4.6 + hops[i]))
+            plane(c, pitch: -4 - hops[i] * 3, offset: CGPoint(x: -1, y: -4.0 + hops[i]))
             let drift = CGFloat(i % 3) * 0.8
             for x in [CGFloat(1.0), 5.2] {
                 c.line([CGPoint(x: x - drift, y: 0.6), CGPoint(x: x + 1.6 - drift, y: 0.6)], width: 0.8)
@@ -73,7 +73,7 @@ nonisolated enum PlaneRunnerArt {
         RunnerCanvas.render(width: width) { c in
             // grounded, nose down a little, rocking now and then
             let rock: CGFloat = i % 2 == 0 ? 0 : 1.5
-            plane(c, pitch: 4 + rock, offset: CGPoint(x: -5, y: -4.8))
+            plane(c, pitch: 4 + rock, offset: CGPoint(x: -4.4, y: -4.2))
             sleepMarks(c, i, x: 17)
         }
     }
@@ -108,7 +108,7 @@ nonisolated enum PlaneRunnerArt {
 
     static func question() -> CGImage {
         RunnerCanvas.render(width: width) { c in
-            plane(c, pitch: -4, offset: CGPoint(x: -5, y: 0))
+            plane(c, pitch: -4, offset: CGPoint(x: -4.4, y: 0))
             c.question(x: 19.6)
         }
     }

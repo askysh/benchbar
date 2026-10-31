@@ -36,8 +36,8 @@ public static class PlaneRunnerArt
     /// <summary>The upper wing and the keel, with the fold between them cut out.</summary>
     private static void Body(RunnerCanvas c)
     {
-        c.Shape([new PointF(5.0f, 14.0f), new PointF(20.4f, 9.2f), new PointF(8.6f, 8.9f)]);
-        c.Shape([new PointF(8.6f, 8.9f), new PointF(20.4f, 9.2f), new PointF(9.6f, 4.8f)]);
+        c.Shape([new PointF(4.6f, 14.6f), new PointF(20.4f, 9.2f), new PointF(8.6f, 8.9f)]);
+        c.Shape([new PointF(8.6f, 8.9f), new PointF(20.4f, 9.2f), new PointF(9.2f, 4.2f)]);
         c.CutLine([new PointF(8.2f, 8.9f), new PointF(18.2f, 9.13f)], 0.45f);
     }
 
@@ -66,7 +66,7 @@ public static class PlaneRunnerArt
     private static void TakingOff(RunnerCanvas c, int i)
     {
         // a run along the ground with little hops, not quite airborne
-        Plane(c, -4 - Hops[i] * 3, new PointF(-1, -4.6f + Hops[i]));
+        Plane(c, -4 - Hops[i] * 3, new PointF(-1, -4.0f + Hops[i]));
         var drift = (i % 3) * 0.8f;
         foreach (var x in new[] { 1.0f, 5.2f })
             c.Line([new PointF(x - drift, 0.6f), new PointF(x + 1.6f - drift, 0.6f)], 0.8f);
@@ -76,7 +76,7 @@ public static class PlaneRunnerArt
     {
         // grounded, nose down a little, rocking now and then
         var rock = i % 2 == 0 ? 0f : 1.5f;
-        Plane(c, 4 + rock, new PointF(-5, -4.8f));
+        Plane(c, 4 + rock, new PointF(-4.4f, -4.2f));
         BenchRunnerArt.SleepMarks(c, i, 17);
     }
 
@@ -111,7 +111,7 @@ public static class PlaneRunnerArt
 
     private static void Question(RunnerCanvas c)
     {
-        Plane(c, -4, new PointF(-5, 0));
+        Plane(c, -4, new PointF(-4.4f, 0));
         c.Question(19.6f);
     }
 }
