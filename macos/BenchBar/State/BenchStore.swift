@@ -185,6 +185,7 @@ final class BenchStore {
     @ObservationIgnored private var popoverOpen = false
     @ObservationIgnored private var polling = false
     @ObservationIgnored private var suspended = false
+    @ObservationIgnored private var lastReload = Date.distantPast
     /// Bumped by suspend: a legacy loop from before ends at its next wake.
     /// That loop is never cancelled, since it may be in a CLI call, and a
     /// cancel there makes swift-subprocess SIGTERM bash (a fake "timed out").
@@ -330,7 +331,7 @@ final class BenchStore {
     func reloadBenches() async {
         guard let client else { return }
         isLoading = true
-        defer { isLoading = false; hasLoadedBenches = true }
+        defer { isLoading = false; hasLoadedBenches = true; lastReload = Date() }
         do {
             let list = try await client.list()
             if listError != nil { listError = nil }
@@ -771,6 +772,15 @@ final class BenchStore {
         screenChanged(wasFast: wasFast)
         // once per opening, every bench, below the work a person waits for
         if open, !suspended { Task(priority: .utility) { await reloadBenches() } }
+    }
+
+    /// BenchBar became the active app (a click back from Terminal or the
+    /// browser) with its window open: what the person changed meanwhile, such
+    /// as `developer_mode` in a site's config, is not in any watched file, so
+    /// the window read stale until the popover was opened. At most every 15 s.
+    func appBecameActive() {
+        guard windowSight.isOpen, !suspended, !isLoading, Date().timeIntervalSince(lastReload) > 15 else { return }
+        Task(priority: .utility) { await reloadBenches() }
     }
 
     /// The BenchBar window opened, closed, came on screen or left it, or
