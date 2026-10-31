@@ -33,8 +33,17 @@ fl_profile_offline_msg "Connection TIMED OUT" || fail "offline message, upper ca
 fl__wk_text_patched "wkhtmltopdf 0.12.6 (With Patched Qt)" || fail "patched, mixed case"
 ! fl__wk_text_patched "wkhtmltopdf 0.12.6" || fail "unpatched"
 
+# ---- first line of a long producer: awk reads it all, head would SIGPIPE it
+( set -o pipefail; v="$(seq 1 300000 | awk 'NR==1')" && [[ "$v" == 1 ]] ) || fail "awk NR==1 under pipefail"
+( set -o pipefail; v="$(seq 1 300000 | awk 'NR<=20' | tail -n1)" && [[ "$v" == 20 ]] ) || fail "awk NR<=20 under pipefail"
+
 # ---- no "| grep -q" left in the shell sources (comments and "||" aside)
 left="$(grep -nE '(^|[^|])\| *grep -[a-zA-Z]*q' "$ROOT/benchbar" "$ROOT"/lib/frappe-local/*.sh "$ROOT"/0*.sh | grep -v '^[^:]*:[0-9]*:[[:space:]]*#' || true)"
 [[ -z "$left" ]] || fail "producer | grep -q under pipefail; capture the output and test it with fl_has_line or case:"$'\n'"$left"
+
+# ---- no "| head -n" after a producer that can write more (pull.sh reads a
+# dump through "head -n 40" on purpose, its status is ignored)
+heads="$(grep -nE '\| *head -n' "$ROOT/benchbar" "$ROOT"/lib/frappe-local/*.sh "$ROOT"/0*.sh | grep -v '^[^:]*:[0-9]*:[[:space:]]*#' | grep -v 'head -n 40' || true)"
+[[ -z "$heads" ]] || fail "producer | head under pipefail gets SIGPIPE (141); use awk 'NR==1' or take the first line of a captured variable:"$'\n'"$heads"
 
 printf 'test-pipelines: ok\n'

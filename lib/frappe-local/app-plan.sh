@@ -29,7 +29,7 @@ fl__ap_git() {
   fl_run_capture_timeout "$secs" "$out" "$err" env GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes' git "$@"
 }
 
-fl__ap_first_line() { grep -v '^[[:space:]]*$' "$1" 2>/dev/null | grep -v '^warning:' | head -n1 || true; }
+fl__ap_first_line() { grep -v '^[[:space:]]*$' "$1" 2>/dev/null | grep -v '^warning:' | awk 'NR==1' || true; }
 
 # fl__ap_remote REPO [BRANCH]: 0 when the repo is readable without a prompt
 # and BRANCH (a branch or tag, when given) exists; else 1 with AP__ERR.
@@ -47,7 +47,7 @@ fl__ap_remote() {
   if [[ "$code" == "2" && -n "$branch" ]]; then AP__ERR="branch ${branch} not found in ${repo}"
   elif [[ "$code" != "0" ]]; then AP__ERR="cannot read ${repo} (git ls-remote exit ${code}): $(fl__ap_first_line "$tmp/err")"
   elif [[ -z "$branch" ]]; then
-    AP__DEFAULT="$(sed -n 's#^ref: refs/heads/\([^[:space:]]*\)[[:space:]]*HEAD$#\1#p' "$tmp/out" | head -n1)"
+    AP__DEFAULT="$(sed -n 's#^ref: refs/heads/\([^[:space:]]*\)[[:space:]]*HEAD$#\1#p' "$tmp/out" | awk 'NR==1')"
   fi
   rm -rf "$tmp"
   [[ -z "$AP__ERR" ]]
@@ -107,7 +107,7 @@ fl__ap_read_hooks() {
   AP__SHA="$(git -C "$tmp/repo" rev-parse "${ref}^{commit}" 2>/dev/null || true)"
   git -C "$tmp/repo" ls-tree -r --name-only "$ref" >"$tmp/tree" 2>/dev/null || true
   if grep -qxF "${name}/hooks.py" "$tmp/tree"; then path="${name}/hooks.py"
-  else path="$(grep -E '^[^/]+/hooks\.py$' "$tmp/tree" | head -n1 || true)"; fi
+  else path="$(grep -E '^[^/]+/hooks\.py$' "$tmp/tree" | awk 'NR==1' || true)"; fi
   if [[ -z "$path" ]]; then
     AP__ERR="${repo} (${branch}${pin:+ at ${pin}}) has no <package>/hooks.py: not a Frappe app?"
     rm -rf "$tmp"; return 1
@@ -681,7 +681,7 @@ fl__ap_error_hints() {
     for ((i = 0; i < ${#M_NAME[@]}; i++)); do
       case "$e" in
         "branch ${M_BRANCH[$i]} not found in "*)
-          heads="$(fl_git_batch ls-remote --heads -- "${M_REPO[$i]}" 2>/dev/null | sed 's#.*refs/heads/##' | head -n 20 | tr '\n' ' ')"
+          heads="$(fl_git_batch ls-remote --heads -- "${M_REPO[$i]}" 2>/dev/null | sed 's#.*refs/heads/##' | awk 'NR<=20' | tr '\n' ' ')"
           fl_note "remote branches: ${heads:-none}"
           fl_fix "pass one of them with --branch" ;;
         "cannot read ${M_REPO[$i]} "*) fl_repo_access_hint "${M_REPO[$i]}" ;;

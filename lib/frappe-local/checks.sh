@@ -472,7 +472,7 @@ chk_helpers() {
   # every helper runs the benchbar the block names: one that is gone (a
   # Cellar folder after brew cleanup, a checkout moved to the Trash) breaks
   # them all, whatever the block's hash says
-  recorded="$(fl_rc_block_extract "$rc" | sed -n 's/^BENCHBAR="\(.*\)"$/\1/p' | head -n 1)"
+  recorded="$(fl_rc_block_extract "$rc" | sed -n 's/^BENCHBAR="\(.*\)"$/\1/p' | awk 'NR==1')"
   if [[ -n "$recorded" && ! -e "$recorded" ]]; then
     chk__set fail "benchup and the other helpers in ${rc} run ${recorded}, which is gone" "${FL_SELF} repair" write_helpers
   elif [[ "$CHK_STATUS" != ok && "${FL_INSTALL_KIND:-}" == homebrew && -n "$recorded" ]]; then
@@ -626,7 +626,7 @@ chk_cli_link() {
 }
 
 # fl_cli_version_at FILE: the version a benchbar script declares, or nothing
-fl_cli_version_at() { sed -n 's/^FL_VERSION="\(.*\)"$/\1/p' "$1" 2>/dev/null | head -n 1; }
+fl_cli_version_at() { sed -n 's/^FL_VERSION="\(.*\)"$/\1/p' "$1" 2>/dev/null | awk 'NR==1'; }
 
 # A second copy of the CLI: the one line installer's checkout next to
 # Homebrew's formula. Those two share one state folder (state.sh moves the
@@ -1214,13 +1214,13 @@ fl_mariadb_server_version() {
   if [[ -n "$pid" ]]; then
     bin="$(ps -o command= -p "$pid" 2>/dev/null | awk '{print $1}' || true)"
     if [[ "$bin" == */mariadbd && -x "$bin" ]]; then
-      "$bin" --version 2>/dev/null | fl_parse_mariadb_version | head -n1
+      "$bin" --version 2>/dev/null | fl_parse_mariadb_version | awk 'NR==1'
       return 0
     fi
   fi
   for f in "$FL_MARIADB_FORMULA" mariadb@11.8 mariadb@11.4 mariadb@10.11 mariadb@10.6 mariadb; do
     if [[ -x "${FL_BREW_PREFIX}/opt/${f}/bin/mariadb" ]]; then
-      "${FL_BREW_PREFIX}/opt/${f}/bin/mariadb" --version 2>/dev/null | fl_parse_mariadb_version | head -n1
+      "${FL_BREW_PREFIX}/opt/${f}/bin/mariadb" --version 2>/dev/null | fl_parse_mariadb_version | awk 'NR==1'
       return 0
     fi
   done

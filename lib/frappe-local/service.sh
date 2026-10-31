@@ -162,7 +162,7 @@ fl_render_all() {
 fl_helpers_cli() {
   local recorded c
   if [[ "${FL_INSTALL_KIND:-}" == app ]]; then
-    recorded="$(fl_rc_block_extract "$(fl_rc_file)" 2>/dev/null | sed -n 's/^BENCHBAR="\(.*\)"$/\1/p' | head -n 1)"
+    recorded="$(fl_rc_block_extract "$(fl_rc_file)" 2>/dev/null | sed -n 's/^BENCHBAR="\(.*\)"$/\1/p' | awk 'NR==1')"
     if [[ "$FL_SELF" != "$FL_APP_CLI" ]]; then
       case "$recorded" in */BenchBar.app/Contents/Resources/cli/benchbar) recorded="" ;; esac
       for c in "$recorded" "$(fl_brew_cli)" "${FL_MANAGED_HOME}/benchbar" "$FL_APP_CLI"; do

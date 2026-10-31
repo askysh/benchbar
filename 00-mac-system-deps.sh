@@ -148,7 +148,7 @@ else
   xcode-select --install || true
   fl_die "Xcode CLT install was launched." "Complete the GUI installer, then re-run this script."
 fi
-fl_ok "Homebrew $(brew --version | head -n1 | awk '{print $2}') at ${FL_BREW_PREFIX}"
+fl_ok "Homebrew $(brew --version | awk 'NR==1' | awk '{print $2}') at ${FL_BREW_PREFIX}"
 
 fl_section "PLAN"
 [[ "$FL_MARIADB_SOURCE" == "running" ]] && fl_info "MariaDB: using the ${FL_MARIADB_FORMULA} server already running on 3306 (inside ${FL_PROFILE}'s range ${FL_MARIADB_MIN} to ${FL_MARIADB_MAX})"
@@ -224,8 +224,8 @@ fi
 MARIADB_BIN="$(fl_mariadb_bin)"
 [[ -x "$MARIADB_BIN" ]] || MARIADB_BIN="$(command -v mariadb || true)"
 [[ -n "$MARIADB_BIN" && -x "$MARIADB_BIN" ]] || fl_die "mariadb client not found." "Try: brew reinstall ${FL_MARIADB_FORMULA}"
-MARIADB_VERSION_LINE="$("$MARIADB_BIN" --version 2>&1 | head -n1)"
-MARIADB_DISTRIB="$(printf '%s\n' "$MARIADB_VERSION_LINE" | fl_parse_mariadb_version | head -n1)"
+MARIADB_VERSION_LINE="$("$MARIADB_BIN" --version 2>&1 | awk 'NR==1')"
+MARIADB_DISTRIB="$(printf '%s\n' "$MARIADB_VERSION_LINE" | fl_parse_mariadb_version | awk 'NR==1')"
 [[ -n "$MARIADB_DISTRIB" ]] || fl_die "Could not parse MariaDB version from: ${MARIADB_VERSION_LINE}"
 case "$MARIADB_DISTRIB" in
   ${FL_MARIADB_MAJOR_MINOR}.*) fl_ok "mariadb - ${MARIADB_DISTRIB} at ${MARIADB_BIN}" ;;
@@ -235,7 +235,7 @@ fl_ensure_service_started "$FL_MARIADB_FORMULA" "mariadbd"
 
 MARIADB_DATA_DIR="${FL_BREW_PREFIX}/var/mysql"
 if [[ -f "${MARIADB_DATA_DIR}/mariadb_upgrade_info" ]]; then
-  DATA_DIR_VER="$(tr -d '\0' < "${MARIADB_DATA_DIR}/mariadb_upgrade_info" | head -n1)"
+  DATA_DIR_VER="$(tr -d '\0' < "${MARIADB_DATA_DIR}/mariadb_upgrade_info" | awk 'NR==1')"
   DATA_DIR_VER="${DATA_DIR_VER%%-*}"
   DATA_DIR_MAJOR_MINOR="$(printf '%s\n' "$DATA_DIR_VER" | awk -F. '{print $1 "." $2}')"
   if [[ "$DATA_DIR_MAJOR_MINOR" == "$FL_MARIADB_MAJOR_MINOR" ]]; then
@@ -301,7 +301,7 @@ fl_sudo_drop
 fl_section "BUILD DEPS"
 for formula in openssl@3 libffi zlib $FL_BUILD_FORMULAE; do
   fl_brew_ensure "$formula"
-  fl_ok "$formula - $(brew list --versions "$formula" | head -n1)"
+  fl_ok "$formula - $(brew list --versions "$formula" | awk 'NR==1')"
 done
 
 fl_section "SHELL CONFIG"
@@ -335,7 +335,7 @@ printf '%-22s %-22s %s\n' "node" "$NODE_VERSION" "$NODE_BIN"
 printf '%-22s %-22s %s\n' "$FL_MARIADB_FORMULA" "$MARIADB_DISTRIB" "$MARIADB_BIN"
 printf '%-22s %-22s %s\n' "redis-server" "${REDIS_VERSION:-?}" "$REDIS_BIN"
 case "$WKHTML_STATE" in
-  ok) printf '%-22s %-22s %s\n' "wkhtmltopdf" "$("$(fl_wkhtmltopdf_bin)" --version 2>/dev/null | head -n1 | awk '{print $2}')" "$(fl_wkhtmltopdf_bin)" ;;
+  ok) printf '%-22s %-22s %s\n' "wkhtmltopdf" "$("$(fl_wkhtmltopdf_bin)" --version 2>/dev/null | awk 'NR==1' | awk '{print $2}')" "$(fl_wkhtmltopdf_bin)" ;;
   skipped) printf '%-22s %-22s %s\n' "wkhtmltopdf" "skipped" "PDFs will not work until it is installed" ;;
   *) printf '%-22s %-22s %s\n' "wkhtmltopdf" "FAILED" "the install did not succeed; see the step below" ;;
 esac

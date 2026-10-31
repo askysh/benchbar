@@ -56,12 +56,12 @@ fl_load_profile() {
 # (.../opt/<formula>/bin/mariadbd or .../Cellar/<formula>/<ver>/bin/mariadbd).
 fl_mariadb_running_formula() {
   local pid bin formula ver
-  pid="$(lsof -ti tcp:3306 -sTCP:LISTEN 2>/dev/null | head -n1 || true)"
+  pid="$(lsof -ti tcp:3306 -sTCP:LISTEN 2>/dev/null | awk 'NR==1' || true)"
   [[ -n "$pid" ]] || return 0
   bin="$(ps -o command= -p "$pid" 2>/dev/null | awk '{print $1}' || true)"
   formula="$(printf '%s' "$bin" | sed -n -E 's#.*/(opt|Cellar)/(mariadb(@[0-9.]+)?)/.*#\2#p')"
   [[ -n "$formula" && -x "$bin" ]] || return 0
-  ver="$("$bin" --version 2>/dev/null | sed -n 's/.*[^0-9]\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)-MariaDB.*/\1/p' | head -n1)"
+  ver="$("$bin" --version 2>/dev/null | sed -n 's/.*[^0-9]\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)-MariaDB.*/\1/p' | awk 'NR==1')"
   [[ -n "$ver" ]] && printf '%s %s' "$formula" "$ver"
   return 0
 }
@@ -111,7 +111,7 @@ fl_profile_major() {
 fl_profile_detect() {
   local init="$1/apps/frappe/frappe/__init__.py" major
   [[ -f "$init" ]] || return 0
-  major="$(sed -n 's/^__version__[[:space:]]*=[[:space:]]*["'"'"']\([0-9][0-9]*\)\..*/\1/p' "$init" | head -n1)"
+  major="$(sed -n 's/^__version__[[:space:]]*=[[:space:]]*["'"'"']\([0-9][0-9]*\)\..*/\1/p' "$init" | awk 'NR==1')"
   [[ -n "$major" ]] || return 0
   awk -F '\t' -v b="version-${major}" 'NR > 1 && $3 == b {print $1; exit}' "$(fl_config_file release-profiles.tsv)"
 }
@@ -218,7 +218,7 @@ fl_update_cache_file() {
 fl_print_newest_update_cache() {
   local newest
   # shellcheck disable=SC2012
-  newest="$(ls -t "${FL_STATE_DIR}"/update-check.*.txt 2>/dev/null | head -n1 || true)"
+  newest="$(ls -t "${FL_STATE_DIR}"/update-check.*.txt 2>/dev/null | awk 'NR==1' || true)"
   if [[ -n "$newest" ]]; then
     fl_warn "Offline mode: printing newest cached update check from ${newest}"
     cat "$newest"

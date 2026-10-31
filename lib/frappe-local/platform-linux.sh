@@ -139,7 +139,7 @@ fl__python_bin_for() {
   done
   if [[ -n "$best" ]]; then printf '%s' "$best"; return 0; fi
   if [[ "${FL_CONTEXT_LIGHT:-0}" != "1" ]] && command -v uv >/dev/null 2>&1; then
-    found="$(uv python find "$ver" 2>/dev/null | head -n1 || true)"
+    found="$(uv python find "$ver" 2>/dev/null | awk 'NR==1' || true)"
     if [[ -n "$found" && -x "$found" ]]; then printf '%s' "$found"; return 0; fi
   fi
   # where uv puts it: the path is right once `uv python install` has run
@@ -558,7 +558,7 @@ fl_mariadb_admin_open() {
     return 1
   fi
   hash="$(sudo "$bin" --protocol=socket -u root --connect-timeout=2 -sNe "SELECT authentication_string FROM mysql.user WHERE User='root' AND Host='localhost'" 2>/dev/null)" || return 1
-  case "$(printf '%s\n' "$hash" | head -n1)" in
+  case "$(printf '%s\n' "$hash" | awk 'NR==1')" in
     invalid|NULL|"") ;;
     *) return 1 ;;
   esac
@@ -735,7 +735,7 @@ fl_wkhtmltopdf_install() {
   [[ "$code" == "0" ]] || return 1
   hash -r 2>/dev/null || true
   case "$(fl_wkhtmltopdf_state)" in
-    patched) fl_ok "$("$(fl_wkhtmltopdf_bin)" --version 2>&1 | head -n1) at $(fl_wkhtmltopdf_bin)"; fl_wkhtmltopdf_shadow_warn ;;
+    patched) fl_ok "$("$(fl_wkhtmltopdf_bin)" --version 2>&1 | awk 'NR==1') at $(fl_wkhtmltopdf_bin)"; fl_wkhtmltopdf_shadow_warn ;;
     *) fl_fail "the package installed but 'wkhtmltopdf --version' does not say 'with patched qt'"; return 1 ;;
   esac
 }

@@ -229,8 +229,8 @@ fl_section "DATABASE"
 MARIADB_BIN="$(fl_mariadb_bin)"
 [[ -x "$MARIADB_BIN" ]] || MARIADB_BIN="$(command -v mariadb || true)"
 [[ -n "$MARIADB_BIN" && -x "$MARIADB_BIN" ]] || fl_die "mariadb client not found." "Try: sudo apt-get install --reinstall mariadb-client"
-MARIADB_VERSION_LINE="$("$MARIADB_BIN" --version 2>&1 | head -n1)"
-MARIADB_DISTRIB="$(printf '%s\n' "$MARIADB_VERSION_LINE" | fl_parse_mariadb_version | head -n1)"
+MARIADB_VERSION_LINE="$("$MARIADB_BIN" --version 2>&1 | awk 'NR==1')"
+MARIADB_DISTRIB="$(printf '%s\n' "$MARIADB_VERSION_LINE" | fl_parse_mariadb_version | awk 'NR==1')"
 [[ -n "$MARIADB_DISTRIB" ]] || fl_die "Could not parse MariaDB version from: ${MARIADB_VERSION_LINE}"
 case "$MARIADB_DISTRIB" in
   ${FL_MARIADB_MAJOR_MINOR}.*) fl_ok "mariadb - ${MARIADB_DISTRIB} at ${MARIADB_BIN}" ;;
@@ -239,7 +239,7 @@ esac
 fl_ensure_service_started mariadb "mariadbd"
 
 if [[ -r "${FL_MARIADB_DATA_DIR}/mariadb_upgrade_info" ]]; then
-  DATA_DIR_VER="$(tr -d '\0' < "${FL_MARIADB_DATA_DIR}/mariadb_upgrade_info" | head -n1)"
+  DATA_DIR_VER="$(tr -d '\0' < "${FL_MARIADB_DATA_DIR}/mariadb_upgrade_info" | awk 'NR==1')"
   DATA_DIR_VER="${DATA_DIR_VER%%-*}"
   DATA_DIR_MAJOR_MINOR="$(printf '%s\n' "$DATA_DIR_VER" | awk -F. '{print $1 "." $2}')"
   if [[ "$DATA_DIR_MAJOR_MINOR" == "$FL_MARIADB_MAJOR_MINOR" ]]; then
@@ -394,7 +394,7 @@ printf '%-22s %-22s %s\n' "node" "$NODE_VERSION" "$NODE_BIN"
 printf '%-22s %-22s %s\n' "mariadb" "$MARIADB_DISTRIB" "$MARIADB_BIN"
 printf '%-22s %-22s %s\n' "redis-server" "${REDIS_VERSION:-?}" "$REDIS_BIN"
 case "$WKHTML_STATE" in
-  ok) printf '%-22s %-22s %s\n' "wkhtmltopdf" "$("$(fl_wkhtmltopdf_bin)" --version 2>/dev/null | head -n1 | awk '{print $2}')" "$(fl_wkhtmltopdf_bin)" ;;
+  ok) printf '%-22s %-22s %s\n' "wkhtmltopdf" "$("$(fl_wkhtmltopdf_bin)" --version 2>/dev/null | awk 'NR==1' | awk '{print $2}')" "$(fl_wkhtmltopdf_bin)" ;;
   skipped) printf '%-22s %-22s %s\n' "wkhtmltopdf" "skipped" "PDFs will not work until it is installed" ;;
   *) printf '%-22s %-22s %s\n' "wkhtmltopdf" "FAILED" "the install did not succeed; see the step below" ;;
 esac

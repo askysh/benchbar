@@ -185,7 +185,7 @@ fl_wkhtmltopdf_install() {
   [[ "$code" == "0" ]] || return 1
   hash -r 2>/dev/null || true
   case "$(fl_wkhtmltopdf_state)" in
-    patched) fl_ok "$("$(fl_wkhtmltopdf_bin)" --version 2>&1 | head -n1) at $(fl_wkhtmltopdf_bin)"; fl_wkhtmltopdf_shadow_warn ;;
+    patched) fl_ok "$("$(fl_wkhtmltopdf_bin)" --version 2>&1 | awk 'NR==1') at $(fl_wkhtmltopdf_bin)"; fl_wkhtmltopdf_shadow_warn ;;
     *) fl_fail "the package installed but 'wkhtmltopdf --version' does not say 'with patched qt'"; return 1 ;;
   esac
 }
@@ -249,7 +249,7 @@ fl_wkhtmltopdf_install_gui() {
   FL_WKHTML_NEED_ROSETTA=0
   hash -r 2>/dev/null || true
   case "$(fl_wkhtmltopdf_state)" in
-    patched) fl_ok "$("$(fl_wkhtmltopdf_bin)" --version 2>&1 | head -n1) at $(fl_wkhtmltopdf_bin)"; fl_wkhtmltopdf_shadow_warn ;;
+    patched) fl_ok "$("$(fl_wkhtmltopdf_bin)" --version 2>&1 | awk 'NR==1') at $(fl_wkhtmltopdf_bin)"; fl_wkhtmltopdf_shadow_warn ;;
     *) fl_fail "the package installed but 'wkhtmltopdf --version' does not say 'with patched qt'"; return 1 ;;
   esac
 }
