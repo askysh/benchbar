@@ -55,6 +55,8 @@ final class BenchModel: Identifiable {
         SiteRow.make(sites: status?.sites ?? summary.sites, defaultSite: summary.site,
                      port: status?.ports?.web ?? summary.ports.web)
     }
+    /// The CLI has listed this bench's sites (an older one may not).
+    var sitesKnown: Bool { (status?.sites ?? summary.sites) != nil }
     /// Procfile.lean runs the scheduler (status --json, CLI 0.4 and later).
     var schedulerOn: Bool? { status?.scheduler }
     /// When the current run started, while it is starting or running.
@@ -138,6 +140,18 @@ final class BenchStore {
     }
 
     @ObservationIgnored let settings: AppSettings
+    /// Pins, recents and sessions of "Open as…" (OpenAsStore), and the
+    /// browser tracking that comes with it. Made on first use: nothing exists
+    /// for a person who never turns Open as on (`startOpenAsIfOptedIn`).
+    @ObservationIgnored private var openAsStore: OpenAsStore?
+    var openAs: OpenAsStore {
+        if let openAsStore { return openAsStore }
+        let made = OpenAsStore()
+        openAsStore = made
+        return made
+    }
+    /// nil until the feature is first used; for views that only read.
+    var openAsIfStarted: OpenAsStore? { openAsStore }
     @ObservationIgnored var onAlert: ((BenchModel, BenchAlert) -> Void)?
     /// Called after anything that changes what the menu bar shows.
     @ObservationIgnored var onChange: (() -> Void)?
@@ -335,10 +349,23 @@ final class BenchStore {
             }
             syncWatchers()
             await refreshAll()
+            startOpenAsIfOptedIn()
         } catch {
             listError = error.localizedDescription
         }
         notifyChange()
+    }
+
+    /// Starts the Open as store once a site has the opt-in on, and drops the
+    /// pins of benches and sites that are gone.
+    private func startOpenAsIfOptedIn() {
+        let optedIn = benches.contains { $0.siteRows.contains { $0.openAsEnabled == true } }
+        guard optedIn || openAsStore != nil else { return }
+        var known: [String: Set<String>?] = [:]
+        for bench in benches {
+            known[bench.path] = bench.sitesKnown ? Set(bench.siteRows.map(\.name)) : nil
+        }
+        openAs.prune(keeping: known)
     }
 
     func refreshAll() async {

@@ -156,6 +156,13 @@ nonisolated struct SiteRow: Equatable, Sendable, Identifiable {
     var isDefault: Bool
     var url: String
     var needsHosts: Bool
+    var developerMode = false
+    /// False when the CLI did not say (older than the release that reports developer_mode).
+    var developerModeKnown = true
+    /// The per site opt-in; nil from a CLI that does not report it.
+    var openAsEnabled: Bool? = nil
+    /// The CLI's own answer to "will open --as sign in here"; nil from an older CLI.
+    var openAs: Bool? = nil
 
     var id: String { name }
 
@@ -165,7 +172,9 @@ nonisolated struct SiteRow: Equatable, Sendable, Identifiable {
     static func make(sites: [SiteInfo]?, defaultSite: String, port: Int) -> [SiteRow] {
         let infos = sites ?? [SiteInfo(name: defaultSite, isDefault: true, hostsEntry: true, pingCode: nil)]
         return infos
-            .map { SiteRow(name: $0.name, isDefault: $0.isDefault, url: "http://\($0.name):\(port)", needsHosts: !$0.hostsEntry) }
+            .map { SiteRow(name: $0.name, isDefault: $0.isDefault, url: "http://\($0.name):\(port)", needsHosts: !$0.hostsEntry,
+                             developerMode: $0.developerMode ?? false, developerModeKnown: $0.developerMode != nil,
+                             openAsEnabled: $0.openAsEnabled, openAs: $0.openAs) }
             .sorted { a, b in
                 if a.isDefault != b.isDefault { return a.isDefault }
                 return a.name.localizedStandardCompare(b.name) == .orderedAscending

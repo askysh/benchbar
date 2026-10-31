@@ -59,7 +59,8 @@ struct AggregateTests {
 
     @Test func siteRowsFromAnOlderCLI() {
         let rows = SiteRow.make(sites: nil, defaultSite: "macdev", port: 8000)
-        #expect(rows == [SiteRow(name: "macdev", isDefault: true, url: "http://macdev:8000", needsHosts: false)])
+        // a CLI that old says nothing about developer mode, so Open as is shown as needing a newer CLI
+        #expect(rows == [SiteRow(name: "macdev", isDefault: true, url: "http://macdev:8000", needsHosts: false, developerModeKnown: false)])
         #expect(SiteRow.hostsFix(rows, bench: "/b") == nil)
     }
 }

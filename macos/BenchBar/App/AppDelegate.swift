@@ -65,6 +65,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 mainWindow.router.hostsRequest = bench.path
                 openBench(bench, tab: .sites, repair: false)
             },
+            findUser: { [weak self] bench, site in
+                guard let self else { return }
+                mainWindow.router.findUserRequest = FindUserRequest(bench: bench.path, site: site)
+                openBench(bench, tab: .sites, repair: false)
+            },
             newBench: { [weak self] in self?.openWizard() },
             manage: { [weak self] bench, tab, repair in self?.openBench(bench, tab: tab, repair: repair) },
             updateOffer: updateOffer,

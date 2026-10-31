@@ -33,6 +33,8 @@ final class WindowRouter {
     var startAfterSetup = false
     /// Set by the popover: the Sites tab of this bench opens its Add Hosts Lines sheet.
     var hostsRequest: String?
+    /// Set by the popover's Open as menu: the Sites tab of this bench opens the Find User sheet for the site.
+    var findUserRequest: FindUserRequest?
     /// Set by the Help menu: the About pane opens its Report a Bug sheet.
     var bugReportRequested = false
     /// Set by the app menu: the About pane checks for updates.

@@ -10,6 +10,8 @@ struct AppCommands {
     var setup: (BenchModel, Bool) -> Void = { _, _ in }
     /// The bench's Sites tab with the Add Hosts Lines sheet open.
     var addHosts: (BenchModel) -> Void = { _ in }
+    /// The bench's Sites tab with the Find User sheet open for this site.
+    var findUser: (BenchModel, String) -> Void = { _, _ in }
     /// The BenchBar window at the first run wizard.
     var newBench: () -> Void = {}
     /// The BenchBar window at a bench's tab (true: open the Repair sheet too).
@@ -137,7 +139,8 @@ struct BenchPanel: View {
                     .help(BenchShortcut.manage.help("Apps, sites and settings in the BenchBar window"))
             }
             .controlSize(.small)
-            SitesSection(bench: bench, manage: { commands.manage(bench, .sites, false) }, addHosts: { commands.addHosts(bench) })
+            SitesSection(store: store, bench: bench, manage: { commands.manage(bench, .sites, false) },
+                         addHosts: { commands.addHosts(bench) }, findUser: { commands.findUser(bench, $0) })
             Divider()
             DoctorSection(store: store, bench: bench,
                           details: { commands.manage(bench, .health, false) },
@@ -226,9 +229,11 @@ struct BenchPanel: View {
 /// opens and benchup waits for. Sites that need a hosts line come next, so
 /// they stay in view, and Add Hosts Lines opens the window at the sheet that adds them.
 struct SitesSection: View {
+    let store: BenchStore
     let bench: BenchModel
     var manage: () -> Void = {}
     var addHosts: () -> Void = {}
+    var findUser: (String) -> Void = { _ in }
     static let visibleRows = 3
 
     var body: some View {
@@ -248,10 +253,13 @@ struct SitesSection: View {
                         .accessibilityLabel(row.isDefault ? "Default site" : "Site")
                     VStack(alignment: .leading, spacing: 2) {
                         Text(row.name).font(.callout).lineLimit(1).truncationMode(.middle).help(row.name)
-                        Text(row.needsHosts ? "Hostname setup needed" : (bench.state == .running ? "Running" : "Bench is not running"))
+                        Text(subtitle(row))
                             .font(.caption).foregroundStyle(row.needsHosts ? .orange : .secondary)
                     }
                     Spacer(minLength: 4)
+                    if row.isDefault {
+                        OpenAsMenu(store: store, bench: bench, row: row, compact: true) { findUser(row.name) }
+                    }
                     siteAction(row)
                 }
             }
@@ -261,6 +269,13 @@ struct SitesSection: View {
                        action: ("Add Hosts Lines…", addHosts))
             }
         }
+    }
+
+    /// "as Priya" after an Open as, while the bench runs.
+    private func subtitle(_ row: SiteRow) -> String {
+        if row.needsHosts { return "Hostname setup needed" }
+        guard bench.state == .running else { return "Bench is not running" }
+        return store.openAsIfStarted?.currentLabel(bench: bench.path, site: row.name).map { "as \($0)" } ?? "Running"
     }
 
     @ViewBuilder private func siteAction(_ row: SiteRow) -> some View {

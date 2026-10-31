@@ -302,6 +302,51 @@ nonisolated struct CLIClient: Sendable {
         }
     }
 
+    // MARK: open as
+
+    /// A session for `user` on a developer_mode site, as a login link (`--print-url`).
+    /// The link holds the session id, so neither a decoding failure nor the
+    /// CLI's own words are allowed to repeat it (`OpenAsLink.scrub`).
+    func openAs(bench: String, site: String, user: String, path: String?) async throws(CLIError) -> OpenAsResult {
+        let pathArguments = path.map { ["--path", $0] } ?? []
+        let output: CommandOutput
+        do throws(CLIError) {
+            output = try await run(["open", "--bench-dir", bench, "--site", site, "--as", user] + pathArguments + ["--print-url", "--json"],
+                                   timeout: Timeout.action, acceptExitCodes: [0])
+        } catch {
+            if case .failed(let command, let code, let message) = error {
+                throw .failed(command: command, exitCode: code, message: OpenAsLink.scrub(message))
+            }
+            throw error
+        }
+        do throws(CLIError) {
+            return try BenchJSON.decode(OpenAsResult.self, from: Data(output.stdout.utf8))
+        } catch {
+            if case .invalidJSON(let detail, _) = error { throw .invalidJSON(detail: detail, preview: "") }
+            throw error
+        }
+    }
+
+    /// The enabled users of a site, System Users first. Read only.
+    func users(bench: String, site: String, search: String?, limit: Int) async throws(CLIError) -> UserList {
+        let searchArguments = search.flatMap { $0.isEmpty ? nil : ["--search", $0] } ?? []
+        let output = try await run(["users", "--bench-dir", bench, "--site", site] + searchArguments + ["--limit", String(limit), "--json"],
+                                   timeout: Timeout.query, acceptExitCodes: [0])
+        return try BenchJSON.decode(UserList.self, from: Data(output.stdout.utf8))
+    }
+
+    /// The per site opt-in: `site open-as on NAME --yes` or `off NAME`.
+    ///
+    /// The app's calls never set BENCHBAR_NONINTERACTIVE, and this one makes
+    /// sure of it: `on` is refused under that mode so that no agent can turn
+    /// it on, and here the click plus the alert is the person's decision. The
+    /// `--yes` skips only the CLI's own question, which the alert replaced.
+    @discardableResult
+    func setOpenAs(_ on: Bool, site: String, bench: String) async throws(CLIError) -> CommandOutput {
+        try await run(["site", "open-as", on ? "on" : "off", site] + (on ? ["--yes"] : []) + ["--plain", "--bench-dir", bench],
+                      timeout: Timeout.action, acceptExitCodes: [0], extraEnvironment: ["BENCHBAR_NONINTERACTIVE": "0"])
+    }
+
     // MARK: plumbing
 
     /// `qos`: `.utility` for the queries (status, list, ports check, app
