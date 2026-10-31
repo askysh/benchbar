@@ -113,7 +113,7 @@ does. Report a Bug sends a redacted report in about a minute.
 - `benchbar report` works without `zip` installed and without a bench.
 - The sudo password of `BENCHBAR_SUDO=env` is no longer in
   `/proc/PID/environ` of the running command, and every command forgets it
-  after its sudo steps. Repair runs its sudo steps first.
+  after its sudo steps. On Linux, repair runs its sudo steps first.
 - `doctor --prerequisites` on Linux warns, not fails, when the user is not
   in the `sudo` group.
 

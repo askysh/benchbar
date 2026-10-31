@@ -311,6 +311,18 @@ assert_calls_contain '^sudo -k$' "(repair dropped the credential)"
 last_k="$(grep -n '^sudo -k$' "$MOCK_LOG" | tail -n1 | cut -d: -f1)"
 last_sudo="$(grep -n '^sudo ' "$MOCK_LOG" | tail -n1 | cut -d: -f1)"
 [[ "$last_sudo" -le "$last_k" ]] || fail "repair used sudo after it dropped the credential (sudo -k line $last_k, last sudo line $last_sudo)"
+# on Linux every sudo action comes before every other repair action, so the
+# credential is gone before pip, npm or bench can run
+linux_order="$(sed -n 's/^FL_ACTION_ORDER="\(.*\)"$/\1/p' "$ROOT/lib/frappe-local/doctor-linux.sh")"
+[[ -n "$linux_order" ]] || fail "no FL_ACTION_ORDER in doctor-linux.sh"
+seen_other=""
+for action in $linux_order; do
+  case "$action" in
+    mariadb_bind|mariadb_utf8|wkhtmltopdf_install)
+      [[ -z "$seen_other" ]] || fail "sudo action $action comes after $seen_other in the Linux repair order" ;;
+    *) [[ -n "$seen_other" ]] || seen_other="$action" ;;
+  esac
+done
 
 # adopt with the right password runs and leaks nothing
 run_env "$SECRET" adopt "$BENCH" --yes --json
