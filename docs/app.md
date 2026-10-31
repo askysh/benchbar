@@ -20,10 +20,13 @@ when it crashes, and shows a question mark when the CLI is missing.
 Reduce Motion shows still poses. With more than one bench it shows the
 worst state of all of them.
 
-![Every frame of the two built in runners](images/runners.png)
+![Every frame of the Bench and the Coffee cup](images/runners.png)
 
-BenchBar ships two runners, Bench and Coffee cup, and you can draw your
-own: see [Custom runners](runners.md).
+BenchBar ships seven runners: Bench, Coffee cup, Kettle, Server rack,
+Paper plane, Snail and Rocket. Pick one under Runner in the Menu Bar
+pane, or draw your own: see [Custom runners](runners.md).
+
+![Every frame of the Kettle, Server rack, Paper plane, Snail and Rocket](images/runners-more.png)
 
 ## The popover
 

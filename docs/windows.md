@@ -212,8 +212,8 @@ Esc closes the flyout, Enter on a row opens the site.
 
 Right click opens the menu: Open BenchBar, Settings, Open BenchBar at
 logon (a shortcut in your Startup folder, no admin needed), Notifications,
-Appearance (System, Light or Dark), Runner (the built in Bench and Coffee
-cup, and your own), Check for Updates, Help, Report a Bug and Quit.
+Appearance (System, Light or Dark), Runner (the seven built in runners, as
+on the Mac, and your own), Check for Updates, Help, Report a Bug and Quit.
 
 ### The BenchBar window
 

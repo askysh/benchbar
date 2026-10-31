@@ -43,7 +43,6 @@ public static class KettleRunnerArt
             new PointF(2.6f, 1.2f), new PointF(13.4f, 1.2f), new PointF(13.8f, 2.2f),
             new PointF(12.6f, 9.4f), new PointF(3.4f, 9.4f), new PointF(2.2f, 2.2f),
         ]);
-        c.Fill(new RectangleF(2.2f, 1.2f, 11.6f, 4), 1.6f);
         c.Fill(new RectangleF(3.2f, 6.2f, 9.6f, 3.6f), 1.8f);
         // the spout, rising to the right
         c.Shape(
@@ -98,7 +97,7 @@ public static class KettleRunnerArt
         Wisp(c, i / 10f, 18.8f, 2, i % 2 == 0);
         var shimmer = i % 2 == 0 ? 0f : 0.6f;
         foreach (var x in new[] { 5f, 8f, 11f })
-            c.Line([new PointF(x - 0.6f + shimmer, 0.2f), new PointF(x + 0.6f + shimmer, 0.2f)], 0.6f);
+            c.Line([new PointF(x - 0.6f + shimmer, 0.45f), new PointF(x + 0.6f + shimmer, 0.45f)], 0.6f);
     }
 
     private static void Sleeping(RunnerCanvas c, int i)

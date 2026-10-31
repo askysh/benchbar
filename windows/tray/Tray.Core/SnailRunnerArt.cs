@@ -65,7 +65,7 @@ public static class SnailRunnerArt
             {
                 // one stalk bends over, puzzled
                 var bend = new PointF(b.X + 0.6f, b.Y + 3.2f);
-                tip = new PointF(bend.X + 1.6f, bend.Y - 0.6f);
+                tip = new PointF(bend.X + 1.1f, bend.Y - 0.9f);
                 c.Line([b, bend, tip], 0.9f);
             }
             else
@@ -129,6 +129,6 @@ public static class SnailRunnerArt
     {
         Body(c, -0.6f, droop: true);
         Shell(c, ShellCenter);
-        c.Question(20.8f);
+        c.Question(21.0f);
     }
 }

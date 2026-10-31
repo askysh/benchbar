@@ -54,7 +54,7 @@ nonisolated enum SnailRunnerArt {
             if droop, n == 1 {
                 // one stalk bends over, puzzled
                 let bend = CGPoint(x: base.x + 0.6, y: base.y + 3.2)
-                tip = CGPoint(x: bend.x + 1.6, y: bend.y - 0.6)
+                tip = CGPoint(x: bend.x + 1.1, y: bend.y - 0.9)
                 c.line([base, bend, tip], width: 0.9)
             } else {
                 c.line([base, tip], width: 0.9)
@@ -121,7 +121,7 @@ nonisolated enum SnailRunnerArt {
         RunnerCanvas.render(width: width) { c in
             body(c, reach: -0.6, droop: true)
             shell(c, center: shellCenter)
-            c.question(x: 20.8)
+            c.question(x: 21.0)
         }
     }
 }

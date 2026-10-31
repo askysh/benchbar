@@ -38,7 +38,7 @@ public static class PlaneRunnerArt
     {
         c.Shape([new PointF(5.6f, 13.2f), new PointF(20.4f, 9.2f), new PointF(8.6f, 8.9f)]);
         c.Shape([new PointF(8.6f, 8.9f), new PointF(20.4f, 9.2f), new PointF(10, 5.6f)]);
-        c.CutLine([new PointF(8.2f, 8.9f), new PointF(19, 9.15f)], 0.6f);
+        c.CutLine([new PointF(8.2f, 8.9f), new PointF(18.2f, 9.13f)], 0.6f);
     }
 
     /// <summary>The plane leaned <paramref name="pitch"/> degrees nose down and moved by <paramref name="offset"/>.</summary>

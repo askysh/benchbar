@@ -31,7 +31,7 @@ nonisolated enum PlaneRunnerArt {
     static func body(_ c: RunnerCanvas) {
         c.shape([CGPoint(x: 5.6, y: 13.2), CGPoint(x: 20.4, y: 9.2), CGPoint(x: 8.6, y: 8.9)])
         c.shape([CGPoint(x: 8.6, y: 8.9), CGPoint(x: 20.4, y: 9.2), CGPoint(x: 10, y: 5.6)])
-        c.cutLine([CGPoint(x: 8.2, y: 8.9), CGPoint(x: 19, y: 9.15)], width: 0.6)
+        c.cutLine([CGPoint(x: 8.2, y: 8.9), CGPoint(x: 18.2, y: 9.13)], width: 0.6)
     }
 
     /// The plane leaned `pitch` degrees nose down and moved by `offset`.

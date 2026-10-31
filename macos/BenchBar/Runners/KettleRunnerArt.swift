@@ -35,7 +35,6 @@ nonisolated enum KettleRunnerArt {
             CGPoint(x: 2.6, y: 1.2), CGPoint(x: 13.4, y: 1.2), CGPoint(x: 13.8, y: 2.2),
             CGPoint(x: 12.6, y: 9.4), CGPoint(x: 3.4, y: 9.4), CGPoint(x: 2.2, y: 2.2),
         ])
-        c.fill(CGRect(x: 2.2, y: 1.2, width: 11.6, height: 4), radius: 1.6)
         c.fill(CGRect(x: 3.2, y: 6.2, width: 9.6, height: 3.6), radius: 1.8)
         // the spout, rising to the right
         c.shape([
@@ -89,7 +88,7 @@ nonisolated enum KettleRunnerArt {
             wisp(c, CGFloat(i) / 10, x: 18.8, length: 2, flip: i % 2 == 0)
             let shimmer: CGFloat = i % 2 == 0 ? 0 : 0.6
             for x in [CGFloat(5), 8, 11] {
-                c.line([CGPoint(x: x - 0.6 + shimmer, y: 0.2), CGPoint(x: x + 0.6 + shimmer, y: 0.2)], width: 0.6)
+                c.line([CGPoint(x: x - 0.6 + shimmer, y: 0.45), CGPoint(x: x + 0.6 + shimmer, y: 0.45)], width: 0.6)
             }
         }
     }
