@@ -96,6 +96,8 @@ internal sealed class MainWindow : Window
         root.Children.Add(sidebar);
         root.Children.Add(right);
         Content = root;
+        // a key press must not draw a focus rectangle around a whole pane: only controls take the focus visual
+        Ui.QuietFocus(root);
 
         InputBindings.Add(new KeyBinding(new RelayCommand(_actions.NewBench), Key.N, ModifierKeys.Control));
         InputBindings.Add(new KeyBinding(new RelayCommand(_actions.ShowSettings), Key.OemComma, ModifierKeys.Control));
@@ -134,32 +136,51 @@ internal sealed class MainWindow : Window
 
     private void BuildBetaBanner()
     {
+        // one slim line: it must not take the room the wizard rows need
         var line = new DockPanel();
         var buttons = new StackPanel { Orientation = Orientation.Horizontal };
-        buttons.Children.Add(Ui.Button(BetaText.ReportABug, () => _actions.ReportBug("Beta banner", null), "Report a bug", primary: true));
+        var report = Ui.Button(BetaText.ReportABug, () => _actions.ReportBug("Beta banner", null), "Report a bug", primary: true);
         var dismiss = Ui.Button("Dismiss", () =>
         {
-            _beta.Visibility = Visibility.Collapsed;
+            _betaWanted = false;
+            SyncBetaBanner();
             _actions.DismissBetaBanner();
         }, "Dismiss the beta notice");
         dismiss.Margin = new Thickness(0);
+        foreach (var b in new[] { report, dismiss })
+        {
+            b.Padding = new Thickness(10, 2, 10, 2);
+            b.MinHeight = 0;
+            b.MinWidth = 0;
+        }
+        buttons.Children.Add(report);
         buttons.Children.Add(dismiss);
         DockPanel.SetDock(buttons, Dock.Right);
         line.Children.Add(buttons);
         line.Children.Add(new TextBlock
         {
             Text = BetaText.Banner,
+            FontSize = 12,
             VerticalAlignment = VerticalAlignment.Center,
-            TextWrapping = TextWrapping.Wrap,
+            TextWrapping = TextWrapping.NoWrap,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            ToolTip = BetaText.Banner,
             Margin = new Thickness(0, 0, 12, 0),
         });
         _beta.Background = Ui.Card;
-        _beta.CornerRadius = new CornerRadius(8);
-        _beta.Padding = new Thickness(16, 10, 12, 10);
+        _beta.CornerRadius = new CornerRadius(6);
+        _beta.Padding = new Thickness(12, 3, 8, 3);
+        _beta.Margin = new Thickness(24, 8, 24, 0);
         _beta.Child = line;
         Ui.Name(_beta, "Beta notice: " + BetaText.Banner);
-        _beta.Visibility = _actions.BetaBannerVisible() ? Visibility.Visible : Visibility.Collapsed;
+        _betaWanted = _actions.BetaBannerVisible();
+        SyncBetaBanner();
     }
+
+    private bool _betaWanted;
+
+    /// <summary>The beta notice shows until dismissed, but not while the wizard is open: the wizard needs the room.</summary>
+    private void SyncBetaBanner() => _beta.Visibility = _betaWanted && Mode != MainMode.Wizard ? Visibility.Visible : Visibility.Collapsed;
 
     /// <summary>Where the person is in this window, for a bug report. No bench names or paths.</summary>
     public string ReportWhere =>
@@ -444,6 +465,7 @@ internal sealed class MainWindow : Window
         _wizard = wizard;
         _contentKey = "wizard";
         _content.Content = wizard;
+        SyncBetaBanner();
         UpdateToolButtons();
     }
 
@@ -452,6 +474,7 @@ internal sealed class MainWindow : Window
         _wizard = null;
         _contentKey = "";
         Mode = MainMode.Home;
+        SyncBetaBanner();
         UpdateToolButtons();
         ShowHome();
     }
@@ -487,7 +510,7 @@ internal sealed class MainWindow : Window
         });
         _banner.Background = Ui.Card;
         _banner.CornerRadius = new CornerRadius(8);
-        _banner.Padding = new Thickness(16, 10, 12, 10);
+        _banner.Padding = new Thickness(12, 4, 8, 4);
         _banner.Child = line;
         Ui.Name(_banner, $"BenchBar {offer.Version} is out");
         _banner.Visibility = Visibility.Visible;

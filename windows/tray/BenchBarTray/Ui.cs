@@ -205,6 +205,26 @@ internal static class Ui
         return grid;
     }
 
+    /// <summary>
+    /// Takes the focus rectangle off the containers of a page (panels, borders, scroll viewers, plain content hosts): after a key press
+    /// the theme drew one big rounded rectangle around the whole page. Buttons, boxes and the other controls keep theirs.
+    /// </summary>
+    public static void QuietFocus(DependencyObject root)
+    {
+        if (root is FrameworkElement element && IsContainer(element))
+        {
+            element.FocusVisualStyle = null;
+            if (element is ScrollViewer or UserControl || element.GetType() == typeof(ContentControl)) element.Focusable = false;
+        }
+        foreach (var child in LogicalTreeHelper.GetChildren(root))
+        {
+            if (child is DependencyObject d) QuietFocus(d);
+        }
+    }
+
+    private static bool IsContainer(FrameworkElement element) =>
+        element is Panel or Border or ScrollViewer or UserControl or ContentPresenter || element.GetType() == typeof(ContentControl);
+
     public static Border CardOf(UIElement content, Thickness? margin = null) => new()
     {
         Background = Card,
