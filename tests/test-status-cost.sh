@@ -25,15 +25,15 @@ status_of() { printf '%s' "$OUT" | jget - "$1" | tr -d "(),'"; }
 
 # shims: log "exec NAME" and run the real program. Programs a mock starts
 # are not logged (every mock sources _mocklib.sh, which exports
-# BENCHBAR_TEST_MOCK). A mock calls dirname on its own path before that,
-# so dirname skips paths of the mocks.
+# BENCHBAR_TEST_MOCK; it finds that file with parameter expansion, so it
+# starts nothing before).
 SHIMS="$TMP_DIR/shims"
 mkdir -p "$SHIMS"
 for n in sed awk tr head tail cut sort uniq grep cat cksum basename dirname id uname shasum date readlink wc mktemp mv rm cp ls stat touch mkdir find xargs sleep python3 perl ruby; do
   real="$(command -v "$n" 2>/dev/null)" || continue
   cat >"$SHIMS/$n" <<SHIM
 #!/bin/bash
-if [[ -z "\${BENCHBAR_TEST_MOCK:-}" && "$n \${1:-}" != "dirname $ROOT/tests/mocks/bin/"* ]]; then printf 'exec %s\n' "$n" >>"\$MOCK_LOG"; fi
+if [[ -z "\${BENCHBAR_TEST_MOCK:-}" ]]; then printf 'exec %s\n' "$n" >>"\$MOCK_LOG"; fi
 exec "$real" "\$@"
 SHIM
   chmod +x "$SHIMS/$n"

@@ -1,11 +1,11 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # redis-server mock: "--version", or "config/<x>.conf --daemonize yes" adds a
 # fake listener on the port from that file. MOCK_REDIS_PROC=1 also puts the
 # server in the fake process table with the working folder it was started
 # in, as a real one is, so benchbar's own-process test finds it and a kill
 # drops it (the listener goes with it).
 # shellcheck source=tests/mocks/bin/_mocklib.sh
-. "$(dirname "$0")/_mocklib.sh"
+. "${0%/*}/_mocklib.sh"
 [[ "${1:-}" == "--version" ]] && { printf 'Redis server v=7.2.5 sha=00000000:0 malloc=libc bits=64 build=abc\n'; exit 0; }
 mock_log "$@"
 if [[ -f "${1:-}" && " $* " == *" --daemonize yes "* ]]; then

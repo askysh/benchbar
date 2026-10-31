@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # df mock: $MOCK_STATE/df_avail_kb fakes the free space of every volume;
 # without it the real df answers.
 if [[ -f "${MOCK_STATE:-/nonexistent}/df_avail_kb" ]]; then

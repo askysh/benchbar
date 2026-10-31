@@ -1,7 +1,7 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # ditto mock: "-x -k ZIP DIR" unzips, "-c -k --keepParent SRC ZIP" zips, "SRC DST" copies
 # shellcheck source=tests/mocks/bin/_mocklib.sh
-. "$(dirname "$0")/_mocklib.sh"
+. "${0%/*}/_mocklib.sh"
 mock_log "$@"
 case "${1:-}" in
   -x) shift; [[ "${1:-}" == "-k" ]] && shift; mkdir -p "$2"; unzip -q -o "$1" -d "$2" ;;

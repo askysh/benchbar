@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # honcho mock: self-contained because it gets copied into fake venvs
 printf 'honcho %s\n' "$*" >>"${MOCK_LOG:-/dev/null}"
 # MOCK_HONCHO_SLEEP keeps it alive for a while, like a running bench;

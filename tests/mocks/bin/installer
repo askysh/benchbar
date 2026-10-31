@@ -1,7 +1,7 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # installer mock: "installs" the wkhtmltopdf package by recording it
 # shellcheck source=tests/mocks/bin/_mocklib.sh
-. "$(dirname "$0")/_mocklib.sh"
+. "${0%/*}/_mocklib.sh"
 mock_log "$@"
 pkg=""
 while [[ "$#" -gt 0 ]]; do case "$1" in -pkg) pkg="$2"; shift 2 ;; *) shift ;; esac; done

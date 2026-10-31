@@ -1,8 +1,8 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # shared by the mocks: append a call record
 mock_log() {
   local name
-  name="$(basename "$0")"
+  name="${0##*/}"
   printf '%s %s\n' "$name" "$*" >>"${MOCK_LOG:-/dev/null}"
   # MOCK_ENV_DUMP=1: record which password variables this mock saw in its
   # environment (names only), so a test can assert a child never got them

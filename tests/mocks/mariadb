@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # mariadb client mock (copied into the fake brew prefix).
 # The root password lives in $MOCK_STATE/mariadb_root_pw (absent: no password,
 # like a fresh Homebrew install). Logins use MYSQL_PWD, like the CLI.

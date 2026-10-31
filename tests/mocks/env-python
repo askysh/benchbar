@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # env/bin/python of a fake bench. Besides the version it answers benchbar's
 # stdin secret wrapper for frappe commands:
 #   -c SNIPPET benchbar-secrets frappe new-site|drop-site SITE ARGS...

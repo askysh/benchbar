@@ -1,9 +1,9 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # gpg mock: "-o OUT -d IN" with the passphrase on stdin (--passphrase-fd 0).
 # The passphrase must equal $MOCK_STATE/backup_key; the "encrypted" file is
 # copied as it is. Only the arguments are logged, never stdin.
 # shellcheck source=tests/mocks/bin/_mocklib.sh
-. "$(dirname "$0")/_mocklib.sh"
+. "${0%/*}/_mocklib.sh"
 [[ "${1:-}" == "--version" ]] && { printf 'gpg (GnuPG) 2.4.5\n'; exit 0; }
 mock_log "$@"
 out=""; in=""; fd=""

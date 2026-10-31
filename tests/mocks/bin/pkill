@@ -1,7 +1,7 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # pkill mock: removes matching lines from the fake process table
 # shellcheck source=tests/mocks/bin/_mocklib.sh
-. "$(dirname "$0")/_mocklib.sh"
+. "${0%/*}/_mocklib.sh"
 mock_log "$@"
 pattern=""; sig="TERM"
 while [[ "$#" -gt 0 ]]; do case "$1" in -f) pattern="$2"; shift 2 ;; -*) sig="${1#-}"; shift ;; *) pattern="$1"; shift ;; esac; done

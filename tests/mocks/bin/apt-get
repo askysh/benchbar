@@ -1,11 +1,11 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # apt-get mock: "install PKG..." adds to $MOCK_STATE/apt_installed (the set
 # dpkg-query reads); "-s" only simulates; "update", "remove" and the rest succeed.
 # a .deb named wkhtmltox* also marks the patched wkhtmltopdf as installed.
 # $MOCK_STATE/apt_fail makes every call fail; names listed in
 # $MOCK_STATE/apt_unavailable cannot be installed.
 # shellcheck source=tests/mocks/bin/_mocklib.sh
-. "$(dirname "$0")/_mocklib.sh"
+. "${0%/*}/_mocklib.sh"
 mock_log "$@"
 simulate=0; verb=""; pkgs=()
 for a in "$@"; do

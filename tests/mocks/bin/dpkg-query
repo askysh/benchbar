@@ -1,8 +1,8 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # dpkg-query mock: "-W -f=FORMAT PKG" answers from $MOCK_STATE/apt_installed
 # (one package per line); a package that is not there exits 1 like dpkg-query
 # shellcheck source=tests/mocks/bin/_mocklib.sh
-. "$(dirname "$0")/_mocklib.sh"
+. "${0%/*}/_mocklib.sh"
 mock_log "$@"
 fmt=""; pkgs=()
 for a in "$@"; do

@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # wkhtmltopdf mock. State, first match wins:
 #   $MOCK_STATE/wkhtml_missing    behaves as if not installed (no output, exit 127)
 #   $MOCK_STATE/wkhtml_installed  the official package was "installed": patched qt

@@ -897,3 +897,7 @@ Measured on five PR runs (September 2026): 11 to 14 minutes wall clock, all of i
 - `site list` and `status` give each site `open_as_enabled` (the opt-in) and `open_as` (opt-in, developer mode and the site `bench serve` answers as), so a client offers Open as only where the CLI will sign in.
 - `open` stays non MUTATING although `--as` writes a session in the site's database: a MUTATING command has a run log, and a log could capture the session id. The sign in changes no bench file.
 - `open --as` reruns the steps of Frappe's `LoginManager.post_login` except `set_user_info`, so it depends on Frappe internals. Tested on v15; v16 is untested so far. The side effects are those of a real login: `on_login` hooks run, `last_login` is updated, and Frappe may end the user's oldest session (`simultaneous_sessions`). `open --help`, the CLI docs and `site open-as on` say so.
+
+## Test cost
+
+- The mocks find `_mocklib.sh` with `${0%/*}` and name themselves with `${0##*/}`, and run under `#!/bin/bash`, not `/usr/bin/env bash`: a mock call started env, bash, dirname and basename before it did anything, and now starts bash alone. `/bin/bash` is the 3.2 the CLI targets on macOS and exists on the Linux runners. What a mock logs and prints is unchanged, and test-status-cost no longer needs its dirname exception.
