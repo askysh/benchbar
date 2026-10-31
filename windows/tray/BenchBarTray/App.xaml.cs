@@ -495,30 +495,38 @@ public partial class App : Application, ITrayHost
     private ReportFlow ReportFlowInstance => _reportFlow ??= new ReportFlow(
         new BugReporter(new SystemProcessRunner(), () => ShimLocator.Find(), TrayOnlyReport.ForThisPc()), BuildReportSeams());
 
+    private ReportBusyWindow? _reportBusy;
+
     private ReportSeams BuildReportSeams() => new()
     {
         ShowBusy = () =>
         {
-            var window = new ReportBusyWindow(Theme, _main);
+            var window = _reportBusy = new ReportBusyWindow(Theme, VisibleMain);
             Awake(true);
             window.Show();
             return new Busy(() =>
             {
+                _reportBusy = null;
                 window.Dispose();
                 Awake(false);
             });
         },
-        Reveal = RevealInExplorer,
-        OpenUrl = OpenUrl,
+        Refocus = () => _reportBusy?.Activate(),
         ShowReady = outcome =>
         {
+            // not modal: a modal dialog blocks the other BenchBar windows, and the click that finds it open must be able to bring it forward
+            var dialog = new ReportReadyDialog(outcome, Theme, VisibleMain, CopyText, RevealInExplorer, OpenUrl);
             Awake(true);
-            try { new ReportReadyDialog(outcome, Theme, _main, CopyText, RevealInExplorer).ShowDialog(); }
-            finally { Awake(false); }
+            dialog.Closed += (_, _) => Awake(false);
+            dialog.Show();
+            return new ReadyHandle(() => dialog.IsVisible, dialog.BringToFront);
         },
         ShowFailure = text => MessageBox.Show(text, "BenchBar", MessageBoxButton.OK, MessageBoxImage.Warning),
         Log = _log.Write,
     };
+
+    /// <summary>The main window as an owner: only when it is on screen (a window that was never shown cannot own one).</summary>
+    private Window? VisibleMain => _main is { IsVisible: true } main ? main : null;
 
     private sealed class Busy(Action done) : IDisposable
     {

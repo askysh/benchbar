@@ -33,7 +33,7 @@ public static class BetaText
     public const string Pill = "Beta";
     public const string WindowTitle = "BenchBar (Beta)";
     public const string TooltipSuffix = " (Beta)";
-    public const string AboutText = "BenchBar for Windows is in beta. It works, and you may find rough edges. Report a Bug sends us a redacted report in about a minute.";
+    public const string AboutText = "BenchBar for Windows is in beta. It works, and you may find rough edges. Report a Bug writes a redacted report and opens a GitHub issue for it, in about a minute.";
     public const string Banner = "BenchBar for Windows is in beta. If something breaks or confuses you, tell us.";
     public const string WizardLine = "This is a beta. If a step fails, Report This Problem sends us what we need.";
     public const string ReportThisProblem = "Report This Problem";

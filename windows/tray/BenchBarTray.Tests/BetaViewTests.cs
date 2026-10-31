@@ -53,7 +53,7 @@ public class BetaViewTests
     public void TheAboutWindowHasThePillAndTheBetaText() => Sta.Run(() =>
     {
         var about = new AboutWindow(new AboutActions(), Theme);
-        Assert.Contains("BenchBar for Windows is in beta. It works, and you may find rough edges. Report a Bug sends us a redacted report in about a minute.", Texts(about));
+        Assert.Contains("BenchBar for Windows is in beta. It works, and you may find rough edges. Report a Bug writes a redacted report and opens a GitHub issue for it, in about a minute.", Texts(about));
         Assert.Contains(Walk(about).OfType<Border>(), b => AutomationProperties.GetName(b) == "Beta: BenchBar for Windows is in beta");
         AssertEveryControlIsNamed(about);
     });
@@ -337,6 +337,7 @@ public class ReportFlowTests
         var reporter = new FakeReporter();
         var busy = 0;
         var ready = new List<ReportOutcome>();
+        var refocused = 0;
         var flow = new ReportFlow(reporter, new ReportSeams
         {
             ShowBusy = () =>
@@ -344,13 +345,19 @@ public class ReportFlowTests
                 busy++;
                 return new Done(() => busy--);
             },
-            ShowReady = ready.Add,
+            Refocus = () => refocused++,
+            ShowReady = outcome =>
+            {
+                ready.Add(outcome);
+                return null;
+            },
         });
 
         var first = flow.RunAsync(Request());
         Assert.True(flow.IsRunning);
         Assert.Equal(1, busy);
-        Assert.False(await flow.RunAsync(Request())); // the second click does nothing
+        Assert.False(await flow.RunAsync(Request())); // the second click starts nothing, it brings the busy window forward
+        Assert.Equal(1, refocused);
         Assert.Single(reporter.Requests);
 
         reporter.Gate.SetResult(Outcome());
@@ -367,7 +374,7 @@ public class ReportFlowTests
     }
 
     [Fact]
-    public async Task WhenItIsDoneExplorerTheBrowserAndTheDialogFollowInThatOrder()
+    public async Task WhenItIsDoneOnlyTheDialogIsShownAndItOpensExplorerAndTheBrowser()
     {
         var reporter = new FakeReporter();
         reporter.Gate.SetResult(Outcome());
@@ -379,24 +386,54 @@ public class ReportFlowTests
                 steps.Add("busy on");
                 return new Done(() => steps.Add("busy off"));
             },
-            Reveal = zip => steps.Add("reveal " + zip),
-            OpenUrl = url => steps.Add("open " + url),
-            ShowReady = outcome => steps.Add("ready " + outcome.ZipPath),
+            ShowReady = outcome =>
+            {
+                steps.Add("ready " + outcome.ZipPath);
+                return null;
+            },
         });
         await flow.RunAsync(Request());
-        Assert.Equal(["busy on", "busy off", @"reveal C:\r\x.zip", "open https://github.com/askysh/benchbar/issues/new?template=bug_report_windows.yml", @"ready C:\r\x.zip"], steps);
+        // the flow opens nothing itself: Explorer and the browser opened first used to cover the dialog
+        Assert.Equal(["busy on", "busy off", @"ready C:\r\x.zip"], steps);
     }
 
     [Fact]
-    public async Task AReportThatCannotBeWrittenSaysSoAndOpensNothing()
+    public async Task AClickWhileTheDialogIsOpenBringsItForwardAndStartsNoSecondReport()
+    {
+        var reporter = new FakeReporter();
+        reporter.Gate.SetResult(Outcome());
+        var open = true;
+        var fronted = 0;
+        var flow = new ReportFlow(reporter, new ReportSeams { ShowReady = _ => new ReadyHandle(() => open, () => fronted++) });
+        Assert.True(await flow.RunAsync(Request()));
+        Assert.False(flow.IsRunning); // the dialog does not block the flow
+        Assert.False(await flow.RunAsync(Request()));
+        Assert.Equal(1, fronted);
+        Assert.Single(reporter.Requests);
+        open = false; // the dialog was closed: the next click writes a new report
+        Assert.True(await flow.RunAsync(Request()));
+        Assert.Equal(2, reporter.Requests.Count);
+        Assert.Equal(1, fronted);
+    }
+
+    [Fact]
+    public async Task AReportThatCannotBeWrittenSaysSoAndShowsNoDialog()
     {
         var reporter = new FakeReporter { Throws = new IOException("The disk is full.") };
         var shown = new List<string>();
-        var opened = new List<string>();
-        var flow = new ReportFlow(reporter, new ReportSeams { ShowFailure = shown.Add, OpenUrl = opened.Add, Reveal = opened.Add });
+        var ready = new List<ReportOutcome>();
+        var flow = new ReportFlow(reporter, new ReportSeams
+        {
+            ShowFailure = shown.Add,
+            ShowReady = o =>
+            {
+                ready.Add(o);
+                return null;
+            },
+        });
         await flow.RunAsync(Request());
         Assert.Equal(["The report could not be written: The disk is full."], shown);
-        Assert.Empty(opened);
+        Assert.Empty(ready);
         Assert.False(flow.IsRunning);
     }
 
@@ -414,16 +451,28 @@ public class ReportFlowTests
     }
 
     [Fact]
-    public void TheReadyDialogHasCopyPathAndOpenFolder() => Sta.Run(() =>
+    public void TheReadyDialogHasOpenIssueShowZipAndCopyPathAndOpensBothOnlyOnce() => Sta.Run(() =>
     {
         var copied = new List<string>();
         var revealed = new List<string>();
-        var dialog = new ReportReadyDialog(Outcome(), PageKit.Theme, null, copied.Add, revealed.Add);
+        var opened = new List<string>();
+        var dialog = new ReportReadyDialog(Outcome(), PageKit.Theme, null, copied.Add, revealed.Add, opened.Add);
         Assert.Contains(BugReportText.ReadyMessage, PageKit.Texts(dialog));
+        Assert.True(dialog.Topmost); // in front of the browser and Explorer until they have settled
         PageKit.Click(PageKit.ButtonNamed(dialog, "Copy the path of the report zip"));
-        PageKit.Click(PageKit.ButtonNamed(dialog, "Open the folder of the report zip"));
         Assert.Equal([@"C:\r\x.zip"], copied);
+        Assert.Empty(revealed); // nothing opens until the dialog is on screen
+        Assert.Empty(opened);
+
+        dialog.LaunchOnce();
+        dialog.LaunchOnce();
         Assert.Equal([@"C:\r\x.zip"], revealed);
+        Assert.Equal(["https://github.com/askysh/benchbar/issues/new?template=bug_report_windows.yml"], opened);
+
+        PageKit.Click(PageKit.ButtonNamed(dialog, "Show the report zip in Explorer"));
+        PageKit.Click(PageKit.ButtonNamed(dialog, "Open the GitHub issue"));
+        Assert.Equal(2, revealed.Count);
+        Assert.Equal(2, opened.Count);
         PageKit.AssertEveryControlIsNamed(dialog);
     });
 }
