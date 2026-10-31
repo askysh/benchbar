@@ -114,6 +114,28 @@ public class ControllerStateTests
     }
 
     [Fact]
+    public async Task AStartThatLeavesTheDistroStoppedSaysSo()
+    {
+        var distro = new FakeProbe { Running = false };
+        var (controller, host, _, time) = Make(options: new TrayOptions
+        {
+            ListenToSystemEvents = false,
+            DistroProbe = distro,
+            Distro = () => "BenchBarQA",
+        });
+        using (host.Owning(controller))
+        {
+            host.Ui(controller.Start);
+            await UntilAsync(() => host.Changes.Count > 0);
+            Assert.True(host.Ui(controller.StartDistro)); // the shim ran keepalive, but it was refused: the distro stays stopped
+            Assert.Empty(host.Notices);
+            time.Advance(TimeSpan.FromSeconds(31));
+            await UntilAsync(() => host.Notices.Count > 0);
+            Assert.Equal("BenchBarQA did not start. Open the log or try again.", host.Notices[0]);
+        }
+    }
+
+    [Fact]
     public async Task ARestartRunsRestartAndPollsAtOnce()
     {
         var (controller, host, source, _) = Make(BenchState.Running);

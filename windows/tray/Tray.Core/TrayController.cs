@@ -19,6 +19,9 @@ public interface ITrayHost
 
     /// <summary>Show one Windows notification. Called on the UI thread, only while notifications are on.</summary>
     void ShowToast(Toast toast);
+
+    /// <summary>Tell the person one thing now, whatever the notification setting (a Start that did not work). Called on the UI thread.</summary>
+    void ShowNotice(string text) { }
 }
 
 /// <summary>What the controller starts with. Everything has a default that works without a config file.</summary>
@@ -56,6 +59,8 @@ public sealed class TrayController : IDisposable
 {
     private readonly IBenchSource _source;
     private readonly ITrayHost _host;
+    private readonly TimeProvider _time;
+    private readonly Func<string?> _distroName;
     private readonly BenchPoller _poller;
     private readonly RunnerIcons _icons;
     private readonly FrameSequencer _sequencer;
@@ -81,6 +86,8 @@ public sealed class TrayController : IDisposable
         options ??= new TrayOptions();
         _source = source;
         _host = host;
+        _time = time;
+        _distroName = options.Distro ?? (() => DistroName.Resolve(null));
         _listenToSystemEvents = options.ListenToSystemEvents;
         _portCheck = options.PortCheck;
         _runners = options.Runners;
@@ -90,7 +97,7 @@ public sealed class TrayController : IDisposable
         _toasts = new ToastPolicy { Enabled = options.Notifications };
         _icons = new RunnerIcons(TrayMetrics.IconSide(TrayMetrics.TaskbarDpi()), _theme.TaskbarLight, _runners.Resolve(_runnerId));
         _sequencer = new FrameSequencer(clock, (pose, frame) => _host.SetIcon(_icons.Get(pose, frame)), _icons.FrameCount);
-        _poller = new BenchPoller(source, time, options.DistroProbe, options.Distro ?? (() => DistroName.Resolve(null)));
+        _poller = new BenchPoller(source, time, options.DistroProbe, _distroName);
         _poller.Updated += OnPolled;
     }
 
@@ -229,9 +236,39 @@ public sealed class TrayController : IDisposable
     public bool StartDistro()
     {
         var started = _source.StartDistro();
-        if (started) _poller.BoostFor(BenchPoller.ActionBoost, untilDistroUp: true);
-        else _poller.Kick();
+        if (started)
+        {
+            _poller.BoostFor(BenchPoller.ActionBoost, untilDistroUp: true);
+            CheckStartedAfterWaitAsync().Forget();
+        }
+        else
+        {
+            _poller.Kick();
+            _host.ShowNotice(StartFailedText(_snapshot.Distro ?? _distroName()));
+        }
         return started;
+    }
+
+    /// <summary>How long Start waits before it checks that the distro is up. The keepalive can refuse (another one holds the mutex) and then nothing starts.</summary>
+    public TimeSpan StartCheckAfter { get; set; } = TimeSpan.FromSeconds(30);
+
+    public static string StartFailedText(string? distro) => $"{distro ?? "The distro"} did not start. Open the log or try again.";
+
+    private async Task CheckStartedAfterWaitAsync()
+    {
+        try
+        {
+            await Task.Delay(StartCheckAfter, _time, _cts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        _host.Post(() =>
+        {
+            if (_disposed || !_snapshot.DistroStopped) return;
+            _host.ShowNotice(StartFailedText(_snapshot.Distro ?? _distroName()));
+        });
     }
 
     public void OpenSite(BenchStatus bench)

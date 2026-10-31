@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Threading;
 using BenchBar.Tray.Core;
 
@@ -94,6 +95,11 @@ internal sealed partial class WizardView : UserControl
         var footer = Ui.Link(BetaText.ReportABug, () => _actions.ReportBug("Setup wizard footer", null), "Report a Bug");
         footer.Margin = new Thickness(36, 0, 40, 16);
         Grid.SetRow(footer, 3);
+        // tab order: the page content, then its buttons, then the Report a Bug link last
+        KeyboardNavigation.SetTabIndex(header, 0);
+        KeyboardNavigation.SetTabIndex(scroll, 1);
+        KeyboardNavigation.SetTabIndex(bar, 2);
+        KeyboardNavigation.SetTabIndex(footer, 3);
         root.Children.Add(header);
         root.Children.Add(scroll);
         root.Children.Add(bar);
@@ -149,10 +155,24 @@ internal sealed partial class WizardView : UserControl
         foreach (var b in page.Left) _left.Children.Add(b);
         foreach (var b in page.Right) _right.Children.Add(b);
         page.Refresh();
+        // a page with no chosen control starts on its first control, so the first Tab goes on through the page and not to the footer link
         var focus = page.Focus is { Visibility: Visibility.Visible, IsEnabled: true } wanted
             ? wanted
-            : page.Right.FirstOrDefault(b => b.IsEnabled && b.Visibility == Visibility.Visible) as Control;
+            : (_model.Page == WizardPage.Check ? FirstControl(page.Content) : null)
+                ?? page.Right.FirstOrDefault(b => b.IsEnabled && b.Visibility == Visibility.Visible) as Control;
         if (focus is not null) Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => focus.Focus());
+    }
+
+    private static Control? FirstControl(UIElement content) =>
+        LogicalWalk(content).OfType<Control>().FirstOrDefault(c => c is Button or TextBox or PasswordBox or CheckBox && c is { IsEnabled: true, Visibility: Visibility.Visible, IsTabStop: true });
+
+    private static IEnumerable<DependencyObject> LogicalWalk(DependencyObject root)
+    {
+        yield return root;
+        foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+        {
+            foreach (var d in LogicalWalk(child)) yield return d;
+        }
     }
 
     private void SetHeading(string title, string subtitle)

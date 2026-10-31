@@ -6,6 +6,8 @@ namespace Tray.Core.Tests;
 /// <summary>The 0.8.1 live recheck: stopped messages, distro changes behind the wizard, advice buttons, plan fixes and blockers.</summary>
 public class Fixes0813Tests
 {
+    private static readonly TimeSpan Timeout10 = TimeSpan.FromSeconds(10);
+
     private static SetupFixture Fixture(string check = "check.json")
     {
         var fixture = new SetupFixture();
@@ -31,12 +33,14 @@ public class Fixes0813Tests
         var holding = new HoldingSetup(fixture.Service);
         var model = new WizardModel(holding, new FakeWizardHost());
         await model.ChooseNewBench();
-        var run = model.RunStepAsync(SetupIds.Cli);
-        await holding.Started.Task;
+        // check-fresh.json has the distro step (action distro_install) and no cli step; the step must exist or the action never starts
+        Assert.NotNull(model.Report.Step(SetupIds.Distro)?.Action);
+        var run = model.RunStepAsync(SetupIds.Distro);
+        await holding.Started.Task.WaitAsync(Timeout10, TestContext.Current.CancellationToken);
         model.CancelRun();
-        await run;
-        Assert.Equal("Stopped. Click the button to try again.", model.StepMessages[SetupIds.Cli]);
-        Assert.DoesNotContain("Windows prompt", model.StepMessages[SetupIds.Cli]);
+        await run.WaitAsync(Timeout10, TestContext.Current.CancellationToken);
+        Assert.Equal("Stopped. Click the button to try again.", model.StepMessages[SetupIds.Distro]);
+        Assert.DoesNotContain("Windows prompt", model.StepMessages[SetupIds.Distro]);
     }
 
     [Fact]
