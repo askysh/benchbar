@@ -434,7 +434,7 @@ install_cli() {
       run git clone --quiet --branch "$PIN" "$BENCHBAR_REPO" "$BENCHBAR_HOME" || die "could not clone ${PIN} from ${BENCHBAR_REPO}" "check the network and that the release exists"
       [[ "$DRY" == "1" ]] || ok "CLI ${PIN} cloned into ${BENCHBAR_HOME}"
     else
-      run git clone --quiet "$BENCHBAR_REPO" "$BENCHBAR_HOME"
+      run git clone --quiet "$BENCHBAR_REPO" "$BENCHBAR_HOME" || die "could not clone ${BENCHBAR_REPO}" "check the network, then run this again"
       [[ "$DRY" == "1" ]] || ok "CLI cloned into ${BENCHBAR_HOME}"
     fi
     CHANGED=1

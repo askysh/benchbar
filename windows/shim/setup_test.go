@@ -1300,7 +1300,7 @@ func TestSetupRunCLIInstall(t *testing.T) {
 	if !found {
 		t.Error("installer output not streamed as log events")
 	}
-	want := `-d Ubuntu-24.04 --cd ~ --exec /bin/bash -c export BENCHBAR_NONINTERACTIVE=1; curl -fsSL ` + installerURL() + ` | bash`
+	want := `-d Ubuntu-24.04 --cd ~ --exec /bin/bash -c set -o pipefail; export BENCHBAR_NONINTERACTIVE=1; curl -fsSL ` + installerURL() + ` | bash`
 	if got := e.starts()[1].Args; strings.Join(got, " ") != want {
 		t.Errorf("installer call %q", strings.Join(got, " "))
 	}
@@ -1674,5 +1674,19 @@ func TestSetupRunWslEnableNoSecondPromptWhileARestartIsPending(t *testing.T) {
 	d := lastEvent(jsonLines(t, e.stdout()))
 	if code != 0 || !d.RebootRequired || len(el.calls) != 1 {
 		t.Errorf("code %d %+v, prompts %d", code, d, len(el.calls))
+	}
+}
+
+func TestSetupRunCLIInstallReportsAFailedDownload(t *testing.T) {
+	e := newEnv(t)
+	e.readyEnv()
+	e.script(
+		rule("--cd ~ --exec /bin/sh", 0, probeOut("alice", "1000", "systemd", "no", setupGoodConf, "", "")),
+		rule("/bin/bash -c", 22, "curl: (22) The requested URL returned error: 404\n"),
+	)
+	e.run("setup", "run", "cli_install", "--jsonl")
+	out := e.stdout()
+	if !strings.Contains(out, "exit code 22") || !strings.Contains(out, "404") {
+		t.Errorf("the download failure is not named:\n%s", out)
 	}
 }

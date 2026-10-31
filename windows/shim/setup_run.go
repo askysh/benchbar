@@ -756,7 +756,8 @@ func actCLIInstall(rc *runCtx) error {
 	if t.cli != "benchbar" {
 		return errors.New(missingCLIFix(t))
 	}
-	script := "export BENCHBAR_NONINTERACTIVE=1; " + installerPipe()
+	// pipefail: a failed download (curl exit 22 on a 404) is the exit code, not bash's 0
+	script := "set -o pipefail; export BENCHBAR_NONINTERACTIVE=1; " + installerPipe()
 	code, lines, err := rc.stream("", "-d", rc.distro, "--cd", "~", "--exec", "/bin/bash", "-c", script)
 	if err != nil {
 		return fmt.Errorf("cannot run wsl.exe: %v", err)
