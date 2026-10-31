@@ -14,6 +14,7 @@
 #                           test-agent-contracts, and every test that names
 #                           a function whose definition the change touched
 #   lib/frappe-local/mcp.py test-mcp, test-cli, test-agent-contracts
+#   A test split into parts (test-X.sh, test-X-2.sh, ...) is picked whole.
 #   tests/test-X.sh         itself
 #   install.sh              test-install-sh
 #   packaging/              test-packaging, test-homebrew
@@ -32,7 +33,7 @@ while [[ "$#" -gt 0 ]]; do
     --base=*) base="${1#*=}"; shift ;;
     --all) all=1; shift ;;
     --list) list=1; shift ;;
-    -h|--help) sed -n '3,21p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '3,22p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) printf 'affected: unknown argument %s (see --help)\n' "$1" >&2; exit 1 ;;
   esac
 done
@@ -56,6 +57,14 @@ files="$( {
 # picked NAME: add a test (or shellcheck) once, in order
 picked=" "
 pick() { case "$picked" in *" $1 "*) ;; *) picked="${picked}$1 " ;; esac; }
+# pick_parts NAME: NAME when it exists, then its parts NAME-2, NAME-3, ...
+pick_parts() {
+  local f
+  for f in "tests/$1.sh" "tests/$1"-[0-9]*.sh; do
+    [[ -f "$f" ]] && pick "$(t="${f##*/}"; printf '%s' "${t%.sh}")"
+  done
+  return 0
+}
 
 full=0 shell=0 lib=0 funcs=""
 while IFS= read -r f; do
@@ -67,8 +76,8 @@ while IFS= read -r f; do
     lib/frappe-local/*.sh)
       lib=1 shell=1
       t="${f##*/}"; t="test-${t%.sh}"
-      [[ -f "tests/${t}.sh" ]] && pick "$t" ;;
-    lib/frappe-local/mcp.py) lib=1; pick test-mcp ;;
+      pick_parts "$t" ;;
+    lib/frappe-local/mcp.py) lib=1; pick_parts test-mcp ;;
     install.sh) pick test-install-sh; shell=1 ;;
     packaging/*) pick test-packaging; pick test-homebrew ;;
     scripts/*.sh) shell=1 ;;
@@ -100,7 +109,7 @@ if [[ "$lib" == 1 ]]; then
     done
   done
   pick test-cli
-  pick test-agent-contracts
+  pick_parts test-agent-contracts
 fi
 [[ "$shell" == 1 ]] && pick shellcheck
 
