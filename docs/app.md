@@ -71,7 +71,8 @@ The footer of the sidebar has three buttons:
 
 - **Add Bench** is a menu with **New Bench…**, **Adopt Existing
   Bench…** and **Find Benches…**.
-- The gear opens **Settings** (⌘,).
+- The gear is a menu with **General** and **Menu Bar** (⌘, opens
+  General).
 - The **i** opens **About BenchBar**.
 
 On a Mac with no bench the window opens on the [first run
@@ -121,9 +122,10 @@ change runs. Drop Site is never on Return: it needs the site name typed.
 
 ![A bench's health: doctor's warnings with their fixes, Run Doctor and Repair](images/window-health.png)
 
-**Settings** (⌘,) and **About BenchBar** (the app menu, or the sidebar
-footer) are windows of their own. Settings can be resized, from 480 by
-400 points, and remembers its size.
+**General**, **Menu Bar** and **About BenchBar** are panes of the same
+window, reached from the footer of the sidebar. **Settings…** (⌘,) in the
+app menu opens the window on General, and **About BenchBar** opens it on
+About.
 
 - **General**: open at login, notifications, which `benchbar` the app
   runs (Automatic, or a path you choose), the editor for **Open in VS

@@ -23,6 +23,14 @@ All notable changes to this project are documented here.
 - `site list --json` and `status --json` give each site `developer_mode`,
   `open_as_enabled` and `open_as`.
 
+### Fixed
+
+- General, Menu Bar and About are panes of the BenchBar window again.
+  0.8.0 gave them windows of their own, and from Settings there was no
+  way back to the BenchBar window. The gear in the sidebar footer lists
+  General and Menu Bar, the **i** opens About, and Settings… (⌘,) opens
+  the window on General.
+
 ## 0.8.0 - 2026-10-30
 
 ### Agents and recovery
