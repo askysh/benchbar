@@ -197,6 +197,26 @@ fi
 run_fm report --json --print --bench-dir "$BENCH"
 assert_eq "1" "$CODE"; assert_contains "$OUT" "not both"
 
+# ---- no zip program and no bench (a fresh distro with only the CLI, the Windows tray's Report a Bug):
+# --json still writes the zip, through Python's zipfile
+NOZIP="$TMP_DIR/nozip-bin"; mkdir -p "$NOZIP"
+IFS=: read -r -a path_dirs <<<"$PATH"
+for d in "${path_dirs[@]}"; do
+  [[ -d "$d" ]] || continue
+  for f in "$d"/*; do [[ -x "$f" && ! -d "$f" && "${f##*/}" != "zip" && ! -e "$NOZIP/${f##*/}" ]] && ln -s "$f" "$NOZIP/${f##*/}"; done
+done
+NZOUT="$TMP_DIR/nozip-out"
+set +e
+nz_line="$(PATH="$NOZIP" "$FM" report --json --bench-dir "$HOME/nothing-here" --out "$NZOUT" 2>"$TMP_DIR/nozip.err")"
+code=$?
+set -e
+assert_eq "0" "$code" "$(cat "$TMP_DIR/nozip.err")"
+nz_zip="$(printf '%s' "$nz_line" | python3 -c 'import json,sys; print(json.load(sys.stdin)["zip"])')"
+assert_file "$nz_zip"
+nz_names="$(python3 -c 'import sys,zipfile; print("\n".join(zipfile.ZipFile(sys.argv[1]).namelist()))' "$nz_zip")"
+assert_contains "$nz_names" "versions.txt" "(the zip made without the zip program)"
+assert_contains "$nz_names" "doctor.json"
+
 run_fm report --bench-dir "$BENCH" --bogus
 assert_eq "1" "$CODE"
 assert_contains "$OUT" "Unknown report option"
