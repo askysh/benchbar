@@ -32,7 +32,7 @@ if [[ -n "${BENCHBAR_SUDO_PASSWORD:+x}" ]]; then
   exec "$BASH" "${BASH_SOURCE[0]}" "$@"
 fi
 
-FL_VERSION="0.8.0"
+FL_VERSION="0.8.1"
 
 # Resolve the real script location even when invoked through a symlink
 # (for example ~/.local/bin/frappe-mac).

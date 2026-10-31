@@ -2,7 +2,26 @@
 
 All notable changes to this project are documented here.
 
-## Unreleased
+## 0.8.1 - 2026-10-31
+
+BenchBar for Windows is now a beta. The tray takes a new PC from no WSL to
+a running bench, and manages benches from its own window, as the Mac app
+does. Report a Bug sends a redacted report in about a minute.
+
+### Windows beta
+
+- The window title, a Beta pill and a banner that you can dismiss say that
+  Windows is a beta. The banner has Report a Bug.
+- Report a Bug is in the tray menu, About, the beta banner and the footer
+  of every wizard page, and Report This Problem is next to each failure.
+  It writes a zip to `%LOCALAPPDATA%\BenchBar\reports`, selects it in
+  Explorer and opens a GitHub issue with the versions, the Windows build
+  and the distro filled in. It works before WSL or Ubuntu is installed and
+  while the distro is stopped, and never starts the distro. User names and
+  home paths are replaced with `<user>`.
+- `benchbar.exe report-windows --json` writes that zip from the command
+  line.
+- New issue form for Windows bugs.
 
 ### Windows
 
@@ -67,6 +86,36 @@ All notable changes to this project are documented here.
   `/etc/hosts` command as a next action for a name that does not.
 - A command that needs `--yes` and runs without a terminal says so in the
   error of its JSON output.
+
+### Fixed
+
+- Turning on WSL asks Windows to elevate only `System32\wsl.exe`, never
+  `benchbar.exe` from a folder that the user can write to. Only one
+  elevation runs at a time. If you stop waiting, the install keeps running
+  in Windows and the wizard asks for a restart.
+- The wizard no longer stops for ever on Install or a bench page on
+  Loading when Windows blocks `benchbar.exe`. It says to allow it in
+  SmartScreen or the antivirus.
+- Check Your PC: linger, keepalive, `.wslconfig` and PATH are advice and
+  never block Continue (`blocking` in `setup check`). Each row without a
+  button shows its fix command with Copy. A running step has Cancel.
+- Setting up systemd or the Linux user no longer stops a running distro
+  without asking: `setup run` refuses with `error_id` `distro_running`
+  until you confirm (`--force`).
+- A restart that the Ubuntu install needs keeps Restart Now on screen.
+  Restart Now comes back if Windows did not restart.
+- The wizard, install, adopt and Report a Bug all use the same distro.
+- The plan review sheet always has Stop Waiting.
+- Esc no longer clears typed passwords. Keyboard focus stays on the
+  control you used, and screen readers hear status changes.
+- The wizard opens by itself only on a PC that needs setup, not for a
+  returning user whose first check failed.
+- `benchbar report` works without `zip` installed and without a bench.
+- The sudo password of `BENCHBAR_SUDO=env` is no longer in
+  `/proc/PID/environ` of the running command, and every command forgets it
+  after its sudo steps. Repair runs its sudo steps first.
+- `doctor --prerequisites` on Linux warns, not fails, when the user is not
+  in the `sudo` group.
 
 ## 0.8.0 - 2026-10-30
 
