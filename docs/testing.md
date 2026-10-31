@@ -203,17 +203,28 @@ service of one bench. For a Homebrew install, see
 ## Running the test suite (contributors)
 
 ```bash
+tests/affected.sh                    # only the tests your change touches (from origin/main; --base REF, --all)
 tests/run-tests.sh                   # every test, as many at a time as you have CPUs
 PARALLEL=1 tests/run-tests.sh        # one after another
 tests/run-tests.sh test-doctor       # only the named tests
-SHARD=2/3 tests/run-tests.sh         # the second third, as a CI shard does
+SHARD=2/4 tests/run-tests.sh         # the second of four shards, as CI runs them
+LIST_ONLY=1 SHARD=2/4 tests/run-tests.sh   # which tests that shard holds, without running them
 ```
+
+`tests/affected.sh` maps the changed files to tests: a file in
+`lib/frappe-local/` picks its own test files, every test that names a
+function it changed, `test-cli` and `test-agent-contracts`; a change to
+the harness, the mocks, `benchbar`, `templates/` or the phase scripts
+runs everything, and docs alone run nothing. Run the whole suite before
+you hand work back.
 
 Each test's output is printed whole when it finishes, in list order, and
 a failing test does not stop the others: the run lists every failure at
 the end and exits 1. `TEST_TIMEOUT` (default 600 seconds) kills a hung
 test and prints its process tree. A new `tests/test-*.sh` must be added
-to the list in `tests/run-tests.sh`, or the run fails.
+to the list in `tests/run-tests.sh`, or the run fails; give it a time in
+`TEST_SECS` there too, since shards are filled heaviest first from those
+times (a test without one counts as 10 seconds).
 
 The app and its Swift tests build with `scripts/macos-build.sh --test`.
 
@@ -221,5 +232,7 @@ Issues and pull requests are welcome. For a bug, attach the zip from
 `benchbar report`; it contains no secrets, paths or names. Shell code
 targets macOS `/bin/bash` 3.2 with no dependencies beyond the ones the
 installer needs, passes shellcheck, and every command stays idempotent:
-a second run changes nothing and says so. CI runs the suite on macOS,
-builds the app, and uploads an unsigned bundle for every pull request.
+a second run changes nothing and says so. CI runs the suite in 8 Linux
+shards, 4 shards under bash 3.2.57 in a container (the bash of macOS) and
+4 macOS shards, builds the app, and uploads an unsigned bundle for every
+pull request.

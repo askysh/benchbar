@@ -37,7 +37,7 @@ test builds its own `HOME` and mock state. `tests/run-tests.sh test-doctor`
 runs one file. [docs/testing.md](docs/testing.md) is the guide for
 trying a build on a real Mac.
 
-CI runs the suite on macOS and on Linux, installs a real bench on Ubuntu
+CI runs the suite on macOS, on Linux and under bash 3.2 in a container, installs a real bench on Ubuntu
 under `systemd --user`, builds the app, builds and tests the Windows shim
 and tray, and uploads an unsigned bundle for every pull request.
 
