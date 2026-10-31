@@ -5,13 +5,13 @@ package main
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
-	"golang.org/x/sys/windows/registry"
 )
 
 type winHost struct{}
@@ -53,27 +53,6 @@ func (winHost) BootTime() (time.Time, error) {
 	}
 	ms, _, _ := procGetTickCount64.Call()
 	return time.Now().Add(-time.Duration(ms) * time.Millisecond), nil
-}
-
-// RebootPending looks at the two flags Windows sets when an installed
-// component or update waits for a restart.
-func (winHost) RebootPending() (bool, error) {
-	keys := []string{
-		`SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending`,
-		`SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired`,
-	}
-	var firstErr error
-	for _, k := range keys {
-		key, err := registry.OpenKey(registry.LOCAL_MACHINE, k, registry.QUERY_VALUE)
-		if err == nil {
-			key.Close()
-			return true, nil
-		}
-		if !errors.Is(err, registry.ErrNotExist) && firstErr == nil {
-			firstErr = err
-		}
-	}
-	return false, firstErr
 }
 
 func (winHost) IsAdmin() bool { return windows.GetCurrentProcessToken().IsElevated() }
@@ -131,9 +110,14 @@ func (winElevator) Start(exe string, args []string) (ElevatedProc, error) {
 	if err != nil {
 		return nil, err
 	}
+	// the working folder is the program's own, not wherever the caller is
+	dir, err := windows.UTF16PtrFromString(filepath.Dir(exe))
+	if err != nil {
+		return nil, err
+	}
 	info := shellExecuteInfo{
 		Mask: seeMaskNoCloseProcess | seeMaskNoAsync,
-		Verb: verb, File: file, Parameters: params, Show: swHide,
+		Verb: verb, File: file, Parameters: params, Directory: dir, Show: swHide,
 	}
 	info.Size = uint32(unsafe.Sizeof(info))
 	if err := procShellExecuteExW.Find(); err != nil {

@@ -44,11 +44,15 @@ user's sudo password. The `/etc/wsl.conf` backup is named
 `wsl.conf.benchbar-backup-<time>-<pid>`, with `-N` added when the name exists;
 an earlier backup is never overwritten.
 
-Only `wsl_enable` needs administrator rights. The shim starts itself with the
-`runas` verb as `benchbar.exe setup elevated wsl_enable --result FILE`. That
-child accepts nothing else: one allow listed action, a result file named
-`run-<16 hex>.jsonl` in `%LOCALAPPDATA%\BenchBar\setup`, no free text, and it
-runs `System32\wsl.exe` only. A declined prompt ends with `cancelled: true`.
+Only `wsl_enable` needs administrator rights. The UAC prompt elevates
+`System32\wsl.exe --install --no-distribution` itself (found with
+`GetSystemDirectory`), never `benchbar.exe`, because the per user install
+folder is writable by the user. The elevated window is hidden, so the `done`
+event comes from the exit code (3010 and 1641 mean restart) and from
+`wsl.exe --status` afterwards. A declined prompt ends with `cancelled: true`.
+A second `wsl_enable` while one runs fails at once. If the caller is stopped
+while the install runs, the shim reports that the install keeps running in
+Windows, asks for a restart and writes the restart marker; it is not a failure.
 The shim never runs `wsl.exe --unregister` or `--shutdown`. `systemd` and
 `distro_user` stop the one distro with `wsl.exe --terminate NAME`.
 

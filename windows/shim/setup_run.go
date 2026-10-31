@@ -136,7 +136,6 @@ type runCtx struct {
 	em     *emitter
 	distro string
 	user   string
-	child  bool // the elevated half of wsl_enable
 
 	// results
 	msg         string // the finishing message
@@ -233,11 +232,14 @@ func runAction(rc *runCtx, id string) int {
 		next = []string{"wsl_update"}
 		if rc.reboot {
 			next = []string{"reboot"}
-			if !rc.child {
-				if werr := writeRebootMarker(rc.sys); werr != nil {
-					rc.warn("could not remember that a restart is pending: " + werr.Error())
-				}
-			}
+		}
+	}
+	if id == "distro_install" && err == nil && rc.reboot {
+		next = []string{"reboot"}
+	}
+	if rc.reboot && err == nil && (id == "wsl_enable" || id == "distro_install") {
+		if werr := writeRebootMarker(rc.sys, id); werr != nil {
+			rc.warn("could not remember that a restart is pending: " + werr.Error())
 		}
 	}
 	rc.em.done(doneEvent{Exit: exit, Changed: rc.changed && err == nil, RebootRequired: rc.reboot && err == nil,
@@ -343,6 +345,15 @@ func actWslEnable(rc *runCtx) error {
 	if err != nil {
 		return fmt.Errorf("cannot run wsl.exe: %v", err)
 	}
+	return rc.wslEnableResult(code, lines)
+}
+
+// wslEnableResult reads the outcome of `wsl.exe --install --no-distribution`:
+// its exit code, the lines it printed (none when it ran elevated and hidden)
+// and, when both are silent about a restart, whether WSL answers now. The
+// generic Windows Update and CBS restart flags are not used: an unrelated
+// update would block onboarding.
+func (rc *runCtx) wslEnableResult(code int, lines []string) error {
 	reboot := rebootCode(code)
 	if code != 0 && !reboot {
 		msg := fmt.Sprintf("wsl.exe --install --no-distribution failed with exit code %d", code)
@@ -362,8 +373,6 @@ func actWslEnable(rc *runCtx) error {
 		if res, err := wslExec(rc.sys, "", "--status"); err != nil || res.Code != 0 {
 			reboot = true
 			rc.warn("WSL does not answer yet, so Windows probably needs a restart")
-		} else if pending, _ := rc.sys.Host.RebootPending(); pending {
-			reboot = true
 		}
 	}
 	if reboot {

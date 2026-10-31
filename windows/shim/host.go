@@ -15,9 +15,6 @@ type HostInfo interface {
 	VirtualizationEnabled() (bool, error)
 	// BootTime is when Windows last started.
 	BootTime() (time.Time, error)
-	// RebootPending is true when Windows itself says a restart is pending
-	// (Component Based Servicing or Windows Update flags).
-	RebootPending() (bool, error)
 	// IsAdmin is true when this process runs elevated.
 	IsAdmin() bool
 }
@@ -26,7 +23,8 @@ type HostInfo interface {
 // the UAC prompt with No (ERROR_CANCELLED, 1223).
 var ErrElevationDeclined = errors.New("the Windows permission prompt was declined")
 
-// Elevator starts a program through the UAC prompt.
+// Elevator starts a program through the UAC prompt. The shim only ever
+// passes the system folder's wsl.exe.
 type Elevator interface {
 	Start(exe string, args []string) (ElevatedProc, error)
 }

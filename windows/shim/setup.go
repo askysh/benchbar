@@ -18,8 +18,6 @@ import (
 //
 //	benchbar.exe setup check --json [--probe] [--distro NAME]
 //	benchbar.exe setup run ACTION [--distro NAME] [--user NAME] --jsonl
-//
-// `setup elevated` is internal: the elevated half of wsl_enable.
 
 const (
 	defaultSetupDistro = "Ubuntu-24.04"
@@ -33,9 +31,8 @@ var (
 	userNameRE   = regexp.MustCompile(`^[a-z_][a-z0-9_-]{0,31}$`)
 )
 
-// cmdSetup handles `setup check`, `setup run` and the internal `setup
-// elevated`. Any other word after setup goes to the CLI, which may have its
-// own setup command.
+// cmdSetup handles `setup check` and `setup run`. Any other word after
+// setup goes to the CLI, which may have its own setup command.
 func cmdSetup(sys *System, args []string) int {
 	if len(args) == 0 {
 		return cmdForward(sys, append([]string{"setup"}, args...))
@@ -45,8 +42,6 @@ func cmdSetup(sys *System, args []string) int {
 		return cmdSetupCheck(sys, args[1:])
 	case "run":
 		return cmdSetupRun(sys, args[1:])
-	case "elevated":
-		return cmdSetupElevated(sys, args[1:])
 	}
 	return cmdForward(sys, append([]string{"setup"}, args...))
 }
@@ -512,12 +507,12 @@ func rebootMarkerPath(sys *System) string {
 	return ""
 }
 
-func writeRebootMarker(sys *System) error {
+func writeRebootMarker(sys *System, reason string) error {
 	path := rebootMarkerPath(sys)
 	if path == "" {
 		return errors.New("LOCALAPPDATA is not set")
 	}
-	data, _ := json.Marshal(rebootMarker{RecordedAt: sys.Now().UTC().Format(time.RFC3339), Reason: "wsl_enable"})
+	data, _ := json.Marshal(rebootMarker{RecordedAt: sys.Now().UTC().Format(time.RFC3339), Reason: reason})
 	return writeFileAtomic(path, append(data, '\n'))
 }
 
