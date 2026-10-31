@@ -170,12 +170,19 @@ once up front and not at all on a second run. Each bench runs as its own
 `systemd --user` unit, and `loginctl enable-linger` brings a running
 bench back after a reboot. The default site is `linuxdev.localhost`, and
 benchbar never edits `/etc/hosts` there. The `bench*` helpers go to
-`~/.bashrc`. `benchbar doctor --prerequisites` on Linux checks free
-disk, the bench folder and the default ports.
+`~/.bashrc`. `benchbar doctor --prerequisites` on Linux checks, without a bench and
+without sudo: the distro (Ubuntu 24.04 is tested, others warn), the CPU
+(x86_64 is needed for the PDF package), that you are not root, sudo (your
+user is in the sudo group), apt, systemd, linger, memory, free disk, the
+bench folder, the default ports and the MariaDB root password state. Each
+check that is not ok names its fix.
+
+After the install, run `source ~/.bashrc` (or open a new terminal), then
+`benchup`. The helpers are in `~/.bashrc`, not in `~/.zshrc`.
 
 ## Windows
 
-A preview. The benches run inside WSL 2 with the Linux install above.
+A beta. The benches run inside WSL 2, with the same CLI as on Linux.
 In PowerShell, as yourself, without administrator rights:
 
 ```powershell
@@ -186,8 +193,13 @@ This installs `benchbar.exe`, which forwards every command to the
 distro, and BenchBar Tray, the notification area app. It checks the zip
 against its SHA256, puts the folder on your PATH and ends with `benchbar.exe
 doctor`. Run it again to update. The programs are unsigned until the
-signing application is approved. [Windows](windows.md) has the
-requirements, the flags, the tray and the signing policy.
+signing application is approved.
+
+When the tray starts and finds no bench, its
+[first run wizard](windows.md#first-run) checks the PC and sets up WSL,
+the Linux distro, the bench and the keepalive. [Windows](windows.md) has
+the requirements, the flags, the tray, Report a Bug, uninstall and the
+signing policy.
 
 ## Updating
 
