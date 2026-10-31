@@ -165,6 +165,7 @@ internal sealed class MainWindow : Window
     public string ReportWhere =>
         Mode == MainMode.Wizard ? (_wizard is null ? "Main window, setup wizard" : ReportContext.Wizard(_wizard.Model.Page, _wizard.Model.Flow, _wizard.Model.BusyStepId))
         : _snapshot.Problem is not null ? "Main window, problem card"
+        : _snapshot.DistroMissing ? "Main window, distro not installed card"
         : _snapshot.DistroStopped ? "Main window, distro stopped card"
         : _tool != SidebarTool.None ? "Main window, " + SidebarTools.Title(_tool)
         : _snapshot.Benches.Count == 0 ? "Main window, no benches yet"
@@ -179,6 +180,7 @@ internal sealed class MainWindow : Window
     {
         var head = new DockPanel { Margin = new Thickness(16, 16, 12, 8) };
         var add = Ui.Button("+", () => { }, "Add a bench", minWidth: 36);
+        add.ToolTip = "Add a Bench";
         add.Margin = new Thickness(0);
         add.Padding = new Thickness(8, 2, 8, 2);
         add.FontSize = 16;
@@ -188,7 +190,7 @@ internal sealed class MainWindow : Window
         var existing = new MenuItem { Header = "I Already Have a Bench..." };
         existing.Click += (_, _) => _actions.ExistingBench();
         Ui.Name(fresh, "New Bench");
-        Ui.Name(existing, "I already have a bench");
+        Ui.Name(existing, "I Already Have a Bench");
         menu.Items.Add(fresh);
         menu.Items.Add(existing);
         add.ContextMenu = menu;
@@ -386,7 +388,10 @@ internal sealed class MainWindow : Window
         else if (_snapshot.DistroStopped)
         {
             var distro = _snapshot.Distro ?? "The WSL distro";
-            SetContent("stopped|" + distro, () => CardPage($"{distro} is stopped", FlyoutView.DistroHint, "Start", _actions.StartDistro));
+            if (_snapshot.DistroMissing)
+                SetContent("missing|" + distro, () => CardPage($"{distro} is not installed", FlyoutView.MissingDistroHint, "Open Settings", _actions.ShowSettings, "Set Up BenchBar", _actions.NewBench));
+            else
+                SetContent("stopped|" + distro, () => CardPage($"{distro} is stopped", FlyoutView.DistroHint, "Start", _actions.StartDistro));
         }
         else if (_tool != SidebarTool.None)
         {

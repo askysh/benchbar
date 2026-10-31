@@ -13,6 +13,9 @@ public interface ISettingsHost
 
     /// <summary>The path of the running benchbar.exe, or null.</summary>
     string? ShimPath { get; }
+
+    /// <summary>The distro BenchBar uses changed: poll now instead of waiting out the back off.</summary>
+    void DistroSwitched() { }
 }
 
 /// <summary>
@@ -138,6 +141,7 @@ public sealed class SettingsModel(TrayConfig config, ISettingsHost host, ISetupS
         {
             var result = await setup.UseDistroAsync(name, ct).ConfigureAwait(true);
             DistroMessage = result.Ok ? null : result.Message;
+            if (result.Ok) host.DistroSwitched();
         }
         catch (SourceProblemException ex)
         {

@@ -121,7 +121,7 @@ public partial class App
         StartDistro = () => _controller!.StartDistro(),
         ShowSettings = ShowSettings,
         ShowAbout = ShowAbout,
-        NewBench = () => OpenWizard(resume: false),
+        NewBench = () => OpenWizard(resume: false, newBench: true), // asked for by name: no Welcome page to click through
         ExistingBench = () => OpenWizard(resume: false, existing: true),
         CopyText = CopyText,
         OpenUrl = OpenUrl,
@@ -170,7 +170,7 @@ public partial class App
 
     // --- the first run wizard ---
 
-    private void OpenWizard(bool resume, bool existing = false)
+    private void OpenWizard(bool resume, bool existing = false, bool newBench = false)
     {
         ResumeGate.Opening(resume);
         if (_quitting || _controller is null || _setup is null) return;
@@ -193,6 +193,7 @@ public partial class App
         _main.ShowWizard(new WizardView(model, BuildWizardActions()));
         if (resume) model.ResumeAtCheck().Forget();
         else if (existing) model.ChooseExistingBench().Forget();
+        else if (newBench) model.ChooseNewBench().Forget();
     }
 
     private void CloseWizard(WizardModel model, WizardClose reason)
@@ -216,8 +217,8 @@ public partial class App
 
     private WizardActions BuildWizardActions() => new()
     {
-        ConfirmRestart = () => MessageBox.Show(_main, "Restart Windows now? Save your work in other programs first.\n\nBenchBar opens again after you sign in and carries on with the setup.",
-            "BenchBar", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) == MessageBoxResult.Yes,
+        ConfirmRestart = () => ConfirmDialog.Ask("Restart Windows", "Windows restarts in 15 seconds. Save your work first.\n\nBenchBar opens again after you sign in and carries on with the setup.",
+            "Restart Now", Theme, _main),
         OpenLog = OpenInstallLog,
         ReportBug = (entry, problem) => ReportBugAsync(entry, problem).Forget(),
     };
@@ -358,6 +359,8 @@ public partial class App
         }
 
         public string? ShimPath => (app._source as ShimBenchSource)?.ShimPath;
+
+        public void DistroSwitched() => app._controller?.Poller.Kick();
     }
 
     private void ShowAbout()
