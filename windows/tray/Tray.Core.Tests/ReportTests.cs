@@ -284,4 +284,15 @@ public class PlanReviewDetachTests
         model.Detach(_ => { });
         Assert.False(model.IsDetached);
     }
+    [Theory]
+    [InlineData("https://github.com/askysh/benchbar/issues/new?template=bug_report_windows.yml&title=x", true)]
+    [InlineData("https://github.com/askysh/benchbar/issues/new?template=bug_report_windows.yml", true)]
+    [InlineData("https://evil.example/issues/new?template=bug_report_windows.yml", false)]
+    [InlineData("file:///C:/Windows/System32/calc.exe", false)]
+    [InlineData("https://github.com/askysh/benchbar/issues/new?template=bug_report_windows.ymlx", false)]
+    [InlineData(null, false)]
+    public void OnlyThisRepositorysIssueFormIsOpened(string? url, bool kept)
+    {
+        Assert.Equal(kept ? url : BugReportText.IssueBase, BugReportText.SafeIssueUrl(url));
+    }
 }

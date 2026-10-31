@@ -503,13 +503,16 @@ public sealed partial class WizardModel : IDisposable
     }
 
     /// <summary>
-    /// Once the distro step passes, the distro the wizard checked becomes the one the shim uses (<c>adopt-distro NAME --json</c>), so the
+    /// Once the distro, systemd and CLI steps pass, the distro the wizard checked becomes the one the shim uses (<c>adopt-distro NAME --json</c>), so the
     /// install, adopt and report that follow all go to the same distro. Asked once per name; a failure blocks Continue and says why.
     /// </summary>
     private async Task AlignDistroAsync(SetupReport report, CancellationToken ct)
     {
         DistroAlignError = null;
         if (report.Step(SetupIds.Distro) is not { IsOk: true } || report.Distro is not { Length: > 0 } name) return;
+        // adopt-distro records the distro only when its probe passes, and the probe needs systemd and the CLI:
+        // asking earlier fails on every fresh PC, between distro_install and cli_install
+        if (report.Step(SetupIds.Systemd) is not { IsOk: true } || report.Step(SetupIds.Cli) is not { IsOk: true }) return;
         if (_alignedDistro == name) return;
         if (string.Equals(_host.ConfiguredDistro, name, StringComparison.OrdinalIgnoreCase))
         {

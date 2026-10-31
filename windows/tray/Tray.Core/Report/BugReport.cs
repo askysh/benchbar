@@ -17,6 +17,10 @@ public static class BugReportText
 
     /// <summary>The longest issue URL the tray makes. GitHub and the browser take more; the shim keeps below 4000 too.</summary>
     public const int UrlLimit = 3900;
+
+    /// <summary>Only the issue form of this repository is opened; anything else falls back to it.</summary>
+    public static string SafeIssueUrl(string? url) =>
+        url is { Length: > 0 } u && (u == IssueBase || u.StartsWith(IssueBase + "&", StringComparison.Ordinal)) ? u : IssueBase;
 }
 
 /// <summary>
@@ -122,7 +126,7 @@ public sealed class BugReporter(IProcessRunner runner, Func<string?> locate, Tra
                     skipped.Add($"{JsonRead.Str(item, "part")}: {JsonRead.Str(item, "reason")}");
             }
             var url = JsonRead.Str(root, "issue_url");
-            return new ReportOutcome(zip, string.IsNullOrWhiteSpace(url) ? BugReportText.IssueBase : url, false, skipped, null);
+            return new ReportOutcome(zip, BugReportText.SafeIssueUrl(url), false, skipped, null);
         }
         return null;
     }
@@ -199,11 +203,14 @@ public sealed class TrayOnlyReport(string folder, Func<DateTime> now, string win
         if (!string.IsNullOrEmpty(profileDir)) text = text.Replace(profileDir.TrimEnd('\\', '/'), @"C:\Users\<user>", StringComparison.OrdinalIgnoreCase);
         text = Regex.Replace(text, @"([A-Za-z]:[\\/]+Users[\\/]+)[^\\/\s""'<>|:*?]+", "${1}<user>", RegexOptions.IgnoreCase);
         text = Regex.Replace(text, @"(/home/)[^/\s""'<>:]+", "${1}<user>");
+        text = Regex.Replace(text, @"(\\home\\)[^\\\s""'<>:]+", "${1}<user>", RegexOptions.IgnoreCase);
+        text = Regex.Replace(text, @"(/mnt/[a-z]/Users/)[^/\s""'<>:]+", "${1}<user>", RegexOptions.IgnoreCase);
         if (userName.Length >= 3) text = Regex.Replace(text, @"\b" + Regex.Escape(userName) + @"\b", "<user>", RegexOptions.IgnoreCase);
         return Regex.Replace(text, @"(?i)\b([A-Za-z0-9_.-]*(?:password|passwd|secret|token|api[_-]?key)[A-Za-z0-9_.-]*)(\s*[=:]\s*)(""[^""\r\n]*""|'[^'\r\n]*'|[^\s,;]+)", "${1}${2}<redacted>");
     }
 
-    private string ForUrl(string text) => Regex.Replace(Redact(text), @"(?i)[A-Za-z]:[\\/][^\s""']*|\\\\[^\s""']+", "<path>");
+    private string ForUrl(string text) =>
+        Regex.Replace(Redact(text), @"(?i)[A-Za-z]:[\\/][^\s""']*|\\\\[^\s""']+|(?<![\w.])/(?:home|mnt|tmp|var|opt|srv|root|usr|etc)/[^\s""']*", "<path>");
 
     private static void AddText(ZipArchive zip, string name, string text)
     {

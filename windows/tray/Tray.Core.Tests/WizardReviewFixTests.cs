@@ -396,6 +396,21 @@ public class WizardReviewFixTests
     }
 
     [Fact]
+    public async Task TheDistroIsNotHandedOverBeforeSystemdAndTheCliAreSetUp()
+    {
+        var fixture = Fixture();
+        File.WriteAllText(Path.Combine(fixture.Setup, "check.json"), File.ReadAllText(Path.Combine(fixture.Setup, "check.json"))
+            .Replace("\"id\":\"systemd\",\"status\":\"ok\"", "\"id\":\"systemd\",\"status\":\"missing\"")
+            .Replace("\"id\":\"cli\",\"status\":\"ok\"", "\"id\":\"cli\",\"status\":\"missing\"")
+            .Replace("\"ready\":true", "\"ready\":false"));
+        var model = new WizardModel(fixture.Service, new FakeWizardHost { ConfiguredDistro = "Debian" });
+        await model.ChooseNewBench();
+        await model.CheckAsync();
+        Assert.DoesNotContain(fixture.Service.Calls, c => c.StartsWith("use-distro"));
+        Assert.Null(model.CheckError);
+    }
+
+    [Fact]
     public async Task ADistroTheShimAlreadyUsesIsLeftAlone()
     {
         var fixture = Fixture();

@@ -74,7 +74,9 @@ internal sealed class ReportFlow(IBugReporter reporter, ReportSeams seams)
     public static ProcessStartInfo RevealInfo(string zip)
     {
         var info = new ProcessStartInfo("explorer.exe") { UseShellExecute = false };
-        info.ArgumentList.Add("/select," + zip);
+        // Explorer parses its own command line: the path is quoted after the comma, so a profile
+        // folder with a space still selects the file. A Windows path cannot hold a quote.
+        info.Arguments = "/select,\"" + zip.Replace("\"", "", StringComparison.Ordinal) + "\"";
         return info;
     }
 }
