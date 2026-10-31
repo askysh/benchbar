@@ -240,7 +240,8 @@ public class WindowViewTests
         var dismissed = 0;
         window.SetUpdate(new UpdateOffer("0.9.0", "https://example.test/r"), () => dismissed++);
         Assert.Equal("0.9.0", window.Offer!.Version);
-        var banner = (Border)((DockPanel)((Grid)window.Content).Children[1]).Children[0];
+        // the beta banner comes first, the update banner second
+        var banner = (Border)((DockPanel)((Grid)window.Content).Children[1]).Children[1];
         Assert.Equal(Visibility.Visible, banner.Visibility);
         var later = Walk(banner).OfType<Button>().Single(b => b.Content as string == "Not Now");
         later.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));

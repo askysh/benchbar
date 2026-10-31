@@ -407,7 +407,10 @@ public class ReportFlowTests
         Assert.Equal("Writing the report...", BugReportText.Working);
         var info = ReportFlow.RevealInfo(@"C:\r\x.zip");
         Assert.Equal("explorer.exe", info.FileName);
-        Assert.Equal([@"/select,C:\r\x.zip"], info.ArgumentList);
+        // the path is quoted after the comma, so a profile folder with a space still selects the file
+        Assert.Equal("/select,\"C:\\Users\\First Last\\x.zip\"", ReportFlow.RevealInfo(@"C:\Users\First Last\x.zip").Arguments);
+        Assert.Equal("/select,\"C:\\r\\x.zip\"", info.Arguments);
+        Assert.Empty(info.ArgumentList);
     }
 
     [Fact]

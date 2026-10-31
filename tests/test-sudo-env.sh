@@ -81,6 +81,7 @@ BENCH="$HOME/frappe-bench"
 pw_file() { printf '%s' "$FL_STATE_DIR/secrets/mariadb-root"; }
 fresh_machine() {
   : >"$MOCK_STATE/apt_installed"
+  : >"$MOCK_LISTEN"
   rm -rf "$HOME/.local/share/uv" "$HOME/.local/share/fnm" "$HOME/.local/bin/uv" "$FL_STATE_DIR/secrets" "$FL_STATE_DIR/downloads" \
     "$FL_MYSQL_CONF_DIR" "$MOCK_STATE/installer_env" "$MOCK_STATE/stopped_mariadb" "$MOCK_STATE/stopped_redis-server" "$BENCH"
   mkdir -p "$FL_MYSQL_CONF_DIR"
