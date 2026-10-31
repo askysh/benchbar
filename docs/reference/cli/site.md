@@ -99,13 +99,15 @@ every site until you turn it on, also for a site you add or pull later.
 The choice is benchbar's own state for the bench; the site is not changed.
 
 `on` must be run in a terminal by a person. It prints what a sign in does
-(the apps' `on_login` hooks run, `last_login` is updated, and Frappe may
-end that user's oldest session) and asks first; `--yes` skips the question.
+(the apps' `on_login` and `on_session_creation` hooks run: `last_login`,
+an Activity Log entry, a mail to System Managers for Administrator, an
+ERPNext Customer or Supplier for a Website User, and Frappe may end that
+user's oldest session) and asks first; `--yes` skips the question.
 It is refused when `BENCHBAR_NONINTERACTIVE=1` is set, which `--for-agent`
 and `benchbar mcp` do, and when there is no terminal on stdin, even with
 `--yes` (the BenchBar app turns it on after its own alert). It still records the choice for a site that is not in
 `developer_mode` or not the site the web process answers as, and says that
-`open --as` will refuse it until that changes. `off` is always allowed.
+`open --as` will refuse it until that changes. `off` is always allowed; it does not end the sessions already made.
 `status --json` prints one document with `open_as_enabled`,
 `developer_mode` and `open_as`; `on` and `off` with `--json` print JSON
 lines ending in a `done`.

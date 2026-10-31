@@ -232,9 +232,18 @@ does not stay in the address bar. It stays in the browser's history and the
 web log, as with `bench browse`.
 
 What a sign-in does on the site, as a real login would: the user's
-`last_login` is updated, every app's `on_login` hook runs, and Frappe keeps
-only the newest sessions of that user (`simultaneous_sessions`, 2 by
-default), so an older one (another browser, a test run) can be signed out.
+`last_login` is updated, and every app's `on_login` and
+`on_session_creation` hooks run. With Frappe and ERPNext that means:
+
+- an Activity Log entry "USER logged in" for every switch;
+- a mail to the System Managers when you sign in as Administrator
+  (`notify_admin_access_to_system_manager`);
+- for a Website User, ERPNext can create a Customer or a Supplier
+  (`create_customer_or_supplier`, with the Portal Settings default role).
+
+Frappe keeps only the newest sessions of that user (`simultaneous_sessions`,
+2 by default), so an older one (another browser, a test run) can be signed
+out. `benchbar site open-as off` does not end the sessions already made.
 IP and login-hour restrictions on the user apply; two-factor login does not.
 A site with `deny_multiple_sessions` on signs that user out everywhere else.
 

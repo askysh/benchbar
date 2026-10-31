@@ -209,6 +209,21 @@ struct OpenAsTests {
         #expect(cli.opens.count == 1)
     }
 
+    @Test func aSiteNoLongerUsableLosesItsCachedSessions() async throws {
+        let cli = FakeOpenAsCLI()
+        let store = try makeStore(check: { _, _ in "priya@example.com" })
+        _ = await switchTo("priya@example.com", on: store, cli: cli)
+        // another site of the bench, and another bench's macdev, keep theirs
+        store.forgetSessions(bench: "/Users/you/other-bench", keeping: [])
+        store.forgetSessions(bench: bench, keeping: [site])
+        _ = await switchTo("priya@example.com", on: store, cli: cli)
+        #expect(cli.opens.count == 1)
+        // Open as off on macdev: the next switch asks the CLI, which refuses there
+        store.forgetSessions(bench: bench, keeping: [])
+        _ = await switchTo("priya@example.com", on: store, cli: cli)
+        #expect(cli.opens.count == 2)
+    }
+
     @Test func aSessionOfAnotherUserIsNotReused() async throws {
         let cli = FakeOpenAsCLI()
         let store = try makeStore(check: { _, _ in "someone.else@example.com" })
@@ -470,7 +485,7 @@ struct OpenAsTests {
 
     @Test func theAlertSaysWhatASignInDoes() {
         let text = OpenAsMenuModel.allowMessage
-        for part in ["without a password", "on_login hooks", "last_login", "oldest session", "development sites only"] {
+        for part in ["without a password", "on_login and on_session_creation hooks", "Activity Log", "System Managers", "last_login", "oldest session", "development sites only"] {
             #expect(text.contains(part), "\(part)")
         }
     }

@@ -232,6 +232,8 @@ fl_cmd_open() {
   fi
   if [[ -n "$path" ]]; then
     [[ "$path" == /* && "$path" != //* ]] || fl_die "--path must start with a single /." "Example: --path /app/todo"
+    # a browser reads /\host as //host, another site
+    [[ "$path" != *\\* ]] || fl_die "--path cannot hold a backslash." "Example: --path /app/todo"
     fl_path_without_sid_v path "$path"
   fi
   base="http://${site}:${FL_WEB_PORT}"
@@ -343,7 +345,8 @@ fl_cmd_site_open_as() {
       "Run it in a terminal: benchbar site open-as on ${name}"
     if ! fl_open_as_enabled "$name" && [[ "${FL_DRY_RUN:-0}" != "1" ]]; then
       fl_info "Open as signs in as any enabled user of ${name} with no password: benchbar open --as USER."
-      fl_info "Each sign in runs the apps' on_login hooks, updates the user's last_login and, past the simultaneous_sessions limit, ends that user's oldest session."
+      fl_info "Each sign in runs the apps' on_login and on_session_creation hooks, as a real login does: the user's last_login is updated and Frappe writes an Activity Log entry; signing in as Administrator can mail the System Managers; ERPNext can create a Customer or Supplier for a Website User; past the simultaneous_sessions limit, that user's oldest session ends."
+      fl_info "Turning it off later does not end the sessions already made."
       fl_confirm "Turn on Open as for ${name}?" || fl_die "Open as stays off for ${name}." "Run again and answer yes, or pass --yes"
     fi
   fi

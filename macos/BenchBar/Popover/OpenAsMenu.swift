@@ -28,7 +28,8 @@ nonisolated enum OpenAsMenuModel {
 
     /// What the opt-in alert says. The CLI says the same before it asks in a terminal.
     static let allowMessage = "Open as signs in to this site as any of its users, without a password. "
-        + "Each sign in runs the apps' on_login hooks, updates that user's last_login and may end that user's oldest session. "
+        + "Each sign in runs the apps' on_login and on_session_creation hooks, as a real login does: last_login, an Activity Log entry, "
+        + "a mail to System Managers for Administrator, an ERPNext Customer or Supplier for a Website User. It may end that user's oldest session. "
         + "Use it on development sites only."
 
     /// Whether the control is shown, and if it is shown but cannot be used, why.

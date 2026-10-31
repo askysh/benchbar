@@ -400,6 +400,9 @@ final class BenchStore {
                 if superseded.contains(bench.path) { continue }
                 apply(.observed(status, .status), to: bench)
                 readFiles(bench, verdict: status)
+                if bench.sitesKnown, let openAs = openAsStore {
+                    openAs.forgetSessions(bench: bench.path, keeping: Set(bench.siteRows.filter { $0.openAs == true }.map(\.name)))
+                }
                 await sampleResources(bench)
             } catch {
                 let message = error.localizedDescription

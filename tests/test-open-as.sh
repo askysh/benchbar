@@ -58,6 +58,7 @@ snap_sites="$(snapshot "$BENCH/sites")"
 BENCHBAR_SUDO=gui run_fm site open-as on --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "on_login"; assert_contains "$OUT" "last_login"; assert_contains "$OUT" "simultaneous_sessions"
+assert_contains "$OUT" "on_session_creation"; assert_contains "$OUT" "Activity Log"; assert_contains "$OUT" "System Managers"; assert_contains "$OUT" "does not end the sessions already made"
 assert_eq "$snap_sites" "$(snapshot "$BENCH/sites")" "(on writes nothing under sites/)"
 BENCHBAR_SUDO=gui run_fm site open-as on v16dev --yes --bench-dir "$BENCH"
 assert_contains "$OUT" "unchanged: Open as is already on for v16dev"
@@ -165,6 +166,7 @@ run_fm open --as web@example.com --bench-dir "$BENCH"
 assert_calls_contain '^open http://v16dev:8000/login\?redirect-to=%2F&sid='
 run_fm open --as priya@example.com --path app/x --bench-dir "$BENCH"; assert_eq "1" "$CODE"; assert_contains "$OUT" "--path must start with a single /."
 run_fm open --as priya@example.com --path //evil.example --bench-dir "$BENCH"; assert_eq "1" "$CODE"; assert_contains "$OUT" "--path must start with a single /."
+run_fm open --as priya@example.com --path '/\evil.example' --bench-dir "$BENCH"; assert_eq "1" "$CODE"; assert_contains "$OUT" "--path cannot hold a backslash."
 
 # ---- refusals from the helper come through as they are
 run_fm open --as nobody@example.com --bench-dir "$BENCH"; assert_eq "1" "$CODE"; assert_contains "$OUT" "No user 'nobody@example.com' on v16dev."

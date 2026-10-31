@@ -909,6 +909,8 @@ Measured on five PR runs (September 2026): 11 to 14 minutes wall clock, all of i
 - `site list` and `status` give each site `open_as_enabled` (the opt-in) and `open_as` (opt-in, developer mode and the site `bench serve` answers as), so a client offers Open as only where the CLI will sign in.
 - `open` stays non MUTATING although `--as` writes a session in the site's database: a MUTATING command has a run log, and a log could capture the session id. The sign in changes no bench file.
 - `open --as` reruns the steps of Frappe's `LoginManager.post_login` except `set_user_info`, so it depends on Frappe internals. Tested on v15; v16 is untested so far. The side effects are those of a real login: `on_login` hooks run, `last_login` is updated, and Frappe may end the user's oldest session (`simultaneous_sessions`). `open --help`, the CLI docs and `site open-as on` say so.
+- What a sign in does is listed in full where a person turns Open as on (the prompt, `open --help`, the docs, the app's alert), not only `on_login`: `make_session` also runs `on_session_creation`, so Frappe writes an Activity Log entry per switch, can mail the System Managers for an Administrator sign in, and ERPNext can create a Customer or Supplier for a Website User. Reported in review by Sumanth Udupi.
+- `--path` refuses a backslash: browsers read `/\host` as `//host`, so `/\evil.example` passed the single slash check and would have sent the browser to another site after the sign in.
 
 ## Test cost
 

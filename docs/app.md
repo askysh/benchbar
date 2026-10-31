@@ -58,11 +58,13 @@ it on, and the app shows nothing else of it until then. Under the hood it runs
 
 **Turn it on** in the BenchBar window: the bench's Sites tab, the `...` menu
 of the site, **Allow Open as…**. An alert says what it does: you can sign in as
-any user of the site without a password, each sign in runs the apps'
-`on_login` hooks, updates that user's `last_login` and may end that user's
-oldest session. Use it on development sites only. **Allow Open as** records
+any user of the site without a password, and each sign in runs the apps'
+`on_login` and `on_session_creation` hooks as a real login does (`last_login`,
+an Activity Log entry, a mail to System Managers for Administrator, an ERPNext
+Customer or Supplier for a Website User) and may end that user's oldest
+session. Use it on development sites only. **Allow Open as** records
 the choice in benchbar's state for the bench (the site itself is not changed);
-**Turn Off Open as** in the same menu undoes it, without a question. The same
+**Turn Off Open as** in the same menu undoes it, without a question; it does not end the sessions already made, but the app forgets its own. The same
 switch in a terminal is [`benchbar site open-as`](reference/cli/site.md#site-open-as).
 
 The Sites tab shows a line under a site that has it on: "Open as is on", or why

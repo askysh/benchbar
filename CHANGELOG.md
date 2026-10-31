@@ -11,8 +11,10 @@ All notable changes to this project are documented here.
   it gets. It is off until you turn it on for a site, in a terminal:
   `benchbar site open-as on NAME`. The site also needs `developer_mode`
   (Administrator included) and must be the site the web process answers
-  as. A sign in runs the apps' `on_login` hooks, updates `last_login` and
-  Frappe may end the user's oldest session. `--path` lands on a page,
+  as. A sign in runs the apps' `on_login` and `on_session_creation` hooks
+  as a real login does (`last_login`, an Activity Log entry, a mail to
+  System Managers for Administrator, an ERPNext Customer or Supplier for a
+  Website User), and Frappe may end the user's oldest session. `--path` lands on a page,
   `--print-url` prints the link instead. `benchbar open` alone opens the
   site.
 - `benchbar site open-as on|off|status [NAME]` keeps that choice in

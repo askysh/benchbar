@@ -118,6 +118,21 @@ final class OpenAsStore {
         savePins()
     }
 
+    /// Forgets the sessions this app made on the sites of `bench` that are
+    /// not in `usable` (Open as turned off, developer_mode off, another
+    /// default site), so a cached one cannot switch past the opt-in. The
+    /// sessions stay valid on the site: turning Open as off ends none.
+    func forgetSessions(bench: String, keeping usable: Set<String>) {
+        let prefix = bench + "|"
+        let kept = sessions.filter { key, _ in
+            guard key.hasPrefix(prefix) else { return true }
+            let rest = key.dropFirst(prefix.count)
+            guard let bar = rest.firstIndex(of: "|") else { return false }
+            return usable.contains(String(rest[..<bar]))
+        }
+        if kept.count != sessions.count { sessions = kept }
+    }
+
     func unpin(_ user: String, bench: String, site: String) {
         let key = Self.siteKey(bench: bench, site: site)
         pins[key]?.removeAll { $0.user == user }
