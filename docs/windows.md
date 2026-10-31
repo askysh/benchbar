@@ -312,10 +312,12 @@ Problem). All of them do the same thing:
 
 1. They run `benchbar.exe report-windows --json`. It writes a redacted
    zip to `%LOCALAPPDATA%\BenchBar\reports` and keeps the newest 10.
-2. The zip is selected in Explorer.
-3. A GitHub issue opens with the Windows bug form filled in (versions,
-   Windows edition, distro and what you did). Drag the zip from Explorer
-   into the last box of the form.
+2. A small window says that the report is ready. It selects the zip in
+   Explorer and opens a GitHub issue with the Windows bug form filled in
+   (versions, Windows edition, distro and what you did). Show Zip and
+   Open Issue do this again, and Copy Path copies the zip path.
+3. Drag the zip from Explorer into the last box of the form, say what
+   happened, and submit.
 
 The zip holds the versions, the Windows edition and build, the WSL status
 and distro list, the setup check (run without starting a distro) and,

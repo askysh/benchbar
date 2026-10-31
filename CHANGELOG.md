@@ -14,8 +14,8 @@ does. Report a Bug sends a redacted report in about a minute.
   Windows is a beta. The banner has Report a Bug.
 - Report a Bug is in the tray menu, About, the beta banner and the footer
   of every wizard page, and Report This Problem is next to each failure.
-  It writes a zip to `%LOCALAPPDATA%\BenchBar\reports`, selects it in
-  Explorer and opens a GitHub issue with the versions, the Windows build
+  It writes a zip to `%LOCALAPPDATA%\BenchBar\reports`, then a small
+  window selects the zip in Explorer and opens a GitHub issue with the versions, the Windows build
   and the distro filled in. It works before WSL or Ubuntu is installed and
   while the distro is stopped, and never starts the distro. User names and
   home paths are replaced with `<user>`.
@@ -117,6 +117,14 @@ does. Report a Bug sends a redacted report in about a minute.
 - The sudo password of `BENCHBAR_SUDO=env` is no longer in
   `/proc/PID/environ` of the running command, and every command forgets it
   after its sudo steps. On Linux, repair runs its sudo steps first.
+- `setup run cli_install` names a failed download (for example a 404)
+  instead of saying that benchbar is not on the PATH.
+- Advice rows with an action, such as `.wslconfig`, have a Set Up button.
+  Set Up Everything runs only the steps that block.
+- The Review page shows the fix for a plan that cannot run, and each
+  blocker with its fix.
+- Stopping a step says "Stopped" instead of talking about a Windows
+  prompt that never came.
 - `doctor --prerequisites` on Linux warns, not fails, when the user is not
   in the `sudo` group.
 - The Windows tray: Check Your PC draws again (it spun at 100 percent CPU
