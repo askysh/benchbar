@@ -16,7 +16,7 @@ argument):
 | `benchbar.exe keepalive install\|remove\|status\|run` | A logon task that keeps the distro running. No admin, no service. |
 | `benchbar.exe path install\|status` | Put this folder on your user PATH. |
 | `benchbar.exe setup check [--json] [--probe] [--distro NAME]` | Read only. Checks the PC step by step (Windows build, virtualization, WSL, restart, distro, Linux user, systemd, CLI, linger, keepalive, `.wslconfig`, PATH). Never starts a stopped distro unless `--probe`, never asks for admin rights. |
-| `benchbar.exe setup run ACTION [--distro NAME] [--user NAME] [--force] --jsonl` | Runs one setup action (`wsl_enable`, `wsl_update`, `distro_install`, `distro_user`, `systemd`, `cli_install`, `linger`, `keepalive`, `wslconfig`, `path`) and prints JSON lines. `wsl_enable` asks Windows for permission (UAC). |
+| `benchbar.exe setup run ACTION [--distro NAME] [--user NAME] [--force] [--jsonl]` | Runs one setup action (`wsl_enable`, `wsl_update`, `distro_install`, `distro_user`, `systemd`, `cli_install`, `linger`, `keepalive`, `wslconfig`, `path`). With `--jsonl` it prints only JSON lines. `wsl_enable` asks Windows for permission (UAC). |
 | `benchbar.exe report-windows [--json] [--distro NAME] [--bench PATH] [--context TEXT] [--tray-version V] [--include FILE]...` | Write a redacted zip for a bug report. Works with no WSL, no distro and no CLI. See "Bug report zip". |
 | `benchbar.exe doctor` | Windows checks first, then the CLI's doctor. `--json` and `--fix-hints` go straight to the CLI. |
 
@@ -40,7 +40,7 @@ command that fixes it (for example another `benchbar.exe` earlier on the
 machine PATH). A blocking step without an `action` (a custom `cli_path` that
 does not exist) also names its fix in the `detail`.
 
-`setup run` prints only JSON lines on stdout: `step` events (`running`,
+With `--jsonl`, `setup run` prints only JSON lines on stdout: `step` events (`running`,
 `done`, `failed`, `skipped`), `log` events (the output of the commands it ran,
 as data) and exactly one `done` event with `exit` (0 or 1), `changed`,
 `reboot_required`, `cancelled`, `warnings` and `next_actions`. A failed action
@@ -48,6 +48,25 @@ may add `error_id`, a short id the caller can act on (see below); it is absent
 otherwise. The password for
 `distro_user` comes from `BENCHBAR_SETUP_PASSWORD` and reaches `chpasswd` on
 stdin only.
+
+The step ids of `setup check`, in order, and the `setup run` action that
+fixes each one (the `action` field of the step):
+
+| Step `id` | Title | Blocking | Fixed by |
+| --- | --- | --- | --- |
+| `windows_build` | Windows version | yes | none: install the Windows update (Windows 10 build 19041 or later) |
+| `virtualization` | Virtualization | yes | none: turn on Intel VT-x or AMD-V (SVM) in the firmware |
+| `wsl_feature` | Windows Subsystem for Linux | yes | `wsl_enable` |
+| `reboot` | Restart Windows | yes | none in `setup run`: the tray asks you to restart |
+| `wsl_version` | WSL version | yes | `wsl_update` |
+| `distro` | Linux distro | yes | `distro_install` |
+| `distro_user` | Linux user | yes | `distro_user` |
+| `systemd` | systemd | yes | `systemd` |
+| `cli` | BenchBar command line tool | yes | `cli_install` |
+| `linger` | Keep benches running | no | `linger` |
+| `keepalive` | Keep the distro awake | no | `keepalive` |
+| `wslconfig` | WSL idle settings | no | `wslconfig` |
+| `shim_path` | benchbar.exe on PATH | no | `path` |
 
 `error_id` values on a `done` event with `exit` 1:
 
@@ -126,7 +145,12 @@ When set in the shim's environment, `ADMIN_PASSWORD`, `MARIADB_ROOT_PASSWORD`,
 passed into WSL for that one run through `WSLENV` (appended to the child's
 copy; your own `WSLENV` is not changed). No other variable is passed.
 
-## Settings
+## Settings and state
+
+Settings and setup state live in `%LOCALAPPDATA%\BenchBar`: `config.json`
+(below), `setup\` (the restart marker, `reboot-pending.json`), `reports\`
+(the Report a Bug zips) and `runners\` (the tray's custom runners). The
+benches and their state stay in the distro.
 
 `%LOCALAPPDATA%\BenchBar\config.json`:
 
@@ -136,8 +160,11 @@ copy; your own `WSLENV` is not changed). No other variable is passed.
 
 ## Build and test
 
+Set `main.version` to the release version (`X.Y.Z`, without a `v`). The release
+workflow does that from the tag; a build without it reports `dev`.
+
 ```
-go build -ldflags "-X main.version=0.1.0" -o benchbar.exe .
+go build -ldflags "-X main.version=X.Y.Z" -o benchbar.exe .
 go vet ./...
 go test ./...
 ```

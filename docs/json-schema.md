@@ -67,7 +67,7 @@ command that read only prints none of them.
 | `next_actions[]` | `{"command", "why"}`: the fix lines and next steps the text output prints |
 | `state_after` | the bench's `status --json` object after the run (no per site ping), `null` when there is no bench, in a dry run, or when the run touched several benches (`ports apply`). A stream's is read after the CLI's locks are released; a one document command's and `pull`'s while its lock is still held (a read, so nothing waits on it) |
 | `missing[]` | only on a refusal of the non interactive mode: the inputs the command lacked (`ADMIN_PASSWORD`, `--yes`, `sudo`, `BENCHBAR_SUDO_PASSWORD`, ...) |
-| `error_id` | only on a failure that has a stable id, for programs to match instead of the text. So far: `sudo_password_wrong` (the password in `BENCHBAR_SUDO_PASSWORD` was refused, before any change) |
+| `error_id` | only on a failure that has a stable id, for programs to match instead of the text. Every CLI done line can carry it. So far: `sudo_password_wrong` (the password in `BENCHBAR_SUDO_PASSWORD` was refused, before any change). The Windows shim adds `distro_running`, see [Windows shim](#windows-shim) |
 
 Which shape a command prints:
 
@@ -1333,3 +1333,24 @@ ignoring only listeners positively identified as belonging to that bench.
 current ports without moving them. `--dry-run` does not save it. New benches
 default to automatic. Fixed mode means the current allocation stays pinned until
 the policy changes or an explicit CLI `--port-offset` override is requested.
+
+## Windows shim
+
+`benchbar.exe` runs on Windows and forwards to the CLI in the WSL distro. Its
+own JSON is not the CLI's: the setup and report commands are answered by the
+shim itself. The full contract, with the step ids, is in
+[windows/shim/README.md](https://github.com/askysh/benchbar/blob/main/windows/shim/README.md).
+
+- `benchbar.exe setup check --json` prints one document: `schema_version`,
+  `distro`, `ready`, `reboot_pending` and `steps`. Each step has `id`,
+  `status` (`ok`, `missing`, `warn` or `fail`), `title`, `detail`, `action`
+  (the `setup run` action that fixes it, or null), `needs_admin` and
+  `blocking`. It is read only.
+- `benchbar.exe setup run ACTION --jsonl` prints JSON lines: `step` and `log`
+  events, then one `done` line. In the `done` line `changed` is a boolean (the
+  action changed something), not the CLI's `changed[]` list. The line also has
+  `exit`, `reboot_required`, `cancelled`, `warnings` and `next_actions`, and
+  `error_id` when the action failed with a stable id (`distro_running`: the
+  action must stop the running distro, and nothing was changed).
+- `benchbar.exe report-windows --json` prints one line: `schema_version`,
+  `zip`, `included`, `skipped` (what was left out, and why) and `issue_url`.
