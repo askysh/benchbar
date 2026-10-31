@@ -377,6 +377,8 @@ fl_cmd_site_drop() {
     [[ -n "$stamp" ]] && backup="$(fl_backup_set_json "${archive}/private/backups" "$stamp")"
   fi
   fl_hosts_remove_name "$name" || true
+  # a later site of the same name does not inherit the choice
+  fl_open_as_set "$name" 0
   fl_changed site "$name" "dropped${archive:+, archived to ${archive}}"
   [[ "$backup" == "null" ]] || fl_changed backup "$name" "$(fl_backup_field "$backup" path)"
   [[ "$FL_HOSTS_REMOVED" != "1" ]] || fl_changed hosts "$name" "line removed"

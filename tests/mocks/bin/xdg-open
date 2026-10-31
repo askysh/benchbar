@@ -3,4 +3,6 @@
 # shellcheck source=tests/mocks/bin/_mocklib.sh
 . "$(dirname "$0")/_mocklib.sh"
 mock_log "$@"
+# MOCK_OPEN_SAYS: what a browser opener prints on stdout ("Opening in existing browser session.")
+[[ -z "${MOCK_OPEN_SAYS:-}" ]] || printf '%s\n' "$MOCK_OPEN_SAYS"
 exit "${MOCK_OPEN_EXIT:-0}"

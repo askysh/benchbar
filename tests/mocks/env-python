@@ -36,4 +36,51 @@ if [[ "${1:-}" == "-c" && "${3:-}" == "benchbar-secrets" && "${4:-}" == "frappe"
   esac
   exit 0
 fi
+# benchbar's own helpers for open --as and users:
+#   -c SNIPPET benchbar-open-as SITE USER
+#   -c SNIPPET benchbar-users SITE QUERY LIMIT MODE
+# Users come from $MOCK_STATE/users.json (Administrator alone without it);
+# MOCK_OPEN_AS_REFUSE fails the login with that text; MOCK_OPEN_AS_SID is the
+# session id. Each argument is logged in brackets, so a test sees how argv arrived.
+if [[ "${1:-}" == "-c" && ( "${3:-}" == "benchbar-open-as" || "${3:-}" == "benchbar-users" ) ]]; then
+  marker="$3"; shift 3
+  { printf 'bench-python %s' "$marker"; for a in "$@"; do printf ' [%s]' "$a"; done; printf '\n'; } >>"${MOCK_LOG:-/dev/null}"
+  exec python3 - "$marker" "$@" <<'PY'
+import json, os, sys
+marker, args = sys.argv[1], sys.argv[2:]
+print("UserWarning: frappe prints noise like this", file=sys.stderr)
+try:
+    users = json.load(open(os.path.join(os.environ["MOCK_STATE"], "users.json")))
+except FileNotFoundError:
+    users = [{"name": "Administrator", "full_name": "Administrator", "user_type": "System User", "enabled": 1,
+              "roles": ["System Manager"], "last_login": None}]
+if marker == "benchbar-open-as":
+    site, user = args
+    if os.environ.get("MOCK_OPEN_AS_REFUSE"):
+        print("BENCHBAR-ERROR " + os.environ["MOCK_OPEN_AS_REFUSE"])
+        sys.exit(1)
+    u = next((x for x in users if x["name"] == user), None)
+    if not u:
+        print("BENCHBAR-ERROR No user %r on %s." % (user, site))
+        sys.exit(1)
+    if not u.get("enabled", 1):
+        print("BENCHBAR-ERROR %s is disabled on %s." % (user, site))
+        sys.exit(1)
+    print("BENCHBAR-RESULT " + "\t".join([u["name"], u["full_name"], u["user_type"], os.environ.get("MOCK_OPEN_AS_SID", "mocksid0123456789")]))
+    sys.exit(0)
+site, query, limit, mode = args[0], args[1].lower(), int(args[2]), args[3]
+rows = [u for u in users if u.get("enabled", 1) and u["name"] != "Guest"
+        and (not query or query in u["name"].lower() or query in u["full_name"].lower())]
+rows.sort(key=lambda u: (u["user_type"], u["name"]))
+more, rows = len(rows) > limit, rows[:limit]
+out = [{"name": u["name"], "full_name": u["full_name"], "user_type": u["user_type"], "roles": u.get("roles", [])[:5],
+        "role_count": len(u.get("roles", [])), "last_login": u.get("last_login")} for u in rows]
+if mode == "json":
+    print("BENCHBAR-RESULT " + json.dumps({"users": out, "truncated": more}))
+else:
+    print("BENCHBAR-RESULT " + ("1" if more else "0"))
+    for u in out:
+        print("BENCHBAR-RESULT " + "\t".join([u["name"], u["full_name"], u["user_type"], ", ".join(u["roles"])]))
+PY
+fi
 exit 0
