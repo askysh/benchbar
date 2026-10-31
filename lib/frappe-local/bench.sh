@@ -113,6 +113,13 @@ fl_bench_owner() {
   esac
 }
 
+# pipx lists frappe-bench as an indented "package frappe-bench" line
+fl__pipx_has_bench() {
+  local listed
+  listed="$(pipx list 2>/dev/null || true)"
+  [[ "$listed" == '   package frappe-bench'* || "$listed" == *$'\n   package frappe-bench'* ]]
+}
+
 fl_install_bench_if_needed() {
   fl_section "BENCH CLI"
   fl_info "Checking frappe-bench CLI"
@@ -144,7 +151,7 @@ fl_install_bench_if_needed() {
     PIPX_BIN_DIR="$(uv tool dir --bin 2>/dev/null || true)"
     PIPX_BIN_DIR="${PIPX_BIN_DIR:-$HOME/.local/bin}"
     export PATH="${PIPX_BIN_DIR}:$PATH"
-  elif pipx list 2>/dev/null | grep -q '^   package frappe-bench'; then
+  elif fl__pipx_has_bench; then
     fl_info "frappe-bench already installed via pipx"
   else
     fl_warn "frappe-bench is missing; installing with pipx"
@@ -500,7 +507,8 @@ fl_install_app_if_needed() {
     # shellcheck disable=SC2015  # an unreadable list means "nothing installed yet"
     installed="$(cd "$bench_dir" && bench --site "$site_name" list-apps 2>/dev/null || true)"
   fi
-  if printf '%s\n' "$installed" | awk '{print $1}' | grep -qx "$app"; then
+  installed="$(printf '%s\n' "$installed" | awk '{print $1}')"
+  if fl_has_line "$installed" "$app"; then
     fl_ok "${app} already installed on ${site_name}"
   else
     fl_bench_run_long "bench install-app ${app} on ${site_name}" "$bench_dir" bench --site "$site_name" install-app "$app" \

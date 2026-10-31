@@ -26,7 +26,7 @@ fl_apps_txt() {
   tr -d '\r' <"$f" | awk '{gsub(/^[ \t]+|[ \t]+$/, "")} NF && !seen[$0]++'
 }
 
-fl_app_in_apps_txt() { fl_apps_txt | grep -qxF "$1"; }
+fl_app_in_apps_txt() { fl_has_line "$(fl_apps_txt || true)" "$1"; }
 
 # A git app: apps/X with a .git and a Python package (stray files and
 # tarballs in apps/ are not apps).
@@ -79,7 +79,7 @@ fl_app_remote() {
   [[ -n "$b" ]] && r="$(fl_app_git "$app" config --get "branch.${b}.remote" 2>/dev/null || true)"
   if [[ -z "$r" || "$r" == "." ]]; then
     remotes="$(fl_app_git "$app" remote 2>/dev/null || true)"
-    if printf '%s\n' "$remotes" | grep -qx upstream; then r=upstream; else r="$(printf '%s\n' "$remotes" | head -n1)"; fi
+    if fl_has_line "$remotes" upstream; then r=upstream; else r="$(printf '%s\n' "$remotes" | head -n1)"; fi
   fi
   printf '%s' "$r"
 }

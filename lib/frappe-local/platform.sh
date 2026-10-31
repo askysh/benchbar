@@ -176,7 +176,9 @@ fl_process_running() {
 
 fl_brew_service_running() {
   local svc="$1"
-  brew services list 2>/dev/null | awk -v s="$svc" '$1==s {print $2}' | grep -q '^started$'
+  local states
+  states="$(brew services list 2>/dev/null | awk -v s="$svc" '$1==s {print $2}' || true)"
+  fl_has_line "$states" started
 }
 
 fl_port_listening() {

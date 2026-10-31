@@ -798,10 +798,11 @@ fl_pull_staging_init() {
 }
 
 fl_pull_step_download() {
-  local f size done_bytes=0 remote rsync_flags=(-a --partial) e_opts code
+  local f size done_bytes=0 remote rsync_flags=(-a --partial) e_opts code rsync_ver
   fl_pull_staging_init
   remote="$(fl_pull_rbackups_path)"
-  if rsync --version 2>/dev/null | head -n1 | grep -q -E '^rsync +version 3\.'; then
+  rsync_ver="$(rsync --version 2>/dev/null | head -n1 || true)"
+  if [[ "$rsync_ver" =~ ^rsync\ +version\ 3\. ]]; then
     rsync_flags+=(--append-verify --info=progress2)
   else
     # rsync 2.6.9 and openrsync (macOS): --partial keeps the partial file as the basis of the next run

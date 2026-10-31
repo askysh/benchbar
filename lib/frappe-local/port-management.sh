@@ -40,7 +40,7 @@ fl_pm_conflicts() {
     while IFS= read -r row; do
       [[ "$row" == "$p "* && "${row#* }" != "$FL_BENCH_DIR" ]] || continue
       owner="${row#* }"
-      if [[ "$preferred" == 1 ]] && printf '%s\n' "${PM_SOFT:-}" | grep -Fqx "$owner"; then continue; fi
+      if [[ "$preferred" == 1 ]] && fl_has_line "${PM_SOFT:-}" "$owner"; then continue; fi
       printf '%s reserved by %s\n' "$p" "$owner"
     done <<<"$PM_TAKEN"
     while IFS= read -r pid; do

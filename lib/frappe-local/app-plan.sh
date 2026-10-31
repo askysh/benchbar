@@ -520,7 +520,7 @@ fl_app_add_plan() {
         IFS='|' read -r kind kn _ <<<"$st"
         case "$kind" in
           build) for a in ${kn//,/ }; do [[ -z "$(fl_app_existing_dir "$a")" ]] || pd_build="${pd_build}${pd_build:+,}$(fl_app_existing_dir "$a")"; done ;;
-          install) if fl_sites_list | grep -qxF "$kn"; then case " ${M_SITES[$i]} " in *" $kn "*) ;; *) M_SITES[i]="${M_SITES[$i]:+${M_SITES[$i]} }$kn" ;; esac; fi ;;
+          install) if fl_has_line "$(fl_sites_list || true)" "$kn"; then case " ${M_SITES[$i]} " in *" $kn "*) ;; *) M_SITES[i]="${M_SITES[$i]:+${M_SITES[$i]} }$kn" ;; esac; fi ;;
           requirements_python) for a in ${kn//,/ }; do [[ -z "$(fl_app_existing_dir "$a")" ]] || pd_py="${pd_py}${pd_py:+,}$(fl_app_existing_dir "$a")"; done ;;
           restart) pd_restart=1 ;;
         esac

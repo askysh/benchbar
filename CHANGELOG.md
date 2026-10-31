@@ -115,6 +115,10 @@ does. Report a Bug sends a redacted report in about a minute.
 
 ### Fixed
 
+- Random false warnings and failed checks are gone. Several checks piped a
+  command into `grep -q`, which quits at the first match; the command then
+  died of a broken pipe and the check failed although it matched. Each now
+  reads the output whole first.
 - General, Menu Bar and About are panes of the BenchBar window again.
   0.8.0 gave them windows of their own, and from Settings there was no
   way back to the BenchBar window. The gear in the sidebar footer lists

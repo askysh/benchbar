@@ -183,7 +183,7 @@ chk_python_leaves() {
   esac
   # installed on request, not "a leaf": brew leaves hides a formula another
   # formula depends on (python@3.14 under pipx or uv) even when it was asked for
-  if brew list --formula --installed-on-request 2>/dev/null | grep -qx "$FL_PYTHON_FORMULA"; then
+  if fl_has_line "$(brew list --formula --installed-on-request 2>/dev/null || true)" "$FL_PYTHON_FORMULA"; then
     chk__set ok "${FL_PYTHON_FORMULA} ${ver} is user-installed (safe from brew autoremove)"
   else
     chk__set warn "${FL_PYTHON_FORMULA} is only a dependency; brew autoremove could delete it" "brew tab --installed-on-request ${FL_PYTHON_FORMULA}" python_leaves
@@ -297,7 +297,7 @@ chk_bench_version() {
   fi
   mod="$(printf '%s' "$out" | sed -n "s/.*No module named '\([A-Za-z0-9_.]*\)'.*/\1/p" | tail -n1)"
   mod="${mod%%.*}"
-  if [[ -n "$mod" && "$mod" != "frappe" ]] && fl_apps_txt | grep -qx "$mod"; then
+  if [[ -n "$mod" && "$mod" != "frappe" ]] && fl_has_line "$(fl_apps_txt || true)" "$mod"; then
     chk__set fail "bench version fails: the app ${mod} does not import (${last})" "cd ${FL_BENCH_DIR} && bench setup requirements --python   (or: ${FL_SELF} app add ${mod} --bench-dir ${FL_BENCH_DIR}, which re-clones it)"
     return 0
   fi

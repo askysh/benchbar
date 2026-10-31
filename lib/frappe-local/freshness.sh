@@ -403,7 +403,7 @@ fl_cmd_app_focus() {
     return 0
   fi
   [[ "$list" == "0" ]] || fl_die "--list takes no app name." "benchbar app focus --list"
-  fl_apps_all | grep -qxF "$app" || fl_die "${app} is not an app of this bench." "benchbar app list shows the apps."
+  fl_has_line "$(fl_apps_all || true)" "$app" || fl_die "${app} is not an app of this bench." "benchbar app list shows the apps."
   if [[ "$cmd" == "unfocus" ]]; then pin=ignore; elif [[ "$auto" == "1" ]]; then pin=auto; else pin=focus; fi
   fl_bench_state_migrate "$FL_BENCH_DIR"
   fl_app_focus_pin_set "$app" "$pin"

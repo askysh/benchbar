@@ -499,7 +499,14 @@ fl_profile_git_net() { env GIT_TERMINAL_PROMPT=0 GIT_LFS_SKIP_SMUDGE=1 GIT_SSH_C
 fl_profile_git_anon() { env GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=true SSH_ASKPASS=true GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -c credential.helper= "$@"; }
 
 fl_profile_offline_mode() { [[ "${BENCHBAR_OFFLINE:-0}" == "1" || "${OFFLINE:-0}" == "1" ]]; }
-fl_profile_offline_msg() { printf '%s' "$1" | grep -qiE 'could not resolve|network is unreachable|timed out|failed to connect|no route to host'; }
+fl_profile_offline_msg() {
+  local t
+  t="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+  case "$t" in
+    *'could not resolve'*|*'network is unreachable'*|*'timed out'*|*'failed to connect'*|*'no route to host'*) return 0 ;;
+  esac
+  return 1
+}
 
 # fl_profile_timed SECS OUT COMMAND...: stdout to OUT, the first line of
 # stderr in FL_PROFILE_ERR; exit 124 after SECS

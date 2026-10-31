@@ -204,7 +204,8 @@ case "$NODE_VERSION" in
 esac
 NPM_VERSION="$("$NPM_BIN" --version)"
 fl_ok "npm - ${NPM_VERSION} at ${NPM_BIN}"
-if "$NPM_BIN" ls -g --depth=0 2>/dev/null | grep -q ' yarn@'; then
+NPM_GLOBALS="$("$NPM_BIN" ls -g --depth=0 2>/dev/null || true)"
+if [[ "$NPM_GLOBALS" == *' yarn@'* ]]; then
   fl_info "yarn already globally installed under ${FL_NODE_FORMULA}"
 else
   fl_run "$NPM_BIN" install -g yarn
