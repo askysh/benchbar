@@ -105,7 +105,7 @@ public sealed class LogViewModel : IDisposable
             if (_showPrevious == value) return;
             _showPrevious = value;
             Reschedule();
-            _ = LoadAsync();
+            LoadAsync().Forget();
         }
     }
 
@@ -335,7 +335,7 @@ public sealed class LogViewModel : IDisposable
             if (_loop is not null) return;
             _loop = new CancellationTokenSource();
             var token = _loop.Token;
-            _ = Task.Run(() => LoopAsync(token));
+            Task.Run(() => LoopAsync(token)).Forget();
         }
     }
 

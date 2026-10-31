@@ -34,6 +34,19 @@ public class ConfigTests : IDisposable
         Assert.Null(config.Distro);
     }
 
+    [Fact]
+    public void TheBetaBannerComesBackUntilItIsDismissedAndThenStaysAway()
+    {
+        Write("{\"distro\":\"Ubuntu-24.04\"}");
+        var config = TrayConfig.Load(ConfigPath);
+        Assert.False(config.BetaBannerDismissed);
+        config.BetaBannerDismissed = true;
+        config.Save();
+        Assert.True(Read()["tray"]!["beta_banner_dismissed"]!.GetValue<bool>());
+        Assert.Equal("Ubuntu-24.04", Read()["distro"]!.GetValue<string>()); // the shim's key is untouched
+        Assert.True(TrayConfig.Load(ConfigPath).BetaBannerDismissed);
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("   \r\n")]

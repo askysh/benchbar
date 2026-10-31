@@ -151,7 +151,7 @@ public class ScaffoldViewTests
         var run = model.ConfirmAsync();
         held.Started.Task.Wait();
         Assert.Equal(PlanPhase.Running, model.Phase);
-        Assert.Empty(sheet.ButtonLabels); // no Stop: this run is not safe to kill
+        Assert.Equal(["Stop Waiting"], sheet.ButtonLabels); // no Stop: this run is not safe to kill, but the sheet can always be left
         sheet.Close();
         Assert.False(closed);
         held.Release();

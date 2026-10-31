@@ -44,7 +44,7 @@ public static class ReportContext
 
     /// <summary>A failed Check row as a problem sentence.</summary>
     public static string Step(SetupStepInfo step, string? message) =>
-        $"Step {step.Id} is {step.Status.ToString().ToLowerInvariant()}: {(string.IsNullOrWhiteSpace(message) ? step.Detail : message)}";
+        $"Step {step.Id} ({step.Status.ToString().ToLowerInvariant()}): {(string.IsNullOrWhiteSpace(message) ? step.Detail : message)}";
 
     private static string Clean(string text) => Regex.Replace(text.Trim(), @"\s+", " ");
 }

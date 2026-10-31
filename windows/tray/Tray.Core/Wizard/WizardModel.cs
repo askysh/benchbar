@@ -740,6 +740,7 @@ public sealed partial class WizardModel : IDisposable
             return false;
         }
         _homeLoaded = true;
+        if (CheckError == HomeUnknownMessage) CheckError = null;
         if (!_folderEdited) Folder = Home + "/frappe-bench";
         return true;
     }

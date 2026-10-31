@@ -67,6 +67,9 @@ internal sealed partial class WizardView
     private PageParts CheckPage()
     {
         var error = Note(error: true);
+        var reportCheck = Ui.Link(BetaText.ReportThisProblem, () => _actions.ReportBug(BetaText.ReportThisProblem, _model.CheckError), "Report this problem");
+        reportCheck.Visibility = Visibility.Collapsed;
+        reportCheck.Margin = new Thickness(0, 0, 0, 10);
         var status = Ui.Live(Ui.Text("", 13, opacity: 0.75, margin: new Thickness(0, 0, 0, 10)));
         var rows = new StackPanel();
         var restart = new StackPanel { Visibility = Visibility.Collapsed };
@@ -86,6 +89,7 @@ internal sealed partial class WizardView
 
         var panel = new StackPanel { MaxWidth = 720, HorizontalAlignment = HorizontalAlignment.Left };
         panel.Children.Add(error);
+        panel.Children.Add(reportCheck);
         panel.Children.Add(status);
         panel.Children.Add(rows);
         panel.Children.Add(restart);
@@ -113,6 +117,7 @@ internal sealed partial class WizardView
         {
             cancel.Visibility = _model.BusyStepId is not null ? Visibility.Visible : Visibility.Collapsed;
             Show(error, _model.CheckError);
+            reportCheck.Visibility = _model.CheckError is { Length: > 0 } ? Visibility.Visible : Visibility.Collapsed;
             status.Text = _model.Checking ? "Checking this PC..." : _model.FixingAll ? "Setting things up..." : "";
             status.Visibility = status.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
             var busy = _model.Checking || _model.BusyStepId is not null || _model.FixingAll;

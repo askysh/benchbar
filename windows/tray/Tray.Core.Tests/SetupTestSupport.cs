@@ -107,6 +107,7 @@ internal sealed class GatedSetup(FixtureSetupService inner) : ISetupService
 internal sealed class RecordingStream : IStreamRunner
 {
     public List<(string File, string[] Args, Dictionary<string, string> Env)> Runs { get; } = [];
+    public List<TimeSpan> Timeouts { get; } = [];
     public string[] Lines { get; set; } = [];
     public StreamResult Result { get; set; } = new(0, null);
 
@@ -114,6 +115,7 @@ internal sealed class RecordingStream : IStreamRunner
         Action<string> onLine, TimeSpan timeout, CancellationToken ct)
     {
         Runs.Add((fileName, [.. args], environment is null ? [] : new Dictionary<string, string>(environment)));
+        Timeouts.Add(timeout);
         foreach (var line in Lines) onLine(line);
         return Task.FromResult(Result);
     }
@@ -131,4 +133,68 @@ internal sealed class CapturingProcessRunner : IProcessRunner
     }
 
     public void StartDetached(string fileName, IReadOnlyList<string> args) { }
+}
+
+/// <summary>A stream runner whose process cannot start (SmartScreen, an antivirus): the exception comes out of the returned task, as it does from the real runner.</summary>
+internal sealed class BlockedStream : IStreamRunner
+{
+    public async Task<StreamResult> RunAsync(string fileName, IReadOnlyList<string> args, IReadOnlyDictionary<string, string>? environment,
+        Action<string> onLine, TimeSpan timeout, CancellationToken ct)
+    {
+        await Task.Yield();
+        throw new System.ComponentModel.Win32Exception(1260, "This program is blocked by group policy.");
+    }
+}
+
+/// <summary>The fixture service with every call overridable, for a test that changes one answer.</summary>
+internal class DelegatingSetup(FixtureSetupService inner) : ISetupService
+{
+    public FixtureSetupService Inner => inner;
+
+    public virtual Task<SetupReport> CheckAsync(string? distro, CancellationToken ct, bool probe = false) => inner.CheckAsync(distro, ct, probe);
+
+    public virtual Task<SetupRunResult> RunActionAsync(SetupRunRequest request, Action<SetupEvent> onEvent, CancellationToken ct) => inner.RunActionAsync(request, onEvent, ct);
+
+    public virtual Task<PlanResult> PlanInstallAsync(InstallRequest request, Secret admin, CancellationToken ct) => inner.PlanInstallAsync(request, admin, ct);
+
+    public virtual Task<InstallRunResult> InstallAsync(InstallRequest request, InstallSecrets secrets, Action<InstallEvent> onEvent, CancellationToken ct) => inner.InstallAsync(request, secrets, onEvent, ct);
+
+    public virtual Task<InstallRunResult> AdoptAsync(string benchPath, InstallSecrets secrets, Action<InstallEvent> onEvent, CancellationToken ct) => inner.AdoptAsync(benchPath, secrets, onEvent, ct);
+
+    public virtual Task<string?> HomeAsync(string? distro, CancellationToken ct) => inner.HomeAsync(distro, ct);
+
+    public virtual Task<IReadOnlyList<DistroInfo>> ListDistrosAsync(CancellationToken ct) => inner.ListDistrosAsync(ct);
+
+    public virtual Task<ActionResult> UseDistroAsync(string name, CancellationToken ct) => inner.UseDistroAsync(name, ct);
+
+    public virtual Task<int?> AdoptSudoStepsAsync(string benchPath, CancellationToken ct) => Task.FromResult<int?>(null);
+
+    public virtual Task<string?> ShimVersionAsync(CancellationToken ct) => inner.ShimVersionAsync(ct);
+}
+
+/// <summary>A setup action that runs until it is cancelled.</summary>
+internal sealed class HoldingSetup(FixtureSetupService inner) : DelegatingSetup(inner)
+{
+    public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public override async Task<SetupRunResult> RunActionAsync(SetupRunRequest request, Action<SetupEvent> onEvent, CancellationToken ct)
+    {
+        Started.TrySetResult();
+        await Task.Delay(Timeout.Infinite, ct);
+        return new SetupRunResult(1, false, false, false, [], [], "never");
+    }
+}
+
+/// <summary>An action that refuses to restart a running distro until it is run again with --force.</summary>
+internal sealed class RunningDistroSetup(FixtureSetupService inner) : DelegatingSetup(inner)
+{
+    public List<SetupRunRequest> Requests { get; } = [];
+
+    public override Task<SetupRunResult> RunActionAsync(SetupRunRequest request, Action<SetupEvent> onEvent, CancellationToken ct)
+    {
+        Requests.Add(request);
+        if (request.Force) return Task.FromResult(new SetupRunResult(0, true, false, false, [], [], null));
+        onEvent(new SetupEvent.Step(request.Action, "failed", "Ubuntu-24.04 is running. This change restarts it."));
+        return Task.FromResult(new SetupRunResult(1, false, false, false, [], [], "Ubuntu-24.04 is running. This change restarts it.", ErrorId: SetupIds.ErrorDistroRunning));
+    }
 }
