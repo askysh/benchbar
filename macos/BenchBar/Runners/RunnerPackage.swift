@@ -32,7 +32,7 @@ nonisolated struct RunnerManifest: Codable, Equatable, Sendable {
     }
 }
 
-/// Why a runner was rejected, in words for the Settings window.
+/// Why a runner was rejected, in words for the Menu Bar pane.
 nonisolated enum RunnerError: Error, Equatable, Sendable, LocalizedError {
     case missingManifest
     case badManifest(String)

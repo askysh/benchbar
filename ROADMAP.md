@@ -136,6 +136,17 @@ that names every missing input, `doctor --ack` and `--quick`, and logs
 with a time per line. An `app update` that stops half way is finished by
 the next one.
 
+**0.8.1, Windows beta and Open as.** The Windows tray takes a new PC
+from no WSL to a running bench and manages benches from its own window,
+with Report a Bug everywhere. `benchbar open --as USER` and Open as… in
+the app sign a development site in as any of its users, off until a
+person turns it on per site (`benchbar site open-as on`). Settings and
+About are panes of the one BenchBar window again, a live QA pass fixed
+the popover in dark mode and the Find User flow, and the menu bar has new
+runners. Behind the scenes: work lands on `next-release` and a release
+tags itself when it reaches `main`, and the mocked test suite runs about
+a quarter faster.
+
 **Launch.** The post on discuss.frappe.io went up on 2026-10-04:
 [BenchBar: local Frappe benches on macOS with a menu bar app](https://discuss.frappe.io/t/benchbar-local-frappe-benches-on-macos-with-a-menu-bar-app/165049).
 

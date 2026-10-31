@@ -1,7 +1,7 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # lsof mock: listeners come from $MOCK_LISTEN lines "port pid cmd addr"
 # shellcheck source=tests/mocks/bin/_mocklib.sh
-. "$(dirname "$0")/_mocklib.sh"
+. "${0%/*}/_mocklib.sh"
 mock_log "$@"
 # "-a -p PID[,PID...] -d cwd -Fn": the working folder of every pid that has a
 # $MOCK_STATE/cwd/PID; like the real lsof, exit 1 when any pid had none

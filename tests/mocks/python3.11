@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 case "$*" in
   --version) printf 'Python 3.11.9\n' ;;
   *) exit 0 ;;

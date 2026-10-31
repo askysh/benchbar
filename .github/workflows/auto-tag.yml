@@ -1,0 +1,89 @@
+# Tags a release when main moves to a new version, and starts its builds.
+#
+# Work lands on next-release; main moves only when a release is cut, by
+# squash merging next-release into it (docs/releasing.md). On that push:
+#   1. the version is read from FL_VERSION in benchbar and MARKETING_VERSION
+#      in macos/project.yml (they must agree) and CHANGELOG.md must have its
+#      "## X.Y.Z" section;
+#   2. when the tag vX.Y.Z does not exist yet, it is created on this commit;
+#      a push to main that keeps the version (a docs fix) tags nothing;
+#   3. release.yml and release-windows.yml are started for the tag. A tag
+#      pushed with GITHUB_TOKEN starts no workflow by itself, so they are
+#      dispatched here, with the tag as their ref;
+#   4. main is merged back into next-release, so the next release pull
+#      request shows only what is new. A conflict there (a fix made on main
+#      alone) is left for a person, with a warning.
+# A tag pushed by a person still starts both release workflows as before.
+name: Auto tag
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: auto-tag
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    name: Tag and start the release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Version
+        id: v
+        run: |
+          cli="$(sed -n 's/^FL_VERSION="\([^"]*\)"$/\1/p' benchbar | head -n 1)"
+          app="$(sed -n 's/^ *MARKETING_VERSION: *"\{0,1\}\([0-9][0-9.]*\)"\{0,1\} *$/\1/p' macos/project.yml | head -n 1)"
+          [ -n "$cli" ] || { echo "::error::no FL_VERSION in benchbar"; exit 1; }
+          [ "$cli" = "$app" ] || { echo "::error::FL_VERSION in benchbar is $cli but MARKETING_VERSION in macos/project.yml is $app"; exit 1; }
+          echo "version=$cli" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v$cli" >/dev/null; then
+            echo "new=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=No release::v$cli is tagged already; this push to main starts no release."
+            exit 0
+          fi
+          grep -q "^## $cli\( \|$\)" CHANGELOG.md || { echo "::error::CHANGELOG.md has no '## $cli' section; add it on next-release before cutting the release"; exit 1; }
+          echo "new=true" >> "$GITHUB_OUTPUT"
+
+      - name: Tag
+        if: steps.v.outputs.new == 'true'
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          git tag "v$VERSION" "$GITHUB_SHA"
+          git push origin "refs/tags/v$VERSION"
+          echo "::notice title=Tagged::v$VERSION on $GITHUB_SHA"
+
+      - name: Start the release builds
+        if: steps.v.outputs.new == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          gh workflow run release.yml --ref "v$VERSION" -f version="$VERSION"
+          gh workflow run release-windows.yml --ref "v$VERSION" -f version="$VERSION" -f draft_release=true
+          echo "::notice title=Release builds::started release.yml and release-windows.yml for v$VERSION; the draft release appears when they finish"
+
+      - name: Merge main back into next-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! git ls-remote --exit-code --heads origin next-release >/dev/null; then
+            echo "::notice::no next-release branch; nothing to merge back"
+            exit 0
+          fi
+          if gh api "repos/${GITHUB_REPOSITORY}/merges" -f base=next-release -f head="$GITHUB_SHA" \
+               -f commit_message="Merge main ($GITHUB_SHA) back into next-release" >/dev/null 2>err.txt; then
+            echo "::notice::main is merged back into next-release"
+          else
+            echo "::warning title=Merge back::main could not be merged into next-release ($(cat err.txt)). Merge it by hand: git switch next-release && git merge origin/main"
+          fi

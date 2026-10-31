@@ -1,6 +1,6 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # shellcheck source=tests/mocks/bin/_mocklib.sh
-. "$(dirname "$0")/_mocklib.sh"
+. "${0%/*}/_mocklib.sh"
 mock_log "$@"
 case "${1:-}" in
   --prefix) printf '%s\n' "${MOCK_BREW_PREFIX:?}" ;;
@@ -21,7 +21,7 @@ case "${1:-}" in
       node@*)
         d="${MOCK_BREW_PREFIX:?}/opt/${f}/bin"; mkdir -p "$d"
         [[ -e "$d/node" ]] || { printf '#!/usr/bin/env bash\nprintf "v%s.0.0\\n"\n' "${f#node@}" >"$d/node"; chmod +x "$d/node"; }
-        [[ -e "$d/npm" ]] || cp "$(dirname "$0")/../npm" "$d/npm" ;;
+        [[ -e "$d/npm" ]] || cp "${0%/*}/../npm" "$d/npm" ;;
     esac ;;
   leaves) cat "${MOCK_BREW_LEAVES:?}" ;;
   tab)

@@ -1,10 +1,10 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # getent mock: "getent hosts NAME" answers 127.0.0.1 for localhost and *.localhost,
 # and for every name listed in $MOCK_STATE/hosts_resolve; anything else is not
 # found (exit 2). $MOCK_STATE/no_myhostname: *.localhost does not resolve
 # either (glibc without nss-myhostname, as on a fresh Ubuntu in WSL)
 # shellcheck source=tests/mocks/bin/_mocklib.sh
-. "$(dirname "$0")/_mocklib.sh"
+. "${0%/*}/_mocklib.sh"
 mock_log "$@"
 [[ "${1:-}" == "hosts" ]] || exit 2
 name="${2:-}"

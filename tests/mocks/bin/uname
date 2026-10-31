@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # uname mock: the suite always sees an Apple Silicon Mac, on any host;
 # MOCK_UNAME=Linux (tests/lib/harness.sh use_linux) makes it an Ubuntu x86_64
 case "${MOCK_UNAME:-Darwin}" in

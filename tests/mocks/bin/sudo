@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # sudo mock: runs the command as the current user (tests use a temp hosts file).
 # The cached credential is the file $MOCK_STATE/sudo_cred: "sudo -v" and a
 # plain "sudo CMD" (the user typed the password) create it, "sudo -k" removes
@@ -15,7 +15,7 @@
 # as the value of any variable), is recorded in $MOCK_STATE/sudo_leak. The
 # command keeps the stdin that "-S" did not read.
 # shellcheck source=tests/mocks/bin/_mocklib.sh
-. "$(dirname "$0")/_mocklib.sh"
+. "${0%/*}/_mocklib.sh"
 [[ -n "${MOCK_NO_LOG:-}" ]] || mock_log "$@"
 state="${MOCK_STATE:-/nonexistent}"
 cred="$state/sudo_cred"

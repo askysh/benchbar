@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # git mock for install.sh: "clone URL DIR" copies the checkout at $MOCK_REPO_ROOT
 # into DIR (with a fake .git), "pull --ff-only" reports "Already up to date."
 # unless $MOCK_STATE/git_update exists, "rev-parse --short HEAD" prints the
@@ -8,7 +8,7 @@
 # changed tracked files and .git/untracked untracked ones, for symbolic-ref,
 # status and checkout; pull fails on a detached HEAD, as git does.
 # shellcheck source=tests/mocks/bin/_mocklib.sh
-. "$(dirname "$0")/_mocklib.sh"
+. "${0%/*}/_mocklib.sh"
 mock_log "$@"
 dir=""
 # -c KEY=VALUE options go back in front of the command for the real git
@@ -112,7 +112,7 @@ esac
 # Anything else goes to the real git: the first one on PATH outside the
 # mocks folder. Never this script again (bash 3.2's "command -v -p" still
 # returned the mock, and the exec loop spun forever on macOS).
-self="$(cd "$(dirname "$0")" && pwd)/git"
+self="$(cd "${0%/*}" && pwd)/git"
 real=""
 for cand in $(type -ap git 2>/dev/null) /usr/bin/git /opt/homebrew/bin/git /usr/local/bin/git; do
   [[ -x "$cand" && "$cand" != "$self" && "$cand" != */tests/mocks/bin/git ]] || continue

@@ -154,8 +154,17 @@ struct SnapshotTests {
     func window(_ store: BenchStore, _ workbench: Workbench, _ router: WindowRouter,
                         about: AboutModel? = nil) -> some View {
         MainWindowView(store: store, router: router, workbench: workbench, about: about ?? AboutModel(store: store),
-                       discovery: BenchDiscovery(store: store), wizard: wizardView(store, WizardRun(store: store)))
+                       discovery: BenchDiscovery(store: store), wizard: wizardView(store, WizardRun(store: store)),
+                       makeSettings: settingsPart(store))
             .frame(width: 900, height: 620)
+    }
+
+    /// General and Menu Bar as the app delegate makes them for the window.
+    func settingsPart(_ store: BenchStore) -> (SettingsView.Part) -> SettingsView {
+        { part in
+            SettingsView(settings: base.settings, store: store, library: library(), launchAtLogin: LaunchAtLogin(),
+                         notifier: Notifier(settings: base.settings), part: part, chooseCLI: {})
+        }
     }
 
     func library() -> RunnerLibrary {
@@ -267,7 +276,7 @@ struct SnapshotTests {
         await about.loadCLIVersion()
         await about.updates.check()
         try render(AboutPane(store: store, model: about, router: WindowRouter())
-            .frame(width: AboutWindowController.size.width, height: AboutWindowController.size.height), "window-about")
+            .frame(width: 560, height: 640), "window-about")
     }
 
     @Test func bugReportSheet() async throws {
@@ -326,17 +335,12 @@ struct SnapshotTests {
             makeClient: { CLIClient(executable: $0, runner: runner) },
             pinger: { _, _ in 200 })
         await store.start(polling: false)
-        let tabs = SettingsTabs()
-        func part(_ part: SettingsView.Part) -> SettingsView {
-            SettingsView(settings: base.settings, store: store, library: library(), launchAtLogin: LaunchAtLogin(),
-                         notifier: Notifier(settings: base.settings), part: part, showsHeader: false, chooseCLI: {})
-        }
-        // the window's first size; the window can be resized from there
-        let view = SettingsTabsView(tabs: tabs, general: part(.general), menuBar: part(.menuBar))
-            .frame(width: SettingsTabsView.size.width, height: SettingsTabsView.size.height)
-        try render(view, "settings-general")
-        tabs.selected = .menuBar
-        try render(view, "settings-menubar")
+        let router = WindowRouter()
+        let workbench = Workbench(store: store)
+        router.pane = .general
+        try render(window(store, workbench, router), "settings-general")
+        router.pane = .menuBar
+        try render(window(store, workbench, router), "settings-menubar")
     }
 
     // MARK: screens added in the 0.7 window pass, so every sheet renders

@@ -183,7 +183,7 @@ chk_python_leaves() {
   esac
   # installed on request, not "a leaf": brew leaves hides a formula another
   # formula depends on (python@3.14 under pipx or uv) even when it was asked for
-  if brew list --formula --installed-on-request 2>/dev/null | grep -qx "$FL_PYTHON_FORMULA"; then
+  if fl_has_line "$(brew list --formula --installed-on-request 2>/dev/null || true)" "$FL_PYTHON_FORMULA"; then
     chk__set ok "${FL_PYTHON_FORMULA} ${ver} is user-installed (safe from brew autoremove)"
   else
     chk__set warn "${FL_PYTHON_FORMULA} is only a dependency; brew autoremove could delete it" "brew tab --installed-on-request ${FL_PYTHON_FORMULA}" python_leaves
@@ -297,7 +297,7 @@ chk_bench_version() {
   fi
   mod="$(printf '%s' "$out" | sed -n "s/.*No module named '\([A-Za-z0-9_.]*\)'.*/\1/p" | tail -n1)"
   mod="${mod%%.*}"
-  if [[ -n "$mod" && "$mod" != "frappe" ]] && fl_apps_txt | grep -qx "$mod"; then
+  if [[ -n "$mod" && "$mod" != "frappe" ]] && fl_has_line "$(fl_apps_txt || true)" "$mod"; then
     chk__set fail "bench version fails: the app ${mod} does not import (${last})" "cd ${FL_BENCH_DIR} && bench setup requirements --python   (or: ${FL_SELF} app add ${mod} --bench-dir ${FL_BENCH_DIR}, which re-clones it)"
     return 0
   fi
@@ -472,7 +472,7 @@ chk_helpers() {
   # every helper runs the benchbar the block names: one that is gone (a
   # Cellar folder after brew cleanup, a checkout moved to the Trash) breaks
   # them all, whatever the block's hash says
-  recorded="$(fl_rc_block_extract "$rc" | sed -n 's/^BENCHBAR="\(.*\)"$/\1/p' | head -n 1)"
+  recorded="$(fl_rc_block_extract "$rc" | sed -n 's/^BENCHBAR="\(.*\)"$/\1/p' | awk 'NR==1')"
   if [[ -n "$recorded" && ! -e "$recorded" ]]; then
     chk__set fail "benchup and the other helpers in ${rc} run ${recorded}, which is gone" "${FL_SELF} repair" write_helpers
   elif [[ "$CHK_STATUS" != ok && "${FL_INSTALL_KIND:-}" == homebrew && -n "$recorded" ]]; then
@@ -626,7 +626,7 @@ chk_cli_link() {
 }
 
 # fl_cli_version_at FILE: the version a benchbar script declares, or nothing
-fl_cli_version_at() { sed -n 's/^FL_VERSION="\(.*\)"$/\1/p' "$1" 2>/dev/null | head -n 1; }
+fl_cli_version_at() { sed -n 's/^FL_VERSION="\(.*\)"$/\1/p' "$1" 2>/dev/null | awk 'NR==1'; }
 
 # A second copy of the CLI: the one line installer's checkout next to
 # Homebrew's formula. Those two share one state folder (state.sh moves the
@@ -1214,13 +1214,13 @@ fl_mariadb_server_version() {
   if [[ -n "$pid" ]]; then
     bin="$(ps -o command= -p "$pid" 2>/dev/null | awk '{print $1}' || true)"
     if [[ "$bin" == */mariadbd && -x "$bin" ]]; then
-      "$bin" --version 2>/dev/null | fl_parse_mariadb_version | head -n1
+      "$bin" --version 2>/dev/null | fl_parse_mariadb_version | awk 'NR==1'
       return 0
     fi
   fi
   for f in "$FL_MARIADB_FORMULA" mariadb@11.8 mariadb@11.4 mariadb@10.11 mariadb@10.6 mariadb; do
     if [[ -x "${FL_BREW_PREFIX}/opt/${f}/bin/mariadb" ]]; then
-      "${FL_BREW_PREFIX}/opt/${f}/bin/mariadb" --version 2>/dev/null | fl_parse_mariadb_version | head -n1
+      "${FL_BREW_PREFIX}/opt/${f}/bin/mariadb" --version 2>/dev/null | fl_parse_mariadb_version | awk 'NR==1'
       return 0
     fi
   done
@@ -1297,7 +1297,7 @@ chk_honcho_setuptools() {
 # OBJC_DISABLE_INITIALIZE_FORK_SAFETY and NO_PROXY keep macOS from killing
 # forked workers; the agent plist sets them and honcho's children inherit.
 chk_fork_safety() {
-  local plist missing=""
+  local plist missing="" after
   # the unit sets NO_PROXY itself and macOS' fork check does not exist on Linux
   if declare -F fl_is_linux >/dev/null && fl_is_linux; then chk__set ok "skipped: macOS only"; return 0; fi
   plist="$(fl_agent_plist_path)"
@@ -1305,8 +1305,12 @@ chk_fork_safety() {
     chk__set ok "skipped: no agent plist yet"
     return 0
   fi
-  grep -A1 -F '<key>OBJC_DISABLE_INITIALIZE_FORK_SAFETY</key>' "$plist" | grep -q -F '<string>YES</string>' || missing="${missing} OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES"
-  grep -A1 -F '<key>NO_PROXY</key>' "$plist" | grep -q -F '<string>*</string>' || missing="${missing} NO_PROXY=*"
+  # the key and the line after it, read whole: "grep | grep -q" under
+  # pipefail failed when grep -q quit before the first grep finished writing
+  after="$(grep -A1 -F '<key>OBJC_DISABLE_INITIALIZE_FORK_SAFETY</key>' "$plist" 2>/dev/null || true)"
+  [[ "$after" == *'<string>YES</string>'* ]] || missing="${missing} OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES"
+  after="$(grep -A1 -F '<key>NO_PROXY</key>' "$plist" 2>/dev/null || true)"
+  [[ "$after" == *'<string>*</string>'* ]] || missing="${missing} NO_PROXY=*"
   if [[ -n "$missing" ]]; then
     chk__set warn "the agent does not pass${missing} to the workers" "${FL_SELF} repair" write_plist
   else

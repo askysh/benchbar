@@ -1,13 +1,15 @@
 import CoreGraphics
 import Foundation
 
-// The two built in runners, drawn with Core Graphics so there are no image
-// files to keep in sync. Everything is drawn in points on an 18 pt tall
-// canvas (y goes up), then rendered at 2x: 36 px tall frames.
+// The built in runners, drawn with Core Graphics so there are no image
+// files to keep in sync. This file has the canvas, the Bench and the Coffee
+// cup; the others have a file each (KettleRunnerArt.swift and so on).
+// Everything is drawn in points on an 18 pt tall canvas (y goes up), then
+// rendered at 2x: 36 px tall frames.
 //
-// Both characters are original: a park bench and a coffee cup, each with
-// two legs and a face, running to the right. Faces are cut out of the
-// filled shapes, so they read as holes once macOS tints the frame.
+// All of them are original. The first two are a park bench and a coffee
+// cup, each with two legs and a face, running to the right. Faces are cut
+// out of the filled shapes, so they read as holes once macOS tints the frame.
 
 /// A frame being drawn: the context plus a few shape helpers.
 nonisolated struct RunnerCanvas {
@@ -15,11 +17,11 @@ nonisolated struct RunnerCanvas {
 
     /// Renders one frame `width` points wide.
     static func render(width: CGFloat, _ draw: (RunnerCanvas) -> Void) -> CGImage {
-        let scale = Runner.scale
+        let scale = Runner.renderScale
         let context = CGContext(
             data: nil,
             width: Int(width * scale),
-            height: Runner.pixelHeight,
+            height: Int(Runner.pointHeight * scale),
             bitsPerComponent: 8,
             bytesPerRow: 0,
             space: CGColorSpace(name: CGColorSpace.sRGB)!,
@@ -67,6 +69,34 @@ nonisolated struct RunnerCanvas {
         context.move(to: first)
         for point in points.dropFirst() { context.addLine(to: point) }
         context.strokePath()
+    }
+
+    /// A filled polygon through `points`.
+    func shape(_ points: [CGPoint]) {
+        guard let first = points.first else { return }
+        context.move(to: first)
+        for point in points.dropFirst() { context.addLine(to: point) }
+        context.closePath()
+        context.fillPath()
+    }
+
+    /// A stroked arc. Angles are radians, counterclockwise positive (y is
+    /// up); `sweep` is the signed length. The tray's port has the same call.
+    func arc(center: CGPoint, radius: CGFloat, start: CGFloat, sweep: CGFloat, width: CGFloat) {
+        context.setLineWidth(width)
+        context.addArc(center: center, radius: radius, startAngle: start, endAngle: start + sweep, clockwise: sweep < 0)
+        context.strokePath()
+    }
+
+    // The same shapes as holes. The tray has one call for each, since GDI+
+    // cannot erase with a brush the way the clear blend mode does.
+
+    func cutDot(_ center: CGPoint, radius: CGFloat) { cutting { dot(center, radius: radius) } }
+
+    func cutLine(_ points: [CGPoint], width: CGFloat) { cutting { line(points, width: width) } }
+
+    func cutArc(center: CGPoint, radius: CGFloat, start: CGFloat, sweep: CGFloat, width: CGFloat) {
+        cutting { arc(center: center, radius: radius, start: start, sweep: sweep, width: width) }
     }
 
     /// A two part leg from `hip`. Angles are degrees from straight down,
@@ -393,7 +423,7 @@ nonisolated enum CupRunnerArt {
 }
 
 /// Two z's floating up and away, frame `i` of 4.
-nonisolated private func sleepMarks(_ c: RunnerCanvas, _ i: Int, x: CGFloat) {
+nonisolated func sleepMarks(_ c: RunnerCanvas, _ i: Int, x: CGFloat) {
     let rise = CGFloat(i) * 0.7
     c.sleepZ(at: CGPoint(x: x, y: 7.2 + rise), size: 2.2)
     if i >= 1 {

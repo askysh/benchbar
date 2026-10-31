@@ -55,6 +55,8 @@ final class BenchModel: Identifiable {
         SiteRow.make(sites: status?.sites ?? summary.sites, defaultSite: summary.site,
                      port: status?.ports?.web ?? summary.ports.web)
     }
+    /// The CLI has listed this bench's sites (an older one may not).
+    var sitesKnown: Bool { (status?.sites ?? summary.sites) != nil }
     /// Procfile.lean runs the scheduler (status --json, CLI 0.4 and later).
     var schedulerOn: Bool? { status?.scheduler }
     /// When the current run started, while it is starting or running.
@@ -138,12 +140,24 @@ final class BenchStore {
     }
 
     @ObservationIgnored let settings: AppSettings
+    /// Pins, recents and sessions of "Open as…" (OpenAsStore), and the
+    /// browser tracking that comes with it. Made on first use: nothing exists
+    /// for a person who never turns Open as on (`startOpenAsIfOptedIn`).
+    @ObservationIgnored private var openAsStore: OpenAsStore?
+    var openAs: OpenAsStore {
+        if let openAsStore { return openAsStore }
+        let made = OpenAsStore()
+        openAsStore = made
+        return made
+    }
+    /// nil until the feature is first used; for views that only read.
+    var openAsIfStarted: OpenAsStore? { openAsStore }
     @ObservationIgnored var onAlert: ((BenchModel, BenchAlert) -> Void)?
     /// Called after anything that changes what the menu bar shows.
     @ObservationIgnored var onChange: (() -> Void)?
     /// How far each bench's files can be trusted, by path. Logged on change.
     @ObservationIgnored private(set) var trust: [String: BenchTrust] = [:]
-    /// What of the BenchBar window is on screen (SettingsWindowController).
+    /// What of the BenchBar window is on screen (MainWindowController).
     @ObservationIgnored private(set) var windowSight = WindowSight()
 
     @ObservationIgnored private let makeClient: (URL) -> CLIClient
@@ -171,6 +185,7 @@ final class BenchStore {
     @ObservationIgnored private var popoverOpen = false
     @ObservationIgnored private var polling = false
     @ObservationIgnored private var suspended = false
+    @ObservationIgnored private var lastReload = Date.distantPast
     /// Bumped by suspend: a legacy loop from before ends at its next wake.
     /// That loop is never cancelled, since it may be in a CLI call, and a
     /// cancel there makes swift-subprocess SIGTERM bash (a fake "timed out").
@@ -316,7 +331,7 @@ final class BenchStore {
     func reloadBenches() async {
         guard let client else { return }
         isLoading = true
-        defer { isLoading = false; hasLoadedBenches = true }
+        defer { isLoading = false; hasLoadedBenches = true; lastReload = Date() }
         do {
             let list = try await client.list()
             if listError != nil { listError = nil }
@@ -335,10 +350,23 @@ final class BenchStore {
             }
             syncWatchers()
             await refreshAll()
+            startOpenAsIfOptedIn()
         } catch {
             listError = error.localizedDescription
         }
         notifyChange()
+    }
+
+    /// Starts the Open as store once a site has the opt-in on, and drops the
+    /// pins of benches and sites that are gone.
+    private func startOpenAsIfOptedIn() {
+        let optedIn = benches.contains { $0.siteRows.contains { $0.openAsEnabled == true } }
+        guard optedIn || openAsStore != nil else { return }
+        var known: [String: Set<String>?] = [:]
+        for bench in benches {
+            known[bench.path] = bench.sitesKnown ? Set(bench.siteRows.map(\.name)) : nil
+        }
+        openAs.prune(keeping: known)
     }
 
     func refreshAll() async {
@@ -373,6 +401,9 @@ final class BenchStore {
                 if superseded.contains(bench.path) { continue }
                 apply(.observed(status, .status), to: bench)
                 readFiles(bench, verdict: status)
+                if bench.sitesKnown, let openAs = openAsStore {
+                    openAs.forgetSessions(bench: bench.path, keeping: Set(bench.siteRows.filter { $0.openAs == true }.map(\.name)))
+                }
                 await sampleResources(bench)
             } catch {
                 let message = error.localizedDescription
@@ -743,8 +774,17 @@ final class BenchStore {
         if open, !suspended { Task(priority: .utility) { await reloadBenches() } }
     }
 
+    /// BenchBar became the active app (a click back from Terminal or the
+    /// browser) with its window open: what the person changed meanwhile, such
+    /// as `developer_mode` in a site's config, is not in any watched file, so
+    /// the window read stale until the popover was opened. At most every 15 s.
+    func appBecameActive() {
+        guard windowSight.isOpen, !suspended, !isLoading, Date().timeIntervalSince(lastReload) > 15 else { return }
+        Task(priority: .utility) { await reloadBenches() }
+    }
+
     /// The BenchBar window opened, closed, came on screen or left it, or
-    /// shows another page (SettingsWindowController).
+    /// shows another page (MainWindowController).
     func setWindow(_ sight: WindowSight) {
         guard sight != windowSight else { return }
         let wasFast = fastMode

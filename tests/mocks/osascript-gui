@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # osascript stand-in for BENCHBAR_SUDO=gui tests (FL_OSASCRIPT points at it).
 # benchbar calls: osascript -e ... -e ... -e ... -- COMMANDLINE REASON. This
 # one records the REASON of every call in $MOCK_STATE/osa_reasons and the

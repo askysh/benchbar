@@ -13,7 +13,8 @@ shim (`windows/shim`, Go) and the tray app (`windows/tray`, .NET).
 
 ## What does not run here
 - The bash test suite and the CLI itself: run them inside WSL (`wsl.exe -- bash tests/run-tests.sh`
-  from the repo checkout inside the distro, not from a Windows checkout).
+  from the repo checkout inside the distro, not from a Windows checkout). `bash tests/affected.sh`
+  there runs only the tests a change touches.
 - Xcode, the Mac app, launchctl, codesign, notarization.
 - Never put a bench or BenchBar state on a Windows drive, and never run `wsl.exe --unregister`.
 - Defender exclusions and Task Scheduler changes need an elevated prompt: ask first.

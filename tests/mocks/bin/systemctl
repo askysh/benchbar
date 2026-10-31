@@ -1,11 +1,11 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # systemctl mock: units live as key=value files in $MOCK_STATE/units/<unit>
 # (LoadState, ActiveState, MainPID, ExecMainStatus, UnitFileState). A unit
 # file in the user unit folder becomes "loaded" at daemon-reload, like the
 # real one; start needs a loaded unit. --system units keep their state under
 # $MOCK_STATE/units/system/.
 # shellcheck source=tests/mocks/bin/_mocklib.sh
-. "$(dirname "$0")/_mocklib.sh"
+. "${0%/*}/_mocklib.sh"
 mock_log "$@"
 scope=system; args=()
 for a in "$@"; do

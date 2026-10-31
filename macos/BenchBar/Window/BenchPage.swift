@@ -18,6 +18,8 @@ struct BenchPage: View {
                 }
                 .pageTabs()
                 .labelsHidden()
+                // the first tab drew a focus ring when the window opened, and the clicked one after
+                .focusEffectDisabled()
                 ChangeResultBanner(workbench: workbench, scope: bench.path)
                     .padding(.top, 10)
             }
@@ -33,6 +35,10 @@ struct BenchPage: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+        // a success banner belongs to the tab it came from; a failure stays until dismissed
+        .onChange(of: router.benchTab) {
+            if workbench.result?.succeeded == true { workbench.result = nil }
         }
     }
 
@@ -187,6 +193,13 @@ struct BenchOverview: View {
             if !editorInMenu {
                 editorButton(editor).fixedSize()
             }
+            if let defaultRow = bench.siteRows.first(where: \.isDefault) {
+                OpenAsMenu(store: store, bench: bench, row: defaultRow) {
+                    router.findUserRequest = FindUserRequest(bench: bench.path, site: defaultRow.name)
+                    router.benchTab = .sites
+                }
+                .fixedSize()
+            }
             Button(defaultNeedsHosts ? "Set Up Site…" : "Open Site") {
                 if defaultNeedsHosts { router.benchTab = .sites }
                 else { Workspace.openSite(bench) }
@@ -244,6 +257,8 @@ struct BenchSites: View {
     @State private var addingSite = false
     @State private var hosts: HostsRun?
     @State private var dropping: String?
+    @State private var findingUser: String?
+    @State private var allowingOpenAs: String?
 
     private var busy: Bool { !store.canChange(bench) }
 
@@ -262,18 +277,23 @@ struct BenchSites: View {
                             if let last = workbench.backups(of: row.name, on: bench)?.backups.first {
                                 LastBackupLine(backup: last)
                             }
+                            if let line = OpenAsMenuModel.statusLine(row) {
+                                Text(line.text).font(.caption).foregroundStyle(line.warning ? .orange : .secondary)
+                                    .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                            }
                         }
                         Spacer()
                         if bench.activity?.hasPrefix("Back up \(row.name)") == true {
                             ProgressView().controlSize(.small)
                         }
+                        OpenAsMenu(store: store, bench: bench, row: row) { findingUser = row.name }
                         Button(row.needsHosts ? "Set Up…" : "Open") {
                             if row.needsHosts { openHosts() }
                             else { Workspace.open(row.url) }
                         }
                         .disabled(!row.needsHosts && bench.state != .running)
-                        SiteMenu(workbench: workbench, bench: bench, row: row, busy: busy,
-                                 onlySite: rows.count == 1) { dropping = row.name }
+                        SiteMenu(workbench: workbench, bench: bench, row: row, busy: busy, onlySite: rows.count == 1,
+                                 openAs: { turnOpenAs(row) }) { dropping = row.name }
                     }
                 }
             } header: {
@@ -285,8 +305,10 @@ struct BenchSites: View {
                         .disabled(busy)
                 }
             } footer: {
-                Text("The default site is the one benchup waits for, the runner pings and ⌘O opens.")
-                    .font(.caption).foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("The default site is the one benchup waits for, the runner pings and ⌘O opens.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
             if rows.count == 1 {
                 Section {
@@ -312,9 +334,26 @@ struct BenchSites: View {
         }
         .formStyle(.grouped)
         .task(id: bench.siteRows.map(\.name)) { await workbench.loadBackups(bench) }
-        .task { openRequestedHosts() }
+        .task { openRequestedHosts(); openRequestedFindUser() }
         .onChange(of: router?.hostsRequest) { openRequestedHosts() }
+        .onChange(of: router?.findUserRequest) { openRequestedFindUser() }
+        .alert("Allow Open as on \(allowingOpenAs ?? "")?",
+               isPresented: Binding(get: { allowingOpenAs != nil }, set: { if !$0 { allowingOpenAs = nil } })) {
+            Button("Allow Open as") {
+                guard let site = allowingOpenAs else { return }
+                allowingOpenAs = nil
+                Task { await workbench.setOpenAs(true, site: site, on: bench) }
+            }
+            Button("Cancel", role: .cancel) { allowingOpenAs = nil }
+        } message: {
+            Text(OpenAsMenuModel.allowMessage)
+        }
         .sheet(item: $hosts) { run in HostsSheet(run: run) { hosts = nil } }
+        .sheet(item: Binding(get: { findingUser.map(FindUserTarget.init) }, set: { findingUser = $0?.site })) { target in
+            if let row = rows.first(where: { $0.name == target.site }) {
+                FindUserSheet(store: store, bench: bench, row: row) { findingUser = nil }
+            }
+        }
         .sheet(item: Binding(get: { dropping.map(DropTarget.init) }, set: { dropping = $0?.site })) { target in
             SiteDropSheet(workbench: workbench, bench: bench, site: target.site) { dropping = nil }
         }
@@ -329,6 +368,21 @@ extension BenchSites {
         hosts = HostsRun(bench: bench, store: store)
     }
 
+    /// Turning it on asks first; turning it off does not.
+    fileprivate func turnOpenAs(_ row: SiteRow) {
+        if row.openAsEnabled == true {
+            Task { await workbench.setOpenAs(false, site: row.name, on: bench) }
+        } else {
+            allowingOpenAs = row.name
+        }
+    }
+
+    fileprivate func openRequestedFindUser() {
+        guard let request = router?.findUserRequest, request.bench == bench.path else { return }
+        router?.findUserRequest = nil
+        findingUser = request.site
+    }
+
     fileprivate func openRequestedHosts() {
         guard router?.hostsRequest == bench.path else { return }
         router?.hostsRequest = nil
@@ -337,6 +391,11 @@ extension BenchSites {
 }
 
 private struct DropTarget: Identifiable {
+    var site: String
+    var id: String { site }
+}
+
+private struct FindUserTarget: Identifiable {
     var site: String
     var id: String { site }
 }
@@ -369,6 +428,7 @@ struct SiteMenu: View {
     let row: SiteRow
     let busy: Bool
     let onlySite: Bool
+    let openAs: () -> Void
     let drop: () -> Void
 
     var body: some View {
@@ -389,6 +449,10 @@ struct SiteMenu: View {
             Divider()
             Button("Open Console") { Workspace.openShell(.console, site: row.name, bench: bench, store: workbench.store) }
             Button("Open Database") { Workspace.openShell(.db, site: row.name, bench: bench, store: workbench.store) }
+            if let enabled = row.openAsEnabled {
+                Divider()
+                Button(enabled ? "Turn Off Open as" : "Allow Open as…", action: openAs)
+            }
             Divider()
             Button("Drop Site…", role: .destructive, action: drop)
                 .disabled(onlySite)
@@ -527,9 +591,10 @@ struct LockSection: View {
                 } else if let check {
                     Image(systemName: check.inSync ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
                         .foregroundStyle(check.inSync ? .green : .orange)
+                        .accessibilityLabel(check.inSync ? "In sync" : "Differences")
                     Text(LockText.badge(check))
                 } else if let error = workbench.lockErrors[bench.path] {
-                    Image(systemName: "xmark.octagon.fill").foregroundStyle(.red)
+                    Image(systemName: "xmark.octagon.fill").foregroundStyle(.red).accessibilityLabel("Error")
                     Text(error).font(.caption).foregroundStyle(.secondary).lineLimit(2).textSelection(.enabled)
                 }
                 Spacer()

@@ -4,11 +4,12 @@
 #
 #   tests/run-tests.sh                  all tests, PARALLEL at a time
 #   PARALLEL=1 tests/run-tests.sh       one after another
-#   SHARD=2/3 tests/run-tests.sh        only the second third (CI matrix)
+#   SHARD=2/3 tests/run-tests.sh        only the second third, balanced by TEST_SECS (CI matrix)
 #   tests/run-tests.sh test-doctor ...  only the named tests
 #   tests/run-tests.sh shellcheck       only the lint
 #   SHELLCHECK=0 tests/run-tests.sh     the tests without the lint
 #   SKIP_TESTS="test-a test-b" ...      all but those (before sharding)
+#   LIST_ONLY=1 SHARD=2/4 ...           print the chosen tests, run nothing
 #
 # PARALLEL defaults to the number of CPUs. Every test builds its own HOME
 # and mock state under mktemp, so they run side by side; each test's output
@@ -25,17 +26,15 @@ SCRIPTS=("$ROOT"/benchbar "$ROOT"/00-mac-system-deps.sh "$ROOT"/00-linux-system-
 
 bash -n "${SCRIPTS[@]}"
 
-# Longest first (measured in CI, macOS and Linux together), so the pool
-# never waits on a slow test that started last. Shards take every Nth test
-# of this list, which balances them. A new test file must be added here;
-# the check below enforces it.
-ALL_TESTS="test-doctor test-phases test-install-json test-install-json-2 test-lock test-apps test-app-recovery test-app-batch test-pull test-repair test-install-linux test-port-management
-test-profiles test-service test-homebrew test-multi-bench test-ports test-sites test-input-hygiene test-doctor-hardening
-test-cli test-freshness test-hygiene test-mcp test-site-backups test-app-cli test-process test-doctor-linux test-install-sh test-install-sh-linux
+# Every test file. Shards are filled from TEST_SECS below, not from this
+# order. A new test file must be added here; the check below enforces it.
+ALL_TESTS="test-doctor test-phases test-install-json test-install-json-2 test-lock test-apps test-app-recovery test-app-recovery-2 test-app-recovery-3 test-app-batch test-pull test-repair test-install-linux test-port-management
+test-profiles test-profiles-2 test-profiles-3 test-service test-homebrew test-multi-bench test-ports test-sites test-input-hygiene test-doctor-hardening
+test-cli test-open-as test-freshness test-hygiene test-mcp test-site-backups test-app-cli test-process test-doctor-linux test-install-sh test-install-sh-linux
 test-adopt test-systemd test-migrate test-repair-json test-json test-report test-profile-v16 test-state-migrate test-run-lock
-test-runner test-redact test-docs-command test-status-cost test-bench-flow test-run test-platform-linux test-self-update
-test-site-restore test-services-served test-templates test-discovery test-shellrc test-docs test-platform test-packaging test-ui test-release-notes test-version-policy
-test-agent-contracts test-sudo-env test-prerequisites-linux test-windows-commands"
+test-runner test-redact test-docs-command test-status-cost test-command-cost test-bench-flow test-run test-platform-linux test-self-update
+test-site-restore test-site-restore-2 test-services-served test-templates test-discovery test-shellrc test-docs test-platform test-packaging test-ui test-release-notes test-version-policy test-affected
+test-agent-contracts test-agent-contracts-2 test-agent-contracts-3 test-pipelines test-sudo-env test-prerequisites-linux test-windows-commands"
 
 for f in "$ROOT"/tests/test-*.sh; do
   n="$(basename "$f" .sh)"
@@ -44,6 +43,42 @@ for f in "$ROOT"/tests/test-*.sh; do
     *) printf 'FAIL: %s is not in the test list of tests/run-tests.sh\n' "$n" >&2; exit 1 ;;
   esac
 done
+
+# Seconds each test takes in a macOS CI shard (3 at a time), as the CI log
+# reports them ("--- ok: test-x (Ns)"); the Linux only tests, which macOS
+# skips, keep their Linux times. A test not named here counts as 10. Only the proportions matter.
+# Shards are filled from this table (see "the jobs"): after a test is added,
+# split or sped up, put its new time here.
+TEST_SECS="test-services-served=287 test-lock=201 test-repair=190 test-apps=186 test-install-json-2=184 test-install-json=183
+test-pull=170 test-mcp=162 test-phases=159 test-port-management=151 test-site-restore=148 test-sudo-env=143
+test-doctor=142 test-app-recovery-2=142 test-profiles-2=138 test-doctor-hardening=128 test-site-restore-2=127 test-app-cli=125
+test-app-batch=110 test-app-recovery=108 test-agent-contracts=108 test-homebrew=107 test-app-recovery-3=106 test-input-hygiene=101
+test-windows-commands=93 test-service=91 test-agent-contracts-3=90 test-sites=89 test-ports=88 test-profiles-3=79
+test-agent-contracts-2=77 test-hygiene=75 test-cli=71 test-freshness=60 test-adopt=60 test-multi-bench=54
+test-site-backups=54 test-profile-v16=42 test-install-sh=41 test-migrate=41 test-process=39 test-json=39
+test-pipelines=38 test-open-as=36 test-command-cost=35 test-profiles=32 test-run-lock=30 test-redact=28
+test-report=24 test-repair-json=23 test-runner=21 test-state-migrate=19 test-status-cost=14 test-docs-command=12
+test-install-linux=110 test-doctor-linux=77 test-systemd=37 test-bench-flow=10 test-platform-linux=3 test-self-update=8
+test-prerequisites-linux=7 test-install-sh-linux=5 test-discovery=4 test-run=3 test-templates=3 test-shellrc=2
+test-docs=1 test-platform=1 test-packaging=1 test-affected=1 test-ui=0 test-release-notes=0
+test-version-policy=0"
+test_secs() {
+  local w
+  w=" $(printf '%s' "$TEST_SECS" | tr '\n' ' ') "
+  case "$w" in
+    *" $1="*) w="${w#*" $1="}"; printf '%s' "${w%% *}" ;;
+    *) printf '10' ;;
+  esac
+}
+
+# weighted_tests: "SECS NAME" for every test that SKIP_TESTS leaves in
+weighted_tests() {
+  local t
+  for t in $ALL_TESTS; do
+    case " ${SKIP_TESTS:-} " in *" $t "*) continue ;; esac
+    printf '%s %s\n' "$(test_secs "$t")" "$t"
+  done
+}
 
 ncpu() { sysctl -n hw.ncpu 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2; }
 PARALLEL="${PARALLEL:-$(ncpu)}"
@@ -115,18 +150,30 @@ if [[ "$#" -gt 0 ]]; then
     JOBS+=("$t")
   done
 else
-  i=0
-  for t in $ALL_TESTS; do
-    case " ${SKIP_TESTS:-} " in *" $t "*) continue ;; esac
-    [[ $((i % SHARD_N + 1)) -eq "$SHARD_I" ]] && JOBS+=("$t")
-    i=$((i + 1))
-  done
+  # Shards are balanced by weight: the tests, heaviest first, each go to the
+  # shard with the least work so far (ties to the lowest number). Every shard
+  # runs the same arithmetic on the same list, so together they cover each
+  # test once; a shard runs its tests heaviest first.
+  SHARD_LOAD=()
+  k=0
+  while [[ "$k" -lt "$SHARD_N" ]]; do SHARD_LOAD[k]=0; k=$((k + 1)); done
+  while read -r secs t; do
+    best=0; k=1
+    while [[ "$k" -lt "$SHARD_N" ]]; do
+      if [[ "${SHARD_LOAD[k]}" -lt "${SHARD_LOAD[best]}" ]]; then best="$k"; fi
+      k=$((k + 1))
+    done
+    SHARD_LOAD[best]=$((SHARD_LOAD[best] + secs))
+    if [[ $((best + 1)) -eq "$SHARD_I" ]]; then JOBS+=("$t"); fi
+  done < <(weighted_tests | sort -k1,1nr -k2,2)
 fi
 if [[ "$#" -eq 0 && "$SHARD_I" -eq 1 && "${SHELLCHECK:-1}" != "0" ]]; then
   if command -v shellcheck >/dev/null 2>&1; then JOBS+=(shellcheck); else
     printf 'shellcheck not installed; skipped lint (brew install shellcheck)\n'
   fi
 fi
+
+if [[ -n "${LIST_ONLY:-}" ]]; then printf '%s\n' ${JOBS[@]+"${JOBS[@]}"}; exit 0; fi
 
 OUT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/benchbar-run-tests.XXXXXX")"
 PIDS=()

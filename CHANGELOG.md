@@ -8,6 +8,11 @@ BenchBar for Windows is now a beta. The tray takes a new PC from no WSL to
 a running bench, and manages benches from its own window, as the Mac app
 does. Report a Bug sends a redacted report in about a minute.
 
+On the Mac, Open as signs a development site in as any of its users, so
+you can check what each role sees, once you turn it on for that site.
+Settings and About are back in the BenchBar window, the popover reads
+over a white page in dark mode, and the menu bar has new runners.
+
 ### Windows beta
 
 - The window title, a Beta pill and a banner that you can dismiss say that
@@ -22,6 +27,42 @@ does. Report a Bug sends a redacted report in about a minute.
 - `benchbar.exe report-windows --json` writes that zip from the command
   line.
 - New issue form for Windows bugs.
+
+### Added
+
+- `benchbar open --as USER` opens a site signed in as any of its users,
+  with no password, to check what a role sees and which workflow actions
+  it gets. It is off until you turn it on for a site, in a terminal:
+  `benchbar site open-as on NAME`. The site also needs `developer_mode`
+  (Administrator included) and must be the site the web process answers
+  as. A sign in runs the apps' `on_login` and `on_session_creation` hooks
+  as a real login does (`last_login`, an Activity Log entry, a mail to
+  System Managers for Administrator, an ERPNext Customer or Supplier for a
+  Website User), and Frappe may end the user's oldest session. `--path` lands on a page,
+  `--print-url` prints the link instead. `benchbar open` alone opens the
+  site.
+- `benchbar site open-as on|off|status [NAME]` keeps that choice in
+  benchbar's state for the bench, never in `sites/`. `on` is refused for an
+  agent (`--for-agent`, `benchbar mcp`); `off` is always allowed.
+- `benchbar users` lists the enabled users of a site with their roles,
+  for picking one to open as (`--search`, `--limit`, `--json`).
+- `site list --json` and `status --json` give each site `developer_mode`,
+  `open_as_enabled` and `open_as`.
+- BenchBar app: **Open as…** on the default site, in the popover, the Sites
+  tab and the Overview. A site's `...` menu has **Allow Open as…** (an alert
+  says what a sign in does) and **Turn Off Open as**. The menu lists
+  Switch Back, pinned users with labels, Administrator and **Find User…**; the
+  row then reads `as NAME`. Nothing shows until a site is opted in.
+- Five more built in runners for the menu bar and the Windows tray:
+  Kettle, Server rack, Paper plane, Snail and Rocket. Pick one under
+  Runner in the Menu Bar pane on the Mac, or in the tray's Runner menu
+  and Settings on Windows. Each one has its own way to sleep, start, run,
+  crash and ask: the kettle boils and pops its lid, the rack blinks and
+  jams a drive, the plane flies and nose dives, the snail hurries and
+  rolls in its shell, the rocket flies and tumbles.
+- The ids `kettle`, `server`, `plane`, `snail` and `rocket` are now
+  reserved. A custom runner folder with one of these names shows an error
+  in Settings; rename the folder and import it again.
 
 ### Windows
 
@@ -88,6 +129,37 @@ does. Report a Bug sends a redacted report in about a minute.
   error of its JSON output.
 
 ### Fixed
+
+- Random false warnings and failed checks are gone. Several checks piped a
+  command into `grep -q`, which quits at the first match; the command then
+  died of a broken pipe and the check failed although it matched. Each now
+  reads the output whole first.
+- General, Menu Bar and About are panes of the BenchBar window again.
+  0.8.0 gave them windows of their own, and from Settings there was no
+  way back to the BenchBar window. The gear in the sidebar footer lists
+  General and Menu Bar, the **i** opens About, and Settings… (⌘,) opens
+  the window on General.
+
+- Mac app, from a live pass on a Mac: the popover is readable over a
+  white web page in dark mode (it kept clear glass, so white text sat on
+  light grey); the BenchBar window reloads the benches when you come
+  back to it, so `developer_mode` set in a terminal shows at once instead
+  of up to five minutes later; Find User keeps one height as you type,
+  no longer closes on Return in a label field and drops the "System User"
+  badge from every row; the Allow Open as alert reads in three short
+  paragraphs; Open as… looks like the buttons beside it; About keeps the
+  command line tool's path under its row; the Window menu has no tab
+  items; the first run wizard says in a line what each of its three
+  choices does.
+
+- Mac app: the popover no longer says "Hostname setup needed" or shows the
+  hosts banner (the Sites tab in the window has it, with Set Up…), and
+  offers Open for a `*.localhost` site that has no hosts line. The first run
+  wizard has Report a Bug… on every page, and Cancel goes back to the page
+  you came from. A success banner clears when you change tab, the Overview
+  tab no longer draws a focus ring on open, the Menu Bar preview is larger and sharp (built in runners are drawn at the preview's size, not the menu bar's frames enlarged),
+  the runners guide is a link, and the doctor, profile, lockfile and
+  install icons have VoiceOver labels.
 
 - On Linux, `benchbar install` checks ports 3306 (MariaDB) and 6379 (the system Redis) before it asks for sudo or changes anything. In WSL 2 all distros share one network, so a second distro failed after 43 seconds with "systemctl start mariadb failed" because another distro's MariaDB held 3306. The plan now lists the port as a blocker, and the run stops at once with `port_3306_in_use` (or `port_6379_in_use`), a message and a fix. Nothing is stopped for you. A rerun on the distro that owns MariaDB is not a blocker.
 - `benchbar install --dry-run` on a fresh Linux machine (no uv, no pipx yet) exits 0 with its plan. Step 2 used to stop with "Neither uv nor pipx is installed" before step 1 had installed them, which the Windows tray read as "the plan could not be made". The dry run now says that step 1 will install uv, Python, Node and the rest. A real blocker, such as too little disk, still fails the dry run.

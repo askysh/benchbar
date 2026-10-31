@@ -26,6 +26,7 @@ Security problems go through a private report, never a public issue: see
 
 ```bash
 tests/run-tests.sh              # the CLI, under mocks, in parallel; shellcheck when installed
+tests/affected.sh               # only the CLI tests your change touches (--base REF, --all)
 scripts/macos-build.sh --test   # the app and its Swift tests
 (cd windows/shim && go test ./...)                     # benchbar.exe, any OS
 dotnet test windows/tray/BenchBarTray.sln -c Release   # the tray, on Windows
@@ -61,6 +62,8 @@ and tray, and uploads an unsigned bundle for every pull request.
 
 ## What a pull request needs
 
+- **Against `next-release`.** `main` holds the last release and moves only
+  when one is cut ([docs/releasing.md](docs/releasing.md#branches)).
 - **Small, one topic.** A fix and a refactor are two pull requests.
 - **CHANGELOG.** A line under `## Unreleased` in
   [CHANGELOG.md](CHANGELOG.md), in the section that fits.

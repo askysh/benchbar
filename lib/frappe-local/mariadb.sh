@@ -130,7 +130,7 @@ fl_mariadb_admin_open() {
   # alone and asked for, as before.
   local hash
   hash="$(MYSQL_PWD="" "$bin" -u "$me" --protocol=socket --connect-timeout=2 -sNe "SELECT authentication_string FROM mysql.user WHERE User='root' AND Host='localhost'" 2>/dev/null)" || return 1
-  [[ "$(printf '%s\n' "$hash" | head -n1)" == "invalid" ]] || return 1
+  [[ "$(printf '%s\n' "$hash" | awk 'NR==1')" == "invalid" ]] || return 1
   FL_MARIADB_ADMIN_USER="$me"
 }
 
@@ -153,7 +153,7 @@ fl_password_generate() {
   # The input is bounded (4 KB of urandom gives about 1500 usable
   # characters): BSD tr reading /dev/urandom forever never notices a
   # closed pipe when SIGPIPE is ignored, as it is under GitHub Actions.
-  head -c 4096 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' | head -c 24
+  head -c 4096 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' | awk '{ printf "%s", substr($0, 1, 24) }'
 }
 
 fl_sql_escape() { printf '%s' "$1" | sed "s/\\\\/\\\\\\\\/g; s/'/\\\\'/g"; }

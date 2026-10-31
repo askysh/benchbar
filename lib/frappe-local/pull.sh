@@ -273,14 +273,14 @@ fl_pull_age_hours() {
 # rest of the newest complete set (partial backups are left out).
 fl_pull_pick_set() {
   local names="$1" prefix re
-  FL_PULL_DB="$(printf '%s\n' "$names" | grep -E -- '-database(-enc)?\.sql(\.gz)?$' | grep -v -- '-partial-' | sort -r | head -n1 || true)"
+  FL_PULL_DB="$(printf '%s\n' "$names" | grep -E -- '-database(-enc)?\.sql(\.gz)?$' | grep -v -- '-partial-' | sort -r | awk 'NR==1' || true)"
   FL_PULL_PUB=""; FL_PULL_PRIV=""; FL_PULL_CONF=""
   [[ -n "$FL_PULL_DB" ]] || return 0
   prefix="${FL_PULL_DB%-database*}"
   re="$(printf '%s' "$prefix" | sed 's/\./\\./g')"
-  FL_PULL_PUB="$(printf '%s\n' "$names" | grep -E "^${re}-files(-enc)?\.(tar|tgz|tar\.gz)$" | head -n1 || true)"
-  FL_PULL_PRIV="$(printf '%s\n' "$names" | grep -E "^${re}-private-files(-enc)?\.(tar|tgz|tar\.gz)$" | head -n1 || true)"
-  FL_PULL_CONF="$(printf '%s\n' "$names" | grep -E "^${re}-site_config_backup(-enc)?\.json$" | head -n1 || true)"
+  FL_PULL_PUB="$(printf '%s\n' "$names" | grep -E "^${re}-files(-enc)?\.(tar|tgz|tar\.gz)$" | awk 'NR==1' || true)"
+  FL_PULL_PRIV="$(printf '%s\n' "$names" | grep -E "^${re}-private-files(-enc)?\.(tar|tgz|tar\.gz)$" | awk 'NR==1' || true)"
+  FL_PULL_CONF="$(printf '%s\n' "$names" | grep -E "^${re}-site_config_backup(-enc)?\.json$" | awk 'NR==1' || true)"
   FL_PULL_ENCRYPTED=0
   case "$FL_PULL_DB $FL_PULL_PUB $FL_PULL_PRIV" in *-enc.*) FL_PULL_ENCRYPTED=1 ;; esac
   return 0
@@ -417,7 +417,7 @@ fl_pull_check_remote() {
   list="$FL_PULL_R_APPS"; FL_PULL_R_APPS=""
   while IFS='|' read -r a ver branch _; do
     [[ -n "$a" ]] || continue
-    line="$(printf '%s\n' "$info" | grep "^${a}|" | head -n1 || true)"
+    line="$(printf '%s\n' "$info" | grep "^${a}|" | awk 'NR==1' || true)"
     origin="$(fl_pull_redact_url "$(printf '%s' "$line" | cut -d'|' -f3-)")"
     [[ -n "$(printf '%s' "$line" | cut -d'|' -f2)" ]] && branch="$(printf '%s' "$line" | cut -d'|' -f2)"
     FL_PULL_R_APPS="${FL_PULL_R_APPS}${a}|${ver}|${branch}|${origin}"$'\n'
@@ -491,7 +491,7 @@ fl_pull_check_set() {
 fl_pull_apps_from_dump() {
   local reader=cat apps a fver
   [[ "$1" == *.gz ]] && reader="gzip -dc"
-  apps="$($reader "$1" 2>/dev/null | grep -o -m1 -E "'installed_apps','\[[^']*\]'|'\[[^']*\]','installed_apps'" 2>/dev/null | head -n1 | sed -e "s/'installed_apps'//" | tr -d '[]\\" '"'" | tr ',' ' ' || true)"
+  apps="$($reader "$1" 2>/dev/null | grep -o -m1 -E "'installed_apps','\[[^']*\]'|'\[[^']*\]','installed_apps'" 2>/dev/null | awk 'NR==1' | sed -e "s/'installed_apps'//" | tr -d '[]\\" '"'" | tr ',' ' ' || true)"
   [[ -n "$apps" ]] || { fl_pull_warn "the app list could not be read from the dump; missing apps show up only at migrate"; return 0; }
   fver="$(fl_pull_dump_frappe_version "$1")"
   FL_PULL_R_APPS=""
@@ -515,9 +515,9 @@ fl_pull_dump_frappe_version() {
     on {
       if (match($0, q "frappe" q "," q "[0-9][^" q "]*" q)) { split(substr($0, RSTART, RLENGTH), p, q); print p[4]; exit }
       if ($0 ~ /;[ \t]*$/) on = 0
-    }' 2>/dev/null | head -n1 || true)"
+    }' 2>/dev/null | awk 'NR==1' || true)"
   if [[ -z "$v" ]]; then
-    v="$($reader "$1" 2>/dev/null | head -n 40 | awk '/^-- \[frappe\]/ { f = 1; next } /^-- \[/ { f = 0 } f && /^-- version = / { print $4; exit }' 2>/dev/null | head -n1 || true)"
+    v="$($reader "$1" 2>/dev/null | head -n 40 | awk '/^-- \[frappe\]/ { f = 1; next } /^-- \[/ { f = 0 } f && /^-- version = / { print $4; exit }' 2>/dev/null | awk 'NR==1' || true)"
   fi
   printf '%s' "$v"
 }
@@ -798,10 +798,11 @@ fl_pull_staging_init() {
 }
 
 fl_pull_step_download() {
-  local f size done_bytes=0 remote rsync_flags=(-a --partial) e_opts code
+  local f size done_bytes=0 remote rsync_flags=(-a --partial) e_opts code rsync_ver
   fl_pull_staging_init
   remote="$(fl_pull_rbackups_path)"
-  if rsync --version 2>/dev/null | head -n1 | grep -q -E '^rsync +version 3\.'; then
+  rsync_ver="$(rsync --version 2>/dev/null | awk 'NR==1' || true)"
+  if [[ "$rsync_ver" =~ ^rsync\ +version\ 3\. ]]; then
     rsync_flags+=(--append-verify --info=progress2)
   else
     # rsync 2.6.9 and openrsync (macOS): --partial keeps the partial file as the basis of the next run

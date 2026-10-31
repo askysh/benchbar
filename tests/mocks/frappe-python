@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # env/bin/python mock for benchbar pull, copied into the local bench and the
 # fake remote bench. It answers:
 #   -m frappe.utils.bench_helper frappe --site S list-apps|backup ...

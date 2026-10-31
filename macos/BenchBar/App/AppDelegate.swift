@@ -7,8 +7,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItemController: StatusItemController!
     private var popover: PopoverController!
     private var mainWindow: MainWindowController!
-    private var settingsWindow: SettingsWindowController!
-    private var aboutWindow: AboutWindowController!
     private var wizard: WizardRun!
     private var logWindows: LogWindowController!
     private let launchAtLogin = LaunchAtLogin()
@@ -38,10 +36,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // before the first CLI call: Homebrew's and the installer's
         // benchbar hand off to the CLI this link leads to
         AppCLILink.register()
+        // one window, no tabs: the Window menu offered Merge All Windows, Show Tab Bar and more
+        NSWindow.allowsAutomaticWindowTabbing = false
         settings = AppSettings()
         store = BenchStore(settings: settings)
         statusItemController = StatusItemController(store: store, settings: settings, library: library)
         store.onChange = { [weak self] in self?.statusItemController.update() }
+        NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.store.appBecameActive() }
+        }
 
         notifier = Notifier(settings: settings)
         store.onAlert = { [weak self] bench, alert in self?.notifier.post(alert, bench: bench) }
@@ -67,6 +70,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 mainWindow.router.hostsRequest = bench.path
                 openBench(bench, tab: .sites, repair: false)
             },
+            findUser: { [weak self] bench, site in
+                guard let self else { return }
+                mainWindow.router.findUserRequest = FindUserRequest(bench: bench.path, site: site)
+                openBench(bench, tab: .sites, repair: false)
+            },
             newBench: { [weak self] in self?.openWizard() },
             manage: { [weak self] bench, tab, repair in self?.openBench(bench, tab: tab, repair: repair) },
             updateOffer: updateOffer,
@@ -84,9 +92,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         wizard.tour = { [weak self] in self?.mainWindow.router.walkthroughRequested = true }
         wizard.leave = { [weak self] in
-            // the first page's Esc: back to the first bench, when there is one
-            guard let self, let first = store.benches.first else { return }
-            mainWindow.show(.bench(first.path), tab: .overview)
+            // the first page's Cancel: back to the page that was showing, else the first bench
+            guard let self else { return }
+            let router = mainWindow.router
+            if let back = router.wizardReturn, let pane = back.pane, pane != .wizard {
+                var stillThere = true
+                if case .bench(let path) = pane { stillThere = store.benches.contains { $0.path == path } }
+                if stillThere {
+                    mainWindow.show(pane, tab: back.tab)
+                    return
+                }
+            }
+            if let first = store.benches.first { mainWindow.show(.bench(first.path), tab: .overview) }
         }
         wizard.finished = { [weak self] path in
             guard let self else { return }
@@ -100,28 +117,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mainWindow = MainWindowController { [unowned self] router in
             MainWindowView(store: store, router: router, workbench: workbench, about: about, discovery: discovery,
                            wizard: WizardView(run: wizard, settings: settings, library: library,
-                                              launchAtLogin: launchAtLogin, notifier: notifier),
-                           settings: settings)
+                                              launchAtLogin: launchAtLogin, notifier: notifier, bugReport: about.bugReport),
+                           settings: settings,
+                           makeSettings: { [unowned self] part in
+                               SettingsView(settings: settings, store: store, library: library, launchAtLogin: launchAtLogin,
+                                            notifier: notifier, part: part, router: router,
+                                            chooseCLI: { [weak self] in self?.chooseCLI() })
+                           })
         }
         // open, close, occlusion and the page: the window's views stay alive
         // when it closes, so the store hears of them from the controller
         mainWindow.onSight = { [weak self] sight in self?.store.setWindow(sight) }
-
-        settingsWindow = SettingsWindowController { [unowned self] tabs, router in
-            let chooseCLI: () -> Void = { [weak self] in self?.chooseCLI() }
-            return SettingsTabsView(
-                tabs: tabs,
-                general: SettingsView(settings: settings, store: store, library: library, launchAtLogin: launchAtLogin, notifier: notifier,
-                                      part: .general, router: router, showsHeader: false, chooseCLI: chooseCLI),
-                menuBar: SettingsView(settings: settings, store: store, library: library, launchAtLogin: launchAtLogin, notifier: notifier,
-                                      part: .menuBar, router: router, showsHeader: false, chooseCLI: chooseCLI))
-        }
-        aboutWindow = AboutWindowController { [unowned self] router in
-            AboutPane(store: store, model: about, router: router)
-        }
-
-        mainWindow.router.openSettings = { [weak self] in self?.openSettings() }
-        mainWindow.router.openAbout = { [weak self] in self?.openAboutAction() }
 
         logWindows = LogWindowController { [weak self] path in self?.openLogsInTerminal(path) }
 
@@ -179,7 +185,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(withTitle: "Settings…", action: #selector(openSettingsAction), keyEquivalent: ",").target = self
         menu.addItem(withTitle: "About BenchBar", action: #selector(openAboutAction), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Documentation", action: #selector(openDocsAction), keyEquivalent: "").target = self
-        // as in the app menu: Sparkle's item, else the About window's check
+        // as in the app menu: Sparkle's item, else the About pane's check
         if let item = updater?.menuItem() {
             menu.addItem(item)
         } else {
@@ -202,6 +208,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openSettingsAction() { openSettings() }
+
+    @objc private func openMenuBarSettingsAction() {
+        popover.close()
+        mainWindow.show(.menuBar)
+    }
 
     @objc private func openWindowAction() { openMainWindow() }
 
@@ -274,13 +285,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openAboutAction() {
         popover.close()
-        aboutWindow.show()
+        mainWindow.show(.about)
     }
 
     /// The app menu's Check for Updates in a build without Sparkle: the
     /// About pane shows the answer.
     @objc private func checkForUpdatesAction() {
-        aboutWindow.router.updateCheckRequested = true
+        mainWindow.router.updateCheckRequested = true
         openAboutAction()
     }
 
@@ -295,8 +306,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func showShortcutsAction() {
         popover.close()
-        settingsWindow.router.scrollTarget = SettingsView.shortcutsID
-        settingsWindow.show(.general)
+        mainWindow.router.scrollTarget = SettingsView.shortcutsID
+        mainWindow.show(.general)
     }
 
     @objc private func showWalkthroughAction() {
@@ -305,23 +316,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func reportBugAction() {
-        aboutWindow.router.bugReportRequested = true
+        mainWindow.router.bugReportRequested = true
         openAboutAction()
     }
 
     /// Opening BenchBar again (Finder, Spotlight, the Dock while a window is
     /// open) shows the window: a menu bar app has nothing else to show.
-    /// About or Settings on screen do not count: `hasVisibleWindows` is true
-    /// for them, and the BenchBar window stayed closed.
+    /// A log window on screen does not count: `hasVisibleWindows` is true
+    /// for it, and the BenchBar window stayed closed.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if !mainWindow.isVisible { openMainWindow() }
         return true
     }
 
-    /// Settings (⌘,): the compact window with General and Menu Bar.
+    /// Settings (⌘,): the BenchBar window on General.
     private func openSettings() {
         popover.close()
-        settingsWindow.show()
+        mainWindow.show(.general)
     }
 
     /// The BenchBar window where it was: the wizard on a Mac without a
@@ -376,7 +387,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: main menu
 
-    /// Only visible while Settings is open (the app is .regular then), but
+    /// Only visible while a window is open (the app is .regular then), but
     /// it is what makes ⌘W, ⌘Q and copy and paste work in that window.
     func makeMainMenu() -> NSMenu {
         let main = NSMenu()
@@ -405,6 +416,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         main.addItem(submenu(edit, title: "Edit"))
 
         let window = NSMenu(title: "Window")
+        window.addItem(withTitle: "BenchBar", action: #selector(openWindowAction), keyEquivalent: "").target = self
+        window.addItem(withTitle: "Menu Bar Settings", action: #selector(openMenuBarSettingsAction), keyEquivalent: "").target = self
+        window.addItem(.separator())
         window.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
         window.addItem(withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
         main.addItem(submenu(window, title: "Window"))

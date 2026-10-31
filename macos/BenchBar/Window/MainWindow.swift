@@ -1,10 +1,11 @@
 import SwiftUI
 
 /// Where the BenchBar window is: an app pane, the first run wizard, or one
-/// bench's page and tab. General, Menu Bar and About are not panes any more:
-/// Settings (⌘,) and About BenchBar are their own small windows.
+/// bench's page and tab. General, Menu Bar and About are panes again (one
+/// window): the sidebar footer and ⌘, lead to them.
 nonisolated enum WindowPane: Hashable, Sendable {
     case profiles, discovery, wizard
+    case general, menuBar, about
     case bench(String)
 }
 
@@ -32,9 +33,11 @@ final class WindowRouter {
     var startAfterSetup = false
     /// Set by the popover: the Sites tab of this bench opens its Add Hosts Lines sheet.
     var hostsRequest: String?
-    /// Set by the Help menu: the About window opens its Report a Bug sheet.
+    /// Set by the popover's Open as menu: the Sites tab of this bench opens the Find User sheet for the site.
+    var findUserRequest: FindUserRequest?
+    /// Set by the Help menu: the About pane opens its Report a Bug sheet.
     var bugReportRequested = false
-    /// Set by the app menu: the About window checks for updates.
+    /// Set by the app menu: the About pane checks for updates.
     var updateCheckRequested = false
     /// Set by Help > Show Walkthrough and the wizard's Take the Tour: the window shows the sheet.
     var walkthroughRequested = false
@@ -45,10 +48,16 @@ final class WindowRouter {
     var notice: String?
     /// A benchbar://profile link: Team Profiles opens the sheet prefilled.
     var profileRequest: URLRouter.ProfileLink?
-    /// Set by the app delegate: the sidebar footer's gear and info buttons
-    /// open the Settings and About windows.
-    @ObservationIgnored var openSettings: (() -> Void)?
-    @ObservationIgnored var openAbout: (() -> Void)?
+
+    /// Where Cancel on the wizard's first page goes back to: the page that was
+    /// showing when the wizard opened (nil pane: the window's own first page).
+    var wizardReturn: (pane: WindowPane?, tab: BenchTab)?
+
+    /// The wizard, remembering the page it replaces.
+    func showWizard() {
+        if pane != .wizard { wizardReturn = (pane, benchTab) }
+        pane = .wizard
+    }
 
     func show(bench path: String, tab: BenchTab = .overview) {
         pane = .bench(path)
@@ -69,6 +78,8 @@ struct MainWindowView: View {
     let discovery: BenchDiscovery
     let wizard: WizardView
     var settings: AppSettings?
+    /// General and Menu Bar, made by the app delegate (they need its services).
+    var makeSettings: ((SettingsView.Part) -> SettingsView)?
 
     /// The page shown: the router's, else the first bench, else the wizard.
     /// nil while the bench list has not been read yet.
@@ -99,7 +110,7 @@ struct MainWindowView: View {
             return .bench(path)
         case .profiles: return .profiles
         case .discovery: return .discovery
-        case .wizard, .none: return nil
+        case .general, .menuBar, .about, .wizard, .none: return nil
         }
     }
 
@@ -163,6 +174,12 @@ struct MainWindowView: View {
             ProgressView().controlSize(.small).frame(maxWidth: .infinity, maxHeight: .infinity)
         case .wizard:
             wizard
+        case .general:
+            makeSettings?(.general).navigationTitle("General")
+        case .menuBar:
+            makeSettings?(.menuBar).navigationTitle("Menu Bar")
+        case .about:
+            AboutPane(store: store, model: about, router: router).navigationTitle("About BenchBar")
         case .profiles:
             ProfilesPane(store: store, workbench: workbench, router: router).navigationTitle("Team Profiles")
         case .discovery:
@@ -238,8 +255,8 @@ struct MainSidebar: View {
     }
 }
 
-/// The "+" pinned at the bottom of the sidebar, then Settings and About:
-/// their own windows, which the sidebar would otherwise never lead to.
+/// The "+" pinned at the bottom of the sidebar, then the gear (General, Menu
+/// Bar) and About: the app's own panes, kept out of the list of benches.
 struct SidebarFooter: View {
     @Bindable var router: WindowRouter
     let wizard: WizardRun
@@ -249,7 +266,7 @@ struct SidebarFooter: View {
             Menu {
                 Button("New Bench…", systemImage: "plus.square") {
                     wizard.reopen()
-                    router.pane = .wizard
+                    router.showWizard()
                 }
                 Button("Adopt Existing Bench…", systemImage: "arrow.down.doc") {
                     router.adoptRequested = true
@@ -266,9 +283,19 @@ struct SidebarFooter: View {
             .fixedSize()
             .help("New Bench, Adopt Existing Bench, Find Benches")
             Spacer()
-            footerButton("gearshape", label: "Settings", help: "Settings (⌘,)") { router.openSettings?() }
+            Menu {
+                Button("General", systemImage: "gearshape") { router.pane = .general }
+                Button("Menu Bar", systemImage: "menubar.rectangle") { router.pane = .menuBar }
+            } label: {
+                Image(systemName: "gearshape")
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .accessibilityLabel("Settings")
+            .help("Settings (⌘,): General and Menu Bar")
             footerButton("info.circle", label: "About BenchBar",
-                         help: "About BenchBar: versions, Check for Updates, Report a Bug") { router.openAbout?() }
+                         help: "About BenchBar: versions, Check for Updates, Report a Bug") { router.pane = .about }
         }
         .font(.callout)
         .foregroundStyle(.secondary)

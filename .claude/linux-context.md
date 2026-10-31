@@ -5,6 +5,7 @@ Akash's Windows laptop. AGENTS.md still applies. This distro is disposable: benc
 here are test material, not anyone's real work.
 
 ## What runs here
+- Only the CLI tests a change touches: `bash tests/affected.sh` (the full suite before a final report).
 - CLI tests: `bash tests/run-tests.sh` (all) or `bash tests/run-tests.sh test-<name>`. They run
   under mocks; macOS `/bin/bash` 3.2 in CI is the authority for the Mac. Write bash 3.2
   compatible code: no associative arrays, no mapfile/readarray, no ${var,,}, no negative array

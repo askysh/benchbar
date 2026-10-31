@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # yarn mock (copied into the fake node formula). Like the mocks in bin/ it
 # records the password variables it saw (MOCK_ENV_DUMP) and whether a cached
 # sudo credential was usable (MOCK_SUDO_PROBE); see bin/_mocklib.sh.

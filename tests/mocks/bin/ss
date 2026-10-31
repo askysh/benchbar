@@ -1,10 +1,10 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # ss mock: listeners come from $MOCK_LISTEN lines "port pid cmd addr" (the lsof
 # mock's table) and print like "ss -Hltnp" (the "p" flag adds the users column).
 # A filter "sport = :PORT" keeps one port. A pid of "-" hides the owner, like
 # a socket of another user.
 # shellcheck source=tests/mocks/bin/_mocklib.sh
-. "$(dirname "$0")/_mocklib.sh"
+. "${0%/*}/_mocklib.sh"
 mock_log "$@"
 withpid=0; want=""
 while [[ "$#" -gt 0 ]]; do

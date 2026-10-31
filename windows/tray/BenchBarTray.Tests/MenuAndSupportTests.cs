@@ -100,18 +100,20 @@ public class TrayMenuTests : IDisposable
         menu.BuildRunnerItems();
         var runner = menu.Menu.Items.OfType<MenuItem>().Single(i => (string)i.Header == "Runner");
         var runners = runner.Items.OfType<MenuItem>().Where(i => i.Tag is RunnerInfo).ToList();
-        Assert.Equal(["Bench", "Coffee cup", "Blob (by Pat)", "broken"], runners.Select(i => i.Header));
-        Assert.Equal([false, true, false, false], runners.Select(i => i.IsChecked));
-        Assert.Equal([true, true, true, false], runners.Select(i => i.IsEnabled));
-        Assert.Contains("\"name\" is missing", (string)runners[3].ToolTip);
-        Assert.All(runners.Take(3), i => Assert.IsType<Image>(i.Icon));
+        // the built ins in their order, then the runners folder: the good one, then the broken one
+        string[] builtIns = ["Bench", "Coffee cup", "Kettle", "Server rack", "Paper plane", "Snail", "Rocket"];
+        Assert.Equal([.. builtIns, "Blob (by Pat)", "broken"], runners.Select(i => i.Header));
+        Assert.Equal(runners.Select(i => (string)i.Header == "Coffee cup"), runners.Select(i => i.IsChecked));
+        Assert.Equal(runners.Select(i => (string)i.Header != "broken"), runners.Select(i => i.IsEnabled));
+        Assert.Contains("\"name\" is missing", (string)runners[^1].ToolTip);
+        Assert.All(runners.SkipLast(1), i => Assert.IsType<Image>(i.Icon));
         Assert.IsType<StackPanel>(runner.Items[0]); // the live preview sits above the list
         Assert.Equal("Coffee cup", menu.PreviewName);
         Assert.Equal("Open runners folder", ((MenuItem)runner.Items[^1]).Header);
 
-        runners[2].RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        runners[^2].RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
         Assert.Equal("blob", selected);
-        Assert.Equal([false, false, true, false], runners.Select(i => i.IsChecked));
+        Assert.Equal(runners.Select(i => (string)i.Header == "Blob (by Pat)"), runners.Select(i => i.IsChecked));
         Assert.False(menu.IsAnimating);
     });
 }

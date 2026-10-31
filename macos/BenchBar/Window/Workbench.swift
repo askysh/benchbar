@@ -183,6 +183,13 @@ final class Workbench {
         }
     }
 
+    /// The per site Open as opt-in. The caller has shown the alert for `on`.
+    func setOpenAs(_ on: Bool, site: String, on bench: BenchModel) async {
+        await change(on ? "Allow Open as on \(site)" : "Turn off Open as on \(site)", on: bench) { client throws(CLIError) in
+            try await client.setOpenAs(on, site: site, bench: bench.path)
+        }
+    }
+
     // MARK: lockfile
 
     /// Compares the bench with its remembered lockfile. Read only; nothing

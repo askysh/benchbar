@@ -1,11 +1,11 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # security mock: generic passwords live as files in $MOCK_STATE/keychain/<service>--<account>.
 # "security -i" reads one command per line from stdin, split like the real
 # parser: on blanks, with double quotes grouping and backslash escaping the
 # next character. The add command's words (password hidden) are kept in
 # <item>.cmd so a test can check the item's options.
 # shellcheck source=tests/mocks/bin/_mocklib.sh
-. "$(dirname "$0")/_mocklib.sh"
+. "${0%/*}/_mocklib.sh"
 mock_log "$@"
 if [[ "${1:-}" == "-i" ]]; then
   # the words of the first command line on stdin become the arguments

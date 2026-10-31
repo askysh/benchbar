@@ -123,6 +123,11 @@ public class RunnerLoaderTests : IDisposable
     [InlineData("bench")]
     [InlineData("cup")]
     [InlineData("Bench")]
+    [InlineData("kettle")]
+    [InlineData("server")]
+    [InlineData("plane")]
+    [InlineData("snail")]
+    [InlineData("Rocket")]
     public void TheBuiltInIdsAreReserved(string id) =>
         Assert.Contains("built in runner", Message(() => RunnerLoader.Load(_runners.Good(), id)));
 
@@ -330,7 +335,7 @@ public class RunnerSetTests : IDisposable
     public void AMissingFolderIsJustTheBuiltIns()
     {
         var set = RunnerSet.Load(Path.Combine(_runners.Root, "nope"));
-        Assert.Equal(["bench", "cup"], set.Runners.Select(r => r.Id));
+        Assert.Equal(["bench", "cup", "kettle", "server", "plane", "snail", "rocket"], set.Runners.Select(r => r.Id));
         Assert.All(set.Runners, r => Assert.True(r.IsBuiltIn && r.IsUsable));
     }
 
@@ -344,18 +349,19 @@ public class RunnerSetTests : IDisposable
 
         var set = RunnerSet.Load(_runners.Root);
 
-        Assert.Equal(["bench", "cup", "blob", "broken", "cup"], set.Runners.Select(r => r.Id));
-        var blob = set.Runners[2];
+        var builtIns = BuiltInRunners.All.Count;
+        Assert.Equal(["bench", "cup", "kettle", "server", "plane", "snail", "rocket", "blob", "broken", "cup"], set.Runners.Select(r => r.Id));
+        var blob = set.Runners[builtIns];
         Assert.True(blob.IsUsable);
         Assert.Equal("Blob (by Pat)", blob.DisplayName);
         Assert.Null(blob.Error);
 
-        var broken = set.Runners[3];
+        var broken = set.Runners[builtIns + 1];
         Assert.False(broken.IsUsable);
         Assert.Contains("\"name\" is missing", broken.Error);
         Assert.Equal("broken", broken.Name);
 
-        Assert.Contains("built in runner", set.Runners[4].Error);
+        Assert.Contains("built in runner", set.Runners[builtIns + 2].Error);
 
         Assert.Same(blob.Art, set.Resolve("blob"));
         Assert.Same(BuiltInRunners.Bench, set.Resolve("broken")); // never selected
@@ -575,6 +581,102 @@ public class CupRunnerTests
             var bytes = new byte[bitmap.Width * bitmap.Height * 4];
             Marshal.Copy(data.Scan0, bytes, 0, bytes.Length);
             return Convert.ToBase64String(bytes);
+        }
+        finally { bitmap.UnlockBits(data); }
+    }
+}
+
+/// <summary>
+/// The runners added after the Bench and the Cup (ports of macos/BenchBar/Runners/*RunnerArt.swift): the Mac's ids,
+/// names and frame counts, ink in every frame at every tray size, and motion in every animated pose.
+/// </summary>
+[Collection(GdiCollection.Name)]
+public class MoreBuiltInRunnerTests
+{
+    public static TheoryData<string, string> Runners => new()
+    {
+        { "kettle", "Kettle" },
+        { "server", "Server rack" },
+        { "plane", "Paper plane" },
+        { "snail", "Snail" },
+        { "rocket", "Rocket" },
+    };
+
+    private static IRunnerArt Art(string id) => BuiltInRunners.All.Single(r => r.Id == id);
+
+    [Theory]
+    [MemberData(nameof(Runners))]
+    public void EachHasTheMacsNameAndTheBenchesFrameCounts(string id, string name)
+    {
+        var art = Art(id);
+        Assert.Equal(name, art.Name);
+        Assert.Equal("BenchBar", art.Author);
+        Assert.True(art.IsTemplate);
+        foreach (var pose in Enum.GetValues<RunnerPose>())
+            Assert.Equal(BuiltInRunners.Bench.FrameCount(pose), art.FrameCount(pose));
+    }
+
+    [Theory]
+    [MemberData(nameof(Runners))]
+    public void EveryFrameHasInkAndIsNotMostlyFilled(string id, string name)
+    {
+        _ = name;
+        var art = Art(id);
+        foreach (var side in new[] { 16, 20, 24, 32 })
+        {
+            foreach (var pose in Enum.GetValues<RunnerPose>())
+            {
+                for (var f = 0; f < art.FrameCount(pose); f++)
+                {
+                    using var bitmap = art.Render(pose, f, side);
+                    var bytes = Bytes(bitmap);
+                    var inked = 0;
+                    for (var i = 3; i < bytes.Length; i += 4) if (bytes[i] >= 128) inked++;
+                    Assert.True(inked >= side, $"{id} {pose} {f} at {side} has only {inked} inked pixels");
+                    Assert.True(inked < side * side * 0.7, $"{id} {pose} {f} at {side} is mostly filled");
+                }
+            }
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(Runners))]
+    public void EveryAnimatedPoseMovesFromFrameToFrame(string id, string name)
+    {
+        _ = name;
+        var art = Art(id);
+        foreach (var pose in Enum.GetValues<RunnerPose>())
+        {
+            var count = art.FrameCount(pose);
+            if (count < 2) continue;
+            for (var f = 0; f < count; f++)
+            {
+                using var a = art.Render(pose, f, 32);
+                using var b = art.Render(pose, (f + 1) % count, 32);
+                Assert.False(Bytes(a).AsSpan().SequenceEqual(Bytes(b)), $"{id} {pose} frames {f} and {f + 1} are the same");
+            }
+        }
+    }
+
+    [Fact]
+    public void NoTwoBuiltInsLookAlike()
+    {
+        var firsts = BuiltInRunners.All.Select(r =>
+        {
+            using var bitmap = r.Render(RunnerPose.Running, 0, 32);
+            return Convert.ToBase64String(Bytes(bitmap));
+        }).ToList();
+        Assert.Equal(firsts.Count, firsts.Distinct().Count());
+    }
+
+    private static byte[] Bytes(Bitmap bitmap)
+    {
+        var data = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+        try
+        {
+            var bytes = new byte[bitmap.Width * bitmap.Height * 4];
+            Marshal.Copy(data.Scan0, bytes, 0, bytes.Length); // stride is width * 4 for a 32 bpp bitmap
+            return bytes;
         }
         finally { bitmap.UnlockBits(data); }
     }

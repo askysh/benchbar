@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 /// One log window per bench, opened with ⌘L from the popover. Like the
-/// Settings window it turns the app into a regular app while it is open
+/// BenchBar window it turns the app into a regular app while it is open
 /// (WindowPresence counts the open windows).
 final class LogWindowController: NSObject, NSWindowDelegate {
     private var windows: [String: (NSWindow, LogViewModel)] = [:]

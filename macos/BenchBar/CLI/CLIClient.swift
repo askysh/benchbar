@@ -25,7 +25,8 @@ nonisolated struct CLIClient: Sendable {
     /// The environment word that makes the CLI ask for the Mac's password in
     /// macOS's own dialog (`osascript`) instead of a terminal. Only an
     /// install, an adopt, a repair or `site hosts` run that the user
-    /// confirmed in the app gets it, and no other call.
+    /// confirmed in the app gets it, and `site open-as on` after its alert
+    /// (there it marks the call as the app's, and no sudo runs).
     static let guiSudo = ["BENCHBAR_SUDO": "gui"]
 
     /// Environment for the CLI: an explicit PATH (Finder launched apps do
@@ -300,6 +301,53 @@ nonisolated struct CLIClient: Sendable {
                                 environment: environment().merging(Self.guiSudo) { _, new in new }, timeout: Timeout.long) { line in
             if let event = RepairEvent.parse(line) { onEvent(event) }
         }
+    }
+
+    // MARK: open as
+
+    /// A session for `user` on a developer_mode site, as a login link (`--print-url`).
+    /// The link holds the session id, so neither a decoding failure nor the
+    /// CLI's own words are allowed to repeat it (`OpenAsLink.scrub`).
+    func openAs(bench: String, site: String, user: String, path: String?) async throws(CLIError) -> OpenAsResult {
+        let pathArguments = path.map { ["--path", $0] } ?? []
+        let output: CommandOutput
+        do throws(CLIError) {
+            output = try await run(["open", "--bench-dir", bench, "--site", site, "--as", user] + pathArguments + ["--print-url", "--json"],
+                                   timeout: Timeout.action, acceptExitCodes: [0])
+        } catch {
+            if case .failed(let command, let code, let message) = error {
+                throw .failed(command: command, exitCode: code, message: OpenAsLink.scrub(message))
+            }
+            throw error
+        }
+        do throws(CLIError) {
+            return try BenchJSON.decode(OpenAsResult.self, from: Data(output.stdout.utf8))
+        } catch {
+            if case .invalidJSON(let detail, _) = error { throw .invalidJSON(detail: detail, preview: "") }
+            throw error
+        }
+    }
+
+    /// The enabled users of a site, System Users first. Read only.
+    func users(bench: String, site: String, search: String?, limit: Int) async throws(CLIError) -> UserList {
+        let searchArguments = search.flatMap { $0.isEmpty ? nil : ["--search", $0] } ?? []
+        let output = try await run(["users", "--bench-dir", bench, "--site", site] + searchArguments + ["--limit", String(limit), "--json"],
+                                   timeout: Timeout.query, acceptExitCodes: [0])
+        return try BenchJSON.decode(UserList.self, from: Data(output.stdout.utf8))
+    }
+
+    /// The per site opt-in: `site open-as on NAME --yes` or `off NAME`.
+    ///
+    /// The CLI refuses `on` under BENCHBAR_NONINTERACTIVE=1 and without a
+    /// terminal, so that no agent can turn it on. Here the click plus the
+    /// alert is the person's decision: this call sets the mode to 0 (the app's
+    /// environment may carry it) and says it comes from the app with
+    /// BENCHBAR_SUDO=gui. The `--yes` skips only the CLI's own question,
+    /// which the alert replaced.
+    @discardableResult
+    func setOpenAs(_ on: Bool, site: String, bench: String) async throws(CLIError) -> CommandOutput {
+        try await run(["site", "open-as", on ? "on" : "off", site] + (on ? ["--yes"] : []) + ["--plain", "--bench-dir", bench],
+                      timeout: Timeout.action, acceptExitCodes: [0], extraEnvironment: ["BENCHBAR_NONINTERACTIVE": "0"].merging(Self.guiSudo) { _, new in new })
     }
 
     // MARK: plumbing

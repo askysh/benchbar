@@ -55,7 +55,7 @@ fl_content_hash() {
 
 fl_template_version() {
   local file="$1"
-  sed -n 's/^#@version[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$file" | head -n1
+  sed -n 's/^#@version[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$file" | awk 'NR==1'
 }
 
 # The replacement of every ${var//pat/rep} here is a plain variable, never a
@@ -147,7 +147,7 @@ fl_template_render() {
 
 # Prints "<name> vN <hash>" from the first header on stdin, or nothing.
 fl_template_header_key() {
-  grep -o "$FL_TEMPLATE_HEADER_RE" | head -n1 | sed 's/^[a-z-]*-template: //' || true
+  grep -o "$FL_TEMPLATE_HEADER_RE" | awk 'NR==1' | sed 's/^[a-z-]*-template: //' || true
 }
 
 # Prints the header key found in an existing file, or nothing.

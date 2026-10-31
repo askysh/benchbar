@@ -1,11 +1,11 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # ssh mock: runs the remote command with bash inside a fake remote home
 # ($MOCK_STATE/remote/home), so "~/frappe-bench" is a folder the test built.
 # Every call is logged on one line (a multi line snippet too). "-O exit"
 # (closing the control master) only logs. $MOCK_STATE/ssh_refused makes the
 # connection fail with 255, $MOCK_STATE/remote_no_rsync hides rsync there.
 # shellcheck source=tests/mocks/bin/_mocklib.sh
-. "$(dirname "$0")/_mocklib.sh"
+. "${0%/*}/_mocklib.sh"
 mock_log "$(printf '%s' "$*" | tr '\n' ' ')"
 # "-G HOST" prints the resolved config: $MOCK_STATE/ssh_hosts maps an
 # alias to HOSTNAME<TAB>PORT (default: the host itself, port 22)

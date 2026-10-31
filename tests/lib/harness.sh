@@ -59,6 +59,10 @@ unset BENCH_DIR SITE_NAME FL_DRY_RUN FL_ASSUME_YES 2>/dev/null || true
 mkdir -p "$HOME/Library/LaunchAgents" "$MOCK_STATE/agents" "$FL_STATE_DIR" "$MOCK_BREW_PREFIX/etc/my.cnf.d" \
   "$MOCK_BREW_PREFIX/opt/python@3.11/bin" "$MOCK_PIPX_HOME/venvs/frappe-bench/bin" "$HOME/.local/bin"
 : >"$MOCK_LOG"; : >"$MOCK_PROCS"; : >"$MOCK_LISTEN"; : >"$MOCK_BREW_SERVICES"
+# 50 GB free on every volume (the df mock): the installer's 10 GB check must
+# not depend on the runner's disk, which is sometimes below it. A test of
+# the check writes its own value.
+printf '%s' 52428800 >"$MOCK_STATE/df_avail_kb"
 printf 'python@3.11\nnode@22\nmariadb@10.11\nredis\n' >"$MOCK_BREW_LEAVES"
 printf "%s\\n" "$MOCK_BREW_INSTALLED" | tr " " "\\n" >"$MOCK_STATE/installed"
 mkdir -p "$MOCK_BREW_PREFIX/opt/node@22/bin" "$MOCK_BREW_PREFIX/opt/mariadb@10.11/bin"

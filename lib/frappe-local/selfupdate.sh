@@ -52,8 +52,8 @@ fl_selfupdate_latest() {
   local json tag page
   json="$(curl -fsSL --max-time "$FL_SELFUPDATE_TIMEOUT" -A "benchbar/${FL_VERSION:-0}" \
     -H 'Accept: application/vnd.github+json' "${FL_SELFUPDATE_API}/releases/latest" 2>/dev/null)" || return 1
-  tag="$(printf '%s' "$json" | tr ',' '\n' | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
-  page="$(printf '%s' "$json" | tr ',' '\n' | sed -n 's/.*"html_url"[[:space:]]*:[[:space:]]*"\([^"]*\/releases\/tag\/[^"]*\)".*/\1/p' | head -n 1)"
+  tag="$(printf '%s' "$json" | tr ',' '\n' | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | awk 'NR==1')"
+  page="$(printf '%s' "$json" | tr ',' '\n' | sed -n 's/.*"html_url"[[:space:]]*:[[:space:]]*"\([^"]*\/releases\/tag\/[^"]*\)".*/\1/p' | awk 'NR==1')"
   [[ -n "$tag" ]] || return 1
   printf '%s\t%s' "${tag#v}" "${page:-https://github.com/askysh/benchbar/releases/tag/${tag}}"
 }
