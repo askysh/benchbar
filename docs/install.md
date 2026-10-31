@@ -199,6 +199,15 @@ user is in the sudo group), apt, systemd, linger, memory, free disk, the
 bench folder, the default ports and the MariaDB root password state. Each
 check that is not ok names its fix.
 
+`install` first checks that ports 3306 (MariaDB) and 6379 (the system
+Redis) are free, or held by this distro's own services. In WSL 2 every
+distro shares one network, so only one of them can run MariaDB. When
+another distro or program holds the port, the plan lists it as a blocker
+and the run stops before it asks for sudo, with error id
+`port_3306_in_use` (or `port_6379_in_use`) and the fix: stop MariaDB in
+the other distro (`sudo systemctl stop mariadb`), or install in that
+distro. benchbar stops nothing for you.
+
 After the install, run `source ~/.bashrc` (or open a new terminal), then
 `benchup`. The helpers are in `~/.bashrc`, not in `~/.zshrc`.
 

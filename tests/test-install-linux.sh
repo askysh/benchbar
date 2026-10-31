@@ -75,6 +75,7 @@ count_calls() { grep -c -E "$1" "$MOCK_LOG" || true; }
 
 fresh_machine() {
   : >"$MOCK_STATE/apt_installed"
+  : >"$MOCK_LISTEN"
   rm -rf "$HOME/.local/share/uv" "$HOME/.local/share/fnm" "$HOME/.local/bin/uv" "$FL_STATE_DIR/secrets" "$FL_STATE_DIR/downloads" \
     "$FL_MYSQL_CONF_DIR" "$MOCK_STATE/installer_env" "$MOCK_STATE/stopped_mariadb" "$MOCK_STATE/stopped_redis-server"
   mkdir -p "$FL_MYSQL_CONF_DIR"
@@ -118,6 +119,7 @@ assert_eq "127.0.0.1 localhost" "$(cat "$FL_HOSTS_FILE")" "(no hosts line on Lin
 # ---- a dry run on a fresh machine (no uv, no pipx) is a plan: exit 0, and what step 1
 # installs is "will be installed by step 1", not a failure of step 2
 fresh_machine
+: >"$MOCK_LISTEN"
 unlink "$FRESHBIN/pipx"
 run_fm install --dry-run --json --yes --bench-dir "$HOME/frappe-bench"
 assert_eq "0" "$CODE" "$OUT"
@@ -140,6 +142,60 @@ assert_contains "$OUT" "free disk space is required"
 run01 --yes
 assert_eq "1" "$CODE" "$OUT"
 ln -sf "$ROOT/tests/mocks/bin/pipx" "$FRESHBIN/pipx"
+printf '3306 111 mariadbd 127.0.0.1\n' >"$MOCK_LISTEN"
+
+# ---- a port another WSL distro holds: a blocker in the plan, before sudo and step 1
+# (WSL distros share one network; ss shows no owner for the other distro's process)
+fresh_machine
+printf '3306 - ? 0.0.0.0\n' >"$MOCK_LISTEN"
+run_fm install --dry-run --json --yes --bench-dir "$HOME/frappe-bench"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" '"blockers":[{"id":"port_3306_in_use","message":"Another WSL distro or program already uses port 3306 (MariaDB). WSL distros share one network, so only one can run MariaDB on it. Stop MariaDB in the other distro, or install in that distro.","fix":"In the other distro run: sudo systemctl stop mariadb'
+assert_contains "$OUT" '"event":"done","exit":1'
+assert_contains "$OUT" '"error_id":"port_3306_in_use"'
+assert_contains "$OUT" '"fix":"In the other distro run: sudo systemctl stop mariadb'
+assert_not_contains "$OUT" '"fix":null'
+assert_calls_not_contain '^(sudo|apt-get|uv|fnm)'
+run_fm install --dry-run --yes --bench-dir "$HOME/frappe-bench"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "Another WSL distro or program already uses port 3306 (MariaDB)."
+assert_contains "$OUT" "fix: In the other distro run: sudo systemctl stop mariadb"
+# a real run stops at the same place, with nothing changed
+run_fm install --yes --bench-dir "$HOME/frappe-bench"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "port 3306 (MariaDB)"
+assert_calls_not_contain '^(sudo|apt-get|uv|fnm|curl)'
+assert_no_file "$HOME/frappe-bench"
+# the system Redis port too, and both are listed
+printf '3306 - ? 0.0.0.0\n6379 - ? 127.0.0.1\n' >"$MOCK_LISTEN"
+run_fm install --dry-run --json --yes --bench-dir "$HOME/frappe-bench"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" '"id":"port_6379_in_use"'
+assert_contains "$OUT" 'only one can run Redis on it'
+printf '6379 - ? 127.0.0.1\n' >"$MOCK_LISTEN"
+run_fm install --dry-run --json --yes --bench-dir "$HOME/frappe-bench"
+assert_contains "$OUT" '"error_id":"port_6379_in_use"'
+# outside WSL the message does not blame a distro
+printf 'Linux version 6.8.0-generic (buildd@lcy02) #1 SMP\n' >"$FL_PROC_VERSION"
+printf '3306 - ? 0.0.0.0\n' >"$MOCK_LISTEN"
+run_fm install --dry-run --yes --bench-dir "$HOME/frappe-bench"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "Another program already uses port 3306 (MariaDB), so the MariaDB of this install could not start."
+assert_not_contains "$OUT" "WSL"
+printf 'Linux version 6.6.0-microsoft-standard-WSL2 (root@build) (gcc) #1 SMP\n' >"$FL_PROC_VERSION"
+# this distro's own MariaDB (its unit is active) is not a blocker: a rerun is safe
+printf 'mariadb-server\nredis-server\n' >"$MOCK_STATE/apt_installed"
+printf '3306 - ? 127.0.0.1\n6379 - ? 127.0.0.1\n' >"$MOCK_LISTEN"
+run_fm install --dry-run --json --yes --bench-dir "$HOME/frappe-bench"
+assert_contains "$OUT" '"blockers":[]'
+assert_not_contains "$OUT" "error_id"
+# a free machine has none either
+fresh_machine
+: >"$MOCK_LISTEN"
+run_fm install --dry-run --json --yes --bench-dir "$HOME/frappe-bench"
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" '"blockers":[]'
+printf '3306 111 mariadbd 127.0.0.1\n' >"$MOCK_LISTEN"
 
 # ---- 00 on a fresh machine: apt, uv, fnm, the socket-only root, the drop-in, the .deb
 fresh_machine

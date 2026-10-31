@@ -193,6 +193,11 @@ fl_port_owner_cwd() {
   lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n1
 }
 
+# fl_install_port_blockers: lines "id|message|fix" for a port that another
+# program holds and that this install needs. None on macOS: Homebrew's
+# MariaDB and Redis cope with an existing server (see the safe mode note).
+fl_install_port_blockers() { return 0; }
+
 fl_mariadb_safe_mode_note() {
   fl_warn "Existing MariaDB/MySQL may already be using port 3306."
   fl_info "Safe path: keep the existing database untouched, verify the root password, and let the bench script reuse it."
