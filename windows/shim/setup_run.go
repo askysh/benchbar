@@ -756,7 +756,7 @@ func actCLIInstall(rc *runCtx) error {
 	if t.cli != "benchbar" {
 		return errors.New(missingCLIFix(t))
 	}
-	script := "curl -fsSL " + installerURL + " | bash"
+	script := "export BENCHBAR_NONINTERACTIVE=1; " + installerPipe()
 	code, lines, err := rc.stream("", "-d", rc.distro, "--cd", "~", "--exec", "/bin/bash", "-c", script)
 	if err != nil {
 		return fmt.Errorf("cannot run wsl.exe: %v", err)

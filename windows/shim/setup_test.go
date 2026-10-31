@@ -1300,7 +1300,7 @@ func TestSetupRunCLIInstall(t *testing.T) {
 	if !found {
 		t.Error("installer output not streamed as log events")
 	}
-	want := `-d Ubuntu-24.04 --cd ~ --exec /bin/bash -c curl -fsSL ` + installerURL + ` | bash`
+	want := `-d Ubuntu-24.04 --cd ~ --exec /bin/bash -c export BENCHBAR_NONINTERACTIVE=1; curl -fsSL ` + installerURL() + ` | bash`
 	if got := e.starts()[1].Args; strings.Join(got, " ") != want {
 		t.Errorf("installer call %q", strings.Join(got, " "))
 	}

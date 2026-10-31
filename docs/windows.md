@@ -37,6 +37,12 @@ user, `benchbar` inside the distro, linger, the keepalive task and
 When BenchBar Tray starts and finds no bench, it opens the BenchBar
 window at Welcome: **Set Up a New Bench**, **I Already Have a Bench** or
 **Just the Command Line Tool**. **+** > New Bench opens it again later.
+The command line tool step runs the
+[Linux installer](install.md#the-installer-on-linux) of the same release
+as `benchbar.exe` inside the distro (`install.sh` from the `v<version>`
+tag, with `--version v<version>`); a development build uses `main`. To
+do it by hand, run in Ubuntu:
+`curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash`.
 
 1. **Check Your PC** lists every step with its state and a button to fix
    it: Windows version, virtualization, WSL, a pending restart, WSL

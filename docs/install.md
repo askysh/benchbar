@@ -84,6 +84,28 @@ command asks for it once too, for the `/etc/hosts` line and the
 wkhtmltopdf package. Prompts read from the terminal, so the installer
 works when piped from `curl`.
 
+### The installer on Linux
+
+The same line works on Ubuntu 24.04 and in WSL. It installs the command
+line tool only, since there is no app on Linux:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash
+```
+
+It needs `git`; when `git` is missing it stops and prints
+`sudo apt update && sudo apt install -y git`. It never runs `sudo`. It
+clones the CLI into `~/.local/share/benchbar` (or pulls), links
+`benchbar` into `~/.local/bin` and adds that folder to `PATH` in
+`~/.bashrc` (`~/.zshrc` when your login shell is zsh) inside the same
+`# >>> benchbar-path >>>` block. It asks nothing, with or without a
+terminal, and `BENCHBAR_NONINTERACTIVE=1` says so explicitly. It then
+prints the next step: open a new terminal and run `benchbar install`. In
+WSL it adds that the BenchBar tray on Windows can continue the setup.
+`--version vX.Y.Z` checks out that release of the CLI instead of `main`
+(a detached checkout; a run without it goes back to `main`). `--dry-run`
+and `--uninstall` work as on a Mac; `--app-only` is refused.
+
 ### Installer flags
 
 Pass flags after `bash -s --`, for example
@@ -95,7 +117,7 @@ Pass flags after `bash -s --`, for example
 | `--dry-run` | Print the plan and every command, change nothing |
 | `--no-app` | The CLI only |
 | `--app-only` | The app only |
-| `--version vX.Y.Z` | Install that release of the app instead of the latest |
+| `--version vX.Y.Z` | Install that release of the app instead of the latest. On Linux: check out that release of the CLI |
 | `--uninstall` | Remove the app, the links and the PATH block; see [Uninstall](#uninstall) |
 
 ## The app from the DMG
