@@ -1655,3 +1655,24 @@ func TestSetupRunCLIInstallFailureNamesTheLastLine(t *testing.T) {
 		t.Errorf("message %q", msg)
 	}
 }
+
+func TestSetupRunWslEnableNoSecondPromptWhileARestartIsPending(t *testing.T) {
+	e := newEnv(t)
+	e.readyEnv()
+	e.script(rule("--status", 1, ""))
+	ctx, cancel := context.WithCancel(context.Background())
+	el := &slowElevator{proc: slowProc{release: make(chan struct{})}}
+	e.Elevate, e.Ctx = el, ctx
+	cancel() // the first run stops waiting: the install keeps going in Windows
+	e.run("setup", "run", "wsl_enable", "--jsonl")
+	if len(el.calls) != 1 {
+		t.Fatalf("first run prompts %d", len(el.calls))
+	}
+	e.Ctx = context.Background()
+	e.out.Reset()
+	code := e.run("setup", "run", "wsl_enable", "--jsonl")
+	d := lastEvent(jsonLines(t, e.stdout()))
+	if code != 0 || !d.RebootRequired || len(el.calls) != 1 {
+		t.Errorf("code %d %+v, prompts %d", code, d, len(el.calls))
+	}
+}

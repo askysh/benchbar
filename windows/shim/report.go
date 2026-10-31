@@ -102,7 +102,8 @@ func newRedactor(sys *System, linuxUser string) *redactor {
 		if fold {
 			flag = "(?i)"
 		}
-		r.names = append(r.names, regexp.MustCompile(flag+`\b`+regexp.QuoteMeta(name)+`\b`))
+		// Go's \b is ASCII only: a name such as "José" needs letter classes
+		r.names = append(r.names, regexp.MustCompile(flag+`(^|[^\pL\pN_])`+regexp.QuoteMeta(name)+`($|[^\pL\pN_])`))
 	}
 	win := sys.User
 	if i := strings.LastIndexAny(win, `\/`); i >= 0 {
@@ -124,7 +125,7 @@ func (r *redactor) text(s string) string {
 	s = mntUsersRE.ReplaceAllString(s, "${1}<user>")
 	s = linuxHomeRE.ReplaceAllString(s, "${1}<user>")
 	for _, re := range r.names {
-		s = re.ReplaceAllString(s, "<user>")
+		s = re.ReplaceAllString(s, "${1}<user>${2}")
 	}
 	return s
 }
@@ -551,6 +552,8 @@ func collectCLIReport(sys *System, f reportFacts, distro, bench string) ([]byte,
 		}
 		return nil, doc.CLIVersion, "cannot copy the CLI report out of the distro: " + why
 	}
+	// the copy is in the Windows zip now: do not leave one more in /tmp
+	_, _, _ = wslBytes(sys, reportWSLTimeout, 1024, "-d", distro, "--exec", "/bin/rm", "-f", "--", doc.Zip)
 	return data, doc.CLIVersion, ""
 }
 

@@ -462,3 +462,12 @@ func TestFixProductName(t *testing.T) {
 		t.Error(got)
 	}
 }
+
+func TestReportRedactsNamesWithNonASCIILetters(t *testing.T) {
+	r := newRedactor(&System{User: `PC\Zoë`}, "josé")
+	got := r.text("Zoë ran it, then josé, but not josélito or xZoë")
+	want := "<user> ran it, then <user>, but not josélito or xZoë"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}

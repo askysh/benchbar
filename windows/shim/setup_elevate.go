@@ -39,6 +39,13 @@ func runWslEnableElevated(rc *runCtx) int {
 		em.done(doneEvent{Exit: 0, NextActions: []string{"wsl_update"}})
 		return 0
 	}
+	// an earlier run that stopped waiting left the install running in Windows
+	// and wrote the restart marker: never ask for a second elevation then
+	if rebootMarkerPending(sys) {
+		em.step(id, "skipped", "WSL is being turned on. Restart Windows to finish, then check again")
+		em.done(doneEvent{Exit: 0, RebootRequired: true, NextActions: []string{"reboot"}})
+		return 0
+	}
 	if sys.ElevatedWSLPath == nil {
 		return failed("no trusted wsl.exe", false)
 	}
