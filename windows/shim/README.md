@@ -26,9 +26,18 @@ next start.
 
 `setup check` prints one JSON document (`schema_version`, `distro`, `ready`,
 `reboot_pending`, `steps`); each step has an `id`, a `status` (`ok`, `missing`,
-`warn`, `fail`), a `title`, a `detail`, the `action` that fixes it and
-`needs_admin`. It exits 0 whenever the document printed. Once a blocking step
-is not ok, the later steps read `waits for <id>`.
+`warn`, `fail`), a `title`, a `detail`, the `action` that fixes it,
+`needs_admin` and `blocking`. It exits 0 whenever the document printed. Once a
+blocking step is not ok, the later steps read `waits for <id>`.
+
+`blocking` is `true` for the steps that must be ok before the PC is `ready`
+(Windows build through `cli`) and `false` for the advisory ones: `linger`,
+`keepalive`, `wslconfig` and `shim_path`. An advisory step is `ok` or `warn`,
+never `missing` or `fail` (except as a `waits for` row), and never changes
+`ready`. When a `warn` has no `action`, its `detail` ends with the exact
+command that fixes it (for example another `benchbar.exe` earlier on the
+machine PATH). A blocking step without an `action` (a custom `cli_path` that
+does not exist) also names its fix in the `detail`.
 
 `setup run` prints only JSON lines on stdout: `step` events (`running`,
 `done`, `failed`, `skipped`), `log` events (the output of the commands it ran,

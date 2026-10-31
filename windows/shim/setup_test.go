@@ -238,7 +238,7 @@ func TestSetupCheckReady(t *testing.T) {
 	if len(rep.Steps) != len(stepIDs) {
 		t.Errorf("%d steps", len(rep.Steps))
 	}
-	want := `{"schema_version":1,"distro":"Ubuntu-24.04","ready":true,"reboot_pending":false,"steps":[{"id":"windows_build","status":"ok","title":"Windows version","detail":"Windows build 26100","action":null,"needs_admin":false},`
+	want := `{"schema_version":1,"distro":"Ubuntu-24.04","ready":true,"reboot_pending":false,"steps":[{"id":"windows_build","status":"ok","title":"Windows version","detail":"Windows build 26100","action":null,"needs_admin":false,"blocking":true},`
 	if !strings.HasPrefix(e.stdout(), want) {
 		t.Errorf("shape:\n%s", e.stdout())
 	}
@@ -464,9 +464,68 @@ func TestSetupCheckLingerKeepaliveWslconfigPath(t *testing.T) {
 			t.Errorf("%s: %+v", id, s)
 		}
 	}
-	// wslconfig is advice only: warn, and it does not make the setup unready by itself
-	if rep.step(t, "wslconfig").Status != "warn" || rep.step(t, "linger").Status != "missing" {
-		t.Errorf("%+v", rep.Steps)
+	// all four are advice only: warn, never blocking, and ready stays true
+	for _, id := range []string{"linger", "keepalive", "wslconfig", "shim_path"} {
+		if s := rep.step(t, id); s.Status != "warn" || s.Blocking {
+			t.Errorf("%s: %+v", id, s)
+		}
+	}
+	if !rep.Ready {
+		t.Errorf("an advisory step made the setup unready: %+v", rep.Steps)
+	}
+}
+
+func TestSetupCheckBlockingFlag(t *testing.T) {
+	e := newEnv(t)
+	e.readyEnv()
+	rep := e.report()
+	want := map[string]bool{"windows_build": true, "virtualization": true, "wsl_feature": true, "reboot": true,
+		"wsl_version": true, "distro": true, "distro_user": true, "systemd": true, "cli": true,
+		"linger": false, "keepalive": false, "wslconfig": false, "shim_path": false}
+	for _, s := range rep.Steps {
+		if s.Blocking != want[s.ID] {
+			t.Errorf("%s: blocking %v", s.ID, s.Blocking)
+		}
+	}
+	// the waiting rows say it too
+	e.host().build = 18362
+	for _, s := range e.report().Steps {
+		if s.Blocking != want[s.ID] {
+			t.Errorf("waiting %s: blocking %v", s.ID, s.Blocking)
+		}
+	}
+	if !strings.Contains(e.stdout(), `"blocking":false`) {
+		t.Errorf("field missing: %s", e.stdout())
+	}
+}
+
+func TestSetupCheckShimPathWithoutActionNamesTheFix(t *testing.T) {
+	e := newEnv(t)
+	e.readyEnv()
+	// another benchbar.exe comes first on PATH, or PATH cannot be read
+	e.paths.userErr = os.ErrPermission
+	rep := e.report()
+	s := rep.step(t, "shim_path")
+	if s.Status != "warn" || s.Blocking || rep.Ready == false {
+		t.Errorf("%+v ready %v", s, rep.Ready)
+	}
+	if s.Action == nil && !strings.Contains(s.Detail, ": ") {
+		t.Errorf("no action and no fix in the detail: %+v", s)
+	}
+}
+
+func TestSetupCheckCustomCLIPathIsBlockingWithTheFixInTheDetail(t *testing.T) {
+	e := newEnv(t)
+	e.readyEnv()
+	e.writeConfig(`{"cli_path":"/opt/nope/benchbar"}`)
+	e.script(
+		rule("--status", 0, ""), rule("--version", 0, "WSL version: 2.4.8.0\n"),
+		rule("--list --running --quiet", 0, "Ubuntu-24.04\n"),
+		rule("--cd ~", 0, probeOut("alice", "1000", "systemd", "yes", setupGoodConf, "", "")),
+	)
+	s := e.report().step(t, "cli")
+	if s.Status != "missing" || s.Action != nil || !s.Blocking || !strings.Contains(s.Detail, "cli_path") {
+		t.Errorf("%+v", s)
 	}
 }
 

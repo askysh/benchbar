@@ -129,6 +129,10 @@ type setupStep struct {
 	Detail     string  `json:"detail"`
 	Action     *string `json:"action"`
 	NeedsAdmin bool    `json:"needs_admin"`
+	// Blocking is true when the step must be ok before the setup is ready.
+	// An advisory step (linger, keepalive, wslconfig, shim_path) is never
+	// missing or failed: it is warn at worst and never changes ready.
+	Blocking bool `json:"blocking"`
 }
 
 type setupReport struct {
@@ -387,9 +391,9 @@ func (c *checker) lingerStep() setupStep {
 	case "yes":
 		return c.step("linger", "ok", "enabled for "+c.pr.user, "")
 	case "no":
-		return c.step("linger", "missing", "off for "+c.pr.user+": benches stop when the last session ends", "linger")
+		return c.step("linger", "warn", "off for "+c.pr.user+": benches stop when the last session ends", "linger")
 	}
-	return c.step("linger", "missing", "cannot read the linger setting of "+c.pr.user, "linger")
+	return c.step("linger", "warn", "cannot read the linger setting of "+c.pr.user, "linger")
 }
 
 func (c *checker) keepaliveStep() setupStep {
@@ -399,7 +403,7 @@ func (c *checker) keepaliveStep() setupStep {
 	if k.Status == "ok" {
 		return c.step("keepalive", "ok", k.Message, "")
 	}
-	return c.step("keepalive", "missing", k.Message, "keepalive")
+	return c.step("keepalive", "warn", k.Message, "keepalive")
 }
 
 func (c *checker) wslconfigStep() setupStep {
@@ -420,9 +424,10 @@ func (c *checker) pathStep() setupStep {
 		return c.step("shim_path", "ok", k.Message, "")
 	}
 	if k.Fix == "benchbar.exe path install" {
-		return c.step("shim_path", "missing", k.Message, "path")
+		return c.step("shim_path", "warn", k.Message, "path")
 	}
-	return c.step("shim_path", "missing", k.Message+": "+k.Fix, "")
+	// no action can fix it: the detail holds the exact command to run
+	return c.step("shim_path", "warn", k.Message+": "+k.Fix, "")
 }
 
 // buildSetupReport reads the state. Steps run in order; once a blocking one
@@ -441,11 +446,11 @@ func buildSetupReport(sys *System, distro string, probe bool) setupReport {
 	for _, d := range c.defs() {
 		if blocker != "" {
 			rep.Steps = append(rep.Steps, setupStep{ID: d.id, Status: "missing", Title: d.title,
-				Detail: "waits for " + blocker, NeedsAdmin: false})
+				Detail: "waits for " + blocker, Blocking: d.blocking})
 			continue
 		}
 		s := d.fn()
-		s.Title = d.title
+		s.Title, s.Blocking = d.title, d.blocking
 		rep.Steps = append(rep.Steps, s)
 		if d.blocking && (s.Status == "missing" || s.Status == "fail") {
 			blocker = d.id
@@ -454,7 +459,7 @@ func buildSetupReport(sys *System, distro string, probe bool) setupReport {
 	rep.RebootPending = c.reboot
 	rep.Ready = !c.unchecked
 	for _, s := range rep.Steps {
-		if s.Status == "missing" || s.Status == "fail" {
+		if s.Blocking && (s.Status == "missing" || s.Status == "fail") {
 			rep.Ready = false
 		}
 	}

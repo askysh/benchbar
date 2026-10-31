@@ -1,15 +1,15 @@
 {"schema_version":1,"distro":"Ubuntu-24.04","ready":false,"reboot_pending":false,"steps":[
-{"id":"windows_build","status":"ok","title":"Windows version","detail":"Windows build 26220","action":null,"needs_admin":false},
-{"id":"virtualization","status":"ok","title":"Virtualization","detail":"enabled in firmware","action":null,"needs_admin":false},
-{"id":"wsl_feature","status":"ok","title":"Windows Subsystem for Linux","detail":"WSL 2.6","action":null,"needs_admin":false},
-{"id":"reboot","status":"ok","title":"Restart","detail":"no restart pending","action":null,"needs_admin":false},
-{"id":"wsl_version","status":"ok","title":"WSL version","detail":"WSL from the Store","action":null,"needs_admin":false},
-{"id":"distro","status":"ok","title":"Ubuntu 24.04","detail":"Ubuntu-24.04, WSL 2","action":null,"needs_admin":false},
-{"id":"distro_user","status":"ok","title":"Linux user","detail":"akash","action":null,"needs_admin":false},
-{"id":"systemd","status":"ok","title":"systemd","detail":"PID 1 is systemd","action":null,"needs_admin":false},
-{"id":"cli","status":"ok","title":"benchbar in Ubuntu","detail":"benchbar 0.8.0","action":null,"needs_admin":false},
-{"id":"linger","status":"ok","title":"Keep benches running","detail":"linger is on","action":null,"needs_admin":false},
-{"id":"keepalive","status":"ok","title":"Keep Ubuntu awake","detail":"task installed","action":null,"needs_admin":false},
-{"id":"wslconfig","status":"warn","title":"WSL idle settings","detail":"WSL can stop idle benches: set vmIdleTimeout","action":"wslconfig","needs_admin":false},
-{"id":"shim_path","status":"missing","title":"benchbar.exe on PATH","detail":"another copy comes first","action":"path","needs_admin":false}
+{"id":"windows_build","status":"ok","title":"Windows version","detail":"Windows build 26220","action":null,"needs_admin":false,"blocking":true},
+{"id":"virtualization","status":"ok","title":"Virtualization","detail":"enabled in firmware","action":null,"needs_admin":false,"blocking":true},
+{"id":"wsl_feature","status":"ok","title":"Windows Subsystem for Linux","detail":"WSL 2.6","action":null,"needs_admin":false,"blocking":true},
+{"id":"reboot","status":"ok","title":"Restart","detail":"no restart pending","action":null,"needs_admin":false,"blocking":true},
+{"id":"wsl_version","status":"ok","title":"WSL version","detail":"WSL from the Store","action":null,"needs_admin":false,"blocking":true},
+{"id":"distro","status":"ok","title":"Ubuntu 24.04","detail":"Ubuntu-24.04, WSL 2","action":null,"needs_admin":false,"blocking":true},
+{"id":"distro_user","status":"ok","title":"Linux user","detail":"akash","action":null,"needs_admin":false,"blocking":true},
+{"id":"systemd","status":"ok","title":"systemd","detail":"PID 1 is systemd","action":null,"needs_admin":false,"blocking":true},
+{"id":"cli","status":"ok","title":"benchbar in Ubuntu","detail":"benchbar 0.8.0","action":null,"needs_admin":false,"blocking":true},
+{"id":"linger","status":"ok","title":"Keep benches running","detail":"linger is on","action":null,"needs_admin":false,"blocking":false},
+{"id":"keepalive","status":"ok","title":"Keep Ubuntu awake","detail":"task installed","action":null,"needs_admin":false,"blocking":false},
+{"id":"wslconfig","status":"warn","title":"WSL idle settings","detail":"WSL can stop idle benches: set vmIdleTimeout","action":"wslconfig","needs_admin":false,"blocking":false},
+{"id":"shim_path","status":"missing","title":"benchbar.exe on PATH","detail":"another copy comes first","action":"path","needs_admin":false,"blocking":false}
 ]}
