@@ -23,7 +23,7 @@ const (
 	defaultSetupDistro = "Ubuntu-24.04"
 	minBuild           = 19041 // Windows 10 version 2004, the first with wsl --install
 	setupSchema        = 1
-	setupUsage         = "usage: benchbar.exe setup check [--json] [--probe] [--distro NAME] | setup run ACTION [--distro NAME] [--user NAME] --jsonl"
+	setupUsage         = "usage: benchbar.exe setup check [--json] [--probe] [--distro NAME] | setup run ACTION [--distro NAME] [--user NAME] [--force] --jsonl"
 )
 
 var (

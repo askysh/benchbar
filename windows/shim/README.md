@@ -16,7 +16,7 @@ argument):
 | `benchbar.exe keepalive install\|remove\|status\|run` | A logon task that keeps the distro running. No admin, no service. |
 | `benchbar.exe path install\|status` | Put this folder on your user PATH. |
 | `benchbar.exe setup check [--json] [--probe] [--distro NAME]` | Read only. Checks the PC step by step (Windows build, virtualization, WSL, restart, distro, Linux user, systemd, CLI, linger, keepalive, `.wslconfig`, PATH). Never starts a stopped distro unless `--probe`, never asks for admin rights. |
-| `benchbar.exe setup run ACTION [--distro NAME] [--user NAME] --jsonl` | Runs one setup action (`wsl_enable`, `wsl_update`, `distro_install`, `distro_user`, `systemd`, `cli_install`, `linger`, `keepalive`, `wslconfig`, `path`) and prints JSON lines. `wsl_enable` asks Windows for permission (UAC). |
+| `benchbar.exe setup run ACTION [--distro NAME] [--user NAME] [--force] --jsonl` | Runs one setup action (`wsl_enable`, `wsl_update`, `distro_install`, `distro_user`, `systemd`, `cli_install`, `linger`, `keepalive`, `wslconfig`, `path`) and prints JSON lines. `wsl_enable` asks Windows for permission (UAC). |
 | `benchbar.exe doctor` | Windows checks first, then the CLI's doctor. `--json` and `--fix-hints` go straight to the CLI. |
 
 `wslconfig --apply` never runs `wsl.exe --shutdown`; WSL reads the file at its
@@ -33,9 +33,17 @@ is not ok, the later steps read `waits for <id>`.
 `setup run` prints only JSON lines on stdout: `step` events (`running`,
 `done`, `failed`, `skipped`), `log` events (the output of the commands it ran,
 as data) and exactly one `done` event with `exit` (0 or 1), `changed`,
-`reboot_required`, `cancelled`, `warnings` and `next_actions`. The password for
+`reboot_required`, `cancelled`, `warnings` and `next_actions`. A failed action
+may add `error_id`, a short id the caller can act on (see below); it is absent
+otherwise. The password for
 `distro_user` comes from `BENCHBAR_SETUP_PASSWORD` and reaches `chpasswd` on
 stdin only.
+
+`error_id` values on a `done` event with `exit` 1:
+
+| `error_id` | When | What to do |
+| --- | --- | --- |
+| `distro_running` | `systemd` or `distro_user` must restart the distro (`wsl.exe --terminate NAME`) and the distro is running. The message says what stops: the benches and MariaDB in it. Nothing was changed. | Ask the person, stop the benches (`benchbar down`), then run the action again, or pass `--force` to accept the stop. |
 
 The `done` event of `distro_user` also carries `"user_existed": true|false`
 (no other action has it). When it is true the Linux user was there already: the

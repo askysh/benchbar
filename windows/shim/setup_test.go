@@ -1424,3 +1424,174 @@ func TestLineWriter(t *testing.T) {
 		t.Errorf("%q", got)
 	}
 }
+
+// --- a running distro is not stopped without --force -----------------------
+
+func doneErrorID(t *testing.T, out string) rawEvent {
+	t.Helper()
+	return lastEvent(jsonLines(t, out))
+}
+
+func TestSetupRunSystemdRefusesARunningDistro(t *testing.T) {
+	e := newEnv(t)
+	e.readyEnv()
+	e.script(
+		rule("--list --running --quiet", 0, "Ubuntu-24.04\r\n"),
+		rule(rReadConf, 0, "[interop]\nenabled=true\n"),
+		rule("/proc/1/comm", 0, "init\n"),
+	)
+	code := e.run("setup", "run", "systemd", "--jsonl")
+	d := doneErrorID(t, e.stdout())
+	if code != 1 || d.Exit != 1 || d.ErrorID != "distro_running" || d.Changed {
+		t.Fatalf("code %d %+v", code, d)
+	}
+	var msg string
+	for _, ev := range jsonLines(t, e.stdout()) {
+		if ev.Event == "step" && ev.Status == "failed" {
+			msg = ev.Message
+		}
+	}
+	if !strings.Contains(msg, "benches") || !strings.Contains(msg, "MariaDB") || !strings.Contains(msg, "--force") {
+		t.Errorf("message %q", msg)
+	}
+	if hasArg(e.events(), "--terminate") || hasArg(e.events(), "cat > ") {
+		t.Error("changed a running distro without --force")
+	}
+}
+
+func TestSetupRunSystemdForceStopsARunningDistro(t *testing.T) {
+	e := newEnv(t)
+	e.readyEnv()
+	e.script(
+		rule("--list --running --quiet", 0, "Ubuntu-24.04\r\n"),
+		rule(rReadConf, 0, "[interop]\nenabled=true\n"),
+		rule(rBackup, 0, ""),
+		ruleStdin(rWriteConf, 0),
+		rule("--terminate Ubuntu-24.04", 0, ""),
+		ruleSeq("/proc/1/comm", reply(0, "init\n"), reply(0, "init\n"), reply(0, "systemd\n")),
+	)
+	if code := e.run("setup", "run", "systemd", "--force", "--jsonl"); code != 0 {
+		t.Fatalf("%d %s", code, e.stdout())
+	}
+	if d := doneErrorID(t, e.stdout()); d.ErrorID != "" || !d.Changed {
+		t.Errorf("%+v", d)
+	}
+	if !hasArg(e.events(), "--terminate Ubuntu-24.04") {
+		t.Error("did not stop the distro")
+	}
+}
+
+func TestSetupRunSystemdRunningButNothingToDoNeedsNoForce(t *testing.T) {
+	e := newEnv(t)
+	e.readyEnv()
+	e.script(rule("--list --running --quiet", 0, "Ubuntu-24.04\r\n"), rule(rReadConf, 0, setupGoodConf), rule("/proc/1/comm", 0, "systemd\n"))
+	if code := e.run("setup", "run", "systemd", "--jsonl"); code != 0 {
+		t.Fatalf("%d %s", code, e.stdout())
+	}
+}
+
+func TestSetupRunDistroUserRefusesARunningDistroBeforeChangingAnything(t *testing.T) {
+	e := newEnv(t)
+	e.readyEnv()
+	e.withPassword("pw")
+	e.script(
+		rule("--list --running --quiet", 0, "Ubuntu-24.04\r\n"),
+		rule("/usr/bin/id -u", 1, ""),
+		rule(rReadConf, 3, ""),
+	)
+	code := e.run("setup", "run", "distro_user", "--user", "alice", "--jsonl")
+	d := doneErrorID(t, e.stdout())
+	if code != 1 || d.ErrorID != "distro_running" {
+		t.Fatalf("code %d %+v", code, d)
+	}
+	for _, w := range []string{"useradd", "chpasswd", "cat > ", "--terminate"} {
+		if hasArg(e.events(), w) {
+			t.Errorf("%s ran before the refusal", w)
+		}
+	}
+}
+
+func TestSetupRunDistroUserStoppedDistroNeedsNoForce(t *testing.T) {
+	e := newEnv(t)
+	e.readyEnv()
+	e.withPassword("pw")
+	e.script(
+		rule("--list --running --quiet", 0, "\r\n"),
+		rule("/usr/bin/id -u", 1, ""), rule("useradd", 0, ""), ruleStdin("chpasswd", 0),
+		rule(rReadConf, 3, ""), rule(rBackup, 0, ""), ruleStdin(rWriteConf, 0), rule("--terminate", 0, ""),
+	)
+	if code := e.run("setup", "run", "distro_user", "--user", "alice", "--jsonl"); code != 0 {
+		t.Fatalf("%d %s", code, e.stdout())
+	}
+}
+
+func TestSetupRunOtherFailuresHaveNoErrorID(t *testing.T) {
+	e := newEnv(t)
+	e.readyEnv()
+	e.script(rule("--status", 1, ""))
+	e.host().admin = true
+	e.script(rule("--status", 1, ""), rule("--install", 1, "boom\n"))
+	e.run("setup", "run", "wsl_enable", "--jsonl")
+	if strings.Contains(e.stdout(), "error_id") {
+		t.Errorf("error_id on an unrelated failure: %s", e.stdout())
+	}
+}
+
+// --- distro_install and cli_install ----------------------------------------
+
+func TestSetupRunDistroInstallNeedsRestart(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("exit codes above 255 exist only on Windows")
+	}
+	e := newEnv(t)
+	e.readyEnv()
+	e.distros.list = nil
+	e.script(rule("--install -d Ubuntu-24.04", 3010, "restart needed\n"))
+	if code := e.run("setup", "run", "distro_install", "--jsonl"); code != 0 {
+		t.Fatalf("%d %s", code, e.stdout())
+	}
+	d := lastEvent(jsonLines(t, e.stdout()))
+	if !d.RebootRequired || strings.Join(d.NextActions, ",") != "reboot" || !rebootMarkerPending(e.System) {
+		t.Errorf("%+v", d)
+	}
+}
+
+func TestSetupRunDistroInstallRestartTextWritesTheMarker(t *testing.T) {
+	// the same path without a 3010 exit code: use the stream hook directly
+	e := newEnv(t)
+	e.readyEnv()
+	rc := &runCtx{sys: e.System, em: &emitter{w: e.out, jsonl: true}, distro: "Ubuntu-24.04"}
+	setupActions["distro_install"] = setupAction{"Install the Linux distro", func(rc *runCtx) error {
+		rc.reboot, rc.msg = true, "restart Windows, then install the distro again"
+		return nil
+	}, []string{"distro_user"}}
+	defer func() {
+		setupActions["distro_install"] = setupAction{"Install the Linux distro", actDistroInstall, []string{"distro_user"}}
+	}()
+	runAction(rc, "distro_install")
+	d := lastEvent(jsonLines(t, e.stdout()))
+	if !d.RebootRequired || strings.Join(d.NextActions, ",") != "reboot" || !rebootMarkerPending(e.System) {
+		t.Errorf("%+v", d)
+	}
+}
+
+func TestSetupRunCLIInstallFailureNamesTheLastLine(t *testing.T) {
+	e := newEnv(t)
+	e.readyEnv()
+	e.script(
+		rule("--cd ~ --exec /bin/sh", 0, probeOut("alice", "1000", "systemd", "no", setupGoodConf, "", "")),
+		rule("/bin/bash -c", 1, "Cloning...\ncurl: (6) Could not resolve host: raw.githubusercontent.com\n"),
+	)
+	if code := e.run("setup", "run", "cli_install", "--jsonl"); code != 1 {
+		t.Fatalf("exit %d", code)
+	}
+	var msg string
+	for _, ev := range jsonLines(t, e.stdout()) {
+		if ev.Event == "step" && ev.Status == "failed" {
+			msg = ev.Message
+		}
+	}
+	if !strings.Contains(msg, "exit code 1") || !strings.HasSuffix(msg, "Could not resolve host: raw.githubusercontent.com") {
+		t.Errorf("message %q", msg)
+	}
+}
