@@ -257,8 +257,8 @@ carry the bench's sites, read from `sites/*/site_config.json`:
 
 ```json
 "sites": [
-  { "name": "v16dev", "default": true, "hosts_entry": true, "ping_code": 200 },
-  { "name": "v16two", "default": false, "hosts_entry": false, "ping_code": null }
+  { "name": "v16dev", "default": true, "hosts_entry": true, "ping_code": 200, "developer_mode": true, "open_as_enabled": true, "open_as": true },
+  { "name": "v16two", "default": false, "hosts_entry": false, "ping_code": null, "developer_mode": false, "open_as_enabled": false, "open_as": false }
 ]
 ```
 
@@ -268,6 +268,9 @@ carry the bench's sites, read from `sites/*/site_config.json`:
 | `default` | bool | the site `benchup` waits for, the runner pings and the app opens; `benchbar site default NAME` changes it (and runs `bench use`) |
 | `hosts_entry` | bool | `/etc/hosts` maps it to 127.0.0.1; `benchbar site hosts` adds the missing lines |
 | `ping_code` | number or null | HTTP code of `/api/method/ping` with this site as `Host`; `null` when nothing listens on the web port or nothing answered. Since 0.6.1 `list --json` and `status --json` leave it `null` (they are polled; `web_ping_code` is the default site's ping) unless `status --json --ping` asks every site once; `site list --json` always asks |
+| `developer_mode` | bool | added after 0.8.0: `developer_mode` as frappe sees it, the site's `site_config.json` over `common_site_config.json`; `1` or `true` is on. `benchbar open --as` signs in as another user only when it is on |
+| `open_as_enabled` | bool | added after 0.8.0: the person turned Open as on for this site (`benchbar site open-as on NAME`). Benchbar's own state for the bench; off for every site until then, also for a site added or pulled later |
+| `open_as` | bool | added after 0.8.0: `benchbar open --as` can sign in on this site: `open_as_enabled` and `developer_mode` are on and it is the site the web process answers as (`bench serve` without `--site` answers as the `default_site` of `common_site_config.json` for every name) |
 | `served` | bool or null | `status --json` only, added in 0.8: does the running web process serve this site (its `Host` is not answered with a 404). `null` while the bench is stopped (a stopped bench is never pinged) or when nothing answered. The default site's ping, and with `--ping` every site's, is reused; any other site is asked once, in bash. `false` is a site folder in `sites/` that the running bench does not serve: doctor's `site_not_served` warns about it |
 
 `benchbar site list --json` prints `{"schema_version":1,"cli_version":..,"bench":..,"sites":[..]}`,

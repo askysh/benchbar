@@ -1,6 +1,6 @@
 ---
 title: "site"
-description: "benchbar site list, add, default, hosts, backup, backups, restore and drop: the sites of a bench, their backups, restoring one, and dropping one safely."
+description: "benchbar site list, add, default, hosts, open-as, backup, backups, restore and drop: the sites of a bench, their backups, restoring one, and dropping one safely."
 ---
 
 The sites of a bench. The guide is
@@ -85,6 +85,36 @@ Exit codes: 0; 1 when the hosts file could not be written.
 
 ```bash
 benchbar site hosts
+```
+
+## site open-as
+
+```
+benchbar site open-as on|off|status [NAME] [--yes] [--json]
+```
+
+Turns password-less sign in (`benchbar open --as USER`) on or off for a
+site, or shows it. NAME defaults to the bench's default site. It is off for
+every site until you turn it on, also for a site you add or pull later.
+The choice is benchbar's own state for the bench; the site is not changed.
+
+`on` must be run in a terminal by a person. It prints what a sign in does
+(the apps' `on_login` hooks run, `last_login` is updated, and Frappe may
+end that user's oldest session) and asks first; `--yes` skips the question.
+It is refused when `BENCHBAR_NONINTERACTIVE=1` is set, which `--for-agent`
+and `benchbar mcp` do. It still records the choice for a site that is not in
+`developer_mode` or not the site the web process answers as, and says that
+`open --as` will refuse it until that changes. `off` is always allowed.
+`status --json` prints one document with `open_as_enabled`,
+`developer_mode` and `open_as`; `on` and `off` with `--json` print JSON
+lines ending in a `done`.
+
+Exit codes: 0; 1 when the site does not exist, `on` is run without a person
+at a terminal, or the question is answered no.
+
+```bash
+benchbar site open-as on v16dev
+benchbar site open-as status --json
 ```
 
 ## site backup

@@ -2,6 +2,27 @@
 
 All notable changes to this project are documented here.
 
+## Unreleased
+
+### Added
+
+- `benchbar open --as USER` opens a site signed in as any of its users,
+  with no password, to check what a role sees and which workflow actions
+  it gets. It is off until you turn it on for a site, in a terminal:
+  `benchbar site open-as on NAME`. The site also needs `developer_mode`
+  (Administrator included) and must be the site the web process answers
+  as. A sign in runs the apps' `on_login` hooks, updates `last_login` and
+  Frappe may end the user's oldest session. `--path` lands on a page,
+  `--print-url` prints the link instead. `benchbar open` alone opens the
+  site.
+- `benchbar site open-as on|off|status [NAME]` keeps that choice in
+  benchbar's state for the bench, never in `sites/`. `on` is refused for an
+  agent (`--for-agent`, `benchbar mcp`); `off` is always allowed.
+- `benchbar users` lists the enabled users of a site with their roles,
+  for picking one to open as (`--search`, `--limit`, `--json`).
+- `site list --json` and `status --json` give each site `developer_mode`,
+  `open_as_enabled` and `open_as`.
+
 ## 0.8.0 - 2026-10-30
 
 ### Agents and recovery
