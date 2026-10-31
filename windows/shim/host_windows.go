@@ -12,6 +12,7 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/registry"
 )
 
 type winHost struct{}
@@ -53,6 +54,24 @@ func (winHost) BootTime() (time.Time, error) {
 	}
 	ms, _, _ := procGetTickCount64.Call()
 	return time.Now().Add(-time.Duration(ms) * time.Millisecond), nil
+}
+
+// ProductName reads the edition from the registry. Windows 11 still says
+// "Windows 10" in ProductName, so the build number decides the family.
+func (winHost) ProductName() (string, error) {
+	key, err := registry.OpenKey(registry.LOCAL_MACHINE, `SOFTWARE\Microsoft\Windows NT\CurrentVersion`, registry.QUERY_VALUE)
+	if err != nil {
+		return "", err
+	}
+	defer key.Close()
+	name, _, err := key.GetStringValue("ProductName")
+	if err != nil {
+		return "", err
+	}
+	if v := windows.RtlGetVersion(); v != nil {
+		name = fixProductName(name, int(v.BuildNumber))
+	}
+	return name, nil
 }
 
 func (winHost) IsAdmin() bool { return windows.GetCurrentProcessToken().IsElevated() }

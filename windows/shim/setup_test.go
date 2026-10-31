@@ -33,6 +33,7 @@ func (f *fakeHost) WindowsBuild() (int, error)           { return f.build, f.bui
 func (f *fakeHost) VirtualizationEnabled() (bool, error) { return f.virt, f.virtErr }
 func (f *fakeHost) BootTime() (time.Time, error)         { return f.boot, nil }
 func (f *fakeHost) RebootPending() (bool, error)         { return f.pending, nil }
+func (f *fakeHost) ProductName() (string, error)         { return "Windows 11 Pro", nil }
 func (f *fakeHost) IsAdmin() bool                        { return f.admin }
 
 // fakeElevator runs the elevated child in this process, at once.

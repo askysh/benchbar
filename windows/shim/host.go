@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -15,6 +16,8 @@ type HostInfo interface {
 	VirtualizationEnabled() (bool, error)
 	// BootTime is when Windows last started.
 	BootTime() (time.Time, error)
+	// ProductName is the Windows edition, such as "Windows 11 Pro".
+	ProductName() (string, error)
 	// IsAdmin is true when this process runs elevated.
 	IsAdmin() bool
 }
@@ -34,4 +37,13 @@ type ElevatedProc interface {
 	// Wait waits up to d. done is false when the program still runs.
 	Wait(d time.Duration) (done bool, exit int, err error)
 	Close()
+}
+
+// fixProductName turns the registry's "Windows 10 Pro" into "Windows 11 Pro"
+// on build 22000 and later, where Windows 11 keeps the old text.
+func fixProductName(name string, build int) string {
+	if build >= 22000 {
+		return strings.Replace(name, "Windows 10", "Windows 11", 1)
+	}
+	return name
 }

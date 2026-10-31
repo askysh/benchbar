@@ -17,6 +17,7 @@ argument):
 | `benchbar.exe path install\|status` | Put this folder on your user PATH. |
 | `benchbar.exe setup check [--json] [--probe] [--distro NAME]` | Read only. Checks the PC step by step (Windows build, virtualization, WSL, restart, distro, Linux user, systemd, CLI, linger, keepalive, `.wslconfig`, PATH). Never starts a stopped distro unless `--probe`, never asks for admin rights. |
 | `benchbar.exe setup run ACTION [--distro NAME] [--user NAME] [--force] --jsonl` | Runs one setup action (`wsl_enable`, `wsl_update`, `distro_install`, `distro_user`, `systemd`, `cli_install`, `linger`, `keepalive`, `wslconfig`, `path`) and prints JSON lines. `wsl_enable` asks Windows for permission (UAC). |
+| `benchbar.exe report-windows [--json] [--distro NAME] [--bench PATH] [--context TEXT] [--tray-version V] [--include FILE]...` | Write a redacted zip for a bug report. Works with no WSL, no distro and no CLI. See "Bug report zip". |
 | `benchbar.exe doctor` | Windows checks first, then the CLI's doctor. `--json` and `--fix-hints` go straight to the CLI. |
 
 `wslconfig --apply` never runs `wsl.exe --shutdown`; WSL reads the file at its
@@ -79,6 +80,44 @@ only if the shim itself may set the foreground; the caller (the tray) should
 call it too, before it starts `setup run wsl_enable`. The shim finds
 `wsl.exe` and `schtasks.exe` through `GetSystemDirectory`, never an
 environment variable.
+
+## Bug report zip
+
+`benchbar.exe report-windows` writes
+`%LOCALAPPDATA%\BenchBar\reports\benchbar-windows-report-YYYYMMDD-HHMMSS.zip`
+and keeps the newest 10 of those zips. It never asks for administrator rights
+and never starts a stopped distro (it asks `wsl.exe --list --running --quiet`,
+like `setup check` without `--probe`). The zip holds:
+
+- `summary.txt`: shim, tray and CLI versions, Windows product name, build and
+  architecture, the WSL version text, the default and the configured distro,
+  whether the distro is installed, running or stopped, and the `--context`.
+- `setup-check.json`: the same data as `setup check --json` without `--probe`.
+- `wsl-status.txt` and `wsl-list.txt`: the output of `wsl.exe --status` and
+  `wsl.exe --list --verbose`.
+- `included/NAME` for each `--include FILE` (repeat the flag; a file larger than
+  1 MB keeps its last 1 MB).
+- `cli-report.zip`, only when the distro runs and has the CLI: the zip that
+  `benchbar report --json --out /tmp` names (with `--bench-dir PATH` for
+  `--bench`), copied out with `wsl.exe --exec cat`.
+
+The Windows user name, `%USERPROFILE%`, the Linux user name and `/home/<user>`
+become `<user>` in every text part, and values next to words such as password,
+secret, token or key become `<redacted>`. No environment is dumped.
+
+With `--json` stdout is one line:
+
+```json
+{"schema_version":1,"zip":"C:\\Users\\...\\reports\\benchbar-windows-report-20260102-030405.zip","included":["summary.txt","wsl-status.txt","wsl-list.txt","setup-check.json","cli-report.zip"],"skipped":[{"part":"cli_report","reason":"the distro is stopped"}],"issue_url":"https://github.com/askysh/benchbar/issues/new?template=bug_report_windows.yml&title=..."}
+```
+
+`skipped` names what was left out and why (`cli_report`: WSL is not
+installed, the distro is not installed, the distro is stopped, benchbar is not
+installed in the distro, or the CLI report failed; `include:NAME`: the file
+cannot be read). It exits 0 whenever a zip was written, 1 on a usage error or
+when the zip cannot be written. Without `--json` it prints the zip path and the
+issue URL. `issue_url` prefills the form fields `versions`, `windows`, `distro`
+and `what`; it holds no paths or user names and stays under 4000 characters.
 
 ## Passwords for the CLI
 
