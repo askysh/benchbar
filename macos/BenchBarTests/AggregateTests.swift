@@ -57,6 +57,16 @@ struct AggregateTests {
         #expect(SiteRow.popoverRows(rows, limit: 10).count == 4)
     }
 
+    @Test func popoverOffersOpenWhereTheNameResolves() {
+        let sites = [
+            SiteInfo(name: "main", isDefault: true, hostsEntry: false, pingCode: nil),
+            SiteInfo(name: "qa1.localhost", isDefault: false, hostsEntry: false, pingCode: nil),
+            SiteInfo(name: "has-line", isDefault: false, hostsEntry: true, pingCode: nil),
+        ]
+        let open = Dictionary(uniqueKeysWithValues: SiteRow.make(sites: sites, defaultSite: "main", port: 8000).map { ($0.name, $0.popoverCanOpen) })
+        #expect(open == ["main": false, "qa1.localhost": true, "has-line": true])
+    }
+
     @Test func siteRowsFromAnOlderCLI() {
         let rows = SiteRow.make(sites: nil, defaultSite: "macdev", port: 8000)
         // a CLI that old says nothing about developer mode, so Open as is shown as needing a newer CLI

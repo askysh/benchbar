@@ -17,11 +17,11 @@ nonisolated struct RunnerCanvas {
 
     /// Renders one frame `width` points wide.
     static func render(width: CGFloat, _ draw: (RunnerCanvas) -> Void) -> CGImage {
-        let scale = Runner.scale
+        let scale = Runner.renderScale
         let context = CGContext(
             data: nil,
             width: Int(width * scale),
-            height: Runner.pixelHeight,
+            height: Int(Runner.pointHeight * scale),
             bitsPerComponent: 8,
             bytesPerRow: 0,
             space: CGColorSpace(name: CGColorSpace.sRGB)!,

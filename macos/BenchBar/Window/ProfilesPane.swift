@@ -159,6 +159,7 @@ struct ProfilesPane: View {
         HStack(alignment: .firstTextBaseline, spacing: WindowMetrics.rowSpacing) {
             Image(systemName: profile.isTeam ? "person.2.fill" : "shippingbox")
                 .foregroundStyle(profile.valid ? Color.accentColor : .red)
+                .accessibilityLabel(!profile.valid ? "Invalid profile" : (profile.isTeam ? "Team profile" : "Profile"))
             VStack(alignment: .leading, spacing: WindowMetrics.lineSpacing) {
                 HStack(spacing: 6) {
                     Text(profile.name).font(.body.weight(.medium))

@@ -133,6 +133,15 @@ does. Report a Bug sends a redacted report in about a minute.
   items; the first run wizard says in a line what each of its three
   choices does.
 
+- Mac app: the popover no longer says "Hostname setup needed" or shows the
+  hosts banner (the Sites tab in the window has it, with Set Up…), and
+  offers Open for a `*.localhost` site that has no hosts line. The first run
+  wizard has Report a Bug… on every page, and Cancel goes back to the page
+  you came from. A success banner clears when you change tab, the Overview
+  tab no longer draws a focus ring on open, the Menu Bar preview is larger and sharp (built in runners are drawn at the preview's size, not the menu bar's frames enlarged),
+  the runners guide is a link, and the doctor, profile, lockfile and
+  install icons have VoiceOver labels.
+
 - On Linux, `benchbar install` checks ports 3306 (MariaDB) and 6379 (the system Redis) before it asks for sudo or changes anything. In WSL 2 all distros share one network, so a second distro failed after 43 seconds with "systemctl start mariadb failed" because another distro's MariaDB held 3306. The plan now lists the port as a blocker, and the run stops at once with `port_3306_in_use` (or `port_6379_in_use`), a message and a fix. Nothing is stopped for you. A rerun on the distro that owns MariaDB is not a blocker.
 - `benchbar install --dry-run` on a fresh Linux machine (no uv, no pipx yet) exits 0 with its plan. Step 2 used to stop with "Neither uv nor pipx is installed" before step 1 had installed them, which the Windows tray read as "the plan could not be made". The dry run now says that step 1 will install uv, Python, Node and the rest. A real blocker, such as too little disk, still fails the dry run.
 - The one line installer works on Linux and WSL. `curl ... install.sh | bash` in Ubuntu 24.04 installs the command line tool (a clone in `~/.local/share/benchbar`, a link in `~/.local/bin`, `PATH` in `~/.bashrc`) without sudo or questions, and names `sudo apt install -y git` when git is missing. It stopped with "This installer is for macOS" before, which broke the Windows tray's command line tool step. `benchbar.exe` now runs the installer of its own release (`v<version>`, with `--version`); a development build uses `main`.
