@@ -38,7 +38,10 @@ nonisolated struct Runner: Sendable, Identifiable {
 
 extension Runner {
     /// The runners that ship with the app, drawn in code.
-    nonisolated static let builtIns: [Runner] = [BenchRunnerArt.make(), CupRunnerArt.make()]
+    nonisolated static let builtIns: [Runner] = [
+        BenchRunnerArt.make(), CupRunnerArt.make(), KettleRunnerArt.make(), ServerRunnerArt.make(),
+        PlaneRunnerArt.make(), SnailRunnerArt.make(), RocketRunnerArt.make(),
+    ]
 
     nonisolated static let defaultID = "bench"
 

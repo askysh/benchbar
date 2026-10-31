@@ -54,14 +54,35 @@ internal sealed class RunnerCanvas
     /// An arc of a circle, stroked. Angles are radians in y up terms, counterclockwise positive
     /// (CGContext.addArc with clockwise false); <paramref name="sweepRadians"/> is the signed length.
     /// </summary>
-    public void Arc(PointF center, float radius, float startRadians, float sweepRadians, float width)
+    public void Arc(PointF center, float radius, float startRadians, float sweepRadians, float width) =>
+        Arc(_inkColor, center, radius, startRadians, sweepRadians, width);
+
+    private void Arc(Color color, PointF center, float radius, float startRadians, float sweepRadians, float width)
     {
         using var path = new GraphicsPath();
         path.AddArc(center.X - radius, center.Y - radius, radius * 2, radius * 2,
             startRadians * 180 / MathF.PI, sweepRadians * 180 / MathF.PI);
-        using var pen = NewPen(width, _inkColor);
+        using var pen = NewPen(width, color);
         _g.DrawPath(pen, path);
     }
+
+    /// <summary>A filled polygon through <paramref name="points"/> (the Mac's <c>shape</c>).</summary>
+    public void Shape(PointF[] points)
+    {
+        if (points.Length < 3) return;
+        using var path = new GraphicsPath();
+        path.AddPolygon(points);
+        _g.FillPath(_ink, path);
+    }
+
+    // The same shapes as holes (the Mac's cutDot, cutLine and cutArc).
+
+    public void CutDot(PointF center, float radius) => Cutting(() => Dot(Brushes.Transparent, center, radius));
+
+    public void CutLine(PointF[] points, float width) => Cutting(() => Line(Color.Transparent, points, width));
+
+    public void CutArc(PointF center, float radius, float startRadians, float sweepRadians, float width) =>
+        Cutting(() => Arc(Color.Transparent, center, radius, startRadians, sweepRadians, width));
 
     /// <summary>A quadratic curve as the cubic GDI+ draws: from <paramref name="p0"/> through control <paramref name="c"/> to <paramref name="p1"/>.</summary>
     public static void QuadTo(GraphicsPath path, PointF p0, PointF c, PointF p1) =>

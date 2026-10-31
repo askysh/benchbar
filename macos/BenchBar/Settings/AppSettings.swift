@@ -30,7 +30,7 @@ final class AppSettings {
     var scanFolder: String { didSet { defaults.set(scanFolder, forKey: Key.scanFolder) } }
     /// The file picker for the CLI is shown at most once automatically.
     var askedForCLI: Bool { didSet { defaults.set(askedForCLI, forKey: Key.askedForCLI) } }
-    /// Built in ("bench", "cup") or a custom runner folder name.
+    /// A built in id (Runner.builtIns: "bench", "cup", "kettle" and so on) or a custom runner folder name.
     var runnerID: String { didSet { defaults.set(runnerID, forKey: Key.runnerID) } }
     /// Off: the running animation keeps one steady speed.
     var speedEnabled: Bool { didSet { defaults.set(speedEnabled, forKey: Key.speedEnabled) } }

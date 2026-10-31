@@ -15,7 +15,7 @@ public sealed record RunnerInfo(string Id, string Name, string? Author, bool IsB
 }
 
 /// <summary>
-/// The runners available: the built in <c>bench</c> and <c>cup</c>, then every valid or broken folder under
+/// The runners available: the built ins (<see cref="BuiltInRunners.All"/>), then every valid or broken folder under
 /// <c>%LOCALAPPDATA%\BenchBar\runners\&lt;id&gt;\</c>. A broken one is listed with its error and never selected:
 /// <see cref="Resolve"/> falls back to the Bench.
 /// </summary>
@@ -28,7 +28,7 @@ public sealed class RunnerSet
 
     public IReadOnlyList<RunnerInfo> Runners { get; }
 
-    /// <summary>Only the built ins: Bench and Coffee cup.</summary>
+    /// <summary>Only the built ins.</summary>
     public static RunnerSet BuiltIn { get; } = new(Describe(BuiltInRunners.All));
 
     /// <summary>Reads the runners folder now. A missing folder is just the built ins; call again to pick up changes.</summary>
