@@ -54,7 +54,7 @@ public class Fixes081Tests
         var step = new SetupStepInfo(SetupIds.Keepalive, SetupStatus.Warn, "Keep the distro awake",
             "keepalive keeps Ubuntu-24.04 alive, but BenchBar uses BenchBarQA", "keepalive", false, Blocking: false);
         var text = StepText.Detail(step, [step]);
-        Assert.Equal("The keep awake task keeps Ubuntu-24.04 running, but BenchBar uses BenchBarQA. Set Up points the task at BenchBarQA.", text);
+        Assert.Equal("The keep awake task serves Ubuntu-24.04. Set Up moves it to BenchBarQA, and Ubuntu-24.04 can then go idle.", text);
     }
 
     [Fact]

@@ -65,6 +65,9 @@ public sealed record SetupStepInfo(string Id, SetupStatus Status, string Title, 
         }
     }
 
+    /// <summary>The row shows its action button: the step is open, or it is advice that warns and has an action (<c>wslconfig</c>).</summary>
+    public bool OffersAction => Action is { Length: > 0 } && (!IsSatisfied || (!Blocking && Status == SetupStatus.Warn));
+
     public bool IsOk => Status is SetupStatus.Ok;
 
     /// <summary>Done or only advice: the page may continue past it.</summary>
@@ -82,8 +85,8 @@ public sealed record SetupReport(string? Distro, bool Ready, bool RebootPending,
 {
     public SetupStepInfo? Step(string id) => Steps.FirstOrDefault(s => s.Id == id);
 
-    /// <summary>The first step that is not done and has something the page can run for it.</summary>
-    public SetupStepInfo? NextActionable => Steps.FirstOrDefault(s => !s.IsSatisfied && !s.Waits && s.Action is { Length: > 0 });
+    /// <summary>The first blocking step that is not done and has something the page can run for it. Set Up Everything runs these only; advice rows keep their own button.</summary>
+    public SetupStepInfo? NextActionable => Steps.FirstOrDefault(s => s.Blocking && !s.IsSatisfied && !s.Waits && s.Action is { Length: > 0 });
 
     /// <summary>The first step that is not done, whether or not it has an action (a step that waits has none).</summary>
     public SetupStepInfo? FirstBlocking => Steps.FirstOrDefault(s => s.StopsTheWizard);

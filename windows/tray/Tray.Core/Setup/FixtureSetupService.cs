@@ -55,7 +55,7 @@ public sealed class FixtureSetupService(string directory) : ISetupService
             if (e is InstallEvent.Plan p) plan = p.Value;
             if (e is InstallEvent.Done d) done = d.Value;
         }
-        if (done is { Exit: not 0 }) return new PlanResult(null, done.Error ?? done.Fix ?? "The plan could not be made.", done.Fix);
+        if (done is { Exit: not 0 }) return new PlanResult(null, done.Error ?? done.Fix ?? "The plan could not be made.", done.Fix, plan?.Blockers);
         return plan is null ? new PlanResult(null, "The fixture has no plan.") : new PlanResult(plan, null);
     }
 

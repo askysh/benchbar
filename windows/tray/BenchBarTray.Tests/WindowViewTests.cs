@@ -22,7 +22,7 @@ public class WindowViewTests
     }
 
     /// <summary>A scratch copy of fixtures/setup in the DIR/setup layout; check.json is replaced by <paramref name="check"/> (ready or not).</summary>
-    internal static FixtureSetupService Fixture(string check = "check.json", bool ready = false, string? install = null, bool noUser = false)
+    internal static FixtureSetupService Fixture(string check = "check.json", bool ready = false, string? install = null, bool noUser = false, string? plan = null)
     {
         string? source = null;
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
@@ -40,6 +40,7 @@ public class WindowViewTests
         if (noUser)
             text = text.Replace("{\"id\":\"distro_user\",\"status\":\"ok\",\"title\":\"Linux user\",\"detail\":\"akash\",\"action\":null", "{\"id\":\"distro_user\",\"status\":\"missing\",\"title\":\"Linux user\",\"detail\":\"no user\",\"action\":\"distro_user\"");
         File.WriteAllText(Path.Combine(target, "check.json"), text);
+        if (plan is not null) File.WriteAllText(Path.Combine(target, "plan.jsonl"), plan);
         if (install is not null) File.Copy(Path.Combine(source, install), Path.Combine(target, "install.jsonl"), overwrite: true);
         return new FixtureSetupService(root);
     }
