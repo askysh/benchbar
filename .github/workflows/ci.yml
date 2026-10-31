@@ -172,10 +172,13 @@ jobs:
       # git (test-affected's fake repository, the bench init clone), python3
       # (jget and the JSON checks), zip and unzip (the report and packaging
       # tests), curl (install.sh's test), perl-utils (shasum, which the
-      # harness uses for the wkhtmltopdf checksum). The mocks start with
+      # harness uses for the wkhtmltopdf checksum), musl-locales (locale -a
+      # and C.UTF-8, for test-status-cost's UTF-8 leg). The mocks start with
       # #!/bin/bash, which the image only has as /usr/local/bin/bash. The
       # suite runs as a user, not root, from a copy in that user's home, so
-      # no uid has to match the runner's and nothing is written back.
+      # no uid has to match the runner's and nothing is written back. The
+      # user is "ci": test-report's sample log holds the word "tester",
+      # which the report would redact as a username.
       - name: CLI tests (bash 3.2.57 container)
         if: env.CODE == 'true'
         env:
@@ -184,11 +187,11 @@ jobs:
           SKIP_TESTS: test-install-linux test-doctor-linux test-systemd test-platform-linux
         run: |
           docker run --rm -v "$PWD:/w:ro" -e SHARD -e SHELLCHECK -e SKIP_TESTS bash:3.2.57 sh -euc '
-            apk add --no-cache coreutils findutils diffutils grep sed gawk procps git python3 zip unzip curl perl-utils >/dev/null
+            apk add --no-cache coreutils findutils diffutils grep sed gawk procps git python3 zip unzip curl perl-utils musl-locales >/dev/null
             ln -sf /usr/local/bin/bash /bin/bash
-            adduser -D tester
-            cp -R /w /home/tester/w && chown -R tester /home/tester/w
-            su tester -s /bin/sh -c "cd /home/tester/w && export HOME=/home/tester && git config --global --add safe.directory \"*\" && bash --version | head -n 1 && nproc && bash tests/run-tests.sh"
+            adduser -D ci
+            cp -R /w /home/ci/w && chown -R ci /home/ci/w
+            su ci -s /bin/sh -c "cd /home/ci/w && export HOME=/home/ci && git config --global --add safe.directory \"*\" && bash --version | head -n 1 && nproc && bash tests/run-tests.sh"
           '
 
   # shellcheck once, on its own runner, for every platform's scripts. Same
