@@ -75,7 +75,17 @@ public sealed record CheckRow(SetupStepInfo Step, bool Busy, string? Message, st
 /// </summary>
 public sealed partial class WizardModel : IDisposable
 {
-    public const string LinuxCliInstallLine = "curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash";
+    /// <summary>The line that installs the Linux CLI inside the distro: a release tray pins the same release, as benchbar.exe does.</summary>
+    public static string LinuxCliInstallLine => LinuxCliInstallLineFor(
+        (System.Reflection.Assembly.GetEntryAssembly() ?? typeof(WizardModel).Assembly)
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion);
+
+    /// <summary>X.Y.Z uses the v X.Y.Z installer and asks for that version; anything else (0.0.0-dev, a pre release) uses main.</summary>
+    public static string LinuxCliInstallLineFor(string? version) =>
+        version is { } v && System.Text.RegularExpressions.Regex.IsMatch(v, @"^\d+\.\d+\.\d+$") && v != "0.0.0"
+            ? $"curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/v{v}/install.sh | bash -s -- --version v{v}"
+            : "curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash";
     public const string McpLine = "claude mcp add benchbar -- benchbar.exe mcp";
     public const string DefaultSite = "linuxdev.localhost";
     public const string DefaultProfile = "v15-lts";

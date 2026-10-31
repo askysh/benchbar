@@ -137,4 +137,14 @@ public class Fixes081Tests
         public void ApplyNotifications(bool on) { }
         public void DistroSwitched() => Switches++;
     }
+
+    [Theory]
+    [InlineData("0.8.1", "https://raw.githubusercontent.com/askysh/benchbar/v0.8.1/install.sh | bash -s -- --version v0.8.1")]
+    [InlineData("0.0.0-dev", "https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash")]
+    [InlineData("0.8.1-rc1", "https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash")]
+    [InlineData(null, "https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash")]
+    public void TheLinuxInstallLineFollowsTheTrayRelease(string? version, string tail)
+    {
+        Assert.Equal("curl -fsSL " + tail, WizardModel.LinuxCliInstallLineFor(version));
+    }
 }
