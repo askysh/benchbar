@@ -166,6 +166,10 @@ nonisolated struct SiteRow: Equatable, Sendable, Identifiable {
 
     var id: String { name }
 
+    /// Whether the popover offers Open: the name resolves with a hosts line,
+    /// and a `*.localhost` name resolves on macOS without one.
+    var popoverCanOpen: Bool { !needsHosts || name.lowercased().hasSuffix(".localhost") }
+
     /// The default site first, then by name as Finder sorts it (site-2
     /// before site-10). Without sites from the CLI (a CLI older than 0.4) the
     /// bench's own site is the only row.
