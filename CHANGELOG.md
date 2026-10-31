@@ -116,6 +116,14 @@ does. Report a Bug sends a redacted report in about a minute.
   after its sudo steps. On Linux, repair runs its sudo steps first.
 - `doctor --prerequisites` on Linux warns, not fails, when the user is not
   in the `sudo` group.
+- The Windows tray: Check Your PC draws again (it spun at 100 percent CPU
+  on a culture error and laid out wider than the window). Icon buttons
+  (More actions, the sidebar) show their icons. The log toolbar fits the
+  window. A finished step drops its "Turning on WSL" text, waiting rows
+  name the step they wait for, and a distro override is explained as
+  advice. A failed install says "Install Failed" and what to do. Create
+  User and Review say what they wait for. An empty flyout has Set Up a
+  Bench, and a distro that WSL does not have shows "not installed".
 
 ## 0.8.0 - 2026-10-30
 
