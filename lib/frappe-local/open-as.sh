@@ -146,7 +146,8 @@ fl_urlencode_v() {
     __c="${__in:__i:1}"
     case "$__c" in
       [a-zA-Z0-9.~_-]) __out="${__out}${__c}" ;;
-      *) printf -v __c '%%%02X' "'$__c"; __out="${__out}${__c}" ;;
+      # bash 3.2 sign extends a byte above 127 ('\xc3' is -61), so mask it
+      *) printf -v __c '%d' "'$__c"; printf -v __c '%%%02X' $((__c & 255)); __out="${__out}${__c}" ;;
     esac
   done
   printf -v "$1" '%s' "$__out"
@@ -336,6 +337,9 @@ fl_cmd_site_open_as() {
   fl_site_config_value_v served default_site
   if [[ "$action" == on ]]; then
     fl_noninteractive && fl_die "Turning on Open as is a person's decision, so nothing run without a terminal can do it." \
+      "Run it in a terminal: benchbar site open-as on ${name}"
+    # --yes skips the question, not the person: a terminal on stdin, or the app (BENCHBAR_SUDO=gui, after its own alert)
+    [[ "${FL_DRY_RUN:-0}" == 1 || -t 0 || "${BENCHBAR_SUDO:-}" == gui ]] || fl_die "Turning on Open as needs a person at a terminal, and this run has none." \
       "Run it in a terminal: benchbar site open-as on ${name}"
     if ! fl_open_as_enabled "$name" && [[ "${FL_DRY_RUN:-0}" != "1" ]]; then
       fl_info "Open as signs in as any enabled user of ${name} with no password: benchbar open --as USER."

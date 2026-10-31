@@ -45,6 +45,9 @@ assert_eq "1" "$CODE" "$OUT"
 run_fm site open-as status --bench-dir "$BENCH"
 assert_contains "$OUT" "Open as is off"
 if grep -rq OPEN_AS_SITES "$FL_STATE_DIR" 2>/dev/null; then fail "a refused on left a record"; fi
+# --yes without a terminal (an agent's plain shell) is refused too; the app passes BENCHBAR_SUDO=gui after its alert
+run_fm site open-as on v16dev --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "needs a person at a terminal"
 # a name that is no site
 run_fm site open-as on nosuch --yes --bench-dir "$BENCH"
 assert_eq "1" "$CODE"; assert_contains "$OUT" "No site 'nosuch'"
@@ -52,11 +55,11 @@ run_fm site open-as sideways --bench-dir "$BENCH"; assert_eq "1" "$CODE"; assert
 
 # on: what a sign in does is said, the choice is benchbar state only
 snap_sites="$(snapshot "$BENCH/sites")"
-run_fm site open-as on --yes --bench-dir "$BENCH"
+BENCHBAR_SUDO=gui run_fm site open-as on --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "on_login"; assert_contains "$OUT" "last_login"; assert_contains "$OUT" "simultaneous_sessions"
 assert_eq "$snap_sites" "$(snapshot "$BENCH/sites")" "(on writes nothing under sites/)"
-run_fm site open-as on v16dev --yes --bench-dir "$BENCH"
+BENCHBAR_SUDO=gui run_fm site open-as on v16dev --yes --bench-dir "$BENCH"
 assert_contains "$OUT" "unchanged: Open as is already on for v16dev"
 run_fm site open-as status --json --bench-dir "$BENCH"
 assert_eq "True True True" "$(printf '%s' "$OUT" | jget - 'd["open_as_enabled"], d["developer_mode"], d["open_as"]' | tr -d "(),'")"
@@ -75,7 +78,7 @@ BENCHBAR_NONINTERACTIVE=1 run_fm site open-as off v16dev --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 # not in developer mode yet: on says so and still records the choice
 printf '{\n "db_name": "_v16dev"\n}\n' >"$BENCH/sites/v16dev/site_config.json"
-run_fm site open-as on v16dev --yes --bench-dir "$BENCH"
+BENCHBAR_SUDO=gui run_fm site open-as on v16dev --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "not in developer mode"
 OUT="$("$FM" site open-as status --json --bench-dir "$BENCH" 2>/dev/null)"
 assert_contains "$(printf '%s' "$OUT" | jget - 'd["warnings"][0]')" "not in developer mode"
@@ -95,7 +98,7 @@ bench_up
 run_fm site open-as off v16dev --bench-dir "$BENCH"; assert_eq "0" "$CODE" "$OUT"
 run_fm open --no-browser --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "(plain open stays available) $OUT"
-run_fm site open-as on v16dev --yes --bench-dir "$BENCH"; assert_eq "0" "$CODE" "$OUT"
+BENCHBAR_SUDO=gui run_fm site open-as on v16dev --yes --bench-dir "$BENCH"; assert_eq "0" "$CODE" "$OUT"
 
 # ---- users
 run_fm users --json --bench-dir "$BENCH"
@@ -197,8 +200,8 @@ printf '{\n "db_name": "_v16dev",\n "developer_mode": 1\n}\n' >"$BENCH/sites/v16
 mkdir -p "$BENCH/sites/two.localhost" "$BENCH/sites/three"
 printf '{\n "developer_mode": 1\n}\n' >"$BENCH/sites/two.localhost/site_config.json"
 printf '{\n "developer_mode": 1\n}\n' >"$BENCH/sites/three/site_config.json"
-run_fm site open-as on two.localhost --yes --bench-dir "$BENCH"; assert_eq "0" "$CODE" "$OUT"
-run_fm site open-as on three --yes --bench-dir "$BENCH"; assert_eq "0" "$CODE" "$OUT"
+BENCHBAR_SUDO=gui run_fm site open-as on two.localhost --yes --bench-dir "$BENCH"; assert_eq "0" "$CODE" "$OUT"
+BENCHBAR_SUDO=gui run_fm site open-as on three --yes --bench-dir "$BENCH"; assert_eq "0" "$CODE" "$OUT"
 reset_calls
 run_fm open --site two.localhost --as priya@example.com --bench-dir "$BENCH"
 assert_eq "1" "$CODE" "$OUT"
@@ -224,6 +227,12 @@ reset_calls
 run_fm open --as priya@example.com --path '/app/x?a=1&&sid&b=2' --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 assert_calls_contain '^open http://v16dev:8000/login\?redirect-to=%2Fapp%2Fx%3Fa%3D1%26b%3D2&sid='
+
+# ---- a path with bytes above 127 is encoded byte by byte (bash 3.2 sign extends them)
+reset_calls
+run_fm open --as priya@example.com --path '/app/café' --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_calls_contain '^open http://v16dev:8000/login\?redirect-to=%2Fapp%2Fcaf%C3%A9&sid='
 
 # ---- a second run works the same (a launch has no "unchanged")
 reset_calls

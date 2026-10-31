@@ -404,7 +404,7 @@ so ⌘U does nothing while the bench runs.
 
 A menu bar app has `LSUIElement = true`: no Dock icon, and macOS treats
 its windows as second class (they open behind other apps). The pattern
-that works (`Settings/SettingsWindowController.swift`):
+that works (`Window/MainWindowController.swift`):
 
 1. On open: `NSApp.setActivationPolicy(.regular)`, which gives a Dock
    icon and a normal menu bar for as long as the window is open, then
@@ -462,7 +462,7 @@ The suite is off unless that folder exists.
 ### Files to read
 
 - `macos/BenchBar/Popover/PopoverView.swift`, `PopoverController.swift`, `BenchPresentation.swift`.
-- `macos/BenchBar/Settings/SettingsWindowController.swift`, `SettingsView.swift`, `LaunchAtLogin.swift`, `RunnerPreview.swift`.
+- `macos/BenchBar/Window/MainWindowController.swift`, `macos/BenchBar/Settings/SettingsView.swift`, `LaunchAtLogin.swift`, `RunnerPreview.swift`.
 - `macos/BenchBar/App/AppDelegate.swift` for the wiring and the click handling.
 - `macos/BenchBarTests/PresentationTests.swift`.
 

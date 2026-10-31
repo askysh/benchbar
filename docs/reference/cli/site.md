@@ -102,7 +102,8 @@ The choice is benchbar's own state for the bench; the site is not changed.
 (the apps' `on_login` hooks run, `last_login` is updated, and Frappe may
 end that user's oldest session) and asks first; `--yes` skips the question.
 It is refused when `BENCHBAR_NONINTERACTIVE=1` is set, which `--for-agent`
-and `benchbar mcp` do. It still records the choice for a site that is not in
+and `benchbar mcp` do, and when there is no terminal on stdin, even with
+`--yes` (the BenchBar app turns it on after its own alert). It still records the choice for a site that is not in
 `developer_mode` or not the site the web process answers as, and says that
 `open --as` will refuse it until that changes. `off` is always allowed.
 `status --json` prints one document with `open_as_enabled`,

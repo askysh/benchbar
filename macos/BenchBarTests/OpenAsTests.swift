@@ -484,6 +484,7 @@ struct OpenAsTests {
         #expect(calls[0].arguments == ["site", "open-as", "on", "macdev", "--yes", "--plain", "--bench-dir", bench])
         #expect(calls[1].arguments == ["site", "open-as", "off", "macdev", "--plain", "--bench-dir", bench])
         #expect(calls.allSatisfy { $0.environment["BENCHBAR_NONINTERACTIVE"] == "0" })
+        #expect(calls.allSatisfy { $0.environment["BENCHBAR_SUDO"] == "gui" })
     }
 
     @Test func pinsOfGoneBenchesAndSitesArePruned() throws {

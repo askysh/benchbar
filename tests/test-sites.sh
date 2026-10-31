@@ -27,7 +27,7 @@ assert_eq "True" "$(dev_mode_of site list --json)" "(site_config.json developer_
 assert_eq "True" "$(dev_mode_of status --json)" "(status carries it too: the tray reads sites from status)"
 run_fm site list --json --bench-dir "$BENCH"
 assert_eq "False True" "$(printf '%s' "$OUT" | jget - 'd["sites"][0]["open_as"], d["sites"][0]["developer_mode"]' | tr -d "(),'")" "(developer mode alone is not open_as: the person has not turned it on)"
-run_fm site open-as on v16dev --yes --bench-dir "$BENCH"
+BENCHBAR_SUDO=gui run_fm site open-as on v16dev --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 run_fm site list --json --bench-dir "$BENCH"
 assert_eq "True True" "$(printf '%s' "$OUT" | jget - 'd["sites"][0]["open_as_enabled"], d["sites"][0]["open_as"]' | tr -d "(),'")" "(opted in, developer mode, the site bench serve answers as)"
