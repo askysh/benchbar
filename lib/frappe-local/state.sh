@@ -285,6 +285,13 @@ fl_state_init() {
 # judged stale and is still stale, renames it away and removes it. Two
 # waiters that saw the same stale lock never remove the lock the faster one
 # took next, and unlock removes only the caller's own lock.
+#
+# Age alone never makes a lock stale: the mtime of a lock is wrong whenever
+# the clock steps (a VM resumed, NTP on a fresh runner) and a live holder can
+# be stopped for seconds on a loaded machine. A lock whose holder (the PID in
+# its token) is alive is waited for ten times as long before the last resort
+# breaks it, and a holder re-checks that the lock is still its own right
+# before it renames the new content into place and starts over when it is not.
 FL__KV_TOKEN=""
 
 # fl__kv_age_v VAR PATH: the age of PATH in seconds from its mtime (GNU stat,
@@ -296,16 +303,34 @@ fl__kv_age_v() {
   if [[ "$__born" =~ ^[0-9]+$ ]]; then printf -v "$1" '%s' "$(( $(date +%s) - __born ))"; else printf -v "$1" '%s' ""; fi
 }
 
+# fl__kv_holder_alive LCK: the PID in the token inside LCK is a running
+# process (no token, or one that is not PID.RANDOM, is nobody's)
+fl__kv_holder_alive() {
+  local tok pid
+  tok="$(ls -A "$1" 2>/dev/null || true)"
+  tok="${tok%%$'\n'*}"
+  pid="${tok%%.*}"
+  [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null
+}
+
 # fl__kv_stale PATH [force]: 10 s old, or born in the future (the clock
-# stepped back: a VM resumed), or "force". An age that cannot be read is no
-# reason: under contention it is mostly a lock released a moment ago, and
-# breaking then removes the lock the next writer has just taken (a lost key,
-# test-run-lock)
+# stepped back: a VM resumed), and no live process holds it; or "force". An
+# age that cannot be read is no reason: under contention it is mostly a lock
+# released a moment ago, and breaking then removes the lock the next writer
+# has just taken (a lost key, test-run-lock). Neither is a clock that stepped
+# while the holder is alive and working.
 fl__kv_stale() {
   local age
   [[ "${2:-}" != "force" ]] || return 0
   fl__kv_age_v age "$1"
-  [[ -n "$age" ]] && [[ "$age" -ge 10 || "$age" -lt -10 ]]
+  [[ -n "$age" ]] && [[ "$age" -ge 10 || "$age" -lt -10 ]] || return 1
+  ! fl__kv_holder_alive "$1"
+}
+
+# fl__kv_owned FILE: the lock of FILE is still the caller's (always true for
+# a lock that takes no token file)
+fl__kv_owned() {
+  [[ -z "$FL__KV_TOKEN" || -e "$1.lck/${FL__KV_TOKEN}" ]]
 }
 
 # fl__kv_reclaim LCK SEEN [force]: removes LCK when it still holds SEEN (what
@@ -324,15 +349,18 @@ fl__kv_reclaim() {
 }
 
 fl__kv_lock() {
-  local lck="$1.lck" i=0 seen
+  local lck="$1.lck" i=0 seen limit
   while ! mkdir "$lck" 2>/dev/null; do
     i=$((i + 1))
     if [[ $((i % 40)) -eq 0 ]]; then
       # what is in it first, then its age: a lock taken anew in between is young
       seen="$(ls -A "$lck" 2>/dev/null || true)"
       # held for good: 600 rounds (about 30 s and the stats) is the last
-      # resort, through the guard and for the same lock only, as the rest
-      if [[ "$i" -ge 600 ]]; then fl__kv_reclaim "$lck" "$seen" force; i=0
+      # resort, through the guard and for the same lock only, as the rest;
+      # 6000 when a live process holds it (or its PID was reused)
+      limit=600
+      fl__kv_holder_alive "$lck" && limit=6000
+      if [[ "$i" -ge "$limit" ]]; then fl__kv_reclaim "$lck" "$seen" force; i=0
       elif fl__kv_stale "$lck"; then fl__kv_reclaim "$lck" "$seen"; fi
     fi
     sleep 0.05
@@ -352,6 +380,19 @@ fl__kv_unlock() {
   FL__KV_TOKEN=""
 }
 
+# fl__kv_commit FILE TMP: renames TMP over FILE when the lock is still the
+# caller's; when it is not (broken as stale meanwhile), TMP was built from a
+# file another writer has changed since, so it is dropped and 1 returned for
+# the caller to lock again and rebuild
+fl__kv_commit() {
+  if fl__kv_owned "$1"; then
+    mv -f "$2" "$1" || rm -f "$2"
+    return 0
+  fi
+  rm -f "$2"
+  return 1
+}
+
 # fl_kv_set FILE KEY VALUE and fl_kv_get FILE KEY: the store behind both
 # the checkout's state.env and the per bench files. Nothing is written in a
 # dry run, and an unchanged value is not written again. The new content is
@@ -368,15 +409,18 @@ fl_kv_set() {
   if [[ "$(fl_kv_get "$file" "$key")" == "$value" ]]; then
     return 0
   fi
-  fl__kv_lock "$file"
-  if tmp="$(mktemp "${file}.XXXXXX" 2>/dev/null)"; then
-    if { grep -v "^${key}=" "$file" 2>/dev/null || true; printf '%s=%q\n' "$key" "$value"; } >"$tmp"; then
-      mv -f "$tmp" "$file" || rm -f "$tmp"
-    else
-      rm -f "$tmp"
+  while :; do
+    fl__kv_lock "$file"
+    if tmp="$(mktemp "${file}.XXXXXX" 2>/dev/null)"; then
+      if { grep -v "^${key}=" "$file" 2>/dev/null || true; printf '%s=%q\n' "$key" "$value"; } >"$tmp"; then
+        fl__kv_commit "$file" "$tmp" || { fl__kv_unlock "$file"; continue; }
+      else
+        rm -f "$tmp"
+      fi
     fi
-  fi
-  fl__kv_unlock "$file"
+    fl__kv_unlock "$file"
+    return 0
+  done
 }
 
 # fl_kv_decode_v VAR RAW: the value fl_kv_set wrote as RAW (printf %q),
@@ -445,15 +489,18 @@ fl_kv_del() {
   local file="$1" key="$2" tmp
   [[ "${FL_DRY_RUN:-0}" == "1" ]] && return 0
   grep -q "^${key}=" "$file" 2>/dev/null || return 0
-  fl__kv_lock "$file"
-  if tmp="$(mktemp "${file}.XXXXXX" 2>/dev/null)"; then
-    if { grep -v "^${key}=" "$file" 2>/dev/null || true; } >"$tmp"; then
-      mv -f "$tmp" "$file" || rm -f "$tmp"
-    else
-      rm -f "$tmp"
+  while :; do
+    fl__kv_lock "$file"
+    if tmp="$(mktemp "${file}.XXXXXX" 2>/dev/null)"; then
+      if { grep -v "^${key}=" "$file" 2>/dev/null || true; } >"$tmp"; then
+        fl__kv_commit "$file" "$tmp" || { fl__kv_unlock "$file"; continue; }
+      else
+        rm -f "$tmp"
+      fi
     fi
-  fi
-  fl__kv_unlock "$file"
+    fl__kv_unlock "$file"
+    return 0
+  done
 }
 
 fl_state_set() { fl_kv_set "$FL_STATE_FILE" "$1" "$2"; }
