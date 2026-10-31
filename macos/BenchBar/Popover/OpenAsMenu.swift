@@ -27,9 +27,10 @@ nonisolated enum OpenAsMenuModel {
     static let noPinsHint = "Pin people from Find User… to switch to them here"
 
     /// What the opt-in alert says. The CLI says the same before it asks in a terminal.
-    static let allowMessage = "Open as signs in to this site as any of its users, without a password. "
-        + "Each sign in runs the apps' on_login and on_session_creation hooks, as a real login does: last_login, an Activity Log entry, "
-        + "a mail to System Managers for Administrator, an ERPNext Customer or Supplier for a Website User. It may end that user's oldest session. "
+    static let allowMessage = "Open as signs in to this site as any of its users, without a password.\n\n"
+        + "Each sign in runs the apps' on_login and on_session_creation hooks, as a real login does: it sets last_login, "
+        + "adds an Activity Log entry, mails the System Managers for Administrator and may create an ERPNext Customer or Supplier "
+        + "for a Website User. It may end that user's oldest session.\n\n"
         + "Use it on development sites only."
 
     /// Whether the control is shown, and if it is shown but cannot be used, why.
@@ -122,6 +123,7 @@ struct OpenAsMenu: View {
             menu(store.openAs)
         case .disabled(let reason):
             Button { } label: { Label("Open as…", systemImage: Self.icon) }
+                .buttonStyle(.bordered)
                 .controlSize(compact ? .small : .regular)
                 .disabled(true)
                 .help(reason)
@@ -162,6 +164,7 @@ struct OpenAsMenu: View {
             }
         }
         .menuStyle(.button)
+        .buttonStyle(.bordered)
         .menuIndicator(.hidden)
         .controlSize(compact ? .small : .regular)
         .fixedSize()

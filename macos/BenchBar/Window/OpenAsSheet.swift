@@ -11,6 +11,7 @@ struct FindUserRequest: Equatable {
 /// the site's Open as… menu under a label of your own.
 struct FindUserSheet: View {
     static let limit = 50
+    static let listHeight = WindowMetrics.sheetMaxContentHeight
     static let debounce: Duration = .milliseconds(250)
 
     let store: BenchStore
@@ -29,25 +30,31 @@ struct FindUserSheet: View {
         SheetScaffold("Find User",
                       explanation: "Enabled users of \(row.name). Open signs the browser in as that user; pin one to keep it in the Open as… menu.",
                       phase: phase) {
-            TextField("Search by name or email", text: $query)
-                .textFieldStyle(.roundedBorder)
-            if let pinNote { SheetNote(pinNote, tint: .orange) }
-            if let list {
-                if list.users.isEmpty {
-                    Text("No users match").foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.vertical, WindowMetrics.paneInset)
-                } else {
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(list.users) { user in
-                            userRow(user)
-                            if user.id != list.users.last?.id { Divider() }
+            // a fixed height while results come and go: the sheet is re-centred
+            // each time its height changes, and it jumped on every keystroke
+            VStack(alignment: .leading, spacing: WindowMetrics.spacing) {
+                TextField("Search by name or email", text: $query)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { }
+                if let pinNote { SheetNote(pinNote, tint: .orange) }
+                if let list {
+                    if list.users.isEmpty {
+                        Text("No users match").foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.vertical, WindowMetrics.paneInset)
+                    } else {
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(list.users) { user in
+                                userRow(user)
+                                if user.id != list.users.last?.id { Divider() }
+                            }
                         }
-                    }
-                    if list.truncated {
-                        SheetNote("Showing the first \(Self.limit); refine the search.")
+                        if list.truncated {
+                            SheetNote("Showing the first \(Self.limit); refine the search.")
+                        }
                     }
                 }
             }
+            .frame(maxWidth: .infinity, minHeight: Self.listHeight, alignment: .top)
         } actions: {
             DoneButton(title: "Close", action: close)
         }
@@ -66,8 +73,11 @@ struct FindUserSheet: View {
             VStack(alignment: .leading, spacing: WindowMetrics.lineSpacing) {
                 HStack(spacing: WindowMetrics.rowSpacing) {
                     Text(user.fullName ?? user.name).font(.body.weight(.medium)).lineLimit(1)
-                    Text(user.userType).font(.caption2).padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(.quaternary, in: Capsule())
+                    // every row of a list of mostly system users saying so is noise
+                    if user.userType != "System User" {
+                        Text(user.userType).font(.caption2).padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(.quaternary, in: Capsule())
+                    }
                 }
                 Text(user.name).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                 if !user.roles.isEmpty {
@@ -79,6 +89,7 @@ struct FindUserSheet: View {
                         get: { openAs.pins(bench: bench.path, site: row.name).first { $0.user == user.name }?.label ?? "" },
                         set: { openAs.setLabel($0, for: user.name, bench: bench.path, site: row.name) }))
                         .textFieldStyle(.roundedBorder).controlSize(.small)
+                        .onSubmit { }
                 }
             }
             Spacer(minLength: WindowMetrics.rowSpacing)
