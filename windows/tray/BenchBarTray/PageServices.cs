@@ -36,6 +36,9 @@ internal sealed class PageServices
     /// <summary>Polls the benches now (after a change, so the sidebar and Overview catch up).</summary>
     public Action RefreshNow { get; set; } = () => { };
 
+    /// <summary>Report a Bug with a failure as its context: the entry point and the problem text.</summary>
+    public Action<string, string?> ReportBug { get; set; } = (_, _) => { };
+
     /// <summary>Says something outside the window (a Windows notification): the result of a run whose window was closed meanwhile.</summary>
     public Action<string> Notify { get; set; } = _ => { };
 

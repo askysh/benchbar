@@ -1,0 +1,145 @@
+using System.Diagnostics;
+using System.Windows;
+using System.Windows.Controls;
+using BenchBar.Tray.Core;
+
+namespace BenchBar.Tray;
+
+/// <summary>What Report a Bug does on screen. The app fills these in; tests replace them, so the flow runs without a window.</summary>
+internal sealed class ReportSeams
+{
+    /// <summary>Shows "Writing the report..." and returns the thing that removes it.</summary>
+    public Func<IDisposable> ShowBusy { get; set; } = () => new Nothing();
+
+    /// <summary>Opens Explorer with the zip selected.</summary>
+    public Action<string> Reveal { get; set; } = _ => { };
+
+    public Action<string> OpenUrl { get; set; } = _ => { };
+
+    /// <summary>The one short dialog: what to do with the zip.</summary>
+    public Action<ReportOutcome> ShowReady { get; set; } = _ => { };
+
+    /// <summary>The report could not be written at all (a locked folder, a full disk).</summary>
+    public Action<string> ShowFailure { get; set; } = _ => { };
+
+    public Action<string, Exception> Log { get; set; } = (_, _) => { };
+
+    private sealed class Nothing : IDisposable
+    {
+        public void Dispose() { }
+    }
+}
+
+/// <summary>
+/// Report a Bug from start to end: busy window, the report, Explorer, the browser, the dialog. A second click while one runs does
+/// nothing. benchbar.exe failing to start is not an error here: the reporter writes a tray only zip and the flow goes on.
+/// </summary>
+internal sealed class ReportFlow(IBugReporter reporter, ReportSeams seams)
+{
+    public bool IsRunning { get; private set; }
+
+    /// <summary>False when a report is already being written (the click is ignored).</summary>
+    public async Task<bool> RunAsync(ReportRequest request)
+    {
+        if (IsRunning) return false;
+        IsRunning = true;
+        try
+        {
+            ReportOutcome outcome;
+            using (seams.ShowBusy())
+            {
+                try
+                {
+                    outcome = await reporter.CreateAsync(request, CancellationToken.None);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+                {
+                    seams.Log("report", ex);
+                    seams.ShowFailure("The report could not be written: " + ex.Message);
+                    return true;
+                }
+            }
+            seams.Reveal(outcome.ZipPath);
+            seams.OpenUrl(outcome.IssueUrl);
+            seams.ShowReady(outcome);
+            return true;
+        }
+        finally
+        {
+            IsRunning = false;
+        }
+    }
+
+    /// <summary>The Explorer command line that selects one file.</summary>
+    public static ProcessStartInfo RevealInfo(string zip)
+    {
+        var info = new ProcessStartInfo("explorer.exe") { UseShellExecute = false };
+        info.ArgumentList.Add("/select," + zip);
+        return info;
+    }
+}
+
+/// <summary>A small window with "Writing the report..." while the shim works. It has no close button; it goes when the report is done.</summary>
+internal sealed class ReportBusyWindow : Window, IDisposable
+{
+    private bool _done;
+
+    public ReportBusyWindow(ResolvedTheme theme, Window? owner)
+    {
+        Title = BugReportText.ReadyTitle;
+        Width = 320;
+        SizeToContent = SizeToContent.Height;
+        ResizeMode = ResizeMode.NoResize;
+        WindowStyle = WindowStyle.ToolWindow;
+        ShowInTaskbar = owner is null;
+        Topmost = owner is null;
+        Owner = owner;
+        WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner;
+        Ui.ApplyTheme(this, theme);
+        Ui.Name(this, BugReportText.Working);
+        var panel = new StackPanel { Margin = new Thickness(20) };
+        panel.Children.Add(Ui.Live(Ui.Text(BugReportText.Working, 14)));
+        panel.Children.Add(new ProgressBar { IsIndeterminate = true, Height = 6, Margin = new Thickness(0, 12, 0, 0) });
+        Content = panel;
+        Closing += (_, e) => { if (!_done) e.Cancel = true; };
+    }
+
+    public void Dispose()
+    {
+        _done = true;
+        Close();
+    }
+}
+
+/// <summary>The one dialog after a report: what to do with the zip, with Copy Path and Open Folder.</summary>
+internal sealed class ReportReadyDialog : Window
+{
+    public ReportReadyDialog(ReportOutcome outcome, ResolvedTheme theme, Window? owner, Action<string> copy, Action<string> reveal)
+    {
+        Title = BugReportText.ReadyTitle;
+        Width = 480;
+        SizeToContent = SizeToContent.Height;
+        ResizeMode = ResizeMode.NoResize;
+        Owner = owner;
+        WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner;
+        Ui.ApplyTheme(this, theme);
+        Ui.Name(this, BugReportText.ReadyTitle);
+
+        var panel = new StackPanel { Margin = new Thickness(24) };
+        panel.Children.Add(Ui.Text(BugReportText.ReadyMessage, 14));
+        var path = Ui.Mono(outcome.ZipPath);
+        path.Margin = new Thickness(0, 10, 0, 0);
+        panel.Children.Add(path);
+        if (outcome.Note is { Length: > 0 } note)
+            panel.Children.Add(Ui.Text("benchbar.exe could not run, so this zip holds the tray's details only. " + note, 12, opacity: 0.8, margin: new Thickness(0, 8, 0, 0)));
+        var bar = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 16, 0, 0) };
+        bar.Children.Add(Ui.Button("Copy Path", () => copy(outcome.ZipPath), "Copy the path of the report zip"));
+        bar.Children.Add(Ui.Button("Open Folder", () => reveal(outcome.ZipPath), "Open the folder of the report zip"));
+        var close = Ui.Button("Close", Close, "Close", primary: true);
+        close.IsDefault = close.IsCancel = true;
+        close.Margin = new Thickness(0);
+        bar.Children.Add(close);
+        panel.Children.Add(bar);
+        Content = panel;
+    }
+}

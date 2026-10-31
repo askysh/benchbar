@@ -13,6 +13,9 @@ internal sealed class WizardActions
 
     /// <summary>Opens the install log (a Linux path inside the distro) in Notepad or Explorer.</summary>
     public Action<string> OpenLog { get; set; } = _ => { };
+
+    /// <summary>Report a Bug from the wizard: the entry point ("Setup wizard footer", "Report This Problem") and the failure next to the button, if any.</summary>
+    public Action<string, string?> ReportBug { get; set; } = (_, _) => { };
 }
 
 /// <summary>One page of the wizard: its content, what the buttons are, and how to bring it up to date with the model.</summary>
@@ -54,7 +57,7 @@ internal sealed partial class WizardView : UserControl
         header.Children.Add(_subtitle);
         Ui.Name(_title, "Page title");
 
-        var bar = new DockPanel { Margin = new Thickness(40, 12, 40, 24), LastChildFill = false };
+        var bar = new DockPanel { Margin = new Thickness(40, 12, 40, 8), LastChildFill = false };
         DockPanel.SetDock(_left, Dock.Left);
         DockPanel.SetDock(_right, Dock.Right);
         bar.Children.Add(_left);
@@ -63,6 +66,7 @@ internal sealed partial class WizardView : UserControl
         var root = new Grid();
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var scroll = new ScrollViewer
         {
@@ -74,15 +78,22 @@ internal sealed partial class WizardView : UserControl
         Grid.SetRow(header, 0);
         Grid.SetRow(scroll, 1);
         Grid.SetRow(bar, 2);
+        // on every page: a way to tell us, before anything has gone wrong
+        var footer = Ui.Link(BetaText.ReportABug, () => _actions.ReportBug("Setup wizard footer", null), "Report a Bug");
+        footer.Margin = new Thickness(36, 0, 40, 16);
+        Grid.SetRow(footer, 3);
         root.Children.Add(header);
         root.Children.Add(scroll);
         root.Children.Add(bar);
+        root.Children.Add(footer);
         Content = root;
 
         _model.Changed += OnChanged;
         Unloaded += (_, _) => _model.Changed -= OnChanged;
         Rebuild();
     }
+
+    public WizardModel Model => _model;
 
     /// <summary>The page on screen, for tests and the window title.</summary>
     public PageParts? Current => _page;
@@ -144,11 +155,23 @@ internal sealed partial class WizardView : UserControl
 
     // --- shared bits ---
 
-    private Button BackButton(string label = "Back")
+    /// <summary>
+    /// Back is the Esc button on pages that hold nothing typed. A page with a password box passes <c>escapes: false</c>: Esc must not
+    /// walk away from a half typed password (Back on the Linux user page forgets it).
+    /// </summary>
+    private Button BackButton(string label = "Back", bool escapes = true)
     {
         var back = Ui.Button(label, _model.Back, label + " to the previous page");
-        back.IsCancel = true;
+        back.IsCancel = escapes;
         return back;
+    }
+
+    /// <summary>A link that sends a bug report with this failure as its context.</summary>
+    private Button ReportProblemLink(string problem)
+    {
+        var link = Ui.Link(BetaText.ReportThisProblem, () => _actions.ReportBug(BetaText.ReportThisProblem, problem), "Report this problem");
+        link.Margin = new Thickness(0, 4, 0, 0);
+        return link;
     }
 
     private static Button Primary(string label, Action click, string? name = null)

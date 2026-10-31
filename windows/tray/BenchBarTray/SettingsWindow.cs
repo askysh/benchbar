@@ -34,7 +34,7 @@ internal sealed class SettingsWindow : ToolWindow
 
         _model.Changed += Sync;
         Closed += (_, _) => _model.Changed -= Sync;
-        Loaded += (_, _) => _ = _model.LoadDistrosAsync();
+        Loaded += (_, _) => _model.LoadDistrosAsync().Forget();
     }
 
     private UIElement General()
@@ -48,7 +48,7 @@ internal sealed class SettingsWindow : ToolWindow
         _distro.SelectionChanged += (_, _) =>
         {
             if (_syncing || _distro.SelectedItem is not string name) return;
-            _ = _model.UseDistroAsync(name.Replace(" (default)", ""));
+            _model.UseDistroAsync(name.Replace(" (default)", "")).Forget();
         };
         Ui.Name(_distro, "WSL distro");
         var distroBox = new StackPanel();

@@ -7,21 +7,30 @@ namespace BenchBar.Tray;
 
 /// <summary>
 /// The plan review sheet (macos PlanReviewFlow): a modal window that shows a plan from a <c>--dry-run --json</c> call, runs the apply
-/// when confirmed, and shows the result. It only draws <see cref="PlanReviewModel"/>. While the apply runs it cannot be closed
-/// (Stop is offered only when the request says it is safe). Open it with <see cref="PageServices.ReviewPlan"/>.
+/// when confirmed, and shows the result. It only draws <see cref="PlanReviewModel"/>. While the apply runs the frame cannot be closed;
+/// Stop Waiting is always there and closes the sheet while the run goes on (a notification says how it ended), and Stop is added only
+/// when the request says the run is safe to kill. Open it with <see cref="PageServices.ReviewPlan"/>.
 /// </summary>
 internal sealed class PlanReviewSheet : Window
 {
     private readonly PlanReviewModel _model;
     private readonly Action<string> _copy;
+    private readonly Action<string, string?> _report;
+    private readonly Action<string>? _onDetachedFinish;
+    private readonly TextBlock _live = Ui.Live(Ui.Text("", 12, opacity: 0.7, margin: new Thickness(0, 8, 0, 0)));
+    private TextBlock? _elapsedText;
+    private bool _leaving;
     private readonly ContentControl _body = new() { IsTabStop = false };
     private readonly System.Windows.Threading.DispatcherTimer _clock = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly StackPanel _bar = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 16, 0, 0) };
 
-    public PlanReviewSheet(PlanReviewModel model, ResolvedTheme theme, Window? owner, Action<string> copy, bool load = true)
+    public PlanReviewSheet(PlanReviewModel model, ResolvedTheme theme, Window? owner, Action<string> copy, bool load = true,
+        Action<string, string?>? report = null, Action<string>? onDetachedFinish = null)
     {
         _model = model;
         _copy = copy;
+        _report = report ?? ((_, _) => { });
+        _onDetachedFinish = onDetachedFinish;
         Title = model.Request.Title;
         Width = 600;
         MaxHeight = 760;
@@ -36,18 +45,23 @@ internal sealed class PlanReviewSheet : Window
         var grid = new Grid { Margin = new Thickness(24) };
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Auto) });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var scroll = new ScrollViewer { Content = _body, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, MaxHeight = 600 };
+        _live.Visibility = Visibility.Collapsed;
         Grid.SetRow(scroll, 0);
-        Grid.SetRow(_bar, 1);
+        Grid.SetRow(_live, 1);
+        Grid.SetRow(_bar, 2);
         grid.Children.Add(scroll);
+        grid.Children.Add(_live);
         grid.Children.Add(_bar);
         Content = grid;
 
         model.Changed += OnChanged;
-        _clock.Tick += (_, _) => Rebuild();
+        // the clock only moves the elapsed time: rebuilding the sheet every second took the focus off its button
+        _clock.Tick += (_, _) => { if (_elapsedText is not null) _elapsedText.Text = ElapsedLine(); };
         Closing += (_, e) =>
         {
-            if (!_model.IsDismissible) e.Cancel = true;
+            if (!_model.IsDismissible && !_leaving) e.Cancel = true;
         };
         Closed += (_, _) =>
         {
@@ -56,7 +70,7 @@ internal sealed class PlanReviewSheet : Window
             model.Dispose();
         };
         Rebuild();
-        if (load) Loaded += (_, _) => _ = model.LoadAsync();
+        if (load) Loaded += (_, _) => model.LoadAsync().Forget();
     }
 
     public PlanReviewModel Model => _model;
@@ -71,7 +85,13 @@ internal sealed class PlanReviewSheet : Window
     public static Task<PlanOutcome> ReviewAsync(PlanReviewRequest request, PageServices services)
     {
         var model = new PlanReviewModel(request, services.Cli) { AskLinuxPassword = services.AskLinuxPassword };
-        var sheet = new PlanReviewSheet(model, services.Theme(), services.Owner(), services.CopyText);
+        var sheet = new PlanReviewSheet(model, services.Theme(), services.Owner(), services.CopyText, report: services.ReportBug, onDetachedFinish: line =>
+        {
+            services.RunEnded();
+            services.Notify(line);
+            services.RefreshNow();
+        });
+        sheet.Closing += (_, _) => { if (sheet._leaving) services.RunStarted(); }; // the window asks before it closes while this goes on
         sheet.ShowDialog();
         var outcome = model.Outcome;
         if (outcome.Applied || outcome.Done is not null) services.RefreshNow();
@@ -85,8 +105,25 @@ internal sealed class PlanReviewSheet : Window
         else Dispatcher.BeginInvoke(Rebuild);
     }
 
+    /// <summary>Stop Waiting: the sheet goes, the run does not. How it ends comes as a notification.</summary>
+    private void StopWaiting()
+    {
+        if (!_model.CanStopWaiting) return;
+        _model.Detach(line => _onDetachedFinish?.Invoke(line));
+        _leaving = true;
+        Close();
+    }
+
+    private string ElapsedLine()
+    {
+        var elapsed = _model.Elapsed;
+        return $"Running for {(int)elapsed.TotalMinutes}:{elapsed.Seconds:00}";
+    }
+
     private void Rebuild()
     {
+        var focused = Ui.FocusedName(this);
+        _elapsedText = null;
         var panel = new StackPanel { Width = 550 };
         var buttons = new List<(string Label, Action Click, bool Primary, bool Enabled)>();
         var plan = _model.Plan;
@@ -100,26 +137,30 @@ internal sealed class PlanReviewSheet : Window
             case PlanPhase.PlanFailed:
                 panel.Children.Add(Ui.Text("There is no plan", 18, FontWeights.SemiBold));
                 panel.Children.Add(Ui.CriticalText(_model.Message ?? "The plan could not be made."));
-                buttons.Add(("Refresh Plan", () => _ = _model.RefreshPlanAsync(), true, true));
+                panel.Children.Add(ReportLink(_model.Message ?? "The plan could not be made."));
+                buttons.Add(("Refresh Plan", () => _model.RefreshPlanAsync().Forget(), true, true));
                 buttons.Add(("Close", Close, false, true));
                 break;
             case PlanPhase.Stale:
                 panel.Children.Add(Ui.Text("The plan is out of date", 18, FontWeights.SemiBold));
                 panel.Children.Add(Ui.Text("Something changed since you reviewed it. Nothing was changed. Read the plan again before you apply it.", 14, opacity: 0.85, margin: new Thickness(0, 8, 0, 0)));
-                buttons.Add(("Refresh Plan", () => _ = _model.RefreshPlanAsync(), true, true));
+                buttons.Add(("Refresh Plan", () => _model.RefreshPlanAsync().Forget(), true, true));
                 buttons.Add(("Close", Close, false, true));
                 break;
             case PlanPhase.Review when plan is not null:
                 BuildReview(panel, plan);
-                buttons.Add((_model.Request.ConfirmLabel, () => _ = _model.ConfirmAsync(), true, _model.CanConfirm));
+                buttons.Add((_model.Request.ConfirmLabel, () => _model.ConfirmAsync().Forget(), true, _model.CanConfirm));
                 buttons.Add(("Cancel", Close, false, true));
                 break;
             case PlanPhase.Running:
                 BuildRunning(panel);
+                // always a way out: the run is not cancelled, the sheet just stops waiting for it
+                buttons.Add(("Stop Waiting", StopWaiting, false, true));
                 if (_model.CanStop) buttons.Add(("Stop", _model.Stop, false, true));
                 break;
             case PlanPhase.Finished when _model.Result is { } result:
                 BuildResult(panel, result);
+                if (!result.Ok && !result.Cancelled) panel.Children.Add(ReportLink($"{_model.Request.Title}: {result.Error ?? result.Headline}"));
                 buttons.Add(("Close", Close, true, true));
                 break;
         }
@@ -127,6 +168,9 @@ internal sealed class PlanReviewSheet : Window
         Collect(panel, lines);
         Lines = lines;
         _body.Content = panel;
+        var live = _model.Phase == PlanPhase.Running ? _model.ProgressLabel : "";
+        _live.Text = live;
+        _live.Visibility = live.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         if (_model.Phase == PlanPhase.Running && !_clock.IsEnabled) _clock.Start();
         else if (_model.Phase != PlanPhase.Running) _clock.Stop();
 
@@ -139,6 +183,14 @@ internal sealed class PlanReviewSheet : Window
             _bar.Children.Add(button);
         }
         ButtonLabels = buttons.Select(b => b.Label).ToList();
+        Ui.RestoreFocus(this, focused);
+    }
+
+    private Button ReportLink(string problem)
+    {
+        var link = Ui.Link(BetaText.ReportThisProblem, () => _report(BetaText.ReportThisProblem, problem), "Report this problem");
+        link.Margin = new Thickness(0, 8, 0, 0);
+        return link;
     }
 
     private void BuildReview(StackPanel panel, PlanDocument plan)
@@ -170,9 +222,11 @@ internal sealed class PlanReviewSheet : Window
     private void BuildRunning(StackPanel panel)
     {
         panel.Children.Add(Ui.Text("Working...", 18, FontWeights.SemiBold));
-        panel.Children.Add(Ui.Text(_model.CanStop ? "You can stop this run." : "This cannot be stopped part way. Keep the window open until it ends.", 13, opacity: 0.75, margin: new Thickness(0, 4, 0, 10)));
-        var elapsed = _model.Elapsed;
-        panel.Children.Add(Ui.Text($"Running for {(int)elapsed.TotalMinutes}:{elapsed.Seconds:00}", 12, opacity: 0.7, margin: new Thickness(0, 0, 0, 8)));
+        panel.Children.Add(Ui.Text(_model.CanStop
+            ? "You can stop this run, or stop waiting and let it finish in the background."
+            : "This cannot be stopped part way. You can stop waiting: it keeps running and BenchBar tells you when it ends.", 13, opacity: 0.75, margin: new Thickness(0, 4, 0, 10)));
+        _elapsedText = Ui.Text(ElapsedLine(), 12, opacity: 0.7, margin: new Thickness(0, 0, 0, 8));
+        panel.Children.Add(_elapsedText);
         foreach (var step in _model.Steps)
         {
             var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4) };
@@ -182,7 +236,6 @@ internal sealed class PlanReviewSheet : Window
             row.Children.Add(Ui.Text(step.Name + (step.Message is { Length: > 0 } m && step.Status is InstallStepStatus.Failed or InstallStepStatus.Skipped or InstallStepStatus.Warning ? ": " + m : ""), 14));
             panel.Children.Add(row);
         }
-        if (_model.ProgressLabel.Length > 0) panel.Children.Add(Ui.Text(_model.ProgressLabel, 12, opacity: 0.7, margin: new Thickness(0, 8, 0, 0)));
     }
 
     private void BuildResult(StackPanel panel, PlanResultModel result)

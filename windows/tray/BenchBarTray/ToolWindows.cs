@@ -70,7 +70,7 @@ internal sealed class DoctorWindow : ToolWindow
         _copyAll = Button("Copy all", () => { if (_report is not null) _copy(TextFormats.Doctor(_report)); });
         _copyAll.IsEnabled = false;
         var bar = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
-        bar.Children.Add(Button("Check again", () => _ = RunAsync()));
+        bar.Children.Add(Button("Check again", () => RunAsync().Forget()));
         bar.Children.Add(_copyAll);
 
         var head = new StackPanel { Margin = new Thickness(16, 14, 16, 8) };
@@ -84,7 +84,7 @@ internal sealed class DoctorWindow : ToolWindow
         root.Children.Add(new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = _list, Margin = new Thickness(8, 0, 8, 8) });
         Content = root;
 
-        Loaded += (_, _) => _ = RunAsync();
+        Loaded += (_, _) => RunAsync().Forget();
     }
 
     public async Task RunAsync()

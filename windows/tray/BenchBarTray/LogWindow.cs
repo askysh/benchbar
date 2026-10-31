@@ -164,7 +164,7 @@ internal sealed class LogWindow : ToolWindow
             Model.Changed -= OnModelChanged;
             Model.Dispose();
         };
-        Loaded += (_, _) => _ = StartAsync();
+        Loaded += (_, _) => StartAsync().Forget();
         Sync();
     }
 

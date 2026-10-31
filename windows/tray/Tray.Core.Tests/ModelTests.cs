@@ -30,8 +30,8 @@ public class AggregateTests
     [Fact]
     public void TooltipNamesTheCountAndTheUpText()
     {
-        Assert.Equal("BenchBar: 2 benches, none up", TrayController.Tooltip(2, "none up"));
-        Assert.Equal("BenchBar: 1 bench, 1 of 1 up", TrayController.Tooltip(1, "1 of 1 up"));
+        Assert.Equal("BenchBar (Beta): 2 benches, none up", TrayController.Tooltip(2, "none up"));
+        Assert.Equal("BenchBar (Beta): 1 bench, 1 of 1 up", TrayController.Tooltip(1, "1 of 1 up"));
     }
 }
 

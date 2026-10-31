@@ -143,17 +143,17 @@ public sealed class CliClient : ICliClient
         return new CliStreamResult(exit, done, error, false, textCopy);
     }
 
-    private Task<StreamResult> StartAsync(IReadOnlyList<string> args, SecretEnvironment? env, Action<string> onLine, TimeSpan timeout, CancellationToken ct)
+    private async Task<StreamResult> StartAsync(IReadOnlyList<string> args, SecretEnvironment? env, Action<string> onLine, TimeSpan timeout, CancellationToken ct)
     {
         var shim = _locate() ?? throw new SetupProblemException(ShimBenchSource.NotFoundMessage);
         try
         {
             // The secrets are placed in the child's environment here, at the last moment, and the dictionary is not kept.
-            return _stream.RunAsync(shim, args, env?.Materialize(), onLine, timeout, ct);
+            return await _stream.RunAsync(shim, args, env?.Materialize(), onLine, timeout, ct).ConfigureAwait(false);
         }
-        catch (Win32Exception ex)
+        catch (Win32Exception)
         {
-            throw new CliProblemException($"benchbar.exe could not be started: {ex.Message}");
+            throw new CliProblemException(ShimBenchSource.BlockedMessage);
         }
     }
 }

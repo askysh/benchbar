@@ -50,6 +50,7 @@ internal sealed class FakeWizardHost : IWizardHost
     public int Restarts { get; private set; }
     public bool RestartWorks { get; set; } = true;
     public string WindowsUserName { get; set; } = "Akash Mishra";
+    public string? ConfiguredDistro { get; set; } = "Ubuntu-24.04";
     public bool Notifications { get; set; } = true;
     public bool OpenAtLogon { get; set; }
     public List<string> Opened { get; } = [];

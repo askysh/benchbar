@@ -5,11 +5,11 @@ using System.Text;
 namespace BenchBar.Tray.Core;
 
 /// <summary>One action of <c>benchbar.exe setup run</c>. The password is only for <c>distro_user</c>.</summary>
-public sealed record SetupRunRequest(string Action, string? Distro, string? User = null, Secret? Password = null);
+public sealed record SetupRunRequest(string Action, string? Distro, string? User = null, Secret? Password = null, bool Force = false);
 
 /// <summary>How a setup action ended. <see cref="Error"/> is one line for the page, from the last failed step or stderr.</summary>
 public sealed record SetupRunResult(int Exit, bool Changed, bool RebootRequired, bool Cancelled,
-    IReadOnlyList<string> Warnings, IReadOnlyList<string> NextActions, string? Error, bool UserExisted = false)
+    IReadOnlyList<string> Warnings, IReadOnlyList<string> NextActions, string? Error, bool UserExisted = false, string? ErrorId = null)
 {
     public bool Ok => Exit == 0 && !Cancelled;
 }
@@ -53,8 +53,11 @@ public interface ISetupService
     /// <summary><c>wsl.exe --list --verbose</c>. Never boots a distro.</summary>
     Task<IReadOnlyList<DistroInfo>> ListDistrosAsync(CancellationToken ct);
 
-    /// <summary>Makes <paramref name="name"/> the distro BenchBar uses (<c>adopt-distro NAME --yes</c>).</summary>
+    /// <summary>Makes <paramref name="name"/> the distro BenchBar uses (<c>adopt-distro NAME --json</c>).</summary>
     Task<ActionResult> UseDistroAsync(string name, CancellationToken ct);
+
+    /// <summary>The number of steps of <c>adopt PATH --dry-run --json</c> that use sudo, or null when the plan could not be read (then the password is asked for).</summary>
+    Task<int?> AdoptSudoStepsAsync(string benchPath, CancellationToken ct) => Task.FromResult<int?>(null);
 
     /// <summary><c>benchbar.exe --shim-version</c>, or null.</summary>
     Task<string?> ShimVersionAsync(CancellationToken ct);
@@ -84,6 +87,9 @@ public sealed class ShimSetupService : ISetupService
 {
     public static readonly TimeSpan CheckTimeout = TimeSpan.FromSeconds(60);
     public static readonly TimeSpan ActionTimeout = TimeSpan.FromMinutes(45);
+
+    /// <summary>Turning on WSL waits for a Windows prompt; nobody should wait an hour for it.</summary>
+    public static readonly TimeSpan WslEnableTimeout = TimeSpan.FromMinutes(10);
     public static readonly TimeSpan PlanTimeout = TimeSpan.FromMinutes(3);
     public static readonly TimeSpan InstallTimeout = TimeSpan.FromMinutes(90);
 
@@ -130,6 +136,7 @@ public sealed class ShimSetupService : ISetupService
         List<string> args = ["setup", "run", request.Action];
         if (!string.IsNullOrWhiteSpace(request.Distro)) args.AddRange(["--distro", request.Distro]);
         if (!string.IsNullOrWhiteSpace(request.User)) args.AddRange(["--user", request.User]);
+        if (request.Force) args.Add("--force");
         args.Add("--jsonl");
 
         var env = new SecretEnvironment().Set(SetupEnv.SetupPassword, request.Password);
@@ -150,9 +157,9 @@ public sealed class ShimSetupService : ISetupService
             if (e is not null) onEvent(e);
         }
 
-        var result = await RunStreamAsync(args, env, OnLine, ActionTimeout, ct).ConfigureAwait(false);
+        var result = await RunStreamAsync(args, env, OnLine, request.Action == SetupIds.ActionWslEnable ? WslEnableTimeout : ActionTimeout, ct).ConfigureAwait(false);
         if (done is { } d2)
-            return new SetupRunResult(d2.Exit, d2.Changed, d2.RebootRequired, d2.Cancelled, d2.Warnings, d2.NextActions, d2.Exit == 0 ? null : failure ?? redact.Clean(result.Error ?? ""), d2.UserExisted);
+            return new SetupRunResult(d2.Exit, d2.Changed, d2.RebootRequired, d2.Cancelled, d2.Warnings, d2.NextActions, d2.Exit == 0 ? null : failure ?? redact.Clean(result.Error ?? ""), d2.UserExisted, d2.ErrorId);
         return new SetupRunResult(result.ExitCode == 0 ? 1 : result.ExitCode, false, false, false, [], [],
             failure ?? (result.Error is null ? "benchbar.exe ended without saying how it went." : redact.Clean(result.Error)));
     }
@@ -206,16 +213,16 @@ public sealed class ShimSetupService : ISetupService
         return new InstallRunResult(result.ExitCode, done, issue ?? (result.Error is null ? null : redact.Clean(result.Error)));
     }
 
-    private Task<StreamResult> RunStreamAsync(IReadOnlyList<string> args, SecretEnvironment env, Action<string> onLine, TimeSpan timeout, CancellationToken ct)
+    private async Task<StreamResult> RunStreamAsync(IReadOnlyList<string> args, SecretEnvironment env, Action<string> onLine, TimeSpan timeout, CancellationToken ct)
     {
         // The values are placed in the child's environment here, at the last moment, and the dictionary is not kept.
         try
         {
-            return _stream.RunAsync(Shim, args, env.Materialize(), onLine, timeout, ct);
+            return await _stream.RunAsync(Shim, args, env.Materialize(), onLine, timeout, ct).ConfigureAwait(false);
         }
-        catch (Win32Exception ex)
+        catch (Win32Exception)
         {
-            throw new CliProblemException($"benchbar.exe could not be started: {ex.Message}");
+            throw new CliProblemException(ShimBenchSource.BlockedMessage);
         }
     }
 
@@ -253,17 +260,60 @@ public sealed class ShimSetupService : ISetupService
     {
         try
         {
-            var result = await _runner.RunAsync(Shim, ["adopt-distro", name, "--yes"], ct, ShimBenchSource.ActionTimeout).ConfigureAwait(false);
+            // --json and no --yes: the distro is recorded, and nothing else (the linger change needs a yes) is touched
+            var result = await _runner.RunAsync(Shim, ["adopt-distro", name, "--json"], ct, ShimBenchSource.ActionTimeout).ConfigureAwait(false);
             if (result.ExitCode == 0) return ActionResult.Success;
-            return new ActionResult(result.ExitCode, ShimBenchSource.FirstLine(result.Error) ?? ShimBenchSource.FirstLine(result.Output) ?? $"benchbar.exe exited with code {result.ExitCode}.");
+            return new ActionResult(result.ExitCode, FailedCheckMessage(result.Output) ?? ShimBenchSource.FirstLine(result.Error) ?? ShimBenchSource.FirstLine(result.Output) ?? $"benchbar.exe exited with code {result.ExitCode}.");
         }
-        catch (Win32Exception ex)
+        catch (Win32Exception)
         {
-            return ActionResult.Failure($"benchbar.exe could not be started: {ex.Message}");
+            return ActionResult.Failure(ShimBenchSource.BlockedMessage);
+        }
+        catch (SourceProblemException ex)
+        {
+            return ActionResult.Failure(ex.Message);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
             return ActionResult.Failure("benchbar.exe adopt-distro did not finish in 3 minutes.");
+        }
+    }
+
+    /// <summary>The message of the first failed check in the <c>adopt-distro --json</c> document.</summary>
+    internal static string? FailedCheckMessage(string output)
+    {
+        try
+        {
+            if (System.Text.Json.Nodes.JsonNode.Parse(output) is System.Text.Json.Nodes.JsonObject root && root["checks"] is System.Text.Json.Nodes.JsonArray checks)
+            {
+                foreach (var check in checks.OfType<System.Text.Json.Nodes.JsonObject>())
+                {
+                    if (JsonRead.Str(check, "status") == "fail" && JsonRead.Str(check, "message") is { Length: > 0 } message) return message;
+                }
+            }
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            // not a document: the caller falls back to the first line
+        }
+        return null;
+    }
+
+    public async Task<int?> AdoptSudoStepsAsync(string benchPath, CancellationToken ct)
+    {
+        var lines = new List<string>();
+        try
+        {
+            var result = await RunStreamAsync(["adopt", benchPath, "--dry-run", "--json"], new SecretEnvironment().Set(SetupEnv.NonInteractive, "1"),
+                line => { lock (lines) lines.Add(line); }, PlanTimeout, ct).ConfigureAwait(false);
+            string[] copy;
+            lock (lines) copy = [.. lines];
+            if (CliJson.PickDocument(copy) is not { } document) return null;
+            return result.ExitCode == 0 ? PlanDocument.FromJson(document).SudoSteps : null;
+        }
+        catch (Exception ex) when (ex is SourceProblemException or TimeoutException or System.Text.Json.JsonException)
+        {
+            return null; // unknown: the page asks for the password
         }
     }
 

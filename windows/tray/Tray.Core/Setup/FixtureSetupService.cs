@@ -28,7 +28,7 @@ public sealed class FixtureSetupService(string directory) : ISetupService
 
     public async Task<SetupRunResult> RunActionAsync(SetupRunRequest request, Action<SetupEvent> onEvent, CancellationToken ct)
     {
-        Record("run " + request.Action + (request.User is null ? "" : " --user " + request.User) + (request.Password is null ? "" : " (password)"));
+        Record("run " + request.Action + (request.User is null ? "" : " --user " + request.User) + (request.Password is null ? "" : " (password)") + (request.Force ? " --force" : ""));
         var file = Path.Combine(_dir, $"run-{request.Action}.jsonl");
         SetupEvent.Done? done = null;
         if (File.Exists(file))
@@ -42,7 +42,7 @@ public sealed class FixtureSetupService(string directory) : ISetupService
             }
         }
         done ??= new SetupEvent.Done(0, true, false, false, [], []);
-        return new SetupRunResult(done.Exit, done.Changed, done.RebootRequired, done.Cancelled, done.Warnings, done.NextActions, done.Exit == 0 ? null : "The fixture action failed.", done.UserExisted);
+        return new SetupRunResult(done.Exit, done.Changed, done.RebootRequired, done.Cancelled, done.Warnings, done.NextActions, done.Exit == 0 ? null : "The fixture action failed.", done.UserExisted, done.ErrorId);
     }
 
     public async Task<PlanResult> PlanInstallAsync(InstallRequest request, Secret admin, CancellationToken ct)

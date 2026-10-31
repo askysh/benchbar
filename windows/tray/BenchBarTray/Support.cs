@@ -191,10 +191,6 @@ internal static class TextFormats
     public static IReadOnlyList<DoctorCheck> ByLevel(DoctorReport report) =>
         report.Checks.OrderBy(c => c.Level switch { CheckLevel.Fail => 0, CheckLevel.Warn => 1, CheckLevel.Ok => 2, _ => 3 }).ToList();
 
-    /// <summary>What Report a Bug says while the distro is stopped: the zip is written inside it, and writing it would boot it.</summary>
-    public static string ReportNeedsDistro(string distro) =>
-        $"{distro} is stopped, and the report is written inside it. Click Start in the BenchBar window, then try again.";
-
     /// <summary>A path inside the distro as Windows can open it: <c>\\wsl.localhost\DISTRO\home\a\x.zip</c>.</summary>
     public static string WslToWindows(string distro, string linuxPath) =>
         @"\\wsl.localhost\" + distro + linuxPath.Replace('/', '\\');

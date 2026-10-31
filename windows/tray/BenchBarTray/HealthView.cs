@@ -85,7 +85,7 @@ internal sealed class HealthView : UserControl, IBenchPageView
             _model.Changed += OnModelChanged;
             _showPassing = false;
             Rebuild();
-            if (_autoRun) _ = _model.RunAsync();
+            if (_autoRun) _model.RunAsync().Forget();
         }
         else if (problemChanged)
         {
@@ -136,7 +136,7 @@ internal sealed class HealthView : UserControl, IBenchPageView
         var buttons = new StackPanel { Orientation = Orientation.Horizontal };
         DockPanel.SetDock(buttons, Dock.Right);
         var labels = new List<string>();
-        RunDoctorButton = Ui.Button("Run Doctor", () => _ = model.RunAsync(), "Run Doctor " + bench.Name);
+        RunDoctorButton = Ui.Button("Run Doctor", () => model.RunAsync().Forget(), "Run Doctor " + bench.Name);
         RunDoctorButton.IsEnabled = !model.IsRunning;
         buttons.Children.Add(RunDoctorButton);
         labels.Add("Run Doctor");
@@ -313,7 +313,7 @@ internal sealed class HealthView : UserControl, IBenchPageView
         if (sheet.Model.Ran)
         {
             _services.RefreshNow();
-            if (_model is not null && _context?.Bench.Path == sheet.Model.BenchPath) _ = _model.RunAsync();
+            if (_model is not null && _context?.Bench.Path == sheet.Model.BenchPath) _model.RunAsync().Forget();
         }
         Rebuild();
     }
@@ -365,7 +365,7 @@ internal sealed class RepairSheet : Window
             model.Dispose();
         };
         Rebuild();
-        if (load) Loaded += (_, _) => _ = model.LoadPlanAsync();
+        if (load) Loaded += (_, _) => model.LoadPlanAsync().Forget();
     }
 
     public RepairModel Model { get; }
@@ -404,7 +404,7 @@ internal sealed class RepairSheet : Window
                 panel.Children.Add(Ui.Text("A backup is taken before every change. Broken folders are moved aside, never deleted.", 13, opacity: 0.8, margin: new Thickness(0, 12, 0, 0)));
                 if (Model.HasSudoSteps)
                     panel.Children.Add(Ui.Text($"{Model.SudoSteps} {(Model.SudoSteps == 1 ? "step uses" : "steps use")} sudo. BenchBar asks for your Linux password when you press Repair; it is used for this run only. Cancel the question and nothing runs.", 13, margin: new Thickness(0, 8, 0, 0)));
-                buttons.Add(("Repair", () => _ = Model.RunAsync(), true, Model.CanRepair));
+                buttons.Add(("Repair", () => Model.RunAsync().Forget(), true, Model.CanRepair));
                 buttons.Add(("Cancel", Close, false, true));
                 break;
             case RepairPhase.Running:
@@ -423,7 +423,7 @@ internal sealed class RepairSheet : Window
                 if (Model.Message is { Length: > 0 } failure) panel.Children.Add(Ui.CriticalText(failure));
                 Steps(panel);
                 LogLine(panel);
-                if (Model.Steps.Count == 0) buttons.Add(("Read Plan Again", () => _ = Model.LoadPlanAsync(), true, true));
+                if (Model.Steps.Count == 0) buttons.Add(("Read Plan Again", () => Model.LoadPlanAsync().Forget(), true, true));
                 buttons.Add(("Close", Close, Model.Steps.Count > 0, true));
                 break;
         }

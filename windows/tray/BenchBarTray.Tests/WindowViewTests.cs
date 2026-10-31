@@ -14,6 +14,7 @@ public class WindowViewTests
         public bool RestartWindows() => true;
         public void AllowForeground() { }
         public string WindowsUserName => "Akash";
+        public string? ConfiguredDistro => "Ubuntu-24.04";
         public bool Notifications { get; set; } = true;
         public bool OpenAtLogon { get; set; }
         public void OpenUrl(string url) { }
@@ -320,14 +321,6 @@ public class WindowViewTests
         var user = VsCode.FindEditor("insiders", pathVariable: "", localAppData: @"C:\u", exists: p => p.EndsWith("code-insiders.cmd", StringComparison.Ordinal));
         Assert.Equal(@"C:\u\Programs\Microsoft VS Code Insiders\bin\code-insiders.cmd", user);
         Assert.Equal(@"C:\x\code.cmd", VsCode.Find(@"C:\x", @"C:\u", p => p == @"C:\x\code.cmd"));
-    }
-
-    [Fact]
-    public void ReportABugNoLongerPointsAtAWindowThatDidNotExist()
-    {
-        var text = TextFormats.ReportNeedsDistro("Ubuntu-24.04");
-        Assert.Contains("Click Start in the BenchBar window", text);
-        Assert.DoesNotContain("first;", text);
     }
 
     [Fact]

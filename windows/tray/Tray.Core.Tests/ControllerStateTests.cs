@@ -46,7 +46,7 @@ public class ControllerStateTests
                 new RunnerPlan.Still(RunnerPose.Unknown),
             });
             Assert.Equal(ShimBenchSource.NotFoundMessage, host.Changes[0].Snapshot.Problem);
-            Assert.StartsWith("BenchBar: benchbar.exe was not found", host.Tooltip);
+            Assert.StartsWith("BenchBar (Beta): benchbar.exe was not found", host.Tooltip);
             Assert.InRange(host.Tooltip.Length, 1, 127);
             Assert.Equal("needs attention", host.Changes[0].UpText);
         }
@@ -73,7 +73,7 @@ public class ControllerStateTests
                 new RunnerPlan.Settle(RunnerPose.Sleeping, 3),
                 new RunnerPlan.Still(RunnerPose.Sleeping),
             });
-            Assert.Equal("BenchBar: Ubuntu-24.04 is not running", host.Tooltip);
+            Assert.Equal("BenchBar (Beta): Ubuntu-24.04 is not running", host.Tooltip);
             Assert.Equal("distro stopped", host.Changes[0].UpText);
             Assert.Equal(0, source.Lists);
         }
