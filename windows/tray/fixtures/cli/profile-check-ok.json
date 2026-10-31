@@ -1,0 +1,1 @@
+{"schema_version":1,"cli_version":"0.8.0","name":"acme","repos":[{"app":"acme_base","repo":"git@github.com:acme/acme_base.git","reachable":true,"reason":null,"commit":null}],"skipped_apps":[],"frappe_commit":null,"erpnext_commit":null}

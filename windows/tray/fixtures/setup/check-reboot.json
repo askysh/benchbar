@@ -1,0 +1,7 @@
+{"schema_version":1,"distro":"Ubuntu-24.04","ready":false,"reboot_pending":true,"steps":[
+{"id":"windows_build","status":"ok","title":"Windows version","detail":"Windows build 26220","action":null,"needs_admin":false},
+{"id":"virtualization","status":"ok","title":"Virtualization","detail":"enabled in firmware","action":null,"needs_admin":false},
+{"id":"wsl_feature","status":"ok","title":"Windows Subsystem for Linux","detail":"enabled, restart pending","action":null,"needs_admin":false},
+{"id":"reboot","status":"missing","title":"Restart","detail":"Windows must restart to finish turning on WSL","action":"reboot","needs_admin":false},
+{"id":"wsl_version","status":"missing","title":"WSL version","detail":"waits for reboot","action":"wsl_update","needs_admin":false}
+]}

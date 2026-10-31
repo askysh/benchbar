@@ -1,0 +1,2 @@
+{"schema_version":1,"cli_version":"0.8.0","event":"plan","bench":"/home/akash/frappe-bench","site":"linuxdev.localhost","steps":[{"id":"hosts_entry","name":"Add the hosts line","sudo":true,"will_run":true},{"id":"unit","name":"Write the systemd unit","sudo":false,"will_run":true}],"token":"bbbb2222"}
+{"schema_version":1,"cli_version":"0.8.0","event":"done","exit":0}

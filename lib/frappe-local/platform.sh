@@ -184,6 +184,15 @@ fl_port_listening() {
   lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1
 }
 
+# The working folder of whatever listens on PORT (the bench's own Redis runs
+# inside the bench), or nothing when nothing listens or it cannot be read.
+fl_port_owner_cwd() {
+  local pid
+  pid="$(lsof -ti "tcp:$1" -sTCP:LISTEN 2>/dev/null | head -n1 || true)"
+  [[ -n "$pid" ]] || return 0
+  lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n1
+}
+
 fl_mariadb_safe_mode_note() {
   fl_warn "Existing MariaDB/MySQL may already be using port 3306."
   fl_info "Safe path: keep the existing database untouched, verify the root password, and let the bench script reuse it."

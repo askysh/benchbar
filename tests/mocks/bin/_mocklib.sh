@@ -4,6 +4,16 @@ mock_log() {
   local name
   name="${0##*/}"
   printf '%s %s\n' "$name" "$*" >>"${MOCK_LOG:-/dev/null}"
+  # sudo password mode (the sudo mock): no program benchbar starts may have
+  # the password in its arguments or its environment. The sudo mock checks
+  # itself; the others write what they saw to $MOCK_STATE/sudo_leak.
+  if [[ "$name" != "sudo" && -f "${MOCK_STATE:-/nonexistent}/sudo_password" ]]; then
+    local pw
+    pw="$(head -n1 "${MOCK_STATE}/sudo_password")"
+    if env | grep -q '^BENCHBAR_SUDO_PASSWORD=' || env | grep -F -q -- "$pw" || [[ "$*" == *"$pw"* ]]; then
+      printf '%s %s\n' "$name" "$*" >>"${MOCK_STATE}/sudo_leak"
+    fi
+  fi
   # MOCK_ENV_DUMP=1: record which password variables this mock saw in its
   # environment (names only), so a test can assert a child never got them
   if [[ -n "${MOCK_ENV_DUMP:-}" && -d "${MOCK_STATE:-/nonexistent}" ]]; then

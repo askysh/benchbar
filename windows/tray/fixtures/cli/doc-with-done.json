@@ -1,0 +1,1 @@
+{"schema_version":1,"cli_version":"0.8.0","bench":"/home/akash/frappe-bench","site":"linuxdev.localhost","path":"/tmp/b.sql.gz","exit":0,"changed":[{"kind":"backup","name":"linuxdev.localhost","detail":"3 files"}],"warnings":[],"next_actions":[],"state_after":null}

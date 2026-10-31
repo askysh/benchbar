@@ -1,0 +1,2 @@
+{"schema_version":1,"cli_version":"0.8.0","token":"bbbb2222","can_apply":false,"entries":[
+ {"path":"/home/akash/projects/loose-bench","name":"loose-bench","site":"loose.localhost","mode":"fixed","current":{"web":8001,"socketio":9002,"redis_queue":11002,"redis_cache":13002},"proposed":null,"conflicts":[],"blocked":"it is running; stop it first","service_installed":false,"setup_plan":null}]}

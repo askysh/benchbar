@@ -1,0 +1,2 @@
+{"schema_version":1,"cli_version":"0.8.0","event":"step","id":"restore","name":"Restore 20260929_101500 into one.localhost with its files","status":"done"}
+{"schema_version":1,"cli_version":"0.8.0","event":"done","exit":0,"changed":[{"kind":"site","name":"one.localhost","detail":"restored"}],"warnings":[],"next_actions":[]}

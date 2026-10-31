@@ -1,0 +1,1 @@
+{"schema_version":1,"cli_version":"0.8.0","updates":[{"name":"acme","kind":"subscribed","behind":2,"diff":"diff --git a/profiles/acme.toml b/profiles/acme.toml\n-old\n+new"}],"digest":"77e3b977e3b977e3b977e3b977e3b977e3b977e3b977e3b977e3b977e3b977e3"}

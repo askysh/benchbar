@@ -30,6 +30,8 @@ FL_STEP_START=0
 FL_RUN_START="${SECONDS}"
 # the message of the last fl_die, for the done line of a JSON stream
 FL_DIE_MESSAGE=""
+# a stable id for the failure (sudo_password_wrong), the "error_id" of the done line
+FL_ERROR_ID=""
 
 fl_ui_init() {
   local cols
@@ -358,6 +360,7 @@ fl_changed_fold() {
 fl_done_fields_v() {
   local __f="" __tail
   [[ -z "${2:-}" ]] || __f="\"exit\":${2},"
+  [[ -z "$FL_ERROR_ID" ]] || __f="${__f}\"error_id\":\"${FL_ERROR_ID}\","
   [[ -z "$FL_NEED_MISSING_JSON" ]] || __f="${__f}\"missing\":[${FL_NEED_MISSING_JSON}],"
   fl_changed_fold
   fl_done_tail_v __tail
@@ -913,7 +916,7 @@ fl_confirm() {
     return 0
   fi
   if fl_noninteractive; then
-    fl_die "'${prompt}' needs an answer, and BENCHBAR_NONINTERACTIVE=1 says nothing can ask." "Pass --yes to confirm it, or run without the mode in a terminal."
+    fl_die "'${prompt}' needs an answer, and BENCHBAR_NONINTERACTIVE=1 says nothing can ask; pass --yes to confirm it." "Pass --yes to confirm it, or run without the mode in a terminal."
   fi
   if [[ ! -t 0 ]]; then
     fl_warn "Not a terminal and --yes not given; treating '${prompt}' as no."

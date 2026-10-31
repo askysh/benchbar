@@ -12,6 +12,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/frappe-local/install-kind.sh
 . "${SCRIPT_DIR}/lib/frappe-local/install-kind.sh"
+# BENCHBAR_SUDO_PASSWORD leaves the environment here, before any command runs
+# shellcheck source=lib/frappe-local/sudo-env.sh
+. "${SCRIPT_DIR}/lib/frappe-local/sudo-env.sh"
 # shellcheck source=lib/frappe-local/ui.sh
 . "${SCRIPT_DIR}/lib/frappe-local/ui.sh"
 # shellcheck source=lib/frappe-local/run.sh

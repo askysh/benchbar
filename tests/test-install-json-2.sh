@@ -137,9 +137,9 @@ run_fm doctor --bench-dir "$PA"
 assert_not_contains "$OUT" "PREREQUISITES" "(a plain doctor keeps its fix line promise: no prerequisites group)"
 run_fm doctor --json --bench-dir "$PA"
 assert_eq "True" "$(printf '%s' "$OUT" | jget - 'len(d["prerequisites"]) == 9 and sum(d["summary"].values()) == len(d["checks"])')"
-# Linux: only the checks that mean something there
+# Linux: the Linux list, none of the Mac checks (tests/test-prerequisites-linux.sh has the conditions)
 ( use_linux; pre
-  assert_eq "disk_free bench_folder default_ports" "$(pq '" ".join(x["id"] for x in d["prerequisites"])')" ) || exit 1
+  assert_eq "linux_distro architecture regular_user sudo apt systemd linger memory disk_free bench_folder mariadb_password default_ports" "$(pq '" ".join(x["id"] for x in d["prerequisites"])')" ) || exit 1
 unset MOCK_XCODE_DIR
 
 # ---- profile list: the versions each profile brings, and the bundles

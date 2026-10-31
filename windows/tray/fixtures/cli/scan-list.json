@@ -1,0 +1,3 @@
+{"schema_version":1,"cli_version":"0.8.0","default_bench":"/home/akash/projects/managed-bench","benches":[
+ {"path":"/home/akash/projects/managed-bench","name":"managed-bench","site":"managed.localhost","label":"benchbar-managed-bench","web_url":"http://managed.localhost:8000","ports":{"web":8000,"socketio":9000,"redis_queue":11000,"redis_socketio":13000,"redis_cache":13000},"default":true,"service_installed":true,"state_file":"x"},
+ {"path":"/home/akash/projects/added-bench","name":"added-bench","site":"added.localhost","label":"benchbar-added-bench","web_url":"http://added.localhost:8001","ports":{"web":8001,"socketio":9001,"redis_queue":11001,"redis_socketio":13001,"redis_cache":13001},"default":false,"service_installed":false,"state_file":"x"}]}

@@ -2,7 +2,9 @@
 //
 //	FAKE_WSL_RECORD        file that gets one JSON line per event
 //	FAKE_WSL_RECORD_STDIN  1: record the stdin bytes (echo-stdin mode)
-//	FAKE_WSL_MODE          exit:N | seq:N,N,... | echo-stdin | run | wait-signal | probe:FILE
+//	FAKE_WSL_MODE          exit:N | seq:N,N,... | echo-stdin | run | wait-signal | probe:FILE | script:FILE
+//	script:FILE            JSON list of rules {match, not, stdout, stderr, exit, stdin, seq}; the first rule
+//	                       whose match text is in the joined arguments answers; no rule exits 99
 //	FAKE_WSL_READY         wait-signal: file created once the handler is set
 //	FAKE_WSL_PROBE_AFTER   probe: file printed after a loginctl call was recorded
 package main
@@ -29,6 +31,8 @@ type record struct {
 	WSLUTF8 string   `json:"wsl_utf8,omitempty"`
 	Stdin   string   `json:"stdin_b64,omitempty"`
 	Signal  string   `json:"signal,omitempty"`
+	Wslenv  string   `json:"wslenv,omitempty"`
+	EnvSet  []string `json:"env_set,omitempty"`
 }
 
 // blob is written to stdout in echo-stdin mode: CRLF, LF, NUL, UTF-8 and
@@ -65,7 +69,12 @@ func startCount() int {
 
 func main() {
 	args := os.Args[1:]
-	r := record{Event: "start", Args: args, WSLUTF8: os.Getenv("WSL_UTF8")}
+	r := record{Event: "start", Args: args, WSLUTF8: os.Getenv("WSL_UTF8"), Wslenv: os.Getenv("WSLENV")}
+	for _, n := range watched {
+		if _, ok := os.LookupEnv(n); ok {
+			r.EnvSet = append(r.EnvSet, n)
+		}
+	}
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "-d", "--distribution":
@@ -96,6 +105,8 @@ func main() {
 		}
 		c, _ := strconv.Atoi(codes[n])
 		os.Exit(c)
+	case strings.HasPrefix(mode, "script:"):
+		runScript(strings.TrimPrefix(mode, "script:"), args)
 	case strings.HasPrefix(mode, "exit:"):
 		n, _ := strconv.Atoi(strings.TrimPrefix(mode, "exit:"))
 		os.Exit(n)
@@ -148,4 +159,66 @@ func main() {
 		}
 		os.Stdout.Write(data)
 	}
+}
+
+// watched are the variables the tests look for in the child environment.
+var watched = []string{
+	"ADMIN_PASSWORD", "MARIADB_ROOT_PASSWORD", "BENCHBAR_SUDO", "BENCHBAR_SUDO_PASSWORD",
+	"BENCHBAR_NONINTERACTIVE", "BENCHBAR_SETUP_PASSWORD", "OTHER_SECRET",
+}
+
+type reply struct {
+	Stdout string `json:"stdout"`
+	Stderr string `json:"stderr"`
+	Exit   int    `json:"exit"`
+}
+
+type rule struct {
+	Match string  `json:"match"`
+	Not   string  `json:"not"`
+	Stdin bool    `json:"stdin"` // record the stdin bytes
+	Seq   []reply `json:"seq"`   // one reply per call, the last one repeats
+	reply
+}
+
+// runScript answers from the rules in file.
+func runScript(file string, args []string) {
+	data, err := os.ReadFile(file)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(98)
+	}
+	var rules []rule
+	if err := json.Unmarshal(data, &rules); err != nil {
+		fmt.Fprintln(os.Stderr, "bad script:", err)
+		os.Exit(98)
+	}
+	joined := strings.Join(args, " ")
+	for i, r := range rules {
+		if !strings.Contains(joined, r.Match) || (r.Not != "" && strings.Contains(joined, r.Not)) {
+			continue
+		}
+		if r.Stdin {
+			in, _ := io.ReadAll(os.Stdin)
+			write(record{Event: "stdin", Stdin: base64.StdEncoding.EncodeToString(in)})
+		}
+		out := r.reply
+		if len(r.Seq) > 0 {
+			counter := fmt.Sprintf("%s.n%d", file, i)
+			n := 0
+			if b, err := os.ReadFile(counter); err == nil {
+				n, _ = strconv.Atoi(strings.TrimSpace(string(b)))
+			}
+			os.WriteFile(counter, []byte(strconv.Itoa(n+1)), 0o644)
+			if n >= len(r.Seq) {
+				n = len(r.Seq) - 1
+			}
+			out = r.Seq[n]
+		}
+		os.Stdout.WriteString(out.Stdout)
+		os.Stderr.WriteString(out.Stderr)
+		os.Exit(out.Exit)
+	}
+	fmt.Fprintln(os.Stderr, "fakewsl: no rule for:", joined)
+	os.Exit(99)
 }

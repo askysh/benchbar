@@ -1,0 +1,2 @@
+{"event":"step","id":"wsl_enable","status":"failed","message":"Windows permission was declined"}
+{"event":"done","exit":1,"changed":false,"reboot_required":false,"cancelled":true,"warnings":[],"next_actions":["wsl_enable"]}

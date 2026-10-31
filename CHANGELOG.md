@@ -36,6 +36,70 @@ All notable changes to this project are documented here.
   General and Menu Bar, the **i** opens About, and Settings… (⌘,) opens
   the window on General.
 
+### Windows
+
+- A BenchBar window with your benches and their sites, Settings and About.
+  Open it from the tray menu, the flyout or a double click on the tray icon.
+- A first run wizard in that window: check this PC, turn on WSL (Windows
+  asks for permission once), restart and resume, install Ubuntu 24.04,
+  create the Linux user, turn on systemd, install the command line tool,
+  then create a bench with every step streamed. It also adopts a bench you
+  already have.
+- `benchbar.exe setup check --json` reads the PC step by step (Windows
+  build, virtualization, WSL, restart, distro, Linux user, systemd, CLI,
+  linger, keepalive, `.wslconfig`, PATH), and `benchbar.exe setup run
+  ACTION --jsonl` fixes one step and streams JSON lines. Only turning on
+  WSL asks Windows for permission.
+- The shim passes `ADMIN_PASSWORD`, `MARIADB_ROOT_PASSWORD`,
+  `BENCHBAR_SUDO`, `BENCHBAR_SUDO_PASSWORD` and `BENCHBAR_NONINTERACTIVE`
+  into WSL for the one run, through `WSLENV`, and nothing else.
+- Open in editor offers VS Code, Cursor or VS Code Insiders, and the window
+  says when a newer release is out.
+- Each bench in the window has Overview, Sites, Apps and Health tabs, as on
+  the Mac. The Overview shows uptime, a line that says why a bench is
+  stopped and what to do, the lockfile state, a Scheduler switch, Port
+  Settings and Setup, and Console and Database in Windows Terminal.
+- Sites: add, make default, back up (with or without files), list backups,
+  restore from a backup (new, the Mac app has no restore yet), drop with the
+  name typed, and open. Windows resolves `*.localhost` itself, so the tray
+  never edits a hosts file.
+- Apps: list, add with the reviewed plan, update after the dry run, install
+  on a site, focus pins and Check Remotes.
+- Health: doctor with the Windows setup checks, Copy fix, and Repair after
+  the plan, with the Linux password asked once for the steps that use sudo.
+- Ports: Automatic or Fixed, the plan, Apply, Review Port Conflict and
+  Resolve and Start. Start and Restart, from the window and the flyout,
+  check the ports first and refuse on a conflict; nothing is ever killed.
+- Find Benches scans a folder in WSL, adds benches, sets up their ports and
+  their management. Team Profiles creates, imports, subscribes to, exports,
+  updates, checks and removes team profiles; Windows file paths are
+  converted with `wslpath`.
+- The log window filters by process, searches, follows the log, shows the
+  previous log and opens `tail -f` in Windows Terminal.
+
+### Linux
+
+- `BENCHBAR_SUDO=env`: a program without a terminal, such as the Windows
+  tray, passes the sudo password in `BENCHBAR_SUDO_PASSWORD`. `install`,
+  `adopt`, `repair`, `service`, `site add` and `ports apply` run their sudo
+  steps without a prompt. A wrong password stops the command before any
+  change with `error_id` `sudo_password_wrong` on the `done` line. The
+  password is read once at startup, removed from the environment, and never
+  appears in arguments, `bash -x` output, the run log or a child process.
+- `benchbar doctor --prerequisites` works on Linux (Ubuntu 24.04, WSL too):
+  distribution, architecture, regular user, sudo, apt, systemd as PID 1,
+  linger, memory, disk, bench folder, an existing MariaDB with an unknown
+  root password, and the default ports.
+- Every `done` line can carry `error_id`, a stable id for the failure.
+- `ports plan`, `ports apply` and `ports check` see a foreign listener on a
+  bench port when `lsof` is not installed, and `site add`, `site backup`,
+  `site drop`, `site restore` and `app install` no longer stop with "Port N
+  is held by another process" when the bench's own Redis already runs.
+- `site hosts` says "unchanged" when every site name resolves, and gives the
+  `/etc/hosts` command as a next action for a name that does not.
+- A command that needs `--yes` and runs without a terminal says so in the
+  error of its JSON output.
+
 ## 0.8.0 - 2026-10-30
 
 ### Agents and recovery

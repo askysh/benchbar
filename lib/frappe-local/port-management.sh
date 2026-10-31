@@ -45,8 +45,10 @@ fl_pm_conflicts() {
     done <<<"$PM_TAKEN"
     while IFS= read -r pid; do
       [[ -n "$pid" ]] || continue
-      if ! fl_pid_is_bench_own_strict "$pid"; then printf '%s has a listener: pid %s\n' "$p" "$pid"; fi
-    done < <(lsof -ti "tcp:$p" -sTCP:LISTEN 2>/dev/null || true)
+      # pid 0 (Linux): ss shows the socket, not its owner; never ours
+      if [[ "$pid" == "0" ]]; then printf '%s has a listener (owner not visible)\n' "$p"
+      elif ! fl_pid_is_bench_own_strict "$pid"; then printf '%s has a listener: pid %s\n' "$p" "$pid"; fi
+    done < <(fl_port_listener_pids "$p")
   done
   return 0
 }

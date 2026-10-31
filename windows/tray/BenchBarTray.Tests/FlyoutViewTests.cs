@@ -7,15 +7,7 @@ namespace BenchBar.Tray.Tests;
 
 public class FlyoutViewTests
 {
-    private static string FixtureDir()
-    {
-        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
-        {
-            var candidate = Path.Combine(dir.FullName, "fixtures", "recorded-v1");
-            if (Directory.Exists(candidate)) return candidate;
-        }
-        throw new DirectoryNotFoundException("fixtures/recorded-v1 not found above " + AppContext.BaseDirectory);
-    }
+    private static string FixtureDir() => BenchBar.Tray.TestSupport.FixtureFiles.Dir("recorded-v1");
 
     private static BenchStatus Status(string name, string state, string? reason = null, string? site = "x.localhost")
     {

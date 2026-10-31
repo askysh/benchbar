@@ -4,11 +4,68 @@
 # plain "sudo CMD" (the user typed the password) create it, "sudo -k" removes
 # it, and "sudo -n CMD" works only while it exists. The command sees MOCK_AS_ROOT=1. Everything fails while
 # $MOCK_STATE/sudo_refused exists (the user cannot or will not type it).
+#
+# Password mode, while $MOCK_STATE/sudo_password exists (its first line is the
+# right password; a machine with no terminal): a password is read only with
+# -S, one line from stdin, and compared with the file. A match makes a ticket
+# for the PARENT process of this mock, like sudo without a terminal (so only
+# a caller that validates and runs from the same shell finds it); "-k" removes
+# that ticket, "-K" all of them. -n never asks. The password in an argument,
+# or in the environment of the mock (BENCHBAR_SUDO_PASSWORD, or the password
+# as the value of any variable), is recorded in $MOCK_STATE/sudo_leak. The
+# command keeps the stdin that "-S" did not read.
 # shellcheck source=tests/mocks/bin/_mocklib.sh
 . "${0%/*}/_mocklib.sh"
 [[ -n "${MOCK_NO_LOG:-}" ]] || mock_log "$@"
 state="${MOCK_STATE:-/nonexistent}"
 cred="$state/sudo_cred"
+
+# the command runs as root: the mariadb mock then logs in over its unix socket
+run_cmd() {
+  if [[ "${1:-}" == "install" ]]; then
+    # the test user cannot give a file to root: drop -o OWNER and -g GROUP
+    shift
+    local args=()
+    while [[ "$#" -gt 0 ]]; do case "$1" in -o|-g) shift 2 ;; *) args+=("$1"); shift ;; esac; done
+    exec install "${args[@]}"
+  fi
+  exec env MOCK_AS_ROOT=1 "$@"
+}
+
+if [[ -f "$state/sudo_password" ]]; then
+  want="$(head -n1 "$state/sudo_password")"
+  ticket="$state/sudo_ticket.$PPID"
+  for a in "$@"; do [[ "$a" == "$want" ]] && printf 'argv %s\n' "$PPID" >>"$state/sudo_leak"; done
+  if env | grep -q '^BENCHBAR_SUDO_PASSWORD=' || env | grep -F -q -- "$want"; then printf 'env %s\n' "$PPID" >>"$state/sudo_leak"; fi
+  [[ -f "$state/sudo_refused" ]] && { echo "sudo: a password is required" >&2; exit 1; }
+  nflag=0; sflag=0; vflag=0
+  while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+      -k) command rm -f "$ticket"; exit 0 ;;
+      -K) command rm -f "$state"/sudo_ticket.*; exit 0 ;;
+      -n) nflag=1; shift ;;
+      -S) sflag=1; shift ;;
+      -v) vflag=1; shift ;;
+      -p) shift 2 ;;
+      -*) shift ;;
+      *) break ;;
+    esac
+  done
+  if [[ ! -f "$ticket" && ! -f "$state/sudo_nopasswd" ]]; then
+    if [[ "$sflag" == "1" && "$nflag" == "0" ]]; then
+      IFS= read -r given || true
+      if [[ "$given" != "$want" ]]; then echo "Sorry, try again." >&2; echo "sudo: 1 incorrect password attempt" >&2; exit 1; fi
+      : >"$ticket"
+    else
+      echo "sudo: a password is required" >&2; exit 1
+    fi
+  fi
+  [[ "$vflag" == "1" ]] && exit 0
+  [[ "${1:-}" == "true" ]] && exit 0
+  [[ "$#" -gt 0 ]] || exit 0
+  run_cmd "$@"
+fi
+
 [[ "${1:-}" == "-k" ]] && { rm -f "$cred"; exit 0; }
 [[ -f "$state/sudo_refused" ]] && { echo "sudo: a password is required" >&2; exit 1; }
 case "${1:-}" in
@@ -24,11 +81,4 @@ case "${1:-}" in
   *) [[ -d "$state" ]] && touch "$cred" ;;
 esac
 [[ "${1:-}" == "true" ]] && exit 0
-if [[ "${1:-}" == "install" ]]; then
-  # the test user cannot give a file to root: drop -o OWNER and -g GROUP
-  shift; args=()
-  while [[ "$#" -gt 0 ]]; do case "$1" in -o|-g) shift 2 ;; *) args+=("$1"); shift ;; esac; done
-  exec install "${args[@]}"
-fi
-# the command runs as root: the mariadb mock then logs in over its unix socket
-exec env MOCK_AS_ROOT=1 "$@"
+run_cmd "$@"

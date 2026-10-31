@@ -1,0 +1,1 @@
+{"schema_version":1,"cli_version":"0.8.0","event":"done","exit":0,"bench":"/home/akash/frappe-bench","site":"two.localhost","default_site":"two.localhost","created":false,"changed":[{"kind":"site","name":"two.localhost","detail":"default"}],"warnings":[],"next_actions":[],"state_after":null,"fix":null,"log":null}

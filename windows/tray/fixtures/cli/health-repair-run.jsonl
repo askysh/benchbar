@@ -1,0 +1,6 @@
+{"event":"plan","schema_version":1,"bench":"/home/akash/frappe-bench","dry_run":false,"actions":[{"id":"build","label":"bench build","fixes":["Built assets"],"sudo":false},{"id":"unit","label":"write the systemd unit (sudo)","fixes":["systemd unit"],"sudo":true}],"log":"/home/akash/.local/state/benchbar/logs/20261030-101500-4242.log"}
+{"event":"step","action":"build","status":"running","message":"bench build"}
+{"event":"step","action":"build","status":"done","message":"bench build"}
+{"event":"step","action":"unit","status":"running","message":"write the systemd unit (sudo)"}
+{"event":"step","action":"unit","status":"skipped","message":"[WARN] skipped without sudo; run: benchbar repair"}
+{"event":"done","exit_code":0,"log":"/home/akash/.local/state/benchbar/logs/20261030-101500-4242.log"}

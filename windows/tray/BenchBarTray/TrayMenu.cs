@@ -22,6 +22,8 @@ internal sealed class TrayMenuModel
     public Func<bool> Notifications { get; set; } = () => true;
     public Action<bool> SetNotifications { get; set; } = _ => { };
     public Func<ResolvedTheme> Theme { get; set; } = () => new ResolvedTheme(false, false);
+    public Action OpenMain { get; set; } = () => { };
+    public Action OpenSettings { get; set; } = () => { };
     public Action CheckForUpdates { get; set; } = () => { };
     public Action Help { get; set; } = () => { };
     public Action ReportBug { get; set; } = () => { };
@@ -77,6 +79,13 @@ internal sealed class TrayMenu
         _runner.SubmenuClosed += (_, e) => { if (ReferenceEquals(e.OriginalSource, _runner)) OnRunnerClosed(); };
         _animation.Tick += (_, _) => NextPreviewFrame();
 
+        var open = new MenuItem { Header = "Open BenchBar", FontWeight = FontWeights.SemiBold };
+        open.Click += (_, _) => model.OpenMain();
+        var settings = new MenuItem { Header = "Settings..." };
+        settings.Click += (_, _) => model.OpenSettings();
+        Menu.Items.Add(open);
+        Menu.Items.Add(settings);
+        Menu.Items.Add(new Separator());
         Menu.Items.Add(_logon);
         Menu.Items.Add(_appearance);
         Menu.Items.Add(_runner);

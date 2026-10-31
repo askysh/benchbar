@@ -420,3 +420,159 @@ fl_report_host_names() {
     head -n1 /etc/hostname 2>/dev/null || true
   } | awk 'length($0) >= 3 && $0 != "localhost" && !seen[$0]++ { print length($0) "\t" $0 }' | sort -rn | cut -f2-
 }
+
+# ------------------------------------------------------------- doctor --prerequisites
+
+# What Ubuntu 24.04 (WSL or not) needs before "benchbar install": no bench,
+# read only, no sudo. The same ids and levels as the Mac list, plus the Linux
+# ones; the first group is fl_prereq_platform_first, the MariaDB one the
+# "extra" slot after the bench folder (doctor.sh).
+# overridable for the tests
+FL_MEMINFO="${FL_MEMINFO:-/proc/meminfo}"
+FL_APT_DIR="${FL_APT_DIR:-/etc/apt}"
+# total memory (MB) from which the memory check is ok, and from which it only warns
+FL_PREREQ_MEM_OK_MB="${FL_PREREQ_MEM_OK_MB:-3500}"
+FL_PREREQ_MEM_WARN_MB="${FL_PREREQ_MEM_WARN_MB:-1800}"
+
+fl__prereq_user() { printf '%s' "${FL_OS_USER:-${USER:-$(id -un 2>/dev/null || true)}}"; }
+
+# the os-release field NAME without quotes
+fl__os_release_field() {
+  local line
+  [[ -r "$FL_OS_RELEASE" ]] || return 0
+  while IFS= read -r line; do
+    case "$line" in "$1="*) line="${line#*=}"; line="${line//\"/}"; printf '%s' "$line"; return 0 ;; esac
+  done <"$FL_OS_RELEASE"
+}
+
+# the first archive URL apt is set up with: Ubuntu 24.04's deb822 file, then
+# the classic sources.list, else the Ubuntu archive
+fl__apt_mirror_url() {
+  local f url=""
+  for f in "$FL_APT_DIR"/sources.list.d/*.sources; do
+    [[ -f "$f" ]] || continue
+    url="$(sed -n 's/^URIs:[[:space:]]*\([^[:space:]]*\).*/\1/p' "$f" | head -n1)"
+    [[ -z "$url" ]] || break
+  done
+  if [[ -z "$url" && -f "$FL_APT_DIR/sources.list" ]]; then
+    url="$(awk '/^deb[[:space:]]/ { for (i = 2; i <= NF; i++) if ($i ~ /^https?:/) { print $i; exit } }' "$FL_APT_DIR/sources.list")"
+  fi
+  printf '%s' "${url:-http://archive.ubuntu.com/ubuntu/}"
+}
+
+# true when a request to URL gets an answer (curl, else a TCP connect)
+fl__url_reachable() {
+  local url="$1" host port=80
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsS -I -o /dev/null --max-time 6 "$url" >/dev/null 2>&1
+    return
+  fi
+  host="${url#*://}"; host="${host%%/*}"
+  case "$url" in https:*) port=443 ;; esac
+  (exec 3<>"/dev/tcp/${host}/${port}") >/dev/null 2>&1
+}
+
+fl_prereq_platform_first() {
+  local id ver arch uid user groups mem_kb mb level apt_url linger_now fix
+
+  # the distribution: Ubuntu 24.04 is what is tested
+  id="$(fl__os_release_field ID)"; ver="$(fl__os_release_field VERSION_ID)"
+  if [[ "$id" == "ubuntu" && "$ver" == "24.04" ]]; then
+    fl_prereq_add linux_distro ok "$(fl_linux_os_summary)"
+  else
+    fl_prereq_add linux_distro warn "$(fl_linux_os_summary); BenchBar is tested on Ubuntu 24.04" "use Ubuntu 24.04 (in WSL: wsl --install -d Ubuntu-24.04)"
+  fi
+
+  # the patched wkhtmltopdf package is built for x86_64 only
+  arch="${FL_ARCH:-$(uname -m)}"
+  if [[ "$arch" == "x86_64" ]]; then fl_prereq_add architecture ok "$arch"
+  else fl_prereq_add architecture warn "${arch}; the patched wkhtmltopdf package is built for x86_64 only, so PDFs will not work" "use an x86_64 machine to print PDFs from Frappe"; fi
+
+  # the installer refuses root and asks for sudo itself
+  uid="${FL_EFFECTIVE_UID:-$EUID}"
+  user="$(fl__prereq_user)"
+  if [[ "$uid" == "0" ]]; then
+    fl_prereq_add regular_user fail "running as root; benchbar must run as your own user" "log in as a normal user (in WSL: wsl -u <user>)"
+  else
+    fl_prereq_add regular_user ok "$user"
+  fi
+
+  # sudo: installed, and the user may use it (the sudo or admin group). Nothing
+  # is run as root here and no password is read.
+  groups="${FL_PREREQ_GROUPS:-$(id -nG 2>/dev/null || true)}"
+  if ! command -v sudo >/dev/null 2>&1; then
+    fl_prereq_add sudo fail "sudo is not installed" "install it as root: apt-get install -y sudo"
+  elif [[ " $groups " == *" sudo "* || " $groups " == *" admin "* ]]; then
+    fl_prereq_add sudo ok "${user} is in the sudo group; sudo asks for its password (BENCHBAR_SUDO=env passes it without a terminal)"
+  else
+    fl_prereq_add sudo fail "${user} is not in the sudo group, so apt and MariaDB cannot be set up" "add the user as root: usermod -aG sudo ${user}"
+  fi
+
+  # apt: the program, and a reachable archive (a warning: a mirror or a proxy may differ)
+  if ! command -v apt-get >/dev/null 2>&1; then
+    fl_prereq_add apt fail "apt-get was not found" "BenchBar needs an apt based system (Ubuntu or Debian)"
+  else
+    apt_url="$(fl__apt_mirror_url)"
+    if fl__url_reachable "$apt_url"; then fl_prereq_add apt ok "${apt_url} is reachable"
+    else fl_prereq_add apt warn "${apt_url} did not answer; the install downloads its packages from there" "check the network and any proxy, then: sudo apt-get update"; fi
+  fi
+
+  # systemd as PID 1 (a WSL distro needs it switched on): bench services are user units
+  if fl_linux_systemd_booted || [[ "$(cat "${FL_PROC_DIR}/1/comm" 2>/dev/null || true)" == "systemd" ]]; then
+    fl_prereq_add systemd ok "systemd runs as PID 1" "" ",\"enabled\":true"
+  else
+    if fl_is_wsl; then fix="add systemd=true under [boot] in /etc/wsl.conf (sudo), then in Windows: wsl --terminate ${WSL_DISTRO_NAME:-<distro>}"
+    else fix="boot this system with systemd as its init"; fi
+    fl_prereq_add systemd fail "systemd is not running as PID 1; bench services run as systemd user units" "$fix" ",\"enabled\":false"
+  fi
+
+  # lingering lets the bench come back after a reboot without a login (install turns it on)
+  linger_now="$(loginctl show-user "$user" -p Linger --value 2>/dev/null || true)"
+  if [[ "$linger_now" == "yes" ]]; then
+    fl_prereq_add linger ok "lingering is on for ${user}" "" ",\"enabled\":true"
+  else
+    fl_prereq_add linger warn "lingering is off for ${user}; a bench returns after a reboot only once you log in (install turns it on)" "sudo loginctl enable-linger ${user}" ",\"enabled\":false"
+  fi
+
+  # memory: MariaDB, Redis, the web server, workers and the asset build
+  mem_kb="$(awk '/^MemTotal:/ { print $2; exit }' "$FL_MEMINFO" 2>/dev/null || true)"
+  if [[ "$mem_kb" =~ ^[0-9]+$ ]]; then
+    mb=$((mem_kb / 1024))
+    level=ok
+    [[ "$mb" -ge "$FL_PREREQ_MEM_OK_MB" ]] || level=warn
+    [[ "$mb" -ge "$FL_PREREQ_MEM_WARN_MB" ]] || level=fail
+    if fl_is_wsl; then fix='give WSL more memory: memory=6GB under [wsl2] in %UserProfile%\.wslconfig, then wsl --shutdown'
+    else fix="add memory to this machine"; fi
+    fl_prereq_add memory "$level" "${mb} MB of memory" "$([[ "$level" == ok ]] || printf '%s' "$fix")" ",\"total_mb\":${mb}"
+  else
+    fl_prereq_add memory warn "could not read the memory size" "" ",\"total_mb\":null"
+  fi
+}
+
+# an apt MariaDB that is running with a root password benchbar does not know
+# (a fresh one logs in over the socket and is secured by the install)
+fl_prereq_platform_extra() {
+  local pw
+  if ! fl_linux_pkg_installed mariadb-server; then
+    fl_prereq_add mariadb_password ok "MariaDB is not installed yet; the install sets it up and keeps its root password in $(fl__secret_file)" "" ",\"needs_password\":false"
+    return 0
+  fi
+  if ! fl_linux_unit_active mariadb; then
+    fl_prereq_add mariadb_password ok "MariaDB is installed and not running; the install starts it" "" ",\"needs_password\":false"
+    return 0
+  fi
+  if [[ -n "${MARIADB_ROOT_PASSWORD:-}" ]] && fl_mariadb_root_verify "$MARIADB_ROOT_PASSWORD"; then
+    fl_prereq_add mariadb_password ok "MARIADB_ROOT_PASSWORD logs in" "" ",\"needs_password\":false"
+    return 0
+  fi
+  pw="$(fl_keychain_get || true)"
+  if [[ -n "$pw" ]] && fl_mariadb_root_verify "$pw"; then
+    fl_prereq_add mariadb_password ok "the password file ($(fl__secret_file)) logs in" "" ",\"needs_password\":false"
+    return 0
+  fi
+  if fl_mariadb_root_open; then
+    fl_prereq_add mariadb_password ok "MariaDB root has no password; the install secures it" "" ",\"needs_password\":false"
+    return 0
+  fi
+  fl_prereq_add mariadb_password warn "MariaDB is already running and benchbar has no root password for it. A fresh apt install needs nothing (the install secures it with sudo); a root password you set yourself must be passed" "pass MARIADB_ROOT_PASSWORD='...' to benchbar install" ",\"needs_password\":true"
+}

@@ -1,0 +1,1 @@
+{"schema_version":1,"cli_version":"0.8.0","event":"done","exit":1,"error":"two.localhost is not a site of this bench.","fix":"benchbar site list","changed":[],"warnings":[],"next_actions":[]}

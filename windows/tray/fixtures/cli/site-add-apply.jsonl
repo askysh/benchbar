@@ -1,0 +1,5 @@
+{"schema_version":1,"cli_version":"0.8.0","event":"step","id":"new_site","name":"Create qa1.localhost","status":"running"}
+{"schema_version":1,"cli_version":"0.8.0","event":"step","id":"new_site","name":"Create qa1.localhost","status":"done","secs":21}
+{"schema_version":1,"cli_version":"0.8.0","event":"progress","step":"install","label":"Installing erpnext","elapsed":4}
+{"schema_version":1,"cli_version":"0.8.0","event":"step","id":"install","name":"Install erpnext","status":"done","secs":40}
+{"schema_version":1,"cli_version":"0.8.0","event":"done","exit":0,"changed":[{"kind":"site","name":"qa1.localhost","detail":"created"},{"kind":"app","name":"erpnext","detail":"installed on qa1.localhost"}],"warnings":["Redis cache was slow to answer."],"next_actions":[{"command":"benchbar site default qa1.localhost","why":"Make it the default site."}],"state_after":{"name":"frappe-bench","state":"running"},"site":"qa1.localhost","created":true}

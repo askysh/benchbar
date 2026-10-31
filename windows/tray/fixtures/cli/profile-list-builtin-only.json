@@ -1,0 +1,2 @@
+{"schema_version":1,"cli_version":"0.8.0","profiles":[
+ {"name":"v15-lts","kind":"builtin","source":"builtin","source_url":null,"subscription":null,"shadowed_by":null,"schema":null,"file":"/opt/benchbar/config/release-profiles.tsv","base":null,"label":"Frappe/ERPNext v15 LTS","frappe_branch":"version-15","valid":true,"error":null}]}

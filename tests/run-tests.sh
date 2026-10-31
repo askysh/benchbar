@@ -35,7 +35,7 @@ test-cli test-open-as test-freshness test-hygiene test-mcp test-site-backups tes
 test-adopt test-systemd test-migrate test-repair-json test-json test-report test-profile-v16 test-state-migrate test-run-lock
 test-runner test-redact test-docs-command test-status-cost test-command-cost test-bench-flow test-run test-platform-linux test-self-update
 test-site-restore test-services-served test-templates test-discovery test-shellrc test-docs test-platform test-packaging test-ui test-release-notes test-version-policy test-affected
-test-agent-contracts"
+test-agent-contracts test-sudo-env test-prerequisites-linux test-windows-commands"
 
 for f in "$ROOT"/tests/test-*.sh; do
   n="$(basename "$f" .sh)"

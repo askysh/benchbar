@@ -81,3 +81,49 @@ One line per non obvious choice. The spike's code is in `spike/` and is not ship
 - Shim: `benchbar.exe doctor` gains `dotnet_desktop` and `tray_logon` (text form only) when `BenchBarTray.exe` sits next to it, about 50 lines. A missing runtime is a warning, so the optional tray never makes doctor exit 1; the check proves the shortcut and the tray exe exist and does not read the shortcut's target. Recorded here because docs/DECISIONS.md belongs to the CLI session this week.
 - The code signing policy in docs/windows.md is written in SignPath Foundation's required form and marked pending until the application is approved.
 - Test builds go to testers by hand before any release, unsigned (Akash, 2026-10-29: no signing yet). Each zip carries `install.ps1`; run from the unpacked zip (benchbar.exe and SHA256SUMS beside it, no `-Version`, `-Zip` or `-Source`) it installs that folder, and `-Zip PATH` installs a zip downloaded by hand. Every file is checked against the zip's own SHA256SUMS, and a program file the list does not name is refused; that finds a damaged or half unpacked download, not a swapped one, so a checksums file next to a `-Zip` is checked as well when present and its absence is a warning. The signing steps stay in the workflow and run only once the SignPath secrets exist.
+- The wizard state is a plain model in `Tray.Core` (`WizardModel`) that the views only draw. Pages are built once and then refreshed, so a poll or log line never takes the caret out of a field.
+- Passwords are `Secret`s (`SecureString`). They are read back only to fill the environment of the one child process, hidden in anything the child prints back, and never put in arguments, config or logs.
+- The tray never runs `reboot` through the shim. It confirms, writes a one-shot Startup shortcut (`--resume-setup`, deleted when the tray starts with it) and runs `shutdown /r /t 15`, so `shutdown /a` still aborts it.
+- The launch check never boots a stopped distro: no `--probe` outside the wizard, and a stopped distro skips the auto-open entirely. The wizard probes once, only after the distro exists.
+- The bench folder is made absolute with `wsl.exe --exec printenv HOME`, because the shim's `sh -c` forwarding does not expand `~`.
+- Stop on the Install page kills the process tree.
+- The resume flag is removed whenever the wizard opens because of a resume, by either path (a direct start or a signal from a second instance). A restart that Windows refused keeps the flag, since a restart by hand still needs it.
+- The Linux password typed in the wizard is never used for sudo when the shim's `distro_user` says `user_existed`; the install asks for the real one.
+- Before an admin action the tray calls `AllowSetForegroundWindow(ASFW_ANY)`, so the Windows prompt comes to the front instead of flashing on the taskbar.
+
+## Bench pages: the shared pieces
+
+- Every page gets one `PageServices` (the CLI client and the shared sheets) in its constructor and never builds its own client or dialogs. Models that parse JSON live in `Tray.Core` and are tested with a `ScriptedStreamRunner`; views only draw them.
+- `ICliClient` runs both one document calls and streams through `IStreamRunner`, so environment secrets (`SecretEnvironment`) work the same for both and tests need no process. A failed call (no shim, a refusal, a timeout) is a result, not an exception.
+- The plan sheet reads any plan document generically (`steps[]`, `touches`, `errors`, `token`, `can_apply`, `changes`); what only one command has stays in `PlanDocument.Raw`. A refused token ("changed since it was shown") becomes the Stale phase with Refresh Plan, and nothing is applied twice.
+- The sheet cannot be closed while an apply runs. Stop is offered only when the request says the run is safe to kill (a clone, not a restore or a migrate).
+- Find Benches and Team Profiles are rows under the benches, not list items, so the bench list model and its tests stay as they were. A site row opens the Sites tab; a poll never changes the tab.
+
+## Bench pages
+
+- `PlanReviewRequest.RequiresToken` is true unless the CLI prints that plan without a token (`adopt`, `app update`, `site drop`); a request that sets it false confirms on the plan alone, and its apply call has no token to go stale.
+- A `ports plan` document becomes plan steps (one per bench, the web port move or the service files, conflicts as the note); a blocked bench is an error, so Confirm stays off.
+- Test fixtures are copied next to the test binaries by the csproj (`CopyToOutputDirectory`), and one `FixtureFiles` class (compiled into both test projects) finds them, so a build with an artifacts path outside the repository passes. Walking up from the binaries stays as the fallback.
+- Start and Restart from the flyout go through `ports check` in `TrayController` (`TrayOptions.PortCheck`), as the Overview already did. The Overview passes `checkPorts: false` because it checked first and shows the conflict in its own guidance row. A refusal is one flyout line with where the fix is; nothing is killed.
+- The Overview's Doctor button became Health and opens the Health tab. The flyout's Doctor button still opens the Doctor window.
+- Demo mode (`BENCHBAR_TRAY_FIXTURES`) gives the pages a `FixtureCliRunner`: recorded answers for the read only calls from `fixtures/cli`, and a plain refusal for every other call, so the demo can never change a bench.
+- Shared UI pieces live in one place: `PageParts.cs` (`PagePanels`, `PageMenuEntry`), `Ui.CriticalText` and `Ui.Mono`; the view tests share `PageKit.cs` and the model tests `CliFixture`.
+- The Sites and Apps tabs show Add Site, Backups, Restore, Drop, Add App and Update as panels in the page, not dialogs. While Drop or Update runs the panel has no buttons and the tab is off, so it cannot be dismissed.
+- The Administrator password is asked in the Add Site form and reaches the CLI only as `ADMIN_PASSWORD` in the environment of the plan and apply calls. The CLI has no generate option, so the tray offers none.
+- Windows resolves `*.localhost` itself and the tray never edits a hosts file. A site whose name does not end in `.localhost` gets Set Up..., which offers adding it as `NAME.localhost`.
+- Console and Database open Windows Terminal with `wsl.exe -d DISTRO --cd BENCH -- bench --site S console|mariadb`. Backup folders open as `\wsl.localhost\DISTRO\path` in Explorer, which is for opening only; data still comes from the CLI.
+- The app list is read with `--no-sites` when the tab is first shown for a bench and after a change, never on a timer. Refresh asks for the live site lists. Check Remotes runs `app focus --fetch`.
+- Restore takes a typed site name before the plan sheet. Encrypted and partial backups cannot be restored.
+- The Health tab runs doctor and `setup check --json` (never `--probe`) once when first shown for a bench and on request, never on a timer; the repair sheet takes the Linux password once, up front, through the environment of that one run, and cannot be closed while it runs.
+- The Overview adds no timer and no poll: uptime and Scheduler come from fields of the `status --json` the poll already reads, and `lock check` runs only when the Overview is the shown tab (once per bench, and on Check Again).
+- The log viewer reads only through `logs --json`; Follow polls `--since` the last line's time every 2 s and only while the window is open, Follow is on and the current log is shown.
+- Find Benches takes a Linux path in a text box with recent folders, not a folder picker, because benches live in WSL. A Windows path is converted with `wsl.exe wslpath -a -u`. Set Up Selected reads `ports plan` itself first, so a blocked plan is said in the pane and the plan sheet opens only for a plan that can be applied.
+- Team Profiles Import and Export accept Windows file paths and convert them with wslpath before the CLI call. Show in Explorer opens `\wsl.localhost\DISTRO\...`.
+- One SitesView, AppsView and HealthView serve every bench, so a panel remembers the bench it was opened for (`_panelBench`, `DropState.BenchPath`, `UpdateState.BenchPath`, `RepairModel.BenchPath`). Showing another bench closes the panels, and an action refuses to run when its captured path is not the bound one; the call always uses the captured path.
+- The sudo password goes only to install, adopt (when the plan has sudo steps) and repair (when an action needs sudo). Ports apply never gets it: on Linux it runs nothing as root and the CLI checks the password up front. `SudoRuleTests` lists every place that can build the variable, so a new one fails until someone decides.
+- `CliTimeouts.Apply` is infinite. Killing a restore, drop, update, add or repair part way is worse than waiting; only reads and plans time out. A long run shows its elapsed time and offers Stop only where the request says the run is safe to kill.
+- Log Follow asks `wsl.exe --list --running --quiet` before each poll and pauses with "The distro stopped. Follow is paused." instead of booting the distro. Only turning Follow on again resumes it.
+- Closing the main window during a page run asks first (default No). If the person closes anyway the run keeps going in the background and its result comes as a Windows notification. The window is not kept hidden, because the views are rebuilt on the next open.
+- Terminal commands use `wsl.exe --exec` so no shell parses the words, site names pass `SiteNames.IsValid` before they reach a command, and `;` is written `\;` for wt.exe.
+- A stale plan is recognised by the CLI's own refusal wording ("plan changed since it was shown", "The port plan changed.", "changed since it was reviewed"), not by the word "stale".
+- Add App refuses a source or branch that starts with a dash. `--` before the positionals is not used where the plan sheet appends its own flags after the arguments.
