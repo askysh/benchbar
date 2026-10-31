@@ -70,7 +70,7 @@ jobs:
           VERSION: ${{ steps.v.outputs.version }}
         run: |
           gh workflow run release.yml --ref "v$VERSION" -f version="$VERSION"
-          gh workflow run release-windows.yml --ref "v$VERSION" -f version="$VERSION" -f draft_release=true
+          gh workflow run release-windows.yml --ref "v$VERSION" -f version="$VERSION" -f draft_release=true -f wait_for_draft=true
           echo "::notice title=Release builds::started release.yml and release-windows.yml for v$VERSION; the draft release appears when they finish"
 
       - name: Merge main back into next-release

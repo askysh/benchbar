@@ -48,6 +48,11 @@ on:
         required: false
         default: false
         type: boolean
+      wait_for_draft:
+        description: "Wait for release.yml's draft as a tag push does (auto-tag.yml starts both at once)"
+        required: false
+        default: false
+        type: boolean
   pull_request:
     paths:
       - ".github/workflows/release-windows.yml"
@@ -525,6 +530,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       EVENT: ${{ github.event_name }}
+      WAIT_FOR_DRAFT: ${{ github.event_name == 'push' || inputs.wait_for_draft == true }}
     steps:
       - uses: actions/download-artifact@v8
         with:
@@ -601,11 +607,12 @@ jobs:
           ) | ForEach-Object { $_ }
           $blockText = $block -join "`n"
 
-          # find the release (release.yml creates it). A tag push waits for it:
-          # its macOS job allows 120 minutes. A manual run needs it to exist.
+          # find the release (release.yml creates it). A tag push, and a run
+          # auto-tag.yml started next to release.yml, wait for it: its macOS
+          # job allows 120 minutes. A manual run needs it to exist.
           $rel = $null
           $waits = 0
-          if ($env:EVENT -eq 'push') { $waits = 130 }
+          if ($env:WAIT_FOR_DRAFT -eq 'true') { $waits = 130 }
           for ($i = 0; $i -le $waits; $i++) {
             $out = gh release view $tag --json isDraft,body 2>$null
             if ($LASTEXITCODE -eq 0) { $rel = $out | ConvertFrom-Json; break }
@@ -615,7 +622,7 @@ jobs:
           $notes = Join-Path $env:RUNNER_TEMP 'notes.md'
           $created = $false
           if ($null -eq $rel) {
-            if ($env:EVENT -ne 'push') {
+            if ($env:WAIT_FOR_DRAFT -ne 'true') {
               Write-Host "::error::There is no release $tag. A manual run attaches to an existing draft: run release.yml for this tag first, then this workflow again."
               exit 1
             }
