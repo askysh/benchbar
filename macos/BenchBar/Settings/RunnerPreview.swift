@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// A runner playing in a SwiftUI view, for the Settings window. It uses the
+/// A runner playing in a SwiftUI view, for the Menu Bar pane. It uses the
 /// same RunnerAnimator as the menu bar, drawn twice as large.
 struct RunnerPreview: NSViewRepresentable {
     var runner: Runner

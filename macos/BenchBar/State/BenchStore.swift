@@ -143,7 +143,7 @@ final class BenchStore {
     @ObservationIgnored var onChange: (() -> Void)?
     /// How far each bench's files can be trusted, by path. Logged on change.
     @ObservationIgnored private(set) var trust: [String: BenchTrust] = [:]
-    /// What of the BenchBar window is on screen (SettingsWindowController).
+    /// What of the BenchBar window is on screen (MainWindowController).
     @ObservationIgnored private(set) var windowSight = WindowSight()
 
     @ObservationIgnored private let makeClient: (URL) -> CLIClient
@@ -744,7 +744,7 @@ final class BenchStore {
     }
 
     /// The BenchBar window opened, closed, came on screen or left it, or
-    /// shows another page (SettingsWindowController).
+    /// shows another page (MainWindowController).
     func setWindow(_ sight: WindowSight) {
         guard sight != windowSight else { return }
         let wasFast = fastMode

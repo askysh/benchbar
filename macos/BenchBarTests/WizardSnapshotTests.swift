@@ -149,18 +149,6 @@ extension SnapshotTests {
         try render(side(store, several), "sidebar-several")
     }
 
-    @Test func settingsAndAboutWindows() async throws {
-        // the Settings tabs are rendered by settingsWindow(); About by windowAbout()
-        let (store, _) = try await wizardRun([], empty: false)
-        let tabs = SettingsTabs()
-        let part: (SettingsView.Part) -> SettingsView = { part in
-            SettingsView(settings: base.settings, store: store, library: library(), launchAtLogin: LaunchAtLogin(),
-                         notifier: Notifier(settings: base.settings), part: part, showsHeader: false, chooseCLI: {})
-        }
-        try render(SettingsTabsView(tabs: tabs, general: part(.general), menuBar: part(.menuBar))
-            .frame(width: SettingsTabsView.size.width, height: SettingsTabsView.size.height), "settings-window")
-    }
-
     // MARK: the teaching surfaces
 
     @Test func walkthroughSteps() throws {

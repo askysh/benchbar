@@ -1,7 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// The General and Menu Bar tabs of the Settings window (the settings that
+/// The General and Menu Bar panes of the BenchBar window (the settings that
 /// belong to the app itself; per bench settings live on each bench's page).
 struct SettingsView: View {
     enum Part { case general, menuBar }
@@ -13,7 +13,7 @@ struct SettingsView: View {
     let notifier: Notifier
     var part: Part = .general
     var router: WindowRouter?
-    /// The pane title block; off in the Settings window, whose tab says it.
+    /// The pane title block; off where something else names the pane.
     var showsHeader = true
     let chooseCLI: () -> Void
 
