@@ -73,6 +73,10 @@ it cannot be used. The site needs `developer_mode` (add it with
 **default site** can be used, because the bench serves only that one: port 8000
 answers every address with it.
 
+The window reloads the benches each time you come back to BenchBar (at most
+every 15 seconds), so a `developer_mode` you set in Terminal shows without
+waiting for the five minute check.
+
 Where it works, an **Open as…** control (a person icon and the words) appears
 in the popover's site row, on the Sites tab and beside **Open Site** on the
 Overview tab. On the default site it stays visible but dimmed, with the reason
@@ -82,7 +86,7 @@ lists:
 - **Switch Back to {name}**: the user before this one.
 - Your pinned users, as `{label} ({user})`, then **Administrator**.
 - **Find User…**: a sheet in the BenchBar window that searches the site's
-  enabled users as you type. **Open** signs in as that user; the pin keeps them
+  enabled users as you type (the sheet keeps one height while you type). **Open** signs in as that user; the pin keeps them
   in the menu, with a label of your own (for example `NE`). A site keeps nine
   pins. Pins of a bench or site that no longer exists are forgotten.
 
