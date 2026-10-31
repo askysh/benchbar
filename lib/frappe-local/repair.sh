@@ -350,7 +350,7 @@ act_write_helpers() {
   # under Homebrew a block that runs a checkout with its own state stays:
   # rewritten, benchup would start without that state (chk_helpers)
   if [[ "${FL_INSTALL_KIND:-}" == homebrew ]]; then
-    recorded="$(fl_rc_block_extract "$rc" | sed -n 's/^BENCHBAR="\(.*\)"$/\1/p' | head -n 1)"
+    recorded="$(fl_rc_block_extract "$rc" | sed -n 's/^BENCHBAR="\(.*\)"$/\1/p' | awk 'NR==1')"
     [[ -z "$recorded" || ! -e "$recorded" ]] || fl_cli_own_state_v own "$recorded"
     if [[ -n "$own" ]]; then
       fl_warn "the helper block in ${rc} runs ${recorded}, a checkout with its own state (${own}); left as is"

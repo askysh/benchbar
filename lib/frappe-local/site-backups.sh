@@ -163,7 +163,7 @@ fl_cmd_site_backup() {
     fl_die "The backup of ${name} failed." "Run it by hand to see why: cd ${FL_BENCH_DIR} && ${args[*]}"
   fi
   fl_bench_redis_down
-  stamp="$(find "$dir" -maxdepth 1 -type f -newer "$before" -name '[0-9]*_[0-9]*-*' 2>/dev/null | sed -n 's#.*/\([0-9]\{8\}_[0-9]\{6\}\)-.*#\1#p' | sort -r | head -n1)"
+  stamp="$(find "$dir" -maxdepth 1 -type f -newer "$before" -name '[0-9]*_[0-9]*-*' 2>/dev/null | sed -n 's#.*/\([0-9]\{8\}_[0-9]\{6\}\)-.*#\1#p' | sort -r | awk 'NR==1')"
   rm -f "$before"
   [[ -n "$stamp" ]] || fl_die "bench reported success, but ${dir} has no new backup." "Look in ${dir}"
   set="$(fl_backup_set_json "$dir" "$stamp")"
@@ -373,7 +373,7 @@ fl_cmd_site_drop() {
     archive=""
   fi
   if [[ -n "$archive" ]]; then
-    stamp="$(fl_backup_stamps "${archive}/private/backups" | head -n1)"
+    stamp="$(fl_backup_stamps "${archive}/private/backups" | awk 'NR==1')"
     [[ -n "$stamp" ]] && backup="$(fl_backup_set_json "${archive}/private/backups" "$stamp")"
   fi
   fl_hosts_remove_name "$name" || true

@@ -87,7 +87,7 @@ fl_app_version() {
   # fl_app_version APP: __version__ of apps/APP/APP/__init__.py, or "not installed"
   local init="${FL_BENCH_DIR}/apps/$1/$1/__init__.py" v
   [[ -f "$init" ]] || { printf 'not installed'; return 0; }
-  v="$(sed -n 's/^__version__[[:space:]]*=[[:space:]]*["'"'"']\([^"'"'"']*\)["'"'"'].*/\1/p' "$init" | head -n1)"
+  v="$(sed -n 's/^__version__[[:space:]]*=[[:space:]]*["'"'"']\([^"'"'"']*\)["'"'"'].*/\1/p' "$init" | awk 'NR==1')"
   printf '%s' "${v:-unknown}"
 }
 

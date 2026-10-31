@@ -191,7 +191,7 @@ fl_mariadb_server_version() {
   fi
   [[ -n "$bin" ]] || bin="$FL_MARIADBD_BIN"
   [[ -x "$bin" ]] || return 0
-  "$bin" --version 2>/dev/null | fl_parse_mariadb_version | head -n1
+  "$bin" --version 2>/dev/null | fl_parse_mariadb_version | awk 'NR==1'
 }
 
 # "formula version" of the server on 3306, the formula being the profile's
@@ -453,7 +453,7 @@ fl__apt_mirror_url() {
   local f url=""
   for f in "$FL_APT_DIR"/sources.list.d/*.sources; do
     [[ -f "$f" ]] || continue
-    url="$(sed -n 's/^URIs:[[:space:]]*\([^[:space:]]*\).*/\1/p' "$f" | head -n1)"
+    url="$(sed -n 's/^URIs:[[:space:]]*\([^[:space:]]*\).*/\1/p' "$f" | awk 'NR==1')"
     [[ -z "$url" ]] || break
   done
   if [[ -z "$url" && -f "$FL_APT_DIR/sources.list" ]]; then

@@ -191,12 +191,15 @@ assert_eq "$snap" "$(snapshot "$E" "$FL_STATE_DIR/benches" "$FL_HOSTS_FILE")"
 run_fm ports setup --yes -- "$E"
 assert_eq 0 "$CODE" "$OUT"
 assert_contains "$OUT" "Completed: $E"
+assert_not_contains "$OUT" "command not found" "(every helper the apply path calls is defined)"
 assert_file "$E/Procfile.lean"
 assert_calls_not_contain '^bench (migrate|build|update|start)'
 # A failed second action stops the batch and never records success for it.
 # Stub the adoption boundary so this is deterministic, independent of launchd.
 (
   . "$ROOT/lib/frappe-local/port-management.sh"
+  # the apply path asks fl_sudo_gui, which benchbar loads from sudo.sh
+  . "$ROOT/lib/frappe-local/sudo.sh"
   FL_ASSUME_YES=1; FL_HONCHO=honcho
   fl_pm_build() { PM_PATHS=(first second third); PM_TARGETS=('8000 9000 11000 13000' '8000 9000 11000 13000' '8000 9000 11000 13000'); PM_TOKEN=approved; PM_CAN_APPLY=1; }
   fl_bench_load() { FL_BENCH_DIR="$1"; FL_WEB_PORT=8000; FL_SOCKETIO_PORT=9000; FL_REDIS_QUEUE_PORT=11000; FL_REDIS_CACHE_PORT=13000; }
@@ -208,9 +211,10 @@ assert_calls_not_contain '^bench (migrate|build|update|start)'
   fl_info() { :; }; fl_ok() { :; }; fl_fail() { printf '%s\n' "$*"; }
   fl_cmd_register() { printf '%s\n' "$1" >>"$TMP_DIR/completed"; }
   cmd_adopt() { printf '%s\n' "$1" >>"$TMP_DIR/attempted"; [[ "$1" != second ]]; }
-  if fl_cmd_ports apply approved first second third >"$TMP_DIR/partial-output"; then fail 'partial failure must fail the command'; fi
+  if fl_cmd_ports apply approved first second third >"$TMP_DIR/partial-output" 2>&1; then fail 'partial failure must fail the command'; fi
   assert_eq $'first\nsecond' "$(cat "$TMP_DIR/attempted")"
   assert_eq first "$(cat "$TMP_DIR/completed")"
   assert_contains "$(cat "$TMP_DIR/partial-output")" 'Earlier completed benches remain configured'
+  assert_not_contains "$(cat "$TMP_DIR/partial-output")" 'command not found'
 )
 printf 'test-port-management: ok\n'

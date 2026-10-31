@@ -226,4 +226,24 @@ KVR="$(bash -c '. "$0/lib/frappe-local/ui.sh"; . "$0/lib/frappe-local/state.sh"
   [[ -e "$lck" || -e "$lck.reclaim" ]] && printf "left" || printf "clean"' "$ROOT" "$KV2")"
 assert_eq "stale kept kept-by-unlock clean" "$KVR"
 
+# ---- a live holder is never judged stale by the age of its lock: a clock that
+# stepped, or a process stopped on a loaded machine, must not let a waiter break
+# the lock and rename its own content over the holder's
+KV3="$TMP_DIR/kv3.env"; : >"$KV3"
+KVH="$TMP_DIR/kv3-holder"
+bash -c '. "$0/lib/frappe-local/ui.sh"; . "$0/lib/frappe-local/state.sh"
+  fl__kv_lock "$1"; touch -t 202001010000 "$1.lck"   # held, and it looks years old
+  : >"$2"
+  sleep 5                                            # well past the first stale check of the waiter
+  if [[ -e "$1.lck/$FL__KV_TOKEN" ]]; then echo owned >"$3"; else echo broken >"$3"; fi
+  fl__kv_unlock "$1"' "$ROOT" "$KV3" "$KVH.ready" "$KVH.result" &
+holder=$!
+for _ in $(seq 1 100); do [[ -e "$KVH.ready" ]] && break; sleep 0.1; done
+assert_file "$KVH.ready"
+bash -c '. "$0/lib/frappe-local/ui.sh"; . "$0/lib/frappe-local/state.sh"; fl_kv_set "$1" WAITER "after the holder"' "$ROOT" "$KV3"
+wait "$holder"
+assert_eq "owned" "$(cat "$KVH.result")" "(the waiter left the live holder's lock alone)"
+assert_eq "after the holder" "$(bash -c '. "$0/lib/frappe-local/ui.sh"; . "$0/lib/frappe-local/state.sh"; fl_kv_get "$1" WAITER' "$ROOT" "$KV3")"
+[[ -z "$(ls "$KV3".* 2>/dev/null)" ]] || fail "no temp file or lock may be left behind: $(ls "$KV3".*)"
+
 printf 'test-run-lock: ok\n'

@@ -33,7 +33,7 @@ fl_bench_helper_pattern() {
 
 # The working folder of a process, from lsof; nothing when it cannot be read.
 fl_pid_cwd() {
-  lsof -a -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -n1
+  lsof -a -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | awk 'NR==1'
 }
 
 # fl_pid_is_bench_own_strict PID: the one ownership test. True only when
@@ -190,7 +190,7 @@ fl_bench_wait_stopped() {
 }
 
 fl_port_listener_pid() {
-  lsof -ti "tcp:$1" -sTCP:LISTEN 2>/dev/null | head -n1 || true
+  lsof -ti "tcp:$1" -sTCP:LISTEN 2>/dev/null | awk 'NR==1' || true
 }
 
 # fl_port_listener_pids PORT: the pid of every listener on PORT, one per line
