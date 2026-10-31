@@ -18,6 +18,8 @@ struct BenchPage: View {
                 }
                 .pageTabs()
                 .labelsHidden()
+                // the first tab drew a focus ring when the window opened, and the clicked one after
+                .focusEffectDisabled()
                 ChangeResultBanner(workbench: workbench, scope: bench.path)
                     .padding(.top, 10)
             }
@@ -33,6 +35,10 @@ struct BenchPage: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+        // a success banner belongs to the tab it came from; a failure stays until dismissed
+        .onChange(of: router.benchTab) {
+            if workbench.result?.succeeded == true { workbench.result = nil }
         }
     }
 
@@ -585,9 +591,10 @@ struct LockSection: View {
                 } else if let check {
                     Image(systemName: check.inSync ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
                         .foregroundStyle(check.inSync ? .green : .orange)
+                        .accessibilityLabel(check.inSync ? "In sync" : "Differences")
                     Text(LockText.badge(check))
                 } else if let error = workbench.lockErrors[bench.path] {
-                    Image(systemName: "xmark.octagon.fill").foregroundStyle(.red)
+                    Image(systemName: "xmark.octagon.fill").foregroundStyle(.red).accessibilityLabel("Error")
                     Text(error).font(.caption).foregroundStyle(.secondary).lineLimit(2).textSelection(.enabled)
                 }
                 Spacer()
