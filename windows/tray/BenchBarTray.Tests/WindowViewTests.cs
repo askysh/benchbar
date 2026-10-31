@@ -22,7 +22,7 @@ public class WindowViewTests
     }
 
     /// <summary>A scratch copy of fixtures/setup in the DIR/setup layout; check.json is replaced by <paramref name="check"/> (ready or not).</summary>
-    private static FixtureSetupService Fixture(string check = "check.json", bool ready = false, string? install = null, bool noUser = false)
+    internal static FixtureSetupService Fixture(string check = "check.json", bool ready = false, string? install = null, bool noUser = false)
     {
         string? source = null;
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
@@ -47,7 +47,7 @@ public class WindowViewTests
     private static Secret Pass(string text) => Secret.From(text);
 
     /// <summary>Drives a model to a page with no WPF object alive yet, so no dispatcher context is captured.</summary>
-    private static async Task<WizardModel> ModelAt(WizardPage page)
+    internal static async Task<WizardModel> ModelAt(WizardPage page)
     {
         SynchronizationContext.SetSynchronizationContext(null);
         switch (page)
@@ -120,7 +120,7 @@ public class WindowViewTests
         { WizardPage.ExistingBench, "Use an Existing Bench" },
         { WizardPage.NewBench, "New Bench" },
         { WizardPage.Review, "Review" },
-        { WizardPage.Install, "Installing" },
+        { WizardPage.Install, "Install Failed" }, // the fixture install fails
         { WizardPage.Done, "Your Bench Is Ready" },
     };
 
