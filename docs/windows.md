@@ -279,6 +279,11 @@ runs. A stopped distro shows the sleeping runner and a **Start** button
 in the flyout, which starts `benchbar.exe keepalive run`. This keeps the
 tray from waking a distro that WSL shut down after its idle time.
 
+One keepalive runs at a time, for one distro. While it keeps one distro
+awake, Start cannot start a second distro, and the tray says so. Switch
+the distro in Settings, or stop the other keepalive first. This is a
+limit of the beta.
+
 ### Settings
 
 The tray keeps its settings under a `tray` key in
