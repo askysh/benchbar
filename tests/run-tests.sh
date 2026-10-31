@@ -44,18 +44,24 @@ for f in "$ROOT"/tests/test-*.sh; do
   esac
 done
 
-# Seconds each test takes in a macOS CI shard (3 at a time), from CI runs and
-# local runs; a test not named here counts as 10. Only the proportions matter.
+# Seconds each test takes in a macOS CI shard (3 at a time), as the CI log
+# reports them ("--- ok: test-x (Ns)"); the Linux only tests, which macOS
+# skips, keep their Linux times. A test not named here counts as 10. Only the proportions matter.
 # Shards are filled from this table (see "the jobs"): after a test is added,
 # split or sped up, put its new time here.
-TEST_SECS="test-app-recovery-2=135 test-app-recovery-3=120 test-app-recovery=70
-test-services-served=260 test-port-management=205 test-install-json-2=198 test-pull=189 test-install-json=181 test-doctor=181
-test-site-restore=165 test-site-restore-2=123 test-apps=164 test-app-batch=158 test-sudo-env=157 test-lock=153
-test-profiles-2=114 test-profiles-3=74 test-profiles=42
-test-agent-contracts=83 test-agent-contracts-2=80 test-agent-contracts-3=89
-test-repair=100 test-phases=100 test-homebrew=90 test-freshness=80 test-app-cli=75 test-windows-commands=65 test-service=65
-test-input-hygiene=60 test-sites=50 test-site-backups=40 test-adopt=35 test-command-cost=30 test-report=28 test-open-as=25 test-json=20
-test-run-lock=15 test-runner=14 test-pipelines=20"
+TEST_SECS="test-services-served=287 test-lock=201 test-repair=190 test-apps=186 test-install-json-2=184 test-install-json=183
+test-pull=170 test-mcp=162 test-phases=159 test-port-management=151 test-site-restore=148 test-sudo-env=143
+test-doctor=142 test-app-recovery-2=142 test-profiles-2=138 test-doctor-hardening=128 test-site-restore-2=127 test-app-cli=125
+test-app-batch=110 test-app-recovery=108 test-agent-contracts=108 test-homebrew=107 test-app-recovery-3=106 test-input-hygiene=101
+test-windows-commands=93 test-service=91 test-agent-contracts-3=90 test-sites=89 test-ports=88 test-profiles-3=79
+test-agent-contracts-2=77 test-hygiene=75 test-cli=71 test-freshness=60 test-adopt=60 test-multi-bench=54
+test-site-backups=54 test-profile-v16=42 test-install-sh=41 test-migrate=41 test-process=39 test-json=39
+test-pipelines=38 test-open-as=36 test-command-cost=35 test-profiles=32 test-run-lock=30 test-redact=28
+test-report=24 test-repair-json=23 test-runner=21 test-state-migrate=19 test-status-cost=14 test-docs-command=12
+test-install-linux=110 test-doctor-linux=77 test-systemd=37 test-bench-flow=10 test-platform-linux=3 test-self-update=8
+test-prerequisites-linux=7 test-install-sh-linux=5 test-discovery=4 test-run=3 test-templates=3 test-shellrc=2
+test-docs=1 test-platform=1 test-packaging=1 test-affected=1 test-ui=0 test-release-notes=0
+test-version-policy=0"
 test_secs() {
   local w
   w=" $(printf '%s' "$TEST_SECS" | tr '\n' ' ') "
