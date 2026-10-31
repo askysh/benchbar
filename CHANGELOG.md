@@ -2,19 +2,6 @@
 
 All notable changes to this project are documented here.
 
-## Unreleased
-
-- Five more built in runners for the menu bar and the Windows tray:
-  Kettle, Server rack, Paper plane, Snail and Rocket. Pick one under
-  Runner in the Menu Bar pane on the Mac, or in the tray's Runner menu
-  and Settings on Windows. Each one has its own way to sleep, start, run,
-  crash and ask: the kettle boils and pops its lid, the rack blinks and
-  jams a drive, the plane flies and nose dives, the snail hurries and
-  rolls in its shell, the rocket flies and tumbles.
-- The ids `kettle`, `server`, `plane`, `snail` and `rocket` are now
-  reserved. A custom runner folder with one of these names shows an error
-  in Settings; rename the folder and import it again.
-
 ## 0.8.1 - 2026-10-31
 
 BenchBar for Windows is now a beta. The tray takes a new PC from no WSL to
@@ -61,6 +48,16 @@ does. Report a Bug sends a redacted report in about a minute.
   says what a sign in does) and **Turn Off Open as**. The menu lists
   Switch Back, pinned users with labels, Administrator and **Find User…**; the
   row then reads `as NAME`. Nothing shows until a site is opted in.
+- Five more built in runners for the menu bar and the Windows tray:
+  Kettle, Server rack, Paper plane, Snail and Rocket. Pick one under
+  Runner in the Menu Bar pane on the Mac, or in the tray's Runner menu
+  and Settings on Windows. Each one has its own way to sleep, start, run,
+  crash and ask: the kettle boils and pops its lid, the rack blinks and
+  jams a drive, the plane flies and nose dives, the snail hurries and
+  rolls in its shell, the rocket flies and tumbles.
+- The ids `kettle`, `server`, `plane`, `snail` and `rocket` are now
+  reserved. A custom runner folder with one of these names shows an error
+  in Settings; rename the folder and import it again.
 
 ### Windows
 
