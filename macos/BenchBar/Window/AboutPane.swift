@@ -156,13 +156,14 @@ struct AboutPane: View {
                 LabeledContent("BenchBar") {
                     Text("\(BenchBarLinks.appVersion) (build \(BenchBarLinks.appBuild))").textSelection(.enabled)
                 }
+                // the path under the row, not inside it: a long path pushed the
+                // value far below its label
                 LabeledContent("Command line tool") {
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text(model.cliVersion ?? (cliPath == nil ? "not found" : "…")).textSelection(.enabled)
-                        if let cliPath {
-                            Text(cliPath).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
-                        }
-                    }
+                    Text(model.cliVersion ?? (cliPath == nil ? "not found" : "…")).textSelection(.enabled)
+                }
+                if let cliPath {
+                    Text(cliPath).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                        .lineLimit(1).truncationMode(.middle).help(cliPath)
                 }
                 if let command = model.cliUpdate {
                     cliBehindRow(command)
