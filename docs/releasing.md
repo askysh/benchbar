@@ -42,7 +42,10 @@ On `next-release`, then into `main`:
      and use them in `windows.md`.
    - The BenchBar window panes: `window-general.png`, and a new
      `window-about.png`, since General and About moved back into the
-     window in 0.8.1.
+     window in 0.8.1. `DocsSnapshotTests` renders the window panes, the
+     Find User sheet and three wizard pages in a real key window (the
+     window panes are captured as the window server draws them, so the
+     sidebar and the selection look as in the app).
 4. Merge those changes into `next-release`, then open a pull request
    from `next-release` into `main` and **squash merge** it (`main` keeps a
    linear history: one commit per release).

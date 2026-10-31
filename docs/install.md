@@ -332,6 +332,8 @@ Open a new Terminal tab, or run `source ~/.zshrc`, so `benchbar` and the
 [Quick start](quick-start.md), or open BenchBar: on a Mac with no bench
 its window starts the [first run wizard](app.md#a-new-bench-from-the-app).
 
+![The first run wizard's Welcome page](images/wizard-welcome.png)
+
 ## Uninstall
 
 Uninstalling removes BenchBar, not your benches: every bench, site,

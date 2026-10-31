@@ -19,6 +19,8 @@ keeping a program running in the background.
 Open BenchBar. On a Mac with no bench, its window opens on a short
 wizard that does the steps below for you:
 
+![The first run wizard's Welcome page](images/wizard-welcome.png)
+
 1. **Check Your Mac** lists what is missing, with a button for the
    Command Line Tools and the Homebrew command to copy.
 2. **New Bench** asks for the folder, the profile (v15-lts, v16-lts or a
@@ -28,6 +30,8 @@ wizard that does the steps below for you:
    in its own dialog for the wkhtmltopdf package and the `/etc/hosts`
    line; BenchBar never sees it.
 4. **Done** opens the site and offers a four step walkthrough of the app.
+
+![The wizard's Review page, before anything changes](images/wizard-review.png)
 
 With a bench you already have, choose **I Already Have a Bench**: Find
 Benches finds it in a folder and sets up its service after showing the

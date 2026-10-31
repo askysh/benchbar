@@ -17,12 +17,15 @@ final class LaunchAtLogin {
 
     private(set) var status: Status = .disabled
     private(set) var lastError: String?
+    /// Tests and the documentation snapshots pin a status; `refresh` keeps it.
+    var pinnedStatus: Status?
 
     init() { refresh() }
 
     var isOn: Bool { status == .enabled || status == .requiresApproval }
 
     func refresh() {
+        if let pinnedStatus { status = pinnedStatus; return }
         status = Self.map(SMAppService.mainApp.status)
     }
 

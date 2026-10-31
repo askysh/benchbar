@@ -93,6 +93,8 @@ lists:
   in the menu, with a label of your own (for example `NE`). A site keeps nine
   pins. Pins of a bench or site that no longer exists are forgotten.
 
+![The Find User sheet: a search field and the site's users, each with a pin and an Open button](images/open-as-find-user.png)
+
 After a switch the site's row reads `as {name}`: the pin's label, else the
 user's full name, else the user id. That is BenchBar's own record of its last
 switch, not what the browser shows now.
@@ -177,7 +179,7 @@ confirmation, the run with its progress at the bottom, and the outcome on
 top. Return confirms and Esc cancels; a sheet cannot be closed while its
 change runs. Drop Site is never on Return: it needs the site name typed.
 
-![The BenchBar window: a bench's overview with Start, Stop, Restart, its site and ports, and the scheduler switch](images/window-overview.png)
+![The BenchBar window: a bench's overview with Start, Stop, Restart, Open as and Open Site, its resources, site and ports](images/window-overview.png)
 
 ![A bench's apps: branch, repository, the sites that have each app, the focus menu, Check Remotes, Install and Update](images/window-apps.png)
 
@@ -201,6 +203,8 @@ release is out, and Copy Update Command and Release Notes in its ⋯
 menu), links to the documentation, the release notes and the source,
 **Report a Bug…**, and the `claude mcp add` command for coding agents.
 Report a Bug and Check for Updates are in the Help and app menus too.
+
+![About BenchBar: the app and command line tool versions, the update check, links, Report a Bug and the MCP command](images/window-about.png)
 
 In the sidebar, below the benches:
 
@@ -280,6 +284,9 @@ back.
 1. **Welcome**: **Set Up a New Bench**, or **I Already Have a Bench**,
    which opens Find Benches to add it and set up its service. **Just the
    Command Line Tool** shows the Homebrew and installer commands to copy.
+
+   ![The Welcome page with Set Up a New Bench, I Already Have a Bench and Just the Command Line Tool](images/wizard-welcome.png)
+
 2. **Check Your Mac**: what `benchbar doctor --prerequisites` checks:
    Apple Silicon, macOS 14 or later, the Xcode Command Line Tools,
    Homebrew, free disk space, a bench folder outside iCloud Drive,
@@ -287,6 +294,9 @@ back.
    ports are free. **Install Command Line Tools** opens Apple's
    installer, and the row checks again on its own. Homebrew is installed
    with the command shown, in Terminal; then **Check Again**.
+
+   ![Check Your Mac: every prerequisite with a green check](images/wizard-check.png)
+
 3. **New Bench**: the folder (`~/frappe-bench` by default), the profile
    (v15-lts, v16-lts or a team profile, with the Python, Node and
    MariaDB each brings), the app bundle, the site name and the
@@ -296,6 +306,9 @@ back.
 4. **Review**: the plan from `benchbar install --dry-run`. The two steps
    that need your password, the patched wkhtmltopdf package and the
    `/etc/hosts` line, say **Asks for your password**.
+
+   ![Review: the folder, site, profile and apps, and the steps that will run](images/wizard-review.png)
+
 5. **Install**: each step and its own steps as they run, with their
    times and the command output under **Show Output**. macOS asks for
    your password in its own dialog, once for each of the two steps;
