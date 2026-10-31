@@ -88,3 +88,8 @@ func (mutexLocks) TryLock(name string) (func(), bool, error) {
 	held[name] = true
 	return func() { heldMu.Lock(); delete(held, name); heldMu.Unlock() }, true, nil
 }
+
+// systemDir is the Windows system folder; there is none here.
+func systemDir() string { return "" }
+
+func finalPathOf(f *os.File) (string, error) { return f.Name(), nil }

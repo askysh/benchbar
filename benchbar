@@ -45,6 +45,9 @@ SCRIPT_DIR="$(fl_resolve_self)"
 # FL_INSTALL_KIND and FL_SELF, the stable path generated files record
 # shellcheck source=lib/frappe-local/install-kind.sh
 . "${SCRIPT_DIR}/lib/frappe-local/install-kind.sh"
+# BENCHBAR_SUDO_PASSWORD leaves the environment here, before any command runs
+# shellcheck source=lib/frappe-local/sudo-env.sh
+. "${SCRIPT_DIR}/lib/frappe-local/sudo-env.sh"
 
 # shellcheck source=lib/frappe-local/ui.sh
 . "${SCRIPT_DIR}/lib/frappe-local/ui.sh"
@@ -346,6 +349,7 @@ Options
 
 Environment:
   BENCHBAR_SUDO=gui   root steps (wkhtmltopdf, /etc/hosts) ask in a macOS password dialog, not sudo
+  BENCHBAR_SUDO=env   Linux: sudo steps use the password in BENCHBAR_SUDO_PASSWORD, no terminal needed
 
 Shell helpers (written to your shell rc by install or repair):
   benchup benchdown benchrestart benchstatus benchlogs benchfg benchwatch benchdoctor benchcd
@@ -841,7 +845,7 @@ cmd_install() {
   else
     phase_code=$?
   fi
-  if fl_is_linux; then fl_sudo_drop; fi
+  if fl_is_linux; then fl_sudo_drop; fl_sudo_env_forget; fi
   if [[ "$phase_code" == "0" ]]; then
     fl_step_end "done"
   else
@@ -1111,6 +1115,7 @@ cmd_repair() {
     # --yes it is answered no
     [[ "$FL_ASSUME_YES" == "1" ]] || exec 0</dev/null
   fi
+  fl_sudo_env_preflight
   fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
   fl_require_bench
   fl_require_plain_bench
@@ -1250,8 +1255,16 @@ fl_noninteractive_preflight() {
       if [[ -n "$FL_TEAM_PROFILE" && -n "$FL_TEAM_SITE" && "$FL_SITE_SOURCE" == "default" ]]; then FL_SITE="$FL_TEAM_SITE"; fi
       [[ "$FL_ASSUME_YES" == "1" ]] || fl_need "--yes" "to confirm the install plan"
       [[ -d "${FL_BENCH_DIR}/sites/${FL_SITE}" || -n "${ADMIN_PASSWORD:-}" ]] || fl_need ADMIN_PASSWORD "the Administrator password of the new site ${FL_SITE}"
-      # json runs skip a root step that would ask; a plain run would wait for the password
-      if [[ "$OPT_JSON" != "1" ]] && ! fl_sudo_gui; then
+      # json runs skip a root step that would ask; a plain run would wait for the password.
+      # BENCHBAR_SUDO=env has the password (checked up front, fl_sudo_env_preflight) or it is named
+      if fl_sudo_env_has_password; then
+        :
+      elif fl_sudo_env; then
+        sudo_why="$(fl_install_sudo_reasons)"
+        if [[ -n "$sudo_why" ]] && ! { command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; }; then
+          fl_need BENCHBAR_SUDO_PASSWORD "BENCHBAR_SUDO=env needs the sudo password for: ${sudo_why//$'\n'/; }"
+        fi
+      elif [[ "$OPT_JSON" != "1" ]] && ! fl_sudo_gui; then
         sudo_why="$(fl_install_sudo_reasons)"
         if [[ -n "$sudo_why" ]] && ! { command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; }; then
           fl_need "sudo" "it would ask for a password: ${sudo_why//$'\n'/; }; cache the credential first, or pass --json to skip those steps"
@@ -1341,6 +1354,12 @@ case "$COMMAND" in
     fl_lock_acquire "${FL_STATE_DIR}/lock"
     ;;
   *) ;;
+esac
+
+# BENCHBAR_SUDO=env: the sudo password is checked once, before anything changes
+# (repair does it in cmd_repair, once its events have started)
+case "$COMMAND ${ARGS[0]:-}" in
+  "install "*|"adopt "*|"service "*|"site add"|"ports apply") fl_sudo_env_preflight ;;
 esac
 
 case "$COMMAND" in

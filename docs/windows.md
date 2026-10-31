@@ -19,17 +19,69 @@ blocks them and SmartScreen warns on first start (see
 
 ## What you need
 
-- Windows 11 (or Windows 10 22H2) with WSL 2 and a distro that runs
-  systemd. Ubuntu 24.04 is the tested one.
-- `benchbar` installed inside the distro, with a bench: see
-  [Install](install.md#linux).
-- `benchbar.exe` on your PATH (`benchbar.exe path install`) and the
-  distro recorded with `benchbar.exe adopt-distro`.
-- The keepalive task, so benches come back after a reboot without a
-  terminal: `benchbar.exe keepalive install`. The tray never keeps the
-  distro running on its own.
+- Windows 11 (or Windows 10 22H2) with virtualization on in the firmware.
 - For the tray: the .NET 10 Desktop Runtime
   (`winget install Microsoft.DotNet.DesktopRuntime.10`).
+
+Everything else the first run wizard sets up for you (see
+[First run](#first-run)): WSL 2, Ubuntu 24.04 with systemd, your Linux
+user, `benchbar` inside the distro, linger, the keepalive task and
+`benchbar.exe` on your PATH. To do it by hand instead, see
+[Set up from PowerShell](#set-up-from-powershell).
+
+## First run
+
+When BenchBar Tray starts and finds no bench, it opens the BenchBar
+window at Welcome: **Set Up a New Bench**, **I Already Have a Bench** or
+**Just the Command Line Tool**. **+** > New Bench opens it again later.
+
+1. **Check Your PC** lists every step with its state and a button to fix
+   it: Windows version, virtualization, WSL, a pending restart, WSL
+   version, the distro, the Linux user, systemd, the command line tool,
+   linger, keepalive, the WSL idle settings and PATH. **Set Up
+   Everything** runs the missing steps in order.
+2. Turning on WSL is the only step that needs administrator rights. It
+   has a shield on its button, and Windows asks for permission once. If
+   you say no, nothing changes and you can try again.
+3. When Windows needs a restart, **Restart Now** asks first, restarts in
+   15 seconds (`shutdown /a` cancels it) and opens the wizard where it
+   was when you sign in again.
+4. **Linux User**: the name and password of your user in Ubuntu. The
+   password is used to create the user and later for the `sudo` steps of
+   the install, and is never stored.
+5. **New Bench**: the folder (default `~/frappe-bench`), the site and the
+   Administrator password; **Review** shows the plan of
+   `benchbar install --dry-run`, with the steps that use sudo marked.
+6. **Install** streams every step. Stop, Retry and Open Log are there;
+   when MariaDB already has a root password BenchBar does not know, a
+   field asks for it.
+7. **Done**: Open Site, notifications, open at logon, and the
+   `claude mcp add benchbar -- benchbar.exe mcp` line to copy.
+
+For a distro whose user the wizard did not create, BenchBar asks for
+your Linux password right before the steps that use sudo.
+
+## Set up from PowerShell
+
+The wizard runs these, and you can too:
+
+```powershell
+benchbar.exe setup check --json            # every step, read only
+benchbar.exe setup check --json --probe    # also starts a stopped distro to check inside it
+benchbar.exe setup run distro_install --jsonl
+```
+
+`setup run` takes one action at a time: `wsl_enable` (asks Windows for
+permission), `wsl_update`, `distro_install`, `distro_user` (the password
+in `BENCHBAR_SETUP_PASSWORD`), `systemd`, `cli_install`, `linger`,
+`keepalive`, `wslconfig` and `path`. It prints JSON lines and ends with
+one `done` line (`exit`, `changed`, `reboot_required`, `cancelled`,
+`warnings`, `next_actions`). `setup` never runs `wsl --shutdown` or
+`--unregister`; `systemd` and `distro_user` stop only that one distro.
+
+The older commands still work: `benchbar.exe path install`,
+`benchbar.exe adopt-distro`, `benchbar.exe keepalive install` and
+`benchbar.exe wslconfig --apply --yes`.
 
 ## Install
 
@@ -136,10 +188,26 @@ Esc closes the flyout, Enter on a row opens the site.
 
 ![The tray flyout in dark mode](images/windows-flyout-dark.png)
 
-Right click opens the menu: Open BenchBar at logon (a shortcut in your
-Startup folder, no admin needed), Appearance (System, Light or Dark),
-Runner (the built in Bench and Coffee cup, and your own), Check for
-Updates, Help, Report a Bug and Quit.
+Right click opens the menu: Open BenchBar, Settings, Open BenchBar at
+logon (a shortcut in your Startup folder, no admin needed), Notifications,
+Appearance (System, Light or Dark), Runner (the built in Bench and Coffee
+cup, and your own), Check for Updates, Help, Report a Bug and Quit.
+
+### The BenchBar window
+
+Open BenchBar (the tray menu, the button at the top of the flyout, or a
+double click on the tray icon) opens the window. The sidebar lists your
+benches with their sites, a **+** menu (New Bench, I Already Have a
+Bench), and Settings and About at the foot. A bench shows its state and
+address, Start or Stop, Restart, Open Site, Logs, Doctor and Open in
+editor. A banner says when a newer release is out. Ctrl+N starts a new
+bench, Ctrl+, opens Settings and F5 checks again.
+
+Settings: open at logon, notifications, check for updates, the distro
+(switching runs `benchbar.exe adopt-distro`), the editor (VS Code, Cursor
+or VS Code Insiders), the command line tool's path, and the tray's
+appearance and runner. About: the versions of the tray, `benchbar.exe`
+and the CLI inside the distro, Report a Bug and the MCP line.
 
 When a bench crashes, is paused by the crash guard or meets a port
 conflict, the tray shows one Windows notification with the bench and
@@ -175,10 +243,9 @@ loaded and the tray stays at about 43 MB.
 
 ## What the tray does not do
 
-- It does not create benches, sites or profiles, and has no BenchBar
-  window: use the CLI inside the distro.
-- It does not install or repair anything. Doctor shows the fix lines;
-  you run them.
+- It creates benches only from the first run wizard. Sites, apps, ports
+  and profiles are not in the window yet: use the CLI.
+- It does not repair a bench. Doctor shows the fix lines; you run them.
 - It does not update itself. Check for Updates opens the release page.
 - It never reads files inside the distro: every fact comes from
   `benchbar.exe`.

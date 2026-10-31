@@ -53,6 +53,13 @@ type System struct {
 	Tasks     TaskRunner
 	Procs     ProcessControl
 	Locks     Locker
+	Host      HostInfo
+
+	// ElevatedWSLPath is the system folder wsl.exe, the only one the elevated
+	// child runs.
+	ElevatedWSLPath func() (string, error)
+
+	Elevate Elevator
 
 	MemoryBytes func() (uint64, error)
 	WSLPath     func() (string, error)

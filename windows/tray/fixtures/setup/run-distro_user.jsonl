@@ -1,0 +1,2 @@
+{"event":"step","id":"distro_user","status":"running","message":"Creating the Linux user"}
+{"event":"done","exit":0,"changed":true,"reboot_required":false,"cancelled":false,"warnings":[],"next_actions":["systemd"]}

@@ -17,7 +17,14 @@ const probeScript = `PATH="$HOME/.local/bin:$PATH"; u=$(id -un); ` +
 	`printf 'benchbar=%s\n' "$(command -v "$0" 2>/dev/null)"; ` +
 	`printf 'linger=%s\n' "$(loginctl show-user "$u" -p Linger --value 2>/dev/null)"`
 
+// setupProbeScript is probeScript plus the user id and the CLI version, for
+// setup check. Nothing in it writes.
+const setupProbeScript = probeScript + `; printf 'uid=%s\n' "$(id -u)"; ` +
+	`printf 'cliver=%s\n' "$(command -v "$0" >/dev/null 2>&1 && "$0" --version 2>/dev/null | head -n 1)"`
+
 type probeResult struct {
+	uid     string
+	cliVer  string
 	wslConf string
 	pid1    string
 	user    string
@@ -37,6 +44,10 @@ func parseProbe(out string) probeResult {
 			if b, err := base64.StdEncoding.DecodeString(strings.TrimSpace(v)); err == nil {
 				r.wslConf = string(b)
 			}
+		case "uid":
+			r.uid = strings.TrimSpace(v)
+		case "cliver":
+			r.cliVer = strings.TrimSpace(v)
 		case "pid1":
 			r.pid1 = strings.TrimSpace(v)
 		case "user":
@@ -51,7 +62,11 @@ func parseProbe(out string) probeResult {
 }
 
 func runProbe(sys *System, distro, cli string) (probeResult, error) {
-	args := []string{"-d", distro, "--cd", "~", "--exec", "/bin/sh", "-c", probeScript, cli}
+	return runProbeScript(sys, distro, cli, probeScript)
+}
+
+func runProbeScript(sys *System, distro, cli, script string) (probeResult, error) {
+	args := []string{"-d", distro, "--cd", "~", "--exec", "/bin/sh", "-c", script, cli}
 	cmd, err := wslCommand(sys, args...)
 	if err != nil {
 		return probeResult{}, err

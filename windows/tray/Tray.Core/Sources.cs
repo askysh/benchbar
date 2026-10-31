@@ -369,6 +369,9 @@ public static class BenchSourceFactory
     public static IBenchSource FromEnvironment() =>
         Fixtures is { } fixtures ? new FixtureBenchSource(fixtures) : new ShimBenchSource();
 
+    public static ISetupService SetupFromEnvironment() =>
+        Fixtures is { } fixtures ? new FixtureSetupService(fixtures) : new ShimSetupService();
+
     /// <summary>The distro probe for the real source; null with fixtures, which have no distro.</summary>
     public static IDistroProbe? DistroProbeFromEnvironment() => Fixtures is null ? new WslDistroProbe() : null;
 }

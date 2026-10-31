@@ -51,7 +51,11 @@ internal static class VsCode
     public const string HelpUrl = "https://code.visualstudio.com/docs/remote/wsl";
 
     /// <summary><c>code.cmd</c> on PATH, else the per user install; null when neither exists.</summary>
-    public static string? Find(string? pathVariable = null, string? localAppData = null, Func<string, bool>? exists = null)
+    public static string? Find(string? pathVariable = null, string? localAppData = null, Func<string, bool>? exists = null) =>
+        FindEditor(EditorKind.DefaultId, pathVariable, localAppData, exists);
+
+    /// <summary>The launcher of the chosen editor (<c>code.cmd</c>, <c>cursor.cmd</c>, <c>code-insiders.cmd</c>) on PATH, else its per user install; null when neither exists.</summary>
+    public static string? FindEditor(string editorId, string? pathVariable = null, string? localAppData = null, Func<string, bool>? exists = null)
     {
         exists ??= File.Exists;
         pathVariable ??= Environment.GetEnvironmentVariable("PATH");
@@ -59,12 +63,12 @@ internal static class VsCode
         var candidates = new List<string>();
         foreach (var dir in (pathVariable ?? "").Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
             candidates.Add(dir.Trim().Trim('"'));
-        candidates.Add(Path.Combine(localAppData, "Programs", "Microsoft VS Code", "bin"));
+        candidates.Add(EditorKind.UserBinFolder(editorId, localAppData));
         foreach (var dir in candidates)
         {
             try
             {
-                var file = Path.Combine(dir, "code.cmd");
+                var file = Path.Combine(dir, EditorKind.CommandFile(editorId));
                 if (exists(file)) return file;
             }
             catch (ArgumentException) { }
@@ -186,6 +190,10 @@ internal static class TextFormats
     /// <summary>FAIL first, then WARN, OK, anything else; the CLI's order inside a level.</summary>
     public static IReadOnlyList<DoctorCheck> ByLevel(DoctorReport report) =>
         report.Checks.OrderBy(c => c.Level switch { CheckLevel.Fail => 0, CheckLevel.Warn => 1, CheckLevel.Ok => 2, _ => 3 }).ToList();
+
+    /// <summary>What Report a Bug says while the distro is stopped: the zip is written inside it, and writing it would boot it.</summary>
+    public static string ReportNeedsDistro(string distro) =>
+        $"{distro} is stopped, and the report is written inside it. Click Start in the BenchBar window, then try again.";
 
     /// <summary>A path inside the distro as Windows can open it: <c>\\wsl.localhost\DISTRO\home\a\x.zip</c>.</summary>
     public static string WslToWindows(string distro, string linuxPath) =>

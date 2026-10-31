@@ -7,14 +7,18 @@ namespace BenchBar.Tray;
 /// "Open BenchBar at logon": a shortcut named <c>BenchBar Tray.lnk</c> in the Startup folder that points at this exe.
 /// The name is fixed: the shim's doctor looks for exactly this file. On means the file exists and points at this exe.
 /// </summary>
-internal sealed class StartupShortcut(string? folder = null, string? exePath = null)
+internal sealed class StartupShortcut(string? folder = null, string? exePath = null, string? fileName = null, string arguments = "")
 {
     public const string FileName = "BenchBar Tray.lnk";
+
+    /// <summary>The one shot flag that opens the setup wizard again after the next sign in: the same exe, <c>--resume-setup</c>, removed by the tray when it starts with it.</summary>
+    public const string ResumeFileName = "BenchBar Setup Resume.lnk";
+    public const string ResumeArgument = "--resume-setup";
 
     private readonly string _folder = folder ?? Environment.GetFolderPath(Environment.SpecialFolder.Startup);
     private readonly string _exe = exePath ?? Environment.ProcessPath ?? "";
 
-    public string LinkPath => Path.Combine(_folder, FileName);
+    public string LinkPath => Path.Combine(_folder, fileName ?? FileName);
 
     public bool IsEnabled()
     {
@@ -33,7 +37,7 @@ internal sealed class StartupShortcut(string? folder = null, string? exePath = n
     public void Enable()
     {
         Directory.CreateDirectory(_folder);
-        ShellLink.Write(LinkPath, _exe, Path.GetDirectoryName(_exe) ?? "", "BenchBar");
+        ShellLink.Write(LinkPath, _exe, Path.GetDirectoryName(_exe) ?? "", "BenchBar", arguments);
     }
 
     public void Disable()
@@ -45,7 +49,7 @@ internal sealed class StartupShortcut(string? folder = null, string? exePath = n
 /// <summary>Just enough of IShellLinkW and IPersistFile to write and read one shortcut.</summary>
 internal static class ShellLink
 {
-    public static void Write(string linkPath, string target, string workingDirectory, string description)
+    public static void Write(string linkPath, string target, string workingDirectory, string description, string arguments = "")
     {
         var link = (IShellLinkW)new ShellLinkObject();
         try
@@ -53,6 +57,7 @@ internal static class ShellLink
             link.SetPath(target);
             link.SetWorkingDirectory(workingDirectory);
             link.SetDescription(description);
+            if (arguments.Length > 0) link.SetArguments(arguments);
             link.SetIconLocation(target, 0);
             ((IPersistFile)link).Save(linkPath, true);
         }

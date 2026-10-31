@@ -66,7 +66,8 @@ command that read only prints none of them.
 | `warnings[]` | the run's `[WARN]` lines, as text |
 | `next_actions[]` | `{"command", "why"}`: the fix lines and next steps the text output prints |
 | `state_after` | the bench's `status --json` object after the run (no per site ping), `null` when there is no bench, in a dry run, or when the run touched several benches (`ports apply`). A stream's is read after the CLI's locks are released; a one document command's and `pull`'s while its lock is still held (a read, so nothing waits on it) |
-| `missing[]` | only on a refusal of the non interactive mode: the inputs the command lacked (`ADMIN_PASSWORD`, `--yes`, `sudo`, ...) |
+| `missing[]` | only on a refusal of the non interactive mode: the inputs the command lacked (`ADMIN_PASSWORD`, `--yes`, `sudo`, `BENCHBAR_SUDO_PASSWORD`, ...) |
+| `error_id` | only on a failure that has a stable id, for programs to match instead of the text. So far: `sudo_password_wrong` (the password in `BENCHBAR_SUDO_PASSWORD` was refused, before any change) |
 
 Which shape a command prints:
 
@@ -570,6 +571,23 @@ sites to /etc/hosts`); if it is cancelled, each bench's setup prints
 `benchbar site hosts --bench-dir PATH` as its manual step and the run goes
 on. `site drop` still needs a terminal for the line it removes.
 
+### `BENCHBAR_SUDO=env` (Linux)
+
+On Linux, a program without a terminal (the Windows tray, an agent)
+passes the user's sudo password in `BENCHBAR_SUDO_PASSWORD` with
+`BENCHBAR_SUDO=env`. The CLI takes it out of its environment before
+anything else runs, checks it once with `sudo -k` and `sudo -S -v`
+before any change, and then runs its sudo steps without a prompt. A
+wrong password ends the run with `exit` 1 and `error_id`
+`sudo_password_wrong`. The password never goes into arguments, `bash -x`
+output, the run log or a child process: in `install` only phase 00 gets
+it, on a file descriptor, and it is forgotten after that phase. Without a
+password and without a terminal, `install --json` with
+`BENCHBAR_NONINTERACTIVE=1` names `BENCHBAR_SUDO_PASSWORD` in `missing`;
+other commands skip their sudo step with a warning. The commands that
+read it: `install`, `adopt`, `repair`, `service`, `site add` and
+`ports apply`. On macOS it is ignored.
+
 ## `benchbar adopt PATH --json`
 
 Added in 0.8, the same stream as `install --json`. Without `--yes` (or
@@ -610,10 +628,19 @@ Every object has the fields of a doctor check (`id`, `label`, `level`,
 `message`, `fix_command`), and every check that is not `ok` has a
 `fix_command`: the command to run, or a plain instruction where there is
 none ("BenchBar needs an Apple Silicon Mac", "update macOS in System
-Settings, Software Update", "free space on the volume of ..."). On Linux
-only `disk_free`, `bench_folder` and `default_ports` are reported: the
-others are Mac only and would be `ok` for something that cannot exist
-there. Exit 1 when one is `fail`. `benchbar doctor --prerequisites` prints
+Settings, Software Update", "free space on the volume of ...").
+
+On Linux (Ubuntu 24.04, WSL too) the list is its own, in this order:
+`linux_distro`, `architecture`, `regular_user`, `sudo` (installed, and
+the user is in the `sudo` or `admin` group; the check never runs sudo),
+`apt` (a mirror answers; unreachable is a `warn`), `systemd` (PID 1;
+carries `enabled`), `linger` (carries `enabled`), `memory` (`warn` below
+3500 MB, `fail` below 1800 MB; carries `total_mb`), `disk_free`,
+`bench_folder`, `mariadb_password` (`warn` with `needs_password` when a
+running MariaDB has a root password benchbar does not know) and
+`default_ports`.
+
+Exit 1 when one is `fail`. `benchbar doctor --prerequisites` prints
 the same list for a person. A plain `doctor` does not print it (its WARN
 and FAIL lines promise a fix line and its exit code the state of the
 bench); `doctor --json` of a bench carries the same array as

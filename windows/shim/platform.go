@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"os/user"
@@ -42,6 +44,8 @@ func newSystem() *System {
 	sys.Distros, sys.Paths, sys.Broadcast = osServices()
 	sys.Procs = procControl{}
 	sys.Locks = mutexLocks{}
+	sys.Host, sys.Elevate = osHost()
+	sys.ElevatedWSLPath = systemWSLPath
 	sys.StdinIsTerminal = isTerminal(os.Stdin)
 	return sys
 }
@@ -63,8 +67,8 @@ func sleepContext(ctx context.Context, d time.Duration) {
 // defaultWSLPath prefers System32, so a wsl.exe earlier on PATH (an old
 // copy, a wrapper) is not picked by accident.
 func defaultWSLPath() (string, error) {
-	if root := os.Getenv("SystemRoot"); root != "" {
-		p := filepath.Join(root, "System32", "wsl.exe")
+	if dir := systemDir(); dir != "" {
+		p := filepath.Join(dir, "wsl.exe")
 		if fileExists(p) {
 			return p, nil
 		}
@@ -76,8 +80,8 @@ type schtasksRunner struct{}
 
 func (schtasksRunner) Schtasks(args ...string) (string, int, error) {
 	path := "schtasks.exe"
-	if root := os.Getenv("SystemRoot"); root != "" {
-		if p := filepath.Join(root, "System32", "schtasks.exe"); fileExists(p) {
+	if dir := systemDir(); dir != "" {
+		if p := filepath.Join(dir, "schtasks.exe"); fileExists(p) {
 			path = p
 		}
 	}
@@ -98,4 +102,17 @@ func listDir(path string) []string {
 		names = append(names, e.Name())
 	}
 	return names
+}
+
+// systemWSLPath is System32\wsl.exe and nothing found through PATH.
+func systemWSLPath() (string, error) {
+	dir := systemDir()
+	if dir == "" {
+		return "", errors.New("the system folder is unknown")
+	}
+	p := filepath.Join(dir, "wsl.exe")
+	if !fileExists(p) {
+		return "", fmt.Errorf("%s does not exist", p)
+	}
+	return p, nil
 }

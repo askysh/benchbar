@@ -25,6 +25,7 @@ internal sealed class FlyoutActions
     public Action StartDistro { get; set; } = () => { };
     public Action<string> CopyText { get; set; } = _ => { };
     public Action<string> OpenUrl { get; set; } = _ => { };
+    public Action OpenMain { get; set; } = () => { };
 }
 
 /// <summary>What the flyout shows now.</summary>
@@ -82,6 +83,11 @@ internal sealed class FlyoutView : UserControl
         DockPanel.SetDock(_upText, Dock.Right);
         header.Children.Add(title);
         header.Children.Add(_upText);
+        var openMain = TextButton("Open BenchBar", () => _actions.OpenMain());
+        openMain.Margin = new Thickness(0, 0, 10, 0);
+        Ui.Name(openMain, "Open the BenchBar window");
+        DockPanel.SetDock(openMain, Dock.Right);
+        header.Children.Add(openMain);
 
         var root = new DockPanel();
         DockPanel.SetDock(header, Dock.Top);

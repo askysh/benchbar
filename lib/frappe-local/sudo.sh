@@ -22,6 +22,8 @@
 
 # BENCHBAR_SUDO=gui (the BenchBar app sets it): the two root steps run
 # through osascript's administrator dialog instead of sudo, see fl_root_run.
+# BENCHBAR_SUDO=env (Linux, the Windows tray sets it) with the password in
+# BENCHBAR_SUDO_PASSWORD: see "BENCHBAR_SUDO=env" at the end of this file.
 # Any other value is the terminal path. FL_OSASCRIPT is for the tests.
 FL_OSASCRIPT="${FL_OSASCRIPT:-/usr/bin/osascript}"
 # macOS only: Linux has no osascript, and BENCHBAR_SUDO is ignored there
@@ -44,6 +46,8 @@ fl_sudo_begin() {
   [[ "${FL_DRY_RUN:-0}" == "1" ]] && { fl_info "dry-run: would ask for your password once (sudo) to: $*"; return 0; }
   # a macOS dialog asks, once per step, when the step runs (fl_root_run)
   fl_sudo_gui && return 0
+  # no terminal, the password in the environment (Linux)
+  if fl_sudo_env_has_password; then fl_sudo_env_begin "$@"; return $?; fi
   [[ "$FL_SUDO_SESSION" == "1" ]] && return 0
   # install --json and adopt --json without the dialogs, and any run under
   # BENCHBAR_NONINTERACTIVE=1 (sudo -v would read the terminal and wait):
@@ -61,7 +65,11 @@ fl_sudo_begin() {
     fi
     FL_SUDO_REFUSED=1
     export FL_SUDO_REFUSED
-    fl_warn "sudo needs a password and this run cannot ask for one; the steps that need it are skipped: $*"
+    if fl_sudo_env; then
+      fl_warn "sudo needs a password, BENCHBAR_SUDO=env has none (set BENCHBAR_SUDO_PASSWORD) and this run cannot ask for one; the steps that need it are skipped: $*"
+    else
+      fl_warn "sudo needs a password and this run cannot ask for one; the steps that need it are skipped: $*"
+    fi
     return 1
   fi
   if [[ "$FL_SUDO_REFUSED" == "1" ]]; then
@@ -172,4 +180,127 @@ fl_root_run() {
   esac
   FL_ROOT_FAILED="${FL_ROOT_FAILED} ${key// /_}"
   return 1
+}
+
+# ---------------------------------------------------------------- BENCHBAR_SUDO=env
+#
+# For a program that cannot type into a terminal (the Windows tray starting
+# benchbar through wsl.exe). The caller sets BENCHBAR_SUDO=env and passes the
+# user's password in BENCHBAR_SUDO_PASSWORD. sudo-env.sh took it out of the
+# environment at startup; it lives only in FL_SUDO_PW, a shell variable that
+# is never exported, so no child process and no xtrace line ever has it.
+#
+# "sudo" becomes a shell function for this process (and its subshells, not
+# for programs it starts). Before each call it tries "sudo -n true"; when
+# that fails it validates the password with "sudo -S -p '' -v", the password
+# on stdin through a process substitution running the printf builtin (never
+# argv, never a file),
+# and then runs the real sudo from the same shell, so a ticket that sudo ties
+# to the parent process (no terminal) is found. The command keeps its own
+# stdin. The run log gets "run:" lines of commands and none carries the
+# password.
+#
+# Linux only: on a Mac BENCHBAR_SUDO=env is ignored.
+fl_sudo_env() { [[ "${BENCHBAR_SUDO:-}" == "env" && "${FL_PLATFORM:-}" == "linux" ]]; }
+# (the length test, not -n "$FL_SUDO_PW": an xtrace line would print the value)
+fl_sudo_env_has_password() { fl_sudo_env && [[ -n "${FL_SUDO_PW:+x}" ]]; }
+
+# fl__sudo_env_feed: validate the password with the real sudo. xtrace is off
+# while the value is expanded.
+fl__sudo_env_feed() {
+  local xt=0 code=0
+  case "$-" in *x*) xt=1; { set +x; } 2>/dev/null ;; esac
+  # not "printf | sudo": every pipeline element is a forked subshell, and bash
+  # 3.2 runs the command in a child of it, so the parent of sudo would be that
+  # subshell and not this shell, and the ticket (tied to the parent pid without
+  # a terminal) would be lost for the call that follows
+  "$FL_SUDO_BIN" -S -p '' -v 0< <(printf '%s\n' "$FL_SUDO_PW") >/dev/null 2>&1 || code=$?
+  if [[ "$xt" == "1" ]]; then set -x; fi
+  return "$code"
+}
+
+# fl__sudo_env_call ARGS...: what the sudo function runs
+fl__sudo_env_call() {
+  case "${1:-}" in
+    -k|-K|-V|--version|-h|--help) "$FL_SUDO_BIN" "$@"; return $? ;;
+  esac
+  if ! "$FL_SUDO_BIN" -n true 2>/dev/null; then
+    fl__sudo_env_feed || { printf 'sudo: the password from BENCHBAR_SUDO_PASSWORD was not accepted\n' >&2; return 1; }
+  fi
+  # never the last command: bash may exec a last command in place of a
+  # $(...) subshell, and sudo's parent would then not be the shell that
+  # holds the ticket
+  local code=0
+  "$FL_SUDO_BIN" "$@" || code=$?
+  return "$code"
+}
+
+# fl__sudo_env_wrap: define the sudo function. The real sudo is called by its
+# path (found before the function exists), not as "command sudo": bash 3.2 with
+# "set -e" ends the shell when "command CMD" fails, even in "if", "!" or "||".
+fl__sudo_env_wrap() {
+  FL_SUDO_BIN="$(type -P sudo 2>/dev/null || true)"
+  FL_SUDO_BIN="${FL_SUDO_BIN:-/usr/bin/sudo}"
+  # shellcheck disable=SC2329  # the callers run it as "sudo"
+  sudo() { fl__sudo_env_call "$@"; }
+}
+
+# fl_sudo_env_forget: the privileged steps are done. The password and the
+# function go, so nothing later in this process can use sudo either.
+fl_sudo_env_forget() {
+  FL_SUDO_PW=""
+  unset -f sudo 2>/dev/null || true
+}
+
+# fl_sudo_env_wrong: the password was refused. The id is stable (the done line).
+fl_sudo_env_wrong() {
+  FL_ERROR_ID="sudo_password_wrong"
+  fl_die "sudo did not accept the password in BENCHBAR_SUDO_PASSWORD. Nothing was changed." \
+    "Run the command again with the sudo password of $(id -un 2>/dev/null || printf 'this user')."
+}
+
+# fl_sudo_env_check: 0 when sudo accepts the password, 2 when there is no
+# sudo. "sudo -k" first, so a credential cached earlier cannot make a wrong
+# password pass.
+fl_sudo_env_check() {
+  command -v sudo >/dev/null 2>&1 || return 2
+  "$FL_SUDO_BIN" -k 2>/dev/null || true
+  fl__sudo_env_feed
+}
+
+# fl_sudo_env_begin REASON...: fl_sudo_begin with a password in env mode
+fl_sudo_env_begin() {
+  local code=0
+  fl__sudo_env_wrap
+  [[ "$FL_SUDO_SESSION" == "1" ]] && return 0
+  fl_sudo_env_check || code=$?
+  case "$code" in
+    0) ;;
+    2) fl_warn "sudo is not available"; return 1 ;;
+    *) fl_sudo_env_wrong ;;
+  esac
+  FL_SUDO_SESSION=1
+  export FL_SUDO_SESSION
+  fl_log "sudo session started (password from BENCHBAR_SUDO_PASSWORD)"
+  return 0
+}
+
+# fl_sudo_env_preflight: a command that may run sudo checks the password once
+# before anything changes, so a wrong one fails up front with its id
+fl_sudo_env_preflight() {
+  local code=0
+  fl_sudo_env_has_password || return 0
+  [[ "${FL_DRY_RUN:-0}" != "1" ]] || return 0
+  fl__sudo_env_wrap
+  fl_sudo_env_check || code=$?
+  case "$code" in
+    0|2) return 0 ;;
+    *) fl_sudo_env_wrong ;;
+  esac
+}
+
+# fl__sudo_env_emit: the password, one line, for a phase script's pipe
+fl__sudo_env_emit() {
+  { set +x; } 2>/dev/null
+  printf '%s\n' "$FL_SUDO_PW"
 }
