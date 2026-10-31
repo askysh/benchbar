@@ -49,6 +49,16 @@ final class WindowRouter {
     /// A benchbar://profile link: Team Profiles opens the sheet prefilled.
     var profileRequest: URLRouter.ProfileLink?
 
+    /// Where Cancel on the wizard's first page goes back to: the page that was
+    /// showing when the wizard opened (nil pane: the window's own first page).
+    var wizardReturn: (pane: WindowPane?, tab: BenchTab)?
+
+    /// The wizard, remembering the page it replaces.
+    func showWizard() {
+        if pane != .wizard { wizardReturn = (pane, benchTab) }
+        pane = .wizard
+    }
+
     func show(bench path: String, tab: BenchTab = .overview) {
         pane = .bench(path)
         benchTab = tab
@@ -256,7 +266,7 @@ struct SidebarFooter: View {
             Menu {
                 Button("New Bench…", systemImage: "plus.square") {
                     wizard.reopen()
-                    router.pane = .wizard
+                    router.showWizard()
                 }
                 Button("Adopt Existing Bench…", systemImage: "arrow.down.doc") {
                     router.adoptRequested = true

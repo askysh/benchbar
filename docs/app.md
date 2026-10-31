@@ -29,7 +29,7 @@ own: see [Custom runners](runners.md).
 
 Click the runner for the popover: bench, site, state and uptime, Start,
 Stop and Restart, the logs and the bench folder, the bench's sites with
-an Open button each, and a health summary: the first checks that need
+an Open button each (none for a site whose name has no `/etc/hosts` line, unless it ends in `.localhost`; the Sites tab in the window has Set Up…), and a health summary: the first checks that need
 attention with a Copy Fix button, Repair when something is repairable,
 and a button to check again. With more than one bench a picker at the
 top chooses which bench the popover shows.
@@ -133,7 +133,8 @@ The footer of the sidebar has three buttons:
 - The **i** opens **About BenchBar**.
 
 On a Mac with no bench the window opens on the [first run
-wizard](#a-new-bench-from-the-app).
+wizard](#a-new-bench-from-the-app). Every wizard page has **Report a Bug…**
+in its footer, and Cancel on the first page goes back to where you were.
 Every bench has a page:
 
 - **Overview**: start, stop and restart (one group of buttons), **Open

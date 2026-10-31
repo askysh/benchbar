@@ -37,8 +37,29 @@ nonisolated struct Runner: Sendable, Identifiable {
 }
 
 extension Runner {
+    /// Pixels per point `RunnerCanvas.render` draws at: the menu bar's 2, or
+    /// the preview's own size times the screen's backing scale, while
+    /// `builtIn(_:renderedAt:)` makes a runner. Read only inside that lock.
+    nonisolated(unsafe) static var renderScale: CGFloat = Runner.scale
+    private nonisolated static let renderLock = NSLock()
+
+    /// A built in runner drawn at `pixelsPerPoint` instead of 2: the preview
+    /// draws it at its own size, so it is sharp rather than the menu bar's
+    /// 36 px frames enlarged. Nil for a runner that is not a built in.
+    nonisolated static func builtIn(_ id: String, renderedAt pixelsPerPoint: CGFloat) -> Runner? {
+        guard builtIns.contains(where: { $0.id == id }) else { return nil }
+        renderLock.lock()
+        defer { renderLock.unlock() }
+        renderScale = pixelsPerPoint
+        defer { renderScale = Runner.scale }
+        return makeBuiltIns().first { $0.id == id }
+    }
+
     /// The runners that ship with the app, drawn in code.
-    nonisolated static let builtIns: [Runner] = [BenchRunnerArt.make(), CupRunnerArt.make()]
+    nonisolated static let builtIns: [Runner] = makeBuiltIns()
+
+    /// Draws every built in at the current `renderScale`.
+    nonisolated static func makeBuiltIns() -> [Runner] { [BenchRunnerArt.make(), CupRunnerArt.make()] }
 
     nonisolated static let defaultID = "bench"
 

@@ -7,6 +7,7 @@ nonisolated enum BenchBarLinks {
     static let docs = URL(string: "https://benchbar.akashmishra.com/")!
     static let install = docs.appending(path: "install/")
     static let appGuide = docs.appending(path: "app/")
+    static let runnersGuide = docs.appending(path: "runners/")
     static let troubleshooting = docs.appending(path: "troubleshooting/")
 
     static let repository = URL(string: "https://github.com/askysh/benchbar")!

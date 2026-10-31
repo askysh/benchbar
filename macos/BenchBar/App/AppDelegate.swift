@@ -92,9 +92,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         wizard.tour = { [weak self] in self?.mainWindow.router.walkthroughRequested = true }
         wizard.leave = { [weak self] in
-            // the first page's Esc: back to the first bench, when there is one
-            guard let self, let first = store.benches.first else { return }
-            mainWindow.show(.bench(first.path), tab: .overview)
+            // the first page's Cancel: back to the page that was showing, else the first bench
+            guard let self else { return }
+            let router = mainWindow.router
+            if let back = router.wizardReturn, let pane = back.pane, pane != .wizard {
+                var stillThere = true
+                if case .bench(let path) = pane { stillThere = store.benches.contains { $0.path == path } }
+                if stillThere {
+                    mainWindow.show(pane, tab: back.tab)
+                    return
+                }
+            }
+            if let first = store.benches.first { mainWindow.show(.bench(first.path), tab: .overview) }
         }
         wizard.finished = { [weak self] path in
             guard let self else { return }
@@ -108,7 +117,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mainWindow = MainWindowController { [unowned self] router in
             MainWindowView(store: store, router: router, workbench: workbench, about: about, discovery: discovery,
                            wizard: WizardView(run: wizard, settings: settings, library: library,
-                                              launchAtLogin: launchAtLogin, notifier: notifier),
+                                              launchAtLogin: launchAtLogin, notifier: notifier, bugReport: about.bugReport),
                            settings: settings,
                            makeSettings: { [unowned self] part in
                                SettingsView(settings: settings, store: store, library: library, launchAtLogin: launchAtLogin,
