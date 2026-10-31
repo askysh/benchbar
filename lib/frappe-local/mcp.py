@@ -1061,6 +1061,8 @@ in a terminal, before raw `bench` commands.
   password: benchbar keeps the MariaDB root password and uses it itself.
 - Every change with a plan: show the plan to the person, and apply it with its
   token only after their OK. A stale token means the bench changed: plan again.
+- Open as (`benchbar open --as USER`) is the person's: never turn it on with
+  `benchbar site open-as on` and never ask for an `open --as --print-url` link.
 - `benchbar_up` with `services_only: true` starts Redis alone (a restore or a
   migrate needs it); `benchbar_doctor` names the fix for anything broken.
 """

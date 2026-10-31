@@ -20,16 +20,19 @@ when it crashes, and shows a question mark when the CLI is missing.
 Reduce Motion shows still poses. With more than one bench it shows the
 worst state of all of them.
 
-![Every frame of the two built in runners](images/runners.png)
+![Every frame of the Bench and the Coffee cup](images/runners.png)
 
-BenchBar ships two runners, Bench and Coffee cup, and you can draw your
-own: see [Custom runners](runners.md).
+BenchBar ships seven runners: Bench, Coffee cup, Kettle, Server rack,
+Paper plane, Snail and Rocket. Pick one under Runner in the Menu Bar
+pane, or draw your own: see [Custom runners](runners.md).
+
+![Every frame of the Kettle, Server rack, Paper plane, Snail and Rocket](images/runners-more.png)
 
 ## The popover
 
 Click the runner for the popover: bench, site, state and uptime, Start,
 Stop and Restart, the logs and the bench folder, the bench's sites with
-an Open button each, and a health summary: the first checks that need
+an Open button each (none for a site whose name has no `/etc/hosts` line, unless it ends in `.localhost`; the Sites tab in the window has Set Up…), and a health summary: the first checks that need
 attention with a Copy Fix button, Repair when something is repairable,
 and a button to check again. With more than one bench a picker at the
 top chooses which bench the popover shows.
@@ -48,6 +51,65 @@ top chooses which bench the popover shows.
 | ⌘F | Open the bench folder |
 | ⌘K | Health in the BenchBar window |
 | ⌘M | The BenchBar window |
+
+## Open as a user
+
+Open as opens a site in your browser signed in as another user, with no
+password, to check what a role sees. It is off for every site until you turn
+it on, and the app shows nothing else of it until then. Under the hood it runs
+[`benchbar open --as`](reference/cli/other.md#open).
+
+**Turn it on** in the BenchBar window: the bench's Sites tab, the `...` menu
+of the site, **Allow Open as…**. An alert says what it does: you can sign in as
+any user of the site without a password, and each sign in runs the apps'
+`on_login` and `on_session_creation` hooks as a real login does (`last_login`,
+an Activity Log entry, a mail to System Managers for Administrator, an ERPNext
+Customer or Supplier for a Website User) and may end that user's oldest
+session. Use it on development sites only. **Allow Open as** records
+the choice in benchbar's state for the bench (the site itself is not changed);
+**Turn Off Open as** in the same menu undoes it, without a question; it does not end the sessions already made, but the app forgets its own. The same
+switch in a terminal is [`benchbar site open-as`](reference/cli/site.md#site-open-as).
+
+The Sites tab shows a line under a site that has it on: "Open as is on", or why
+it cannot be used. The site needs `developer_mode` (add it with
+`bench --site NAME set-config developer_mode 1`), and only the bench's
+**default site** can be used, because the bench serves only that one: port 8000
+answers every address with it.
+
+The window reloads the benches each time you come back to BenchBar (at most
+every 15 seconds), so a `developer_mode` you set in Terminal shows without
+waiting for the five minute check.
+
+Where it works, an **Open as…** control (a person icon and the words) appears
+in the popover's site row, on the Sites tab and beside **Open Site** on the
+Overview tab. On the default site it stays visible but dimmed, with the reason
+as its tooltip, while the bench is stopped or the site is not usable. The menu
+lists:
+
+- **Switch Back to {name}**: the user before this one.
+- Your pinned users, as `{label} ({user})`, then **Administrator**.
+- **Find User…**: a sheet in the BenchBar window that searches the site's
+  enabled users as you type (the sheet keeps one height while you type). **Open** signs in as that user; the pin keeps them
+  in the menu, with a label of your own (for example `NE`). A site keeps nine
+  pins. Pins of a bench or site that no longer exists are forgotten.
+
+![The Find User sheet: a search field and the site's users, each with a pin and an Open button](images/open-as-find-user.png)
+
+After a switch the site's row reads `as {name}`: the pin's label, else the
+user's full name, else the user id. That is BenchBar's own record of its last
+switch, not what the browser shows now.
+
+The link opens a new tab in the browser you used last (Safari, Chrome, Arc,
+Brave, Edge or Firefox), so the session cookie lands where you are testing;
+other tabs of that site keep the old user's screen, so reload them. If none of
+them was frontmost since BenchBar started, it uses your default browser when it
+runs, else the first of them that runs, else the default browser. BenchBar
+reads no tab and asks for no extra permission.
+
+BenchBar keeps the sessions it created in memory and reuses one while the site
+still says it belongs to that user, so switching back is quick. Quitting
+BenchBar forgets them. Nothing about a session is written to disk or logged by
+BenchBar; the browser keeps the sign-in link in its history.
 
 ## Links for Raycast and Shortcuts
 
@@ -71,11 +133,13 @@ The footer of the sidebar has three buttons:
 
 - **Add Bench** is a menu with **New Bench…**, **Adopt Existing
   Bench…** and **Find Benches…**.
-- The gear opens **Settings** (⌘,).
+- The gear is a menu with **General** and **Menu Bar** (⌘, opens
+  General).
 - The **i** opens **About BenchBar**.
 
 On a Mac with no bench the window opens on the [first run
-wizard](#a-new-bench-from-the-app).
+wizard](#a-new-bench-from-the-app). Every wizard page has **Report a Bug…**
+in its footer, and Cancel on the first page goes back to where you were.
 Every bench has a page:
 
 - **Overview**: start, stop and restart (one group of buttons), **Open
@@ -115,15 +179,16 @@ confirmation, the run with its progress at the bottom, and the outcome on
 top. Return confirms and Esc cancels; a sheet cannot be closed while its
 change runs. Drop Site is never on Return: it needs the site name typed.
 
-![The BenchBar window: a bench's overview with Start, Stop, Restart, its site and ports, and the scheduler switch](images/window-overview.png)
+![The BenchBar window: a bench's overview with Start, Stop, Restart, Open as and Open Site, its resources, site and ports](images/window-overview.png)
 
 ![A bench's apps: branch, repository, the sites that have each app, the focus menu, Check Remotes, Install and Update](images/window-apps.png)
 
 ![A bench's health: doctor's warnings with their fixes, Run Doctor and Repair](images/window-health.png)
 
-**Settings** (⌘,) and **About BenchBar** (the app menu, or the sidebar
-footer) are windows of their own. Settings can be resized, from 480 by
-400 points, and remembers its size.
+**General**, **Menu Bar** and **About BenchBar** are panes of the same
+window, reached from the footer of the sidebar. **Settings…** (⌘,) in the
+app menu opens the window on General, and **About BenchBar** opens it on
+About.
 
 - **General**: open at login, notifications, which `benchbar` the app
   runs (Automatic, or a path you choose), the editor for **Open in VS
@@ -138,6 +203,8 @@ release is out, and Copy Update Command and Release Notes in its ⋯
 menu), links to the documentation, the release notes and the source,
 **Report a Bug…**, and the `claude mcp add` command for coding agents.
 Report a Bug and Check for Updates are in the Help and app menus too.
+
+![About BenchBar: the app and command line tool versions, the update check, links, Report a Bug and the MCP command](images/window-about.png)
 
 In the sidebar, below the benches:
 
@@ -217,6 +284,9 @@ back.
 1. **Welcome**: **Set Up a New Bench**, or **I Already Have a Bench**,
    which opens Find Benches to add it and set up its service. **Just the
    Command Line Tool** shows the Homebrew and installer commands to copy.
+
+   ![The Welcome page with Set Up a New Bench, I Already Have a Bench and Just the Command Line Tool](images/wizard-welcome.png)
+
 2. **Check Your Mac**: what `benchbar doctor --prerequisites` checks:
    Apple Silicon, macOS 14 or later, the Xcode Command Line Tools,
    Homebrew, free disk space, a bench folder outside iCloud Drive,
@@ -224,6 +294,9 @@ back.
    ports are free. **Install Command Line Tools** opens Apple's
    installer, and the row checks again on its own. Homebrew is installed
    with the command shown, in Terminal; then **Check Again**.
+
+   ![Check Your Mac: every prerequisite with a green check](images/wizard-check.png)
+
 3. **New Bench**: the folder (`~/frappe-bench` by default), the profile
    (v15-lts, v16-lts or a team profile, with the Python, Node and
    MariaDB each brings), the app bundle, the site name and the
@@ -233,6 +306,9 @@ back.
 4. **Review**: the plan from `benchbar install --dry-run`. The two steps
    that need your password, the patched wkhtmltopdf package and the
    `/etc/hosts` line, say **Asks for your password**.
+
+   ![Review: the folder, site, profile and apps, and the steps that will run](images/wizard-review.png)
+
 5. **Install**: each step and its own steps as they run, with their
    times and the command output under **Show Output**. macOS asks for
    your password in its own dialog, once for each of the two steps;

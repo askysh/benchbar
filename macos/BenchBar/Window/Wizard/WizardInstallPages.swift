@@ -146,7 +146,23 @@ struct InstallStepRow: View {
         .padding(.leading, CGFloat(depth) * 22)
     }
 
-    @ViewBuilder private var glyph: some View {
+    private var glyphLabel: String {
+        switch row.status {
+        case nil: row.alreadyDone ? "already done" : "waiting"
+        case .running: "running"
+        case .done: "done"
+        case .unchanged: "unchanged"
+        case .skipped: "skipped"
+        case .warning: "warning"
+        case .failed: "failed"
+        case .unknown: "unknown"
+        case .stopped: "stopped"
+        }
+    }
+
+    private var glyph: some View { glyphIcon.accessibilityLabel(glyphLabel) }
+
+    @ViewBuilder private var glyphIcon: some View {
         switch row.status {
         case nil: Image(systemName: row.alreadyDone ? "checkmark.circle" : "circle").foregroundStyle(.secondary)
         case .running: ProgressView().controlSize(.mini)

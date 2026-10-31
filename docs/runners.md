@@ -3,9 +3,32 @@ title: "Custom runners"
 description: "Make your own menu bar runner for BenchBar: the folder, manifest.json, states and frame rules."
 ---
 
-The character in the menu bar is a **runner**. BenchBar ships two, Bench
-and Coffee cup, and you can add your own: a folder with a `manifest.json`
-and PNG frames. A working example with the script that drew it is in
+The character in the menu bar is a **runner**. BenchBar ships seven, and
+you can add your own: a folder with a `manifest.json` and PNG frames.
+
+## Built in runners
+
+| Runner | Running | Stopped | Crashed |
+|---|---|---|---|
+| Bench | runs on two legs | stands and sleeps | stumbles |
+| Coffee cup | runs, steaming | sits down, cold | stumbles and spills |
+| Kettle | boils, its lid rattling | sleeps, cold | boils over, the lid pops off |
+| Server rack | blinks and sends data | lights out, asleep | shakes and jams a drive |
+| Paper plane | flies on a wave | rests on the ground | nose dives into the ground |
+| Snail | hurries, stalks back | hides in its shell | rolls over in its shell |
+| Rocket | flies up, flame on | parked, engine cold | tumbles, smoking |
+
+While the bench starts, each one gets ready in its own way (the kettle
+warms up, the rack boots, the rocket smokes on the pad). All of them
+show `!` after a crash and `?` when the CLI is missing. Pick one under
+Runner in the Menu Bar pane (on Windows, the tray's Runner menu or
+Settings).
+
+![Every frame of the Kettle, Server rack, Paper plane, Snail and Rocket](images/runners-more.png)
+
+## Make your own
+
+A working example with the script that drew it is in
 [`examples/runners/blob`](https://github.com/askysh/benchbar/tree/main/examples/runners/blob).
 
 ## Install one
@@ -116,6 +139,7 @@ background.
 
 ## Not allowed
 
-The built in names `bench` and `cup` are reserved. Do not use art,
+The built in names `bench`, `cup`, `kettle`, `server`, `plane`, `snail`
+and `rocket` are reserved. Do not use art,
 names or characters you do not have the rights to: a runner is yours to
 share only if you made it or its license allows it.

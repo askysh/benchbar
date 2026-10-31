@@ -1,11 +1,11 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # rsync mock: copies HOST:PATH from the fake remote home into the local
 # destination. $MOCK_STATE/rsync_fail_after (a byte count) cuts the next
 # fresh transfer short like a dropped link; a later call that finds the
 # partial file records its size in $MOCK_STATE/rsync_resumed_from.
 # $MOCK_STATE/rsync_version sets the version line (default 3.2.7).
 # shellcheck source=tests/mocks/bin/_mocklib.sh
-. "$(dirname "$0")/_mocklib.sh"
+. "${0%/*}/_mocklib.sh"
 if [[ "${1:-}" == "--version" ]]; then
   printf 'rsync  version %s  protocol version 31\n' "$(cat "${MOCK_STATE:?}/rsync_version" 2>/dev/null || printf '3.2.7')"
   exit 0

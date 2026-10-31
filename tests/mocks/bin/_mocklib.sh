@@ -1,8 +1,8 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # shared by the mocks: append a call record
 mock_log() {
   local name
-  name="$(basename "$0")"
+  name="${0##*/}"
   printf '%s %s\n' "$name" "$*" >>"${MOCK_LOG:-/dev/null}"
   # sudo password mode (the sudo mock): no program benchbar starts may have
   # the password in its arguments or its environment. The sudo mock checks

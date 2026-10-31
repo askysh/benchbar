@@ -26,7 +26,7 @@ fl_apps_txt() {
   tr -d '\r' <"$f" | awk '{gsub(/^[ \t]+|[ \t]+$/, "")} NF && !seen[$0]++'
 }
 
-fl_app_in_apps_txt() { fl_apps_txt | grep -qxF "$1"; }
+fl_app_in_apps_txt() { fl_has_line "$(fl_apps_txt || true)" "$1"; }
 
 # A git app: apps/X with a .git and a Python package (stray files and
 # tarballs in apps/ are not apps).
@@ -43,9 +43,9 @@ fl_apps_unlisted() {
   listed="$(fl_apps_txt)"
   for d in "${FL_BENCH_DIR}"/apps/*/; do
     [[ -d "$d" ]] || continue
-    n="$(basename "$d")"
+    d="${d%/}"; n="${d##*/}"
     fl_app_is_git_app "$n" || continue
-    printf '%s\n' "$listed" | grep -qxF "$n" || printf '%s\n' "$n"
+    case $'\n'"${listed}"$'\n' in *$'\n'"${n}"$'\n'*) ;; *) printf '%s\n' "$n" ;; esac
   done
 }
 
@@ -58,7 +58,7 @@ fl_app_existing_dir() {
   want="$(printf '%s' "$1" | tr '[:upper:]-' '[:lower:]_')"
   for d in "${FL_BENCH_DIR}"/apps/*/; do
     [[ -d "$d" ]] || continue
-    n="$(basename "$d")"
+    d="${d%/}"; n="${d##*/}"
     [[ "$(printf '%s' "$n" | tr '[:upper:]-' '[:lower:]_')" == "$want" ]] && { printf '%s' "$n"; return 0; }
   done
   return 0
@@ -79,7 +79,7 @@ fl_app_remote() {
   [[ -n "$b" ]] && r="$(fl_app_git "$app" config --get "branch.${b}.remote" 2>/dev/null || true)"
   if [[ -z "$r" || "$r" == "." ]]; then
     remotes="$(fl_app_git "$app" remote 2>/dev/null || true)"
-    if printf '%s\n' "$remotes" | grep -qx upstream; then r=upstream; else r="$(printf '%s\n' "$remotes" | head -n1)"; fi
+    if fl_has_line "$remotes" upstream; then r=upstream; else r="${remotes%%$'\n'*}"; fi
   fi
   printf '%s' "$r"
 }
@@ -219,7 +219,8 @@ fl_site_apps_cached() {
   local file line
   file="$(fl__site_apps_source)"
   [[ -f "$file" ]] || return 1
-  line="$(grep "^$1 " "$file" 2>/dev/null | head -n1)" || return 1
+  line="$(grep "^$1 " "$file" 2>/dev/null)" || return 1
+  line="${line%%$'\n'*}"
   printf '%s' "${line#* }"
 }
 
@@ -227,7 +228,7 @@ fl_site_apps_meta() {
   local file
   file="$(fl__site_apps_source)"
   [[ -f "$file" ]] || return 0
-  sed -n "s/^@$1 //p" "$file" | head -n1
+  sed -n "/^@$1 /{s///;p;q;}" "$file"
 }
 
 fl_site_has_app() {
@@ -358,13 +359,13 @@ fl_repo_preflight() {
   if [[ "$code" == "0" ]]; then rm -f "$err"; return 0; fi
   if [[ "$code" == "2" ]]; then
     rm -f "$err"
-    heads="$(fl_git_batch ls-remote --heads -- "$repo" 2>/dev/null | sed 's#.*refs/heads/##' | head -n 20 | tr '\n' ' ')"
+    heads="$(fl_git_batch ls-remote --heads -- "$repo" 2>/dev/null | sed 's#.*refs/heads/##' | awk 'NR<=20' | tr '\n' ' ')"
     fl_fail "branch ${branch} not found in ${repo}"
     fl_note "remote branches: ${heads:-none}"
     fl_fix "pass one of them with --branch"
     return 1
   fi
-  fl_fail "cannot read ${repo} (git ls-remote exit ${code}): $(grep -v '^[[:space:]]*$' "$err" | head -n1)"
+  fl_fail "cannot read ${repo} (git ls-remote exit ${code}): $(grep -v '^[[:space:]]*$' "$err" | awk 'NR==1')"
   rm -f "$err"
   fl_repo_access_hint "$repo"
   return 1
@@ -444,7 +445,7 @@ fl_app_clone() {
   fl_bench_env_exports
   if fl_run_long "bench get-app ${name} (${branch})" fl__in_dir "$FL_BENCH_DIR" env GIT_TERMINAL_PROMPT=0 bench get-app --skip-assets --branch "$branch" "$repo"; then
     after="$(fl__apps_dirs)"
-    new="$(comm -13 <(printf '%s\n' "$before") <(printf '%s\n' "$after") | head -n1)"
+    new="$(comm -13 <(printf '%s\n' "$before") <(printf '%s\n' "$after") | awk 'NR==1')"
     FL_CLONED_DIR="${new:-$(fl_app_existing_dir "$name")}"
     [[ -n "$FL_CLONED_DIR" ]] || { fl_fail "bench get-app finished but no folder for ${name} appeared in apps/"; return 1; }
     return 0
@@ -741,7 +742,7 @@ fl_app_fetch() {
   fl_git_batch -C "$(fl_app_path "$app")" fetch --quiet ${args[@]+"${args[@]}"} "$remote" "$branch" >/dev/null 2>"$err" || code=$?
   fl_log_file_append "$err"
   if [[ "$code" != "0" ]]; then
-    fl_fail "git fetch ${remote} ${branch} failed in apps/${app}: $(grep -v '^[[:space:]]*$' "$err" | head -n1)"
+    fl_fail "git fetch ${remote} ${branch} failed in apps/${app}: $(grep -v '^[[:space:]]*$' "$err" | awk 'NR==1')"
     rm -f "$err"
     fl_repo_access_hint "$(fl_app_remote_url "$app")"
     return 1

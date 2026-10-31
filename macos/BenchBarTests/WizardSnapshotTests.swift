@@ -6,7 +6,7 @@ import Testing
 /// Snapshots of the 0.8 screens: the wizard pages, the sidebar, Settings,
 /// About, the walkthrough, guidance and the empty states.
 extension SnapshotTests {
-    private func wizardRun(_ events: [WizardState.Event], empty: Bool = true) async throws -> (BenchStore, WizardRun) {
+    func wizardRun(_ events: [WizardState.Event], empty: Bool = true) async throws -> (BenchStore, WizardRun) {
         base.cli.answer("list", json: try Fixture.string(empty ? "list-empty" : "list"))
         let store = base.makeStore()
         await store.start(polling: false)
@@ -15,16 +15,16 @@ extension SnapshotTests {
         return (store, run)
     }
 
-    private func page(_ run: WizardRun) -> some View {
+    func page(_ run: WizardRun) -> some View {
         wizardView(run.store, run).frame(width: 760, height: 620)
     }
 
-    private func installEvents(_ name: String, upTo count: Int? = nil) throws -> [WizardState.Event] {
+    func installEvents(_ name: String, upTo count: Int? = nil) throws -> [WizardState.Event] {
         let all = try InstallEvent.decodeAll(try Fixture.lines(name)).map(WizardState.Event.install)
         return count.map { Array(all.prefix($0)) } ?? all
     }
 
-    private func report(failing ids: Set<String> = [], ok: Bool = false) throws -> PrerequisiteReport {
+    func report(failing ids: Set<String> = [], ok: Bool = false) throws -> PrerequisiteReport {
         var r = try BenchJSON.decode(PrerequisiteReport.self, from: try Fixture.data("doctor-prerequisites"))
         for i in r.prerequisites.indices {
             if ids.contains(r.prerequisites[i].id) { r.prerequisites[i].level = .fail }
@@ -104,7 +104,7 @@ extension SnapshotTests {
 
     /// The dry run's plan (site macdev); another site gets port block 1, and
     /// `hostsInPlace` its hosts line already in /etc/hosts.
-    private func plan(site: String? = nil, hostsInPlace: Bool = false) throws -> InstallPlan {
+    func plan(site: String? = nil, hostsInPlace: Bool = false) throws -> InstallPlan {
         guard case .plan(var plan)? = try InstallEvent.decodeAll(try Fixture.lines("install-dry-run")).first else { throw Fixture.FixtureError.missing("plan") }
         if let site {
             plan.site = site
@@ -147,18 +147,6 @@ extension SnapshotTests {
         router.pane = .bench(store.benches[1].path)
         router.benchTab = .sites
         try render(side(store, several), "sidebar-several")
-    }
-
-    @Test func settingsAndAboutWindows() async throws {
-        // the Settings tabs are rendered by settingsWindow(); About by windowAbout()
-        let (store, _) = try await wizardRun([], empty: false)
-        let tabs = SettingsTabs()
-        let part: (SettingsView.Part) -> SettingsView = { part in
-            SettingsView(settings: base.settings, store: store, library: library(), launchAtLogin: LaunchAtLogin(),
-                         notifier: Notifier(settings: base.settings), part: part, showsHeader: false, chooseCLI: {})
-        }
-        try render(SettingsTabsView(tabs: tabs, general: part(.general), menuBar: part(.menuBar))
-            .frame(width: SettingsTabsView.size.width, height: SettingsTabsView.size.height), "settings-window")
     }
 
     // MARK: the teaching surfaces

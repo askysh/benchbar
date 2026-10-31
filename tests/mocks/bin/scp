@@ -1,7 +1,7 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # scp mock: copies HOST:PATH from the fake remote home into the local destination.
 # shellcheck source=tests/mocks/bin/_mocklib.sh
-. "$(dirname "$0")/_mocklib.sh"
+. "${0%/*}/_mocklib.sh"
 mock_log "$@"
 pos=()
 while [[ "$#" -gt 0 ]]; do

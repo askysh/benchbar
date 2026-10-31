@@ -133,6 +133,16 @@ fl_strip_ansi() {
   sed -e 's/\x1b\[[0-9;]*[A-Za-z]//g' -e 's/\x1b([AB]//g'
 }
 
+# fl_has_line TEXT LINE: LINE is a whole line of TEXT (grep -qxF), without a
+# pipe. "producer | grep -q" fails under pipefail when grep quits on the first
+# match and the producer then gets SIGPIPE (141), so capture the output first.
+fl_has_line() {
+  case $'\n'"$1"$'\n' in
+    *$'\n'"$2"$'\n'*) return 0 ;;
+  esac
+  return 1
+}
+
 # a word for a POSIX shell, in single quotes
 fl_sq() { local q="'"; printf "'%s'" "${1//$q/$q\\$q$q}"; }
 

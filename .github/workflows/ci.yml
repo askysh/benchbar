@@ -7,10 +7,12 @@
 # versions do not know. The CLI jobs run on macos-latest, where /bin/bash
 # is the same 3.2 the CLI targets.
 #
-# Speed (docs/DECISIONS.md, "CI speed"): the CLI tests run in four shards
-# on macOS and four on Linux, each running its tests in parallel; shellcheck
-# is its own Linux job; the macOS shards leave out the tests of the Linux
-# platform layer, which the Linux shards run on the bash Linux users have;
+# Speed (docs/DECISIONS.md, "CI speed" and "CI speed, round 3"): the CLI
+# tests run in eight shards on Linux, four in a bash 3.2.57 container on
+# Linux and four on macOS, each running its tests in parallel; shellcheck is
+# its own Linux job; the macOS and bash 3.2 shards leave out the tests of
+# the Linux platform layer, which the Linux shards run on the bash Linux
+# users have;
 # the release bundle is built in the app job from the same checkout and
 # DerivedData instead of a second job.
 #
@@ -29,7 +31,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, next-release]
   workflow_dispatch:
 
 permissions:
@@ -66,7 +68,9 @@ jobs:
   # "shard 1/3" check would wait forever. A skipped shard runs on a cheap
   # Linux runner for a few seconds and passes.
   # Four shards plus the app job are the five concurrent macOS jobs of the
-  # free plan.
+  # free plan. Two shards were tried (CI speed, round 3): the slowest test
+  # files take 8 to 10 minutes on a macOS runner, and two of them in one
+  # shard made the run longer.
   cli-macos:
     name: CLI tests (macOS, shard ${{ matrix.shard }}/4)
     needs: changes
@@ -103,17 +107,17 @@ jobs:
         run: /bin/bash tests/run-tests.sh
 
   # The mocked suite on Linux, for the Linux platform layer
-  # (docs/DECISIONS.md, "Linux"), in four shards. Same skip rule as the
+  # (docs/DECISIONS.md, "Linux"), in eight shards. Same skip rule as the
   # macOS shards: it skips step by step when only docs/ or site/ changed.
   cli-linux:
-    name: CLI tests (Linux, shard ${{ matrix.shard }}/4)
+    name: CLI tests (Linux, shard ${{ matrix.shard }}/8)
     needs: changes
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     env:
       CODE: ${{ needs.changes.outputs.code }}
     steps:
@@ -133,9 +137,63 @@ jobs:
       - name: CLI tests (Linux bash)
         if: env.CODE == 'true'
         env:
-          SHARD: ${{ matrix.shard }}/4
+          SHARD: ${{ matrix.shard }}/8
           SHELLCHECK: '0'
         run: bash tests/run-tests.sh
+
+  # The mocked suite under bash 3.2.57, the bash of macOS, on cheap Linux
+  # runners: the bash-ism risk (a 4.x feature that /bin/bash on a Mac does
+  # not have) no longer needs a macOS runner. The image is Alpine, where
+  # JavaScript actions such as checkout do not run, so the checkout happens
+  # on the runner and the suite runs through docker run. Same skip rules as
+  # the macOS shards.
+  cli-bash32:
+    name: CLI tests (bash 3.2, shard ${{ matrix.shard }}/4)
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    env:
+      CODE: ${{ needs.changes.outputs.code }}
+    steps:
+      - name: Skipped (only docs/ or site/ changed)
+        if: env.CODE != 'true'
+        run: echo "Only docs/ or site/ changed; the CLI tests do not run."
+
+      - uses: actions/checkout@v7
+        if: env.CODE == 'true'
+
+      # Packages, each for what the suite runs that busybox does not do the
+      # GNU way: coreutils (stat -c, date, mktemp, timeout), findutils (find),
+      # diffutils (cmp, diff), grep, sed and gawk (the GNU behaviour the Linux
+      # layer is written for), procps (ps -eo for run-tests.sh's deadline),
+      # git (test-affected's fake repository, the bench init clone), python3
+      # (jget and the JSON checks), zip and unzip (the report and packaging
+      # tests), curl (install.sh's test), perl-utils (shasum, which the
+      # harness uses for the wkhtmltopdf checksum), musl-locales (locale -a
+      # and C.UTF-8, for test-status-cost's UTF-8 leg). The mocks start with
+      # #!/bin/bash, which the image only has as /usr/local/bin/bash. The
+      # suite runs as a user, not root, from a copy in that user's home, so
+      # no uid has to match the runner's and nothing is written back. The
+      # user is "ci": test-report's sample log holds the word "tester",
+      # which the report would redact as a username.
+      - name: CLI tests (bash 3.2.57 container)
+        if: env.CODE == 'true'
+        env:
+          SHARD: ${{ matrix.shard }}/4
+          SHELLCHECK: '0'
+          SKIP_TESTS: test-install-linux test-doctor-linux test-systemd test-platform-linux
+        run: |
+          docker run --rm -v "$PWD:/w:ro" -e SHARD -e SHELLCHECK -e SKIP_TESTS bash:3.2.57 sh -euc '
+            apk add --no-cache coreutils findutils diffutils grep sed gawk procps git python3 zip unzip curl perl-utils musl-locales >/dev/null
+            ln -sf /usr/local/bin/bash /bin/bash
+            adduser -D ci
+            cp -R /w /home/ci/w && chown -R ci /home/ci/w
+            su ci -s /bin/sh -c "cd /home/ci/w && export HOME=/home/ci && git config --global --add safe.directory \"*\" && bash --version | head -n 1 && nproc && bash tests/run-tests.sh"
+          '
 
   # shellcheck once, on its own runner, for every platform's scripts. Same
   # skip rule as the shards.

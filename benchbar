@@ -129,6 +129,8 @@ SCRIPT_DIR="$(fl_resolve_self)"
 . "${SCRIPT_DIR}/lib/frappe-local/site-backups.sh"
 # shellcheck source=lib/frappe-local/consoles.sh
 . "${SCRIPT_DIR}/lib/frappe-local/consoles.sh"
+# shellcheck source=lib/frappe-local/open-as.sh
+. "${SCRIPT_DIR}/lib/frappe-local/open-as.sh"
 # shellcheck source=lib/frappe-local/apps.sh
 . "${SCRIPT_DIR}/lib/frappe-local/apps.sh"
 # shellcheck source=lib/frappe-local/freshness.sh
@@ -266,6 +268,10 @@ Daily
                       the default site also needs --new-default OTHER (--dry-run, --json).
   console             bench --site SITE console: a Python shell with frappe (--site S).
   db                  bench --site SITE mariadb: the site's database with its own user (--site S).
+  open                Open the site in the browser (--site S, --path /app/...). --as USER signs in
+                      as that user, no password; needs developer_mode and a person to run
+                      "site open-as on" for the site. --print-url prints the link instead.
+  users               Enabled users of a site for open --as (--site S, --search TEXT, --limit N).
   mariadb-password    Print the MariaDB root password (Keychain; a 0600 file on Linux; asks first).
   mcp                 Model Context Protocol server on stdio for coding agents
                       (claude mcp add benchbar -- benchbar mcp). Read tools, up, down, restart,
@@ -478,6 +484,8 @@ fl_json_mode_resolve() {
     # a dry run of these is their plan, one document with its token
     "app update"|"site add") if [[ "$FL_DRY_RUN" == "1" ]]; then FL_JSON_MODE=doc; else FL_JSON_MODE=stream; fi ;;
     "site backup"|"site drop"|"site restore"|"app add") FL_JSON_MODE=doc ;;
+    # on and off stream like site default; status only reads
+    "site open-as") if [[ "${ARGS[1]:-}" == "status" ]]; then FL_JSON_MODE=doc; else FL_JSON_MODE=stream; fi ;;
   esac
 }
 # status, list and the other readers are polled: they skip the table unless
@@ -1335,6 +1343,10 @@ fl_noninteractive_preflight() {
           fl_need "sudo" "the ${FL_HOSTS_FILE} line would ask for a password; cache the credential first, or pass --json to skip it"
         fi
       fi ;;
+    "site open-as"*)
+      # password-less sign in is turned on by a person: refused before the lock, whatever else is given
+      [[ "${ARGS[1]:-}" != "on" ]] || fl_need "a person at a terminal" "turning on Open as is a person's decision; run benchbar site open-as on NAME in a terminal"
+      ;;
     "site restore")
       # the restore needs the root password (to create or replace the database) and a yes
       [[ "$FL_ASSUME_YES" == "1" ]] || fl_need "--yes" "to confirm the restore plan (or --apply TOKEN --yes)"
@@ -1390,7 +1402,7 @@ case "$COMMAND" in
     # without --fetch: its one write, FETCHED_AT, goes through the key-value
     # file's own lock); the others change things
     if [[ "${ARGS[0]:-list}" != "list" && "${ARGS[0]:-}" != "show" && "${ARGS[0]:-}" != "check" && "${ARGS[0]:-}" != "backups" \
-      && " ${ARGS[*]:-} " != *" --plan "* ]] && ! fl_app_focus_is_listing "${ARGS[@]+"${ARGS[@]}"}"; then
+      && " ${ARGS[*]:-} " != *" --plan "* && ! ( "${ARGS[0]:-}" == "open-as" && "${ARGS[1]:-}" == "status" ) ]] && ! fl_app_focus_is_listing "${ARGS[@]+"${ARGS[@]}"}"; then
       fl_log_init "${FL_STATE_DIR}/logs"
       fl_lock_acquire "${FL_STATE_DIR}/lock"
     fi
@@ -1448,6 +1460,8 @@ case "$COMMAND" in
     fi ;;
   path) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; printf '%s\n' "$FL_BENCH_DIR" ;;
   console) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_console ${ARGS[@]+"${ARGS[@]}"} ;;
+  open) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_open ${ARGS[@]+"${ARGS[@]}"} ;;
+  users) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_users ${ARGS[@]+"${ARGS[@]}"} ;;
   db) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_db ${ARGS[@]+"${ARGS[@]}"} ;;
   site) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_site ${ARGS[@]+"${ARGS[@]}"} ;;
   app) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_app ${ARGS[@]+"${ARGS[@]}"} ;;

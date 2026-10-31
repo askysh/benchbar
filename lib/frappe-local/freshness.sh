@@ -113,7 +113,7 @@ fl_focus_apps() {
   printf '%s' "$out"
 }
 
-fl_is_focus_app() { printf '%s' "$FL_FOCUS_APPS" | grep -qxF "$1"; }
+fl_is_focus_app() { [[ $'\n'"$FL_FOCUS_APPS"$'\n' == *$'\n'"$1"$'\n'* ]]; }
 
 # fl_focus_dependencies: "DEP NEEDED_BY,NEEDED_BY" per line: every app of the
 # bench a focus app needs through required_apps (transitively), the focus
@@ -403,7 +403,7 @@ fl_cmd_app_focus() {
     return 0
   fi
   [[ "$list" == "0" ]] || fl_die "--list takes no app name." "benchbar app focus --list"
-  fl_apps_all | grep -qxF "$app" || fl_die "${app} is not an app of this bench." "benchbar app list shows the apps."
+  fl_has_line "$(fl_apps_all || true)" "$app" || fl_die "${app} is not an app of this bench." "benchbar app list shows the apps."
   if [[ "$cmd" == "unfocus" ]]; then pin=ignore; elif [[ "$auto" == "1" ]]; then pin=auto; else pin=focus; fi
   fl_bench_state_migrate "$FL_BENCH_DIR"
   fl_app_focus_pin_set "$app" "$pin"

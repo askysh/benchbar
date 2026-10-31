@@ -38,7 +38,7 @@ public sealed class BuiltInRunner(
     public Bitmap Render(RunnerPose pose, int frame, int side) => render(pose, frame, side);
 }
 
-/// <summary>The two runners that ship with BenchBar. Their ids are reserved.</summary>
+/// <summary>The runners that ship with BenchBar, in the Mac's order (Runner.builtIns). Their ids are reserved.</summary>
 public static class BuiltInRunners
 {
     public const string BenchId = "bench";
@@ -48,10 +48,19 @@ public static class BuiltInRunners
 
     public static IRunnerArt Cup { get; } = new BuiltInRunner(CupId, "Coffee cup", CupRunnerArt.FrameCount, CupRunnerArt.Render);
 
-    public static IReadOnlyList<IRunnerArt> All { get; } = [Bench, Cup];
+    public static IRunnerArt Kettle { get; } = new BuiltInRunner("kettle", "Kettle", KettleRunnerArt.FrameCount, KettleRunnerArt.Render);
 
-    public static bool IsReserved(string id) =>
-        id.Equals(BenchId, StringComparison.OrdinalIgnoreCase) || id.Equals(CupId, StringComparison.OrdinalIgnoreCase);
+    public static IRunnerArt Server { get; } = new BuiltInRunner("server", "Server rack", ServerRunnerArt.FrameCount, ServerRunnerArt.Render);
+
+    public static IRunnerArt Plane { get; } = new BuiltInRunner("plane", "Paper plane", PlaneRunnerArt.FrameCount, PlaneRunnerArt.Render);
+
+    public static IRunnerArt Snail { get; } = new BuiltInRunner("snail", "Snail", SnailRunnerArt.FrameCount, SnailRunnerArt.Render);
+
+    public static IRunnerArt Rocket { get; } = new BuiltInRunner("rocket", "Rocket", RocketRunnerArt.FrameCount, RocketRunnerArt.Render);
+
+    public static IReadOnlyList<IRunnerArt> All { get; } = [Bench, Cup, Kettle, Server, Plane, Snail, Rocket];
+
+    public static bool IsReserved(string id) => All.Any(r => r.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
 }
 
 /// <summary>Painting a template frame in one colour.</summary>

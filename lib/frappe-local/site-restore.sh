@@ -454,7 +454,7 @@ fl_srestore_run() {
     esac
     if [[ "$code" == "0" && "$id" == "local_backup" ]]; then
       now="$(fl_backup_stamps "$(fl_site_backup_dir "$SR_TARGET")")"
-      SR_BACKUP_STAMP="$(printf '%s\n' "$now" | grep -v -x -F -- "$before" | head -n1 || true)"
+      SR_BACKUP_STAMP="$(printf '%s\n' "$now" | grep -v -x -F -- "$before" | awk 'NR==1' || true)"
       # nothing is overwritten until the backup is there with all its parts
       fl_srestore_verify_backup || code=1
     fi

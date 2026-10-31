@@ -92,6 +92,16 @@ flag~uninstall-service~--yes~~Do not ask; required without a terminal.
 cmd~path~benchbar path~Print the bench directory.~no~no~no~no~none
 cmd~console~benchbar console [--site S]~bench --site SITE console: a Python shell with frappe.~yes~no~no~no~none
 cmd~db~benchbar db [--site S]~bench --site SITE mariadb: the site's database.~yes~no~no~no~none
+cmd~open~benchbar open [--site S] [--as USER] [--path P] [--no-browser] [--print-url] [--json]~Open a site in the browser, or open it signed in as USER (developer_mode sites that were opted in with site open-as on).~no~no~no~no~document
+flag~open~--as~USER~Sign in as this user, no password. Refused unless site open-as is on for the site and developer_mode is on. A sign in runs the apps' on_login and on_session_creation hooks as a real login does: last_login, an Activity Log entry, a mail to System Managers for Administrator, an ERPNext Customer or Supplier for a Website User, and Frappe may end the user's oldest session (simultaneous_sessions).
+flag~open~--path~P~Where to land, for example /app/todo. Default: /app, or / for a Website User.
+flag~open~--no-browser~~Start the session, open nothing.
+flag~open~--print-url~~Print the link (it holds the session id) instead of opening it; in --json as url.
+flag~open~--json~~One JSON document; url only with --print-url.
+cmd~users~benchbar users [--site S] [--search Q] [--limit N] [--json]~Enabled users of a site, for open --as (needs site open-as on).~no~no~no~no~document
+flag~users~--search~TEXT~Only users whose id or full name contains TEXT.
+flag~users~--limit~N~At most N users (1 to 500, default 50).
+flag~users~--json~~One JSON document.
 cmd~pull~benchbar pull HOST:SITE [--as NAME] [--from-dir DIR] [--replace] [--json]~Copy a production site over SSH into a new local site.~yes~no~yes~yes~stream
 flag~pull~--as~NAME~Local site name (default SITE.local).
 flag~pull~--from-dir~DIR~A backup set downloaded by hand, no SSH.
@@ -118,7 +128,7 @@ env~ports apply~BENCHBAR_SUDO~Linux only: env makes the sudo steps use BENCHBAR_
 env~ports apply~BENCHBAR_SUDO_PASSWORD~The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed from the environment; never in argv, the log or a child.
 cmd~ports check~benchbar ports check [--json]~Port conflicts of the bench.~no~no~no~no~document
 cmd~ports mode~benchbar ports mode automatic|fixed~Keep automatic or fixed ports for the bench.~no~no~no~yes~none
-cmd~site~benchbar site list|add|default|hosts|backup|backups|restore|drop ...~The sites of a bench.~no~no~no~no~none
+cmd~site~benchbar site list|add|default|hosts|backup|backups|restore|drop|open-as ...~The sites of a bench.~no~no~no~no~none
 cmd~site list~benchbar site list [--json]~The bench's sites; the default one is what benchup waits for.~no~no~no~no~document
 cmd~site add~benchbar site add NAME [--bundle NAME|--apps "a b"] [--dry-run|--apply TOKEN] [--yes] [--json]~bench new-site, the hosts line and apps from apps/. The default site stays.~yes~yes~no~yes~stream
 flag~site add~--bundle~NAME~App bundle to install.
@@ -131,6 +141,9 @@ env~site add~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar doe
 env~site add~BENCHBAR_SUDO~Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change).
 env~site add~BENCHBAR_SUDO_PASSWORD~The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed from the environment; never in argv, the log or a child.
 cmd~site default~benchbar site default NAME [--json]~Make NAME the default site.~no~no~no~yes~stream
+cmd~site open-as~benchbar site open-as on|off|status [NAME] [--json]~Turn password-less sign in (open --as) on or off for a site, or show it. Changes benchbar's state only. on needs a person at a terminal.~yes~no~no~yes~stream
+flag~site open-as~--yes~~Do not ask before turning on (still refused without a terminal session, BENCHBAR_NONINTERACTIVE=1).
+flag~site open-as~--json~~JSON lines for on and off, one document for status.
 cmd~site hosts~benchbar site hosts~Add a 127.0.0.1 line for every site to /etc/hosts.~yes~yes~no~yes~none
 cmd~site backup~benchbar site backup NAME [--with-files] [--json]~bench --site NAME backup.~no~no~no~yes~document
 flag~site backup~--with-files~~Include the uploads.

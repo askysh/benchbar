@@ -31,7 +31,7 @@ final class MainWindowController: NSObject, NSWindowDelegate {
     var isVisible: Bool { window?.isVisible == true }
 
     func show(_ pane: WindowPane? = nil, tab: BenchTab? = nil, repair: Bool = false) {
-        if let pane { router.pane = pane }
+        if pane == .wizard { router.showWizard() } else if let pane { router.pane = pane }
         if let tab { router.benchTab = tab; router.sidebarSite = nil }
         if repair { router.repairRequested = true }
         if window == nil {
@@ -45,6 +45,7 @@ final class MainWindowController: NSObject, NSWindowDelegate {
             window.toolbarStyle = .unified
             window.setContentSize(NSSize(width: 860, height: 600))
             window.isReleasedWhenClosed = false
+            window.tabbingMode = .disallowed
             window.delegate = self
             window.setFrameAutosaveName("BenchBarWindow")
             window.center()

@@ -231,7 +231,7 @@ fl_bench_cli_version() {
   fl_run_capture_timeout 15 "$out" "$err" fl__in_dir "$FL_BENCH_DIR" bench --version || true
   fl_log_file_append "$err"
   rm -f "$err"
-  v="$(grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' "$out" | head -n1)"
+  v="$(grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' "$out" | awk 'NR==1')"
   rm -f "$out"
   printf '%s' "$v"
 }

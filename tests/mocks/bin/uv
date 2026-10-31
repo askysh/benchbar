@@ -1,7 +1,7 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # uv mock: "pip install --python <py> honcho" drops a honcho next to <py>
 # shellcheck source=tests/mocks/bin/_mocklib.sh
-. "$(dirname "$0")/_mocklib.sh"
+. "${0%/*}/_mocklib.sh"
 mock_log "$@"
 # "uv pip install --python PY setuptools<70": the env now has pkg_resources
 if [[ "$1" == "pip" && "$2" == "install" && "$*" == *"setuptools<70"* ]]; then
@@ -24,7 +24,7 @@ pydir="${UV_PYTHON_INSTALL_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/uv/python}"
 if [[ "${1:-} ${2:-}" == "python install" && -n "${3:-}" ]]; then
   ver="${3#python}"; ver="${ver%%.*}.$(printf '%s' "$ver" | cut -d. -f2)"
   mkdir -p "$pydir/cpython-${ver}.9-linux-x86_64-gnu/bin"
-  cp "$(dirname "$0")/../python3.11" "$pydir/cpython-${ver}.9-linux-x86_64-gnu/bin/python${ver}"
+  cp "${0%/*}/../python3.11" "$pydir/cpython-${ver}.9-linux-x86_64-gnu/bin/python${ver}"
   chmod +x "$pydir/cpython-${ver}.9-linux-x86_64-gnu/bin/python${ver}"
   exit 0
 fi
@@ -36,5 +36,5 @@ if [[ "${1:-} ${2:-}" == "python find" ]]; then
 fi
 py=""
 while [[ "$#" -gt 0 ]]; do case "$1" in --python) py="$2"; shift 2 ;; *) shift ;; esac; done
-[[ -n "$py" ]] && { cp "$(dirname "$0")/../honcho" "$(dirname "$py")/honcho"; chmod +x "$(dirname "$py")/honcho"; }
+[[ -n "$py" ]] && { cp "${0%/*}/../honcho" "$(dirname "$py")/honcho"; chmod +x "$(dirname "$py")/honcho"; }
 exit 0

@@ -358,7 +358,7 @@ internal sealed partial class WizardView
 
         var panel = new StackPanel();
         panel.Children.Add(Ui.Labeled("Bench folder", folder, "Inside Ubuntu. The default is in your Linux home folder."));
-        panel.Children.Add(Ui.Labeled("Site name", site, "Open it later at http://" + WizardModel.DefaultSite + ":8000. Windows resolves .localhost names by itself."));
+        panel.Children.Add(Ui.Labeled("Site name", site, "The site's address uses it, for example http://" + WizardModel.DefaultSite + ":8000. A name ending in .localhost needs no hosts line: Windows resolves it by itself."));
         panel.Children.Add(Ui.Labeled("Apps", bundle, "minimal is Frappe only; common and extended add more apps."));
         panel.Children.Add(Ui.Labeled("Administrator password", admin, "The login of the new site. It is used for this install only and never saved."));
         panel.Children.Add(problem);

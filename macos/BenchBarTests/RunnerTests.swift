@@ -102,7 +102,7 @@ struct RunnerTests {
     }
 
     @Test func builtInRunnersHaveEveryPoseAtThe36PixelSize() {
-        #expect(Runner.builtIns.map(\.id) == ["bench", "cup"])
+        #expect(Runner.builtIns.map(\.id) == ["bench", "cup", "kettle", "server", "plane", "snail", "rocket"])
         for runner in Runner.builtIns {
             #expect(runner.isTemplate)
             for pose in RunnerPose.allCases {
@@ -114,6 +114,43 @@ struct RunnerTests {
                     #expect(Self.coverage(frame) > 0.05, "\(runner.id) \(pose.rawValue) frame is nearly empty")
                 }
             }
+        }
+    }
+
+    /// Every built in has the Bench's frame counts, so the tray (which ports
+    /// the drawing code) and the plans see the same poses.
+    @Test func builtInRunnersShareTheFrameCounts() {
+        let bench = Runner.builtIn("bench")
+        for runner in Runner.builtIns {
+            for pose in RunnerPose.allCases {
+                #expect(runner.frames(for: pose).count == bench.frames(for: pose).count, "\(runner.id) \(pose.rawValue)")
+            }
+        }
+    }
+
+    /// A looping pose that does not change from one frame to the next would
+    /// look frozen in the menu bar.
+    @Test func everyAnimatedPoseMovesFromFrameToFrame() {
+        for runner in Runner.builtIns {
+            for pose in RunnerPose.allCases {
+                let frames = runner.frames(for: pose).map(Self.rgba)
+                guard frames.count > 1 else { continue }
+                for (n, frame) in frames.enumerated() {
+                    let next = frames[(n + 1) % frames.count]
+                    #expect(frame != next, "\(runner.id) \(pose.rawValue) frames \(n) and \(n + 1) are the same")
+                }
+            }
+        }
+    }
+
+    /// Each built in is its own character: no two share a running frame, and
+    /// within one runner the states look different from each other.
+    @Test func builtInRunnersAndTheirStatesDiffer() {
+        let firsts = Runner.builtIns.map { Self.rgba($0.frames(for: .running)[0]) }
+        #expect(Set(firsts).count == firsts.count)
+        for runner in Runner.builtIns {
+            let poses = RunnerPose.allCases.map { Self.rgba(runner.frames(for: $0)[0]) }
+            #expect(Set(poses).count == poses.count, "\(runner.id) has two poses that start alike")
         }
     }
 

@@ -21,9 +21,19 @@ FL_WKHTML_NEED_ROSETTA=0
 # FL_SKIP_COMMAND (ui.sh) is set when the step is skipped on purpose: what to
 # run by hand, for the JSON stream's "command"
 
+# "with patched qt", any case, in a captured --version text (no pipe: see fl_has_line)
+fl__wk_text_patched() {
+  case "$1" in
+    *[Ww][Ii][Tt][Hh]\ [Pp][Aa][Tt][Cc][Hh][Ee][Dd]\ [Qq][Tt]*) return 0 ;;
+  esac
+  return 1
+}
+
 fl__wkhtmltopdf_is_patched() {
   [[ -n "$1" && -x "$1" ]] || return 1
-  "$1" --version 2>&1 | grep -qi 'with patched qt'
+  local raw
+  raw="$("$1" --version 2>&1 || true)"
+  fl__wk_text_patched "$raw"
 }
 
 # The binary that counts: the package's own when it is the patched build,
@@ -60,7 +70,7 @@ fl_wkhtmltopdf_state() {
   bin="$(fl_wkhtmltopdf_bin)"
   [[ -n "$bin" ]] || { printf 'missing'; return 0; }
   raw="$("$bin" --version 2>&1 || true)"
-  if printf '%s' "$raw" | grep -qi 'with patched qt'; then printf 'patched'; elif [[ -n "$raw" ]]; then printf 'unpatched'; else printf 'missing'; fi
+  if fl__wk_text_patched "$raw"; then printf 'patched'; elif [[ -n "$raw" ]]; then printf 'unpatched'; else printf 'missing'; fi
 }
 
 fl_rosetta_installed() {
@@ -175,7 +185,7 @@ fl_wkhtmltopdf_install() {
   [[ "$code" == "0" ]] || return 1
   hash -r 2>/dev/null || true
   case "$(fl_wkhtmltopdf_state)" in
-    patched) fl_ok "$("$(fl_wkhtmltopdf_bin)" --version 2>&1 | head -n1) at $(fl_wkhtmltopdf_bin)"; fl_wkhtmltopdf_shadow_warn ;;
+    patched) fl_ok "$("$(fl_wkhtmltopdf_bin)" --version 2>&1 | awk 'NR==1') at $(fl_wkhtmltopdf_bin)"; fl_wkhtmltopdf_shadow_warn ;;
     *) fl_fail "the package installed but 'wkhtmltopdf --version' does not say 'with patched qt'"; return 1 ;;
   esac
 }
@@ -239,7 +249,7 @@ fl_wkhtmltopdf_install_gui() {
   FL_WKHTML_NEED_ROSETTA=0
   hash -r 2>/dev/null || true
   case "$(fl_wkhtmltopdf_state)" in
-    patched) fl_ok "$("$(fl_wkhtmltopdf_bin)" --version 2>&1 | head -n1) at $(fl_wkhtmltopdf_bin)"; fl_wkhtmltopdf_shadow_warn ;;
+    patched) fl_ok "$("$(fl_wkhtmltopdf_bin)" --version 2>&1 | awk 'NR==1') at $(fl_wkhtmltopdf_bin)"; fl_wkhtmltopdf_shadow_warn ;;
     *) fl_fail "the package installed but 'wkhtmltopdf --version' does not say 'with patched qt'"; return 1 ;;
   esac
 }
