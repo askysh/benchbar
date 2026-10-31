@@ -1297,7 +1297,7 @@ chk_honcho_setuptools() {
 # OBJC_DISABLE_INITIALIZE_FORK_SAFETY and NO_PROXY keep macOS from killing
 # forked workers; the agent plist sets them and honcho's children inherit.
 chk_fork_safety() {
-  local plist missing=""
+  local plist missing="" after
   # the unit sets NO_PROXY itself and macOS' fork check does not exist on Linux
   if declare -F fl_is_linux >/dev/null && fl_is_linux; then chk__set ok "skipped: macOS only"; return 0; fi
   plist="$(fl_agent_plist_path)"
@@ -1305,8 +1305,12 @@ chk_fork_safety() {
     chk__set ok "skipped: no agent plist yet"
     return 0
   fi
-  grep -A1 -F '<key>OBJC_DISABLE_INITIALIZE_FORK_SAFETY</key>' "$plist" | grep -q -F '<string>YES</string>' || missing="${missing} OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES"
-  grep -A1 -F '<key>NO_PROXY</key>' "$plist" | grep -q -F '<string>*</string>' || missing="${missing} NO_PROXY=*"
+  # the key and the line after it, read whole: "grep | grep -q" under
+  # pipefail failed when grep -q quit before the first grep finished writing
+  after="$(grep -A1 -F '<key>OBJC_DISABLE_INITIALIZE_FORK_SAFETY</key>' "$plist" 2>/dev/null || true)"
+  [[ "$after" == *'<string>YES</string>'* ]] || missing="${missing} OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES"
+  after="$(grep -A1 -F '<key>NO_PROXY</key>' "$plist" 2>/dev/null || true)"
+  [[ "$after" == *'<string>*</string>'* ]] || missing="${missing} NO_PROXY=*"
   if [[ -n "$missing" ]]; then
     chk__set warn "the agent does not pass${missing} to the workers" "${FL_SELF} repair" write_plist
   else
