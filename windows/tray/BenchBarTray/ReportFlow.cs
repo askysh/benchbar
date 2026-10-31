@@ -100,15 +100,30 @@ internal sealed class ReportBusyWindow : Window, IDisposable
         Ui.ApplyTheme(this, theme);
         Ui.Name(this, BugReportText.Working);
         var panel = new StackPanel { Margin = new Thickness(20) };
-        panel.Children.Add(Ui.Live(Ui.Text(BugReportText.Working, 14)));
+        var line = Ui.Live(Ui.Text(BugReportText.Working, 14));
+        panel.Children.Add(line);
         panel.Children.Add(new ProgressBar { IsIndeterminate = true, Height = 6, Margin = new Thickness(0, 12, 0, 0) });
         Content = panel;
         Closing += (_, e) => { if (!_done) e.Cancel = true; };
+        // a distro that is missing or does not answer makes each check wait up to 20 seconds: say so instead of sitting still
+        _slow = new System.Windows.Threading.DispatcherTimer { Interval = SlowAfter };
+        _slow.Tick += (_, _) =>
+        {
+            _slow.Stop();
+            line.Text = BugReportText.StillWorking;
+        };
+        _slow.Start();
     }
+
+    /// <summary>How long the first text stays before it says the report is still being written.</summary>
+    public static readonly TimeSpan SlowAfter = TimeSpan.FromSeconds(6);
+
+    private readonly System.Windows.Threading.DispatcherTimer _slow;
 
     public void Dispose()
     {
         _done = true;
+        _slow.Stop();
         Close();
     }
 }

@@ -40,7 +40,20 @@ public interface IWizardHost
 public sealed record LinuxPasswordRequest(int SudoSteps, bool WasWrong, bool UserExisted = false);
 
 /// <summary>Why an install or adopt run ended without success.</summary>
-public sealed record WizardFailure(string? Step, string Message, string? Fix, string? Log);
+public sealed record WizardFailure(string? Step, string Message, string? Fix, string? Log)
+{
+    /// <summary>The fix is a command to copy, not a sentence ("Pass MARIADB_ROOT_PASSWORD." is advice and has no Copy).</summary>
+    public bool FixIsCommand => Fix is { Length: > 0 } fix && FixCommand.IsCommand(fix);
+}
+
+public static partial class FixCommand
+{
+    [GeneratedRegex(@"^(?:(?:benchbar(?:\.exe)?|wsl(?:\.exe)?|sudo|bash|sh|apt|apt-get|systemctl|winget|powershell|pwsh|setx|cd)(?=\s|$)|\./|[A-Z][A-Z0-9_]*=)", RegexOptions.CultureInvariant)]
+    private static partial Regex CommandStart();
+
+    /// <summary>True for a line that starts like a command; a sentence (starts with a capital word, ends with a period) is not.</summary>
+    public static bool IsCommand(string text) => CommandStart().IsMatch(text.Trim());
+}
 
 public enum InstallPhase { Idle, Running, Succeeded, Failed, NeedsRootPassword, NeedsLinuxPassword, Stopped }
 
@@ -48,7 +61,11 @@ public enum InstallPhase { Idle, Running, Succeeded, Failed, NeedsRootPassword, 
 public sealed record InstallRow(string Id, string? Parent, string Name, InstallStepStatus Status, int? Secs, string? Message, string? Command);
 
 /// <summary>A row of the Check Your PC page, as the page draws it.</summary>
-public sealed record CheckRow(SetupStepInfo Step, bool Busy, string? Message, string? ButtonLabel, bool ShowsShield, string? AdminNote, bool Waiting = false);
+public sealed record CheckRow(SetupStepInfo Step, bool Busy, string? Message, string? ButtonLabel, bool ShowsShield, string? AdminNote, bool Waiting = false, string? DetailText = null)
+{
+    /// <summary>The detail line to show: the shim's, with step ids turned into titles.</summary>
+    public string Detail => DetailText ?? Step.Detail;
+}
 
 /// <summary>
 /// The first run wizard as a value you can drive: pages, the form fields, and the calls to the shim. No window code:
@@ -161,6 +178,8 @@ public sealed partial class WizardModel : IDisposable
     private CheckRow MakeRow(SetupStepInfo step)
     {
         _messages.TryGetValue(step.Id, out var message);
+        // a finished step says nothing more: "Turning on WSL" must not stay under a row that is done
+        if (step.Status == SetupStatus.Ok && BusyStepId != step.Id) message = null;
         var actionable = !step.IsSatisfied && step.Action is { Length: > 0 };
         var waiting = step.Waits;
         var label = !actionable ? null : step.Action switch
@@ -170,7 +189,7 @@ public sealed partial class WizardModel : IDisposable
             SetupIds.ActionWslEnable => "Turn On",
             _ => "Set Up",
         };
-        return new CheckRow(step, BusyStepId == step.Id, message, label, actionable && !waiting && step.NeedsAdmin, actionable && !waiting && step.NeedsAdmin ? AdminNote : null, waiting);
+        return new CheckRow(step, BusyStepId == step.Id, message, label, actionable && !waiting && step.NeedsAdmin, actionable && !waiting && step.NeedsAdmin ? AdminNote : null, waiting, StepText.Detail(step, Report.Steps));
     }
 
     /// <summary>Why the shim cannot use the distro the wizard checked (it could not be recorded), or null.</summary>

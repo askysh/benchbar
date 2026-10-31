@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Threading;
 using BenchBar.Tray.Core;
@@ -28,6 +29,9 @@ internal sealed class PageParts
     public List<Button> Left { get; } = [];
     public List<Button> Right { get; } = [];
     public Control? Focus { get; set; }
+
+    /// <summary>Changes the heading while the page stays (the install page becomes "Install Failed"). Set by the view.</summary>
+    public Action<string, string> SetHeading { get; set; } = (_, _) => { };
 }
 
 /// <summary>
@@ -56,6 +60,12 @@ internal sealed partial class WizardView : UserControl
         header.Children.Add(_title);
         header.Children.Add(_subtitle);
         Ui.Name(_title, "Page title");
+        // no focus rectangle around the page or its parts: only the controls inside it take the focus
+        FocusVisualStyle = null;
+        Focusable = false;
+        _body.FocusVisualStyle = null;
+        _body.Focusable = false;
+        _body.IsTabStop = false;
 
         var bar = new DockPanel { Margin = new Thickness(40, 12, 40, 8), LastChildFill = false };
         DockPanel.SetDock(_left, Dock.Left);
@@ -71,6 +81,7 @@ internal sealed partial class WizardView : UserControl
         var scroll = new ScrollViewer
         {
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, // the page wraps to the window; it never measures wider
             Content = _body,
             Padding = new Thickness(40, 0, 40, 0),
             Focusable = false,
@@ -127,18 +138,36 @@ internal sealed partial class WizardView : UserControl
         _builtPage = _model.Page;
         var page = Build(_model.Page);
         _page = page;
-        _title.Text = page.Title;
-        _subtitle.Text = page.Subtitle;
-        _subtitle.Visibility = page.Subtitle.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
-        _body.Content = page.Content;
+        page.SetHeading = SetHeading;
+        SetHeading(page.Title, page.Subtitle);
+        _body.Content = Ui.Constrain(page.Content, MaxWidthOf(_model.Page));
         _left.Children.Clear();
         _right.Children.Clear();
         foreach (var b in page.Left) _left.Children.Add(b);
         foreach (var b in page.Right) _right.Children.Add(b);
         page.Refresh();
-        var focus = page.Focus ?? page.Right.FirstOrDefault(b => b.IsEnabled) as Control;
+        var focus = page.Focus is { Visibility: Visibility.Visible, IsEnabled: true } wanted
+            ? wanted
+            : page.Right.FirstOrDefault(b => b.IsEnabled && b.Visibility == Visibility.Visible) as Control;
         if (focus is not null) Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => focus.Focus());
     }
+
+    private void SetHeading(string title, string subtitle)
+    {
+        _title.Text = title;
+        // the heading is announced by what it says, not by "Page title"
+        AutomationProperties.SetName(_title, title);
+        _subtitle.Text = subtitle;
+        _subtitle.Visibility = subtitle.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    /// <summary>How wide a page's column gets at most; the same on every state of the page, so rows do not change width.</summary>
+    internal static double MaxWidthOf(WizardPage page) => page switch
+    {
+        WizardPage.Welcome or WizardPage.LinuxUser => 560,
+        WizardPage.Check or WizardPage.Install => 720,
+        _ => 640,
+    };
 
     private PageParts Build(WizardPage page) => page switch
     {

@@ -173,6 +173,7 @@ internal sealed class FakeProbe : IDistroProbe
     private int _calls;
 
     public bool Running { get; set; } = true;
+    public bool Installed { get; set; } = true;
     public Exception? Throws { get; set; }
     public int Calls => Volatile.Read(ref _calls);
 
@@ -182,6 +183,8 @@ internal sealed class FakeProbe : IDistroProbe
         if (Throws is not null) throw Throws;
         return Task.FromResult(Running);
     }
+
+    public Task<bool> IsInstalledAsync(string distro, CancellationToken ct) => Task.FromResult(Installed);
 }
 
 /// <summary>A process runner that starts nothing: it answers from a script and records what it was asked.</summary>

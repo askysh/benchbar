@@ -278,6 +278,7 @@ public sealed class TrayController : IDisposable
     /// <summary>The short summary beside the title: "2 of 3 up", "none up", "distro stopped" or "needs attention".</summary>
     public static string UpText(TraySnapshot snapshot, IReadOnlyList<BenchState> states) =>
         snapshot.Problem is not null ? "needs attention"
+        : snapshot.DistroMissing ? "distro not installed"
         : snapshot.DistroStopped ? "distro stopped"
         : BenchAggregate.UpText(states);
 
@@ -292,6 +293,7 @@ public sealed class TrayController : IDisposable
     public static string Tooltip(TraySnapshot snapshot, string upText)
     {
         var text = snapshot.Problem is { } problem ? $"{TooltipName}: {problem}"
+            : snapshot.DistroMissing ? $"{TooltipName}: {snapshot.Distro ?? "WSL distro"} is not installed"
             : snapshot.DistroStopped ? $"{TooltipName}: {snapshot.Distro ?? "WSL distro"} is not running"
             : Tooltip(snapshot.Benches.Count, upText);
         return text.Length <= 127 ? text : text[..126] + "…";

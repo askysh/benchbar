@@ -26,6 +26,9 @@ internal sealed class FlyoutActions
     public Action<string> CopyText { get; set; } = _ => { };
     public Action<string> OpenUrl { get; set; } = _ => { };
     public Action OpenMain { get; set; } = () => { };
+
+    /// <summary>Opens the setup wizard (the empty flyout's next step).</summary>
+    public Action SetUpBench { get; set; } = () => { };
 }
 
 /// <summary>What the flyout shows now.</summary>
@@ -55,6 +58,7 @@ internal sealed class BenchRow : Border
 internal sealed class FlyoutView : UserControl
 {
     public const string DistroHint = "The tray does not start it on its own.";
+    public const string MissingDistroHint = "WSL has no distro with that name. Set up BenchBar to install it, or pick another distro in Settings.";
 
     private static readonly Brush CardBrush = Frozen(new SolidColorBrush(Color.FromArgb(0x1A, 0x80, 0x80, 0x80)));
     private static readonly Brush FocusBrush = Frozen(new SolidColorBrush(Color.FromArgb(0x26, 0x80, 0x80, 0x80)));
@@ -164,7 +168,7 @@ internal sealed class FlyoutView : UserControl
     }
 
     private string KeyOf(TraySnapshot s) => string.Join('\n',
-        s.DistroStopped ? $"stopped|{s.Distro}|{_distroStarting}" : "up",
+        s.DistroStopped ? $"stopped|{s.Distro}|{_distroStarting}|{s.DistroMissing}" : "up",
         s.Problem ?? "",
         string.Join('\n', s.Benches.Select(b =>
             $"{b.Path}|{b.Name}|{b.State}|{b.RawState}|{b.StopReason}|{b.Site}|{b.WebUrl}|{_busy.Contains(b.Path)}|{(_failures.TryGetValue(b.Path, out var f) ? f.Message : "")}|{b.Problem}")));
@@ -186,12 +190,12 @@ internal sealed class FlyoutView : UserControl
         else if (_snapshot.DistroStopped)
         {
             Mode = FlyoutMode.DistroStopped;
-            _body.Children.Add(DistroCard(_snapshot.Distro ?? "The WSL distro"));
+            _body.Children.Add(_snapshot.DistroMissing ? MissingDistroCard(_snapshot.Distro ?? "The WSL distro") : DistroCard(_snapshot.Distro ?? "The WSL distro"));
         }
         else if (_snapshot.Benches.Count == 0)
         {
             Mode = FlyoutMode.Empty;
-            _body.Children.Add(new TextBlock { Text = "No benches found.", Opacity = 0.7, Margin = new Thickness(12, 8, 12, 8) });
+            _body.Children.Add(EmptyCard());
         }
         else
         {
@@ -232,6 +236,37 @@ internal sealed class FlyoutView : UserControl
         var panel = new StackPanel();
         panel.Children.Add(new TextBlock { Text = CardTitle, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
         panel.Children.Add(new TextBlock { Text = CardHint, Opacity = 0.7, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) });
+        panel.Children.Add(button);
+        return Card(panel);
+    }
+
+    /// <summary>WSL does not have the distro BenchBar is set to (a typo, or it was removed): Start would do nothing, so the next step is setup or Settings.</summary>
+    private Border MissingDistroCard(string distro)
+    {
+        var button = new Button { Content = "Set Up a Bench", MinWidth = 64, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 10, 0, 0) };
+        button.Click += (_, _) => _actions.SetUpBench();
+        AutomationProperties(button, "Set up a bench");
+        _cardButton = button;
+        CardTitle = $"{distro} is not installed";
+        CardHint = MissingDistroHint;
+        CardButtons = ["Set Up a Bench"];
+        var panel = new StackPanel();
+        panel.Children.Add(new TextBlock { Text = CardTitle, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
+        panel.Children.Add(new TextBlock { Text = CardHint, Opacity = 0.7, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) });
+        panel.Children.Add(button);
+        return Card(panel);
+    }
+
+    private Border EmptyCard()
+    {
+        var button = new Button { Content = "Set Up a Bench", MinWidth = 64, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 10, 0, 0) };
+        button.Click += (_, _) => _actions.SetUpBench();
+        AutomationProperties(button, "Set up a bench");
+        _cardButton = button;
+        CardTitle = "No benches found.";
+        CardButtons = ["Set Up a Bench"];
+        var panel = new StackPanel();
+        panel.Children.Add(new TextBlock { Text = CardTitle, Opacity = 0.7, TextWrapping = TextWrapping.Wrap });
         panel.Children.Add(button);
         return Card(panel);
     }

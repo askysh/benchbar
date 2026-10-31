@@ -15,12 +15,19 @@ internal sealed class SettingsWindow : ToolWindow
     private readonly Action<string> _copy;
     private readonly ComboBox _distro = new() { Width = 320, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly TextBlock _distroNote = Ui.Text("", 12, opacity: 0.8, margin: new Thickness(0, 4, 0, 0));
+    private readonly ResolvedTheme _theme;
     private bool _syncing;
+
+    /// <summary>Asks before the distro changes; tests replace it.</summary>
+    public Func<string, bool> ConfirmSwitch { get; set; }
 
     public SettingsWindow(SettingsModel model, Func<RunnerSet> runners, Action<string> copy, ResolvedTheme theme)
         : base("BenchBar Settings", 620, 560, theme)
     {
         _model = model;
+        _theme = theme;
+        ConfirmSwitch = name => ConfirmDialog.Ask($"Use {name}?",
+            $"BenchBar will use {name} for its benches from now on. Benches in the other distro stay where they are, and the list updates at once.", "Switch", _theme, this);
         _runners = runners;
         _copy = copy;
         Ui.ApplyMica(this);
@@ -47,8 +54,15 @@ internal sealed class SettingsWindow : ToolWindow
 
         _distro.SelectionChanged += (_, _) =>
         {
-            if (_syncing || _distro.SelectedItem is not string name) return;
-            _model.UseDistroAsync(name.Replace(" (default)", "")).Forget();
+            if (_syncing || _distro.SelectedItem is not string chosen) return;
+            var name = chosen.Replace(" (default)", "");
+            if (string.Equals(name, _model.CurrentDistro, StringComparison.OrdinalIgnoreCase)) return;
+            if (!ConfirmSwitch(name))
+            {
+                Dispatcher.BeginInvoke(Sync); // put the picker back on the distro in use
+                return;
+            }
+            _model.UseDistroAsync(name).Forget();
         };
         Ui.Name(_distro, "WSL distro");
         var distroBox = new StackPanel();

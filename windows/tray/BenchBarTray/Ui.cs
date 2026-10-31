@@ -191,6 +191,20 @@ internal static class Ui
         return panel;
     }
 
+    /// <summary>
+    /// Puts <paramref name="content"/> at the left in a column that is as wide as the space allows, up to <paramref name="maxWidth"/>. A
+    /// left aligned panel with a MaxWidth shrinks to its widest child, so rows changed width from one state to the next; this one does not.
+    /// </summary>
+    public static Grid Constrain(UIElement content, double maxWidth)
+    {
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MaxWidth = maxWidth });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(content, 0);
+        grid.Children.Add(content);
+        return grid;
+    }
+
     public static Border CardOf(UIElement content, Thickness? margin = null) => new()
     {
         Background = Card,
@@ -243,8 +257,9 @@ internal static class Ui
             FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
             FontSize = size,
             VerticalAlignment = VerticalAlignment.Center,
-            Foreground = brush,
         };
+        // never assign null: a local null Foreground beats the inherited one and the glyph is drawn in no color at all
+        if (brush is not null) block.Foreground = brush;
         if (name is not null) Name(block, name);
         return block;
     }

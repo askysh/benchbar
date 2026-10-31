@@ -314,6 +314,7 @@ public partial class App : Application, ITrayHost
         CopyText = CopyText,
         OpenUrl = OpenUrl,
         OpenMain = OpenMain,
+        SetUpBench = () => OpenWizard(resume: false),
     };
 
     private VsCodeOutcome OpenEditor(BenchStatus bench)
@@ -544,9 +545,13 @@ public partial class App : Application, ITrayHost
         else if (_main is not null) where = _main.ReportWhere;
         else where = "No BenchBar window open";
         problem ??= inWizard ? _wizard!.ReportProblem : null;
-        var benchPath = _main?.SelectedBenchPath ?? (snapshot.Benches.Count == 1 ? snapshot.Benches[0].Path : null);
+        var distro = DistroName.Resolve(_config.Distro) ?? snapshot.Distro;
+        // the last poll's benches belong to the distro it polled: after a switch of distro (or while it is missing) they are not this one's
+        var pollIsCurrent = !snapshot.DistroStopped && snapshot.Problem is null
+            && string.Equals(snapshot.Distro ?? distro, distro, StringComparison.OrdinalIgnoreCase);
+        var benchPath = _main?.SelectedBenchPath ?? (pollIsCurrent && snapshot.Benches.Count == 1 ? snapshot.Benches[0].Path : null);
         var includes = File.Exists(_log.Path) ? new[] { _log.Path } : [];
-        var request = new ReportRequest(DistroName.Resolve(_config.Distro) ?? snapshot.Distro, benchPath,
+        var request = new ReportRequest(distro, benchPath,
             ReportContext.Compose(entry, where, problem), UpdateCheck.CurrentVersion().Split('+')[0], includes);
         await ReportFlowInstance.RunAsync(request);
     }

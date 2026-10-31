@@ -45,14 +45,15 @@ public sealed record BenchEntry(string Name, string Path, bool IsDefault, string
 
 /// <summary>
 /// What one poll found: the benches, or why there are none. With <see cref="DistroStopped"/> the poller
-/// asked nothing of the CLI (that would boot the distro). <see cref="Problem"/> is the one line the shim
+/// asked nothing of the CLI (that would boot the distro). With <see cref="DistroMissing"/> as well, WSL does not have the distro at all. <see cref="Problem"/> is the one line the shim
 /// or the tray printed for a setup or CLI failure, to show as it is.
 /// </summary>
 public sealed record TraySnapshot(
     IReadOnlyList<BenchStatus> Benches,
     bool DistroStopped = false,
     string? Distro = null,
-    string? Problem = null)
+    string? Problem = null,
+    bool DistroMissing = false)
 {
     public static TraySnapshot Empty { get; } = new([]);
 }
