@@ -22,6 +22,11 @@ All notable changes to this project are documented here.
   for picking one to open as (`--search`, `--limit`, `--json`).
 - `site list --json` and `status --json` give each site `developer_mode`,
   `open_as_enabled` and `open_as`.
+- BenchBar app: **Open as…** on the default site, in the popover, the Sites
+  tab and the Overview. A site's `...` menu has **Allow Open as…** (an alert
+  says what a sign in does) and **Turn Off Open as**. The menu lists
+  Switch Back, pinned users with labels, Administrator and **Find User…**; the
+  row then reads `as NAME`. Nothing shows until a site is opted in.
 
 ### Fixed
 

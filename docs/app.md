@@ -49,6 +49,57 @@ top chooses which bench the popover shows.
 | ⌘K | Health in the BenchBar window |
 | ⌘M | The BenchBar window |
 
+## Open as a user
+
+Open as opens a site in your browser signed in as another user, with no
+password, to check what a role sees. It is off for every site until you turn
+it on, and the app shows nothing else of it until then. Under the hood it runs
+[`benchbar open --as`](reference/cli/other.md#open).
+
+**Turn it on** in the BenchBar window: the bench's Sites tab, the `...` menu
+of the site, **Allow Open as…**. An alert says what it does: you can sign in as
+any user of the site without a password, each sign in runs the apps'
+`on_login` hooks, updates that user's `last_login` and may end that user's
+oldest session. Use it on development sites only. **Allow Open as** records
+the choice in benchbar's state for the bench (the site itself is not changed);
+**Turn Off Open as** in the same menu undoes it, without a question. The same
+switch in a terminal is [`benchbar site open-as`](reference/cli/site.md#site-open-as).
+
+The Sites tab shows a line under a site that has it on: "Open as is on", or why
+it cannot be used. The site needs `developer_mode` (add it with
+`bench --site NAME set-config developer_mode 1`), and only the bench's
+**default site** can be used, because the bench serves only that one: port 8000
+answers every address with it.
+
+Where it works, an **Open as…** control (a person icon and the words) appears
+in the popover's site row, on the Sites tab and beside **Open Site** on the
+Overview tab. On the default site it stays visible but dimmed, with the reason
+as its tooltip, while the bench is stopped or the site is not usable. The menu
+lists:
+
+- **Switch Back to {name}**: the user before this one.
+- Your pinned users, as `{label} ({user})`, then **Administrator**.
+- **Find User…**: a sheet in the BenchBar window that searches the site's
+  enabled users as you type. **Open** signs in as that user; the pin keeps them
+  in the menu, with a label of your own (for example `NE`). A site keeps nine
+  pins. Pins of a bench or site that no longer exists are forgotten.
+
+After a switch the site's row reads `as {name}`: the pin's label, else the
+user's full name, else the user id. That is BenchBar's own record of its last
+switch, not what the browser shows now.
+
+The link opens a new tab in the browser you used last (Safari, Chrome, Arc,
+Brave, Edge or Firefox), so the session cookie lands where you are testing;
+other tabs of that site keep the old user's screen, so reload them. If none of
+them was frontmost since BenchBar started, it uses your default browser when it
+runs, else the first of them that runs, else the default browser. BenchBar
+reads no tab and asks for no extra permission.
+
+BenchBar keeps the sessions it created in memory and reuses one while the site
+still says it belongs to that user, so switching back is quick. Quitting
+BenchBar forgets them. Nothing about a session is written to disk or logged by
+BenchBar; the browser keeps the sign-in link in its history.
+
 ## Links for Raycast and Shortcuts
 
 `benchbar://up`, `down`, `restart`, `open`, `logs`, `window`, `doctor`,
