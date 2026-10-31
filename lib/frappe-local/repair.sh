@@ -5,7 +5,9 @@
 # the check -> plan -> apply -> verify engine shared by "repair" and
 # "service" (the background phase).
 
-FL_ACTION_ORDER="python_leaves node_install yarn_install env_rebuild env_setuptools honcho_install honcho_setuptools node_requirements build clear_cache mariadb_bind mariadb_utf8 wkhtmltopdf_install legacy_migrate port_block write_procfile write_runner write_plist write_helpers write_cli_link hosts_entry rotate_logs redis_stop"
+# the steps that need sudo come first: on Linux the credential is dropped right
+# after them (fl_sudo_phase_done), before pip, npm and bench run
+FL_ACTION_ORDER="mariadb_bind mariadb_utf8 wkhtmltopdf_install python_leaves node_install yarn_install env_rebuild env_setuptools honcho_install honcho_setuptools node_requirements build clear_cache legacy_migrate port_block write_procfile write_runner write_plist write_helpers write_cli_link hosts_entry rotate_logs redis_stop"
 # actions whose check may stay a warning after a run without failing it:
 # the user may decline them (or sudo) on purpose
 FL_OPTIONAL_ACTIONS="wkhtmltopdf_install hosts_entry redis_stop"
@@ -667,7 +669,7 @@ fl_event_step() {
 # Returns 0 when everything is healthy afterwards, 1 when something failed.
 fl_repair_engine() {
   shift
-  local actions action i n=0 rows=() unchanged remaining status labels step_from optional_left="" ids plan_from plan_to
+  local actions action i n=0 last_sudo rows=() unchanged remaining status labels step_from optional_left="" ids plan_from plan_to
   fl_doctor_run "$@"
   actions=""
   for action in $(fl_doctor_actions); do
@@ -750,6 +752,11 @@ fl_repair_engine() {
   fi
   i=0
   status=0
+  # the sudo steps come first in FL_ACTION_ORDER: the credential is dropped
+  # after the last of them (Linux), before the actions that run bench, pip or npm
+  last_sudo=""
+  for action in $actions; do fl_action_needs_sudo "$action" && last_sudo="$action"; done
+  [[ -n "$last_sudo" ]] || fl_sudo_phase_done
   for action in $actions; do
     fl_step_begin "$i"
     # an action may report "skipped" (or "unchanged") through FL_STEP_RESULT
@@ -775,7 +782,9 @@ fl_repair_engine() {
       esac
     fi
     i=$((i + 1))
+    [[ "$action" != "$last_sudo" ]] || fl_sudo_phase_done
   done
+  fl_sudo_phase_done
   if [[ "$FL_NEED_CLEAR_CACHE" == "1" && "$status" == "0" ]]; then
     fl_info "clearing caches after the rebuild"
     act_clear_cache || true

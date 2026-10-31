@@ -576,12 +576,15 @@ on. `site drop` still needs a terminal for the line it removes.
 On Linux, a program without a terminal (the Windows tray, an agent)
 passes the user's sudo password in `BENCHBAR_SUDO_PASSWORD` with
 `BENCHBAR_SUDO=env`. The CLI takes it out of its environment before
-anything else runs, checks it once with `sudo -k` and `sudo -S -v`
+anything else runs (it starts itself once more without the variable, so
+the running process has no copy in `/proc/PID/environ`), checks it once with `sudo -k` and `sudo -S -v`
 before any change, and then runs its sudo steps without a prompt. A
 wrong password ends the run with `exit` 1 and `error_id`
 `sudo_password_wrong`. The password never goes into arguments, `bash -x`
 output, the run log or a child process: in `install` only phase 00 gets
-it, on a file descriptor, and it is forgotten after that phase. Without a
+it, on a file descriptor. Every command forgets it, and drops the sudo
+credential, when its sudo steps are done, before any bench, pip or npm
+step runs. Without a
 password and without a terminal, `install --json` with
 `BENCHBAR_NONINTERACTIVE=1` names `BENCHBAR_SUDO_PASSWORD` in `missing`;
 other commands skip their sudo step with a warning. The commands that
