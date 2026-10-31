@@ -118,6 +118,24 @@ public class TrayMenuTests : IDisposable
 
 internal sealed class RunnerFolder(string root) : IDisposable
 {
+    private static readonly object GdiGate = new();
+
+    /// <summary>Saves a PNG with an encoder looked up here, one thread at a time: the codec list of GDI+ can come back empty while another thread is the first to use it (ArgumentNullException, encoder).</summary>
+    private static void SavePng(System.Drawing.Bitmap bitmap, string path)
+    {
+        lock (GdiGate)
+        {
+            System.Drawing.Imaging.ImageCodecInfo? png = null;
+            for (var attempt = 0; attempt < 20 && png is null; attempt++)
+            {
+                png = System.Drawing.Imaging.ImageCodecInfo.GetImageEncoders().FirstOrDefault(e => e.FormatID == System.Drawing.Imaging.ImageFormat.Png.Guid);
+                if (png is null) Thread.Sleep(25);
+            }
+            if (png is null) throw new InvalidOperationException("GDI+ has no PNG encoder.");
+            bitmap.Save(path, png, null);
+        }
+    }
+
     public string Make(string name) => Directory.CreateDirectory(Path.Combine(root, name)).FullName;
 
     public string Good(string name)
@@ -127,7 +145,7 @@ internal sealed class RunnerFolder(string root) : IDisposable
         {
             using var bitmap = new System.Drawing.Bitmap(36, 36);
             using (var g = System.Drawing.Graphics.FromImage(bitmap)) g.Clear(System.Drawing.Color.Black);
-            bitmap.Save(Path.Combine(dir, file), System.Drawing.Imaging.ImageFormat.Png);
+            SavePng(bitmap, Path.Combine(dir, file));
         }
         File.WriteAllText(Path.Combine(dir, "manifest.json"),
             """{"name":"Blob","author":"Pat","template":true,"states":{"running":["run1.png","run2.png","run3.png"]}}""");
@@ -256,6 +274,23 @@ public class SupportTests : IDisposable
         Assert.True(File.Exists(path + ".1"));
         Assert.True(new FileInfo(path).Length <= 300);
         Assert.True(new FileInfo(path + ".1").Length <= 300);
+    }
+
+    [Fact]
+    public void TheErrorLogWritesAnIdenticalRepeatedExceptionOnceAndCountsTheRest()
+    {
+        var path = Path.Combine(_dir, "BenchBar", "tray.log");
+        var clock = new DateTime(2026, 10, 30, 12, 0, 0, DateTimeKind.Utc);
+        var log = new ErrorLog(path, utcNow: () => clock);
+        for (var i = 0; i < 500; i++) log.Write("ui", new InvalidOperationException("same"));
+        Assert.Single(File.ReadAllLines(path));
+        log.Write("ui", new InvalidOperationException("other"));
+        Assert.Equal(2, File.ReadAllLines(path).Length);
+        clock += ErrorLog.RepeatWindow + TimeSpan.FromSeconds(1);
+        log.Write("ui", new InvalidOperationException("same"));
+        var lines = File.ReadAllLines(path);
+        Assert.Equal(3, lines.Length);
+        Assert.Contains("repeated 499 more times", lines[2]);
     }
 
     [Fact]
