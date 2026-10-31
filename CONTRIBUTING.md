@@ -10,8 +10,11 @@ Security problems go through a private report, never a public issue: see
 
 ## Before you start
 
-- **A bug:** open an issue with the bug form and attach the zip from
-  `benchbar report`. It contains no secrets, paths or names.
+- **A bug on macOS or Linux:** open an issue with the bug form and attach
+  the zip from `benchbar report`. It contains no secrets, paths or names.
+- **A bug on Windows (beta):** use **Report a Bug** in the tray. It writes
+  a redacted zip and opens the Windows bug form with the zip to drag in.
+  User names and home paths are replaced in that zip.
 - **A small fix:** open a pull request directly.
 - **A large change** (a new command, a new doctor check family, a change
   to the JSON API or the runner format, anything across the CLI and the
@@ -66,9 +69,10 @@ and tray, and uploads an unsigned bundle for every pull request.
   [docs/DECISIONS.md](docs/DECISIONS.md), app choices in
   [macos/DECISIONS.md](macos/DECISIONS.md). If a reviewer would ask "why
   not the obvious way?", that answer is a DECISIONS line.
-- **Tested on.** The macOS version, the profile (`v15-lts`, `v16-lts` or
-  a team profile) and whether it ran on a real Mac with a real bench, not
-  only under the mocks.
+- **Tested on.** The OS (the macOS version, or the Ubuntu version, or the
+  Windows edition and build with the WSL distro), the profile (`v15-lts`,
+  `v16-lts` or a team profile) and whether it ran on a real machine with a
+  real bench, not only under the mocks.
 - **Commits** have an imperative subject ("Add", "Fix", "Read") and a
   body that says why.
 

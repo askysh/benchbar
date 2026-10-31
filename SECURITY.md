@@ -10,7 +10,9 @@ it. If you cannot use GitHub, email
 [mail@akashmishra.com](mailto:mail@akashmishra.com). You get an answer within a week, and a fix or a plan for one before
 anything is disclosed. Say whether you want credit in the advisory.
 
-Include what you ran, the macOS version, `benchbar --version`, and what
+Include what you ran, the OS (the macOS version, the Ubuntu version, or
+the Windows edition and build with the WSL distro), the version
+(`benchbar --version`, or the versions in the tray's About window) and what
 an attacker gains. A proof of concept helps; please use a throwaway
 bench, never someone else's machine or data.
 
@@ -22,14 +24,28 @@ exploitable:
 
 - **The Keychain.** Anything that reads, writes or prints the MariaDB
   root password or another stored secret where it should not, or lets
-  another program get it.
-- **sudo.** Anything that runs more than the `/etc/hosts` line and the
-  wkhtmltopdf package with `sudo`, or lets input reach those commands.
+  another program get it. On Linux the root password is not in a
+  Keychain. It is a 0600 file in a 0700 folder under the state folder
+  (`$XDG_STATE_HOME/benchbar`). A file that other users can read, or a
+  password that reaches a log, the command line or a child process,
+  counts.
+- **sudo.** Anything that runs `sudo` for more than its platform's list,
+  or lets input reach those commands. On macOS the list is the `/etc/hosts`
+  line and the wkhtmltopdf package. On Linux it is apt (the packages and
+  the wkhtmltopdf `.deb`), the MariaDB admin step (`sudo mariadb`, its
+  config drop-in and a restart), and starting a stopped `mariadb` or
+  `redis-server`. On Windows only `System32\wsl.exe --install --no-distribution`
+  is elevated, through the UAC prompt.
+- **BENCHBAR_SUDO_PASSWORD.** On Linux, with `BENCHBAR_SUDO=env`, the
+  password is read once at start and removed from the environment. Report
+  anything that puts it in the command line, a log, a report zip or a
+  child process.
 - **A site or a database.** Anything that drops, overwrites or exposes a
   site, a database or a backup without the confirmation the command
   promises (`pull`, `repair`, `adopt`, `app update`, `site add`).
-- **`benchbar report`.** A password, key, token, path or name that ends
-  up in the report zip or in `report --print`.
+- **`benchbar report` and Report a Bug.** A password, key, token, path or
+  name that ends up in the report zip, in `report --print` or in the
+  Windows zip from `report-windows`.
 - **Secrets elsewhere.** A token or password in logs under
   `.benchbar/logs/`, in `--json` output, in a lockfile, or in a git
   remote.
