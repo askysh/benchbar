@@ -1,6 +1,7 @@
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
 
 namespace BenchBar.Tray.Core;
 
@@ -14,11 +15,17 @@ internal sealed class RunnerCanvas
 {
     public enum EyeStyle { Open, Wide, Closed, Crossed }
 
-    private readonly Graphics _g;
+    /// <summary>The frame being drawn on; a mask while <see cref="Cutting"/> runs.</summary>
+    private Graphics _g;
+    private readonly Bitmap _bitmap;
     private readonly Brush _ink = Brushes.Black;
     private readonly Color _inkColor = Color.Black;
 
-    public RunnerCanvas(Graphics g) => _g = g;
+    private RunnerCanvas(Graphics g, Bitmap bitmap)
+    {
+        _g = g;
+        _bitmap = bitmap;
+    }
 
     /// <summary>
     /// A <paramref name="side"/> by <paramref name="side"/> bitmap (32 bpp, straight alpha) with the 24 by 18 pt
@@ -38,7 +45,7 @@ internal sealed class RunnerCanvas
         g.TranslateTransform(0, top + BenchRunnerArt.Height * scale);
         g.ScaleTransform(scale, -scale); // points, y up
 
-        draw(new RunnerCanvas(g));
+        draw(new RunnerCanvas(g, bitmap));
         return bitmap;
     }
 
@@ -54,15 +61,12 @@ internal sealed class RunnerCanvas
     /// An arc of a circle, stroked. Angles are radians in y up terms, counterclockwise positive
     /// (CGContext.addArc with clockwise false); <paramref name="sweepRadians"/> is the signed length.
     /// </summary>
-    public void Arc(PointF center, float radius, float startRadians, float sweepRadians, float width) =>
-        Arc(_inkColor, center, radius, startRadians, sweepRadians, width);
-
-    private void Arc(Color color, PointF center, float radius, float startRadians, float sweepRadians, float width)
+    public void Arc(PointF center, float radius, float startRadians, float sweepRadians, float width)
     {
         using var path = new GraphicsPath();
         path.AddArc(center.X - radius, center.Y - radius, radius * 2, radius * 2,
             startRadians * 180 / MathF.PI, sweepRadians * 180 / MathF.PI);
-        using var pen = NewPen(width, color);
+        using var pen = NewPen(width, _inkColor);
         _g.DrawPath(pen, path);
     }
 
@@ -77,12 +81,12 @@ internal sealed class RunnerCanvas
 
     // The same shapes as holes (the Mac's cutDot, cutLine and cutArc).
 
-    public void CutDot(PointF center, float radius) => Cutting(() => Dot(Brushes.Transparent, center, radius));
+    public void CutDot(PointF center, float radius) => Cutting(() => Dot(center, radius));
 
-    public void CutLine(PointF[] points, float width) => Cutting(() => Line(Color.Transparent, points, width));
+    public void CutLine(PointF[] points, float width) => Cutting(() => Line(points, width));
 
     public void CutArc(PointF center, float radius, float startRadians, float sweepRadians, float width) =>
-        Cutting(() => Arc(Color.Transparent, center, radius, startRadians, sweepRadians, width));
+        Cutting(() => Arc(center, radius, startRadians, sweepRadians, width));
 
     /// <summary>A quadratic curve as the cubic GDI+ draws: from <paramref name="p0"/> through control <paramref name="c"/> to <paramref name="p1"/>.</summary>
     public static void QuadTo(GraphicsPath path, PointF p0, PointF c, PointF p1) =>
@@ -110,12 +114,54 @@ internal sealed class RunnerCanvas
         _g.Restore(state);
     }
 
-    /// <summary>Draws with the clear blend mode: whatever is drawn becomes a hole (real alpha).</summary>
+    /// <summary>
+    /// Whatever <paramref name="body"/> draws becomes a hole, as the Mac's clear blend mode makes it: the shapes go
+    /// into a mask with the same transform, then each pixel keeps the part of its alpha the mask does not cover.
+    /// SourceCopy with a transparent brush would wipe every pixel an antialiased edge touches, and at 16 px a thin
+    /// cut (the snail's spiral) took most of the shape with it.
+    /// </summary>
     private void Cutting(Action body)
     {
-        _g.CompositingMode = CompositingMode.SourceCopy;
-        try { body(); }
-        finally { _g.CompositingMode = CompositingMode.SourceOver; }
+        using var mask = new Bitmap(_bitmap.Width, _bitmap.Height, PixelFormat.Format32bppArgb);
+        using (var m = Graphics.FromImage(mask))
+        {
+            m.Clear(Color.Transparent);
+            m.SmoothingMode = _g.SmoothingMode;
+            m.PixelOffsetMode = _g.PixelOffsetMode;
+            using (var transform = _g.Transform) m.Transform = transform;
+            var frame = _g;
+            _g = m;
+            try { body(); }
+            finally { _g = frame; }
+        }
+        _g.Flush(FlushIntention.Sync);
+        Erase(_bitmap, mask);
+    }
+
+    /// <summary>Multiplies each pixel's alpha in <paramref name="frame"/> by what <paramref name="mask"/> leaves uncovered.</summary>
+    private static void Erase(Bitmap frame, Bitmap mask)
+    {
+        var rect = new Rectangle(0, 0, frame.Width, frame.Height);
+        var f = frame.LockBits(rect, ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
+        var k = mask.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+        try
+        {
+            var row = new byte[rect.Width * 4];
+            var cut = new byte[rect.Width * 4];
+            for (var y = 0; y < rect.Height; y++)
+            {
+                Marshal.Copy(f.Scan0 + y * f.Stride, row, 0, row.Length);
+                Marshal.Copy(k.Scan0 + y * k.Stride, cut, 0, cut.Length);
+                for (var a = 3; a < row.Length; a += 4)
+                    row[a] = (byte)(row[a] * (255 - cut[a]) / 255);
+                Marshal.Copy(row, 0, f.Scan0 + y * f.Stride, row.Length);
+            }
+        }
+        finally
+        {
+            mask.UnlockBits(k);
+            frame.UnlockBits(f);
+        }
     }
 
     public void Fill(RectangleF rect, float radius)
@@ -131,17 +177,13 @@ internal sealed class RunnerCanvas
         _g.FillPath(_ink, path);
     }
 
-    public void Dot(PointF center, float radius) => Dot(_ink, center, radius);
+    public void Dot(PointF center, float radius) =>
+        _g.FillEllipse(_ink, center.X - radius, center.Y - radius, radius * 2, radius * 2);
 
-    private void Dot(Brush brush, PointF center, float radius) =>
-        _g.FillEllipse(brush, center.X - radius, center.Y - radius, radius * 2, radius * 2);
-
-    public void Line(PointF[] points, float width) => Line(_inkColor, points, width);
-
-    private void Line(Color color, PointF[] points, float width)
+    public void Line(PointF[] points, float width)
     {
         if (points.Length < 2) return;
-        using var pen = NewPen(width, color);
+        using var pen = NewPen(width, _inkColor);
         _g.DrawLines(pen, points);
     }
 
@@ -167,14 +209,14 @@ internal sealed class RunnerCanvas
             {
                 switch (style)
                 {
-                    case EyeStyle.Open: Dot(Brushes.Transparent, c, 0.8f); break;
-                    case EyeStyle.Wide: Dot(Brushes.Transparent, c, 1.05f); break;
+                    case EyeStyle.Open: Dot(c, 0.8f); break;
+                    case EyeStyle.Wide: Dot(c, 1.05f); break;
                     case EyeStyle.Closed:
-                        Line(Color.Transparent, [new PointF(c.X - 0.6f, c.Y), new PointF(c.X + 0.6f, c.Y)], 0.7f);
+                        Line([new PointF(c.X - 0.6f, c.Y), new PointF(c.X + 0.6f, c.Y)], 0.7f);
                         break;
                     case EyeStyle.Crossed:
-                        Line(Color.Transparent, [new PointF(c.X - 0.75f, c.Y - 0.75f), new PointF(c.X + 0.75f, c.Y + 0.75f)], 0.6f);
-                        Line(Color.Transparent, [new PointF(c.X - 0.75f, c.Y + 0.75f), new PointF(c.X + 0.75f, c.Y - 0.75f)], 0.6f);
+                        Line([new PointF(c.X - 0.75f, c.Y - 0.75f), new PointF(c.X + 0.75f, c.Y + 0.75f)], 0.6f);
+                        Line([new PointF(c.X - 0.75f, c.Y + 0.75f), new PointF(c.X + 0.75f, c.Y - 0.75f)], 0.6f);
                         break;
                 }
             }

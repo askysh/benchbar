@@ -8,7 +8,7 @@ import Foundation
 nonisolated enum SnailRunnerArt {
     static let width: CGFloat = 24
     static let shellCenter = CGPoint(x: 8, y: 7.6)
-    static let shellRadius: CGFloat = 4.9
+    static let shellRadius: CGFloat = 5.4
 
     static func make() -> Runner {
         Runner(
@@ -31,10 +31,10 @@ nonisolated enum SnailRunnerArt {
     static func shell(_ c: RunnerCanvas, center: CGPoint, turn: CGFloat = 0) {
         c.dot(center, radius: shellRadius)
         c.transformed(lean: turn, pivot: center) {
-            c.cutArc(center: CGPoint(x: center.x + 0.3, y: center.y), radius: 2.9,
-                     start: .pi * 0.5, sweep: .pi * 1.55, width: 0.8)
-            c.cutArc(center: CGPoint(x: center.x + 0.6, y: center.y + 0.3), radius: 1.3,
-                     start: .pi * 1.5, sweep: .pi * 1.4, width: 0.8)
+            c.cutArc(center: CGPoint(x: center.x + 0.3, y: center.y), radius: 3.2,
+                     start: .pi * 0.5, sweep: .pi * 1.55, width: 0.6)
+            c.cutArc(center: CGPoint(x: center.x + 0.6, y: center.y + 0.3), radius: 1.4,
+                     start: .pi * 1.5, sweep: .pi * 1.4, width: 0.6)
         }
     }
 
@@ -90,7 +90,7 @@ nonisolated enum SnailRunnerArt {
         RunnerCanvas.render(width: width) { c in
             // all in the shell, which rests on the ground and breathes
             let breath: CGFloat = i % 2 == 0 ? 0 : 0.3
-            shell(c, center: CGPoint(x: shellCenter.x, y: 5.2 + breath))
+            shell(c, center: CGPoint(x: shellCenter.x, y: 5.7 + breath))
             c.fill(CGRect(x: 3.4, y: 0.6, width: 9.6, height: 1.2), radius: 0.6)
             sleepMarks(c, i, x: 15)
         }
@@ -99,7 +99,7 @@ nonisolated enum SnailRunnerArt {
     static func rolling(_ i: Int) -> CGImage {
         // it pulls in and the shell rolls over, a quarter turn a frame
         RunnerCanvas.render(width: width) { c in
-            let center = CGPoint(x: 9 + CGFloat(i) * 1.2, y: 5.6 + (i % 2 == 0 ? 0.6 : 0))
+            let center = CGPoint(x: 9 + CGFloat(i) * 1.2, y: 6.0 + (i % 2 == 0 ? 0.6 : 0))
             shell(c, center: center, turn: CGFloat(i) * 90)
             c.line([CGPoint(x: center.x - 6.6, y: 0.6), CGPoint(x: center.x - 5.2, y: 0.6)], width: 0.8)
             if i % 2 == 1 {

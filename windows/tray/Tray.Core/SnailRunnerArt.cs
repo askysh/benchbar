@@ -10,7 +10,7 @@ namespace BenchBar.Tray.Core;
 public static class SnailRunnerArt
 {
     private static readonly PointF ShellCenter = new(8, 7.6f);
-    private const float ShellRadius = 4.9f;
+    private const float ShellRadius = 5.4f;
 
     public static int FrameCount(RunnerPose pose) => BenchRunnerArt.FrameCount(pose);
 
@@ -39,8 +39,8 @@ public static class SnailRunnerArt
         c.Dot(center, ShellRadius);
         c.Transformed(turn, center, PointF.Empty, () =>
         {
-            c.CutArc(new PointF(center.X + 0.3f, center.Y), 2.9f, 0.5f * MathF.PI, 1.55f * MathF.PI, 0.8f);
-            c.CutArc(new PointF(center.X + 0.6f, center.Y + 0.3f), 1.3f, 1.5f * MathF.PI, 1.4f * MathF.PI, 0.8f);
+            c.CutArc(new PointF(center.X + 0.3f, center.Y), 3.2f, 0.5f * MathF.PI, 1.55f * MathF.PI, 0.6f);
+            c.CutArc(new PointF(center.X + 0.6f, center.Y + 0.3f), 1.4f, 1.5f * MathF.PI, 1.4f * MathF.PI, 0.6f);
         });
     }
 
@@ -100,7 +100,7 @@ public static class SnailRunnerArt
     {
         // all in the shell, which rests on the ground and breathes
         var breath = i % 2 == 0 ? 0f : 0.3f;
-        Shell(c, new PointF(ShellCenter.X, 5.2f + breath));
+        Shell(c, new PointF(ShellCenter.X, 5.7f + breath));
         c.Fill(new RectangleF(3.4f, 0.6f, 9.6f, 1.2f), 0.6f);
         BenchRunnerArt.SleepMarks(c, i, 15);
     }
@@ -108,7 +108,7 @@ public static class SnailRunnerArt
     private static void Rolling(RunnerCanvas c, int i)
     {
         // it pulls in and the shell rolls over, a quarter turn a frame
-        var center = new PointF(9 + i * 1.2f, 5.6f + (i % 2 == 0 ? 0.6f : 0));
+        var center = new PointF(9 + i * 1.2f, 6.0f + (i % 2 == 0 ? 0.6f : 0));
         Shell(c, center, i * 90);
         c.Line([new PointF(center.X - 6.6f, 0.6f), new PointF(center.X - 5.2f, 0.6f)], 0.8f);
         if (i % 2 == 1)

@@ -40,25 +40,25 @@ public static class RocketRunnerArt
     {
         c.Transformed(lean, PointF.Empty, center, () =>
         {
-            if (flame > 0) c.Shape([new PointF(-1.3f, -4.6f), new PointF(1.3f, -4.6f), new PointF(0, -4.8f - flame)]);
-            c.Fill(new RectangleF(-2.1f, -3.8f, 4.2f, 7.6f), 1.4f);
+            if (flame > 0) c.Shape([new PointF(-1.5f, -5.4f), new PointF(1.5f, -5.4f), new PointF(0, -5.6f - flame)]);
+            c.Fill(new RectangleF(-2.6f, -4.4f, 5.2f, 8.8f), 1.6f);
             c.Shape(
             [
-                new PointF(-2.1f, 2.6f), new PointF(2.1f, 2.6f), new PointF(1.4f, 4.8f),
-                new PointF(0, 6.4f), new PointF(-1.4f, 4.8f),
+                new PointF(-2.6f, 3.0f), new PointF(2.6f, 3.0f), new PointF(1.7f, 5.6f),
+                new PointF(0, 7.4f), new PointF(-1.7f, 5.6f),
             ]);
-            c.Shape([new PointF(-2.0f, -0.6f), new PointF(-4.2f, -4.6f), new PointF(-2.0f, -3.4f)]);
-            c.Shape([new PointF(2.0f, -0.6f), new PointF(4.2f, -4.6f), new PointF(2.0f, -3.4f)]);
-            c.Fill(new RectangleF(-1.3f, -4.8f, 2.6f, 1.4f), 0.3f);
-            var eye = new PointF(0, 1.2f);
+            c.Shape([new PointF(-2.4f, -0.8f), new PointF(-5.0f, -5.4f), new PointF(-2.4f, -4.0f)]);
+            c.Shape([new PointF(2.4f, -0.8f), new PointF(5.0f, -5.4f), new PointF(2.4f, -4.0f)]);
+            c.Fill(new RectangleF(-1.5f, -5.6f, 3.0f, 1.6f), 0.3f);
+            var eye = new PointF(0, 1.4f);
             switch (window)
             {
-                case Window.Open: c.CutDot(eye, 1.1f); break;
-                case Window.Wide: c.CutDot(eye, 1.4f); break;
-                case Window.Closed: c.CutLine([new PointF(-0.8f, 1), new PointF(0.8f, 1)], 0.7f); break;
+                case Window.Open: c.CutDot(eye, 1.3f); break;
+                case Window.Wide: c.CutDot(eye, 1.6f); break;
+                case Window.Closed: c.CutLine([new PointF(-0.9f, 1.2f), new PointF(0.9f, 1.2f)], 0.7f); break;
                 case Window.Crossed:
-                    c.CutLine([new PointF(-0.8f, 0.4f), new PointF(0.8f, 2)], 0.6f);
-                    c.CutLine([new PointF(-0.8f, 2), new PointF(0.8f, 0.4f)], 0.6f);
+                    c.CutLine([new PointF(-0.9f, 0.5f), new PointF(0.9f, 2.3f)], 0.6f);
+                    c.CutLine([new PointF(-0.9f, 2.3f), new PointF(0.9f, 0.5f)], 0.6f);
                     break;
             }
         });
@@ -74,7 +74,7 @@ public static class RocketRunnerArt
         for (var k = 0; k < 3; k++)
         {
             var t = (i / 6f + k / 3f) % 1;
-            var d = 8.6f + 5 * t;
+            var d = 9.8f + 4.4f * t;
             c.Dot(new PointF(13 - d * 0.707f, 9.6f - d * 0.707f), 0.6f + 0.8f * t);
         }
     }
@@ -83,7 +83,7 @@ public static class RocketRunnerArt
     {
         // on the pad, rumbling, the smoke spreading out at its feet
         var shake = i % 2 == 0 ? 0.2f : -0.2f;
-        Rocket(c, new PointF(10 + shake, 6.4f), flame: i % 2 == 0 ? 0.8f : 1.4f);
+        Rocket(c, new PointF(10 + shake, 7.4f), flame: i % 2 == 0 ? 0.8f : 1.4f);
         float spread = i % 3;
         foreach (var side in new[] { -1f, 1f })
         {
@@ -96,7 +96,7 @@ public static class RocketRunnerArt
     {
         // parked on its fins, engine cold
         var breath = i % 2 == 0 ? 0f : 0.25f;
-        Rocket(c, new PointF(9, 5.2f + breath), window: Window.Closed);
+        Rocket(c, new PointF(9, 6.0f + breath), window: Window.Closed);
         BenchRunnerArt.SleepMarks(c, i, 15.6f);
     }
 
@@ -119,13 +119,13 @@ public static class RocketRunnerArt
 
     private static void Alert(RunnerCanvas c)
     {
-        Rocket(c, new PointF(9, 5.2f), window: Window.Wide);
+        Rocket(c, new PointF(9, 6.0f), window: Window.Wide);
         c.Exclamation(18.6f);
     }
 
     private static void Question(RunnerCanvas c)
     {
-        Rocket(c, new PointF(9, 5.2f), -8);
+        Rocket(c, new PointF(9, 6.0f), -8);
         c.Question(18.6f);
     }
 }

@@ -29,9 +29,9 @@ nonisolated enum PlaneRunnerArt {
 
     /// The upper wing and the keel, with the fold between them cut out.
     static func body(_ c: RunnerCanvas) {
-        c.shape([CGPoint(x: 5.6, y: 13.2), CGPoint(x: 20.4, y: 9.2), CGPoint(x: 8.6, y: 8.9)])
-        c.shape([CGPoint(x: 8.6, y: 8.9), CGPoint(x: 20.4, y: 9.2), CGPoint(x: 10, y: 5.6)])
-        c.cutLine([CGPoint(x: 8.2, y: 8.9), CGPoint(x: 18.2, y: 9.13)], width: 0.6)
+        c.shape([CGPoint(x: 5.0, y: 14.0), CGPoint(x: 20.4, y: 9.2), CGPoint(x: 8.6, y: 8.9)])
+        c.shape([CGPoint(x: 8.6, y: 8.9), CGPoint(x: 20.4, y: 9.2), CGPoint(x: 9.6, y: 4.8)])
+        c.cutLine([CGPoint(x: 8.2, y: 8.9), CGPoint(x: 18.2, y: 9.13)], width: 0.45)
     }
 
     /// The plane leaned `pitch` degrees nose down and moved by `offset`.
@@ -61,7 +61,7 @@ nonisolated enum PlaneRunnerArt {
         RunnerCanvas.render(width: width) { c in
             // a run along the ground with little hops, not quite airborne
             let hops: [CGFloat] = [0, 0.3, 1.2, 2.0, 1.2, 0.3]
-            plane(c, pitch: -4 - hops[i] * 3, offset: CGPoint(x: -1, y: -5.4 + hops[i]))
+            plane(c, pitch: -4 - hops[i] * 3, offset: CGPoint(x: -1, y: -4.6 + hops[i]))
             let drift = CGFloat(i % 3) * 0.8
             for x in [CGFloat(1.0), 5.2] {
                 c.line([CGPoint(x: x - drift, y: 0.6), CGPoint(x: x + 1.6 - drift, y: 0.6)], width: 0.8)
@@ -73,7 +73,7 @@ nonisolated enum PlaneRunnerArt {
         RunnerCanvas.render(width: width) { c in
             // grounded, nose down a little, rocking now and then
             let rock: CGFloat = i % 2 == 0 ? 0 : 1.5
-            plane(c, pitch: 4 + rock, offset: CGPoint(x: -5, y: -5.6))
+            plane(c, pitch: 4 + rock, offset: CGPoint(x: -5, y: -4.8))
             sleepMarks(c, i, x: 17)
         }
     }

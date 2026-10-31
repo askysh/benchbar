@@ -32,24 +32,24 @@ nonisolated enum RocketRunnerArt {
     static func rocket(_ c: RunnerCanvas, center: CGPoint, lean: CGFloat = 0, flame: CGFloat = 0, window: Window = .open) {
         c.transformed(lean: lean, pivot: .zero, offset: center) {
             if flame > 0 {
-                c.shape([CGPoint(x: -1.3, y: -4.6), CGPoint(x: 1.3, y: -4.6), CGPoint(x: 0, y: -4.8 - flame)])
+                c.shape([CGPoint(x: -1.5, y: -5.4), CGPoint(x: 1.5, y: -5.4), CGPoint(x: 0, y: -5.6 - flame)])
             }
-            c.fill(CGRect(x: -2.1, y: -3.8, width: 4.2, height: 7.6), radius: 1.4)
+            c.fill(CGRect(x: -2.6, y: -4.4, width: 5.2, height: 8.8), radius: 1.6)
             c.shape([
-                CGPoint(x: -2.1, y: 2.6), CGPoint(x: 2.1, y: 2.6), CGPoint(x: 1.4, y: 4.8),
-                CGPoint(x: 0, y: 6.4), CGPoint(x: -1.4, y: 4.8),
+                CGPoint(x: -2.6, y: 3.0), CGPoint(x: 2.6, y: 3.0), CGPoint(x: 1.7, y: 5.6),
+                CGPoint(x: 0, y: 7.4), CGPoint(x: -1.7, y: 5.6),
             ])
-            c.shape([CGPoint(x: -2.0, y: -0.6), CGPoint(x: -4.2, y: -4.6), CGPoint(x: -2.0, y: -3.4)])
-            c.shape([CGPoint(x: 2.0, y: -0.6), CGPoint(x: 4.2, y: -4.6), CGPoint(x: 2.0, y: -3.4)])
-            c.fill(CGRect(x: -1.3, y: -4.8, width: 2.6, height: 1.4), radius: 0.3)
-            let eye = CGPoint(x: 0, y: 1.2)
+            c.shape([CGPoint(x: -2.4, y: -0.8), CGPoint(x: -5.0, y: -5.4), CGPoint(x: -2.4, y: -4.0)])
+            c.shape([CGPoint(x: 2.4, y: -0.8), CGPoint(x: 5.0, y: -5.4), CGPoint(x: 2.4, y: -4.0)])
+            c.fill(CGRect(x: -1.5, y: -5.6, width: 3.0, height: 1.6), radius: 0.3)
+            let eye = CGPoint(x: 0, y: 1.4)
             switch window {
-            case .open: c.cutDot(eye, radius: 1.1)
-            case .wide: c.cutDot(eye, radius: 1.4)
-            case .closed: c.cutLine([CGPoint(x: -0.8, y: 1), CGPoint(x: 0.8, y: 1)], width: 0.7)
+            case .open: c.cutDot(eye, radius: 1.3)
+            case .wide: c.cutDot(eye, radius: 1.6)
+            case .closed: c.cutLine([CGPoint(x: -0.9, y: 1.2), CGPoint(x: 0.9, y: 1.2)], width: 0.7)
             case .crossed:
-                c.cutLine([CGPoint(x: -0.8, y: 0.4), CGPoint(x: 0.8, y: 2)], width: 0.6)
-                c.cutLine([CGPoint(x: -0.8, y: 2), CGPoint(x: 0.8, y: 0.4)], width: 0.6)
+                c.cutLine([CGPoint(x: -0.9, y: 0.5), CGPoint(x: 0.9, y: 2.3)], width: 0.6)
+                c.cutLine([CGPoint(x: -0.9, y: 2.3), CGPoint(x: 0.9, y: 0.5)], width: 0.6)
             }
         }
     }
@@ -62,7 +62,7 @@ nonisolated enum RocketRunnerArt {
             // puffs of exhaust drifting away down to the left
             for k in 0..<3 {
                 let t = (CGFloat(i) / 6 + CGFloat(k) / 3).truncatingRemainder(dividingBy: 1)
-                let d = 8.6 + 5 * t
+                let d = 9.8 + 4.4 * t
                 c.dot(CGPoint(x: 13 - d * 0.707, y: 9.6 - d * 0.707), radius: 0.6 + 0.8 * t)
             }
         }
@@ -72,7 +72,7 @@ nonisolated enum RocketRunnerArt {
         RunnerCanvas.render(width: width) { c in
             // on the pad, rumbling, the smoke spreading out at its feet
             let shake: CGFloat = i % 2 == 0 ? 0.2 : -0.2
-            rocket(c, center: CGPoint(x: 10 + shake, y: 6.4), flame: i % 2 == 0 ? 0.8 : 1.4)
+            rocket(c, center: CGPoint(x: 10 + shake, y: 7.4), flame: i % 2 == 0 ? 0.8 : 1.4)
             let spread = CGFloat(i % 3)
             for side in [CGFloat(-1), 1] {
                 c.dot(CGPoint(x: 10 + side * (3.6 + spread * 0.9), y: 1.4), radius: 0.8 + spread * 0.25)
@@ -85,7 +85,7 @@ nonisolated enum RocketRunnerArt {
         RunnerCanvas.render(width: width) { c in
             // parked on its fins, engine cold
             let breath: CGFloat = i % 2 == 0 ? 0 : 0.25
-            rocket(c, center: CGPoint(x: 9, y: 5.2 + breath), window: .closed)
+            rocket(c, center: CGPoint(x: 9, y: 6.0 + breath), window: .closed)
             sleepMarks(c, i, x: 15.6)
         }
     }
@@ -108,14 +108,14 @@ nonisolated enum RocketRunnerArt {
 
     static func alert() -> CGImage {
         RunnerCanvas.render(width: width) { c in
-            rocket(c, center: CGPoint(x: 9, y: 5.2), window: .wide)
+            rocket(c, center: CGPoint(x: 9, y: 6.0), window: .wide)
             c.exclamation(x: 18.6)
         }
     }
 
     static func question() -> CGImage {
         RunnerCanvas.render(width: width) { c in
-            rocket(c, center: CGPoint(x: 9, y: 5.2), lean: -8)
+            rocket(c, center: CGPoint(x: 9, y: 6.0), lean: -8)
             c.question(x: 18.6)
         }
     }
