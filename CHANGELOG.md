@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here.
 
-## 0.8.1 - 2026-10-31
+## 0.8.1 - 2026-11-01
 
 BenchBar for Windows is now a beta. The tray takes a new PC from no WSL to
 a running bench, and manages benches from its own window, as the Mac app
