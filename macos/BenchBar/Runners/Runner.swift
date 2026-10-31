@@ -59,7 +59,12 @@ extension Runner {
     nonisolated static let builtIns: [Runner] = makeBuiltIns()
 
     /// Draws every built in at the current `renderScale`.
-    nonisolated static func makeBuiltIns() -> [Runner] { [BenchRunnerArt.make(), CupRunnerArt.make()] }
+    nonisolated static func makeBuiltIns() -> [Runner] {
+        [
+            BenchRunnerArt.make(), CupRunnerArt.make(), KettleRunnerArt.make(), ServerRunnerArt.make(),
+            PlaneRunnerArt.make(), SnailRunnerArt.make(), RocketRunnerArt.make(),
+        ]
+    }
 
     nonisolated static let defaultID = "bench"
 
