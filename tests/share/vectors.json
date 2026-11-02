@@ -1,0 +1,251 @@
+{
+  "notes": "All hex values are lowercase. Fh and Fg are the 32 raw bytes of SHA-256 over the SPKI DER of each leaf certificate; Ng and Nh are their 16 raw bytes. commit = hex(SHA-256(Fg || Ng)). SAS = SHA-256(UTF-8 'benchbar-share-sas-v2' || Fh || Fg || Ng || Nh); take the first 4 bytes as a big-endian uint32, mod 1000000, zero-padded to 6 digits. Fingerprint string = 'sha256:' + hex(SHA-256(SPKI DER)). Path vectors: ok=false means the target must be rejected; ok=true gives the normalised (decoded) path, the re-encoded forward path and the query string including its leading '?' (empty when absent).",
+  "spki": {
+    "der_hex": "3059301306072a8648ce3d020106082a8648ce3d030107034200042b2617c9a62dbb666c943311328d0e196539e0088571a0e32291c9910a071dffbc1aa770450f0411e2c2184386a436cb42dbdf0ca554f2c665d2ad2fc1ebde08",
+    "sha256_hex": "c5285b5652e53408a5ea70f5856cea62b3a68c4ae4e143bb0d6c7d82f9afec2a",
+    "fingerprint": "sha256:c5285b5652e53408a5ea70f5856cea62b3a68c4ae4e143bb0d6c7d82f9afec2a"
+  },
+  "pairing": {
+    "fh": "c5285b5652e53408a5ea70f5856cea62b3a68c4ae4e143bb0d6c7d82f9afec2a",
+    "fg": "88ccea5c482901678ed2bfc38c39617bfe80fd19e046f151b1fdbd9c2cd0b553",
+    "ng": "000102030405060708090a0b0c0d0e0f",
+    "nh": "f0e1d2c3b4a5968778695a4b3c2d1e0f",
+    "commit": "f89e17a15c12a06040b4ef94c9a54554840c3cf5f2e430d79a8a627000c31dd2",
+    "sas": "373088"
+  },
+  "paths": [
+    {
+      "raw": "/",
+      "ok": true,
+      "path": "/",
+      "forward": "/",
+      "search": ""
+    },
+    {
+      "raw": "/app",
+      "ok": true,
+      "path": "/app",
+      "forward": "/app",
+      "search": ""
+    },
+    {
+      "raw": "/app/",
+      "ok": true,
+      "path": "/app/",
+      "forward": "/app/",
+      "search": ""
+    },
+    {
+      "raw": "/app/sales-order/SO-0042",
+      "ok": true,
+      "path": "/app/sales-order/SO-0042",
+      "forward": "/app/sales-order/SO-0042",
+      "search": ""
+    },
+    {
+      "raw": "/app/Sales%20Order",
+      "ok": true,
+      "path": "/app/Sales Order",
+      "forward": "/app/Sales%20Order",
+      "search": ""
+    },
+    {
+      "raw": "/%61pp",
+      "ok": true,
+      "path": "/app",
+      "forward": "/app",
+      "search": ""
+    },
+    {
+      "raw": "/%63onsole",
+      "ok": true,
+      "path": "/console",
+      "forward": "/console",
+      "search": ""
+    },
+    {
+      "raw": "/app/%E2%82%AC",
+      "ok": true,
+      "path": "/app/€",
+      "forward": "/app/%E2%82%AC",
+      "search": ""
+    },
+    {
+      "raw": "/app/a%25",
+      "ok": true,
+      "path": "/app/a%",
+      "forward": "/app/a%25",
+      "search": ""
+    },
+    {
+      "raw": "/app/a%2Bb",
+      "ok": true,
+      "path": "/app/a+b",
+      "forward": "/app/a%2Bb",
+      "search": ""
+    },
+    {
+      "raw": "/api/method/frappe.client.get?doctype=User&name=x",
+      "ok": true,
+      "path": "/api/method/frappe.client.get",
+      "forward": "/api/method/frappe.client.get",
+      "search": "?doctype=User&name=x"
+    },
+    {
+      "raw": "/%2e%2e/",
+      "ok": false
+    },
+    {
+      "raw": "/%2E%2E/x",
+      "ok": false
+    },
+    {
+      "raw": "/a/../b",
+      "ok": false
+    },
+    {
+      "raw": "/a/./b",
+      "ok": false
+    },
+    {
+      "raw": "/..",
+      "ok": false
+    },
+    {
+      "raw": "/%2e",
+      "ok": false
+    },
+    {
+      "raw": "//",
+      "ok": false
+    },
+    {
+      "raw": "//evil.example/x",
+      "ok": false
+    },
+    {
+      "raw": "/a//b",
+      "ok": false
+    },
+    {
+      "raw": "/a\\b",
+      "ok": false
+    },
+    {
+      "raw": "/a%5Cb",
+      "ok": false
+    },
+    {
+      "raw": "/a%5cb",
+      "ok": false
+    },
+    {
+      "raw": "/a%2Fb",
+      "ok": false
+    },
+    {
+      "raw": "/a%2fb",
+      "ok": false
+    },
+    {
+      "raw": "/%00",
+      "ok": false
+    },
+    {
+      "raw": "/a%00b",
+      "ok": false
+    },
+    {
+      "raw": "/a%252f",
+      "ok": false
+    },
+    {
+      "raw": "/a%25%32f",
+      "ok": false
+    },
+    {
+      "raw": "/a%255c",
+      "ok": false
+    },
+    {
+      "raw": "/console;x",
+      "ok": false
+    },
+    {
+      "raw": "/a;b",
+      "ok": false
+    },
+    {
+      "raw": "http://evil.example/",
+      "ok": false
+    },
+    {
+      "raw": "https://x/app",
+      "ok": false
+    },
+    {
+      "raw": "evil.example:80",
+      "ok": false
+    },
+    {
+      "raw": "*",
+      "ok": false
+    },
+    {
+      "raw": "",
+      "ok": false
+    },
+    {
+      "raw": "app",
+      "ok": false
+    },
+    {
+      "raw": "/a b",
+      "ok": false
+    },
+    {
+      "raw": "/a%zz",
+      "ok": false
+    },
+    {
+      "raw": "/a%2",
+      "ok": false
+    },
+    {
+      "raw": "/a%",
+      "ok": false
+    },
+    {
+      "raw": "/%ff",
+      "ok": false
+    },
+    {
+      "raw": "/%C0%AE",
+      "ok": false
+    },
+    {
+      "raw": "/a\u0001b",
+      "ok": false
+    },
+    {
+      "raw": "/é",
+      "ok": false
+    },
+    {
+      "raw": "/a#frag",
+      "ok": false
+    },
+    {
+      "raw": "/a?x\u0000y",
+      "ok": false
+    },
+    {
+      "raw": "/a?x y",
+      "ok": false
+    },
+    {
+      "raw": "/a?x\\y",
+      "ok": false
+    }
+  ]
+}

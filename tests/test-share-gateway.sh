@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# LAN sharing gateway: the pure Node modules (path policy, commit-reveal SAS,
+# rate limits, device store, activity log, error pages) via node:test.
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+set -euo pipefail
+
+if ! command -v node >/dev/null 2>&1; then
+  printf 'SKIP: node not found\n'
+  exit 0
+fi
+
+cd "$ROOT"
+node --test tests/share/*.test.js
+printf 'test-share-gateway: ok\n'
