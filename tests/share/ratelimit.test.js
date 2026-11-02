@@ -115,3 +115,18 @@ test("RateBucket: 6 per minute per key, a sliding window, keys independent", () 
     c.t += 2 * S;
     assert.strictEqual(b.take("dev1"), true);
 });
+
+test("retryAfter reports the cooldown left, the IP's own TTL left, or the soonest slot to free", () => {
+    const c = clock(); const l = new PairLimiter({ now: c.now });
+    l.admit("10.0.0.1");
+    c.t += 100 * S;
+    l.admit("10.0.0.2"); l.admit("10.0.0.3");
+    assert.strictEqual(l.admit("10.0.0.1").reason, "ip_pending");
+    assert.strictEqual(l.retryAfter("10.0.0.1"), 200);
+    assert.strictEqual(l.admit("10.0.0.4").reason, "total_pending");
+    assert.strictEqual(l.retryAfter("10.0.0.4"), 200);
+    l.onDeny("10.0.0.2");
+    c.t += 10 * S;
+    assert.strictEqual(l.admit("10.0.0.2").reason, "cooldown");
+    assert.strictEqual(l.retryAfter("10.0.0.2"), 50);
+});

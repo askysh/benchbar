@@ -802,3 +802,74 @@ test("hygiene: after a full flow the state dir and log dir hold no sid, typed co
         assert.ok(!JSON.stringify(replies.slice(1, 3)).includes(code));
     });
 });
+
+test("gateway.js ignores NODE_ENV=test and x-test-peer-ip: the limiter sees the real address", async () => {
+    await withGateway({ production: true }, async (gw) => {
+        assert.strictEqual((await pairStart(gw, cert("prod1"), { ip: "10.8.0.1" })).r.status, 200);
+        const second = await pairStart(gw, cert("prod2"), { ip: "10.8.0.2" });
+        assert.strictEqual(second.r.status, 429, "a forged address evaded the per-IP limit");
+        gw.jump(2 * 3600_000);
+        await sleep(300);
+        assert.strictEqual((await gw.control({ op: "status" })).ok, true, "the clock file was honoured");
+    });
+});
+
+test("a control op after the deadline (sleep/wake) is refused and the gateway exits 0; extend cannot revive it", async () => {
+    await withGateway({ tickMs: 600_000 }, async (gw) => {
+        gw.jump(2 * 3600_000);
+        const reply = await gw.control({ op: "extend", seconds: 3600 }).catch(() => ({ ok: false }));
+        assert.notStrictEqual(reply.ok, true);
+        const exit = await Promise.race([gw.exited, sleep(3000).then(() => "timeout")]);
+        assert.deepStrictEqual(exit, { code: 0, signal: null });
+        assert.strictEqual(JSON.parse(fs.readFileSync(gw.cfgFile, "utf8")).deadline_epoch, gw.cfg.deadline_epoch);
+    });
+});
+
+test("status.pending is the true queued count while the pending list shows only the head", async () => {
+    await withGateway({}, async (gw) => {
+        const held = [];
+        for (const n of [1, 2, 3]) {
+            const c = cert(`q${n}`);
+            const { r, ng } = await pairStart(gw, c, { ip: `10.9.${n}.1` });
+            held.push(pairReveal(gw, c, r.json.request_id, ng, { ip: `10.9.${n}.1` }));
+            await until(async () => (await gw.control({ op: "status" })).pending === n);
+        }
+        assert.strictEqual((await pending(gw)).length, 1);
+        assert.strictEqual((await gw.control({ op: "status" })).pending, 3);
+    });
+});
+
+test("a cross-site leave or confirm is refused and the device survives", async () => {
+    const c = cert("xs1");
+    const row = deviceRow(c);
+    const pc = cert("xs2");
+    const pcRow = deviceRow(pc, { status: "pending_confirm" });
+    await withGateway({ devices: [row, pcRow] }, async (gw) => {
+        for (const headers of [{ "sec-fetch-site": "cross-site" }, { origin: "http://evil.example" }]) {
+            const leave = await request(gw, { method: "POST", path: "/_benchbar/leave", cert: c, body: "", headers });
+            assert.strictEqual(leave.status, 403, JSON.stringify(headers));
+            const confirm = await request(gw, { method: "POST", path: "/pair/confirm", cert: pc, headers, body: JSON.stringify({ device_id: pcRow.id }) });
+            assert.strictEqual(confirm.status, 403, JSON.stringify(headers));
+        }
+        const bad = await request(gw, { method: "POST", path: "/_benchbar/leave", cert: c, body: "", headers: { origin: "http://share.localhost:8443", host: "evil.example" } });
+        assert.strictEqual(bad.status, 400);
+        const { devices } = await gw.control({ op: "devices" });
+        assert.deepStrictEqual(devices.map((d) => [d.id, d.status]).sort(), [[row.id, "active"], [pcRow.id, "pending_confirm"]].sort());
+        assert.strictEqual((await request(gw, { method: "POST", path: "/_benchbar/leave", cert: c, body: "" })).status, 200);
+    });
+});
+
+test("429 retry_after is the real remaining time: cooldown, own TTL, or the soonest slot", async () => {
+    await withGateway({}, async (gw) => {
+        const a = cert("ra1");
+        assert.strictEqual((await pairStart(gw, a, { ip: "10.10.0.1" })).r.status, 200);
+        gw.jump(100_000);
+        const same = await pairStart(gw, a, { ip: "10.10.0.1" });
+        assert.ok(same.r.json.retry_after >= 199 && same.r.json.retry_after <= 201, String(same.r.json.retry_after));
+        gw.jump(0);
+        await pairStart(gw, cert("ra2"), { ip: "10.10.0.2" });
+        await pairStart(gw, cert("ra3"), { ip: "10.10.0.3" });
+        const full = await pairStart(gw, cert("ra4"), { ip: "10.10.0.4" });
+        assert.ok(full.r.json.retry_after > 250 && full.r.json.retry_after <= 300);
+    });
+});

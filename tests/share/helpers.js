@@ -11,6 +11,7 @@ const { spkiFingerprint } = require("../../lib/frappe-local/share/sas.js");
 
 const OPENSSL = "/usr/bin/openssl";
 const GATEWAY_JS = path.join(__dirname, "../../lib/frappe-local/share/gateway.js");
+const HARNESS_JS = path.join(__dirname, "gateway_harness.js");
 const SID = "SIDSECRET0123456789abcdef0123456789ab";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -87,7 +88,8 @@ function deviceRow(cert, extra = {}) {
         paired_ip: "192.168.1.9", added: iso, last_seen: iso, ...extra };
 }
 
-// Spawns the real gateway. The clock offset file and the peer-IP header are test hooks that only exist under NODE_ENV=test.
+// Spawns the gateway through gateway_harness.js, which injects the test clock, tick and peer-IP header.
+// `production: true` runs gateway.js itself under NODE_ENV=test, to prove it honours none of them.
 async function startGateway(opts = {}) {
     const dir = tmpDir();
     const stateDir = path.join(dir, "st");
@@ -116,7 +118,7 @@ async function startGateway(opts = {}) {
     const clockFile = path.join(dir, "clock");
     fs.writeFileSync(clockFile, "0");
 
-    const child = spawn(process.execPath, [GATEWAY_JS, cfgFile], {
+    const child = spawn(process.execPath, [opts.production ? GATEWAY_JS : HARNESS_JS, cfgFile], {
         env: { ...process.env, NODE_ENV: "test", FL_SHARE_TEST_CLOCK_FILE: clockFile, FL_SHARE_TEST_TICK_MS: String(opts.tickMs || 100) },
         stdio: ["ignore", "pipe", "pipe"]
     });
