@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # LAN sharing gateway: the pure Node modules (path policy, commit-reveal SAS,
-# rate limits, device store, activity log, error pages) via node:test.
+# rate limits, device store, activity log, error pages) and the gateway server
+# itself (mTLS, pairing, sign-in, proxy, control socket, deadline) via node:test.
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 set -euo pipefail
 
