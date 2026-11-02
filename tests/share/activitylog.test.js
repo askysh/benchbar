@@ -32,6 +32,15 @@ test("the query is dropped and the path is redacted to two segments", () => {
     assert.ok(!JSON.stringify(r).includes("SO-0042") && !JSON.stringify(r).includes("Acme") && !JSON.stringify(r).includes("Secret"));
 });
 
+test("file names are never logged", () => {
+    const dir = tmp();
+    const log = new ActivityLog(dir, { now: () => T0 });
+    log.record({ device: "d", user: "u", method: "GET", path: "/files/Secret.pdf", status: 200 });
+    log.record({ device: "d", user: "u", method: "GET", path: "/private/files/Payroll.xlsx?x=1", status: 200 });
+    const r = lines(dir);
+    assert.deepStrictEqual(r.map((x) => x.path), ["/files", "/private/files"]);
+});
+
 test("a newline or other control character cannot forge a line", () => {
     const dir = tmp();
     const log = new ActivityLog(dir, { now: () => T0 });

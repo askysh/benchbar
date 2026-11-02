@@ -127,6 +127,51 @@ test("a user cannot be mapped to two devices; the same device may be reassigned"
     assert.throws(() => s.assign(id(9), "z@example.com"), /not found/);
 });
 
+test("add enforces the unique-user rule too", () => {
+    const s = store(tmp());
+    s.add(dev(1, { user: "priya.test@example.com" }));
+    assert.throws(() => s.add(dev(2, { user: "Priya.Test@example.com" })), (e) => e.code === "user_taken");
+    assert.strictEqual(s.list().length, 1);
+    s.add(dev(2, { user: "other@example.com" }));
+    assert.strictEqual(s.list().length, 2);
+});
+
+test("a throttled touch does no file I/O: no lock file is created", () => {
+    let t = T0;
+    const dir = tmp();
+    const s = store(dir, () => t);
+    s.add(dev(1));
+    s.list();
+    const real = fs.openSync;
+    const opened = [];
+    fs.openSync = (...a) => { opened.push(a[0]); return real(...a); };
+    try {
+        t = T0 + 10_000;
+        s.touch(id(1));
+    } finally {
+        fs.openSync = real;
+    }
+    assert.deepStrictEqual(opened, []);
+    assert.ok(!fs.existsSync(path.join(dir, "devices.lock")));
+});
+
+test("a holder whose stale lock was broken does not delete the next holder's lock", () => {
+    const dir = tmp();
+    const lock = path.join(dir, "devices.lock");
+    const s = store(dir);
+    const real = fs.renameSync;
+    fs.renameSync = (...a) => {
+        fs.writeFileSync(lock, "someone-else-token");
+        return real(...a);
+    };
+    try {
+        s.add(dev(1));
+    } finally {
+        fs.renameSync = real;
+    }
+    assert.strictEqual(fs.readFileSync(lock, "utf8"), "someone-else-token");
+});
+
 test("prune removes a device unseen for 30 days and keeps a recent one", () => {
     let t = T0;
     const s = store(tmp(), () => t);

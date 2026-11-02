@@ -39,7 +39,7 @@ test("static page: no script, no external resource, strict headers", () => {
         assert.ok(!/<script/i.test(r.body), kind);
         assert.ok(!/https?:\/\//i.test(r.body), kind);
         assert.ok(!/<(link|img|iframe|object|embed)\b/i.test(r.body), kind);
-        assert.strictEqual(r.headers["Content-Security-Policy"], "default-src 'none'; style-src 'unsafe-inline'");
+        assert.strictEqual(r.headers["Content-Security-Policy"], "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'");
         assert.strictEqual(r.headers["Cache-Control"], "no-store");
         assert.match(r.headers["Content-Type"], /^text\/html; charset=utf-8$/);
         assert.strictEqual(r.headers["Content-Length"], String(Buffer.byteLength(r.body)));

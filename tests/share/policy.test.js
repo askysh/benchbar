@@ -147,6 +147,24 @@ test("sanitizeRequestHeaders drops an empty cookie and does not mutate its input
     assert.strictEqual(policy.sanitizeRequestHeaders({ cookie: ["sid=1", "x=2"] }).cookie, "sid=1");
 });
 
+test("a __debugger__ query key is rejected in any case or encoding, on any path", () => {
+    for (const raw of ["/app?__debugger__=yes&cmd=resource&f=style.css", "/app?%5F%5Fdebugger%5F%5F=yes&cmd=pinauth", "/app?x=1&__DEBUGGER__=yes",
+        "/api/method/x?%5f%5fDebugger%5f%5f", "/app?a=1;__debugger__=1", "/app?__debugger__", "/app?__%64ebugger__=1", "/app?__debugger__=", "/?__debugger__=yes"]) {
+        const r = policy.normalizePath(raw);
+        assert.strictEqual(r.ok, false, raw);
+        assert.strictEqual(r.reason, "debugger", raw);
+    }
+    assert.strictEqual(policy.normalizePath("/app?%E0%A4%A=1").ok, false);
+    assert.strictEqual(policy.normalizePath("/app?x=__debugger__").ok, true, "a value is not a key");
+    assert.strictEqual(policy.normalizePath("/app?debugger=1&_debugger_=2").ok, true);
+});
+
+test("redactPath drops file names", () => {
+    assert.strictEqual(policy.redactPath("/files/Secret Customer.pdf"), "/files");
+    assert.strictEqual(policy.redactPath("/files"), "/files");
+    assert.strictEqual(policy.redactPath("/private/files/Payroll.xlsx"), "/private/files");
+});
+
 test("redactPath keeps the first two segments only", () => {
     assert.strictEqual(policy.redactPath("/app/sales-order/SO-0042"), "/app/sales-order");
     assert.strictEqual(policy.redactPath("/app/sales-order"), "/app/sales-order");

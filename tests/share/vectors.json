@@ -66,7 +66,7 @@
     {
       "raw": "/app/%E2%82%AC",
       "ok": true,
-      "path": "/app/€",
+      "path": "/app/\u20ac",
       "forward": "/app/%E2%82%AC",
       "search": ""
     },
@@ -228,7 +228,7 @@
       "ok": false
     },
     {
-      "raw": "/é",
+      "raw": "/\u00e9",
       "ok": false
     },
     {
@@ -246,6 +246,25 @@
     {
       "raw": "/a?x\\y",
       "ok": false
+    },
+    {
+      "raw": "/app?__debugger__=yes&cmd=resource&f=style.css",
+      "ok": false
+    },
+    {
+      "raw": "/app?%5F%5Fdebugger%5F%5F=yes&cmd=pinauth",
+      "ok": false
+    },
+    {
+      "raw": "/app?x=1&__DEBUGGER__=yes",
+      "ok": false
+    },
+    {
+      "raw": "/app?x=__debugger__",
+      "ok": true,
+      "path": "/app",
+      "forward": "/app",
+      "search": "?x=__debugger__"
     }
   ]
 }

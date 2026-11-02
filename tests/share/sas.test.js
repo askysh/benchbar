@@ -31,6 +31,16 @@ test("checkCommit accepts the right nonce and refuses another, a short or a wron
     assert.strictEqual(sas.checkCommit(undefined, b(P.fg), b(P.ng)), false);
 });
 
+test("checkCommit returns false, never throws, on malformed input", () => {
+    assert.strictEqual(sas.checkCommit(P.commit, b(P.fg), b(P.ng).subarray(1)), false);
+    assert.strictEqual(sas.checkCommit(P.commit, b(P.fg), Buffer.alloc(17)), false);
+    assert.strictEqual(sas.checkCommit(P.commit, b(P.fg).subarray(1), b(P.ng)), false);
+    assert.strictEqual(sas.checkCommit(P.commit, b(P.fg), "zz"), false);
+    assert.strictEqual(sas.checkCommit(P.commit, b(P.fg), undefined), false);
+    assert.strictEqual(sas.checkCommit(P.commit, b(P.fg), 12345), false);
+    assert.strictEqual(sas.checkCommit(P.commit, null, b(P.ng)), false);
+});
+
 test("sas matches the vector and is six digits", () => {
     const code = sas.sas(b(P.fh), b(P.fg), b(P.ng), b(P.nh));
     assert.strictEqual(code, P.sas);
