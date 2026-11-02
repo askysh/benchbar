@@ -38,7 +38,7 @@ test("forward never contains a decoded slash, backslash or dot segment, and roun
 });
 
 test("isAllowed accepts the Frappe allowlist", () => {
-    const ok = (m, p) => policy.isAllowed(m, p, {});
+    const ok = (m, p) => policy.isAllowed(m, p);
     for (const p of ["/", "/app", "/app/", "/app/sales-order/SO-0042", "/login", "/logout", "/assets/frappe/js/x.js", "/files/a.png",
         "/private/files/a.pdf", "/api/method/frappe.client.get", "/api/resource/User", "/printview", "/manifest.json", "/sw.js",
         "/favicon.ico", "/website_script.js", "/update-password", "/me"]) {
@@ -49,14 +49,21 @@ test("isAllowed accepts the Frappe allowlist", () => {
     assert.deepStrictEqual(ok("GET", "/_benchbar/hello"), { ok: true, route: "hello" });
     assert.deepStrictEqual(ok("GET", "/_benchbar/signin"), { ok: true, route: "signin" });
     assert.deepStrictEqual(ok("POST", "/_benchbar/leave"), { ok: true, route: "leave" });
-    assert.strictEqual(ok("POST", "/pair/start").route, "pair");
-    assert.strictEqual(ok("POST", "/pair/reveal").route, "pair");
-    assert.strictEqual(ok("GET", "/pair/start").ok, false);
+    assert.deepStrictEqual(ok("GET", "/_benchbar/room"), { ok: true, route: "room" });
+    assert.deepStrictEqual(ok("GET", "/_benchbar/seats"), { ok: true, route: "seats" });
+    assert.deepStrictEqual(ok("POST", "/_benchbar/seat"), { ok: true, route: "seat" });
+    assert.strictEqual(ok("POST", "/_benchbar/seats").ok, false);
+    assert.deepStrictEqual(ok("GET", "/room/hello"), { ok: true, route: "roomhello" });
+    assert.deepStrictEqual(ok("POST", "/room/join/start"), { ok: true, route: "joinstart" });
+    assert.deepStrictEqual(ok("POST", "/room/join/finish"), { ok: true, route: "joinfinish" });
+    assert.strictEqual(ok("GET", "/room/join/start").ok, false);
+    assert.strictEqual(ok("POST", "/room/hello").ok, false);
+    for (const gone of ["/pair/start", "/pair/reveal", "/pair/confirm", "/pair/cancel"]) assert.strictEqual(ok("POST", gone).ok, false, gone);
     for (const m of ["GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"]) assert.strictEqual(ok(m, "/app").ok, true, m);
 });
 
 test("isAllowed refuses everything else, including the debugger and other upstreams", () => {
-    const no = (m, p) => policy.isAllowed(m, p, {});
+    const no = (m, p) => policy.isAllowed(m, p);
     for (const p of ["/console", "/CONSOLE", "/%63onsole", "/application", "/appx", "/api", "/api/", "/api/method", "/api/other",
         "/api/v2/x", "/private/other", "/private", "/files", "/assets", "/me/x", "/printview/x", "/_benchbar", "/_benchbar/other",
         "/_benchbar/hello/x", "/server-status", "/login/x", "/__debugger__", "/app;x", "/.git/config", "/robots.txt"]) {

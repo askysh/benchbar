@@ -28,8 +28,9 @@ test("a missing file loads empty; add writes 0600 atomically and leaves no temp 
     assert.strictEqual(fs.statSync(file).mode & 0o777, 0o600);
     assert.deepStrictEqual(fs.readdirSync(dir), ["devices.json"]);
     const j = JSON.parse(fs.readFileSync(file, "utf8"));
-    assert.strictEqual(j.v, 2);
-    assert.strictEqual(j.devices[0].status, "pending_confirm");
+    assert.strictEqual(j.v, 3);
+    assert.deepStrictEqual(j.blocked, []);
+    assert.strictEqual(j.devices[0].status, "active");
     assert.strictEqual(j.devices[0].added, "2026-11-02T10:00:00.000Z");
     assert.strictEqual(j.devices[0].last_seen, "2026-11-02T10:00:00.000Z");
 });
@@ -55,7 +56,7 @@ test("unknown fields and an unknown future v survive a round trip", () => {
     const dir = tmp();
     const file = path.join(dir, "devices.json");
     fs.writeFileSync(file, JSON.stringify({
-        v: 7, future_top: { a: 1 },
+        v: 7, future_top: { a: 1 }, blocked: [],
         devices: [{ id: id(1), name: "A", model: "M", fp: fp(1), status: "active", added: "2026-10-01T00:00:00.000Z",
             last_seen: "2026-11-01T00:00:00.000Z", paired_ip: "10.0.0.1", future_field: [1, 2] }]
     }), { mode: 0o600 });
@@ -72,11 +73,14 @@ test("strict schema: a corrupt or malformed file is refused, never silently rese
     const dir = tmp();
     const file = path.join(dir, "devices.json");
     const bad = [
-        "not json", "[]", JSON.stringify({ v: 1, devices: [] }), JSON.stringify({ devices: [] }), JSON.stringify({ v: 2 }),
-        JSON.stringify({ v: 2, devices: [{ id: "x", name: "A", model: "M", fp: fp(1), status: "active" }] }),
-        JSON.stringify({ v: 2, devices: [{ id: id(1), name: "A", model: "M", fp: "sha256:short", status: "active" }] }),
-        JSON.stringify({ v: 2, devices: [{ id: id(1), name: "A", model: "M", fp: fp(1), status: "weird" }] }),
-        JSON.stringify({ v: 2, devices: [{ id: id(1), name: 5, model: "M", fp: fp(1), status: "active" }] })
+        "not json", "[]", JSON.stringify({ v: 2, devices: [] }), JSON.stringify({ devices: [] }), JSON.stringify({ v: 3 }),
+        JSON.stringify({ v: 3, devices: [{ id: "x", name: "A", model: "M", fp: fp(1), status: "active" }] }),
+        JSON.stringify({ v: 3, devices: [{ id: id(1), name: "A", model: "M", fp: "sha256:short", status: "active" }] }),
+        JSON.stringify({ v: 3, devices: [{ id: id(1), name: "A", model: "M", fp: fp(1), status: "weird" }] }),
+        JSON.stringify({ v: 3, devices: [{ id: id(1), name: "A", model: "M", fp: fp(1), status: "pending_confirm" }] }),
+        JSON.stringify({ v: 3, devices: [{ id: id(1), name: 5, model: "M", fp: fp(1), status: "active" }] }),
+        JSON.stringify({ v: 3, devices: [], blocked: ["not-a-fingerprint"] }),
+        JSON.stringify({ v: 3, devices: [], blocked: "x" })
     ];
     for (const b of bad) {
         fs.writeFileSync(file, b);
@@ -95,17 +99,14 @@ test("add refuses an invalid device and a duplicate id or fingerprint", () => {
     assert.throws(() => s.add({ ...dev(2), fp: fp(1) }), /duplicate/);
 });
 
-test("confirm moves pending_confirm to active; findBySpki returns a copy", () => {
+test("findBySpki returns a copy", () => {
     const s = store(tmp());
     s.add(dev(1));
-    assert.strictEqual(s.findBySpki(fp(1)).status, "pending_confirm");
-    s.confirm(id(1));
     const d = s.findBySpki(fp(1));
     assert.strictEqual(d.status, "active");
     d.status = "hacked";
     assert.strictEqual(s.findBySpki(fp(1)).status, "active");
     assert.strictEqual(s.findBySpki(fp(9)), null);
-    assert.throws(() => s.confirm(id(9)), /not found/);
 });
 
 test("remove deletes and reports whether it did", () => {
@@ -116,24 +117,56 @@ test("remove deletes and reports whether it did", () => {
     assert.deepStrictEqual(s.list(), []);
 });
 
-test("a user cannot be mapped to two devices; the same device may be reassigned", () => {
+test("a seat is held by one device: the check and the set are one step, the same device may re-take its own", () => {
     const s = store(tmp());
     s.add(dev(1)); s.add(dev(2));
-    s.assign(id(1), "priya.test@example.com");
-    assert.throws(() => s.assign(id(2), "Priya.Test@example.com"), (e) => e.code === "user_taken");
-    s.assign(id(1), "priya.test@example.com");
-    s.assign(id(2), "other@example.com");
-    assert.strictEqual(s.findBySpki(fp(2)).user, "other@example.com");
-    assert.throws(() => s.assign(id(9), "z@example.com"), /not found/);
+    const a = { seat_id: "seat_a", user: "a@example.com" };
+    assert.strictEqual(s.takeSeat(id(1), a), null);
+    assert.throws(() => s.takeSeat(id(2), a), (e) => e.code === "seat_taken");
+    assert.deepStrictEqual(s.takeSeat(id(1), a), { seat_id: "seat_a", user: "a@example.com" });
+    assert.deepStrictEqual(s.takeSeat(id(1), { seat_id: "seat_b", user: "b@example.com" }), { seat_id: "seat_a", user: "a@example.com" });
+    assert.strictEqual(s.takeSeat(id(2), a), null, "the released seat is free");
+    assert.strictEqual(s.findBySpki(fp(2)).user, "a@example.com");
+    assert.throws(() => s.takeSeat(id(9), a), /not found/);
 });
 
-test("add enforces the unique-user rule too", () => {
+test("add refuses a held seat, a full room (cap) and a blocked fingerprint; the cap counts people, not seats", () => {
     const s = store(tmp());
-    s.add(dev(1, { user: "priya.test@example.com" }));
-    assert.throws(() => s.add(dev(2, { user: "Priya.Test@example.com" })), (e) => e.code === "user_taken");
-    assert.strictEqual(s.list().length, 1);
-    s.add(dev(2, { user: "other@example.com" }));
+    s.add(dev(1, { seat_id: "seat_a", user: "a@example.com" }));
+    assert.throws(() => s.add(dev(2, { seat_id: "seat_a", user: "a@example.com" })), (e) => e.code === "seat_taken");
+    s.add(dev(2), { cap: 2 });
+    assert.throws(() => s.add(dev(3), { cap: 2 }), (e) => e.code === "full");
     assert.strictEqual(s.list().length, 2);
+    s.block(fp(4));
+    assert.throws(() => s.add(dev(4)), (e) => e.code === "blocked");
+    assert.strictEqual(s.isBlocked(fp(4)), true);
+    assert.strictEqual(s.isBlocked(fp(1)), false);
+    s.block(fp(4));
+    assert.strictEqual(JSON.parse(fs.readFileSync(path.join(path.dirname(s.file), "devices.json"), "utf8")).blocked.length, 1);
+});
+
+test("reapSeatless removes only devices without a seat that joined 120 s ago", () => {
+    let t = T0;
+    const s = store(tmp(), () => t);
+    s.add(dev(1)); s.add(dev(2, { seat_id: "seat_a", user: "a@example.com" }));
+    t = T0 + 119_000;
+    assert.deepStrictEqual(s.reapSeatless().map((d) => d.id), []);
+    t = T0 + 120_000;
+    assert.deepStrictEqual(s.reapSeatless().map((d) => d.id), [id(1)]);
+    assert.deepStrictEqual(s.list().map((d) => d.id), [id(2)]);
+});
+
+test("emptyAll clears devices and the blocked list, even over a damaged file", () => {
+    const dir = tmp();
+    const s = store(dir);
+    s.add(dev(1)); s.block(fp(2));
+    s.emptyAll();
+    assert.deepStrictEqual(s.list(), []);
+    assert.strictEqual(s.isBlocked(fp(2)), false);
+    fs.writeFileSync(path.join(dir, "devices.json"), "not json");
+    s.emptyAll();
+    assert.deepStrictEqual(devices.load(path.join(dir, "devices.json"), {}).list(), []);
+    assert.deepStrictEqual(fs.readdirSync(dir), ["devices.json"]);
 });
 
 test("a throttled touch does no file I/O: no lock file is created", () => {
