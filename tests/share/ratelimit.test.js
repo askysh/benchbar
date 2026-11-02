@@ -125,3 +125,15 @@ test("RateBucket.retryAfter is the time until the oldest hit leaves the window",
     assert.strictEqual(b.retryAfter("k"), 40);
     assert.strictEqual(b.retryAfter("other"), 1);
 });
+
+test("a flood of 429s and of distinct hello keys cannot grow the bookkeeping", () => {
+    const c = clock(); const l = new JoinLimiter({ now: c.now });
+    for (let i = 0; i < 100_000; i++) { l.noteLimited(); if (i % 1000 === 0) c.t += 1; }
+    assert.ok(l.limited.length <= 5, String(l.limited.length));
+    assert.strictEqual(l.trouble(), true);
+    const b = new RateBucket({ now: c.now, limit: 10, windowMs: 60 * S });
+    for (let i = 0; i < 20_000; i++) { b.take(`10.0.${i >> 8}.${i & 255}`); if (i % 500 === 0) c.t += 20 * S; }
+    assert.ok(b.hits.size <= 1024 + 500, String(b.hits.size));
+    c.t += 61 * S; b.take("x");
+    assert.ok(b.hits.size <= 1024 + 1);
+});

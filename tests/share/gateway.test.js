@@ -752,6 +752,57 @@ test("take a seat, switch (the old user is wiped, canonical user only), a held s
     });
 });
 
+test("a seat switch and a sign-in racing on one device never leave a cookie for the old seat", async () => {
+    const a = cert("race-a");
+    const b = cert("race-b");
+    await withGateway({ devices: [deviceRow(a, { user: "slowwipe@example.com", seat_id: "seat5" }), deviceRow(b, { user: "slowmint@example.com", seat_id: "seat4" })] }, async (gw) => {
+        // Switch first (its wipe is slow), sign-in arrives meanwhile: it waits, then mints for the NEW seat.
+        const pick = request(gw, { method: "POST", path: "/_benchbar/seat", cert: a, body: JSON.stringify({ seat_id: "seat6" }) });
+        await sleep(80);
+        const si = await request(gw, { path: "/_benchbar/signin", cert: a });
+        assert.strictEqual((await pick).status, 200);
+        assert.strictEqual(si.status, 302);
+        assert.deepStrictEqual(gw.helper.calls().slice(0, 2), [["wipe", "share.localhost", "slowwipe@example.com"], ["share.localhost", "seat6@example.com"]]);
+
+        // Sign-in first (its mint is slow), switch arrives meanwhile: it waits, so the wipe lands after the mint.
+        const slowSignin = request(gw, { path: "/_benchbar/signin", cert: b });
+        await sleep(80);
+        const move = await request(gw, { method: "POST", path: "/_benchbar/seat", cert: b, body: JSON.stringify({ seat_id: "seat3" }) });
+        assert.strictEqual((await slowSignin).status, 302);
+        assert.strictEqual(move.status, 200);
+        assert.deepStrictEqual(gw.helper.calls().slice(2), [["share.localhost", "slowmint@example.com"], ["wipe", "share.localhost", "slowmint@example.com"]]);
+    });
+});
+
+test("a sign-in whose device lost its seat while minting wipes the sid and sends no cookie", async () => {
+    const c = cert("lost-seat");
+    await withGateway({ devices: [deviceRow(c, { user: "slowmint@example.com", seat_id: "seat4" })] }, async (gw) => {
+        const si = request(gw, { path: "/_benchbar/signin", cert: c }).catch(() => null);
+        await sleep(80);
+        const reply = await gw.control({ op: "remove", device: (await people(gw))[0].id });
+        assert.strictEqual(reply.ok, true);
+        const r = await si;
+        assert.ok(r === null || (r.status === 403 && !r.headers["set-cookie"]), "remove closes the guest's sockets; if a reply got out it carries no cookie");
+        await until(() => gw.helper.calls().length === 2);
+        assert.deepStrictEqual(gw.helper.calls()[1], ["wipe", "share.localhost", "slowmint@example.com"]);
+    });
+});
+
+test("leave waits for the wipe; a failing wipe is reported to the guest and in status.wipe_failed", async () => {
+    const ok = cert("leave-ok");
+    const bad = cert("leave-bad");
+    await withGateway({ devices: [deviceRow(ok, { user: "seat2@example.com", seat_id: "seat2" }), deviceRow(bad, { user: "wipefail@example.com", seat_id: "seat3" })] }, async (gw) => {
+        const r1 = await request(gw, { method: "POST", path: "/_benchbar/leave", cert: ok, body: "" });
+        assert.deepStrictEqual(r1.json, { ok: true, wiped: true });
+        assert.deepStrictEqual(gw.helper.calls(), [["wipe", "share.localhost", "seat2@example.com"]], "the wipe finished before the reply");
+        assert.deepStrictEqual((await status(gw)).wipe_failed, []);
+        const r2 = await request(gw, { method: "POST", path: "/_benchbar/leave", cert: bad, body: "" });
+        assert.deepStrictEqual(r2.json, { ok: true, wiped: false });
+        assert.deepStrictEqual((await status(gw)).wipe_failed, ["wipefail@example.com"]);
+        assert.deepStrictEqual(await people(gw), []);
+    });
+});
+
 test("a failed wipe moves nothing: the device keeps its seat and gets the friendly 503", async () => {
     const c = cert("wipefail");
     await withGateway({ devices: [deviceRow(c, { user: "wipefail@example.com", seat_id: "seat5" })] }, async (gw) => {

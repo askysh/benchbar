@@ -72,9 +72,13 @@ function writeFakeHelper(dir) {
     const log = path.join(dir, "helper-argv.jsonl");
     fs.writeFileSync(file, `"use strict";
 const fs = require("fs");
+const wipe = process.argv[2] === "wipe";
+const user = wipe ? process.argv[4] : process.argv[3];
+// Users named slow* take 300 ms, and are logged when they finish, so tests can see the order of completion.
+if (/^slow/.test(user)) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 300);
 fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify(process.argv.slice(2)) + "\\n");
-if (process.argv[2] === "wipe") { process.exit(process.argv[4] === "wipefail@example.com" ? 1 : 0); }
-if (process.argv[3] === "failuser") { process.stderr.write("boom-" + ${JSON.stringify(SID)}); process.exit(1); }
+if (wipe) process.exit(user === "wipefail@example.com" ? 1 : 0);
+if (user === "failuser") { process.stderr.write("boom-" + ${JSON.stringify(SID)}); process.exit(1); }
 process.stdout.write(${JSON.stringify(SID)} + "\\n");
 `);
     return { file, log, calls: () => (fs.existsSync(log) ? fs.readFileSync(log, "utf8").trim().split("\n").filter(Boolean).map((l) => JSON.parse(l)) : []) };

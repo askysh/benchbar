@@ -8,6 +8,7 @@ const path = require("node:path");
 const cpace = require("../../lib/frappe-local/share/cpace.js");
 const devices = require("../../lib/frappe-local/share/devices.js");
 const { JoinLimiter } = require("../../lib/frappe-local/share/ratelimit.js");
+const util = require("node:util");
 const { Room } = require("../../lib/frappe-local/share/join.js");
 
 const S = 1000;
@@ -35,7 +36,7 @@ class Guest {
 
     start({ code, hostFp = HOST_FP, Ya } = {}) {
         const hello = this.room.hello();
-        const g = cpace.calculateGenerator(Buffer.from(code ?? this.room.roomCode, "ascii"), Buffer.from(hello.salt, "hex"), Buffer.alloc(0));
+        const g = cpace.calculateGenerator(Buffer.from(code ?? this.room.code().code, "ascii"), Buffer.from(hello.salt, "hex"), Buffer.alloc(0));
         this.ya = crypto.randomBytes(32);
         this.Ya = Ya ?? cpace.scalarMult(this.ya, g);
         this.hostFpRaw = Buffer.from(hostFp.slice(7), "hex");
@@ -74,7 +75,7 @@ const joined = (room, opts) => {
 };
 const wrong = (room, opts = {}) => {
     const g = new Guest(room, opts);
-    g.start({ code: room.roomCode === "000000" ? "111111" : "000000" });
+    g.start({ code: room.code().code === "000000" ? "111111" : "000000" });
     return g.finish();
 };
 
@@ -84,7 +85,7 @@ test("hello carries the documented fields and no secret; a new code changes the 
     assert.deepStrictEqual(Object.keys(h), ["v", "room", "host", "site", "salt", "locked", "full", "people", "seats"]);
     assert.deepStrictEqual([h.v, h.room, h.host, h.site, h.locked, h.full, h.people, h.seats], [3, "Standup", "Host Mac", "macdev", false, false, 0, 4]);
     assert.match(h.salt, /^[0-9a-f]{32}$/);
-    assert.ok(!JSON.stringify(h).includes(room.roomCode) || room.roomCode.length < 6);
+    assert.ok(!JSON.stringify(h).includes(room.code().code) || room.code().code.length < 6);
     room.rotate();
     assert.notStrictEqual(room.hello().salt, h.salt);
 });
@@ -164,7 +165,7 @@ test("J1: a request id is single-use whatever the outcome", () => {
     ok.start(); ok.finish();
     assert.deepStrictEqual(ok.finish({ id: ok.id }), { status: 404, body: { status: "unknown_request" } });
     const bad = new Guest(room, { ip: "10.4.0.2" });
-    bad.start({ code: room.roomCode === "000000" ? "111111" : "000000" });
+    bad.start({ code: room.code().code === "000000" ? "111111" : "000000" });
     assert.strictEqual(bad.finish().status, 403);
     assert.strictEqual(bad.finish().status, 404, "the failed request is gone too");
     assert.strictEqual(room.status().budget_left, 9, "only the first failure was charged");
@@ -229,7 +230,7 @@ test("J4: starts near exhaustion cannot add up to more failures than the budget"
     const { room } = makeRoom();
     for (let i = 0; i < 8; i++) wrong(room, { ip: `10.8.0.${i}` });
     const guests = ["10.8.1.1", "10.8.1.2", "10.8.1.3"].map((ip) => new Guest(room, { ip }));
-    const codes = guests.map((g) => g.start({ code: room.roomCode === "000000" ? "111111" : "000000" }).status);
+    const codes = guests.map((g) => g.start({ code: room.code().code === "000000" ? "111111" : "000000" }).status);
     assert.deepStrictEqual(codes, [200, 200, 423]);
     for (const g of guests.slice(0, 2)) g.finish();
     const s = room.status();
@@ -426,4 +427,62 @@ test("J5: the cap is re-checked inside the store lock, even when the pre-check s
     assert.deepStrictEqual(res, { status: 409, body: { status: "full" } });
     assert.strictEqual(store.list().length, 1);
     assert.strictEqual(room.status().budget_left, 10, "not charged");
+});
+
+test("a seatless device past 120 s is absent: not counted, not already_joined, and the room is not full because of it", () => {
+    const { room, store, clock } = makeRoom({ seats: 1 });
+    const g = joined(room, { ip: "10.20.0.1" });
+    assert.strictEqual(room.hello().full, true);
+    clock.t += 121 * S;
+    const h = room.hello();
+    assert.deepStrictEqual([h.people, h.full], [0, false]);
+    assert.strictEqual(store.list().length, 0, "reaped as a side effect");
+    const again = new Guest(room, { fp: g.fp, ip: "10.20.0.2" });
+    assert.strictEqual(again.start().status, 200);
+    assert.strictEqual(again.finish().status, 200);
+});
+
+test("expired but unreaped rows are ignored even if reaping fails", () => {
+    const { room, store, clock } = makeRoom({ seats: 1 });
+    const g = joined(room, { ip: "10.20.1.1" });
+    clock.t += 121 * S;
+    store.reapSeatless = () => [];
+    assert.strictEqual(room.status().people, 0);
+    assert.strictEqual(new Guest(room, { fp: g.fp, ip: "10.20.1.2" }).start().status, 200);
+});
+
+test("the room code is a private field: JSON and inspect never show it", () => {
+    const { room } = makeRoom();
+    for (let i = 0; i < 20; i++) {
+        room.rotate();
+        const code = room.code().code;
+        const re = new RegExp(`(?<![0-9A-Za-z])${code}(?![0-9A-Za-z])`);
+        assert.ok(!re.test(JSON.stringify(room)));
+        assert.ok(!re.test(util.inspect(room, { depth: 6, showHidden: true })));
+        assert.ok(!re.test(util.inspect({ ...room }, { depth: 6 })));
+    }
+});
+
+test("seat moves, sign-ins and leaves on one device run one after another", async () => {
+    const { room } = makeRoom();
+    const order = [];
+    const slow = (name, ms) => room.exclusive("d_1", async () => { order.push(`${name}:start`); await new Promise((r) => setTimeout(r, ms)); order.push(`${name}:end`); });
+    await Promise.all([slow("a", 30), slow("b", 1), slow("c", 1)]);
+    assert.deepStrictEqual(order, ["a:start", "a:end", "b:start", "b:end", "c:start", "c:end"]);
+    await assert.rejects(room.exclusive("d_1", async () => { throw new Error("x"); }));
+    assert.strictEqual(await room.exclusive("d_1", async () => "still runs"), "still runs");
+    await new Promise((r) => setImmediate(r));
+    assert.strictEqual(room.tails.size, 0, "idle devices leave no queue behind");
+});
+
+test("a failed wipe on a seat move is listed in status.wipe_failed until a wipe works", async () => {
+    const { room, store } = makeRoom();
+    joined(room);
+    const dev = store.list()[0];
+    await room.moveToSeat(dev, "seat_a", async () => {});
+    const boom = async () => { throw new Error("boom"); };
+    assert.strictEqual((await room.moveToSeat(store.list()[0], "seat_b", boom)).status, 503);
+    assert.deepStrictEqual(room.status().wipe_failed, ["a@example.com"]);
+    assert.strictEqual((await room.moveToSeat(store.list()[0], "seat_b", async () => {})).ok, true);
+    assert.deepStrictEqual(room.status().wipe_failed, []);
 });
