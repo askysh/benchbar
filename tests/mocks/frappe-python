@@ -79,6 +79,9 @@ for app in (m.group(1) if m else "").replace("\\", "").replace("\"", "").split("
         printf '{\n "db_name": "_new%s",\n "db_password": "newdbpw",\n "encryption_key": "new-site-key"\n}\n' "$RANDOM" >"$site/site_config.json"
       fi
       exit 0 ;;
+    benchbar-share-users|benchbar-share-harden)
+      # the sharing helpers are answered by env-python (MOCK_ENV_PYTHON), stdin included
+      exec "${MOCK_ENV_PYTHON:?}" -c "$snippet" "$@" ;;
     benchbar-probe)
       shift
       log "benchbar-probe $*"

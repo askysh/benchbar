@@ -39,12 +39,18 @@ fi
 # benchbar's own helpers for open --as and users:
 #   -c SNIPPET benchbar-open-as SITE USER
 #   -c SNIPPET benchbar-users SITE QUERY LIMIT MODE
+# and for sharing (the roles DocPerm would add to the fixed floor come from
+# $MOCK_STATE/code_roles, one per line):
+#   -c SNIPPET benchbar-share-users SITE json|rows|classes
+#   -c SNIPPET benchbar-share-harden SITE      (the allowed users on stdin)
 # Users come from $MOCK_STATE/users.json (Administrator alone without it);
 # MOCK_OPEN_AS_REFUSE fails the login with that text; MOCK_OPEN_AS_SID is the
 # session id. Each argument is logged in brackets, so a test sees how argv arrived.
-if [[ "${1:-}" == "-c" && ( "${3:-}" == "benchbar-open-as" || "${3:-}" == "benchbar-users" ) ]]; then
+if [[ "${1:-}" == "-c" && ( "${3:-}" == "benchbar-open-as" || "${3:-}" == "benchbar-users" || "${3:-}" == "benchbar-share-users" || "${3:-}" == "benchbar-share-harden" ) ]]; then
   marker="$3"; shift 3
   { printf 'bench-python %s' "$marker"; for a in "$@"; do printf ' [%s]' "$a"; done; printf '\n'; } >>"${MOCK_LOG:-/dev/null}"
+  # the heredoc below is the script's stdin: the helper's own stdin is kept in a file first
+  [[ "$marker" != benchbar-share-harden ]] || cat >"${MOCK_STATE:?}/stdin-share-harden"
   exec python3 - "$marker" "$@" <<'PY'
 import json, os, sys
 marker, args = sys.argv[1], sys.argv[2:]
@@ -54,6 +60,65 @@ try:
 except FileNotFoundError:
     users = [{"name": "Administrator", "full_name": "Administrator", "user_type": "System User", "enabled": 1,
               "roles": ["System Manager"], "last_login": None}]
+FLOOR = ["System Manager", "Administrator", "Script Manager", "Server Script Manager", "Developer", "Report Manager"]
+def code_roles():
+    try:
+        extra = [l.strip() for l in open(os.path.join(os.environ["MOCK_STATE"], "code_roles")) if l.strip()]
+    except FileNotFoundError:
+        extra = []
+    return FLOOR + extra
+if marker == "benchbar-share-users":
+    site, mode = args
+    if mode == "classes":
+        try:
+            rows = [l.rstrip("\n") for l in open(os.path.join(os.environ["MOCK_STATE"], "classes.tsv")) if l.strip()]
+        except FileNotFoundError:
+            rows = ["User\t%d" % len(users), "Customer\t3", "Contact\t2", "Address\t2", "Employee\t1"]
+        for r in rows:
+            print("BENCHBAR-RESULT " + r.replace("\t", "\x1f"))
+        sys.exit(0)
+    code = code_roles()
+    out = []
+    for u in sorted(users, key=lambda x: (not x.get("enabled", 1), x["user_type"], x["name"])):
+        if u["name"] == "Guest":
+            continue
+        roles = u.get("roles", [])
+        cc = [r for r in roles if r in code]
+        admin = u["name"] == "Administrator"
+        out.append({"name": u["name"], "full_name": u["full_name"], "enabled": bool(u.get("enabled", 1)), "user_type": u["user_type"],
+                    "roles": roles, "code_capable_roles": cc, "will_demote": bool(cc) and not admin,
+                    "selectable": bool(u.get("enabled", 1)) and u["user_type"] == "System User" and not admin})
+    if mode == "json":
+        print("BENCHBAR-RESULT " + json.dumps({"users": out}))
+    else:
+        for u in out:
+            print("BENCHBAR-RESULT " + "\x1f".join([u["name"], u["full_name"], "1" if u["enabled"] else "0", u["user_type"], "|".join(u["roles"]), "|".join(u["code_capable_roles"])]))
+    sys.exit(0)
+if marker == "benchbar-share-harden":
+    if os.environ.get("MOCK_SHARE_HARDEN_REFUSE"):
+        print("BENCHBAR-ERROR " + os.environ["MOCK_SHARE_HARDEN_REFUSE"])
+        sys.exit(1)
+    allowed = [l.strip() for l in open(os.path.join(os.environ["MOCK_STATE"], "stdin-share-harden")) if l.strip()]
+    open(os.path.join(os.environ["MOCK_STATE"], "harden-site"), "w").write(args[0])
+    # what a leaky helper would print and write: a test looks for it in the run log and the state folder
+    with open(os.path.join(os.environ["MOCK_STATE"], "harden-secrets"), "w") as f:
+        f.write("mock-admin-password-7f3a\n")
+        for u in allowed:
+            f.write("mock-user-password-%s\n" % u)
+    print("password rotated to mock-admin-password-7f3a", file=sys.stderr)
+    code = code_roles()
+    demoted = removed = 0
+    for u in users:
+        if u["name"] in allowed:
+            cc = [r for r in u.get("roles", []) if r in code]
+            demoted += 1 if cc else 0
+            removed += len(cc)
+    disabled = sum(1 for u in users if u.get("enabled", 1) and u["name"] not in allowed and u["name"] not in ("Administrator", "Guest"))
+    print("BENCHBAR-RESULT " + json.dumps({"admin_rotated": 1, "passwords_rotated": len(allowed), "api_keys_cleared": 2, "token_tables_cleared": 3,
+        "social_logins_disabled": 1, "webhooks_disabled": 1, "notifications_disabled": 2, "email_accounts_disabled": 1,
+        "users_disabled": disabled, "users_demoted": demoted, "roles_removed": removed, "sessions_deleted": 4,
+        "allow_error_traceback": 0, "disable_signup": 1, "portal_default_role_cleared": 1}, separators=(",", ":")))
+    sys.exit(0)
 if marker == "benchbar-open-as":
     site, user = args
     if os.environ.get("MOCK_OPEN_AS_REFUSE"):

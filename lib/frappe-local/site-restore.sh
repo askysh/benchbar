@@ -51,6 +51,7 @@ SR_PLAN_JSON=""
 SR_TOKEN=""
 SR_CAN_APPLY=0
 SR_VERIFY_JSON="null"
+SR_STEP_PARENT=""
 
 fl_srestore_err() { SR_ERRORS+=("$1"); }
 
@@ -212,7 +213,8 @@ fl_srestore_plan() {
   [[ -n "$FL_PULL_HOOK" ]] && FL_PULL_STEPS+=("before_migrate|Run ${FL_PULL_HOOK##*/} (--before-migrate)")
   [[ "$FL_PULL_NO_MIGRATE" == "1" ]] || FL_PULL_STEPS+=("migrate|bench migrate")
   FL_PULL_STEPS+=("clear_cache|Clear caches")
-  if [[ "$SR_NEW" == "1" ]] && ! fl_hosts_has_name "$SR_TARGET"; then FL_PULL_STEPS+=("hosts|Hosts line for ${SR_TARGET}"); fi
+  # nested in share setup, nobody opens the copy by name: no hosts line, so no sudo
+  if [[ "$SR_NEW" == "1" && -z "$SR_STEP_PARENT" ]] && ! fl_hosts_has_name "$SR_TARGET"; then FL_PULL_STEPS+=("hosts|Hosts line for ${SR_TARGET}"); fi
   FL_PULL_STEPS+=("verify|Verify ${SR_TARGET}")
 
   touches=""
@@ -436,7 +438,8 @@ fl_srestore_run() {
   n="${#FL_PULL_STEPS[@]}"
   for s in "${FL_PULL_STEPS[@]}"; do labels+=("${s#*|}"); ids+=("${s%%|*}"); done
   fl_steps_define "${labels[@]}"
-  fl_steps_ids "${ids[@]}"
+  # nested in another command's step (share setup): its steps hang under that one, unnumbered
+  if [[ -n "$SR_STEP_PARENT" ]]; then fl_steps_ids -n -p "$SR_STEP_PARENT" "${ids[@]}"; else fl_steps_ids "${ids[@]}"; fi
   fl_site_default_file_v SR_DEFAULT_BEFORE
   # the backup first prunes old files in the target's backup folder, which is
   # where the set may be: restore from a copy of it outside sites/
@@ -469,6 +472,32 @@ fl_srestore_run() {
     fl_step_end "$FL_STEP_RESULT"
     i=$((i + 1))
   done
+  return 0
+}
+
+# fl_srestore_execute: the planned restore, run: the root password, the steps,
+# the summary, and what to do after a failure. The plan (fl_srestore_plan) has
+# been made and can be applied. Returns the exit code; the caller prints the
+# result document. Also what benchbar share setup runs for its copy.
+fl_srestore_execute() {
+  local code=0
+  # the password is resolved (and tried against the server) before anything changes
+  fl_mariadb_root_password_resolve || fl_die "The MariaDB root password is needed for the restore." "Re-run with: MARIADB_ROOT_PASSWORD='...' benchbar site restore ..." 2
+  # nothing below may ask a question: frappe's downgrade prompt would hang a terminal
+  exec 0</dev/null
+  fl_srestore_run || code=$?
+  fl_steps_summary
+  [[ -z "$SR_SET_COPY" ]] || fl_info "a copy of the backup set is kept in ${SR_SET_COPY}"
+  if [[ "$code" != "0" ]]; then
+    [[ -z "$SR_BACKUP_STAMP" ]] || fl_info "${SR_TARGET} was backed up first; put that back with: benchbar site restore ${SR_TARGET} --from ${SR_BACKUP_STAMP} --with-files --yes"
+    if [[ "${FL_PULL_QUIESCED:-0}" == "1" ]]; then
+      fl_warn "the scheduler of every site on this bench stays paused (pause_scheduler in common_site_config.json)"
+      fl_fix "cd ${FL_BENCH_DIR} && bench config remove-common-config pause_scheduler"
+    fi
+    return "$code"
+  fi
+  fl_changed site "$SR_TARGET" "restored from ${SR_SET_STAMP}"
+  [[ -z "$SR_BACKUP_STAMP" ]] || fl_changed backup "$SR_TARGET" "$SR_BACKUP_STAMP"
   return 0
 }
 
@@ -524,24 +553,11 @@ fl_cmd_site_restore() {
     [[ "$SR_EXISTS" == "1" ]] && q="Back up ${SR_TARGET}, then replace its data with ${SR_SET_STAMP}?"
     fl_confirm "$q" || { fl_warn "Cancelled. Nothing was changed."; return 1; }
   fi
-  # the password is resolved (and tried against the server) before anything changes
-  fl_mariadb_root_password_resolve || fl_die "The MariaDB root password is needed for the restore." "Re-run with: MARIADB_ROOT_PASSWORD='...' benchbar site restore ..." 2
-  # nothing below may ask a question: frappe's downgrade prompt would hang a terminal
-  exec 0</dev/null
-  fl_srestore_run || code=$?
-  fl_steps_summary
-  [[ -z "$SR_SET_COPY" ]] || fl_info "a copy of the backup set is kept in ${SR_SET_COPY}"
+  fl_srestore_execute || code=$?
   if [[ "$code" != "0" ]]; then
-    [[ -z "$SR_BACKUP_STAMP" ]] || fl_info "${SR_TARGET} was backed up first; put that back with: benchbar site restore ${SR_TARGET} --from ${SR_BACKUP_STAMP} --with-files --yes"
-    if [[ "${FL_PULL_QUIESCED:-0}" == "1" ]]; then
-      fl_warn "the scheduler of every site on this bench stays paused (pause_scheduler in common_site_config.json)"
-      fl_fix "cd ${FL_BENCH_DIR} && bench config remove-common-config pause_scheduler"
-    fi
     [[ "$json" != "1" ]] || fl_doc_emit "$code" "$(fl_srestore_result_json "$code")"
     return "$code"
   fi
-  fl_changed site "$SR_TARGET" "restored from ${SR_SET_STAMP}"
-  [[ -z "$SR_BACKUP_STAMP" ]] || fl_changed backup "$SR_TARGET" "$SR_BACKUP_STAMP"
   [[ "$json" != "1" ]] || fl_doc_emit 0 "$(fl_srestore_result_json 0)"
   fl_ok "${SR_TARGET} is restored from ${SR_SET_STAMP}$([[ "$FL_PULL_NO_MIGRATE" == "1" ]] && printf ' (not migrated)'); the default site stays ${SR_DEFAULT_BEFORE:-unset}"
   return 0

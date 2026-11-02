@@ -144,6 +144,19 @@ cmd~site default~benchbar site default NAME [--json]~Make NAME the default site.
 cmd~site open-as~benchbar site open-as on|off|status [NAME] [--json]~Turn password-less sign in (open --as) on or off for a site, or show it. Changes benchbar's state only. on needs a person at a terminal.~yes~no~no~yes~stream
 flag~site open-as~--yes~~Do not ask before turning on (still refused without a terminal session, BENCHBAR_NONINTERACTIVE=1).
 flag~site open-as~--json~~JSON lines for on and off, one document for status.
+cmd~share~benchbar share setup|users ...~Share a hardened copy of a site with people on your network (the copy and the identity first; start and stop follow).~no~no~no~no~none
+cmd~share setup~benchbar share setup [--site S] [--from STAMP|latest] [--backup-now] [--users A,B] [--refresh] [--regenerate-identity] [--acknowledge-data] [--dry-run] [--yes] [--json]~Prepare sharing: the host identity and a hardened share copy of a site.~yes~no~no~yes~stream
+flag~share setup~--users~A,B~The Frappe users who may sign in to the copy, one seat each. They must be enabled System Users; each loses the roles that can run code or change settings, in the copy only. Default: the last setup's.
+flag~share setup~--from~STAMP|latest~The backup set of the site to copy (benchbar site backups S lists them). Default: the newest complete one.
+flag~share setup~--backup-now~~Take a backup of the site first (benchbar site backup S) and copy that.
+flag~share setup~--name~LABEL~The room's label, at most 40 printable characters. Default: "<your name>'s room".
+flag~share setup~--refresh~~Replace the existing copy (it is backed up first). Anything guests changed in it is lost; needed to change --users.
+flag~share setup~--regenerate-identity~~Replace the host's key and certificate and empty the paired Macs: every pairing becomes invalid. Asks first (--yes).
+flag~share setup~--acknowledge-data~~Agree that the copy holds the site's real data (people, customers, contacts, addresses). Without it setup stops before any change, naming what the copy holds.
+flag~share setup~--dry-run~~Print the plan (size, time, the data the copy holds) and change nothing.
+flag~share setup~--yes~~Do not ask before replacing the copy or the identity.
+flag~share setup~--json~~JSON lines: plan, steps, done.
+cmd~share users~benchbar share users [--site S] [--json]~The users of a site who can take a seat in a shared copy, and which roles each would lose there.~no~no~no~no~document
 cmd~site hosts~benchbar site hosts~Add a 127.0.0.1 line for every site to /etc/hosts.~yes~yes~no~yes~none
 cmd~site backup~benchbar site backup NAME [--with-files] [--json]~bench --site NAME backup.~no~no~no~yes~document
 flag~site backup~--with-files~~Include the uploads.

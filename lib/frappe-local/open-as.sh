@@ -24,19 +24,17 @@
 # parameter expansion, never a here-string: bash 3.2 writes a here-string
 # to a file in /var/tmp.
 
-# The steps of frappe's LoginManager.post_login (auth.py) without
-# set_user_info: that one only sets the response cookies, which the
-# browser's own /login?sid= request sets, and computes the default page by
-# importing every app (six of the seven seconds of a login on a bench with
-# Insights). on_login hooks, the IP and hour restrictions and the session
-# itself run as in a real login.
-FL_PY_OPEN_AS='import sys
+# open --as: the sign in of one user. The session itself is made by
+# share/session_mint.py (shared with the sharing gateway's signin.py), which
+# fl_open_as_snippet_v splices between the two halves below.
+FL_PY_OPEN_AS_HEAD='import sys
 site, user = sys.argv[2], sys.argv[3]
 def say(tag, *fields):
     clean = [str(f or "").replace("\t", " ").replace("\r", " ").replace("\n", " ") for f in fields]
     print("\n" + tag + " " + "\t".join(clean), flush=True)
 import frappe
-from frappe.auth import CookieManager, LoginManager, validate_ip_address
+'
+FL_PY_OPEN_AS_TAIL='
 frappe.init(site=site)
 frappe.connect()
 try:
@@ -50,25 +48,21 @@ try:
     if not row.enabled:
         say("BENCHBAR-ERROR", row.name + " is disabled on " + site + ".")
         sys.exit(1)
-    frappe.utils.set_request(path="/")
-    frappe.local.cookie_manager = CookieManager()
-    login = LoginManager()
-    login.user = row.name
     try:
-        login.run_trigger("on_login")
-        validate_ip_address(row.name)
-        login.validate_hour()
-        login.get_user_info()
-        login.full_name = " ".join(filter(None, [row.first_name, row.last_name]))
-        login.make_session()
-        login.setup_boot_cache()
+        full_name, sid = mint_session(frappe, row)
     except frappe.AuthenticationError as e:
         say("BENCHBAR-ERROR", "Frappe refused the login: " + (str(e) or "not allowed"))
         sys.exit(1)
-    frappe.db.commit()
-    say("BENCHBAR-RESULT", row.name, login.full_name or row.name, row.user_type, frappe.session.sid)
+    say("BENCHBAR-RESULT", row.name, full_name or row.name, row.user_type, sid)
 finally:
     frappe.destroy()'
+
+# fl_open_as_snippet_v VAR: the Python of open --as, with the shared session body
+fl_open_as_snippet_v() {
+  local __mint
+  __mint="$(<"${SCRIPT_DIR}/lib/frappe-local/share/session_mint.py")"
+  printf -v "$1" '%s\n%s\n%s' "$FL_PY_OPEN_AS_HEAD" "$__mint" "$FL_PY_OPEN_AS_TAIL"
+}
 
 # Enabled users for a picker: System Users first, then by last login.
 # Each user's roles come rarest first (held by the fewest users), so the
@@ -201,7 +195,7 @@ fl_open_as_require_served() {
 }
 
 fl_cmd_open() {
-  local user="" path="" browser=1 print_url=0 site="$FL_SITE" fields name="" full_name="" user_type="" sid="" url base enc opened=false j
+  local user="" path="" browser=1 print_url=0 site="$FL_SITE" fields name="" full_name="" user_type="" sid="" url base enc opened=false j snippet
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
       --as) [[ -n "${2:-}" ]] || fl_die "--as needs a user." "Example: benchbar open --as someone@example.com"; user="$2"; shift 2 ;;
@@ -240,7 +234,8 @@ fl_cmd_open() {
   if [[ -z "$user" ]]; then
     url="${base}${path}"
   else
-    fl_bench_python_v fields "$FL_PY_OPEN_AS" benchbar-open-as "$site" "$user"
+    fl_open_as_snippet_v snippet
+    fl_bench_python_v fields "$snippet" benchbar-open-as "$site" "$user"
     name="${fields%%$'\t'*}"; fields="${fields#*$'\t'}"
     full_name="${fields%%$'\t'*}"; fields="${fields#*$'\t'}"
     user_type="${fields%%$'\t'*}"; sid="${fields#*$'\t'}"
