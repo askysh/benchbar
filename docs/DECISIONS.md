@@ -7,6 +7,34 @@ One line per non obvious choice: the decision, then the reason. The
 decisions of the app work live in `macos/DECISIONS.md`. The 0.5.5, 0.5 and 0.4
 runs come first, the 0.3 easy install run follows.
 
+## LAN sharing: rooms (2026-11)
+
+- Sharing is copy-only: `share setup` restores a backup into `share.localhost` and hardens that; the site itself is never served to the LAN, so a guest's mistake or a bug in the gateway reaches a disposable database.
+- One share per Mac, and the copy's name is fixed (`share.localhost`, no random suffix): one gateway port (8443), one control socket and one launchd job keep the fail-closed checks simple, and a second room would double the attack surface for no use the owner asked for.
+- In the copy, every user but the seats is disabled and Administrator's password is replaced by a random one that is never shown: guests sign in through the gateway only, so no password of the copy has to be known by anyone.
+- Guests sign in by the gateway asking the copy for a session of the seat's user (the sign-in snippet factors from upstream's Open as, `FL_PY_OPEN_AS`); the random passwords are discarded, so a seat cannot be used outside the room.
+- The share job's label is `com.benchbar-share.*` and its plist lives in the share folder, outside `~/Library/LaunchAgents`, deleted once launchd has loaded it: no bench agent glob, `uninstall-service --all`, doctor or `benchbar down` pattern can see it or touch it, and nothing restarts it at login.
+- The copy is served by `share_web.py`, a shim that replaces `werkzeug.serving.run_simple` before `frappe.app` is imported so the server binds `127.0.0.1` with the debugger, evalex and reloader off; it runs with `CI=1` and `env -u DEV_SERVER`, because the bench's `.env` sets `DEV_SERVER=1`, which forces tracebacks into responses.
+- Rooms replace pairing: a 6 digit room code verified with CPace-X25519-SHA512 (`draft-irtf-cfrg-cpace-21`, protocol v3), bound to both TLS certificates by their SPKI fingerprints and the TLS exporter. The commit-reveal SAS, protocol v2 and pin-after-Yes are gone: the host no longer approves each join (the owner accepted the trust change), and the guest pins the host only after the host proved it knows the code (pin-after-proof).
+- The room code proves membership, not the host's identity, on a first join (J19): a rogue room that knows the code looks the same to a new guest. The docs and the host card say so; the pin protects rejoins only.
+- Ten failed confirmations per code lock the room, and only a new code resets the budget (J3): an attacker gets at most 10 guesses in a million per code, and can never rotate a code someone already handed out.
+- The code lives only in the gateway's memory and leaves through the 0600 control socket's `code` op. `share code --json` is the one document that carries it (J14), and `share code` is refused under `BENCHBAR_NONINTERACTIVE`, `--for-agent` and `mcp` (the app passes `BENCHBAR_NONINTERACTIVE=0`).
+- No session id on disk: `share open-as --json` never carries the link or the sid (`--print-url` prints upstream's link, which does); stop, remove and assign end the seat's sessions in the copy, and a sign-out that could not finish is kept as `wipe_failed` and retried.
+- `share setup` stops until `--acknowledge-data`: the copy holds the site's real people, customers, contacts and addresses, and the person who shares it must say they know.
+- `/socket.io` answers 404 at the gateway in v1: Frappe's realtime server would need namespace enforcement on every CONNECT packet and an event allowlist (`open_in_editor` is one of its events) to be safe for guests, so guests get no live updates and reload instead.
+- One Mac per seat at a time, and a person may switch seats (A15 re-ruled for rooms): a seat taken by another Mac reads "taken by {name}", and the host can move or remove anyone.
+- The activity log keeps only the first two path segments of each request (`/app/sales-order`, never a document name), one 0600 file per day, 14 days: "Priya opened Sales Order" is enough for a host, and a customer's name never lands in a log.
+- The 5 minute pairing TTL (A17) went with pairing; a join's start record is kept 30 s, and an unfinished start that expires is charged as a failure (J6).
+- `dns-sd` dying marks the share `degraded` and is restarted; it never ends the share (A18): the room is still reachable by address, and the Local Network privilege is checked by the app before the first start.
+- The deadline is capped at 12 hours from the start, and `share extend` moves it within that cap: a room left open overnight ends by itself.
+- No MCP tool and no `benchbar://` route starts or joins a share (U3): sharing a site with real data is a person's decision.
+- The gateway forwards only the `sid` and `preferred_language` cookies to the copy: any other cookie of the guest's browser (another site's, a tracking one) never reaches Frappe.
+- Sharing fails closed: a gateway that exits, or two failed critical checks in a row, end the job; a probe that cannot run is a failure, never an ok.
+- The pf check probes this Mac's own LAN address with its own throwaway listener inside the blocked range and a control port above it: a refused port proves nothing unless the control answers, and the anchor's `from ! 127.0.0.1` rule blocks the Mac's own LAN address too, which is what makes the probe possible.
+- The LAN guard and the firewall allow are the two new sudo exceptions on macOS (`lan-guard install`/`remove`, `lan-guard allow-node`): a pf anchor and a launch daemon in `/etc` and `/Library` need root, and the root script carries both files as literals so root never reads a file the user owns. Both are refused under `BENCHBAR_NONINTERACTIVE`, `--for-agent` and `mcp`, and without a terminal unless the app passes `BENCHBAR_SUDO=gui` after its own alert.
+- `lan-guard status` and install's "unchanged" use share preflight's rule (the anchor's non-comment rules, whitespace squeezed, and a daemon that loads it): the Phase 0 files written by hand read as installed, and no sudo is asked for a header comment.
+- `share teardown` keeps the archived copy's Time Machine exclusion: the archive still holds the site's real data.
+
 ## 0.8: the install stream and the privilege path
 
 - `install --json` and `adopt --json` share one emitter in `ui.sh` (`fl_jsonl`, fd 3) instead of growing `pull`'s: the phase scripts are child processes and need the same lines, and they inherit fd 3 and `FL_JSONL` for free. `pull` keeps its own emitter.

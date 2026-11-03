@@ -2,6 +2,24 @@
 
 All notable changes to this project are documented here.
 
+## Unreleased
+
+### Added
+
+- `benchbar share`: a room on your Wi-Fi where people sign in to a hardened
+  copy of a dev site. `share setup` makes the copy (`--acknowledge-data`,
+  `--users`), `share start` opens the room until its deadline, `share code`
+  shows the 6 digit room code (`--new` draws another), `share lock` and
+  `unlock`, `share people`, `share remove` (with `--new-code`), `share
+  assign`, `share log`, `share open-as`, `share status`, `share extend`,
+  `share stop` and `share teardown`. macOS only; no MCP tool.
+- `benchbar lan-guard install|status|remove|allow-node`: the pf anchor that
+  keeps every bench port off the LAN, its launch daemon, and the firewall
+  allow for node. `install`, `remove` and `allow-node` ask for sudo once and
+  are refused under `--for-agent`, `mcp` and `BENCHBAR_NONINTERACTIVE`.
+- Docs: the [share and lan-guard reference](docs/reference/cli/share.md)
+  and the sharing documents in the JSON schema.
+
 ## 0.8.1 - 2026-11-01
 
 BenchBar for Windows is now a beta. The tray takes a new PC from no WSL to
