@@ -117,8 +117,8 @@ nonisolated final class ShareForwarder: @unchecked Sendable {
     }
 
     /// Binds both loopback addresses; a taken port (the free check is racy) moves to the next.
-    func start(attempts: Int = 20) async throws {
-        for _ in 0..<attempts {
+    func start() async throws {
+        for _ in 0..<20 {
             if await bind(port: port) { return }
             port = port >= UInt16(LocalShareName.portRange.upperBound) ? UInt16(LocalShareName.portRange.lowerBound) : port + 1
         }

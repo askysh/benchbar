@@ -25,6 +25,10 @@ nonisolated final class NodeGateway {
         return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
     }
 
+    static var available: Bool {
+        nodePath() != nil && FileManager.default.fileExists(atPath: ShareRepo.root.appendingPathComponent("tests/share/helpers.js").path)
+    }
+
     init?() throws {
         guard let node = Self.nodePath(),
               FileManager.default.fileExists(atPath: ShareRepo.root.appendingPathComponent("tests/share/helpers.js").path)
@@ -56,7 +60,9 @@ nonisolated final class NodeGateway {
     }
 }
 
-@Suite(.serialized) struct ShareInteropTests {
+/// Skipped (not failed) where node or the repository's share tests are absent, as on CI.
+@Suite(.serialized, .enabled(if: NodeGateway.available, "needs node and tests/share/helpers.js"))
+struct ShareInteropTests {
     private func join(_ gateway: NodeGateway, identity: KeychainIdentity, code: String, pin: ServerPin = .firstJoin) async throws -> (Result<JoinedRoom, JoinRefusal>, RoomConnection) {
         let connection = RoomConnection(endpoint: gateway.endpoint, identity: try identity.identity(), pin: pin)
         try await connection.open()

@@ -48,7 +48,7 @@ nonisolated enum RoomAPIError: Error, Equatable, Sendable {
 }
 
 /// The joined-guest calls, over a pinned connection that presents the client identity.
-nonisolated struct RoomAPI {
+nonisolated struct RoomAPI: Sendable {
     let transport: RoomTransport
 
     func hello() async throws(RoomAPIError) -> GatewayHello {

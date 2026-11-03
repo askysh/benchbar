@@ -35,6 +35,8 @@ nonisolated protocol RoomTransport: AnyObject, Sendable {
     /// Fh: the server SPKI hash this connection saw in its handshake.
     var serverSPKIHash: Data? { get }
     var exporter: Data? { get }
+    /// The resolved address, kept so a saved room reconnects without Bonjour first.
+    var remoteEndpoint: NWEndpoint? { get }
     func close()
 }
 
@@ -57,6 +59,7 @@ nonisolated final class RoomConnection: RoomTransport, @unchecked Sendable {
 
     var serverSPKIHash: Data? { capture.spkiHash }
     var exporter: Data? { PinnedTLS.exporter(of: connection) }
+    var remoteEndpoint: NWEndpoint? { connection.currentPath?.remoteEndpoint }
 
     func open(timeout: TimeInterval = 8) async throws(RoomConnectionError) {
         let result: Result<Void, RoomConnectionError> = await withCheckedContinuation { continuation in
