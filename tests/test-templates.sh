@@ -92,7 +92,7 @@ share_runner() {
 }
 sp="$(share_plist)"; sr="$(share_runner)"
 assert_contains "$sp" "benchbar-template: share.plist v1 "
-assert_contains "$sr" "benchbar-template: share-run.sh v3 "
+assert_contains "$sr" "benchbar-template: share-run.sh v4 "
 assert_not_contains "$sr" "__" "(every value is filled in)"
 assert_contains "$(share_runner 9443)" "GATEWAY_PORT=9443" "(Bonjour announces the gateway's port, not a literal)"
 assert_not_contains "$(sed -n '/^start_dns()/,/^}/p' "$ROOT/templates/share-run.sh.tmpl")" "8443"

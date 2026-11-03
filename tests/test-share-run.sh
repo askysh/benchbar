@@ -232,6 +232,19 @@ while not stopping and time.time() < end and os.getppid() == parent and not os.p
 srv.close()
 os.unlink(path)
 PY
+# lsof for the runner: the mock, except that with $MOCK_STATE/lsof_flip it answers once that the newest web
+# process holds 8001 and then drops that listener (ownership lost between two checks)
+cat >"$SB/lsof" <<SH
+#!/bin/bash
+out="\$("$ROOT/tests/mocks/bin/lsof" "\$@")"; code=\$?
+web="\$(tail -n1 "\$MOCK_STATE/web_pids" 2>/dev/null)"
+if [[ -f "\$MOCK_STATE/lsof_flip" && -n "\$web" && \$'\n'"\$out"\$'\n' == *\$'\n'"\$web"\$'\n'* ]]; then
+  grep -v "^8001 " "\$MOCK_LISTEN" >"\$MOCK_LISTEN.tmp"; mv "\$MOCK_LISTEN.tmp" "\$MOCK_LISTEN"
+  rm -f "\$MOCK_STATE/lsof_flip"
+fi
+[[ -z "\$out" ]] || printf '%s\n' "\$out"
+exit "\$code"
+SH
 # the node the share runs on: gateway.js is the Python gateway, the control client is the real node,
 # anything else (the version, the checks' throwaway listener) is the node mock
 cat >"$SB/node" <<SH
@@ -261,7 +274,7 @@ events() { order | grep -v '^control ' | awk '{ print ($1 == "webop") ? "webop-"
 reset_order() {
   : >"$MOCK_STATE/order"
   rm -f "$MOCK_STATE/pre_script" "$MOCK_STATE/gw_exit" "$MOCK_STATE/dns_die" "$MOCK_STATE/web_deaf" "$MOCK_STATE/wipe_fail" \
-    "$MOCK_STATE/wipe_hang" "$MOCK_STATE/caf_die" "$MOCK_STATE/web_op_fail"
+    "$MOCK_STATE/wipe_hang" "$MOCK_STATE/caf_die" "$MOCK_STATE/web_op_fail" "$MOCK_STATE/lsof_flip"
 }
 # wait_for SECONDS CMD...: until CMD succeeds, or fail
 wait_for() {
@@ -365,7 +378,7 @@ NASTY_ROOM='Lab "one" $HOME `x`'
 render_runner() {
   fl_template_render share-run.sh "SHARE_DIR=${SHARE_DIR}" "SOCK=${SOCK}" "BENCH=${BENCH}" "SHARE_SITE=share.localhost" "WEB_PORT=8001" \
     "GATEWAY_PORT=8443" "PYTHON=${BENCH}/env/bin/python" "LIB=${ROOT}/lib/frappe-local" "NODE=${SB}/node" "BENCHBAR=${SB}/benchbar" \
-    "DNS_SD=${SB}/dns-sd" "CAFFEINATE=${SB}/caffeinate" "LSOF=${ROOT}/tests/mocks/bin/lsof" "WIPE_SECS=${FL_SHARE_WIPE_SECS}" \
+    "DNS_SD=${SB}/dns-sd" "CAFFEINATE=${SB}/caffeinate" "LSOF=${SB}/lsof" "WIPE_SECS=${FL_SHARE_WIPE_SECS}" \
     "LISTEN_SECS=${FL_SHARE_LISTEN_SECS}" "SOCK_SECS=${FL_SHARE_SOCK_SECS}" "SESSIONS_PY=${FL_PY_SHARE_SESSIONS}" \
     "CONTROL_JS=${FL_JS_SHARE_CONTROL}" "SITE_LABEL=macdev" "ROOM_LABEL=${NASTY_ROOM}" >"$SHARE_DIR/share-run.sh"
   chmod 700 "$SHARE_DIR/share-run.sh"
@@ -441,7 +454,7 @@ assert_no_file "$SHARE_DIR/job.plist"
 reset_order; write_gateway_cfg $((NOW + 3600)); printf 'fail\n' >"$MOCK_STATE/pre_script"
 start_runner
 wait_for 15 runner_gone
-assert_eq "1" "$(runner_code)"
+assert_eq "1" "$(runner_code)" "(line $LINENO: $(events))"
 assert_eq "wipe web preflight wipe" "$(events)"
 assert_contains "$(cat "$SHARE_DIR/ended")" "checks"
 finish_runner
@@ -450,7 +463,7 @@ finish_runner
 reset_order; printf 'ok\nskipgw\n' >"$MOCK_STATE/pre_script"
 start_runner
 wait_for 15 runner_gone
-assert_eq "1" "$(runner_code)"
+assert_eq "1" "$(runner_code)" "(line $LINENO: $(events))"
 assert_eq "wipe web preflight gateway preflight wipe" "$(events)" "(no dns-sd, and the web is never marked up)"
 finish_runner
 
@@ -458,7 +471,7 @@ finish_runner
 reset_order; : >"$MOCK_STATE/web_op_fail"
 start_runner
 wait_for 15 runner_gone
-assert_eq "1" "$(runner_code)"
+assert_eq "1" "$(runner_code)" "(line $LINENO: $(events))"
 assert_eq "wipe web preflight gateway preflight webop-up wipe" "$(events)"
 assert_contains "$(cat "$SHARE_DIR/ended")" "did not confirm that the web process is up"
 finish_runner
@@ -467,7 +480,7 @@ finish_runner
 reset_order; : >"$MOCK_STATE/web_deaf"; export BENCHBAR_SHARE_LISTEN_SECS=1
 start_runner
 wait_for 15 runner_gone
-assert_eq "1" "$(runner_code)"
+assert_eq "1" "$(runner_code)" "(line $LINENO: $(events))"
 assert_eq "wipe web wipe" "$(events)"
 finish_runner
 unset BENCHBAR_SHARE_LISTEN_SECS
@@ -476,7 +489,7 @@ unset BENCHBAR_SHARE_LISTEN_SECS
 reset_order; printf 'ok\nok\nfail\nok\nok\nfail\nfail\n' >"$MOCK_STATE/pre_script"
 start_runner
 wait_for 30 runner_gone
-assert_eq "1" "$(runner_code)"
+assert_eq "1" "$(runner_code)" "(line $LINENO: $(events))"
 assert_eq "7" "$(grep -c '^preflight ' "$MOCK_STATE/order")" "(ended at the second fail in a row, not at the first)"
 assert_contains "$(cat "$SHARE_DIR/ended")" "twice in a row"
 finish_runner
@@ -514,9 +527,29 @@ wait_for 15 has_event '^webop up'
 # up comes after the latch and after a check that ran after it, never before
 awk '/^latched/ { l = NR } /^preflight / && l && !p { p = NR } /^webop up/ && l { u = NR } END { exit !(l && p > l && u > p) }' "$MOCK_STATE/order" \
   || fail "re-armed before a passing check: $(order)"
-assert_eq "1" "$(grep -c 'marked the web up again' "$TMP_DIR/runner.log")"
+wait_for 10 bash -c 'grep -q "marked the web up again" "$1"' _ "$TMP_DIR/runner.log"
+assert_eq "1" "$(grep -c 'marked the web up again' "$TMP_DIR/runner.log")" "(one line)"
 kill -TERM "$RUNNER_PID"; wait_for 15 runner_gone
 finish_runner
+
+# ---- the web loses its port between the check and the up: the gateway is told down again and the job ends
+reset_order; : >"$MOCK_STATE/lsof_flip"
+start_runner
+wait_for 15 runner_gone
+assert_eq "1" "$(runner_code)" "(line $LINENO: $(events))"
+assert_eq "wipe web preflight gateway preflight webop-up webop-down wipe" "$(events)" "(at the first start)"
+assert_contains "$(cat "$SHARE_DIR/ended")" "stopped holding its port as it was marked up"
+finish_runner
+reset_order
+start_runner
+wait_for 15 has_event '^caffeinate '
+: >"$MOCK_STATE/order"; : >"$MOCK_STATE/lsof_flip"; : >"$MOCK_STATE/gw_latch"
+wait_for 15 runner_gone
+assert_eq "1" "$(runner_code)" "(line $LINENO: $(events))"
+assert_eq "webop-up webop-down wipe" "$(events | tr ' ' '\n' | grep -v -E '^(latched|preflight)$' | tr '\n' ' ' | sed 's/ $//')" "(at a re-arm)"
+assert_contains "$(cat "$SHARE_DIR/ended")" "stopped holding its port as it was marked up"
+finish_runner
+grep -v "^8001 " "$MOCK_LISTEN" >"$MOCK_LISTEN.tmp"; mv "$MOCK_LISTEN.tmp" "$MOCK_LISTEN"
 
 # ---- a foreign listener holds the web port: the latched web stays down
 reset_order
@@ -540,7 +573,7 @@ start_runner
 wait_for 15 has_event '^caffeinate '
 kill "$(tail -n1 "$MOCK_STATE/web_pids")"
 wait_for 15 runner_gone
-assert_eq "1" "$(runner_code)"
+assert_eq "1" "$(runner_code)" "(line $LINENO: $(events))"
 assert_eq "webop-down web preflight wipe" "$(events | cut -d' ' -f9-)" "(never up)"
 assert_contains "$(cat "$SHARE_DIR/ended")" "does not hold its port"
 finish_runner
@@ -562,7 +595,7 @@ done
 export BENCHBAR_SHARE_FIRST_TICK=2
 kill "$(tail -n1 "$MOCK_STATE/web_pids")"
 wait_for 15 runner_gone
-assert_eq "1" "$(runner_code)"
+assert_eq "1" "$(runner_code)" "(line $LINENO: $(events))"
 assert_eq "webop-down wipe" "$(events | cut -d' ' -f5-)"
 assert_contains "$(cat "$SHARE_DIR/ended")" "ended 4 times in 5 minutes"
 finish_runner
@@ -573,7 +606,7 @@ start_runner
 wait_for 15 has_event '^caffeinate '
 kill "$(tail -n1 "$MOCK_STATE/web_pids")"
 wait_for 15 runner_gone
-assert_eq "1" "$(runner_code)"
+assert_eq "1" "$(runner_code)" "(line $LINENO: $(events))"
 assert_eq "webop-down web preflight wipe" "$(events | cut -d' ' -f9-)" "(after the restart: down, the web, its checks, the end; never up)"
 finish_runner
 export BENCHBAR_SHARE_FIRST_TICK=2

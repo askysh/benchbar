@@ -1,5 +1,5 @@
 #!/bin/bash
-#@version 3
+#@version 4
 #@quoted SHARE_DIR SOCK BENCH SHARE_SITE WEB_PORT PYTHON LIB NODE BENCHBAR DNS_SD CAFFEINATE LSOF SITE_LABEL ROOM_LABEL  # SESSIONS_PY and CONTROL_JS sit in quoted here-documents, where they are literal
 # __HEADER__
 #
@@ -183,13 +183,22 @@ gateway_web_down() {
   return 1
 }
 
+# web_up_held: tells the gateway the web is up, then checks again that the web's own PID still holds the
+# port (it could lose it between the check before and the op); if not, the gateway is told down and the job ends
+web_up_held() {
+  web_state up
+  web_owns_port && return 0
+  web_state down
+  fail_job web "The web process of the share stopped holding its port as it was marked up."
+}
+
 # rearm_web: after a passing check, a web the gateway latched down is marked up again when its own PID
 # holds the port. A port held by something else stays down, said once until the web is up again.
 FOREIGN_SAID=0
 rearm_web() {
   gateway_web_down || return 0
   if web_owns_port; then
-    web_state up
+    web_up_held
     FOREIGN_SAID=0
     say "the gateway had marked the web down; its own process holds the port: marked the web up again"
   elif [ "$FOREIGN_SAID" = 0 ]; then
@@ -286,7 +295,7 @@ web_gone() {
   restart_web
   # as at the first start: the checks passed, and the new web still lives and holds its port
   web_owns_port || fail_job web "The web process of the share ended, or does not hold its port, after it started again."
-  web_state up
+  web_up_held
 }
 
 trap 'exit 0' TERM INT HUP
@@ -303,7 +312,7 @@ phase starting:gateway
 start_gateway || fail_job gateway "The gateway did not start."
 checks 1 || fail_job checks "The checks failed once the gateway was up: ${LAST_FAILED:-no answer}."
 alive "$WEB_PID" || fail_job web "The web process of the share ended while it was checked."
-web_state up
+web_up_held
 phase running
 start_dns
 start_caffeinate

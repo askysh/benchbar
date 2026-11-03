@@ -134,8 +134,28 @@ cp "$ROOT/tests/run-tests.sh" "$RT/tests/run-tests.sh"
 for f in benchbar 00-mac-system-deps.sh 00-linux-system-deps.sh 01-install-bench-and-site.sh 02-background-service.sh lib/frappe-local/x.sh; do
   printf '#!/usr/bin/env bash\n' >"$RT/$f"
 done
-# aborts on an unset variable, as a share test would after a mistake: exit 0 under bash 3.2, never its ok line
-cat >"$RT/tests/test-share.sh" <<'SH'
+# stops halfway with exit 0 and no ok line (what a bash 3.2 set -u abort does), on any bash
+printf 'printf "test-share: half\\n"\nexit 0\n' >"$RT/tests/test-share.sh"
+printf 'printf "test-share-run: ok (SKIPPED: no node)\\n"\n' >"$RT/tests/test-share-run.sh"
+printf 'printf "SKIP: node not found\\n"\n' >"$RT/tests/test-share-gateway.sh"
+printf 'printf "test-share-preflight: okay\\n"\n' >"$RT/tests/test-share-preflight.sh"
+printf 'exit 0\n' >"$RT/tests/test-cli.sh"
+jobs="test-share test-share-run test-share-gateway test-share-preflight test-cli"
+set +e
+# shellcheck disable=SC2086  # the job names are words
+OUT="$(PARALLEL=2 bash "$RT/tests/run-tests.sh" $jobs 2>&1)"; CODE=$?
+set -e
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "--- FAIL: test-share (exit 1,"
+assert_contains "$OUT" 'test-share exited 0 without its "test-share: ok" line'
+assert_contains "$OUT" "--- FAIL: test-share-gateway (exit 1,"
+assert_contains "$OUT" "--- FAIL: test-share-preflight (exit 1," "(okay is not ok)"
+assert_contains "$OUT" "--- ok: test-share-run" "(an ok line with a note in parentheses, as a skip prints it)"
+assert_contains "$OUT" "--- ok: test-cli" "(a test of another name keeps exit-code judging)"
+assert_contains "$OUT" "FAILED: test-share test-share-gateway test-share-preflight"
+# the real abort, where it exits 0 (bash 3.2: a set -u abort inside a function, with an EXIT trap): failed
+if [[ "$(bash -c 'printf %s "${BASH_VERSINFO[0]}"')" -lt 4 ]]; then
+  cat >"$RT/tests/test-share.sh" <<'SH'
 set -euo pipefail
 D="$(mktemp -d)"
 trap 'rm -rf "$D"' EXIT
@@ -143,18 +163,9 @@ f() { printf '%s\n' "${BENCHBAR_TEST_NEVER_SET}"; }
 f
 printf 'test-share: ok\n'
 SH
-printf 'printf "test-share-run: ok\\n"\n' >"$RT/tests/test-share-run.sh"
-printf 'printf "SKIP: node not found\\n"\n' >"$RT/tests/test-share-gateway.sh"
-printf 'exit 0\n' >"$RT/tests/test-cli.sh"
-set +e
-OUT="$(PARALLEL=2 bash "$RT/tests/run-tests.sh" test-share test-share-run test-share-gateway test-cli 2>&1)"; CODE=$?
-set -e
-assert_eq "1" "$CODE" "$OUT"
-assert_contains "$OUT" "--- FAIL: test-share (exit 1,"
-assert_contains "$OUT" 'test-share exited 0 without its "test-share: ok" line'
-assert_contains "$OUT" "--- FAIL: test-share-gateway (exit 1,"
-assert_contains "$OUT" "--- ok: test-share-run"
-assert_contains "$OUT" "--- ok: test-cli" "(a test of another name keeps exit-code judging)"
-assert_contains "$OUT" "FAILED: test-share test-share-gateway"
+  set +e; OUT="$(bash "$RT/tests/run-tests.sh" test-share 2>&1)"; CODE=$?; set -e
+  assert_eq "1" "$CODE" "$OUT"
+  assert_contains "$OUT" 'test-share exited 0 without its "test-share: ok" line'
+fi
 
 printf 'test-affected: ok\n'
