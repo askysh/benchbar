@@ -47,19 +47,30 @@ fl_lg_state_v() {
   else printf -v "$1" outdated; fi
 }
 
-# fl_lg_active_v VAR: the pf_active probe of share preflight from this Mac's LAN address: true, false,
-# or null when there is no LAN address to probe from
+# fl_lg_active_v VAR: whether pf refuses the bench ports, by share preflight's probe from this Mac's LAN
+# address alone (the files are the state's business): true (nothing answered and the control did), false
+# (a port that must be refused answered), or null (no LAN address, or the probe could not run)
 fl_lg_active_v() {
-  local i
   fl_sp_lan_v
   if [[ -z "$SP_LAN_IP" ]]; then printf -v "$1" null; return 0; fi
-  SP_ID=(); SP_STATUS=()
+  SP_ID=(); SP_STATUS=(); SP_PF_PROBE=unknown
   fl_sp_probe_pf
-  printf -v "$1" false
-  for ((i = 0; i < ${#SP_ID[@]}; i++)); do
-    [[ "${SP_ID[$i]}" == pf_active && "${SP_STATUS[$i]}" == ok ]] && printf -v "$1" true
-  done
-  return 0
+  case "$SP_PF_PROBE" in
+    blocked) printf -v "$1" true ;;
+    answered) printf -v "$1" false ;;
+    *) printf -v "$1" null ;;
+  esac
+}
+
+# fl_lg_say_active: one line for LG_ACTIVE
+fl_lg_say_active() {
+  case "$LG_ACTIVE" in
+    true) fl_ok "the bench ports are refused on ${SP_LAN_IP}" ;;
+    false) fl_warn "the bench ports are not refused on ${SP_LAN_IP}: see benchbar share preflight --critical" ;;
+    *)
+      if [[ -z "$SP_LAN_IP" ]]; then fl_info "no LAN address, so the block could not be probed"
+      else fl_info "the block could not be probed on ${SP_LAN_IP}: see benchbar share preflight --critical"; fi ;;
+  esac
 }
 
 # fl_lg_require_person COMMAND: U3, before anything is asked or changed
@@ -114,6 +125,13 @@ put() {
 /bin/mkdir -p "${anchor%/*}"
 put "$anchor" "$pf_text"
 put "$daemon" "$plist_text"
+ROOT
+  fl_lg_load_sh
+}
+
+# fl_lg_load_sh: the load half: pf enabled with the anchor loaded, and the daemon (re)started
+fl_lg_load_sh() {
+  cat <<'ROOT'
 "$pfctl" -E -a "$pf_anchor" -f "$anchor"
 if "$launchctl" print "system/$label" >/dev/null 2>&1; then
   "$launchctl" kickstart -k "system/$label"
@@ -121,6 +139,13 @@ else
   "$launchctl" bootstrap system "$daemon"
 fi
 ROOT
+}
+
+# fl_lg_reload_script: the root side of a repair, when the files match but pf does not refuse the ports
+fl_lg_reload_script() {
+  printf 'set -eu\n'
+  fl_lg_tools_sh
+  fl_lg_load_sh
 }
 
 fl_lg_remove_script() {
@@ -155,11 +180,7 @@ fl_lg_doc_v() {
 fl_lg_report() {
   local doc
   fl_lg_doc_v doc
-  case "$LG_ACTIVE" in
-    true) fl_ok "the bench ports are refused on ${SP_LAN_IP}" ;;
-    false) fl_warn "the bench ports are not refused on ${SP_LAN_IP}: see benchbar share preflight --critical" ;;
-    *) fl_info "no LAN address, so the block could not be probed" ;;
-  esac
+  fl_lg_say_active
   [[ "${OPT_JSON:-0}" != 1 ]] || fl_doc_emit 0 "$doc"
 }
 
@@ -170,22 +191,45 @@ fl_cmd_lan_guard_status() {
   fl_lg_doc_v doc
   if [[ "${OPT_JSON:-0}" == 1 ]]; then fl_doc_emit 0 "$doc"; return 0; fi
   fl_info "LAN guard: ${LG_STATE} (pf anchor ${FL_LANGUARD_PF_ANCHOR_NAME}: ${FL_LANGUARD_PORTS})"
-  case "$LG_ACTIVE" in
-    true) fl_ok "the bench ports are refused on ${SP_LAN_IP}" ;;
-    false) fl_warn "the bench ports are not refused on ${SP_LAN_IP}" ;;
-    *) fl_info "no LAN address, so the block was not probed" ;;
-  esac
-  [[ "$LG_STATE" == installed ]] || fl_fix "benchbar lan-guard install"
+  fl_lg_say_active
+  [[ "$LG_STATE" == installed && "$LG_ACTIVE" != false ]] || fl_fix "benchbar lan-guard install"
+}
+
+# fl_lg_repair: the files match but a bench port answers on the LAN (pf disabled, the anchor flushed, the
+# daemon not loaded): load the anchor and the daemon again, the files untouched
+fl_lg_repair() {
+  local doc ip="$SP_LAN_IP"
+  if [[ "${FL_DRY_RUN:-0}" == 1 ]]; then
+    fl_info "dry-run: the guard's files match, but the bench ports are not refused on ${ip}; with sudo, once, would:"
+    fl_info "  run /sbin/pfctl -E -a ${FL_LANGUARD_PF_ANCHOR_NAME} -f ${FL_SHARE_PF_ANCHOR_FILE}, and load the daemon again (launchctl)"
+    return 0
+  fi
+  fl_warn "The guard's files match, but the bench ports are not refused on ${ip}."
+  fl_confirm "Load the LAN guard again with sudo (pf and its launch daemon)?" || fl_die "Not loaded." "Run: benchbar lan-guard install"
+  fl_lg_as_root "load the LAN guard again: the pf anchor that keeps the bench ports off the LAN" \
+    "benchbar lan-guard install" "$(fl_lg_reload_script)"
+  fl_lg_doc_v doc
+  [[ "$LG_ACTIVE" != false ]] || fl_die "The bench ports still answer on ${ip} after the guard was loaded again." "See benchbar share preflight --critical."
+  fl_changed lan-guard "$FL_LANGUARD_PF_ANCHOR_NAME" "reloaded"
+  fl_ok "LAN guard loaded again"
+  fl_lg_say_active
+  [[ "${OPT_JSON:-0}" != 1 ]] || fl_doc_emit 0 "$doc"
 }
 
 fl_cmd_lan_guard_install() {
-  local a state
+  local a state doc
   for a in "$@"; do fl_die "Unknown argument for lan-guard install: $a" "Use: benchbar lan-guard install [--dry-run] [--yes] [--json]"; done
   fl_lg_require_person install
   fl_lg_state_v state
   if [[ "$state" == installed ]]; then
-    fl_ok "unchanged: the guard is installed and matches"
-    fl_lg_report
+    fl_lg_doc_v doc
+    if [[ "$LG_ACTIVE" != false ]]; then
+      fl_ok "unchanged: the guard is installed and matches"
+      fl_lg_say_active
+      [[ "${OPT_JSON:-0}" != 1 ]] || fl_doc_emit 0 "$doc"
+      return 0
+    fi
+    fl_lg_repair
     return 0
   fi
   if [[ "${FL_DRY_RUN:-0}" == 1 ]]; then

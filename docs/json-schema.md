@@ -1365,7 +1365,7 @@ owed, else `{"retried":bool,"wiped":N|null,"wipe_failed":M|null}`.
 ```
 
 - `state`: `installed`, `missing` or `outdated` (the anchor's rules differ, or the daemon does not load it).
-- `active`: the `pf_active` check of `share preflight`, probed from `lan_ip`; null with no LAN address.
+- `active`: whether pf refuses the bench ports, by the probe alone (the files are `state`): true when no bench port answered from `lan_ip` and the control port did, false when a bench port answered, null with no LAN address or when the probe could not run.
 
 `lan-guard install` and `remove` end in a done line with the same fields;
 `allow-node`'s carries `node`, the realpath it allowed.

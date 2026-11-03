@@ -51,9 +51,9 @@ for want in '<string>/sbin/pfctl</string><string>-E</string>' '<string>-f</strin
 done
 
 # ---------------------------------------------------------------- missing: status, dry run, install (gui)
-# active is share preflight's pf_active check, which fails while the files are missing
+# active is what the probe alone saw: here the block works although the files are missing (I3)
 clean
-assert_eq "missing False 192.168.1.20 com.apple/250.benchbar" "$(jstat '" ".join(str(x) for x in (d["state"], d["active"], d["lan_ip"], d["anchor"]))')"
+assert_eq "missing True 192.168.1.20 com.apple/250.benchbar" "$(jstat '" ".join(str(x) for x in (d["state"], d["active"], d["lan_ip"], d["anchor"]))')"
 assert_eq "8000:8099 9000:9099 11000:11099 13000:13099 3306" "$(jget "$TMP_DIR/st.json" 'd["ports"]')"
 # status is never refused, also for an agent
 BENCHBAR_NONINTERACTIVE=1 run_fm lan-guard status --json --bench-dir "$BENCH"
@@ -116,6 +116,36 @@ for bad in 's#<string>-E</string>##' 's#<key>RunAtLoad</key><true/>##' 's#/sbin/
   assert_eq outdated "$(jstat 'd["state"]')" "(daemon edited: $bad)"
 done
 cp "$TMP_DIR/daemon.good" "$FL_LANGUARD_DAEMON"
+
+# I3: the files match but pf lets a bench port through (pf disabled, the anchor flushed): active is false,
+# and install loads the guard again instead of saying unchanged; the files are not rewritten
+printf '8097\n18097\n' >"$MOCK_STATE/lan_reachable_ports"
+assert_eq "installed False" "$(jstat '" ".join(str(x) for x in (d["state"], d["active"]))')"
+lg install --dry-run
+assert_eq 0 "$CODE" "$OUT"; assert_contains "$OUT" "not refused"; assert_contains "$OUT" "load the daemon again"
+assert_calls_not_contain '^(sudo|pfctl|osascript)'
+reset_calls; rm -f "$MOCK_STATE/osa_reasons"; printf '18097\n' >"$MOCK_STATE/pfctl_loads"
+cp "$FL_LANGUARD_ANCHOR" "$TMP_DIR/anchor.before"
+lg_gui install --yes
+rm -f "$MOCK_STATE/pfctl_loads"
+assert_eq 0 "$CODE" "$OUT"
+assert_not_contains "$OUT" "unchanged"; assert_contains "$OUT" "LAN guard loaded again"
+assert_eq 1 "$(wc -l <"$MOCK_STATE/osa_reasons" | tr -d ' ')" "(one dialog)"
+assert_calls_contain "^pfctl -E -a com.apple/250.benchbar -f ${FL_LANGUARD_ANCHOR}\$"
+assert_calls_not_contain '^chown' "(the files are not rewritten)"
+assert_eq "$(cat "$TMP_DIR/anchor.before")" "$(cat "$FL_LANGUARD_ANCHOR")"
+assert_eq "installed True" "$(jstat '" ".join(str(x) for x in (d["state"], d["active"]))')"
+# a reload that does not stop the port answering is a failure, not a success
+printf '8097\n18097\n' >"$MOCK_STATE/lan_reachable_ports"; reset_calls
+lg_gui install --yes
+assert_eq 1 "$CODE" "$OUT"; assert_contains "$OUT" "still answer"
+printf '18097\n' >"$MOCK_STATE/lan_reachable_ports"
+# the probe could not run (the control port does not answer): active is unknown, never false
+: >"$MOCK_STATE/lan_reachable_ports"
+assert_eq "installed None" "$(jstat '" ".join(str(x) for x in (d["state"], d["active"]))')"
+lg_gui install --yes
+assert_eq 0 "$CODE" "$OUT"; assert_contains "$OUT" "unchanged"; assert_contains "$OUT" "could not be probed"
+printf '18097\n' >"$MOCK_STATE/lan_reachable_ports"
 
 # ---------------------------------------------------------------- different ports: outdated, rewritten (terminal, sudo)
 sed_inplace 's/8000:8099/8000:8199/' "$FL_LANGUARD_ANCHOR"

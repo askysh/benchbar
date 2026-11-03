@@ -303,11 +303,15 @@ Writes the pf anchor `/etc/pf.anchors/com.benchbar.lan` (loaded as
 `/Library/LaunchDaemons/com.benchbar.pf.plist` that loads it at every boot,
 with sudo once, then probes the block from the LAN address. Says
 "unchanged: the guard is installed and matches", with no sudo, when the
-anchor's rules already match. Refused under `BENCHBAR_NONINTERACTIVE`,
+anchor and the daemon already match and no bench port answers on the LAN.
+When they match but a bench port answers (pf disabled, the anchor flushed),
+it loads the anchor and the daemon again with sudo, and fails if a port
+still answers. Refused under `BENCHBAR_NONINTERACTIVE`,
 `--for-agent` and `mcp`, and without a terminal unless `BENCHBAR_SUDO=gui`.
 On a refusal, run the same command yourself in a terminal.
 
-Exit codes: 0; 1 on a refusal, a cancelled password or a failed root step.
+Exit codes: 0; 1 on a refusal, a cancelled password, a failed root step or
+a block that still lets a bench port through.
 
 ```bash
 benchbar lan-guard install --dry-run

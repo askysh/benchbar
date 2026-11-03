@@ -235,8 +235,10 @@ fl_sp_pf_files_problem_v() {
 # pf_active's fix_action names the cause: the pf files or a port that answers (install_network_protection)
 # before a listener that could not run (none) before a control that did not answer
 # (open_local_network_settings, the cause local_network names).
+# SP_PF_PROBE is what the probe alone saw, the files aside: answered (a port that must be refused
+# answered), blocked (none did, and the control answered) or unknown (the probe could not run).
 fl_sp_probe_pf() {
-  local want6="" problems=() control_bad=0 listener_bad=0 pf_bad=0 files node_problem p ports=() seen=" " ip="$SP_LAN_IP" action
+  local want6="" problems=() control_bad=0 listener_bad=0 pf_bad=0 answered=0 files node_problem p ports=() seen=" " ip="$SP_LAN_IP" action
   [[ -z "$SP_LAN_IP6" ]] || want6=6
   fl_sp_pf_files_problem_v files
   [[ -z "$files" ]] || { pf_bad=1; problems+=("$files"); }
@@ -247,13 +249,13 @@ fl_sp_probe_pf() {
     if ! fl_sp_nc_open "$ip" "$SP_L4C"; then
       control_bad=1; problems+=("the probe itself does not work: this Mac did not answer its own address ${ip} on port ${SP_L4C}, outside the blocked ranges")
     elif fl_sp_nc_open "$ip" "$SP_L4R"; then
-      pf_bad=1; problems+=("${SP_L4R} answers on ${ip}: the pf block let a test listener through")
+      pf_bad=1; answered=1; problems+=("${SP_L4R} answers on ${ip}: the pf block let a test listener through")
     fi
     if [[ -n "$want6" ]]; then
       if ! fl_sp_nc_open -6 "$SP_LAN_IP6" "$SP_L6C"; then
         control_bad=1; problems+=("the probe itself does not work over IPv6: this Mac did not answer its own address ${SP_LAN_IP6} on port ${SP_L6C}")
       elif fl_sp_nc_open -6 "$SP_LAN_IP6" "$SP_L6R"; then
-        pf_bad=1; problems+=("IPv6 ${SP_L6R} answers on ${SP_LAN_IP6}: the pf block let a test listener through")
+        pf_bad=1; answered=1; problems+=("IPv6 ${SP_L6R} answers on ${SP_LAN_IP6}: the pf block let a test listener through")
       fi
     fi
   else
@@ -266,8 +268,11 @@ fl_sp_probe_pf() {
   for p in "${ports[@]}"; do
     [[ "$p" =~ ^[0-9]+$ && "$seen" != *" ${p} "* ]] || continue
     seen="${seen}${p} "
-    if fl_sp_nc_open 127.0.0.1 "$p" && fl_sp_nc_open "$ip" "$p"; then pf_bad=1; problems+=("${p} answers on ${ip}"); fi
+    if fl_sp_nc_open 127.0.0.1 "$p" && fl_sp_nc_open "$ip" "$p"; then pf_bad=1; answered=1; problems+=("${p} answers on ${ip}"); fi
   done
+  if [[ "$answered" == 1 ]]; then SP_PF_PROBE=answered
+  elif [[ "$listener_bad" == 1 || "$control_bad" == 1 ]]; then SP_PF_PROBE=unknown
+  else SP_PF_PROBE=blocked; fi
 
   if [[ "$listener_bad" == 1 ]]; then
     fl_sp_add local_network critical skip "no probe could run"

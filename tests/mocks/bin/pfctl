@@ -1,6 +1,11 @@
 #!/bin/bash
-# pfctl mock: logs the call and changes nothing (the tests never reach the real pf)
+# pfctl mock: logs the call and changes nothing (the tests never reach the real pf), except that while
+# $MOCK_STATE/pfctl_loads exists, loading an anchor ("-E ... -f FILE") makes the LAN reach only the ports
+# that file lists ($MOCK_STATE/lan_reachable_ports, read by the nc mock): pf blocking again.
 # shellcheck source=tests/mocks/bin/_mocklib.sh
 . "${0%/*}/_mocklib.sh"
 mock_log "$@"
+if [[ "${1:-}" == -E && -f "${MOCK_STATE:-/nonexistent}/pfctl_loads" ]]; then
+  cp "$MOCK_STATE/pfctl_loads" "$MOCK_STATE/lan_reachable_ports"
+fi
 exit 0
