@@ -93,6 +93,19 @@ nonisolated final class NodeGateway {
         #expect(roster.you == joined.deviceId)
         #expect(roster.people.first?.seat == "Seat 2")
         #expect(try await api.hello().device == joined.deviceId)
+
+        // The browser path: loopback forwarder, pinned mTLS upstream, Host passed through.
+        let forwarder = ShareForwarder(localHost: "test-room-1a2b3c4d.localhost", port: 41000 + UInt16.random(in: 0...999), hostLabel: "Test Host",
+                                       pin: joined.hostPin, makeUpstream: ShareForwarder.pinnedUpstream(to: gateway.endpoint, identity: identity, pin: joined.hostPin))
+        try await forwarder.start()
+        defer { forwarder.stop() }
+        #expect(forwarder.signInURL()?.absoluteString == "http://test-room-1a2b3c4d.localhost:\(forwarder.port)/_benchbar/signin?next=/app")
+        let reply = await rawExchange(port: forwarder.port, "GET /_benchbar/hello HTTP/1.1\r\nHost: \(forwarder.expectedHost)\r\nAccept: application/json\r\n\r\n")
+        #expect(reply.hasPrefix("HTTP/1.1 200"))
+        #expect(reply.contains(joined.deviceId))
+        let signin = await rawExchange(host: "::1", port: forwarder.port, "GET /_benchbar/signin?next=/app HTTP/1.1\r\nHost: \(forwarder.expectedHost)\r\n\r\n")
+        #expect(signin.hasPrefix("HTTP/1.1 302"))
+        #expect(signin.contains("Set-Cookie: sid="))
     }
 
     @Test func wrongCodeIsRefusedAndAWrongPinNeverConnects() async throws {

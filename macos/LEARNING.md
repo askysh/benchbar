@@ -780,3 +780,4 @@ Read `App/AppDelegate.swift` (the menus), `Updates/UpdateCheck.swift`,
 - A TLS verify block must be a `@Sendable` closure made in a nonisolated function. Formed inside a type with the default MainActor isolation, it traps on the verify queue (spike S2).
 - A pinned NWConnection whose server shows another key reports `.waiting` with a TLS error before `.failed`; map both through the pin check, or a changed host looks like an unreachable one.
 - The gateway reuses HTTP codes (403 is `wrong_code`, `blocked` or `not_paired`; 409 is `full` or `already_joined`), so the guest maps refusals on the body's `status`.
+- Two NWListeners on the same port, one `requiredLocalEndpoint` 127.0.0.1 and one ::1, fail the second bind with EADDRINUSE unless `allowLocalEndpointReuse` is on (checked with lsof). A port another process holds without reuse still refuses the bind, so the forwarder's move-to-the-next-port still works.
