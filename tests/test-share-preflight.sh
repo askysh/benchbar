@@ -323,6 +323,11 @@ printf 'garbage\n' >"$MOCK_STATE/share_check"
 pre --static
 for id in signup_disabled admin_password_not_default seats_valid no_api_keys; do assert_check "$id" fail "" rerun_setup; done
 rm -f "$MOCK_STATE/share_check"
+# a share.json with no seats: said so, not a crash (bash 3.2 and an empty array under set -u; the error
+# dies inside a command substitution, so only stderr shows it)
+reset_world; sed_inplace '/"seat_id"/d' "$SHARE_DIR/share.json"
+pre --static; assert_check seats_valid fail "lists no seats" rerun_setup; assert_check signup_disabled ok
+assert_not_contains "$ERR" "unbound variable"
 # no copy yet
 reset_world; rm -f "$SHARE_DIR/share.json"
 : >"$MOCK_LOG"

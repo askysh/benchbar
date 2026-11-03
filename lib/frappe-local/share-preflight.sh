@@ -431,7 +431,7 @@ fl_sp_copy_rows_v() {
   local __rows=""
   fl_share_redis_up
   __rows="$(
-    fl_bench_python_v __rows "$FL_PY_SHARE_CHECK" benchbar-share-check "$FL_SHARE_SITE" <<<"$(printf '%s\n' "${SP_SEAT_USERS[@]}")"
+    fl_bench_python_v __rows "$FL_PY_SHARE_CHECK" benchbar-share-check "$FL_SHARE_SITE" <<<"$(printf '%s\n' ${SP_SEAT_USERS[@]+"${SP_SEAT_USERS[@]}"})"
     printf '%s' "$__rows"
   )" || __rows=""
   fl_share_redis_down
