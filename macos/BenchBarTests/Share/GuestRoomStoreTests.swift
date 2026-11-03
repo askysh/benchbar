@@ -30,6 +30,41 @@ nonisolated final class ScriptedTransport: RoomTransport, @unchecked Sendable {
     func close() {}
 }
 
+/// A room that completes TLS and never answers: every send waits until close().
+nonisolated final class SilentTransport: RoomTransport, @unchecked Sendable {
+    private let lock = NSLock()
+    private var waiting: [CheckedContinuation<Void, Never>] = []
+    private var _closed = false
+    private var _sends = 0
+    var closed: Bool { lock.withLock { _closed } }
+    var sends: Int { lock.withLock { _sends } }
+    var serverSPKIHash: Data? { Data(count: 32) }
+    var exporter: Data? { Data(count: 32) }
+    var remoteEndpoint: NWEndpoint? { nil }
+
+    func send(_ method: String, _ path: String, body: Data?) async throws(RoomConnectionError) -> RoomResponse {
+        await withCheckedContinuation { continuation in
+            let resumeNow = lock.withLock { () -> Bool in
+                _sends += 1
+                if _closed { return true }
+                waiting.append(continuation)
+                return false
+            }
+            if resumeNow { continuation.resume() }
+        }
+        throw .closed
+    }
+
+    func close() {
+        let resumed = lock.withLock { () -> [CheckedContinuation<Void, Never>] in
+            _closed = true
+            defer { waiting.removeAll() }
+            return waiting
+        }
+        resumed.forEach { $0.resume() }
+    }
+}
+
 nonisolated final class FakeForwarder: ForwarderRunning, @unchecked Sendable {
     private let lock = NSLock()
     private var running = false
@@ -282,6 +317,65 @@ private final class Harness {
         #expect(h.store.saved == [room])
         #expect(!NetworkPanePresentation.canRejoin(.identityChanged))
         #expect(h.codesSeen == ["482913"])
+    }
+
+    @Test func cancelWhileJoiningClosesTheSheetAndTheConnection() async throws {
+        let silent = SilentTransport()
+        let store = GuestRoomStore(dependencies: .init(
+            browser: NoBrowser(),
+            rooms: SavedRoomsStore(defaults: UserDefaults(suiteName: "guest-cancel-\(UUID().uuidString)")!),
+            dial: { _, _ throws(RoomConnectionError) in silent },
+            runJoin: { transport, _, _, _, _ in
+                do { _ = try await transport.send("GET", "/room/hello", body: nil) } catch { return .failure(.unreachable) }
+                return .failure(.failed)
+            },
+            clientFingerprint: { Data(count: 32) },
+            makeForwarder: { _ in FakeForwarder() },
+            openURL: { _ in }), guestName: "Asha")
+        store.beginJoin(Harness.room)
+        let attempt = Task { await store.submit(code: "482913", for: Harness.room) }
+        for _ in 0..<400 where silent.sends == 0 { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(store.join == .joining(Harness.room))
+        store.cancelJoin()
+        #expect(store.join == .none)
+        await attempt.value
+        #expect(silent.closed)
+        #expect(store.join == .none)
+        #expect(store.saved.isEmpty)
+    }
+
+    @Test func aSilentRoomDoesNotHoldUpTheOthersPing() async throws {
+        let defaults = UserDefaults(suiteName: "guest-ping-\(UUID().uuidString)")!
+        let rooms = SavedRoomsStore(defaults: defaults)
+        func saved(_ byte: UInt8, _ address: String) -> SavedRoom {
+            SavedRoom(hostFingerprint: Fingerprint.prefix + Data(repeating: byte, count: 32).hex, deviceId: "d_\(byte)", room: "Room \(byte)",
+                      host: "Host \(byte)", site: "macdev", serviceName: "room-\(byte)", lastHost: address, port: 8443, localPort: nil,
+                      joinedAt: Date(timeIntervalSince1970: 1_800_000_000))
+        }
+        let quiet = saved(1, "10.0.0.1"), live = saved(2, "10.0.0.2")
+        rooms.save(quiet)
+        rooms.save(live)
+        let silent = SilentTransport()
+        let answering = ScriptedTransport(["/_benchbar/hello": (200, #"{"ok":true,"protocol":3,"device":"d_2","user_label":null,"deadline_epoch":1800003600,"label":"Room 2","site_label":"macdev"}"#)])
+        let store = GuestRoomStore(dependencies: .init(
+            browser: NoBrowser(),
+            rooms: rooms,
+            dial: { endpoint, _ throws(RoomConnectionError) in
+                if case .hostPort(let host, _) = endpoint, "\(host)" == "10.0.0.1" { return silent }
+                return answering
+            },
+            runJoin: { _, _, _, _, _ in .failure(.failed) },
+            clientFingerprint: { Data(count: 32) },
+            makeForwarder: { _ in FakeForwarder() },
+            openURL: { _ in }), guestName: "Asha")
+        let round = Task { await store.pingAll() }
+        for _ in 0..<400 where store.health[live.id] == nil { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(store.health[live.id] == .ready(deadline: Date(timeIntervalSince1970: 1_800_003_600)))
+        #expect(silent.sends == 1)
+        #expect(store.health[quiet.id] == nil)
+        silent.close()
+        await round.value
+        #expect(store.health[quiet.id] == .offline)
     }
 
     @Test func forgetTellsTheHostAndDropsTheRoom() async {

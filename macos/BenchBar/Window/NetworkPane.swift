@@ -129,6 +129,10 @@ private struct JoinSheet: View {
                 ProgressView().controlSize(.small)
                 Text(NetworkPanePresentation.joining(room))
             }
+            HStack {
+                Spacer()
+                Button("Cancel") { store.cancelJoin() }.keyboardShortcut(.cancelAction)
+            }
         case .refused(let room, let refusal):
             Text(NetworkPanePresentation.refusal(refusal, host: room.display.label)).fixedSize(horizontal: false, vertical: true)
             buttons(primary: "Try Again", enabled: true) { store.join = .enteringCode(room) }

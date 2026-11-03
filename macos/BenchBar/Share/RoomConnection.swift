@@ -51,9 +51,15 @@ nonisolated final class RoomConnection: RoomTransport, @unchecked Sendable {
     private let pin: ServerPin
     private let queue = DispatchQueue(label: "benchbar.share.room-connection")
     private var buffer = Data()
+    /// A room that completes TLS and never answers must not hold a join or a ping for good.
+    private let requestTimeout: TimeInterval
+    /// Claimed by whichever comes first, the deadline or a failed request; either way the
+    /// connection is done.
+    private let expired = ResumeOnce()
 
-    init(endpoint: NWEndpoint, identity: SecIdentity, pin: ServerPin) {
+    init(endpoint: NWEndpoint, identity: SecIdentity, pin: ServerPin, requestTimeout: TimeInterval = 10) {
         self.pin = pin
+        self.requestTimeout = requestTimeout
         connection = NWConnection(to: endpoint, using: PinnedTLS.parameters(identity: identity, pin: pin, capture: capture))
     }
 
@@ -98,12 +104,24 @@ nonisolated final class RoomConnection: RoomTransport, @unchecked Sendable {
         connection.cancel()
     }
 
+    /// Cancelling the connection at the deadline completes the pending send or receive with an
+    /// error, which is reported as `timedOut`; the connection is unusable afterwards.
     func send(_ method: String, _ path: String, body: Data?) async throws(RoomConnectionError) -> RoomResponse {
         var head = "\(method) \(path) HTTP/1.1\r\nHost: \(Self.hostHeader)\r\nAccept: application/json\r\n"
         if let body { head += "Content-Type: application/json\r\nContent-Length: \(body.count)\r\n" }
         head += "\r\n"
-        try await write(Data(head.utf8) + (body ?? Data()))
-        return try await readResponse()
+        let deadline = DispatchWorkItem { [weak self] in
+            guard let self, self.expired.claim() else { return }
+            self.connection.cancel()
+        }
+        queue.asyncAfter(deadline: .now() + requestTimeout, execute: deadline)
+        defer { deadline.cancel() }
+        do {
+            try await write(Data(head.utf8) + (body ?? Data()))
+            return try await readResponse()
+        } catch {
+            throw expired.claim() ? error : .timedOut
+        }
     }
 
     private func write(_ data: Data) async throws(RoomConnectionError) {

@@ -74,6 +74,9 @@ final class GuestRoomStore {
     private var pingTask: Task<Void, Never>?
     /// The saved room the join sheet is for, so its pin is used and never replaced (J19).
     private var rejoining: SavedRoom?
+    /// Bumped by Cancel while joining: a join that resumes afterwards leaves the sheet closed.
+    private var joinAttempt = 0
+    private var joinTransport: (any RoomTransport)?
 
     init(dependencies: Dependencies, guestName: String = NSFullUserName()) {
         deps = dependencies
@@ -131,7 +134,11 @@ final class GuestRoomStore {
     }
 
     func cancelJoin() {
-        if case .joining = join { return }
+        if case .joining = join {
+            joinAttempt += 1
+            joinTransport?.close()
+            joinTransport = nil
+        }
         rejoining = nil
         join = .none
     }
@@ -155,6 +162,8 @@ final class GuestRoomStore {
         }
         lastAttempt = now
         join = .joining(room)
+        joinAttempt += 1
+        let attempt = joinAttempt
 
         // A host this Mac joined before must show the same key (rejoins are pinned).
         let earlier = rejoining.flatMap { $0.serviceName == room.id ? $0 : nil } ?? saved.first { $0.serviceName == room.id }
@@ -163,15 +172,22 @@ final class GuestRoomStore {
         do {
             transport = try await deps.dial(room.endpoint, pin)
         } catch {
+            guard attempt == joinAttempt else { return }
             join = .refused(room, error == .identityChanged ? .identityChanged : error == .localNetworkDenied ? .localNetworkDenied : .unreachable)
             if error == .localNetworkDenied { localNetworkDenied = true }
             // R3.8: the saved row shows the changed identity; the pin is never replaced here.
             if error == .identityChanged, let earlier { note(.identityChanged, for: earlier) }
             return
         }
+        guard attempt == joinAttempt else {
+            transport.close()
+            return
+        }
+        joinTransport = transport
         let result = await deps.runJoin(transport, code, guestName, deps.model, fg)
         let address = transport.remoteEndpoint
         transport.close()
+        if attempt == joinAttempt { joinTransport = nil }
 
         switch result {
         case .failure(let refusal):
@@ -182,7 +198,7 @@ final class GuestRoomStore {
                     lockedUntil = deps.now().addingTimeInterval(Self.lockout)
                 }
             }
-            join = .refused(room, refusal)
+            if attempt == joinAttempt { join = .refused(room, refusal) }
         case .success(let joined):
             wrongInARow = 0
             rejoining = nil
@@ -199,17 +215,22 @@ final class GuestRoomStore {
             deps.rooms.save(entry)
             saved = deps.rooms.load()
             health[entry.id] = .unknown
+            // Joined even if Cancel came late: the room is kept, only the seat sheet is not shown.
+            guard attempt == joinAttempt else { return }
             await chooseSeat(entry)
         }
     }
 
     /// Lists the seats for a joined room (also how a guest switches seat later).
     func chooseSeat(_ room: SavedRoom) async {
+        let attempt = joinAttempt
         do {
             let seats = try await withAPI(room) { api async throws(RoomAPIError) in try await api.seats() }
+            guard attempt == joinAttempt else { return }
             join = .pickingSeat(room, seats)
         } catch {
             note(error, for: room)
+            guard attempt == joinAttempt else { return }
             join = .seatRefused(room, [], error)
         }
     }
@@ -291,22 +312,28 @@ final class GuestRoomStore {
         pingTask = nil
     }
 
-    /// One `GET /_benchbar/hello` per saved room. A failure after a good hello is "host gone";
-    /// 403 not_paired is "removed"; a changed key is never connected to again.
+    /// One `GET /_benchbar/hello` per saved room, all at once so a silent room cannot hold up
+    /// the others. A failure after a good hello is "host gone"; 403 not_paired is "removed" or
+    /// "a new room"; a changed key is never connected to again.
     func pingAll() async {
-        for room in saved {
-            guard NetworkPanePresentation.canOpen(health[room.id]) else { continue }
-            do {
-                let hello = try await withAPI(room) { api async throws(RoomAPIError) in try await api.hello() }
-                health[room.id] = .ready(deadline: Date(timeIntervalSince1970: TimeInterval(hello.deadline_epoch)))
-                forwarders[room.id]?.show(nil)
-            } catch .removed {
-                set(await sameRoom(room) ? .removed : .newRoom, for: room)
-            } catch {
-                note(error, for: room)
+        await withTaskGroup(of: Void.self) { group in
+            for room in saved where NetworkPanePresentation.canOpen(health[room.id]) {
+                group.addTask { await self.ping(room) }
             }
-            if forwarders[room.id]?.stopIfIdle() == true { forwarders[room.id] = nil }
         }
+    }
+
+    private func ping(_ room: SavedRoom) async {
+        do {
+            let hello = try await withAPI(room) { api async throws(RoomAPIError) in try await api.hello() }
+            health[room.id] = .ready(deadline: Date(timeIntervalSince1970: TimeInterval(hello.deadline_epoch)))
+            forwarders[room.id]?.show(nil)
+        } catch .removed {
+            set(await sameRoom(room) ? .removed : .newRoom, for: room)
+        } catch {
+            note(error, for: room)
+        }
+        if forwarders[room.id]?.stopIfIdle() == true { forwarders[room.id] = nil }
     }
 
     /// not_paired means removed, or a new room after a restart; only the pre-auth salt
