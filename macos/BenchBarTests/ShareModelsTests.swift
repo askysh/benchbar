@@ -222,6 +222,23 @@ struct ShareStoreTests {
         for (_, value) in UserDefaults.standard.dictionaryRepresentation() { #expect(!"\(value)".contains("482913")) }
     }
 
+    @Test func seatsSeenHeldAreRememberedUntilSharingStops() async {
+        let fake = FakeShareCLI([on(), on(), ShareStatus(state: .off)])
+        fake.setPeople([SharePerson(id: "d_1", name: "Sam", seatID: "s_a", seatFullName: "Sam Rao")])
+        let store = ShareStore(bench: "/b", client: fake, log: { _ in })
+        await store.refresh()
+        await store.loadPeople()
+        fake.setPeople([])
+        await store.refresh()
+        await store.loadPeople()
+        #expect(store.knownSeats == ["s_a": "Sam Rao"])
+        let ok = await store.assign(SharePerson(id: "d_2", name: "Asha"), seat: "s_a")
+        #expect(ok)
+        #expect(fake.calls.contains("assign d_2 s_a"))
+        await store.refresh()
+        #expect(store.knownSeats.isEmpty)
+    }
+
     @Test func theCodeIsForgottenWhenSharingStops() async {
         let fake = FakeShareCLI([on(), ShareStatus(state: .off)])
         let store = ShareStore(bench: "/b", client: fake, log: { _ in })

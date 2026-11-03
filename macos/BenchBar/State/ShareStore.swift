@@ -98,6 +98,9 @@ final class ShareStore {
     private(set) var users: [ShareUser] = []
     private(set) var log: [ShareLogEntry] = []
     private(set) var code: ShareCode?
+    /// Seats seen held in this room (id → full name). The CLI lists only the
+    /// seats people hold, so a free seat is one seen earlier that nobody holds now.
+    private(set) var knownSeats: [String: String] = [:]
     private(set) var busy: String?
     private(set) var lastError: String?
     /// The Sharing tab is on screen: poll even while sharing is off.
@@ -195,6 +198,7 @@ final class ShareStore {
         for event in tracker.status(next) { emit(event) }
         if !next.isOn {
             code = nil
+            knownSeats = [:]
             if !people.isEmpty { people = [] }
             return
         }
@@ -224,6 +228,7 @@ final class ShareStore {
         do throws(CLIError) {
             let list = try await client.sharePeople(bench: bench)
             people = list.people
+            for person in list.people { if let seat = person.seatID { knownSeats[seat] = person.seatFullName ?? seat } }
             for event in tracker.people(list.people) { emit(event) }
         } catch {
             report(error)

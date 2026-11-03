@@ -225,6 +225,15 @@ struct SharingTab: View {
                         Text(person.seatFullName ?? "No seat yet").font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
+                    let targets = SharePresentation.moveTargets(for: person, people: share.people, known: share.knownSeats)
+                    Menu("Move to") {
+                        ForEach(targets, id: \.id) { seat in
+                            Button(seat.name) { Task { await share.assign(person, seat: seat.id) } }
+                        }
+                    }
+                    .fixedSize()
+                    .disabled(targets.isEmpty || share.busy != nil)
+                    .help(targets.isEmpty ? "No free seat this room has shown yet." : "Signs them out of their seat and into the one you pick.")
                     Button("Remove") { Task { await remove(person) } }
                 }
             }

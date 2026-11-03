@@ -140,6 +140,14 @@ nonisolated enum SharePresentation {
         }
     }
 
+    /// The seats `person` can move to: known seats nobody holds, by name.
+    static func moveTargets(for person: SharePerson, people: [SharePerson], known: [String: String]) -> [(id: String, name: String)] {
+        let held = Set(people.compactMap(\.seatID))
+        return known.filter { !held.contains($0.key) && $0.key != person.seatID }
+            .map { (id: $0.key, name: $0.value) }
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
     static func removeConfirm(_ person: SharePerson, site: String) -> String {
         "Remove \(person.name)? Closes their connections and signs them out of \(site)."
     }

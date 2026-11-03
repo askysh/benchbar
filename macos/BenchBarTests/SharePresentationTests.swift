@@ -88,4 +88,13 @@ struct SharePresentationTests {
             for word in ["fp8", "preflight", "LAN guard", "Revoke", "Devices", "pair"] { #expect(!text.contains(word), "\(text) has \(word)") }
         }
     }
+
+    @Test func moveTargetsAreKnownSeatsNobodyHolds() {
+        let sam = SharePerson(id: "d_1", name: "Sam", seatID: "s_a", seatFullName: "Sam Rao")
+        let asha = SharePerson(id: "d_2", name: "Asha", seatID: "s_b", seatFullName: "Asha K")
+        let known = ["s_a": "Sam Rao", "s_b": "Asha K", "s_c": "Priya Nair"]
+        #expect(SharePresentation.moveTargets(for: sam, people: [sam, asha], known: known).map(\.id) == ["s_c"])
+        #expect(SharePresentation.moveTargets(for: sam, people: [sam], known: known).map(\.id) == ["s_b", "s_c"])
+        #expect(SharePresentation.moveTargets(for: sam, people: [sam], known: ["s_a": "Sam Rao"]).isEmpty)
+    }
 }
