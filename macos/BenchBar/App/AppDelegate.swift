@@ -49,6 +49,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         notifier = Notifier(settings: settings)
         store.onAlert = { [weak self] bench, alert in self?.notifier.post(alert, bench: bench) }
         ShareCenter.shared.attach(store)
+        ShareCenter.shared.onIconChange = { [weak self] icon in self?.statusItemController.setShareIcon(icon) }
         ShareCenter.shared.onEvent = { share, event in
             guard let notice = HostAmbient.notice(event, bench: share.bench) else { return }
             ShareNotices.post(title: notice.title, body: notice.body, bench: share.bench, identifier: notice.identifier)

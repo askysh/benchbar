@@ -106,6 +106,8 @@ final class ShareStore {
     }
 
     @ObservationIgnored var onEvent: ((ShareEvent) -> Void)?
+    /// Every status read, for the menu bar and the popover.
+    @ObservationIgnored var onStatus: (() -> Void)?
     /// Errors also land on the bench (`BenchModel.lastError`), like Open as.
     @ObservationIgnored var onError: ((String) -> Void)?
     @ObservationIgnored private let client: any ShareCLI
@@ -188,6 +190,7 @@ final class ShareStore {
         availability = next.needsNewerCLI ? .needsNewerCLI : .available
         let countsMoved = status.map { $0.people != next.people || $0.devicesOnline != next.devicesOnline } ?? true
         status = next
+        onStatus?()
         logLine("share: status \(next.state.rawValue)")
         for event in tracker.status(next) { emit(event) }
         if !next.isOn {

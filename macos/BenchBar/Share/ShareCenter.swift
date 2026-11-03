@@ -12,6 +12,9 @@ final class ShareCenter {
     private(set) var stores: [String: ShareStore] = [:]
     @ObservationIgnored private weak var benchStore: BenchStore?
     @ObservationIgnored var onEvent: ((ShareStore, ShareEvent) -> Void)?
+    /// The menu bar's sharing state, told on every change.
+    @ObservationIgnored var onIconChange: ((HostAmbient.IconState) -> Void)?
+    @ObservationIgnored private var icon: HostAmbient.IconState = .off
     @ObservationIgnored private var pathMonitor: NWPathMonitor?
     @ObservationIgnored private var wakeObserver: NSObjectProtocol?
     @ObservationIgnored private var sawFirstPath = false
@@ -39,6 +42,7 @@ final class ShareCenter {
             guard let made else { return }
             self?.onEvent?(made, event)
         }
+        made.onStatus = { [weak self] in self?.statusChanged() }
         made.onError = { [weak self] text in
             self?.benchStore?.benches.first { $0.path == bench }?.lastError = text
         }
@@ -54,6 +58,13 @@ final class ShareCenter {
     }
 
     var sharingStores: [ShareStore] { stores.values.filter(\.isSharing).sorted { $0.bench < $1.bench } }
+
+    private func statusChanged() {
+        let next = HostAmbient.icon(stores.values.compactMap(\.status))
+        guard next != icon else { return }
+        icon = next
+        onIconChange?(next)
+    }
 
     /// The first update is the current path, not a change.
     private func pathUpdated() {
