@@ -86,12 +86,16 @@ share_plist() {
 }
 share_runner() {
   fl_template_render share-run.sh "SHARE_DIR=/s" "SOCK=/s/control.sock" "BENCH=/b" "SHARE_SITE=share.localhost" "WEB_PORT=8001" \
-    "PYTHON=/b/env/bin/python" "LIB=/l" "NODE=/n/node" "BENCHBAR=/x/benchbar" "DNS_SD=/usr/bin/dns-sd" "CAFFEINATE=/usr/bin/caffeinate" \
-    "LSOF=/usr/sbin/lsof" "SESSIONS_PY=print(1)" "SITE_LABEL=macdev" "ROOM_LABEL=Lab"
+    "GATEWAY_PORT=${1:-8443}" "PYTHON=/b/env/bin/python" "LIB=/l" "NODE=/n/node" "BENCHBAR=/x/benchbar" "DNS_SD=/usr/bin/dns-sd" \
+    "CAFFEINATE=/usr/bin/caffeinate" "LSOF=/usr/sbin/lsof" "WIPE_SECS=10" "LISTEN_SECS=60" "SOCK_SECS=15" "SESSIONS_PY=print(1)" \
+    "CONTROL_JS=1;" "SITE_LABEL=macdev" "ROOM_LABEL=Lab"
 }
 sp="$(share_plist)"; sr="$(share_runner)"
 assert_contains "$sp" "benchbar-template: share.plist v1 "
-assert_contains "$sr" "benchbar-template: share-run.sh v1 "
+assert_contains "$sr" "benchbar-template: share-run.sh v2 "
+assert_not_contains "$sr" "__" "(every value is filled in)"
+assert_contains "$(share_runner 9443)" "GATEWAY_PORT=9443" "(Bonjour announces the gateway's port, not a literal)"
+assert_not_contains "$(sed -n '/^start_dns()/,/^}/p' "$ROOT/templates/share-run.sh.tmpl")" "8443"
 assert_contains "$sp" "<key>RunAtLoad</key><false/>"
 assert_contains "$sp" "<key>KeepAlive</key><false/>"
 assert_contains "$sp" "<key>Umask</key><integer>63</integer>" "(decimal 63 is octal 077: a plist integer is decimal)"

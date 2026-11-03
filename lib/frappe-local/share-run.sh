@@ -3,7 +3,7 @@
 #
 # share-run.sh: a share's lifetime.
 #
-#   benchbar share start [--for DUR] [--name LABEL] [--dry-run] [--yes] [--json]
+#   benchbar share start [--for DUR] [--name LABEL] [--dry-run] [--json]
 #   benchbar share stop [--json]
 #   benchbar share extend --by DUR [--json]
 #   benchbar share status [--preflight] [--json]
@@ -31,6 +31,12 @@ FL_SHARE_JOB_LABEL="com.benchbar-share.gateway"
 FL_SHARE_MAX_TOTAL_S=43200
 FL_SHARE_MIN_S=300
 FL_SHARE_DEFAULT_S=14400
+# The runner's time limits (rendered into it) and share start's wait, which is built from them: the
+# session wipe, the web process until it listens, the control socket, and one run of the critical checks.
+FL_SHARE_WIPE_SECS=10
+FL_SHARE_LISTEN_SECS=60
+FL_SHARE_SOCK_SECS=15
+FL_SHARE_CHECKS_SECS="${FL_SHARE_CHECKS_SECS:-30}"
 
 # node -e SCRIPT control SOCKET REQUEST: one request line, one reply, printed as
 # KEY=VALUE lines of the allowed fields only (an array as its length). Exit 0
@@ -61,6 +67,18 @@ c.on("data", (chunk) => {
 });'
 
 fl_share_sock() { printf '%s' "${FL_SHARE_CONTROL_SOCK:-$(fl_share_dir)/control.sock}"; }
+
+# fl_share_phase_v VAR_PID VAR_PHASE: the runner's PID and how far its start has come (both empty
+# without the phase file; the runner removes it when it ends, a runner killed with -9 leaves it)
+fl_share_phase_v() {
+  local __pid="" __phase="" __f
+  __f="$(fl_share_dir)/phase"
+  [[ ! -s "$__f" ]] || read -r __pid __phase <"$__f" || true
+  [[ "$__pid" =~ ^[0-9]+$ ]] || { __pid=""; __phase=""; }
+  printf -v "$1" '%s' "$__pid"; printf -v "$2" '%s' "$__phase"
+}
+# the runner's own PID (not the test process table of FL_KILL_CMD)
+fl_share_runner_alive() { [[ -n "$1" ]] && kill -0 "$1" 2>/dev/null; }
 fl_share_job_target() { printf '%s/%s' "$(fl_launchd_domain)" "$FL_SHARE_JOB_LABEL"; }
 fl_share_job_loaded() { launchctl print "$(fl_share_job_target)" >/dev/null 2>&1; }
 
@@ -125,13 +143,24 @@ fl_share_devices_empty() {
 ' || fl_warn "could not empty $(fl_share_dir)/devices.json"
 }
 
-# fl_share_wipe_all: ends every session of the copy (the whole copy, so the users of status.wipe_failed too)
+# fl_share_wipe_all: ends every session of the copy (the whole copy, so the users of status.wipe_failed too).
+# Redis and the helper run in a subshell, so neither can end the caller (stop must finish): a Redis port
+# held by another process, or a helper that dies, is a warning and the wipe_failed marker, which status
+# reports and the runner's next start-wipe clears.
 fl_share_wipe_all() {
   local count=""
-  fl_share_redis_up
-  count="$(fl_bench_python_v count "$FL_PY_SHARE_SESSIONS" benchbar-share-sessions "$FL_SHARE_SITE" </dev/null; printf '%s' "$count")" || count=""
-  fl_share_redis_down
-  if [[ "$count" =~ ^[0-9]+$ ]]; then fl_info "ended ${count} sessions in ${FL_SHARE_SITE}"; return 0; fi
+  count="$(
+    trap 'fl_share_redis_down >/dev/null 2>&1' EXIT
+    fl_share_redis_up >&2
+    fl_bench_python_v count "$FL_PY_SHARE_SESSIONS" benchbar-share-sessions "$FL_SHARE_SITE" </dev/null
+    printf '%s' "$count"
+  )" || count=""
+  if [[ "$count" =~ ^[0-9]+$ ]]; then
+    rm -f "$(fl_share_dir)/wipe_failed"
+    fl_info "ended ${count} sessions in ${FL_SHARE_SITE}"
+    return 0
+  fi
+  fl_share_write_private "$(fl_share_dir)/wipe_failed" 600 "" || true
   fl_warn "could not end the sessions in ${FL_SHARE_SITE}; the next share start ends them before anyone can sign in"
   return 1
 }
@@ -139,19 +168,18 @@ fl_share_wipe_all() {
 # fl_share_teardown: ends a share in whatever state it is: tells the gateway, boots the job out, removes
 # what the runner leaves, empties the room and ends every session of the copy. SH_TORN=1 when there
 # was anything to end (a second stop finds nothing, wipes nothing and says unchanged).
-SH_TORN=0
+# SH_BOOTOUT_FAILED=1 when launchd still lists the job afterwards: the caller must not report it stopped.
+SH_TORN=0; SH_BOOTOUT_FAILED=0
 fl_share_teardown() {
   local dir sock reply f had=0
   dir="$(fl_share_dir)"; sock="$(fl_share_sock)"
-  SH_TORN=0
+  SH_TORN=0; SH_BOOTOUT_FAILED=0
   fl_share_job_loaded && had=1
-  for f in "$sock" "$dir/job.plist" "$dir/share-run.sh" "$dir/gateway.json" "$dir/ended"; do [[ ! -e "$f" ]] || had=1; done
+  for f in "$sock" "$dir/job.plist" "$dir/share-run.sh" "$dir/gateway.json" "$dir/ended" "$dir/phase"; do [[ ! -e "$f" ]] || had=1; done
   [[ "$had" == 1 ]] || return 0
   if [[ -S "$sock" ]] && fl_share_control_v reply '{"op":"stop"}'; then fl_info "the gateway is stopping"; fi
-  if fl_share_job_loaded; then
-    fl_agent_bootout "$(fl_share_job_target)" || fl_warn "launchd still lists ${FL_SHARE_JOB_LABEL}"
-  fi
-  rm -f "$sock" "$dir/job.plist" "$dir/share-run.sh" "$dir/gateway.json" "$dir/degraded" "$dir/ended"
+  if fl_share_job_loaded && ! fl_agent_bootout "$(fl_share_job_target)"; then SH_BOOTOUT_FAILED=1; fi
+  rm -f "$sock" "$dir/job.plist" "$dir/share-run.sh" "$dir/gateway.json" "$dir/degraded" "$dir/ended" "$dir/phase"
   fl_share_devices_empty
   fl_share_wipe_all || true
   SH_TORN=1
@@ -205,9 +233,10 @@ fl_share_render_job() {
   dir="$(fl_share_dir)"
   fl_share_cfg_str_v web_port web_port; fl_share_cfg_str_v site site
   runner="$(fl_template_render share-run.sh "SHARE_DIR=${dir}" "SOCK=$(fl_share_sock)" "BENCH=${FL_BENCH_DIR}" "SHARE_SITE=${FL_SHARE_SITE}" \
-    "WEB_PORT=${web_port}" "PYTHON=${FL_BENCH_DIR}/env/bin/python" "LIB=${FL_SELF_DIR}/lib/frappe-local" "NODE=${SP_NODE_REAL}" "BENCHBAR=$2" \
-    "DNS_SD=${FL_SHARE_DNS_SD:-/usr/bin/dns-sd}" "CAFFEINATE=${FL_SHARE_CAFFEINATE:-/usr/bin/caffeinate}" "LSOF=${FL_SHARE_LSOF:-/usr/sbin/lsof}" \
-    "SESSIONS_PY=${FL_PY_SHARE_SESSIONS}" "SITE_LABEL=${site}" "ROOM_LABEL=$1")" || return 1
+    "WEB_PORT=${web_port}" "GATEWAY_PORT=${FL_SHARE_GATEWAY_PORT}" "PYTHON=${FL_BENCH_DIR}/env/bin/python" "LIB=${FL_SELF_DIR}/lib/frappe-local" \
+    "NODE=${SP_NODE_REAL}" "BENCHBAR=$2" "DNS_SD=${FL_SHARE_DNS_SD:-/usr/bin/dns-sd}" "CAFFEINATE=${FL_SHARE_CAFFEINATE:-/usr/bin/caffeinate}" \
+    "LSOF=${FL_SHARE_LSOF:-/usr/sbin/lsof}" "WIPE_SECS=${FL_SHARE_WIPE_SECS}" "LISTEN_SECS=${FL_SHARE_LISTEN_SECS}" "SOCK_SECS=${FL_SHARE_SOCK_SECS}" \
+    "SESSIONS_PY=${FL_PY_SHARE_SESSIONS}" "CONTROL_JS=${FL_JS_SHARE_CONTROL}" "SITE_LABEL=${site}" "ROOM_LABEL=$1")" || return 1
   plist="$(fl_template_render share.plist "LABEL=${FL_SHARE_JOB_LABEL}" "APP_BUNDLE_ID=${FL_APP_BUNDLE_ID}" "RUNNER=${dir}/share-run.sh" \
     "SHARE_DIR=${dir}" "PATH=$(fl_launchd_path_value)" "LOG=${dir}/share.log")" || return 1
   if ! fl_share_write_private "${dir}/share-run.sh" 700 "$runner" || ! fl_share_write_private "${dir}/job.plist" 600 "$plist"; then
@@ -216,14 +245,21 @@ fl_share_render_job() {
   fi
 }
 
-# fl_share_on_v VAR_DEADLINE: the share answers on its control socket (VAR_DEADLINE: its deadline)
+# fl_share_on_v VAR_DEADLINE [VAR_WEB_UP]: the share answers on its control socket (its deadline, and
+# whether the gateway sends to the web process: true once the runner's checks have passed)
 fl_share_on_v() {
-  local __reply __d
+  local __reply __d __w
   printf -v "$1" '%s' ""
+  [[ -z "${2:-}" ]] || printf -v "$2" '%s' ""
   fl_share_control_v __reply '{"op":"status"}' || return 1
   fl_share_reply_v __d "$__reply" deadline_epoch
+  fl_share_reply_v __w "$__reply" web_up
   printf -v "$1" '%s' "$__d"
+  [[ -z "${2:-}" ]] || printf -v "$2" '%s' "$__w"
 }
+
+# a stop that came while a start was on its way: the start ends what it began
+fl_share_stop_requested() { [[ -e "$(fl_share_dir)/stop_requested" ]]; }
 
 # ---------------------------------------------------------------- share start
 
@@ -254,6 +290,9 @@ fl_share_start_step_job() {
   local dir target
   dir="$(fl_share_dir)"; target="$(fl_share_job_target)"
   fl_share_render_job "$(printf '%s' "$SH_START_ROOM_JSON" | fl_share_json_unquote)" "$SH_START_BENCHBAR" || return 1
+  if fl_share_stop_requested; then fl_fail "benchbar share stop was run while sharing was starting"; return 1; fi
+  # the log is this share's: the last one is kept as share.log.1
+  if [[ -f "${dir}/share.log" ]]; then mv -f "${dir}/share.log" "${dir}/share.log.1" || true; fi
   if ! fl_agent_bootstrap "${dir}/job.plist" "$FL_SHARE_JOB_LABEL"; then
     rm -f "${dir}/job.plist"
     fl_fail "launchd did not load ${FL_SHARE_JOB_LABEL}"
@@ -261,19 +300,39 @@ fl_share_start_step_job() {
   fi
   rm -f "${dir}/job.plist"
   fl_launchd_kickstart "$target" || { fl_fail "launchd did not start ${FL_SHARE_JOB_LABEL}"; return 1; }
-  fl_changed process share "started until $(fl_share_iso_of "$SH_START_DEADLINE")"
 }
 
+# fl_share_phase_secs PHASE: how long the runner may stay in PHASE, from the limits it was rendered with
+fl_share_phase_secs() {
+  case "$1" in
+    starting:wipe) printf '%s' $((FL_SHARE_WIPE_SECS + 5)) ;;
+    starting:web) printf '%s' $((FL_SHARE_LISTEN_SECS + 5)) ;;
+    starting:checks) printf '%s' "$FL_SHARE_CHECKS_SECS" ;;
+    starting:gateway) printf '%s' $((FL_SHARE_SOCK_SECS + FL_SHARE_CHECKS_SECS)) ;;
+    # running: the web is marked up at once; no phase yet: launchd has not started the runner
+    *) printf '%s' 10 ;;
+  esac
+}
+
+# wait_listening: until the gateway says the web is up (the runner's checks passed), for as long as the
+# runner lives and each phase keeps within its own limit
 fl_share_start_step_wait_listening() {
-  local deadline until=$((SECONDS + 15))
-  while [[ "$SECONDS" -lt "$until" ]]; do
-    if fl_share_on_v deadline; then return 0; fi
-    # the runner writes why it ended
-    [[ ! -s "$(fl_share_dir)/ended" ]] || break
+  local deadline web_up pid ph last="none" since="$SECONDS" ended
+  while :; do
+    if fl_share_on_v deadline web_up && [[ "$web_up" == true ]]; then break; fi
+    if [[ -s "$(fl_share_dir)/ended" ]]; then
+      ended="$(awk -F '\t' 'NR == 1 { print $2 }' "$(fl_share_dir)/ended")"
+      fl_fail "the sharing job ended: ${ended}"; return 1
+    fi
+    fl_share_phase_v pid ph
+    if [[ -n "$pid" ]] && ! fl_share_runner_alive "$pid"; then fl_fail "the sharing job ended while ${ph} (its log: $(fl_share_dir)/share.log)"; return 1; fi
+    [[ "${ph:-none}" == "$last" ]] || { last="${ph:-none}"; since="$SECONDS"; }
+    if [[ $((SECONDS - since)) -gt "$(fl_share_phase_secs "${ph:-}")" ]]; then
+      fl_fail "the sharing job got no further than ${ph:-being started by launchd} (its log: $(fl_share_dir)/share.log)"; return 1
+    fi
     sleep 0.25
   done
-  fl_fail "the gateway did not answer within 15 s (its log: $(fl_share_dir)/share.log)"
-  return 1
+  if fl_share_stop_requested; then fl_fail "benchbar share stop was run while sharing was starting"; return 1; fi
 }
 
 fl_share_start_step_post_start_preflight() {
@@ -308,7 +367,7 @@ fl_cmd_share_start() {
       --for=*) dur="${1#*=}"; shift ;;
       --name) [[ "$#" -ge 2 ]] || fl_die "--name needs a label." "Example: --name \"Priya's room\""; name="$2"; name_given=1; shift 2 ;;
       --name=*) name="${1#*=}"; name_given=1; shift ;;
-      *) fl_die "Unknown argument for share start: $1" "Use: benchbar share start [--for DUR] [--name LABEL] [--dry-run] [--yes] [--json]" ;;
+      *) fl_die "Unknown argument for share start: $1" "Use: benchbar share start [--for DUR] [--name LABEL] [--dry-run] [--json]" ;;
     esac
   done
   fl_noninteractive && fl_die "Sharing on the network is a person's decision, so nothing run without a terminal can start it." \
@@ -319,6 +378,7 @@ fl_cmd_share_start() {
   fl_share_dur_v secs "$dur" --for
   fl_require_bench
   fl_share_require_setup
+  rm -f "$(fl_share_dir)/stop_requested"
   fl_sp_nc_open 127.0.0.1 "$FL_REDIS_CACHE_PORT" || fl_die "The bench is not running: its Redis does not answer on ${FL_REDIS_CACHE_PORT}." "Start it (benchbar up), then run this again."
 
   # one share at a time: a second start leaves the one that runs as it is
@@ -355,7 +415,13 @@ fl_cmd_share_start() {
     return 0
   fi
 
-  # a job that is loaded but does not answer (it ended, or it was killed) is cleared first
+  # a job that is loaded but does not answer: one whose runner lives (still starting, or a gateway that
+  # is slow or a node that cannot be trusted) is left alone; one whose runner ended is cleared first
+  local runner_pid runner_phase
+  fl_share_phase_v runner_pid runner_phase
+  if fl_share_job_loaded && fl_share_runner_alive "$runner_pid"; then
+    fl_die "A share is already ${runner_phase:-running}, and its gateway does not answer." "Wait, see benchbar share status, or run benchbar share stop."
+  fi
   if fl_share_job_loaded || [[ -e "$(fl_share_sock)" ]]; then
     fl_info "clearing a share that is no longer running"
     fl_share_teardown
@@ -378,6 +444,7 @@ fl_cmd_share_start() {
     fl_step_end "$FL_STEP_RESULT"
     i=$((i + 1))
   done
+  fl_changed process share "started until $(fl_share_iso_of "$SH_START_DEADLINE")"
   fl_next_action "benchbar share status" "See who is in the room and the time left"
   fl_next_action "benchbar share stop" "Stop sharing"
   [[ "${OPT_JSON:-0}" != 1 ]] || fl_doc_emit 0 "$(fl_share_start_doc "$SH_START_NOW" "$SH_START_DEADLINE")"
@@ -389,7 +456,15 @@ fl_cmd_share_start() {
 # no fl_require_bench: a bench that is broken or gone still has its share job booted out
 fl_cmd_share_stop() {
   [[ "$#" -eq 0 ]] || fl_die "share stop takes no argument: $1" "Use: benchbar share stop [--json]"
+  [[ "${FL_DRY_RUN:-0}" != 1 ]] || fl_die "share stop has no dry run: it changes nothing until it stops the share." "Run benchbar share status to see what would stop."
+  # a start on its way sees this and ends what it began
+  fl_share_dir_ensure
+  fl_share_write_private "$(fl_share_dir)/stop_requested" 600 "" || fl_warn "could not leave the stop marker for a start on its way"
   fl_share_teardown
+  if [[ "$SH_BOOTOUT_FAILED" == 1 ]]; then
+    fl_die "launchd still lists ${FL_SHARE_JOB_LABEL} after the bootout, so the share may still run." \
+      "Run: launchctl bootout $(fl_share_job_target)"
+  fi
   if [[ "$SH_TORN" == 1 ]]; then
     fl_changed process share "stopped"
     fl_ok "Sharing stopped"
@@ -412,6 +487,7 @@ fl_cmd_share_extend() {
     esac
   done
   [[ -n "$by" ]] || fl_die "share extend needs --by." "Example: benchbar share extend --by 1h"
+  [[ "${FL_DRY_RUN:-0}" != 1 ]] || fl_die "share extend has no dry run." "benchbar share status shows the deadline and can_extend_s."
   fl_share_dur_v secs "$by" --by
   fl_require_bench
   fl_share_on_v before || fl_die "Sharing is not on." "Start it: benchbar share start"
@@ -470,7 +546,7 @@ fl_share_preflight_json_v() {
 fl_cmd_share_status() {
   local want_pre=0 a dir sock now state=off loaded=0 reply="" started="" deadline="" ended="" degraded="null" error="null"
   local site web_port label users seats copy lan_guard pre="null" started_json=null deadline_json=null left=0 can=0
-  local total=0 online=0 locked=null lock_reason=null budget=null people=0 trouble=false wipe=0 v files
+  local total=0 online=0 locked=null lock_reason=null budget=null people=0 trouble=false wipe=0 v files runner_pid runner_phase phase_json=null
   for a in "$@"; do
     case "$a" in
       --preflight) want_pre=1 ;;
@@ -488,6 +564,8 @@ fl_cmd_share_status() {
   [[ -n "$label" ]] || fl_share_cfg_raw_v label room_label
 
   fl_share_job_loaded && loaded=1
+  fl_share_phase_v runner_pid runner_phase
+  [[ ! -e "${dir}/wipe_failed" ]] || wipe=1
   if [[ "$loaded" == 1 || -f "${dir}/gateway.json" ]]; then
     if [[ "$loaded" == 1 && -S "$sock" ]] && fl_share_control_v reply '{"op":"status"}'; then
       state=on
@@ -503,6 +581,9 @@ fl_cmd_share_status() {
       [[ ! -s "${dir}/degraded" ]] || degraded="$(fl_json_str "$(awk 'NR == 1' "${dir}/degraded")")"
     elif [[ "$deadline" =~ ^[0-9]+$ && "$now" -ge "$deadline" ]] || { fl_share_reply_v v "$reply" error; [[ "$v" == ended ]]; }; then
       state=expired
+    elif [[ "$runner_phase" == starting:* ]] && fl_share_runner_alive "$runner_pid"; then
+      state=starting
+      phase_json="\"${runner_phase}\""
     else
       state=error
       [[ ! -s "${dir}/ended" ]] || ended="$(awk -F '\t' 'NR == 1 { print $2 }' "${dir}/ended")"
@@ -528,15 +609,16 @@ fl_cmd_share_status() {
 
   if [[ "${OPT_JSON:-0}" == 1 ]]; then
     FL_DONE_NO_STATE=1
-    fl_doc_emit 0 "$(printf '{"schema_version":%d,"cli_version":"%s","protocol":%d,"bench":%s,"site":%s,"share_site":%s,"state":"%s","degraded":%s,"error":%s,"label":%s,"port":%s,"web_port":%s,"lan_ip":%s,"started":%s,"deadline":%s,"seconds_left":%s,"can_extend_s":%s,"copy":%s,"allowed_users":%s,"seats":%s,"people":%s,"devices_total":%s,"devices_online":%s,"pending":0,"locked":%s,"lock_reason":%s,"budget_left":%s,"join_trouble":%s,"wipe_failed":%s,"lan_guard":"%s","preflight":%s}' \
+    fl_doc_emit 0 "$(printf '{"schema_version":%d,"cli_version":"%s","protocol":%d,"bench":%s,"site":%s,"share_site":%s,"state":"%s","phase":%s,"degraded":%s,"error":%s,"label":%s,"port":%s,"web_port":%s,"lan_ip":%s,"started":%s,"deadline":%s,"seconds_left":%s,"can_extend_s":%s,"copy":%s,"allowed_users":%s,"seats":%s,"people":%s,"devices_total":%s,"devices_online":%s,"pending":0,"locked":%s,"lock_reason":%s,"budget_left":%s,"join_trouble":%s,"wipe_failed":%s,"lan_guard":"%s","preflight":%s}' \
       "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$FL_SHARE_PROTOCOL" "$(fl_json_str "$FL_BENCH_DIR")" "$( [[ -n "$site" ]] && fl_json_str "$site" || printf 'null')" \
-      "$(fl_json_str "$FL_SHARE_SITE")" "$state" "$degraded" "$error" "${label:-null}" "$FL_SHARE_GATEWAY_PORT" "$web_port" \
+      "$(fl_json_str "$FL_SHARE_SITE")" "$state" "$phase_json" "$degraded" "$error" "${label:-null}" "$FL_SHARE_GATEWAY_PORT" "$web_port" \
       "$( [[ -n "$SP_LAN_IP" ]] && fl_json_str "$SP_LAN_IP" || printf 'null')" "$started_json" "$deadline_json" "$left" "$can" "$copy" "${users:-[]}" \
       "$seats" "$people" "$total" "$online" "$locked" "$lock_reason" "$budget" "$trouble" "$wipe" "$lan_guard" "$pre")"
     return 0
   fi
   case "$state" in
     on) fl_ok "Sharing ${FL_SHARE_SITE} until $(fl_share_iso_of "$deadline") ($(fl_fmt_secs "$left") left): ${people} in the room, ${online} online" ;;
+    starting) fl_info "Sharing is starting (${runner_phase})." ;;
     expired) fl_info "Sharing has ended (the deadline passed). benchbar share stop clears it." ;;
     error) fl_warn "Sharing is not running: ${ended:-the gateway does not answer}. benchbar share stop clears it." ;;
     *) fl_info "Sharing is off." ;;

@@ -61,7 +61,7 @@ test-report=24 test-repair-json=23 test-runner=21 test-state-migrate=19 test-sta
 test-install-linux=110 test-doctor-linux=77 test-systemd=37 test-bench-flow=10 test-platform-linux=3 test-self-update=8
 test-prerequisites-linux=7 test-install-sh-linux=5 test-discovery=4 test-run=3 test-templates=3 test-shellrc=2
 test-docs=1 test-platform=1 test-packaging=1 test-affected=1 test-ui=0 test-release-notes=0
-test-version-policy=0 test-share-gateway=33 test-share=90 test-share-preflight=85 test-share-run=80"
+test-version-policy=0 test-share-gateway=33 test-share=90 test-share-preflight=85 test-share-run=140"
 test_secs() {
   local w
   w=" $(printf '%s' "$TEST_SECS" | tr '\n' ' ') "

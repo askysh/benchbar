@@ -162,13 +162,12 @@ flag~share preflight~--static~~Only the checks that run before anything starts: 
 flag~share preflight~--critical~~Only the fast checks a running share repeats: the pf block (probed from this Mac's LAN address with its own listener and a control), the share web process, the bench's Redis.
 flag~share preflight~--quiet~~List only the checks that are not ok.
 flag~share preflight~--json~~One document: protocol, ok, lan_ip and the checks, each with a status, a message and a fix_action.
-cmd~share start~benchbar share start [--for DUR] [--name LABEL] [--dry-run] [--yes] [--json]~Start sharing on the LAN until the deadline.~yes~no~no~yes~stream
+cmd~share start~benchbar share start [--for DUR] [--name LABEL] [--dry-run] [--json]~Start sharing on the LAN until the deadline.~yes~no~no~yes~stream
 flag~share start~--for~DUR~How long the share runs: 30m, 4h; from 5 minutes to 12 hours. Default: 4h.
 flag~share start~--name~LABEL~The room's label for this share, at most 40 printable characters. Default: the one share setup recorded.
 flag~share start~--dry-run~~Print the plan and start nothing.
-flag~share start~--yes~~Do not ask.
 flag~share start~--json~~JSON lines: plan, steps, done (with the deadline).
-cmd~share stop~benchbar share stop [--json]~Stop sharing: the gateway and the job end, the room empties, every session of the copy ends. Never refused.~no~no~no~yes~stream
+cmd~share stop~benchbar share stop [--json]~Stop sharing: the gateway and the job end, the room empties, every session of the copy ends. Never refused (no dry run).~no~no~no~yes~stream
 flag~share stop~--json~~JSON lines: steps, done.
 cmd~share extend~benchbar share extend --by DUR [--json]~Move the deadline of the running share, up to 12 hours from its start.~no~no~no~yes~stream
 flag~share extend~--by~DUR~How much later: 30m, 1h; from 5 minutes to 12 hours.

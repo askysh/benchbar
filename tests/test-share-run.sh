@@ -12,6 +12,7 @@
 . "$ROOT/lib/frappe-local/run.sh"
 . "$ROOT/lib/frappe-local/templates.sh"
 . "$ROOT/lib/frappe-local/share-site.sh"
+. "$ROOT/lib/frappe-local/share-run.sh"
 
 BENCH="$HOME/dev/frappe-bench"
 make_fake_bench "$BENCH" macdev
@@ -107,6 +108,7 @@ case "\${1:-}" in
       keep="\$(cat)"
       printf 'wipe %s keep=[%s]\n' "\${4:-}" "\${keep//\$'\n'/,}" >>"\$MOCK_STATE/order"
       [[ ! -f "\$MOCK_STATE/wipe_fail" ]] || exit 1
+      [[ ! -f "\$MOCK_STATE/wipe_hang" ]] || exec sleep 25
       printf '\nBENCHBAR-RESULT 2\n'
       exit 0
     fi ;;
@@ -125,6 +127,7 @@ cat >"$SB/caffeinate" <<'SH'
 #!/bin/bash
 printf 'caffeinate %s\n' "$*" >>"$MOCK_STATE/order"
 printf '%s\n' "$$" >>"$MOCK_STATE/caf_pids"
+[[ ! -f "$MOCK_STATE/caf_die" ]] || exit 1
 while kill -0 "$PPID" 2>/dev/null; do sleep 0.2; done
 SH
 # "benchbar share preflight": each run takes the next line of $MOCK_STATE/pre_script (ok when empty):
@@ -138,6 +141,7 @@ if [[ -s "$MOCK_STATE/pre_script" ]]; then
   r="$(head -n1 "$MOCK_STATE/pre_script")"
   tail -n +2 "$MOCK_STATE/pre_script" >"$MOCK_STATE/pre_script.tmp"; mv "$MOCK_STATE/pre_script.tmp" "$MOCK_STATE/pre_script"
 fi
+case "$r" in hang) sleep 8; r=ok ;; esac
 gw=skip; [[ ! -S "${FL_SHARE_CONTROL_SOCK:-/nonexistent}" ]] || gw=ok
 ok=true; pf=ok; code=0
 case "$r" in skipgw) gw=skip ;; fail) ok=false; pf=fail; code=1 ;; esac
@@ -167,15 +171,22 @@ srv.listen(8)
 srv.settimeout(0.2)
 parent = os.getppid()
 stopping = False
+web_up = False
 def answer(msg):
-    global stopping
+    global stopping, web_up
     op = msg.get("op")
+    if op == "web":
+        note("webop " + str(msg.get("state")))
+        if os.path.exists(os.path.join(state, "web_op_fail")):
+            return {"ok": False, "error": "internal"}
+        web_up = msg.get("state") == "up"
+        return {"ok": True, "web_up": web_up}
     note("control " + str(op))
     d = cfg["deadline_epoch"]
     if time.time() >= d:
         return {"ok": False, "error": "ended"}
     if op == "status":
-        return {"ok": True, "deadline_epoch": d, "online": ["d_0a1b2c3d"], "conns": 2, "web_up": True, "locked": False,
+        return {"ok": True, "deadline_epoch": d, "online": ["d_0a1b2c3d"], "conns": 2, "web_up": web_up, "locked": False,
                 "lock_reason": None, "budget_left": 9, "seats": 2, "people": 1, "join_trouble": False,
                 "wipe_failed": ["priya@example.com"], "code": "482913"}
     if op == "extend":
@@ -219,6 +230,7 @@ cat >"$SB/node" <<SH
 case "\${1:-}" in
   */gateway.js) exec python3 "$SB/gateway.py" "\${2:-}" ;;
   -e) if [[ "\${3:-}" == control ]]; then exec "$REAL_NODE" "\$@"; fi ;;
+  --version) [[ ! -f "\$MOCK_STATE/node_slow" ]] || sleep 3 ;;
 esac
 exec "$ROOT/tests/mocks/node" "\$@"
 SH
@@ -230,8 +242,14 @@ export BENCHBAR_SHARE_POLL=0.2 BENCHBAR_SHARE_FIRST_TICK=2 BENCHBAR_SHARE_EVERY=
 
 order() { cat "$MOCK_STATE/order" 2>/dev/null || true; }
 # events: the first word of each line of the order log, joined by spaces
-events() { order | awk '{ print $1 }' | tr '\n' ' ' | sed 's/ $//'; }
-reset_order() { : >"$MOCK_STATE/order"; rm -f "$MOCK_STATE/pre_script" "$MOCK_STATE/gw_exit" "$MOCK_STATE/dns_die" "$MOCK_STATE/web_deaf" "$MOCK_STATE/wipe_fail"; }
+# events: the first word of each line of the order log, joined by spaces (the control socket's status and
+# stop calls left out; the web ops are "webop up" and "webop down", as one word each)
+events() { order | grep -v '^control ' | awk '{ print ($1 == "webop") ? "webop-" $2 : $1 }' | tr '\n' ' ' | sed 's/ $//'; }
+reset_order() {
+  : >"$MOCK_STATE/order"
+  rm -f "$MOCK_STATE/pre_script" "$MOCK_STATE/gw_exit" "$MOCK_STATE/dns_die" "$MOCK_STATE/web_deaf" "$MOCK_STATE/wipe_fail" \
+    "$MOCK_STATE/wipe_hang" "$MOCK_STATE/caf_die" "$MOCK_STATE/web_op_fail"
+}
 # wait_for SECONDS CMD...: until CMD succeeds, or fail
 wait_for() {
   local secs="$1" i=0
@@ -301,6 +319,29 @@ assert_eq "2" "$code" "(no site, no serve)"
 set +e; web_py --site "share.localhost" --port 0x1f >/dev/null 2>&1; code=$?; set -e
 assert_eq "2" "$code" "(the port is a number)"
 
+# ================================================================ the job's plist
+plist="$(fl_template_render share.plist "LABEL=${LABEL}" "APP_BUNDLE_ID=com.akashmishra.benchbar" "RUNNER=${SHARE_DIR}/share-run.sh" \
+  "SHARE_DIR=${SHARE_DIR}" "PATH=/opt/homebrew/bin:/usr/bin:/bin" "LOG=${SHARE_DIR}/share.log")"
+printf '%s' "$plist" >"$TMP_DIR/job.plist"
+python3 - "$TMP_DIR/job.plist" "$LABEL" "$SHARE_DIR" <<'PY' || fail "the share job's plist"
+import plistlib, sys
+p = plistlib.load(open(sys.argv[1], "rb"))
+assert p["Label"] == sys.argv[2], p
+assert p["RunAtLoad"] is False and p["KeepAlive"] is False, p
+assert p["Umask"] == 0o077, p["Umask"]
+assert p["ProgramArguments"] == ["/bin/bash", sys.argv[3] + "/share-run.sh"], p
+assert p["AssociatedBundleIdentifiers"] == ["com.akashmishra.benchbar"], p
+assert "/opt/homebrew/bin" in p["EnvironmentVariables"]["PATH"], p
+PY
+assert_contains "$plist" "benchbar-template: share.plist v"
+
+if [[ -z "$REAL_NODE" ]]; then
+  # the runner tells the gateway the web state over the control socket, which needs the real node
+  printf 'SKIP: node not found: the runner and the start, stop, extend and status cases were not run\n'
+  printf 'test-share-run: ok (SKIPPED the node cases)\n'
+  exit 0
+fi
+
 # ================================================================ the runner, run directly
 NOW="$(date +%s)"
 write_gateway_cfg() { # DEADLINE: what the stand-in gateway reads (the real file is written by share start)
@@ -310,9 +351,10 @@ write_gateway_cfg() { # DEADLINE: what the stand-in gateway reads (the real file
 NASTY_ROOM='Lab "one" $HOME `x`'
 render_runner() {
   fl_template_render share-run.sh "SHARE_DIR=${SHARE_DIR}" "SOCK=${SOCK}" "BENCH=${BENCH}" "SHARE_SITE=share.localhost" "WEB_PORT=8001" \
-    "PYTHON=${BENCH}/env/bin/python" "LIB=${ROOT}/lib/frappe-local" "NODE=${SB}/node" "BENCHBAR=${SB}/benchbar" \
-    "DNS_SD=${SB}/dns-sd" "CAFFEINATE=${SB}/caffeinate" "LSOF=${ROOT}/tests/mocks/bin/lsof" "SESSIONS_PY=${FL_PY_SHARE_SESSIONS}" \
-    "SITE_LABEL=macdev" "ROOM_LABEL=${NASTY_ROOM}" >"$SHARE_DIR/share-run.sh"
+    "GATEWAY_PORT=8443" "PYTHON=${BENCH}/env/bin/python" "LIB=${ROOT}/lib/frappe-local" "NODE=${SB}/node" "BENCHBAR=${SB}/benchbar" \
+    "DNS_SD=${SB}/dns-sd" "CAFFEINATE=${SB}/caffeinate" "LSOF=${ROOT}/tests/mocks/bin/lsof" "WIPE_SECS=${FL_SHARE_WIPE_SECS}" \
+    "LISTEN_SECS=${FL_SHARE_LISTEN_SECS}" "SOCK_SECS=${FL_SHARE_SOCK_SECS}" "SESSIONS_PY=${FL_PY_SHARE_SESSIONS}" \
+    "CONTROL_JS=${FL_JS_SHARE_CONTROL}" "SITE_LABEL=macdev" "ROOM_LABEL=${NASTY_ROOM}" >"$SHARE_DIR/share-run.sh"
   chmod 700 "$SHARE_DIR/share-run.sh"
   printf '<plist/>\n' >"$SHARE_DIR/job.plist"
 }
@@ -344,8 +386,8 @@ assert_eq "1" "$(grep -c '^umask 077$' "$SHARE_DIR/share-run.sh")"
 reset_order; write_gateway_cfg $((NOW + 3600))
 start_runner
 wait_for 15 has_event '^caffeinate '
-assert_eq "wipe web preflight gateway preflight" "$(events | cut -d' ' -f1-5)" "$(order)"
-assert_eq "caffeinate dns-sd" "$(events | cut -d' ' -f6-7 | tr ' ' '\n' | sort | tr '\n' ' ' | sed 's/ $//')"
+assert_eq "wipe web preflight gateway preflight webop-up" "$(events | cut -d' ' -f1-6)" "(the gateway hears the web is up only after the second checks) $(order)"
+assert_eq "caffeinate dns-sd" "$(events | cut -d' ' -f7-8 | tr ' ' '\n' | sort | tr '\n' ' ' | sed 's/ $//')"
 started_order() { grep -o -E '(dns-sd|caffeinate) started' "$1" | awk '{print $1}' | tr '\n' ' ' | sed 's/ $//'; }
 assert_eq "dns-sd caffeinate" "$(started_order "$TMP_DIR/runner.log")" "(Bonjour before caffeinate, from the runner's own log)"
 assert_contains "$(order)" "wipe share.localhost keep=[]" "(the whole copy, at start: covers a runner killed with -9)"
@@ -355,6 +397,8 @@ assert_contains "$(order)" "gateway ${SHARE_DIR}/gateway.json"
 assert_contains "$(order)" "dns-sd -R ${NASTY_ROOM} _benchbar-share._tcp local 8443 v=3 label=${NASTY_ROOM} site=macdev"
 assert_contains "$(order)" "caffeinate -i -w ${RUNNER_PID}"
 assert_not_contains "$(order)" "fingerprint"
+assert_eq "${RUNNER_PID} running" "$(cat "$SHARE_DIR/phase")"
+assert_eq "600" "$(stat -f %Lp "$SHARE_DIR/phase" 2>/dev/null || stat -c %a "$SHARE_DIR/phase")"
 # the watchdog ticks while all is well
 wait_for 10 bash -c '[[ "$(grep -c "^preflight " "$1")" -ge 3 ]]' _ "$MOCK_STATE/order"
 assert_eq "False" "$(runner_gone && echo True || echo False)"
@@ -364,8 +408,11 @@ assert_eq "0" "$(runner_code)" "(a bootout is a normal end)"
 wait_for 5 every_recorded_gone
 assert_eq "wipe" "$(order | tail -n1 | awk '{print $1}')" "(the trap wipes the sessions after the children are gone)"
 assert_eq "2" "$(grep -c '^wipe ' "$MOCK_STATE/order")"
-assert_no_file "$SOCK"; assert_no_file "$SHARE_DIR/job.plist"; assert_no_file "$SHARE_DIR/share-run.sh"
+assert_no_file "$SOCK"; assert_no_file "$SHARE_DIR/job.plist"; assert_no_file "$SHARE_DIR/share-run.sh"; assert_no_file "$SHARE_DIR/phase"
 assert_file "$SHARE_DIR/gateway.json" "(status still reads the deadline)"
+# the runner's children are its own processes; one it started that outlives a kill -9 of the runner is
+# reaped by launchd, which kills the job's process group (AbandonProcessGroup unset): the stand-ins here
+# exit with their parent instead, so that rests on launchd, UNVERIFIED until the real run of Task 9
 stop_recorded
 
 # ---- no gateway.json: exit 78, nothing started
@@ -390,7 +437,16 @@ reset_order; printf 'ok\nskipgw\n' >"$MOCK_STATE/pre_script"
 start_runner
 wait_for 15 runner_gone
 assert_eq "1" "$(runner_code)"
-assert_eq "wipe web preflight gateway preflight wipe" "$(events)" "(no dns-sd: the room is never announced)"
+assert_eq "wipe web preflight gateway preflight wipe" "$(events)" "(no dns-sd, and the web is never marked up)"
+finish_runner
+
+# ---- a web op the gateway does not confirm ends the job
+reset_order; : >"$MOCK_STATE/web_op_fail"
+start_runner
+wait_for 15 runner_gone
+assert_eq "1" "$(runner_code)"
+assert_eq "wipe web preflight gateway preflight webop-up wipe" "$(events)"
+assert_contains "$(cat "$SHARE_DIR/ended")" "did not confirm that the web process is up"
 finish_runner
 
 # ---- the web shim never listens on its port: the job ends before any check
@@ -411,33 +467,48 @@ assert_eq "7" "$(grep -c '^preflight ' "$MOCK_STATE/order")" "(ended at the seco
 assert_contains "$(cat "$SHARE_DIR/ended")" "twice in a row"
 finish_runner
 
-# ---- dns-sd dies: restarted, and the share is degraded (a warning), never ended
-reset_order; : >"$MOCK_STATE/dns_die"
+# ---- dns-sd dies: restarted, and the share is degraded (a warning), never ended; once it has stayed up, no longer
+reset_order; : >"$MOCK_STATE/dns_die"; export BENCHBAR_SHARE_STABLE_POLLS=10
 start_runner
 wait_for 15 bash -c '[[ "$(grep -c "^dns-sd " "$1")" -ge 2 ]]' _ "$MOCK_STATE/order"
 wait_for 5 test -f "$SHARE_DIR/degraded"
 assert_contains "$(cat "$SHARE_DIR/degraded")" "Bonjour"
+assert_contains "$(cat "$TMP_DIR/runner.log")" "dns-sd ended; starting it again in 5 polls"
+wait_for 10 bash -c '! test -f "$1"' _ "$SHARE_DIR/degraded"
+assert_contains "$(cat "$TMP_DIR/runner.log")" "no longer degraded"
 assert_eq "False" "$(runner_gone && echo True || echo False)"
 kill -TERM "$RUNNER_PID"; wait_for 15 runner_gone
-assert_no_file "$SHARE_DIR/degraded" "(the trap clears it)"
+finish_runner
+unset BENCHBAR_SHARE_STABLE_POLLS
+
+# ---- caffeinate that keeps ending is started again after a backoff that doubles, one line a step
+reset_order; : >"$MOCK_STATE/caf_die"
+start_runner
+wait_for 20 bash -c 'grep -q "caffeinate ended; starting it again in 20 polls" "$1"' _ "$TMP_DIR/runner.log"
+assert_eq "5 10 20" "$(grep -o 'caffeinate ended; starting it again in [0-9]* polls' "$TMP_DIR/runner.log" | awk '{print $7}' | tr '\n' ' ' | sed 's/ $//')"
+assert_eq "3" "$(grep -c '^caffeinate ' "$MOCK_STATE/order")" "(one start per step, not one a poll)"
+kill -TERM "$RUNNER_PID"; wait_for 15 runner_gone
 finish_runner
 
 # ---- the web child: restarted 3 times, each followed by the checks; the 4th death ends the job
-reset_order
+reset_order; export BENCHBAR_SHARE_FIRST_TICK=2000
 start_runner
 wait_for 15 has_event '^caffeinate '
 for n in 1 2 3; do
   pid="$(tail -n1 "$MOCK_STATE/web_pids")"
+  : >"$MOCK_STATE/order"
   kill "$pid"
-  wait_for 15 bash -c '[[ "$(grep -c "^web " "$1")" -ge $2 ]]' _ "$MOCK_STATE/order" $((n + 1))
-  wait_for 15 bash -c 'awk "/^web /{w=NR} /^preflight /{p=NR} END{exit !(p > w)}" "$1"' _ "$MOCK_STATE/order"
+  wait_for 15 has_event '^webop up'
+  # the gateway is told down before the web starts again, and up only after the checks of the new one
+  assert_eq "webop-down web preflight webop-up" "$(events)" "(restart $n)"
   assert_eq "False" "$(runner_gone && echo True || echo False)" "(restart $n)"
 done
+export BENCHBAR_SHARE_FIRST_TICK=2
 kill "$(tail -n1 "$MOCK_STATE/web_pids")"
 wait_for 15 runner_gone
 assert_eq "1" "$(runner_code)"
-assert_eq "4" "$(grep -c '^web ' "$MOCK_STATE/order")"
-assert_contains "$(cat "$SHARE_DIR/ended")" "web"
+assert_eq "webop-down wipe" "$(events | cut -d' ' -f5-)"
+assert_contains "$(cat "$SHARE_DIR/ended")" "ended 4 times in 5 minutes"
 finish_runner
 
 # ---- a restarted web whose checks fail ends the job at once (no debounce)
@@ -447,7 +518,7 @@ wait_for 15 has_event '^caffeinate '
 kill "$(tail -n1 "$MOCK_STATE/web_pids")"
 wait_for 15 runner_gone
 assert_eq "1" "$(runner_code)"
-assert_eq "web preflight wipe" "$(events | cut -d' ' -f8-)" "(after the restart: the web, its checks, and the end)"
+assert_eq "webop-down web preflight wipe" "$(events | cut -d' ' -f9-)" "(after the restart: down, the web, its checks, the end; never up)"
 finish_runner
 export BENCHBAR_SHARE_FIRST_TICK=2
 
@@ -462,30 +533,17 @@ wait_for 5 every_recorded_gone
 assert_no_file "$SOCK"; assert_no_file "$SHARE_DIR/job.plist"
 finish_runner
 
-# ---- a session wipe that hangs is cut at 10 s (the trap must not outlive launchd's 20 s)
-assert_contains "$(cat "$ROOT/templates/share-run.sh.tmpl")" "WIPE_SECS=10"
-
-# ================================================================ the job's plist
-plist="$(fl_template_render share.plist "LABEL=${LABEL}" "APP_BUNDLE_ID=com.akashmishra.benchbar" "RUNNER=${SHARE_DIR}/share-run.sh" \
-  "SHARE_DIR=${SHARE_DIR}" "PATH=/opt/homebrew/bin:/usr/bin:/bin" "LOG=${SHARE_DIR}/share.log")"
-printf '%s' "$plist" >"$TMP_DIR/job.plist"
-python3 - "$TMP_DIR/job.plist" "$LABEL" "$SHARE_DIR" <<'PY' || fail "the share job's plist"
-import plistlib, sys
-p = plistlib.load(open(sys.argv[1], "rb"))
-assert p["Label"] == sys.argv[2], p
-assert p["RunAtLoad"] is False and p["KeepAlive"] is False, p
-assert p["Umask"] == 0o077, p["Umask"]
-assert p["ProgramArguments"] == ["/bin/bash", sys.argv[3] + "/share-run.sh"], p
-assert p["AssociatedBundleIdentifiers"] == ["com.akashmishra.benchbar"], p
-assert "/opt/homebrew/bin" in p["EnvironmentVariables"]["PATH"], p
-PY
-assert_contains "$plist" "benchbar-template: share.plist v"
-
-if [[ -z "$REAL_NODE" ]]; then
-  printf 'SKIP: node not found: the start, stop, extend and status cases need the real node for the control socket\n'
-  printf 'test-share-run: ok\n'
-  exit 0
-fi
+# ---- a session wipe that hangs is cut at WIPE_SECS: the trap ends well inside launchd's 20 s
+reset_order
+start_runner
+wait_for 15 has_event '^caffeinate '
+: >"$MOCK_STATE/wipe_hang"
+t0="$SECONDS"
+kill -TERM "$RUNNER_PID"
+wait_for 16 runner_gone
+[[ $((SECONDS - t0)) -le 14 ]] || fail "the trap took $((SECONDS - t0)) s"
+assert_contains "$(cat "$TMP_DIR/runner.log")" "took more than ${FL_SHARE_WIPE_SECS} s"
+finish_runner
 
 # ================================================================ the CLI
 # the mock launchctl runs the job's runner (as launchd would) when it is kickstarted
@@ -696,6 +754,7 @@ cli start --json
 assert_eq "1" "$CODE" "$OUT$ERR"
 done_line
 assert_eq "1" "$(jget "$TMP_DIR/done.json" 'd["exit"]')"
+assert_eq "False" "$(jget "$TMP_DIR/done.json" 'any("started until" in c["detail"] for c in d["changed"])')" "(no started change for a share that did not stay up)"
 assert_contains "$ERR" "8001 answers on 192.168.1.20"
 loaded && fail "the job is not loaded after a failed post-start check"
 wait_for 15 every_recorded_gone
@@ -755,6 +814,94 @@ cli start --for=12h --name="x"
 assert_eq "0" "$CODE" "$OUT$ERR"
 assert_eq "43200" "$(jget "$SHARE_DIR/gateway.json" 'd["deadline_epoch"] - d["started_epoch"]')"
 cli stop
+
+# ---- stop and extend have no dry run: refused before anything is touched
+cli start --for 30m
+assert_eq "0" "$CODE" "$OUT$ERR"
+snap="$(snapshot "$SHARE_DIR")"; reset_calls; reset_order
+cli stop --dry-run
+assert_eq "1" "$CODE"; assert_contains "$OUT$ERR" "share stop has no dry run"
+cli extend --by 1h --dry-run
+assert_eq "1" "$CODE"; assert_contains "$OUT$ERR" "share extend has no dry run"
+assert_eq "$snap" "$(snapshot "$SHARE_DIR")"
+assert_calls_not_contain '^launchctl bootout'
+assert_not_contains "$(order)" "control stop"
+
+# ---- launchd still lists the job after the bootout: stop cleans up the rest and says so, exit 1
+MOCK_BOOTOUT_LINGER=1000 MOCK_BOOTOUT_LINGER_LABEL="$LABEL" FL_BOOTOUT_WAIT_SECS=1 cli stop
+assert_eq "1" "$CODE" "$OUT$ERR"
+assert_contains "$OUT$ERR" "launchd still lists ${LABEL}"
+assert_not_contains "$OUT$ERR" "Sharing stopped"
+assert_no_file "$SHARE_DIR/gateway.json"; assert_no_file "$SOCK"
+rm -f "$MOCK_STATE/agents/$LABEL" "$MOCK_STATE/agents/$LABEL.linger"
+wait_for 15 every_recorded_gone
+
+# ---- a wipe that fails (or a Redis port held by another process) never stops stop midway
+cli start --for 30m
+assert_eq "0" "$CODE" "$OUT$ERR"
+: >"$MOCK_STATE/wipe_fail"
+cli stop --json
+assert_eq "0" "$CODE" "$OUT$ERR"
+assert_contains "$ERR" "could not end the sessions"
+done_line
+assert_eq "off" "$(jget "$TMP_DIR/done.json" 'd["state"]')"
+loaded && fail "booted out although the wipe failed"
+assert_file "$SHARE_DIR/wipe_failed"
+status_json
+assert_eq "off 1" "$(sget 'd["state"] + " " + str(d["wipe_failed"])')" "(status names it until a wipe works)"
+rm -f "$MOCK_STATE/wipe_fail"
+cli start --for 30m
+assert_eq "0" "$CODE" "$OUT$ERR"
+assert_no_file "$SHARE_DIR/wipe_failed" "(the runner's start-wipe worked)"
+cli stop
+wait_for 15 every_recorded_gone
+
+# ---- a start on its way: status says starting with the phase; a second start refuses and tears nothing down
+sleep 60 &
+FAKE_RUNNER=$!
+set_agent "$LABEL" running "$FAKE_RUNNER" 0
+printf '%s starting:web\n' "$FAKE_RUNNER" >"$SHARE_DIR/phase"
+printf '{"deadline_epoch":%s,"started_epoch":%s}\n' $(($(date +%s) + 600)) "$(date +%s)" >"$SHARE_DIR/gateway.json"
+status_json
+assert_eq "starting starting:web None" "$(sget '" ".join(str(x) for x in (d["state"], d["phase"], d["error"]))')"
+reset_calls
+cli start --for 30m
+assert_eq "1" "$CODE" "$OUT$ERR"; assert_contains "$OUT$ERR" "already starting:web"
+assert_calls_not_contain '^launchctl (bootout|bootstrap)'
+assert_file "$SHARE_DIR/phase"; assert_file "$SHARE_DIR/gateway.json"
+kill "$FAKE_RUNNER" 2>/dev/null || true; wait "$FAKE_RUNNER" 2>/dev/null || true
+status_json
+assert_eq "error" "$(sget 'd["state"]')" "(the runner is gone: no longer starting)"
+cli stop
+assert_eq "0" "$CODE" "$OUT$ERR"
+
+# ---- a start whose runner gets no further than a phase is ended, and the phase is named
+reset_order; printf 'hang\n' >"$MOCK_STATE/pre_script"
+FL_SHARE_CHECKS_SECS=2 cli start --for 30m
+assert_eq "1" "$CODE" "$OUT$ERR"
+assert_contains "$OUT$ERR" "got no further than starting:checks"
+loaded && fail "the stuck job is booted out"
+wait_for 20 every_recorded_gone
+
+# ---- a stop while a start is on its way (before the job is loaded): the start ends what it began
+reset_order; : >"$MOCK_STATE/node_slow"
+( cli start --for 30m; printf '%s\n' "$CODE" >"$TMP_DIR/start.code"; printf '%s' "$OUT$ERR" >"$TMP_DIR/start.out" ) &
+STARTER=$!
+sleep 1.5
+cli stop
+assert_eq "0" "$CODE" "$OUT$ERR"; assert_contains "$OUT$ERR" "unchanged"
+wait "$STARTER" || true
+rm -f "$MOCK_STATE/node_slow"
+assert_eq "1" "$(cat "$TMP_DIR/start.code")" "$(cat "$TMP_DIR/start.out")"
+assert_contains "$(cat "$TMP_DIR/start.out")" "benchbar share stop was run while sharing was starting"
+loaded && fail "the start did not leave a job behind"
+assert_not_contains "$(events)" "web"
+# a start of its own clears the marker
+cli start --for 30m
+assert_eq "0" "$CODE" "$OUT$ERR"
+assert_no_file "$SHARE_DIR/stop_requested"
+cli stop
+wait_for 15 every_recorded_gone
 
 # ================================================================ Review Focus 5: the job is not a bench agent
 reset_calls
