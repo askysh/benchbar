@@ -486,3 +486,31 @@ test("a failed wipe on a seat move is listed in status.wipe_failed until a wipe 
     assert.strictEqual((await room.moveToSeat(store.list()[0], "seat_b", async () => {})).ok, true);
     assert.deepStrictEqual(room.status().wipe_failed, []);
 });
+
+test("a seat whose user is still owed a wipe is not free: remove, then take is 409, then the wipe, then take works", async () => {
+    const { room, store } = makeRoom({ seats: 2 });
+    joined(room, { ip: "10.20.0.1", name: "A" }); joined(room, { ip: "10.20.0.2", name: "B" });
+    const [a, b] = store.list();
+    const wiped = [];
+    const wipe = async (user) => { wiped.push(user); };
+    assert.strictEqual((await room.moveToSeat(a, "seat_a", wipe)).ok, true);
+    // the host removes A, as the gateway's remove op does: the seat's user is owed a wipe until the wipe op
+    store.remove(a.id); room.onRemove(a.fp); room.noteWipeFailure("a@example.com");
+    const grab = await room.moveToSeat(b, "seat_a", wipe);
+    assert.deepStrictEqual([grab.ok, grab.status, grab.error], [false, 409, "seat_taken"], "B cannot take X while X is owed a wipe");
+    assert.ok(room.seatList()[0].taken_by, "the seat list shows it taken");
+    assert.strictEqual(store.list().find((d) => d.id === b.id).seat_id, null);
+    // the wipe op ends A's sessions; then the seat is free, and B's new session is never wiped by it
+    await wipe("a@example.com"); room.noteWipeDone("a@example.com");
+    assert.strictEqual(room.seatList()[0].taken_by, null);
+    assert.strictEqual((await room.moveToSeat(b, "seat_a", wipe)).ok, true);
+    assert.deepStrictEqual(wiped, ["a@example.com"]);
+    assert.ok(!JSON.stringify(room.seatList()).includes("@"), "the stand-in holder names no user");
+});
+
+test("M5: the CPace generator is private, like the room code: no inspect or JSON reaches it", () => {
+    const { room } = makeRoom();
+    assert.strictEqual(room.generator, undefined);
+    assert.ok(!Object.keys(room).includes("generator"));
+    assert.ok(!util.inspect(room, { depth: 4 }).includes("generator"));
+});

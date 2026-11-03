@@ -788,6 +788,23 @@ test("a sign-in whose device lost its seat while minting wipes the sid and sends
     });
 });
 
+test("a seat stays taken while its leaving holder's sessions are wiped, so the wipe never ends the next holder's", async () => {
+    const leaver = cert("leave-slow");
+    const grabber = cert("leave-grab");
+    const seats = SEATS.map((s) => (s.seat_id === "seat5" ? { ...s, user: "slowwipe@example.com" } : s));
+    await withGateway({ config: { seats }, devices: [deviceRow(leaver, { user: "slowwipe@example.com", seat_id: "seat5" }), seatless(grabber)] }, async (gw) => {
+        const leave = request(gw, { method: "POST", path: "/_benchbar/leave", cert: leaver, body: "" }).catch((e) => ({ json: String(e) }));
+        await sleep(80);
+        const during = await request(gw, { method: "POST", path: "/_benchbar/seat", cert: grabber, body: JSON.stringify({ seat_id: "seat5" }) });
+        assert.deepStrictEqual([during.status, during.json.status], [409, "seat_taken"], "the seat is not free while its wipe runs");
+        assert.deepStrictEqual((await leave).json, { ok: true, wiped: true });
+        assert.deepStrictEqual((await status(gw)).wipe_failed, [], "a wipe that worked owes nothing");
+        const after = await request(gw, { method: "POST", path: "/_benchbar/seat", cert: grabber, body: JSON.stringify({ seat_id: "seat5" }) });
+        assert.strictEqual(after.status, 200);
+        assert.deepStrictEqual(gw.helper.calls(), [["wipe", "share.localhost", "slowwipe@example.com"]]);
+    });
+});
+
 test("leave waits for the wipe; a failing wipe is reported to the guest and in status.wipe_failed", async () => {
     const ok = cert("leave-ok");
     const bad = cert("leave-bad");
