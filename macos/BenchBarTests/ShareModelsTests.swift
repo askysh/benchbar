@@ -352,7 +352,7 @@ struct ShareCLITests {
     }
 
     @Test func theInviteIsReadAsAPersonLenientlyAndAFailedReadRepeatsNothing() async throws {
-        let json = #"{"schema_version":1,"url":"benchbar://share/join?v=1&c=482913","text":"Join my BenchBar room\nbenchbar://share/join?v=1&c=482913","expires_at":"2027-01-15T08:00:00Z","room":"Standup","extra":true}"#
+        let json = #"{"schema_version":1,"cli_version":"0.9.0","bench":"/b","share_site":"share.localhost","url":"benchbar://share/join?v=1&c=482913","text":"Join my BenchBar room\nbenchbar://share/join?v=1&c=482913","expires_at":"2027-01-15T08:00:00Z","room":"Standup","wipe":null}"#
         let (good, runner) = client(json)
         let invite = try await good.shareInvite(bench: "/b", installURL: nil)
         #expect(invite.text == "Join my BenchBar room\nbenchbar://share/join?v=1&c=482913")

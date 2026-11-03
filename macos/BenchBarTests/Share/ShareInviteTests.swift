@@ -29,6 +29,17 @@ nonisolated enum InviteFixture {
         #expect(invite.check == .init(hostPin: Data(repeating: 0xab, count: 32), salt: InviteFixture.salt))
     }
 
+    /// The shape `share invite` prints (c4a825c, tests/test-share-admin.sh): every value
+    /// percent-encoded, a space as %20, the colon of `a` as %3A.
+    @Test func theCLIsLinkParsesBackToItsFields() throws {
+        let link = "benchbar://share/join?v=1&r=Caf%C3%A9%20%26%20Lab%3D1%20%22Q%22&h=\(InviteFixture.hostHex)&s=ffeeddccbbaa99887766554433221100&c=482913&a=192.168.1.20%3A8443&x=1800003600"
+        let invite = try ShareInvite.parse(URL(string: link)!).get()
+        #expect(invite.room == "Caf\u{e9} & Lab=1 \"Q\"")
+        #expect(invite.salt == "ffeeddccbbaa99887766554433221100")
+        #expect(invite.address == .init(host: "192.168.1.20", port: 8443))
+        #expect(try ShareInvite.first(in: "Join my BenchBar room\n\(link)\nOr: open BenchBar").get() == invite)
+    }
+
     @Test func percentEncodingAndUnknownParametersAreHandled() throws {
         let invite = try #require(InviteFixture.invite(InviteFixture.link(room: "Priya%E2%80%99s%20room%20%26%20co", extra: "&z=later&utm=1")))
         #expect(invite.room == "Priya\u{2019}s room & co")
