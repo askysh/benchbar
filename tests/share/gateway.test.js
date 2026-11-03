@@ -1185,3 +1185,51 @@ test("a control op after the deadline (sleep/wake) is refused and the gateway ex
     });
 });
 
+
+test("web state: down at start, 503 while down whatever upstream does, up only when told; the first connect failure latches it down", async () => {
+    const c = cert("web1");
+    await withGateway({ devices: [deviceRow(c, { user: "seat1@example.com" })], webDown: true }, async (gw) => {
+        const html = { accept: "text/html" };
+        assert.strictEqual((await status(gw)).web_up, false, "the gateway starts down");
+        const early = await request(gw, { path: "/app", cert: c, headers: html });
+        assert.strictEqual(early.status, 503);
+        assert.ok(early.text.includes("bench is restarting, try again in a moment"));
+        assert.strictEqual(gw.upstream.hits.length, 0, "nothing reaches upstream while down");
+        // the room keeps working while the web is down
+        assert.strictEqual((await request(gw, { path: "/_benchbar/room", cert: c })).status, 200);
+        assert.strictEqual((await request(gw, { path: "/room/hello", ip: "10.40.0.1" })).status, 200);
+
+        assert.deepStrictEqual(await gw.control({ op: "web", state: "up" }), { ok: true, web_up: true });
+        assert.strictEqual((await request(gw, { path: "/app", cert: c })).status, 200);
+        assert.strictEqual((await gw.control({ op: "web", state: "down" })).web_up, false);
+        const told = await request(gw, { path: "/app", cert: c, headers: html });
+        assert.strictEqual(told.status, 503, "down when told, although upstream answers");
+        assert.strictEqual(gw.upstream.hits.length, 1);
+        for (const bad of [{ op: "web" }, { op: "web", state: "UP" }, { op: "web", state: true }]) {
+            assert.deepStrictEqual(await gw.control(bad), { ok: false, error: "bad_request" });
+        }
+    });
+});
+
+test("web state: a refused upstream connection latches the web down until the runner says up", async () => {
+    const c = cert("web2");
+    const upstream = await H.startUpstream();
+    const port = upstream.port;
+    await withGateway({ devices: [deviceRow(c, { user: "seat1@example.com" })], upstream }, async (gw) => {
+        assert.strictEqual((await request(gw, { path: "/app", cert: c })).status, 200);
+        await upstream.close();
+        assert.strictEqual((await request(gw, { path: "/app", cert: c })).status, 503);
+        assert.strictEqual((await status(gw)).web_up, false, "latched by the failed connect");
+        // something else takes the port: it gets nothing until the runner has checked and said up
+        const squatter = await H.startUpstream({ port });
+        try {
+            assert.strictEqual((await request(gw, { path: "/app", cert: c })).status, 503);
+            assert.strictEqual(squatter.hits.length, 0);
+            await gw.control({ op: "web", state: "up" });
+            assert.strictEqual((await request(gw, { path: "/app", cert: c })).status, 200);
+            assert.strictEqual(squatter.hits.length, 1);
+        } finally {
+            await squatter.close();
+        }
+    });
+});

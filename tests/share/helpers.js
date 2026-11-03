@@ -48,7 +48,7 @@ function freePort() {
     });
 }
 
-async function startUpstream() {
+async function startUpstream({ port: wanted } = {}) {
     const hits = [];
     const server = http.createServer((req, res) => {
         const chunks = [];
@@ -60,7 +60,7 @@ async function startUpstream() {
             res.end("upstream-ok");
         });
     });
-    const port = await freePort();
+    const port = wanted || (await freePort());
     await new Promise((r) => server.listen(port, "127.0.0.1", r));
     return { port, hits, close: () => { server.closeAllConnections(); return new Promise((r) => server.close(r)); } };
 }
@@ -157,6 +157,8 @@ async function startGateway(opts = {}) {
             // The gateway empties devices.json when it starts, so test rows go in once it is up.
             if (r.ok) {
                 if (opts.devices) writeDevices(cfg.devices, opts.devices, opts.blocked);
+                // the gateway starts with the web marked down; the share runner marks it up after its checks
+                if (!opts.webDown) await controlCall(cfg.control_sock, { op: "web", state: "up" });
                 return gw;
             }
         } catch { /* not up yet */ }
