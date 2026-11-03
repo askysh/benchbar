@@ -328,7 +328,7 @@ assert_file "$SHARE_DIR/share.json.prev"
 assert_eq "$(grep -c '^redis-server' "$MOCK_LOG")" "$(grep -c '^redis-cli .*shutdown' "$MOCK_LOG")" "(the setup Redis is stopped after a dying helper)"
 assert_calls_contain '^redis-cli .*shutdown'
 setup --users "priya@example.com" --acknowledge-data --bench-dir "$BENCH"
-assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "nobody knows how it was hardened"
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "Sharing setup was interrupted"; assert_contains "$OUT" "Run: benchbar share setup --refresh"
 jsetup --users "priya@example.com" --acknowledge-data --refresh --yes
 assert_eq "0" "$CODE" "$OUT$ERR"
 assert_file "$SHARE_DIR/share.json"; assert_no_file "$SHARE_DIR/share.json.prev"
@@ -370,9 +370,9 @@ assert_contains "$ERR" "a seat still holds a code-capable role"
 assert_contains "$ERR" "not hardened"
 assert_no_file "$SHARE_DIR/share.json" "(no config for a copy that is not hardened)"
 assert_eq "1" "$(last_line | jget - 'd["exit"]')"
-# the copy that is left is not trusted without its share.json: setup asks for --refresh
+# the copy that is left is not trusted without its share.json: setup names it interrupted and asks for --refresh
 jsetup --users "priya@example.com" --acknowledge-data
-assert_eq "1" "$CODE" "$OUT$ERR"; assert_contains "$ERR" "nobody knows how it was hardened"
+assert_eq "1" "$CODE" "$OUT$ERR"; assert_contains "$ERR" "Sharing setup was interrupted"; assert_contains "$ERR" "Run: benchbar share setup --refresh"
 rm -rf "$SHARE_DIR" "$BENCH/sites/share.localhost"
 
 # ---------------------------------------------------------------- secrets stay out of the state folder and the log
@@ -667,10 +667,30 @@ assert_calls_not_contain 'remove-common-config'
 (cd "$BENCH" && bench config remove-common-config pause_scheduler)
 : >"$MOCK_PROCS"
 
-# a plain setup never inherits users or label from a stale share.json.prev
+# the interrupted setup is named as such, and points to --refresh
+run_json_status() { set +e; OUT="$("$FM" share status --json --bench-dir "$BENCH" 2>"$MOCK_STATE/stderr")"; CODE="$?"; ERR="$(cat "$MOCK_STATE/stderr")"; set -e; }
+run_json_status
+assert_eq "0" "$CODE" "$OUT$ERR"
+assert_eq "True" "$(printf '%s' "$OUT" | jget - 'd["setup_interrupted"]')"
+run_fm share status --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "Sharing setup was interrupted. Run: benchbar share setup --refresh"
+BENCHBAR_SUDO=gui run_fm share start --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "Sharing setup was interrupted"; assert_contains "$OUT" "Run: benchbar share setup --refresh"
+setup --users "priya@example.com" --acknowledge-data --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "Sharing setup was interrupted"; assert_contains "$OUT" "Run: benchbar share setup --refresh"
+setup --acknowledge-data --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "Run: benchbar share setup --refresh" "(the hint comes before the question of who may sign in)"
+
+# --refresh finishes the setup, and nothing is interrupted any more
+jsetup --users "priya@example.com" --acknowledge-data --refresh --yes
+assert_eq "0" "$CODE" "$OUT$ERR"
+run_json_status
+assert_eq "False" "$(printf '%s' "$OUT" | jget - 'd["setup_interrupted"]')"
+
+# a plain setup never inherits users or label from a stale share.json.prev: it names the setup interrupted
 rm -rf "$SHARE_DIR"; mkdir -p "$SHARE_DIR"; chmod 700 "$SHARE_DIR"
 printf '{\n  "allowed_users": ["stale@example.com"],\n  "room_label": "Stale"\n}\n' >"$SHARE_DIR/share.json.prev"
 setup --acknowledge-data --bench-dir "$BENCH" --dry-run
-assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "--users A,B"
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "Run: benchbar share setup --refresh"; assert_not_contains "$OUT" "stale@example.com"
 
 printf 'test-share: ok\n'

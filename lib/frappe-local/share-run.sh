@@ -196,6 +196,7 @@ fl_share_teardown() {
 fl_share_require_setup() {
   local v
   fl_share_cfg_raw_v v v
+  ! fl_share_setup_interrupted || fl_die "$FL_SHARE_INTERRUPTED_MSG" "$FL_SHARE_INTERRUPTED_FIX"
   [[ -f "$(fl_share_dir)/share.json" && "$v" == 3 && -f "${FL_BENCH_DIR}/sites/${FL_SHARE_SITE}/site_config.json" ]] \
     || fl_die "Sharing is not set up on this bench." "Run benchbar share setup first."
 }
@@ -561,7 +562,7 @@ fl_share_preflight_json_v() {
 fl_cmd_share_status() {
   local want_pre=0 a dir sock now state=off loaded=0 reply="" started="" deadline="" ended="" degraded="null" error="null"
   local site web_port label users seats copy lan_guard pre="null" started_json=null deadline_json=null left=0 can=0
-  local total=0 online=0 locked=null lock_reason=null budget=null people=0 trouble=false wipe=0 v files runner_pid runner_phase phase_json=null web_up_json=null
+  local total=0 online=0 locked=null lock_reason=null budget=null people=0 trouble=false wipe=0 v files runner_pid runner_phase phase_json=null web_up_json=null interrupted
   for a in "$@"; do
     case "$a" in
       --preflight) want_pre=1 ;;
@@ -616,6 +617,8 @@ fl_cmd_share_status() {
   fi
 
   fl_share_copy_json_v copy
+  interrupted=false
+  ! fl_share_setup_interrupted || interrupted=true
   fl_sp_pf_files_problem_v files
   if [[ -z "$files" ]]; then lan_guard=installed
   elif [[ ! -r "${FL_LANGUARD_ANCHOR:-$FL_SHARE_PF_ANCHOR_FILE}" || ! -r "${FL_LANGUARD_DAEMON:-$FL_SHARE_PF_DAEMON_FILE}" ]]; then lan_guard=missing
@@ -625,11 +628,11 @@ fl_cmd_share_status() {
 
   if [[ "${OPT_JSON:-0}" == 1 ]]; then
     FL_DONE_NO_STATE=1
-    fl_doc_emit 0 "$(printf '{"schema_version":%d,"cli_version":"%s","protocol":%d,"bench":%s,"site":%s,"share_site":%s,"state":"%s","phase":%s,"web_up":%s,"degraded":%s,"error":%s,"label":%s,"port":%s,"web_port":%s,"lan_ip":%s,"started":%s,"deadline":%s,"seconds_left":%s,"can_extend_s":%s,"copy":%s,"allowed_users":%s,"seats":%s,"people":%s,"devices_total":%s,"devices_online":%s,"pending":0,"locked":%s,"lock_reason":%s,"budget_left":%s,"join_trouble":%s,"wipe_failed":%s,"lan_guard":"%s","preflight":%s}' \
+    fl_doc_emit 0 "$(printf '{"schema_version":%d,"cli_version":"%s","protocol":%d,"bench":%s,"site":%s,"share_site":%s,"state":"%s","phase":%s,"web_up":%s,"degraded":%s,"error":%s,"label":%s,"port":%s,"web_port":%s,"lan_ip":%s,"started":%s,"deadline":%s,"seconds_left":%s,"can_extend_s":%s,"copy":%s,"allowed_users":%s,"seats":%s,"people":%s,"devices_total":%s,"devices_online":%s,"pending":0,"locked":%s,"lock_reason":%s,"budget_left":%s,"join_trouble":%s,"wipe_failed":%s,"lan_guard":"%s","preflight":%s,"setup_interrupted":%s}' \
       "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$FL_SHARE_PROTOCOL" "$(fl_json_str "$FL_BENCH_DIR")" "$( [[ -n "$site" ]] && fl_json_str "$site" || printf 'null')" \
       "$(fl_json_str "$FL_SHARE_SITE")" "$state" "$phase_json" "$web_up_json" "$degraded" "$error" "${label:-null}" "$FL_SHARE_GATEWAY_PORT" "$web_port" \
       "$( [[ -n "$SP_LAN_IP" ]] && fl_json_str "$SP_LAN_IP" || printf 'null')" "$started_json" "$deadline_json" "$left" "$can" "$copy" "${users:-[]}" \
-      "$seats" "$people" "$total" "$online" "$locked" "$lock_reason" "$budget" "$trouble" "$wipe" "$lan_guard" "$pre")"
+      "$seats" "$people" "$total" "$online" "$locked" "$lock_reason" "$budget" "$trouble" "$wipe" "$lan_guard" "$pre" "$interrupted")"
     return 0
   fi
   case "$state" in
@@ -637,7 +640,7 @@ fl_cmd_share_status() {
     starting) fl_info "Sharing is starting (${runner_phase})." ;;
     expired) fl_info "Sharing has ended (the deadline passed). benchbar share stop clears it." ;;
     error) fl_warn "Sharing is not running: ${ended:-the gateway does not answer}. benchbar share stop clears it." ;;
-    *) fl_info "Sharing is off." ;;
+    *) if [[ "$interrupted" == true ]]; then fl_warn "${FL_SHARE_INTERRUPTED_MSG} ${FL_SHARE_INTERRUPTED_FIX}"; else fl_info "Sharing is off."; fi ;;
   esac
   [[ "$degraded" == null ]] || fl_warn "$(awk 'NR == 1' "${dir}/degraded")"
   fl_info "Network protection: ${lan_guard}"

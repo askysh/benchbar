@@ -1321,7 +1321,8 @@ none holds a session id.
  "label":"Your Mac","port":8443,"web_port":8001,"lan_ip":"192.168.1.20","started":"…","deadline":"…",
  "seconds_left":3600,"can_extend_s":28800,"copy":{…},"allowed_users":["priya@example.com"],"seats":2,
  "people":1,"devices_total":1,"devices_online":1,"pending":0,"locked":false,"lock_reason":null,
- "budget_left":10,"join_trouble":false,"wipe_failed":0,"lan_guard":"installed","preflight":null}
+ "budget_left":10,"join_trouble":false,"wipe_failed":0,"lan_guard":"installed","preflight":null,
+ "setup_interrupted":false}
 ```
 
 - `state`: `on`, `off`, `expired` or `error`.
@@ -1333,6 +1334,8 @@ none holds a session id.
 - `pending` is always 0: there are no join requests to approve in rooms.
 - `lan_guard`: as `lan-guard status`'s `state`.
 - `preflight`: null, or with `--preflight` the critical checks as in `share preflight`.
+- `setup_interrupted`: a setup stopped halfway (no `share.json`, but the one it set
+  aside or the copy is there); `share setup --refresh` finishes it.
 
 ### `benchbar share preflight --json`
 

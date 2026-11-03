@@ -52,6 +52,16 @@ fl_share_require_stopped() {
 
 # the config to read: share.json; a --refresh falls back to the one it set aside (its seat ids and
 # dates carry over), a plain run never reads that stale file
+# fl_share_setup_interrupted: a setup stopped after it began the copy: share.json is missing, and the
+# one it set aside or the copy is there (only setup --refresh finishes it)
+fl_share_setup_interrupted() {
+  local d
+  d="$(fl_share_dir)"
+  [[ ! -f "${d}/share.json" ]] && [[ -f "${d}/share.json.prev" || -d "${FL_BENCH_DIR}/sites/${FL_SHARE_SITE}" ]]
+}
+FL_SHARE_INTERRUPTED_MSG="Sharing setup was interrupted."
+FL_SHARE_INTERRUPTED_FIX="Run: benchbar share setup --refresh"
+
 fl_share_cfg_file() {
   local d
   d="$(fl_share_dir)"
@@ -274,6 +284,7 @@ fl_cmd_share_setup() {
   [[ "$from" == latest || "$from" =~ ^[0-9]{8}_[0-9]{6}$ ]] || fl_die "--from takes a backup stamp (YYYYmmdd_HHMMSS) or latest." "benchbar site backups ${site} lists the stamps."
   fl_share_require_stopped
   dir="$(fl_share_dir)"
+  [[ "$refresh" == 1 ]] || ! fl_share_setup_interrupted || fl_die "$FL_SHARE_INTERRUPTED_MSG" "$FL_SHARE_INTERRUPTED_FIX"
   SH_SITE="$site"; SH_BACKUP_NOW="$backup_now"; SH_REFRESH="$refresh"; SH_REGEN="$regen"
   [[ -f "${FL_BENCH_DIR}/sites/${FL_SHARE_SITE}/site_config.json" ]] && SH_COPY_EXISTS=1
   [[ -s "${dir}/host.key" && -s "${dir}/host.crt" ]] && existing_key=1

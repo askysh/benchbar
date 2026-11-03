@@ -93,6 +93,14 @@ before any change with exit 2, naming `MARIADB_ROOT_PASSWORD`. A MariaDB
 root that logs in only over the unix socket, with no password, cannot make
 the copy.
 
+A setup that stops halfway (a failed step, or the app quit while it ran)
+never leaves the bench's scheduler paused: the pause it set for the restore
+is removed on the way out, and the half-made copy keeps a `pause_scheduler`
+and `mute_emails` of its own. A pause that was there before setup started
+stays. Such a setup leaves no `share.json`: until `share setup --refresh`
+finishes it, `share status`, `share start` and a plain `share setup` say
+"Sharing setup was interrupted. Run: benchbar share setup --refresh".
+
 Exit codes: 0; 1 on a refusal or a failed step; 2 when the MariaDB root
 password is needed and unknown.
 
@@ -311,6 +319,10 @@ benchbar share status [--preflight] [--json]
 `on`, `off`, `expired` or `error`, the time left, the copy, the room's
 counts (`seats`, `people`, `locked`, `budget_left`, `join_trouble`) and the
 LAN guard's state. Never the code. `--preflight` adds the critical checks.
+
+`setup_interrupted` is true when a setup stopped halfway: there is no
+`share.json`, and the one setup set aside or the copy `share.localhost` is
+there. Only `share setup --refresh` clears it.
 
 `wipe_failed` counts a sign-out that is owed or failed. While sharing is
 off it reads 1 or more from the marker `share stop` leaves when it could
