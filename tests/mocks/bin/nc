@@ -1,0 +1,22 @@
+#!/bin/bash
+# nc mock for the share checks: "nc [-6] -z -w1 HOST PORT". Loopback hosts answer for the ports
+# in $MOCK_STATE/loopback_ports; any other host (the LAN address) for the ports in
+# $MOCK_STATE/lan_reachable_ports, one per line: "PORT" (either family), "4:PORT" or "6:PORT".
+# A missing file refuses everything, which is what a working pf block does.
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "${0%/*}/_mocklib.sh"
+mock_log "$@"
+family=4; pos=()
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    -w) shift 2 ;;
+    -6) family=6; shift ;;
+    -*) shift ;;
+    *) pos+=("$1"); shift ;;
+  esac
+done
+host="${pos[0]:-}"; port="${pos[1]:-}"
+case "$host" in
+  127.0.0.1|::1|localhost) grep -qx "$port" "${MOCK_STATE:-/nonexistent}/loopback_ports" 2>/dev/null ;;
+  *) grep -qxE "(${port}|${family}:${port})" "${MOCK_STATE:-/nonexistent}/lan_reachable_ports" 2>/dev/null ;;
+esac

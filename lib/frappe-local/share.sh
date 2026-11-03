@@ -551,6 +551,7 @@ fl_cmd_share() {
   case "$sub" in
     setup) fl_cmd_share_setup "$@" ;;
     users) fl_cmd_share_users "$@" ;;
-    *) fl_die "Usage: benchbar share setup|users ..." "Example: benchbar share users --site ${FL_SITE:-NAME}" ;;
+    preflight) fl_cmd_share_preflight "$@" || exit 1 ;;
+    *) fl_die "Usage: benchbar share setup|users|preflight ..." "Example: benchbar share users --site ${FL_SITE:-NAME}" ;;
   esac
 }

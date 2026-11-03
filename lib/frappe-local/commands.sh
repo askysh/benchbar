@@ -144,7 +144,7 @@ cmd~site default~benchbar site default NAME [--json]~Make NAME the default site.
 cmd~site open-as~benchbar site open-as on|off|status [NAME] [--json]~Turn password-less sign in (open --as) on or off for a site, or show it. Changes benchbar's state only. on needs a person at a terminal.~yes~no~no~yes~stream
 flag~site open-as~--yes~~Do not ask before turning on (still refused without a terminal session, BENCHBAR_NONINTERACTIVE=1).
 flag~site open-as~--json~~JSON lines for on and off, one document for status.
-cmd~share~benchbar share setup|users ...~Share a hardened copy of a site with people on your network (the copy and the identity first; start and stop follow).~no~no~no~no~none
+cmd~share~benchbar share setup|users|preflight ...~Share a hardened copy of a site with people on your network (the copy and the identity first; start and stop follow).~no~no~no~no~none
 cmd~share setup~benchbar share setup [--site S] [--from STAMP|latest] [--backup-now] [--users A,B] [--refresh] [--regenerate-identity] [--acknowledge-data] [--dry-run] [--yes] [--json]~Prepare sharing: the host identity and a hardened share copy of a site.~yes~no~no~yes~stream
 flag~share setup~--users~A,B~The Frappe users who may sign in to the copy, one seat each. They must be enabled System Users; each loses the roles that can run code or change settings, in the copy only. Default: the last setup's.
 flag~share setup~--from~STAMP|latest~The backup set of the site to copy (benchbar site backups S lists them). Default: the newest complete one.
@@ -157,6 +157,11 @@ flag~share setup~--dry-run~~Print the plan (size, time, the data the copy holds)
 flag~share setup~--yes~~Do not ask before replacing the copy or the identity.
 flag~share setup~--json~~JSON lines: plan, steps, done.
 cmd~share users~benchbar share users [--site S] [--json]~The users of a site who can take a seat in a shared copy, and which roles each would lose there.~no~no~no~no~document
+cmd~share preflight~benchbar share preflight [--static|--critical] [--quiet] [--json]~The checks that prove this Mac is safe to share the hardened copy on the LAN; exits 1 when one fails.~no~no~no~no~document
+flag~share preflight~--static~~Only the checks that run before anything starts: the copy, its seats, node, the firewall.
+flag~share preflight~--critical~~Only the fast checks a running share repeats: the pf block (probed from this Mac's LAN address with its own listener and a control), the share web process, the bench's Redis.
+flag~share preflight~--quiet~~List only the checks that are not ok.
+flag~share preflight~--json~~One document: protocol, ok, lan_ip and the checks, each with a status, a message and a fix_action.
 cmd~site hosts~benchbar site hosts~Add a 127.0.0.1 line for every site to /etc/hosts.~yes~yes~no~yes~none
 cmd~site backup~benchbar site backup NAME [--with-files] [--json]~bench --site NAME backup.~no~no~no~yes~document
 flag~site backup~--with-files~~Include the uploads.

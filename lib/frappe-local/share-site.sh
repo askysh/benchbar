@@ -199,6 +199,79 @@ finally:
     frappe.destroy()'
 FL_PY_SHARE_HARDEN="${FL_PY_SHARE_ROLES}${FL_PY_SHARE_HARDEN_BODY}"
 
+# What share preflight reads from the copy (argv: SITE; the seats' users on
+# stdin, one per line). Read only: rows of "BENCHBAR-RESULT KIND\x1fNAME\x1fVALUE",
+# never a name beyond the seats' own, a hash or the passwords it tries.
+#   flag signup_disabled 0|1    Website Settings disable_signup
+#   flag admin_default 0|1      Administrator's stored hash matches a well-known default
+#   seat USER PROBLEM [ROLE]    PROBLEM: missing, disabled, not_system_user, role (ROLE
+#                               is code-capable), role_profile
+#   count api_keys|api_secrets|oauth_rows N
+#   done                        the last row: a helper that stopped early is not "all well"
+# The admin test verifies each candidate against the stored hash with passlib
+# directly: frappe's check_password also rehashes and clears login counters,
+# which a read must not do.
+# shellcheck disable=SC2016  # Python source: the backticks and dollar signs are not the shell's
+FL_PY_SHARE_CHECK_BODY='
+import sys
+site = sys.argv[2]
+seats = [line.strip() for line in sys.stdin if line.strip()]
+DEFAULT_PASSWORDS = ("admin", "Admin", "admin123", "Admin123", "administrator", "Administrator", "password", "Password", "123", "1234",
+    "12345", "123456", "frappe", "erpnext", "test", "root", "pass", "secret", "changeme")
+def say(*fields):
+    print("\nBENCHBAR-RESULT " + "\x1f".join(" ".join(str(f).split()) for f in fields), flush=True)
+import frappe
+frappe.init(site=site)
+frappe.connect()
+try:
+    from frappe.utils.password import passlibctx
+    say("flag", "signup_disabled", 1 if frappe.db.get_single_value("Website Settings", "disable_signup") else 0)
+    stored = frappe.db.sql("select `password` from `__Auth` where doctype = %s and name = %s and fieldname = %s and encrypted = 0 limit 1", ("User", "Administrator", "password"))
+    admin_default = False
+    if stored and stored[0][0]:
+        for candidate in DEFAULT_PASSWORDS:
+            try:
+                if passlibctx.verify(candidate, stored[0][0]):
+                    admin_default = True
+                    break
+            except ValueError:
+                break
+    say("flag", "admin_default", 1 if admin_default else 0)
+    if seats:
+        capable = set(code_capable_roles(frappe))
+        names = {"names": tuple(seats)}
+        rows = {r["name"]: r for r in frappe.db.sql("select name, enabled, user_type from `tabUser` where name in %(names)s", names, as_dict=True)}
+        held = {}
+        for r in frappe.db.sql("select parent, role from `tabHas Role` where parenttype = %(kind)s and parent in %(names)s", {"kind": "User", "names": tuple(seats)}, as_dict=True):
+            held.setdefault(r["parent"], set()).add(r["role"])
+        profiled = set()
+        if frappe.db.has_column("User", "role_profile_name"):
+            profiled = set(frappe.db.sql_list("select name from `tabUser` where name in %(names)s and ifnull(role_profile_name, %(blank)s) != %(blank)s", {"names": tuple(seats), "blank": ""}))
+        for user in seats:
+            row = rows.get(user)
+            if row is None:
+                say("seat", user, "missing")
+                continue
+            if not row["enabled"]:
+                say("seat", user, "disabled")
+            if row["user_type"] != "System User":
+                say("seat", user, "not_system_user")
+            for role in sorted(held.get(user, set()) & capable):
+                say("seat", user, "role", role)
+            if user in profiled:
+                say("seat", user, "role_profile")
+    say("count", "api_keys", frappe.db.sql("select count(*) from `tabUser` where ifnull(api_key, %s) != %s", ("", ""))[0][0])
+    say("count", "api_secrets", frappe.db.sql("select count(*) from `__Auth` where doctype = %s and fieldname = %s", ("User", "api_secret"))[0][0])
+    oauth_rows = 0
+    for doctype in ("OAuth Bearer Token", "OAuth Authorization Code", "Token Cache"):
+        if frappe.db.table_exists(doctype):
+            oauth_rows += frappe.db.sql("select count(*) from `tab" + doctype + "`")[0][0]
+    say("count", "oauth_rows", oauth_rows)
+    say("done")
+finally:
+    frappe.destroy()'
+FL_PY_SHARE_CHECK="${FL_PY_SHARE_ROLES}${FL_PY_SHARE_CHECK_BODY}"
+
 # The bench's Redis, up for a Frappe call and down after it, whatever the
 # bench is doing: a dry run reads too, so FL_DRY_RUN does not skip it.
 fl_share_redis_up() { FL_DRY_RUN=0 fl_bench_redis_up "$FL_BENCH_DIR"; }

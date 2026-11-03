@@ -511,11 +511,12 @@ assert "Builder" not in got and "Viewer" not in got and "All" not in got
 PY
 
 
-# the real Python of the users and harden helpers, under a stand-in frappe whose database applies
+# the real Python of the users, harden and check helpers, under a stand-in frappe whose database applies
 # %-parameters the way pymysql does (a format mistake in a query raises)
 printf '%s' "$(bash -c '. "$1/lib/frappe-local/share-site.sh"; printf "%s" "$FL_PY_SHARE_USERS"' _ "$ROOT")" >"$TMP_DIR/users_snippet.py"
 printf '%s' "$(bash -c '. "$1/lib/frappe-local/share-site.sh"; printf "%s" "$FL_PY_SHARE_HARDEN"' _ "$ROOT")" >"$TMP_DIR/harden_snippet.py"
-assert_eq "helpers_stub: ok" "$(python3 "$ROOT/tests/share/helpers_stub.py" "$TMP_DIR/users_snippet.py" "$TMP_DIR/harden_snippet.py" 2>&1)"
+printf '%s' "$(bash -c '. "$1/lib/frappe-local/share-site.sh"; printf "%s" "$FL_PY_SHARE_CHECK"' _ "$ROOT")" >"$TMP_DIR/check_snippet.py"
+assert_eq "helpers_stub: ok" "$(python3 "$ROOT/tests/share/helpers_stub.py" "$TMP_DIR/users_snippet.py" "$TMP_DIR/harden_snippet.py" "$TMP_DIR/check_snippet.py" 2>&1)"
 assert_eq "1" "$(grep -c 'FL_SHARE_USER_CAP=' "$ROOT"/lib/frappe-local/share*.sh | awk -F: '{s += $2} END {print s}')" "(the users cap is defined once)"
 
 # a plain setup never inherits users or label from a stale share.json.prev

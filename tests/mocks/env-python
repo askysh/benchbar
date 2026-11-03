@@ -43,14 +43,17 @@ fi
 # $MOCK_STATE/code_roles, one per line):
 #   -c SNIPPET benchbar-share-users SITE json|rows|classes
 #   -c SNIPPET benchbar-share-harden SITE      (the allowed users on stdin)
+#   -c SNIPPET benchbar-share-check SITE       (the seats on stdin; the rows come from
+#                                               $MOCK_STATE/share_check, tab separated, else all is well)
 # Users come from $MOCK_STATE/users.json (Administrator alone without it);
 # MOCK_OPEN_AS_REFUSE fails the login with that text; MOCK_OPEN_AS_SID is the
 # session id. Each argument is logged in brackets, so a test sees how argv arrived.
-if [[ "${1:-}" == "-c" && ( "${3:-}" == "benchbar-open-as" || "${3:-}" == "benchbar-users" || "${3:-}" == "benchbar-share-users" || "${3:-}" == "benchbar-share-harden" ) ]]; then
+if [[ "${1:-}" == "-c" && ( "${3:-}" == "benchbar-open-as" || "${3:-}" == "benchbar-users" || "${3:-}" == "benchbar-share-users" || "${3:-}" == "benchbar-share-harden" || "${3:-}" == "benchbar-share-check" ) ]]; then
   marker="$3"; shift 3
   { printf 'bench-python %s' "$marker"; for a in "$@"; do printf ' [%s]' "$a"; done; printf '\n'; } >>"${MOCK_LOG:-/dev/null}"
   # the heredoc below is the script's stdin: the helper's own stdin is kept in a file first
   [[ "$marker" != benchbar-share-harden ]] || cat >"${MOCK_STATE:?}/stdin-share-harden"
+  [[ "$marker" != benchbar-share-check ]] || cat >"${MOCK_STATE:?}/stdin-share-check"
   exec python3 - "$marker" "$@" <<'PY'
 import json, os, sys
 marker, args = sys.argv[1], sys.argv[2:]
@@ -97,6 +100,14 @@ if marker == "benchbar-share-users":
         print("BENCHBAR-RESULT " + "\x1ftruncated\x1f" + ("1" if os.environ.get("MOCK_SHARE_USERS_TRUNCATED") else "0"))
         for u in out:
             print("BENCHBAR-RESULT " + "\x1f".join([u["name"], u["full_name"], "1" if u["enabled"] else "0", u["user_type"], "|".join(u["roles"]), "|".join(u["code_capable_roles"])]))
+    sys.exit(0)
+if marker == "benchbar-share-check":
+    try:
+        rows = [l.rstrip("\n") for l in open(os.path.join(os.environ["MOCK_STATE"], "share_check")) if l.strip()]
+    except FileNotFoundError:
+        rows = ["flag\tsignup_disabled\t1", "flag\tadmin_default\t0", "count\tapi_keys\t0", "count\tapi_secrets\t0", "count\toauth_rows\t0", "done"]
+    for r in rows:
+        print("BENCHBAR-RESULT " + r.replace("\t", "\x1f"))
     sys.exit(0)
 if marker == "benchbar-share-harden":
     if os.environ.get("MOCK_SHARE_HARDEN_REFUSE"):

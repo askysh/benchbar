@@ -1,8 +1,8 @@
-"""Runs the real Python of benchbar's share helpers (users, harden) under a
+"""Runs the real Python of benchbar's share helpers (users, harden, check) under a
 stand-in frappe whose database applies %-style parameters the way pymysql
 does, so a format mistake in a query raises here and not on a real site.
 
-usage: helpers_stub.py USERS_SNIPPET_FILE HARDEN_SNIPPET_FILE
+usage: helpers_stub.py USERS_SNIPPET_FILE HARDEN_SNIPPET_FILE CHECK_SNIPPET_FILE
 """
 import io
 import json
@@ -78,11 +78,23 @@ class Scenario:
         self.users = users
         self.profiles_kept = profiles_kept
         self.missing_tables = set(missing_tables)
-        self.single = {"default_role": "Customer"}
+        self.single = {"default_role": "Customer", "disable_signup": 1}
         self.profile_cut = False
         self.db = None
+        # the check helper's inputs: Administrator's stored hash, and the counts of what the harden step clears
+        self.auth_hash = "hash:a-long-random-password"
+        self.api_keys = self.api_secrets = self.oauth = None
 
     def answer(self, q, as_dict):
+        if "from `__Auth` where doctype = 'User' and name = 'Administrator'" in q:
+            return [[self.auth_hash]] if self.auth_hash else []
+        if "select count(*) from `tabUser` where ifnull(api_key" in q and self.api_keys is not None:
+            return [[self.api_keys]]
+        if "select count(*) from `__Auth`" in q and self.api_secrets is not None:
+            return [[self.api_secrets]]
+        if "select count(*) from `tabOAuth" in q or "select count(*) from `tabToken Cache`" in q:
+            if self.oauth is not None:
+                return [[self.oauth]]
         if "from `tabDocPerm`" in q:
             return [{"parent": "Server Script", "role": "Script Dev", "write": 1, "create": 0, "submit": 0}]
         if "from `tabCustom DocPerm`" in q:
@@ -120,6 +132,13 @@ def run(snippet, argv, scenario, stdin=""):
     frappe.init = frappe.connect = frappe.destroy = frappe.clear_cache = lambda *a, **k: None
     password = types.ModuleType("frappe.utils.password")
     password.update_password = lambda *a, **k: None
+
+    def verify(candidate, stored):
+        if stored == "garbage":
+            raise ValueError("hash not identified")
+        return stored == "hash:" + candidate
+
+    password.passlibctx = types.SimpleNamespace(verify=verify)
     saved = dict(sys.modules), sys.argv, sys.stdin, sys.stdout
     sys.modules.update({"frappe": frappe, "frappe.utils": types.ModuleType("frappe.utils"), "frappe.utils.password": password})
     sys.argv = ["-c"] + argv
@@ -149,6 +168,7 @@ def user(name, roles, kind="System User"):
 def main():
     users_snippet = open(sys.argv[1]).read()
     harden_snippet = open(sys.argv[2]).read()
+    check_snippet = open(sys.argv[3]).read()
     base = [user("Administrator", []), user("u@x.com", ["System Manager", "Script Dev", "Sales User"]), user("web@x.com", ["Customer"], "Website User")]
 
     for mode in ("json", "rows", "classes"):
@@ -189,6 +209,56 @@ def main():
     # a bench without the optional tables
     code, out, log = run(harden_snippet, ["m", "share.localhost"], Scenario(seat, missing_tables=("User Role Profile", "Social Login Key", "Token Cache")), "u@x.com\n")
     assert code == 0, (out, log)
+
+    # check: read only, rows of kind, name, value; the admin test says yes or no and nothing else
+    def rows(out):
+        return [tuple(r.split("\x1f")) for r in results(out)]
+
+    code, out, log = run(check_snippet, ["m", "share.localhost"], Scenario(seat), "u@x.com\n")
+    got = rows(out)
+    assert code == 0 and got[-1] == ("done",), (code, out)
+    assert ("flag", "signup_disabled", "1") in got and ("flag", "admin_default", "0") in got, got
+    assert ("seat", "u@x.com", "role", "Script Dev") in got and ("seat", "u@x.com", "role", "System Manager") in got, got
+    assert not any(r[:3] == ("seat", "u@x.com", "role") and r[3] == "Sales User" for r in got), got
+    assert any(r[:2] == ("count", "oauth_rows") for r in got), got
+    assert not any(q.startswith(("update", "delete", "truncate", "single", "COMMIT")) for q in log), log
+    # a well-known default is found, and neither the candidates nor the hash are printed
+    scenario = Scenario(seat)
+    scenario.auth_hash = "hash:admin123"
+    code, out, log = run(check_snippet, ["m", "share.localhost"], scenario, "u@x.com\n")
+    assert ("flag", "admin_default", "1") in rows(out), out
+    for secret in ("admin123", "hash:", "changeme", "frappe", "erpnext"):
+        assert secret not in out, (secret, out)
+    scenario = Scenario(seat)
+    scenario.auth_hash = "garbage"
+    code, out, log = run(check_snippet, ["m", "share.localhost"], scenario, "u@x.com\n")
+    assert code == 0 and ("flag", "admin_default", "0") in rows(out), out
+    scenario = Scenario(seat)
+    scenario.auth_hash = None
+    scenario.single["disable_signup"] = 0
+    code, out, log = run(check_snippet, ["m", "share.localhost"], scenario, "u@x.com\n")
+    assert ("flag", "admin_default", "0") in rows(out) and ("flag", "signup_disabled", "0") in rows(out), out
+    # seats that are missing, disabled or not System Users, and a role profile that hands roles back
+    odd = [user("off@x.com", [], "System User"), user("web@x.com", ["Customer"], "Website User")]
+    odd[0]["enabled"] = 0
+    code, out, log = run(check_snippet, ["m", "share.localhost"], Scenario(odd), "off@x.com\nweb@x.com\ngone@x.com\n")
+    got = rows(out)
+    assert ("seat", "off@x.com", "disabled") in got and ("seat", "web@x.com", "not_system_user") in got and ("seat", "gone@x.com", "missing") in got, got
+    code, out, log = run(check_snippet, ["m", "share.localhost"], Scenario(seat, profiles_kept=True), "u@x.com\n")
+    assert ("seat", "u@x.com", "role_profile") in rows(out), out
+    # the counts, with and without the optional tables
+    scenario = Scenario(seat, missing_tables=("OAuth Bearer Token", "OAuth Authorization Code", "Token Cache"))
+    scenario.api_keys, scenario.api_secrets = 2, 1
+    code, out, log = run(check_snippet, ["m", "share.localhost"], scenario, "u@x.com\n")
+    got = rows(out)
+    assert ("count", "api_keys", "2") in got and ("count", "api_secrets", "1") in got and ("count", "oauth_rows", "0") in got, got
+    scenario = Scenario(seat)
+    scenario.oauth = 4
+    code, out, log = run(check_snippet, ["m", "share.localhost"], scenario, "u@x.com\n")
+    assert ("count", "oauth_rows", "12") in rows(out), rows(out)
+    # no seats: nothing about seats is asked
+    code, out, log = run(check_snippet, ["m", "share.localhost"], Scenario(seat), "")
+    assert code == 0 and not any(r[0] == "seat" for r in rows(out)) and not any("tabHas Role" in q for q in log), (out, log)
     print("helpers_stub: ok")
 
 

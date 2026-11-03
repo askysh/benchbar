@@ -135,6 +135,8 @@ SCRIPT_DIR="$(fl_resolve_self)"
 . "${SCRIPT_DIR}/lib/frappe-local/share-site.sh"
 # shellcheck source=lib/frappe-local/share.sh
 . "${SCRIPT_DIR}/lib/frappe-local/share.sh"
+# shellcheck source=lib/frappe-local/share-preflight.sh
+. "${SCRIPT_DIR}/lib/frappe-local/share-preflight.sh"
 # shellcheck source=lib/frappe-local/apps.sh
 . "${SCRIPT_DIR}/lib/frappe-local/apps.sh"
 # shellcheck source=lib/frappe-local/freshness.sh
@@ -281,6 +283,9 @@ Daily
                       the copy holds the site's real data. --users A,B, --from STAMP|latest,
                       --backup-now, --refresh, --regenerate-identity, --dry-run, --json.
   share users         Who can take a seat in a shared copy, and which roles each would lose there.
+  share preflight     The checks that say whether this Mac is safe to share the copy: the pf block
+                      probed from the LAN address, the share web process, the firewall, the copy and
+                      its seats. --static or --critical for half, --quiet, --json; exit 1 on a fail.
   mariadb-password    Print the MariaDB root password (Keychain; a 0600 file on Linux; asks first).
   mcp                 Model Context Protocol server on stdio for coding agents
                       (claude mcp add benchbar -- benchbar mcp). Read tools, up, down, restart,
@@ -496,7 +501,7 @@ fl_json_mode_resolve() {
     # on and off stream like site default; status only reads
     "site open-as") if [[ "${ARGS[1]:-}" == "status" ]]; then FL_JSON_MODE=doc; else FL_JSON_MODE=stream; fi ;;
     "share setup") FL_JSON_MODE=stream ;;
-    "share users") FL_JSON_MODE=doc ;;
+    "share users"|"share preflight") FL_JSON_MODE=doc ;;
   esac
 }
 # status, list and the other readers are polled: they skip the table unless
