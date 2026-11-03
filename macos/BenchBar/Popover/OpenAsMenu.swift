@@ -84,6 +84,24 @@ nonisolated enum OpenAsMenuModel {
         return user
     }
 
+    /// The popover key of each item that has one, by item id: ⇧⌘O Switch
+    /// Back, ⌘0 Administrator, ⌘1 to ⌘9 the pins in menu order.
+    static func shortcuts(_ items: [Item]) -> [String: OpenAsShortcut] {
+        var keys: [String: OpenAsShortcut] = [:]
+        var pinDigit = 0
+        for item in items {
+            switch item {
+            case .switchBack: keys[item.id] = .switchBack
+            case .administrator: keys[item.id] = .openAs(0)
+            case .pin:
+                pinDigit += 1
+                keys[item.id] = .openAs(pinDigit)
+            case .divider, .pinHint, .findUser: break
+            }
+        }
+        return keys
+    }
+
     /// `recents` is newest first: the first is who the browser is now, the
     /// second is where Switch Back goes.
     static func items(pins: [PinnedUser], recents: [RecentUser]) -> [Item] {
@@ -113,6 +131,8 @@ struct OpenAsMenu: View {
     let bench: BenchModel
     let row: SiteRow
     var compact = false
+    /// The popover's ⌘0 to ⌘9 and ⇧⌘O act on the default site only.
+    var shortcuts = false
     let findUser: () -> Void
 
     var body: some View {
@@ -136,17 +156,19 @@ struct OpenAsMenu: View {
         let switching = openAs.isSwitching(bench: bench.path, site: row.name)
         let items = OpenAsMenuModel.items(pins: openAs.pins(bench: bench.path, site: row.name),
                                           recents: openAs.recents(bench: bench.path, site: row.name))
+        let keys = OpenAsMenuModel.shortcuts(items)
         return Menu {
             ForEach(items) { item in
                 switch item {
                 case .switchBack(let user, let title):
-                    Button(title) { go(user, switching: switching) }
+                    Button(title) { go(user, switching: switching) }.shortcut(keys[item.id], if: shortcuts)
                 case .divider:
                     Divider()
                 case .pin(let user, let title, let fullName):
-                    Button(title) { go(user, fullName: fullName, switching: switching) }
+                    Button(title) { go(user, fullName: fullName, switching: switching) }.shortcut(keys[item.id], if: shortcuts)
                 case .administrator:
                     Button(OpenAsStore.administrator) { go(OpenAsStore.administrator, switching: switching) }
+                        .shortcut(keys[item.id], if: shortcuts)
                 case .pinHint:
                     Text(OpenAsMenuModel.noPinsHint)
                 case .findUser:
@@ -170,10 +192,36 @@ struct OpenAsMenu: View {
         .fixedSize()
         .disabled(switching)
         .help("Open \(row.name) as another user")
+        .background { if shortcuts { shortcutButtons(items, keys: keys, switching: switching) } }
+    }
+
+    /// The same shortcuts as invisible buttons, so they act while the menu is closed.
+    private func shortcutButtons(_ items: [OpenAsMenuModel.Item], keys: [String: OpenAsShortcut], switching: Bool) -> some View {
+        ZStack {
+            ForEach(items) { item in
+                if let key = keys[item.id] {
+                    switch item {
+                    case .switchBack(let user, _): Button("") { go(user, switching: switching) }.shortcut(key)
+                    case .pin(let user, _, let fullName): Button("") { go(user, fullName: fullName, switching: switching) }.shortcut(key)
+                    case .administrator: Button("") { go(OpenAsStore.administrator, switching: switching) }.shortcut(key)
+                    case .divider, .pinHint, .findUser: EmptyView()
+                    }
+                }
+            }
+        }
+        .opacity(0)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
     private func go(_ user: String, fullName: String? = nil, switching: Bool) {
         guard !switching else { return }
         Task { await store.switchUser(user, fullName: fullName, on: bench, row: row) }
+    }
+}
+
+private extension View {
+    @ViewBuilder func shortcut(_ shortcut: OpenAsShortcut?, if enabled: Bool) -> some View {
+        if enabled, let shortcut { self.shortcut(shortcut) } else { self }
     }
 }

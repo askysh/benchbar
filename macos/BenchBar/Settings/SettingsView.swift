@@ -204,6 +204,7 @@ struct SettingsView: View {
         (BenchShortcut.folder.action, BenchShortcut.folder.display),
         (BenchShortcut.health.action, BenchShortcut.health.display),
         (BenchShortcut.manage.action, BenchShortcut.manage.display),
+        ("Open as Administrator, a pinned user, or back", OpenAsShortcut.summary),
     ]
 
     // MARK: general

@@ -372,6 +372,16 @@ struct OpenAsTests {
         ])
     }
 
+    @Test func thePopoverKeysFollowTheMenuOrder() {
+        let pins = [PinnedUser(user: "rahul@x.com", label: "CS"), PinnedUser(user: "priya@x.com", label: nil)]
+        let recents = [RecentUser(user: "rahul@x.com", fullName: nil), RecentUser(user: "priya@x.com", fullName: nil)]
+        let keys = OpenAsMenuModel.shortcuts(OpenAsMenuModel.items(pins: pins, recents: recents))
+        #expect(keys == ["switch-back": .switchBack, "pin-rahul@x.com": .openAs(1), "pin-priya@x.com": .openAs(2),
+                         "administrator": .openAs(0)])
+        #expect(OpenAsShortcut.switchBack.display == "⇧⌘O")
+        #expect(OpenAsShortcut.openAs(2).display == "⌘2")
+    }
+
     @Test func withNoPinsTheMenuSaysHowToPin() {
         #expect(OpenAsMenuModel.noPinsHint == "Pin people from Find User… to switch to them here")
         let items = OpenAsMenuModel.items(pins: [], recents: [])
