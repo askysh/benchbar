@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented here.
 
+## Unreleased
+
+### Mac app
+
+- Open as has keyboard shortcuts. In the popover, ⌘0 opens the default
+  site as Administrator, ⌘1 to ⌘9 as a pinned user, and ⇧⌘O switches back.
+  Quick Switch (⌃⌥U) lists the same users from any app; it is off until
+  you turn it on in Settings, which also says when another app holds the key.
+
 ## 0.8.1 - 2026-11-01
 
 BenchBar for Windows is now a beta. The tray takes a new PC from no WSL to

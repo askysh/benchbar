@@ -58,6 +58,7 @@ struct SettingsView: View {
                         if !Updater.isAvailable { updatesSection }
                         cliSection
                         editorSection
+                        quickSwitchSection
                         shortcutsSection.id(Self.shortcutsID)
                     case .menuBar:
                         previewSection
@@ -237,6 +238,22 @@ struct SettingsView: View {
         } footer: {
             Text("Your benches run as their own login agents, so they keep running when BenchBar is closed.")
                 .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private var quickSwitchSection: some View {
+        Section {
+            Toggle(isOn: $settings.quickSwitchEnabled) {
+                Text("Quick Switch from any app: ⌃⌥U")
+                Text("Lists the pinned users of the sites where Open as is on: ↑ ↓ then ↩ switches, ⇥ moves to the next site, esc closes. It needs no Accessibility permission.")
+            }
+            if settings.quickSwitchEnabled && settings.quickSwitchConflict {
+                Label("⌃⌥U is used by another app, so Quick Switch is off. Turn it off and on again to retry.",
+                      systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.red)
+            }
+        } header: {
+            Text("Quick Switch")
         }
     }
 

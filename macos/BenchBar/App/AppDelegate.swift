@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var updater: Updater?
     private var about: AboutModel!
     private var updateOffer: UpdateOffer!
+    private var quickSwitch: QuickSwitchController!
     /// benchbar:// links that arrived before the bench list was loaded
     /// (a link can launch the app).
     private var pendingURLs: [URL] = []
@@ -135,6 +136,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updateOffer.checkWithSparkle = { [weak self] in self?.updater?.checkForUpdates() }
         NSApp.mainMenu = makeMainMenu()
         setUpClicks()
+
+        quickSwitch = QuickSwitchController(store: store, settings: settings)
+        settings.onQuickSwitchChange = { [weak self] in self?.quickSwitch.sync() }
+        quickSwitch.sync()
 
         Task {
             await store.start()
