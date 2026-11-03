@@ -81,6 +81,9 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: com.akashmishra.benchbar
             CFBundleURLSchemes: [benchbar]
+        # guest side of rooms: finding rooms on this Wi-Fi (Bonjour) and joining one
+        NSLocalNetworkUsageDescription: "BenchBar looks for rooms your colleagues share on this Wi-Fi and connects to the ones you join."
+        NSBonjourServices: ["_benchbar-share._tcp"]
     entitlements:
       path: BenchBar/Resources/BenchBar.entitlements
       properties:
