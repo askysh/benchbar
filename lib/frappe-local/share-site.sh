@@ -380,7 +380,7 @@ fl_share_pick_stamp_v() {
 # existing one, which is backed up first). Its steps hang under the step that
 # calls this; SH_RESTORE_TOKEN is the token of the plan it ran.
 fl_share_copy_plan_apply() {
-  local err code=0
+  local err code=0 dir
   SR_TARGET="$FL_SHARE_SITE"; SR_FROM="$2"; SR_FROM_SITE="$1"; SR_WITH_FILES="$3"; SR_APPLY=1
   SR_NEW=1; [[ -f "${FL_BENCH_DIR}/sites/${FL_SHARE_SITE}/site_config.json" ]] && SR_NEW=0
   SR_STEP_PARENT=share_site
@@ -390,6 +390,11 @@ fl_share_copy_plan_apply() {
     return 1
   fi
   SH_RESTORE_TOKEN="$SR_TOKEN"
+  # from here the copy is raw data until harden finishes: share.json goes aside, and only the config step
+  # makes it again (a plan refused above leaves the old copy and its share.json as they were)
+  dir="$(fl_share_dir)"
+  if [[ -f "${dir}/share.json" ]]; then mv -f "${dir}/share.json" "${dir}/share.json.prev" || return 1; fi
+  SH_RESTORE_BEGAN=1
   fl_steps_push
   fl_srestore_execute || code=$?
   fl_steps_pop

@@ -78,7 +78,17 @@ certificate). `--users` picks the seats (enabled System Users).
 change the seats. Refused under `BENCHBAR_NONINTERACTIVE`, `--for-agent`
 and `mcp`, and without a terminal unless the app passes `BENCHBAR_SUDO=gui`.
 
-Exit codes: 0; 1 on a refusal or a failed step.
+Making the copy (the first setup, or `--refresh`) restores it as MariaDB's
+root user, so it needs the root password: from the Keychain, from
+`MARIADB_ROOT_PASSWORD`, or typed at a terminal (setup asks for it before
+anything changes, and keeps it in the Keychain). Without a terminal, with
+`--yes` or `--json`, and with no password known, setup and its dry run stop
+before any change with exit 2, naming `MARIADB_ROOT_PASSWORD`. A MariaDB
+root that logs in only over the unix socket, with no password, cannot make
+the copy.
+
+Exit codes: 0; 1 on a refusal or a failed step; 2 when the MariaDB root
+password is needed and unknown.
 
 ```bash
 benchbar share setup --site mysite.localhost --users priya@example.com,mgr@example.com --acknowledge-data

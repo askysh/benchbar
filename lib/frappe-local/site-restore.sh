@@ -166,7 +166,8 @@ fl_srestore_plan() {
   # the database server and its password, judged without trying them
   if [[ "${#SR_ERRORS[@]}" == "0" || -n "$FL_PULL_DB" ]]; then
     fl_port_listening 3306 || fl_srestore_err "MariaDB is not running (nothing listens on 3306); start it: $(fl_pull_mariadb_start_hint)"
-    if ! fl_mariadb_root_password_known; then
+    # FL_MARIADB_ROOT_PW: resolved earlier in this run (share setup asks before its plan)
+    if [[ -z "$FL_MARIADB_ROOT_PW" ]] && ! fl_mariadb_root_password_known; then
       SR_NEEDS='"MARIADB_ROOT_PASSWORD"'
       # a run in a terminal asks for it; any other run cannot
       [[ -t 0 && "${FL_ASSUME_YES:-0}" != "1" && "${OPT_JSON:-0}" != "1" && "$SR_APPLY" != "1" ]] \
@@ -482,7 +483,7 @@ fl_srestore_run() {
 fl_srestore_execute() {
   local code=0
   # the password is resolved (and tried against the server) before anything changes
-  fl_mariadb_root_password_resolve || fl_die "The MariaDB root password is needed for the restore." "Re-run with: MARIADB_ROOT_PASSWORD='...' benchbar site restore ..." 2
+  [[ -n "$FL_MARIADB_ROOT_PW" && "${FL_MARIADB_ROOT_PW_SOURCE:-}" != dry-run ]] || fl_mariadb_root_password_resolve || fl_die "The MariaDB root password is needed for the restore." "Re-run with: MARIADB_ROOT_PASSWORD='...' benchbar site restore ..." 2
   # nothing below may ask a question: frappe's downgrade prompt would hang a terminal
   exec 0</dev/null
   fl_srestore_run || code=$?

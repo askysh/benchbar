@@ -523,6 +523,75 @@ printf '%s' "$(bash -c '. "$1/lib/frappe-local/share-site.sh"; printf "%s" "$FL_
 assert_eq "helpers_stub: ok" "$(python3 "$ROOT/tests/share/helpers_stub.py" "$TMP_DIR/users_snippet.py" "$TMP_DIR/harden_snippet.py" "$TMP_DIR/check_snippet.py" "$TMP_DIR/sessions_snippet.py" 2>&1)"
 assert_eq "1" "$(grep -c 'FL_SHARE_USER_CAP=' "$ROOT"/lib/frappe-local/share*.sh | awk -F: '{s += $2} END {print s}')" "(the users cap is defined once)"
 
+# ---------------------------------------------------------------- I2: the MariaDB root password comes first
+# pty_answer ANSWERS ARGS...: ARGS run on a terminal (a pty); ANSWERS has lines "PROMPT<TAB>REPLY", typed in
+# order as each prompt appears. The output in OUT, the exit code in CODE.
+pty_answer() {
+  set +e
+  OUT="$(python3 -c '
+import os, pty, select, sys
+answers = [l.rstrip("\n").split("\t", 1) for l in open(sys.argv[1]) if l.strip()]
+pid, fd = pty.fork()
+if pid == 0:
+    os.execvp(sys.argv[2], sys.argv[2:])
+seen = b""; out = b""
+while True:
+    if not select.select([fd], [], [], 120)[0]:
+        break
+    try:
+        d = os.read(fd, 4096)
+    except OSError:
+        break
+    if not d:
+        break
+    out += d; seen += d
+    while answers and answers[0][0].encode() in seen:
+        prompt, reply = answers.pop(0)
+        seen = seen[seen.index(prompt.encode()) + len(prompt):]
+        os.write(fd, (reply + "\n").encode())
+sys.stdout.write(out.decode("utf-8", "replace"))
+sys.exit(os.waitstatus_to_exitcode(os.waitpid(pid, 0)[1]))
+' "$@" 2>&1)"
+  CODE="$?"
+  set -e
+}
+jsetup --users "priya@example.com" --acknowledge-data --refresh --yes
+assert_eq "0" "$CODE" "$OUT$ERR"
+# no password anywhere: not in the Keychain, the secret file or the environment
+mv "$MOCK_STATE/keychain/benchbar-mariadb--root" "$TMP_DIR/keychain.saved"
+mv "$FL_STATE_DIR/secrets/mariadb-root" "$TMP_DIR/secret.saved"
+key_before="$(sha_of "$SHARE_DIR/host.key")"; json_before="$(sha_of "$SHARE_DIR/share.json")"
+backups_before="$(ls "$BENCH/sites/macdev/private/backups")"
+snap="$(snap_all)"; reset_calls
+# the app's way (no terminal, --yes --json) and its dry run: refused with exit 2, naming the password
+jsetup --users "priya@example.com" --acknowledge-data --refresh --yes --backup-now
+assert_eq "2" "$CODE" "$OUT$ERR"; assert_contains "$OUT$ERR" "MARIADB_ROOT_PASSWORD"
+assert_not_contains "$OUT$ERR" "may exist but is not hardened"
+jsetup --users "priya@example.com" --acknowledge-data --refresh --yes --dry-run
+assert_eq "2" "$CODE" "$OUT$ERR"; assert_contains "$OUT$ERR" "MARIADB_ROOT_PASSWORD"
+setup --users "priya@example.com" --acknowledge-data --refresh --yes --backup-now --bench-dir "$BENCH"
+assert_eq "2" "$CODE" "$OUT"; assert_contains "$OUT" "MARIADB_ROOT_PASSWORD"
+# nothing changed: the identity, share.json (not moved aside), no backup taken, nothing restored
+assert_eq "$snap" "$(snap_all)" "(a refusal for the password changes nothing)"
+assert_eq "$key_before" "$(sha_of "$SHARE_DIR/host.key")"; assert_eq "$json_before" "$(sha_of "$SHARE_DIR/share.json")"
+assert_no_file "$SHARE_DIR/share.json.prev"
+assert_eq "$backups_before" "$(ls "$BENCH/sites/macdev/private/backups")"
+assert_calls_not_contain 'backup|new-site|restore'
+# a copy that stays as it is needs no password
+setup --users "priya@example.com" --acknowledge-data --bench-dir "$BENCH" --dry-run
+assert_eq "0" "$CODE" "$OUT"
+# at a terminal the plan says it will ask, and the password typed there makes the copy (and is kept)
+printf '' >"$TMP_DIR/answers"
+pty_answer "$TMP_DIR/answers" "$FM" share setup --users "priya@example.com" --acknowledge-data --refresh --dry-run --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "asks for the MariaDB root password first"
+printf 'Replaces the copy\ty\nMariaDB root password:\trootpw\nconfirm MariaDB root password:\trootpw\n' >"$TMP_DIR/answers"
+pty_answer "$TMP_DIR/answers" "$FM" share setup --users "priya@example.com" --acknowledge-data --refresh --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "share.localhost is ready"
+assert_not_contains "$OUT" "rootpw" "(the typed password is never echoed)"
+assert_eq "rootpw" "$(cat "$MOCK_STATE/keychain/benchbar-mariadb--root")"
+assert_file "$SHARE_DIR/share.json"
+cp "$TMP_DIR/secret.saved" "$FL_STATE_DIR/secrets/mariadb-root"
+
 # a plain setup never inherits users or label from a stale share.json.prev
 rm -rf "$SHARE_DIR"; mkdir -p "$SHARE_DIR"; chmod 700 "$SHARE_DIR"
 printf '{\n  "allowed_users": ["stale@example.com"],\n  "room_label": "Stale"\n}\n' >"$SHARE_DIR/share.json.prev"

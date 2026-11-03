@@ -169,7 +169,7 @@ fl_cmd_share_users() {
 # ---------------------------------------------------------------- share setup
 
 # the state of one setup run, shared by its steps
-SH_SITE=""; SH_STAMP=""; SH_BACKUP_NOW=0; SH_REFRESH=0; SH_REGEN=0; SH_COPY_EXISTS=0; SH_COPY_BUILT=0
+SH_SITE=""; SH_STAMP=""; SH_BACKUP_NOW=0; SH_REFRESH=0; SH_REGEN=0; SH_COPY_EXISTS=0; SH_COPY_BUILT=0; SH_RESTORE_BEGAN=0
 SH_USERS=(); SH_SEAT_NAMES=(); SH_SEAT_ROLES=()
 SH_LABEL_JSON=""; SH_WEB_PORT=""; SH_APPS_JSON="{}"; SH_HARDEN_JSON=""; SH_RESTORE_TOKEN=""; SH_WITH_FILES=0
 SH_PRIOR_USERS=""; SH_FINGERPRINT=""
@@ -228,7 +228,7 @@ fl_share_json_array_v() {
 fl_cmd_share_setup() {
   local site="$FL_SITE" from=latest backup_now=0 users_arg="" refresh=0 regen=0 ack=0 name="" name_given=0 u
   local dir src_dir set size_bytes with_files="false" age="null" need_bytes size_gb est_min avail_kb free_gb
-  local rows classes_text classes_json users_json steps_json prior_users_raw prior_users_json existing_key=0 i id code
+  local rows classes_text classes_json users_json steps_json prior_users_raw prior_users_json existing_key=0 i id code pw_ask=0 box=()
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
       --from) [[ -n "${2:-}" ]] || fl_die "--from needs a backup stamp or latest." "Example: --from latest"; from="$2"; shift 2 ;;
@@ -327,18 +327,29 @@ fl_cmd_share_setup() {
   [[ "$backup_now" != 1 ]] || age=0
 
   steps_json='["identity","backup","share_site","harden","baseline","config","exclude"]'
+  # the copy is restored as MariaDB's root user: its password is known, or asked for at this terminal
+  # before anything changes; with nothing to ask it in, the plan and the dry run are refused (exit 2)
+  if [[ "$SH_COPY_EXISTS" == 0 || "$refresh" == 1 ]] && [[ -z "$FL_MARIADB_ROOT_PW" ]] && ! fl_mariadb_root_password_known; then
+    if [[ -t 0 && "${FL_ASSUME_YES:-0}" != 1 && "${OPT_JSON:-0}" != 1 ]]; then
+      pw_ask=1
+    else
+      fl_need MARIADB_ROOT_PASSWORD "the copy is restored as MariaDB's root user, which must log in with a password: put it in the environment, or run share setup in a terminal to type it"
+      fl_need_check always
+    fi
+  fi
   if [[ "${OPT_JSON:-0}" == 1 ]]; then
     fl_doc_emit 0 "$(printf '{"schema_version":%d,"cli_version":"%s","bench":%s,"site":%s,"share_site":%s,"dry_run":%s,"backup_now":%s,"source_stamp":%s,"refresh":%s,"regenerate_identity":%s,"users":%s,"size_gb":%s,"est_minutes":%s,"source_age_s":%s,"data_classes":%s,"steps":%s}' \
       "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$(fl_json_str "$FL_BENCH_DIR")" "$(fl_json_str "$site")" "$(fl_json_str "$FL_SHARE_SITE")" \
       "$(fl_json_bool "${FL_DRY_RUN:-0}")" "$(fl_json_bool "$backup_now")" "$(fl_json_str "$SH_STAMP")" "$(fl_json_bool "$refresh")" "$(fl_json_bool "$regen")" \
       "$users_json" "$size_gb" "$est_min" "$age" "$classes_json" "$steps_json")" plan
   fi
-  fl_box "Share setup" \
-    "site     ${site} -> ${FL_SHARE_SITE}$([[ "$SH_COPY_EXISTS" == 1 && "$refresh" == 1 ]] && printf ' (replaced)')" \
-    "from     $([[ "$backup_now" == 1 ]] && printf 'a backup taken now' || printf '%s (%s old)' "$SH_STAMP" "$(fl_fmt_secs "$age")")" \
-    "needs    about ${size_gb} GB free, about ${est_min} min" \
-    "people   ${SH_USERS[*]}" \
-    "data     ${classes_text:-none counted}"
+  box=("site     ${site} -> ${FL_SHARE_SITE}$([[ "$SH_COPY_EXISTS" == 1 && "$refresh" == 1 ]] && printf ' (replaced)')"
+    "from     $([[ "$backup_now" == 1 ]] && printf 'a backup taken now' || printf '%s (%s old)' "$SH_STAMP" "$(fl_fmt_secs "$age")")"
+    "needs    about ${size_gb} GB free, about ${est_min} min"
+    "people   ${SH_USERS[*]}"
+    "data     ${classes_text:-none counted}")
+  [[ "$pw_ask" != 1 ]] || box+=("root     asks for the MariaDB root password first")
+  fl_box "Share setup" "${box[@]}"
 
   if [[ "${FL_DRY_RUN:-0}" == 1 ]]; then
     fl_info "dry-run: nothing was backed up, copied or written"
@@ -369,6 +380,11 @@ fl_cmd_share_setup() {
     fl_confirm "Replace the host identity?" || fl_die "Nothing was changed." "Run again and answer yes, or pass --yes."
   fi
 
+  if [[ "$pw_ask" == 1 ]]; then
+    fl_mariadb_root_password_resolve || fl_die "The MariaDB root password is needed to make the copy; nothing was changed." \
+      "Run it again and type it, or put it in the environment: MARIADB_ROOT_PASSWORD='...'. Sharing needs a MariaDB root that logs in with a password." 2
+  fi
+
   fl_steps_define "Create the host identity" "Take a backup of ${site}" "Make the copy ${FL_SHARE_SITE}" "Harden and demote the copy" \
     "Record the apps at copy time" "Write share.json" "Keep the share out of Time Machine"
   fl_steps_ids identity backup share_site harden baseline config exclude
@@ -381,7 +397,7 @@ fl_cmd_share_setup() {
     "fl_share_step_${id}" || code=$?
     if [[ "$code" != 0 ]]; then
       fl_step_end failed
-      [[ "$id" != harden && "$id" != share_site ]] || fl_warn "${FL_SHARE_SITE} may exist but is not hardened: nothing can share it until share setup finishes."
+      [[ "$id" != harden && ( "$id" != share_site || "$SH_RESTORE_BEGAN" != 1 ) ]] || fl_warn "${FL_SHARE_SITE} may exist but is not hardened: nothing can share it until share setup finishes."
       fl_die "share setup stopped at: ${FL_STEP_LABELS[$i]}." "Fix what is listed above, then run it again."
     fi
     fl_step_end "$FL_STEP_RESULT"
@@ -459,11 +475,7 @@ fl_share_step_backup() {
 }
 
 fl_share_step_share_site() {
-  local dir
   if [[ "$SH_COPY_EXISTS" == 1 && "$SH_REFRESH" != 1 ]]; then FL_STEP_RESULT=unchanged; return 0; fi
-  # from here the copy is raw data until harden finishes: share.json goes aside, and only the config step makes it again
-  dir="$(fl_share_dir)"
-  if [[ -f "${dir}/share.json" ]]; then mv -f "${dir}/share.json" "${dir}/share.json.prev" || return 1; fi
   fl_share_copy_plan_apply "$SH_SITE" "$SH_STAMP" "$SH_WITH_FILES" || return 1
   SH_COPY_BUILT=1
 }

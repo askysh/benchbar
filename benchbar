@@ -286,7 +286,8 @@ Daily
   users               Enabled users of a site for open --as (--site S, --search TEXT, --limit N).
   share setup         Make a hardened copy of a site (share.localhost) and the host identity for
                       sharing it on your network. Needs a person at a terminal and --acknowledge-data:
-                      the copy holds the site's real data. --users A,B, --from STAMP|latest,
+                      the copy holds the site's real data, and the MariaDB root password (Keychain,
+                      MARIADB_ROOT_PASSWORD or typed). --users A,B, --name LABEL, --from STAMP|latest,
                       --backup-now, --refresh, --regenerate-identity, --dry-run, --json.
   share users         Who can take a seat in a shared copy, and which roles each would lose there.
   share preflight     The checks that say whether this Mac is safe to share the copy: the pf block
