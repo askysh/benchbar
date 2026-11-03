@@ -524,30 +524,51 @@ assert_eq "helpers_stub: ok" "$(python3 "$ROOT/tests/share/helpers_stub.py" "$TM
 assert_eq "1" "$(grep -c 'FL_SHARE_USER_CAP=' "$ROOT"/lib/frappe-local/share*.sh | awk -F: '{s += $2} END {print s}')" "(the users cap is defined once)"
 
 # ---------------------------------------------------------------- I2: the MariaDB root password comes first
-# pty_answer ANSWERS ARGS...: ARGS run on a terminal (a pty); ANSWERS has lines "PROMPT<TAB>REPLY", typed in
-# order as each prompt appears. The output in OUT, the exit code in CODE.
+# pty_answer ANSWERS ARGS...: ARGS run on a terminal (a pty); ANSWERS has lines "PROMPT<TAB>REPLY[<TAB>secret]",
+# typed in order as each prompt appears. The output in OUT, the exit code in CODE.
+# A secret reply waits until the terminal's echo is off as well. bash's read -s prints its prompt first and
+# turns echo off only after that prompt has drained to us (tcsetattr TCSADRAIN), so a reply written the moment
+# the prompt is read can reach the line discipline while echo is still on and be echoed: a slow runner lost
+# that race (CI shard 3/4, run 41625118960). A person never types that fast. The pty master reads the slave's
+# termios, and output is drained meanwhile, or bash's tcsetattr would wait on us for ever.
 pty_answer() {
   set +e
   OUT="$(python3 -c '
-import os, pty, select, sys
-answers = [l.rstrip("\n").split("\t", 1) for l in open(sys.argv[1]) if l.strip()]
+import os, pty, select, sys, termios, time
+answers = [l.rstrip("\n").split("\t") for l in open(sys.argv[1]) if l.strip()]
 pid, fd = pty.fork()
 if pid == 0:
     os.execvp(sys.argv[2], sys.argv[2:])
-seen = b""; out = b""
-while True:
-    if not select.select([fd], [], [], 120)[0]:
-        break
+seen = b""; out = b""; eof = False
+def pump(timeout):
+    global out, seen, eof
+    if not select.select([fd], [], [], timeout)[0]:
+        return False
     try:
         d = os.read(fd, 4096)
     except OSError:
-        break
+        d = b""
     if not d:
-        break
+        eof = True
+        return False
     out += d; seen += d
+    return True
+def echo_on():
+    try:
+        return bool(termios.tcgetattr(fd)[3] & termios.ECHO)
+    except termios.error:
+        return False
+while not eof:
+    if not pump(120) and not eof:
+        break
     while answers and answers[0][0].encode() in seen:
-        prompt, reply = answers.pop(0)
+        prompt, reply = answers[0][0], answers[0][1]
+        secret = len(answers[0]) > 2 and answers[0][2] == "secret"
+        answers.pop(0)
         seen = seen[seen.index(prompt.encode()) + len(prompt):]
+        deadline = time.monotonic() + 60
+        while secret and not eof and echo_on() and time.monotonic() < deadline:
+            pump(0.05)
         os.write(fd, (reply + "\n").encode())
 sys.stdout.write(out.decode("utf-8", "replace"))
 sys.exit(os.waitstatus_to_exitcode(os.waitpid(pid, 0)[1]))
@@ -584,7 +605,13 @@ assert_eq "0" "$CODE" "$OUT"
 printf '' >"$TMP_DIR/answers"
 pty_answer "$TMP_DIR/answers" "$FM" share setup --users "priya@example.com" --acknowledge-data --refresh --dry-run --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "asks for the MariaDB root password first"
-printf 'Replaces the copy\ty\nMariaDB root password:\trootpw\nconfirm MariaDB root password:\trootpw\n' >"$TMP_DIR/answers"
+# a slow runner, simulated: echo goes off a second after the prompt; the secret reply waits for it
+printf 'Secret:\tslowpw\tsecret\n' >"$TMP_DIR/answers"
+# shellcheck disable=SC2016  # the child shell expands it
+pty_answer "$TMP_DIR/answers" /bin/bash -c 'printf "  Secret: " >&2; sleep 1; read -r -s x; printf "\ngot=%s\n" "${#x}"'
+assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "got=6"
+assert_not_contains "$OUT" "slowpw" "(a secret reply is typed only once echo is off)"
+printf 'Replaces the copy\ty\nMariaDB root password:\trootpw\tsecret\nconfirm MariaDB root password:\trootpw\tsecret\n' >"$TMP_DIR/answers"
 pty_answer "$TMP_DIR/answers" "$FM" share setup --users "priya@example.com" --acknowledge-data --refresh --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "share.localhost is ready"
 assert_not_contains "$OUT" "rootpw" "(the typed password is never echoed)"
