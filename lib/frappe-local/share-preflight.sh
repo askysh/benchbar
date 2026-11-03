@@ -67,7 +67,7 @@ setTimeout(() => process.exit(0), 20000);
 
 # ---------------------------------------------------------------- results
 
-SP_ID=(); SP_CLASS=(); SP_STATUS=(); SP_MSG=(); SP_FIX=(); SP_ACT=()
+SP_ID=(); SP_CLASS=(); SP_STATUS=(); SP_MSG=(); SP_FIX=(); SP_ACT=(); SP_EXTRA=(); SP_NOTE=()
 SP_LAN_IP=""; SP_LAN_IFACE=""; SP_LAN_IP6=""; SP_WEB_PORT=""
 SP_SEAT_USERS=(); SP_SEAT_NAMES=()
 SP_NODE_REAL=""; SP_COPY_READY=0
@@ -77,6 +77,14 @@ SP_HTTP_CODE=""; SP_HTTP_TYPE=""; SP_HTTP_WERKZEUG=0; SP_HTTP_EXC=0
 # fl_sp_add ID CLASS STATUS MESSAGE [FIX [FIX_ACTION]]
 fl_sp_add() {
   SP_ID+=("$1"); SP_CLASS+=("$2"); SP_STATUS+=("$3"); SP_MSG+=("$4"); SP_FIX+=("${5:-}"); SP_ACT+=("${6:-none}")
+  SP_EXTRA+=(""); SP_NOTE+=("")
+}
+
+# fl_sp_detail JSON_MEMBER TEXT: more about the check just added, kept out of its message (which the app
+# shows as written): JSON_MEMBER joins the check's object, TEXT follows the message in the terminal
+fl_sp_detail() {
+  local last=$((${#SP_ID[@]} - 1))
+  SP_EXTRA[last]="$1"; SP_NOTE[last]="$2"
 }
 
 # ---------------------------------------------------------------- probes
@@ -130,15 +138,15 @@ fl_sp_realpath_v() {
   printf -v "$1" '%s/%s' "${dir%/}" "$(basename "$p")"
 }
 
-# fl_sp_listener_start WANT6: SP_LISTENER_PID and the four ports; fails when node cannot open them
+# fl_sp_listener_start NODE WANT6: SP_LISTENER_PID and the four ports; fails when NODE cannot open them.
+# NODE must already have passed fl_sp_node_path_problem_v. fl_cleanup stops it however the run ends.
 fl_sp_listener_start() {
-  local node ready i
+  local node="$1" ready i
   SP_LISTENER_PID=""; SP_L4R=0; SP_L4C=0; SP_L6R=0; SP_L6C=0
-  fl_sp_node_v node
   [[ "$node" == /* && -x "$node" ]] || return 1
   SP_LISTENER_OUT="$(mktemp "${TMPDIR:-/tmp}/benchbar-share-listener.XXXXXX")" || return 1
   # fd 3 is the real stdout of a --json run: the child must not keep it open
-  "$node" -e "$FL_JS_SHARE_LISTENER" "$1" >"$SP_LISTENER_OUT" 2>/dev/null </dev/null 3>&- &
+  "$node" -e "$FL_JS_SHARE_LISTENER" "$2" >"$SP_LISTENER_OUT" 2>/dev/null </dev/null 3>&- &
   SP_LISTENER_PID="$!"
   for ((i = 0; i < 50; i++)); do
     [[ ! -s "$SP_LISTENER_OUT" ]] || break
@@ -148,7 +156,7 @@ fl_sp_listener_start() {
   read -r ready SP_L4R SP_L4C SP_L6R SP_L6C <"$SP_LISTENER_OUT" || true
   [[ "$ready" == ready && "$SP_L4R" =~ ^[0-9]+$ && "$SP_L4C" =~ ^[0-9]+$ && "$SP_L6R" =~ ^[0-9]+$ && "$SP_L6C" =~ ^[0-9]+$ ]] || return 1
   [[ "$SP_L4R" != 0 && "$SP_L4C" != 0 ]] || return 1
-  [[ "$1" != 6 || ( "$SP_L6R" != 0 && "$SP_L6C" != 0 ) ]]
+  [[ "$2" != 6 || ( "$SP_L6R" != 0 && "$SP_L6C" != 0 ) ]]
 }
 
 fl_sp_listener_stop() {
@@ -199,22 +207,28 @@ fl_sp_pf_files_problem_v() {
 }
 
 # fl_sp_probe_pf: the local_network and pf_active checks
+# pf_active's fix_action names the cause: the pf files or a port that answers (install_network_protection)
+# before a listener that could not run (none) before a control that did not answer
+# (open_local_network_settings, the cause local_network names).
 fl_sp_probe_pf() {
-  local want6="" problems=() control_bad=0 listener_bad=0 files p ports=() seen=" " ip="$SP_LAN_IP"
+  local want6="" problems=() control_bad=0 listener_bad=0 pf_bad=0 files node_problem p ports=() seen=" " ip="$SP_LAN_IP" action
   [[ -z "$SP_LAN_IP6" ]] || want6=6
   fl_sp_pf_files_problem_v files
-  [[ -z "$files" ]] || problems+=("$files")
-  if fl_sp_listener_start "$want6"; then
+  [[ -z "$files" ]] || { pf_bad=1; problems+=("$files"); }
+  fl_sp_node_path_problem_v node_problem
+  if [[ -n "$node_problem" ]]; then
+    listener_bad=1; problems+=("Node cannot be trusted to run the gateway: ${node_problem}")
+  elif fl_sp_listener_start "$SP_NODE_REAL" "$want6"; then
     if ! fl_sp_nc_open "$ip" "$SP_L4C"; then
       control_bad=1; problems+=("the probe itself does not work: this Mac did not answer its own address ${ip} on port ${SP_L4C}, outside the blocked ranges")
     elif fl_sp_nc_open "$ip" "$SP_L4R"; then
-      problems+=("${SP_L4R} answers on ${ip}: the pf block let a test listener through")
+      pf_bad=1; problems+=("${SP_L4R} answers on ${ip}: the pf block let a test listener through")
     fi
     if [[ -n "$want6" ]]; then
       if ! fl_sp_nc_open -6 "$SP_LAN_IP6" "$SP_L6C"; then
         control_bad=1; problems+=("the probe itself does not work over IPv6: this Mac did not answer its own address ${SP_LAN_IP6} on port ${SP_L6C}")
       elif fl_sp_nc_open -6 "$SP_LAN_IP6" "$SP_L6R"; then
-        problems+=("IPv6 ${SP_L6R} answers on ${SP_LAN_IP6}: the pf block let a test listener through")
+        pf_bad=1; problems+=("IPv6 ${SP_L6R} answers on ${SP_LAN_IP6}: the pf block let a test listener through")
       fi
     fi
   else
@@ -227,7 +241,7 @@ fl_sp_probe_pf() {
   for p in "${ports[@]}"; do
     [[ "$p" =~ ^[0-9]+$ && "$seen" != *" ${p} "* ]] || continue
     seen="${seen}${p} "
-    if fl_sp_nc_open 127.0.0.1 "$p" && fl_sp_nc_open "$ip" "$p"; then problems+=("${p} answers on ${ip}"); fi
+    if fl_sp_nc_open 127.0.0.1 "$p" && fl_sp_nc_open "$ip" "$p"; then pf_bad=1; problems+=("${p} answers on ${ip}"); fi
   done
 
   if [[ "$listener_bad" == 1 ]]; then
@@ -241,10 +255,22 @@ fl_sp_probe_pf() {
   if [[ "${#problems[@]}" -eq 0 ]]; then
     fl_sp_add pf_active critical ok "bench ports are refused on ${ip}, and the control port answers"
   else
-    local joined="" problem
+    local joined="" problem fix="benchbar lan-guard install"
     for problem in "${problems[@]}"; do joined="${joined}${joined:+; }${problem}"; done
-    fl_sp_add pf_active critical fail "$joined" "benchbar lan-guard install" \
-      "$([[ "$listener_bad" == 1 ]] && printf none || printf install_network_protection)"
+    if [[ "$pf_bad" == 1 ]]; then action=install_network_protection
+    elif [[ "$listener_bad" == 1 ]]; then action=none
+    else action=open_local_network_settings; fix="Open System Settings > Privacy & Security > Local Network and allow BenchBar."; fi
+    fl_sp_add pf_active critical fail "$joined" "$fix" "$action"
+  fi
+}
+
+# fl_sp_no_web_port ID: a critical check of the share web process that has no port to look at. It fails: a
+# watchdog tick that cannot see the web process has not shown it is safe.
+fl_sp_no_web_port() {
+  if [[ ! -f "$(fl_share_dir)/share.json" ]]; then
+    fl_sp_add "$1" critical fail "There is no share.json, so there is no share web port to check." "Run benchbar share setup." rerun_setup
+  else
+    fl_sp_add "$1" critical fail "share.json names no usable share web port." "Stop sharing and start it again." restart_sharing
   fi
 }
 
@@ -273,7 +299,7 @@ fl_sp_critical() {
       fl_sp_add gateway_reachable critical fail "The gateway does not answer on ${ip}:${FL_SHARE_GATEWAY_PORT}." "Stop sharing and start it again." restart_sharing
     fi
     if [[ -z "$SP_WEB_PORT" ]]; then
-      fl_sp_add share_web_lan_closed critical skip "share.json names no web port"
+      fl_sp_no_web_port share_web_lan_closed
     elif fl_sp_nc_open "$ip" "$SP_WEB_PORT"; then
       fl_sp_add share_web_lan_closed critical fail "The share web port ${SP_WEB_PORT} answers on ${ip}: anyone on the network could reach it without the gateway." "Stop sharing." restart_sharing
     else
@@ -282,7 +308,7 @@ fl_sp_critical() {
   fi
 
   if [[ -z "$SP_WEB_PORT" ]]; then
-    fl_sp_add share_traceback_off critical skip "share.json names no web port"
+    fl_sp_no_web_port share_traceback_off
   else
     fl_sp_fetch "http://127.0.0.1:${SP_WEB_PORT}/api/method/benchbar.no.such.method"
     if [[ -z "$SP_HTTP_CODE" ]]; then
@@ -301,7 +327,7 @@ fl_sp_critical() {
   fi
 
   if [[ -z "$SP_WEB_PORT" ]]; then
-    fl_sp_add share_debugger_off critical skip "share.json names no web port"
+    fl_sp_no_web_port share_debugger_off
   else
     violations=""
     # / and the debugger URL (whose path is also /) are the home page once the debugger is off, and Frappe
@@ -327,10 +353,11 @@ fl_sp_critical() {
 
 # ---------------------------------------------------------------- static checks
 
-# fl_sp_stat_v VAR PATH: "UID GROUP MODE" (MODE: octal, four digits)
+# fl_sp_stat_v VAR PATH: "UID GROUP MODE" (MODE: octal, four digits, the first the setuid/setgid/sticky bits).
+# BSD %Lp alone drops those bits (/private/tmp is 777 there, 1777 with %Mp%Lp, as GNU %a prints it).
 fl_sp_stat_v() {
   local __var="$1" __out __uid __group __mode
-  if stat --version >/dev/null 2>&1; then __out="$(stat -c '%u %G %a' "$2")" || return 1; else __out="$(stat -f '%u %Sg %Lp' "$2")" || return 1; fi
+  if stat --version >/dev/null 2>&1; then __out="$(stat -c '%u %G %a' "$2")" || return 1; else __out="$(stat -f '%u %Sg %Mp%Lp' "$2")" || return 1; fi
   read -r __uid __group __mode <<<"$__out"
   while [[ "${#__mode}" -lt 4 ]]; do __mode="0${__mode}"; done
   printf -v "$__var" '%s %s %s' "$__uid" "$__group" "$__mode"
@@ -355,21 +382,17 @@ fl_sp_path_problem_v() {
   fi
 }
 
-# fl_sp_node_problem_v VAR: why this node cannot be trusted to run the gateway (empty: it can);
-# SP_NODE_REAL is its realpath
-fl_sp_node_problem_v() {
-  local __var="$1" __node __real __ver __p __why __is_dir=0
+# fl_sp_node_path_problem_v VAR: why the node the share would run on cannot be trusted, from its path alone
+# (empty: it can). Nothing is run: a node another user could have replaced must not run even once.
+# SP_NODE_REAL is its realpath, set only when the walk is clean.
+fl_sp_node_path_problem_v() {
+  local __var="$1" __node __real __p __why __is_dir=0
   printf -v "$__var" '%s' ""
   SP_NODE_REAL=""
   fl_sp_node_v __node
   if [[ "$__node" != /* ]]; then printf -v "$__var" 'node is not an absolute path (%s)' "$__node"; return 0; fi
   if [[ ! -x "$__node" ]]; then printf -v "$__var" 'there is no executable node at %s' "$__node"; return 0; fi
   fl_sp_realpath_v __real "$__node" || { printf -v "$__var" 'cannot resolve %s' "$__node"; return 0; }
-  SP_NODE_REAL="$__real"
-  __ver="$("$__real" --version 2>/dev/null || true)"
-  if [[ ! "$__ver" =~ ^v([0-9]+)\. || "${BASH_REMATCH[1]}" -lt "$FL_SHARE_MIN_NODE" ]]; then
-    printf -v "$__var" 'node %s is older than %s' "${__ver:-of unknown version}" "$FL_SHARE_MIN_NODE"; return 0
-  fi
   __p="$__real"
   while :; do
     fl_sp_path_problem_v __why "$__p" "$__is_dir"
@@ -377,6 +400,20 @@ fl_sp_node_problem_v() {
     [[ "$__p" != / ]] || break
     __p="$(dirname "$__p")"; __is_dir=1
   done
+  SP_NODE_REAL="$__real"
+}
+
+# fl_sp_node_problem_v VAR: the path walk, then (only when it is clean) the version
+fl_sp_node_problem_v() {
+  local __problem __ver
+  fl_sp_node_path_problem_v __problem
+  if [[ -z "$__problem" ]]; then
+    __ver="$("$SP_NODE_REAL" --version 2>/dev/null || true)"
+    if [[ ! "$__ver" =~ ^v([0-9]+)\. || "${BASH_REMATCH[1]}" -lt "$FL_SHARE_MIN_NODE" ]]; then
+      __problem="node ${__ver:-of unknown version} is older than ${FL_SHARE_MIN_NODE}"
+    fi
+  fi
+  printf -v "$1" '%s' "$__problem"
 }
 
 fl_sp_firewall() {
@@ -390,7 +427,9 @@ fl_sp_firewall() {
   state="$(printf '%s' "$state" | tr '[:upper:]' '[:lower:]')"
   case "$state" in
     *"state = 0"*|*"is disabled"*) fl_sp_add firewall_node static ok "the firewall is off"; return 0 ;;
-    *"state = 1"*|*"state = 2"*|*"is enabled"*) ;;
+    # block all incoming connections: no per-app allow overrides it, and the CLI has nothing to offer
+    *"state = 2"*) fl_sp_add firewall_node static fail "macOS is blocking all incoming connections." "" none; return 0 ;;
+    *"state = 1"*|*"is enabled"*) ;;
     *) fl_sp_add firewall_node static fail "${blocked} (the firewall state is not readable)" "$fix" allow_node_firewall; return 0 ;;
   esac
   app="$("$fw" --getappblocked "$real" 2>&1 || true)"
@@ -498,7 +537,7 @@ fl_sp_drift_v() {
 }
 
 fl_sp_static() {
-  local problem version drifted copy="${FL_BENCH_DIR}/sites/${FL_SHARE_SITE}/site_config.json" none_yet="needs the copy"
+  local problem version drifted app apps_json rest copy="${FL_BENCH_DIR}/sites/${FL_SHARE_SITE}/site_config.json" none_yet="needs the copy"
   fl_sp_node_problem_v problem
   if [[ -z "$problem" ]]; then fl_sp_add node_ok static ok "node ${SP_NODE_REAL}"
   else fl_sp_add node_ok static fail "Node cannot be trusted to run the gateway: ${problem}." "Install Node ${FL_SHARE_MIN_NODE} or later with Homebrew, and keep it writable only by you." none; fi
@@ -530,7 +569,12 @@ fl_sp_static() {
     fl_sp_copy_checks
     fl_sp_drift_v drifted
     if [[ -z "$drifted" ]]; then fl_sp_add copy_drift static ok "the apps are at the commits the copy was made from"
-    else fl_sp_add copy_drift static warn "Your code changed since the copy was made: refresh to avoid errors. (${drifted})" "Run benchbar share setup --refresh." refresh_copy; fi
+    else
+      fl_sp_add copy_drift static warn "Your code changed since the copy was made: refresh to avoid errors." "Run benchbar share setup --refresh." refresh_copy
+      apps_json=""; rest="${drifted}, "
+      while [[ -n "$rest" ]]; do app="${rest%%, *}"; rest="${rest#*, }"; apps_json="${apps_json}${apps_json:+,}$(fl_json_str "$app")"; done
+      fl_sp_detail "\"apps\":[${apps_json}]" "(${drifted})"
+    fi
   fi
   fl_sp_add cli_protocol static ok "protocol ${FL_SHARE_PROTOCOL}"
 }
@@ -541,7 +585,7 @@ fl_sp_doc() {
   local i sep="" checks="" ok=true
   for ((i = 0; i < ${#SP_ID[@]}; i++)); do
     [[ "${SP_STATUS[$i]}" != fail ]] || ok=false
-    checks="${checks}${sep}{\"id\":$(fl_json_str "${SP_ID[$i]}"),\"class\":$(fl_json_str "${SP_CLASS[$i]}"),\"status\":$(fl_json_str "${SP_STATUS[$i]}"),\"message\":$(fl_json_str "${SP_MSG[$i]}"),\"fix\":$(fl_json_str "${SP_FIX[$i]}"),\"fix_action\":$(fl_json_str "${SP_ACT[$i]}")}"
+    checks="${checks}${sep}{\"id\":$(fl_json_str "${SP_ID[$i]}"),\"class\":$(fl_json_str "${SP_CLASS[$i]}"),\"status\":$(fl_json_str "${SP_STATUS[$i]}"),\"message\":$(fl_json_str "${SP_MSG[$i]}"),\"fix\":$(fl_json_str "${SP_FIX[$i]}"),\"fix_action\":$(fl_json_str "${SP_ACT[$i]}")${SP_EXTRA[$i]:+,${SP_EXTRA[$i]}}}"
     sep=","
   done
   printf '{"schema_version":%d,"cli_version":"%s","protocol":%d,"ok":%s,"lan_ip":%s,"checks":[%s]}' \
@@ -562,11 +606,11 @@ fl_cmd_share_preflight() {
   [[ "$run_static" == 1 || "$run_critical" == 1 ]] || { run_static=1; run_critical=1; }
   fl_site_json_begin
   fl_require_bench
-  SP_ID=(); SP_CLASS=(); SP_STATUS=(); SP_MSG=(); SP_FIX=(); SP_ACT=(); SP_LAN_IP=""
+  SP_ID=(); SP_CLASS=(); SP_STATUS=(); SP_MSG=(); SP_FIX=(); SP_ACT=(); SP_EXTRA=(); SP_NOTE=(); SP_LAN_IP=""
   [[ "$run_static" == 0 ]] || fl_sp_static
   [[ "$run_critical" == 0 ]] || fl_sp_critical
   for ((i = 0; i < ${#SP_ID[@]}; i++)); do
-    line="${SP_ID[$i]}: ${SP_MSG[$i]}"
+    line="${SP_ID[$i]}: ${SP_MSG[$i]}${SP_NOTE[$i]:+ ${SP_NOTE[$i]}}"
     case "${SP_STATUS[$i]}" in
       ok) [[ "$quiet" == 1 ]] || fl_ok "$line" ;;
       skip) [[ "$quiet" == 1 ]] || fl_info "$line (skipped)" ;;

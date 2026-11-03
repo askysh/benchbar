@@ -534,6 +534,8 @@ fl_cleanup() {
   fl_pull_on_exit "$code"
   # a setup Redis started for site add goes, however the command ends
   fl_bench_redis_down >/dev/null 2>&1 || true
+  # share preflight's throwaway listener, when a signal ended the run while it was up
+  fl_sp_listener_stop
   fl_sudo_end
   fl_lock_release
   # install --json and adopt --json: always the last line, after the lock is free

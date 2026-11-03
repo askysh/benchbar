@@ -6,6 +6,8 @@
 # shellcheck source=tests/mocks/bin/_mocklib.sh
 . "${0%/*}/_mocklib.sh"
 mock_log "$@"
+# $MOCK_STATE/nc_slow: every probe takes 3 s (a run interrupted while its listener is up)
+[[ ! -f "${MOCK_STATE:-/nonexistent}/nc_slow" ]] || sleep 3
 family=4; pos=()
 while [[ "$#" -gt 0 ]]; do
   case "$1" in

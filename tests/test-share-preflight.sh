@@ -105,6 +105,13 @@ pre() {
   CODE="$?"
   set -e
   OUT="$(cat "$TMP_DIR/pre.out")"; ERR="$(cat "$TMP_DIR/pre.err")"
+  listener_gone
+}
+# listener_gone: the throwaway listener of the last run (if it started) is not running any more
+listener_gone() {
+  [[ -s "$MOCK_STATE/listener_pid" ]] || return 0
+  local pid; pid="$(cat "$MOCK_STATE/listener_pid")"; rm -f "$MOCK_STATE/listener_pid"
+  ! kill -0 "$pid" 2>/dev/null || fail "the throwaway listener (pid $pid) outlived the run"
 }
 st() { jget "$TMP_DIR/pre.out" 'next(c["status"] for c in d["checks"] if c["id"] == "'"$1"'")'; }
 fld() { jget "$TMP_DIR/pre.out" 'next(c["'"$2"'"] for c in d["checks"] if c["id"] == "'"$1"'")'; }
@@ -144,8 +151,12 @@ assert_eq "False" "$(jget "$TMP_DIR/pre.out" 'd["ok"]')"
 : >"$MOCK_STATE/lan_reachable_ports"
 pre --critical
 assert_eq "1" "$CODE" "$OUT"
-assert_check pf_active fail "the probe itself does not work"
+assert_check pf_active fail "the probe itself does not work" open_local_network_settings
 assert_check local_network fail "Local Network" open_local_network_settings
+# the control fails and a pf file is wrong too: the pf file is what to fix first
+rm -f "$FL_LANGUARD_DAEMON"
+pre --critical; assert_check pf_active fail "the probe itself does not work" install_network_protection
+write_anchor
 # a listener node cannot open, or a node that dies: never ok
 printf '18097\n' >"$MOCK_STATE/lan_reachable_ports"
 : >"$MOCK_STATE/listener_fail"
@@ -191,7 +202,7 @@ assert_check pf_active fail "IPv6" install_network_protection; assert_contains "
 # IPv4 fine but the IPv6 control does not answer: the IPv6 probe does not work
 printf '18097\n' >"$MOCK_STATE/lan_reachable_ports"
 pre --critical
-assert_check pf_active fail "IPv6"; assert_contains "$(fld pf_active message)" "the probe itself does not work"
+assert_check pf_active fail "IPv6" open_local_network_settings; assert_contains "$(fld pf_active message)" "the probe itself does not work"
 # no IPv6 address at all: no IPv6 probe, no failure
 rm -f "$MOCK_STATE/ifconfig6"; reset_world
 pre --critical
@@ -220,6 +231,16 @@ assert_check gateway_reachable fail "8443" restart_sharing
 printf '18097\n8443\n' >"$MOCK_STATE/lan_reachable_ports"
 pre --critical
 assert_check gateway_reachable ok; assert_eq "0" "$CODE" "$OUT"
+
+# ---------------------------------------------------------------- no share web port: a critical run fails closed
+reset_world; rm -f "$SHARE_DIR/share.json"
+pre --critical
+assert_eq "1" "$CODE" "$OUT"; assert_eq "False" "$(jget "$TMP_DIR/pre.out" 'd["ok"]')"
+for id in share_web_lan_closed share_traceback_off share_debugger_off; do assert_check "$id" fail "no share.json" rerun_setup; done
+reset_world; sed_inplace 's/"web_port": 8001/"web_port": "x"/' "$SHARE_DIR/share.json"
+pre --critical
+assert_eq "1" "$CODE" "$OUT"
+for id in share_web_lan_closed share_traceback_off share_debugger_off; do assert_check "$id" fail "no usable share web port" restart_sharing; done
 
 # ---------------------------------------------------------------- the share web process: debugger, tracebacks, Redis
 reset_world
@@ -279,7 +300,12 @@ printf 'something nobody has seen\n' >"$MOCK_STATE/fw_app"
 pre --static; assert_check firewall_node fail "" allow_node_firewall
 printf 'Mystery firewall output\n' >"$MOCK_STATE/fw_state"
 pre --static; assert_check firewall_node fail "" allow_node_firewall
-rm -f "$MOCK_STATE/fw_state"; : >"$MOCK_LOG"
+# block all incoming connections: no allow for node overrides it, and the CLI offers no fix
+printf 'Firewall is enabled. (State = 2)\n' >"$MOCK_STATE/fw_state"; printf 'Incoming connection to %%PATH%% is permitted.\n' >"$MOCK_STATE/fw_app"
+: >"$MOCK_LOG"
+pre --static; assert_check firewall_node fail "macOS is blocking all incoming connections." none; assert_eq "1" "$CODE"
+assert_eq "None" "$(fld firewall_node fix)"; assert_calls_not_contain "getappblocked"
+rm -f "$MOCK_STATE/fw_state" "$MOCK_STATE/fw_app"; : >"$MOCK_LOG"
 pre --static; assert_check firewall_node ok # off, as measured on a Mac
 assert_calls_not_contain "getappblocked" "(off: the app is not asked)"
 
@@ -287,10 +313,22 @@ assert_calls_not_contain "getappblocked" "(off: the app is not asked)"
 reset_world
 pre --static; assert_check node_ok ok
 chmod 775 "$TMP_DIR/nodes/cellar"
+: >"$MOCK_STATE/node_calls"
 pre --static; assert_check node_ok fail "group" none; assert_eq "1" "$CODE"
+assert_eq "" "$(cat "$MOCK_STATE/node_calls")" "(a node in an unsafe path is never run, not even --version)"
+assert_eq "skip" "$(st firewall_node)"
+# a critical run vets the same path before it starts the listener with it
+pre --critical
+assert_check pf_active fail "Node cannot be trusted to run the gateway" none; assert_contains "$(fld pf_active message)" "group-writable"
+assert_eq "skip" "$(st local_network)"
+assert_eq "" "$(cat "$MOCK_STATE/node_calls")" "(no listener from an unsafe node)"
 FL_SHARE_ADMIN_GROUP="$(id -gn)" pre --static; assert_check node_ok ok "" "" # group-writable by admin (Homebrew's own mode)
 chmod 755 "$TMP_DIR/nodes/cellar"; chmod 757 "$TMP_DIR/nodes/cellar"
 FL_SHARE_ADMIN_GROUP="$(id -gn)" pre --static; assert_check node_ok fail "world" none
+# a sticky world-writable folder (like /tmp: 1777) is not held against what lies below it; this reads the
+# special bits on the platform the suite runs on (BSD stat's %Lp alone drops them)
+chmod 1757 "$TMP_DIR/nodes/cellar"
+FL_SHARE_ADMIN_GROUP="$(id -gn)" pre --static; assert_check node_ok ok "" ""
 chmod 755 "$TMP_DIR/nodes/cellar"; chmod 757 "$NODE_REAL_DIR/node"
 pre --static; assert_check node_ok fail "world"
 chmod 755 "$NODE_REAL_DIR/node"
@@ -359,7 +397,9 @@ pre --static; assert_check copy_ready fail "older" rerun_setup
 reset_world
 git -C "$BENCH/apps/erpnext" -c user.name=t -c user.email=t@example.com commit -q --allow-empty -m "newer"
 pre --static
-assert_check copy_drift warn "Your code changed since the copy was made: refresh to avoid errors." refresh_copy
+assert_check copy_drift warn "" refresh_copy
+assert_eq "Your code changed since the copy was made: refresh to avoid errors." "$(fld copy_drift message)" "(the app's own words, nothing appended)"
+assert_eq "['erpnext']" "$(fld copy_drift apps)"
 assert_eq "0" "$CODE" "$OUT"; assert_eq "True" "$(jget "$TMP_DIR/pre.out" 'd["ok"]')"
 assert_check cli_protocol ok "3"
 
@@ -426,5 +466,38 @@ pre
 assert_eq "$before" "$(snapshot "$BENCH" "$FL_HOSTS_FILE" "$SHARE_DIR")" "(preflight writes nothing)"
 # the command table knows it, as a document that does not change anything
 assert_eq "True" "$(BENCHBAR_TEST_X=1 "$FM" commands --json | python3 -c 'import json,sys; d=json.load(sys.stdin); c = [x for x in d["commands"] if x["name"] == "share preflight"][0]; print(c["json"] == "document" and c["mutating"] is False)')"
+
+# ---------------------------------------------------------------- the listener never outlives the run
+# a run stopped by a signal while its listener is up (a probe in flight) still stops it: the EXIT trap
+reset_world; rm -f "$MOCK_STATE/listener_pid"; : >"$MOCK_STATE/nc_slow"
+"$FM" share preflight --critical --json --bench-dir "$BENCH" >/dev/null 2>&1 &
+PRE_PID="$!"
+for ((i = 0; i < 100; i++)); do [[ ! -s "$MOCK_STATE/listener_pid" ]] || break; sleep 0.1; done
+assert_eq "yes" "$([[ -s "$MOCK_STATE/listener_pid" ]] && echo yes || echo no)" "(the listener started)"
+kill -TERM "$PRE_PID"; wait "$PRE_PID" 2>/dev/null || true
+rm -f "$MOCK_STATE/nc_slow"
+listener_gone
+
+# the REAL listener script under a real node: it says ready, listens on the ports it names, and is gone
+# after the stop path, which kills only the PID it recorded
+REAL_NODE=""
+for n in /opt/homebrew/opt/node@22/bin/node /usr/local/opt/node@22/bin/node /opt/homebrew/bin/node /usr/local/bin/node /usr/bin/node; do
+  [[ -x "$n" ]] && { REAL_NODE="$n"; break; }
+done
+if [[ -z "$REAL_NODE" ]]; then
+  printf 'test-share-preflight: SKIP the real listener test: no real node found\n'
+else
+  got="$(bash -c '
+    set -u
+    . "$1/lib/frappe-local/share-preflight.sh"
+    open_port() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null && echo open || echo closed; }
+    fl_sp_listener_start "$2" "" || { echo "not ready"; exit 0; }
+    pid="$SP_LISTENER_PID"
+    printf "%s %s %s %s " "$SP_L4R" "$SP_L4C" "$(open_port "$SP_L4R")" "$(open_port "$SP_L4C")"
+    fl_sp_listener_stop
+    kill -0 "$pid" 2>/dev/null && echo alive || echo gone' _ "$ROOT" "$REAL_NODE")"
+  [[ "$got" =~ ^([0-9]+)\ ([0-9]+)\ open\ open\ gone$ ]] || fail "real listener under $REAL_NODE: [$got]"
+  (( BASH_REMATCH[1] >= 8002 && BASH_REMATCH[1] <= 8099 && BASH_REMATCH[2] >= 18000 )) || fail "real listener ports: [$got]"
+fi
 
 printf 'test-share-preflight: ok\n'
