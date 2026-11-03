@@ -540,3 +540,167 @@ private final class Harness {
         #expect(h.store.inviteNotice == NetworkPanePresentation.inviteProblem(.notFound))
     }
 }
+
+/// A browser the test drives: it reports the rooms it is given and counts start and stop.
+nonisolated final class DrivenBrowser: RoomBrowsing, @unchecked Sendable {
+    private let lock = NSLock()
+    private var onChange: (@Sendable ([DiscoveredRoom]) -> Void)?
+    private var _starts = 0
+    private var _stops = 0
+    var starts: Int { lock.withLock { _starts } }
+    var stops: Int { lock.withLock { _stops } }
+
+    func start(onChange: @escaping @Sendable ([DiscoveredRoom]) -> Void, onDenied: @escaping @Sendable () -> Void) {
+        lock.withLock {
+            _starts += 1
+            self.onChange = onChange
+        }
+    }
+
+    func stop() { lock.withLock { _stops += 1 } }
+
+    func emit(_ rooms: [DiscoveredRoom]) { lock.withLock { onChange }?(rooms) }
+}
+
+/// Records every request, body included, and answers /room/hello from a table per address.
+nonisolated final class HelloRoom: RoomTransport, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _requests: [(String, Data?)] = []
+    let hello: String?
+    var requests: [(String, Data?)] { lock.withLock { _requests } }
+    var serverSPKIHash: Data? { Data(count: 32) }
+    var exporter: Data? { Data(count: 32) }
+    var remoteEndpoint: NWEndpoint? { nil }
+
+    init(hello: String?) { self.hello = hello }
+
+    func send(_ method: String, _ path: String, body: Data?) async throws(RoomConnectionError) -> RoomResponse {
+        lock.withLock { _requests.append(("\(method) \(path)", body)) }
+        guard let hello, path == "/room/hello" else { throw .unreachable }
+        return RoomResponse(status: 200, headers: [:], body: Data(hello.utf8))
+    }
+
+    func close() {}
+}
+
+@MainActor
+@Suite struct NearbyRoomsTests {
+    static func hello(room: String, locked: Bool = false, full: Bool = false, people: Int = 3, seats: Int = 5) -> String {
+        #"{"v":3,"room":"\#(room)","host":"Priya","site":"macdev","salt":"\#(String(repeating: "00", count: 16))","locked":\#(locked),"full":\#(full),"people":\#(people),"seats":\#(seats)}"#
+    }
+
+    static func room(_ id: String, _ last: Int) -> DiscoveredRoom {
+        DiscoveredRoom(id: id, endpoint: .hostPort(host: NWEndpoint.Host("10.0.0.\(last)"), port: 8443), display: RoomDisplay(label: id, site: "macdev", protocolV: 3))
+    }
+
+    final class Rig {
+        let browser = DrivenBrowser()
+        let dials = DialLog()
+        var rooms: [String: HelloRoom] = [:]
+        var now = Date(timeIntervalSince1970: 1_800_000_000)
+        var codes = 0
+        lazy var store: GuestRoomStore = makeStore()
+
+        private func makeStore() -> GuestRoomStore {
+            let dials = dials
+            let rooms = rooms
+            return GuestRoomStore(dependencies: .init(
+                browser: browser,
+                rooms: SavedRoomsStore(defaults: UserDefaults(suiteName: "nearby-\(UUID().uuidString)")!),
+                dial: { endpoint, pin throws(RoomConnectionError) in
+                    try dials.record(pin)
+                    guard case .hostPort(let host, _) = endpoint, let room = rooms["\(host)"] else { throw .unreachable }
+                    return room
+                },
+                runJoin: { [unowned self] _, _, _, _, _, _ in
+                    await MainActor.run { codes += 1 }
+                    return .failure(.failed)
+                },
+                clientFingerprint: { Data(count: 32) },
+                makeForwarder: { _ in FakeForwarder() },
+                openURL: { _ in },
+                readPasteboard: { nil },
+                now: { [unowned self] in now }), guestName: "Asha")
+        }
+
+        func show(_ found: [DiscoveredRoom]) async {
+            browser.emit(found)
+            for _ in 0..<200 where store.discovered != found { await Task.yield() }
+            for _ in 0..<200 where found.contains(where: { [.checking, nil].contains(store.nearbyStatus[$0.id]?.state) }) { await Task.yield() }
+        }
+    }
+
+    @Test func theStatusComesFromTheHello() {
+        func hello(_ text: String) -> RoomHello { try! JSONDecoder().decode(RoomHello.self, from: Data(text.utf8)) }
+        #expect(NetworkPanePresentation.nearbyState(hello(Self.hello(room: "A"))) == .open)
+        #expect(NetworkPanePresentation.nearbyState(hello(Self.hello(room: "A", locked: true, full: true))) == .locked)
+        #expect(NetworkPanePresentation.nearbyState(hello(Self.hello(room: "A", full: true))) == .full)
+        #expect(NetworkPanePresentation.nearbyState(nil) == .notAnswering)
+        #expect(["Open", "Locked", "Full", "Not answering"] == [.open, .locked, .full, .notAnswering].map(NetworkPanePresentation.nearbyStateText))
+        let lines = NetworkPanePresentation.nearbyLines(Self.room("svc", 1), .init(state: .open, hello: hello(Self.hello(room: "Stand\u{202E}up"))))
+        #expect(lines.title == "Stand up" && lines.detail == "Priya · macdev" && lines.seats == "3 of 5 seats taken")
+    }
+
+    @Test func roomsAreAskedAndSortedOpenFirst() async {
+        let rig = Rig()
+        rig.rooms = ["10.0.0.1": HelloRoom(hello: Self.hello(room: "Zeta", full: true)),
+                     "10.0.0.2": HelloRoom(hello: Self.hello(room: "Beta", locked: true)),
+                     "10.0.0.4": HelloRoom(hello: Self.hello(room: "Yak"))]
+        let found = [Self.room("full", 1), Self.room("locked", 2), Self.room("gone", 3), Self.room("open", 4)]
+        rig.store.startBrowsing()
+        await rig.show(found)
+        #expect(rig.store.nearbyStatus["gone"]?.state == .notAnswering)
+        #expect(rig.store.sortedNearby.map(\.id) == ["open", "locked", "full", "gone"])
+        #expect(rig.store.openNearbyCount == 1)
+        rig.store.stopBrowsing()
+    }
+
+    @Test func eachRoomIsAskedAtMostOncePerFifteenSecondsEvenOnRefresh() async {
+        let rig = Rig()
+        let room = HelloRoom(hello: Self.hello(room: "Standup"))
+        rig.rooms = ["10.0.0.1": room]
+        rig.store.startBrowsing()
+        await rig.show([Self.room("standup", 1)])
+        #expect(room.requests.count == 1)
+        await rig.store.checkNearby()
+        await rig.store.refreshNearby()
+        rig.now += 14
+        await rig.store.refreshNearby()
+        #expect(room.requests.count == 1)
+        #expect(rig.browser.starts == 3)
+        rig.now += 1
+        await rig.store.refreshNearby()
+        #expect(room.requests.count == 2)
+        rig.store.stopBrowsing()
+    }
+
+    @Test func discoverySendsNoCodeMaterialAndIsNeverPinnedOrJoined() async {
+        let rig = Rig()
+        let room = HelloRoom(hello: Self.hello(room: "Standup"))
+        rig.rooms = ["10.0.0.1": room]
+        rig.store.startBrowsing()
+        await rig.show([Self.room("standup", 1)])
+        rig.now += 60
+        await rig.store.refreshNearby()
+        #expect(room.requests.count == 2)
+        #expect(room.requests.allSatisfy { $0.0 == "GET /room/hello" && $0.1 == nil })
+        #expect(rig.dials.pins.allSatisfy { $0 == .firstJoin })
+        #expect(rig.codes == 0)
+        rig.store.stopBrowsing()
+    }
+
+    @Test func browsingRunsWhileThePaneOrThePopoverIsOpen() async {
+        let rig = Rig()
+        rig.store.startBrowsing(for: .popover)
+        rig.store.startBrowsing(for: .pane)
+        #expect(rig.browser.starts == 1)
+        rig.store.stopBrowsing(for: .pane)
+        #expect(rig.browser.stops == 0)
+        rig.store.stopBrowsing(for: .pane)
+        #expect(rig.browser.stops == 0)
+        rig.store.stopBrowsing(for: .popover)
+        #expect(rig.browser.stops == 1)
+        await rig.store.refreshNearby()
+        #expect(rig.browser.starts == 1)
+    }
+}

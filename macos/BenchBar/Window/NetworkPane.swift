@@ -6,7 +6,7 @@ import SwiftUI
 struct NetworkPane: View {
     @Bindable var store: GuestRoomStore
     var openSharing: () -> Void = {}
-    @AppStorage("shareGuestExplained") private var explained = false
+    @AppStorage(NetworkPanePresentation.explainedKey) private var explained = false
 
     var body: some View {
         Form {
@@ -46,18 +46,24 @@ struct NetworkPane: View {
                 }
             }
             if explained {
-                Section(NetworkPanePresentation.nearbySection) {
+                Section {
                     if store.nearby.isEmpty {
-                        Text(NetworkPanePresentation.emptyText).foregroundStyle(.secondary)
-                    }
-                    ForEach(store.nearby) { room in
                         HStack {
-                            Text(NetworkPanePresentation.nearbyRow(room))
+                            Text(NetworkPanePresentation.emptyText).foregroundStyle(.secondary)
                             Spacer()
-                            Button("Join") { store.beginJoin(room) }
-                                .disabled(room.display.needsUpdate)
-                                .help(NetworkPanePresentation.joinDisabledReason(room) ?? "")
+                            Button(NetworkPanePresentation.pasteInvite) { store.pasteInvite() }
+                                .help(NetworkPanePresentation.pasteInviteHelp)
                         }
+                    }
+                    ForEach(store.sortedNearby) { room in
+                        NearbyRoomRow(store: store, room: room)
+                    }
+                } header: {
+                    HStack {
+                        Text(NetworkPanePresentation.nearbySection)
+                        Spacer()
+                        Button(NetworkPanePresentation.findRooms, systemImage: "arrow.clockwise") { Task { await store.refreshNearby() } }
+                            .buttonStyle(.borderless)
                     }
                 }
             }
@@ -84,6 +90,32 @@ struct NetworkPane: View {
         .sheet(isPresented: Binding(get: { store.join != .none }, set: { if !$0 { store.cancelJoin() } })) {
             JoinSheet(store: store)
         }
+    }
+}
+
+private struct NearbyRoomRow: View {
+    let store: GuestRoomStore
+    let room: DiscoveredRoom
+
+    var body: some View {
+        let status = store.nearbyStatus[room.id]
+        let state = status?.state ?? .checking
+        let lines = NetworkPanePresentation.nearbyLines(room, status)
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(lines.title).font(.headline)
+                Text([lines.detail, lines.seats ?? ""].filter { !$0.isEmpty }.joined(separator: " · "))
+                    .font(.callout).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Text(NetworkPanePresentation.nearbyStateText(state)).foregroundStyle(state == .open ? .primary : .secondary)
+            if state == .open {
+                Button("Join") { store.beginJoin(room) }
+                    .disabled(room.display.needsUpdate)
+                    .help(NetworkPanePresentation.joinDisabledReason(room) ?? "")
+            }
+        }
+        .opacity(state == .locked || state == .full ? 0.55 : 1)
     }
 }
 

@@ -42,6 +42,27 @@ final class GuestRoomStore {
         case identityChanged
     }
 
+    /// Who wants rooms found: browsing (and the nearby hellos) run while either is on screen.
+    enum BrowseOwner: Hashable {
+        case pane
+        case popover
+    }
+
+    /// A nearby room's live state, from its pre-auth `/room/hello` over an unpinned TLS
+    /// connection: display only, and no code material is ever sent for it.
+    enum NearbyState: Equatable {
+        case checking
+        case open
+        case locked
+        case full
+        case notAnswering
+    }
+
+    struct NearbyStatus: Equatable {
+        var state: NearbyState
+        var hello: RoomHello?
+    }
+
     struct Dependencies {
         var browser: any RoomBrowsing
         var rooms: SavedRoomsStore
@@ -58,6 +79,10 @@ final class GuestRoomStore {
     }
 
     static let pingInterval: Duration = .seconds(10)
+    /// At most one nearby hello per room this often: the gateway allows 10 hellos a minute per
+    /// address, shared with the join's own hello and the saved rooms' checks.
+    static let helloSpacing: TimeInterval = 15
+    static let nearbyInterval: Duration = .seconds(5)
     static let attemptSpacing: TimeInterval = 3
     static let lockoutAfter = 5
     static let lockout: TimeInterval = 60
@@ -66,6 +91,8 @@ final class GuestRoomStore {
     private(set) var saved: [SavedRoom]
     private(set) var health: [String: RoomHealth] = [:]
     private(set) var localNetworkDenied = false
+    /// Live state per nearby room (Bonjour service name), while browsing.
+    private(set) var nearbyStatus: [String: NearbyStatus] = [:]
     var join: JoinStep = .none
     var guestName: String
     /// The invite the join sheet is for. Its code is the sheet's prefill and is blanked as the
@@ -85,6 +112,10 @@ final class GuestRoomStore {
     /// Bumped by Cancel while joining: a join that resumes afterwards leaves the sheet closed.
     private var joinAttempt = 0
     private var joinTransport: (any RoomTransport)?
+    private var browseOwners: Set<BrowseOwner> = []
+    private var lastHello: [String: Date] = [:]
+    private var helloInFlight: Set<String> = []
+    private var nearbyTask: Task<Void, Never>?
 
     init(dependencies: Dependencies, guestName: String = NSFullUserName()) {
         deps = dependencies
@@ -98,18 +129,83 @@ final class GuestRoomStore {
         return discovered.filter { !joined.contains($0.id) }
     }
 
-    // MARK: Finding rooms (only while the pane is visible)
+    /// Nearby rooms, Open first, then still checking, Locked, Full and not answering.
+    var sortedNearby: [DiscoveredRoom] {
+        NetworkPanePresentation.sortedNearby(nearby, status: nearbyStatus)
+    }
 
-    func startBrowsing() {
+    var openNearbyCount: Int {
+        nearby.filter { nearbyStatus[$0.id]?.state == .open }.count
+    }
+
+    // MARK: Finding rooms (only while the pane or the popover is visible)
+
+    func startBrowsing(for owner: BrowseOwner = .pane) {
+        let idle = browseOwners.isEmpty
+        browseOwners.insert(owner)
+        guard idle else { return }
+        startBrowser()
+        nearbyTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: Self.nearbyInterval)
+                await self?.checkNearby()
+            }
+        }
+    }
+
+    func stopBrowsing(for owner: BrowseOwner = .pane) {
+        guard browseOwners.remove(owner) != nil, browseOwners.isEmpty else { return }
+        deps.browser.stop()
+        nearbyTask?.cancel()
+        nearbyTask = nil
+    }
+
+    /// Find rooms / Refresh: browse again and ask every room whose spacing allows it now.
+    func refreshNearby() async {
+        guard !browseOwners.isEmpty else { return }
+        deps.browser.stop()
+        startBrowser()
+        await checkNearby()
+    }
+
+    private func startBrowser() {
         deps.browser.start(onChange: { [weak self] rooms in
-            Task { @MainActor in self?.discovered = rooms }
+            Task { @MainActor in
+                self?.discovered = rooms
+                await self?.checkNearby()
+            }
         }, onDenied: { [weak self] in
             Task { @MainActor in self?.localNetworkDenied = true }
         })
     }
 
-    func stopBrowsing() {
-        deps.browser.stop()
+    /// One pre-auth hello for each nearby room not asked within `helloSpacing`.
+    func checkNearby() async {
+        let now = deps.now()
+        let due = nearby.filter { room in
+            !room.display.needsUpdate && !helloInFlight.contains(room.id)
+                && lastHello[room.id].map { now.timeIntervalSince($0) >= Self.helloSpacing } ?? true
+        }
+        for room in due {
+            lastHello[room.id] = now
+            helloInFlight.insert(room.id)
+            if nearbyStatus[room.id] == nil { nearbyStatus[room.id] = NearbyStatus(state: .checking) }
+        }
+        await withTaskGroup(of: Void.self) { group in
+            for room in due {
+                group.addTask { await self.askHello(room) }
+            }
+        }
+    }
+
+    private func askHello(_ room: DiscoveredRoom) async {
+        var hello: RoomHello?
+        if let transport = try? await deps.dial(room.endpoint, .firstJoin) {
+            hello = try? await RoomAPI(transport: transport).roomHello()
+            transport.close()
+        }
+        helloInFlight.remove(room.id)
+        nearbyStatus[room.id] = NearbyStatus(state: NetworkPanePresentation.nearbyState(hello), hello: hello)
     }
 
     // MARK: Joining

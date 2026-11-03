@@ -65,6 +65,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         updateOffer = UpdateOffer(settings: settings)
 
+        let browser = BrowserRouter()
+        guest = GuestRoomStore(dependencies: .live(identity: KeychainIdentity(), openURL: { browser.open($0) }))
         let commands = AppCommands(
             openSettings: { [weak self] in self?.openSettings() },
             quit: { NSApp.terminate(nil) },
@@ -90,15 +92,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             newBench: { [weak self] in self?.openWizard() },
             manage: { [weak self] bench, tab, repair in self?.openBench(bench, tab: tab, repair: repair) },
             updateOffer: updateOffer,
-            update: { [weak self] in self?.updateNowAction() })
-        popover = PopoverController(rootView: PopoverView(store: store, commands: commands))
-        popover.onOpenChange = { [weak self] open in self?.store.setPopoverOpen(open) }
+            update: { [weak self] in self?.updateNowAction() },
+            openNetwork: { [weak self] in
+                guard let self else { return }
+                popover.close()
+                mainWindow.show(.network)
+            })
+        popover = PopoverController(rootView: PopoverView(store: store, commands: commands, guest: guest))
+        popover.onOpenChange = { [weak self] open in
+            guard let self else { return }
+            store.setPopoverOpen(open)
+            // Rooms are browsed only while the popover is open, and never before the pane's
+            // explanation, so the Local Network prompt does not appear at an odd time.
+            if open && UserDefaults.standard.bool(forKey: NetworkPanePresentation.explainedKey) {
+                guest.startBrowsing(for: .popover)
+            } else if !open {
+                guest.stopBrowsing(for: .popover)
+            }
+        }
 
         let workbench = Workbench(store: store)
         about = AboutModel(store: store, offer: updateOffer)
         let discovery = BenchDiscovery(store: store)
-        let browser = BrowserRouter()
-        guest = GuestRoomStore(dependencies: .live(identity: KeychainIdentity(), openURL: { browser.open($0) }))
         wizard = WizardRun(store: store)
         wizard.openFindBenches = { [weak self] in
             self?.mainWindow.router.scanRequested = true

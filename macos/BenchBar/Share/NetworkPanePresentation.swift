@@ -6,7 +6,11 @@ nonisolated enum NetworkPanePresentation {
     static let joinedSection = "Your rooms"
     static let nearbySection = "Nearby"
     static let findingText = "Looking for rooms on this Wi-Fi…"
-    static let emptyText = "No rooms found. Ask your colleague to turn on Sharing in BenchBar."
+    static let emptyText = "No rooms on this Wi-Fi right now. Ask a colleague to start sharing, or paste an invite."
+    static let findRooms = "Find rooms"
+    /// The pane's AppStorage key: the Local Network explanation was accepted. Until then
+    /// nothing browses, so the macOS prompt never appears from the popover.
+    static let explainedKey = "shareGuestExplained"
     static let localNetworkOff = "Local Network access is off for BenchBar."
     static let explanation = "BenchBar will ask macOS for Local Network access to find rooms your colleagues share on this Wi-Fi."
     static let seatTitle = "Pick a seat"
@@ -15,6 +19,55 @@ nonisolated enum NetworkPanePresentation {
     /// `{room} · {site}`: before joining, the TXT record is all there is (display only).
     static func nearbyRow(_ room: DiscoveredRoom) -> String {
         [room.display.label.isEmpty ? room.id : room.display.label, room.display.site].filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    typealias NearbyState = GuestRoomStore.NearbyState
+
+    static func nearbyState(_ hello: RoomHello?) -> NearbyState {
+        guard let hello else { return .notAnswering }
+        if hello.locked { return .locked }
+        if hello.full { return .full }
+        return .open
+    }
+
+    static func nearbyStateText(_ state: NearbyState) -> String {
+        switch state {
+        case .checking: return "Checking…"
+        case .open: return "Open"
+        case .locked: return "Locked"
+        case .full: return "Full"
+        case .notAnswering: return "Not answering"
+        }
+    }
+
+    /// Room name; host · site; "3 of 5 seats taken". The hello's words are the host's,
+    /// cleaned like a TXT record; before a hello only the TXT record is shown.
+    static func nearbyLines(_ room: DiscoveredRoom, _ status: GuestRoomStore.NearbyStatus?) -> (title: String, detail: String, seats: String?) {
+        guard let hello = status?.hello else { return (name(room), room.display.site, nil) }
+        let title = TXTSanitizer.clean(hello.room)
+        let detail = [TXTSanitizer.clean(hello.host), TXTSanitizer.clean(hello.site)].filter { !$0.isEmpty }.joined(separator: " · ")
+        return (title.isEmpty ? name(room) : title, detail, seatsTaken(hello))
+    }
+
+    static func seatsTaken(_ hello: RoomHello) -> String {
+        "\(min(max(hello.people, 0), max(hello.seats, 0))) of \(max(hello.seats, 0)) seats taken"
+    }
+
+    static func sortedNearby(_ rooms: [DiscoveredRoom], status: [String: GuestRoomStore.NearbyStatus]) -> [DiscoveredRoom] {
+        func rank(_ room: DiscoveredRoom) -> Int {
+            switch status[room.id]?.state ?? .checking {
+            case .open: return 0
+            case .checking: return 1
+            case .locked: return 2
+            case .full: return 3
+            case .notAnswering: return 4
+            }
+        }
+        return rooms.sorted { (rank($0), nearbyLines($0, status[$0.id]).title.lowercased(), $0.id) < (rank($1), nearbyLines($1, status[$1.id]).title.lowercased(), $1.id) }
+    }
+
+    static func popoverNearby(open: Int) -> String {
+        "Rooms nearby (\(open) open)"
     }
 
     static func joinDisabledReason(_ room: DiscoveredRoom) -> String? {

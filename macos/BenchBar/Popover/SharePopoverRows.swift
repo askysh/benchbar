@@ -1,5 +1,20 @@
 import SwiftUI
 
+/// "Rooms nearby (N open)", which opens On your network. Shown only after the pane's Local
+/// Network explanation, so the popover never brings up the macOS prompt.
+struct NearbyRoomsPopoverRow: View {
+    let guest: GuestRoomStore
+    let open: () -> Void
+    @AppStorage(NetworkPanePresentation.explainedKey) private var explained = false
+
+    var body: some View {
+        if explained {
+            Button(NetworkPanePresentation.popoverNearby(open: guest.openNearbyCount), systemImage: "wifi", action: open)
+                .buttonStyle(.borderless)
+        }
+    }
+}
+
 /// One row per bench that is sharing: "Sharing on your network · n online ·
 /// time left", with Stop. Absent when nothing is shared.
 struct SharePopoverRows: View {

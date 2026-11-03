@@ -19,6 +19,8 @@ struct AppCommands {
     /// A newer release on offer: "Update to X…" in the footer.
     var updateOffer: UpdateOffer?
     var update: () -> Void = {}
+    /// The BenchBar window at On your network.
+    var openNetwork: () -> Void = {}
 }
 
 /// The popover under the menu bar runner.
@@ -30,6 +32,7 @@ struct AppCommands {
 struct PopoverView: View {
     let store: BenchStore
     let commands: AppCommands
+    var guest: GuestRoomStore?
     static let maxContentHeight: CGFloat = 540
 
     var body: some View {
@@ -39,6 +42,7 @@ struct PopoverView: View {
                 ScrollView { content.frame(maxWidth: .infinity, alignment: .leading) }
             }
             SharePopoverRows(center: ShareCenter.shared)
+            if let guest { NearbyRoomsPopoverRow(guest: guest, open: commands.openNetwork) }
             Divider()
             Button("Scan Folder…", systemImage: "folder.badge.plus", action: commands.scanFolder)
                 .buttonStyle(.borderless)
