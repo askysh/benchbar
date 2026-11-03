@@ -1244,3 +1244,22 @@ test("web state: a reset of one request is that request's 503 and does not latch
         assert.strictEqual((await request(gw, { path: "/app", cert: c })).status, 200);
     });
 });
+
+test("remove leaves the user owed a wipe in status.wipe_failed; the wipe op ends it, keeps a failure, and is a no-op when nothing is owed", async () => {
+    const a = cert("owed-a");
+    const b = cert("owed-b");
+    const rowA = deviceRow(a, { user: "seat2@example.com", seat_id: "seat2" });
+    const rowB = deviceRow(b, { user: "wipefail@example.com", seat_id: "seat3" });
+    await withGateway({ devices: [rowA, rowB] }, async (gw) => {
+        assert.deepStrictEqual(await gw.control({ op: "wipe" }), { ok: true, wiped: 0, wipe_failed: [] });
+        assert.deepStrictEqual(gw.helper.calls(), [], "nothing owed, nothing run");
+        assert.deepStrictEqual(await gw.control({ op: "remove", device: rowA.id }), { ok: true, user: "seat2@example.com" });
+        assert.deepStrictEqual((await status(gw)).wipe_failed, ["seat2@example.com"], "owed until the wipe op runs");
+        assert.deepStrictEqual(await gw.control({ op: "remove", device: rowB.id }), { ok: true, user: "wipefail@example.com" });
+        const reply = await gw.control({ op: "wipe" });
+        assert.deepStrictEqual(reply, { ok: true, wiped: 1, wipe_failed: ["wipefail@example.com"] });
+        assert.deepStrictEqual(gw.helper.calls().map((c) => c.join(" ")).sort(),
+            ["wipe share.localhost seat2@example.com", "wipe share.localhost wipefail@example.com"]);
+        assert.deepStrictEqual((await status(gw)).wipe_failed, ["wipefail@example.com"]);
+    });
+});

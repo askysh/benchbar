@@ -34,7 +34,7 @@ test-cli test-open-as test-freshness test-hygiene test-mcp test-site-backups tes
 test-adopt test-systemd test-migrate test-repair-json test-json test-report test-profile-v16 test-state-migrate test-run-lock
 test-runner test-redact test-docs-command test-status-cost test-command-cost test-bench-flow test-run test-platform-linux test-self-update
 test-site-restore test-site-restore-2 test-services-served test-templates test-discovery test-shellrc test-docs test-platform test-packaging test-ui test-release-notes test-version-policy test-affected
-test-agent-contracts test-agent-contracts-2 test-agent-contracts-3 test-pipelines test-sudo-env test-prerequisites-linux test-windows-commands test-share-gateway test-share test-share-preflight test-share-run"
+test-agent-contracts test-agent-contracts-2 test-agent-contracts-3 test-pipelines test-sudo-env test-prerequisites-linux test-windows-commands test-share-gateway test-share test-share-preflight test-share-run test-share-admin"
 
 for f in "$ROOT"/tests/test-*.sh; do
   n="$(basename "$f" .sh)"
@@ -61,7 +61,7 @@ test-report=24 test-repair-json=23 test-runner=21 test-state-migrate=19 test-sta
 test-install-linux=110 test-doctor-linux=77 test-systemd=37 test-bench-flow=10 test-platform-linux=3 test-self-update=8
 test-prerequisites-linux=7 test-install-sh-linux=5 test-discovery=4 test-run=3 test-templates=3 test-shellrc=2
 test-docs=1 test-platform=1 test-packaging=1 test-affected=1 test-ui=0 test-release-notes=0
-test-version-policy=0 test-share-gateway=33 test-share=90 test-share-preflight=85 test-share-run=140"
+test-version-policy=0 test-share-gateway=33 test-share=90 test-share-preflight=85 test-share-run=140 test-share-admin=70"
 test_secs() {
   local w
   w=" $(printf '%s' "$TEST_SECS" | tr '\n' ' ') "

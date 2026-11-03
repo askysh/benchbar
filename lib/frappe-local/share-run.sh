@@ -96,7 +96,8 @@ fl_share_dur_v() {
 fl_share_iso_of() { date -u -r "$1" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d "@$1" +%Y-%m-%dT%H:%M:%SZ; }
 fl_share_epoch_of_iso() { date -u -j -f %Y-%m-%dT%H:%M:%SZ "$1" +%s 2>/dev/null || date -u -d "$1" +%s 2>/dev/null || true; }
 
-# fl_share_control_v VAR REQUEST: the reply's KEY=VALUE lines; non zero when there is no ok reply
+# fl_share_control_v VAR REQUEST [SCRIPT MODE]: the reply's KEY=VALUE lines; non zero when there is no ok
+# reply. SCRIPT (FL_JS_SHARE_ROOM of share-admin.sh) replaces FL_JS_SHARE_CONTROL, MODE is its last argument.
 fl_share_control_v() {
   local __out="" __code=0 __problem __sock
   printf -v "$1" '%s' ""
@@ -104,7 +105,7 @@ fl_share_control_v() {
   [[ -S "$__sock" ]] || return 1
   fl_sp_node_path_problem_v __problem
   if [[ -n "$__problem" ]]; then fl_log "the control socket is not asked: ${__problem}"; return 1; fi
-  __out="$("$SP_NODE_REAL" -e "$FL_JS_SHARE_CONTROL" control "$__sock" "$2" </dev/null 2>/dev/null 3>&-)" || __code=$?
+  __out="$("$SP_NODE_REAL" -e "${3:-$FL_JS_SHARE_CONTROL}" control "$__sock" "$2" ${4:+"$4"} </dev/null 2>/dev/null 3>&-)" || __code=$?
   printf -v "$1" '%s' "$__out"
   return "$__code"
 }
@@ -146,9 +147,11 @@ fl_share_devices_empty() {
 # fl_share_wipe_all: ends every session of the copy (the whole copy, so the users of status.wipe_failed too).
 # Redis and the helper run in a subshell, so neither can end the caller (stop must finish): a Redis port
 # held by another process, or a helper that dies, is a warning and the wipe_failed marker, which status
-# reports and the runner's next start-wipe clears.
+# reports and the runner's next start-wipe clears. SH_WIPED_COUNT: the sessions it ended (empty on a failure).
+SH_WIPED_COUNT=""
 fl_share_wipe_all() {
   local count=""
+  SH_WIPED_COUNT=""
   count="$(
     trap 'fl_share_redis_down >/dev/null 2>&1' EXIT
     fl_share_redis_up >&2
@@ -157,6 +160,7 @@ fl_share_wipe_all() {
   )" || count=""
   if [[ "$count" =~ ^[0-9]+$ ]]; then
     rm -f "$(fl_share_dir)/wipe_failed"
+    SH_WIPED_COUNT="$count"
     fl_info "ended ${count} sessions in ${FL_SHARE_SITE}"
     return 0
   fi

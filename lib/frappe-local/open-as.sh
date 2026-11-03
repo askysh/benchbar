@@ -161,6 +161,15 @@ fl_path_without_sid_v() {
   printf -v "$1" '%s' "${__p}${__kept:+?${__kept}}${__frag}"
 }
 
+# fl_open_as_login_url_v VAR BASE PATH SID: the link that signs the browser in: frappe takes the sid from
+# /login, sets the cookie and answers 301 to PATH; t= makes every link new (a browser caches a 301).
+# share open-as delivers its sid the same way.
+fl_open_as_login_url_v() {
+  local __enc
+  fl_urlencode_v __enc "$3"
+  printf -v "$1" '%s/login?redirect-to=%s&sid=%s&t=%s' "$2" "$__enc" "$4" "$(date +%s)"
+}
+
 # fl_open_as_require_reachable SITE: the bench answers and the browser can
 # find SITE by name (a hosts line, or a *.localhost name, which resolves
 # without one). In WSL the browser is Windows', which reads its own hosts
@@ -195,7 +204,7 @@ fl_open_as_require_served() {
 }
 
 fl_cmd_open() {
-  local user="" path="" browser=1 print_url=0 site="$FL_SITE" fields name="" full_name="" user_type="" sid="" url base enc opened=false j snippet
+  local user="" path="" browser=1 print_url=0 site="$FL_SITE" fields name="" full_name="" user_type="" sid="" url base opened=false j snippet
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
       --as) [[ -n "${2:-}" ]] || fl_die "--as needs a user." "Example: benchbar open --as someone@example.com"; user="$2"; shift 2 ;;
@@ -244,8 +253,7 @@ fl_cmd_open() {
     if [[ -z "$path" ]]; then
       path=/; [[ "$user_type" == "System User" ]] && path=/app
     fi
-    fl_urlencode_v enc "$path"
-    url="${base}/login?redirect-to=${enc}&sid=${sid}&t=$(date +%s)"
+    fl_open_as_login_url_v url "$base" "$path" "$sid"
   fi
   if [[ "$browser" == "1" ]]; then
     if fl_open_url "$url" >/dev/null; then opened=true

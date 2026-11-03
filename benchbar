@@ -139,6 +139,8 @@ SCRIPT_DIR="$(fl_resolve_self)"
 . "${SCRIPT_DIR}/lib/frappe-local/share-preflight.sh"
 # shellcheck source=lib/frappe-local/share-run.sh
 . "${SCRIPT_DIR}/lib/frappe-local/share-run.sh"
+# shellcheck source=lib/frappe-local/share-admin.sh
+. "${SCRIPT_DIR}/lib/frappe-local/share-admin.sh"
 # shellcheck source=lib/frappe-local/apps.sh
 . "${SCRIPT_DIR}/lib/frappe-local/apps.sh"
 # shellcheck source=lib/frappe-local/freshness.sh
@@ -502,8 +504,8 @@ fl_json_mode_resolve() {
     "site backup"|"site drop"|"site restore"|"app add") FL_JSON_MODE=doc ;;
     # on and off stream like site default; status only reads
     "site open-as") if [[ "${ARGS[1]:-}" == "status" ]]; then FL_JSON_MODE=doc; else FL_JSON_MODE=stream; fi ;;
-    "share setup"|"share start"|"share stop"|"share extend") FL_JSON_MODE=stream ;;
-    "share users"|"share preflight"|"share status") FL_JSON_MODE=doc ;;
+    "share setup"|"share start"|"share stop"|"share extend"|"share lock"|"share unlock"|"share remove"|"share revoke"|"share assign"|"share teardown") FL_JSON_MODE=stream ;;
+    "share users"|"share preflight"|"share status"|"share code"|"share people"|"share devices"|"share log"|"share open-as") FL_JSON_MODE=doc ;;
   esac
 }
 # status, list and the other readers are polled: they skip the table unless
@@ -1424,13 +1426,15 @@ case "$COMMAND" in
       fl_lock_acquire "${FL_STATE_DIR}/lock"
     fi ;;
   share)
-    # users, preflight and status read; setup makes the copy and the identity, start the job. stop and
-    # extend take no lock: a long setup or start must never keep a share from being stopped
+    # users, preflight, status, people and log read; setup makes the copy and the identity, start the
+    # job, teardown drops the copy and the share folder. stop, extend and the room's changes take no lock:
+    # a long setup or start must never keep a share from being stopped or a person from being removed.
+    # code and open-as never open a run log: they handle the room code and a session id
     case "${ARGS[0]:-}" in
-      setup|start)
+      setup|start|teardown)
         fl_log_init "${FL_STATE_DIR}/logs"
         fl_lock_acquire "${FL_STATE_DIR}/lock" ;;
-      stop|extend) fl_log_init "${FL_STATE_DIR}/logs" ;;
+      stop|extend|lock|unlock|remove|revoke|assign) fl_log_init "${FL_STATE_DIR}/logs" ;;
     esac ;;
   site|app|profile|lock)
     # the list, show and check commands are read only, and so is a --plan

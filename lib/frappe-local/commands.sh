@@ -144,7 +144,7 @@ cmd~site default~benchbar site default NAME [--json]~Make NAME the default site.
 cmd~site open-as~benchbar site open-as on|off|status [NAME] [--json]~Turn password-less sign in (open --as) on or off for a site, or show it. Changes benchbar's state only. on needs a person at a terminal.~yes~no~no~yes~stream
 flag~site open-as~--yes~~Do not ask before turning on (still refused without a terminal session, BENCHBAR_NONINTERACTIVE=1).
 flag~site open-as~--json~~JSON lines for on and off, one document for status.
-cmd~share~benchbar share setup|users|preflight|start|stop|extend|status ...~Share a hardened copy of a site with people on your network: setup makes the copy and the identity, start and stop run the share.~no~no~no~no~none
+cmd~share~benchbar share setup|users|preflight|start|stop|extend|status|code|lock|unlock|people|remove|assign|log|open-as|teardown ...~Share a hardened copy of a site with people on your network: setup makes the copy and the identity, start and stop run the share.~no~no~no~no~none
 cmd~share setup~benchbar share setup [--site S] [--from STAMP|latest] [--backup-now] [--users A,B] [--refresh] [--regenerate-identity] [--acknowledge-data] [--dry-run] [--yes] [--json]~Prepare sharing: the host identity and a hardened share copy of a site.~yes~no~no~yes~stream
 flag~share setup~--users~A,B~The Frappe users who may sign in to the copy, one seat each. They must be enabled System Users; each loses the roles that can run code or change settings, in the copy only. Default: the last setup's.
 flag~share setup~--from~STAMP|latest~The backup set of the site to copy (benchbar site backups S lists them). Default: the newest complete one.
@@ -175,6 +175,36 @@ flag~share extend~--json~~JSON lines: done, with the new deadline.
 cmd~share status~benchbar share status [--preflight] [--json]~The share: on, off, expired or error, the time left, the copy, the room's counts. Reads only.~no~no~no~no~document
 flag~share status~--preflight~~Run the critical checks too and add them, each with its fix_action.
 flag~share status~--json~~One document (never the room code).
+cmd~share code~benchbar share code [--new] [--json]~The room code, on the terminal only: the one way it leaves the gateway (--json is the app's read). Refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp.~no~no~no~no~document
+flag~share code~--new~~Draw a new code first: the failure budget resets, the people in the room stay, a code already handed out stops working.
+flag~share code~--json~~One document with the code: never logged, never stored.
+cmd~share lock~benchbar share lock [--json]~Lock the room: nobody new can join until share unlock.~no~no~no~yes~stream
+flag~share lock~--json~~JSON lines: done, with locked and lock_reason.
+cmd~share unlock~benchbar share unlock [--json]~Unlock the room. A lock after 10 wrong codes stays until share code --new.~no~no~no~yes~stream
+flag~share unlock~--json~~JSON lines: done, with locked and lock_reason.
+cmd~share people~benchbar share people [--json]~The people in the room: name, Mac, address, seat, online. Reads only (it retries a wipe the gateway still owes).~no~no~no~no~document
+flag~share people~--json~~One document: state and people, each with id, name, model, ip, seat_id, seat_full_name, online, joined, last_seen.
+cmd~share devices~benchbar share devices [--json]~Another name for share people.~no~no~no~no~document
+flag~share devices~--json~~As share people --json.
+cmd~share remove~benchbar share remove ID [--new-code] [--yes] [--json]~Remove a person from the room: their Mac is blocked for this room and their seat's sessions end. Asks first (--yes).~yes~no~no~yes~stream
+flag~share remove~--new-code~~Also draw a new room code, for when the person is not known: a fresh Mac could join again with the old one.
+flag~share remove~--yes~~Do not ask first.
+flag~share remove~--json~~JSON lines: done, with removed, new_code and the wipe.
+cmd~share revoke~benchbar share revoke ID [--new-code] [--yes] [--json]~Another name for share remove.~yes~no~no~yes~stream
+flag~share revoke~--json~~As share remove --json.
+cmd~share assign~benchbar share assign ID SEAT_ID [--json]~Move a person in the room to another free seat; the old seat's sessions end first.~no~no~no~yes~stream
+flag~share assign~--json~~JSON lines: done, with the device and its new seat.
+cmd~share log~benchbar share log [--device ID] [--since TIME] [--limit N] [--json]~What the people in the room opened in the last 14 days: time, Mac, seat, method, page (two path segments, never a document name), status.~no~no~no~no~document
+flag~share log~--device~ID~Only this Mac (an id of share people).
+flag~share log~--since~TIME~Only entries at or after it: ISO 8601, YYYY-MM-DD HH:MM:SS, a date, or HH:MM:SS today.
+flag~share log~--limit~N~The newest N entries, 1 to 5000. Default: 200.
+flag~share log~--json~~One document: entries (ts, device, user, method, path, status) and truncated.
+cmd~share open-as~benchbar share open-as USER [--print-url] [--json]~Open the shared copy in this Mac's browser signed in as a seat, the way open --as does. Needs sharing on; never a user who is not a seat or can run code. Refused under BENCHBAR_NONINTERACTIVE, --for-agent, mcp and without a terminal (the app passes BENCHBAR_SUDO=gui).~yes~no~no~yes~document
+flag~share open-as~--print-url~~Print the sign-in link instead of opening it; it holds the session.
+flag~share open-as~--json~~One document without the link (never the session).
+cmd~share teardown~benchbar share teardown [--yes] [--json]~Stop sharing, drop the copy (backed up first), and delete the share folder with the host identity and the room; the Time Machine exclusions go too. Asks first (--yes); only a person runs it.~yes~no~no~yes~stream
+flag~share teardown~--yes~~Do not ask first.
+flag~share teardown~--json~~JSON lines: steps, done with copy_dropped, archived_path and state_removed.
 cmd~site hosts~benchbar site hosts~Add a 127.0.0.1 line for every site to /etc/hosts.~yes~yes~no~yes~none
 cmd~site backup~benchbar site backup NAME [--with-files] [--json]~bench --site NAME backup.~no~no~no~yes~document
 flag~site backup~--with-files~~Include the uploads.
