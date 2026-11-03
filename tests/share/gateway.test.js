@@ -1233,3 +1233,14 @@ test("web state: a refused upstream connection latches the web down until the ru
         }
     });
 });
+
+test("web state: a reset of one request is that request's 503 and does not latch the web down", async () => {
+    const c = cert("web3");
+    await withGateway({ devices: [deviceRow(c, { user: "seat1@example.com" })] }, async (gw) => {
+        const reset = await request(gw, { path: "/app/reset-me", cert: c, headers: { accept: "text/html" } });
+        assert.strictEqual(reset.status, 503);
+        assert.ok(reset.text.includes("bench is restarting, try again in a moment"));
+        assert.strictEqual((await status(gw)).web_up, true, "a reset is not a connect failure");
+        assert.strictEqual((await request(gw, { path: "/app", cert: c })).status, 200);
+    });
+});

@@ -56,6 +56,8 @@ async function startUpstream({ port: wanted } = {}) {
         req.on("end", () => {
             hits.push({ method: req.method, url: req.url, headers: req.headers, rawHeaders: req.rawHeaders, body: Buffer.concat(chunks) });
             if (req.url === "/slow") return;
+            // a live web process that drops one request: the connection is reset, the server keeps listening
+            if (req.url.startsWith("/app/reset")) return req.socket.destroy();
             res.writeHead(200, { "Content-Type": "text/plain", "Set-Cookie": "up=1; Path=/" });
             res.end("upstream-ok");
         });
