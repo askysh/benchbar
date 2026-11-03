@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Network
 import Observation
@@ -46,10 +47,12 @@ final class GuestRoomStore {
         var rooms: SavedRoomsStore
         var dial: @Sendable (NWEndpoint, ServerPin) async throws(RoomConnectionError) -> any RoomTransport
         /// The join itself; the code is passed through and never kept.
-        var runJoin: @Sendable (any RoomTransport, String, String, String, Data) async -> Result<JoinedRoom, JoinRefusal>
+        var runJoin: @Sendable (any RoomTransport, String, String, String, Data, RoomJoin.InviteCheck?) async -> Result<JoinedRoom, JoinRefusal>
         var clientFingerprint: @Sendable () -> Data?
         var makeForwarder: (SavedRoom) -> any ForwarderRunning
         var openURL: (URL) -> Void
+        /// Read only by Paste invite, on its click.
+        var readPasteboard: () -> String?
         var now: () -> Date = Date.init
         var model: String = GuestRoomStore.hardwareModel()
     }
@@ -65,6 +68,11 @@ final class GuestRoomStore {
     private(set) var localNetworkDenied = false
     var join: JoinStep = .none
     var guestName: String
+    /// The invite the join sheet is for. Its code is the sheet's prefill and is blanked as the
+    /// join is sent; the key, salt and deadline stay for a retry. Cleared when the sheet closes.
+    private(set) var invite: ShareInvite?
+    /// Why a link or a paste did not open the join sheet.
+    private(set) var inviteNotice: String?
 
     private let deps: Dependencies
     private var forwarders: [String: any ForwarderRunning] = [:]
@@ -110,6 +118,7 @@ final class GuestRoomStore {
         guard !room.display.needsUpdate else { return }
         if case .joining = join { return }
         rejoining = nil
+        invite = nil
         join = .enteringCode(room)
     }
 
@@ -120,7 +129,48 @@ final class GuestRoomStore {
         let target = rejoinTarget(room)
         guard !target.display.needsUpdate else { return }
         rejoining = room
+        invite = nil
         join = .enteringCode(target)
+    }
+
+    /// A `benchbar://share/join` link or a pasted invite: opens the join sheet with the code
+    /// filled in and waits for the Join click. Nothing is dialled here.
+    func open(invite result: Result<ShareInvite, ShareInvite.Problem>) {
+        if case .joining = join { return }
+        switch result {
+        case .failure(let problem):
+            inviteNotice = NetworkPanePresentation.inviteProblem(problem)
+        case .success(let invite):
+            inviteNotice = nil
+            rejoining = nil
+            self.invite = invite
+            join = .enteringCode(inviteTargets(invite)[0])
+        }
+    }
+
+    /// The Paste invite button: the only place the pasteboard is read.
+    func pasteInvite() {
+        open(invite: ShareInvite.first(in: deps.readPasteboard() ?? ""))
+    }
+
+    func dismissInviteNotice() {
+        inviteNotice = nil
+    }
+
+    /// Bonjour rooms with the invite's label first, then the invite's address. A TXT record
+    /// proves nothing, so every one of them is dialled pinned to the invite's key.
+    private func inviteTargets(_ invite: ShareInvite) -> [DiscoveredRoom] {
+        var targets = discovered.filter { $0.display.label == invite.room && !$0.display.needsUpdate }
+        if let address = invite.address, let port = NWEndpoint.Port(rawValue: address.port) {
+            targets.append(DiscoveredRoom(id: invite.room, endpoint: .hostPort(host: NWEndpoint.Host(address.host), port: port),
+                                          display: RoomDisplay(label: invite.room, site: "", protocolV: CPace.protocolVersion)))
+        }
+        if targets.isEmpty {
+            // Neither seen nor addressed: the sheet still opens, and Join reports "didn't answer".
+            targets.append(DiscoveredRoom(id: invite.room, endpoint: .service(name: invite.room, type: LanRoomBrowser.serviceType, domain: "local.", interface: nil),
+                                          display: RoomDisplay(label: invite.room, site: "", protocolV: CPace.protocolVersion)))
+        }
+        return targets
     }
 
     /// The live Bonjour entry first, then the saved address, then the service by name.
@@ -140,6 +190,7 @@ final class GuestRoomStore {
             joinTransport = nil
         }
         rejoining = nil
+        invite = nil
         join = .none
     }
 
@@ -160,31 +211,61 @@ final class GuestRoomStore {
             join = .refused(room, .failed)
             return
         }
+        let invite = self.invite
+        self.invite?.code = ""
         lastAttempt = now
         join = .joining(room)
         joinAttempt += 1
         let attempt = joinAttempt
 
-        // A host this Mac joined before must show the same key (rejoins are pinned).
-        let earlier = rejoining.flatMap { $0.serviceName == room.id ? $0 : nil } ?? saved.first { $0.serviceName == room.id }
-        let pin: ServerPin = earlier?.hostPin.map(ServerPin.pinned) ?? .firstJoin
-        let transport: any RoomTransport
-        do {
-            transport = try await deps.dial(room.endpoint, pin)
-        } catch {
-            guard attempt == joinAttempt else { return }
-            join = .refused(room, error == .identityChanged ? .identityChanged : error == .localNetworkDenied ? .localNetworkDenied : .unreachable)
-            if error == .localNetworkDenied { localNetworkDenied = true }
-            // R3.8: the saved row shows the changed identity; the pin is never replaced here.
-            if error == .identityChanged, let earlier { note(.identityChanged, for: earlier) }
-            return
+        // A host this Mac joined before must show the same key (rejoins are pinned); an
+        // invite's host must show the invite's key, checked in the TLS handshake itself.
+        let earlier: SavedRoom?
+        let pin: ServerPin
+        let targets: [DiscoveredRoom]
+        if let invite {
+            earlier = saved.first { $0.hostPin == invite.hostPin }
+            pin = .pinned(invite.hostPin)
+            targets = inviteTargets(invite)
+        } else {
+            earlier = rejoining.flatMap { $0.serviceName == room.id ? $0 : nil } ?? saved.first { $0.serviceName == room.id }
+            pin = earlier?.hostPin.map(ServerPin.pinned) ?? .firstJoin
+            targets = [room]
         }
-        guard attempt == joinAttempt else {
-            transport.close()
+        var dialed: (transport: any RoomTransport, target: DiscoveredRoom)?
+        var failures: [RoomConnectionError] = []
+        for target in targets {
+            do {
+                let transport = try await deps.dial(target.endpoint, pin)
+                guard attempt == joinAttempt else {
+                    transport.close()
+                    return
+                }
+                dialed = (transport, target)
+                break
+            } catch {
+                guard attempt == joinAttempt else { return }
+                failures.append(error)
+            }
+        }
+        guard let (transport, target) = dialed else {
+            if failures.contains(.localNetworkDenied) {
+                localNetworkDenied = true
+                join = .refused(room, .localNetworkDenied)
+            } else if failures.contains(.identityChanged) {
+                join = .refused(room, invite == nil ? .identityChanged : .notTheInvitedRoom)
+                // R3.8: the saved row shows the changed identity; the pin is never replaced here.
+                if invite == nil, let earlier { note(.identityChanged, for: earlier) }
+            } else if let invite, invite.isExpired(now: deps.now()) {
+                // `x` is advisory (the host may have extended): it only explains a room that is gone.
+                join = .refused(room, .inviteExpired)
+            } else {
+                join = .refused(room, .unreachable)
+            }
             return
         }
         joinTransport = transport
-        let result = await deps.runJoin(transport, code, guestName, deps.model, fg)
+        let result = await deps.runJoin(transport, code, guestName, deps.model, fg, invite?.check)
         let address = transport.remoteEndpoint
         transport.close()
         if attempt == joinAttempt { joinTransport = nil }
@@ -202,6 +283,7 @@ final class GuestRoomStore {
         case .success(let joined):
             wrongInARow = 0
             rejoining = nil
+            self.invite = nil
             var lastHost = ""
             var port: UInt16 = 0
             if case .hostPort(let host, let hostPort)? = address {
@@ -210,7 +292,7 @@ final class GuestRoomStore {
             }
             // The host chooses these words: shown like a TXT record, never with bidi or control characters.
             let entry = SavedRoom(hostFingerprint: Fingerprint.prefix + joined.hostPin.hex, deviceId: joined.deviceId, room: TXTSanitizer.clean(joined.hello.room),
-                                  host: TXTSanitizer.clean(joined.hello.host), site: TXTSanitizer.clean(joined.hello.site), serviceName: room.id, lastHost: lastHost, port: port,
+                                  host: TXTSanitizer.clean(joined.hello.host), site: TXTSanitizer.clean(joined.hello.site), serviceName: target.id, lastHost: lastHost, port: port,
                                   localPort: earlier?.localPort, joinedAt: deps.now(), salt: joined.hello.salt)
             if let old = forwarders.removeValue(forKey: entry.id) { old.stop() }
             deps.rooms.save(entry)
@@ -412,8 +494,8 @@ extension GuestRoomStore.Dependencies {
                 try await connection.open()
                 return connection
             },
-            runJoin: { transport, code, name, model, fg in
-                await RoomJoin(name: name, model: model).join(over: transport, code: code, fg: fg)
+            runJoin: { transport, code, name, model, fg, invite in
+                await RoomJoin(name: name, model: model).join(over: transport, code: code, fg: fg, invite: invite)
             },
             clientFingerprint: { (try? identity.spkiDER()).map(Fingerprint.raw(spki:)) },
             makeForwarder: { room in
@@ -425,6 +507,7 @@ extension GuestRoomStore.Dependencies {
                 return ShareForwarder(localHost: LocalShareName.host(label: room.room, suffix: suffix, hostPin: pin), port: port, hostLabel: room.host, pin: pin,
                                       makeUpstream: ShareForwarder.pinnedUpstream(to: endpoint, identity: identity, pin: pin))
             },
-            openURL: openURL)
+            openURL: openURL,
+            readPasteboard: { NSPasteboard.general.string(forType: .string) })
     }
 }

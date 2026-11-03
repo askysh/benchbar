@@ -17,6 +17,8 @@ nonisolated final class NodeGateway {
     let info: Info
     private let process: Process
     private let stdin: Pipe
+    private let stdout: Pipe
+    private var unread = Data()
 
     /// Absolute paths: an xcodebuild test host's PATH may lack Homebrew.
     static func nodePath() -> String? {
@@ -37,18 +39,37 @@ nonisolated final class NodeGateway {
         process.executableURL = URL(fileURLWithPath: node)
         process.arguments = [ShareRepo.macos.appendingPathComponent("BenchBarTests/Fixtures/room-gateway.js").path, ShareRepo.root.path]
         stdin = Pipe()
-        let stdout = Pipe()
+        stdout = Pipe()
         process.standardInput = stdin
         process.standardOutput = stdout
         process.standardError = FileHandle.nullDevice
         try process.run()
-        var line = Data()
-        while !line.contains(0x0A) {
-            let chunk = stdout.fileHandleForReading.availableData
+        var buffer = Data()
+        info = try JSONDecoder().decode(Info.self, from: Self.readLine(stdout, buffer: &buffer))
+        unread = buffer
+    }
+
+    private static func readLine(_ pipe: Pipe, buffer: inout Data) -> Data {
+        while !buffer.contains(0x0A) {
+            let chunk = pipe.fileHandleForReading.availableData
             if chunk.isEmpty { break }
-            line.append(chunk)
+            buffer.append(chunk)
         }
-        info = try JSONDecoder().decode(Info.self, from: line)
+        guard let newline = buffer.firstIndex(of: 0x0A) else { defer { buffer = Data() }; return buffer }
+        let line = buffer[buffer.startIndex..<newline]
+        buffer = Data(buffer[buffer.index(after: newline)...])
+        return Data(line)
+    }
+
+    /// One control message to the gateway (the host's own channel), e.g. `status`.
+    func control(_ op: String) throws -> [String: Any] {
+        stdin.fileHandleForWriting.write(Data("{\"op\":\"\(op)\"}\n".utf8))
+        return try JSONSerialization.jsonObject(with: Self.readLine(stdout, buffer: &unread)) as? [String: Any] ?? [:]
+    }
+
+    /// The host's wrong-code budget, as `share status` reads it.
+    func budgetLeft() throws -> Int? {
+        try control("status")["budget_left"] as? Int
     }
 
     var endpoint: NWEndpoint { .hostPort(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: info.port)!) }
@@ -134,5 +155,117 @@ struct ShareInteropTests {
         otherPin[0] ^= 0x01
         let pinned = RoomConnection(endpoint: gateway.endpoint, identity: try identity.identity(), pin: .pinned(otherPin))
         await #expect(throws: RoomConnectionError.identityChanged) { try await pinned.open() }
+    }
+
+    /// The pre-auth salt the invite's `s` is compared with.
+    private func roomSalt(_ gateway: NodeGateway, identity: KeychainIdentity) async throws -> String {
+        let connection = RoomConnection(endpoint: gateway.endpoint, identity: try identity.identity(), pin: .firstJoin)
+        try await connection.open()
+        defer { connection.close() }
+        return try await RoomAPI(transport: connection).roomHello().salt
+    }
+
+    /// A stale invite (another salt) and an invite for another key both stop before the CPace
+    /// start, so the host's wrong-code budget is not spent; a real wrong code shows the budget
+    /// does move when a try is spent.
+    @Test func aStaleOrForeignInviteNeverSpendsTheHostsBudget() async throws {
+        guard let gateway = try NodeGateway() else {
+            Issue.record("node or tests/share/helpers.js not found: the Node interop join was not run")
+            return
+        }
+        defer { gateway.stop() }
+        let scratch = try #require(ScratchKeychain())
+        let identity = KeychainIdentity(label: "interop \(UUID().uuidString)", keychain: scratch.keychain)
+        let hostPin = try #require(Fingerprint.raw(fingerprint: gateway.info.host_fp))
+        let joiner = RoomJoin(name: "Asha", model: "Mac14,2", makeMap: { () throws(CPace.Failure) in try CPaceMap(scriptURL: ShareRepo.mapScript) })
+        let fg = Fingerprint.raw(spki: try identity.spkiDER())
+        let before = try #require(try gateway.budgetLeft())
+
+        let staleSalt = Data((0..<16).map { _ in UInt8.random(in: 0...255) }).hex
+        #expect(staleSalt != (try await roomSalt(gateway, identity: identity)))
+        let stale = RoomConnection(endpoint: gateway.endpoint, identity: try identity.identity(), pin: .pinned(hostPin))
+        try await stale.open()
+        let staleResult = await joiner.join(over: stale, code: gateway.info.code, fg: fg, invite: .init(hostPin: hostPin, salt: staleSalt))
+        stale.close()
+        #expect(staleResult == .failure(.inviteOutOfDate))
+        #expect(try gateway.budgetLeft() == before)
+
+        var otherPin = hostPin
+        otherPin[0] ^= 0x01
+        let foreign = RoomConnection(endpoint: gateway.endpoint, identity: try identity.identity(), pin: .firstJoin)
+        try await foreign.open()
+        let foreignResult = await joiner.join(over: foreign, code: gateway.info.code, fg: fg,
+                                              invite: .init(hostPin: otherPin, salt: try await roomSalt(gateway, identity: identity)))
+        foreign.close()
+        #expect(foreignResult == .failure(.notTheInvitedRoom))
+        #expect(try gateway.budgetLeft() == before)
+
+        let digits = Array(gateway.info.code)
+        let wrong = String(digits.dropLast()) + String((Int(String(digits.last!))! + 1) % 10)
+        let (wrongResult, connection) = try await join(gateway, identity: identity, code: wrong)
+        connection.close()
+        #expect(wrongResult == .failure(.wrongCode))
+        #expect(try gateway.budgetLeft() == before - 1)
+    }
+
+    /// The whole guest path from an invite link: the store opens the sheet, nothing is dialled
+    /// until Join, then the join is pinned to `h` and lands on the seat picker, past `x` too.
+    @Test func anInviteLinkJoinsTheNodeGatewayOnlyAfterJoinIsClicked() async throws {
+        guard let gateway = try NodeGateway() else {
+            Issue.record("node or tests/share/helpers.js not found: the Node interop join was not run")
+            return
+        }
+        defer { gateway.stop() }
+        let scratch = try #require(ScratchKeychain())
+        let identity = KeychainIdentity(label: "interop \(UUID().uuidString)", keychain: scratch.keychain)
+        let hostHex = String(gateway.info.host_fp.dropFirst(Fingerprint.prefix.count))
+        let salt = try await roomSalt(gateway, identity: identity)
+        // A past `x` (an extended share) does not stop a room that answers with `h` and `s`.
+        let deadline = Int(Date().timeIntervalSince1970) - 600
+        let link = "benchbar://share/join?v=1&r=Test%20Room&h=\(hostHex)&s=\(salt)&c=\(gateway.info.code)&a=127.0.0.1:\(gateway.info.port)&x=\(deadline)"
+        let message = "Join my BenchBar room \"Test Room\" (office Wi-Fi, until 18:00)\n\(link)\nOr: open BenchBar → On your network → Paste invite"
+
+        let defaults = UserDefaults(suiteName: "interop-invite-\(UUID().uuidString)")!
+        let dials = DialLog()
+        let store = GuestRoomStore(dependencies: .init(
+            browser: NoBrowser(),
+            rooms: SavedRoomsStore(defaults: defaults),
+            dial: { endpoint, pin throws(RoomConnectionError) in
+                try dials.record(pin)
+                guard let secIdentity = try? identity.identity() else { throw .unreachable }
+                let connection = RoomConnection(endpoint: endpoint, identity: secIdentity, pin: pin)
+                try await connection.open()
+                return connection
+            },
+            runJoin: { transport, code, name, model, fg, invite in
+                await RoomJoin(name: name, model: model, makeMap: { () throws(CPace.Failure) in try CPaceMap(scriptURL: ShareRepo.mapScript) })
+                    .join(over: transport, code: code, fg: fg, invite: invite)
+            },
+            clientFingerprint: { (try? identity.spkiDER()).map(Fingerprint.raw(spki:)) },
+            makeForwarder: { _ in FakeForwarder() },
+            openURL: { _ in },
+            readPasteboard: { message }), guestName: "Asha")
+
+        store.pasteInvite()
+        guard case .enteringCode(let room) = store.join, let invite = store.invite else {
+            Issue.record("expected the invite's join sheet, got \(store.join)")
+            return
+        }
+        #expect(dials.pins.isEmpty)
+        #expect(invite.code == gateway.info.code)
+        let before = try gateway.budgetLeft()
+
+        await store.submit(code: invite.code, for: room)
+        guard case .pickingSeat(let saved, let seats) = store.join else {
+            Issue.record("expected the seat picker, got \(store.join)")
+            return
+        }
+        let hostPin = try #require(Fingerprint.raw(fingerprint: gateway.info.host_fp))
+        #expect(!dials.pins.isEmpty && dials.pins.allSatisfy { $0 == .pinned(hostPin) })
+        #expect(saved.hostPin == hostPin)
+        #expect(seats.map(\.seat_id) == gateway.info.seats)
+        #expect(store.invite == nil)
+        #expect(try gateway.budgetLeft() == before)
+        #expect(!"\(defaults.dictionaryRepresentation())".contains(gateway.info.code))
     }
 }

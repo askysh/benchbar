@@ -118,6 +118,9 @@ private final class Harness {
     var opened: [URL] = []
     var joinResult: Result<JoinedRoom, JoinRefusal>
     var codesSeen: [String] = []
+    var invitesSeen: [RoomJoin.InviteCheck?] = []
+    var pasteboard: String?
+    var pasteboardReads = 0
     var now = Date(timeIntervalSince1970: 1_800_000_000)
     let defaults = UserDefaults(suiteName: "guest-store-\(UUID().uuidString)")!
     lazy var store: GuestRoomStore = makeStore()
@@ -146,15 +149,20 @@ private final class Harness {
                 try dials.record(pin)
                 return transport
             },
-            runJoin: { [unowned self] _, code, _, _, _ in
+            runJoin: { [unowned self] _, code, _, _, _, invite in
                 await MainActor.run {
                     codesSeen.append(code)
+                    invitesSeen.append(invite)
                     return joinResult
                 }
             },
             clientFingerprint: { Data(count: 32) },
             makeForwarder: { _ in forwarder },
             openURL: { [unowned self] in opened.append($0) },
+            readPasteboard: { [unowned self] in
+                pasteboardReads += 1
+                return pasteboard
+            },
             now: { [unowned self] in now },
             model: "Mac14,2"), guestName: "Asha")
     }
@@ -325,13 +333,13 @@ private final class Harness {
             browser: NoBrowser(),
             rooms: SavedRoomsStore(defaults: UserDefaults(suiteName: "guest-cancel-\(UUID().uuidString)")!),
             dial: { _, _ throws(RoomConnectionError) in silent },
-            runJoin: { transport, _, _, _, _ in
+            runJoin: { transport, _, _, _, _, _ in
                 do { _ = try await transport.send("GET", "/room/hello", body: nil) } catch { return .failure(.unreachable) }
                 return .failure(.failed)
             },
             clientFingerprint: { Data(count: 32) },
             makeForwarder: { _ in FakeForwarder() },
-            openURL: { _ in }), guestName: "Asha")
+            openURL: { _ in }, readPasteboard: { nil }), guestName: "Asha")
         store.beginJoin(Harness.room)
         let attempt = Task { await store.submit(code: "482913", for: Harness.room) }
         for _ in 0..<400 where silent.sends == 0 { try await Task.sleep(for: .milliseconds(5)) }
@@ -364,10 +372,10 @@ private final class Harness {
                 if case .hostPort(let host, _) = endpoint, "\(host)" == "10.0.0.1" { return silent }
                 return answering
             },
-            runJoin: { _, _, _, _, _ in .failure(.failed) },
+            runJoin: { _, _, _, _, _, _ in .failure(.failed) },
             clientFingerprint: { Data(count: 32) },
             makeForwarder: { _ in FakeForwarder() },
-            openURL: { _ in }), guestName: "Asha")
+            openURL: { _ in }, readPasteboard: { nil }), guestName: "Asha")
         let round = Task { await store.pingAll() }
         for _ in 0..<400 where store.health[live.id] == nil { try await Task.sleep(for: .milliseconds(5)) }
         #expect(store.health[live.id] == .ready(deadline: Date(timeIntervalSince1970: 1_800_003_600)))
@@ -428,5 +436,107 @@ private final class Harness {
         let taken = RoomSeat(seat_id: "s2", full_name: "Ops", roles: [], taken_by: "Ravi")
         #expect(NetworkPanePresentation.seatRow(free) == ("Sales One · Sales User, Stock User", ""))
         #expect(NetworkPanePresentation.seatRow(taken) == ("Ops", "taken by Ravi"))
+    }
+}
+
+@MainActor
+@Suite struct GuestInviteTests {
+    private let invite = InviteFixture.invite()!
+    private var addressed: DiscoveredRoom {
+        DiscoveredRoom(id: "Standup", endpoint: .hostPort(host: "192.168.1.9", port: 8443), display: RoomDisplay(label: "Standup", site: "", protocolV: 3))
+    }
+
+    @Test func aLinkOnlyOpensTheSheetAndJoinIsPinnedToTheInvite() async throws {
+        let h = Harness()
+        h.store.open(invite: .success(invite))
+        #expect(h.store.join == .enteringCode(addressed))
+        #expect(h.store.invite?.code == "482913")
+        #expect(h.dials.pins.isEmpty && h.codesSeen.isEmpty && h.pasteboardReads == 0)
+
+        await h.store.submit(code: "482913", for: addressed)
+        #expect(!h.dials.pins.isEmpty && h.dials.pins.allSatisfy { $0 == .pinned(Data(repeating: 0xab, count: 32)) })
+        #expect(h.invitesSeen == [invite.check])
+        guard case .pickingSeat(let saved, _) = h.store.join else {
+            Issue.record("expected the seat picker, got \(h.store.join)")
+            return
+        }
+        #expect(saved.hostPin == invite.hostPin)
+        #expect(h.store.invite == nil)
+        #expect(!"\(h.defaults.dictionaryRepresentation())".contains("482913"))
+    }
+
+    /// `x` is advisory: the host may have extended the share, and a matching key and salt
+    /// prove the code is current.
+    @Test func aPastDeadlineStillJoinsALiveMatchingRoom() async {
+        let h = Harness()
+        h.now = invite.expires.addingTimeInterval(600)
+        h.store.open(invite: .success(invite))
+        #expect(h.store.join == .enteringCode(addressed))
+        await h.store.submit(code: "482913", for: addressed)
+        #expect(h.invitesSeen == [invite.check])
+        guard case .pickingSeat = h.store.join else {
+            Issue.record("expected the seat picker, got \(h.store.join)")
+            return
+        }
+    }
+
+    @Test func aPastDeadlineWithNoRoomAnsweringIsExpired() async {
+        let h = Harness()
+        h.dials.failure = .unreachable
+        h.store.open(invite: .success(invite))
+        h.now = invite.expires.addingTimeInterval(1)
+        await h.store.submit(code: "482913", for: addressed)
+        #expect(h.store.join == .refused(addressed, .inviteExpired))
+        #expect(h.codesSeen.isEmpty)
+
+        let early = Harness()
+        early.dials.failure = .unreachable
+        early.store.open(invite: .success(invite))
+        await early.store.submit(code: "482913", for: addressed)
+        #expect(early.store.join == .refused(addressed, .unreachable))
+    }
+
+    @Test func anotherKeyIsNotTheInvitedRoomAndNoJoinRuns() async {
+        let h = Harness()
+        h.dials.failure = .identityChanged
+        h.store.open(invite: .success(invite))
+        await h.store.submit(code: "482913", for: addressed)
+        #expect(h.store.join == .refused(addressed, .notTheInvitedRoom))
+        #expect(h.codesSeen.isEmpty)
+        #expect(h.store.health.isEmpty)
+    }
+
+    @Test func theCodeIsBlankedOnceSentAndTheKeyStaysForARetry() async {
+        let h = Harness()
+        h.joinResult = .failure(.unreachable)
+        h.store.open(invite: .success(invite))
+        await h.store.submit(code: "482913", for: addressed)
+        #expect(h.store.join == .refused(addressed, .unreachable))
+        #expect(h.store.invite?.code == "")
+        #expect(h.store.invite?.hostPin == invite.hostPin)
+        h.store.cancelJoin()
+        #expect(h.store.invite == nil)
+    }
+
+    @Test func thePasteboardIsReadOnlyByPasteInvite() async {
+        let h = Harness()
+        h.pasteboard = "see you there: \(InviteFixture.link())"
+        h.store.startBrowsing()
+        h.store.open(invite: .success(invite))
+        h.store.cancelJoin()
+        _ = URLRouter.route(URL(string: InviteFixture.link())!, benches: [], selected: nil)
+        await h.store.pingAll()
+        #expect(h.pasteboardReads == 0)
+
+        h.store.pasteInvite()
+        #expect(h.pasteboardReads == 1)
+        #expect(h.store.join == .enteringCode(addressed))
+        h.store.cancelJoin()
+
+        h.pasteboard = "nothing to see"
+        h.store.pasteInvite()
+        #expect(h.pasteboardReads == 2)
+        #expect(h.store.join == .none)
+        #expect(h.store.inviteNotice == NetworkPanePresentation.inviteProblem(.notFound))
     }
 }

@@ -45,6 +45,9 @@ nonisolated enum URLRouter {
         case profile(ProfileLink)
         /// A page of a room this Mac already joined; never joins anything (U3).
         case share(ShareDeepLink.Target)
+        /// `benchbar://share/join?…`: the join sheet with the invite's code filled in, waiting
+        /// for the Join click. It carries the code, so the link itself is never logged.
+        case shareInvite(Result<ShareInvite, ShareInvite.Problem>)
     }
 
     /// `benchbar://profile/import?url=` and `benchbar://profile/subscribe?url=`.
@@ -133,6 +136,9 @@ nonisolated enum URLRouter {
     /// path, a query or a fragment is ignored (ShareDeepLink).
     static func shareRoute(_ url: URL) -> Outcome? {
         guard url.scheme?.lowercased() == scheme, url.host(percentEncoded: false)?.lowercased() == "share" else { return nil }
+        // Any share link with a query may hold a code: it goes to the invite parser, never to
+        // `.ignore`, which logs the link.
+        if ShareInvite.isInviteLink(url) || url.query != nil || url.fragment != nil { return .shareInvite(ShareInvite.parse(url)) }
         guard let target = ShareDeepLink.parse(url) else { return .ignore("a share link opens only benchbar://share/<room>/app pages") }
         return .share(target)
     }

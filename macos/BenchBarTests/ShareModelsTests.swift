@@ -37,6 +37,12 @@ nonisolated final class FakeShareCLI: ShareCLI, @unchecked Sendable {
         return ShareCode(code: code, isNew: new, budgetLeft: 10)
     }
 
+    func shareInvite(bench: String, installURL: String?) async throws(CLIError) -> ShareInviteMessage {
+        try record(installURL.map { "invite \($0)" } ?? "invite")
+        return ShareInviteMessage(text: "Join my BenchBar room \"Standup\"\nbenchbar://share/join?v=1&c=\(code)", url: "benchbar://share/join?v=1&c=\(code)",
+                                  expiresAt: Date(timeIntervalSince1970: 1_800_003_600), room: "Standup")
+    }
+
     func sharePeople(bench: String) async throws(CLIError) -> SharePeople {
         lock.withLock { SharePeople(state: .on, people: people) }
     }
@@ -183,6 +189,26 @@ struct ShareStoreTests {
         #expect(fake.statusCalls.prefix(4) == [true, false, true, true])
     }
 
+    @Test func copyInviteWritesTheMessageOnceAndLogsNoCode() async {
+        let fake = FakeShareCLI([on()])
+        let sink = LogSink()
+        let store = ShareStore(bench: "/b", client: fake, log: { sink.lines.append($0) })
+        var written: [String] = []
+        await store.copyInvite { written.append($0) }
+        #expect(written.isEmpty)
+        #expect(fake.calls.isEmpty)
+
+        await store.refresh()
+        await store.copyInvite { written.append($0) }
+        #expect(fake.calls == ["invite"])
+        #expect(written.count == 1 && written[0].contains("482913"))
+        #expect(store.inviteCopied)
+        #expect(sink.lines.contains("share: invite copied"))
+        #expect(!sink.lines.joined().contains("482913"))
+        await store.loadCode(new: true)
+        #expect(!store.inviteCopied)
+    }
+
     @Test func aWrongCallSurfacesTheCLIMessageVerbatim() async {
         let fake = FakeShareCLI([on()])
         fake.actionFailure = .failed(command: "share", exitCode: 1, message: "d_00000000 is not in the room.")
@@ -322,6 +348,31 @@ struct ShareCLITests {
             Issue.record("expected a decoding failure")
         } catch {
             #expect(error == .invalidJSON(detail: "share code", preview: ""))
+        }
+    }
+
+    @Test func theInviteIsReadAsAPersonLenientlyAndAFailedReadRepeatsNothing() async throws {
+        let json = #"{"schema_version":1,"url":"benchbar://share/join?v=1&c=482913","text":"Join my BenchBar room\nbenchbar://share/join?v=1&c=482913","expires_at":"2027-01-15T08:00:00Z","room":"Standup","extra":true}"#
+        let (good, runner) = client(json)
+        let invite = try await good.shareInvite(bench: "/b", installURL: nil)
+        #expect(invite.text == "Join my BenchBar room\nbenchbar://share/join?v=1&c=482913")
+        #expect(invite.expiresAt == Date(timeIntervalSince1970: 1_800_000_000) && invite.room == "Standup")
+        #expect(runner.calls[0].arguments == ["share", "invite", "--json", "--bench-dir", "/b"])
+        #expect(runner.calls[0].environment["BENCHBAR_NONINTERACTIVE"] == "0")
+        #expect(runner.calls[0].environment["BENCHBAR_SUDO"] == "gui")
+        #expect(!"\(invite)".contains("482913"))
+
+        let (install, installRunner) = client(#"{"text":"t","expires_at":1800000000}"#)
+        let minimal = try await install.shareInvite(bench: "/b", installURL: "https://example.com/benchbar")
+        #expect(minimal == ShareInviteMessage(text: "t"))
+        #expect(installRunner.calls[0].arguments == ["share", "invite", "--install-url", "https://example.com/benchbar", "--json", "--bench-dir", "/b"])
+
+        let (bad, _) = client(#"{"url":"benchbar://share/join?v=1&c=482913"}"#)
+        do {
+            _ = try await bad.shareInvite(bench: "/b", installURL: nil)
+            Issue.record("expected a decoding failure")
+        } catch {
+            #expect(error == .invalidJSON(detail: "share invite", preview: ""))
         }
     }
 

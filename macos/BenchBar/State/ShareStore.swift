@@ -103,6 +103,8 @@ final class ShareStore {
     private(set) var knownSeats: [String: String] = [:]
     private(set) var busy: String?
     private(set) var lastError: String?
+    /// Set after Copy invite put the message on the pasteboard.
+    private(set) var inviteCopied = false
     /// The Sharing tab is on screen: poll even while sharing is off.
     var tabVisible = false {
         didSet { if tabVisible && !oldValue { forcePreflight = true; ensurePolling() } }
@@ -240,6 +242,7 @@ final class ShareStore {
     /// Reads the code (`new`: draws a new one, which resets the wrong-code budget).
     func loadCode(new: Bool = false) async {
         guard isSharing else { return }
+        if new { inviteCopied = false }
         do throws(CLIError) {
             code = try await client.shareCode(bench: bench, new: new)
             logLine(new ? "share: new code drawn" : "share: code read")
@@ -247,6 +250,21 @@ final class ShareStore {
             report(error)
         }
         if new { await refresh() }
+    }
+
+    /// Copy invite: `share invite --json`, then `write` puts the message on the pasteboard.
+    /// Runs only on that click; the message is never kept or logged.
+    func copyInvite(installURL: String? = nil, write: (String) -> Void) async {
+        guard isSharing else { return }
+        inviteCopied = false
+        do throws(CLIError) {
+            let invite = try await client.shareInvite(bench: bench, installURL: installURL)
+            write(invite.text)
+            inviteCopied = true
+            logLine("share: invite copied")
+        } catch {
+            report(error)
+        }
     }
 
     // MARK: actions

@@ -121,10 +121,16 @@ struct SharingTab: View {
                 Spacer()
                 Button("Copy") { if let code = share.code { ShareClipboard.copy(code.code) } }
                     .disabled(share.code == nil)
+                Button(SharePresentation.copyInvite) { Task { await share.copyInvite(write: ShareClipboard.copy) } }
+                    .help(SharePresentation.copyInviteHelp)
+                    .disabled(share.busy != nil)
                 Button("New code") { Task { await share.loadCode(new: true) } }
                 Button(status.locked == true ? "Unlock" : "Lock room") {
                     Task { await share.setLocked(!(status.locked ?? false)) }
                 }
+            }
+            if share.inviteCopied {
+                Label(SharePresentation.inviteCopied, systemImage: "checkmark.circle").foregroundStyle(.secondary)
             }
             Text(SharePresentation.codeNote).foregroundStyle(.secondary)
             Text(SharePresentation.codeProves).font(.caption).foregroundStyle(.secondary)

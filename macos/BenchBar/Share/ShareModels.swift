@@ -281,6 +281,41 @@ nonisolated struct ShareCode: Decodable, Sendable, Equatable {
     }
 }
 
+/// `benchbar share invite --json`: the ready-to-paste message and its link, both holding
+/// the code. Only `text` is needed, and it goes to the pasteboard on the Copy invite click;
+/// the rest is read leniently. Never encoded, logged or stored, and never printed.
+nonisolated struct ShareInviteMessage: Decodable, Sendable, Equatable, CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
+    var text: String
+    var url: String?
+    var expiresAt: Date?
+    var room: String?
+
+    enum CodingKeys: String, CodingKey {
+        case text, url, room
+        case expiresAt = "expires_at"
+    }
+
+    init(text: String, url: String? = nil, expiresAt: Date? = nil, room: String? = nil) {
+        self.text = text
+        self.url = url
+        self.expiresAt = expiresAt
+        self.room = room
+    }
+
+    init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        text = try c.decode(String.self, forKey: .text)
+        url = try? c.decodeIfPresent(String.self, forKey: .url)
+        // ISO 8601 UTC; anything else is left out rather than failing the copy.
+        expiresAt = (try? c.decodeIfPresent(String.self, forKey: .expiresAt)).flatMap { try? Date($0, strategy: .iso8601) }
+        room = try? c.decodeIfPresent(String.self, forKey: .room)
+    }
+
+    var description: String { "ShareInviteMessage(room: \(room ?? "?"), text and url hidden)" }
+    var debugDescription: String { description }
+    var customMirror: Mirror { Mirror(self, children: ["room": room as Any], displayStyle: .struct) }
+}
+
 /// One person in the room (`share people --json`). No fingerprint, no user.
 nonisolated struct SharePerson: Codable, Sendable, Equatable, Identifiable {
     var id: String

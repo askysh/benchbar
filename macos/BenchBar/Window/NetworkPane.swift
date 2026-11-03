@@ -29,6 +29,15 @@ struct NetworkPane: View {
                     }
                 }
             }
+            if let notice = store.inviteNotice {
+                Section {
+                    HStack {
+                        Label(notice, systemImage: "exclamationmark.circle")
+                        Spacer()
+                        Button("OK") { store.dismissInviteNotice() }
+                    }
+                }
+            }
             if !store.saved.isEmpty {
                 Section(NetworkPanePresentation.joinedSection) {
                     ForEach(store.saved) { room in
@@ -53,6 +62,12 @@ struct NetworkPane: View {
                 }
             }
             Section {
+                HStack {
+                    Text("Got an invite from a colleague?").foregroundStyle(.secondary)
+                    Spacer()
+                    Button(NetworkPanePresentation.pasteInvite) { store.pasteInvite() }
+                        .help(NetworkPanePresentation.pasteInviteHelp)
+                }
                 HStack {
                     Text(NetworkPanePresentation.shareYourOwn).foregroundStyle(.secondary)
                     Spacer()
@@ -102,8 +117,10 @@ private struct JoinedRoomRow: View {
 
 private struct JoinSheet: View {
     @Bindable var store: GuestRoomStore
-    /// The typed code lives only here and is cleared as it is sent (J12).
+    /// The typed code lives only here and is cleared as it is sent (J12). An invite's code
+    /// is copied in when its sheet appears and shown masked until Show.
     @State private var code = ""
+    @State private var showCode = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -118,11 +135,25 @@ private struct JoinSheet: View {
         case .none:
             EmptyView()
         case .enteringCode(let room):
-            Text(NetworkPanePresentation.codePrompt(room)).font(.headline)
+            Text(store.invite == nil ? NetworkPanePresentation.codePrompt(room) : NetworkPanePresentation.invitePrompt(room)).font(.headline)
             TextField("Your name", text: $store.guestName)
-            TextField("482 913", text: $code)
+            HStack {
+                Group {
+                    if store.invite == nil || showCode {
+                        TextField("482 913", text: $code)
+                    } else {
+                        SecureField("Room code", text: $code)
+                    }
+                }
                 .font(.system(.title2, design: .monospaced))
                 .onSubmit { send(room) }
+                if store.invite != nil {
+                    Toggle("Show", isOn: $showCode).toggleStyle(.button)
+                }
+            }
+            .onAppear {
+                if code.isEmpty, let prefill = store.invite?.code, !prefill.isEmpty { code = prefill }
+            }
             buttons(primary: "Join", enabled: RoomCode.normalize(code) != nil) { send(room) }
         case .joining(let room):
             HStack {
@@ -135,7 +166,14 @@ private struct JoinSheet: View {
             }
         case .refused(let room, let refusal):
             Text(NetworkPanePresentation.refusal(refusal, host: room.display.label)).fixedSize(horizontal: false, vertical: true)
-            buttons(primary: "Try Again", enabled: true) { store.join = .enteringCode(room) }
+            if NetworkPanePresentation.canRetry(refusal) {
+                buttons(primary: "Try Again", enabled: true) { store.join = .enteringCode(room) }
+            } else {
+                HStack {
+                    Spacer()
+                    Button("Close") { store.cancelJoin() }.keyboardShortcut(.defaultAction)
+                }
+            }
         case .pickingSeat(let room, let seats):
             seatPicker(room, seats, error: nil)
         case .seatRefused(let room, let seats, let error):
@@ -176,6 +214,7 @@ private struct JoinSheet: View {
     private func send(_ room: DiscoveredRoom) {
         let typed = code
         code = ""
+        showCode = false
         Task { await store.submit(code: typed, for: room) }
     }
 }

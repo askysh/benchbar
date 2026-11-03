@@ -49,6 +49,32 @@ nonisolated enum NetworkPanePresentation {
         case .unreachable: return "\(host)'s room didn't answer. Check that you're on the same Wi-Fi."
         case .localNetworkDenied: return localNetworkOff
         case .failed: return "Joining didn't work. Try again."
+        case .inviteExpired: return "This invite has expired. Ask \(host)'s host for a new one."
+        case .notTheInvitedRoom: return "This isn't the room in the invite."
+        case .inviteOutOfDate: return "This invite is out of date (the host changed the code). Ask for a new one."
+        }
+    }
+
+    /// A retry cannot help an invite that expired, went stale or points at another key.
+    static func canRetry(_ refusal: JoinRefusal) -> Bool {
+        switch refusal {
+        case .inviteExpired, .notTheInvitedRoom, .inviteOutOfDate: return false
+        default: return true
+        }
+    }
+
+    static let pasteInvite = "Paste invite"
+    static let pasteInviteHelp = "Reads the clipboard once, for a BenchBar invite your colleague sent."
+
+    static func invitePrompt(_ room: DiscoveredRoom) -> String {
+        "Join \(name(room)) from the invite"
+    }
+
+    static func inviteProblem(_ problem: ShareInvite.Problem) -> String {
+        switch problem {
+        case .notFound: return "There's no BenchBar invite on the clipboard. Copy the whole invite message and try again."
+        case .newerVersion: return "This invite needs a newer BenchBar."
+        case .malformed: return "This invite link is incomplete. Ask for the invite again."
         }
     }
 

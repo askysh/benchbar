@@ -265,6 +265,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // an unknown room only shows the pane; a link never joins (U3)
                 if !(await guest.open(link: target)) { mainWindow.show(.network) }
             }
+        case .shareInvite(let invite):
+            Self.urlLog.info("share invite link: the join sheet, waiting for a click")
+            guest.open(invite: invite)
+            mainWindow.show(.network)
         case .profile(let link):
             Self.urlLog.info("profile link: Team Profiles, sheet prefilled")
             mainWindow.router.profileRequest = link

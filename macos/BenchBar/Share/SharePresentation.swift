@@ -32,6 +32,9 @@ nonisolated enum SharePrimary: Equatable, Sendable {
 nonisolated enum SharePresentation {
     static let durations = [1, 2, 4, 8, 12]
     static let newerCLI = "Sharing needs a newer BenchBar command line tool."
+    static let copyInvite = "Copy invite"
+    static let copyInviteHelp = "Copies a message with a link that joins this room in one click, code included."
+    static let inviteCopied = "Invite copied — paste it in your team channel. New code or Stop makes it stop working."
     static let codeNote = "Anyone on this Wi-Fi with the code can join. Remove people anytime."
     static let codeProves = "The code proves someone may join; it does not prove to them that this Mac is the host."
     static let liveUpdates = "Guests see changes after a page refresh."

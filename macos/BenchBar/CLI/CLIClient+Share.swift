@@ -4,6 +4,7 @@ import Foundation
 nonisolated protocol ShareCLI: Sendable {
     func shareStatus(bench: String, preflight: Bool) async throws(CLIError) -> ShareStatus
     func shareCode(bench: String, new: Bool) async throws(CLIError) -> ShareCode
+    func shareInvite(bench: String, installURL: String?) async throws(CLIError) -> ShareInviteMessage
     func sharePeople(bench: String) async throws(CLIError) -> SharePeople
     func shareUsers(bench: String, site: String) async throws(CLIError) -> ShareUsers
     func shareLog(bench: String, device: String?, since: String?, limit: Int) async throws(CLIError) -> ShareLog
@@ -60,6 +61,21 @@ extension CLIClient: ShareCLI {
             return try BenchJSON.decode(ShareCode.self, from: Data(output.stdout.utf8))
         } catch {
             throw .invalidJSON(detail: "share code", preview: "")
+        }
+    }
+
+    /// Like `shareCode`: the invite holds the code, so it is read as a person from the app
+    /// and a failed read repeats nothing of stdout. Read leniently: only `text` is needed,
+    /// and a missing `schema_version` is accepted.
+    func shareInvite(bench: String, installURL: String?) async throws(CLIError) -> ShareInviteMessage {
+        let install = installURL.flatMap { $0.isEmpty ? nil : ["--install-url", $0] } ?? []
+        let output = try await run(["share", "invite"] + install + ["--json", "--bench-dir", bench],
+                                   timeout: Timeout.action, acceptExitCodes: [0],
+                                   extraEnvironment: Self.personEnvironment)
+        do {
+            return try JSONDecoder().decode(ShareInviteMessage.self, from: Data(output.stdout.utf8))
+        } catch {
+            throw .invalidJSON(detail: "share invite", preview: "")
         }
     }
 

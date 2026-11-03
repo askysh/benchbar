@@ -30,6 +30,13 @@ nonisolated enum JoinRefusal: Error, Equatable, Sendable {
     case unreachable
     case localNetworkDenied
     case failed
+    /// No endpoint of an invite past its `x` answered: the share has most likely ended.
+    case inviteExpired
+    /// The TLS key is not the invite's `h`: no code material was sent.
+    case notTheInvitedRoom
+    /// The room's salt is not the invite's `s` (a new code): stopped before the CPace start,
+    /// so the host's wrong-code budget is untouched.
+    case inviteOutOfDate
 }
 
 nonisolated struct JoinedRoom: Sendable, Equatable {
@@ -63,6 +70,12 @@ nonisolated struct RoomJoin {
     var randomScalar: @Sendable () -> Data = CPace.randomScalar
     var sleep: @Sendable (Duration) async -> Void = { try? await Task.sleep(for: $0) }
 
+    /// What an invite promised: the host key and the salt of the code it carries.
+    struct InviteCheck: Equatable, Sendable {
+        var hostPin: Data
+        var salt: String
+    }
+
     /// The host checks JavaScript string length (UTF-16 units).
     static func clip(_ text: String, max: Int) -> String {
         var out = ""
@@ -72,22 +85,26 @@ nonisolated struct RoomJoin {
 
     /// `fg` is the raw SPKI hash of this Mac's client certificate. The code is used here and
     /// dropped; it is never stored, logged or put into an error (J12).
-    func join(over transport: RoomTransport, code typed: String, fg: Data) async -> Result<JoinedRoom, JoinRefusal> {
+    /// With `invite`, the key is compared before the hello and the salt right after it, so a
+    /// wrong room or a stale invite stops before anything derived from the code is sent.
+    func join(over transport: RoomTransport, code typed: String, fg: Data, invite: InviteCheck? = nil) async -> Result<JoinedRoom, JoinRefusal> {
         guard let code = RoomCode.normalize(typed) else { return .failure(.invalidCode) }
         guard fg.count == 32 else { return .failure(.failed) }
         do throws(JoinRefusal) {
-            return .success(try await run(transport, code: code, fg: fg))
+            return .success(try await run(transport, code: code, fg: fg, invite: invite))
         } catch {
             return .failure(error)
         }
     }
 
-    private func run(_ transport: RoomTransport, code: String, fg: Data) async throws(JoinRefusal) -> JoinedRoom {
+    private func run(_ transport: RoomTransport, code: String, fg: Data, invite: InviteCheck?) async throws(JoinRefusal) -> JoinedRoom {
+        if let invite, transport.serverSPKIHash != invite.hostPin { throw .notTheInvitedRoom }
         let helloReply = try await exchange(transport, "GET", "/room/hello", nil)
         let helloAnswered = ContinuousClock.now
         if helloReply.status == 429 { throw .rateLimited(retryAfter: retryAfter(helloReply)) }
         guard helloReply.status == 200, let hello = helloReply.json(RoomHello.self) else { throw .failed }
         guard hello.v == CPace.protocolVersion else { throw .needsUpdate }
+        if let invite, hello.salt.lowercased() != invite.salt { throw .inviteOutOfDate }
         if hello.locked { throw .locked }
         if hello.full { throw .full }
         guard let salt = Data(hex: hello.salt), salt.count == 16, let fhAtStart = transport.serverSPKIHash else { throw .failed }
@@ -138,6 +155,7 @@ nonisolated struct RoomJoin {
         guard let finished = finishReply.json(Finished.self), finished.status == "joined" else { throw .failed }
         // Pin only after Tb verifies (pin-after-proof).
         guard let tb = Data(hex: finished.Tb), CPace.verifyTag(expected: expectedTb, got: tb) else { throw .codeDidNotCheckOut }
+        if let invite, fh != invite.hostPin { throw .notTheInvitedRoom }
         return JoinedRoom(deviceId: finished.device_id, hostPin: fh, hello: hello)
     }
 
