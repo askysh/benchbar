@@ -254,7 +254,18 @@ nonisolated final class DateBox: @unchecked Sendable {
         #expect(suffix.count == 8)
         #expect(LocalShareName.installSuffix(defaults: one) == suffix)
         #expect(LocalShareName.installSuffix(defaults: two) != suffix)
-        #expect(LocalShareName.host(label: "Priya", suffix: suffix) == "priya-\(suffix).localhost")
+        let pin = Data(repeating: 7, count: 32)
+        #expect(LocalShareName.host(label: "Priya", suffix: suffix, hostPin: pin) != LocalShareName.host(label: "Priya", suffix: LocalShareName.installSuffix(defaults: two), hostPin: pin))
+    }
+
+    @Test func roomsWithOneLabelButDifferentHostsNeverShareACookieJar() {
+        let hostA = Data(repeating: 0xA1, count: 32), hostB = Data(repeating: 0xB2, count: 32)
+        let nameA = LocalShareName.host(label: "Akash's room", suffix: "1a2b3c4d", hostPin: hostA)
+        #expect(nameA != LocalShareName.host(label: "Akash's room", suffix: "1a2b3c4d", hostPin: hostB))
+        #expect(nameA == LocalShareName.host(label: "Akash's room", suffix: "1a2b3c4d", hostPin: hostA))
+        #expect(nameA.hasPrefix("akashs-room-") && nameA.hasSuffix(".localhost"))
+        let longest = LocalShareName.host(label: String(repeating: "a", count: 60), suffix: "1a2b3c4d", hostPin: hostA)
+        #expect(longest.dropLast(".localhost".count).count <= 63)
     }
 
     @Test func portIsDeterministicAndSkipsTakenPorts() {

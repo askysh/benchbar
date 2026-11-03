@@ -354,7 +354,7 @@ extension GuestRoomStore.Dependencies {
                     ? .service(name: room.serviceName, type: LanRoomBrowser.serviceType, domain: "local.", interface: nil)
                     : .hostPort(host: NWEndpoint.Host(room.lastHost), port: NWEndpoint.Port(rawValue: room.port) ?? 0)
                 let port = room.localPort ?? LocalShareName.port(for: pin, isFree: { _ in true }) ?? UInt16(LocalShareName.portRange.lowerBound)
-                return ShareForwarder(localHost: LocalShareName.host(label: room.room, suffix: suffix), port: port, hostLabel: room.host, pin: pin,
+                return ShareForwarder(localHost: LocalShareName.host(label: room.room, suffix: suffix, hostPin: pin), port: port, hostLabel: room.host, pin: pin,
                                       makeUpstream: ShareForwarder.pinnedUpstream(to: endpoint, identity: identity, pin: pin))
             },
             openURL: openURL)

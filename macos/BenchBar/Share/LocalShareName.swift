@@ -1,9 +1,12 @@
+import CryptoKit
 import Foundation
 
-/// The guest-local name a room is browsed under: `<slug>-<8hex>.localhost:<port>` (A9).
-/// Cookies are port-agnostic (spike S5), so the per-install suffix keeps one host's session
-/// away from another install's and from plain `localhost`. `*.localhost` resolves to
-/// loopback with no hosts line and no sudo.
+/// The guest-local name a room is browsed under: `<slug>-<16hex>.localhost:<port>` (A9).
+/// Cookies are port-agnostic (spike S5), so the name alone is the cookie jar. The hex is
+/// SHA-256(install suffix ‖ host pin): another install, or another host with the same room
+/// label, never shares a jar with this one (a host picks its own label, so the label alone
+/// would hand one room's `sid` to another). 64 bits, so a host cannot grind a key into
+/// another host's name. `*.localhost` resolves to loopback with no hosts line and no sudo.
 nonisolated enum LocalShareName {
     static let suffixKey = "shareGuestInstallSuffix"
     static let portRange = 41000...41999
@@ -32,8 +35,9 @@ nonisolated enum LocalShareName {
         return fresh
     }
 
-    static func host(label: String, suffix: String) -> String {
-        "\(slug(label: label))-\(suffix).localhost"
+    static func host(label: String, suffix: String, hostPin: Data) -> String {
+        let jar = SHA256.hash(data: Data(suffix.utf8) + hostPin).prefix(8).map { String(format: "%02x", $0) }.joined()
+        return "\(slug(label: label))-\(jar).localhost"
     }
 
     /// Deterministic per host pin within 41000-41999, moving on while a port is taken.
