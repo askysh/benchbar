@@ -49,6 +49,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         notifier = Notifier(settings: settings)
         store.onAlert = { [weak self] bench, alert in self?.notifier.post(alert, bench: bench) }
         ShareCenter.shared.attach(store)
+        store.confirmWhileSharing = { action, bench in
+            guard let line = HostAmbient.benchConfirm(ShareCenter.shared.stores[bench.path]?.status, restart: action == .restart) else { return true }
+            return ShareConfirm.ask(action == .restart ? "Restart \(bench.name)?" : "Stop \(bench.name)?", detail: line,
+                                    button: action == .restart ? "Restart" : "Stop")
+        }
         ShareCenter.shared.onIconChange = { [weak self] icon in self?.statusItemController.setShareIcon(icon) }
         ShareCenter.shared.onEvent = { share, event in
             guard let notice = HostAmbient.notice(event, bench: share.bench) else { return }

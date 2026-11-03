@@ -153,6 +153,8 @@ final class BenchStore {
     /// nil until the feature is first used; for views that only read.
     var openAsIfStarted: OpenAsStore? { openAsStore }
     @ObservationIgnored var onAlert: ((BenchModel, BenchAlert) -> Void)?
+    /// Asked before Stop or Restart; false cancels. The app delegate asks only while the bench shares.
+    @ObservationIgnored var confirmWhileSharing: ((CLIClient.Action, BenchModel) -> Bool)?
     /// Called after anything that changes what the menu bar shows.
     @ObservationIgnored var onChange: (() -> Void)?
     /// How far each bench's files can be trusted, by path. Logged on change.
@@ -446,6 +448,7 @@ final class BenchStore {
     @discardableResult
     func perform(_ action: CLIClient.Action, on bench: BenchModel) async -> String? {
         guard canChange(bench) else { return Self.busyMessage }
+        if action != .up, let confirm = confirmWhileSharing, !confirm(action, bench) { return nil }
         return await run(action, on: bench)
     }
 
