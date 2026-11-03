@@ -773,3 +773,10 @@ Read `App/AppDelegate.swift` (the menus), `Updates/UpdateCheck.swift`,
   busy state.
 - Preserve subprocess output on a failed batch: warnings from earlier successes
   must not hide the failing path or partial-completion details.
+
+## Share guest crypto
+
+- In the file-based keychain, `kSecAttrIsExtractable: false` inside `kSecPrivateKeyAttrs` is ignored: the key came back exportable until the flag was also set at the top level of the `SecKeyCreateRandomKey` attributes. The identity test checks `SecKeyCopyExternalRepresentation` returns nil.
+- A TLS verify block must be a `@Sendable` closure made in a nonisolated function. Formed inside a type with the default MainActor isolation, it traps on the verify queue (spike S2).
+- A pinned NWConnection whose server shows another key reports `.waiting` with a TLS error before `.failed`; map both through the pin check, or a changed host looks like an unreachable one.
+- The gateway reuses HTTP codes (403 is `wrong_code`, `blocked` or `not_paired`; 409 is `full` or `already_joined`), so the guest maps refusals on the body's `status`.

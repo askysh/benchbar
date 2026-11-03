@@ -50,8 +50,13 @@ targets:
         excludes:
           - "Resources/Info.plist"
           - "Resources/AppIcon.icon"
+          - "Resources/cpace-map.js"
       # the Icon Composer icon is one file to Xcode, compiled by actool
       - path: BenchBar/Resources/AppIcon.icon
+        type: file
+        buildPhase: resources
+      # lib/frappe-local/share/cpace-map.js, byte for byte (ShareCryptoTests): run in JavaScriptCore
+      - path: BenchBar/Resources/cpace-map.js
         type: file
         buildPhase: resources
     info:

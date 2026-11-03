@@ -542,3 +542,10 @@ Asked for after the phases, to stop naming drift before the first release.
 - Move to lists only seats the app has seen held in this room, because the CLI lists held seats only (`share people`).
 - Bench Stop and Restart ask first while that bench shares (`BenchStore.confirmWhileSharing`). Start does not ask.
 - Local Network access is not triggered by the host. The `local_network` check turns red, and Start stays disabled until it passes; the guest side owns the trigger helper.
+
+## Joining a room (guest side)
+
+- The guest runs CPace-X25519-SHA512 (task-2b-spec R3.3, J1-J19) against the host's gateway. `CPace.swift` is a byte-for-byte port of `lib/frappe-local/share/cpace.js`; X25519, SHA-512 and HMAC-SHA512 come from CryptoKit. The Elligator2 map is not ported: `cpace-map.js` is bundled unmodified and runs in JavaScriptCore, so host and guest share one implementation of the risky part. Only the 32 hashed bytes reach JavaScript, as a Uint8Array built through the context's constructor.
+- Hello, start and finish go over one keep-alive TLS connection, because Ta binds the server SPKI and the TLS exporter (`EXPORTER-bb-join-v3`, 32 bytes, empty context, `sec_protocol_metadata_create_secret`) of the connection finish goes out on.
+- The host's SPKI is pinned only after Tb verifies. Every later connection is pinned to it; the hostname and the chain are ignored on purpose, since the host's certificate is self-signed and the SPKI is its only identity.
+- The client identity is a P-256 key plus a hand-built self-signed certificate in the file-based login keychain: an ad-hoc-signed app has no keychain access group, so the data-protection keychain is out. A lookup error is thrown, never answered with a new key, because a new key is a new SPKI and every saved room would silently break. An ACL prompt after an app update (new ad-hoc cdhash) is UNVERIFIED (S3, Task 18).
