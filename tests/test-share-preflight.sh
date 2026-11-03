@@ -140,7 +140,7 @@ assert_eq "critical" "$(fld pf_active class)"; assert_eq "static" "$(fld node_ok
 # the document is the only thing on stdout, and it is one document
 assert_eq "1" "$(wc -l <"$TMP_DIR/pre.out" | tr -d ' ')" "(one line of JSON)"
 # the throwaway listener ran under node with the 0.0.0.0 address inside the pf range and a control above 18000
-assert_calls_contain "^nc .*-z -w1 192.168.1.20 8097"; assert_calls_contain "^nc .*-z -w1 192.168.1.20 18097"
+assert_calls_contain "^nc -z -G1 -w1 192.168.1.20 8097$"; assert_calls_contain "^nc -z -G1 -w1 192.168.1.20 18097$"
 assert_calls_not_contain "^nc .*-6 "
 
 # ---------------------------------------------------------------- pf_active: not vacuous
@@ -193,11 +193,19 @@ printf '18097\n6:18098\n' >"$MOCK_STATE/lan_reachable_ports"
 printf '    inet6 fe80::1c2b:3d4e:5f60:7182%%en0 prefixlen 64 secured scopeid 0xd\n    inet6 2401:4900:1:2::99 prefixlen 64 autoconf secured\n' >"$MOCK_STATE/ifconfig6"
 pre --critical
 assert_eq "0" "$CODE" "$OUT"; assert_check pf_active ok
-assert_calls_contain "^nc -z -w1 -6 2401:4900:1:2::99 8098\$"; assert_calls_contain "^nc -z -w1 -6 2401:4900:1:2::99 18098\$"
+assert_calls_contain "^nc -z -G1 -w1 -6 2401:4900:1:2::99 8098\$"; assert_calls_contain "^nc -z -G1 -w1 -6 2401:4900:1:2::99 18098\$"
 # only a link-local address: probed with its scope
 printf '    inet6 fe80::1c2b:3d4e:5f60:7182%%en0 prefixlen 64 secured scopeid 0xd\n' >"$MOCK_STATE/ifconfig6"
 pre --critical
-assert_check pf_active ok; assert_calls_contain "^nc -z -w1 -6 fe80::1c2b:3d4e:5f60:7182%en0 8098\$"
+assert_check pf_active ok; assert_calls_contain "^nc -z -G1 -w1 -6 fe80::1c2b:3d4e:5f60:7182%en0 8098\$"
+# B5: a blocked port that sends no RST (the link-local IPv6 case on macOS) hangs nc's connect for 75 s
+# unless -G bounds it: the whole critical run stays within seconds, and the verdict is the same
+printf '20\n' >"$MOCK_STATE/nc_unbounded_connect"
+t0="$SECONDS"
+pre --critical
+rm -f "$MOCK_STATE/nc_unbounded_connect"
+assert_check pf_active ok
+[[ $((SECONDS - t0)) -lt 15 ]] || fail "a critical run took $((SECONDS - t0)) s: a probe's connect is not bounded"
 # the IPv6 in-range listener answers: fail naming it
 printf '18097\n6:18098\n6:8098\n' >"$MOCK_STATE/lan_reachable_ports"
 pre --critical
@@ -285,7 +293,7 @@ pre --critical; assert_check share_traceback_off ok; assert_check share_debugger
 reset_world; printf '8001\n' >"$MOCK_STATE/loopback_ports"
 pre --critical
 assert_check bench_redis_up fail "13000" none; assert_contains "$(fld bench_redis_up message)" "stopped"
-assert_calls_contain "^nc .*-z -w1 127.0.0.1 13000"
+assert_calls_contain "^nc -z -G1 -w1 127.0.0.1 13000"
 
 # ---------------------------------------------------------------- the firewall and node
 reset_world

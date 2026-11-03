@@ -110,8 +110,13 @@ fl_sp_detail() {
 
 # ---------------------------------------------------------------- probes
 
-# fl_sp_nc_open ARGS...: whether a TCP connection to HOST PORT succeeds within a second (nc -z -w1 ARGS)
-fl_sp_nc_open() { "${FL_NC:-/usr/bin/nc}" -z -w1 "$@" >/dev/null 2>&1; }
+# fl_sp_nc_open ARGS...: whether a TCP connection to HOST PORT succeeds within a second. On macOS -w is only
+# an idle timeout: a connect that gets no answer (a blocked link-local IPv6 port sends no RST) waits 75 s
+# unless -G bounds it. Other nc builds (OpenBSD's on Linux) bound the connect with -w and have no -G.
+fl_sp_nc_open() {
+  if [[ "${FL_PLATFORM:-macos}" == macos ]]; then "${FL_NC:-/usr/bin/nc}" -z -G1 -w1 "$@" >/dev/null 2>&1
+  else "${FL_NC:-/usr/bin/nc}" -z -w1 "$@" >/dev/null 2>&1; fi
+}
 
 # fl_sp_lan_v: SP_LAN_IFACE and SP_LAN_IP, the address of the default route's interface
 fl_sp_lan_v() {

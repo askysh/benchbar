@@ -1,5 +1,5 @@
 #!/bin/bash
-# nc mock for the share checks: "nc [-6] -z -w1 HOST PORT". Loopback hosts answer for the ports
+# nc mock for the share checks: "nc -z -G1 -w1 [-6] HOST PORT". Loopback hosts answer for the ports
 # in $MOCK_STATE/loopback_ports; any other host (the LAN address) for the ports in
 # $MOCK_STATE/lan_reachable_ports, one per line: "PORT" (either family), "4:PORT" or "6:PORT".
 # A missing file refuses everything, which is what a working pf block does.
@@ -8,16 +8,27 @@
 mock_log "$@"
 # $MOCK_STATE/nc_slow: every probe takes 3 s (a run interrupted while its listener is up)
 [[ ! -f "${MOCK_STATE:-/nonexistent}/nc_slow" ]] || sleep 3
-family=4; pos=()
+# $MOCK_STATE/nc_unbounded_connect: a port of a non-loopback host that refuses nothing (no RST, as macOS
+# sees a blocked link-local IPv6 port) hangs for the seconds in that file, unless -G (macOS's connect
+# timeout) bounds the connect; -w alone does not
+family=4; pos=(); bounded=0
+for a in "$@"; do case "$a" in -G*) bounded=1 ;; esac; done
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
-    -w) shift 2 ;;
+    -w|-G) shift 2 ;;
     -6) family=6; shift ;;
     -*) shift ;;
     *) pos+=("$1"); shift ;;
   esac
 done
 host="${pos[0]:-}"; port="${pos[1]:-}"
+case "$host" in
+  127.0.0.1|::1|localhost) ;;
+  *) if [[ "$bounded" == 0 && -f "${MOCK_STATE:-/nonexistent}/nc_unbounded_connect" ]] \
+       && ! grep -qxE "(${port}|${family}:${port})" "${MOCK_STATE}/lan_reachable_ports" 2>/dev/null; then
+       sleep "$(cat "${MOCK_STATE}/nc_unbounded_connect")"
+     fi ;;
+esac
 case "$host" in
   127.0.0.1|::1|localhost) grep -qx "$port" "${MOCK_STATE:-/nonexistent}/loopback_ports" 2>/dev/null ;;
   *) grep -qxE "(${port}|${family}:${port})" "${MOCK_STATE:-/nonexistent}/lan_reachable_ports" 2>/dev/null ;;
