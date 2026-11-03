@@ -48,6 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         notifier = Notifier(settings: settings)
         store.onAlert = { [weak self] bench, alert in self?.notifier.post(alert, bench: bench) }
+        ShareCenter.shared.attach(store)
         notifier.onOpen = { [weak self] path in self?.showPopover(for: path) }
         notifier.start()
 

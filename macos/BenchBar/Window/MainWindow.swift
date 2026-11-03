@@ -10,7 +10,7 @@ nonisolated enum WindowPane: Hashable, Sendable {
 }
 
 nonisolated enum BenchTab: String, CaseIterable, Hashable, Sendable, Identifiable {
-    case overview = "Overview", sites = "Sites", apps = "Apps", health = "Health"
+    case overview = "Overview", sites = "Sites", apps = "Apps", health = "Health", sharing = "Sharing"
     var id: String { rawValue }
 }
 
