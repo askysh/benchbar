@@ -378,6 +378,17 @@ private final class Harness {
         #expect(store.health[quiet.id] == .offline)
     }
 
+    @Test func theHostsWordsAreSanitizedBeforeTheyAreSaved() async {
+        let h = Harness()
+        var hello = Harness.hello
+        hello.room = "Stand\u{202E}up\u{0007}"
+        hello.host = "Pri\u{200B}ya"
+        h.joinResult = .success(JoinedRoom(deviceId: "d_1", hostPin: Data(repeating: 0xab, count: 32), hello: hello))
+        await h.store.submit(code: "482913", for: Harness.room)
+        #expect(h.store.saved.first?.room == "Stand up")
+        #expect(h.store.saved.first?.host == "Pri ya")
+    }
+
     @Test func forgetTellsTheHostAndDropsTheRoom() async {
         let h = Harness()
         await h.store.submit(code: "482913", for: Harness.room)

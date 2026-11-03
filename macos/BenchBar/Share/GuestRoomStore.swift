@@ -208,8 +208,9 @@ final class GuestRoomStore {
                 lastHost = "\(host)"
                 port = hostPort.rawValue
             }
-            let entry = SavedRoom(hostFingerprint: Fingerprint.prefix + joined.hostPin.hex, deviceId: joined.deviceId, room: joined.hello.room,
-                                  host: joined.hello.host, site: joined.hello.site, serviceName: room.id, lastHost: lastHost, port: port,
+            // The host chooses these words: shown like a TXT record, never with bidi or control characters.
+            let entry = SavedRoom(hostFingerprint: Fingerprint.prefix + joined.hostPin.hex, deviceId: joined.deviceId, room: TXTSanitizer.clean(joined.hello.room),
+                                  host: TXTSanitizer.clean(joined.hello.host), site: TXTSanitizer.clean(joined.hello.site), serviceName: room.id, lastHost: lastHost, port: port,
                                   localPort: earlier?.localPort, joinedAt: deps.now(), salt: joined.hello.salt)
             if let old = forwarders.removeValue(forKey: entry.id) { old.stop() }
             deps.rooms.save(entry)
