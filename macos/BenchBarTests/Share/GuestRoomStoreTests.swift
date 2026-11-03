@@ -319,7 +319,7 @@ private final class Harness {
         #expect(h.codesSeen == ["482913"])
     }
 
-    @Test func cancelWhileJoiningClosesTheSheetAndTheConnection() async throws {
+    @Test(.timeLimit(.minutes(1))) func cancelWhileJoiningClosesTheSheetAndTheConnection() async throws {
         let silent = SilentTransport()
         let store = GuestRoomStore(dependencies: .init(
             browser: NoBrowser(),
@@ -344,7 +344,7 @@ private final class Harness {
         #expect(store.saved.isEmpty)
     }
 
-    @Test func aSilentRoomDoesNotHoldUpTheOthersPing() async throws {
+    @Test(.timeLimit(.minutes(1))) func aSilentRoomDoesNotHoldUpTheOthersPing() async throws {
         let defaults = UserDefaults(suiteName: "guest-ping-\(UUID().uuidString)")!
         let rooms = SavedRoomsStore(defaults: defaults)
         func saved(_ byte: UInt8, _ address: String) -> SavedRoom {

@@ -44,7 +44,7 @@ nonisolated final class SilentRoomServer {
 
 @Suite(.enabled(if: NodeGateway.available, "needs node and tests/share/helpers.js"))
 struct RoomTimeoutTests {
-    @Test func aRoomThatNeverAnswersTimesOut() async throws {
+    @Test(.timeLimit(.minutes(1))) func aRoomThatNeverAnswersTimesOut() async throws {
         guard let server = try SilentRoomServer() else {
             Issue.record("node or tests/share/helpers.js not found: the timeout was not run")
             return
