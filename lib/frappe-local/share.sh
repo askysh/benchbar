@@ -24,7 +24,6 @@
 
 FL_SHARE_MAX_SEATS=50
 FL_SHARE_MAX_LABEL=40
-FL_SHARE_USER_CAP=5000
 
 fl_share_dir() { printf '%s/share' "$FL_STATE_DIR"; }
 fl_share_now_iso() { date -u +%Y-%m-%dT%H:%M:%SZ; }
@@ -49,11 +48,12 @@ fl_share_require_stopped() {
   fl_die "Sharing is on, so the copy is in use." "Run benchbar share stop first, then run this again."
 }
 
-# the config to read: share.json, else the one a refresh set aside (its seat ids and dates carry over)
+# the config to read: share.json; a --refresh falls back to the one it set aside (its seat ids and
+# dates carry over), a plain run never reads that stale file
 fl_share_cfg_file() {
   local d
   d="$(fl_share_dir)"
-  if [[ -f "${d}/share.json" ]]; then printf '%s/share.json' "$d"; else printf '%s/share.json.prev' "$d"; fi
+  if [[ -f "${d}/share.json" || "${SH_REFRESH:-0}" != 1 ]]; then printf '%s/share.json' "$d"; else printf '%s/share.json.prev' "$d"; fi
 }
 
 # fl_share_cfg_raw_v VAR KEY: the JSON text of a top level key of share.json

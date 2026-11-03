@@ -324,7 +324,7 @@ assert_no_file "$SHARE_DIR/share.json" "(the old config does not point at the ra
 assert_file "$SHARE_DIR/share.json.prev"
 assert_eq "$(grep -c '^redis-server' "$MOCK_LOG")" "$(grep -c '^redis-cli .*shutdown' "$MOCK_LOG")" "(the setup Redis is stopped after a dying helper)"
 assert_calls_contain '^redis-cli .*shutdown'
-setup --acknowledge-data --bench-dir "$BENCH"
+setup --users "priya@example.com" --acknowledge-data --bench-dir "$BENCH"
 assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "nobody knows how it was hardened"
 jsetup --users "priya@example.com" --acknowledge-data --refresh --yes
 assert_eq "0" "$CODE" "$OUT$ERR"
@@ -412,6 +412,7 @@ class _DB:
     def get_value(self, doctype, name, fields, as_dict=False):
         return _Row(ROWS[name]) if name in ROWS else None
     def sql_list(self, query, values=()):
+        query % tuple("'%s'" % v for v in values)
         return ["sid-one", "sid-two"] if values == ("priya@example.com",) else []
     def commit(self):
         note("commit")
@@ -510,60 +511,17 @@ assert "Builder" not in got and "Viewer" not in got and "All" not in got
 PY
 
 
-# the hardening cuts a seat's role profile before it demotes, and refuses a seat that keeps one
-harden_snippet="$(bash -c '. "$1/lib/frappe-local/share-site.sh"; printf "%s" "$FL_PY_SHARE_HARDEN"' _ "$ROOT")"
-cat >"$TMP_DIR/harden_stub.py" <<'PY'
-import sys, types
-snippet, mode = sys.argv[1], sys.argv[2]
-log = []
-class DB:
-    def sql(self, q, v=None, as_dict=False):
-        log.append(q)
-        if "select name, enabled, user_type" in q: return [{"name": "u@x.com", "enabled": 1, "user_type": "System User"}]
-        if "tabDocPerm" in q or "tabCustom DocPerm" in q: return []
-        if "select count(*)" in q: return [[1 if "User Role Profile" in q else 0]]
-        return []
-    def sql_list(self, q, v=None):
-        log.append(q)
-        if "role_profile_name" in q:
-            return ["u@x.com"] if (mode == "keeps" or "select name" in q and not any("set role_profile_name = NULL" in x for x in log)) else []
-        if "select role from" in q: return ["System Manager", "Sales User"]
-        return []
-    def get_single_value(self, *a): return None
-    def set_single_value(self, *a): pass
-    def delete(self, *a): pass
-    def truncate(self, *a): pass
-    def table_exists(self, d): return d == "User Role Profile"
-    def has_column(self, d, c): return True
-    def commit(self): log.append("COMMIT")
-    def rollback(self): log.append("ROLLBACK")
-frappe = types.ModuleType("frappe")
-frappe.db = DB(); frappe.cache = types.SimpleNamespace(hdel=lambda *a: None)
-frappe.init = frappe.connect = frappe.destroy = frappe.clear_cache = lambda *a, **k: None
-pw = types.ModuleType("frappe.utils.password"); pw.update_password = lambda *a, **k: None
-sys.modules.update({"frappe": frappe, "frappe.utils": types.ModuleType("frappe.utils"), "frappe.utils.password": pw})
-sys.argv = ["-c", "marker", "share.localhost"]
-code = 0
-try:
-    exec(snippet)
-except SystemExit as e:
-    code = e.code or 0
-sys.stderr.write("\n".join(log))
-sys.exit(code)
-PY
-set +e
-printf 'u@x.com\n' | python3 "$TMP_DIR/harden_stub.py" "$harden_snippet" clears >"$TMP_DIR/h.out" 2>"$TMP_DIR/h.err"; code=$?
-set -e
-assert_eq "0" "$code" "$(cat "$TMP_DIR/h.err")"
-assert_contains "$(cat "$TMP_DIR/h.out")" '"role_profiles_cleared":2'
-prof="$(grep -n 'set role_profile_name = NULL' "$TMP_DIR/h.err" | head -n1 | cut -d: -f1)"
-# shellcheck disable=SC2016  # a literal backtick in the SQL
-dele="$(grep -n 'delete from `tabHas Role`' "$TMP_DIR/h.err" | head -n1 | cut -d: -f1)"
-[[ -n "$prof" && -n "$dele" && "$prof" -lt "$dele" ]] || fail "the role profile is cut before the roles are removed ($prof, $dele)"
-assert_contains "$(cat "$TMP_DIR/h.err")" 'tabUser Role Profile'
-set +e
-printf 'u@x.com\n' | python3 "$TMP_DIR/harden_stub.py" "$harden_snippet" keeps >"$TMP_DIR/h.out" 2>"$TMP_DIR/h.err"; code=$?
-set -e
-assert_eq "1" "$code"; assert_contains "$(cat "$TMP_DIR/h.out")" "BENCHBAR-ERROR"; assert_contains "$(cat "$TMP_DIR/h.err")" "ROLLBACK"
+# the real Python of the users and harden helpers, under a stand-in frappe whose database applies
+# %-parameters the way pymysql does (a format mistake in a query raises)
+printf '%s' "$(bash -c '. "$1/lib/frappe-local/share-site.sh"; printf "%s" "$FL_PY_SHARE_USERS"' _ "$ROOT")" >"$TMP_DIR/users_snippet.py"
+printf '%s' "$(bash -c '. "$1/lib/frappe-local/share-site.sh"; printf "%s" "$FL_PY_SHARE_HARDEN"' _ "$ROOT")" >"$TMP_DIR/harden_snippet.py"
+assert_eq "helpers_stub: ok" "$(python3 "$ROOT/tests/share/helpers_stub.py" "$TMP_DIR/users_snippet.py" "$TMP_DIR/harden_snippet.py" 2>&1)"
+assert_eq "1" "$(grep -c 'FL_SHARE_USER_CAP=' "$ROOT"/lib/frappe-local/share*.sh | awk -F: '{s += $2} END {print s}')" "(the users cap is defined once)"
+
+# a plain setup never inherits users or label from a stale share.json.prev
+rm -rf "$SHARE_DIR"; mkdir -p "$SHARE_DIR"; chmod 700 "$SHARE_DIR"
+printf '{\n  "allowed_users": ["stale@example.com"],\n  "room_label": "Stale"\n}\n' >"$SHARE_DIR/share.json.prev"
+setup --acknowledge-data --bench-dir "$BENCH" --dry-run
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "--users A,B"
 
 printf 'test-share: ok\n'

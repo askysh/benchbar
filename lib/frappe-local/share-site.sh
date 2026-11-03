@@ -52,7 +52,6 @@ def code_capable_roles(frappe):
 FL_PY_SHARE_USERS_BODY='
 import sys, json
 site, mode = sys.argv[2], sys.argv[3]
-USER_CAP = 5000
 def say(*fields):
     print("\nBENCHBAR-RESULT " + "\x1f".join(" ".join(str(f).split()) for f in fields), flush=True)
 import frappe
@@ -65,7 +64,7 @@ try:
                 say(doctype, frappe.db.sql("select count(*) from `tab" + doctype + "`")[0][0])
         sys.exit(0)
     capable = set(code_capable_roles(frappe))
-    users = frappe.db.sql("select name, full_name, enabled, user_type from `tabUser` where name != %s order by enabled desc, user_type, name limit %d" % (USER_CAP + 1), ("Guest",), as_dict=True)
+    users = frappe.db.sql("select name, full_name, enabled, user_type from `tabUser` where name != %s order by enabled desc, user_type, name limit %s", ("Guest", USER_CAP + 1), as_dict=True)
     truncated = len(users) > USER_CAP
     users = users[:USER_CAP]
     held = {}
@@ -88,7 +87,10 @@ try:
             say(u["name"], u["full_name"], "1" if u["enabled"] else "0", u["user_type"], "|".join(u["roles"]), "|".join(u["code_capable_roles"]))
 finally:
     frappe.destroy()'
-FL_PY_SHARE_USERS="${FL_PY_SHARE_ROLES}${FL_PY_SHARE_USERS_BODY}"
+# the users cap is defined once, here; the Python gets it spliced in
+FL_SHARE_USER_CAP=5000
+FL_PY_SHARE_USERS="${FL_PY_SHARE_ROLES}USER_CAP = ${FL_SHARE_USER_CAP}
+${FL_PY_SHARE_USERS_BODY}"
 
 # The hardening of the copy, run inside it (argv: SITE; the allowed users on
 # stdin, one per line). It sets what only the site's own data can set, and
