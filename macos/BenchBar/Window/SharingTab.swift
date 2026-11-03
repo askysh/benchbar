@@ -163,14 +163,14 @@ struct SharingTab: View {
                     Text(SharePresentation.checkTitle(check))
                     Spacer()
                     if check.status != .ok, let label = SharePresentation.fixLabel(check.fixAction) {
-                        Button(label) { Task { await fix(check.fixAction) } }
+                        Button(label) { Task { await fix(check.fixAction, status: status) } }
                     }
                 }
             }
         }
     }
 
-    private func fix(_ action: ShareFixAction) async {
+    private func fix(_ action: ShareFixAction, status: ShareStatus) async {
         switch action {
         case .none: break
         case .installNetworkProtection: await turnOnProtection()
@@ -183,6 +183,8 @@ struct SharingTab: View {
         case .updateCLI: NSWorkspace.shared.open(BenchBarLinks.docs)
         case .rerunSetup, .refreshCopy: setupOpen = true
         case .restartSharing:
+            let confirm = SharePresentation.restartConfirm(online: status.devicesOnline)
+            guard ShareConfirm.ask(confirm.message, detail: confirm.detail, button: "Restart") else { return }
             await share.stop()
             await share.start(hours: hours, label: nil)
         }

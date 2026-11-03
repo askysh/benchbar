@@ -44,6 +44,13 @@ struct SharePresentationTests {
         #expect(SharePresentation.stopConfirm(online: 3) == "Stop sharing? 3 people are connected and will be signed out.")
     }
 
+    @Test func restartConfirmCountsThePeopleItSignsOut() {
+        #expect(SharePresentation.restartConfirm(online: 0).message == "Restart sharing?")
+        #expect(SharePresentation.restartConfirm(online: 1).message == "Restart sharing? 1 person is connected and will be signed out.")
+        #expect(SharePresentation.restartConfirm(online: 4).message == "Restart sharing? 4 people are connected and will be signed out.")
+        #expect(SharePresentation.restartConfirm(online: 4).detail.contains("new room code"))
+    }
+
     @Test func extendNeverPassesTheCap() {
         #expect(SharePresentation.extendOptions(canExtendS: 0).isEmpty)
         #expect(SharePresentation.extendOptions(canExtendS: 1800).map(\.minutes) == [30])

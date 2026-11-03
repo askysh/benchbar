@@ -73,6 +73,16 @@ nonisolated enum SharePresentation {
         }
     }
 
+    /// The restart fix ends the room (every device is deleted, R3.5) and starts one with a new code.
+    static func restartConfirm(online: Int) -> (message: String, detail: String) {
+        let message = switch online {
+        case 0: "Restart sharing?"
+        case 1: "Restart sharing? 1 person is connected and will be signed out."
+        default: "Restart sharing? \(online) people are connected and will be signed out."
+        }
+        return (message, "Everyone in the room is disconnected and needs the new room code to join again.")
+    }
+
     /// Extend choices in minutes, none past `canExtendS`.
     static func extendOptions(canExtendS: Int) -> [(label: String, minutes: Int)] {
         [("+30 min", 30), ("+1 hour", 60)].filter { $0.minutes * 60 <= canExtendS }
