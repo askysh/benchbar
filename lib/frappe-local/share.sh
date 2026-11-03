@@ -8,6 +8,7 @@
 #       [--name LABEL] [--refresh] [--regenerate-identity] [--acknowledge-data]
 #       [--dry-run] [--yes] [--json]
 #   benchbar share users [--site S] [--json]
+#   benchbar share start|stop|extend|status: share-run.sh
 #
 # setup makes the host identity (a P-256 key and certificate under
 # $FL_STATE_DIR/share, mode 0700) and share.localhost, a copy of the site
@@ -552,6 +553,10 @@ fl_cmd_share() {
     setup) fl_cmd_share_setup "$@" ;;
     users) fl_cmd_share_users "$@" ;;
     preflight) fl_cmd_share_preflight "$@" || exit 1 ;;
-    *) fl_die "Usage: benchbar share setup|users|preflight ..." "Example: benchbar share users --site ${FL_SITE:-NAME}" ;;
+    start) fl_cmd_share_start "$@" ;;
+    stop) fl_cmd_share_stop "$@" ;;
+    extend) fl_cmd_share_extend "$@" ;;
+    status) fl_cmd_share_status "$@" ;;
+    *) fl_die "Usage: benchbar share setup|users|preflight|start|stop|extend|status ..." "Example: benchbar share status" ;;
   esac
 }

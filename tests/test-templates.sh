@@ -79,4 +79,28 @@ fl_move_aside "$target" broken
 assert_no_file "$target"
 [[ -n "$(ls "$TMP_DIR"/Procfile.lean.broken.* 2>/dev/null)" ]] || fail "moved-aside copy expected"
 
+# the share job: its plist and runner carry the header; a change to either template makes the copy outdated
+share_plist() {
+  fl_template_render share.plist "LABEL=com.benchbar-share.gateway" "APP_BUNDLE_ID=com.akashmishra.benchbar" "RUNNER=/s/share-run.sh" \
+    "SHARE_DIR=/s" "PATH=/usr/bin:/bin" "LOG=/s/share.log"
+}
+share_runner() {
+  fl_template_render share-run.sh "SHARE_DIR=/s" "SOCK=/s/control.sock" "BENCH=/b" "SHARE_SITE=share.localhost" "WEB_PORT=8001" \
+    "PYTHON=/b/env/bin/python" "LIB=/l" "NODE=/n/node" "BENCHBAR=/x/benchbar" "DNS_SD=/usr/bin/dns-sd" "CAFFEINATE=/usr/bin/caffeinate" \
+    "LSOF=/usr/sbin/lsof" "SESSIONS_PY=print(1)" "SITE_LABEL=macdev" "ROOM_LABEL=Lab"
+}
+sp="$(share_plist)"; sr="$(share_runner)"
+assert_contains "$sp" "benchbar-template: share.plist v1 "
+assert_contains "$sr" "benchbar-template: share-run.sh v1 "
+assert_contains "$sp" "<key>RunAtLoad</key><false/>"
+assert_contains "$sp" "<key>KeepAlive</key><false/>"
+assert_contains "$sp" "<key>Umask</key><integer>63</integer>" "(decimal 63 is octal 077: a plist integer is decimal)"
+assert_not_contains "$sp" "__"; assert_not_contains "$sr" "__HEADER__"
+fl_template_apply "$TMP_DIR/job.plist" "$sp" 600; fl_template_apply "$TMP_DIR/share-run.sh" "$sr" 700
+assert_eq "current current" "$(fl_template_status "$TMP_DIR/job.plist" "$sp") $(fl_template_status "$TMP_DIR/share-run.sh" "$sr")"
+mkdir -p "$TMP_DIR/tmpl"; cp "$ROOT"/templates/*.tmpl "$TMP_DIR/tmpl/"
+printf '# a change\n' >>"$TMP_DIR/tmpl/share-run.sh.tmpl"
+sed_inplace 's#<key>RunAtLoad</key>#<key>RunAtLoad</key> #' "$TMP_DIR/tmpl/share.plist.tmpl"
+assert_eq "outdated outdated" "$(FL_TEMPLATE_DIR="$TMP_DIR/tmpl"; fl_template_status "$TMP_DIR/job.plist" "$(share_plist)") $(FL_TEMPLATE_DIR="$TMP_DIR/tmpl"; fl_template_status "$TMP_DIR/share-run.sh" "$(share_runner)")"
+
 printf 'test-templates: ok\n'

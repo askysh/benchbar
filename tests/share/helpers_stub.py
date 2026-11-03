@@ -2,7 +2,7 @@
 stand-in frappe whose database applies %-style parameters the way pymysql
 does, so a format mistake in a query raises here and not on a real site.
 
-usage: helpers_stub.py USERS_SNIPPET_FILE HARDEN_SNIPPET_FILE CHECK_SNIPPET_FILE
+usage: helpers_stub.py USERS_SNIPPET_FILE HARDEN_SNIPPET_FILE CHECK_SNIPPET_FILE SESSIONS_SNIPPET_FILE
 """
 import io
 import json
@@ -84,6 +84,10 @@ class Scenario:
         # the check helper's inputs: Administrator's stored hash, and the counts of what the harden step clears
         self.auth_hash = "hash:a-long-random-password"
         self.api_keys = self.api_secrets = self.oauth = None
+        # the sessions helper's inputs: the sids of the copy, and whether the bench's Redis answers
+        self.sids = []
+        self.redis_up = True
+        self.hdel = []
 
     def answer(self, q, as_dict):
         if "from `__Auth` where doctype = 'User' and name = 'Administrator'" in q:
@@ -115,6 +119,8 @@ class Scenario:
         return []
 
     def answer_list(self, q):
+        if "from `tabSessions`" in q:
+            return list(self.sids)
         if "role_profile_name" in q:
             if self.profiles_kept or not self.profile_cut:
                 return ["u@x.com"]
@@ -128,7 +134,18 @@ def run(snippet, argv, scenario, stdin=""):
     scenario.db = DB(scenario)
     frappe = types.ModuleType("frappe")
     frappe.db = scenario.db
-    frappe.cache = types.SimpleNamespace(hdel=lambda *a: None)
+
+    def ping():
+        if not scenario.redis_up:
+            raise ConnectionError("Error 61 connecting to 127.0.0.1:13000. Connection refused.")
+        return True
+
+    def hdel(name, key):
+        if not scenario.redis_up:
+            raise ConnectionError("Error 61 connecting to 127.0.0.1:13000. Connection refused.")
+        scenario.hdel.append((name, key))
+
+    frappe.cache = types.SimpleNamespace(hdel=hdel, ping=ping)
     frappe.init = frappe.connect = frappe.destroy = frappe.clear_cache = lambda *a, **k: None
     password = types.ModuleType("frappe.utils.password")
     password.update_password = lambda *a, **k: None
@@ -169,6 +186,7 @@ def main():
     users_snippet = open(sys.argv[1]).read()
     harden_snippet = open(sys.argv[2]).read()
     check_snippet = open(sys.argv[3]).read()
+    sessions_snippet = open(sys.argv[4]).read()
     base = [user("Administrator", []), user("u@x.com", ["System Manager", "Script Dev", "Sales User"]), user("web@x.com", ["Customer"], "Website User")]
 
     for mode in ("json", "rows", "classes"):
@@ -259,6 +277,35 @@ def main():
     # no seats: nothing about seats is asked
     code, out, log = run(check_snippet, ["m", "share.localhost"], Scenario(seat), "")
     assert code == 0 and not any(r[0] == "seat" for r in rows(out)) and not any("tabHas Role" in q for q in log), (out, log)
+
+    # sessions: the whole copy when stdin is empty (no "not in ()", a MariaDB syntax error), else all but the kept users;
+    # rows first, then the cache; only a count is printed
+    scenario = Scenario(seat)
+    scenario.sids = ["sid-a", "sid-b"]
+    code, out, log = run(sessions_snippet, ["m", "share.localhost"], scenario, "")
+    assert code == 0 and results(out) == ["2"], (code, out)
+    assert "select sid from `tabSessions`" in log, log
+    assert not any("not in" in q for q in log), log
+    gone = next(i for i, q in enumerate(log) if q.startswith("delete from `tabSessions` where sid in ('sid-a','sid-b')"))
+    assert log.index("COMMIT") > gone, log
+    assert scenario.hdel == [("session", "sid-a"), ("last_db_session_update", "sid-a"), ("session", "sid-b"), ("last_db_session_update", "sid-b")], scenario.hdel
+    for secret in ("sid-a", "sid-b"):
+        assert secret not in out, out
+    scenario = Scenario(seat)
+    scenario.sids = ["sid-c"]
+    code, out, log = run(sessions_snippet, ["m", "share.localhost"], scenario, "u@x.com\nother@x.com\n\n")
+    assert code == 0 and results(out) == ["1"], (code, out)
+    assert "select sid from `tabSessions` where user not in ('u@x.com','other@x.com')" in log, log
+    # nothing to end: no delete, still a count
+    scenario = Scenario(seat)
+    code, out, log = run(sessions_snippet, ["m", "share.localhost"], scenario, "")
+    assert code == 0 and results(out) == ["0"] and not any(q.startswith("delete") for q in log), (out, log)
+    # the bench's Redis is down: the rows still go (the cache is not saved, so it holds nothing after a restart)
+    scenario = Scenario(seat)
+    scenario.sids = ["sid-d"]
+    scenario.redis_up = False
+    code, out, log = run(sessions_snippet, ["m", "share.localhost"], scenario, "")
+    assert code == 0 and results(out) == ["1"] and any(q.startswith("delete from `tabSessions`") for q in log), (code, out, log)
     print("helpers_stub: ok")
 
 

@@ -137,6 +137,8 @@ SCRIPT_DIR="$(fl_resolve_self)"
 . "${SCRIPT_DIR}/lib/frappe-local/share.sh"
 # shellcheck source=lib/frappe-local/share-preflight.sh
 . "${SCRIPT_DIR}/lib/frappe-local/share-preflight.sh"
+# shellcheck source=lib/frappe-local/share-run.sh
+. "${SCRIPT_DIR}/lib/frappe-local/share-run.sh"
 # shellcheck source=lib/frappe-local/apps.sh
 . "${SCRIPT_DIR}/lib/frappe-local/apps.sh"
 # shellcheck source=lib/frappe-local/freshness.sh
@@ -500,8 +502,8 @@ fl_json_mode_resolve() {
     "site backup"|"site drop"|"site restore"|"app add") FL_JSON_MODE=doc ;;
     # on and off stream like site default; status only reads
     "site open-as") if [[ "${ARGS[1]:-}" == "status" ]]; then FL_JSON_MODE=doc; else FL_JSON_MODE=stream; fi ;;
-    "share setup") FL_JSON_MODE=stream ;;
-    "share users"|"share preflight") FL_JSON_MODE=doc ;;
+    "share setup"|"share start"|"share stop"|"share extend") FL_JSON_MODE=stream ;;
+    "share users"|"share preflight"|"share status") FL_JSON_MODE=doc ;;
   esac
 }
 # status, list and the other readers are polled: they skip the table unless
@@ -1369,6 +1371,9 @@ fl_noninteractive_preflight() {
       # the copy holds real data and others sign in to it: a person's decision, refused before the lock
       fl_need "a person at a terminal" "sharing a site is a person's decision; run benchbar share setup in a terminal"
       ;;
+    "share start")
+      fl_need "a person at a terminal" "sharing on the network is a person's decision; run benchbar share start in a terminal"
+      ;;
     "site restore")
       # the restore needs the root password (to create or replace the database) and a yes
       [[ "$FL_ASSUME_YES" == "1" ]] || fl_need "--yes" "to confirm the restore plan (or --apply TOKEN --yes)"
@@ -1419,11 +1424,14 @@ case "$COMMAND" in
       fl_lock_acquire "${FL_STATE_DIR}/lock"
     fi ;;
   share)
-    # users reads; setup makes the copy and the identity
-    if [[ "${ARGS[0]:-}" == setup ]]; then
-      fl_log_init "${FL_STATE_DIR}/logs"
-      fl_lock_acquire "${FL_STATE_DIR}/lock"
-    fi ;;
+    # users, preflight and status read; setup makes the copy and the identity, start the job. stop and
+    # extend take no lock: a long setup or start must never keep a share from being stopped
+    case "${ARGS[0]:-}" in
+      setup|start)
+        fl_log_init "${FL_STATE_DIR}/logs"
+        fl_lock_acquire "${FL_STATE_DIR}/lock" ;;
+      stop|extend) fl_log_init "${FL_STATE_DIR}/logs" ;;
+    esac ;;
   site|app|profile|lock)
     # the list, show and check commands are read only, and so is a --plan
     # and "app focus" without an app name (the focus listing, with or

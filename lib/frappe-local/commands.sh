@@ -144,7 +144,7 @@ cmd~site default~benchbar site default NAME [--json]~Make NAME the default site.
 cmd~site open-as~benchbar site open-as on|off|status [NAME] [--json]~Turn password-less sign in (open --as) on or off for a site, or show it. Changes benchbar's state only. on needs a person at a terminal.~yes~no~no~yes~stream
 flag~site open-as~--yes~~Do not ask before turning on (still refused without a terminal session, BENCHBAR_NONINTERACTIVE=1).
 flag~site open-as~--json~~JSON lines for on and off, one document for status.
-cmd~share~benchbar share setup|users|preflight ...~Share a hardened copy of a site with people on your network (the copy and the identity first; start and stop follow).~no~no~no~no~none
+cmd~share~benchbar share setup|users|preflight|start|stop|extend|status ...~Share a hardened copy of a site with people on your network: setup makes the copy and the identity, start and stop run the share.~no~no~no~no~none
 cmd~share setup~benchbar share setup [--site S] [--from STAMP|latest] [--backup-now] [--users A,B] [--refresh] [--regenerate-identity] [--acknowledge-data] [--dry-run] [--yes] [--json]~Prepare sharing: the host identity and a hardened share copy of a site.~yes~no~no~yes~stream
 flag~share setup~--users~A,B~The Frappe users who may sign in to the copy, one seat each. They must be enabled System Users; each loses the roles that can run code or change settings, in the copy only. Default: the last setup's.
 flag~share setup~--from~STAMP|latest~The backup set of the site to copy (benchbar site backups S lists them). Default: the newest complete one.
@@ -162,6 +162,20 @@ flag~share preflight~--static~~Only the checks that run before anything starts: 
 flag~share preflight~--critical~~Only the fast checks a running share repeats: the pf block (probed from this Mac's LAN address with its own listener and a control), the share web process, the bench's Redis.
 flag~share preflight~--quiet~~List only the checks that are not ok.
 flag~share preflight~--json~~One document: protocol, ok, lan_ip and the checks, each with a status, a message and a fix_action.
+cmd~share start~benchbar share start [--for DUR] [--name LABEL] [--dry-run] [--yes] [--json]~Start sharing on the LAN until the deadline.~yes~no~no~yes~stream
+flag~share start~--for~DUR~How long the share runs: 30m, 4h; from 5 minutes to 12 hours. Default: 4h.
+flag~share start~--name~LABEL~The room's label for this share, at most 40 printable characters. Default: the one share setup recorded.
+flag~share start~--dry-run~~Print the plan and start nothing.
+flag~share start~--yes~~Do not ask.
+flag~share start~--json~~JSON lines: plan, steps, done (with the deadline).
+cmd~share stop~benchbar share stop [--json]~Stop sharing: the gateway and the job end, the room empties, every session of the copy ends. Never refused.~no~no~no~yes~stream
+flag~share stop~--json~~JSON lines: steps, done.
+cmd~share extend~benchbar share extend --by DUR [--json]~Move the deadline of the running share, up to 12 hours from its start.~no~no~no~yes~stream
+flag~share extend~--by~DUR~How much later: 30m, 1h; from 5 minutes to 12 hours.
+flag~share extend~--json~~JSON lines: done, with the new deadline.
+cmd~share status~benchbar share status [--preflight] [--json]~The share: on, off, expired or error, the time left, the copy, the room's counts. Reads only.~no~no~no~no~document
+flag~share status~--preflight~~Run the critical checks too and add them, each with its fix_action.
+flag~share status~--json~~One document (never the room code).
 cmd~site hosts~benchbar site hosts~Add a 127.0.0.1 line for every site to /etc/hosts.~yes~yes~no~yes~none
 cmd~site backup~benchbar site backup NAME [--with-files] [--json]~bench --site NAME backup.~no~no~no~yes~document
 flag~site backup~--with-files~~Include the uploads.

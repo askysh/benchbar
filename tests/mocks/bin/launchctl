@@ -7,6 +7,24 @@ agents="${MOCK_STATE:?}/agents"
 mkdir -p "$agents"
 cmd="${1:-}"; shift || true
 label_of_target() { printf '%s' "${1##*/}"; }
+# the label of a plist: its file name, as for every bench agent; the share job's plist (job.plist,
+# outside LaunchAgents) is known by its Label, as launchd knows every job
+label_of_plist() {
+  local l
+  l="$(sed -n 's#.*<key>Label</key><string>\(com\.benchbar-share\.[^<]*\)</string>.*#\1#p' "$1" 2>/dev/null | head -n1)"
+  printf '%s' "${l:-$(basename "$1" .plist)}"
+}
+# a share job's runner, as launchd runs it: kickstart starts it in the background when MOCK_LAUNCHD_RUN=1
+# (its PID in $MOCK_STATE/agents/LABEL.pid); bootout sends it TERM and waits, and KILL after 20 s
+share_runner_stop() {
+  local pidf="$agents/$1.pid" pid i=0
+  [[ -s "$pidf" ]] || return 0
+  pid="$(cat "$pidf")"
+  kill -TERM "$pid" 2>/dev/null || true
+  while kill -0 "$pid" 2>/dev/null && [[ "$i" -lt 200 ]]; do sleep 0.1; i=$((i + 1)); done
+  kill -KILL "$pid" 2>/dev/null || true
+  rm -f "$pidf"
+}
 # MOCK_BOOTOUT_LINGER=N: like the real launchctl, bootout returns while a
 # running job is still shutting down. The job stays listed for N more
 # "print" calls, and bootstrap fails meanwhile (exit 5, Input/output error),
@@ -31,11 +49,13 @@ case "$cmd" in
   disable)
     : >"$agents/$(label_of_target "$1").disabled"; exit 0 ;;
   bootstrap)
-    plist="$2"; label="$(basename "$plist" .plist)"
+    plist="$2"
     [[ -f "$plist" ]] || exit 5
+    label="$(label_of_plist "$plist")"
     [[ -f "$agents/$label.disabled" ]] && { echo "Bootstrap failed: 119: Service is disabled" >&2; exit 119; }
     lingering "$label" && { echo "Bootstrap failed: 5: Input/output error" >&2; exit 5; }
     [[ -f "$agents/$label" ]] && { echo "already bootstrapped" >&2; exit 37; }
+    case "$label" in com.benchbar-share.*) cp "$plist" "$agents/$label.plist" ;; esac
     printf 'state = not running\nlast exit code = 0\n' >"$agents/$label" ;;
   load)
     plist="${*: -1}"; label="$(basename "$plist" .plist)"
@@ -44,6 +64,7 @@ case "$cmd" in
     printf 'state = not running\nlast exit code = 0\n' >"$agents/$label" ;;
   bootout|remove)
     label="$(label_of_target "$1")"
+    case "$label" in com.benchbar-share.*) share_runner_stop "$label"; rm -f "$agents/$label.plist" ;; esac
     # MOCK_BOOTOUT_LINGER_LABEL limits the lingering to one label
     if [[ -n "${MOCK_BOOTOUT_LINGER:-}" && -f "$agents/$label" ]] && [[ -z "${MOCK_BOOTOUT_LINGER_LABEL:-}" || "$label" == "${MOCK_BOOTOUT_LINGER_LABEL:-}" ]]; then
       printf '%s' "$MOCK_BOOTOUT_LINGER" >"$agents/$label.linger"
@@ -54,8 +75,18 @@ case "$cmd" in
     rm -f "$agents/$(basename "${*: -1}" .plist)" ;;
   kickstart)
     [[ "$1" == "-k" ]] && shift
-    f="$agents/$(label_of_target "$1")"
+    label="$(label_of_target "$1")"; f="$agents/$label"
     [[ -f "$f" ]] || exit 113
+    case "$label" in
+      com.benchbar-share.*)
+        printf 'state = running\npid = 4243\nlast exit code = 0\n' >"$f"
+        if [[ "${MOCK_LAUNCHD_RUN:-}" == 1 ]]; then
+          runner="$(awk '/<key>ProgramArguments<\/key>/ { p = 1; next } p && /<string>/ { n++; if (n == 2) { sub(/.*<string>/, ""); sub(/<\/string>.*/, ""); print; exit } }' "$agents/$label.plist")"
+          /bin/bash "$runner" </dev/null >>"${MOCK_STATE}/runner.log" 2>&1 3>&- 4>&- 5>&- 6>&- 7>&- 8>&- 9>&- &
+          printf '%s\n' "$!" >"$agents/$label.pid"
+        fi
+        exit 0 ;;
+    esac
     printf 'state = running\npid = 4242\nlast exit code = 0\n' >"$f"
     # simulate the runner starting: honcho appears in the process table
     printf '4242 honcho start -f Procfile.lean\n' >>"${MOCK_PROCS:?}"

@@ -272,6 +272,43 @@ finally:
     frappe.destroy()'
 FL_PY_SHARE_CHECK="${FL_PY_SHARE_ROLES}${FL_PY_SHARE_CHECK_BODY}"
 
+# Ends sessions in the copy (argv: SITE; the users to keep on stdin, one per
+# line; no users: every session ends). Prints one count. The share runner
+# runs it before the web process starts (which also covers a runner killed
+# with -9, whose trap never ran) and from its trap; share stop runs it, and
+# revoke keeps the users still mapped to a device. The rows go first, as in
+# frappe.sessions.delete_session. The bench's Redis cache is not saved
+# (save "" in config/redis_cache.conf), so when it does not answer there is no
+# cached session left to clear: the cache is skipped, not failed.
+# shellcheck disable=SC2016  # Python source: the backticks are not the shell's
+FL_PY_SHARE_SESSIONS='
+import sys
+site = sys.argv[2]
+keep = [line.strip() for line in sys.stdin if line.strip()]
+import frappe
+frappe.init(site=site)
+frappe.connect()
+try:
+    if keep:
+        sids = frappe.db.sql_list("select sid from `tabSessions` where user not in %(keep)s", {"keep": tuple(keep)})
+    else:
+        sids = frappe.db.sql_list("select sid from `tabSessions`")
+    if sids:
+        frappe.db.sql("delete from `tabSessions` where sid in %(sids)s", {"sids": tuple(sids)})
+    frappe.db.commit()
+    try:
+        frappe.cache.ping()
+        cache_up = True
+    except Exception:
+        cache_up = False
+    if cache_up:
+        for sid in sids:
+            frappe.cache.hdel("session", sid)
+            frappe.cache.hdel("last_db_session_update", sid)
+    print("\nBENCHBAR-RESULT %d" % len(sids), flush=True)
+finally:
+    frappe.destroy()'
+
 # The bench's Redis, up for a Frappe call and down after it, whatever the
 # bench is doing: a dry run reads too, so FL_DRY_RUN does not skip it.
 fl_share_redis_up() { FL_DRY_RUN=0 fl_bench_redis_up "$FL_BENCH_DIR"; }

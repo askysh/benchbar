@@ -592,8 +592,27 @@ fl_sp_doc() {
     "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$FL_SHARE_PROTOCOL" "$ok" "$(fl_json_str "$SP_LAN_IP")" "$checks"
 }
 
+fl_sp_reset() { SP_ID=(); SP_CLASS=(); SP_STATUS=(); SP_MSG=(); SP_FIX=(); SP_ACT=(); SP_EXTRA=(); SP_NOTE=(); SP_LAN_IP=""; SP_WARNED=0; }
+
+# fl_sp_print QUIET: the checks as text (QUIET 1: only those that are not ok); non zero when one failed.
+# SP_WARNED=1 when one warned.
+SP_WARNED=0
+fl_sp_print() {
+  local i line failed=0
+  for ((i = 0; i < ${#SP_ID[@]}; i++)); do
+    line="${SP_ID[$i]}: ${SP_MSG[$i]}${SP_NOTE[$i]:+ ${SP_NOTE[$i]}}"
+    case "${SP_STATUS[$i]}" in
+      ok) [[ "$1" == 1 ]] || fl_ok "$line" ;;
+      skip) [[ "$1" == 1 ]] || fl_info "$line (skipped)" ;;
+      warn) fl_warn "$line"; SP_WARNED=1 ;;
+      fail) fl_fail "$line"; [[ -z "${SP_FIX[$i]}" ]] || fl_info "  fix: ${SP_FIX[$i]}"; failed=1 ;;
+    esac
+  done
+  [[ "$failed" == 0 ]]
+}
+
 fl_cmd_share_preflight() {
-  local run_static=0 run_critical=0 quiet=0 a i failed=0 line
+  local run_static=0 run_critical=0 quiet=0 a failed=0
   for a in "$@"; do
     case "$a" in
       --static) run_static=1 ;;
@@ -606,18 +625,10 @@ fl_cmd_share_preflight() {
   [[ "$run_static" == 1 || "$run_critical" == 1 ]] || { run_static=1; run_critical=1; }
   fl_site_json_begin
   fl_require_bench
-  SP_ID=(); SP_CLASS=(); SP_STATUS=(); SP_MSG=(); SP_FIX=(); SP_ACT=(); SP_EXTRA=(); SP_NOTE=(); SP_LAN_IP=""
+  fl_sp_reset
   [[ "$run_static" == 0 ]] || fl_sp_static
   [[ "$run_critical" == 0 ]] || fl_sp_critical
-  for ((i = 0; i < ${#SP_ID[@]}; i++)); do
-    line="${SP_ID[$i]}: ${SP_MSG[$i]}${SP_NOTE[$i]:+ ${SP_NOTE[$i]}}"
-    case "${SP_STATUS[$i]}" in
-      ok) [[ "$quiet" == 1 ]] || fl_ok "$line" ;;
-      skip) [[ "$quiet" == 1 ]] || fl_info "$line (skipped)" ;;
-      warn) fl_warn "$line" ;;
-      fail) fl_fail "$line"; [[ -z "${SP_FIX[$i]}" ]] || fl_info "  fix: ${SP_FIX[$i]}"; failed=1 ;;
-    esac
-  done
+  fl_sp_print "$quiet" || failed=1
   if [[ "${OPT_JSON:-0}" == 1 ]]; then
     FL_DONE_NO_STATE=1
     fl_doc_emit "$failed" "$(fl_sp_doc)"
