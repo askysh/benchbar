@@ -18,11 +18,17 @@ The documents are in the [JSON schema](../../json-schema.md#sharing).
 - **The bench's ports stay on this Mac.** The LAN guard (a pf anchor,
   below) refuses web 8000-8099, socket.io 9000-9099, Redis 11000-11099
   and 13000-13099 and MariaDB 3306 to anything but this Mac. Guests reach
-  only the gateway on port 8443 (TLS, both sides with a certificate).
-- **Sharing fails closed.** Before the gateway starts, and every few
-  seconds while it runs, the checks (`share preflight --critical`) probe
-  the block from this Mac's own LAN address with a throwaway listener and
-  a control port. A failed check, or a gateway that exits, ends the share.
+  only the gateway on port 8443 (TLS, both sides with a certificate). A
+  request that names any other `Host` (DNS rebinding) is refused with
+  400 `bad_host` and its connection closed.
+- **Sharing fails closed.** Before the gateway starts, and about once a
+  minute while it runs, the checks (`share preflight --critical`, a few
+  seconds per run) probe the block from this Mac's own LAN address with a
+  throwaway listener and a control port. Two failed runs in a row, or a
+  gateway that exits, end the share. A share web process that ends is
+  started again and checked, with guests seeing a "restarting" page
+  meanwhile; the 4th end in a row (a web that stays up 5 minutes starts
+  the count again) ends the share.
 - **The room code proves membership, not the host's identity.** Anyone who
   has the code can join, with no action from you; you see every join and
   can remove people. On a first join a guest cannot tell your room from a
@@ -134,6 +140,13 @@ Starts the room until the deadline (`--for 30m`, `4h`; 5 minutes to 12
 hours; 4 hours by default). The bench must be running. Refused like
 `share setup`. A second start says "unchanged".
 
+A start takes about 15 seconds on a 29-app copy: the checks run before
+and after the gateway starts (about 2 seconds each), and the copy's web
+process is started and warmed with one request before them (1 to 10
+seconds, longer for a cold large copy; up to 30 seconds are allowed). A
+restart of the web process while sharing takes about 10 seconds, during
+which guests see the "restarting" page.
+
 ```bash
 benchbar share start --for 2h
 ```
@@ -236,8 +249,12 @@ benchbar share open-as USER [--print-url] [--json]
 Opens the copy in this Mac's browser signed in as a seat, the way
 `open --as` does (the copy is opted in to Open as by `share setup`).
 `--print-url` prints the sign-in link instead: it carries the session id,
-so treat it like a password. `--json` never includes the link or the
-session.
+so treat it like a password. The link goes to the copy's own web port on
+this Mac (`http://share.localhost:PORT/login?...`), not through the
+gateway. `--json` never includes the link or the session.
+
+Refused under `BENCHBAR_NONINTERACTIVE`, `--for-agent` and `mcp`, and
+without a terminal unless the app passes `BENCHBAR_SUDO=gui`.
 
 ```bash
 benchbar share open-as priya@example.com
