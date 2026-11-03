@@ -217,9 +217,10 @@ assert_not_contains "$(cat "$SHARE_DIR/share.json")" "room_code"
 # excluded from Time Machine, and the copy's folder with it
 assert_calls_contain "^tmutil addexclusion ${SHARE_DIR}\$"
 assert_calls_contain "^tmutil addexclusion ${BENCH}/sites/share.localhost\$"
-# Open as is recorded for the copy (benchbar state only; the copy is not in developer mode)
+# setup does not turn Open as on for the copy
 OUT="$("$FM" site open-as status share.localhost --json --bench-dir "$BENCH" 2>/dev/null)"
-assert_eq "True False False" "$(printf '%s' "$OUT" | jget - 'd["open_as_enabled"], d["developer_mode"], d["open_as"]' | tr -d "(),'")"
+assert_eq "False False False" "$(printf '%s' "$OUT" | jget - 'd["open_as_enabled"], d["developer_mode"], d["open_as"]' | tr -d "(),'")"
+assert_eq "" "$(grep -rl OPEN_AS_SITES "$FL_STATE_DIR" 2>/dev/null || true)" "(no Open as record)"
 
 # ---------------------------------------------------------------- the second run changes nothing
 key_sha="$(sha_of "$SHARE_DIR/host.key")"; cfg_sha="$(sha_of "$SHARE_DIR/share.json")"; seats_before="$(cfg 'json.dumps(d["seats"])')"
@@ -313,6 +314,49 @@ assert_eq "40" "$(cfg 'len(d["room_label"])')"
 BENCHBAR_SUDO=gui run_fm share setup --users "priya@example.com" --acknowledge-data --refresh --yes --bench-dir "$BENCH" --name ""
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$(cfg 'd["room_label"]')" "'s room"
+
+# ---------------------------------------------------------------- a failed refresh leaves nothing usable
+seat_before="$(cfg 'd["seats"][0]["seat_id"]')"
+reset_calls
+MOCK_SHARE_HARDEN_REFUSE="refused for the test" jsetup --users "priya@example.com" --acknowledge-data --refresh --yes
+assert_eq "1" "$CODE" "$OUT$ERR"
+assert_no_file "$SHARE_DIR/share.json" "(the old config does not point at the raw copy)"
+assert_file "$SHARE_DIR/share.json.prev"
+assert_eq "$(grep -c '^redis-server' "$MOCK_LOG")" "$(grep -c '^redis-cli .*shutdown' "$MOCK_LOG")" "(the setup Redis is stopped after a dying helper)"
+assert_calls_contain '^redis-cli .*shutdown'
+setup --acknowledge-data --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "nobody knows how it was hardened"
+jsetup --users "priya@example.com" --acknowledge-data --refresh --yes
+assert_eq "0" "$CODE" "$OUT$ERR"
+assert_file "$SHARE_DIR/share.json"; assert_no_file "$SHARE_DIR/share.json.prev"
+assert_eq "$seat_before" "$(cfg 'd["seats"][0]["seat_id"]')" "(the seat id survives a failed refresh)"
+# the users helper dying stops Redis too
+reset_calls
+MOCK_SHARE_USERS_FAIL="the users helper broke" setup --users "priya@example.com" --acknowledge-data --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "the users helper broke"
+assert_eq "$(grep -c '^redis-server' "$MOCK_LOG")" "$(grep -c '^redis-cli .*shutdown' "$MOCK_LOG")"
+# a list cut at the cap is said, not silent
+MOCK_SHARE_USERS_TRUNCATED=1 run_fm share users --bench-dir "$BENCH"
+assert_contains "$OUT" "more than 5000 users"
+MOCK_SHARE_USERS_TRUNCATED=1 setup --users "nobody@example.com" --acknowledge-data --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "stops at 5000"
+
+# ---------------------------------------------------------------- the control socket: stale is removed, live refuses
+SOCK="$TMP_DIR/ctl.sock"; export FL_SHARE_CONTROL_SOCK="$SOCK"
+python3 -c 'import socket,sys; s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.close()' "$SOCK"
+assert_eq "yes" "$([[ -S "$SOCK" ]] && echo yes)"
+setup --users "priya@example.com" --acknowledge-data --bench-dir "$BENCH" --dry-run
+assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "no longer running"; assert_no_file "$SOCK"
+python3 -c '
+import socket, sys, time
+s = socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.listen(5)
+time.sleep(20)' "$SOCK" &
+LIVE_PID=$!
+for _ in 1 2 3 4 5 6 7 8 9 10; do [[ -S "$SOCK" ]] && break; sleep 0.2; done
+setup --users "priya@example.com" --acknowledge-data --bench-dir "$BENCH" --dry-run
+kill "$LIVE_PID" 2>/dev/null || true; wait "$LIVE_PID" 2>/dev/null || true
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "benchbar share stop"
+rm -f "$SOCK"; unset FL_SHARE_CONTROL_SOCK
 
 # ---------------------------------------------------------------- the helper's own refusal leaves no share.json
 rm -rf "$SHARE_DIR"; rm -rf "$BENCH/sites/share.localhost"
@@ -464,5 +508,62 @@ want = set(FLOOR_ROLES) | {"Script Dev", "Report Writer", "Submitter", "Only Cus
 assert got == want, (sorted(got ^ want))
 assert "Builder" not in got and "Viewer" not in got and "All" not in got
 PY
+
+
+# the hardening cuts a seat's role profile before it demotes, and refuses a seat that keeps one
+harden_snippet="$(bash -c '. "$1/lib/frappe-local/share-site.sh"; printf "%s" "$FL_PY_SHARE_HARDEN"' _ "$ROOT")"
+cat >"$TMP_DIR/harden_stub.py" <<'PY'
+import sys, types
+snippet, mode = sys.argv[1], sys.argv[2]
+log = []
+class DB:
+    def sql(self, q, v=None, as_dict=False):
+        log.append(q)
+        if "select name, enabled, user_type" in q: return [{"name": "u@x.com", "enabled": 1, "user_type": "System User"}]
+        if "tabDocPerm" in q or "tabCustom DocPerm" in q: return []
+        if "select count(*)" in q: return [[1 if "User Role Profile" in q else 0]]
+        return []
+    def sql_list(self, q, v=None):
+        log.append(q)
+        if "role_profile_name" in q:
+            return ["u@x.com"] if (mode == "keeps" or "select name" in q and not any("set role_profile_name = NULL" in x for x in log)) else []
+        if "select role from" in q: return ["System Manager", "Sales User"]
+        return []
+    def get_single_value(self, *a): return None
+    def set_single_value(self, *a): pass
+    def delete(self, *a): pass
+    def truncate(self, *a): pass
+    def table_exists(self, d): return d == "User Role Profile"
+    def has_column(self, d, c): return True
+    def commit(self): log.append("COMMIT")
+    def rollback(self): log.append("ROLLBACK")
+frappe = types.ModuleType("frappe")
+frappe.db = DB(); frappe.cache = types.SimpleNamespace(hdel=lambda *a: None)
+frappe.init = frappe.connect = frappe.destroy = frappe.clear_cache = lambda *a, **k: None
+pw = types.ModuleType("frappe.utils.password"); pw.update_password = lambda *a, **k: None
+sys.modules.update({"frappe": frappe, "frappe.utils": types.ModuleType("frappe.utils"), "frappe.utils.password": pw})
+sys.argv = ["-c", "marker", "share.localhost"]
+code = 0
+try:
+    exec(snippet)
+except SystemExit as e:
+    code = e.code or 0
+sys.stderr.write("\n".join(log))
+sys.exit(code)
+PY
+set +e
+printf 'u@x.com\n' | python3 "$TMP_DIR/harden_stub.py" "$harden_snippet" clears >"$TMP_DIR/h.out" 2>"$TMP_DIR/h.err"; code=$?
+set -e
+assert_eq "0" "$code" "$(cat "$TMP_DIR/h.err")"
+assert_contains "$(cat "$TMP_DIR/h.out")" '"role_profiles_cleared":2'
+prof="$(grep -n 'set role_profile_name = NULL' "$TMP_DIR/h.err" | head -n1 | cut -d: -f1)"
+# shellcheck disable=SC2016  # a literal backtick in the SQL
+dele="$(grep -n 'delete from `tabHas Role`' "$TMP_DIR/h.err" | head -n1 | cut -d: -f1)"
+[[ -n "$prof" && -n "$dele" && "$prof" -lt "$dele" ]] || fail "the role profile is cut before the roles are removed ($prof, $dele)"
+assert_contains "$(cat "$TMP_DIR/h.err")" 'tabUser Role Profile'
+set +e
+printf 'u@x.com\n' | python3 "$TMP_DIR/harden_stub.py" "$harden_snippet" keeps >"$TMP_DIR/h.out" 2>"$TMP_DIR/h.err"; code=$?
+set -e
+assert_eq "1" "$code"; assert_contains "$(cat "$TMP_DIR/h.out")" "BENCHBAR-ERROR"; assert_contains "$(cat "$TMP_DIR/h.err")" "ROLLBACK"
 
 printf 'test-share: ok\n'

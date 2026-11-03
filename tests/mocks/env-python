@@ -88,9 +88,13 @@ if marker == "benchbar-share-users":
         out.append({"name": u["name"], "full_name": u["full_name"], "enabled": bool(u.get("enabled", 1)), "user_type": u["user_type"],
                     "roles": roles, "code_capable_roles": cc, "will_demote": bool(cc) and not admin,
                     "selectable": bool(u.get("enabled", 1)) and u["user_type"] == "System User" and not admin})
+    if os.environ.get("MOCK_SHARE_USERS_FAIL"):
+        print("BENCHBAR-ERROR " + os.environ["MOCK_SHARE_USERS_FAIL"])
+        sys.exit(1)
     if mode == "json":
-        print("BENCHBAR-RESULT " + json.dumps({"users": out}))
+        print("BENCHBAR-RESULT " + json.dumps({"users": out, "truncated": False}))
     else:
+        print("BENCHBAR-RESULT " + "\x1ftruncated\x1f" + ("1" if os.environ.get("MOCK_SHARE_USERS_TRUNCATED") else "0"))
         for u in out:
             print("BENCHBAR-RESULT " + "\x1f".join([u["name"], u["full_name"], "1" if u["enabled"] else "0", u["user_type"], "|".join(u["roles"]), "|".join(u["code_capable_roles"])]))
     sys.exit(0)

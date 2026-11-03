@@ -20,10 +20,14 @@ FL_SHARE_SITE="share.localhost"
 # code-capable even if a site's permissions say otherwise. A Custom DocPerm row
 # for a doctype replaces its standard DocPerm rows (frappe/model/meta.py,
 # set_custom_permissions), so the standard rows of such a doctype do not count.
+# The doctype list is a heuristic on top of the name floor: server scripts are
+# already off in the copy (server_script_enabled 0), so this is what is left
+# that can change what runs or who may do what.
 # shellcheck disable=SC2016  # Python source: the backticks and dollar signs are not the shell's
 FL_PY_SHARE_ROLES='CODE_DOCTYPES = ("Server Script", "Client Script", "Custom Script", "Report", "System Settings", "Customize Form",
     "DocType", "Custom Field", "Property Setter", "Workflow", "Webhook", "Notification", "Email Account", "Scheduled Job Type",
-    "Page", "Print Format", "Web Page", "Custom HTML Block", "System Console", "Website Script", "Module Def", "Package")
+    "Page", "Print Format", "Web Page", "Custom HTML Block", "System Console", "Website Script", "Module Def", "Package",
+    "DocPerm", "Custom DocPerm", "Web Form", "Auto Email Report", "Data Import")
 FLOOR_ROLES = ("System Manager", "Administrator", "Script Manager", "Server Script Manager", "Developer", "Report Manager")
 AUTOMATIC_ROLES = ("All", "Guest", "Desk User")
 def code_capable_roles(frappe):
@@ -48,6 +52,7 @@ def code_capable_roles(frappe):
 FL_PY_SHARE_USERS_BODY='
 import sys, json
 site, mode = sys.argv[2], sys.argv[3]
+USER_CAP = 5000
 def say(*fields):
     print("\nBENCHBAR-RESULT " + "\x1f".join(" ".join(str(f).split()) for f in fields), flush=True)
 import frappe
@@ -60,7 +65,9 @@ try:
                 say(doctype, frappe.db.sql("select count(*) from `tab" + doctype + "`")[0][0])
         sys.exit(0)
     capable = set(code_capable_roles(frappe))
-    users = frappe.db.sql("select name, full_name, enabled, user_type from `tabUser` where name != %s order by enabled desc, user_type, name limit 500", ("Guest",), as_dict=True)
+    users = frappe.db.sql("select name, full_name, enabled, user_type from `tabUser` where name != %s order by enabled desc, user_type, name limit %d" % (USER_CAP + 1), ("Guest",), as_dict=True)
+    truncated = len(users) > USER_CAP
+    users = users[:USER_CAP]
     held = {}
     if users:
         for row in frappe.db.sql("select parent, role from `tabHas Role` where parenttype = %(kind)s and parent in %(names)s and role not in %(automatic)s order by role",
@@ -74,8 +81,9 @@ try:
             "roles": roles, "code_capable_roles": lost, "will_demote": bool(lost) and u["name"] != "Administrator",
             "selectable": bool(u["enabled"]) and u["user_type"] == "System User" and u["name"] != "Administrator"})
     if mode == "json":
-        print("\nBENCHBAR-RESULT " + json.dumps({"users": out}, separators=(",", ":")), flush=True)
+        print("\nBENCHBAR-RESULT " + json.dumps({"users": out, "truncated": truncated}, separators=(",", ":")), flush=True)
     else:
+        say("", "truncated", "1" if truncated else "0")
         for u in out:
             say(u["name"], u["full_name"], "1" if u["enabled"] else "0", u["user_type"], "|".join(u["roles"]), "|".join(u["code_capable_roles"]))
 finally:
@@ -153,6 +161,14 @@ try:
         frappe.db.sql("update `tabUser` set enabled = 0 where name in %(names)s", {"names": tuple(others)})
     counts["users_disabled"] = len(others)
     capable = set(code_capable_roles(frappe))
+    # a role profile re-applies its roles on every save of the User (user.py populate_role_profile_roles): cut the link first
+    counts["role_profiles_cleared"] = 0
+    if frappe.db.has_column("User", "role_profile_name"):
+        counts["role_profiles_cleared"] += len(frappe.db.sql_list("select name from `tabUser` where name in %(names)s and ifnull(role_profile_name, %(blank)s) != %(blank)s", {"names": tuple(allowed), "blank": ""}))
+        frappe.db.sql("update `tabUser` set role_profile_name = NULL where name in %(names)s", {"names": tuple(allowed)})
+    if frappe.db.table_exists("User Role Profile"):
+        counts["role_profiles_cleared"] += frappe.db.sql("select count(*) from `tabUser Role Profile` where parenttype = %(kind)s and parent in %(names)s", {"kind": "User", "names": tuple(allowed)})[0][0]
+        frappe.db.sql("delete from `tabUser Role Profile` where parenttype = %(kind)s and parent in %(names)s", {"kind": "User", "names": tuple(allowed)})
     counts["users_demoted"] = counts["roles_removed"] = 0
     for user in allowed:
         held = frappe.db.sql_list("select role from `tabHas Role` where parenttype = %(kind)s and parent = %(user)s", {"kind": "User", "user": user})
@@ -163,6 +179,8 @@ try:
             counts["roles_removed"] += len(drop)
     still = frappe.db.sql_list("select parent from `tabHas Role` where parenttype = %(kind)s and parent in %(names)s and role in %(roles)s",
         {"kind": "User", "names": tuple(allowed), "roles": tuple(capable)})
+    if frappe.db.has_column("User", "role_profile_name"):
+        still += frappe.db.sql_list("select name from `tabUser` where name in %(names)s and ifnull(role_profile_name, %(blank)s) != %(blank)s", {"names": tuple(allowed), "blank": ""})
     if still:
         frappe.db.rollback()
         refuse("A seat still holds a code-capable role after the demotion.")

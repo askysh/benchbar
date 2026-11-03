@@ -24,6 +24,7 @@
 
 FL_SHARE_MAX_SEATS=50
 FL_SHARE_MAX_LABEL=40
+FL_SHARE_USER_CAP=5000
 
 fl_share_dir() { printf '%s/share' "$FL_STATE_DIR"; }
 fl_share_now_iso() { date -u +%Y-%m-%dT%H:%M:%SZ; }
@@ -35,17 +36,31 @@ fl_share_dir_ensure() {
   chmod 700 "$dir"
 }
 
-# fl_share_require_stopped: the control socket of a running share
+# fl_share_require_stopped: refuses while a share answers on its control
+# socket; a socket nothing answers on (a crash left it) is removed
 fl_share_require_stopped() {
-  [[ ! -S "${FL_SHARE_CONTROL_SOCK:-$(fl_share_dir)/control.sock}" ]] \
-    || fl_die "Sharing is on, so the copy is in use." "Stop sharing first, then run this again."
+  local sock="${FL_SHARE_CONTROL_SOCK:-$(fl_share_dir)/control.sock}"
+  [[ -e "$sock" ]] || return 0
+  if [[ -x /usr/bin/nc ]] && ! /usr/bin/nc -U -w 1 "$sock" </dev/null >/dev/null 2>&1; then
+    rm -f "$sock"
+    fl_info "removed the control socket of a share that is no longer running"
+    return 0
+  fi
+  fl_die "Sharing is on, so the copy is in use." "Run benchbar share stop first, then run this again."
+}
+
+# the config to read: share.json, else the one a refresh set aside (its seat ids and dates carry over)
+fl_share_cfg_file() {
+  local d
+  d="$(fl_share_dir)"
+  if [[ -f "${d}/share.json" ]]; then printf '%s/share.json' "$d"; else printf '%s/share.json.prev' "$d"; fi
 }
 
 # fl_share_cfg_raw_v VAR KEY: the JSON text of a top level key of share.json
 # (empty without the file or the key)
 fl_share_cfg_raw_v() {
   local __file __v=""
-  __file="$(fl_share_dir)/share.json"
+  __file="$(fl_share_cfg_file)"
   [[ ! -f "$__file" ]] || __v="$(sed -n "s/^  \"$2\": \(.*\)\$/\1/p" "$__file" | awk 'NR == 1')"
   printf -v "$1" '%s' "${__v%,}"
 }
@@ -141,7 +156,7 @@ fl_cmd_share_users() {
   fl_share_probe_v result "$site" rows
   table=("User|Name|Type|Roles|Will lose")
   while IFS=$'\x1f' read -r u n e t r c; do
-    [[ -n "$u" ]] || continue
+    if [[ -z "$u" ]]; then [[ "$n" == truncated && "$e" == 1 ]] && fl_warn "${site} has more than ${FL_SHARE_USER_CAP} users: the list stops there. Name a user with --users to be sure."; continue; fi
     table+=("${u}|${n//|//}|${t}$([[ "$e" == 1 ]] || printf ' (disabled)')|${r//|/, }|${c//|/, }")
   done <<<"$result"
   if [[ "${#table[@]}" == 1 ]]; then fl_info "No user on ${site}."; return 0; fi
@@ -165,7 +180,8 @@ fl_share_user_ok() { [[ "$1" =~ ^[^[:space:][:cntrl:]\",\\]{1,140}$ ]]; }
 # the roles the copy keeps, from the source site; refuses a name that cannot
 # take a seat
 fl_share_resolve_users() {
-  local rows="$1" u line found name full enabled type roles capable r kept role_list=()
+  local rows="$1" u line found name full enabled type roles capable r kept role_list=() cut_note=""
+  [[ "$rows" != $'\x1ftruncated\x1f1'* ]] || cut_note=" (the list of users stops at ${FL_SHARE_USER_CAP}, so it may be past that)"
   SH_SEAT_NAMES=(); SH_SEAT_ROLES=()
   for u in "${SH_USERS[@]}"; do
     found=0
@@ -184,7 +200,7 @@ fl_share_resolve_users() {
       SH_SEAT_NAMES+=("$full"); SH_SEAT_ROLES+=("$kept")
       break
     done <<<"$rows"
-    [[ "$found" == 1 ]] || fl_die "No user '${u}' on ${SH_SITE}." "benchbar share users lists them."
+    [[ "$found" == 1 ]] || fl_die "No user '${u}' on ${SH_SITE}${cut_note}." "benchbar share users lists them."
   done
 }
 
@@ -272,7 +288,7 @@ fl_cmd_share_setup() {
 
   # the copy that exists keeps its people: another list needs --refresh
   if [[ "$SH_COPY_EXISTS" == 1 && "$refresh" != 1 ]]; then
-    [[ -n "$SH_PRIOR_USERS" ]] || fl_die "${FL_SHARE_SITE} exists but share.json does not, so nobody knows how it was hardened." \
+    [[ -f "${dir}/share.json" && -n "$SH_PRIOR_USERS" ]] || fl_die "${FL_SHARE_SITE} exists but share.json does not, so nobody knows how it was hardened." \
       "Rebuild it: benchbar share setup --refresh"
     [[ "$SH_PRIOR_USERS" == "$users_json" ]] || fl_die "The people changed since the copy was made; the copy keeps the old ones." \
       "Rebuild the copy with the new list: benchbar share setup --users ... --refresh"
@@ -441,7 +457,11 @@ fl_share_step_backup() {
 }
 
 fl_share_step_share_site() {
+  local dir
   if [[ "$SH_COPY_EXISTS" == 1 && "$SH_REFRESH" != 1 ]]; then FL_STEP_RESULT=unchanged; return 0; fi
+  # from here the copy is raw data until harden finishes: share.json goes aside, and only the config step makes it again
+  dir="$(fl_share_dir)"
+  if [[ -f "${dir}/share.json" ]]; then mv -f "${dir}/share.json" "${dir}/share.json.prev" || return 1; fi
   fl_share_copy_plan_apply "$SH_SITE" "$SH_STAMP" "$SH_WITH_FILES" || return 1
   SH_COPY_BUILT=1
 }
@@ -466,7 +486,7 @@ fl_share_step_baseline() {
 fl_share_seats_json_v() {
   local __var="$1" __out="" __sep="" i u id line roles_json file
   local role_list=()
-  file="$(fl_share_dir)/share.json"
+  file="$(fl_share_cfg_file)"
   for ((i = 0; i < ${#SH_USERS[@]}; i++)); do
     u="${SH_USERS[$i]}"
     id=""
@@ -513,11 +533,7 @@ fl_share_step_config() {
     fi
     fl_changed config "share.json" "written"
   fi
-  # the copy is Open as's to list as well, as `site open-as on` records it (benchbar state only)
-  if ! fl_open_as_enabled "$FL_SHARE_SITE"; then
-    fl_open_as_set "$FL_SHARE_SITE" 1
-    fl_changed open_as "$FL_SHARE_SITE" "turned on"
-  fi
+  rm -f "$(fl_share_dir)/share.json.prev"
 }
 
 fl_share_step_exclude() {
