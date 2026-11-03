@@ -227,6 +227,17 @@ test("hello: the documented fields, no names, the code never; a new code changes
     });
 });
 
+test("the code op's salt is the salt hello serves for that code, before and after a new code (the invite's s)", async () => {
+    await withGateway({}, async (gw) => {
+        const first = await gw.control({ op: "code" });
+        assert.strictEqual(first.salt, (await request(gw, { path: "/room/hello", ip: "10.31.1.1" })).json.salt);
+        await gw.control({ op: "rotate" });
+        const second = await gw.control({ op: "code" });
+        assert.notStrictEqual(second.salt, first.salt);
+        assert.strictEqual(second.salt, (await request(gw, { path: "/room/hello", ip: "10.31.1.2" })).json.salt);
+    });
+});
+
 test("hello is 10 per minute per IP, with a real retry_after; another IP is unaffected", async () => {
     await withGateway({}, async (gw) => {
         for (let i = 0; i < 10; i++) assert.strictEqual((await request(gw, { path: "/room/hello", ip: "10.32.0.1" })).status, 200, String(i));
@@ -940,8 +951,9 @@ test("the control socket is 0600; status, code, lock, unlock, rotate, people, as
         agent.destroy();
 
         const code = await gw.control({ op: "code" });
-        assert.deepStrictEqual(Object.keys(code), ["ok", "code"]);
+        assert.deepStrictEqual(Object.keys(code), ["ok", "code", "salt"]);
         assert.match(code.code, /^[0-9]{6}$/);
+        assert.match(code.salt, /^[0-9a-f]{32}$/);
         assert.deepStrictEqual(await gw.control({ op: "lock" }), { ok: true });
         const locked = await status(gw);
         assert.deepStrictEqual([locked.locked, locked.lock_reason], [true, "host"]);

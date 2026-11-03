@@ -511,7 +511,7 @@ fl_json_mode_resolve() {
     # on and off stream like site default; status only reads
     "site open-as") if [[ "${ARGS[1]:-}" == "status" ]]; then FL_JSON_MODE=doc; else FL_JSON_MODE=stream; fi ;;
     "share setup"|"share start"|"share stop"|"share extend"|"share lock"|"share unlock"|"share remove"|"share revoke"|"share assign"|"share teardown") FL_JSON_MODE=stream ;;
-    "share users"|"share preflight"|"share status"|"share code"|"share people"|"share devices"|"share log"|"share open-as") FL_JSON_MODE=doc ;;
+    "share users"|"share preflight"|"share status"|"share code"|"share invite"|"share people"|"share devices"|"share log"|"share open-as") FL_JSON_MODE=doc ;;
     "lan-guard install"|"lan-guard remove"|"lan-guard allow-node") FL_JSON_MODE=stream ;;
     "lan-guard status") FL_JSON_MODE=doc ;;
   esac
@@ -1441,7 +1441,7 @@ case "$COMMAND" in
     # users, preflight, status, people and log read; setup makes the copy and the identity, start the
     # job, teardown drops the copy and the share folder. stop, extend and the room's changes take no lock:
     # a long setup or start must never keep a share from being stopped or a person from being removed.
-    # code and open-as never open a run log: they handle the room code and a session id
+    # code, invite and open-as never open a run log: they handle the room code and a session id
     case "${ARGS[0]:-}" in
       setup|start|teardown)
         fl_log_init "${FL_STATE_DIR}/logs"

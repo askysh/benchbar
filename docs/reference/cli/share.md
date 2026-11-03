@@ -1,6 +1,6 @@
 ---
 title: "share and lan-guard"
-description: "benchbar share setup, start, code, lock, people, remove, assign, log, open-as, stop and teardown, and benchbar lan-guard: a room on your Wi-Fi where people sign in to a hardened copy of a dev site."
+description: "benchbar share setup, start, code, invite, lock, people, remove, assign, log, open-as, stop and teardown, and benchbar lan-guard: a room on your Wi-Fi where people sign in to a hardened copy of a dev site."
 ---
 
 Sharing opens a **room** on this Mac's network. People on the same Wi-Fi
@@ -36,7 +36,7 @@ The documents are in the [JSON schema](../../json-schema.md#sharing).
   protects only rejoins.
 - **Ten wrong codes lock the room** until you draw a new code. The code
   never reaches a file, a log, `share status` or any `--json` but
-  `share code --json`.
+  `share code --json` and `share invite --json`.
 - **The copy holds real data** (people, customers, contacts, addresses).
   `share setup` stops until you pass `--acknowledge-data`.
 - **No live updates for guests.** `/socket.io` answers 404 through the
@@ -168,6 +168,48 @@ a cron job or an agent's shell never reads the code.
 
 ```bash
 benchbar share code --new
+```
+
+## share invite
+
+```
+benchbar share invite [--install-url URL] [--json]
+```
+
+Prints a ready-to-paste invite for your team channel. Its link carries
+the room's name, this Mac's key fingerprint, the code's salt, the code
+itself, this Mac's LAN address and gateway port, and the deadline, so
+a guest's BenchBar opens the join sheet with everything filled in. The
+guest still clicks **Join**. Before the code is sent, the guest's app checks
+that the host's key matches the fingerprint in the link and that the salt
+is still current.
+
+```
+Join my BenchBar room "Lab" (office Wi-Fi, until 17:30)
+benchbar://share/join?v=1&r=Lab&h=<64 hex>&s=<32 hex>&c=<6 digits>&a=192.168.1.20%3A8443&x=<unix seconds>
+No BenchBar yet? Install: <URL>
+Or: open BenchBar → On your network → Paste invite
+```
+
+The install line is there only with `--install-url`, which must be one
+`http://` or `https://` address with no spaces. `--json` gives
+`url`, `text`, `expires_at` (ISO 8601, UTC) and `room`. Every link
+value is percent-encoded (a space is `%20`).
+
+**The invite holds the room code.** Anyone who gets the text can join
+until sharing ends. Post it only where the people you mean to invite read
+it. **New code** (`share code --new`, or `share remove --new-code`) or
+**Stop** makes every posted invite stop working: a guest with an old invite is told to ask for a new one, and
+does not use up one of the room's ten tries. The app's **Copy invite** puts
+the text on the clipboard only when you click it.
+
+It has the same guards as `share code`: refused for agents and scripts,
+never logged and never stored. It needs sharing on with the site up, and
+says "start sharing first" if it is not. It also needs an IPv4 address on
+this Mac's default network.
+
+```bash
+benchbar share invite --install-url https://example.com/benchbar
 ```
 
 ## share lock and share unlock

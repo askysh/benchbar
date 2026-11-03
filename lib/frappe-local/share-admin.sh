@@ -4,6 +4,7 @@
 # share-admin.sh: the host's room while it is shared.
 #
 #   benchbar share code [--new] [--json]
+#   benchbar share invite [--install-url URL] [--json]
 #   benchbar share lock|unlock [--json]
 #   benchbar share people [--json]                              (alias: devices)
 #   benchbar share remove ID [--new-code] [--yes] [--json]      (alias: revoke)
@@ -12,10 +13,11 @@
 #   benchbar share open-as USER [--print-url] [--json]
 #   benchbar share teardown [--yes] [--json]
 #
-# The room code leaves the gateway only through share code: on the terminal, or in share code --json,
-# which the app reads (J14). No run log is opened for it (the dispatcher's list), it is printed with
-# printf and never through fl_info or fl_log, and an agent (BENCHBAR_NONINTERACTIVE, so --for-agent and
-# mcp too) is refused before the socket is asked.
+# The room code leaves the gateway only through share code and share invite (the invite link carries it):
+# on the terminal, or in their --json, which the app reads (J14). No run log is opened for them (the
+# dispatcher's list), the code is printed with printf and never through fl_info or fl_log, it never
+# passes through a here-string (bash writes those to a temp file), and an agent (BENCHBAR_NONINTERACTIVE,
+# so --for-agent and mcp too) is refused before the socket is asked.
 #
 # A removed person's seat is owed a wipe of its Frappe sessions: the gateway keeps such users in
 # status.wipe_failed until its wipe op ends them. remove runs that op at once; every other room command
@@ -28,6 +30,7 @@
 # node -e SCRIPT control SOCKET REQUEST MODE: one request, one reply, printed as MODE asks. Exit 0 for an
 # ok reply; anything else prints error=CODE and exits 1. MODE:
 #   code         the six digits, and nothing else
+#   invite       the salt (32 hex) and the six digits, apart by a space: one reply, so no rotate between them
 #   people_json  the people as a JSON array of the documented fields only
 #   people_rows  a line per person, the same fields apart by \x1f
 #   wipe         wiped=N and wipe_failed=M (counts)
@@ -59,6 +62,9 @@ c.on("data", (chunk) => {
   if (m === null || typeof m !== "object") return finish(1, "error=bad_reply\n");
   if (m.ok !== true) return finish(1, "error=" + (typeof m.error === "string" && /^[a-z_]{1,32}$/.test(m.error) ? m.error : "bad_reply") + "\n");
   if (mode === "code") return /^[0-9]{6}$/.test(m.code) ? finish(0, m.code) : finish(1, "error=bad_reply\n");
+  if (mode === "invite") {
+    return /^[0-9]{6}$/.test(m.code) && /^[0-9a-f]{32}$/.test(m.salt) ? finish(0, m.salt + " " + m.code) : finish(1, "error=bad_reply\n");
+  }
   if (mode === "wipe") {
     if (!Number.isInteger(m.wiped) || !Array.isArray(m.wipe_failed)) return finish(1, "error=bad_reply\n");
     return finish(0, "wiped=" + m.wiped + "\nwipe_failed=" + m.wipe_failed.length + "\n");
@@ -245,6 +251,99 @@ fl_cmd_share_code() {
   printf '  Room code  %s %s\n' "${code:0:3}" "${code:3:3}"
   printf '  Anyone on this Wi-Fi with the code can join. Remove people anytime.\n'
   printf '  The code proves someone may join; it does not prove to them that this Mac is the host.\n'
+}
+
+# ---------------------------------------------------------------- share invite
+
+# fl__share_pct_v VAR TEXT: TEXT percent-encoded byte by byte; only RFC 3986's unreserved characters stay,
+# so a space is %20, never + (the guest's URL parser would keep a + as it is)
+fl__share_pct_v() {
+  local LC_ALL=C __s="$2" __o="" __c __n __h __i
+  for ((__i = 0; __i < ${#__s}; __i++)); do
+    __c="${__s:__i:1}"
+    case "$__c" in
+      [A-Za-z0-9._~-]) __o="${__o}${__c}" ;;
+      *)
+        printf -v __n '%d' "'${__c}"
+        [[ "$__n" -ge 0 ]] || __n=$((__n + 256))  # bash 3.2 reads a byte above 127 as a signed char
+        printf -v __h '%%%02X' "$__n"; __o="${__o}${__h}" ;;
+    esac
+  done
+  printf -v "$1" '%s' "$__o"
+}
+
+# fl__share_json_unquote_v VAR JSON_STRING: the text of a JSON string as fl_json_str writes it (its only
+# escapes are \" and \\: it drops control characters rather than escape them)
+fl__share_json_unquote_v() {
+  local __s="${2#\"}" __o=""
+  __s="${__s%\"}"
+  while [[ "$__s" == *\\* ]]; do
+    __o="${__o}${__s%%\\*}"; __s="${__s#*\\}"
+    __o="${__o}${__s:0:1}"; __s="${__s:1}"
+  done
+  printf -v "$1" '%s' "${__o}${__s}"
+}
+
+fl_cmd_share_invite() {
+  local usage="Use: benchbar share invite [--install-url URL] [--json]"
+  local install_url="" has_install=0 web_up deadline port raw label fp pair salt code url until line1 line_install="" text j1 j2 j3 j4
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --install-url)
+        [[ $# -ge 2 ]] || fl_die "--install-url needs the address people download BenchBar from." "$usage"
+        install_url="$2"; has_install=1; shift ;;
+      *) fl_die "Unknown argument for share invite: $1" "$usage" ;;
+    esac
+    shift
+  done
+  # the invite carries the code: the same rule as share code
+  fl_share_require_person "Making a room invite" "benchbar share invite"
+  fl_share_refuse_dry_run invite
+  # pasted into a team channel as a line of its own: a space or a line break would forge text after it
+  if [[ "$has_install" == 1 ]] && [[ ! "$install_url" =~ ^https?://[^[:space:][:cntrl:]]+$ || ${#install_url} -gt 2048 ]]; then
+    fl_die "--install-url must be one http:// or https:// address, with no spaces." "$usage"
+  fi
+  fl_site_json_begin
+  FL_DONE_NO_STATE=1
+  fl_require_bench
+  fl_share_control_v SH_STATUS '{"op":"status"}' || fl_die "Sharing is not on: start sharing first, then make the invite." "benchbar share start"
+  fl_share_reply_v web_up "$SH_STATUS" web_up
+  [[ "$web_up" == true ]] || fl_die "The shared site is not up yet, so an invite would not work: start sharing first, and wait for it." "benchbar share status shows when it is up."
+  fl_share_wipe_owed
+  fl_share_reply_v deadline "$SH_STATUS" deadline_epoch
+  [[ "$deadline" =~ ^[0-9]+$ ]] || fl_die "The gateway did not say when sharing ends." "See benchbar share status."
+  fl_share_gw_int_v port port
+  [[ "$port" =~ ^[0-9]+$ ]] || fl_die "gateway.json has no port." "Stop sharing and start it again."
+  fl_share_gw_str_raw_v raw room_label
+  [[ -n "$raw" ]] || fl_share_cfg_raw_v raw room_label
+  fl__share_json_unquote_v label "$raw"
+  [[ -n "$label" ]] || fl_die "The room has no name." "Stop sharing and start it again."
+  fl_sp_lan_v
+  [[ -n "$SP_LAN_IP" ]] || fl_die "This Mac has no IPv4 address on a network, so nobody could reach the room." "Join the office Wi-Fi, then run benchbar share invite again."
+  fl_share_fingerprint_v fp "$(fl_share_dir)/host.crt" || fl_die "The host certificate could not be read." "Run benchbar share setup."
+  fp="${fp#sha256:}"
+
+  fl_share_room_v pair '{"op":"code"}' invite || fl_die "The gateway did not give the room code." "See benchbar share status."
+  salt="${pair%% *}"; code="${pair#* }"
+  [[ "$salt" =~ ^[0-9a-f]{32}$ && "$code" =~ ^[0-9]{6}$ ]] || fl_die "The gateway gave no room code." "See benchbar share status."
+  local r a
+  fl__share_pct_v r "$label"
+  fl__share_pct_v a "${SP_LAN_IP}:${port}"
+  url="benchbar://share/join?v=1&r=${r}&h=${fp}&s=${salt}&c=${code}&a=${a}&x=${deadline}"
+  until="$(date -r "$deadline" +%H:%M 2>/dev/null || date -d "@$deadline" +%H:%M)"
+  line1="Join my BenchBar room \"${label}\" (office Wi-Fi, until ${until})"
+  [[ "$has_install" == 0 ]] || line_install="No BenchBar yet? Install: ${install_url}"
+  local line_paste="Or: open BenchBar → On your network → Paste invite"
+  if [[ "${OPT_JSON:-0}" == 1 ]]; then
+    # fl_json_str drops a line break with the other control characters, so the lines are joined here
+    fl_json_escape_v j1 "$line1"; fl_json_escape_v j2 "$url"; fl_json_escape_v j3 "$line_install"; fl_json_escape_v j4 "$line_paste"
+    text="${j1}\\n${j2}\\n${j3:+${j3}\\n}${j4}"
+    fl_doc_emit 0 "$(fl_share_room_doc "\"url\":\"${j2}\",\"text\":\"${text}\",\"expires_at\":$(fl_json_str "$(fl_share_iso_of "$deadline")"),\"room\":$(fl_json_str "$label")")"
+    return 0
+  fi
+  printf '%s\n%s\n' "$line1" "$url"
+  [[ -z "$line_install" ]] || printf '%s\n' "$line_install"
+  printf '%s\n' "$line_paste"
 }
 
 # ---------------------------------------------------------------- share lock, share unlock

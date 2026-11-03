@@ -9,7 +9,7 @@
 #       [--dry-run] [--yes] [--json]
 #   benchbar share users [--site S] [--json]
 #   benchbar share start|stop|extend|status: share-run.sh
-#   benchbar share code|lock|unlock|people|remove|assign|log|open-as|teardown: share-admin.sh
+#   benchbar share code|invite|lock|unlock|people|remove|assign|log|open-as|teardown: share-admin.sh
 #
 # setup makes the host identity (a P-256 key and certificate under
 # $FL_STATE_DIR/share, mode 0700) and share.localhost, a copy of the site
@@ -571,6 +571,7 @@ fl_cmd_share() {
     extend) fl_cmd_share_extend "$@" ;;
     status) fl_cmd_share_status "$@" ;;
     code) fl_cmd_share_code "$@" ;;
+    invite) fl_cmd_share_invite "$@" ;;
     lock|unlock) fl_cmd_share_lock "$sub" "$@" ;;
     people|devices) fl_cmd_share_people "$@" ;;
     remove|revoke) fl_cmd_share_remove "$@" ;;
@@ -578,6 +579,6 @@ fl_cmd_share() {
     log) fl_cmd_share_log "$@" ;;
     open-as) fl_cmd_share_open_as "$@" ;;
     teardown) fl_cmd_share_teardown "$@" ;;
-    *) fl_die "Usage: benchbar share setup|users|preflight|start|stop|extend|status|code|lock|unlock|people|remove|assign|log|open-as|teardown ..." "Example: benchbar share status" ;;
+    *) fl_die "Usage: benchbar share setup|users|preflight|start|stop|extend|status|code|invite|lock|unlock|people|remove|assign|log|open-as|teardown ..." "Example: benchbar share status" ;;
   esac
 }

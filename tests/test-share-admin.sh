@@ -92,6 +92,7 @@ state = os.environ["MOCK_STATE"]
 path = sys.argv[1]
 flag = lambda name: os.path.exists(os.path.join(state, name))
 code = "482913"
+salt = "00112233445566778899aabbccddeeff"
 host_locked = False
 budget = 10
 wipe_failed = []
@@ -106,7 +107,7 @@ people = [
 def find(i):
     return next((p for p in people if p["id"] == i), None)
 def answer(msg):
-    global code, host_locked, budget
+    global code, salt, host_locked, budget
     op = msg.get("op")
     with open(os.path.join(state, "ctl.log"), "a") as f:
         f.write(json.dumps(msg, sort_keys=True) + "\n")
@@ -117,9 +118,10 @@ def answer(msg):
                 "conns": 1, "web_up": not flag("web_down"), "locked": locked, "lock_reason": reason, "budget_left": budget,
                 "seats": 3, "people": len(people), "join_trouble": False, "wipe_failed": list(wipe_failed)}
     if op == "code":
-        return {"ok": True, "code": code}
+        return {"ok": True, "code": code, "salt": salt}
     if op == "rotate":
         code = "771204"
+        salt = "ffeeddccbbaa99887766554433221100"
         budget = 10
         return {"ok": True, "budget_left": budget}
     if op == "lock":
@@ -251,6 +253,9 @@ doc() { printf '%s' "$OUT" >"$TMP_DIR/doc.json"; jget "$TMP_DIR/doc.json" "$1"; 
 cli code
 assert_eq "1" "$CODE" "$OUT$ERR"
 assert_contains "$OUT$ERR" "Sharing is not on"
+cli invite
+assert_eq "1" "$CODE" "$OUT$ERR"
+assert_contains "$OUT$ERR" "start sharing first"
 cli lock
 assert_eq "1" "$CODE" "$OUT$ERR"
 cli people --json
@@ -315,6 +320,97 @@ assert_not_contains "$OUT$ERR" "482 913"
 assert_eq "" "$(ctl_ops)"
 cli code --bogus
 assert_eq "1" "$CODE" "$OUT$ERR"
+
+# ================================================================ the invite (the second exception that carries the code)
+export FL_ROUTE="$ROOT/tests/mocks/bin/route" FL_IPCONFIG="$ROOT/tests/mocks/bin/ipconfig"
+printf 'en0\n' >"$MOCK_STATE/lan_iface"; printf '192.168.1.20\n' >"$MOCK_STATE/lan_ip"
+/usr/bin/openssl ecparam -name prime256v1 -genkey -noout -out "$SHARE_DIR/host.key" 2>/dev/null
+/usr/bin/openssl req -new -x509 -key "$SHARE_DIR/host.key" -days 2 -subj /CN=benchbar-share -out "$SHARE_DIR/host.crt" 2>/dev/null
+# h is checked against the gateway's own function, not against the openssl pipeline the CLI may use
+HOST_H="$("$REAL_NODE" -e 'const c = require("crypto"); const { spkiFingerprint } = require(process.argv[1]);
+const x = new c.X509Certificate(require("fs").readFileSync(process.argv[2]));
+process.stdout.write(spkiFingerprint(x.publicKey.export({ type: "spki", format: "der" })).slice(7));' "$ROOT/lib/frappe-local/share/cpace.js" "$SHARE_DIR/host.crt")"
+[[ "$HOST_H" =~ ^[0-9a-f]{64}$ ]] || fail "the test could not compute the host fingerprint: $HOST_H"
+printf '{\n  "v": 3,\n  "listen": {"host": "0.0.0.0", "port": 8443},\n  "web_port": 8001,\n  "deadline_epoch": 1,\n  "room_label": "Caf\xc3\xa9 & Lab=1 \\"Q\\"",\n  "site": "macdev"\n}\n' >"$SHARE_DIR/gateway.json"
+chmod 600 "$SHARE_DIR/gateway.json"
+# url_fields URL: the invite's parameters back, in order, as "k=v" lines
+url_fields() { python3 -c 'import sys, urllib.parse as u; p = u.urlsplit(sys.argv[1]); print(p.scheme + "://" + p.netloc + p.path); [print(k + "=" + v) for k, v in u.parse_qsl(p.query, keep_blank_values=True)]' "$1"; }
+# the room code section drew a new code: the invite carries it and its salt, from one reply
+ctl_reset
+cli invite --json
+assert_eq "0" "$CODE" "$OUT$ERR"
+[[ -n "$OUT" && "$OUT" != *$'\n'* ]] || fail "invite --json is one line of JSON: $OUT"
+for k in url text expires_at room; do assert_eq "True" "$(doc "'$k' in d")" "(invite --json has $k)"; done
+assert_eq 'Café & Lab=1 "Q"' "$(doc 'd["room"]')"
+INV_URL="$(doc 'd["url"]')"
+INV_X="$(url_fields "$INV_URL" | sed -n 's/^x=//p')"
+[[ "$INV_X" =~ ^[0-9]+$ ]] || fail "x is unix seconds: $INV_URL"
+assert_eq "$(python3 -c 'import datetime,sys; print(datetime.datetime.fromtimestamp(int(sys.argv[1]), datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))' "$INV_X")" "$(doc 'd["expires_at"]')"
+assert_eq "benchbar://share/join
+v=1
+r=Café & Lab=1 \"Q\"
+h=${HOST_H}
+s=ffeeddccbbaa99887766554433221100
+c=${CODE2}
+a=192.168.1.20:8443
+x=${INV_X}" "$(url_fields "$INV_URL")"
+# every value percent-encoded: a space is %20 (never +), and & = " and é never appear raw
+assert_contains "$INV_URL" "?v=1&r=Caf%C3%A9%20%26%20Lab%3D1%20%22Q%22&h=${HOST_H}&s=ffeeddccbbaa99887766554433221100&c=${CODE2}&a=192.168.1.20%3A8443&x=${INV_X}"
+HHMM="$(python3 -c 'import time,sys; print(time.strftime("%H:%M", time.localtime(int(sys.argv[1]))))' "$INV_X")"
+assert_eq "Join my BenchBar room \"Café & Lab=1 \"Q\"\" (office Wi-Fi, until ${HHMM})
+${INV_URL}
+Or: open BenchBar → On your network → Paste invite" "$(doc 'd["text"]')"
+assert_eq "status code" "$(ctl_ops)"
+# plain: the message alone, ready to paste; --install-url adds its line
+cli invite --install-url https://example.com/benchbar
+assert_eq "0" "$CODE" "$OUT$ERR"
+# the stand-in's deadline is now + 1 h at each status, so only x may differ from the --json run
+INV_URL2="$(printf '%s\n' "$OUT" | sed -n 2p)"
+assert_eq "${INV_URL%&x=*}" "${INV_URL2%&x=*}"
+HHMM="$(python3 -c 'import time,sys; print(time.strftime("%H:%M", time.localtime(int(sys.argv[1]))))' "${INV_URL2##*&x=}")"
+assert_eq "Join my BenchBar room \"Café & Lab=1 \"Q\"\" (office Wi-Fi, until ${HHMM})
+${INV_URL2}
+No BenchBar yet? Install: https://example.com/benchbar
+Or: open BenchBar → On your network → Paste invite" "$OUT"
+for bad in "ftp://x" "https://a b" $'https://a\nInjected line' "" ; do
+  cli invite --install-url "$bad"
+  assert_eq "1" "$CODE" "(--install-url [$bad]) $OUT$ERR"
+  assert_not_contains "$OUT" "$CODE2"
+done
+cli invite --install-url
+assert_eq "1" "$CODE" "$OUT$ERR"
+cli invite --bogus
+assert_eq "1" "$CODE" "$OUT$ERR"
+# refused for agents and scripts before the socket is asked; nothing carries the code
+ctl_reset
+cli invite --for-agent
+assert_eq "1" "$CODE" "$OUT$ERR"
+assert_not_contains "$OUT$ERR" "$CODE2"
+cli_env BENCHBAR_NONINTERACTIVE=1 invite --json
+assert_eq "1" "$CODE" "$OUT$ERR"
+assert_not_contains "$OUT$ERR" "$CODE2"
+cli_notty invite
+assert_eq "1" "$CODE" "$OUT$ERR"
+assert_contains "$OUT$ERR" "benchbar share invite"
+assert_eq "" "$(ctl_ops)"
+# no invite while the shared site is not up, nor without a LAN address
+printf '' >"$MOCK_STATE/web_down"
+cli invite --json
+assert_eq "1" "$CODE" "$OUT$ERR"
+assert_contains "$OUT$ERR" "start sharing first"
+assert_not_contains "$OUT$ERR" "$CODE2"
+rm -f "$MOCK_STATE/web_down"
+: >"$MOCK_STATE/lan_iface"
+cli invite
+assert_eq "1" "$CODE" "$OUT$ERR"
+assert_not_contains "$OUT$ERR" "$CODE2"
+printf 'en0\n' >"$MOCK_STATE/lan_iface"
+# status and log never carry it
+cli status --json
+assert_not_contains "$OUT$ERR" "$CODE2"
+cli log
+assert_not_contains "$OUT$ERR" "$CODE2"
+rm -f "$SHARE_DIR/gateway.json"
 
 # ================================================================ lock and unlock
 ctl_reset

@@ -1310,7 +1310,8 @@ Every document starts with `schema_version` and `cli_version`; under
 `--json` the done fields follow. The streams (setup, start, stop, extend,
 lock, unlock, remove, assign, teardown, and lan-guard install, remove and
 allow-node) end in a done line carrying the fields shown. No document but
-`share code --json` ever holds the room code, and none holds a session id.
+`share code --json` and `share invite --json` ever holds the room code, and
+none holds a session id.
 
 ### `benchbar share status --json`
 
@@ -1349,6 +1350,7 @@ owed, else `{"retried":bool,"wiped":N|null,"wipe_failed":M|null}`.
 | Command | Fields |
 |---|---|
 | `share code` | `code` (`"NNNNNN"`, a placeholder here), `new`, `budget_left` |
+| `share invite` | `url` (`benchbar://share/join?v=1&r=…&h=…&s=…&c=…&a=…&x=…`, holds the code), `text` (the message, lines apart by `\n`), `expires_at` (ISO 8601, UTC), `room` |
 | `share lock`, `share unlock` (done) | `locked`, `lock_reason` |
 | `share people` | `state` (`on`/`off`), `people`: `[{id, name, model, ip, seat_id, seat_full_name, online, joined, last_seen}]` |
 | `share remove` (done) | `device`, `name`, `removed`, `new_code` (a bool, never the code) |
