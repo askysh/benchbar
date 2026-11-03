@@ -10,6 +10,11 @@
 # run_simple inside the function, so the replacement is put on
 # werkzeug.serving before frappe.app is imported (spike S1); a frappe that
 # imports it when the module loads gets the replacement too.
+# CI=1 is not inert: besides the debugger and the reloader, Frappe's
+# connected_app.py sets OAUTHLIB_INSECURE_TRANSPORT=1 when CI is set. The
+# gateway terminates TLS and share setup clears the copy's OAuth rows, so
+# nothing here relies on that, but nothing may assume CI=1 changes only
+# Werkzeug either.
 import argparse
 import os
 import sys
