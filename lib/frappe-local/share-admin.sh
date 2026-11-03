@@ -266,20 +266,18 @@ fl_cmd_share_lock() {
       fl_ok "Room locked: nobody new can join."
     fi
     reason=host
-  elif [[ "$reason" == host ]]; then
+  elif [[ "$reason" == host || "$reason" == budget ]]; then
+    # the status names a budget lock first, so a host lock may sit under it: unlock lifts that one
     fl_share_control_v reply '{"op":"unlock"}' || fl_die "The gateway did not unlock the room." "See benchbar share status."
     fl_share_reply_v reason "$reply" lock_reason
-    fl_changed share room "unlocked"
     if [[ "$reason" == budget ]]; then
       fl_warn "Someone typed a wrong room code 10 times. The room is locked."
       fl_note "Only a new code opens it again: benchbar share code --new"
     else
       locked=false; reason=""
+      fl_changed share room "unlocked"
       fl_ok "Room unlocked: people with the code can join."
     fi
-  elif [[ "$reason" == budget ]]; then
-    fl_warn "Someone typed a wrong room code 10 times. The room is locked."
-    fl_note "Only a new code opens it again: benchbar share code --new"
   elif [[ "$reason" == full ]]; then
     fl_info "unchanged: Room full: every seat is taken. It opens again when someone leaves or is removed."
   else
@@ -509,7 +507,7 @@ fl_cmd_share_open_as() {
 # ---------------------------------------------------------------- share teardown
 
 fl_cmd_share_teardown() {
-  local a dir copy had_state=0 had_copy=0 archive="" dropped=0 removed=0 tm p
+  local a dir copy had_state=0 had_copy=0 archive="" dropped=0 removed=0 tm
   for a in "$@"; do fl_die "Unknown argument for share teardown: $a" "Use: benchbar share teardown [--yes] [--json]"; done
   fl_share_require_person "Tearing down sharing" "benchbar share teardown"
   fl_share_refuse_dry_run teardown
@@ -529,14 +527,6 @@ fl_cmd_share_teardown() {
         "Run: launchctl bootout $(fl_share_job_target), then benchbar share teardown again"
       [[ "$SH_TORN" == 0 ]] || fl_changed process share "stopped"
     fi
-    # the exclusions go while their paths still exist
-    tm="${FL_TMUTIL:-/usr/bin/tmutil}"
-    if ! fl_is_linux && [[ -x "$tm" ]]; then
-      for p in "$dir" "$copy"; do
-        [[ -e "$p" ]] || continue
-        "$tm" removeexclusion "$p" >>"${FL_LOG_FILE:-/dev/null}" 2>&1 || fl_warn "could not remove the Time Machine exclusion of ${p}"
-      done
-    fi
     if [[ "$had_copy" == 1 ]]; then
       # site drop backs the copy up first and stops the run on any failure: in a subshell, so the share
       # folder is kept when the copy is
@@ -547,6 +537,13 @@ fl_cmd_share_teardown() {
       fl_changed site "$FL_SHARE_SITE" "dropped${archive:+, archived to ${archive}}"
     fi
     if [[ "$had_state" == 1 && "$dir" == "${FL_STATE_DIR}/share" ]]; then
+      # the copy keeps its exclusion: setup's is sticky (tmutil addexclusion without -p), so it moved with the
+      # folder to archived/sites, and that archive (with drop-site's backup in it) holds the site's real data.
+      # The share folder's goes last, so a failure above leaves it excluded.
+      tm="${FL_TMUTIL:-/usr/bin/tmutil}"
+      if ! fl_is_linux && [[ -x "$tm" ]]; then
+        "$tm" removeexclusion "$dir" >>"${FL_LOG_FILE:-/dev/null}" 2>&1 || fl_warn "could not remove the Time Machine exclusion of ${dir}"
+      fi
       rm -rf -- "$dir" || fl_die "Could not remove ${dir}." "Remove it yourself: rm -rf ${dir}"
       removed=1
       fl_changed config "$dir" "removed: the host identity, the room and its activity log"

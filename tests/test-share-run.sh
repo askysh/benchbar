@@ -746,6 +746,9 @@ assert_eq "on None True" "$(sget '" ".join(str(x) for x in (d["state"], d["degra
 assert_eq "True" "$(sget '14300 < d["seconds_left"] <= 14400 and d["can_extend_s"] == 43200 - 14400 and d["started"].endswith("Z") and d["deadline"].endswith("Z")')"
 assert_eq "1 1 0 9 2 1 False None False 1" "$(sget '" ".join(str(x) for x in (d["devices_total"], d["devices_online"], d["pending"], d["budget_left"], d["seats"], d["people"], d["locked"], d["lock_reason"], d["join_trouble"], d["wipe_failed"]))')"
 assert_not_contains "$OUT" "482913"; assert_not_contains "$OUT" "\"code\""
+# the runner's watchdog asks status too, whose reply carries the code: nothing under the state folder
+# (share.log, the run logs) holds it (J14)
+assert_eq "" "$(grep -r -l "482913" "$FL_STATE_DIR" 2>/dev/null || true)" "(the room code is in no log or state file)"
 assert_not_contains "$(sget 'json.dumps(d["wipe_failed"])')" "priya"
 assert_eq "Lab \"one\" \$HOME" "$(sget 'd["label"]')"
 

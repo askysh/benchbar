@@ -318,13 +318,19 @@ cli unlock
 assert_eq "0" "$CODE" "$OUT$ERR"
 assert_contains "$OUT$ERR" "Room unlocked: people with the code can join."
 assert_eq "status lock status status unlock" "$(ctl_ops)"
-# a budget lock stays until a new code: unlock says so
+# a budget lock stays until a new code: unlock says so, and still lifts a host lock the status hides under it
+cli lock
+ctl_reset
 touch "$MOCK_STATE/budget_lock"
 cli unlock --json
 assert_eq "0" "$CODE" "$OUT$ERR"
+assert_eq "status unlock" "$(ctl_ops)"
 assert_contains "$OUT$ERR" "Someone typed a wrong room code 10 times. The room is locked."
 assert_eq "True budget" "$(printf '%s\n' "$OUT" | tail -n1 | jget - '" ".join(str(x) for x in (d["locked"], d["lock_reason"]))')"
 rm -f "$MOCK_STATE/budget_lock"
+cli unlock
+assert_eq "0" "$CODE" "$OUT$ERR"
+assert_contains "$OUT$ERR" "unchanged: the room is not locked"
 
 # ================================================================ people
 cli people --json
@@ -529,13 +535,21 @@ assert_contains "$OUT$ERR" "needs a person at a terminal"
 cli teardown
 assert_eq "1" "$CODE" "$OUT$ERR"
 assert_file "$SHARE_DIR/share.json"; assert_file "$COPY/site_config.json"
+# a drop that fails keeps the share folder, and with it every Time Machine exclusion
+reset_calls
+set +e; OUT="$(MOCK_DROP_SITE_EXIT=1 BENCHBAR_SUDO=gui "$FM" share teardown --yes --bench-dir "$BENCH" </dev/null 2>&1)"; CODE=$?; set -e
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "the share folder is kept"
+assert_file "$SHARE_DIR/share.json"; assert_file "$COPY/site_config.json"
+assert_calls_not_contain '^tmutil removeexclusion'
+gw_start
 reset_calls; ctl_reset
 cli teardown --yes --json
 assert_eq "0" "$CODE" "$OUT$ERR"
 assert_contains "$(ctl_ops)" "stop"
 wait "$GW_PID" 2>/dev/null || true; GW_PID=""
 assert_calls_contain "^tmutil removeexclusion ${SHARE_DIR}\$"
-assert_calls_contain "^tmutil removeexclusion ${COPY}\$"
+assert_calls_not_contain "^tmutil removeexclusion ${COPY}" "(the copy's sticky exclusion goes with it to archived/sites)"
 assert_calls_contain '^bench drop-site share\.localhost'
 assert_no_file "$SHARE_DIR"
 assert_no_file "$COPY"
