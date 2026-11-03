@@ -301,6 +301,14 @@ assert_not_contains "$OUT$ERR" "$CODE2"
 cli_env BENCHBAR_NONINTERACTIVE=1 code --json
 assert_eq "1" "$CODE" "$OUT$ERR"
 assert_not_contains "$OUT$ERR" "$CODE2"
+# I4: nor does a script, cron job or an agent's shell that sets nothing: no terminal and no BENCHBAR_SUDO=gui
+cli_notty code --json
+assert_eq "1" "$CODE" "$OUT$ERR"
+assert_not_contains "$OUT$ERR" "$CODE2"
+assert_contains "$OUT$ERR" "benchbar share code"
+cli_notty code
+assert_eq "1" "$CODE" "$OUT$ERR"
+assert_not_contains "$OUT$ERR" "482 913"
 assert_eq "" "$(ctl_ops)"
 cli code --bogus
 assert_eq "1" "$CODE" "$OUT$ERR"

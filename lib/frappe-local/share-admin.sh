@@ -221,7 +221,8 @@ fl_cmd_share_code() {
       *) fl_die "Unknown argument for share code: $a" "Use: benchbar share code [--new] [--json]" ;;
     esac
   done
-  fl_noninteractive && fl_die "The room code is for the person sharing, so nothing run without a terminal reads it." "Run it in a terminal: benchbar share code"
+  # the code is shown only on the host's screen: a terminal, or the app (BENCHBAR_SUDO=gui after its own UI)
+  fl_share_require_person "Reading the room code" "benchbar share code"
   fl_share_refuse_dry_run code
   fl_site_json_begin
   FL_DONE_NO_STATE=1

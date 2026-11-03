@@ -139,8 +139,9 @@ new one: the failure budget resets, people already in the room stay, and a
 code already handed out stops working. `--json` is the app's read: the one
 document that carries the code. Never logged and never stored.
 
-Refused under `BENCHBAR_NONINTERACTIVE`, `--for-agent` and `mcp`. The app
-runs it with `BENCHBAR_NONINTERACTIVE=0`.
+Refused under `BENCHBAR_NONINTERACTIVE`, `--for-agent` and `mcp`, and
+without a terminal unless the app passes `BENCHBAR_SUDO=gui`, so a script,
+a cron job or an agent's shell never reads the code.
 
 ```bash
 benchbar share code --new

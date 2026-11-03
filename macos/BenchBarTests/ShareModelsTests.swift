@@ -308,13 +308,13 @@ struct ShareCLITests {
         return (CLIClient(executable: URL(fileURLWithPath: "/usr/local/bin/benchbar"), runner: runner), runner)
     }
 
-    @Test func theCodeIsReadAsAPersonAndAFailedReadRepeatsNothing() async throws {
+    @Test func theCodeIsReadAsAPersonFromTheAppAndAFailedReadRepeatsNothing() async throws {
         let (good, runner) = client(try Fixture.string("share-code"))
         let code = try await good.shareCode(bench: "/b", new: true)
         #expect(code.code == "482913")
         #expect(runner.calls[0].arguments == ["share", "code", "--new", "--json", "--bench-dir", "/b"])
         #expect(runner.calls[0].environment["BENCHBAR_NONINTERACTIVE"] == "0")
-        #expect(runner.calls[0].environment["BENCHBAR_SUDO"] == nil)
+        #expect(runner.calls[0].environment["BENCHBAR_SUDO"] == "gui")
 
         let (bad, _) = client(#"{"schema_version":1,"code":482913}"#)
         do {

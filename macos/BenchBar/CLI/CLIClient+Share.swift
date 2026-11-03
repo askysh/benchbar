@@ -51,11 +51,11 @@ extension CLIClient: ShareCLI {
 
     /// The code is in this stdout and nowhere else. A failure to read it must
     /// not repeat stdout, so a decoding error carries no preview. The CLI
-    /// refuses agents (BENCHBAR_NONINTERACTIVE=1), so the app sets it to 0.
+    /// gives the code only to a terminal or to the app (BENCHBAR_SUDO=gui).
     func shareCode(bench: String, new: Bool) async throws(CLIError) -> ShareCode {
         let output = try await run(["share", "code"] + (new ? ["--new"] : []) + ["--json", "--bench-dir", bench],
                                    timeout: Timeout.action, acceptExitCodes: [0],
-                                   extraEnvironment: ["BENCHBAR_NONINTERACTIVE": "0"])
+                                   extraEnvironment: Self.personEnvironment)
         do throws(CLIError) {
             return try BenchJSON.decode(ShareCode.self, from: Data(output.stdout.utf8))
         } catch {
