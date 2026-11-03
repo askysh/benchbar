@@ -7,6 +7,7 @@ set -euo pipefail
 
 if ! command -v node >/dev/null 2>&1; then
   printf 'SKIP: node not found\n'
+  printf 'test-share-gateway: ok (SKIPPED: node not found)\n'
   exit 0
 fi
 
