@@ -49,6 +49,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         notifier = Notifier(settings: settings)
         store.onAlert = { [weak self] bench, alert in self?.notifier.post(alert, bench: bench) }
         ShareCenter.shared.attach(store)
+        ShareCenter.shared.onEvent = { share, event in
+            guard let notice = HostAmbient.notice(event, bench: share.bench) else { return }
+            ShareNotices.post(title: notice.title, body: notice.body, bench: share.bench, identifier: notice.identifier)
+        }
         notifier.onOpen = { [weak self] path in self?.showPopover(for: path) }
         notifier.start()
 
@@ -139,6 +143,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         Task {
             await store.start()
+            for bench in store.benches { _ = ShareCenter.shared.store(for: bench.path) }
             benchesLoaded = true
             let waiting = pendingURLs
             pendingURLs = []
