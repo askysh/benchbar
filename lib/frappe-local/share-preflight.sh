@@ -158,7 +158,10 @@ fl_sp_listener_stop() {
 }
 
 # fl_sp_fetch URL: one GET of the share web process: SP_HTTP_CODE (empty: it did not answer), SP_HTTP_TYPE
-# (lower case), SP_HTTP_WERKZEUG and SP_HTTP_EXC (whether the body names Werkzeug, or carries an exc or exc_type key)
+# (lower case), SP_HTTP_WERKZEUG and SP_HTTP_EXC (whether the body names Werkzeug, or carries a traceback).
+# A traceback is an exc, exception or _exc_source key, or the text of one. exc_type alone is not: Frappe v15
+# sets it on every API error whatever allow_error_traceback says (frappe/utils/response.py report_error,
+# outside its allow_traceback branch), and it holds only the class name.
 fl_sp_fetch() {
   local hdr body line
   SP_HTTP_CODE=""; SP_HTTP_TYPE=""; SP_HTTP_WERKZEUG=0; SP_HTTP_EXC=0
@@ -172,7 +175,8 @@ fl_sp_fetch() {
       esac
     done <"$hdr"
     ! grep -qiF Werkzeug "$body" || SP_HTTP_WERKZEUG=1
-    ! grep -Eq '"exc(_type)?"[[:space:]]*:' "$body" || SP_HTTP_EXC=1
+    ! grep -Eq '"(exc|exception|_exc_source)"[[:space:]]*:' "$body" || SP_HTTP_EXC=1
+    ! grep -qF 'Traceback (most recent call last)' "$body" || SP_HTTP_EXC=1
   fi
   rm -f "$hdr" "$body"
 }
@@ -300,12 +304,13 @@ fl_sp_critical() {
     fl_sp_add share_debugger_off critical skip "share.json names no web port"
   else
     violations=""
-    # the home page may legitimately answer 200: only its body and type are held against it
+    # / and the debugger URL (whose path is also /) are the home page once the debugger is off, and Frappe
+    # renders it for a Guest with 200 (login): only their body and type are held against them
     for i in 0 1 2; do
       fl_sp_fetch "http://127.0.0.1:${SP_WEB_PORT}${urls[$i]}"
       if [[ -z "$SP_HTTP_CODE" ]]; then violations="does not answer on 127.0.0.1:${SP_WEB_PORT}"; break; fi
       code=""
-      [[ "$i" == 0 || "$SP_HTTP_CODE" != 200 ]] || code="GET ${urls[$i]} answered 200"
+      [[ "$i" != 2 || "$SP_HTTP_CODE" != 200 ]] || code="GET ${urls[$i]} answered 200"
       [[ "$SP_HTTP_WERKZEUG" != 1 ]] || code="${code:+${code}, }the answer to GET ${urls[$i]} names Werkzeug"
       [[ "$SP_HTTP_TYPE" != *text/css* ]] || code="${code:+${code}, }GET ${urls[$i]} answered text/css"
       [[ -z "$code" ]] || violations="${violations}${violations:+; }${code}"

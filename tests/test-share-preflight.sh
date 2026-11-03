@@ -82,6 +82,15 @@ reset_world() {
   write_copy_config; write_share_json; write_anchor
   chmod 755 "$TMP_DIR/nodes" "$TMP_DIR/nodes/cellar" "$TMP_DIR/nodes/cellar/22" "$NODE_REAL_DIR" "$NODE_LINK_DIR"
   unset FL_SHARE_ADMIN_GROUP
+  serve_healthy_web
+}
+# what a healthy share web process (Frappe v15, the debugger off, allow_error_traceback 0) answers a Guest:
+# the login page at / (also for the debugger URL, whose path is /), and exc_type with no traceback for an API error
+serve_healthy_web() {
+  serve "$WEB/" "HTTP/1.1 200 OK" "Content-Type: text/html; charset=utf-8" "<title>Login</title>"
+  serve "$DEBUGGER_URL" "HTTP/1.1 200 OK" "Content-Type: text/html; charset=utf-8" "<title>Login</title>"
+  serve "$TRACEBACK_URL" "HTTP/1.1 417 EXPECTATION FAILED" "Content-Type: application/json" \
+    '{"exc_type":"ValidationError","_server_messages":"[\"{\\\"message\\\": \\\"Failed to get method for command benchbar.no.such.method\\\"}\"]"}'
 }
 http_key() { printf '%s' "$1" | tr -c 'A-Za-z0-9' '_'; }
 # serve URL STATUS_LINE HEADER BODY: a raw response for the curl mock
@@ -240,8 +249,14 @@ pre --critical
 assert_check share_traceback_off fail "traceback" rerun_setup; assert_eq "1" "$CODE"
 serve "$TRACEBACK_URL" "HTTP/1.1 404 NOT FOUND" "Content-Type: application/json" '{"exc": "x"}'
 pre --critical; assert_check share_traceback_off fail
+serve "$TRACEBACK_URL" "HTTP/1.1 417 EXPECTATION FAILED" "Content-Type: application/json" '{"exc_type":"ValidationError","exception":"frappe.exceptions.ValidationError: x"}'
+pre --critical; assert_check share_traceback_off fail
+serve "$TRACEBACK_URL" "HTTP/1.1 500 INTERNAL SERVER ERROR" "Content-Type: text/html" "<pre>Traceback (most recent call last):</pre>"
+pre --critical; assert_check share_traceback_off fail
 serve "$TRACEBACK_URL" "HTTP/1.1 404 NOT FOUND" "Content-Type: application/json" '{"message":"not found","_server_messages":"[]"}'
 pre --critical; assert_check share_traceback_off ok
+reset_world # exc_type alone is no traceback: Frappe sends it on every API error
+pre --critical; assert_check share_traceback_off ok; assert_check share_debugger_off ok
 # the bench's Redis
 reset_world; printf '8001\n' >"$MOCK_STATE/loopback_ports"
 pre --critical
@@ -383,7 +398,7 @@ reset_world
 printf 'Firewall is enabled. (State = 1)\n' >"$MOCK_STATE/fw_state"; printf 'Incoming connection to %%PATH%% is blocked.\n' >"$MOCK_STATE/fw_app"
 printf '8097\n18097\n' >"$MOCK_STATE/lan_reachable_ports"; printf '8001\n' >"$MOCK_STATE/loopback_ports"
 write_copy_config 1 1; printf 'flag\tsignup_disabled\t0\nflag\tadmin_default\t1\nseat\tpriya@example.com\trole\tAuditor\ncount\tapi_keys\t1\ncount\tapi_secrets\t0\ncount\toauth_rows\t0\ndone\n' >"$MOCK_STATE/share_check"
-serve "$TRACEBACK_URL" "HTTP/1.1 404 NOT FOUND" "Content-Type: application/json" '{"exc_type":"X"}'
+serve "$TRACEBACK_URL" "HTTP/1.1 404 NOT FOUND" "Content-Type: application/json" '{"exc_type":"X","exc":"[]"}'
 serve "$WEB/console" "HTTP/1.1 200 OK" "Content-Type: text/html" "x"
 pre
 assert_eq "1" "$CODE"
