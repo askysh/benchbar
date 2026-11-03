@@ -34,6 +34,9 @@ final class GuestRoomStore {
         case hostGone(lastSeen: Date)
         case offline
         case removed
+        /// 403 not_paired while the room's salt changed: the host ended that room and started
+        /// another, which deletes every device (R3.5); a rejoin with the new code is pinned.
+        case newRoom
         case ended
         case identityChanged
     }
@@ -69,6 +72,8 @@ final class GuestRoomStore {
     private var wrongInARow = 0
     private var lockedUntil: Date?
     private var pingTask: Task<Void, Never>?
+    /// The saved room the join sheet is for, so its pin is used and never replaced (J19).
+    private var rejoining: SavedRoom?
 
     init(dependencies: Dependencies, guestName: String = NSFullUserName()) {
         deps = dependencies
@@ -101,11 +106,33 @@ final class GuestRoomStore {
     func beginJoin(_ room: DiscoveredRoom) {
         guard !room.display.needsUpdate else { return }
         if case .joining = join { return }
+        rejoining = nil
         join = .enteringCode(room)
+    }
+
+    /// Join a saved room's host again (a new room after a restart, or after Remove): the dial
+    /// is pinned to the key saved at the first join, so a host showing another key is refused.
+    func beginRejoin(_ room: SavedRoom) {
+        if case .joining = join { return }
+        let target = rejoinTarget(room)
+        guard !target.display.needsUpdate else { return }
+        rejoining = room
+        join = .enteringCode(target)
+    }
+
+    /// The live Bonjour entry first, then the saved address, then the service by name.
+    private func rejoinTarget(_ room: SavedRoom) -> DiscoveredRoom {
+        if let found = discovered.first(where: { $0.id == room.serviceName }) { return found }
+        let endpoint: NWEndpoint = !room.lastHost.isEmpty && room.port != 0
+            ? .hostPort(host: NWEndpoint.Host(room.lastHost), port: NWEndpoint.Port(rawValue: room.port) ?? 0)
+            : .service(name: room.serviceName, type: LanRoomBrowser.serviceType, domain: "local.", interface: nil)
+        return DiscoveredRoom(id: room.serviceName, endpoint: endpoint,
+                              display: RoomDisplay(label: room.room, site: room.site, protocolV: CPace.protocolVersion))
     }
 
     func cancelJoin() {
         if case .joining = join { return }
+        rejoining = nil
         join = .none
     }
 
@@ -130,7 +157,7 @@ final class GuestRoomStore {
         join = .joining(room)
 
         // A host this Mac joined before must show the same key (rejoins are pinned).
-        let earlier = saved.first { $0.serviceName == room.id }
+        let earlier = rejoining.flatMap { $0.serviceName == room.id ? $0 : nil } ?? saved.first { $0.serviceName == room.id }
         let pin: ServerPin = earlier?.hostPin.map(ServerPin.pinned) ?? .firstJoin
         let transport: any RoomTransport
         do {
@@ -138,6 +165,8 @@ final class GuestRoomStore {
         } catch {
             join = .refused(room, error == .identityChanged ? .identityChanged : error == .localNetworkDenied ? .localNetworkDenied : .unreachable)
             if error == .localNetworkDenied { localNetworkDenied = true }
+            // R3.8: the saved row shows the changed identity; the pin is never replaced here.
+            if error == .identityChanged, let earlier { note(.identityChanged, for: earlier) }
             return
         }
         let result = await deps.runJoin(transport, code, guestName, deps.model, fg)
@@ -156,6 +185,7 @@ final class GuestRoomStore {
             join = .refused(room, refusal)
         case .success(let joined):
             wrongInARow = 0
+            rejoining = nil
             var lastHost = ""
             var port: UInt16 = 0
             if case .hostPort(let host, let hostPort)? = address {
@@ -164,7 +194,7 @@ final class GuestRoomStore {
             }
             let entry = SavedRoom(hostFingerprint: Fingerprint.prefix + joined.hostPin.hex, deviceId: joined.deviceId, room: joined.hello.room,
                                   host: joined.hello.host, site: joined.hello.site, serviceName: room.id, lastHost: lastHost, port: port,
-                                  localPort: earlier?.localPort, joinedAt: deps.now())
+                                  localPort: earlier?.localPort, joinedAt: deps.now(), salt: joined.hello.salt)
             if let old = forwarders.removeValue(forKey: entry.id) { old.stop() }
             deps.rooms.save(entry)
             saved = deps.rooms.load()
@@ -205,10 +235,7 @@ final class GuestRoomStore {
     /// Starts the room's forwarder if needed and opens the sign-in page in the browser.
     /// Does nothing for a room the host removed this Mac from, or whose key changed.
     func open(_ room: SavedRoom, path: String = "/app") async {
-        switch health[room.id] {
-        case .removed?, .identityChanged?, .ended?: return
-        default: break
-        }
+        guard NetworkPanePresentation.canOpen(health[room.id]) else { return }
         let forwarder = forwarders[room.id] ?? deps.makeForwarder(room)
         forwarders[room.id] = forwarder
         if !forwarder.isRunning {
@@ -224,9 +251,11 @@ final class GuestRoomStore {
         startHealthLoop()
     }
 
-    /// `benchbar://share/<fp16>/app…`: opens a saved room only; false shows the pane instead.
+    /// `benchbar://share/<fp16>/app…`: opens a saved room only; false shows the pane instead,
+    /// also for a room that cannot be opened (removed, a new room, ended, a changed key).
     func open(link: ShareDeepLink.Target) async -> Bool {
-        guard let room = saved.first(where: { $0.hostPin.map(ShareDeepLink.fp16(of:)) == link.fp16 }) else { return false }
+        guard let room = saved.first(where: { $0.hostPin.map(ShareDeepLink.fp16(of:)) == link.fp16 }),
+              NetworkPanePresentation.canOpen(health[room.id]) else { return false }
         await open(room, path: link.path)
         return true
     }
@@ -266,19 +295,26 @@ final class GuestRoomStore {
     /// 403 not_paired is "removed"; a changed key is never connected to again.
     func pingAll() async {
         for room in saved {
-            switch health[room.id] {
-            case .removed?, .identityChanged?, .ended?: continue
-            default: break
-            }
+            guard NetworkPanePresentation.canOpen(health[room.id]) else { continue }
             do {
                 let hello = try await withAPI(room) { api async throws(RoomAPIError) in try await api.hello() }
                 health[room.id] = .ready(deadline: Date(timeIntervalSince1970: TimeInterval(hello.deadline_epoch)))
                 forwarders[room.id]?.show(nil)
+            } catch .removed {
+                set(await sameRoom(room) ? .removed : .newRoom, for: room)
             } catch {
                 note(error, for: room)
             }
             if forwarders[room.id]?.stopIfIdle() == true { forwarders[room.id] = nil }
         }
+    }
+
+    /// not_paired means removed, or a new room after a restart; only the pre-auth salt
+    /// tells them apart. A row saved before the salt was kept reads as a new room.
+    private func sameRoom(_ room: SavedRoom) async -> Bool {
+        guard let salt = room.salt,
+              let hello = try? await withAPI(room, { api async throws(RoomAPIError) in try await api.roomHello() }) else { return false }
+        return hello.salt == salt
     }
 
     private func note(_ error: RoomAPIError, for room: SavedRoom) {
@@ -295,6 +331,10 @@ final class GuestRoomStore {
             }
         case .seatTaken, .rateLimited, .refused: return
         }
+        set(state, for: room)
+    }
+
+    private func set(_ state: RoomHealth, for room: SavedRoom) {
         health[room.id] = state
         forwarders[room.id]?.show(NetworkPanePresentation.page(for: state, host: room.host, askAgain: "benchbar://share/\(room.hostPin.map(ShareDeepLink.fp16(of:)) ?? "")/app"))
     }

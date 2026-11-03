@@ -53,6 +53,8 @@ nonisolated struct SavedRoom: Codable, Identifiable, Equatable, Sendable {
     var port: UInt16
     var localPort: UInt16?
     var joinedAt: Date
+    /// The room's public salt at join (not the code), to tell a new room from a removal.
+    var salt: String?
 
     var hostPin: Data? { Fingerprint.raw(fingerprint: hostFingerprint) }
 }

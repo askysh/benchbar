@@ -55,6 +55,11 @@ nonisolated struct RoomAPI: Sendable {
         try decode(GatewayHello.self, try await call("GET", "/_benchbar/hello", nil))
     }
 
+    /// Pre-auth `GET /room/hello`: its salt changes with every new room.
+    func roomHello() async throws(RoomAPIError) -> RoomHello {
+        try decode(RoomHello.self, try await call("GET", "/room/hello", nil))
+    }
+
     func seats() async throws(RoomAPIError) -> [RoomSeat] {
         try decode([RoomSeat].self, try await call("GET", "/_benchbar/seats", nil))
     }

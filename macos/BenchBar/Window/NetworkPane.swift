@@ -87,6 +87,9 @@ private struct JoinedRoomRow: View {
                 if NetworkPanePresentation.canOpen(health) {
                     Button("Change Seat") { Task { await store.chooseSeat(room) } }
                 }
+                if NetworkPanePresentation.canRejoin(health) {
+                    Button("Join") { store.beginRejoin(room) }
+                }
                 Button(health == .identityChanged ? "Remove and Join Again" : "Forget") { Task { await store.forget(room) } }
             }
             TimelineView(.periodic(from: .now, by: 30)) { context in

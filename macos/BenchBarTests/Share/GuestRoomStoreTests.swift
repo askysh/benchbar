@@ -44,6 +44,26 @@ nonisolated final class FakeForwarder: ForwarderRunning, @unchecked Sendable {
     func stopIfIdle() -> Bool { false }
 }
 
+/// Every dial the store makes, and an optional failure to answer it with.
+nonisolated final class DialLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _pins: [ServerPin] = []
+    private var _failure: RoomConnectionError?
+    var pins: [ServerPin] { lock.withLock { _pins } }
+    var failure: RoomConnectionError? {
+        get { lock.withLock { _failure } }
+        set { lock.withLock { _failure = newValue } }
+    }
+
+    func record(_ pin: ServerPin) throws(RoomConnectionError) {
+        let failure = lock.withLock { () -> RoomConnectionError? in
+            _pins.append(pin)
+            return _failure
+        }
+        if let failure { throw failure }
+    }
+}
+
 nonisolated final class NoBrowser: RoomBrowsing, @unchecked Sendable {
     func start(onChange: @escaping @Sendable ([DiscoveredRoom]) -> Void, onDenied: @escaping @Sendable () -> Void) {}
     func stop() {}
@@ -56,7 +76,9 @@ private final class Harness {
         "/_benchbar/seat": (200, #"{"ok":true,"seat_id":"s1","full_name":"Sales One"}"#),
         "/_benchbar/hello": (200, #"{"ok":true,"protocol":3,"device":"d_1","user_label":null,"deadline_epoch":1800003600,"label":"Priya","site_label":"macdev"}"#),
         "/_benchbar/leave": (200, #"{"ok":true,"wiped":true}"#),
+        "/room/hello": (200, Harness.roomHello(salt: String(repeating: "00", count: 16))),
     ])
+    let dials = DialLog()
     let forwarder = FakeForwarder()
     var opened: [URL] = []
     var joinResult: Result<JoinedRoom, JoinRefusal>
@@ -67,6 +89,10 @@ private final class Harness {
 
     static let hello = RoomHello(v: 3, room: "Standup", host: "Priya", site: "macdev", salt: String(repeating: "00", count: 16),
                                  locked: false, full: false, people: 1, seats: 2)
+    static func roomHello(salt: String) -> String {
+        #"{"v":3,"room":"Standup","host":"Priya","site":"macdev","salt":"\#(salt)","locked":false,"full":false,"people":1,"seats":2}"#
+    }
+
     static let room = DiscoveredRoom(id: "Priya's room", endpoint: .hostPort(host: "192.168.1.9", port: 8443),
                                      display: RoomDisplay(label: "Standup", site: "macdev", protocolV: 3))
 
@@ -77,10 +103,14 @@ private final class Harness {
     private func makeStore() -> GuestRoomStore {
         let transport = transport
         let forwarder = forwarder
+        let dials = dials
         return GuestRoomStore(dependencies: .init(
             browser: NoBrowser(),
             rooms: SavedRoomsStore(defaults: defaults),
-            dial: { _, _ throws(RoomConnectionError) in transport },
+            dial: { _, pin throws(RoomConnectionError) in
+                try dials.record(pin)
+                return transport
+            },
             runJoin: { [unowned self] _, code, _, _, _ in
                 await MainActor.run {
                     codesSeen.append(code)
@@ -187,6 +217,71 @@ private final class Harness {
         h.opened.removeAll()
         await h.store.open(room)
         #expect(h.opened.isEmpty)
+    }
+
+    @Test func aRestartReadsAsANewRoomAndTheRejoinIsPinned() async throws {
+        let h = Harness()
+        await h.store.submit(code: "482913", for: Harness.room)
+        let room = h.store.saved[0]
+        #expect(room.salt == String(repeating: "00", count: 16))
+        await h.store.open(room)
+        h.store.stopHealthLoop()
+        h.transport.set("/_benchbar/hello", 403, #"{"error":"not_paired"}"#)
+        h.transport.set("/room/hello", 200, Harness.roomHello(salt: String(repeating: "11", count: 16)))
+        await h.store.pingAll()
+        #expect(h.store.health[room.id] == .newRoom)
+        #expect(NetworkPanePresentation.health(.newRoom, host: "Priya", now: h.now) == "Priya started a new room. Join with the new room code.")
+        #expect(h.forwarder.shown == .ended(host: "Priya"))
+        #expect(NetworkPanePresentation.canRejoin(h.store.health[room.id]))
+        #expect(await h.store.open(link: .init(fp16: "abababababababab", path: "/app")) == false)
+
+        h.store.beginRejoin(room)
+        guard case .enteringCode(let target) = h.store.join else {
+            Issue.record("expected the code sheet, got \(h.store.join)")
+            return
+        }
+        #expect(target.id == room.serviceName && target.display.label == "Standup")
+        let before = h.dials.pins.count
+        h.now = h.now.addingTimeInterval(10)
+        await h.store.submit(code: "123456", for: target)
+        let rejoinDials = h.dials.pins.dropFirst(before)
+        #expect(!rejoinDials.isEmpty && rejoinDials.allSatisfy { $0 == .pinned(Data(repeating: 0xab, count: 32)) })
+        #expect(h.store.saved.count == 1)
+        #expect(h.store.health[room.id] == .unknown)
+        guard case .pickingSeat = h.store.join else {
+            Issue.record("expected the seat picker, got \(h.store.join)")
+            return
+        }
+    }
+
+    @Test func aRemovalInTheSameRoomStillReadsAsRemoved() async {
+        let h = Harness()
+        await h.store.submit(code: "482913", for: Harness.room)
+        let room = h.store.saved[0]
+        h.transport.set("/_benchbar/hello", 403, #"{"error":"not_paired"}"#)
+        await h.store.pingAll()
+        #expect(h.store.health[room.id] == .removed)
+        #expect(NetworkPanePresentation.canRejoin(.removed))
+    }
+
+    @Test func aPinnedRejoinToAnotherKeyShowsIdentityChangedAndKeepsThePin() async {
+        let h = Harness()
+        await h.store.submit(code: "482913", for: Harness.room)
+        let room = h.store.saved[0]
+        h.dials.failure = .identityChanged
+        h.store.beginRejoin(room)
+        guard case .enteringCode(let target) = h.store.join else {
+            Issue.record("expected the code sheet, got \(h.store.join)")
+            return
+        }
+        h.now = h.now.addingTimeInterval(10)
+        await h.store.submit(code: "123456", for: target)
+        #expect(h.dials.pins.last == .pinned(Data(repeating: 0xab, count: 32)))
+        #expect(h.store.join == .refused(target, .identityChanged))
+        #expect(h.store.health[room.id] == .identityChanged)
+        #expect(h.store.saved == [room])
+        #expect(!NetworkPanePresentation.canRejoin(.identityChanged))
+        #expect(h.codesSeen == ["482913"])
     }
 
     @Test func forgetTellsTheHostAndDropsTheRoom() async {

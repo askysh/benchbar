@@ -63,6 +63,7 @@ nonisolated enum NetworkPanePresentation {
         case .hostGone(let seen): return "\(host) isn't sharing right now (last seen \(clock(seen)))."
         case .offline: return "\(host) isn't sharing right now."
         case .removed: return "\(host) removed you from this room."
+        case .newRoom: return "\(host) started a new room. Join with the new room code."
         case .ended: return "\(host) ended the room."
         case .identityChanged: return identityChanged(host: host)
         }
@@ -71,8 +72,17 @@ nonisolated enum NetworkPanePresentation {
     /// Open is offered only when the room can still be opened.
     static func canOpen(_ state: GuestRoomStore.RoomHealth?) -> Bool {
         switch state {
-        case .removed?, .ended?, .identityChanged?: return false
+        case .removed?, .newRoom?, .ended?, .identityChanged?: return false
         default: return true
+        }
+    }
+
+    /// Join (pinned to the saved key) when the seat is gone or the host is away; never for a
+    /// changed key, which only Forget and a fresh join may replace (R3.8, J19).
+    static func canRejoin(_ state: GuestRoomStore.RoomHealth?) -> Bool {
+        switch state {
+        case .removed?, .newRoom?, .ended?, .offline?, .hostGone?: return true
+        default: return false
         }
     }
 
@@ -103,7 +113,7 @@ nonisolated enum NetworkPanePresentation {
     static func page(for state: GuestRoomStore.RoomHealth, host: String, askAgain: String) -> ForwarderPage? {
         switch state {
         case .removed: return .removed(host: host, askAgain: askAgain)
-        case .ended: return .ended(host: host)
+        case .ended, .newRoom: return .ended(host: host)
         case .identityChanged: return .identityChanged(host: host)
         case .hostGone(let seen): return .hostOffline(host: host, lastSeen: clock(seen))
         case .offline: return .hostOffline(host: host, lastSeen: "a while ago")
