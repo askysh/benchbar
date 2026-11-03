@@ -529,3 +529,16 @@ Asked for after the phases, to stop naming drift before the first release.
 - `docs/images/runners.png` keeps only the Bench and the Cup, since `scripts/social-preview.swift` cuts the bench's running row out of it by pixel position. The new five have their own sheet, `docs/images/runners-more.png`.
 - The Plane, the Snail and the Rocket were drawn bolder after the tray's 16 px test: at that size (0.67 px a point) they had 16 to 25 solid pixels against the Bench's 50. The rocket is a fifth larger, the plane deeper in the wing and the keel, the shell larger with thinner spiral cuts.
 - The five new ids are reserved like `bench` and `cup`. A custom runner folder with one of those names now shows an error instead of loading; the changelog says so.
+
+## Sharing a copy on the network (host side)
+
+- The CLI is the only backend: the Sharing tab, the menu bar dot, the popover row and the notices all read `benchbar share … --json`. The app writes no share file and runs no pf, launchctl or sudo itself.
+- Rooms, not pairing (task-2b-spec R3, R3.10). There is no approve step. The host shows the room code and guests type it. The code exists only in `share code --json` stdout (run with `BENCHBAR_NONINTERACTIVE=0`, since the CLI refuses agents) and in `ShareStore.code` in memory. It never goes to UserDefaults, a log line, a notification, an error text or a decoding preview. The pasteboard gets it only on an explicit Copy click, marked `org.nspasteboard.ConcealedType` and `TransientType`. `ShareEvent` has no case that can carry it. A test asserts the log sink, the events, the errors and the defaults.
+- Sudo goes only through macOS's own dialog, and only for network protection (`lan-guard install`) and the firewall allow (`lan-guard allow-node`). Each runs with `BENCHBAR_SUDO=gui` after the app's own alert. This is the exception to "nothing in the app asks for sudo". `share setup`, `start`, `teardown` and `open-as` get `BENCHBAR_NONINTERACTIVE=0` plus `BENCHBAR_SUDO=gui` after an alert too, because the CLI refuses them without a person (U3). The lan-guard argv is one constant (`CLIClient.lanGuardArguments`), unverified against the CLI at the time of writing.
+- In the setup picker, a role that can run code or change settings is amber, with "removed in the copy". The copy demotes it, and the host should see that before choosing.
+- There is no working-site mode. Only the hardened copy (share.localhost) is ever shared.
+- Notices: `{name} joined` with `name · model · ip` and no seat (J14), left, locked by wrong codes, join trouble, and reminders at 10 and 1 minutes. The store records its first status and people list silently, so a relaunch repeats none of them.
+- Polling: `share status` every 5 s only while sharing or while the Sharing tab is open, and the checks every 60 s or after wake or a network change. `share status` is not cheap (Task 5, concern 1).
+- Move to lists only seats the app has seen held in this room, because the CLI lists held seats only (`share people`).
+- Bench Stop and Restart ask first while that bench shares (`BenchStore.confirmWhileSharing`). Start does not ask.
+- Local Network access is not triggered by the host. The `local_network` check turns red, and Start stays disabled until it passes; the guest side owns the trigger helper.

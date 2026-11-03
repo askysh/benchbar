@@ -151,15 +151,21 @@ extension CLIClient: ShareCLI {
                           timeout: Timeout.long, acceptExitCodes: [0], extraEnvironment: Self.personEnvironment)
     }
 
+    /// UNVERIFIED: `benchbar lan-guard` was not on this branch's CLI when this
+    /// was written; the words come from the share preflight's fix strings.
+    /// Check them against the real command here, in one place.
+    static let lanGuardArguments = (install: ["lan-guard", "install", "--yes", "--plain"],
+                                    allowNode: ["lan-guard", "allow-node", "--yes", "--plain"])
+
     /// Network protection (the pf rules) needs root: macOS's own password
     /// dialog asks, through BENCHBAR_SUDO=gui, after the app's sheet.
     func lanGuardInstall() async throws(CLIError) {
-        _ = try await run(["lan-guard", "install", "--yes", "--plain"], timeout: Timeout.long, acceptExitCodes: [0],
+        _ = try await run(Self.lanGuardArguments.install, timeout: Timeout.long, acceptExitCodes: [0],
                           extraEnvironment: Self.personEnvironment)
     }
 
     func lanGuardAllowNode() async throws(CLIError) {
-        _ = try await run(["lan-guard", "allow-node", "--yes", "--plain"], timeout: Timeout.long, acceptExitCodes: [0],
+        _ = try await run(Self.lanGuardArguments.allowNode, timeout: Timeout.long, acceptExitCodes: [0],
                           extraEnvironment: Self.personEnvironment)
     }
 }
