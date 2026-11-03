@@ -4,7 +4,7 @@
 # one records the REASON of every call in $MOCK_STATE/osa_reasons and the
 # COMMANDLINE of call N in $MOCK_STATE/osa_cmd.N, then, like "do shell
 # script", runs the command line with /bin/sh, as the test user and not as
-# root, with the absolute tool paths of the root scripts mapped to the mocks:
+# root, with the absolute tool paths of the root scripts mapped to the mocks (root-paths.sh too):
 #   $MOCK_STATE/osa_cancel_all   every dialog is cancelled
 #   $MOCK_STATE/osa_cancel       cancels the dialogs whose REASON is a line of this file
 #   $MOCK_STATE/osa_fail         every command fails
@@ -19,6 +19,8 @@ if [[ -f "$state/osa_cancel_all" ]] || { [[ -f "$state/osa_cancel" ]] && grep -q
   exit 1
 fi
 if [[ -f "$state/osa_fail" ]]; then echo "execution error: the script failed (1)" >&2; exit 1; fi
-mapped="$(printf '%s' "$cmd" | sed -e 's#/usr/bin/install #install #g' -e 's#/usr/bin/mktemp#mktemp#g' -e 's#/usr/bin/shasum#shasum#g' \
+# shellcheck source=tests/mocks/root-paths.sh
+. "${0%/*}/root-paths.sh"
+mapped="$(mock_root_paths "$cmd" | sed -e 's#/usr/bin/install #install #g' -e 's#/usr/bin/mktemp#mktemp#g' -e 's#/usr/bin/shasum#shasum#g' \
   -e 's#/usr/bin/awk#awk#g' -e 's#/usr/sbin/installer#installer#g' -e 's#/usr/sbin/softwareupdate#softwareupdate#g')"
 exec /bin/sh -c "$mapped"

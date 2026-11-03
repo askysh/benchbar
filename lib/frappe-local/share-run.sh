@@ -614,7 +614,7 @@ fl_cmd_share_status() {
   fl_share_copy_json_v copy
   fl_sp_pf_files_problem_v files
   if [[ -z "$files" ]]; then lan_guard=installed
-  elif [[ ! -r "${FL_LANGUARD_ANCHOR:-/etc/pf.anchors/com.benchbar.lan}" || ! -r "${FL_LANGUARD_DAEMON:-/Library/LaunchDaemons/com.benchbar.pf.plist}" ]]; then lan_guard=missing
+  elif [[ ! -r "${FL_LANGUARD_ANCHOR:-$FL_SHARE_PF_ANCHOR_FILE}" || ! -r "${FL_LANGUARD_DAEMON:-$FL_SHARE_PF_DAEMON_FILE}" ]]; then lan_guard=missing
   else lan_guard=outdated; fi
   fl_sp_lan_v
   [[ "$want_pre" == 0 ]] || fl_share_preflight_json_v pre

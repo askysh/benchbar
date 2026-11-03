@@ -19,8 +19,10 @@
 #
 # Every program is the absolute system one, or the file named by its FL_* seam
 # (FL_NC, FL_CURL, FL_ROUTE, FL_IPCONFIG, FL_IFCONFIG, FL_SOCKETFILTERFW,
-# FL_SHARE_NODE; FL_LANGUARD_ANCHOR and FL_LANGUARD_DAEMON for the pf files):
-# the tests point them at mocks, nothing else sets them.
+# FL_SHARE_NODE; FL_LANGUARD_ANCHOR and FL_LANGUARD_DAEMON for where these checks
+# read the pf files): the tests point them at mocks, nothing else sets them. They
+# only choose what this user's process reads; what root runs and writes is fixed
+# (lan-guard.sh).
 
 FL_SHARE_PROTOCOL=3
 FL_SHARE_GATEWAY_PORT=8443
@@ -31,6 +33,25 @@ FL_SHARE_MIN_NODE=22
 FL_SHARE_PF_TEMPLATE='ports = "{ 8000:8099, 9000:9099, 11000:11099, 13000:13099, 3306 }"
 block return in quick inet proto tcp from ! 127.0.0.1 to any port $ports
 block return in quick inet6 proto tcp from ! ::1 to any port $ports'
+
+# The two root files lan-guard installs, and the daemon's exact text: pfctl enables pf (-E) and loads the
+# anchor at every boot (RunAtLoad).
+FL_SHARE_PF_ANCHOR_FILE=/etc/pf.anchors/com.benchbar.lan
+FL_SHARE_PF_DAEMON_FILE=/Library/LaunchDaemons/com.benchbar.pf.plist
+FL_SHARE_PF_PLIST='<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key><string>com.benchbar.pf</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/sbin/pfctl</string><string>-E</string>
+        <string>-a</string><string>com.apple/250.benchbar</string>
+        <string>-f</string><string>/etc/pf.anchors/com.benchbar.lan</string>
+    </array>
+    <key>RunAtLoad</key><true/>
+</dict>
+</plist>'
 
 # The throwaway listener (node -e SCRIPT [6]). It prints "ready V4_RANGE V4_CONTROL V6_RANGE V6_CONTROL"
 # (0: could not listen, or not asked for) and exits by itself after 20 s whatever happens to its parent.
@@ -193,16 +214,20 @@ fl_sp_fetch() {
 
 # fl_sp_pf_files_problem_v VAR: why the anchor or its daemon is not what lan-guard installs (empty: they are)
 fl_sp_pf_files_problem_v() {
-  local anchor="${FL_LANGUARD_ANCHOR:-/etc/pf.anchors/com.benchbar.lan}" daemon="${FL_LANGUARD_DAEMON:-/Library/LaunchDaemons/com.benchbar.pf.plist}" lines want
+  local anchor="${FL_LANGUARD_ANCHOR:-$FL_SHARE_PF_ANCHOR_FILE}" daemon="${FL_LANGUARD_DAEMON:-$FL_SHARE_PF_DAEMON_FILE}" lines want
   local squeeze='s/^[[:space:]]*//; /^#/d; /^$/d; s/[[:space:]][[:space:]]*/ /g; s/[[:space:]]$//'
+  # a whole-line XML comment is the header an earlier install wrote, not part of what launchd reads
+  local squeeze_xml='s/^[[:space:]]*//; /^<!--.*-->$/d; /^$/d; s/[[:space:]][[:space:]]*/ /g; s/[[:space:]]$//'
   printf -v "$1" '%s' ""
   if [[ ! -r "$anchor" ]]; then printf -v "$1" 'the pf anchor %s is missing' "$anchor"; return 0; fi
   lines="$(sed "$squeeze" "$anchor")"
   want="$(printf '%s\n' "$FL_SHARE_PF_TEMPLATE" | sed "$squeeze")"
   if [[ "$lines" != "$want" ]]; then printf -v "$1" 'the pf anchor %s does not match what lan-guard installs' "$anchor"; return 0; fi
   if [[ ! -r "$daemon" ]]; then printf -v "$1" 'the launch daemon %s is missing' "$daemon"; return 0; fi
-  if ! grep -qF "$anchor" "$daemon" || ! grep -qF com.apple/250.benchbar "$daemon" || ! grep -qF pfctl "$daemon"; then
-    printf -v "$1" 'the launch daemon %s does not load the anchor' "$daemon"
+  lines="$(sed "$squeeze_xml" "$daemon")"
+  want="$(printf '%s\n' "$FL_SHARE_PF_PLIST" | sed "$squeeze_xml")"
+  if [[ "$lines" != "$want" ]]; then
+    printf -v "$1" 'the launch daemon %s does not match what lan-guard installs (it must enable pf and load the anchor at boot)' "$daemon"
   fi
 }
 

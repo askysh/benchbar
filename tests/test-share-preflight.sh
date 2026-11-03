@@ -63,7 +63,7 @@ ports = "{ 8000:8099, 9000:9099, 11000:11099, 13000:13099, 3306 }"
 block return in quick inet  proto tcp from ! 127.0.0.1 to any port $ports
 block return in quick inet6 proto tcp from ! ::1 to any port $ports
 PF
-  printf '<?xml version="1.0"?>\n<plist><dict><key>ProgramArguments</key><array><string>/sbin/pfctl</string><string>-a</string><string>com.apple/250.benchbar</string><string>-f</string><string>%s</string></array></dict></plist>\n' "$FL_LANGUARD_ANCHOR" >"$FL_LANGUARD_DAEMON"
+  sed -n "/^FL_SHARE_PF_PLIST='/,/'\$/p" "$ROOT/lib/frappe-local/share-preflight.sh" | sed "s/^FL_SHARE_PF_PLIST='//; s/'\$//" >"$FL_LANGUARD_DAEMON"
 }
 
 export FL_NC="$ROOT/tests/mocks/bin/nc" FL_CURL="$ROOT/tests/mocks/bin/curl" FL_SOCKETFILTERFW="$ROOT/tests/mocks/bin/socketfilterfw"

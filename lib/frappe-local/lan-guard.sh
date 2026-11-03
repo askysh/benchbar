@@ -8,27 +8,34 @@
 # 11000:11099 and 13000:13099, MariaDB 3306. A LaunchDaemon loads it again at
 # boot. share start refuses to run without it (share preflight, pf_active).
 #
-# Root never reads a file the user owns: the CLI renders the pf and plist text
-# from templates/ in the user's process and puts both into the root script as
-# single-quoted literals, with the destination paths and the tool paths; the
-# script, run as root (sudo /bin/bash -c, or fl_root_run's dialog with
-# BENCHBAR_SUDO=gui), writes them itself.
+# Root never reads a file the user owns, and nothing from the environment chooses what root runs or
+# writes: the root script names the system tools and the two root files by their absolute paths, and the
+# pf and plist text are constants of this CLI (share-preflight.sh), put into the script as single-quoted
+# literals. The script, run as root (sudo /bin/bash -c, or fl_root_run's dialog with BENCHBAR_SUDO=gui),
+# writes them itself. The tests' sudo and osascript mocks map those absolute paths to mocks.
 #
 # install, remove and allow-node are a person's decision, like share setup
 # (U3): refused under BENCHBAR_NONINTERACTIVE (so --for-agent and mcp), and
 # without a terminal unless the app passes BENCHBAR_SUDO=gui after its own
 # alert. status only reads and is never refused.
 #
-# Seams for the tests, nothing else sets them: FL_LANGUARD_ANCHOR and
-# FL_LANGUARD_DAEMON (the two root files), FL_PFCTL, FL_LAUNCHCTL, FL_CHOWN and
-# FL_SOCKETFILTERFW (the tools the root script runs).
+# Seams for the tests, nothing else sets them, and they only choose what this user's process reads:
+# FL_LANGUARD_ANCHOR and FL_LANGUARD_DAEMON (where the checks read the two root files) and
+# FL_SOCKETFILTERFW (the firewall state allow-node reads).
 
 FL_LANGUARD_LABEL=com.benchbar.pf
 FL_LANGUARD_PF_ANCHOR_NAME=com.apple/250.benchbar
 FL_LANGUARD_PORTS="8000:8099 9000:9099 11000:11099 13000:13099 3306"
 
-fl_lg_anchor() { printf '%s' "${FL_LANGUARD_ANCHOR:-/etc/pf.anchors/com.benchbar.lan}"; }
-fl_lg_daemon() { printf '%s' "${FL_LANGUARD_DAEMON:-/Library/LaunchDaemons/com.benchbar.pf.plist}"; }
+FL_LANGUARD_PF_TEXT="# BenchBar: Frappe bench ports answer this Mac only (benchbar lan-guard install).
+# Web 8000-8099 (Werkzeug debugger included), socket.io 9000-9099, Redis 11000-11099 and 13000-13099, MariaDB 3306.
+# Keyed on ports, not apps, so a brew upgrade cannot reopen it. \"from ! 127.0.0.1\" also blocks this Mac's own
+# LAN address, which is what lets a probe of that address prove the rule works.
+${FL_SHARE_PF_TEMPLATE}"
+
+# where the checks read the two root files (the tests' seams); root always writes FL_SHARE_PF_*_FILE
+fl_lg_anchor() { printf '%s' "${FL_LANGUARD_ANCHOR:-$FL_SHARE_PF_ANCHOR_FILE}"; }
+fl_lg_daemon() { printf '%s' "${FL_LANGUARD_DAEMON:-$FL_SHARE_PF_DAEMON_FILE}"; }
 
 # fl_lg_state_v VAR: installed, missing or outdated, by the rule share preflight and share status use
 # (the anchor's non-comment lines, and a daemon that loads it)
@@ -81,20 +88,20 @@ fl_lg_as_root() {
   [[ "$code" == 0 ]] || fl_die "The root step failed (exit ${code}); see the log." "Run: ${manual}"
 }
 
-# fl_lg_tools_sh: the tool paths every root script names, as shell assignments
+# fl_lg_tools_sh: the tool and file paths every root script names, as shell assignments, one per line
 fl_lg_tools_sh() {
   printf 'pfctl=%s\nlaunchctl=%s\nchown=%s\nanchor=%s\ndaemon=%s\nlabel=%s\npf_anchor=%s\n' \
-    "$(fl_sq "${FL_PFCTL:-/sbin/pfctl}")" "$(fl_sq "${FL_LAUNCHCTL:-/bin/launchctl}")" "$(fl_sq "${FL_CHOWN:-/usr/sbin/chown}")" \
-    "$(fl_sq "$(fl_lg_anchor)")" "$(fl_sq "$(fl_lg_daemon)")" "$FL_LANGUARD_LABEL" "$FL_LANGUARD_PF_ANCHOR_NAME"
+    "'/sbin/pfctl'" "'/bin/launchctl'" "'/usr/sbin/chown'" \
+    "$(fl_sq "$FL_SHARE_PF_ANCHOR_FILE")" "$(fl_sq "$FL_SHARE_PF_DAEMON_FILE")" "$FL_LANGUARD_LABEL" "$FL_LANGUARD_PF_ANCHOR_NAME"
 }
 
-# fl_lg_install_script PF PLIST: the root side of install. Each file is written next to its place, made
+# fl_lg_install_script: the root side of install. Each file is written next to its place, made
 # root:wheel 0644 and moved in; then pf loads the anchor (and is enabled) and launchd loads the daemon,
 # which loads it again at every boot.
 fl_lg_install_script() {
   printf 'set -eu\numask 022\n'
   fl_lg_tools_sh
-  printf 'pf_text=%s\nplist_text=%s\n' "$(fl_sq "$1")" "$(fl_sq "$2")"
+  printf 'pf_text=%s\nplist_text=%s\n' "$(fl_sq "$FL_LANGUARD_PF_TEXT")" "$(fl_sq "$FL_SHARE_PF_PLIST")"
   cat <<'ROOT'
 put() {
   new="$1.benchbar.new"
@@ -128,7 +135,7 @@ ROOT
 
 # fl_lg_allow_node_script REALPATH
 fl_lg_allow_node_script() {
-  printf 'set -eu\nfw=%s\nnode=%s\n' "$(fl_sq "${FL_SOCKETFILTERFW:-/usr/libexec/ApplicationFirewall/socketfilterfw}")" "$(fl_sq "$1")"
+  printf 'set -eu\nfw=%s\nnode=%s\n' "'/usr/libexec/ApplicationFirewall/socketfilterfw'" "$(fl_sq "$1")"
   cat <<'ROOT'
 "$fw" --add "$node"
 "$fw" --unblockapp "$node"
@@ -172,7 +179,7 @@ fl_cmd_lan_guard_status() {
 }
 
 fl_cmd_lan_guard_install() {
-  local a state pf plist
+  local a state
   for a in "$@"; do fl_die "Unknown argument for lan-guard install: $a" "Use: benchbar lan-guard install [--dry-run] [--yes] [--json]"; done
   fl_lg_require_person install
   fl_lg_state_v state
@@ -181,22 +188,20 @@ fl_cmd_lan_guard_install() {
     fl_lg_report
     return 0
   fi
-  pf="$(fl_template_render lan-guard.pf)"
-  plist="$(fl_template_render lan-guard.plist "ANCHOR=$(fl_lg_anchor)")"
   if [[ "${FL_DRY_RUN:-0}" == 1 ]]; then
     fl_info "dry-run: the guard is ${state}; with sudo, once, would:"
-    fl_info "  write $(fl_lg_anchor) (root:wheel 0644): block TCP to ${FL_LANGUARD_PORTS} from anything but loopback"
-    fl_info "  write $(fl_lg_daemon) (root:wheel 0644): load that anchor at every boot"
-    fl_info "  run ${FL_PFCTL:-/sbin/pfctl} -E -a ${FL_LANGUARD_PF_ANCHOR_NAME} -f $(fl_lg_anchor), and load the daemon (launchctl)"
+    fl_info "  write ${FL_SHARE_PF_ANCHOR_FILE} (root:wheel 0644): block TCP to ${FL_LANGUARD_PORTS} from anything but loopback"
+    fl_info "  write ${FL_SHARE_PF_DAEMON_FILE} (root:wheel 0644): load that anchor at every boot"
+    fl_info "  run /sbin/pfctl -E -a ${FL_LANGUARD_PF_ANCHOR_NAME} -f ${FL_SHARE_PF_ANCHOR_FILE}, and load the daemon (launchctl)"
     return 0
   fi
   fl_confirm "Install the LAN guard with sudo (a pf anchor and a launch daemon)?" || fl_die "Not installed." "Run: benchbar lan-guard install"
   fl_lg_as_root "install the LAN guard: the pf anchor that keeps the bench ports off the LAN, and the daemon that loads it at boot" \
-    "benchbar lan-guard install" "$(fl_lg_install_script "$pf" "$plist")"
+    "benchbar lan-guard install" "$(fl_lg_install_script)"
   fl_lg_state_v state
   [[ "$state" == installed ]] || fl_die "The guard files are still ${state} after the root step." "See the log; run benchbar lan-guard install again."
   fl_changed lan-guard "$FL_LANGUARD_PF_ANCHOR_NAME" "installed"
-  fl_ok "LAN guard installed: $(fl_lg_anchor) and $(fl_lg_daemon)"
+  fl_ok "LAN guard installed: ${FL_SHARE_PF_ANCHOR_FILE} and ${FL_SHARE_PF_DAEMON_FILE}"
   fl_lg_report
 }
 
