@@ -32,9 +32,12 @@ FL_SHARE_MAX_TOTAL_S=43200
 FL_SHARE_MIN_S=300
 FL_SHARE_DEFAULT_S=14400
 # The runner's time limits (rendered into it) and share start's wait, which is built from them: the
-# session wipe, the web process until it listens, the control socket, and one run of the critical checks.
-FL_SHARE_WIPE_SECS=10
+# session wipe, the web process until it listens, its warm-up GET, the control socket, and one run of the
+# critical checks. The wipe also runs in the runner's trap, which must end well inside the 20 s launchd
+# gives a job after a bootout: about 2 s for the children, then the wipe.
+FL_SHARE_WIPE_SECS=8
 FL_SHARE_LISTEN_SECS=60
+FL_SHARE_WARM_SECS=30
 FL_SHARE_SOCK_SECS=15
 FL_SHARE_CHECKS_SECS="${FL_SHARE_CHECKS_SECS:-30}"
 
@@ -239,7 +242,8 @@ fl_share_render_job() {
   runner="$(fl_template_render share-run.sh "SHARE_DIR=${dir}" "SOCK=$(fl_share_sock)" "BENCH=${FL_BENCH_DIR}" "SHARE_SITE=${FL_SHARE_SITE}" \
     "WEB_PORT=${web_port}" "GATEWAY_PORT=${FL_SHARE_GATEWAY_PORT}" "PYTHON=${FL_BENCH_DIR}/env/bin/python" "LIB=${FL_SELF_DIR}/lib/frappe-local" \
     "NODE=${SP_NODE_REAL}" "BENCHBAR=$2" "DNS_SD=${FL_SHARE_DNS_SD:-/usr/bin/dns-sd}" "CAFFEINATE=${FL_SHARE_CAFFEINATE:-/usr/bin/caffeinate}" \
-    "LSOF=${FL_SHARE_LSOF:-/usr/sbin/lsof}" "WIPE_SECS=${FL_SHARE_WIPE_SECS}" "LISTEN_SECS=${FL_SHARE_LISTEN_SECS}" "SOCK_SECS=${FL_SHARE_SOCK_SECS}" \
+    "LSOF=${FL_SHARE_LSOF:-/usr/sbin/lsof}" "CURL=${FL_CURL:-/usr/bin/curl}" "WIPE_SECS=${FL_SHARE_WIPE_SECS}" "LISTEN_SECS=${FL_SHARE_LISTEN_SECS}" \
+    "SOCK_SECS=${FL_SHARE_SOCK_SECS}" "WARM_SECS=${FL_SHARE_WARM_SECS}" \
     "SESSIONS_PY=${FL_PY_SHARE_SESSIONS}" "CONTROL_JS=${FL_JS_SHARE_CONTROL}" "SITE_LABEL=${site}" "ROOM_LABEL=$1")" || return 1
   plist="$(fl_template_render share.plist "LABEL=${FL_SHARE_JOB_LABEL}" "APP_BUNDLE_ID=${FL_APP_BUNDLE_ID}" "RUNNER=${dir}/share-run.sh" \
     "SHARE_DIR=${dir}" "PATH=$(fl_launchd_path_value)" "LOG=${dir}/share.log")" || return 1
@@ -311,7 +315,7 @@ fl_share_start_step_job() {
 fl_share_phase_secs() {
   case "$1" in
     starting:wipe) printf '%s' $((FL_SHARE_WIPE_SECS + 5)) ;;
-    starting:web) printf '%s' $((FL_SHARE_LISTEN_SECS + 5)) ;;
+    starting:web) printf '%s' $((FL_SHARE_LISTEN_SECS + FL_SHARE_WARM_SECS + 5)) ;;
     starting:checks) printf '%s' "$FL_SHARE_CHECKS_SECS" ;;
     starting:gateway) printf '%s' $((FL_SHARE_SOCK_SECS + FL_SHARE_CHECKS_SECS)) ;;
     # running: the web is marked up at once; no phase yet: launchd has not started the runner

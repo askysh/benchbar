@@ -373,6 +373,15 @@ fi
 
 # ================================================================ the runner, run directly
 NOW="$(date +%s)"
+# the runner's curl: the web's warm-up GET (B6). It records "warm ARGS"; $MOCK_STATE/warm_fail is a web that
+# does not answer within the budget (curl exit 28)
+cat >"$SB/curl" <<'SH'
+#!/bin/bash
+printf 'warm %s\n' "$*" >>"$MOCK_STATE/order"
+[[ ! -f "$MOCK_STATE/warm_fail" ]] || exit 28
+exit 0
+SH
+chmod +x "$SB/curl"
 write_gateway_cfg() { # DEADLINE: what the stand-in gateway reads (the real file is written by share start)
   printf '{"control_sock":"%s","deadline_epoch":%s,"started_epoch":%s,"max_total_s":43200}\n' "$SOCK" "$1" "$NOW" >"$SHARE_DIR/gateway.json"
   chmod 600 "$SHARE_DIR/gateway.json"
@@ -382,8 +391,8 @@ render_runner() {
   fl_template_render share-run.sh "SHARE_DIR=${SHARE_DIR}" "SOCK=${SOCK}" "BENCH=${BENCH}" "SHARE_SITE=share.localhost" "WEB_PORT=8001" \
     "GATEWAY_PORT=8443" "PYTHON=${BENCH}/env/bin/python" "LIB=${ROOT}/lib/frappe-local" "NODE=${SB}/node" "BENCHBAR=${SB}/benchbar" \
     "DNS_SD=${SB}/dns-sd" "CAFFEINATE=${SB}/caffeinate" "LSOF=${SB}/lsof" "WIPE_SECS=${FL_SHARE_WIPE_SECS}" \
-    "LISTEN_SECS=${FL_SHARE_LISTEN_SECS}" "SOCK_SECS=${FL_SHARE_SOCK_SECS}" "SESSIONS_PY=${FL_PY_SHARE_SESSIONS}" \
-    "CONTROL_JS=${FL_JS_SHARE_CONTROL}" "SITE_LABEL=macdev" "ROOM_LABEL=${NASTY_ROOM}" >"$SHARE_DIR/share-run.sh"
+    "LISTEN_SECS=${FL_SHARE_LISTEN_SECS}" "SOCK_SECS=${FL_SHARE_SOCK_SECS}" "WARM_SECS=${FL_SHARE_WARM_SECS}" "CURL=${SB}/curl" \
+    "SESSIONS_PY=${FL_PY_SHARE_SESSIONS}" "CONTROL_JS=${FL_JS_SHARE_CONTROL}" "SITE_LABEL=macdev" "ROOM_LABEL=${NASTY_ROOM}" >"$SHARE_DIR/share-run.sh"
   chmod 700 "$SHARE_DIR/share-run.sh"
   printf '<plist/>\n' >"$SHARE_DIR/job.plist"
 }
@@ -415,9 +424,12 @@ assert_eq "1" "$(grep -c '^umask 077$' "$SHARE_DIR/share-run.sh")"
 reset_order; write_gateway_cfg $((NOW + 3600))
 start_runner
 wait_for 15 has_event '^caffeinate '
-assert_eq "wipe web preflight gateway preflight webop-up" "$(events | cut -d' ' -f1-6)" "(the gateway hears the web is up only after the second checks) $(order)"
+assert_eq "wipe web warm preflight gateway preflight webop-up" "$(events | cut -d' ' -f1-7)" "(the web is warmed before the first checks; the gateway hears it is up only after the second) $(order)"
+# B6: one GET of the home page, bounded by the warm-up budget, with the copy's Host
+assert_contains "$(order)" "warm -s -o /dev/null -m ${FL_SHARE_WARM_SECS} -H Host: share.localhost http://127.0.0.1:8001/"
+assert_eq "$((FL_SHARE_LISTEN_SECS + FL_SHARE_WARM_SECS + 5))" "$(fl_share_phase_secs starting:web)" "(share start waits for the warm-up too)"
 # the two start together; the stand-ins write when they get to it, and a watchdog check may come first under load
-assert_eq "caffeinate dns-sd" "$(events | cut -d' ' -f7- | tr ' ' '\n' | grep -v '^preflight$' | head -n2 | sort | tr '\n' ' ' | sed 's/ $//')"
+assert_eq "caffeinate dns-sd" "$(events | cut -d' ' -f8- | tr ' ' '\n' | grep -v '^preflight$' | head -n2 | sort | tr '\n' ' ' | sed 's/ $//')"
 started_order() { grep -o -E '(dns-sd|caffeinate) started' "$1" | awk '{print $1}' | tr '\n' ' ' | sed 's/ $//'; }
 assert_eq "dns-sd caffeinate" "$(started_order "$TMP_DIR/runner.log")" "(Bonjour before caffeinate, from the runner's own log)"
 assert_contains "$(order)" "wipe share.localhost keep=[]" "(the whole copy, at start: covers a runner killed with -9)"
@@ -458,7 +470,7 @@ reset_order; write_gateway_cfg $((NOW + 3600)); printf 'fail\n' >"$MOCK_STATE/pr
 start_runner
 wait_for 15 runner_gone
 assert_eq "1" "$(runner_code)" "(line $LINENO: $(events))"
-assert_eq "wipe web preflight wipe" "$(events)"
+assert_eq "wipe web warm preflight wipe" "$(events)"
 assert_contains "$(cat "$SHARE_DIR/ended")" "checks"
 finish_runner
 
@@ -467,7 +479,7 @@ reset_order; printf 'ok\nskipgw\n' >"$MOCK_STATE/pre_script"
 start_runner
 wait_for 15 runner_gone
 assert_eq "1" "$(runner_code)" "(line $LINENO: $(events))"
-assert_eq "wipe web preflight gateway preflight wipe" "$(events)" "(no dns-sd, and the web is never marked up)"
+assert_eq "wipe web warm preflight gateway preflight wipe" "$(events)" "(no dns-sd, and the web is never marked up)"
 finish_runner
 
 # ---- a web op the gateway does not confirm ends the job
@@ -475,7 +487,7 @@ reset_order; : >"$MOCK_STATE/web_op_fail"
 start_runner
 wait_for 15 runner_gone
 assert_eq "1" "$(runner_code)" "(line $LINENO: $(events))"
-assert_eq "wipe web preflight gateway preflight webop-up wipe" "$(events)"
+assert_eq "wipe web warm preflight gateway preflight webop-up wipe" "$(events)"
 assert_contains "$(cat "$SHARE_DIR/ended")" "did not confirm that the web process is up"
 finish_runner
 
@@ -540,7 +552,7 @@ reset_order; : >"$MOCK_STATE/lsof_flip"
 start_runner
 wait_for 15 runner_gone
 assert_eq "1" "$(runner_code)" "(line $LINENO: $(events))"
-assert_eq "wipe web preflight gateway preflight webop-up webop-down wipe" "$(events)" "(at the first start)"
+assert_eq "wipe web warm preflight gateway preflight webop-up webop-down wipe" "$(events)" "(at the first start)"
 assert_contains "$(cat "$SHARE_DIR/ended")" "stopped holding its port as it was marked up"
 finish_runner
 reset_order
@@ -577,7 +589,7 @@ wait_for 15 has_event '^caffeinate '
 kill "$(tail -n1 "$MOCK_STATE/web_pids")"
 wait_for 15 runner_gone
 assert_eq "1" "$(runner_code)" "(line $LINENO: $(events))"
-assert_eq "webop-down web preflight wipe" "$(events | cut -d' ' -f9-)" "(never up)"
+assert_eq "webop-down web warm preflight wipe" "$(events | cut -d' ' -f10-)" "(never up)"
 assert_contains "$(cat "$SHARE_DIR/ended")" "does not hold its port"
 finish_runner
 export BENCHBAR_SHARE_FIRST_TICK=2
@@ -592,15 +604,45 @@ for n in 1 2 3; do
   kill "$pid"
   wait_for 15 has_event '^webop up'
   # the gateway is told down before the web starts again, and up only after the checks of the new one
-  assert_eq "webop-down web preflight webop-up" "$(events)" "(restart $n)"
+  assert_eq "webop-down web warm preflight webop-up" "$(events)" "(restart $n)"
   assert_eq "False" "$(runner_gone && echo True || echo False)" "(restart $n)"
 done
 export BENCHBAR_SHARE_FIRST_TICK=2
 kill "$(tail -n1 "$MOCK_STATE/web_pids")"
 wait_for 15 runner_gone
 assert_eq "1" "$(runner_code)" "(line $LINENO: $(events))"
-assert_eq "webop-down wipe" "$(events | cut -d' ' -f5-)"
-assert_contains "$(cat "$SHARE_DIR/ended")" "ended 4 times in 5 minutes"
+assert_eq "webop-down wipe" "$(events | cut -d' ' -f6-)"
+assert_contains "$(cat "$SHARE_DIR/ended")" "ended 4 times in a row"
+finish_runner
+
+# ---- B9: the count is of deaths in a row: a web that stayed up the healthy period (here 3 s) starts it again,
+# whatever the restarts took; three more quick deaths after that end the job on the 4th of them
+reset_order; export BENCHBAR_SHARE_FIRST_TICK=2000 BENCHBAR_SHARE_WEB_HEALTHY_SECS=3
+start_runner
+wait_for 15 has_event '^caffeinate '
+kill_web_wait_up() { : >"$MOCK_STATE/order"; kill "$(tail -n1 "$MOCK_STATE/web_pids")"; wait_for 15 has_event '^webop up'; }
+for n in 1 2 3; do kill_web_wait_up; done
+sleep 4
+for n in 1 2 3; do
+  kill_web_wait_up
+  assert_eq "False" "$(runner_gone && echo True || echo False)" "(death $n after a healthy web)"
+done
+kill "$(tail -n1 "$MOCK_STATE/web_pids")"
+wait_for 15 runner_gone
+assert_eq "1" "$(runner_code)" "(line $LINENO: $(events))"
+assert_contains "$(cat "$SHARE_DIR/ended")" "ended 4 times in a row"
+finish_runner
+unset BENCHBAR_SHARE_WEB_HEALTHY_SECS
+export BENCHBAR_SHARE_FIRST_TICK=2
+
+# ---- B6: a warm-up the web does not answer within its budget does not end the job: the checks decide
+reset_order; : >"$MOCK_STATE/warm_fail"
+start_runner
+wait_for 15 has_event '^webop up'
+rm -f "$MOCK_STATE/warm_fail"
+assert_contains "$(cat "$TMP_DIR/runner.log")" "did not answer a first request within ${FL_SHARE_WARM_SECS} s"
+assert_eq "False" "$(runner_gone && echo True || echo False)"
+kill -TERM "$RUNNER_PID"; wait_for 15 runner_gone
 finish_runner
 
 # ---- a restarted web whose checks fail ends the job at once (no debounce)
@@ -610,7 +652,7 @@ wait_for 15 has_event '^caffeinate '
 kill "$(tail -n1 "$MOCK_STATE/web_pids")"
 wait_for 15 runner_gone
 assert_eq "1" "$(runner_code)" "(line $LINENO: $(events))"
-assert_eq "webop-down web preflight wipe" "$(events | cut -d' ' -f9-)" "(after the restart: down, the web, its checks, the end; never up)"
+assert_eq "webop-down web warm preflight wipe" "$(events | cut -d' ' -f10-)" "(after the restart: down, the web, its checks, the end; never up)"
 finish_runner
 export BENCHBAR_SHARE_FIRST_TICK=2
 
@@ -625,14 +667,19 @@ wait_for 5 every_recorded_gone
 assert_no_file "$SOCK"; assert_no_file "$SHARE_DIR/job.plist"
 finish_runner
 
-# ---- a session wipe that hangs is cut at WIPE_SECS: the trap ends well inside launchd's 20 s
+# ---- a session wipe that hangs is cut at WIPE_SECS: the trap ends well inside launchd's 20 s, also on a slow
+# machine: here every sleep takes three times as long (a loaded CI runner's forks), and the trap's waits are
+# bounded by the clock, not by a count of sleeps. Its worst case: the children's TERM wait (2 s) and the wipe
+# cap (WIPE_SECS), each up to 1 s more for whole-second clock reads, plus the forks: 14 s leaves 6 s to SIGKILL.
 reset_order
-start_runner
-wait_for 15 has_event '^caffeinate '
+SLOW="$TMP_DIR/slow-bin"; mkdir -p "$SLOW"
+printf '#!/bin/bash\nexec /bin/sleep "$(awk -v s="$1" '"'"'BEGIN { print s * 3 }'"'"')"\n' >"$SLOW/sleep"; chmod +x "$SLOW/sleep"
+PATH="$SLOW:$PATH" start_runner
+wait_for 30 has_event '^caffeinate '
 : >"$MOCK_STATE/wipe_hang"
 t0="$SECONDS"
 kill -TERM "$RUNNER_PID"
-wait_for 16 runner_gone
+wait_for 30 runner_gone
 [[ $((SECONDS - t0)) -le 14 ]] || fail "the trap took $((SECONDS - t0)) s"
 assert_contains "$(cat "$TMP_DIR/runner.log")" "took more than ${FL_SHARE_WIPE_SECS} s"
 finish_runner
