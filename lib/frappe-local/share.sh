@@ -173,6 +173,22 @@ SH_SITE=""; SH_STAMP=""; SH_BACKUP_NOW=0; SH_REFRESH=0; SH_REGEN=0; SH_COPY_EXIS
 SH_USERS=(); SH_SEAT_NAMES=(); SH_SEAT_ROLES=()
 SH_LABEL_JSON=""; SH_WEB_PORT=""; SH_APPS_JSON="{}"; SH_HARDEN_JSON=""; SH_RESTORE_TOKEN=""; SH_WITH_FILES=0
 SH_PRIOR_USERS=""; SH_FINGERPRINT=""
+SH_RESUME_ON_EXIT=0
+
+# fl_share_on_exit: benchbar's exit handler, however the run ended (a failed step, fl_die, TERM, INT,
+# HUP). The copy's restore paused the scheduler of every site (FL_PULL_QUIESCED); that pause goes now.
+# frappe's restore writes a fresh site_config, so the half-restored copy first gets a pause and muted
+# email of its own: the bench's scheduler must not run jobs or send mail from it. A pause that was set
+# before setup started never made FL_PULL_QUIESCED 1 (fl_pull_common_paused), so it stays.
+fl_share_on_exit() {
+  [[ "$SH_RESUME_ON_EXIT" == 1 && "${FL_PULL_QUIESCED:-0}" == 1 ]] || return 0
+  SH_RESUME_ON_EXIT=0
+  if [[ -f "${FL_BENCH_DIR}/sites/${FL_SHARE_SITE}/site_config.json" ]]; then
+    fl_share_site_config pause_scheduler 1 || true
+    fl_share_site_config mute_emails 1 || true
+  fi
+  fl_pull_step_resume || fl_fix "cd ${FL_BENCH_DIR} && bench config remove-common-config pause_scheduler"
+}
 
 # fl_share_user_ok NAME: a name that survives a comma separated list, one line of
 # stdin and share.json written by the shell

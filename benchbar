@@ -544,6 +544,8 @@ fl_cleanup() {
   fl_spinner_stop
   # pull closes its SSH connection and ends its JSON stream with "done"
   fl_pull_on_exit "$code"
+  # share setup never leaves the scheduler of every site paused, whatever stopped it
+  fl_share_on_exit
   # a setup Redis started for site add goes, however the command ends
   fl_bench_redis_down >/dev/null 2>&1 || true
   # share preflight's throwaway listener, when a signal ended the run while it was up

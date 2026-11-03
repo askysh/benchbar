@@ -491,7 +491,8 @@ fl_srestore_execute() {
   [[ -z "$SR_SET_COPY" ]] || fl_info "a copy of the backup set is kept in ${SR_SET_COPY}"
   if [[ "$code" != "0" ]]; then
     [[ -z "$SR_BACKUP_STAMP" ]] || fl_info "${SR_TARGET} was backed up first; put that back with: benchbar site restore ${SR_TARGET} --from ${SR_BACKUP_STAMP} --with-files --yes"
-    if [[ "${FL_PULL_QUIESCED:-0}" == "1" ]]; then
+    # share setup resumes it on its way out (fl_share_on_exit)
+    if [[ "${FL_PULL_QUIESCED:-0}" == "1" && "${SH_RESUME_ON_EXIT:-0}" != 1 ]]; then
       fl_warn "the scheduler of every site on this bench stays paused (pause_scheduler in common_site_config.json)"
       fl_fix "cd ${FL_BENCH_DIR} && bench config remove-common-config pause_scheduler"
     fi

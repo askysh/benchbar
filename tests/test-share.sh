@@ -619,6 +619,54 @@ assert_eq "rootpw" "$(cat "$MOCK_STATE/keychain/benchbar-mariadb--root")"
 assert_file "$SHARE_DIR/share.json"
 cp "$TMP_DIR/secret.saved" "$FL_STATE_DIR/secrets/mariadb-root"
 
+# ---------------------------------------------------------------- a setup stopped halfway
+# A running bench: setup pauses the scheduler of every site (common_site_config) for the restore.
+# However the run ends, that pause goes, and the half-restored copy keeps a pause of its own.
+common_paused() { python3 -c 'import json,sys; print("pause_scheduler" in json.load(open(sys.argv[1])))' "$BENCH/sites/common_site_config.json"; }
+# setup_killed SIG: setup --refresh the app's way, SIG to it once the restore began; CODE, and SECS it took
+setup_killed() {
+  local sig="$1" pid n=0 t0
+  rm -f "$MOCK_STATE/restore_began"
+  t0="$(date +%s)"
+  BENCHBAR_SUDO=gui MOCK_FRAPPE_RESTORE_SLEEP=20 FL_KILL_GRACE=0 "$FM" share setup --users "priya@example.com" --acknowledge-data --refresh --yes --json \
+    --bench-dir "$BENCH" >"$TMP_DIR/killed.out" 2>&1 &
+  pid=$!
+  while [[ ! -e "$MOCK_STATE/restore_began" && "$n" -lt 300 ]]; do sleep 0.1; n=$((n + 1)); done
+  [[ -e "$MOCK_STATE/restore_began" ]] || fail "the restore never began: $(cat "$TMP_DIR/killed.out")"
+  kill "-${sig}" "$pid"
+  set +e; wait "$pid"; CODE="$?"; set -e
+  SECS=$(( $(date +%s) - t0 ))
+}
+add_proc 4242 "honcho start -f Procfile.lean" "$BENCH"
+reset_calls
+setup_killed TERM
+assert_eq "143" "$CODE" "$(cat "$TMP_DIR/killed.out")"
+[[ "$SECS" -lt 15 ]] || fail "TERM waited for the restore to end (${SECS}s)"
+assert_contains "$(cat "$MOCK_LOG")" "set-config -g -p pause_scheduler 1"
+assert_eq "False" "$(common_paused)" "(a setup stopped by TERM resumes the bench's scheduler)"
+assert_eq "1 1" "$(site_conf pause_scheduler) $(site_conf mute_emails)" "(the half-restored copy stays paused and muted on its own)"
+assert_no_file "$SHARE_DIR/share.json"; assert_file "$SHARE_DIR/share.json.prev"
+
+# HUP (the terminal closed) and a failed restore resume it too
+setup_killed HUP
+assert_eq "129" "$CODE" "$(cat "$TMP_DIR/killed.out")"
+assert_eq "False" "$(common_paused)" "(a setup stopped by HUP resumes the bench's scheduler)"
+MOCK_FRAPPE_FAIL=restore jsetup --users "priya@example.com" --acknowledge-data --refresh --yes
+assert_eq "1" "$CODE" "$OUT$ERR"
+assert_eq "False" "$(common_paused)" "(a failed setup resumes the bench's scheduler)"
+assert_not_contains "$OUT$ERR" "stays paused"
+assert_eq "1 1" "$(site_conf pause_scheduler) $(site_conf mute_emails)"
+
+# a pause that was there before setup started is the owner's: it stays
+(cd "$BENCH" && bench set-config -g -p pause_scheduler 1)
+reset_calls
+setup_killed TERM
+assert_eq "143" "$CODE" "$(cat "$TMP_DIR/killed.out")"
+assert_eq "True" "$(common_paused)" "(an earlier pause is kept)"
+assert_calls_not_contain 'remove-common-config'
+(cd "$BENCH" && bench config remove-common-config pause_scheduler)
+: >"$MOCK_PROCS"
+
 # a plain setup never inherits users or label from a stale share.json.prev
 rm -rf "$SHARE_DIR"; mkdir -p "$SHARE_DIR"; chmod 700 "$SHARE_DIR"
 printf '{\n  "allowed_users": ["stale@example.com"],\n  "room_label": "Stale"\n}\n' >"$SHARE_DIR/share.json.prev"

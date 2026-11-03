@@ -395,6 +395,7 @@ fl_share_copy_plan_apply() {
   dir="$(fl_share_dir)"
   if [[ -f "${dir}/share.json" ]]; then mv -f "${dir}/share.json" "${dir}/share.json.prev" || return 1; fi
   SH_RESTORE_BEGAN=1
+  SH_RESUME_ON_EXIT=1
   fl_steps_push
   fl_srestore_execute || code=$?
   fl_steps_pop

@@ -58,6 +58,9 @@ if [[ "${1:-}" == "-c" ]]; then
         [[ -f "${site}/site_config.json" ]] || { echo "mock: Site ${site} does not exist" >&2; exit 1; }
         # frappe writes a fresh site config with a key of its own
         printf '{\n "db_name": "_mock%s",\n "db_password": "localdbpw",\n "encryption_key": "generated-local-key"\n}\n' "$RANDOM" >"${site}/site_config.json"
+        # MOCK_FRAPPE_RESTORE_SLEEP=N: a restore still running (restore_began says when), for a signal to stop
+        : >"${MOCK_STATE}/restore_began"
+        [[ -z "${MOCK_FRAPPE_RESTORE_SLEEP:-}" ]] || sleep "$MOCK_FRAPPE_RESTORE_SLEEP"
         gzip -dc "$dump" 2>/dev/null | python3 -c '
 import re, sys
 m = re.search(r"installed_apps\x27,\x27\[([^\]]*)\]", sys.stdin.read())
