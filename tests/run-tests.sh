@@ -199,10 +199,10 @@ start_job() {
       if run_shellcheck >"$OUT_DIR/$idx.log" 2>&1; then c=0; else c=$?; fi
     else
       if run_test_with_deadline "$ROOT/tests/$name.sh" >"$OUT_DIR/$idx.log" 2>&1; then c=0; else c=$?; fi
-      # a share test passes only with its own "NAME: ok" line as well: under bash 3.2 a set -u abort inside a
-      # function exits 0 when an EXIT trap is set, so the code alone can count a test that stopped halfway
-      # (a skip says why after the ok, in parentheses: "NAME: ok (SKIPPED ...)")
-      if [[ "$c" == 0 && "$name" == test-share* ]] && ! grep -qE "^${name}: ok( \(.*\))?\$" "$OUT_DIR/$idx.log"; then
+      # a share or lan-guard test passes only with its own "NAME: ok" line as well: under bash 3.2 a set -u
+      # abort inside a function exits 0 when an EXIT trap is set, so the code alone can count a test that
+      # stopped halfway (a skip says why after the ok, in parentheses: "NAME: ok (SKIPPED ...)")
+      if [[ "$c" == 0 && ( "$name" == test-share* || "$name" == test-lan-guard ) ]] && ! grep -qE "^${name}: ok( \(.*\))?\$" "$OUT_DIR/$idx.log"; then
         printf 'FAIL: %s exited 0 without its "%s: ok" line\n' "$name" "$name" >>"$OUT_DIR/$idx.log"
         c=1
       fi

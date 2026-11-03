@@ -139,8 +139,9 @@ printf 'printf "test-share: half\\n"\nexit 0\n' >"$RT/tests/test-share.sh"
 printf 'printf "test-share-run: ok (SKIPPED: no node)\\n"\n' >"$RT/tests/test-share-run.sh"
 printf 'printf "SKIP: node not found\\n"\n' >"$RT/tests/test-share-gateway.sh"
 printf 'printf "test-share-preflight: okay\\n"\n' >"$RT/tests/test-share-preflight.sh"
+printf 'printf "test-lan-guard: half\\n"\nexit 0\n' >"$RT/tests/test-lan-guard.sh"
 printf 'exit 0\n' >"$RT/tests/test-cli.sh"
-jobs="test-share test-share-run test-share-gateway test-share-preflight test-cli"
+jobs="test-share test-share-run test-share-gateway test-share-preflight test-lan-guard test-cli"
 set +e
 # shellcheck disable=SC2086  # the job names are words
 OUT="$(PARALLEL=2 bash "$RT/tests/run-tests.sh" $jobs 2>&1)"; CODE=$?
@@ -152,7 +153,9 @@ assert_contains "$OUT" "--- FAIL: test-share-gateway (exit 1,"
 assert_contains "$OUT" "--- FAIL: test-share-preflight (exit 1," "(okay is not ok)"
 assert_contains "$OUT" "--- ok: test-share-run" "(an ok line with a note in parentheses, as a skip prints it)"
 assert_contains "$OUT" "--- ok: test-cli" "(a test of another name keeps exit-code judging)"
-assert_contains "$OUT" "FAILED: test-share test-share-gateway test-share-preflight"
+assert_contains "$OUT" "--- FAIL: test-lan-guard (exit 1," "(the lan-guard test is judged by its ok line too)"
+assert_contains "$OUT" 'test-lan-guard exited 0 without its "test-lan-guard: ok" line'
+assert_contains "$OUT" "FAILED: test-share test-share-gateway test-share-preflight test-lan-guard"
 # the real abort, where it exits 0 (bash 3.2: a set -u abort inside a function, with an EXIT trap): failed
 if [[ "$(bash -c 'printf %s "${BASH_VERSINFO[0]}"')" -lt 4 ]]; then
   cat >"$RT/tests/test-share.sh" <<'SH'
