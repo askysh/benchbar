@@ -281,7 +281,8 @@ fl_share_start_step_gateway_config() {
   [[ "$SH_START_BENCHBAR" == /* && -x "$SH_START_BENCHBAR" ]] || { fl_fail "benchbar is not at an absolute path: ${SH_START_BENCHBAR}"; return 1; }
   SH_START_NOW="$(date +%s)"
   SH_START_DEADLINE=$((SH_START_NOW + SH_START_FOR))
-  rm -f "${dir}/ended" "${dir}/degraded"
+  # what an earlier runner left (one SIGKILLed leaves its phase with a dead PID) must not be read as this one's
+  rm -f "${dir}/ended" "${dir}/degraded" "${dir}/phase"
   fl_share_gateway_json "$SH_START_NOW" "$SH_START_DEADLINE" "$SH_START_ROOM_JSON" || return 1
   fl_share_devices_empty
 }
@@ -381,8 +382,15 @@ fl_cmd_share_start() {
   rm -f "$(fl_share_dir)/stop_requested"
   fl_sp_nc_open 127.0.0.1 "$FL_REDIS_CACHE_PORT" || fl_die "The bench is not running: its Redis does not answer on ${FL_REDIS_CACHE_PORT}." "Start it (benchbar up), then run this again."
 
-  # one share at a time: a second start leaves the one that runs as it is
-  if fl_share_on_v deadline; then
+  # one share at a time: a second start leaves the one that runs as it is. One that answers but has the
+  # web marked down (still starting, or latched down by the gateway) is not "already on": it is refused
+  local web_up runner_pid runner_phase
+  if fl_share_on_v deadline web_up && [[ "$web_up" != true ]]; then
+    fl_share_phase_v runner_pid runner_phase
+    fl_die "A share is starting or has its web marked down (${runner_phase:-unknown phase}), so it is not started again." \
+      "Wait, and see benchbar share status; benchbar share stop ends it."
+  fi
+  if [[ "$web_up" == true ]]; then
     fl_share_gw_int_v started started_epoch
     fl_share_gw_str_raw_v SH_START_ROOM_JSON room_label
     [[ -n "$SH_START_ROOM_JSON" ]] || fl_share_cfg_raw_v SH_START_ROOM_JSON room_label
@@ -417,7 +425,6 @@ fl_cmd_share_start() {
 
   # a job that is loaded but does not answer: one whose runner lives (still starting, or a gateway that
   # is slow or a node that cannot be trusted) is left alone; one whose runner ended is cleared first
-  local runner_pid runner_phase
   fl_share_phase_v runner_pid runner_phase
   if fl_share_job_loaded && fl_share_runner_alive "$runner_pid"; then
     fl_die "A share is already ${runner_phase:-running}, and its gateway does not answer." "Wait, see benchbar share status, or run benchbar share stop."
@@ -546,7 +553,7 @@ fl_share_preflight_json_v() {
 fl_cmd_share_status() {
   local want_pre=0 a dir sock now state=off loaded=0 reply="" started="" deadline="" ended="" degraded="null" error="null"
   local site web_port label users seats copy lan_guard pre="null" started_json=null deadline_json=null left=0 can=0
-  local total=0 online=0 locked=null lock_reason=null budget=null people=0 trouble=false wipe=0 v files runner_pid runner_phase phase_json=null
+  local total=0 online=0 locked=null lock_reason=null budget=null people=0 trouble=false wipe=0 v files runner_pid runner_phase phase_json=null web_up_json=null
   for a in "$@"; do
     case "$a" in
       --preflight) want_pre=1 ;;
@@ -578,6 +585,7 @@ fl_cmd_share_status() {
       fl_share_reply_v v "$reply" locked; [[ "$v" != true && "$v" != false ]] || locked="$v"
       fl_share_reply_v v "$reply" join_trouble; [[ "$v" != true ]] || trouble=true
       fl_share_reply_v v "$reply" lock_reason; [[ ! "$v" =~ ^(budget|host|full)$ ]] || lock_reason="\"${v}\""
+      fl_share_reply_v v "$reply" web_up; [[ "$v" != true && "$v" != false ]] || web_up_json="$v"
       [[ ! -s "${dir}/degraded" ]] || degraded="$(fl_json_str "$(awk 'NR == 1' "${dir}/degraded")")"
     elif [[ "$deadline" =~ ^[0-9]+$ && "$now" -ge "$deadline" ]] || { fl_share_reply_v v "$reply" error; [[ "$v" == ended ]]; }; then
       state=expired
@@ -609,9 +617,9 @@ fl_cmd_share_status() {
 
   if [[ "${OPT_JSON:-0}" == 1 ]]; then
     FL_DONE_NO_STATE=1
-    fl_doc_emit 0 "$(printf '{"schema_version":%d,"cli_version":"%s","protocol":%d,"bench":%s,"site":%s,"share_site":%s,"state":"%s","phase":%s,"degraded":%s,"error":%s,"label":%s,"port":%s,"web_port":%s,"lan_ip":%s,"started":%s,"deadline":%s,"seconds_left":%s,"can_extend_s":%s,"copy":%s,"allowed_users":%s,"seats":%s,"people":%s,"devices_total":%s,"devices_online":%s,"pending":0,"locked":%s,"lock_reason":%s,"budget_left":%s,"join_trouble":%s,"wipe_failed":%s,"lan_guard":"%s","preflight":%s}' \
+    fl_doc_emit 0 "$(printf '{"schema_version":%d,"cli_version":"%s","protocol":%d,"bench":%s,"site":%s,"share_site":%s,"state":"%s","phase":%s,"web_up":%s,"degraded":%s,"error":%s,"label":%s,"port":%s,"web_port":%s,"lan_ip":%s,"started":%s,"deadline":%s,"seconds_left":%s,"can_extend_s":%s,"copy":%s,"allowed_users":%s,"seats":%s,"people":%s,"devices_total":%s,"devices_online":%s,"pending":0,"locked":%s,"lock_reason":%s,"budget_left":%s,"join_trouble":%s,"wipe_failed":%s,"lan_guard":"%s","preflight":%s}' \
       "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$FL_SHARE_PROTOCOL" "$(fl_json_str "$FL_BENCH_DIR")" "$( [[ -n "$site" ]] && fl_json_str "$site" || printf 'null')" \
-      "$(fl_json_str "$FL_SHARE_SITE")" "$state" "$phase_json" "$degraded" "$error" "${label:-null}" "$FL_SHARE_GATEWAY_PORT" "$web_port" \
+      "$(fl_json_str "$FL_SHARE_SITE")" "$state" "$phase_json" "$web_up_json" "$degraded" "$error" "${label:-null}" "$FL_SHARE_GATEWAY_PORT" "$web_port" \
       "$( [[ -n "$SP_LAN_IP" ]] && fl_json_str "$SP_LAN_IP" || printf 'null')" "$started_json" "$deadline_json" "$left" "$can" "$copy" "${users:-[]}" \
       "$seats" "$people" "$total" "$online" "$locked" "$lock_reason" "$budget" "$trouble" "$wipe" "$lan_guard" "$pre")"
     return 0

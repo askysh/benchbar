@@ -82,7 +82,9 @@ case "$cmd" in
         printf 'state = running\npid = 4243\nlast exit code = 0\n' >"$f"
         if [[ "${MOCK_LAUNCHD_RUN:-}" == 1 ]]; then
           runner="$(awk '/<key>ProgramArguments<\/key>/ { p = 1; next } p && /<string>/ { n++; if (n == 2) { sub(/.*<string>/, ""); sub(/<\/string>.*/, ""); print; exit } }' "$agents/$label.plist")"
-          /bin/bash "$runner" </dev/null >>"${MOCK_STATE}/runner.log" 2>&1 3>&- 4>&- 5>&- 6>&- 7>&- 8>&- 9>&- &
+          # like launchd: stdout and stderr to the plist's StandardOutPath (opened when the job starts)
+          log="$(sed -n '/<key>StandardOutPath<\/key>/{s#.*<string>\(.*\)</string>.*#\1#p;}' "$agents/$label.plist" | head -n1)"
+          /bin/bash "$runner" </dev/null >>"${log:-${MOCK_STATE}/runner.log}" 2>&1 3>&- 4>&- 5>&- 6>&- 7>&- 8>&- 9>&- &
           printf '%s\n' "$!" >"$agents/$label.pid"
         fi
         exit 0 ;;

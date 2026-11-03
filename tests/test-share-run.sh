@@ -141,7 +141,11 @@ if [[ -s "$MOCK_STATE/pre_script" ]]; then
   r="$(head -n1 "$MOCK_STATE/pre_script")"
   tail -n +2 "$MOCK_STATE/pre_script" >"$MOCK_STATE/pre_script.tmp"; mv "$MOCK_STATE/pre_script.tmp" "$MOCK_STATE/pre_script"
 fi
-case "$r" in hang) sleep 8; r=ok ;; esac
+case "$r" in
+  hang) sleep 8; r=ok ;;
+  # the web stops owning its port right after its checks
+  unlisten) grep -v "^8001 " "$MOCK_LISTEN" >"$MOCK_LISTEN.tmp"; mv "$MOCK_LISTEN.tmp" "$MOCK_LISTEN"; r=ok ;;
+esac
 gw=skip; [[ ! -S "${FL_SHARE_CONTROL_SOCK:-/nonexistent}" ]] || gw=ok
 ok=true; pf=ok; code=0
 case "$r" in skipgw) gw=skip ;; fail) ok=false; pf=fail; code=1 ;; esac
@@ -203,6 +207,11 @@ def answer(msg):
     return {"ok": False, "error": "unknown_op"}
 end = time.time() + 120
 while not stopping and time.time() < end and os.getppid() == parent and not os.path.exists(os.path.join(state, "gw_exit")):
+    # $MOCK_STATE/gw_latch: what the real gateway does on a refused upstream connect
+    if os.path.exists(os.path.join(state, "gw_latch")):
+        os.unlink(os.path.join(state, "gw_latch"))
+        web_up = False
+        note("latched")
     try:
         conn, _ = srv.accept()
     except socket.timeout:
@@ -230,7 +239,11 @@ cat >"$SB/node" <<SH
 case "\${1:-}" in
   */gateway.js) exec python3 "$SB/gateway.py" "\${2:-}" ;;
   -e) if [[ "\${3:-}" == control ]]; then exec "$REAL_NODE" "\$@"; fi ;;
-  --version) [[ ! -f "\$MOCK_STATE/node_slow" ]] || sleep 3 ;;
+  --version)
+    if [[ -f "\$MOCK_STATE/node_slow" ]]; then
+      : >"\$MOCK_STATE/node_slow_entered"
+      for _ in \$(seq 1 200); do [[ ! -f "\$MOCK_STATE/node_release" ]] || break; sleep 0.1; done
+    fi ;;
 esac
 exec "$ROOT/tests/mocks/node" "\$@"
 SH
@@ -387,7 +400,8 @@ reset_order; write_gateway_cfg $((NOW + 3600))
 start_runner
 wait_for 15 has_event '^caffeinate '
 assert_eq "wipe web preflight gateway preflight webop-up" "$(events | cut -d' ' -f1-6)" "(the gateway hears the web is up only after the second checks) $(order)"
-assert_eq "caffeinate dns-sd" "$(events | cut -d' ' -f7-8 | tr ' ' '\n' | sort | tr '\n' ' ' | sed 's/ $//')"
+# the two start together; the stand-ins write when they get to it, and a watchdog check may come first under load
+assert_eq "caffeinate dns-sd" "$(events | cut -d' ' -f7- | tr ' ' '\n' | grep -v '^preflight$' | head -n2 | sort | tr '\n' ' ' | sed 's/ $//')"
 started_order() { grep -o -E '(dns-sd|caffeinate) started' "$1" | awk '{print $1}' | tr '\n' ' ' | sed 's/ $//'; }
 assert_eq "dns-sd caffeinate" "$(started_order "$TMP_DIR/runner.log")" "(Bonjour before caffeinate, from the runner's own log)"
 assert_contains "$(order)" "wipe share.localhost keep=[]" "(the whole copy, at start: covers a runner killed with -9)"
@@ -487,8 +501,50 @@ start_runner
 wait_for 20 bash -c 'grep -q "caffeinate ended; starting it again in 20 polls" "$1"' _ "$TMP_DIR/runner.log"
 assert_eq "5 10 20" "$(grep -o 'caffeinate ended; starting it again in [0-9]* polls' "$TMP_DIR/runner.log" | awk '{print $7}' | tr '\n' ' ' | sed 's/ $//')"
 assert_eq "3" "$(grep -c '^caffeinate ' "$MOCK_STATE/order")" "(one start per step, not one a poll)"
+assert_eq "1" "$(grep -c 'caffeinate started' "$TMP_DIR/runner.log")" "(a restart writes its one backoff line, not a second started line)"
 kill -TERM "$RUNNER_PID"; wait_for 15 runner_gone
 finish_runner
+
+# ---- the gateway latched the web down (a refused connect) while the web's own PID listens: the watchdog re-arms it
+reset_order
+start_runner
+wait_for 15 has_event '^caffeinate '
+: >"$MOCK_STATE/order"; : >"$MOCK_STATE/gw_latch"
+wait_for 15 has_event '^webop up'
+# up comes after the latch and after a check that ran after it, never before
+awk '/^latched/ { l = NR } /^preflight / && l && !p { p = NR } /^webop up/ && l { u = NR } END { exit !(l && p > l && u > p) }' "$MOCK_STATE/order" \
+  || fail "re-armed before a passing check: $(order)"
+assert_eq "1" "$(grep -c 'marked the web up again' "$TMP_DIR/runner.log")"
+kill -TERM "$RUNNER_PID"; wait_for 15 runner_gone
+finish_runner
+
+# ---- a foreign listener holds the web port: the latched web stays down
+reset_order
+start_runner
+wait_for 15 has_event '^caffeinate '
+web_pid="$(tail -n1 "$MOCK_STATE/web_pids")"
+grep -v "^8001 " "$MOCK_LISTEN" >"$MOCK_LISTEN.tmp"; printf '8001 99991 python 127.0.0.1\n' >>"$MOCK_LISTEN.tmp"; mv "$MOCK_LISTEN.tmp" "$MOCK_LISTEN"
+: >"$MOCK_STATE/order"; : >"$MOCK_STATE/gw_latch"
+wait_for 15 has_event '^latched'
+wait_for 15 bash -c '[[ "$(grep -c "^preflight " "$1")" -ge 3 ]]' _ "$MOCK_STATE/order"
+assert_not_contains "$(events)" "webop-up" "(a port someone else holds is never re-armed)"
+assert_eq "1" "$(grep -c 'does not hold its port' "$TMP_DIR/runner.log")" "(said once, not every tick)"
+assert_eq "False" "$(runner_gone && echo True || echo False)"
+kill -TERM "$RUNNER_PID"; wait_for 15 runner_gone
+finish_runner
+grep -v "^8001 99991 " "$MOCK_LISTEN" >"$MOCK_LISTEN.tmp"; mv "$MOCK_LISTEN.tmp" "$MOCK_LISTEN"
+
+# ---- a restarted web that stops holding its port after its checks is not marked up
+reset_order; printf 'ok\nok\nunlisten\n' >"$MOCK_STATE/pre_script"; export BENCHBAR_SHARE_FIRST_TICK=2000
+start_runner
+wait_for 15 has_event '^caffeinate '
+kill "$(tail -n1 "$MOCK_STATE/web_pids")"
+wait_for 15 runner_gone
+assert_eq "1" "$(runner_code)"
+assert_eq "webop-down web preflight wipe" "$(events | cut -d' ' -f9-)" "(never up)"
+assert_contains "$(cat "$SHARE_DIR/ended")" "does not hold its port"
+finish_runner
+export BENCHBAR_SHARE_FIRST_TICK=2
 
 # ---- the web child: restarted 3 times, each followed by the checks; the 4th death ends the job
 reset_order; export BENCHBAR_SHARE_FIRST_TICK=2000
@@ -568,7 +624,7 @@ redis_down() { printf '8001\n' >"$MOCK_STATE/loopback_ports"; }
 reset_order; rm -f "$SHARE_DIR/gateway.json" "$SHARE_DIR/ended"
 status_json
 assert_eq "0" "$CODE" "$OUT$ERR"
-assert_eq "off None None 0 0" "$(sget '" ".join(str(x) for x in (d["state"], d["started"], d["deadline"], d["seconds_left"], d["can_extend_s"]))')"
+assert_eq "off None None 0 0 None" "$(sget '" ".join(str(x) for x in (d["state"], d["started"], d["deadline"], d["seconds_left"], d["can_extend_s"], d["web_up"]))')"
 assert_eq "3 share.localhost 8443 8001 macdev" "$(sget '" ".join(str(x) for x in (d["protocol"], d["share_site"], d["port"], d["web_port"], d["site"]))')"
 assert_eq "installed 192.168.1.20 None" "$(sget '" ".join(str(x) for x in (d["lan_guard"], d["lan_ip"], d["preflight"]))')"
 assert_eq "False 2 priya@example.com,mgr@example.com" "$(sget '" ".join(str(x) for x in (d["copy"]["drifted"], d["seats"], ",".join(d["allowed_users"])))')"
@@ -646,14 +702,14 @@ assert_contains "$runner_text" "BENCHBAR=\"${SB}/benchbar\""
 assert_contains "$runner_text" "DNS_SD=\"${SB}/dns-sd\""
 wait_for 15 has_event '^caffeinate '
 assert_eq "wipe web preflight gateway preflight" "$(events | sed 's/ control//g' | cut -d' ' -f1-5)" "$(order)"
-assert_eq "dns-sd caffeinate" "$(started_order "$MOCK_STATE/runner.log")"
+assert_eq "dns-sd caffeinate" "$(started_order "$SHARE_DIR/share.log")" "(the job's log is share.log, as launchd opens it)"
 # it never moves the default site
 assert_eq "macdev" "$(tr -d '[:space:]' <"$BENCH/sites/currentsite.txt")"
 
 # ---- status while on: the room's counts from the control socket, never the code or a user name
 status_json
 assert_eq "0" "$CODE" "$OUT$ERR"
-assert_eq "on None" "$(sget '" ".join(str(x) for x in (d["state"], d["degraded"]))')"
+assert_eq "on None True" "$(sget '" ".join(str(x) for x in (d["state"], d["degraded"], d["web_up"]))')"
 assert_eq "True" "$(sget '14300 < d["seconds_left"] <= 14400 and d["can_extend_s"] == 43200 - 14400 and d["started"].endswith("Z") and d["deadline"].endswith("Z")')"
 assert_eq "1 1 0 9 2 1 False None False 1" "$(sget '" ".join(str(x) for x in (d["devices_total"], d["devices_online"], d["pending"], d["budget_left"], d["seats"], d["people"], d["locked"], d["lock_reason"], d["join_trouble"], d["wipe_failed"]))')"
 assert_not_contains "$OUT" "482913"; assert_not_contains "$OUT" "\"code\""
@@ -885,13 +941,16 @@ wait_for 20 every_recorded_gone
 
 # ---- a stop while a start is on its way (before the job is loaded): the start ends what it began
 reset_order; : >"$MOCK_STATE/node_slow"
+rm -f "$MOCK_STATE/node_slow_entered" "$MOCK_STATE/node_release"
 ( cli start --for 30m; printf '%s\n' "$CODE" >"$TMP_DIR/start.code"; printf '%s' "$OUT$ERR" >"$TMP_DIR/start.out" ) &
 STARTER=$!
-sleep 1.5
+# the start is inside its static checks (node --version holds there): past clearing the marker, before the job
+wait_for 20 test -f "$MOCK_STATE/node_slow_entered"
 cli stop
 assert_eq "0" "$CODE" "$OUT$ERR"; assert_contains "$OUT$ERR" "unchanged"
+: >"$MOCK_STATE/node_release"
 wait "$STARTER" || true
-rm -f "$MOCK_STATE/node_slow"
+rm -f "$MOCK_STATE/node_slow" "$MOCK_STATE/node_slow_entered" "$MOCK_STATE/node_release"
 assert_eq "1" "$(cat "$TMP_DIR/start.code")" "$(cat "$TMP_DIR/start.out")"
 assert_contains "$(cat "$TMP_DIR/start.out")" "benchbar share stop was run while sharing was starting"
 loaded && fail "the start did not leave a job behind"
@@ -902,6 +961,56 @@ assert_eq "0" "$CODE" "$OUT$ERR"
 assert_no_file "$SHARE_DIR/stop_requested"
 cli stop
 wait_for 15 every_recorded_gone
+
+# ---- a stale phase file (a runner SIGKILLed; the job no longer loaded) does not fail the next start
+# a PID that has ended (one that exits by itself: a background subshell killed before it execs would run
+# this test's EXIT trap)
+/usr/bin/true &
+DEAD=$!; wait "$DEAD" || true
+printf '%s starting:web\n' "$DEAD" >"$SHARE_DIR/phase"
+reset_order
+cli start --for 30m
+assert_eq "0" "$CODE" "$OUT$ERR"
+wait_for 10 bash -c 'grep -q " running$" "$1" 2>/dev/null' _ "$SHARE_DIR/phase"
+
+# ---- share.log is this share's: the last one is kept as share.log.1, and only that one
+assert_contains "$(cat "$SHARE_DIR/share.log")" "sharing share.localhost"
+cli stop
+printf 'the previous share\n' >>"$SHARE_DIR/share.log"
+# no watchdog ticks for this share: the web marked down below would otherwise be re-armed (rightly)
+export BENCHBAR_SHARE_FIRST_TICK=2000
+cli start --for 30m
+assert_eq "0" "$CODE" "$OUT$ERR"
+wait_for 15 bash -c 'grep -q "sharing share.localhost" "$1"' _ "$SHARE_DIR/share.log"
+assert_contains "$(cat "$SHARE_DIR/share.log.1")" "the previous share"
+assert_not_contains "$(cat "$SHARE_DIR/share.log")" "the previous share" "(a fresh log)"
+logs=""; for f in "$SHARE_DIR"/share.log*; do logs="${logs}${logs:+ }${f##*/}"; done
+assert_eq "share.log share.log.1" "$logs"
+
+# ---- a second start while the first is on but the web is marked down: not "unchanged"
+"$REAL_NODE" -e "$FL_JS_SHARE_CONTROL" control "$SOCK" '{"op":"web","state":"down"}' >/dev/null
+cli start --for 30m
+assert_eq "1" "$CODE" "$OUT$ERR"
+assert_not_contains "$OUT$ERR" "unchanged"
+assert_contains "$OUT$ERR" "is starting or has its web marked down (running)"
+export BENCHBAR_SHARE_FIRST_TICK=2
+cli stop
+wait_for 15 every_recorded_gone
+
+# ---- a second start while a share is still starting (its gateway answers, its checks are not done). While the
+# first share start runs, the lock refuses a second one; this is the share whose start has gone (the app quit)
+reset_order; printf 'ok\nhang\n' >"$MOCK_STATE/pre_script"
+write_gateway_cfg $(($(date +%s) + 3600))
+start_runner
+set_agent "$LABEL" running "$RUNNER_PID" 0
+wait_for 20 bash -c 'grep -q " starting:gateway$" "$1" 2>/dev/null && test -S "$2"' _ "$SHARE_DIR/phase" "$SOCK"
+cli start --for 30m
+assert_eq "1" "$CODE" "$OUT$ERR"
+assert_not_contains "$OUT$ERR" "unchanged"
+assert_contains "$OUT$ERR" "is starting or has its web marked down (starting:gateway)"
+kill -TERM "$RUNNER_PID"; wait_for 20 runner_gone
+finish_runner
+rm -f "$MOCK_STATE/agents/$LABEL" "$SHARE_DIR/gateway.json"
 
 # ================================================================ Review Focus 5: the job is not a bench agent
 reset_calls

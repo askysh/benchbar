@@ -1,5 +1,5 @@
 #!/bin/bash
-#@version 2
+#@version 3
 #@quoted SHARE_DIR SOCK BENCH SHARE_SITE WEB_PORT PYTHON LIB NODE BENCHBAR DNS_SD CAFFEINATE LSOF SITE_LABEL ROOM_LABEL  # SESSIONS_PY and CONTROL_JS sit in quoted here-documents, where they are literal
 # __HEADER__
 #
@@ -22,7 +22,10 @@
 #      ending makes the share degraded until it has stayed up that long; it
 #      never ends the share.
 #   6. the watchdog: the checks FIRST_TICK polls in, then every EVERY polls (a
-#      poll is POLL seconds); two fails in a row end the job.
+#      poll is POLL seconds); two fails in a row end the job. After a pass, a
+#      gateway that latched the web down (a refused connect) is told up again
+#      only while the web's own PID holds its port; a port someone else holds
+#      stays down.
 # The gateway exiting (stop, the deadline, a crash) ends the job. When the web
 # process ends, the gateway is told the web is down first, then the web is
 # started again (up to 3 times in 5 minutes) and the checks run; only a pass
@@ -151,17 +154,48 @@ web_state() {
     || fail_job gateway "The gateway did not confirm that the web process is $1."
 }
 
-# web_listening: until the web process itself (its PID, not whatever else holds the port) listens on WEB_PORT
-web_listening() {
-  local i=0 pids nl='
+# web_owns_port: the web process itself (its PID, not whatever else holds the port) listens on WEB_PORT now
+web_owns_port() {
+  local pids nl='
 '
+  alive "$WEB_PID" || return 1
+  pids="$("$LSOF" -ti "tcp:${WEB_PORT}" -sTCP:LISTEN 2>/dev/null)"
+  case "${nl}${pids}${nl}" in *"${nl}${WEB_PID}${nl}"*) return 0 ;; esac
+  return 1
+}
+
+# web_listening: until web_owns_port, for up to LISTEN_SECS
+web_listening() {
+  local i=0
   while [ "$i" -lt $((LISTEN_SECS * 5)) ]; do
     alive "$WEB_PID" || return 1
-    pids="$("$LSOF" -ti "tcp:${WEB_PORT}" -sTCP:LISTEN 2>/dev/null)"
-    case "${nl}${pids}${nl}" in *"${nl}${WEB_PID}${nl}"*) return 0 ;; esac
+    web_owns_port && return 0
     sleep 0.2; i=$((i + 1))
   done
   return 1
+}
+
+# gateway_web_down: the gateway answers that it has the web marked down (no answer is not a yes)
+gateway_web_down() {
+  local out
+  out="$("$NODE" -e "$CONTROL_JS" control "$SOCK" '{"op":"status"}' </dev/null 2>/dev/null)" || return 1
+  case "$out" in *web_up=false*) return 0 ;; esac
+  return 1
+}
+
+# rearm_web: after a passing check, a web the gateway latched down is marked up again when its own PID
+# holds the port. A port held by something else stays down, said once until the web is up again.
+FOREIGN_SAID=0
+rearm_web() {
+  gateway_web_down || return 0
+  if web_owns_port; then
+    web_state up
+    FOREIGN_SAID=0
+    say "the gateway had marked the web down; its own process holds the port: marked the web up again"
+  elif [ "$FOREIGN_SAID" = 0 ]; then
+    FOREIGN_SAID=1
+    say "the gateway has the web marked down, and the web process does not hold its port: it stays down"
+  fi
 }
 
 start_web() {
@@ -205,19 +239,20 @@ start_gateway() {
   return 1
 }
 
-# the TXT record is for display only: no fingerprint, never the code
+# start_dns [again]: the TXT record is for display only: no fingerprint, never the code. A start again is
+# logged by its backoff line alone.
 start_dns() {
   "$DNS_SD" -R "$ROOM_LABEL" _benchbar-share._tcp local "$GATEWAY_PORT" v=3 "label=${ROOM_LABEL}" "site=${SITE_LABEL}" </dev/null &
   DNS_PID=$!
   DNS_SINCE=$polls
-  say "dns-sd started (pid ${DNS_PID})"
+  [ -n "${1:-}" ] || say "dns-sd started (pid ${DNS_PID})"
 }
 
 start_caffeinate() {
   "$CAFFEINATE" -i -w "$$" </dev/null &
   CAF_PID=$!
   CAF_SINCE=$polls
-  say "caffeinate started (pid ${CAF_PID})"
+  [ -n "${1:-}" ] || say "caffeinate started (pid ${CAF_PID})"
 }
 
 # backoff_next DELAY SINCE: the polls to wait before starting again a child that started at poll SINCE and
@@ -249,6 +284,8 @@ web_gone() {
   WEB_PID=""
   web_state down
   restart_web
+  # as at the first start: the checks passed, and the new web still lives and holds its port
+  web_owns_port || fail_job web "The web process of the share ended, or does not hold its port, after it started again."
   web_state up
 }
 
@@ -295,7 +332,7 @@ while :; do
     printf '%s\n' "Rooms on this Wi-Fi may not list this room for a moment: Bonjour stopped and was started again." >"$DEGRADED"
     say "dns-sd ended; starting it again in ${DNS_DELAY} polls"
   fi
-  if [ -z "$DNS_PID" ] && [ "$polls" -ge "$DNS_NEXT" ]; then start_dns; fi
+  if [ -z "$DNS_PID" ] && [ "$polls" -ge "$DNS_NEXT" ]; then start_dns again; fi
   if [ -n "$DNS_PID" ] && [ -f "$DEGRADED" ] && [ $((polls - DNS_SINCE)) -ge "$STABLE_POLLS" ]; then
     rm -f "$DEGRADED"
     say "dns-sd has stayed up for ${STABLE_POLLS} polls: no longer degraded"
@@ -307,11 +344,12 @@ while :; do
     CAF_NEXT=$((polls + CAF_DELAY))
     say "caffeinate ended; starting it again in ${CAF_DELAY} polls"
   fi
-  if [ -z "$CAF_PID" ] && [ "$polls" -ge "$CAF_NEXT" ]; then start_caffeinate; fi
+  if [ -z "$CAF_PID" ] && [ "$polls" -ge "$CAF_NEXT" ]; then start_caffeinate again; fi
   if [ "$polls" -ge "$next_tick" ]; then
     next_tick=$((polls + EVERY))
     if checks 1; then
       fails=0
+      rearm_web
     elif ! alive "$WEB_PID"; then
       # the web ended while it was checked: that is a restart, not a failed tick
       web_gone
