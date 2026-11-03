@@ -5,6 +5,9 @@
 # the real node; the bench's Python is a stand-in for signin.py and the sessions helper. Nothing listens
 # on the network, and the stand-in gateway is stopped by its recorded PID.
 # shellcheck disable=SC2016  # Python and JSON bodies are meant to stay literal
+# The feature is macOS only (pf, launchd, the Keychain, Homebrew's node), so are its tests; command -p
+# reaches the system uname, never the mock. CI's Linux shards leave this test out too (SKIP_TESTS).
+if [[ "$(command -p uname -s)" != Darwin ]]; then printf 'test-share-admin: ok (SKIPPED: macOS only)\n'; exit 0; fi
 # shellcheck source=tests/lib/harness.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
 

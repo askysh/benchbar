@@ -2,6 +2,9 @@
 # benchbar share preflight: the checks that prove the Mac is safe to share a hardened copy on the LAN.
 # Every program it runs is a mock (nc, curl, route, ipconfig, ifconfig, socketfilterfw, node, the bench's
 # Python), reached through the FL_* seams, so nothing here touches the machine's pf, firewall or network.
+# The feature is macOS only (pf, launchd, the Keychain, Homebrew's node), so are its tests; command -p
+# reaches the system uname, never the mock. CI's Linux shards leave this test out too (SKIP_TESTS).
+if [[ "$(command -p uname -s)" != Darwin ]]; then printf 'test-share-preflight: ok (SKIPPED: macOS only)\n'; exit 0; fi
 # shellcheck source=tests/lib/harness.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
 

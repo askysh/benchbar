@@ -6,6 +6,9 @@
 # gateway (a Python control socket), dns-sd, caffeinate, and a scripted "benchbar share preflight".
 # Nothing listens on the LAN, and every stand-in is stopped by its recorded PID.
 # shellcheck disable=SC2016  # bash -c bodies, JavaScript and labels are meant to stay literal
+# The feature is macOS only (pf, launchd, the Keychain, Homebrew's node), so are its tests; command -p
+# reaches the system uname, never the mock. CI's Linux shards leave this test out too (SKIP_TESTS).
+if [[ "$(command -p uname -s)" != Darwin ]]; then printf 'test-share-run: ok (SKIPPED: macOS only)\n'; exit 0; fi
 # shellcheck source=tests/lib/harness.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
 . "$ROOT/lib/frappe-local/ui.sh"

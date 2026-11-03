@@ -2,6 +2,9 @@
 # benchbar lan-guard install|status|remove|allow-node. The root scripts name the system tools and the two
 # root files by their absolute paths; the sudo and osascript mocks map those to mocks and to TMP_DIR
 # (tests/mocks/root-paths.sh), so nothing here touches this Mac's pf, launchd or firewall.
+# The feature is macOS only (pf, launchd, the Keychain, Homebrew's node), so are its tests; command -p
+# reaches the system uname, never the mock. CI's Linux shards leave this test out too (SKIP_TESTS).
+if [[ "$(command -p uname -s)" != Darwin ]]; then printf 'test-lan-guard: ok (SKIPPED: macOS only)\n'; exit 0; fi
 # shellcheck source=tests/lib/harness.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
 

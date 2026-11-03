@@ -3,6 +3,9 @@
 # demoted copy (share.localhost), the user list, the guards, and signin.py,
 # the helper the gateway runs to start and end Frappe sessions in the copy.
 # Real /usr/bin/openssl runs; the bench, MariaDB and Frappe are mocks.
+# The feature is macOS only (pf, launchd, the Keychain, Homebrew's node), so are its tests; command -p
+# reaches the system uname, never the mock. CI's Linux shards leave this test out too (SKIP_TESTS).
+if [[ "$(command -p uname -s)" != Darwin ]]; then printf 'test-share: ok (SKIPPED: macOS only)\n'; exit 0; fi
 # shellcheck source=tests/lib/harness.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
 
