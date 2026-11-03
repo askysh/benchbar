@@ -1,0 +1,9 @@
+#@version 1
+# __HEADER__
+# BenchBar: Frappe bench ports answer this Mac only.
+# Web 8000-8099 (Werkzeug debugger included), socket.io 9000-9099, Redis 11000-11099 and 13000-13099, MariaDB 3306.
+# Keyed on ports, not apps, so a brew upgrade cannot reopen it. "from ! 127.0.0.1" also blocks this Mac's own
+# LAN address, which is what lets a probe of that address prove the rule works.
+ports = "{ 8000:8099, 9000:9099, 11000:11099, 13000:13099, 3306 }"
+block return in quick inet  proto tcp from ! 127.0.0.1 to any port $ports
+block return in quick inet6 proto tcp from ! ::1 to any port $ports

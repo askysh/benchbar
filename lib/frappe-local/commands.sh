@@ -205,6 +205,19 @@ flag~share open-as~--json~~One document without the link (never the session).
 cmd~share teardown~benchbar share teardown [--yes] [--json]~Stop sharing, drop the copy (backed up first), and delete the share folder with the host identity and the room; the Time Machine exclusions go too. Asks first (--yes); only a person runs it.~yes~no~no~yes~stream
 flag~share teardown~--yes~~Do not ask first.
 flag~share teardown~--json~~JSON lines: steps, done with copy_dropped, archived_path and state_removed.
+cmd~lan-guard~benchbar lan-guard install|status|remove|allow-node ...~The LAN guard: a pf anchor (com.apple/250.benchbar) that refuses the bench ports (8000:8099 9000:9099 11000:11099 13000:13099 3306) to anything but this Mac, and the firewall allow for the share gateway's node.~yes~yes~no~yes~stream
+cmd~lan-guard install~benchbar lan-guard install [--dry-run] [--yes] [--json]~Write the pf anchor and the launch daemon that loads it at boot, with sudo once, then probe the block from the LAN address. Unchanged, with no sudo, when the guard already matches. A person's decision: refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp, and without a terminal unless BENCHBAR_SUDO=gui.~yes~yes~no~yes~stream
+flag~lan-guard install~--dry-run~~Print what would be written and run, with no sudo.
+flag~lan-guard install~--yes~~Do not ask first (sudo still asks for the password).
+flag~lan-guard install~--json~~JSON lines: done, with state, active, ports, anchor and lan_ip.
+cmd~lan-guard status~benchbar lan-guard status [--json]~Whether the guard is installed, missing or outdated, and whether the bench ports are refused on this Mac's LAN address (a probe with its own listener). Reads only; never refused.~no~no~no~no~document
+flag~lan-guard status~--json~~One document: state, active (null with no LAN address), ports, anchor, lan_ip.
+cmd~lan-guard remove~benchbar lan-guard remove [--yes] [--json]~Unload and delete the pf anchor and its daemon, with sudo once. Sharing refuses to start without them. Asks first.~yes~yes~no~yes~stream
+flag~lan-guard remove~--yes~~Do not ask first.
+flag~lan-guard remove~--json~~JSON lines: done, with the guard's state.
+cmd~lan-guard allow-node~benchbar lan-guard allow-node [--yes] [--json]~Add the realpath of the node the share gateway runs on to the macOS firewall's allowed apps, with sudo once. Unchanged when the firewall is off or already allows it; needed again after a Homebrew upgrade of node.~yes~yes~no~yes~stream
+flag~lan-guard allow-node~--yes~~Do not ask first.
+flag~lan-guard allow-node~--json~~JSON lines: done, with node (the realpath).
 cmd~site hosts~benchbar site hosts~Add a 127.0.0.1 line for every site to /etc/hosts.~yes~yes~no~yes~none
 cmd~site backup~benchbar site backup NAME [--with-files] [--json]~bench --site NAME backup.~no~no~no~yes~document
 flag~site backup~--with-files~~Include the uploads.

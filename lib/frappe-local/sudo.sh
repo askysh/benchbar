@@ -8,9 +8,11 @@
 # process exits). The session is exported as FL_SUDO_SESSION=1 so a function
 # that needs sudo later in the same run does not ask again.
 #
-# On macOS only two things ever need sudo: the wkhtmltopdf package
+# On macOS only four things ever need sudo: the wkhtmltopdf package
 # (installer -pkg, with Rosetta 2 installed by the same root script when the
-# package needs it and it is missing) and the /etc/hosts line. On Linux: apt (the packages and
+# package needs it and it is missing), the /etc/hosts line, the LAN guard
+# (lan-guard install and remove: the pf anchor and its launch daemon) and the
+# firewall allow for node (lan-guard allow-node). On Linux: apt (the packages and
 # the wkhtmltopdf .deb), the MariaDB admin step, its drop-in and restart, and
 # starting a stopped mariadb or redis-server (platform-linux.sh). Nothing
 # else in benchbar runs as root, and fl_sudo_drop ("sudo -k") ends the
@@ -20,7 +22,7 @@
 # does those steps first and drops; a phase script that needs sudo on its
 # own asks itself and drops after.
 
-# BENCHBAR_SUDO=gui (the BenchBar app sets it): the two root steps run
+# BENCHBAR_SUDO=gui (the BenchBar app sets it): the root steps run
 # through osascript's administrator dialog instead of sudo, see fl_root_run.
 # BENCHBAR_SUDO=env (Linux, the Windows tray sets it) with the password in
 # BENCHBAR_SUDO_PASSWORD: see "BENCHBAR_SUDO=env" at the end of this file.

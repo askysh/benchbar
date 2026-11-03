@@ -141,6 +141,8 @@ SCRIPT_DIR="$(fl_resolve_self)"
 . "${SCRIPT_DIR}/lib/frappe-local/share-run.sh"
 # shellcheck source=lib/frappe-local/share-admin.sh
 . "${SCRIPT_DIR}/lib/frappe-local/share-admin.sh"
+# shellcheck source=lib/frappe-local/lan-guard.sh
+. "${SCRIPT_DIR}/lib/frappe-local/lan-guard.sh"
 # shellcheck source=lib/frappe-local/apps.sh
 . "${SCRIPT_DIR}/lib/frappe-local/apps.sh"
 # shellcheck source=lib/frappe-local/freshness.sh
@@ -290,6 +292,9 @@ Daily
   share preflight     The checks that say whether this Mac is safe to share the copy: the pf block
                       probed from the LAN address, the share web process, the firewall, the copy and
                       its seats. --static or --critical for half, --quiet, --json; exit 1 on a fail.
+  lan-guard install   The pf anchor that keeps the bench ports off the LAN, and the daemon that loads it
+                      at boot (sudo, once; a person at a terminal). status (--json), remove, and
+                      allow-node (lets the share gateway's node through the macOS firewall).
   mariadb-password    Print the MariaDB root password (Keychain; a 0600 file on Linux; asks first).
   mcp                 Model Context Protocol server on stdio for coding agents
                       (claude mcp add benchbar -- benchbar mcp). Read tools, up, down, restart,
@@ -506,12 +511,14 @@ fl_json_mode_resolve() {
     "site open-as") if [[ "${ARGS[1]:-}" == "status" ]]; then FL_JSON_MODE=doc; else FL_JSON_MODE=stream; fi ;;
     "share setup"|"share start"|"share stop"|"share extend"|"share lock"|"share unlock"|"share remove"|"share revoke"|"share assign"|"share teardown") FL_JSON_MODE=stream ;;
     "share users"|"share preflight"|"share status"|"share code"|"share people"|"share devices"|"share log"|"share open-as") FL_JSON_MODE=doc ;;
+    "lan-guard install"|"lan-guard remove"|"lan-guard allow-node") FL_JSON_MODE=stream ;;
+    "lan-guard status") FL_JSON_MODE=doc ;;
   esac
 }
 # status, list and the other readers are polled: they skip the table unless
 # --for-agent asks for it
 case "$COMMAND" in
-  install|adopt|repair|pull|up|down|restart|service|site|app|ports|share) fl_json_mode_resolve ;;
+  install|adopt|repair|pull|up|down|restart|service|site|app|ports|share|lan-guard) fl_json_mode_resolve ;;
   *) if [[ "$OPT_FOR_AGENT" == "1" ]]; then fl_json_mode_resolve; fi ;;
 esac
 
@@ -1376,6 +1383,10 @@ fl_noninteractive_preflight() {
     "share start")
       fl_need "a person at a terminal" "sharing on the network is a person's decision; run benchbar share start in a terminal"
       ;;
+    "lan-guard install"|"lan-guard remove"|"lan-guard allow-node")
+      # sudo for the pf anchor or the firewall: a person's decision, refused before anything is asked (U3)
+      fl_need "a person at a terminal" "benchbar lan-guard ${ARGS[0]} runs sudo; run it in a terminal"
+      ;;
     "site restore")
       # the restore needs the root password (to create or replace the database) and a yes
       [[ "$FL_ASSUME_YES" == "1" ]] || fl_need "--yes" "to confirm the restore plan (or --apply TOKEN --yes)"
@@ -1436,6 +1447,8 @@ case "$COMMAND" in
         fl_lock_acquire "${FL_STATE_DIR}/lock" ;;
       stop|extend|lock|unlock|remove|revoke|assign) fl_log_init "${FL_STATE_DIR}/logs" ;;
     esac ;;
+  lan-guard)
+    case "${ARGS[0]:-}" in install|remove|allow-node) fl_log_init "${FL_STATE_DIR}/logs" ;; esac ;;
   site|app|profile|lock)
     # the list, show and check commands are read only, and so is a --plan
     # and "app focus" without an app name (the focus listing, with or
@@ -1503,6 +1516,7 @@ case "$COMMAND" in
   open) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_open ${ARGS[@]+"${ARGS[@]}"} ;;
   users) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_users ${ARGS[@]+"${ARGS[@]}"} ;;
   share) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_share ${ARGS[@]+"${ARGS[@]}"} ;;
+  lan-guard) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_lan_guard ${ARGS[@]+"${ARGS[@]}"} ;;
   db) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_db ${ARGS[@]+"${ARGS[@]}"} ;;
   site) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_site ${ARGS[@]+"${ARGS[@]}"} ;;
   app) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_app ${ARGS[@]+"${ARGS[@]}"} ;;
