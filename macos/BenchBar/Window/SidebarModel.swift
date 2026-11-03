@@ -58,6 +58,7 @@ nonisolated enum SidebarItem: Hashable, Sendable {
     case site(bench: String, name: String)
     case profiles
     case discovery
+    case network
 }
 
 extension SidebarModel {

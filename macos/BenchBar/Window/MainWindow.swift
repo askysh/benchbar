@@ -5,6 +5,8 @@ import SwiftUI
 /// window): the sidebar footer and ⌘, lead to them.
 nonisolated enum WindowPane: Hashable, Sendable {
     case profiles, discovery, wizard
+    /// On your network: rooms joined and rooms nearby (guest side of sharing).
+    case network
     case general, menuBar, about
     case bench(String)
 }
@@ -80,6 +82,8 @@ struct MainWindowView: View {
     var settings: AppSettings?
     /// General and Menu Bar, made by the app delegate (they need its services).
     var makeSettings: ((SettingsView.Part) -> SettingsView)?
+    /// The guest side of rooms; nil in snapshots.
+    var guest: GuestRoomStore?
 
     /// The page shown: the router's, else the first bench, else the wizard.
     /// nil while the bench list has not been read yet.
@@ -110,6 +114,7 @@ struct MainWindowView: View {
             return .bench(path)
         case .profiles: return .profiles
         case .discovery: return .discovery
+        case .network: return .network
         case .general, .menuBar, .about, .wizard, .none: return nil
         }
     }
@@ -122,6 +127,7 @@ struct MainWindowView: View {
             router.sidebarSite = name
         case .profiles: router.pane = .profiles
         case .discovery: router.pane = .discovery
+        case .network: router.pane = .network
         case .none: break
         }
     }
@@ -184,6 +190,10 @@ struct MainWindowView: View {
             ProfilesPane(store: store, workbench: workbench, router: router).navigationTitle("Team Profiles")
         case .discovery:
             DiscoveryPane(discovery: discovery, router: router).navigationTitle("Find Benches")
+        case .network:
+            if let guest {
+                NetworkPane(store: guest).navigationTitle(NetworkPanePresentation.title)
+            }
         case .bench(let path):
             if let bench = store.benches.first(where: { $0.path == path }) {
                 BenchPage(store: store, workbench: workbench, bench: bench, router: router)
@@ -250,6 +260,7 @@ struct MainSidebar: View {
             Section {
                 Label("Team Profiles", systemImage: "person.2").tag(SidebarItem.profiles)
                 Label("Find Benches", systemImage: "folder.badge.plus").tag(SidebarItem.discovery)
+                Label("On your network", systemImage: "wifi").tag(SidebarItem.network)
             }
         }
     }

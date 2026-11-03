@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var updater: Updater?
     private var about: AboutModel!
     private var updateOffer: UpdateOffer!
+    private var guest: GuestRoomStore!
     /// benchbar:// links that arrived before the bench list was loaded
     /// (a link can launch the app).
     private var pendingURLs: [URL] = []
@@ -96,6 +97,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let workbench = Workbench(store: store)
         about = AboutModel(store: store, offer: updateOffer)
         let discovery = BenchDiscovery(store: store)
+        let browser = BrowserRouter()
+        guest = GuestRoomStore(dependencies: .live(identity: KeychainIdentity(), openURL: { browser.open($0) }))
         wizard = WizardRun(store: store)
         wizard.openFindBenches = { [weak self] in
             self?.mainWindow.router.scanRequested = true
@@ -134,7 +137,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                SettingsView(settings: settings, store: store, library: library, launchAtLogin: launchAtLogin,
                                             notifier: notifier, part: part, router: router,
                                             chooseCLI: { [weak self] in self?.chooseCLI() })
-                           })
+                           },
+                           guest: guest)
         }
         // open, close, occlusion and the page: the window's views stay alive
         // when it closes, so the store hears of them from the controller
