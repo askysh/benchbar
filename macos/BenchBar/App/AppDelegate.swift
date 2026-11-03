@@ -258,6 +258,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Self.urlLog.notice("Ignored \(link, privacy: .public): \(reason, privacy: .public)")
         case .window:
             openMainWindow()
+        case .share(let target):
+            Self.urlLog.info("share link: a joined room's page")
+            Task { [weak self] in
+                guard let self else { return }
+                // an unknown room only shows the pane; a link never joins (U3)
+                if !(await guest.open(link: target)) { mainWindow.show(.network) }
+            }
         case .profile(let link):
             Self.urlLog.info("profile link: Team Profiles, sheet prefilled")
             mainWindow.router.profileRequest = link

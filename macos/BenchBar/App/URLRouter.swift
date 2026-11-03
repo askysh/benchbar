@@ -43,6 +43,8 @@ nonisolated enum URLRouter {
         /// Team Profiles with the import or subscribe sheet prefilled. The
         /// sheet waits for the user's click; the link itself fetches nothing.
         case profile(ProfileLink)
+        /// A page of a room this Mac already joined; never joins anything (U3).
+        case share(ShareDeepLink.Target)
     }
 
     /// `benchbar://profile/import?url=` and `benchbar://profile/subscribe?url=`.
@@ -92,6 +94,7 @@ nonisolated enum URLRouter {
     /// bench the app has selected, if any.
     static func route(_ url: URL, benches: [Bench], selected: String?) -> Outcome {
         if let outcome = profileRoute(url) { return outcome }
+        if let outcome = shareRoute(url) { return outcome }
         switch parse(url) {
         case .failure(let reason):
             return .ignore(reason.message)
@@ -124,6 +127,14 @@ nonisolated enum URLRouter {
             return .explain("The subscribe link has no git repository address in url=, so BenchBar did not open it.")
         }
         return .profile(.subscribe(address))
+    }
+
+    /// nil when the link is not a share link. `benchbar://share/<fp16>/app…` only: any other
+    /// path, a query or a fragment is ignored (ShareDeepLink).
+    static func shareRoute(_ url: URL) -> Outcome? {
+        guard url.scheme?.lowercased() == scheme, url.host(percentEncoded: false)?.lowercased() == "share" else { return nil }
+        guard let target = ShareDeepLink.parse(url) else { return .ignore("a share link opens only benchbar://share/<room>/app pages") }
+        return .share(target)
     }
 
     static func resolve(_ request: Request, benches: [Bench], selected: String?) -> Outcome {
