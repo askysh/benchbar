@@ -38,6 +38,7 @@ struct PopoverView: View {
             CappedHeight(maxHeight: Self.maxContentHeight) {
                 ScrollView { content.frame(maxWidth: .infinity, alignment: .leading) }
             }
+            SharePopoverRows(center: ShareCenter.shared)
             Divider()
             Button("Scan Folder…", systemImage: "folder.badge.plus", action: commands.scanFolder)
                 .buttonStyle(.borderless)
