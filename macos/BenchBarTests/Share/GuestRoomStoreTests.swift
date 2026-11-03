@@ -149,6 +149,7 @@ private final class Harness {
                 try dials.record(pin)
                 return transport
             },
+            discoveryDial: { _ throws(RoomConnectionError) in throw .unreachable },
             runJoin: { [unowned self] _, code, _, _, _, invite in
                 await MainActor.run {
                     codesSeen.append(code)
@@ -333,6 +334,7 @@ private final class Harness {
             browser: NoBrowser(),
             rooms: SavedRoomsStore(defaults: UserDefaults(suiteName: "guest-cancel-\(UUID().uuidString)")!),
             dial: { _, _ throws(RoomConnectionError) in silent },
+            discoveryDial: { _ throws(RoomConnectionError) in throw .unreachable },
             runJoin: { transport, _, _, _, _, _ in
                 do { _ = try await transport.send("GET", "/room/hello", body: nil) } catch { return .failure(.unreachable) }
                 return .failure(.failed)
@@ -372,6 +374,7 @@ private final class Harness {
                 if case .hostPort(let host, _) = endpoint, "\(host)" == "10.0.0.1" { return silent }
                 return answering
             },
+            discoveryDial: { _ throws(RoomConnectionError) in throw .unreachable },
             runJoin: { _, _, _, _, _, _ in .failure(.failed) },
             clientFingerprint: { Data(count: 32) },
             makeForwarder: { _ in FakeForwarder() },
@@ -607,8 +610,11 @@ nonisolated final class HelloRoom: RoomTransport, @unchecked Sendable {
             return GuestRoomStore(dependencies: .init(
                 browser: browser,
                 rooms: SavedRoomsStore(defaults: UserDefaults(suiteName: "nearby-\(UUID().uuidString)")!),
-                dial: { endpoint, pin throws(RoomConnectionError) in
+                dial: { _, pin throws(RoomConnectionError) in
                     try dials.record(pin)
+                    throw .unreachable
+                },
+                discoveryDial: { endpoint throws(RoomConnectionError) in
                     guard case .hostPort(let host, _) = endpoint, let room = rooms["\(host)"] else { throw .unreachable }
                     return room
                 },
@@ -684,7 +690,8 @@ nonisolated final class HelloRoom: RoomTransport, @unchecked Sendable {
         await rig.store.refreshNearby()
         #expect(room.requests.count == 2)
         #expect(room.requests.allSatisfy { $0.0 == "GET /room/hello" && $0.1 == nil })
-        #expect(rig.dials.pins.allSatisfy { $0 == .firstJoin })
+        // Only the identity-free discovery dial ran: the dial that carries this Mac's identity never did.
+        #expect(rig.dials.pins.isEmpty)
         #expect(rig.codes == 0)
         rig.store.stopBrowsing()
     }

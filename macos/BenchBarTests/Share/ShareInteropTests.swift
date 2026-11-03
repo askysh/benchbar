@@ -81,6 +81,56 @@ nonisolated final class NodeGateway {
     }
 }
 
+/// Fixtures/peer-room.js: a room that records which client certificate each request showed.
+nonisolated final class PeerRoomServer {
+    struct Info: Decodable {
+        var port: UInt16
+        var fp: String
+    }
+
+    let info: Info
+    private let process: Process
+    private let stdin: Pipe
+    private let stdout: Pipe
+
+    init?() throws {
+        guard NodeGateway.available, let node = NodeGateway.nodePath() else { return nil }
+        process = Process()
+        process.executableURL = URL(fileURLWithPath: node)
+        process.arguments = [ShareRepo.macos.appendingPathComponent("BenchBarTests/Fixtures/peer-room.js").path, ShareRepo.root.path]
+        stdin = Pipe()
+        stdout = Pipe()
+        process.standardInput = stdin
+        process.standardOutput = stdout
+        process.standardError = FileHandle.nullDevice
+        try process.run()
+        info = try JSONDecoder().decode(Info.self, from: Self.line(stdout))
+    }
+
+    private static func line(_ pipe: Pipe) -> Data {
+        var line = Data()
+        while !line.contains(0x0A) {
+            let chunk = pipe.fileHandleForReading.availableData
+            if chunk.isEmpty { break }
+            line.append(chunk)
+        }
+        return line
+    }
+
+    var endpoint: NWEndpoint { .hostPort(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: info.port)!) }
+
+    /// The client SPKI SHA-256 (hex) of every request so far, "none" for no certificate.
+    func seen() throws -> [String] {
+        stdin.fileHandleForWriting.write(Data("seen\n".utf8))
+        return try JSONDecoder().decode([String].self, from: Self.line(stdout))
+    }
+
+    func stop() {
+        try? stdin.fileHandleForWriting.close()
+        process.waitUntilExit()
+    }
+}
+
 /// Skipped (not failed) where node or the repository's share tests are absent, as on CI.
 @Suite(.serialized, .enabled(if: NodeGateway.available, "needs node and tests/share/helpers.js"))
 struct ShareInteropTests {
@@ -155,6 +205,47 @@ struct ShareInteropTests {
         otherPin[0] ^= 0x01
         let pinned = RoomConnection(endpoint: gateway.endpoint, identity: try identity.identity(), pin: .pinned(otherPin))
         await #expect(throws: RoomConnectionError.identityChanged) { try await pinned.open() }
+    }
+
+    /// Nearby discovery shows no client certificate: the real gateway still answers its hello,
+    /// a room that records certificates sees none, and a join dial still shows the real one.
+    @Test func discoveryHellosShowNoIdentityAndJoinsStillDo() async throws {
+        guard let gateway = try NodeGateway(), let peer = try PeerRoomServer() else {
+            Issue.record("node or tests/share/helpers.js not found: the discovery identity check was not run")
+            return
+        }
+        defer {
+            gateway.stop()
+            peer.stop()
+        }
+        let scratch = try #require(ScratchKeychain())
+        let identity = KeychainIdentity(label: "interop \(UUID().uuidString)", keychain: scratch.keychain)
+        let mine = Fingerprint.raw(spki: try identity.spkiDER()).hex
+
+        let toGateway = try await GuestRoomStore.Dependencies.anonymousDial(gateway.endpoint)
+        let hello = try await RoomAPI(transport: toGateway).roomHello()
+        toGateway.close()
+        #expect(hello.room == "Test Room")
+
+        let toPeer = try await GuestRoomStore.Dependencies.anonymousDial(peer.endpoint)
+        #expect(try await RoomAPI(transport: toPeer).roomHello().room == "Peer Room")
+        toPeer.close()
+        #expect(try peer.seen() == ["none"])
+
+        // The join and saved-room dial (`dial` in the live store) shows the real identity.
+        let joining = RoomConnection(endpoint: peer.endpoint, identity: try identity.identity(), pin: .firstJoin)
+        try await joining.open()
+        _ = try await RoomAPI(transport: joining).roomHello()
+        joining.close()
+        let seen = try peer.seen()
+        #expect(seen == ["none", mine])
+        #expect(seen.first != mine)
+
+        // The gateway refuses a join on a connection with no certificate.
+        let anonymous = try await GuestRoomStore.Dependencies.anonymousDial(gateway.endpoint)
+        defer { anonymous.close() }
+        let start = try await anonymous.send("POST", "/room/join/start", body: Data(#"{"v":3}"#.utf8))
+        #expect(start.status == 403 && String(decoding: start.body, as: UTF8.self).contains("certificate_required"))
     }
 
     /// The pre-auth salt the invite's `s` is compared with.
@@ -237,6 +328,7 @@ struct ShareInteropTests {
                 try await connection.open()
                 return connection
             },
+            discoveryDial: GuestRoomStore.Dependencies.anonymousDial,
             runJoin: { transport, code, name, model, fg, invite in
                 await RoomJoin(name: name, model: model, makeMap: { () throws(CPace.Failure) in try CPaceMap(scriptURL: ShareRepo.mapScript) })
                     .join(over: transport, code: code, fg: fg, invite: invite)

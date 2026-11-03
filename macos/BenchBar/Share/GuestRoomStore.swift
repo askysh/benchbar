@@ -67,6 +67,9 @@ final class GuestRoomStore {
         var browser: any RoomBrowsing
         var rooms: SavedRoomsStore
         var dial: @Sendable (NWEndpoint, ServerPin) async throws(RoomConnectionError) -> any RoomTransport
+        /// Nearby discovery's hello: unpinned and without this Mac's client identity, so a room
+        /// the user never chose cannot learn which Mac is looking. Join and saved rooms use `dial`.
+        var discoveryDial: @Sendable (NWEndpoint) async throws(RoomConnectionError) -> any RoomTransport
         /// The join itself; the code is passed through and never kept.
         var runJoin: @Sendable (any RoomTransport, String, String, String, Data, RoomJoin.InviteCheck?) async -> Result<JoinedRoom, JoinRefusal>
         var clientFingerprint: @Sendable () -> Data?
@@ -200,7 +203,7 @@ final class GuestRoomStore {
 
     private func askHello(_ room: DiscoveredRoom) async {
         var hello: RoomHello?
-        if let transport = try? await deps.dial(room.endpoint, .firstJoin) {
+        if let transport = try? await deps.discoveryDial(room.endpoint) {
             hello = try? await RoomAPI(transport: transport).roomHello()
             transport.close()
         }
@@ -578,6 +581,13 @@ final class GuestRoomStore {
 }
 
 extension GuestRoomStore.Dependencies {
+    /// A TLS connection to a room with no client certificate and no pin.
+    static let anonymousDial: @Sendable (NWEndpoint) async throws(RoomConnectionError) -> any RoomTransport = { endpoint throws(RoomConnectionError) in
+        let connection = RoomConnection(endpoint: endpoint, identity: nil, pin: .firstJoin)
+        try await connection.open()
+        return connection
+    }
+
     /// The real thing: Keychain identity, pinned mTLS, the bundled map, the loopback forwarder.
     static func live(identity: KeychainIdentity, defaults: UserDefaults = .standard, openURL: @escaping (URL) -> Void) -> Self {
         let suffix = LocalShareName.installSuffix(defaults: defaults)
@@ -590,6 +600,7 @@ extension GuestRoomStore.Dependencies {
                 try await connection.open()
                 return connection
             },
+            discoveryDial: anonymousDial,
             runJoin: { transport, code, name, model, fg, invite in
                 await RoomJoin(name: name, model: model).join(over: transport, code: code, fg: fg, invite: invite)
             },

@@ -36,14 +36,16 @@ nonisolated final class PeerCapture: @unchecked Sendable {
 nonisolated enum PinnedTLS {
     private static let verifyQueue = DispatchQueue(label: "benchbar.share.tls-verify")
 
-    /// TLS 1.3 only, ALPN http/1.1, the guest's client identity, and the pin check.
-    static func parameters(identity: SecIdentity, pin: ServerPin, capture: PeerCapture) -> NWParameters {
+    /// TLS 1.3 only, ALPN http/1.1, the guest's client identity, and the pin check. With no
+    /// identity the client answers the room's certificate request with an empty Certificate:
+    /// enough for the pre-auth hello, refused by the join routes.
+    static func parameters(identity: SecIdentity?, pin: ServerPin, capture: PeerCapture) -> NWParameters {
         let tls = NWProtocolTLS.Options()
         let options = tls.securityProtocolOptions
         sec_protocol_options_set_min_tls_protocol_version(options, .TLSv13)
         sec_protocol_options_set_max_tls_protocol_version(options, .TLSv13)
         sec_protocol_options_add_tls_application_protocol(options, "http/1.1")
-        if let local = sec_identity_create(identity) {
+        if let identity, let local = sec_identity_create(identity) {
             sec_protocol_options_set_local_identity(options, local)
         }
         sec_protocol_options_set_verify_block(options, verifyBlock(pin: pin, capture: capture), verifyQueue)

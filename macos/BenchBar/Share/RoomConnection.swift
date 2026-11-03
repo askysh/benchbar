@@ -57,7 +57,8 @@ nonisolated final class RoomConnection: RoomTransport, @unchecked Sendable {
     /// connection is done.
     private let expired = ResumeOnce()
 
-    init(endpoint: NWEndpoint, identity: SecIdentity, pin: ServerPin, requestTimeout: TimeInterval = 10) {
+    /// `identity` nil: no client certificate (Nearby discovery, which must not show this Mac).
+    init(endpoint: NWEndpoint, identity: SecIdentity?, pin: ServerPin, requestTimeout: TimeInterval = 10) {
         self.pin = pin
         self.requestTimeout = requestTimeout
         connection = NWConnection(to: endpoint, using: PinnedTLS.parameters(identity: identity, pin: pin, capture: capture))
