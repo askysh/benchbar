@@ -37,7 +37,7 @@ nonisolated struct LabsLoader: Sendable {
 /// last `labs list` said.
 @Observable @MainActor
 final class Labs {
-    enum Availability: Equatable { case unknown, available, unsupported }
+    enum Availability: Equatable { case unknown, available, unsupported, cliMissing }
 
     static let shared = Labs()
 
@@ -47,6 +47,8 @@ final class Labs {
     private(set) var busy: Set<String> = []
     /// The last failure per name, shown under its row.
     private(set) var errors: [String: String] = [:]
+    /// The last failed refresh that is no verdict (the entries stay); shown in the section.
+    private(set) var refreshError: String?
 
     /// Returned by `observe`; `cancel()` removes that one handler.
     final class ObservationToken {
@@ -83,15 +85,30 @@ final class Labs {
             let fresh = try await loader.load()
             lastRefresh = now()
             availability = .available
+            refreshError = nil
             apply(fresh)
         } catch {
             lastRefresh = now()
-            // a CLI without `labs` exits non zero; anything else is no verdict
-            if case CLIError.failed = error {
+            if case CLIError.notFound = error {
+                availability = .cliMissing
+                refreshError = nil
+            } else if case CLIError.failed(_, _, let message) = error, message.contains("Unknown command") {
+                // only the CLI's own "Unknown command" means a CLI without `labs`
                 availability = .unsupported
+                refreshError = nil
                 apply([])
+            } else {
+                // a transient failure is no verdict: keep what the last list said
+                refreshError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                if case CLIError.failed(_, _, let message) = error, !message.isEmpty { refreshError = message }
             }
         }
+    }
+
+    /// For a trigger that fires often (the popover opening, the app coming
+    /// forward): the throttle in `refresh` keeps it to one CLI call per 5 s.
+    func refreshIfStale() {
+        Task { await refresh() }
     }
 
     func set(_ lab: Lab, on: Bool) async throws {

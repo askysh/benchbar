@@ -100,6 +100,11 @@ for c in share lan-guard; do
   run_fm "$c" --help
   assert_eq "2" "$CODE" "$OUT"; assert_contains "$OUT" "is an experiment and it is off."
 done
+# with --json the refusal is one JSON document on stdout, exit 2, no password hint
+fm_out share --json --bench-dir "$BENCH"
+assert_eq "2" "$CODE"
+assert_eq "2 True" "$(printf '%s' "$OUT" | jget - 'd["exit"], "experiment" in d["error"]')"
+assert_eq "0" "$(printf '%s' "$OUT" | jget - 'len([a for a in d.get("next_actions", []) if "MARIADB" in json.dumps(a)])')"
 # on: the gate lets it through (this version has no such command)
 BENCHBAR_LABS=lan-rooms run_fm share --bench-dir "$BENCH"
 assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "Unknown command: share"

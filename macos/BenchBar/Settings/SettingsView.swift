@@ -87,7 +87,12 @@ struct SettingsView: View {
         Section {
             if labs.availability == .unsupported {
                 Text("Update the CLI to use Labs").foregroundStyle(.secondary)
+            } else if labs.availability == .cliMissing {
+                Text("BenchBar cannot find the benchbar command").foregroundStyle(.secondary)
             } else {
+                if let message = labs.refreshError {
+                    Text(message).font(.callout).foregroundStyle(.red)
+                }
                 ForEach(labs.entries) { entry in
                     VStack(alignment: .leading, spacing: 4) {
                         Toggle(isOn: Binding(
@@ -96,7 +101,7 @@ struct SettingsView: View {
                             Text(entry.title)
                             Text(entry.description)
                         }
-                        .disabled(labs.busy.contains(entry.name) || entry.available == false)
+                        .disabled(labs.busy.contains(entry.name) || (entry.available == false && !entry.enabled))
                         if entry.available == false {
                             Text("Not on this platform").font(.caption).foregroundStyle(.secondary)
                         }
