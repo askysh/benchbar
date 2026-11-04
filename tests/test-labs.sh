@@ -28,7 +28,7 @@ assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "lan-rooms"; assert_contain
 
 # ---- on and off write the state
 run_fm labs on quick-switch --yes
-assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "system wide hotkey"
+assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "system wide keyboard shortcut"
 assert_contains "$(cat "$FL_STATE_FILE")" "LABS=quick-switch"
 run_fm labs status quick-switch
 assert_eq "0" "$CODE" "$OUT"
