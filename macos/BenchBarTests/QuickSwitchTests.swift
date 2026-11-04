@@ -274,7 +274,7 @@ struct QuickSwitchTests {
 
     @Test func theFooterShowsQuickPickOnlyWhileDigitsSwitch() {
         var m = model(pins: [ne])
-        #expect(m.footerHint == "↑↓ select   ↩ switch   0–9 quick pick   esc close")
+        #expect(m.footerHint == "↑↓ select   ↩ switch   0 to 9 quick pick   esc close")
         m.setQuery("n")
         #expect(m.footerHint == "↑↓ select   ↩ switch   esc close")
         m.setQuery("")
@@ -377,6 +377,14 @@ struct QuickSwitchTests {
         let items = OpenAsMenuModel.items(pins: [PinnedUser(user: "a@x.com", label: "A", fullName: nil)], recents: [])
         #expect(OpenAsMenuModel.popoverShortcuts(items, quickSwitchOn: false).isEmpty)
         #expect(!OpenAsMenuModel.popoverShortcuts(items, quickSwitchOn: true).isEmpty)
+    }
+
+    @Test func theMenuItemsCarryTheirKeyAsTrailingTextOnlyWhenBound() {
+        let items = OpenAsMenuModel.items(pins: [], recents: [])
+        let keys = OpenAsMenuModel.popoverShortcuts(items, quickSwitchOn: true)
+        let admin = items.first { if case .administrator = $0 { true } else { false } }!
+        #expect(OpenAsMenuModel.titled("Administrator", key: keys[admin.id]) == "Administrator    ⌘0")
+        #expect(OpenAsMenuModel.titled("Administrator", key: OpenAsMenuModel.popoverShortcuts(items, quickSwitchOn: false)[admin.id]) == "Administrator")
     }
 
     @Test func theShortcutRowsForQuickSwitchShowOnlyWhileTheLabIsOn() {

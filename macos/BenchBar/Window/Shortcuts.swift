@@ -68,7 +68,7 @@ nonisolated enum OpenAsShortcut: Equatable, Sendable {
     var display: String { (usesShift ? "⇧" : "") + "⌘" + String(key).uppercased() }
 
     /// What Settings lists for the family.
-    static let summary = "⌘0  ⌘1–⌘9  \(OpenAsShortcut.switchBack.display)"
+    static let summary = "⌘0  ⌘1 to ⌘9  \(OpenAsShortcut.switchBack.display)"
 }
 
 extension View {

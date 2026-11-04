@@ -107,6 +107,12 @@ nonisolated enum OpenAsMenuModel {
         quickSwitchOn ? shortcuts(items) : [:]
     }
 
+    /// A menu item's title with its key as trailing text ("Administrator    ⌘0"). The key
+    /// is only text: the binding is the hidden button's, so nothing is bound twice.
+    static func titled(_ title: String, key: OpenAsShortcut?) -> String {
+        key.map { "\(title)    \($0.display)" } ?? title
+    }
+
     /// `recents` is newest first: the first is who the browser is now, the
     /// second is where Switch Back goes.
     static func items(pins: [PinnedUser], recents: [RecentUser]) -> [Item] {
@@ -162,17 +168,18 @@ struct OpenAsMenu: View {
         let items = OpenAsMenuModel.items(pins: openAs.pins(bench: bench.path, site: row.name),
                                           recents: openAs.recents(bench: bench.path, site: row.name))
         let keys = OpenAsMenuModel.popoverShortcuts(items, quickSwitchOn: Labs.shared.isOn(.quickSwitch))
+        let hints = shortcuts ? keys : [:]
         return Menu {
             ForEach(items) { item in
                 switch item {
                 case .switchBack(let user, let title):
-                    Button(title) { go(user, switching: switching) }
+                    Button(OpenAsMenuModel.titled(title, key: hints[item.id])) { go(user, switching: switching) }
                 case .divider:
                     Divider()
                 case .pin(let user, let title, let fullName):
-                    Button(title) { go(user, fullName: fullName, switching: switching) }
+                    Button(OpenAsMenuModel.titled(title, key: hints[item.id])) { go(user, fullName: fullName, switching: switching) }
                 case .administrator:
-                    Button(OpenAsStore.administrator) { go(OpenAsStore.administrator, switching: switching) }
+                    Button(OpenAsMenuModel.titled(OpenAsStore.administrator, key: hints[item.id])) { go(OpenAsStore.administrator, switching: switching) }
                 case .pinHint:
                     Text(OpenAsMenuModel.noPinsHint)
                 case .findUser:
