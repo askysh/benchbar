@@ -16,6 +16,15 @@ FL_DOCTOR_QUICK="${FL_DOCTOR_QUICK:-0}"
 
 fl_doctor_reset() { FL_D_IDS=(); FL_D_STATUS=(); FL_D_MSG=(); FL_D_FIX=(); FL_D_ACTION=(); FL_D_ACKED=(); FL_D_SKIPPED=""; }
 
+# fl_check_relevant ID: the checks of a lab run only while the lab is on or it left a trace
+# (the share state folder), so a Mac that never turned lan-rooms on sees nothing of it
+fl_check_relevant() {
+  case "$1" in
+    share_scheduler) fl_lab_on lan-rooms || [[ -d "${FL_STATE_DIR}/share" ]] ;;
+    *) return 0 ;;
+  esac
+}
+
 # fl_doctor_run [GROUP...]: runs every check (or only the given groups).
 CHK_MORE=()
 fl_doctor_run() {
@@ -23,6 +32,7 @@ fl_doctor_run() {
   fl_doctor_reset
   # a plan may add checks (port_block while ports move)
   for id in ${FL_PLAN_CHECKS:-} $FL_CHECK_ORDER; do
+    fl_check_relevant "$id" || continue
     g="$(fl_check_group "$id")"
     if [[ -n "$groups" ]]; then
       case " $groups " in *" $g "*) ;; *) continue ;; esac

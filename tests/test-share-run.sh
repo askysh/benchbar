@@ -11,6 +11,7 @@
 if [[ "$(command -p uname -s)" != Darwin ]]; then printf 'test-share-run: ok (SKIPPED: macOS only)\n'; exit 0; fi
 # shellcheck source=tests/lib/harness.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
+export BENCHBAR_LABS=lan-rooms
 . "$ROOT/lib/frappe-local/ui.sh"
 . "$ROOT/lib/frappe-local/run.sh"
 . "$ROOT/lib/frappe-local/templates.sh"

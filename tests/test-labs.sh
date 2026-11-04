@@ -8,6 +8,7 @@
 BENCH="$HOME/dev/frappe-bench"
 make_fake_bench "$BENCH" v16dev
 unset BENCHBAR_LABS
+export FL_LANGUARD_ANCHOR="$TMP_DIR/no-anchor" FL_LANGUARD_DAEMON="$TMP_DIR/no-daemon"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export ROOT
 
@@ -100,9 +101,9 @@ for c in share lan-guard; do
   run_fm "$c" --help
   assert_eq "2" "$CODE" "$OUT"; assert_contains "$OUT" "is an experiment and it is off."
 done
-# on: the gate lets it through (this version has no such command)
+# on: the gate lets it through (share without a subcommand shows its usage)
 BENCHBAR_LABS=lan-rooms run_fm share --bench-dir "$BENCH"
-assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "Unknown command: share"
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "Usage: benchbar share"
 run_fm status --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 
@@ -132,7 +133,7 @@ SH
 bash "$TMP_DIR/gate.sh" >"$TMP_DIR/gate.out"
 head -n 1 "$TMP_DIR/gate.out" >"$TMP_DIR/gate.json"; USAGE_OFF="$(tail -n +2 "$TMP_DIR/gate.out")"
 assert_eq "[] share lan-rooms" "$(jget "$TMP_DIR/gate.json" 'd["labs"], d["gated"][0]["name"], d["gated"][0]["lab"]' | tr -d "(),'")" "(gated)"
-assert_eq "0 1" "$(jget "$TMP_DIR/gate.json" 'len([c for c in d["commands"] if c["name"].startswith("share")]), len(d["gated"])')" "(one gated entry for share and share stop)"
+assert_eq "0 2" "$(jget "$TMP_DIR/gate.json" 'len([c for c in d["commands"] if c["name"].startswith("share")]), len(d["gated"])')" "(one gated entry each for share and lan-guard)"
 assert_not_contains "$USAGE_OFF" "share"
 assert_not_contains "$USAGE_OFF" "--seat"
 assert_contains "$USAGE_OFF" "path"

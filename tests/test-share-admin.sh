@@ -10,6 +10,7 @@
 if [[ "$(command -p uname -s)" != Darwin ]]; then printf 'test-share-admin: ok (SKIPPED: macOS only)\n'; exit 0; fi
 # shellcheck source=tests/lib/harness.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
+export BENCHBAR_LABS=lan-rooms
 
 REAL_NODE="$(command -v node 2>/dev/null || true)"
 if [[ -z "$REAL_NODE" ]]; then

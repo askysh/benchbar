@@ -8,6 +8,7 @@
 if [[ "$(command -p uname -s)" != Darwin ]]; then printf 'test-share: ok (SKIPPED: macOS only)\n'; exit 0; fi
 # shellcheck source=tests/lib/harness.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
+export BENCHBAR_LABS=lan-rooms
 
 BENCH="$HOME/dev/frappe-bench"
 make_fake_bench "$BENCH" macdev

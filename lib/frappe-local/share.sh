@@ -635,3 +635,19 @@ fl_cmd_share() {
     *) fl_die "Usage: benchbar share setup|users|preflight|start|stop|extend|status|code|invite|lock|unlock|people|remove|assign|log|open-as|teardown ..." "Example: benchbar share status" ;;
   esac
 }
+
+# fl_lab_off_lan_rooms: what `benchbar labs off lan-rooms` undoes (labs.sh calls it). A running share
+# stops through the share stop path, in a subshell so a refusal cannot end the labs run, with no
+# prompt and no JSON of its own. The pf anchor is root's: it is never removed from here, a warning
+# names the command instead.
+fl_lab_off_lan_rooms() {
+  local rc=0 state
+  if [[ -d "$(fl_share_dir)" ]]; then
+    ( OPT_JSON=0; FL_JSONL=0; fl_context_init "${OPT_BENCH_DIR:-}" "${OPT_SITE:-}" "${OPT_PROFILE:-}"; fl_cmd_share_stop ) || rc=1
+  fi
+  if declare -F fl_lg_state_v >/dev/null; then
+    fl_lg_state_v state
+    [[ "$state" == missing ]] || fl_warn "lan-guard is still installed and keeps the bench ports off the LAN; to remove it, run: benchbar lan-guard remove"
+  fi
+  return "$rc"
+}
