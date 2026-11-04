@@ -34,7 +34,10 @@ The documents are in the [JSON schema](../../json-schema.md#sharing).
   can remove people. On a first join a guest cannot tell your room from a
   rogue one that also knows the code: the guest's pin of your certificate
   protects only rejoins.
-- **Ten wrong codes lock the room** until you draw a new code. The code
+- **Ten wrong codes lock the room** until you draw a new code. The count is
+  for the room, not per guest, so anyone on the network who can reach the
+  gateway can lock everyone out by guessing wrong ten times. The lock holds
+  until `share code --new`; nobody gets in or back in meanwhile. The code
   never reaches a file, a log, `share status` or any `--json` but
   `share code --json` and `share invite --json`.
 - **The copy holds real data** (people, customers, contacts, addresses).
