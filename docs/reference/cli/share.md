@@ -396,6 +396,18 @@ state folder (`lan-guard/pf.state`, never the bench), together with whether
 pf was already on before the first install, so that `lan-guard remove` can
 give it back.
 
+**What lan-guard blocks.** The rule is global and always on, with or without
+a room open: TCP to ports 8000-8099 (web), 9000-9099 (socket.io),
+11000-11099 and 13000-13099 (Redis) and 3306 (MariaDB) is refused unless it
+comes from this Mac's loopback address. Anything that reaches those ports
+through this Mac's LAN address is refused too, which includes a Docker
+container or a VM that dials the LAN IP instead of the loopback one. Use
+127.0.0.1 where the tool allows it, or run `benchbar lan-guard remove` for as
+long as you need the LAN path (`share start` refuses to run without the
+guard, so install it again before you share). `lan-guard allow-node` is not
+a way around the block: it only lets the gateway's node through the macOS
+application firewall and opens no bench port.
+
 Exit codes: 0; 1 on a refusal, a cancelled password, a failed root step or
 a block that still lets a bench port through.
 
