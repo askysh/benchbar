@@ -100,9 +100,13 @@ struct SettingsView: View {
                         if entry.available == false {
                             Text("Not on this platform").font(.caption).foregroundStyle(.secondary)
                         }
-                        Label(entry.warning, systemImage: "exclamationmark.triangle.fill")
-                            .font(.callout)
-                            .foregroundStyle(.orange)
+                        if entry.enabled {
+                            Label(entry.warning, systemImage: "exclamationmark.triangle.fill")
+                                .font(.callout)
+                                .foregroundStyle(.orange)
+                        } else {
+                            Text(entry.warning).font(.callout).foregroundStyle(.secondary)
+                        }
                         Text("since \(entry.since)").font(.caption).foregroundStyle(.secondary)
                         if let error = labs.errors[entry.name] {
                             Text(error).font(.callout).foregroundStyle(.red)
