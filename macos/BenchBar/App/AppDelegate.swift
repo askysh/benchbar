@@ -366,6 +366,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// open) shows the window: a menu bar app has nothing else to show.
     /// A log window on screen does not count: `hasVisibleWindows` is true
     /// for it, and the BenchBar window stayed closed.
+    /// Quitting kills a running share setup or teardown (the CLI gets SIGTERM):
+    /// the copy is left half made, so ask first. Keep running is the default.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard ShareCenter.shared.setupOrTeardownRunning else { return .terminateNow }
+        let alert = NSAlert()
+        alert.messageText = "Sharing setup is still running."
+        alert.informativeText = "Quitting now stops it halfway; the copy will need setup again."
+        alert.addButton(withTitle: "Keep running")
+        alert.addButton(withTitle: "Quit anyway")
+        return alert.runModal() == .alertSecondButtonReturn ? .terminateNow : .terminateCancel
+    }
+
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if !mainWindow.isVisible { openMainWindow() }
         return true

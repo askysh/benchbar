@@ -102,6 +102,10 @@ final class ShareStore {
     /// seats people hold, so a free seat is one seen earlier that nobody holds now.
     private(set) var knownSeats: [String: String] = [:]
     private(set) var busy: String?
+    /// Setup or teardown calls the CLI is running: quitting now stops one
+    /// halfway, and the copy needs setup again.
+    private(set) var setupOrTeardownCalls = 0
+    var stopsHalfwayIfQuit: Bool { setupOrTeardownCalls > 0 }
     private(set) var lastError: String?
     /// Set after Copy invite put the message on the pasteboard.
     private(set) var inviteCopied = false
@@ -284,7 +288,9 @@ final class ShareStore {
     /// Runs setup; `onStep` hears each step name. Returns true on success.
     @discardableResult
     func setup(_ request: ShareSetupRequest, onStep: @escaping @Sendable (String) -> Void) async -> Bool {
-        await perform("Making the copy…") { client, bench throws(CLIError) in
+        setupOrTeardownCalls += 1
+        defer { setupOrTeardownCalls -= 1 }
+        return await perform("Making the copy…") { client, bench throws(CLIError) in
             try await client.shareSetup(bench: bench, request: request, onStep: onStep)
         }
     }
@@ -333,7 +339,9 @@ final class ShareStore {
 
     @discardableResult
     func teardown() async -> Bool {
-        await perform("Removing the copy…") { client, bench throws(CLIError) in try await client.shareTeardown(bench: bench) }
+        setupOrTeardownCalls += 1
+        defer { setupOrTeardownCalls -= 1 }
+        return await perform("Removing the copy…") { client, bench throws(CLIError) in try await client.shareTeardown(bench: bench) }
     }
 
     @discardableResult

@@ -59,7 +59,23 @@ nonisolated final class FakeShareCLI: ShareCLI, @unchecked Sendable {
         try BenchJSON.decode(ShareSetupPlan.self, from: Data(#"{"schema_version":1,"site":"s","size_gb":1.5,"est_minutes":4}"#.utf8))
     }
 
-    func shareSetup(bench: String, request: ShareSetupRequest, onStep: @escaping @Sendable (String) -> Void) async throws(CLIError) { try record("setup") }
+    /// While true, setup and teardown wait inside the call (`inCall` says one is there).
+    private var _hold = false
+    private var _inCall = false
+    var hold: Bool {
+        get { lock.withLock { _hold } }
+        set { lock.withLock { _hold = newValue } }
+    }
+    var inCall: Bool { lock.withLock { _inCall } }
+
+    private func held(_ call: String) async throws(CLIError) {
+        lock.withLock { _inCall = true }
+        while hold { try? await Task.sleep(for: .milliseconds(5)) }
+        lock.withLock { _inCall = false }
+        try record(call)
+    }
+
+    func shareSetup(bench: String, request: ShareSetupRequest, onStep: @escaping @Sendable (String) -> Void) async throws(CLIError) { try await held("setup") }
     func shareStart(bench: String, forHours hours: Int, label: String?) async throws(CLIError) { try record("start \(hours)") }
     func shareStop(bench: String) async throws(CLIError) { try record("stop") }
     func shareExtend(bench: String, byMinutes minutes: Int) async throws(CLIError) { try record("extend \(minutes)") }
@@ -67,7 +83,7 @@ nonisolated final class FakeShareCLI: ShareCLI, @unchecked Sendable {
     func shareRemove(bench: String, person: String, newCode: Bool) async throws(CLIError) { try record("remove \(person) \(newCode)") }
     func shareAssign(bench: String, person: String, seat: String) async throws(CLIError) { try record("assign \(person) \(seat)") }
     func shareOpenAs(bench: String, user: String) async throws(CLIError) { try record("open-as \(user)") }
-    func shareTeardown(bench: String) async throws(CLIError) { try record("teardown") }
+    func shareTeardown(bench: String) async throws(CLIError) { try await held("teardown") }
     func lanGuardInstall() async throws(CLIError) { try record("lan-guard install") }
     func lanGuardAllowNode() async throws(CLIError) { try record("lan-guard allow-node") }
 }
@@ -152,6 +168,37 @@ struct ShareStoreTests {
         await store.refresh()
         #expect(store.availability == .unavailable)
         #expect(store.lastError == nil)
+    }
+
+    /// Quitting while setup or teardown runs stops the CLI halfway, so the app asks first.
+    @Test func setupIsInFlightUntilItReturns() async { await inFlightUntilItReturns("setup") }
+    @Test func teardownIsInFlightUntilItReturns() async { await inFlightUntilItReturns("teardown") }
+
+    private func inFlightUntilItReturns(_ call: String) async {
+        let fake = FakeShareCLI([ShareStatus(state: .off)])
+        let store = ShareStore(bench: "/b", client: fake, log: { _ in })
+        #expect(!store.stopsHalfwayIfQuit)
+        fake.hold = true
+        let run = Task { @MainActor in
+            if call == "setup" {
+                await store.setup(ShareSetupRequest(site: "s", users: ["u"], backupNow: false, refresh: false), onStep: { _ in })
+            } else {
+                await store.teardown()
+            }
+        }
+        while !fake.inCall { try? await Task.sleep(for: .milliseconds(5)) }
+        #expect(store.stopsHalfwayIfQuit)
+        fake.hold = false
+        await run.value
+        #expect(!store.stopsHalfwayIfQuit)
+        #expect(fake.calls == [call])
+    }
+
+    @Test func otherActionsAreNotInFlightForQuit() async {
+        let fake = FakeShareCLI([ShareStatus(state: .off)])
+        let store = ShareStore(bench: "/b", client: fake, log: { _ in })
+        await store.stop()
+        #expect(!store.stopsHalfwayIfQuit)
     }
 
     @Test func olderProtocolNeedsNewerCLI() async throws {

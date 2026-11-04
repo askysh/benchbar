@@ -57,6 +57,9 @@ final class ShareCenter {
         stores[bench]?.availability != .unavailable
     }
 
+    /// A share setup or teardown is running on some bench (the quit alert).
+    var setupOrTeardownRunning: Bool { stores.values.contains(where: \.stopsHalfwayIfQuit) }
+
     var sharingStores: [ShareStore] { stores.values.filter(\.isSharing).sorted { $0.bench < $1.bench } }
 
     private func statusChanged() {
