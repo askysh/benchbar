@@ -391,6 +391,11 @@ still answers. Refused under `BENCHBAR_NONINTERACTIVE`,
 `--for-agent` and `mcp`, and without a terminal unless `BENCHBAR_SUDO=gui`.
 On a refusal, run the same command yourself in a terminal.
 
+Turning pf on (`pfctl -E`) hands out a token. Install records it in the
+state folder (`lan-guard/pf.state`, never the bench), together with whether
+pf was already on before the first install, so that `lan-guard remove` can
+give it back.
+
 Exit codes: 0; 1 on a refusal, a cancelled password, a failed root step or
 a block that still lets a bench port through.
 
@@ -421,6 +426,13 @@ benchbar lan-guard remove [--yes] [--json]
 Unloads and deletes the anchor and its daemon, with sudo once. Asks first.
 Without them the bench ports answer the LAN and `share start` refuses to
 run.
+
+It also gives back the pf token that install recorded (`pfctl -X TOKEN`), so
+pf is turned off again when the guard was the only thing that turned it on.
+When pf was already enabled before the first install, remove leaves pf on.
+A token from before a reboot is stale, and releasing it is harmless. The
+boot daemon takes a reference of its own at every boot; it ends at the next
+reboot, because remove deletes the daemon.
 
 ```bash
 benchbar lan-guard remove

@@ -82,20 +82,24 @@ fl_lg_require_person() {
 
 # fl_lg_as_root REASON MANUAL SCRIPT: SCRIPT as root, once: one dialog with BENCHBAR_SUDO=gui, else sudo on
 # this terminal, dropped (sudo -k) as soon as it is done. Stops the command, naming MANUAL, when root is refused.
+# What the script printed on stdout is in FL_LG_ROOT_OUT.
+FL_LG_ROOT_OUT=""
 fl_lg_as_root() {
   local reason="$1" manual="$2" script="$3" code=0 last
+  FL_LG_ROOT_OUT=""
   if fl_sudo_gui; then
     fl_root_run "$reason" "$script" || code=$?
     case "$code" in
-      0) return 0 ;;
+      0) FL_LG_ROOT_OUT="$FL_ROOT_OUTPUT"; return 0 ;;
       2) fl_die "The password dialog was cancelled; nothing was changed." "Run: ${manual}" ;;
     esac
     last="$(printf '%s\n' "$FL_ROOT_OUTPUT" | grep -v '^[[:space:]]*$' | tail -n 1 || true)"
     fl_die "The root step failed${last:+: ${last}}." "Run: ${manual}"
   fi
   fl_sudo_begin "$reason" || fl_die "sudo was not available, so nothing was changed." "Run in a terminal: ${manual}"
-  sudo /bin/bash -c "$script" benchbar-root || code=$?
+  FL_LG_ROOT_OUT="$(sudo /bin/bash -c "$script" benchbar-root)" || code=$?
   fl_sudo_drop
+  printf '%s\n' "$FL_LG_ROOT_OUT" | grep -v '^benchbar-pf-' || true
   [[ "$code" == 0 ]] || fl_die "The root step failed (exit ${code}); see the log." "Run: ${manual}"
 }
 
@@ -129,10 +133,19 @@ ROOT
   fl_lg_load_sh
 }
 
-# fl_lg_load_sh: the load half: pf enabled with the anchor loaded, and the daemon (re)started
+# fl_lg_load_sh: the load half: pf enabled with the anchor loaded, and the daemon (re)started.
+# pfctl -E takes a reference on pf and prints its token; lan-guard remove gives that reference back with
+# pfctl -X. So the root side says, on stdout, whether pf was enabled before and which token it got
+# ("benchbar-pf-was-enabled 0|1", "benchbar-pf-token N"); fl_lg_pf_record keeps them in the state folder.
 fl_lg_load_sh() {
   cat <<'ROOT'
-"$pfctl" -E -a "$pf_anchor" -f "$anchor"
+pf_was=0
+case "$("$pfctl" -s info 2>/dev/null || true)" in *"Status: Enabled"*) pf_was=1 ;; esac
+pf_out="$("$pfctl" -E -a "$pf_anchor" -f "$anchor" 2>&1)" || { printf '%s\n' "$pf_out" >&2; exit 1; }
+printf '%s\n' "$pf_out" >&2
+printf 'benchbar-pf-was-enabled %s\n' "$pf_was"
+pf_token="$(printf '%s\n' "$pf_out" | sed -n 's/^[Tt]oken *: *\([0-9][0-9]*\).*$/\1/p' | head -n 1)"
+if [ -n "$pf_token" ]; then printf 'benchbar-pf-token %s\n' "$pf_token"; fi
 if "$launchctl" print "system/$label" >/dev/null 2>&1; then
   "$launchctl" kickstart -k "system/$label"
 else
@@ -148,12 +161,55 @@ fl_lg_reload_script() {
   fl_lg_load_sh
 }
 
+# fl_lg_pf_state: where the pf enable of install is remembered, in the state folder (never the bench):
+# was_enabled=0|1 (pf was already on before the first install) and one token=N per pfctl -E
+fl_lg_pf_state() { printf '%s/lan-guard/pf.state' "$FL_STATE_DIR"; }
+
+# fl_lg_pf_record OUTPUT: keeps what the root side of install or reload said. was_enabled is kept from the
+# first install (a later run finds pf on because of this guard); tokens are added.
+fl_lg_pf_record() {
+  local f dir was="" tokens="" line
+  f="$(fl_lg_pf_state)"; dir="${f%/*}"
+  if [[ -f "$f" ]]; then
+    was="$(sed -n 's/^was_enabled=\([01]\)$/\1/p' "$f" | head -n 1)"
+    tokens="$(sed -n 's/^token=\([0-9][0-9]*\)$/\1/p' "$f")"
+  fi
+  while IFS= read -r line; do
+    case "$line" in
+      "benchbar-pf-was-enabled "[01]) [[ -n "$was" ]] || was="${line##* }" ;;
+      "benchbar-pf-token "[0-9]*) tokens="${tokens}${tokens:+$'\n'}${line##* }" ;;
+    esac
+  done <<<"$1"
+  [[ -n "$was" ]] || return 0
+  (umask 077; mkdir -p "$dir")
+  chmod 700 "$dir"
+  { printf 'was_enabled=%s\n' "$was"; [[ -z "$tokens" ]] || printf '%s\n' "$tokens" | sed 's/^/token=/'; } >"${f}.new"
+  mv -f "${f}.new" "$f"
+}
+
+# fl_lg_pf_tokens_v VAR: the tokens to give back, space separated: none when pf was on before the guard
+# (it stays on), none without a record
+fl_lg_pf_tokens_v() {
+  local f was t
+  f="$(fl_lg_pf_state)"
+  printf -v "$1" '%s' ""
+  [[ -f "$f" ]] || return 0
+  was="$(sed -n 's/^was_enabled=\([01]\)$/\1/p' "$f" | head -n 1)"
+  [[ "$was" == 0 ]] || return 0
+  t="$(sed -n 's/^token=\([0-9][0-9]*\)$/\1/p' "$f" | tr '\n' ' ')"
+  printf -v "$1" '%s' "${t% }"
+}
+
 fl_lg_remove_script() {
+  local tokens
+  fl_lg_pf_tokens_v tokens
   printf 'set -eu\n'
   fl_lg_tools_sh
+  printf 'pf_tokens=%s\n' "$(fl_sq "$tokens")"
   cat <<'ROOT'
 if "$launchctl" print "system/$label" >/dev/null 2>&1; then "$launchctl" bootout "system/$label" || true; fi
 "$pfctl" -a "$pf_anchor" -F all || true
+for t in $pf_tokens; do "$pfctl" -X "$t" || true; done
 /bin/rm -f "$daemon" "$anchor"
 ROOT
 }
@@ -208,6 +264,7 @@ fl_lg_repair() {
   fl_confirm "Load the LAN guard again with sudo (pf and its launch daemon)?" || fl_die "Not loaded." "Run: benchbar lan-guard install"
   fl_lg_as_root "load the LAN guard again: the pf anchor that keeps the bench ports off the LAN" \
     "benchbar lan-guard install" "$(fl_lg_reload_script)"
+  fl_lg_pf_record "$FL_LG_ROOT_OUT"
   fl_lg_doc_v doc
   [[ "$LG_ACTIVE" != false ]] || fl_die "The bench ports still answer on ${ip} after the guard was loaded again." "See benchbar share preflight --critical."
   fl_changed lan-guard "$FL_LANGUARD_PF_ANCHOR_NAME" "reloaded"
@@ -242,6 +299,7 @@ fl_cmd_lan_guard_install() {
   fl_confirm "Install the LAN guard with sudo (a pf anchor and a launch daemon)?" || fl_die "Not installed." "Run: benchbar lan-guard install"
   fl_lg_as_root "install the LAN guard: the pf anchor that keeps the bench ports off the LAN, and the daemon that loads it at boot" \
     "benchbar lan-guard install" "$(fl_lg_install_script)"
+  fl_lg_pf_record "$FL_LG_ROOT_OUT"
   fl_lg_state_v state
   [[ "$state" == installed ]] || fl_die "The guard files are still ${state} after the root step." "See the log; run benchbar lan-guard install again."
   fl_changed lan-guard "$FL_LANGUARD_PF_ANCHOR_NAME" "installed"
@@ -264,6 +322,7 @@ fl_cmd_lan_guard_remove() {
   fl_lg_as_root "remove the LAN guard: its pf anchor and its launch daemon" "benchbar lan-guard remove" "$(fl_lg_remove_script)"
   fl_lg_state_v state
   [[ "$state" == missing ]] || fl_die "The guard files are still there after the root step." "See the log; run benchbar lan-guard remove again."
+  rm -f "$(fl_lg_pf_state)"
   fl_changed lan-guard "$FL_LANGUARD_PF_ANCHOR_NAME" "removed"
   fl_ok "LAN guard removed"
   fl_lg_report

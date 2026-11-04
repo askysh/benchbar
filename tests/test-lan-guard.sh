@@ -32,7 +32,7 @@ const_of() { # NAME: a single-quoted constant of share-preflight.sh, as the CLI 
   sed -n "/^$1='/,/'\$/p" "$ROOT/lib/frappe-local/share-preflight.sh" | sed "s/^$1='//; s/'\$//"
 }
 WANT_PLIST="$(const_of FL_SHARE_PF_PLIST)"
-clean() { rm -f "$FL_LANGUARD_ANCHOR" "$FL_LANGUARD_DAEMON" "$MOCK_STATE/osa_reasons" "$MOCK_STATE"/osa_cmd.* "$MOCK_STATE/agents/com.benchbar.pf"; reset_calls; }
+clean() { rm -f "$FL_LANGUARD_ANCHOR" "$FL_LANGUARD_DAEMON" "$MOCK_STATE/osa_reasons" "$MOCK_STATE"/osa_cmd.* "$MOCK_STATE/agents/com.benchbar.pf" "$FL_STATE_DIR/lan-guard/pf.state" "$MOCK_STATE/pf_enabled"; reset_calls; }
 lg() { run_fm lan-guard "$@" --bench-dir "$BENCH"; }
 lg_gui() { BENCHBAR_SUDO=gui run_fm lan-guard "$@" --bench-dir "$BENCH"; }
 # lg_tty ARGS...: on a terminal (a pty), the sudo path
@@ -199,10 +199,40 @@ assert_no_file "$FL_LANGUARD_ANCHOR"; assert_no_file "$FL_LANGUARD_DAEMON"
 assert_eq 1 "$(wc -l <"$MOCK_STATE/osa_reasons" | tr -d ' ')" "(one dialog)"
 assert_calls_contain '^launchctl bootout system/com.benchbar.pf$'
 assert_calls_contain '^pfctl -a com.apple/250.benchbar -F all$'
+assert_calls_contain '^pfctl -X 4242$'
+assert_no_file "$FL_STATE_DIR/lan-guard/pf.state"
 assert_eq missing "$(jstat 'd["state"]')"
 reset_calls
 lg_gui remove --yes
 assert_eq 0 "$CODE" "$OUT"; assert_contains "$OUT" "unchanged"; assert_calls_not_contain '^pfctl'
+
+# ---------------------------------------------------------------- the pf token: kept at install, given back at remove
+# pf off before install: the token and was_enabled=0 land in the state folder (not the bench)
+clean
+lg_gui install --yes
+assert_eq 0 "$CODE" "$OUT"
+assert_eq "was_enabled=0 token=4242" "$(tr '\n' ' ' <"$FL_STATE_DIR/lan-guard/pf.state" | sed 's/ $//')"
+# a reload adds its token and keeps was_enabled (pf is on by then, because of the guard)
+printf '4243\n' >"$MOCK_STATE/pf_token"; touch "$MOCK_STATE/pf_enabled"
+printf '8097\n18097\n' >"$MOCK_STATE/lan_reachable_ports"; printf '18097\n' >"$MOCK_STATE/pfctl_loads"
+lg_gui install --yes
+assert_eq 0 "$CODE" "$OUT"
+assert_eq "was_enabled=0 token=4242 token=4243" "$(tr '\n' ' ' <"$FL_STATE_DIR/lan-guard/pf.state" | sed 's/ $//')"
+rm -f "$MOCK_STATE/pfctl_loads" "$MOCK_STATE/pf_token"
+reset_calls
+lg_gui remove --yes
+assert_eq 0 "$CODE" "$OUT"
+assert_calls_contain '^pfctl -X 4242$'; assert_calls_contain '^pfctl -X 4243$'
+# pf already on before the first install: the guard leaves it on, no token is given back
+clean; touch "$MOCK_STATE/pf_enabled"
+lg_gui install --yes
+assert_eq 0 "$CODE" "$OUT"
+assert_eq "was_enabled=1 token=4242" "$(tr '\n' ' ' <"$FL_STATE_DIR/lan-guard/pf.state" | sed 's/ $//')"
+reset_calls
+lg_gui remove --yes
+assert_eq 0 "$CODE" "$OUT"
+assert_calls_not_contain '^pfctl -X'
+clean
 
 # ---------------------------------------------------------------- allow-node: the realpath, unchanged when allowed or off
 clean; rm -f "$MOCK_STATE/osa_reasons"

@@ -5,6 +5,15 @@
 # shellcheck source=tests/mocks/bin/_mocklib.sh
 . "${0%/*}/_mocklib.sh"
 mock_log "$@"
+# "-s info" says Enabled while $MOCK_STATE/pf_enabled exists; "-E" prints the token pf hands out
+# ($MOCK_STATE/pf_token, else 4242), on stderr like the real one
+if [[ "${1:-}" == -s && "${2:-}" == info ]]; then
+  if [[ -f "${MOCK_STATE:-/nonexistent}/pf_enabled" ]]; then printf 'Status: Enabled for 0 days 00:01:00           Debug: Urgent\n'; else printf 'Status: Disabled\n'; fi
+  exit 0
+fi
+if [[ "${1:-}" == -E ]]; then
+  printf 'pf enabled\nToken : %s\n' "$(cat "${MOCK_STATE:-/nonexistent}/pf_token" 2>/dev/null || printf 4242)" >&2
+fi
 if [[ "${1:-}" == -E && -f "${MOCK_STATE:-/nonexistent}/pfctl_loads" ]]; then
   cp "$MOCK_STATE/pfctl_loads" "$MOCK_STATE/lan_reachable_ports"
 fi
