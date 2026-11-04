@@ -18,6 +18,9 @@ lab~lan-rooms~Share with people on the same Wi-Fi~Let colleagues on the office W
 lab~quick-switch~Quick Switch panel~A panel on a global keyboard shortcut to open a site as any pinned user.~Holds a system wide keyboard shortcut while the app runs.~0.9.0~~macos
 TABLE
 
+# The readers loop over the variable with a here string, never over a pipe: a
+# loop that returns early would close the pipe on a writer still printing, and
+# Linux bash then prints "printf: write error: Broken pipe" into the output
 fl_lab_table() { printf '%s\n' "$FL_LAB_TABLE"; }
 
 # fl_lab_names_v VAR: every known lab name, space separated
@@ -25,7 +28,7 @@ fl_lab_names_v() {
   local __l __k __r=""
   while IFS='~' read -r __l __k _; do
     [[ "$__l" == lab ]] && __r="${__r}${__r:+ }${__k}"
-  done < <(fl_lab_table)
+  done <<<"$FL_LAB_TABLE"
   printf -v "$1" '%s' "$__r"
 }
 
@@ -34,7 +37,7 @@ fl_lab_known() {
   local k n
   while IFS='~' read -r k n _; do
     [[ "$k" == lab && "$n" == "$1" ]] && return 0
-  done < <(fl_lab_table)
+  done <<<"$FL_LAB_TABLE"
   return 1
 }
 
@@ -45,7 +48,7 @@ fl_lab_attr_v() {
     [[ "$__k" == lab && "$__n" == "$2" ]] || continue
     case "$3" in title) __r="$__t" ;; description) __r="$__d" ;; warning) __r="$__w" ;; since) __r="$__s" ;; commands) __r="$__c" ;; platforms) __r="$__p" ;; esac
     break
-  done < <(fl_lab_table)
+  done <<<"$FL_LAB_TABLE"
   printf -v "$1" '%s' "$__r"
 }
 
@@ -92,7 +95,7 @@ fl_lab_of_cmd() {
     for x in ${cmds[@]+"${cmds[@]}"}; do
       [[ "$x" == "$1" ]] && { printf '%s' "$n"; return 0; }
     done
-  done < <(fl_lab_table)
+  done <<<"$FL_LAB_TABLE"
   return 0
 }
 
@@ -122,7 +125,7 @@ fl_lab_hidden_v() {
   while IFS='~' read -r __k __n _ _ _ _ __c _; do
     [[ "$__k" == lab && -n "$__c" ]] || continue
     fl_lab_on "$__n" || __r="${__r}${__r:+ }${__c//,/ }"
-  done < <(fl_lab_table)
+  done <<<"$FL_LAB_TABLE"
   printf -v "$1" '%s' "$__r"
 }
 
@@ -192,7 +195,7 @@ fl_labs_json() {
     fl_lab_available "$n" && av=true || av=false
     out="${out}${sep}{\"name\":$(fl_json_str "$n"),\"title\":$(fl_json_str "$t"),\"description\":$(fl_json_str "$d"),\"warning\":$(fl_json_str "$w"),\"since\":$(fl_json_str "$s"),\"enabled\":${en},\"commands\":[${cmds}],\"platforms\":[${plats}],\"available\":${av}}"
     sep=","
-  done < <(fl_lab_table)
+  done <<<"$FL_LAB_TABLE"
   printf '{"schema_version":%d,"labs":[%s]}\n' "${FL_SCHEMA_VERSION:-1}" "$out"
 }
 
