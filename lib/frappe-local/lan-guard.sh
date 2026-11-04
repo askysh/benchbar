@@ -144,7 +144,7 @@ case "$("$pfctl" -s info 2>/dev/null || true)" in *"Status: Enabled"*) pf_was=1 
 pf_out="$("$pfctl" -E -a "$pf_anchor" -f "$anchor" 2>&1)" || { printf '%s\n' "$pf_out" >&2; exit 1; }
 printf '%s\n' "$pf_out" >&2
 printf 'benchbar-pf-was-enabled %s\n' "$pf_was"
-pf_token="$(printf '%s\n' "$pf_out" | sed -n 's/^[Tt]oken *: *\([0-9][0-9]*\).*$/\1/p' | head -n 1)"
+pf_token="$(printf '%s\n' "$pf_out" | sed -n 's/^[Tt]oken *: *\([0-9][0-9]*\).*$/\1/p' | awk 'NR==1')"
 if [ -n "$pf_token" ]; then printf 'benchbar-pf-token %s\n' "$pf_token"; fi
 if "$launchctl" print "system/$label" >/dev/null 2>&1; then
   "$launchctl" kickstart -k "system/$label"
@@ -171,7 +171,7 @@ fl_lg_pf_record() {
   local f dir was="" tokens="" line
   f="$(fl_lg_pf_state)"; dir="${f%/*}"
   if [[ -f "$f" ]]; then
-    was="$(sed -n 's/^was_enabled=\([01]\)$/\1/p' "$f" | head -n 1)"
+    was="$(sed -n 's/^was_enabled=\([01]\)$/\1/p' "$f" | awk 'NR==1')"
     tokens="$(sed -n 's/^token=\([0-9][0-9]*\)$/\1/p' "$f")"
   fi
   while IFS= read -r line; do
@@ -194,7 +194,7 @@ fl_lg_pf_tokens_v() {
   f="$(fl_lg_pf_state)"
   printf -v "$1" '%s' ""
   [[ -f "$f" ]] || return 0
-  was="$(sed -n 's/^was_enabled=\([01]\)$/\1/p' "$f" | head -n 1)"
+  was="$(sed -n 's/^was_enabled=\([01]\)$/\1/p' "$f" | awk 'NR==1')"
   [[ "$was" == 0 ]] || return 0
   t="$(sed -n 's/^token=\([0-9][0-9]*\)$/\1/p' "$f" | tr '\n' ' ')"
   printf -v "$1" '%s' "${t% }"

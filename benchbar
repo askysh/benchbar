@@ -1426,9 +1426,6 @@ fl_noninteractive_preflight() {
   fl_need_check
 }
 
-# the one place a lab gates its commands: refused (exit 2) while the lab is off
-fl_lab_gate "${FL_JSON_KEY:-$COMMAND}"
-
 # the stream starts first, so that a refusal (the preflight) is a done line and not silence:
 # install and adopt with --json before the log and the lock (fl_jsonl_start runs the preflight)
 if [[ "$OPT_JSON" == "1" && ( "$COMMAND" == "install" || "$COMMAND" == "adopt" ) ]]; then
@@ -1436,6 +1433,10 @@ if [[ "$OPT_JSON" == "1" && ( "$COMMAND" == "install" || "$COMMAND" == "adopt" )
 else
   # the other commands that stream (or whose document the stream wraps)
   if [[ "$FL_JSON_MODE" == "stream" || ( "$FL_JSON_MODE" == "doc" && "$OPT_JSONL" == "1" ) ]]; then fl_jsonl_begin_generic; fi
+  # the lab gate comes after the stream starts (a stream gets its done line, a --json
+  # document its error object) and before the preflight (a lab that is off is exit 2, not
+  # a missing input)
+  fl_lab_gate "${FL_JSON_KEY:-$COMMAND}"
   fl_noninteractive_preflight
 fi
 
@@ -1448,6 +1449,12 @@ case "$COMMAND" in
   register|self-update)
     fl_log_init "${FL_STATE_DIR}/logs"
     fl_lock_acquire "${FL_STATE_DIR}/lock" ;;
+  # labs on and off write the state file and off may stop a share; list and status read
+  labs)
+    if [[ "${ARGS[0]:-}" == "on" || "${ARGS[0]:-}" == "off" ]]; then
+      fl_log_init "${FL_STATE_DIR}/logs"
+      fl_lock_acquire "${FL_STATE_DIR}/lock"
+    fi ;;
   # doctor reads; --ack and --unack write the bench's state file, under the lock
   doctor)
     if [[ -n "$OPT_ACK" || -n "$OPT_UNACK" ]]; then

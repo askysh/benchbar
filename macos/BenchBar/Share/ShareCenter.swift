@@ -50,8 +50,9 @@ final class ShareCenter {
     }
 
     /// The lan-rooms lab went off (the CLI's `labs off` already stopped a running share): polling,
-    /// the network monitor and the wake observer end, the stores go, the saved list is cleared and
-    /// the menu bar dot is off.
+    /// the network monitor and the wake observer end, the stores go and the menu bar dot is off.
+    /// The saved list stays: only the CLI's `labs off` really stopped the shares, and a refresh that
+    /// reports off must not make the app forget which benches were sharing.
     func tearDown() {
         for store in stores.values { store.shutDown() }
         stores.removeAll()
@@ -60,7 +61,6 @@ final class ShareCenter {
         if let wakeObserver { NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver) }
         wakeObserver = nil
         sawFirstPath = false
-        defaults.removeObject(forKey: Self.activeKey)
         if icon != .off {
             icon = .off
             onIconChange?(.off)

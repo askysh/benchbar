@@ -560,3 +560,4 @@ Asked for after the phases, to stop naming drift before the first release.
 ## Labs
 
 - Labs toggles live in Settings and read the CLI's LABS key; the app never stores the flags itself, so the CLI, MCP and app agree. `Labs.shared` refreshes at launch, when Settings appears and when the window becomes key (at most every 5 s); turning one on passes `--yes` with BENCHBAR_NONINTERACTIVE=0 and BENCHBAR_SUDO=gui, as `site open-as on` does. A non zero exit from `labs list` is read as a CLI without the command.
+- When the lan-rooms lab reads off, `ShareCenter.tearDown` stops watching and drops the stores but keeps `shareActiveBenches`: only the CLI's `labs off` really stops shares, so a refresh that reports off must not forget which benches were sharing.

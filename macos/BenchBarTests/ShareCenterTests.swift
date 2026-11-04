@@ -27,4 +27,20 @@ struct ShareCenterTests {
         center.restoreActive(among: ["/a", "/b"])
         #expect(center.stores.isEmpty && !center.isWatching)
     }
+
+    @Test func offeringSetupDoesNotCreateAStore() throws {
+        let center = ShareCenter(defaults: try defaults())
+        center.attach(BenchStore(settings: AppSettings(defaults: try defaults())))
+        #expect(SharePopoverRows.offersSetup(center: center, bench: "/a"), "no store means not set up")
+        #expect(center.stores.isEmpty && !center.isWatching, "rendering the row starts nothing")
+    }
+
+    @Test func tearDownKeepsTheSavedList() throws {
+        let defaults = try defaults()
+        defaults.set(["/b"], forKey: ShareCenter.activeKey)
+        let center = ShareCenter(defaults: defaults)
+        center.tearDown()
+        #expect(center.savedActive == ["/b"], "a refresh that reports off does not forget who was sharing")
+        #expect(center.stores.isEmpty && !center.isWatching)
+    }
 }

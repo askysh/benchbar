@@ -108,6 +108,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover.onOpenChange = { [weak self] open in
             guard let self else { return }
             store.setPopoverOpen(open)
+            if open { Labs.shared.refreshIfStale() }
             // Rooms are browsed only while the popover is open, and never before the pane's
             // explanation, so the Local Network prompt does not appear at an odd time.
             if open && Labs.shared.isOn(.lanRooms) && UserDefaults.standard.bool(forKey: NetworkPanePresentation.explainedKey) {
@@ -164,6 +165,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // open, close, occlusion and the page: the window's views stay alive
         // when it closes, so the store hears of them from the controller
         mainWindow.onKey = { Task { await Labs.shared.refresh() } }
+        NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
+            Task { @MainActor in Labs.shared.refreshIfStale() }
+        }
         mainWindow.onSight = { [weak self] sight in self?.store.setWindow(sight) }
 
         logWindows = LogWindowController { [weak self] path in self?.openLogsInTerminal(path) }

@@ -24,6 +24,14 @@ for c in "share status" "share setup" "lan-guard status" "lan-guard install"; do
 done
 run_fm share status --json --bench-dir "$BENCH"
 assert_eq "2" "$CODE" "$OUT"
+# a stream command is refused by the gate (a done line, exit 2), not by the preflight (exit 1)
+# that wants a person at a terminal; one valid JSON line and no MariaDB hint
+set +e
+OUT="$(BENCHBAR_NONINTERACTIVE=1 "$FM" share start --json --bench-dir "$BENCH" 2>/dev/null)"; CODE=$?
+set -e
+assert_eq "2" "$CODE" "$OUT"
+assert_eq "done 2 True" "$(printf '%s' "$OUT" | jget - 'd["event"], d["exit"], "experiment" in d["error"]' | tr -d "',()" )"
+assert_not_contains "$OUT" "MARIADB"
 run_fm --help
 assert_not_contains "$OUT" "  share "
 assert_not_contains "$OUT" "lan-guard"
