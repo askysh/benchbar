@@ -69,11 +69,38 @@ nonisolated final class FakeLabsBackend: @unchecked Sendable {
 
     @Test func missingCommandIsUnsupported() async {
         let backend = FakeLabsBackend()
-        backend.result = .failure(.failed(command: "labs", exitCode: 1, message: "Unknown command"))
+        backend.result = .failure(.failed(command: "labs", exitCode: 1, message: "[FAIL] Unknown command: labs"))
         let labs = Labs(loader: backend.loader)
         await labs.refresh()
         #expect(labs.availability == .unsupported)
         #expect(labs.entries.isEmpty)
+    }
+
+    @Test func missingCliIsReported() async {
+        let backend = FakeLabsBackend()
+        backend.result = .failure(.notFound(searched: []))
+        let labs = Labs(loader: backend.loader)
+        await labs.refresh()
+        #expect(labs.availability == .cliMissing)
+    }
+
+    @Test func otherFailureKeepsEntriesAndShowsMessage() async throws {
+        let backend = FakeLabsBackend()
+        backend.result = .success(try Self.entries())
+        var clock = Date(timeIntervalSince1970: 1000)
+        let labs = Labs(loader: backend.loader, now: { clock })
+        var flips = 0
+        labs.observeAll { _, _ in flips += 1 }
+        await labs.refresh()
+        let flipsBefore = flips
+        backend.result = .failure(.failed(command: "labs", exitCode: 1, message: "[FAIL] lock busy"))
+        clock += 10
+        await labs.refresh()
+        #expect(labs.availability == .available)
+        #expect(labs.entries.count == 3)
+        #expect(labs.isOn(.lanRooms))
+        #expect(flips == flipsBefore)
+        #expect(labs.refreshError == "[FAIL] lock busy")
     }
 
     @Test func setCallsLoaderAndFlipsState() async throws {

@@ -130,6 +130,16 @@ fl_lab_hidden_v() {
 fl_lab_require() {
   fl_lab_on "$1" && return 0
   FL_EXIT2_NOT_PASSWORD=1
+  # a --json document command (a stream gets its done line from fl_die's exit)
+  # answers with its error object on stdout, the text on stderr
+  if [[ "${OPT_JSON:-0}" == "1" && "${FL_JSONL:-0}" != "1" ]]; then
+    local msg="benchbar ${2:-${COMMAND:-this command}} is an experiment and it is off." f
+    printf '%s Turn it on: benchbar labs on %s\n' "$msg" "$1" >&2
+    FL_DONE_NO_BENCH=1; FL_DONE_NO_STATE=1
+    fl_done_fields_v f 2
+    printf '{"schema_version":%d,"cli_version":"%s",%s,"error":%s}\n' "${FL_SCHEMA_VERSION:-1}" "${FL_VERSION:-0}" "$f" "$(fl_json_str "$msg")"
+    exit 2
+  fi
   fl_die "benchbar ${2:-${COMMAND:-this command}} is an experiment and it is off." "Turn it on: benchbar labs on $1" 2
 }
 
