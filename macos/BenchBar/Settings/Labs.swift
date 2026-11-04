@@ -48,8 +48,15 @@ final class Labs {
     /// The last failure per name, shown under its row.
     private(set) var errors: [String: String] = [:]
 
-    /// A feature hears of a flip here (unregister a hotkey, hide a pane).
-    @ObservationIgnored var onChange: ((Lab, Bool) -> Void)?
+    /// Returned by `observe`; `cancel()` removes that one handler.
+    final class ObservationToken {
+        private var onCancel: (() -> Void)?
+        fileprivate init(_ onCancel: @escaping () -> Void) { self.onCancel = onCancel }
+        func cancel() { onCancel?(); onCancel = nil }
+    }
+
+    @ObservationIgnored private var observers: [(id: Int, lab: Lab?, handler: (Lab, Bool) -> Void)] = []
+    @ObservationIgnored private var nextObserverID = 0
     @ObservationIgnored var loader: LabsLoader
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private var lastRefresh: Date?
@@ -114,9 +121,32 @@ final class Labs {
         errors[lab.rawValue] = message
     }
 
+    /// A feature hears of a flip of one lab (unregister a hotkey, hide a pane).
+    /// Any number of features can observe the same lab; keep the token to cancel.
+    @discardableResult
+    func observe(_ lab: Lab, _ handler: @escaping @MainActor (Bool) -> Void) -> ObservationToken {
+        add(lab) { _, on in handler(on) }
+    }
+
+    /// Every flip of every lab.
+    @discardableResult
+    func observeAll(_ handler: @escaping @MainActor (Lab, Bool) -> Void) -> ObservationToken {
+        add(nil, handler)
+    }
+
+    private func add(_ lab: Lab?, _ handler: @escaping (Lab, Bool) -> Void) -> ObservationToken {
+        let id = nextObserverID
+        nextObserverID += 1
+        observers.append((id, lab, handler))
+        return ObservationToken { [weak self] in self?.observers.removeAll { $0.id == id } }
+    }
+
     private func apply(_ fresh: [LabEntry]) {
         let before = Dictionary(Lab.allCases.map { ($0, isOn($0)) }) { first, _ in first }
         entries = fresh
-        for lab in Lab.allCases where before[lab] != isOn(lab) { onChange?(lab, isOn(lab)) }
+        for lab in Lab.allCases where before[lab] != isOn(lab) {
+            let on = isOn(lab)
+            for observer in observers where observer.lab == nil || observer.lab == lab { observer.handler(lab, on) }
+        }
     }
 }

@@ -1091,11 +1091,14 @@ Exit 0. An argument other than `--json` exits 1.
 `labs list --json` is one document, with no done fields:
 
 ```json
-{"schema_version":1,"labs":[{"name":"lan-rooms","title":"...","description":"...","warning":"...","since":"0.9.0","enabled":false,"commands":["share","lan-guard"]}]}
+{"schema_version":1,"labs":[{"name":"lan-rooms","title":"...","description":"...","warning":"...","since":"0.9.0","enabled":false,"commands":["share","lan-guard"],"platforms":["macos"],"available":false}]}
 ```
 
 `commands` are the top level commands the lab gates (it may be empty, or name
-a command this version does not have). `labs status NAME --json` is
+a command this version does not have). `platforms` is the list the lab runs
+on (`macos`, `linux`, `windows`) and `available` is true when this machine is
+one of them (WSL counts as `windows` and also runs a `linux` lab). `labs on`
+exits 1 with "NAME is not available on PLATFORM yet" when it is not. `labs status NAME --json` is
 `{"schema_version":1,"name":"lan-rooms","enabled":false}` and exits 1 when off.
 `labs on` and `labs off` stream like `site open-as`: the `done` line carries
 `lab`, `enabled` and the [done fields](#the-done-fields-08). `labs on` exits 2

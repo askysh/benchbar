@@ -142,7 +142,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // the key is registered when the CLI says the lab is on (Labs.refresh below), never before
         quickSwitch = QuickSwitchController(store: store, labs: Labs.shared)
-        Labs.shared.onChange = { [weak self] lab, _ in if lab == .quickSwitch { self?.quickSwitch.sync() } }
+        Labs.shared.observe(.quickSwitch) { [weak self] _ in self?.quickSwitch.sync() }
 
         Task {
             await store.start()

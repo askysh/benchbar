@@ -8,13 +8,14 @@
 # `commands --json`, and running one is refused with exit 2.
 #
 # Records are lines with fields separated by `~` (no field holds one):
-#   lab~NAME~TITLE~DESCRIPTION~WARNING~SINCE~COMMANDS
+#   lab~NAME~TITLE~DESCRIPTION~WARNING~SINCE~COMMANDS~PLATFORMS
 # COMMANDS is a comma separated list of command names, may be empty, and may
-# name commands that do not exist yet.
+# name commands that do not exist yet. PLATFORMS is a comma separated list
+# from macos, linux, windows (Windows is Linux inside WSL).
 
 read -r -d '' FL_LAB_TABLE <<'TABLE' || true
-lab~lan-rooms~Share with people on the same Wi-Fi~Open a room so colleagues on the office network can browse a hardened copy of a site as a seat you pick.~Installs a pf firewall anchor with sudo and runs a gateway on port 8443. A share stays up until you stop it.~0.9.0~share,lan-guard
-lab~quick-switch~Quick Switch panel~A panel on a global keyboard shortcut to open a site as any pinned user.~Registers a system wide hotkey while the app runs.~0.9.0~
+lab~lan-rooms~Share with people on the same Wi-Fi~Let colleagues on the office Wi-Fi browse a hardened copy of a site, signed in as a user you choose.~Asks for your password once to install a firewall rule, and opens port 8443 on this Mac while a share is on. A share stays up until you stop it.~0.9.0~share,lan-guard~macos
+lab~quick-switch~Quick Switch panel~A panel on a global keyboard shortcut to open a site as any pinned user.~Holds a system wide keyboard shortcut while the app runs.~0.9.0~~macos
 TABLE
 
 fl_lab_table() { printf '%s\n' "$FL_LAB_TABLE"; }
@@ -37,12 +38,12 @@ fl_lab_known() {
   return 1
 }
 
-# fl_lab_attr_v VAR NAME FIELD: title, description, warning, since or commands of a lab
+# fl_lab_attr_v VAR NAME FIELD: title, description, warning, since, commands or platforms of a lab
 fl_lab_attr_v() {
-  local __k __n __t __d __w __s __c __r=""
-  while IFS='~' read -r __k __n __t __d __w __s __c; do
+  local __k __n __t __d __w __s __c __p __r=""
+  while IFS='~' read -r __k __n __t __d __w __s __c __p; do
     [[ "$__k" == lab && "$__n" == "$2" ]] || continue
-    case "$3" in title) __r="$__t" ;; description) __r="$__d" ;; warning) __r="$__w" ;; since) __r="$__s" ;; commands) __r="$__c" ;; esac
+    case "$3" in title) __r="$__t" ;; description) __r="$__d" ;; warning) __r="$__w" ;; since) __r="$__s" ;; commands) __r="$__c" ;; platforms) __r="$__p" ;; esac
     break
   done < <(fl_lab_table)
   printf -v "$1" '%s' "$__r"
@@ -85,7 +86,7 @@ fl_lab_set() {
 # fl_lab_of_cmd CMD: the lab that gates the top level command CMD, or nothing
 fl_lab_of_cmd() {
   local k n c cmds x
-  while IFS='~' read -r k n _ _ _ _ c; do
+  while IFS='~' read -r k n _ _ _ _ c _; do
     [[ "$k" == lab ]] || continue
     IFS=',' read -r -a cmds <<<"$c"
     for x in ${cmds[@]+"${cmds[@]}"}; do
@@ -95,10 +96,30 @@ fl_lab_of_cmd() {
   return 0
 }
 
+# fl_lab_platform_v VAR: the platform this run is on: macos, linux or windows
+# (Linux inside WSL)
+fl_lab_platform_v() {
+  if [[ "${FL_PLATFORM:-macos}" != linux ]]; then printf -v "$1" macos
+  elif declare -F fl_is_wsl >/dev/null && fl_is_wsl; then printf -v "$1" windows
+  else printf -v "$1" linux; fi
+}
+
+# fl_lab_available NAME: true when the lab lists this platform (a lab on
+# linux also runs in WSL)
+fl_lab_available() {
+  local p plat x
+  fl_lab_attr_v p "$1" platforms
+  fl_lab_platform_v plat
+  for x in ${p//,/ }; do
+    [[ "$x" == "$plat" || ( "$plat" == windows && "$x" == linux ) ]] && return 0
+  done
+  return 1
+}
+
 # fl_lab_hidden_v VAR: the commands of every lab that is off, space separated
 fl_lab_hidden_v() {
   local __k __n __c __r=""
-  while IFS='~' read -r __k __n _ _ _ _ __c; do
+  while IFS='~' read -r __k __n _ _ _ _ __c _; do
     [[ "$__k" == lab && -n "$__c" ]] || continue
     fl_lab_on "$__n" || __r="${__r}${__r:+ }${__c//,/ }"
   done < <(fl_lab_table)
@@ -148,14 +169,18 @@ fl_lab_cleanup() {
 
 # fl_labs_json: the document of `labs list --json`
 fl_labs_json() {
-  local k n t d w s c sep="" out="" en cmds x csep arr
-  while IFS='~' read -r k n t d w s c; do
+  local k n t d w s c p sep="" out="" en av cmds x csep arr plats psep parr
+  while IFS='~' read -r k n t d w s c p; do
     [[ "$k" == lab ]] || continue
     fl_lab_on "$n" && en=true || en=false
     cmds=""; csep=""
     IFS=',' read -r -a arr <<<"$c"
     for x in ${arr[@]+"${arr[@]}"}; do cmds="${cmds}${csep}$(fl_json_str "$x")"; csep=","; done
-    out="${out}${sep}{\"name\":$(fl_json_str "$n"),\"title\":$(fl_json_str "$t"),\"description\":$(fl_json_str "$d"),\"warning\":$(fl_json_str "$w"),\"since\":$(fl_json_str "$s"),\"enabled\":${en},\"commands\":[${cmds}]}"
+    plats=""; psep=""
+    IFS=',' read -r -a parr <<<"$p"
+    for x in ${parr[@]+"${parr[@]}"}; do plats="${plats}${psep}$(fl_json_str "$x")"; psep=","; done
+    fl_lab_available "$n" && av=true || av=false
+    out="${out}${sep}{\"name\":$(fl_json_str "$n"),\"title\":$(fl_json_str "$t"),\"description\":$(fl_json_str "$d"),\"warning\":$(fl_json_str "$w"),\"since\":$(fl_json_str "$s"),\"enabled\":${en},\"commands\":[${cmds}],\"platforms\":[${plats}],\"available\":${av}}"
     sep=","
   done < <(fl_lab_table)
   printf '{"schema_version":%d,"labs":[%s]}\n' "${FL_SCHEMA_VERSION:-1}" "$out"
@@ -189,6 +214,7 @@ fl_cmd_labs() {
     for n in $all; do
       fl_lab_on "$n" && state=on || state=off
       fl_lab_attr_v t "$n" title
+      fl_lab_available "$n" || t="${t} (not on this platform)"
       rows+=("${n}|${state}|${t}")
     done
     fl_table "${rows[@]}"
@@ -199,6 +225,11 @@ fl_cmd_labs() {
   [[ -n "$name" ]] || fl_die "benchbar labs ${action} needs a lab name." "Names: ${n}. Example: benchbar labs ${action} quick-switch"
   fl_lab_known "$name" || fl_die "Unknown lab: ${name}" "Names: ${n}"
   fl_lab_on "$name" && on_now=true
+  if [[ "$action" == on ]] && ! fl_lab_available "$name"; then
+    fl_lab_platform_v t
+    fl_lab_attr_v w "$name" platforms
+    fl_die "${name} is not available on ${t} yet" "It lists these platforms: ${w//,/, }"
+  fi
   if [[ "$action" == status ]]; then
     if [[ "${OPT_JSON:-0}" == "1" ]]; then
       printf '{"schema_version":%d,"name":%s,"enabled":%s}\n' "${FL_SCHEMA_VERSION:-1}" "$(fl_json_str "$name")" "$on_now"

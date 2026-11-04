@@ -336,7 +336,7 @@ struct QuickSwitchTests {
         key.accept = accept
         let controller = QuickSwitchController(store: BenchStore(settings: AppSettings(defaults: UserDefaults(suiteName: "benchbar-tests-\(UUID().uuidString)")!)),
                                                labs: labs, hotKey: key)
-        labs.onChange = { lab, _ in if lab == .quickSwitch { controller.sync() } }
+        labs.observe(.quickSwitch) { _ in controller.sync() }
         controller.sync()
         return (labs, controller, key, backend)
     }
