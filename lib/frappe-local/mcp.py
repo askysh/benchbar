@@ -46,6 +46,9 @@ BENCH = {
 # the logs_tail "file" values and the CLI flags they stand for
 LOG_FILES = {"bench": [], "worker": ["--worker"], "worker_error": ["--worker-error"], "previous": ["--previous"]}
 
+# tool name -> the lab (`benchbar labs`) that must be on for the tool to exist; none yet
+LAB_OF = {}
+
 # name -> (description, extra input properties, argv builder, read only, exit codes that still carry JSON)
 TOOLS = {
     "benchbar_list": (
@@ -675,9 +678,23 @@ def annotations(name, read_only):
     return a
 
 
+def labs_enabled():
+    """The names of the labs that are on (`labs list --json`); run once per tools/list, and only when a tool is gated."""
+    if not LAB_OF:
+        return set()
+    try:
+        code, out, _err = run_cli(["labs", "list", "--json"], timeout=30)
+        return {l["name"] for l in json.loads(out)["labs"] if l["enabled"]} if code == 0 else set()
+    except (ValueError, KeyError, OSError, subprocess.TimeoutExpired):
+        return set()
+
+
 def tool_list():
     tools = []
+    on = labs_enabled()
     for name, (description, props, _argv, read_only, _codes) in TOOLS.items():
+        if name in LAB_OF and LAB_OF[name] not in on:
+            continue
         schema = {"type": "object", "properties": props, "additionalProperties": False}
         if name in REQUIRED:
             schema["required"] = REQUIRED[name]
@@ -848,7 +865,7 @@ def tool_call(params, call=None):
     arguments = params.get("arguments") or {}
     if not isinstance(arguments, dict):
         raise RpcError(-32602, "arguments must be an object")
-    if name not in TOOLS:
+    if name not in TOOLS or (name in LAB_OF and LAB_OF[name] not in labs_enabled()):
         raise RpcError(-32602, "unknown tool: %s" % name)
     _description, props, build, read_only, codes = TOOLS[name]
     unknown = [k for k in arguments if k not in props]
