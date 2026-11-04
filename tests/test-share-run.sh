@@ -513,11 +513,12 @@ finish_runner
 reset_order; : >"$MOCK_STATE/dns_die"; export BENCHBAR_SHARE_STABLE_POLLS=10
 start_runner
 wait_for 15 bash -c '[[ "$(grep -c "^dns-sd " "$1")" -ge 2 ]]' _ "$MOCK_STATE/order"
-wait_for 5 test -f "$SHARE_DIR/degraded"
+# the runner writes the file before it logs the line, so wait on the line
+wait_for 5 grep -q "dns-sd ended; starting it again in 5 polls" "$TMP_DIR/runner.log"
 assert_contains "$(cat "$SHARE_DIR/degraded")" "Bonjour"
-assert_contains "$(cat "$TMP_DIR/runner.log")" "dns-sd ended; starting it again in 5 polls"
-wait_for 10 bash -c '! test -f "$1"' _ "$SHARE_DIR/degraded"
-assert_contains "$(cat "$TMP_DIR/runner.log")" "no longer degraded"
+# the runner removes the file before it logs the line, so wait on the line
+wait_for 20 grep -q "no longer degraded" "$TMP_DIR/runner.log"
+assert_eq "False" "$(test -f "$SHARE_DIR/degraded" && echo True || echo False)"
 assert_eq "False" "$(runner_gone && echo True || echo False)"
 kill -TERM "$RUNNER_PID"; wait_for 15 runner_gone
 finish_runner
