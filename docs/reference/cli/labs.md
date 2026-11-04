@@ -37,4 +37,4 @@ the environment replaces the saved list, for tests and CI.
 | `lan-rooms` | Let colleagues on the office Wi-Fi browse a hardened copy of a site, signed in as a user you choose. Commands: `share`, `lan-guard`. | 0.9.0 | macOS |
 | `quick-switch` | A panel on a global keyboard shortcut to open a site as any pinned user. | 0.9.0 | macOS |
 
-The JSON is in [the JSON reference](../../json-schema.md#benchbar-labs-json).
+The JSON is in [the JSON reference](../../json-schema.md#benchbar-labs---json).
