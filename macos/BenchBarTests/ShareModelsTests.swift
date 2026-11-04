@@ -260,12 +260,9 @@ struct ShareStoreTests {
         let fake = FakeShareCLI([on()])
         fake.actionFailure = .failed(command: "share", exitCode: 1, message: "d_00000000 is not in the room.")
         let store = ShareStore(bench: "/b", client: fake, log: { _ in })
-        var benchError: String?
-        store.onError = { benchError = $0 }
         let ok = await store.remove(SharePerson(id: "d_00000000", name: "Sam"), newCode: false)
         #expect(!ok)
         #expect(store.lastError == "d_00000000 is not in the room.")
-        #expect(benchError == "d_00000000 is not in the room.")
     }
 
     @Test func theCodeIsInNoDefaultsKeyNoLogLineAndNoEvent() async throws {

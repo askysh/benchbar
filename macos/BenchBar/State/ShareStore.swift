@@ -117,8 +117,6 @@ final class ShareStore {
     @ObservationIgnored var onEvent: ((ShareEvent) -> Void)?
     /// Every status read, for the menu bar and the popover.
     @ObservationIgnored var onStatus: (() -> Void)?
-    /// Errors also land on the bench (`BenchModel.lastError`), like Open as.
-    @ObservationIgnored var onError: ((String) -> Void)?
     @ObservationIgnored private let client: any ShareCLI
     @ObservationIgnored private let clock: () -> Date
     @ObservationIgnored private let sleeper: @Sendable (Duration) async -> Void
@@ -382,6 +380,5 @@ final class ShareStore {
         }
         lastError = text
         logLine("share: error")
-        onError?(text)
     }
 }

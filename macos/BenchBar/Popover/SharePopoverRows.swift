@@ -41,6 +41,9 @@ struct SharePopoverRows: View {
                     .controlSize(.small)
                     .disabled(share.busy != nil)
                 }
+                if let error = share.lastError {
+                    Text(error).font(.caption).foregroundStyle(.red).lineLimit(2)
+                }
             }
         }
     }
