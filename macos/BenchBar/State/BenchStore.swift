@@ -444,11 +444,12 @@ final class BenchStore {
     static let busyMessage = "Another change is still running; try again when it has finished."
 
     /// Start, stop or restart. Returns the error text, nil on success;
-    /// "busy" when another change holds the slot.
+    /// "busy" when another change holds the slot. `fromLink` is a
+    /// `benchbar://` link: it skips the room confirm (see DECISIONS.md).
     @discardableResult
-    func perform(_ action: CLIClient.Action, on bench: BenchModel) async -> String? {
+    func perform(_ action: CLIClient.Action, on bench: BenchModel, fromLink: Bool = false) async -> String? {
         guard canChange(bench) else { return Self.busyMessage }
-        if action != .up, let confirm = confirmWhileSharing, !confirm(action, bench) { return nil }
+        if action != .up, !fromLink, let confirm = confirmWhileSharing, !confirm(action, bench) { return nil }
         return await run(action, on: bench)
     }
 
