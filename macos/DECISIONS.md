@@ -537,3 +537,7 @@ Asked for after the phases, to stop naming drift before the first release.
 - `docs/images/runners.png` keeps only the Bench and the Cup, since `scripts/social-preview.swift` cuts the bench's running row out of it by pixel position. The new five have their own sheet, `docs/images/runners-more.png`.
 - The Plane, the Snail and the Rocket were drawn bolder after the tray's 16 px test: at that size (0.67 px a point) they had 16 to 25 solid pixels against the Bench's 50. The rocket is a fifth larger, the plane deeper in the wing and the keel, the shell larger with thinner spiral cuts.
 - The five new ids are reserved like `bench` and `cup`. A custom runner folder with one of those names now shows an error instead of loading; the changelog says so.
+
+## Labs
+
+- Labs toggles live in Settings and read the CLI's LABS key; the app never stores the flags itself, so the CLI, MCP and app agree. `Labs.shared` refreshes at launch, when Settings appears and when the window becomes key (at most every 5 s); turning one on passes `--yes` with BENCHBAR_NONINTERACTIVE=0 and BENCHBAR_SUDO=gui, as `site open-as on` does. A non zero exit from `labs list` is read as a CLI without the command.

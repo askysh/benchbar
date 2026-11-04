@@ -60,6 +60,7 @@ struct SettingsView: View {
                         editorSection
                         quickSwitchSection
                         shortcutsSection.id(Self.shortcutsID)
+                        labsSection
                     case .menuBar:
                         previewSection
                         runnerSection
@@ -76,6 +77,41 @@ struct SettingsView: View {
             library.reload()
             launchAtLogin.refresh()
             Task { await notifier.refresh() }
+            Task { await Labs.shared.refresh() }
+        }
+    }
+
+    // MARK: labs
+
+    @ViewBuilder private var labsSection: some View {
+        let labs = Labs.shared
+        Section {
+            if labs.availability == .unsupported {
+                Text("Update the CLI to use Labs").foregroundStyle(.secondary)
+            } else {
+                ForEach(labs.entries) { entry in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Toggle(isOn: Binding(
+                            get: { entry.enabled },
+                            set: { on in Task { try? await labs.set(name: entry.name, on: on) } })) {
+                            Text(entry.title)
+                            Text(entry.description)
+                        }
+                        .disabled(labs.busy.contains(entry.name))
+                        Label(entry.warning, systemImage: "exclamationmark.triangle.fill")
+                            .font(.callout)
+                            .foregroundStyle(.orange)
+                        Text("since \(entry.since)").font(.caption).foregroundStyle(.secondary)
+                        if let error = labs.errors[entry.name] {
+                            Text(error).font(.callout).foregroundStyle(.red)
+                        }
+                    }
+                }
+            }
+        } header: {
+            Text("Labs")
+        } footer: {
+            Text("Experiments can change or disappear. Turning one off stops what it started.")
         }
     }
 

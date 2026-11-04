@@ -220,6 +220,13 @@ About.
 - **Menu Bar**: the runner, with a live preview and custom runners, see
   [Custom runners](runners.md).
 
+**Labs** (the last section of General) lists experiments that can change
+or disappear. Each has a switch, what it does, a warning and the version
+it first came in. The switch runs `benchbar labs on` or `off`: the command
+line tool keeps the flag, so the terminal, coding agents and the app always
+agree. With a command line tool that has no `labs` command, the section
+says to update it.
+
 **About BenchBar** shows the app's version and the command line tool's
 (with its path), **Check for Updates** (with **Update Now** when a newer
 release is out, and Copy Update Command and Release Notes in its ⋯
