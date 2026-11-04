@@ -189,8 +189,10 @@ fl_agent_field() {
     $1 ~ "^[[:space:]]*" f "$" { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2; exit }' || true
 }
 
-# Loads a plist and confirms launchd lists the job. Neither exit code can be
-# trusted on its own: "load -w" exits 0 even when it loaded nothing, so the
+# fl_agent_bootstrap PLIST [LABEL]: loads a plist and confirms launchd lists
+# the job. LABEL is the plist's Label when its file is not named after it (the
+# share job's plist is job.plist, outside LaunchAgents). Neither exit code can
+# be trusted on its own: "load -w" exits 0 even when it loaded nothing, so the
 # result is checked with "launchctl print". A few tries, a second apart.
 fl_agent_bootstrap() {
   local plist="$1" target try
@@ -198,7 +200,7 @@ fl_agent_bootstrap() {
     fl_info "dry-run: launchctl bootstrap $(fl_launchd_domain) ${plist}"
     return 0
   fi
-  target="$(fl_launchd_domain)/$(basename "$plist" .plist)"
+  target="$(fl_launchd_domain)/${2:-$(basename "$plist" .plist)}"
   for try in 1 2 3; do
     fl_log "launchctl bootstrap $(fl_launchd_domain) ${plist} (try ${try})"
     launchctl bootstrap "$(fl_launchd_domain)" "$plist" 2>/dev/null || launchctl load -w "$plist" 2>/dev/null || true
@@ -270,6 +272,16 @@ fl_agent_kickstart() {
   else
     launchctl kickstart "$(fl_agent_target)"
   fi
+}
+
+# fl_launchd_kickstart TARGET: starts a loaded job that is not the bench's agent (the share job)
+fl_launchd_kickstart() {
+  if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
+    fl_info "dry-run: launchctl kickstart $1"
+    return 0
+  fi
+  fl_log "launchctl kickstart $1"
+  launchctl kickstart "$1"
 }
 
 fl_agent_signal() {

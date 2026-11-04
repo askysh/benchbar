@@ -1,0 +1,7 @@
+#!/bin/bash
+# ifconfig mock: "ifconfig IF inet6" prints $MOCK_STATE/ifconfig6 (nothing without it)
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "${0%/*}/_mocklib.sh"
+mock_log "$@"
+if [[ -f "${MOCK_STATE:-/nonexistent}/ifconfig6" ]]; then cat "${MOCK_STATE}/ifconfig6"; fi
+exit 0

@@ -95,6 +95,7 @@ export default defineConfig({
                 { label: 'lock', slug: 'reference/cli/lock' },
                 { label: 'pull', slug: 'reference/cli/pull' },
                 { label: 'mcp', slug: 'reference/cli/mcp' },
+                { label: 'share and lan-guard', slug: 'reference/cli/share' },
                 { label: 'report and other commands', slug: 'reference/cli/other' },
               ],
             },

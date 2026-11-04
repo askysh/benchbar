@@ -1,0 +1,286 @@
+"use strict";
+const test = require("node:test");
+const assert = require("node:assert");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const { spawn, spawnSync } = require("node:child_process");
+const devices = require("../../lib/frappe-local/share/devices.js");
+
+const DEVICES_JS = path.join(__dirname, "../../lib/frappe-local/share/devices.js");
+const fp = (n) => "sha256:" + String(n).padStart(64, "0");
+const id = (n) => "d_" + String(n).padStart(8, "0");
+const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "bb-dev-"));
+const T0 = Date.parse("2026-11-02T10:00:00Z");
+const DAY = 86400000;
+
+function store(dir, now = () => T0) {
+    return devices.load(path.join(dir, "devices.json"), { now });
+}
+const dev = (n, extra = {}) => ({ id: id(n), name: `Mac ${n}`, model: "MacBookPro18,1", fp: fp(n), paired_ip: "192.168.1.23", ...extra });
+
+test("a missing file loads empty; add writes 0600 atomically and leaves no temp or lock file", () => {
+    const dir = tmp();
+    const s = store(dir);
+    assert.deepStrictEqual(s.list(), []);
+    s.add(dev(1));
+    const file = path.join(dir, "devices.json");
+    assert.strictEqual(fs.statSync(file).mode & 0o777, 0o600);
+    assert.deepStrictEqual(fs.readdirSync(dir), ["devices.json"]);
+    const j = JSON.parse(fs.readFileSync(file, "utf8"));
+    assert.strictEqual(j.v, 3);
+    assert.deepStrictEqual(j.blocked, []);
+    assert.strictEqual(j.devices[0].status, "active");
+    assert.strictEqual(j.devices[0].added, "2026-11-02T10:00:00.000Z");
+    assert.strictEqual(j.devices[0].last_seen, "2026-11-02T10:00:00.000Z");
+});
+
+test("a write that fails mid-way leaves the previous file intact and no temp file", () => {
+    const dir = tmp();
+    const s = store(dir);
+    s.add(dev(1));
+    const file = path.join(dir, "devices.json");
+    const before = fs.readFileSync(file, "utf8");
+    const real = fs.renameSync;
+    fs.renameSync = () => { throw new Error("boom"); };
+    try {
+        assert.throws(() => s.add(dev(2)), /boom/);
+    } finally {
+        fs.renameSync = real;
+    }
+    assert.strictEqual(fs.readFileSync(file, "utf8"), before);
+    assert.deepStrictEqual(fs.readdirSync(dir), ["devices.json"]);
+});
+
+test("unknown fields and an unknown future v survive a round trip", () => {
+    const dir = tmp();
+    const file = path.join(dir, "devices.json");
+    fs.writeFileSync(file, JSON.stringify({
+        v: 7, future_top: { a: 1 }, blocked: [],
+        devices: [{ id: id(1), name: "A", model: "M", fp: fp(1), status: "active", added: "2026-10-01T00:00:00.000Z",
+            last_seen: "2026-11-01T00:00:00.000Z", paired_ip: "10.0.0.1", future_field: [1, 2] }]
+    }), { mode: 0o600 });
+    const s = devices.load(file, { now: () => T0 });
+    s.add(dev(2));
+    const j = JSON.parse(fs.readFileSync(file, "utf8"));
+    assert.strictEqual(j.v, 7);
+    assert.deepStrictEqual(j.future_top, { a: 1 });
+    assert.deepStrictEqual(j.devices[0].future_field, [1, 2]);
+    assert.strictEqual(j.devices.length, 2);
+});
+
+test("strict schema: a corrupt or malformed file is refused, never silently reset", () => {
+    const dir = tmp();
+    const file = path.join(dir, "devices.json");
+    const bad = [
+        "not json", "[]", JSON.stringify({ v: 2, devices: [] }), JSON.stringify({ devices: [] }), JSON.stringify({ v: 3 }),
+        JSON.stringify({ v: 3, devices: [{ id: "x", name: "A", model: "M", fp: fp(1), status: "active" }] }),
+        JSON.stringify({ v: 3, devices: [{ id: id(1), name: "A", model: "M", fp: "sha256:short", status: "active" }] }),
+        JSON.stringify({ v: 3, devices: [{ id: id(1), name: "A", model: "M", fp: fp(1), status: "weird" }] }),
+        JSON.stringify({ v: 3, devices: [{ id: id(1), name: "A", model: "M", fp: fp(1), status: "pending_confirm" }] }),
+        JSON.stringify({ v: 3, devices: [{ id: id(1), name: 5, model: "M", fp: fp(1), status: "active" }] }),
+        JSON.stringify({ v: 3, devices: [], blocked: ["not-a-fingerprint"] }),
+        JSON.stringify({ v: 3, devices: [], blocked: "x" })
+    ];
+    for (const b of bad) {
+        fs.writeFileSync(file, b);
+        assert.throws(() => devices.load(file, { now: () => T0 }).list(), undefined, b);
+    }
+});
+
+test("add refuses an invalid device and a duplicate id or fingerprint", () => {
+    const s = store(tmp());
+    assert.throws(() => s.add({ ...dev(1), fp: "sha256:abc" }));
+    assert.throws(() => s.add({ ...dev(1), id: "nope" }));
+    assert.throws(() => s.add({ ...dev(1), status: "root" }));
+    assert.throws(() => s.add({ ...dev(1), name: "x".repeat(500) }));
+    s.add(dev(1));
+    assert.throws(() => s.add({ ...dev(2), id: id(1) }), /duplicate/);
+    assert.throws(() => s.add({ ...dev(2), fp: fp(1) }), /duplicate/);
+});
+
+test("findBySpki returns a copy", () => {
+    const s = store(tmp());
+    s.add(dev(1));
+    const d = s.findBySpki(fp(1));
+    assert.strictEqual(d.status, "active");
+    d.status = "hacked";
+    assert.strictEqual(s.findBySpki(fp(1)).status, "active");
+    assert.strictEqual(s.findBySpki(fp(9)), null);
+});
+
+test("remove deletes and reports whether it did", () => {
+    const s = store(tmp());
+    s.add(dev(1));
+    assert.strictEqual(s.remove(id(1)), true);
+    assert.strictEqual(s.remove(id(1)), false);
+    assert.deepStrictEqual(s.list(), []);
+});
+
+test("a seat is held by one device: the check and the set are one step, the same device may re-take its own", () => {
+    const s = store(tmp());
+    s.add(dev(1)); s.add(dev(2));
+    const a = { seat_id: "seat_a", user: "a@example.com" };
+    assert.strictEqual(s.takeSeat(id(1), a), null);
+    assert.throws(() => s.takeSeat(id(2), a), (e) => e.code === "seat_taken");
+    assert.deepStrictEqual(s.takeSeat(id(1), a), { seat_id: "seat_a", user: "a@example.com" });
+    assert.deepStrictEqual(s.takeSeat(id(1), { seat_id: "seat_b", user: "b@example.com" }), { seat_id: "seat_a", user: "a@example.com" });
+    assert.strictEqual(s.takeSeat(id(2), a), null, "the released seat is free");
+    assert.strictEqual(s.findBySpki(fp(2)).user, "a@example.com");
+    assert.throws(() => s.takeSeat(id(9), a), /not found/);
+});
+
+test("add refuses a held seat, a full room (cap) and a blocked fingerprint; the cap counts people, not seats", () => {
+    const s = store(tmp());
+    s.add(dev(1, { seat_id: "seat_a", user: "a@example.com" }));
+    assert.throws(() => s.add(dev(2, { seat_id: "seat_a", user: "a@example.com" })), (e) => e.code === "seat_taken");
+    s.add(dev(2), { cap: 2 });
+    assert.throws(() => s.add(dev(3), { cap: 2 }), (e) => e.code === "full");
+    assert.strictEqual(s.list().length, 2);
+    s.block(fp(4));
+    assert.throws(() => s.add(dev(4)), (e) => e.code === "blocked");
+    assert.strictEqual(s.isBlocked(fp(4)), true);
+    assert.strictEqual(s.isBlocked(fp(1)), false);
+    s.block(fp(4));
+    assert.strictEqual(JSON.parse(fs.readFileSync(path.join(path.dirname(s.file), "devices.json"), "utf8")).blocked.length, 1);
+});
+
+test("reapSeatless removes only devices without a seat that joined 120 s ago", () => {
+    let t = T0;
+    const s = store(tmp(), () => t);
+    s.add(dev(1)); s.add(dev(2, { seat_id: "seat_a", user: "a@example.com" }));
+    t = T0 + 119_000;
+    assert.deepStrictEqual(s.reapSeatless().map((d) => d.id), []);
+    t = T0 + 120_000;
+    assert.deepStrictEqual(s.reapSeatless().map((d) => d.id), [id(1)]);
+    assert.deepStrictEqual(s.list().map((d) => d.id), [id(2)]);
+});
+
+test("emptyAll clears devices and the blocked list, even over a damaged file", () => {
+    const dir = tmp();
+    const s = store(dir);
+    s.add(dev(1)); s.block(fp(2));
+    s.emptyAll();
+    assert.deepStrictEqual(s.list(), []);
+    assert.strictEqual(s.isBlocked(fp(2)), false);
+    fs.writeFileSync(path.join(dir, "devices.json"), "not json");
+    s.emptyAll();
+    assert.deepStrictEqual(devices.load(path.join(dir, "devices.json"), {}).list(), []);
+    assert.deepStrictEqual(fs.readdirSync(dir), ["devices.json"]);
+});
+
+test("a throttled touch does no file I/O: no lock file is created", () => {
+    let t = T0;
+    const dir = tmp();
+    const s = store(dir, () => t);
+    s.add(dev(1));
+    s.list();
+    const real = fs.openSync;
+    const opened = [];
+    fs.openSync = (...a) => { opened.push(a[0]); return real(...a); };
+    try {
+        t = T0 + 10_000;
+        s.touch(id(1));
+    } finally {
+        fs.openSync = real;
+    }
+    assert.deepStrictEqual(opened, []);
+    assert.ok(!fs.existsSync(path.join(dir, "devices.lock")));
+});
+
+test("a holder whose stale lock was broken does not delete the next holder's lock", () => {
+    const dir = tmp();
+    const lock = path.join(dir, "devices.lock");
+    const s = store(dir);
+    const real = fs.renameSync;
+    fs.renameSync = (...a) => {
+        fs.writeFileSync(lock, "someone-else-token");
+        return real(...a);
+    };
+    try {
+        s.add(dev(1));
+    } finally {
+        fs.renameSync = real;
+    }
+    assert.strictEqual(fs.readFileSync(lock, "utf8"), "someone-else-token");
+});
+
+test("prune removes a device unseen for 30 days and keeps a recent one", () => {
+    let t = T0;
+    const s = store(tmp(), () => t);
+    s.add(dev(1)); s.add(dev(2));
+    t = T0 + 29 * DAY;
+    s.touch(id(2));
+    t = T0 + 31 * DAY;
+    assert.deepStrictEqual(s.prune(t), [id(1)]);
+    assert.deepStrictEqual(s.list().map((d) => d.id), [id(2)]);
+    assert.deepStrictEqual(s.prune(t), []);
+});
+
+test("touch writes at most once a minute", () => {
+    let t = T0;
+    const dir = tmp();
+    const s = store(dir, () => t);
+    s.add(dev(1));
+    const file = path.join(dir, "devices.json");
+    t = T0 + 10_000; s.touch(id(1));
+    assert.strictEqual(JSON.parse(fs.readFileSync(file, "utf8")).devices[0].last_seen, "2026-11-02T10:00:00.000Z");
+    t = T0 + 61_000; s.touch(id(1));
+    assert.strictEqual(JSON.parse(fs.readFileSync(file, "utf8")).devices[0].last_seen, "2026-11-02T10:01:01.000Z");
+});
+
+test("two concurrent writer processes serialise through the lock (no lost update)", async () => {
+    const dir = tmp();
+    const file = path.join(dir, "devices.json");
+    const code = `
+        const d = require(${JSON.stringify(DEVICES_JS)});
+        const [file, tag] = process.argv.slice(1);
+        const s = d.load(file, {});
+        for (let i = 0; i < 25; i++) {
+            const n = tag + String(i).padStart(2, "0");
+            s.add({ id: "d_" + n.padStart(8, "0"), name: "m" + n, model: "M", fp: "sha256:" + n.padStart(64, "0") });
+        }`;
+    const run = (tag) => new Promise((resolve) => {
+        const c = spawn(process.execPath, ["-e", code, file, tag], { stdio: ["ignore", "ignore", "pipe"] });
+        let err = ""; c.stderr.on("data", (b) => { err += b; });
+        c.on("exit", (status) => resolve({ status, err }));
+    });
+    const [a, b] = await Promise.all([run("a"), run("b")]);
+    assert.strictEqual(a.status, 0, a.err);
+    assert.strictEqual(b.status, 0, b.err);
+    const j = JSON.parse(fs.readFileSync(file, "utf8"));
+    assert.strictEqual(j.devices.length, 50);
+    assert.strictEqual(new Set(j.devices.map((d) => d.id)).size, 50);
+    assert.deepStrictEqual(fs.readdirSync(dir), ["devices.json"]);
+});
+
+test("a stale lock (older than 10 s) is broken; a fresh one makes the writer wait then fail", () => {
+    const dir = tmp();
+    const lock = path.join(dir, "devices.lock");
+    fs.writeFileSync(lock, "999999", { mode: 0o600 });
+    const old = new Date(Date.now() - 60_000);
+    fs.utimesSync(lock, old, old);
+    const s = devices.load(path.join(dir, "devices.json"), { now: () => T0 });
+    s.add(dev(1));
+    assert.strictEqual(s.list().length, 1);
+
+    fs.writeFileSync(lock, "999999", { mode: 0o600 });
+    const s2 = devices.load(path.join(dir, "devices.json"), { now: () => T0, lockTimeoutMs: 150 });
+    assert.throws(() => s2.add(dev(2)), /lock/);
+    assert.ok(fs.existsSync(lock), "a lock we did not take is left alone");
+});
+
+test("CLI: remove ID takes the same lock and file; unknown id exits 2; bad usage exits 1", () => {
+    const dir = tmp();
+    const file = path.join(dir, "devices.json");
+    const s = devices.load(file, { now: () => T0 });
+    s.add(dev(1)); s.add(dev(2));
+    const run = (...args) => spawnSync(process.execPath, [DEVICES_JS, ...args], { encoding: "utf8", env: { PATH: process.env.PATH, FL_SHARE_DEVICES_FILE: file } });
+    let r = run("remove", id(1));
+    assert.strictEqual(r.status, 0, r.stderr);
+    assert.deepStrictEqual(devices.load(file, {}).list().map((d) => d.id), [id(2)]);
+    assert.strictEqual(run("remove", id(1)).status, 2);
+    assert.strictEqual(run("remove", "not-an-id").status, 1);
+    assert.strictEqual(run("frobnicate", id(2)).status, 1);
+    assert.strictEqual(run("remove").status, 1);
+});

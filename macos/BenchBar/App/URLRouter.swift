@@ -43,6 +43,11 @@ nonisolated enum URLRouter {
         /// Team Profiles with the import or subscribe sheet prefilled. The
         /// sheet waits for the user's click; the link itself fetches nothing.
         case profile(ProfileLink)
+        /// A page of a room this Mac already joined; never joins anything (U3).
+        case share(ShareDeepLink.Target)
+        /// `benchbar://share/join?…`: the join sheet with the invite's code filled in, waiting
+        /// for the Join click. It carries the code, so the link itself is never logged.
+        case shareInvite(Result<ShareInvite, ShareInvite.Problem>)
     }
 
     /// `benchbar://profile/import?url=` and `benchbar://profile/subscribe?url=`.
@@ -90,8 +95,12 @@ nonisolated enum URLRouter {
 
     /// The whole decision: parse, then pick the bench. `selected` is the
     /// bench the app has selected, if any.
-    static func route(_ url: URL, benches: [Bench], selected: String?) -> Outcome {
+    static func route(_ url: URL, benches: [Bench], selected: String?, lanRooms: Bool = false) -> Outcome {
         if let outcome = profileRoute(url) { return outcome }
+        if let outcome = shareRoute(url) {
+            // the reason is generic on purpose: ignored links are logged, and an invite holds a code
+            return lanRooms ? outcome : .ignore("share links need the lan-rooms lab (benchbar labs on lan-rooms)")
+        }
         switch parse(url) {
         case .failure(let reason):
             return .ignore(reason.message)
@@ -124,6 +133,17 @@ nonisolated enum URLRouter {
             return .explain("The subscribe link has no git repository address in url=, so BenchBar did not open it.")
         }
         return .profile(.subscribe(address))
+    }
+
+    /// nil when the link is not a share link. `benchbar://share/<fp16>/app…` only: any other
+    /// path, a query or a fragment is ignored (ShareDeepLink).
+    static func shareRoute(_ url: URL) -> Outcome? {
+        guard url.scheme?.lowercased() == scheme, url.host(percentEncoded: false)?.lowercased() == "share" else { return nil }
+        // Any share link with a query may hold a code: it goes to the invite parser, never to
+        // `.ignore`, which logs the link.
+        if ShareInvite.isInviteLink(url) || url.query != nil || url.fragment != nil { return .shareInvite(ShareInvite.parse(url)) }
+        guard let target = ShareDeepLink.parse(url) else { return .ignore("a share link opens only benchbar://share/<room>/app pages") }
+        return .share(target)
     }
 
     static func resolve(_ request: Request, benches: [Bench], selected: String?) -> Outcome {

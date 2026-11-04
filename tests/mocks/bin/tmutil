@@ -1,0 +1,6 @@
+#!/bin/bash
+# tmutil mock: logs the call (FL_TMUTIL points the CLI here)
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "${0%/*}/_mocklib.sh"
+mock_log "$@"
+exit 0

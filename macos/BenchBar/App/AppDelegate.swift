@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItemController: StatusItemController!
     private var popover: PopoverController!
     private var mainWindow: MainWindowController!
+    private var lanRoomsObservation: Labs.ObservationToken?
     private var wizard: WizardRun!
     private var logWindows: LogWindowController!
     private let launchAtLogin = LaunchAtLogin()
@@ -15,6 +16,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var updater: Updater?
     private var about: AboutModel!
     private var updateOffer: UpdateOffer!
+    /// The guest side of rooms; filled only while the lan-rooms lab is on.
+    private let guestSlot = GuestSlot()
+    private var guest: GuestRoomStore? { guestSlot.store }
     /// benchbar:// links that arrived before the bench list was loaded
     /// (a link can launch the app).
     private var pendingURLs: [URL] = []
@@ -44,12 +48,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store.onChange = { [weak self] in self?.statusItemController.update() }
         let labsStore = store!
         Labs.shared.loader = .cli { await MainActor.run { labsStore.cliClient } }
+        lanRoomsObservation = Labs.shared.observe(.lanRooms) { [weak self] on in self?.lanRoomsChanged(on) }
         NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.store.appBecameActive() }
         }
 
         notifier = Notifier(settings: settings)
         store.onAlert = { [weak self] bench, alert in self?.notifier.post(alert, bench: bench) }
+        ShareCenter.shared.attach(store)
+        store.confirmWhileSharing = { action, bench in
+            guard Labs.shared.isOn(.lanRooms), let line = HostAmbient.benchConfirm(ShareCenter.shared.stores[bench.path]?.status, restart: action == .restart) else { return true }
+            return ShareConfirm.ask(action == .restart ? "Restart \(bench.name)?" : "Stop \(bench.name)?", detail: line,
+                                    button: action == .restart ? "Restart" : "Stop")
+        }
+        ShareCenter.shared.onIconChange = { [weak self] icon in
+            self?.statusItemController.setShareIcon(Labs.shared.isOn(.lanRooms) ? icon : .off)
+        }
+        ShareCenter.shared.onEvent = { share, event in
+            guard Labs.shared.isOn(.lanRooms), let notice = HostAmbient.notice(event, bench: share.bench) else { return }
+            ShareNotices.post(title: notice.title, body: notice.body, bench: share.bench, identifier: notice.identifier)
+        }
         notifier.onOpen = { [weak self] path in self?.showPopover(for: path) }
         notifier.start()
 
@@ -80,11 +98,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             newBench: { [weak self] in self?.openWizard() },
             manage: { [weak self] bench, tab, repair in self?.openBench(bench, tab: tab, repair: repair) },
             updateOffer: updateOffer,
-            update: { [weak self] in self?.updateNowAction() })
-        popover = PopoverController(rootView: PopoverView(store: store, commands: commands))
+            update: { [weak self] in self?.updateNowAction() },
+            openNetwork: { [weak self] in
+                guard let self else { return }
+                popover.close()
+                mainWindow.show(.network)
+            })
+        popover = PopoverController(rootView: PopoverView(store: store, commands: commands, guest: guestSlot))
         popover.onOpenChange = { [weak self] open in
-            self?.store.setPopoverOpen(open)
+            guard let self else { return }
+            store.setPopoverOpen(open)
             if open { Labs.shared.refreshIfStale() }
+            // Rooms are browsed only while the popover is open, and never before the pane's
+            // explanation, so the Local Network prompt does not appear at an odd time.
+            if open && Labs.shared.isOn(.lanRooms) && UserDefaults.standard.bool(forKey: NetworkPanePresentation.explainedKey) {
+                guest?.startBrowsing(for: .popover)
+            } else if !open {
+                guest?.stopBrowsing(for: .popover)
+            }
         }
 
         let workbench = Workbench(store: store)
@@ -128,7 +159,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                SettingsView(settings: settings, store: store, library: library, launchAtLogin: launchAtLogin,
                                             notifier: notifier, part: part, router: router,
                                             chooseCLI: { [weak self] in self?.chooseCLI() })
-                           })
+                           },
+                           guest: guestSlot)
         }
         // open, close, occlusion and the page: the window's views stay alive
         // when it closes, so the store hears of them from the controller
@@ -147,6 +179,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         Task {
             await store.start()
+            // the lab's flip restores a share that was on at the last quit (lanRoomsChanged)
             await Labs.shared.refresh()
             benchesLoaded = true
             let waiting = pendingURLs
@@ -246,12 +279,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let benches = store.benches.map {
             URLRouter.Bench(path: $0.path, name: $0.name, sites: $0.siteRows.map(\.name))
         }
-        let link = String(url.absoluteString.prefix(300))
-        switch URLRouter.route(url, benches: benches, selected: store.selectedPath) {
+        // a share link can carry a room code: its address is never logged, only a generic line
+        let link = url.host(percentEncoded: false)?.lowercased() == "share" ? "share link" : String(url.absoluteString.prefix(300))
+        switch URLRouter.route(url, benches: benches, selected: store.selectedPath, lanRooms: Labs.shared.isOn(.lanRooms)) {
         case .ignore(let reason):
             Self.urlLog.notice("Ignored \(link, privacy: .public): \(reason, privacy: .public)")
         case .window:
             openMainWindow()
+        case .share(let target):
+            Self.urlLog.info("share link: a joined room's page")
+            Task { [weak self] in
+                guard let self else { return }
+                // an unknown room only shows the pane; a link never joins (U3)
+                if !(await guest?.open(link: target) ?? false) { mainWindow.show(.network) }
+            }
+        case .shareInvite(let invite):
+            Self.urlLog.info("share invite link: the join sheet, waiting for a click")
+            guest?.open(invite: invite)
+            mainWindow.show(.network)
         case .profile(let link):
             Self.urlLog.info("profile link: Team Profiles, sheet prefilled")
             mainWindow.router.profileRequest = link
@@ -265,8 +310,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Self.urlLog.info("\(route.rawValue, privacy: .public) on \(bench.name, privacy: .public)")
             switch route {
             case .up: Task { await store.perform(.up, on: bench) }
-            case .down: Task { await store.perform(.down, on: bench) }
-            case .restart: Task { await store.perform(.restart, on: bench) }
+            case .down: Task { await store.perform(.down, on: bench, fromLink: true) }
+            case .restart: Task { await store.perform(.restart, on: bench, fromLink: true) }
             case .open:
                 if let site, let row = bench.siteRows.first(where: { $0.name == site }) {
                     Workspace.open(row.url)
@@ -334,6 +379,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// open) shows the window: a menu bar app has nothing else to show.
     /// A log window on screen does not count: `hasVisibleWindows` is true
     /// for it, and the BenchBar window stayed closed.
+    /// Quitting kills a running share setup or teardown (the CLI gets SIGTERM):
+    /// the copy is left half made, so ask first. It also drops the people in a
+    /// room this Mac hosts and closes the forwarder to a room it joined, so
+    /// those ask too. Keep running is the default.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        let alert = NSAlert()
+        let labOn = Labs.shared.isOn(.lanRooms)
+        if labOn, ShareCenter.shared.setupOrTeardownRunning {
+            alert.messageText = "Sharing setup is still running."
+            alert.informativeText = "Quitting now stops it halfway; the copy will need setup again."
+        } else if labOn, let hosted = ShareCenter.shared.benchesWithGuests.first {
+            let people = hosted.status?.people ?? 0
+            alert.messageText = "People are in your room."
+            alert.informativeText = "\(people == 1 ? "1 person is" : "\(people) people are") in the room on \(URL(fileURLWithPath: hosted.bench).lastPathComponent). Quitting disconnects them."
+        } else if labOn, guest?.hasRunningForwarder == true {
+            alert.messageText = "You are connected to a room."
+            alert.informativeText = "Quitting closes the connection to the site you opened from it."
+        } else {
+            return .terminateNow
+        }
+        alert.addButton(withTitle: "Keep running")
+        alert.addButton(withTitle: "Quit anyway")
+        return alert.runModal() == .alertSecondButtonReturn ? .terminateNow : .terminateCancel
+    }
+
+    /// The lan-rooms lab flipped, live: on makes the guest store and restores a share that was on at
+    /// the last quit; off closes everything the lab started (the CLI's `labs off` already stopped a
+    /// running share) and leaves a pane that is gone.
+    private func lanRoomsChanged(_ on: Bool) {
+        if on {
+            if guestSlot.store == nil {
+                let browser = BrowserRouter()
+                guestSlot.store = GuestRoomStore(dependencies: .live(identity: KeychainIdentity(), openURL: { browser.open($0) }))
+            }
+            ShareCenter.shared.restoreActive(among: store.benches.map(\.path))
+        } else {
+            guestSlot.store?.shutDown()
+            guestSlot.store = nil
+            ShareCenter.shared.tearDown()
+            statusItemController.setShareIcon(.off)
+            let router = mainWindow.router
+            if router.pane == .network { router.pane = .general }
+            if router.benchTab == .sharing { router.benchTab = .overview }
+        }
+    }
+
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if !mainWindow.isVisible { openMainWindow() }
         return true

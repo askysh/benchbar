@@ -162,6 +162,34 @@ struct BenchStoreTests {
         #expect(bench.lastError == nil)
     }
 
+    @Test(arguments: [CLIClient.Action.down, .restart])
+    func aDeclinedSharingConfirmRunsNothing(_ action: CLIClient.Action) async throws {
+        cli.answer("list", json: listJSON())
+        cli.answer("status", json: statusJSON("running"))
+        let store = makeStore()
+        await store.start(polling: false)
+        let bench = try #require(store.selected)
+        var asked: [CLIClient.Action] = []
+        store.confirmWhileSharing = { asked.append($0); _ = $1; return false }
+        await store.perform(action, on: bench)
+        #expect(asked == [action])
+        #expect(!cli.calls.contains { $0.first == action.rawValue })
+    }
+
+    @Test(arguments: [CLIClient.Action.down, .restart])
+    func aLinkSkipsTheSharingConfirm(_ action: CLIClient.Action) async throws {
+        cli.answer("list", json: listJSON())
+        cli.answer("status", json: statusJSON("running"))
+        let store = makeStore()
+        await store.start(polling: false)
+        let bench = try #require(store.selected)
+        var asked = 0
+        store.confirmWhileSharing = { _, _ in asked += 1; return false }
+        await store.perform(action, on: bench, fromLink: true)
+        #expect(asked == 0)
+        #expect(cli.calls.contains { $0.first == action.rawValue })
+    }
+
     @Test func failedActionKeepsTheMessage() async {
         cli.answer("list", json: listJSON(installed: false))
         cli.answer("status", json: statusJSON("stopped", reason: "manual"))

@@ -5,7 +5,7 @@
 # the check -> plan -> apply -> verify engine shared by "repair" and
 # "service" (the background phase).
 
-FL_ACTION_ORDER="python_leaves node_install yarn_install env_rebuild env_setuptools honcho_install honcho_setuptools node_requirements build clear_cache mariadb_bind mariadb_utf8 wkhtmltopdf_install legacy_migrate port_block write_procfile write_runner write_plist write_helpers write_cli_link hosts_entry rotate_logs redis_stop"
+FL_ACTION_ORDER="python_leaves node_install yarn_install env_rebuild env_setuptools honcho_install honcho_setuptools node_requirements build clear_cache mariadb_bind mariadb_utf8 wkhtmltopdf_install legacy_migrate port_block write_procfile write_runner write_plist write_helpers write_cli_link hosts_entry share_resume rotate_logs redis_stop"
 # actions whose check may stay a warning after a run without failing it:
 # the user may decline them (or sudo) on purpose
 FL_OPTIONAL_ACTIONS="wkhtmltopdf_install hosts_entry redis_stop"
@@ -51,6 +51,7 @@ fl_action_label() {
       else printf 'link benchbar and frappe-mac into ~/.local/bin'; fi ;;
     hosts_entry) printf 'add %s to /etc/hosts (sudo)' "$FL_SITE" ;;
     rotate_logs) printf 'copy large logs aside and truncate them' ;;
+    share_resume) printf 'resume the scheduler that a share setup left paused' ;;
     redis_stop) printf 'stop Homebrew redis on 6379' ;;
     *) printf '%s' "$1" ;;
   esac
@@ -591,6 +592,16 @@ act_rotate_logs() {
       i=$((i + 1))
     done
   done
+}
+
+act_share_resume() {
+  if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
+    fl_info "dry-run: would run bench config remove-common-config pause_scheduler"
+    return 0
+  fi
+  fl_bench_env_exports
+  (cd "$FL_BENCH_DIR" && bench config remove-common-config pause_scheduler) >>"${FL_LOG_FILE:-/dev/null}" 2>&1 || { fl_fail "bench config remove-common-config pause_scheduler failed"; return 1; }
+  rm -f "${FL_STATE_DIR}/share/scheduler-paused"
 }
 
 act_redis_stop() {

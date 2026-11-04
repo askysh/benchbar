@@ -1,2 +1,18 @@
 #!/bin/bash
+# node mock: "--version" (anything else) prints a version. "-e SCRIPT [6]" is the share checks' throwaway
+# listener: it prints "ready V4_RANGE V4_CONTROL V6_RANGE V6_CONTROL" (ports from MOCK_LISTENER_V4 and
+# MOCK_LISTENER_V6, zeros for the family not asked for or when $MOCK_STATE/listener_fail exists) and then
+# stays up until it is killed. $MOCK_STATE/listener_dead makes it exit without a word.
+# Every run appends its arguments' first word to $MOCK_STATE/node_calls; the listener writes its PID
+# (the sleep it becomes) to $MOCK_STATE/listener_pid.
+[[ ! -d "${MOCK_STATE:-/nonexistent}" ]] || printf '%s\n' "${1:-}" >>"$MOCK_STATE/node_calls"
+if [[ "${1:-}" == "-e" ]]; then
+  [[ ! -f "${MOCK_STATE:-/nonexistent}/listener_dead" ]] || exit 1
+  v4="${MOCK_LISTENER_V4:-8097 18097}"; v6="0 0"
+  [[ "${3:-}" != 6 ]] || v6="${MOCK_LISTENER_V6:-8098 18098}"
+  [[ ! -f "${MOCK_STATE:-/nonexistent}/listener_fail" ]] || { v4="0 0"; v6="0 0"; }
+  [[ ! -d "${MOCK_STATE:-/nonexistent}" ]] || printf '%s\n' "$$" >"$MOCK_STATE/listener_pid"
+  printf 'ready %s %s\n' "$v4" "$v6"
+  exec sleep 30
+fi
 printf 'v22.19.0\n'

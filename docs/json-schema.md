@@ -1325,6 +1325,78 @@ canonical-path checksum suffix. An installed label owned by the same bench
 is retained. Clients should always use the returned label rather than deriving
 it from the directory name.
 
+## Sharing
+
+`benchbar share` and `benchbar lan-guard` ([reference](reference/cli/share.md)).
+Every document starts with `schema_version` and `cli_version`; under
+`--json` the done fields follow. The streams (setup, start, stop, extend,
+lock, unlock, remove, assign, teardown, and lan-guard install, remove and
+allow-node) end in a done line carrying the fields shown. No document but
+`share code --json` and `share invite --json` ever holds the room code, and
+none holds a session id.
+
+### `benchbar share status --json`
+
+```json
+{"schema_version":1,"cli_version":"…","protocol":3,"bench":"/path/to/bench","site":"mysite.localhost",
+ "share_site":"share.localhost","state":"on","phase":null,"web_up":true,"degraded":false,"error":null,
+ "label":"Your Mac","port":8443,"web_port":8001,"lan_ip":"192.168.1.20","started":"…","deadline":"…",
+ "seconds_left":3600,"can_extend_s":28800,"copy":{…},"allowed_users":["priya@example.com"],"seats":2,
+ "people":1,"devices_total":1,"devices_online":1,"pending":0,"locked":false,"lock_reason":null,
+ "budget_left":10,"join_trouble":false,"wipe_failed":0,"lan_guard":"installed","preflight":null,
+ "setup_interrupted":false}
+```
+
+- `state`: `on`, `off`, `expired` or `error`.
+- `lock_reason`: `host`, `budget` (10 wrong codes; only `share code --new` opens it), `full`, or null.
+- `wipe_failed`: a sign-out that is owed or failed. While sharing is off it
+  reads 1 or more from the marker `share stop` leaves when it could not end
+  every session of the copy. It reads 1 for a moment after every
+  `share remove`, until the removed seat's sessions are gone.
+- `pending` is always 0: there are no join requests to approve in rooms.
+- `lan_guard`: as `lan-guard status`'s `state`.
+- `preflight`: null, or with `--preflight` the critical checks as in `share preflight`.
+- `setup_interrupted`: a setup stopped halfway (no `share.json`, but the one it set
+  aside or the copy is there); `share setup --refresh` finishes it.
+
+### `benchbar share preflight --json`
+
+`{"schema_version":1,"cli_version":"…","protocol":3,"ok":bool,"lan_ip":"…"|null,"checks":[{"id","class","status","message","fix_action"}]}`.
+`class` is `static` or `critical`; `status` is `ok`, `fail`, `warn` or
+`skip`. `fix_action` is a machine name for the app's button (`none`,
+`install_network_protection`, `allow_node_firewall`,
+`open_local_network_settings`, `rerun_setup`, `restart_sharing`, …).
+
+### The room documents
+
+They share `bench`, `share_site` and `wipe`. `wipe` is null when nothing was
+owed, else `{"retried":bool,"wiped":N|null,"wipe_failed":M|null}`.
+
+| Command | Fields |
+|---|---|
+| `share code` | `code` (`"NNNNNN"`, a placeholder here), `new`, `budget_left` |
+| `share invite` | `url` (`benchbar://share/join?v=1&r=…&h=…&s=…&c=…&a=…&x=…`, holds the code), `text` (the message, lines apart by `\n`), `expires_at` (ISO 8601, UTC), `room` |
+| `share lock`, `share unlock` (done) | `locked`, `lock_reason` |
+| `share people` | `state` (`on`/`off`), `people`: `[{id, name, model, ip, seat_id, seat_full_name, online, joined, last_seen}]` |
+| `share remove` (done) | `device`, `name`, `removed`, `new_code` (a bool, never the code) |
+| `share assign` (done) | `device`, `name`, `seat_id`, `seat_full_name` |
+| `share log` | `entries`: `[{ts, device, user, method, path, status}]`, `truncated` |
+| `share open-as` | `user`, `page`, `opened`: never the link or the session id, even with `--print-url` |
+| `share teardown` (done) | `copy_dropped`, `archived_path`, `state_removed` |
+
+### `benchbar lan-guard status --json`
+
+```json
+{"schema_version":1,"cli_version":"…","state":"installed","active":true,
+ "ports":"8000:8099 9000:9099 11000:11099 13000:13099 3306","anchor":"com.apple/250.benchbar","lan_ip":"192.168.1.20"}
+```
+
+- `state`: `installed`, `missing` or `outdated` (the anchor's rules differ, or the daemon does not load it).
+- `active`: whether pf refuses the bench ports, by the probe alone (the files are `state`): true when no bench port answered from `lan_ip` and the control port did, false when a bench port answered, null with no LAN address or when the probe could not run.
+
+`lan-guard install` and `remove` end in a done line with the same fields;
+`allow-node`'s carries `node`, the realpath it allowed.
+
 ## Port management
 
 `benchbar ports plan --json -- PATH ...` is read-only. Canonical paths are

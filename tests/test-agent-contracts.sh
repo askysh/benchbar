@@ -10,11 +10,15 @@ assert_eq "0" "$CODE" "$OUT"
 assert_eq "1" "$(printf '%s' "$OUT" | jget - 'd["schema_version"]')"
 assert_eq "$VER" "$(printf '%s' "$OUT" | jget - 'd["cli_version"]')"
 printf '%s' "$OUT" >"$TMP_DIR/commands.json"
+# the commands of a lab that is off are not listed: the label check reads the table with every lab on
+BENCHBAR_LABS=lan-rooms,quick-switch run_fm commands --json
+assert_eq "0" "$CODE" "$OUT"
+printf '%s' "$OUT" >"$TMP_DIR/commands-labs.json"
 
 # every label of every dispatcher has an entry in the table: the labels of the
 # last `case` of benchbar's dispatch and of fl_cmd_site, _app, _profile, _lock
 # and _ports are parsed from the source, so a new label without an entry fails here
-python3 -I - "$ROOT" "$TMP_DIR/commands.json" <<'PY' || fail "a dispatcher label has no entry in the commands table (lib/frappe-local/commands.sh)"
+python3 -I - "$ROOT" "$TMP_DIR/commands-labs.json" <<'PY' || fail "a dispatcher label has no entry in the commands table (lib/frappe-local/commands.sh)"
 import json, re, sys
 root, table_file = sys.argv[1], sys.argv[2]
 table = {c["name"] for c in json.load(open(table_file))["commands"]}

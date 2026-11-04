@@ -19,6 +19,8 @@ struct AppCommands {
     /// A newer release on offer: "Update to X…" in the footer.
     var updateOffer: UpdateOffer?
     var update: () -> Void = {}
+    /// The BenchBar window at On your network.
+    var openNetwork: () -> Void = {}
 }
 
 /// The popover under the menu bar runner.
@@ -30,6 +32,7 @@ struct AppCommands {
 struct PopoverView: View {
     let store: BenchStore
     let commands: AppCommands
+    var guest: GuestSlot?
     static let maxContentHeight: CGFloat = 540
 
     var body: some View {
@@ -37,6 +40,15 @@ struct PopoverView: View {
             // as tall as the content, scrolling only past the cap
             CappedHeight(maxHeight: Self.maxContentHeight) {
                 ScrollView { content.frame(maxWidth: .infinity, alignment: .leading) }
+            }
+            if Labs.shared.isOn(.lanRooms) {
+                SharePopoverRows(center: ShareCenter.shared)
+                if let bench = store.selected, SharePopoverRows.offersSetup(center: ShareCenter.shared, bench: bench.path) {
+                    Button(SharePresentation.shareNearby, systemImage: "wifi") { commands.manage(bench, .sharing, false) }
+                        .buttonStyle(.borderless)
+                        .help("Opens this bench's Sharing tab")
+                }
+                if let guest = guest?.store { NearbyRoomsPopoverRow(guest: guest, open: commands.openNetwork) }
             }
             Divider()
             Button("Scan Folder…", systemImage: "folder.badge.plus", action: commands.scanFolder)

@@ -134,11 +134,13 @@ jobs:
           bash --version | head -n 1
           nproc
 
+      # the LAN share and its guard are macOS only (pf, launchd, the Keychain)
       - name: CLI tests (Linux bash)
         if: env.CODE == 'true'
         env:
           SHARD: ${{ matrix.shard }}/8
           SHELLCHECK: '0'
+          SKIP_TESTS: test-share test-share-run test-share-admin test-share-preflight test-lan-guard
         run: bash tests/run-tests.sh
 
   # The mocked suite under bash 3.2.57, the bash of macOS, on cheap Linux
@@ -185,7 +187,8 @@ jobs:
         env:
           SHARD: ${{ matrix.shard }}/4
           SHELLCHECK: '0'
-          SKIP_TESTS: test-install-linux test-doctor-linux test-systemd test-platform-linux
+          # the Linux platform tests, and the macOS only LAN share tests (a Linux container)
+          SKIP_TESTS: test-install-linux test-doctor-linux test-systemd test-platform-linux test-share test-share-run test-share-admin test-share-preflight test-lan-guard
         run: |
           docker run --rm -v "$PWD:/w:ro" -e SHARD -e SHELLCHECK -e SKIP_TESTS bash:3.2.57 sh -euc '
             apk add --no-cache coreutils findutils diffutils grep sed gawk procps git python3 zip unzip curl perl-utils musl-locales >/dev/null
