@@ -2,6 +2,8 @@ import Foundation
 
 /// Every line the "On your network" pane shows, from the guest store's state (R3.8 copy).
 nonisolated enum NetworkPanePresentation {
+    static let headerTitle = "On your network"
+    static let headerSubtitle = "Rooms that colleagues on this Wi-Fi opened, and the ones you joined."
     static let title = "Rooms on this Wi-Fi"
     static let joinedSection = "Your rooms"
     static let nearbySection = "Nearby"

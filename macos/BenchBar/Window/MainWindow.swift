@@ -197,7 +197,12 @@ struct MainWindowView: View {
             DiscoveryPane(discovery: discovery, router: router).navigationTitle("Find Benches")
         case .network:
             if Labs.shared.isOn(.lanRooms), let guest = guest?.store {
-                NetworkPane(store: guest).navigationTitle(NetworkPanePresentation.title)
+                VStack(alignment: .leading, spacing: 0) {
+                    PaneHeader(symbol: "wifi", tint: .blue, title: NetworkPanePresentation.headerTitle,
+                               subtitle: NetworkPanePresentation.headerSubtitle)
+                    NetworkPane(store: guest)
+                }
+                .navigationTitle(NetworkPanePresentation.title)
             }
         case .bench(let path):
             if let bench = store.benches.first(where: { $0.path == path }) {

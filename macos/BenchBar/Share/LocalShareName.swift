@@ -40,7 +40,7 @@ nonisolated enum LocalShareName {
         return "\(slug(label: label))-\(jar).localhost"
     }
 
-    /// Deterministic per host pin within 41000-41999, moving on while a port is taken.
+    /// Deterministic per host pin within 41000 to 41999, moving on while a port is taken.
     static func port(for hostPin: Data, isFree: (UInt16) -> Bool) -> UInt16? {
         let seed = hostPin.prefix(2).reduce(0) { $0 << 8 | Int($1) }
         let count = portRange.count

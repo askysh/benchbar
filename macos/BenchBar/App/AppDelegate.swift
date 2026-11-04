@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItemController: StatusItemController!
     private var popover: PopoverController!
     private var mainWindow: MainWindowController!
+    private var lanRoomsObservation: Labs.ObservationToken?
     private var wizard: WizardRun!
     private var logWindows: LogWindowController!
     private let launchAtLogin = LaunchAtLogin()
@@ -47,9 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store.onChange = { [weak self] in self?.statusItemController.update() }
         let labsStore = store!
         Labs.shared.loader = .cli { await MainActor.run { labsStore.cliClient } }
-        Labs.shared.onChange = { [weak self] lab, on in
-            if lab == .lanRooms { self?.lanRoomsChanged(on) }
-        }
+        lanRoomsObservation = Labs.shared.observe(.lanRooms) { [weak self] on in self?.lanRoomsChanged(on) }
         NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.store.appBecameActive() }
         }
@@ -417,7 +416,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ShareCenter.shared.tearDown()
             statusItemController.setShareIcon(.off)
             let router = mainWindow.router
-            if router.pane == .network { router.pane = nil }
+            if router.pane == .network { router.pane = .general }
             if router.benchTab == .sharing { router.benchTab = .overview }
         }
     }

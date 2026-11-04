@@ -43,6 +43,11 @@ struct PopoverView: View {
             }
             if Labs.shared.isOn(.lanRooms) {
                 SharePopoverRows(center: ShareCenter.shared)
+                if let bench = store.selected, SharePopoverRows.offersSetup(center: ShareCenter.shared, bench: bench.path) {
+                    Button(SharePresentation.shareNearby, systemImage: "wifi") { commands.manage(bench, .sharing, false) }
+                        .buttonStyle(.borderless)
+                        .help("Opens this bench's Sharing tab")
+                }
                 if let guest = guest?.store { NearbyRoomsPopoverRow(guest: guest, open: commands.openNetwork) }
             }
             Divider()

@@ -20,6 +20,13 @@ struct NearbyRoomsPopoverRow: View {
 struct SharePopoverRows: View {
     let center: ShareCenter
 
+    /// The popover offers "Share with people nearby" while the bench has no share set up or running.
+    @MainActor static func offersSetup(center: ShareCenter, bench: String) -> Bool {
+        guard center.showsTab(for: bench) else { return false }
+        guard let status = center.store(for: bench)?.status else { return true }
+        return status.state != .on && status.state != .starting && status.copy == nil
+    }
+
     var body: some View {
         ForEach(center.sharingStores, id: \.bench) { share in
             if let status = share.status {
