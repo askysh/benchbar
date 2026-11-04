@@ -1,0 +1,9 @@
+#!/bin/bash
+# ipconfig mock: "ipconfig getifaddr IF" prints $MOCK_STATE/lan_ip when IF is $MOCK_STATE/lan_iface, else fails
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "${0%/*}/_mocklib.sh"
+mock_log "$@"
+if [[ "${1:-}" == getifaddr && -s "${MOCK_STATE:-/nonexistent}/lan_ip" && "${2:-}" == "$(cat "${MOCK_STATE:-/nonexistent}/lan_iface" 2>/dev/null)" ]]; then
+  cat "${MOCK_STATE}/lan_ip"; exit 0
+fi
+exit 1

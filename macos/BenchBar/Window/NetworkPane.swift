@@ -1,0 +1,252 @@
+import AppKit
+import SwiftUI
+
+/// "On your network": rooms this Mac joined, rooms nearby, and the join sheet.
+/// Browsing runs only while the pane is visible, after the app's own explanation.
+struct NetworkPane: View {
+    @Bindable var store: GuestRoomStore
+    var openSharing: () -> Void = {}
+    @AppStorage(NetworkPanePresentation.explainedKey) private var explained = false
+
+    var body: some View {
+        Form {
+            if !explained {
+                Section {
+                    Text(NetworkPanePresentation.explanation)
+                    Button("Continue") {
+                        explained = true
+                        store.startBrowsing()
+                    }
+                }
+            }
+            if store.localNetworkDenied {
+                Section {
+                    Label(NetworkPanePresentation.localNetworkOff, systemImage: "wifi.exclamationmark")
+                    Button("Open System Settings") {
+                        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                }
+            }
+            if let notice = store.inviteNotice {
+                Section {
+                    HStack {
+                        Label(notice, systemImage: "exclamationmark.circle")
+                        Spacer()
+                        Button("OK") { store.dismissInviteNotice() }
+                    }
+                }
+            }
+            if !store.saved.isEmpty {
+                Section(NetworkPanePresentation.joinedSection) {
+                    ForEach(store.saved) { room in
+                        JoinedRoomRow(store: store, room: room)
+                    }
+                }
+            }
+            if explained {
+                Section {
+                    if store.nearby.isEmpty {
+                        HStack {
+                            Text(NetworkPanePresentation.emptyText).foregroundStyle(.secondary)
+                            Spacer()
+                            Button(NetworkPanePresentation.pasteInvite) { store.pasteInvite() }
+                                .help(NetworkPanePresentation.pasteInviteHelp)
+                        }
+                    }
+                    ForEach(store.sortedNearby) { room in
+                        NearbyRoomRow(store: store, room: room)
+                    }
+                } header: {
+                    HStack {
+                        Text(NetworkPanePresentation.nearbySection)
+                        Spacer()
+                        Button(NetworkPanePresentation.findRooms, systemImage: "arrow.clockwise") { Task { await store.refreshNearby() } }
+                            .buttonStyle(.borderless)
+                    }
+                }
+            }
+            Section {
+                HStack {
+                    Text("Got an invite from a colleague?").foregroundStyle(.secondary)
+                    Spacer()
+                    Button(NetworkPanePresentation.pasteInvite) { store.pasteInvite() }
+                        .help(NetworkPanePresentation.pasteInviteHelp)
+                }
+                HStack {
+                    Text(NetworkPanePresentation.shareYourOwn).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Sharing…", action: openSharing)
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .onAppear {
+            if explained { store.startBrowsing() }
+            store.startHealthLoop()
+        }
+        .onDisappear { store.stopBrowsing() }
+        .sheet(isPresented: Binding(get: { store.join != .none }, set: { if !$0 { store.cancelJoin() } })) {
+            JoinSheet(store: store)
+        }
+    }
+}
+
+private struct NearbyRoomRow: View {
+    let store: GuestRoomStore
+    let room: DiscoveredRoom
+
+    var body: some View {
+        let status = store.nearbyStatus[room.id]
+        let state = status?.state ?? .checking
+        let lines = NetworkPanePresentation.nearbyLines(room, status)
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(lines.title).font(.headline)
+                Text([lines.detail, lines.seats ?? ""].filter { !$0.isEmpty }.joined(separator: " · "))
+                    .font(.callout).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Text(NetworkPanePresentation.nearbyStateText(state)).foregroundStyle(state == .open ? .primary : .secondary)
+            if state == .open {
+                Button("Join") { store.beginJoin(room) }
+                    .disabled(room.display.needsUpdate)
+                    .help(NetworkPanePresentation.joinDisabledReason(room) ?? "")
+            }
+        }
+        .opacity(state == .locked || state == .full ? 0.55 : 1)
+    }
+}
+
+private struct JoinedRoomRow: View {
+    let store: GuestRoomStore
+    let room: SavedRoom
+
+    var body: some View {
+        let health = store.health[room.id] ?? .unknown
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("\(room.room) · \(room.host) · \(room.site)").font(.headline)
+                Spacer()
+                Button("Open") { Task { await store.open(room) } }
+                    .disabled(!NetworkPanePresentation.canOpen(health))
+                if NetworkPanePresentation.canOpen(health) {
+                    Button("Change Seat") { Task { await store.chooseSeat(room) } }
+                }
+                if NetworkPanePresentation.canRejoin(health) {
+                    Button("Join") { store.beginRejoin(room) }
+                }
+                Button(health == .identityChanged ? "Remove and Join Again" : "Forget") { Task { await store.forget(room) } }
+            }
+            TimelineView(.periodic(from: .now, by: 30)) { context in
+                Text(NetworkPanePresentation.health(health, host: room.host, now: context.date))
+                    .font(.callout).foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+private struct JoinSheet: View {
+    @Bindable var store: GuestRoomStore
+    /// The typed code lives only here and is cleared as it is sent (J12). An invite's code
+    /// is copied in when its sheet appears and shown masked until Show.
+    @State private var code = ""
+    @State private var showCode = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            content
+        }
+        .padding(20)
+        .frame(width: 380)
+    }
+
+    @ViewBuilder private var content: some View {
+        switch store.join {
+        case .none:
+            EmptyView()
+        case .enteringCode(let room):
+            Text(store.invite == nil ? NetworkPanePresentation.codePrompt(room) : NetworkPanePresentation.invitePrompt(room)).font(.headline)
+            TextField("Your name", text: $store.guestName)
+            HStack {
+                Group {
+                    if store.invite == nil || showCode {
+                        TextField("482 913", text: $code)
+                    } else {
+                        SecureField("Room code", text: $code)
+                    }
+                }
+                .font(.system(.title2, design: .monospaced))
+                .onSubmit { send(room) }
+                if store.invite != nil {
+                    Toggle("Show", isOn: $showCode).toggleStyle(.button)
+                }
+            }
+            .onAppear {
+                if code.isEmpty, let prefill = store.invite?.code, !prefill.isEmpty { code = prefill }
+            }
+            buttons(primary: "Join", enabled: RoomCode.normalize(code) != nil) { send(room) }
+        case .joining(let room):
+            HStack {
+                ProgressView().controlSize(.small)
+                Text(NetworkPanePresentation.joining(room))
+            }
+            HStack {
+                Spacer()
+                Button("Cancel") { store.cancelJoin() }.keyboardShortcut(.cancelAction)
+            }
+        case .refused(let room, let refusal):
+            Text(NetworkPanePresentation.refusal(refusal, host: room.display.label)).fixedSize(horizontal: false, vertical: true)
+            if NetworkPanePresentation.canRetry(refusal) {
+                buttons(primary: "Try Again", enabled: true) { store.join = .enteringCode(room) }
+            } else {
+                HStack {
+                    Spacer()
+                    Button("Close") { store.cancelJoin() }.keyboardShortcut(.defaultAction)
+                }
+            }
+        case .pickingSeat(let room, let seats):
+            seatPicker(room, seats, error: nil)
+        case .seatRefused(let room, let seats, let error):
+            seatPicker(room, seats, error: NetworkPanePresentation.seatRefusal(error, host: room.host))
+        }
+    }
+
+    @ViewBuilder private func seatPicker(_ room: SavedRoom, _ seats: [RoomSeat], error: String?) -> some View {
+        Text(NetworkPanePresentation.seatTitle).font(.headline)
+        if let error { Text(error).foregroundStyle(.red) }
+        ForEach(seats) { seat in
+            let row = NetworkPanePresentation.seatRow(seat)
+            Button {
+                Task { await store.pick(seat: seat, in: room, seats: seats) }
+            } label: {
+                HStack {
+                    Text(row.title)
+                    Spacer()
+                    Text(row.detail).foregroundStyle(.secondary)
+                }
+            }
+            .disabled(seat.taken_by != nil)
+        }
+        HStack {
+            Spacer()
+            Button("Later") { store.join = .none }
+        }
+    }
+
+    private func buttons(primary: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        HStack {
+            Spacer()
+            Button("Cancel") { store.cancelJoin() }.keyboardShortcut(.cancelAction)
+            Button(primary, action: action).keyboardShortcut(.defaultAction).disabled(!enabled)
+        }
+    }
+
+    private func send(_ room: DiscoveredRoom) {
+        let typed = code
+        code = ""
+        showCode = false
+        Task { await store.submit(code: typed, for: room) }
+    }
+}

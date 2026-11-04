@@ -1,0 +1,6 @@
+#!/bin/bash
+# chown mock for the root scripts (mapped by tests/mocks/root-paths.sh): logs the call, changes nothing
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "${0%/*}/../bin/_mocklib.sh"
+mock_log "$@"
+exit 0

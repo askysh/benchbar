@@ -144,6 +144,84 @@ cmd~site default~benchbar site default NAME [--json]~Make NAME the default site.
 cmd~site open-as~benchbar site open-as on|off|status [NAME] [--json]~Turn password-less sign in (open --as) on or off for a site, or show it. Changes benchbar's state only. on needs a person at a terminal.~yes~no~no~yes~stream
 flag~site open-as~--yes~~Do not ask before turning on (still refused without a terminal session, BENCHBAR_NONINTERACTIVE=1).
 flag~site open-as~--json~~JSON lines for on and off, one document for status.
+cmd~share~benchbar share setup|users|preflight|start|stop|extend|status|code|invite|lock|unlock|people|remove|assign|log|open-as|teardown ...~Share a hardened copy of a site with people on your network: setup makes the copy and the identity, start and stop run the share.~no~no~no~no~none
+cmd~share setup~benchbar share setup [--site S] [--from STAMP|latest] [--backup-now] [--users A,B] [--name LABEL] [--refresh] [--regenerate-identity] [--acknowledge-data] [--dry-run] [--yes] [--json]~Prepare sharing: the host identity and a hardened share copy of a site.~yes~no~no~yes~stream
+flag~share setup~--users~A,B~The Frappe users who may sign in to the copy, one seat each. They must be enabled System Users; each loses the roles that can run code or change settings, in the copy only. Default: the last setup's.
+flag~share setup~--from~STAMP|latest~The backup set of the site to copy (benchbar site backups S lists them). Default: the newest complete one.
+flag~share setup~--backup-now~~Take a backup of the site first (benchbar site backup S) and copy that.
+flag~share setup~--name~LABEL~The room's label, at most 40 printable characters. Default: "<your name>'s room".
+flag~share setup~--refresh~~Replace the existing copy (it is backed up first). Anything guests changed in it is lost; needed to change --users.
+flag~share setup~--regenerate-identity~~Replace the host's key and certificate and empty the paired Macs: every pairing becomes invalid. Asks first (--yes).
+flag~share setup~--acknowledge-data~~Agree that the copy holds the site's real data (people, customers, contacts, addresses). Without it setup stops before any change, naming what the copy holds.
+flag~share setup~--dry-run~~Print the plan (size, time, the data the copy holds) and change nothing.
+flag~share setup~--yes~~Do not ask before replacing the copy or the identity.
+flag~share setup~--json~~JSON lines: plan, steps, done.
+env~share setup~MARIADB_ROOT_PASSWORD~Making the copy restores it as MariaDB's root user: the password from the Keychain, this variable, or typed at a terminal. With none of them, setup and its dry run exit 2 before any change.
+cmd~share users~benchbar share users [--site S] [--json]~The users of a site who can take a seat in a shared copy, and which roles each would lose there.~no~no~no~no~document
+cmd~share preflight~benchbar share preflight [--static|--critical] [--quiet] [--json]~The checks that prove this Mac is safe to share the hardened copy on the LAN; exits 1 when one fails.~no~no~no~no~document
+flag~share preflight~--static~~Only the checks that run before anything starts: the copy, its seats, node, the firewall.
+flag~share preflight~--critical~~Only the fast checks a running share repeats: the pf block (probed from this Mac's LAN address with its own listener and a control), the share web process, the bench's Redis.
+flag~share preflight~--quiet~~List only the checks that are not ok.
+flag~share preflight~--json~~One document: protocol, ok, lan_ip and the checks, each with a status, a message and a fix_action.
+cmd~share start~benchbar share start [--for DUR] [--name LABEL] [--dry-run] [--json]~Start sharing on the LAN until the deadline.~yes~no~no~yes~stream
+flag~share start~--for~DUR~How long the share runs: 30m, 4h; from 5 minutes to 12 hours. Default: 4h.
+flag~share start~--name~LABEL~The room's label for this share, at most 40 printable characters. Default: the one share setup recorded.
+flag~share start~--dry-run~~Print the plan and start nothing.
+flag~share start~--json~~JSON lines: plan, steps, done (with the deadline).
+cmd~share stop~benchbar share stop [--json]~Stop sharing: the gateway and the job end, the room empties, every session of the copy ends. Never refused (no dry run).~no~no~no~yes~stream
+flag~share stop~--json~~JSON lines: steps, done.
+cmd~share extend~benchbar share extend --by DUR [--json]~Move the deadline of the running share, up to 12 hours from its start.~no~no~no~yes~stream
+flag~share extend~--by~DUR~How much later: 30m, 1h; from 5 minutes to 12 hours.
+flag~share extend~--json~~JSON lines: done, with the new deadline.
+cmd~share status~benchbar share status [--preflight] [--json]~The share: on, off, expired or error, the time left, the copy, the room's counts. Reads only.~no~no~no~no~document
+flag~share status~--preflight~~Run the critical checks too and add them, each with its fix_action.
+flag~share status~--json~~One document (never the room code).
+cmd~share code~benchbar share code [--new] [--json]~The room code, on the terminal only: the one way it leaves the gateway (--json is the app's read). Refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp.~no~no~no~no~document
+flag~share code~--new~~Draw a new code first: the failure budget resets, the people in the room stay, a code already handed out stops working.
+flag~share code~--json~~One document with the code: never logged, never stored.
+cmd~share invite~benchbar share invite [--install-url URL] [--json]~A ready-to-paste invite for the team channel: a benchbar://share/join link with the room, this Mac's key fingerprint, the code's salt, the code, the LAN address and the deadline. It carries the code, so it is refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp. Needs a running share.~no~no~no~no~document
+flag~share invite~--install-url~URL~Where people download BenchBar, added to the invite text; one http:// or https:// address.
+flag~share invite~--json~~One document with the invite text and its link: the code is in it, never logged, never stored.
+cmd~share lock~benchbar share lock [--json]~Lock the room: nobody new can join until share unlock.~no~no~no~yes~stream
+flag~share lock~--json~~JSON lines: done, with locked and lock_reason.
+cmd~share unlock~benchbar share unlock [--json]~Unlock the room. A lock after 10 wrong codes stays until share code --new.~no~no~no~yes~stream
+flag~share unlock~--json~~JSON lines: done, with locked and lock_reason.
+cmd~share people~benchbar share people [--json]~The people in the room: name, Mac, address, seat, online. Reads only (it retries a wipe the gateway still owes).~no~no~no~no~document
+flag~share people~--json~~One document: state and people, each with id, name, model, ip, seat_id, seat_full_name, online, joined, last_seen.
+cmd~share devices~benchbar share devices [--json]~Another name for share people.~no~no~no~no~document
+flag~share devices~--json~~As share people --json.
+cmd~share remove~benchbar share remove ID [--new-code] [--yes] [--json]~Remove a person from the room: their Mac is blocked for this room and their seat's sessions end. Asks first (--yes).~yes~no~no~yes~stream
+flag~share remove~--new-code~~Also draw a new room code, for when the person is not known: a fresh Mac could join again with the old one.
+flag~share remove~--yes~~Do not ask first.
+flag~share remove~--json~~JSON lines: done, with removed, new_code and the wipe.
+cmd~share revoke~benchbar share revoke ID [--new-code] [--yes] [--json]~Another name for share remove.~yes~no~no~yes~stream
+flag~share revoke~--json~~As share remove --json.
+cmd~share assign~benchbar share assign ID SEAT_ID [--json]~Move a person in the room to another free seat; the old seat's sessions end first.~no~no~no~yes~stream
+flag~share assign~--json~~JSON lines: done, with the device and its new seat.
+cmd~share log~benchbar share log [--device ID] [--since TIME] [--limit N] [--json]~What the people in the room opened in the last 14 days: time, Mac, seat, method, page (two path segments, never a document name), status.~no~no~no~no~document
+flag~share log~--device~ID~Only this Mac (an id of share people).
+flag~share log~--since~TIME~Only entries at or after it: ISO 8601, YYYY-MM-DD HH:MM:SS, a date, or HH:MM:SS today.
+flag~share log~--limit~N~The newest N entries, 1 to 5000. Default: 200.
+flag~share log~--json~~One document: entries (ts, device, user, method, path, status) and truncated.
+cmd~share open-as~benchbar share open-as USER [--print-url] [--json]~Open the shared copy in this Mac's browser signed in as a seat, the way open --as does. Needs sharing on; never a user who is not a seat or can run code. Refused under BENCHBAR_NONINTERACTIVE, --for-agent, mcp and without a terminal (the app passes BENCHBAR_SUDO=gui).~yes~no~no~yes~document
+flag~share open-as~--print-url~~Print the sign-in link instead of opening it; it holds the session.
+flag~share open-as~--json~~One document without the link (never the session).
+cmd~share teardown~benchbar share teardown [--yes] [--json]~Stop sharing, drop the copy (backed up first), and delete the share folder with the host identity and the room; the Time Machine exclusions go too. Asks first (--yes); only a person runs it.~yes~no~no~yes~stream
+flag~share teardown~--yes~~Do not ask first.
+flag~share teardown~--json~~JSON lines: steps, done with copy_dropped, archived_path and state_removed.
+cmd~lan-guard~benchbar lan-guard install|status|remove|allow-node ...~The LAN guard: a pf anchor (com.apple/250.benchbar) that refuses the bench ports (8000:8099 9000:9099 11000:11099 13000:13099 3306) to anything but this Mac, and the firewall allow for the share gateway's node.~yes~yes~no~yes~stream
+cmd~lan-guard install~benchbar lan-guard install [--dry-run] [--yes] [--json]~Write the pf anchor and the launch daemon that loads it at boot, with sudo once, then probe the block from the LAN address. Unchanged, with no sudo, when the guard already matches. A person's decision: refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp, and without a terminal unless BENCHBAR_SUDO=gui.~yes~yes~no~yes~stream
+flag~lan-guard install~--dry-run~~Print what would be written and run, with no sudo.
+flag~lan-guard install~--yes~~Do not ask first (sudo still asks for the password).
+flag~lan-guard install~--json~~JSON lines: done, with state, active, ports, anchor and lan_ip.
+cmd~lan-guard status~benchbar lan-guard status [--json]~Whether the guard is installed, missing or outdated, and whether the bench ports are refused on this Mac's LAN address (a probe with its own listener). Reads only; never refused.~no~no~no~no~document
+flag~lan-guard status~--json~~One document: state, active (null with no LAN address), ports, anchor, lan_ip.
+cmd~lan-guard remove~benchbar lan-guard remove [--yes] [--json]~Unload and delete the pf anchor and its daemon, with sudo once. Sharing refuses to start without them. Asks first.~yes~yes~no~yes~stream
+flag~lan-guard remove~--yes~~Do not ask first.
+flag~lan-guard remove~--json~~JSON lines: done, with the guard's state.
+cmd~lan-guard allow-node~benchbar lan-guard allow-node [--yes] [--json]~Add the realpath of the node the share gateway runs on to the macOS firewall's allowed apps, with sudo once. Unchanged when the firewall is off or already allows it; needed again after a Homebrew upgrade of node.~yes~yes~no~yes~stream
+flag~lan-guard allow-node~--yes~~Do not ask first.
+flag~lan-guard allow-node~--json~~JSON lines: done, with node (the realpath).
 cmd~site hosts~benchbar site hosts~Add a 127.0.0.1 line for every site to /etc/hosts.~yes~yes~no~yes~none
 cmd~site backup~benchbar site backup NAME [--with-files] [--json]~bench --site NAME backup.~no~no~no~yes~document
 flag~site backup~--with-files~~Include the uploads.

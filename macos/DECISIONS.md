@@ -538,6 +538,34 @@ Asked for after the phases, to stop naming drift before the first release.
 - The Plane, the Snail and the Rocket were drawn bolder after the tray's 16 px test: at that size (0.67 px a point) they had 16 to 25 solid pixels against the Bench's 50. The rocket is a fifth larger, the plane deeper in the wing and the keel, the shell larger with thinner spiral cuts.
 - The five new ids are reserved like `bench` and `cup`. A custom runner folder with one of those names now shows an error instead of loading; the changelog says so.
 
+## Sharing a copy on the network (host side)
+
+- The CLI is the only backend: the Sharing tab, the menu bar dot, the popover row and the notices all read `benchbar share … --json`. The app writes no share file and runs no pf, launchctl or sudo itself.
+- Rooms, not pairing (task-2b-spec R3, R3.10). There is no approve step. The host shows the room code and guests type it. The code exists only in `share code --json` stdout (run with `BENCHBAR_NONINTERACTIVE=0`, since the CLI refuses agents) and in `ShareStore.code` in memory. It never goes to UserDefaults, a log line, a notification, an error text or a decoding preview. The pasteboard gets it only on an explicit Copy click, marked `org.nspasteboard.ConcealedType` and `TransientType`. `ShareEvent` has no case that can carry it. A test asserts the log sink, the events, the errors and the defaults.
+- Sudo goes only through macOS's own dialog, and only for network protection (`lan-guard install`) and the firewall allow (`lan-guard allow-node`). Each runs with `BENCHBAR_SUDO=gui` after the app's own alert. This is the exception to "nothing in the app asks for sudo". `share setup`, `start`, `teardown` and `open-as` get `BENCHBAR_NONINTERACTIVE=0` plus `BENCHBAR_SUDO=gui` after an alert too, because the CLI refuses them without a person (U3). The lan-guard argv is one constant (`CLIClient.lanGuardArguments`), unverified against the CLI at the time of writing.
+- In the setup picker, a role that can run code or change settings is amber, with "removed in the copy". The copy demotes it, and the host should see that before choosing.
+- There is no working-site mode. Only the hardened copy (share.localhost) is ever shared.
+- Notices: `{name} joined` with `name · model · ip` and no seat (J14), left, locked by wrong codes, join trouble, and reminders at 10 and 1 minutes. The store records its first status and people list silently, so a relaunch repeats none of them.
+- Polling: `share status` every 5 s only while sharing or while the Sharing tab is open, and the checks every 60 s or after wake or a network change. `share status` is not cheap (Task 5, concern 1).
+- Move to lists only seats the app has seen held in this room, because the CLI lists held seats only (`share people`).
+- Bench Stop and Restart ask first while that bench shares (`BenchStore.confirmWhileSharing`). Start does not ask.
+- Local Network access is not triggered by the host. The `local_network` check turns red, and Start stays disabled until it passes; the guest side owns the trigger helper.
+
+## Joining a room (guest side)
+
+- The guest runs CPace-X25519-SHA512 (task-2b-spec R3.3, J1-J19) against the host's gateway. `CPace.swift` is a byte-for-byte port of `lib/frappe-local/share/cpace.js`; X25519, SHA-512 and HMAC-SHA512 come from CryptoKit. The Elligator2 map is not ported: `cpace-map.js` is bundled unmodified and runs in JavaScriptCore, so host and guest share one implementation of the risky part. Only the 32 hashed bytes reach JavaScript, as a Uint8Array built through the context's constructor.
+- Hello, start and finish go over one keep-alive TLS connection, because Ta binds the server SPKI and the TLS exporter (`EXPORTER-bb-join-v3`, 32 bytes, empty context, `sec_protocol_metadata_create_secret`) of the connection finish goes out on.
+- The host's SPKI is pinned only after Tb verifies. Every later connection is pinned to it; the hostname and the chain are ignored on purpose, since the host's certificate is self-signed and the SPKI is its only identity.
+- The client identity is a P-256 key plus a hand-built self-signed certificate in the file-based login keychain: an ad-hoc-signed app has no keychain access group, so the data-protection keychain is out. A lookup error is thrown, never answered with a new key, because a new key is a new SPKI and every saved room would silently break. An ACL prompt after an app update (new ad-hoc cdhash) is UNVERIFIED (S3, Task 18).
+- The guest forwarder listens on 127.0.0.1 and ::1 only (R0-2) at `<slug>-<8hex>.localhost:<port>`; `*.localhost` resolves to loopback with no hosts line, so it needs no sudo. It checks each request head (exact Host, same Origin, no cross-site or same-site `Sec-Fetch-Site`, no Upgrade) and sends it on with `Connection: close`, so one browser connection carries one request: a pooled keep-alive connection reused by a cross-site request would otherwise skip the check.
+
+## Lazy sharing and links (PR 96 review)
+
+- A `benchbar://down` or `restart` link skips the "people are in the room" confirm (`BenchStore.perform(_:on:fromLink:)`), as the 0.5.8 line says: Raycast and Shortcuts exist to skip clicks, and the browser already asks before a page opens the app. Buttons in the app still ask.
+- Sharing costs nothing at launch for a person who never shares: `ShareCenter.attach` stores the bench store and starts nothing. A ShareStore (with its first `share status` call), the NWPathMonitor and the wake observer begin when the Sharing tab first shows, or at launch for a bench whose share was on at the last quit (`ShareCenter.restoreActive`, benches kept in UserDefaults under `shareActiveBenches`, written on every status change). A share started from Terminal while the app never opened the tab is found when the tab is opened. A saved guest room needs no ShareStore: it has its own store.
+- Share errors stay in the ShareStore (`lastError`, shown in the Sharing tab and under the popover share row). They no longer write `BenchModel.lastError`, the red banner shared by the whole app.
+- Quitting asks when people are in a room this Mac hosts or a guest forwarder is up, as it does for a running share setup. A share link's address is never logged, only "share link".
 ## Labs
 
 - Labs toggles live in Settings and read the CLI's LABS key; the app never stores the flags itself, so the CLI, MCP and app agree. `Labs.shared` refreshes at launch, when Settings appears and when the window becomes key (at most every 5 s); turning one on passes `--yes` with BENCHBAR_NONINTERACTIVE=0 and BENCHBAR_SUDO=gui, as `site open-as on` does. A non zero exit from `labs list` is read as a CLI without the command.
+- When the lan-rooms lab reads off, `ShareCenter.tearDown` stops watching and drops the stores but keeps `shareActiveBenches`: only the CLI's `labs off` really stops shares, so a refresh that reports off must not forget which benches were sharing.

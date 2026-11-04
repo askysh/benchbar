@@ -13,6 +13,20 @@ for a in "$@"; do
   [[ "$prev" == "-o" ]] && out="$a"
   prev="$a"
 done
+# the share checks ("-D HEADERS -o BODY URL"): $MOCK_STATE/share_http/KEY holds a raw response (status line,
+# headers, a blank line, body) for the URL whose every character but a letter or digit is "_"; no file is a 404
+# page, $MOCK_STATE/share_http_down is a web process that does not answer (curl exit 7)
+hdr=""; prev=""
+for a in "$@"; do [[ "$prev" == "-D" ]] && hdr="$a"; prev="$a"; done
+if [[ -n "$hdr" ]]; then
+  [[ ! -f "${MOCK_STATE:-/nonexistent}/share_http_down" ]] || exit 7
+  key="$(printf '%s' "${*: -1}" | tr -c 'A-Za-z0-9' '_')"
+  raw="${MOCK_STATE:-/nonexistent}/share_http/${key}"
+  [[ -f "$raw" ]] || { raw="${MOCK_STATE:-/nonexistent}/share_http_404"; printf 'HTTP/1.1 404 NOT FOUND\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<h1>Not Found</h1>\n' >"$raw"; }
+  awk -v hdr="$hdr" -v body="${out:-/dev/null}" 'BEGIN { inbody = 0 } inbody == 0 { print > hdr; if ($0 == "" || $0 == "\r") inbody = 1; next } { print > body }' "$raw"
+  [[ -z "$out" || -e "$out" ]] || : >"$out"
+  exit 0
+fi
 for a in "$@"; do [[ "$a" == "-w" ]] && { printf '%s' "$code"; [[ "$code" == "000" ]] && exit 7; exit 0; }; done
 url="${*: -1}"
 # $MOCK_STATE/http/KEY serves URL (KEY: the URL with every character other

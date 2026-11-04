@@ -167,7 +167,8 @@ PY
             [[ -f "$old" && "$old" != "${base}"-* ]] && rm -f "$old"
           done
         fi
-        printf 'local backup\n' >"${base}-database.sql.gz"
+        # MOCK_BENCH_BACKUP_DB=FILE: the database file is a copy of FILE (a dump a restore can read)
+        if [[ -n "${MOCK_BENCH_BACKUP_DB:-}" ]]; then cp "$MOCK_BENCH_BACKUP_DB" "${base}-database.sql.gz"; else printf 'local backup\n' >"${base}-database.sql.gz"; fi
         printf '{}\n' >"${base}-site_config_backup.json"
         # MOCK_BENCH_BACKUP_NOFILES=1: a backup that has no file archives
         if [[ "${4:-}" == "--with-files" && -z "${MOCK_BENCH_BACKUP_NOFILES:-}" ]]; then printf 'public\n' >"${base}-files.tar"; printf 'private\n' >"${base}-private-files.tar"; fi
