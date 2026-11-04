@@ -7,12 +7,17 @@ import Carbon.HIToolbox
 final class HotKey {
     private static let signature: OSType = 0x4242_5153 // 'BBQS'
 
-    private var hotKeyRef: EventHotKeyRef?
-    private var handlerRef: EventHandlerRef?
+    private nonisolated(unsafe) var hotKeyRef: EventHotKeyRef?
+    private nonisolated(unsafe) var handlerRef: EventHandlerRef?
     private let onPress: () -> Void
 
     init(onPress: @escaping () -> Void) {
         self.onPress = onPress
+    }
+
+    deinit {
+        if let hotKeyRef { UnregisterEventHotKey(hotKeyRef) }
+        if let handlerRef { RemoveEventHandler(handlerRef) }
     }
 
     var isRegistered: Bool { hotKeyRef != nil }
