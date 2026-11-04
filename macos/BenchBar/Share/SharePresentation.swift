@@ -52,9 +52,20 @@ nonisolated enum SharePresentation {
     static let peopleTitle = "People in the room"
     static let activityNote = "Guests are told this log exists."
 
-    /// Start is allowed only with no red check (a missing check list counts as not red).
+    /// Start is allowed only with no red check (a missing check list counts as not red), leaving out
+    /// the checks of the running share: `share start` gates on its static checks alone.
     static func canStart(_ status: ShareStatus) -> Bool {
-        !(status.preflight?.checks.contains { $0.status == .fail } ?? false)
+        !(status.preflight?.checks.contains { $0.status == .fail && !waitsForStart($0, status) } ?? false)
+    }
+
+    /// Checks that probe the gateway or the share web process. While sharing is off there is nothing to
+    /// probe (the web checks read the last share's port and fail); the job runs them, failing closed,
+    /// before it lets anyone in.
+    static let checksOfTheRunningShare: Set<String> = ["gateway_reachable", "share_web_lan_closed", "share_traceback_off", "share_debugger_off"]
+    static let checkedAtStart = "Checked when sharing starts"
+
+    static func waitsForStart(_ check: ShareCheck, _ status: ShareStatus) -> Bool {
+        !status.isOn && checksOfTheRunningShare.contains(check.id)
     }
 
     /// 3540 s → "59 min", 7260 → "2 h 1 min", 30 → "less than a minute".

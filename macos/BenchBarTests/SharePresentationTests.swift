@@ -18,6 +18,31 @@ struct SharePresentationTests {
         #expect(SharePrimary.from(ShareStatus(protocolVersion: 2, state: .off)) == .updateCLI)
     }
 
+    @Test func checksOfTheRunningShareDoNotBlockAStart() {
+        let webDown = SharePreflight(ok: false, checks: [
+            ShareCheck(id: "pf_active", status: .ok),
+            ShareCheck(id: "gateway_reachable", status: .skip),
+            ShareCheck(id: "share_traceback_off", status: .fail, fixAction: .restartSharing),
+            ShareCheck(id: "share_debugger_off", status: .fail, fixAction: .restartSharing),
+        ])
+        for state in [ShareState.off, .expired] {
+            let status = ShareStatus(state: state, copy: copy, preflight: webDown)
+            #expect(SharePrimary.from(status) == .start(enabled: true))
+            #expect(webDown.checks.filter { SharePresentation.waitsForStart($0, status) }.map(\.id)
+                == ["gateway_reachable", "share_traceback_off", "share_debugger_off"])
+        }
+        let on = ShareStatus(state: .on, copy: copy, preflight: webDown)
+        #expect(!webDown.checks.contains { SharePresentation.waitsForStart($0, on) })
+    }
+
+    @Test func aRefusedSetupSaysWhy() {
+        let done = #"{"event":"done","exit":1,"changed":[],"error":"Sharing setup was interrupted."}"#
+        #expect(ShareStepLine.failure([done]) == "Sharing setup was interrupted.")
+        let step = #"{"event":"step","status":"fail","message":"the backup failed"}"#
+        #expect(ShareStepLine.failure([step, #"{"event":"done","exit":1}"#]) == "the backup failed")
+        #expect(ShareStepLine.failure([#"{"event":"done","exit":0}"#]) == nil)
+    }
+
     @Test func countdownAndIndicator() {
         #expect(SharePresentation.countdown(30) == "less than a minute")
         #expect(SharePresentation.countdown(3540) == "59 min")
