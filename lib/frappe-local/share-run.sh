@@ -388,6 +388,7 @@ fl_cmd_share_start() {
   fl_share_dur_v secs "$dur" --for
   fl_require_bench
   fl_share_require_setup
+  fl_share_resume_leftover
   rm -f "$(fl_share_dir)/stop_requested"
   fl_sp_nc_open 127.0.0.1 "$FL_REDIS_CACHE_PORT" || fl_die "The bench is not running: its Redis does not answer on ${FL_REDIS_CACHE_PORT}." "Start it (benchbar up), then run this again."
 

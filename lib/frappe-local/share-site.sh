@@ -396,9 +396,12 @@ fl_share_copy_plan_apply() {
   if [[ -f "${dir}/share.json" ]]; then mv -f "${dir}/share.json" "${dir}/share.json.prev" || return 1; fi
   SH_RESTORE_BEGAN=1
   SH_RESUME_ON_EXIT=1
+  # the marker goes down before the restore pauses the bench's scheduler; a pause that was already there is not ours
+  if [[ "${FL_PULL_QUIESCE:-0}" == 1 ]]; then fl_share_dir_ensure; : >"$(fl_share_pause_marker)"; fi
   fl_steps_push
   fl_srestore_execute || code=$?
   fl_steps_pop
+  [[ "${FL_PULL_QUIESCED:-0}" == 1 ]] || rm -f "$(fl_share_pause_marker)"
   SR_STEP_PARENT=""
   return "$code"
 }

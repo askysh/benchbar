@@ -681,9 +681,21 @@ assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "Sharing setup was interrup
 setup --acknowledge-data --yes --bench-dir "$BENCH"
 assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "Run: benchbar share setup --refresh" "(the hint comes before the question of who may sign in)"
 
+# a setup that nothing could end cleanly (the Mac lost power) leaves the pause and its marker: doctor
+# flags it with the resume command, and the next setup resumes it first
+(cd "$BENCH" && bench set-config -g -p pause_scheduler 1)
+: >"$SHARE_DIR/scheduler-paused"
+sched_check() {
+  { "$FM" doctor --json --bench-dir "$BENCH" 2>/dev/null || true; } |
+    jget - '" | ".join("%s | %s" % (c["level"], c["fix_command"]) for c in d["checks"] if c["id"] == "share_scheduler")'
+}
+assert_eq "warn | cd $BENCH && bench config remove-common-config pause_scheduler" "$(sched_check)"
 # --refresh finishes the setup, and nothing is interrupted any more
 jsetup --users "priya@example.com" --acknowledge-data --refresh --yes
 assert_eq "0" "$CODE" "$OUT$ERR"
+assert_eq "False" "$(common_paused)" "(the next setup resumed the leftover pause)"
+assert_no_file "$SHARE_DIR/scheduler-paused"
+assert_eq "ok" "$(sched_check | cut -d' ' -f1)"
 run_json_status
 assert_eq "False" "$(printf '%s' "$OUT" | jget - 'd["setup_interrupted"]')"
 

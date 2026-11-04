@@ -185,6 +185,30 @@ SH_LABEL_JSON=""; SH_WEB_PORT=""; SH_APPS_JSON="{}"; SH_HARDEN_JSON=""; SH_RESTO
 SH_PRIOR_USERS=""; SH_FINGERPRINT=""
 SH_RESUME_ON_EXIT=0
 
+# The restore of the copy pauses the scheduler of every site (the bench wide pause cannot be narrowed to
+# the copy: frappe's restore writes a fresh site_config.json, so a pause of the copy's own comes too late
+# for the jobs that run while the data goes in). A marker in the state folder, written before the pause,
+# says this setup set it; doctor flags a marker whose pause is still there, and the next share setup or
+# share start resumes it first.
+fl_share_pause_marker() { printf '%s/scheduler-paused' "$(fl_share_dir)"; }
+
+# fl_share_resume_leftover: resumes a pause a stopped setup left behind (its marker is still there).
+# A marker whose pause is gone is only removed. A pause without a marker is the user's, and stays.
+fl_share_resume_leftover() {
+  local marker
+  marker="$(fl_share_pause_marker)"
+  [[ -f "$marker" ]] || return 0
+  if fl_pull_common_paused; then
+    fl_bench_env_exports
+    if (cd "$FL_BENCH_DIR" && bench config remove-common-config pause_scheduler) >>"${FL_LOG_FILE:-/dev/null}" 2>&1; then
+      fl_info "the scheduler that an earlier share setup left paused runs again"
+    else
+      fl_die "The scheduler of every site on this bench is still paused by an earlier share setup." "cd ${FL_BENCH_DIR} && bench config remove-common-config pause_scheduler"
+    fi
+  fi
+  rm -f "$marker"
+}
+
 # fl_share_on_exit: benchbar's exit handler, however the run ended (a failed step, fl_die, TERM, INT,
 # HUP). The copy's restore paused the scheduler of every site (FL_PULL_QUIESCED); that pause goes now.
 # frappe's restore writes a fresh site_config, so the half-restored copy first gets a pause and muted
@@ -197,7 +221,8 @@ fl_share_on_exit() {
     fl_share_site_config pause_scheduler 1 || true
     fl_share_site_config mute_emails 1 || true
   fi
-  fl_pull_step_resume || fl_fix "cd ${FL_BENCH_DIR} && bench config remove-common-config pause_scheduler"
+  if fl_pull_step_resume; then rm -f "$(fl_share_pause_marker)"
+  else fl_fix "cd ${FL_BENCH_DIR} && bench config remove-common-config pause_scheduler"; fi
 }
 
 # fl_share_user_ok NAME: a name that survives a comma separated list, one line of
@@ -283,6 +308,7 @@ fl_cmd_share_setup() {
   [[ "$site" != "$FL_SHARE_SITE" ]] || fl_die "${FL_SHARE_SITE} is the copy; there is nothing to copy from it." "Pass --site with the site to share."
   [[ "$from" == latest || "$from" =~ ^[0-9]{8}_[0-9]{6}$ ]] || fl_die "--from takes a backup stamp (YYYYmmdd_HHMMSS) or latest." "benchbar site backups ${site} lists the stamps."
   fl_share_require_stopped
+  fl_share_resume_leftover
   dir="$(fl_share_dir)"
   [[ "$refresh" == 1 ]] || ! fl_share_setup_interrupted || fl_die "$FL_SHARE_INTERRUPTED_MSG" "$FL_SHARE_INTERRUPTED_FIX"
   SH_SITE="$site"; SH_BACKUP_NOW="$backup_now"; SH_REFRESH="$refresh"; SH_REGEN="$regen"
