@@ -42,6 +42,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store = BenchStore(settings: settings)
         statusItemController = StatusItemController(store: store, settings: settings, library: library)
         store.onChange = { [weak self] in self?.statusItemController.update() }
+        let labsStore = store!
+        Labs.shared.loader = .cli { await MainActor.run { labsStore.cliClient } }
         NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.store.appBecameActive() }
         }
@@ -80,7 +82,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             updateOffer: updateOffer,
             update: { [weak self] in self?.updateNowAction() })
         popover = PopoverController(rootView: PopoverView(store: store, commands: commands))
-        popover.onOpenChange = { [weak self] open in self?.store.setPopoverOpen(open) }
+        popover.onOpenChange = { [weak self] open in
+            self?.store.setPopoverOpen(open)
+            if open { Labs.shared.refreshIfStale() }
+        }
 
         let workbench = Workbench(store: store)
         about = AboutModel(store: store, offer: updateOffer)
@@ -127,6 +132,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // open, close, occlusion and the page: the window's views stay alive
         // when it closes, so the store hears of them from the controller
+        mainWindow.onKey = { Task { await Labs.shared.refresh() } }
+        NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
+            Task { @MainActor in Labs.shared.refreshIfStale() }
+        }
         mainWindow.onSight = { [weak self] sight in self?.store.setWindow(sight) }
 
         logWindows = LogWindowController { [weak self] path in self?.openLogsInTerminal(path) }
@@ -138,6 +147,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         Task {
             await store.start()
+            await Labs.shared.refresh()
             benchesLoaded = true
             let waiting = pendingURLs
             pendingURLs = []

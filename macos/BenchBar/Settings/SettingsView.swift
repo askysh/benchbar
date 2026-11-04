@@ -59,6 +59,7 @@ struct SettingsView: View {
                         cliSection
                         editorSection
                         shortcutsSection.id(Self.shortcutsID)
+                        labsSection
                     case .menuBar:
                         previewSection
                         runnerSection
@@ -75,6 +76,53 @@ struct SettingsView: View {
             library.reload()
             launchAtLogin.refresh()
             Task { await notifier.refresh() }
+            Task { await Labs.shared.refresh() }
+        }
+    }
+
+    // MARK: labs
+
+    @ViewBuilder private var labsSection: some View {
+        let labs = Labs.shared
+        Section {
+            if labs.availability == .unsupported {
+                Text("Update the CLI to use Labs").foregroundStyle(.secondary)
+            } else if labs.availability == .cliMissing {
+                Text("BenchBar cannot find the benchbar command").foregroundStyle(.secondary)
+            } else {
+                if let message = labs.refreshError {
+                    Text(message).font(.callout).foregroundStyle(.red)
+                }
+                ForEach(labs.entries) { entry in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Toggle(isOn: Binding(
+                            get: { entry.enabled },
+                            set: { on in Task { try? await labs.set(name: entry.name, on: on) } })) {
+                            Text(entry.title)
+                            Text(entry.description)
+                        }
+                        .disabled(labs.busy.contains(entry.name) || (entry.available == false && !entry.enabled))
+                        if entry.available == false {
+                            Text("Not on this platform").font(.caption).foregroundStyle(.secondary)
+                        }
+                        if entry.enabled {
+                            Label(entry.warning, systemImage: "exclamationmark.triangle.fill")
+                                .font(.callout)
+                                .foregroundStyle(.orange)
+                        } else {
+                            Text(entry.warning).font(.callout).foregroundStyle(.secondary)
+                        }
+                        Text("since \(entry.since)").font(.caption).foregroundStyle(.secondary)
+                        if let error = labs.errors[entry.name] {
+                            Text(error).font(.callout).foregroundStyle(.red)
+                        }
+                    }
+                }
+            }
+        } header: {
+            Text("Labs")
+        } footer: {
+            Text("Experiments can change or disappear. Turning one off stops what it started.")
         }
     }
 
