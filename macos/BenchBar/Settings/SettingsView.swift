@@ -236,7 +236,10 @@ struct SettingsView: View {
         } header: {
             Text("Keyboard shortcuts")
         } footer: {
-            Text("In the menu bar popover, for the bench it shows.").font(.caption).foregroundStyle(.secondary)
+            Text(Labs.shared.isOn(.quickSwitch)
+                 ? "In the menu bar popover, for the bench it shows. Quick Switch works from any app."
+                 : "In the menu bar popover, for the bench it shows.")
+                .font(.caption).foregroundStyle(.secondary)
         }
     }
 
