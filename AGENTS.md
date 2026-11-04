@@ -195,8 +195,9 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
   `sites/`. The tool moves broken folders aside; do the same. The
   exceptions are its own lock folders (the run lock and
   `<bench>/.benchbar.lock`, with the `.stale.<pid>` name a stale one is
-  renamed to and the `.reclaim` guard) and the oldest `.old` log copies
-  beyond three.
+  renamed to and the `.reclaim` guard), the oldest `.old` log copies
+  beyond three, and `share teardown`'s removal of the share state folder
+  (`<state>/share`, outside the bench, confirmed first).
 - Never run `bench update` unless the user asked for it by name.
 - Never write your own LaunchAgents or `Procfile`. Use `benchbar
   service`, which generates `Procfile.lean`, the runner and the agent
@@ -212,7 +213,7 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
 - On macOS `sudo` is only ever used for `/etc/hosts`, the wkhtmltopdf
   package (which includes Rosetta 2, when the package needs it and it is
   missing), the LAN guard (`benchbar lan-guard install` and `remove`: the
-  pf anchor and its launch daemon) and the firewall allow for node
+  pf anchor, its launch daemon and the pf reference it took) and the firewall allow for node
   (`benchbar lan-guard allow-node`); on Linux for apt, the wkhtmltopdf .deb
   and MariaDB (see above). The `lan-guard` commands are a person's
   decision: never run them under `--for-agent`, `mcp` or
