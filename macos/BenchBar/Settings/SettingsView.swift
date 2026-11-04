@@ -248,8 +248,8 @@ struct SettingsView: View {
                 Text("Quick Switch from any app: ⌃⌥U")
                 Text("Lists the pinned users of the sites where Open as is on: ↑ ↓ then ↩ switches, ⇥ moves to the next site, esc closes. It needs no Accessibility permission.")
             }
-            if settings.quickSwitchEnabled && settings.quickSwitchConflict {
-                Label("⌃⌥U is used by another app, so Quick Switch is off. Turn it off and on again to retry.",
+            if settings.quickSwitchConflict {
+                Label("⌃⌥U is used by another app, so Quick Switch was turned off. Turn it on again to retry.",
                       systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.red)
             }

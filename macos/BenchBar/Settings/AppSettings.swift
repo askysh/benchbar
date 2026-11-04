@@ -57,6 +57,12 @@ final class AppSettings {
     }
     /// Another app holds ⌃⌥U, so Quick Switch is off. Not stored: the next launch asks the system again.
     var quickSwitchConflict = false
+    /// The system refused ⌃⌥U: the setting goes back to off (so it is not left on with a dead key,
+    /// and not kept for the next launch) and the conflict note stays to say why.
+    func quickSwitchRegistrationFailed() {
+        quickSwitchEnabled = false
+        quickSwitchConflict = true
+    }
     /// The hot key follows the setting (QuickSwitchController.sync).
     @ObservationIgnored var onQuickSwitchChange: (() -> Void)?
 

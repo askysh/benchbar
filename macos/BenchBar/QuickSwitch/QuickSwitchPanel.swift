@@ -66,7 +66,11 @@ final class QuickSwitchController {
     /// feature off with a note in Settings; the next change of the setting tries again.
     func sync() {
         if settings.quickSwitchEnabled {
-            settings.quickSwitchConflict = !hotKey.register()
+            if hotKey.register() {
+                settings.quickSwitchConflict = false
+            } else {
+                settings.quickSwitchRegistrationFailed()
+            }
         } else {
             hotKey.unregister()
             settings.quickSwitchConflict = false

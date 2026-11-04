@@ -317,6 +317,15 @@ struct QuickSwitchTests {
         #expect(AppSettings(defaults: defaults).quickSwitchEnabled)
     }
 
+    @Test func aRefusedHotKeyTurnsTheSettingBackOffAndKeepsTheNote() throws {
+        let defaults = try #require(UserDefaults(suiteName: "benchbar-tests-\(UUID().uuidString)"))
+        let settings = AppSettings(defaults: defaults)
+        settings.quickSwitchEnabled = true
+        settings.quickSwitchRegistrationFailed()
+        #expect(!settings.quickSwitchEnabled && settings.quickSwitchConflict)
+        #expect(!AppSettings(defaults: defaults).quickSwitchEnabled, "the dead key is not kept for the next launch")
+    }
+
     @Test func theSpokenTitleDropsTheEllipsis() {
         #expect(model().spokenTitle == "Open macdev as")
     }
