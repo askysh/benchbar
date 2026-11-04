@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here.
 
+## Unreleased
+
+- Labs: `benchbar labs` lists the experiments, and `labs on NAME` (in a terminal) turns one on. While one is off its commands are hidden and refuse to run. `lan-rooms` and `quick-switch` are the first two.
+
 ## 0.8.1 - 2026-11-01
 
 BenchBar for Windows is now a beta. The tray takes a new PC from no WSL to

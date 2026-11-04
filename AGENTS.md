@@ -219,6 +219,11 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
 - Open as is the person's choice. Never run `benchbar site open-as on`
   (it refuses an agent anyway) and never ask for or use an
   `open --as --print-url` link: it holds a login session for that user.
+- Experiments are the person's choice. `benchbar labs` lists them; never
+  run `benchbar labs on` (it refuses an agent anyway). A command of an
+  experiment that is off exits 2 with "Turn it on: benchbar labs on NAME":
+  tell the user, do not work around it. `status --json` and
+  `commands --json` list the `labs` that are on.
 - Never print or log the MariaDB root password. It lives in the Keychain
   (a 0600 file on Linux);
   `benchbar mariadb-password --yes` prints it when a user asks for it.
