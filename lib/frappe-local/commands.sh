@@ -179,6 +179,9 @@ flag~share status~--json~~One document (never the room code).
 cmd~share code~benchbar share code [--new] [--json]~The room code, on the terminal only: the one way it leaves the gateway (--json is the app's read). Refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp.~no~no~no~no~document
 flag~share code~--new~~Draw a new code first: the failure budget resets, the people in the room stay, a code already handed out stops working.
 flag~share code~--json~~One document with the code: never logged, never stored.
+cmd~share invite~benchbar share invite [--install-url URL] [--json]~A ready-to-paste invite for the team channel: a benchbar://share/join link with the room, this Mac's key fingerprint, the code's salt, the code, the LAN address and the deadline. It carries the code, so it is refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp. Needs a running share.~no~no~no~no~document
+flag~share invite~--install-url~URL~Where people download BenchBar, added to the invite text; one http:// or https:// address.
+flag~share invite~--json~~One document with the invite text and its link: the code is in it, never logged, never stored.
 cmd~share lock~benchbar share lock [--json]~Lock the room: nobody new can join until share unlock.~no~no~no~yes~stream
 flag~share lock~--json~~JSON lines: done, with locked and lock_reason.
 cmd~share unlock~benchbar share unlock [--json]~Unlock the room. A lock after 10 wrong codes stays until share code --new.~no~no~no~yes~stream
