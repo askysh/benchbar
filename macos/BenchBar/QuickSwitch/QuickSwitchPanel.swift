@@ -61,6 +61,7 @@ extension HotKey: HotKeyRegistering {}
 /// not registered and the panel opens from nowhere.
 final class QuickSwitchController {
     static let conflictNote = "⌃⌥U is used by another app, so Quick Switch was turned off. Turn it on again to retry."
+    static let stuckOnNote = "The key is held by another app, and BenchBar could not turn the lab off: run benchbar labs off quick-switch"
 
     private let store: BenchStore
     private let labs: Labs
@@ -84,8 +85,13 @@ final class QuickSwitchController {
         }
         guard !hotKey.register() else { return }
         Task { [labs] in
-            try? await labs.set(.quickSwitch, on: false)
-            labs.note(.quickSwitch, Self.conflictNote)
+            do {
+                try await labs.set(.quickSwitch, on: false)
+                labs.note(.quickSwitch, Self.conflictNote)
+            } catch {
+                // the CLI flag is still on and no key is registered: the toggle keeps showing the CLI's truth
+                labs.note(.quickSwitch, Self.stuckOnNote)
+            }
         }
     }
 

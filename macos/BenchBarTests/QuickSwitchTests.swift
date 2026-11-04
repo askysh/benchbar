@@ -367,6 +367,16 @@ struct QuickSwitchTests {
         #expect(labs.errors["quick-switch"] == QuickSwitchController.conflictNote)
     }
 
+    @MainActor @Test func aRefusedKeyWithAFailingRollbackKeepsTheCLITruthAndSaysHowToFixIt() async throws {
+        let (labs, _, key, backend) = try wired(startsOn: false, accept: false)
+        backend.failTurningOff = true
+        await labs.refresh()
+        try await labs.set(.quickSwitch, on: true)
+        for _ in 0..<200 where labs.errors["quick-switch"] != QuickSwitchController.stuckOnNote { await Task.yield() }
+        #expect(labs.isOn(.quickSwitch) && !key.registered, "the toggle reads what the CLI holds")
+        #expect(labs.errors["quick-switch"] == QuickSwitchController.stuckOnNote)
+    }
+
     @MainActor @Test func thePanelDoesNotOpenWhileTheLabIsOff() throws {
         let (labs, controller, _, _) = try wired(startsOn: false)
         controller.toggle()
