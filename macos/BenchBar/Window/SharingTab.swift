@@ -27,7 +27,8 @@ struct SharingTab: View {
                     primarySection(status)
                     if status.isOn { roomSection(status) }
                     noticesSection(status)
-                    checksSection(status)
+                    // a bench never set up fails every check by definition; the list is for after setup
+                    if SharePrimary.from(status) != .setUp { checksSection(status) }
                     if let copy = status.copy { copySection(copy, status: status) }
                     if status.isOn { peopleSection(status) ; activitySection }
                 }
@@ -50,7 +51,8 @@ struct SharingTab: View {
     @ViewBuilder
     private func primarySection(_ status: ShareStatus) -> some View {
         Section {
-            Text(SharePresentation.liveUpdates).foregroundStyle(.secondary)
+            Text(SharePrimary.from(status) == .setUp ? SharePresentation.setUpIntro : SharePresentation.liveUpdates)
+                .foregroundStyle(.secondary)
             HStack {
                 if status.isOn {
                     Text(SharePresentation.indicator(status))

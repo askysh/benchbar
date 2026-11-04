@@ -37,6 +37,7 @@ nonisolated enum SharePresentation {
     static let inviteCopied = "Invite copied — paste it in your team channel. New code or Stop makes it stop working."
     static let codeNote = "Anyone on this Wi-Fi with the code can join. Remove people anytime."
     static let codeProves = "The code proves someone may join; it does not prove to them that this Mac is the host."
+    static let setUpIntro = "Share a copy of this site with people on the same Wi-Fi. Setup makes the copy; nothing is shared until you press Start sharing."
     static let liveUpdates = "Guests see changes after a page refresh."
     static let awake = "Keeping this Mac awake while sharing; closing the lid still ends it."
     static let locked = "Room locked: nobody new can join."
@@ -120,6 +121,10 @@ nonisolated enum SharePresentation {
         case "local_network": "Local Network access for BenchBar"
         case "firewall_node": "The firewall lets sharing through"
         case "bench_redis_up": "The bench is running"
+        case "lan_ip": "This Mac has a network address"
+        case "gateway_reachable": "The gateway answers on the network"
+        case "share_traceback_off": "Error traces are hidden in the copy"
+        case "share_debugger_off": "The debugger is off in the copy"
         case "share_web_lan_closed": "The copy is reachable only through BenchBar"
         default: check.id.replacingOccurrences(of: "_", with: " ").capitalized
         }
