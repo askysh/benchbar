@@ -120,13 +120,12 @@ assert_eq "['lan-rooms', 'quick-switch']" "$(printf '%s' "$OUT" | jget - 'd["lab
 run_fm labs off quick-switch
 
 # ---- commands --json and the help text with a gated command in the table
-# (this version has no share command, so the table gets rows for the test)
+# (the real table has the share and lan-guard rows)
 cat >"$TMP_DIR/gate.sh" <<'SH'
 . "$ROOT/lib/frappe-local/ui.sh"
 . "$ROOT/lib/frappe-local/state.sh"
 . "$ROOT/lib/frappe-local/labs.sh"
 . "$ROOT/lib/frappe-local/commands.sh"
-FL_CMD_TABLE="${FL_CMD_TABLE}"$'\n''cmd~share~benchbar share~Share a site.~no~no~no~yes~stream'$'\n''flag~share~--seat~NAME~A seat.'$'\n''cmd~share stop~benchbar share stop~Stop.~no~no~no~yes~stream'
 fl_commands_json
 printf '%s\n' "  site list    sites" "  share       Share a site." "                  --seat NAME: the seat" "  path        Print it." | fl_lab_usage_filter
 SH
