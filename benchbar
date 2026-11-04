@@ -157,6 +157,8 @@ SCRIPT_DIR="$(fl_resolve_self)"
 . "${SCRIPT_DIR}/lib/frappe-local/site-restore.sh"
 # shellcheck source=lib/frappe-local/selfupdate.sh
 . "${SCRIPT_DIR}/lib/frappe-local/selfupdate.sh"
+# shellcheck source=lib/frappe-local/labs.sh
+. "${SCRIPT_DIR}/lib/frappe-local/labs.sh"
 # shellcheck source=lib/frappe-local/commands.sh
 . "${SCRIPT_DIR}/lib/frappe-local/commands.sh"
 # the platform layer goes over the macOS functions last (Linux only)
@@ -201,7 +203,7 @@ COMMAND=""
 ARGS=()
 
 usage() {
-  cat <<USAGE
+  cat <<USAGE | fl_lab_usage_filter
 benchbar ${FL_VERSION}: local Frappe/ERPNext bench on macOS, in the background.
 
 Usage: benchbar <command> [options]
@@ -353,6 +355,11 @@ Team profiles
   profile remove NAME Move an import or a whole subscription aside.
   profile check NAME  Can git read every repo with your credentials? (--json)
 
+Experiments (off until a person turns one on)
+  labs [list]         The experiments and whether each is on (--json).
+  labs on NAME        Turn one on, in a terminal, after its warning. Never from an agent.
+  labs off NAME       Turn one off and undo what it started. labs status NAME: exit 1 when off.
+
 Production copy
   pull HOST:SITE      Copy a production site over SSH into a NEW local site: the latest
                       backup on the server (nothing written there), the encryption key,
@@ -472,6 +479,8 @@ export FL_DRY_RUN
 export -n MARIADB_ROOT_PASSWORD ADMIN_PASSWORD
 
 if [[ "$FL_WANT_HELP" == "1" ]]; then
+  # a command of a lab that is off shows the refusal, not its help
+  [[ -z "$COMMAND" ]] || fl_lab_gate "$COMMAND"
   if [[ -n "$COMMAND" ]] && FL_HELP_KEY="$(fl_cmd_key_for "$COMMAND" "${ARGS[0]:-}")"; then fl_cmd_help "$FL_HELP_KEY"; else usage; fi
   exit 0
 fi
@@ -514,12 +523,13 @@ fl_json_mode_resolve() {
     "share users"|"share preflight"|"share status"|"share code"|"share invite"|"share people"|"share devices"|"share log"|"share open-as") FL_JSON_MODE=doc ;;
     "lan-guard install"|"lan-guard remove"|"lan-guard allow-node") FL_JSON_MODE=stream ;;
     "lan-guard status") FL_JSON_MODE=doc ;;
+    "labs on"|"labs off") FL_JSON_MODE=stream ;;
   esac
 }
 # status, list and the other readers are polled: they skip the table unless
 # --for-agent asks for it
 case "$COMMAND" in
-  install|adopt|repair|pull|up|down|restart|service|site|app|ports|share|lan-guard) fl_json_mode_resolve ;;
+  install|adopt|repair|pull|up|down|restart|service|site|app|ports|share|lan-guard|labs) fl_json_mode_resolve ;;
   *) if [[ "$OPT_FOR_AGENT" == "1" ]]; then fl_json_mode_resolve; fi ;;
 esac
 
@@ -637,7 +647,7 @@ fl_jsonl_done_generic() {
   if [[ "$code" != "0" ]]; then
     FL_DIE_MESSAGE="${FL_DIE_MESSAGE:-$(fl_log_step_message 0)}"
     extra=",\"error\":$(fl_json_str "${FL_DIE_MESSAGE:-the command failed; see the log}")"
-    [[ "$code" != "2" ]] || fl_next_action "Run the command again with MARIADB_ROOT_PASSWORD='...' in the environment" "The MariaDB root password is unknown"
+    [[ "$code" != "2" || "${FL_EXIT2_NOT_PASSWORD:-0}" == "1" ]] || fl_next_action "Run the command again with MARIADB_ROOT_PASSWORD='...' in the environment" "The MariaDB root password is unknown"
   fi
   fl_done_fields_v f "$code"
   if [[ -n "$FL_DOC" ]]; then rest="$(fl_doc_rest "$FL_DOC"),"; else
@@ -1153,7 +1163,7 @@ cmd_doctor_prerequisites() {
 }
 
 cmd_doctor() {
-  local fails
+  local fails labs_on
   if [[ "$OPT_PREREQ" == "1" ]]; then cmd_doctor_prerequisites; return; fi
   # --ack and --unack under --json: the document on fd 3, every line of text on stderr
   if [[ -n "$OPT_ACK$OPT_UNACK" && "$OPT_JSON" == "1" ]]; then fl_json_doc_begin; fi
@@ -1179,6 +1189,8 @@ cmd_doctor() {
   else
     fl_header "benchbar doctor" "read-only" "$(fl_profile_display)" "$FL_BENCH_DIR" "$FL_SITE"
     fl_doctor_print
+    fl_lab_enabled_v labs_on
+    fl_info "labs: ${labs_on:-none}"
     if [[ -n "$(fl_doctor_actions)" ]]; then
       printf '\n'
       fl_info "run '${FL_SELF} repair' to apply the fixes marked above (dry-run: add --dry-run)"
@@ -1414,6 +1426,9 @@ fl_noninteractive_preflight() {
   fl_need_check
 }
 
+# the one place a lab gates its commands: refused (exit 2) while the lab is off
+fl_lab_gate "${FL_JSON_KEY:-$COMMAND}"
+
 # the stream starts first, so that a refusal (the preflight) is a done line and not silence:
 # install and adopt with --json before the log and the lock (fl_jsonl_start runs the preflight)
 if [[ "$OPT_JSON" == "1" && ( "$COMMAND" == "install" || "$COMMAND" == "adopt" ) ]]; then
@@ -1524,6 +1539,8 @@ case "$COMMAND" in
   site) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_site ${ARGS[@]+"${ARGS[@]}"} ;;
   app) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_app ${ARGS[@]+"${ARGS[@]}"} ;;
   profile) fl_cmd_profile ${ARGS[@]+"${ARGS[@]}"} ;;
+  # status exits 1 for a lab that is off, without the ERR trap's line
+  labs) FL_DONE_NO_BENCH=1; fl_cmd_labs ${ARGS[@]+"${ARGS[@]}"} || exit $? ;;
   # like doctor: drift exits 1 without the ERR trap's line after the JSON
   lock) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_lock ${ARGS[@]+"${ARGS[@]}"} || exit 1 ;;
   pull) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_pull ${ARGS[@]+"${ARGS[@]}"} ;;
@@ -1531,7 +1548,7 @@ case "$COMMAND" in
   docs) fl_cmd_docs ${ARGS[@]+"${ARGS[@]}"} ;;
   self-update) fl_cmd_self_update ${ARGS[@]+"${ARGS[@]}"} || exit 1 ;;
   where) cmd_where ;;
-  commands) if [[ "$OPT_JSON" == "1" ]]; then fl_commands_json; else fl_cmd_table | awk -F'~' '$1 == "cmd" { printf "%-22s %s\n", $2, $4 }'; fi ;;
+  commands) if [[ "$OPT_JSON" == "1" ]]; then fl_commands_json; else fl_cmd_visible_table | awk -F'~' '$1 == "cmd" { printf "%-22s %s\n", $2, $4 }'; fi ;;
   mcp) cmd_mcp ;;
   help) usage ;;
   *) fl_die "Unknown command: ${COMMAND}" "Run: benchbar --help" ;;

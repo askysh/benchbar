@@ -272,9 +272,34 @@ cmd~profile subscribe~benchbar profile subscribe GIT_URL [--plan|--yes] [--json]
 cmd~profile update~benchbar profile update NAME|--all [--plan] [--json]~Fetch an import or subscription again.~yes~no~yes~yes~document
 cmd~profile remove~benchbar profile remove NAME [--yes] [--json]~Move an import or subscription aside.~yes~no~no~yes~document
 cmd~profile check~benchbar profile check NAME [--json]~Can git read every repo with your credentials?~no~no~yes~no~document
+cmd~labs~benchbar labs [list|on NAME|off NAME|status NAME] [--yes] [--json]~Experiments: off until a person turns one on.~no~no~no~no~document
+flag~labs~--json~~One JSON document.
+env~labs~BENCHBAR_LABS~Comma separated lab names that replace the saved list (tests and CI).
+cmd~labs list~benchbar labs list [--json]~The experiments, whether each is on, and the commands each gates.~no~no~no~no~document
+flag~labs list~--json~~One JSON document.
+cmd~labs on~benchbar labs on NAME [--yes] [--json]~Turn an experiment on after its warning. Refused without a person (BENCHBAR_NONINTERACTIVE, --for-agent, mcp).~yes~no~no~yes~stream
+flag~labs on~--json~~JSON lines, ending in a done line.
+flag~labs on~--yes~~Do not ask before turning on (still refused without a person, BENCHBAR_NONINTERACTIVE=1).
+cmd~labs off~benchbar labs off NAME [--json]~Turn an experiment off and undo what it started. Always allowed.~no~no~no~yes~stream
+flag~labs off~--json~~JSON lines, ending in a done line.
+cmd~labs status~benchbar labs status NAME [--json]~Whether an experiment is on. Exit 0 on, 1 off.~no~no~no~no~document
+flag~labs status~--json~~One JSON document.
 TABLE
 
 fl_cmd_table() { printf '%s\n' "$FL_CMD_TABLE"; }
+
+# fl_cmd_visible_table: the table without the commands of a lab that is off
+fl_cmd_visible_table() {
+  local line hidden key word skip=0
+  fl_lab_hidden_v hidden
+  while IFS= read -r line; do
+    case "$line" in
+      cmd~*) key="${line#cmd~}"; key="${key%%~*}"; word="${key%% *}"
+             case " ${hidden} " in *" ${word} "*) skip=1 ;; *) skip=0 ;; esac ;;
+    esac
+    [[ "$skip" == 1 ]] || printf '%s\n' "$line"
+  done < <(fl_cmd_table)
+}
 
 # Options every command takes, for the help text and `commands --json`.
 fl_cmd_global_flags() {
@@ -337,26 +362,38 @@ fl_cmd_help() {
   printf 'All commands: benchbar commands --json\n'
 }
 
-# fl_commands_json: benchbar commands --json
+# fl_commands_json: benchbar commands --json. The commands of a lab that is
+# off are left out and named in "gated"; one of a lab that is on has "lab".
 fl_commands_json() {
   local line kind k a b c out="" body="" fsep="" esep="" envs="" open=0 gflags="" gsep="" tty sudo net mut json
+  local word="" lab="" skip=0 gated="" gsep2="" labs_on
   while IFS= read -r line; do
     IFS='~' read -r kind k a b c <<<"$line"
     case "$kind" in
       cmd)
         if [[ "$open" == "1" ]]; then out="${out}${out:+,}${body}],\"env\":[${envs}]}"; fi
+        open=0; skip=0
+        if [[ "${k%% *}" != "$word" ]]; then word="${k%% *}"; lab="$(fl_lab_of_cmd "$word")"; fi
+        if [[ -n "$lab" ]] && ! fl_lab_on "$lab"; then
+          skip=1
+          case ",${gated}" in *"\"name\":$(fl_json_str "$word"),"*) ;; *) gated="${gated}${gsep2}{\"name\":$(fl_json_str "$word"),\"lab\":$(fl_json_str "$lab")}"; gsep2="," ;; esac
+          continue
+        fi
         IFS='~' read -r _ _ _ _ tty sudo net mut json <<<"$line"
-        body="{\"name\":$(fl_json_str "$k"),\"usage\":$(fl_json_str "$a"),\"summary\":$(fl_json_str "$b"),\"tty\":$(fl_json_bool "$tty"),\"sudo\":$(fl_json_bool "$sudo"),\"network\":$(fl_json_bool "$net"),\"mutating\":$(fl_json_bool "$mut"),\"json\":$(fl_json_str "$json"),\"flags\":["
+        body="{\"name\":$(fl_json_str "$k"),\"usage\":$(fl_json_str "$a"),\"summary\":$(fl_json_str "$b"),\"tty\":$(fl_json_bool "$tty"),\"sudo\":$(fl_json_bool "$sudo"),\"network\":$(fl_json_bool "$net"),\"mutating\":$(fl_json_bool "$mut"),\"json\":$(fl_json_str "$json"),"
+        [[ -z "$lab" ]] || body="${body}\"lab\":$(fl_json_str "$lab"),"
+        body="${body}\"flags\":["
         envs=""; open=1; fsep=""; esep="" ;;
       flag)
-        body="${body}${fsep}{\"name\":$(fl_json_str "$a"),\"value\":$(fl_json_str "$b"),\"help\":$(fl_json_str "$c")}"; fsep="," ;;
+        [[ "$skip" == 1 ]] || { body="${body}${fsep}{\"name\":$(fl_json_str "$a"),\"value\":$(fl_json_str "$b"),\"help\":$(fl_json_str "$c")}"; fsep=","; } ;;
       env)
-        envs="${envs}${esep}{\"name\":$(fl_json_str "$a"),\"help\":$(fl_json_str "$b")}"; esep="," ;;
+        [[ "$skip" == 1 ]] || { envs="${envs}${esep}{\"name\":$(fl_json_str "$a"),\"help\":$(fl_json_str "$b")}"; esep=","; } ;;
     esac
   done < <(fl_cmd_table)
   [[ "$open" != "1" ]] || out="${out}${out:+,}${body}],\"env\":[${envs}]}"
   while IFS='~' read -r a b c; do
     gflags="${gflags}${gsep}{\"name\":$(fl_json_str "$a"),\"value\":$(fl_json_str "$b"),\"help\":$(fl_json_str "$c")}"; gsep=","
   done < <(fl_cmd_global_flags)
-  printf '{"schema_version":%d,"cli_version":"%s","global_flags":[%s],"commands":[%s]}\n' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$gflags" "$out"
+  fl_lab_enabled_json_v labs_on
+  printf '{"schema_version":%d,"cli_version":"%s","labs":%s,"gated":[%s],"global_flags":[%s],"commands":[%s]}\n' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$labs_on" "$gated" "$gflags" "$out"
 }

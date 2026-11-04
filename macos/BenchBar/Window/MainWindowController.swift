@@ -20,6 +20,8 @@ final class MainWindowController: NSObject, NSWindowDelegate {
     private var isShown = false
     /// Every change of what the store should know; the store ignores repeats.
     var onSight: ((WindowSight) -> Void)?
+    /// The window became the key window.
+    var onKey: (() -> Void)?
 
     init(makeView: @escaping (WindowRouter) -> MainWindowView) {
         self.makeView = makeView
@@ -61,6 +63,10 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         WindowPresence.closed()
         isShown = false
         report()
+    }
+
+    func windowDidBecomeKey(_ notification: Notification) {
+        onKey?()
     }
 
     func windowDidChangeOcclusionState(_ notification: Notification) {

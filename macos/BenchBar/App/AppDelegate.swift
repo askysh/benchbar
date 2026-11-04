@@ -43,6 +43,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store = BenchStore(settings: settings)
         statusItemController = StatusItemController(store: store, settings: settings, library: library)
         store.onChange = { [weak self] in self?.statusItemController.update() }
+        let labsStore = store!
+        Labs.shared.loader = .cli { await MainActor.run { labsStore.cliClient } }
         NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.store.appBecameActive() }
         }
@@ -157,6 +159,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // open, close, occlusion and the page: the window's views stay alive
         // when it closes, so the store hears of them from the controller
+        mainWindow.onKey = { Task { await Labs.shared.refresh() } }
         mainWindow.onSight = { [weak self] sight in self?.store.setWindow(sight) }
 
         logWindows = LogWindowController { [weak self] path in self?.openLogsInTerminal(path) }
@@ -169,6 +172,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task {
             await store.start()
             ShareCenter.shared.restoreActive(among: store.benches.map(\.path))
+            await Labs.shared.refresh()
             benchesLoaded = true
             let waiting = pendingURLs
             pendingURLs = []

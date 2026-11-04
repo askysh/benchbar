@@ -19,6 +19,7 @@ All notable changes to this project are documented here.
   are refused under `--for-agent`, `mcp` and `BENCHBAR_NONINTERACTIVE`.
 - Docs: the [share and lan-guard reference](docs/reference/cli/share.md)
   and the sharing documents in the JSON schema.
+- Labs: `benchbar labs` lists the experiments, and `labs on NAME` (in a terminal) turns one on. While one is off its commands are hidden and refuse to run. `lan-rooms` and `quick-switch` are the first two.
 
 ## 0.8.1 - 2026-11-01
 

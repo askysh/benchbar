@@ -1086,6 +1086,25 @@ of guessing from paths.
 
 Exit 0. An argument other than `--json` exits 1.
 
+## `benchbar labs --json`
+
+`labs list --json` is one document, with no done fields:
+
+```json
+{"schema_version":1,"labs":[{"name":"lan-rooms","title":"...","description":"...","warning":"...","since":"0.9.0","enabled":false,"commands":["share","lan-guard"]}]}
+```
+
+`commands` are the top level commands the lab gates (it may be empty, or name
+a command this version does not have). `labs status NAME --json` is
+`{"schema_version":1,"name":"lan-rooms","enabled":false}` and exits 1 when off.
+`labs on` and `labs off` stream like `site open-as`: the `done` line carries
+`lab`, `enabled` and the [done fields](#the-done-fields-08). `labs on` exits 2
+with `error` "turning on an experiment is a person's decision" when nothing
+can ask. Added after 0.8.1: `status --json` and `commands --json` have `labs`
+(the enabled names); `commands --json` also has `gated` (`[{"name","lab"}]`
+for a command left out because its lab is off) and a command of an enabled lab
+has `lab`.
+
 ## Site backups
 
 Since 0.8 the results of `site backup` and `site drop` (not their plans) also carry the [done fields](#the-done-fields-08), and `site drop`'s plan and result `default_site`. `--jsonl` turns either into a stream whose `done` carries the document's fields.
