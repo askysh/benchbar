@@ -1390,13 +1390,12 @@ if [[ "$OPT_JSON" == "1" && ( "$COMMAND" == "install" || "$COMMAND" == "adopt" )
 else
   # the other commands that stream (or whose document the stream wraps)
   if [[ "$FL_JSON_MODE" == "stream" || ( "$FL_JSON_MODE" == "doc" && "$OPT_JSONL" == "1" ) ]]; then fl_jsonl_begin_generic; fi
+  # the lab gate comes after the stream starts (a stream gets its done line, a --json
+  # document its error object) and before the preflight (a lab that is off is exit 2, not
+  # a missing input)
+  fl_lab_gate "${FL_JSON_KEY:-$COMMAND}"
   fl_noninteractive_preflight
 fi
-
-# the one place a lab gates its commands: refused (exit 2) while the lab is off.
-# After the stream starts, so that a stream gets its done line and a --json
-# document its error object
-fl_lab_gate "${FL_JSON_KEY:-$COMMAND}"
 
 case "$COMMAND" in
   ports)
