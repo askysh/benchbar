@@ -95,9 +95,12 @@ nonisolated enum URLRouter {
 
     /// The whole decision: parse, then pick the bench. `selected` is the
     /// bench the app has selected, if any.
-    static func route(_ url: URL, benches: [Bench], selected: String?) -> Outcome {
+    static func route(_ url: URL, benches: [Bench], selected: String?, lanRooms: Bool = false) -> Outcome {
         if let outcome = profileRoute(url) { return outcome }
-        if let outcome = shareRoute(url) { return outcome }
+        if let outcome = shareRoute(url) {
+            // the reason is generic on purpose: ignored links are logged, and an invite holds a code
+            return lanRooms ? outcome : .ignore("share links need the lan-rooms lab (benchbar labs on lan-rooms)")
+        }
         switch parse(url) {
         case .failure(let reason):
             return .ignore(reason.message)

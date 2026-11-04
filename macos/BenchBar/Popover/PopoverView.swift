@@ -32,7 +32,7 @@ struct AppCommands {
 struct PopoverView: View {
     let store: BenchStore
     let commands: AppCommands
-    var guest: GuestRoomStore?
+    var guest: GuestSlot?
     static let maxContentHeight: CGFloat = 540
 
     var body: some View {
@@ -41,8 +41,10 @@ struct PopoverView: View {
             CappedHeight(maxHeight: Self.maxContentHeight) {
                 ScrollView { content.frame(maxWidth: .infinity, alignment: .leading) }
             }
-            SharePopoverRows(center: ShareCenter.shared)
-            if let guest { NearbyRoomsPopoverRow(guest: guest, open: commands.openNetwork) }
+            if Labs.shared.isOn(.lanRooms) {
+                SharePopoverRows(center: ShareCenter.shared)
+                if let guest = guest?.store { NearbyRoomsPopoverRow(guest: guest, open: commands.openNetwork) }
+            }
             Divider()
             Button("Scan Folder…", systemImage: "folder.badge.plus", action: commands.scanFolder)
                 .buttonStyle(.borderless)

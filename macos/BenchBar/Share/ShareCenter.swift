@@ -49,6 +49,24 @@ final class ShareCenter {
         for bench in benches where saved.contains(bench) { _ = store(for: bench) }
     }
 
+    /// The lan-rooms lab went off (the CLI's `labs off` already stopped a running share): polling,
+    /// the network monitor and the wake observer end, the stores go, the saved list is cleared and
+    /// the menu bar dot is off.
+    func tearDown() {
+        for store in stores.values { store.shutDown() }
+        stores.removeAll()
+        pathMonitor?.cancel()
+        pathMonitor = nil
+        if let wakeObserver { NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver) }
+        wakeObserver = nil
+        sawFirstPath = false
+        defaults.removeObject(forKey: Self.activeKey)
+        if icon != .off {
+            icon = .off
+            onIconChange?(.off)
+        }
+    }
+
     private func startWatching() {
         guard pathMonitor == nil else { return }
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(

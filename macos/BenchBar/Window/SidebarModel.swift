@@ -34,8 +34,11 @@ nonisolated struct SidebarModel: Equatable, Sendable {
     }
 
     var benches: [Row]
+    /// "On your network" is listed only while the lan-rooms lab is on.
+    var showsNetwork: Bool
 
-    init(_ inputs: [Input]) {
+    init(_ inputs: [Input], showsNetwork: Bool = false) {
+        self.showsNetwork = showsNetwork
         benches = inputs.map { input in
             let twins = inputs.filter { $0.name == input.name }.count > 1
             return Row(path: input.path, name: input.name,
@@ -62,10 +65,10 @@ nonisolated enum SidebarItem: Hashable, Sendable {
 }
 
 extension SidebarModel {
-    @MainActor init(benches: [BenchModel]) {
+    @MainActor init(benches: [BenchModel], showsNetwork: Bool = false) {
         self.init(benches.map { bench in
             Input(path: bench.path, name: bench.name, state: bench.state, isBusy: bench.isBusy,
                   sites: bench.siteRows.map { Site(name: $0.name, isDefault: $0.isDefault) }, guidance: bench.guidance)
-        })
+        }, showsNetwork: showsNetwork)
     }
 }

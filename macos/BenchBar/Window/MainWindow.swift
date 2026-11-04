@@ -14,6 +14,11 @@ nonisolated enum WindowPane: Hashable, Sendable {
 nonisolated enum BenchTab: String, CaseIterable, Hashable, Sendable, Identifiable {
     case overview = "Overview", sites = "Sites", apps = "Apps", health = "Health", sharing = "Sharing"
     var id: String { rawValue }
+
+    /// The tabs shown: Sharing only while the lan-rooms lab is on and the CLI has the command.
+    static func visible(lanRooms: Bool, sharingAvailable: Bool) -> [BenchTab] {
+        allCases.filter { $0 != .sharing || (lanRooms && sharingAvailable) }
+    }
 }
 
 /// Lets the popover, the menu and notifications open the window at a pane.
@@ -83,7 +88,7 @@ struct MainWindowView: View {
     /// General and Menu Bar, made by the app delegate (they need its services).
     var makeSettings: ((SettingsView.Part) -> SettingsView)?
     /// The guest side of rooms; nil in snapshots.
-    var guest: GuestRoomStore?
+    var guest: GuestSlot?
 
     /// The page shown: the router's, else the first bench, else the wizard.
     /// nil while the bench list has not been read yet.
@@ -151,7 +156,7 @@ struct MainWindowView: View {
             VStack(spacing: 0) {
                 // a closure, not the method reference select(_:): the Swift 6.3
                 // compiler of Xcode 26.6 crashed emitting its isolated thunk
-                MainSidebar(store: store, model: SidebarModel(benches: store.benches),
+                MainSidebar(store: store, model: SidebarModel(benches: store.benches, showsNetwork: Labs.shared.isOn(.lanRooms)),
                             selection: Binding(get: { selection }, set: { select($0) }))
                 Divider()
                 SidebarFooter(router: router, wizard: wizard.run)
@@ -191,7 +196,7 @@ struct MainWindowView: View {
         case .discovery:
             DiscoveryPane(discovery: discovery, router: router).navigationTitle("Find Benches")
         case .network:
-            if let guest {
+            if Labs.shared.isOn(.lanRooms), let guest = guest?.store {
                 NetworkPane(store: guest).navigationTitle(NetworkPanePresentation.title)
             }
         case .bench(let path):
@@ -260,7 +265,7 @@ struct MainSidebar: View {
             Section {
                 Label("Team Profiles", systemImage: "person.2").tag(SidebarItem.profiles)
                 Label("Find Benches", systemImage: "folder.badge.plus").tag(SidebarItem.discovery)
-                Label("On your network", systemImage: "wifi").tag(SidebarItem.network)
+                if model.showsNetwork { Label("On your network", systemImage: "wifi").tag(SidebarItem.network) }
             }
         }
     }

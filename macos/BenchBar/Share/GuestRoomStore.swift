@@ -108,6 +108,14 @@ final class GuestRoomStore {
     private var forwarders: [String: any ForwarderRunning] = [:]
     /// A loopback forwarder is up for a joined room (the quit alert).
     var hasRunningForwarder: Bool { forwarders.values.contains { $0.isRunning } }
+
+    /// The lan-rooms lab went off: every forwarder closes and browsing ends.
+    func shutDown() {
+        for forwarder in forwarders.values { forwarder.stop() }
+        forwarders.removeAll()
+        stopBrowsing(for: .popover)
+        stopBrowsing(for: .pane)
+    }
     private var lastAttempt: Date?
     private var wrongInARow = 0
     private var lockedUntil: Date?
@@ -619,4 +627,12 @@ extension GuestRoomStore.Dependencies {
             openURL: openURL,
             readPasteboard: { NSPasteboard.general.string(forType: .string) })
     }
+}
+
+/// Holds the guest store while the lan-rooms lab is on: it is made when the lab turns on and
+/// dropped when it turns off, so a Mac without the lab never makes a store, a browser or a
+/// Keychain identity.
+@Observable @MainActor
+final class GuestSlot {
+    var store: GuestRoomStore?
 }

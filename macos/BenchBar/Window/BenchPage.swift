@@ -14,7 +14,7 @@ struct BenchPage: View {
                 header
                     .padding(.top, 16).padding(.bottom, 10)
                 Picker("", selection: $router.benchTab) {
-                    ForEach(BenchTab.allCases.filter { $0 != .sharing || ShareCenter.shared.showsTab(for: bench.path) }) { Text($0.rawValue).tag($0) }
+                    ForEach(BenchTab.visible(lanRooms: Labs.shared.isOn(.lanRooms), sharingAvailable: ShareCenter.shared.showsTab(for: bench.path))) { Text($0.rawValue).tag($0) }
                 }
                 .pageTabs()
                 .labelsHidden()
@@ -33,7 +33,7 @@ struct BenchPage: View {
                 case .apps: BenchApps(store: store, workbench: workbench, bench: bench)
                 case .health: BenchHealth(store: store, bench: bench, router: router)
                 case .sharing:
-                    if let share = ShareCenter.shared.store(for: bench.path) { SharingTab(bench: bench, share: share) }
+                    if Labs.shared.isOn(.lanRooms), let share = ShareCenter.shared.store(for: bench.path) { SharingTab(bench: bench, share: share) }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

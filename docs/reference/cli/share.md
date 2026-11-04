@@ -3,6 +3,8 @@ title: "share and lan-guard"
 description: "benchbar share setup, start, code, invite, lock, people, remove, assign, log, open-as, stop and teardown, and benchbar lan-guard: a room on your Wi-Fi where people sign in to a hardened copy of a dev site."
 ---
 
+**share is an experiment: run `benchbar labs on lan-rooms` first.** While the lab is off, `share` and `lan-guard` are hidden from `--help` and `commands --json` (listed under `gated`) and exit 2 with that hint. `benchbar labs off lan-rooms` stops a running share and, if lan-guard is installed, warns with `run: benchbar lan-guard remove` (it never uses sudo itself).
+
 Sharing opens a **room** on this Mac's network. People on the same Wi-Fi
 join it with a 6 digit **room code**, take a **seat** (one of the Frappe
 users you chose) and use a hardened **copy** of one of your dev sites in

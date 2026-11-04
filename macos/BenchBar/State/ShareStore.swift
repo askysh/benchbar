@@ -164,6 +164,12 @@ final class ShareStore {
         }
     }
 
+    /// The lan-rooms lab went off: the poll loop ends and nothing reads the status again.
+    func shutDown() {
+        pollTask?.cancel()
+        pollTask = nil
+    }
+
     /// Wake or a network change: the checks run on the next poll.
     func networkChanged() {
         forcePreflight = true

@@ -108,11 +108,11 @@ nonisolated enum InviteFixture {
 
     @Test func aShareLinkWithAQueryIsAnInviteAndNeverIgnored() throws {
         let invite = try #require(InviteFixture.invite())
-        #expect(URLRouter.route(URL(string: InviteFixture.link())!, benches: [], selected: nil) == .shareInvite(.success(invite)))
-        #expect(URLRouter.route(URL(string: InviteFixture.link(v: "2"))!, benches: [], selected: nil) == .shareInvite(.failure(.newerVersion)))
+        #expect(URLRouter.route(URL(string: InviteFixture.link())!, benches: [], selected: nil, lanRooms: true) == .shareInvite(.success(invite)))
+        #expect(URLRouter.route(URL(string: InviteFixture.link(v: "2"))!, benches: [], selected: nil, lanRooms: true) == .shareInvite(.failure(.newerVersion)))
         // `.ignore` and `.explain` log the link; a query may hold a code.
         for text in ["benchbar://share/join?c=482913", "benchbar://share/0011223344556677/app?c=482913", "benchbar://SHARE/Join?v=1&c=482913"] {
-            let outcome = URLRouter.route(URL(string: text)!, benches: [], selected: nil)
+            let outcome = URLRouter.route(URL(string: text)!, benches: [], selected: nil, lanRooms: true)
             #expect(outcome == .shareInvite(.failure(.malformed)), "\(text)")
         }
     }
