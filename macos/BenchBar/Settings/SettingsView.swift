@@ -96,7 +96,10 @@ struct SettingsView: View {
                             Text(entry.title)
                             Text(entry.description)
                         }
-                        .disabled(labs.busy.contains(entry.name))
+                        .disabled(labs.busy.contains(entry.name) || entry.available == false)
+                        if entry.available == false {
+                            Text("Not on this platform").font(.caption).foregroundStyle(.secondary)
+                        }
                         Label(entry.warning, systemImage: "exclamationmark.triangle.fill")
                             .font(.callout)
                             .foregroundStyle(.orange)

@@ -10,6 +10,9 @@ nonisolated struct LabEntry: Codable, Sendable, Equatable, Identifiable {
     var since: String
     var enabled: Bool
     var commands: [String]
+    /// Absent from an older CLI, which then offers every lab everywhere.
+    var platforms: [String]?
+    var available: Bool?
 
     var id: String { name }
 }

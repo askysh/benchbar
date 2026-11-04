@@ -165,3 +165,22 @@ assert_eq "False False" "$OUT"
 OUT="$(BENCHBAR="$FM" BENCHBAR_LABS="lan-rooms" python3 -I "$TMP_DIR/mcp-lab.py" 2>&1)"
 assert_contains "$OUT" "True"
 echo "test-labs: ok"
+
+# ---- platforms: lan-rooms and quick-switch are macOS only for now
+fm_out labs list --json
+assert_eq "[['macos'], ['macos']] [True, True]" "$(printf '%s' "$OUT" | jget - '[l["platforms"] for l in d["labs"]], [l["available"] for l in d["labs"]]')"
+use_linux
+printf 'Linux version 6.8.0-generic (buildd@lcy02) #1 SMP\n' >"$FL_PROC_VERSION"
+run_fm labs on quick-switch --yes
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "quick-switch is not available on linux yet"
+fm_out labs on lan-rooms --yes --json
+assert_eq "1" "$CODE"
+fm_out labs list --json
+assert_eq "[False, False]" "$(printf '%s' "$OUT" | jget - '[l["available"] for l in d["labs"]]')"
+run_fm labs
+assert_contains "$OUT" "(not on this platform)"
+assert_not_contains "$(cat "$FL_STATE_FILE" 2>/dev/null)" "LABS=quick-switch"
+# inside WSL the platform is windows
+printf 'Linux version 6.6.0-microsoft-standard-WSL2 (root@build) (gcc) #1 SMP\n' >"$FL_PROC_VERSION"
+run_fm labs on quick-switch --yes
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "quick-switch is not available on windows yet"

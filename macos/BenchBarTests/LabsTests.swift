@@ -31,7 +31,7 @@ nonisolated final class FakeLabsBackend: @unchecked Sendable {
     static let fixture = """
     {"schema_version":1,"labs":[
      {"name":"lan-rooms","title":"Share with people on the same Wi-Fi","description":"d","warning":"w","since":"0.9.0","enabled":true,"commands":["share","lan-guard"]},
-     {"name":"quick-switch","title":"Quick Switch panel","description":"d","warning":"w","since":"0.9.0","enabled":false,"commands":[]},
+     {"name":"quick-switch","title":"Quick Switch panel","description":"d","warning":"w","since":"0.9.0","enabled":false,"commands":[],"platforms":["macos"],"available":false},
      {"name":"future-thing","title":"Future","description":"d","warning":"w","since":"1.0.0","enabled":true,"commands":[]}]}
     """
 
@@ -44,6 +44,8 @@ nonisolated final class FakeLabsBackend: @unchecked Sendable {
         #expect(labs.count == 3)
         #expect(labs[0].commands == ["share", "lan-guard"])
         #expect(labs[0].since == "0.9.0")
+        #expect(labs[0].platforms == nil && labs[0].available == nil)
+        #expect(labs[1].platforms == ["macos"] && labs[1].available == false)
     }
 
     @Test func isOnAnswersForKnownCases() async throws {
