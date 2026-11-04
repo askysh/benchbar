@@ -58,7 +58,6 @@ struct SettingsView: View {
                         if !Updater.isAvailable { updatesSection }
                         cliSection
                         editorSection
-                        quickSwitchSection
                         shortcutsSection.id(Self.shortcutsID)
                         labsSection
                     case .menuBar:
@@ -222,7 +221,7 @@ struct SettingsView: View {
 
     private var shortcutsSection: some View {
         Section {
-            ForEach(Self.shortcuts, id: \.keys) { item in
+            ForEach(Self.shortcuts(quickSwitch: Labs.shared.isOn(.quickSwitch)), id: \.keys) { item in
                 LabeledContent(item.action) {
                     Text(item.keys).font(.callout.monospaced()).foregroundStyle(.secondary)
                 }
@@ -230,7 +229,7 @@ struct SettingsView: View {
         } header: {
             Text("Keyboard shortcuts")
         } footer: {
-            Text("In the menu bar popover, for the bench it shows. Quick Switch works from any app.").font(.caption).foregroundStyle(.secondary)
+            Text("In the menu bar popover, for the bench it shows.").font(.caption).foregroundStyle(.secondary)
         }
     }
 
@@ -241,9 +240,16 @@ struct SettingsView: View {
         (BenchShortcut.folder.action, BenchShortcut.folder.display),
         (BenchShortcut.health.action, BenchShortcut.health.display),
         (BenchShortcut.manage.action, BenchShortcut.manage.display),
-        ("Open as Administrator, a pinned user, or back", OpenAsShortcut.summary),
-        ("Quick Switch, from any app, once turned on", "⌃⌥U"),
     ]
+
+    /// Quick Switch's rows show only while the lab is on, and so do the Open as keys it brought.
+    static func shortcuts(quickSwitch: Bool) -> [(action: String, keys: String)] {
+        guard quickSwitch else { return shortcuts }
+        return shortcuts + [
+            ("Open as Administrator, a pinned user, or back", OpenAsShortcut.summary),
+            ("Quick Switch, from any app", "⌃⌥U"),
+        ]
+    }
 
     // MARK: general
 
@@ -275,22 +281,6 @@ struct SettingsView: View {
         } footer: {
             Text("Your benches run as their own login agents, so they keep running when BenchBar is closed.")
                 .font(.caption).foregroundStyle(.secondary)
-        }
-    }
-
-    private var quickSwitchSection: some View {
-        Section {
-            Toggle(isOn: $settings.quickSwitchEnabled) {
-                Text("Quick Switch from any app: ⌃⌥U")
-                Text("Lists the pinned users of the sites where Open as is on: ↑ ↓ then ↩ switches, ⇥ moves to the next site, esc closes. It needs no Accessibility permission.")
-            }
-            if settings.quickSwitchConflict {
-                Label("⌃⌥U is used by another app, so Quick Switch was turned off. Turn it on again to retry.",
-                      systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.red)
-            }
-        } header: {
-            Text("Quick Switch")
         }
     }
 

@@ -19,7 +19,6 @@ final class AppSettings {
         static let editorBundleID = "editorBundleID"
         static let checkUpdatesAutomatically = "checkUpdatesAutomatically"
         static let walkthroughSeen = "walkthroughSeen"
-        static let quickSwitchEnabled = "quickSwitchEnabled"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -46,25 +45,6 @@ final class AppSettings {
 
     /// The walkthrough has been shown once on its own (never again after that).
     var walkthroughSeen: Bool { didSet { defaults.set(walkthroughSeen, forKey: Key.walkthroughSeen) } }
-
-    /// ⌃⌥U opens the Quick Switch panel from any app. Off until turned on: a
-    /// system-wide key is taken from every other app while BenchBar runs.
-    var quickSwitchEnabled: Bool {
-        didSet {
-            defaults.set(quickSwitchEnabled, forKey: Key.quickSwitchEnabled)
-            onQuickSwitchChange?()
-        }
-    }
-    /// Another app holds ⌃⌥U, so Quick Switch is off. Not stored: the next launch asks the system again.
-    var quickSwitchConflict = false
-    /// The system refused ⌃⌥U: the setting goes back to off (so it is not left on with a dead key,
-    /// and not kept for the next launch) and the conflict note stays to say why.
-    func quickSwitchRegistrationFailed() {
-        quickSwitchEnabled = false
-        quickSwitchConflict = true
-    }
-    /// The hot key follows the setting (QuickSwitchController.sync).
-    @ObservationIgnored var onQuickSwitchChange: (() -> Void)?
 
     /// The editors that are installed. Launch Services answers from disk, so
     /// it is asked once at launch and again when any app launches or quits
@@ -95,7 +75,6 @@ final class AppSettings {
         editorBundleID = defaults.string(forKey: Key.editorBundleID) ?? ""
         checkUpdatesAutomatically = defaults.bool(forKey: Key.checkUpdatesAutomatically)
         walkthroughSeen = defaults.bool(forKey: Key.walkthroughSeen)
-        quickSwitchEnabled = defaults.bool(forKey: Key.quickSwitchEnabled)
         installedEditors = findEditors()
         let workspace = NSWorkspace.shared.notificationCenter
         for name in [NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification] {

@@ -48,37 +48,51 @@ final class QuickSwitchPanel: NSPanel {
     }
 }
 
+/// What the controller needs of the Carbon key, so a test can refuse it.
+protocol HotKeyRegistering: AnyObject {
+    @discardableResult func register() -> Bool
+    func unregister()
+}
+
+extension HotKey: HotKeyRegistering {}
+
 /// Owns the hot key and the panel: ⌃⌥U shows it, or hides it when it is up.
+/// Settings > Labs is the one switch (`Labs.isOn(.quickSwitch)`): off, the key is
+/// not registered and the panel opens from nowhere.
 final class QuickSwitchController {
+    static let conflictNote = "⌃⌥U is used by another app, so Quick Switch was turned off. Turn it on again to retry."
+
     private let store: BenchStore
-    private let settings: AppSettings
-    private var hotKey: HotKey!
+    private let labs: Labs
+    private var hotKey: HotKeyRegistering!
     private var panel: QuickSwitchPanel?
     private var shown = 0
 
-    init(store: BenchStore, settings: AppSettings) {
+    init(store: BenchStore, labs: Labs, hotKey: HotKeyRegistering? = nil) {
         self.store = store
-        self.settings = settings
-        hotKey = HotKey { [weak self] in self?.toggle() }
+        self.labs = labs
+        self.hotKey = hotKey ?? HotKey { [weak self] in self?.toggle() }
     }
 
-    /// Makes the hot key match the setting. A key another app holds turns the
-    /// feature off with a note in Settings; the next change of the setting tries again.
+    /// Makes the hot key match the lab. A key another app holds turns the lab
+    /// back off (through the CLI too) with a note under its row; the next flip tries again.
     func sync() {
-        if settings.quickSwitchEnabled {
-            if hotKey.register() {
-                settings.quickSwitchConflict = false
-            } else {
-                settings.quickSwitchRegistrationFailed()
-            }
-        } else {
+        guard labs.isOn(.quickSwitch) else {
             hotKey.unregister()
-            settings.quickSwitchConflict = false
             close()
+            return
+        }
+        guard !hotKey.register() else { return }
+        Task { [labs] in
+            try? await labs.set(.quickSwitch, on: false)
+            labs.note(.quickSwitch, Self.conflictNote)
         }
     }
 
-    private func toggle() {
+    var isShowing: Bool { panel != nil }
+
+    func toggle() {
+        guard labs.isOn(.quickSwitch) else { return close() }
         if panel == nil { show() } else { close() }
     }
 
@@ -90,6 +104,7 @@ final class QuickSwitchController {
     }
 
     private func show() {
+        guard labs.isOn(.quickSwitch) else { return }
         let model = makeModel(lastSwitchedKey: store.openAs.lastSwitchedKey)
         shown += 1
         let opening = shown

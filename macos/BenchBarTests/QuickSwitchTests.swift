@@ -306,24 +306,84 @@ struct QuickSwitchTests {
         #expect(model().offersSame(as: model(pins: [ne])))
     }
 
-    @Test func theHotKeyIsOffUntilTurnedOnAndTheChoiceIsKept() throws {
-        let defaults = try #require(UserDefaults(suiteName: "benchbar-tests-\(UUID().uuidString)"))
-        let first = AppSettings(defaults: defaults)
-        #expect(!first.quickSwitchEnabled, "a system-wide key is never taken by default")
-        var changes = 0
-        first.onQuickSwitchChange = { changes += 1 }
-        first.quickSwitchEnabled = true
-        #expect(changes == 1)
-        #expect(AppSettings(defaults: defaults).quickSwitchEnabled)
+    // MARK: the lab is the one switch
+
+    final class FakeHotKey: HotKeyRegistering {
+        var accept = true
+        var registered = false
+        var registerCalls = 0
+        func register() -> Bool {
+            registerCalls += 1
+            registered = accept
+            return accept
+        }
+        func unregister() { registered = false }
     }
 
-    @Test func aRefusedHotKeyTurnsTheSettingBackOffAndKeepsTheNote() throws {
-        let defaults = try #require(UserDefaults(suiteName: "benchbar-tests-\(UUID().uuidString)"))
-        let settings = AppSettings(defaults: defaults)
-        settings.quickSwitchEnabled = true
-        settings.quickSwitchRegistrationFailed()
-        #expect(!settings.quickSwitchEnabled && settings.quickSwitchConflict)
-        #expect(!AppSettings(defaults: defaults).quickSwitchEnabled, "the dead key is not kept for the next launch")
+    func labEntries(quickSwitch: Bool) throws -> [LabEntry] {
+        let json = """
+        {"schema_version":1,"labs":[{"name":"quick-switch","title":"Quick Switch panel","description":"d","warning":"w","since":"0.9.0","enabled":\(quickSwitch),"commands":[]}]}
+        """
+        return try BenchJSON.decode(LabsDocument.self, from: Data(json.utf8)).labs
+    }
+
+    /// Labs wired to a fake CLI, and a controller on a fake key, hooked up as the app does.
+    @MainActor func wired(startsOn: Bool, accept: Bool = true) throws -> (Labs, QuickSwitchController, FakeHotKey, FakeLabsBackend) {
+        let backend = FakeLabsBackend()
+        backend.result = .success(try labEntries(quickSwitch: startsOn))
+        let labs = Labs(loader: backend.loader)
+        let key = FakeHotKey()
+        key.accept = accept
+        let controller = QuickSwitchController(store: BenchStore(settings: AppSettings(defaults: UserDefaults(suiteName: "benchbar-tests-\(UUID().uuidString)")!)),
+                                               labs: labs, hotKey: key)
+        labs.onChange = { lab, _ in if lab == .quickSwitch { controller.sync() } }
+        controller.sync()
+        return (labs, controller, key, backend)
+    }
+
+    @MainActor @Test func theKeyIsNotRegisteredBeforeLabsAnswered() throws {
+        let (_, _, key, _) = try wired(startsOn: true)
+        #expect(key.registerCalls == 0 && !key.registered)
+    }
+
+    @MainActor @Test func labOnRegistersAndOffUnregisters() async throws {
+        let (labs, _, key, backend) = try wired(startsOn: true)
+        await labs.refresh()
+        #expect(labs.isOn(.quickSwitch) && key.registered)
+        try await labs.set(.quickSwitch, on: false)
+        #expect(!key.registered)
+        #expect(backend.sets == ["quick-switch:false"])
+        try await labs.set(.quickSwitch, on: true)
+        #expect(key.registered)
+    }
+
+    @MainActor @Test func aRefusedKeyRollsTheLabBackThroughTheCLIAndLeavesTheNote() async throws {
+        let (labs, _, key, backend) = try wired(startsOn: false, accept: false)
+        await labs.refresh()
+        try await labs.set(.quickSwitch, on: true)
+        for _ in 0..<200 where labs.isOn(.quickSwitch) || labs.errors["quick-switch"] == nil { await Task.yield() }
+        #expect(!labs.isOn(.quickSwitch) && !key.registered)
+        #expect(backend.sets == ["quick-switch:true", "quick-switch:false"], "the CLI flag rolled back too")
+        #expect(labs.errors["quick-switch"] == QuickSwitchController.conflictNote)
+    }
+
+    @MainActor @Test func thePanelDoesNotOpenWhileTheLabIsOff() throws {
+        let (labs, controller, _, _) = try wired(startsOn: false)
+        controller.toggle()
+        #expect(!controller.isShowing && !labs.isOn(.quickSwitch))
+    }
+
+    @Test func thePopoverBindingsAreAbsentWhileTheLabIsOff() {
+        let items = OpenAsMenuModel.items(pins: [PinnedUser(user: "a@x.com", label: "A", fullName: nil)], recents: [])
+        #expect(OpenAsMenuModel.popoverShortcuts(items, quickSwitchOn: false).isEmpty)
+        #expect(!OpenAsMenuModel.popoverShortcuts(items, quickSwitchOn: true).isEmpty)
+    }
+
+    @Test func theShortcutRowsForQuickSwitchShowOnlyWhileTheLabIsOn() {
+        let off = SettingsView.shortcuts(quickSwitch: false).map(\.keys).joined(separator: " ")
+        let on = SettingsView.shortcuts(quickSwitch: true).map(\.keys).joined(separator: " ")
+        #expect(!off.contains("⌃⌥U") && !off.contains("⇧⌘O"))
+        #expect(on.contains("⌃⌥U") && on.contains("⇧⌘O"))
     }
 
     @Test func theSpokenTitleDropsTheEllipsis() {

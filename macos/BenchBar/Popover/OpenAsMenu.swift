@@ -102,6 +102,11 @@ nonisolated enum OpenAsMenuModel {
         return keys
     }
 
+    /// The keys the popover binds: none while the Quick Switch lab is off.
+    static func popoverShortcuts(_ items: [Item], quickSwitchOn: Bool) -> [String: OpenAsShortcut] {
+        quickSwitchOn ? shortcuts(items) : [:]
+    }
+
     /// `recents` is newest first: the first is who the browser is now, the
     /// second is where Switch Back goes.
     static func items(pins: [PinnedUser], recents: [RecentUser]) -> [Item] {
@@ -156,7 +161,7 @@ struct OpenAsMenu: View {
         let switching = openAs.isSwitching(bench: bench.path, site: row.name)
         let items = OpenAsMenuModel.items(pins: openAs.pins(bench: bench.path, site: row.name),
                                           recents: openAs.recents(bench: bench.path, site: row.name))
-        let keys = OpenAsMenuModel.shortcuts(items)
+        let keys = OpenAsMenuModel.popoverShortcuts(items, quickSwitchOn: Labs.shared.isOn(.quickSwitch))
         return Menu {
             ForEach(items) { item in
                 switch item {

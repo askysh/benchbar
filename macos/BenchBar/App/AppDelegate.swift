@@ -140,9 +140,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.mainMenu = makeMainMenu()
         setUpClicks()
 
-        quickSwitch = QuickSwitchController(store: store, settings: settings)
-        settings.onQuickSwitchChange = { [weak self] in self?.quickSwitch.sync() }
-        quickSwitch.sync()
+        // the key is registered when the CLI says the lab is on (Labs.refresh below), never before
+        quickSwitch = QuickSwitchController(store: store, labs: Labs.shared)
+        Labs.shared.onChange = { [weak self] lab, _ in if lab == .quickSwitch { self?.quickSwitch.sync() } }
 
         Task {
             await store.start()

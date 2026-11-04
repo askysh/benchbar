@@ -109,6 +109,11 @@ final class Labs {
         apply(next)
     }
 
+    /// A note under the lab's row that stays until the next flip of that lab (a hotkey another app holds).
+    func note(_ lab: Lab, _ message: String) {
+        errors[lab.rawValue] = message
+    }
+
     private func apply(_ fresh: [LabEntry]) {
         let before = Dictionary(Lab.allCases.map { ($0, isOn($0)) }) { first, _ in first }
         entries = fresh

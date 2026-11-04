@@ -54,7 +54,7 @@ top chooses which bench the popover shows.
 | ⌘0 | Open as Administrator, on the default site where Open as is on |
 | ⌘1 to ⌘9 | Open as a pinned user, in menu order |
 | ⇧⌘O | Switch back to the user before |
-| ⌃⌥U | Quick Switch, from any app, once turned on in Settings |
+| ⌃⌥U | Quick Switch, from any app, once turned on in Settings > Labs |
 
 ## Open as a user
 
@@ -102,8 +102,10 @@ lists:
 ### Quick Switch
 
 **Quick Switch** (⌃⌥U) opens a small list from any app: Switch Back, your
-pinned users and Administrator for the sites where Open as works. It is off
-until you turn it on in **Settings > General > Quick Switch**. In the list:
+pinned users and Administrator for the sites where Open as works. It is an
+experiment, off until you turn it on in **Settings > Labs** (the same switch as
+`benchbar labs on quick-switch`). The ⌘0 to ⌘9 and ⇧⌘O keys in the popover work
+only while it is on. In the list:
 
 | Keys | Action |
 |---|---|
@@ -115,8 +117,8 @@ until you turn it on in **Settings > General > Quick Switch**. In the list:
 
 Typing filters the list, and from two characters it also searches the site's
 other users. ⌃⌥U again closes it. It uses no Accessibility permission. If
-another app already holds ⌃⌥U, Settings says so in red and Quick Switch stays
-off.
+another app already holds ⌃⌥U, the Labs row says so in red and the lab goes
+back to off.
 
 After a switch the site's row reads `as {name}`: the pin's label, else the
 user's full name, else the user id. That is BenchBar's own record of its last
