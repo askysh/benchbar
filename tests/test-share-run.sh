@@ -516,7 +516,7 @@ wait_for 15 bash -c '[[ "$(grep -c "^dns-sd " "$1")" -ge 2 ]]' _ "$MOCK_STATE/or
 wait_for 5 test -f "$SHARE_DIR/degraded"
 assert_contains "$(cat "$SHARE_DIR/degraded")" "Bonjour"
 assert_contains "$(cat "$TMP_DIR/runner.log")" "dns-sd ended; starting it again in 5 polls"
-wait_for 10 bash -c '! test -f "$1"' _ "$SHARE_DIR/degraded"
+wait_for 10 bash -c '! test -f "$1" && grep -q "no longer degraded" "$2"' _ "$SHARE_DIR/degraded" "$TMP_DIR/runner.log"
 assert_contains "$(cat "$TMP_DIR/runner.log")" "no longer degraded"
 assert_eq "False" "$(runner_gone && echo True || echo False)"
 kill -TERM "$RUNNER_PID"; wait_for 15 runner_gone

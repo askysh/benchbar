@@ -1,5 +1,5 @@
 #!/bin/bash
-#@version 5
+#@version 6
 #@quoted SHARE_DIR SOCK BENCH SHARE_SITE WEB_PORT PYTHON LIB NODE BENCHBAR DNS_SD CAFFEINATE LSOF CURL SITE_LABEL ROOM_LABEL  # SESSIONS_PY and CONTROL_JS sit in quoted here-documents, where they are literal
 # __HEADER__
 #
@@ -365,8 +365,8 @@ while :; do
   fi
   if [ -z "$DNS_PID" ] && [ "$polls" -ge "$DNS_NEXT" ]; then start_dns again; fi
   if [ -n "$DNS_PID" ] && [ -f "$DEGRADED" ] && [ $((polls - DNS_SINCE)) -ge "$STABLE_POLLS" ]; then
-    rm -f "$DEGRADED"
     say "dns-sd has stayed up for ${STABLE_POLLS} polls: no longer degraded"
+    rm -f "$DEGRADED"
   fi
   if [ -n "$CAF_PID" ] && ! alive "$CAF_PID"; then
     wait "$CAF_PID" 2>/dev/null
