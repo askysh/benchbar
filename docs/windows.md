@@ -394,3 +394,14 @@ of the distro first. `wsl --list --verbose` shows the distro names.
   USER` opens the site signed in as that user in your Windows browser. The
   site needs a `*.localhost` name, which the Windows browser reaches without
   a hosts line. See [benchbar open](reference/cli/other.md).
+- It cannot join a room. Rooms (`benchbar share`) are Mac only for now:
+  WSL 2 does not expose a port to the Wi-Fi by default and Windows has no
+  pf.
+
+## Labs
+
+Labs work the same on Windows. `benchbar.exe labs list` shows them, and the
+ones that are not on Windows yet say so. `benchbar.exe labs on NAME` asks
+first in PowerShell. Turning one on is a person's decision, so an agent with
+`BENCHBAR_NONINTERACTIVE=1` is refused. See
+[labs](reference/cli/labs.md).

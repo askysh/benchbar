@@ -31,7 +31,7 @@ nonisolated final class FakeLabsBackend: @unchecked Sendable {
     static let fixture = """
     {"schema_version":1,"labs":[
      {"name":"lan-rooms","title":"Share with people on the same Wi-Fi","description":"d","warning":"w","since":"0.9.0","enabled":true,"commands":["share","lan-guard"]},
-     {"name":"quick-switch","title":"Quick Switch panel","description":"d","warning":"w","since":"0.9.0","enabled":false,"commands":[]},
+     {"name":"quick-switch","title":"Quick Switch panel","description":"d","warning":"w","since":"0.9.0","enabled":false,"commands":[],"platforms":["macos"],"available":false},
      {"name":"future-thing","title":"Future","description":"d","warning":"w","since":"1.0.0","enabled":true,"commands":[]}]}
     """
 
@@ -44,6 +44,8 @@ nonisolated final class FakeLabsBackend: @unchecked Sendable {
         #expect(labs.count == 3)
         #expect(labs[0].commands == ["share", "lan-guard"])
         #expect(labs[0].since == "0.9.0")
+        #expect(labs[0].platforms == nil && labs[0].available == nil)
+        #expect(labs[1].platforms == ["macos"] && labs[1].available == false)
     }
 
     @Test func isOnAnswersForKnownCases() async throws {
@@ -99,17 +101,36 @@ nonisolated final class FakeLabsBackend: @unchecked Sendable {
         #expect(labs.busy.isEmpty)
     }
 
-    @Test func onChangeFires() async throws {
+    @Test func observeAllFires() async throws {
         let backend = FakeLabsBackend()
         backend.result = .success(try Self.entries())
         let labs = Labs(loader: backend.loader)
         var seen: [String] = []
-        labs.onChange = { lab, on in seen.append("\(lab.rawValue):\(on)") }
+        labs.observeAll { lab, on in seen.append("\(lab.rawValue):\(on)") }
         await labs.refresh()
         #expect(seen == ["lan-rooms:true"])
         try await labs.set(.quickSwitch, on: true)
         try await labs.set(.lanRooms, on: false)
         #expect(seen == ["lan-rooms:true", "quick-switch:true", "lan-rooms:false"])
+    }
+
+    @Test func observersOfOneLabBothFireAndCancelStopsOne() async throws {
+        let backend = FakeLabsBackend()
+        backend.result = .success(try Self.entries())
+        let labs = Labs(loader: backend.loader)
+        var first: [Bool] = []
+        var second: [Bool] = []
+        var other: [Bool] = []
+        let token = labs.observe(.quickSwitch) { first.append($0) }
+        labs.observe(.quickSwitch) { second.append($0) }
+        labs.observe(.lanRooms) { other.append($0) }
+        await labs.refresh()
+        #expect(other == [true] && first.isEmpty && second.isEmpty)
+        try await labs.set(.quickSwitch, on: true)
+        #expect(first == [true] && second == [true] && other == [true])
+        token.cancel()
+        try await labs.set(.quickSwitch, on: false)
+        #expect(first == [true] && second == [true, false])
     }
 
     @Test func refreshIsThrottled() async throws {

@@ -24,13 +24,17 @@ on. `labs off` always works. It undoes what the experiment started and turns
 it off; a problem while undoing is a warning, and the experiment is off anyway.
 `labs status` exits 0 when the experiment is on and 1 when it is off.
 
+A lab lists its platforms (`macos`, `linux`, `windows`). On another platform
+`labs` shows it as "(not on this platform)" and `labs on` stops with exit
+code 1: "NAME is not available on linux yet".
+
 All of this is benchbar's own state (the `LABS` key). No bench or site changes.
 The BenchBar app shows the same list under Settings. `BENCHBAR_LABS=a,b` in
 the environment replaces the saved list, for tests and CI.
 
-| Name | What it does | Since |
-| --- | --- | --- |
-| `lan-rooms` | Share with people on the same Wi-Fi. Commands: `share`, `lan-guard`. | 0.9.0 |
-| `quick-switch` | A panel on a global keyboard shortcut to open a site as any pinned user. | 0.9.0 |
+| Name | What it does | Since | Platforms |
+| --- | --- | --- | --- |
+| `lan-rooms` | Let colleagues on the office Wi-Fi browse a hardened copy of a site, signed in as a user you choose. Commands: `share`, `lan-guard`. | 0.9.0 | macOS |
+| `quick-switch` | A panel on a global keyboard shortcut to open a site as any pinned user. | 0.9.0 | macOS |
 
 The JSON is in [the JSON reference](../../json-schema.md#benchbar-labs-json).
