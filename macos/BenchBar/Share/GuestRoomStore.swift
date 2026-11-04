@@ -106,6 +106,8 @@ final class GuestRoomStore {
 
     private let deps: Dependencies
     private var forwarders: [String: any ForwarderRunning] = [:]
+    /// A loopback forwarder is up for a joined room (the quit alert).
+    var hasRunningForwarder: Bool { forwarders.values.contains { $0.isRunning } }
     private var lastAttempt: Date?
     private var wrongInARow = 0
     private var lockedUntil: Date?

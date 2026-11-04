@@ -168,7 +168,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         Task {
             await store.start()
-            for bench in store.benches { _ = ShareCenter.shared.store(for: bench.path) }
+            ShareCenter.shared.restoreActive(among: store.benches.map(\.path))
             benchesLoaded = true
             let waiting = pendingURLs
             pendingURLs = []
@@ -267,7 +267,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let benches = store.benches.map {
             URLRouter.Bench(path: $0.path, name: $0.name, sites: $0.siteRows.map(\.name))
         }
-        let link = String(url.absoluteString.prefix(300))
+        // a share link can carry a room code: its address is never logged, only a generic line
+        let link = url.host(percentEncoded: false)?.lowercased() == "share" ? "share link" : String(url.absoluteString.prefix(300))
         switch URLRouter.route(url, benches: benches, selected: store.selectedPath) {
         case .ignore(let reason):
             Self.urlLog.notice("Ignored \(link, privacy: .public): \(reason, privacy: .public)")
@@ -297,8 +298,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Self.urlLog.info("\(route.rawValue, privacy: .public) on \(bench.name, privacy: .public)")
             switch route {
             case .up: Task { await store.perform(.up, on: bench) }
-            case .down: Task { await store.perform(.down, on: bench) }
-            case .restart: Task { await store.perform(.restart, on: bench) }
+            case .down: Task { await store.perform(.down, on: bench, fromLink: true) }
+            case .restart: Task { await store.perform(.restart, on: bench, fromLink: true) }
             case .open:
                 if let site, let row = bench.siteRows.first(where: { $0.name == site }) {
                     Workspace.open(row.url)
@@ -367,12 +368,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// A log window on screen does not count: `hasVisibleWindows` is true
     /// for it, and the BenchBar window stayed closed.
     /// Quitting kills a running share setup or teardown (the CLI gets SIGTERM):
-    /// the copy is left half made, so ask first. Keep running is the default.
+    /// the copy is left half made, so ask first. It also drops the people in a
+    /// room this Mac hosts and closes the forwarder to a room it joined, so
+    /// those ask too. Keep running is the default.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard ShareCenter.shared.setupOrTeardownRunning else { return .terminateNow }
         let alert = NSAlert()
-        alert.messageText = "Sharing setup is still running."
-        alert.informativeText = "Quitting now stops it halfway; the copy will need setup again."
+        if ShareCenter.shared.setupOrTeardownRunning {
+            alert.messageText = "Sharing setup is still running."
+            alert.informativeText = "Quitting now stops it halfway; the copy will need setup again."
+        } else if let hosted = ShareCenter.shared.benchesWithGuests.first {
+            let people = hosted.status?.people ?? 0
+            alert.messageText = "People are in your room."
+            alert.informativeText = "\(people == 1 ? "1 person is" : "\(people) people are") in the room on \(URL(fileURLWithPath: hosted.bench).lastPathComponent). Quitting disconnects them."
+        } else if guest.hasRunningForwarder {
+            alert.messageText = "You are connected to a room."
+            alert.informativeText = "Quitting closes the connection to the site you opened from it."
+        } else {
+            return .terminateNow
+        }
         alert.addButton(withTitle: "Keep running")
         alert.addButton(withTitle: "Quit anyway")
         return alert.runModal() == .alertSecondButtonReturn ? .terminateNow : .terminateCancel
