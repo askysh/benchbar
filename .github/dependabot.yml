@@ -1,17 +1,21 @@
 # Weekly updates for the Actions in .github/workflows, the Swift
 # packages of the app and the docs site's packages (site/, bun). The CLI
-# is plain bash with no packages to update.
+# is plain bash with no packages to update. Updates go to next-release,
+# where every change lands; main moves only when a release is cut.
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
+    target-branch: next-release
     schedule:
       interval: weekly
   - package-ecosystem: swift
     directory: /macos
+    target-branch: next-release
     schedule:
       interval: weekly
   - package-ecosystem: bun
     directory: /site
+    target-branch: next-release
     schedule:
       interval: weekly
