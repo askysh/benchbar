@@ -189,8 +189,10 @@ update, so back it up.
 
 ### 5. The Homebrew tap
 
-`askysh/homebrew-tap` holds two files, both written by
-`.github/workflows/homebrew-tap.yml` when a release is published:
+`askysh/homebrew-tap` holds two benchbar files, both written by
+`.github/workflows/homebrew-tap.yml` when a release is published. The
+tap also holds the cask of [Margin](https://github.com/askysh/margin),
+which its own workflow updates.
 
 | File | Installs | Updated for |
 |---|---|---|
@@ -204,7 +206,11 @@ It downloads the release's tarball and DMG, checks them against
 with `scripts/homebrew-render.sh`, runs `brew style` and `brew audit
 --strict --online`, installs both, runs `brew test`, uninstalls, and
 opens a pull request on the tap that merges itself once the tap's
-checks pass. A prerelease leaves the tap alone. Run it by hand from the
+checks pass. It also closes the open tap pull requests of older
+benchbar versions. The tap's `tests` check audits, installs and
+uninstalls only the files a pull request changes. Thus a Margin release
+at the same time does not block a benchbar release. A prerelease leaves
+the tap alone. Run it by hand from the
 Actions tab (Homebrew tap, Run workflow, the version) to redo one.
 
 It needs `HOMEBREW_TAP_TOKEN`: a fine grained personal access token

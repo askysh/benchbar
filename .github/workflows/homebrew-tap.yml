@@ -8,6 +8,9 @@
 # clone of the tap, checked with brew style and brew audit, installed and
 # tested, then proposed as a pull request that merges itself once the tap's
 # checks pass (docs/releasing.md, "The Homebrew tap").
+# It closes the open tap pull requests of older benchbar versions: the new
+# one replaces them. The tap's tests check only the files a pull request
+# changes, so a Margin release at the same time does not block this one.
 #
 # Needs the HOMEBREW_TAP_TOKEN secret: a fine grained token with Contents
 # and Pull requests write access to askysh/homebrew-tap only. Without it
@@ -175,4 +178,15 @@ jobs:
           gh pr view "$branch" --repo askysh/homebrew-tap >/dev/null 2>&1 \
             || gh pr create --repo askysh/homebrew-tap --base main --head "$branch" --title "benchbar ${VERSION}" --body "$body"
           gh pr merge "$branch" --repo askysh/homebrew-tap --auto --squash --delete-branch
-          echo "::notice title=Tap pull request::$(gh pr view "$branch" --repo askysh/homebrew-tap --json url --jq .url) merges itself once its checks pass."
+          url="$(gh pr view "$branch" --repo askysh/homebrew-tap --json url --jq .url)"
+          # An open pull request for an older benchbar version is replaced by this one: close it.
+          gh pr list --repo askysh/homebrew-tap --state open --json headRefName --jq '.[].headRefName' \
+            | sed -n 's/^benchbar-\([0-9][0-9.]*\)$/\1/p' | while read -r old; do
+                [ "$old" != "$VERSION" ] || continue
+                newest="$(printf '%s\n%s\n' "$old" "$VERSION" | sort -t. -k1,1n -k2,2n -k3,3n | tail -n1)"
+                [ "$newest" = "$VERSION" ] || continue
+                gh pr close "benchbar-$old" --repo askysh/homebrew-tap --delete-branch \
+                  --comment "Replaced by $url (benchbar $VERSION)."
+                echo "::notice title=Closed::the tap pull request for benchbar $old, replaced by $VERSION."
+              done
+          echo "::notice title=Tap pull request::$url merges itself once its checks pass."
