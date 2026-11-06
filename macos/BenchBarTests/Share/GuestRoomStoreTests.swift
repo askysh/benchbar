@@ -429,11 +429,10 @@ private final class Harness {
         #expect(NetworkPanePresentation.refusal(.wrongCode, host: "Priya") == "That code didn't work. Check with Priya and try again.")
         #expect(NetworkPanePresentation.refusal(.locked, host: "Priya") == "Priya locked this room.")
         #expect(NetworkPanePresentation.refusal(.full, host: "Priya") == "This room is full.")
-        // a new code does not lift a removal; only a new room does, so say who can do it
-        #expect(NetworkPanePresentation.refusal(.blocked, host: "Priya")
-            == "Priya removed you from this room. A new code won't let you back in: ask Priya to stop sharing and start it again.")
+        // a removal holds only against the code they had: a new invite lets them back
+        #expect(NetworkPanePresentation.refusal(.blocked, host: "Priya") == "Priya removed you from this room. Ask Priya for a new invite to join again.")
         #expect(NetworkPanePresentation.refusal(.codeDidNotCheckOut, host: "Priya") == "This room's code didn't check out. Ask Priya for the code again.")
-        #expect(NetworkPanePresentation.health(.removed, host: "Priya", now: now) == "Priya removed you from this room.")
+        #expect(NetworkPanePresentation.health(.removed, host: "Priya", now: now) == "Priya removed you from this room. Ask Priya for a new invite to join again.")
         #expect(NetworkPanePresentation.health(.ended, host: "Priya", now: now) == "Priya ended the room.")
         #expect(NetworkPanePresentation.health(.ready(deadline: now.addingTimeInterval(95 * 60)), host: "Priya", now: now) == "Ready · 1 h 35 min left")
         #expect(NetworkPanePresentation.health(.hostGone(lastSeen: now), host: "Priya", now: now).hasPrefix("Priya isn't sharing right now (last seen "))

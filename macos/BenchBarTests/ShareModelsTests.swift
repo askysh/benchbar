@@ -251,6 +251,23 @@ struct ShareStoreTests {
         #expect(!events.contains(.networkChanged))
     }
 
+    @Test func aRemovalOffersANewInviteThatLetsThePersonBackIn() async {
+        let fake = FakeShareCLI([on()])
+        let store = ShareStore(bench: "/b", client: fake, log: { _ in })
+        await store.refresh()
+        await store.remove(SharePerson(id: "d_1", name: "Alcin"), newCode: false)
+        #expect(store.removedName == "Alcin")
+        var written: [String] = []
+        await store.copyNewInvite { written.append($0) }
+        #expect(fake.calls == ["remove d_1 false", "code --new", "invite"])
+        #expect(written.count == 1)
+        #expect(store.removedName == nil)
+        #expect(store.inviteCopied)
+        // a removal that also drew a new code has nothing to offer: the new code already lifted it
+        await store.remove(SharePerson(id: "d_2", name: "Sam"), newCode: true)
+        #expect(store.removedName == nil)
+    }
+
     @Test func copyInviteWritesTheMessageOnceAndLogsNoCode() async {
         let fake = FakeShareCLI([on()])
         let sink = LogSink()

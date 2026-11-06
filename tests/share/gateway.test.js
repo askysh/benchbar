@@ -456,21 +456,24 @@ test("J4: near exhaustion, concurrent starts cannot add up to more failures than
     });
 });
 
-test("a removed person is blocked for the room: start is 403 and costs nothing; a new code does not lift it", async () => {
+test("a removed person cannot rejoin with the code they had; a new code lets them back and keeps everyone else", async () => {
     await withGateway({}, async (gw) => {
         const c = cert("blockme");
+        const stays = await joinGuest(gw, cert("stays"), "10.41.0.9");
         const s = await joinGuest(gw, c, "10.41.0.1");
         s.close();
-        const [row] = await people(gw);
-        assert.deepStrictEqual(await gw.control({ op: "remove", device: row.id }), { ok: true, user: null });
+        const removed = (await people(gw)).find((p) => p.fp === c.fp);
+        assert.deepStrictEqual(await gw.control({ op: "remove", device: removed.id }), { ok: true, user: null });
         const again = new GuestSession(gw, c, { ip: "10.41.0.2" });
         const r = await again.start(await roomCode(gw));
         assert.deepStrictEqual([r.status, r.json.status], [403, "blocked"]);
         assert.strictEqual((await status(gw)).budget_left, 10);
+        again.close();
         await gw.control({ op: "rotate" });
-        assert.strictEqual((await again.start(await roomCode(gw))).status, 403);
-        const fresh = await joinGuest(gw, cert("blockme-not"), "10.41.0.3");
-        fresh.close(); again.close();
+        const back = await joinGuest(gw, c, "10.41.0.2");
+        const fps = (await people(gw)).map((p) => p.fp).sort();
+        assert.deepStrictEqual(fps, [c.fp, cert("stays").fp].sort(), "the one who stayed is still in the room");
+        back.close(); stays.close();
     });
 });
 

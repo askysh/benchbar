@@ -182,6 +182,12 @@ nonisolated enum SharePresentation {
     static func removeConfirm(_ person: SharePerson, site: String) -> String {
         "Remove \(person.name)? Closes their connections and signs them out of \(site)."
     }
+    static let removeDetail = "They can't join again with the current code. Everyone else stays. To let them back in, copy a new invite and send it to them."
+    static let copyNewInvite = "Copy new invite"
+
+    static func removedNotice(_ name: String) -> String {
+        "\(name) was removed. To let them back in, send a new invite."
+    }
 
     /// "Sam · sales-invoice · 09:30" from one activity line.
     static func activityLine(_ entry: ShareLogEntry, names: [String: String]) -> String {

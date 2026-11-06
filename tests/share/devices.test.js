@@ -169,6 +169,18 @@ test("emptyAll clears devices and the blocked list, even over a damaged file", (
     assert.deepStrictEqual(fs.readdirSync(dir), ["devices.json"]);
 });
 
+test("clearBlocked lets removed Macs join again and leaves the people in the room alone", () => {
+    const s = store(tmp());
+    s.add(dev(1)); s.block(fp(2)); s.block(fp(3));
+    assert.strictEqual(s.clearBlocked(), true);
+    assert.strictEqual(s.isBlocked(fp(2)), false);
+    assert.strictEqual(s.isBlocked(fp(3)), false);
+    assert.deepStrictEqual(s.list().map((d) => d.id), [id(1)]);
+    assert.strictEqual(s.clearBlocked(), false);
+    s.add(dev(2));
+    assert.deepStrictEqual(s.list().map((d) => d.id).sort(), [id(1), id(2)].sort());
+});
+
 test("a throttled touch does no file I/O: no lock file is created", () => {
     let t = T0;
     const dir = tmp();

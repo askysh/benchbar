@@ -49,8 +49,12 @@ has Open as keyboard shortcuts, and two sharing fixes are in.
   (a new critical check, `copy_present`), instead of staying on and showing
   guests "restarting".
 - Mac app: a share started or stopped in a terminal runs its checks again on
-  the next poll, not up to a minute later. A guest who was removed is told a
-  new code will not let them back in, and to ask the host to start sharing again.
+  the next poll, not up to a minute later.
+- Sharing: Remove no longer shuts someone out until the room ends. They
+  cannot join again with the code they had; drawing a new code lets them
+  back, and everyone else stays in the room. In the app, Remove is one
+  click, and **Copy new invite** appears right after it. A removed guest is
+  told to ask the host for a new invite.
 - Mac app: "Your network changed" shows only when the address guests reach
   the room on changes, not for every network event macOS reports (a VPN,
   a virtual machine's network or waking from sleep). The checks still run

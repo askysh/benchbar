@@ -255,7 +255,7 @@ test("the store itself refuses a person over the cap and a blocked fingerprint",
     assert.throws(() => store.add(blocked), (e) => e.code === "blocked");
 });
 
-test("a blocked SPKI is refused at start, uncharged, and the block outlives the in-flight request", () => {
+test("a blocked SPKI is refused at start, uncharged, until a new code lifts the block", () => {
     const { room, store } = makeRoom();
     const g = joined(room);
     const id = store.list()[0].id;
@@ -265,7 +265,7 @@ test("a blocked SPKI is refused at start, uncharged, and the block outlives the 
     assert.deepStrictEqual(again.start(), { status: 403, body: { status: "blocked" } });
     assert.strictEqual(room.status().budget_left, 10);
     room.rotate();
-    assert.strictEqual(new Guest(room, { fp: g.fp, ip: "10.10.0.9" }).start().status, 403, "a new code does not lift the block");
+    assert.strictEqual(new Guest(room, { fp: g.fp, ip: "10.10.0.9" }).start().status, 200, "a new code lets a removed person try again");
 });
 
 test("a person already in the room cannot start another join", () => {
