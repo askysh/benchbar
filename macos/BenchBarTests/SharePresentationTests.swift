@@ -46,6 +46,14 @@ struct SharePresentationTests {
         #expect(ShareStepLine.failure([#"{"event":"done","exit":0}"#]) == nil)
     }
 
+    @Test func removingSaysHowToLetSomeoneBackIn() {
+        #expect(SharePresentation.removeConfirm(SharePerson(id: "d_1", name: "Alcin"), site: "macdev")
+            == "Remove Alcin? Closes their connections and signs them out of macdev.")
+        #expect(SharePresentation.removeDetail.contains("Everyone else stays"))
+        #expect(SharePresentation.removedNotice("Alcin") == "Alcin was removed. To let them back in, send a new invite.")
+        #expect(SharePresentation.copyNewInvite == "Copy new invite")
+    }
+
     @Test func countdownAndIndicator() {
         #expect(SharePresentation.countdown(30) == "less than a minute")
         #expect(SharePresentation.countdown(3540) == "59 min")

@@ -134,6 +134,14 @@ struct SharingTab: View {
             if share.inviteCopied {
                 Label(SharePresentation.inviteCopied, systemImage: "checkmark.circle").foregroundStyle(.secondary)
             }
+            if let name = share.removedName {
+                HStack {
+                    Label(SharePresentation.removedNotice(name), systemImage: "person.badge.minus").foregroundStyle(.secondary)
+                    Spacer()
+                    Button(SharePresentation.copyNewInvite) { Task { await share.copyNewInvite(write: ShareClipboard.copy) } }
+                        .disabled(share.busy != nil)
+                }
+            }
             Text(SharePresentation.codeNote).foregroundStyle(.secondary)
             Text(SharePresentation.codeProves).font(.caption).foregroundStyle(.secondary)
         }
@@ -260,11 +268,8 @@ struct SharingTab: View {
     }
 
     private func remove(_ person: SharePerson) async {
-        switch ShareConfirm.removeChoice(SharePresentation.removeConfirm(person, site: site)) {
-        case .cancel: return
-        case .remove: await share.remove(person, newCode: false)
-        case .removeAndNewCode: await share.remove(person, newCode: true)
-        }
+        guard ShareConfirm.ask(SharePresentation.removeConfirm(person, site: site), detail: SharePresentation.removeDetail, button: "Remove") else { return }
+        await share.remove(person, newCode: false)
     }
 
     private var activitySection: some View {
@@ -291,23 +296,6 @@ enum ShareConfirm {
         alert.addButton(withTitle: button)
         alert.addButton(withTitle: "Cancel")
         return alert.runModal() == .alertFirstButtonReturn
-    }
-
-    enum RemoveChoice { case cancel, remove, removeAndNewCode }
-
-    /// J14: a fresh identity can rejoin with the old code, so Remove offers a new code too.
-    static func removeChoice(_ message: String) -> RemoveChoice {
-        let alert = NSAlert()
-        alert.messageText = message
-        alert.informativeText = "They cannot rejoin from this Mac. Someone who knows the code could join again from another identity; Remove and change code stops that."
-        alert.addButton(withTitle: "Remove")
-        alert.addButton(withTitle: "Remove and change code")
-        alert.addButton(withTitle: "Cancel")
-        switch alert.runModal() {
-        case .alertFirstButtonReturn: return .remove
-        case .alertSecondButtonReturn: return .removeAndNewCode
-        default: return .cancel
-        }
     }
 }
 

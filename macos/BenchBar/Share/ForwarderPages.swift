@@ -30,7 +30,7 @@ nonisolated enum ForwarderPage: Equatable, Sendable {
     var message: String {
         switch self {
         case .ended(let host): return "\(host) ended the room."
-        case .removed(let host, _): return "\(host) removed you from this room."
+        case .removed(let host, _): return NetworkPanePresentation.removedLine(host: host)
         case .hostOffline(let host, let lastSeen): return "\(host) isn't sharing right now (last seen \(lastSeen))."
         case .identityChanged(let host):
             return "\(host)'s Mac looks different from the one you joined. BenchBar did not connect. If \(host) reset BenchBar, remove the room and join again with a new code."

@@ -131,7 +131,7 @@ reset_world
 pre
 assert_eq "0" "$CODE" "$OUT$ERR"
 assert_eq "True" "$(jget "$TMP_DIR/pre.out" 'd["ok"] and d["protocol"] == 3 and d["lan_ip"] == "192.168.1.20" and d["schema_version"] == 1 and "cli_version" in d')"
-for id in lan_ip local_network pf_active share_web_lan_closed share_traceback_off bench_redis_up share_debugger_off \
+for id in lan_ip local_network pf_active share_web_lan_closed share_traceback_off bench_redis_up share_debugger_off copy_present \
   firewall_node developer_mode_off server_script_off signup_disabled admin_password_not_default seats_valid no_api_keys node_ok copy_ready copy_drift cli_protocol; do
   assert_check "$id" ok
 done
@@ -425,6 +425,11 @@ pre --critical; assert_check pf_active fail "does not match" install_network_pro
 reset_world
 rm -f "$FL_LANGUARD_DAEMON"
 pre --critical; assert_check pf_active fail "daemon" install_network_protection
+# the copy removed while sharing (a site drop, a cleanup): the job must end, so it is a critical check
+reset_world
+mv "$COPY/site_config.json" "$COPY/site_config.json.gone"
+pre --critical; assert_check copy_present fail "share.localhost" rerun_setup
+mv "$COPY/site_config.json.gone" "$COPY/site_config.json"
 # comments and blank lines are not compared
 reset_world; printf '\n# another comment\n' >>"$FL_LANGUARD_ANCHOR"
 pre --critical; assert_check pf_active ok
@@ -432,7 +437,7 @@ pre --critical; assert_check pf_active ok
 # ---------------------------------------------------------------- the document: modes, exit code, fix_action enum
 reset_world
 pre --critical
-assert_eq "lan_ip local_network pf_active gateway_reachable share_web_lan_closed share_traceback_off bench_redis_up share_debugger_off" "$(ids)"
+assert_eq "lan_ip local_network pf_active gateway_reachable share_web_lan_closed share_traceback_off bench_redis_up share_debugger_off copy_present" "$(ids)"
 pre --static
 assert_eq "node_ok firewall_node copy_ready developer_mode_off server_script_off signup_disabled admin_password_not_default seats_valid no_api_keys copy_drift cli_protocol" "$(ids)"
 # --critical runs no static check (the helper is not asked), --static runs no probe
@@ -444,7 +449,7 @@ pre --static
 assert_calls_not_contain "^(nc|curl|route|ipconfig) "
 reset_world; : >"$MOCK_LOG"
 pre
-assert_eq "True" "$(jget "$TMP_DIR/pre.out" 'len(d["checks"]) == 19')" "(no flag: both)"
+assert_eq "True" "$(jget "$TMP_DIR/pre.out" 'len(d["checks"]) == 20')" "(no flag: both)"
 # every failing check has a fix_action from the enum; a fail exits 1 and the document is still printed
 reset_world
 printf 'Firewall is enabled. (State = 1)\n' >"$MOCK_STATE/fw_state"; printf 'Incoming connection to %%PATH%% is blocked.\n' >"$MOCK_STATE/fw_app"
