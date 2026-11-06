@@ -226,6 +226,26 @@ KVR="$(bash -c '. "$0/lib/frappe-local/ui.sh"; . "$0/lib/frappe-local/state.sh"
   [[ -e "$lck" || -e "$lck.reclaim" ]] && printf "left" || printf "clean"' "$ROOT" "$KV2")"
 assert_eq "stale kept kept-by-unlock clean" "$KVR"
 
+# ---- a folder created twice (mkdir is not the arbiter on a loaded Linux
+# runner): the writer that finds another token in the folder it just made
+# backs off, keeps the other's token, and holds nothing; alone, it holds
+KV4="$TMP_DIR/kv4.env"; : >"$KV4"
+KVC="$(bash -c '. "$0/lib/frappe-local/ui.sh"; . "$0/lib/frappe-local/state.sh"
+  lck="$1.lck"
+  mkdir "$lck"; : >"$lck/other.1"
+  fl__kv_claim "$lck" && printf "claimed " || printf "backed-off "
+  printf "token=[%s] " "$FL__KV_TOKEN"
+  [[ -e "$lck/other.1" ]] && printf "other-kept " || printf "other-lost "
+  fl__kv_unlock "$1"
+  [[ -d "$lck" ]] && printf "folder-kept " || printf "folder-lost "
+  rm -f "$lck/other.1"; rmdir "$lck"
+  mkdir "$lck"
+  fl__kv_claim "$lck" && printf "alone-claimed " || printf "alone-refused "
+  [[ -e "$lck/$FL__KV_TOKEN" ]] && printf "mine-there " || printf "mine-missing "
+  fl__kv_unlock "$1"
+  [[ -e "$lck" ]] && printf "left" || printf "clean"' "$ROOT" "$KV4")"
+assert_eq "backed-off token=[] other-kept folder-kept alone-claimed mine-there clean" "$KVC"
+
 # ---- a live holder is never judged stale by the age of its lock: a clock that
 # stepped, or a process stopped on a loaded machine, must not let a waiter break
 # the lock and rename its own content over the holder's
