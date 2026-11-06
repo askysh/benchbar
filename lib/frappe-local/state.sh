@@ -327,10 +327,9 @@ fl__kv_stale() {
   ! fl__kv_holder_alive "$1"
 }
 
-# fl__kv_owned FILE: the lock of FILE is still the caller's (always true for
-# a lock that takes no token file)
+# fl__kv_owned FILE: the lock of FILE is still the caller's
 fl__kv_owned() {
-  [[ -z "$FL__KV_TOKEN" || -e "$1.lck/${FL__KV_TOKEN}" ]]
+  [[ -n "$FL__KV_TOKEN" && -e "$1.lck/${FL__KV_TOKEN}" ]]
 }
 
 # fl__kv_reclaim LCK SEEN [force]: removes LCK when it still holds SEEN (what
@@ -350,7 +349,10 @@ fl__kv_reclaim() {
 
 fl__kv_lock() {
   local lck="$1.lck" i=0 seen limit
-  while ! mkdir "$lck" 2>/dev/null; do
+  while :; do
+    if mkdir "$lck" 2>/dev/null; then
+      fl__kv_claim "$lck" && return 0
+    fi
     i=$((i + 1))
     if [[ $((i % 40)) -eq 0 ]]; then
       # what is in it first, then its age: a lock taken anew in between is young
@@ -365,13 +367,34 @@ fl__kv_lock() {
     fi
     sleep 0.05
   done
-  FL__KV_TOKEN="$$.${RANDOM}${RANDOM}"
-  # a lock that takes no file: unlock removes it as before, without the token
-  : >"${lck}/${FL__KV_TOKEN}" 2>/dev/null || FL__KV_TOKEN=""
 }
+
+# fl__kv_claim LCK: writes the caller's token into the lock folder its mkdir
+# has just created and checks that it is the only one there. mkdir alone is
+# not the arbiter: on a loaded Linux CI runner two writers have both seen
+# their mkdir succeed within a few milliseconds of the previous holder's
+# rmdir, and both tokens landed in one folder (test-run-lock, traced). The
+# writer that finds another token takes its own back and waits again; when
+# both do, the last to leave removes the folder, so the next mkdir is not
+# stuck on an empty one. A token that cannot be written (the folder is gone
+# already) is no lock either.
+fl__kv_claim() {
+  local lck="$1" entries
+  FL__KV_TOKEN="$$.${RANDOM}${RANDOM}"
+  if : >"${lck}/${FL__KV_TOKEN}" 2>/dev/null; then
+    entries=("$lck"/*)
+    if [[ "${#entries[@]}" -eq 1 && "${entries[0]}" == "${lck}/${FL__KV_TOKEN}" ]]; then return 0; fi
+    rm -f "${lck}/${FL__KV_TOKEN}"
+    rmdir "$lck" 2>/dev/null || true
+  fi
+  FL__KV_TOKEN=""
+  return 1
+}
+
 fl__kv_unlock() {
   local lck="$1.lck"
-  if [[ -z "$FL__KV_TOKEN" ]]; then rmdir "$lck" 2>/dev/null || true; return 0; fi
+  # no token, no lock of ours to release (never remove a folder another writer may have just taken)
+  [[ -n "$FL__KV_TOKEN" ]] || return 0
   # only the caller's own lock: one broken as stale and taken by another writer stays
   if [[ -e "${lck}/${FL__KV_TOKEN}" ]]; then
     rm -f "${lck}/${FL__KV_TOKEN}"

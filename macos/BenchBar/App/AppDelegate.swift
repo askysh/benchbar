@@ -16,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var updater: Updater?
     private var about: AboutModel!
     private var updateOffer: UpdateOffer!
+    private var quickSwitch: QuickSwitchController!
     /// The guest side of rooms; filled only while the lan-rooms lab is on.
     private let guestSlot = GuestSlot()
     private var guest: GuestRoomStore? { guestSlot.store }
@@ -176,6 +177,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updateOffer.checkWithSparkle = { [weak self] in self?.updater?.checkForUpdates() }
         NSApp.mainMenu = makeMainMenu()
         setUpClicks()
+
+        // the key is registered when the CLI says the lab is on (Labs.refresh below), never before
+        quickSwitch = QuickSwitchController(store: store, labs: Labs.shared)
+        Labs.shared.observe(.quickSwitch) { [weak self] _ in self?.quickSwitch.sync() }
 
         Task {
             await store.start()

@@ -9,6 +9,7 @@ nonisolated final class FakeLabsBackend: @unchecked Sendable {
     private var _loads = 0
     var result: Result<[LabEntry], CLIError> = .success([])
     var setFailure: CLIError?
+    var failTurningOff = false
 
     var sets: [String] { lock.withLock { _sets } }
     var loads: Int { lock.withLock { _loads } }
@@ -21,6 +22,7 @@ nonisolated final class FakeLabsBackend: @unchecked Sendable {
             },
             set: { [self] name, on in
                 if let setFailure { throw setFailure }
+                if failTurningOff && !on { throw CLIError.failed(command: "labs off", exitCode: 1, message: "locked") }
                 lock.withLock { _sets.append("\(name):\(on)") }
             })
     }

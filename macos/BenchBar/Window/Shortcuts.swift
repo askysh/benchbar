@@ -46,3 +46,33 @@ extension View {
         keyboardShortcut(shortcut.keyEquivalent, modifiers: .command)
     }
 }
+
+/// The "Open as…" shortcuts of the popover, for the default site while its
+/// menu shows. Kept out of `BenchShortcut`: ⇧⌘O and the digits are a family,
+/// not one key each.
+nonisolated enum OpenAsShortcut: Equatable, Sendable {
+    case switchBack
+    /// 0 is Administrator, 1 to 9 the pins in menu order.
+    case openAs(Int)
+
+    var key: Character {
+        switch self {
+        case .switchBack: "o"
+        case .openAs(let digit): Character(String(digit))
+        }
+    }
+
+    var usesShift: Bool { self == .switchBack }
+
+    /// "⇧⌘O", "⌘2"
+    var display: String { (usesShift ? "⇧" : "") + "⌘" + String(key).uppercased() }
+
+    /// What Settings lists for the family.
+    static let summary = "⌘0  ⌘1 to ⌘9  \(OpenAsShortcut.switchBack.display)"
+}
+
+extension View {
+    func shortcut(_ shortcut: OpenAsShortcut) -> some View {
+        keyboardShortcut(KeyEquivalent(shortcut.key), modifiers: shortcut.usesShift ? [.command, .shift] : .command)
+    }
+}
