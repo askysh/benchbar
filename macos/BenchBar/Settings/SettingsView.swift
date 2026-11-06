@@ -233,7 +233,7 @@ struct SettingsView: View {
 
     private var shortcutsSection: some View {
         Section {
-            ForEach(Self.shortcuts, id: \.keys) { item in
+            ForEach(Self.shortcuts(quickSwitch: Labs.shared.isOn(.quickSwitch)), id: \.keys) { item in
                 LabeledContent(item.action) {
                     Text(item.keys).font(.callout.monospaced()).foregroundStyle(.secondary)
                 }
@@ -241,7 +241,10 @@ struct SettingsView: View {
         } header: {
             Text("Keyboard shortcuts")
         } footer: {
-            Text("In the menu bar popover, for the bench it shows.").font(.caption).foregroundStyle(.secondary)
+            Text(Labs.shared.isOn(.quickSwitch)
+                 ? "In the menu bar popover, for the bench it shows. Quick Switch works from any app."
+                 : "In the menu bar popover, for the bench it shows.")
+                .font(.caption).foregroundStyle(.secondary)
         }
     }
 
@@ -253,6 +256,15 @@ struct SettingsView: View {
         (BenchShortcut.health.action, BenchShortcut.health.display),
         (BenchShortcut.manage.action, BenchShortcut.manage.display),
     ]
+
+    /// Quick Switch's rows show only while the lab is on, and so do the Open as keys it brought.
+    static func shortcuts(quickSwitch: Bool) -> [(action: String, keys: String)] {
+        guard quickSwitch else { return shortcuts }
+        return shortcuts + [
+            ("Open as Administrator, a pinned user, or back", OpenAsShortcut.summary),
+            ("Quick Switch, from any app", "⌃⌥U"),
+        ]
+    }
 
     // MARK: general
 

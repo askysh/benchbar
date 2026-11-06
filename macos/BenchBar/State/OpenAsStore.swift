@@ -38,6 +38,8 @@ final class OpenAsStore {
     /// Switches running per site ("<bench>|<site>"): the menu shows a spinner while it is above 0.
     /// A count, not a flag: with two switches on one site, the first to end must not stop the spinner.
     private(set) var switchingCount: [String: Int] = [:]
+    /// The site ("<bench>|<site>") the last switch happened on: Quick Switch opens there.
+    private(set) var lastSwitchedKey: String?
 
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let browser: any BrowserOpening
@@ -212,6 +214,7 @@ final class OpenAsStore {
         }
 
         recordRecent(user, fullName: name, key: siteKey)
+        lastSwitchedKey = siteKey
         browser.open(link)
         return nil
     }

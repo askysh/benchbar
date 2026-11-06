@@ -133,6 +133,11 @@ final class Labs {
         apply(next)
     }
 
+    /// A note under the lab's row that stays until the next flip of that lab (a hotkey another app holds).
+    func note(_ lab: Lab, _ message: String) {
+        errors[lab.rawValue] = message
+    }
+
     /// A feature hears of a flip of one lab (unregister a hotkey, hide a pane).
     /// Any number of features can observe the same lab; keep the token to cancel.
     @discardableResult

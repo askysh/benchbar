@@ -270,7 +270,7 @@ struct SitesSection: View {
                     }
                     Spacer(minLength: 4)
                     if row.isDefault {
-                        OpenAsMenu(store: store, bench: bench, row: row, compact: true) { findUser(row.name) }
+                        OpenAsMenu(store: store, bench: bench, row: row, compact: true, shortcuts: true) { findUser(row.name) }
                     }
                     siteAction(row)
                 }

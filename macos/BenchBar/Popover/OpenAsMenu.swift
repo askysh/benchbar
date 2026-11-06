@@ -84,6 +84,35 @@ nonisolated enum OpenAsMenuModel {
         return user
     }
 
+    /// The popover key of each item that has one, by item id: ⇧⌘O Switch
+    /// Back, ⌘0 Administrator, ⌘1 to ⌘9 the pins in menu order.
+    static func shortcuts(_ items: [Item]) -> [String: OpenAsShortcut] {
+        var keys: [String: OpenAsShortcut] = [:]
+        var pinDigit = 0
+        for item in items {
+            switch item {
+            case .switchBack: keys[item.id] = .switchBack
+            case .administrator: keys[item.id] = .openAs(0)
+            case .pin:
+                pinDigit += 1
+                keys[item.id] = .openAs(pinDigit)
+            case .divider, .pinHint, .findUser: break
+            }
+        }
+        return keys
+    }
+
+    /// The keys the popover binds: none while the Quick Switch lab is off.
+    static func popoverShortcuts(_ items: [Item], quickSwitchOn: Bool) -> [String: OpenAsShortcut] {
+        quickSwitchOn ? shortcuts(items) : [:]
+    }
+
+    /// A menu item's title with its key as trailing text ("Administrator    ⌘0"). The key
+    /// is only text: the binding is the hidden button's, so nothing is bound twice.
+    static func titled(_ title: String, key: OpenAsShortcut?) -> String {
+        key.map { "\(title)    \($0.display)" } ?? title
+    }
+
     /// `recents` is newest first: the first is who the browser is now, the
     /// second is where Switch Back goes.
     static func items(pins: [PinnedUser], recents: [RecentUser]) -> [Item] {
@@ -113,6 +142,8 @@ struct OpenAsMenu: View {
     let bench: BenchModel
     let row: SiteRow
     var compact = false
+    /// The popover's ⌘0 to ⌘9 and ⇧⌘O act on the default site only.
+    var shortcuts = false
     let findUser: () -> Void
 
     var body: some View {
@@ -136,17 +167,19 @@ struct OpenAsMenu: View {
         let switching = openAs.isSwitching(bench: bench.path, site: row.name)
         let items = OpenAsMenuModel.items(pins: openAs.pins(bench: bench.path, site: row.name),
                                           recents: openAs.recents(bench: bench.path, site: row.name))
+        let keys = OpenAsMenuModel.popoverShortcuts(items, quickSwitchOn: Labs.shared.isOn(.quickSwitch))
+        let hints = shortcuts ? keys : [:]
         return Menu {
             ForEach(items) { item in
                 switch item {
                 case .switchBack(let user, let title):
-                    Button(title) { go(user, switching: switching) }
+                    Button(OpenAsMenuModel.titled(title, key: hints[item.id])) { go(user, switching: switching) }
                 case .divider:
                     Divider()
                 case .pin(let user, let title, let fullName):
-                    Button(title) { go(user, fullName: fullName, switching: switching) }
+                    Button(OpenAsMenuModel.titled(title, key: hints[item.id])) { go(user, fullName: fullName, switching: switching) }
                 case .administrator:
-                    Button(OpenAsStore.administrator) { go(OpenAsStore.administrator, switching: switching) }
+                    Button(OpenAsMenuModel.titled(OpenAsStore.administrator, key: hints[item.id])) { go(OpenAsStore.administrator, switching: switching) }
                 case .pinHint:
                     Text(OpenAsMenuModel.noPinsHint)
                 case .findUser:
@@ -170,6 +203,28 @@ struct OpenAsMenu: View {
         .fixedSize()
         .disabled(switching)
         .help("Open \(row.name) as another user")
+        .background { if shortcuts { shortcutButtons(items, keys: keys, switching: switching) } }
+    }
+
+    /// The shortcuts live here only, as invisible buttons, so they act while the menu is closed.
+    /// The menu items carry none: a key bound twice is ambiguous, and a menu item's key
+    /// only works once the menu is open, which is not when the popover needs it.
+    private func shortcutButtons(_ items: [OpenAsMenuModel.Item], keys: [String: OpenAsShortcut], switching: Bool) -> some View {
+        ZStack {
+            ForEach(items) { item in
+                if let key = keys[item.id] {
+                    switch item {
+                    case .switchBack(let user, _): Button("") { go(user, switching: switching) }.shortcut(key)
+                    case .pin(let user, _, let fullName): Button("") { go(user, fullName: fullName, switching: switching) }.shortcut(key)
+                    case .administrator: Button("") { go(OpenAsStore.administrator, switching: switching) }.shortcut(key)
+                    case .divider, .pinHint, .findUser: EmptyView()
+                    }
+                }
+            }
+        }
+        .opacity(0)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
     private func go(_ user: String, fullName: String? = nil, switching: Bool) {
