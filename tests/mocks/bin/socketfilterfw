@@ -1,0 +1,13 @@
+#!/bin/bash
+# socketfilterfw mock: --getglobalstate prints $MOCK_STATE/fw_state (default: off, as measured on a Mac);
+# --getappblocked PATH prints $MOCK_STATE/fw_app with %PATH% replaced (default: permitted).
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "${0%/*}/_mocklib.sh"
+mock_log "$@"
+case "${1:-}" in
+  --getglobalstate)
+    if [[ -f "${MOCK_STATE:-/nonexistent}/fw_state" ]]; then cat "${MOCK_STATE}/fw_state"; else echo "Firewall is disabled. (State = 0)"; fi ;;
+  --getappblocked)
+    if [[ -f "${MOCK_STATE:-/nonexistent}/fw_app" ]]; then sed "s|%PATH%|${2:-}|g" "${MOCK_STATE}/fw_app"; else echo "Incoming connection to ${2:-} is permitted."; fi ;;
+esac
+exit 0

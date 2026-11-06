@@ -20,8 +20,18 @@
 state="${MOCK_STATE:-/nonexistent}"
 cred="$state/sudo_cred"
 
-# the command runs as root: the mariadb mock then logs in over its unix socket
+# shellcheck source=tests/mocks/root-paths.sh
+. "${0%/*}/../root-paths.sh"
+
+# the command runs as root: the mariadb mock then logs in over its unix socket; a root script
+# (/bin/bash -c SCRIPT) gets its system tool and file paths mapped to the mocks
 run_cmd() {
+  if [[ "${1:-}" == /bin/bash && "${2:-}" == -c && "$#" -ge 3 ]]; then
+    local script
+    script="$(mock_root_paths "$3")"
+    shift 3
+    exec env MOCK_AS_ROOT=1 /bin/bash -c "$script" "$@"
+  fi
   if [[ "${1:-}" == "install" ]]; then
     # the test user cannot give a file to root: drop -o OWNER and -g GROUP
     shift

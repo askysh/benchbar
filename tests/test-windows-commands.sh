@@ -85,6 +85,10 @@ ok service --yes --plain --bench-dir "$BENCH"
 # ================================================================ site
 ok site list --json --bench-dir "$BENCH"
 assert_eq "$SITE True True" "$(J '" ".join(str(x) for x in (d["default_site"], d["sites"][0]["default"], d["sites"][0]["hosts_entry"]))')" "(a *.localhost site resolves without a hosts line)"
+ok labs list --json
+assert_eq "['macos'] False" "$(J 'd["labs"][0]["platforms"], d["labs"][0]["available"]')"
+lx labs on lan-rooms --yes --json
+assert_eq "1" "$CODE" "$(all)"
 
 # add: the plan, then the apply, which needs the Administrator password named
 ok site add lin2.localhost --dry-run --json --bench-dir "$BENCH"

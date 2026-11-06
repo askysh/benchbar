@@ -2,6 +2,52 @@
 
 All notable changes to this project are documented here.
 
+## 0.8.2 - 2026-11-06
+
+0.8.2 brings Labs: experiments that stay off until you turn them on, in a
+terminal or in Settings > Labs. The first two are rooms, which share a dev
+site with people on the same Wi-Fi behind a room code, and Quick Switch,
+which opens a site as another user from any app (⌃⌥U). The popover also
+has Open as keyboard shortcuts, and two sharing fixes are in.
+
+### Added
+
+- `benchbar share`: a room on your Wi-Fi where people sign in to a hardened
+  copy of a dev site. `share setup` makes the copy (`--acknowledge-data`,
+  `--users`), `share start` opens the room until its deadline, `share code`
+  shows the 6 digit room code (`--new` draws another), `share lock` and
+  `unlock`, `share people`, `share remove` (with `--new-code`), `share
+  assign`, `share log`, `share open-as`, `share status`, `share extend`,
+  `share stop` and `share teardown`. macOS only; no MCP tool.
+- `benchbar lan-guard install|status|remove|allow-node`: the pf anchor that
+  keeps every bench port off the LAN, its launch daemon, and the firewall
+  allow for node. `install`, `remove` and `allow-node` ask for sudo once and
+  are refused under `--for-agent`, `mcp` and `BENCHBAR_NONINTERACTIVE`.
+- Docs: the [share and lan-guard reference](docs/reference/cli/share.md)
+  and the sharing documents in the JSON schema.
+- Labs: `benchbar labs` lists the experiments, and `labs on NAME` (in a terminal) turns one on. While one is off its commands are hidden and refuse to run. `lan-rooms` and `quick-switch` are the first two.
+
+### Mac app
+
+- Open as has keyboard shortcuts. In the popover, ⌘0 opens the default
+  site as Administrator, ⌘1 to ⌘9 as a pinned user, and ⇧⌘O switches back.
+  Quick Switch (⌃⌥U) lists the same users from any app; it is a lab: turn it
+  on in Settings > Labs, which also says when another app holds the key.
+
+### Fixed
+
+- Mac app: Start sharing is no longer greyed out after a share stops or
+  expires. The checks of the running share (its gateway and web process)
+  read "Checked when sharing starts" until then. A refused share setup now
+  says why instead of "share setup failed."
+- Mac app: "Your network changed" shows only when the address guests reach
+  the room on changes, not for every network event macOS reports (a VPN,
+  a virtual machine's network or waking from sleep). The checks still run
+  again on each of those, without a banner.
+- Two commands that write a setting at the same moment no longer lose one
+  of the writes. The key value lock now checks that it is the only holder
+  (seen on Linux).
+
 ## 0.8.1 - 2026-11-01
 
 BenchBar for Windows is now a beta. The tray takes a new PC from no WSL to

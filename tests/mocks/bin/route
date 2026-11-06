@@ -1,0 +1,11 @@
+#!/bin/bash
+# route mock: "route -n get default" names $MOCK_STATE/lan_iface as the default interface; without it there is no default route.
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "${0%/*}/_mocklib.sh"
+mock_log "$@"
+if [[ -s "${MOCK_STATE:-/nonexistent}/lan_iface" ]]; then
+  printf '   route to: default\ndestination: default\n       mask: default\n    gateway: 192.168.1.1\n  interface: %s\n      flags: <UP,GATEWAY,DONE,STATIC,PRCLONING,GLOBAL>\n' "$(cat "${MOCK_STATE}/lan_iface")"
+  exit 0
+fi
+echo "route: writing to routing socket: not in table" >&2
+exit 1

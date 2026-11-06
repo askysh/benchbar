@@ -1,0 +1,370 @@
+{
+  "notes": "All hex values are lowercase. 'spki': one SPKI DER and its SHA-256 fingerprint ('sha256:' + hex). 'cpace.b1_*' are copied verbatim from draft-irtf-cfrg-cpace-21 (SHA-256 of the draft text ed2772c26c21d43a199d490c1ebe5c5d2431a7dbce50d2124d4fa40957fbf58f): Appendix B.1.1 calculate_generator, B.1.2-B.1.5 messages/K/ISK (initiator-responder), B.1.10 low-order and non-canonical u coordinates (u0..ub, every q is scalar_mult_vfy(s,u); the all-zero q must abort), A.1/A.3.5 string helpers. 'cpace.production' is project-generated, see its own notes. Path vectors: ok=false means the target must be rejected; ok=true gives the normalised (decoded) path, the re-encoded forward path and the query string including its leading '?' (empty when absent).",
+  "spki": {
+    "der_hex": "3059301306072a8648ce3d020106082a8648ce3d030107034200042b2617c9a62dbb666c943311328d0e196539e0088571a0e32291c9910a071dffbc1aa770450f0411e2c2184386a436cb42dbdf0ca554f2c665d2ad2fc1ebde08",
+    "sha256_hex": "c5285b5652e53408a5ea70f5856cea62b3a68c4ae4e143bb0d6c7d82f9afec2a",
+    "fingerprint": "sha256:c5285b5652e53408a5ea70f5856cea62b3a68c4ae4e143bb0d6c7d82f9afec2a"
+  },
+  "cpace": {
+    "b1_1": {
+      "prs_ascii": "Password",
+      "dsi_ascii": "CPace255",
+      "s_in_bytes": 128,
+      "ci": "0b415f696e69746961746f720b425f726573706f6e646572",
+      "sid": "7e4b4791d6a8ef019b936c79fb7f2c57",
+      "generator_string": "0843506163653235350850617373776f72646d00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000180b415f696e69746961746f720b425f726573706f6e646572107e4b4791d6a8ef019b936c79fb7f2c57",
+      "hash32": "03998087bdb1a2617bbe25ef5a7c18cd4f84f902328701790958755ee4aed1d3",
+      "decoded": "03998087bdb1a2617bbe25ef5a7c18cd4f84f902328701790958755ee4aed153",
+      "g": "d04bf6d41f6a289632a2e929fa29bebd51092512a7829fdde7d314b62f05a73f"
+    },
+    "b1_isk": {
+      "ada_ascii": "ADa",
+      "adb_ascii": "ADb",
+      "ya": "21b4f4bd9e64ed355c3eb676a28ebedaf6d8f17bdc365995b319097153044080",
+      "Ya": "1d13c89278cdadd826f6d8d7f887701430f8380ddc17611cdd6dc989ce0c9f32",
+      "yb": "848b0779ff415f0af4ea14df9dd1d3c29ac41d836c7808896c4eba19c51ac40a",
+      "Yb": "248cccf6d5cdc3646f0ad593f9e6cef4e69d4945f8372e623512ecea32185623",
+      "K": "5b067effbdc0b2a0e1d907b21ebb25cfedb96a852179a847c37e43ee71322c6b",
+      "transcript_ir": "201d13c89278cdadd826f6d8d7f887701430f8380ddc17611cdd6dc989ce0c9f320341446120248cccf6d5cdc3646f0ad593f9e6cef4e69d4945f8372e623512ecea3218562303414462",
+      "isk_input": "0c43506163653235355f49534b107e4b4791d6a8ef019b936c79fb7f2c57205b067effbdc0b2a0e1d907b21ebb25cfedb96a852179a847c37e43ee71322c6b201d13c89278cdadd826f6d8d7f887701430f8380ddc17611cdd6dc989ce0c9f320341446120248cccf6d5cdc3646f0ad593f9e6cef4e69d4945f8372e623512ecea3218562303414462",
+      "isk": "6e19b875f7a561d6b3ca3dbb9ef42ac55de3e717881018204b8922b4d5e53bb2aa82c300bea7b65d2b671da71922ddf6472301b79bc270adfa8bf413285f2263"
+    },
+    "b1_10": {
+      "s": "af46e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449aff",
+      "u": {
+        "0": "0000000000000000000000000000000000000000000000000000000000000000",
+        "1": "0100000000000000000000000000000000000000000000000000000000000000",
+        "2": "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+        "3": "e0eb7a7c3b41b8ae1656e3faf19fc46ada098deb9c32b1fd866205165f49b800",
+        "4": "5f9c95bca3508c24b1d0b1559c83ef5b04445cc4581c8e86d8224eddd09f1157",
+        "5": "edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+        "6": "daffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "7": "eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+        "8": "dbffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "9": "d9ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "a": "cdeb7a7c3b41b8ae1656e3faf19fc46ada098deb9c32b1fd866205165f49b880",
+        "b": "4c9c95bca3508c24b1d0b1559c83ef5b04445cc4581c8e86d8224eddd09f11d7"
+      },
+      "q": {
+        "0": "0000000000000000000000000000000000000000000000000000000000000000",
+        "1": "0000000000000000000000000000000000000000000000000000000000000000",
+        "2": "0000000000000000000000000000000000000000000000000000000000000000",
+        "3": "0000000000000000000000000000000000000000000000000000000000000000",
+        "4": "0000000000000000000000000000000000000000000000000000000000000000",
+        "5": "0000000000000000000000000000000000000000000000000000000000000000",
+        "6": "d8e2c776bbacd510d09fd9278b7edcd25fc5ae9adfba3b6e040e8d3b71b21806",
+        "7": "0000000000000000000000000000000000000000000000000000000000000000",
+        "8": "c85c655ebe8be44ba9c0ffde69f2fe10194458d137f09bbff725ce58803cdb38",
+        "9": "db64dafa9b8fdd136914e61461935fe92aa372cb056314e1231bc4ec12417456",
+        "a": "e062dcd5376d58297be2618c7498f55baa07d7e03184e8aada20bca28888bf7a",
+        "b": "993c6ad11c4c29da9a56f7691fd0ff8d732e49de6250b6c2e80003ff4629a175"
+      },
+      "abort": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "7"
+      ]
+    },
+    "strings": {
+      "prepend_len_empty": "00",
+      "prepend_len_1234": "0431323334",
+      "lv_cat_args_ascii": [
+        "1234",
+        "5",
+        "",
+        "678"
+      ],
+      "lv_cat": "043132333401350003363738",
+      "transcript_ir_args_ascii": [
+        "123",
+        "PartyA",
+        "234",
+        "PartyB"
+      ],
+      "transcript_ir": "03313233065061727479410332333406506172747942"
+    },
+    "production": {
+      "notes": "Project-generated, not from the draft. Produced by lib/frappe-local/share/cpace.js with fixed inputs and independently reproduced by a throwaway pure-Python implementation (own X25519 ladder, own Elligator2 with an explicit Legendre branch, hashlib/hmac); the draft vectors B.1.1 cover the map itself. Production parameters (J15): PRS = the six ASCII digits; CI = the 16-byte room salt; sid = empty. ADa = lv_cat(\"bb-join-v3\", name, model) and ADb = lv_cat(\"bb-join-v3\", room, request_id) over exact UTF-8 bytes (name here has a non-ASCII apostrophe). ISK = SHA-512(lv_cat(\"CPace255_ISK\", sid, K) || lv_cat(Ya,ADa) || lv_cat(Yb,ADb)); mac_key = SHA-512(\"CPaceMac\" || sid || ISK); ta/tb = HMAC-SHA512(mac_key, lv_cat(\"guest\"|\"host\", Ya, ADa, Yb, ADb, Fh, Fg, exporter)), Fh/Fg the raw 32-byte SPKI SHA-256 hashes, exporter the 32-byte TLS 1.3 exporter. The exporter is label \"EXPORTER-bb-join-v3\", length 32, and an empty context. In Node: tlsSocket.exportKeyingMaterial(32, \"EXPORTER-bb-join-v3\", Buffer.alloc(0)); an empty context and no context are the same value in TLS 1.3 (RFC 8446 section 7.5 hashes the empty string). The Swift side must request exactly that. ya/yb are raw scalar bytes before X25519 clamping.",
+      "prs_ascii": "482913",
+      "salt": "000102030405060708090a0b0c0d0e0f",
+      "sid": "",
+      "ya": "01080f161d242b323940474e555c636a71787f868d949ba2a9b0b7bec5ccd3da",
+      "yb": "030e19242f3a45505b66717c87929da8b3bec9d4dfeaf5000b16212c37424d58",
+      "name": "Priya’s MacBook",
+      "model": "Mac14,2",
+      "room": "Standup room",
+      "request_id": "j_0123456789abcdef0123456789abcdef",
+      "fh": "d28de784b98b2811c2ee811f4940b5d64f5095a16267c15b211fe98a7aab3aa1",
+      "fg": "6c7a9f79b7956cb4d53ca7ae9bbb83177c68db17f9dab3523e4e33118e0288b7",
+      "exporter": "05121f2c394653606d7a8794a1aebbc8d5e2effc091623303d4a5764717e8b98",
+      "g": "e8900ec65ed6bfb521771da37a98923ca01d182662e516d204141ab52dcf5226",
+      "Ya": "0cc96091c09219e374884b9e2cb292560a1e1f7df85f31329f702a77d8bb9a4c",
+      "Yb": "049f951bae4c3956514fdb45dc2950cd7bf343d1883fa24501fdf9d46fcde72c",
+      "K": "34e193cfc49ed000e7282d3332799817189dc89f35a17cafa9cf537828510002",
+      "ada": "0a62622d6a6f696e2d7633115072697961e2809973204d6163426f6f6b074d616331342c32",
+      "adb": "0a62622d6a6f696e2d76330c5374616e64757020726f6f6d226a5f3031323334353637383961626364656630313233343536373839616263646566",
+      "isk": "b8488146b2065381151cb79c24cb068d2c9817ba5aef49d578050a1a9e536c58bda3898a7bbd308ae13b12e87b4c86a41ea33d90812ccded641a8675df53186b",
+      "mac_key": "00b7e5c77294e12739f7dfe318508d1bebb42244866e85e66577ebbfe7490c1b6e6164ce74f413f7909b4c4677ed383582f1b7e4b65335134ace72a58c4523c0",
+      "ta": "32b15587b324b3fc50ce2a7bcadfae71cbc1bff37738b9b418a018dfd2e8d3f298b742cd9f93b6704451b5f17724b6624b572169e79d11e6aa3aeead6433c948",
+      "tb": "225f0e0ae2126c2cedc94af8c940b9c981de4727a76b36235601134cf25da8111deebc9479a91c1ee73b1974b107fdeeb82252f5d2a61df6f72ad5a0ffc21dc1"
+    }
+  },
+  "paths": [
+    {
+      "raw": "/",
+      "ok": true,
+      "path": "/",
+      "forward": "/",
+      "search": ""
+    },
+    {
+      "raw": "/app",
+      "ok": true,
+      "path": "/app",
+      "forward": "/app",
+      "search": ""
+    },
+    {
+      "raw": "/app/",
+      "ok": true,
+      "path": "/app/",
+      "forward": "/app/",
+      "search": ""
+    },
+    {
+      "raw": "/app/sales-order/SO-0042",
+      "ok": true,
+      "path": "/app/sales-order/SO-0042",
+      "forward": "/app/sales-order/SO-0042",
+      "search": ""
+    },
+    {
+      "raw": "/app/Sales%20Order",
+      "ok": true,
+      "path": "/app/Sales Order",
+      "forward": "/app/Sales%20Order",
+      "search": ""
+    },
+    {
+      "raw": "/%61pp",
+      "ok": true,
+      "path": "/app",
+      "forward": "/app",
+      "search": ""
+    },
+    {
+      "raw": "/%63onsole",
+      "ok": true,
+      "path": "/console",
+      "forward": "/console",
+      "search": ""
+    },
+    {
+      "raw": "/app/%E2%82%AC",
+      "ok": true,
+      "path": "/app/€",
+      "forward": "/app/%E2%82%AC",
+      "search": ""
+    },
+    {
+      "raw": "/app/a%25",
+      "ok": true,
+      "path": "/app/a%",
+      "forward": "/app/a%25",
+      "search": ""
+    },
+    {
+      "raw": "/app/a%2Bb",
+      "ok": true,
+      "path": "/app/a+b",
+      "forward": "/app/a%2Bb",
+      "search": ""
+    },
+    {
+      "raw": "/api/method/frappe.client.get?doctype=User&name=x",
+      "ok": true,
+      "path": "/api/method/frappe.client.get",
+      "forward": "/api/method/frappe.client.get",
+      "search": "?doctype=User&name=x"
+    },
+    {
+      "raw": "/%2e%2e/",
+      "ok": false
+    },
+    {
+      "raw": "/%2E%2E/x",
+      "ok": false
+    },
+    {
+      "raw": "/a/../b",
+      "ok": false
+    },
+    {
+      "raw": "/a/./b",
+      "ok": false
+    },
+    {
+      "raw": "/..",
+      "ok": false
+    },
+    {
+      "raw": "/%2e",
+      "ok": false
+    },
+    {
+      "raw": "//",
+      "ok": false
+    },
+    {
+      "raw": "//evil.example/x",
+      "ok": false
+    },
+    {
+      "raw": "/a//b",
+      "ok": false
+    },
+    {
+      "raw": "/a\\b",
+      "ok": false
+    },
+    {
+      "raw": "/a%5Cb",
+      "ok": false
+    },
+    {
+      "raw": "/a%5cb",
+      "ok": false
+    },
+    {
+      "raw": "/a%2Fb",
+      "ok": false
+    },
+    {
+      "raw": "/a%2fb",
+      "ok": false
+    },
+    {
+      "raw": "/%00",
+      "ok": false
+    },
+    {
+      "raw": "/a%00b",
+      "ok": false
+    },
+    {
+      "raw": "/a%252f",
+      "ok": false
+    },
+    {
+      "raw": "/a%25%32f",
+      "ok": false
+    },
+    {
+      "raw": "/a%255c",
+      "ok": false
+    },
+    {
+      "raw": "/console;x",
+      "ok": false
+    },
+    {
+      "raw": "/a;b",
+      "ok": false
+    },
+    {
+      "raw": "http://evil.example/",
+      "ok": false
+    },
+    {
+      "raw": "https://x/app",
+      "ok": false
+    },
+    {
+      "raw": "evil.example:80",
+      "ok": false
+    },
+    {
+      "raw": "*",
+      "ok": false
+    },
+    {
+      "raw": "",
+      "ok": false
+    },
+    {
+      "raw": "app",
+      "ok": false
+    },
+    {
+      "raw": "/a b",
+      "ok": false
+    },
+    {
+      "raw": "/a%zz",
+      "ok": false
+    },
+    {
+      "raw": "/a%2",
+      "ok": false
+    },
+    {
+      "raw": "/a%",
+      "ok": false
+    },
+    {
+      "raw": "/%ff",
+      "ok": false
+    },
+    {
+      "raw": "/%C0%AE",
+      "ok": false
+    },
+    {
+      "raw": "/a\u0001b",
+      "ok": false
+    },
+    {
+      "raw": "/é",
+      "ok": false
+    },
+    {
+      "raw": "/a#frag",
+      "ok": false
+    },
+    {
+      "raw": "/a?x\u0000y",
+      "ok": false
+    },
+    {
+      "raw": "/a?x y",
+      "ok": false
+    },
+    {
+      "raw": "/a?x\\y",
+      "ok": false
+    },
+    {
+      "raw": "/app?__debugger__=yes&cmd=resource&f=style.css",
+      "ok": false
+    },
+    {
+      "raw": "/app?%5F%5Fdebugger%5F%5F=yes&cmd=pinauth",
+      "ok": false
+    },
+    {
+      "raw": "/app?x=1&__DEBUGGER__=yes",
+      "ok": false
+    },
+    {
+      "raw": "/app?x=__debugger__",
+      "ok": true,
+      "path": "/app",
+      "forward": "/app",
+      "search": "?x=__debugger__"
+    }
+  ]
+}

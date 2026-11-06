@@ -147,6 +147,13 @@ runners. Behind the scenes: work lands on `next-release` and a release
 tags itself when it reaches `main`, and the mocked test suite runs about
 a quarter faster.
 
+**0.8.2, Labs.** Experiments ship behind one switch that the CLI owns
+(`benchbar labs`, Settings > Labs in the app). The first two: rooms,
+which share a hardened copy of a dev site with people on the same Wi-Fi
+behind a room code, with `lan-guard` keeping the bench ports off the LAN,
+and Quick Switch (⌃⌥U), which opens a site as another user from any app.
+Open as has keyboard shortcuts in the popover.
+
 **Launch.** The post on discuss.frappe.io went up on 2026-10-04:
 [BenchBar: local Frappe benches on macOS with a menu bar app](https://discuss.frappe.io/t/benchbar-local-frappe-benches-on-macos-with-a-menu-bar-app/165049).
 

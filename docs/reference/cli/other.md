@@ -360,6 +360,8 @@ To remove BenchBar itself, see [Uninstall](../../install.md#uninstall).
 
 ## commands
 
+Experiments that are off are left out: see [labs](labs.md).
+
 ```
 benchbar commands --json
 ```

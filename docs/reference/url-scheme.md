@@ -62,6 +62,18 @@ benchbar://doctor?bench=%2FUsers%2Fyou%2Fwork%2Ffrappe-bench
 
 Encode a path in a query: `/` becomes `%2F`, a space `%20`.
 
+## Share links
+
+| Link | What it does |
+|---|---|
+| `benchbar://share/FINGERPRINT/app` | Opens the joined room's site in your browser through the local forwarder. A room you have not joined only shows On your network |
+| `benchbar://share/join?...` | The join sheet, filled in from the invite. It waits for your click and never joins by itself |
+
+`FINGERPRINT` is the first 16 hex characters of the room's pinned certificate
+fingerprint: it names a room, it is not a secret. The first link opens a room
+you already joined without asking, like `benchbar://open`. BenchBar logs only
+"share link", never the address.
+
 ## Profile links
 
 Two links share a team profile. They need no bench.

@@ -238,8 +238,15 @@ set_agent() {
 # document `d` (reads stdin for "-"), for asserting JSON output.
 jget() {
   local src="$1" expr="$2"
+  # a document that does not parse is printed to stderr, so a CI log shows what the CLI wrote
   if [[ "$src" == "-" ]]; then
-    python3 -c "import json,sys; d=json.load(sys.stdin); print($expr)"
+    python3 -c "
+import json,sys
+raw=sys.stdin.read()
+try: d=json.loads(raw)
+except Exception as e:
+    sys.stderr.write('jget: not JSON (%s)\\n--- document ---\\n%s\\n--- end ---\\n' % (e, raw[:4000])); raise
+print($expr)"
   else
     python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print($expr)" "$src"
   fi

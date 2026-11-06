@@ -11,7 +11,7 @@
 # Groups (used by "benchbar service" versus "benchbar repair"):
 #   system, bench, service, site
 
-FL_CHECK_ORDER="brew formula_dates python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac mole app_copies full_disk_access env_python env_setuptools bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy app_update_pending app_add_pending dependency_behind apps_behind lock_parse lock_drift profile_outdated logs bench_path honcho honcho_setuptools procfile runner agent runner_heartbeat fork_safety scheduler stop_flag helpers cli_link cli_duplicate legacy_agents dead_agents hosts port_clash orphans ping site_not_served"
+FL_CHECK_ORDER="brew formula_dates python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac mole app_copies full_disk_access env_python env_setuptools bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy app_update_pending app_add_pending dependency_behind apps_behind lock_parse lock_drift profile_outdated logs bench_path honcho honcho_setuptools procfile runner agent runner_heartbeat fork_safety scheduler stop_flag helpers cli_link cli_duplicate legacy_agents dead_agents hosts port_clash share_scheduler orphans ping site_not_served"
 FL_LOG_WARN_MB="${FL_LOG_WARN_MB:-50}"
 # doctor --quick leaves these out: they start brew, python, node, bench, git
 # or ask the site, which takes seconds each; the JSON names them (skipped_checks)
@@ -79,6 +79,7 @@ fl_check_label() {
     mole) printf 'Mole' ;;
     wsl_time_sync) printf 'WSL time sync' ;;
     port_clash) printf 'Port clash' ;;
+    share_scheduler) printf 'Share scheduler pause' ;;
     port_block) printf 'Port block' ;;
     scheduler) printf 'Scheduler' ;;
     full_disk_access) printf 'Full Disk Access' ;;
@@ -1138,6 +1139,16 @@ chk_port_clash() {
 
 # Reported, never flagged: the scheduler is a choice. A Procfile that does
 # not match the choice shows up as "Procfile.lean is outdated".
+# share_scheduler: a share setup that stopped after it paused the scheduler of every site (its marker in
+# the state folder) and did not resume it. A pause without the marker is the user's and is not flagged.
+chk_share_scheduler() {
+  if [[ -f "${FL_STATE_DIR}/share/scheduler-paused" ]] && fl_pull_common_paused; then
+    chk__set warn "the scheduler of every site on this bench is paused: a share setup stopped before it could resume it" "cd ${FL_BENCH_DIR} && bench config remove-common-config pause_scheduler" share_resume
+  else
+    chk__set ok "no share setup left the scheduler paused"
+  fi
+}
+
 chk_scheduler() {
   if fl_scheduler_enabled; then
     chk__set ok "on: Procfile.lean runs bench schedule (off: benchbar service --without-schedule)"

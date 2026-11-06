@@ -19,7 +19,7 @@ include:
 
 settings:
   base:
-    MARKETING_VERSION: "0.8.1"
+    MARKETING_VERSION: "0.8.2"
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "6.0"
     MACOSX_DEPLOYMENT_TARGET: "14.0"
@@ -50,8 +50,13 @@ targets:
         excludes:
           - "Resources/Info.plist"
           - "Resources/AppIcon.icon"
+          - "Resources/cpace-map.js"
       # the Icon Composer icon is one file to Xcode, compiled by actool
       - path: BenchBar/Resources/AppIcon.icon
+        type: file
+        buildPhase: resources
+      # lib/frappe-local/share/cpace-map.js, byte for byte (ShareCryptoTests): run in JavaScriptCore
+      - path: BenchBar/Resources/cpace-map.js
         type: file
         buildPhase: resources
     info:
@@ -76,6 +81,9 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: com.akashmishra.benchbar
             CFBundleURLSchemes: [benchbar]
+        # guest side of rooms: finding rooms on this Wi-Fi (Bonjour) and joining one
+        NSLocalNetworkUsageDescription: "BenchBar looks for rooms your colleagues share on this Wi-Fi and connects to the ones you join."
+        NSBonjourServices: ["_benchbar-share._tcp"]
     entitlements:
       path: BenchBar/Resources/BenchBar.entitlements
       properties:

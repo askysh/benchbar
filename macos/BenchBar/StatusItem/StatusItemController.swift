@@ -18,6 +18,9 @@ final class StatusItemController {
     /// hides the menu bar, or on a display that sleeps. The runner is paused
     /// and the speed loop stops while it is hidden.
     private var itemVisible = true
+    /// A dot in the corner while a room is open: the accent color, orange when it needs the host.
+    private let shareDot = CALayer()
+    private var shareIcon: HostAmbient.IconState = .off
 
     /// Room on each side of the runner inside the button.
     static let padding: CGFloat = 3
@@ -54,6 +57,11 @@ final class StatusItemController {
         button.wantsLayer = true
         button.layer?.addSublayer(animator.layer)
         placeRunner()
+        shareDot.bounds = CGRect(x: 0, y: 0, width: 5, height: 5)
+        shareDot.cornerRadius = 2.5
+        shareDot.isHidden = true
+        shareDot.autoresizingMask = [.layerMinXMargin, .layerMaxYMargin]
+        button.layer?.addSublayer(shareDot)
         button.setAccessibilityLabel("BenchBar")
         // the menu bar turns light or dark with the wallpaper (and in the
         // macOS 26 transparent menu bar), so follow the button's appearance
@@ -80,6 +88,19 @@ final class StatusItemController {
             color = NSColor.labelColor.cgColor
         }
         animator.setTint(color)
+    }
+
+    /// Shows or hides the sharing dot (HostAmbient.icon decides the state).
+    func setShareIcon(_ icon: HostAmbient.IconState) {
+        guard icon != shareIcon, let button = statusItem.button else { return }
+        shareIcon = icon
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        shareDot.isHidden = icon == .off
+        shareDot.backgroundColor = (icon == .attention ? NSColor.systemOrange : NSColor.controlAccentColor).cgColor
+        shareDot.position = CGPoint(x: button.bounds.maxX - 3.5, y: button.bounds.maxY - 3.5)
+        CATransaction.commit()
+        button.setAccessibilityHelp(icon == .off ? nil : "Sharing on your network")
     }
 
     // MARK: state

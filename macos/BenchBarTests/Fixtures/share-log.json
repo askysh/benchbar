@@ -1,0 +1,1 @@
+{"schema_version":1,"cli_version":"0.9.0","entries":[{"ts":"2026-11-03T09:30:00Z","device":"d_0a1b2c3d","user":"sam@example.com","method":"GET","path":"/app/sales-invoice/SINV-0001","status":200},{"ts":"2026-11-03T09:31:00Z","device":"d_0a1b2c3d","user":"sam@example.com","method":"POST","path":"/api/method/frappe.desk.form.save.savedocs","status":200}],"truncated":false}

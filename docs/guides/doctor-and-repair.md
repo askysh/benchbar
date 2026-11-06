@@ -508,6 +508,17 @@ this check never warns.
 Fix: none needed. `benchbar service --with-schedule` turns it on,
 `--without-schedule` off.
 
+### share_scheduler
+
+Warns when a `benchbar share setup` stopped after it paused the scheduler of
+every site on the bench (`pause_scheduler` in `common_site_config.json`) and
+did not resume it. The restore of the share copy needs that bench wide
+pause, so setup leaves a marker in its state folder first. A pause without
+the marker is yours and is never flagged.
+
+Fix: `cd BENCH && bench config remove-common-config pause_scheduler`, or
+`benchbar repair`. The next `share setup` or `share start` resumes it too.
+
 ### stop_flag
 
 No stop flag, or a stop on purpose (`benchdown`). A flag of `crash` (three
