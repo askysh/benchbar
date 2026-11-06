@@ -34,6 +34,10 @@ All notable changes to this project are documented here.
   expires. The checks of the running share (its gateway and web process)
   read "Checked when sharing starts" until then. A refused share setup now
   says why instead of "share setup failed."
+- Mac app: "Your network changed" shows only when the address guests reach
+  the room on changes, not for every network event macOS reports (a VPN,
+  a virtual machine's network or waking from sleep). The checks still run
+  again on each of those, without a banner.
 
 ## 0.8.1 - 2026-11-01
 
