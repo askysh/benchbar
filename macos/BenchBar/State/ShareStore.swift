@@ -208,6 +208,9 @@ final class ShareStore {
         if next.preflight == nil, let checks = previous?.preflight { next.preflight = checks }
         availability = next.needsNewerCLI ? .needsNewerCLI : .available
         let countsMoved = status.map { $0.people != next.people || $0.devicesOnline != next.devicesOnline } ?? true
+        // a share started or stopped outside the app (a terminal, the job ending): the kept checks belong to
+        // the old state, so the next poll runs them again instead of up to a minute later
+        if let previous = status, previous.state != next.state { forcePreflight = true }
         status = next
         onStatus?()
         logLine("share: status \(next.state.rawValue)")

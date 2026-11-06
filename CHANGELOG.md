@@ -45,6 +45,12 @@ has Open as keyboard shortcuts, and two sharing fixes are in.
   `/manufacturing-ops`, `/crm`, `/insights`). The share gateway reads those
   routes from the copy when sharing starts; before, it refused them as
   "isn't available through sharing".
+- Sharing ends by itself when its copy is dropped or deleted while it is on
+  (a new critical check, `copy_present`), instead of staying on and showing
+  guests "restarting".
+- Mac app: a share started or stopped in a terminal runs its checks again on
+  the next poll, not up to a minute later. A guest who was removed is told a
+  new code will not let them back in, and to ask the host to start sharing again.
 - Mac app: "Your network changed" shows only when the address guests reach
   the room on changes, not for every network event macOS reports (a VPN,
   a virtual machine's network or waking from sleep). The checks still run

@@ -137,6 +137,7 @@ nonisolated enum SharePresentation {
         case "gateway_reachable": "The gateway answers on the network"
         case "share_traceback_off": "Error traces are hidden in the copy"
         case "share_debugger_off": "The debugger is off in the copy"
+        case "copy_present": "The shared copy is there"
         case "share_web_lan_closed": "The copy is reachable only through BenchBar"
         default: check.id.replacingOccurrences(of: "_", with: " ").capitalized
         }

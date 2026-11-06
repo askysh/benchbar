@@ -95,7 +95,7 @@ nonisolated enum NetworkPanePresentation {
         case .locked: return "\(host) locked this room."
         case .full: return "This room is full."
         case .alreadyJoined: return "This Mac is already in \(host)'s room."
-        case .blocked: return "\(host) removed you from this room."
+        case .blocked: return "\(host) removed you from this room. A new code won't let you back in: ask \(host) to stop sharing and start it again."
         case .expired: return "That took too long. Try the code again."
         case .rateLimited(let seconds): return "Too many tries. Wait \(seconds) seconds and try again."
         case .needsUpdate: return "Update BenchBar to join \(host)'s room."

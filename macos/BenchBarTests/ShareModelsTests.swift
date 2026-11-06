@@ -221,6 +221,17 @@ struct ShareStoreTests {
         #expect(!store.shouldPoll)
     }
 
+    @Test func aStateChangeFromOutsideTheAppRunsTheChecksOnTheNextPoll() async {
+        // sharing started in a terminal while the tab was open: the cached "off" checks must not linger a minute
+        let now = Date(timeIntervalSince1970: 1_000)
+        let fake = FakeShareCLI([ShareStatus(state: .off), on(), on()])
+        let store = ShareStore(bench: "/b", client: fake, clock: { now }, log: { _ in })
+        await store.refresh()
+        await store.refresh()
+        await store.refresh()
+        #expect(fake.statusCalls.prefix(3) == [true, false, true])
+    }
+
     @Test func checksRunEveryMinuteAndAfterANetworkChange() async {
         var now = Date(timeIntervalSince1970: 1_000)
         let fake = FakeShareCLI([on()])

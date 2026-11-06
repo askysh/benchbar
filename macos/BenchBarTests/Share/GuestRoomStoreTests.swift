@@ -429,6 +429,9 @@ private final class Harness {
         #expect(NetworkPanePresentation.refusal(.wrongCode, host: "Priya") == "That code didn't work. Check with Priya and try again.")
         #expect(NetworkPanePresentation.refusal(.locked, host: "Priya") == "Priya locked this room.")
         #expect(NetworkPanePresentation.refusal(.full, host: "Priya") == "This room is full.")
+        // a new code does not lift a removal; only a new room does, so say who can do it
+        #expect(NetworkPanePresentation.refusal(.blocked, host: "Priya")
+            == "Priya removed you from this room. A new code won't let you back in: ask Priya to stop sharing and start it again.")
         #expect(NetworkPanePresentation.refusal(.codeDidNotCheckOut, host: "Priya") == "This room's code didn't check out. Ask Priya for the code again.")
         #expect(NetworkPanePresentation.health(.removed, host: "Priya", now: now) == "Priya removed you from this room.")
         #expect(NetworkPanePresentation.health(.ended, host: "Priya", now: now) == "Priya ended the room.")
