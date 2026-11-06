@@ -40,6 +40,11 @@ has Open as keyboard shortcuts, and two sharing fixes are in.
   expires. The checks of the running share (its gateway and web process)
   read "Checked when sharing starts" until then. A refused share setup now
   says why instead of "share setup failed."
+- Sharing: guests can open the apps screen (`/apps`) and the apps that
+  add themselves to it with their own front end (for example
+  `/manufacturing-ops`, `/crm`, `/insights`). The share gateway reads those
+  routes from the copy when sharing starts; before, it refused them as
+  "isn't available through sharing".
 - Mac app: "Your network changed" shows only when the address guests reach
   the room on changes, not for every network event macOS reports (a VPN,
   a virtual machine's network or waking from sleep). The checks still run
