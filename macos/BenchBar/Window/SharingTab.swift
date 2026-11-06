@@ -165,6 +165,14 @@ struct SharingTab: View {
                 }
             }
             ForEach(status.preflight?.checks ?? []) { check in
+                if SharePresentation.waitsForStart(check, status) {
+                    HStack {
+                        Image(systemName: "clock").foregroundStyle(.secondary)
+                        Text(SharePresentation.checkTitle(check))
+                        Spacer()
+                        Text(SharePresentation.checkedAtStart).font(.caption).foregroundStyle(.secondary)
+                    }
+                } else {
                 HStack {
                     Image(systemName: check.status == .ok ? "checkmark.circle.fill" : check.status == .fail ? "xmark.circle.fill" : "exclamationmark.circle.fill")
                         .foregroundStyle(check.status == .ok ? .green : check.status == .fail ? .red : .orange)
@@ -173,6 +181,7 @@ struct SharingTab: View {
                     if check.status != .ok, let label = SharePresentation.fixLabel(check.fixAction) {
                         Button(label) { Task { await fix(check.fixAction, status: status) } }
                     }
+                }
                 }
             }
         }

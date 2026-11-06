@@ -28,6 +28,13 @@ All notable changes to this project are documented here.
   Quick Switch (⌃⌥U) lists the same users from any app; it is a lab: turn it
   on in Settings > Labs, which also says when another app holds the key.
 
+### Fixed
+
+- Mac app: Start sharing is no longer greyed out after a share stops or
+  expires. The checks of the running share (its gateway and web process)
+  read "Checked when sharing starts" until then. A refused share setup now
+  says why instead of "share setup failed."
+
 ## 0.8.1 - 2026-11-01
 
 BenchBar for Windows is now a beta. The tray takes a new PC from no WSL to
