@@ -38,8 +38,11 @@ struct SharePresentationTests {
     @Test func aRefusedSetupSaysWhy() {
         let done = #"{"event":"done","exit":1,"changed":[],"error":"Sharing setup was interrupted."}"#
         #expect(ShareStepLine.failure([done]) == "Sharing setup was interrupted.")
-        let step = #"{"event":"step","status":"fail","message":"the backup failed"}"#
-        #expect(ShareStepLine.failure([step, #"{"event":"done","exit":1}"#]) == "the backup failed")
+        // a failed step's [FAIL] line beats the done line, which only names the step
+        let step = #"{"event":"step","id":"restore","status":"failed","message":"[FAIL] no complete database backup with the stamp 20261103_084000"}"#
+        let stopped = #"{"event":"done","exit":1,"error":"share setup stopped at: Restore the copy."}"#
+        #expect(ShareStepLine.failure([step, stopped]) == "no complete database backup with the stamp 20261103_084000")
+        #expect(ShareStepLine.failure([#"{"event":"step","id":"restore","status":"failed"}"#, stopped]) == "share setup stopped at: Restore the copy.")
         #expect(ShareStepLine.failure([#"{"event":"done","exit":0}"#]) == nil)
     }
 

@@ -201,15 +201,16 @@ nonisolated enum ShareStepLine {
         return object["action"] as? String ?? object["step"] as? String
     }
 
-    /// The message of the stream's failing step or done line, if any. A refusal before the first
-    /// step (a check, an interrupted setup) is only in the done line's `error`.
+    /// The reason the stream failed, if any: the failed step's `message` (its `[FAIL]` line) first,
+    /// since the done line's `error` only names the step ("share setup stopped at: …"). A refusal
+    /// before the first step (a check, an interrupted setup) has no failed step and is only in the
+    /// done line's `error`.
     static func failure(_ lines: [String]) -> String? {
-        for line in lines.reversed() {
-            guard let object = object(line),
-                  object["status"] as? String == "fail" || object["event"] as? String == "done" else { continue }
-            for key in ["message", "error"] {
-                if let text = object[key] as? String, !text.isEmpty { return CLIText.plain(text) }
-            }
+        let objects = lines.reversed().compactMap(object)
+        let failedStep = objects.first { $0["event"] as? String == "step" && $0["status"] as? String == "failed" }
+        let done = objects.first { $0["event"] as? String == "done" }
+        for (object, key) in [(failedStep, "message"), (done, "error"), (done, "message")] {
+            if let text = object?[key] as? String, !text.isEmpty { return CLIText.plain(text) }
         }
         return nil
     }
