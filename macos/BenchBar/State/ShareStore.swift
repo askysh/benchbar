@@ -39,6 +39,7 @@ nonisolated struct ShareEventTracker: Sendable, Equatable {
     private var state: ShareState = .off
     private var lockReason: ShareLockReason?
     private var joinTrouble = false
+    private var lanIP: String?
     private var firedReminders: Set<Int> = []
     private var peopleByID: [String: String] = [:]
     private var peopleSeeded = false
@@ -51,6 +52,7 @@ nonisolated struct ShareEventTracker: Sendable, Equatable {
             state = status.state
             lockReason = status.lockReason
             joinTrouble = status.joinTrouble
+            lanIP = status.lanIP
             if !status.isOn { peopleByID = [:] }
         }
         guard seeded else {
@@ -62,6 +64,9 @@ nonisolated struct ShareEventTracker: Sendable, Equatable {
         if status.isOn {
             if status.lockReason == .budget && lockReason != .budget { events.append(.lockedByWrongCodes) }
             if status.joinTrouble && !joinTrouble { events.append(.joinTrouble) }
+            // the address guests reach the room on moved (another Wi-Fi, or none): worth a banner.
+            // A path update that leaves it alone (a VM bridge or VPN coming and going) is not.
+            if state == .on && status.lanIP != lanIP { events.append(.networkChanged) }
             // the smallest threshold reached is the one worth saying; the larger ones are spent with it
             if let minutes = due.filter({ !firedReminders.contains($0) }).min() { events.append(.reminder(minutes: minutes)) }
             firedReminders.formUnion(due)
@@ -170,10 +175,11 @@ final class ShareStore {
         pollTask = nil
     }
 
-    /// Wake or a network change: the checks run on the next poll.
+    /// Wake or a network path update: the checks run on the next poll. No banner here: macOS
+    /// reports a path update for every interface that comes or goes; the tracker says
+    /// "network changed" only when the room's LAN address moves.
     func networkChanged() {
         forcePreflight = true
-        if isSharing { onEvent?(.networkChanged) }
         ensurePolling()
     }
 

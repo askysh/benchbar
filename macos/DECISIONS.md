@@ -566,6 +566,7 @@ Asked for after the phases, to stop naming drift before the first release.
 - Share errors stay in the ShareStore (`lastError`, shown in the Sharing tab and under the popover share row). They no longer write `BenchModel.lastError`, the red banner shared by the whole app.
 - Quitting asks when people are in a room this Mac hosts or a guest forwarder is up, as it does for a running share setup. A share link's address is never logged, only "share link".
 - `SharePresentation.canStart` leaves out the checks of the running share (`gateway_reachable`, `share_web_lan_closed`, `share_traceback_off`, `share_debugger_off`) while sharing is off: with no share they have nothing to probe and the web ones read the last share's port and fail, which kept Start greyed out for good. `share start` gates on its static checks alone and the job runs these, failing closed, before anyone can join, so the app matches the CLI instead of the CLI skipping a check the job could also hit.
+- "Your network changed" comes from the status poll (`ShareEventTracker`, when `lan_ip` moves while sharing), not from `NWPathMonitor`: macOS sends a path update for every interface that comes or goes (a VPN `utun`, a VM bridge, AWDL) and the app also treated each wake as one, so the banner repeated while the address guests use stayed the same. A path update or wake still forces the next preflight, silently.
 
 ## Labs
 

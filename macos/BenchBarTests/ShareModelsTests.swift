@@ -225,6 +225,8 @@ struct ShareStoreTests {
         var now = Date(timeIntervalSince1970: 1_000)
         let fake = FakeShareCLI([on()])
         let store = ShareStore(bench: "/b", client: fake, clock: { now }, log: { _ in })
+        var events: [ShareEvent] = []
+        store.onEvent = { events.append($0) }
         await store.refresh()
         now += 5
         await store.refresh()
@@ -234,6 +236,8 @@ struct ShareStoreTests {
         store.pollTask?.cancel()
         await store.refresh()
         #expect(fake.statusCalls.prefix(4) == [true, false, true, true])
+        // a path update alone (a VM's bridge, a VPN) is no news: the checks rerun without a banner
+        #expect(!events.contains(.networkChanged))
     }
 
     @Test func copyInviteWritesTheMessageOnceAndLogsNoCode() async {
@@ -326,6 +330,22 @@ struct ShareEventTrackerTests {
         var tracker = ShareEventTracker()
         #expect(tracker.status(on(secondsLeft: 30, lockReason: .budget, joinTrouble: true)).isEmpty)
         #expect(tracker.status(on(secondsLeft: 25, lockReason: .budget, joinTrouble: true)).isEmpty)
+    }
+
+    @Test func onlyANewLANAddressWhileSharingIsANetworkChange() {
+        func at(_ ip: String?, _ state: ShareState = .on) -> ShareStatus {
+            var status = state == .on ? on() : ShareStatus(state: state)
+            status.lanIP = ip
+            return status
+        }
+        var tracker = ShareEventTracker()
+        _ = tracker.status(at("192.168.1.20"))
+        #expect(tracker.status(at("192.168.1.20")).isEmpty)
+        #expect(tracker.status(at("10.0.0.7")) == [.networkChanged])
+        #expect(tracker.status(at(nil)) == [.networkChanged])
+        #expect(tracker.status(at(nil)).isEmpty)
+        _ = tracker.status(at("10.0.0.7", .off))
+        #expect(tracker.status(at("10.0.0.9", .off)).isEmpty)
     }
 
     @Test func remindersFireOnceEachAtTenAndOneMinutes() {
