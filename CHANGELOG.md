@@ -2,7 +2,13 @@
 
 All notable changes to this project are documented here.
 
-## Unreleased
+## 0.8.2 - 2026-11-06
+
+0.8.2 brings Labs: experiments that stay off until you turn them on, in a
+terminal or in Settings > Labs. The first two are rooms, which share a dev
+site with people on the same Wi-Fi behind a room code, and Quick Switch,
+which opens a site as another user from any app (⌃⌥U). The popover also
+has Open as keyboard shortcuts, and two sharing fixes are in.
 
 ### Added
 
@@ -38,6 +44,9 @@ All notable changes to this project are documented here.
   the room on changes, not for every network event macOS reports (a VPN,
   a virtual machine's network or waking from sleep). The checks still run
   again on each of those, without a banner.
+- Two commands that write a setting at the same moment no longer lose one
+  of the writes. The key value lock now checks that it is the only holder
+  (seen on Linux).
 
 ## 0.8.1 - 2026-11-01
 

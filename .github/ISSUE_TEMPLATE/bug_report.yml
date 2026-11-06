@@ -20,7 +20,7 @@ body:
     id: version
     attributes:
       label: benchbar --version
-      placeholder: benchbar 0.8.1
+      placeholder: benchbar 0.8.2
     validations:
       required: true
   - type: dropdown

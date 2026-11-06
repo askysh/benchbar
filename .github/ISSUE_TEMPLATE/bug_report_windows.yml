@@ -13,7 +13,7 @@ body:
     attributes:
       label: benchbar.exe, tray and CLI versions
       description: "The tray's About window shows all three. Report a Bug fills this in too."
-      placeholder: benchbar.exe 0.8.1, tray 0.8.1, CLI 0.8.1
+      placeholder: benchbar.exe 0.8.2, tray 0.8.2, CLI 0.8.2
     validations:
       required: true
   - type: input
