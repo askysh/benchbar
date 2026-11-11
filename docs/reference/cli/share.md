@@ -260,10 +260,13 @@ benchbar share people
 benchbar share remove ID [--new-code] [--yes] [--json]
 ```
 
-Removes a person: their Mac is blocked for the rest of this room and their
-seat's sessions end. Asks first. `--new-code` also draws a new code, for
-when you do not know who it was: a fresh Mac could join again with the old
-one. `share revoke` is another name for it.
+Removes a person: their seat's sessions end and their Mac cannot join
+again with the code it used. Drawing a new code (`share code --new`, the
+app's **Copy new invite**) lifts every removal, so to let someone back in,
+send them the new invite; the people still in the room stay. Asks first.
+`--new-code` also draws a new code, for when you do not know who it was: a
+fresh Mac could join again with the old one. `share revoke` is another name
+for it.
 
 ```bash
 benchbar share remove d_0123abcd --new-code

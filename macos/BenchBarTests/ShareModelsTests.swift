@@ -221,6 +221,17 @@ struct ShareStoreTests {
         #expect(!store.shouldPoll)
     }
 
+    @Test func aStateChangeFromOutsideTheAppRunsTheChecksOnTheNextPoll() async {
+        // sharing started in a terminal while the tab was open: the cached "off" checks must not linger a minute
+        let now = Date(timeIntervalSince1970: 1_000)
+        let fake = FakeShareCLI([ShareStatus(state: .off), on(), on()])
+        let store = ShareStore(bench: "/b", client: fake, clock: { now }, log: { _ in })
+        await store.refresh()
+        await store.refresh()
+        await store.refresh()
+        #expect(fake.statusCalls.prefix(3) == [true, false, true])
+    }
+
     @Test func checksRunEveryMinuteAndAfterANetworkChange() async {
         var now = Date(timeIntervalSince1970: 1_000)
         let fake = FakeShareCLI([on()])
@@ -238,6 +249,23 @@ struct ShareStoreTests {
         #expect(fake.statusCalls.prefix(4) == [true, false, true, true])
         // a path update alone (a VM's bridge, a VPN) is no news: the checks rerun without a banner
         #expect(!events.contains(.networkChanged))
+    }
+
+    @Test func aRemovalOffersANewInviteThatLetsThePersonBackIn() async {
+        let fake = FakeShareCLI([on()])
+        let store = ShareStore(bench: "/b", client: fake, log: { _ in })
+        await store.refresh()
+        await store.remove(SharePerson(id: "d_1", name: "Alcin"), newCode: false)
+        #expect(store.removedName == "Alcin")
+        var written: [String] = []
+        await store.copyNewInvite { written.append($0) }
+        #expect(fake.calls == ["remove d_1 false", "code --new", "invite"])
+        #expect(written.count == 1)
+        #expect(store.removedName == nil)
+        #expect(store.inviteCopied)
+        // a removal that also drew a new code has nothing to offer: the new code already lifted it
+        await store.remove(SharePerson(id: "d_2", name: "Sam"), newCode: true)
+        #expect(store.removedName == nil)
     }
 
     @Test func copyInviteWritesTheMessageOnceAndLogsNoCode() async {

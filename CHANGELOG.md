@@ -40,6 +40,21 @@ has Open as keyboard shortcuts, and two sharing fixes are in.
   expires. The checks of the running share (its gateway and web process)
   read "Checked when sharing starts" until then. A refused share setup now
   says why instead of "share setup failed."
+- Sharing: guests can open the apps screen (`/apps`) and the apps that
+  add themselves to it with their own front end (for example
+  `/manufacturing-ops`, `/crm`, `/insights`). The share gateway reads those
+  routes from the copy when sharing starts; before, it refused them as
+  "isn't available through sharing".
+- Sharing ends by itself when its copy is dropped or deleted while it is on
+  (a new critical check, `copy_present`), instead of staying on and showing
+  guests "restarting".
+- Mac app: a share started or stopped in a terminal runs its checks again on
+  the next poll, not up to a minute later.
+- Sharing: Remove no longer shuts someone out until the room ends. They
+  cannot join again with the code they had; drawing a new code lets them
+  back, and everyone else stays in the room. In the app, Remove is one
+  click, and **Copy new invite** appears right after it. A removed guest is
+  told to ask the host for a new invite.
 - Mac app: "Your network changed" shows only when the address guests reach
   the room on changes, not for every network event macOS reports (a VPN,
   a virtual machine's network or waking from sleep). The checks still run

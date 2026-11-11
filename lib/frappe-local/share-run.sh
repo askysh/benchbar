@@ -219,19 +219,33 @@ fl_share_host_label_v() {
   printf -v "$1" '%s' "${__n:-This Mac}"
 }
 
+# fl_share_app_routes_json_v VAR: the copy's apps screen routes (/manufacturing-ops, /crm …) as a JSON
+# list for the gateway, one plain segment each. A helper that fails or prints anything else gives
+# fewer routes, never a wider allowlist: the gateway checks each one again.
+fl_share_app_routes_json_v() {
+  local __out="" __list="" __sep="" __line
+  __out="$("${FL_BENCH_DIR}/env/bin/python" "${FL_SELF_DIR}/lib/frappe-local/share/signin.py" routes "$FL_SHARE_SITE" 2>/dev/null)" || __out=""
+  while IFS= read -r __line; do
+    [[ "$__line" =~ ^/[a-z0-9][a-z0-9-]{0,63}$ ]] || continue
+    __list="${__list}${__sep}$(fl_json_str "$__line")"; __sep=", "
+  done <<<"$__out"
+  printf -v "$1" '[%s]' "$__list"
+}
+
 # fl_share_gateway_json STARTED DEADLINE ROOM_LABEL_JSON: gateway.json, the keys config.js accepts and no other
 fl_share_gateway_json() {
-  local dir web_port copy_made site seats host lib content
+  local dir web_port copy_made site seats host lib content app_routes
   dir="$(fl_share_dir)"; lib="${FL_SELF_DIR}/lib/frappe-local/share"
   fl_share_cfg_str_v web_port web_port; fl_share_cfg_str_v copy_made copy_made; fl_share_cfg_str_v site site
   fl_share_seats_lines_v seats
   fl_share_host_label_v host
+  fl_share_app_routes_json_v app_routes
   [[ "$web_port" =~ ^[0-9]+$ && -n "$seats" && -n "$copy_made" ]] || { fl_fail "share.json lacks the web port, the seats or the copy's date"; return 1; }
-  content="$(printf '{\n  "v": 3,\n  "protocol": 3,\n  "listen": {"host": "0.0.0.0", "port": %s},\n  "tls": {"key": %s, "cert": %s},\n  "share_site": %s,\n  "web_port": %s,\n  "deadline_epoch": %s,\n  "started_epoch": %s,\n  "max_total_s": %s,\n  "state_dir": %s,\n  "devices": %s,\n  "control_sock": %s,\n  "log_dir": %s,\n  "python": %s,\n  "signin_helper": %s,\n  "max_conns": {"per_device": 64, "total": 256, "unpaired_total": 16, "unpaired_per_ip": 4},\n  "max_body_mb": 50,\n  "label": %s,\n  "room_label": %s,\n  "site_label": %s,\n  "copy_made": %s,\n  "seats": [\n    %s\n  ]\n}\n' \
+  content="$(printf '{\n  "v": 3,\n  "protocol": 3,\n  "listen": {"host": "0.0.0.0", "port": %s},\n  "tls": {"key": %s, "cert": %s},\n  "share_site": %s,\n  "web_port": %s,\n  "deadline_epoch": %s,\n  "started_epoch": %s,\n  "max_total_s": %s,\n  "state_dir": %s,\n  "devices": %s,\n  "control_sock": %s,\n  "log_dir": %s,\n  "python": %s,\n  "signin_helper": %s,\n  "max_conns": {"per_device": 64, "total": 256, "unpaired_total": 16, "unpaired_per_ip": 4},\n  "max_body_mb": 50,\n  "label": %s,\n  "room_label": %s,\n  "site_label": %s,\n  "copy_made": %s,\n  "app_routes": %s,\n  "seats": [\n    %s\n  ]\n}\n' \
     "$FL_SHARE_GATEWAY_PORT" "$(fl_json_str "${dir}/host.key")" "$(fl_json_str "${dir}/host.crt")" "$(fl_json_str "$FL_SHARE_SITE")" "$web_port" \
     "$2" "$1" "$FL_SHARE_MAX_TOTAL_S" "$(fl_json_str "$dir")" "$(fl_json_str "${dir}/devices.json")" "$(fl_json_str "$(fl_share_sock)")" \
     "$(fl_json_str "$dir")" "$(fl_json_str "${FL_BENCH_DIR}/env/bin/python")" "$(fl_json_str "${lib}/signin.py")" \
-    "$(fl_json_str "$host")" "$3" "$(fl_json_str "$site")" "$(fl_json_str "$copy_made")" "$seats")"
+    "$(fl_json_str "$host")" "$3" "$(fl_json_str "$site")" "$(fl_json_str "$copy_made")" "$app_routes" "$seats")"
   fl_share_write_private "${dir}/gateway.json" 600 "$content" || { fl_fail "could not write ${dir}/gateway.json"; return 1; }
 }
 

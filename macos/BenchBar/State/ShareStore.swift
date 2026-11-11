@@ -114,6 +114,8 @@ final class ShareStore {
     private(set) var lastError: String?
     /// Set after Copy invite put the message on the pasteboard.
     private(set) var inviteCopied = false
+    /// The person last removed, until a new code lifts the removal: the tab offers Copy new invite.
+    private(set) var removedName: String?
     /// The Sharing tab is on screen: poll even while sharing is off.
     var tabVisible = false {
         didSet { if tabVisible && !oldValue { forcePreflight = true; ensurePolling() } }
@@ -208,12 +210,16 @@ final class ShareStore {
         if next.preflight == nil, let checks = previous?.preflight { next.preflight = checks }
         availability = next.needsNewerCLI ? .needsNewerCLI : .available
         let countsMoved = status.map { $0.people != next.people || $0.devicesOnline != next.devicesOnline } ?? true
+        // a share started or stopped outside the app (a terminal, the job ending): the kept checks belong to
+        // the old state, so the next poll runs them again instead of up to a minute later
+        if let previous = status, previous.state != next.state { forcePreflight = true }
         status = next
         onStatus?()
         logLine("share: status \(next.state.rawValue)")
         for event in tracker.status(next) { emit(event) }
         if !next.isOn {
             code = nil
+            removedName = nil
             knownSeats = [:]
             if !people.isEmpty { people = [] }
             return
@@ -259,6 +265,7 @@ final class ShareStore {
         if new { inviteCopied = false }
         do throws(CLIError) {
             code = try await client.shareCode(bench: bench, new: new)
+            if new { removedName = nil }
             logLine(new ? "share: new code drawn" : "share: code read")
         } catch {
             report(error)
@@ -279,6 +286,13 @@ final class ShareStore {
         } catch {
             report(error)
         }
+    }
+
+    /// Draws a new code, which lets a removed person back in, and copies the invite for it.
+    func copyNewInvite(installURL: String? = nil, write: (String) -> Void) async {
+        await loadCode(new: true)
+        guard removedName == nil else { return }
+        await copyInvite(installURL: installURL, write: write)
     }
 
     // MARK: actions
@@ -330,6 +344,7 @@ final class ShareStore {
     @discardableResult
     func remove(_ person: SharePerson, newCode: Bool) async -> Bool {
         let ok = await perform("Removing…") { client, bench throws(CLIError) in try await client.shareRemove(bench: bench, person: person.id, newCode: newCode) }
+        if ok { removedName = newCode ? nil : person.name }
         if ok && newCode { code = nil; await loadCode() }
         await loadPeople()
         return ok
