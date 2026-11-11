@@ -56,6 +56,8 @@ export default defineConfig({
             'data-domains': 'benchbar.akashmishra.com',
           },
         },
+        // custom events (copied commands, downloads, outbound links): public/analytics-events.js
+        { tag: 'script', attrs: { defer: true, src: '/analytics-events.js' } },
       ],
       sidebar: [
         {
