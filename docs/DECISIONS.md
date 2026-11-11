@@ -306,6 +306,7 @@ runs come first, the 0.3 easy install run follows.
 - The docs workflow runs on every pull request and skips its build job the same way when no docs file changed, so "Docs build" can be required too. It also runs `tests/test-docs.sh`, which the CLI shards skip on a docs only change.
 - The link check is linkinator over `site/dist` with fragment checks on, skipping every external URL: GitHub and the site's own domain (before DNS) would make the check flaky, and the internal links are the ones a docs change breaks.
 - The Umami script uses the benchbar.akashmishra.com website of Akash's Umami, limited with `data-domains` so local previews are not counted, and `og:image` points at `https://benchbar.akashmishra.com/og.png`, which the build copies from `docs/images/og-image.png` when that file exists.
+- The docs site sends three custom Umami events from `site/public/analytics-events.js`: `command-copy` (the first line of a copied code block), `download-click` (a link to a GitHub release) and `outbound-click` (any other link off the site). They answer what page views cannot: whether a reader copied the install command or went to a download. Query strings are never sent, and no event carries anything a reader typed.
 
 ## 0.5.5: readme
 
