@@ -20,16 +20,17 @@ public static class CliOutput
             return trimmed;
         }
         var lines = output.Split('\n').Select(l => l.TrimEnd('\r')).ToList();
-        if (CliJson.PickDocument(lines) is { } picked)
-        {
-            JsonRead.RefuseNewerSchema(picked);
-            return picked.ToJsonString();
-        }
-        // a line of text, then a document that spans several lines (an indented one)
+        // a line of text, then a document that spans several lines (an indented one). This comes before the line by line pick, which
+        // would take one inner object of an indented document for the whole answer.
         if (FromFirstBrace(lines) is { } text && SchemaOf(text, out var schema))
         {
             RefuseNewer(schema);
             return text;
+        }
+        if (CliJson.PickDocument(lines) is { } picked)
+        {
+            JsonRead.RefuseNewerSchema(picked);
+            return picked.ToJsonString();
         }
         throw Unreadable(output, what);
     }

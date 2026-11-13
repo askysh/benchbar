@@ -134,7 +134,9 @@ fl_wsl_windows_load() {
   bin="$(fl_wsl_netstat_bin)" || return 0
   out="$(mktemp "${TMPDIR:-/tmp}/benchbar-netstat.XXXXXX")"
   err="$(mktemp "${TMPDIR:-/tmp}/benchbar-netstat.XXXXXX")"
-  if fl_run_capture_timeout "${FL_WIN_NETSTAT_SECS:-5}" "$out" "$err" "$bin" -ano; then
+  # from / : on some WSL builds a Windows program cannot start when the
+  # working directory is a folder under the Linux home ("Invalid argument")
+  if ( cd / && fl_run_capture_timeout "${FL_WIN_NETSTAT_SECS:-5}" "$out" "$err" "$bin" -ano ); then
     FL_WIN_LISTEN="$(tr -d '\r' <"$out" | awk '
       $1 == "TCP" && NF >= 5 && $3 ~ /:0$/ {
         la = $2; i = length(la)

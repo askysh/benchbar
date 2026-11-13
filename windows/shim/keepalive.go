@@ -326,6 +326,15 @@ func keepaliveRemove(sys *System) int {
 		installed = false
 	}
 	if installed {
+		// the task has one fixed name, so it may belong to another copy of
+		// benchbar.exe (a second install): that copy removes its own task
+		if xml, code, err := sys.Tasks.Schtasks("/Query", "/TN", taskName, "/XML"); err == nil && code == 0 {
+			if exe, _, ok := parseTaskArguments(xml); ok && sys.ExePath != "" && sys.FileExists(exe) &&
+				normDir(exe, sys.Getenv) != normDir(sys.ExePath, sys.Getenv) {
+				fmt.Fprintf(sys.Stdout, "The task %q runs another copy (%s), so it was left alone. To remove it: \"%s\" keepalive remove\n", taskName, exe, exe)
+				return 0
+			}
+		}
 		sys.Tasks.Schtasks("/End", "/TN", taskName)
 		if out, code, err := sys.Tasks.Schtasks("/Delete", "/TN", taskName, "/F"); err != nil || code != 0 {
 			errorf(sys, "schtasks.exe could not delete the task: %s", schtasksDetail(out, err))

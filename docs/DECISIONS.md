@@ -1016,3 +1016,5 @@ Measured on five PR runs (September 2026): 11 to 14 minutes wall clock, all of i
 - Lingering is enabled before phase 00, while the sudo credential still exists.
 - An apt proxy travels in a 0600 `APT_CONFIG` file, never on a command line, because proxy URLs can hold credentials.
 - The wkhtmltopdf arm64 row is trusted from the release asset (the pinned sha256 was computed from the download, the same way the amd64 one reproduces); not tested on real arm64 hardware.
+- Shim: `keepalive remove` leaves the task alone when it runs another existing copy of `benchbar.exe`, because the task has one fixed name and an uninstall of a second install must not remove the first one's keepalive.
+- The Windows port check starts `netstat.exe` from `/`, because on some WSL builds a Windows program fails with "Invalid argument" when the working directory is a folder under the Linux home (seen on Windows build 26320 with WSL 3.0.5).

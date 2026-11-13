@@ -1180,6 +1180,9 @@ func TestDoctorNamesAMissingTrayFromTheInstallRecord(t *testing.T) {
 
 func TestDoctorNamesAMissingKeepaliveTarget(t *testing.T) {
 	e := installRecordEnv(t, "\xef\xbb\xbfBenchBarTray.exe\r\nbenchbar.exe\r\n", "BenchBarTray.exe")
+	// benchbar.exe itself is the missing file here, whatever the path separator of the test machine
+	present := e.FileExists
+	e.FileExists = func(p string) bool { return !strings.EqualFold(p, e.ExePath) && present(p) }
 	args := `--headless "` + e.ExePath + `" keepalive run --distro "Ubuntu-24.04"`
 	e.taskHandler(taskXMLOutput(args), statusCSV)
 	e.run("doctor")
