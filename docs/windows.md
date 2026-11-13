@@ -167,13 +167,17 @@ it. The `README.txt` in the zip says which programs are signed.
 
 ## Code signing policy
 
-Pending: this section takes effect when the SignPath Foundation
-application is approved. Until then the Windows binaries are unsigned.
+Free code signing provided by [SignPath.io](https://about.signpath.io),
+certificate by [SignPath Foundation](https://signpath.org).
 
-- Free code signing for the project's own binaries (`benchbar.exe`, `BenchBarTray.exe`, `BenchBarTray.dll`, `BenchBar.Tray.Core.dll`) is provided
-  by [SignPath.io](https://about.signpath.io), with a certificate by
-  [SignPath Foundation](https://signpath.org). The signature names
-  SignPath Foundation as the publisher.
+The application to SignPath Foundation is in review. Until it is
+approved, the Windows binaries are unsigned; this policy applies from the
+first signed release.
+
+- The project's own binaries are signed: `benchbar.exe`,
+  `BenchBarTray.exe`, `BenchBarTray.dll` and `BenchBar.Tray.Core.dll`.
+  The signature names SignPath Foundation as the publisher. Libraries
+  from other projects in the zip are not signed by BenchBar.
 - Only binaries built by the `release-windows.yml` workflow of
   [askysh/benchbar](https://github.com/askysh/benchbar) from a release
   tag are signed. Nothing built on a developer machine is.

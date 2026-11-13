@@ -84,7 +84,9 @@ irm https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1 | iex
 ```
 
 The Windows programs are unsigned until the signing application is
-approved. For a bug, use **Report a Bug** in the tray: it writes a
+approved: see the
+[Code signing policy](https://benchbar.akashmishra.com/windows/#code-signing-policy).
+For a bug, use **Report a Bug** in the tray: it writes a
 redacted zip and opens the bug form. See
 [Windows](https://benchbar.akashmishra.com/windows/).
 

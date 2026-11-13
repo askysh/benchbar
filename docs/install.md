@@ -230,7 +230,7 @@ When the tray starts and finds no bench, its
 [first run wizard](windows.md#first-run) checks the PC and sets up WSL,
 the Linux distro, the bench and the keepalive. [Windows](windows.md) has
 the requirements, the flags, the tray, Report a Bug, uninstall and the
-signing policy.
+[Code signing policy](windows.md#code-signing-policy).
 
 ## Updating
 
