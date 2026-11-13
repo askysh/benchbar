@@ -85,7 +85,9 @@ public static class SetupEnv
 /// <summary>The real service: <c>benchbar.exe</c> and, for the lists that must not boot a distro, <c>wsl.exe</c>.</summary>
 public sealed class ShimSetupService : ISetupService
 {
-    public static readonly TimeSpan CheckTimeout = TimeSpan.FromSeconds(60);
+    /// <summary>The shim's probe may take 90 s and each of its quick calls 60 s, so the check waits longer than both.</summary>
+    public static readonly TimeSpan CheckTimeout = TimeSpan.FromSeconds(120);
+    public static readonly TimeSpan CheckProbeTimeout = TimeSpan.FromSeconds(150);
     public static readonly TimeSpan ActionTimeout = TimeSpan.FromMinutes(45);
 
     /// <summary>Turning on WSL waits for a Windows prompt; nobody should wait an hour for it.</summary>
@@ -116,19 +118,19 @@ public sealed class ShimSetupService : ISetupService
         ProcessResult result;
         try
         {
-            result = await _runner.RunAsync(Shim, args, ct, CheckTimeout).ConfigureAwait(false);
+            result = await _runner.RunAsync(Shim, args, ct, probe ? CheckProbeTimeout : CheckTimeout).ConfigureAwait(false);
         }
         catch (Win32Exception ex)
         {
-            throw new CliProblemException($"benchbar.exe could not be started: {ex.Message}");
+            throw new CliProblemException(ShimStart.Describe(ex, _locate()));
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            throw new CliProblemException("benchbar.exe setup check did not answer in 1 minute.");
+            throw new CliProblemException("benchbar.exe setup check did not answer in " + (probe ? "150" : "120") + " seconds. Wait a minute and run benchbar.exe setup check again.");
         }
         if (string.IsNullOrWhiteSpace(result.Output))
             throw new CliProblemException(ShimBenchSource.FirstLine(result.Error) ?? $"benchbar.exe setup check exited with code {result.ExitCode}. Update BenchBar.");
-        return SetupJson.ParseCheck(result.Output);
+        return CliOutput.Parse(result.Output, "setup check", SetupJson.ParseCheck);
     }
 
     public async Task<SetupRunResult> RunActionAsync(SetupRunRequest request, Action<SetupEvent> onEvent, CancellationToken ct)
@@ -220,9 +222,9 @@ public sealed class ShimSetupService : ISetupService
         {
             return await _stream.RunAsync(Shim, args, env.Materialize(), onLine, timeout, ct).ConfigureAwait(false);
         }
-        catch (Win32Exception)
+        catch (Win32Exception ex)
         {
-            throw new CliProblemException(ShimBenchSource.BlockedMessage);
+            throw new CliProblemException(ShimStart.Describe(ex, _locate()));
         }
     }
 
@@ -265,9 +267,9 @@ public sealed class ShimSetupService : ISetupService
             if (result.ExitCode == 0) return ActionResult.Success;
             return new ActionResult(result.ExitCode, FailedCheckMessage(result.Output) ?? ShimBenchSource.FirstLine(result.Error) ?? ShimBenchSource.FirstLine(result.Output) ?? $"benchbar.exe exited with code {result.ExitCode}.");
         }
-        catch (Win32Exception)
+        catch (Win32Exception ex)
         {
-            return ActionResult.Failure(ShimBenchSource.BlockedMessage);
+            return ActionResult.Failure(ShimStart.Describe(ex, _locate()));
         }
         catch (SourceProblemException ex)
         {

@@ -33,7 +33,43 @@ internal static class Ui
 
     public static Brush Card { get; } = Frozen(Color.FromArgb(0x1A, 0x80, 0x80, 0x80));
 
-    public static Brush CriticalBrush => Critical;
+    // Text colors. The status colors above are for dots and glyphs (3:1 is enough there); text needs 4.5:1 on the card, which in the
+    // light theme is a light gray: E5484D is 3.5:1 and D98E04 2.4:1 on it, so the light theme has darker ones. The dark theme's red is
+    // lightened for the same reason (4.2:1 on the dark card). High contrast replaces all of them with the system's colors.
+    public static readonly Color CriticalTextLight = Color.FromRgb(0xC4, 0x2B, 0x31);
+    public static readonly Color CriticalTextDark = Color.FromRgb(0xFF, 0x70, 0x75);
+    public static readonly Color CautionTextLight = Color.FromRgb(0x8A, 0x58, 0x00);
+    public static readonly Color CautionTextDark = Color.FromRgb(0xD9, 0x8E, 0x04);
+
+    private static readonly Brush CriticalLightBrush = Frozen(CriticalTextLight);
+    private static readonly Brush CriticalDarkBrush = Frozen(CriticalTextDark);
+    private static readonly Brush CautionLightBrush = Frozen(CautionTextLight);
+    private static readonly Brush CautionDarkBrush = Frozen(CautionTextDark);
+
+    /// <summary>Whether windows are in the light theme now (set when a window takes its theme). Text colors follow it.</summary>
+    public static bool LightTheme { get; set; } = true;
+
+    public static bool HighContrast => SystemParameters.HighContrast;
+
+    /// <summary>The color of a problem line.</summary>
+    public static Brush CriticalBrush => HighContrast ? SystemColors.HotTrackBrush : LightTheme ? CriticalLightBrush : CriticalDarkBrush;
+
+    /// <summary>The color of a warning line (a pill, a note on an app).</summary>
+    public static Brush CautionTextBrush => HighContrast ? SystemColors.HotTrackBrush : LightTheme ? CautionLightBrush : CautionDarkBrush;
+
+    /// <summary>The WCAG contrast ratio of two opaque colors.</summary>
+    public static double ContrastRatio(Color a, Color b)
+    {
+        static double Channel(byte v)
+        {
+            var c = v / 255.0;
+            return c <= 0.03928 ? c / 12.92 : Math.Pow((c + 0.055) / 1.055, 2.4);
+        }
+        static double Luminance(Color c) => 0.2126 * Channel(c.R) + 0.7152 * Channel(c.G) + 0.0722 * Channel(c.B);
+        var (hi, lo) = (Luminance(a), Luminance(b));
+        if (hi < lo) (hi, lo) = (lo, hi);
+        return (hi + 0.05) / (lo + 0.05);
+    }
 
     public static void Name(DependencyObject element, string name, string? help = null)
     {
@@ -341,6 +377,9 @@ internal static class Ui
         }
     }
 
-    public static void ApplyTheme(Window window, ResolvedTheme theme) =>
+    public static void ApplyTheme(Window window, ResolvedTheme theme)
+    {
+        LightTheme = theme.FlyoutLight;
         window.ThemeMode = theme.FlyoutLight ? ThemeMode.Light : ThemeMode.Dark;
+    }
 }

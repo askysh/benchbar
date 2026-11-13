@@ -103,8 +103,8 @@ public sealed class SettingsModel(TrayConfig config, ISettingsHost host, ISetupS
         }
     }
 
-    /// <summary>The distro BenchBar uses: the shim's <c>distro</c> key, else the WSL default.</summary>
-    public string? CurrentDistro => DistroName.Resolve(config.Distro, () => Distros.FirstOrDefault(d => d.IsDefault)?.Name);
+    /// <summary>The distro BenchBar uses: the shim's <c>distro</c> key, else the pick the tray makes (a Docker or Rancher default is skipped).</summary>
+    public string? CurrentDistro => DistroName.Resolve(config.Distro, () => DistroName.Pick(Distros.Select(d => (d.Name, d.IsDefault)).ToList()));
 
     public string? CliPath => config.CliPath;
 

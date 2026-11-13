@@ -22,14 +22,15 @@ public sealed class BenchPoller : IDisposable
         [TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(120), TimeSpan.FromSeconds(300)];
 
     /// <summary>
-    /// The time to the next poll. Boosted (just after an action) 2 s; flyout open 5 s; any bench starting 2 s;
+    /// The time to the next poll. Boosted (just after an action) 2 s; a window open and in use 5 s; any bench starting 2 s;
     /// any running 30 s; else (stopped, paused, crashed, unknown, distro stopped) the back off,
-    /// where <paramref name="idleStep"/> counts the idle polls so far.
+    /// where <paramref name="idleStep"/> counts the idle polls so far. A window that is open but minimized or not in use for a while
+    /// (<paramref name="viewerIdle"/>) does not hold the 5 s rate: one poll costs a benchbar.exe and several wsl.exe processes.
     /// </summary>
-    public static TimeSpan NextDelay(IReadOnlyCollection<BenchState> states, bool flyoutOpen, int idleStep, bool boost = false)
+    public static TimeSpan NextDelay(IReadOnlyCollection<BenchState> states, bool flyoutOpen, int idleStep, bool boost = false, bool viewerIdle = false)
     {
         if (boost) return StartingDelay;
-        if (flyoutOpen) return FlyoutOpenDelay;
+        if (flyoutOpen && !viewerIdle) return FlyoutOpenDelay;
         if (states.Contains(BenchState.Starting)) return StartingDelay;
         if (states.Contains(BenchState.Running)) return RunningDelay;
         return IdleSteps[Math.Clamp(idleStep, 0, IdleSteps.Count - 1)];
@@ -51,6 +52,7 @@ public sealed class BenchPoller : IDisposable
     private bool _kickPending;
     private bool _suspended;
     private bool _flyoutOpen;
+    private bool _viewerIdle;
     private bool _disposed;
     private int _idleStep;
     private DateTimeOffset _boostUntil;
@@ -112,6 +114,20 @@ public sealed class BenchPoller : IDisposable
             if (_flyoutOpen == open) return;
             _flyoutOpen = open;
             // an armed timer follows the new interval; a poll in progress picks it up when it ends
+            if (_started && !_polling && !_suspended && !_disposed) Arm(advanceBackoff: false);
+        }
+    }
+
+    /// <summary>
+    /// Whether the open windows are out of use (minimized, or another program has had the focus for a while). The poll then follows the
+    /// rules of no window (30 s with a bench running, the back off otherwise) until the person is back.
+    /// </summary>
+    public void SetViewerIdle(bool idle)
+    {
+        lock (_gate)
+        {
+            if (_viewerIdle == idle) return;
+            _viewerIdle = idle;
             if (_started && !_polling && !_suspended && !_disposed) Arm(advanceBackoff: false);
         }
     }
@@ -196,8 +212,8 @@ public sealed class BenchPoller : IDisposable
     {
         var states = _last.Benches.Select(s => s.State).ToList();
         var boost = _time.GetUtcNow() < _boostUntil;
-        var delay = NextDelay(states, _flyoutOpen, _idleStep, boost);
-        var idle = !boost && !_flyoutOpen && !states.Contains(BenchState.Starting) && !states.Contains(BenchState.Running);
+        var delay = NextDelay(states, _flyoutOpen, _idleStep, boost, _viewerIdle);
+        var idle = !boost && !(_flyoutOpen && !_viewerIdle) && !states.Contains(BenchState.Starting) && !states.Contains(BenchState.Running);
         if (!idle) _idleStep = 0;
         else if (advanceBackoff) _idleStep = Math.Min(_idleStep + 1, IdleSteps.Count - 1);
         _timer.Change(delay, Timeout.InfiniteTimeSpan);

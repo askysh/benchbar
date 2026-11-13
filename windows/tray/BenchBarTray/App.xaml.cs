@@ -19,6 +19,9 @@ public partial class App : Application, ITrayHost
     private const string HelpUrl = "https://benchbar.akashmishra.com/windows/";
 
     private readonly ErrorLog _log = new();
+    private readonly NoticeBoard _notices = new();
+    private readonly KeepAwakeGuard _keepAwake = new();
+    private readonly RunMarker _runMarker = new();
     private readonly StartupShortcut _startup = new();
     private readonly Dictionary<string, LogWindow> _logs = [];
     private readonly Dictionary<string, DoctorWindow> _doctors = [];
@@ -43,7 +46,6 @@ public partial class App : Application, ITrayHost
     private EventWaitHandle? _setupEvent;
     private RegisteredWaitHandle? _setupWait;
     private bool _launchChecked;
-    private int _viewers;
     private long _updateCheckedAt;
     private UpdateOffer? _updateOffer;
     private string? _updateDismissed;
@@ -64,11 +66,15 @@ public partial class App : Application, ITrayHost
         DispatcherUnhandledException += (_, args) =>
         {
             _log.Write("ui", args.Exception);
-            args.Handled = true; // keep running
+            args.Handled = true; // keep running, and say so once: a silent catch hid every fault from the person
+            _notices.Set(new Notice("unexpected", "BenchBar hit an error and kept running. If something looks wrong, tell us.", "Report a Bug", () => ReportBugAsync("Error notice").Forget()));
         };
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {
             if (args.ExceptionObject is Exception ex) _log.Write("domain", ex);
+            // the process ends now: take the icon out of the notification area, or a ghost stays until the mouse passes over it.
+            // The run marker stays, so the next start says that this one ended badly.
+            try { _icon?.Dispose(); } catch (Exception) { }
         };
         TaskScheduler.UnobservedTaskException += (_, args) =>
         {
@@ -82,6 +88,13 @@ public partial class App : Application, ITrayHost
             Shutdown();
             return;
         }
+
+        var crashedLastTime = _runMarker.Begin(UpdateCheck.CurrentVersion().Split('+')[0]);
+        _notices.Changed += SyncNotices;
+        Activated += (_, _) => PostViewerSync();
+        Deactivated += (_, _) => PostViewerSync();
+        // sign out and shutdown are clean ends: they must not count as a crash at the next start
+        SessionEnding += (_, _) => { if (_mutex is not null) _runMarker.End(); };
 
         // Created first: `hello` is queued until the pipe is up, so nothing sent below is lost.
         _link = HarnessLink.FromEnvironment("BenchBarTray");
@@ -130,6 +143,13 @@ public partial class App : Application, ITrayHost
         _icon.TrayMouseDoubleClick += (_, _) => OpenMain();
         _releaseFlyout.Tick += (_, _) => ReleaseFlyout();
         _controller.Start();
+        CheckShimVersionAsync().Forget();
+        if (crashedLastTime)
+        {
+            const string text = "BenchBar closed unexpectedly last time.";
+            _notices.Set(new Notice("crashed", text, "Report a Bug", () => ReportBugAsync("Closed unexpectedly").Forget()));
+            ShowNotice(text + " Click for details.");
+        }
         if (resume)
         {
             // the one shot flag did its job: take it away before anything can fail
@@ -165,6 +185,8 @@ public partial class App : Application, ITrayHost
 
     protected override void OnExit(ExitEventArgs e)
     {
+        try { _keepAwake.Set(false); } catch (Exception) { }
+        if (_mutex is not null) _runMarker.End(); // a clean exit of the running instance: the next start finds no marker (a second instance that only passed on its message must not remove it)
         _openWait?.Unregister(null);
         _openEvent?.Dispose();
         _setupWait?.Unregister(null);
@@ -243,6 +265,29 @@ public partial class App : Application, ITrayHost
         }
     }
 
+    // --- notices ---
+
+    private void SyncNotices()
+    {
+        _flyout?.View.SetNotices(_notices.All, DismissNotice);
+        _main?.SetNotices(_notices.All, DismissNotice);
+    }
+
+    private void DismissNotice(string key) => _notices.Remove(key);
+
+    /// <summary>
+    /// Once at start: <c>benchbar.exe --shim-version</c> against this tray's version. A PC was found whose keepalive ran an older shim from
+    /// another folder, so a mismatch is real; it stays on the flyout and the window until the two match.
+    /// </summary>
+    private async Task CheckShimVersionAsync()
+    {
+        if (_setup is null) return;
+        var line = await _setup.ShimVersionAsync(CancellationToken.None);
+        var text = VersionMismatch.Notice(line, UpdateCheck.CurrentVersion(), (_source as ShimBenchSource)?.ShimPath);
+        if (text is null) _notices.Remove("shim-version");
+        else _notices.Set(new Notice("shim-version", text, "Copy Install Line", () => CopyText(UpdateCheck.InstallCommand), Dismissible: false));
+    }
+
     // --- efficiency mode ---
 
     /// <summary>The icon alone runs in efficiency mode; any open window of ours leaves it until the last one closes.</summary>
@@ -273,6 +318,8 @@ public partial class App : Application, ITrayHost
                 _releaseFlyout.Start();
             };
             view.SetSnapshot(_controller.Snapshot, TrayController.UpText(_controller.Snapshot, _controller.Benches.Select(b => b.State).ToList()));
+            view.SetFooter("BenchBar " + UpdateCheck.CurrentVersion().Split('+')[0]);
+            view.SetNotices(_notices.All, DismissNotice);
         }
         _flyout.ShowAtTray();
     }
@@ -483,15 +530,20 @@ public partial class App : Application, ITrayHost
         {
             var latest = await UpdateCheck.FetchLatestAsync(CancellationToken.None);
             var current = UpdateCheck.CurrentVersion();
-            if (latest is { } release && UpdateCheck.IsNewer(release.Tag, current))
+            switch (UpdateCheck.State(latest, current, UpdateCheck.Arch()))
             {
-                var answer = MessageBox.Show($"BenchBar {release.Tag.TrimStart('v')} is out. You have {current.Split('+')[0]}.\n\nOpen the release page?",
-                    "BenchBar", MessageBoxButton.YesNo, MessageBoxImage.Information);
-                if (answer == MessageBoxResult.Yes) OpenUrl(release.Url);
-            }
-            else
-            {
-                MessageBox.Show("You have the latest version of BenchBar.", "BenchBar", MessageBoxButton.OK, MessageBoxImage.Information);
+                case UpdateState.Available:
+                    CopyText(UpdateCheck.InstallCommand);
+                    var answer = MessageBox.Show($"BenchBar {latest!.Version} is out. You have {current.Split('+')[0]}.\n\n{UpdateCheck.InstallExplanation} The line is copied to the clipboard:\n\n{UpdateCheck.InstallCommand}\n\nOpen the release page too?",
+                        "BenchBar", MessageBoxButton.YesNo, MessageBoxImage.Information);
+                    if (answer == MessageBoxResult.Yes) OpenUrl(latest!.Url);
+                    break;
+                case UpdateState.NoWindowsBuild:
+                    MessageBox.Show($"BenchBar {latest!.Version} is out, but its Windows download is not ready yet. You have {current.Split('+')[0]}. Try again later.", "BenchBar", MessageBoxButton.OK, MessageBoxImage.Information);
+                    break;
+                default:
+                    MessageBox.Show("You have the latest version of BenchBar.", "BenchBar", MessageBoxButton.OK, MessageBoxImage.Information);
+                    break;
             }
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)

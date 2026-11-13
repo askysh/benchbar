@@ -94,9 +94,9 @@ public sealed class BugReporter(IProcessRunner runner, Func<string?> locate, Tra
         {
             result = await runner.RunAsync(shim, Arguments(request), ct, Timeout).ConfigureAwait(false);
         }
-        catch (Win32Exception)
+        catch (Win32Exception ex)
         {
-            return fallback.Write(request, ShimBenchSource.BlockedMessage);
+            return fallback.Write(request, ShimStart.Describe(ex, shim));
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {

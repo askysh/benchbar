@@ -58,6 +58,20 @@ internal sealed class FakeWizardHost : IWizardHost
 
     public int ForegroundGrants { get; private set; }
 
+    /// <summary>Every KeepAwake call, in order: true to hold the PC awake, false to let it sleep.</summary>
+    public List<bool> AwakeCalls { get; } = [];
+
+    public bool Awake => AwakeCalls.Count > 0 && AwakeCalls[^1];
+
+    public void KeepAwake(bool on) => AwakeCalls.Add(on);
+
+    /// <summary>The flow saved for the resume after a restart, as the real host keeps it in the config.</summary>
+    public WizardFlow? SavedFlow { get; set; }
+
+    public WizardFlow? ResumeFlow => SavedFlow;
+
+    public void SetResumeFlow(WizardFlow flow) => SavedFlow = flow;
+
     public void AllowForeground() => ForegroundGrants++;
 
     public void SetResumeAfterLogon(bool on) => ResumeFlag = on;

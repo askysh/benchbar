@@ -276,6 +276,7 @@ internal sealed partial class WizardView
         var confirm = Ui.Password("Confirm Linux password", s => SetSecret(_model.SetConfirm, s), 280);
         var nameProblem = Note(error: true);
         var passProblem = Note(error: true);
+        var passAdvice = Note(); // the 8 character minimum is advice here: the user may already exist with a shorter password
         var error = Note(error: true);
         var working = Ui.Text("", 13, opacity: 0.75, margin: new Thickness(0, 6, 0, 0));
         var userHint = Note(); // says what Create User is waiting for
@@ -286,6 +287,7 @@ internal sealed partial class WizardView
         panel.Children.Add(Ui.Labeled("Password", pass, "This is what sudo asks for later. BenchBar keeps it in memory while this window is open and never saves it."));
         panel.Children.Add(Ui.Labeled("Confirm password", confirm));
         panel.Children.Add(passProblem);
+        panel.Children.Add(passAdvice);
         panel.Children.Add(error);
         panel.Children.Add(userHint);
         panel.Children.Add(working);
@@ -309,6 +311,7 @@ internal sealed partial class WizardView
             // problems show once the person has typed something, not on an empty form
             Show(nameProblem, _model.UserNameProblem);
             Show(passProblem, _model.LinuxPassword.IsEmpty ? null : _model.PasswordProblem);
+            Show(passAdvice, _model.PasswordAdvice);
             Show(error, _model.UserError);
             reportUser.Visibility = _model.UserError is { Length: > 0 } ? Visibility.Visible : Visibility.Collapsed;
             working.Text = _model.CreatingUser ? "Creating the user..." : "";
@@ -358,7 +361,7 @@ internal sealed partial class WizardView
 
         var panel = new StackPanel();
         panel.Children.Add(Ui.Labeled("Bench folder", folder, "Inside Ubuntu. The default is in your Linux home folder."));
-        panel.Children.Add(Ui.Labeled("Site name", site, "The site's address uses it, for example http://" + WizardModel.DefaultSite + ":8000. A name ending in .localhost needs no hosts line: Windows resolves it by itself."));
+        panel.Children.Add(Ui.Labeled("Site name", site, "The site's address uses it, for example http://" + WizardModel.DefaultSite + ":8000. A name ending in .localhost needs no hosts line: browsers such as Edge and Chrome open it by themselves. PowerShell and ping do not resolve it."));
         panel.Children.Add(Ui.Labeled("Apps", bundle, "minimal is Frappe only; common and extended add more apps."));
         panel.Children.Add(Ui.Labeled("Administrator password", admin, "The login of the new site. It is used for this install only and never saved."));
         panel.Children.Add(problem);
@@ -505,7 +508,10 @@ internal sealed partial class WizardView
         var rootPanel = Ui.Labeled("MariaDB root password", root, "MariaDB in Ubuntu already has a root password that BenchBar does not know. Enter it and retry.");
         rootPanel.Visibility = Visibility.Collapsed;
 
+        // the install takes 20 to 30 minutes and its timeouts keep counting while the PC sleeps: the app holds the PC awake, and says what the person can do
+        var awake = Ui.Text(WizardModel.KeepAwakeNote, 13, FontWeights.SemiBold, margin: new Thickness(0, 0, 0, 10));
         var panel = new StackPanel();
+        panel.Children.Add(awake);
         panel.Children.Add(rows);
         panel.Children.Add(progress);
         panel.Children.Add(failure);
@@ -529,7 +535,8 @@ internal sealed partial class WizardView
         parts.Right.Add(retry);
         parts.Refresh = () =>
         {
-            var running = _model.Phase == InstallPhase.Running;
+            var running = _model.IsInstalling;
+            awake.Visibility = running ? Visibility.Visible : Visibility.Collapsed;
             var (heading, line) = InstallHeading(_model.Phase);
             parts.SetHeading(heading, line);
             back.IsEnabled = !running;
@@ -577,6 +584,7 @@ internal sealed partial class WizardView
     {
         InstallPhase.Failed => ("Install Failed", "A step did not finish. Retry it, tell us with Report This Problem, or open the log."),
         InstallPhase.Stopped => ("Install Stopped", "Run Again continues where it can. Finished steps are not repeated."),
+        InstallPhase.WaitingForPreviousRun => ("Waiting for the Previous Run", "A run that was stopped is still ending inside Ubuntu. BenchBar tries again by itself."),
         InstallPhase.NeedsLinuxPassword => ("Wrong Linux Password", "Linux did not accept the password. Type it again and press Retry."),
         InstallPhase.NeedsRootPassword => ("MariaDB Needs Its Password", "MariaDB in Ubuntu already has a root password. Enter it and press Retry."),
         _ => ("Installing", "This takes a while the first time. You can leave this window open and do something else."),

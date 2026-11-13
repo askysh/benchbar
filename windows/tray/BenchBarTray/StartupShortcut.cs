@@ -1,14 +1,50 @@
 using System.Runtime.InteropServices;
 using System.Text;
+using Microsoft.Win32;
 
 namespace BenchBar.Tray;
 
 /// <summary>
-/// "Open BenchBar at logon": a shortcut named <c>BenchBar Tray.lnk</c> in the Startup folder that points at this exe.
-/// The name is fixed: the shim's doctor looks for exactly this file. On means the file exists and points at this exe.
+/// Windows keeps its own on/off switch for each entry of the Startup folder (Settings, Apps, Startup, and Task Manager's Startup tab):
+/// <c>HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\StartupFolder</c>, one binary value per file name. A value
+/// that is absent, or whose first byte is even (02), means enabled; an odd first byte (03) means disabled, and the shortcut is then ignored
+/// at sign in. This is the registry part, apart so a test can stand in for it.
 /// </summary>
-internal sealed class StartupShortcut(string? folder = null, string? exePath = null, string? fileName = null, string arguments = "")
+internal interface IStartupApproval
 {
+    /// <summary>The value for a shortcut's file name; null when there is none.</summary>
+    byte[]? Get(string fileName);
+
+    /// <summary>Removes the value: absent means enabled.</summary>
+    void Clear(string fileName);
+}
+
+internal sealed class RegistryStartupApproval : IStartupApproval
+{
+    private const string KeyPath = @"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\StartupFolder";
+
+    public byte[]? Get(string fileName)
+    {
+        using var key = Registry.CurrentUser.OpenSubKey(KeyPath);
+        return key?.GetValue(fileName) as byte[];
+    }
+
+    public void Clear(string fileName)
+    {
+        using var key = Registry.CurrentUser.OpenSubKey(KeyPath, writable: true);
+        key?.DeleteValue(fileName, throwOnMissingValue: false);
+    }
+}
+
+/// <summary>
+/// "Open BenchBar at logon": a shortcut named <c>BenchBar Tray.lnk</c> in the Startup folder that points at this exe.
+/// The name is fixed: the shim's doctor looks for exactly this file. On means the file exists, points at this exe, and Windows
+/// has not switched the entry off (<see cref="IStartupApproval"/>). Turning it on clears Windows' off switch for the entry.
+/// </summary>
+internal sealed class StartupShortcut(string? folder = null, string? exePath = null, string? fileName = null, string arguments = "", IStartupApproval? approval = null)
+{
+    private readonly IStartupApproval _approval = approval ?? new RegistryStartupApproval();
+
     public const string FileName = "BenchBar Tray.lnk";
 
     /// <summary>The one shot flag that opens the setup wizard again after the next sign in: the same exe, <c>--resume-setup</c>, removed by the tray when it starts with it.</summary>
@@ -20,11 +56,28 @@ internal sealed class StartupShortcut(string? folder = null, string? exePath = n
 
     public string LinkPath => Path.Combine(_folder, fileName ?? FileName);
 
+    /// <summary>Whether Windows has the entry switched off: the first byte of its StartupApproved value is odd.</summary>
+    public static bool IsDisabledValue(byte[]? value) => value is { Length: > 0 } && (value[0] & 1) == 1;
+
+    /// <summary>Windows switched the entry off in Settings or Task Manager (the shortcut is there and is ignored at sign in).</summary>
+    public bool IsApprovedOff()
+    {
+        try
+        {
+            return IsDisabledValue(_approval.Get(Path.GetFileName(LinkPath)));
+        }
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
+        {
+            return false; // cannot tell: the file decides
+        }
+    }
+
     public bool IsEnabled()
     {
         try
         {
             if (!File.Exists(LinkPath)) return false;
+            if (IsApprovedOff()) return false;
             var target = ShellLink.ReadTarget(LinkPath);
             return string.Equals(Path.GetFullPath(target), Path.GetFullPath(_exe), StringComparison.OrdinalIgnoreCase);
         }
@@ -38,11 +91,25 @@ internal sealed class StartupShortcut(string? folder = null, string? exePath = n
     {
         Directory.CreateDirectory(_folder);
         ShellLink.Write(LinkPath, _exe, Path.GetDirectoryName(_exe) ?? "", "BenchBar", arguments);
+        ClearApproval();
     }
 
     public void Disable()
     {
         if (File.Exists(LinkPath)) File.Delete(LinkPath);
+        ClearApproval();
+    }
+
+    /// <summary>Takes Windows' off switch for this entry away (a value that is absent means enabled). A registry that cannot be written changes nothing else.</summary>
+    private void ClearApproval()
+    {
+        try
+        {
+            _approval.Clear(Path.GetFileName(LinkPath));
+        }
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
+        {
+        }
     }
 }
 

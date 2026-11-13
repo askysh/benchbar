@@ -34,6 +34,18 @@ public interface IWizardHost
     void OpenUrl(string url);
 
     void CopyText(string text);
+
+    /// <summary>
+    /// Asked to keep the PC awake (true) or let it sleep again (false). The model calls it from the UI thread only, in pairs, around an
+    /// install or a setup action: a Windows execution state belongs to the thread that set it.
+    /// </summary>
+    void KeepAwake(bool on) { }
+
+    /// <summary>The flow the wizard was in when Windows had to restart; null when none was saved (then it resumes as a new bench).</summary>
+    WizardFlow? ResumeFlow => null;
+
+    /// <summary>Remembers the flow for the resume after the restart.</summary>
+    void SetResumeFlow(WizardFlow flow) { }
 }
 
 /// <summary>The small dialog before an install that needs sudo: how many steps, and whether an earlier password was refused.</summary>
@@ -55,7 +67,8 @@ public static partial class FixCommand
     public static bool IsCommand(string text) => CommandStart().IsMatch(text.Trim());
 }
 
-public enum InstallPhase { Idle, Running, Succeeded, Failed, NeedsRootPassword, NeedsLinuxPassword, Stopped }
+/// <summary><see cref="WaitingForPreviousRun"/>: an earlier run that was stopped may still end inside Ubuntu (its lock is held), so the next one waits for it.</summary>
+public enum InstallPhase { Idle, Running, Succeeded, Failed, NeedsRootPassword, NeedsLinuxPassword, Stopped, WaitingForPreviousRun }
 
 /// <summary>One step on the Install page.</summary>
 public sealed record InstallRow(string Id, string? Parent, string Name, InstallStepStatus Status, int? Secs, string? Message, string? Command);
@@ -98,10 +111,21 @@ public sealed partial class WizardModel : IDisposable
     public const string WaitingForPromptMessage = "Waiting for you to answer the Windows prompt. It may be behind other windows.";
     public const string HomeUnknownMessage = "BenchBar could not read your Linux home folder. Make sure Ubuntu starts, then check again.";
     public const string DistroRunningQuestion = "Ubuntu is running. Setting this up restarts it, which stops any benches and MariaDB inside it. Restart Ubuntu now?";
+    public const string KeepAwakeNote = "Keep this PC plugged in and awake until it finishes.";
+    public const string WaitingForPreviousRunMessage = "Waiting for the previous run to end inside Ubuntu. BenchBar tries again by itself.";
+    public const string PreviousRunStillGoingMessage = "The previous run is still going inside Ubuntu. Wait for it to end, then press Retry.";
+    public const string PasswordTooShortMessage = "Use at least 8 characters for a new user.";
+    public const string PasswordLineBreakMessage = "The password cannot contain a line break.";
+    public const int MinPasswordLength = 8;
     public const string StoppedWaitingMessage = "Stopped waiting. If you already answered the Windows prompt, WSL keeps installing. Restart Windows when it finishes, then check again.";
 
     /// <summary>How long Restart Now stays off after a restart was requested. A shutdown that was aborted must not leave the button dead.</summary>
     public TimeSpan RestartRetryAfter { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>How often a run that met the lock of a previous run is tried again, and for how long in all.</summary>
+    public TimeSpan LockWaitEvery { get; set; } = TimeSpan.FromSeconds(15);
+
+    public TimeSpan LockWaitLimit { get; set; } = TimeSpan.FromMinutes(10);
 
     public static readonly IReadOnlyList<string> Bundles = ["minimal", "common", "extended"];
 
@@ -121,6 +145,9 @@ public sealed partial class WizardModel : IDisposable
     private string? _alignedDistro;
     private string? _seenConfigured;
     private string? _busyAction;
+    private int _awakeHolds;
+    private bool _previousRunMayLinger;
+    private bool _lockHeld;
 
     public WizardModel(ISetupService setup, IWizardHost host, string? distro = null)
     {
@@ -200,9 +227,18 @@ public sealed partial class WizardModel : IDisposable
             SetupIds.ActionReboot => "Restart Now",
             SetupIds.ActionDistroUser => "Create User",
             SetupIds.ActionWslEnable => "Turn On",
-            _ => "Set Up",
+            SetupIds.ActionCliInstall when step.IsCliUpdate => "Update", // the shim sends cli_install for an older CLI too
+            _ when StepText.KeepaliveServesOtherDistro(step) => "Move Keep Awake", // the consequence is in the row's detail, above the button
+            _ => "Set Up", // an action id this tray does not know still runs through the generic path
         };
-        return new CheckRow(step, BusyStepId == step.Id, message, label, actionable && !waiting && step.NeedsAdmin, actionable && !waiting && step.NeedsAdmin ? AdminNote : null, waiting, StepText.Detail(step, Report.Steps));
+        var detail = StepText.Detail(step, Report.Steps);
+        // a step the shim added after this tray was built brings its own fix line: show it
+        if (step.Fix is { Length: > 0 } fix && !waiting && !detail.Contains(fix, StringComparison.Ordinal))
+            detail = (detail.Length == 0 ? "" : detail.TrimEnd('.') + ". ") + "Fix: " + fix;
+        // the user is created from the Windows name unless it is changed: say which, before the step runs
+        if (step.Id == SetupIds.DistroUser && actionable && !waiting && step.Action == SetupIds.ActionDistroUser && !UserCreated)
+            detail = (detail.Length == 0 ? "" : detail.TrimEnd('.') + ". ") + $"Create User makes the Linux user {UserName}. You can change the name on the next page.";
+        return new CheckRow(step, BusyStepId == step.Id, message, label, actionable && !waiting && step.NeedsAdmin, actionable && !waiting && step.NeedsAdmin ? AdminNote : null, waiting, detail);
     }
 
     /// <summary>Why the shim cannot use the distro the wizard checked (it could not be recorded), or null.</summary>
@@ -251,11 +287,20 @@ public sealed partial class WizardModel : IDisposable
         {
             if (_linuxPassword.IsEmpty) return "Choose a password. It is what sudo asks for later.";
             var text = _linuxPassword.Reveal();
-            if (text.Any(c => c is '\n' or '\r' or '\0')) return "The password cannot contain a line break.";
+            if (HasLineBreak(text)) return PasswordLineBreakMessage;
             if (!_linuxPassword.SameAs(_confirmPassword)) return "The two passwords are not the same.";
             return null;
         }
     }
+
+    /// <summary>
+    /// Advice, never a blocker, on the Create User page: a short password for a new user. The user may already exist with a shorter
+    /// password (the shim then keeps that user and ignores the typed one), so only an empty password and a line break stop the page.
+    /// </summary>
+    public string? PasswordAdvice => !_linuxPassword.IsEmpty && _linuxPassword.Reveal().Length < MinPasswordLength ? PasswordTooShortMessage : null;
+
+    /// <summary>Passwords travel in environment variables and through a sudo path that reads one line: a line break would cut them.</summary>
+    private static bool HasLineBreak(string text) => text.Any(c => c is '\n' or '\r' or '\0');
 
     public bool CanCreateUser => !CreatingUser && UserNameProblem is null && PasswordProblem is null;
 
@@ -297,6 +342,9 @@ public sealed partial class WizardModel : IDisposable
             if (!IsValidSite(Site)) return SiteRule;
             if (!Bundles.Contains(Bundle)) return "Choose a bundle.";
             if (_adminPassword.IsEmpty) return "Choose the Administrator password for the site.";
+            var admin = _adminPassword.Reveal();
+            if (HasLineBreak(admin)) return "The Administrator password cannot contain a line break.";
+            if (admin.Length < MinPasswordLength) return "The Administrator password needs at least 8 characters.";
             return null;
         }
     }
@@ -341,7 +389,7 @@ public sealed partial class WizardModel : IDisposable
 
     public bool StopRequested { get; private set; }
 
-    public bool IsInstalling => Page == WizardPage.Install && Phase == InstallPhase.Running;
+    public bool IsInstalling => Page == WizardPage.Install && Phase is InstallPhase.Running or InstallPhase.WaitingForPreviousRun;
 
     public Secret RootPassword => _rootPassword;
 
@@ -376,6 +424,29 @@ public sealed partial class WizardModel : IDisposable
             var failed = Report.Steps.FirstOrDefault(s => s.StopsTheWizard && !s.Waits);
             return failed is null ? null : ReportContext.Step(failed, _messages.GetValueOrDefault(failed.Id));
         }
+    }
+
+    // --- keep the PC awake ---
+
+    /// <summary>An install or a setup action takes minutes and their timeouts keep counting in sleep: hold the PC awake from the first hold to the last release.</summary>
+    private void HoldAwake()
+    {
+        if (_awakeHolds++ == 0) SafeAwake(true);
+    }
+
+    private void ReleaseAwake()
+    {
+        if (_awakeHolds == 0) return;
+        if (--_awakeHolds == 0) SafeAwake(false);
+    }
+
+    /// <summary>Whether the model asked the host to keep the PC awake now (for tests and the window title).</summary>
+    public bool HoldingAwake => _awakeHolds > 0;
+
+    private void SafeAwake(bool on)
+    {
+        try { _host.KeepAwake(on); }
+        catch (Exception) { /* a host that cannot do it must not stop the install */ }
     }
 
     // --- helpers ---
@@ -422,7 +493,7 @@ public sealed partial class WizardModel : IDisposable
     /// <summary>Opens straight on the Check page (the wizard resumed after a restart).</summary>
     public Task ResumeAtCheck()
     {
-        Flow = WizardFlow.NewBench;
+        Flow = _host.ResumeFlow ?? WizardFlow.NewBench;
         Page = WizardPage.Check;
         return CheckAsync();
     }
@@ -586,6 +657,7 @@ public sealed partial class WizardModel : IDisposable
     private void NoteRestartNeeded()
     {
         RestartNeeded = true;
+        _host.SetResumeFlow(Flow);
         _host.SetResumeAfterLogon(true);
     }
 
@@ -658,6 +730,7 @@ public sealed partial class WizardModel : IDisposable
         _messages.Remove(step.Id);
         if (action == SetupIds.ActionWslEnable) _messages[step.Id] = WaitingForPromptMessage;
         _actionLog.Clear();
+        HoldAwake();
         Raise();
         SetupRunResult result;
         var stoppedWaiting = false;
@@ -686,6 +759,7 @@ public sealed partial class WizardModel : IDisposable
         {
             BusyStepId = null;
             _busyAction = null;
+            ReleaseAwake();
         }
 
         if (stoppedWaiting)
@@ -735,6 +809,7 @@ public sealed partial class WizardModel : IDisposable
     {
         if (_disposed || FixingAll || BusyStepId is not null) return;
         FixingAll = true;
+        HoldAwake(); // one hold across the steps, so the PC does not sleep between two of them
         Raise();
         try
         {
@@ -757,6 +832,7 @@ public sealed partial class WizardModel : IDisposable
         finally
         {
             FixingAll = false;
+            ReleaseAwake();
             Raise();
         }
     }
@@ -965,7 +1041,7 @@ public sealed partial class WizardModel : IDisposable
     /// <summary>Retry or Run Again on the Install page.</summary>
     public async Task RetryAsync()
     {
-        if (Page != WizardPage.Install || Phase is InstallPhase.Running or InstallPhase.Succeeded or InstallPhase.Idle) return;
+        if (Page != WizardPage.Install || Phase is InstallPhase.Running or InstallPhase.WaitingForPreviousRun or InstallPhase.Succeeded or InstallPhase.Idle) return;
         if (Phase == InstallPhase.NeedsRootPassword && _rootPassword.IsEmpty) return;
         await RunInstallAsync(adopt: Flow == WizardFlow.ExistingBench, retrying: true).ConfigureAwait(true);
     }
@@ -1001,10 +1077,88 @@ public sealed partial class WizardModel : IDisposable
         }
 
         Page = WizardPage.Install;
+        StopRequested = false;
+        // the PC stays awake from here to every way out of this method: the end, a Stop, an exception, the window closing
+        HoldAwake();
+        try
+        {
+            if (_previousRunMayLinger && !await WaitForOldRunAsync().ConfigureAwait(true)) return;
+            var waited = TimeSpan.Zero;
+            while (true)
+            {
+                await AttemptInstallAsync(adopt).ConfigureAwait(true);
+                if (_disposed || !_lockHeld || Phase != InstallPhase.Failed) return;
+                // the CLI refused at its lock before it changed anything: the run that was stopped is still ending. Wait, a bounded time.
+                if (waited >= LockWaitLimit)
+                {
+                    Failure = new WizardFailure(null, PreviousRunStillGoingMessage + " " + Failure?.Message, Failure?.Fix, Failure?.Log ?? LogPath);
+                    Raise();
+                    return;
+                }
+                var cts = _runCts = new CancellationTokenSource(); // before the phase: a Stop seen on the phase must cancel this wait
+                Phase = InstallPhase.WaitingForPreviousRun;
+                ProgressLabel = WaitingForPreviousRunMessage;
+                Raise();
+                try
+                {
+                    await Task.Delay(LockWaitEvery, cts.Token).ConfigureAwait(true);
+                }
+                catch (OperationCanceledException)
+                {
+                    if (_disposed) return;
+                    Phase = InstallPhase.Stopped;
+                    ProgressLabel = "";
+                    Raise();
+                    return;
+                }
+                waited += LockWaitEvery;
+                if (_disposed) return;
+            }
+        }
+        finally
+        {
+            ReleaseAwake();
+        }
+    }
+
+    /// <summary>
+    /// A Stop or a timeout kills the Windows side only: the Linux install, apt or dpkg may keep running and holds the CLI's lock. Before
+    /// the next run the setup check runs (it needs no lock and shows that Ubuntu answers); false when Stop was pressed meanwhile.
+    /// </summary>
+    private async Task<bool> WaitForOldRunAsync()
+    {
+        var cts = _runCts = new CancellationTokenSource();
+        Phase = InstallPhase.WaitingForPreviousRun;
+        Failure = null;
+        ProgressLabel = WaitingForPreviousRunMessage;
+        Raise();
+        try
+        {
+            var report = await _setup.CheckAsync(Distro, cts.Token).ConfigureAwait(true);
+            if (!cts.IsCancellationRequested) Report = report;
+        }
+        catch (OperationCanceledException)
+        {
+            if (_disposed) return false;
+            Phase = InstallPhase.Stopped;
+            ProgressLabel = "";
+            Raise();
+            return false;
+        }
+        catch (Exception ex) when (ex is SourceProblemException or System.Text.Json.JsonException or TimeoutException or System.ComponentModel.Win32Exception or IOException)
+        {
+            // the attempt itself says what is wrong
+        }
+        return !_disposed;
+    }
+
+    /// <summary>One run of install or adopt, to its end (<see cref="Conclude"/>). <see cref="_lockHeld"/> says whether the CLI refused at a lock that is held.</summary>
+    private async Task AttemptInstallAsync(bool adopt)
+    {
         Phase = InstallPhase.Running;
         Failure = null;
-        StopRequested = false;
         ProgressLabel = "";
+        _lockHeld = false;
         _rows.Clear();
         SeedRows();
         Raise();
@@ -1013,6 +1167,7 @@ public sealed partial class WizardModel : IDisposable
         var secrets = new InstallSecrets(adopt ? null : _adminPassword, _linuxPassword, _rootPassword.IsEmpty ? null : _rootPassword);
         InstallRunResult? result = null;
         string? problem = null;
+        var timedOut = false;
         try
         {
             result = adopt
@@ -1023,13 +1178,21 @@ public sealed partial class WizardModel : IDisposable
         {
             // Stop was pressed
         }
-        catch (Exception ex) when (ex is SourceProblemException or TimeoutException or System.ComponentModel.Win32Exception or IOException or InvalidOperationException)
+        catch (TimeoutException ex)
+        {
+            timedOut = true;
+            problem = ex.Message;
+        }
+        catch (Exception ex) when (ex is SourceProblemException or System.ComponentModel.Win32Exception or IOException or InvalidOperationException)
         {
             // a blocked benchbar.exe ends the run with a line; the page never stays on Running
             problem = ex.Message;
         }
         if (_disposed) return;
         Conclude(result, problem, cts.IsCancellationRequested);
+        // a killed Windows process tree leaves the Linux side running: the next run meets its lock until it ends
+        if (cts.IsCancellationRequested || timedOut) _previousRunMayLinger = true;
+        else if (Phase == InstallPhase.Succeeded) _previousRunMayLinger = false;
     }
 
     private void SeedRows()
@@ -1116,6 +1279,7 @@ public sealed partial class WizardModel : IDisposable
             var failedStep = _rows.LastOrDefault(r => r.Status == InstallStepStatus.Failed);
             var message = problem ?? done?.Error ?? failedStep?.Message ?? result?.Error ?? "The install did not finish.";
             Failure = new WizardFailure(failedStep?.Name, message, done?.Fix, done?.Log ?? LogPath);
+            _lockHeld = LockText.IsHeld(problem, done?.Error, done?.Fix, failedStep?.Message, result?.Error);
         }
         Raise();
     }
@@ -1190,6 +1354,12 @@ public sealed partial class WizardModel : IDisposable
         _lifetime.Cancel();
         _checkCts?.Cancel();
         _runCts?.Cancel();
+        // the window closed: the PC may sleep again now, whatever is still winding down
+        if (_awakeHolds > 0)
+        {
+            _awakeHolds = 0;
+            SafeAwake(false);
+        }
         _linuxPassword.Dispose();
         _confirmPassword.Dispose();
         _adminPassword.Dispose();
