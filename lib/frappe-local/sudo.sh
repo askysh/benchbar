@@ -300,6 +300,13 @@ fl_sudo_env_begin() {
 # before anything changes, so a wrong one fails up front with its id
 fl_sudo_env_preflight() {
   local code=0
+  # benchbar's first image saw a line break in BENCHBAR_SUDO_PASSWORD (it keeps
+  # only the flag): the pipe carries one line, so the password would be cut
+  if [[ "${FL_SUDO_PW_NEWLINE:-}" == "1" ]]; then
+    FL_ERROR_ID="password_has_newline"
+    fl_die "BENCHBAR_SUDO_PASSWORD contains a line break, and the sudo password is passed on one line only. Nothing was changed." \
+      "Run the command again with the sudo password of $(id -un 2>/dev/null || printf 'this user'), which has no line break."
+  fi
   fl_sudo_env_has_password || return 0
   [[ "${FL_DRY_RUN:-0}" != "1" ]] || return 0
   fl__sudo_env_wrap

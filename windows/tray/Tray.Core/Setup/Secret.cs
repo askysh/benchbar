@@ -99,19 +99,38 @@ public sealed class SecretEnvironment
     public override string ToString() => "environment(" + string.Join(", ", Names.Order()) + ")";
 }
 
-/// <summary>Replaces every occurrence of a password in a line a child printed, in case a tool echoes its input.</summary>
+/// <summary>
+/// Replaces every occurrence of a password in a line a child printed, in case a tool echoes its input. A password is matched as it
+/// is and in the two JSON string forms a CLI writes it in (quotes, backslashes and control characters escaped; with or without the
+/// non ASCII characters written as u escapes), because the CLI prints its documents as JSON. The forms ask for a password of at least
+/// <see cref="WizardModel.MinPasswordLength"/> characters, so a one character password cannot be in the way of every letter of a line;
+/// one that is shorter anyway (an existing MariaDB or Linux password typed by hand) is still hidden: a mangled line is better than a leak.
+/// </summary>
 public sealed class Redactor(IEnumerable<Secret> secrets)
 {
     private readonly List<Secret> _secrets = secrets.Where(s => !s.IsEmpty).ToList();
 
     public static Redactor None { get; } = new([]);
 
+    /// <summary>The forms of a text to look for, longest first: the text, then its JSON escaped forms when they differ.</summary>
+    internal static IReadOnlyList<string> Forms(string text)
+    {
+        var forms = new List<string> { text };
+        foreach (var encoder in new[] { System.Text.Encodings.Web.JavaScriptEncoder.Default, System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping })
+        {
+            var escaped = System.Text.Json.JsonEncodedText.Encode(text, encoder).ToString();
+            if (escaped.Length > 0 && !forms.Contains(escaped, StringComparer.Ordinal)) forms.Add(escaped);
+        }
+        return forms.OrderByDescending(f => f.Length).ToList();
+    }
+
     public string Clean(string line)
     {
         foreach (var secret in _secrets)
         {
             var text = secret.Reveal();
-            if (text.Length >= 3) line = line.Replace(text, "***", StringComparison.Ordinal);
+            if (text.Length == 0) continue;
+            foreach (var form in Forms(text)) line = line.Replace(form, "***", StringComparison.Ordinal);
         }
         return line;
     }

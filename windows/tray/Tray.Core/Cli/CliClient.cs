@@ -151,9 +151,9 @@ public sealed class CliClient : ICliClient
             // The secrets are placed in the child's environment here, at the last moment, and the dictionary is not kept.
             return await _stream.RunAsync(shim, args, env?.Materialize(), onLine, timeout, ct).ConfigureAwait(false);
         }
-        catch (Win32Exception)
+        catch (Win32Exception ex)
         {
-            throw new CliProblemException(ShimBenchSource.BlockedMessage);
+            throw new CliProblemException(ShimStart.Describe(ex, shim));
         }
     }
 }

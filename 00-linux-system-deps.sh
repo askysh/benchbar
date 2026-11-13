@@ -107,6 +107,7 @@ export FL_DRY_RUN
 # the root password is read here (fl_mariadb_root_setup) and must not reach
 # the uv and fnm installers, npm or apt
 export -n MARIADB_ROOT_PASSWORD ADMIN_PASSWORD
+fl_secrets_single_line MARIADB_ROOT_PASSWORD
 
 if [[ "$LIST_PROFILES" == "1" ]]; then
   fl_list_profiles
@@ -140,7 +141,7 @@ fl_install_script() {
   local label="$1" url="$2" interp="$3" tmp code=0
   shift 3
   tmp="$(mktemp "${TMPDIR:-/tmp}/benchbar-installer.XXXXXX")"
-  if fl_run_long "download the ${label} installer" curl -fsSL -o "$tmp" "$url"; then
+  if fl_run_long "download the ${label} installer" curl -fsSL --connect-timeout 15 --retry 3 --retry-delay 2 -o "$tmp" "$url"; then
     fl_run_long "install ${label}" env UV_NO_MODIFY_PATH=1 INSTALLER_NO_MODIFY_PATH=1 "$interp" "$tmp" "$@" || code=$?
   else
     code=1
@@ -153,16 +154,16 @@ fl_section "SYSTEM"
 fl_preflight_basics "$OFFLINE" "$FL_MIN_DISK_GB" "$HOME"
 if [[ "$FL_IS_WSL" == "1" ]]; then
   fl_ok "$(fl_linux_os_summary) detected, running in WSL (${FL_ARCH})"
-  fl_info "WSL: open the site in your Windows browser; localhost ports are shared with Windows."
+  fl_info "WSL: open the site in a Windows browser (for example http://$(fl_default_site):8000). Browsers and curl.exe resolve *.localhost names by themselves; PowerShell and ping do not, so use localhost or 127.0.0.1 there."
 else
   fl_ok "$(fl_linux_os_summary) detected (${FL_ARCH})"
 fi
-if [[ "$FL_ARCH" != "x86_64" ]]; then
-  fl_warn "Architecture is ${FL_ARCH}; the wkhtmltopdf package is x86_64 only, so PDF printing is skipped."
+if [[ -z "$(fl_wkhtmltopdf_deb_arch)" ]]; then
+  fl_warn "PDF printing is not set up on ${FL_ARCH}: the wkhtmltopdf package is built for x86_64 and arm64 only. Everything else works."
+  fl_info "fix: print PDFs from a machine that has the package, or install a patched wkhtmltopdf by hand"
 fi
 fl_ok "apt-get at $(command -v apt-get)"
-fl_linux_systemd_booted || fl_die "systemd is not running, and MariaDB and Redis are systemd services here." \
-  "In WSL add '[boot]' and 'systemd=true' to /etc/wsl.conf, then run 'wsl --shutdown' from Windows."
+fl_linux_systemd_booted || { FL_ERROR_ID="systemd_not_running"; fl_die "systemd is not running, and MariaDB and Redis are systemd services here." "$(fl_linux_systemd_fix)"; }
 fl_ok "systemd is running"
 command -v sudo >/dev/null 2>&1 || fl_warn "sudo was not found; apt and MariaDB need it"
 
@@ -188,9 +189,8 @@ fi
 if [[ "$FL_DRY_RUN" == "1" ]]; then
   fl_section "DRY RUN"
   if [[ -n "$MISSING_PKGS" ]]; then
-    fl_run sudo apt-get update
-    # shellcheck disable=SC2086  # the package names are words
-    fl_run sudo apt-get install -y $MISSING_PKGS
+    fl_info "dry-run: sudo apt-get update"
+    fl_info "dry-run: sudo apt-get install -y ${MISSING_PKGS}"
   else
     fl_info "dry-run: every apt package is installed"
   fi
@@ -216,9 +216,9 @@ if [[ -z "$MISSING_PKGS" ]]; then
   fl_ok "unchanged: all apt packages are installed ($FL_LINUX_APT_PACKAGES)"
 else
   fl_info "missing: ${MISSING_PKGS}"
-  fl_run_long "apt-get update" sudo apt-get update || fl_warn "apt-get update failed; trying the install with the indexes there are"
+  fl_apt_run_long "apt-get update" update || fl_warn "apt-get update failed; trying the install with the indexes there are"
   # shellcheck disable=SC2086  # the package names are words
-  fl_run_long "apt-get install ${MISSING_PKGS}" sudo apt-get install -y $MISSING_PKGS \
+  fl_apt_run_long "apt-get install ${MISSING_PKGS}" install -y $MISSING_PKGS \
     || fl_die "apt-get install failed." "Run it by hand to see why: sudo apt-get install -y ${MISSING_PKGS}"
   STILL_MISSING="$(fl_linux_missing_packages)"
   [[ -z "$STILL_MISSING" ]] || fl_die "apt packages still missing after the install: ${STILL_MISSING}"

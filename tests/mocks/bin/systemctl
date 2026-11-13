@@ -17,6 +17,11 @@ for a in "$@"; do
   esac
 done
 quiet="${quiet:-0}"
+# $MOCK_STATE/user_manager_down: no login session, so no user bus (systemctl --user fails)
+if [[ "$scope" == user && -f "${MOCK_STATE:-/nonexistent}/user_manager_down" ]]; then
+  echo "Failed to connect to bus: No medium found" >&2
+  exit 1
+fi
 udir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 if [[ "$scope" == user ]]; then sdir="${MOCK_STATE:?}/units"; else sdir="${MOCK_STATE:?}/units/system"; fi
 mkdir -p "$sdir"

@@ -173,10 +173,10 @@ public class WizardModelTests
         Assert.Equal("akash-mishra", model.UserName);
 
         Assert.False(model.CanCreateUser);
-        model.SetPassword(Pass("one"));
-        model.SetConfirm(Pass("two"));
+        model.SetPassword(Pass("one-one-one"));
+        model.SetConfirm(Pass("two-two-two"));
         Assert.Equal("The two passwords are not the same.", model.PasswordProblem);
-        model.SetConfirm(Pass("one"));
+        model.SetConfirm(Pass("one-one-one"));
         model.SetUserName("Bad Name");
         Assert.NotNull(model.UserNameProblem);
         model.SetUserName("root");

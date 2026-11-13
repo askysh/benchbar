@@ -200,6 +200,14 @@ fl_port_owner_cwd() {
 # MariaDB and Redis cope with an existing server (see the safe mode note).
 fl_install_port_blockers() { return 0; }
 
+# The Linux layer (preflight-linux.sh) answers these; on macOS there is nothing
+# to look at before the plan: no Windows side, no apt, no blockers but ports.
+fl_port_outside_holder() { return 1; }
+fl_install_preflight_load() { return 0; }
+fl_install_env_blockers() { return 0; }
+fl_install_env_warnings() { return 0; }
+fl_bench_windows_fs_blocker() { return 0; }
+
 fl_mariadb_safe_mode_note() {
   fl_warn "Existing MariaDB/MySQL may already be using port 3306."
   fl_info "Safe path: keep the existing database untouched, verify the root password, and let the bench script reuse it."

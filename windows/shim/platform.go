@@ -44,6 +44,7 @@ func newSystem() *System {
 	sys.Distros, sys.Paths, sys.Broadcast = osServices()
 	sys.Procs = procControl{}
 	sys.Locks = mutexLocks{}
+	sys.StartupApproved = startupApproved
 	sys.Host, sys.Elevate = osHost()
 	sys.ElevatedWSLPath = systemWSLPath
 	sys.StdinIsTerminal = isTerminal(os.Stdin)

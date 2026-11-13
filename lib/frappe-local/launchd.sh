@@ -130,6 +130,11 @@ fl_agent_list_hint() { printf 'ls ~/Library/LaunchAgents/com.benchbar.*'; }
 # manager's business on Linux (systemd.sh); launchd has RunAtLoad.
 fl_linger_ensure() { return 0; }
 
+# launchd always has a user manager to ask; systemd.sh tells the two apart
+fl_user_manager_down() { return 1; }
+fl_user_manager_msg() { :; }
+fl_user_manager_fix() { :; }
+
 # fl_render_agent RUN_AT_LOAD: FL_R_PLIST gets the agent's plist
 fl_render_agent() {
   FL_R_PLIST="$(fl_template_render launchagent.plist \

@@ -187,7 +187,7 @@ internal sealed class ProfilesView : UserControl
             Render();
             return;
         }
-        RevealWindowsPath(WslPaths.ToWindows(distro, linuxPath));
+        RevealWindowsPath(WslPaths.ToWindows(distro, linuxPath, WslPaths.PathExists));
     }
 
     /// <summary>The export result is the Windows path the person chose; an import or subscription result is a Linux path.</summary>

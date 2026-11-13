@@ -16,7 +16,6 @@ internal sealed class FlyoutWindow : Window
 {
     public const double FlyoutWidth = 340;
     private const double FlyoutMaxHeight = 460;
-    private const double EdgeMargin = 12;
 
     private readonly TrayController _controller;
     private readonly HarnessLink? _link;
@@ -93,7 +92,7 @@ internal sealed class FlyoutWindow : Window
         }
     }
 
-    /// <summary>Shows the flyout above the notification area of the taskbar's monitor, in the theme Appearance resolves to.</summary>
+    /// <summary>Shows the flyout above the notification area of the monitor that was clicked, in the theme Appearance resolves to.</summary>
     public void ShowAtTray()
     {
         if (IsVisible)
@@ -102,11 +101,13 @@ internal sealed class FlyoutWindow : Window
             return;
         }
 
-        ThemeMode = ThemeResolver.Resolve(_controller.Appearance).FlyoutLight ? ThemeMode.Light : ThemeMode.Dark;
+        var light = ThemeResolver.Resolve(_controller.Appearance).FlyoutLight;
+        Ui.LightTheme = light;
+        ThemeMode = light ? ThemeMode.Light : ThemeMode.Dark;
         View.ClearMessage();
 
-        var taskbar = NativeMethods.FindWindow("Shell_TrayWnd", null);
-        var monitor = NativeMethods.MonitorFromWindow(taskbar, NativeMethods.MonitorDefaultToPrimary);
+        // the monitor of the click, not always the primary one: the icon can be clicked on a secondary taskbar
+        var monitor = FlyoutPlacement.MonitorOfClick();
         var info = new NativeMethods.MonitorInfo { Size = Marshal.SizeOf<NativeMethods.MonitorInfo>() };
         NativeMethods.GetMonitorInfo(monitor, ref info);
         uint dpi = 96;
@@ -144,13 +145,7 @@ internal sealed class FlyoutWindow : Window
     }
 
     /// <summary>The corner nearest the notification area, for a window of this physical size.</summary>
-    private (int X, int Y) Anchor(int widthPx, int heightPx)
-    {
-        var margin = (int)Math.Round(EdgeMargin * _dpi / 96.0);
-        if (_work.Top > _mon.Top) return (_work.Right - widthPx - margin, _work.Top + margin);        // taskbar on top
-        if (_work.Left > _mon.Left) return (_work.Left + margin, _work.Bottom - heightPx - margin);   // taskbar on the left
-        return (_work.Right - widthPx - margin, _work.Bottom - heightPx - margin);                    // bottom or right
-    }
+    private (int X, int Y) Anchor(int widthPx, int heightPx) => FlyoutPlacement.Anchor(_work, _mon, _dpi, widthPx, heightPx);
 
     /// <summary>The content grew or shrank after the first placement (benches arrived): keep the anchor corner.</summary>
     private void OnSizeChanged(object sender, SizeChangedEventArgs e)

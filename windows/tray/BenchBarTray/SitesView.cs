@@ -131,7 +131,7 @@ internal sealed class SitesView : UserControl, IBenchPageView
         }
         text.Children.Add(nameLine);
         var detail = Ui.Text(row.NeedsSetUp ? "Windows cannot find this name" : row.Url ?? "no address", 12, opacity: row.NeedsSetUp ? 1 : 0.7);
-        if (row.NeedsSetUp) detail.Foreground = new SolidColorBrush(Color.FromRgb(0xD9, 0x8E, 0x04));
+        if (row.NeedsSetUp) detail.Foreground = Ui.CautionTextBrush;
         text.Children.Add(detail);
         grid.Children.Add(text);
 
@@ -463,7 +463,7 @@ internal sealed class SitesView : UserControl, IBenchPageView
         }
         try
         {
-            FolderOpener(TextFormats.WslToWindows(distro, linuxFolder));
+            FolderOpener(TextFormats.WslToWindowsExisting(distro, linuxFolder));
         }
         catch (Exception ex)
         {

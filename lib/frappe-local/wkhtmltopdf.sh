@@ -54,13 +54,24 @@ fl_wkhtmltopdf_shadow() {
   printf '%s' "$on_path"
 }
 
+# fl_wkhtmltopdf_deb_arch: the package architecture of the official .deb for
+# this machine (amd64 or arm64), nothing for any other. Empty on macOS.
+fl_wkhtmltopdf_deb_arch() {
+  fl_is_linux || return 0
+  case "${FL_ARCH:-$(uname -m)}" in
+    x86_64|amd64) printf 'amd64' ;;
+    aarch64|arm64) printf 'arm64' ;;
+  esac
+}
+
 fl_wkhtmltopdf_pin() {
   # sets FL_WKHTML_VERSION, FL_WKHTML_FILE, FL_WKHTML_URL, FL_WKHTML_SHA256
   local file
   file="$(fl_config_file wkhtmltopdf.tsv)"
   [[ -f "$file" ]] || { fl_fail "missing ${file}"; return 1; }
-  # the row of this platform (column 7; a row without one is the macOS package)
-  IFS=$'\t' read -r FL_WKHTML_VERSION FL_WKHTML_FILE FL_WKHTML_URL FL_WKHTML_SHA256 _arch _note _platform < <(awk -F '\t' -v p="${FL_PLATFORM:-macos}" 'NR > 1 && ($7 == p || ($7 == "" && p == "macos")) {print; exit}' "$file")
+  # the row of this platform (column 7; a row without one is the macOS package);
+  # on Linux also the row of this machine's package architecture (column 5)
+  IFS=$'\t' read -r FL_WKHTML_VERSION FL_WKHTML_FILE FL_WKHTML_URL FL_WKHTML_SHA256 _arch _note _platform < <(awk -F '\t' -v p="${FL_PLATFORM:-macos}" -v a="$(fl_wkhtmltopdf_deb_arch)" 'NR > 1 && ($7 == p || ($7 == "" && p == "macos")) && (p != "linux" || a == "" || $5 == a) {print; exit}' "$file")
   [[ -n "$FL_WKHTML_SHA256" ]] || { fl_fail "no sha256 pinned in ${file}"; return 1; }
 }
 
@@ -301,8 +312,9 @@ fl_wkhtmltopdf_ensure() {
     fl_warn "wkhtmltopdf is not installed (Frappe needs it for PDF printing)"
   fi
   fl_wkhtmltopdf_pin || return 1
-  if fl_is_linux && [[ "${FL_ARCH:-$(uname -m)}" != "x86_64" ]]; then
-    fl_warn "skipping wkhtmltopdf: the official package is built for x86_64 only (this machine is ${FL_ARCH:-$(uname -m)}). PDFs will not work; everything else does."
+  if fl_is_linux && [[ -z "$(fl_wkhtmltopdf_deb_arch)" ]]; then
+    fl_warn "PDF printing is not set up on ${FL_ARCH:-$(uname -m)}: the official wkhtmltopdf package is built for x86_64 and arm64 only. Everything else works."
+    fl_fix "print PDFs from a machine that has the package, or install a patched wkhtmltopdf by hand"
     return 2
   fi
   if ! fl_is_linux && [[ "${FL_ARCH:-$(uname -m)}" == "arm64" ]] && ! fl_rosetta_ensure; then

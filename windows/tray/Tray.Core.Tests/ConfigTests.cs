@@ -24,6 +24,34 @@ public class ConfigTests : IDisposable
 
     private JsonObject Read() => (JsonObject)JsonNode.Parse(File.ReadAllText(ConfigPath))!;
 
+    private sealed class Held(List<string> log) : IDisposable
+    {
+        public void Dispose() => log.Add("released");
+    }
+
+    [Fact]
+    public void SaveHoldsTheConfigLockFromTheReadUntilTheWriteEnds()
+    {
+        Write("""{"distro":"Ubuntu"}""");
+        var log = new List<string>();
+        var config = TrayConfig.Load(ConfigPath);
+        config.AcquireLock = () => { log.Add("taken"); return new Held(log); };
+        config.Notifications = false;
+        config.Save();
+        Assert.Equal(["taken", "released"], log);
+        Assert.False(Read()["tray"]!["notifications"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public void SaveGoesOnWithoutTheLockWhenNoneCouldBeTaken()
+    {
+        var config = TrayConfig.Load(ConfigPath);
+        config.AcquireLock = () => null;
+        config.Save();
+        Assert.True(File.Exists(ConfigPath));
+        Assert.Equal(@"Local\BenchBarConfig", TrayConfig.LockName);
+    }
+
     [Fact]
     public void AMissingFileAndFolderGiveTheDefaults()
     {

@@ -23,18 +23,29 @@ public static class SetupIds
     public const string WslConfig = "wslconfig";
     public const string ShimPath = "shim_path";
 
+    /// <summary>The distro is not Ubuntu 24.04 (a blocking step the shim adds; this tray treats any id it does not know the same way).</summary>
+    public const string DistroOs = "distro_os";
+
     public const string ActionReboot = "reboot";
     public const string ActionWslEnable = "wsl_enable";
     public const string ActionDistroUser = "distro_user";
     public const string ActionSystemd = "systemd";
+    public const string ActionCliInstall = "cli_install";
 
     /// <summary>The <c>error_id</c> of a done line: the action must restart the distro and the distro runs. Ask, then run again with <c>--force</c>.</summary>
     public const string ErrorDistroRunning = "distro_running";
 }
 
 /// <summary>One row of the Check Your PC page.</summary>
-public sealed record SetupStepInfo(string Id, SetupStatus Status, string Title, string Detail, string? Action, bool NeedsAdmin, bool Blocking = true)
+public sealed record SetupStepInfo(string Id, SetupStatus Status, string Title, string Detail, string? Action, bool NeedsAdmin, bool Blocking = true, string? Fix = null, string? CliVersion = null)
 {
+    /// <summary>
+    /// The <c>cli</c> step is open because the CLI in the distro is older than benchbar.exe: the same <c>cli_install</c> action, but an
+    /// update. The shim sends <c>cli_version</c> (the installed release) then; an older shim says "does not match" in the detail.
+    /// </summary>
+    public bool IsCliUpdate => Id == SetupIds.Cli && Status == SetupStatus.Missing
+        && (CliVersion is { Length: > 0 } || Detail.Contains("does not match", StringComparison.OrdinalIgnoreCase));
+
     /// <summary>The steps that are advice only: they never block the PC being ready, and an older shim does not say so.</summary>
     public static bool IsAdvisoryId(string id) => id is SetupIds.Linger or SetupIds.Keepalive or SetupIds.WslConfig or SetupIds.ShimPath;
 
@@ -55,6 +66,7 @@ public sealed record SetupStepInfo(string Id, SetupStatus Status, string Title, 
     {
         get
         {
+            if (Fix is { Length: > 0 } fix && FixCommand.IsCommand(fix)) return fix.Trim();
             var cut = Detail.LastIndexOf(": ", StringComparison.Ordinal);
             if (cut < 0) return Detail;
             var tail = Detail[(cut + 2)..].Trim();
@@ -145,7 +157,9 @@ public static class SetupJson
                     JsonRead.Str(item, "detail") ?? "",
                     JsonRead.Str(item, "action") is { Length: > 0 } a ? a : null,
                     JsonRead.Bool(item, "needs_admin"),
-                    item["blocking"] is JsonValue b && b.TryGetValue<bool>(out var blocking) ? blocking : !SetupStepInfo.IsAdvisoryId(id)));
+                    item["blocking"] is JsonValue b && b.TryGetValue<bool>(out var blocking) ? blocking : !SetupStepInfo.IsAdvisoryId(id),
+                    JsonRead.Str(item, "fix") is { Length: > 0 } fix ? fix : JsonRead.Str(item, "fix_command") is { Length: > 0 } fixCommand ? fixCommand : null,
+                    JsonRead.Str(item, "cli_version") is { Length: > 0 } cliVersion ? cliVersion : null));
             }
         }
         return new SetupReport(JsonRead.Str(root, "distro"), JsonRead.Bool(root, "ready"), JsonRead.Bool(root, "reboot_pending"), steps);

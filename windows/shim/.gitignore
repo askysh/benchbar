@@ -1,2 +1,4 @@
 # Local builds of the shim; CI builds the released ones.
 *.exe
+# The version resource CI generates before go build (goversioninfo); a plain go build works without it.
+*.syso

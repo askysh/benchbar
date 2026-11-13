@@ -121,6 +121,18 @@ func (winServices) EnvironmentChanged() error {
 	return nil
 }
 
+const startupApprovedKey = `Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\StartupFolder`
+
+func startupApproved(name string) ([]byte, error) {
+	k, err := registry.OpenKey(registry.CURRENT_USER, startupApprovedKey, registry.QUERY_VALUE)
+	if err != nil {
+		return nil, err
+	}
+	defer k.Close()
+	v, _, err := k.GetBinaryValue(name)
+	return v, err
+}
+
 type memoryStatusEx struct {
 	Length               uint32
 	MemoryLoad           uint32

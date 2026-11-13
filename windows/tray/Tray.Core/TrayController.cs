@@ -148,13 +148,88 @@ public sealed class TrayController : IDisposable
 
     // --- the flyout ---
 
+    /// <summary>How long every window of ours must be out of use (minimized, or not the active program) before polling backs off.</summary>
+    public TimeSpan ViewerIdleAfter { get; set; } = TimeSpan.FromSeconds(30);
+
+    private int _viewers;
+    private bool _viewersActive = true;
+    private ITimer? _idleTimer;
+
+    /// <summary>How many windows (the flyout, the BenchBar window, Settings, About) are open now.</summary>
+    public int Viewers
+    {
+        get { lock (_powerGate) return _viewers; }
+    }
+
+    /// <summary>A window opened. Polling runs at the window rate while at least one is open; each open window counts.</summary>
     public void FlyoutOpened()
     {
-        _poller.SetFlyoutOpen(true);
+        lock (_powerGate)
+        {
+            _viewers++;
+            if (_viewers == 1)
+            {
+                _viewersActive = true;
+                _poller.SetViewerIdle(false);
+                _poller.SetFlyoutOpen(true);
+            }
+        }
         _poller.Kick();
     }
 
-    public void FlyoutClosed() => _poller.SetFlyoutOpen(false);
+    /// <summary>A window closed. Only the last one takes polling back to the rate of no window.</summary>
+    public void FlyoutClosed()
+    {
+        lock (_powerGate)
+        {
+            if (_viewers == 0) return;
+            if (--_viewers > 0) return;
+            StopIdleTimer();
+            _viewersActive = true;
+            _poller.SetViewerIdle(false);
+            _poller.SetFlyoutOpen(false);
+        }
+    }
+
+    /// <summary>
+    /// Whether one of our windows is in use now: the program is the active one and no window is minimized away. When none has been for
+    /// <see cref="ViewerIdleAfter"/>, polling backs off to about 30 s; coming back polls at once at the window rate again.
+    /// </summary>
+    public void ViewersActive(bool active)
+    {
+        var kick = false;
+        lock (_powerGate)
+        {
+            if (_disposed || active == _viewersActive) return;
+            _viewersActive = active;
+            if (_viewers == 0) return;
+            if (active)
+            {
+                StopIdleTimer();
+                _poller.SetViewerIdle(false);
+                kick = true;
+            }
+            else
+            {
+                StopIdleTimer();
+                _idleTimer = _time.CreateTimer(_ =>
+                {
+                    lock (_powerGate)
+                    {
+                        if (_disposed || _viewersActive || _viewers == 0) return;
+                        _poller.SetViewerIdle(true);
+                    }
+                }, null, ViewerIdleAfter, Timeout.InfiniteTimeSpan);
+            }
+        }
+        if (kick) _poller.Kick();
+    }
+
+    private void StopIdleTimer()
+    {
+        _idleTimer?.Dispose();
+        _idleTimer = null;
+    }
 
     // --- settings ---
 
@@ -407,6 +482,7 @@ public sealed class TrayController : IDisposable
             SystemEvents.SessionSwitch -= OnSessionSwitch;
             SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
         }
+        lock (_powerGate) StopIdleTimer();
         _cts.Cancel();
         _poller.Dispose();
         _sequencer.Pause();

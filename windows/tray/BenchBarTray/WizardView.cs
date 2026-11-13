@@ -112,6 +112,13 @@ internal sealed partial class WizardView : UserControl
 
         _model.Changed += OnChanged;
         Unloaded += (_, _) => _model.Changed -= OnChanged;
+        // a window that is shown again (the wizard moved to another host, a tab switch) subscribes again, and catches up with what changed
+        Loaded += (_, _) =>
+        {
+            _model.Changed -= OnChanged;
+            _model.Changed += OnChanged;
+            Update();
+        };
         Rebuild();
     }
 

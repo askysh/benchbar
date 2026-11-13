@@ -21,7 +21,8 @@ public class ShimSourceTests
     {
         var (source, runner) = Make(shim: null);
         var ex = await Assert.ThrowsAsync<SetupProblemException>(() => source.ListAsync(Ct));
-        Assert.Equal("benchbar.exe was not found. Put it next to BenchBarTray.exe or on PATH (benchbar.exe path install).", ex.Message);
+        Assert.Equal(ShimBenchSource.NotFoundMessage, ex.Message);
+        Assert.Contains("Protection history", ex.Message);
         await Assert.ThrowsAsync<SetupProblemException>(() => source.RunAsync(["up"], Ct));
         await Assert.ThrowsAsync<SetupProblemException>(() => source.DoctorAsync("/b", Ct));
         Assert.False(source.StartDistro());
@@ -95,7 +96,7 @@ public class ShimSourceTests
     public async Task AShimThatCannotStartIsACliProblem()
     {
         var (source, runner) = Make();
-        runner.Throws = new Win32Exception("Access is denied");
+        runner.Throws = new Win32Exception(22, "The device does not recognize the command");
         var ex = await Assert.ThrowsAsync<CliProblemException>(() => source.ListAsync(Ct));
         Assert.Contains("could not be started", ex.Message);
         Assert.False(source.StartDistro());

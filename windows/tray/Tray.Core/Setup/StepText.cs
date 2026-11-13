@@ -11,6 +11,10 @@ public static partial class StepText
     [GeneratedRegex(@"^keepalive keeps (?<have>\S+) alive, but BenchBar uses (?<want>\S+)$", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
     private static partial Regex OtherDistroPattern();
 
+    /// <summary>The keep awake row says it serves another distro than the one BenchBar uses: its button moves it.</summary>
+    public static bool KeepaliveServesOtherDistro(SetupStepInfo step) =>
+        step.Id == SetupIds.Keepalive && OtherDistroPattern().IsMatch(step.Detail.Trim());
+
     /// <summary>"waits for wsl_feature" becomes "waits for Turn on WSL" (the step's title); the keepalive line about another distro says it is advice.</summary>
     public static string Detail(SetupStepInfo step, IReadOnlyList<SetupStepInfo> all)
     {
@@ -18,7 +22,7 @@ public static partial class StepText
         if (step.Id == SetupIds.Keepalive && OtherDistroPattern().Match(detail.Trim()) is { Success: true } m)
         {
             return $"The keep awake task serves {m.Groups["have"].Value}. "
-                + $"Set Up moves it to {m.Groups["want"].Value}, and {m.Groups["have"].Value} can then go idle.";
+                + $"Move Keep Awake makes it serve {m.Groups["want"].Value} instead. {m.Groups["have"].Value} is then no longer kept awake: it can go idle and stop, and so can any benches in it.";
         }
         if (step.Waits)
         {

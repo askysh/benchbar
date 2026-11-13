@@ -16,7 +16,21 @@
 # command keeps the stdin that "-S" did not read.
 # shellcheck source=tests/mocks/bin/_mocklib.sh
 . "${0%/*}/_mocklib.sh"
-[[ -n "${MOCK_NO_LOG:-}" ]] || mock_log "$@"
+# fl_apt_get runs "sudo env DEBIAN_FRONTEND=... apt-get -o OPT ...": logged as
+# "sudo apt-get ..." (the apt-get mock keeps the whole call in apt_raw)
+log_args=("$@")
+if [[ "${1:-}" == env && "${2:-}" == DEBIAN_FRONTEND=* ]]; then
+  log_args=(); seen=0; skip=0
+  for a in "$@"; do
+    if [[ "$seen" == "0" ]]; then [[ "$a" == apt-get ]] && { seen=1; log_args+=("$a"); }; continue; fi
+    if [[ "$skip" == "1" ]]; then skip=0; continue; fi
+    [[ "$a" == -o ]] && { skip=1; continue; }
+    log_args+=("$a")
+  done
+fi
+[[ -n "${MOCK_NO_LOG:-}" ]] || mock_log "${log_args[@]}"
+# the whole wrapper call, for the test of its options and the proxy hand-over
+[[ "${1:-}" == env && "${2:-}" == DEBIAN_FRONTEND=* && -d "${MOCK_STATE:-/nonexistent}" ]] && printf '%s\n' "$*" >>"$MOCK_STATE/apt_sudo_raw"
 state="${MOCK_STATE:-/nonexistent}"
 cred="$state/sudo_cred"
 

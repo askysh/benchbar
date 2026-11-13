@@ -53,7 +53,8 @@ public class WizardReviewFixTests
 
         Assert.Equal(InstallPhase.Failed, model.Phase);
         Assert.Equal(ShimBenchSource.BlockedMessage, model.Failure!.Message);
-        Assert.Equal("Windows blocked benchbar.exe. If SmartScreen or your antivirus asked, allow it, then try again.", model.Failure.Message);
+        Assert.StartsWith("Windows blocked benchbar.exe. If SmartScreen or your antivirus asked, allow it, then try again.", model.Failure.Message);
+        Assert.Contains("Smart App Control", model.Failure.Message);
     }
 
     [Fact]

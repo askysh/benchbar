@@ -115,13 +115,44 @@ fl_launchd_path_value() {
 
 # ------------------------------------------------------------- state
 
+# 1 when the last systemctl --user read found no user manager to ask (no login
+# session, no bus), which is not the same as a unit that is not loaded. A
+# reader sets it; fl_user_manager_down, _msg and _fix are what callers use.
+FL_UMGR_DOWN=0
+fl_user_manager_down() { [[ "$FL_UMGR_DOWN" == "1" ]]; }
+# true when the user manager answers (it does for a unit that is not there)
+fl_user_manager_reachable() { systemctl --user show -p Version >/dev/null 2>&1; }
+# the login name: id -un (never $USER, which a wsl.exe start may not set);
+# FL_OS_USER is the tests' (the suite may run as root)
+fl__linux_user() { printf '%s' "${FL_OS_USER:-$(id -un 2>/dev/null || true)}"; }
+fl_user_manager_msg() {
+  printf 'the systemd user manager is not reachable for %s (no login session and no user bus), so the bench unit cannot be read or started' "$(fl__linux_user)"
+}
+fl_user_manager_fix() {
+  local user
+  user="$(fl__linux_user)"
+  [[ -n "$user" ]] || user=USER
+  if fl_is_wsl; then
+    printf 'sudo loginctl enable-linger %s, or restart the distro from Windows: wsl.exe --terminate %s' "$user" "${WSL_DISTRO_NAME:-DISTRO}"
+  else
+    printf 'sudo loginctl enable-linger %s, then log in again' "$user"
+  fi
+}
+
 # fl_unit_show UNIT: sets U_LOAD, U_ACTIVE, U_PID and U_EXIT from one
 # "systemctl show" (empty when systemd does not answer)
 U_LOAD=""; U_ACTIVE=""; U_PID=""; U_EXIT=""
 fl_unit_show() {
   local out line
   U_LOAD=""; U_ACTIVE=""; U_PID=""; U_EXIT=""
-  out="$(systemctl --user show -p LoadState,ActiveState,MainPID,ExecMainStatus "$1" 2>/dev/null)" || return 0
+  # a unit that is not loaded still answers (LoadState=not-found); no answer
+  # at all means there is no user manager to ask
+  if out="$(systemctl --user show -p LoadState,ActiveState,MainPID,ExecMainStatus "$1" 2>/dev/null)"; then
+    FL_UMGR_DOWN=0
+  else
+    FL_UMGR_DOWN=1
+    return 0
+  fi
   while IFS= read -r line; do
     case "$line" in
       LoadState=*) U_LOAD="${line#LoadState=}" ;;
@@ -147,8 +178,17 @@ fl_unit_state_word() {
 
 fl_agent_target() { fl_unit_name "$(fl_agent_label)"; }
 
+# false for a unit that is not loaded and for no user manager; the second one
+# sets FL_UMGR_DOWN, so a caller can say which it was (fl_user_manager_down)
 fl_agent_loaded() {
-  [[ "$(systemctl --user show -p LoadState --value "$(fl_unit_name "${1:-$(fl_agent_target)}")" 2>/dev/null)" == "loaded" ]]
+  local out
+  if out="$(systemctl --user show -p LoadState --value "$(fl_unit_name "${1:-$(fl_agent_target)}")" 2>/dev/null)"; then
+    FL_UMGR_DOWN=0
+  else
+    FL_UMGR_DOWN=1
+    return 1
+  fi
+  [[ "$out" == "loaded" ]]
 }
 
 # fl_agent_listed TARGET: systemd knows the unit
@@ -206,7 +246,15 @@ fl_agent_bootstrap() {
     return 0
   fi
   fl_log "systemctl --user daemon-reload"
-  systemctl --user daemon-reload 2>/dev/null || { fl_log "systemctl --user daemon-reload failed"; return 1; }
+  if ! systemctl --user daemon-reload 2>/dev/null; then
+    fl_log "systemctl --user daemon-reload failed"
+    if ! fl_user_manager_reachable; then
+      FL_UMGR_DOWN=1
+      fl_warn "$(fl_user_manager_msg)"
+      fl_fix "$(fl_user_manager_fix)"
+    fi
+    return 1
+  fi
   if fl_unit_autostart "$file"; then
     fl_log "systemctl --user enable ${unit}"
     systemctl --user enable "$unit" >/dev/null 2>&1 || { fl_log "systemctl --user enable ${unit} failed"; return 1; }
@@ -305,8 +353,12 @@ fl_agent_list_hint() { printf 'ls ~/.config/systemd/user/benchbar-*.service'; }
 
 # A bench started with autostart on should come back after a reboot, which
 # a user manager only does for a user whose services may run without a login.
+# fl_linger_ensure [sudo]: with "sudo" (install), a refusal is tried again
+# through sudo when a credential or the BENCHBAR_SUDO=env password is there;
+# a failure is a warning with the fix, never an error.
 fl_linger_ensure() {
-  local user="${USER:-${LOGNAME:-}}" now
+  local use_sudo="${1:-}" user now
+  user="$(fl__linux_user)"
   [[ -n "$user" ]] || return 0
   now="$(loginctl show-user "$user" -p Linger --value 2>/dev/null || true)"
   [[ "$now" == "yes" ]] && return 0
@@ -319,10 +371,17 @@ fl_linger_ensure() {
   # session; that is the sudo fix below, never a prompt in the middle of up
   if loginctl --no-ask-password enable-linger "$user" >/dev/null 2>&1; then
     fl_info "lingering is on for ${user}: the bench can come back after a reboot, before you log in"
-  else
-    fl_warn "could not turn on lingering; the bench returns after a reboot only once you log in"
-    fl_fix "sudo loginctl enable-linger ${user}"
+    return 0
   fi
+  if [[ "$use_sudo" == "sudo" ]] && command -v sudo >/dev/null 2>&1 && { fl_sudo_env_has_password || sudo -n true 2>/dev/null; }; then
+    fl_log "sudo loginctl enable-linger ${user}"
+    if sudo loginctl enable-linger "$user" >/dev/null 2>&1; then
+      fl_info "lingering is on for ${user}: the bench can come back after a reboot, before you log in"
+      return 0
+    fi
+  fi
+  fl_warn "could not turn on lingering; the bench returns after a reboot only once you log in"
+  fl_fix "sudo loginctl enable-linger ${user}"
   return 0
 }
 

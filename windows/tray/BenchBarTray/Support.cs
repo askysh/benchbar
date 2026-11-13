@@ -127,10 +127,52 @@ internal static class VsCode
     }
 }
 
+/// <summary>
+/// A release as the update check needs it: the tag, the page, and the names of its files. The latest release is shared with the Mac app, so
+/// it can exist before a Windows zip does.
+/// </summary>
+internal sealed record ReleaseInfo(string Tag, string Url, IReadOnlyList<string> Assets)
+{
+    public string Version => Tag.TrimStart('v');
+
+    /// <summary>The zip of this release for a CPU (<c>amd64</c> or <c>arm64</c>): <c>benchbar-windows-VERSION-ARCH.zip</c>.</summary>
+    public string ZipName(string arch) => $"benchbar-windows-{Version}-{arch}.zip";
+
+    public bool HasWindowsZip(string arch) => Assets.Contains(ZipName(arch), StringComparer.OrdinalIgnoreCase);
+}
+
+internal enum UpdateState { Current, Available, NoWindowsBuild }
+
 /// <summary>The Check for Updates logic, apart from the HTTP call.</summary>
 internal static class UpdateCheck
 {
     public const string LatestUrl = "https://api.github.com/repos/askysh/benchbar/releases/latest";
+
+    /// <summary>
+    /// The one line installer from the documentation (docs/windows.md). The script installs the latest release; a copy pinned to the tag
+    /// (<c>.../v0.9.0/install.ps1</c>) would still install the latest, because the script has no version of its own, so the main form is used.
+    /// </summary>
+    public const string InstallCommand = "irm https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1 | iex";
+
+    /// <summary>What to tell the person to do with <see cref="InstallCommand"/>.</summary>
+    public const string InstallExplanation = "Run this line in PowerShell. It closes BenchBar and starts it again.";
+
+    /// <summary>The CPU of this PC in the words of the zip names: <c>arm64</c> or <c>amd64</c>. The machine's, not the process's.</summary>
+    public static string Arch() =>
+        System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.Arm64 ? "arm64" : "amd64";
+
+    /// <summary>Where the latest release stands for this PC: nothing newer, newer with a Windows zip, or newer with no Windows zip yet.</summary>
+    public static UpdateState State(ReleaseInfo? latest, string current, string arch) =>
+        latest is null || !IsNewer(latest.Tag, current) ? UpdateState.Current
+        : latest.HasWindowsZip(arch) ? UpdateState.Available
+        : UpdateState.NoWindowsBuild;
+
+    /// <summary>
+    /// The release to offer: newer than <paramref name="current"/> and carrying the Windows zip for <paramref name="arch"/>. A release
+    /// with no Windows zip (the Mac side shipped first) is not offered.
+    /// </summary>
+    public static ReleaseInfo? Offer(ReleaseInfo? latest, string current, string arch) =>
+        latest is { } release && IsNewer(release.Tag, current) && release.HasWindowsZip(arch) ? release : null;
 
     private static readonly Regex Number = new(@"^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?(.*)$", RegexOptions.CultureInvariant);
 
@@ -175,14 +217,31 @@ internal static class UpdateCheck
         return string.IsNullOrEmpty(tag) || string.IsNullOrEmpty(url) ? null : (tag, url);
     }
 
+    /// <summary>The tag, the page and the asset names from the GitHub API's JSON.</summary>
+    public static ReleaseInfo? ParseReleaseInfo(string json)
+    {
+        if (ParseRelease(json) is not { } basic) return null;
+        using var doc = JsonDocument.Parse(json);
+        var names = new List<string>();
+        if (doc.RootElement.TryGetProperty("assets", out var assets) && assets.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var asset in assets.EnumerateArray())
+            {
+                if (asset.ValueKind == JsonValueKind.Object && asset.TryGetProperty("name", out var n) && n.ValueKind == JsonValueKind.String && n.GetString() is { Length: > 0 } name)
+                    names.Add(name);
+            }
+        }
+        return new ReleaseInfo(basic.Tag, basic.Url, names);
+    }
+
     /// <summary>One GET with a User-Agent. The client lives only for this call.</summary>
-    public static async Task<(string Tag, string Url)?> FetchLatestAsync(CancellationToken ct)
+    public static async Task<ReleaseInfo?> FetchLatestAsync(CancellationToken ct)
     {
         using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
         client.DefaultRequestHeaders.UserAgent.ParseAdd("BenchBarTray/" + CurrentVersion().Split('+')[0]);
         client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
         var json = await client.GetStringAsync(LatestUrl, ct).ConfigureAwait(false);
-        return ParseRelease(json);
+        return ParseReleaseInfo(json);
     }
 }
 
@@ -212,8 +271,11 @@ internal static class TextFormats
         report.Checks.OrderBy(c => c.Level switch { CheckLevel.Fail => 0, CheckLevel.Warn => 1, CheckLevel.Ok => 2, _ => 3 }).ToList();
 
     /// <summary>A path inside the distro as Windows can open it: <c>\\wsl.localhost\DISTRO\home\a\x.zip</c>.</summary>
-    public static string WslToWindows(string distro, string linuxPath) =>
-        @"\\wsl.localhost\" + distro + linuxPath.Replace('/', '\\');
+    public static string WslToWindows(string distro, string linuxPath) => WslPaths.ToWindows(distro, linuxPath);
+
+    /// <summary>The same, with <c>\\wsl$\</c> when only that share exists (older Windows 10 builds).</summary>
+    public static string WslToWindowsExisting(string distro, string linuxPath) =>
+        WslPaths.ToWindows(distro, linuxPath, WslPaths.PathExists);
 
     /// <summary>A file name for the bench's log copy: letters, digits, dot, dash and underscore only.</summary>
     public static string SafeFileName(string name)
