@@ -123,7 +123,7 @@ pre; assert_eq "warn 0 65536" "$(lv inotify_watches) $CODE $(pq 'c["inotify_watc
 assert_contains "$(pq 'c["inotify_watches"]["fix_command"]')" "fs.inotify.max_user_watches=524288"
 assert_contains "$(pq 'c["inotify_watches"]["fix_command"]')" "sysctl --system"
 : >"$TMP_DIR/gone.marker"; mv "$FL_INOTIFY_FILE" "$TMP_DIR/gone.marker"
-pre; assert_eq "" "$(pq '" ".join(x["id"] for x in d["prerequisites"] if x["id"] == "inotify_watches")')" "(a host without the file has no row)"
+pre; assert_eq "ok 0 None" "$(lv inotify_watches) $CODE $(pq 'c["inotify_watches"]["max_user_watches"]')" "(a host without the file keeps the row, as ok with no number)"
 printf '524288\n' >"$FL_INOTIFY_FILE"
 
 # disk, folder

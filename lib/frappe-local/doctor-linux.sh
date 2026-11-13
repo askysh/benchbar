@@ -570,6 +570,9 @@ fl_prereq_platform_first() {
       fl_prereq_add inotify_watches warn "fs.inotify.max_user_watches is ${watches}, below 524288; benchwatch and bench build --watch can run out of file watchers" \
         "echo 'fs.inotify.max_user_watches=524288' | sudo tee /etc/sysctl.d/60-benchbar.conf && sudo sysctl --system" ",\"max_user_watches\":${watches}"
     fi
+  else
+    # always in the list, so the prerequisites have the same ids on every Linux
+    fl_prereq_add inotify_watches ok "could not read fs.inotify.max_user_watches" "" ",\"max_user_watches\":null"
   fi
 }
 
