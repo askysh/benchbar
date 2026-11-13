@@ -5,9 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"os/signal"
 	"regexp"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 	"unicode"
 )
@@ -150,6 +153,9 @@ type runCtx struct {
 	user   string
 	force  bool // --force: allow stopping a running distro
 
+	// proxy: pass the Windows proxy variables on to the next stream call
+	proxy bool
+
 	// wasRunning is whether the distro ran before the action touched it,
 	// read first because the action's own commands start it.
 	wasRunning bool
@@ -178,6 +184,7 @@ var setupActions = map[string]setupAction{
 	"wsl_enable":     {"Turn on WSL", actWslEnable, nil}, // next depends on reboot_required
 	"wsl_update":     {"Update WSL", actWslUpdate, []string{"distro_install"}},
 	"distro_install": {"Install the Linux distro", actDistroInstall, []string{"distro_user"}},
+	"distro_wsl2":    {"Convert the Linux distro to WSL 2", actDistroWSL2, []string{"distro_user"}},
 	"distro_user":    {"Create the Linux user", actDistroUser, []string{"systemd"}},
 	"systemd":        {"Turn on systemd", actSystemd, []string{"cli_install"}},
 	"cli_install":    {"Install the BenchBar command line tool", actCLIInstall, []string{"linger"}},
@@ -210,7 +217,7 @@ func cmdSetupRun(sys *System, args []string) int {
 	if !ok {
 		return fail(id, fmt.Sprintf("unknown action %q", id))
 	}
-	distro, err := setupDistro(sys, p.vals["--distro"])
+	distro, err := setupDistro(sys, p.vals["--distro"], true)
 	if err != nil {
 		return fail(id, err.Error())
 	}
@@ -221,6 +228,14 @@ func cmdSetupRun(sys *System, args []string) int {
 	if id == "distro_user" && !validLinuxUser(user) {
 		return fail(id, fmt.Sprintf("%q is not a usable Linux user name", user))
 	}
+	// An interrupt or a closing console ends sys.Ctx, so an action that waits
+	// (the elevated install, the wait for systemd) can stop and say so. The
+	// first signal puts the default back, so a second one ends the process.
+	parent := sys.Ctx
+	ctx, stop := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
+	go func() { <-ctx.Done(); stop() }()
+	sys.Ctx = ctx
+	defer func() { sys.Ctx = parent; stop() }()
 	rc := &runCtx{sys: sys, em: em, distro: distro, user: user, force: p.bools["--force"]}
 	if id == "wsl_enable" && !sys.Host.IsAdmin() {
 		return runWslEnableElevated(rc)
@@ -232,7 +247,7 @@ func cmdSetupRun(sys *System, args []string) int {
 func runAction(rc *runCtx, id string) int {
 	act := setupActions[id]
 	rc.em.step(id, "running", act.title)
-	if id == "distro_user" || id == "systemd" {
+	if id == "distro_user" || id == "systemd" || id == "distro_wsl2" {
 		rc.wasRunning = distroRunning(rc.sys, rc.distro)
 	}
 	err := act.run(rc)
@@ -310,6 +325,9 @@ func (rc *runCtx) stream(stdin string, args ...string) (int, []string, error) {
 	if err != nil {
 		return 1, nil, err
 	}
+	if rc.proxy {
+		cmd.Env = withEnvNames(rc.sys, cmd.Env, nil, proxyEnv)
+	}
 	var lines []string
 	var mu sync.Mutex
 	w := &lineWriter{emit: func(s string) {
@@ -339,6 +357,23 @@ func (rc *runCtx) stream(stdin string, args ...string) (int, []string, error) {
 		return ee.ExitCode(), lines, nil
 	}
 	return 1, lines, werr
+}
+
+// failCodeText prints an exit code of wsl.exe: hex when it is a Windows error
+// code (above 255), the plain number otherwise.
+func failCodeText(code int) string {
+	if code < 0 || code > 255 {
+		return hexCode(code)
+	}
+	return fmt.Sprint(code)
+}
+
+// adviceSuffix is ". advice" for a known Windows error code, or "".
+func adviceSuffix(code int) string {
+	if a := wslFailureAdvice(uint32(code)); a != "" {
+		return ". " + a
+	}
+	return ""
 }
 
 func lastLine(lines []string) string {
@@ -381,11 +416,11 @@ func actWslEnable(rc *runCtx) error {
 func (rc *runCtx) wslEnableResult(code int, lines []string) error {
 	reboot := rebootCode(code)
 	if code != 0 && !reboot {
-		msg := fmt.Sprintf("wsl.exe --install --no-distribution failed with exit code %d", code)
+		msg := fmt.Sprintf("wsl.exe --install --no-distribution failed with exit code %s", hexCode(code))
 		if l := lastLine(lines); l != "" {
 			msg += ": " + l
 		}
-		return errors.New(msg)
+		return errors.New(msg + ". " + wslInstallAdvice(code))
 	}
 	rc.changed = true
 	rc.msg = "WSL is turned on"
@@ -426,11 +461,11 @@ func actWslUpdate(rc *runCtx) error {
 		return fmt.Errorf("cannot run wsl.exe: %v", err)
 	}
 	if code != 0 {
-		msg := fmt.Sprintf("wsl.exe --update failed with exit code %d", code)
+		msg := fmt.Sprintf("wsl.exe --update failed with exit code %s", failCodeText(code))
 		if l := lastLine(lines); l != "" {
 			msg += ": " + l
 		}
-		return errors.New(msg)
+		return errors.New(msg + adviceSuffix(code))
 	}
 	after := wslVersionText(rc.sys)
 	rc.changed = before != after
@@ -482,11 +517,11 @@ func actDistroInstall(rc *runCtx) error {
 			return nil
 		}
 		if code != 0 {
-			msg := fmt.Sprintf("wsl.exe --install -d %s failed with exit code %d", rc.distro, code)
+			msg := fmt.Sprintf("wsl.exe --install -d %s failed with exit code %s", rc.distro, failCodeText(code))
 			if l := lastLine(lines); l != "" {
 				msg += ": " + l
 			}
-			return errors.New(msg)
+			return errors.New(msg + adviceSuffix(code))
 		}
 		changed = true
 		if d, err = registeredDistro(rc.sys, rc.distro); err != nil || d == nil {
@@ -499,19 +534,20 @@ func actDistroInstall(rc *runCtx) error {
 		if err != nil {
 			detail = err.Error()
 		}
+		if err == nil {
+			detail = fmt.Sprintf("exit code %s: %s", failCodeText(res.Code), detail) + adviceSuffix(res.Code)
+		}
 		return fmt.Errorf("%s is installed but does not start: %s", rc.distro, detail)
 	}
 	if d.Version != 2 {
 		rc.warn(fmt.Sprintf("%s runs as WSL %d; benches need WSL 2 (wsl.exe --set-version %s 2)", d.Name, d.Version, d.Name))
 	}
-	cfg, err := loadConfig(rc.sys)
-	if err == nil {
+	err = updateConfig(rc.sys, func(cfg *configFile) {
 		if cfg.str("distro") != d.Name {
 			changed = true
 		}
 		cfg.setStr("distro", d.Name)
-		err = cfg.save()
-	}
+	})
 	if err != nil {
 		return fmt.Errorf("cannot record the distro: %v", err)
 	}
@@ -522,6 +558,46 @@ func actDistroInstall(rc *runCtx) error {
 	if rc.skipped {
 		rc.msg = rc.distro + " is already installed"
 	}
+	return nil
+}
+
+// --- distro_wsl2 -----------------------------------------------------------
+
+// actDistroWSL2 converts a WSL 1 distro with wsl.exe --set-version NAME 2. It
+// needs no administrator rights and stops the distro, so a running one is
+// refused without --force.
+func actDistroWSL2(rc *runCtx) error {
+	d, err := registeredDistro(rc.sys, rc.distro)
+	if err != nil {
+		return fmt.Errorf("cannot read the WSL registry: %v", err)
+	}
+	if d == nil {
+		return fmt.Errorf("%s is not installed (benchbar.exe setup run distro_install)", rc.distro)
+	}
+	if d.Version == 2 {
+		rc.skipped, rc.msg = true, rc.distro+" already runs as WSL 2"
+		return nil
+	}
+	if err := rc.refuseRunning(); err != nil {
+		return err
+	}
+	rc.em.log("converting " + rc.distro + " to WSL 2 can take several minutes; it stops the distro")
+	code, lines, err := rc.stream("", "--set-version", rc.distro, "2")
+	if err != nil {
+		return fmt.Errorf("cannot run wsl.exe: %v", err)
+	}
+	if code != 0 {
+		msg := fmt.Sprintf("wsl.exe --set-version %s 2 failed with exit code %s", rc.distro, failCodeText(code))
+		if l := lastLine(lines); l != "" {
+			msg += ": " + l
+		}
+		return errors.New(msg + adviceSuffix(code))
+	}
+	if d, err := registeredDistro(rc.sys, rc.distro); err != nil || d == nil || d.Version != 2 {
+		return fmt.Errorf("%s still runs as WSL 1 after the conversion: wsl.exe --set-version %s 2", rc.distro, quoteArg(rc.distro))
+	}
+	rc.changed = true
+	rc.msg = rc.distro + " runs as WSL 2"
 	return nil
 }
 
@@ -691,12 +767,17 @@ func actDistroUser(rc *runCtx) error {
 
 // --- systemd ---------------------------------------------------------------
 
-func (rc *runCtx) pid1() string {
+// pid1 is the name of PID 1 in the distro. The error is set only when
+// wsl.exe did not answer in time.
+func (rc *runCtx) pid1() (string, error) {
 	res, err := wslExec(rc.sys, "", "-d", rc.distro, "--exec", "/bin/cat", "/proc/1/comm")
-	if err != nil || res.Code != 0 {
-		return ""
+	if isWslTimeout(err) {
+		return "", err
 	}
-	return strings.TrimSpace(res.Stdout)
+	if err != nil || res.Code != 0 {
+		return "", nil
+	}
+	return strings.TrimSpace(res.Stdout), nil
 }
 
 func actSystemd(rc *runCtx) error {
@@ -704,7 +785,9 @@ func actSystemd(rc *runCtx) error {
 	if err != nil {
 		return err
 	}
-	if !differs && rc.pid1() == "systemd" {
+	if cur, err := rc.pid1(); err != nil {
+		return err
+	} else if !differs && cur == "systemd" {
 		rc.skipped, rc.msg = true, "systemd is already running"
 		return nil
 	}
@@ -720,10 +803,17 @@ func actSystemd(rc *runCtx) error {
 	}
 	pid1 := ""
 	for i := 0; i < 15; i++ {
-		if pid1 = rc.pid1(); pid1 == "systemd" {
+		var err error
+		if pid1, err = rc.pid1(); err != nil {
+			return err
+		}
+		if pid1 == "systemd" || rc.sys.Ctx.Err() != nil {
 			break
 		}
 		rc.sys.Sleep(rc.sys.Ctx, 2*time.Second)
+	}
+	if pid1 != "systemd" && rc.sys.Ctx.Err() != nil {
+		return errors.New("stopped while waiting for systemd; run this action again to check it")
 	}
 	if pid1 != "systemd" {
 		return fmt.Errorf("%s restarted but PID 1 is %q, not systemd", rc.distro, pid1)
@@ -749,16 +839,26 @@ func actCLIInstall(rc *runCtx) error {
 	if pr.uid == "0" {
 		return errors.New("the default user of " + rc.distro + " is root; create the Linux user first (distro_user)")
 	}
+	before := ""
 	if pr.bench != "" {
-		rc.skipped, rc.msg = true, "benchbar is already installed: "+orUnknown(pr.cliVer)
-		return nil
+		// an older CLI than this release of benchbar.exe is updated by the
+		// pinned installer, which fetches and checks out its release
+		cli, older, _ := cliSkew(pr.cliVer)
+		if !older || t.cli != "benchbar" {
+			rc.skipped, rc.msg = true, "benchbar is already installed: "+orUnknown(pr.cliVer)
+			return nil
+		}
+		before = cli
+		rc.em.log(fmt.Sprintf("benchbar %s is older than benchbar.exe %s: updating it", cli, version))
 	}
-	if t.cli != "benchbar" {
+	if pr.bench == "" && t.cli != "benchbar" {
 		return errors.New(missingCLIFix(t))
 	}
-	// pipefail: a failed download (curl exit 22 on a 404) is the exit code, not bash's 0
-	script := "set -o pipefail; export BENCHBAR_NONINTERACTIVE=1; " + installerPipe()
+	// the installer line has pipefail: a failed download is curl's exit code, not bash's 0
+	script := "export BENCHBAR_NONINTERACTIVE=1; " + installerPipe()
+	rc.proxy = true
 	code, lines, err := rc.stream("", "-d", rc.distro, "--cd", "~", "--exec", "/bin/bash", "-c", script)
+	rc.proxy = false
 	if err != nil {
 		return fmt.Errorf("cannot run wsl.exe: %v", err)
 	}
@@ -767,6 +867,9 @@ func actCLIInstall(rc *runCtx) error {
 		if l := lastLine(lines); l != "" {
 			msg += ": " + l
 		}
+		if hint := curlHint(code, lines, rc.distro); hint != "" {
+			msg += ". " + hint
+		}
 		return errors.New(msg)
 	}
 	// curl | bash hides a failed download, so look for the result
@@ -774,9 +877,46 @@ func actCLIInstall(rc *runCtx) error {
 	if err != nil || pr.bench == "" {
 		return errors.New("the installer finished, but benchbar is not on the PATH in " + rc.distro)
 	}
+	if before != "" {
+		if _, still, _ := cliSkew(pr.cliVer); still {
+			return fmt.Errorf("the installer finished, but benchbar in %s is still %s, not %s. Run the installer by hand: %s", rc.distro, before, version, installerCommand(rc.distro))
+		}
+		rc.changed = true
+		rc.msg = fmt.Sprintf("updated benchbar from %s to %s", before, version)
+		return nil
+	}
 	rc.changed = true
 	rc.msg = "installed " + orUnknown(pr.cliVer)
 	return nil
+}
+
+var curlLineRE = regexp.MustCompile(`curl: \((\d+)\)`)
+
+// curlHint is what to do about the exit code of curl in the installer line.
+// It applies only when curl itself said so in the output, so an exit code of
+// the installer script is never taken for curl's.
+func curlHint(code int, lines []string, distro string) string {
+	seen := false
+	for _, l := range lines {
+		if m := curlLineRE.FindStringSubmatch(l); m != nil && m[1] == fmt.Sprint(code) {
+			seen = true
+		}
+	}
+	if !seen {
+		return ""
+	}
+	switch code {
+	case 22:
+		if releaseRE.MatchString(version) {
+			return fmt.Sprintf("the release v%s is not published for this build: install the latest benchbar.exe from the BenchBar releases page, then run this action again", version)
+		}
+		return "the installer was not found on the server: try again later, or run the line by hand: " + installerCommand(distro)
+	case 6, 7, 28:
+		return "WSL has no network or DNS: check the VPN and the proxy (set HTTPS_PROXY and NO_PROXY in Windows, they are passed on), then run this action again"
+	case 35, 60:
+		return "a proxy or a security product changes the TLS certificate: add its root certificate to the distro (sudo cp CERT.crt /usr/local/share/ca-certificates/ && sudo update-ca-certificates), then run this action again"
+	}
+	return ""
 }
 
 // --- linger, keepalive, wslconfig, path ------------------------------------

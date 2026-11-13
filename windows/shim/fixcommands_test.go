@@ -36,7 +36,7 @@ func TestFixCommandsQuoteDistroNames(t *testing.T) {
 		`sudo sh -c "printf '`,
 		`>> /etc/wsl.conf"; wsl.exe --terminate "My Distro"`,
 		`wsl.exe -d "My Distro" -- sudo sh -c`,
-		`wsl.exe -d "My Distro" -- bash -c "curl`,
+		`wsl.exe -d "My Distro" -- bash -c "set -o pipefail; curl`,
 		`wsl.exe -d "My Distro" -- loginctl enable-linger akash`,
 	} {
 		if !strings.Contains(out, want) {
@@ -101,7 +101,7 @@ func TestMissingDefaultCLIGetsTheInstaller(t *testing.T) {
 		}
 		e.useProbe(probeText(goodConf, "systemd", "akash", "", "yes"))
 		e.run("adopt-distro")
-		if !strings.Contains(e.stdout(), "fix: wsl.exe -d Ubuntu-24.04 -- bash -c \"curl") || strings.Contains(e.stdout(), "cli_path") {
+		if !strings.Contains(e.stdout(), "fix: wsl.exe -d Ubuntu-24.04 -- bash -c \"set -o pipefail; curl") || strings.Contains(e.stdout(), "cli_path") {
 			t.Errorf("config %q, adopt output:\n%s", cfg, e.stdout())
 		}
 		t.Setenv("FAKE_WSL_MODE", "exit:127")

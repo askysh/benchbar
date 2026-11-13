@@ -2,7 +2,7 @@
 //
 //	FAKE_WSL_RECORD        file that gets one JSON line per event
 //	FAKE_WSL_RECORD_STDIN  1: record the stdin bytes (echo-stdin mode)
-//	FAKE_WSL_MODE          exit:N | seq:N,N,... | echo-stdin | run | wait-signal | probe:FILE | script:FILE
+//	FAKE_WSL_MODE          exit:N | seq:N,N,... | echo-stdin | run | wait-signal | sleep | probe:FILE | script:FILE
 //	script:FILE            JSON list of rules {match, not, stdout, stderr, exit, stdin, seq}; the first rule
 //	                       whose match text is in the joined arguments answers; no rule exits 99
 //	FAKE_WSL_READY         wait-signal: file created once the handler is set
@@ -20,6 +20,7 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type record struct {
@@ -130,6 +131,9 @@ func main() {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
+	case mode == "sleep":
+		// answers nothing for a minute: the shim's deadline must end it
+		time.Sleep(time.Minute)
 	case mode == "wait-signal":
 		ch := make(chan os.Signal, 1)
 		signal.Notify(ch, os.Interrupt)

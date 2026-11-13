@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/base64"
 	"fmt"
 	"strings"
@@ -15,7 +16,10 @@ const probeScript = `PATH="$HOME/.local/bin:$PATH"; u=$(id -un); ` +
 	`printf 'pid1=%s\n' "$(cat /proc/1/comm 2>/dev/null)"; ` +
 	`printf 'user=%s\n' "$u"; ` +
 	`printf 'benchbar=%s\n' "$(command -v "$0" 2>/dev/null)"; ` +
-	`printf 'linger=%s\n' "$(loginctl show-user "$u" -p Linger --value 2>/dev/null)"`
+	`printf 'linger=%s\n' "$(loginctl show-user "$u" -p Linger --value 2>/dev/null)"; ` +
+	`printf 'osid=%s\n' "$(. /etc/os-release 2>/dev/null; printf %s "$ID")"; ` +
+	`printf 'osver=%s\n' "$(. /etc/os-release 2>/dev/null; printf %s "$VERSION_ID")"; ` +
+	`printf 'osname=%s\n' "$(. /etc/os-release 2>/dev/null; printf %s "$NAME")"`
 
 // setupProbeScript is probeScript plus the user id and the CLI version, for
 // setup check. Nothing in it writes.
@@ -30,6 +34,9 @@ type probeResult struct {
 	user    string
 	bench   string
 	linger  string
+	osID    string // ID in /etc/os-release, such as ubuntu
+	osVer   string // VERSION_ID, such as 24.04
+	osName  string // NAME, such as Ubuntu
 }
 
 func parseProbe(out string) probeResult {
@@ -56,6 +63,12 @@ func parseProbe(out string) probeResult {
 			r.bench = strings.TrimSpace(v)
 		case "linger":
 			r.linger = strings.ToLower(strings.TrimSpace(v))
+		case "osid":
+			r.osID = strings.ToLower(strings.TrimSpace(v))
+		case "osver":
+			r.osVer = strings.TrimSpace(v)
+		case "osname":
+			r.osName = strings.TrimSpace(v)
 		}
 	}
 	return r
@@ -67,13 +80,18 @@ func runProbe(sys *System, distro, cli string) (probeResult, error) {
 
 func runProbeScript(sys *System, distro, cli, script string) (probeResult, error) {
 	args := []string{"-d", distro, "--cd", "~", "--exec", "/bin/sh", "-c", script, cli}
-	cmd, err := wslCommand(sys, args...)
+	ctx, cancel := context.WithTimeout(sys.Ctx, wslProbeTimeout)
+	defer cancel()
+	cmd, err := wslCommandContext(ctx, sys, args...)
 	if err != nil {
 		return probeResult{}, err
 	}
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	if err := cmd.Run(); err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return probeResult{}, &wslTimeoutError{wslProbeTimeout}
+		}
 		msg := strings.TrimSpace(errb.String())
 		if msg == "" {
 			msg = err.Error()
@@ -149,6 +167,22 @@ func probeChecks(t target, r probeResult) []Check {
 	return append(cs, lc)
 }
 
+// osCheck is the distro_os line: Ubuntu 24.04 is the one supported release.
+func osCheck(distro string, r probeResult) Check {
+	c := Check{ID: "distro_os", Label: "Linux version", Status: "ok", Message: "Ubuntu " + r.osVer}
+	switch {
+	case r.osID == "":
+		c.Status = "warn"
+		c.Message = "cannot read /etc/os-release in " + distro + ", so the Linux release is not checked"
+		c.Fix = fmt.Sprintf("wsl.exe -d %s -- cat /etc/os-release", quoteArg(distro))
+	case osProblem(distro, r) != "":
+		c.Status = "fail"
+		c.Message = osProblem(distro, r)
+		c.Fix = osFix()
+	}
+	return c
+}
+
 func replaceCheck(cs []Check, c Check) {
 	for i := range cs {
 		if cs[i].ID == c.ID {
@@ -171,7 +205,7 @@ func cmdAdoptDistro(sys *System, args []string) int {
 	if len(p.pos) == 1 {
 		want = p.pos[0]
 	}
-	t, err := resolveTarget(sys, want)
+	t, err := resolveTargetWith(sys, want, true)
 	if err != nil {
 		errorf(sys, "%v", err)
 		return 1
@@ -211,6 +245,7 @@ func cmdAdoptDistro(sys *System, args []string) int {
 		} else {
 			probed = true
 			checks = append(checks, probeChecks(t, probe)...)
+			checks = append(checks, osCheck(t.distro, probe))
 		}
 	}
 
@@ -232,18 +267,18 @@ func cmdAdoptDistro(sys *System, args []string) int {
 
 	recorded := false
 	if !hasFail(checks) && t.distro != "" {
-		cfg, err := loadConfig(sys)
-		if err == nil {
+		// a config.json that is not valid JSON is replaced only when the person
+		// named the distro (its old text is kept as config.json.invalid)
+		err := updateConfigWith(sys, func(cfg *configFile) {
 			cfg.setStr("distro", t.distro)
-			err = cfg.save()
-		}
+		}, want != "")
 		if err != nil {
 			errorf(sys, "cannot record the distro: %v", err)
 			return 1
 		}
 		recorded = true
 		if !asJSON {
-			fmt.Fprintf(sys.Stdout, "\nRecorded %s in %s\n", t.distro, cfg.path)
+			fmt.Fprintf(sys.Stdout, "\nRecorded %s in %s\n", t.distro, configPath(sys))
 		}
 	}
 
@@ -287,7 +322,9 @@ func (sys *System) offerLinger(yes, asJSON bool, user, distro string) bool {
 // setting again. The returned check is the linger line afterwards.
 func applyLinger(sys *System, t target, user string) (Check, bool) {
 	warn := probeChecks(t, probeResult{linger: "no", user: user})[2]
-	cmd, err := wslCommand(sys, "-d", t.distro, "--exec", "loginctl", "--no-ask-password", "enable-linger", user)
+	ctx, cancel := context.WithTimeout(sys.Ctx, wslProbeTimeout)
+	defer cancel()
+	cmd, err := wslCommandContext(ctx, sys, "-d", t.distro, "--exec", "loginctl", "--no-ask-password", "enable-linger", user)
 	if err != nil {
 		warn.Message += fmt.Sprintf(" (enabling failed: %v)", err)
 		return warn, false

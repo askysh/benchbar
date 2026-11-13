@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -36,12 +37,28 @@ func forwardArgs(distro, cli string, args []string) []string {
 }
 
 func wslCommand(sys *System, args ...string) (*exec.Cmd, error) {
+	cmd, err := wslCommandContext(context.Background(), sys, args...)
+	if err != nil {
+		return nil, err
+	}
+	// no deadline binds this call (a streamed long action or the user's own
+	// command), so a wait delay must not cut its output
+	cmd.WaitDelay = 0
+	return cmd, nil
+}
+
+// wslCommandContext is wslCommand that ends the process when ctx ends. Only
+// the shim's own calls use a context: a command the user forwards never has
+// a deadline. Only these deadline bound calls get a WaitDelay.
+func wslCommandContext(ctx context.Context, sys *System, args ...string) (*exec.Cmd, error) {
 	path, err := sys.WSLPath()
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.Command(path, args...)
+	cmd := exec.CommandContext(ctx, path, args...)
 	cmd.Env = append(sys.Environ(), "WSL_UTF8=1")
+	// a pipe that something else holds open must not block Wait for good
+	cmd.WaitDelay = wslWaitDelay
 	return cmd, nil
 }
 
@@ -56,12 +73,32 @@ var forwardedEnv = []string{
 	"BENCHBAR_NONINTERACTIVE",
 }
 
+// proxyEnv are the proxy settings of the Windows side. Linux tools (curl,
+// git, apt) read the lower case spelling, so both are passed on, and the
+// names are compared with their case here, since Windows treats the two
+// spellings as one variable.
+var proxyEnv = []string{
+	"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY",
+	"http_proxy", "https_proxy", "no_proxy",
+}
+
 // withForwardedEnv returns env with WSLENV extended by the forwarded names
 // that are set. It changes the child's copy only, never the user's own
 // WSLENV. Values are never read here; WSL copies them across.
 func withForwardedEnv(sys *System, env []string) []string {
+	return withEnvNames(sys, env, forwardedEnv, proxyEnv)
+}
+
+// withEnvNames is withForwardedEnv for chosen lists: nameList is compared
+// without case, exactList with it.
+func withEnvNames(sys *System, env []string, nameList, exactList []string) []string {
 	var names []string
-	for _, n := range forwardedEnv {
+	for _, n := range nameList {
+		if sys.Getenv(n) != "" {
+			names = append(names, n)
+		}
+	}
+	for _, n := range exactList {
 		if sys.Getenv(n) != "" {
 			names = append(names, n)
 		}
@@ -79,6 +116,7 @@ func withForwardedEnv(sys *System, env []string) []string {
 		out = append(out, kv)
 	}
 	have := map[string]bool{}
+	haveExact := map[string]bool{}
 	var parts []string
 	for _, p := range strings.Split(current, ":") {
 		if p == "" {
@@ -87,28 +125,45 @@ func withForwardedEnv(sys *System, env []string) []string {
 		parts = append(parts, p)
 		base, _, _ := strings.Cut(p, "/")
 		have[strings.ToUpper(base)] = true
+		haveExact[base] = true
 	}
 	for _, n := range names {
-		if !have[n] {
+		if isExactName(n, exactList) {
+			if !haveExact[n] {
+				parts = append(parts, n)
+			}
+		} else if !have[n] {
 			parts = append(parts, n)
 		}
 	}
 	return append(out, "WSLENV="+strings.Join(parts, ":"))
 }
 
+func isExactName(n string, list []string) bool {
+	for _, x := range list {
+		if x == n {
+			return true
+		}
+	}
+	return false
+}
+
 // forward runs the CLI in the distro with the shim's own standard handles.
 func forward(sys *System, t target, args []string) int {
-	cmd, err := wslCommand(sys, forwardArgs(t.distro, t.cli, args)...)
+	cmd, err := wslCommand(sys, forwardArgs(t.distro, t.cli, linuxPathArgs(args, t.distro))...)
 	if err != nil {
 		errorf(sys, "wsl.exe was not found: %v", err)
 		return 1
 	}
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = sys.Stdin, sys.Stdout, sys.Stderr
 	cmd.Env = withForwardedEnv(sys, cmd.Env)
-	code, err := runInterruptible(cmd)
+	code, raw, err := runInterruptible(cmd)
 	if err != nil {
 		errorf(sys, "cannot run wsl.exe: %v", err)
 		return 1
+	}
+	if raw != nil {
+		errorf(sys, "%s", wslFailureLine(*raw))
 	}
 	if code == 127 && !cliExists(sys, t) {
 		where := "the default WSL distro"
@@ -136,7 +191,9 @@ func cliExists(sys *System, t target) bool {
 		a = append(a, "-d", t.distro)
 	}
 	a = append(a, "--exec", "/bin/sh", "-c", `PATH="$HOME/.local/bin:$PATH"; command -v "$0"`, t.cli)
-	cmd, err := wslCommand(sys, a...)
+	ctx, cancel := context.WithTimeout(sys.Ctx, wslQuickTimeout)
+	defer cancel()
+	cmd, err := wslCommandContext(ctx, sys, a...)
 	if err != nil {
 		return false
 	}
@@ -146,12 +203,15 @@ func cliExists(sys *System, t target) bool {
 // runInterruptible starts cmd, waits for it and never returns before it
 // exits. Ctrl+C is not the shim's to act on: on Windows the console already
 // delivers it to wsl.exe; elsewhere it is passed on.
-func runInterruptible(cmd *exec.Cmd) (int, error) {
+//
+// raw is set when the exit code is outside 0..255: wsl.exe itself failed,
+// not the CLI. The code returned is then 1.
+func runInterruptible(cmd *exec.Cmd) (code int, raw *int, err error) {
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, os.Interrupt)
 	defer signal.Stop(ch)
 	if err := cmd.Start(); err != nil {
-		return 1, err
+		return 1, nil, err
 	}
 	defer attachKillOnClose(cmd.Process.Pid)()
 	done := make(chan error, 1)
@@ -161,13 +221,31 @@ func runInterruptible(cmd *exec.Cmd) (int, error) {
 		case <-ch:
 			relayInterrupt(cmd.Process)
 		case err := <-done:
-			return exitCode(err), nil
+			return exitCode(err), outOfRange(err), nil
 		}
 	}
 }
 
-// exitCode keeps 0..255 and turns anything else (wsl.exe failures such as
-// 0xFFFFFFFF) into 1.
+// outOfRange is the exit code of a process that ended with one outside
+// 0..255 (a failure of wsl.exe itself, such as 0x80370102), or nil.
+func outOfRange(err error) *int {
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
+		if c := ee.ExitCode(); (c < 0 || c > 255) && !isControlCExit(c) {
+			return &c
+		}
+	}
+	return nil
+}
+
+// statusControlCExit is STATUS_CONTROL_C_EXIT, the code of a process the
+// console ended with Ctrl+C.
+const statusControlCExit = 0xC000013A
+
+func isControlCExit(c int) bool { return uint32(c) == statusControlCExit }
+
+// exitCode keeps 0..255, turns an end by Ctrl+C into 130 and anything else
+// (wsl.exe failures such as 0xFFFFFFFF) into 1.
 func exitCode(err error) int {
 	if err == nil {
 		return 0
@@ -176,6 +254,8 @@ func exitCode(err error) int {
 	if errors.As(err, &ee) {
 		if c := ee.ExitCode(); c >= 0 && c <= 255 {
 			return c
+		} else if isControlCExit(c) {
+			return 130
 		}
 	}
 	return 1

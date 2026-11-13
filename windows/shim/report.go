@@ -152,24 +152,10 @@ func (b *limitBuffer) Write(p []byte) (int, error) {
 	return b.Buffer.Write(p)
 }
 
-// wslText runs wsl.exe, waits at most d and returns its text. A timeout is
-// an error and ends the process.
+// wslText runs wsl.exe, waits at most d and returns its text. At the
+// deadline wsl.exe is ended and the error says so.
 func wslText(sys *System, d time.Duration, args ...string) (wslResult, error) {
-	type out struct {
-		res wslResult
-		err error
-	}
-	ch := make(chan out, 1)
-	go func() {
-		res, err := wslExec(sys, "", args...)
-		ch <- out{res, err}
-	}()
-	select {
-	case o := <-ch:
-		return o.res, o.err
-	case <-time.After(d):
-		return wslResult{}, fmt.Errorf("wsl.exe %s did not answer within %s", strings.Join(args, " "), d)
-	}
+	return wslExecTimeout(sys, d, "", args...)
 }
 
 // wslBytes runs wsl.exe and returns its raw stdout (a zip must not pass
@@ -318,7 +304,7 @@ func cmdReportWindows(sys *System, args []string) int {
 	}
 	if distro == "" {
 		// a damaged config.json must not stop a report
-		if d, err := setupDistro(sys, ""); err == nil {
+		if d, err := setupDistro(sys, "", false); err == nil {
 			distro = d
 		} else {
 			distro = defaultSetupDistro

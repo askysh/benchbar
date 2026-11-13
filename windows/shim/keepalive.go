@@ -191,6 +191,11 @@ func queryKeepalive(sys *System) keepaliveInfo {
 		c.Status, c.Message = "warn", "installed, but its action is not a BenchBar keepalive"
 	case !info.ExeExists:
 		c.Status, c.Message = "warn", fmt.Sprintf("installed, but %s does not exist", exe)
+	case sys.ExePath != "" && normDir(exe, sys.Getenv) != normDir(sys.ExePath, sys.Getenv):
+		// an upgrade that put benchbar.exe somewhere else leaves the task on
+		// the old copy; install rewrites the task in place (schtasks /F)
+		c.Status = "warn"
+		c.Message = fmt.Sprintf("installed, but the task runs %s, not this benchbar.exe (%s)", exe, sys.ExePath)
 	case !info.RunAlive:
 		// a disabled task, one that failed to start or a run that died: WSL
 		// can stop the distro, so this is not healthy; install restarts it
@@ -271,6 +276,10 @@ func keepaliveStatus(sys *System, asJSON bool) int {
 }
 
 func keepaliveInstall(sys *System, distro string) int {
+	if strings.TrimSpace(sys.User) == "" {
+		errorf(sys, "cannot tell which Windows user this is, so the logon task cannot be made. fix: run benchbar.exe keepalive install from your own signed in terminal (whoami must print DOMAIN\\user)")
+		return 1
+	}
 	f, err := os.CreateTemp("", "benchbar-keepalive-*.xml")
 	if err != nil {
 		errorf(sys, "cannot write the task file: %v", err)
@@ -286,6 +295,10 @@ func keepaliveInstall(sys *System, distro string) int {
 		return 1
 	}
 	if out, code, err := sys.Tasks.Schtasks("/Create", "/TN", taskName, "/XML", f.Name(), "/F"); err != nil || code != 0 {
+		if accessDenied(out, code) {
+			errorf(sys, "Windows refused to create the task (access denied): a policy may block scheduled tasks for your account. fix: ask the PC's administrator, or keep the distro awake by hand with benchbar.exe keepalive run in a terminal you leave open")
+			return 1
+		}
 		errorf(sys, "schtasks.exe could not create the task: %s", schtasksDetail(out, err))
 		return 1
 	}
@@ -390,6 +403,14 @@ func stopRun(sys *System) (int, error) {
 	}
 	os.Remove(pidFile(sys))
 	return stopped, nil
+}
+
+// accessDenied is true when schtasks.exe refused with the English text or
+// the error number 0x80070005. Other languages fall through to the generic
+// message, which shows schtasks's own text.
+func accessDenied(out string, code int) bool {
+	l := strings.ToLower(out)
+	return code != 0 && (strings.Contains(l, "access is denied") || strings.Contains(l, "0x80070005"))
 }
 
 func schtasksDetail(out string, err error) string {

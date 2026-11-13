@@ -210,7 +210,20 @@ func TestKeepaliveInstallFailureStops(t *testing.T) {
 	if len(e.tasks.calls) != 1 {
 		t.Errorf("calls %v", e.tasks.calls)
 	}
-	if !strings.Contains(e.stderr(), "Access is denied") {
+	if !strings.Contains(e.stderr(), "Windows refused to create the task (access denied)") || !strings.Contains(e.stderr(), "fix: ") {
+		t.Errorf("stderr %q", e.stderr())
+	}
+}
+
+func TestKeepaliveInstallOtherFailureShowsSchtasksText(t *testing.T) {
+	e := newEnv(t)
+	e.tasks.handler = func(a []string) (string, int, error) {
+		return "ERROR: The task XML is malformed.", 1, nil
+	}
+	if code := e.run("keepalive", "install"); code != 1 {
+		t.Errorf("exit %d", code)
+	}
+	if !strings.Contains(e.stderr(), "schtasks.exe could not create the task: ERROR: The task XML is malformed.") {
 		t.Errorf("stderr %q", e.stderr())
 	}
 }

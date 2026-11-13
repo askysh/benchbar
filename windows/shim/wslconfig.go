@@ -205,7 +205,7 @@ func applyWslconfig(sys *System, f *ini, rep wslReport, yes bool) int {
 			errorf(sys, "cannot read %s: %v", rep.Path, err)
 			return 1
 		}
-		backup := rep.Path + ".benchbar-backup-" + sys.Now().Format("20060102-150405")
+		backup := uniqueBackupName(rep.Path + ".benchbar-backup-" + sys.Now().Format("20060102-150405"))
 		if err := writeFileAtomic(backup, old); err != nil {
 			errorf(sys, "cannot write the backup %s: %v", backup, err)
 			return 1
@@ -246,4 +246,45 @@ func idleCheck(r wslReport) Check {
 		c.Fix = "benchbar.exe wslconfig --apply --yes"
 	}
 	return c
+}
+
+// networkChecks are the doctor lines for the networking keys of .wslconfig,
+// which decide whether a site in WSL opens at localhost from a Windows
+// browser. A key that is not set gives no line.
+func networkChecks(f *ini) []Check {
+	var cs []Check
+	mode, _ := f.get("wsl2", "networkingMode")
+	mode = strings.ToLower(strings.Trim(mode, `"' `))
+	fwd, _ := f.get("wsl2", "localhostForwarding")
+	const edit = `edit "%USERPROFILE%\.wslconfig", then wsl.exe --shutdown when it is OK to stop every distro`
+	switch mode {
+	case "bridged", "virtioproxy":
+		cs = append(cs, Check{ID: "wsl_network", Label: "WSL networking", Status: "warn",
+			Message: "networkingMode=" + mode + " in .wslconfig: the site may not open from a Windows browser at localhost",
+			Fix:     `set networkingMode=nat (or mirrored) under [wsl2]: ` + edit})
+	case "mirrored":
+		cs = append(cs, Check{ID: "wsl_network", Label: "WSL networking", Status: "ok",
+			Message: "networkingMode=mirrored in .wslconfig: localhost reaches WSL from Windows (information only)"})
+	default:
+		if strings.EqualFold(strings.Trim(fwd, `"' `), "false") {
+			cs = append(cs, Check{ID: "wsl_network", Label: "WSL networking", Status: "warn",
+				Message: "localhostForwarding=false in .wslconfig: the site may not open from a Windows browser at localhost",
+				Fix:     `set localhostForwarding=true (or remove the line) under [wsl2]: ` + edit})
+		}
+	}
+	return cs
+}
+
+// uniqueBackupName is name, or name-N when a file of that name exists, so a
+// second backup in the same second never replaces the first.
+func uniqueBackupName(name string) string {
+	taken := func(p string) bool {
+		_, err := os.Lstat(p)
+		return err == nil
+	}
+	out := name
+	for n := 1; taken(out); n++ {
+		out = fmt.Sprintf("%s-%d", name, n)
+	}
+	return out
 }

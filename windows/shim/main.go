@@ -30,8 +30,8 @@ func run(sys *System, args []string) int {
 		case "keepalive":
 			return cmdKeepalive(sys, args[1:])
 		case "path":
-			// the CLI has its own `path` command; only these two are ours
-			if len(args) > 1 && (args[1] == "install" || args[1] == "status") {
+			// the CLI has its own `path` command; only these three are ours
+			if len(args) > 1 && (args[1] == "install" || args[1] == "status" || args[1] == "remove") {
 				return cmdPath(sys, args[1])
 			}
 		case "report-windows":

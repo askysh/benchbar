@@ -144,7 +144,7 @@ func reply(exit int, stdout string) map[string]any {
 func probeOut(user, uid, pid1, linger, conf, bench, ver string) string {
 	return "wslconf_b64=" + base64.StdEncoding.EncodeToString([]byte(conf)) + "\n" +
 		"pid1=" + pid1 + "\nuser=" + user + "\nbenchbar=" + bench + "\nlinger=" + linger + "\n" +
-		"uid=" + uid + "\ncliver=" + ver + "\n"
+		"uid=" + uid + "\ncliver=" + ver + "\nosid=ubuntu\nosver=24.04\nosname=Ubuntu\n"
 }
 
 const setupGoodConf = "[boot]\nsystemd=true\n"
@@ -221,7 +221,7 @@ func neverDestructive(t *testing.T, evs []fakeEvent) {
 
 // --- setup check -----------------------------------------------------------
 
-var stepIDs = []string{"windows_build", "virtualization", "wsl_feature", "reboot", "wsl_version", "distro",
+var stepIDs = []string{"windows_build", "virtualization", "wsl_feature", "reboot", "wsl_version", "distro", "distro_os",
 	"distro_user", "systemd", "cli", "linger", "keepalive", "wslconfig", "shim_path"}
 
 func TestSetupCheckReady(t *testing.T) {
@@ -296,11 +296,12 @@ func TestSetupCheckVirtualization(t *testing.T) {
 	}
 	e.script(rule("--status", 1, ""))
 	rep := e.report()
-	if s := rep.step(t, "virtualization"); s.Status != "fail" || !strings.Contains(s.Detail, "BIOS") {
+	// a false flag only warns: it can be wrong while a hypervisor runs
+	if s := rep.step(t, "virtualization"); s.Status != "warn" || !strings.Contains(s.Detail, "BIOS") || s.Action != nil {
 		t.Errorf("%+v", s)
 	}
-	if rep.step(t, "wsl_feature").Detail != "waits for virtualization" {
-		t.Errorf("%+v", rep.step(t, "wsl_feature"))
+	if s := rep.step(t, "wsl_feature"); s.Status != "missing" || action(s) != "wsl_enable" {
+		t.Errorf("a false flag must not block: %+v", s)
 	}
 	e.host().virtErr = os.ErrInvalid
 	e.script(rule("--status", 1, ""))
@@ -366,7 +367,7 @@ func TestSetupCheckDistroSteps(t *testing.T) {
 		t.Errorf("%+v", rep.step(t, "distro_user"))
 	}
 	e.distros.list = []Distro{{Name: "Ubuntu-24.04", Version: 1}}
-	if s := e.report().step(t, "distro"); s.Status != "fail" || s.Action != nil || !strings.Contains(s.Detail, "--set-version") {
+	if s := e.report().step(t, "distro"); s.Status != "fail" || action(s) != "distro_wsl2" || !strings.Contains(s.Detail, "Fix: wsl.exe --set-version Ubuntu-24.04 2") {
 		t.Errorf("%+v", s)
 	}
 }
@@ -481,7 +482,7 @@ func TestSetupCheckBlockingFlag(t *testing.T) {
 	e.readyEnv()
 	rep := e.report()
 	want := map[string]bool{"windows_build": true, "virtualization": true, "wsl_feature": true, "reboot": true,
-		"wsl_version": true, "distro": true, "distro_user": true, "systemd": true, "cli": true,
+		"wsl_version": true, "distro": true, "distro_os": true, "distro_user": true, "systemd": true, "cli": true,
 		"linger": false, "keepalive": false, "wslconfig": false, "shim_path": false}
 	for _, s := range rep.Steps {
 		if s.Blocking != want[s.ID] {
@@ -859,7 +860,7 @@ func TestSetupRunWslEnableFailure(t *testing.T) {
 			failed = ev.Message
 		}
 	}
-	if !strings.Contains(failed, "exit code 1") {
+	if !strings.Contains(failed, "exit code 0x00000001") || !strings.Contains(failed, "wsl --install --no-distribution in a terminal opened as administrator") {
 		t.Errorf("failed message %q", failed)
 	}
 }
@@ -1300,7 +1301,7 @@ func TestSetupRunCLIInstall(t *testing.T) {
 	if !found {
 		t.Error("installer output not streamed as log events")
 	}
-	want := `-d Ubuntu-24.04 --cd ~ --exec /bin/bash -c set -o pipefail; export BENCHBAR_NONINTERACTIVE=1; curl -fsSL ` + installerURL() + ` | bash`
+	want := `-d Ubuntu-24.04 --cd ~ --exec /bin/bash -c export BENCHBAR_NONINTERACTIVE=1; set -o pipefail; curl -fsSL ` + installerURL() + ` | bash`
 	if got := e.starts()[1].Args; strings.Join(got, " ") != want {
 		t.Errorf("installer call %q", strings.Join(got, " "))
 	}

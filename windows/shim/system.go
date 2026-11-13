@@ -61,6 +61,11 @@ type System struct {
 
 	Elevate Elevator
 
+	// StartupApproved reads the binary value of a startup folder entry under
+	// HKCU\...\Explorer\StartupApproved\StartupFolder. An error means there
+	// is no value. Nil in tests that do not need it.
+	StartupApproved func(name string) ([]byte, error)
+
 	MemoryBytes func() (uint64, error)
 	WSLPath     func() (string, error)
 	FileExists  func(path string) bool
