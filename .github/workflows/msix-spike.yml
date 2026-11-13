@@ -1,0 +1,86 @@
+# MSIX feasibility spike (windows/msix). Builds the MSIX packages with
+# windows/msix/build-msix.ps1 on a Windows runner and uploads them as an
+# artifact. Run by hand only: Actions, MSIX spike, Run workflow. It never runs
+# on a push or a pull request, never signs with a real certificate and never
+# publishes anything. Store mode makes the unsigned .msixupload for Partner
+# Center; sideload mode makes one signed test package (self signed, test only).
+name: MSIX spike
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Sideload (self signed test package, x64) or Store (unsigned, x64 and arm64 bundle)'
+        type: choice
+        options: [Sideload, Store]
+        default: Sideload
+      version:
+        description: 'Package version A.B.C (the fourth part is always 0)'
+        type: string
+        default: '0.0.1'
+      identity_name:
+        description: 'Store mode only: Identity Name from Partner Center'
+        type: string
+        default: ''
+      publisher:
+        description: 'Store mode only: Identity Publisher from Partner Center (CN=...)'
+        type: string
+        default: ''
+      publisher_display_name:
+        description: 'Store mode only: PublisherDisplayName from Partner Center'
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: msix-spike-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      MODE: ${{ inputs.mode }}
+      PKG_VERSION: ${{ inputs.version }}
+      IDENTITY_NAME: ${{ inputs.identity_name }}
+      PUBLISHER: ${{ inputs.publisher }}
+      PUBLISHER_DISPLAY_NAME: ${{ inputs.publisher_display_name }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: windows/shim/go.mod
+          cache-dependency-path: windows/shim/go.sum
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: windows/tray/global.json
+
+      - name: Build the package
+        shell: pwsh
+        run: |
+          $p = @{ Mode = $env:MODE; Version = $env:PKG_VERSION }
+          if ($env:MODE -eq 'Store') {
+            $p.Arch = 'both'
+            $p.IdentityName = $env:IDENTITY_NAME
+            $p.Publisher = $env:PUBLISHER
+            $p.PublisherDisplayName = $env:PUBLISHER_DISPLAY_NAME
+          } else {
+            $p.Arch = 'x64'
+          }
+          ./windows/msix/build-msix.ps1 @args
+
+      - name: Upload the package
+        uses: actions/upload-artifact@v7
+        with:
+          name: benchbar-msix-${{ inputs.mode }}
+          path: |
+            windows/msix/out/*.msix
+            windows/msix/out/*.msixbundle
+            windows/msix/out/*.msixupload
+            windows/msix/out/*.cer
+          if-no-files-found: error

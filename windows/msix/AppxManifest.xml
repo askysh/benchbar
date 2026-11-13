@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  BenchBar for Windows, MSIX package manifest TEMPLATE (feasibility spike).
+  build-msix.ps1 replaces every {{TOKEN}} below and writes AppxManifest.xml
+  into the package folder. This file is not a valid manifest until then.
+
+  Tokens
+    {{IDENTITY_NAME}}        Partner Center, Product identity, Package/Identity/Name
+    {{PUBLISHER}}            Partner Center, Product identity, Package/Identity/Publisher
+                             (a string such as CN=XXXXXXXX-XXXX-...; for a local test it is
+                             the subject of the self signed certificate)
+    {{PUBLISHER_DISPLAY}}    Partner Center, Product identity, Package/Properties/PublisherDisplayName
+    {{VERSION}}              four part version A.B.C.0 (the Store reserves the last part: keep it 0)
+    {{ARCH}}                 x64 or arm64 (one package per CPU, then a bundle for the Store)
+
+  Notes
+    - Every namespace used below is declared on Package. uap10 is left out of
+      IgnorableNamespaces on purpose: a Windows that cannot read it must refuse the install
+      and not run with half the activation info.
+    - Full trust: runFullTrust is a restricted capability. Store submission asks for a
+      justification (see README.md). Sideloading needs no approval.
+    - The package folder is flat: benchbar.exe sits next to BenchBarTray.exe, which is where
+      the tray looks first (ShimLocator.Find: next to the running exe, then PATH).
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
+  xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap3 desktop rescap">
+
+  <Identity
+    Name="{{IDENTITY_NAME}}"
+    Publisher="{{PUBLISHER}}"
+    Version="{{VERSION}}"
+    ProcessorArchitecture="{{ARCH}}" />
+
+  <Properties>
+    <DisplayName>BenchBar</DisplayName>
+    <PublisherDisplayName>{{PUBLISHER_DISPLAY}}</PublisherDisplayName>
+    <Description>Set up and run Frappe benches in WSL 2 from the Windows notification area and the command line.</Description>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Dependencies>
+    <!-- 19045 is Windows 10 22H2, the oldest Windows the product supports. uap10 attributes need 19041 or later. -->
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19045.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+    <!--
+      Only if the test shows that the shim and an unpackaged copy must share
+      %LOCALAPPDATA%\BenchBar (see README.md, "Where config.json lands").
+      It is a second restricted capability with its own justification, and the docs say it
+      is not meant for this use, so keep it a fallback:
+      <rescap:Capability Name="unvirtualizedResources" />
+      and add inside Properties: <desktop6:FileSystemWriteVirtualization>disabled</desktop6:FileSystemWriteVirtualization>
+      (declare xmlns:desktop6="http://schemas.microsoft.com/appx/manifest/desktop/windows10/6").
+    -->
+  </Capabilities>
+
+  <Applications>
+
+    <!-- 1. The tray app. Start menu entry, startup task, single instance. -->
+    <Application
+      Id="BenchBarTray"
+      Executable="BenchBarTray.exe"
+      uap10:RuntimeBehavior="packagedClassicApp"
+      uap10:TrustLevel="mediumIL">
+      <uap:VisualElements
+        DisplayName="BenchBar"
+        Description="BenchBar tray app for Windows"
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png" />
+      <Extensions>
+        <!--
+          Open at logon, in place of the Startup folder shortcut.
+          Enabled="false": nothing runs at logon until the tray calls
+          StartupTask.RequestEnableAsync("BenchBarTrayLogon") after the person ticks
+          "Open BenchBar at logon". A person can turn it off in Task Manager > Startup
+          or Settings > Apps > Startup, and the app cannot turn it back on (Microsoft Learn,
+          "Integrate your desktop app with Windows using packaging extensions").
+        -->
+        <desktop:Extension
+          Category="windows.startupTask"
+          Executable="BenchBarTray.exe"
+          EntryPoint="Windows.FullTrustApplication">
+          <desktop:StartupTask
+            TaskId="BenchBarTrayLogon"
+            Enabled="false"
+            DisplayName="BenchBar" />
+        </desktop:Extension>
+      </Extensions>
+    </Application>
+
+    <!--
+      2. The command line shim. No Start menu entry (AppListEntry="none").
+      The alias puts benchbar.exe in %LOCALAPPDATA%\Microsoft\WindowsApps, which is on the
+      user PATH on a default Windows install. The alias is a reparse point (a stub), not a copy.
+      Only one alias per Application, and the last package that registers a name wins.
+    -->
+    <Application
+      Id="BenchBarCli"
+      Executable="benchbar.exe"
+      uap10:RuntimeBehavior="packagedClassicApp"
+      uap10:TrustLevel="mediumIL">
+      <uap:VisualElements
+        DisplayName="BenchBar command line"
+        Description="benchbar.exe: runs the BenchBar CLI inside WSL"
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png"
+        AppListEntry="none" />
+      <Extensions>
+        <uap3:Extension
+          Category="windows.appExecutionAlias"
+          Executable="benchbar.exe"
+          EntryPoint="Windows.FullTrustApplication">
+          <uap3:AppExecutionAlias>
+            <desktop:ExecutionAlias Alias="benchbar.exe" />
+          </uap3:AppExecutionAlias>
+        </uap3:Extension>
+
+        <!--
+          OPTION for replacing the "BenchBar Keepalive" scheduled task (not enabled in the spike).
+          A startup task on this Application would start the shim at logon with
+          uap10:Parameters="keepalive run" set on the Application element (documented as
+          "only supported for desktop apps that have package identity"). The shim is a console
+          program, so Windows may show a console window; test that before choosing it. The
+          other option, with no manifest change, is for the tray to start
+          "benchbar.exe keepalive run" hidden when it starts (it already starts at logon).
+        -->
+      </Extensions>
+    </Application>
+
+  </Applications>
+</Package>
