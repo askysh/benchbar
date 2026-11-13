@@ -285,7 +285,12 @@ chk_agent() {
   chk__template "systemd unit" "$unit" "$FL_R_PLIST" write_plist
   [[ "$CHK_STATUS" == "ok" ]] || return 0
   if ! fl_agent_loaded; then
-    chk__set warn "unit $(fl_agent_label) is written but not loaded" "$(fl_agent_load_hint "$unit")" write_plist
+    if fl_user_manager_down; then
+      # not "not loaded": nothing could be asked. Repairing the unit file cannot help
+      chk__set warn "$(fl_user_manager_msg)" "$(fl_user_manager_fix)"
+    else
+      chk__set warn "unit $(fl_agent_label) is written but not loaded" "$(fl_agent_load_hint "$unit")" write_plist
+    fi
     return 0
   fi
   state="$(fl_agent_field state)"; pid="$(fl_agent_field pid)"; code="$(fl_agent_field 'last exit code')"
@@ -475,7 +480,9 @@ fl__url_reachable() {
 }
 
 fl_prereq_platform_first() {
-  local id ver arch uid user groups mem_kb mb level apt_url linger_now fix
+  local id ver arch uid user groups mem_kb mb level apt_url linger_now fix ok_mb watches
+  # Windows' listening ports, for the default ports check that follows (WSL)
+  fl_wsl_windows_load
 
   # the distribution: Ubuntu 24.04 is what is tested
   id="$(fl__os_release_field ID)"; ver="$(fl__os_release_field VERSION_ID)"
@@ -485,10 +492,10 @@ fl_prereq_platform_first() {
     fl_prereq_add linux_distro warn "$(fl_linux_os_summary); BenchBar is tested on Ubuntu 24.04" "use Ubuntu 24.04 (in WSL: wsl --install -d Ubuntu-24.04)"
   fi
 
-  # the patched wkhtmltopdf package is built for x86_64 only
+  # the patched wkhtmltopdf package is built for x86_64 and arm64 only
   arch="${FL_ARCH:-$(uname -m)}"
-  if [[ "$arch" == "x86_64" ]]; then fl_prereq_add architecture ok "$arch"
-  else fl_prereq_add architecture warn "${arch}; the patched wkhtmltopdf package is built for x86_64 only, so PDFs will not work" "use an x86_64 machine to print PDFs from Frappe"; fi
+  if [[ -n "$(fl_wkhtmltopdf_deb_arch)" ]]; then fl_prereq_add architecture ok "$arch"
+  else fl_prereq_add architecture warn "PDF printing is not set up on ${arch}: the patched wkhtmltopdf package is built for x86_64 and arm64 only" "use an x86_64 or arm64 machine to print PDFs from Frappe"; fi
 
   # the installer refuses root and asks for sudo itself
   uid="${FL_EFFECTIVE_UID:-$EUID}"
@@ -542,13 +549,27 @@ fl_prereq_platform_first() {
   if [[ "$mem_kb" =~ ^[0-9]+$ ]]; then
     mb=$((mem_kb / 1024))
     level=ok
-    [[ "$mb" -ge "$FL_PREREQ_MEM_OK_MB" ]] || level=warn
+    # WSL: bench build can be killed below about 6 GB, so that is where it stops being ok
+    ok_mb="$FL_PREREQ_MEM_OK_MB"
+    fl_is_wsl && [[ "$FL_WSL_MEM_WARN_MB" -gt "$ok_mb" ]] && ok_mb="$FL_WSL_MEM_WARN_MB"
+    [[ "$mb" -ge "$ok_mb" ]] || level=warn
     [[ "$mb" -ge "$FL_PREREQ_MEM_WARN_MB" ]] || level=fail
-    if fl_is_wsl; then fix='give WSL more memory: memory=6GB under [wsl2] in %UserProfile%\.wslconfig, then wsl --shutdown'
+    if fl_is_wsl; then fix='give WSL more memory: memory=8GB under [wsl2] in %UserProfile%\.wslconfig (BenchBar never edits that file), then wsl.exe --shutdown in Windows'
     else fix="add memory to this machine"; fi
     fl_prereq_add memory "$level" "${mb} MB of memory" "$([[ "$level" == ok ]] || printf '%s' "$fix")" ",\"total_mb\":${mb}"
   else
     fl_prereq_add memory warn "could not read the memory size" "" ",\"total_mb\":null"
+  fi
+
+  # file watchers: benchwatch and bench build --watch use inotify; the Ubuntu default is too low for a bench
+  watches="$(cat "${FL_INOTIFY_FILE:-/proc/sys/fs/inotify/max_user_watches}" 2>/dev/null || true)"
+  if [[ "$watches" =~ ^[0-9]+$ ]]; then
+    if [[ "$watches" -ge 524288 ]]; then
+      fl_prereq_add inotify_watches ok "fs.inotify.max_user_watches is ${watches}" "" ",\"max_user_watches\":${watches}"
+    else
+      fl_prereq_add inotify_watches warn "fs.inotify.max_user_watches is ${watches}, below 524288; benchwatch and bench build --watch can run out of file watchers" \
+        "echo 'fs.inotify.max_user_watches=524288' | sudo tee /etc/sysctl.d/60-benchbar.conf && sudo sysctl --system" ",\"max_user_watches\":${watches}"
+    fi
   fi
 }
 

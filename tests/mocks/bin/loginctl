@@ -18,8 +18,8 @@ case "$cmd" in
     st="$(cat "$dir/$user" 2>/dev/null || echo no)"
     if [[ "$value" == 1 ]]; then printf '%s\n' "$st"; else printf 'Linger=%s\n' "$st"; fi ;;
   enable-linger)
-    # MOCK_LINGER_DENIED=1: polkit says no
-    [[ -n "${MOCK_LINGER_DENIED:-}" ]] && { echo "Failed to enable linger: Access denied" >&2; exit 1; }
+    # MOCK_LINGER_DENIED=1: polkit says no to the user, yes to root (sudo)
+    [[ -n "${MOCK_LINGER_DENIED:-}" && -z "${MOCK_AS_ROOT:-}" ]] && { echo "Failed to enable linger: Access denied" >&2; exit 1; }
     printf 'yes' >"$dir/${1:-}" ;;
   disable-linger) printf 'no' >"$dir/${1:-}" ;;
   *) ;;

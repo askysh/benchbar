@@ -5,6 +5,15 @@
 # shellcheck source=tests/mocks/bin/_mocklib.sh
 . "${0%/*}/_mocklib.sh"
 mock_log "$@"
+# $MOCK_STATE/curl_fail_hosts: one host name per line; a call whose URL is on one of them
+# fails like a host that does not answer (exit 28, a timeout)
+if [[ -f "${MOCK_STATE:-/nonexistent}/curl_fail_hosts" ]]; then
+  for a in "$@"; do
+    case "$a" in
+      http://*|https://*) h="${a#*://}"; h="${h%%/*}"; grep -qx "${h%%:*}" "${MOCK_STATE}/curl_fail_hosts" && { echo "curl: (28) Connection timed out" >&2; exit 28; } ;;
+    esac
+  done
+fi
 code="${MOCK_CURL_CODE:-000}"
 [[ -f "${MOCK_STATE:-/nonexistent}/curl_code" ]] && code="$(cat "${MOCK_STATE}/curl_code")"
 out=""

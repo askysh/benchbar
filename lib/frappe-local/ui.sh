@@ -878,6 +878,23 @@ fl_steps_counts() {
 # instead of waiting, reading end of input as "no", or guessing a default.
 fl_noninteractive() { [[ "${BENCHBAR_NONINTERACTIVE:-0}" == "1" ]]; }
 
+# fl_secrets_single_line NAME...: refuses, before any work, a password (the
+# variable NAME holds it) that contains a line break. The sudo password
+# travels on a pipe and the site's passwords on a standard input, one line
+# each, so a second line would be cut off or read as the next answer. Only the
+# name is printed, never the value.
+fl_secrets_single_line() {
+  local n
+  for n in "$@"; do
+    case "${!n:-}" in
+      *$'\n'*)
+        FL_ERROR_ID="password_has_newline"
+        fl_die "${n} contains a line break, and a password is passed on one line only. Nothing was changed." \
+          "Use a password without a line break in ${n} (a password you type or paste in a terminal never has one)." ;;
+    esac
+  done
+}
+
 FL_NEED_LIST=""
 # the names alone, as JSON strings: the "missing" field of the refusal
 FL_NEED_JSON=""

@@ -92,11 +92,11 @@ run00 --profile v16-lts --yes
 assert_eq "1" "$CODE" "$OUT"
 assert_contains "$OUT" "not supported on Linux yet"
 assert_contains "$OUT" "v15-lts is"
-assert_calls_not_contain '^(sudo|apt-get|uv|fnm|curl .*(wkhtmltox|astral|fnm))'
+assert_calls_not_contain '^(sudo|apt-get|uv|fnm|curl .*(wkhtmltox|astral\.sh/uv|fnm\.vercel))'
 run_fm install --profile v16-lts --dry-run
 assert_eq "1" "$CODE" "$OUT"
 assert_contains "$OUT" "not supported on Linux yet"
-assert_calls_not_contain '^(sudo|apt-get|uv|fnm|curl .*(wkhtmltox|astral|fnm))'
+assert_calls_not_contain '^(sudo|apt-get|uv|fnm|curl .*(wkhtmltox|astral\.sh/uv|fnm\.vercel))'
 
 # ---- dry run on a fresh machine: the plan, no sudo, no apt-get, no installer
 run00 --profile v15-lts --dry-run
@@ -106,7 +106,7 @@ assert_contains "$OUT" "dry-run: sudo apt-get install -y mariadb-server"
 assert_contains "$OUT" "dry-run: would ask for your password once (sudo)"
 assert_contains "$OUT" "uv python install 3.11"
 assert_contains "$OUT" "fnm install 22"
-assert_calls_not_contain '^(sudo|apt-get|uv|fnm|curl .*(wkhtmltox|astral|fnm))'
+assert_calls_not_contain '^(sudo|apt-get|uv|fnm|curl .*(wkhtmltox|astral\.sh/uv|fnm\.vercel))'
 [[ ! -s "$(pw_file)" ]] || fail "a dry run must not write the password file"
 assert_no_file "$FL_MYSQL_CONF_DIR/99-frappe.cnf"
 run_fm install --dry-run --yes --bench-dir "$HOME/frappe-bench"
@@ -164,7 +164,8 @@ assert_contains "$OUT" "fix: In the other distro run: sudo systemctl stop mariad
 run_fm install --yes --bench-dir "$HOME/frappe-bench"
 assert_eq "1" "$CODE" "$OUT"
 assert_contains "$OUT" "port 3306 (MariaDB)"
-assert_calls_not_contain '^(sudo|apt-get|uv|fnm|curl)'
+# (the hosts probe of the plan is a curl too: only a download counts)
+assert_calls_not_contain '^(sudo|apt-get|uv|fnm|curl .*(wkhtmltox|astral\.sh/uv|fnm\.vercel))'
 assert_no_file "$HOME/frappe-bench"
 # the system Redis port too, and both are listed
 printf '3306 - ? 0.0.0.0\n6379 - ? 127.0.0.1\n' >"$MOCK_LISTEN"
@@ -208,6 +209,15 @@ assert_calls_contain '^sudo apt-get update$'
 assert_calls_contain '^sudo apt-get install -y mariadb-server mariadb-client redis-server build-essential pkg-config libmariadb-dev libssl-dev libffi-dev zlib1g-dev git curl zip'
 # uv and fnm installers (no sudo, no shell edits), then Python and Node through them
 assert_calls_contain '^curl .*https://astral.sh/uv/install.sh'
+# the installers' downloads: a connect limit and retries, a slow network is not a hang
+assert_calls_contain '^curl -fsSL --connect-timeout 15 --retry 3 --retry-delay 2 -o .* https://astral.sh/uv/install.sh$'
+assert_calls_contain '^curl -fsSL --connect-timeout 15 --retry 3 --retry-delay 2 -o .* https://fnm.vercel.app/install$'
+# every apt call: no questions, a wait for the dpkg lock, the old config kept (fl_apt_get)
+apt_calls="$(cat "$MOCK_STATE/apt_sudo_raw")"
+assert_contains "$apt_calls" "env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get -o DPkg::Lock::Timeout=600 -o Dpkg::Options::=--force-confold update"
+assert_contains "$apt_calls" "-o Dpkg::Options::=--force-confold install -y mariadb-server mariadb-client"
+assert_contains "$apt_calls" "-o Dpkg::Options::=--force-confold install -y /tmp/benchbar-wkhtmltopdf."
+assert_eq "0" "$(grep -c -v 'DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get -o DPkg::Lock::Timeout=600' "$MOCK_STATE/apt_sudo_raw" || true)" "(no apt call without them)"
 assert_calls_contain '^curl .*https://fnm.vercel.app/install'
 assert_contains "$(cat "$MOCK_STATE/installer_env")" "UV_NO_MODIFY_PATH=1"
 assert_contains "$(cat "$MOCK_STATE/installer_env")" "fnm installer args: --install-dir $HOME/.local/share/fnm"
@@ -272,7 +282,7 @@ assert_eq "0" "$CODE" "$OUT"
 assert_eq "$snap_before" "$(snapshot "$HOME" "$FL_MYSQL_CONF_DIR" "$FL_STATE_DIR/secrets")" "(00 rerun must write nothing)"
 assert_calls_not_contain '^sudo ' "(a set up machine never asks for sudo)"
 assert_calls_not_contain '^apt-get (install|update)'
-assert_calls_not_contain '^(uv python install|fnm install|curl .*(wkhtmltox|astral|fnm))'
+assert_calls_not_contain '^(uv python install|fnm install|curl .*(wkhtmltox|astral\.sh/uv|fnm\.vercel))'
 [[ ! -s "$MOCK_STATE/mariadb_sql.log" ]] || fail "no SQL on a rerun"
 assert_contains "$OUT" "[OK] unchanged: all apt packages are installed"
 assert_contains "$OUT" "[OK] MariaDB root password verified (password file, unchanged)"
@@ -362,7 +372,7 @@ touch "$MOCK_STATE/sudo_refused"
 run00 --yes --profile v15-lts
 assert_eq "1" "$CODE" "$OUT"
 assert_contains "$OUT" "sudo is needed to set up the system dependencies"
-assert_calls_not_contain '^(apt-get|uv|fnm|curl .*(wkhtmltox|astral|fnm))'
+assert_calls_not_contain '^(apt-get|uv|fnm|curl .*(wkhtmltox|astral\.sh/uv|fnm\.vercel))'
 rm -f "$MOCK_STATE/sudo_refused"
 
 # ---- a tampered .deb: the checksum stops it, apt never sees it, the run goes on

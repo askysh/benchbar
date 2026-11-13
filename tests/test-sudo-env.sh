@@ -201,7 +201,7 @@ done_line="$(printf '%s\n' "$OUT" | grep '"event":"done"' | tail -n1)"
 assert_eq "sudo_password_wrong" "$(printf '%s' "$done_line" | jget - "d['error_id']")" "$done_line"
 assert_eq "1" "$(printf '%s' "$done_line" | jget - "d['exit']")"
 assert_contains "$done_line" "BENCHBAR_SUDO_PASSWORD"
-assert_calls_not_contain '^(apt-get|sudo apt-get|uv|fnm|bench|curl .*(wkhtmltox|astral|fnm))' "(nothing ran)"
+assert_calls_not_contain '^(apt-get|sudo apt-get|uv|fnm|bench|curl .*(wkhtmltox|astral\.sh/uv|fnm\.vercel))' "(nothing ran)"
 assert_calls_not_contain '^sudo (install|mariadb|systemctl)'
 assert_no_file "$(pw_file)"
 assert_no_file "$FL_MYSQL_CONF_DIR/99-frappe.cnf"

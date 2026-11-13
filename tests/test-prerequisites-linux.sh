@@ -17,6 +17,8 @@ lv() { pq "c[\"$1\"][\"level\"]"; }
 export FL_ARCH=x86_64 FL_PREREQ_GROUPS="tester adm sudo users"
 export FL_MEMINFO="$TMP_DIR/meminfo" FL_APT_DIR="$TMP_DIR/apt"
 export FL_SYSTEMD_RUN_DIR="$TMP_DIR/run-systemd"
+# the file watchers a healthy machine has (the host's own limit must not decide)
+export FL_INOTIFY_FILE="$TMP_DIR/max_user_watches"; printf '524288\n' >"$FL_INOTIFY_FILE"
 export FL_MARIADB_BIN="$ROOT/tests/mocks/mariadb" MOCK_MARIADB_ROOT_SOCKET_ONLY=1
 mkdir -p "$FL_SYSTEMD_RUN_DIR" "$FL_APT_DIR/sources.list.d" "$MOCK_STATE/linger"
 printf 'MemTotal:        8123456 kB\nMemFree: 1 kB\n' >"$FL_MEMINFO"
@@ -32,11 +34,11 @@ mkdir -p "$MOCK_STATE/http"
 snap="$(snapshot "$HOME" "$FL_STATE_DIR")"
 pre --bench-dir "$HOME/not-created-yet"
 assert_eq "0" "$CODE" "$OUT"
-assert_eq "linux_distro architecture regular_user sudo apt systemd linger memory disk_free bench_folder mariadb_password default_ports" \
+assert_eq "linux_distro architecture regular_user sudo apt systemd linger memory inotify_watches disk_free bench_folder mariadb_password default_ports" \
   "$(pq '" ".join(x["id"] for x in d["prerequisites"])')"
 assert_eq "True" "$(pq 'all(set(x) >= {"id","label","level","message","fix_command"} for x in d["prerequisites"])')"
-assert_eq "ok ok ok ok ok ok ok ok ok ok ok ok" "$(pq '" ".join(x["level"] for x in d["prerequisites"])')" "$OUT"
-assert_eq '{"ok": 12, "warn": 0, "fail": 0}' "$(pq 'json.dumps(d["summary"])')"
+assert_eq "ok ok ok ok ok ok ok ok ok ok ok ok ok" "$(pq '" ".join(x["level"] for x in d["prerequisites"])')" "$OUT"
+assert_eq '{"ok": 13, "warn": 0, "fail": 0}' "$(pq 'json.dumps(d["summary"])')"
 assert_eq "True" "$(pq 'all(x["level"] == "ok" or bool(x["fix_command"]) for x in d["prerequisites"])')"
 assert_eq "Ubuntu 24.04" "$(pq 'c["linux_distro"]["message"]')"
 assert_eq "7933 True 50 0" "$(pq '" ".join(str(v) for v in (c["memory"]["total_mb"], c["systemd"]["enabled"], c["disk_free"]["free_gb"], c["default_ports"]["port_offset"]))')"
@@ -48,13 +50,15 @@ assert_calls_not_contain '^(apt-get|systemctl .*(start|restart|enable))'
 set +e; OUT="$(cd "$PRE" && "$FM" doctor --prerequisites 2>&1)"; CODE=$?; set -e
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "systemd: systemd runs as PID 1"
-assert_contains "$OUT" "12 ok, 0 warn, 0 fail"
+assert_contains "$OUT" "13 ok, 0 warn, 0 fail"
 
 # distribution, architecture, user
 printf 'NAME="Ubuntu"\nID=ubuntu\nVERSION_ID="22.04"\n' >"$FL_OS_RELEASE"
 pre; assert_eq "warn 0" "$(lv linux_distro) $CODE"; assert_contains "$(pq 'c["linux_distro"]["fix_command"]')" "Ubuntu-24.04"
 printf 'NAME="Ubuntu"\nID=ubuntu\nID_LIKE=debian\nVERSION_ID="24.04"\n' >"$FL_OS_RELEASE"
-FL_ARCH=aarch64 pre; assert_eq "warn 0" "$(lv architecture) $CODE"; assert_contains "$(pq 'c["architecture"]["message"]')" "x86_64 only"
+# arm64 has an official package too (config/wkhtmltopdf.tsv); another architecture has none
+FL_ARCH=aarch64 pre; assert_eq "ok 0" "$(lv architecture) $CODE"
+FL_ARCH=riscv64 pre; assert_eq "warn 0" "$(lv architecture) $CODE"; assert_contains "$(pq 'c["architecture"]["message"]')" "PDF printing is not set up on riscv64"
 FL_EFFECTIVE_UID=0 pre; assert_eq "fail 1" "$(lv regular_user) $CODE"
 
 # sudo: the group decides, nothing is run as root
@@ -101,11 +105,26 @@ printf 'yes' >"$MOCK_STATE/linger/tester"
 # memory
 printf 'MemTotal:        3000000 kB\n' >"$FL_MEMINFO"
 pre; assert_eq "warn 0 2929" "$(lv memory) $CODE $(pq 'c["memory"]["total_mb"]')"; assert_contains "$(pq 'c["memory"]["fix_command"]')" ".wslconfig"
+# WSL: bench build can be killed below about 6 GB (5500 MB is the line), elsewhere 3500 MB is enough
+printf 'MemTotal:        5000000 kB\n' >"$FL_MEMINFO"
+pre; assert_eq "warn 0" "$(lv memory) $CODE"; assert_contains "$(pq 'c["memory"]["fix_command"]')" "memory=8GB"
+FL_PROC_VERSION="$TMP_DIR/not-wsl-version"; printf 'Linux version 6.8.0-generic\n' >"$FL_PROC_VERSION"
+pre; assert_eq "ok 0" "$(lv memory) $CODE" "(4 GB is fine outside WSL)"
+printf 'Linux version 6.6.0-microsoft-standard-WSL2\n' >"$FL_PROC_VERSION"
 printf 'MemTotal:        1000000 kB\n' >"$FL_MEMINFO"
 pre; assert_eq "fail 1" "$(lv memory) $CODE"
 printf 'nothing useful\n' >"$FL_MEMINFO"
 pre; assert_eq "warn None" "$(lv memory) $(pq 'c["memory"]["total_mb"]')"
 printf 'MemTotal:        8123456 kB\n' >"$FL_MEMINFO"
+
+# file watchers: the sysctl fix line below 524288; no file, no row
+printf '65536\n' >"$FL_INOTIFY_FILE"
+pre; assert_eq "warn 0 65536" "$(lv inotify_watches) $CODE $(pq 'c["inotify_watches"]["max_user_watches"]')"
+assert_contains "$(pq 'c["inotify_watches"]["fix_command"]')" "fs.inotify.max_user_watches=524288"
+assert_contains "$(pq 'c["inotify_watches"]["fix_command"]')" "sysctl --system"
+: >"$TMP_DIR/gone.marker"; mv "$FL_INOTIFY_FILE" "$TMP_DIR/gone.marker"
+pre; assert_eq "" "$(pq '" ".join(x["id"] for x in d["prerequisites"] if x["id"] == "inotify_watches")')" "(a host without the file has no row)"
+printf '524288\n' >"$FL_INOTIFY_FILE"
 
 # disk, folder
 printf '%s' 15728640 >"$MOCK_STATE/df_avail_kb"; pre; assert_eq "warn 15" "$(lv disk_free) $(pq 'c["disk_free"]["free_gb"]')"

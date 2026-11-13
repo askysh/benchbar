@@ -13,6 +13,19 @@ FL_BREW_PREFIX=""
 FL_PROC_VERSION="${FL_PROC_VERSION:-/proc/version}"
 FL_OS_RELEASE="${FL_OS_RELEASE:-/etc/os-release}"
 FL_PROC_DIR="${FL_PROC_DIR:-/proc}"
+FL_USER_RUN_BASE="${FL_USER_RUN_BASE:-/run/user}"
+
+# A run started by wsl.exe on an older WSL has no login session, so
+# XDG_RUNTIME_DIR is unset and "systemctl --user" cannot find its bus, though
+# systemd runs the user's manager under /run/user/UID. Point at it (no process
+# is started: $UID is the shell's own).
+fl_linux_user_bus_env() {
+  local dir="${FL_USER_RUN_BASE}/${UID}"
+  [[ -z "${XDG_RUNTIME_DIR:-}" && -d "$dir" ]] || return 0
+  export XDG_RUNTIME_DIR="$dir"
+  [[ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]] || export DBUS_SESSION_BUS_ADDRESS="unix:path=${dir}/bus"
+}
+fl_linux_user_bus_env
 
 # ------------------------------------------------------------- startup
 
@@ -44,14 +57,24 @@ fl_platform_init() {
 
 fl_default_site() { printf 'linuxdev.localhost'; }
 
-# wslview inside WSL (it opens the Windows browser), xdg-open elsewhere
+# wslview inside WSL (it opens the Windows browser), else explorer.exe from the
+# Windows PATH, xdg-open elsewhere
 fl_open_cmd() {
-  if fl_is_wsl; then printf 'wslview'; else printf 'xdg-open'; fi
+  if fl_is_wsl; then
+    if ! command -v wslview >/dev/null 2>&1 && command -v explorer.exe >/dev/null 2>&1; then printf 'explorer.exe'; else printf 'wslview'; fi
+  else
+    printf 'xdg-open'
+  fi
 }
 
 fl_open_url() {
   local cmd
   cmd="$(fl_open_cmd)"
+  if [[ "$cmd" == "explorer.exe" ]]; then
+    # explorer.exe exits 1 even when it opened the page: that is not a failure
+    "$cmd" "$1" || true
+    return 0
+  fi
   command -v "$cmd" >/dev/null 2>&1 || { cmd=xdg-open; command -v "$cmd" >/dev/null 2>&1 || return 127; }
   "$cmd" "$1"
 }
@@ -378,20 +401,28 @@ fl_port_listen_addresses() {
 # when the unit (mariadb, redis-server) of this distro is active, so a rerun
 # passes. ss may not show the owner (another user's process, or another WSL
 # distro, whose processes are in a PID space of their own), so the unit is
-# the test, not the pid. Nothing is stopped.
+# the test, not the pid. Under WSL a program of Windows counts too
+# (fl_port_outside_holder: netstat.exe and a connect to 127.0.0.1). Nothing is
+# stopped.
 fl_install_port_blockers() {
-  local spec port unit what id msg fix
+  local spec port unit what id msg fix who
   for spec in "3306 mariadb MariaDB" "6379 redis-server Redis"; do
     read -r port unit what <<<"$spec"
-    fl_port_listening "$port" || continue
-    fl_linux_unit_active "$unit" && continue
     id="port_${port}_in_use"
-    if fl_is_wsl; then
-      msg="Another WSL distro or program already uses port ${port} (${what}). WSL distros share one network, so only one can run ${what} on it. Stop ${what} in the other distro, or install in that distro."
-      fix="In the other distro run: sudo systemctl stop ${unit} (wsl.exe --list --running names the distros that run), then run benchbar install again"
+    if fl_port_listening "$port"; then
+      fl_linux_unit_active "$unit" && continue
+      if fl_is_wsl; then
+        msg="Another WSL distro or program already uses port ${port} (${what}). WSL distros share one network, so only one can run ${what} on it. Stop ${what} in the other distro, or install in that distro."
+        fix="In the other distro run: sudo systemctl stop ${unit} (wsl.exe --list --running names the distros that run), then run benchbar install again"
+      else
+        msg="Another program already uses port ${port} (${what}), so the ${what} of this install could not start. Stop it, or install on a machine where the port is free."
+        fix="Find it with: ss -ltnp 'sport = :${port}', stop it, then run benchbar install again"
+      fi
+    elif who="$(fl_port_outside_holder "$port")" && [[ -n "$who" ]]; then
+      msg="Port ${port} (${what}) is already in use by ${who}, so ${what} in this distro would clash with it or not be reachable from Windows."
+      fix="$(fl_windows_port_fix "$port")"
     else
-      msg="Another program already uses port ${port} (${what}), so the ${what} of this install could not start. Stop it, or install on a machine where the port is free."
-      fix="Find it with: ss -ltnp 'sport = :${port}', stop it, then run benchbar install again"
+      continue
     fi
     printf '%s|%s|%s\n' "$id" "$msg" "$fix"
   done
@@ -682,10 +713,10 @@ fl_linux_sudo_reasons() {
 fl_wkhtmltopdf_sudo_reason() { printf 'install the wkhtmltopdf package (apt-get install %s)' "$FL_WKHTML_FILE"; }
 fl_wkhtmltopdf_manual_install() { printf 'sudo apt-get install -y %s' "$FL_WKHTML_PKG"; }
 
-# the package is built for x86_64 only
+# the official package is built for x86_64 (amd64) and arm64 only
 fl_wkhtmltopdf_will_install() {
   [[ "$(fl_wkhtmltopdf_state)" != "patched" ]] || return 1
-  [[ "${FL_ARCH:-$(uname -m)}" == "x86_64" ]] || return 1
+  [[ -n "$(fl_wkhtmltopdf_deb_arch)" ]] || return 1
   [[ "${FL_ASSUME_YES:-0}" == "1" || -t 0 ]]
 }
 
@@ -726,8 +757,8 @@ fl_wkhtmltopdf_install() {
     else
       fl_ok "root owned copy verified (sha256 ok)"
       # the package indexes may be stale on a fresh machine; a failed update is not fatal
-      fl_run_long "apt-get update" sudo apt-get update || fl_warn "apt-get update failed; trying the install with the indexes there are"
-      fl_run_long "apt-get install ${FL_WKHTML_FILE}" sudo apt-get install -y "$root_pkg" || code=1
+      fl_apt_run_long "apt-get update" update || fl_warn "apt-get update failed; trying the install with the indexes there are"
+      fl_apt_run_long "apt-get install ${FL_WKHTML_FILE}" install -y "$root_pkg" || code=1
     fi
   fi
   fl_log "run: sudo rm -rf ${root_dir}"
@@ -780,3 +811,6 @@ fl_hosts_remove_name() { FL_HOSTS_REMOVED=0; FL_HOSTS_MANUAL=""; return 0; }
 # the Linux checks, repair actions and report pieces live in their own file
 # shellcheck source=lib/frappe-local/doctor-linux.sh
 . "${SCRIPT_DIR}/lib/frappe-local/doctor-linux.sh"
+# apt, systemd, WSL and network preflight (the install plan's blockers and warnings)
+# shellcheck source=lib/frappe-local/preflight-linux.sh
+. "${SCRIPT_DIR}/lib/frappe-local/preflight-linux.sh"

@@ -345,6 +345,7 @@ fl_cmd_up() {
   fl_step_begin 0
   fl_arm_start
   if ! fl_agent_loaded; then
+    ! fl_user_manager_down || fl_die "$(fl_user_manager_msg)" "$(fl_user_manager_fix)"
     fl_info "agent not loaded; loading $(fl_agent_plist_path)"
     fl_agent_bootstrap "$(fl_agent_plist_path)" || fl_die "${FL_AGENT_CTL} could not load the agent." "Run: ${FL_SELF} repair"
   fi
@@ -435,6 +436,7 @@ fl_cmd_restart() {
   fl_step_begin 0
   fl_arm_start
   if ! fl_agent_loaded; then
+    ! fl_user_manager_down || fl_die "$(fl_user_manager_msg)" "$(fl_user_manager_fix)"
     fl_agent_bootstrap "$(fl_agent_plist_path)" || fl_die "${FL_AGENT_CTL} could not load the agent."
   fi
   fl_state_json_write starting "" "" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "" ""
