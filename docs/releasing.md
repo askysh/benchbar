@@ -80,27 +80,46 @@ the Mac app. The workflow never publishes. Re-run it after a re-run of
 release.yml, which replaces the notes and with them the Windows
 paragraph.
 
-When `SIGNPATH_API_TOKEN` and `SIGNPATH_ORGANIZATION_ID` are set (repo
-secrets; `SIGNPATH_PROJECT_SLUG`, `SIGNPATH_SIGNING_POLICY_SLUG` and
+The signing step is dormant: it runs only when `SIGNPATH_API_TOKEN` and
+`SIGNPATH_ORGANIZATION_ID` are set (repo
+secrets; there are none today, so every Windows program ships unsigned; `SIGNPATH_PROJECT_SLUG`, `SIGNPATH_SIGNING_POLICY_SLUG` and
 `SIGNPATH_ARTIFACT_CONFIGURATION_SLUG` variables override `benchbar`,
 `release-signing` and `windows-exe`), the project's own exe and DLLs (not NuGet packages) go through SignPath, only for a tag build, and each is
 checked with `Get-AuthenticodeSignature`. A missing secret, a failed
 request or a signature that does not check leaves that exe unsigned;
 the release still completes, and its notes say which binaries are
-unsigned.
+unsigned. To make a release fail instead when a program of ours is
+unsigned, set the repository variable `SIGNING_REQUIRED` to `true`. It is
+unset today; set it only once signing works, or no Windows release can be
+attached.
+
+The release job also attests both zips with `actions/attest-build-provenance`
+(it needs the `id-token` and `attestations` write permissions), so
+`gh attestation verify benchbar-windows-X.Y.Z-amd64.zip -R askysh/benchbar`
+works. The notes and `README.txt` tell users to run the one liner as
+`& ([scriptblock]::Create((irm URL))) -Version X.Y.Z`, which pins the
+version and sets nothing in their session. A build that is not a release
+points at `main` instead of a tag.
 
 Before publishing the draft, check:
 
 1. Both zips and the sums file are attached, and the Windows paragraph
-   of the notes names the unsigned binaries (all of them until SignPath
-   approves the project).
+   of the notes names the unsigned binaries (all of them while there are no
+   signing secrets).
 2. `install.ps1 -Version X.Y.Z` cannot be tried on a draft (its assets
    answer 404): download the amd64 zip from the draft instead, unpack it,
    run `benchbar.exe --shim-version` and start `BenchBarTray.exe`
    against a distro with a bench.
 3. After publishing, run the one liner from
    [Windows](windows.md#install) on a clean Windows 11 (a VM or Windows
-   Sandbox) and note what SmartScreen says.
+   Sandbox) and check these:
+   - One line installer: no dialog is expected.
+   - Zip route (unpack, start a program yourself): the "Open File -
+     Security Warning" is expected until the builds are signed.
+   - Smart App Control on: the installer stops before it writes anything.
+4. Submit the two zips at <https://www.microsoft.com/wdsi/filesubmission>
+   as a software developer when Defender flags them. This is a manual
+   step for each release.
 
 To try the Windows build without a release, run Release Windows by
 hand with a version and `draft_release` off: the zips land as workflow
@@ -113,8 +132,8 @@ download the `windows-amd64` (and `windows-arm64`) artifact from the
 run's summary page. Each holds the zip and its `sums-<arch>.txt`. Send
 the zip; the tester unpacks it and runs its own `install.ps1`, as
 [Windows](windows.md#a-test-build-you-were-sent) describes. The
-programs are unsigned, so SmartScreen warns on first start and Smart
-App Control in enforce mode blocks them: testers need it off or in
+programs are unsigned, so starting one from the unpacked folder shows the
+Open File security warning and Smart App Control in enforce mode blocks them: testers need it off or in
 evaluation mode.
 
 ### Trying a build without a release

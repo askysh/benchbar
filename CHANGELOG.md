@@ -2,6 +2,68 @@
 
 All notable changes to this project are documented here.
 
+## Unreleased
+
+A fix pass for Windows from a full review and a live test on a Windows 11
+PC. Getting from nothing to a running bench has fewer dead ends, and the
+installer, `benchbar.exe`, the tray and the command line tool in WSL say
+what is wrong and how to fix it.
+
+### Windows installer
+
+- The installer stops before it writes anything when Smart App Control is on, and says what to do. It also stops early in Constrained Language Mode.
+- It removes the "downloaded from the internet" mark from the files it installs, so a zip install no longer shows "The publisher could not be verified" at every start.
+- A first install adds a Start menu shortcut, offers to install the .NET 10 Desktop Runtime with winget, starts the tray and ends with the next step.
+- It finds the newest release that has a Windows zip, works through a proxy, and still works when GitHub's API is rate limited.
+- When a security product removes a file, it says so and names Windows Security > Protection history.
+- `install.ps1 -Uninstall` removes BenchBar for Windows: tray, keepalive task, shortcuts, PATH entry and files. It never touches WSL, your distro or your benches.
+
+### benchbar.exe
+
+- Upgrading `benchbar.exe` now also updates the command line tool inside WSL: `setup check` and `doctor` show when the two releases differ, and `setup run cli_install` brings the tool up to date.
+- A Docker Desktop, Rancher Desktop or Podman distro is never picked on its own. If your WSL default is one of them, BenchBar uses your one other distro, or asks you to choose with `benchbar.exe adopt-distro NAME`.
+- Setup checks that the distro is Ubuntu 24.04 before anything is installed. If you already have one Ubuntu 24.04 distro, setup uses it and does not install a second one.
+- Commands that talk to WSL no longer hang for good when `wsl.exe` does not answer. They stop with a message and the fix.
+- A failed WSL install shows its error code with advice: virtualization off in the firmware, network or proxy, a policy or a stopped service.
+- A failed download of the installer says why, and your Windows proxy settings are passed into WSL.
+- `benchbar.exe adopt C:\path` and other drive and `\\wsl.localhost` paths now work as arguments.
+- `benchbar.exe path remove` takes the install folder out of your user PATH.
+- `doctor` warns about WSL networking settings that stop a site opening at `localhost`, a keepalive task that runs an old copy, a tray that Windows has turned off at logon, and files a security product may have removed.
+- `setup` needs Windows 10 22H2 or later, tells you to choose Restart (not Shut down) when a restart is needed, and can convert a WSL 1 distro (`setup run distro_wsl2`).
+- A `config.json` written by Windows PowerShell (UTF-16) is read, and a broken file names its path and the fix.
+- `benchbar.exe` has a version resource: company, product, description and version.
+
+### Windows tray
+
+- The PC stays awake while a setup or install runs.
+- The setup wizard opens on a PC that has WSL but no usable Ubuntu distro, comes to the front when BenchBar opens it, resumes in the right flow after a restart, and names the Linux user it will create.
+- A notice says when `benchbar.exe` and the tray are different versions, and the flyout shows the running version. An unreadable answer from `benchbar.exe` names a version mismatch as the likely cause.
+- A setup step the tray does not know yet is shown and can be run.
+- Stop or a timeout during an install waits for the old run to end before the next try.
+- A notice appears when BenchBar closed unexpectedly last time, with Report a Bug.
+- The update notice appears only when the Windows download exists, and copies the one line installer for PowerShell.
+- "Open BenchBar at logon" shows off when Windows has switched the startup entry off, and turning it on clears that.
+- The flyout opens on the monitor you clicked. Polling slows down while the window is minimized or in the background.
+- A new site's Administrator password needs at least 8 characters, no password may hold a line break, and passwords are hidden in log lines in every form.
+- Clearer messages when `benchbar.exe` is missing, blocked by Smart App Control, or access is denied.
+- Red and amber text are darker, and high contrast uses system colors.
+
+### Linux and WSL
+
+- `install` checks before it asks for sudo: systemd running, ports held by Windows programs, github.com reachable, and a bench folder on the Windows drive (refused unless `--allow-windows-fs`). Low WSL memory, low Windows disk space and unreachable package hosts show as warnings in the plan.
+- A bench init that was stopped or timed out, with no site and no app of your own, is moved aside and started again by the next install. `BENCH_INIT_TIMEOUT_SECONDS` sets how long init may run, and init now reports progress in the JSON stream.
+- apt runs without questions, waits for another apt's lock, and keeps your proxy. Package downloads retry on a slow network.
+- `install` turns on lingering for your user, and says clearly when the systemd user manager is not reachable.
+- PDF printing now works on arm64 Linux. Other architectures get a warning.
+- `doctor --prerequisites` warns about too few file watchers. A password with a line break is refused before any work.
+- The install plan JSON has a new `warnings` list next to `blockers`.
+
+### Docs and releases
+
+- Windows docs: what Windows may show per install route, an "If Windows blocks it" guide, how to verify a download, update and uninstall, and troubleshooting. The Windows programs are not signed yet, and the docs say what that means.
+- Windows releases after 0.8.2 carry build provenance: `gh attestation verify benchbar-windows-VERSION-ARCH.zip -R askysh/benchbar`.
+- The release workflow can require signed files (`SIGNING_REQUIRED`), gives test builds a development version, and runs the installer test before every release.
+
 ## 0.8.2 - 2026-11-06
 
 0.8.2 brings Labs: experiments that stay off until you turn them on, in a

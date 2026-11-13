@@ -64,8 +64,15 @@ phase scripts: no other program started by the install sees them.
 | `--dry-run` | Print the plan of every phase, change nothing |
 | `--frappe-commit SHA`, `--erpnext-commit SHA` | Pin frappe or erpnext to a commit (7 to 40 hex characters; a team profile can say `frappe_commit` and `erpnext_commit`). The flag wins over the profile. A pinned clone is fetched without its first build, the commit is checked out, and one build follows. A commit the clone does not reach stops the install before anything is built or created |
 | `--offline` | Skip the remote branch checks of both phase scripts (also `OFFLINE=1` or `BENCHBAR_OFFLINE=1`) |
+| `--allow-windows-fs` | WSL only: accept a bench on the Windows file system (`/mnt/c`, drvfs, 9p). Refused by default: it is very slow, file watching does not work and permissions break |
 | `-y`, `--yes` | Accept every default and confirmation, including the `sudo` line for `/etc/hosts`; the passwords must be in the environment |
 | `--json` | JSON lines for the BenchBar app and agents: `plan`, `step`, `progress` and a closing `done` ([schema](../../json-schema.md#benchbar-install---json)). Needs `--yes` or `--dry-run`, takes every value from a flag or the environment and never asks |
+
+`BENCH_INIT_TIMEOUT_SECONDS` sets how long `bench init` may run before it is
+stopped (default 2700, `0` for no limit). A half built bench left by a stopped
+init, with frappe as its only app and no site, is moved aside (never deleted)
+by the next `install`, which starts `bench init` again. A bench with another
+app or a site is never moved: `install` stops and names `benchbar repair`.
 
 With `--yes` the confirmation is skipped but the `sudo` password prompt
 is not. When the BenchBar app runs it, `BENCHBAR_SUDO=gui` is set, and each of
@@ -105,6 +112,7 @@ warns and does not install it into the bench env.
 | `--make-default` | Make this the default bench even when another one is the default |
 | `--port-offset N` | Use port block N instead of the automatic choice |
 | `--site NAME` | The site `benchup` waits for, when the bench has several |
+| `--allow-windows-fs` | WSL only: accept a bench on the Windows file system (`/mnt/c`, drvfs, 9p), which is refused by default |
 | `--dry-run` | Print the plan, change nothing |
 | `-y`, `--yes` | Apply without asking |
 | `--json` | JSON lines, as for `install` ([schema](../../json-schema.md#benchbar-install---json)); needs `--yes` or `--dry-run` |
