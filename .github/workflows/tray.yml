@@ -71,3 +71,24 @@ jobs:
           name: BenchBarTray-win-x64-self-contained
           path: windows/tray/out/sc
           if-no-files-found: error
+
+  # Build only, no tests (the test projects are x64) and no artifact: the
+  # release ships an arm64 tray, so an arm64 break should show up in a pull
+  # request and not at release time. The same properties as release-windows.yml.
+  build-arm64:
+    name: build (arm64)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      DOTNET_NOLOGO: '1'
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: windows/tray/global.json
+      - name: Publish for arm64 (framework dependent)
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          dotnet publish BenchBarTray/BenchBarTray.csproj -c Release -r win-arm64 --self-contained false -p:Platform=arm64 -p:PlatformTarget=arm64 -o out/arm64
+          if (-not (Test-Path out/arm64/BenchBarTray.exe)) { throw 'dotnet publish did not produce BenchBarTray.exe' }
