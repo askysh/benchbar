@@ -40,11 +40,12 @@ has Open as keyboard shortcuts, and two sharing fixes are in.
   expires. The checks of the running share (its gateway and web process)
   read "Checked when sharing starts" until then. A refused share setup now
   says why instead of "share setup failed."
-- Sharing: guests can open the apps screen (`/apps`) and the apps that
-  add themselves to it with their own front end (for example
-  `/manufacturing-ops`, `/crm`, `/insights`). The share gateway reads those
-  routes from the copy when sharing starts; before, it refused them as
-  "isn't available through sharing".
+- Sharing: guests can open the apps screen (`/apps`) and the apps with
+  their own front end, whether they add themselves to the apps screen or
+  only route `/x/<path:app_path>` to their page (for example
+  `/manufacturing-ops`, `/crm`, `/insights`, `/engineering-change`). The
+  share gateway reads those routes from the copy when sharing starts;
+  before, it refused them as "isn't available through sharing".
 - Sharing ends by itself when its copy is dropped or deleted while it is on
   (a new critical check, `copy_present`), instead of staying on and showing
   guests "restarting".
