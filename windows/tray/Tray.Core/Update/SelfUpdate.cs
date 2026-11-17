@@ -223,7 +223,12 @@ public sealed class SelfUpdateLauncher(Func<string?> locateShim, Func<ProcessSta
             }
             if (process is null) return new UpdateStart(UpdateStartKind.Failed, "Windows did not start the update window.");
             _running = process;
-            process.Exited += () => Ended?.Invoke();
+            process.Exited += () =>
+            {
+                // forget the ended window, so the next Update Now starts a new one
+                lock (_gate) { if (ReferenceEquals(_running, process)) _running = null; }
+                Ended?.Invoke();
+            };
         }
         if (process.HasExited) Ended?.Invoke(); // it ended before Exited had a handler
         return new UpdateStart(UpdateStartKind.Started);
