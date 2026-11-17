@@ -221,6 +221,9 @@ public partial class App
         model.ConfirmRestartDistro = question => Task.FromResult(
             MessageBox.Show(_main, question, "BenchBar", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes);
         model.CloseRequested += reason => CloseWizard(model, reason);
+        // the wizard's logon box shows what the startup task reports: read it now, and again whenever a request ends
+        Logon.Changed += model.Refresh;
+        Logon.RefreshAsync().Forget();
         _wizard = model;
         _main.ShowWizard(new WizardView(model, BuildWizardActions()));
         if (resume) model.ResumeAtCheck().Forget();
@@ -243,6 +246,7 @@ public partial class App
             _controller?.Poller.BoostFor(BenchPoller.ActionBoost);
         }
         _wizard = null;
+        Logon.Changed -= model.Refresh;
         _main?.CloseWizard();
         model.Dispose();
     }

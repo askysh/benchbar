@@ -86,6 +86,9 @@ public class PackagingTests
         public StartupTaskState State { get; set; } = state;
         public StartupTaskState AfterEnable { get; set; } = StartupTaskState.Enabled;
         public bool Throws { get; set; }
+        public bool ThrowOnEnable { get; set; }
+        public bool KeepsState { get; set; }
+        public TaskCompletionSource<StartupTaskState>? EnableGate { get; set; }
         public List<string> Calls { get; } = [];
 
         public Task<StartupTaskState> GetStateAsync()
@@ -98,6 +101,8 @@ public class PackagingTests
         public Task<StartupTaskState> RequestEnableAsync()
         {
             Calls.Add("enable");
+            if (ThrowOnEnable) throw new InvalidOperationException("request failed");
+            if (EnableGate is { } gate) return gate.Task;
             if (State == StartupTaskState.Disabled) State = AfterEnable;
             return Task.FromResult(State);
         }
@@ -105,7 +110,7 @@ public class PackagingTests
         public Task DisableAsync()
         {
             Calls.Add("disable");
-            if (State == StartupTaskState.Enabled) State = StartupTaskState.Disabled;
+            if (!KeepsState && State == StartupTaskState.Enabled) State = StartupTaskState.Disabled;
             return Task.CompletedTask;
         }
     }
@@ -210,6 +215,58 @@ public class PackagingTests
         Assert.Equal(1, changes);
         await model.SetAsync(true);
         Assert.Equal(2, changes);
+    }
+
+    [Theory]
+    [InlineData(StartupTaskState.Disabled)]
+    [InlineData(StartupTaskState.DisabledByUser)]
+    public async Task ARequestThatEndsOffPublishesOffNeverTheClicksGuess(StartupTaskState after)
+    {
+        var task = new FakeTask(StartupTaskState.Disabled) { AfterEnable = after };
+        var model = new LogonModel(Packaged, new FakeShortcut(), task);
+        await model.RefreshAsync();
+        await model.SetAsync(true);
+        Assert.False(model.View.IsOn);
+        Assert.Equal(after == StartupTaskState.DisabledByUser ? LogonView.TurnedOffInWindows : null, model.View.Note);
+    }
+
+    [Fact]
+    public async Task ARequestThatThrowsPublishesOffWithTheUnreadableLine()
+    {
+        var faults = new List<Exception>();
+        var task = new FakeTask(StartupTaskState.Disabled) { ThrowOnEnable = true };
+        var model = new LogonModel(Packaged, new FakeShortcut(), task, faults.Add);
+        await model.RefreshAsync();
+        await model.SetAsync(true);
+        Assert.False(model.View.IsOn);
+        Assert.Equal(LogonView.Unreadable, model.View.Note);
+        Assert.Single(faults);
+    }
+
+    [Fact]
+    public async Task ADisableShowsWhatTheTaskReportsAfterwards()
+    {
+        var task = new FakeTask(StartupTaskState.Enabled) { KeepsState = true };
+        var model = new LogonModel(Packaged, new FakeShortcut(), task);
+        await model.RefreshAsync();
+        await model.SetAsync(false);
+        Assert.True(model.View.IsOn); // Disable() did not take: the box says so
+    }
+
+    [Fact]
+    public async Task AToggleWhileARequestIsInFlightIsIgnored()
+    {
+        var gate = new TaskCompletionSource<StartupTaskState>();
+        var task = new FakeTask(StartupTaskState.Disabled) { EnableGate = gate };
+        var model = new LogonModel(Packaged, new FakeShortcut(), task);
+        await model.RefreshAsync();
+        var first = model.SetAsync(true);
+        await model.SetAsync(false); // ignored
+        Assert.Equal(["get", "enable"], task.Calls);
+        gate.SetResult(StartupTaskState.Enabled);
+        await first;
+        Assert.True(model.View.IsOn);
+        Assert.Equal(["get", "enable"], task.Calls);
     }
 
     // --- Settings ---

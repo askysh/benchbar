@@ -166,6 +166,8 @@ public partial class App : Application, ITrayHost
         _icon.TrayMouseDoubleClick += (_, _) => OpenMain();
         _releaseFlyout.Tick += (_, _) => ReleaseFlyout();
         _controller.Start();
+        // Windows stopped the keepalive with the old package: start it again (does nothing without a keepalive task or when it runs)
+        KeepaliveRestart.RunAsync(restarted, new SystemProcessRunner(), () => ShimLocator.Find(), ex => _log.Write("keepalive", ex)).Forget();
         CheckShimVersionAsync().Forget();
         if (crashedLastTime)
         {

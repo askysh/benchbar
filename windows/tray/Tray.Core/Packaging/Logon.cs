@@ -70,6 +70,7 @@ public sealed class LogonModel(IPackageInfo package, IShortcutLogon shortcut, IS
     private readonly Lock _gate = new();
     private LogonView _view = package.IsPackaged ? LogonView.Loading : new LogonView(false, true);
     private bool _read;
+    private int _busy;
 
     public event Action? Changed;
 
@@ -113,6 +114,8 @@ public sealed class LogonModel(IPackageInfo package, IShortcutLogon shortcut, IS
             Publish(ReadShortcut());
             return;
         }
+        // one request at a time: a toggle while one is in flight is ignored (the window shows what the model says, so it falls back)
+        if (Interlocked.CompareExchange(ref _busy, 1, 0) != 0) return;
         try
         {
             if (on)
@@ -129,6 +132,10 @@ public sealed class LogonModel(IPackageInfo package, IShortcutLogon shortcut, IS
         {
             fault?.Invoke(ex);
             Publish(LogonView.FromTask((StartupTaskState)(-1)));
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _busy, 0);
         }
     }
 

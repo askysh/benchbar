@@ -147,7 +147,10 @@ internal sealed class SettingsWindow : ToolWindow
     private UIElement LogonRow()
     {
         var row = new StackPanel();
-        _logon.Click += (_, _) => _model.OpenAtLogon = _logon.IsChecked == true;
+        // Checked/Unchecked, not Click: UI Automation's Toggle pattern flips the box without a Click. Whatever the box was flipped to, it is put back
+        // to what the model says at once; the answer of Windows publishes the real state and Sync shows it.
+        _logon.Checked += (_, _) => OnLogonToggled();
+        _logon.Unchecked += (_, _) => OnLogonToggled();
         Ui.Name(_logon, "Open BenchBar at logon");
         row.Children.Add(_logon);
         _logonNote.TextWrapping = TextWrapping.Wrap;
@@ -165,10 +168,21 @@ internal sealed class SettingsWindow : ToolWindow
         return box;
     }
 
+    private void OnLogonToggled()
+    {
+        if (_syncing) return;
+        var wanted = _logon.IsChecked == true;
+        SyncLogon();
+        _model.OpenAtLogon = wanted;
+    }
+
     private void SyncLogon()
     {
         var logon = _model.LogonView;
-        _logon.IsChecked = logon.IsOn;
+        var was = _syncing;
+        _syncing = true;
+        try { _logon.IsChecked = logon.IsOn; }
+        finally { _syncing = was; }
         _logon.IsEnabled = logon.CanChange;
         _logonNote.Text = logon.Note ?? "";
         _logonNote.Visibility = logon.Note is null ? Visibility.Collapsed : Visibility.Visible;
