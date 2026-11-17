@@ -19,6 +19,8 @@ what is wrong and how to fix it.
   the Windows startup setting, updates come from the Store, and `doctor`
   and the tray say when a second install from the one line installer is on
   the same PC. `windows/msix/build-msix.ps1` builds the package.
+- New: `benchbar.exe keepalive start` starts the keepalive task again when
+  its run has ended, for example after an update. It never creates a task.
 
 ### Windows installer
 
@@ -68,6 +70,7 @@ what is wrong and how to fix it.
 - PDF printing now works on arm64 Linux. Other architectures get a warning.
 - `doctor --prerequisites` warns about too few file watchers. A password with a line break is refused before any work.
 - The install plan JSON has a new `warnings` list next to `blockers`.
+- `doctor` no longer says "nothing listens on 3306: MariaDB is not running" while the apt MariaDB runs. A regular user cannot see who owns its socket, and the check took that for no server, so every fresh install ended with a warning.
 
 ### Docs and releases
 

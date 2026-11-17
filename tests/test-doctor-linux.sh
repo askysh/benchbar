@@ -215,6 +215,12 @@ printf '[mysqld]\nbind-address            = 127.0.0.1\n' >"$CONF/50-server.cnf"
 scan
 assert_eq "ok | - | -" "$(row mariadb_bind)"
 rm -f "$CONF/50-server.cnf"
+# the apt mariadbd runs as user mysql, and ss hides that owner from a regular
+# user (pid "-"): the server still counts as running (seen on a fresh WSL install)
+printf '3306 - mariadbd 127.0.0.1\n' >"$MOCK_LISTEN"
+scan
+assert_eq "ok" "$(field mariadb_version level)"
+assert_contains "$(msg mariadb_version)" "MariaDB 10.11.8"
 printf '3306 111 mariadbd 127.0.0.1\n' >"$MOCK_LISTEN"
 # a redis on 6379 is expected on Linux, not a stray
 add_listener 6379 222 redis-server 127.0.0.1
