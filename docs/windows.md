@@ -489,6 +489,10 @@ For a security problem, do not use the form. See
 
 ## Update
 
+In the app: when a newer release is out, the BenchBar window, the tray
+menu and About show **Update Now**. It runs the update in its own window,
+closes BenchBar, and starts it again when the update is done.
+
 In a terminal:
 
 ```powershell
@@ -634,8 +638,6 @@ every distro, so stop your benches first).
 
 ## What the tray does not do
 
-- It does not update itself. Check for Updates asks, then opens the
-  release page.
 - It has no `benchbar://` links yet, and no CPU source for the runner, so
   the runner runs at one speed. Team Profiles copies a
   `benchbar://profile/import` link for a team chat, but Windows has no

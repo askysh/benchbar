@@ -40,6 +40,9 @@ what is wrong and how to fix it.
 - A keepalive task moves to the new `benchbar.exe` after an update, so the old program does not keep running.
 - Running the installer over an existing install is an update: it no longer adds a Startup shortcut or opens the setup again, and it ends with the version it updated from and to. A first install says plainly to open "BenchBar" from the Start menu.
 - When the CLI in WSL is newer than `benchbar.exe`, `doctor` and `setup check` now name `benchbar.exe self-update` as the fix.
+- The tray has Update Now in the BenchBar window, the flyout, the tray menu (Update to X) and About. It runs the update in its own window, which stays open with the result. Copy Update Line is still there under Other Ways.
+- After an update, BenchBar says "BenchBar was updated to X" once, with a What's New link.
+- The first time a BenchBar window closes, a notification says BenchBar is still running near the clock and can be opened from the Start menu.
 
 ### Windows tray
 

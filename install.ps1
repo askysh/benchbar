@@ -384,6 +384,9 @@ function Install-BenchBar {
 
   # Ask the tray to close, wait a few seconds, then end it.
   function Stop-BenchBarTray($Running) {
+    # a tray from 0.8.3 on quits on this event, as if Quit was clicked in its
+    # menu, and removes its running marker; an older tray has no such event
+    try { $quit = [System.Threading.EventWaitHandle]::OpenExisting('Local\BenchBarTray.Quit'); $null = $quit.Set(); $quit.Dispose() } catch { }
     foreach ($p in $Running) { try { $null = $p.CloseMainWindow() } catch { } }
     foreach ($p in $Running) { try { $null = $p.WaitForExit(5000) } catch { } }
     foreach ($p in $Running) {
