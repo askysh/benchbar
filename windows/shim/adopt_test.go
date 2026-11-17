@@ -13,7 +13,7 @@ import (
 const goodConf = "[boot]\nsystemd=true\n"
 
 func probeText(conf, pid1, user, bench, linger string) string {
-	return fmt.Sprintf("wslconf_b64=%s\npid1=%s\nuser=%s\nbenchbar=%s\nlinger=%s\n",
+	return fmt.Sprintf("osid=ubuntu\nosver=24.04\nosname=Ubuntu\nwslconf_b64=%s\npid1=%s\nuser=%s\nbenchbar=%s\nlinger=%s\n",
 		base64.StdEncoding.EncodeToString([]byte(conf)), pid1, user, bench, linger)
 }
 
@@ -55,7 +55,7 @@ func TestAdoptGoodDistro(t *testing.T) {
 		"  [OK] benchbar: found at /home/akash/.local/bin/benchbar\n",
 		"  [OK] Linger: ",
 		"Recorded Ubuntu-24.04 in " + filepath.Join(e.ConfigDir, "config.json"),
-		"5 ok, 0 warn, 0 fail",
+		"6 ok, 0 warn, 0 fail",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in:\n%s", want, out)
@@ -139,7 +139,7 @@ func TestAdoptBenchbarMissing(t *testing.T) {
 	if code := e.run("adopt-distro"); code != 1 {
 		t.Fatalf("exit %d", code)
 	}
-	want := `fix: wsl.exe -d Ubuntu-24.04 -- bash -c "curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash"`
+	want := `fix: wsl.exe -d Ubuntu-24.04 -- bash -c "set -o pipefail; curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash"`
 	if !strings.Contains(e.stdout(), "[FAIL] benchbar: ") || !strings.Contains(e.stdout(), want) {
 		t.Errorf("output:\n%s", e.stdout())
 	}
@@ -284,7 +284,7 @@ func TestAdoptLingerFixWithYes(t *testing.T) {
 	if strings.Join(calls[0], " ") != strings.Join(want, " ") {
 		t.Errorf("args %q\nwant %q", calls[0], want)
 	}
-	if !strings.Contains(e.stdout(), "After the change:\n  [OK] Linger") || !strings.Contains(e.stdout(), "5 ok, 0 warn, 0 fail") {
+	if !strings.Contains(e.stdout(), "After the change:\n  [OK] Linger") || !strings.Contains(e.stdout(), "6 ok, 0 warn, 0 fail") {
 		t.Errorf("output:\n%s", e.stdout())
 	}
 }
@@ -365,10 +365,10 @@ func TestAdoptJSON(t *testing.T) {
 	if err := json.Unmarshal(e.out.Bytes(), &r); err != nil {
 		t.Fatalf("%v\n%s", err, e.stdout())
 	}
-	if r.Distro != "Ubuntu-24.04" || !r.Recorded || len(r.Checks) != 5 {
+	if r.Distro != "Ubuntu-24.04" || !r.Recorded || len(r.Checks) != 6 {
 		t.Errorf("%+v", r)
 	}
-	ids := []string{"distro", "wsl2", "systemd", "benchbar", "linger"}
+	ids := []string{"distro", "wsl2", "systemd", "benchbar", "linger", "distro_os"}
 	for i, c := range r.Checks {
 		if c.ID != ids[i] {
 			t.Errorf("check %d is %q, want %q", i, c.ID, ids[i])
@@ -428,7 +428,7 @@ func TestAdoptNoDistroAtAllSuggestsInstall(t *testing.T) {
 	e := newEnv(t)
 	e.distros.list = nil
 	e.run("adopt-distro")
-	if !strings.Contains(e.stdout(), "fix: wsl.exe --install -d Ubuntu-24.04") {
+	if !strings.Contains(e.stdout(), "fix: benchbar.exe setup check") {
 		t.Errorf("output:\n%s", e.stdout())
 	}
 }

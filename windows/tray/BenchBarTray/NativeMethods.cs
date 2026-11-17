@@ -60,6 +60,41 @@ internal static partial class NativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static partial bool AllowSetForegroundWindow(int processId);
 
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct ScreenPoint { public int X, Y; }
+
+    internal const uint MonitorDefaultToNearest = 2;
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool GetCursorPos(out ScreenPoint point);
+
+    [LibraryImport("user32.dll")]
+    internal static partial IntPtr MonitorFromPoint(ScreenPoint point, uint flags);
+
+    /// <summary>ES_CONTINUOUS and ES_SYSTEM_REQUIRED: the state belongs to the calling thread and lasts until it is cleared or the thread ends.</summary>
+    internal const uint EsContinuous = 0x80000000, EsSystemRequired = 0x00000001;
+
+    [LibraryImport("kernel32.dll")]
+    internal static partial uint SetThreadExecutionState(uint flags);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool SetForegroundWindow(IntPtr hwnd);
+
+    [LibraryImport("user32.dll")]
+    internal static partial IntPtr GetForegroundWindow();
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct FlashInfo { public uint Size; public IntPtr Hwnd; public uint Flags; public uint Count; public uint Timeout; }
+
+    /// <summary>FLASHW_ALL (caption and taskbar button) with FLASHW_TIMERNOFG (until the window comes to the front).</summary>
+    internal const uint FlashAllUntilForeground = 0x3 | 0xC;
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool FlashWindowEx(ref FlashInfo info);
+
     internal const int SiidShield = 77;
     internal const uint ShgsiIcon = 0x100, ShgsiSmallIcon = 0x1;
 

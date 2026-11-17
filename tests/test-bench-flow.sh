@@ -11,6 +11,8 @@ cat >"$TMP_DIR/bin/bench" <<'SH'
 #!/usr/bin/env bash
 printf 'bench %s\n' "$*" >>"${BENCH_LOG:?}"
 if [[ "$1" == "init" ]]; then
+  # INIT_STOPS_HALF_WAY=SECS: frappe is cloned, then bench init hangs (killed at the timeout)
+  if [[ -n "${INIT_STOPS_HALF_WAY:-}" ]]; then mkdir -p "$2/apps/frappe" "$2/sites"; sleep "$INIT_STOPS_HALF_WAY"; fi
   mkdir -p "$2/apps/frappe" "$2/env/bin" "$2/sites"
   touch "$2/sites/apps.txt"
   # new-site runs through the bench's python with its passwords on stdin
@@ -89,6 +91,53 @@ mkdir -p "$INCOMPLETE/apps"
 assert_fails fl_bench_init_if_needed "$INCOMPLETE" version-15 /usr/bin/python3 0
 fl_bench_init_if_needed "$INCOMPLETE" version-15 /usr/bin/python3 1
 [[ -d "$INCOMPLETE/apps/frappe" ]]
+
+# ---- a bench init that stopped half way is resumed by the next run, never deleted
+# (frappe cloned, no env or no apps.txt, no site): moved aside, then init again
+HALF="$TMP_DIR/half-bench"
+mkdir -p "$HALF/apps/frappe" "$HALF/sites"
+printf 'clone\n' >"$HALF/apps/frappe/marker"
+out="$(fl_bench_init_if_needed "$HALF" version-15 /usr/bin/python3 0 2>&1)"
+case "$out" in *"An earlier bench init stopped half way in ${HALF}"*"starting over"*) ;; *) printf 'Expected the resume line: %s\n' "$out"; exit 1 ;; esac
+[[ -f "$HALF/sites/apps.txt" && -d "$HALF/env" ]] || { printf 'Expected a complete bench after the resume\n'; exit 1; }
+set -- "$TMP_DIR"/half-bench.incomplete.*
+assert_eq "1" "$#"
+assert_eq "clone" "$(cat "$1/apps/frappe/marker")"
+# an env without its python and no apps.txt is the same half built bench
+HALF2="$TMP_DIR/half-bench-2"
+mkdir -p "$HALF2/apps/frappe" "$HALF2/env" "$HALF2/sites"
+fl_bench_init_if_needed "$HALF2" version-15 /usr/bin/python3 0 >/dev/null 2>&1
+[[ -f "$HALF2/sites/apps.txt" && -x "$HALF2/env/bin/python" ]]
+# a half bench with a second app in apps/ may hold uncommitted work: not moved, the repair stop
+TWO="$TMP_DIR/two-app-bench"
+mkdir -p "$TWO/apps/frappe" "$TWO/apps/myapp" "$TWO/sites"
+printf 'wip\n' >"$TWO/apps/myapp/wip.txt"
+out="$( ( fl_bench_init_if_needed "$TWO" version-15 /usr/bin/python3 0 ) 2>&1 || true)"
+case "$out" in *"has apps or sites but its env is missing or incomplete"*"repair --bench-dir ${TWO}"*) ;; *) printf 'Expected the repair stop for a second app: %s\n' "$out"; exit 1 ;; esac
+[[ -f "$TWO/apps/myapp/wip.txt" ]] || { printf 'A bench with a second app must not be moved aside\n'; exit 1; }
+set -- "$TMP_DIR"/two-app-bench.incomplete.*
+[[ ! -e "$1" ]] || { printf 'A bench with a second app must not be moved aside\n'; exit 1; }
+# a folder that holds a site is never moved: the old stop with the repair hint
+HELD="$TMP_DIR/held-bench"
+mkdir -p "$HELD/apps/frappe" "$HELD/sites/mysite"
+printf '{}\n' >"$HELD/sites/mysite/site_config.json"
+out="$( ( fl_bench_init_if_needed "$HELD" version-15 /usr/bin/python3 0 ) 2>&1 || true)"
+case "$out" in *"has apps or sites but its env is missing or incomplete"*"repair --bench-dir ${HELD}"*) ;; *) printf 'Expected the repair stop: %s\n' "$out"; exit 1 ;; esac
+[[ -f "$HELD/sites/mysite/site_config.json" ]]
+set -- "$TMP_DIR"/held-bench.incomplete.*
+[[ ! -e "$1" ]] || { printf 'A bench that holds a site must not be moved aside\n'; exit 1; }
+# the init timeout (BENCH_INIT_TIMEOUT_SECONDS): the message says what to run next, and the next run resumes (4 s, not 1: a loaded machine can be slow to start the mock)
+SLOW="$TMP_DIR/slow-bench"
+out="$( ( INIT_STOPS_HALF_WAY=12 BENCH_INIT_TIMEOUT_SECONDS=4 FL_KILL_GRACE=0 fl_bench_init_if_needed "$SLOW" version-15 /usr/bin/python3 0 ) 2>&1 || true)"
+case "$out" in *"bench init timed out after 4s"*"bench init did not finish within 4s"*"Run benchbar install again"*"BENCH_INIT_TIMEOUT_SECONDS=5400"*) ;; *) printf 'Expected the timeout message with the next step: %s\n' "$out"; exit 1 ;; esac
+[[ -d "$SLOW/apps/frappe" && ! -f "$SLOW/sites/apps.txt" ]] || { printf 'Expected a half built bench after the timeout\n'; exit 1; }
+fl_bench_init_if_needed "$SLOW" version-15 /usr/bin/python3 0 >/dev/null 2>&1
+[[ -f "$SLOW/sites/apps.txt" && -d "$SLOW/env" ]] || { printf 'Expected the rerun after a timeout to finish the bench\n'; exit 1; }
+set -- "$TMP_DIR"/slow-bench.incomplete.*
+assert_eq "1" "$#"
+# a timeout that is not a number is the default, not an error
+fl_bench_init_if_needed "$TMP_DIR/odd-bench" version-15 /usr/bin/python3 0 >/dev/null 2>&1
+BENCH_INIT_TIMEOUT_SECONDS=soon fl_bench_init_if_needed "$TMP_DIR/odd-bench" version-15 /usr/bin/python3 0 >/dev/null 2>&1
 
 fl_get_app_if_needed "$BENCH_DIR" hrms version-15 "" "" 0
 [[ -d "$BENCH_DIR/apps/hrms" ]]

@@ -83,11 +83,15 @@ Linux distro and the bench:
 irm https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1 | iex
 ```
 
-The Windows programs are unsigned until the signing application is
-approved: see the
-[Code signing policy](https://benchbar.akashmishra.com/windows/#code-signing-policy).
-For a bug, use **Report a Bug** in the tray: it writes a
-redacted zip and opens the bug form. See
+The Windows programs are not signed yet. On our Windows 11 test PC the
+line above showed no SmartScreen warning, but Smart App Control blocks
+unsigned programs: when it is on, the installer stops first and says what
+to do. What that means in practice is in
+[Before you install](https://benchbar.akashmishra.com/windows/#before-you-install).
+Every release has SHA256SUMS and, from the next release, build provenance
+you can verify. To remove BenchBar again, run the installer
+with `-Uninstall`. For a bug, use **Report a Bug** in the tray: it writes
+a redacted zip and opens the bug form. See
 [Windows](https://benchbar.akashmishra.com/windows/).
 
 ## Quick start
@@ -157,7 +161,7 @@ GitHub too, and `benchbar docs` opens them from the terminal.
 
 ## Roadmap
 
-0.6.1 is the first signed and notarized release, with Sparkle updates. 0.7.0 installs the CLI and the app with Homebrew, in 0.7.1 the app ships the CLI, so one update covers both, 0.7.2 gives the window one main action per page and one layout for every sheet, and 0.7.3 is a fix pass from a full review (node@22 for v15, ownership checks, fail closed writes, MCP hardening). 0.8.0 brings the first run wizard and a new bench from the app, the CLI on Linux, a Windows preview (`benchbar.exe` and a tray app), and commands that agents can drive: one JSON stream with a closing `done` line and a non interactive mode. 0.8.1 makes Windows a beta: the tray takes a PC from no WSL to a running bench. 0.8.2 adds Labs, experiments that stay off until you turn them on: rooms on your Wi-Fi and Quick Switch. The rest is in [ROADMAP.md](ROADMAP.md).
+0.6.1 is the first signed and notarized release, with Sparkle updates. 0.7.0 installs the CLI and the app with Homebrew, in 0.7.1 the app ships the CLI, so one update covers both, 0.7.2 gives the window one main action per page and one layout for every sheet, and 0.7.3 is a fix pass from a full review (node@22 for v15, ownership checks, fail closed writes, MCP hardening). 0.8.0 brings the first run wizard and a new bench from the app, the CLI on Linux, a Windows preview (`benchbar.exe` and a tray app), and commands that agents can drive: one JSON stream with a closing `done` line and a non interactive mode. 0.8.1 makes Windows a beta: the tray takes a PC from no WSL to a running bench. 0.8.2 adds Labs, experiments that stay off until you turn them on: rooms on your Wi-Fi and Quick Switch. 0.8.3 is a fix pass for Windows: the installer, `benchbar.exe`, the tray and the install inside WSL have fewer dead ends and say what is wrong and how to fix it. The rest is in [ROADMAP.md](ROADMAP.md).
 
 ## Contributing
 

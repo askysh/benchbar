@@ -187,8 +187,11 @@ fl_run_long() {
   return "$code"
 }
 
+# fl_run_with_timeout SECS LABEL COMMAND...: like fl_run_long with a deadline
+# (exit 124 at the deadline) and the same progress line for the JSON stream
+# every FL_PROGRESS_SECS, so a long bench init is not silent there.
 fl_run_with_timeout() {
-  local timeout_seconds="$1" label="$2" log pid start elapsed code state
+  local timeout_seconds="$1" label="$2" log pid start elapsed code state last_progress
   shift 2
   fl_redact_url_v FL_LAST_COMMAND "$*"
   if [[ "$FL_DRY_RUN" == "1" ]]; then
@@ -205,6 +208,7 @@ fl_run_with_timeout() {
   fl_run_bg_group "$log" "$@"
   pid="$FL_RUN_PID"
   start="$SECONDS"
+  last_progress="$SECONDS"
   fl_spinner_start "$label" "$log"
 
   while kill -0 "$pid" >/dev/null 2>&1; do
@@ -232,6 +236,10 @@ fl_run_with_timeout() {
       fl_log_file_append "$log"
       rm -f "$log"
       return 124
+    fi
+    if [[ "$FL_JSONL" == "1" && $((SECONDS - last_progress)) -ge "${FL_PROGRESS_SECS:-10}" ]]; then
+      last_progress="$SECONDS"
+      fl_jsonl_progress "$label" "$elapsed"
     fi
     sleep 1
   done

@@ -100,6 +100,9 @@ func newEnv(t *testing.T) *env {
 	t.Setenv("FAKE_WSL_RECORD_STDIN", "")
 	t.Setenv("FAKE_WSL_PROBE_AFTER", "")
 	t.Setenv("FAKE_WSL_READY", "")
+	for _, n := range proxyEnv {
+		t.Setenv(n, "")
+	}
 	return e
 }
 

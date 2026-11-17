@@ -8,6 +8,9 @@ public class LaunchPlannerTests
 {
     private static BenchStatus Bench(string name = "a") => new(name, "/" + name, BenchState.Running, null, "http://a:8000", "a");
 
+    /// <summary>The first start of a tray that never ran here: the one ordinary start that may open the wizard.</summary>
+    private static readonly LaunchStart First = new(FirstRun: true, Dismissed: false);
+
     private static SetupReport Report(bool ready) => new("Ubuntu-24.04", ready, false,
         [new SetupStepInfo(SetupIds.WslFeature, ready ? SetupStatus.Ok : SetupStatus.Missing, "WSL", "", ready ? null : SetupIds.ActionWslEnable, true)]);
 
@@ -21,9 +24,9 @@ public class LaunchPlannerTests
     public void AReturningUserWhoseFirstPollFailedIsLeftAlone()
     {
         var failedPoll = new TraySnapshot([], Problem: "benchbar.exe did not answer in 30 seconds.");
-        Assert.Equal(LaunchAction.Nothing, LaunchPlanner.AtLaunch(failedPoll, CliOkButSystemdMissing(), false, false));
+        Assert.Equal(LaunchAction.Nothing, LaunchPlanner.AtLaunch(failedPoll, CliOkButSystemdMissing(), First));
         // the same open step on a PC where the poll worked and found nothing still opens it
-        Assert.Equal(LaunchAction.OpenWizard, LaunchPlanner.AtLaunch(new TraySnapshot([]), CliOkButSystemdMissing(), false, false));
+        Assert.Equal(LaunchAction.OpenWizard, LaunchPlanner.AtLaunch(new TraySnapshot([]), CliOkButSystemdMissing(), First));
     }
 
     [Fact]
@@ -35,7 +38,7 @@ public class LaunchPlannerTests
             new SetupStepInfo(SetupIds.ShimPath, SetupStatus.Warn, "PATH", "another copy first", null, false, Blocking: false),
             new SetupStepInfo(SetupIds.WslConfig, SetupStatus.Missing, "wslconfig", "", "wslconfig", false, Blocking: false),
         ]);
-        Assert.Equal(LaunchAction.Nothing, LaunchPlanner.AtLaunch(new TraySnapshot([]), advice, false, false));
+        Assert.Equal(LaunchAction.Nothing, LaunchPlanner.AtLaunch(new TraySnapshot([]), advice, First));
     }
 
     [Fact]
@@ -46,7 +49,7 @@ public class LaunchPlannerTests
             new SetupStepInfo(SetupIds.WslFeature, SetupStatus.Missing, "WSL", "WSL is not installed", SetupIds.ActionWslEnable, true),
             new SetupStepInfo(SetupIds.Cli, SetupStatus.Missing, "benchbar", "waits for wsl_feature", null, false),
         ]);
-        Assert.Equal(LaunchAction.OpenWizard, LaunchPlanner.AtLaunch(new TraySnapshot([], Problem: BenchPoller.WslMissingMessage), wslMissing, false, false));
+        Assert.Equal(LaunchAction.OpenWizard, LaunchPlanner.AtLaunch(new TraySnapshot([], Problem: BenchPoller.WslMissingMessage), wslMissing, First));
     }
 
     [Fact]
@@ -62,8 +65,8 @@ public class LaunchPlannerTests
     public void ANewPcWithNothingSetUpOpensTheWizard()
     {
         var snapshot = new TraySnapshot([], Problem: "WSL is not installed: wsl.exe --install");
-        Assert.True(LaunchPlanner.NeedsSetupCheck(snapshot, dismissed: false));
-        Assert.Equal(LaunchAction.OpenWizard, LaunchPlanner.AtLaunch(snapshot, Report(false), false, false));
+        Assert.True(LaunchPlanner.NeedsSetupCheck(snapshot));
+        Assert.Equal(LaunchAction.OpenWizard, LaunchPlanner.AtLaunch(snapshot, Report(false), First));
     }
 
     [Fact]
@@ -72,25 +75,25 @@ public class LaunchPlannerTests
         var withBench = new TraySnapshot([Bench()]);
         var stopped = new TraySnapshot([], DistroStopped: true, Distro: "Ubuntu-24.04");
         var empty = new TraySnapshot([]);
-        Assert.False(LaunchPlanner.NeedsSetupCheck(withBench, false));
-        Assert.False(LaunchPlanner.NeedsSetupCheck(stopped, false));
-        Assert.False(LaunchPlanner.NeedsSetupCheck(empty, dismissed: true));
-        Assert.Equal(LaunchAction.Nothing, LaunchPlanner.AtLaunch(withBench, Report(false), false, false));
-        Assert.Equal(LaunchAction.Nothing, LaunchPlanner.AtLaunch(stopped, Report(false), false, false));
-        Assert.Equal(LaunchAction.Nothing, LaunchPlanner.AtLaunch(empty, Report(false), true, false));
+        Assert.False(LaunchPlanner.NeedsSetupCheck(withBench));
+        Assert.False(LaunchPlanner.NeedsSetupCheck(stopped));
+        Assert.True(LaunchPlanner.NeedsSetupCheck(empty)); // dismissed or not: the menu and the flyout need to know
+        Assert.Equal(LaunchAction.Nothing, LaunchPlanner.AtLaunch(withBench, Report(false), First));
+        Assert.Equal(LaunchAction.Nothing, LaunchPlanner.AtLaunch(stopped, Report(false), First));
+        Assert.Equal(LaunchAction.Nothing, LaunchPlanner.AtLaunch(empty, Report(false), First with { Dismissed = true }));
     }
 
     [Fact]
     public void AReadyPcWithoutABenchOrAnUnansweredCheckStaysQuiet()
     {
         var empty = new TraySnapshot([]);
-        Assert.Equal(LaunchAction.Nothing, LaunchPlanner.AtLaunch(empty, Report(true), false, false));
-        Assert.Equal(LaunchAction.Nothing, LaunchPlanner.AtLaunch(empty, null, false, false));
+        Assert.Equal(LaunchAction.Nothing, LaunchPlanner.AtLaunch(empty, Report(true), First));
+        Assert.Equal(LaunchAction.Nothing, LaunchPlanner.AtLaunch(empty, null, First));
     }
 
     [Fact]
     public void TheResumeFlagAlwaysOpensTheWizard() =>
-        Assert.Equal(LaunchAction.OpenWizard, LaunchPlanner.AtLaunch(new TraySnapshot([Bench()]), null, true, resumeFlag: true));
+        Assert.Equal(LaunchAction.OpenWizard, LaunchPlanner.AtLaunch(new TraySnapshot([Bench()]), null, new LaunchStart(false, Dismissed: true, ResumeFlag: true)));
 }
 
 public class SidebarTests

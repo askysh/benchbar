@@ -72,9 +72,9 @@ sites or databases.
 - **Linux and Windows.** The same CLI runs on Ubuntu 24.04 with each
   bench under `systemd --user`. On Windows (a beta) the benches run in
   WSL, `benchbar.exe` runs the CLI from PowerShell and a tray app shows
-  them. See [Install](install.md#linux) and [Windows](windows.md). The
-  Windows programs have a
-  [Code signing policy](windows.md#code-signing-policy).
+  them. The Windows programs are not signed yet: see
+  [Before you install](windows.md#before-you-install). See
+  [Install](install.md#linux) and [Windows](windows.md).
 - **For coding agents.** `benchbar mcp` lets Claude Code, Cursor and
   other agents read and drive your benches. In Terminal, `--for-agent`
   prints JSON and asks nothing, and every change ends in one `done`

@@ -12,9 +12,9 @@
     "linkcheck": "bun --bun linkinator dist"
   },
   "dependencies": {
-    "@astrojs/markdown-remark": "^7.3.5",
-    "@astrojs/starlight": "^0.42.8",
-    "astro": "^7.4.4",
+    "@astrojs/markdown-remark": "^7.3.9",
+    "@astrojs/starlight": "^0.43.1",
+    "astro": "^7.4.7",
     "sharp": "^0.35.5"
   },
   "devDependencies": {

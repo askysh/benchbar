@@ -2,6 +2,88 @@
 
 All notable changes to this project are documented here.
 
+## 0.8.3 - 2026-11-17
+
+0.8.3 is a fix pass for Windows from a full review and a live test on a
+Windows 11 PC. Getting from nothing to a running bench has fewer dead ends, and the
+installer, `benchbar.exe`, the tray and the command line tool in WSL say
+what is wrong and how to fix it.
+
+### Windows installer
+
+- The installer stops before it writes anything when Smart App Control is on, and says what to do. It also stops early in Constrained Language Mode.
+- It removes the "downloaded from the internet" mark from the files it installs, so a zip install no longer shows "The publisher could not be verified" at every start.
+- A first install adds a Start menu shortcut, offers to install the .NET 10 Desktop Runtime with winget, starts the tray and ends with the next step.
+- It finds the newest release that has a Windows zip, works through a proxy, and still works when GitHub's API is rate limited.
+- When a security product removes a file, it says so and names Windows Security > Protection history.
+- `install.ps1 -Uninstall` removes BenchBar for Windows: tray, keepalive task, shortcuts, PATH entry and files. It never touches WSL, your distro or your benches.
+
+### benchbar.exe
+
+- Upgrading `benchbar.exe` now also updates the command line tool inside WSL: `setup check` and `doctor` show when the two releases differ, and `setup run cli_install` brings the tool up to date.
+- A Docker Desktop, Rancher Desktop or Podman distro is never picked on its own. If your WSL default is one of them, BenchBar uses your one other distro, or asks you to choose with `benchbar.exe adopt-distro NAME`.
+- Setup checks that the distro is Ubuntu 24.04 before anything is installed. If you already have one Ubuntu 24.04 distro, setup uses it and does not install a second one.
+- Commands that talk to WSL no longer hang for good when `wsl.exe` does not answer. They stop with a message and the fix.
+- A failed WSL install shows its error code with advice: virtualization off in the firmware, network or proxy, a policy or a stopped service.
+- A failed download of the installer says why, and your Windows proxy settings are passed into WSL.
+- `benchbar.exe adopt C:\path` and other drive and `\\wsl.localhost` paths now work as arguments.
+- `benchbar.exe path remove` takes the install folder out of your user PATH.
+- `doctor` warns about WSL networking settings that stop a site opening at `localhost`, a keepalive task that runs an old copy, a tray that Windows has turned off at logon, and files a security product may have removed.
+- `setup` needs Windows 10 22H2 or later, tells you to choose Restart (not Shut down) when a restart is needed, and can convert a WSL 1 distro (`setup run distro_wsl2`).
+- A `config.json` written by Windows PowerShell (UTF-16) is read, and a broken file names its path and the fix.
+- `benchbar.exe` has a version resource: company, product, description and version.
+
+### Updating on Windows
+
+- `benchbar.exe self-update` updates BenchBar for Windows in one step: `benchbar.exe`, the tray app and the BenchBar CLI in WSL, all to the same release. It shows the plan, asks once (`--yes` skips the question), runs the one line installer for you and ends with one line for each part.
+- `benchbar.exe self-update --check` shows the version you have, the newest release and the CLI in WSL, and changes nothing. `--json` gives the same as one JSON document.
+- A keepalive task moves to the new `benchbar.exe` after an update, so the old program does not keep running.
+- Running the installer over an existing install is an update: it no longer adds a Startup shortcut or opens the setup again, and it ends with the version it updated from and to. A first install says plainly to open "BenchBar" from the Start menu.
+- When the CLI in WSL is newer than `benchbar.exe`, `doctor` and `setup check` now name `benchbar.exe self-update` as the fix.
+- The tray has Update Now in the BenchBar window, the flyout, the tray menu (Update to X) and About. It runs the update in its own window, which stays open with the result. Copy Update Line is still there under Other Ways.
+- After an update, BenchBar says "BenchBar was updated to X" once, with a What's New link.
+- The installer now replaces the files all or nothing. When one file cannot be replaced (a program holds it open), it puts every old file back, names the file and says that nothing was changed, and a tray app it closed starts again. Before, such an update could leave a new `benchbar.exe` next to old tray files. `self-update` then shows the installer's error, says when nothing was changed and gives the command to try again.
+- The first time a BenchBar window closes, a notification says BenchBar is still running near the clock and can be opened from the Start menu.
+
+### Windows tray
+
+- The PC stays awake while a setup or install runs.
+- The setup wizard opens on a PC that has WSL but no usable Ubuntu distro, comes to the front when BenchBar opens it, resumes in the right flow after a restart, and names the Linux user it will create.
+- A notice says when `benchbar.exe` and the tray are different versions, and the flyout shows the running version. An unreadable answer from `benchbar.exe` names a version mismatch as the likely cause.
+- A setup step the tray does not know yet is shown and can be run.
+- Stop or a timeout during an install waits for the old run to end before the next try.
+- A notice appears when BenchBar closed unexpectedly last time, with Report a Bug.
+- The update notice appears only when the Windows download exists, and copies the one line installer for PowerShell.
+- "Open BenchBar at logon" shows off when Windows has switched the startup entry off, and turning it on clears that.
+- The flyout opens on the monitor you clicked. Polling slows down while the window is minimized or in the background.
+- A new site's Administrator password needs at least 8 characters, no password may hold a line break, and passwords are hidden in log lines in every form.
+- Clearer messages when `benchbar.exe` is missing, blocked by Smart App Control, or access is denied.
+- Red and amber text are darker, and high contrast uses system colors.
+
+### Linux and WSL
+
+- `install` checks before it asks for sudo: systemd running, ports held by Windows programs, github.com reachable, and a bench folder on the Windows drive (refused unless `--allow-windows-fs`). Low WSL memory, low Windows disk space and unreachable package hosts show as warnings in the plan.
+- A bench init that was stopped or timed out, with no site and no app of your own, is moved aside and started again by the next install. `BENCH_INIT_TIMEOUT_SECONDS` sets how long init may run, and init now reports progress in the JSON stream.
+- apt runs without questions, waits for another apt's lock, and keeps your proxy. Package downloads retry on a slow network.
+- `install` turns on lingering for your user, and says clearly when the systemd user manager is not reachable.
+- PDF printing now works on arm64 Linux. Other architectures get a warning.
+- `doctor --prerequisites` warns about too few file watchers. A password with a line break is refused before any work.
+- The install plan JSON has a new `warnings` list next to `blockers`.
+- `doctor` no longer says "nothing listens on 3306: MariaDB is not running" while the apt MariaDB runs. A regular user cannot see who owns its socket, and the check took that for no server, so every fresh install ended with a warning.
+
+### Sharing
+
+- Guests can also open an app whose front end is not on the apps screen and
+  only routes `/x/<path:app_path>` to its own page (for example
+  `/engineering-change`). Before, the share gateway refused it as "isn't
+  available through sharing".
+
+### Docs and releases
+
+- Windows docs: what Windows may show per install route, an "If Windows blocks it" guide, how to verify a download, update and uninstall, and troubleshooting. The Windows programs are not signed yet, and the docs say what that means.
+- Windows releases after 0.8.2 carry build provenance: `gh attestation verify benchbar-windows-VERSION-ARCH.zip -R askysh/benchbar`.
+- The release workflow can require signed files (`SIGNING_REQUIRED`), gives test builds a development version, and runs the installer test before every release.
+
 ## 0.8.2 - 2026-11-06
 
 0.8.2 brings Labs: experiments that stay off until you turn them on, in a
@@ -40,6 +122,21 @@ has Open as keyboard shortcuts, and two sharing fixes are in.
   expires. The checks of the running share (its gateway and web process)
   read "Checked when sharing starts" until then. A refused share setup now
   says why instead of "share setup failed."
+- Sharing: guests can open the apps screen (`/apps`) and the apps that
+  add themselves to it with their own front end (for example
+  `/manufacturing-ops`, `/crm`, `/insights`). The share gateway reads those
+  routes from the copy when sharing starts; before, it refused them as
+  "isn't available through sharing".
+- Sharing ends by itself when its copy is dropped or deleted while it is on
+  (a new critical check, `copy_present`), instead of staying on and showing
+  guests "restarting".
+- Mac app: a share started or stopped in a terminal runs its checks again on
+  the next poll, not up to a minute later.
+- Sharing: Remove no longer shuts someone out until the room ends. They
+  cannot join again with the code they had; drawing a new code lets them
+  back, and everyone else stays in the room. In the app, Remove is one
+  click, and **Copy new invite** appears right after it. A removed guest is
+  told to ask the host for a new invite.
 - Mac app: "Your network changed" shows only when the address guests reach
   the room on changes, not for every network event macOS reports (a VPN,
   a virtual machine's network or waking from sleep). The checks still run

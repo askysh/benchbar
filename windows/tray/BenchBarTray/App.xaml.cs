@@ -16,9 +16,18 @@ public partial class App : Application, ITrayHost
     private const string MutexName = @"Local\BenchBarTray";
     private const string OpenEventName = @"Local\BenchBarTray.Open";
     private const string SetupEventName = @"Local\BenchBarTray.Setup";
+
+    /// <summary>
+    /// Set by the installer to close the tray politely before it replaces the files: the tray quits as from its menu, so the run marker goes
+    /// and the next start reports no crash. <c>CloseMainWindow</c> cannot do it: the tray usually has no visible window to close.
+    /// </summary>
+    internal const string QuitEventName = @"Local\BenchBarTray.Quit";
     private const string HelpUrl = "https://benchbar.akashmishra.com/windows/";
 
     private readonly ErrorLog _log = new();
+    private readonly NoticeBoard _notices = new();
+    private readonly KeepAwakeGuard _keepAwake = new();
+    private readonly RunMarker _runMarker = new();
     private readonly StartupShortcut _startup = new();
     private readonly Dictionary<string, LogWindow> _logs = [];
     private readonly Dictionary<string, DoctorWindow> _doctors = [];
@@ -42,8 +51,13 @@ public partial class App : Application, ITrayHost
     private readonly StartupShortcut _resumeFlag = new(fileName: StartupShortcut.ResumeFileName, arguments: StartupShortcut.ResumeArgument);
     private EventWaitHandle? _setupEvent;
     private RegisteredWaitHandle? _setupWait;
+    private EventWaitHandle? _quitEvent;
+    private RegisteredWaitHandle? _quitWait;
     private bool _launchChecked;
-    private int _viewers;
+    private LaunchStart _launchStart = new(FirstRun: false, Dismissed: false);
+
+    /// <summary>The launch check found setup unfinished: the tray menu and the flyout's problem card offer Set Up BenchBar.</summary>
+    private bool _setupPending;
     private long _updateCheckedAt;
     private UpdateOffer? _updateOffer;
     private string? _updateDismissed;
@@ -64,11 +78,15 @@ public partial class App : Application, ITrayHost
         DispatcherUnhandledException += (_, args) =>
         {
             _log.Write("ui", args.Exception);
-            args.Handled = true; // keep running
+            args.Handled = true; // keep running, and say so once: a silent catch hid every fault from the person
+            _notices.Set(new Notice("unexpected", "BenchBar hit an error and kept running. If something looks wrong, tell us.", "Report a Bug", () => ReportBugAsync("Error notice").Forget()));
         };
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {
             if (args.ExceptionObject is Exception ex) _log.Write("domain", ex);
+            // the process ends now: take the icon out of the notification area, or a ghost stays until the mouse passes over it.
+            // The run marker stays, so the next start says that this one ended badly.
+            try { _icon?.Dispose(); } catch (Exception) { }
         };
         TaskScheduler.UnobservedTaskException += (_, args) =>
         {
@@ -82,6 +100,13 @@ public partial class App : Application, ITrayHost
             Shutdown();
             return;
         }
+
+        var crashedLastTime = _runMarker.Begin(UpdateCheck.CurrentVersion().Split('+')[0]);
+        _notices.Changed += SyncNotices;
+        Activated += (_, _) => PostViewerSync();
+        Deactivated += (_, _) => PostViewerSync();
+        // sign out and shutdown are clean ends: they must not count as a crash at the next start
+        SessionEnding += (_, _) => { if (_mutex is not null) _runMarker.End(); };
 
         // Created first: `hello` is queued until the pipe is up, so nothing sent below is lost.
         _link = HarnessLink.FromEnvironment("BenchBarTray");
@@ -130,6 +155,17 @@ public partial class App : Application, ITrayHost
         _icon.TrayMouseDoubleClick += (_, _) => OpenMain();
         _releaseFlyout.Tick += (_, _) => ReleaseFlyout();
         _controller.Start();
+        CheckShimVersionAsync().Forget();
+        if (crashedLastTime)
+        {
+            const string text = "BenchBar closed unexpectedly last time.";
+            _notices.Set(new Notice("crashed", text, "Report a Bug", () => ReportBugAsync("Closed unexpectedly").Forget()));
+            ShowNotice(text + " Click for details.");
+        }
+        // read before NoteVersion saves the file: a config with no tray object means no tray ran here before (an unreadable one is not that)
+        var firstRun = !_config.HadTraySection && !_config.Unreadable;
+        var updated = NoteVersion();
+        _launchStart = LaunchStart.From(e.Args, firstRun, _config.WizardDismissed, updated);
         if (resume)
         {
             // the one shot flag did its job: take it away before anything can fail
@@ -160,15 +196,21 @@ public partial class App : Application, ITrayHost
         _openWait = ThreadPool.RegisterWaitForSingleObject(_openEvent, (_, _) => Dispatcher.BeginInvoke(ShowFlyout), null, Timeout.Infinite, executeOnlyOnce: false);
         _setupEvent = new EventWaitHandle(false, EventResetMode.AutoReset, SetupEventName);
         _setupWait = ThreadPool.RegisterWaitForSingleObject(_setupEvent, (_, _) => Dispatcher.BeginInvoke(() => OpenWizard(resume: true)), null, Timeout.Infinite, executeOnlyOnce: false);
+        _quitEvent = new EventWaitHandle(false, EventResetMode.AutoReset, QuitEventName);
+        _quitWait = ThreadPool.RegisterWaitForSingleObject(_quitEvent, (_, _) => Dispatcher.BeginInvoke(Quit), null, Timeout.Infinite, executeOnlyOnce: true);
         return true;
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        try { _keepAwake.Set(false); } catch (Exception) { }
+        if (_mutex is not null) _runMarker.End(); // a clean exit of the running instance: the next start finds no marker (a second instance that only passed on its message must not remove it)
         _openWait?.Unregister(null);
         _openEvent?.Dispose();
         _setupWait?.Unregister(null);
         _setupEvent?.Dispose();
+        _quitWait?.Unregister(null);
+        _quitEvent?.Dispose();
         if (_mutex is not null)
         {
             try { _mutex.ReleaseMutex(); } catch (ApplicationException) { }
@@ -197,15 +239,17 @@ public partial class App : Application, ITrayHost
             _launchChecked = true;
             LaunchCheckAsync(snapshot).Forget();
         }
+        else if (_setupPending && snapshot.Benches.Count > 0) SetSetupPending(false); // a bench appeared: setup is done
     }
 
     /// <summary>
-    /// A PC with no bench and no finished setup opens the wizard by itself. The read only <c>setup check</c> never boots a
-    /// stopped distro, and a stopped distro is skipped entirely: it exists, so this is not a new user.
+    /// Once, after the first poll: is setup unfinished, and does this start open the wizard by itself (<see cref="LaunchPlanner.Decide"/>)?
+    /// The read only <c>setup check</c> never boots a stopped distro, and a stopped distro is skipped entirely: it exists, so this is not a
+    /// new user. The check runs whenever the PC has no bench, dismissed or not, so the menu and the flyout can offer Set Up BenchBar.
     /// </summary>
     private async Task LaunchCheckAsync(TraySnapshot snapshot)
     {
-        if (_setup is null || !LaunchPlanner.NeedsSetupCheck(snapshot, _config.WizardDismissed)) return;
+        if (_setup is null || !LaunchPlanner.NeedsSetupCheck(snapshot)) return;
         SetupReport? report = null;
         try
         {
@@ -215,8 +259,18 @@ public partial class App : Application, ITrayHost
         {
             _log.Write("setup-check", ex); // no shim or an old one: the flyout already says so
         }
-        if (LaunchPlanner.AtLaunch(snapshot, report, _config.WizardDismissed, resumeFlag: false) == LaunchAction.OpenWizard)
+        if (_quitting) return;
+        var unfinished = LaunchPlanner.SetupUnfinished(snapshot, report);
+        SetSetupPending(unfinished && (_controller?.Snapshot.Benches.Count ?? 0) == 0);
+        // a resume start has opened the wizard already; the launch start is the resume flag's own path then
+        if (_wizard is null && LaunchPlanner.Decide(_launchStart, unfinished) == LaunchAction.OpenWizard)
             OpenWizard(resume: false);
+    }
+
+    private void SetSetupPending(bool pending)
+    {
+        _setupPending = pending;
+        _flyout?.View.SetSetupPending(pending);
     }
 
     public void ShowToast(Toast toast)
@@ -241,6 +295,29 @@ public partial class App : Application, ITrayHost
         {
             _log.Write("notice", ex);
         }
+    }
+
+    // --- notices ---
+
+    private void SyncNotices()
+    {
+        _flyout?.View.SetNotices(_notices.All, DismissNotice);
+        _main?.SetNotices(_notices.All, DismissNotice);
+    }
+
+    private void DismissNotice(string key) => _notices.Remove(key);
+
+    /// <summary>
+    /// Once at start: <c>benchbar.exe --shim-version</c> against this tray's version. A PC was found whose keepalive ran an older shim from
+    /// another folder, so a mismatch is real; it stays on the flyout and the window until the two match.
+    /// </summary>
+    private async Task CheckShimVersionAsync()
+    {
+        if (_setup is null) return;
+        var line = await _setup.ShimVersionAsync(CancellationToken.None);
+        var text = VersionMismatch.Notice(line, UpdateCheck.CurrentVersion(), (_source as ShimBenchSource)?.ShimPath);
+        if (text is null) _notices.Remove("shim-version");
+        else _notices.Set(new Notice("shim-version", text, "Copy Install Line", () => CopyText(UpdateLinks.InstallCommand), Dismissible: false));
     }
 
     // --- efficiency mode ---
@@ -273,6 +350,10 @@ public partial class App : Application, ITrayHost
                 _releaseFlyout.Start();
             };
             view.SetSnapshot(_controller.Snapshot, TrayController.UpText(_controller.Snapshot, _controller.Benches.Select(b => b.State).ToList()));
+            view.SetFooter("BenchBar " + UpdateCheck.CurrentVersion().Split('+')[0]);
+            view.SetNotices(_notices.All, DismissNotice);
+            view.SetUpdate(_updateOffer, UpdateRunning);
+            view.SetSetupPending(_setupPending);
         }
         _flyout.ShowAtTray();
     }
@@ -327,6 +408,7 @@ public partial class App : Application, ITrayHost
         OpenUrl = OpenUrl,
         OpenMain = OpenMain,
         SetUpBench = () => OpenWizard(resume: false),
+        UpdateNow = UpdateNow,
     };
 
     private VsCodeOutcome OpenEditor(BenchStatus bench)
@@ -439,7 +521,12 @@ public partial class App : Application, ITrayHost
         Theme = () => Theme,
         OpenMain = OpenMain,
         OpenSettings = ShowSettings,
+        SetupPending = () => _setupPending,
+        SetUp = () => OpenWizard(resume: false, keepFlow: true),
         CheckForUpdates = () => CheckForUpdatesAsync().Forget(),
+        Update = () => _updateKnown,
+        UpdateRunning = () => UpdateRunning,
+        UpdateNow = UpdateNow,
         Help = () => OpenUrl(HelpUrl),
         ReportBug = () => ReportBugAsync("Tray menu").Forget(),
         Quit = Quit,
@@ -474,29 +561,6 @@ public partial class App : Application, ITrayHost
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
         {
             _log.Write("runners-folder", ex);
-        }
-    }
-
-    private async Task CheckForUpdatesAsync()
-    {
-        try
-        {
-            var latest = await UpdateCheck.FetchLatestAsync(CancellationToken.None);
-            var current = UpdateCheck.CurrentVersion();
-            if (latest is { } release && UpdateCheck.IsNewer(release.Tag, current))
-            {
-                var answer = MessageBox.Show($"BenchBar {release.Tag.TrimStart('v')} is out. You have {current.Split('+')[0]}.\n\nOpen the release page?",
-                    "BenchBar", MessageBoxButton.YesNo, MessageBoxImage.Information);
-                if (answer == MessageBoxResult.Yes) OpenUrl(release.Url);
-            }
-            else
-            {
-                MessageBox.Show("You have the latest version of BenchBar.", "BenchBar", MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-        }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
-        {
-            MessageBox.Show("Could not check for updates: " + ex.Message, "BenchBar", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -598,6 +662,7 @@ public partial class App : Application, ITrayHost
         _flyout?.Close();
         foreach (var w in _logs.Values.ToList()) w.Close();
         foreach (var w in _doctors.Values.ToList()) w.Close();
+        if (_wizard is { } wizard) RecordWizardClose(wizard, reason: null); // Quit with the wizard open is "not now" too
         _wizard?.Dispose();
         _wizard = null;
         _main?.Close();

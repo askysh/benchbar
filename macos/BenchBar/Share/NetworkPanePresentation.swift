@@ -95,7 +95,7 @@ nonisolated enum NetworkPanePresentation {
         case .locked: return "\(host) locked this room."
         case .full: return "This room is full."
         case .alreadyJoined: return "This Mac is already in \(host)'s room."
-        case .blocked: return "\(host) removed you from this room."
+        case .blocked: return removedLine(host: host)
         case .expired: return "That took too long. Try the code again."
         case .rateLimited(let seconds): return "Too many tries. Wait \(seconds) seconds and try again."
         case .needsUpdate: return "Update BenchBar to join \(host)'s room."
@@ -143,11 +143,16 @@ nonisolated enum NetworkPanePresentation {
         case .ready(let deadline): return "Ready · \(timeLeft(until: deadline, now: now))"
         case .hostGone(let seen): return "\(host) isn't sharing right now (last seen \(clock(seen)))."
         case .offline: return "\(host) isn't sharing right now."
-        case .removed: return "\(host) removed you from this room."
+        case .removed: return removedLine(host: host)
         case .newRoom: return "\(host) started a new room. Join with the new room code."
         case .ended: return "\(host) ended the room."
         case .identityChanged: return identityChanged(host: host)
         }
+    }
+
+    /// A removal holds only against the code the guest had: a new invite lets them join again.
+    static func removedLine(host: String) -> String {
+        "\(host) removed you from this room. Ask \(host) for a new invite to join again."
     }
 
     /// Open is offered only when the room can still be opened.
@@ -182,7 +187,7 @@ nonisolated enum NetworkPanePresentation {
         switch error {
         case .seatTaken: return "Someone took that seat. Pick another."
         case .rateLimited: return "Too many seat changes. Wait a minute."
-        case .removed: return "\(host) removed you from this room."
+        case .removed: return removedLine(host: host)
         case .ended: return "\(host) ended the room."
         case .identityChanged: return identityChanged(host: host)
         case .unreachable: return "\(host) isn't sharing right now."

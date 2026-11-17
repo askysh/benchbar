@@ -27,6 +27,18 @@ chmod +x "$TMP_DIR/slow"
 fl_run_with_timeout 0 "true command" true
 assert_status 124 fl_run_with_timeout 1 "slow command" "$TMP_DIR/slow"
 
+# a timed command (bench init) is not silent in the JSON stream: a progress line
+# every FL_PROGRESS_SECS, with its label and the seconds so far, as fl_run_long
+printf '#!/usr/bin/env bash\nsleep 4\n' >"$TMP_DIR/slow4"
+chmod +x "$TMP_DIR/slow4"
+FL_JSONL=1 FL_PROGRESS_SECS=1 fl_run_with_timeout 20 "bench init" "$TMP_DIR/slow4" 3>"$TMP_DIR/stream" >/dev/null
+progress="$(grep -c '"event":"progress".*"label":"bench init"' "$TMP_DIR/stream" || true)"
+[[ "$progress" -ge 2 ]] || { printf 'Expected progress lines for the timed command, got %s: %s\n' "$progress" "$(cat "$TMP_DIR/stream")"; exit 1; }
+case "$(cat "$TMP_DIR/stream")" in *'"elapsed":'*) ;; *) printf 'Expected elapsed seconds in the progress line\n'; exit 1 ;; esac
+# without the stream there is none
+FL_JSONL=0 FL_PROGRESS_SECS=1 fl_run_with_timeout 20 "bench init" "$TMP_DIR/slow4" 3>"$TMP_DIR/stream0" >/dev/null
+[[ ! -s "$TMP_DIR/stream0" ]] || { printf 'No stream, no progress lines\n'; exit 1; }
+
 ps() {
   printf 'T\n'
 }

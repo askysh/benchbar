@@ -74,6 +74,27 @@ test("isAllowed refuses everything else, including the debugger and other upstre
     for (const m of ["TRACE", "CONNECT", "PATCH", "PROPFIND", "get", ""]) assert.strictEqual(no(m, "/app").ok, false, m);
 });
 
+test("the apps screen and the routes installed apps declare for it are allowed, at any depth", () => {
+    const appRoutes = policy.appRouteSet(["manufacturing-ops", "crm", "insights", "payments", "lms"]);
+    const ok = (p) => policy.isAllowed("GET", p, { appRoutes });
+    for (const p of ["/apps", "/manufacturing-ops", "/manufacturing-ops/requests/MR-1", "/crm/leads", "/insights", "/payments/x", "/lms/courses/a"]) {
+        assert.deepStrictEqual(ok(p), { ok: true, route: "web" }, p);
+    }
+    assert.strictEqual(policy.isAllowed("GET", "/manufacturing-ops/x", {}).ok, false, "no route unless the gateway was told it");
+    assert.strictEqual(policy.isAllowed("GET", "/apps/x", { appRoutes }).ok, false, "the apps screen is one page");
+    for (const p of ["/console", "/__debugger__", "/application", "/crmx", "/_benchbar/other", "/api/other"]) {
+        assert.strictEqual(ok(p).ok, false, p);
+    }
+});
+
+test("appRouteSet keeps only plain slugs that are not reserved", () => {
+    const set = policy.appRouteSet(["manufacturing-ops", "/crm", "app", "api", "assets", "files", "private", "_benchbar", "socket.io",
+        "console", "__debugger__", "login", "me", "room", "app/hr", "Bad Name", "", "a".repeat(65), 7, null, "lms"]);
+    assert.deepStrictEqual([...set].sort(), ["crm", "lms", "manufacturing-ops"]);
+    assert.strictEqual(policy.appRouteSet(undefined).size, 0);
+    assert.strictEqual(policy.appRouteSet("crm").size, 0);
+});
+
 test("socket.io and anything under it is gone, in any case or encoding, with any method", () => {
     for (const raw of ["/socket.io", "/socket.io/", "/SOCKET.IO/", "/Socket.Io/x/y", "/socket%2eio/", "/socket%2Eio/?EIO=4", "/%73ocket.io/",
         "/socket.io/?EIO=4&transport=polling"]) {

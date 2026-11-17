@@ -30,14 +30,17 @@ func run(sys *System, args []string) int {
 		case "keepalive":
 			return cmdKeepalive(sys, args[1:])
 		case "path":
-			// the CLI has its own `path` command; only these two are ours
-			if len(args) > 1 && (args[1] == "install" || args[1] == "status") {
+			// the CLI has its own `path` command; only these three are ours
+			if len(args) > 1 && (args[1] == "install" || args[1] == "status" || args[1] == "remove") {
 				return cmdPath(sys, args[1])
 			}
 		case "report-windows":
 			return cmdReportWindows(sys, args[1:])
 		case "setup":
 			return cmdSetup(sys, args[1:])
+		case "self-update":
+			// benchbar.exe, the tray and the CLI together; --cli is the CLI's own
+			return cmdSelfUpdate(sys, args[1:])
 		case "doctor":
 			if !hasAny(args[1:], "--json", "--fix-hints") {
 				return cmdDoctor(sys, args[1:])

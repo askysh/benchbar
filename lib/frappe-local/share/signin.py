@@ -4,6 +4,8 @@
 #
 #   signin.py SITE USER          starts a session of USER; stdout is the sid
 #   signin.py wipe SITE USER     ends every session of USER; stdout is a count
+#   signin.py routes SITE        the app front end routes of SITE (apps screen and
+#                                single page app rules), one per line (share start lets these through)
 #
 # Nothing but the sid or the count goes to stdout, nothing is logged, and no
 # secret travels in argv. A refusal is exit 1 and no output. USER must be an
@@ -44,6 +46,20 @@ def wipe(frappe, user):
 
 
 def main(argv):
+    if argv[:1] == ["routes"]:
+        if len(argv) != 2 or not argv[1]:
+            return 2
+        os.chdir(sites_dir())
+        import frappe
+        frappe.init(site=argv[1])
+        frappe.connect()
+        try:
+            from app_routes import app_routes
+            for route in app_routes(frappe.get_hooks("add_to_apps_screen"), frappe.get_hooks("website_route_rules")):
+                sys.stdout.write(route + "\n")
+            return 0
+        finally:
+            frappe.destroy()
     do_wipe = argv[:1] == ["wipe"]
     args = argv[1:] if do_wipe else argv
     if len(args) != 2 or not all(args):

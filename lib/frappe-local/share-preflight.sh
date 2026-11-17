@@ -384,6 +384,14 @@ fl_sp_critical() {
       fl_sp_add share_debugger_off critical ok "no debugger on the share web process"
     fi
   fi
+
+  # critical, not only static: a site drop or a cleanup can remove the copy while sharing is on, and then
+  # every guest gets a "restarting" page from a share that still says it is on
+  if [[ -f "${FL_BENCH_DIR}/sites/${FL_SHARE_SITE}/site_config.json" ]]; then
+    fl_sp_add copy_present critical ok "${FL_SHARE_SITE} is there"
+  else
+    fl_sp_add copy_present critical fail "The copy ${FL_SHARE_SITE} is gone (dropped or deleted while sharing)." "Run benchbar share setup --refresh, then start sharing again." rerun_setup
+  fi
 }
 
 # ---------------------------------------------------------------- static checks

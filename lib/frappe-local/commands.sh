@@ -27,6 +27,7 @@ flag~install~--profile~NAME~Release profile (default v15-lts) or a team profile.
 flag~install~--bundle~NAME~App bundle: minimal, common or extended.
 flag~install~--port-offset~N~Use port block N (web 8000+N).
 flag~install~--make-default~~Make this the default bench even when another one is.
+flag~install~--allow-windows-fs~~WSL only: accept a bench on the Windows file system (/mnt/c, drvfs, 9p). It is refused by default: slow, no file watching, broken permissions.
 flag~install~--offline~~Skip the remote branch checks.
 flag~install~--frappe-commit~SHA~Pin the frappe clone to this commit (or FRAPPE_COMMIT, or the team profile).
 flag~install~--erpnext-commit~SHA~Pin the erpnext clone to this commit.
@@ -34,11 +35,13 @@ flag~install~--dry-run~~Print the plan, change nothing.
 flag~install~--yes~~Do not ask; secrets come from the environment.
 env~install~ADMIN_PASSWORD~The new site's Administrator password.
 env~install~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
+env~install~BENCH_INIT_TIMEOUT_SECONDS~Seconds bench init may take before it is stopped (default 2700, 0 for no limit). A half built bench left by a stopped init is moved aside by the next install, which starts it again.
 env~install~BENCHBAR_SUDO~Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change).
 env~install~BENCHBAR_SUDO_PASSWORD~The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed from the environment; never in argv, the log or a child.
 cmd~adopt~benchbar adopt PATH [--dry-run] [--yes] [--json]~Register an existing bench: Procfile.lean, runner, agent, helpers. Never runs migrate, build or update.~yes~yes~no~yes~stream
 flag~adopt~--port-offset~N~Move the bench to port block N.
 flag~adopt~--make-default~~Make this the default bench.
+flag~adopt~--allow-windows-fs~~WSL only: accept a bench on the Windows file system (/mnt/c, drvfs, 9p), which is refused by default.
 flag~adopt~--dry-run~~Print the plan, change nothing.
 flag~adopt~--yes~~Do not ask.
 env~adopt~BENCHBAR_SUDO~Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change).
@@ -190,8 +193,8 @@ cmd~share people~benchbar share people [--json]~The people in the room: name, Ma
 flag~share people~--json~~One document: state and people, each with id, name, model, ip, seat_id, seat_full_name, online, joined, last_seen.
 cmd~share devices~benchbar share devices [--json]~Another name for share people.~no~no~no~no~document
 flag~share devices~--json~~As share people --json.
-cmd~share remove~benchbar share remove ID [--new-code] [--yes] [--json]~Remove a person from the room: their Mac is blocked for this room and their seat's sessions end. Asks first (--yes).~yes~no~no~yes~stream
-flag~share remove~--new-code~~Also draw a new room code, for when the person is not known: a fresh Mac could join again with the old one.
+cmd~share remove~benchbar share remove ID [--new-code] [--yes] [--json]~Remove a person from the room: their seat's sessions end and their Mac cannot join again with the current code; a new code (a new invite) lets them back. Asks first (--yes).~yes~no~no~yes~stream
+flag~share remove~--new-code~~Also draw a new room code, for when the person is not known: a fresh Mac could join again with the old one. The new code also lets the removed Mac back, if they get it.
 flag~share remove~--yes~~Do not ask first.
 flag~share remove~--json~~JSON lines: done, with removed, new_code and the wipe.
 cmd~share revoke~benchbar share revoke ID [--new-code] [--yes] [--json]~Another name for share remove.~yes~no~no~yes~stream

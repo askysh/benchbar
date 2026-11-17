@@ -29,6 +29,9 @@ internal sealed class FlyoutActions
 
     /// <summary>Opens the setup wizard (the empty flyout's next step).</summary>
     public Action SetUpBench { get; set; } = () => { };
+
+    /// <summary>Update Now: starts the update window (benchbar.exe self-update --yes).</summary>
+    public Action UpdateNow { get; set; } = () => { };
 }
 
 /// <summary>What the flyout shows now.</summary>
@@ -58,22 +61,26 @@ internal sealed class BenchRow : Border
 internal sealed class FlyoutView : UserControl
 {
     public const string DistroHint = "The tray does not start it on its own.";
+    public const string SetUpLabel = "Set Up BenchBar";
     public const string MissingDistroHint = "WSL has no distro with that name. Set up BenchBar to install it, or pick another distro in Settings.";
 
     private static readonly Brush CardBrush = Frozen(new SolidColorBrush(Color.FromArgb(0x1A, 0x80, 0x80, 0x80)));
     private static readonly Brush FocusBrush = Frozen(new SolidColorBrush(Color.FromArgb(0x26, 0x80, 0x80, 0x80)));
-    private static readonly Brush ErrorBrush = Frozen(new SolidColorBrush(Color.FromRgb(0xE5, 0x48, 0x4D)));
 
     private readonly FlyoutActions _actions;
     private readonly TextBlock _upText = new() { Opacity = 0.7, VerticalAlignment = VerticalAlignment.Center };
     private readonly StackPanel _body = new();
     private readonly StackPanel _message = new() { Visibility = Visibility.Collapsed, Margin = new Thickness(16, 0, 16, 8) };
+    private readonly StackPanel _notices = new() { Visibility = Visibility.Collapsed, Margin = new Thickness(12, 0, 12, 4) };
+    private readonly TextBlock _footer = new() { FontSize = 11, Opacity = 0.65, Margin = new Thickness(16, 0, 16, 10), Visibility = Visibility.Collapsed };
+    private readonly Border _update = new() { Visibility = Visibility.Collapsed, Margin = new Thickness(12, 0, 12, 4), CornerRadius = new CornerRadius(6), Padding = new Thickness(10, 6, 10, 6) };
     private readonly HashSet<string> _busy = [];
     private readonly Dictionary<string, (string Message, BenchState State, string? Reason)> _failures = [];
     private readonly List<BenchRow> _rows = [];
     private TraySnapshot _snapshot = TraySnapshot.Empty;
     private string _key = "";
     private bool _distroStarting;
+    private bool _setupPending;
     private Button? _cardButton;
 
     /// <summary>The button of the distro or problem card (Start or Copy).</summary>
@@ -96,8 +103,15 @@ internal sealed class FlyoutView : UserControl
         var root = new DockPanel();
         DockPanel.SetDock(header, Dock.Top);
         DockPanel.SetDock(_message, Dock.Top);
+        DockPanel.SetDock(_footer, Dock.Bottom);
+        DockPanel.SetDock(_notices, Dock.Bottom);
+        DockPanel.SetDock(_update, Dock.Bottom);
+        _update.Background = CardBrush;
         root.Children.Add(header);
         root.Children.Add(_message);
+        root.Children.Add(_footer);
+        root.Children.Add(_update);
+        root.Children.Add(_notices);
         root.Children.Add(new ScrollViewer
         {
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
@@ -109,6 +123,78 @@ internal sealed class FlyoutView : UserControl
     }
 
     public FlyoutMode Mode { get; private set; } = FlyoutMode.Empty;
+
+    /// <summary>The line at the foot: the version that is running ("BenchBar 0.8.2"). Empty hides it.</summary>
+    public string FooterText => _footer.Text;
+
+    public void SetFooter(string text)
+    {
+        _footer.Text = text;
+        _footer.Visibility = text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    /// <summary>The update line above the footer ("BenchBar 0.9.0 is out."); empty when it is hidden.</summary>
+    public string UpdateText { get; private set; } = "";
+
+    /// <summary>
+    /// One line for a newer release, with Update Now when this install can run it (off and "Updating..." while the update window runs), else
+    /// Copy Update Line. Null hides it.
+    /// </summary>
+    public void SetUpdate(UpdateOffer? offer, bool running)
+    {
+        if (offer is null)
+        {
+            UpdateText = "";
+            _update.Child = null;
+            _update.Visibility = Visibility.Collapsed;
+            return;
+        }
+        UpdateText = offer.CanUpdateNow && running ? $"Updating to BenchBar {offer.Version}." : $"BenchBar {offer.Version} is out.";
+        var line = new StackPanel();
+        line.Children.Add(new TextBlock { Text = UpdateText, FontSize = 12, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 4) });
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+        if (offer.CanUpdateNow)
+        {
+            var update = TextButton(running ? "Updating..." : "Update Now", () => _actions.UpdateNow(), enabled: !running);
+            Ui.Name(update, "Update BenchBar now");
+            buttons.Children.Add(update);
+        }
+        if (!running)
+        {
+            var copy = TextButton("Copy Update Line", () => _actions.CopyText(offer.Command));
+            Ui.Name(copy, "Copy the update line for PowerShell");
+            buttons.Children.Add(copy);
+        }
+        line.Children.Add(buttons);
+        _update.Child = line;
+        _update.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>The notices of the board (the tray closed unexpectedly, the shim's version differs), each with its button and a Dismiss when it can be.</summary>
+    public IReadOnlyList<string> NoticeTexts => _notices.Children.OfType<Border>().Select(b => b.Tag as string ?? "").ToList();
+
+    public void SetNotices(IReadOnlyList<Notice> notices, Action<string> dismiss)
+    {
+        _notices.Children.Clear();
+        foreach (var notice in notices)
+        {
+            var line = new StackPanel { Margin = new Thickness(0, 0, 0, 4) };
+            var words = new TextBlock { Text = notice.Text, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 4) };
+            if (notice.Critical) words.Foreground = Ui.CriticalBrush; // news keeps the inherited color: a null Foreground would hide the text
+            line.Children.Add(words);
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+            if (notice.ActionLabel is { } label && notice.Action is { } action) buttons.Children.Add(TextButton(label, action));
+            if (notice.Dismissible)
+            {
+                var close = TextButton("Dismiss", () => dismiss(notice.Key));
+                close.Margin = new Thickness(10, 0, 0, 0);
+                buttons.Children.Add(close);
+            }
+            if (buttons.Children.Count > 0) line.Children.Add(buttons);
+            _notices.Children.Add(new Border { Child = line, Tag = notice.Text, Background = CardBrush, CornerRadius = new CornerRadius(6), Padding = new Thickness(10, 6, 10, 6) });
+        }
+        _notices.Visibility = notices.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+    }
 
     public string UpText => _upText.Text;
 
@@ -134,6 +220,15 @@ internal sealed class FlyoutView : UserControl
         if (key == _key) return;
         _key = key;
         Rebuild();
+    }
+
+    /// <summary>Setup is unfinished: the problem card offers Set Up BenchBar next to Copy (the empty and missing distro cards always do).</summary>
+    public void SetSetupPending(bool pending)
+    {
+        if (_setupPending == pending) return;
+        _setupPending = pending;
+        _key = "";
+        SetSnapshot(_snapshot, _upText.Text);
     }
 
     public void ShowVsCodeMissing() => ShowMessage(VsCode.InstallMessage, "Learn more", VsCode.HelpUrl);
@@ -170,6 +265,7 @@ internal sealed class FlyoutView : UserControl
     private string KeyOf(TraySnapshot s) => string.Join('\n',
         s.DistroStopped ? $"stopped|{s.Distro}|{_distroStarting}|{s.DistroMissing}" : "up",
         s.Problem ?? "",
+        _setupPending ? "setup" : "",
         string.Join('\n', s.Benches.Select(b =>
             $"{b.Path}|{b.Name}|{b.State}|{b.RawState}|{b.StopReason}|{b.Site}|{b.WebUrl}|{_busy.Contains(b.Path)}|{(_failures.TryGetValue(b.Path, out var f) ? f.Message : "")}|{b.Problem}")));
 
@@ -280,7 +376,22 @@ internal sealed class FlyoutView : UserControl
         CardButtons = ["Copy"];
         var panel = new StackPanel();
         panel.Children.Add(new TextBlock { Text = problem, TextWrapping = TextWrapping.Wrap });
-        panel.Children.Add(copy);
+        if (!_setupPending)
+        {
+            panel.Children.Add(copy);
+            return Card(panel);
+        }
+        // setup is unfinished (the person closed the wizard): the way back is on the card, first in Tab order
+        var setUp = new Button { Content = SetUpLabel, MinWidth = 64, Margin = new Thickness(0, 0, 8, 0) };
+        setUp.Click += (_, _) => _actions.SetUpBench();
+        AutomationProperties(setUp, "Set up BenchBar");
+        copy.Margin = new Thickness(0);
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 10, 0, 0) };
+        buttons.Children.Add(setUp);
+        buttons.Children.Add(copy);
+        panel.Children.Add(buttons);
+        _cardButton = setUp;
+        CardButtons = [SetUpLabel, "Copy"];
         return Card(panel);
     }
 
@@ -369,7 +480,7 @@ internal sealed class FlyoutView : UserControl
             stack.Children.Add(new TextBlock
             {
                 Text = line,
-                Foreground = ErrorBrush,
+                Foreground = Ui.CriticalBrush,
                 FontSize = 12,
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(18, 4, 0, 0),

@@ -1,8 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
-using System.Text.Json;
-using System.Text.RegularExpressions;
 using BenchBar.Tray.Core;
 
 namespace BenchBar.Tray;
@@ -127,13 +125,9 @@ internal static class VsCode
     }
 }
 
-/// <summary>The Check for Updates logic, apart from the HTTP call.</summary>
+/// <summary>The running tray's version. Updates themselves are checked and run through benchbar.exe (<see cref="SelfUpdateClient"/>).</summary>
 internal static class UpdateCheck
 {
-    public const string LatestUrl = "https://api.github.com/repos/askysh/benchbar/releases/latest";
-
-    private static readonly Regex Number = new(@"^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?(.*)$", RegexOptions.CultureInvariant);
-
     public static string CurrentVersion()
     {
         var info = (System.Reflection.Assembly.GetEntryAssembly() ?? typeof(UpdateCheck).Assembly)
@@ -142,48 +136,8 @@ internal static class UpdateCheck
         return string.IsNullOrWhiteSpace(info) ? "0.0.0-dev" : info;
     }
 
-    /// <summary>True when <paramref name="tag"/> is a later version than <paramref name="current"/>. A pre release (-dev) is before its release.</summary>
-    public static bool IsNewer(string tag, string current)
-    {
-        var (a, aPre) = Parse(tag);
-        var (b, bPre) = Parse(current);
-        if (a is null) return false;
-        if (b is null) return true;
-        for (var i = 0; i < 3; i++)
-        {
-            if (a[i] != b[i]) return a[i] > b[i];
-        }
-        return bPre && !aPre;
-    }
-
-    private static (int[]? Parts, bool Pre) Parse(string text)
-    {
-        var m = Number.Match(text.Trim());
-        if (!m.Success) return (null, false);
-        int P(int g) => m.Groups[g].Success ? int.Parse(m.Groups[g].Value, CultureInfo.InvariantCulture) : 0;
-        var rest = m.Groups[4].Value;
-        return ([P(1), P(2), P(3)], rest.StartsWith('-'));
-    }
-
-    /// <summary>The tag and the release page from the GitHub API's JSON.</summary>
-    public static (string Tag, string Url)? ParseRelease(string json)
-    {
-        using var doc = JsonDocument.Parse(json);
-        if (doc.RootElement.ValueKind != JsonValueKind.Object) return null;
-        var tag = doc.RootElement.TryGetProperty("tag_name", out var t) && t.ValueKind == JsonValueKind.String ? t.GetString() : null;
-        var url = doc.RootElement.TryGetProperty("html_url", out var u) && u.ValueKind == JsonValueKind.String ? u.GetString() : null;
-        return string.IsNullOrEmpty(tag) || string.IsNullOrEmpty(url) ? null : (tag, url);
-    }
-
-    /// <summary>One GET with a User-Agent. The client lives only for this call.</summary>
-    public static async Task<(string Tag, string Url)?> FetchLatestAsync(CancellationToken ct)
-    {
-        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("BenchBarTray/" + CurrentVersion().Split('+')[0]);
-        client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
-        var json = await client.GetStringAsync(LatestUrl, ct).ConfigureAwait(false);
-        return ParseRelease(json);
-    }
+    /// <summary>The version without build metadata: <c>0.8.4</c> of <c>0.8.4+abc</c>.</summary>
+    public static string ShortVersion() => CurrentVersion().Split('+')[0];
 }
 
 /// <summary>Text forms of what the windows show, so tests and Copy buttons share them.</summary>
@@ -212,8 +166,11 @@ internal static class TextFormats
         report.Checks.OrderBy(c => c.Level switch { CheckLevel.Fail => 0, CheckLevel.Warn => 1, CheckLevel.Ok => 2, _ => 3 }).ToList();
 
     /// <summary>A path inside the distro as Windows can open it: <c>\\wsl.localhost\DISTRO\home\a\x.zip</c>.</summary>
-    public static string WslToWindows(string distro, string linuxPath) =>
-        @"\\wsl.localhost\" + distro + linuxPath.Replace('/', '\\');
+    public static string WslToWindows(string distro, string linuxPath) => WslPaths.ToWindows(distro, linuxPath);
+
+    /// <summary>The same, with <c>\\wsl$\</c> when only that share exists (older Windows 10 builds).</summary>
+    public static string WslToWindowsExisting(string distro, string linuxPath) =>
+        WslPaths.ToWindows(distro, linuxPath, WslPaths.PathExists);
 
     /// <summary>A file name for the bench's log copy: letters, digits, dot, dash and underscore only.</summary>
     public static string SafeFileName(string name)
