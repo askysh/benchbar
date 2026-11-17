@@ -146,7 +146,7 @@ func twoInstallsCheck(sys *System) []Check {
 	return []Check{{
 		ID: "two_installs", Label: "Installs", Status: "warn",
 		Message: "two BenchBar installs are on this PC: the Microsoft Store one and " + other,
-		Fix:     `$env:BENCHBAR_UNINSTALL = '1'; irm https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1 | iex`,
+		Fix:     `& ([scriptblock]::Create((irm https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1))) -Uninstall`,
 	}}
 }
 

@@ -29,7 +29,7 @@ public static class TwoInstalls
     public const string CopyLabel = "Copy Uninstall Line";
 
     /// <summary>The one line installer with its own uninstall switch (docs/windows.md, Uninstall): it asks once, then removes the two programs and keeps WSL, the distro and the benches.</summary>
-    public const string UninstallLine = "$env:BENCHBAR_UNINSTALL = '1'; irm https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1 | iex";
+    public const string UninstallLine = "& ([scriptblock]::Create((irm https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1))) -Uninstall";
 
     /// <summary>Where the one line installer puts the tray.</summary>
     public static string UnpackagedTrayPath(string localAppData) => Path.Combine(localAppData, "Programs", "BenchBar", "BenchBarTray.exe");

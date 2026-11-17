@@ -501,7 +501,7 @@ func TestTwoInstallsCheck(t *testing.T) {
 			t.Fatalf("%s: %+v", c.name, got)
 		}
 		if c.want && (got[0].Status != "warn" || !strings.Contains(got[0].Message, "two BenchBar installs") ||
-			!strings.Contains(got[0].Fix, "BENCHBAR_UNINSTALL = '1'")) {
+			!strings.Contains(got[0].Fix, "install.ps1))) -Uninstall")) {
 			t.Errorf("%s: %+v", c.name, got[0])
 		}
 	}

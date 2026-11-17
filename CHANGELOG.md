@@ -9,6 +9,17 @@ PC. Getting from nothing to a running bench has fewer dead ends, and the
 installer, `benchbar.exe`, the tray and the command line tool in WSL say
 what is wrong and how to fix it.
 
+### Microsoft Store package (not published yet)
+
+- `benchbar.exe` and the tray can run from an MSIX package, the form the
+  Microsoft Store signs and installs with no security dialog. In a package
+  they keep their files in the package's own data folder, `benchbar` comes
+  from the app execution alias and `path install` changes nothing,
+  keepalive runs the alias so it survives updates, "Open at logon" uses
+  the Windows startup setting, updates come from the Store, and `doctor`
+  and the tray say when a second install from the one line installer is on
+  the same PC. `windows/msix/build-msix.ps1` builds the package.
+
 ### Windows installer
 
 - The installer stops before it writes anything when Smart App Control is on, and says what to do. It also stops early in Constrained Language Mode.

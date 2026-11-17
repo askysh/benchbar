@@ -18,8 +18,12 @@ on:
         description: 'Package version A.B.C (the fourth part is always 0)'
         type: string
         default: '0.0.1'
+      app_version:
+        description: 'Version stamped into benchbar.exe and the tray, X.Y.Z (empty builds dev versions)'
+        type: string
+        default: ''
       identity_name:
-        description: 'Store mode only: Identity Name from Partner Center'
+        description: 'Store mode only: Identity Name, empty for BenchBar in Partner Center'
         type: string
         default: ''
       publisher:
@@ -45,6 +49,7 @@ jobs:
     env:
       MODE: ${{ inputs.mode }}
       PKG_VERSION: ${{ inputs.version }}
+      APP_VERSION: ${{ inputs.app_version }}
       IDENTITY_NAME: ${{ inputs.identity_name }}
       PUBLISHER: ${{ inputs.publisher }}
       PUBLISHER_DISPLAY_NAME: ${{ inputs.publisher_display_name }}
@@ -66,13 +71,15 @@ jobs:
           $p = @{ Mode = $env:MODE; Version = $env:PKG_VERSION }
           if ($env:MODE -eq 'Store') {
             $p.Arch = 'both'
-            $p.IdentityName = $env:IDENTITY_NAME
-            $p.Publisher = $env:PUBLISHER
-            $p.PublisherDisplayName = $env:PUBLISHER_DISPLAY_NAME
+            # empty inputs: the script uses BenchBar's product identity from Partner Center
+            if ($env:IDENTITY_NAME) { $p.IdentityName = $env:IDENTITY_NAME }
+            if ($env:PUBLISHER) { $p.Publisher = $env:PUBLISHER }
+            if ($env:PUBLISHER_DISPLAY_NAME) { $p.PublisherDisplayName = $env:PUBLISHER_DISPLAY_NAME }
+            if ($env:APP_VERSION) { $p.AppVersion = $env:APP_VERSION }
           } else {
             $p.Arch = 'x64'
           }
-          ./windows/msix/build-msix.ps1 @args
+          ./windows/msix/build-msix.ps1 @p
 
       - name: Upload the package
         uses: actions/upload-artifact@v7

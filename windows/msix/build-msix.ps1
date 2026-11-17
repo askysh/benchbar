@@ -23,8 +23,7 @@
   .\build-msix.ps1
   .\build-msix.ps1 -Version 0.8.2 -Arch x64
   .\build-msix.ps1 -Mode Store -Version 0.8.2 -Arch both `
-      -IdentityName 'AkashMishra.BenchBar' -Publisher 'CN=XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX' `
-      -PublisherDisplayName 'Akash Mishra'
+      -AppVersion 0.8.2
 #>
 [CmdletBinding()]
 param(
@@ -38,9 +37,12 @@ param(
   [ValidateSet('x64', 'arm64', 'both')]
   [string]$Arch = '',
 
-  [string]$IdentityName = 'BenchBar.Spike',
-  [string]$Publisher = 'CN=BenchBar Spike Test',
-  [string]$PublisherDisplayName = 'BenchBar Spike (test)',
+  # Package identity. Empty picks the default for the mode: Store mode uses the product identity
+  # of BenchBar in Partner Center (Product management, Product identity), Sideload mode a test
+  # identity whose Publisher is the subject of the self signed certificate.
+  [string]$IdentityName = '',
+  [string]$Publisher = '',
+  [string]$PublisherDisplayName = '',
 
   # Release version stamped into benchbar.exe and BenchBarTray.exe, X.Y.Z. Empty builds
   # dev versions (the shim reports "dev" and never compares itself with the CLI).
@@ -92,8 +94,19 @@ if ($Mode -eq 'Sideload' -and $Arch -eq 'both') { Fail 'Sideload mode builds one
 if ($Mode -eq 'Sideload' -and $Arch -ne $hostArch) {
   Say "WARNING: this PC is $hostArch, so a $Arch package will build but will not install here."
 }
-if ($Mode -eq 'Store' -and ($IdentityName -eq 'BenchBar.Spike' -or $Publisher -eq 'CN=BenchBar Spike Test')) {
-  Fail 'Store mode needs the Name, Publisher and PublisherDisplayName from Partner Center (Product identity). Pass -IdentityName, -Publisher and -PublisherDisplayName.'
+# Partner Center, BenchBar (Store ID 9NNG0NV12ZBS), Product identity. These are public values:
+# every installed package shows them. The package family name is Askysh.BenchBar_0f196q1bwh8q6.
+if ($Mode -eq 'Store') {
+  if (-not $IdentityName) { $IdentityName = 'Askysh.BenchBar' }
+  if (-not $Publisher) { $Publisher = 'CN=BA1A2A4F-276F-4E64-8619-08871322A90C' }
+  if (-not $PublisherDisplayName) { $PublisherDisplayName = 'Askysh' }
+} else {
+  if (-not $IdentityName) { $IdentityName = 'BenchBar.Spike' }
+  if (-not $Publisher) { $Publisher = 'CN=BenchBar Spike Test' }
+  if (-not $PublisherDisplayName) { $PublisherDisplayName = 'BenchBar Spike (test)' }
+}
+if ($Mode -eq 'Store' -and $Publisher -eq 'CN=BenchBar Spike Test') {
+  Fail 'Store mode cannot use the test Publisher. Leave -Publisher out, or pass the one from Partner Center.'
 }
 # @( ) around the whole if: a one element array from an if expression is unrolled to a string, and $arches[0] is then its first character
 $arches = @(if ($Arch -eq 'both') { 'x64'; 'arm64' } else { $Arch })

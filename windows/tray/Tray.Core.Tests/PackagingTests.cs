@@ -332,7 +332,7 @@ public class PackagingTests
     [Fact]
     public void TheUninstallLineIsTheDocumentedOne()
     {
-        Assert.Equal("$env:BENCHBAR_UNINSTALL = '1'; irm https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1 | iex", TwoInstalls.UninstallLine);
+        Assert.Equal("& ([scriptblock]::Create((irm https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1))) -Uninstall", TwoInstalls.UninstallLine);
         Assert.Contains("uninstall", TwoInstalls.Text);
     }
 
