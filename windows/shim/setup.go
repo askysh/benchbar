@@ -198,6 +198,11 @@ type setupReport struct {
 	Ready         bool        `json:"ready"`
 	RebootPending bool        `json:"reboot_pending"`
 	Steps         []setupStep `json:"steps"`
+	// Packaged is true when benchbar.exe runs from the Microsoft Store
+	// package; DataDir is the folder holding config.json, the reports and
+	// the logs (empty when LOCALAPPDATA is unknown).
+	Packaged bool   `json:"packaged"`
+	DataDir  string `json:"data_dir"`
 }
 
 func strp(s string) *string { return &s }
@@ -566,6 +571,7 @@ func buildSetupReport(sys *System, distro string, probe bool) setupReport {
 			blocker = d.id
 		}
 	}
+	rep.Packaged, rep.DataDir = sys.Package.Packaged, sys.ConfigDir
 	rep.RebootPending = c.reboot
 	rep.Ready = !c.unchecked
 	for _, s := range rep.Steps {

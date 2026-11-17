@@ -46,6 +46,7 @@ func cmdDoctor(sys *System, rest []string) int {
 	checks = append(checks, ka.Checks...)
 	checks = append(checks, trayChecks(sys)...)
 	checks = append(checks, installRecordChecks(sys, ka)...)
+	checks = append(checks, twoInstallsCheck(sys)...)
 
 	fmt.Fprint(sys.Stdout, "\nWINDOWS\n")
 	printChecks(sys.Stdout, checks)
@@ -101,7 +102,7 @@ func cliVersionCheck(sys *System, t target) (Check, bool) {
 	case newer:
 		c.Status = "warn"
 		c.Message = fmt.Sprintf("benchbar %s in %s is newer than benchbar.exe %s", cli, where, version)
-		c.Fix = "irm https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1 | iex"
+		c.Fix = updateFix(sys)
 	}
 	return c, true
 }

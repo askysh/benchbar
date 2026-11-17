@@ -145,8 +145,11 @@ func pathCheck(sys *System) Check {
 		c.Message = fmt.Sprintf("cannot read the machine PATH: %v", err)
 		return c
 	}
+	if sys.Package.Packaged {
+		return packagedPathCheck(sys, c, machine, user.Value)
+	}
 	exeDir := dirOf(sys.ExePath)
-	dir, from, found := firstBenchbarFrom(machine, user.Value, sys.Getenv, sys.FileExists)
+	dir, from, found := firstBenchbarFrom(machine, user.Value, sys.Getenv, sys.exeExists)
 	switch {
 	case found && normDir(dir, sys.Getenv) == normDir(exeDir, sys.Getenv):
 		c.Status, c.Fix = "ok", ""
@@ -154,6 +157,9 @@ func pathCheck(sys *System) Check {
 	case found:
 		c.Status = "warn"
 		c.Message = fmt.Sprintf("another copy comes first: %s\\benchbar.exe (this one is %s)", strings.TrimRight(dir, `\/`), sys.ExePath)
+		if sys.aliasDir() != "" && normDir(dir, sys.Getenv) == normDir(sys.aliasDir(), sys.Getenv) && sys.exeExists(sys.aliasPath()) {
+			c.Message = fmt.Sprintf("another copy comes first: %s, the Microsoft Store install (this one is %s)", sys.aliasPath(), sys.ExePath)
+		}
 		if from == "machine" {
 			// the user PATH comes after the machine PATH, so path install cannot win
 			other := strings.TrimRight(dir, `\/`)
@@ -162,6 +168,38 @@ func pathCheck(sys *System) Check {
 	default:
 		c.Status = "warn"
 		c.Message = exeDir + " is not on PATH"
+	}
+	return c
+}
+
+// packagedPathCheck is the PATH check of the Store install: the app
+// execution alias is this copy, and the versioned package folder never goes
+// on PATH.
+func packagedPathCheck(sys *System, c Check, machine, user string) Check {
+	alias, aliasDir := sys.aliasPath(), sys.aliasDir()
+	c.Status = "warn"
+	switch {
+	case alias == "":
+		c.Message = "LOCALAPPDATA is not set, so the Store alias of benchbar.exe cannot be found"
+		c.Fix = storeAliasFix
+		return c
+	case !sys.exeExists(alias):
+		c.Message = "the Store install's benchbar.exe alias is missing: " + alias
+		c.Fix = storeAliasFix
+		return c
+	}
+	dir, _, found := firstBenchbarFrom(machine, user, sys.Getenv, sys.exeExists)
+	switch {
+	case found && normDir(dir, sys.Getenv) == normDir(aliasDir, sys.Getenv):
+		c.Status, c.Fix = "ok", ""
+		c.Message = "benchbar.exe resolves to " + alias + " (the Microsoft Store install)"
+	case found:
+		other := strings.TrimRight(dir, `\/`)
+		c.Message = fmt.Sprintf("another copy comes first: %s\\benchbar.exe (the Store install is %s)", other, alias)
+		c.Fix = fmt.Sprintf("remove %s from PATH, or delete %s\\benchbar.exe", other, other)
+	default:
+		c.Message = aliasDir + " is not on PATH"
+		c.Fix = "add " + aliasDir + " to your user PATH, and in " + storeAliasFix
 	}
 	return c
 }
@@ -186,6 +224,11 @@ func removePathDir(current, dir string, getenv func(string) string) (string, int
 }
 
 func cmdPath(sys *System, sub string) int {
+	if sys.Package.Packaged && (sub == "install" || sub == "remove") {
+		// the package folder changes on every update and is never put on PATH
+		fmt.Fprintln(sys.Stdout, "The Microsoft Store install provides benchbar through its app execution alias, so there is nothing to change on PATH.")
+		return 0
+	}
 	if sub == "remove" {
 		user, err := sys.Paths.User()
 		if err != nil {

@@ -152,6 +152,15 @@ type keepaliveInfo struct {
 	Checks     []Check `json:"checks"`
 }
 
+// keepaliveExe is the program the task runs: the app execution alias when
+// packaged (it survives an update), else this benchbar.exe.
+func keepaliveExe(sys *System) string {
+	if sys.Package.Packaged {
+		return sys.aliasPath()
+	}
+	return sys.ExePath
+}
+
 func queryKeepalive(sys *System) keepaliveInfo {
 	info := keepaliveInfo{Task: taskName}
 	rec := readPidRecord(sys)
@@ -175,7 +184,7 @@ func queryKeepalive(sys *System) keepaliveInfo {
 	info.Installed = true
 	exe, distro, ok := parseTaskArguments(out)
 	info.Exe, info.Distro = exe, distro
-	info.ExeExists = ok && sys.FileExists(exe)
+	info.ExeExists = ok && sys.exeExists(exe)
 
 	if out, code, err := sys.Tasks.Schtasks("/Query", "/TN", taskName, "/FO", "CSV", "/V", "/NH"); err == nil && code == 0 {
 		r := csv.NewReader(strings.NewReader(out))
@@ -189,13 +198,17 @@ func queryKeepalive(sys *System) keepaliveInfo {
 	switch {
 	case !ok:
 		c.Status, c.Message = "warn", "installed, but its action is not a BenchBar keepalive"
+	case sys.ownVersionedPath(exe):
+		// the package folder changes on every update: the task goes stale
+		c.Status = "warn"
+		c.Message = fmt.Sprintf("installed, but the task runs %s, a versioned folder of the Store package that changes on every update", exe)
 	case !info.ExeExists:
 		c.Status, c.Message = "warn", fmt.Sprintf("installed, but %s does not exist", exe)
-	case sys.ExePath != "" && normDir(exe, sys.Getenv) != normDir(sys.ExePath, sys.Getenv):
+	case keepaliveExe(sys) != "" && normDir(exe, sys.Getenv) != normDir(keepaliveExe(sys), sys.Getenv):
 		// an upgrade that put benchbar.exe somewhere else leaves the task on
 		// the old copy; install rewrites the task in place (schtasks /F)
 		c.Status = "warn"
-		c.Message = fmt.Sprintf("installed, but the task runs %s, not this benchbar.exe (%s)", exe, sys.ExePath)
+		c.Message = fmt.Sprintf("installed, but the task runs %s, not this benchbar.exe (%s)", exe, keepaliveExe(sys))
 	case !info.RunAlive:
 		// a disabled task, one that failed to start or a run that died: WSL
 		// can stop the distro, so this is not healthy; install restarts it
@@ -280,13 +293,18 @@ func keepaliveInstall(sys *System, distro string) int {
 		errorf(sys, "cannot tell which Windows user this is, so the logon task cannot be made. fix: run benchbar.exe keepalive install from your own signed in terminal (whoami must print DOMAIN\\user)")
 		return 1
 	}
+	exe := keepaliveExe(sys)
+	if sys.Package.Packaged && !sys.exeExists(exe) {
+		errorf(sys, "the Store install's benchbar.exe alias is missing (%s), so the task could not start it. fix: %s", exe, storeAliasFix)
+		return 1
+	}
 	f, err := os.CreateTemp("", "benchbar-keepalive-*.xml")
 	if err != nil {
 		errorf(sys, "cannot write the task file: %v", err)
 		return 1
 	}
 	defer os.Remove(f.Name())
-	_, err = f.Write(utf16LE(keepaliveXML(sys.User, sys.ExePath, distro)))
+	_, err = f.Write(utf16LE(keepaliveXML(sys.User, exe, distro)))
 	if cerr := f.Close(); err == nil {
 		err = cerr
 	}
@@ -329,8 +347,10 @@ func keepaliveRemove(sys *System) int {
 		// the task has one fixed name, so it may belong to another copy of
 		// benchbar.exe (a second install): that copy removes its own task
 		if xml, code, err := sys.Tasks.Schtasks("/Query", "/TN", taskName, "/XML"); err == nil && code == 0 {
-			if exe, _, ok := parseTaskArguments(xml); ok && sys.ExePath != "" && sys.FileExists(exe) &&
-				normDir(exe, sys.Getenv) != normDir(sys.ExePath, sys.Getenv) {
+			// a packaged copy owns the alias and every versioned folder of its package
+			if exe, _, ok := parseTaskArguments(xml); ok && keepaliveExe(sys) != "" && sys.exeExists(exe) &&
+				normDir(exe, sys.Getenv) != normDir(keepaliveExe(sys), sys.Getenv) &&
+				!sys.ownVersionedPath(exe) && normDir(exe, sys.Getenv) != normDir(sys.ExePath, sys.Getenv) {
 				fmt.Fprintf(sys.Stdout, "The task %q runs another copy (%s), so it was left alone. To remove it: \"%s\" keepalive remove\n", taskName, exe, exe)
 				return 0
 			}

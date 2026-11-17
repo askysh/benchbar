@@ -288,3 +288,30 @@ func systemDir() string {
 	}
 	return d
 }
+
+// ERROR_INSUFFICIENT_BUFFER and APPMODEL_ERROR_NO_PACKAGE
+const (
+	errInsufficientBuffer = 122
+	errNoPackage          = 15700
+)
+
+// packageFamilyName is the package family name of the process, and false
+// when it is not packaged. The function is missing before Windows 8, which
+// counts as not packaged.
+func packageFamilyName() (string, bool) {
+	proc := windows.NewLazySystemDLL("kernel32.dll").NewProc("GetCurrentPackageFamilyName")
+	if proc.Find() != nil {
+		return "", false
+	}
+	var n uint32
+	r, _, _ := proc.Call(uintptr(unsafe.Pointer(&n)), 0)
+	if r == errNoPackage || r != errInsufficientBuffer || n == 0 {
+		return "", false
+	}
+	buf := make([]uint16, n)
+	r, _, _ = proc.Call(uintptr(unsafe.Pointer(&n)), uintptr(unsafe.Pointer(&buf[0])))
+	if r != 0 {
+		return "", false
+	}
+	return windows.UTF16ToString(buf), true
+}

@@ -28,6 +28,9 @@ func osServices() (DistroSource, PathStore, Broadcaster) {
 
 func startupApproved(string) ([]byte, error) { return nil, errNotWindows }
 
+// packageFamilyName: a build for another platform is never packaged.
+func packageFamilyName() (string, bool) { return "", false }
+
 func hostMemory() (uint64, error) { return 0, errNotWindows }
 
 func isTerminal(f *os.File) bool {

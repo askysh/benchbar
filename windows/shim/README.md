@@ -261,6 +261,17 @@ Settings and setup state live in `%LOCALAPPDATA%\BenchBar`: `config.json`
 (the Report a Bug zips) and `runners\` (the tray's custom runners). The
 benches and their state stay in the distro.
 
+In the Microsoft Store package (`GetCurrentPackageFamilyName` says the process
+is packaged) the folder is the physical path
+`%LOCALAPPDATA%\Packages\<PackageFamilyName>\LocalCache\Local\BenchBar`, so
+every printed path is a file that exists and Windows removes it with the
+package. The first run copies `config.json` from `%LOCALAPPDATA%\BenchBar` into
+it once (under the config mutex) and never writes to the old folder. In a
+package `path install` and `path remove` change nothing (the app execution
+alias provides `benchbar`), the PATH checks treat the alias as this copy, and
+`keepalive install` runs the alias, never the versioned package folder.
+`setup check --json` and `report-windows --json` say `packaged` and `data_dir`.
+
 `%LOCALAPPDATA%\BenchBar\config.json`:
 
 - `distro`: the WSL distro to use. Default: the WSL default distro (never a

@@ -18,6 +18,9 @@ func main() {
 // run handles the shim's own subcommands (only as the first argument) and
 // forwards everything else.
 func run(sys *System, args []string) int {
+	if len(args) == 0 || args[0] != "--shim-version" {
+		importLegacyConfig(sys)
+	}
 	if len(args) > 0 {
 		switch args[0] {
 		case "--shim-version":
