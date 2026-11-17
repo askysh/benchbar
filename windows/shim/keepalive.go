@@ -230,7 +230,7 @@ func queryKeepalive(sys *System) keepaliveInfo {
 }
 
 func cmdKeepalive(sys *System, args []string) int {
-	usage := "usage: benchbar.exe keepalive install|remove|status|run [--distro D]"
+	usage := "usage: benchbar.exe keepalive install|remove|status|start|run [--distro D]"
 	if len(args) == 0 {
 		errorf(sys, "%s", usage)
 		return 1
@@ -249,6 +249,8 @@ func cmdKeepalive(sys *System, args []string) int {
 		return keepaliveStatus(sys, p.bools["--json"])
 	case "remove":
 		return keepaliveRemove(sys)
+	case "start":
+		return keepaliveStart(sys)
 	case "install", "run":
 		t, err := resolveTarget(sys, p.vals["--distro"])
 		if err != nil {
@@ -335,6 +337,25 @@ func keepaliveInstall(sys *System, distro string) int {
 		return 1
 	}
 	fmt.Fprintln(sys.Stdout, "Started it. It also starts at every logon.")
+	return 0
+}
+
+// keepaliveStart starts the installed task when its run process is not alive.
+// It never creates or changes the task, and prints nothing when there is
+// nothing to do: the tray calls it after an update, unattended.
+func keepaliveStart(sys *System) int {
+	_, code, err := sys.Tasks.Schtasks("/Query", "/TN", taskName)
+	if err != nil || code != 0 {
+		return 0
+	}
+	if isKeepaliveProcess(sys, readPidRecord(sys)) {
+		return 0
+	}
+	if out, code, err := sys.Tasks.Schtasks("/Run", "/TN", taskName); err != nil || code != 0 {
+		errorf(sys, "the task %q is installed but did not start: %s", taskName, schtasksDetail(out, err))
+		return 1
+	}
+	fmt.Fprintf(sys.Stdout, "Started the task %q.\n", taskName)
 	return 0
 }
 
@@ -542,6 +563,9 @@ func keepaliveRun(sys *System, distro string) int {
 		sys.Sleep(ctx, wait)
 	}
 	log.printf("keepalive for %s stopped", distro)
+	if sys.Package.Packaged && ctx.Err() != nil {
+		log.printf("an update or a sign out stopped it; benchbar.exe keepalive start or the next logon starts it again")
+	}
 	return 0
 }
 

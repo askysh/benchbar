@@ -434,6 +434,12 @@ awake, Start cannot start a second distro, and the tray says so. Switch
 the distro in Settings, or stop the other keepalive first. This is a
 limit of the beta.
 
+A package update stops a running keepalive, and the task starts only at
+logon. `benchbar.exe keepalive start` runs the installed task again when
+its run process is not alive. It prints nothing and exits 0 when there is
+no task or the run is alive, and it never creates or changes the task. The
+tray calls it after an update.
+
 ### Settings
 
 The tray keeps its settings under a `tray` key in

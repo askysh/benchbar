@@ -13,7 +13,7 @@ argument):
 | `benchbar.exe --shim-version` | Print the shim version. |
 | `benchbar.exe adopt-distro [NAME] [--yes] [--json]` | Check a distro (registered, WSL 2, systemd, benchbar, linger) and record it as the target. |
 | `benchbar.exe wslconfig [--suggest] [--apply --yes] [--json]` | Show `.wslconfig` memory and idle settings, suggest or write safe values (with a backup). |
-| `benchbar.exe keepalive install\|remove\|status\|run` | A logon task that keeps the distro running. No admin, no service. |
+| `benchbar.exe keepalive install\|remove\|status\|start\|run` | A logon task that keeps the distro running. No admin, no service. `start` runs the installed task when its run process is not alive (silent when there is no task); it never creates or changes the task. |
 | `benchbar.exe path install\|status\|remove` | Put this folder on your user PATH, show where `benchbar.exe` resolves, or take exactly this folder out of the user PATH again (a clear line and no change when it is not there). |
 | `benchbar.exe setup check [--json] [--probe] [--distro NAME]` | Read only. Checks the PC step by step (Windows build, virtualization, WSL, restart, distro, Linux release, Linux user, systemd, CLI, linger, keepalive, `.wslconfig`, PATH). Never starts a stopped distro unless `--probe`, never asks for admin rights. |
 | `benchbar.exe setup run ACTION [--distro NAME] [--user NAME] [--force] [--jsonl]` | Runs one setup action (`wsl_enable`, `wsl_update`, `distro_install`, `distro_wsl2`, `distro_user`, `systemd`, `cli_install`, `linger`, `keepalive`, `wslconfig`, `path`). With `--jsonl` it prints only JSON lines. `wsl_enable` asks Windows for permission (UAC). |
