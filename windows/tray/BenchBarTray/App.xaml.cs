@@ -16,6 +16,12 @@ public partial class App : Application, ITrayHost
     private const string MutexName = @"Local\BenchBarTray";
     private const string OpenEventName = @"Local\BenchBarTray.Open";
     private const string SetupEventName = @"Local\BenchBarTray.Setup";
+
+    /// <summary>
+    /// Set by the installer to close the tray politely before it replaces the files: the tray quits as from its menu, so the run marker goes
+    /// and the next start reports no crash. <c>CloseMainWindow</c> cannot do it: the tray usually has no visible window to close.
+    /// </summary>
+    internal const string QuitEventName = @"Local\BenchBarTray.Quit";
     private const string HelpUrl = "https://benchbar.akashmishra.com/windows/";
 
     private readonly ErrorLog _log = new();
@@ -45,6 +51,8 @@ public partial class App : Application, ITrayHost
     private readonly StartupShortcut _resumeFlag = new(fileName: StartupShortcut.ResumeFileName, arguments: StartupShortcut.ResumeArgument);
     private EventWaitHandle? _setupEvent;
     private RegisteredWaitHandle? _setupWait;
+    private EventWaitHandle? _quitEvent;
+    private RegisteredWaitHandle? _quitWait;
     private bool _launchChecked;
     private long _updateCheckedAt;
     private UpdateOffer? _updateOffer;
@@ -150,6 +158,7 @@ public partial class App : Application, ITrayHost
             _notices.Set(new Notice("crashed", text, "Report a Bug", () => ReportBugAsync("Closed unexpectedly").Forget()));
             ShowNotice(text + " Click for details.");
         }
+        NoteVersion();
         if (resume)
         {
             // the one shot flag did its job: take it away before anything can fail
@@ -180,6 +189,8 @@ public partial class App : Application, ITrayHost
         _openWait = ThreadPool.RegisterWaitForSingleObject(_openEvent, (_, _) => Dispatcher.BeginInvoke(ShowFlyout), null, Timeout.Infinite, executeOnlyOnce: false);
         _setupEvent = new EventWaitHandle(false, EventResetMode.AutoReset, SetupEventName);
         _setupWait = ThreadPool.RegisterWaitForSingleObject(_setupEvent, (_, _) => Dispatcher.BeginInvoke(() => OpenWizard(resume: true)), null, Timeout.Infinite, executeOnlyOnce: false);
+        _quitEvent = new EventWaitHandle(false, EventResetMode.AutoReset, QuitEventName);
+        _quitWait = ThreadPool.RegisterWaitForSingleObject(_quitEvent, (_, _) => Dispatcher.BeginInvoke(Quit), null, Timeout.Infinite, executeOnlyOnce: true);
         return true;
     }
 
@@ -191,6 +202,8 @@ public partial class App : Application, ITrayHost
         _openEvent?.Dispose();
         _setupWait?.Unregister(null);
         _setupEvent?.Dispose();
+        _quitWait?.Unregister(null);
+        _quitEvent?.Dispose();
         if (_mutex is not null)
         {
             try { _mutex.ReleaseMutex(); } catch (ApplicationException) { }
@@ -285,7 +298,7 @@ public partial class App : Application, ITrayHost
         var line = await _setup.ShimVersionAsync(CancellationToken.None);
         var text = VersionMismatch.Notice(line, UpdateCheck.CurrentVersion(), (_source as ShimBenchSource)?.ShimPath);
         if (text is null) _notices.Remove("shim-version");
-        else _notices.Set(new Notice("shim-version", text, "Copy Install Line", () => CopyText(UpdateCheck.InstallCommand), Dismissible: false));
+        else _notices.Set(new Notice("shim-version", text, "Copy Install Line", () => CopyText(UpdateLinks.InstallCommand), Dismissible: false));
     }
 
     // --- efficiency mode ---
@@ -320,6 +333,7 @@ public partial class App : Application, ITrayHost
             view.SetSnapshot(_controller.Snapshot, TrayController.UpText(_controller.Snapshot, _controller.Benches.Select(b => b.State).ToList()));
             view.SetFooter("BenchBar " + UpdateCheck.CurrentVersion().Split('+')[0]);
             view.SetNotices(_notices.All, DismissNotice);
+            view.SetUpdate(_updateOffer, UpdateRunning);
         }
         _flyout.ShowAtTray();
     }
@@ -374,6 +388,7 @@ public partial class App : Application, ITrayHost
         OpenUrl = OpenUrl,
         OpenMain = OpenMain,
         SetUpBench = () => OpenWizard(resume: false),
+        UpdateNow = UpdateNow,
     };
 
     private VsCodeOutcome OpenEditor(BenchStatus bench)
@@ -487,6 +502,9 @@ public partial class App : Application, ITrayHost
         OpenMain = OpenMain,
         OpenSettings = ShowSettings,
         CheckForUpdates = () => CheckForUpdatesAsync().Forget(),
+        Update = () => _updateKnown,
+        UpdateRunning = () => UpdateRunning,
+        UpdateNow = UpdateNow,
         Help = () => OpenUrl(HelpUrl),
         ReportBug = () => ReportBugAsync("Tray menu").Forget(),
         Quit = Quit,
@@ -521,34 +539,6 @@ public partial class App : Application, ITrayHost
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
         {
             _log.Write("runners-folder", ex);
-        }
-    }
-
-    private async Task CheckForUpdatesAsync()
-    {
-        try
-        {
-            var latest = await UpdateCheck.FetchLatestAsync(CancellationToken.None);
-            var current = UpdateCheck.CurrentVersion();
-            switch (UpdateCheck.State(latest, current, UpdateCheck.Arch()))
-            {
-                case UpdateState.Available:
-                    CopyText(UpdateCheck.InstallCommand);
-                    var answer = MessageBox.Show($"BenchBar {latest!.Version} is out. You have {current.Split('+')[0]}.\n\n{UpdateCheck.InstallExplanation} The line is copied to the clipboard:\n\n{UpdateCheck.InstallCommand}\n\nOpen the release page too?",
-                        "BenchBar", MessageBoxButton.YesNo, MessageBoxImage.Information);
-                    if (answer == MessageBoxResult.Yes) OpenUrl(latest!.Url);
-                    break;
-                case UpdateState.NoWindowsBuild:
-                    MessageBox.Show($"BenchBar {latest!.Version} is out, but its Windows download is not ready yet. You have {current.Split('+')[0]}. Try again later.", "BenchBar", MessageBoxButton.OK, MessageBoxImage.Information);
-                    break;
-                default:
-                    MessageBox.Show("You have the latest version of BenchBar.", "BenchBar", MessageBoxButton.OK, MessageBoxImage.Information);
-                    break;
-            }
-        }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
-        {
-            MessageBox.Show("Could not check for updates: " + ex.Message, "BenchBar", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 

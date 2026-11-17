@@ -212,27 +212,11 @@ public class SupportTests : IDisposable
         Assert.Equal("", info.Arguments);
     }
 
-    [Theory]
-    [InlineData("v0.8.1", "0.8.0", true)]
-    [InlineData("0.8.0", "0.8.0", false)]
-    [InlineData("v0.7.9", "0.8.0", false)]
-    [InlineData("v1.0.0", "0.9.9", true)]
-    [InlineData("v0.8.0", "0.8.0-dev", true)]
-    [InlineData("v0.0.1", "0.0.0-dev", true)]
-    [InlineData("v0.8", "0.8.0", false)]
-    [InlineData("nightly", "0.8.0", false)]
-    [InlineData("v0.8.0", "weird", true)]
-    public void VersionsCompareByNumber(string tag, string current, bool newer) =>
-        Assert.Equal(newer, UpdateCheck.IsNewer(tag, current));
-
     [Fact]
-    public void TheReleaseJsonGivesTheTagAndThePage()
+    public void TheVersionIsKnown()
     {
-        var release = UpdateCheck.ParseRelease("""{"tag_name":"v0.9.0","html_url":"https://github.com/askysh/benchbar/releases/tag/v0.9.0","assets":[]}""");
-        Assert.Equal(("v0.9.0", "https://github.com/askysh/benchbar/releases/tag/v0.9.0"), release);
-        Assert.Null(UpdateCheck.ParseRelease("""{"message":"Not Found"}"""));
-        Assert.Null(UpdateCheck.ParseRelease("[]"));
         Assert.False(string.IsNullOrEmpty(UpdateCheck.CurrentVersion()));
+        Assert.DoesNotContain('+', UpdateCheck.ShortVersion());
     }
 
     [Fact]

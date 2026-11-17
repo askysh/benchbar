@@ -14,8 +14,6 @@ public partial class App
         try { _resumeFlag.Disable(); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { _log.Write("resume-flag", ex); }
     });
 
-    private static readonly TimeSpan UpdateCheckEvery = TimeSpan.FromHours(6);
-
     // --- the BenchBar window ---
 
     private void OpenMain()
@@ -32,6 +30,7 @@ public partial class App
                 _main = null;
                 Viewer(false);
                 ReleaseMemory();
+                MaybeShowRunningHint(); // once ever: where BenchBar went when its window closed
             };
             _main = main;
             Viewer(true);
@@ -39,8 +38,7 @@ public partial class App
             main.SetSnapshot(_controller.Snapshot, TrayController.UpText(_controller.Snapshot, _controller.Benches.Select(b => b.State).ToList()));
             if (_wizard is not null) main.ShowWizard(new WizardView(_wizard, BuildWizardActions()));
             main.Show();
-            if (_config.CheckForUpdates) CheckBannerAsync().Forget();
-            else if (_updateOffer is not null) main.SetUpdate(_updateOffer, DismissUpdate);
+            CheckBannerAsync().Forget(); // the switch and the six hour cadence are checked inside; an offer already known is shown either way
         }
         else
         {
@@ -164,41 +162,8 @@ public partial class App
             _config.BetaBannerDismissed = true;
             SaveConfig();
         },
+        UpdateNow = UpdateNow,
     };
-
-    // --- the update banner ---
-
-    /// <summary>Asks GitHub when the window opens, at most once in a few hours; a failure shows nothing (the menu item reports errors).</summary>
-    private async Task CheckBannerAsync()
-    {
-        if (Environment.TickCount64 - _updateCheckedAt < UpdateCheckEvery.TotalMilliseconds && _updateCheckedAt != 0)
-        {
-            _main?.SetUpdate(_updateOffer, DismissUpdate);
-            return;
-        }
-        _updateCheckedAt = Math.Max(1, Environment.TickCount64);
-        try
-        {
-            var latest = await UpdateCheck.FetchLatestAsync(CancellationToken.None);
-            var current = UpdateCheck.CurrentVersion();
-            // only a release that has the Windows zip for this CPU: the latest release is shared with the Mac app
-            _updateOffer = UpdateCheck.Offer(latest, current, UpdateCheck.Arch()) is { } release && release.Tag != _updateDismissed
-                ? new UpdateOffer(release.Version, release.Url)
-                : null;
-        }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
-        {
-            _updateCheckedAt = 0; // try again the next time the window opens
-            return;
-        }
-        _main?.SetUpdate(_updateOffer, DismissUpdate);
-    }
-
-    private void DismissUpdate()
-    {
-        _updateDismissed = "v" + _updateOffer?.Version;
-        _updateOffer = null;
-    }
 
     // --- the first run wizard ---
 
@@ -425,7 +390,10 @@ public partial class App
             AppVersion = UpdateCheck.CurrentVersion(),
             ShimVersion = () => _setup.ShimVersionAsync(CancellationToken.None),
             CliVersion = ReadCliVersionAsync,
-            CheckForUpdates = CheckUpdatesTextAsync,
+            CheckForUpdates = RunUpdateCheckAsync,
+            KnownOffer = () => _updateKnown,
+            UpdateRunning = () => UpdateRunning,
+            UpdateNow = UpdateNow,
             ReportBug = () => ReportBugAsync("About").Forget(),
             OpenUrl = OpenUrl,
             CopyText = CopyText,
@@ -457,24 +425,6 @@ public partial class App
         catch (Exception ex) when (ex is SourceProblemException or System.Text.Json.JsonException)
         {
             return AboutCli.Unknown;
-        }
-    }
-
-    private static async Task<string> CheckUpdatesTextAsync()
-    {
-        try
-        {
-            var latest = await UpdateCheck.FetchLatestAsync(CancellationToken.None);
-            return UpdateCheck.State(latest, UpdateCheck.CurrentVersion(), UpdateCheck.Arch()) switch
-            {
-                UpdateState.Available => $"BenchBar {latest!.Version} is out.",
-                UpdateState.NoWindowsBuild => $"BenchBar {latest!.Version} is out, but its Windows download is not ready yet.",
-                _ => "You have the latest version.",
-            };
-        }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
-        {
-            return "Could not check for updates: " + ex.Message;
         }
     }
 }

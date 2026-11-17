@@ -13,8 +13,16 @@ internal sealed class AboutActions
     /// <summary>The Linux CLI's version from the read only setup check (it never boots a stopped distro); null when unknown.</summary>
     public Func<Task<AboutCli>> CliVersion { get; set; } = () => Task.FromResult(AboutCli.Unknown);
 
-    /// <summary>Asks GitHub; the answer is the line to show.</summary>
-    public Func<Task<string>> CheckForUpdates { get; set; } = () => Task.FromResult("");
+    /// <summary>Asks benchbar.exe (<c>self-update --check --json</c>); the answer or the reason there is none.</summary>
+    public Func<Task<SelfUpdateCheck>> CheckForUpdates { get; set; } = () => Task.FromResult(SelfUpdateCheck.Failed("not available"));
+
+    /// <summary>The release an earlier check found, shown when About opens; null when none is known.</summary>
+    public Func<UpdateOffer?> KnownOffer { get; set; } = () => null;
+
+    /// <summary>True while the update window runs.</summary>
+    public Func<bool> UpdateRunning { get; set; } = () => false;
+
+    public Action UpdateNow { get; set; } = () => { };
 
     public Action ReportBug { get; set; } = () => { };
     public Action<string> OpenUrl { get; set; } = _ => { };
@@ -32,6 +40,7 @@ internal sealed class AboutWindow : ToolWindow
     private readonly TextBlock _shim = Ui.Text("reading...", 14);
     private readonly TextBlock _cli = Ui.Text("reading...", 14);
     private readonly TextBlock _update = Ui.Text("", 13, opacity: 0.85);
+    private readonly StackPanel _updateButtons = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0), Visibility = Visibility.Collapsed };
 
     public AboutWindow(AboutActions actions, ResolvedTheme theme) : base("About BenchBar", 560, 640, theme)
     {
@@ -55,6 +64,7 @@ internal sealed class AboutWindow : ToolWindow
         var check = Ui.Button("Check for Updates", () => CheckAsync().Forget(), "Check for updates");
         update.Children.Add(check);
         update.Children.Add(_update);
+        update.Children.Add(_updateButtons);
         versions.Children.Add(Row("Updates", update));
         panel.Children.Add(Section("Versions", Ui.CardOf(versions)));
 
@@ -86,7 +96,15 @@ internal sealed class AboutWindow : ToolWindow
 
         Content = new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         Loaded += (_, _) => LoadVersionsAsync().Forget();
+        if (actions.KnownOffer() is { } known)
+        {
+            _update.Text = $"BenchBar {known.Version} is out.";
+            ShowOffer(known);
+        }
     }
+
+    /// <summary>The text under Check for Updates (for tests).</summary>
+    public string UpdateText => _update.Text;
 
     private static UIElement Section(string title, UIElement body)
     {
@@ -114,9 +132,41 @@ internal sealed class AboutWindow : ToolWindow
         _cli.Text = (await _actions.CliVersion()).Text;
     }
 
-    private async Task CheckAsync()
+    internal async Task CheckAsync()
     {
         _update.Text = "Checking...";
-        _update.Text = await _actions.CheckForUpdates();
+        ShowOffer(null);
+        var check = await _actions.CheckForUpdates();
+        _update.Text = UpdatePlanner.CheckText(check);
+        ShowOffer(UpdatePlanner.Offer(check.Status));
+    }
+
+    /// <summary>
+    /// Update Now beside the version when this install can run it (off while the update window runs), and Copy Update Line for anyone who
+    /// prefers to run it in PowerShell.
+    /// </summary>
+    internal void ShowOffer(UpdateOffer? offer)
+    {
+        _updateButtons.Children.Clear();
+        _updateButtons.Visibility = offer is null ? Visibility.Collapsed : Visibility.Visible;
+        if (offer is null) return;
+        if (offer.CanUpdateNow)
+        {
+            var running = _actions.UpdateRunning();
+            var now = Ui.Button(running ? "Updating..." : "Update Now", () =>
+            {
+                _actions.UpdateNow();
+                ShowOffer(offer);
+            }, "Update BenchBar now", primary: true);
+            now.IsEnabled = !running;
+            _updateButtons.Children.Add(now);
+        }
+        Button? copy = null;
+        copy = Ui.Button("Copy Update Line", () =>
+        {
+            _actions.CopyText(offer.Command);
+            if (copy is not null) copy.Content = "Copied";
+        }, "Copy the update line for PowerShell");
+        _updateButtons.Children.Add(copy);
     }
 }

@@ -126,55 +126,16 @@ public class WindowsFixesViewTests : IDisposable
 
     // --- 9: updates ---
 
-    private const string ReleaseJson = """
-        {"tag_name":"v0.9.0","html_url":"https://github.com/askysh/benchbar/releases/tag/v0.9.0","assets":[
-          {"name":"BenchBar-0.9.0.dmg"},{"name":"benchbar-windows-0.9.0-amd64.zip"},{"name":"benchbar-windows-0.9.0-SHA256SUMS.txt"}]}
-        """;
-
-    [Fact]
-    public void TheReleaseListsItsFiles()
-    {
-        var release = UpdateCheck.ParseReleaseInfo(ReleaseJson)!;
-        Assert.Equal("v0.9.0", release.Tag);
-        Assert.Equal("0.9.0", release.Version);
-        Assert.Equal(3, release.Assets.Count);
-        Assert.Equal("benchbar-windows-0.9.0-arm64.zip", release.ZipName("arm64"));
-        Assert.True(release.HasWindowsZip("amd64"));
-        Assert.False(release.HasWindowsZip("arm64"));
-        Assert.Null(UpdateCheck.ParseReleaseInfo("""{"message":"Not Found"}"""));
-        Assert.Empty(UpdateCheck.ParseReleaseInfo("""{"tag_name":"v1.0.0","html_url":"https://x"}""")!.Assets);
-    }
-
-    [Fact]
-    public void AReleaseIsOfferedOnlyWithItsWindowsZipForThisCpu()
-    {
-        var release = UpdateCheck.ParseReleaseInfo(ReleaseJson);
-        Assert.Same(release, UpdateCheck.Offer(release, "0.8.2", "amd64"));
-        Assert.Null(UpdateCheck.Offer(release, "0.8.2", "arm64"));          // no arm64 zip yet
-        Assert.Null(UpdateCheck.Offer(release, "0.9.0", "amd64"));          // not newer
-        Assert.Null(UpdateCheck.Offer(null, "0.8.2", "amd64"));
-
-        var macOnly = UpdateCheck.ParseReleaseInfo("""{"tag_name":"v0.9.0","html_url":"https://x","assets":[{"name":"BenchBar-0.9.0.dmg"}]}""");
-        Assert.Null(UpdateCheck.Offer(macOnly, "0.8.2", "amd64"));          // the Mac side shipped first
-
-        Assert.Equal(UpdateState.Available, UpdateCheck.State(release, "0.8.2", "amd64"));
-        Assert.Equal(UpdateState.NoWindowsBuild, UpdateCheck.State(macOnly, "0.8.2", "amd64"));
-        Assert.Equal(UpdateState.NoWindowsBuild, UpdateCheck.State(release, "0.8.2", "arm64"));
-        Assert.Equal(UpdateState.Current, UpdateCheck.State(release, "0.9.0", "amd64"));
-        Assert.Equal(UpdateState.Current, UpdateCheck.State(null, "0.8.2", "amd64"));
-        Assert.Contains(UpdateCheck.Arch(), new[] { "amd64", "arm64" });
-    }
-
     [Fact]
     public void TheUpdateLineIsTheDocumentedOne()
     {
-        Assert.Equal("irm https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1 | iex", UpdateCheck.InstallCommand);
-        Assert.Contains("closes BenchBar and starts it again", UpdateCheck.InstallExplanation);
-        Assert.Equal(UpdateCheck.InstallCommand, new UpdateOffer("0.9.0", "https://x").Command);
+        Assert.Equal("irm https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1 | iex", UpdateLinks.InstallCommand);
+        Assert.Contains("closes BenchBar and starts it again", UpdateLinks.InstallExplanation);
+        Assert.Equal(UpdateLinks.InstallCommand, new UpdateOffer("0.9.0", "https://x").Command);
     }
 
     [Fact]
-    public void TheBannerCopiesTheUpdateLineAndKeepsTheReleasePage() => Sta.Run(() =>
+    public void ACopyOnlyBannerCopiesTheUpdateLineAndKeepsTheReleasePage() => Sta.Run(() =>
     {
         var copied = new List<string>();
         var opened = new List<string>();
@@ -182,10 +143,11 @@ public class WindowsFixesViewTests : IDisposable
         window.SetUpdate(new UpdateOffer("0.9.0", "https://github.com/askysh/benchbar/releases/tag/v0.9.0"), () => { });
 
         Assert.Contains("BenchBar 0.9.0 is out.", Texts(window));
-        Assert.Contains(UpdateCheck.InstallExplanation, Texts(window));
+        Assert.Contains(UpdateLinks.InstallExplanation, Texts(window));
+        Assert.Null(FindButton(window, "Update BenchBar now")); // a loose copy or a dev build: no Update Now
         Click(ButtonNamed(window, "Copy the update line for PowerShell"));
         Click(ButtonNamed(window, "Open the release page"));
-        Assert.Equal([UpdateCheck.InstallCommand], copied);
+        Assert.Equal([UpdateLinks.InstallCommand], copied);
         Assert.Equal(["https://github.com/askysh/benchbar/releases/tag/v0.9.0"], opened);
     });
 
