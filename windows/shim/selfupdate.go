@@ -420,7 +420,7 @@ func selfUpdateRun(sys *System, o suOpts) int {
 		}
 	}
 
-	trayBefore, trayKnown := trayRunning(sys, trayExe)
+	trayBefore, trayKnown := trayProcesses(sys, trayExe)
 	fmt.Fprintf(w, "\nRunning the installer for %s.\n", target)
 	var summary []string
 	code, err := sys.Launch.Run(sys.Ctx, LaunchSpec{
@@ -448,7 +448,7 @@ func selfUpdateRun(sys *System, o suOpts) int {
 			}
 		}
 	}
-	summary = append(summary, trayLine(sys, trayExe, trayBefore, trayKnown))
+	summary = append(summary, trayLine(sys, trayExe, trayBefore, trayKnown, winOK))
 	cliFailed := false
 	if winOK {
 		if l := restartKeepalive(sys, newExe); l != "" {
@@ -551,11 +551,11 @@ func printableCommand(ps, script string) string {
 
 // installerEnv is this process's environment without the install.ps1
 // variables, plus BENCHBAR_FROM_SELF_UPDATE=1 so the installer's closing
-// text says the CLI comes next. It is the child's copy only; nothing is
+// text leaves the CLI to the shim. It is the child's copy only; nothing is
 // set in the user's shell.
 func installerEnv(sys *System) []string {
 	var out []string
-	for _, kv := range sys.Environ() {
+	for _, kv := range powerShellEnv(sys.Environ()) {
 		k, _, _ := strings.Cut(kv, "=")
 		drop := strings.EqualFold(k, "BENCHBAR_FROM_SELF_UPDATE")
 		for _, n := range installerEnvDropped {
@@ -566,6 +566,23 @@ func installerEnv(sys *System) []string {
 		}
 	}
 	return append(out, "BENCHBAR_FROM_SELF_UPDATE=1")
+}
+
+// powerShellEnv is env for a Windows PowerShell 5.1 (powershell.exe) child:
+// the same without PSModulePath. PowerShell 7 sets PSModulePath to its own
+// module folders, and 5.1 started with that value cannot load its own
+// modules (Get-FileHash is not recognized). Without the variable 5.1 builds
+// its default. Windows environment names ignore case, and so does this.
+// Every start of powershell.exe goes through it.
+func powerShellEnv(env []string) []string {
+	out := make([]string, 0, len(env))
+	for _, kv := range env {
+		k, _, _ := strings.Cut(kv, "=")
+		if !strings.EqualFold(k, "PSModulePath") {
+			out = append(out, kv)
+		}
+	}
+	return out
 }
 
 // --- after the installer --------------------------------------------------------
@@ -589,37 +606,57 @@ func exeVersion(sys *System, exe string) (string, error) {
 	return "", nil
 }
 
-// trayRunning is whether the tray of this install runs; known is false when
+// trayProcesses are the tray processes of this install; known is false when
 // the shim cannot list processes.
-func trayRunning(sys *System, trayExe string) (running, known bool) {
+func trayProcesses(sys *System, trayExe string) (procs []ProcessInfo, known bool) {
 	if sys.ProcessImages == nil {
-		return false, false
+		return nil, false
 	}
 	for _, p := range sys.ProcessImages("BenchBarTray.exe") {
-		if normDir(p, sys.Getenv) == normDir(trayExe, sys.Getenv) {
-			return true, true
+		if normDir(p.Image, sys.Getenv) == normDir(trayExe, sys.Getenv) {
+			procs = append(procs, p)
 		}
 	}
-	return false, true
+	return procs, true
 }
 
-func trayLine(sys *System, trayExe string, before, known bool) string {
+// sameProcess is true when a process of after is one of before: same pid
+// and same creation time, so a reused pid does not count.
+func sameProcess(before, after []ProcessInfo) bool {
+	for _, a := range after {
+		for _, b := range before {
+			if a.Pid == b.Pid && a.Created == b.Created {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// trayLine says what happened to the tray, from its processes before and
+// after the installer. A restart is claimed only when the Windows part
+// worked and the tray process is a new one.
+func trayLine(sys *System, trayExe string, before []ProcessInfo, known, winOK bool) string {
 	if !sys.FileExists(trayExe) {
 		return "Tray app: not installed (this install has benchbar.exe only)"
 	}
 	if !known {
 		return "Tray app: the installer restarts it when it was running"
 	}
-	after, _ := trayRunning(sys, trayExe)
+	after, _ := trayProcesses(sys, trayExe)
 	switch {
-	case before && after:
+	case len(after) > 0 && sameProcess(before, after):
+		return "Tray app: still the old one (the installer did not get to it): quit BenchBar from its menu and start it from the Start menu"
+	case len(before) > 0 && len(after) > 0 && winOK:
 		return "Tray app: restarted"
-	case before:
+	case len(after) > 0 && winOK:
+		return "Tray app: started"
+	case len(after) > 0:
+		return "Tray app: running a new process, but the Windows part failed: it may be the old version"
+	case len(before) > 0:
 		return "Tray app: closed for the update and not running now: start BenchBar from the Start menu"
-	case after:
-		return "Tray app: running"
 	}
-	return "Tray app: not running, as before the update: start BenchBar from the Start menu when you want it"
+	return "Tray app: not running (it was not running before the update): start BenchBar from the Start menu when you want it"
 }
 
 // restartKeepalive moves a keepalive run of this install to the new

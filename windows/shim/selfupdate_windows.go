@@ -47,9 +47,10 @@ func systemProxySettings() (server, override string, ok bool) {
 	return server, override, strings.TrimSpace(server) != ""
 }
 
-// processImages lists the full program paths of the running processes
-// named name. A process this user cannot open is left out.
-func processImages(name string) []string {
+// processImages lists the running processes named name, with their full
+// program path and creation time. A process this user cannot open is left
+// out.
+func processImages(name string) []ProcessInfo {
 	snap, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
 	if err != nil {
 		return nil
@@ -57,13 +58,15 @@ func processImages(name string) []string {
 	defer windows.CloseHandle(snap)
 	var e windows.ProcessEntry32
 	e.Size = uint32(unsafe.Sizeof(e))
-	var out []string
+	var out []ProcessInfo
 	for err = windows.Process32First(snap, &e); err == nil; err = windows.Process32Next(snap, &e) {
 		if !strings.EqualFold(windows.UTF16ToString(e.ExeFile[:]), name) {
 			continue
 		}
-		if img, err := (procControl{}).Image(int(e.ProcessID)); err == nil {
-			out = append(out, img)
+		pid := int(e.ProcessID)
+		if img, err := (procControl{}).Image(pid); err == nil {
+			created, _ := (procControl{}).Created(pid)
+			out = append(out, ProcessInfo{Pid: pid, Image: img, Created: created})
 		}
 	}
 	return out

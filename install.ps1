@@ -150,6 +150,16 @@ function Install-BenchBar {
     return ($v -ne '' -and $v -ne '0' -and $v -ne 'false' -and $v -ne 'no')
   }
 
+  # Compare-Version A B: -1, 0 or 1, comparing each part as a number (so
+  # 0.8.10 is newer than 0.8.2). $null when either is not a version.
+  function Compare-Version([string]$A, [string]$B) {
+    $va = $null
+    $vb = $null
+    if (-not [version]::TryParse(([string]$A).Trim().TrimStart('v'), [ref]$va)) { return $null }
+    if (-not [version]::TryParse(([string]$B).Trim().TrimStart('v'), [ref]$vb)) { return $null }
+    return $va.CompareTo($vb)
+  }
+
   # Confirm-Choice QUESTION DEFAULT [NOTERMINALDEFAULT]: -Yes takes the default;
   # a missing terminal takes NOTERMINALDEFAULT (the default when not given)
   function Confirm-Choice([string]$Question, [bool]$Default, [object]$NoTerminalDefault = $null) {
@@ -993,7 +1003,7 @@ function Install-BenchBar {
           } catch {
             Say-Warn "The tray app could not be started: $(Get-UserMessage $_). Start BenchBar from the Start menu. If Windows blocks it, see $docsBlocked"
           }
-        } else {
+        } elseif (-not $isUpdate) {
           Say-Info 'not started'
         }
       }
@@ -1003,8 +1013,12 @@ function Install-BenchBar {
     if ($isUpdate) {
       $fromText = $previousVersion
       if (-not $fromText) { $fromText = 'an earlier version' }
-      if ($previousVersion -and $previousVersion -eq $releaseVersion) {
+      $order = $null
+      if ($previousVersion) { $order = Compare-Version $previousVersion $releaseVersion }
+      if ($order -eq 0 -or ($previousVersion -and $previousVersion -eq $releaseVersion)) {
         Write-Host "BenchBar $releaseVersion is installed again in $installDir. The update is done." -ForegroundColor Green
+      } elseif ($order -eq 1) {
+        Write-Host "BenchBar is changed from $fromText to $releaseVersion in $installDir. The update is done." -ForegroundColor Green
       } else {
         Write-Host "BenchBar is updated from $fromText to $releaseVersion in $installDir. The update is done." -ForegroundColor Green
       }
@@ -1018,10 +1032,10 @@ function Install-BenchBar {
           Write-Host '  - Open BenchBar from the Start menu when you want it. It is the icon near the clock.'
         }
       }
-      if ($fromSelfUpdate) {
-        Write-Host '  - benchbar.exe self-update now updates the BenchBar CLI in WSL to the same release.'
-      } else {
-        Write-Host '  - To bring the BenchBar CLI in WSL to the same release, run benchbar.exe self-update in a new terminal.'
+      # From self-update the shim prints what happened to the CLI in WSL right
+      # after this, so nothing is said about it here.
+      if (-not $fromSelfUpdate) {
+        Write-Host '  - When the BenchBar CLI is installed in WSL, run benchbar.exe self-update in a new terminal to bring it to the same release.'
       }
       Write-Host '  - Your settings, benches and sites are as they were.'
     } else {

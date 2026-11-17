@@ -59,6 +59,9 @@ type suEnvT struct {
 	launch   *fakeLauncher
 	envs     map[string]string
 	trayRuns bool
+	// trayGen counts tray starts: each start is a new process with a new
+	// creation time (and here a new pid).
+	trayGen int
 }
 
 func newSUEnv(t *testing.T) *suEnvT {
@@ -76,9 +79,9 @@ func newSUEnv(t *testing.T) *suEnvT {
 	e.Web, e.Launch = e.web, e.launch
 	e.PowerShellPath = func() (string, error) { return suPS, nil }
 	e.MachineArch = func() string { return "amd64" }
-	e.ProcessImages = func(name string) []string {
+	e.ProcessImages = func(name string) []ProcessInfo {
 		if name == "BenchBarTray.exe" && e.trayRuns {
-			return []string{suTray}
+			return []ProcessInfo{{Pid: 4000 + e.trayGen, Image: suTray, Created: uint64(1000 + e.trayGen)}}
 		}
 		return nil
 	}
@@ -304,6 +307,7 @@ func (e *suEnvT) updateHandler(newVersion string, cliEvents string) {
 		switch {
 		case s.Path == suPS:
 			e.trayRuns = true
+			e.trayGen++
 			return 0, nil
 		case s.Path == suExe && reflect.DeepEqual(s.Args, []string{"--shim-version"}):
 			fmt.Fprintf(s.Stdout, "benchbar.exe %s\n", newVersion)
@@ -603,5 +607,130 @@ func TestPickProxy(t *testing.T) {
 		if got != c.want {
 			t.Errorf("pickProxy(%q, %q, %q) = %q, want %q", c.server, c.override, c.host, got, c.want)
 		}
+	}
+}
+
+func TestInstallerEnvDropsPSModulePath(t *testing.T) {
+	e := newSUEnv(t)
+	e.Environ = func() []string {
+		return []string{
+			`PSModulePath=C:\Program Files\PowerShell\7\Modules;C:\Program Files\PowerShell\7\Modules`,
+			`psmodulepath=C:\Users\tester\Documents\PowerShell\Modules`,
+			`LOCALAPPDATA=` + suLocal,
+			`PATH=C:\Windows\System32;C:\Windows`,
+			`SystemRoot=C:\Windows`,
+			`USERPROFILE=C:\Users\tester`,
+			`HTTPS_PROXY=http://proxy:8080`,
+			`BENCHBAR_ZIP=C:\old.zip`,
+		}
+	}
+	got := installerEnv(e.System)
+	for _, kv := range got {
+		k, _, _ := strings.Cut(kv, "=")
+		if strings.EqualFold(k, "PSModulePath") || strings.EqualFold(k, "BENCHBAR_ZIP") {
+			t.Errorf("%q reached the installer", kv)
+		}
+	}
+	for _, want := range []string{"LOCALAPPDATA=" + suLocal, `PATH=C:\Windows\System32;C:\Windows`, `SystemRoot=C:\Windows`,
+		`USERPROFILE=C:\Users\tester`, "HTTPS_PROXY=http://proxy:8080", "BENCHBAR_FROM_SELF_UPDATE=1"} {
+		found := false
+		for _, kv := range got {
+			found = found || kv == want
+		}
+		if !found {
+			t.Errorf("missing %q in %q", want, got)
+		}
+	}
+}
+
+func TestSelfUpdateInstallerGetsNoPSModulePath(t *testing.T) {
+	e := newSUEnv(t)
+	e.Environ = func() []string {
+		return append(os.Environ(), `PSModulePath=C:\Program Files\PowerShell\7\Modules`)
+	}
+	e.updateHandler("0.8.4", cliUpdated)
+	if code := e.run("self-update", "--yes"); code != 0 {
+		t.Fatalf("exit %d\n%s%s", code, e.stdout(), e.stderr())
+	}
+	if e.launch.calls[0].Path != suPS {
+		t.Fatalf("first call %q", e.launch.calls[0].Path)
+	}
+	for _, kv := range e.launch.calls[0].Env {
+		if strings.HasPrefix(strings.ToUpper(kv), "PSMODULEPATH=") {
+			t.Fatalf("%q reached powershell.exe", kv)
+		}
+	}
+}
+
+// trayCase runs a self-update where the installer exits with code and
+// leaves the tray as after says: "same" (the process from before), "new"
+// (a new process) or "none".
+func trayCase(t *testing.T, runsBefore bool, code int, after string) string {
+	t.Helper()
+	e := newSUEnv(t)
+	e.trayRuns = runsBefore
+	e.launch.handler = func(s LaunchSpec) (int, error) {
+		switch {
+		case s.Path == suPS:
+			switch after {
+			case "same":
+				e.trayRuns = true
+			case "new":
+				e.trayRuns = true
+				e.trayGen++
+			default:
+				e.trayRuns = false
+			}
+			return code, nil
+		case s.Path == suExe && reflect.DeepEqual(s.Args, []string{"--shim-version"}):
+			fmt.Fprintln(s.Stdout, "benchbar.exe 0.8.4")
+		case s.Path == suExe && len(s.Args) > 1 && s.Args[0] == "setup":
+			fmt.Fprint(s.Stdout, cliUpdated)
+		}
+		return 0, nil
+	}
+	e.run("self-update", "--yes")
+	return e.stdout()
+}
+
+func TestSelfUpdateTrayLineComparesTheProcess(t *testing.T) {
+	cases := []struct {
+		name       string
+		runsBefore bool
+		code       int
+		after      string
+		want       string
+	}{
+		{"installer failed, same tray", true, 1, "same", "Tray app: still the old one (the installer did not get to it)"},
+		{"worked, same tray", true, 0, "same", "Tray app: still the old one (the installer did not get to it)"},
+		{"worked, new tray", true, 0, "new", "Tray app: restarted"},
+		{"installer failed, new tray", true, 1, "new", "Tray app: running a new process, but the Windows part failed"},
+		{"worked, closed", true, 0, "none", "Tray app: closed for the update and not running now"},
+		{"not running before or after", false, 0, "none", "Tray app: not running (it was not running before the update)"},
+		{"not running before, started", false, 0, "new", "Tray app: started"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			out := trayCase(t, c.runsBefore, c.code, c.after)
+			if !strings.Contains(out, c.want) {
+				t.Fatalf("want %q in\n%s", c.want, out)
+			}
+			if !strings.Contains(c.want, "restarted") && strings.Contains(out, "Tray app: restarted") {
+				t.Fatalf("claims a restart:\n%s", out)
+			}
+		})
+	}
+}
+
+func TestSameProcessNeedsPidAndCreationTime(t *testing.T) {
+	before := []ProcessInfo{{Pid: 10, Created: 5}}
+	if !sameProcess(before, []ProcessInfo{{Pid: 10, Created: 5}}) {
+		t.Fatal("same pid and time is the same process")
+	}
+	if sameProcess(before, []ProcessInfo{{Pid: 10, Created: 6}}) {
+		t.Fatal("a reused pid is another process")
+	}
+	if sameProcess(before, []ProcessInfo{{Pid: 11, Created: 5}}) || sameProcess(nil, before) {
+		t.Fatal("another pid, or nothing before, is not the same process")
 	}
 }

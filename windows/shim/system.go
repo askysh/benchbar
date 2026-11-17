@@ -77,9 +77,9 @@ type System struct {
 	// MachineArch is the CPU of the PC (amd64 or arm64), not of this
 	// process: an amd64 benchbar.exe can run emulated on an Arm PC.
 	MachineArch func() string
-	// ProcessImages are the full paths of the running processes whose
-	// program file is named name (such as BenchBarTray.exe).
-	ProcessImages func(name string) []string
+	// ProcessImages are the running processes whose program file is named
+	// name (such as BenchBarTray.exe): pid, full path and creation time.
+	ProcessImages func(name string) []ProcessInfo
 
 	MemoryBytes func() (uint64, error)
 	WSLPath     func() (string, error)
@@ -102,6 +102,15 @@ type System struct {
 	Ctx   context.Context
 	Sleep func(ctx context.Context, d time.Duration)
 	Now   func() time.Time
+}
+
+// ProcessInfo is one running process. Pid and Created together name it,
+// since a pid can be reused later by another process. Created is 0 when it
+// could not be read.
+type ProcessInfo struct {
+	Pid     int
+	Image   string
+	Created uint64
 }
 
 // ProcessControl looks at and ends one process by its id.
