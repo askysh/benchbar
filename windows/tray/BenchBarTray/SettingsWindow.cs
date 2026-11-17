@@ -30,6 +30,9 @@ internal sealed class SettingsWindow : ToolWindow
             $"BenchBar will use {name} for its benches from now on. Benches in the other distro stay where they are, and the list updates at once.", "Switch", _theme, this);
         _runners = runners;
         _copy = copy;
+        _logonSettings = Ui.Button(LogonView.SettingsButton, () => _model.OpenStartupSettings(), "Open Windows startup settings", minWidth: 160);
+        _logonSettings.HorizontalAlignment = HorizontalAlignment.Left;
+        _logonSettings.Margin = new Thickness(0, 0, 0, 12);
         Ui.ApplyMica(this);
         Ui.Name(this, "BenchBar Settings");
 
@@ -40,17 +43,33 @@ internal sealed class SettingsWindow : ToolWindow
         Content = tabs;
 
         _model.Changed += Sync;
-        Closed += (_, _) => _model.Changed -= Sync;
-        Loaded += (_, _) => _model.LoadDistrosAsync().Forget();
+        Closed += (_, _) =>
+        {
+            _model.Changed -= Sync;
+            _model.Detach();
+        };
+        Loaded += (_, _) =>
+        {
+            _model.LoadDistrosAsync().Forget();
+            _model.LoadLogonAsync().Forget();
+        };
+        SyncLogon();
     }
 
     private UIElement General()
     {
         var panel = new StackPanel { Margin = new Thickness(16) };
 
-        panel.Children.Add(Check("Open BenchBar at logon", () => _model.OpenAtLogon, v => _model.OpenAtLogon = v));
+        panel.Children.Add(LogonRow());
         panel.Children.Add(Check("Show notifications when a bench stops or crashes", () => _model.Notifications, v => _model.Notifications = v));
-        panel.Children.Add(Check("Check for updates when the BenchBar window opens", () => _model.CheckForUpdates, v => _model.CheckForUpdates = v));
+        var updates = Check("Check for updates when the BenchBar window opens", () => _model.CheckForUpdates, v => _model.CheckForUpdates = v);
+        if (!_model.ShowsUpdateCheck)
+        {
+            // packaged: the Store updates the programs, so the switch is gone and one line says where updates come from
+            updates.Visibility = Visibility.Collapsed;
+            panel.Children.Add(Ui.Text(UpdatePolicy.StoreLine, 13, opacity: 0.85, margin: new Thickness(0, 0, 0, 12)));
+        }
+        panel.Children.Add(updates);
 
         _distro.SelectionChanged += (_, _) =>
         {
@@ -117,6 +136,25 @@ internal sealed class SettingsWindow : ToolWindow
     }
 
     private readonly List<(CheckBox Box, Func<bool> Get)> _checks = [];
+    private readonly CheckBox _logon = new() { Content = "Open BenchBar at logon", Margin = new Thickness(0, 0, 0, 12) };
+    private readonly TextBlock _logonNote = Ui.Text("", 12, opacity: 0.85, margin: new Thickness(0, -6, 0, 6));
+    private readonly Button _logonSettings;
+
+    /// <summary>
+    /// The logon switch and what goes with it. Packaged, it is the package's startup task: when Windows or a policy has it off, the app cannot
+    /// turn it on, so the box is off and disabled, one line says where to turn it on, and a button opens Settings > Apps > Startup.
+    /// </summary>
+    private UIElement LogonRow()
+    {
+        var row = new StackPanel();
+        _logon.Click += (_, _) => _model.OpenAtLogon = _logon.IsChecked == true;
+        Ui.Name(_logon, "Open BenchBar at logon");
+        row.Children.Add(_logon);
+        _logonNote.TextWrapping = TextWrapping.Wrap;
+        row.Children.Add(_logonNote);
+        row.Children.Add(_logonSettings);
+        return row;
+    }
 
     private CheckBox Check(string label, Func<bool> get, Action<bool> set)
     {
@@ -127,6 +165,16 @@ internal sealed class SettingsWindow : ToolWindow
         return box;
     }
 
+    private void SyncLogon()
+    {
+        var logon = _model.LogonView;
+        _logon.IsChecked = logon.IsOn;
+        _logon.IsEnabled = logon.CanChange;
+        _logonNote.Text = logon.Note ?? "";
+        _logonNote.Visibility = logon.Note is null ? Visibility.Collapsed : Visibility.Visible;
+        _logonSettings.Visibility = logon.ShowSettingsButton ? Visibility.Visible : Visibility.Collapsed;
+    }
+
     /// <summary>The distro list and the note under it.</summary>
     private void Sync()
     {
@@ -134,6 +182,7 @@ internal sealed class SettingsWindow : ToolWindow
         try
         {
             foreach (var (box, get) in _checks) box.IsChecked = get();
+            SyncLogon();
             var names = _model.Distros.Select(d => d.IsDefault ? d.Name + " (default)" : d.Name).ToList();
             if (!names.SequenceEqual(_distro.Items.OfType<string>())) _distro.ItemsSource = names;
             var current = _model.CurrentDistro;

@@ -39,7 +39,7 @@ public partial class App
             main.SetSnapshot(_controller.Snapshot, TrayController.UpText(_controller.Snapshot, _controller.Benches.Select(b => b.State).ToList()));
             if (_wizard is not null) main.ShowWizard(new WizardView(_wizard, BuildWizardActions()));
             main.Show();
-            if (_config.CheckForUpdates) CheckBannerAsync().Forget();
+            if (UpdatePolicy.ChecksGitHub(_package) && _config.CheckForUpdates) CheckBannerAsync().Forget();
             else if (_updateOffer is not null) main.SetUpdate(_updateOffer, DismissUpdate);
         }
         else
@@ -182,7 +182,7 @@ public partial class App
             var latest = await UpdateCheck.FetchLatestAsync(CancellationToken.None);
             var current = UpdateCheck.CurrentVersion();
             // only a release that has the Windows zip for this CPU: the latest release is shared with the Mac app
-            _updateOffer = UpdateCheck.Offer(latest, current, UpdateCheck.Arch()) is { } release && release.Tag != _updateDismissed
+            _updateOffer = UpdateCheck.OfferFor(_package, latest, current, UpdateCheck.Arch()) is { } release && release.Tag != _updateDismissed
                 ? new UpdateOffer(release.Version, release.Url)
                 : null;
         }
@@ -325,8 +325,8 @@ public partial class App
 
         public bool OpenAtLogon
         {
-            get => app._startup.IsEnabled();
-            set => app.SetLogon(value);
+            get => app.Logon.View.IsOn;
+            set => app.Logon.SetAsync(value).Forget();
         }
 
         public void OpenUrl(string url) => App.OpenUrl(url);
@@ -357,12 +357,6 @@ public partial class App
         if (_controller is not null) _controller.Notifications = on;
     }
 
-    private void SetLogon(bool on)
-    {
-        try { if (on) _startup.Enable(); else _startup.Disable(); }
-        catch (Exception ex) { _log.Write("logon", ex); }
-    }
-
     // --- Settings and About ---
 
     private void ShowSettings()
@@ -390,9 +384,15 @@ public partial class App
     {
         public bool OpenAtLogon
         {
-            get => app._startup.IsEnabled();
-            set => app.SetLogon(value);
+            get => app.Logon.View.IsOn;
+            set => app.Logon.SetAsync(value).Forget();
         }
+
+        public IPackageInfo Package => app._package;
+
+        public ILogonControl? Logon => app.Logon;
+
+        public void OpenStartupSettings() => App.OpenUrl(LogonView.SettingsUri);
 
         public void ApplyAppearance(AppearanceMode mode)
         {
@@ -407,7 +407,7 @@ public partial class App
             if (app._controller is not null) app._controller.Notifications = on;
         }
 
-        public string? ShimPath => (app._source as ShimBenchSource)?.ShimPath;
+        public string? ShimPath => app.DisplayShimPath();
 
         public void DistroSwitched() => app._controller?.Poller.Kick();
     }
@@ -423,6 +423,7 @@ public partial class App
         var window = new AboutWindow(new AboutActions
         {
             AppVersion = UpdateCheck.CurrentVersion(),
+            UpdatesFromStore = !UpdatePolicy.ChecksGitHub(_package),
             ShimVersion = () => _setup.ShimVersionAsync(CancellationToken.None),
             CliVersion = ReadCliVersionAsync,
             CheckForUpdates = CheckUpdatesTextAsync,

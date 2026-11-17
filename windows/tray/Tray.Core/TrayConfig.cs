@@ -7,7 +7,7 @@ namespace BenchBar.Tray.Core;
 public enum AppearanceMode { System, Light, Dark }
 
 /// <summary>
-/// <c>%LOCALAPPDATA%\BenchBar\config.json</c>, shared with the shim. The shim owns <c>distro</c> and <c>cli_path</c>;
+/// <c>config.json</c> in <see cref="DataFolder.Current"/> (<c>%LOCALAPPDATA%\BenchBar</c>, or the package's data folder when packaged), shared with the shim. The shim owns <c>distro</c> and <c>cli_path</c>;
 /// the tray owns a <c>tray</c> object (<c>appearance</c>, <c>runner</c>, <c>notifications</c>). Save re-reads the file
 /// from disk and replaces only the <c>tray</c> object, so whatever the shim wrote since the tray started
 /// (<c>adopt-distro</c> sets <c>distro</c>) is never reverted; the write is atomic. <see cref="Distro"/> is read from
@@ -58,8 +58,7 @@ public sealed class TrayConfig
 
     public string Path { get; }
 
-    public static string DefaultPath { get; } = System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BenchBar", "config.json");
+    public static string DefaultPath { get; } = System.IO.Path.Combine(DataFolder.Current, "config.json");
 
     /// <summary>
     /// The shim's <c>distro</c> key; null when absent. The tray only reads it, and re-reads the file only when its
@@ -122,6 +121,9 @@ public sealed class TrayConfig
     /// <summary>The person closed the beta banner at the top of the BenchBar window; it stays away from then on.</summary>
     public bool BetaBannerDismissed { get; set; }
 
+    /// <summary>The person closed the "two installs" notice; it stays away until the second install goes and comes back.</summary>
+    public bool TwoInstallsDismissed { get; set; }
+
     /// <summary>True when the file existed but was not valid JSON; Save then keeps it as <c>config.json.bad</c> first.</summary>
     public bool WasCorrupt => _corrupt;
 
@@ -161,6 +163,7 @@ public sealed class TrayConfig
             if (tray["check_for_updates"] is JsonValue u && u.TryGetValue<bool>(out var check)) config.CheckForUpdates = check;
             if (tray["wizard_dismissed"] is JsonValue w && w.TryGetValue<bool>(out var dismissed)) config.WizardDismissed = dismissed;
             if (tray["beta_banner_dismissed"] is JsonValue bb && bb.TryGetValue<bool>(out var betaDismissed)) config.BetaBannerDismissed = betaDismissed;
+            if (tray["two_installs_dismissed"] is JsonValue ti && ti.TryGetValue<bool>(out var twoDismissed)) config.TwoInstallsDismissed = twoDismissed;
             config.ResumeFlow = ReadString(tray, "resume_flow") == "existing" ? "existing" : "new";
         }
         return config;
@@ -227,6 +230,7 @@ public sealed class TrayConfig
         tray["check_for_updates"] = CheckForUpdates;
         tray["wizard_dismissed"] = WizardDismissed;
         tray["beta_banner_dismissed"] = BetaBannerDismissed;
+        tray["two_installs_dismissed"] = TwoInstallsDismissed;
         tray["resume_flow"] = ResumeFlow == "existing" ? "existing" : "new";
         root["tray"] = tray;
 
