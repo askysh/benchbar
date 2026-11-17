@@ -61,6 +61,7 @@ internal sealed class BenchRow : Border
 internal sealed class FlyoutView : UserControl
 {
     public const string DistroHint = "The tray does not start it on its own.";
+    public const string SetUpLabel = "Set Up BenchBar";
     public const string MissingDistroHint = "WSL has no distro with that name. Set up BenchBar to install it, or pick another distro in Settings.";
 
     private static readonly Brush CardBrush = Frozen(new SolidColorBrush(Color.FromArgb(0x1A, 0x80, 0x80, 0x80)));
@@ -79,6 +80,7 @@ internal sealed class FlyoutView : UserControl
     private TraySnapshot _snapshot = TraySnapshot.Empty;
     private string _key = "";
     private bool _distroStarting;
+    private bool _setupPending;
     private Button? _cardButton;
 
     /// <summary>The button of the distro or problem card (Start or Copy).</summary>
@@ -220,6 +222,15 @@ internal sealed class FlyoutView : UserControl
         Rebuild();
     }
 
+    /// <summary>Setup is unfinished: the problem card offers Set Up BenchBar next to Copy (the empty and missing distro cards always do).</summary>
+    public void SetSetupPending(bool pending)
+    {
+        if (_setupPending == pending) return;
+        _setupPending = pending;
+        _key = "";
+        SetSnapshot(_snapshot, _upText.Text);
+    }
+
     public void ShowVsCodeMissing() => ShowMessage(VsCode.InstallMessage, "Learn more", VsCode.HelpUrl);
 
     public void ShowVsCodeBadPath(string benchPath) => ShowMessage(VsCode.BadPathMessage(benchPath), null, null);
@@ -254,6 +265,7 @@ internal sealed class FlyoutView : UserControl
     private string KeyOf(TraySnapshot s) => string.Join('\n',
         s.DistroStopped ? $"stopped|{s.Distro}|{_distroStarting}|{s.DistroMissing}" : "up",
         s.Problem ?? "",
+        _setupPending ? "setup" : "",
         string.Join('\n', s.Benches.Select(b =>
             $"{b.Path}|{b.Name}|{b.State}|{b.RawState}|{b.StopReason}|{b.Site}|{b.WebUrl}|{_busy.Contains(b.Path)}|{(_failures.TryGetValue(b.Path, out var f) ? f.Message : "")}|{b.Problem}")));
 
@@ -364,7 +376,22 @@ internal sealed class FlyoutView : UserControl
         CardButtons = ["Copy"];
         var panel = new StackPanel();
         panel.Children.Add(new TextBlock { Text = problem, TextWrapping = TextWrapping.Wrap });
-        panel.Children.Add(copy);
+        if (!_setupPending)
+        {
+            panel.Children.Add(copy);
+            return Card(panel);
+        }
+        // setup is unfinished (the person closed the wizard): the way back is on the card, first in Tab order
+        var setUp = new Button { Content = SetUpLabel, MinWidth = 64, Margin = new Thickness(0, 0, 8, 0) };
+        setUp.Click += (_, _) => _actions.SetUpBench();
+        AutomationProperties(setUp, "Set up BenchBar");
+        copy.Margin = new Thickness(0);
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 10, 0, 0) };
+        buttons.Children.Add(setUp);
+        buttons.Children.Add(copy);
+        panel.Children.Add(buttons);
+        _cardButton = setUp;
+        CardButtons = [SetUpLabel, "Copy"];
         return Card(panel);
     }
 

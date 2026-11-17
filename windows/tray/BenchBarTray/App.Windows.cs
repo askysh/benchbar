@@ -113,7 +113,9 @@ public partial class App
                 return;
             }
         }
-        // closing the window ends the wizard; a pending restart keeps its one shot flag so the wizard comes back after it
+        // closing the window ends the wizard and counts as "not now" unless it was done; a pending restart keeps its one shot flag so the
+        // wizard comes back after it (the resume start opens it whatever the dismissal says)
+        if (_wizard is { } wizard) RecordWizardClose(wizard, reason: null);
         _wizard?.Dispose();
         _wizard = null;
     }
@@ -167,7 +169,8 @@ public partial class App
 
     // --- the first run wizard ---
 
-    private void OpenWizard(bool resume, bool existing = false, bool newBench = false)
+    /// <param name="keepFlow">Set Up BenchBar from the tray menu: an open wizard is brought forward as it is, on the page it shows.</param>
+    private void OpenWizard(bool resume, bool existing = false, bool newBench = false, bool keepFlow = false)
     {
         ResumeGate.Opening(resume);
         if (_quitting || _controller is null || _setup is null) return;
@@ -177,7 +180,7 @@ public partial class App
         {
             // the wizard is already open: bring it forward, and switch to the flow that was asked for unless something runs
             if (_main.Mode != MainMode.Wizard) _main.ShowWizard(new WizardView(_wizard, BuildWizardActions()));
-            if (!resume) _wizard.SwitchFlowAsync(existing ? WizardFlow.ExistingBench : WizardFlow.NewBench).Forget();
+            if (!resume && !keepFlow) _wizard.SwitchFlowAsync(existing ? WizardFlow.ExistingBench : WizardFlow.NewBench).Forget();
             WindowFocus.Raise(_main);
             return;
         }
@@ -196,20 +199,29 @@ public partial class App
     private void CloseWizard(WizardModel model, WizardClose reason)
     {
         if (!ReferenceEquals(model, _wizard)) return;
-        if (reason == WizardClose.Cancelled && model.Page == WizardPage.Welcome)
-        {
-            _config.WizardDismissed = true; // no more opening by itself at launch; + > New Bench is still there
-            SaveConfig();
-        }
-        else if (reason == WizardClose.Finished)
-        {
-            _config.WizardDismissed = false;
-            SaveConfig();
-            _controller?.Poller.BoostFor(BenchPoller.ActionBoost);
-        }
+        RecordWizardClose(model, reason);
         _wizard = null;
         _main?.CloseWizard();
         model.Dispose();
+    }
+
+    /// <summary>
+    /// Any close of the wizard before Done (Cancel, the window's X, Alt+F4, Quit) is "not now": it no longer opens by itself at launch, and
+    /// the tray menu, the flyout and the window still offer Set Up BenchBar. Done clears the dismissal and the pending setup.
+    /// </summary>
+    private void RecordWizardClose(WizardModel model, WizardClose? reason)
+    {
+        if (WizardDismissal.OnClose(reason, model.Page) == WizardCloseRecord.Finished)
+        {
+            _config.WizardDismissed = false;
+            SaveConfig();
+            SetSetupPending(false);
+            _controller?.Poller.BoostFor(BenchPoller.ActionBoost);
+            return;
+        }
+        if (_config.WizardDismissed) return;
+        _config.WizardDismissed = true;
+        SaveConfig();
     }
 
     private WizardActions BuildWizardActions() => new()

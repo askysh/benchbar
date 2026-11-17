@@ -133,12 +133,12 @@ public partial class App
 
     /// <summary>
     /// At start: a newer version than the config recorded says "BenchBar was updated to X" once, with What's New (the release page of that
-    /// version), and records it. A first install and a normal start say nothing.
+    /// version), and records it. A first install and a normal start say nothing. True when this start is the first of a newer version.
     /// </summary>
-    private void NoteVersion()
+    private bool NoteVersion()
     {
         var decision = UpdatedNotice.Decide(_config.LastVersion, UpdateCheck.ShortVersion(), _config.HadTraySection);
-        if (decision.Record is null) return;
+        if (decision.Record is null) return false;
         _config.LastVersion = decision.Record;
         if (decision.Show)
         {
@@ -150,6 +150,7 @@ public partial class App
             ShowInfo(text + " Click for what's new.");
         }
         SaveConfig();
+        return decision.Show;
     }
 
     /// <summary>

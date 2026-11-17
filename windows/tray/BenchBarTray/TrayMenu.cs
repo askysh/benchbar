@@ -24,6 +24,13 @@ internal sealed class TrayMenuModel
     public Func<ResolvedTheme> Theme { get; set; } = () => new ResolvedTheme(false, false);
     public Action OpenMain { get; set; } = () => { };
     public Action OpenSettings { get; set; } = () => { };
+
+    /// <summary>Setup is unfinished: "Set Up BenchBar..." is shown. Read when the menu opens.</summary>
+    public Func<bool> SetupPending { get; set; } = () => false;
+
+    /// <summary>Opens the setup wizard, or brings an open one forward.</summary>
+    public Action SetUp { get; set; } = () => { };
+
     public Action CheckForUpdates { get; set; } = () => { };
 
     /// <summary>The release Update Now can install; null hides "Update to X". Read when the menu opens.</summary>
@@ -45,6 +52,7 @@ internal sealed class TrayMenuModel
 internal sealed class TrayMenu
 {
     public const string LogonHeader = "Open BenchBar at logon";
+    public const string SetUpHeader = "Set Up BenchBar...";
 
     private readonly TrayMenuModel _model;
     private readonly MenuItem _logon = new() { Header = LogonHeader, IsCheckable = true };
@@ -52,6 +60,7 @@ internal sealed class TrayMenu
     private readonly MenuItem _runner = new() { Header = "Runner" };
     private readonly MenuItem _notifications = new() { Header = "Notifications", IsCheckable = true };
     private readonly MenuItem _update = new() { Visibility = Visibility.Collapsed };
+    private readonly MenuItem _setUp = new() { Header = SetUpHeader, Visibility = Visibility.Collapsed };
     private readonly Image _preview = new() { Width = 48, Height = 48, Stretch = Stretch.Uniform, SnapsToDevicePixels = true };
     private readonly TextBlock _previewName = new() { HorizontalAlignment = HorizontalAlignment.Center, Opacity = 0.7, Margin = new Thickness(0, 4, 0, 0) };
     private readonly DispatcherTimer _animation = new(DispatcherPriority.Background);
@@ -92,7 +101,9 @@ internal sealed class TrayMenu
         open.Click += (_, _) => model.OpenMain();
         var settings = new MenuItem { Header = "Settings..." };
         settings.Click += (_, _) => model.OpenSettings();
+        _setUp.Click += (_, _) => model.SetUp();
         Menu.Items.Add(open);
+        Menu.Items.Add(_setUp);
         Menu.Items.Add(settings);
         Menu.Items.Add(new Separator());
         Menu.Items.Add(_logon);
@@ -132,6 +143,7 @@ internal sealed class TrayMenu
     {
         _logon.IsChecked = _model.LogonEnabled();
         _notifications.IsChecked = _model.Notifications();
+        _setUp.Visibility = _model.SetupPending() ? Visibility.Visible : Visibility.Collapsed;
         RefreshUpdate();
         var mode = _model.Appearance();
         foreach (var item in _appearance.Items.OfType<MenuItem>()) item.IsChecked = (AppearanceMode)item.Tag == mode;

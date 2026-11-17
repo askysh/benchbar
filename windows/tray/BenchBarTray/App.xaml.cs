@@ -54,6 +54,10 @@ public partial class App : Application, ITrayHost
     private EventWaitHandle? _quitEvent;
     private RegisteredWaitHandle? _quitWait;
     private bool _launchChecked;
+    private LaunchStart _launchStart = new(FirstRun: false, Dismissed: false);
+
+    /// <summary>The launch check found setup unfinished: the tray menu and the flyout's problem card offer Set Up BenchBar.</summary>
+    private bool _setupPending;
     private long _updateCheckedAt;
     private UpdateOffer? _updateOffer;
     private string? _updateDismissed;
@@ -158,7 +162,10 @@ public partial class App : Application, ITrayHost
             _notices.Set(new Notice("crashed", text, "Report a Bug", () => ReportBugAsync("Closed unexpectedly").Forget()));
             ShowNotice(text + " Click for details.");
         }
-        NoteVersion();
+        // read before NoteVersion saves the file: a config with no tray object means no tray ran here before (an unreadable one is not that)
+        var firstRun = !_config.HadTraySection && !_config.Unreadable;
+        var updated = NoteVersion();
+        _launchStart = LaunchStart.From(e.Args, firstRun, _config.WizardDismissed, updated);
         if (resume)
         {
             // the one shot flag did its job: take it away before anything can fail
@@ -232,15 +239,17 @@ public partial class App : Application, ITrayHost
             _launchChecked = true;
             LaunchCheckAsync(snapshot).Forget();
         }
+        else if (_setupPending && snapshot.Benches.Count > 0) SetSetupPending(false); // a bench appeared: setup is done
     }
 
     /// <summary>
-    /// A PC with no bench and no finished setup opens the wizard by itself. The read only <c>setup check</c> never boots a
-    /// stopped distro, and a stopped distro is skipped entirely: it exists, so this is not a new user.
+    /// Once, after the first poll: is setup unfinished, and does this start open the wizard by itself (<see cref="LaunchPlanner.Decide"/>)?
+    /// The read only <c>setup check</c> never boots a stopped distro, and a stopped distro is skipped entirely: it exists, so this is not a
+    /// new user. The check runs whenever the PC has no bench, dismissed or not, so the menu and the flyout can offer Set Up BenchBar.
     /// </summary>
     private async Task LaunchCheckAsync(TraySnapshot snapshot)
     {
-        if (_setup is null || !LaunchPlanner.NeedsSetupCheck(snapshot, _config.WizardDismissed)) return;
+        if (_setup is null || !LaunchPlanner.NeedsSetupCheck(snapshot)) return;
         SetupReport? report = null;
         try
         {
@@ -250,8 +259,18 @@ public partial class App : Application, ITrayHost
         {
             _log.Write("setup-check", ex); // no shim or an old one: the flyout already says so
         }
-        if (LaunchPlanner.AtLaunch(snapshot, report, _config.WizardDismissed, resumeFlag: false) == LaunchAction.OpenWizard)
+        if (_quitting) return;
+        var unfinished = LaunchPlanner.SetupUnfinished(snapshot, report);
+        SetSetupPending(unfinished && (_controller?.Snapshot.Benches.Count ?? 0) == 0);
+        // a resume start has opened the wizard already; the launch start is the resume flag's own path then
+        if (_wizard is null && LaunchPlanner.Decide(_launchStart, unfinished) == LaunchAction.OpenWizard)
             OpenWizard(resume: false);
+    }
+
+    private void SetSetupPending(bool pending)
+    {
+        _setupPending = pending;
+        _flyout?.View.SetSetupPending(pending);
     }
 
     public void ShowToast(Toast toast)
@@ -334,6 +353,7 @@ public partial class App : Application, ITrayHost
             view.SetFooter("BenchBar " + UpdateCheck.CurrentVersion().Split('+')[0]);
             view.SetNotices(_notices.All, DismissNotice);
             view.SetUpdate(_updateOffer, UpdateRunning);
+            view.SetSetupPending(_setupPending);
         }
         _flyout.ShowAtTray();
     }
@@ -501,6 +521,8 @@ public partial class App : Application, ITrayHost
         Theme = () => Theme,
         OpenMain = OpenMain,
         OpenSettings = ShowSettings,
+        SetupPending = () => _setupPending,
+        SetUp = () => OpenWizard(resume: false, keepFlow: true),
         CheckForUpdates = () => CheckForUpdatesAsync().Forget(),
         Update = () => _updateKnown,
         UpdateRunning = () => UpdateRunning,
@@ -640,6 +662,7 @@ public partial class App : Application, ITrayHost
         _flyout?.Close();
         foreach (var w in _logs.Values.ToList()) w.Close();
         foreach (var w in _doctors.Values.ToList()) w.Close();
+        if (_wizard is { } wizard) RecordWizardClose(wizard, reason: null); // Quit with the wizard open is "not now" too
         _wizard?.Dispose();
         _wizard = null;
         _main?.Close();

@@ -113,7 +113,7 @@ public sealed class TrayConfig
     /// <summary>Look for a newer release when the BenchBar window opens (once in a few hours). Off: only the menu item asks.</summary>
     public bool CheckForUpdates { get; set; } = true;
 
-    /// <summary>The person closed the first run wizard with Cancel: it no longer opens by itself at launch.</summary>
+    /// <summary>The person closed the first run wizard before finishing it (Cancel, the window's X, Alt+F4, Quit): it no longer opens by itself at launch.</summary>
     public bool WizardDismissed { get; set; }
 
     /// <summary>The wizard flow to resume after Windows restarts: <c>new</c> (set up a new bench) or <c>existing</c> (use a bench that is already there).</summary>
