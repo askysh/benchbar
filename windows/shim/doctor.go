@@ -30,17 +30,22 @@ func cmdDoctor(sys *System, rest []string) int {
 		return 1
 	}
 	checks := []Check{pathCheck(sys), distroCheck(t)}
-	if _, rep, err := readWslconfig(sys); err != nil {
+	if f, rep, err := readWslconfig(sys); err != nil {
 		checks = append(checks, Check{ID: "wslconfig", Label: ".wslconfig", Status: "warn", Message: err.Error(), Fix: `type "%USERPROFILE%\.wslconfig"`})
 	} else {
 		checks = append(checks, idleCheck(rep))
+		checks = append(checks, networkChecks(f)...)
 	}
 	ka := queryKeepalive(sys)
 	if t.prob == nil {
 		checkKeepaliveTarget(&ka, t.distro)
+		if c, ok := cliVersionCheck(sys, t); ok {
+			checks = append(checks, c)
+		}
 	}
 	checks = append(checks, ka.Checks...)
 	checks = append(checks, trayChecks(sys)...)
+	checks = append(checks, installRecordChecks(sys, ka)...)
 
 	fmt.Fprint(sys.Stdout, "\nWINDOWS\n")
 	printChecks(sys.Stdout, checks)
@@ -55,4 +60,48 @@ func cmdDoctor(sys *System, rest []string) int {
 		return 1
 	}
 	return code
+}
+
+// cliVersionCheck compares the CLI in the distro with this benchbar.exe. A
+// dev build of the shim, a custom cli_path and a CLI that does not answer
+// give no line. The distro is started for it, as the CLI's own doctor does
+// right after.
+func cliVersionCheck(sys *System, t target) (Check, bool) {
+	if !releaseRE.MatchString(version) || (t.cli != "" && t.cli != "benchbar") {
+		return Check{}, false
+	}
+	var a []string
+	if t.distro != "" {
+		a = append(a, "-d", t.distro)
+	}
+	a = append(a, "--cd", "~", "--exec", "/bin/sh", "-c",
+		`PATH="$HOME/.local/bin:$PATH"; command -v "$0" >/dev/null 2>&1 && "$0" --version 2>/dev/null | head -n 1`, "benchbar")
+	res, err := wslExec(sys, "", a...)
+	if err != nil || res.Code != 0 {
+		return Check{}, false
+	}
+	cli, older, newer := cliSkew(res.Stdout)
+	if cli == "" {
+		return Check{}, false
+	}
+	c := Check{ID: "cli_version", Label: "CLI version", Status: "ok",
+		Message: fmt.Sprintf("benchbar %s in the distro matches benchbar.exe %s", cli, version)}
+	where := t.distro
+	if where == "" {
+		where = "the default distro"
+	}
+	switch {
+	case older:
+		c.Status = "warn"
+		c.Message = fmt.Sprintf("benchbar %s in %s is older than benchbar.exe %s", cli, where, version)
+		c.Fix = "benchbar.exe setup run cli_install"
+		if t.distro != "" {
+			c.Fix += " --distro " + quoteArg(t.distro)
+		}
+	case newer:
+		c.Status = "warn"
+		c.Message = fmt.Sprintf("benchbar %s in %s is newer than benchbar.exe %s", cli, where, version)
+		c.Fix = "irm https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1 | iex"
+	}
+	return c, true
 }

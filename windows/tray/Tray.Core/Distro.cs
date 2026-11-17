@@ -56,15 +56,42 @@ public static class DistroName
         return (defaultDistro ?? FromRegistry)();
     }
 
-    /// <summary>HKCU Lxss: <c>DefaultDistribution</c> is a GUID; its subkey holds <c>DistributionName</c>.</summary>
+    /// <summary>
+    /// Distros that belong to another tool (Docker Desktop, Rancher Desktop, Podman) and are never a place for a bench, default or not.
+    /// The shim (windows/shim/distro.go) applies the same rule, so the tray and <c>benchbar.exe</c> watch the same distro.
+    /// </summary>
+    public static readonly IReadOnlyList<string> ToolPrefixes = ["docker-desktop", "rancher-desktop", "podman-machine"];
+
+    public static bool IsToolDistro(string name) =>
+        ToolPrefixes.Any(p => name.StartsWith(p, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// The distro to watch among the registered ones: the default when it is usable, else the only usable one, else none (several
+    /// candidates and no usable default is a choice for Settings or <c>adopt-distro</c>, not a guess).
+    /// </summary>
+    public static string? Pick(IReadOnlyList<(string Name, bool IsDefault)> distros)
+    {
+        var usable = distros.Where(d => d.Name.Length > 0 && !IsToolDistro(d.Name)).ToList();
+        if (usable.FirstOrDefault(d => d.IsDefault) is { Name: { Length: > 0 } preferred }) return preferred;
+        return usable.Count == 1 ? usable[0].Name : null;
+    }
+
+    /// <summary>HKCU Lxss: every subkey with a <c>DistributionName</c>, and <c>DefaultDistribution</c> (a GUID) names the default.</summary>
     public static string? FromRegistry()
     {
         try
         {
             using var lxss = Registry.CurrentUser.OpenSubKey(LxssKey);
-            if (lxss?.GetValue("DefaultDistribution") is not string guid || guid.Length == 0) return null;
-            using var distro = lxss.OpenSubKey(guid);
-            return distro?.GetValue("DistributionName") as string;
+            if (lxss is null) return null;
+            var defaultGuid = lxss.GetValue("DefaultDistribution") as string;
+            var distros = new List<(string Name, bool IsDefault)>();
+            foreach (var guid in lxss.GetSubKeyNames())
+            {
+                using var key = lxss.OpenSubKey(guid);
+                if (key?.GetValue("DistributionName") is string name)
+                    distros.Add((name, string.Equals(guid, defaultGuid, StringComparison.OrdinalIgnoreCase)));
+            }
+            return Pick(distros);
         }
         catch (Exception)
         {

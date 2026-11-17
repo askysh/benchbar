@@ -133,7 +133,7 @@ func TestForwardExit127Message(t *testing.T) {
 		t.Errorf("exit %d, want 1", code)
 	}
 	want := `benchbar.exe: benchbar was not found in WSL distro "Ubuntu-24.04". fix: install it inside the distro: ` +
-		`wsl.exe -d Ubuntu-24.04 -- bash -c "curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash"` + "\n"
+		`wsl.exe -d Ubuntu-24.04 -- bash -c "set -o pipefail; curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash"` + "\n"
 	if e.stderr() != want {
 		t.Errorf("stderr\n got %q\nwant %q", e.stderr(), want)
 	}
@@ -174,7 +174,7 @@ func TestNoDistroInstalled(t *testing.T) {
 	if code := e.run("up"); code != 1 {
 		t.Errorf("exit %d", code)
 	}
-	want := "benchbar.exe: no WSL distro is installed. fix: wsl.exe --install -d Ubuntu-24.04\n"
+	want := "benchbar.exe: no WSL distro is installed. fix: benchbar.exe setup check (it installs Ubuntu 24.04; by hand: wsl.exe --install -d Ubuntu-24.04)\n"
 	if e.stderr() != want {
 		t.Errorf("stderr %q", e.stderr())
 	}
@@ -491,7 +491,7 @@ func TestExit127WithoutDistroNameOmitsDash(t *testing.T) {
 		t.Errorf("exit %d", code)
 	}
 	if strings.Contains(e.stderr(), "-d ") || !strings.Contains(e.stderr(), "default WSL distro") ||
-		!strings.Contains(e.stderr(), `fix: install it inside the distro: wsl.exe -- bash -c "curl`) {
+		!strings.Contains(e.stderr(), `fix: install it inside the distro: wsl.exe -- bash -c "set -o pipefail; curl`) {
 		t.Errorf("stderr %q", e.stderr())
 	}
 	for _, s := range e.starts() {

@@ -140,14 +140,8 @@ internal sealed class AppsView : UserControl, IBenchPageView
         return tag;
     }
 
-    private static readonly Brush Orange = FrozenBrush(Color.FromRgb(0xD9, 0x8E, 0x04));
+    private static Brush Orange => Ui.CautionTextBrush;
 
-    private static Brush FrozenBrush(Color color)
-    {
-        var brush = new SolidColorBrush(color);
-        brush.Freeze();
-        return brush;
-    }
 
     private UIElement RowView(BenchApp app, bool sitesKnown)
     {

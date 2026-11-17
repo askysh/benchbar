@@ -32,6 +32,25 @@ public static class WslPaths
     public static string ToWindows(string distro, string linuxPath) =>
         @"\\wsl.localhost\" + distro + linuxPath.Replace('/', '\\');
 
+    /// <summary>
+    /// The same path, falling back to <c>\\wsl$\DISTRO\...</c> (the only share older Windows 10 builds have) when the first form does
+    /// not exist and the second does. With neither found, the <c>wsl.localhost</c> form comes back, so the caller's error names it.
+    /// </summary>
+    public static string ToWindows(string distro, string linuxPath, Func<string, bool> exists)
+    {
+        var modern = ToWindows(distro, linuxPath);
+        if (exists(modern)) return modern;
+        var legacy = @"\\wsl$\" + distro + linuxPath.Replace('/', '\\');
+        return exists(legacy) ? legacy : modern;
+    }
+
+    /// <summary>A file or folder exists; a share that cannot be reached counts as absent.</summary>
+    public static bool PathExists(string path)
+    {
+        try { return File.Exists(path) || Directory.Exists(path); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { return false; }
+    }
+
     /// <summary><c>~</c> and <c>~/x</c> become paths under <paramref name="home"/>; anything else stays.</summary>
     public static string ExpandHome(string path, string? home)
     {

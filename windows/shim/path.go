@@ -166,7 +166,48 @@ func pathCheck(sys *System) Check {
 	return c
 }
 
+// removePathDir takes every entry that names dir out of a PATH value. The
+// other entries, their spelling and a trailing ";" stay as they were.
+func removePathDir(current, dir string, getenv func(string) string) (string, int) {
+	want := normDir(dir, getenv)
+	var out []string
+	removed := 0
+	for _, e := range strings.Split(current, ";") {
+		if e != "" && normDir(e, getenv) == want {
+			removed++
+			continue
+		}
+		out = append(out, e)
+	}
+	if removed == 0 {
+		return current, 0
+	}
+	return strings.Join(out, ";"), removed
+}
+
 func cmdPath(sys *System, sub string) int {
+	if sub == "remove" {
+		user, err := sys.Paths.User()
+		if err != nil {
+			errorf(sys, "cannot read the user PATH: %v. fix: reg query HKCU\\Environment /v Path", err)
+			return 1
+		}
+		exeDir := dirOf(sys.ExePath)
+		next, removed := removePathDir(user.Value, exeDir, sys.Getenv)
+		if removed == 0 {
+			fmt.Fprintf(sys.Stdout, "%s is not on your user PATH. Nothing to remove.\n", exeDir)
+			return 0
+		}
+		if err := sys.Paths.SetUser(next, user.Expand); err != nil {
+			errorf(sys, "cannot write the user PATH: %v", err)
+			return 1
+		}
+		if err := sys.Broadcast.EnvironmentChanged(); err != nil {
+			fmt.Fprintf(sys.Stderr, "benchbar.exe: could not tell running programs about the change: %v\n", err)
+		}
+		fmt.Fprintf(sys.Stdout, "Removed %s from your user PATH. New terminals pick it up; open terminals keep the old PATH.\n", exeDir)
+		return 0
+	}
 	if sub == "install" {
 		user, err := sys.Paths.User()
 		if err != nil {

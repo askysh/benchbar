@@ -149,11 +149,9 @@ public static class ShimLocator
 /// </summary>
 public sealed class ShimBenchSource : IBenchSource
 {
-    public const string NotFoundMessage =
-        "benchbar.exe was not found. Put it next to BenchBarTray.exe or on PATH (benchbar.exe path install).";
+    public const string NotFoundMessage = ShimStart.NotFoundMessage;
 
-    public const string BlockedMessage =
-        "Windows blocked benchbar.exe. If SmartScreen or your antivirus asked, allow it, then try again.";
+    public const string BlockedMessage = ShimStart.BlockedMessage;
 
     /// <summary>up, down and restart wait for the bench: 3 minutes.</summary>
     public static readonly TimeSpan ActionTimeout = TimeSpan.FromSeconds(180);
@@ -190,12 +188,12 @@ public sealed class ShimBenchSource : IBenchSource
     public string? ShimPath => _locate();
 
     public async Task<IReadOnlyList<BenchEntry>> ListAsync(CancellationToken ct) =>
-        BenchJson.ParseList((await RunCliAsync(["list", "--json"], ct).ConfigureAwait(false)).Output);
+        CliOutput.Parse((await RunCliAsync(["list", "--json"], ct).ConfigureAwait(false)).Output, "list", BenchJson.ParseList);
 
     public async Task<BenchStatus> StatusAsync(BenchEntry bench, CancellationToken ct)
     {
         var result = await RunCliAsync(["status", "--json", "--bench-dir", bench.Path], ct).ConfigureAwait(false);
-        var status = BenchJson.ParseStatus(result.Output);
+        var status = CliOutput.Parse(result.Output, "status", BenchJson.ParseStatus);
         return status with
         {
             Name = string.IsNullOrEmpty(status.Name) ? bench.Name : status.Name,
@@ -223,22 +221,22 @@ public sealed class ShimBenchSource : IBenchSource
         }
         catch (Win32Exception ex)
         {
-            throw new CliProblemException($"benchbar.exe could not be started: {ex.Message}");
+            throw new CliProblemException(ShimStart.Describe(ex, shim));
         }
     }
 
     public async Task<DoctorReport> DoctorAsync(string benchPath, CancellationToken ct) =>
-        BenchJson.ParseDoctor((await RunCliAsync(["doctor", "--json", "--bench-dir", benchPath], ct).ConfigureAwait(false)).Output);
+        CliOutput.Parse((await RunCliAsync(["doctor", "--json", "--bench-dir", benchPath], ct).ConfigureAwait(false)).Output, "doctor", BenchJson.ParseDoctor);
 
     public async Task<LogTail> LogsAsync(string benchPath, CancellationToken ct, int lines = 300) =>
-        BenchJson.ParseLogs((await RunCliAsync(
-            ["logs", "--json", "-n" + lines.ToString(CultureInfo.InvariantCulture), "--bench-dir", benchPath], ct).ConfigureAwait(false)).Output);
+        CliOutput.Parse((await RunCliAsync(
+            ["logs", "--json", "-n" + lines.ToString(CultureInfo.InvariantCulture), "--bench-dir", benchPath], ct).ConfigureAwait(false)).Output, "logs", BenchJson.ParseLogs);
 
     public async Task<string> ReportAsync(string? benchPath, CancellationToken ct)
     {
         List<string> args = ["report", "--json"];
         if (!string.IsNullOrEmpty(benchPath)) args.AddRange(["--bench-dir", benchPath]);
-        return BenchJson.ParseReport((await RunCliAsync(args, ct).ConfigureAwait(false)).Output);
+        return CliOutput.Parse((await RunCliAsync(args, ct).ConfigureAwait(false)).Output, "report", BenchJson.ParseReport);
     }
 
     public bool StartDistro()
@@ -266,7 +264,7 @@ public sealed class ShimBenchSource : IBenchSource
         }
         catch (Win32Exception ex)
         {
-            throw new CliProblemException($"benchbar.exe could not be started: {ex.Message}");
+            throw new CliProblemException(ShimStart.Describe(ex, shim));
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {

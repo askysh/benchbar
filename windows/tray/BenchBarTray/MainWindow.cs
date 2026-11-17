@@ -31,8 +31,8 @@ internal sealed class MainActions
     public Action DismissBetaBanner { get; set; } = () => { };
 }
 
-/// <summary>A newer release the banner offers.</summary>
-internal sealed record UpdateOffer(string Version, string Url);
+/// <summary>A newer release the banner offers: its page, and the one line installer to run in PowerShell.</summary>
+internal sealed record UpdateOffer(string Version, string Url, string Command = UpdateCheck.InstallCommand);
 
 /// <summary>
 /// The BenchBar window: a sidebar of benches (a state dot, each site as a child row) with Settings and About at the foot, and
@@ -45,6 +45,7 @@ internal sealed class MainWindow : Window
     private readonly ListBox _list = new() { BorderThickness = new Thickness(0), Background = Brushes.Transparent, Margin = new Thickness(4, 0, 4, 0) };
     private readonly TextBlock _summary = Ui.Text("", 12, opacity: 0.7, margin: new Thickness(16, 0, 16, 8));
     private readonly Border _banner = new() { Visibility = Visibility.Collapsed, Margin = new Thickness(24, 16, 24, 0) };
+    private readonly StackPanel _notices = new() { Visibility = Visibility.Collapsed, Margin = new Thickness(24, 8, 24, 0) };
     private readonly Border _beta = new() { Visibility = Visibility.Collapsed, Margin = new Thickness(24, 16, 24, 0) };
     private readonly ContentControl _content = new() { Margin = new Thickness(24, 20, 24, 20), IsTabStop = false };
     private readonly BenchPage _page;
@@ -84,6 +85,8 @@ internal sealed class MainWindow : Window
         var right = new DockPanel();
         DockPanel.SetDock(_beta, Dock.Top);
         DockPanel.SetDock(_banner, Dock.Top);
+        DockPanel.SetDock(_notices, Dock.Top);
+        right.Children.Add(_notices);
         right.Children.Add(_beta);
         right.Children.Add(_banner);
         right.Children.Add(_content);
@@ -479,6 +482,46 @@ internal sealed class MainWindow : Window
         ShowHome();
     }
 
+    // --- notices ---
+
+    /// <summary>The texts of the notices shown (for tests).</summary>
+    public IReadOnlyList<string> NoticeTexts => _notices.Children.OfType<Border>().Select(b => b.Tag as string ?? "").ToList();
+
+    /// <summary>
+    /// The notices of the board, above everything else: the tray closed unexpectedly last time, benchbar.exe is of another version.
+    /// Each has its button (Report a Bug, Copy Install Line) and, when it can be, Dismiss.
+    /// </summary>
+    public void SetNotices(IReadOnlyList<Notice> notices, Action<string> dismiss)
+    {
+        _notices.Children.Clear();
+        foreach (var notice in notices)
+        {
+            var line = new DockPanel();
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+            if (notice.ActionLabel is { } label && notice.Action is { } action)
+                buttons.Children.Add(Ui.Button(label, action, label, primary: true));
+            if (notice.Dismissible)
+            {
+                var close = Ui.Button("Dismiss", () => dismiss(notice.Key), "Dismiss: " + notice.Text);
+                close.Margin = new Thickness(0);
+                buttons.Children.Add(close);
+            }
+            foreach (var b in buttons.Children.OfType<Button>())
+            {
+                b.Padding = new Thickness(10, 2, 10, 2);
+                b.MinHeight = 0;
+                b.MinWidth = 0;
+            }
+            DockPanel.SetDock(buttons, Dock.Right);
+            line.Children.Add(buttons);
+            line.Children.Add(new TextBlock { Text = notice.Text, FontSize = 12, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0), Foreground = Ui.CriticalBrush });
+            var card = new Border { Child = line, Tag = notice.Text, Background = Ui.Card, CornerRadius = new CornerRadius(6), Padding = new Thickness(12, 4, 8, 4), Margin = new Thickness(0, 0, 0, 4) };
+            Ui.Name(card, "Notice: " + notice.Text);
+            _notices.Children.Add(card);
+        }
+        _notices.Visibility = notices.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+    }
+
     // --- update banner ---
 
     public void SetUpdate(UpdateOffer? offer, Action dismiss)
@@ -490,8 +533,15 @@ internal sealed class MainWindow : Window
             return;
         }
         var line = new DockPanel();
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal };
-        buttons.Children.Add(Ui.Button("Open Release Page", () => _actions.OpenUrl(offer.Url), "Open the release page", primary: true));
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        Button? copy = null;
+        copy = Ui.Button("Copy Update Line", () =>
+        {
+            _actions.CopyText(offer.Command);
+            if (copy is not null) copy.Content = "Copied";
+        }, "Copy the update line for PowerShell", primary: true);
+        buttons.Children.Add(copy);
+        buttons.Children.Add(Ui.Button("Release Page", () => _actions.OpenUrl(offer.Url), "Open the release page"));
         var later = Ui.Button("Not Now", () =>
         {
             dismiss();
@@ -501,13 +551,10 @@ internal sealed class MainWindow : Window
         buttons.Children.Add(later);
         DockPanel.SetDock(buttons, Dock.Right);
         line.Children.Add(buttons);
-        line.Children.Add(new TextBlock
-        {
-            Text = $"BenchBar {offer.Version} is out.",
-            VerticalAlignment = VerticalAlignment.Center,
-            FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 12, 0),
-        });
+        var words = new StackPanel { Margin = new Thickness(0, 0, 12, 0) };
+        words.Children.Add(new TextBlock { Text = $"BenchBar {offer.Version} is out.", FontWeight = FontWeights.SemiBold });
+        words.Children.Add(new TextBlock { Text = UpdateCheck.InstallExplanation, FontSize = 12, Opacity = 0.8, TextWrapping = TextWrapping.Wrap });
+        line.Children.Add(words);
         _banner.Background = Ui.Card;
         _banner.CornerRadius = new CornerRadius(8);
         _banner.Padding = new Thickness(12, 4, 8, 4);

@@ -43,12 +43,13 @@ public static class LaunchPlanner
     /// The wizard opens by itself only for a PC that has no bench and is not set up: no bench in the first poll, the distro
     /// is not merely stopped (a stopped distro exists, so this is not a new user), the person did not dismiss the wizard, and the
     /// shim's read only check has a blocking step that is not done (advice rows do not count). A poll that failed on a PC where
-    /// benchbar is installed in the distro is a returning user having a bad moment, not a new one: nothing opens.
+    /// benchbar is installed in the distro is a returning user having a bad moment, not a new one: nothing opens. A distro that WSL
+    /// does not list at all (<see cref="TraySnapshot.DistroMissing"/>) is not a stopped distro: it falls through to the check.
     /// </summary>
     public static LaunchAction AtLaunch(TraySnapshot snapshot, SetupReport? report, bool dismissed, bool resumeFlag)
     {
         if (resumeFlag) return LaunchAction.OpenWizard;
-        if (dismissed || snapshot.Benches.Count > 0 || snapshot.DistroStopped) return LaunchAction.Nothing;
+        if (dismissed || snapshot.Benches.Count > 0 || StoppedButThere(snapshot)) return LaunchAction.Nothing;
         if (report is null || !report.HasBlockingFailure) return LaunchAction.Nothing;
         if (snapshot.Problem is not null && report.Step(SetupIds.Cli) is { IsOk: true }) return LaunchAction.Nothing;
         return LaunchAction.OpenWizard;
@@ -56,7 +57,10 @@ public static class LaunchPlanner
 
     /// <summary>Whether the setup check is worth running for this first snapshot (no bench, a distro that is not just stopped).</summary>
     public static bool NeedsSetupCheck(TraySnapshot snapshot, bool dismissed) =>
-        !dismissed && snapshot.Benches.Count == 0 && !snapshot.DistroStopped;
+        !dismissed && snapshot.Benches.Count == 0 && !StoppedButThere(snapshot);
+
+    /// <summary>A distro that exists and is not running: a returning user, not a new one. A missing distro is not that.</summary>
+    private static bool StoppedButThere(TraySnapshot snapshot) => snapshot.DistroStopped && !snapshot.DistroMissing;
 }
 
 public enum SidebarKind { Bench, Site }

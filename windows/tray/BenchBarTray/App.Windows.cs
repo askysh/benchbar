@@ -25,6 +25,8 @@ public partial class App
         {
             var main = new MainWindow(BuildMainActions(), Theme);
             main.Closing += OnMainClosing;
+            main.StateChanged += (_, _) => SyncViewerActivity();
+            WatchActivity(main);
             main.Closed += (_, _) =>
             {
                 _main = null;
@@ -33,6 +35,7 @@ public partial class App
             };
             _main = main;
             Viewer(true);
+            main.SetNotices(_notices.All, DismissNotice);
             main.SetSnapshot(_controller.Snapshot, TrayController.UpText(_controller.Snapshot, _controller.Benches.Select(b => b.State).ToList()));
             if (_wizard is not null) main.ShowWizard(new WizardView(_wizard, BuildWizardActions()));
             main.Show();
@@ -43,16 +46,44 @@ public partial class App
         {
             if (_main.WindowState == WindowState.Minimized) _main.WindowState = WindowState.Normal;
         }
-        _main.Activate();
+        // opened by the tray itself (a launch check, a resume, the installer): bring it to the front, or flash its taskbar button
+        WindowFocus.Raise(_main);
     }
 
     /// <summary>A window of ours is open: leave efficiency mode and poll at the window rate. The last one closing undoes both.</summary>
     private void Viewer(bool open)
     {
         Awake(open);
-        _viewers = Math.Max(0, _viewers + (open ? 1 : -1));
-        if (open && _viewers == 1) _controller?.FlyoutOpened();
-        else if (!open && _viewers == 0) _controller?.FlyoutClosed();
+        // the controller counts the windows: the flyout closing must not drop polling to the slow rate while the BenchBar window is open
+        if (open)
+        {
+            _controller?.FlyoutOpened();
+            Dispatcher.BeginInvoke(SyncViewerActivity, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+        }
+        else _controller?.FlyoutClosed();
+    }
+
+    /// <summary>
+    /// Tells the controller whether one of our windows is in use: one is the active window and not minimized. When none has been for a while
+    /// (minimized, or another program in front) polling backs off from 5 s to about 30 s; coming back polls at once.
+    /// </summary>
+    private void PostViewerSync() =>
+        Dispatcher.BeginInvoke(SyncViewerActivity, System.Windows.Threading.DispatcherPriority.Background);
+
+    /// <summary>
+    /// Activated and Deactivated fire before Window.IsActive has caught up, so the sync runs after them, and a window's own
+    /// events are watched too: a switch between two of our windows never raises the application's.
+    /// </summary>
+    private void WatchActivity(Window window)
+    {
+        window.Activated += (_, _) => PostViewerSync();
+        window.Deactivated += (_, _) => PostViewerSync();
+    }
+
+    private void SyncViewerActivity()
+    {
+        var active = Windows.OfType<Window>().Any(w => w.IsActive && w.WindowState != WindowState.Minimized);
+        _controller?.ViewersActive(active);
     }
 
     private static void ReleaseMemory()
@@ -150,8 +181,9 @@ public partial class App
         {
             var latest = await UpdateCheck.FetchLatestAsync(CancellationToken.None);
             var current = UpdateCheck.CurrentVersion();
-            _updateOffer = latest is { } release && UpdateCheck.IsNewer(release.Tag, current) && release.Tag != _updateDismissed
-                ? new UpdateOffer(release.Tag.TrimStart('v'), release.Url)
+            // only a release that has the Windows zip for this CPU: the latest release is shared with the Mac app
+            _updateOffer = UpdateCheck.Offer(latest, current, UpdateCheck.Arch()) is { } release && release.Tag != _updateDismissed
+                ? new UpdateOffer(release.Version, release.Url)
                 : null;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
@@ -181,7 +213,7 @@ public partial class App
             // the wizard is already open: bring it forward, and switch to the flow that was asked for unless something runs
             if (_main.Mode != MainMode.Wizard) _main.ShowWizard(new WizardView(_wizard, BuildWizardActions()));
             if (!resume) _wizard.SwitchFlowAsync(existing ? WizardFlow.ExistingBench : WizardFlow.NewBench).Forget();
-            _main.Activate();
+            WindowFocus.Raise(_main);
             return;
         }
         var model = new WizardModel(_setup, new WizardHost(this), DistroName.Resolve(_config.Distro));
@@ -230,7 +262,7 @@ public partial class App
         try
         {
             var info = new ProcessStartInfo("notepad.exe") { UseShellExecute = false };
-            info.ArgumentList.Add(TextFormats.WslToWindows(distro, linuxPath));
+            info.ArgumentList.Add(TextFormats.WslToWindowsExisting(distro, linuxPath));
             Process.Start(info)?.Dispose();
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
@@ -300,6 +332,22 @@ public partial class App
         public void OpenUrl(string url) => App.OpenUrl(url);
 
         public void CopyText(string text) => app.CopyText(text);
+
+        // an install takes 20 to 30 minutes: the PC must not sleep in it (the execution state is per thread, and this is the UI thread)
+        public void KeepAwake(bool on)
+        {
+            if (!app._keepAwake.Set(on) && on) app._log.Write("keep-awake", new InvalidOperationException("SetThreadExecutionState refused"));
+        }
+
+        public WizardFlow? ResumeFlow => app._config.ResumeFlow == "existing" ? WizardFlow.ExistingBench : WizardFlow.NewBench;
+
+        public void SetResumeFlow(WizardFlow flow)
+        {
+            var text = flow == WizardFlow.ExistingBench ? "existing" : "new";
+            if (app._config.ResumeFlow == text) return;
+            app._config.ResumeFlow = text;
+            app.SaveConfig();
+        }
     }
 
     private void SetNotifications(bool on)
@@ -328,6 +376,7 @@ public partial class App
         var model = new SettingsModel(_config, new SettingsHost(this), _setup, SaveConfig);
         var window = new SettingsWindow(model, () => RunnerSet.Load(), CopyText, Theme);
         _settingsWindow = window;
+        WatchActivity(window);
         window.Closed += (_, _) =>
         {
             _settingsWindow = null;
@@ -382,6 +431,7 @@ public partial class App
             CopyText = CopyText,
         }, Theme);
         _aboutWindow = window;
+        WatchActivity(window);
         window.Closed += (_, _) =>
         {
             _aboutWindow = null;
@@ -415,10 +465,12 @@ public partial class App
         try
         {
             var latest = await UpdateCheck.FetchLatestAsync(CancellationToken.None);
-            var current = UpdateCheck.CurrentVersion();
-            return latest is { } release && UpdateCheck.IsNewer(release.Tag, current)
-                ? $"BenchBar {release.Tag.TrimStart('v')} is out."
-                : "You have the latest version.";
+            return UpdateCheck.State(latest, UpdateCheck.CurrentVersion(), UpdateCheck.Arch()) switch
+            {
+                UpdateState.Available => $"BenchBar {latest!.Version} is out.",
+                UpdateState.NoWindowsBuild => $"BenchBar {latest!.Version} is out, but its Windows download is not ready yet.",
+                _ => "You have the latest version.",
+            };
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
         {

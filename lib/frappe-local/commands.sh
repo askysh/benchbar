@@ -27,6 +27,7 @@ flag~install~--profile~NAME~Release profile (default v15-lts) or a team profile.
 flag~install~--bundle~NAME~App bundle: minimal, common or extended.
 flag~install~--port-offset~N~Use port block N (web 8000+N).
 flag~install~--make-default~~Make this the default bench even when another one is.
+flag~install~--allow-windows-fs~~WSL only: accept a bench on the Windows file system (/mnt/c, drvfs, 9p). It is refused by default: slow, no file watching, broken permissions.
 flag~install~--offline~~Skip the remote branch checks.
 flag~install~--frappe-commit~SHA~Pin the frappe clone to this commit (or FRAPPE_COMMIT, or the team profile).
 flag~install~--erpnext-commit~SHA~Pin the erpnext clone to this commit.
@@ -34,11 +35,13 @@ flag~install~--dry-run~~Print the plan, change nothing.
 flag~install~--yes~~Do not ask; secrets come from the environment.
 env~install~ADMIN_PASSWORD~The new site's Administrator password.
 env~install~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
+env~install~BENCH_INIT_TIMEOUT_SECONDS~Seconds bench init may take before it is stopped (default 2700, 0 for no limit). A half built bench left by a stopped init is moved aside by the next install, which starts it again.
 env~install~BENCHBAR_SUDO~Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change).
 env~install~BENCHBAR_SUDO_PASSWORD~The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed from the environment; never in argv, the log or a child.
 cmd~adopt~benchbar adopt PATH [--dry-run] [--yes] [--json]~Register an existing bench: Procfile.lean, runner, agent, helpers. Never runs migrate, build or update.~yes~yes~no~yes~stream
 flag~adopt~--port-offset~N~Move the bench to port block N.
 flag~adopt~--make-default~~Make this the default bench.
+flag~adopt~--allow-windows-fs~~WSL only: accept a bench on the Windows file system (/mnt/c, drvfs, 9p), which is refused by default.
 flag~adopt~--dry-run~~Print the plan, change nothing.
 flag~adopt~--yes~~Do not ask.
 env~adopt~BENCHBAR_SUDO~Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change).

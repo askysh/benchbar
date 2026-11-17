@@ -11,9 +11,14 @@
 #                      run builds the dispatched ref and only uploads a
 #                      workflow artifact, unsigned. (Dispatch works only once
 #                      this file is on main, so the pull request path exists.)
+#                      Its benchbar.exe gets a dev version (0.0.0-dev-SHA), not
+#                      the typed one, so the shim never pins its CLI install
+#                      to a tag that does not exist. The zip name keeps the
+#                      typed version.
 #   pull_request       when this file or install.ps1 changes: build, package
 #                      and run the installer against the zip. Never touches a
-#                      release.
+#                      release. A tag push runs the installer test too, before
+#                      the release job.
 #
 # What it ships, per architecture (amd64 and arm64):
 #   benchbar-windows-<version>-<arch>.zip   benchbar.exe, the tray app (when
@@ -28,7 +33,19 @@
 # own binaries go through SignPath (third party DLLs are not ours to sign); a
 # signature that does not verify is thrown away and the unsigned file ships.
 # README.txt and the release notes list what Get-AuthenticodeSignature says
-# about every .exe and .dll in the zip.
+# about every .exe and .dll in the zip. SignPath may wait for a person to
+# approve the request: the step waits up to 24 hours, but GitHub stops any
+# hosted job after 6 hours, so an approval later than that leaves the file
+# unsigned (re-run the workflow after approving). Set the repository variable
+# SIGNING_REQUIRED to true and the release job fails when a program of ours is
+# unsigned, instead of attaching an unsigned build.
+#
+# Build provenance: the release job attests both zips (actions/attest-build-
+# provenance), so `gh attestation verify FILE.zip -R askysh/benchbar` works.
+#
+# benchbar.exe carries a version resource (company, product, description,
+# version, asInvoker manifest), generated before go build from
+# windows/shim/versioninfo.json. A plain `go build` works without it.
 #
 # The release job only ever creates or edits a DRAFT. A published release gets
 # its assets but its notes are left alone. Publishing is a human step.
@@ -57,6 +74,8 @@ on:
     paths:
       - ".github/workflows/release-windows.yml"
       - "install.ps1"
+      - "windows/shim/versioninfo.json"
+      - "windows/shim/benchbar.manifest"
 
 permissions:
   contents: read
@@ -72,6 +91,7 @@ jobs:
     outputs:
       version: ${{ steps.v.outputs.version }}
       release: ${{ steps.v.outputs.release }}
+      shim_version: ${{ steps.v.outputs.shim_version }}
     steps:
       - id: v
         env:
@@ -98,15 +118,26 @@ jobs:
             echo "::error::The tag v${v} does not exist. A run that attaches to a release builds that tag, so push it first (release.yml builds the Mac side from the same tag)."
             exit 1
           fi
-          echo "version=$v" >> "$GITHUB_OUTPUT"
-          echo "release=$release" >> "$GITHUB_OUTPUT"
-          echo "Windows build of version $v (attach to a release: $release)"
+          # Only a build of a release tag says it is that release. The shim
+          # pins the CLI install inside the distro to its own version when it
+          # looks like X.Y.Z, so any other build gets a dev version.
+          shim="$v"
+          if [ "$release" != "true" ]; then shim="0.0.0-dev-${GITHUB_SHA::7}"; fi
+          {
+            echo "version=$v"
+            echo "release=$release"
+            echo "shim_version=$shim"
+          } >> "$GITHUB_OUTPUT"
+          echo "Windows build of version $v (attach to a release: $release; benchbar.exe says $shim)"
 
   package:
     name: Package (${{ matrix.arch }})
     needs: version
     runs-on: windows-latest
-    timeout-minutes: 40
+    # A release build may wait for a person to approve the signing request, so
+    # it gets the longest time GitHub allows for a hosted job (6 hours). Other
+    # builds never sign and stop after 40 minutes.
+    timeout-minutes: ${{ needs.version.outputs.release == 'true' && 360 || 40 }}
     # actions: read is for SignPath's action, which reads this run and
     # downloads the unsigned artifact with the GitHub token
     permissions:
@@ -127,6 +158,7 @@ jobs:
         shell: pwsh
     env:
       VERSION: ${{ needs.version.outputs.version }}
+      SHIM_VERSION: ${{ needs.version.outputs.shim_version }}
       ARCH: ${{ matrix.arch }}
       RID: ${{ matrix.rid }}
       MACHINE: ${{ matrix.machine }}
@@ -176,6 +208,29 @@ jobs:
           go vet ./...
           go test ./...
 
+      # The version resource (what Explorer shows under Properties, Details):
+      # company, product, description, version and an asInvoker manifest. It is
+      # a .syso file next to the Go code, never committed (.gitignore). The tool
+      # runs on the build machine, so this step sets no GOOS or GOARCH.
+      - name: Make the version resource for benchbar.exe
+        working-directory: windows/shim
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@v1.7.0
+          $tool = Join-Path (go env GOPATH) 'bin/goversioninfo.exe'
+          if ($env:VERSION -notmatch '^(\d+)\.(\d+)\.(\d+)') { throw "cannot read a version from '$env:VERSION'" }
+          $major, $minor, $patch = [int]$Matches[1], [int]$Matches[2], [int]$Matches[3]
+          # -64 alone is amd64, -arm -64 is arm64
+          $archFlags = @('-64')
+          if ($env:ARCH -eq 'arm64') { $archFlags = @('-arm', '-64') }
+          & $tool @archFlags `
+            "-ver-major=$major" "-ver-minor=$minor" "-ver-patch=$patch" '-ver-build=0' `
+            "-product-ver-major=$major" "-product-ver-minor=$minor" "-product-ver-patch=$patch" '-product-ver-build=0' `
+            "-file-version=$major.$minor.$patch.0" "-product-version=$env:VERSION" `
+            "-o=resource_windows_$env:ARCH.syso" versioninfo.json
+          if (-not (Test-Path "resource_windows_$env:ARCH.syso")) { throw 'goversioninfo wrote no .syso file' }
+          Get-ChildItem *.syso | Format-Table Name, Length
+
       - name: Build benchbar.exe
         working-directory: windows/shim
         env:
@@ -186,7 +241,9 @@ jobs:
           $PSNativeCommandUseErrorActionPreference = $true
           . "$env:RUNNER_TEMP/pe.ps1"
           $out = Join-Path $env:GITHUB_WORKSPACE 'out/benchbar.exe'
-          $ldflags = "-s -w -X main.version=$env:VERSION"
+          # SHIM_VERSION is the release version for a release build and a dev
+          # version (0.0.0-dev-SHA) for any other build
+          $ldflags = "-s -w -X main.version=$env:SHIM_VERSION"
           go build -trimpath -ldflags $ldflags -o $out .
           Assert-PeMachine $out $env:MACHINE
 
@@ -215,7 +272,10 @@ jobs:
           # Directory.Build.props pins win-x64 and Platform x64; arm64 overrides all three
           $extra = @()
           if ($env:ARCH -eq 'arm64') { $extra = @('-p:Platform=arm64', '-p:PlatformTarget=arm64') }
-          dotnet publish windows/tray/BenchBarTray/BenchBarTray.csproj -c Release -r $env:RID --self-contained false "-p:Version=$env:VERSION" @extra -o out/tray
+          # Company, Product and FileDescription are what Explorer and the
+          # security dialogs show for BenchBarTray.exe
+          $meta = @('-p:Company=Akash Mishra', '-p:Product=BenchBar', '-p:AssemblyTitle=BenchBar tray app', '-p:Description=BenchBar tray app for Windows', '-p:Copyright=Copyright (c) 2026 Akash Mishra. MIT License.')
+          dotnet publish windows/tray/BenchBarTray/BenchBarTray.csproj -c Release -r $env:RID --self-contained false "-p:Version=$env:VERSION" @meta @extra -o out/tray
           $exe = 'out/tray/BenchBarTray.exe'
           if (-not (Test-Path $exe)) { throw "dotnet publish did not produce $exe" }
           # fail loudly rather than ship amd64 bits in the arm64 zip
@@ -256,6 +316,9 @@ jobs:
           artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG || 'windows-exe' }}
           github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
           wait-for-completion: true
+          # a person may have to approve the request; GitHub ends a hosted job
+          # after 6 hours whatever this says
+          wait-for-completion-timeout-in-seconds: 86400
           output-artifact-directory: signed
 
       - name: Use signed files that verify
@@ -289,6 +352,7 @@ jobs:
       - name: Write README.txt and SHA256SUMS, build the zip
         env:
           HAS_TRAY: ${{ steps.tray.outputs.present }}
+          RELEASE_BUILD: ${{ needs.version.outputs.release }}
         run: |
           $PSNativeCommandUseErrorActionPreference = $true
           $pkg = 'pkg'
@@ -326,7 +390,7 @@ jobs:
           } else {
             $signing = "Signed:     $signedText`nNot signed: $($unsignedList -join ', ')`n(Third party libraries are signed by their authors or not at all; this`nproject signs only its own programs.)"
             if ($ownUnsigned.Count -gt 0) {
-              $signing += "`nThis project's own programs not signed yet: $($ownUnsigned -join ', '). Windows SmartScreen may warn when you first run them (More info, then Run anyway). With Smart App Control on, an unsigned program can be blocked."
+              $signing += "`nThis project's own programs not signed yet: $($ownUnsigned -join ', '). With Smart App Control on, Windows blocks unsigned programs (the installer says so before it writes anything). Otherwise Windows may show 'Open File - Security Warning: The publisher could not be verified' the first time you start one: choose Run."
             }
           }
 
@@ -345,6 +409,17 @@ jobs:
           This download has no tray app.
           "@
           }
+          # the one liner of a release pins the installer and the version and
+          # leaves nothing set in the user's session; a build that is not a
+          # release has no tag to point at, so it points at main
+          $rawUrl = 'https://raw.githubusercontent.com/askysh/benchbar'
+          if ($env:RELEASE_BUILD -eq 'true') {
+            $oneLead = 'From a published release, the one liner does the same (this line pins the installer and the version of this release and sets nothing in your session):'
+            $oneLine = "& ([scriptblock]::Create((irm $rawUrl/v$env:VERSION/install.ps1))) -Version $env:VERSION"
+          } else {
+            $oneLead = 'This is a test build, not a published release. The one liner installs the newest published release, not this build:'
+            $oneLine = "irm $rawUrl/main/install.ps1 | iex"
+          }
           $readme = @"
           BenchBar for Windows $env:VERSION ($env:ARCH)
 
@@ -354,11 +429,13 @@ jobs:
           the whole zip, open PowerShell in the unpacked folder and run
             powershell -ExecutionPolicy Bypass -File .\install.ps1
           It checks every file against SHA256SUMS, installs to
-          %LOCALAPPDATA%\Programs\BenchBar, puts benchbar.exe on your PATH and
-          ends with benchbar.exe doctor. Running it again updates in place.
+          %LOCALAPPDATA%\Programs\BenchBar, removes the "downloaded from the
+          internet" mark from the installed files, puts benchbar.exe on your
+          PATH and ends with benchbar.exe doctor. Running it again updates in
+          place. To remove BenchBar again, run the same command with -Uninstall.
 
-          From a published release, the one liner does the same:
-            irm https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1 | iex
+          $oneLead
+            $oneLine
 
           Code signing, as checked with Get-AuthenticodeSignature when this zip was built:
           $signing
@@ -396,10 +473,11 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+  # Runs on every trigger, a tag push included: the release job waits for it,
+  # so a zip the installer cannot install is never attached to a release.
   installer-test:
     name: Installer test
     needs: [version, package]
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     timeout-minutes: 20
     defaults:
@@ -407,6 +485,7 @@ jobs:
         shell: pwsh
     env:
       VERSION: ${{ needs.version.outputs.version }}
+      SHIM_VERSION: ${{ needs.version.outputs.shim_version }}
     steps:
       - uses: actions/checkout@v7
 
@@ -432,7 +511,7 @@ jobs:
           if (-not (Test-Path $exe)) { throw "$exe is missing" }
           $said = (& $exe --shim-version) -join "`n"
           Write-Host $said
-          if ($said -notmatch [regex]::Escape($env:VERSION)) { throw "--shim-version did not print $env:VERSION" }
+          if ($said -notmatch [regex]::Escape($env:SHIM_VERSION)) { throw "--shim-version did not print $env:SHIM_VERSION" }
 
       - name: Install again with Windows PowerShell 5.1 (an update in place)
         shell: powershell
@@ -444,7 +523,7 @@ jobs:
           $exe = Join-Path $fresh 'Programs\BenchBar\benchbar.exe'
           $said = (& $exe --shim-version) -join "`n"
           Write-Host $said
-          if ($said -notmatch [regex]::Escape($env:VERSION)) { throw "--shim-version did not print $env:VERSION" }
+          if ($said -notmatch [regex]::Escape($env:SHIM_VERSION)) { throw "--shim-version did not print $env:SHIM_VERSION" }
 
       - name: Piped into iex leaves the session alone
         run: |
@@ -510,15 +589,92 @@ jobs:
           if (Test-Path (Join-Path $fresh 'Programs/BenchBar/benchbar.exe')) { throw 'a refused folder install left files behind' }
           $global:LASTEXITCODE = 0
 
+      - name: Smart App Control on (faked) stops before anything is written
+        run: |
+          $fresh = Join-Path $env:RUNNER_TEMP 'localappdata-sac'
+          New-Item -ItemType Directory -Force $fresh | Out-Null
+          $env:LOCALAPPDATA = $fresh
+          # BENCHBAR_TEST_SAC_STATE stands in for the registry value, for this test only
+          $env:BENCHBAR_TEST_SAC_STATE = '1'
+          $said = (pwsh -NoProfile -File install.ps1 -Source (Resolve-Path source).Path -NoTray -Yes 2>&1 | Out-String)
+          $code = $LASTEXITCODE
+          Write-Host $said
+          if ($code -eq 0) { throw 'install.ps1 went on with Smart App Control on' }
+          if ($said -notmatch 'Smart App Control is on') { throw 'the message about Smart App Control is missing' }
+          if ($said -notmatch 'windows/#smart-app-control') { throw 'the link to the docs is missing' }
+          if (Test-Path (Join-Path $fresh 'Programs')) { throw 'a stopped install wrote files' }
+          # evaluation mode warns and goes on
+          $env:BENCHBAR_TEST_SAC_STATE = '2'
+          $said = (pwsh -NoProfile -File install.ps1 -Source (Resolve-Path source).Path -NoTray -Yes 2>&1 | Out-String)
+          if ($LASTEXITCODE -ne 0) { throw "install.ps1 exited with $LASTEXITCODE in evaluation mode" }
+          if ($said -notmatch 'evaluation mode') { throw 'no warning for evaluation mode' }
+          if (-not (Test-Path (Join-Path $fresh 'Programs/BenchBar/benchbar.exe'))) { throw 'the evaluation mode install did not install' }
+          Remove-Item Env:BENCHBAR_TEST_SAC_STATE
+          $global:LASTEXITCODE = 0
+
+      # A stub tray app (a copy of benchbar.exe, which exits at once) stands in
+      # for BenchBarTray.exe, so no WPF window opens on the runner. The folder
+      # is marked as downloaded from the internet, like an unpacked browser zip.
+      - name: Fresh install with the tray from a marked folder (Windows PowerShell 5.1), then uninstall
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $zip = (Get-ChildItem source -Filter *.zip).FullName
+          $unpacked = Join-Path $env:RUNNER_TEMP 'marked'
+          Expand-Archive $zip -DestinationPath $unpacked -Force
+          Copy-Item (Join-Path $unpacked 'benchbar.exe') (Join-Path $unpacked 'BenchBarTray.exe') -Force
+          $stubHash = (Get-FileHash (Join-Path $unpacked 'BenchBarTray.exe') -Algorithm SHA256).Hash.ToLowerInvariant()
+          $sumsFile = Join-Path $unpacked 'SHA256SUMS'
+          $lines = @(Get-Content $sumsFile | Where-Object { $_ -notmatch '\s\*?BenchBarTray\.exe\s*$' })
+          $lines += "$stubHash  BenchBarTray.exe"
+          [IO.File]::WriteAllText($sumsFile, (($lines -join "`n") + "`n"), (New-Object Text.UTF8Encoding $false))
+          foreach ($f in Get-ChildItem $unpacked -Recurse -File) {
+            Set-Content -LiteralPath $f.FullName -Stream Zone.Identifier -Value "[ZoneTransfer]`r`nZoneId=3"
+          }
+          $marked = @(Get-ChildItem $unpacked -Recurse -File | Where-Object { Get-Item -LiteralPath $_.FullName -Stream Zone.Identifier -ErrorAction SilentlyContinue })
+          if ($marked.Count -eq 0) { throw 'the test could not mark the files' }
+
+          $fresh = Join-Path $env:RUNNER_TEMP 'localappdata-tray'
+          New-Item -ItemType Directory -Force $fresh | Out-Null
+          $env:LOCALAPPDATA = $fresh
+          $env:BENCHBAR_TEST_DOTNET_DESKTOP = '1'   # this test has no .NET 10 Desktop Runtime to look for
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $unpacked 'install.ps1') -Yes
+          if ($LASTEXITCODE -ne 0) { throw "install.ps1 exited with $LASTEXITCODE" }
+
+          $installDir = Join-Path $fresh 'Programs\BenchBar'
+          if (-not (Test-Path (Join-Path $installDir 'BenchBarTray.exe'))) { throw 'the tray app was not installed' }
+          $menu = Join-Path ([Environment]::GetFolderPath('Programs')) 'BenchBar.lnk'
+          $startup = Join-Path ([Environment]::GetFolderPath('Startup')) 'BenchBar Tray.lnk'
+          if (-not (Test-Path $menu)) { throw "no Start menu shortcut at $menu" }
+          if (-not (Test-Path $startup)) { throw "no Startup shortcut at $startup" }
+          $target = (New-Object -ComObject WScript.Shell).CreateShortcut($menu).TargetPath
+          if ($target -ine (Join-Path $installDir 'BenchBarTray.exe')) { throw "the Start menu shortcut points to $target" }
+          $still = @(Get-ChildItem $installDir -Recurse -File | Where-Object { Get-Item -LiteralPath $_.FullName -Stream Zone.Identifier -ErrorAction SilentlyContinue })
+          if ($still.Count -gt 0) { throw "files still carry the internet mark: $($still.Name -join ', ')" }
+
+          # uninstall: the files, the shortcuts, the PATH entry and the folder go
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $unpacked 'install.ps1') -Uninstall -Yes
+          if ($LASTEXITCODE -ne 0) { throw "install.ps1 -Uninstall exited with $LASTEXITCODE" }
+          if (Test-Path $menu) { throw 'the Start menu shortcut is still there' }
+          if (Test-Path $startup) { throw 'the Startup shortcut is still there' }
+          if (Test-Path $installDir) { throw 'the install folder is still there' }
+          $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+          if ($userPath -and (($userPath -split ';') | Where-Object { $_.TrimEnd('\') -ieq $installDir })) { throw 'the install folder is still on the user PATH' }
+          Remove-Item Env:BENCHBAR_TEST_DOTNET_DESKTOP
+
   release:
     name: Attach to the draft release
-    needs: [version, package]
+    needs: [version, package, installer-test]
     if: needs.version.outputs.release == 'true'
     # ubuntu: waiting for the Mac draft costs almost nothing there
     runs-on: ubuntu-latest
     timeout-minutes: 150
+    # id-token and attestations are for the build provenance step, and only
+    # this job has them
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     concurrency:
       group: release-windows-attach-${{ needs.version.outputs.version }}
       cancel-in-progress: false
@@ -531,12 +687,26 @@ jobs:
       GH_REPO: ${{ github.repository }}
       EVENT: ${{ github.event_name }}
       WAIT_FOR_DRAFT: ${{ github.event_name == 'push' || inputs.wait_for_draft == true }}
+      # repository variable: 'true' makes this job fail when a program of ours is unsigned
+      SIGNING_REQUIRED: ${{ vars.SIGNING_REQUIRED }}
     steps:
       - uses: actions/download-artifact@v8
         with:
           pattern: windows-*
           merge-multiple: true
           path: dist
+
+      - name: Fail when a program of ours is unsigned (only if SIGNING_REQUIRED is true)
+        if: env.SIGNING_REQUIRED == 'true'
+        run: |
+          $records = @(Get-ChildItem dist -Filter 'signing-*.json' | Sort-Object Name | ForEach-Object { Get-Content $_.FullName -Raw | ConvertFrom-Json })
+          if ($records.Count -eq 0) { throw 'SIGNING_REQUIRED is true, but there is no signing record to check.' }
+          $unsigned = @($records | ForEach-Object { $arch = $_.arch; @($_.files) | Where-Object { $_.firstParty -and -not $_.signed } | ForEach-Object { "$($_.name) ($arch)" } })
+          if ($unsigned.Count -gt 0) {
+            Write-Host "::error title=Unsigned programs::SIGNING_REQUIRED is true and these are not signed: $($unsigned -join ', '). Nothing was attached. Fix signing, then run this workflow again."
+            exit 1
+          }
+          Write-Host 'Every program of ours is signed.'
 
       - name: Write the combined checksums file
         run: |
@@ -553,6 +723,13 @@ jobs:
           }
           [IO.File]::WriteAllText((Join-Path $PWD $sums), (($lines -join "`n") + "`n"), (New-Object Text.UTF8Encoding $false))
           Get-Content $sums
+
+      # `gh attestation verify benchbar-windows-VERSION-ARCH.zip -R askysh/benchbar`
+      # checks a download against this. pinned by commit (v4.2.2)
+      - name: Attest the build provenance of both zips
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
+        with:
+          subject-path: dist/benchbar-windows-*.zip
 
       - name: Find or create the draft release, upload, update the notes
         run: |
@@ -581,7 +758,7 @@ jobs:
             if ($ownUnsigned.Count -eq 0) {
               $signLines += "This project's own programs are signed ($($ownAll -join ', '))."
             } else {
-              $signLines += "Not code signed yet: $($ownUnsigned -join ', '). SmartScreen may warn, and Smart App Control can block unsigned programs."
+              $signLines += "Not code signed yet: $($ownUnsigned -join ', '). Smart App Control blocks unsigned programs (the installer stops before it writes anything and says what to do). Without Smart App Control, Windows may ask you to confirm the first start of a program; the one line installer removes that question."
             }
             if ($otherUnsigned.Count -gt 0) {
               $signLines += "Third party files without a signature (not signed by this project): $($otherUnsigned -join ', ')."
@@ -594,13 +771,15 @@ jobs:
             'Install for the current user (needs WSL 2 with Ubuntu 24.04):'
             ''
             '```powershell'
-            'irm https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1 | iex'
+            "& ([scriptblock]::Create((irm https://raw.githubusercontent.com/askysh/benchbar/v$env:VERSION/install.ps1))) -Version $env:VERSION"
             '```'
             ''
             'Downloads (each zip also holds README.txt and SHA256SUMS):'
             ''
             $zipLines
             "- benchbar-windows-$env:VERSION-SHA256SUMS.txt"
+            ''
+            "Check a download: ``gh attestation verify benchbar-windows-$env:VERSION-amd64.zip -R askysh/benchbar`` (build provenance), or compare its SHA256 with the sums file."
             ''
             ($signLines -join "`n`n")
             '<!-- /windows -->'

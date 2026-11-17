@@ -74,8 +74,11 @@ fl_port_block_conflicts() {
     who="$(fl_port_listener_summary "$p")"
     # strict here: a listener on a block the bench does not use yet is
     # foreign unless it is known to run inside this bench
-    if [[ -n "$who" ]] && ! fl_pid_is_bench_own_strict "${who%% *}"; then
-      printf '%s has a listener: pid %s\n' "$p" "$who"
+    if [[ -n "$who" ]]; then
+      fl_pid_is_bench_own_strict "${who%% *}" || printf '%s has a listener: pid %s\n' "$p" "$who"
+    elif who="$(fl_port_outside_holder "$p")" && [[ -n "$who" ]]; then
+      # WSL: nothing listens in this distro, but a Windows program holds the port
+      printf '%s has a listener: %s (find it in Windows: netstat -ano | findstr :%s)\n' "$p" "$who" "$p"
     fi
   done
 }

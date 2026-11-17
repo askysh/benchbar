@@ -1,0 +1,10 @@
+# Line endings that must not change on a checkout, on any OS. These are the
+# files that run on Linux, macOS and in WSL (a CRLF breaks a shell script) and
+# install.ps1, which is served raw from GitHub with LF endings. Existing files
+# already have these endings, so nothing is renormalized.
+*.sh text eol=lf
+*.tmpl text eol=lf
+*.ps1 text eol=lf
+/benchbar text eol=lf
+/install.sh text eol=lf
+/templates/** text eol=lf

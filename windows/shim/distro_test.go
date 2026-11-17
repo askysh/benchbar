@@ -17,7 +17,7 @@ func TestInstallerPinnedToRelease(t *testing.T) {
 	if got, want := installerURL(), "https://raw.githubusercontent.com/askysh/benchbar/v0.8.1/install.sh"; got != want {
 		t.Errorf("url %q, want %q", got, want)
 	}
-	want := `wsl.exe -d Ubuntu-24.04 -- bash -c "curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/v0.8.1/install.sh | bash -s -- --version v0.8.1"`
+	want := `wsl.exe -d Ubuntu-24.04 -- bash -c "set -o pipefail; curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/v0.8.1/install.sh | bash -s -- --version v0.8.1"`
 	if got := installerCommand("Ubuntu-24.04"); got != want {
 		t.Errorf("command\n got %q\nwant %q", got, want)
 	}

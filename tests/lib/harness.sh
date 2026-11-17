@@ -88,9 +88,10 @@ export FL_CONFIG_DIR="$TMP_DIR/config"
 mkdir -p "$FL_CONFIG_DIR"; cp "$ROOT"/config/*.tsv "$FL_CONFIG_DIR/"
 printf 'stub download\n' >"$MOCK_STATE/download_payload"
 STUB_SHA="$(shasum -a 256 "$MOCK_STATE/download_payload" | awk '{print $1}')"
-# (the macOS row and the Linux .deb row alike)
+# (the macOS row and the Linux .deb rows alike)
 sed -e "s/81a66b77b508fede8dbcaa67127203748376568b3673a17f6611b6d51e9894f8/${STUB_SHA}/" \
-    -e "s/4f723b2691ad8638a9df960e0421d346d7315083e3583a334f33362280ddba15/${STUB_SHA}/" "$ROOT/config/wkhtmltopdf.tsv" >"$FL_CONFIG_DIR/wkhtmltopdf.tsv"
+    -e "s/4f723b2691ad8638a9df960e0421d346d7315083e3583a334f33362280ddba15/${STUB_SHA}/" \
+    -e "s/2095f20256661ebf0983b9311168596c9d012666e21a94bc24f304db6ac69ec5/${STUB_SHA}/" "$ROOT/config/wkhtmltopdf.tsv" >"$FL_CONFIG_DIR/wkhtmltopdf.tsv"
 cp "$ROOT/tests/mocks/honcho" "$MOCK_PIPX_HOME/venvs/frappe-bench/bin/honcho"
 chmod +x "$MOCK_PIPX_HOME/venvs/frappe-bench/bin/honcho"
 export PATH="$ROOT/tests/mocks/bin:$PATH"
