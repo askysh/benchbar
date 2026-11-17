@@ -91,6 +91,27 @@ public class FlyoutViewTests
     });
 
     [Fact]
+    public void AProblemWhileSetupIsUnfinishedOffersSetUpBenchBarFirst() => Sta.Run(() =>
+    {
+        var setUp = 0;
+        string? copied = null;
+        var view = new FlyoutView(new FlyoutActions { SetUpBench = () => setUp++, CopyText = t => copied = t });
+        const string problem = "WSL has no distro yet.";
+        view.SetSnapshot(new TraySnapshot([], Problem: problem), "needs attention");
+        Assert.Equal(["Copy"], view.CardButtons);
+
+        view.SetSetupPending(true); // the person closed the wizard: the way back is on the card
+        Assert.Equal(FlyoutMode.Problem, view.Mode);
+        Assert.Equal([FlyoutView.SetUpLabel, "Copy"], view.CardButtons);
+        Click(view.CardButton!);
+        Assert.Equal(1, setUp);
+        Assert.Null(copied);
+
+        view.SetSetupPending(false);
+        Assert.Equal(["Copy"], view.CardButtons);
+    });
+
+    [Fact]
     public void NoBenchesSaysSo() => Sta.Run(() =>
     {
         var view = new FlyoutView(new FlyoutActions());

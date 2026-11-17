@@ -1,8 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
-using System.Text.Json;
-using System.Text.RegularExpressions;
 using BenchBar.Tray.Core;
 
 namespace BenchBar.Tray;
@@ -127,55 +125,9 @@ internal static class VsCode
     }
 }
 
-/// <summary>
-/// A release as the update check needs it: the tag, the page, and the names of its files. The latest release is shared with the Mac app, so
-/// it can exist before a Windows zip does.
-/// </summary>
-internal sealed record ReleaseInfo(string Tag, string Url, IReadOnlyList<string> Assets)
-{
-    public string Version => Tag.TrimStart('v');
-
-    /// <summary>The zip of this release for a CPU (<c>amd64</c> or <c>arm64</c>): <c>benchbar-windows-VERSION-ARCH.zip</c>.</summary>
-    public string ZipName(string arch) => $"benchbar-windows-{Version}-{arch}.zip";
-
-    public bool HasWindowsZip(string arch) => Assets.Contains(ZipName(arch), StringComparer.OrdinalIgnoreCase);
-}
-
-internal enum UpdateState { Current, Available, NoWindowsBuild }
-
-/// <summary>The Check for Updates logic, apart from the HTTP call.</summary>
+/// <summary>The running tray's version. Updates themselves are checked and run through benchbar.exe (<see cref="SelfUpdateClient"/>).</summary>
 internal static class UpdateCheck
 {
-    public const string LatestUrl = "https://api.github.com/repos/askysh/benchbar/releases/latest";
-
-    /// <summary>
-    /// The one line installer from the documentation (docs/windows.md). The script installs the latest release; a copy pinned to the tag
-    /// (<c>.../v0.9.0/install.ps1</c>) would still install the latest, because the script has no version of its own, so the main form is used.
-    /// </summary>
-    public const string InstallCommand = "irm https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1 | iex";
-
-    /// <summary>What to tell the person to do with <see cref="InstallCommand"/>.</summary>
-    public const string InstallExplanation = "Run this line in PowerShell. It closes BenchBar and starts it again.";
-
-    /// <summary>The CPU of this PC in the words of the zip names: <c>arm64</c> or <c>amd64</c>. The machine's, not the process's.</summary>
-    public static string Arch() =>
-        System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.Arm64 ? "arm64" : "amd64";
-
-    /// <summary>Where the latest release stands for this PC: nothing newer, newer with a Windows zip, or newer with no Windows zip yet.</summary>
-    public static UpdateState State(ReleaseInfo? latest, string current, string arch) =>
-        latest is null || !IsNewer(latest.Tag, current) ? UpdateState.Current
-        : latest.HasWindowsZip(arch) ? UpdateState.Available
-        : UpdateState.NoWindowsBuild;
-
-    /// <summary>
-    /// The release to offer: newer than <paramref name="current"/> and carrying the Windows zip for <paramref name="arch"/>. A release
-    /// with no Windows zip (the Mac side shipped first) is not offered.
-    /// </summary>
-    public static ReleaseInfo? Offer(ReleaseInfo? latest, string current, string arch) =>
-        latest is { } release && IsNewer(release.Tag, current) && release.HasWindowsZip(arch) ? release : null;
-
-    private static readonly Regex Number = new(@"^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?(.*)$", RegexOptions.CultureInvariant);
-
     public static string CurrentVersion()
     {
         var info = (System.Reflection.Assembly.GetEntryAssembly() ?? typeof(UpdateCheck).Assembly)
@@ -184,65 +136,8 @@ internal static class UpdateCheck
         return string.IsNullOrWhiteSpace(info) ? "0.0.0-dev" : info;
     }
 
-    /// <summary>True when <paramref name="tag"/> is a later version than <paramref name="current"/>. A pre release (-dev) is before its release.</summary>
-    public static bool IsNewer(string tag, string current)
-    {
-        var (a, aPre) = Parse(tag);
-        var (b, bPre) = Parse(current);
-        if (a is null) return false;
-        if (b is null) return true;
-        for (var i = 0; i < 3; i++)
-        {
-            if (a[i] != b[i]) return a[i] > b[i];
-        }
-        return bPre && !aPre;
-    }
-
-    private static (int[]? Parts, bool Pre) Parse(string text)
-    {
-        var m = Number.Match(text.Trim());
-        if (!m.Success) return (null, false);
-        int P(int g) => m.Groups[g].Success ? int.Parse(m.Groups[g].Value, CultureInfo.InvariantCulture) : 0;
-        var rest = m.Groups[4].Value;
-        return ([P(1), P(2), P(3)], rest.StartsWith('-'));
-    }
-
-    /// <summary>The tag and the release page from the GitHub API's JSON.</summary>
-    public static (string Tag, string Url)? ParseRelease(string json)
-    {
-        using var doc = JsonDocument.Parse(json);
-        if (doc.RootElement.ValueKind != JsonValueKind.Object) return null;
-        var tag = doc.RootElement.TryGetProperty("tag_name", out var t) && t.ValueKind == JsonValueKind.String ? t.GetString() : null;
-        var url = doc.RootElement.TryGetProperty("html_url", out var u) && u.ValueKind == JsonValueKind.String ? u.GetString() : null;
-        return string.IsNullOrEmpty(tag) || string.IsNullOrEmpty(url) ? null : (tag, url);
-    }
-
-    /// <summary>The tag, the page and the asset names from the GitHub API's JSON.</summary>
-    public static ReleaseInfo? ParseReleaseInfo(string json)
-    {
-        if (ParseRelease(json) is not { } basic) return null;
-        using var doc = JsonDocument.Parse(json);
-        var names = new List<string>();
-        if (doc.RootElement.TryGetProperty("assets", out var assets) && assets.ValueKind == JsonValueKind.Array)
-        {
-            foreach (var asset in assets.EnumerateArray())
-            {
-                if (asset.ValueKind == JsonValueKind.Object && asset.TryGetProperty("name", out var n) && n.ValueKind == JsonValueKind.String && n.GetString() is { Length: > 0 } name)
-                    names.Add(name);
-            }
-        }
-        return new ReleaseInfo(basic.Tag, basic.Url, names);
-    }
-
-    /// <summary>One GET with a User-Agent. The client lives only for this call.</summary>
-    public static async Task<ReleaseInfo?> FetchLatestAsync(CancellationToken ct)
-    {
-        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("BenchBarTray/" + CurrentVersion().Split('+')[0]);
-        client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
-        var json = await client.GetStringAsync(LatestUrl, ct).ConfigureAwait(false);
-        return ParseReleaseInfo(json);
-    }
+    /// <summary>The version without build metadata: <c>0.8.4</c> of <c>0.8.4+abc</c>.</summary>
+    public static string ShortVersion() => CurrentVersion().Split('+')[0];
 }
 
 /// <summary>Text forms of what the windows show, so tests and Copy buttons share them.</summary>

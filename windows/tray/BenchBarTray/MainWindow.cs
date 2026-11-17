@@ -29,10 +29,10 @@ internal sealed class MainActions
     public Func<bool> BetaBannerVisible { get; set; } = () => false;
 
     public Action DismissBetaBanner { get; set; } = () => { };
-}
 
-/// <summary>A newer release the banner offers: its page, and the one line installer to run in PowerShell.</summary>
-internal sealed record UpdateOffer(string Version, string Url, string Command = UpdateCheck.InstallCommand);
+    /// <summary>Update Now: starts the update window (benchbar.exe self-update --yes).</summary>
+    public Action UpdateNow { get; set; } = () => { };
+}
 
 /// <summary>
 /// The BenchBar window: a sidebar of benches (a state dot, each site as a child row) with Settings and About at the foot, and
@@ -514,7 +514,9 @@ internal sealed class MainWindow : Window
             }
             DockPanel.SetDock(buttons, Dock.Right);
             line.Children.Add(buttons);
-            line.Children.Add(new TextBlock { Text = notice.Text, FontSize = 12, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0), Foreground = Ui.CriticalBrush });
+            var words = new TextBlock { Text = notice.Text, FontSize = 12, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
+            if (notice.Critical) words.Foreground = Ui.CriticalBrush;
+            line.Children.Add(words);
             var card = new Border { Child = line, Tag = notice.Text, Background = Ui.Card, CornerRadius = new CornerRadius(6), Padding = new Thickness(12, 4, 8, 4), Margin = new Thickness(0, 0, 0, 4) };
             Ui.Name(card, "Notice: " + notice.Text);
             _notices.Children.Add(card);
@@ -524,9 +526,18 @@ internal sealed class MainWindow : Window
 
     // --- update banner ---
 
-    public void SetUpdate(UpdateOffer? offer, Action dismiss)
+    /// <summary>True while the banner says the update window runs.</summary>
+    public bool UpdateRunning { get; private set; }
+
+    /// <summary>
+    /// The banner for a newer release. With Update Now (the one line installer's install): Update Now, Other Ways (Copy Update Line, Release
+    /// Page) and Not Now. Without it (a development build or a loose copy): Copy Update Line, Release Page and Not Now, as before. While the
+    /// update window runs, Update Now is off and says so.
+    /// </summary>
+    public void SetUpdate(UpdateOffer? offer, Action dismiss, bool running = false)
     {
         _offer = offer;
+        UpdateRunning = offer is not null && running;
         if (offer is null)
         {
             _banner.Visibility = Visibility.Collapsed;
@@ -535,32 +546,73 @@ internal sealed class MainWindow : Window
         var line = new DockPanel();
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         Button? copy = null;
-        copy = Ui.Button("Copy Update Line", () =>
+        void CopyLine()
         {
             _actions.CopyText(offer.Command);
             if (copy is not null) copy.Content = "Copied";
-        }, "Copy the update line for PowerShell", primary: true);
-        buttons.Children.Add(copy);
-        buttons.Children.Add(Ui.Button("Release Page", () => _actions.OpenUrl(offer.Url), "Open the release page"));
-        var later = Ui.Button("Not Now", () =>
+        }
+        string headline, detail;
+        if (offer.CanUpdateNow)
         {
-            dismiss();
-            SetUpdate(null, dismiss);
-        }, "Dismiss the update notice");
-        later.Margin = new Thickness(0);
-        buttons.Children.Add(later);
+            var update = Ui.Button(running ? "Updating..." : "Update Now", _actions.UpdateNow, "Update BenchBar now", primary: true);
+            update.IsEnabled = !running;
+            buttons.Children.Add(update);
+            buttons.Children.Add(OtherWays(offer, () => _actions.CopyText(offer.Command)));
+            headline = running ? $"Updating to BenchBar {offer.Version}." : $"BenchBar {offer.Version} is out.";
+            detail = running ? UpdateLinks.UpdatingExplanation : UpdateLinks.UpdateNowExplanation;
+        }
+        else
+        {
+            copy = Ui.Button("Copy Update Line", CopyLine, "Copy the update line for PowerShell", primary: true);
+            buttons.Children.Add(copy);
+            buttons.Children.Add(Ui.Button("Release Page", () => _actions.OpenUrl(offer.Url), "Open the release page"));
+            headline = $"BenchBar {offer.Version} is out.";
+            detail = UpdateLinks.InstallExplanation;
+        }
+        if (!running)
+        {
+            var later = Ui.Button("Not Now", () =>
+            {
+                dismiss();
+                SetUpdate(null, dismiss);
+            }, "Dismiss the update notice");
+            later.Margin = new Thickness(0);
+            buttons.Children.Add(later);
+        }
         DockPanel.SetDock(buttons, Dock.Right);
         line.Children.Add(buttons);
         var words = new StackPanel { Margin = new Thickness(0, 0, 12, 0) };
-        words.Children.Add(new TextBlock { Text = $"BenchBar {offer.Version} is out.", FontWeight = FontWeights.SemiBold });
-        words.Children.Add(new TextBlock { Text = UpdateCheck.InstallExplanation, FontSize = 12, Opacity = 0.8, TextWrapping = TextWrapping.Wrap });
+        words.Children.Add(new TextBlock { Text = headline, FontWeight = FontWeights.SemiBold });
+        words.Children.Add(new TextBlock { Text = detail, FontSize = 12, Opacity = 0.8, TextWrapping = TextWrapping.Wrap });
         line.Children.Add(words);
         _banner.Background = Ui.Card;
         _banner.CornerRadius = new CornerRadius(8);
         _banner.Padding = new Thickness(12, 4, 8, 4);
         _banner.Child = line;
-        Ui.Name(_banner, $"BenchBar {offer.Version} is out");
+        Ui.Name(_banner, headline.TrimEnd('.'));
         _banner.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>The second ways to update, for people who run the line themselves: a small menu under the button.</summary>
+    private Button OtherWays(UpdateOffer offer, Action copy)
+    {
+        var menu = new ContextMenu();
+        var copyItem = new MenuItem { Header = "Copy Update Line" };
+        copyItem.Click += (_, _) => copy();
+        var page = new MenuItem { Header = "Release Page" };
+        page.Click += (_, _) => _actions.OpenUrl(offer.Url);
+        menu.Items.Add(copyItem);
+        menu.Items.Add(page);
+        var button = Ui.Button("Other Ways", () => { }, "Other ways to update");
+        button.ContextMenu = menu;
+        button.Click += (_, _) =>
+        {
+            menu.PlacementTarget = button;
+            menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+            menu.IsOpen = true;
+        };
+        button.ToolTip = "Copy the update line for PowerShell, or open the release page";
+        return button;
     }
 
     private sealed class RelayCommand(Action run) : ICommand

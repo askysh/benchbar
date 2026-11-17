@@ -22,6 +22,12 @@
        a Startup shortcut and starts the tray app
     7. runs "benchbar.exe doctor" and prints what it says, then what to do next
 
+  A run over an earlier install is an update. It keeps your choices: it adds
+  no Startup shortcut, starts the tray app again only when it was running
+  (so the setup does not open again), and ends with the version it updated
+  from and to. "benchbar.exe self-update" runs this installer for you, then
+  updates the BenchBar CLI in WSL to the same release.
+
   By hand, without a GitHub release (a test build you were sent):
     - unpack the zip, then in that folder:
         powershell -ExecutionPolicy Bypass -File .\install.ps1
@@ -125,6 +131,7 @@ function Install-BenchBar {
   $docsBlocked = 'https://benchbar.akashmishra.com/windows/#if-windows-blocks-it'
   $falsePositiveUrl = 'https://www.microsoft.com/wdsi/filesubmission'
   $net = @{ RateLimited = $false }   # set by Get-JsonFromGitHub when GitHub's API says "too many requests"
+  $replace = @{ State = 'none' }     # set by Install-FilesAllOrNothing: replacing, done, unchanged or mixed
   $startFailedMarker = 'BENCHBAR_START_FAILED: '
 
   # ------------------------------------------------------------ output
@@ -142,6 +149,16 @@ function Install-BenchBar {
     if ($null -eq $Value) { return $false }
     $v = $Value.Trim().ToLowerInvariant()
     return ($v -ne '' -and $v -ne '0' -and $v -ne 'false' -and $v -ne 'no')
+  }
+
+  # Compare-Version A B: -1, 0 or 1, comparing each part as a number (so
+  # 0.8.10 is newer than 0.8.2). $null when either is not a version.
+  function Compare-Version([string]$A, [string]$B) {
+    $va = $null
+    $vb = $null
+    if (-not [version]::TryParse(([string]$A).Trim().TrimStart('v'), [ref]$va)) { return $null }
+    if (-not [version]::TryParse(([string]$B).Trim().TrimStart('v'), [ref]$vb)) { return $null }
+    return $va.CompareTo($vb)
   }
 
   # Confirm-Choice QUESTION DEFAULT [NOTERMINALDEFAULT]: -Yes takes the default;
@@ -297,24 +314,163 @@ function Install-BenchBar {
     Say-Ok "$($listed.Count) files match SHA256SUMS"
   }
 
-  # Copy-IntoPlace SRC DST: a running exe cannot be overwritten but can be
-  # renamed, so a locked file moves aside to NAME.old (removed on the next run)
-  function Copy-IntoPlace([string]$From, [string]$To) {
-    $dir = Split-Path -Parent $To
-    if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
-    try {
-      Copy-Item -LiteralPath $From -Destination $To -Force
-    } catch {
-      if (Test-AntivirusMessage $_.Exception.Message) {
-        throw ("$startFailedMarker" + (Get-AntivirusText "Windows would not let $(Split-Path -Leaf $To) be copied."))
-      }
-      if (-not (Test-Path -LiteralPath $To)) { throw }
-      $old = "$To.old"
-      Remove-Item -LiteralPath $old -Force -ErrorAction SilentlyContinue
-      Move-Item -LiteralPath $To -Destination $old -Force
-      Copy-Item -LiteralPath $From -Destination $To -Force
-      Say-Info "$(Split-Path -Leaf $To) was in use: the old copy is now $(Split-Path -Leaf $old)"
+  # Get-BackupName PATH: a free name for the old copy of PATH, NAME.old or
+  # NAME.N.old (an old exe that still runs keeps its NAME.old until it ends)
+  function Get-BackupName([string]$Path) {
+    $candidate = "$Path.old"
+    $n = 1
+    while (Test-Path -LiteralPath $candidate) {
+      $candidate = "$Path.$n.old"
+      $n++
     }
+    return $candidate
+  }
+
+  # Install-FilesAllOrNothing: replaces the installed files with the staged
+  # ones, all or nothing. Phase 1 renames every file that is replaced or
+  # removed (Gone) to a backup name in the install folder; a running exe can
+  # be renamed, a file held without delete sharing cannot. Phase 2 copies the
+  # new files in, checks them and writes the manifest. A failure in either
+  # phase removes the new files and renames every backup back, before the
+  # error is thrown. Only after both phases are the backups deleted. Sets
+  # $replace.State: 'unchanged' after a rollback that worked, 'mixed' when the
+  # rollback failed too, 'done' when the new files are in place.
+  function Install-FilesAllOrNothing([string]$FromRoot, [string[]]$Rels, [string[]]$Gone, [string]$ManifestPath, [string]$ManifestText) {
+    $replace.State = 'replacing'
+    $moved = New-Object System.Collections.ArrayList     # @{ Rel; Path; Backup }
+    $written = New-Object System.Collections.ArrayList   # @{ Rel; Path }
+    $madeDirs = New-Object System.Collections.ArrayList
+    $failure = ''
+    $advice = ''
+    $hadManifest = Test-Path -LiteralPath $ManifestPath -PathType Leaf
+    $oldManifest = ''
+    if ($hadManifest) { $oldManifest = [IO.File]::ReadAllText($ManifestPath) }
+    $holders = 'A file is usually held by the tray app, a terminal that is running benchbar.exe, or an antivirus scan.'
+    $what = 'update'
+    if (-not $isUpdate) { $what = 'install' }
+
+    # phase 1: move aside every file that is replaced or removed
+    foreach ($rel in @(@($Rels) + @($Gone) | Where-Object { $_ })) {
+      $path = Join-Path $installDir $rel
+      if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { continue }
+      $backup = Get-BackupName $path
+      try {
+        Move-Item -LiteralPath $path -Destination $backup -ErrorAction Stop
+      } catch {
+        $failure = "$rel could not be moved aside, most likely because a program holds it open ($((Get-UserMessage $_).TrimEnd('.')))"
+        $advice = "$holders`n  fix: close what holds $rel (or wait for the scan to end), then run the installer again"
+        break
+      }
+      $null = $moved.Add(@{ Rel = $rel; Path = $path; Backup = $backup })
+    }
+
+    # phase 2: copy the new files in, check them, write the manifest
+    if (-not $failure) {
+      foreach ($rel in $Rels) {
+        $to = Join-Path $installDir $rel
+        try {
+          $dir = Split-Path -Parent $to
+          $missing = @()
+          $d = $dir
+          while ($d -and -not (Test-Path -LiteralPath $d)) { $missing += $d; $d = Split-Path -Parent $d }
+          if ($missing.Count -gt 0) {
+            New-Item -ItemType Directory -Force -Path $dir | Out-Null
+            foreach ($m in $missing) { $null = $madeDirs.Add($m) }
+          }
+          $null = $written.Add(@{ Rel = $rel; Path = $to })
+          Copy-Item -LiteralPath (Join-Path $FromRoot $rel) -Destination $to -Force -ErrorAction Stop
+        } catch {
+          $detail = (Get-UserMessage $_).TrimEnd('.')
+          $failure = "$rel could not be copied into $installDir ($detail)"
+          if (Test-AntivirusMessage $detail) {
+            $advice = Get-AntivirusText "Windows would not let $rel be copied."
+          } else {
+            $advice = 'fix: run the installer again; if it fails the same way, look in Windows Security > Protection history for a BenchBar item'
+          }
+          break
+        }
+      }
+    }
+    if (-not $failure) {
+      try {
+        Assert-CopiedFiles $Rels
+      } catch {
+        $failure = 'a new file failed the check after the copy'
+        $advice = Get-UserMessage $_
+      }
+    }
+    if (-not $failure -and $ManifestText) {
+      try {
+        [IO.File]::WriteAllText($ManifestPath, $ManifestText, (New-Object Text.UTF8Encoding $false))
+      } catch {
+        $failure = "the list of installed files could not be written ($((Get-UserMessage $_).TrimEnd('.')))"
+        $advice = 'fix: run the installer again'
+      }
+    }
+
+    if (-not $failure) {
+      # both phases worked: the backups go; a running old exe keeps its until the next run
+      foreach ($m in $moved) { Remove-Item -LiteralPath $m.Backup -Force -ErrorAction SilentlyContinue }
+      $replace.State = 'done'
+      return
+    }
+
+    # rollback: the new files out first, so the old names are free again
+    $stuck = New-Object System.Collections.ArrayList
+    $backupOf = @{}
+    foreach ($m in $moved) { $backupOf[$m.Path.ToLowerInvariant()] = $m }
+    foreach ($w in $written) {
+      if (-not (Test-Path -LiteralPath $w.Path -PathType Leaf)) { continue }
+      try {
+        Remove-Item -LiteralPath $w.Path -Force -ErrorAction Stop
+      } catch {
+        if (-not $backupOf.ContainsKey($w.Path.ToLowerInvariant())) {
+          $null = $stuck.Add("$($w.Rel): the new version is in place (a file new in this version that could not be removed)")
+        }
+      }
+    }
+    $restored = 0
+    for ($i = $moved.Count - 1; $i -ge 0; $i--) {
+      $m = $moved[$i]
+      $backupLeaf = Split-Path -Leaf $m.Backup
+      if (Test-Path -LiteralPath $m.Path) {
+        $null = $stuck.Add("$($m.Rel): the new version is in place (it could not be removed); the old version is $backupLeaf")
+        continue
+      }
+      try {
+        Move-Item -LiteralPath $m.Backup -Destination $m.Path -ErrorAction Stop
+        $restored++
+      } catch {
+        $null = $stuck.Add("$($m.Rel): missing; the old version is $backupLeaf ($(Get-UserMessage $_))")
+      }
+    }
+    try {
+      if ($hadManifest) {
+        if ([IO.File]::ReadAllText($ManifestPath) -ne $oldManifest) { [IO.File]::WriteAllText($ManifestPath, $oldManifest, (New-Object Text.UTF8Encoding $false)) }
+      } elseif (Test-Path -LiteralPath $ManifestPath) {
+        Remove-Item -LiteralPath $ManifestPath -Force -ErrorAction Stop
+      }
+    } catch {
+      $null = $stuck.Add("$(Split-Path -Leaf $ManifestPath): could not be put back ($(Get-UserMessage $_))")
+    }
+    foreach ($dir in @($madeDirs | Sort-Object { $_.Length } -Descending)) {
+      if (-not (Get-ChildItem -LiteralPath $dir -Force -ErrorAction SilentlyContinue)) { Remove-Item -LiteralPath $dir -Force -ErrorAction SilentlyContinue }
+    }
+
+    if ($stuck.Count -eq 0) {
+      $replace.State = 'unchanged'
+      Say-Info "put $restored files back"
+      throw ("Could not $what BenchBar: $failure.`n" +
+        "  Nothing was changed: every file in $installDir is back as it was before this run.`n" +
+        "  $advice")
+    }
+    $replace.State = 'mixed'
+    $lines = @($stuck | ForEach-Object { "    - $_" }) -join "`n"
+    throw ("Could not $what BenchBar: $failure.`n" +
+      "  Putting the old files back failed too, so $installDir now holds parts of two versions:`n" +
+      "$lines`n" +
+      "  Every other file is the version from before this run.`n" +
+      "  fix: close what holds these files (the tray app, a terminal that is running benchbar.exe, an antivirus scan), then run the one line installer: irm https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1 | iex")
   }
 
   # After the copy: an antivirus may have removed a file, or may hold it so
@@ -378,6 +534,9 @@ function Install-BenchBar {
 
   # Ask the tray to close, wait a few seconds, then end it.
   function Stop-BenchBarTray($Running) {
+    # a tray from 0.8.3 on quits on this event, as if Quit was clicked in its
+    # menu, and removes its running marker; an older tray has no such event
+    try { $quit = [System.Threading.EventWaitHandle]::OpenExisting('Local\BenchBarTray.Quit'); $null = $quit.Set(); $quit.Dispose() } catch { }
     foreach ($p in $Running) { try { $null = $p.CloseMainWindow() } catch { } }
     foreach ($p in $Running) { try { $null = $p.WaitForExit(5000) } catch { } }
     foreach ($p in $Running) {
@@ -628,6 +787,23 @@ function Install-BenchBar {
     Say-Ok 'Smart App Control is off'
   }
 
+  # An update: an earlier install is in the folder. Its README.txt names its
+  # version ("BenchBar for Windows X (arch)"). An update keeps the choices made
+  # at the first install: it adds no Startup shortcut and starts a tray app
+  # only when one was running, so the setup does not open again.
+  $isUpdate = Test-Path -LiteralPath $installExe
+  $previousVersion = ''
+  if ($isUpdate) {
+    try {
+      $oldReadme = Join-Path $installDir 'README.txt'
+      if (Test-Path -LiteralPath $oldReadme) {
+        $m = [regex]::Match([string](Get-Content -LiteralPath $oldReadme -TotalCount 1), 'BenchBar for Windows (\S+) \(')
+        if ($m.Success) { $previousVersion = $m.Groups[1].Value }
+      }
+    } catch { }
+  }
+  $fromSelfUpdate = Test-Flag $env:BENCHBAR_FROM_SELF_UPDATE
+
   $work = Join-Path ([IO.Path]::GetTempPath()) ('benchbar-install-' + [guid]::NewGuid().ToString('N'))
   $restartTray = $false
   $trayStarted = $false
@@ -829,11 +1005,28 @@ function Install-BenchBar {
     $previous = @()
     if (Test-Path -LiteralPath $manifestPath) { $previous = @(Get-Content -LiteralPath $manifestPath | Where-Object { $_ }) }
 
-    foreach ($rel in $files) {
-      Copy-IntoPlace (Join-Path $stagingRoot $rel) (Join-Path $installDir $rel)
+    # what the new zip no longer has goes too: only files an earlier run of
+    # this installer wrote (its manifest), only inside the install folder
+    $gone = @()
+    if (-not $NoTray) {
+      $installRoot = [IO.Path]::GetFullPath($installDir).TrimEnd('\') + '\'
+      foreach ($rel in $previous) {
+        if ($files -contains $rel) { continue }
+        $target = [IO.Path]::GetFullPath((Join-Path $installDir $rel))
+        if (-not $target.StartsWith($installRoot, [StringComparison]::OrdinalIgnoreCase)) { continue }
+        if (Test-Path -LiteralPath $target -PathType Leaf) { $gone += $rel }
+      }
     }
-    Assert-CopiedFiles $files
+    $manifestText = ''
+    if (-not $NoTray -or -not (Test-Path -LiteralPath $manifestPath)) {
+      $manifestText = (($files | Sort-Object) -join "`r`n") + "`r`n"
+    }
+
+    # all or nothing: a failure puts every old file back and stops here
+    Install-FilesAllOrNothing $stagingRoot $files $gone $manifestPath $manifestText
+    $installed = $true
     Say-Ok "$($files.Count) files copied"
+    if ($gone.Count -gt 0) { Say-Ok "$($gone.Count) files from the old version removed" }
 
     # A zip saved by a browser, or unpacked by Explorer, marks its files as
     # downloaded from the internet, and the copy keeps the mark. Windows then
@@ -845,24 +1038,6 @@ function Install-BenchBar {
     } catch {
       Say-Warn "Could not remove the internet mark from the installed files: $($_.Exception.Message). Windows may ask you to confirm the first start of each program."
     }
-
-    # remove what the new zip no longer has: only files an earlier run of this
-    # installer wrote (its manifest), only inside the install folder
-    if (-not $NoTray) {
-      $installRoot = [IO.Path]::GetFullPath($installDir).TrimEnd('\') + '\'
-      $removed = 0
-      foreach ($rel in $previous) {
-        if ($files -contains $rel) { continue }
-        $target = [IO.Path]::GetFullPath((Join-Path $installDir $rel))
-        if (-not $target.StartsWith($installRoot, [StringComparison]::OrdinalIgnoreCase)) { continue }
-        if (Test-Path -LiteralPath $target -PathType Leaf) { Remove-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue; $removed++ }
-      }
-      if ($removed -gt 0) { Say-Ok "$removed files from the old version removed" }
-    }
-    if (-not $NoTray -or -not (Test-Path -LiteralPath $manifestPath)) {
-      [IO.File]::WriteAllText($manifestPath, (($files | Sort-Object) -join "`r`n") + "`r`n", (New-Object Text.UTF8Encoding $false))
-    }
-    $installed = $true
 
     # ---------------------------------------------------------- 5. PATH
     Say-Step 'Putting the install folder on your user PATH'
@@ -923,6 +1098,8 @@ function Install-BenchBar {
         if (Test-Path -LiteralPath $startupLink) {
           $null = New-TrayShortcut $startupLink 'BenchBar tray app'
           $recorded += $startupLink
+        } elseif ($isUpdate) {
+          Say-Info 'no Startup shortcut (an update keeps your choice; BenchBar Settings can turn on Open at logon)'
         } elseif (Confirm-Choice 'Start the tray app when you sign in?' $true) {
           $null = New-TrayShortcut $startupLink 'BenchBar tray app'
           $recorded += $startupLink
@@ -950,55 +1127,111 @@ function Install-BenchBar {
         Say-Warn 'The tray app was not started, because the .NET 10 Desktop Runtime is missing. Install it, then start BenchBar from the Start menu.'
       } else {
         $startNow = $restartTray
-        if (-not $startNow) {
+        if (-not $startNow -and $isUpdate) {
+          Say-Step 'Tray app'
+          Say-Info 'not started: it was not running before the update'
+        } elseif (-not $startNow) {
           Say-Step 'Tray app'
           $startNow = Confirm-Choice 'Start the tray app now? It opens the setup.' $true
         }
         if ($startNow) {
           try {
-            Start-Process -FilePath $trayExe -WorkingDirectory $installDir
+            # the tray opens its setup by itself for --installed (a first install, also over
+            # an old config) and never for --restarted (it was running before this run)
+            $trayArg = '--installed'
+            if ($restartTray -or $isUpdate) { $trayArg = '--restarted' }
+            Start-Process -FilePath $trayExe -WorkingDirectory $installDir -ArgumentList $trayArg
             $trayStarted = $true
             Say-Ok 'tray app started'
           } catch {
             Say-Warn "The tray app could not be started: $(Get-UserMessage $_). Start BenchBar from the Start menu. If Windows blocks it, see $docsBlocked"
           }
-        } else {
+        } elseif (-not $isUpdate) {
           Say-Info 'not started'
         }
       }
     }
 
     Write-Host ''
-    Write-Host "BenchBar $releaseVersion is installed in $installDir." -ForegroundColor Green
-    if ($trayExists) { Write-Host "Tray app: $trayExe" }
-
-    Write-Host ''
-    Write-Host 'Next:' -ForegroundColor Cyan
-    if ($trayExists -and $runtimeOk) {
-      if ($trayStarted) {
-        Write-Host '  - The BenchBar tray app opens the setup. Follow it to set up WSL, Ubuntu and your first bench.'
+    if ($isUpdate) {
+      $fromText = $previousVersion
+      if (-not $fromText) { $fromText = 'an earlier version' }
+      $order = $null
+      if ($previousVersion) { $order = Compare-Version $previousVersion $releaseVersion }
+      if ($order -eq 0 -or ($previousVersion -and $previousVersion -eq $releaseVersion)) {
+        Write-Host "BenchBar $releaseVersion is installed again in $installDir. The update is done." -ForegroundColor Green
+      } elseif ($order -eq 1) {
+        Write-Host "BenchBar is changed from $fromText to $releaseVersion in $installDir. The update is done." -ForegroundColor Green
       } else {
-        Write-Host '  - Start BenchBar from the Start menu. It opens the setup.'
+        Write-Host "BenchBar is updated from $fromText to $releaseVersion in $installDir. The update is done." -ForegroundColor Green
       }
-      Write-Host '  - Later, find it in the Start menu, or as the icon near the clock. Windows may hide that icon under the ^ arrow.'
+      Write-Host ''
+      Write-Host 'Next:' -ForegroundColor Cyan
+      if ($releaseVersion -match '^\d+\.\d+\.\d+$') { Write-Host "  - What changed: $repoWeb/releases/tag/v$releaseVersion" }
+      if ($trayExists) {
+        if ($trayStarted) {
+          # $order is -1 for a higher version, 1 for a lower one, 0 or $null otherwise
+          if ($order -eq -1) {
+            Write-Host '  - The tray app was restarted with the new version.'
+          } elseif ($order -eq 1) {
+            Write-Host "  - The tray app was restarted. It now runs $releaseVersion."
+          } else {
+            Write-Host '  - The tray app was restarted.'
+          }
+        } elseif ($runtimeOk) {
+          Write-Host '  - Open BenchBar from the Start menu when you want it. It is the icon near the clock.'
+        }
+      }
+      # From self-update the shim prints what happened to the CLI in WSL right
+      # after this, so nothing is said about it here.
+      if (-not $fromSelfUpdate) {
+        Write-Host '  - When the BenchBar CLI is installed in WSL, run benchbar.exe self-update in a new terminal to bring it to the same release.'
+      }
+      Write-Host '  - Your settings, benches and sites are as they were.'
+    } else {
+      Write-Host "BenchBar $releaseVersion is installed in $installDir." -ForegroundColor Green
+      if ($trayExists) { Write-Host "Tray app: $trayExe" }
+      Write-Host ''
+      Write-Host 'Next:' -ForegroundColor Cyan
+      if ($trayExists -and $runtimeOk) {
+        Write-Host '  - BenchBar is one program. Open it from the Start menu: it is named "BenchBar". It lives as the icon near the clock (Windows may hide that icon under the ^ arrow).'
+        if ($trayStarted) {
+          Write-Host '  - It is open now, with the setup. Follow it to set up WSL, Ubuntu and your first bench.'
+        } else {
+          Write-Host '  - The first time, it opens the setup. Follow it to set up WSL, Ubuntu and your first bench.'
+        }
+      }
+      Write-Host '  - In a terminal (open a new one first), benchbar.exe setup check shows what is ready and what is not.'
     }
-    Write-Host '  - In a terminal (open a new one first), benchbar.exe setup check shows what is ready and what is not.'
     Write-Host "  - Help: https://benchbar.akashmishra.com/windows/"
   } catch {
     $message = $_.Exception.Message
     # a tray app this run closed comes back, old or new, whatever failed
     if ($restartTray -and -not $trayStarted -and (Test-Path -LiteralPath $trayExe)) {
-      try { Start-Process -FilePath $trayExe -WorkingDirectory $installDir; Say-Info 'started the tray app again' } catch { }
+      try { Start-Process -FilePath $trayExe -WorkingDirectory $installDir -ArgumentList '--restarted'; Say-Info 'started the tray app again' } catch { }
     }
-    if ($message.StartsWith($startFailedMarker)) {
-      Write-Host "  [FAIL] $($message.Substring($startFailedMarker.Length))" -ForegroundColor Red
-      return $false
-    }
-    if ($installed) {
+    $startFailed = $message.StartsWith($startFailedMarker)
+    if ($startFailed) { $message = $message.Substring($startFailedMarker.Length) }
+    if ($installed -and -not $startFailed) {
       Write-Host "  [WARN] The files are installed, but a later step failed: $message" -ForegroundColor Yellow
       return $true
     }
     Write-Host "  [FAIL] $message" -ForegroundColor Red
+    # self-update names a file here (BENCHBAR_INSTALL_RESULT) and reads it
+    # after a failure: first line what happened to the files (unchanged,
+    # mixed, changed or unknown), second line the error
+    if ($env:BENCHBAR_INSTALL_RESULT) {
+      $filesState = 'unknown'
+      if ($replace.State -eq 'none' -or $replace.State -eq 'unchanged') {
+        $filesState = 'unchanged'
+      } elseif ($replace.State -eq 'mixed') {
+        $filesState = 'mixed'
+      } elseif ($replace.State -eq 'done') {
+        $filesState = 'changed'
+      }
+      $first = ([string]($message -split "`n")[0]).Trim()
+      try { [IO.File]::WriteAllText($env:BENCHBAR_INSTALL_RESULT, "$filesState`r`n$first`r`n", (New-Object Text.UTF8Encoding $false)) } catch { }
+    }
     return $false
   } finally {
     Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue

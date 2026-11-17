@@ -662,6 +662,101 @@ jobs:
           if ($userPath -and (($userPath -split ';') | Where-Object { $_.TrimEnd('\') -ieq $installDir })) { throw 'the install folder is still on the user PATH' }
           Remove-Item Env:BENCHBAR_TEST_DOTNET_DESKTOP
 
+      # Version A is the zip with a stub tray (as above); version B is A with
+      # every file changed by an appended line break, under another version number.
+      # One installed file held open without delete sharing must make the
+      # update to B fail and leave every file of A as it was. Each host runs
+      # the installer once: Windows PowerShell 5.1, then PowerShell 7.
+      - name: A held file rolls the whole update back (both PowerShell hosts)
+        run: |
+          $zip = (Get-ChildItem source -Filter *.zip).FullName
+          $folderA = Join-Path $env:RUNNER_TEMP 'held-a'
+          Expand-Archive $zip -DestinationPath $folderA -Force
+          Copy-Item (Join-Path $folderA 'benchbar.exe') (Join-Path $folderA 'BenchBarTray.exe') -Force
+          function Write-Sums([string]$Folder) {
+            $root = (Resolve-Path $Folder).Path
+            $lines = Get-ChildItem $root -Recurse -File | Where-Object { $_.Name -ne 'SHA256SUMS' } | Sort-Object FullName | ForEach-Object {
+              '{0}  {1}' -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $_.FullName.Substring($root.Length + 1).Replace('\', '/')
+            }
+            [IO.File]::WriteAllText((Join-Path $root 'SHA256SUMS'), (($lines -join "`n") + "`n"), (New-Object Text.UTF8Encoding $false))
+          }
+          Write-Sums $folderA
+          $folderB = Join-Path $env:RUNNER_TEMP 'held-b'
+          Copy-Item $folderA $folderB -Recurse -Force
+          $readmeB = Join-Path $folderB 'README.txt'
+          $readmeText = [IO.File]::ReadAllText($readmeB) -replace '^BenchBar for Windows \S+ ', 'BenchBar for Windows 99.0.0 '
+          [IO.File]::WriteAllText($readmeB, $readmeText, (New-Object Text.UTF8Encoding $false))
+          foreach ($f in Get-ChildItem $folderB -Recurse -File) {
+            if ($f.Name -eq 'SHA256SUMS') { continue }
+            # a trailing line break: a PE file still runs, JSON and scripts stay valid
+            [IO.File]::AppendAllText($f.FullName, "`r`n")
+          }
+          Write-Sums $folderB
+
+          function Get-Snapshot([string]$Dir) {
+            $snap = @{}
+            foreach ($f in Get-ChildItem $Dir -Recurse -File -Force) {
+              $snap[$f.FullName.Substring($Dir.Length + 1)] = (Get-FileHash $f.FullName -Algorithm SHA256).Hash
+            }
+            return $snap
+          }
+
+          $env:BENCHBAR_TEST_DOTNET_DESKTOP = '1'
+          foreach ($hostExe in @('powershell.exe', 'pwsh')) {
+            Write-Host "--- installer under $hostExe"
+            $fresh = Join-Path $env:RUNNER_TEMP "localappdata-held-$hostExe"
+            New-Item -ItemType Directory -Force $fresh | Out-Null
+            $env:LOCALAPPDATA = $fresh
+            $installDir = Join-Path $fresh 'Programs\BenchBar'
+
+            & $hostExe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $folderA 'install.ps1') -Yes
+            if ($LASTEXITCODE -ne 0) { throw "installing version A exited with $LASTEXITCODE" }
+            $before = Get-Snapshot $installDir
+
+            # the file the tester held; README.txt when this build has no tray app
+            $heldRel = 'BenchBar.Tray.Core.dll'
+            if (-not (Test-Path (Join-Path $installDir $heldRel))) { $heldRel = 'README.txt' }
+            $handle = [System.IO.File]::Open((Join-Path $installDir $heldRel), 'Open', 'Read', 'Read')
+            try {
+              $said = (& $hostExe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $folderB 'install.ps1') -Yes 2>&1 | Out-String)
+              $code = $LASTEXITCODE
+            } finally {
+              $handle.Dispose()
+            }
+            Write-Host $said
+            if ($code -eq 0) { throw "the update to B succeeded with $heldRel held open" }
+            if ($said -notmatch [regex]::Escape($heldRel)) { throw "the failure does not name $heldRel" }
+            if ($said -notmatch 'Nothing was changed') { throw 'the failure does not say that nothing was changed' }
+            if ($said -match 'restarted with the new version') { throw 'a failed update claims the new version' }
+            $after = Get-Snapshot $installDir
+            $extra = @($after.Keys | Where-Object { -not $before.ContainsKey($_) })
+            $lost = @($before.Keys | Where-Object { -not $after.ContainsKey($_) })
+            $differ = @($before.Keys | Where-Object { $after.ContainsKey($_) -and $after[$_] -ne $before[$_] })
+            if ($extra.Count -gt 0) { throw "left behind by the failed update: $($extra -join ', ')" }
+            if ($lost.Count -gt 0) { throw "missing after the failed update: $($lost -join ', ')" }
+            if ($differ.Count -gt 0) { throw "not version A any more: $($differ -join ', ')" }
+            Write-Host "all $($before.Count) files are still version A"
+
+            # with the handle closed the same update works, and every file is B
+            & $hostExe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $folderB 'install.ps1') -Yes
+            if ($LASTEXITCODE -ne 0) { throw "the update to B exited with $LASTEXITCODE after the handle was closed" }
+            $rootB = (Resolve-Path $folderB).Path
+            foreach ($f in Get-ChildItem $rootB -Recurse -File) {
+              $rel = $f.FullName.Substring($rootB.Length + 1)
+              if ($rel -eq 'SHA256SUMS') { continue }
+              $installed = Join-Path $installDir $rel
+              if (-not (Test-Path $installed)) { throw "$rel is missing after the update to B" }
+              if ((Get-FileHash $installed -Algorithm SHA256).Hash -ne (Get-FileHash $f.FullName -Algorithm SHA256).Hash) { throw "$rel is not version B" }
+            }
+            $old = @(Get-ChildItem $installDir -Recurse -File -Filter '*.old')
+            if ($old.Count -gt 0) { throw "backups left after a successful update: $($old.Name -join ', ')" }
+
+            & $hostExe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $folderB 'install.ps1') -Uninstall -Yes
+            if ($LASTEXITCODE -ne 0) { throw "install.ps1 -Uninstall exited with $LASTEXITCODE" }
+          }
+          Remove-Item Env:BENCHBAR_TEST_DOTNET_DESKTOP
+          $global:LASTEXITCODE = 0
+
   release:
     name: Attach to the draft release
     needs: [version, package, installer-test]

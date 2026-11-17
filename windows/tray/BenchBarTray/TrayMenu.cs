@@ -24,7 +24,22 @@ internal sealed class TrayMenuModel
     public Func<ResolvedTheme> Theme { get; set; } = () => new ResolvedTheme(false, false);
     public Action OpenMain { get; set; } = () => { };
     public Action OpenSettings { get; set; } = () => { };
+
+    /// <summary>Setup is unfinished: "Set Up BenchBar..." is shown. Read when the menu opens.</summary>
+    public Func<bool> SetupPending { get; set; } = () => false;
+
+    /// <summary>Opens the setup wizard, or brings an open one forward.</summary>
+    public Action SetUp { get; set; } = () => { };
+
     public Action CheckForUpdates { get; set; } = () => { };
+
+    /// <summary>The release Update Now can install; null hides "Update to X". Read when the menu opens.</summary>
+    public Func<UpdateOffer?> Update { get; set; } = () => null;
+
+    /// <summary>True while the update window runs: the item says so and is off.</summary>
+    public Func<bool> UpdateRunning { get; set; } = () => false;
+
+    public Action UpdateNow { get; set; } = () => { };
     public Action Help { get; set; } = () => { };
     public Action ReportBug { get; set; } = () => { };
     public Action Quit { get; set; } = () => { };
@@ -37,12 +52,15 @@ internal sealed class TrayMenuModel
 internal sealed class TrayMenu
 {
     public const string LogonHeader = "Open BenchBar at logon";
+    public const string SetUpHeader = "Set Up BenchBar...";
 
     private readonly TrayMenuModel _model;
     private readonly MenuItem _logon = new() { Header = LogonHeader, IsCheckable = true };
     private readonly MenuItem _appearance = new() { Header = "Appearance" };
     private readonly MenuItem _runner = new() { Header = "Runner" };
     private readonly MenuItem _notifications = new() { Header = "Notifications", IsCheckable = true };
+    private readonly MenuItem _update = new() { Visibility = Visibility.Collapsed };
+    private readonly MenuItem _setUp = new() { Header = SetUpHeader, Visibility = Visibility.Collapsed };
     private readonly Image _preview = new() { Width = 48, Height = 48, Stretch = Stretch.Uniform, SnapsToDevicePixels = true };
     private readonly TextBlock _previewName = new() { HorizontalAlignment = HorizontalAlignment.Center, Opacity = 0.7, Margin = new Thickness(0, 4, 0, 0) };
     private readonly DispatcherTimer _animation = new(DispatcherPriority.Background);
@@ -83,7 +101,9 @@ internal sealed class TrayMenu
         open.Click += (_, _) => model.OpenMain();
         var settings = new MenuItem { Header = "Settings..." };
         settings.Click += (_, _) => model.OpenSettings();
+        _setUp.Click += (_, _) => model.SetUp();
         Menu.Items.Add(open);
+        Menu.Items.Add(_setUp);
         Menu.Items.Add(settings);
         Menu.Items.Add(new Separator());
         Menu.Items.Add(_logon);
@@ -91,6 +111,8 @@ internal sealed class TrayMenu
         Menu.Items.Add(_runner);
         Menu.Items.Add(_notifications);
         Menu.Items.Add(new Separator());
+        _update.Click += (_, _) => model.UpdateNow();
+        Menu.Items.Add(_update);
         foreach (var (header, click) in items)
         {
             var item = new MenuItem { Header = header };
@@ -111,17 +133,34 @@ internal sealed class TrayMenu
     /// <summary>Whether the preview timer is running: only while the Runner submenu is open.</summary>
     public bool IsAnimating => _animation.IsEnabled;
 
-    /// <summary>The header of every item in order; a separator is "-".</summary>
+    /// <summary>The header of every item shown, in order; a separator is "-". A hidden item (Update to X with no update) is left out.</summary>
     public IReadOnlyList<string> Headers =>
-        Menu.Items.Cast<object>().Select(i => i is MenuItem m ? m.Header?.ToString() ?? "" : "-").ToList();
+        Menu.Items.Cast<object>().Where(i => i is not MenuItem { Visibility: Visibility.Collapsed })
+            .Select(i => i is MenuItem m ? m.Header?.ToString() ?? "" : "-").ToList();
 
     /// <summary>Reads the checkmarks from the model (the logon one touches the Startup folder, so only now).</summary>
     public void RefreshChecks()
     {
         _logon.IsChecked = _model.LogonEnabled();
         _notifications.IsChecked = _model.Notifications();
+        _setUp.Visibility = _model.SetupPending() ? Visibility.Visible : Visibility.Collapsed;
+        RefreshUpdate();
         var mode = _model.Appearance();
         foreach (var item in _appearance.Items.OfType<MenuItem>()) item.IsChecked = (AppearanceMode)item.Tag == mode;
+    }
+
+    /// <summary>"Update to X" when Update Now can install a newer release; "Updating to X..." and off while the update window runs.</summary>
+    public void RefreshUpdate()
+    {
+        if (_model.Update() is not { CanUpdateNow: true } offer)
+        {
+            _update.Visibility = Visibility.Collapsed;
+            return;
+        }
+        var running = _model.UpdateRunning();
+        _update.Header = running ? $"Updating to {offer.Version}..." : $"Update to {offer.Version}";
+        _update.IsEnabled = !running;
+        _update.Visibility = Visibility.Visible;
     }
 
     // --- the Runner submenu ---

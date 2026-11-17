@@ -113,7 +113,7 @@ public sealed class TrayConfig
     /// <summary>Look for a newer release when the BenchBar window opens (once in a few hours). Off: only the menu item asks.</summary>
     public bool CheckForUpdates { get; set; } = true;
 
-    /// <summary>The person closed the first run wizard with Cancel: it no longer opens by itself at launch.</summary>
+    /// <summary>The person closed the first run wizard before finishing it (Cancel, the window's X, Alt+F4, Quit): it no longer opens by itself at launch.</summary>
     public bool WizardDismissed { get; set; }
 
     /// <summary>The wizard flow to resume after Windows restarts: <c>new</c> (set up a new bench) or <c>existing</c> (use a bench that is already there).</summary>
@@ -121,6 +121,15 @@ public sealed class TrayConfig
 
     /// <summary>The person closed the beta banner at the top of the BenchBar window; it stays away from then on.</summary>
     public bool BetaBannerDismissed { get; set; }
+
+    /// <summary>The tray version that last started (X.Y.Z), so the first start of a newer one can say "BenchBar was updated". Null before 0.8.4.</summary>
+    public string? LastVersion { get; set; }
+
+    /// <summary>The one time "BenchBar is still running near the clock" hint was shown when a window closed.</summary>
+    public bool RunningHintShown { get; set; }
+
+    /// <summary>True when the file had a <c>tray</c> object when it was read: this tray (or an older one) ran and saved before.</summary>
+    public bool HadTraySection { get; private set; }
 
     /// <summary>True when the file existed but was not valid JSON; Save then keeps it as <c>config.json.bad</c> first.</summary>
     public bool WasCorrupt => _corrupt;
@@ -154,6 +163,9 @@ public sealed class TrayConfig
 
         if (root["tray"] is JsonObject tray)
         {
+            config.HadTraySection = true;
+            config.LastVersion = ReadString(tray, "last_version") is { Length: > 0 } last ? last : null;
+            if (tray["running_hint_shown"] is JsonValue rh && rh.TryGetValue<bool>(out var hintShown)) config.RunningHintShown = hintShown;
             config.Appearance = ParseAppearance(ReadString(tray, "appearance"));
             config.RunnerId = ReadString(tray, "runner") is { Length: > 0 } id ? id : DefaultRunnerId;
             if (tray["notifications"] is JsonValue v && v.TryGetValue<bool>(out var on)) config.Notifications = on;
@@ -228,6 +240,8 @@ public sealed class TrayConfig
         tray["wizard_dismissed"] = WizardDismissed;
         tray["beta_banner_dismissed"] = BetaBannerDismissed;
         tray["resume_flow"] = ResumeFlow == "existing" ? "existing" : "new";
+        if (LastVersion is { Length: > 0 } lastVersion) tray["last_version"] = lastVersion;
+        tray["running_hint_shown"] = RunningHintShown;
         root["tray"] = tray;
 
         var temp = Path + "." + Environment.ProcessId + ".tmp";

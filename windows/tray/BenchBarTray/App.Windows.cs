@@ -14,8 +14,6 @@ public partial class App
         try { _resumeFlag.Disable(); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { _log.Write("resume-flag", ex); }
     });
 
-    private static readonly TimeSpan UpdateCheckEvery = TimeSpan.FromHours(6);
-
     // --- the BenchBar window ---
 
     private void OpenMain()
@@ -32,6 +30,7 @@ public partial class App
                 _main = null;
                 Viewer(false);
                 ReleaseMemory();
+                MaybeShowRunningHint(); // once ever: where BenchBar went when its window closed
             };
             _main = main;
             Viewer(true);
@@ -39,8 +38,7 @@ public partial class App
             main.SetSnapshot(_controller.Snapshot, TrayController.UpText(_controller.Snapshot, _controller.Benches.Select(b => b.State).ToList()));
             if (_wizard is not null) main.ShowWizard(new WizardView(_wizard, BuildWizardActions()));
             main.Show();
-            if (_config.CheckForUpdates) CheckBannerAsync().Forget();
-            else if (_updateOffer is not null) main.SetUpdate(_updateOffer, DismissUpdate);
+            CheckBannerAsync().Forget(); // the switch and the six hour cadence are checked inside; an offer already known is shown either way
         }
         else
         {
@@ -115,7 +113,9 @@ public partial class App
                 return;
             }
         }
-        // closing the window ends the wizard; a pending restart keeps its one shot flag so the wizard comes back after it
+        // closing the window ends the wizard and counts as "not now" unless it was done; a pending restart keeps its one shot flag so the
+        // wizard comes back after it (the resume start opens it whatever the dismissal says)
+        if (_wizard is { } wizard) RecordWizardClose(wizard, reason: null);
         _wizard?.Dispose();
         _wizard = null;
     }
@@ -164,45 +164,13 @@ public partial class App
             _config.BetaBannerDismissed = true;
             SaveConfig();
         },
+        UpdateNow = UpdateNow,
     };
-
-    // --- the update banner ---
-
-    /// <summary>Asks GitHub when the window opens, at most once in a few hours; a failure shows nothing (the menu item reports errors).</summary>
-    private async Task CheckBannerAsync()
-    {
-        if (Environment.TickCount64 - _updateCheckedAt < UpdateCheckEvery.TotalMilliseconds && _updateCheckedAt != 0)
-        {
-            _main?.SetUpdate(_updateOffer, DismissUpdate);
-            return;
-        }
-        _updateCheckedAt = Math.Max(1, Environment.TickCount64);
-        try
-        {
-            var latest = await UpdateCheck.FetchLatestAsync(CancellationToken.None);
-            var current = UpdateCheck.CurrentVersion();
-            // only a release that has the Windows zip for this CPU: the latest release is shared with the Mac app
-            _updateOffer = UpdateCheck.Offer(latest, current, UpdateCheck.Arch()) is { } release && release.Tag != _updateDismissed
-                ? new UpdateOffer(release.Version, release.Url)
-                : null;
-        }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
-        {
-            _updateCheckedAt = 0; // try again the next time the window opens
-            return;
-        }
-        _main?.SetUpdate(_updateOffer, DismissUpdate);
-    }
-
-    private void DismissUpdate()
-    {
-        _updateDismissed = "v" + _updateOffer?.Version;
-        _updateOffer = null;
-    }
 
     // --- the first run wizard ---
 
-    private void OpenWizard(bool resume, bool existing = false, bool newBench = false)
+    /// <param name="keepFlow">Set Up BenchBar from the tray menu: an open wizard is brought forward as it is, on the page it shows.</param>
+    private void OpenWizard(bool resume, bool existing = false, bool newBench = false, bool keepFlow = false)
     {
         ResumeGate.Opening(resume);
         if (_quitting || _controller is null || _setup is null) return;
@@ -212,7 +180,7 @@ public partial class App
         {
             // the wizard is already open: bring it forward, and switch to the flow that was asked for unless something runs
             if (_main.Mode != MainMode.Wizard) _main.ShowWizard(new WizardView(_wizard, BuildWizardActions()));
-            if (!resume) _wizard.SwitchFlowAsync(existing ? WizardFlow.ExistingBench : WizardFlow.NewBench).Forget();
+            if (!resume && !keepFlow) _wizard.SwitchFlowAsync(existing ? WizardFlow.ExistingBench : WizardFlow.NewBench).Forget();
             WindowFocus.Raise(_main);
             return;
         }
@@ -231,20 +199,29 @@ public partial class App
     private void CloseWizard(WizardModel model, WizardClose reason)
     {
         if (!ReferenceEquals(model, _wizard)) return;
-        if (reason == WizardClose.Cancelled && model.Page == WizardPage.Welcome)
-        {
-            _config.WizardDismissed = true; // no more opening by itself at launch; + > New Bench is still there
-            SaveConfig();
-        }
-        else if (reason == WizardClose.Finished)
-        {
-            _config.WizardDismissed = false;
-            SaveConfig();
-            _controller?.Poller.BoostFor(BenchPoller.ActionBoost);
-        }
+        RecordWizardClose(model, reason);
         _wizard = null;
         _main?.CloseWizard();
         model.Dispose();
+    }
+
+    /// <summary>
+    /// Any close of the wizard before Done (Cancel, the window's X, Alt+F4, Quit) is "not now": it no longer opens by itself at launch, and
+    /// the tray menu, the flyout and the window still offer Set Up BenchBar. Done clears the dismissal and the pending setup.
+    /// </summary>
+    private void RecordWizardClose(WizardModel model, WizardClose? reason)
+    {
+        if (WizardDismissal.OnClose(reason, model.Page) == WizardCloseRecord.Finished)
+        {
+            _config.WizardDismissed = false;
+            SaveConfig();
+            SetSetupPending(false);
+            _controller?.Poller.BoostFor(BenchPoller.ActionBoost);
+            return;
+        }
+        if (_config.WizardDismissed) return;
+        _config.WizardDismissed = true;
+        SaveConfig();
     }
 
     private WizardActions BuildWizardActions() => new()
@@ -425,7 +402,10 @@ public partial class App
             AppVersion = UpdateCheck.CurrentVersion(),
             ShimVersion = () => _setup.ShimVersionAsync(CancellationToken.None),
             CliVersion = ReadCliVersionAsync,
-            CheckForUpdates = CheckUpdatesTextAsync,
+            CheckForUpdates = RunUpdateCheckAsync,
+            KnownOffer = () => _updateKnown,
+            UpdateRunning = () => UpdateRunning,
+            UpdateNow = UpdateNow,
             ReportBug = () => ReportBugAsync("About").Forget(),
             OpenUrl = OpenUrl,
             CopyText = CopyText,
@@ -457,24 +437,6 @@ public partial class App
         catch (Exception ex) when (ex is SourceProblemException or System.Text.Json.JsonException)
         {
             return AboutCli.Unknown;
-        }
-    }
-
-    private static async Task<string> CheckUpdatesTextAsync()
-    {
-        try
-        {
-            var latest = await UpdateCheck.FetchLatestAsync(CancellationToken.None);
-            return UpdateCheck.State(latest, UpdateCheck.CurrentVersion(), UpdateCheck.Arch()) switch
-            {
-                UpdateState.Available => $"BenchBar {latest!.Version} is out.",
-                UpdateState.NoWindowsBuild => $"BenchBar {latest!.Version} is out, but its Windows download is not ready yet.",
-                _ => "You have the latest version.",
-            };
-        }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
-        {
-            return "Could not check for updates: " + ex.Message;
         }
     }
 }

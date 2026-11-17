@@ -173,21 +173,20 @@ public class WindowsFixesTests
         var missing = new TraySnapshot([], DistroStopped: true, Distro: "Ubuntu-24.04", DistroMissing: true);
         var stopped = new TraySnapshot([], DistroStopped: true, Distro: "Ubuntu-24.04");
 
-        Assert.True(LaunchPlanner.NeedsSetupCheck(missing, dismissed: false));
-        Assert.Equal(LaunchAction.OpenWizard, LaunchPlanner.AtLaunch(missing, Blocking(), dismissed: false, resumeFlag: false));
+        Assert.True(LaunchPlanner.NeedsSetupCheck(missing));
+        Assert.Equal(LaunchAction.OpenWizard, LaunchPlanner.AtLaunch(missing, Blocking(), new LaunchStart(FirstRun: true, Dismissed: false)));
 
-        Assert.False(LaunchPlanner.NeedsSetupCheck(stopped, dismissed: false));
-        Assert.Equal(LaunchAction.Nothing, LaunchPlanner.AtLaunch(stopped, Blocking(), dismissed: false, resumeFlag: false));
+        Assert.False(LaunchPlanner.NeedsSetupCheck(stopped));
+        Assert.Equal(LaunchAction.Nothing, LaunchPlanner.AtLaunch(stopped, Blocking(), new LaunchStart(FirstRun: true, Dismissed: false)));
     }
 
     [Fact]
     public void AMissingDistroStillRespectsTheOtherReasonsNotToOpen()
     {
         var missing = new TraySnapshot([], DistroStopped: true, Distro: "Ubuntu-24.04", DistroMissing: true);
-        Assert.Equal(LaunchAction.Nothing, LaunchPlanner.AtLaunch(missing, Blocking(), dismissed: true, resumeFlag: false));
-        Assert.Equal(LaunchAction.Nothing, LaunchPlanner.AtLaunch(missing, null, dismissed: false, resumeFlag: false));
-        Assert.Equal(LaunchAction.Nothing, LaunchPlanner.AtLaunch(missing, SetupReport.Empty, dismissed: false, resumeFlag: false));
-        Assert.False(LaunchPlanner.NeedsSetupCheck(missing, dismissed: true));
+        Assert.Equal(LaunchAction.Nothing, LaunchPlanner.AtLaunch(missing, Blocking(), new LaunchStart(FirstRun: true, Dismissed: true)));
+        Assert.Equal(LaunchAction.Nothing, LaunchPlanner.AtLaunch(missing, null, new LaunchStart(FirstRun: true, Dismissed: false)));
+        Assert.Equal(LaunchAction.Nothing, LaunchPlanner.AtLaunch(missing, SetupReport.Empty, new LaunchStart(FirstRun: true, Dismissed: false)));
     }
 
     [Theory]

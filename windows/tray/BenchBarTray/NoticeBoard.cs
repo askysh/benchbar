@@ -1,7 +1,7 @@
 namespace BenchBar.Tray;
 
-/// <summary>One notice on the board: what to say, an optional button, and whether it can be dismissed.</summary>
-internal sealed record Notice(string Key, string Text, string? ActionLabel = null, Action? Action = null, bool Dismissible = true);
+/// <summary>One notice on the board: what to say, an optional button, whether it can be dismissed, and whether it is a problem (drawn in the warning color) or news.</summary>
+internal sealed record Notice(string Key, string Text, string? ActionLabel = null, Action? Action = null, bool Dismissible = true, bool Critical = true);
 
 /// <summary>
 /// The notices the tray keeps on screen until they are dealt with: the tray closed unexpectedly last time, benchbar.exe and BenchBar are of

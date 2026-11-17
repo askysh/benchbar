@@ -276,7 +276,7 @@ func TestSetupCheckSkewCases(t *testing.T) {
 	// newer than the shim: a warning, no action, nothing blocks
 	e = skewEnv(t, "0.8.2", "0.9.0")
 	rep := e.report()
-	if s := rep.step(t, "cli"); s.Status != "warn" || s.Action != nil || !strings.Contains(s.Detail, "newer than benchbar.exe 0.8.2") {
+	if s := rep.step(t, "cli"); s.Status != "warn" || s.Action != nil || !strings.Contains(s.Detail, "newer than benchbar.exe 0.8.2") || !strings.HasSuffix(s.Detail, "benchbar.exe self-update") {
 		t.Errorf("%+v", s)
 	}
 	if !rep.Ready {
@@ -367,6 +367,21 @@ func TestDoctorWarnsAboutAnOlderCLI(t *testing.T) {
 		t.Fatalf("exit %d: %s", code, e.stderr())
 	}
 	want := "  [WARN] CLI version: benchbar 0.8.1 in Ubuntu-24.04 is older than benchbar.exe 0.8.2\n     fix: benchbar.exe setup run cli_install --distro Ubuntu-24.04\n"
+	if !strings.Contains(e.stdout(), want) {
+		t.Errorf("output:\n%s", e.stdout())
+	}
+}
+
+func TestDoctorNewerCLIFixIsSelfUpdate(t *testing.T) {
+	withVersion(t, "0.8.2")
+	e := newEnv(t)
+	e.healthyWindows()
+	e.script(
+		map[string]any{"match": "head -n 1", "exit": 0, "stdout": "benchbar 0.8.3\n"},
+		map[string]any{"match": "--exec", "exit": 0, "stdout": ""},
+	)
+	e.run("doctor")
+	want := "  [WARN] CLI version: benchbar 0.8.3 in Ubuntu-24.04 is newer than benchbar.exe 0.8.2\n     fix: benchbar.exe self-update\n"
 	if !strings.Contains(e.stdout(), want) {
 		t.Errorf("output:\n%s", e.stdout())
 	}

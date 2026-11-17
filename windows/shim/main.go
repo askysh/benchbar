@@ -38,6 +38,9 @@ func run(sys *System, args []string) int {
 			return cmdReportWindows(sys, args[1:])
 		case "setup":
 			return cmdSetup(sys, args[1:])
+		case "self-update":
+			// benchbar.exe, the tray and the CLI together; --cli is the CLI's own
+			return cmdSelfUpdate(sys, args[1:])
 		case "doctor":
 			if !hasAny(args[1:], "--json", "--fix-hints") {
 				return cmdDoctor(sys, args[1:])

@@ -101,7 +101,7 @@ func cliVersionCheck(sys *System, t target) (Check, bool) {
 	case newer:
 		c.Status = "warn"
 		c.Message = fmt.Sprintf("benchbar %s in %s is newer than benchbar.exe %s", cli, where, version)
-		c.Fix = "irm https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1 | iex"
+		c.Fix = "benchbar.exe self-update"
 	}
 	return c, true
 }
