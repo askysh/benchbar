@@ -584,6 +584,14 @@ func TestKeepaliveRunAfterRenameIsStillOurs(t *testing.T) {
 	if !isKeepaliveProcess(e.System, pidRecord{Pid: 77, Created: 77000}) {
 		t.Fatal("a run whose exe was renamed by an update must still be found")
 	}
+	e.procs.add(79, `C:\x\benchbar.exe.2.old`)
+	if !isKeepaliveProcess(e.System, pidRecord{Pid: 79, Created: 79000}) {
+		t.Fatal("benchbar.exe.N.old is the name when benchbar.exe.old is still taken")
+	}
+	e.procs.add(80, `C:\x\benchbar.exe.x.old`)
+	if isKeepaliveProcess(e.System, pidRecord{Pid: 80, Created: 80000}) {
+		t.Fatal("only a number goes between benchbar.exe and .old")
+	}
 	e.procs.add(78, `C:\x\notepad.exe`)
 	if isKeepaliveProcess(e.System, pidRecord{Pid: 78, Created: 78000}) {
 		t.Fatal("another program is never ours")
@@ -624,7 +632,7 @@ func TestInstallerEnvDropsPSModulePath(t *testing.T) {
 			`BENCHBAR_ZIP=C:\old.zip`,
 		}
 	}
-	got := installerEnv(e.System)
+	got := installerEnv(e.System, "")
 	for _, kv := range got {
 		k, _, _ := strings.Cut(kv, "=")
 		if strings.EqualFold(k, "PSModulePath") || strings.EqualFold(k, "BENCHBAR_ZIP") {
@@ -701,7 +709,7 @@ func TestSelfUpdateTrayLineComparesTheProcess(t *testing.T) {
 		after      string
 		want       string
 	}{
-		{"installer failed, same tray", true, 1, "same", "Tray app: still the old one (the installer did not get to it)"},
+		{"installer failed, same tray", true, 1, "same", "Tray app: still running, not closed by the failed update"},
 		{"worked, same tray", true, 0, "same", "Tray app: still the old one (the installer did not get to it)"},
 		{"worked, new tray", true, 0, "new", "Tray app: restarted"},
 		{"installer failed, new tray", true, 1, "new", "Tray app: running a new process, but the Windows part failed"},
@@ -718,6 +726,9 @@ func TestSelfUpdateTrayLineComparesTheProcess(t *testing.T) {
 			if !strings.Contains(c.want, "restarted") && strings.Contains(out, "Tray app: restarted") {
 				t.Fatalf("claims a restart:\n%s", out)
 			}
+			if c.code != 0 && strings.Contains(out, "quit BenchBar") {
+				t.Fatalf("a failed update gives restart advice:\n%s", out)
+			}
 		})
 	}
 }
@@ -732,5 +743,139 @@ func TestSameProcessNeedsPidAndCreationTime(t *testing.T) {
 	}
 	if sameProcess(before, []ProcessInfo{{Pid: 11, Created: 5}}) || sameProcess(nil, before) {
 		t.Fatal("another pid, or nothing before, is not the same process")
+	}
+}
+
+// envValue is the value of key in a child's environment, "" when unset.
+func envValue(env []string, key string) string {
+	for _, kv := range env {
+		if k, v, ok := strings.Cut(kv, "="); ok && strings.EqualFold(k, key) {
+			return v
+		}
+	}
+	return ""
+}
+
+// failedInstall runs a self-update whose installer exits 1 after writing
+// result to BENCHBAR_INSTALL_RESULT and leaves the tray as after says.
+func failedInstall(t *testing.T, result, after string) (*suEnvT, string) {
+	t.Helper()
+	e := newSUEnv(t)
+	e.launch.handler = func(s LaunchSpec) (int, error) {
+		if s.Path != suPS {
+			return 0, nil
+		}
+		path := envValue(s.Env, "BENCHBAR_INSTALL_RESULT")
+		if path == "" || !strings.HasPrefix(path, e.ConfigDir) {
+			t.Errorf("result file %q is not in the config folder %q", path, e.ConfigDir)
+		}
+		if result != "" {
+			os.WriteFile(path, []byte(result), 0o644)
+		}
+		if after == "new" {
+			e.trayGen++
+		}
+		e.trayRuns = after != "none"
+		return 1, nil
+	}
+	if code := e.run("self-update", "--yes"); code != 1 {
+		t.Fatalf("exit %d", code)
+	}
+	return e, e.stdout()
+}
+
+func TestSelfUpdateFailedInstallerNothingChanged(t *testing.T) {
+	e, out := failedInstall(t, "unchanged\r\nCould not update BenchBar: BenchBar.Tray.Core.dll could not be moved aside, most likely because a program holds it open (in use).\r\n", "new")
+	for _, s := range []string{
+		"Windows programs: failed: the installer exited with 1: Could not update BenchBar: BenchBar.Tray.Core.dll could not be moved aside",
+		"Windows programs: nothing was changed: benchbar.exe and the tray app are still 0.8.3",
+		"Tray app: started again, with the files from before the update",
+		"CLI in WSL: not updated, because the Windows part failed",
+		"Retry, once the cause above is fixed: benchbar.exe self-update\n",
+	} {
+		if !strings.Contains(out, s) {
+			t.Errorf("missing %q in\n%s", s, out)
+		}
+	}
+	for _, s := range []string{"quit BenchBar", "Tray app: restarted", "may be the old version"} {
+		if strings.Contains(out, s) {
+			t.Errorf("%q does not fit a failed update that changed nothing:\n%s", s, out)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(e.ConfigDir, "self-update-result.txt")); !os.IsNotExist(err) {
+		t.Errorf("the result file is left behind: %v", err)
+	}
+}
+
+func TestSelfUpdateFailedInstallerSameTrayVersionRetry(t *testing.T) {
+	e := newSUEnv(t)
+	e.launch.handler = func(s LaunchSpec) (int, error) { return 1, nil }
+	e.run("self-update", "--yes", "--version", "0.8.4")
+	out := e.stdout()
+	for _, s := range []string{
+		"Windows programs: failed: the installer exited with 1 (the lines above say why)",
+		"Tray app: still running, not closed by the failed update",
+		"Retry, once the cause above is fixed: benchbar.exe self-update --version 0.8.4",
+	} {
+		if !strings.Contains(out, s) {
+			t.Errorf("missing %q in\n%s", s, out)
+		}
+	}
+	if strings.Contains(out, "nothing was changed") {
+		t.Errorf("an installer that said nothing is not quoted as saying nothing changed:\n%s", out)
+	}
+}
+
+func TestSelfUpdateFailedInstallerMixed(t *testing.T) {
+	_, out := failedInstall(t, "mixed\nCould not update BenchBar: x could not be copied\n", "none")
+	if !strings.Contains(out, "Windows programs: some files could not be put back (the lines above name them). fix: "+oneLineInstall) {
+		t.Errorf("no repair line:\n%s", out)
+	}
+	if strings.Contains(out, "nothing was changed") || strings.Contains(out, "Retry, once") {
+		t.Errorf("a mixed install is not retried with self-update:\n%s", out)
+	}
+}
+
+func TestSelfUpdatePlanSaysWhatHappensToTheTray(t *testing.T) {
+	const restarts = "The tray app closes and starts again."
+	const stays = "The tray app is not running and will not be started."
+	e := newSUEnv(t)
+	e.trayRuns = true
+	e.run("self-update", "--dry-run")
+	if out := e.stdout(); !strings.Contains(out, restarts) || strings.Contains(out, stays) {
+		t.Errorf("running tray:\n%s", out)
+	}
+	e = newSUEnv(t)
+	e.trayRuns = false
+	e.run("self-update", "--dry-run")
+	if out := e.stdout(); !strings.Contains(out, stays) || strings.Contains(out, restarts) {
+		t.Errorf("tray not running:\n%s", out)
+	}
+	e = newSUEnv(t)
+	e.ProcessImages = nil
+	e.run("self-update", "--dry-run")
+	if out := e.stdout(); !strings.Contains(out, "A running tray app closes and starts again.") {
+		t.Errorf("processes unknown:\n%s", out)
+	}
+}
+
+func TestInstallerEnvResultFile(t *testing.T) {
+	e := newSUEnv(t)
+	e.Environ = func() []string { return []string{`BENCHBAR_INSTALL_RESULT=C:\elsewhere.txt`, `PATH=C:\Windows`} }
+	got := installerEnv(e.System, `C:\cfg\self-update-result.txt`)
+	if v := envValue(got, "BENCHBAR_INSTALL_RESULT"); v != `C:\cfg\self-update-result.txt` {
+		t.Fatalf("result file %q in %q", v, got)
+	}
+	n := 0
+	for _, kv := range got {
+		if strings.HasPrefix(strings.ToUpper(kv), "BENCHBAR_INSTALL_RESULT=") {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Fatalf("an inherited BENCHBAR_INSTALL_RESULT reached the installer: %q", got)
+	}
+	if envValue(installerEnv(e.System, ""), "BENCHBAR_INSTALL_RESULT") != "" {
+		t.Fatal("no result path, no variable")
 	}
 }

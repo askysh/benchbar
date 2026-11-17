@@ -42,6 +42,7 @@ what is wrong and how to fix it.
 - When the CLI in WSL is newer than `benchbar.exe`, `doctor` and `setup check` now name `benchbar.exe self-update` as the fix.
 - The tray has Update Now in the BenchBar window, the flyout, the tray menu (Update to X) and About. It runs the update in its own window, which stays open with the result. Copy Update Line is still there under Other Ways.
 - After an update, BenchBar says "BenchBar was updated to X" once, with a What's New link.
+- The installer now replaces the files all or nothing. When one file cannot be replaced (a program holds it open), it puts every old file back, names the file and says that nothing was changed, and a tray app it closed starts again. Before, such an update could leave a new `benchbar.exe` next to old tray files. `self-update` then shows the installer's error, says when nothing was changed and gives the command to try again.
 - The first time a BenchBar window closes, a notification says BenchBar is still running near the clock and can be opened from the Start menu.
 
 ### Windows tray

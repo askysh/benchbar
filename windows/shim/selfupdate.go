@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -17,8 +19,10 @@ import (
 // (benchbar.exe and the tray) with the one line installer, then the CLI in
 // the distro with the new benchbar.exe, so the three are the same release.
 // The installer is the engine: what it downloads carries no internet mark,
-// it checks the zip against the release's SHA256 sums, moves files that are
-// in use aside to NAME.old and closes and restarts the tray.
+// it checks the zip against the release's SHA256 sums, replaces the files
+// all or nothing (it puts every old file back when one cannot be replaced)
+// and closes and restarts the tray. After a failure it tells the shim, in
+// the file named by BENCHBAR_INSTALL_RESULT, whether the files changed.
 
 const selfUpdateHelp = `Usage: benchbar.exe self-update [--check] [--json] [--yes] [--version X.Y.Z | --zip PATH] [--installer FILE] [--dry-run]
        benchbar.exe self-update --cli [ARGS]
@@ -383,13 +387,19 @@ func selfUpdateRun(sys *System, o suOpts) int {
 		ps, perr = sys.PowerShellPath()
 	}
 
+	trayBefore, trayKnown := trayProcesses(sys, trayExe)
 	w := sys.Stdout
 	fmt.Fprintf(w, "BenchBar for Windows %s is installed in %s.\n", version, dir)
 	fmt.Fprintf(w, "This installs %s%s:\n", target, relation(target))
-	if noTray {
+	switch {
+	case noTray:
 		fmt.Fprintln(w, "  1. The one line installer updates benchbar.exe (this install has no tray app).")
-	} else {
+	case !trayKnown:
+		fmt.Fprintln(w, "  1. The one line installer updates benchbar.exe and the tray app. A running tray app closes and starts again.")
+	case len(trayBefore) > 0:
 		fmt.Fprintln(w, "  1. The one line installer updates benchbar.exe and the tray app. The tray app closes and starts again.")
+	default:
+		fmt.Fprintln(w, "  1. The one line installer updates benchbar.exe and the tray app. The tray app is not running and will not be started.")
 	}
 	if skip == "" {
 		fmt.Fprintf(w, "  2. The new benchbar.exe updates the BenchBar CLI in WSL (%s) to the same release.\n", distro)
@@ -420,18 +430,27 @@ func selfUpdateRun(sys *System, o suOpts) int {
 		}
 	}
 
-	trayBefore, trayKnown := trayProcesses(sys, trayExe)
 	fmt.Fprintf(w, "\nRunning the installer for %s.\n", target)
 	var summary []string
+	resultPath := installResultPath(sys)
 	code, err := sys.Launch.Run(sys.Ctx, LaunchSpec{
-		Path: ps, Args: installerArgs(script), Env: installerEnv(sys), Stdout: sys.Stdout, Stderr: sys.Stderr,
+		Path: ps, Args: installerArgs(script), Env: installerEnv(sys, resultPath), Stdout: sys.Stdout, Stderr: sys.Stderr,
 	})
 	winOK := false
+	var res installResult
 	switch {
 	case err != nil:
 		summary = append(summary, "Windows programs: failed: Windows PowerShell could not be started: "+err.Error())
 	case code != 0:
-		summary = append(summary, fmt.Sprintf("Windows programs: failed: the installer exited with %d (the lines above say why)", code))
+		res = readInstallResult(resultPath)
+		if res.Error != "" {
+			summary = append(summary, fmt.Sprintf("Windows programs: failed: the installer exited with %d: %s", code, res.Error))
+		} else {
+			summary = append(summary, fmt.Sprintf("Windows programs: failed: the installer exited with %d (the lines above say why)", code))
+		}
+		if l := res.filesLine(version, noTray); l != "" {
+			summary = append(summary, l)
+		}
 	default:
 		got, verr := exeVersion(sys, newExe)
 		switch {
@@ -448,7 +467,7 @@ func selfUpdateRun(sys *System, o suOpts) int {
 			}
 		}
 	}
-	summary = append(summary, trayLine(sys, trayExe, trayBefore, trayKnown, winOK))
+	summary = append(summary, trayLine(sys, trayExe, trayBefore, trayKnown, winOK, res.Files == "unchanged"))
 	cliFailed := false
 	if winOK {
 		if l := restartKeepalive(sys, newExe); l != "" {
@@ -459,6 +478,9 @@ func selfUpdateRun(sys *System, o suOpts) int {
 		cliFailed = failed
 	} else {
 		summary = append(summary, "CLI in WSL: not updated, because the Windows part failed")
+		if res.Files != "mixed" {
+			summary = append(summary, "Retry, once the cause above is fixed: "+retryCommand(o))
+		}
 	}
 	printUpdateSummary(sys, summary)
 	if !winOK || cliFailed {
@@ -553,11 +575,11 @@ func printableCommand(ps, script string) string {
 // variables, plus BENCHBAR_FROM_SELF_UPDATE=1 so the installer's closing
 // text leaves the CLI to the shim. It is the child's copy only; nothing is
 // set in the user's shell.
-func installerEnv(sys *System) []string {
+func installerEnv(sys *System, resultPath string) []string {
 	var out []string
 	for _, kv := range powerShellEnv(sys.Environ()) {
 		k, _, _ := strings.Cut(kv, "=")
-		drop := strings.EqualFold(k, "BENCHBAR_FROM_SELF_UPDATE")
+		drop := strings.EqualFold(k, "BENCHBAR_FROM_SELF_UPDATE") || strings.EqualFold(k, "BENCHBAR_INSTALL_RESULT")
 		for _, n := range installerEnvDropped {
 			drop = drop || strings.EqualFold(k, n)
 		}
@@ -565,7 +587,83 @@ func installerEnv(sys *System) []string {
 			out = append(out, kv)
 		}
 	}
-	return append(out, "BENCHBAR_FROM_SELF_UPDATE=1")
+	out = append(out, "BENCHBAR_FROM_SELF_UPDATE=1")
+	if resultPath != "" {
+		out = append(out, "BENCHBAR_INSTALL_RESULT="+resultPath)
+	}
+	return out
+}
+
+// installResult is what a failed install.ps1 writes to the file named by
+// BENCHBAR_INSTALL_RESULT: Files is unchanged, mixed, changed or unknown
+// (empty when the installer wrote nothing, such as an older installer), and
+// Error is the first line of its error.
+type installResult struct {
+	Files, Error string
+}
+
+// installResultPath is the result file in the shim's config folder, empty
+// and deleted beforehand; "" when there is no config folder to put it in.
+func installResultPath(sys *System) string {
+	if sys.ConfigDir == "" || os.MkdirAll(sys.ConfigDir, 0o755) != nil {
+		return ""
+	}
+	p := filepath.Join(sys.ConfigDir, "self-update-result.txt")
+	os.Remove(p)
+	return p
+}
+
+// readInstallResult reads and removes the result file.
+func readInstallResult(path string) installResult {
+	if path == "" {
+		return installResult{}
+	}
+	data, err := os.ReadFile(path)
+	os.Remove(path)
+	if err != nil {
+		return installResult{}
+	}
+	var r installResult
+	lines := strings.Split(strings.TrimPrefix(string(data), "\ufeff"), "\n")
+	if len(lines) > 0 {
+		r.Files = strings.TrimSpace(lines[0])
+	}
+	if len(lines) > 1 {
+		r.Error = strings.TrimSpace(lines[1])
+	}
+	return r
+}
+
+// filesLine says what the failed installer did to the installed files, as
+// far as it told; "" when it did not say.
+func (r installResult) filesLine(current string, noTray bool) string {
+	switch r.Files {
+	case "unchanged":
+		if noTray {
+			return "Windows programs: nothing was changed: benchbar.exe is still " + current
+		}
+		return "Windows programs: nothing was changed: benchbar.exe and the tray app are still " + current
+	case "mixed":
+		return "Windows programs: some files could not be put back (the lines above name them). fix: " + oneLineInstall
+	case "changed":
+		return "Windows programs: the new files are in place, but a later step failed (the lines above say which)"
+	}
+	return ""
+}
+
+// retryCommand is the self-update command line to run again.
+func retryCommand(o suOpts) string {
+	c := "benchbar.exe self-update"
+	switch {
+	case o.version != "":
+		c += " --version " + o.version
+	case o.zip != "":
+		c += " --zip " + quoteArg(o.zip)
+	}
+	if o.installer != "" {
+		c += " --installer " + quoteArg(o.installer)
+	}
+	return c
 }
 
 // powerShellEnv is env for a Windows PowerShell 5.1 (powershell.exe) child:
@@ -635,8 +733,9 @@ func sameProcess(before, after []ProcessInfo) bool {
 
 // trayLine says what happened to the tray, from its processes before and
 // after the installer. A restart is claimed only when the Windows part
-// worked and the tray process is a new one.
-func trayLine(sys *System, trayExe string, before []ProcessInfo, known, winOK bool) string {
+// worked and the tray process is a new one. unchanged is true when the
+// failed installer said it put every file back.
+func trayLine(sys *System, trayExe string, before []ProcessInfo, known, winOK, unchanged bool) string {
 	if !sys.FileExists(trayExe) {
 		return "Tray app: not installed (this install has benchbar.exe only)"
 	}
@@ -645,8 +744,12 @@ func trayLine(sys *System, trayExe string, before []ProcessInfo, known, winOK bo
 	}
 	after, _ := trayProcesses(sys, trayExe)
 	switch {
+	case len(after) > 0 && sameProcess(before, after) && !winOK:
+		return "Tray app: still running, not closed by the failed update"
 	case len(after) > 0 && sameProcess(before, after):
 		return "Tray app: still the old one (the installer did not get to it): quit BenchBar from its menu and start it from the Start menu"
+	case len(after) > 0 && !winOK && unchanged:
+		return "Tray app: started again, with the files from before the update"
 	case len(before) > 0 && len(after) > 0 && winOK:
 		return "Tray app: restarted"
 	case len(after) > 0 && winOK:
@@ -661,8 +764,8 @@ func trayLine(sys *System, trayExe string, before []ProcessInfo, known, winOK bo
 
 // restartKeepalive moves a keepalive run of this install to the new
 // benchbar.exe. The old run still runs the old program (renamed to
-// benchbar.exe.old by the installer), which would also keep that file in
-// use. keepalive install of the new exe rewrites the task, stops the old run
+// benchbar.exe.old or benchbar.exe.N.old by the installer), which would
+// also keep that file in use. keepalive install of the new exe rewrites the task, stops the old run
 // and starts the task again. A task of another copy is left alone, and so
 // is a PC without the task. The line is empty when nothing was done.
 func restartKeepalive(sys *System, newExe string) string {

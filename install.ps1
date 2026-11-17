@@ -131,6 +131,7 @@ function Install-BenchBar {
   $docsBlocked = 'https://benchbar.akashmishra.com/windows/#if-windows-blocks-it'
   $falsePositiveUrl = 'https://www.microsoft.com/wdsi/filesubmission'
   $net = @{ RateLimited = $false }   # set by Get-JsonFromGitHub when GitHub's API says "too many requests"
+  $replace = @{ State = 'none' }     # set by Install-FilesAllOrNothing: replacing, done, unchanged or mixed
   $startFailedMarker = 'BENCHBAR_START_FAILED: '
 
   # ------------------------------------------------------------ output
@@ -313,24 +314,163 @@ function Install-BenchBar {
     Say-Ok "$($listed.Count) files match SHA256SUMS"
   }
 
-  # Copy-IntoPlace SRC DST: a running exe cannot be overwritten but can be
-  # renamed, so a locked file moves aside to NAME.old (removed on the next run)
-  function Copy-IntoPlace([string]$From, [string]$To) {
-    $dir = Split-Path -Parent $To
-    if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
-    try {
-      Copy-Item -LiteralPath $From -Destination $To -Force
-    } catch {
-      if (Test-AntivirusMessage $_.Exception.Message) {
-        throw ("$startFailedMarker" + (Get-AntivirusText "Windows would not let $(Split-Path -Leaf $To) be copied."))
-      }
-      if (-not (Test-Path -LiteralPath $To)) { throw }
-      $old = "$To.old"
-      Remove-Item -LiteralPath $old -Force -ErrorAction SilentlyContinue
-      Move-Item -LiteralPath $To -Destination $old -Force
-      Copy-Item -LiteralPath $From -Destination $To -Force
-      Say-Info "$(Split-Path -Leaf $To) was in use: the old copy is now $(Split-Path -Leaf $old)"
+  # Get-BackupName PATH: a free name for the old copy of PATH, NAME.old or
+  # NAME.N.old (an old exe that still runs keeps its NAME.old until it ends)
+  function Get-BackupName([string]$Path) {
+    $candidate = "$Path.old"
+    $n = 1
+    while (Test-Path -LiteralPath $candidate) {
+      $candidate = "$Path.$n.old"
+      $n++
     }
+    return $candidate
+  }
+
+  # Install-FilesAllOrNothing: replaces the installed files with the staged
+  # ones, all or nothing. Phase 1 renames every file that is replaced or
+  # removed (Gone) to a backup name in the install folder; a running exe can
+  # be renamed, a file held without delete sharing cannot. Phase 2 copies the
+  # new files in, checks them and writes the manifest. A failure in either
+  # phase removes the new files and renames every backup back, before the
+  # error is thrown. Only after both phases are the backups deleted. Sets
+  # $replace.State: 'unchanged' after a rollback that worked, 'mixed' when the
+  # rollback failed too, 'done' when the new files are in place.
+  function Install-FilesAllOrNothing([string]$FromRoot, [string[]]$Rels, [string[]]$Gone, [string]$ManifestPath, [string]$ManifestText) {
+    $replace.State = 'replacing'
+    $moved = New-Object System.Collections.ArrayList     # @{ Rel; Path; Backup }
+    $written = New-Object System.Collections.ArrayList   # @{ Rel; Path }
+    $madeDirs = New-Object System.Collections.ArrayList
+    $failure = ''
+    $advice = ''
+    $hadManifest = Test-Path -LiteralPath $ManifestPath -PathType Leaf
+    $oldManifest = ''
+    if ($hadManifest) { $oldManifest = [IO.File]::ReadAllText($ManifestPath) }
+    $holders = 'A file is usually held by the tray app, a terminal that is running benchbar.exe, or an antivirus scan.'
+    $what = 'update'
+    if (-not $isUpdate) { $what = 'install' }
+
+    # phase 1: move aside every file that is replaced or removed
+    foreach ($rel in @(@($Rels) + @($Gone) | Where-Object { $_ })) {
+      $path = Join-Path $installDir $rel
+      if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { continue }
+      $backup = Get-BackupName $path
+      try {
+        Move-Item -LiteralPath $path -Destination $backup -ErrorAction Stop
+      } catch {
+        $failure = "$rel could not be moved aside, most likely because a program holds it open ($((Get-UserMessage $_).TrimEnd('.')))"
+        $advice = "$holders`n  fix: close what holds $rel (or wait for the scan to end), then run the installer again"
+        break
+      }
+      $null = $moved.Add(@{ Rel = $rel; Path = $path; Backup = $backup })
+    }
+
+    # phase 2: copy the new files in, check them, write the manifest
+    if (-not $failure) {
+      foreach ($rel in $Rels) {
+        $to = Join-Path $installDir $rel
+        try {
+          $dir = Split-Path -Parent $to
+          $missing = @()
+          $d = $dir
+          while ($d -and -not (Test-Path -LiteralPath $d)) { $missing += $d; $d = Split-Path -Parent $d }
+          if ($missing.Count -gt 0) {
+            New-Item -ItemType Directory -Force -Path $dir | Out-Null
+            foreach ($m in $missing) { $null = $madeDirs.Add($m) }
+          }
+          $null = $written.Add(@{ Rel = $rel; Path = $to })
+          Copy-Item -LiteralPath (Join-Path $FromRoot $rel) -Destination $to -Force -ErrorAction Stop
+        } catch {
+          $detail = (Get-UserMessage $_).TrimEnd('.')
+          $failure = "$rel could not be copied into $installDir ($detail)"
+          if (Test-AntivirusMessage $detail) {
+            $advice = Get-AntivirusText "Windows would not let $rel be copied."
+          } else {
+            $advice = 'fix: run the installer again; if it fails the same way, look in Windows Security > Protection history for a BenchBar item'
+          }
+          break
+        }
+      }
+    }
+    if (-not $failure) {
+      try {
+        Assert-CopiedFiles $Rels
+      } catch {
+        $failure = 'a new file failed the check after the copy'
+        $advice = Get-UserMessage $_
+      }
+    }
+    if (-not $failure -and $ManifestText) {
+      try {
+        [IO.File]::WriteAllText($ManifestPath, $ManifestText, (New-Object Text.UTF8Encoding $false))
+      } catch {
+        $failure = "the list of installed files could not be written ($((Get-UserMessage $_).TrimEnd('.')))"
+        $advice = 'fix: run the installer again'
+      }
+    }
+
+    if (-not $failure) {
+      # both phases worked: the backups go; a running old exe keeps its until the next run
+      foreach ($m in $moved) { Remove-Item -LiteralPath $m.Backup -Force -ErrorAction SilentlyContinue }
+      $replace.State = 'done'
+      return
+    }
+
+    # rollback: the new files out first, so the old names are free again
+    $stuck = New-Object System.Collections.ArrayList
+    $backupOf = @{}
+    foreach ($m in $moved) { $backupOf[$m.Path.ToLowerInvariant()] = $m }
+    foreach ($w in $written) {
+      if (-not (Test-Path -LiteralPath $w.Path -PathType Leaf)) { continue }
+      try {
+        Remove-Item -LiteralPath $w.Path -Force -ErrorAction Stop
+      } catch {
+        if (-not $backupOf.ContainsKey($w.Path.ToLowerInvariant())) {
+          $null = $stuck.Add("$($w.Rel): the new version is in place (a file new in this version that could not be removed)")
+        }
+      }
+    }
+    $restored = 0
+    for ($i = $moved.Count - 1; $i -ge 0; $i--) {
+      $m = $moved[$i]
+      $backupLeaf = Split-Path -Leaf $m.Backup
+      if (Test-Path -LiteralPath $m.Path) {
+        $null = $stuck.Add("$($m.Rel): the new version is in place (it could not be removed); the old version is $backupLeaf")
+        continue
+      }
+      try {
+        Move-Item -LiteralPath $m.Backup -Destination $m.Path -ErrorAction Stop
+        $restored++
+      } catch {
+        $null = $stuck.Add("$($m.Rel): missing; the old version is $backupLeaf ($(Get-UserMessage $_))")
+      }
+    }
+    try {
+      if ($hadManifest) {
+        if ([IO.File]::ReadAllText($ManifestPath) -ne $oldManifest) { [IO.File]::WriteAllText($ManifestPath, $oldManifest, (New-Object Text.UTF8Encoding $false)) }
+      } elseif (Test-Path -LiteralPath $ManifestPath) {
+        Remove-Item -LiteralPath $ManifestPath -Force -ErrorAction Stop
+      }
+    } catch {
+      $null = $stuck.Add("$(Split-Path -Leaf $ManifestPath): could not be put back ($(Get-UserMessage $_))")
+    }
+    foreach ($dir in @($madeDirs | Sort-Object { $_.Length } -Descending)) {
+      if (-not (Get-ChildItem -LiteralPath $dir -Force -ErrorAction SilentlyContinue)) { Remove-Item -LiteralPath $dir -Force -ErrorAction SilentlyContinue }
+    }
+
+    if ($stuck.Count -eq 0) {
+      $replace.State = 'unchanged'
+      Say-Info "put $restored files back"
+      throw ("Could not $what BenchBar: $failure.`n" +
+        "  Nothing was changed: every file in $installDir is back as it was before this run.`n" +
+        "  $advice")
+    }
+    $replace.State = 'mixed'
+    $lines = @($stuck | ForEach-Object { "    - $_" }) -join "`n"
+    throw ("Could not $what BenchBar: $failure.`n" +
+      "  Putting the old files back failed too, so $installDir now holds parts of two versions:`n" +
+      "$lines`n" +
+      "  Every other file is the version from before this run.`n" +
+      "  fix: close what holds these files (the tray app, a terminal that is running benchbar.exe, an antivirus scan), then run the one line installer: irm https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1 | iex")
   }
 
   # After the copy: an antivirus may have removed a file, or may hold it so
@@ -865,11 +1005,28 @@ function Install-BenchBar {
     $previous = @()
     if (Test-Path -LiteralPath $manifestPath) { $previous = @(Get-Content -LiteralPath $manifestPath | Where-Object { $_ }) }
 
-    foreach ($rel in $files) {
-      Copy-IntoPlace (Join-Path $stagingRoot $rel) (Join-Path $installDir $rel)
+    # what the new zip no longer has goes too: only files an earlier run of
+    # this installer wrote (its manifest), only inside the install folder
+    $gone = @()
+    if (-not $NoTray) {
+      $installRoot = [IO.Path]::GetFullPath($installDir).TrimEnd('\') + '\'
+      foreach ($rel in $previous) {
+        if ($files -contains $rel) { continue }
+        $target = [IO.Path]::GetFullPath((Join-Path $installDir $rel))
+        if (-not $target.StartsWith($installRoot, [StringComparison]::OrdinalIgnoreCase)) { continue }
+        if (Test-Path -LiteralPath $target -PathType Leaf) { $gone += $rel }
+      }
     }
-    Assert-CopiedFiles $files
+    $manifestText = ''
+    if (-not $NoTray -or -not (Test-Path -LiteralPath $manifestPath)) {
+      $manifestText = (($files | Sort-Object) -join "`r`n") + "`r`n"
+    }
+
+    # all or nothing: a failure puts every old file back and stops here
+    Install-FilesAllOrNothing $stagingRoot $files $gone $manifestPath $manifestText
+    $installed = $true
     Say-Ok "$($files.Count) files copied"
+    if ($gone.Count -gt 0) { Say-Ok "$($gone.Count) files from the old version removed" }
 
     # A zip saved by a browser, or unpacked by Explorer, marks its files as
     # downloaded from the internet, and the copy keeps the mark. Windows then
@@ -881,24 +1038,6 @@ function Install-BenchBar {
     } catch {
       Say-Warn "Could not remove the internet mark from the installed files: $($_.Exception.Message). Windows may ask you to confirm the first start of each program."
     }
-
-    # remove what the new zip no longer has: only files an earlier run of this
-    # installer wrote (its manifest), only inside the install folder
-    if (-not $NoTray) {
-      $installRoot = [IO.Path]::GetFullPath($installDir).TrimEnd('\') + '\'
-      $removed = 0
-      foreach ($rel in $previous) {
-        if ($files -contains $rel) { continue }
-        $target = [IO.Path]::GetFullPath((Join-Path $installDir $rel))
-        if (-not $target.StartsWith($installRoot, [StringComparison]::OrdinalIgnoreCase)) { continue }
-        if (Test-Path -LiteralPath $target -PathType Leaf) { Remove-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue; $removed++ }
-      }
-      if ($removed -gt 0) { Say-Ok "$removed files from the old version removed" }
-    }
-    if (-not $NoTray -or -not (Test-Path -LiteralPath $manifestPath)) {
-      [IO.File]::WriteAllText($manifestPath, (($files | Sort-Object) -join "`r`n") + "`r`n", (New-Object Text.UTF8Encoding $false))
-    }
-    $installed = $true
 
     # ---------------------------------------------------------- 5. PATH
     Say-Step 'Putting the install folder on your user PATH'
@@ -1031,7 +1170,14 @@ function Install-BenchBar {
       if ($releaseVersion -match '^\d+\.\d+\.\d+$') { Write-Host "  - What changed: $repoWeb/releases/tag/v$releaseVersion" }
       if ($trayExists) {
         if ($trayStarted) {
-          Write-Host '  - The tray app was restarted with the new version.'
+          # $order is -1 for a higher version, 1 for a lower one, 0 or $null otherwise
+          if ($order -eq -1) {
+            Write-Host '  - The tray app was restarted with the new version.'
+          } elseif ($order -eq 1) {
+            Write-Host "  - The tray app was restarted. It now runs $releaseVersion."
+          } else {
+            Write-Host '  - The tray app was restarted.'
+          }
         } elseif ($runtimeOk) {
           Write-Host '  - Open BenchBar from the Start menu when you want it. It is the icon near the clock.'
         }
@@ -1064,15 +1210,28 @@ function Install-BenchBar {
     if ($restartTray -and -not $trayStarted -and (Test-Path -LiteralPath $trayExe)) {
       try { Start-Process -FilePath $trayExe -WorkingDirectory $installDir -ArgumentList '--restarted'; Say-Info 'started the tray app again' } catch { }
     }
-    if ($message.StartsWith($startFailedMarker)) {
-      Write-Host "  [FAIL] $($message.Substring($startFailedMarker.Length))" -ForegroundColor Red
-      return $false
-    }
-    if ($installed) {
+    $startFailed = $message.StartsWith($startFailedMarker)
+    if ($startFailed) { $message = $message.Substring($startFailedMarker.Length) }
+    if ($installed -and -not $startFailed) {
       Write-Host "  [WARN] The files are installed, but a later step failed: $message" -ForegroundColor Yellow
       return $true
     }
     Write-Host "  [FAIL] $message" -ForegroundColor Red
+    # self-update names a file here (BENCHBAR_INSTALL_RESULT) and reads it
+    # after a failure: first line what happened to the files (unchanged,
+    # mixed, changed or unknown), second line the error
+    if ($env:BENCHBAR_INSTALL_RESULT) {
+      $filesState = 'unknown'
+      if ($replace.State -eq 'none' -or $replace.State -eq 'unchanged') {
+        $filesState = 'unchanged'
+      } elseif ($replace.State -eq 'mixed') {
+        $filesState = 'mixed'
+      } elseif ($replace.State -eq 'done') {
+        $filesState = 'changed'
+      }
+      $first = ([string]($message -split "`n")[0]).Trim()
+      try { [IO.File]::WriteAllText($env:BENCHBAR_INSTALL_RESULT, "$filesState`r`n$first`r`n", (New-Object Text.UTF8Encoding $false)) } catch { }
+    }
     return $false
   } finally {
     Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
