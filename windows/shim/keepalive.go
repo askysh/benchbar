@@ -351,6 +351,15 @@ func keepaliveStart(sys *System) int {
 	if isKeepaliveProcess(sys, readPidRecord(sys)) {
 		return 0
 	}
+	// the task has one fixed name: one that runs another copy of benchbar.exe
+	// (a second install) is that copy's to start, and its run is not in our pid file
+	if xml, code, err := sys.Tasks.Schtasks("/Query", "/TN", taskName, "/XML"); err == nil && code == 0 {
+		if exe, _, ok := parseTaskArguments(xml); ok && keepaliveExe(sys) != "" && sys.exeExists(exe) &&
+			normDir(exe, sys.Getenv) != normDir(keepaliveExe(sys), sys.Getenv) &&
+			!sys.ownVersionedPath(exe) && normDir(exe, sys.Getenv) != normDir(sys.ExePath, sys.Getenv) {
+			return 0
+		}
+	}
 	if out, code, err := sys.Tasks.Schtasks("/Run", "/TN", taskName); err != nil || code != 0 {
 		errorf(sys, "the task %q is installed but did not start: %s", taskName, schtasksDetail(out, err))
 		return 1

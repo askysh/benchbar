@@ -662,6 +662,7 @@ func TestKeepaliveStatusReportsRunProcess(t *testing.T) {
 
 func TestKeepaliveStart(t *testing.T) {
 	runCall := `/Run /TN BenchBar Keepalive`
+	xmlCall := `/Query /TN BenchBar Keepalive /XML`
 	cases := []struct {
 		name     string
 		setup    func(e *env)
@@ -688,7 +689,7 @@ func TestKeepaliveStart(t *testing.T) {
 			name:     "task and no run",
 			setup:    func(e *env) {},
 			stdout:   `Started the task "BenchBar Keepalive".`,
-			wantCall: []string{`/Query /TN BenchBar Keepalive`, runCall},
+			wantCall: []string{`/Query /TN BenchBar Keepalive`, xmlCall, runCall},
 		},
 		{
 			name: "task and a reused pid",
@@ -697,7 +698,19 @@ func TestKeepaliveStart(t *testing.T) {
 				e.writePid(777, 777000)
 			},
 			stdout:   `Started the task "BenchBar Keepalive".`,
-			wantCall: []string{`/Query /TN BenchBar Keepalive`, runCall},
+			wantCall: []string{`/Query /TN BenchBar Keepalive`, xmlCall, runCall},
+		},
+		{
+			// a second install's task is that copy's to start: nothing is run
+			name: "task of another copy",
+			setup: func(e *env) {
+				e.taskHandler(taskXMLOutput(`--headless "C:\other\benchbar.exe" keepalive run --distro "Ubuntu-24.04"`), statusCSV)
+				e.FileExists = func(p string) bool { return true }
+				if e.LocalAppData == "" {
+					e.LocalAppData = `C:\Users\me\AppData\Local`
+				}
+			},
+			wantCall: []string{`/Query /TN BenchBar Keepalive`, xmlCall},
 		},
 		{
 			name: "run fails",
@@ -711,7 +724,7 @@ func TestKeepaliveStart(t *testing.T) {
 			},
 			code:     1,
 			stderr:   `the task "BenchBar Keepalive" is installed but did not start: ERROR: Access is denied.`,
-			wantCall: []string{`/Query /TN BenchBar Keepalive`, runCall},
+			wantCall: []string{`/Query /TN BenchBar Keepalive`, xmlCall, runCall},
 		},
 	}
 	for _, c := range cases {
