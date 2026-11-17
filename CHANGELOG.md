@@ -57,6 +57,7 @@ what is wrong and how to fix it.
 - PDF printing now works on arm64 Linux. Other architectures get a warning.
 - `doctor --prerequisites` warns about too few file watchers. A password with a line break is refused before any work.
 - The install plan JSON has a new `warnings` list next to `blockers`.
+- `doctor` no longer says "nothing listens on 3306: MariaDB is not running" while the apt MariaDB runs. A regular user cannot see who owns its socket, and the check took that for no server, so every fresh install ended with a warning.
 
 ### Docs and releases
 

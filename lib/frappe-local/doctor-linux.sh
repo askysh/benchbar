@@ -198,7 +198,8 @@ fl_mariadb_server_version() {
 # name for that series (mariadb@10.11), so the policy comparison works
 fl_mariadb_running_formula() {
   local ver
-  [[ -n "$(fl_port_listener_pid 3306)" ]] || return 0
+  # fl_port_listening, not the owner pid: ss hides the owner of the apt mariadbd (user mysql) from a regular user
+  fl_port_listening 3306 || return 0
   ver="$(fl_mariadb_server_version)"
   [[ -n "$ver" ]] || return 0
   printf 'mariadb@%s %s' "$(printf '%s' "$ver" | awk -F. '{print $1 "." $2}')" "$ver"
@@ -207,7 +208,7 @@ fl_mariadb_running_formula() {
 # shellcheck disable=SC2153  # FL_MARIADB_MIN is set by the profile
 chk_mariadb_version() {
   local ver mm
-  if [[ -z "$(fl_port_listener_pid 3306)" ]]; then
+  if ! fl_port_listening 3306; then
     chk__set warn "nothing listens on 3306: MariaDB is not running" "sudo systemctl start mariadb"
     return 0
   fi
