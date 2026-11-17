@@ -1,12 +1,18 @@
-# MSIX feasibility spike (windows/msix). Builds the MSIX packages with
-# windows/msix/build-msix.ps1 on a Windows runner and uploads them as an
-# artifact. Run by hand only: Actions, MSIX spike, Run workflow. It never runs
-# on a push or a pull request, never signs with a real certificate and never
-# publishes anything. Store mode makes the unsigned .msixupload for Partner
-# Center; sideload mode makes one signed test package (self signed, test only).
-name: MSIX spike
+# The MSIX package of BenchBar for Windows (windows/msix), the form the
+# Microsoft Store takes. Builds it with windows/msix/build-msix.ps1 on a
+# Windows runner and uploads it as an artifact. On a pull request that
+# touches the package it builds the unsigned Store bundle as a check. By
+# hand (Actions, MSIX package, Run workflow) it builds either mode. It never
+# signs with a real certificate and never publishes anything: the
+# .msixupload is uploaded to Partner Center by a person. Sideload mode makes
+# one test package signed with a self signed certificate (test only).
+name: MSIX package
 
 on:
+  pull_request:
+    paths:
+      - 'windows/msix/**'
+      - '.github/workflows/msix.yml'
   workflow_dispatch:
     inputs:
       mode:
@@ -39,7 +45,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: msix-spike-${{ github.ref }}
+  group: msix-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -47,8 +53,8 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     env:
-      MODE: ${{ inputs.mode }}
-      PKG_VERSION: ${{ inputs.version }}
+      MODE: ${{ inputs.mode || 'Store' }}
+      PKG_VERSION: ${{ inputs.version || '0.0.1' }}
       APP_VERSION: ${{ inputs.app_version }}
       IDENTITY_NAME: ${{ inputs.identity_name }}
       PUBLISHER: ${{ inputs.publisher }}
@@ -84,7 +90,7 @@ jobs:
       - name: Upload the package
         uses: actions/upload-artifact@v7
         with:
-          name: benchbar-msix-${{ inputs.mode }}
+          name: benchbar-msix-${{ inputs.mode || 'Store' }}
           path: |
             windows/msix/out/*.msix
             windows/msix/out/*.msixbundle

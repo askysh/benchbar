@@ -31,7 +31,7 @@
 | `AppxManifest.xml` | Manifest template. `{{TOKEN}}` values come from `build-msix.ps1`. |
 | `build-msix.ps1` | Builds both programs, lays out the package, packs, signs for a test, or makes the Store upload. |
 | `Assets/` | Placeholder logos made from the tray icon with `sips`. Replace them before a Store submission. |
-| `../../.github/workflows/msix-spike.yml` | The same build on a GitHub runner. By hand only. |
+| `../../.github/workflows/msix.yml` | The same build on a GitHub runner. By hand only. |
 
 The package folder is flat: `benchbar.exe`, `BenchBarTray.exe` and the .NET runtime files sit together, because the tray looks for `benchbar.exe` next to itself first. Two apps are declared. `BenchBarTray` has the Start menu entry and the startup task (`Enabled="false"`: the person must turn it on). `BenchBarCli` has no Start entry and owns the `benchbar.exe` alias.
 
@@ -65,7 +65,7 @@ Other modes:
 - `.\build-msix.ps1 -FrameworkDependent` builds the small tray (for the size note only).
 - `.\build-msix.ps1 -Mode Store -Version 0.8.2 -IdentityName ... -Publisher ... -PublisherDisplayName ...` makes `out\*.msix` per CPU, `out\*.msixbundle` and `out\*.msixupload`, all unsigned. These values come from Partner Center.
 - Loose layout, no signing, Developer Mode on: `Add-AppxPackage -Register .\out\pkg-x64\AppxManifest.xml`.
-- GitHub: Actions, MSIX spike, Run workflow.
+- GitHub: Actions, MSIX package, Run workflow.
 
 Remove the test certificate afterwards (the script prints the lines). It is trusted machine wide while it is in `TrustedPeople`.
 
