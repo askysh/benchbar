@@ -66,6 +66,21 @@ type System struct {
 	// is no value. Nil in tests that do not need it.
 	StartupApproved func(name string) ([]byte, error)
 
+	// Web makes the HTTPS requests of self-update (the GitHub releases
+	// API). Launch starts the Windows programs self-update runs (the
+	// installer in PowerShell, then the new benchbar.exe). Nil in tests that
+	// do not need them.
+	Web    WebClient
+	Launch Launcher
+	// PowerShellPath is Windows PowerShell 5.1 in the system folder.
+	PowerShellPath func() (string, error)
+	// MachineArch is the CPU of the PC (amd64 or arm64), not of this
+	// process: an amd64 benchbar.exe can run emulated on an Arm PC.
+	MachineArch func() string
+	// ProcessImages are the full paths of the running processes whose
+	// program file is named name (such as BenchBarTray.exe).
+	ProcessImages func(name string) []string
+
 	MemoryBytes func() (uint64, error)
 	WSLPath     func() (string, error)
 	FileExists  func(path string) bool

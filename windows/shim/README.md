@@ -18,6 +18,7 @@ argument):
 | `benchbar.exe setup check [--json] [--probe] [--distro NAME]` | Read only. Checks the PC step by step (Windows build, virtualization, WSL, restart, distro, Linux release, Linux user, systemd, CLI, linger, keepalive, `.wslconfig`, PATH). Never starts a stopped distro unless `--probe`, never asks for admin rights. |
 | `benchbar.exe setup run ACTION [--distro NAME] [--user NAME] [--force] [--jsonl]` | Runs one setup action (`wsl_enable`, `wsl_update`, `distro_install`, `distro_wsl2`, `distro_user`, `systemd`, `cli_install`, `linger`, `keepalive`, `wslconfig`, `path`). With `--jsonl` it prints only JSON lines. `wsl_enable` asks Windows for permission (UAC). |
 | `benchbar.exe report-windows [--json] [--distro NAME] [--bench PATH] [--context TEXT] [--tray-version V] [--include FILE]...` | Write a redacted zip for a bug report. Works with no WSL, no distro and no CLI. See "Bug report zip". |
+| `benchbar.exe self-update [--check] [--json] [--yes] [--version X.Y.Z \| --zip PATH] [--dry-run]` | Update `benchbar.exe`, the tray and the CLI in WSL to one release. `--cli ARGS` runs the CLI's own `self-update` instead. See "Self-update". |
 | `benchbar.exe doctor` | Windows checks first, then the CLI's doctor. `--json` and `--fix-hints` go straight to the CLI. See "Doctor". |
 
 `wslconfig --apply` never runs `wsl.exe --shutdown`; WSL reads the file at its
@@ -97,7 +98,8 @@ unknown), so a client can tell "update" (`missing` with a `cli_version`) from
 then runs the installer pinned to this release (it fetches and checks out the
 tag), so an upgrade of `benchbar.exe` brings the CLI along. A CLI that is
 newer is only a `warn` with no action (nothing here takes a CLI back to an
-older release). A dev build of the shim never reports a difference, and a
+older release); its detail ends with `benchbar.exe self-update`, which
+brings `benchbar.exe` up to the same release. A dev build of the shim never reports a difference, and a
 custom `cli_path` is never touched. `benchbar.exe doctor` shows the same as a
 WARN with the fix line.
 
@@ -150,6 +152,59 @@ only if the shim itself may set the foreground; the caller (the tray) should
 call it too, before it starts `setup run wsl_enable`. The shim finds
 `wsl.exe` and `schtasks.exe` through `GetSystemDirectory`, never an
 environment variable.
+
+## Self-update
+
+`benchbar.exe self-update` updates the BenchBar for Windows that the one line
+installer put in `%LOCALAPPDATA%\Programs\BenchBar`, and then the CLI in WSL,
+so the three parts are the same release. The CLI's own `self-update` in the
+distro stays reachable as `benchbar.exe self-update --cli ARGS`; it says first
+that it updates only that CLI.
+
+- `--check` changes nothing. It asks GitHub's releases API once (10 s
+  deadline, the proxy from `HTTPS_PROXY` or the Windows proxy settings) and
+  takes the release `install.ps1` would take: the newest published one, not a
+  draft or a prerelease, with `benchbar-windows-X.Y.Z-ARCH.zip` for this PC's
+  CPU and its SHA256SUMS file. When the API is rate limited it reads the tag
+  from the release page, as the installer does. It also asks the CLI
+  (`self-update --check --json`), only when the distro already runs, with a
+  15 s deadline; that part never makes the check fail. `--json` prints the
+  document described in [docs/json-schema.md](../../docs/json-schema.md) and
+  exits 0 whenever it printed.
+- A Microsoft Store copy (it runs from `\WindowsApps\`) changes nothing and
+  exits 0: the Store updates it. Any other copy outside the install folder (a
+  dev build, an unpacked zip) is refused with exit 1.
+- Otherwise it shows the plan and the exact command, asks once (`--yes` skips
+  the question; with no terminal, or `BENCHBAR_NONINTERACTIVE=1`, and no
+  `--yes` it refuses with exit 1), then runs the installer and waits, with its
+  output on the console:
+
+  ```
+  powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$ErrorActionPreference = 'Stop'; [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; & ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1'))) -Yes -Version 'X.Y.Z'; exit $LASTEXITCODE"
+  ```
+
+  The installer runs as a script block, so a Restricted execution policy does
+  not stop it. It is main's installer (the newest), pinned with `-Version` to
+  the release the user agreed to. `-NoTray` is added when the install has no
+  tray app. `--zip PATH` passes `-Zip PATH` instead of `-Version`, and
+  `--installer FILE` reads that `install.ps1` instead of the one on GitHub
+  (both for testing a build). The installer gets `BENCHBAR_FROM_SELF_UPDATE=1`
+  and none of `BENCHBAR_VERSION`, `BENCHBAR_ZIP`, `BENCHBAR_SOURCE`,
+  `BENCHBAR_UNINSTALL`, `BENCHBAR_NO_TRAY`, `BENCHBAR_YES` that may be left in
+  the shell. Nothing is set in the user's shell.
+- The running `benchbar.exe` is one of the files replaced: the installer
+  moves a file in use aside to `NAME.old` and removes it at its next run. It
+  closes the tray app and starts it again when it was running.
+- After the installer it asks the new `benchbar.exe --shim-version`. When a
+  keepalive task of this install exists, the new `benchbar.exe keepalive
+  install --distro NAME` moves it to the new program (the old run would keep
+  running the old one). Then the new `benchbar.exe setup run cli_install
+  --distro NAME --jsonl` updates the CLI, for the distro setup uses; with no
+  distro, or no WSL, that part is skipped with one line.
+- It ends with `Summary:` and one line each for `Windows programs`, `Tray
+  app`, `Keepalive` (only with a task) and `CLI in WSL`. The exit code is 1
+  when the Windows part or the CLI part failed, else 0.
+- When Windows already has the newest release, only the CLI part runs.
 
 ## Bug report zip
 

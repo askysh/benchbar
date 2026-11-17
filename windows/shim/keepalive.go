@@ -382,13 +382,20 @@ func readPidRecord(sys *System) pidRecord {
 }
 
 // isKeepaliveProcess is true only for the process the record names: alive,
-// program benchbar.exe, same creation time.
+// program benchbar.exe (or benchbar.exe.old after an update), same creation
+// time.
 func isKeepaliveProcess(sys *System, r pidRecord) bool {
 	if r.Pid <= 0 || r.Created == 0 || !sys.Procs.Alive(r.Pid) {
 		return false
 	}
+	// an update renames a running benchbar.exe to benchbar.exe.old, and the
+	// process then reports that name
 	img, err := sys.Procs.Image(r.Pid)
-	if err != nil || !strings.EqualFold(img[strings.LastIndexAny(img, `\/`)+1:], "benchbar.exe") {
+	base := ""
+	if err == nil {
+		base = img[strings.LastIndexAny(img, `\/`)+1:]
+	}
+	if !strings.EqualFold(base, "benchbar.exe") && !strings.EqualFold(base, "benchbar.exe.old") {
 		return false
 	}
 	created, err := sys.Procs.Created(r.Pid)

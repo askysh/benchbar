@@ -48,6 +48,11 @@ func newSystem() *System {
 	sys.Host, sys.Elevate = osHost()
 	sys.ElevatedWSLPath = systemWSLPath
 	sys.StdinIsTerminal = isTerminal(os.Stdin)
+	sys.Web = httpWeb{}
+	sys.Launch = osLauncher{}
+	sys.PowerShellPath = windowsPowerShellPath
+	sys.MachineArch = machineArch
+	sys.ProcessImages = processImages
 	return sys
 }
 

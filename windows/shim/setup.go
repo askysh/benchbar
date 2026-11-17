@@ -486,7 +486,7 @@ func (c *checker) cliInstalled() setupStep {
 		s.CLIVersion = cli
 		return s
 	case newer:
-		s := c.step("cli", "warn", fmt.Sprintf("benchbar %s in %s is newer than benchbar.exe %s: update benchbar.exe to the same release", cli, c.distro, version), "")
+		s := c.step("cli", "warn", fmt.Sprintf("benchbar %s in %s is newer than benchbar.exe %s: update benchbar.exe to the same release with benchbar.exe self-update", cli, c.distro, version), "")
 		s.CLIVersion = cli
 		return s
 	}
