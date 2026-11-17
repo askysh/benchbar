@@ -997,7 +997,11 @@ function Install-BenchBar {
         }
         if ($startNow) {
           try {
-            Start-Process -FilePath $trayExe -WorkingDirectory $installDir
+            # the tray opens its setup by itself for --installed (a first install, also over
+            # an old config) and never for --restarted (it was running before this run)
+            $trayArg = '--installed'
+            if ($restartTray -or $isUpdate) { $trayArg = '--restarted' }
+            Start-Process -FilePath $trayExe -WorkingDirectory $installDir -ArgumentList $trayArg
             $trayStarted = $true
             Say-Ok 'tray app started'
           } catch {
@@ -1058,7 +1062,7 @@ function Install-BenchBar {
     $message = $_.Exception.Message
     # a tray app this run closed comes back, old or new, whatever failed
     if ($restartTray -and -not $trayStarted -and (Test-Path -LiteralPath $trayExe)) {
-      try { Start-Process -FilePath $trayExe -WorkingDirectory $installDir; Say-Info 'started the tray app again' } catch { }
+      try { Start-Process -FilePath $trayExe -WorkingDirectory $installDir -ArgumentList '--restarted'; Say-Info 'started the tray app again' } catch { }
     }
     if ($message.StartsWith($startFailedMarker)) {
       Write-Host "  [FAIL] $($message.Substring($startFailedMarker.Length))" -ForegroundColor Red
