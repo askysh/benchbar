@@ -2,10 +2,10 @@
 
 All notable changes to this project are documented here.
 
-## Unreleased
+## 0.8.3 - 2026-11-17
 
-A fix pass for Windows from a full review and a live test on a Windows 11
-PC. Getting from nothing to a running bench has fewer dead ends, and the
+0.8.3 is a fix pass for Windows from a full review and a live test on a
+Windows 11 PC. Getting from nothing to a running bench has fewer dead ends, and the
 installer, `benchbar.exe`, the tray and the command line tool in WSL say
 what is wrong and how to fix it.
 
