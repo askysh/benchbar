@@ -210,7 +210,20 @@ func TestKeepaliveInstallFailureStops(t *testing.T) {
 	if len(e.tasks.calls) != 1 {
 		t.Errorf("calls %v", e.tasks.calls)
 	}
-	if !strings.Contains(e.stderr(), "Access is denied") {
+	if !strings.Contains(e.stderr(), "Windows refused to create the task (access denied)") || !strings.Contains(e.stderr(), "fix: ") {
+		t.Errorf("stderr %q", e.stderr())
+	}
+}
+
+func TestKeepaliveInstallOtherFailureShowsSchtasksText(t *testing.T) {
+	e := newEnv(t)
+	e.tasks.handler = func(a []string) (string, int, error) {
+		return "ERROR: The task XML is malformed.", 1, nil
+	}
+	if code := e.run("keepalive", "install"); code != 1 {
+		t.Errorf("exit %d", code)
+	}
+	if !strings.Contains(e.stderr(), "schtasks.exe could not create the task: ERROR: The task XML is malformed.") {
 		t.Errorf("stderr %q", e.stderr())
 	}
 }
@@ -305,7 +318,7 @@ func TestKeepaliveRemove(t *testing.T) {
 	for _, c := range e2.tasks.calls {
 		got = append(got, strings.Join(c, " "))
 	}
-	want := []string{"/Query /TN BenchBar Keepalive", "/End /TN BenchBar Keepalive", "/Delete /TN BenchBar Keepalive /F"}
+	want := []string{"/Query /TN BenchBar Keepalive", "/Query /TN BenchBar Keepalive /XML", "/End /TN BenchBar Keepalive", "/Delete /TN BenchBar Keepalive /F"}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("calls\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
@@ -319,6 +332,24 @@ func TestKeepaliveRemove(t *testing.T) {
 	}
 	if code := e3.run("keepalive", "remove"); code != 1 {
 		t.Errorf("exit %d, want 1 when delete fails", code)
+	}
+}
+
+func TestKeepaliveRemoveLeavesAnotherCopysTask(t *testing.T) {
+	e := newEnv(t)
+	other := `C:\other\benchbar.exe`
+	e.taskHandler(taskXMLOutput(`--headless "`+other+`" keepalive run --distro "Ubuntu-24.04"`), statusCSV)
+	e.FileExists = func(p string) bool { return true }
+	if code := e.run("keepalive", "remove"); code != 0 {
+		t.Fatalf("exit %d: %s", code, e.stderr())
+	}
+	for _, c := range e.tasks.calls {
+		if c[0] == "/Delete" || c[0] == "/End" {
+			t.Errorf("touched another copy's task: %v", c)
+		}
+	}
+	if !strings.Contains(e.stdout(), "runs another copy ("+other+")") {
+		t.Errorf("output:\n%s", e.stdout())
 	}
 }
 

@@ -358,6 +358,8 @@ fl_cmd_site_add() {
   fl_require_plain_bench
   [[ -n "$name" ]] || fl_die "Usage: benchbar site add NAME [--bundle NAME | --apps \"app1 app2\"]"
   fl_site_valid_name "$name"
+  # a password with a line break would be cut off on its standard input: refused before any work
+  fl_secrets_single_line ADMIN_PASSWORD MARIADB_ROOT_PASSWORD
   if [[ "$apply" == "1" ]]; then
     [[ "$token" =~ ^[0-9a-f]{64}$ ]] || fl_die "--apply needs the token of a plan." "benchbar site add ${name} --dry-run --json prints it"
     [[ "${FL_DRY_RUN:-0}" != "1" ]] || fl_die "--apply runs the plan; --dry-run shows it. Pass one of them."

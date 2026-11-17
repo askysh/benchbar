@@ -24,6 +24,9 @@ if [[ -n "${BENCHBAR_SUDO_PASSWORD:+x}" ]]; then
   FL__XT=0
   case "$-" in *x*) FL__XT=1; { set +x; } 2>/dev/null ;; esac
   if [[ "${BENCHBAR_SUDO:-}" == "env" ]]; then
+    # a line break cannot ride the pipe (one line is read): only the fact goes
+    # on, and fl_sudo_env_preflight refuses before anything runs
+    case "$BENCHBAR_SUDO_PASSWORD" in *$'\n'*) export FL_SUDO_PW_NEWLINE=1 ;; esac
     exec 9< <(printf '%s\n' "$BENCHBAR_SUDO_PASSWORD")
     export FL_SUDO_PW_FD=9
   fi
@@ -193,6 +196,8 @@ OPT_ERPNEXT_COMMIT=""
 # never answer a question (--yes, --make-default, an approved port plan)
 FL_ASSUME_YES=0
 FL_MAKE_DEFAULT=0
+# install, adopt: --allow-windows-fs lets a bench live on the Windows file system under WSL
+FL_ALLOW_WINDOWS_FS=0
 FL_PORT_PLAN_APPROVED=0
 # --offline, OFFLINE=1 or BENCHBAR_OFFLINE=1: install skips its remote
 # checks (the phase scripts get --offline), doctor --fetch fetches nothing
@@ -386,6 +391,8 @@ Options
   --bundle NAME       App bundle for install (minimal, common, extended)
   --make-default      install, adopt, service: make this the default bench even when
                       another one is already the default
+  --allow-windows-fs  install, adopt (WSL): accept a bench on the Windows file system
+                      (/mnt/c, drvfs, 9p), which is slow and breaks file watching
   --with-schedule     service: add the scheduler to Procfile.lean (per bench, kept by repair)
   --without-schedule  service: remove it again (the default)
   --port-offset N     install, adopt, service: use port block N (web 8000+N, socketio 9000+N,
@@ -407,6 +414,7 @@ Options
 Environment:
   BENCHBAR_SUDO=gui   root steps (wkhtmltopdf, /etc/hosts) ask in a macOS password dialog, not sudo
   BENCHBAR_SUDO=env   Linux: sudo steps use the password in BENCHBAR_SUDO_PASSWORD, no terminal needed
+  BENCH_INIT_TIMEOUT_SECONDS   install: how long bench init may run (default 2700, 0 for no limit)
 
 Shell helpers (written to your shell rc by install or repair):
   benchup benchdown benchrestart benchstatus benchlogs benchfg benchwatch benchdoctor benchcd
@@ -438,6 +446,7 @@ while [[ "$#" -gt 0 ]]; do
     --dry-run) FL_DRY_RUN=1; shift ;;
     --offline) OFFLINE=1; shift ;;
     --make-default) FL_MAKE_DEFAULT=1; shift ;;
+    --allow-windows-fs) FL_ALLOW_WINDOWS_FS=1; shift ;;
     --with-schedule) FL_SCHEDULER=on; shift ;;
     --without-schedule) FL_SCHEDULER=off; shift ;;
     --port-offset) OPT_PORT_OFFSET="${2:-}"; shift 2 ;;
@@ -842,11 +851,15 @@ fl_install_plan_json() {
   fl_sudo_gui && mode=gui
   web_port="${INSTALL_PORT_BLOCK%% *}"; [[ -n "$web_port" ]] || web_port="$FL_WEB_PORT"
   [[ -z "$FL_TEAM_PROFILE" ]] || team="$(fl_json_str "$FL_TEAM_PROFILE")"
-  local blockers="" bl_id bl_msg bl_fix
+  local blockers="" warnings="" bl_id bl_msg bl_fix
   while IFS='|' read -r bl_id bl_msg bl_fix; do
     [[ -n "$bl_id" ]] || continue
     blockers="${blockers}${blockers:+,}{\"id\":$(fl_json_str "$bl_id"),\"message\":$(fl_json_str "$bl_msg"),\"fix\":$(fl_json_str "$bl_fix")}"
   done <<<"$FL_INSTALL_BLOCKERS"
+  while IFS='|' read -r bl_id bl_msg bl_fix; do
+    [[ -n "$bl_id" ]] || continue
+    warnings="${warnings}${warnings:+,}{\"id\":$(fl_json_str "$bl_id"),\"message\":$(fl_json_str "$bl_msg"),\"fix\":$(fl_json_str "$bl_fix")}"
+  done <<<"$FL_INSTALL_WARNINGS"
   pl_steps="{\"n\":null,\"id\":\"wkhtmltopdf_install\",\"name\":$(fl_json_str "$FL_INSTALL_PDF_NAME"),\"sudo\":true,\"will_run\":$(fl_json_bool "$pdf_run")}"
   pl_steps="${pl_steps},{\"n\":null,\"id\":\"hosts_entry\",\"name\":$(fl_json_str "$(fl_install_hosts_name)"),\"sudo\":true,\"will_run\":$(fl_json_bool "$hosts_run")}"
   for label in "${FL_STEP_LABELS[@]}"; do
@@ -854,10 +867,22 @@ fl_install_plan_json() {
     pl_steps="${pl_steps},{\"n\":${n},\"id\":\"${id}\",\"name\":$(fl_json_str "$label"),\"sudo\":false,\"will_run\":true}"
   done
   FL_JSONL_URL="http://${FL_SITE}:${web_port}"
-  fl_jsonl plan ",\"bench\":$(fl_json_str "$FL_BENCH_DIR"),\"site\":$(fl_json_str "$FL_SITE"),\"profile\":$(fl_json_str "$FL_PROFILE"),\"team_profile\":${team},\"bundle\":$(fl_json_str "$1"),\"port_offset\":$(fl_json_num "$INSTALL_PORT_OFFSET"),\"web_url\":$(fl_json_str "$FL_JSONL_URL"),\"dry_run\":$(fl_json_bool "$FL_DRY_RUN"),\"sudo_mode\":\"${mode}\",\"steps\":[${pl_steps}],\"blockers\":[${blockers}],\"log\":$(fl_json_str "${FL_LOG_FILE:-}")"
+  fl_jsonl plan ",\"bench\":$(fl_json_str "$FL_BENCH_DIR"),\"site\":$(fl_json_str "$FL_SITE"),\"profile\":$(fl_json_str "$FL_PROFILE"),\"team_profile\":${team},\"bundle\":$(fl_json_str "$1"),\"port_offset\":$(fl_json_num "$INSTALL_PORT_OFFSET"),\"web_url\":$(fl_json_str "$FL_JSONL_URL"),\"dry_run\":$(fl_json_bool "$FL_DRY_RUN"),\"sudo_mode\":\"${mode}\",\"steps\":[${pl_steps}],\"blockers\":[${blockers}],\"warnings\":[${warnings}],\"log\":$(fl_json_str "${FL_LOG_FILE:-}")"
   FL_JSONL_PLAN_SENT=1
   [[ "$FL_DRY_RUN" != "1" ]] || FL_JSONL_QUIET=1
   export FL_JSONL_QUIET
+}
+
+# fl_install_warnings_print: what the plan warns about (the run goes on), each
+# with its fix line
+fl_install_warnings_print() {
+  local id msg fix
+  [[ -n "$FL_INSTALL_WARNINGS" ]] || return 0
+  while IFS='|' read -r id msg fix; do
+    [[ -n "$id" ]] || continue
+    fl_warn "${id}: ${msg}"
+    fl_info "fix: ${fix}"
+  done <<<"$FL_INSTALL_WARNINGS"
 }
 
 # fl_install_blockers_die: every blocker is listed, the first one ends the run
@@ -880,6 +905,8 @@ cmd_install() {
   local profile_name
   fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"
   fl_require_plain_bench
+  # a password with a line break would be cut off on its pipe: refused before any work
+  fl_secrets_single_line ADMIN_PASSWORD MARIADB_ROOT_PASSWORD
   # a malformed pin is refused before any prompt or step
   [[ -z "$OPT_FRAPPE_COMMIT" ]] || fl_validate_custom_commit "$OPT_FRAPPE_COMMIT"
   [[ -z "$OPT_ERPNEXT_COMMIT" ]] || fl_validate_custom_commit "$OPT_ERPNEXT_COMMIT"
@@ -911,16 +938,27 @@ cmd_install() {
   fi
   bundle="${OPT_BUNDLE:-$(fl_bstate_get APP_BUNDLE 2>/dev/null || true)}"
   bundle="${bundle:-$FL_TEAM_BUNDLE}"
+  # Windows' listening ports and the hosts the install downloads from, looked at
+  # once here (WSL; a few seconds at most), before the plan and its port block
+  fl_install_preflight_load
   fl_install_port_plan
-  # a port another program holds stops the run here, before sudo and step 1
-  FL_INSTALL_BLOCKERS="$(fl_install_port_blockers)"
+  # a port another program holds, no systemd, a bench on the Windows file system
+  # or no way to github.com and apt stop the run here, before sudo and step 1
+  FL_INSTALL_BLOCKERS="$(fl_install_port_blockers; fl_install_env_blockers)"
+  FL_INSTALL_WARNINGS="$(fl_install_env_warnings)"
   fl_steps_define "System dependencies (${phase00})" "Bench and site (01-install-bench-and-site.sh)" "Background service"
   fl_steps_ids system_deps bench_site service
   fl_install_plan_json "${bundle:-minimal}"
   fl_steps_print_plan
+  fl_install_warnings_print
   fl_install_blockers_die
   fl_install_sudo_upfront
   fl_install_privileged_steps
+  # Linux: lingering, so the bench's systemd user unit can run without a login
+  # session (a wsl.exe start has none) and after a reboot. Here, while the sudo
+  # credential or the BENCHBAR_SUDO=env password is still there: phase 00 drops
+  # it. A refusal is a warning with the fix, not a failure.
+  fl_linger_ensure sudo
   # from here on nothing runs as root: brew, pip, npm, yarn and bench get-app
   # must not find a cached sudo credential. On Linux the apt and MariaDB
   # steps are phase 00 itself: it drops the credential when they are done
@@ -1113,13 +1151,20 @@ fl_adopt_plan_json() {
 }
 
 cmd_adopt() {
-  local path="${1:-}"
+  local path="${1:-}" bl_line bl_msg bl_fix
   [[ -n "$path" ]] || fl_die "Usage: benchbar adopt <bench path>" "Example: benchbar adopt ~/frappe-bench"
   path="$(fl_abs_path "$path")"
   fl_bench_path_valid "$path"
   fl_is_bench_dir "$path" || fl_die "${path} is not a bench (no sites/common_site_config.json and no apps/frappe)." "Point adopt at the folder that holds apps/, sites/ and env/."
   fl_context_init "$path" "$OPT_SITE" "$OPT_PROFILE"
   fl_require_plain_bench
+  # WSL: a bench on the Windows file system is refused here, as install does
+  bl_line="$(fl_bench_windows_fs_blocker "$FL_BENCH_DIR")"
+  if [[ -n "$bl_line" ]]; then
+    IFS='|' read -r FL_ERROR_ID bl_msg bl_fix <<<"$bl_line"
+    FL_ERROR_FIX="$bl_fix"
+    fl_die "$bl_msg" "$bl_fix"
+  fi
   FL_JSONL_BENCH="$FL_BENCH_DIR"; FL_JSONL_SITE="$FL_SITE"
   fl_header "benchbar adopt" "$(fl_mode_name)" "$(fl_profile_display)" "$FL_BENCH_DIR" "$FL_SITE"
   fl_info "adopt only adds the background service files and remembers the bench."

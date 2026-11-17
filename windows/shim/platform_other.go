@@ -26,6 +26,8 @@ func osServices() (DistroSource, PathStore, Broadcaster) {
 	return unsupported{}, unsupported{}, unsupported{}
 }
 
+func startupApproved(string) ([]byte, error) { return nil, errNotWindows }
+
 func hostMemory() (uint64, error) { return 0, errNotWindows }
 
 func isTerminal(f *os.File) bool {

@@ -1,8 +1,11 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -24,11 +27,14 @@ func installerURL() string {
 	return installerBase + "main/install.sh"
 }
 
-// installerPipe is the shell line that downloads the installer and runs it.
-// A release build passes --version, so install.sh checks out that release
-// of the CLI too.
+// installerPipe is the one shell line that downloads the installer and runs
+// it. pipefail makes a failed download (curl exit 22 on a 404) the exit code
+// of the whole line; without it the pipe would end with bash's 0. The line
+// is for bash, which every distro BenchBar supports has, and the commands
+// that run it name bash explicitly. A release build passes --version, so
+// install.sh checks out that release of the CLI too.
 func installerPipe() string {
-	line := "curl -fsSL " + installerURL() + " | bash"
+	line := "set -o pipefail; curl -fsSL " + installerURL() + " | bash"
 	if releaseRE.MatchString(version) {
 		line += " -s -- --version v" + version
 	}
@@ -83,7 +89,19 @@ type target struct {
 }
 
 func resolveTarget(sys *System, want string) (target, error) {
+	return resolveTargetWith(sys, want, false)
+}
+
+// resolveTargetWith is resolveTarget; with lenient a config.json that is not
+// valid JSON is ignored when a distro name is given. adopt-distro NAME uses
+// it, because it is the command that writes the file again.
+func resolveTargetWith(sys *System, want string, lenient bool) (target, error) {
 	cfg, err := loadConfig(sys)
+	var ce *configError
+	if errors.As(err, &ce) && want != "" && lenient {
+		// adopt-distro NAME repairs a broken config.json, so it must get past it
+		cfg, err = &configFile{path: ce.path, m: map[string]json.RawMessage{}}, nil
+	}
 	if err != nil {
 		return target{}, err
 	}
@@ -117,25 +135,119 @@ func resolveDistro(sys *System, want string) (string, *Distro, *problem) {
 		}
 	}
 	if len(list) == 0 {
-		return "", nil, &problem{Msg: "no WSL distro is installed", Fix: "wsl.exe --install -d Ubuntu-24.04"}
+		return "", nil, &problem{Msg: "no WSL distro is installed", Fix: "benchbar.exe setup check (it installs Ubuntu 24.04; by hand: wsl.exe --install -d Ubuntu-24.04)"}
 	}
-	pick := -1
+	var usable []int
 	for i, d := range list {
-		if d.Default {
-			pick = i
-			break
+		if !isToolDistro(d.Name) {
+			usable = append(usable, i)
 		}
 	}
-	if pick < 0 {
-		for i, d := range list {
-			if !strings.HasPrefix(strings.ToLower(d.Name), "docker-desktop") {
-				pick = i
-				break
-			}
+	switch {
+	case len(usable) == 0:
+		return "", nil, &problem{
+			Msg: "the only WSL distros are container tool distros (" + names(list) + "), which BenchBar never uses",
+			Fix: "benchbar.exe setup check (it installs Ubuntu 24.04), or benchbar.exe adopt-distro NAME for a distro you added yourself",
+		}
+	case len(usable) == 1:
+		return list[usable[0]].Name, &list[usable[0]], nil
+	}
+	// several usable distros: the WSL default stays the choice, unless
+	// it is not a usable one
+	var rest []Distro
+	for _, i := range usable {
+		if list[i].Default {
+			return list[i].Name, &list[i], nil
+		}
+		rest = append(rest, list[i])
+	}
+	return "", nil, &problem{
+		Msg: "the WSL default distro is not one BenchBar can use and there is more than one other (" + names(rest) + ")",
+		Fix: "benchbar.exe adopt-distro NAME (wsl.exe --list --verbose shows the names)",
+	}
+}
+
+// toolDistroPrefixes are the distros that container tools register for
+// themselves. BenchBar never picks one on its own.
+var toolDistroPrefixes = []string{"docker-desktop", "rancher-desktop", "podman-machine"}
+
+func isToolDistro(name string) bool {
+	n := strings.ToLower(name)
+	for _, p := range toolDistroPrefixes {
+		if strings.HasPrefix(n, p) {
+			return true
 		}
 	}
-	if pick < 0 {
-		pick = 0
+	return false
+}
+
+func names(list []Distro) string {
+	var out []string
+	for _, d := range list {
+		out = append(out, d.Name)
 	}
-	return list[pick].Name, &list[pick], nil
+	return strings.Join(out, ", ")
+}
+
+// The one Linux release BenchBar supports in a distro.
+const (
+	supportedOSID  = "ubuntu"
+	supportedOSVer = "24.04"
+)
+
+// osProblem is the message when the probe shows a distro that is not Ubuntu
+// 24.04, or "" when it is, or when the probe could not read the release.
+func osProblem(distro string, r probeResult) string {
+	if r.osID == "" || (r.osID == supportedOSID && r.osVer == supportedOSVer) {
+		return ""
+	}
+	name := r.osName
+	if name == "" {
+		name = r.osID
+	}
+	return fmt.Sprintf("BenchBar supports Ubuntu %s; %s is %s", supportedOSVer, distro, strings.TrimSpace(name+" "+r.osVer))
+}
+
+// osFix is the fix for a distro that is not Ubuntu 24.04.
+func osFix() string {
+	return "benchbar.exe setup run distro_install --distro Ubuntu-24.04 installs it next to this one, or benchbar.exe adopt-distro NAME uses another distro that is Ubuntu 24.04"
+}
+
+// releaseVersion parses the X.Y.Z in a version line such as "benchbar 0.8.1".
+func releaseVersion(line string) ([3]int, bool) {
+	var v [3]int
+	m := versionRE.FindStringSubmatch(line)
+	if m == nil {
+		return v, false
+	}
+	for i := range v {
+		v[i], _ = strconv.Atoi(m[i+1])
+	}
+	return v, true
+}
+
+func versionLess(a, b [3]int) bool {
+	for i := range a {
+		if a[i] != b[i] {
+			return a[i] < b[i]
+		}
+	}
+	return false
+}
+
+// cliSkew compares the CLI version the distro reports with the shim's own
+// release version. A dev build of the shim, and a version line that cannot
+// be read, never report a skew. older is true when the CLI is older than
+// the shim, newer when it is newer.
+func cliSkew(cliLine string) (cli string, older, newer bool) {
+	if !releaseRE.MatchString(version) {
+		return "", false, false
+	}
+	have, ok := releaseVersion(cliLine)
+	if !ok {
+		return "", false, false
+	}
+	want, _ := releaseVersion(version)
+	cli = fmt.Sprintf("%d.%d.%d", have[0], have[1], have[2])
+	return cli, versionLess(have, want), versionLess(want, have)
 }

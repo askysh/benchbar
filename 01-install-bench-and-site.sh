@@ -112,6 +112,8 @@ done
 # stdin, see bench.sh) and must not reach pip, yarn, bench get-app or any
 # other child
 export -n MARIADB_ROOT_PASSWORD ADMIN_PASSWORD
+# one line each: the site is created with them on stdin
+fl_secrets_single_line ADMIN_PASSWORD MARIADB_ROOT_PASSWORD
 
 if [[ "$LIST_PROFILES" == "1" ]]; then
   fl_list_profiles

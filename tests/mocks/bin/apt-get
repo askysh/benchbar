@@ -7,15 +7,26 @@
 # $MOCK_STATE/apt_unavailable cannot be installed.
 # shellcheck source=tests/mocks/bin/_mocklib.sh
 . "${0%/*}/_mocklib.sh"
-mock_log "$@"
-simulate=0; verb=""; pkgs=()
+# fl_apt_get adds "-o OPTION" pairs (lock timeout, force-confold): the log line
+# keeps the plain form ("apt-get install -y PKG"), the whole call is in
+# $MOCK_STATE/apt_raw
+printf '%s\n' "$*" >>"${MOCK_STATE:-/dev/null}/apt_raw" 2>/dev/null || true
+# APT_CONFIG (the proxy file of fl_apt_get): its content and mode, copied to $MOCK_STATE/apt_conf_seen
+if [[ -n "${APT_CONFIG:-}" && -f "$APT_CONFIG" && -d "${MOCK_STATE:-/nonexistent}" ]]; then
+  { cat "$APT_CONFIG"; printf 'mode=%s\n' "$(stat -c %a "$APT_CONFIG" 2>/dev/null || stat -f %Lp "$APT_CONFIG")"; } >>"$MOCK_STATE/apt_conf_seen"
+fi
+simulate=0; verb=""; pkgs=(); plain=(); skip=0
 for a in "$@"; do
+  if [[ "$skip" == "1" ]]; then skip=0; continue; fi
   case "$a" in
+    -o) skip=1; continue ;;
     -s|--simulate|--dry-run) simulate=1 ;;
     -*) ;;
     *) if [[ -z "$verb" ]]; then verb="$a"; else pkgs+=("$a"); fi ;;
   esac
+  plain+=("$a")
 done
+mock_log "${plain[@]}"
 [[ -f "${MOCK_STATE:?}/apt_fail" ]] && { echo "E: apt-get failed" >&2; exit 100; }
 if [[ "$verb" == "install" ]]; then
   for p in ${pkgs[@]+"${pkgs[@]}"}; do

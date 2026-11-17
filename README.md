@@ -83,9 +83,15 @@ Linux distro and the bench:
 irm https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1 | iex
 ```
 
-The Windows programs are unsigned until the signing application is
-approved. For a bug, use **Report a Bug** in the tray: it writes a
-redacted zip and opens the bug form. See
+The Windows programs are not signed yet. On our Windows 11 test PC the
+line above showed no SmartScreen warning, but Smart App Control blocks
+unsigned programs: when it is on, the installer stops first and says what
+to do. What that means in practice is in
+[Before you install](https://benchbar.akashmishra.com/windows/#before-you-install).
+Every release has SHA256SUMS and, from the next release, build provenance
+you can verify. To remove BenchBar again, run the installer
+with `-Uninstall`. For a bug, use **Report a Bug** in the tray: it writes
+a redacted zip and opens the bug form. See
 [Windows](https://benchbar.akashmishra.com/windows/).
 
 ## Quick start

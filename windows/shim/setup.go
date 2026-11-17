@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,7 +22,7 @@ import (
 
 const (
 	defaultSetupDistro = "Ubuntu-24.04"
-	minBuild           = 19041 // Windows 10 version 2004, the first with wsl --install
+	minBuild           = 19045 // Windows 10 22H2: wsl --install --no-distribution needs a build later than 2004
 	setupSchema        = 1
 	setupUsage         = "usage: benchbar.exe setup check [--json] [--probe] [--distro NAME] | setup run ACTION [--distro NAME] [--user NAME] [--force] --jsonl"
 )
@@ -47,9 +48,11 @@ func cmdSetup(sys *System, args []string) int {
 }
 
 // setupDistro is the distro setup works on: the flag, else the configured
-// one, else Ubuntu-24.04. The name must be plain, so it can never carry a
-// quote or an option into a command.
-func setupDistro(sys *System, flag string) (string, error) {
+// one, else the one Ubuntu 24.04 distro that is already there, else
+// Ubuntu-24.04. The name must be plain, so it can never carry a quote or an
+// option into a command. mayStart says whether looking inside a stopped
+// distro is allowed (setup check does that only with --probe).
+func setupDistro(sys *System, flag string, mayStart bool) (string, error) {
 	name := flag
 	if name == "" {
 		cfg, err := loadConfig(sys)
@@ -59,12 +62,48 @@ func setupDistro(sys *System, flag string) (string, error) {
 		name = cfg.str("distro")
 	}
 	if name == "" {
+		name = existingUbuntu(sys, mayStart)
+	}
+	if name == "" {
 		name = defaultSetupDistro
 	}
 	if !distroNameRE.MatchString(name) {
 		return "", fmt.Errorf("%q is not a usable distro name (letters, digits, . _ - only)", name)
 	}
 	return name, nil
+}
+
+// existingUbuntu is the name of the one usable WSL 2 distro when it is
+// Ubuntu 24.04 (so setup does not install a second one), or "". A distro
+// that is not called Ubuntu is never looked into. A stopped one is not
+// started unless mayStart.
+func existingUbuntu(sys *System, mayStart bool) string {
+	list, err := sys.Distros.Distros()
+	if err != nil {
+		return ""
+	}
+	var usable []Distro
+	for _, d := range list {
+		if !isToolDistro(d.Name) {
+			usable = append(usable, d)
+		}
+	}
+	if len(usable) != 1 || usable[0].Version != 2 || !distroNameRE.MatchString(usable[0].Name) ||
+		!strings.HasPrefix(strings.ToLower(usable[0].Name), "ubuntu") {
+		return ""
+	}
+	d := usable[0]
+	if strings.EqualFold(d.Name, defaultSetupDistro) {
+		return d.Name
+	}
+	if !mayStart && !distroRunning(sys, d.Name) {
+		return ""
+	}
+	res, err := wslExec(sys, "", "-d", d.Name, "--exec", "/bin/sh", "-c", `. /etc/os-release 2>/dev/null; printf '%s %s' "$ID" "$VERSION_ID"`)
+	if err != nil || res.Code != 0 || strings.TrimSpace(res.Stdout) != supportedOSID+" "+supportedOSVer {
+		return ""
+	}
+	return d.Name
 }
 
 func setupDir(sys *System) string {
@@ -92,10 +131,20 @@ func decodeOut(b []byte) string {
 	return strings.ReplaceAll(string(text), "\x00", "")
 }
 
-// wslExec runs wsl.exe and waits. stdin is fed when it is not empty. An
-// error means wsl.exe did not run; a non zero exit is in Code.
+// wslExec runs wsl.exe and waits, at most wslTimeoutFor(args). stdin is fed
+// when it is not empty. An error means wsl.exe did not run or did not answer
+// in time (a *wslTimeoutError); a non zero exit is in Code.
 func wslExec(sys *System, stdin string, args ...string) (wslResult, error) {
-	cmd, err := wslCommand(sys, args...)
+	return wslExecTimeout(sys, wslTimeoutFor(args), stdin, args...)
+}
+
+// wslExecTimeout is wslExec with a chosen deadline. At the deadline wsl.exe
+// is ended (and the job object takes what it started), so nothing is left
+// behind.
+func wslExecTimeout(sys *System, d time.Duration, stdin string, args ...string) (wslResult, error) {
+	ctx, cancel := context.WithTimeout(sys.Ctx, d)
+	defer cancel()
+	cmd, err := wslCommandContext(ctx, sys, args...)
 	if err != nil {
 		return wslResult{}, err
 	}
@@ -111,6 +160,9 @@ func wslExec(sys *System, stdin string, args ...string) (wslResult, error) {
 	werr := cmd.Wait()
 	res := wslResult{Stdout: decodeOut(o.Bytes()), Stderr: decodeOut(e.Bytes())}
 	if werr != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return res, &wslTimeoutError{d}
+		}
 		var ee *exec.ExitError
 		if !errors.As(werr, &ee) {
 			return res, werr
@@ -133,6 +185,11 @@ type setupStep struct {
 	// An advisory step (linger, keepalive, wslconfig, shim_path) is never
 	// missing or failed: it is warn at worst and never changes ready.
 	Blocking bool `json:"blocking"`
+	// CLIVersion is only set on the cli step, when the CLI in the distro
+	// reports a release that differs from benchbar.exe: the installed
+	// version. It is left out when unknown, so a step with the status
+	// missing and a CLI version is an update, not an install.
+	CLIVersion string `json:"cli_version,omitempty"`
 }
 
 type setupReport struct {
@@ -161,6 +218,7 @@ type checker struct {
 	target    target
 	statusRan bool
 	wslWorks  bool
+	statusErr error // wsl.exe --status did not answer in time
 
 	registered bool
 	probed     bool
@@ -185,6 +243,9 @@ func (c *checker) wslStatus() bool {
 	c.statusRan = true
 	res, err := wslExec(c.sys, "", "--status")
 	c.wslWorks = err == nil && res.Code == 0
+	if isWslTimeout(err) {
+		c.statusErr = err
+	}
 	return c.wslWorks
 }
 
@@ -196,6 +257,7 @@ func (c *checker) defs() []stepDef {
 		{"reboot", "Restart Windows", true, false, c.rebootStep},
 		{"wsl_version", "WSL version", true, false, c.wslVersion},
 		{"distro", "Linux distro", true, false, c.distroStep},
+		{"distro_os", "Linux version", true, false, c.distroOS},
 		{"distro_user", "Linux user", true, false, c.distroUser},
 		{"systemd", "systemd", true, false, c.systemdStep},
 		{"cli", "BenchBar command line tool", true, false, c.cliStep},
@@ -212,7 +274,7 @@ func (c *checker) windowsBuild() setupStep {
 	case err != nil:
 		return c.step("windows_build", "warn", "cannot read the Windows build: "+err.Error(), "")
 	case b < minBuild:
-		return c.step("windows_build", "fail", fmt.Sprintf("Windows build %d is too old, WSL 2 needs Windows 10 version 2004 (build %d) or Windows 11", b, minBuild), "")
+		return c.step("windows_build", "fail", fmt.Sprintf("Windows build %d is too old, WSL 2 needs Windows 10 version 22H2 (build %d) or Windows 11: update Windows in Settings > Windows Update", b, minBuild), "")
 	}
 	return c.step("windows_build", "ok", fmt.Sprintf("Windows build %d", b), "")
 }
@@ -228,7 +290,10 @@ func (c *checker) virtualization() setupStep {
 		// WSL answers, so the machine can run it whatever the flag says
 		return c.step("virtualization", "ok", "Windows does not report firmware virtualization, but WSL runs", "")
 	}
-	return c.step("virtualization", "fail", "virtualization is off: turn on Intel VT-x or AMD-V (SVM) in the BIOS or UEFI settings, then start again", "")
+	// IsProcessorFeaturePresent can say no while a hypervisor already runs, so
+	// this does not stop the setup. If WSL then fails with 0x80370102, the
+	// message of the failing step names the firmware setting.
+	return c.step("virtualization", "warn", "Windows does not report firmware virtualization (this can be wrong). If WSL does not start later, turn on Intel VT-x or AMD SVM (AMD-V) in the BIOS or UEFI settings", "")
 }
 
 func (c *checker) wslFeature() setupStep {
@@ -239,13 +304,17 @@ func (c *checker) wslFeature() setupStep {
 	if c.wslStatus() {
 		return c.step("wsl_feature", "ok", "wsl.exe --status answers", "")
 	}
+	if c.statusErr != nil {
+		// no answer is not "not installed": do not offer to install anything
+		return c.step("wsl_feature", "fail", c.statusErr.Error(), "")
+	}
 	return c.step("wsl_feature", "missing", "WSL is not installed or does not answer; Windows will ask for permission to turn it on", "wsl_enable")
 }
 
 func (c *checker) rebootStep() setupStep {
 	if c.reboot || rebootMarkerPending(c.sys) {
 		c.reboot = true
-		return c.step("reboot", "missing", "Windows must restart before WSL can start a Linux distro", "reboot")
+		return c.step("reboot", "missing", "Windows must restart before WSL can start a Linux distro. Choose Restart in the Start menu, not Shut down: with Fast Startup, Shut down does not count as a restart", "reboot")
 	}
 	return c.step("reboot", "ok", "no restart is pending", "")
 }
@@ -268,6 +337,9 @@ func wslVersionOK(out string) (string, bool) {
 
 func (c *checker) wslVersion() setupStep {
 	res, err := wslExec(c.sys, "", "--version")
+	if isWslTimeout(err) {
+		return c.step("wsl_version", "fail", err.Error(), "")
+	}
 	if err != nil || res.Code != 0 {
 		return c.step("wsl_version", "missing", "this is the old built in WSL, the current one comes from the Microsoft Store (wsl.exe --update)", "wsl_update")
 	}
@@ -317,7 +389,7 @@ func (c *checker) distroStep() setupStep {
 	}
 	c.registered = true
 	if info.Version != 2 {
-		return c.step("distro", "fail", fmt.Sprintf("%s runs as WSL %d, benches need WSL 2: wsl.exe --set-version %s 2", info.Name, info.Version, info.Name), "")
+		return c.step("distro", "fail", fmt.Sprintf("%s runs as WSL %d, benches need WSL 2. Fix: wsl.exe --set-version %s 2 (or benchbar.exe setup run distro_wsl2; it stops the distro)", info.Name, info.Version, quoteArg(info.Name)), "distro_wsl2")
 	}
 	run := c.probe
 	if !run {
@@ -342,6 +414,21 @@ func (c *checker) distroStep() setupStep {
 func (c *checker) notChecked(id string) setupStep {
 	c.unchecked = true
 	return c.step(id, "warn", "not checked: the distro is stopped (run setup check --probe to start it and check)", "")
+}
+
+// distroOS checks the distro is Ubuntu 24.04, the one release BenchBar
+// supports. A distro whose release cannot be read is a warning, not a stop.
+func (c *checker) distroOS() setupStep {
+	if !c.probed {
+		return c.notChecked("distro_os")
+	}
+	if c.pr.osID == "" {
+		return c.step("distro_os", "warn", "cannot read /etc/os-release in "+c.distro+", so the Linux release is not checked", "")
+	}
+	if msg := osProblem(c.distro, c.pr); msg != "" {
+		return c.step("distro_os", "fail", msg+". Fix: "+osFix(), "")
+	}
+	return c.step("distro_os", "ok", "Ubuntu "+c.pr.osVer, "")
 }
 
 func (c *checker) distroUser() setupStep {
@@ -375,12 +462,35 @@ func (c *checker) cliStep() setupStep {
 		return c.notChecked("cli")
 	}
 	if c.pr.bench != "" {
-		return c.step("cli", "ok", orUnknown(c.pr.cliVer)+" at "+c.pr.bench, "")
+		return c.cliInstalled()
 	}
 	if c.target.cli != "" && c.target.cli != "benchbar" {
 		return c.step("cli", "missing", missingCLIFix(c.target), "")
 	}
 	return c.step("cli", "missing", "benchbar is not on the PATH inside "+c.distro, "cli_install")
+}
+
+// cliInstalled is the cli step when benchbar is there. A release build of
+// the shim wants the CLI of the same release: an older one is not ok, and
+// cli_install brings it up to date. A newer one only warns, since nothing
+// here should take a CLI back to an older release.
+func (c *checker) cliInstalled() setupStep {
+	detail := orUnknown(c.pr.cliVer) + " at " + c.pr.bench
+	if c.target.cli != "" && c.target.cli != "benchbar" {
+		return c.step("cli", "ok", detail, "")
+	}
+	cli, older, newer := cliSkew(c.pr.cliVer)
+	switch {
+	case older:
+		s := c.step("cli", "missing", fmt.Sprintf("benchbar %s in %s does not match benchbar.exe %s: update it with benchbar.exe setup run cli_install", cli, c.distro, version), "cli_install")
+		s.CLIVersion = cli
+		return s
+	case newer:
+		s := c.step("cli", "warn", fmt.Sprintf("benchbar %s in %s is newer than benchbar.exe %s: update benchbar.exe to the same release", cli, c.distro, version), "")
+		s.CLIVersion = cli
+		return s
+	}
+	return c.step("cli", "ok", detail, "")
 }
 
 func (c *checker) lingerStep() setupStep {
@@ -475,7 +585,7 @@ func cmdSetupCheck(sys *System, args []string) int {
 		errorf(sys, "%v. %s", err, setupUsage)
 		return 1
 	}
-	distro, err := setupDistro(sys, p.vals["--distro"])
+	distro, err := setupDistro(sys, p.vals["--distro"], p.bools["--probe"])
 	if err != nil {
 		errorf(sys, "%v", err)
 		return 1

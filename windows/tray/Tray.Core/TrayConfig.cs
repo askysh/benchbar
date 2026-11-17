@@ -26,6 +26,36 @@ public sealed class TrayConfig
 
     private TrayConfig(string path) => Path = path;
 
+    /// <summary>The name of the mutex the shim (windows/shim/config.go) takes around its own read, modify, write of the file.</summary>
+    public const string LockName = @"Local\BenchBarConfig";
+
+    /// <summary>Takes the config lock for one Save; a test replaces it. The result is disposed when the write ends, null means none was taken.</summary>
+    internal Func<IDisposable?> AcquireLock { get; set; } = TryHoldLock;
+
+    /// <summary>
+    /// The same advisory lock as the shim: the mutex exists while a writer is in its read, modify, write. Creating it is the
+    /// try; "already exists" means another writer holds it, so wait 100 ms and try again, up to 20 times (2 s), then go on
+    /// without it. Nobody ever waits on the mutex and it is never held across a process call.
+    /// </summary>
+    private static IDisposable? TryHoldLock()
+    {
+        for (var attempt = 0; attempt < 20; attempt++)
+        {
+            try
+            {
+                var mutex = new Mutex(false, LockName, out var created);
+                if (created) return mutex;
+                mutex.Dispose();
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or WaitHandleCannotBeOpenedException)
+            {
+                return null; // no lock available here: go on without it
+            }
+            Thread.Sleep(100);
+        }
+        return null;
+    }
+
     public string Path { get; }
 
     public static string DefaultPath { get; } = System.IO.Path.Combine(
@@ -86,6 +116,9 @@ public sealed class TrayConfig
     /// <summary>The person closed the first run wizard with Cancel: it no longer opens by itself at launch.</summary>
     public bool WizardDismissed { get; set; }
 
+    /// <summary>The wizard flow to resume after Windows restarts: <c>new</c> (set up a new bench) or <c>existing</c> (use a bench that is already there).</summary>
+    public string ResumeFlow { get; set; } = "new";
+
     /// <summary>The person closed the beta banner at the top of the BenchBar window; it stays away from then on.</summary>
     public bool BetaBannerDismissed { get; set; }
 
@@ -128,6 +161,7 @@ public sealed class TrayConfig
             if (tray["check_for_updates"] is JsonValue u && u.TryGetValue<bool>(out var check)) config.CheckForUpdates = check;
             if (tray["wizard_dismissed"] is JsonValue w && w.TryGetValue<bool>(out var dismissed)) config.WizardDismissed = dismissed;
             if (tray["beta_banner_dismissed"] is JsonValue bb && bb.TryGetValue<bool>(out var betaDismissed)) config.BetaBannerDismissed = betaDismissed;
+            config.ResumeFlow = ReadString(tray, "resume_flow") == "existing" ? "existing" : "new";
         }
         return config;
     }
@@ -164,6 +198,8 @@ public sealed class TrayConfig
         var dir = System.IO.Path.GetDirectoryName(Path);
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
 
+        using var configLock = AcquireLock(); // held from the read to the replace, so the shim's write is not lost to ours
+
         JsonObject root = [];
         if (File.Exists(Path))
         {
@@ -191,6 +227,7 @@ public sealed class TrayConfig
         tray["check_for_updates"] = CheckForUpdates;
         tray["wizard_dismissed"] = WizardDismissed;
         tray["beta_banner_dismissed"] = BetaBannerDismissed;
+        tray["resume_flow"] = ResumeFlow == "existing" ? "existing" : "new";
         root["tray"] = tray;
 
         var temp = Path + "." + Environment.ProcessId + ".tmp";

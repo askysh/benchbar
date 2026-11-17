@@ -19,6 +19,21 @@ public interface IStreamRunner
 
 public sealed class SystemStreamRunner : IStreamRunner
 {
+    /// <summary>How long to wait for the output pipes after the child has exited: a grandchild that keeps a pipe open must not hang the call.</summary>
+    public static readonly TimeSpan PipeGrace = TimeSpan.FromSeconds(5);
+
+    /// <summary>A timeout in words: seconds below one minute ("60 seconds"), else minutes ("90 minutes", "1 minute").</summary>
+    public static string TimeoutText(TimeSpan timeout)
+    {
+        if (timeout.TotalSeconds < 60)
+        {
+            var seconds = Math.Max(1, (int)Math.Ceiling(timeout.TotalSeconds));
+            return seconds == 1 ? "1 second" : $"{seconds} seconds";
+        }
+        var minutes = (int)timeout.TotalMinutes;
+        return minutes == 1 ? "1 minute" : $"{minutes} minutes";
+    }
+
     public async Task<StreamResult> RunAsync(string fileName, IReadOnlyList<string> args, IReadOnlyDictionary<string, string>? environment,
         Action<string> onLine, TimeSpan timeout, CancellationToken ct)
     {
@@ -47,28 +62,49 @@ public sealed class SystemStreamRunner : IStreamRunner
         var errors = new List<string>();
         var pumpOut = Task.Run(async () =>
         {
-            string? line;
-            while ((line = await process.StandardOutput.ReadLineAsync(CancellationToken.None).ConfigureAwait(false)) is not null) onLine(line);
+            try
+            {
+                string? line;
+                while ((line = await process.StandardOutput.ReadLineAsync(CancellationToken.None).ConfigureAwait(false)) is not null) onLine(line);
+            }
+            catch (Exception ex) when (ex is ObjectDisposedException or IOException or InvalidOperationException)
+            {
+                // the process was disposed while a grandchild still held the pipe
+            }
         }, CancellationToken.None);
         var pumpErr = Task.Run(async () =>
         {
-            string? line;
-            while ((line = await process.StandardError.ReadLineAsync(CancellationToken.None).ConfigureAwait(false)) is not null)
+            try
             {
-                if (line.Trim().Length > 0 && errors.Count < 5) errors.Add(line.Trim());
+                string? line;
+                while ((line = await process.StandardError.ReadLineAsync(CancellationToken.None).ConfigureAwait(false)) is not null)
+                {
+                    if (line.Trim().Length > 0 && errors.Count < 5) errors.Add(line.Trim());
+                }
+            }
+            catch (Exception ex) when (ex is ObjectDisposedException or IOException or InvalidOperationException)
+            {
+                // see above
             }
         }, CancellationToken.None);
         try
         {
             await process.WaitForExitAsync(cts.Token).ConfigureAwait(false);
-            await Task.WhenAll(pumpOut, pumpErr).ConfigureAwait(false);
+            try
+            {
+                await Task.WhenAll(pumpOut, pumpErr).WaitAsync(PipeGrace, ct).ConfigureAwait(false);
+            }
+            catch (TimeoutException)
+            {
+                // a grandchild holds a pipe: the child is done, so the result is what it printed so far
+            }
             return new StreamResult(process.ExitCode, errors.Count == 0 ? null : errors[0]);
         }
         catch (OperationCanceledException)
         {
             try { process.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
             if (ct.IsCancellationRequested) throw;
-            throw new TimeoutException($"{Path.GetFileName(fileName)} did not finish in {(int)timeout.TotalMinutes} minutes.");
+            throw new TimeoutException($"{Path.GetFileName(fileName)} did not finish in {TimeoutText(timeout)}.");
         }
     }
 }

@@ -62,12 +62,13 @@ internal sealed class FlyoutView : UserControl
 
     private static readonly Brush CardBrush = Frozen(new SolidColorBrush(Color.FromArgb(0x1A, 0x80, 0x80, 0x80)));
     private static readonly Brush FocusBrush = Frozen(new SolidColorBrush(Color.FromArgb(0x26, 0x80, 0x80, 0x80)));
-    private static readonly Brush ErrorBrush = Frozen(new SolidColorBrush(Color.FromRgb(0xE5, 0x48, 0x4D)));
 
     private readonly FlyoutActions _actions;
     private readonly TextBlock _upText = new() { Opacity = 0.7, VerticalAlignment = VerticalAlignment.Center };
     private readonly StackPanel _body = new();
     private readonly StackPanel _message = new() { Visibility = Visibility.Collapsed, Margin = new Thickness(16, 0, 16, 8) };
+    private readonly StackPanel _notices = new() { Visibility = Visibility.Collapsed, Margin = new Thickness(12, 0, 12, 4) };
+    private readonly TextBlock _footer = new() { FontSize = 11, Opacity = 0.65, Margin = new Thickness(16, 0, 16, 10), Visibility = Visibility.Collapsed };
     private readonly HashSet<string> _busy = [];
     private readonly Dictionary<string, (string Message, BenchState State, string? Reason)> _failures = [];
     private readonly List<BenchRow> _rows = [];
@@ -96,8 +97,12 @@ internal sealed class FlyoutView : UserControl
         var root = new DockPanel();
         DockPanel.SetDock(header, Dock.Top);
         DockPanel.SetDock(_message, Dock.Top);
+        DockPanel.SetDock(_footer, Dock.Bottom);
+        DockPanel.SetDock(_notices, Dock.Bottom);
         root.Children.Add(header);
         root.Children.Add(_message);
+        root.Children.Add(_footer);
+        root.Children.Add(_notices);
         root.Children.Add(new ScrollViewer
         {
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
@@ -109,6 +114,39 @@ internal sealed class FlyoutView : UserControl
     }
 
     public FlyoutMode Mode { get; private set; } = FlyoutMode.Empty;
+
+    /// <summary>The line at the foot: the version that is running ("BenchBar 0.8.2"). Empty hides it.</summary>
+    public string FooterText => _footer.Text;
+
+    public void SetFooter(string text)
+    {
+        _footer.Text = text;
+        _footer.Visibility = text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    /// <summary>The notices of the board (the tray closed unexpectedly, the shim's version differs), each with its button and a Dismiss when it can be.</summary>
+    public IReadOnlyList<string> NoticeTexts => _notices.Children.OfType<Border>().Select(b => b.Tag as string ?? "").ToList();
+
+    public void SetNotices(IReadOnlyList<Notice> notices, Action<string> dismiss)
+    {
+        _notices.Children.Clear();
+        foreach (var notice in notices)
+        {
+            var line = new StackPanel { Margin = new Thickness(0, 0, 0, 4) };
+            line.Children.Add(new TextBlock { Text = notice.Text, FontSize = 12, TextWrapping = TextWrapping.Wrap, Foreground = Ui.CriticalBrush, Margin = new Thickness(0, 0, 0, 4) });
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+            if (notice.ActionLabel is { } label && notice.Action is { } action) buttons.Children.Add(TextButton(label, action));
+            if (notice.Dismissible)
+            {
+                var close = TextButton("Dismiss", () => dismiss(notice.Key));
+                close.Margin = new Thickness(10, 0, 0, 0);
+                buttons.Children.Add(close);
+            }
+            if (buttons.Children.Count > 0) line.Children.Add(buttons);
+            _notices.Children.Add(new Border { Child = line, Tag = notice.Text, Background = CardBrush, CornerRadius = new CornerRadius(6), Padding = new Thickness(10, 6, 10, 6) });
+        }
+        _notices.Visibility = notices.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+    }
 
     public string UpText => _upText.Text;
 
@@ -369,7 +407,7 @@ internal sealed class FlyoutView : UserControl
             stack.Children.Add(new TextBlock
             {
                 Text = line,
-                Foreground = ErrorBrush,
+                Foreground = Ui.CriticalBrush,
                 FontSize = 12,
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(18, 4, 0, 0),

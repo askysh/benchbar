@@ -168,8 +168,10 @@ fl_bench_complete() {
   [[ -d "$bench_dir/apps/frappe" && -d "$bench_dir/env" && -f "$bench_dir/sites/apps.txt" ]]
 }
 
-# A bench that has real content (apps or sites) must never be moved aside
-# by the installer, even when env/ or node_modules are gone.
+# A bench that has real content (apps or sites) is never moved aside by a
+# plain rerun, even when env/ or node_modules are gone: it stops with the
+# repair hint. The one exception is fl_bench_incomplete_init (frappe alone,
+# no site: nothing of anyone's in it).
 fl_bench_has_data() {
   local bench_dir="$1" s
   [[ -d "$bench_dir/apps/frappe" ]] && return 0
@@ -177,6 +179,25 @@ fl_bench_has_data() {
     [[ -f "$s" ]] && return 0
   done
   return 1
+}
+
+# fl_bench_incomplete_init DIR: DIR is a bench init that stopped half way:
+# frappe was cloned (apps/frappe) but the env or sites/apps.txt never got
+# made, no site exists and apps/ holds no app but frappe. Nothing in it is
+# anyone's data, so a rerun moves it aside and starts over. A folder that
+# holds a site, or any other app (maybe with uncommitted work), is never one.
+fl_bench_incomplete_init() {
+  local bench_dir="$1" s a
+  [[ -d "$bench_dir/apps/frappe" ]] || return 1
+  for a in "$bench_dir"/apps/* "$bench_dir"/apps/.[!.]*; do
+    [[ -e "$a" ]] || continue
+    [[ "${a##*/}" == frappe ]] || return 1
+  done
+  [[ ! -f "$bench_dir/sites/apps.txt" || ! -e "$bench_dir/env/bin/python" ]] || return 1
+  for s in "$bench_dir"/sites/*/site_config.json; do
+    [[ -f "$s" ]] && return 1
+  done
+  return 0
 }
 
 # fl_bench_run_long LABEL BENCH_DIR COMMAND...: a slow bench command with a spinner
@@ -199,7 +220,9 @@ fl__in_dir() {
 fl_bench_init_if_needed() {
   local bench_dir="$1" frappe_ref="$2" python_bin="$3" repair="${4:-0}" skip_assets="${5:-0}" timestamp backup init_extra=()
   [[ "$skip_assets" == "1" ]] && init_extra+=(--skip-assets)
-  local timeout_seconds="${BENCH_INIT_TIMEOUT_SECONDS:-2700}"
+  local timeout_seconds="${BENCH_INIT_TIMEOUT_SECONDS:-2700}" init_code=0
+  # BENCH_INIT_TIMEOUT_SECONDS: seconds, 0 for no limit; anything else is the default
+  [[ "$timeout_seconds" =~ ^[0-9]+$ ]] || timeout_seconds=2700
   fl_section "BENCH INIT"
   fl_info "Checking bench directory ${bench_dir}"
   if fl_bench_complete "$bench_dir"; then
@@ -208,16 +231,23 @@ fl_bench_init_if_needed() {
     return 0
   fi
   if [[ -e "$bench_dir" ]]; then
-    if fl_bench_has_data "$bench_dir"; then
-      fl_die "Bench ${bench_dir} has apps or sites but its env is missing or incomplete." "This is a repair, not a reinstall. Run: ${FL_SELF} repair --bench-dir ${bench_dir}"
-    fi
-    if [[ "$repair" != "1" ]]; then
-      fl_die "Bench directory exists but is incomplete: ${bench_dir}" "Move it aside or rerun with --repair-bench after reading: mv ${bench_dir} ${bench_dir}.incomplete.\$(date +%Y%m%d%H%M%S)"
-    fi
     timestamp="$(date +%Y%m%d%H%M%S)"
     backup="${bench_dir}.incomplete.${timestamp}"
-    fl_warn "Moving incomplete bench to ${backup}"
-    fl_run mv "$bench_dir" "$backup"
+    if fl_bench_incomplete_init "$bench_dir"; then
+      # an earlier bench init (a failure, a timeout, a closed window) left a half built
+      # bench with no site: moved aside, never deleted, so a rerun starts over by itself
+      fl_warn "An earlier bench init stopped half way in ${bench_dir} (no env or no apps.txt, and no site); moving it to ${backup} and starting over"
+      fl_run mv "$bench_dir" "$backup"
+    else
+      if fl_bench_has_data "$bench_dir"; then
+        fl_die "Bench ${bench_dir} has apps or sites but its env is missing or incomplete." "This is a repair, not a reinstall. Run: ${FL_SELF} repair --bench-dir ${bench_dir}"
+      fi
+      if [[ "$repair" != "1" ]]; then
+        fl_die "Bench directory exists but is incomplete: ${bench_dir}" "Move it aside or rerun with --repair-bench after reading: mv ${bench_dir} ${bench_dir}.incomplete.\$(date +%Y%m%d%H%M%S)"
+      fi
+      fl_warn "Moving incomplete bench to ${backup}"
+      fl_run mv "$bench_dir" "$backup"
+    fi
   fi
   # --no-backups keeps bench init away from crontab: a dev bench needs no
   # backup cron, and without Full Disk Access the crontab write fails and
@@ -227,9 +257,14 @@ fl_bench_init_if_needed() {
     fl_info "for bench setup backups later: System Settings > Privacy & Security > Full Disk Access, add Terminal"
   fi
   fl_info "Running bench init for frappe ref ${frappe_ref}"
-  fl_info "bench init timeout: $((timeout_seconds / 60)) minutes"
-  fl_run_with_timeout "$timeout_seconds" "bench init" bench init "$bench_dir" --frappe-branch "$frappe_ref" --python "$python_bin" --no-backups --verbose ${init_extra[@]+"${init_extra[@]}"} \
-    || fl_die "bench init failed." "Manual command: bench init ${bench_dir} --frappe-branch ${frappe_ref} --python ${python_bin} --no-backups --verbose${init_extra[*]:+ ${init_extra[*]}}"
+  if [[ "$timeout_seconds" -gt 0 ]]; then fl_info "bench init timeout: $((timeout_seconds / 60)) minutes (BENCH_INIT_TIMEOUT_SECONDS changes it)"; else fl_info "bench init has no time limit"; fi
+  fl_run_with_timeout "$timeout_seconds" "bench init" bench init "$bench_dir" --frappe-branch "$frappe_ref" --python "$python_bin" --no-backups --verbose ${init_extra[@]+"${init_extra[@]}"} || init_code=$?
+  if [[ "$init_code" == "124" ]]; then
+    fl_die "bench init did not finish within $(fl_fmt_secs "$timeout_seconds")." \
+      "Run benchbar install again: the half built bench is moved aside and init starts over. On a slow network or disk give it more time: BENCH_INIT_TIMEOUT_SECONDS=5400 benchbar install"
+  elif [[ "$init_code" != "0" ]]; then
+    fl_die "bench init failed." "Run benchbar install again (a half built bench is moved aside and init starts over), or by hand: bench init ${bench_dir} --frappe-branch ${frappe_ref} --python ${python_bin} --no-backups --verbose${init_extra[*]:+ ${init_extra[*]}}"
+  fi
   [[ "$skip_assets" != "1" ]] || fl_needs_build_mark "$bench_dir"
   fl_state_set BENCH_INIT complete
   fl_changed bench "$bench_dir" "created with frappe ${frappe_ref}"

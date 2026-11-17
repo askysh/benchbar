@@ -237,6 +237,7 @@ fl_prereq_label() {
     systemd) printf 'systemd' ;;
     linger) printf 'Linger' ;;
     memory) printf 'Memory' ;;
+    inotify_watches) printf 'File watchers' ;;
     mariadb_password) printf 'MariaDB root password' ;;
     default_ports) printf 'Default ports' ;;
     *) printf '%s' "$1" ;;
