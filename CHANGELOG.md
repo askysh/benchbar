@@ -59,6 +59,13 @@ what is wrong and how to fix it.
 - The install plan JSON has a new `warnings` list next to `blockers`.
 - `doctor` no longer says "nothing listens on 3306: MariaDB is not running" while the apt MariaDB runs. A regular user cannot see who owns its socket, and the check took that for no server, so every fresh install ended with a warning.
 
+### Sharing
+
+- Guests can also open an app whose front end is not on the apps screen and
+  only routes `/x/<path:app_path>` to its own page (for example
+  `/engineering-change`). Before, the share gateway refused it as "isn't
+  available through sharing".
+
 ### Docs and releases
 
 - Windows docs: what Windows may show per install route, an "If Windows blocks it" guide, how to verify a download, update and uninstall, and troubleshooting. The Windows programs are not signed yet, and the docs say what that means.
