@@ -154,6 +154,15 @@ behind a room code, with `lan-guard` keeping the bench ports off the LAN,
 and Quick Switch (⌃⌥U), which opens a site as another user from any app.
 Open as has keyboard shortcuts in the popover.
 
+**0.8.3, Windows fix pass.** A full review of the Windows side and a live
+test on a Windows 11 PC, from an empty PC to a running bench: the
+installer checks Smart App Control before it writes anything, removes the
+internet mark from what it installs and can uninstall; `benchbar.exe`
+puts deadlines on WSL calls and explains WSL errors; the tray's setup
+wizard recovers from more states; and `install` inside WSL checks
+systemd, ports, the network and the bench folder before it asks for sudo.
+The Windows programs are still unsigned.
+
 **Launch.** The post on discuss.frappe.io went up on 2026-10-04:
 [BenchBar: local Frappe benches on macOS with a menu bar app](https://discuss.frappe.io/t/benchbar-local-frappe-benches-on-macos-with-a-menu-bar-app/165049).
 
