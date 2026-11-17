@@ -489,18 +489,38 @@ For a security problem, do not use the form. See
 
 ## Update
 
-Run the one line installer again. It finds the newest release that has a
-Windows zip, closes the tray (it asks the tray to close first), replaces
-the files, removes files the new version no longer has, and starts the
-tray again. Your settings and benches stay as they are.
+In a terminal:
 
-The installer updates `benchbar.exe` and the tray. It does not change
-anything inside the distro. The setup check tells you when the command
-line tool in the distro is older than `benchbar.exe` and offers to update
-it. Run `benchbar.exe setup check`, or open the tray's setup. To update it
-yourself, run `benchbar.exe setup run cli_install`. The tray
-does not update itself: Check for Updates asks, then opens the release
-page.
+```powershell
+benchbar.exe self-update
+```
+
+It shows the version you have and the newest release, asks once, then
+updates all of BenchBar for Windows to that release: `benchbar.exe`, the
+tray app and the BenchBar CLI inside WSL. It runs the one line installer for
+you, so the new files are checked against the release's SHA256 sums and
+Windows shows no SmartScreen dialog for them. The tray app closes and starts
+again. It ends with one line for each part. Your settings, benches and sites
+stay as they are.
+
+- `benchbar.exe self-update --check` only looks: the version you have, the
+  newest release and the CLI in WSL. `--json` gives the same as JSON.
+- `--yes` does not ask. `--version X.Y.Z` installs that release, also an
+  older one.
+- With no distro set up yet, the CLI part is skipped: the setup installs it.
+- BenchBar from the Microsoft Store is updated by the Store, and
+  `self-update` changes nothing there.
+
+Running the one line installer again does the same for `benchbar.exe` and
+the tray. It finds the newest release that has a Windows zip, closes the
+tray (it asks the tray to close first), replaces the files, removes files
+the new version no longer has, and starts the tray again when it was
+running. An update keeps your choices: it adds no Startup shortcut and does
+not open the setup again. It ends with the version it updated from and to.
+It does not change anything inside the distro: run `benchbar.exe
+self-update` afterwards, or `benchbar.exe setup run cli_install`, to bring
+the CLI in WSL to the same release. `benchbar.exe setup check` and
+`benchbar.exe doctor` say when the two differ.
 
 ## Uninstall
 

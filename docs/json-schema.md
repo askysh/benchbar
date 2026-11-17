@@ -1454,3 +1454,14 @@ shim itself. The full contract, with the step ids, is in
   action must stop the running distro, and nothing was changed).
 - `benchbar.exe report-windows --json` prints one line: `schema_version`,
   `zip`, `included`, `skipped` (what was left out, and why) and `issue_url`.
+- `benchbar.exe self-update --check --json` prints one document and exits 0
+  whenever it printed: `schema_version`, `current` (this `benchbar.exe`),
+  `latest` (the newest published release with a Windows zip for this PC, or
+  null), `update_available` (a boolean, false when `latest` is unknown),
+  `install` (`installer`, `store` or `other`), `exe`, `install_dir`, `arch`,
+  `release_url`, `latest_source` (`api`, or `release_page` when GitHub's API
+  was rate limited), `command` (`benchbar.exe self-update`, or null), `notes`,
+  `error` (why `latest` is unknown, or null), and the CLI's side:
+  `cli_distro`, `cli` (the CLI's own `self-update --check --json` document,
+  asked only when the distro already runs) and `cli_error` (why `cli` is
+  null). It changes nothing and never starts a distro.

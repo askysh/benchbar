@@ -33,6 +33,14 @@ what is wrong and how to fix it.
 - A `config.json` written by Windows PowerShell (UTF-16) is read, and a broken file names its path and the fix.
 - `benchbar.exe` has a version resource: company, product, description and version.
 
+### Updating on Windows
+
+- `benchbar.exe self-update` updates BenchBar for Windows in one step: `benchbar.exe`, the tray app and the BenchBar CLI in WSL, all to the same release. It shows the plan, asks once (`--yes` skips the question), runs the one line installer for you and ends with one line for each part.
+- `benchbar.exe self-update --check` shows the version you have, the newest release and the CLI in WSL, and changes nothing. `--json` gives the same as one JSON document.
+- A keepalive task moves to the new `benchbar.exe` after an update, so the old program does not keep running.
+- Running the installer over an existing install is an update: it no longer adds a Startup shortcut or opens the setup again, and it ends with the version it updated from and to. A first install says plainly to open "BenchBar" from the Start menu.
+- When the CLI in WSL is newer than `benchbar.exe`, `doctor` and `setup check` now name `benchbar.exe self-update` as the fix.
+
 ### Windows tray
 
 - The PC stays awake while a setup or install runs.

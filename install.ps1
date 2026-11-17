@@ -22,6 +22,12 @@
        a Startup shortcut and starts the tray app
     7. runs "benchbar.exe doctor" and prints what it says, then what to do next
 
+  A run over an earlier install is an update. It keeps your choices: it adds
+  no Startup shortcut, starts the tray app again only when it was running
+  (so the setup does not open again), and ends with the version it updated
+  from and to. "benchbar.exe self-update" runs this installer for you, then
+  updates the BenchBar CLI in WSL to the same release.
+
   By hand, without a GitHub release (a test build you were sent):
     - unpack the zip, then in that folder:
         powershell -ExecutionPolicy Bypass -File .\install.ps1
@@ -628,6 +634,23 @@ function Install-BenchBar {
     Say-Ok 'Smart App Control is off'
   }
 
+  # An update: an earlier install is in the folder. Its README.txt names its
+  # version ("BenchBar for Windows X (arch)"). An update keeps the choices made
+  # at the first install: it adds no Startup shortcut and starts a tray app
+  # only when one was running, so the setup does not open again.
+  $isUpdate = Test-Path -LiteralPath $installExe
+  $previousVersion = ''
+  if ($isUpdate) {
+    try {
+      $oldReadme = Join-Path $installDir 'README.txt'
+      if (Test-Path -LiteralPath $oldReadme) {
+        $m = [regex]::Match([string](Get-Content -LiteralPath $oldReadme -TotalCount 1), 'BenchBar for Windows (\S+) \(')
+        if ($m.Success) { $previousVersion = $m.Groups[1].Value }
+      }
+    } catch { }
+  }
+  $fromSelfUpdate = Test-Flag $env:BENCHBAR_FROM_SELF_UPDATE
+
   $work = Join-Path ([IO.Path]::GetTempPath()) ('benchbar-install-' + [guid]::NewGuid().ToString('N'))
   $restartTray = $false
   $trayStarted = $false
@@ -923,6 +946,8 @@ function Install-BenchBar {
         if (Test-Path -LiteralPath $startupLink) {
           $null = New-TrayShortcut $startupLink 'BenchBar tray app'
           $recorded += $startupLink
+        } elseif ($isUpdate) {
+          Say-Info 'no Startup shortcut (an update keeps your choice; BenchBar Settings can turn on Open at logon)'
         } elseif (Confirm-Choice 'Start the tray app when you sign in?' $true) {
           $null = New-TrayShortcut $startupLink 'BenchBar tray app'
           $recorded += $startupLink
@@ -950,7 +975,10 @@ function Install-BenchBar {
         Say-Warn 'The tray app was not started, because the .NET 10 Desktop Runtime is missing. Install it, then start BenchBar from the Start menu.'
       } else {
         $startNow = $restartTray
-        if (-not $startNow) {
+        if (-not $startNow -and $isUpdate) {
+          Say-Step 'Tray app'
+          Say-Info 'not started: it was not running before the update'
+        } elseif (-not $startNow) {
           Say-Step 'Tray app'
           $startNow = Confirm-Choice 'Start the tray app now? It opens the setup.' $true
         }
@@ -969,20 +997,45 @@ function Install-BenchBar {
     }
 
     Write-Host ''
-    Write-Host "BenchBar $releaseVersion is installed in $installDir." -ForegroundColor Green
-    if ($trayExists) { Write-Host "Tray app: $trayExe" }
-
-    Write-Host ''
-    Write-Host 'Next:' -ForegroundColor Cyan
-    if ($trayExists -and $runtimeOk) {
-      if ($trayStarted) {
-        Write-Host '  - The BenchBar tray app opens the setup. Follow it to set up WSL, Ubuntu and your first bench.'
+    if ($isUpdate) {
+      $fromText = $previousVersion
+      if (-not $fromText) { $fromText = 'an earlier version' }
+      if ($previousVersion -and $previousVersion -eq $releaseVersion) {
+        Write-Host "BenchBar $releaseVersion is installed again in $installDir. The update is done." -ForegroundColor Green
       } else {
-        Write-Host '  - Start BenchBar from the Start menu. It opens the setup.'
+        Write-Host "BenchBar is updated from $fromText to $releaseVersion in $installDir. The update is done." -ForegroundColor Green
       }
-      Write-Host '  - Later, find it in the Start menu, or as the icon near the clock. Windows may hide that icon under the ^ arrow.'
+      Write-Host ''
+      Write-Host 'Next:' -ForegroundColor Cyan
+      if ($releaseVersion -match '^\d+\.\d+\.\d+$') { Write-Host "  - What changed: $repoWeb/releases/tag/v$releaseVersion" }
+      if ($trayExists) {
+        if ($trayStarted) {
+          Write-Host '  - The tray app was restarted with the new version.'
+        } elseif ($runtimeOk) {
+          Write-Host '  - Open BenchBar from the Start menu when you want it. It is the icon near the clock.'
+        }
+      }
+      if ($fromSelfUpdate) {
+        Write-Host '  - benchbar.exe self-update now updates the BenchBar CLI in WSL to the same release.'
+      } else {
+        Write-Host '  - To bring the BenchBar CLI in WSL to the same release, run benchbar.exe self-update in a new terminal.'
+      }
+      Write-Host '  - Your settings, benches and sites are as they were.'
+    } else {
+      Write-Host "BenchBar $releaseVersion is installed in $installDir." -ForegroundColor Green
+      if ($trayExists) { Write-Host "Tray app: $trayExe" }
+      Write-Host ''
+      Write-Host 'Next:' -ForegroundColor Cyan
+      if ($trayExists -and $runtimeOk) {
+        Write-Host '  - BenchBar is one program. Open it from the Start menu: it is named "BenchBar". It lives as the icon near the clock (Windows may hide that icon under the ^ arrow).'
+        if ($trayStarted) {
+          Write-Host '  - It is open now, with the setup. Follow it to set up WSL, Ubuntu and your first bench.'
+        } else {
+          Write-Host '  - The first time, it opens the setup. Follow it to set up WSL, Ubuntu and your first bench.'
+        }
+      }
+      Write-Host '  - In a terminal (open a new one first), benchbar.exe setup check shows what is ready and what is not.'
     }
-    Write-Host '  - In a terminal (open a new one first), benchbar.exe setup check shows what is ready and what is not.'
     Write-Host "  - Help: https://benchbar.akashmishra.com/windows/"
   } catch {
     $message = $_.Exception.Message
