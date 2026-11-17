@@ -57,7 +57,12 @@ param(
   [switch]$FrameworkDependent,
 
   # Also build resources.pri with MakePri.exe so the target size logos are found.
-  [switch]$MakePri
+  [switch]$MakePri,
+
+  # Folder that holds <10.0.x.y>\<arch>\makeappx.exe (the layout of "Windows Kits\10\bin"). For a PC
+  # without the Windows SDK: restore the NuGet package Microsoft.Windows.SDK.BuildTools and pass its
+  # "bin" folder. The environment variable BENCHBAR_SDK_BIN does the same.
+  [string]$SdkBin = $env:BENCHBAR_SDK_BIN
 )
 
 Set-StrictMode -Version Latest
@@ -90,14 +95,16 @@ if ($Mode -eq 'Sideload' -and $Arch -ne $hostArch) {
 if ($Mode -eq 'Store' -and ($IdentityName -eq 'BenchBar.Spike' -or $Publisher -eq 'CN=BenchBar Spike Test')) {
   Fail 'Store mode needs the Name, Publisher and PublisherDisplayName from Partner Center (Product identity). Pass -IdentityName, -Publisher and -PublisherDisplayName.'
 }
-$arches = if ($Arch -eq 'both') { @('x64', 'arm64') } else { @($Arch) }
+# @( ) around the whole if: a one element array from an if expression is unrolled to a string, and $arches[0] is then its first character
+$arches = @(if ($Arch -eq 'both') { 'x64'; 'arm64' } else { $Arch })
 
 # ----------------------------------------------------------------- tools
 
 function Find-SdkTool([string]$name) {
   # Windows SDK layout: <Program Files (x86)>\Windows Kits\10\bin\<10.0.x.y>\<arch>\tool.exe
-  $roots = @($env:ProgramFiles, ${env:ProgramFiles(x86)}) | Where-Object { $_ } |
-    ForEach-Object { Join-Path $_ 'Windows Kits\10\bin' } | Where-Object { Test-Path $_ }
+  $roots = @($SdkBin) + @(@($env:ProgramFiles, ${env:ProgramFiles(x86)}) | Where-Object { $_ } |
+    ForEach-Object { Join-Path $_ 'Windows Kits\10\bin' })
+  $roots = @($roots | Where-Object { $_ -and (Test-Path $_) })
   $found = @()
   foreach ($root in $roots) {
     foreach ($dir in (Get-ChildItem $root -Directory -ErrorAction SilentlyContinue)) {
@@ -130,10 +137,11 @@ if ($Mode -eq 'Sideload') {
   $signtool = Find-SdkTool 'signtool.exe'
   if (-not $signtool) { Fail 'signtool.exe not found. It comes with the Windows SDK (see above). Sideload mode signs the package with it.' }
 }
-$makepri = $null
+# not $makepri: PowerShell names are case insensitive, so that would be the -MakePri switch itself
+$makepriExe = $null
 if ($MakePri) {
-  $makepri = Find-SdkTool 'makepri.exe'
-  if (-not $makepri) { Fail 'makepri.exe not found. It comes with the Windows SDK (see above).' }
+  $makepriExe = Find-SdkTool 'makepri.exe'
+  if (-not $makepriExe) { Fail 'makepri.exe not found. It comes with the Windows SDK (see above).' }
 }
 if (-not $SkipBuild) {
   if (-not (Get-Command go -ErrorAction SilentlyContinue)) { Fail 'go not found on PATH (the shim is built with Go, see windows/shim/go.mod).' }
@@ -143,7 +151,8 @@ Say "MakeAppx: $makeappx"
 if ($signtool) { Say "signtool: $signtool" }
 
 function Invoke-Native([string]$exe, [string[]]$arguments) {
-  & $exe @arguments
+  # Out-Host: a native tool's stdout must not become part of the return value of Pack and New-PackageFolder
+  & $exe @arguments | Out-Host
   if ($LASTEXITCODE -ne 0) { Fail "$exe failed with exit code $LASTEXITCODE" }
 }
 
@@ -225,7 +234,7 @@ function New-PackageFolder([string]$a, [string]$stage) {
   Copy-Item (Join-Path $here 'Assets') (Join-Path $pkg 'Assets') -Recurse
   Write-Manifest $a (Join-Path $pkg 'AppxManifest.xml')
 
-  if ($makepri) {
+  if ($makepriExe) {
     Say "[$a] MakePri"
     $tmp = Join-Path $OutDir "pri-$a"
     if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force }
@@ -233,8 +242,8 @@ function New-PackageFolder([string]$a, [string]$stage) {
     Copy-Item (Join-Path $pkg 'Assets') (Join-Path $tmp 'Assets') -Recurse
     Copy-Item (Join-Path $pkg 'AppxManifest.xml') $tmp
     $cfg = Join-Path $tmp 'priconfig.xml'
-    Invoke-Native $makepri @('createconfig', '/cf', $cfg, '/dq', 'en-US', '/o')
-    Invoke-Native $makepri @('new', '/pr', $tmp, '/cf', $cfg, '/mn', (Join-Path $tmp 'AppxManifest.xml'), '/of', (Join-Path $pkg 'resources.pri'), '/o')
+    Invoke-Native $makepriExe @('createconfig', '/cf', $cfg, '/dq', 'en-US', '/o')
+    Invoke-Native $makepriExe @('new', '/pr', $tmp, '/cf', $cfg, '/mn', (Join-Path $tmp 'AppxManifest.xml'), '/of', (Join-Path $pkg 'resources.pri'), '/o')
   }
   $pkg
 }
