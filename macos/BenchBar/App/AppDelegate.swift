@@ -286,9 +286,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // a link can carry a room code or a profile token: only its scheme and action are logged (MAC-10)
         let link = URLRouter.logLabel(url)
-        switch URLRouter.route(url, benches: benches, selected: store.selectedPath, lanRooms: Labs.shared.isOn(.lanRooms)) {
-        case .ignore(let reason):
-            Self.urlLog.notice("Ignored \(link, privacy: .public): \(reason, privacy: .public)")
+        let outcome = URLRouter.route(url, benches: benches, selected: store.selectedPath, lanRooms: Labs.shared.isOn(.lanRooms))
+        // the log line is built from fixed texts and the short label only: never a host, path, query or bench name
+        if let line = URLRouter.rejectionLogLine(link: link, outcome: outcome) {
+            Self.urlLog.notice("\(line, privacy: .public)")
+        }
+        switch outcome {
+        case .ignore:
+            break
         case .window:
             openMainWindow()
         case .share(let target):
@@ -306,15 +311,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Self.urlLog.info("profile link: Team Profiles, sheet prefilled")
             mainWindow.router.profileRequest = link
             mainWindow.show(.profiles)
-        case .explain(let message):
-            Self.urlLog.notice("\(link, privacy: .public): \(message, privacy: .public)")
+        case .explain(let message, _):
             mainWindow.router.notice = message
             openMainWindow()
         case .run(let route, let path, let site):
             guard let bench = store.benches.first(where: { $0.path == path }) else { return }
             if LinkConfirm.needsAsking(route, setting: settings.confirmLinkActions) {
                 let question = LinkConfirm.question(route, bench: bench.name)
-                guard ShareConfirm.ask(question.title, detail: question.detail, button: question.button) else {
+                guard ShareConfirm.ask(question.title, detail: question.detail, button: question.button, cancelIsDefault: true) else {
                     Self.urlLog.info("\(route.rawValue, privacy: .public) on \(bench.name, privacy: .public): not confirmed")
                     return
                 }

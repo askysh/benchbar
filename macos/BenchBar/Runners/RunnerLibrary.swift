@@ -194,16 +194,26 @@ final class RunnerLibrary {
         return out
     }
 
-    /// Every entry under `folder` is a regular file or a folder, links not followed.
+    /// Every entry under `folder` is a regular file or a folder, links not followed. Fails
+    /// closed: a folder that is not there, that is not a folder, or that the walk cannot read
+    /// to the end is not plain.
     nonisolated static func onlyPlainFiles(in folder: URL) -> Bool {
-        guard let walker = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: nil) else { return true }
+        var root = stat()
+        guard lstat(folder.path, &root) == 0, root.st_mode & S_IFMT == S_IFDIR else { return false }
+        // the error handler runs for an entry the walk cannot read; the walk then stops, and
+        // an unfinished walk must not pass
+        final class Failure: @unchecked Sendable { var happened = false }
+        let failure = Failure()
+        guard let walker = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: nil, options: [],
+                                                          errorHandler: { _, _ in failure.happened = true; return false })
+        else { return false }
         for case let url as URL in walker {
             var info = stat()
             guard lstat(url.path, &info) == 0 else { return false }
             let kind = info.st_mode & S_IFMT
             if kind != S_IFREG && kind != S_IFDIR { return false }
         }
-        return true
+        return !failure.happened
     }
 
     /// "12 files, 34567 bytes uncompressed, ..." from zipinfo -t.

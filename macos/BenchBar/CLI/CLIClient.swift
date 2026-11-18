@@ -29,10 +29,9 @@ nonisolated struct CLIClient: Sendable {
     /// (there it marks the call as the app's, and no sudo runs).
     static let guiSudo = ["BENCHBAR_SUDO": "gui"].merging(appCaller) { _, new in new }
 
-    /// Says the run comes from this app: its process id, for the CLI to check against the
-    /// parent chain of the process it runs in (MAC-4). It is a claim any process of the same
-    /// user could copy, so it is a rail against agents that follow AGENTS.md and mistakes,
-    /// not a boundary; docs/app.md says so.
+    /// Says the run comes from this app: its process id (MAC-4). The CLI does not check it
+    /// today, and it is a claim any process of the same user could copy, so it is a rail
+    /// against agents that follow AGENTS.md and against mistakes, not a boundary; docs/app.md says so.
     static var appCaller: [String: String] { ["BENCHBAR_APP_PID": String(ProcessInfo.processInfo.processIdentifier)] }
 
     /// Environment for the CLI: an explicit PATH (Finder launched apps do

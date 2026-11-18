@@ -71,6 +71,58 @@ struct LinkTrustTests {
         #expect(!URLRouter.logLabel(url).contains("token123"))
     }
 
+    /// The whole line the app writes for a link it ignored or explained, with a secret looking
+    /// value in the host, the path and the query: none of it may be in the line.
+    @Test func theLoggedLineOfARejectedLinkHoldsNoPartOfTheLink() {
+        let secret = "s3cr3tZ9"
+        let main = URLRouter.Bench(path: "/Users/me/frappe-bench", name: "frappe-bench", sites: ["macdev"])
+        let twin = URLRouter.Bench(path: "/Users/me/work/frappe-bench", name: "frappe-bench", sites: [])
+        let cases: [(link: String, benches: [URLRouter.Bench], lanRooms: Bool, kind: String)] = [
+            ("https://\(secret).example.com/\(secret)?q=\(secret)", [main], false, "not ours"),
+            ("benchbar://\(secret)/\(secret)?bench=\(secret)&token=\(secret)", [main], false, "unknown route in the host"),
+            ("benchbar:\(secret)?token=\(secret)", [main], false, "unknown route in the path"),
+            ("benchbar:///?token=\(secret)", [main], false, "no route"),
+            ("benchbar://profile/\(secret)/x?url=https://\(secret).example.com/\(secret)", [main], false, "unknown profile action"),
+            ("benchbar://profile/import?url=ftp://user:\(secret)@\(secret).example.com/\(secret).toml", [main], false, "profile address"),
+            ("benchbar://profile/subscribe?url=\(secret)", [main], false, "subscribe address"),
+            ("benchbar://share/0011223344556677/\(secret)", [main], true, "share path"),
+            ("benchbar://share/0011223344556677/\(secret)", [main], false, "share with the lab off"),
+            ("benchbar://up?bench=\(secret)", [main], false, "bench name"),
+            ("benchbar://up?bench=/\(secret)/bench", [main], false, "bench path"),
+            ("benchbar://up?bench=frappe-bench&token=\(secret)", [main, twin], false, "ambiguous bench"),
+            ("benchbar://up?token=\(secret)", [main, twin], false, "no bench chosen"),
+            ("benchbar://up?token=\(secret)", [], false, "no bench known"),
+            ("benchbar://open?bench=frappe-bench&site=\(secret)", [main], false, "site"),
+            ("benchbar://db?bench=frappe-bench&site=\(secret).localhost", [main], false, "site on db"),
+        ]
+        var whys = Set<URLRouter.Why>()
+        for item in cases {
+            let url = URL(string: item.link)!
+            let outcome = URLRouter.route(url, benches: item.benches, selected: nil, lanRooms: item.lanRooms)
+            if case .explain(let message, let why) = outcome {
+                whys.insert(why)
+                #expect(!why.logText.isEmpty)
+                // the person's alert may name what they asked for; only the log is bare
+                if why == .benchNotFound || why == .siteNotFound { #expect(message.contains(secret), "\(item.kind)") }
+            }
+            guard let line = URLRouter.rejectionLogLine(link: URLRouter.logLabel(url), outcome: outcome) else {
+                Issue.record("\(item.kind): no log line for \(outcome)"); continue
+            }
+            #expect(!line.contains(secret), "\(item.kind): \(line)")
+            #expect(!line.localizedCaseInsensitiveContains("example.com"), "\(item.kind): \(line)")
+            #expect(!line.contains("frappe-bench"), "\(item.kind): \(line)")
+            #expect(!line.contains("/Users"), "\(item.kind): \(line)")
+            #expect(!line.contains("\""), "\(item.kind): fixed text has no quoted value: \(line)")
+        }
+        #expect(whys == Set(URLRouter.Why.allCases), "every kind of explained link is covered above")
+        // an ignored link is its short hash or action label plus a fixed sentence
+        let hashed = URLRouter.rejectionLogLine(link: "other link, hash 0a1b2c3d4e5f",
+                                                outcome: .ignore(URLRouter.IgnoreReason.unknownRoute.message))
+        #expect(hashed == "Ignored other link, hash 0a1b2c3d4e5f: unknown route")
+        // a link that ran is not a rejected one
+        #expect(URLRouter.rejectionLogLine(link: "x", outcome: .window) == nil)
+    }
+
     // MARK: MAC-4, the app says it is the app
 
     @Test func everyPersonRunCarriesTheAppsProcessId() async throws {

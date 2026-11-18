@@ -205,6 +205,101 @@ struct RunnerPackageTests {
         #expect(lib.custom.isEmpty)
     }
 
+    // the walk that stops a zip with a link in it: fails closed, and sees every kind of entry
+
+    @Test func theWalkRefusesAFIFOAndALinkToADevice() throws {
+        let plain = try RunnerFolder.valid(in: dir, name: "walk-plain")
+        #expect(RunnerLibrary.onlyPlainFiles(in: plain.url))
+
+        let fifo = try RunnerFolder.valid(in: dir, name: "walk-fifo")
+        #expect(mkfifo(fifo.url.appendingPathComponent("pipe").path, 0o600) == 0)
+        #expect(!RunnerLibrary.onlyPlainFiles(in: fifo.url), "a FIFO")
+
+        let device = try RunnerFolder.valid(in: dir, name: "walk-device")
+        try FileManager.default.createSymbolicLink(at: device.url.appendingPathComponent("null"),
+                                                   withDestinationURL: URL(fileURLWithPath: "/dev/null"))
+        #expect(!RunnerLibrary.onlyPlainFiles(in: device.url), "a link to a device")
+
+        // a deeper folder is walked too
+        let nested = try RunnerFolder.valid(in: dir, name: "walk-nested")
+        let deep = nested.url.appendingPathComponent("a/b", isDirectory: true)
+        try FileManager.default.createDirectory(at: deep, withIntermediateDirectories: true)
+        #expect(mkfifo(deep.appendingPathComponent("pipe").path, 0o600) == 0)
+        #expect(!RunnerLibrary.onlyPlainFiles(in: nested.url), "a FIFO two folders down")
+    }
+
+    @Test func theWalkRefusesASocket() throws {
+        let folder = try RunnerFolder.valid(in: dir, name: "walk-socket")
+        // a socket path is limited to about 100 bytes: bind it in a short place, then move it in
+        let short = "/tmp/bb-\(UUID().uuidString.prefix(8))"
+        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+        try #require(fd >= 0)
+        defer { close(fd); unlink(short) }
+        var address = sockaddr_un()
+        address.sun_family = sa_family_t(AF_UNIX)
+        withUnsafeMutableBytes(of: &address.sun_path) { raw in
+            _ = short.withCString { strlcpy(raw.baseAddress!.assumingMemoryBound(to: CChar.self), $0, raw.count) }
+        }
+        let bound = withUnsafePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) }
+        }
+        try #require(bound == 0)
+        try FileManager.default.moveItem(atPath: short, toPath: folder.url.appendingPathComponent("sock").path)
+        #expect(!RunnerLibrary.onlyPlainFiles(in: folder.url))
+    }
+
+    @Test func aFolderThatCannotBeWalkedIsNotPlain() {
+        let gone = dir.url.appendingPathComponent("not-there-\(UUID().uuidString)")
+        #expect(!RunnerLibrary.onlyPlainFiles(in: gone), "fails closed")
+    }
+
+    /// A stored zip written by hand, so an entry can be named `../x`, which ditto will not write.
+    func handMadeZip(_ entries: [(name: String, data: Data)]) -> URL {
+        func le<T: FixedWidthInteger>(_ value: T) -> Data { withUnsafeBytes(of: value.littleEndian) { Data($0) } }
+        func crc32(_ data: Data) -> UInt32 {
+            var crc: UInt32 = 0xFFFF_FFFF
+            for byte in data {
+                crc ^= UInt32(byte)
+                for _ in 0..<8 { crc = (crc >> 1) ^ (0xEDB8_8320 & (0 &- (crc & 1))) }
+            }
+            return ~crc
+        }
+        var body = Data(), central = Data()
+        for entry in entries {
+            let name = Data(entry.name.utf8), crc = crc32(entry.data), offset = UInt32(body.count)
+            body += le(UInt32(0x0403_4B50)) + le(UInt16(20)) + le(UInt16(0)) + le(UInt16(0)) + le(UInt16(0)) + le(UInt16(0x21))
+            body += le(crc) + le(UInt32(entry.data.count)) + le(UInt32(entry.data.count)) + le(UInt16(name.count)) + le(UInt16(0)) + name + entry.data
+            central += le(UInt32(0x0201_4B50)) + le(UInt16(20)) + le(UInt16(20)) + le(UInt16(0)) + le(UInt16(0)) + le(UInt16(0)) + le(UInt16(0x21))
+            central += le(crc) + le(UInt32(entry.data.count)) + le(UInt32(entry.data.count)) + le(UInt16(name.count))
+            central += le(UInt16(0)) + le(UInt16(0)) + le(UInt16(0)) + le(UInt16(0)) + le(UInt32(0)) + le(offset) + name
+        }
+        let end = le(UInt32(0x0605_4B50)) + le(UInt16(0)) + le(UInt16(0)) + le(UInt16(entries.count)) + le(UInt16(entries.count))
+            + le(UInt32(central.count)) + le(UInt32(body.count)) + le(UInt16(0))
+        let url = dir.url.appendingPathComponent("\(UUID().uuidString).zip")
+        try? (body + central + end).write(to: url)
+        return url
+    }
+
+    @Test func aZipEntryNamedDotDotWritesNothingOutsideTheUnpackFolder() throws {
+        let source = try RunnerFolder.valid(in: dir, name: "dots")
+        let escape = "benchbar-escape-\(UUID().uuidString).txt"
+        var entries: [(name: String, data: Data)] = []
+        for file in ["manifest.json", "run1.png", "run2.png", "run3.png", "zzz.png"] {
+            entries.append(("dots/\(file)", try Data(contentsOf: source.url.appendingPathComponent(file))))
+        }
+        entries.append(("../\(escape)", Data("outside".utf8)))
+        entries.append(("dots/../../\(escape)", Data("outside".utf8)))
+        let zipURL = handMadeZip(entries)
+        let lib = library()
+        // the import may refuse it or take only the runner: either way nothing lands outside
+        _ = try? lib.importRunner(from: zipURL)
+        let fm = FileManager.default
+        for parent in [fm.temporaryDirectory, dir.url, lib.folder, lib.folder.deletingLastPathComponent()] {
+            #expect(!fm.fileExists(atPath: parent.appendingPathComponent(escape).path), "\(parent.path)")
+        }
+        #expect(!fm.fileExists(atPath: lib.folder.appendingPathComponent("dots/\(escape)").path))
+    }
+
     @Test func aPlainZipStillImports() throws {
         let source = try RunnerFolder.valid(in: dir, name: "fine")
         let lib = library()

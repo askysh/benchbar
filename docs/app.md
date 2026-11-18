@@ -158,8 +158,9 @@ do not control. Links that only show a window, a log, a site or the editor
 never ask.
 
 The app logs a link it ignored or could not use with its action only
-(`benchbar://down`, never the bench, the query or an address). A link that
-is not one of its own is logged as a short hash.
+(`benchbar://down`) and a fixed reason, never the bench, the site, the
+query or an address. A link that is not one of its own is logged as a short
+hash. The alert asks with Cancel as its default button.
 
 ## The BenchBar window
 
@@ -397,7 +398,7 @@ sign-in link, sharing, the firewall guard) are refused to a program that runs
 `BENCHBAR_NONINTERACTIVE`. The app runs them for you after its own alert, so
 every call it makes this way says that it comes from the app: it sets
 `BENCHBAR_NONINTERACTIVE=0` and `BENCHBAR_SUDO=gui`, and its process id in
-`BENCHBAR_APP_PID`. This stops an agent that follows the rules in
+`BENCHBAR_APP_PID`; the command line tool does not check that last one yet. This stops an agent that follows the rules in
 [AGENTS.md](https://github.com/askysh/benchbar/blob/main/AGENTS.md) and a
 script that runs by mistake. It does not stop another process of the same
 macOS user that sets those variables itself: such a process can already read

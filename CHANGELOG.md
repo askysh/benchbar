@@ -7,8 +7,8 @@ All notable changes to this project are documented here.
 ### Mac app
 
 - New setting **Links, Ask before a link acts** (off by default): when on, BenchBar shows an alert before a `benchbar://` link starts, stops or restarts a bench or opens a console. Any web page or app can open such a link, and a browser's "always allow" removes its own question. The docs say so plainly.
-- The app's runs of `benchbar` that stand for a person's click now also set `BENCHBAR_APP_PID` to the app's process id, so the command line tool can tell the app's calls from a copied pair of variables. The docs state what this does not stop: another process of the same user.
-- The log no longer holds the address of a link the app ignored or could not use: only `benchbar://action`, or a short hash for a link that is not one of the app's own.
+- The app's runs of `benchbar` that stand for a person's click now also set `BENCHBAR_APP_PID` to the app's process id, as a marker that the call comes from the app. The command line tool does not check it yet, and a process of the same user can set it too, so it is a safety rail and not a boundary; the docs say so.
+- The log no longer holds any part of a link the app ignored or could not use: only `benchbar://action` or a short hash, plus a fixed sentence that names the reason and never a host, path, query, bench or site from the link. The alert for a link that asks to start, stop or restart a bench has Cancel as its default button.
 - Importing a runner reads `manifest.json` only as a plain file of at most 64 KB, never through a symbolic link, and refuses a zip that holds a link or another file that is not a plain file. The zip is unpacked off the main thread, so the window does not freeze.
 
 ### Windows tray
