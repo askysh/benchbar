@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here.
 
+## Unreleased
+
+### For contributors
+
+- The Claude Code hooks in `.claude/` are tighter and tested. `guard-rm.sh` now also blocks `rm -r` without `-f`, a delete behind backticks or `$(`, `git clean`, `git reset --hard`, `find -delete`, `rsync --delete` and an interpreter one liner that deletes, and `~/.benchbar` counts only for its logs. `guard-writes.sh` also blocks `gh` writes to other repositories, and no longer reads an awk `-F` after a pipe as a body flag. `.claude/settings.json` asks before `git push`, `git tag`, `gh pr merge`, `gh run rerun`, `gh release` and `sudo`, denies `bench update`, `bench restore` and `mariadb -u root`, and names no Windows user. `tests/test-guards.sh` runs a table of allowed and blocked lines against both hooks.
+
 ## 0.8.3 - 2026-11-17
 
 0.8.3 is a fix pass for Windows from a full review and a live test on a

@@ -199,6 +199,17 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
   beyond three, and `share teardown`'s removal of the share state folder
   (`<state>/share`, outside the bench, confirmed first).
 - Never run `bench update` unless the user asked for it by name.
+- Two hooks in `.claude/` check every Bash call: `guard-rm.sh` blocks a
+  recursive delete (`rm -r`, `find -delete`, `git clean`, `git reset --hard`,
+  `rsync --delete`) outside the repo, the temp folder and `~/.benchbar/logs`,
+  and `guard-writes.sh` blocks `gh` writes to any repository but this one and
+  the tap. They guard against mistakes and are not a security boundary: when
+  one blocks a call, say so to the user, do not look for a way around it.
+- `.claude/settings.json` asks before `git push`, `git tag`, `gh pr merge`,
+  `gh pr close`, `gh run rerun|cancel|delete`, `gh release` and `sudo`, and
+  denies `bench update`, `bench restore` and `mariadb -u root`.
+- `tests/test-guards.sh` holds a table of allowed and blocked command lines
+  for both hooks. A change to a hook or to the settings adds its cases there.
 - Never write your own LaunchAgents or `Procfile`. Use `benchbar
   service`, which generates `Procfile.lean`, the runner and the agent
   from templates with a version hash header.

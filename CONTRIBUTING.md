@@ -53,6 +53,12 @@ and tray, and uploads an unsigned bundle for every pull request.
   database, never edit `sites/`: move broken folders aside into
   `.benchbar/backups/`. [AGENTS.md](AGENTS.md) has the full list; it holds
   for people too.
+- **Agent hooks.** If you run Claude Code here, two hooks in `.claude/`
+  block a recursive delete outside the checkout and `gh` writes to other
+  repositories, and `.claude/settings.json` asks before a push, a tag, a
+  merge and `sudo`. They guard against mistakes and are not a security
+  boundary. A change to them adds its allowed and blocked command lines to
+  `tests/test-guards.sh`, which runs with the rest of the suite.
 - **Swift** stays Swift 6 with the project's default MainActor
   isolation. App changes add a line to `macos/LEARNING.md` when they
   taught something.

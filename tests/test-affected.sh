@@ -105,6 +105,18 @@ aff --base main --list
 assert_contains "$OUT" "affected: test-ports shellcheck"
 reset
 
+# ---- the agent hooks and the project settings: test-guards and shellcheck
+mkdir -p "$REPO/.claude"
+printf '# hook\n' >"$REPO/.claude/guard-rm.sh"
+aff --base main --list
+assert_contains "$OUT" "affected: test-guards shellcheck"
+reset
+mkdir -p "$REPO/.claude"
+printf '{}\n' >"$REPO/.claude/settings.json"
+aff --base main --list
+assert_contains "$OUT" "affected: test-guards shellcheck"
+reset
+
 # ---- the full suite: the harness, the mocks, run-tests.sh, the entry point, templates
 for f in tests/lib/harness.sh tests/mocks/bin/git tests/run-tests.sh benchbar templates/Procfile.lean; do
   printf '# x\n' >>"$REPO/$f"

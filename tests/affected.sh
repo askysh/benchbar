@@ -16,6 +16,7 @@
 #   lib/frappe-local/mcp.py test-mcp, test-cli, test-agent-contracts
 #   A test split into parts (test-X.sh, test-X-2.sh, ...) is picked whole.
 #   tests/test-X.sh         itself
+#   .claude/guard-*.sh, .claude/settings.json   test-guards
 #   install.sh              test-install-sh
 #   packaging/              test-packaging, test-homebrew
 #   any shell file          shellcheck
@@ -78,6 +79,7 @@ while IFS= read -r f; do
       t="${f##*/}"; t="test-${t%.sh}"
       pick_parts "$t" ;;
     lib/frappe-local/mcp.py) lib=1; pick_parts test-mcp ;;
+    .claude/guard-*.sh | .claude/settings.json) pick test-guards; shell=1 ;;
     install.sh) pick test-install-sh; shell=1 ;;
     packaging/*) pick test-packaging; pick test-homebrew ;;
     scripts/*.sh) shell=1 ;;
