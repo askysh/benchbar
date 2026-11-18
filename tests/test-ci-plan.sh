@@ -174,6 +174,9 @@ plan EVENT=pull_request FILES="docs/a.md" PLAN_SUMMARY="$TMP_DIR/summary.md"
 assert_contains "$(cat "$TMP_DIR/summary.md")" "### CI plan"; assert_contains "$(cat "$TMP_DIR/summary.md")" "test-docs"
 
 # ---- the shard tables in run-tests.sh size the matrix
+# The CI job that runs this test sets SHARD, ONLY_TESTS and SKIP_TESTS for its own leg: the
+# calls below must see the whole table, not that leg's part of it.
+unset SHARD ONLY_TESTS SKIP_TESTS
 w="$(TEST_PLATFORM=linux SECS_ONLY=1 SHELLCHECK=0 bash tests/run-tests.sh)"
 [[ "$w" -gt 1000 ]] || fail "the Linux table weighs $w"
 OUT="$(TEST_PLATFORM=linux ONLY_TESTS="test-cli test-doctor" SECS_ONLY=1 bash tests/run-tests.sh)"
