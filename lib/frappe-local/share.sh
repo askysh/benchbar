@@ -435,7 +435,7 @@ fl_cmd_share_setup() {
 
   if [[ "$pw_ask" == 1 ]]; then
     fl_mariadb_root_password_resolve || fl_die "The MariaDB root password is needed to make the copy; nothing was changed." \
-      "Run it again and type it, or put it in the environment: MARIADB_ROOT_PASSWORD='...'. Sharing needs a MariaDB root that logs in with a password." 2
+      "Run it again and type it, or put it in the environment: MARIADB_ROOT_PASSWORD='...'. An agent asks the person for it and does not look for it. Sharing needs a MariaDB root that logs in with a password." 2
   fi
 
   fl_steps_define "Create the host identity" "Take a backup of ${site}" "Make the copy ${FL_SHARE_SITE}" "Harden and demote the copy" \

@@ -30,7 +30,10 @@ to `main` with a new version tags it and starts the release builds
 On `next-release`, then into `main`:
 
 1. Bump `MARKETING_VERSION` in `macos/project.yml` and `FL_VERSION` in
-   `benchbar`. The workflow refuses a tag that does not match both.
+   `benchbar`. The workflow refuses a tag that does not match both. Then run
+   `bash tests/record-tray-fixtures.sh` and commit what it changes in
+   `windows/tray/fixtures`: the tray's recorded CLI output holds `cli_version`,
+   and `test-tray-fixtures` fails until it is regenerated.
 2. Add the `## X.Y.Z` section to `CHANGELOG.md`. The workflow refuses a
    version without one, and uses the section as the release notes.
 3. Refresh the screenshots in `docs/images` for every screen the release

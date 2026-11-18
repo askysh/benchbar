@@ -107,6 +107,9 @@ assert_contains "$OUT" "bench drop-site bbtest.localhost"
 assert_eq "$snap" "$(snapshot "$BENCH/sites" "$FL_HOSTS_FILE")" "(dry run)"
 
 # ---- drop: the real thing, the password on stdin, the backup reported, the hosts line gone
+# a generated Administrator password benchbar mcp kept for the site goes with it, another site's stays
+mkdir -p "$FL_STATE_DIR/site-admin"
+printf 'pw1\n' >"$FL_STATE_DIR/site-admin/bbtest.localhost"; printf 'pw2\n' >"$FL_STATE_DIR/site-admin/other"
 reset_calls
 run_json site drop bbtest.localhost --confirm-site bbtest.localhost --json --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
@@ -118,6 +121,8 @@ AR="$BENCH/archived/sites/bbtest.localhost"
 assert_eq "True $AR $AR/private/backups/20260929_110000-bbtest_localhost-database.sql.gz True True None" \
   "$(printf '%s' "$OUT" | jget - '"%s %s %s %s %s %s" % (d["dropped"], d["archived_path"], d["backup"]["path"], d["backup"]["with_files"], d["hosts_removed"], d["manual_step"])')"
 assert_no_file "$BENCH/sites/bbtest.localhost"
+assert_no_file "$FL_STATE_DIR/site-admin/bbtest.localhost" "(the kept Administrator password goes with the site)"
+assert_file "$FL_STATE_DIR/site-admin/other"
 ! grep -q 'bbtest.localhost' "$FL_HOSTS_FILE" || fail "the hosts line of the dropped site"
 grep -q '^127.0.0.1 other$' "$FL_HOSTS_FILE" || fail "the other site's hosts line stays"
 grep -q '^127.0.0.1 macdev$' "$FL_HOSTS_FILE" || fail "a line outside the block stays"

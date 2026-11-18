@@ -216,6 +216,15 @@ fl_cmd_open() {
       *) fl_die "Unknown argument for open: $1" "Use: benchbar open [--site NAME] [--as USER] [--path /app/...] [--no-browser] [--print-url] [--json]" ;;
     esac
   done
+  # the link holds a login session: printing it hands that session to whatever reads the output, so
+  # it is a person's, as site open-as on is. Refused under BENCHBAR_NONINTERACTIVE=1 (--for-agent,
+  # mcp) and when stdin is not a terminal, unless the caller says BENCHBAR_NONINTERACTIVE=0 itself
+  # (the Mac app does). This stops the documented agent modes and a plain pipe; a process of the
+  # same user that fakes a terminal or sets the 0 is not stopped: it is a guard against mistakes.
+  if [[ -n "$user" && "$print_url" == 1 ]] && { fl_noninteractive || { [[ ! -t 0 ]] && [[ "${BENCHBAR_NONINTERACTIVE:-}" != "0" ]]; }; }; then
+    fl_die "Printing a sign-in link is a person's decision, so a run without a terminal does not do it: the link holds a login session." \
+      "Ask the person to run it in a terminal of their own."
+  fi
   fl_require_bench
   [[ -n "$site" ]] || fl_die "This bench has no default site." "Pass --site NAME (benchbar site list shows them)"
   fl_site_require "$site"
