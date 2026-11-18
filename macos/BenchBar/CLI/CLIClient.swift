@@ -313,12 +313,17 @@ nonisolated struct CLIClient: Sendable {
     /// A session for `user` on a developer_mode site, as a login link (`--print-url`).
     /// The link holds the session id, so neither a decoding failure nor the
     /// CLI's own words are allowed to repeat it (`OpenAsLink.scrub`).
+    ///
+    /// The CLI prints a link only to a terminal or to a caller that says
+    /// BENCHBAR_NONINTERACTIVE=0 itself: this click is the person's decision,
+    /// and the app has no terminal, so the call says so (and a mode in the
+    /// app's own environment cannot turn it off).
     func openAs(bench: String, site: String, user: String, path: String?) async throws(CLIError) -> OpenAsResult {
         let pathArguments = path.map { ["--path", $0] } ?? []
         let output: CommandOutput
         do throws(CLIError) {
             output = try await run(["open", "--bench-dir", bench, "--site", site, "--as", user] + pathArguments + ["--print-url", "--json"],
-                                   timeout: Timeout.action, acceptExitCodes: [0])
+                                   timeout: Timeout.action, acceptExitCodes: [0], extraEnvironment: ["BENCHBAR_NONINTERACTIVE": "0"])
         } catch {
             if case .failed(let command, let code, let message) = error {
                 throw .failed(command: command, exitCode: code, message: OpenAsLink.scrub(message))

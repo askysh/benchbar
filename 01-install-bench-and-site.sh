@@ -405,7 +405,7 @@ fi
 if [[ "$FL_DRY_RUN" != "1" && "$SITE_EXISTS" != "1" ]]; then
   fl_section "VERIFY DB CREDENTIALS"
   fl_mariadb_root_verify "$MARIADB_ROOT_PASSWORD" \
-    || fl_die "MariaDB root password is wrong." "benchbar mariadb-password prints the stored one; MARIADB_ROOT_PASSWORD='...' overrides it."
+    || fl_die "MariaDB root password is wrong." "Ask the person who installed it for the right one (they can read the stored one in their own terminal with benchbar mariadb-password); MARIADB_ROOT_PASSWORD='...' overrides it."
   DB_CHARSET="$(fl_mariadb_server_charset "$MARIADB_ROOT_PASSWORD")"
   [[ "$DB_CHARSET" == "utf8mb4" ]] || fl_die "MariaDB character_set_server is '${DB_CHARSET}', expected 'utf8mb4'." "Run ./$(fl_phase00_script) again (it writes the utf8mb4 drop-in and restarts MariaDB)."
   fl_ok "MariaDB root password verified and charset is utf8mb4"
