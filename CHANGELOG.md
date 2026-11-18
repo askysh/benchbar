@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here.
 
+## Unreleased
+
+### Agents never see a secret
+
+- `benchbar mariadb-password` is for a person at a terminal. It refuses under `--for-agent`, `BENCHBAR_NONINTERACTIVE`, `benchbar mcp` and when stdin is not a terminal, whatever `--yes` says, and no message or doc line tells an agent to run it. When the MariaDB root password is unknown (exit 2), the message tells an agent to ask the person.
+- `benchbar open --as USER --print-url` is refused under `--for-agent`, `BENCHBAR_NONINTERACTIVE` and `benchbar mcp`, as `site open-as on` is: the link holds a login session. The app, the tray and a terminal still get it.
+- `benchbar_site_add` no longer returns a generated Administrator password. It is saved in a 0600 file (`site-admin/SITE` in benchbar's state folder) and the result names that file; pass your own `admin_password` to choose one.
+
 ## 0.8.3 - 2026-11-17
 
 0.8.3 is a fix pass for Windows from a full review and a live test on a

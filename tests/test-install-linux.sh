@@ -358,11 +358,11 @@ assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "verified (from MARIADB_ROOT_PASSWORD)"
 assert_eq "olderpw" "$(cat "$(pw_file)")"
 assert_eq "600" "$(perm_of "$(pw_file)")"
-run_fm mariadb-password --yes
+run_fm_tty mariadb-password --yes
 assert_eq "0" "$CODE" "$OUT"
 assert_eq "olderpw" "$OUT"
 rm -rf "$FL_STATE_DIR/secrets"
-run_fm mariadb-password --yes
+run_fm_tty mariadb-password --yes
 assert_eq "1" "$CODE" "$OUT"
 assert_contains "$OUT" "no MariaDB root password in $(pw_file)"
 

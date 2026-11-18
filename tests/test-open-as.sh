@@ -148,6 +148,27 @@ OUT_URL="$("$FM" open --as priya@example.com --print-url --bench-dir "$BENCH" 2>
 assert_eq "1" "$(printf '%s\n' "$OUT_URL" | wc -l | tr -d ' ')" "(--print-url alone prints one line)"
 case "$OUT_URL" in http://v16dev:8000/login\?redirect-to=%2Fapp\&sid=mocksid0123456789\&t=[0-9]*) ;; *) fail "unexpected url line: $OUT_URL" ;; esac
 
+# the link holds a login session: never printed to a run that has no person (MCP-2), as site open-as on is
+for refused in "BENCHBAR_NONINTERACTIVE=1 run_fm open --as priya@example.com --print-url" \
+               "run_fm open --as priya@example.com --print-url --for-agent" \
+               "BENCHBAR_NONINTERACTIVE=1 run_fm open --as priya@example.com --print-url --json"; do
+  reset_calls
+  eval "$refused --bench-dir \"\$BENCH\""
+  assert_eq "1" "$CODE" "$refused: $OUT"; assert_contains "$OUT" "person"
+  assert_not_contains "$OUT" "mocksid" "($refused)"
+  assert_calls_not_contain '^bench-python' "($refused starts no session)"
+  assert_calls_not_contain '^open '
+done
+# a terminal does not lift it: the mode says nothing can ask
+BENCHBAR_NONINTERACTIVE=1 run_fm_tty open --as priya@example.com --print-url --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"; assert_not_contains "$OUT" "mocksid"
+# the person's terminal, and the app's own run (no mode), still get the link; a plain open --as signs in without printing it
+run_fm_tty open --as priya@example.com --print-url --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "sid=mocksid0123456789"
+reset_calls
+BENCHBAR_NONINTERACTIVE=1 run_fm open --as priya@example.com --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"; assert_not_contains "$OUT" "mocksid" "(without --print-url nothing is printed, so nothing is refused)"
+
 # '+' and a quote in the user id stay one argument and come back unchanged
 reset_calls
 run_fm open --as 'a+b@x.com' --no-browser --json --bench-dir "$BENCH"

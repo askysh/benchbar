@@ -124,12 +124,13 @@ assert_file "$HOME/Library/LaunchAgents/com.benchbar.nohoncho.plist"
 mv "$MOCK_PIPX_HOME/venvs/frappe-bench/bin/honcho.away" "$MOCK_PIPX_HOME/venvs/frappe-bench/bin/honcho"
 
 # ---- benchbar mariadb-password
-run_fm mariadb-password </dev/null
+run_fm_tty mariadb-password
 assert_eq "1" "$CODE"; assert_contains "$OUT" "no MariaDB root password in the Keychain"
 mkdir -p "$MOCK_STATE/keychain"; printf 'kc-secret-1\n' >"$MOCK_STATE/keychain/benchbar-mariadb--root"
 run_fm mariadb-password </dev/null
-assert_eq "1" "$CODE" "$OUT"; assert_not_contains "$OUT" "kc-secret-1"; assert_contains "$OUT" "not printed"
-run_fm mariadb-password --yes
+assert_eq "1" "$CODE" "$OUT"; assert_not_contains "$OUT" "kc-secret-1"; assert_contains "$OUT" "Not printed"
+assert_not_contains "$OUT" "--yes"
+run_fm_tty mariadb-password --yes
 assert_eq "0" "$CODE" "$OUT"; assert_eq "kc-secret-1" "$OUT"
 
 printf 'test-adopt: ok\n'

@@ -216,6 +216,12 @@ fl_cmd_open() {
       *) fl_die "Unknown argument for open: $1" "Use: benchbar open [--site NAME] [--as USER] [--path /app/...] [--no-browser] [--print-url] [--json]" ;;
     esac
   done
+  # the link holds a login session: printing it hands that session to whatever reads the output, so
+  # it is a person's, as site open-as on is: never under BENCHBAR_NONINTERACTIVE (--for-agent, mcp).
+  # No terminal is not enough to refuse: the tray and a script of the person's own print it too.
+  [[ -z "$user" || "$print_url" != 1 ]] || ! fl_noninteractive \
+    || fl_die "Printing a sign-in link is a person's decision, so nothing run without a terminal can do it: the link holds a login session." \
+      "Ask the person to run it in a terminal of their own."
   fl_require_bench
   [[ -n "$site" ]] || fl_die "This bench has no default site." "Pass --site NAME (benchbar site list shows them)"
   fl_site_require "$site"

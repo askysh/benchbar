@@ -338,7 +338,7 @@ fl_cmd_site_drop() {
 
   fl_header "benchbar site drop" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "$name"
   fl_mariadb_root_password_resolve || fl_die "The MariaDB root password is needed to drop the database of ${name}." \
-    "Re-run with: MARIADB_ROOT_PASSWORD='...' benchbar site drop ${name} --confirm-site ${name}" 2
+    "Ask the person for it (do not look for it), then re-run with: MARIADB_ROOT_PASSWORD='...' benchbar site drop ${name} --confirm-site ${name}" 2
   fl_bench_env_exports
   fl_bench_redis_up "$FL_BENCH_DIR"
   archive_before="$(fl_site_archive_latest "$name")"

@@ -114,7 +114,11 @@ benchbar doctor --for-agent  # one JSON document
 - With `BENCHBAR_NONINTERACTIVE=1` a command that lacks an input
   (`ADMIN_PASSWORD`, `MARIADB_ROOT_PASSWORD`, `--yes`, a `sudo` that would
   ask) names all of them in one error before it takes the lock or touches
-  the bench. It exits 2 when the MariaDB root password is one of them.
+  the bench. It exits 2 when the MariaDB root password is one of them;
+  then ask the person for it, do not look for it.
+- Two commands are a person's and refuse in this mode and under MCP:
+  `benchbar mariadb-password` (the root password) and `benchbar open --as
+  USER --print-url` (a login session), whatever `--yes` says.
 - `benchbar doctor --quick` skips the slow checks and names them.
   `doctor --ack CHECK` silences one warning until its message changes;
   `--unack CHECK` undoes it. A failure cannot be acknowledged, and
@@ -137,4 +141,5 @@ benchbar repair --yes
 are pointed at BenchBar with "set up Frappe on my Mac" or "my bench is
 broken, fix it": how to start from the facts, the rules they must keep
 (never `rm -rf` inside a bench, never `bench update` unless asked, never
-print the MariaDB root password), and how to read the output.
+print the MariaDB root password, or a sign-in link), and how to read the
+output.

@@ -502,7 +502,17 @@ R="$(mcp "$(call 3 benchbar_site_add '{"site":"qa1.localhost","token":"'"$STOK"'
 assert_eq "False" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')" "$R"
 assert_file "$BENCH/sites/qa1.localhost/site_config.json"
 SC="$(printf '%s' "$R" | jget - 'json.dumps(d["result"]["structuredContent"])')"
-assert_eq "True 20" "$(printf '%s' "$SC" | jget - '" ".join(str(x) for x in [d["admin_password_generated"], len(d["admin_password"])])')" "(a generated Administrator password comes back once)"
+perm_of() { if [[ "$STAT_GNU" == "1" ]]; then stat -c %a "$1"; else stat -f %Lp "$1"; fi; }
+# MCP-21: a generated Administrator password is not in the result or its text; it is kept for the person
+# in a 0600 file of the state folder, and the result says where
+assert_eq "True False" "$(printf '%s' "$SC" | jget - '" ".join(str(x) for x in [d["admin_password_generated"], "admin_password" in d])')" "(the generated password is not returned)"
+APW_FILE="$(printf '%s' "$SC" | jget - 'd["admin_password_file"]')"
+assert_eq "$FL_STATE_DIR/site-admin/qa1.localhost" "$APW_FILE"
+assert_file "$APW_FILE"; assert_eq "600" "$(perm_of "$APW_FILE")"; assert_eq "700" "$(perm_of "$FL_STATE_DIR/site-admin")"
+APW="$(cat "$APW_FILE")"
+assert_eq "20" "${#APW}" "(the file holds the generated password)"
+assert_not_contains "$R" "$APW" "(the password is in no part of the reply)"
+assert_contains "$(printf '%s' "$SC" | jget - 'd["admin_password_note"]')" "person"
 assert_eq "macdev" "$(printf '%s' "$SC" | jget - '[s["name"] for s in d["sites"]["sites"] if s["default"]][0]')" "(the default site does not move)"
 assert_contains "$(printf '%s' "$SC" | jget - '[s["name"] for s in d["sites"]["sites"]]')" "qa1.localhost"
 # a second plan for the same site: it exists, nothing to do
@@ -537,6 +547,18 @@ assert_not_contains "$R" "mariadb-password"
 assert_not_contains "$R" "find-generic-password"
 assert_not_contains "$R" "secrets/mariadb-root"
 assert_not_contains "$R" "rootpw"
+# whatever the server runs, the root password is not printed: the CLI it starts is under BENCHBAR_NONINTERACTIVE
+# (MCP-1), with --yes or without, so even a call that reached the command would learn nothing
+python3 -c '
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("mcp", sys.argv[1]); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+m.BENCHBAR = sys.argv[2]
+for argv in (["mariadb-password", "--yes"], ["mariadb-password"]):
+    code, out, err = m.run_cli(argv + ["--bench-dir", sys.argv[3]])
+    assert code != 0, (argv, code, out, err)
+    assert "rootpw" not in out + err, (argv, out, err)
+    assert "mariadb-password --yes" not in out + err, (argv, out, err)
+' "$ROOT/lib/frappe-local/mcp.py" "$FM" "$BENCH"
 # the scrub itself: a CLI line that points at the store is withheld
 python3 -c '
 import importlib.util, sys

@@ -46,6 +46,15 @@ The tools and their arguments are in
   `"truncated": true`, and the text is that same JSON, so it still
   parses. Only a text that cannot be shrunk is cut by bytes, with a
   trailing `... [truncated, N bytes total]`.
+- No tool returns a secret. The MariaDB root password has no tool, and
+  `benchbar mariadb-password` refuses under the mode every tool runs in.
+  `open --as USER --print-url` (a login session) refuses there too. A new
+  site made by `benchbar_site_add` without `admin_password` gets a
+  generated Administrator password that is saved in a 0600 file,
+  `site-admin/SITE` in benchbar's state folder, and the result names that
+  file as `admin_password_file` and never holds the password. The person
+  reads it there; an agent that needs a login asks for one or passes its
+  own `admin_password`.
 - `tools/list` and `tools/call` before `initialize` get error `-32002`;
   `ping` always works. Unexpected errors come back as a plain `internal
   error` with the details on stderr, never a path.

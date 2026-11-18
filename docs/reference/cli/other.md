@@ -250,7 +250,10 @@ A site with `deny_multiple_sessions` on signs that user out everywhere else.
 `--print-url` prints the link instead of opening it (in `--json` as `url`);
 the link holds the session id, so treat it like a password. `--json` without
 `--print-url` leaves it out. Nothing is written to disk and no run log is
-kept.
+kept. With `--as`, `--print-url` is refused under `BENCHBAR_NONINTERACTIVE`,
+`--for-agent` and `benchbar mcp`, as `site open-as on` is: a link in an
+agent's output stays in its transcript. The app, the tray and a person at a
+terminal still get it.
 
 Exit codes: 0 opened (or printed); 1 a refusal: no such site or user, a
 disabled user, Open as is off for the site, the bench is stopped, the site is not in developer mode, the
@@ -304,9 +307,14 @@ benchbar mariadb-password [--yes]
 
 Prints the MariaDB root password kept in the Keychain (item
 `benchbar-mariadb`; on Linux a 0600 file in the state folder), after
-asking. `--yes` skips the question.
+asking. `--yes` skips the question, not the person: the command is for a
+person at a terminal. It is refused under `BENCHBAR_NONINTERACTIVE`,
+`--for-agent` and `benchbar mcp`, and when stdin is not a terminal,
+whatever `--yes` says, so a coding agent never gets the password in its
+output. An agent that needs it asks the person.
 
-Exit codes: 0 printed; 1 declined, or no password in the Keychain.
+Exit codes: 0 printed; 1 declined, no password in the Keychain, or
+refused because no person is at a terminal.
 
 ```bash
 benchbar mariadb-password

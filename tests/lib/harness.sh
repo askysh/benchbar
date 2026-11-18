@@ -159,6 +159,19 @@ run_fm() {
   CODE="$?"
   set -e
 }
+# run_fm_tty ARGS...: as run_fm, with a terminal (a pty) on stdin, the one thing a
+# person at a prompt has and an agent's plain shell lacks; stdout and stderr stay a pipe
+run_fm_tty() {
+  set +e
+  OUT="$(python3 -c '
+import os, pty, subprocess, sys
+master, slave = pty.openpty()
+p = subprocess.run(sys.argv[1:], stdin=slave, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+sys.stdout.buffer.write(p.stdout)
+sys.exit(p.returncode)' "$FM" "$@" 2>&1)"
+  CODE="$?"
+  set -e
+}
 reset_calls() { : >"$MOCK_LOG"; }
 # BSD stat on macOS, GNU stat on Linux (the suite also runs on Linux machines).
 if stat --version >/dev/null 2>&1; then STAT_GNU=1; else STAT_GNU=0; fi
