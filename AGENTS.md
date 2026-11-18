@@ -245,8 +245,13 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
 
 ## Contributing a change
 
-- Run `bash tests/affected.sh` for the tests your change touches; the full
-  suite (`bash tests/run-tests.sh`) before you hand the work back.
+- Run `bash tests/affected.sh` for the tests your change touches. CI runs
+  the full suite; run it yourself only when the selector says everything.
+- A change a user can see updates its guide or app page, `docs/features.md`
+  and `CHANGELOG.md`; a new command, flag or MCP tool also needs
+  `python3 scripts/docs-reference.py --write` (the reference tables are
+  generated, and `test-docs` fails when they drift). The pull request
+  template lists the same checks.
 - Branch from `next-release` and open the pull request against it.
   `main` holds the last release and moves only when one is cut
   (docs/releasing.md).

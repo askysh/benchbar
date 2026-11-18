@@ -99,6 +99,8 @@ claude mcp add benchbar -- benchbar mcp
 An argument marked `*` is required. `bench` (the bench's path, from `benchbar_list`) is optional on every tool that has it: without it the tool uses the default bench.
 <!-- /generated:mcp-tools -->
 
+`benchbar_logs_tail` reads one file: `file` is `bench` (the default), `worker`, `worker_error` or `previous` (the log of the run before the last restart). `since` returns only the lines after a time, and `since_restart` only the lines since the bench last started; each line has its time in `ts`.
+
 ## Flags, needs and environment
 
 <!-- generated:cli-commands mcp -->

@@ -140,6 +140,10 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # its own group: a slow weekly check must not hold up a deploy of main
+    concurrency:
+      group: docs-external-links
+      cancel-in-progress: true
     defaults:
       run:
         working-directory: site
