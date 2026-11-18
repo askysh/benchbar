@@ -50,6 +50,9 @@ fi
 exit 0
 SH
 chmod +x "$TMP_DIR/bin/bench"
+# bench init needs uv (fl_bench_require_uv); a runner without one must not fail the flow
+printf '#!/bin/sh\nexit 0\n' >"$TMP_DIR/bin/uv"
+chmod +x "$TMP_DIR/bin/uv"
 export PATH="$TMP_DIR/bin:$PATH"
 export BENCH_LOG="$TMP_DIR/bench.log"
 : >"$BENCH_LOG"
