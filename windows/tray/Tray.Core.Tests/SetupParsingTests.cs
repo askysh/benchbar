@@ -99,8 +99,12 @@ public class SetupParsingTests
     }
 
     [Fact]
-    public void ANewerSchemaIsRefused() =>
-        Assert.Throws<UnsupportedSchemaException>(() => SetupJson.ParseCheck("{\"schema_version\":2,\"steps\":[]}"));
+    public void ANewerSchemaIsRefusedWhenTheStepsAreGone() =>
+        Assert.Throws<UnsupportedSchemaException>(() => CliOutput.Parse("{\"schema_version\":2,\"phases\":[]}", "setup check", SetupJson.ParseCheck, requires: "steps"));
+
+    [Fact]
+    public void ANewerSchemaWithTheStepsIsRead() =>
+        Assert.Empty(CliOutput.Parse("{\"schema_version\":2,\"steps\":[]}", "setup check", SetupJson.ParseCheck, requires: "steps").Steps);
 
     [Fact]
     public void UnknownStatusAndFieldsAreTolerated()

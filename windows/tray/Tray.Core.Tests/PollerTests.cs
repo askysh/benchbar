@@ -27,6 +27,34 @@ public class PollerTests
     public void NextDelayTable(BenchState[] states, bool flyoutOpen, int step, double seconds) =>
         Assert.Equal(S(seconds), BenchPoller.NextDelay(states, flyoutOpen, step));
 
+    [Fact]
+    public void OnBatteryTheRunningPollIsStretchedAndNothingElseChanges()
+    {
+        Assert.Equal(S(60), BenchPoller.NextDelay([BenchState.Running], flyoutOpen: false, idleStep: 0, onBattery: true));
+        Assert.Equal(S(30), BenchPoller.NextDelay([BenchState.Running], flyoutOpen: false, idleStep: 0));
+        Assert.Equal(S(2), BenchPoller.NextDelay([BenchState.Starting, BenchState.Running], flyoutOpen: false, idleStep: 0, onBattery: true));
+        Assert.Equal(S(5), BenchPoller.NextDelay([BenchState.Running], flyoutOpen: true, idleStep: 0, onBattery: true));
+        Assert.Equal(S(60), BenchPoller.NextDelay([BenchState.Stopped], flyoutOpen: false, idleStep: 1, onBattery: true)); // the idle steps are the same
+    }
+
+    [Fact]
+    public async Task ARunningPollerOnBatteryWaitsSixtySecondsAfterTheNextPoll()
+    {
+        var (poller, source, time, probe) = Make(BenchState.Running);
+        using (poller)
+        using (probe)
+        {
+            poller.SetOnBattery(true);
+            poller.Start();
+            await probe.NextAsync();
+            time.Advance(S(30));              // 30 s would be the mains rate: this does not fire the timer yet
+            Assert.Equal(1, source.Lists);
+            time.Advance(S(30));
+            await probe.NextAsync();
+            Assert.Equal(2, source.Lists);
+        }
+    }
+
     /// <summary>Counts polls as they end; the timer is already re-armed when the event fires.</summary>
     internal sealed class Probe : IDisposable
     {
