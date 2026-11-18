@@ -188,6 +188,16 @@ final class BenchStore {
     @ObservationIgnored private var polling = false
     @ObservationIgnored private var suspended = false
     @ObservationIgnored private var lastReload = Date.distantPast
+    /// A reload is queued but has not begun: another trigger in that moment
+    /// (the popover and the window open together) adds none.
+    @ObservationIgnored private var reloadRequested = false
+    /// What each bench's status said when the Mac went to sleep or locked
+    /// (running or starting), to tell a crash that came and went meanwhile.
+    @ObservationIgnored private var awayBaseline: [String: BenchStatus] = [:]
+    /// Benches whose crash was already told while the Mac was locked.
+    @ObservationIgnored private var toldWhileAway: Set<String> = []
+    /// Called when nothing holds the CLI any more (a quit that waits for it).
+    @ObservationIgnored var onIdle: (() -> Void)?
     /// Bumped by suspend: a legacy loop from before ends at its next wake.
     /// That loop is never cancelled, since it may be in a CLI call, and a
     /// cancel there makes swift-subprocess SIGTERM bash (a fake "timed out").
@@ -210,6 +220,9 @@ final class BenchStore {
     /// A running bench on screen that the speed loop does not sample.
     static let chartInterval: Duration = .seconds(5)
     static let chartTolerance: Duration = .seconds(1)
+    /// At most this many `status` calls (bash programs) at once: with six
+    /// benches one popover click would start eight programs together.
+    static let maxParallelStatus = 3
 
     init(
         settings: AppSettings,
@@ -254,6 +267,20 @@ final class BenchStore {
     /// other bench may start a change either: it would fail on the lock.
     var busyBench: BenchModel? {
         changeAnchor ?? benches.first(where: \.isBusy)
+    }
+
+    /// The change that holds the CLI, named for a person, nil when none runs.
+    /// Quitting asks while this is set (`QuitPolicy`).
+    var runningChangeLabel: String? {
+        guard let bench = busyBench else { return nil }
+        if let activity = bench.activity { return activity }
+        if bench.isChangingScheduler { return "Changing the scheduler on \(bench.name)" }
+        switch bench.pending {
+        case .up?: return "Starting \(bench.name)"
+        case .down?: return "Stopping \(bench.name)"
+        case .restart?: return "Restarting \(bench.name)"
+        case nil: return "A change on \(bench.name)"
+        }
     }
 
     /// True when another bench holds the CLI's lock: this one waits.
@@ -372,9 +399,19 @@ final class BenchStore {
     }
 
     func refreshAll() async {
+        await forEachLimited(benches) { await self.refresh($0) }
+    }
+
+    /// The benches' calls, `maxParallelStatus` at a time.
+    private func forEachLimited(_ list: [BenchModel], _ body: @escaping @MainActor (BenchModel) async -> Void) async {
         await withTaskGroup(of: Void.self) { group in
-            for bench in benches {
-                group.addTask { await self.refresh(bench) }
+            var next = list.makeIterator()
+            for _ in 0..<Self.maxParallelStatus {
+                guard let bench = next.next() else { break }
+                group.addTask { await body(bench) }
+            }
+            while await group.next() != nil {
+                if let bench = next.next() { group.addTask { await body(bench) } }
             }
         }
     }
@@ -579,13 +616,14 @@ final class BenchStore {
         case .heartbeat, .terminal:
             await take(file, for: bench)
         case .overruled:
-            // the claim the CLI denied, unchanged: no hint, just ask
-            await refresh(bench)
+            // the claim the CLI denied, unchanged: no hint, just ask (not
+            // while locked: the wake asks every bench once)
+            if !suspended { await refresh(bench) }
         case .legacy:
             if let status = file.status {
                 apply(.observed(status.merged(over: bench.status), .stateFile), to: bench)
             }
-            await refresh(bench)
+            if !suspended { await refresh(bench) }
         }
     }
 
@@ -599,7 +637,7 @@ final class BenchStore {
             superseded.insert(bench.path)
             refreshAgain.insert(bench.path)
         }
-        await sampleResources(bench)
+        if !suspended { await sampleResources(bench) }
     }
 
     /// Applies state.json's status; true when the bench's status moved,
@@ -702,11 +740,7 @@ final class BenchStore {
     func safetyCheck() async {
         guard !suspended else { return }
         Log.poll.info("safety poll: \(self.benches.count) benches")
-        await withTaskGroup(of: Void.self) { group in
-            for bench in benches {
-                group.addTask { await self.check(bench, finalAsksCLI: true) }
-            }
-        }
+        await forEachLimited(benches) { await self.check($0, finalAsksCLI: true) }
     }
 
     /// One bench from its files when they can be believed, else the CLI.
@@ -731,7 +765,15 @@ final class BenchStore {
 
     /// In the minute loop: its files cannot say, or its last status failed.
     private func isLegacy(_ bench: BenchModel) -> Bool {
-        trust[bench.path]?.isLegacy == true || failing.contains(bench.path)
+        if failing.contains(bench.path) { return true }
+        guard let mode = trust[bench.path], mode.isLegacy else { return false }
+        // A bench that never ran under the runner (no state.json) and that
+        // the CLI has called stopped, crashed or paused is final: its first
+        // start is a new file in a folder that is watched, and the safety
+        // poll still asks the CLI. One started by hand (benchfg) leaves no
+        // file and only the CLI sees it stop, so it stays in the loop.
+        if mode == .legacy(.noFile), BenchTrust.isFinal(bench.state) { return false }
+        return true
     }
 
     /// The legacy loop runs (for the tests).
@@ -758,11 +800,7 @@ final class BenchStore {
             let due = benches.filter(isLegacy)
             guard !due.isEmpty else { return }
             Log.poll.info("legacy poll: \(due.count) benches")
-            await withTaskGroup(of: Void.self) { group in
-                for bench in due {
-                    group.addTask { await self.check(bench, finalAsksCLI: false) }
-                }
-            }
+            await forEachLimited(due) { await self.check($0, finalAsksCLI: false) }
         }
     }
 
@@ -775,7 +813,7 @@ final class BenchStore {
         popoverOpen = open
         screenChanged(wasFast: wasFast)
         // once per opening, every bench, below the work a person waits for
-        if open, !suspended { Task(priority: .utility) { await reloadBenches() } }
+        if open { requestReload() }
     }
 
     /// BenchBar became the active app (a click back from Terminal or the
@@ -783,8 +821,20 @@ final class BenchStore {
     /// as `developer_mode` in a site's config, is not in any watched file, so
     /// the window read stale until the popover was opened. At most every 15 s.
     func appBecameActive() {
-        guard windowSight.isOpen, !suspended, !isLoading, Date().timeIntervalSince(lastReload) > 15 else { return }
-        Task(priority: .utility) { await reloadBenches() }
+        guard windowSight.isOpen, Date().timeIntervalSince(lastReload) > 15 else { return }
+        requestReload()
+    }
+
+    /// A reload for what came on screen, unless one runs or is queued
+    /// already: a click on the menu bar item while the window opens must
+    /// not start two rounds of `list` and one `status` per bench.
+    private func requestReload() {
+        guard !suspended, !isLoading, !reloadRequested else { return }
+        reloadRequested = true
+        Task(priority: .utility) {
+            reloadRequested = false
+            await reloadBenches()
+        }
     }
 
     /// The BenchBar window opened, closed, came on screen or left it, or
@@ -796,7 +846,7 @@ final class BenchStore {
         windowSight = sight
         if opened { windowSession += 1 }
         screenChanged(wasFast: wasFast)
-        if opened, !suspended { Task(priority: .utility) { await reloadBenches() } }
+        if opened { requestReload() }
     }
 
     /// The runner's speed loop samples this bench now (nil: none). Its
@@ -866,25 +916,45 @@ final class BenchStore {
     /// The chart loop runs (for the tests).
     var isSamplingCharts: Bool { chartTask != nil }
 
-    /// Sleep, screen lock: stop watching and the loops. A loop in a CLI call
-    /// finishes it; only its next round is skipped.
+    /// Sleep, screen lock: stop the loops. A loop in a CLI call finishes it;
+    /// only its next round is skipped. The folder watchers stay: they cost
+    /// nothing without events, and a crash heard while the Mac is locked is
+    /// told at once (a CLI call waits for the wake).
     func suspend() {
+        guard !suspended else { return }
         suspended = true
         generation += 1
         legacyTask = nil
         updateChartLoop()
-        for watcher in watchers.values { watcher.stop() }
-        watchers.removeAll()
+        awayBaseline = benches.reduce(into: [:]) { baseline, bench in
+            if let status = bench.status, bench.state == .running || bench.state == .starting {
+                baseline[bench.path] = status
+            }
+        }
+        toldWhileAway = []
     }
 
-    /// Wake: catch up at once, then carry on.
+    /// Wake: catch up at once, then carry on. A bench that was running when
+    /// the Mac went away and runs again after a failing exit and a new start
+    /// crashed meanwhile and was restarted: one notice for it.
     func resume() {
         guard suspended else { return }
         suspended = false
         syncWatchers()
         updateLegacyLoop()
         updateChartLoop()
-        Task(priority: .utility) { await refreshAll() }
+        let baseline = awayBaseline
+        let told = toldWhileAway
+        awayBaseline = [:]
+        toldWhileAway = []
+        Task(priority: .utility) {
+            await refreshAll()
+            for bench in benches where !told.contains(bench.path) {
+                guard let exitCode = CrashWhileAway.exitCode(before: baseline[bench.path], after: bench.status) else { continue }
+                Log.poll.info("\(bench.name, privacy: .public): crashed while the Mac was away")
+                onAlert?(bench, .crashed(exitCode: exitCode))
+            }
+        }
     }
 
     // MARK: effects
@@ -898,6 +968,7 @@ final class BenchStore {
         for effect in effects {
             switch effect {
             case .alert(let alert):
+                if suspended, case .crashed = alert { toldWhileAway.insert(bench.path) }
                 onAlert?(bench, alert)
             case .pingSite:
                 Task { await pingAfterStart(bench) }
@@ -951,5 +1022,6 @@ final class BenchStore {
         // a bench on screen started or stopped; after the menu bar, which may
         // have handed it to the speed loop
         updateChartLoop()
+        if onIdle != nil, busyBench == nil { onIdle?() }
     }
 }
