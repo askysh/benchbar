@@ -14,6 +14,9 @@ public sealed class BenchPoller : IDisposable
     public static readonly TimeSpan StartingDelay = TimeSpan.FromSeconds(2);
     public static readonly TimeSpan RunningDelay = TimeSpan.FromSeconds(30);
 
+    /// <summary>The running rate on battery: each poll starts several processes inside WSL, so it is stretched to twice the mains rate.</summary>
+    public static readonly TimeSpan RunningOnBatteryDelay = TimeSpan.FromSeconds(60);
+
     /// <summary>How long polling stays fast after an up, down or restart.</summary>
     public static readonly TimeSpan ActionBoost = TimeSpan.FromSeconds(60);
 
@@ -25,14 +28,15 @@ public sealed class BenchPoller : IDisposable
     /// The time to the next poll. Boosted (just after an action) 2 s; a window open and in use 5 s; any bench starting 2 s;
     /// any running 30 s; else (stopped, paused, crashed, unknown, distro stopped) the back off,
     /// where <paramref name="idleStep"/> counts the idle polls so far. A window that is open but minimized or not in use for a while
-    /// (<paramref name="viewerIdle"/>) does not hold the 5 s rate: one poll costs a benchbar.exe and several wsl.exe processes.
+    /// (<paramref name="viewerIdle"/>) does not hold the 5 s rate: one poll costs a benchbar.exe and several wsl.exe processes. On battery
+    /// (<paramref name="onBattery"/>) the running rate is 60 s.
     /// </summary>
-    public static TimeSpan NextDelay(IReadOnlyCollection<BenchState> states, bool flyoutOpen, int idleStep, bool boost = false, bool viewerIdle = false)
+    public static TimeSpan NextDelay(IReadOnlyCollection<BenchState> states, bool flyoutOpen, int idleStep, bool boost = false, bool viewerIdle = false, bool onBattery = false)
     {
         if (boost) return StartingDelay;
         if (flyoutOpen && !viewerIdle) return FlyoutOpenDelay;
         if (states.Contains(BenchState.Starting)) return StartingDelay;
-        if (states.Contains(BenchState.Running)) return RunningDelay;
+        if (states.Contains(BenchState.Running)) return onBattery ? RunningOnBatteryDelay : RunningDelay;
         return IdleSteps[Math.Clamp(idleStep, 0, IdleSteps.Count - 1)];
     }
 
@@ -45,6 +49,7 @@ public sealed class BenchPoller : IDisposable
     private readonly Func<string?>? _distro;
     private readonly ITimer _timer;
     private readonly CancellationTokenSource _cts = new();
+    private readonly CancellationToken _ct;
     private readonly object _gate = new();
 
     private bool _started;
@@ -53,6 +58,7 @@ public sealed class BenchPoller : IDisposable
     private bool _suspended;
     private bool _flyoutOpen;
     private bool _viewerIdle;
+    private bool _onBattery;
     private bool _disposed;
     private int _idleStep;
     private DateTimeOffset _boostUntil;
@@ -68,6 +74,7 @@ public sealed class BenchPoller : IDisposable
         _time = time;
         _probe = probe;
         _distro = distro;
+        _ct = _cts.Token; // read once: a poll that starts as the poller is disposed must not touch a disposed source
         _timer = time.CreateTimer(_ => Trigger(resetBackoff: false), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
     }
 
@@ -128,6 +135,17 @@ public sealed class BenchPoller : IDisposable
         {
             if (_viewerIdle == idle) return;
             _viewerIdle = idle;
+            if (_started && !_polling && !_suspended && !_disposed) Arm(advanceBackoff: false);
+        }
+    }
+
+    /// <summary>On battery the running poll is stretched (<see cref="RunningOnBatteryDelay"/>). Takes effect at the next arm.</summary>
+    public void SetOnBattery(bool onBattery)
+    {
+        lock (_gate)
+        {
+            if (_onBattery == onBattery) return;
+            _onBattery = onBattery;
             if (_started && !_polling && !_suspended && !_disposed) Arm(advanceBackoff: false);
         }
     }
@@ -212,7 +230,7 @@ public sealed class BenchPoller : IDisposable
     {
         var states = _last.Benches.Select(s => s.State).ToList();
         var boost = _time.GetUtcNow() < _boostUntil;
-        var delay = NextDelay(states, _flyoutOpen, _idleStep, boost, _viewerIdle);
+        var delay = NextDelay(states, _flyoutOpen, _idleStep, boost, _viewerIdle, _onBattery);
         var idle = !boost && !(_flyoutOpen && !_viewerIdle) && !states.Contains(BenchState.Starting) && !states.Contains(BenchState.Running);
         if (!idle) _idleStep = 0;
         else if (advanceBackoff) _idleStep = Math.Min(_idleStep + 1, IdleSteps.Count - 1);
@@ -221,7 +239,7 @@ public sealed class BenchPoller : IDisposable
 
     private async Task<TraySnapshot> PollOnceAsync()
     {
-        var ct = _cts.Token;
+        var ct = _ct;
 
         string? distro = null;
         if (_probe is not null && _distro?.Invoke() is { } name && !string.IsNullOrWhiteSpace(name))

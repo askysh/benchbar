@@ -130,7 +130,7 @@ public sealed class ShimSetupService : ISetupService
         }
         if (string.IsNullOrWhiteSpace(result.Output))
             throw new CliProblemException(ShimBenchSource.FirstLine(result.Error) ?? $"benchbar.exe setup check exited with code {result.ExitCode}. Update BenchBar.");
-        return CliOutput.Parse(result.Output, "setup check", SetupJson.ParseCheck);
+        return CliOutput.Parse(result.Output, "setup check", SetupJson.ParseCheck, requires: "steps");
     }
 
     public async Task<SetupRunResult> RunActionAsync(SetupRunRequest request, Action<SetupEvent> onEvent, CancellationToken ct)
