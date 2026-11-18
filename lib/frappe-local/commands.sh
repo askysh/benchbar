@@ -367,36 +367,52 @@ fl_cmd_help() {
 
 # fl_commands_json: benchbar commands --json. The commands of a lab that is
 # off are left out and named in "gated"; one of a lab that is on has "lab".
+# Built with the _v helpers and here strings: a subshell per value cost 1 s.
 fl_commands_json() {
   local line kind k a b c out="" body="" fsep="" esep="" envs="" open=0 gflags="" gsep="" tty sudo net mut json
-  local word="" lab="" skip=0 gated="" gsep2="" labs_on
+  local word="" lab="" skip=0 gated="" gsep2="" labs_on lab_on=0
+  local jk ja jb jc jt js jn jm jj jl jw
   while IFS= read -r line; do
     IFS='~' read -r kind k a b c <<<"$line"
     case "$kind" in
       cmd)
         if [[ "$open" == "1" ]]; then out="${out}${out:+,}${body}],\"env\":[${envs}]}"; fi
         open=0; skip=0
-        if [[ "${k%% *}" != "$word" ]]; then word="${k%% *}"; lab="$(fl_lab_of_cmd "$word")"; fi
-        if [[ -n "$lab" ]] && ! fl_lab_on "$lab"; then
+        if [[ "${k%% *}" != "$word" ]]; then
+          word="${k%% *}"; fl_lab_of_cmd_v lab "$word"
+          lab_on=0
+          if [[ -n "$lab" ]] && fl_lab_on "$lab"; then lab_on=1; fi
+        fi
+        if [[ -n "$lab" && "$lab_on" != "1" ]]; then
           skip=1
-          case ",${gated}" in *"\"name\":$(fl_json_str "$word"),"*) ;; *) gated="${gated}${gsep2}{\"name\":$(fl_json_str "$word"),\"lab\":$(fl_json_str "$lab")}"; gsep2="," ;; esac
+          fl_json_str_v jw "$word"
+          case ",${gated}" in *"\"name\":${jw},"*) ;; *) fl_json_str_v jl "$lab"; gated="${gated}${gsep2}{\"name\":${jw},\"lab\":${jl}}"; gsep2="," ;; esac
           continue
         fi
         IFS='~' read -r _ _ _ _ tty sudo net mut json <<<"$line"
-        body="{\"name\":$(fl_json_str "$k"),\"usage\":$(fl_json_str "$a"),\"summary\":$(fl_json_str "$b"),\"tty\":$(fl_json_bool "$tty"),\"sudo\":$(fl_json_bool "$sudo"),\"network\":$(fl_json_bool "$net"),\"mutating\":$(fl_json_bool "$mut"),\"json\":$(fl_json_str "$json"),"
-        [[ -z "$lab" ]] || body="${body}\"lab\":$(fl_json_str "$lab"),"
+        fl_json_str_v jk "$k"; fl_json_str_v ja "$a"; fl_json_str_v jb "$b"
+        fl_json_bool_v jt "$tty"; fl_json_bool_v js "$sudo"; fl_json_bool_v jn "$net"; fl_json_bool_v jm "$mut"; fl_json_str_v jj "$json"
+        body="{\"name\":${jk},\"usage\":${ja},\"summary\":${jb},\"tty\":${jt},\"sudo\":${js},\"network\":${jn},\"mutating\":${jm},\"json\":${jj},"
+        if [[ -n "$lab" ]]; then fl_json_str_v jl "$lab"; body="${body}\"lab\":${jl},"; fi
         body="${body}\"flags\":["
         envs=""; open=1; fsep=""; esep="" ;;
       flag)
-        [[ "$skip" == 1 ]] || { body="${body}${fsep}{\"name\":$(fl_json_str "$a"),\"value\":$(fl_json_str "$b"),\"help\":$(fl_json_str "$c")}"; fsep=","; } ;;
+        if [[ "$skip" != 1 ]]; then
+          fl_json_str_v ja "$a"; fl_json_str_v jb "$b"; fl_json_str_v jc "$c"
+          body="${body}${fsep}{\"name\":${ja},\"value\":${jb},\"help\":${jc}}"; fsep=","
+        fi ;;
       env)
-        [[ "$skip" == 1 ]] || { envs="${envs}${esep}{\"name\":$(fl_json_str "$a"),\"help\":$(fl_json_str "$b")}"; esep=","; } ;;
+        if [[ "$skip" != 1 ]]; then
+          fl_json_str_v ja "$a"; fl_json_str_v jb "$b"
+          envs="${envs}${esep}{\"name\":${ja},\"help\":${jb}}"; esep=","
+        fi ;;
     esac
-  done < <(fl_cmd_table)
+  done <<<"$FL_CMD_TABLE"
   [[ "$open" != "1" ]] || out="${out}${out:+,}${body}],\"env\":[${envs}]}"
   while IFS='~' read -r a b c; do
-    gflags="${gflags}${gsep}{\"name\":$(fl_json_str "$a"),\"value\":$(fl_json_str "$b"),\"help\":$(fl_json_str "$c")}"; gsep=","
-  done < <(fl_cmd_global_flags)
+    fl_json_str_v ja "$a"; fl_json_str_v jb "$b"; fl_json_str_v jc "$c"
+    gflags="${gflags}${gsep}{\"name\":${ja},\"value\":${jb},\"help\":${jc}}"; gsep=","
+  done <<<"$(fl_cmd_global_flags)"
   fl_lab_enabled_json_v labs_on
   printf '{"schema_version":%d,"cli_version":"%s","labs":%s,"gated":[%s],"global_flags":[%s],"commands":[%s]}\n' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$labs_on" "$gated" "$gflags" "$out"
 }
