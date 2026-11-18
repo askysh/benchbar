@@ -492,6 +492,15 @@ func TestRedactionHidesJSONStyleSecrets(t *testing.T) {
 		{`"session_id": "s-1"`, `"session_id": "<redacted>"`},
 		{`password=hunter2`, `password=<redacted>`},
 		{`MARIADB_ROOT_PASSWORD=hunter2`, `MARIADB_ROOT_PASSWORD=<redacted>`},
+		// a string with escapes is read whole, an array of strings and a
+		// nested object are one value
+		{`"password": "ab\"cd"`, `"password": "<redacted>"`},
+		{`"password": "a\\"`, `"password": "<redacted>"`},
+		{`"secrets": ["s1","s2"]`, `"secrets": "<redacted>"`},
+		{`"secrets": [ "s1" , "s,2" ]`, `"secrets": "<redacted>"`},
+		{`"token": {"a": "s1", "b": {"c": ["s2", "s3"]}}, "host": "h"`, `"token": "<redacted>", "host": "h"`},
+		{`{"db": {"password": "p1", "host": "h", "inner": {"api_key": "k\"1"}}}`, `{"db": {"password": "<redacted>", "host": "h", "inner": {"api_key": "<redacted>"}}}`},
+		{`secrets=["a","b"] next`, `secrets="<redacted>" next`},
 		// words that only look similar stay
 		{`inside: the bench`, `inside: the bench`},
 		{`sidebar: open`, `sidebar: open`},
@@ -500,6 +509,22 @@ func TestRedactionHidesJSONStyleSecrets(t *testing.T) {
 	for _, c := range cases {
 		if got := r.text(c.in); got != c.want {
 			t.Errorf("%s\n got  %s\n want %s", c.in, got, c.want)
+		}
+	}
+	// no part of an escaped, listed or nested secret is left
+	for _, doc := range []string{
+		`{"secrets": ["s1","s2"], "password": "ab\"cd", "n": {"token": {"x": ["t1", {"y": "t2"}]}}, "ok": "fine"}`,
+		"{\n  \"secrets\": [\n    \"s1\",\n    \"s2\"\n  ],\n  \"ok\": 1\n}",
+	} {
+		out := r.text(doc)
+		var v map[string]any
+		if err := json.Unmarshal([]byte(out), &v); err != nil {
+			t.Fatalf("redacted JSON does not parse: %v\n%s", err, out)
+		}
+		for _, leak := range []string{"s1", "s2", "cd", "t1", "t2"} {
+			if strings.Contains(out, leak) {
+				t.Errorf("%q left in %s", leak, out)
+			}
 		}
 	}
 	// a JSON file stays JSON

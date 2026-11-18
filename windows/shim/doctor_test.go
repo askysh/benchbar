@@ -116,6 +116,64 @@ func TestWithWindowsChecksKeepsTheDocumentAsItIs(t *testing.T) {
 	}
 }
 
+func TestWithWindowsChecksMergesIntoTheDoneLineOfAStream(t *testing.T) {
+	checks := []Check{{ID: "path", Label: "PATH", Status: "ok", Message: "m"}}
+	arr := `"windows_checks":[{"id":"path","label":"PATH","level":"ok","message":"m","fix_command":"","status":"ok","fix":""}]`
+	plan := `{"schema_version":1,"event":"plan","steps":[]}`
+	step := `{"schema_version":1,"event":"step","name":"a"}`
+	done := `{"schema_version":1,"event":"done","exit":0,"checks":[],"summary":{"ok":0}}`
+	got := string(withWindowsChecks([]byte(plan+"\n"+step+"\n"+done+"\n"), checks))
+	want := plan + "\n" + step + "\n" + strings.TrimSuffix(done, "}") + "," + arr + "}\n"
+	if got != want {
+		t.Errorf("got  %s\nwant %s", got, want)
+	}
+	// every line stays one JSON object and only the done line has the key
+	for i, l := range strings.Split(strings.TrimSpace(got), "\n") {
+		var m map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(l), &m); err != nil {
+			t.Fatalf("line %d is not JSON: %v", i, err)
+		}
+		if _, has := m["windows_checks"]; has != (i == 2) {
+			t.Errorf("line %d has windows_checks: %v", i, has)
+		}
+	}
+	// no done line (the CLI was cut off): the last line gets it, once
+	got = string(withWindowsChecks([]byte(plan+"\n"+step+"\n"), checks))
+	if strings.Count(got, "windows_checks") != 1 || !strings.Contains(strings.Split(got, "\n")[1], "windows_checks") {
+		t.Errorf("no done line: %s", got)
+	}
+	// a line that is not an object: the stream is left alone
+	if bad := plan + "\nnot json\n"; string(withWindowsChecks([]byte(bad), checks)) != bad {
+		t.Error("a stream with a bad line was changed")
+	}
+}
+
+func TestDoctorJSONLMergesTheWindowsChecksIntoTheDoneLine(t *testing.T) {
+	e := newEnv(t)
+	e.healthyWindows()
+	e.script(map[string]any{"match": "doctor", "stdout": `{"schema_version":1,"event":"step","name":"x"}` + "\n" +
+		`{"schema_version":1,"event":"done","exit":0,"summary":{"ok":1}}` + "\n"})
+	if code := e.run("doctor", "--jsonl"); code != 0 {
+		t.Fatalf("exit %d: %s", code, e.stderr())
+	}
+	lines := strings.Split(strings.TrimSpace(e.stdout()), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("stdout %q", e.stdout())
+	}
+	var done struct {
+		Event   string `json:"event"`
+		Windows []struct {
+			ID string `json:"id"`
+		} `json:"windows_checks"`
+	}
+	if err := json.Unmarshal([]byte(lines[1]), &done); err != nil || done.Event != "done" || len(done.Windows) == 0 {
+		t.Errorf("done line %q: %v %+v", lines[1], err, done)
+	}
+	if strings.Contains(lines[0], "windows_checks") {
+		t.Errorf("step line changed: %s", lines[0])
+	}
+}
+
 func TestDoctorPrintsWindowsSectionThenForwards(t *testing.T) {
 	e := newEnv(t)
 	e.healthyWindows()

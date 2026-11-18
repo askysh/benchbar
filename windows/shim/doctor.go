@@ -136,23 +136,70 @@ func cmdDoctorMachine(sys *System, args []string) int {
 }
 
 // withWindowsChecks adds the "windows_checks" array to the CLI's document.
-// Anything that is not one JSON object (an error, an empty output) is
-// returned as it is.
+// The CLI's bytes are kept and the key goes in before the closing brace, so
+// its key order is not changed. With --jsonl the CLI streams several lines
+// (plan, step, progress, then one done line that holds the document's keys):
+// the array goes into the done line, or into the last line when there is no
+// done line, and every other line stays as it is. Anything else (not JSON,
+// an array, two documents in one line) is returned unchanged.
 func withWindowsChecks(doc []byte, checks []Check) []byte {
-	trimmed := bytes.TrimSpace(doc)
-	if len(trimmed) < 2 || trimmed[0] != '{' || trimmed[len(trimmed)-1] != '}' || !json.Valid(trimmed) {
+	arr, _ := json.Marshal(windowsChecksJSON(checks))
+	if one := bytes.TrimSpace(doc); len(one) >= 2 && one[0] == '{' && one[len(one)-1] == '}' && json.Valid(one) {
+		return append(spliceWindowsChecks(one, arr), '\n')
+	}
+	lines := splitJSONLines(doc)
+	if len(lines) == 0 {
 		return doc
 	}
-	arr, _ := json.Marshal(windowsChecksJSON(checks))
-	body := bytes.TrimSpace(trimmed[1 : len(trimmed)-1])
+	target := len(lines) - 1
+	for i := len(lines) - 1; i >= 0 && len(lines) > 1; i-- {
+		var ev struct {
+			Event string `json:"event"`
+		}
+		if json.Unmarshal(lines[i], &ev) == nil && ev.Event == "done" {
+			target = i
+			break
+		}
+	}
+	var out []byte
+	for i, l := range lines {
+		if i == target {
+			l = spliceWindowsChecks(l, arr)
+		}
+		out = append(append(out, l...), '\n')
+	}
+	return out
+}
+
+// splitJSONLines returns the non-empty lines of doc, each trimmed, when
+// every one is a JSON object; nil otherwise.
+func splitJSONLines(doc []byte) [][]byte {
+	var lines [][]byte
+	for _, l := range bytes.Split(doc, []byte("\n")) {
+		l = bytes.TrimSpace(l)
+		if len(l) == 0 {
+			continue
+		}
+		if l[0] != '{' || l[len(l)-1] != '}' || !json.Valid(l) {
+			return nil
+		}
+		lines = append(lines, l)
+	}
+	return lines
+}
+
+// spliceWindowsChecks puts "windows_checks":arr before the closing brace of
+// one JSON object.
+func spliceWindowsChecks(obj, arr []byte) []byte {
+	body := bytes.TrimSpace(obj[1 : len(obj)-1])
 	sep := ","
 	if len(body) == 0 {
 		sep = ""
 	}
-	out := append([]byte{}, trimmed[:len(trimmed)-1]...)
+	out := append([]byte{}, obj[:len(obj)-1]...)
 	out = append(out, sep+`"windows_checks":`...)
 	out = append(out, arr...)
-	return append(out, '}', '\n')
+	return append(out, '}')
 }
 
 // withWindowsFixHints appends the fix command of every failing and warning

@@ -633,7 +633,12 @@ every distro, so stop your benches first).
   `site restore --from backup.sql.gz` mean that folder. This works for a
   drive folder (`C:\work`), a network folder and a `\\wsl.localhost` folder
   of your distro. A folder of another distro, or one the distro cannot
-  see, starts in your Linux home instead. `.\x` and `..\x` are turned into
+  see (a missing folder, a drive WSL does not mount), starts in your Linux
+  home instead, and `benchbar.exe` says so with one line on stderr:
+  `benchbar.exe: <folder> has no path in WSL, running in ~`. Stdout is not
+  touched, so `--json` output stays one document. Check that line before you
+  run a command such as `adopt .` or `ports plan -- .`: it would act on your
+  home folder, not on the folder you meant. `.\x` and `..\x` are turned into
   `./x` and `../x`; write other relative paths with `/`.
 - **Environment variables.** `benchbar.exe` passes `ADMIN_PASSWORD`,
   `MARIADB_ROOT_PASSWORD`, `BENCHBAR_SUDO`, `BENCHBAR_SUDO_PASSWORD`,

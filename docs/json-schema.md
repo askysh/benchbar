@@ -1458,7 +1458,8 @@ shim itself. The full contract, with the step ids, is in
   `cli_version`), each with `id`, `label`, `level`, `message`, `fix_command`
   and the older `status` and `fix`. `summary` counts only the CLI's checks.
   Stdout holds the document and nothing else, and the exit code is 1 when a
-  Windows check has the level `fail`. With `--fix-hints` the fix commands of
+  Windows check has the level `fail`. With `--jsonl` the key is added to the
+  `done` line. With `--fix-hints` the fix commands of
   the failing and warning Windows checks follow the CLI's.
 - `benchbar.exe report-windows --json` prints one line: `schema_version`,
   `zip`, `included`, `skipped` (what was left out, and why) and `issue_url`.

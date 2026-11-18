@@ -13,15 +13,20 @@ import (
 // cwdEnv carries the Windows current folder of benchbar.exe into the distro.
 // The wrapper turns it into the Linux folder with wslpath, which knows the
 // mount of every drive and the \\wsl.localhost shares of this distro, and
-// stays in the home folder when that folder does not exist there. It is
-// removed again before the CLI starts.
+// stays in the home folder, with one line on stderr, when that folder has no
+// path there. It is removed again before the CLI starts.
 const cwdEnv = "BENCHBAR_SHIM_CWD"
+
+// noPathNotice is the one stderr line for a folder the CLI cannot start in.
+// The %s is the Windows folder. It goes to stderr only: stdout of --json
+// must stay one JSON document.
+const noPathNotice = `benchbar.exe: %s has no path in WSL, running in ~`
 
 // wrapper puts ~/.local/bin on PATH (the installer puts the CLI there; a
 // non-login shell may not), moves to the folder benchbar.exe was started in
 // and runs the CLI named by $0 with the rest.
 const wrapper = `PATH="$HOME/.local/bin:$PATH"; command -v "$0" >/dev/null 2>&1 || exit 127; ` +
-	`if [ -n "$` + cwdEnv + `" ]; then d=$(wslpath -a -u -- "$` + cwdEnv + `" 2>/dev/null) && [ -d "$d" ] && cd -- "$d"; unset ` + cwdEnv + `; fi; ` +
+	`if [ -n "$` + cwdEnv + `" ]; then d=$(wslpath -a -u -- "$` + cwdEnv + `" 2>/dev/null) && [ -d "$d" ] && cd -- "$d" 2>/dev/null || printf '` + noPathNotice + `\n' "$` + cwdEnv + `" >&2; unset ` + cwdEnv + `; fi; ` +
 	`exec "$0" "$@"`
 
 func cmdForward(sys *System, args []string) int {
@@ -223,16 +228,24 @@ func forward(sys *System, t target, args []string) int {
 // shimCwd is the folder benchbar.exe runs in, for the CLI to start in: a
 // drive folder, a network folder or a \\wsl.localhost folder of this distro.
 // It is empty when there is none or when it is a folder of another distro,
-// and the CLI then starts in the home folder, as it always did.
+// and the CLI then starts in the home folder. That is never silent: a
+// folder the shim already knows has no path in this distro, and a folder it
+// cannot read, get one line on stderr here; the wrapper prints the same line
+// for a folder wslpath cannot convert or that is not there.
 func shimCwd(sys *System, distro string) string {
 	if sys.Getwd == nil {
 		return ""
 	}
 	wd, err := sys.Getwd()
-	if err != nil || wd == "" {
+	if err != nil {
+		fmt.Fprintf(sys.Stderr, "benchbar.exe: the current folder cannot be read (%v), running in ~\n", err)
+		return ""
+	}
+	if wd == "" {
 		return ""
 	}
 	if m := wslUNCRE.FindStringSubmatch(wd); m != nil && (distro == "" || !strings.EqualFold(m[1], distro)) {
+		fmt.Fprintf(sys.Stderr, noPathNotice+"\n", wd)
 		return ""
 	}
 	return wd

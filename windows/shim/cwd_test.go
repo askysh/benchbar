@@ -33,12 +33,36 @@ func TestForwardHandsOverTheWindowsFolder(t *testing.T) {
 		if st[0].ShimCwd != c.want {
 			t.Errorf("cwd %q: handed over %q, want %q", c.dir, st[0].ShimCwd, c.want)
 		}
+		// a folder of another distro: one notice on stderr, nothing on stdout
+		wantErr := ""
+		if c.dir != "" && c.want == "" {
+			wantErr = "benchbar.exe: " + c.dir + " has no path in WSL, running in ~\n"
+		}
+		if e.stderr() != wantErr || strings.Contains(e.stdout(), "no path in WSL") {
+			t.Errorf("cwd %q: stderr %q (want %q), stdout %q", c.dir, e.stderr(), wantErr, e.stdout())
+		}
 		if has := strings.Contains(st[0].Wslenv, "BENCHBAR_SHIM_CWD"); has != (c.want != "") {
 			t.Errorf("cwd %q: WSLENV %q", c.dir, st[0].Wslenv)
 		}
 		if st[0].Cd != "~" || strings.Join(st[0].Exec[4:], " ") != "adopt ." {
 			t.Errorf("cwd %q: cd %q exec %q", c.dir, st[0].Cd, st[0].Exec)
 		}
+	}
+}
+
+func TestForwardSaysSoWhenItCannotReadTheFolder(t *testing.T) {
+	e := newEnv(t)
+	e.Getwd = func() (string, error) { return "", os.ErrNotExist }
+	e.run("status", "--json")
+	st := e.starts()
+	if len(st) != 1 || st[0].ShimCwd != "" {
+		t.Fatalf("calls %+v", st)
+	}
+	if got := e.stderr(); strings.Count(got, "\n") != 1 || !strings.HasPrefix(got, "benchbar.exe: the current folder cannot be read") || !strings.HasSuffix(got, "running in ~\n") {
+		t.Errorf("stderr %q", got)
+	}
+	if strings.Contains(e.stdout(), "running in") {
+		t.Errorf("stdout %q", e.stdout())
 	}
 }
 
@@ -67,7 +91,7 @@ func TestOtherShimCallsDoNotCarryTheFolder(t *testing.T) {
 // runWrapper runs the real wrapper in /bin/sh with a stand-in wslpath that
 // prints out (or fails when out is empty) and a stand-in benchbar that
 // prints where it runs and whether the variable is still set.
-func runWrapper(t *testing.T, winCwd, wslpathOut, startDir string) string {
+func runWrapper(t *testing.T, winCwd, wslpathOut, startDir string) (stdout, stderr string) {
 	t.Helper()
 	if runtime.GOOS == "windows" {
 		t.Skip("needs /bin/sh")
@@ -86,11 +110,12 @@ func runWrapper(t *testing.T, winCwd, wslpathOut, startDir string) string {
 	cmd := exec.Command("/bin/sh", "-c", wrapper, "benchbar", "adopt", ".")
 	cmd.Dir = startDir
 	cmd.Env = []string{"HOME=" + home, "PATH=/usr/bin:/bin", cwdEnv + "=" + winCwd}
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("%v: %s", err, out)
+	var so, se strings.Builder
+	cmd.Stdout, cmd.Stderr = &so, &se
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("%v: %s%s", err, so.String(), se.String())
 	}
-	return strings.TrimSpace(string(out))
+	return strings.TrimSpace(so.String()), se.String()
 }
 
 func realPath(t *testing.T, p string) string {
@@ -104,9 +129,49 @@ func realPath(t *testing.T, p string) string {
 
 func TestWrapperStartsTheCLIInTheForwardedFolder(t *testing.T) {
 	target, home := realPath(t, t.TempDir()), realPath(t, t.TempDir())
-	got := runWrapper(t, `C:\work\bench`, target, home)
+	got, notice := runWrapper(t, `C:\work\bench`, target, home)
 	if want := target + " [unset] adopt ."; got != want {
 		t.Errorf("got %q, want %q", got, want)
+	}
+	if notice != "" {
+		t.Errorf("notice on stderr: %q", notice)
+	}
+}
+
+// a folder with a space, a non ASCII name and a network folder go through the
+// real wrapper whole: the variable is quoted, not word split
+func TestWrapperKeepsAwkwardFolderNames(t *testing.T) {
+	for _, c := range []struct{ name, win, sub string }{
+		{"space", `C:\Users\me\My Bench Folder`, "my bench folder"},
+		{"non ASCII", `D:\Entwicklung\Büro\日本語`, "büro 日本語"},
+		{"UNC share", `\\server\share\my bench`, "unc share"},
+		{"wsl.localhost", `\\wsl.localhost\Ubuntu-24.04\home\me\bench dir`, "bench dir"},
+	} {
+		base := realPath(t, t.TempDir())
+		target := filepath.Join(base, c.sub)
+		if err := os.MkdirAll(target, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		home := realPath(t, t.TempDir())
+		got, notice := runWrapper(t, c.win, target, home)
+		if want := target + " [unset] adopt ."; got != want {
+			t.Errorf("%s: got %q, want %q", c.name, got, want)
+		}
+		if notice != "" {
+			t.Errorf("%s: notice %q", c.name, notice)
+		}
+	}
+}
+
+// the same folders through the Go side: handed over as they are
+func TestForwardHandsOverAwkwardFolderNames(t *testing.T) {
+	for _, dir := range []string{`C:\Users\me\My Bench Folder`, `D:\Entwicklung\Büro\日本語`, `\\server\share\my bench`} {
+		e := newEnv(t)
+		e.cwd(dir)
+		e.run("status")
+		if st := e.starts(); len(st) != 1 || st[0].ShimCwd != dir || e.stderr() != "" {
+			t.Errorf("%q: %+v, stderr %q", dir, st, e.stderr())
+		}
 	}
 }
 
@@ -116,8 +181,13 @@ func TestWrapperStaysInTheHomeFolderWhenTheFolderIsNotThere(t *testing.T) {
 		"wslpath fails":         "",
 		"folder does not exist": "/no/such/folder/for/benchbar",
 	} {
-		if got, want := runWrapper(t, `Z:\gone`, out, home), home+" [unset] adopt ."; got != want {
+		got, notice := runWrapper(t, `Z:\gone`, out, home)
+		if want := home + " [unset] adopt ."; got != want {
 			t.Errorf("%s: got %q, want %q", name, got, want)
+		}
+		// stdout holds only the CLI's output; the fallback is one line on stderr
+		if want := "benchbar.exe: Z:\\gone has no path in WSL, running in ~\n"; notice != want {
+			t.Errorf("%s: stderr %q, want %q", name, notice, want)
 		}
 	}
 }

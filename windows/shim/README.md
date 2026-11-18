@@ -273,7 +273,10 @@ any drive letter (the mount comes from the distro, not from a fixed `/mnt/c`),
 a network folder and a `\\wsl.localhost\<this distro>\...` folder. The
 variable is removed before the CLI starts. When `wslpath` fails or the folder
 does not exist in the distro (a disconnected drive, a folder of another
-distro), the command starts in the Linux home folder, as it did before.
+distro), the command starts in the Linux home folder, as it did before, and
+`benchbar.exe: <folder> has no path in WSL, running in ~` is printed once on
+stderr (by the shim for a folder of another distro or one it cannot read, by
+the wrapper for the rest). Never on stdout: `--json` stays one document.
 
 ## Windows paths as arguments
 
@@ -325,7 +328,9 @@ Windows checks are inside it as a `windows_checks` array (`id`, `label`,
 `level`, `message`, `fix_command`, and the older names `status` and `fix`),
 the exit code is 1 when one of them is `fail`, and the human WINDOWS block is
 not printed. With `--fix-hints` the fix commands of the failing and warning
-Windows checks follow the CLI's lines. `--ack`, `--unack` and
+Windows checks follow the CLI's lines. With `--jsonl` the CLI streams several
+lines; the `windows_checks` array goes into the `done` line and the other lines
+are not changed. `--ack`, `--unack` and
 `--prerequisites` are the CLI's own documents and pass through unchanged.
 
 Besides PATH, distro,

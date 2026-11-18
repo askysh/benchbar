@@ -15,7 +15,7 @@ import (
 )
 
 const wantWrapper = `PATH="$HOME/.local/bin:$PATH"; command -v "$0" >/dev/null 2>&1 || exit 127; ` +
-	`if [ -n "$BENCHBAR_SHIM_CWD" ]; then d=$(wslpath -a -u -- "$BENCHBAR_SHIM_CWD" 2>/dev/null) && [ -d "$d" ] && cd -- "$d"; unset BENCHBAR_SHIM_CWD; fi; ` +
+	`if [ -n "$BENCHBAR_SHIM_CWD" ]; then d=$(wslpath -a -u -- "$BENCHBAR_SHIM_CWD" 2>/dev/null) && [ -d "$d" ] && cd -- "$d" 2>/dev/null || printf 'benchbar.exe: %s has no path in WSL, running in ~\n' "$BENCHBAR_SHIM_CWD" >&2; unset BENCHBAR_SHIM_CWD; fi; ` +
 	`exec "$0" "$@"`
 
 // fakeBlob is what the fake writes after echoing stdin.
