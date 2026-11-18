@@ -210,12 +210,32 @@ that exists. `--replace` overwrites that site's database and files
 instead, after backing it up and asking again. A name that cannot be
 restored into (a folder in `sites/` that is no site) stops the check,
 `--dry-run` included. `--no-migrate` stops after the restore, and
-`--before-migrate SCRIPT` runs a script of yours between the two. The copy gets the
-production `encryption_key` so stored passwords still decrypt, has email muted and the scheduler paused before it
-ever starts, and runs `bench migrate` when your apps are newer. When the
+`--before-migrate SCRIPT` runs a script of yours between the two. The copy has email muted and the scheduler paused before it
+ever starts, is neutralised (see below), and runs `bench migrate` when your apps are newer. When the
 bench lacks an app production has, pull stops and prints the
 `bench get-app` command; `--skip-app APP` restores without it. Encrypted
 backups are decrypted locally with `gpg` (`brew install gnupg`).
+
+Since 0.9 the copy is neutralised by default. After the restore and before
+migrate, pull switches off what could reach production or act as it, and
+deletes every stored password but the Administrator login: all `Password`
+fields (the `__Auth` table, so SMTP, IMAP, LDAP, S3, payment gateway,
+OAuth and webhook secrets and the passwords of users), webhooks,
+notifications, email accounts, mail that was waiting to be sent, social
+logins, OAuth and Connected App tokens, Integration Requests, Google,
+Dropbox, S3, LDAP, push and payment settings, Slack and SMS gateway URLs,
+API keys, and the scheduled jobs and server scripts that call out. The
+output says how many of each (`neutralised erpcopy: 2 webhooks switched off,
+41 stored secrets cleared`) and the `done` line of `--json` carries the
+counts. The [pull reference](../reference/cli/pull.md#what-the-copy-loses)
+lists every part. Customer data is not scrubbed: names, emails, phones
+and documents are in the copy.
+
+To keep production's integrations and stored passwords, pass
+`--keep-secrets`. The copy then keeps them (and the encryption key
+decrypts them), so keep its scheduler and workers off. A copy that was
+neutralised cannot be switched back: pull again with `--replace
+--keep-secrets`.
 
 The encryption key and the passwords never appear on a command line, in
 the output or in the log. The download is kept in

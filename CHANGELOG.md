@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here.
 
+## Unreleased
+
+### New defaults
+
+- `benchbar pull` now neutralises the copy. After the restore and before `bench migrate`, it switches off what could reach production or act as it: email accounts, Email Queue rows not yet sent, webhooks and their logs, notifications, auto email reports, auto repeats, social logins, OAuth clients and tokens, Connected App tokens, Integration Requests, Google, Dropbox, S3, LDAP and push settings, payment gateway keys, Slack and SMS gateway URLs, API keys, and the scheduled jobs and server scripts that call out. Every stored password (the `__Auth` table, all `Password` fields) is deleted, except the Administrator login. The output and the `done` line (`neutralised`) say how many of each. Customer data is not scrubbed. The pull reference lists every part.
+- Switch back with `--keep-secrets`: the copy then keeps production's integrations and stored passwords as 0.8 did (email is still muted and the scheduler paused). Upgrade note: a script that pulls and then relies on production's SMTP, S3 or API credentials in the copy must add `--keep-secrets`, and a pull that was already made keeps what it has until you pull again with `--replace`. The `decrypt` counts of `pull --json` are 0 on a neutralised copy.
+- The room copy of `benchbar share setup` runs the same neutralisation, so it now also turns off LDAP, SMS, Google, Dropbox, S3 and payment settings and clears every stored password. It is one list in `lib/frappe-local/neutralise.sh`, so the two cannot drift.
+
 ## 0.8.3 - 2026-11-17
 
 0.8.3 is a fix pass for Windows from a full review and a live test on a

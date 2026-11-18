@@ -11,6 +11,10 @@
 #                                   benchbar's new-site wrapper (secrets on stdin,
 #                                   saved to $MOCK_STATE/stdin-new-site, never
 #                                   logged): makes the site folder like bench new-site
+#   -c SNIPPET benchbar-neutralise SITE KEEP_ADMIN
+#                                   the shared neutralisation routine: rows of
+#                                   "BENCHBAR-RESULT key<US>count<US>label"
+#                                   (MOCK_NEUTRALISE_FAIL=1: stops with an error)
 #   -c SNIPPET benchbar-probe SITE  the decrypt probe: "5 0" when the site
 #                                   holds $MOCK_STATE/site_key, else "0 5"
 #   -c 'import pkg_resources'       doctor's setuptools probe, as env-python
@@ -85,6 +89,15 @@ for app in (m.group(1) if m else "").replace("\\", "").replace("\"", "").split("
     benchbar-share-users|benchbar-share-harden|benchbar-share-check)
       # the sharing helpers are answered by env-python (MOCK_ENV_PYTHON), stdin included
       exec "${MOCK_ENV_PYTHON:?}" -c "$snippet" "$@" ;;
+    benchbar-neutralise)
+      shift
+      log "benchbar-neutralise $*"
+      [[ -z "${MOCK_NEUTRALISE_FAIL:-}" ]] || { printf 'BENCHBAR-ERROR mock: neutralise failed\n'; exit 1; }
+      printf '\nBENCHBAR-RESULT webhooks\x1f2\x1fwebhooks switched off\n'
+      printf 'BENCHBAR-RESULT ldap\x1f0\x1fLDAP switched off\n'
+      printf 'BENCHBAR-RESULT email_accounts\x1f1\x1femail accounts switched off\n'
+      printf 'BENCHBAR-RESULT stored_secrets\x1f7\x1fstored secrets cleared\n'
+      exit 0 ;;
     benchbar-probe)
       shift
       log "benchbar-probe $*"
