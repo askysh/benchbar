@@ -211,4 +211,4 @@ ok "SHA256SUMS"
 
 printf '\n[OK] release %s in %s\n' "$VERSION" "$DIST"
 ls -1 "$DIST"
-printf '\nNext: gh release create v%s dist/* --title "BenchBar %s" --generate-notes\n' "$VERSION" "$VERSION"
+printf '\nNext: gh release create v%s dist/* --draft --title "BenchBar %s" --generate-notes\n' "$VERSION" "$VERSION"

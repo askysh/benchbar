@@ -106,6 +106,10 @@ works. The notes and `README.txt` tell users to run the one liner as
 version and sets nothing in their session. A build that is not a release
 points at `main` instead of a tag.
 
+Publish only after both release workflows (`release.yml` and
+`release-windows.yml`) have finished: releases are immutable, so a
+file that arrives after publishing can never be added.
+
 Before publishing the draft, check:
 
 1. Both zips and the sums file are attached, and the Windows paragraph
