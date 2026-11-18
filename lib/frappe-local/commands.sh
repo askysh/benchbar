@@ -119,8 +119,11 @@ cmd~docs~benchbar docs [TOPIC] [--print]~Open the documentation, or one topic's 
 cmd~self-update~benchbar self-update [--check] [--dry-run] [--json]~Update the benchbar CLI and the BenchBar app.~yes~no~yes~yes~document
 flag~self-update~--check~~This version against the latest.
 cmd~where~benchbar where [--json]~How this CLI was installed, its state folder and the app.~no~no~no~no~document
-cmd~mcp~benchbar mcp [--print-agents-md]~Model Context Protocol server on stdio for coding agents.~no~no~no~no~none
+cmd~mcp~benchbar mcp [--print-agents-md] [--calls [N]] [--allow-bench PATH]~Model Context Protocol server on stdio for coding agents.~no~no~no~no~none
 flag~mcp~--print-agents-md~~Print a snippet for a project's AGENTS.md or CLAUDE.md and exit.
+flag~mcp~--calls~[N]~Print the last N (default 50) lines of the audit log of MCP calls (mcp-calls.jsonl in the state folder) and exit.
+flag~mcp~--allow-bench~PATH~Let the changing tools act on this bench folder although benchbar does not know it (repeatable; the environment variable BENCHBAR_MCP_ALLOW_BENCH holds a : separated list). A person's choice, never a tool argument.
+env~mcp~BENCHBAR_MCP_APPLY_DELAY~Seconds a plan must have been returned before its apply is accepted (default 5; 0 turns the wait off).
 cmd~help~benchbar help~The global help text.~no~no~no~no~none
 cmd~commands~benchbar commands --json~This table: every command, flag and environment variable.~no~no~no~no~document
 cmd~ports~benchbar ports plan|setup|apply|check|mode ...~Port allocation for several benches.~no~no~no~no~none

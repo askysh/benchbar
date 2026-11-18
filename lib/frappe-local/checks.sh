@@ -22,7 +22,7 @@ FL_HOSTS_FILE="${FL_HOSTS_FILE:-/etc/hosts}"
 # (FL_PORT_TARGET, set by fl_ports_plan); doctor never shows it.
 chk_port_block() {
   if [[ -n "${FL_PORT_TARGET:-}" && "$FL_PORT_TARGET" != "$(fl_port_offset_current)" ]]; then
-    chk__set warn "ports move to block ${FL_PORT_TARGET}: $(fl_port_block "$FL_PORT_TARGET" | tr ' ' '/')" "${FL_SELF} service --port-offset ${FL_PORT_TARGET} --bench-dir ${FL_BENCH_DIR}" port_block
+    chk__set warn "ports move to block ${FL_PORT_TARGET}: $(fl_port_block "$FL_PORT_TARGET" | tr ' ' '/')" "${FL_SELF} service --port-offset ${FL_PORT_TARGET} --bench-dir $(chk__q "$FL_BENCH_DIR")" port_block
   else
     chk__set ok "ports stay ${FL_WEB_PORT}/${FL_SOCKETIO_PORT}/${FL_REDIS_QUEUE_PORT}/${FL_REDIS_CACHE_PORT}"
   fi
@@ -106,6 +106,9 @@ fl_check_label() {
 }
 
 chk__set() { CHK_STATUS="$1"; CHK_MSG="$2"; CHK_FIX="${3:-}"; CHK_ACTION="${4:-}"; }
+# chk__q VALUE: VALUE quoted for the shell, for a fix command (a bench path with a space or an
+# apostrophe, an app or branch name from a repo): a fix is text an agent may run
+chk__q() { printf '%q' "$1"; }
 
 chk_brew() {
   local missing="" f
@@ -207,7 +210,7 @@ chk_env_python() {
   want="${FL_PYTHON_BIN_NAME#python}"
   if [[ ! -e "$py" && ! -L "$py" ]]; then
     if fl_profile_is_guess; then
-      chk__set fail "env/bin/python is missing, and no profile matches this bench's Frappe, so the Python to rebuild it with is unknown" "benchbar install --profile NAME --bench-dir ${FL_BENCH_DIR}   (or: cd ${FL_BENCH_DIR} && bench setup env --python /path/to/pythonX.Y)"
+      chk__set fail "env/bin/python is missing, and no profile matches this bench's Frappe, so the Python to rebuild it with is unknown" "benchbar install --profile NAME --bench-dir $(chk__q "$FL_BENCH_DIR")   (or: cd $(chk__q "$FL_BENCH_DIR") && bench setup env --python /path/to/pythonX.Y)"
     else
       chk__set fail "env/bin/python is missing (env deleted, for example by a cleanup tool)" "${FL_SELF} repair" env_rebuild
     fi
@@ -215,7 +218,7 @@ chk_env_python() {
   fi
   if ! ver="$("$py" -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null)"; then
     if fl_profile_is_guess; then
-      chk__set fail "env/bin/python does not run, and no profile matches this bench's Frappe, so the Python to rebuild it with is unknown" "benchbar install --profile NAME --bench-dir ${FL_BENCH_DIR}   (or: cd ${FL_BENCH_DIR} && bench setup env --python /path/to/pythonX.Y)"
+      chk__set fail "env/bin/python does not run, and no profile matches this bench's Frappe, so the Python to rebuild it with is unknown" "benchbar install --profile NAME --bench-dir $(chk__q "$FL_BENCH_DIR")   (or: cd $(chk__q "$FL_BENCH_DIR") && bench setup env --python /path/to/pythonX.Y)"
     else
       chk__set fail "env/bin/python does not run (broken symlink or removed interpreter)" "${FL_SELF} repair" env_rebuild
     fi
@@ -223,7 +226,7 @@ chk_env_python() {
   fi
   if [[ "$ver" != "$want" ]]; then
     if fl_profile_is_guess; then
-      chk__set warn "env uses Python ${ver}; no profile matches this bench's Frappe (${FL_PROFILE} is only the default), so the env is left as it is" "benchbar install --profile NAME --bench-dir ${FL_BENCH_DIR}   (sets the profile; a team profile can name any Frappe branch)"
+      chk__set warn "env uses Python ${ver}; no profile matches this bench's Frappe (${FL_PROFILE} is only the default), so the env is left as it is" "benchbar install --profile NAME --bench-dir $(chk__q "$FL_BENCH_DIR")   (sets the profile; a team profile can name any Frappe branch)"
     else
       chk__set fail "env uses Python ${ver}, profile ${FL_PROFILE} expects ${want}" "${FL_SELF} repair" env_rebuild
     fi
@@ -276,7 +279,7 @@ chk_bench_version() {
   local out code=0 last mod
   if [[ ! -e "${FL_BENCH_DIR}/env/bin/python" ]]; then
     if fl_profile_is_guess; then
-      chk__set fail "skipped: env is missing and no profile matches this bench" "benchbar install --profile NAME --bench-dir ${FL_BENCH_DIR}"
+      chk__set fail "skipped: env is missing and no profile matches this bench" "benchbar install --profile NAME --bench-dir $(chk__q "$FL_BENCH_DIR")"
     else
       chk__set fail "skipped: env is missing" "${FL_SELF} repair" env_rebuild
     fi
@@ -299,11 +302,11 @@ chk_bench_version() {
   mod="$(printf '%s' "$out" | sed -n "s/.*No module named '\([A-Za-z0-9_.]*\)'.*/\1/p" | tail -n1)"
   mod="${mod%%.*}"
   if [[ -n "$mod" && "$mod" != "frappe" ]] && fl_has_line "$(fl_apps_txt || true)" "$mod"; then
-    chk__set fail "bench version fails: the app ${mod} does not import (${last})" "cd ${FL_BENCH_DIR} && bench setup requirements --python   (or: ${FL_SELF} app add ${mod} --bench-dir ${FL_BENCH_DIR}, which re-clones it)"
+    chk__set fail "bench version fails: the app ${mod} does not import (${last})" "cd $(chk__q "$FL_BENCH_DIR") && bench setup requirements --python   (or: ${FL_SELF} app add $(chk__q "$mod") --bench-dir $(chk__q "$FL_BENCH_DIR"), which re-clones it)"
     return 0
   fi
   if fl_profile_is_guess; then
-    chk__set fail "bench version fails: ${last}" "cd ${FL_BENCH_DIR} && bench setup requirements --python   (no profile matches this bench, so no env rebuild is offered)"
+    chk__set fail "bench version fails: ${last}" "cd $(chk__q "$FL_BENCH_DIR") && bench setup requirements --python   (no profile matches this bench, so no env rebuild is offered)"
     return 0
   fi
   chk__set fail "bench version fails: ${last}" "${FL_SELF} repair" env_rebuild
@@ -313,7 +316,7 @@ chk_socketio() {
   if [[ -d "${FL_BENCH_DIR}/apps/frappe/node_modules/socket.io" ]]; then
     chk__set ok "apps/frappe/node_modules/socket.io present"
   else
-    chk__set fail "apps/frappe/node_modules/socket.io is missing (node_modules deleted)" "cd ${FL_BENCH_DIR} && bench setup requirements --node" node_requirements
+    chk__set fail "apps/frappe/node_modules/socket.io is missing (node_modules deleted)" "cd $(chk__q "$FL_BENCH_DIR") && bench setup requirements --node" node_requirements
   fi
 }
 
@@ -333,10 +336,10 @@ chk_assets() {
   local r
   r="$(fl_assets_missing)"
   case "$r" in
-    nojson) chk__set fail "sites/assets/assets.json is missing (never built)" "cd ${FL_BENCH_DIR} && bench build" build ;;
-    0/0) chk__set warn "assets.json references no dist files" "cd ${FL_BENCH_DIR} && bench build" build ;;
+    nojson) chk__set fail "sites/assets/assets.json is missing (never built)" "cd $(chk__q "$FL_BENCH_DIR") && bench build" build ;;
+    0/0) chk__set warn "assets.json references no dist files" "cd $(chk__q "$FL_BENCH_DIR") && bench build" build ;;
     0/*) chk__set ok "all ${r#0/} dist files referenced by assets.json exist" ;;
-    *) chk__set fail "${r%%/*} of ${r##*/} dist files referenced by assets.json are missing (site loads unstyled)" "cd ${FL_BENCH_DIR} && bench build" build ;;
+    *) chk__set fail "${r%%/*} of ${r##*/} dist files referenced by assets.json are missing (site loads unstyled)" "cd $(chk__q "$FL_BENCH_DIR") && bench build" build ;;
   esac
 }
 
@@ -344,7 +347,7 @@ chk_honcho() {
   if [[ -n "$FL_HONCHO" ]]; then
     chk__set ok "honcho at ${FL_HONCHO}"
   else
-    chk__set fail "honcho not found on PATH, in the pipx venv or in env/bin" "uv pip install --python ${FL_BENCH_DIR}/env/bin/python honcho" honcho_install
+    chk__set fail "honcho not found on PATH, in the pipx venv or in env/bin" "uv pip install --python $(chk__q "${FL_BENCH_DIR}/env/bin/python") honcho" honcho_install
   fi
 }
 
@@ -414,7 +417,7 @@ FL_HEARTBEAT_STALE_SECS="${FL_HEARTBEAT_STALE_SECS:-90}"
 FL_HEARTBEAT_FUTURE_SECS=5
 chk_runner_heartbeat() {
   local hb="${FL_BENCH_DIR}/logs/.benchbar/heartbeat" age fix
-  fix="${FL_SELF} restart --bench-dir ${FL_BENCH_DIR}"
+  fix="${FL_SELF} restart --bench-dir $(chk__q "$FL_BENCH_DIR")"
   if [[ "$(fl_template_status "$(fl_runner_path)" "$FL_R_RUNNER")" != "current" ]]; then
     chk__set ok "no heartbeat to check until the runner script is current (see the runner check)"
     return 0
@@ -454,7 +457,7 @@ chk_stop_flag() {
       # name what holds the ports now; nothing when it has gone since
       local held
       held="$(fl_port_current_listener_conflicts | tr '\n' ';' | sed 's/;$//; s/;/; /g')"
-      chk__set warn "auto-restart paused: another process held this bench's ports at start$([[ -n "$held" ]] && printf ' (now: %s)' "$held" || printf ' (the ports are free now)')" "free the port or move the bench (${FL_SELF} ports setup -- ${FL_BENCH_DIR}), then benchup" ;;
+      chk__set warn "auto-restart paused: another process held this bench's ports at start$([[ -n "$held" ]] && printf ' (now: %s)' "$held" || printf ' (the ports are free now)')" "free the port or move the bench (${FL_SELF} ports setup -- $(chk__q "$FL_BENCH_DIR")), then benchup" ;;
     *) chk__set warn "stop flag has unknown content '${reason}'" "rm ${flag}" ;;
   esac
 }
@@ -878,7 +881,7 @@ chk_pdf_engine() {
       if [[ -n "$shadow" ]]; then
         chk__set warn "patched build at $(fl_wkhtmltopdf_bin), but ${shadow} comes first on PATH and is not patched${chrome}" "$(fl_is_linux && printf 'sudo apt-get remove wkhtmltopdf' || printf 'brew uninstall wkhtmltopdf')"
       elif [[ "$chrome_ok" == "0" ]]; then
-        chk__set warn "wkhtmltopdf: patched Qt build at $(fl_wkhtmltopdf_bin)${chrome}" "cd ${FL_BENCH_DIR} && bench setup-chrome"
+        chk__set warn "wkhtmltopdf: patched Qt build at $(fl_wkhtmltopdf_bin)${chrome}" "cd $(chk__q "$FL_BENCH_DIR") && bench setup-chrome"
       else
         chk__set ok "wkhtmltopdf: patched Qt build at $(fl_wkhtmltopdf_bin)${chrome}"
       fi ;;
@@ -960,7 +963,7 @@ chk_site_not_served() {
   done < <(fl_sites_list)
   if [[ -n "$bad" ]]; then
     chk__set warn "the web process on port ${FL_WEB_PORT} answers 404 for ${bad}: the site is in ${FL_BENCH_DIR}/sites, the running bench does not serve it" \
-      "${FL_SELF} restart --bench-dir ${FL_BENCH_DIR}   (then: ${FL_SELF} status --json shows sites[].served)"
+      "${FL_SELF} restart --bench-dir $(chk__q "$FL_BENCH_DIR")   (then: ${FL_SELF} status --json shows sites[].served)"
   else
     chk__set ok "the running bench serves every site it was asked about (${n})"
   fi
@@ -970,7 +973,7 @@ chk_hosts() {
   if fl_hosts_has_site; then
     chk__set ok "${FL_HOSTS_FILE} maps ${FL_SITE} to 127.0.0.1"
   else
-    chk__set warn "${FL_HOSTS_FILE} has no entry for ${FL_SITE}" "${FL_SELF} repair --bench-dir ${FL_BENCH_DIR}   (adds '127.0.0.1 ${FL_SITE}' inside the benchbar block, with sudo)" hosts_entry
+    chk__set warn "${FL_HOSTS_FILE} has no entry for ${FL_SITE}" "${FL_SELF} repair --bench-dir $(chk__q "$FL_BENCH_DIR")   (adds '127.0.0.1 ${FL_SITE}' inside the benchbar block, with sudo)" hosts_entry
   fi
 }
 
@@ -1127,9 +1130,9 @@ chk_port_clash() {
     END { for (i = 1; i <= k; i++) { n = order[i]; sub(/.*\//, "", n); printf "%s%s: %s", (i > 1 ? "; " : ""), n, seen[order[i]] } }')"
   next="$(fl_port_next_free_offset 2>/dev/null || printf 'N')"
   if [[ -n "$running" ]]; then
-    chk__set warn "another running bench uses the same port:${running}" "${FL_SELF} service --port-offset ${next} --bench-dir ${FL_BENCH_DIR}   (or stop the other bench)"
+    chk__set warn "another running bench uses the same port:${running}" "${FL_SELF} service --port-offset ${next} --bench-dir $(chk__q "$FL_BENCH_DIR")   (or stop the other bench)"
   elif [[ -n "$configured" ]]; then
-    chk__set warn "another bench is set up with the same ports (${configured}); only one of them can run at a time" "${FL_SELF} service --port-offset ${next} --bench-dir ${FL_BENCH_DIR}"
+    chk__set warn "another bench is set up with the same ports (${configured}); only one of them can run at a time" "${FL_SELF} service --port-offset ${next} --bench-dir $(chk__q "$FL_BENCH_DIR")"
   else
     chk__set ok "no other benchbar bench uses ${FL_WEB_PORT}, ${FL_SOCKETIO_PORT}, ${FL_REDIS_QUEUE_PORT} or ${FL_REDIS_CACHE_PORT}"
   fi
@@ -1143,7 +1146,7 @@ chk_port_clash() {
 # the state folder) and did not resume it. A pause without the marker is the user's and is not flagged.
 chk_share_scheduler() {
   if [[ -f "${FL_STATE_DIR}/share/scheduler-paused" ]] && fl_pull_common_paused; then
-    chk__set warn "the scheduler of every site on this bench is paused: a share setup stopped before it could resume it" "cd ${FL_BENCH_DIR} && bench config remove-common-config pause_scheduler" share_resume
+    chk__set warn "the scheduler of every site on this bench is paused: a share setup stopped before it could resume it" "cd $(chk__q "$FL_BENCH_DIR") && bench config remove-common-config pause_scheduler" share_resume
   else
     chk__set ok "no share setup left the scheduler paused"
   fi
@@ -1378,7 +1381,7 @@ chk_orphans() {
   [[ -z "$foreign" ]] || msg="${msg}${msg:+; }other programs hold this bench's ports (not this bench's to stop): ${foreign}"
   if [[ -n "$held" ]]; then fix="${FL_SELF} down   (or benchbar restart)"
   elif [[ -n "$unknown" ]]; then fix="$(fl_is_linux && printf 'ss -ltnp' || printf 'lsof -p %s' "$first_unknown")   (check whose it is; kill it yourself if it is this bench's leftover)"
-  else fix="${FL_SELF} ports setup -- ${FL_BENCH_DIR}   (or stop that program)"; fi
+  else fix="${FL_SELF} ports setup -- $(chk__q "$FL_BENCH_DIR")   (or stop that program)"; fi
   chk__set warn "$msg" "$fix"
 }
 
@@ -1393,7 +1396,7 @@ chk_apps_txt() {
   done < <(fl_apps_txt)
   unlisted="$(fl_apps_unlisted | tr '\n' ' ')"; unlisted="${unlisted% }"
   if [[ -n "$missing" ]]; then
-    chk__set fail "sites/apps.txt lists ${missing} but apps/ has no such folder (every bench command fails to import it)" "benchbar app add ${missing%% *} --bench-dir ${FL_BENCH_DIR}"
+    chk__set fail "sites/apps.txt lists ${missing} but apps/ has no such folder (every bench command fails to import it)" "benchbar app add $(chk__q "${missing%% *}") --bench-dir $(chk__q "$FL_BENCH_DIR")"
   elif [[ -n "$unlisted" ]]; then
     chk__set warn "apps/${unlisted// /, apps/} is a git app that is not in sites/apps.txt (a get-app that did not finish?)" "mv ${FL_BENCH_DIR}/apps/${unlisted%% *} ~/${unlisted%% *}.aside, then: benchbar app add <its git URL>"
   else
@@ -1412,7 +1415,7 @@ chk_app_branch_policy() {
     n=$((n + 1))
     if [[ "$cur" != "$want" ]]; then
       off="${off}${off:+, }${app} is on ${cur} (policy ${want})"
-      [[ -n "$fix" ]] || fix="cd ${FL_BENCH_DIR}/apps/${app} && git fetch $(fl_app_remote "$app") ${want} && git checkout ${want}   (only if you meant to follow the policy)"
+      [[ -n "$fix" ]] || fix="cd $(chk__q "${FL_BENCH_DIR}/apps/${app}") && git fetch $(chk__q "$(fl_app_remote "$app")") $(chk__q "$want") && git checkout $(chk__q "$want")   (only if you meant to follow the policy)"
     fi
   done < <(fl_apps_txt)
   if [[ -n "$off" ]]; then
@@ -1438,7 +1441,7 @@ fl__chk_pending() {
       [[ -e "$f" ]] || continue
       if ! fl_pending_read "$f"; then
         # an unreadable record is reported once, by the update check
-        [[ "$1" != "app_update" ]] || { n=$((n + 1)); msg="${f##*/}"; msg="${msg%.json}"; CHK_MORE+=("warn"$'\037'"the pending record of ${msg} cannot be read; no step runs from it"$'\037'"benchbar app update ${msg} --discard-pending --bench-dir ${FL_BENCH_DIR}"$'\037'); }
+        [[ "$1" != "app_update" ]] || { n=$((n + 1)); msg="${f##*/}"; msg="${msg%.json}"; CHK_MORE+=("warn"$'\037'"the pending record of ${msg} cannot be read; no step runs from it"$'\037'"benchbar app update $(chk__q "$msg") --discard-pending --bench-dir $(chk__q "$FL_BENCH_DIR")"$'\037'); }
         continue
       fi
       [[ "$PD_OP" == "$1" ]] || continue
@@ -1446,7 +1449,7 @@ fl__chk_pending() {
       kinds=""
       for st in ${PD_STEPS[@]+"${PD_STEPS[@]}"}; do kind="${st%%|*}"; kinds="${kinds}${kinds:+, }${kind}"; done
       msg="${2} of ${PD_APP} did not finish${PD_FAILED:+: stopped at ${PD_FAILED}}${PD_REASON:+ (${PD_REASON})}; ${#PD_STEPS[@]} step(s) left${kinds:+ (${kinds})}"
-      CHK_MORE+=("warn"$'\037'"${msg}"$'\037'"benchbar ${3} ${PD_APP} --bench-dir ${FL_BENCH_DIR}"$'\037')
+      CHK_MORE+=("warn"$'\037'"${msg}"$'\037'"benchbar ${3} $(chk__q "$PD_APP") --bench-dir $(chk__q "$FL_BENCH_DIR")"$'\037')
     done
   fi
   [[ "$n" -gt 0 ]] || chk__set ok "no unfinished ${2}"

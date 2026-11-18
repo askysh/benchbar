@@ -133,7 +133,7 @@ fl_doctor_ack() {
   [[ "$(fl_bstate_get "ACK_${id}")" == "$msg" ]] || fl_changed state "ack:${id}" "acknowledged: ${msg}"
   fl_bstate_set "ACK_${id}" "$msg"
   fl_ok "acknowledged ${id} for ${FL_BENCH_NAME}: ${msg}"
-  fl_note "it lapses when the message changes; undo it: ${FL_SELF} doctor --unack ${id} --bench-dir ${FL_BENCH_DIR}"
+  fl_note "it lapses when the message changes; undo it: ${FL_SELF} doctor --unack ${id} --bench-dir $(printf '%q' "$FL_BENCH_DIR")"
 }
 
 # fl_doctor_unack ID: doctor --unack ID

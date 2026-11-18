@@ -328,10 +328,11 @@ fl_bench_load() {
 # One bench of list --json. Sites are listed with ping_code null: list never
 # asks a site or looks for listeners (status does, for one bench).
 fl_list_entry_json() {
-  local default="$1" installed=0 lock="" label f j_path j_name j_site j_url j_ports j_sites j_default j_installed j_file j_lock
+  local default="$1" installed=0 adopted=0 lock="" label f j_path j_name j_site j_url j_ports j_sites j_default j_installed j_file j_lock j_adopted
   fl_agent_label_v label
   fl_agent_file_v f "$label"
   [[ -f "$f" ]] && installed=1
+  if fl_bench_adopted; then adopted=1; fi
   # the bench's lockfile: remembered or <bench>/benchbar.toml (BENCHBAR_LOCK names one bench, not all)
   if declare -F fl_lock_file_resolve >/dev/null; then
     fl_lock_file_resolve "" no-env
@@ -345,8 +346,11 @@ fl_list_entry_json() {
   fl_json_bool_v j_default "$default"; fl_json_bool_v j_installed "$installed"
   fl_json_str_v j_file "${FL_BENCH_DIR}/logs/.benchbar/state.json"
   fl_json_str_v j_lock "$lock"
-  printf '{"path":%s,"name":%s,"site":%s,"label":"%s","web_url":%s,"ports":%s,"sites":%s,"default":%s,"service_installed":%s,"state_file":%s,"lock_file":%s}' \
-    "$j_path" "$j_name" "$j_site" "$label" "$j_url" "$j_ports" "$j_sites" "$j_default" "$j_installed" "$j_file" "$j_lock"
+  # adopted: benchbar knows this bench (a service, registered, or remembered); a folder that only looks
+  # like a bench under ~ or ~/dev is listed with false (the MCP server changes only adopted benches)
+  fl_json_bool_v j_adopted "$adopted"
+  printf '{"path":%s,"name":%s,"site":%s,"label":"%s","web_url":%s,"ports":%s,"sites":%s,"default":%s,"service_installed":%s,"state_file":%s,"lock_file":%s,"adopted":%s}' \
+    "$j_path" "$j_name" "$j_site" "$label" "$j_url" "$j_ports" "$j_sites" "$j_default" "$j_installed" "$j_file" "$j_lock" "$j_adopted"
 }
 
 # fl_cmd_list JSON: the default bench is the one commands use without --bench-dir.

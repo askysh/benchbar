@@ -175,6 +175,7 @@ How `status` decides (live facts win over the state file):
 | `benches[].sites` | array | added in 0.4, see [Sites](#sites) |
 | `benches[].default` | bool | same as `path == default_bench` |
 | `benches[].service_installed` | bool | the agent plist exists |
+| `benches[].adopted` | bool | benchbar knows this bench: it has a service, is registered or is the remembered bench. A folder that only looks like a bench under `~` or `~/dev` is listed with `false` (added in 0.9). The MCP tools that change a bench act only on `true` ones |
 | `benches[].state_file` | string | where the runner writes `state.json` |
 
 Benches are found in this order, without duplicates: the remembered

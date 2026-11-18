@@ -30,6 +30,15 @@ the apply tool with the same arguments and the token (the CLI form is
   service of a bench that has none (`benchbar_up` says `service:
   "missing"` then). `benchbar_up` with `services_only` starts Redis alone.
 
+The apply tools refuse a token their plan tool did not return through
+this server, or one returned less than 5 seconds ago, and a client that
+supports MCP elicitation asks the person from inside the apply: plan,
+show, wait for the OK, then apply, in separate turns. Every call is
+logged in `mcp-calls.jsonl` in the state folder (`benchbar mcp --calls`
+prints it). A doctor `fix_command` comes with `fix_argv` for a program that
+runs it without a shell. The tools change only benches benchbar knows
+(`adopted` in `benchbar_list`).
+
 Never probe MariaDB root, the Keychain or benchbar's state folder for a
 password: benchbar keeps the root password and uses it itself, and no
 tool hands it out. Long calls send progress notifications when the client

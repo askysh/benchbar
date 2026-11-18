@@ -69,8 +69,14 @@ add only repos you trust, and read the plan:
    the sites, the steps, and a `token`. Nothing changes.
 2. The agent shows you that plan and waits for your OK. benchbar cannot
    tell whether you saw it: the token proves only that the bench has not
-   changed since the plan, and the tool says so, so ask your agent to
-   show the plan before it applies.
+   changed since the plan, and the tool says so. What the server does
+   check: the token must come from a plan it returned, at least 5 seconds
+   ago, so a plan and its apply cannot run in one batch. And when your
+   client supports MCP elicitation, the apply asks you itself, with the
+   plan in the question, and runs only on your yes. Without elicitation
+   the gate is your client's approval of the apply tool: keep it on
+   "ask" for `benchbar_app_add` and the other apply tools, and do not
+   auto approve them.
 3. `benchbar_app_add` with the same arguments and the `token` runs
    exactly that plan. If `sites/apps.txt`, `apps/` or the sites changed
    in between, the token is refused and the agent plans again.
@@ -83,8 +89,23 @@ shows the outcome.
 Every tool but `benchbar_list` and the two profile tools takes an
 optional `bench`, the absolute path from `benchbar_list`; without it the
 tool acts on the default bench. The tools that change a bench refuse a
-path that is not in `benchbar_list`; register it first in a terminal
-with `benchbar register PATH`.
+bench benchbar does not know. A folder that only looks like a bench
+under `~` or `~/dev` is listed with `adopted: false` and is refused:
+register it first in a terminal with `benchbar register PATH`, or name it
+in your client's setup for that server (`benchbar mcp --allow-bench PATH`).
+
+## What was run
+
+Every call is logged in `mcp-calls.jsonl` in benchbar's state folder
+(for Homebrew and the one line installer,
+`~/.local/state/benchbar/mcp-calls.jsonl`): when, which client, which
+tool, its arguments (tokens and passwords are `***`) and how it ended.
+`benchbar mcp --calls 20` prints the last 20. After an agent session it
+answers "what did it run, and in what order".
+
+Fix commands in a doctor report come twice: the text, for you, and
+`fix_argv` (with `fix_cwd`), an array a program can run without a shell.
+It is `null` when the fix is not one plain command; read the text then.
 The JSON each one returns is described in the [JSON schema](../json-schema.md).
 
 ## The CLI as an agent contract
