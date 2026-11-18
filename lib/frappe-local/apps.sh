@@ -17,7 +17,7 @@
 # ---------------------------------------------------------------- reading
 
 fl_app_path() { printf '%s/apps/%s' "$FL_BENCH_DIR" "$1"; }
-fl_app_git() { local app="$1"; shift; git -C "$(fl_app_path "$app")" "$@"; }
+fl_app_git() { local app="$1"; shift; git -C "${FL_BENCH_DIR}/apps/${app}" "$@"; }
 
 # sites/apps.txt, one app per line, in order
 fl_apps_txt() {
@@ -34,8 +34,7 @@ fl_app_in_apps_txt() {
 # A git app: apps/X with a .git and a Python package (stray files and
 # tarballs in apps/ are not apps).
 fl_app_is_git_app() {
-  local d
-  d="$(fl_app_path "$1")"
+  local d="${FL_BENCH_DIR}/apps/$1"
   [[ -e "$d/.git" ]] || return 1
   [[ -f "$d/pyproject.toml" || -f "$d/setup.py" || -f "$d/$1/__init__.py" ]]
 }
@@ -177,7 +176,7 @@ fl__af_collect() {
 # table of app list shows
 # shellcheck disable=SC2120
 fl_app_facts_load() {
-  local apps=() app dir i=0 pids=() p now_keep
+  local apps=() app dir i=0 pids=() p now_keep rec
   if [[ "$#" -gt 0 ]]; then apps=("$@"); else while IFS= read -r app; do [[ -n "$app" ]] && apps+=("$app"); done < <(fl_apps_all); fi
   dir="$(mktemp -d "${TMPDIR:-/tmp}/benchbar-facts.XXXXXX")"
   FL_AF_NOW="$(fl_now)"
@@ -194,7 +193,8 @@ fl_app_facts_load() {
   FL_AF_NAMES=(${apps[@]+"${apps[@]}"})
   i=0
   for app in ${apps[@]+"${apps[@]}"}; do
-    FL_AF_REC+=("$(<"${dir}/${i}")")
+    IFS= read -r -d '' rec <"${dir}/${i}" || true
+    FL_AF_REC+=("${rec%$'\n'}")
     # the place of APP in the arrays, found by name without a scan (a name that
     # clashes after the sanitizing is told by fl__af_field and found by a scan)
     printf -v "FL_AF_I_${app//[!A-Za-z0-9_]/_}" '%s' "$i"
@@ -204,12 +204,70 @@ fl_app_facts_load() {
   FL_AF_TXT="$(fl_apps_txt || true)"
   FL_AF_PINS="$(fl_bstate_get APP_FOCUS)"
   FL_AF_ON=1; FL_AF_BEHIND=1
+  fl_app_prefetch ${apps[@]+"${apps[@]}"}
+}
+
+# fl_app_prefetch APP...: what the apps' files say (the policy branch in
+# apps.tsv, the version in sites/apps.json, required_apps in hooks.py) read
+# once for the whole bench, kept as the memo answers of fl_app_policy_branch,
+# fl_app_json_version and fl_app_required_apps. 36 apps were 126 awk and 45 tr.
+fl_app_prefetch() {
+  local app f v line out files=() owners=() i s sites=() sapps=()
+  [[ "$#" -gt 0 ]] || return 0
+  # the policy branch of each app, asked in this shell (an answer asked for in
+  # a "$( )" would be lost) from apps.tsv read once
+  fl_policy_table_load
+  for app in "$@"; do
+    if [[ "$app" == "frappe" ]]; then v="$FL_FRAPPE_BRANCH"
+    elif fl_lookup_app_policy_v v "$app" "$FL_PROFILE"; then v="${v%%|*}"
+    else v=""; fi
+    fl_app_memo_set policy "$app" "$v"
+  done
+  if [[ -f "${FL_BENCH_DIR}/sites/apps.json" ]]; then
+    out="$(fl_apps_json_versions)"
+    out=$'\n'"${out}"$'\n'
+    for app in "$@"; do
+      v=""
+      if [[ "$out" == *$'\n'"${app}"$'\t'* ]]; then v="${out#*$'\n'"${app}"$'\t'}"; v="${v%%$'\n'*}"; fi
+      fl_app_memo_set version "$app" "$v"
+    done
+  fi
+  # the sites each app is on: the cached list of each site is read once, not
+  # once per app and site (a grep and two subshells each)
+  sites=(); sapps=()
+  while IFS= read -r s; do
+    [[ -n "$s" ]] || continue
+    if v="$(fl_site_apps_cached "$s")"; then sites+=("$s"); sapps+=(" ${v} "); fi
+  done < <(fl_sites_list)
+  for app in "$@"; do
+    v=""; i=0
+    for s in ${sites[@]+"${sites[@]}"}; do
+      [[ "${sapps[$i]}" == *" ${app} "* ]] && v="${v}${v:+ }${s}"
+      i=$((i + 1))
+    done
+    fl_app_memo_set sites "$app" "$v"
+  done
+  for app in "$@"; do
+    if fl_app_hooks_file_v f "$app"; then files+=("$f"); owners+=("$app"); else fl_app_memo_set required "$app" ""; fi
+  done
+  [[ "${#files[@]}" -gt 0 ]] || return 0
+  out="$(fl_hooks_required_apps_many "${files[@]}")"$'\n'
+  i=0
+  for f in ${files[@]+"${files[@]}"}; do
+    v=""
+    while IFS= read -r line; do
+      [[ "${line%%$'\t'*}" == "$f" ]] && v="${v}${line#*$'\t'}"$'\n'
+    done <<<"$out"
+    fl_app_memo_set required "${owners[$i]}" "$v"
+    i=$((i + 1))
+  done
 }
 
 fl_app_facts_clear() {
   local n
   for n in ${FL_AF_NAMES[@]+"${FL_AF_NAMES[@]}"}; do unset "FL_AF_I_${n//[!A-Za-z0-9_]/_}"; done
   FL_AF_ON=0; FL_AF_BEHIND=0; FL_AF_NAMES=(); FL_AF_REC=(); FL_AF_TXT=""; FL_AF_PINS=""; FL_AF_NOW=""
+  fl_policy_table_drop
   fl_app_memo_clear
 }
 
@@ -231,6 +289,13 @@ fl_app_memo() {
     FL_AFM_KEYS+=("$v")
   fi
   printf '%s' "${!v}"
+}
+# fl_app_memo_set KIND APP VALUE: an answer asked for in one go for every app
+# (one awk over the bench instead of one per app)
+fl_app_memo_set() {
+  local v="FL_AFM_${1}_${2//[!A-Za-z0-9_]/_}"
+  [[ -n "${!v+x}" ]] || FL_AFM_KEYS+=("$v")
+  printf -v "$v" '%s' "$3"
 }
 # fl_app_memo_peek KIND APP: the answer in FL_MEMO_VAL when it was asked; else 1
 # fl_app_memo_fill APP...: the policy branch, pin and required apps of each, asked once
@@ -317,12 +382,6 @@ fl_app_remote() {
   printf '%s' "$r"
 }
 
-# https://user:token@host/x -> https://host/x (never shown, never written)
-fl_url_strip_userinfo_v() {
-  if [[ "$2" =~ ^(https?://)[^/@]*@(.*)$ ]]; then printf -v "$1" '%s%s' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"; else printf -v "$1" '%s' "$2"; fi
-}
-fl_url_strip_userinfo() { local u; fl_url_strip_userinfo_v u "$1"; printf '%s' "$u"; }
-
 fl_app_remote_url() {
   local app="$1" r
   fl_app_has_git "$app" || return 0
@@ -335,12 +394,26 @@ fl_app_remote_url() {
 # The version bench recorded in sites/apps.json for APP.
 fl_app_json_version() { fl_app_memo version "$1" fl__app_json_version "$1"; }
 fl__app_json_version() {
-  local f="${FL_BENCH_DIR}/sites/apps.json"
-  [[ -f "$f" ]] || return 0
-  awk -v a="\"$1\"" '
-    index($0, a) && /:[ \t]*\{/ { f = 1; next }
-    f && /"version"/ { v = $0; sub(/.*"version"[ \t]*:[ \t]*"/, "", v); sub(/".*/, "", v); print v; exit }
-    f && /^[ \t]?\}/ { exit }' "$f"
+  local v
+  [[ -f "${FL_BENCH_DIR}/sites/apps.json" ]] || return 0
+  # shellcheck disable=SC2119
+  v="$(fl_apps_json_versions "$1")"
+  printf '%s' "${v#*$'\t'}"
+}
+
+# fl_apps_json_versions [APP]: "app<TAB>version" for the apps of
+# sites/apps.json (just APP when given), one awk for all of them. An app is a
+# key of the top level object; its version is the first "version" inside it.
+fl_apps_json_versions() {
+  awk -v want="${1:-}" '
+    { opn = gsub(/\{/, "{"); cls = gsub(/\}/, "}") }
+    depth == 1 && match($0, /^[ \t]*"[^"]+"[ \t]*:[ \t]*\{/) { cur = $0; sub(/^[ \t]*"/, "", cur); sub(/".*/, "", cur) }
+    depth >= 2 && cur != "" && /"version"/ {
+      v = $0; sub(/.*"version"[ \t]*:[ \t]*"/, "", v); sub(/".*/, "", v)
+      if (!(cur in seen) && (want == "" || want == cur)) { seen[cur] = 1; print cur "\t" v }
+      cur = ""
+    }
+    { depth += opn - cls }' "${FL_BENCH_DIR}/sites/apps.json" 2>/dev/null || true
 }
 
 # The branch config/apps.tsv (or the profile, for frappe) wants for APP.
@@ -357,32 +430,49 @@ fl__app_policy_branch() {
 fl_app_required_apps() { fl_app_memo required "$1" fl__app_required_apps "$1"; }
 fl__app_required_apps() { local f; f="$(fl_app_hooks_file "$1")" && fl_hooks_required_apps "$f"; return 0; }
 
-# fl_app_hooks_file APP: apps/APP/<package>/hooks.py. The folder and the
-# package can differ (apps/Raven holds raven), so like the app add plan:
-# the folder's own name, its lower case form, else the one package there.
-fl_app_hooks_file() {
-  local d f lower
-  d="$(fl_app_path "$1")"
-  lower="$(printf '%s' "$1" | tr '[:upper:]-' '[:lower:]_')"
-  for f in "$d/$1/hooks.py" "$d/${lower}/hooks.py"; do [[ -f "$f" ]] && { printf '%s' "$f"; return 0; }; done
-  for f in "$d"/*/hooks.py; do [[ -f "$f" ]] && { printf '%s' "$f"; return 0; }; done
+# fl_app_hooks_file_v VAR APP: apps/APP/<package>/hooks.py in VAR, 1 when
+# there is none. The folder and the package can differ (apps/Raven holds
+# raven), so like the app add plan: the folder's own name, its lower case
+# form, else the one package there. No fork unless the first try misses.
+fl_app_hooks_file_v() {
+  local __d __f __l
+  __d="${FL_BENCH_DIR}/apps/$2"
+  if [[ -f "$__d/$2/hooks.py" ]]; then printf -v "$1" '%s' "$__d/$2/hooks.py"; return 0; fi
+  __l="$(printf '%s' "$2" | tr '[:upper:]-' '[:lower:]_')"
+  for __f in "$__d/${__l}/hooks.py" "$__d"/*/hooks.py; do
+    [[ -f "$__f" ]] && { printf -v "$1" '%s' "$__f"; return 0; }
+  done
   return 1
 }
+fl_app_hooks_file() { local f; fl_app_hooks_file_v f "$1" && printf '%s' "$f"; }
 
 # fl_hooks_required_apps FILE: the same read from any hooks.py
 fl_hooks_required_apps() {
-  local hooks="$1"
-  [[ -f "$hooks" ]] || return 0
-  awk '
-    /^[ \t]*required_apps[ \t]*=/ { f = 1 }
-    f { buf = buf " " $0; if (index($0, "]")) exit }
-    END {
+  [[ -f "$1" ]] || return 0
+  fl__hooks_required_awk 0 "$1"
+}
+
+# fl_hooks_required_apps_many FILE...: "FILE<TAB>app" per required app, one awk
+fl_hooks_required_apps_many() { fl__hooks_required_awk 1 "$@"; }
+
+# fl__hooks_required_awk TAG FILE...: with TAG 1 every line starts with its file
+fl__hooks_required_awk() {
+  local tag="$1"
+  shift
+  awk -v tag="$tag" '
+    function flush(   v, n, parts) {
       while (match(buf, /["\047][^"\047]+["\047]/)) {
         v = substr(buf, RSTART + 1, RLENGTH - 2); buf = substr(buf, RSTART + RLENGTH)
         n = split(v, parts, "/"); v = parts[n]
-        if (v != "frappe") print v
+        if (v != "frappe") print (tag ? name "\t" : "") v
       }
-    }' "$hooks"
+      buf = ""
+    }
+    FNR == 1 { flush(); name = FILENAME; f = 0; done = 0 }
+    done { next }
+    /^[ \t]*required_apps[ \t]*=/ { f = 1 }
+    f { buf = buf " " $0; if (index($0, "]")) done = 1 }
+    END { flush() }' "$@"
 }
 
 # ---------------------------------------------------------------- site app lists

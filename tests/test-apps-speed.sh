@@ -58,6 +58,10 @@ SYNC="$TMP_DIR/sync"
 mkdir -p "$SHIM" "$SYNC"
 cat >"$SHIM/git" <<SH
 #!/bin/bash
+if [[ " \$* " == *" ls-remote "* ]]; then
+  [[ -n "\${SPEED_STARTS:-}" ]] && printf '%s %s\\n' "\$(date +%s)" "\$*" >>"\$SPEED_STARTS"
+  if [[ -n "\${SPEED_FAKE_OK:-}" ]]; then printf 'abc123\\trefs/heads/main\\n'; exit 0; fi
+fi
 if [[ " \$* " == *" ls-remote "* && -n "\${SPEED_SYNC:-}" ]]; then
   : >"\$SPEED_SYNC/started.\$\$"
   for _ in \$(seq 1 40); do
@@ -67,9 +71,9 @@ if [[ " \$* " == *" ls-remote "* && -n "\${SPEED_SYNC:-}" ]]; then
     sleep 0.2
   done
 fi
-if [[ " \$* " == *" ls-remote "* && -n "\${SPEED_HANG:-}" ]]; then
+if [[ " \$* " == *" ls-remote "* && -n "\${SPEED_HANG:-}" && " \$* " == *"\${SPEED_HANG_MATCH:-}"* ]]; then
   sleep 60 &
-  printf '%s\\n' "\$!" >>"\$SPEED_HANG"
+  printf '%s %s %s\\n' "\$\$" "\$!" "\$(date +%s)" >>"\$SPEED_HANG"
   wait
 fi
 printf "git %s\\n" "\$*" >>"\${MOCK_LOG:-/dev/null}"
@@ -98,22 +102,71 @@ for f in "$SYNC"/together.*; do [[ -e "$f" ]] && TOGETHER=$((TOGETHER + 1)); don
 [[ "$TOGETHER" -ge 3 ]] || fail "the repos were asked one after the other: only ${TOGETHER} ls-remote saw two others running at once"
 unset SPEED_SYNC
 
-# a hanging ls-remote is cut after FL_PROFILE_NET_SECS and takes its children along
-export SPEED_HANG="$TMP_DIR/hang-pids" FL_PROFILE_NET_SECS=1
+# alive PIDFILE MIN_AGE: how many recorded processes ("shell sleep epoch" per
+# line, both pids) that started at least MIN_AGE seconds ago still run; kills them
+alive_hang_pids() {
+  local f="$1" min="$2" sh sl at now n=0 p
+  now="$(date +%s)"
+  while read -r sh sl at; do
+    [[ -n "$sh" && $((now - at)) -ge "$min" ]] || continue
+    for p in "$sh" "$sl"; do
+      if kill -0 "$p" 2>/dev/null; then n=$((n + 1)); kill "$p" 2>/dev/null || true; fi
+    done
+  done <"$f"
+  printf '%s' "$n"
+}
+
+# a hanging ls-remote is cut after FL_PROFILE_NET_SECS and takes its children
+# along. Checked while profile check still runs (two repos at a time, so the
+# command outlives the first timeouts): a git that only dies when benchbar
+# exits is not cut. The first two repos have been timed out for 3 s: no
+# process of theirs may be left, though benchbar is still waiting for the rest.
+export SPEED_HANG="$TMP_DIR/hang-pids" FL_PROFILE_NET_SECS=1 FL_PROFILE_JOBS=2
 : >"$SPEED_HANG"
-run_js profile check speedprof --json --bench-dir "$BENCH"
-unset SPEED_HANG FL_PROFILE_NET_SECS
+"$FM" profile check speedprof --json --bench-dir "$BENCH" >"$TMP_DIR/hang.out" 2>"$TMP_DIR/hang.err" &
+HANG_PID="$!"
+sleep 3
+kill -0 "$HANG_PID" 2>/dev/null || fail "profile check ended before the liveness check (test needs it to run)"
+LIVE="$(alive_hang_pids "$SPEED_HANG" 2)"
+assert_eq "0" "$LIVE" "(a timed out git is still running while profile check runs)"
+set +e; wait "$HANG_PID"; CODE="$?"; set -e
+OUT="$(cat "$TMP_DIR/hang.out")"; ERR="$(cat "$TMP_DIR/hang.err")"
+unset SPEED_HANG FL_PROFILE_NET_SECS FL_PROFILE_JOBS
+assert_eq "0" "$CODE" "$OUT $ERR"
 assert_eq "0" "$(printf '%s' "$OUT" | grep -o '"reachable":true' | wc -l | tr -d ' ')" "(none answered) $OUT"
 assert_contains "$OUT" "timed out after 1s"
 assert_not_contains "$ERR" "Terminated" "(the shell's job message is not shown)"
 sleep 1
-ALIVE=0
-while IFS= read -r pid; do
-  [[ -n "$pid" ]] || continue
-  if kill -0 "$pid" 2>/dev/null; then ALIVE=$((ALIVE + 1)); kill "$pid" 2>/dev/null || true; fi
-done <"$TMP_DIR/hang-pids"
-assert_eq "0" "$ALIVE" "(a timed out git left a child running)"
+assert_eq "0" "$(alive_hang_pids "$TMP_DIR/hang-pids" 0)" "(a timed out git left a process running)"
 assert_eq "6" "$(wc -l <"$TMP_DIR/hang-pids" | tr -d ' ')"
+
+# a slot is refilled when any job ends, not when the oldest one does: the first
+# repo hangs for 4 s, two jobs at a time; the other five must start long
+# before it is cut (the oldest first pool starts the third repo after 4 s)
+export SPEED_HANG="$TMP_DIR/hang-pids2" SPEED_HANG_MATCH="papp_0.git" SPEED_STARTS="$TMP_DIR/starts" FL_PROFILE_NET_SECS=4 FL_PROFILE_JOBS=2 FL_KILL_GRACE=0
+: >"$SPEED_HANG"; : >"$SPEED_STARTS"
+run_js profile check speedprof --json --bench-dir "$BENCH"
+unset SPEED_HANG SPEED_HANG_MATCH SPEED_STARTS FL_PROFILE_NET_SECS FL_PROFILE_JOBS FL_KILL_GRACE
+assert_eq "5" "$(printf '%s' "$OUT" | grep -o '"reachable":true' | wc -l | tr -d ' ')" "(the five others answered) $OUT $ERR"
+FIRST_AT="$(awk 'index($0, "papp_0.git") {print $1; exit}' "$TMP_DIR/starts")"
+LAST_AT="$(awk '{print $1}' "$TMP_DIR/starts" | sort -n | tail -1)"
+[[ $((LAST_AT - FIRST_AT)) -le 2 ]] || fail "the last repo was asked $((LAST_AT - FIRST_AT)) s after the first: a free slot waited for the hanging repo"
+
+# INT or TERM to benchbar while the checks run stops the background groups too
+export SPEED_HANG="$TMP_DIR/hang-pids3" FL_PROFILE_NET_SECS=30 FL_PROFILE_JOBS=6
+: >"$SPEED_HANG"
+"$FM" profile check speedprof --json --bench-dir "$BENCH" >"$TMP_DIR/sig.out" 2>"$TMP_DIR/sig.err" &
+SIG_PID="$!"
+for _ in $(seq 1 50); do [[ "$(wc -l <"$SPEED_HANG" | tr -d ' ')" -ge 6 ]] && break; sleep 0.1; done
+assert_eq "6" "$(wc -l <"$SPEED_HANG" | tr -d ' ')" "(all six repos were being asked before the signal)"
+kill -TERM "$SIG_PID"
+for _ in $(seq 1 60); do kill -0 "$SIG_PID" 2>/dev/null || break; sleep 0.1; done
+kill -0 "$SIG_PID" 2>/dev/null && { kill -KILL "$SIG_PID" 2>/dev/null || true; fail "benchbar did not stop on TERM within 6 s"; }
+set +e; wait "$SIG_PID"; CODE="$?"; set -e
+unset SPEED_HANG FL_PROFILE_NET_SECS FL_PROFILE_JOBS
+assert_eq "143" "$CODE" "(TERM ends the run with 143)"
+sleep 0.5
+assert_eq "0" "$(alive_hang_pids "$TMP_DIR/hang-pids3" 0)" "(a git of the pool outlived the TERM to benchbar)"
 export PATH="$OLD_PATH"
 
 # ---- a yes is kept for a few minutes, a no is asked again
@@ -134,5 +187,47 @@ assert_eq "0" "$(printf '%s' "$OUT" | grep -o '"reachable":true' | wc -l | tr -d
 reset_calls
 run_js profile check nobranch --json --bench-dir "$BENCH"
 assert_eq "1" "$(grep -c 'ls-remote' "$MOCK_LOG" || true)" "(a no is asked again)"
+
+# a yes kept for a few minutes does not carry install: it asks the network again
+# before it plans anything, and a branch deleted in between stops it with a message
+git --git-dir="$REMOTES/papp_0.git" branch keepme main
+printf 'schema = 1\nbase = "v15-lts"\nsite = "del.localhost"\n\n[[apps]]\nname = "papp_0"\nrepo = "file://%s/papp_0.git"\nbranch = "keepme"\n' "$REMOTES" >"$USER_DIR/delprof.toml"
+run_js profile check delprof --json --bench-dir "$BENCH"
+assert_eq "1" "$(printf '%s' "$OUT" | grep -o '"reachable":true' | wc -l | tr -d ' ')" "$OUT $ERR"
+git --git-dir="$REMOTES/papp_0.git" branch -D keepme >/dev/null
+reset_calls
+run_js profile check delprof --json --bench-dir "$BENCH"
+assert_eq "1" "$(printf '%s' "$OUT" | grep -o '"reachable":true' | wc -l | tr -d ' ')" "(inside the few minutes the kept yes answers: that is the documented window)"
+assert_eq "0" "$(grep -c 'ls-remote' "$MOCK_LOG" || true)" "(profile check did not ask again)"
+add_proc 900 "mariadbd --datadir=/x"; add_proc 901 "redis-server *:6379"
+printf 'mariadb@10.11 started akash file\nredis started akash file\n' >"$MOCK_BREW_SERVICES"
+touch "$MOCK_STATE/wkhtml_installed"; printf rootpw >"$MOCK_STATE/mariadb_root_pw"
+reset_calls
+MARIADB_ROOT_PASSWORD=rootpw ADMIN_PASSWORD=adminpw run_fm install --yes --profile delprof --bench-dir "$HOME/del-bench"
+[[ "$CODE" != "0" ]] || fail "install went on although the branch of papp_0 was deleted: $OUT"
+assert_contains "$OUT" "Branch/tag 'keepme' not found for papp_0"
+assert_contains "$OUT" "Check the app repo"
+assert_not_contains "${OUT#*Branch/tag \'keepme\' not found}" "========== PLAN" "(install stops before phase 01 shows its plan)"
+assert_calls_not_contain 'bench (init|get-app|new-site)'
+assert_calls_contain 'ls-remote .*keepme'
+
+# the cache file keeps no token or user name of a URL and is 0600 (a profile file
+# refuses such a URL, but a remote of a bench or a typed URL can carry one)
+remember() { bash -c '. "$0/lib/frappe-local/ui.sh"; . "$0/lib/frappe-local/profiles.sh"; "$@"' "$ROOT" "$@"; }
+RC_FILE="$FL_STATE_DIR/reach-cache"
+: >"$RC_FILE"
+chmod 644 "$RC_FILE"
+remember fl_profile_reach_remember "https://octo:s3cr3tt0ken@github.com/acme/tokapp.git" main
+assert_not_contains "$(cat "$RC_FILE")" "s3cr3tt0ken" "(the cache keeps a token)"
+assert_not_contains "$(cat "$RC_FILE")" "octo" "(the cache keeps a user name)"
+assert_contains "$(cat "$RC_FILE")" "https://github.com/acme/tokapp.git"
+assert_eq "600" "$(stat -f '%Lp' "$RC_FILE" 2>/dev/null || stat -c '%a' "$RC_FILE")" "(the cache is readable by its owner only, an old 0644 file is closed)"
+# the same repo with another token is the same answer
+remember fl_profile_reach_cached "https://other:0therT0ken@github.com/acme/tokapp.git" main || fail "a kept yes was not found by the URL without its userinfo"
+remember fl_profile_reach_cached "https://github.com/acme/tokapp.git" other && fail "another branch is not the same answer"
+# a new cache file is created 0600
+unlink "$RC_FILE"
+remember fl_profile_reach_remember "https://github.com/acme/tokapp.git" main
+assert_eq "600" "$(stat -f '%Lp' "$RC_FILE" 2>/dev/null || stat -c '%a' "$RC_FILE")" "(a new cache is created 0600)"
 
 echo "test-apps-speed: ok"

@@ -598,26 +598,31 @@ FL_PROFILE_REACH_TTL="${FL_PROFILE_REACH_TTL:-300}"
 fl_profile_reach_cache_file() { printf '%s/reach-cache' "$FL_STATE_DIR"; }
 
 fl_profile_reach_cached() {
-  local f now
+  local f now repo
   [[ "$FL_PROFILE_REACH_TTL" -gt 0 ]] 2>/dev/null || return 1
   f="$(fl_profile_reach_cache_file)"
   [[ -f "$f" ]] || return 1
   now="$(date +%s)"
-  awk -F '\t' -v now="$now" -v ttl="$FL_PROFILE_REACH_TTL" -v r="$1" -v b="$2" '$2 == r && $3 == b && $1 + ttl >= now { f = 1 } END { exit f ? 0 : 1 }' "$f"
+  fl_url_strip_userinfo_v repo "$1"
+  awk -F '\t' -v now="$now" -v ttl="$FL_PROFILE_REACH_TTL" -v r="$repo" -v b="$2" '$2 == r && $3 == b && $1 + ttl >= now { f = 1 } END { exit f ? 0 : 1 }' "$f"
 }
 
+# The file holds repo URLs: never a token or a user name (the userinfo is cut
+# before a line is written) and only its owner can read it (0600).
 fl_profile_reach_remember() {
-  local f now tmp
+  local f now tmp repo
   [[ "$FL_PROFILE_REACH_TTL" -gt 0 ]] 2>/dev/null || return 0
   f="$(fl_profile_reach_cache_file)"
   now="$(date +%s)"
+  fl_url_strip_userinfo_v repo "$1"
   mkdir -p "$(dirname "$f")" 2>/dev/null || return 0
   # one short line per answer, appended in one write: parallel checks do not interleave
-  printf '%s\t%s\t%s\n' "$now" "$1" "$2" >>"$f" 2>/dev/null || return 0
+  ( umask 077; printf '%s\t%s\t%s\n' "$now" "$repo" "$2" >>"$f" ) 2>/dev/null || return 0
+  chmod 600 "$f" 2>/dev/null || true
   # drop the stale lines once the file grows
   if [[ "$(wc -l <"$f" 2>/dev/null | tr -d ' ')" -gt 400 ]]; then
     tmp="${f}.$$"
-    if awk -F '\t' -v now="$now" -v ttl="$FL_PROFILE_REACH_TTL" '$1 + ttl >= now' "$f" >"$tmp" 2>/dev/null; then mv "$tmp" "$f" 2>/dev/null || rm -f "$tmp"; else rm -f "$tmp"; fi
+    if ( umask 077; awk -F '\t' -v now="$now" -v ttl="$FL_PROFILE_REACH_TTL" '$1 + ttl >= now' "$f" >"$tmp" ) 2>/dev/null; then mv "$tmp" "$f" 2>/dev/null || rm -f "$tmp"; else rm -f "$tmp"; fi
   fi
   return 0
 }
@@ -679,13 +684,26 @@ fl_profile_access() {
 
 # fl_profile_reach_all: asks about every repo of FL_TEAM_APPS side by side
 # (FL_PROFILE_JOBS at a time, 8 by default), each repo and branch once, each
-# with the timeout of fl_profile_reach. Prints one line per app, in order:
-# INDEX<TAB>true|false|null<TAB>reason. Time is the slowest answers, not their sum.
+# with the timeout of fl_profile_reach. A slot is refilled the moment any job
+# ends, so a slow repo holds up only its own slot and the time is the slowest
+# answers, not their sum. FL_REACH_ANSWERS gets one line per app, in order:
+# INDEX<TAB>true|false|null<TAB>reason. It is not a command substitution on
+# purpose: the jobs must be children of the shell that traps INT and TERM, so
+# fl_on_signal reaches them (FL_BG_PIDS) and their git groups (fl_bg_job_stop).
+FL_REACH_ANSWERS=""
+fl__reach_reap() {
+  local p keep=()
+  for p in ${FL_BG_PIDS[@]+"${FL_BG_PIDS[@]}"}; do
+    if kill -0 "$p" 2>/dev/null; then keep+=("$p"); else wait "$p" 2>/dev/null || true; fi
+  done
+  FL_BG_PIDS=(${keep[@]+"${keep[@]}"})
+}
 fl_profile_reach_all() {
-  local spec n b r c i j found key u dir jobs="${FL_PROFILE_JOBS:-8}" ukeys=() uidx=() pids=() reach reason
+  local spec n b r c i j found key u dir jobs="${FL_PROFILE_JOBS:-8}" ukeys=() uidx=() reach reason
   [[ "$jobs" =~ ^[1-9][0-9]*$ ]] || jobs=8
+  FL_REACH_ANSWERS=""
   dir="$(mktemp -d "${TMPDIR:-/tmp}/benchbar-reach.XXXXXX")"
-  i=0
+  FL_BG_DIR="$dir"; FL_BG_PIDS=()
   for spec in ${FL_TEAM_APPS[@]+"${FL_TEAM_APPS[@]}"}; do
     IFS='|' read -r n b r c <<<"$spec"
     key="${r}"$'\t'"${b}"
@@ -697,30 +715,34 @@ fl_profile_reach_all() {
     if [[ "$found" -lt 0 ]]; then
       found="${#ukeys[@]}"
       ukeys+=("$key")
+      while [[ "${#FL_BG_PIDS[@]}" -ge "$jobs" ]]; do
+        fl__reach_reap
+        [[ "${#FL_BG_PIDS[@]}" -lt "$jobs" ]] || sleep 0.05
+      done
       (
+        trap fl_bg_job_stop TERM INT HUP
         fl_profile_reach "$r" "$b"
         printf '%s\n%s\n' "$FL_REACH" "$FL_REACH_REASON" >"${dir}/${found}"
       ) &
-      pids+=("$!")
-      if [[ "${#pids[@]}" -ge "$jobs" ]]; then
-        wait "${pids[0]}" 2>/dev/null || true
-        pids=("${pids[@]:1}")
-      fi
+      FL_BG_PIDS+=("$!")
     fi
     uidx+=("$found")
-    i=$((i + 1))
   done
-  for u in ${pids[@]+"${pids[@]}"}; do wait "$u" 2>/dev/null || true; done
+  while [[ "${#FL_BG_PIDS[@]}" -gt 0 ]]; do
+    fl__reach_reap
+    [[ "${#FL_BG_PIDS[@]}" -eq 0 ]] || sleep 0.05
+  done
   i=0
   for j in ${uidx[@]+"${uidx[@]}"}; do
     reach="null"; reason="the check did not finish"
     if [[ -f "${dir}/${j}" ]]; then
       { IFS= read -r reach; IFS= read -r reason; } <"${dir}/${j}" || true
     fi
-    printf '%s\t%s\t%s\n' "$i" "$reach" "$reason"
+    FL_REACH_ANSWERS="${FL_REACH_ANSWERS}${i}"$'\t'"${reach}"$'\t'"${reason}"$'\n'
     i=$((i + 1))
   done
   rm -rf "$dir"
+  FL_BG_DIR=""
 }
 
 # fl_profile_check_loaded: asks git about every app of the profile
@@ -730,7 +752,8 @@ fl_profile_reach_all() {
 fl_profile_check_loaded() {
   local spec n b r c i skip=" " changed req why answers
   CK_APPS=(); CK_REPOS=(); CK_REACH=(); CK_REASON=(); CK_SKIPPED=(); CK_SKIP_WHY=(); CK_COMMIT=()
-  answers="$(fl_profile_reach_all)"
+  fl_profile_reach_all
+  answers="$FL_REACH_ANSWERS"
   i=0
   for spec in ${FL_TEAM_APPS[@]+"${FL_TEAM_APPS[@]}"}; do
     IFS='|' read -r n b r c <<<"$spec"

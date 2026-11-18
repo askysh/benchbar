@@ -144,8 +144,59 @@ fl_expand_policy_ref() {
   esac
 }
 
+# apps.tsv read once for a command that asks about many apps (app list, doctor:
+# fl_app_prefetch) instead of one awk per app. While FL_POLTAB_ON is 1 the
+# lookups below answer from FL_POLTAB (the rows without the header line).
+FL_POLTAB_ON=0
+FL_POLTAB=""
+fl_policy_table_load() {
+  local f line first=1
+  f="$(fl_config_file apps.tsv)"
+  FL_POLTAB=""
+  if [[ -r "$f" ]]; then
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      if [[ "$first" == "1" ]]; then first=0; continue; fi
+      FL_POLTAB="${FL_POLTAB}${line}"$'\n'
+    done <"$f"
+  fi
+  FL_POLTAB_ON=1
+}
+fl_policy_table_drop() { FL_POLTAB_ON=0; FL_POLTAB=""; }
+
+# fl_lookup_app_policy_v VAR APP PROFILE: fl_lookup_app_policy's answer in VAR
+# without a subshell, from the loaded table (fl_policy_table_load); 1 when the
+# app has no row
+fl_lookup_app_policy_v() {
+  local __o="$1" app="$2" profile="$3" repo v15 v16 priority notes branch t
+  # a loaded team profile names its own apps' repos and branches
+  if [[ -n "${FL_TEAM_PROFILE:-}" ]] && declare -F fl_team_app_policy >/dev/null; then
+    if t="$(fl_team_app_policy "$app")"; then printf -v "$__o" '%s' "$t"; return 0; fi
+  fi
+  t=$'\n'"$FL_POLTAB"
+  [[ "$t" == *$'\n'"${app}"$'\t'* ]] || return 1
+  t="${t#*$'\n'"${app}"$'\t'}"; t="${t%%$'\n'*}"
+  # tabs become \001, which (unlike a tab) does not swallow an empty field
+  t="${t//$'\t'/$'\001'}"
+  IFS=$'\001' read -r repo v15 v16 priority notes _ <<<"$t"
+  case "$profile" in
+    v16-lts) branch="$v16" ;;
+    *) branch="$v15" ;;
+  esac
+  # shellcheck disable=SC2016  # the literal text of the placeholder
+  case "$branch" in
+    '${frappe_branch}') branch="$FL_FRAPPE_BRANCH" ;;
+    '${erpnext_branch}') branch="$FL_ERPNEXT_BRANCH" ;;
+  esac
+  printf -v "$__o" '%s|%s|%s|%s' "$branch" "$repo" "$priority" "$notes"
+}
+
 fl_lookup_app_policy() {
-  local app="$1" profile="$2" file row repo v15 v16 priority notes branch
+  local app="$1" profile="$2" file row repo v15 v16 priority notes branch t
+  if [[ "$FL_POLTAB_ON" == "1" ]]; then
+    fl_lookup_app_policy_v t "$app" "$profile" || return 1
+    printf '%s\n' "$t"
+    return 0
+  fi
   # a loaded team profile names its own apps' repos and branches
   if declare -F fl_team_app_policy >/dev/null && fl_team_app_policy "$app"; then return 0; fi
   file="$(fl_config_file apps.tsv)"

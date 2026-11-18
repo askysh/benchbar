@@ -12,6 +12,7 @@
 # Then it times
 #
 #   benchbar app list --json --no-sites     the focus inference and the git reads
+#   benchbar app list --json                the same, with the site list of the cache (plain)
 #   benchbar profile check NAME --json      one ls-remote per app
 #
 # A local ls-remote returns at once, so a real round trip is faked: the git on
@@ -69,7 +70,13 @@ if [[ -n "${BENCH_COUNT_GIT:-}" ]]; then
   for t in awk sed tr grep cat mktemp date sleep wc sort head tail cut basename dirname; do
     real="$(PATH="/usr/bin:/bin" command -v "$t" || true)"
     [[ -n "$real" ]] || continue
-    printf '#!/bin/bash\nprintf "%%s\\n" "%s" >>"%s/exec.log"\nexec "%s" "$@"\n' "$t" "$TMP_DIR" "$real" >"$SHIM/$t"
+    # BENCH_EXEC_DETAIL=1 also logs the start of the arguments (which awk program, which tr set)
+    cat >"$SHIM/$t" <<SH
+#!/bin/bash
+a="\$*"; a="\${a//\$'\\n'/ }"
+printf '%s\\n' "$t \${BENCH_EXEC_DETAIL:+\${a:0:70}}" >>"$TMP_DIR/exec.log"
+exec "$real" "\$@"
+SH
     chmod +x "$SHIM/$t"
   done
 fi
@@ -118,7 +125,9 @@ export FL_NOW
 FL_NOW="$(date +%s)"
 if [[ -n "${BENCH_COUNT_GIT:-}" ]]; then : >"$TMP_DIR/git-calls.log"; : >"$TMP_DIR/exec.log"; fi
 timed "app list --json --no-sites" "$FM" app list --json --no-sites --bench-dir "$BENCH"
-[[ -z "${BENCH_COUNT_GIT:-}" ]] || printf '  git processes: %s, others: %s\n' "$(wc -l <"$TMP_DIR/git-calls.log" | tr -d ' ')" "$(sort "$TMP_DIR/exec.log" | uniq -c | sort -rn | awk '{printf "%s %s, ", $2, $1}')"
+[[ -z "${BENCH_COUNT_GIT:-}" ]] || printf '  git processes: %s, others: %s\n' "$(wc -l <"$TMP_DIR/git-calls.log" | tr -d ' ')" "$(awk '{c[$1]++} END {for (k in c) printf "%s %s, ", k, c[k]}' "$TMP_DIR/exec.log")"
+[[ -z "${BENCH_EXEC_DETAIL:-}" ]] || sort "$TMP_DIR/exec.log" | uniq -c | sort -rn | head -30
+timed "app list --json (plain, with sites)" "$FM" app list --json --bench-dir "$BENCH"
 timed "app list --no-sites (text)" "$FM" app list --no-sites --bench-dir "$BENCH"
 timed "app focus --json" "$FM" app focus --json --bench-dir "$BENCH"
 if [[ -n "${BENCH_COUNT_GIT:-}" ]]; then : >"$TMP_DIR/git-calls.log"; fi

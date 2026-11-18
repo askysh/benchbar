@@ -59,6 +59,37 @@ fl_run_group_kill() {
   FL_RUN_PGID=""
 }
 
+# Background jobs a command runs side by side with the shell (the profile
+# check pool): their pids are in FL_BG_PIDS, so a signal to benchbar can stop
+# them too. A job is a subshell that stops its own process group on TERM
+# (fl_bg_job_stop); FL_BG_DIR is the temp folder the pool leaves behind.
+FL_BG_PIDS=()
+FL_BG_DIR=""
+
+# fl_bg_job_stop: the TERM trap of a background job's subshell: its running
+# command's group goes down with it (the job table knows a command that
+# FL_RUN_PGID was not set for yet)
+fl_bg_job_stop() {
+  local job
+  trap - TERM INT HUP
+  for job in $(jobs -p 2>/dev/null); do
+    kill -TERM -- "-${job}" 2>/dev/null || kill -TERM "$job" 2>/dev/null || true
+  done
+  fl_run_group_kill
+  exit 143
+}
+
+# fl_bg_stop_all: TERM to every registered background job and wait for it
+# (each one has stopped its own group by then), then drop its temp folder
+fl_bg_stop_all() {
+  local p
+  for p in ${FL_BG_PIDS[@]+"${FL_BG_PIDS[@]}"}; do kill -TERM "$p" 2>/dev/null || true; done
+  for p in ${FL_BG_PIDS[@]+"${FL_BG_PIDS[@]}"}; do wait "$p" 2>/dev/null || true; done
+  FL_BG_PIDS=()
+  [[ -z "$FL_BG_DIR" ]] || rm -rf "$FL_BG_DIR"
+  FL_BG_DIR=""
+}
+
 # fl_on_signal NAME: benchbar (or a phase script) got TERM, INT or HUP. The
 # running command's group and the foreground child get the same signal, so
 # nothing keeps writing into the bench after the run says it ended, and
@@ -83,6 +114,7 @@ fl_on_signal() {
       kill -TERM -- "-${job}" 2>/dev/null || kill -TERM "$job" 2>/dev/null || true
     done
   fi
+  fl_bg_stop_all
   fl_run_group_kill
   fl_log "stopped by SIG${sig}"
   exit "$code"
