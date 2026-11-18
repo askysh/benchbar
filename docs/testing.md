@@ -202,21 +202,31 @@ service of one bench. For a Homebrew install, see
 
 ## Running the test suite (contributors)
 
+This part is for people who change BenchBar's code; the steps above are
+for testers.
+
 ```bash
 tests/affected.sh                    # only the tests your change touches (from origin/main; --base REF, --all)
 tests/run-tests.sh                   # every test, as many at a time as you have CPUs
 PARALLEL=1 tests/run-tests.sh        # one after another
 tests/run-tests.sh test-doctor       # only the named tests
 SHARD=2/4 tests/run-tests.sh         # the second of four shards, as CI runs them
+ONLY_TESTS="test-a test-b" SHARD=1/2 tests/run-tests.sh   # a list, sharded like the full suite
 LIST_ONLY=1 SHARD=2/4 tests/run-tests.sh   # which tests that shard holds, without running them
 ```
 
 `tests/affected.sh` maps the changed files to tests: a file in
-`lib/frappe-local/` picks its own test files, every test that names a
-function it changed, `test-cli` and `test-agent-contracts`; a change to
-the harness, the mocks, `benchbar`, `templates/` or the phase scripts
-runs everything, and docs alone run nothing. Run the whole suite before
-you hand work back.
+`lib/frappe-local/` picks its own test files, the tests of its family
+(the doctor library picks the doctor and repair tests, and so on: the
+`lib_family` list in the script), every test that names a function it
+changed, `test-cli` and `test-agent-contracts`; the LAN share's
+JavaScript, the app fixtures in `macos/BenchBarTests/Fixtures/`, `scripts/`
+and `docs/` have entries too. A change to the harness, the mocks,
+`run-tests.sh`, `affected.sh` itself, `benchbar`, `templates/`, `config/`
+or the phase scripts runs everything. `affected.sh --lib-coverage` lists
+lib files that no test covers; `test-affected` fails on one, so add a
+`lib_family` entry with a new lib file. Run the whole suite before you hand
+work back.
 
 Each test's output is printed whole when it finishes, in list order, and
 a failing test does not stop the others: the run lists every failure at
@@ -232,7 +242,34 @@ Issues and pull requests are welcome. For a bug, attach the zip from
 `benchbar report`; it contains no secrets, paths or names. Shell code
 targets macOS `/bin/bash` 3.2 with no dependencies beyond the ones the
 installer needs, passes shellcheck, and every command stays idempotent:
-a second run changes nothing and says so. CI runs the suite in 8 Linux
-shards, 4 shards under bash 3.2.57 in a container (the bash of macOS) and
-4 macOS shards, builds the app, and uploads an unsigned bundle for every
-pull request.
+a second run changes nothing and says so.
+
+### What CI runs
+
+CI plans each run from the changed files (`scripts/ci-plan.sh`):
+
+- A pull request runs the tests `affected.sh` picks, on Linux and under
+  bash 3.2.57 in a container (the bash of macOS), plus shellcheck on the
+  changed shell files. A docs only change runs `test-docs` and
+  `test-docs-command`; a Swift only change builds the app and runs no CLI
+  test.
+- macOS runs on a pull request only when a path that needs a Mac changed
+  (platform, launchd, the LAN share, the Keychain, installers, packaging;
+  the `macos_paths` list in the script), or when you put the label
+  `test-macos` on the pull request before you push. Use the label for a
+  change to BSD tool flags (`sed -i`, `stat`, `date`, `find`). The label
+  `test-linux` adds the real install on Linux.
+- The whole suite on every platform runs on each push to `next-release` and
+  `main`, and nightly.
+- To rerun a few tests on one platform without a full run, start the CI
+  workflow by hand (Actions, CI, Run workflow) with `tests` (for example
+  `test-run-lock test-lock`) and `legs` (`linux`, `bash32`, `macos`,
+  `shellcheck`, `app`, `shim`, `real`).
+- `CI result` is the one required check: it passes when every job that
+  ran passed.
+
+The shards are sized from the seconds per test in `tests/run-tests.sh`
+(`TEST_SECS_MAC` and `TEST_SECS_LINUX`). After many tests changed, take the
+log of a green full run (a push to `next-release`) and run
+`scripts/ci-timings.sh RUN_ID`; it prints both tables to paste in. A test
+without an entry counts as 10 seconds, so a new test needs no entry to run.
