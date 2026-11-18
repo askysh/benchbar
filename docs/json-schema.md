@@ -1454,6 +1454,15 @@ shim itself. The full contract, with the step ids, is in
   `exit`, `reboot_required`, `cancelled`, `warnings` and `next_actions`, and
   `error_id` when the action failed with a stable id (`distro_running`: the
   action must stop the running distro, and nothing was changed).
+- `benchbar.exe doctor --json` (also `--jsonl` and `--for-agent`) is the CLI's
+  document with one more key at the end, `windows_checks`: an array of the
+  Windows side's checks (PATH, `distro`, `.wslconfig`, `keepalive`, tray,
+  `cli_version`), each with `id`, `label`, `level`, `message`, `fix_command`
+  and the older `status` and `fix`. `summary` counts only the CLI's checks.
+  Stdout holds the document and nothing else, and the exit code is 1 when a
+  Windows check has the level `fail`. With `--jsonl` the key is added to the
+  `done` line. With `--fix-hints` the fix commands of
+  the failing and warning Windows checks follow the CLI's.
 - `benchbar.exe report-windows --json` prints one line: `schema_version`,
   `zip`, `included`, `skipped` (what was left out, and why) and `issue_url`.
 - `benchbar.exe self-update --check --json` prints one document and exits 0

@@ -34,6 +34,7 @@ type record struct {
 	Signal  string   `json:"signal,omitempty"`
 	Wslenv  string   `json:"wslenv,omitempty"`
 	EnvSet  []string `json:"env_set,omitempty"`
+	ShimCwd string   `json:"shim_cwd,omitempty"`
 }
 
 // blob is written to stdout in echo-stdin mode: CRLF, LF, NUL, UTF-8 and
@@ -70,7 +71,7 @@ func startCount() int {
 
 func main() {
 	args := os.Args[1:]
-	r := record{Event: "start", Args: args, WSLUTF8: os.Getenv("WSL_UTF8"), Wslenv: os.Getenv("WSLENV")}
+	r := record{Event: "start", Args: args, WSLUTF8: os.Getenv("WSL_UTF8"), Wslenv: os.Getenv("WSLENV"), ShimCwd: os.Getenv("BENCHBAR_SHIM_CWD")}
 	for _, n := range watched {
 		if _, ok := os.LookupEnv(n); ok {
 			r.EnvSet = append(r.EnvSet, n)
