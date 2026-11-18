@@ -276,19 +276,29 @@ fl_ports_json() { local j; fl_ports_json_v j; printf '%s' "$j"; }
 # bench first: state.env, agents in ~/Library/LaunchAgents, auto-detection.
 # In bash, without a pipeline: every command that looks for a bench label
 # runs it once.
-fl_known_benches() {
-  local f d c seen=$'\n' cands=()
+# fl_known_bench_candidates: every folder benchbar has been told of, one per
+# line, before the "is it a bench" filter: state.env, the registered list,
+# agents, auto-detection. A folder that is gone (an unmounted volume) is in
+# it; fl_known_benches leaves such ones out.
+fl_known_bench_candidates() {
+  local f d
   d="$(fl_state_get BENCH_DIR 2>/dev/null || true)"
-  cands+=("$d")
+  [[ -z "$d" ]] || printf '%s\n' "$d"
   if [[ -f "${FL_STATE_DIR}/registered-benches.txt" ]]; then
-    while IFS= read -r d || [[ -n "$d" ]]; do cands+=("$d"); done <"${FL_STATE_DIR}/registered-benches.txt"
+    while IFS= read -r d || [[ -n "$d" ]]; do [[ -z "$d" ]] || printf '%s\n' "$d"; done <"${FL_STATE_DIR}/registered-benches.txt"
   fi
   while IFS= read -r f; do
     [[ -n "$f" ]] || continue
-    cands+=("$(fl_plist_working_dir "$f")")
+    d="$(fl_plist_working_dir "$f")"
+    [[ -z "$d" ]] || printf '%s\n' "$d"
   done < <(fl_agent_files all)
-  while IFS= read -r d; do cands+=("$d"); done < <(fl_bench_candidates)
-  for d in "${cands[@]}"; do
+  fl_bench_candidates
+}
+
+fl_known_benches() {
+  local d c seen=$'\n' cands=()
+  while IFS= read -r d; do cands+=("$d"); done < <(fl_known_bench_candidates)
+  for d in ${cands[@]+"${cands[@]}"}; do
     if [[ -z "$d" ]] || ! fl_is_bench_dir "$d"; then continue; fi
     c="$(fl_abs_path "$d")"
     [[ -n "${c//[[:space:]]/}" ]] || continue
