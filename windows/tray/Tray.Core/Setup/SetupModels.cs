@@ -138,11 +138,10 @@ public static class SetupJson
         _ => SetupStatus.Unknown,
     };
 
-    /// <summary><c>setup check --json</c>. Malformed JSON throws <see cref="JsonException"/>; a newer schema is refused.</summary>
+    /// <summary><c>setup check --json</c>. Malformed JSON throws <see cref="JsonException"/>; a newer schema is the caller's to judge (<see cref="CliOutput.Parse"/> reads it anyway).</summary>
     public static SetupReport ParseCheck(string json)
     {
         if (JsonNode.Parse(json) is not JsonObject root) throw new JsonException("setup check: not a JSON object");
-        JsonRead.RefuseNewerSchema(root);
         var steps = new List<SetupStepInfo>();
         if (root["steps"] is JsonArray array)
         {
@@ -230,6 +229,9 @@ internal static class JsonRead
             return false;
         }
     }
+
+    /// <summary>The schema a document claims when it is newer than this reader knows, else null.</summary>
+    public static int? NewerSchema(JsonObject o) => Int(o, "schema_version") is { } v && v > SupportedSchema ? v : null;
 
     public static void RefuseNewerSchema(JsonObject o)
     {

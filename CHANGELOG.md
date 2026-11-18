@@ -11,6 +11,13 @@ All notable changes to this project are documented here.
 - benchbar's own state folder keeps to a limit: the newest 100 run logs, 50 backup folders and 14 update checks, and old `state.env.*` temp files go. The run's `changed[]` says what was removed.
 - `benchup` keeps the logs of the last three starts as `bench.previous.1.log` to `.3.log`, so the evidence of a crash survives a quick second start.
 
+### Windows tray
+
+- A call to `benchbar.exe` that has finished no longer shows "did not finish" when a helper process it started keeps its output open: the tray waits a few seconds for the output and goes on.
+- The Logs window waits longer between requests while no new lines arrive, makes none while the PC is locked or asleep or the window is minimized, and asks at most every 30 seconds in battery saver. The bench poll with a running bench is every 60 seconds on battery.
+- A list, a status, a log or a health check from a newer `benchbar` than the tray is read when it still has what the tray needs, instead of blanking the whole window. A plan or a change from a newer one is still refused. A newer `benchbar.exe` no longer blocks Check for Updates, and a newer patch version of it no longer shows a version warning.
+- Saving a setting no longer freezes the window while an antivirus scan holds `config.json`.
+
 ## 0.8.3 - 2026-11-17
 
 0.8.3 is a fix pass for Windows from a full review and a live test on a

@@ -2,15 +2,19 @@ namespace BenchBar.Tray.Core;
 
 /// <summary>
 /// One bench's log in the viewer (macos LogViewModel): the lines read through <c>logs --json</c> (never through <c>\\wsl$</c>), a capped
-/// buffer, the filter and search, and Follow. Follow polls <c>logs --json --since</c> every <see cref="PollEvery"/> and only while the
-/// viewer is open (<see cref="Start"/> to <see cref="Dispose"/>), Follow is on and the current log is shown (not the previous one).
-/// Nothing runs otherwise. Raises <see cref="Changed"/> on the context captured at construction.
+/// buffer, the filter and search, and Follow. Follow polls <c>logs --json --since</c> only while the viewer is open (<see cref="Start"/> to
+/// <see cref="Dispose"/>), Follow is on and the current log is shown (not the previous one). It asks every <see cref="PollEvery"/> while
+/// lines arrive and backs off up to <see cref="MaxIdleEvery"/> while none do; it makes no poll and holds no timer while the PC is locked or
+/// asleep or the window is hidden or minimized, and polls no faster than <see cref="SlowEvery"/> in battery saver. A poll that brought lines
+/// is one process (the CLI call); the distro probe, a second process, runs only after an empty poll or a pause. Nothing runs otherwise.
+/// Raises <see cref="Changed"/> on the context captured at construction.
 /// </summary>
 public sealed class LogViewModel : IDisposable
 {
     public const int RawTailKept = 400;
 
     private readonly ICliClient _cli;
+    private readonly TimeProvider _time;
     private readonly object _gate = new();
     private readonly SynchronizationContext? _context = SynchronizationContext.Current;
     private readonly LogBuffer _buffer;
@@ -25,10 +29,14 @@ public sealed class LogViewModel : IDisposable
     private bool _open;
     private bool _disposed;
     private int _polls;
+    private bool _hidden;
+    private IFollowGate? _followGate;
+    private TaskCompletionSource _wake = NewWake();
 
-    public LogViewModel(ICliClient cli, string benchPath, string benchName, int capacity = 5000)
+    public LogViewModel(ICliClient cli, string benchPath, string benchName, int capacity = 5000, TimeProvider? time = null)
     {
         _cli = cli;
+        _time = time ?? TimeProvider.System;
         BenchPath = benchPath;
         BenchName = benchName;
         _buffer = new LogBuffer(capacity);
@@ -38,8 +46,39 @@ public sealed class LogViewModel : IDisposable
 
     public string BenchName { get; }
 
-    /// <summary>How often Follow asks for newer lines. Tests make it short.</summary>
+    /// <summary>How often Follow asks for newer lines while lines arrive. Tests make it short.</summary>
     public TimeSpan PollEvery { get; set; } = TimeSpan.FromSeconds(2);
+
+    /// <summary>The longest wait between polls while nothing new arrives (the wait doubles from <see cref="PollEvery"/> to this).</summary>
+    public TimeSpan MaxIdleEvery { get; set; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>The shortest wait between polls in battery saver.</summary>
+    public TimeSpan SlowEvery { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>Lock, sleep and battery saver (<see cref="TrayController.LogFollow"/>); null means always <see cref="FollowPace.Normal"/>.</summary>
+    public IFollowGate? Gate
+    {
+        get => _followGate;
+        set
+        {
+            if (_followGate is not null) _followGate.Changed -= WakeLoop;
+            _followGate = value;
+            if (value is not null) value.Changed += WakeLoop;
+            WakeLoop();
+        }
+    }
+
+    /// <summary>The window is minimized or hidden: no Follow poll until it is shown again, then one catch up poll.</summary>
+    public bool Hidden
+    {
+        get => _hidden;
+        set
+        {
+            if (_hidden == value) return;
+            _hidden = value;
+            WakeLoop();
+        }
+    }
 
     /// <summary>Asked before each Follow poll whether the distro runs, so a poll never boots a stopped one. Null skips the check.</summary>
     public IDistroProbe? DistroProbe { get; set; }
@@ -284,19 +323,19 @@ public sealed class LogViewModel : IDisposable
     }
 
     /// <summary>One Follow poll: the lines newer than the last one shown. Public so a test can run it once.</summary>
-    public async Task PollOnceAsync(CancellationToken ct = default)
+    public async Task<bool> PollOnceAsync(CancellationToken ct = default)
     {
         string? since;
         lock (_gate) since = _lastTime;
         Interlocked.Increment(ref _polls);
         var result = await _cli.RunJsonAsync(LogArgs.Newer(BenchPath, since), null, CliTimeouts.Read, LogsJson.Parse, ct).ConfigureAwait(false);
-        if (_disposed || ct.IsCancellationRequested || result.Value is not { } chunk) return;
+        if (_disposed || ct.IsCancellationRequested || result.Value is not { } chunk) return false;
         var changed = false;
         lock (_gate)
         {
-            if (_showPrevious) return;
+            if (_showPrevious) return false;
             var (fresh, restarted) = LogOverlap.NewLines(_rawTail, chunk.Lines);
-            if (fresh.Count == 0 && !restarted) return;
+            if (fresh.Count == 0 && !restarted) return false;
             if (restarted) _buffer.Append(["--- log restarted ---"]);
             // the times of the fresh lines are the last ones of the response
             var offset = chunk.Lines.Count - fresh.Count;
@@ -305,6 +344,7 @@ public sealed class LogViewModel : IDisposable
             changed = true;
         }
         if (changed) Raise();
+        return changed;
     }
 
     private void Remember(IReadOnlyList<string> lines, IReadOnlyList<string?> times)
@@ -339,19 +379,80 @@ public sealed class LogViewModel : IDisposable
         }
     }
 
+    private static TaskCompletionSource NewWake() => new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>The pace or the window changed: a loop that is waiting looks again.</summary>
+    private void WakeLoop()
+    {
+        TaskCompletionSource old;
+        lock (_gate)
+        {
+            old = _wake;
+            _wake = NewWake();
+        }
+        old.TrySetResult();
+    }
+
+    private FollowPace CurrentPace() => _hidden ? FollowPace.Paused : _followGate?.Pace ?? FollowPace.Normal;
+
+    /// <summary>The wait before the next poll: <see cref="PollEvery"/> doubled per empty poll up to <see cref="MaxIdleEvery"/>, and never below <see cref="SlowEvery"/> in battery saver.</summary>
+    internal TimeSpan NextWait(int emptyPolls, FollowPace pace)
+    {
+        var wait = PollEvery;
+        for (var i = 0; i < emptyPolls && wait < MaxIdleEvery; i++) wait *= 2;
+        if (wait > MaxIdleEvery && MaxIdleEvery >= PollEvery) wait = MaxIdleEvery;
+        return pace == FollowPace.Slow && wait < SlowEvery ? SlowEvery : wait;
+    }
+
     private async Task LoopAsync(CancellationToken ct)
     {
+        var empty = 0;          // polls in a row that brought nothing
+        var probe = true;       // ask whether the distro runs before the next poll: always before the first, then only after an empty poll
+        var catchUp = false;    // poll now: the loop was paused
         try
         {
             while (!ct.IsCancellationRequested)
             {
-                await Task.Delay(PollEvery, ct).ConfigureAwait(false);
-                if (!await DistroIsUpAsync(ct).ConfigureAwait(false))
+                TaskCompletionSource wake;
+                lock (_gate) wake = _wake;
+                var pace = CurrentPace();
+                if (pace == FollowPace.Paused)
+                {
+                    // no timer and no process until the PC or the window is back
+                    await wake.Task.WaitAsync(ct).ConfigureAwait(false);
+                    empty = 0;
+                    probe = true;
+                    catchUp = true;
+                    continue;
+                }
+                if (!catchUp)
+                {
+                    using var waiting = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    var delay = Task.Delay(NextWait(empty, pace), _time, waiting.Token);
+                    if (await Task.WhenAny(delay, wake.Task).ConfigureAwait(false) != delay)
+                    {
+                        waiting.Cancel(); // the pace changed: work out the wait again
+                        continue;
+                    }
+                    await delay.ConfigureAwait(false);
+                }
+                catchUp = false;
+                if (CurrentPace() == FollowPace.Paused) continue;
+                if (probe && !await DistroIsUpAsync(ct).ConfigureAwait(false))
                 {
                     PauseForDistro();
                     return;
                 }
-                await PollOnceAsync(ct).ConfigureAwait(false);
+                if (await PollOnceAsync(ct).ConfigureAwait(false))
+                {
+                    empty = 0;
+                    probe = false; // lines are arriving, so the distro is up: the next poll is the one process
+                }
+                else
+                {
+                    empty++;
+                    probe = true;
+                }
             }
         }
         catch (OperationCanceledException)
@@ -396,6 +497,7 @@ public sealed class LogViewModel : IDisposable
     {
         _disposed = true;
         _open = false;
+        if (_followGate is not null) _followGate.Changed -= WakeLoop;
         lock (_gate)
         {
             try { _loop?.Cancel(); } catch (ObjectDisposedException) { }
