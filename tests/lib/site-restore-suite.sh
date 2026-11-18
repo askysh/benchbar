@@ -362,7 +362,7 @@ assert d["source"]["site"] == "acme.localhost", d["source"]
   copy="$(printf '%s' "$OUT" | jget - 'd["set_copy"]')"
   case "$copy" in "$FL_BACKUP_ROOT"/*/restore-set) ;; *) fail "the copy is under the state backups, not sites/: ${copy}" ;; esac
   assert_file "$copy/${SET1}-acme_localhost-database.sql.gz" "(the copy is kept after the run)"
-  assert_no_file "$BENCH/sites/acme.localhost/private/backups/${SET1}-acme_localhost-database.sql.gz" "(the prune did delete the original: the case is real)"
+  assert_file "$BENCH/sites/acme.localhost/private/backups/${SET1}-acme_localhost-database.sql.gz" "(the original is back after bench deleted it: benchbar keeps older backups)"
   assert_contains "$ERR" "a copy of the backup set is kept in ${copy}"
   make_set acme.localhost "$SET1"; make_set acme.localhost "$SET2" files
   # the backup taken first has to be complete, and new: otherwise nothing is overwritten
