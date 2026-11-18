@@ -9,7 +9,10 @@
 #   tests/run-tests.sh shellcheck       only the lint
 #   SHELLCHECK=0 tests/run-tests.sh     the tests without the lint
 #   SKIP_TESTS="test-a test-b" ...      all but those (before sharding)
+#   ONLY_TESTS="test-a test-b" ...      only those, sharded like the full list (CI: affected tests)
 #   LIST_ONLY=1 SHARD=2/4 ...           print the chosen tests, run nothing
+#   SECS_ONLY=1 ...                     print the weight (table seconds) of the chosen tests, run nothing
+#   SHELLCHECK_FILES="a.sh b.sh" ...    the lint checks only those files; SC_JOBS=4 runs 4 shellcheck at once
 #
 # PARALLEL defaults to the number of CPUs. Every test builds its own HOME
 # and mock state under mktemp, so they run side by side; each test's output
@@ -24,7 +27,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 SCRIPTS=("$ROOT"/benchbar "$ROOT"/00-mac-system-deps.sh "$ROOT"/00-linux-system-deps.sh "$ROOT"/01-install-bench-and-site.sh "$ROOT"/02-background-service.sh "$ROOT"/lib/frappe-local/*.sh)
 
-bash -n "${SCRIPTS[@]}"
+# (the plan only wants a weight: SECS_ONLY skips the syntax check)
+[[ -n "${SECS_ONLY:-}" ]] || bash -n "${SCRIPTS[@]}"
 
 # Every test file. Shards are filled from TEST_SECS below, not from this
 # order. A new test file must be added here; the check below enforces it.
@@ -34,49 +38,78 @@ test-cli test-open-as test-freshness test-hygiene test-mcp test-site-backups tes
 test-adopt test-systemd test-migrate test-repair-json test-json test-report test-profile-v16 test-state-migrate test-run-lock
 test-runner test-redact test-docs-command test-status-cost test-command-cost test-bench-flow test-run test-platform-linux test-self-update
 test-site-restore test-site-restore-2 test-services-served test-templates test-discovery test-shellrc test-docs test-platform test-packaging test-ui test-release-notes test-version-policy test-affected
-test-agent-contracts test-agent-contracts-2 test-agent-contracts-3 test-pipelines test-sudo-env test-prerequisites-linux test-windows-commands test-share-gateway test-share test-share-preflight test-share-run test-share-admin test-lan-guard test-labs test-labs-share test-wsl-preflight test-backup-safety"
+test-agent-contracts test-agent-contracts-2 test-agent-contracts-3 test-pipelines test-sudo-env test-prerequisites-linux test-windows-commands test-share-gateway test-share test-share-preflight test-share-run test-share-admin test-lan-guard test-labs test-labs-share test-wsl-preflight test-ci-plan test-backup-safety"
 
+ALL_TESTS_WORDS=" $(printf '%s' "$ALL_TESTS" | tr '\n' ' ') "
 for f in "$ROOT"/tests/test-*.sh; do
-  n="$(basename "$f" .sh)"
-  case " $(printf '%s' "$ALL_TESTS" | tr '\n' ' ') " in
+  n="${f##*/}"; n="${n%.sh}"
+  case "$ALL_TESTS_WORDS" in
     *" $n "*) ;;
     *) printf 'FAIL: %s is not in the test list of tests/run-tests.sh\n' "$n" >&2; exit 1 ;;
   esac
 done
 
-# Seconds each test takes in a macOS CI shard (3 at a time), as the CI log
-# reports them ("--- ok: test-x (Ns)"); the Linux only tests, which macOS
-# skips, keep their Linux times. A test not named here counts as 10. Only the proportions matter.
-# Shards are filled from this table (see "the jobs"): after a test is added,
-# split or sped up, put its new time here.
-TEST_SECS="test-services-served=287 test-lock=201 test-repair=190 test-apps=186 test-install-json-2=184 test-install-json=183
-test-pull=170 test-mcp=162 test-phases=159 test-port-management=151 test-site-restore=148 test-sudo-env=143
-test-doctor=142 test-app-recovery-2=142 test-profiles-2=138 test-doctor-hardening=128 test-site-restore-2=127 test-app-cli=125
-test-app-batch=110 test-app-recovery=108 test-agent-contracts=108 test-homebrew=107 test-app-recovery-3=106 test-input-hygiene=101
-test-windows-commands=93 test-service=91 test-agent-contracts-3=90 test-sites=89 test-ports=88 test-profiles-3=79
-test-agent-contracts-2=77 test-hygiene=75 test-cli=71 test-freshness=60 test-adopt=60 test-multi-bench=54
-test-site-backups=54 test-profile-v16=42 test-install-sh=41 test-migrate=41 test-process=39 test-json=39
-test-pipelines=38 test-open-as=36 test-command-cost=35 test-profiles=32 test-run-lock=30 test-redact=28
-test-report=24 test-repair-json=23 test-runner=21 test-state-migrate=19 test-status-cost=14 test-docs-command=12
-test-install-linux=110 test-doctor-linux=77 test-systemd=37 test-bench-flow=10 test-platform-linux=3 test-self-update=8
-test-prerequisites-linux=7 test-install-sh-linux=5 test-discovery=4 test-run=3 test-templates=3 test-shellrc=2
-test-docs=1 test-platform=1 test-packaging=1 test-affected=1 test-ui=0 test-release-notes=0
-test-version-policy=0 test-share-gateway=33 test-share=90 test-share-preflight=85 test-share-run=140 test-share-admin=70 test-lan-guard=25 test-wsl-preflight=40"
+# Seconds each test takes in a CI shard, as the CI log reports them
+# ("--- ok: test-x (Ns)"): TEST_SECS_MAC on the macOS shards (3 CPUs), TEST_SECS_LINUX
+# on the Linux and bash 3.2 container shards (4 CPUs; the average of both). A test
+# not named counts as 10 (one new test is a rounding error; a table that is a month
+# old is not). Only the proportions matter. Shards are filled from these tables (see
+# "the jobs"), and CI-ready plans size the matrix from them (scripts/ci-plan.sh).
+# Refresh both from the log of a green full run (a push to next-release or the
+# nightly): scripts/ci-timings.sh RUN_ID prints the two blocks below, from run
+# 44055044922 (2026-11-17).
+TEST_SECS_MAC="test-services-served=297 test-doctor=270 test-port-management=232 test-share-run=232 test-repair=223 test-share=222
+test-install-json=220 test-site-restore=219 test-pull=216 test-lock=200 test-windows-commands=197 test-site-restore-2=194
+test-sudo-env=193 test-app-recovery-2=181 test-doctor-hardening=179 test-wsl-preflight=176 test-share-preflight=174 test-apps=165
+test-mcp=161 test-agent-contracts-3=159 test-app-batch=156 test-app-recovery-3=149 test-phases=137 test-agent-contracts-2=134
+test-app-recovery=128 test-install-json-2=128 test-agent-contracts=123 test-profiles-2=121 test-homebrew=116 test-freshness=115
+test-service=109 test-ports=108 test-share-admin=108 test-app-cli=104 test-input-hygiene=104 test-multi-bench=101
+test-sites=81 test-hygiene=80 test-cli=76 test-open-as=65 test-site-backups=61 test-install-sh=57
+test-pipelines=57 test-profiles-3=57 test-lan-guard=50 test-report=49 test-migrate=48 test-json=47
+test-profiles=45 test-process=43 test-adopt=42 test-profile-v16=38 test-run-lock=36 test-state-migrate=36
+test-command-cost=35 test-redact=35 test-repair-json=34 test-share-gateway=33 test-bench-flow=20 test-docs-command=20
+test-labs=20 test-prerequisites-linux=20 test-labs-share=19 test-runner=19 test-status-cost=14 test-run=13
+test-install-sh-linux=10 test-discovery=5 test-self-update=5 test-affected=4 test-shellrc=4 test-templates=4
+test-packaging=2 test-docs=1 test-platform=0 test-release-notes=0 test-ui=0 test-version-policy=0 test-ci-plan=25"
+
+TEST_SECS_LINUX="test-doctor=184 test-apps=176 test-pull=175 test-sudo-env=172 test-windows-commands=165 test-install-json-2=164
+test-site-restore=159 test-repair=157 test-site-restore-2=153 test-app-batch=148 test-lock=148 test-mcp=145
+test-phases=139 test-port-management=138 test-wsl-preflight=137 test-install-linux=136 test-install-json=135 test-app-recovery-2=130
+test-app-recovery-3=122 test-agent-contracts-3=119 test-doctor-hardening=118 test-services-served=115 test-app-recovery=114 test-homebrew=106
+test-agent-contracts-2=103 test-agent-contracts=99 test-service=99 test-profiles-2=97 test-sites=96 test-input-hygiene=94
+test-freshness=92 test-multi-bench=89 test-ports=89 test-app-cli=84 test-pipelines=84 test-doctor-linux=74
+test-open-as=72 test-hygiene=69 test-site-backups=69 test-profiles-3=57 test-cli=56 test-systemd=48
+test-adopt=45 test-process=41 test-install-sh=40 test-migrate=39 test-profile-v16=37 test-json=35
+test-profiles=33 test-report=32 test-repair-json=29 test-run-lock=27 test-state-migrate=25 test-labs=24
+test-redact=22 test-command-cost=20 test-docs-command=18 test-bench-flow=17 test-runner=17 test-share-gateway=17
+test-labs-share=14 test-prerequisites-linux=12 test-run=12 test-status-cost=10 test-install-sh-linux=7 test-self-update=7
+test-discovery=4 test-templates=4 test-affected=3 test-platform-linux=3 test-docs=2 test-shellrc=2
+test-packaging=1 test-release-notes=1 test-platform=0 test-ui=0 test-version-policy=0 test-ci-plan=25"
+# TEST_PLATFORM=mac or linux picks the table (default: this machine)
+case "${TEST_PLATFORM:-$(uname -s)}" in
+  mac|Darwin) TEST_SECS="$TEST_SECS_MAC" ;;
+  *) TEST_SECS="$TEST_SECS_LINUX" ;;
+esac
+TEST_SECS_WORDS=" $(printf '%s' "$TEST_SECS" | tr '\n' ' ') "
+# test_secs NAME: sets SECS (no subshell: this runs once per test, and a fork
+# costs milliseconds on a busy machine)
 test_secs() {
-  local w
-  w=" $(printf '%s' "$TEST_SECS" | tr '\n' ' ') "
+  local w="$TEST_SECS_WORDS"
   case "$w" in
-    *" $1="*) w="${w#*" $1="}"; printf '%s' "${w%% *}" ;;
-    *) printf '10' ;;
+    *" $1="*) w="${w#*" $1="}"; SECS="${w%% *}" ;;
+    *) SECS=10 ;;
   esac
 }
 
-# weighted_tests: "SECS NAME" for every test that SKIP_TESTS leaves in
+# weighted_tests: "SECS NAME" for every test that SKIP_TESTS leaves in (and, when
+# ONLY_TESTS is set, that it names)
 weighted_tests() {
   local t
   for t in $ALL_TESTS; do
     case " ${SKIP_TESTS:-} " in *" $t "*) continue ;; esac
-    printf '%s %s\n' "$(test_secs "$t")" "$t"
+    if [[ -n "${ONLY_TESTS:-}" ]]; then case " $ONLY_TESTS " in *" $t "*) ;; *) continue ;; esac; fi
+    test_secs "$t"
+    printf '%s %s\n' "$SECS" "$t"
   done
 }
 
@@ -128,15 +161,34 @@ run_test_with_deadline() {
   return "$code"
 }
 
+# run_shellcheck: shellcheck -x over every shell file, or over SHELLCHECK_FILES
+# when set (the files a pull request changed). The files go to SC_JOBS shellcheck
+# processes at a time, 12 files each (one process over all 200 takes minutes: it
+# parses harness.sh and the libraries again for every test file). SC_JOBS is 1
+# unless set; a run of "shellcheck" alone uses every CPU.
 run_shellcheck() {
-  local extra=()
-  [[ -f "$ROOT/install.sh" ]] && extra+=("$ROOT/install.sh")
-  shellcheck -x "${SCRIPTS[@]}" ${extra[@]+"${extra[@]}"} "$ROOT"/tests/*.sh "$ROOT"/tests/lib/*.sh \
-    "$ROOT"/tests/mocks/bin/* "$ROOT"/scripts/*.sh || return 1
-  printf 'shellcheck: ok\n'
+  local files=() jobs="${SC_JOBS:-1}"
+  if [[ -n "${SHELLCHECK_FILES:-}" ]]; then
+    # shellcheck disable=SC2206  # one word per path, none has a space
+    files=(${SHELLCHECK_FILES})
+  else
+    files=("${SCRIPTS[@]}")
+    [[ -f "$ROOT/install.sh" ]] && files+=("$ROOT/install.sh")
+    files+=("$ROOT"/tests/*.sh "$ROOT"/tests/lib/*.sh "$ROOT"/tests/mocks/bin/* "$ROOT"/scripts/*.sh)
+  fi
+  [[ "${#files[@]}" -gt 0 ]] || { printf 'shellcheck: no files\n'; return 0; }
+  printf '%s\0' "${files[@]}" | xargs -0 -n 12 -P "$jobs" shellcheck -x || return 1
+  printf 'shellcheck: ok (%s files)\n' "${#files[@]}"
 }
 
 # ---------------------------------------------------------------- the jobs
+
+for t in ${ONLY_TESTS:-}; do
+  case "$ALL_TESTS_WORDS" in
+    *" $t "*) ;;
+    *) printf 'ONLY_TESTS: no such test: %s\n' "$t" >&2; exit 1 ;;
+  esac
+done
 
 JOBS=()
 if [[ "$#" -gt 0 ]]; then
@@ -174,6 +226,13 @@ if [[ "$#" -eq 0 && "$SHARD_I" -eq 1 && "${SHELLCHECK:-1}" != "0" ]]; then
 fi
 
 if [[ -n "${LIST_ONLY:-}" ]]; then printf '%s\n' ${JOBS[@]+"${JOBS[@]}"}; exit 0; fi
+if [[ -n "${SECS_ONLY:-}" ]]; then
+  total=0
+  for t in ${JOBS[@]+"${JOBS[@]}"}; do [[ "$t" == shellcheck ]] || { test_secs "$t"; total=$((total + SECS)); }; done
+  printf '%s\n' "$total"; exit 0
+fi
+# a run of the lint alone has the machine to itself
+if [[ "${#JOBS[@]}" -eq 1 && "${JOBS[0]}" == shellcheck && -z "${SC_JOBS:-}" ]]; then SC_JOBS="$PARALLEL"; fi
 
 OUT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/benchbar-run-tests.XXXXXX")"
 PIDS=()
