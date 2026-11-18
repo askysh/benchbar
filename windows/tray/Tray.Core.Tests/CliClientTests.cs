@@ -97,7 +97,8 @@ public class CliClientTests
     {
         var (client, runner) = CliFixture.Scripted();
         runner.On("site").Print("{\"schema_version\":9}");
-        var result = await client.RunJsonAsync(["site", "list", "--json"], null, Short, TestContext.Current.CancellationToken);
+        // a plan is never acted on in a schema this tray does not know (a read only list of it is still read: WindowsFixesTests)
+        var result = await client.RunJsonAsync(["site", "drop", "x", "--dry-run", "--json"], null, Short, TestContext.Current.CancellationToken);
         Assert.False(result.Ok);
         Assert.Contains("Update BenchBar", result.Error);
     }

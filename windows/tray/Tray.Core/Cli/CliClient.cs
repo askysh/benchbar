@@ -44,6 +44,22 @@ public interface ICliClient
     Task<CliStreamResult> RunStreamAsync(IReadOnlyList<string> args, SecretEnvironment? env, TimeSpan timeout, Action<CliEvent> onEvent, CancellationToken ct = default);
 }
 
+/// <summary>Which commands only read: their documents of a newer schema are still shown when they have the shape the reader needs.</summary>
+internal static class CliSchema
+{
+    private static readonly HashSet<string> Reads = ["list", "status", "doctor", "logs", "where", "commands", "scan"];
+    private static readonly HashSet<string> GroupReads = ["list", "backups", "check", "scan"];
+
+    public static bool IsReadOnly(IReadOnlyList<string> args)
+    {
+        var words = args.Where(a => !a.StartsWith('-')).Take(2).ToList();
+        if (words.Count == 0 || args.Any(a => a is "--apply" or "--yes" or "--dry-run" or "--fix" or "--ack" or "--unack")) return false;
+        if (words.Count == 1) return Reads.Contains(words[0]);
+        return Reads.Contains(words[0]) || (words[0] is "setup" && words[1] is "check")
+            || (words[0] is "site" or "app" or "profile" or "ports" && GroupReads.Contains(words[1]));
+    }
+}
+
 public sealed class CliClient : ICliClient
 {
     private readonly IStreamRunner _stream;
@@ -76,16 +92,11 @@ public sealed class CliClient : ICliClient
         string[] copy;
         lock (lines) copy = [.. lines];
         var error = result.Error is null ? null : redact.Clean(result.Error);
-        JsonObject? document;
-        try
-        {
-            document = CliJson.PickDocument(copy);
-            if (document is not null) JsonRead.RefuseNewerSchema(document);
-        }
-        catch (UnsupportedSchemaException ex)
-        {
-            return new CliResult<T>(1, default, null, ex.Message);
-        }
+        JsonObject? document = CliJson.PickDocument(copy);
+        // a document that changes things (a plan, an apply, a restore) of a schema this tray does not know is never acted on; a read only one is
+        // read anyway and refused only when it does not have the shape the reader needs
+        int? newer = document is null ? null : JsonRead.NewerSchema(document);
+        if (newer is { } unknown && !CliSchema.IsReadOnly(args)) return new CliResult<T>(1, default, null, new UnsupportedSchemaException(unknown).Message);
         var done = CliJson.FindDone(copy) ?? (document is null ? null : CliJson.ParseDone(document));
         var exit = done?.Exit ?? result.ExitCode;
         if (document is null || (done is { Exit: not 0 } && JsonRead.Str(document, "event") == "done"))
@@ -96,7 +107,7 @@ public sealed class CliClient : ICliClient
         }
         catch (Exception ex) when (ex is FormatException or InvalidOperationException or KeyNotFoundException)
         {
-            return new CliResult<T>(exit == 0 ? 1 : exit, default, done, ex.Message);
+            return new CliResult<T>(exit == 0 ? 1 : exit, default, done, newer is { } unread ? new UnsupportedSchemaException(unread).Message : ex.Message);
         }
     }
 
