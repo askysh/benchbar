@@ -28,6 +28,7 @@
 #   install.sh              test-install-sh
 #   packaging/              test-packaging, test-homebrew
 #   macos/BenchBarTests/Fixtures/   the tests that compare CLI output with them
+#   windows/tray/fixtures/  test-tray-fixtures (the tray's recorded CLI output)
 #   scripts/X.sh            the tests that run it (script_tests below)
 #   docs/                   test-docs, test-docs-command
 #   any shell file          shellcheck
@@ -64,7 +65,7 @@ done
 # test of its own name needs no entry; every other file needs one
 # (tests/test-affected.sh checks that, with --lib-coverage). LIB_CORE is the
 # set of end to end tests for code every command runs.
-LIB_CORE="test-doctor test-install-json test-phases test-repair test-service test-ports test-adopt test-json test-run-lock test-status-cost"
+LIB_CORE="test-doctor test-install-json test-phases test-repair test-service test-ports test-adopt test-json test-run-lock test-status-cost test-tray-fixtures"
 lib_family() {
   case "$1" in
     checks|doctor) echo "test-doctor test-doctor-hardening test-doctor-linux test-repair test-repair-json test-json" ;;
@@ -170,6 +171,7 @@ while IFS= read -r f; do
     install.sh) pick test-install-sh; shell=1 ;;
     packaging/*) pick test-packaging; pick test-homebrew ;;
     macos/BenchBarTests/Fixtures/*) pick_family "test-json test-install-json test-lock" ;;
+    windows/tray/fixtures/* | tests/record-tray-fixtures.sh) pick test-tray-fixtures; shell=1 ;;
     scripts/*.sh)
       shell=1
       t="${f##*/}"; pick_family "$(script_tests "${t%.sh}")" ;;

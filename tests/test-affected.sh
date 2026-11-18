@@ -110,6 +110,12 @@ printf '{}\n' >"$REPO/macos/BenchBarTests/Fixtures/x.json"
 aff --base main --list
 assert_contains "$OUT" "affected: test-json test-install-json test-lock" "(Fixtures)"
 reset
+# the tray's recorded CLI output: its own test, not the app's
+mkdir -p "$REPO/windows/tray/fixtures/cli"
+printf '{}\n' >"$REPO/windows/tray/fixtures/cli/x.json"
+aff --base main --list
+assert_contains "$OUT" "affected: test-tray-fixtures" "(windows/tray/fixtures)"
+reset
 # scripts: the tests that run them
 printf '#!/bin/sh\n' >"$REPO/scripts/release-notes.sh"
 printf '#!/bin/sh\n' >"$REPO/scripts/other.sh"
