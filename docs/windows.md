@@ -407,7 +407,21 @@ file path for import or export is converted with `wslpath`.
 
 The log window filters by process, searches, follows the log (while the
 window is open), shows the previous log and opens `tail -f` in Windows
-Terminal.
+Terminal. Follow asks every 2 seconds while lines arrive and waits up to 10
+seconds while none do. It asks nothing while the PC is locked or asleep or
+the window is minimized, and catches up with one request when you are
+back. In Windows battery saver it asks at most every 30 seconds. With
+the bench running, the tray's own poll is 60 seconds instead of 30 on
+battery.
+
+The tray reads the passwords of an install or an adopt (the Administrator
+password, the Linux password for `sudo`) once and hands them to
+`benchbar.exe` in its environment for that one run, because the command
+line tool takes them from `ADMIN_PASSWORD`, `BENCHBAR_SUDO_PASSWORD` and
+`MARIADB_ROOT_PASSWORD` and nowhere else. They are never on a command
+line, in a file or in the tray's logs, and the output of the run is
+cleaned of them. An install can last long, so for that time the values
+can be read by another program of your own user.
 
 Settings: Open BenchBar at logon, notifications, check for updates when the window
 opens, the distro (switching runs `benchbar.exe adopt-distro`), the editor

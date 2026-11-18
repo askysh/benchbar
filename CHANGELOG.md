@@ -4,6 +4,13 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+### Windows tray
+
+- A call to `benchbar.exe` that has finished no longer shows "did not finish" when a helper process it started keeps its output open: the tray waits a few seconds for the output and goes on.
+- The Logs window waits longer between requests while no new lines arrive, makes none while the PC is locked or asleep or the window is minimized, and asks at most every 30 seconds in battery saver. The bench poll with a running bench is every 60 seconds on battery.
+- A list, a status, a log or a health check from a newer `benchbar` than the tray is read when it still has what the tray needs, instead of blanking the whole window. A plan or a change from a newer one is still refused. A newer `benchbar.exe` no longer blocks Check for Updates, and a newer patch version of it no longer shows a version warning.
+- Saving a setting no longer freezes the window while an antivirus scan holds `config.json`.
+
 ### benchbar.exe
 
 - `benchbar.exe` starts the command in the folder you run it in (a drive folder, a network folder or a `\\wsl.localhost` folder of your distro), so `adopt .`, `--bench-dir .\bench`, `profile export` and `site restore --from file` work with relative paths. `.\x` and `..\x` become `./x` and `../x`.
