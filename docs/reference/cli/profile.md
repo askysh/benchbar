@@ -175,9 +175,13 @@ benchbar profile check NAME [--json]
 ```
 
 Asks git whether each repo and branch of a team profile can be read with
-your own keys and tokens (no prompt, 10 seconds per repo). Lists the apps
-`install --profile NAME` would leave out: the unreachable ones and every
-app that requires one.
+your own keys and tokens (no prompt, 10 seconds per repo, 5 seconds to
+connect). The repos are asked side by side, 8 at a time, and a repo that
+two apps share is asked once. A timed out git is stopped with the ssh it
+started. A repo that answered yes is kept for 5 minutes, so `install
+--profile NAME` right after the check does not ask again; a no is always
+asked again. Lists the apps `install --profile NAME` would leave out: the
+unreachable ones and every app that requires one.
 
 Exit codes: 0 whatever the answer; 1 when there is no such profile.
 

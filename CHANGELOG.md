@@ -4,6 +4,11 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+### Command line tool
+
+- `benchbar app list --json` reads each app's branch, remote, local changes and commit once and reads the apps side by side, instead of about 30 `git` calls per app (13 s for 36 apps before, about 1000 git processes). The author search for the focus apps looks only at the last `FL_FOCUS_DAYS` days. The output is unchanged.
+- `benchbar profile check` asks the repos side by side (8 at a time, a repo shared by two apps once), with a 5 second connect limit, and keeps a yes for 5 minutes, so `install --profile` straight after it does not ask again. A timed out `git` is now stopped together with the `ssh` it started and no longer stays running. The checks that read a remote (`app add` preflight, the plan, the version policy, the lock) share one helper.
+
 ### Mac app
 
 - New setting **Links, Ask before a link acts** (off by default): when on, BenchBar shows an alert before a `benchbar://` link starts, stops or restarts a bench or opens a console. Any web page or app can open such a link, and a browser's "always allow" removes its own question. The docs say so plainly.
