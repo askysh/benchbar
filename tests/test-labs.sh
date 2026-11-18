@@ -21,7 +21,7 @@ assert_eq "0" "$CODE"
 assert_eq "lan-rooms quick-switch" "$(printf '%s' "$OUT" | jget - '" ".join(l["name"] for l in d["labs"])')"
 assert_eq "[False, False]" "$(printf '%s' "$OUT" | jget - '[l["enabled"] for l in d["labs"]]')"
 assert_eq "['share', 'lan-guard'] []" "$(printf '%s' "$OUT" | jget - 'd["labs"][0]["commands"], d["labs"][1]["commands"]')"
-assert_eq "1 0.9.0" "$(printf '%s' "$OUT" | jget - 'd["schema_version"], d["labs"][0]["since"]')"
+assert_eq "1 0.8.2" "$(printf '%s' "$OUT" | jget - 'd["schema_version"], d["labs"][0]["since"]')"
 fm_out labs --json
 assert_eq "0" "$CODE"; assert_contains "$OUT" '"lan-rooms"'
 run_fm labs

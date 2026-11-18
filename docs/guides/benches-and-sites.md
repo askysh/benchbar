@@ -76,7 +76,10 @@ benchbar site backups v16two                # every backup, newest first
 ```
 
 A backup lands inside the bench, in `sites/NAME/private/backups/`. Copy
-it somewhere else when you need it to outlive the bench.
+it somewhere else when you need it to outlive the bench. Frappe's own
+`bench backup` (and so `site backup`) first deletes the files in that
+folder that are older than the site's `keep_backups_for_hours` (23 hours
+when it is not set), so an old set there is not kept for you.
 
 `site restore` puts a backup back, into the site it came from or into a
 new site (`--new`), with the encryption key of the set. A site that is

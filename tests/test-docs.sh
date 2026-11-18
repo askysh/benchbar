@@ -32,6 +32,7 @@ assert_contains "$OUT" "docs-reference: ok"
 COPY="$TMP_DIR/ref-copy"
 mkdir -p "$COPY"
 cp -R "$ROOT/benchbar" "$ROOT/lib" "$ROOT/scripts" "$ROOT/docs" "$COPY/"
+# shellcheck disable=SC2016
 sed -i.bak 's/^| `benchbar site list\([^|]*\)| [a-z]* |/| `benchbar site list\1| maybe |/' "$COPY/docs/reference/cli/site.md"
 if OUT="$(python3 -I "$COPY/scripts/docs-reference.py" --check 2>&1)"; then fail "a changed generated table passed the docs reference check"; fi
 assert_contains "$OUT" "site.md: a generated table differs from the code"
@@ -61,6 +62,14 @@ done < <(find "$ROOT/docs" -name '*.md')
 while IFS= read -r lab; do
   [[ -n "$lab" ]] || continue
   grep -q "\`${lab}\`" "$ROOT/docs/features.md" || fail "docs/features.md does not mention the Lab ${lab}"
+  # and the Since of its rows is the version the lab table says (DOC-10)
+  since="$(awk -F'~' -v l="$lab" '$1 == "lab" && $2 == l { print $6 }' "$ROOT/lib/frappe-local/labs.sh")"
+  while IFS= read -r row; do
+    case "$row" in
+      *"| ${since} |"*) ;;
+      *) fail "docs/features.md: the row of the Lab ${lab} does not say since ${since}: ${row}" ;;
+    esac
+  done < <(grep "\*\*Lab\*\* \`${lab}\`" "$ROOT/docs/features.md")
 done < <(sed -n 's/^lab~\([^~]*\)~.*/\1/p' "$ROOT/lib/frappe-local/labs.sh")
 
 printf 'test-docs: ok\n'

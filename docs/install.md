@@ -175,9 +175,8 @@ app or adopt a bench you have.
 
 ## Linux
 
-From 0.8 the same CLI runs on Linux: Ubuntu 24.04 and other Debian based
-systems with apt, Windows through WSL first, with the v15-lts profile so
-far. There is no menu bar app on Linux; on Windows a tray app shows the
+From 0.8 the same CLI runs on Linux: Ubuntu 24.04 (tested) and other apt based systems (doctor warns about them), Windows through WSL
+first, with the v15-lts profile so far. There is no menu bar app on Linux; on Windows a tray app shows the
 benches of the distro: see [Windows](windows.md).
 
 ```bash
@@ -356,6 +355,15 @@ knowing first:
   when you no longer want them. When `~/.local/state` is on another
   volume than `~/.local/share/benchbar`, the state stays in that
   checkout's `.benchbar/` folder, and deleting the checkout deletes it.
+
+What `install`, `adopt` and the rest wrote outside the bench stays too,
+and you remove it yourself when you want it gone:
+
+- The marked block in `/etc/hosts` with a line per site (macOS; edit it with `sudo`).
+- The MariaDB root password: the Keychain item `benchbar-mariadb` on macOS, a 0600 file in the state folder on Linux.
+- The patched wkhtmltopdf package that `install` put in for PDF output; remove it with the package tool of your system.
+- On Linux, linger for your user (`sudo loginctl disable-linger USER`), and the `~/.bashrc` helper block when you did not use `uninstall-service`.
+- The LAN guard of a room on macOS: `benchbar lan-guard remove` takes out the pf anchor and its launch daemon.
 
 ### Homebrew
 
