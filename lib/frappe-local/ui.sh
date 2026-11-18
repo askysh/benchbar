@@ -142,7 +142,7 @@ fl_state_prune() {
     d="${root}/${name}"
     [[ -d "$d" && ! -L "$d" && ! -e "${d}/restore-set" && "$name" != "${FL_BACKUP_STAMP:-}" ]] || continue
     # a kept older backup (site-backups.sh) that was not put back may be the only copy
-    [[ -z "$(find "${d}/kept-sets" -type f ! -name '.*' 2>/dev/null | head -n 1)" ]] || continue
+    [[ -z "$(find "${d}/kept-sets" -type f ! -name '.*' -print -quit 2>/dev/null)" ]] || continue
     rm -rf -- "$d" 2>/dev/null && baks=$((baks + 1))
   done < <(ls -1 "$root" 2>/dev/null | grep -E '^[0-9]{8}-[0-9]{6}-[0-9]+$' | sort -r || true)
   # the update check of every day
