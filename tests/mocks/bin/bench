@@ -167,6 +167,13 @@ PY
             [[ -f "$old" && "$old" != "${base}"-* ]] && rm -f "$old"
           done
         fi
+        # MOCK_BENCH_BACKUP_SIGNAL=TERM: the run is cut short now (benchbar gets the signal, as on Ctrl-C),
+        # after the prune above and before the backup is written
+        if [[ -n "${MOCK_BENCH_BACKUP_SIGNAL:-}" ]]; then
+          kill -"$MOCK_BENCH_BACKUP_SIGNAL" "$(cat "$PWD/.benchbar.lock/pid")"
+          sleep 20
+          exit 1
+        fi
         # MOCK_BENCH_BACKUP_DB=FILE: the database file is a copy of FILE (a dump a restore can read)
         if [[ -n "${MOCK_BENCH_BACKUP_DB:-}" ]]; then cp "$MOCK_BENCH_BACKUP_DB" "${base}-database.sql.gz"; else printf 'local backup\n' | gzip -c >"${base}-database.sql.gz"; fi
         printf '{}\n' >"${base}-site_config_backup.json"

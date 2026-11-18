@@ -137,7 +137,12 @@ bench's backup deletes the site's backups older than 23 hours
 (`keep_backups_for_hours`). benchbar keeps them: it holds a second name
 for every file of the folder under its state folder while bench runs and
 puts back what bench deleted. Nothing is pruned, and the site's config is
-not changed. The same holds for the backup that `site restore`, `site
+not changed. On the same volume the second name is a hard link; when the
+state folder is on another volume it is a full copy of the folder each
+run, and the command stops before bench starts when the free space does
+not cover it. A run that is cut short puts the files back as it exits;
+after a kill, the next backup puts them back (doctor warns until then:
+`kept_backups`, fixed by `benchbar repair`). The same holds for the backup that `site restore`, `site
 drop`, `pull --replace` and `app update` take first. See [what is kept
 and for how long](../../guides/benches-and-sites.md#backing-up-and-dropping-a-site).
 

@@ -82,76 +82,203 @@ fl_backup_set_json() {
 # removes every file in the site's private/backups older than
 # keep_backups_for_hours (23 by default). A safety net from Monday would be
 # gone on Wednesday, so benchbar keeps what is there: before bench runs, every
-# file of the folder gets a second name (a hard link, else a copy) under the
-# state backups, and after it a file that went is put back. It never changes
-# the site's config and never deletes a backup. benchbar prunes nothing in a
-# site's backup folder: those files are the site's to remove.
+# file of the folder gets a second name under the state backups
+# (<stamp>/kept-sets/<site>/, a hard link on the same volume, else a copy) and
+# after it a file that went is put back. It never changes the site's config
+# and never deletes a backup. benchbar prunes nothing in a site's backup
+# folder: those files are the site's to remove.
+#
+# While bench runs, the kept copy may be the only copy. So:
+#   - a run that is cut short (Ctrl-C, TERM, HUP) puts the files back in its
+#     exit trap (fl_backups_keep_on_exit);
+#   - a run that is killed without a trap, a put back that failed and a site
+#     drop that found no archive leave the folder behind. Such a folder is never
+#     pruned (fl_state_prune), the next fl_backups_keep_begin puts back what is
+#     missing, and until then doctor warns (kept_backups; repair puts back).
+# Each kept folder holds ".from", the folder its files came from.
 FL_KEEP_DIR=""
 FL_KEEP_COUNT=0
 FL_KEEP_RESTORED=0
+FL_KEEP_LEFT=0
 
-# fl_backups_keep_begin SITE: sets FL_KEEP_DIR (empty when there was nothing to
-# keep). Returns 1, with a [FAIL] line, when a file could not be kept: bench's
-# backup must not run then.
-fl_backups_keep_begin() {
-  local site="$1" dir f name need=0 avail size
-  FL_KEEP_DIR=""; FL_KEEP_COUNT=0; FL_KEEP_RESTORED=0
+# fl_kept_root: the folder that holds <stamp>/kept-sets
+fl_kept_root() { printf '%s' "${FL_BACKUP_ROOT:-${FL_STATE_DIR}/backups}"; }
+
+# fl_kept_dirs [BENCH_DIR]: every kept folder that still holds a file, one per
+# line; with BENCH_DIR only those whose files came from that bench
+fl_kept_dirs() {
+  local d f from
+  for d in "$(fl_kept_root)"/*/kept-sets/*; do
+    [[ -d "$d" && ! -L "$d" ]] || continue
+    if [[ -n "${1:-}" ]]; then
+      from=""
+      if [[ -f "${d}/.from" ]]; then IFS= read -r from <"${d}/.from" || true; fi
+      case "$from" in "${1}"/*) ;; *) continue ;; esac
+    fi
+    for f in "$d"/*; do
+      [[ -f "$f" ]] || continue
+      printf '%s\n' "$d"
+      break
+    done
+  done
+}
+
+# fl_kept_target KDIR: the folder the files of KDIR go back to: where they came
+# from, else (a site that bench drop-site moved) the newest archived folder of
+# the site next to it. Empty when there is none.
+fl_kept_target() {
+  local kdir="$1" from="" site base a
+  if [[ -f "${kdir}/.from" ]]; then IFS= read -r from <"${kdir}/.from" || true; fi
+  [[ -n "$from" ]] || from="$(fl_site_backup_dir "${kdir##*/}")"
+  if [[ -d "$from" ]]; then printf '%s' "$from"; return 0; fi
+  # <bench>/sites/<site>/private/backups -> <bench>/archived/sites/<site>*/private/backups
+  case "$from" in
+    */sites/*/private/backups)
+      base="${from%/sites/*/private/backups}"
+      site="${from#"${base}"/sites/}"; site="${site%/private/backups}"
+      a="$(FL_BENCH_DIR="$base" fl_site_archive_latest "$site")"
+      if [[ -n "$a" && -d "${a}/private/backups" ]]; then printf '%s' "${a}/private/backups"; fi ;;
+  esac
+  return 0
+}
+
+# fl_kept_put_back KDIR TARGET: puts back into TARGET each file of KDIR that is
+# not there and drops the kept copy of each file that is (the same file: the
+# same inode or the same bytes). A file that could not go back stays. Adds to
+# FL_KEEP_RESTORED and FL_KEEP_LEFT. Removes KDIR (and the folders above it
+# that are empty) when nothing is left.
+fl_kept_put_back() {
+  local kdir="$1" target="$2" f name left=0
+  for f in "$kdir"/*; do
+    [[ -f "$f" ]] || continue
+    name="${f##*/}"
+    if [[ -e "${target}/${name}" ]]; then
+      if [[ "$f" -ef "${target}/${name}" ]] || cmp -s "$f" "${target}/${name}" 2>/dev/null; then
+        rm -f "$f"
+      else
+        # a different file of the same name: neither is deleted
+        left=$((left + 1))
+        fl_warn "${name} in ${target} differs from the kept copy in ${kdir}; both stay"
+      fi
+      continue
+    fi
+    if [[ -d "$target" ]] && { ln "$f" "${target}/${name}" 2>/dev/null || cp -p "$f" "${target}/${name}" 2>/dev/null; }; then
+      FL_KEEP_RESTORED=$((FL_KEEP_RESTORED + 1))
+      fl_log "kept: ${name} was deleted by bench's backup and is back in ${target}"
+      rm -f "$f"
+    else
+      left=$((left + 1))
+    fi
+  done
+  FL_KEEP_LEFT=$((FL_KEEP_LEFT + left))
+  [[ "$left" == "0" ]] || return 1
+  rm -f "${kdir}/.from"
+  rmdir "$kdir" "$(dirname "$kdir")" "$(dirname "$(dirname "$kdir")")" 2>/dev/null || true
+  return 0
+}
+
+# fl_backups_recover [BENCH_DIR]: puts back what a run that did not finish left
+# in the kept folders (not the run's own, FL_KEEP_DIR). One [WARN] line and one
+# changed[] entry for what was put back, a [WARN] line for what could not be.
+# Always returns 0: a leftover must not stop the backup that is about to run.
+fl_backups_recover() {
+  local kdir target site
   [[ "${FL_DRY_RUN:-0}" != "1" ]] || return 0
+  while IFS= read -r kdir; do
+    [[ -n "$kdir" && "$kdir" != "${FL_KEEP_DIR:-}" ]] || continue
+    site="${kdir##*/}"
+    target="$(fl_kept_target "$kdir")"
+    if [[ -z "$target" ]]; then
+      fl_warn "older backups of ${site} are only in ${kdir}: their folder is gone and no archived folder was found; copy them out by hand"
+      continue
+    fi
+    FL_KEEP_RESTORED=0; FL_KEEP_LEFT=0
+    fl_kept_put_back "$kdir" "$target" || true
+    if [[ "$FL_KEEP_RESTORED" -gt 0 ]]; then
+      fl_warn "a run that did not finish left older backups of ${site} only in ${kdir}: ${FL_KEEP_RESTORED} file(s) are back in ${target}"
+      fl_changed backups "$site" "put back ${FL_KEEP_RESTORED} older backup file(s) into ${target} (a run was cut short)"
+    fi
+    if [[ "$FL_KEEP_LEFT" -gt 0 ]]; then
+      fl_warn "${FL_KEEP_LEFT} older backup file(s) of ${site} could not be put back into ${target}; they stay in ${kdir}"
+    fi
+  done < <(fl_kept_dirs "${1:-}")
+  FL_KEEP_RESTORED=0; FL_KEEP_LEFT=0
+  return 0
+}
+
+# fl_backups_keep_begin SITE: first puts back what an earlier run left, then
+# sets FL_KEEP_DIR (empty when there was nothing to keep). Returns 1, with a
+# [FAIL] line, when a file could not be kept: bench's backup must not run then
+# (and nothing of the new kept folder stays).
+fl_backups_keep_begin() {
+  local site="$1" dir f name need=0 avail copies=()
+  FL_KEEP_DIR=""; FL_KEEP_COUNT=0; FL_KEEP_RESTORED=0; FL_KEEP_LEFT=0
+  [[ "${FL_DRY_RUN:-0}" != "1" ]] || return 0
+  fl_backups_recover
   dir="$(fl_site_backup_dir "$site")"
   [[ -d "$dir" ]] || return 0
-  FL_KEEP_DIR="${FL_BACKUP_ROOT:-${FL_STATE_DIR}/backups}/$(fl_backup_stamp)/kept-sets/${site}"
+  FL_KEEP_DIR="$(fl_kept_root)/$(fl_backup_stamp)/kept-sets/${site}"
   mkdir -p "$FL_KEEP_DIR" 2>/dev/null || { fl_fail "could not make ${FL_KEEP_DIR}"; FL_KEEP_DIR=""; return 1; }
+  printf '%s\n' "$dir" >"${FL_KEEP_DIR}/.from"
   for f in "$dir"/*; do
     [[ -f "$f" ]] || continue
     name="${f##*/}"
     [[ -e "${FL_KEEP_DIR}/${name}" ]] && continue
-    if ! ln "$f" "${FL_KEEP_DIR}/${name}" 2>/dev/null; then
-      # no hard link (another volume): a real copy needs the room
-      size="$(wc -c <"$f" | tr -d '[:space:]')"
-      need=$((need + ${size:-0}))
-      avail="$(df -k "$FL_KEEP_DIR" 2>/dev/null | awk 'NR == 2 { print $4 }')"
-      if [[ "$avail" =~ ^[0-9]+$ && $((avail * 1024)) -lt "$need" ]]; then
-        fl_fail "not enough free space to keep the older backups of ${site} while bench takes a new one: $(fl_fmt_bytes "$need") needed in ${FL_KEEP_DIR}"
-        fl_backups_keep_end "$dir" >/dev/null 2>&1 || true
+    if ln "$f" "${FL_KEEP_DIR}/${name}" 2>/dev/null; then
+      FL_KEEP_COUNT=$((FL_KEEP_COUNT + 1))
+    else
+      # no hard link (another volume): a real copy, which needs the room
+      copies+=("$f")
+      need=$((need + $(wc -c <"$f" | tr -d '[:space:]')))
+    fi
+  done
+  if [[ "${#copies[@]}" -gt 0 ]]; then
+    # the free space is read once and compared with the whole size
+    avail="$(df -k "$FL_KEEP_DIR" 2>/dev/null | awk 'NR == 2 { print $4 }')"
+    if [[ "$avail" =~ ^[0-9]+$ && $((avail * 1024)) -lt "$need" ]]; then
+      fl_fail "not enough free space to keep the older backups of ${site} while bench takes a new one: $(fl_fmt_bytes "$need") needed in ${FL_KEEP_DIR}, $(fl_fmt_bytes $((avail * 1024))) free"
+      fl_backups_keep_end >/dev/null 2>&1 || true
+      return 1
+    fi
+    for f in "${copies[@]}"; do
+      name="${f##*/}"
+      if ! cp -p "$f" "${FL_KEEP_DIR}/${name}" 2>/dev/null; then
+        fl_fail "could not keep ${f} in ${FL_KEEP_DIR}"
+        fl_backups_keep_end >/dev/null 2>&1 || true
         return 1
       fi
-      cp -p "$f" "${FL_KEEP_DIR}/${name}" 2>/dev/null || { fl_fail "could not keep ${f} in ${FL_KEEP_DIR}"; return 1; }
-    fi
-    FL_KEEP_COUNT=$((FL_KEEP_COUNT + 1))
-  done
+      FL_KEEP_COUNT=$((FL_KEEP_COUNT + 1))
+    done
+  fi
   return 0
 }
 
 # fl_backups_keep_end [DIR]: a file that bench's backup deleted goes back into
-# DIR (default: the site's backup folder; site drop passes the archived one)
-# and the copy under the state backups goes. A file that could not go back
-# stays in the state backups, with a [WARN] line. Sets FL_KEEP_RESTORED to the
-# number put back.
+# DIR (default: the folder the files came from; site drop passes the archived
+# one) and the kept copy goes. A file that could not go back stays in the
+# state backups, with a [WARN] line, and is never pruned. Sets FL_KEEP_RESTORED
+# to the number put back.
 fl_backups_keep_end() {
-  local target="${1-}" f name left=0
-  FL_KEEP_RESTORED=0
-  [[ -n "$FL_KEEP_DIR" && -d "$FL_KEEP_DIR" ]] || return 0
-  [[ -n "$target" ]] || target="$(fl_site_backup_dir "${FL_KEEP_DIR##*/}")"
-  for f in "$FL_KEEP_DIR"/*; do
-    [[ -f "$f" ]] || continue
-    name="${f##*/}"
-    if [[ ! -e "${target}/${name}" ]]; then
-      if [[ -d "$target" ]] && { ln "$f" "${target}/${name}" 2>/dev/null || cp -p "$f" "${target}/${name}" 2>/dev/null; }; then
-        FL_KEEP_RESTORED=$((FL_KEEP_RESTORED + 1))
-        fl_log "kept: ${name} was deleted by bench's backup and is back in ${target}"
-      else
-        left=$((left + 1))
-        continue
-      fi
-    fi
-    rm -f "$f"
-  done
-  if [[ "$left" -gt 0 ]]; then
-    fl_warn "${left} older backup file(s) that bench's backup deleted could not be put back into ${target}; they are in ${FL_KEEP_DIR}"
+  local target="${1-}" kdir="$FL_KEEP_DIR"
+  FL_KEEP_RESTORED=0; FL_KEEP_LEFT=0
+  FL_KEEP_DIR=""
+  [[ -n "$kdir" && -d "$kdir" ]] || return 0
+  [[ -n "$target" ]] || target="$(fl_kept_target "$kdir")"
+  if [[ -z "$target" ]]; then
+    fl_warn "older backups of ${kdir##*/} are only in ${kdir}: their folder is gone and no archived folder was found"
     return 0
   fi
-  rmdir "$FL_KEEP_DIR" "$(dirname "$FL_KEEP_DIR")" "$(dirname "$(dirname "$FL_KEEP_DIR")")" 2>/dev/null || true
-  FL_KEEP_DIR=""
+  fl_kept_put_back "$kdir" "$target" && return 0
+  fl_warn "${FL_KEEP_LEFT} older backup file(s) that bench's backup deleted could not be put back into ${target}; they are in ${kdir}"
+  return 0
+}
+
+# fl_backups_keep_on_exit: the EXIT trap of benchbar. A run that was cut short
+# between begin and end (a signal ends the shell through exit) puts the files
+# back now; one that is killed outright is picked up by the next begin.
+fl_backups_keep_on_exit() {
+  [[ -n "${FL_KEEP_DIR:-}" ]] || return 0
+  fl_backups_keep_end >/dev/null 2>&1 || true
   return 0
 }
 

@@ -81,7 +81,7 @@ cmd~restart~benchbar restart [--json]~Restart the bench, for example after chang
 cmd~logs~benchbar logs [-nN] [--worker|--worker-error|--previous] [--process NAME] [--since TIMESTAMP] [--since-restart] [--no-follow] [--json]~Tail logs/bench.log.~no~no~no~no~document
 flag~logs~--worker~~Read logs/worker.log.
 flag~logs~--worker-error~~Read logs/worker.error.log.
-flag~logs~--previous~~Read logs/bench.previous.log.
+flag~logs~--previous~~Read logs/bench.previous.log (the starts before it are bench.previous.1.log to .3.log).
 flag~logs~--process~NAME~web, socketio, schedule or worker.
 flag~logs~--since~TIMESTAMP~Only lines at or after it (--json; ISO 8601, or HH:MM:SS today).
 flag~logs~--since-restart~~Only lines after the bench's last start (--json).

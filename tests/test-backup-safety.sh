@@ -188,6 +188,148 @@ assert_eq "4" "$(find "$LOGS" -name '*.log' | wc -l | tr -d ' ')"
 assert_contains "$OUT" "1 run logs (keeps 4), 0 backup folders (keeps 3), 0 update checks (keeps 2), 0 old temp files"
 unset FL_KEEP_RUN_LOGS FL_KEEP_STATE_BACKUPS FL_KEEP_UPDATE_CHECKS
 
+# ---- SVC-3, later: a kept set is never the only copy that gets pruned or lost
+# kcall CODE: CODE in a fresh shell with the libraries loaded (a killed run is made by hand)
+kcall() {
+  FL_STATE_DIR="$FL_STATE_DIR" FL_BACKUP_ROOT="$FL_BACKUP_ROOT" FL_BENCH_DIR="$BENCH" LIBROOT="$ROOT/lib/frappe-local" bash -c '
+    for f in ui.sh run.sh templates.sh site-backups.sh; do . "$LIBROOT/$f"; done
+    eval "$1"' _ "$1"
+}
+# shellcheck disable=SC2016  # expanded in the shell kcall starts
+PRUNE='fl_state_prune "$FL_STATE_DIR/logs"'
+# newer_stamps N: N state backup folders, all newer than the fixtures
+newer_stamps() {
+  local i
+  for i in $(seq 1 "$1"); do mkdir -p "$FL_BACKUP_ROOT/20261001-$(printf '%06d' "$i")-$i"; printf 'x\n' >"$FL_BACKUP_ROOT/20261001-$(printf '%06d' "$i")-$i/file"; done
+}
+# leave_kept_set SITE STAMP FILES...: what a killed run leaves: the files are in kept-sets
+# and bench's backup already deleted them from the site's folder
+leave_kept_set() {
+  local site="$1" stamp="$2" dir ks f
+  shift 2
+  dir="$BENCH/sites/$site/private/backups"
+  ks="$FL_BACKUP_ROOT/$stamp/kept-sets/$site"
+  mkdir -p "$ks"
+  printf '%s\n' "$dir" >"$ks/.from"
+  for f in "$@"; do mv "$dir/$f" "$ks/$f"; done
+}
+find "$FL_BACKUP_ROOT" -mindepth 1 -delete
+KSET="20260801_090000-bbtest_localhost"
+make_old_set "$BK" bbtest_localhost 20260801_090000 files
+leave_kept_set bbtest.localhost 20260801-000000-1 "${KSET}-database.sql.gz" "${KSET}-files.tar" "${KSET}-private-files.tar" "${KSET}-site_config_backup.json"
+assert_no_file "$BK/${KSET}-database.sql.gz"
+# 51 newer stamps (limit 50), and an old folder that holds nothing of value
+newer_stamps 51
+mkdir -p "$FL_BACKUP_ROOT/20260701-000000-2"; printf 'x\n' >"$FL_BACKUP_ROOT/20260701-000000-2/file"
+kcall "$PRUNE"
+assert_no_file "$FL_BACKUP_ROOT/20260701-000000-2" "(the prune ran and removed an old folder)"
+assert_file "$FL_BACKUP_ROOT/20260801-000000-1/kept-sets/bbtest.localhost/${KSET}-database.sql.gz" "(a stamp folder that holds a kept set is never pruned)"
+assert_file "$FL_BACKUP_ROOT/20260801-000000-1/kept-sets/bbtest.localhost/${KSET}-files.tar"
+# doctor warns, with the fix
+run_json doctor --json --bench-dir "$BENCH"
+assert_eq "warn" "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "kept_backups"][0]["level"]')" "$OUT"
+assert_eq "kept_backups" "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "kept_backups"][0]["action"]')"
+assert_contains "$OUT" "4 file(s) of bbtest.localhost"
+# the next backup of the site puts the files back first, says so, and the folder goes
+MOCK_BENCH_BACKUP_PRUNE=1 run_json site backup bbtest.localhost --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT$ERR"
+for f in database.sql.gz files.tar private-files.tar site_config_backup.json; do assert_file "$BK/${KSET}-${f}" "(put back by the next backup)"; done
+assert_eq "-- dump of 20260801_090000" "$(gzip -dc "$BK/${KSET}-database.sql.gz" | head -n1)"
+assert_contains "$OUT" "put back 4 older backup file(s)"
+assert_eq "True" "$(printf '%s' "$OUT" | jget - 'any(c["kind"] == "backups" for c in d["changed"])')" "$OUT"
+assert_no_file "$FL_BACKUP_ROOT/20260801-000000-1/kept-sets" "(nothing left to keep)"
+assert_no_kept_copy
+run_json doctor --json --bench-dir "$BENCH"
+assert_eq "ok" "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "kept_backups"][0]["level"]')" "$OUT"
+
+# a site folder that is gone and has no archive (a site drop that found none): the files stay, are not pruned,
+# and go to the archived folder when there is one
+make_old_set "$BENCH/sites/ghost.localhost/private/backups" ghost_localhost 20260802_090000
+GK="20260802_090000-ghost_localhost"
+leave_kept_set ghost.localhost 20260802-000000-3 "${GK}-database.sql.gz" "${GK}-site_config_backup.json"
+find "$BENCH/sites/ghost.localhost" -mindepth 1 -delete; rmdir "$BENCH/sites/ghost.localhost"
+newer_stamps 51
+kcall "$PRUNE"
+assert_file "$FL_BACKUP_ROOT/20260802-000000-3/kept-sets/ghost.localhost/${GK}-database.sql.gz" "(no folder to go back to: still kept after the prune)"
+run_json site backup bbtest.localhost --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT$ERR"
+assert_contains "$OUT" "only in"
+assert_file "$FL_BACKUP_ROOT/20260802-000000-3/kept-sets/ghost.localhost/${GK}-database.sql.gz" "(a backup of another site does not lose it)"
+mkdir -p "$BENCH/archived/sites/ghost.localhost/private/backups"
+run_json site backup bbtest.localhost --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT$ERR"
+assert_file "$BENCH/archived/sites/ghost.localhost/private/backups/${GK}-database.sql.gz" "(put back into the archived folder)"
+assert_no_file "$FL_BACKUP_ROOT/20260802-000000-3/kept-sets"
+
+# a put back that fails (the folder cannot be written) leaves the files, then a later one puts them back
+if [[ "$(id -u)" != "0" ]]; then
+  make_old_set "$BK" bbtest_localhost 20260803_090000
+  PB="20260803_090000-bbtest_localhost"
+  leave_kept_set bbtest.localhost 20260803-000000-4 "${PB}-database.sql.gz" "${PB}-site_config_backup.json"
+  chmod 555 "$BK"
+  kcall 'fl_backups_recover'
+  chmod 755 "$BK"
+  assert_file "$FL_BACKUP_ROOT/20260803-000000-4/kept-sets/bbtest.localhost/${PB}-database.sql.gz" "(a failed put back keeps the file)"
+  assert_no_file "$BK/${PB}-database.sql.gz"
+  newer_stamps 51
+  kcall "$PRUNE"
+  assert_file "$FL_BACKUP_ROOT/20260803-000000-4/kept-sets/bbtest.localhost/${PB}-database.sql.gz" "(and the prune leaves it)"
+  run_json doctor --json --bench-dir "$BENCH"
+  assert_eq "warn" "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "kept_backups"][0]["level"]')" "$OUT"
+  # repair is the fix doctor names
+  run_json repair --yes --json --bench-dir "$BENCH"
+  assert_file "$BK/${PB}-database.sql.gz" "(repair puts it back)"
+  assert_no_file "$FL_BACKUP_ROOT/20260803-000000-4/kept-sets"
+fi
+find "$FL_BACKUP_ROOT" -mindepth 1 -delete
+
+# a run that is cut short between begin and end puts the files back in its exit trap
+make_old_set "$BK" bbtest_localhost 20260804_090000
+TK="20260804_090000-bbtest_localhost"
+MOCK_BENCH_BACKUP_PRUNE=1 MOCK_BENCH_BACKUP_SIGNAL=TERM run_json site backup bbtest.localhost --json --bench-dir "$BENCH"
+assert_eq "143" "$CODE" "$OUT$ERR"
+assert_file "$BK/${TK}-database.sql.gz" "(TERM between begin and end: the files are back)"
+assert_file "$BK/${TK}-site_config_backup.json"
+assert_no_kept_copy
+find "$BK" -name "${TK}-*" -delete
+
+# the copy fallback (a backup folder on another volume) reads the free space once and compares it with the
+# whole folder. The df here counts what the copies already use, as a real one does: adding the copied bytes to
+# the need again (a second time) fails a folder that fits
+make_old_set "$BK" bbtest_localhost 20260805_090000
+make_old_set "$BK" bbtest_localhost 20260806_090000
+head -c 3000000 /dev/zero >"$BK/20260805_090000-bbtest_localhost-big.bin"
+head -c 3000000 /dev/zero >"$BK/20260806_090000-bbtest_localhost-big.bin"
+mkdir -p "$TMP_DIR/mockbin"
+cat >"$TMP_DIR/mockbin/ln" <<'LN'
+#!/bin/bash
+# no hard links here: another volume
+exit 1
+LN
+cat >"$TMP_DIR/mockbin/df" <<'DF'
+#!/bin/bash
+# DF_LIMIT_KB of room in all; what is in the kept folders is used
+used="$(find "$DF_ROOT" -path '*/kept-sets/*' -type f -print0 2>/dev/null | xargs -0 cat 2>/dev/null | wc -c | tr -d ' ')"
+printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\n'
+printf '/dev/x 999999999 1 %s 1%% /\n' "$(( DF_LIMIT_KB - used / 1024 ))"
+DF
+chmod +x "$TMP_DIR/mockbin/ln" "$TMP_DIR/mockbin/df"
+total_kb=$(( ( $(find "$BK" -type f -print0 | xargs -0 cat | wc -c) + 1023 ) / 1024 ))
+# half the room: the folder does not fit, bench's backup does not run
+reset_calls
+DF_ROOT="$FL_BACKUP_ROOT" DF_LIMIT_KB="$((total_kb / 2))" PATH="$TMP_DIR/mockbin:$PATH" run_json site backup bbtest.localhost --json --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT$ERR"
+assert_contains "$OUT$ERR" "not enough free space to keep the older backups"
+assert_calls_not_contain '^bench --site .* backup' "(bench's backup does not run when the files cannot be kept)"
+assert_file "$BK/20260805_090000-bbtest_localhost-big.bin"
+assert_no_kept_copy
+# room for the whole folder and a little more: the copy is made, bench's backup runs, the files are still there
+DF_ROOT="$FL_BACKUP_ROOT" DF_LIMIT_KB="$((total_kb + 64))" MOCK_BENCH_BACKUP_PRUNE=1 PATH="$TMP_DIR/mockbin:$PATH" run_json site backup bbtest.localhost --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT$ERR"
+assert_file "$BK/20260805_090000-bbtest_localhost-big.bin" "(kept by a copy, put back)"
+assert_file "$BK/20260806_090000-bbtest_localhost-database.sql.gz"
+assert_no_kept_copy
+
 # ---- SVC-15: the evidence of a crash survives a second start
 export MOCK_KICKSTART_PING=200
 printf 'crash trace\n' >"$BENCH/logs/bench.log"

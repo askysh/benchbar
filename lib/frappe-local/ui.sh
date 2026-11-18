@@ -106,7 +106,10 @@ fl_log_init() {
 #   run logs            logs/<date>-<time>-<pid>.log        newest 100
 #   state backups       backups/<date>-<time>-<pid>/        newest 50 (a folder
 #                       that still holds a restore-set copy stays; that copy has
-#                       its own limit, the three newest of a bench)
+#                       its own limit, the three newest of a bench; so does one
+#                       that holds a kept-sets file, which may be the only copy
+#                       of a site's older backup: the next backup of the site
+#                       puts it back, and doctor warns until then)
 #   update checks       update-check.<date>.txt             newest 14
 #   temp files          state.env.XXXXXX of a killed writer older than a day
 # The limits can be changed with FL_KEEP_RUN_LOGS, FL_KEEP_STATE_BACKUPS and
@@ -138,6 +141,8 @@ fl_state_prune() {
     [[ "$n" -gt "$keep_bk" ]] || continue
     d="${root}/${name}"
     [[ -d "$d" && ! -L "$d" && ! -e "${d}/restore-set" && "$name" != "${FL_BACKUP_STAMP:-}" ]] || continue
+    # a kept older backup (site-backups.sh) that was not put back may be the only copy
+    [[ -z "$(find "${d}/kept-sets" -type f ! -name '.*' 2>/dev/null | head -n 1)" ]] || continue
     rm -rf -- "$d" 2>/dev/null && baks=$((baks + 1))
   done < <(ls -1 "$root" 2>/dev/null | grep -E '^[0-9]{8}-[0-9]{6}-[0-9]+$' | sort -r || true)
   # the update check of every day

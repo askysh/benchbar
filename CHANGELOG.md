@@ -6,7 +6,8 @@ All notable changes to this project are documented here.
 
 ### Backups
 
-- `site backup`, `site restore`, `site drop`, `pull --replace` and `app update` no longer delete the site's backups older than 23 hours. bench's backup did that silently; benchbar now keeps those files and puts them back. Nothing in a site's backup folder is pruned.
+- `site backup`, `site restore`, `site drop`, `pull --replace` and `app update` no longer delete the site's backups older than 23 hours. bench's backup did that silently; benchbar now keeps those files and puts them back. Nothing in a site's backup folder is pruned. On the same volume the kept files are hard links (no space); when the state folder is on another volume each run copies the whole backup folder and stops before bench starts when the free space does not cover it.
+- A run that is cut short between keeping and putting back (Ctrl-C, TERM) puts the files back as it exits. A run that is killed outright, or a file that could not go back, leaves the copy in the state folder, which is then never pruned: the next backup puts it back (`changed[]` says so), `doctor` warns (`kept_backups`) until then, and `repair` puts the files back.
 - `site restore` and `pull` read a backup set before they change anything: a dump that is empty or cut short, or a file archive tar cannot read, stops the command with the file named. `site backups` marks a set with an empty part `(incomplete)` and has `"complete"` in JSON.
 - benchbar's own state folder keeps to a limit: the newest 100 run logs, 50 backup folders and 14 update checks, and old `state.env.*` temp files go. The run's `changed[]` says what was removed.
 - `benchup` keeps the logs of the last three starts as `bench.previous.1.log` to `.3.log`, so the evidence of a crash survives a quick second start.

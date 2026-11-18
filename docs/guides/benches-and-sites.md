@@ -91,6 +91,25 @@ What is kept, and for how long:
   yourself when the disk fills. A backup that frappe's own scheduler
   takes is still pruned by frappe (set `keep_backups_for_hours` in the
   site config to keep more of those).
+
+  How it works: before bench runs, each file of the site's backup folder
+  gets a second name in the state folder
+  (`backups/<run>/kept-sets/<site>/`). On the same volume that is a hard
+  link and costs no space. When the state folder is on another volume
+  (the bench on an external disk, say) a link is impossible, so benchbar
+  copies the whole folder each run: it needs that much free space, checks
+  it first, and stops before bench starts when it is not there. Afterwards
+  the files bench deleted are put back and the second names go. A hard
+  link shares the file's inode, so making the second name changes its status
+  change time (`ctime`), which frappe reads to decide a backup is old:
+  an old set looks recent to frappe for another `keep_backups_for_hours`.
+
+  If a run is cut short (Ctrl-C, a closed terminal) benchbar puts the
+  files back as it exits. If it is killed outright, or a file could not
+  be put back, the kept copy may be the only copy, so benchbar never
+  prunes it. The next backup of any site puts it back first and says so in
+  `changed[]`, and until then `benchbar doctor` warns (`kept_backups`);
+  `benchbar repair` puts the files back.
 - **Read before use.** `site restore` and `pull` read the set before they
   change anything: the dump has to be a complete gzip file and, with
   `--with-files`, the file archives have to be readable tar archives. A
