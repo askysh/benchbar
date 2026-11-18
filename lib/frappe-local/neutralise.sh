@@ -40,6 +40,8 @@ FL_PY_NEUTRALISE='
 NEUTRALISE = [
     # Mail accounts: no sending and no fetching from the real mailbox (the password goes with the other stored passwords)
     ("email_accounts", "Email Account", "set", {"enable_outgoing": 0, "enable_incoming": 0, "enable_auto_reply": 0}, None, "email accounts switched off"),
+    # Email Account API key (an API based mail service) is a plain Data field
+    ("integration_keys", "Email Account", "set", {"api_key": ""}, None, "integration keys blanked"),
     # Mail waiting to go out would be sent to real customers the day mute_emails is lifted
     ("email_queue", "Email Queue", "delete", None, {"status": ["Not Sent", "Sending", "Partially Sent"]}, "queued emails dropped"),
     # The recipients of the queued mail just dropped (not counted again)
@@ -50,6 +52,12 @@ NEUTRALISE = [
     ("notifications", "Notification", "set", {"enabled": 0}, None, "notifications switched off"),
     # Webhooks post document data to outside URLs on document events (the secret goes with the stored passwords)
     ("webhooks", "Webhook", "set", {"enabled": 0}, None, "webhooks switched off"),
+    # A webhook URL often carries the key or token in its path or query string, so it is blanked and not only switched off
+    ("webhook_urls", "Webhook", "set", {"request_url": ""}, None, "webhook URLs and header values blanked"),
+    # Webhook headers (Authorization, API keys) are plain Data in a child table
+    ("webhook_urls", "Webhook Header", "set", {"value": ""}, None, "webhook URLs and header values blanked"),
+    # v16 Automation Flow: its CallWebhook and SendNotification actions fire on save, whether the scheduler runs or not
+    ("automation_flows", "Automation Flow", "set", {"enabled": 0}, None, "automation flows switched off"),
     # The log of what webhooks posted: payloads of real documents and the answers
     ("webhook_logs", "Webhook Request Log", "delete", None, None, "webhook logs dropped"),
     # A Slack webhook URL is the credential itself and is stored in a plain field
@@ -80,6 +88,8 @@ NEUTRALISE = [
     ("google", "Google Settings", "set", {"enable": 0, "api_key": ""}, None, "Google integrations switched off"),
     # Google indexing of the website: the refresh token is a plain field
     ("google", "Website Settings", "set", {"enable_google_indexing": 0, "indexing_refresh_token": ""}, None, "Google integrations switched off"),
+    # The Google Analytics id of the website: the copy would send its hits to the real property
+    ("google", "Website Settings", "set", {"google_analytics_id": ""}, None, "Google integrations switched off"),
     # Backups uploaded to Dropbox every day (the app secret and tokens: stored passwords)
     ("backup_uploads", "Dropbox Settings", "set", {"enabled": 0, "app_access_key": ""}, None, "backup uploads switched off"),
     # Backups uploaded to S3 or an S3 compatible bucket (the secret key: stored passwords)
@@ -92,22 +102,34 @@ NEUTRALISE = [
     ("payment_gateways", "Razorpay Settings", "set", {"api_key": ""}, None, "payment gateway keys blanked"),
     # Stripe: the publishable key (the secret key: stored passwords)
     ("payment_gateways", "Stripe Settings", "set", {"publishable_key": ""}, None, "payment gateway keys blanked"),
-    # PayPal: the API user name (password and signature: stored passwords)
-    ("payment_gateways", "PayPal Settings", "set", {"api_username": ""}, None, "payment gateway keys blanked"),
+    # PayPal: the API user name and the signature are plain Data fields (only the API password is a stored password)
+    ("payment_gateways", "PayPal Settings", "set", {"api_username": "", "signature": ""}, None, "payment gateway keys blanked"),
     # Braintree: merchant and public key (private key: stored passwords)
     ("payment_gateways", "Braintree Settings", "set", {"merchant_id": "", "public_key": ""}, None, "payment gateway keys blanked"),
-    # M-Pesa: the consumer key (consumer secret: stored passwords)
-    ("payment_gateways", "Mpesa Settings", "set", {"consumer_key": ""}, None, "payment gateway keys blanked"),
+    # M-Pesa: the consumer key and the security credential, both plain fields (consumer secret: stored passwords)
+    ("payment_gateways", "Mpesa Settings", "set", {"consumer_key": "", "security_credential": ""}, None, "payment gateway keys blanked"),
     # Paytm: the merchant id (merchant key: stored passwords)
     ("payment_gateways", "Paytm Settings", "set", {"merchant_id": ""}, None, "payment gateway keys blanked"),
     # Plaid bank feeds: the sync is switched off and the client id blanked (secret: stored passwords)
     ("payment_gateways", "Plaid Settings", "set", {"enabled": 0, "automatic_sync": 0, "plaid_client_id": ""}, None, "payment gateway keys blanked"),
+    # GoCardless: the access token and the webhook secret are plain fields
+    ("payment_gateways", "GoCardless Settings", "set", {"access_token": "", "webhooks_secret": ""}, None, "payment gateway keys blanked"),
+    # A bank linked to Plaid keeps its access token in a plain field
+    ("payment_gateways", "Bank", "set", {"plaid_access_token": ""}, None, "payment gateway keys blanked"),
+    # ERPNext Video Settings: the YouTube API key is a plain field
+    ("integration_keys", "Video Settings", "set", {"api_key": ""}, None, "integration keys blanked"),
+    # ERPNext Currency Exchange Settings: the access key, the endpoint (which can carry it) and the url are plain fields
+    ("integration_keys", "Currency Exchange Settings", "set", {"access_key": "", "api_endpoint": "", "url": ""}, None, "integration keys blanked"),
     # Recurring documents are created on a schedule and mailed to the parties of the original
     ("auto_repeats", "Auto Repeat", "set", {"disabled": 1}, None, "auto repeats paused"),
     # Scheduled jobs that send mail or read a mailbox, so they stay stopped if someone turns the scheduler on
     ("scheduled_jobs", "Scheduled Job Type", "set", {"stopped": 1}, {"method": ["frappe.email.%", "%.send\\_%", "%\\_reminder%", "%.trigger\\_emails", "%email\\_digest%", "%email\\_campaign%", "%send\\_auto\\_email%"]}, "scheduled jobs that call out stopped"),
     # Scheduled jobs that upload backups or sync with an outside service
     ("scheduled_jobs", "Scheduled Job Type", "set", {"stopped": 1}, {"method": ["frappe.integrations.%", "%plaid\\_settings%", "%update\\_youtube\\_data", "frappe.utils.change\\_log.%", "frappe.desk.doctype.changelog\\_feed.%", "frappe.utils.telemetry.%"]}, "scheduled jobs that call out stopped"),
+    # The payments job that captures authorised Razorpay payments with the stored keys
+    ("scheduled_jobs", "Scheduled Job Type", "set", {"stopped": 1}, {"method": ["%razorpay\\_settings.capture\\_payment"]}, "scheduled jobs that call out stopped"),
+    # The v16 job that fetches the knowledge sources of the site from their outside URLs
+    ("scheduled_jobs", "Scheduled Job Type", "set", {"stopped": 1}, {"method": ["frappe.flow.knowledge.ingest.sync_due_sources"]}, "scheduled jobs that call out stopped"),
     # Jobs of the India Compliance app, which talk to the GST portal and e-invoice services with the stored credentials
     ("scheduled_jobs", "Scheduled Job Type", "set", {"stopped": 1}, {"method": ["india\\_compliance.%"]}, "scheduled jobs that call out stopped"),
     # Server scripts that make HTTP requests themselves

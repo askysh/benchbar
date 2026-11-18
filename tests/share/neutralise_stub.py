@@ -89,10 +89,18 @@ def build():
     db = DB()
     run = db.con.executescript
     run("""
-    create table `tabWebhook` (name text, enabled int, webhook_secret text);
-    insert into `tabWebhook` values ('hook a', 1, '*****'), ('hook b', 1, null), ('hook c', 0, null);
-    create table `tabEmail Account` (name text, enable_outgoing int, enable_incoming int, enable_auto_reply int, password text);
-    insert into `tabEmail Account` values ('Sales', 1, 1, 0, '*****'), ('Support', 0, 1, 1, null);
+    create table `tabWebhook` (name text, enabled int, webhook_secret text, request_url text);
+    insert into `tabWebhook` values ('hook a', 1, '*****', 'https://api.example.com/hook?token=live'), ('hook b', 1, null, 'https://b.example.com'), ('hook c', 0, null, '');
+    create table `tabWebhook Header` (name text, parent text, `key` text, value text);
+    insert into `tabWebhook Header` values ('h1', 'hook a', 'Authorization', 'Bearer live'), ('h2', 'hook b', 'X-Api-Key', 'abc'), ('h3', 'hook c', 'Accept', '');
+    create table `tabAutomation Flow` (name text, enabled int);
+    insert into `tabAutomation Flow` values ('flow a', 1), ('flow b', 0);
+    create table `tabBank` (name text, plaid_access_token text);
+    insert into `tabBank` values ('HDFC', 'access-live'), ('ICICI', null);
+    create table `tabGoCardless Settings` (name text, access_token text, webhooks_secret text);
+    insert into `tabGoCardless Settings` values ('gc', 'live_token', 'whsec'), ('gc2', '', '');
+    create table `tabEmail Account` (name text, enable_outgoing int, enable_incoming int, enable_auto_reply int, password text, api_key text);
+    insert into `tabEmail Account` values ('Sales', 1, 1, 0, '*****', 'mailkey'), ('Support', 0, 1, 1, null, null);
     create table `tabSlack Webhook URL` (name text, webhook_url text);
     insert into `tabSlack Webhook URL` values ('ops', 'https://hooks.slack.com/services/T0/B0/secret'), ('empty', '');
     create table `tabOAuth Bearer Token` (name text, access_token text);
@@ -110,7 +118,10 @@ def build():
       ('j1', 'frappe.email.queue.flush', 0),
       ('j2', 'frappe.integrations.doctype.s3_backup_settings.s3_backup_settings.take_backups_daily', 0),
       ('j3', 'frappe.sessions.clear_expired_sessions', 0),
-      ('j4', 'hrms.controllers.employee_reminders.send_birthday_reminders', 0);
+      ('j4', 'hrms.controllers.employee_reminders.send_birthday_reminders', 0),
+      ('j5', 'payments.payment_gateways.doctype.razorpay_settings.razorpay_settings.capture_payment', 0),
+      ('j6', 'frappe.flow.knowledge.ingest.sync_due_sources', 0),
+      ('j7', 'payments.payment_gateways.doctype.razorpay_settings.razorpay_settings.other_job', 0);
     create table `tabServer Script` (name text, script text, disabled int);
     insert into `tabServer Script` values
       ('calls out', 'r = frappe.make_post_request("https://x.example", data={})', 0),
@@ -126,6 +137,11 @@ def build():
       ('LDAP Settings', 'enabled', '1'), ('LDAP Settings', 'ldap_server_url', 'ldaps://ldap.example.com'),
       ('SMS Settings', 'sms_gateway_url', 'https://sms.example.com/send?key=live'),
       ('Razorpay Settings', 'api_key', 'rzp_live_x'),
+      ('PayPal Settings', 'api_username', 'pp-user'), ('PayPal Settings', 'signature', 'pp-signature'),
+      ('Mpesa Settings', 'consumer_key', 'mp-key'), ('Mpesa Settings', 'security_credential', 'mp-credential'),
+      ('Video Settings', 'api_key', 'yt-key'), ('Video Settings', 'enable_youtube_tracking', '1'),
+      ('Currency Exchange Settings', 'access_key', 'fx-key'), ('Currency Exchange Settings', 'api_endpoint', 'https://fx.example.com/live?key=fx-key'), ('Currency Exchange Settings', 'url', 'https://fx.example.com'),
+      ('Website Settings', 'google_analytics_id', 'G-LIVE123'), ('Website Settings', 'title', 'Our site'),
       ('Push Notification Settings', 'enable_push_notification_relay', '1'),
       ('System Settings', 'enable_scheduler', '1');
     create table `__Auth` (doctype text, name text, fieldname text, password text, encrypted int);
@@ -181,6 +197,17 @@ def main():
     # outbound switches are off
     assert count(db, "select count(*) from `tabWebhook` where enabled = 1") == 0, "webhooks"
     assert got["webhooks"] == 2, got
+    # a webhook URL and its header values are blanked, not only switched off
+    assert count(db, "select count(*) from `tabWebhook` where ifnull(request_url, '') != ''") == 0 and got["webhook_urls"] == 4, got
+    assert count(db, "select count(*) from `tabWebhook Header` where ifnull(value, '') != ''") == 0
+    assert [r[0] for r in db.con.execute("select `key` from `tabWebhook Header` order by name")] == ["Authorization", "X-Api-Key", "Accept"], "header names stay"
+    # v16 Automation Flow is switched off
+    assert count(db, "select count(*) from `tabAutomation Flow` where enabled != 0") == 0 and got["automation_flows"] == 1, got
+    # plain keys of ERPNext and payments doctypes are blank
+    assert count(db, "select count(*) from `tabBank` where ifnull(plaid_access_token, '') != ''") == 0
+    assert count(db, "select count(*) from `tabGoCardless Settings` where ifnull(access_token, '') != '' or ifnull(webhooks_secret, '') != ''") == 0
+    assert count(db, "select count(*) from `tabEmail Account` where ifnull(api_key, '') != ''") == 0
+    assert got["integration_keys"] == 3, got  # Email Account, Video Settings, Currency Exchange Settings
     assert count(db, "select count(*) from `tabEmail Account` where enable_outgoing = 1 or enable_incoming = 1 or enable_auto_reply = 1") == 0
     assert got["email_accounts"] == 2, got
     assert count(db, "select count(*) from `tabSocial Login Key` where enable_social_login = 1") == 0
@@ -197,7 +224,7 @@ def main():
     assert got["email_queue"] == 3, got
     # scheduled jobs that call out are stopped, a housekeeping job is not
     stopped = {r[0]: r[1] for r in db.con.execute("select name, stopped from `tabScheduled Job Type`")}
-    assert stopped == {"j1": 1, "j2": 1, "j3": 0, "j4": 1}, stopped
+    assert stopped == {"j1": 1, "j2": 1, "j3": 0, "j4": 1, "j5": 1, "j6": 1, "j7": 0}, stopped
     assert {r[0]: r[1] for r in db.con.execute("select name, disabled from `tabServer Script`")} == {"calls out": 1, "local only": 0}
     # single doctypes live in tabSingles
     singles = {(r[0], r[1]): r[2] for r in db.con.execute("select doctype, field, value from `tabSingles`")}
@@ -207,6 +234,12 @@ def main():
     assert singles[("LDAP Settings", "enabled")] == "0" and singles[("LDAP Settings", "ldap_server_url")] == ""
     assert singles[("SMS Settings", "sms_gateway_url")] == "" and singles[("Razorpay Settings", "api_key")] == ""
     assert singles[("Push Notification Settings", "enable_push_notification_relay")] == "0"
+    assert singles[("PayPal Settings", "signature")] == "" and singles[("PayPal Settings", "api_username")] == ""
+    assert singles[("Mpesa Settings", "security_credential")] == "" and singles[("Mpesa Settings", "consumer_key")] == ""
+    assert singles[("Video Settings", "api_key")] == "" and singles[("Video Settings", "enable_youtube_tracking")] == "1"
+    for field in ("access_key", "api_endpoint", "url"):
+        assert singles[("Currency Exchange Settings", field)] == "", field
+    assert singles[("Website Settings", "google_analytics_id")] == "" and singles[("Website Settings", "title")] == "Our site"
     assert singles[("System Settings", "enable_scheduler")] == "1", "the scheduler is pull's own business"
     # every stored password goes but the Administrator login
     left = db.con.execute("select doctype, name, fieldname from `__Auth`").fetchall()
@@ -225,6 +258,15 @@ def main():
     db.con.execute("drop table `tabEmail Queue Recipient`")
     rows = run(snippet, ["benchbar-neutralise", "copy.localhost", "1"], db, "1")
     assert rows["webhooks"][0] == 0
+    # a v15 site without Automation Flow, a site without erpnext or payments, a table that lacks a column: all skipped quietly
+    db = build()
+    for table in ("Automation Flow", "Bank", "GoCardless Settings", "Webhook Header"):
+        db.con.execute("drop table `tab%s`" % table)
+    db.con.execute("delete from `tabSingles` where doctype in ('Video Settings', 'Currency Exchange Settings', 'Mpesa Settings', 'PayPal Settings')")
+    db.con.executescript("alter table `tabEmail Account` drop column api_key; alter table `tabWebhook` drop column request_url;")
+    rows = run(snippet, ["benchbar-neutralise", "copy.localhost", "1"], db, "1")
+    assert rows["automation_flows"][0] == 0 and rows["webhook_urls"][0] == 0 and rows["integration_keys"][0] == 0, rows
+    assert rows["webhooks"][0] == 2 and rows["payment_gateways"][0] == 1, rows  # only Razorpay is left to blank
     print("neutralise_stub: ok")
 
 

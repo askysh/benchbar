@@ -224,7 +224,8 @@ OAuth and webhook secrets and the passwords of users), webhooks,
 notifications, email accounts, mail that was waiting to be sent, social
 logins, OAuth and Connected App tokens, Integration Requests, Google,
 Dropbox, S3, LDAP, push and payment settings, Slack and SMS gateway URLs,
-API keys, and the scheduled jobs and server scripts that call out. The
+API keys, webhook URLs and headers, Automation Flows, and the scheduled jobs and server scripts that call out.
+Without `ADMIN_PASSWORD`, production's Administrator password works on the copy. The
 output says how many of each (`neutralised erpcopy: 2 webhooks switched off,
 41 stored secrets cleared`) and the `done` line of `--json` carries the
 counts. The [pull reference](../reference/cli/pull.md#what-the-copy-loses)

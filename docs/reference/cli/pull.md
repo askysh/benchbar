@@ -49,16 +49,19 @@ bench's own Python, never through `mariadb`:
 | What | Change |
 |---|---|
 | Every stored password (the `__Auth` table: all `Password` fields, such as SMTP, IMAP, LDAP, S3, payment, OAuth client and webhook secrets, and the passwords of users) | deleted, except the Administrator login |
-| Email Account | outgoing and incoming off |
+| Email Account | outgoing and incoming off, API key blanked |
 | Email Queue | mail that was not sent yet is dropped |
-| Auto Email Report, Notification, Webhook, Social Login Key, Auto Repeat | switched off |
+| Auto Email Report, Notification, Webhook, Social Login Key, Auto Repeat, and (Frappe v16) Automation Flow | switched off |
+| Webhook (request URL) and Webhook Header (value) | blanked, not only switched off: a URL or header often holds the key |
 | Webhook Request Log, Integration Request | emptied |
 | Slack Webhook URL, SMS gateway URL and parameters, OAuth Client secret, API keys and open password reset keys of users | blanked |
 | OAuth Bearer Token, OAuth Authorization Code, Token Cache (the Connected App tokens) | emptied |
 | Google Calendar, Contacts, Drive, Settings and indexing | off, plain keys blanked |
+| Website Settings: Google Analytics id | blanked |
 | Dropbox and S3 Backup Settings, LDAP Settings, Push Notification Settings, Plaid Settings | off, plain keys blanked |
-| Razorpay, Stripe, PayPal, Braintree, M-Pesa and Paytm settings | plain key ids blanked |
-| Scheduled Job Type | jobs that send mail, read a mailbox, upload backups or call an outside service are stopped |
+| Razorpay, Stripe, PayPal (user name and signature, both plain `Data` fields), Braintree, M-Pesa (consumer key and security credential), Paytm and GoCardless (access token and webhook secret) settings, and the Plaid access token of a Bank | plain keys blanked |
+| ERPNext Video Settings (API key) and Currency Exchange Settings (access key, endpoint, url) | blanked |
+| Scheduled Job Type | jobs that send mail, read a mailbox, upload backups or call an outside service are stopped, among them the payments job `razorpay_settings.capture_payment` and the v16 job `frappe.flow.knowledge.ingest.sync_due_sources` |
 | Server Script | scripts that make HTTP requests are disabled |
 
 The line `neutralised SITE: ...` in the output, and `neutralised` in the
@@ -69,8 +72,12 @@ of an app benchbar does not know (a WhatsApp or SMS app, for example)
 keep their plain fields: switch those off yourself.
 
 Because every other user's password is cleared, log in as
-Administrator with the password you set (`ADMIN_PASSWORD` or the
-prompt) and set the others from the User form. To undo a job stop, open
+Administrator and set the others from the User form. Which password
+Administrator has depends on how you ran it: with `ADMIN_PASSWORD` (or
+the answer at the prompt) it is the one you set. Without it (`--yes`, no
+terminal, or you declined the prompt), production's Administrator
+password works on the copy: the restore brought it along and neutralise
+keeps that one login. To undo a job stop, open
 Scheduled Job Type and clear Stopped. To get production's integrations
 and passwords back, pull again with `--keep-secrets` (and `--replace`):
 the cleared rows are not recoverable from the copy.
@@ -80,6 +87,11 @@ a step of the plan. A target the restore cannot go into stops the check,
 `--dry-run` included, instead of failing at its first step: a folder in
 `sites/` without a `site_config.json` (move it aside), a `new-site` that
 did not finish, MariaDB not running, or no MariaDB root password.
+
+When a step fails after the restore and before the copy is neutralised,
+the run says so: the copy still holds production's secrets and
+integrations. Do not start its scheduler or workers; run the same pull
+with `--replace` once the cause is fixed.
 
 When the bench lacks an app production has, pull stops and prints the
 `bench get-app` command. Encrypted backups are decrypted locally with

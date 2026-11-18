@@ -1230,6 +1230,13 @@ fl_cmd_pull() {
       if [[ -d "${FL_BENCH_DIR}/sites/${FL_PULL_AS}" && "$i" -gt 0 ]]; then
         fl_info "site ${FL_PULL_AS} may be half set up; after fixing the cause run the same pull with --replace"
       fi
+      # between the restore and the neutralise step the copy holds production's data as it was: say so
+      case "${FL_PULL_STEPS[$i]%%|*}" in
+        restore|encryption_key|dev_safety)
+          if [[ "$FL_PULL_KEEP_SECRETS" != "1" ]]; then
+            fl_warn "${FL_PULL_AS} was not neutralised: the copy still holds production's secrets and integrations (stored passwords, webhooks, API keys). Do not start the scheduler or workers on it; run the same pull with --replace once the cause is fixed."
+          fi ;;
+      esac
       if [[ "${FL_PULL_QUIESCED:-0}" == "1" ]]; then
         fl_warn "the scheduler of every site on this bench stays paused (pause_scheduler in common_site_config.json)"
         fl_fix "once ${FL_PULL_AS} is fixed or removed: cd ${FL_BENCH_DIR} && bench config remove-common-config pause_scheduler"

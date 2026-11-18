@@ -243,6 +243,13 @@ assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "neutralis"
 assert_calls_not_contain '^bench --site neutfail migrate$'
 assert_contains "$OUT" "--replace"
 
+# ---- a step that fails between the restore and neutralise says the copy still holds production's secrets
+MOCK_BENCH_SITE_SET_CONFIG_EXIT=1 run_fm pull "$SRC" --as midfail --skip-app hrms --yes --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "midfail was not neutralised: the copy still holds production's secrets and integrations"
+assert_calls_not_contain 'benchbar-neutralise midfail'
+assert_calls_not_contain '^bench --site midfail migrate$'
+
 # ---- no key on production: a warning, and the probe says so
 write_remote_config "backup_encryption_key=$BACKUP_KEY"
 run_fm pull "$SRC" --as nokey --skip-app hrms --keep-secrets --yes --bench-dir "$BENCH"
