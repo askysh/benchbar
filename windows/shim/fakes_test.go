@@ -145,6 +145,7 @@ type fakeEvent struct {
 	Signal  string   `json:"signal"`
 	Wslenv  string   `json:"wslenv"`
 	EnvSet  []string `json:"env_set"`
+	ShimCwd string   `json:"shim_cwd"`
 }
 
 // events reads what the fake wsl.exe recorded; none if it never ran.
