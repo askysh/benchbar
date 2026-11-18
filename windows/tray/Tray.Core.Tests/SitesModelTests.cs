@@ -158,7 +158,7 @@ public class SitesModelTests
     {
         var first = SiteJson.ParseList(Doc("sites-backups.json")).Backups[0];
         Assert.Equal("09/29/2026 04:45, 5.0 MB, with files", first.Summary(TimeZoneInfo.Utc, System.Globalization.CultureInfo.InvariantCulture));
-        Assert.Equal("Sep 29 2026 10:15, 5.0 MB, with files", first.Summary(TimeZoneInfo.CreateCustomTimeZone("ist", TimeSpan.FromHours(5.5), "ist", "ist"), System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal("09/29/2026 10:15, 5.0 MB, with files", first.Summary(TimeZoneInfo.CreateCustomTimeZone("ist", TimeSpan.FromHours(5.5), "ist", "ist"), System.Globalization.CultureInfo.InvariantCulture));
         Assert.Equal("1.0 KB", ByteSize.Format(1024, System.Globalization.CultureInfo.InvariantCulture));
         Assert.Equal("12 B", ByteSize.Format(12, System.Globalization.CultureInfo.InvariantCulture));
         Assert.Equal("3.0 GB", ByteSize.Format(3L * 1024 * 1024 * 1024, System.Globalization.CultureInfo.InvariantCulture));
