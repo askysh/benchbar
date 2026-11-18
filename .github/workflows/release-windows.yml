@@ -286,9 +286,12 @@ jobs:
       # the tray-arm64 job below, on an arm64 runner).
       - name: Test the tray app
         if: steps.tray.outputs.present == 'true' && matrix.arch == 'amd64'
+        # from windows/tray: the SDK reads that folder's global.json (the
+        # Microsoft.Testing.Platform runner) only from the working folder upward
+        working-directory: windows/tray
         run: |
           $PSNativeCommandUseErrorActionPreference = $true
-          dotnet test windows/tray/BenchBarTray.sln -c Release
+          dotnet test BenchBarTray.sln -c Release
 
       # ------------------------------------------------------------- signing
       # Only the project's own binaries: SignPath Foundation signs a project's
