@@ -111,7 +111,7 @@ public sealed record SiteBackup(string Stamp, DateTimeOffset? Time, string? Path
         : Partial ? "This is a partial backup; site restore takes a full set."
         : "This backup has no database file.";
 
-    /// <summary>"Sep 29 2026 10:15, 5.0 MB, with files" (the date, the time and the decimal sign follow <paramref name="culture"/>, by default the current one).</summary>
+    /// <summary>"09/29/2026 10:15, 5.0 MB, with files" (the date, the time and the decimal sign follow <paramref name="culture"/>, by default the current one).</summary>
     public string Summary(TimeZoneInfo? zone = null, System.Globalization.CultureInfo? culture = null)
     {
         var parts = new List<string>();
