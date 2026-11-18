@@ -471,3 +471,59 @@ func TestReportRedactsNamesWithNonASCIILetters(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
+
+func TestRedactionHidesJSONStyleSecrets(t *testing.T) {
+	r := &redactor{}
+	cases := []struct{ in, want string }{
+		{`"db_password": "hunter2"`, `"db_password": "<redacted>"`},
+		{`"admin_password":"hunter2"`, `"admin_password":"<redacted>"`},
+		{`"encryption_key": "abc"`, `"encryption_key": "<redacted>"`},
+		{`'private_key' : 'abc'`, `'private_key' : '<redacted>'`},
+		{`{"api_key": "k1", "host": "x"}`, `{"api_key": "<redacted>", "host": "x"}`},
+		{`"token": 12345`, `"token": <redacted>`},
+		{`Authorization: Bearer abc123`, `Authorization: <redacted>`},
+		{`"authorization": "Basic dXNlcjpwdw==", "x": 1`, `"authorization": "<redacted>", "x": 1`},
+		{`curl -H "Authorization: Bearer abc123def456"`, `curl -H "Authorization: <redacted>"`},
+		{`got Bearer abcdefghijklmnop1234 back`, `got Bearer <redacted> back`},
+		{"Cookie: sid=abc; other=def", "Cookie: <redacted>"},
+		{"Set-Cookie: a=b; Path=/", "Set-Cookie: <redacted>"},
+		{`"cookie": "a=b; c=d"`, `"cookie": "<redacted>"`},
+		{`sid=abc123`, `sid=<redacted>`},
+		{`"session_id": "s-1"`, `"session_id": "<redacted>"`},
+		{`password=hunter2`, `password=<redacted>`},
+		{`MARIADB_ROOT_PASSWORD=hunter2`, `MARIADB_ROOT_PASSWORD=<redacted>`},
+		// words that only look similar stay
+		{`inside: the bench`, `inside: the bench`},
+		{`sidebar: open`, `sidebar: open`},
+		{`bearer of news`, `bearer of news`},
+	}
+	for _, c := range cases {
+		if got := r.text(c.in); got != c.want {
+			t.Errorf("%s\n got  %s\n want %s", c.in, got, c.want)
+		}
+	}
+	// a JSON file stays JSON
+	doc := `{"db_password": "hunter2", "db_host": "localhost", "admin_password":"hunter2"}`
+	var v map[string]string
+	if err := json.Unmarshal([]byte(r.text(doc)), &v); err != nil {
+		t.Fatalf("redacted JSON does not parse: %v", err)
+	}
+	if v["db_host"] != "localhost" || v["db_password"] != "<redacted>" {
+		t.Errorf("%v", v)
+	}
+}
+
+func TestReportWindowsRedactsAnIncludedJSONFile(t *testing.T) {
+	e := reportEnv(t, true, false, nil)
+	inc := filepath.Join(e.root, "site_config.json")
+	body := `{"db_name": "_abc", "db_password": "hunter2", "encryption_key": "KEY123"}` + "\n"
+	if err := os.WriteFile(inc, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	e.writeConfig(`{"distro":"Ubuntu-24.04"}`)
+	r := e.reportJSON("--include", inc)
+	got := string(zipFiles(t, r.Zip)["included/site_config.json"])
+	if strings.Contains(got, "hunter2") || strings.Contains(got, "KEY123") || !strings.Contains(got, "_abc") {
+		t.Errorf("included file:\n%s", got)
+	}
+}

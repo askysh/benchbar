@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented here.
 
+## Unreleased
+
+### benchbar.exe
+
+- `benchbar.exe` starts the command in the folder you run it in (a drive folder, a network folder or a `\\wsl.localhost` folder of your distro), so `adopt .`, `--bench-dir .\bench`, `profile export` and `site restore --from file` work with relative paths. `.\x` and `..\x` become `./x` and `../x`.
+- A drive path such as `D:\bench` uses the mount the distro really has, not a fixed `/mnt/d`.
+- `benchbar.exe doctor --json`, `--jsonl` and `--for-agent` print only the JSON document, with the Windows checks inside it as `windows_checks`. `--fix-hints` lists the Windows fixes too.
+- Bug reports hide secrets in JSON files (`"db_password": "..."`, `encryption_key`, `Authorization`, cookies) as well as `key=value` ones.
+- `schtasks.exe` and streamed `wsl.exe` output are read in the right code page, so a user name with accents no longer breaks the keepalive checks or garbles the setup log.
+- `BENCHBAR_LABS`, `BENCH_INIT_TIMEOUT_SECONDS`, `BENCHBAR_PROFILE_PATH` and the `BENCHBAR_MCP_*` settings now reach the CLI in WSL.
+
 ## 0.8.3 - 2026-11-17
 
 0.8.3 is a fix pass for Windows from a full review and a live test on a

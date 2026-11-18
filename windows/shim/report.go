@@ -72,7 +72,17 @@ func splitIncludes(args []string) (rest, includes []string, err error) {
 // --- redaction --------------------------------------------------------------
 
 var (
-	secretLineRE = regexp.MustCompile(`(?i)\b([A-Za-z0-9_.-]*(?:password|passwd|secret|token|api[_-]?key)[A-Za-z0-9_.-]*)(\s*[=:]\s*)("[^"\r\n]*"|'[^'\r\n]*'|[^\s,;]+)`)
+	// secretLineRE is a name that holds a secret, then = or :, then its value.
+	// The name may end in a closing quote before the separator, so JSON
+	// ("db_password": "x") and key=value both match. sid is a name of its
+	// own, not part of another word.
+	secretLineRE = regexp.MustCompile(`(?i)(\b(?:[A-Za-z0-9_.-]*(?:password|passwd|secret|token|api[_-]?key|encryption[_-]?key|private[_-]?key|session[_-]?id|cookie)[A-Za-z0-9_.-]*|sid))(["']?\s*[=:]\s*)("[^"\r\n]*"|'[^'\r\n]*'|[^\s,;]+)`)
+	// an Authorization header or field: the scheme (Bearer, Basic) and the
+	// credential after it; a bare "Bearer xxxx" is covered by bearerRE
+	authorizationRE = regexp.MustCompile(`(?i)(\bauthorization["']?\s*[=:]\s*["']?)[^\r\n"']+`)
+	bearerRE        = regexp.MustCompile(`(?i)\b(bearer\s+)[A-Za-z0-9._~+/=-]{16,}`)
+	// a Cookie or Set-Cookie header holds the whole line as secrets
+	cookieLineRE = regexp.MustCompile(`(?im)^(\s*(?:set-)?cookie\s*:\s*).+$`)
 	winUsersRE   = regexp.MustCompile(`(?i)([A-Za-z]:[\\/]+Users[\\/]+)[^\\/\s"'<>|:*?]+`)
 	wslHomeRE    = regexp.MustCompile(`(?i)(\\\\wsl(?:\.localhost|\$)\\[^\\\s"']+\\home\\)[^\\\s"'<>]+`)
 	mntUsersRE   = regexp.MustCompile(`(?i)(/mnt/[a-z]/Users/)[^/\s"'<>]+`)
@@ -114,9 +124,26 @@ func newRedactor(sys *System, linuxUser string) *redactor {
 	return r
 }
 
+// redactSecretValue replaces the value of one secretLineRE match and keeps
+// the quote around it, so a JSON file stays valid JSON.
+func redactSecretValue(m string) string {
+	parts := secretLineRE.FindStringSubmatch(m)
+	if parts == nil {
+		return m
+	}
+	repl := "<redacted>"
+	if v := parts[3]; len(v) >= 2 && (v[0] == '"' || v[0] == '\'') && v[len(v)-1] == v[0] {
+		repl = string(v[0]) + repl + string(v[0])
+	}
+	return parts[1] + parts[2] + repl
+}
+
 // text hides the names and secrets in one text part.
 func (r *redactor) text(s string) string {
-	s = secretLineRE.ReplaceAllString(s, "${1}${2}<redacted>")
+	s = authorizationRE.ReplaceAllString(s, "${1}<redacted>")
+	s = cookieLineRE.ReplaceAllString(s, "${1}<redacted>")
+	s = bearerRE.ReplaceAllString(s, "${1}<redacted>")
+	s = secretLineRE.ReplaceAllStringFunc(s, redactSecretValue)
 	if r.profile != nil {
 		s = r.profile.ReplaceAllString(s, `C:\Users\<user>`)
 	}

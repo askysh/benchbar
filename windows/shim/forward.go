@@ -10,9 +10,19 @@ import (
 	"strings"
 )
 
+// cwdEnv carries the Windows current folder of benchbar.exe into the distro.
+// The wrapper turns it into the Linux folder with wslpath, which knows the
+// mount of every drive and the \\wsl.localhost shares of this distro, and
+// stays in the home folder when that folder does not exist there. It is
+// removed again before the CLI starts.
+const cwdEnv = "BENCHBAR_SHIM_CWD"
+
 // wrapper puts ~/.local/bin on PATH (the installer puts the CLI there; a
-// non-login shell may not) and runs the CLI named by $0 with the rest.
-const wrapper = `PATH="$HOME/.local/bin:$PATH"; command -v "$0" >/dev/null 2>&1 || exit 127; exec "$0" "$@"`
+// non-login shell may not), moves to the folder benchbar.exe was started in
+// and runs the CLI named by $0 with the rest.
+const wrapper = `PATH="$HOME/.local/bin:$PATH"; command -v "$0" >/dev/null 2>&1 || exit 127; ` +
+	`if [ -n "$` + cwdEnv + `" ]; then d=$(wslpath -a -u -- "$` + cwdEnv + `" 2>/dev/null) && [ -d "$d" ] && cd -- "$d"; unset ` + cwdEnv + `; fi; ` +
+	`exec "$0" "$@"`
 
 func cmdForward(sys *System, args []string) int {
 	t, err := resolveTarget(sys, "")
@@ -65,12 +75,29 @@ func wslCommandContext(ctx context.Context, sys *System, args ...string) (*exec.
 // forwardedEnv are the only variables the forwarder hands to the CLI in the
 // distro. The BenchBar tray sets them in the child's environment for one
 // run, so a password never sits on a command line.
+//
+// This is the one list. Every variable the CLI documents (its env records in
+// lib/frappe-local/commands.sh) is here, or in noForwardEnv with the reason;
+// a test compares the two. A variable that holds a path (BENCHBAR_PROFILE_PATH)
+// is passed as it is: it must be a Linux path of the distro.
 var forwardedEnv = []string{
 	"ADMIN_PASSWORD",
 	"MARIADB_ROOT_PASSWORD",
 	"BENCHBAR_SUDO",
 	"BENCHBAR_SUDO_PASSWORD",
 	"BENCHBAR_NONINTERACTIVE",
+	"BENCHBAR_LABS",
+	"BENCH_INIT_TIMEOUT_SECONDS",
+	"BENCHBAR_PROFILE_PATH",
+	"BENCHBAR_MCP_TIMEOUT",
+	"BENCHBAR_MCP_MAX_BYTES",
+	"BENCHBAR_MCP_KILL_GRACE",
+	"BENCHBAR_MCP_EOF_GRACE",
+}
+
+// noForwardEnv are CLI variables that are not passed on, with why.
+var noForwardEnv = map[string]string{
+	"BENCHBAR_MCP_CLI": "names the CLI to start: a Windows path means nothing in the distro, and the shim starts the right one",
 }
 
 // proxyEnv are the proxy settings of the Windows side. Linux tools (curl,
@@ -103,6 +130,12 @@ func withEnvNames(sys *System, env []string, nameList, exactList []string) []str
 			names = append(names, n)
 		}
 	}
+	return extendWSLENV(env, names, exactList)
+}
+
+// extendWSLENV adds names to the WSLENV of env, once each. exactList names
+// are compared with their case, the others without.
+func extendWSLENV(env, names, exactList []string) []string {
 	if len(names) == 0 {
 		return env
 	}
@@ -150,13 +183,17 @@ func isExactName(n string, list []string) bool {
 
 // forward runs the CLI in the distro with the shim's own standard handles.
 func forward(sys *System, t target, args []string) int {
-	cmd, err := wslCommand(sys, forwardArgs(t.distro, t.cli, linuxPathArgs(args, t.distro))...)
+	roots := probeDriveRoots(sys, t.distro, driveLettersIn(args))
+	cmd, err := wslCommand(sys, forwardArgs(t.distro, t.cli, linuxPathArgsWith(args, t.distro, roots))...)
 	if err != nil {
 		errorf(sys, "wsl.exe was not found: %v", err)
 		return 1
 	}
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = sys.Stdin, sys.Stdout, sys.Stderr
 	cmd.Env = withForwardedEnv(sys, cmd.Env)
+	if cwd := shimCwd(sys, t.distro); cwd != "" {
+		cmd.Env = extendWSLENV(append(cmd.Env, cwdEnv+"="+cwd), []string{cwdEnv}, nil)
+	}
 	code, raw, err := runInterruptible(cmd)
 	if err != nil {
 		errorf(sys, "cannot run wsl.exe: %v", err)
@@ -181,6 +218,24 @@ func forward(sys *System, t target, args []string) int {
 		return 1
 	}
 	return code
+}
+
+// shimCwd is the folder benchbar.exe runs in, for the CLI to start in: a
+// drive folder, a network folder or a \\wsl.localhost folder of this distro.
+// It is empty when there is none or when it is a folder of another distro,
+// and the CLI then starts in the home folder, as it always did.
+func shimCwd(sys *System, distro string) string {
+	if sys.Getwd == nil {
+		return ""
+	}
+	wd, err := sys.Getwd()
+	if err != nil || wd == "" {
+		return ""
+	}
+	if m := wslUNCRE.FindStringSubmatch(wd); m != nil && (distro == "" || !strings.EqualFold(m[1], distro)) {
+		return ""
+	}
+	return wd
 }
 
 // cliExists asks the distro again, so that a 127 from the CLI itself (a

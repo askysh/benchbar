@@ -1,6 +1,11 @@
 package main
 
-import "fmt"
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"strings"
+)
 
 func distroCheck(t target) Check {
 	c := Check{ID: "distro", Label: "WSL distro"}
@@ -22,13 +27,9 @@ func distroCheck(t target) Check {
 	return c
 }
 
-// cmdDoctor prints the Windows checks, then the CLI's own doctor.
-func cmdDoctor(sys *System, rest []string) int {
-	t, err := resolveTarget(sys, "")
-	if err != nil {
-		errorf(sys, "%v", err)
-		return 1
-	}
+// windowsChecks are the checks of the Windows side: PATH, the distro,
+// .wslconfig, the keepalive, the tray and the CLI version.
+func windowsChecks(sys *System, t target) []Check {
 	checks := []Check{pathCheck(sys), distroCheck(t)}
 	if f, rep, err := readWslconfig(sys); err != nil {
 		checks = append(checks, Check{ID: "wslconfig", Label: ".wslconfig", Status: "warn", Message: err.Error(), Fix: `type "%USERPROFILE%\.wslconfig"`})
@@ -46,6 +47,17 @@ func cmdDoctor(sys *System, rest []string) int {
 	checks = append(checks, ka.Checks...)
 	checks = append(checks, trayChecks(sys)...)
 	checks = append(checks, installRecordChecks(sys, ka)...)
+	return checks
+}
+
+// cmdDoctor prints the Windows checks, then the CLI's own doctor.
+func cmdDoctor(sys *System, rest []string) int {
+	t, err := resolveTarget(sys, "")
+	if err != nil {
+		errorf(sys, "%v", err)
+		return 1
+	}
+	checks := windowsChecks(sys, t)
 
 	fmt.Fprint(sys.Stdout, "\nWINDOWS\n")
 	printChecks(sys.Stdout, checks)
@@ -60,6 +72,109 @@ func cmdDoctor(sys *System, rest []string) int {
 		return 1
 	}
 	return code
+}
+
+// machineFlags ask the CLI for output that a program reads: stdout must then
+// hold that output and nothing else.
+var machineFlags = []string{"--json", "--jsonl", "--for-agent", "--fix-hints"}
+
+// windowsCheckJSON is one Windows check in the document, with the field names
+// of the CLI's own checks (level and fix_command are the contract, status
+// and fix the older names).
+type windowsCheckJSON struct {
+	ID         string `json:"id"`
+	Label      string `json:"label"`
+	Level      string `json:"level"`
+	Message    string `json:"message"`
+	FixCommand string `json:"fix_command"`
+	Status     string `json:"status"`
+	Fix        string `json:"fix"`
+}
+
+func windowsChecksJSON(checks []Check) []windowsCheckJSON {
+	out := make([]windowsCheckJSON, 0, len(checks))
+	for _, c := range checks {
+		out = append(out, windowsCheckJSON{c.ID, c.Label, c.Status, c.Message, c.Fix, c.Status, c.Fix})
+	}
+	return out
+}
+
+// cmdDoctorMachine is doctor with --json, --jsonl, --for-agent or
+// --fix-hints. Stdout holds the CLI's output and nothing else, with the
+// Windows checks inside it: a "windows_checks" array at the end of the
+// document, or the fix commands of the Windows checks after the CLI's own.
+// --ack, --unack and --prerequisites have documents of their own and pass
+// through untouched. The exit code is the CLI's, and 1 when a Windows check
+// fails and the CLI's doctor passed.
+func cmdDoctorMachine(sys *System, args []string) int {
+	if hasAny(args, "--ack", "--unack", "--prerequisites") {
+		return cmdForward(sys, append([]string{"doctor"}, args...))
+	}
+	t, err := resolveTarget(sys, "")
+	if err != nil {
+		errorf(sys, "%v", err)
+		return 1
+	}
+	if t.prob != nil {
+		t.prob.print(sys)
+		return 1
+	}
+	checks := windowsChecks(sys, t)
+	var out bytes.Buffer
+	cs := *sys
+	cs.Stdout = &out
+	code := forward(&cs, t, append([]string{"doctor"}, args...))
+	if hasAny(args, "--fix-hints") {
+		sys.Stdout.Write(withWindowsFixHints(out.Bytes(), checks))
+	} else {
+		sys.Stdout.Write(withWindowsChecks(out.Bytes(), checks))
+	}
+	if code == 0 && hasFail(checks) {
+		return 1
+	}
+	return code
+}
+
+// withWindowsChecks adds the "windows_checks" array to the CLI's document.
+// Anything that is not one JSON object (an error, an empty output) is
+// returned as it is.
+func withWindowsChecks(doc []byte, checks []Check) []byte {
+	trimmed := bytes.TrimSpace(doc)
+	if len(trimmed) < 2 || trimmed[0] != '{' || trimmed[len(trimmed)-1] != '}' || !json.Valid(trimmed) {
+		return doc
+	}
+	arr, _ := json.Marshal(windowsChecksJSON(checks))
+	body := bytes.TrimSpace(trimmed[1 : len(trimmed)-1])
+	sep := ","
+	if len(body) == 0 {
+		sep = ""
+	}
+	out := append([]byte{}, trimmed[:len(trimmed)-1]...)
+	out = append(out, sep+`"windows_checks":`...)
+	out = append(out, arr...)
+	return append(out, '}', '\n')
+}
+
+// withWindowsFixHints appends the fix command of every failing and warning
+// Windows check, failures first, each once, to the CLI's lines.
+func withWindowsFixHints(cli []byte, checks []Check) []byte {
+	out := append([]byte{}, cli...)
+	if len(out) > 0 && out[len(out)-1] != '\n' {
+		out = append(out, '\n')
+	}
+	seen := map[string]bool{}
+	for _, l := range strings.Split(string(cli), "\n") {
+		seen[strings.TrimSpace(l)] = true
+	}
+	for _, want := range []string{"fail", "warn"} {
+		for _, c := range checks {
+			if c.Status == want && c.Fix != "" && !seen[c.Fix] {
+				seen[c.Fix] = true
+				out = append(out, c.Fix+"\n"...)
+			}
+		}
+	}
+	return out
 }
 
 // cliVersionCheck compares the CLI in the distro with this benchbar.exe. A

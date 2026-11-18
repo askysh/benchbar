@@ -2,7 +2,9 @@ package main
 
 import (
 	"bytes"
+	"strings"
 	"unicode/utf16"
+	"unicode/utf8"
 )
 
 // textEnc is how a text file was stored, so a write can use the same.
@@ -63,4 +65,24 @@ func (e textEnc) encode(utf8Text []byte) []byte {
 		}
 	}
 	return out
+}
+
+// oemDecode turns bytes in the console (OEM) code page of this PC into
+// UTF-8. It is set per platform: Windows asks the system for the code page,
+// elsewhere every byte is its own character (Latin 1), so a test can run.
+// Tests replace it.
+var oemDecode = osOEMDecode
+
+// decodeConsole is the text of a Windows console program that writes to a
+// pipe (schtasks.exe). It is UTF-16 (with a BOM, or with NULs), UTF-8 (all
+// ASCII, or what a UTF-8 console wrote) or, in the usual case on a PC with a
+// non English Windows, bytes in the OEM code page: a profile path such as
+// C:\Users\José is not valid UTF-8 then and would not match the path of the
+// file on disk.
+func decodeConsole(b []byte) string {
+	text, _ := decodeText(b)
+	if utf8.Valid(text) {
+		return strings.ReplaceAll(string(text), "\x00", "")
+	}
+	return strings.ReplaceAll(oemDecode(text), "\x00", "")
 }
