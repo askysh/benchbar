@@ -11,6 +11,14 @@ All notable changes to this project are documented here.
 - The log no longer holds any part of a link the app ignored or could not use: only `benchbar://action` or a short hash, plus a fixed sentence that names the reason and never a host, path, query, bench or site from the link. The alert for a link that asks to start, stop or restart a bench has Cancel as its default button.
 - Importing a runner reads `manifest.json` only as a plain file of at most 64 KB, never through a symbolic link, and refuses a zip that holds a link or another file that is not a plain file. The zip is unpacked off the main thread, so the window does not freeze.
 
+### Docs
+
+- New [Features](docs/features.md) page: every feature by surface (command line tool, Mac app, Windows, MCP) with its platform and the version it came in (the first CHANGELOG heading that has it), Linux marked from 0.8.0, and the Labs marked. The home page and the README link to it.
+- The docs sidebar has seven groups: Start, Guides, Concepts, Reference, App, Windows and For contributors. The Labs reference is in it now. Doctor checks moved to Reference, Runners to App and Troubleshooting to Guides. No URL changed.
+- Two Concepts pages: [Port blocks](docs/concepts/port-blocks.md) and [How sharing keeps your bench safe](docs/concepts/sharing-safety.md), moved out of the benches guide and the share reference.
+- Testing, Releasing and Decisions are under For contributors. Decisions and Releasing no longer show in the site search.
+- The Mac app page describes the Sharing tab, On your network and the Labs list, and the energy cost of both.
+
 ### Windows tray
 
 - A call to `benchbar.exe` that has finished no longer shows "did not finish" when a helper process it started keeps its output open: the tray waits a few seconds for the output and goes on.
