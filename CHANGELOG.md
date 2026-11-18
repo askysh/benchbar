@@ -4,6 +4,14 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+### Docs
+
+- New [Features](docs/features.md) page: every feature by surface (command line tool, Mac app, Windows, MCP) with its platform and the version it came in, and the Labs marked. The home page and the README link to it.
+- The docs sidebar has seven groups: Start, Guides, Concepts, Reference, App, Windows and For contributors. The Labs reference is in it now. Doctor checks moved to Reference, Runners to App and Troubleshooting to Guides. No URL changed.
+- Two Concepts pages: [Port blocks](docs/concepts/port-blocks.md) and [How sharing keeps your bench safe](docs/concepts/sharing-safety.md), moved out of the benches guide and the share reference.
+- Testing, Releasing and Decisions are under For contributors. Decisions and Releasing no longer show in the site search.
+- The Mac app page describes the Sharing tab, On your network and the Labs list, and the energy cost of both.
+
 ### Windows tray
 
 - A call to `benchbar.exe` that has finished no longer shows "did not finish" when a helper process it started keeps its output open: the tray waits a few seconds for the output and goes on.
