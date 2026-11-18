@@ -150,16 +150,43 @@ public class WindowsFixesTests
     public async Task AGrandchildThatHoldsThePipeDoesNotHangTheCall()
     {
         if (!OperatingSystem.IsWindows()) return;
-        // cmd ends at once, and the ping it started in the background keeps the output pipe (it writes to it) for about 14 seconds
+        // cmd ends at once, and the ping it started in the background keeps the output pipe (it writes to it) for about 29 seconds;
+        // the 5 second grace returns long before that, and the wide margin keeps a slow runner from failing the test
         var lines = new List<string>();
         var watch = Stopwatch.StartNew();
-        var result = await new SystemStreamRunner().RunAsync("cmd.exe", ["/c", "echo first & start /b ping -n 15 127.0.0.1 & exit /b 0"], null,
+        var result = await new SystemStreamRunner().RunAsync("cmd.exe", ["/c", "echo first & start /b ping -n 30 127.0.0.1 & exit /b 0"], null,
             line => { lock (lines) lines.Add(line); }, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken);
         watch.Stop();
 
         Assert.Equal(0, result.ExitCode);
         Assert.Contains(lines, l => l.Contains("first"));
-        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(11), $"took {watch.Elapsed}");
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(20), $"took {watch.Elapsed}");
+    }
+
+    [Fact]
+    public async Task AGrandchildThatHoldsThePipeDoesNotTurnAFinishedCallIntoATimeout()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        // the same shape as the stream runner's test, for the runner every poll, doctor and up goes through:
+        // cmd ends at once, the background ping keeps stdout open for about 14 seconds
+        var watch = Stopwatch.StartNew();
+        var result = await new SystemProcessRunner(pipeGrace: S(1)).RunAsync("cmd.exe",
+            ["/c", "echo first & start /b ping -n 30 127.0.0.1 & exit /b 0"], TestContext.Current.CancellationToken, S(60));
+        watch.Stop();
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Contains("first", result.Output);
+        Assert.True(watch.Elapsed < S(10), $"took {watch.Elapsed}");
+    }
+
+    [Fact]
+    public async Task AKillThatFailsDoesNotHideTheTimeout()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        // the process is gone before the kill: Kill throws InvalidOperationException (or, for a tree, an AggregateException): neither may escape
+        using var finished = Process.Start(new ProcessStartInfo("cmd.exe") { ArgumentList = { "/c", "exit", "0" }, CreateNoWindow = true, UseShellExecute = false })!;
+        await finished.WaitForExitAsync(TestContext.Current.CancellationToken);
+        ProcessKill.Tree(finished);
     }
 
     // --- 2: a PC with WSL and no usable distro ---
@@ -236,15 +263,42 @@ public class WindowsFixesTests
     }
 
     [Fact]
-    public async Task ANewerSchemaIsRefusedWithItsOwnMessage()
+    public async Task ANewerSchemaThatLostWhatTheViewNeedsIsRefusedWithItsOwnMessage()
     {
         var (source, runner) = Shim();
-        runner.Answer = (_, _) => new ProcessResult(0, """{"schema_version":2,"benches":[]}""", "");
+        runner.Answer = (_, _) => new ProcessResult(0, """{"schema_version":2,"items":[]}""", "");
         var ex = await Assert.ThrowsAsync<UnsupportedSchemaException>(() => source.ListAsync(TestContext.Current.CancellationToken));
         Assert.Contains("schema 2", ex.Message);
 
-        runner.Answer = (_, _) => new ProcessResult(0, "banner\n" + """{"schema_version":3,"bench":"/b","state":"running"}""", "");
+        runner.Answer = (_, _) => new ProcessResult(0, "banner\n" + """{"schema_version":3,"bench":"/b","phase":"running"}""", "");
         await Assert.ThrowsAsync<UnsupportedSchemaException>(() => source.StatusAsync(new BenchEntry("b", "/b", true, null), TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task ANewerSchemaThatStillHasTheMembersIsReadAndOnlyTheDocumentThatMovedOnIsAffected()
+    {
+        var (source, runner) = Shim();
+        runner.Answer = (_, args) => args[0] == "list"
+            ? new ProcessResult(0, """{"schema_version":2,"benches":[{"path":"/home/x/a","name":"a","brand_new":1}],"future":true}""", "")
+            : new ProcessResult(0, """{"schema_version":1,"bench":"/home/x/a","state":"running"}""", "");
+        var entry = Assert.Single(await source.ListAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("/home/x/a", entry.Path);
+        Assert.Equal(BenchState.Running, (await source.StatusAsync(entry, TestContext.Current.CancellationToken)).State);
+    }
+
+    [Fact]
+    public async Task AReadOnlyCommandOfANewerSchemaIsReadButAPlanIsNeverActedOn()
+    {
+        var runner = new ScriptedStreamRunner();
+        var client = new CliClient(runner, () => "benchbar.exe");
+        runner.On(a => a[0] == "site" && a[1] == "list").Print(["""{"schema_version":2,"sites":[]}"""]);
+        runner.On(a => a[0] == "site" && a[1] == "drop").Print(["""{"schema_version":2,"plan":{}}"""]);
+
+        var read = await client.RunJsonAsync(["site", "list", "--json"], null, TimeSpan.FromSeconds(5), o => o, TestContext.Current.CancellationToken);
+        Assert.NotNull(read.Value);
+        var plan = await client.RunJsonAsync(["site", "drop", "x", "--dry-run", "--json"], null, TimeSpan.FromSeconds(5), o => o, TestContext.Current.CancellationToken);
+        Assert.Null(plan.Value);
+        Assert.Contains("schema 2", plan.Error);
     }
 
     [Fact]
@@ -287,7 +341,7 @@ public class WindowsFixesTests
         Assert.Contains("Segmentation fault", ex.Message);
         Assert.Contains("version", ex.Message);
 
-        runner.Next = new ProcessResult(0, """{"schema_version":9,"steps":[]}""", "");
+        runner.Next = new ProcessResult(0, """{"schema_version":9,"phases":[]}""", "");
         await Assert.ThrowsAsync<UnsupportedSchemaException>(() => service.CheckAsync("Ubuntu-24.04", TestContext.Current.CancellationToken));
     }
 
@@ -314,6 +368,7 @@ public class WindowsFixesTests
     [InlineData("benchbar.exe 0.8.2", "0.0.0-dev", null)]
     [InlineData(null, "0.8.2", null)]
     [InlineData("benchbar.exe 0.8.2-rc1", "0.8.2", null)]
+    [InlineData("benchbar.exe 0.8.3", "0.8.2", null)] // a newer patch of the same minor is compatible
     public void TheShimVersionIsComparedWithTheTrays(string? shim, string tray, string? expected)
     {
         var notice = VersionMismatch.Notice(shim, tray);
@@ -326,6 +381,12 @@ public class WindowsFixesTests
             Assert.Contains("installer", notice);
         }
     }
+
+    [Theory]
+    [InlineData("benchbar.exe 0.9.0", "0.8.2")] // another minor, even a newer one
+    [InlineData("benchbar.exe 1.0.0", "0.8.2")]
+    [InlineData("benchbar.exe 0.8.1", "0.8.2")] // an older patch
+    public void AShimOfAnotherMinorOrOlderStillWarns(string shim, string tray) => Assert.NotNull(VersionMismatch.Notice(shim, tray));
 
     [Fact]
     public void TheMismatchNoticeSaysWhichFileRan() =>

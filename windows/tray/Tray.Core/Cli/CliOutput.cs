@@ -4,9 +4,11 @@ namespace BenchBar.Tray.Core;
 
 /// <summary>
 /// Picks the JSON document out of what <c>benchbar.exe</c> printed, the way <see cref="CliClient"/> does: the whole output when it is one
-/// document, else the document among its lines (a shim or CLI of another version may print a line of text first). A document of a newer
-/// schema is refused. What cannot be read becomes a <see cref="CliProblemException"/> that names a version mismatch as the likely cause
-/// and quotes the first line, never a raw parser message.
+/// document, else the document among its lines (a shim or CLI of another version may print a line of text first). What is read here is
+/// read only (a list, a status, a doctor, a log): a document of a newer schema is read anyway and refused only when it does not have the
+/// shape the reader needs, so one document that moved on does not blank a whole view (docs/json-schema.md: adding fields is not a break).
+/// What cannot be read becomes a <see cref="CliProblemException"/> that names a version mismatch as the likely cause and quotes the first
+/// line, never a raw parser message.
 /// </summary>
 public static class CliOutput
 {
@@ -14,24 +16,15 @@ public static class CliOutput
     public static string Document(string output, string what)
     {
         var trimmed = output.Trim();
-        if (trimmed.Length > 0 && trimmed[0] == '{' && SchemaOf(trimmed, out var whole))
+        if (trimmed.Length > 0 && trimmed[0] == '{' && SchemaOf(trimmed, out _))
         {
-            RefuseNewer(whole);
             return trimmed;
         }
         var lines = output.Split('\n').Select(l => l.TrimEnd('\r')).ToList();
         // a line of text, then a document that spans several lines (an indented one). This comes before the line by line pick, which
         // would take one inner object of an indented document for the whole answer.
-        if (FromFirstBrace(lines) is { } text && SchemaOf(text, out var schema))
-        {
-            RefuseNewer(schema);
-            return text;
-        }
-        if (CliJson.PickDocument(lines) is { } picked)
-        {
-            JsonRead.RefuseNewerSchema(picked);
-            return picked.ToJsonString();
-        }
+        if (FromFirstBrace(lines) is { } text && SchemaOf(text, out _)) return text;
+        if (CliJson.PickDocument(lines) is { } picked) return picked.ToJsonString();
         throw Unreadable(output, what);
     }
 
@@ -57,15 +50,21 @@ public static class CliOutput
     }
 
     /// <summary>Reads the document with <paramref name="parse"/>; a document that does not have the shape the parser needs is the same readable problem.</summary>
-    public static T Parse<T>(string output, string what, Func<string, T> parse)
+    public static T Parse<T>(string output, string what, Func<string, T> parse, string? requires = null)
     {
         var json = Document(output, what);
         try
         {
+            // the readers skip what they do not find, so a document of a newer schema that lost the member this view is made of would
+            // read as an empty one: it must have <paramref name="requires"/> to count as read
+            if (requires is not null && SchemaOf(json, out var newer) && newer is { } n && n > JsonRead.SupportedSchema && !HasMember(json, requires))
+                throw new UnsupportedSchemaException(n);
             return parse(json);
         }
         catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException)
         {
+            // a newer schema that did not read is told as that, so the person updates BenchBar instead of chasing a version mismatch
+            if (SchemaOf(json, out var schema) && schema is { } v && v > JsonRead.SupportedSchema) throw new UnsupportedSchemaException(v);
             throw Unreadable(output, what);
         }
     }
@@ -90,6 +89,12 @@ public static class CliOutput
             $"benchbar.exe {what} gave an answer BenchBar cannot read. {quote} A benchbar.exe of another version than BenchBar is the likely cause: run the installer again so both match.");
     }
 
+    private static bool HasMember(string json, string name)
+    {
+        using var doc = JsonDocument.Parse(json);
+        return doc.RootElement.TryGetProperty(name, out _);
+    }
+
     private static bool SchemaOf(string json, out int? schema)
     {
         schema = null;
@@ -104,10 +109,5 @@ public static class CliOutput
         {
             return false;
         }
-    }
-
-    private static void RefuseNewer(int? schema)
-    {
-        if (schema is { } v && v > JsonRead.SupportedSchema) throw new UnsupportedSchemaException(v);
     }
 }
