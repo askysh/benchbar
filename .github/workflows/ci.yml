@@ -1,45 +1,84 @@
-# CI for BenchBar: the CLI tests and lint on macOS and Linux, the app build
-# and Swift tests on macOS, and an unsigned release bundle you can download
-# from the run to try the app without a GitHub release.
+# CI for BenchBar: the CLI tests and lint on Linux, in a bash 3.2 container and
+# on macOS, the app build and Swift tests on macOS, and an unsigned release
+# bundle you can download from the run to try the app without a GitHub release.
+#
+# Tiers (docs/DECISIONS.md, "CI tiering"). The "changes" job runs
+# scripts/ci-plan.sh, which decides every other job from the changed files:
+#   pull request   the tests tests/affected.sh picks, on Linux (bash 5) and in
+#                  the bash 3.2 container, in as many shards as their weight
+#                  needs. macOS runs only when a path that needs it changed
+#                  (BSD tools, launchd, the Keychain, pf, the installers: the
+#                  macos_paths list in the script) or the label test-macos is
+#                  on, and the app only for macos/ and its scripts. A change
+#                  to the harness, the mocks, run-tests.sh, affected.sh, the
+#                  entry point, templates, config, the phases or this file
+#                  runs everything everywhere.
+#   push to main or next-release, and the nightly
+#                  everything everywhere, the real install and the Windows
+#                  jobs too (a push that changes only docs, site or *.md skips
+#                  them)
+#   workflow_dispatch
+#                  the inputs "tests" and "legs" pick a subset
+# "CI result" needs every other job and is the one required check: it fails
+# when any of them failed or was cancelled, and a skipped job is fine.
 #
 # The app job runs on macos-26: the project uses Xcode 26 build settings
 # (default MainActor isolation, approachable concurrency) that older Xcode
 # versions do not know. The CLI jobs run on macos-latest, where /bin/bash
 # is the same 3.2 the CLI targets.
 #
-# Speed (docs/DECISIONS.md, "CI speed" and "CI speed, round 3"): the CLI
-# tests run in eight shards on Linux, four in a bash 3.2.57 container on
-# Linux and four on macOS, each running its tests in parallel; shellcheck is
-# its own Linux job; the macOS and bash 3.2 shards leave out the tests of
-# the Linux platform layer, which the Linux shards run on the bash Linux
-# users have;
-# the release bundle is built in the app job from the same checkout and
-# DerivedData instead of a second job.
+# Speed (docs/DECISIONS.md, "CI speed" and "CI tiering"): the shards of a leg
+# are balanced from the per test seconds in tests/run-tests.sh
+# (scripts/ci-timings.sh regenerates them from a run) and sized to about 150
+# seconds each; shellcheck is its own Linux job and checks only the changed
+# files on a pull request, in parallel; the macOS and bash 3.2 shards leave
+# out the tests of the Linux platform layer, which the Linux shards run on the
+# bash Linux users have; the release bundle is built in the app job from the
+# same checkout and DerivedData instead of a second job.
 #
 # The Windows shim (windows/shim, Go) is vetted, tested and built for
 # windows/amd64 and windows/arm64 on Linux in the "shim" job; the "wsl" job
 # runs its tests on Windows and against a real WSL distro on a GitHub hosted
 # Windows runner.
 #
-# A change that touches only docs/** or site/** skips the CLI and app jobs
-# (the "changes" job decides; the docs site has its own workflow, docs.yml).
-# The skip happens inside the run, not with a workflow "paths-ignore": a
-# skipped job counts as a pass for a required check, a workflow that never
-# starts leaves it pending (docs/DECISIONS.md, "0.5.5: docs site").
+# A job that has nothing to do is skipped as a whole (a skipped job passes
+# "CI result"), so a pull request that changes only docs starts no macOS job
+# and a Swift only one starts no CLI shard. The docs site has its own
+# workflow, docs.yml.
 name: CI
 
 on:
   pull_request:
   push:
     branches: [main, next-release]
+  schedule:
+    # the nightly: the whole suite on every platform, so runner image drift
+    # shows without a pull request. GitHub runs a schedule from the default
+    # branch (main, the last release), so the jobs check out next-release
+    # themselves (the "ref" of each checkout) to test what is about to ship
+    - cron: "37 2 * * *"
   workflow_dispatch:
+    inputs:
+      tests:
+        description: 'Test names to run, space separated (empty: the whole suite). Example: "test-run-lock test-lock"'
+        required: false
+        default: ''
+      legs:
+        description: 'Legs to run, space separated, from: linux bash32 macos shellcheck app shim real (empty: all; with tests: linux bash32)'
+        required: false
+        default: ''
 
 permissions:
   contents: read
 
+# One run per pull request: a push to the branch cancels the run before it.
+# The group has the pull request number, not the ref, so a pull request run
+# and the push run after its merge never cancel each other. A push to
+# next-release or main is never cancelled: a full run per merge must finish.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  # only a pull request's older run is stale; a push to next-release or main must finish (a full run per merge)
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   changes:
@@ -50,48 +89,68 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      code: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.code == 'true' }}
+      code: ${{ steps.plan.outputs.code }}
+      full: ${{ steps.plan.outputs.full }}
+      tests: ${{ steps.plan.outputs.tests }}
+      linux_skip: ${{ steps.plan.outputs.linux_skip }}
+      linux_n: ${{ steps.plan.outputs.linux_n }}
+      linux_shards: ${{ steps.plan.outputs.linux_shards }}
+      bash32_skip: ${{ steps.plan.outputs.bash32_skip }}
+      bash32_n: ${{ steps.plan.outputs.bash32_n }}
+      bash32_shards: ${{ steps.plan.outputs.bash32_shards }}
+      macos_skip: ${{ steps.plan.outputs.macos_skip }}
+      macos_n: ${{ steps.plan.outputs.macos_n }}
+      macos_shards: ${{ steps.plan.outputs.macos_shards }}
+      shellcheck: ${{ steps.plan.outputs.shellcheck }}
+      shellcheck_files: ${{ steps.plan.outputs.shellcheck_files }}
+      app: ${{ steps.plan.outputs.app }}
+      shim: ${{ steps.plan.outputs.shim }}
+      wsl: ${{ steps.plan.outputs.wsl }}
+      real: ${{ steps.plan.outputs.real }}
     steps:
+      # the whole history: the plan diffs against the pull request's base, and
+      # affected.sh names the functions a change touched
       - uses: actions/checkout@v7
-      # "code" is any file outside docs/ and site/
-      - uses: dorny/paths-filter@v4
-        id: filter
         with:
-          predicate-quantifier: every
-          filters: |
-            code:
-              - '!docs/**'
-              - '!site/**'
+          ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
+          fetch-depth: 0
 
-  # The shards skip step by step, not with a job "if": a matrix job skipped
-  # as a whole reports one check under its unexpanded name, so a required
-  # "shard 1/3" check would wait forever. A skipped shard runs on a cheap
-  # Linux runner for a few seconds and passes.
-  # Four shards plus the app job are the five concurrent macOS jobs of the
-  # free plan. Two shards were tried (CI speed, round 3): the slowest test
-  # files take 8 to 10 minutes on a macOS runner, and two of them in one
-  # shard made the run longer.
+      # Everything from the event goes in through env, never into the script text
+      - name: Plan the run (scripts/ci-plan.sh)
+        id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ' ') }}
+          INPUT_TESTS: ${{ inputs.tests }}
+          INPUT_LEGS: ${{ inputs.legs }}
+        run: |
+          PLAN_SUMMARY="$GITHUB_STEP_SUMMARY" bash scripts/ci-plan.sh >"$RUNNER_TEMP/plan.out"
+          cat "$RUNNER_TEMP/plan.out"
+          cat "$RUNNER_TEMP/plan.out" >>"$GITHUB_OUTPUT"
+
+  # The shards are a matrix the plan sizes (an empty one skips the job as a
+  # whole). Every leg runs its shard of the tests: run-tests.sh SHARD=I/N,
+  # PARALLEL at a time, the tests named in ONLY_TESTS or all of them, minus
+  # the tests the platform leaves out (SKIP_TESTS, from the plan).
+  # Four of the macOS jobs plus the app job are the five concurrent macOS jobs
+  # of the free plan, so macOS stays the exception on a pull request.
   cli-macos:
-    name: CLI tests (macOS, shard ${{ matrix.shard }}/4)
+    name: CLI tests (macOS, shard ${{ matrix.shard }}/${{ needs.changes.outputs.macos_n }})
     needs: changes
-    runs-on: ${{ needs.changes.outputs.code == 'true' && 'macos-latest' || 'ubuntu-latest' }}
+    if: needs.changes.outputs.macos_n != '0'
+    runs-on: macos-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
-    env:
-      CODE: ${{ needs.changes.outputs.code }}
+        shard: ${{ fromJSON(needs.changes.outputs.macos_shards) }}
     steps:
-      - name: Skipped (only docs/ or site/ changed)
-        if: env.CODE != 'true'
-        run: echo "Only docs/ or site/ changed; the CLI tests do not run."
-
       - uses: actions/checkout@v7
-        if: env.CODE == 'true'
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
 
       - name: Versions
-        if: env.CODE == 'true'
         run: |
           /bin/bash --version | head -n 1
           sysctl -n hw.ncpu
@@ -99,74 +158,63 @@ jobs:
       # run-tests.sh runs its share of the tests PARALLEL (the CPU count) at a
       # time; the Linux platform tests run in the Linux shards
       - name: CLI tests (macOS /bin/bash 3.2)
-        if: env.CODE == 'true'
         env:
-          SHARD: ${{ matrix.shard }}/4
+          SHARD: ${{ matrix.shard }}/${{ needs.changes.outputs.macos_n }}
+          ONLY_TESTS: ${{ needs.changes.outputs.tests }}
           SHELLCHECK: '0'
-          SKIP_TESTS: test-install-linux test-doctor-linux test-systemd test-platform-linux
+          SKIP_TESTS: ${{ needs.changes.outputs.macos_skip }}
         run: /bin/bash tests/run-tests.sh
 
   # The mocked suite on Linux, for the Linux platform layer
-  # (docs/DECISIONS.md, "Linux"), in eight shards. Same skip rule as the
-  # macOS shards: it skips step by step when only docs/ or site/ changed.
+  # (docs/DECISIONS.md, "Linux"). The LAN share and its guard are macOS only
+  # (pf, launchd, the Keychain), so the plan leaves them out here.
   cli-linux:
-    name: CLI tests (Linux, shard ${{ matrix.shard }}/8)
+    name: CLI tests (Linux, shard ${{ matrix.shard }}/${{ needs.changes.outputs.linux_n }})
     needs: changes
+    if: needs.changes.outputs.linux_n != '0'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8]
-    env:
-      CODE: ${{ needs.changes.outputs.code }}
+        shard: ${{ fromJSON(needs.changes.outputs.linux_shards) }}
     steps:
-      - name: Skipped (only docs/ or site/ changed)
-        if: env.CODE != 'true'
-        run: echo "Only docs/ or site/ changed; the CLI tests do not run."
-
       - uses: actions/checkout@v7
-        if: env.CODE == 'true'
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
 
       - name: Versions
-        if: env.CODE == 'true'
         run: |
           bash --version | head -n 1
           nproc
 
-      # the LAN share and its guard are macOS only (pf, launchd, the Keychain)
       - name: CLI tests (Linux bash)
-        if: env.CODE == 'true'
         env:
-          SHARD: ${{ matrix.shard }}/8
+          SHARD: ${{ matrix.shard }}/${{ needs.changes.outputs.linux_n }}
+          ONLY_TESTS: ${{ needs.changes.outputs.tests }}
           SHELLCHECK: '0'
-          SKIP_TESTS: test-share test-share-run test-share-admin test-share-preflight test-lan-guard
+          SKIP_TESTS: ${{ needs.changes.outputs.linux_skip }}
         run: bash tests/run-tests.sh
 
   # The mocked suite under bash 3.2.57, the bash of macOS, on cheap Linux
   # runners: the bash-ism risk (a 4.x feature that /bin/bash on a Mac does
   # not have) no longer needs a macOS runner. The image is Alpine, where
   # JavaScript actions such as checkout do not run, so the checkout happens
-  # on the runner and the suite runs through docker run. Same skip rules as
-  # the macOS shards.
+  # on the runner and the suite runs through docker run.
   cli-bash32:
-    name: CLI tests (bash 3.2, shard ${{ matrix.shard }}/4)
+    name: CLI tests (bash 3.2, shard ${{ matrix.shard }}/${{ needs.changes.outputs.bash32_n }})
     needs: changes
+    if: needs.changes.outputs.bash32_n != '0'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
-    env:
-      CODE: ${{ needs.changes.outputs.code }}
+        shard: ${{ fromJSON(needs.changes.outputs.bash32_shards) }}
     steps:
-      - name: Skipped (only docs/ or site/ changed)
-        if: env.CODE != 'true'
-        run: echo "Only docs/ or site/ changed; the CLI tests do not run."
-
       - uses: actions/checkout@v7
-        if: env.CODE == 'true'
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
 
       # Packages, each for what the suite runs that busybox does not do the
       # GNU way: coreutils (stat -c, date, mktemp, timeout), findutils (find),
@@ -181,68 +229,76 @@ jobs:
       # suite runs as a user, not root, from a copy in that user's home, so
       # no uid has to match the runner's and nothing is written back. The
       # user is "ci": test-report's sample log holds the word "tester",
-      # which the report would redact as a username.
+      # which the report would redact as a username. The image pull and the
+      # package download retry: Docker Hub and the Alpine mirrors are the
+      # flake sources of this job.
       - name: CLI tests (bash 3.2.57 container)
-        if: env.CODE == 'true'
         env:
-          SHARD: ${{ matrix.shard }}/4
+          SHARD: ${{ matrix.shard }}/${{ needs.changes.outputs.bash32_n }}
+          ONLY_TESTS: ${{ needs.changes.outputs.tests }}
           SHELLCHECK: '0'
-          # the Linux platform tests, and the macOS only LAN share tests (a Linux container)
-          SKIP_TESTS: test-install-linux test-doctor-linux test-systemd test-platform-linux test-share test-share-run test-share-admin test-share-preflight test-lan-guard
+          SKIP_TESTS: ${{ needs.changes.outputs.bash32_skip }}
         run: |
-          docker run --rm -v "$PWD:/w:ro" -e SHARD -e SHELLCHECK -e SKIP_TESTS bash:3.2.57 sh -euc '
-            apk add --no-cache coreutils findutils diffutils grep sed gawk procps git python3 zip unzip curl perl-utils musl-locales >/dev/null
+          for attempt in 1 2 3; do docker pull -q bash:3.2.57 >/dev/null && break; [ "$attempt" = 3 ] && exit 1; sleep 5; done
+          docker run --rm -v "$PWD:/w:ro" -e SHARD -e SHELLCHECK -e SKIP_TESTS -e ONLY_TESTS bash:3.2.57 sh -euc '
+            for attempt in 1 2 3; do
+              apk add --no-cache coreutils findutils diffutils grep sed gawk procps git python3 zip unzip curl perl-utils musl-locales >/dev/null && break
+              [ "$attempt" = 3 ] && exit 1
+              sleep 5
+            done
             ln -sf /usr/local/bin/bash /bin/bash
             adduser -D ci
             cp -R /w /home/ci/w && chown -R ci /home/ci/w
             su ci -s /bin/sh -c "cd /home/ci/w && export HOME=/home/ci && git config --global --add safe.directory \"*\" && bash --version | head -n 1 && nproc && bash tests/run-tests.sh"
           '
 
-  # shellcheck once, on its own runner, for every platform's scripts. Same
-  # skip rule as the shards.
+  # shellcheck once, on its own runner, for every platform's scripts: the files
+  # a pull request changed (the plan lists them), every file on a full run. It
+  # runs one shellcheck process per 12 files, one per CPU at a time.
   shellcheck:
     name: shellcheck
     needs: changes
+    if: needs.changes.outputs.shellcheck == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    env:
-      CODE: ${{ needs.changes.outputs.code }}
     steps:
-      - name: Skipped (only docs/ or site/ changed)
-        if: env.CODE != 'true'
-        run: echo "Only docs/ or site/ changed; shellcheck does not run."
-
       - uses: actions/checkout@v7
-        if: env.CODE == 'true'
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
 
       # Homebrew's 0.11.0, the version contributors run on a Mac: Ubuntu's
-      # apt package is older and reports findings 0.11.0 does not
+      # apt package is older and reports findings 0.11.0 does not. The binary
+      # for this runner's CPU, each with its checksum.
       - name: Install shellcheck 0.11.0
-        if: env.CODE == 'true'
         run: |
-          curl -fsSL -o "$RUNNER_TEMP/sc.tar.xz" https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz
+          case "$(uname -m)" in
+            x86_64) arch=x86_64; sum=4da528ddb3a4d1b7b24a59d4e16eb2f5fd960f4bd9a3708a15baddbdf1d5a55b ;;
+            aarch64) arch=aarch64; sum=127f13925eadd52c341bca0ebaf9ab0dbd78c6468f30a8f262a528bf8de47546 ;;
+            *) echo "no shellcheck binary pinned for $(uname -m)"; exit 1 ;;
+          esac
+          curl -fsSL -o "$RUNNER_TEMP/sc.tar.xz" "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.$arch.tar.xz"
           tar -xJf "$RUNNER_TEMP/sc.tar.xz" -C "$RUNNER_TEMP"
-          echo "4da528ddb3a4d1b7b24a59d4e16eb2f5fd960f4bd9a3708a15baddbdf1d5a55b  $RUNNER_TEMP/shellcheck-v0.11.0/shellcheck" | sha256sum -c -
+          echo "$sum  $RUNNER_TEMP/shellcheck-v0.11.0/shellcheck" | sha256sum -c -
           echo "$RUNNER_TEMP/shellcheck-v0.11.0" >>"$GITHUB_PATH"
 
       - name: shellcheck
-        if: env.CODE == 'true'
+        env:
+          SHELLCHECK_FILES: ${{ needs.changes.outputs.shellcheck_files }}
         run: |
           shellcheck --version | sed -n 2p
           bash tests/run-tests.sh shellcheck
 
   # A real install on Linux: phase 00 from apt, uv and fnm, a v15 bench and
   # site, the bench under systemd --user, up, the site answering, status and
-  # doctor, down. Slow (a bench build), so only on pushes to main and on pull
-  # requests labelled test-linux. GitHub's Ubuntu runners boot systemd, but
-  # the runner user has no user manager until linger starts one
-  # (docs/DECISIONS.md, "Linux").
+  # doctor, down. Slow (a bench build), so only on pushes, the nightly, a
+  # dispatch that asks for it and pull requests labelled test-linux (the plan
+  # says; a push that changes only docs, site or *.md skips it). GitHub's
+  # Ubuntu runners boot systemd, but the runner user has no user manager until
+  # linger starts one (docs/DECISIONS.md, "Linux").
   cli-linux-real:
     name: Real install (Linux, v15, systemd --user)
-    if: >-
-      github.event_name == 'push' ||
-      github.event_name == 'workflow_dispatch' ||
-      contains(github.event.pull_request.labels.*.name, 'test-linux')
+    needs: changes
+    if: needs.changes.outputs.real == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 75
     env:
@@ -250,6 +306,8 @@ jobs:
       SITE: linuxdev.localhost
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
 
       # The image ships MySQL (stopped) and its /etc/mysql: mariadb-server
       # cannot install over them. A throwaway VM, so purging is safe here.
@@ -319,35 +377,28 @@ jobs:
           cat "$RUNNER_TEMP/doctor.json" 2>/dev/null || true
 
   # The Windows shim: vet, unit tests (a fake wsl.exe, so Linux is enough)
-  # and both Windows builds, uploaded as one artifact. Same skip rule as the
-  # shards.
+  # and both Windows builds, uploaded as one artifact. Runs when windows/shim
+  # changed and on the full runs.
   shim:
     name: Windows shim (go vet, go test, amd64 and arm64 builds)
     needs: changes
+    if: needs.changes.outputs.shim == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    env:
-      CODE: ${{ needs.changes.outputs.code }}
     defaults:
       run:
         working-directory: windows/shim
     steps:
-      - name: Skipped (only docs/ or site/ changed)
-        if: env.CODE != 'true'
-        working-directory: .
-        run: echo "Only docs/ or site/ changed; the shim does not build."
-
       - uses: actions/checkout@v7
-        if: env.CODE == 'true'
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
 
       - uses: actions/setup-go@v7
-        if: env.CODE == 'true'
         with:
           go-version-file: windows/shim/go.mod
           cache-dependency-path: windows/shim/go.sum
 
       - name: gofmt and go vet
-        if: env.CODE == 'true'
         run: |
           go version
           test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
@@ -355,11 +406,9 @@ jobs:
           GOOS=windows go vet ./...
 
       - name: go test
-        if: env.CODE == 'true'
         run: go test ./...
 
       - name: Build windows/amd64 and windows/arm64
-        if: env.CODE == 'true'
         run: |
           mkdir -p "$RUNNER_TEMP/shim/amd64" "$RUNNER_TEMP/shim/arm64"
           for arch in amd64 arm64; do
@@ -370,7 +419,6 @@ jobs:
           ls -l "$RUNNER_TEMP"/shim/*/benchbar.exe
 
       - name: Upload the exes
-        if: env.CODE == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: benchbar-shim-${{ github.sha }}
@@ -385,14 +433,14 @@ jobs:
   # request from this repo runs in the same fenced VM as any other job. Read
   # only inside the distro: status, exit codes through the hop, quoting, mcp
   # over stdio and wslconfig without --apply.
-  # Not a required check, so it skips as a whole when only docs/ or site/
-  # changed, and for Dependabot's branches, which are in this repo but not
+  # Not a required check, so it skips as a whole when the plan leaves the shim
+  # out (windows/shim did not change on a pull request), and for Dependabot's branches, which are in this repo but not
   # written by a person.
   wsl:
     name: Windows shim against real WSL
     needs: changes
     if: >-
-      needs.changes.outputs.code == 'true' &&
+      needs.changes.outputs.wsl == 'true' &&
       github.actor != 'dependabot[bot]' &&
       (github.event_name == 'push' ||
        (github.event_name == 'pull_request' &&
@@ -453,11 +501,13 @@ jobs:
   app:
     name: App build, Swift tests and unsigned release bundle (macOS)
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.app == 'true'
     runs-on: macos-26
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'next-release' || github.sha }}
 
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@v1
@@ -521,3 +571,26 @@ jobs:
             macos/build/test.log
             macos/build/build.log
           if-no-files-found: ignore
+
+  # The one required check of next-release: it needs every other job of this
+  # file and fails when any of them failed or was cancelled. A skipped job (a
+  # leg the plan left out) is fine. always(): it also runs, and fails, when a
+  # needed job was cancelled, so a cancelled run never counts as a pass.
+  ci-result:
+    name: CI result
+    if: always()
+    needs: [changes, cli-macos, cli-linux, cli-bash32, shellcheck, cli-linux-real, shim, wsl, app]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every job passed or was skipped
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          printf '%s\n' "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          if printf '%s\n' "$NEEDS" | jq -e 'all(.[]; .result == "success" or .result == "skipped")' >/dev/null; then
+            echo "CI passed"
+          else
+            echo "::error::a job failed or was cancelled (listed above)"
+            exit 1
+          fi
