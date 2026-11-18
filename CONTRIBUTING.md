@@ -37,15 +37,32 @@ test builds its own `HOME` and mock state. `tests/run-tests.sh test-doctor`
 runs one file. [docs/testing.md](docs/testing.md) is the guide for
 trying a build on a real Mac.
 
+### What CI will do with your pull request
+
 CI plans each run from the changed files. A pull request runs the tests
 `tests/affected.sh` picks on Linux and under bash 3.2 in a container,
 shellcheck on the changed files, and the app build when `macos/` changed;
 macOS runs only for paths that need a Mac or with the label `test-macos`.
 Pushes to `next-release` and `main` and the nightly run the whole suite on
 macOS, Linux and bash 3.2, install a real bench on Ubuntu under
-`systemd --user`, build the app and build and test the Windows shim and
-tray. `CI result` is the one required check. Details:
-[docs/testing.md](docs/testing.md#what-ci-runs).
+`systemd --user` (a pull request gets that run only with the label
+`test-linux`), build the app and build and test the Windows shim and
+tray. Details: [docs/testing.md](docs/testing.md#what-ci-runs).
+
+- **Many checks show "skipped".** A job with nothing to do for your
+  change is skipped as a whole, and a skipped job passes. A docs only
+  change starts no macOS job and no CLI shard beyond the docs tests.
+- **`CI result` is the one required check on `next-release`.** It passes
+  when every job that ran passed.
+- **Docs build** runs on a pull request that changes `docs/`, `site/`,
+  the root `ROADMAP.md` or `CONTRIBUTING.md`, or the code the generated
+  reference tables come from. To run it yourself: `bash tests/run-tests.sh
+  test-docs`, then in `site/`: `bun install`, `bun run build`, `bun run
+  linkcheck`. It is not required, but a red one means a broken page or
+  link.
+- **A pull request from someone who is not a collaborator waits for a
+  maintainer** to click "Approve and run": the repository requires it for
+  every outside contributor. Nothing is wrong; CI starts after the click.
 
 ## How the code is written
 
@@ -71,6 +88,16 @@ tray. `CI result` is the one required check. Details:
 - **Against `next-release`.** `main` holds the last release and moves only
   when one is cut ([docs/releasing.md](docs/releasing.md#branches)).
 - **Small, one topic.** A fix and a refactor are two pull requests.
+- **User docs.** A change a user can see updates the page that tells them
+  about it: the guide or the app page under [docs/](docs/), and a row in
+  [docs/features.md](docs/features.md) for a new feature, Lab or
+  platform. Updating only the reference page is not enough. The CLI
+  reference tables (flags, what a command needs, the MCP tools) are
+  generated from the code: after you change `lib/frappe-local/commands.sh`
+  or `lib/frappe-local/mcp.py`, run `python3 -I scripts/docs-reference.py
+  --write` and commit the result; `tests/test-docs.sh` fails when they
+  differ. A bug with a workaround gets a troubleshooting entry in the
+  same pull request.
 - **CHANGELOG.** A line under `## Unreleased` in
   [CHANGELOG.md](CHANGELOG.md), in the section that fits.
 - **DECISIONS.** One line per non obvious choice: the decision, then the
@@ -82,10 +109,17 @@ tray. `CI result` is the one required check. Details:
   Windows edition and build with the WSL distro), the profile (`v15-lts`,
   `v16-lts` or a team profile) and whether it ran on a real machine with a
   real bench, not only under the mocks.
+- **Plain punctuation.** No em dash and no en dash in code, docs or
+  commit and pull request text: a colon, a comma or a new sentence does
+  the work.
 - **Commits** have an imperative subject ("Add", "Fix", "Read") and a
   body that says why.
 
-The pull request template asks for all of this.
+The pull request template asks for all of this as checkboxes. A docs only
+fix (a typo, a wrong sentence) may go to `main` instead of `next-release`
+when it cannot wait for a release; say so in the pull request. The site
+is built from `main` only, so it shows the last release
+([docs/releasing.md](docs/releasing.md#the-docs-site)).
 
 ## AI assisted contributions
 
