@@ -160,15 +160,20 @@ fl_render_all() {
 # and socketio lines start with (fl_listen_dir). In "all" mode the lines are
 # plain "bench serve" and "bench socketio", as before 0.9.0, and no file is
 # rendered. The tokens hold a $ and double quotes for the shell that honcho
-# runs the line in; the paths are relative because honcho starts in the bench.
+# runs the line in. The paths start at $PWD, the bench folder (honcho starts
+# the line there), and are absolute for a reason: "bench serve" changes into
+# sites/ before it starts the dev server, and a relative PYTHONPATH entry would
+# then point at sites/config/benchbar-listen, which does not exist. The
+# quotes keep a bench path with spaces in one piece (node splits NODE_OPTIONS on spaces and
+# reads a double quoted part as one word).
 fl_render_procfile() {
   local web_env="" socketio_env=""
   FL_R_LISTEN_PY=""; FL_R_LISTEN_JS=""
   if ! fl_listen_is_all; then
     # shellcheck disable=SC2016  # the shell of the Procfile line expands these
-    web_env='PYTHONPATH=config/benchbar-listen${PYTHONPATH:+:$PYTHONPATH} '
+    web_env='PYTHONPATH="$PWD/config/benchbar-listen${PYTHONPATH:+:$PYTHONPATH}" '
     # shellcheck disable=SC2016
-    socketio_env='NODE_OPTIONS="--require ./config/benchbar-listen/socketio.js ${NODE_OPTIONS:-}" '
+    socketio_env='NODE_OPTIONS="--require \"$PWD/config/benchbar-listen/socketio.js\" ${NODE_OPTIONS:-}" '
     FL_R_LISTEN_PY="$(fl_template_render listen-sitecustomize.py)"
     FL_R_LISTEN_JS="$(fl_template_render listen-socketio.js)"
   fi

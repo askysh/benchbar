@@ -472,15 +472,14 @@ backups. A running bench takes them at its next `benchbar restart`.
 The dev web server and socketio listen on 127.0.0.1 only. Frappe binds
 both to every interface, with its debugger on; 0.9.0 starts them on
 loopback unless the bench was set to `all` with `benchbar listen all`.
-A warning means one of two things: the bench is set to `all` (the message
-says so), or a listener on the bench's web or socketio port is not on
-loopback although the bench is set to `local`, because it was started
-before 0.9.0 or outside benchbar (`bench start`).
+A warning means one of four things:
 
-Fix: `benchbar listen local` and `benchbar restart` for the first;
-`benchbar repair` (when `procfile` is outdated) and `benchbar restart` for
-the second. The check only reads, and `benchbar listen all` is a person's
-command.
+- the bench is set to `all` (the message says so). Fix: `benchbar listen local`, then `benchbar restart`.
+- the bench is set to `local` but `Procfile.lean` is the one of before 0.9.0 (or a file in `config/benchbar-listen` is missing). This is reported while the bench is stopped too: its next start binds every interface. Fix: `benchbar repair`, then `benchbar restart`.
+- a listener on the bench's web or socketio port is not on loopback although the files are current, because it was started before 0.9.0 or outside benchbar (`bench start`). Fix: `benchbar restart`.
+- the realtime server is the Python one (`socketio_backend: python`, Frappe v16). benchbar does not cover that backend yet: it listens on every interface whatever `listen` says, and a restart does not change that. Fix: switch the bench to the node socketio server (remove `socketio_backend` or set it to `node` in `sites/common_site_config.json`).
+
+The check only reads, and `benchbar listen all` is a person's command.
 
 ### runner
 

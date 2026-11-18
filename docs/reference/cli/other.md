@@ -315,8 +315,9 @@ The choice is kept per bench, in the bench's state file, and written into
 keep it. A running bench takes it at its next `benchbar restart`. The bench's
 Redis and MariaDB were already on 127.0.0.1 only.
 
-`local` starts the web line with `PYTHONPATH=config/benchbar-listen` and
-the socketio line with `NODE_OPTIONS="--require ./config/benchbar-listen/socketio.js ..."`.
+`local` starts the web line with `PYTHONPATH="$PWD/config/benchbar-listen..."` and
+the socketio line with `NODE_OPTIONS="--require \"$PWD/config/benchbar-listen/socketio.js\" ..."`
+(absolute, because `bench serve` changes into `sites/` before it starts the server).
 The two files in `config/benchbar-listen` are written by benchbar from its
 templates: the first replaces werkzeug's `run_simple` so that Frappe's host
 `0.0.0.0` becomes `127.0.0.1`, the second gives `server.listen(port)` a
@@ -337,7 +338,9 @@ address of the computer; `benchbar listen all` brings that back.
 
 The Python realtime server of `socketio_backend: python` (Frappe v16 with a
 bench that has the key) is not covered: it listens on every interface
-whatever this setting says, and `doctor` reports it.
+whatever this setting says, and `doctor` reports it as not covered yet. A
+restart does not change that; switching the bench to the node socketio server
+does.
 
 Exit codes: 0; 1 for another argument, a refused `all`, or when the files
 could not be written.

@@ -390,13 +390,30 @@ chk_procfile() {
 
 # Where the dev web server (with its debugger) and socketio listen. Frappe
 # binds both to every interface; 0.9.0 starts them on 127.0.0.1 unless the
-# bench was set to "all" (benchbar listen all). Two ways to be exposed: the
-# setting says all, or a listener on a bench port is not on loopback although
-# the setting says local (the bench still runs the Procfile of before 0.9.0,
-# or something started it outside benchbar). Read only: both fixes are a
-# person's command.
+# bench was set to "all" (benchbar listen all). Ways to be exposed: the
+# setting says all; the setting says local but Procfile.lean (or a listen file
+# it starts) is not the current one, so the next start binds every interface
+# (the bench is stopped or not, a stopped bench is no proof); a listener on a
+# bench port is not on loopback although the files are current (the bench still
+# runs the old Procfile, or something started it outside benchbar); or the
+# realtime server is the Python one, which benchbar does not patch (a restart
+# cannot help there). Read only: the fixes are a person's command.
+# the Procfile and the files it starts are one that binds loopback: false only
+# for a Procfile of an older benchbar or a missing listen file. A bench with no
+# Procfile.lean (no service) or a foreign one is not this check's: the
+# procfile check says so, and nothing here knows how that bench starts.
+fl_listen_files_stale() {
+  local st
+  st="$(fl_template_status "$(fl_procfile_path)" "$FL_R_PROCFILE")"
+  case "$st" in
+    outdated) return 0 ;;
+    current) [[ -f "$(fl_listen_py_path)" && -f "$(fl_listen_js_path)" ]] || return 0 ;;
+  esac
+  return 1
+}
+
 chk_bench_listen() {
-  local exposed="" port a addrs listening=0 fix
+  local exposed="" port a addrs listening=0 fix backend="" cmd sio_exposed=0
   for port in "$FL_WEB_PORT" "$FL_SOCKETIO_PORT"; do
     addrs="$(fl_port_listen_addresses "$port")"
     [[ -z "$addrs" ]] && continue
@@ -404,21 +421,37 @@ chk_bench_listen() {
     while IFS= read -r a; do
       case "$a" in
         127.0.0.1:*|"[::1]:"*|localhost:*) ;;
-        *) exposed="${exposed} ${a}" ;;
+        *) exposed="${exposed} ${a}"; [[ "$port" == "$FL_SOCKETIO_PORT" ]] && sio_exposed=1 ;;
       esac
     done <<<"$addrs"
   done
   if fl_listen_is_all; then
     if [[ -n "$exposed" ]]; then
-      chk__set warn "the web server and socketio listen on${exposed}: anyone on the network can reach the dev server and its debugger (listen is set to all)" "${FL_SELF} listen local --bench-dir ${FL_BENCH_DIR}, then ${FL_SELF} restart"
+      chk__set warn "the web server and socketio listen on${exposed}: anyone on the network can reach the dev server and its debugger (listen is set to all)" "${FL_SELF} listen local --bench-dir ${FL_BENCH_DIR}, then ${FL_SELF} restart --bench-dir ${FL_BENCH_DIR}"
     else
       chk__set warn "listen is set to all: the web server and socketio listen on every interface once the bench runs (the dev server has its debugger on)" "${FL_SELF} listen local --bench-dir ${FL_BENCH_DIR}"
     fi
+    return 0
+  fi
+  if fl_listen_files_stale; then
+    # the next start of this bench binds every interface, running or not
+    chk__set warn "Procfile.lean is not the 0.9.0 one (or a file in config/benchbar-listen is missing): the web server and socketio bind every interface when the bench starts" "${FL_SELF} repair --bench-dir ${FL_BENCH_DIR}"
+    return 0
+  fi
+  if [[ "$sio_exposed" == "1" ]]; then
+    fl_site_config_value_v backend socketio_backend
+    cmd="$(fl_port_listener_summary "$FL_SOCKETIO_PORT")"
+    cmd="${cmd#* }"
+    case "$backend:$cmd" in
+      python:*|*:[Pp]ython*|*:uvicorn*) backend=python ;;
+      *) backend="" ;;
+    esac
+  fi
+  if [[ "$backend" == "python" ]]; then
+    # a restart does not change this: uvicorn gets its host from frappe
+    chk__set warn "the realtime server is the Python one (socketio_backend: python) and listens on${exposed}: benchbar does not cover that backend yet, so it stays on every interface whatever listen says" "switch to the node socketio server: remove socketio_backend or set it to node in ${FL_BENCH_DIR}/sites/common_site_config.json (a restart alone does not change this)"
   elif [[ -n "$exposed" ]]; then
-    # a current Procfile only needs the restart; an older one needs the repair first
-    fix="${FL_SELF} restart --bench-dir ${FL_BENCH_DIR}"
-    [[ "$(fl_template_status "$(fl_procfile_path)" "$FL_R_PROCFILE")" == "current" ]] || fix="${FL_SELF} repair --bench-dir ${FL_BENCH_DIR}, then ${FL_SELF} restart --bench-dir ${FL_BENCH_DIR}"
-    chk__set warn "the web server or socketio listens on${exposed}, not on 127.0.0.1 only: the bench was started before listen local took effect, or outside benchbar" "$fix"
+    chk__set warn "the web server or socketio listens on${exposed}, not on 127.0.0.1 only: the bench was started before listen local took effect, or outside benchbar" "${FL_SELF} restart --bench-dir ${FL_BENCH_DIR}"
   elif [[ "$listening" == "1" ]]; then
     chk__set ok "the web server and socketio listen on 127.0.0.1 only"
   else
