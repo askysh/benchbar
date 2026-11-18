@@ -1,6 +1,7 @@
 ---
 title: "Decisions"
 description: "Every non obvious choice in the BenchBar CLI and repo, one line each: the decision, then the reason."
+pagefind: false
 ---
 
 One line per non obvious choice: the decision, then the reason. The
@@ -307,6 +308,9 @@ runs come first, the 0.3 easy install run follows.
 - The link check is linkinator over `site/dist` with fragment checks on, skipping every external URL: GitHub and the site's own domain (before DNS) would make the check flaky, and the internal links are the ones a docs change breaks.
 - The Umami script uses the benchbar.akashmishra.com website of Akash's Umami, limited with `data-domains` so local previews are not counted, and `og:image` points at `https://benchbar.akashmishra.com/og.png`, which the build copies from `docs/images/og-image.png` when that file exists.
 - The docs site sends three custom Umami events from `site/public/analytics-events.js`: `command-copy` (the first line of a copied code block), `download-click` (a link to a GitHub release) and `outbound-click` (any other link off the site). They answer what page views cannot: whether a reader copied the install command or went to a download. Query strings are never sent, and no event carries anything a reader typed.
+- The sidebar groups pages by the reader's task (Start, Guides, Concepts, Reference, App, Windows, For contributors) and a page's URL follows its file, not its group: doctor checks sit under Reference, but stay at `/guides/doctor-and-repair/` because `doctor` FAIL lines and the app link to it. A page moves between groups with no redirect. `tests/test-docs.sh` fails when a page is in no group and when a Lab is missing from `docs/features.md`.
+- Every *Since* value in `docs/features.md` is the first CHANGELOG heading that has the feature (checked with `git tag --contains` when the text is unclear), not the release that polished it. Linux and WSL first shipped in 0.8.0, so a row that came earlier says "macOS; Linux 0.8.0".
+- Maintainer pages stay in `docs/` (AGENTS.md, CONTRIBUTING and the tests link to their paths) under a For contributors group, and Decisions and Releasing carry `pagefind: false`, so a search for "sudo" or "keychain" finds user pages.
 
 ## 0.5.5: readme
 
@@ -1052,3 +1056,5 @@ Written for the macOS arm64 runner shortage of November 2026 (pull requests wait
 - The Microsoft Store case of self-update is recognised by the exe path (`\WindowsApps\`), because the package detection lives on the MSIX branch; switch to it when that merges.
 - `self-update` starts Windows PowerShell 5.1 without `PSModulePath` (any case of the name): PowerShell 7 sets it to its own module folders, and 5.1 started with that value cannot load its own modules (`Get-FileHash` is not recognized); without it 5.1 builds its default. Every start of powershell.exe in the shim goes through `powerShellEnv`.
 - install.ps1 replaces the installed files all or nothing: phase 1 renames every file it replaces or removes to NAME.old (NAME.N.old when taken) inside the install folder, phase 2 copies the new files in; a failure in either phase deletes the new files and renames every backup back before anything else runs, and only a rollback that itself fails reports a mixed install, with the one line installer as the repair. A failed run tells `self-update` in the file named by `BENCHBAR_INSTALL_RESULT` (unchanged, mixed, changed or unknown, then the error line), so the shim keeps streaming the installer's output to the console as it is.
+- The shim hands its Windows folder to the distro in `BENCHBAR_SHIM_CWD` and the `sh` wrapper converts it with `wslpath -a -u`, instead of converting it in Go: only the distro knows `[automount] root`, and the wrapper falls back to the home folder when the folder is not there (a folder of another distro, a drive WSL does not mount). Every fallback prints one line on stderr (`benchbar.exe: <folder> has no path in WSL, running in ~`), never on stdout: a silent fallback made `adopt .` and `ports plan -- .` act on $HOME. Drive paths in arguments are converted in Go with the mount that `wslpath` reported (one extra call, only when an argument holds a drive path), `/mnt/x` when it fails.
+- `benchbar.exe doctor` with `--json`, `--jsonl`, `--for-agent` or `--fix-hints` adds the Windows checks to the CLI's output (a `windows_checks` array at the end of the document, or the fix lines after the CLI's) and never prints the human WINDOWS block, so stdout is one document for a program. The array is spliced into the CLI's bytes, not parsed and written again, so the CLI's key order is kept; output that is not one JSON object passes through unchanged. With `--jsonl` (several lines) the array goes into the `done` line, which holds the document's keys.

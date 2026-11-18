@@ -1,6 +1,6 @@
 ---
 title: "The menu bar app"
-description: "The BenchBar menu bar app and window: the runner, the popover, keyboard shortcuts, the pages for each bench, and what the app never does."
+description: "The BenchBar menu bar app and window: the runner, the popover, keyboard shortcuts, the pages for each bench, Sharing and On your network, Labs, and what the app never does."
 ---
 
 The BenchBar app lives in the menu bar. It shows every bench as a small
@@ -167,8 +167,8 @@ hash. The alert asks with Cancel as its default button.
 Open it with ⌘M, **Manage Bench…** in the popover, or by
 opening BenchBar again from Finder or Spotlight. The sidebar lists your
 benches first, each with its state dot and its sites beneath it (a site
-opens the bench's Sites tab), then **Team Profiles** and **Find
-Benches**. A bench that is not running has one line under its name that
+opens the bench's Sites tab), then **Team Profiles**, **Find
+Benches** and, while the `lan-rooms` Lab is on, **On your network**. A bench that is not running has one line under its name that
 says why and offers the next step: Start, View Health, Review Port
 Conflict…, Repair… or Set Up Management….
 
@@ -216,6 +216,9 @@ Every bench has a page:
   Right click a bench in the sidebar for its actions.
 - **Health**: doctor's checks, and Repair with its plan shown before
   anything changes and each step as it runs.
+- **Sharing**: opens a room for this bench's site on your Wi-Fi. It shows
+  only while the `lan-rooms` Lab is on. See
+  [Share on your network](#share-on-your-network).
 
 Every sheet works the same way: the plan or the form first, then your
 confirmation, the run with its progress at the bottom, and the outcome on
@@ -273,6 +276,59 @@ In the sidebar, below the benches:
   [Teams](guides/teams.md#team-profiles).
 
 ![Team Profiles: the built in profiles and a team profile with where each comes from, and the Import and Subscribe buttons](images/window-profiles.png)
+
+## Share on your network
+
+Sharing lets colleagues on the same Wi-Fi use a copy of one of your dev
+sites in their own browser. It is a Lab, so it is off until you turn on
+`lan-rooms` in **Settings > Labs** (or run `benchbar labs on lan-rooms`).
+While it is off, the Sharing tab, the popover rows and **On your network**
+do not show. The safety model is in
+[How sharing keeps your bench safe](concepts/sharing-safety.md).
+
+### Host a room: the Sharing tab
+
+The Sharing tab of a bench has one main button for each state:
+
+1. **Set up sharing** makes a hardened copy of the site and picks the seats. A
+   seat is a Frappe user that a guest signs in as. Nothing is shared yet.
+2. **Turn on network protection** asks for your password in its own macOS
+   dialog and installs the LAN guard, a firewall rule that keeps the
+   bench's ports closed to other Macs. It shows only when the check fails.
+3. **Start sharing** asks once more, then opens the room for the time you
+   pick (1, 2, 4, 8 or 12 hours). **Extend** adds 30 minutes or 1 hour, up
+   to 12 hours in total.
+4. **Stop** ends the room. Every guest session ends with it.
+
+While the room is open the tab shows:
+
+- **Room code**: six digits. **Copy** copies the code. **Copy invite**
+  copies a link that holds the code. **New code** makes the old code stop
+  working. **Lock room** stops new joins.
+- **Checks**: the protection checks. Sharing ends by itself when they fail
+  twice in a row.
+- **The copy**: the site that guests see, with **Refresh copy…**.
+- **People in the room**: each guest, with their seat. **Remove** ends a
+  guest's session. The seat menu moves a guest to another seat.
+- **Activity**: the last events of the room.
+
+The popover shows the room with its time left, **Copy invite** and **Stop**.
+Guests see changes after a page refresh. The Mac stays awake while the
+room is open. Closing the lid still ends it.
+
+### Join a room: On your network
+
+**On your network** is in the sidebar of the window. It has two lists:
+
+- **Your rooms**: the rooms you joined. **Open** opens the room's site,
+  **Change Seat** picks another seat, and **Forget** removes the room.
+- **Nearby**: rooms that colleagues on this Wi-Fi opened. **Join** asks for
+  the room code and then for a seat.
+
+The first time, BenchBar explains why it needs Local Network access and
+then asks macOS for it. If you said no, the pane shows a button for System
+Settings. **Find rooms** looks again. Got an invite from a colleague?
+**Paste invite** joins from it. Browsing runs only while the pane is open.
 
 ## Updates
 
@@ -439,6 +495,12 @@ follows, every 5 seconds for a bench whose charts are on screen, and
 only while that bench runs. The runner's speed is not read while the Mac
 sleeps, the screen is locked, the menu bar is hidden or Low Power Mode
 is on (the runner then plays at one speed).
+
+Two features read more often, and only while they are on screen. While the
+Sharing tab is open or a room runs, the app asks `benchbar share status`
+every 5 seconds and runs the protection checks once a minute. While **On
+your network** is open, it looks for nearby rooms every 5 seconds. Both
+stop when you close the pane and no room runs.
 
 `benchbar status` pings only the default site. `benchbar status --ping`
 asks every site once and fills `ping_code` in the JSON; see
