@@ -135,7 +135,7 @@ func resolveDistro(sys *System, want string) (string, *Distro, *problem) {
 		}
 	}
 	if len(list) == 0 {
-		return "", nil, &problem{Msg: "no WSL distro is installed", Fix: "benchbar.exe setup check (it installs Ubuntu 24.04; by hand: wsl.exe --install -d Ubuntu-24.04)"}
+		return "", nil, &problem{Msg: "no WSL distro is installed", Fix: "benchbar.exe setup run distro_install (installs Ubuntu 24.04; by hand: wsl.exe --install -d Ubuntu-24.04)"}
 	}
 	var usable []int
 	for i, d := range list {
@@ -147,7 +147,7 @@ func resolveDistro(sys *System, want string) (string, *Distro, *problem) {
 	case len(usable) == 0:
 		return "", nil, &problem{
 			Msg: "the only WSL distros are container tool distros (" + names(list) + "), which BenchBar never uses",
-			Fix: "benchbar.exe setup check (it installs Ubuntu 24.04), or benchbar.exe adopt-distro NAME for a distro you added yourself",
+			Fix: "benchbar.exe setup run distro_install (installs Ubuntu 24.04), or benchbar.exe adopt-distro NAME for a distro you added yourself",
 		}
 	case len(usable) == 1:
 		return list[usable[0]].Name, &list[usable[0]], nil
