@@ -72,7 +72,7 @@ fl_keychain_set() {
     "$(fl__security_quote "BenchBar MariaDB root")" "$(fl__security_quote "MariaDB root password written by benchbar")" \
     "$(fl__security_quote "$pw")" | security -i >/dev/null 2>&1 || true
   [[ "$(fl_keychain_get || true)" == "$pw" ]] || { fl_warn "could not write the Keychain item ${FL_KEYCHAIN_SERVICE}"; return 1; }
-  fl_ok "MariaDB root password saved to the Keychain (benchbar mariadb-password prints it)"
+  fl_ok "MariaDB root password saved to the Keychain"
   fl_log "keychain: wrote ${FL_KEYCHAIN_SERVICE}/${FL_KEYCHAIN_ACCOUNT}"
 }
 
@@ -140,6 +140,39 @@ fl_mariadb_root_verify() {
   bin="$(fl_mariadb_client)"
   [[ -n "$bin" ]] || return 1
   MYSQL_PWD="$1" "$bin" -u root --connect-timeout=2 -e "SELECT 1" >/dev/null 2>&1
+}
+
+# fl_mariadb_db_exists PASSWORD NAME: 0 the database exists, 1 it does not,
+# 2 it cannot be told (no client, no login). NAME is checked by a
+# comparison, not LIKE, where "_" would match any character.
+fl_mariadb_db_exists() {
+  local bin out
+  [[ "$2" =~ ^[A-Za-z0-9_]+$ ]] || return 2
+  bin="$(fl_mariadb_client)"
+  [[ -n "$bin" ]] || return 2
+  out="$(MYSQL_PWD="$1" "$bin" -u root --connect-timeout=2 -sNe "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME='$2'" 2>/dev/null)" || return 2
+  [[ "$out" == "$2" ]]
+}
+
+# fl_mariadb_db_fresh PASSWORD NAME: 0 the database is still in a just created
+# state (no tables at all, a cut short new-site, or no tabUser rows but
+# Administrator and Guest), 1 it holds more (a working site's), 2 it cannot be
+# told. NAME is _ and 16 hex digits when benchbar made it; checked here again.
+fl_mariadb_db_fresh() {
+  local bin n
+  [[ "$2" =~ ^[A-Za-z0-9_]+$ ]] || return 2
+  bin="$(fl_mariadb_client)"
+  [[ -n "$bin" ]] || return 2
+  n="$(MYSQL_PWD="$1" "$bin" -u root --connect-timeout=2 -sNe "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='$2'" 2>/dev/null)" || return 2
+  [[ "$n" =~ ^[0-9]+$ ]] || return 2
+  [[ "$n" == "0" ]] && return 0
+  n="$(MYSQL_PWD="$1" "$bin" -u root --connect-timeout=2 -sNe "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='$2' AND TABLE_NAME='tabUser'" 2>/dev/null)" || return 2
+  [[ "$n" =~ ^[0-9]+$ ]] || return 2
+  # tables but no tabUser yet: nothing a person made
+  [[ "$n" == "0" ]] && return 0
+  n="$(MYSQL_PWD="$1" "$bin" -u root --connect-timeout=2 -sNe "SELECT COUNT(*) FROM \`$2\`.tabUser WHERE name NOT IN ('Administrator','Guest')" 2>/dev/null)" || return 2
+  [[ "$n" =~ ^[0-9]+$ ]] || return 2
+  [[ "$n" == "0" ]]
 }
 
 fl_mariadb_server_charset() {
@@ -451,9 +484,18 @@ fl_mariadb_service_formula() {
 
 # ------------------------------------------------------------- command
 
-# benchbar mariadb-password: prints the stored password after a confirmation
+# benchbar mariadb-password: prints the stored password to a person at a
+# terminal, after a confirmation (--yes skips the question, not the person).
+# Refused before anything is read under BENCHBAR_NONINTERACTIVE (so under
+# --for-agent and mcp) and without a terminal: a password that reaches an
+# agent's output stays in its transcript. No text of this command tells an
+# agent to run it, with a flag or without.
 fl_cmd_mariadb_password() {
   local pw
+  fl_noninteractive && fl_die "The MariaDB root password is a person's to read, so nothing run without a terminal can print it." \
+    "Ask the person for it. Do not look for it: benchbar keeps it and uses it itself."
+  [[ -t 0 ]] || fl_die "Not printed: the MariaDB root password is shown only to a person at a terminal, and this run has none; a flag does not stand in for one." \
+    "Ask the person to read it in a terminal of their own."
   pw="$(fl_keychain_get || true)"
   if [[ -z "$pw" ]]; then
     fl_fail "$(fl_mariadb_password_missing_msg)"
@@ -461,11 +503,6 @@ fl_cmd_mariadb_password() {
     return 1
   fi
   if [[ "${FL_ASSUME_YES:-0}" != "1" ]]; then
-    if [[ ! -t 0 ]]; then
-      fl_fail "not printed: there is no terminal to ask on, and only the --yes flag answers for you"
-      fl_fix "${FL_SELF} mariadb-password --yes"
-      return 1
-    fi
     fl_confirm "Print the MariaDB root password to this terminal?" || { fl_info "not printed"; return 1; }
   fi
   printf '%s\n' "$pw"

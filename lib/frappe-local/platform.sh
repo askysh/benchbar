@@ -108,6 +108,21 @@ fl_crontab_denied() {
   return 1
 }
 
+# fl_uv_on_path: uv is runnable, after putting the folder of a uv that is not
+# on PATH there (Homebrew's <prefix>/bin, or ~/.local/bin, where uv's own
+# installer puts it). bench init needs uv: frappe-bench 5.31 and later make
+# the env with "uv venv", whoever installed bench itself (issue 112).
+fl_uv_on_path() {
+  local d
+  command -v uv >/dev/null 2>&1 && return 0
+  for d in "${FL_BREW_PREFIX:-}/bin" "$HOME/.local/bin"; do
+    [[ "$d" != /bin && -x "$d/uv" ]] || continue
+    export PATH="${PATH}:${d}"
+    return 0
+  done
+  return 1
+}
+
 fl_brew_ensure() {
   local formula="$1"
   if brew list --formula --versions "$formula" >/dev/null 2>&1; then
@@ -209,6 +224,25 @@ fl_install_preflight_load() { return 0; }
 fl_install_env_blockers() { return 0; }
 fl_install_env_warnings() { return 0; }
 fl_bench_windows_fs_blocker() { return 0; }
+
+# fl_mariadb_listener_is_own: what listens on 3306 is the profile's own
+# Homebrew MariaDB, started by its brew service, and the root password the
+# Keychain holds logs in: benchbar's own server, not "an existing MariaDB".
+fl_mariadb_listener_is_own() {
+  local pid bin pw formula="${FL_MARIADB_FORMULA:-}"
+  [[ -n "$formula" ]] && fl_brew_service_running "$formula" || return 1
+  pid="$(lsof -ti tcp:3306 -sTCP:LISTEN 2>/dev/null | awk 'NR==1' || true)"
+  [[ -n "$pid" ]] || return 1
+  bin="$(ps -o command= -p "$pid" 2>/dev/null | awk '{print $1}' || true)"
+  # under Homebrew's own prefix, not any folder that has an opt/<formula> in its path
+  [[ -n "${FL_BREW_PREFIX:-}" ]] || return 1
+  case "$bin" in
+    "${FL_BREW_PREFIX}"/opt/"${formula}"/*|"${FL_BREW_PREFIX}"/Cellar/"${formula}"/*) ;;
+    *) return 1 ;;
+  esac
+  pw="$(fl_keychain_get 2>/dev/null || true)"
+  [[ -n "$pw" ]] && fl_mariadb_root_verify "$pw"
+}
 
 fl_mariadb_safe_mode_note() {
   fl_warn "Existing MariaDB/MySQL may already be using port 3306."

@@ -66,11 +66,28 @@ assert_file "$BENCH/benchbar-run.sh"
 noni uninstall-service --bench-dir "$BENCH"
 assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "--yes"
 assert_file "$BENCH/Procfile.lean"
-# fl_confirm under the mode names --yes instead of reading no
+# the root password is a person's to read: refused under the mode, with or without --yes, and
+# no failure text tells an agent to pass --yes (MCP-1, SVC-11)
 mkdir -p "$MOCK_STATE/keychain"; printf 'rootpw' >"$MOCK_STATE/keychain/benchbar-mariadb--root"
-noni mariadb-password --bench-dir "$BENCH"
-assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "--yes"
-assert_not_contains "$OUT" "rootpw"
+for flags in "" "--yes"; do
+  noni mariadb-password $flags --bench-dir "$BENCH"
+  assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "person"
+  assert_not_contains "$OUT" "rootpw"; assert_not_contains "$OUT" "mariadb-password --yes"
+  run_fm mariadb-password $flags --for-agent --bench-dir "$BENCH"
+  assert_eq "1" "$CODE" "$OUT"; assert_not_contains "$OUT" "rootpw"; assert_not_contains "$OUT" "mariadb-password --yes"
+  # a terminal does not lift it: the mode says nothing can ask
+  BENCHBAR_NONINTERACTIVE=1 run_fm_tty mariadb-password $flags --bench-dir "$BENCH"
+  assert_eq "1" "$CODE" "$OUT"; assert_not_contains "$OUT" "rootpw"
+done
+# no terminal and no --yes: refused, and the text names no flag to pass
+run_fm mariadb-password --bench-dir "$BENCH" </dev/null
+assert_eq "1" "$CODE" "$OUT"; assert_not_contains "$OUT" "--yes"; assert_not_contains "$OUT" "rootpw"
+# --yes alone does not answer for a person: an agent's plain shell has no terminal
+run_fm mariadb-password --yes --bench-dir "$BENCH" </dev/null
+assert_eq "1" "$CODE" "$OUT"; assert_not_contains "$OUT" "rootpw"; assert_contains "$OUT" "terminal"
+# the person at a terminal still reads it
+run_fm_tty mariadb-password --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"; assert_eq "rootpw" "$OUT"
 rm -rf "$MOCK_STATE/keychain"
 # the flag sets the mode: --for-agent
 run_fm site add noniuser3 --for-agent --bench-dir "$BENCH"

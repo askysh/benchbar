@@ -250,7 +250,13 @@ A site with `deny_multiple_sessions` on signs that user out everywhere else.
 `--print-url` prints the link instead of opening it (in `--json` as `url`);
 the link holds the session id, so treat it like a password. `--json` without
 `--print-url` leaves it out. Nothing is written to disk and no run log is
-kept.
+kept. With `--as`, `--print-url` is refused under `BENCHBAR_NONINTERACTIVE=1`,
+`--for-agent` and `benchbar mcp`, and when stdin is not a terminal unless the
+caller sets `BENCHBAR_NONINTERACTIVE=0` itself, as `site open-as on` is: a
+link in an agent's output stays in its transcript. A person at a terminal and
+the Mac app (which sets the 0) get it. This is a guard against a mistake, not
+a boundary: a process that runs as the same user and fakes a terminal, or
+sets the variable, is not stopped.
 
 Exit codes: 0 opened (or printed); 1 a refusal: no such site or user, a
 disabled user, Open as is off for the site, the bench is stopped, the site is not in developer mode, the
@@ -304,9 +310,18 @@ benchbar mariadb-password [--yes]
 
 Prints the MariaDB root password kept in the Keychain (item
 `benchbar-mariadb`; on Linux a 0600 file in the state folder), after
-asking. `--yes` skips the question.
+asking. `--yes` skips the question, not the person: the command is for a
+person at a terminal. It is refused under `BENCHBAR_NONINTERACTIVE`,
+`--for-agent` and `benchbar mcp`, and when stdin is not a terminal,
+whatever `--yes` says, so the documented agent modes and a plain pipe do not
+put the password in an agent's output. A process that runs as the same user
+and fakes a terminal is not stopped, and any program of that user can read
+the Keychain item through `security` (see SECURITY.md): these are guards
+against mistakes, not a boundary. An agent that needs the password asks the
+person.
 
-Exit codes: 0 printed; 1 declined, or no password in the Keychain.
+Exit codes: 0 printed; 1 declined, no password in the Keychain, or
+refused because no person is at a terminal.
 
 ```bash
 benchbar mariadb-password
