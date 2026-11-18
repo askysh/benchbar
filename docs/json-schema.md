@@ -334,8 +334,11 @@ plan line of its stream) as `structuredContent`. The apply tools and
 (the `done` line, or the one document with the done fields) and the state
 after: `sites` (`site list --json`) for `benchbar_site_add` and
 `benchbar_site_restore`, `status` for the others. `benchbar_site_add` adds
-`admin_password` and `admin_password_generated: true` when it generated the
-new site's Administrator password. `benchbar_up` on a bench whose `state` is
+`admin_password_generated: true`, `admin_password_file` (a 0600 file in
+benchbar's state folder, `site-admin/SITE`, where the person reads the
+password) and `admin_password_note` when it generated the new site's
+Administrator password; the password itself is never in a result. If the file
+could not be written, `admin_password_file` is absent and the note says so. `benchbar_up` on a bench whose `state` is
 `not_adopted` returns `service: "missing"`, `started: false`, `next_tool:
 "benchbar_service_install_plan"` and the `status` instead of starting it.
 Any line of CLI text that would name where the MariaDB root password is kept

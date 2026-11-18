@@ -391,7 +391,7 @@ fl_cmd_site_add() {
       [[ -n "${MARIADB_ROOT_PASSWORD:-}" || -n "$(fl_keychain_get 2>/dev/null || true)" ]] || code=2
       msg="The Administrator password for ${name} is needed."
       [[ "$code" != "2" ]] || msg="${msg} The MariaDB root password is unknown too."
-      fl_die "$msg" "Re-run with: ADMIN_PASSWORD='...' MARIADB_ROOT_PASSWORD='...' benchbar site add ${name} --yes" "$code"
+      fl_die "$msg" "Ask the person for the passwords (do not look for them), then re-run with: ADMIN_PASSWORD='...' MARIADB_ROOT_PASSWORD='...' benchbar site add ${name} --yes" "$code"
     fi
   fi
   [[ -n "$bundle" && -z "$apps" ]] && { apps="$(fl_bundle_apps "$bundle")"; [[ -n "$apps" ]] || fl_die "Unknown app bundle: ${bundle}"; }
@@ -403,7 +403,7 @@ fl_cmd_site_add() {
   if [[ -d "${FL_BENCH_DIR}/sites/${name}" ]]; then
     fl_ok "site ${name} already exists"
   else
-    fl_mariadb_root_password_resolve || fl_die "MariaDB root password needed to create the site." "Re-run with: MARIADB_ROOT_PASSWORD='...' benchbar site add ${name}" 2
+    fl_mariadb_root_password_resolve || fl_die "MariaDB root password needed to create the site." "Ask the person for it (do not look for it), then re-run with: MARIADB_ROOT_PASSWORD='...' benchbar site add ${name}" 2
     if [[ -z "${ADMIN_PASSWORD:-}" ]]; then
       if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then ADMIN_PASSWORD="dry-run-placeholder"
       else fl_ask_secret ADMIN_PASSWORD "Administrator password for ${name}"; fi

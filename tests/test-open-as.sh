@@ -136,7 +136,7 @@ if grep -r -q mocksid "$BENCH/sites" 2>/dev/null; then fail "a session id was wr
 
 # --print-url: the link on stdout, nothing opened
 reset_calls
-run_fm open --as priya@example.com --print-url --json --bench-dir "$BENCH"
+BENCHBAR_NONINTERACTIVE=0 run_fm open --as priya@example.com --print-url --json --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 assert_eq "False" "$(printf '%s' "$OUT" | jget - 'd["opened"]')"
 case "$(printf '%s' "$OUT" | jget - 'd["url"]')" in
@@ -144,9 +144,35 @@ case "$(printf '%s' "$OUT" | jget - 'd["url"]')" in
   *) fail "unexpected url: $OUT" ;;
 esac
 assert_calls_not_contain '^open '
-OUT_URL="$("$FM" open --as priya@example.com --print-url --bench-dir "$BENCH" 2>/dev/null)"
+OUT_URL="$(BENCHBAR_NONINTERACTIVE=0 "$FM" open --as priya@example.com --print-url --bench-dir "$BENCH" 2>/dev/null)"
 assert_eq "1" "$(printf '%s\n' "$OUT_URL" | wc -l | tr -d ' ')" "(--print-url alone prints one line)"
 case "$OUT_URL" in http://v16dev:8000/login\?redirect-to=%2Fapp\&sid=mocksid0123456789\&t=[0-9]*) ;; *) fail "unexpected url line: $OUT_URL" ;; esac
+
+# the link holds a login session: never printed to a run that has no person (MCP-2), as site open-as on is
+for refused in "BENCHBAR_NONINTERACTIVE=1 run_fm open --as priya@example.com --print-url" \
+               "run_fm open --as priya@example.com --print-url --for-agent" \
+               "run_fm open --as priya@example.com --print-url" \
+               "run_fm open --as priya@example.com --print-url --json" \
+               "BENCHBAR_NONINTERACTIVE=1 run_fm open --as priya@example.com --print-url --json"; do
+  reset_calls
+  eval "$refused --bench-dir \"\$BENCH\""
+  assert_eq "1" "$CODE" "$refused: $OUT"; assert_contains "$OUT" "person"
+  assert_not_contains "$OUT" "mocksid" "($refused)"
+  assert_calls_not_contain '^bench-python' "($refused starts no session)"
+  assert_calls_not_contain '^open '
+done
+# --for-agent wins over an explicit 0 in the environment
+BENCHBAR_NONINTERACTIVE=0 run_fm open --as priya@example.com --print-url --for-agent --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"; assert_not_contains "$OUT" "mocksid"
+# a terminal does not lift it: the mode says nothing can ask
+BENCHBAR_NONINTERACTIVE=1 run_fm_tty open --as priya@example.com --print-url --bench-dir "$BENCH"
+assert_eq "1" "$CODE" "$OUT"; assert_not_contains "$OUT" "mocksid"
+# the person's terminal, and a caller that says BENCHBAR_NONINTERACTIVE=0 itself (the Mac app), still get the link; a plain open --as signs in without printing it
+run_fm_tty open --as priya@example.com --print-url --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "sid=mocksid0123456789"
+reset_calls
+BENCHBAR_NONINTERACTIVE=1 run_fm open --as priya@example.com --json --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"; assert_not_contains "$OUT" "mocksid" "(without --print-url nothing is printed, so nothing is refused)"
 
 # '+' and a quote in the user id stay one argument and come back unchanged
 reset_calls
@@ -260,7 +286,7 @@ printf 'three\n' >>"$MOCK_STATE/hosts_resolve"
 sed_inplace 's/"default_site": "two.localhost"/"default_site": "three"/' "$BENCH/sites/common_site_config.json"
 run_fm open --site three --as priya@example.com --bench-dir "$BENCH"
 assert_eq "1" "$CODE"; assert_contains "$OUT" "three is not a *.localhost name, so the Windows browser may not reach it from WSL."
-run_fm open --site three --as priya@example.com --print-url --bench-dir "$BENCH"
+BENCHBAR_NONINTERACTIVE=0 run_fm open --site three --as priya@example.com --print-url --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "(the person opens the link: --print-url is not refused) $OUT"
 run_fm open --site three --no-browser --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "(plain open is not a sign-in) $OUT"
