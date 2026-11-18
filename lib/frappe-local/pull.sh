@@ -658,7 +658,7 @@ fl_pull_hook_resolve() {
 fl_pull_check_local() {
   fl_pull_check_target
   fl_port_listening 3306 || fl_die "MariaDB is not running (nothing listens on 3306)." "Start it: $(fl_pull_mariadb_start_hint)"
-  fl_mariadb_root_password_resolve || fl_die "The MariaDB root password is needed for the restore." "Re-run with: MARIADB_ROOT_PASSWORD='...' benchbar pull ..." 2
+  fl_mariadb_root_password_resolve || fl_die "The MariaDB root password is needed for the restore." "Ask the person for it (do not look for it), then re-run with: MARIADB_ROOT_PASSWORD='...' benchbar pull ..." 2
   # a dry run does not verify the password; it can still say that none is known
   # and a run in a terminal asks for it, so its dry run only says that it will
   if [[ "${FL_DRY_RUN:-0}" == "1" ]] && ! fl_mariadb_root_password_known; then
@@ -666,7 +666,7 @@ fl_pull_check_local() {
       FL_PULL_NEEDS='"MARIADB_ROOT_PASSWORD"'
       fl_info "the MariaDB root password is not stored: the run asks for it (or pass MARIADB_ROOT_PASSWORD)"
     else
-      fl_die "The MariaDB root password is needed for the restore." "Re-run with: MARIADB_ROOT_PASSWORD='...' benchbar pull ..." 2
+      fl_die "The MariaDB root password is needed for the restore." "Ask the person for it (do not look for it), then re-run with: MARIADB_ROOT_PASSWORD='...' benchbar pull ..." 2
     fi
   fi
   if [[ "$FL_PULL_ENCRYPTED" == "1" ]]; then

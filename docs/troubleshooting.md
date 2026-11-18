@@ -33,6 +33,8 @@ then `benchup`.
 **The site loads without styling.** Run `benchbar doctor`. If the built
 assets are missing, `benchbar repair` runs `bench build`.
 
+**`install` fails at `bench init` with `No such file or directory: 'uv'`, or stops at `Bench directory exists but is incomplete`.** Update BenchBar and run `benchbar install` again: it installs `uv` and moves the empty folder the failed init left aside. The steps, by hand and otherwise, are in [If the install stops](quick-start.md#if-the-install-stops).
+
 **`bench: command not found` after phase 2.** benchbar installs `bench`
 with uv, or with pipx when uv is missing; both put it in `~/.local/bin`.
 Run `uv tool update-shell` (or `pipx ensurepath`) and open a new
@@ -47,7 +49,8 @@ Editing `/etc/hosts` by hand works too, but keep a copy first
 (`sudo cp /etc/hosts /etc/hosts.bak`) and use your site's name in place
 of `macdev`.
 
-**MariaDB rejects the root password.** `benchbar mariadb-password` prints
+**MariaDB rejects the root password.** In your own terminal (not through
+a coding agent, which is refused), `benchbar mariadb-password` prints
 the one in the Keychain; confirm it with `mariadb -u root -p` in another
 tab. If it changed, run `MARIADB_ROOT_PASSWORD='...' benchbar install`
 once to verify and save the new one. Forgotten entirely: see
@@ -260,6 +263,9 @@ are reported so you can remove them by hand.
 - `<bench>/logs/.benchbar/state.json`, written by the runner
 - `<bench>/logs/.benchbar/creating-<site>`, a marker while `bench
   new-site` runs, so an interrupted site is not taken for created
+- `new-site/<hash>.rec` in the state folder, the database name BenchBar
+  chose for that `new-site`; only with it, and only for a database no
+  site names and that holds no users, will a rerun drop the database
 - `<bench>/.benchbar.lock`, the bench's own lock folder during a
   mutating run
 - the state folder, `~/.local/state/benchbar` (`.benchbar/` in a git
@@ -325,7 +331,8 @@ bench's path.
 2. Drop each site's database while the bench folder still exists: the
    database name and user are only written in the site's
    `site_config.json`. Look them up, then drop both in `mariadb -u root
-   -p` (`benchbar mariadb-password --yes` prints the root password):
+   -p` (in your own terminal, `benchbar mariadb-password --yes` prints the
+   root password):
 
    ```bash
    grep -h '"db_name"' ~/frappe-bench/sites/*/site_config.json

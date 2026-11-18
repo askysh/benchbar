@@ -196,6 +196,8 @@ OPT_ERPNEXT_COMMIT=""
 # never answer a question (--yes, --make-default, an approved port plan)
 FL_ASSUME_YES=0
 FL_MAKE_DEFAULT=0
+# install --repair-bench: move an incomplete bench folder aside (phase 01 decides which)
+OPT_REPAIR_BENCH=0
 # install, adopt: --allow-windows-fs lets a bench live on the Windows file system under WSL
 FL_ALLOW_WINDOWS_FS=0
 FL_PORT_PLAN_APPROVED=0
@@ -304,6 +306,7 @@ Daily
                       at boot (sudo, once; a person at a terminal). status (--json), remove, and
                       allow-node (lets the share gateway's node through the macOS firewall).
   mariadb-password    Print the MariaDB root password (Keychain; a 0600 file on Linux; asks first).
+                      A person's command: refused for agents, mcp and without a terminal.
   mcp                 Model Context Protocol server on stdio for coding agents
                       (claude mcp add benchbar -- benchbar mcp). Read tools, up, down, restart,
                       app add from a reviewed plan.
@@ -391,6 +394,8 @@ Options
   --bundle NAME       App bundle for install (minimal, common, extended)
   --make-default      install, adopt, service: make this the default bench even when
                       another one is already the default
+  --repair-bench      install: move a bench folder that is incomplete aside and start over (never
+                      one that holds a site; --dry-run shows the move)
   --allow-windows-fs  install, adopt (WSL): accept a bench on the Windows file system
                       (/mnt/c, drvfs, 9p), which is slow and breaks file watching
   --with-schedule     service: add the scheduler to Procfile.lean (per bench, kept by repair)
@@ -446,6 +451,7 @@ while [[ "$#" -gt 0 ]]; do
     --dry-run) FL_DRY_RUN=1; shift ;;
     --offline) OFFLINE=1; shift ;;
     --make-default) FL_MAKE_DEFAULT=1; shift ;;
+    --repair-bench) OPT_REPAIR_BENCH=1; shift ;;
     --allow-windows-fs) FL_ALLOW_WINDOWS_FS=1; shift ;;
     --with-schedule) FL_SCHEDULER=on; shift ;;
     --without-schedule) FL_SCHEDULER=off; shift ;;
@@ -658,7 +664,7 @@ fl_jsonl_done_generic() {
   if [[ "$code" != "0" ]]; then
     FL_DIE_MESSAGE="${FL_DIE_MESSAGE:-$(fl_log_step_message 0)}"
     extra=",\"error\":$(fl_json_str "${FL_DIE_MESSAGE:-the command failed; see the log}")"
-    [[ "$code" != "2" || "${FL_EXIT2_NOT_PASSWORD:-0}" == "1" ]] || fl_next_action "Run the command again with MARIADB_ROOT_PASSWORD='...' in the environment" "The MariaDB root password is unknown"
+    [[ "$code" != "2" || "${FL_EXIT2_NOT_PASSWORD:-0}" == "1" ]] || fl_next_action "Ask the person for the MariaDB root password (do not look for it); they run the command again with MARIADB_ROOT_PASSWORD='...' in the environment" "The MariaDB root password is unknown"
   fi
   fl_done_fields_v f "$code"
   if [[ -n "$FL_DOC" ]]; then rest="$(fl_doc_rest "$FL_DOC"),"; else
@@ -681,7 +687,7 @@ fl_jsonl_on_exit() {
   FL_JSONL_QUIET=0
   [[ "$code" != "0" || -z "$FL_JSONL_URL" ]] || url="$(fl_json_str "$FL_JSONL_URL")"
   FL_DIE_MESSAGE="${FL_DIE_MESSAGE:-$(fl_log_step_message 0)}"
-  [[ "$code" != "2" ]] || fix="$(fl_json_str "The MariaDB root password is unknown: run the command again with MARIADB_ROOT_PASSWORD='...' in the environment")"
+  [[ "$code" != "2" ]] || fix="$(fl_json_str "The MariaDB root password is unknown: ask the person for it (do not look for it), then run the command again with MARIADB_ROOT_PASSWORD='...' in the environment")"
   # a failure with a stable id and a fix of its own (a port that is taken)
   if [[ "$code" != "0" && -n "$FL_ERROR_FIX" ]]; then
     fix="$(fl_json_str "$FL_ERROR_FIX")"
@@ -902,6 +908,16 @@ fl_install_blockers_die() {
   fl_die "$first_msg" "$first_fix"
 }
 
+# fl_install_rerun_hint: how to start the install again, with a path that works
+# even when "benchbar" is not on PATH in this shell yet
+fl_install_rerun_hint() {
+  local link
+  link="$(fl_cli_link_path)"
+  if [[ -x "$link" || -L "$link" ]]; then
+    fl_info "Run it again: ${link} install   (a new terminal, or: source $(fl_rc_file), puts benchbar on PATH)"
+  fi
+}
+
 cmd_install() {
   local code=0 args00=() args01=() bundle phase00 phase_code=0
   local profile_name
@@ -973,6 +989,7 @@ cmd_install() {
   [[ "$FL_ASSUME_YES" == "1" ]] && { args00+=(--yes); args01+=(--yes); }
   [[ "$OFFLINE" == "1" ]] && { args00+=(--offline); args01+=(--offline); }
   [[ "$FL_MAKE_DEFAULT" == "1" ]] && args01+=(--make-default)
+  [[ "$OPT_REPAIR_BENCH" == "1" ]] && args01+=(--repair-bench)
   [[ -z "$OPT_FRAPPE_COMMIT" ]] || args01+=(--frappe-commit "$OPT_FRAPPE_COMMIT")
   [[ -z "$OPT_ERPNEXT_COMMIT" ]] || args01+=(--erpnext-commit "$OPT_ERPNEXT_COMMIT")
 
@@ -986,6 +1003,10 @@ cmd_install() {
   fl_sudo_phase_done
   if [[ "$phase_code" == "0" ]]; then
     fl_step_end "done"
+    # benchbar on PATH from here on, not only after the whole install: a run that stops
+    # in the bench step (or is cut short) is started again with "benchbar install"
+    # (issue 112: "command not found" until the first install had finished)
+    [[ "$FL_DRY_RUN" == "1" ]] || act_write_cli_link || fl_warn "could not link benchbar into ~/.local/bin; run: ${FL_SELF} repair"
   else
     code="$phase_code"
     if [[ "$code" == "2" ]]; then
@@ -1030,6 +1051,7 @@ cmd_install() {
     fi
     fl_step_end failed
     fl_steps_summary
+    fl_install_rerun_hint
     return "$code"
   fi
   fl_remember_bench || fl_info "the default bench stays $(fl_state_get BENCH_DIR) (--make-default changes it)"

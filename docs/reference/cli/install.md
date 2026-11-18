@@ -36,7 +36,7 @@ environment variables and what each needs, as one document.
 ## install
 
 ```
-benchbar install [--profile NAME] [--bundle NAME] [--make-default] [--port-offset N] [--frappe-commit SHA] [--erpnext-commit SHA] [--offline] [--dry-run] [--yes] [--json]
+benchbar install [--profile NAME] [--bundle NAME] [--make-default] [--repair-bench] [--port-offset N] [--frappe-commit SHA] [--erpnext-commit SHA] [--offline] [--dry-run] [--yes] [--json]
 ```
 
 Runs phase 00 (system dependencies), phase 01 (bench and site) and the
@@ -59,6 +59,7 @@ phase scripts: no other program started by the install sees them.
 | `--profile NAME` | Release profile (default `v15-lts`), or a team profile ([Configuration](../configuration.md#profiles)) |
 | `--bundle NAME` | App bundle: `minimal`, `common` or `extended` |
 | `--make-default` | Make this the default bench even when another one is already the default |
+| `--repair-bench` | Move a bench folder that is incomplete aside (to `<folder>.incomplete.<time>`) and start over. A folder that holds only empty folders is moved without it. Never a bench that holds a site or an app of yours. With `--dry-run` it shows the `mv` |
 | `--port-offset N` | Use port block N (web 8000+N, socketio 9000+N, redis 11000+N and 13000+N). Default: keep the ports, or the next free block when another bench already uses them |
 | `--with-schedule`, `--without-schedule` | Add the scheduler to `Procfile.lean`, or leave it out (the default) |
 | `--dry-run` | Print the plan of every phase, change nothing |

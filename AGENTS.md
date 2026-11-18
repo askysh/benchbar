@@ -102,9 +102,10 @@ MARIADB_ROOT_PASSWORD='...' ADMIN_PASSWORD='...' ./benchbar install --yes
 `ADMIN_PASSWORD` is the site's Administrator login; ask the user for it,
 or run without `--yes` and let them type it. `MARIADB_ROOT_PASSWORD` is
 optional: a fresh MariaDB gets a generated password, an existing password
-is read from the Keychain (`benchbar mariadb-password --yes` prints it). Only
+is read from the Keychain, and no command hands it to an agent. Only
 when MariaDB already has a password that neither the environment nor the
-Keychain knows does the run stop with exit code 2 and say what to pass. A
+Keychain knows does the run stop with exit code 2: ask the person for it
+and do not look for it. A
 fresh Homebrew MariaDB, whose root logs in over the socket only, is
 secured through the macOS user's socket account and needs no password.
 The patched wkhtmltopdf package and the `/etc/hosts` line need `sudo`;
@@ -233,6 +234,12 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
   the variables that tell the CLI a person is at the keyboard, so the rule is
   yours to keep) and never ask for or use an
   `open --as --print-url` link: it holds a login session for that user.
+  The CLI guards it: `open --as USER --print-url` refuses under
+  `--for-agent`, `BENCHBAR_NONINTERACTIVE=1` and `benchbar mcp`, and when
+  stdin is not a terminal unless the caller sets `BENCHBAR_NONINTERACTIVE=0`
+  itself (the Mac app does), as `site open-as on` does. A process of the same
+  user that fakes a terminal or sets that variable is not stopped: the guard
+  is against a mistake, not a boundary, so the rule above is the rule.
 - Experiments are the person's choice. `benchbar labs` lists them; never
   run `benchbar labs on` (it refuses an agent anyway, and a process of the same
   user can set the variables it looks at, so keep the rule). A command of an
@@ -240,8 +247,13 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
   tell the user, do not work around it. `status --json` and
   `commands --json` list the `labs` that are on.
 - Never print or log the MariaDB root password. It lives in the Keychain
-  (a 0600 file on Linux);
-  `benchbar mariadb-password --yes` prints it when a user asks for it.
+  (a 0600 file on Linux). `benchbar mariadb-password` is the person's own
+  command: it refuses under `--for-agent`, `BENCHBAR_NONINTERACTIVE`,
+  `benchbar mcp` and without a terminal, whatever `--yes` says. That stops
+  the documented agent modes and a missing terminal; a process of the same
+  user that fakes a terminal, or reads the Keychain itself, is not stopped
+  (SECURITY.md says so). If you need the password, ask the person; never
+  try to read it another way.
 - When something is wrong, `./benchbar report --print` shows the redacted
   diagnostics; `./benchbar report` writes the zip for a bug report.
 - If doctor warns about CleanMyMac or Mole, tell the user to add the

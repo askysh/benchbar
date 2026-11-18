@@ -187,7 +187,7 @@ fl_srestore_plan() {
       SR_NEEDS='"MARIADB_ROOT_PASSWORD"'
       # a run in a terminal asks for it; any other run cannot
       [[ -t 0 && "${FL_ASSUME_YES:-0}" != "1" && "${OPT_JSON:-0}" != "1" && "$SR_APPLY" != "1" ]] \
-        || fl_srestore_err "the MariaDB root password is unknown to benchbar; run the command with MARIADB_ROOT_PASSWORD='...' in the environment"
+        || fl_srestore_err "the MariaDB root password is unknown to benchbar; ask the person for it (do not look for it), then run the command with MARIADB_ROOT_PASSWORD='...' in the environment"
     fi
   fi
   # the hook
@@ -507,7 +507,7 @@ fl_srestore_run() {
 fl_srestore_execute() {
   local code=0
   # the password is resolved (and tried against the server) before anything changes
-  [[ -n "$FL_MARIADB_ROOT_PW" && "${FL_MARIADB_ROOT_PW_SOURCE:-}" != dry-run ]] || fl_mariadb_root_password_resolve || fl_die "The MariaDB root password is needed for the restore." "Re-run with: MARIADB_ROOT_PASSWORD='...' benchbar site restore ..." 2
+  [[ -n "$FL_MARIADB_ROOT_PW" && "${FL_MARIADB_ROOT_PW_SOURCE:-}" != dry-run ]] || fl_mariadb_root_password_resolve || fl_die "The MariaDB root password is needed for the restore." "Ask the person for it (do not look for it), then re-run with: MARIADB_ROOT_PASSWORD='...' benchbar site restore ..." 2
   # nothing below may ask a question: frappe's downgrade prompt would hang a terminal
   exec 0</dev/null
   fl_srestore_run || code=$?
