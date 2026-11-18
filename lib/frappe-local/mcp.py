@@ -312,7 +312,8 @@ def site_restore_args(a):
 # sites from a reviewed plan: a throwaway site, a copy of a site for QA. The
 # MariaDB root operations stay inside benchbar; the agent never gets the
 # root password, and the Administrator password of a new site is the one it
-# passes or one generated here and returned once.
+# passes or one generated here and kept for the person in a file (never
+# returned: a result lives in the model's context and in any transcript).
 TOOLS["benchbar_site_add_plan"] = (
     "Plan a new site on a bench, read only: the steps (bench new-site, install the given apps, the hosts line), what they "
     "touch, the default site (which never moves) and a token for benchbar_site_add. Show this plan to the person first. "
@@ -325,8 +326,9 @@ TOOLS["benchbar_site_add_plan"] = (
 TOOLS["benchbar_site_add"] = (
     "Apply a plan from benchbar_site_add_plan: create the site with benchbar's own MariaDB credentials, install the apps, "
     "add the hosts line. Only after the person saw the plan; pass the same arguments and the plan's token. "
-    "admin_password is the new site's Administrator password; without it one is generated and returned once in the "
-    "result (admin_password). The default site does not change. Takes minutes.",
+    "admin_password is the new site's Administrator password; without it one is generated and saved for the person "
+    "in a file only they read (the result names it as admin_password_file, never the password): ask the person for the "
+    "login, or pass your own admin_password. The default site does not change. Takes minutes.",
     dict(SITE_ADD, token=TOKEN, admin_password={"type": "string", "description": "The new site's Administrator password (optional; generated when absent)."}),
     lambda a: site_add_args(a) + ["--apply", a["token"], "--yes", "--json"],
     False,
@@ -386,8 +388,11 @@ REQUIRED = {
     "benchbar_service_install": ["token"],
 }
 # per call environment: site add gets the new site's Administrator password,
-# the one passed or one generated here (returned once in the result)
+# the one passed or one generated here. A generated one is saved for the person
+# (keep_generated_password) and is in no result.
 ALPHABET = string.ascii_letters + string.digits
+SITE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+GENERATED = "_generated_password"  # the key that carries the password to the saving step, never into a result
 
 
 def site_add_env(a):
@@ -395,7 +400,46 @@ def site_add_env(a):
     if password:
         return {"ADMIN_PASSWORD": password}, {}
     password = "".join(secrets.choice(ALPHABET) for _ in range(20))
-    return {"ADMIN_PASSWORD": password}, {"admin_password": password, "admin_password_generated": True}
+    return {"ADMIN_PASSWORD": password}, {"admin_password_generated": True, GENERATED: password}
+
+
+def keep_generated_password(site, password, call):
+    """Save the generated Administrator password of a site this call created in <state folder>/site-admin/SITE
+    (0600 in a 0700 folder) and return the result fields that say where: the password itself is never returned."""
+    shown = site if SITE_NAME.match(site or "") else "SITE"
+    lost = {"admin_password_generated": True, "admin_password_note":
+            "A generated Administrator password could not be saved, so nobody has it. The person can set one: "
+            "bench --site %s set-admin-password" % shown}
+    try:
+        if not SITE_NAME.match(site or ""):
+            return lost
+        code, out, _ = run_cli(["where", "--json"], timeout=30, call=call)
+        folder = os.path.join(json.loads(out)["state_dir"], "site-admin")
+        os.makedirs(folder, mode=0o700, exist_ok=True)
+        os.chmod(folder, 0o700)
+        path = os.path.join(folder, site)
+        # a new file of our own (O_EXCL, 0600) renamed over the target, so a file that was there
+        # with a looser mode, or as a link, never decides who can read the password
+        tmp = os.path.join(folder, ".%s.%d.%s.tmp" % (site, os.getpid(), secrets.token_hex(4)))
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            with os.fdopen(fd, "w") as f:
+                os.fchmod(f.fileno(), 0o600)
+                f.write(password + "\n")
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, path)
+        except BaseException:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
+    except (OSError, ValueError, KeyError, TypeError):
+        return lost
+    return {"admin_password_generated": True, "admin_password_file": path, "admin_password_note":
+            "The generated Administrator password is not shown here. The person can read it in that file; ask them "
+            "for the login, or create a site with your own admin_password."}
 
 
 ENV = {"benchbar_site_add": site_add_env}
@@ -944,10 +988,14 @@ def tool_call(params, call=None):
             if done is not None:  # JSON lines: the done line is the result
                 summary["result"] = scrub(done)
                 summary["output"] = scrub(err.strip())
-    # a generated Administrator password is returned only for a site this run
+    # a generated Administrator password is kept (never returned) only for a site this run
     # created: a site that existed keeps its own, and the generated one was unused
     if code == 0 and extra_result and isinstance(summary.get("result"), dict) and summary["result"].get("created") is True:
-        summary.update(extra_result)
+        generated = extra_result.get(GENERATED)
+        if generated:
+            summary.update(keep_generated_password(arguments.get("site"), generated, call))
+        else:
+            summary.update(extra_result)
     # the action's result stands whatever happens to the status after it
     what = " ".join(after(arguments)[:2])
     after_timeout = tool_timeout(AFTER_TOOL[key])
