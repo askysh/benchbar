@@ -127,7 +127,9 @@ if [[ -n "${BENCH_COUNT_GIT:-}" ]]; then : >"$TMP_DIR/git-calls.log"; : >"$TMP_D
 timed "app list --json --no-sites" "$FM" app list --json --no-sites --bench-dir "$BENCH"
 [[ -z "${BENCH_COUNT_GIT:-}" ]] || printf '  git processes: %s, others: %s\n' "$(wc -l <"$TMP_DIR/git-calls.log" | tr -d ' ')" "$(awk '{c[$1]++} END {for (k in c) printf "%s %s, ", k, c[k]}' "$TMP_DIR/exec.log")"
 [[ -z "${BENCH_EXEC_DETAIL:-}" ]] || sort "$TMP_DIR/exec.log" | uniq -c | sort -rn | head -30
+if [[ -n "${BENCH_COUNT_GIT:-}" ]]; then : >"$TMP_DIR/git-calls.log"; : >"$TMP_DIR/exec.log"; fi
 timed "app list --json (plain, with sites)" "$FM" app list --json --bench-dir "$BENCH"
+[[ -z "${BENCH_COUNT_GIT:-}" ]] || printf '  git processes: %s, others: %s\n' "$(wc -l <"$TMP_DIR/git-calls.log" | tr -d ' ')" "$(awk '{c[$1]++} END {for (k in c) printf "%s %s, ", k, c[k]}' "$TMP_DIR/exec.log")"
 timed "app list --no-sites (text)" "$FM" app list --no-sites --bench-dir "$BENCH"
 timed "app focus --json" "$FM" app focus --json --bench-dir "$BENCH"
 if [[ -n "${BENCH_COUNT_GIT:-}" ]]; then : >"$TMP_DIR/git-calls.log"; fi
