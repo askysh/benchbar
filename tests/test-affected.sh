@@ -82,6 +82,29 @@ printf 'x\n' >"$REPO/lib/frappe-local/share/gateway.js"
 aff --base main --list
 for t in test-share test-share-gateway; do assert_contains "$OUT" " $t" "(share/gateway.js)"; done
 reset
+# the LAN gateway's own JavaScript tests and their helpers
+mkdir -p "$REPO/tests/share"
+for f in tests/share/join.test.js tests/share/gateway_harness.js; do
+  printf 'x\n' >"$REPO/$f"
+  aff --base main --list
+  assert_contains "$OUT" "test-share-gateway" "($f)"; assert_not_contains "$OUT" "every test" "($f)"
+  reset
+  mkdir -p "$REPO/tests/share"
+done
+# a file no test is known to cover runs everything; the files another job covers run nothing
+for f in scripts/unknown-tool.py .shellcheckrc .gitignore tests/data.json; do
+  printf 'x\n' >"$REPO/$f"
+  aff --base main --machine
+  assert_contains "$OUT" "mode=full" "($f)"
+  reset
+done
+for f in install.ps1 scripts/app-icon.py windows/tray/a.cs macos/a.swift examples/x.json CHANGELOG.md .github/workflows/other.yml; do
+  case "$f" in */*) mkdir -p "$REPO/${f%/*}" ;; esac
+  printf 'x\n' >"$REPO/$f"
+  aff --base main --machine
+  assert_contains "$OUT" "mode=none" "($f)"
+  reset
+done
 # the fixtures the macOS app tests share with the CLI tests
 printf '{}\n' >"$REPO/macos/BenchBarTests/Fixtures/x.json"
 aff --base main --list

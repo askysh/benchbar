@@ -73,11 +73,12 @@ permissions:
 
 # One run per pull request: a push to the branch cancels the run before it.
 # The group has the pull request number, not the ref, so a pull request run
-# and the push run after its merge never cancel each other. A push to main
-# (the release) is never cancelled.
+# and the push run after its merge never cancel each other. A push to
+# next-release or main is never cancelled: a full run per merge must finish.
 concurrency:
   group: ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  # only a pull request's older run is stale; a push to next-release or main must finish (a full run per merge)
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   changes:

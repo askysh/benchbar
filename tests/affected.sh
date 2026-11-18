@@ -31,7 +31,11 @@
 #   scripts/X.sh            the tests that run it (script_tests below)
 #   docs/                   test-docs, test-docs-command
 #   any shell file          shellcheck
-#   site/ and the rest (macos/, windows/, .github/, *.md)   nothing
+#   tests/share/            test-share-gateway
+#   macos/, windows/, examples/, site/, .github/, .claude/, install.ps1,
+#   scripts/app-*.py and *.md   nothing here: the app, tray, shim and Windows installer
+#                           jobs, the workflows themselves and the docs site cover them
+#   any other file          the full suite (a file nothing maps to is not assumed safe)
 
 set -euo pipefail
 
@@ -48,7 +52,7 @@ while [[ "$#" -gt 0 ]]; do
     --lib-coverage) lib_coverage=1; shift ;;
     --machine) machine=1; list=1; shift ;;
     --files) [[ "$#" -ge 2 ]] || { printf 'affected: --files needs a list\n' >&2; exit 1; }; files_arg="$2"; have_files=1; shift 2 ;;
-    -h|--help) sed -n '3,34p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '3,40p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) printf 'affected: unknown argument %s (see --help)\n' "$1" >&2; exit 1 ;;
   esac
 done
@@ -152,6 +156,7 @@ while IFS= read -r f; do
   [[ -n "$f" ]] || continue
   case "$f" in
     tests/lib/* | tests/mocks/* | tests/run-tests.sh | tests/affected.sh | benchbar | frappe-mac | templates/* | config/* | 0[0-2]-*.sh) full=1 ;;
+    tests/share/*) pick test-share-gateway ;;
     tests/test-*.sh) [[ -f "$f" ]] && pick "$(t="${f##*/}"; printf '%s' "${t%.sh}")"; shell=1 ;;
     lib/frappe-local/share/*) lib=1; pick_family "$(lib_family share)" ;;
     lib/frappe-local/*.sh)
@@ -169,6 +174,12 @@ while IFS= read -r f; do
       shell=1
       t="${f##*/}"; pick_family "$(script_tests "${t%.sh}")" ;;
     docs/*) pick_family "test-docs test-docs-command" ;;
+    # no CLI test, by design: another job runs it (the app and the tray and shim jobs, the
+    # Windows installer test of release-windows.yml for install.ps1, the workflow itself
+    # for .github/, docs.yml for site/), or it is prose or agent tooling
+    macos/* | windows/* | site/* | examples/* | .github/* | .claude/* | install.ps1 | scripts/app-*.py | *.md | LICENSE) ;;
+    # a file nothing above knows: no test is known to cover it, so run them all
+    *) full=1 ;;
   esac
   case "$f" in
     *.sh | benchbar | frappe-mac) [[ -f "$f" ]] && shfiles_all="$shfiles_all $f" ;;
@@ -179,7 +190,7 @@ if [[ "$full" == 1 ]]; then
   if [[ "$machine" == 1 ]]; then
     printf 'mode=full\ntests=\nshellcheck=true\nshellcheck_files=\n'; exit 0
   fi
-  printf 'affected: a change to the harness, the selector, the entry point, templates, config or the phases: every test\n'
+  printf 'affected: a change to the harness, the selector, the entry point, templates, config, the phases or a file no test is known to cover: every test\n'
   [[ "$list" == 1 ]] && exit 0
   exec bash "$ROOT/tests/run-tests.sh"
 fi

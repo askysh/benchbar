@@ -69,6 +69,51 @@ assert_eq "0" "$(val macos_n)"
 plan EVENT=pull_request FILES="lib/frappe-local/ports.sh" LABELS="test-linux"
 assert_eq "true" "$(val real)"
 
+# ---- a selected test that every planned leg skips turns macOS on (never a green run that ran nothing)
+# fl_same_path lives in state.sh, which macos_paths does not match; test-share-run names it
+plan EVENT=pull_request FILES="lib/frappe-local/state.sh"
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$(val tests)" "test-share-run"
+at_least_one macos_n
+# a macOS only test picked by name is the other way in
+plan EVENT=pull_request FILES="tests/test-share-admin.sh"
+at_least_one macos_n
+# a change whose tests all run on Linux keeps macOS off
+plan EVENT=pull_request FILES="lib/frappe-local/ports.sh tests/test-ports.sh"
+assert_eq "0" "$(val macos_n)"
+# every selected test is on some leg, for each file of the real tree that selects a test
+for f in lib/frappe-local/state.sh lib/frappe-local/service.sh lib/frappe-local/doctor.sh lib/frappe-local/share/gateway.js tests/share/join.test.js; do
+  plan EVENT=pull_request FILES="$f"
+  assert_eq "0" "$CODE" "($f) $OUT"
+  for t in $(val tests); do
+    ran=0
+    for leg in linux bash32 macos; do
+      [[ "$(val ${leg}_n)" -ge 1 ]] || continue
+      case " $(val ${leg}_skip) " in *" $t "*) ;; *) ran=1 ;; esac
+    done
+    [[ "$ran" == 1 ]] || fail "($f) $t is selected and no planned leg runs it: $OUT"
+  done
+done
+# a dispatch that names its legs and leaves out the only leg that can run the test is refused;
+# with no legs named it turns macOS on
+plan EVENT=workflow_dispatch INPUT_TESTS="test-share" INPUT_LEGS="linux bash32"
+assert_eq "1" "$CODE"; assert_contains "$OUT" "test-share would run on no leg"
+plan EVENT=workflow_dispatch INPUT_TESTS="test-share"
+assert_eq "0" "$CODE" "$OUT"; at_least_one macos_n
+
+# ---- install.ps1 has no CLI test: the Windows installer job of release-windows.yml covers it on its own
+# pull request trigger, so ci.yml plans nothing for it. Guard that trigger.
+plan EVENT=pull_request FILES="install.ps1"
+assert_eq "0" "$CODE" "$OUT"; assert_eq "false" "$(val full)"; assert_eq "[]" "$(val linux_shards)"
+sed -n '/^  pull_request:/,/^permissions:/p' .github/workflows/release-windows.yml | grep -q '"install.ps1"' \
+  || fail "release-windows.yml no longer runs on a pull request that changes install.ps1, and ci.yml plans nothing for it"
+# the app icon script is the app job's
+plan EVENT=pull_request FILES="scripts/app-icon.py"
+assert_eq "true" "$(val app)"; assert_eq "[]" "$(val linux_shards)"; assert_eq "false" "$(val full)"
+# a file nothing maps to runs everything
+plan EVENT=pull_request FILES="scripts/unknown-tool.py"
+assert_eq "true" "$(val full)"; assert_eq "[1,2,3,4,5,6,7,8]" "$(val linux_shards)"
+
 # ---- the harness, a mock, run-tests.sh, the selector, the entry point: everything everywhere, no app
 for f in tests/lib/harness.sh tests/mocks/bin/git tests/run-tests.sh tests/affected.sh benchbar templates/Procfile.lean.tmpl; do
   plan EVENT=pull_request FILES="$f"

@@ -25,6 +25,9 @@
 #   pull request   the tests tests/affected.sh picks, on Linux and in the
 #                  bash 3.2 container. macOS only when a path that needs macOS
 #                  changed (macos_paths below), or the label test-macos is on.
+#                  A selected test that every planned leg skips (the LAN share
+#                  tests, picked through a shared lib file) turns macOS on; one
+#                  no leg can run fails the plan.
 #                  The harness, the mocks, run-tests.sh, affected.sh, the entry
 #                  point, templates, config, the phases or the CI files
 #                  themselves run everything everywhere.
@@ -58,7 +61,7 @@ TARGET_MACOS=900 MAX_MACOS=4
 # the paths a pull request needs macOS for: BSD tools, launchd, the Keychain,
 # pf and the installers. Everything else is the same bash on Linux.
 macos_paths='^(lib/frappe-local/(platform|launchd|lan-guard|mariadb|sudo|wkhtmltopdf|share[a-z-]*)\.sh|lib/frappe-local/share/.*|00-mac-system-deps\.sh|install\.sh|packaging/.*|templates/(launchagent|share)\.plist\.tmpl|tests/test-(platform|lan-guard|share[a-z-]*|hygiene|service|templates|shellrc|install-sh|homebrew|packaging)\.sh)$'
-app_paths='^(macos/.*|scripts/(macos-[a-z-]+|release-local|app-[a-z-]+|ci-annotate)\.sh)$'
+app_paths='^(macos/.*|examples/.*|scripts/(macos-[a-z-]+|release-local|app-[a-z-]+|ci-annotate)\.sh|scripts/app-[a-z-]+\.py)$'
 shim_paths='^windows/shim/.*$'
 ci_paths='^(\.github/workflows/ci\.yml|scripts/ci-plan\.sh)$'
 docs_paths='^(docs/.*|site/.*|.*\.md|LICENSE)$'
@@ -173,6 +176,27 @@ case "$EVENT" in
 esac
 has_word "$LABELS" test-linux && [[ "$EVENT" == pull_request && "$code" == true ]] && real=true
 
+# ---- every selected test runs on at least one leg
+# A test one platform leaves out (the LAN share is macOS only) can be picked through a
+# shared lib file that macos_paths does not match. When every leg of the plan skips it,
+# the macOS leg is turned on for it. A test no leg can run, or a dispatch that names the
+# legs and leaves it out, fails the plan: a green run must never mean "not run".
+leg_runs() { # TEST: a leg that runs, and does not skip it
+  [[ "$run_linux" == true ]] && ! has_word "$SKIP_LINUX" "$1" && return 0
+  [[ "$run_bash32" == true ]] && ! has_word "$SKIP_BASH32" "$1" && return 0
+  [[ "$run_macos" == true ]] && ! has_word "$SKIP_MACOS" "$1" && return 0
+  return 1
+}
+macos_for=""
+for t in $tests; do
+  if leg_runs "$t"; then continue; fi
+  if ! has_word "$SKIP_MACOS" "$t" && [[ "$EVENT" != workflow_dispatch || -z "$INPUT_LEGS" ]]; then
+    run_macos=true; macos_for="${macos_for:+$macos_for }$t"; continue
+  fi
+  printf 'ci-plan: %s would run on no leg (every leg of the plan leaves it out)\n' "$t" >&2
+  exit 1
+done
+
 # ---- shards
 # weight LEG: the table seconds of the leg's tests
 weight() { # PLATFORM SKIP
@@ -227,6 +251,7 @@ if [[ -n "${PLAN_SUMMARY:-}" ]]; then
     printf '| bash 3.2 container | %s | %s |\n' "$run_bash32" "$n_bash32"
     printf '| macOS | %s | %s |\n' "$run_macos" "$n_macos"
     printf '| shellcheck | %s | |\n| app (macOS) | %s | |\n| Windows shim | %s | |\n| real install | %s | |\n\n' "$shellcheck" "$app" "$shim" "$real"
+    [[ -z "$macos_for" ]] || printf 'macOS is on because only it runs: `%s`.\n\n' "$macos_for"
     if [[ -n "$tests" ]]; then printf 'Tests: `%s`\n' "$tests"; elif [[ "$full" == true ]]; then printf 'Tests: the whole suite.\n'; else printf 'Tests: none.\n'; fi
   } >>"$PLAN_SUMMARY"
 fi
