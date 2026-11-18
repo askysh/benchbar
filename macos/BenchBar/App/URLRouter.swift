@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// `benchbar://` links, for Raycast, Shortcuts and the like. Pure: a URL
@@ -91,6 +92,27 @@ nonisolated enum URLRouter {
             case .unknownRoute(let word): return word.isEmpty ? "no route in the link" : "unknown route \"\(word)\""
             }
         }
+    }
+
+    /// What a link is called in the log: the scheme and the action word, never the host, path,
+    /// query or userinfo (a profile link can carry a token, a share link a room code). A link
+    /// that is not one of ours, or has a route we do not have, is only a short hash, enough to
+    /// tell two apart and nothing to read back.
+    static func logLabel(_ url: URL) -> String {
+        if url.scheme?.lowercased() == scheme {
+            let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            let words = ((url.host(percentEncoded: false) ?? "") + "/" + (components?.path ?? ""))
+                .split(separator: "/").map { $0.lowercased() }
+            if let first = words.first {
+                if Route(rawValue: first) != nil { return "\(scheme)://\(first)" }
+                if first == "share" { return "\(scheme)://share" }
+                if first == "profile", words.count > 1, words[1] == "import" || words[1] == "subscribe" {
+                    return "\(scheme)://profile/\(words[1])"
+                }
+            }
+        }
+        let digest = SHA256.hash(data: Data(url.absoluteString.utf8))
+        return "other link, hash " + digest.prefix(6).map { String(format: "%02x", $0) }.joined()
     }
 
     /// The whole decision: parse, then pick the bench. `selected` is the

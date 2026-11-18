@@ -143,6 +143,74 @@ struct RunnerPackageTests {
         expectError(.missingFile("a.png"), folder)
     }
 
+    // UI-5: a manifest from a zip off the internet
+
+    @Test func aSymlinkedManifestIsRejected() throws {
+        let folder = try RunnerFolder.valid(in: dir)
+        let real = try RunnerFolder(in: dir, name: "real-manifest")
+        try real.manifest(#"{"name": "Evil", "template": true, "states": {"running": ["run1.png"]}}"#)
+        let manifest = folder.url.appendingPathComponent("manifest.json")
+        try FileManager.default.removeItem(at: manifest)
+        try FileManager.default.createSymbolicLink(at: manifest, withDestinationURL: real.url.appendingPathComponent("manifest.json"))
+        expectError(.badManifest("it is not a plain file"), folder)
+    }
+
+    @Test func aManifestThatIsNotAFileIsRejectedWithoutReadingIt() throws {
+        let folder = try RunnerFolder.valid(in: dir)
+        let manifest = folder.url.appendingPathComponent("manifest.json")
+        try FileManager.default.removeItem(at: manifest)
+        #expect(mkfifo(manifest.path, 0o600) == 0)
+        // a FIFO with no writer blocks a plain read for ever: this must answer at once
+        expectError(.badManifest("it is not a plain file"), folder)
+    }
+
+    @Test func aHugeManifestIsRejectedAfterReadingNoMoreThanTheLimit() throws {
+        let folder = try RunnerFolder.valid(in: dir)
+        try Data(repeating: 0x20, count: 5 * 1024 * 1024).write(to: folder.url.appendingPathComponent("manifest.json"))
+        expectError(.badManifest("it is larger than 64 KB"), folder)
+    }
+
+    func zip(_ source: RunnerFolder, keepParent: Bool = true) throws -> URL {
+        let zip = dir.url.appendingPathComponent("\(UUID().uuidString).zip")
+        let ditto = Process()
+        ditto.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+        ditto.arguments = ["-c", "-k"] + (keepParent ? ["--keepParent"] : []) + [source.url.path, zip.path]
+        try ditto.run(); ditto.waitUntilExit()
+        #expect(ditto.terminationStatus == 0)
+        return zip
+    }
+
+    @Test func aZipWithASymlinkedManifestImportsNothing() throws {
+        let source = try RunnerFolder.valid(in: dir, name: "sneaky")
+        let manifest = source.url.appendingPathComponent("manifest.json")
+        let real = dir.url.appendingPathComponent("elsewhere.json")
+        try FileManager.default.moveItem(at: manifest, to: real)
+        try FileManager.default.createSymbolicLink(at: manifest, withDestinationURL: real)
+        let lib = library()
+        #expect(throws: RunnerError.badArchive("it holds a link or another file that is not a plain file")) {
+            try lib.importRunner(from: try zip(source))
+        }
+        #expect(lib.custom.isEmpty)
+        #expect(!FileManager.default.fileExists(atPath: lib.folder.appendingPathComponent("sneaky").path))
+    }
+
+    @Test func aZipWithAnyLinkInsideIsRefusedEvenForAnUnlistedFile() throws {
+        let source = try RunnerFolder.valid(in: dir, name: "linky")
+        try FileManager.default.createSymbolicLink(at: source.url.appendingPathComponent("notes.txt"),
+                                                   withDestinationURL: URL(fileURLWithPath: "/etc/hosts"))
+        let lib = library()
+        #expect(throws: RunnerError.badArchive("it holds a link or another file that is not a plain file")) {
+            try lib.importRunner(from: try zip(source))
+        }
+        #expect(lib.custom.isEmpty)
+    }
+
+    @Test func aPlainZipStillImports() throws {
+        let source = try RunnerFolder.valid(in: dir, name: "fine")
+        let lib = library()
+        #expect(try lib.importRunner(from: try zip(source)) == "fine")
+    }
+
     @Test func runnersOver2MBAreRejected() throws {
         let folder = try RunnerFolder.valid(in: dir)
         try Data(count: RunnerLoader.maxBytes).write(to: folder.url.appendingPathComponent("padding.bin"))

@@ -284,8 +284,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let benches = store.benches.map {
             URLRouter.Bench(path: $0.path, name: $0.name, sites: $0.siteRows.map(\.name))
         }
-        // a share link can carry a room code: its address is never logged, only a generic line
-        let link = url.host(percentEncoded: false)?.lowercased() == "share" ? "share link" : String(url.absoluteString.prefix(300))
+        // a link can carry a room code or a profile token: only its scheme and action are logged (MAC-10)
+        let link = URLRouter.logLabel(url)
         switch URLRouter.route(url, benches: benches, selected: store.selectedPath, lanRooms: Labs.shared.isOn(.lanRooms)) {
         case .ignore(let reason):
             Self.urlLog.notice("Ignored \(link, privacy: .public): \(reason, privacy: .public)")
@@ -312,11 +312,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             openMainWindow()
         case .run(let route, let path, let site):
             guard let bench = store.benches.first(where: { $0.path == path }) else { return }
+            if LinkConfirm.needsAsking(route, setting: settings.confirmLinkActions) {
+                let question = LinkConfirm.question(route, bench: bench.name)
+                guard ShareConfirm.ask(question.title, detail: question.detail, button: question.button) else {
+                    Self.urlLog.info("\(route.rawValue, privacy: .public) on \(bench.name, privacy: .public): not confirmed")
+                    return
+                }
+            }
             Self.urlLog.info("\(route.rawValue, privacy: .public) on \(bench.name, privacy: .public)")
             switch route {
             case .up: Task { await store.perform(.up, on: bench) }
-            case .down: Task { await store.perform(.down, on: bench, fromLink: true) }
-            case .restart: Task { await store.perform(.restart, on: bench, fromLink: true) }
+            // with the confirm setting on, the alert above came first and the room confirm still follows
+            case .down: Task { await store.perform(.down, on: bench, fromLink: !settings.confirmLinkActions) }
+            case .restart: Task { await store.perform(.restart, on: bench, fromLink: !settings.confirmLinkActions) }
             case .open:
                 if let site, let row = bench.siteRows.first(where: { $0.name == site }) {
                     Workspace.open(row.url)

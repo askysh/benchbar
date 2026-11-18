@@ -72,7 +72,7 @@ Encode a path in a query: `/` becomes `%2F`, a space `%20`.
 `FINGERPRINT` is the first 16 hex characters of the room's pinned certificate
 fingerprint: it names a room, it is not a secret. The first link opens a room
 you already joined without asking, like `benchbar://open`. BenchBar logs only
-"share link", never the address.
+`benchbar://share`, never the address.
 
 ## Profile links
 
@@ -98,8 +98,13 @@ at a prompt; nothing runs in it until you type. There is no route for repair, in
 pull, restore, dropping a site or anything else that changes or deletes
 files; the profile links only fill in a sheet, and the app ignores any
 route not in the tables above and logs it.
-Browsers ask before a page opens an app, so a page cannot do even that
-silently.
+Browsers ask before a page opens an app, but they also offer "always
+allow this site", and after that a page can open any route above without a
+click. That is the risk of the scheme: a page you visit can stop or restart
+your bench or open Terminal windows. **Settings, Links, Ask before a link acts**
+makes BenchBar ask first for `up`, `down`, `restart`, `console` and `db`. It is
+off by default so Raycast and Shortcuts keep working; see
+[the app page](../app.md#links-for-raycast-and-shortcuts).
 
 To see ignored links, stream the app's log:
 
