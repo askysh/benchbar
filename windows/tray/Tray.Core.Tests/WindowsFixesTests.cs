@@ -150,16 +150,17 @@ public class WindowsFixesTests
     public async Task AGrandchildThatHoldsThePipeDoesNotHangTheCall()
     {
         if (!OperatingSystem.IsWindows()) return;
-        // cmd ends at once, and the ping it started in the background keeps the output pipe (it writes to it) for about 14 seconds
+        // cmd ends at once, and the ping it started in the background keeps the output pipe (it writes to it) for about 29 seconds;
+        // the 5 second grace returns long before that, and the wide margin keeps a slow runner from failing the test
         var lines = new List<string>();
         var watch = Stopwatch.StartNew();
-        var result = await new SystemStreamRunner().RunAsync("cmd.exe", ["/c", "echo first & start /b ping -n 15 127.0.0.1 & exit /b 0"], null,
+        var result = await new SystemStreamRunner().RunAsync("cmd.exe", ["/c", "echo first & start /b ping -n 30 127.0.0.1 & exit /b 0"], null,
             line => { lock (lines) lines.Add(line); }, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken);
         watch.Stop();
 
         Assert.Equal(0, result.ExitCode);
         Assert.Contains(lines, l => l.Contains("first"));
-        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(11), $"took {watch.Elapsed}");
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(20), $"took {watch.Elapsed}");
     }
 
     [Fact]
@@ -170,7 +171,7 @@ public class WindowsFixesTests
         // cmd ends at once, the background ping keeps stdout open for about 14 seconds
         var watch = Stopwatch.StartNew();
         var result = await new SystemProcessRunner(pipeGrace: S(1)).RunAsync("cmd.exe",
-            ["/c", "echo first & start /b ping -n 15 127.0.0.1 & exit /b 0"], TestContext.Current.CancellationToken, S(60));
+            ["/c", "echo first & start /b ping -n 30 127.0.0.1 & exit /b 0"], TestContext.Current.CancellationToken, S(60));
         watch.Stop();
 
         Assert.Equal(0, result.ExitCode);
