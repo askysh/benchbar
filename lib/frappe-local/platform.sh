@@ -59,7 +59,8 @@ fl_platform_init() {
 }
 
 fl_preflight_not_root() {
-  local effective_uid="${FL_EFFECTIVE_UID:-$EUID}"
+  local effective_uid="$EUID"
+  [[ "${FL_TESTING:-}" == "1" ]] && effective_uid="${FL_EFFECTIVE_UID:-$EUID}"
   [[ "$effective_uid" != "0" ]] || fl_die "Do not run this installer as root." "Run it as your normal macOS user; the scripts will ask for sudo only where macOS requires it."
   fl_ok "Running as a regular user"
 }
@@ -153,8 +154,9 @@ fl_formula_disable_days_from() {
   [[ "$dis_date" != "-" ]] || return 0
   at="$(fl_date_epoch "$dis_date")"
   [[ -n "$at" ]] || return 0
-  # FL_NOW: the tests' clock (freshness.sh's fl_now reads it too)
-  now="${FL_NOW:-$(date +%s)}"
+  # FL_NOW: the tests' clock, read only under FL_TESTING=1 (freshness.sh's fl_now too)
+  now="$(date +%s)"
+  [[ "${FL_TESTING:-}" == "1" ]] && now="${FL_NOW:-$now}"
   if [[ "$now" -ge "$at" ]]; then printf '%s' "$(( -((now - at) / 86400) - 1 ))"; else printf '%s' "$(( (at - now) / 86400 ))"; fi
 }
 

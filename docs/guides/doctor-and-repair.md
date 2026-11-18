@@ -622,8 +622,14 @@ nothing is offered for the Trash then. Nothing is ever deleted for you.
 
 ### legacy_agents
 
-No per process LaunchAgents (one each for web, worker, socketio and so
-on) and no agent from frappe-mac 0.2.
+No per process LaunchAgents of this bench (one each for web, worker,
+socketio and so on) and no agent from frappe-mac 0.2. An agent counts
+only when its plist names this bench's folder and runs honcho, a
+BenchBar or frappe-mac runner, socketio, or `bench` with serve, worker,
+schedule, socketio or start.
+Your own agents never count, even when their name or script says
+"frappe" or they run honcho for another project or a one off command
+such as `bench backup` in this folder.
 
 Fix: `benchbar repair` boots them out and moves the plists to
 `~/Library/LaunchAgents-disabled/<timestamp>/`.

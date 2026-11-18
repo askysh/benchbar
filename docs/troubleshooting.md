@@ -227,8 +227,9 @@ moves the old agent aside and installs `com.benchbar.<bench>`, starting
 the bench again if it was running. `frappe-mac` keeps working as a name
 for `benchbar`.
 
-Per process LaunchAgents (one each for web, worker, socketio and so on)
-and hand made agents are listed by doctor with their launchctl state and
+Per process LaunchAgents of this bench (one each for web, worker,
+socketio and so on) and hand made agents that start this bench's honcho,
+runner, socketio, serve, worker or schedule are listed by doctor with their launchctl state and
 last exit code. Repair boots them out and moves the plists to
 `~/Library/LaunchAgents-disabled/<timestamp>/`. Nothing is deleted.
 
