@@ -5,7 +5,7 @@
   "timeout": 30000,
   "concurrency": 8,
   "skip": [
-    "^https?://(localhost|127\\.0\\.0\\.1|0\\.0\\.0\\.0|\\[::1\\])",
+    "^https://benchbar\\.akashmishra\\.com",
     "^https?://([a-z0-9-]+\\.)*example\\.(com|org|net|test)",
     "^https?://[^/]*\\.(localhost|local|test)(:|/|$)"
   ],
