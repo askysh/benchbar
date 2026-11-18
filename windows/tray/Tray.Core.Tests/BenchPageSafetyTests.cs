@@ -29,13 +29,14 @@ public class BenchPageSafetyTests
         var (client, runner) = Scripted();
         runner.On(a => a.Contains("--dry-run")).Print(Lines("site-add-plan.json"));
         var held = runner.On(a => a.Contains("--apply")).Print(Lines("site-add-apply.jsonl")).Hold();
-        var model = new PlanReviewModel(PlanReviewRequest.Tokened("Add", ["site", "add", "x"]), client);
+        var time = new Microsoft.Extensions.Time.Testing.FakeTimeProvider();
+        var model = new PlanReviewModel(PlanReviewRequest.Tokened("Add", ["site", "add", "x"]), client, time);
         await model.LoadAsync(TestContext.Current.CancellationToken);
         Assert.Equal(TimeSpan.Zero, model.Elapsed);
         var run = model.ConfirmAsync();
         await held.Started.Task;
-        await Task.Delay(30, TestContext.Current.CancellationToken);
-        Assert.True(model.Elapsed > TimeSpan.Zero);
+        time.Advance(TimeSpan.FromSeconds(30));
+        Assert.Equal(TimeSpan.FromSeconds(30), model.Elapsed);
         Assert.False(model.CanStop); // nothing offers to kill it
         held.Release();
         await run;
@@ -71,23 +72,29 @@ public class BenchPageSafetyTests
         var (client, runner) = Scripted();
         runner.On("logs").Print(Lines("logs-first.json"));
         var probe = new Probe(false);
-        var model = new LogViewModel(client, "/b", "b") { PollEvery = TimeSpan.FromMilliseconds(15), DistroProbe = probe, Distro = () => "Ubuntu-24.04" };
+        var time = new LogsTests.CountingTime();
+        var model = new LogViewModel(client, "/b", "b", time: time) { DistroProbe = probe, Distro = () => "Ubuntu-24.04" };
         await model.LoadAsync(TestContext.Current.CancellationToken);
         var loads = runner.Runs.Count;
         model.Start();
+        await time.NextTimerAsync();
+        time.Advance(model.PollEvery);
         await Until(() => model.DistroPaused);
 
         Assert.False(model.Follow);
         Assert.Contains(model.Visible(), l => l.Text == LogViewModel.DistroStoppedLine);
         Assert.Equal(loads, runner.Runs.Count); // no poll reached the CLI, so the distro was not booted
         var asked = probe.Asked;
-        await Task.Delay(80, TestContext.Current.CancellationToken);
+        time.Advance(TimeSpan.FromHours(1));
         Assert.Equal(asked, probe.Asked); // and it does not ask again by itself
 
         probe.Running = true;
         runner.On(a => a.Contains("--since")).Print(Lines("logs-since.json"));
         model.Follow = true;
-        await Until(() => model.Polls > 0);
+        await time.NextTimerAsync();
+        time.Advance(model.PollEvery);
+        await time.NextTimerAsync();
+        Assert.True(model.Polls > 0);
         Assert.False(model.DistroPaused);
         model.Dispose();
     }
@@ -97,10 +104,17 @@ public class BenchPageSafetyTests
     {
         var (client, runner) = Scripted();
         runner.On("logs").Print(Lines("logs-first.json"));
-        var model = new LogViewModel(client, "/b", "b") { PollEvery = TimeSpan.FromMilliseconds(15), DistroProbe = new Probe(true), Distro = () => "Ubuntu-24.04" };
+        var time = new LogsTests.CountingTime();
+        var model = new LogViewModel(client, "/b", "b", time: time) { DistroProbe = new Probe(true), Distro = () => "Ubuntu-24.04" };
         await model.LoadAsync(TestContext.Current.CancellationToken);
         model.Start();
-        await Until(() => model.Polls > 1);
+        for (var i = 0; i < 2; i++)
+        {
+            await time.NextTimerAsync();
+            time.Advance(time.LastDue);
+        }
+        await time.NextTimerAsync();
+        Assert.True(model.Polls > 1);
         Assert.False(model.DistroPaused);
         Assert.True(model.Follow);
         model.Dispose();

@@ -69,6 +69,7 @@ public sealed class TrayController : IDisposable
     private readonly ICliClient? _portCheck;
     private readonly CancellationTokenSource _cts = new();
     private readonly object _powerGate = new();
+    private readonly FollowGate _follow = new();
 
     private SpeedSmoother _smoother = new();
     private TraySnapshot _snapshot = TraySnapshot.Empty;
@@ -109,6 +110,9 @@ public sealed class TrayController : IDisposable
 
     public IBenchSource Source => _source;
 
+    /// <summary>Lock, sleep and battery saver, for the Logs windows' Follow: the same rules that stop or stretch this poller.</summary>
+    public IFollowGate LogFollow => _follow;
+
     /// <summary>What the last poll found.</summary>
     public TraySnapshot Snapshot => _snapshot;
 
@@ -142,6 +146,7 @@ public sealed class TrayController : IDisposable
             SystemEvents.PowerModeChanged += OnPowerModeChanged;
             SystemEvents.SessionSwitch += OnSessionSwitch;
             SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
+            ApplyPower();
         }
         _poller.Start();
     }
@@ -416,7 +421,20 @@ public sealed class TrayController : IDisposable
     private void OnPowerModeChanged(object? sender, PowerModeChangedEventArgs e)
     {
         if (e.Mode == PowerModes.Suspend) SetAway(slept: true, locked: null);
-        else if (e.Mode == PowerModes.Resume) SetAway(slept: false, locked: null);
+        else if (e.Mode == PowerModes.Resume)
+        {
+            SetAway(slept: false, locked: null);
+            ApplyPower();
+        }
+        else if (e.Mode == PowerModes.StatusChange) ApplyPower();
+    }
+
+    /// <summary>Mains or battery, and battery saver: the running poll is stretched on battery, Follow slows down in battery saver.</summary>
+    private void ApplyPower()
+    {
+        var state = PowerState.Read();
+        _poller.SetOnBattery(state.OnBattery);
+        _follow.SetBatterySaver(state.BatterySaver);
     }
 
     private void OnSessionSwitch(object? sender, SessionSwitchEventArgs e)
@@ -446,6 +464,7 @@ public sealed class TrayController : IDisposable
             if (locked is { } l) _locked = l;
             away = _slept || _locked;
         }
+        _follow.SetAway(away);
         if (away)
         {
             _poller.Suspend();
