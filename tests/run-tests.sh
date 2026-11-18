@@ -70,7 +70,7 @@ test-profiles=45 test-process=43 test-adopt=42 test-profile-v16=38 test-run-lock
 test-command-cost=35 test-redact=35 test-repair-json=34 test-share-gateway=33 test-bench-flow=20 test-docs-command=20
 test-labs=20 test-prerequisites-linux=20 test-labs-share=19 test-runner=19 test-status-cost=14 test-run=13
 test-install-sh-linux=10 test-discovery=5 test-self-update=5 test-affected=4 test-shellrc=4 test-templates=4
-test-packaging=2 test-docs=1 test-platform=0 test-release-notes=0 test-ui=0 test-version-policy=0"
+test-packaging=2 test-docs=1 test-platform=0 test-release-notes=0 test-ui=0 test-version-policy=0 test-ci-plan=25"
 
 TEST_SECS_LINUX="test-doctor=184 test-apps=176 test-pull=175 test-sudo-env=172 test-windows-commands=165 test-install-json-2=164
 test-site-restore=159 test-repair=157 test-site-restore-2=153 test-app-batch=148 test-lock=148 test-mcp=145
@@ -84,7 +84,7 @@ test-profiles=33 test-report=32 test-repair-json=29 test-run-lock=27 test-state-
 test-redact=22 test-command-cost=20 test-docs-command=18 test-bench-flow=17 test-runner=17 test-share-gateway=17
 test-labs-share=14 test-prerequisites-linux=12 test-run=12 test-status-cost=10 test-install-sh-linux=7 test-self-update=7
 test-discovery=4 test-templates=4 test-affected=3 test-platform-linux=3 test-docs=2 test-shellrc=2
-test-packaging=1 test-release-notes=1 test-platform=0 test-ui=0 test-version-policy=0"
+test-packaging=1 test-release-notes=1 test-platform=0 test-ui=0 test-version-policy=0 test-ci-plan=25"
 # TEST_PLATFORM=mac or linux picks the table (default: this machine)
 case "${TEST_PLATFORM:-$(uname -s)}" in
   mac|Darwin) TEST_SECS="$TEST_SECS_MAC" ;;
