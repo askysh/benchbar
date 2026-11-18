@@ -20,7 +20,7 @@ public static class UiText
     {
         culture ??= CultureInfo.CurrentCulture;
         var local = TimeZoneInfo.ConvertTime(time, zone ?? TimeZoneInfo.Local);
-        return local.ToString("MMM d yyyy ", culture) + local.ToString(culture.DateTimeFormat.ShortTimePattern, culture);
+        return local.ToString(culture.DateTimeFormat.ShortDatePattern, culture) + " " + local.ToString(culture.DateTimeFormat.ShortTimePattern, culture);
     }
 
     /// <summary>A number with one decimal, with the culture's decimal separator.</summary>
