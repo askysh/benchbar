@@ -138,7 +138,7 @@ keeps the first as the default unless you pass `--make-default`. See
 Each bench uses a block of four ports: web `8000 + n`, socketio
 `9000 + n`, Redis `11000 + n` and `13000 + n`. `--port-offset N` picks
 block N for `install`, `adopt` or `service`. How a clashing bench is
-moved is in [Port blocks](../guides/benches-and-sites.md#port-blocks).
+moved is in [Port blocks](../concepts/port-blocks.md).
 
 ## Where state lives
 

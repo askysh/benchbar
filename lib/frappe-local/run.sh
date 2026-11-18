@@ -24,11 +24,18 @@ fl_run_bg_group() {
   local log="$1" err="${FL_RUN_ERR_FILE:-}"
   shift
   set -m
-  if [[ -n "$err" ]]; then
-    "$@" </dev/null >"$log" 2>"$err" 3>&- &
-  else
-    "$@" </dev/null >"$log" 2>&1 3>&- &
-  fi
+  # bash's parent side of the fork also calls setpgid and, when the child has
+  # exec'd first, prints "child setpgid (N to N): Operation not permitted" on
+  # its own stderr (the child already made the group, so it is harmless). The
+  # group's stderr keeps the parent's quiet: the command's own output goes to
+  # LOG or ERR below, never through it.
+  {
+    if [[ -n "$err" ]]; then
+      "$@" </dev/null >"$log" 2>"$err" 3>&- &
+    else
+      "$@" </dev/null >"$log" 2>&1 3>&- &
+    fi
+  } 2>/dev/null
   FL_RUN_PID="$!"
   set +m
   FL_RUN_PGID="$FL_RUN_PID"

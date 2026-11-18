@@ -407,7 +407,21 @@ file path for import or export is converted with `wslpath`.
 
 The log window filters by process, searches, follows the log (while the
 window is open), shows the previous log and opens `tail -f` in Windows
-Terminal.
+Terminal. Follow asks every 2 seconds while lines arrive and waits up to 10
+seconds while none do. It asks nothing while the PC is locked or asleep or
+the window is minimized, and catches up with one request when you are
+back. In Windows battery saver it asks at most every 30 seconds. With
+the bench running, the tray's own poll is 60 seconds instead of 30 on
+battery.
+
+The tray reads the passwords of an install or an adopt (the Administrator
+password, the Linux password for `sudo`) once and hands them to
+`benchbar.exe` in its environment for that one run, because the command
+line tool takes them from `ADMIN_PASSWORD`, `BENCHBAR_SUDO_PASSWORD` and
+`MARIADB_ROOT_PASSWORD` and nowhere else. They are never on a command
+line, in a file or in the tray's logs, and the output of the run is
+cleaned of them. An install can last long, so for that time the values
+can be read by another program of your own user.
 
 Settings: Open BenchBar at logon, notifications, check for updates when the window
 opens, the distro (switching runs `benchbar.exe adopt-distro`), the editor
@@ -628,6 +642,24 @@ every distro, so stop your benches first).
   slow and file watching does not work there. Keep benches in the distro's
   own file system, under your Linux home. If you accept the problems,
   `--allow-windows-fs` overrides the refusal.
+- **A relative path.** `benchbar.exe` starts the command in the folder you
+  run it in, so `benchbar.exe adopt .`, `--bench-dir .\bench` and
+  `site restore --from backup.sql.gz` mean that folder. This works for a
+  drive folder (`C:\work`), a network folder and a `\\wsl.localhost` folder
+  of your distro. A folder of another distro, or one the distro cannot
+  see (a missing folder, a drive WSL does not mount), starts in your Linux
+  home instead, and `benchbar.exe` says so with one line on stderr:
+  `benchbar.exe: <folder> has no path in WSL, running in ~`. Stdout is not
+  touched, so `--json` output stays one document. Check that line before you
+  run a command such as `adopt .` or `ports plan -- .`: it would act on your
+  home folder, not on the folder you meant. `.\x` and `..\x` are turned into
+  `./x` and `../x`; write other relative paths with `/`.
+- **Environment variables.** `benchbar.exe` passes `ADMIN_PASSWORD`,
+  `MARIADB_ROOT_PASSWORD`, `BENCHBAR_SUDO`, `BENCHBAR_SUDO_PASSWORD`,
+  `BENCHBAR_NONINTERACTIVE`, `BENCHBAR_LABS`, `BENCH_INIT_TIMEOUT_SECONDS`,
+  `BENCHBAR_PROFILE_PATH` (a Linux path of the distro), the
+  `BENCHBAR_MCP_TIMEOUT`, `_MAX_BYTES`, `_KILL_GRACE` and `_EOF_GRACE`
+  settings and your proxy variables into WSL. No other variable is passed.
 - **The tray does not open at logon.** The tray's **Open BenchBar at
   logon** makes a shortcut in your Startup folder. Windows can switch a Startup
   entry off in Settings > Apps > Startup. Turn **BenchBar Tray** on there.

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +14,8 @@ import (
 	"syscall"
 	"time"
 	"unicode"
+	"unicode/utf16"
+	"unicode/utf8"
 )
 
 // --- the event stream ------------------------------------------------------
@@ -102,18 +105,26 @@ func (e *emitter) done(d doneEvent) {
 
 // lineWriter turns child output into log events, one per line. A carriage
 // return ends a line too, so a progress bar does not become one long line.
+//
+// The output is decoded like the buffered wsl.exe calls: an old inbox wsl.exe
+// writes UTF-16 even with WSL_UTF8=1, which is found from the first bytes
+// (a BOM, or a NUL after the first letter) and kept for the whole stream; a
+// line that is not UTF-8 is in the OEM code page.
 type lineWriter struct {
-	mu   sync.Mutex
-	buf  []byte
-	emit func(string)
+	mu      sync.Mutex
+	buf     []byte // decoded text, UTF-8
+	pending []byte // bytes not yet decoded: the first byte, or half a UTF-16 unit
+	mode    int    // 0 not known yet, 1 bytes, 2 UTF-16LE
+	emit    func(string)
 }
 
 func (w *lineWriter) Write(p []byte) (int, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	w.buf = append(w.buf, p...)
+	w.pending = append(w.pending, p...)
+	w.decode()
 	for {
-		i := strings.IndexAny(string(w.buf), "\r\n")
+		i := bytes.IndexAny(w.buf, "\r\n")
 		if i < 0 {
 			break
 		}
@@ -123,7 +134,39 @@ func (w *lineWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
+// decode moves the pending bytes into buf.
+func (w *lineWriter) decode() {
+	if w.mode == 0 {
+		if len(w.pending) < 2 {
+			return
+		}
+		switch {
+		case w.pending[0] == 0xFF && w.pending[1] == 0xFE:
+			w.mode, w.pending = 2, w.pending[2:]
+		case w.pending[0] != 0 && w.pending[1] == 0:
+			w.mode = 2
+		default:
+			w.mode = 1
+		}
+	}
+	if w.mode == 1 {
+		w.buf = append(w.buf, w.pending...)
+		w.pending = nil
+		return
+	}
+	n := len(w.pending) &^ 1
+	u := make([]uint16, n/2)
+	for i := range u {
+		u[i] = uint16(w.pending[2*i]) | uint16(w.pending[2*i+1])<<8
+	}
+	w.buf = append(w.buf, string(utf16.Decode(u))...)
+	w.pending = w.pending[n:]
+}
+
 func (w *lineWriter) line(s string) {
+	if !utf8.ValidString(s) {
+		s = oemDecode([]byte(s))
+	}
 	s = strings.TrimSpace(strings.ReplaceAll(s, "\x00", ""))
 	s = strings.Map(func(r rune) rune {
 		if unicode.IsControl(r) && r != '\t' {
@@ -139,6 +182,10 @@ func (w *lineWriter) line(s string) {
 func (w *lineWriter) Flush() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	if w.mode == 0 && len(w.pending) > 0 {
+		w.mode = 1 // one byte only: not UTF-16
+		w.decode()
+	}
 	w.line(string(w.buf))
 	w.buf = nil
 }
