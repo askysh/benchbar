@@ -568,10 +568,17 @@ fl_db_named_by_other_site() {
   # that is gone (an unmounted volume) or whose sites/ cannot be read counts
   # as naming DB, so nothing is dropped. A bench benchbar has never seen is
   # not looked at (docs/DECISIONS.md).
-  if declare -F fl_known_benches >/dev/null; then
+  if declare -F fl_known_bench_candidates >/dev/null; then
+    # every folder benchbar was told of, the unfiltered list: one that is gone
+    # (an unmounted volume) fails closed below; one that is there but is no
+    # bench (auto-detection found a folder that is not one) is skipped
     local known
-    known="$(fl_known_benches 2>/dev/null)" || { printf '%s' "the list of known benches"; return 0; }
-    while IFS= read -r line; do [[ -z "$line" ]] || benches+=("$line"); done <<<"$known"
+    known="$(fl_known_bench_candidates 2>/dev/null)" || { printf '%s' "the list of known benches (it could not be read)"; return 0; }
+    while IFS= read -r line; do
+      [[ -n "$line" ]] || continue
+      if [[ ! -e "$line" ]]; then printf '%s' "the known bench ${line} (gone, perhaps on a volume that is not mounted)"; return 0; fi
+      fl_is_bench_dir "$line" && benches+=("$line")
+    done <<<"$known"
   fi
   if [[ -e "${FL_STATE_DIR}/registered-benches.txt" ]]; then
     [[ -r "${FL_STATE_DIR}/registered-benches.txt" ]] || { printf '%s' "${FL_STATE_DIR}/registered-benches.txt"; return 0; }
@@ -582,7 +589,7 @@ fl_db_named_by_other_site() {
     case "$seen" in *$'\n'"$c"$'\n'*) continue ;; esac
     seen="${seen}${c}"$'\n'
     if [[ ! -d "$c/sites" || ! -r "$c/sites" || ! -x "$c/sites" ]]; then
-      printf '%s' "$c/sites"; return 0
+      printf '%s' "$c/sites (it cannot be read)"; return 0
     fi
     for cfg in "$c"/sites/*/site_config.json; do
       [[ -e "$cfg" && "$cfg" != "$own" ]] || continue

@@ -58,7 +58,10 @@ case "$*" in
       *".tabUser WHERE name NOT IN"*)
         # shellcheck disable=SC2016
         want="$(printf '%s' "$*" | sed -n 's/.*FROM `\([^`]*\)`\.tabUser.*/\1/p')"
-        grep -vxE 'Administrator|Guest' "$state/mariadb_users.$want" 2>/dev/null | grep -c . || true ;;
+        grep -vxE 'Administrator|Guest' "$state/mariadb_users.$want" 2>/dev/null | grep -c . || true
+        # mariadb_users.<db>.next: the users the database has after this answer (a site made
+        # meanwhile), so a second look sees them
+        [[ ! -f "$state/mariadb_users.$want.next" ]] || mv "$state/mariadb_users.$want.next" "$state/mariadb_users.$want" ;;
       *"character_set_server"*) printf 'character_set_server\tutf8mb4\n' ;;
       # root's native hash: 'invalid' until ALTER USER gave it a password
       *"SELECT authentication_string FROM mysql.user"*) if [[ -f "$pwfile" ]]; then printf '*%s\n' "$(printf '%s' "$(cat "$pwfile")" | shasum -a 1 | tr 'a-f' 'A-F' | cut -c1-40)"; else printf 'invalid\n'; fi ;;

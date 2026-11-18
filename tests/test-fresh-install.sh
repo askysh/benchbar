@@ -307,6 +307,14 @@ SITE_NAME=shared3 run01 --yes --offline
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "dropped the database ${HALF_DB}"
 
+# the second look right before the drop: a user appears after the first check (a site made over
+# the database meanwhile), so nothing is dropped
+cut_site race1
+printf 'Administrator\nGuest\n' >"$MOCK_STATE/mariadb_users.${HALF_DB}"
+printf 'Administrator\nGuest\nalice@example.com\n' >"$MOCK_STATE/mariadb_users.${HALF_DB}.next"
+refused race1 "a user appears between the checks" "no longer just created"
+assert_file "$BENCH/sites/race1"
+
 # a finished site with a stale marker: the database has users, so it is no half made one
 cut_site stale
 printf 'Administrator\nGuest\nalice@example.com\n' >"$MOCK_STATE/mariadb_users.${HALF_DB}"
