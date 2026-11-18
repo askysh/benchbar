@@ -3,7 +3,8 @@
 # has a "### <id>" heading in docs/guides/doctor-and-repair.md (doctor FAIL
 # lines link to /guides/doctor-and-repair/#<id>), every flag in a table of
 # docs/reference/cli/ appears in benchbar --help, and every markdown file
-# in docs/ has a title and a description in its frontmatter.
+# in docs/ has a title and a description in its frontmatter, every page
+# is in the sidebar (DOC-3) and every Lab is on the Features page.
 # shellcheck source=tests/lib/harness.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
 
@@ -40,5 +41,20 @@ while IFS= read -r f; do
   head -n5 "$f" | grep -q '^title: ' || fail "${f#"$ROOT"/} has no title"
   head -n5 "$f" | grep -q '^description: ' || fail "${f#"$ROOT"/} has no description"
 done < <(find "$ROOT/docs" -name '*.md')
+
+# ---- every page is in the sidebar (a page nobody can find is not documented)
+CONFIG="$ROOT/site/astro.config.mjs"
+while IFS= read -r f; do
+  rel="${f#"$ROOT"/docs/}"
+  [[ "$rel" == "README.md" ]] && continue
+  slug="$(printf '%s' "${rel%.md}" | tr '[:upper:]' '[:lower:]')"
+  grep -q "slug: '${slug}'" "$CONFIG" || fail "docs/${rel} is not in the sidebar: add slug '${slug}' to site/astro.config.mjs"
+done < <(find "$ROOT/docs" -name '*.md')
+
+# ---- every Lab has a row on the Features page
+while IFS= read -r lab; do
+  [[ -n "$lab" ]] || continue
+  grep -q "\`${lab}\`" "$ROOT/docs/features.md" || fail "docs/features.md does not mention the Lab ${lab}"
+done < <(sed -n 's/^lab~\([^~]*\)~.*/\1/p' "$ROOT/lib/frappe-local/labs.sh")
 
 printf 'test-docs: ok\n'

@@ -125,7 +125,7 @@ public sealed record SelfUpdateCheck(SelfUpdateStatus? Status, string? Problem)
 /// <summary>
 /// Asks <c>benchbar.exe self-update --check --json</c>, the one source of truth for updates. It first asks <c>--shim-version</c>: only a shim
 /// of this tray's own version knows the Windows <c>self-update</c>, and an older one would forward the command to the Linux CLI and boot the
-/// distro. Never throws for a missing or failing shim; the answer says why.
+/// distro (a newer one is fine). Never throws for a missing or failing shim; the answer says why.
 /// </summary>
 public sealed class SelfUpdateClient(IProcessRunner runner, Func<string?> locateShim, string trayVersion)
 {
@@ -144,7 +144,10 @@ public sealed class SelfUpdateClient(IProcessRunner runner, Func<string?> locate
         {
             var version = await runner.RunAsync(shim, ["--shim-version"], ct, VersionTimeout).ConfigureAwait(false);
             var shimVersion = version.ExitCode == 0 ? VersionMismatch.Parse(ShimBenchSource.FirstLine(version.Output)) : "unknown";
-            if (shimVersion != VersionMismatch.Parse(trayVersion))
+            var tray = VersionMismatch.Parse(trayVersion);
+            // an older shim never gets the command; a newer one knows it, and asking is how a tray whose files could not all be replaced gets fixed
+            var usable = shimVersion == tray || (shimVersion is not null && tray is not null && shimVersion != "unknown" && VersionMismatch.IsNewer(shimVersion, tray));
+            if (!usable)
                 return SelfUpdateCheck.Failed("benchbar.exe is not the same version as BenchBar. Run the installer again.");
 
             var result = await runner.RunAsync(shim, CheckArgs, ct, CheckTimeout).ConfigureAwait(false);
@@ -344,19 +347,8 @@ public static class UpdatedNotice
                 ? new UpdatedNoticeDecision(UpdatedNoticeKind.Updated, current, current)
                 : new UpdatedNoticeDecision(UpdatedNoticeKind.None, current);
         if (earlier == current) return new UpdatedNoticeDecision(UpdatedNoticeKind.None, null);
-        return IsNewer(current, earlier)
+        return VersionMismatch.IsNewer(current, earlier)
             ? new UpdatedNoticeDecision(UpdatedNoticeKind.Updated, current, current)
             : new UpdatedNoticeDecision(UpdatedNoticeKind.None, current);
-    }
-
-    private static bool IsNewer(string a, string b)
-    {
-        var x = a.Split('.').Select(p => int.Parse(p, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
-        var y = b.Split('.').Select(p => int.Parse(p, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
-        for (var i = 0; i < 3; i++)
-        {
-            if (x[i] != y[i]) return x[i] > y[i];
-        }
-        return false;
     }
 }

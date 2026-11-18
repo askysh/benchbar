@@ -247,25 +247,54 @@ and `what`; it holds no paths or user names and stays under 4000 characters.
 ## Variables for the CLI
 
 When set in the shim's environment, `ADMIN_PASSWORD`, `MARIADB_ROOT_PASSWORD`,
-`BENCHBAR_SUDO`, `BENCHBAR_SUDO_PASSWORD` and `BENCHBAR_NONINTERACTIVE` are
+`BENCHBAR_SUDO`, `BENCHBAR_SUDO_PASSWORD`, `BENCHBAR_NONINTERACTIVE`,
+`BENCHBAR_LABS`, `BENCH_INIT_TIMEOUT_SECONDS`, `BENCHBAR_PROFILE_PATH` and the
+MCP settings `BENCHBAR_MCP_TIMEOUT`, `BENCHBAR_MCP_MAX_BYTES`,
+`BENCHBAR_MCP_KILL_GRACE` and `BENCHBAR_MCP_EOF_GRACE` are
 passed into WSL for that one run through `WSLENV` (appended to the child's
-copy; your own `WSLENV` is not changed). So are the proxy settings
+copy; your own `WSLENV` is not changed). The list is `forwardedEnv` in
+`forward.go`; a test checks that every variable the CLI documents in
+`commands.sh` is in it or in `noForwardEnv` with the reason
+(`BENCHBAR_MCP_CLI` names a program, and a Windows path means nothing in the
+distro). `BENCHBAR_PROFILE_PATH` is passed as it is, so it must hold Linux
+folders of the distro. So are the proxy settings
 `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY` and `http_proxy`, `https_proxy`,
 `no_proxy` (Linux tools read the lower case ones). No other variable is
 passed.
 
+## The working folder
+
+The command starts in the folder `benchbar.exe` was started in, so a relative
+path, `adopt .`, `profile export` and the bench detection from the current
+folder work as they do on a Mac or in WSL. The shim gives the Windows folder
+to the distro in `BENCHBAR_SHIM_CWD` (added to the child's `WSLENV`), and the
+`sh` wrapper turns it into a Linux folder with `wslpath -a -u`. That works for
+any drive letter (the mount comes from the distro, not from a fixed `/mnt/c`),
+a network folder and a `\\wsl.localhost\<this distro>\...` folder. The
+variable is removed before the CLI starts. When `wslpath` fails or the folder
+does not exist in the distro (a disconnected drive, a folder of another
+distro), the command starts in the Linux home folder, as it did before, and
+`benchbar.exe: <folder> has no path in WSL, running in ~` is printed once on
+stderr (by the shim for a folder of another distro or one it cannot read, by
+the wrapper for the rest). Never on stdout: `--json` stays one document.
+
 ## Windows paths as arguments
 
 An argument that is clearly a Windows path is turned into the Linux path
-before the command is forwarded, in the shim, with no extra `wsl.exe` call:
+before the command is forwarded, in the shim:
 
 | You type | The CLI gets |
 | --- | --- |
-| `C:\Users\me\bench` or `C:/Users/me/bench` | `/mnt/c/Users/me/bench` |
+| `C:\Users\me\bench` or `C:/Users/me/bench` | `/mnt/c/Users/me/bench` (the distro's mount of `C:`) |
+| `.\bench`, `..\bench` | `./bench`, `../bench` |
 | `\\wsl.localhost\Ubuntu-24.04\home\me\bench` or `\\wsl$\...` of the same distro | `/home/me/bench` |
 | `--bench-dir=D:\b` | `--bench-dir=/mnt/d/b` |
 
-Only `X:\...`, `X:/...` and the two `\\wsl` shapes count. `C:`, `C:foo`, a path
+The mount of a drive is asked from `wslpath` in the distro, with one extra
+`wsl.exe` call for all the drives of a command, and only when an argument
+holds a drive path; a distro with `[automount] root` set gets its own mount,
+and `/mnt/x` is used when the call fails. Only `X:\...`, `X:/...`, `.\x`,
+`..\x` and the two `\\wsl` shapes count. `C:`, `C:foo`, a path
 of another distro, a UNC path of a server, and text that merely contains a
 path are passed as typed. Arguments after a `--` are converted too: the CLI
 uses `--` before bench paths (`benchbar ports plan -- PATH`), and a drive path
@@ -291,7 +320,20 @@ line, exit code 130.
 
 ## Doctor
 
-`benchbar.exe doctor` prints the Windows checks first. Besides PATH, distro,
+`benchbar.exe doctor` prints the Windows checks first.
+
+With `--json`, `--jsonl`
+or `--for-agent`, stdout holds the CLI's JSON document and nothing else: the
+Windows checks are inside it as a `windows_checks` array (`id`, `label`,
+`level`, `message`, `fix_command`, and the older names `status` and `fix`),
+the exit code is 1 when one of them is `fail`, and the human WINDOWS block is
+not printed. With `--fix-hints` the fix commands of the failing and warning
+Windows checks follow the CLI's lines. With `--jsonl` the CLI streams several
+lines; the `windows_checks` array goes into the `done` line and the other lines
+are not changed. `--ack`, `--unack` and
+`--prerequisites` are the CLI's own documents and pass through unchanged.
+
+Besides PATH, distro,
 `.wslconfig` idle settings, keepalive and the tray checks it shows:
 
 - `cli_version`: the CLI in the distro against this `benchbar.exe` (release

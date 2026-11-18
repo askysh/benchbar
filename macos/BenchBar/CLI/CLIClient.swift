@@ -27,7 +27,12 @@ nonisolated struct CLIClient: Sendable {
     /// install, an adopt, a repair or `site hosts` run that the user
     /// confirmed in the app gets it, and `site open-as on` after its alert
     /// (there it marks the call as the app's, and no sudo runs).
-    static let guiSudo = ["BENCHBAR_SUDO": "gui"]
+    static let guiSudo = ["BENCHBAR_SUDO": "gui"].merging(appCaller) { _, new in new }
+
+    /// Says the run comes from this app: its process id (MAC-4). The CLI does not check it
+    /// today, and it is a claim any process of the same user could copy, so it is a rail
+    /// against agents that follow AGENTS.md and against mistakes, not a boundary; docs/app.md says so.
+    static var appCaller: [String: String] { ["BENCHBAR_APP_PID": String(ProcessInfo.processInfo.processIdentifier)] }
 
     /// Environment for the CLI: an explicit PATH (Finder launched apps do
     /// not get the shell's), no colors, no spinners.
@@ -308,12 +313,17 @@ nonisolated struct CLIClient: Sendable {
     /// A session for `user` on a developer_mode site, as a login link (`--print-url`).
     /// The link holds the session id, so neither a decoding failure nor the
     /// CLI's own words are allowed to repeat it (`OpenAsLink.scrub`).
+    ///
+    /// The CLI prints a link only to a terminal or to a caller that says
+    /// BENCHBAR_NONINTERACTIVE=0 itself: this click is the person's decision,
+    /// and the app has no terminal, so the call says so (and a mode in the
+    /// app's own environment cannot turn it off).
     func openAs(bench: String, site: String, user: String, path: String?) async throws(CLIError) -> OpenAsResult {
         let pathArguments = path.map { ["--path", $0] } ?? []
         let output: CommandOutput
         do throws(CLIError) {
             output = try await run(["open", "--bench-dir", bench, "--site", site, "--as", user] + pathArguments + ["--print-url", "--json"],
-                                   timeout: Timeout.action, acceptExitCodes: [0])
+                                   timeout: Timeout.action, acceptExitCodes: [0], extraEnvironment: ["BENCHBAR_NONINTERACTIVE": "0"])
         } catch {
             if case .failed(let command, let code, let message) = error {
                 throw .failed(command: command, exitCode: code, message: OpenAsLink.scrub(message))
@@ -357,7 +367,9 @@ nonisolated struct CLIClient: Sendable {
     /// a person waits for; `.default` for everything a person asked for.
     func run(_ arguments: [String], timeout: Duration, acceptExitCodes: Set<Int32>,
              extraEnvironment: [String: String] = [:], qos: QualityOfService = .default) async throws(CLIError) -> CommandOutput {
-        let env = environment().merging(extraEnvironment) { _, new in new }
+        var env = environment().merging(extraEnvironment) { _, new in new }
+        // a run that says it is a person's click (BENCHBAR_NONINTERACTIVE=0, open --as) also says which app
+        if extraEnvironment["BENCHBAR_NONINTERACTIVE"] == "0" { env.merge(Self.appCaller) { _, new in new } }
         let output = try await runner.run(executable: executable, arguments: arguments, environment: env, timeout: timeout, qos: qos)
         guard acceptExitCodes.contains(output.exitCode) else {
             throw .failed(command: arguments.first ?? "", exitCode: output.exitCode, message: Self.summarize(output))

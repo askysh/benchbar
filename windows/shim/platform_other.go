@@ -93,3 +93,13 @@ func (mutexLocks) TryLock(name string) (func(), bool, error) {
 
 // systemDir is the Windows system folder; there is none here.
 func systemDir() string { return "" }
+
+// osOEMDecode: there is no console code page here; every byte is the
+// character with that number.
+func osOEMDecode(b []byte) string {
+	r := make([]rune, len(b))
+	for i, c := range b {
+		r[i] = rune(c)
+	}
+	return string(r)
+}

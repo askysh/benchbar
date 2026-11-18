@@ -11,7 +11,18 @@
 name: Homebrew formula
 
 on:
+  # A pull request runs it only for the files that change what brew installs
+  # or how: a sixth macOS job beside the CI jobs on every lib/** change was
+  # what kept pull requests waiting when macOS runners were scarce. The rest
+  # of the CLI is checked on the push to next-release or main and nightly.
   pull_request:
+    paths:
+      - packaging/homebrew/**
+      - scripts/cli-tarball.sh
+      - scripts/homebrew-render.sh
+      - .github/workflows/homebrew-formula.yml
+  push:
+    branches: [main, next-release]
     paths:
       - benchbar
       - frappe-mac

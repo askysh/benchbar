@@ -27,6 +27,7 @@ func newSystem() *System {
 		FileExists:  fileExists,
 		ListDir:     listDir,
 		Getenv:      os.Getenv,
+		Getwd:       os.Getwd,
 		Environ:     os.Environ,
 		ConfigDir:   configDir,
 		ProfileDir:  os.Getenv("USERPROFILE"),
@@ -92,13 +93,15 @@ func (schtasksRunner) Schtasks(args ...string) (string, int, error) {
 		}
 	}
 	out, err := exec.Command(path, args...).CombinedOutput()
+	// schtasks writes in the OEM code page, not UTF-8
+	text := decodeConsole(out)
 	if err == nil {
-		return string(out), 0, nil
+		return text, 0, nil
 	}
 	if ee, ok := err.(*exec.ExitError); ok {
-		return string(out), ee.ExitCode(), nil
+		return text, ee.ExitCode(), nil
 	}
-	return string(out), -1, err
+	return text, -1, err
 }
 
 func listDir(path string) []string {

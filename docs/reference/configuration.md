@@ -93,7 +93,7 @@ share ([Sharing a profile](../guides/teams.md#sharing-a-profile)).
 
 | What | Where it lives | When you need it |
 |---|---|---|
-| MariaDB root | your Keychain, item `benchbar-mariadb` (on Linux a 0600 file in the state folder); `benchbar mariadb-password` prints it after a confirmation | rarely: another `bench new-site`, or `mariadb -u root -p` |
+| MariaDB root | your Keychain, item `benchbar-mariadb` (on Linux a 0600 file in the state folder); `benchbar mariadb-password` prints it to a person at a terminal after a confirmation (it refuses under `--for-agent`, `benchbar mcp` and without a terminal; a process of your user that fakes a terminal is not stopped) | rarely: another `bench new-site`, or `mariadb -u root -p` |
 | Administrator | you choose it during `benchbar install` or `site add`, or `ADMIN_PASSWORD` | every login at `http://<site>:<port>`, by default `http://macdev:8000` |
 
 ## Environment variables
@@ -138,7 +138,7 @@ keeps the first as the default unless you pass `--make-default`. See
 Each bench uses a block of four ports: web `8000 + n`, socketio
 `9000 + n`, Redis `11000 + n` and `13000 + n`. `--port-offset N` picks
 block N for `install`, `adopt` or `service`. How a clashing bench is
-moved is in [Port blocks](../guides/benches-and-sites.md#port-blocks).
+moved is in [Port blocks](../concepts/port-blocks.md).
 
 ## Where state lives
 

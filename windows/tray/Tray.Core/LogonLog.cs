@@ -12,6 +12,7 @@ public static class LogonLog
 {
     public static void IconAdded(string shell)
     {
+#if HARNESS
         string? path = PathFromArgs(Environment.GetCommandLineArgs());
         if (path is null) return;
         try
@@ -25,6 +26,7 @@ public static class LogonLog
             File.AppendAllText(path, line + Environment.NewLine);
         }
         catch (Exception) { /* a measurement aid must never stop the app */ }
+#endif
     }
 
     public static string? PathFromArgs(IReadOnlyList<string> args)

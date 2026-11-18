@@ -65,6 +65,11 @@ public sealed class SystemProcessRunner : IProcessRunner
 {
     public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(30);
 
+    private readonly TimeSpan _pipeGrace;
+
+    /// <param name="pipeGrace">How long to wait for the output pipes after the child has exited (default <see cref="SystemStreamRunner.PipeGrace"/>): a grandchild that keeps a pipe open must not turn a finished call into a timeout.</param>
+    public SystemProcessRunner(TimeSpan? pipeGrace = null) => _pipeGrace = pipeGrace ?? SystemStreamRunner.PipeGrace;
+
     public async Task<ProcessResult> RunAsync(
         string fileName, IReadOnlyList<string> args, CancellationToken ct, TimeSpan? timeout = null, Encoding? outputEncoding = null)
     {
@@ -83,17 +88,49 @@ public sealed class SystemProcessRunner : IProcessRunner
         process.Start();
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(timeout ?? DefaultTimeout);
-        var output = process.StandardOutput.ReadToEndAsync(cts.Token);
-        var error = process.StandardError.ReadToEndAsync(cts.Token);
+        // read into buffers, not with ReadToEnd: after the grace the call returns what the child wrote even when a pipe is still open
+        var output = new StringBuilder();
+        var error = new StringBuilder();
+        var pumps = Task.WhenAll(Pump(process.StandardOutput, output), Pump(process.StandardError, error));
         try
         {
             await process.WaitForExitAsync(cts.Token).ConfigureAwait(false);
-            return new ProcessResult(process.ExitCode, await output.ConfigureAwait(false), await error.ConfigureAwait(false));
+            try
+            {
+                await pumps.WaitAsync(_pipeGrace, cts.Token).ConfigureAwait(false);
+            }
+            catch (TimeoutException)
+            {
+                // a grandchild holds a pipe: the child is done, so the result is what it printed
+            }
+            return new ProcessResult(process.ExitCode, Text(output), Text(error));
         }
         catch (OperationCanceledException)
         {
-            try { process.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
+            ProcessKill.Tree(process);
             throw;
+        }
+    }
+
+    private static string Text(StringBuilder buffer)
+    {
+        lock (buffer) return buffer.ToString();
+    }
+
+    private static async Task Pump(StreamReader reader, StringBuilder sink)
+    {
+        var chunk = new char[4096];
+        try
+        {
+            int read;
+            while ((read = await reader.ReadAsync(chunk.AsMemory(), CancellationToken.None).ConfigureAwait(false)) > 0)
+            {
+                lock (sink) sink.Append(chunk, 0, read);
+            }
+        }
+        catch (Exception ex) when (ex is ObjectDisposedException or IOException or InvalidOperationException)
+        {
+            // the process was disposed while a grandchild still held the pipe
         }
     }
 
@@ -102,6 +139,22 @@ public sealed class SystemProcessRunner : IProcessRunner
         var info = new ProcessStartInfo(fileName) { UseShellExecute = false, CreateNoWindow = true };
         foreach (var a in args) info.ArgumentList.Add(a);
         Process.Start(info)?.Dispose(); // disposing the handle does not end the process
+    }
+}
+
+/// <summary>Ends a child and its tree without letting the kill itself throw into a cancellation path.</summary>
+internal static class ProcessKill
+{
+    public static void Tree(Process process)
+    {
+        try
+        {
+            process.Kill(entireProcessTree: true);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or Win32Exception or AggregateException or NotSupportedException)
+        {
+            // already gone, access denied, or part of the tree could not be ended: the caller reports the timeout, not this
+        }
     }
 }
 
@@ -188,12 +241,12 @@ public sealed class ShimBenchSource : IBenchSource
     public string? ShimPath => _locate();
 
     public async Task<IReadOnlyList<BenchEntry>> ListAsync(CancellationToken ct) =>
-        CliOutput.Parse((await RunCliAsync(["list", "--json"], ct).ConfigureAwait(false)).Output, "list", BenchJson.ParseList);
+        CliOutput.Parse((await RunCliAsync(["list", "--json"], ct).ConfigureAwait(false)).Output, "list", BenchJson.ParseList, requires: "benches");
 
     public async Task<BenchStatus> StatusAsync(BenchEntry bench, CancellationToken ct)
     {
         var result = await RunCliAsync(["status", "--json", "--bench-dir", bench.Path], ct).ConfigureAwait(false);
-        var status = CliOutput.Parse(result.Output, "status", BenchJson.ParseStatus);
+        var status = CliOutput.Parse(result.Output, "status", BenchJson.ParseStatus, requires: "state");
         return status with
         {
             Name = string.IsNullOrEmpty(status.Name) ? bench.Name : status.Name,
@@ -226,11 +279,11 @@ public sealed class ShimBenchSource : IBenchSource
     }
 
     public async Task<DoctorReport> DoctorAsync(string benchPath, CancellationToken ct) =>
-        CliOutput.Parse((await RunCliAsync(["doctor", "--json", "--bench-dir", benchPath], ct).ConfigureAwait(false)).Output, "doctor", BenchJson.ParseDoctor);
+        CliOutput.Parse((await RunCliAsync(["doctor", "--json", "--bench-dir", benchPath], ct).ConfigureAwait(false)).Output, "doctor", BenchJson.ParseDoctor, requires: "checks");
 
     public async Task<LogTail> LogsAsync(string benchPath, CancellationToken ct, int lines = 300) =>
         CliOutput.Parse((await RunCliAsync(
-            ["logs", "--json", "-n" + lines.ToString(CultureInfo.InvariantCulture), "--bench-dir", benchPath], ct).ConfigureAwait(false)).Output, "logs", BenchJson.ParseLogs);
+            ["logs", "--json", "-n" + lines.ToString(CultureInfo.InvariantCulture), "--bench-dir", benchPath], ct).ConfigureAwait(false)).Output, "logs", BenchJson.ParseLogs, requires: "lines");
 
     public async Task<string> ReportAsync(string? benchPath, CancellationToken ct)
     {
@@ -364,6 +417,11 @@ public sealed class FixtureBenchSource(string directory) : IBenchSource, ILoadSo
 public static class BenchSourceFactory
 {
     public const string FixturesVariable = "BENCHBAR_TRAY_FIXTURES";
+
+    /// <summary>True when <see cref="FixturesVariable"/> is set: the tray shows recorded benches and a setup that installs nothing.</summary>
+    public static bool FixturesActive => Fixtures is not null;
+
+    public static string DemoNotice => UiText.Get("DemoNotice");
 
     private static string? Fixtures => Environment.GetEnvironmentVariable(FixturesVariable) is { } f && !string.IsNullOrWhiteSpace(f) ? f : null;
 

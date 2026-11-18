@@ -2,22 +2,18 @@
 # framework dependent as an artifact. Nothing is measured here; the cost at
 # rest numbers come from the development laptop (windows/tray/DECISIONS.md).
 #
-# Path filtered to the app and its library. The spike under
-# windows/tray/spike has its own workflow (tray-spike.yml) and does not
-# trigger this one.
+# Path filtered to the app, its library and its tests.
 name: Tray
 
 on:
   pull_request:
     paths:
       - 'windows/tray/**'
-      - '!windows/tray/spike/**'
       - '.github/workflows/tray.yml'
   push:
     branches: [main]
     paths:
       - 'windows/tray/**'
-      - '!windows/tray/spike/**'
       - '.github/workflows/tray.yml'
   workflow_dispatch:
     inputs:

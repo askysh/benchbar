@@ -54,8 +54,8 @@ flag~service~--dry-run~~Print the plan and its token, change nothing.
 flag~service~--apply~TOKEN~Run exactly that plan (with --yes).
 env~service~BENCHBAR_SUDO~Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change).
 env~service~BENCHBAR_SUDO_PASSWORD~The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed from the environment; never in argv, the log or a child.
-cmd~mariadb-password~benchbar mariadb-password [--yes]~Print the MariaDB root password (asks first).~yes~no~no~no~none
-flag~mariadb-password~--yes~~Do not ask.
+cmd~mariadb-password~benchbar mariadb-password [--yes]~Print the MariaDB root password to a person at a terminal (asks first). Refused under BENCHBAR_NONINTERACTIVE, --for-agent, mcp and without a terminal, whatever --yes says.~yes~no~no~no~none
+flag~mariadb-password~--yes~~Do not ask (still refused without a person at a terminal).
 cmd~doctor~benchbar doctor [--json] [--fix-hints] [--quick] [--ack CHECK] [--unack CHECK] [--prerequisites] [--fetch]~Read only health report. Exit 1 when something FAILs.~no~no~no~no~document
 flag~doctor~--json~~One JSON document.
 flag~doctor~--fix-hints~~Only the fix commands, one per line.
@@ -99,7 +99,7 @@ cmd~open~benchbar open [--site S] [--as USER] [--path P] [--no-browser] [--print
 flag~open~--as~USER~Sign in as this user, no password. Refused unless site open-as is on for the site and developer_mode is on. A sign in runs the apps' on_login and on_session_creation hooks as a real login does: last_login, an Activity Log entry, a mail to System Managers for Administrator, an ERPNext Customer or Supplier for a Website User, and Frappe may end the user's oldest session (simultaneous_sessions).
 flag~open~--path~P~Where to land, for example /app/todo. Default: /app, or / for a Website User.
 flag~open~--no-browser~~Start the session, open nothing.
-flag~open~--print-url~~Print the link (it holds the session id) instead of opening it; in --json as url.
+flag~open~--print-url~~Print the link (it holds the session id) instead of opening it; in --json as url. With --as, refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp.
 flag~open~--json~~One JSON document; url only with --print-url.
 cmd~users~benchbar users [--site S] [--search Q] [--limit N] [--json]~Enabled users of a site, for open --as (needs site open-as on).~no~no~no~no~document
 flag~users~--search~TEXT~Only users whose id or full name contains TEXT.

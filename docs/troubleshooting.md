@@ -47,7 +47,8 @@ Editing `/etc/hosts` by hand works too, but keep a copy first
 (`sudo cp /etc/hosts /etc/hosts.bak`) and use your site's name in place
 of `macdev`.
 
-**MariaDB rejects the root password.** `benchbar mariadb-password` prints
+**MariaDB rejects the root password.** In your own terminal (not through
+a coding agent, which is refused), `benchbar mariadb-password` prints
 the one in the Keychain; confirm it with `mariadb -u root -p` in another
 tab. If it changed, run `MARIADB_ROOT_PASSWORD='...' benchbar install`
 once to verify and save the new one. Forgotten entirely: see
@@ -323,7 +324,8 @@ bench's path.
 2. Drop each site's database while the bench folder still exists: the
    database name and user are only written in the site's
    `site_config.json`. Look them up, then drop both in `mariadb -u root
-   -p` (`benchbar mariadb-password --yes` prints the root password):
+   -p` (in your own terminal, `benchbar mariadb-password --yes` prints the
+   root password):
 
    ```bash
    grep -h '"db_name"' ~/frappe-bench/sites/*/site_config.json
