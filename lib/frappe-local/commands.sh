@@ -71,8 +71,10 @@ flag~repair~--yes~~Do not ask.
 env~repair~BENCHBAR_SUDO~Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change).
 env~repair~BENCHBAR_SUDO_PASSWORD~The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed from the environment; never in argv, the log or a child.
 cmd~status~benchbar status [--json] [--ping]~State, pid, stop reason, site ping.~no~no~no~no~document
+env~status~BENCHBAR_LOAD_ALL~Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
 flag~status~--ping~~Ask every site, not only the default one.
 cmd~list~benchbar list [--json]~Every bench benchbar knows about. Never pings a site.~no~no~no~no~document
+env~list~BENCHBAR_LOAD_ALL~Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
 cmd~scan~benchbar scan PATH [--json]~Find benches recursively in a folder (read only).~no~no~no~no~document
 cmd~register~benchbar register PATH...~Remember selected benches without changing their services.~no~no~no~yes~none
 cmd~up~benchbar up [--services-only] [--json]~Start the bench in the background.~yes~no~no~yes~stream
@@ -94,6 +96,7 @@ cmd~uninstall-service~benchbar uninstall-service [--all] [--yes] [--dry-run]~Rem
 flag~uninstall-service~--all~~Every bench with a benchbar agent, after one question.
 flag~uninstall-service~--yes~~Do not ask; required without a terminal.
 cmd~path~benchbar path~Print the bench directory.~no~no~no~no~none
+env~path~BENCHBAR_LOAD_ALL~Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
 cmd~console~benchbar console [--site S]~bench --site SITE console: a Python shell with frappe.~yes~no~no~no~none
 cmd~db~benchbar db [--site S]~bench --site SITE mariadb: the site's database.~yes~no~no~no~none
 cmd~open~benchbar open [--site S] [--as USER] [--path P] [--no-browser] [--print-url] [--json]~Open a site in the browser, or open it signed in as USER (developer_mode sites that were opted in with site open-as on).~no~no~no~no~document
@@ -119,10 +122,12 @@ cmd~docs~benchbar docs [TOPIC] [--print]~Open the documentation, or one topic's 
 cmd~self-update~benchbar self-update [--check] [--dry-run] [--json]~Update the benchbar CLI and the BenchBar app.~yes~no~yes~yes~document
 flag~self-update~--check~~This version against the latest.
 cmd~where~benchbar where [--json]~How this CLI was installed, its state folder and the app.~no~no~no~no~document
+env~where~BENCHBAR_LOAD_ALL~Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
 cmd~mcp~benchbar mcp [--print-agents-md]~Model Context Protocol server on stdio for coding agents.~no~no~no~no~none
 flag~mcp~--print-agents-md~~Print a snippet for a project's AGENTS.md or CLAUDE.md and exit.
 cmd~help~benchbar help~The global help text.~no~no~no~no~none
 cmd~commands~benchbar commands --json~This table: every command, flag and environment variable.~no~no~no~no~document
+env~commands~BENCHBAR_LOAD_ALL~Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
 cmd~ports~benchbar ports plan|setup|apply|check|mode ...~Port allocation for several benches.~no~no~no~no~none
 cmd~ports plan~benchbar ports plan [--json] -- PATH ...~Read only preview of the allocation and its approval token.~no~no~no~no~document
 cmd~ports setup~benchbar ports setup [--dry-run] -- PATH ...~Preview, confirm once, then apply.~yes~yes~no~yes~none

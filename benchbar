@@ -79,6 +79,9 @@ SCRIPT_DIR="$(fl_resolve_self)"
 FL_LEAN=0
 if [[ "${BENCHBAR_LOAD_ALL:-0}" != "1" ]]; then
   case "${1:-}" in path|commands|where|list|status|--version|--help|-h) FL_LEAN=1 ;; esac
+  # --profile checks the name against the profiles (version-policy.sh, profiles.sh)
+  for _a in "$@"; do case "$_a" in --profile|--profile=*) FL_LEAN=0 ;; esac; done
+  unset _a
 fi
 # shellcheck source=lib/frappe-local/ui.sh
 . "${SCRIPT_DIR}/lib/frappe-local/ui.sh"
@@ -1618,7 +1621,10 @@ case "$COMMAND" in
       fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_uninstall_service
     fi ;;
   # path only names the folder (benchcd runs it): no site, ports, profile or rendered templates
-  path) fl_bench_detect "$OPT_BENCH_DIR"; printf '%s\n' "$FL_BENCH_DIR" ;;
+  # (--profile still checks the name: the full context, and a full load)
+  path)
+    if [[ -n "$OPT_PROFILE" ]]; then fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; else fl_bench_detect "$OPT_BENCH_DIR"; fi
+    printf '%s\n' "$FL_BENCH_DIR" ;;
   console) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_console ${ARGS[@]+"${ARGS[@]}"} ;;
   open) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_open ${ARGS[@]+"${ARGS[@]}"} ;;
   users) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_users ${ARGS[@]+"${ARGS[@]}"} ;;

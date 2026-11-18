@@ -48,25 +48,31 @@ fl_ui_init() {
   if [[ "$FL_TTY" == "1" ]]; then
     cols="$(tput cols 2>/dev/null || true)"
     [[ -n "$cols" && "$cols" -gt 40 ]] && FL_COLS="$cols"
+    # the color terminals of every Mac and Linux terminal app: the codes are
+    # fixed, so no tput process (nine of them, 19 ms) for them. A terminal
+    # whose terminfo has no colors (xterm-mono, vt100) asks tput, which then
+    # prints nothing for the colors, as before.
+    local __fixed=0
     case "${TERM:-}" in
-      # the ANSI terminals of every Mac and Linux terminal app: the codes are
-      # fixed, so no tput process (nine of them, 19 ms) for them
-      xterm*|screen*|tmux*|rxvt*|linux|alacritty|foot*|wezterm|vt100|ansi)
-        local __e=$'\033['
-        FL_BOLD="${__e}1m"; FL_DIM="${__e}2m"
-        FL_RED="${__e}31m"; FL_GREEN="${__e}32m"; FL_YELLOW="${__e}33m"; FL_BLUE="${__e}34m"; FL_CYAN="${__e}36m"
-        FL_RESET="${__e}m"; FL_EL="${__e}K" ;;
-      *)
-        FL_BOLD="$(tput bold 2>/dev/null || true)"
-        FL_DIM="$(tput dim 2>/dev/null || true)"
-        FL_RED="$(tput setaf 1 2>/dev/null || true)"
-        FL_GREEN="$(tput setaf 2 2>/dev/null || true)"
-        FL_YELLOW="$(tput setaf 3 2>/dev/null || true)"
-        FL_BLUE="$(tput setaf 4 2>/dev/null || true)"
-        FL_CYAN="$(tput setaf 6 2>/dev/null || true)"
-        FL_RESET="$(tput sgr0 2>/dev/null || true)"
-        FL_EL="$(tput el 2>/dev/null || true)" ;;
+      *mono*) ;;
+      xterm*|screen*|tmux*|rxvt*|linux|alacritty|foot*|wezterm) __fixed=1 ;;
     esac
+    if [[ "$__fixed" == "1" ]]; then
+      local __e=$'\033['
+      FL_BOLD="${__e}1m"; FL_DIM="${__e}2m"
+      FL_RED="${__e}31m"; FL_GREEN="${__e}32m"; FL_YELLOW="${__e}33m"; FL_BLUE="${__e}34m"; FL_CYAN="${__e}36m"
+      FL_RESET="${__e}m"; FL_EL="${__e}K"
+    else
+      FL_BOLD="$(tput bold 2>/dev/null || true)"
+      FL_DIM="$(tput dim 2>/dev/null || true)"
+      FL_RED="$(tput setaf 1 2>/dev/null || true)"
+      FL_GREEN="$(tput setaf 2 2>/dev/null || true)"
+      FL_YELLOW="$(tput setaf 3 2>/dev/null || true)"
+      FL_BLUE="$(tput setaf 4 2>/dev/null || true)"
+      FL_CYAN="$(tput setaf 6 2>/dev/null || true)"
+      FL_RESET="$(tput sgr0 2>/dev/null || true)"
+      FL_EL="$(tput el 2>/dev/null || true)"
+    fi
   else
     FL_BOLD=""; FL_DIM=""; FL_RED=""; FL_GREEN=""; FL_YELLOW=""; FL_BLUE=""; FL_CYAN=""; FL_RESET=""; FL_EL=""
   fi
