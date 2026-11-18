@@ -5,7 +5,7 @@ namespace Tray.Core.Tests;
 
 internal static class Fixtures
 {
-    /// <summary>The spike's fixtures folder, found by walking up from the test binaries.</summary>
+    /// <summary>The fixtures folder, found by walking up from the test binaries.</summary>
     public static string Root => BenchBar.Tray.TestSupport.FixtureFiles.Root;
 
     public static string Dir(string name) => Path.Combine(Root, name);
