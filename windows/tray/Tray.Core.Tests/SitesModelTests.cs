@@ -239,6 +239,7 @@ public class SitesModelTests
     {
         var culture = (System.Globalization.CultureInfo)System.Globalization.CultureInfo.InvariantCulture.Clone();
         culture.DateTimeFormat.AbbreviatedMonthNames = ["Jan", "Feb", "M\u00e4r", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez", ""];
+        culture.DateTimeFormat.AbbreviatedMonthGenitiveNames = culture.DateTimeFormat.AbbreviatedMonthNames; // "MMM d" uses the genitive set
         culture.DateTimeFormat.ShortTimePattern = "H:mm";
         culture.NumberFormat.NumberDecimalSeparator = ",";
         return culture;
