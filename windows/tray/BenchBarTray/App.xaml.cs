@@ -442,6 +442,7 @@ public partial class App : Application, ITrayHost
             return;
         }
         var window = new LogWindow(PageServicesInstance, bench, Theme);
+        window.Model.Gate = _controller?.LogFollow; // lock, sleep and battery saver, the same rules as the bench poller
         _logs[bench.Path] = window;
         window.Closed += (_, _) =>
         {
@@ -540,13 +541,34 @@ public partial class App : Application, ITrayHost
             _ => ThemeMode.System,
         };
 
+    private readonly object _saveGate = new();
+    private Task _saving = Task.CompletedTask;
+
+    /// <summary>
+    /// Saves on a pool thread, one save after the other: Save retries for up to a second while an antivirus scan or the indexer holds
+    /// the file, which on the UI thread froze the window. Each save writes the config as it is when it runs, so the last one wins.
+    /// </summary>
     private void SaveConfig()
+    {
+        lock (_saveGate) _saving = _saving.ContinueWith(_ => SaveConfigNow(), CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
+    }
+
+    private void SaveConfigNow()
     {
         try { _config.Save(); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _log.Write("config", ex);
         }
+    }
+
+    /// <summary>Quit: a save still under way is given a moment to finish, so the last setting is not lost.</summary>
+    private void FlushConfig()
+    {
+        Task pending;
+        lock (_saveGate) pending = _saving;
+        try { pending.Wait(TimeSpan.FromSeconds(3)); }
+        catch (AggregateException) { /* SaveConfigNow logs its own failures */ }
     }
 
     private void OpenRunnersFolder()
@@ -658,6 +680,7 @@ public partial class App : Application, ITrayHost
     {
         if (_quitting) return;
         _quitting = true;
+        FlushConfig();
         _controller?.Dispose();
         _flyout?.Close();
         foreach (var w in _logs.Values.ToList()) w.Close();

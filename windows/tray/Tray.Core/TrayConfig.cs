@@ -181,7 +181,7 @@ public sealed class TrayConfig
     /// <summary>
     /// Replaces the file with the temp copy. Windows refuses the replace while another process has the target
     /// open without delete sharing (an antivirus scan, the search indexer, the shim reading it), for a moment:
-    /// a few short retries instead of losing the write.
+    /// a few short retries instead of losing the write. It sleeps, so callers on the UI thread save through a pool thread.
     /// </summary>
     private static void ReplaceWithRetry(string temp, string path)
     {

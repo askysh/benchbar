@@ -4,6 +4,13 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+### Windows tray
+
+- A call to `benchbar.exe` that has finished no longer shows "did not finish" when a helper process it started keeps its output open: the tray waits a few seconds for the output and goes on.
+- The Logs window waits longer between requests while no new lines arrive, makes none while the PC is locked or asleep or the window is minimized, and asks at most every 30 seconds in battery saver. The bench poll with a running bench is every 60 seconds on battery.
+- A list, a status, a log or a health check from a newer `benchbar` than the tray is read when it still has what the tray needs, instead of blanking the whole window. A plan or a change from a newer one is still refused. A newer `benchbar.exe` no longer blocks Check for Updates, and a newer patch version of it no longer shows a version warning.
+- Saving a setting no longer freezes the window while an antivirus scan holds `config.json`.
+
 ### Agents never see a secret
 
 - `benchbar mariadb-password` is for a person at a terminal. It refuses under `--for-agent`, `BENCHBAR_NONINTERACTIVE`, `benchbar mcp` and when stdin is not a terminal, whatever `--yes` says, and no message or doc line tells an agent to run it (the install messages now say to ask the person who installed it). When the MariaDB root password is unknown (exit 2), the message tells an agent to ask the person. This stops the documented agent modes and a missing terminal. A process that runs as the same user and fakes a terminal is not stopped: these are guards against mistakes, not a boundary, as SECURITY.md says for the Keychain.
