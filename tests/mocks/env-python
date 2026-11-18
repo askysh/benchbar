@@ -25,6 +25,7 @@ if [[ "${1:-}" == "-c" && "${3:-}" == "benchbar-secrets" && "${4:-}" == "frappe"
       mkdir -p "$site"; touch "$site/installed_apps"; printf '{"db_name": "%s"}\n' "$db" >"$site/site_config.json"
       # the database is made, as frappe does before it fills it
       printf '%s\n' "$db" >>"${MOCK_STATE:?}/mariadb_dbs"
+      printf 'Administrator\nGuest\n' >"${MOCK_STATE}/mariadb_users.$db"
       # MOCK_NEW_SITE_CUT=1: the run is cut short (Ctrl+C) with the folder and the database in place
       [[ -n "${MOCK_NEW_SITE_CUT:-}" ]] && exit 130 ;;
     drop-site)

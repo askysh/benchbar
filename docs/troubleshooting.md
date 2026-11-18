@@ -261,6 +261,9 @@ are reported so you can remove them by hand.
 - `<bench>/logs/.benchbar/state.json`, written by the runner
 - `<bench>/logs/.benchbar/creating-<site>`, a marker while `bench
   new-site` runs, so an interrupted site is not taken for created
+- `new-site/<hash>.rec` in the state folder, the database name BenchBar
+  chose for that `new-site`; only with it, and only for a database no
+  site names and that holds no users, will a rerun drop the database
 - `<bench>/.benchbar.lock`, the bench's own lock folder during a
   mutating run
 - the state folder, `~/.local/state/benchbar` (`.benchbar/` in a git

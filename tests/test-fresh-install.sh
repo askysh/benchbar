@@ -155,6 +155,9 @@ HALF_DB="$(sed -n 's/^db_name=//p' "$MARKER")"
 assert_calls_contain "^bench new-site ${SITE} .*--db-name ${HALF_DB}\$"
 grep -qx -- "$HALF_DB" "$MOCK_STATE/mariadb_dbs" || fail "the cut short new-site left its database"
 assert_file "$BENCH/sites/$SITE/site_config.json"
+set -- "$FL_STATE_DIR"/new-site/*.rec
+assert_eq "1" "$#" "(benchbar's own record of the database, written before the marker)"
+grep -qx -- "db_name=${HALF_DB}" "$1" || fail "the record names the database"
 reset_calls
 SITE_NAME="$SITE" run01 --yes --offline
 assert_eq "0" "$CODE" "$OUT"
@@ -167,6 +170,8 @@ set -- "$BENCH"/archived/sites/"${SITE}".incomplete.*
 assert_eq "1" "$#" "(the half made folder is moved, not deleted)"
 assert_file "$1/site_config.json"
 assert_no_file "$MARKER"
+set -- "$FL_STATE_DIR"/new-site/*.rec
+[[ ! -e "$1" ]] || fail "the record is gone once the cut short new-site is cleaned up and the new one is done"
 assert_file "$BENCH/sites/$SITE/site_config.json"
 NEW_DB="$(sed -n 's/.*"db_name": "\(.*\)".*/\1/p' "$BENCH/sites/$SITE/site_config.json")"
 [[ "$NEW_DB" != "$HALF_DB" && "$NEW_DB" =~ ^_[0-9a-f]{16}$ ]] || fail "the rerun made a new database, got [$NEW_DB]"
@@ -178,12 +183,23 @@ assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "already exists: no passwords needed"
 assert_calls_not_contain '^bench new-site'
 
+# benchbar's own record of the name it chose (lib/frappe-local/bench.sh, fl_site_record_write): a file
+# in its state folder, keyed by the bench's path and the site
+CANON="$(cd "$BENCH" && pwd -P)"
+record_path() { printf '%s/new-site/%s.rec' "$FL_STATE_DIR" "$(printf '%s' "${CANON}|$1" | cksum | awk '{printf "%08x", $1}')"; }
+write_record() { # SITE DB
+  mkdir -p "$FL_STATE_DIR/new-site"
+  printf 'bench=%s\nsite=%s\ndb_name=%s\n' "$CANON" "$1" "$2" >"$(record_path "$1")"
+}
+
 # in doubt: a marker without the database name (an older benchbar), a folder whose config names another
 # database, a name that is not one benchbar makes: nothing is dropped or moved, and the exact commands are said
 doubt() {
-  local label="$1" site="$2" marker_body="$3" config_db="$4" before after
+  local label="$1" site="$2" marker_body="$3" config_db="$4" before after mdb
   mkdir -p "$BENCH/sites/$site" "$BENCH/logs/.benchbar"
   printf '%s' "$marker_body" >"$BENCH/logs/.benchbar/creating-${site}"
+  mdb="$(printf '%s' "$marker_body" | sed -n 's/^db_name=//p')"
+  [[ -z "$mdb" ]] || write_record "$site" "$mdb"
   [[ -z "$config_db" ]] || printf '{"db_name": "%s"}\n' "$config_db" >"$BENCH/sites/$site/site_config.json"
   : >"$SQLLOG"
   SITE_NAME="$site" run01 --yes --offline
@@ -209,6 +225,7 @@ doubt "odd name" oddname $'2026-10-03T10:00:00Z\ndb_name=mysql\n' ""
 printf '%s\n' _cccccccccccccccc >>"$MOCK_STATE/mariadb_dbs"
 mkdir -p "$BENCH/sites/nopw"
 printf '2026-10-03T10:00:00Z\ndb_name=_cccccccccccccccc\n' >"$BENCH/logs/.benchbar/creating-nopw"
+write_record nopw _cccccccccccccccc
 printf '{"db_name": "_cccccccccccccccc"}\n' >"$BENCH/sites/nopw/site_config.json"
 printf 'wrongpw' >"$MOCK_STATE/keychain/benchbar-mariadb--root"
 MARIADB_ROOT_PASSWORD=wrongpw SITE_NAME=nopw run01 --yes --offline
@@ -217,16 +234,93 @@ assert_eq "2" "$CODE" "$OUT"
 grep -qx -- _cccccccccccccccc "$MOCK_STATE/mariadb_dbs" || fail "no database is dropped without a working root password"
 assert_file "$BENCH/sites/nopw"
 
-# a dry run says what it would do and does it not
-printf '2026-10-03T10:00:00Z\ndb_name=_dddddddddddddddd\n' >"$BENCH/logs/.benchbar/creating-dryhalf"
-mkdir -p "$BENCH/sites/dryhalf"; printf '_dddddddddddddddd\n' >>"$MOCK_STATE/mariadb_dbs"
-: >"$SQLLOG"
-SITE_NAME=dryhalf run01 --yes --offline --dry-run
+# ---- the database is dropped only when ALL of these hold: benchbar's own record names it, no site of any
+# bench benchbar knows names it, it is still just created, a person said yes. Any other case: nothing is
+# dropped or moved, and the stop names the database and the commands.
+# cut_site SITE: a genuinely cut short new-site (folder, database, marker, and benchbar's record)
+cut_site() {
+  MOCK_NEW_SITE_CUT=1 SITE_NAME="$1" run01 --yes --offline
+  assert_eq "1" "$CODE" "$OUT"
+  MARKER="$BENCH/logs/.benchbar/creating-$1"
+  HALF_DB="$(sed -n 's/^db_name=//p' "$MARKER")"
+  [[ "$HALF_DB" =~ ^_[0-9a-f]{16}$ ]] || fail "$1: no database name in the marker"
+  : >"$SQLLOG"
+  reset_calls
+}
+# refused SITE LABEL [EXPECTED TEXT]: a rerun stops, drops and moves nothing, names the database
+refused() {
+  local site="$1" label="$2"
+  SITE_NAME="$site" run01 --yes --offline
+  assert_eq "1" "$CODE" "$label: $OUT"
+  assert_contains "$OUT" "$HALF_DB" "$label (names the database)"
+  [[ -z "${3:-}" ]] || assert_contains "$OUT" "$3" "$label"
+  ! grep -q "DROP DATABASE" "$SQLLOG" || fail "$label: the database must not be dropped"
+  grep -qx -- "$HALF_DB" "$MOCK_STATE/mariadb_dbs" || fail "$label: the database must stay"
+  assert_file "$MARKER" "$label"
+  assert_calls_not_contain '^bench new-site' "$label (no new site is started over it)"
+  set +f; set -- "$BENCH"/archived/sites/"${site}".incomplete.*
+  [[ ! -e "$1" ]] || fail "$label: nothing may be moved"
+}
+
+# a marker alone is not enough: no record in benchbar's state folder, no drop
+cut_site norec
+assert_file "$(record_path norec)" "(the cut short new-site left benchbar's record)"
+rm -f "$(record_path norec)"
+refused norec "marker without a record" "benchbar has no record"
+assert_contains "$OUT" 'DROP DATABASE IF EXISTS' "(the commands for the person)"
+assert_file "$BENCH/sites/norec"
+
+# a database that another site of this bench names (here: a site made by hand over it)
+cut_site shared1
+mkdir -p "$BENCH/sites/handmade"
+printf '{"db_name": "%s"}\n' "$HALF_DB" >"$BENCH/sites/handmade/site_config.json"
+refused shared1 "database shared with a site of this bench" "sites/handmade/site_config.json names the database ${HALF_DB}"
+assert_file "$BENCH/sites/shared1"
+
+# a database that a site of another registered bench names
+cut_site shared2
+OTHER_BENCH="$TMP_DIR/otherbench"
+mkdir -p "$OTHER_BENCH/sites/theirs"
+printf '{}\n' >"$OTHER_BENCH/sites/common_site_config.json"
+printf '{"db_name": "%s"}\n' "$HALF_DB" >"$OTHER_BENCH/sites/theirs/site_config.json"
+printf '%s\n' "$OTHER_BENCH" >"$FL_STATE_DIR/registered-benches.txt"
+refused shared2 "database shared with another registered bench" "otherbench/sites/theirs/site_config.json names the database ${HALF_DB}"
+assert_file "$BENCH/sites/shared2"
+# the same database unregistered elsewhere is not seen (benchbar knows only the benches it knows): it is dropped
+cut_site shared3
+printf '' >"$FL_STATE_DIR/registered-benches.txt"
+SITE_NAME=shared3 run01 --yes --offline
 assert_eq "0" "$CODE" "$OUT"
-assert_contains "$OUT" "dry-run: would move ${BENCH}/sites/dryhalf"
-assert_contains "$OUT" "drop the database _dddddddddddddddd"
-assert_file "$BENCH/sites/dryhalf"
-grep -qx -- _dddddddddddddddd "$MOCK_STATE/mariadb_dbs" || fail "a dry run drops nothing"
+assert_contains "$OUT" "dropped the database ${HALF_DB}"
+
+# a finished site with a stale marker: the database has users, so it is no half made one
+cut_site stale
+printf 'Administrator\nGuest\nalice@example.com\n' >"$MOCK_STATE/mariadb_users.${HALF_DB}"
+refused stale "complete site with a stale marker" "holds data"
+assert_file "$BENCH/sites/stale/site_config.json"
+
+# the folder is gone and the database cannot be cleaned up: a stop that names it, not a silent new-site
+cut_site orphan
+mv "$BENCH/sites/orphan" "$TMP_DIR/orphan.moved"
+rm -f "$(record_path orphan)"
+SITE_NAME=orphan run01 --yes --offline
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "sites/orphan is gone; its database ${HALF_DB} may be left behind"
+assert_contains "$OUT" 'DROP DATABASE IF EXISTS' "(the commands)"
+assert_calls_not_contain '^bench new-site' "(no new-site over an orphan database)"
+grep -qx -- "$HALF_DB" "$MOCK_STATE/mariadb_dbs" || fail "the orphan database stays"
+assert_file "$MARKER"
+
+# a dry run says what it would do and does it not
+cut_site dryrun
+SITE_NAME=dryrun run01 --yes --offline --dry-run
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "dry-run: would move ${BENCH}/sites/dryrun"
+assert_contains "$OUT" "drop the database ${HALF_DB}"
+assert_contains "$OUT" "only if it is still just created"
+assert_file "$BENCH/sites/dryrun"
+grep -qx -- "$HALF_DB" "$MOCK_STATE/mariadb_dbs" || fail "a dry run drops nothing"
+! grep -q "DROP DATABASE" "$SQLLOG" || fail "a dry run drops nothing"
 rm -rf "$BENCH"
 
 # ---- minor point of #112: benchbar is on PATH before the bench and site step

@@ -232,8 +232,10 @@ fl_mariadb_listener_is_own() {
   pid="$(lsof -ti tcp:3306 -sTCP:LISTEN 2>/dev/null | awk 'NR==1' || true)"
   [[ -n "$pid" ]] || return 1
   bin="$(ps -o command= -p "$pid" 2>/dev/null | awk '{print $1}' || true)"
+  # under Homebrew's own prefix, not any folder that has an opt/<formula> in its path
+  [[ -n "${FL_BREW_PREFIX:-}" ]] || return 1
   case "$bin" in
-    */opt/"${formula}"/*|*/Cellar/"${formula}"/*) ;;
+    "${FL_BREW_PREFIX}"/opt/"${formula}"/*|"${FL_BREW_PREFIX}"/Cellar/"${formula}"/*) ;;
     *) return 1 ;;
   esac
   pw="$(fl_keychain_get 2>/dev/null || true)"

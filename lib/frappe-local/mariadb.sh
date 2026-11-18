@@ -154,6 +154,27 @@ fl_mariadb_db_exists() {
   [[ "$out" == "$2" ]]
 }
 
+# fl_mariadb_db_fresh PASSWORD NAME: 0 the database is still in a just created
+# state (no tables at all, a cut short new-site, or no tabUser rows but
+# Administrator and Guest), 1 it holds more (a working site's), 2 it cannot be
+# told. NAME is _ and 16 hex digits when benchbar made it; checked here again.
+fl_mariadb_db_fresh() {
+  local bin n
+  [[ "$2" =~ ^[A-Za-z0-9_]+$ ]] || return 2
+  bin="$(fl_mariadb_client)"
+  [[ -n "$bin" ]] || return 2
+  n="$(MYSQL_PWD="$1" "$bin" -u root --connect-timeout=2 -sNe "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='$2'" 2>/dev/null)" || return 2
+  [[ "$n" =~ ^[0-9]+$ ]] || return 2
+  [[ "$n" == "0" ]] && return 0
+  n="$(MYSQL_PWD="$1" "$bin" -u root --connect-timeout=2 -sNe "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='$2' AND TABLE_NAME='tabUser'" 2>/dev/null)" || return 2
+  [[ "$n" =~ ^[0-9]+$ ]] || return 2
+  # tables but no tabUser yet: nothing a person made
+  [[ "$n" == "0" ]] && return 0
+  n="$(MYSQL_PWD="$1" "$bin" -u root --connect-timeout=2 -sNe "SELECT COUNT(*) FROM \`$2\`.tabUser WHERE name NOT IN ('Administrator','Guest')" 2>/dev/null)" || return 2
+  [[ "$n" =~ ^[0-9]+$ ]] || return 2
+  [[ "$n" == "0" ]]
+}
+
 fl_mariadb_server_charset() {
   local bin
   bin="$(fl_mariadb_client)"

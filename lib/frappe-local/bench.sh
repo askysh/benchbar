@@ -526,44 +526,138 @@ fl_site_marker_db() {
   return 0
 }
 
+# The record of a new-site that benchbar started: the database name it chose,
+# written in benchbar's own state folder (outside the bench, so a marker that
+# is copied or edited cannot forge it) before the marker and before new-site
+# runs, keyed by the bench's path and the site. Removed when the site is done
+# or the cut short one is cleaned up.
+fl_site_record_file() {
+  local h
+  fl_path_hash_v h "$(fl_bench_canonical "$1")|$2"
+  printf '%s/new-site/%s.rec' "$FL_STATE_DIR" "$h"
+}
+
+# fl_site_record_write BENCH SITE DB
+fl_site_record_write() {
+  local f tmp
+  f="$(fl_site_record_file "$1" "$2")"
+  mkdir -p "$(dirname "$f")" 2>/dev/null || return 1
+  tmp="${f}.tmp.$$"
+  printf 'bench=%s\nsite=%s\ndb_name=%s\n' "$(fl_bench_canonical "$1")" "$2" "$3" >"$tmp" 2>/dev/null && mv "$tmp" "$f" 2>/dev/null
+}
+
+# fl_site_record_has BENCH SITE DB: the record names this bench, this site and this database
+fl_site_record_has() {
+  local f
+  f="$(fl_site_record_file "$1" "$2")"
+  [[ -f "$f" ]] || return 1
+  grep -qxF -- "bench=$(fl_bench_canonical "$1")" "$f" && grep -qxF -- "site=$2" "$f" && grep -qxF -- "db_name=$3" "$f"
+}
+
+fl_site_record_remove() { local f; f="$(fl_site_record_file "$1" "$2")"; [[ ! -f "$f" ]] || rm -f "$f"; return 0; }
+
+# fl_db_named_by_other_site BENCH SITE_DIR DB: prints the first sites/*/site_config.json,
+# in this bench or in any bench benchbar knows (known and registered ones),
+# that names DB, other than the config inside SITE_DIR itself. A config that
+# cannot be read counts as naming it. 0 found, 1 none.
+fl_db_named_by_other_site() {
+  local bench_dir="$1" site_dir="$2" db="$3" b c own cfg line seen=$'\n' benches=()
+  own="$(fl_bench_canonical "$bench_dir")/sites/${site_dir##*/}/site_config.json"
+  benches=("$bench_dir")
+  if declare -F fl_known_benches >/dev/null; then
+    while IFS= read -r line; do [[ -z "$line" ]] || benches+=("$line"); done < <(fl_known_benches 2>/dev/null || true)
+  fi
+  if [[ -r "${FL_STATE_DIR}/registered-benches.txt" ]]; then
+    while IFS= read -r line || [[ -n "$line" ]]; do [[ -z "$line" ]] || benches+=("$line"); done <"${FL_STATE_DIR}/registered-benches.txt"
+  fi
+  for b in "${benches[@]}"; do
+    c="$(fl_bench_canonical "$b")"
+    case "$seen" in *$'\n'"$c"$'\n'*) continue ;; esac
+    seen="${seen}${c}"$'\n'
+    for cfg in "$c"/sites/*/site_config.json; do
+      [[ -e "$cfg" && "$cfg" != "$own" ]] || continue
+      if [[ ! -r "$cfg" ]] || grep -Eq "\"db_name\"[[:space:]]*:[[:space:]]*\"${db}\"" "$cfg" 2>/dev/null; then
+        printf '%s' "$cfg"; return 0
+      fi
+    done
+  done
+  return 1
+}
+
+# fl__db_by_hand DB: the command a person runs to drop a half made database (and its user) themselves
+fl__db_by_hand() {
+  # shellcheck disable=SC2016
+  printf 'mariadb -u root -p -e "DROP DATABASE IF EXISTS \\`%s\\`; DROP USER IF EXISTS '"'%s'@'%%', '%s'@'localhost'"'"' "$1" "$1" "$1"
+}
+
 # fl_site_incomplete BENCH SITE [WHY]: true, with the recovery printed, when a
 # bench new-site for SITE was cut short (Ctrl+C, a crash): the folder is
 # there, the database may be half made, site_config.json may be missing.
 # The install cleans a provable one up itself (fl_site_recover); this is
-# the stop for the rest, and WHY says why benchbar did not.
+# the stop for the rest, and WHY says why benchbar did not. What
+# fl_site_recover left in FL_SITE_RECOVER_DB and _FOREIGN is read here once
+# and cleared, so the next call (a site add, a restore) never sees it.
 FL_SITE_RECOVER_WHY=""
 FL_SITE_RECOVER_FOREIGN=0
+FL_SITE_RECOVER_DB=""
 fl_site_incomplete() {
-  local bench_dir="$1" site_name="$2" marker
+  local bench_dir="$1" site_name="$2" marker foreign="$FL_SITE_RECOVER_FOREIGN" db="$FL_SITE_RECOVER_DB"
+  FL_SITE_RECOVER_FOREIGN=0; FL_SITE_RECOVER_DB=""
   marker="$(fl_site_creating_marker "$bench_dir" "$site_name")"
   [[ -d "$bench_dir/sites/$site_name" && -f "$marker" ]] || return 1
   fl_fail "a previous bench new-site ${site_name} did not finish (started $(sed -n 1p "$marker" 2>/dev/null || printf '?')); the site folder is incomplete"
   [[ -z "${3:-}" ]] || fl_info "benchbar did not clean it up itself: ${3}"
-  if [[ "$FL_SITE_RECOVER_FOREIGN" == "1" ]]; then
-    fl_fix "mv ${bench_dir}/sites/${site_name} ~/${site_name}.incomplete, then run this again; leave the database it names alone until you know whose it is"
+  if [[ "$foreign" == "1" ]]; then
+    fl_fix "mv ${bench_dir}/sites/${site_name} ~/${site_name}.incomplete, then run this again; leave the database ${db:-it names} alone until you know whose it is"
+  elif [[ -n "$db" ]]; then
+    fl_fix "mv ${bench_dir}/sites/${site_name} ~/${site_name}.incomplete, then run this again. The database ${db} may be left behind: first check that no site uses it (grep -l '\"${db}\"' ${bench_dir}/sites/*/site_config.json), then drop it yourself: $(fl__db_by_hand "$db")   If the site works already (bench --site ${site_name} doctor), only remove ${marker}"
   else
     fl_fix "mv ${bench_dir}/sites/${site_name} ~/${site_name}.incomplete   (then, if its database exists: cd ${bench_dir} && bench drop-site ${site_name} --force), then run this again; if the site works already (bench --site ${site_name} doctor), only remove ${marker}"
   fi
   return 0
 }
 
+# fl_site_orphan_stop BENCH SITE: the marker is there, the site folder is
+# gone and the database could not be cleaned up: a stop that names it (starting
+# new-site again would overwrite the marker and lose track of it).
+fl_site_orphan_stop() {
+  local bench_dir="$1" site_name="$2" db="$FL_SITE_RECOVER_DB" marker
+  marker="$(fl_site_creating_marker "$bench_dir" "$site_name")"
+  fl_fail "a previous bench new-site ${site_name} did not finish and sites/${site_name} is gone; its database ${db} may be left behind"
+  [[ -z "$FL_SITE_RECOVER_WHY" ]] || fl_info "benchbar did not clean it up itself: ${FL_SITE_RECOVER_WHY}"
+  fl_fix "check that no site uses ${db} (grep -l '\"${db}\"' ${bench_dir}/sites/*/site_config.json); if none does, drop it yourself: $(fl__db_by_hand "$db")   Then remove ${marker} and run this again"
+  FL_SITE_RECOVER_FOREIGN=0; FL_SITE_RECOVER_DB=""
+}
+
 # fl_site_recover BENCH SITE ROOT_PASSWORD: cleans up a new-site that was cut
 # short, so a rerun starts over without any work by hand. 0 cleaned up (or,
-# in a dry run, would), 1 not touched, with FL_SITE_RECOVER_WHY saying why.
-# It drops a database only when all of this holds: the marker benchbar wrote
-# before new-site started names it, benchbar chose that name itself and had
-# checked it did not exist, the site's own site_config.json (when there is
-# one) names no other database, and the root password logs in. The site
-# folder is moved to archived/sites, as bench drop-site does, never deleted.
+# in a dry run, would), 1 not touched, with FL_SITE_RECOVER_WHY saying why
+# (and FL_SITE_RECOVER_DB naming the database the marker records).
+# It drops a database only when ALL of this holds:
+#  a) benchbar's own record in its state folder (outside the bench, written
+#     before the marker and before new-site ran) names this database for this
+#     bench and site; the marker alone is not enough,
+#  b) no sites/*/site_config.json of this bench or of any bench benchbar knows
+#     names it, other than a config inside the half made site folder itself,
+#  c) it is still just created: no tabUser rows but Administrator and Guest, or
+#     no tables at all,
+#  d) the root password logs in and a person confirms (a terminal, default No),
+#     or --yes was given. Without either, nothing is dropped.
+# The site folder is moved to archived/sites, as bench drop-site does, never deleted.
 fl_site_recover() {
-  local bench_dir="$1" site_name="$2" pw="$3" marker db cfg_db site_dir dest bin rc=0
-  FL_SITE_RECOVER_WHY=""; FL_SITE_RECOVER_FOREIGN=0
+  local bench_dir="$1" site_name="$2" pw="$3" marker db cfg_db site_dir dest bin hit answer rc=0 fresh=0
+  FL_SITE_RECOVER_WHY=""; FL_SITE_RECOVER_FOREIGN=0; FL_SITE_RECOVER_DB=""
   marker="$(fl_site_creating_marker "$bench_dir" "$site_name")"
   [[ -f "$marker" ]] || return 1
   site_dir="${bench_dir}/sites/${site_name}"
   db="$(fl_site_marker_db "$bench_dir" "$site_name")"
   if [[ -z "$db" ]]; then
     FL_SITE_RECOVER_WHY="the marker does not name a database that benchbar made (an older benchbar wrote it), so no database is dropped"
+    return 1
+  fi
+  FL_SITE_RECOVER_DB="$db"
+  if ! fl_site_record_has "$bench_dir" "$site_name" "$db"; then
+    FL_SITE_RECOVER_WHY="benchbar has no record in its state folder that it chose ${db} for ${site_name} (the marker alone is not proof: it can be copied, edited or left by an older benchbar), so no database is dropped"
     return 1
   fi
   if [[ -f "$site_dir/site_config.json" ]]; then
@@ -574,11 +668,16 @@ fl_site_recover() {
       return 1
     fi
   fi
+  if hit="$(fl_db_named_by_other_site "$bench_dir" "$site_dir" "$db")"; then
+    FL_SITE_RECOVER_WHY="${hit} names the database ${db}: another site uses it, so nothing is dropped or moved"
+    FL_SITE_RECOVER_FOREIGN=1
+    return 1
+  fi
   dest="${bench_dir}/archived/sites/${site_name}.incomplete.$(date +%Y%m%d%H%M%S)"
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
     fl_warn "A new-site for ${site_name} was cut short (started $(sed -n 1p "$marker" 2>/dev/null || printf '?'))"
     [[ ! -d "$site_dir" ]] || fl_info "dry-run: would move ${site_dir} to ${dest}"
-    fl_info "dry-run: would drop the database ${db} and its user, which the cut short new-site made (named in ${marker}), then remove the marker"
+    fl_info "dry-run: would drop the database ${db} and its user, which the cut short new-site made (benchbar's record and ${marker} name it), only if it is still just created (no users but Administrator and Guest) and you confirm or pass --yes; then remove the marker"
     return 0
   fi
   if [[ -z "$pw" ]] || ! fl_mariadb_root_verify "$pw"; then
@@ -589,6 +688,29 @@ fl_site_recover() {
   if [[ "$rc" == "2" ]]; then
     FL_SITE_RECOVER_WHY="MariaDB could not be asked whether ${db} exists"
     return 1
+  fi
+  if [[ "$rc" == "0" ]]; then
+    fl_mariadb_db_fresh "$pw" "$db" || fresh=$?
+    if [[ "$fresh" == "1" ]]; then
+      FL_SITE_RECOVER_WHY="the database ${db} holds data (users besides Administrator and Guest), so it is no half made one; it may be a finished site, and nothing is dropped or moved"
+      FL_SITE_RECOVER_FOREIGN=1
+      return 1
+    elif [[ "$fresh" != "0" ]]; then
+      FL_SITE_RECOVER_WHY="MariaDB could not tell whether ${db} is still just created"
+      return 1
+    fi
+    if [[ "${FL_ASSUME_YES:-0}" != "1" ]]; then
+      if fl_noninteractive || [[ ! -t 0 ]]; then
+        FL_SITE_RECOVER_WHY="dropping ${db} needs your OK and nothing can ask: run this again with --yes, or drop it yourself"
+        return 1
+      fi
+      fl_spinner_pause
+      read -r -p "  Drop the half made database ${db} and its user? [y/N] " answer || answer=""
+      if [[ ! "$answer" =~ ^[Yy]$ ]]; then
+        FL_SITE_RECOVER_WHY="you did not confirm dropping ${db}"
+        return 1
+      fi
+    fi
   fi
   fl_warn "A new-site for ${site_name} was cut short (started $(sed -n 1p "$marker" 2>/dev/null || printf '?')); cleaning it up and starting over"
   if [[ "$rc" == "0" ]]; then
@@ -608,6 +730,8 @@ fl_site_recover() {
     fl_ok "moved ${site_dir} to ${dest}"
   fi
   rm -f "$marker"
+  fl_site_record_remove "$bench_dir" "$site_name"
+  FL_SITE_RECOVER_DB=""
   fl_changed site "$site_name" "a cut short new-site was cleaned up (folder moved to ${dest}, database ${db} dropped)"
 }
 
@@ -640,6 +764,12 @@ fl_new_site_create() {
       [[ "$rc" == "1" ]] && { db_name="$candidate"; break; }
     done
     [[ -z "$db_name" ]] || db_args=(--db-name "$db_name")
+    # benchbar's own record of the name first (see fl_site_record_file): the marker
+    # in the bench is not proof by itself, and nothing starts without the record
+    if [[ -n "$db_name" ]] && ! fl_site_record_write "$bench_dir" "$site_name" "$db_name"; then
+      fl_fail "could not write benchbar's record of the database ${db_name} in ${FL_STATE_DIR}; not starting new-site without it"
+      return 1
+    fi
     mkdir -p "$(dirname "$marker")" 2>/dev/null
     { date -u +%Y-%m-%dT%H:%M:%SZ; [[ -z "$db_name" ]] || printf 'db_name=%s\n' "$db_name"; } >"$marker" 2>/dev/null || { fl_fail "could not write ${marker}; not starting new-site without it"; return 1; }
   fi
@@ -649,6 +779,7 @@ fl_new_site_create() {
   FL__DB_PW=""; FL__ADMIN_PW=""
   [[ "$code" == "0" ]] || return 2
   rm -f "$marker"
+  fl_site_record_remove "$bench_dir" "$site_name"
 }
 
 fl_new_site_if_needed() {
@@ -657,10 +788,16 @@ fl_new_site_if_needed() {
   fl_info "Checking site ${site_name}"
   if [[ -f "$(fl_site_creating_marker "$bench_dir" "$site_name")" ]]; then
     # a new-site that was cut short: cleaned up here when it is provably ours,
-    # else a stop with the recovery when its folder is there (without one, as
-    # before, the run goes on and new-site starts again)
-    if ! fl_site_recover "$bench_dir" "$site_name" "$db_password" && [[ -d "$bench_dir/sites/$site_name" ]]; then
-      fl_site_incomplete "$bench_dir" "$site_name" "$FL_SITE_RECOVER_WHY" && return 1
+    # else a stop with the recovery when its folder is there, or one that names
+    # the database when only that is left (a marker that names no database, an
+    # older benchbar's, goes on as before and new-site starts again)
+    if ! fl_site_recover "$bench_dir" "$site_name" "$db_password"; then
+      if [[ -d "$bench_dir/sites/$site_name" ]]; then
+        fl_site_incomplete "$bench_dir" "$site_name" "$FL_SITE_RECOVER_WHY" && return 1
+      elif [[ -n "$FL_SITE_RECOVER_DB" ]]; then
+        fl_site_orphan_stop "$bench_dir" "$site_name"
+        return 1
+      fi
     fi
   elif [[ -d "$bench_dir/sites/$site_name" ]]; then
     fl_ok "Site ${site_name} already exists"

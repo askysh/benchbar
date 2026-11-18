@@ -124,13 +124,18 @@ bench that has a site is never moved.
 PATH; until then run `~/.local/bin/benchbar install`.
 
 **It was cut short while it created the site** (Ctrl+C, a closed window).
-Run `benchbar install` again. It drops the half made database that its
-own marker names, moves the half made site folder to
+Run `benchbar install` again. It drops the half made database only when
+it can prove that BenchBar made it just now and nobody uses it: BenchBar's
+own record in its state folder names it, no site of this bench or of any
+bench BenchBar knows names it, and it holds no users but Administrator
+and Guest (or no tables at all). It asks you first (the default is No);
+`--yes` answers for you. Then it moves the half made site folder to
 `<bench>/archived/sites/<site>.incomplete.<time>` and creates the site
 again; it needs the MariaDB root password (the Keychain has it) and asks
-for the Administrator password again. When it cannot show that the
-database is its own (for example a marker an older release wrote), it
-touches nothing and prints the commands.
+for the Administrator password again. When any of that fails (a marker an
+older release wrote, a database another site names, a database with
+users), it drops and moves nothing, names the database and prints the
+commands for you to run once you have checked whose it is.
 
 To pick the Frappe version or the apps, pass a profile and a bundle, for
 example `benchbar install --profile v16-lts --bundle common`. The choices
