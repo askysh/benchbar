@@ -437,13 +437,13 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 
 | Command | Flag | Value | What it does |
 |---|---|---|---|
-| `mariadb-password` | `--yes` |  | Do not ask. |
+| `mariadb-password` | `--yes` |  | Do not ask (still refused without a person at a terminal). |
 | `uninstall-service` | `--all` |  | Every bench with a benchbar agent, after one question. |
 | `uninstall-service` | `--yes` |  | Do not ask; required without a terminal. |
 | `open` | `--as` | `USER` | Sign in as this user, no password. Refused unless site open-as is on for the site and developer_mode is on. A sign in runs the apps' on_login and on_session_creation hooks as a real login does: last_login, an Activity Log entry, a mail to System Managers for Administrator, an ERPNext Customer or Supplier for a Website User, and Frappe may end the user's oldest session (simultaneous_sessions). |
 | `open` | `--path` | `P` | Where to land, for example /app/todo. Default: /app, or / for a Website User. |
 | `open` | `--no-browser` |  | Start the session, open nothing. |
-| `open` | `--print-url` |  | Print the link (it holds the session id) instead of opening it; in --json as url. |
+| `open` | `--print-url` |  | Print the link (it holds the session id) instead of opening it; in --json as url. With --as, refused under BENCHBAR_NONINTERACTIVE, --for-agent and mcp. |
 | `open` | `--json` |  | One JSON document; url only with --print-url. |
 | `users` | `--search` | `TEXT` | Only users whose id or full name contains TEXT. |
 | `users` | `--limit` | `N` | At most N users (1 to 500, default 50). |

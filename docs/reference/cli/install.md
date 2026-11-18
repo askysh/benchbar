@@ -187,6 +187,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `install` | `--bundle` | `NAME` | App bundle: minimal, common or extended. |
 | `install` | `--port-offset` | `N` | Use port block N (web 8000+N). |
 | `install` | `--make-default` |  | Make this the default bench even when another one is. |
+| `install` | `--repair-bench` |  | Move a bench folder that is incomplete aside and start over (never one that holds a site). With --dry-run it shows the move. |
 | `install` | `--allow-windows-fs` |  | WSL only: accept a bench on the Windows file system (/mnt/c, drvfs, 9p). It is refused by default: slow, no file watching, broken permissions. |
 | `install` | `--offline` |  | Skip the remote branch checks. |
 | `install` | `--frappe-commit` | `SHA` | Pin the frappe clone to this commit (or FRAPPE_COMMIT, or the team profile). |
