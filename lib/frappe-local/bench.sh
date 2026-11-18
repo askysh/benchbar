@@ -281,16 +281,16 @@ fl_commit_present() {
 fl_commit_reach() {
   local dir="$1" sha="$2" remote
   fl_commit_present "$dir" "$sha" && return 0
-  env GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes' git -C "$dir" fetch --all --tags --quiet >>"${FL_LOG_FILE:-/dev/null}" 2>&1 || true
+  fl_git_net -C "$dir" fetch --all --tags --quiet >>"${FL_LOG_FILE:-/dev/null}" 2>&1 || true
   fl_commit_present "$dir" "$sha" && return 0
   if [[ "$(git -C "$dir" rev-parse --is-shallow-repository 2>/dev/null || true)" == "true" ]]; then
-    env GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes' git -C "$dir" fetch --all --tags --unshallow --quiet >>"${FL_LOG_FILE:-/dev/null}" 2>&1 || true
+    fl_git_net -C "$dir" fetch --all --tags --unshallow --quiet >>"${FL_LOG_FILE:-/dev/null}" 2>&1 || true
   fi
   fl_commit_present "$dir" "$sha" && return 0
   # a single branch clone has not seen a commit that is on another branch: the
   # remote may hand out a commit it has by its hash (GitHub does)
   for remote in $(git -C "$dir" remote 2>/dev/null || true); do
-    env GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes' git -C "$dir" fetch --quiet "$remote" "$sha" >>"${FL_LOG_FILE:-/dev/null}" 2>&1 || true
+    fl_git_net -C "$dir" fetch --quiet "$remote" "$sha" >>"${FL_LOG_FILE:-/dev/null}" 2>&1 || true
     fl_commit_present "$dir" "$sha" && return 0
   done
   return 1

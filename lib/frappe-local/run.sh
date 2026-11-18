@@ -267,25 +267,87 @@ fl_run_with_timeout() {
 # runs on; exit 124. FL_RUN_PGID is put back afterwards: a signal that
 # arrives later still reaches the right group.
 fl_run_capture_timeout() {
-  local secs="$1" out="$2" saved_pgid="$FL_RUN_PGID" pid ticks=0 code=0
+  local secs="$1" out="$2" saved_pgid="$FL_RUN_PGID" pid waited=0 code=0
   local FL_RUN_ERR_FILE="$3"
   shift 3
   FL_RUN_PGID=""
   fl_run_bg_group "$out" "$@"
   pid="$FL_RUN_PID"
+  # a quick command (a local ls-remote) is noticed within 20 ms; a slow one is polled every 100 ms
   while kill -0 "$pid" 2>/dev/null; do
-    if [[ "$ticks" -ge $((secs * 10)) ]]; then
+    if [[ "$waited" -ge $((secs * 1000)) ]]; then
       fl_run_group_kill
       printf 'timed out after %ss\n' "$secs" >>"$FL_RUN_ERR_FILE"
       FL_RUN_PGID="$saved_pgid"
       return 124
     fi
-    sleep 0.1
-    ticks=$((ticks + 1))
+    if [[ "$waited" -lt 500 ]]; then sleep 0.02; waited=$((waited + 20)); else sleep 0.1; waited=$((waited + 100)); fi
   done
   wait "$pid" || code=$?
   FL_RUN_PGID="$saved_pgid"
   return "$code"
+}
+
+# ---------------------------------------------------------------- git over the network
+#
+# One place for every read of a remote (preflight, plan, profile check, lock):
+# git never prompts, ssh never waits for a password and gives up connecting
+# after FL_GIT_CONNECT_SECS, and the whole call dies with its process group
+# after the timeout (ssh included), so nothing is left running.
+
+FL_GIT_CONNECT_SECS="${FL_GIT_CONNECT_SECS:-5}"
+FL_GR_CODE=0     # exit code of the last fl_git_remote_run: 124 after a timeout
+FL_GR_ERR=""     # its first line of stderr (without warnings), "timed out after Ns" on 124
+FL_GR_OUT=""     # its stdout
+FL_GR_DEFAULT="" # fl_git_remote_default: the branch HEAD points at
+
+# git with your own keys and tokens, never a question
+fl_git_net() {
+  env GIT_TERMINAL_PROMPT=0 GIT_LFS_SKIP_SMUDGE=1 GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=${FL_GIT_CONNECT_SECS}" git "$@"
+}
+
+# fl_git_remote_run SECS GIT_ARGS...: fl_git_net with a deadline; sets
+# FL_GR_CODE, FL_GR_OUT and FL_GR_ERR, and puts git's stderr in the log
+fl_git_remote_run() {
+  local secs="$1" out err
+  shift
+  out="$(mktemp "${TMPDIR:-/tmp}/benchbar-gitnet.XXXXXX")"
+  err="$(mktemp "${TMPDIR:-/tmp}/benchbar-gitnet.XXXXXX")"
+  FL_GR_CODE=0
+  # the shell tells "Terminated" of a job it killed on a timeout: not a line for the user
+  { fl_run_capture_timeout "$secs" "$out" "$err" fl_git_net "$@" || FL_GR_CODE=$?; } 2>/dev/null
+  FL_GR_OUT="$(cat "$out" 2>/dev/null || true)"
+  fl_log_file_append "$err"
+  if [[ "$FL_GR_CODE" == "124" ]]; then
+    FL_GR_ERR="timed out after ${secs}s"
+  else
+    FL_GR_ERR="$(grep -v '^[[:space:]]*$' "$err" 2>/dev/null | grep -v '^warning:' | awk 'NR==1' || true)"
+  fi
+  rm -f "$out" "$err"
+  return 0
+}
+
+# fl_git_remote_ref REPO REF [SECS]: is REF a branch or tag of REPO?
+# Returns FL_GR_CODE: 0 found, 2 not there, 124 timeout, else git's own code.
+fl_git_remote_ref() {
+  fl_git_remote_run "${3:-${FL_GIT_TIMEOUT:-30}}" ls-remote --exit-code --heads --tags -- "$1" "$2"
+  return "$FL_GR_CODE"
+}
+
+# fl_git_remote_default REPO [SECS]: the branch HEAD points at, in FL_GR_DEFAULT
+# (nothing when unknown); returns FL_GR_CODE
+fl_git_remote_default() {
+  FL_GR_DEFAULT=""
+  fl_git_remote_run "${2:-${FL_GIT_TIMEOUT:-30}}" ls-remote --symref -- "$1" HEAD
+  [[ "$FL_GR_CODE" == "0" ]] && FL_GR_DEFAULT="$(printf '%s\n' "$FL_GR_OUT" | awk '$1 == "ref:" && $3 == "HEAD" {sub(/^refs\/heads\//, "", $2); print $2; exit}')"
+  return "$FL_GR_CODE"
+}
+
+# fl_git_remote_heads REPO [SECS]: the branch names of REPO, one per line (at most 20)
+fl_git_remote_heads() {
+  fl_git_remote_run "${2:-${FL_GIT_TIMEOUT:-30}}" ls-remote --heads -- "$1"
+  [[ "$FL_GR_CODE" == "0" ]] && printf '%s\n' "$FL_GR_OUT" | sed 's#.*refs/heads/##' | awk 'NR<=20 && NF'
+  return 0
 }
 
 fl_capture() {

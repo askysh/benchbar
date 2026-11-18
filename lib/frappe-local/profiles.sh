@@ -494,7 +494,7 @@ fl_profile_file_source() {
 # git in a subscription clone; a clone never runs hooks
 fl_profile_git() { local d="$1"; shift; git -C "$d" -c core.hooksPath=/dev/null "$@"; }
 # git with your own keys and tokens, but never a prompt
-fl_profile_git_net() { env GIT_TERMINAL_PROMPT=0 GIT_LFS_SKIP_SMUDGE=1 GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=${FL_PROFILE_NET_SECS}" git -c core.hooksPath=/dev/null "$@"; }
+fl_profile_git_net() { fl_git_net -c core.hooksPath=/dev/null "$@"; }
 # git as a stranger: no config, no credential helper, no prompt
 fl_profile_git_anon() { env GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=true SSH_ASKPASS=true GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git -c credential.helper= "$@"; }
 
@@ -509,26 +509,19 @@ fl_profile_offline_msg() {
 }
 
 # fl_profile_timed SECS OUT COMMAND...: stdout to OUT, the first line of
-# stderr in FL_PROFILE_ERR; exit 124 after SECS
+# stderr in FL_PROFILE_ERR; exit 124 after SECS. The command runs in a process
+# group of its own that a timeout ends whole (fl_run_capture_timeout): git and
+# the ssh it started do not outlive it.
 fl_profile_timed() {
-  local secs="$1" out="$2" err pid ticks=0 code=0
+  local secs="$1" out="$2" err code=0
   shift 2
   err="$(mktemp "${TMPDIR:-/tmp}/benchbar-net.XXXXXX")"
-  "$@" </dev/null >"$out" 2>"$err" &
-  pid=$!
-  while kill -0 "$pid" 2>/dev/null; do
-    if [[ "$ticks" -ge $((secs * 10)) ]]; then
-      kill "$pid" 2>/dev/null || true
-      wait "$pid" 2>/dev/null || true
-      rm -f "$err"
-      FL_PROFILE_ERR="timed out after ${secs}s"
-      return 124
-    fi
-    sleep 0.1
-    ticks=$((ticks + 1))
-  done
-  wait "$pid" || code=$?
-  FL_PROFILE_ERR="$(grep -v '^[[:space:]]*$' "$err" | awk 'NR==1' | sed -E 's/^(fatal|remote|error): *//' || true)"
+  { fl_run_capture_timeout "$secs" "$out" "$err" "$@" || code=$?; } 2>/dev/null
+  if [[ "$code" == "124" ]]; then
+    FL_PROFILE_ERR="timed out after ${secs}s"
+  else
+    FL_PROFILE_ERR="$(grep -v '^[[:space:]]*$' "$err" | awk 'NR==1' | sed -E 's/^(fatal|remote|error): *//' || true)"
+  fi
   rm -f "$err"
   return "$code"
 }
@@ -597,17 +590,49 @@ fl_profile_export_url() {
 
 # ---- asking git
 
+# A repo that answered a few minutes ago is not asked again (profile check,
+# then install --profile, then import: one answer for the three). Only a yes
+# is kept: a no or a timeout is asked again, so a fixed key or a network that
+# came back shows at once. FL_PROFILE_REACH_TTL=0 turns it off.
+FL_PROFILE_REACH_TTL="${FL_PROFILE_REACH_TTL:-300}"
+fl_profile_reach_cache_file() { printf '%s/reach-cache' "$FL_STATE_DIR"; }
+
+fl_profile_reach_cached() {
+  local f now
+  [[ "$FL_PROFILE_REACH_TTL" -gt 0 ]] 2>/dev/null || return 1
+  f="$(fl_profile_reach_cache_file)"
+  [[ -f "$f" ]] || return 1
+  now="$(date +%s)"
+  awk -F '\t' -v now="$now" -v ttl="$FL_PROFILE_REACH_TTL" -v r="$1" -v b="$2" '$2 == r && $3 == b && $1 + ttl >= now { f = 1 } END { exit f ? 0 : 1 }' "$f"
+}
+
+fl_profile_reach_remember() {
+  local f now tmp
+  [[ "$FL_PROFILE_REACH_TTL" -gt 0 ]] 2>/dev/null || return 0
+  f="$(fl_profile_reach_cache_file)"
+  now="$(date +%s)"
+  mkdir -p "$(dirname "$f")" 2>/dev/null || return 0
+  # one short line per answer, appended in one write: parallel checks do not interleave
+  printf '%s\t%s\t%s\n' "$now" "$1" "$2" >>"$f" 2>/dev/null || return 0
+  # drop the stale lines once the file grows
+  if [[ "$(wc -l <"$f" 2>/dev/null | tr -d ' ')" -gt 400 ]]; then
+    tmp="${f}.$$"
+    if awk -F '\t' -v now="$now" -v ttl="$FL_PROFILE_REACH_TTL" '$1 + ttl >= now' "$f" >"$tmp" 2>/dev/null; then mv "$tmp" "$f" 2>/dev/null || rm -f "$tmp"; else rm -f "$tmp"; fi
+  fi
+  return 0
+}
+
 # fl_profile_reach REPO BRANCH: FL_REACH is true, false or null (offline)
 # and FL_REACH_REASON says why not
 fl_profile_reach() {
-  local out code=0
+  local code=0
   FL_REACH=""; FL_REACH_REASON=""
   if fl_profile_offline_mode; then FL_REACH=null; FL_REACH_REASON="offline mode"; return 0; fi
-  out="$(mktemp "${TMPDIR:-/tmp}/benchbar-net.XXXXXX")"
-  fl_profile_timed "$FL_PROFILE_NET_SECS" "$out" fl_profile_git_net ls-remote --exit-code --heads --tags -- "$1" "$2" || code=$?
-  rm -f "$out"
+  if fl_profile_reach_cached "$1" "$2"; then FL_REACH=true; return 0; fi
+  fl_git_remote_ref "$1" "$2" "$FL_PROFILE_NET_SECS" || code=$?
+  FL_PROFILE_ERR="$(printf '%s' "$FL_GR_ERR" | sed -E 's/^(fatal|remote|error): *//')"
   case "$code" in
-    0) FL_REACH=true ;;
+    0) FL_REACH=true; fl_profile_reach_remember "$1" "$2" ;;
     2) FL_REACH=false; FL_REACH_REASON="the repo has no branch or tag ${2}" ;;
     124) FL_REACH=null; FL_REACH_REASON="${FL_PROFILE_ERR} (offline?)" ;;
     *)
@@ -618,23 +643,16 @@ fl_profile_reach() {
 
 # fl_profile_default_branch URL: the branch HEAD points at, or nothing
 fl_profile_default_branch() {
-  local out
   fl_profile_offline_mode && return 0
-  out="$(mktemp "${TMPDIR:-/tmp}/benchbar-net.XXXXXX")"
-  if fl_profile_timed "$FL_PROFILE_NET_SECS" "$out" fl_profile_git_net ls-remote --symref -- "$1" HEAD; then
-    awk '$1 == "ref:" && $3 == "HEAD" {sub(/^refs\/heads\//, "", $2); print $2; exit}' "$out"
-  fi
-  rm -f "$out"
+  fl_git_remote_default "$1" "$FL_PROFILE_NET_SECS" || true
+  printf '%s\n' "$FL_GR_DEFAULT" | awk 'NF'
   return 0
 }
 
 fl_profile_branch_exists() {
-  local out code=0
   fl_profile_offline_mode && return 1
-  out="$(mktemp "${TMPDIR:-/tmp}/benchbar-net.XXXXXX")"
-  fl_profile_timed "$FL_PROFILE_NET_SECS" "$out" fl_profile_git_net ls-remote --exit-code --heads -- "$1" "$2" || code=$?
-  rm -f "$out"
-  return "$code"
+  fl_git_remote_run "$FL_PROFILE_NET_SECS" ls-remote --exit-code --heads -- "$1" "$2"
+  return "$FL_GR_CODE"
 }
 
 # fl_profile_access URL: public when a stranger can read it over https,
@@ -659,18 +677,68 @@ fl_profile_access() {
 
 # ---- check
 
+# fl_profile_reach_all: asks about every repo of FL_TEAM_APPS side by side
+# (FL_PROFILE_JOBS at a time, 8 by default), each repo and branch once, each
+# with the timeout of fl_profile_reach. Prints one line per app, in order:
+# INDEX<TAB>true|false|null<TAB>reason. Time is the slowest answers, not their sum.
+fl_profile_reach_all() {
+  local spec n b r c i j found key u dir jobs="${FL_PROFILE_JOBS:-8}" ukeys=() uidx=() pids=() reach reason
+  [[ "$jobs" =~ ^[1-9][0-9]*$ ]] || jobs=8
+  dir="$(mktemp -d "${TMPDIR:-/tmp}/benchbar-reach.XXXXXX")"
+  i=0
+  for spec in ${FL_TEAM_APPS[@]+"${FL_TEAM_APPS[@]}"}; do
+    IFS='|' read -r n b r c <<<"$spec"
+    key="${r}"$'\t'"${b}"
+    j=0; found=-1
+    for u in ${ukeys[@]+"${ukeys[@]}"}; do
+      [[ "$u" == "$key" ]] && { found="$j"; break; }
+      j=$((j + 1))
+    done
+    if [[ "$found" -lt 0 ]]; then
+      found="${#ukeys[@]}"
+      ukeys+=("$key")
+      (
+        fl_profile_reach "$r" "$b"
+        printf '%s\n%s\n' "$FL_REACH" "$FL_REACH_REASON" >"${dir}/${found}"
+      ) &
+      pids+=("$!")
+      if [[ "${#pids[@]}" -ge "$jobs" ]]; then
+        wait "${pids[0]}" 2>/dev/null || true
+        pids=("${pids[@]:1}")
+      fi
+    fi
+    uidx+=("$found")
+    i=$((i + 1))
+  done
+  for u in ${pids[@]+"${pids[@]}"}; do wait "$u" 2>/dev/null || true; done
+  i=0
+  for j in ${uidx[@]+"${uidx[@]}"}; do
+    reach="null"; reason="the check did not finish"
+    if [[ -f "${dir}/${j}" ]]; then
+      { IFS= read -r reach; IFS= read -r reason; } <"${dir}/${j}" || true
+    fi
+    printf '%s\t%s\t%s\n' "$i" "$reach" "$reason"
+    i=$((i + 1))
+  done
+  rm -rf "$dir"
+}
+
 # fl_profile_check_loaded: asks git about every app of the profile
 # fl_team_profile_read just read. Per app CK_APPS, CK_REPOS, CK_REACH,
 # CK_REASON; CK_SKIPPED are the apps install leaves out (unreachable ones
 # and every app that requires one), CK_SKIP_WHY says why, same index.
 fl_profile_check_loaded() {
-  local spec n b r c i skip=" " changed req why
+  local spec n b r c i skip=" " changed req why answers
   CK_APPS=(); CK_REPOS=(); CK_REACH=(); CK_REASON=(); CK_SKIPPED=(); CK_SKIP_WHY=(); CK_COMMIT=()
+  answers="$(fl_profile_reach_all)"
+  i=0
   for spec in ${FL_TEAM_APPS[@]+"${FL_TEAM_APPS[@]}"}; do
     IFS='|' read -r n b r c <<<"$spec"
-    fl_profile_reach "$r" "$b"
+    FL_REACH="$(printf '%s\n' "$answers" | awk -F '\t' -v i="$i" '$1 == i {print $2; exit}')"
+    FL_REACH_REASON="$(printf '%s\n' "$answers" | awk -F '\t' -v i="$i" '$1 == i {print $3; exit}')"
     CK_APPS+=("$n"); CK_REPOS+=("$r"); CK_REACH+=("$FL_REACH"); CK_REASON+=("$FL_REACH_REASON"); CK_COMMIT+=("$c")
     [[ "$FL_REACH" == "false" ]] && skip="${skip}${n} "
+    i=$((i + 1))
   done
   changed=1
   while [[ "$changed" == "1" ]]; do
