@@ -286,6 +286,20 @@ printf '{"db_name": "%s"}\n' "$HALF_DB" >"$OTHER_BENCH/sites/theirs/site_config.
 printf '%s\n' "$OTHER_BENCH" >"$FL_STATE_DIR/registered-benches.txt"
 refused shared2 "database shared with another registered bench" "otherbench/sites/theirs/site_config.json names the database ${HALF_DB}"
 assert_file "$BENCH/sites/shared2"
+# fails closed: a registered bench that is gone (an unmounted volume) is never ruled out, so nothing is dropped
+cut_site gone1
+printf '%s\n' "$TMP_DIR/unmounted-bench" >"$FL_STATE_DIR/registered-benches.txt"
+refused gone1 "a registered bench that is gone" "unmounted-bench/sites"
+assert_file "$BENCH/sites/gone1"
+# fails closed: a registered list that cannot be read
+cut_site gone2
+printf '%s\n' "$OTHER_BENCH" >"$FL_STATE_DIR/registered-benches.txt"
+chmod 000 "$FL_STATE_DIR/registered-benches.txt"
+if [[ ! -r "$FL_STATE_DIR/registered-benches.txt" ]]; then
+  refused gone2 "an unreadable list of registered benches" "registered-benches.txt"
+  assert_file "$BENCH/sites/gone2"
+fi
+chmod 600 "$FL_STATE_DIR/registered-benches.txt"
 # the same database unregistered elsewhere is not seen (benchbar knows only the benches it knows): it is dropped
 cut_site shared3
 printf '' >"$FL_STATE_DIR/registered-benches.txt"

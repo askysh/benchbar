@@ -564,16 +564,26 @@ fl_db_named_by_other_site() {
   local bench_dir="$1" site_dir="$2" db="$3" b c own cfg line seen=$'\n' benches=()
   own="$(fl_bench_canonical "$bench_dir")/sites/${site_dir##*/}/site_config.json"
   benches=("$bench_dir")
+  # Fails closed: a list that cannot be read, a known or registered bench
+  # that is gone (an unmounted volume) or whose sites/ cannot be read counts
+  # as naming DB, so nothing is dropped. A bench benchbar has never seen is
+  # not looked at (docs/DECISIONS.md).
   if declare -F fl_known_benches >/dev/null; then
-    while IFS= read -r line; do [[ -z "$line" ]] || benches+=("$line"); done < <(fl_known_benches 2>/dev/null || true)
+    local known
+    known="$(fl_known_benches 2>/dev/null)" || { printf '%s' "the list of known benches"; return 0; }
+    while IFS= read -r line; do [[ -z "$line" ]] || benches+=("$line"); done <<<"$known"
   fi
-  if [[ -r "${FL_STATE_DIR}/registered-benches.txt" ]]; then
+  if [[ -e "${FL_STATE_DIR}/registered-benches.txt" ]]; then
+    [[ -r "${FL_STATE_DIR}/registered-benches.txt" ]] || { printf '%s' "${FL_STATE_DIR}/registered-benches.txt"; return 0; }
     while IFS= read -r line || [[ -n "$line" ]]; do [[ -z "$line" ]] || benches+=("$line"); done <"${FL_STATE_DIR}/registered-benches.txt"
   fi
   for b in "${benches[@]}"; do
     c="$(fl_bench_canonical "$b")"
     case "$seen" in *$'\n'"$c"$'\n'*) continue ;; esac
     seen="${seen}${c}"$'\n'
+    if [[ ! -d "$c/sites" || ! -r "$c/sites" || ! -x "$c/sites" ]]; then
+      printf '%s' "$c/sites"; return 0
+    fi
     for cfg in "$c"/sites/*/site_config.json; do
       [[ -e "$cfg" && "$cfg" != "$own" ]] || continue
       if [[ ! -r "$cfg" ]] || grep -Eq "\"db_name\"[[:space:]]*:[[:space:]]*\"${db}\"" "$cfg" 2>/dev/null; then
@@ -714,6 +724,20 @@ fl_site_recover() {
   fi
   fl_warn "A new-site for ${site_name} was cut short (started $(sed -n 1p "$marker" 2>/dev/null || printf '?')); cleaning it up and starting over"
   if [[ "$rc" == "0" ]]; then
+    # the prompt can wait for a person for a long time: ask again, right before
+    # the drop, that no site took the database meanwhile and it is still fresh
+    if hit="$(fl_db_named_by_other_site "$bench_dir" "$site_dir" "$db")"; then
+      FL_SITE_RECOVER_WHY="${hit} names the database ${db} now: another site uses it, so nothing is dropped or moved"
+      FL_SITE_RECOVER_FOREIGN=1
+      return 1
+    fi
+    fresh=0
+    fl_mariadb_db_fresh "$pw" "$db" || fresh=$?
+    if [[ "$fresh" != "0" ]]; then
+      FL_SITE_RECOVER_WHY="the database ${db} is no longer just created, or MariaDB could not tell, so nothing is dropped or moved"
+      FL_SITE_RECOVER_FOREIGN=1
+      return 1
+    fi
     bin="$(fl_mariadb_client)"
     # db is _ and 16 hex digits (fl_site_marker_db): safe in SQL; the backticks are SQL's
     # shellcheck disable=SC2016
