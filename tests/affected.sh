@@ -18,8 +18,9 @@
 #   tests/test-X.sh         itself
 #   install.sh              test-install-sh
 #   packaging/              test-packaging, test-homebrew
+#   .github/workflows/, .github/actions/, scripts/macos-release.sh   test-release-workflows
 #   any shell file          shellcheck
-#   docs/, site/ and the rest (macos/, windows/, .github/, *.md)   nothing
+#   docs/, site/ and the rest (macos/, windows/, *.md)   nothing
 
 set -euo pipefail
 
@@ -80,6 +81,8 @@ while IFS= read -r f; do
     lib/frappe-local/mcp.py) lib=1; pick_parts test-mcp ;;
     install.sh) pick test-install-sh; shell=1 ;;
     packaging/*) pick test-packaging; pick test-homebrew ;;
+    scripts/macos-release.sh) pick test-release-workflows; shell=1 ;;
+    .github/workflows/* | .github/actions/*) pick test-release-workflows ;;
     scripts/*.sh) shell=1 ;;
   esac
 done <<<"$files"

@@ -1,0 +1,50 @@
+# The steps both Mac build jobs of release.yml share after they build: the
+# release notes, a workflow artifact and the draft GitHub release. It reads
+# no secret; the only credential is the job's GitHub token, for gh.
+name: Release draft
+description: Write the release notes, upload dist/ as an artifact and create or update the draft release.
+inputs:
+  version:
+    description: The version being built (X.Y.Z)
+    required: true
+  signed:
+    description: "true for a Developer ID build, false for an ad hoc one"
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Release notes from the CHANGELOG
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        SIGNED: ${{ inputs.signed }}
+      run: |
+        if [ "$SIGNED" = "true" ]; then
+          scripts/release-notes.sh "$VERSION" --signed > "$RUNNER_TEMP/notes.md"
+        else
+          scripts/release-notes.sh "$VERSION" > "$RUNNER_TEMP/notes.md"
+        fi
+        cat "$RUNNER_TEMP/notes.md"
+
+    - name: Upload the files as a workflow artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: BenchBar-${{ inputs.version }}
+        path: dist/*
+        if-no-files-found: error
+
+    - name: Create or update the draft GitHub release
+      if: startsWith(github.ref, 'refs/tags/v')
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        TAG: ${{ github.ref_name }}
+        VERSION: ${{ inputs.version }}
+      run: |
+        if gh release view "$TAG" >/dev/null 2>&1; then
+          gh release edit "$TAG" --title "BenchBar ${VERSION}" --notes-file "$RUNNER_TEMP/notes.md"
+        else
+          gh release create "$TAG" --draft --title "BenchBar ${VERSION}" --notes-file "$RUNNER_TEMP/notes.md"
+        fi
+        gh release upload "$TAG" dist/* --clobber
+        echo "::notice title=Draft release::https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG} (draft: review, then publish; publishing updates the Homebrew tap)"

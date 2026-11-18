@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here.
 
+## Unreleased
+
+### Release process
+
+- The signing, notarization, Sparkle and Homebrew tap secrets now live in a `release` environment that accepts only `v*` tags and waits for the maintainer, so a branch or pull request run cannot reach the release keys.
+- A `v*` tag build with a missing signing secret fails instead of producing an unsigned release; the ad hoc build is only for a manual run with the `adhoc` input.
+- The certificate, the notary key and the Sparkle key stay on the runner for a shorter time, and `.github/CODEOWNERS` names the maintainer on the release code and the installers.
+
 ## 0.8.3 - 2026-11-17
 
 0.8.3 is a fix pass for Windows from a full review and a live test on a

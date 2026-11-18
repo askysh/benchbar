@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# The release keys are guarded (docs/releasing.md, "Secrets"): every job that
+# reads one of the ten release secrets declares `environment: release`, and
+# no other job does, so a pull request or a branch run never reaches the
+# environment; the composite actions read no secret; the signed build
+# checks out without a token, imports the certificate for codesign only (no
+# -A), removes the keychain and keys in an always() step before the draft
+# step, and a tag build with a missing secret fails instead of going ad hoc;
+# macos-release.sh keeps the notary and Sparkle keys out of the environment
+# of the build.
+# shellcheck source=tests/lib/harness.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
+
+WF="$ROOT/.github/workflows"
+RELEASE="$WF/release.yml"
+SCRIPT="$ROOT/scripts/macos-release.sh"
+
+# ---- which job reads a secret, and which declares the environment
+set +e
+OUT="$(python3 -I - "$ROOT" <<'PY' 2>&1
+import glob, re, sys
+
+root = sys.argv[1]
+secrets = {"APPLE_TEAM_ID", "MACOS_SIGN_IDENTITY", "MACOS_CERTIFICATE_P12", "MACOS_CERTIFICATE_PASSWORD",
+           "NOTARY_API_KEY_P8", "NOTARY_API_KEY_ID", "NOTARY_API_ISSUER_ID", "SPARKLE_ED_PRIVATE_KEY",
+           "SPARKLE_ED_PUBLIC_KEY", "HOMEBREW_TAP_TOKEN"}
+bad = []
+for path in sorted(glob.glob(root + "/.github/workflows/*.yml")):
+    jobs, cur, in_jobs = {}, None, False
+    for line in open(path):
+        if re.match(r"^jobs:\s*$", line):
+            in_jobs = True
+            continue
+        if in_jobs and re.match(r"^\S", line) and line.strip():
+            in_jobs = False
+        m = re.match(r"^  ([A-Za-z0-9_-]+):\s*$", line)
+        if in_jobs and m:
+            cur = m.group(1)
+            jobs[cur] = []
+        elif in_jobs and cur:
+            jobs[cur].append(line)
+    for name, lines in jobs.items():
+        text = "".join(lines)
+        reads = {s for s in secrets if re.search(r"secrets\.%s\b" % s, text)}
+        env = re.search(r"^    environment:\s*release\s*$", text, re.M) is not None
+        base = path.rsplit("/", 1)[1] + ":" + name
+        if reads and not env:
+            bad.append("%s reads %s without environment: release" % (base, ",".join(sorted(reads))))
+        if env and not reads:
+            bad.append("%s declares environment: release but reads no release secret" % base)
+for path in glob.glob(root + "/.github/actions/*/action.yml"):
+    if re.search(r"secrets\.", open(path).read()):
+        bad.append("%s reads a secret: a composite action must take it as an input" % path)
+print("\n".join(bad))
+sys.exit(1 if bad else 0)
+PY
+)"
+CODE=$?
+set -e
+assert_eq 0 "$CODE" "(secret jobs and the release environment)"$'\n'"$OUT"
+
+# ---- release.yml: tag builds are signed or fail, ad hoc only by input
+assert_contains "$(cat "$RELEASE")" "environment: release"
+assert_contains "$(cat "$RELEASE")" "refs/tags/v*) ;;"
+assert_contains "$(cat "$RELEASE")" "A tag build is never released unsigned"
+assert_contains "$(cat "$RELEASE")" "mode == 'adhoc'"
+CHECK_JOB="$(awk '/^  check:/{f=1;next} /^  [a-z-]+:$/{f=0} f' "$RELEASE")"
+assert_not_contains "$CHECK_JOB" "secrets."
+ADHOC_JOB="$(awk '/^  build-adhoc:/{f=1;next} /^  [a-z-]+:$/{f=0} f' "$RELEASE")"
+assert_not_contains "$ADHOC_JOB" "secrets."
+assert_not_contains "$ADHOC_JOB" "environment:"
+
+SIGNED_JOB="$(awk '/^  build-signed:/{f=1;next} /^  [a-z-]+:$/{f=0} f' "$RELEASE")"
+assert_contains "$SIGNED_JOB" "persist-credentials: false"
+assert_contains "$SIGNED_JOB" "-T /usr/bin/codesign"
+case "$SIGNED_JOB" in *"security import"*" -A "*) fail "the certificate is imported with -A (any program may use the key)" ;; esac
+# the cleanup runs always, and before the release is drafted
+clean_line="$(printf '%s\n' "$SIGNED_JOB" | grep -n 'Remove the keychain and keys' | head -n 1 | cut -d: -f1)"
+draft_line="$(printf '%s\n' "$SIGNED_JOB" | grep -n 'release-draft' | head -n 1 | cut -d: -f1)"
+[[ -n "$clean_line" && -n "$draft_line" && "$clean_line" -lt "$draft_line" ]] || fail "the key cleanup step must come before the draft step"
+assert_contains "$(printf '%s\n' "$SIGNED_JOB" | sed -n "${clean_line},$((clean_line + 2))p")" "if: always()"
+
+# ---- macos-release.sh: content keys never reach the build's environment
+assert_contains "$(cat "$SCRIPT")" "unset NOTARY_KEY_BASE64 SPARKLE_ED_KEY"
+assert_contains "$(cat "$SCRIPT")" "use_sparkle_key"
+assert_contains "$(cat "$SCRIPT")" "drop_notary_key"
+
+printf 'test-release-workflows: ok\n'

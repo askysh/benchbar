@@ -10,11 +10,17 @@
 # Needs these environment variables:
 #   BENCHBAR_SIGN_IDENTITY      "Developer ID Application: Your Name (TEAMID)"
 #   BENCHBAR_TEAM_ID            the 10 character team id
-#   NOTARY_KEY_PATH             App Store Connect API key (.p8 file)
+#   NOTARY_KEY_PATH             App Store Connect API key (.p8 file), or
+#   NOTARY_KEY_BASE64           its content in base64 (CI: no file until it is used)
 #   NOTARY_KEY_ID               its key id
 #   NOTARY_ISSUER_ID            its issuer id
-#   SPARKLE_ED_KEY_PATH         Sparkle EdDSA private key file (generate_keys -x)
+#   SPARKLE_ED_KEY_PATH         Sparkle EdDSA private key file (generate_keys -x), or
+#   SPARKLE_ED_KEY              its content (CI)
 #   BENCHBAR_SPARKLE_PUBLIC_KEY the matching public key (goes into Info.plist)
+#
+# A key given as content never reaches the build or its tests: it is read into
+# a shell variable that is not exported, and written to a 0600 file only for
+# the one command that needs it (notarytool, generate_appcast), then deleted.
 #
 # Output in dist/:
 #   BenchBar-<version>.dmg      signed, notarized, stapled: for people and Homebrew
@@ -42,11 +48,52 @@ VERSION=""
 for arg in "$@"; do
   case "$arg" in
     --check) CHECK_ONLY=1 ;;
-    -h|--help) sed -n '2,27p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,32p' "$0"; exit 0 ;;
     -*) die "Unknown option: $arg" ;;
     *) VERSION="$arg" ;;
   esac
 done
+
+# Keys given as content: keep them out of the environment of everything below.
+NOTARY_KEY_B64="${NOTARY_KEY_BASE64:-}"
+SPARKLE_KEY_CONTENT="${SPARKLE_ED_KEY:-}"
+unset NOTARY_KEY_BASE64 SPARKLE_ED_KEY
+NOTARY_KEY_TMP=""
+SPARKLE_KEY_TMP=""
+STAGE_DIR=""
+cleanup() {
+  [[ -z "$NOTARY_KEY_TMP" ]] || rm -f "$NOTARY_KEY_TMP"
+  [[ -z "$SPARKLE_KEY_TMP" ]] || rm -f "$SPARKLE_KEY_TMP"
+  [[ -z "$STAGE_DIR" ]] || rm -rf "$STAGE_DIR"
+}
+trap cleanup EXIT
+
+# use_notary_key / drop_notary_key: when the key came as content, write it to a
+# 0600 file for one notarytool call and delete it again.
+use_notary_key() {
+  [[ -z "$NOTARY_KEY_B64" ]] && return 0
+  NOTARY_KEY_TMP="$(umask 077; mktemp "${TMPDIR:-/tmp}/benchbar-notary.XXXXXX")"
+  printf '%s' "$NOTARY_KEY_B64" | base64 --decode >"$NOTARY_KEY_TMP"
+  NOTARY_KEY_PATH="$NOTARY_KEY_TMP"
+}
+drop_notary_key() {
+  [[ -z "$NOTARY_KEY_TMP" ]] && return 0
+  rm -f "$NOTARY_KEY_TMP"
+  NOTARY_KEY_TMP=""
+  NOTARY_KEY_PATH=""
+}
+use_sparkle_key() {
+  [[ -z "$SPARKLE_KEY_CONTENT" ]] && return 0
+  SPARKLE_KEY_TMP="$(umask 077; mktemp "${TMPDIR:-/tmp}/benchbar-sparkle.XXXXXX")"
+  printf '%s' "$SPARKLE_KEY_CONTENT" >"$SPARKLE_KEY_TMP"
+  SPARKLE_ED_KEY_PATH="$SPARKLE_KEY_TMP"
+}
+drop_sparkle_key() {
+  [[ -z "$SPARKLE_KEY_TMP" ]] && return 0
+  rm -f "$SPARKLE_KEY_TMP"
+  SPARKLE_KEY_TMP=""
+  SPARKLE_ED_KEY_PATH=""
+}
 
 project_version() {
   sed -n 's/^ *MARKETING_VERSION: *"\{0,1\}\([^"]*\)"\{0,1\} *$/\1/p' "${ROOT}/macos/project.yml" | head -n 1
@@ -60,13 +107,14 @@ done
 ok "tools present"
 "${ROOT}/scripts/check-profile-formulae.sh" || die "a release profile names a formula Homebrew is about to disable" "move the profile in config/release-profiles.tsv (see docs/DECISIONS.md, 0.7.3)"
 missing=()
-for var in BENCHBAR_SIGN_IDENTITY BENCHBAR_TEAM_ID NOTARY_KEY_PATH NOTARY_KEY_ID NOTARY_ISSUER_ID \
-           SPARKLE_ED_KEY_PATH BENCHBAR_SPARKLE_PUBLIC_KEY; do
+for var in BENCHBAR_SIGN_IDENTITY BENCHBAR_TEAM_ID NOTARY_KEY_ID NOTARY_ISSUER_ID BENCHBAR_SPARKLE_PUBLIC_KEY; do
   [[ -n "${!var:-}" ]] || missing+=("$var")
 done
+[[ -n "${NOTARY_KEY_PATH:-}" || -n "$NOTARY_KEY_B64" ]] || missing+=("NOTARY_KEY_PATH or NOTARY_KEY_BASE64")
+[[ -n "${SPARKLE_ED_KEY_PATH:-}" || -n "$SPARKLE_KEY_CONTENT" ]] || missing+=("SPARKLE_ED_KEY_PATH or SPARKLE_ED_KEY")
 [[ "${#missing[@]}" == "0" ]] || die "missing settings: ${missing[*]}" "see docs/releasing.md, Secrets"
-[[ -f "$NOTARY_KEY_PATH" ]] || die "no API key at $NOTARY_KEY_PATH"
-[[ -f "$SPARKLE_ED_KEY_PATH" ]] || die "no Sparkle key at $SPARKLE_ED_KEY_PATH"
+[[ -z "${NOTARY_KEY_PATH:-}" || -f "$NOTARY_KEY_PATH" ]] || die "no API key at $NOTARY_KEY_PATH"
+[[ -z "${SPARKLE_ED_KEY_PATH:-}" || -f "$SPARKLE_ED_KEY_PATH" ]] || die "no Sparkle key at $SPARKLE_ED_KEY_PATH"
 security find-identity -v -p codesigning | grep -qF "$BENCHBAR_SIGN_IDENTITY" \
   || die "signing identity not in the keychain: $BENCHBAR_SIGN_IDENTITY" "import the Developer ID .p12 (docs/releasing.md)"
 ok "settings and signing identity present"
@@ -91,6 +139,7 @@ ok "version ${VERSION}, build ${BUILD_NUMBER}"
 # Apple: `xcrun notarytool wait ID`).
 notarize() {
   local out id
+  use_notary_key
   out="$(xcrun notarytool submit "$1" --key "$NOTARY_KEY_PATH" --key-id "$NOTARY_KEY_ID" \
     --issuer "$NOTARY_ISSUER_ID" --wait --timeout "${NOTARY_TIMEOUT:-50m}" 2>&1 | tee /dev/stderr)" \
     || die "notarytool failed for $1" "if it timed out, xcrun notarytool wait ID, then run this again"
@@ -99,6 +148,7 @@ notarize() {
     [[ -n "$id" ]] && xcrun notarytool log "$id" --key "$NOTARY_KEY_PATH" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" || true
     die "Apple did not accept $1" "read the log above; the issues name each binary"
   fi
+  drop_notary_key
 }
 
 # ------------------------------------------------------------------- build
@@ -127,7 +177,7 @@ ok "app notarized and stapled"
 # ------------------------------------------------------------------- DMG
 step "disk image"
 stage="$(mktemp -d)"
-trap 'rm -rf "$stage"' EXIT
+STAGE_DIR="$stage"
 ditto "$APP" "${stage}/BenchBar.app"
 ln -s /Applications "${stage}/Applications"
 hdiutil create -volname "BenchBar ${VERSION}" -srcfolder "$stage" -ov -format UDZO "$DMG" >/dev/null
@@ -142,9 +192,11 @@ tools="$(find "${ROOT}/macos/build/DerivedData/SourcePackages/artifacts" -type f
 [[ -x "$tools" ]] || die "generate_appcast not found in the Sparkle package" "run scripts/macos-build.sh --sparkle once"
 feed="$(mktemp -d)"
 cp "$ZIP" "$feed/"
+use_sparkle_key
 "$tools" --ed-key-file "$SPARKLE_ED_KEY_PATH" \
   --download-url-prefix "${REPO_URL}/releases/download/v${VERSION}/" \
   --link "$REPO_URL" "$feed"
+drop_sparkle_key
 cp "${feed}/appcast.xml" "${DIST}/appcast.xml"
 rm -rf "$feed"
 ok "appcast.xml signed"

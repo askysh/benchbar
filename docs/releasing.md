@@ -9,12 +9,15 @@ review the draft and publish it.
 
 | Path | When | What people get |
 |---|---|---|
-| **Developer ID** (since 0.6.1) | the nine signing and notarization secrets exist | `BenchBar-<version>.zip`, `BenchBar-<version>.dmg` and `SHA256SUMS`, signed, notarized and stapled, plus `appcast.xml` for Sparkle and `benchbar-cli-<version>.tar.gz` for the Homebrew formula |
-| **Ad hoc** (up to 0.6.0) | no Apple Developer secrets in the repository | the same zip, dmg, CLI tarball and `SHA256SUMS`, ad hoc signed. A DMG download showed "Apple could not verify" once (the install page keeps the Open Anyway steps for those releases); `install.sh` downloads with curl, which sets no quarantine flag, so the app opened directly. |
+| **Developer ID** (since 0.6.1) | every `v*` tag | `BenchBar-<version>.zip`, `BenchBar-<version>.dmg` and `SHA256SUMS`, signed, notarized and stapled, plus `appcast.xml` for Sparkle and `benchbar-cli-<version>.tar.gz` for the Homebrew formula |
+| **Ad hoc** (the only path up to 0.6.0) | a manual run with the `adhoc` input on, for a test | the same zip, dmg, CLI tarball and `SHA256SUMS`, ad hoc signed. A DMG download showed "Apple could not verify" once (the install page keeps the Open Anyway steps for those releases); `install.sh` downloads with curl, which sets no quarantine flag, so the app opened directly. |
 
-The `check` job decides: it looks for the secrets and prints which path
-runs as a notice. Nothing else differs for you: same tag, same draft
-release.
+The `check` job decides from the ref and the input, and reads no secret.
+A tag build is always the Developer ID path. When one of the nine
+secrets is missing, the run fails and names it; it never turns into an
+unsigned release that looks normal in the draft (before 0.9.0 it did).
+Ad hoc exists only when you start the workflow by hand with `adhoc` on,
+and that job has no access to the secrets (see "Who can reach the keys").
 
 ## Branches
 
@@ -155,9 +158,9 @@ ad hoc path of the workflow, running on your Mac.
 
 ## The Developer ID path: one time setup
 
-Everything below switches on when the secrets exist; the repository has
-had all nine since 0.6.1. Without them the workflow takes the ad hoc
-path.
+Everything below needs the nine secrets (and the tap token) in the
+`release` environment; the repository has had them since 0.6.1. A tag
+build without them fails.
 
 ### 1. Apple Developer Program
 
@@ -229,13 +232,17 @@ checks pass. It also closes the open tap pull requests of older
 benchbar versions. The tap's `tests` check audits, installs and
 uninstalls only the files a pull request changes. Thus a Margin release
 at the same time does not block a benchbar release. A prerelease leaves
-the tap alone. Run it by hand from the
-Actions tab (Homebrew tap, Run workflow, the version) to redo one.
+the tap alone. Run it by hand
+to redo one: Actions tab, Homebrew tap, Run workflow, choose the tag
+`vX.Y.Z` as the branch or tag, and type the version. A run on a branch
+is refused by the `release` environment.
 
 It needs `HOMEBREW_TAP_TOKEN`: a fine grained personal access token
 with Contents and Pull requests write access to `askysh/homebrew-tap`
-only. Without it the workflow still checks everything and prints the
-two files to copy by hand. The tap repository needs auto-merge allowed
+only, kept in the `release` environment. Only the last step reads it:
+the tap is cloned without it, so no credential sits in the clone while
+`brew` runs the formula. Without the token the workflow still checks
+everything and prints the two files to copy by hand. The tap repository needs auto-merge allowed
 (Settings, General) and its `tests` check required on `main`, or the
 pull request waits for you.
 
@@ -263,10 +270,82 @@ changes. It is not a required check.
 The official `homebrew/cask` needs a notable, notarized app with some
 history; submit there once BenchBar qualifies (roadmap v1.0).
 
+### Who can reach the keys
+
+The ten secrets below live in the **`release` environment**, not in the
+repository secrets. Settings, Environments, `release`:
+
+- **Deployment branches and tags:** only tags matching `v*`. A run on
+  any other ref cannot start a job that names the environment.
+- **Required reviewer:** the maintainer (`askysh`). Every job that reads a
+  secret waits for the approval.
+
+Every job that reads a secret declares `environment: release`: the
+`build-signed` job of `release.yml` and the `tap` job of
+`homebrew-tap.yml`. No other job does, and no job that runs for a pull
+request does, so a pull request never reaches the environment. The
+signed build is started with the tag as its ref, by `auto-tag.yml`
+(`gh workflow run release.yml --ref vX.Y.Z`, dispatched with the
+`GITHUB_TOKEN`) or by a pushed tag, so the deployment ref is the tag
+and the `v*` rule matches. A dispatch from a branch (without `adhoc`)
+fails in the `check` job before the environment is asked.
+`tests/test-release-workflows.sh` fails when a workflow reads one of
+these secrets in a job without the environment, or names the
+environment without needing a secret.
+
+**What you approve.** GitHub shows "Review pending deployments" on the
+run: it names the workflow, the tag and the commit, and says the job
+wants the `release` environment. Check that the tag is the one you cut
+(`auto-tag.yml` tagged it, or you did), that its commit is the squash
+merge you expect on `main`, and that nobody pushed a different commit
+under that tag. Approving hands the keys to that commit's
+`scripts/macos-release.sh` and workflow files, so read the diff of
+`.github/`, `scripts/` and `packaging/` since the last release first if
+anyone else had write access. Reject anything else: a rejected run
+costs nothing and can be started again. The `tap` job is approved
+the same way after you publish the draft; check the version only.
+
+The keys sit on the runner for as short a time as the build allows. The
+certificate is imported into a temporary keychain in the step that
+signs, for `codesign` only, and its file is deleted at once. The notary
+key and the Sparkle key are not in the environment of the build or its
+tests: `macos-release.sh` writes each to a 0600 file for the one command
+that uses it (`notarytool`, `generate_appcast`) and deletes it. An
+`always()` step deletes the keychain right after the build, before the
+draft is created, and the checkout keeps no token in `.git/config`.
+
+**Rotating a key.** Make the new one, set it in the `release`
+environment (Settings, Environments, `release`, edit the secret), cut or
+re-run a release candidate to prove it, then revoke the old one:
+
+| Key | New one | Revoke the old one |
+|---|---|---|
+| `MACOS_CERTIFICATE_P12`, `MACOS_CERTIFICATE_PASSWORD`, `MACOS_SIGN_IDENTITY` | step 2 above; update the identity string too | Apple Developer, Certificates, Revoke (apps already signed keep working) |
+| `NOTARY_API_KEY_P8`, `NOTARY_API_KEY_ID`, `NOTARY_API_ISSUER_ID` | step 3 | App Store Connect, Integrations, Revoke |
+| `SPARKLE_ED_PRIVATE_KEY`, `SPARKLE_ED_PUBLIC_KEY` | do not rotate lightly: installed apps trust the old public key, so an update signed with a new one is refused. Ship a release signed with the old key that carries the new public key first (`SUPublicEDKey`), then switch | nothing to revoke; delete the old key only after the last install has updated |
+| `HOMEBREW_TAP_TOKEN` | a new fine grained token, one repository (`askysh/homebrew-tap`), Contents and Pull requests write, 90 day expiry; put the expiry date in your calendar | delete the old token in GitHub, Settings, Developer settings |
+
+If a key may have leaked (a run you did not approve, a laptop lost),
+revoke first and rotate after. For Sparkle there is no revoke: ship a
+release with a new key pair signed by the old one, and say so in
+`SECURITY.md`.
+
+### Who may change the release code
+
+`.github/CODEOWNERS` names the maintainer on `.github/`, `.claude/`,
+`scripts/`, `packaging/`, `install.sh`, `install.ps1` and the release
+files (`config/release-profiles.tsv`, `macos/project.yml`,
+`macos/sparkle.yml`, `windows/shim/versioninfo.json`, this page). It
+takes effect when the ruleset on `main` turns on "Require review from
+Code Owners". Beside it the repository needs a tag ruleset for `v*`
+(no deletion, no update, no force push) and the "Immutable releases"
+setting, so a published tag and its files cannot be replaced; the tap
+needs the same Code Owners rule on `Formula/` and `Casks/`.
+
 ### Secrets
 
-Add these in the GitHub repository, Settings, Secrets and variables,
-Actions:
+Add these in the GitHub repository, Settings, Environments, `release`,
+Environment secrets (not Repository secrets):
 
 | Secret | Value |
 |---|---|
@@ -281,8 +360,9 @@ Actions:
 | `SPARKLE_ED_PUBLIC_KEY` | the public key `generate_keys` printed |
 | `HOMEBREW_TAP_TOKEN` | the tap token from step 5; without it the tap is updated by hand |
 
-The `check` job needs the first nine. With any missing it says which and
-takes the ad hoc path.
+The `build-signed` job needs the first nine and checks them before it
+builds. With any missing it fails and names them; it does not fall back
+to ad hoc.
 
 ### Locally, without CI
 
