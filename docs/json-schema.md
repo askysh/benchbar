@@ -1128,13 +1128,15 @@ share one timestamp:
   "size_bytes": 5242880,
   "with_files": true,
   "encrypted": false,
-  "partial": false
+  "partial": false,
+  "complete": true
 }
 ```
 
 | Field | Meaning |
 |---|---|
 | `stamp` | the timestamp at the start of the file names, in the site's time zone |
+| `complete` | `false` for a partial set, a set without a database file, or one with an empty part (a cheap check: `site restore` also reads the files to their end) |
 | `time` | when the database file was written, UTC |
 | `path` | the database file, the one a restore needs (else the first file of the set) |
 | `database`, `files`, `private_files`, `config` | each part, `null` when the set has none |

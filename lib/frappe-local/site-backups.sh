@@ -42,10 +42,12 @@ fl_backup_stamps() {
 
 # fl_backup_set_json DIR STAMP: one backup set as a JSON object.
 #   {"stamp","time","path","database","files","private_files","config",
-#    "size_bytes","with_files","encrypted","partial"}
+#    "size_bytes","with_files","encrypted","partial","complete"}
 # path is the database file (the one a restore needs), else the first file.
+# complete is false for a partial set, one without a database file and one
+# with an empty part; fl_backup_set_check reads the files themselves.
 fl_backup_set_json() {
-  local dir="$1" stamp="$2" f name db="" pub="" priv="" conf="" size=0 bytes enc=0 partial=0 first="" mtime
+  local dir="$1" stamp="$2" f name db="" pub="" priv="" conf="" size=0 bytes enc=0 partial=0 first="" mtime complete=1
   for f in "$dir/${stamp}"-*; do
     [[ -f "$f" ]] || continue
     name="${f##*/}"
@@ -61,12 +63,131 @@ fl_backup_set_json() {
     case "$name" in *-partial-database*) partial=1 ;; esac
     bytes="$(wc -c <"$f" | tr -d '[:space:]')"
     size=$((size + ${bytes:-0}))
+    # a part with no bytes is a set that cannot be restored (the cheap half of
+    # fl_backup_set_check; the listing must not read every dump)
+    [[ "${bytes:-0}" -gt 0 ]] || complete=0
   done
+  [[ -n "$db" && "$partial" == "0" ]] || complete=0
   mtime="$(fl_file_mtime "${db:-$first}")"
-  printf '{"stamp":%s,"time":%s,"path":%s,"database":%s,"files":%s,"private_files":%s,"config":%s,"size_bytes":%s,"with_files":%s,"encrypted":%s,"partial":%s}' \
+  printf '{"stamp":%s,"time":%s,"path":%s,"database":%s,"files":%s,"private_files":%s,"config":%s,"size_bytes":%s,"with_files":%s,"encrypted":%s,"partial":%s,"complete":%s}' \
     "$(fl_json_str "$stamp")" "$(fl_json_str "$(fl_iso_from_epoch "$mtime")")" "$(fl_json_str "${db:-$first}")" \
     "$(fl_json_str "$db")" "$(fl_json_str "$pub")" "$(fl_json_str "$priv")" "$(fl_json_str "$conf")" "$size" \
-    "$(fl_json_bool "$([[ -n "$pub" || -n "$priv" ]] && printf 1 || printf 0)")" "$(fl_json_bool "$enc")" "$(fl_json_bool "$partial")"
+    "$(fl_json_bool "$([[ -n "$pub" || -n "$priv" ]] && printf 1 || printf 0)")" "$(fl_json_bool "$enc")" "$(fl_json_bool "$partial")" "$(fl_json_bool "$complete")"
+}
+
+# ------------------------------------------------- keep older backups
+
+# bench's backup (and with it site restore, site drop, pull --replace and app
+# update, which take one first) runs frappe's delete_temp_backups, which
+# removes every file in the site's private/backups older than
+# keep_backups_for_hours (23 by default). A safety net from Monday would be
+# gone on Wednesday, so benchbar keeps what is there: before bench runs, every
+# file of the folder gets a second name (a hard link, else a copy) under the
+# state backups, and after it a file that went is put back. It never changes
+# the site's config and never deletes a backup. benchbar prunes nothing in a
+# site's backup folder: those files are the site's to remove.
+FL_KEEP_DIR=""
+FL_KEEP_COUNT=0
+FL_KEEP_RESTORED=0
+
+# fl_backups_keep_begin SITE: sets FL_KEEP_DIR (empty when there was nothing to
+# keep). Returns 1, with a [FAIL] line, when a file could not be kept: bench's
+# backup must not run then.
+fl_backups_keep_begin() {
+  local site="$1" dir f name need=0 avail size
+  FL_KEEP_DIR=""; FL_KEEP_COUNT=0; FL_KEEP_RESTORED=0
+  [[ "${FL_DRY_RUN:-0}" != "1" ]] || return 0
+  dir="$(fl_site_backup_dir "$site")"
+  [[ -d "$dir" ]] || return 0
+  FL_KEEP_DIR="${FL_BACKUP_ROOT:-${FL_STATE_DIR}/backups}/$(fl_backup_stamp)/kept-sets/${site}"
+  mkdir -p "$FL_KEEP_DIR" 2>/dev/null || { fl_fail "could not make ${FL_KEEP_DIR}"; FL_KEEP_DIR=""; return 1; }
+  for f in "$dir"/*; do
+    [[ -f "$f" ]] || continue
+    name="${f##*/}"
+    [[ -e "${FL_KEEP_DIR}/${name}" ]] && continue
+    if ! ln "$f" "${FL_KEEP_DIR}/${name}" 2>/dev/null; then
+      # no hard link (another volume): a real copy needs the room
+      size="$(wc -c <"$f" | tr -d '[:space:]')"
+      need=$((need + ${size:-0}))
+      avail="$(df -k "$FL_KEEP_DIR" 2>/dev/null | awk 'NR == 2 { print $4 }')"
+      if [[ "$avail" =~ ^[0-9]+$ && $((avail * 1024)) -lt "$need" ]]; then
+        fl_fail "not enough free space to keep the older backups of ${site} while bench takes a new one: $(fl_fmt_bytes "$need") needed in ${FL_KEEP_DIR}"
+        fl_backups_keep_end "$dir" >/dev/null 2>&1 || true
+        return 1
+      fi
+      cp -p "$f" "${FL_KEEP_DIR}/${name}" 2>/dev/null || { fl_fail "could not keep ${f} in ${FL_KEEP_DIR}"; return 1; }
+    fi
+    FL_KEEP_COUNT=$((FL_KEEP_COUNT + 1))
+  done
+  return 0
+}
+
+# fl_backups_keep_end [DIR]: a file that bench's backup deleted goes back into
+# DIR (default: the site's backup folder; site drop passes the archived one)
+# and the copy under the state backups goes. A file that could not go back
+# stays in the state backups, with a [WARN] line. Sets FL_KEEP_RESTORED to the
+# number put back.
+fl_backups_keep_end() {
+  local target="${1-}" f name left=0
+  FL_KEEP_RESTORED=0
+  [[ -n "$FL_KEEP_DIR" && -d "$FL_KEEP_DIR" ]] || return 0
+  [[ -n "$target" ]] || target="$(fl_site_backup_dir "${FL_KEEP_DIR##*/}")"
+  for f in "$FL_KEEP_DIR"/*; do
+    [[ -f "$f" ]] || continue
+    name="${f##*/}"
+    if [[ ! -e "${target}/${name}" ]]; then
+      if [[ -d "$target" ]] && { ln "$f" "${target}/${name}" 2>/dev/null || cp -p "$f" "${target}/${name}" 2>/dev/null; }; then
+        FL_KEEP_RESTORED=$((FL_KEEP_RESTORED + 1))
+        fl_log "kept: ${name} was deleted by bench's backup and is back in ${target}"
+      else
+        left=$((left + 1))
+        continue
+      fi
+    fi
+    rm -f "$f"
+  done
+  if [[ "$left" -gt 0 ]]; then
+    fl_warn "${left} older backup file(s) that bench's backup deleted could not be put back into ${target}; they are in ${FL_KEEP_DIR}"
+    return 0
+  fi
+  rmdir "$FL_KEEP_DIR" "$(dirname "$FL_KEEP_DIR")" "$(dirname "$(dirname "$FL_KEEP_DIR")")" 2>/dev/null || true
+  FL_KEEP_DIR=""
+  return 0
+}
+
+# ------------------------------------------------- integrity
+
+# fl_backup_file_check FILE: 0 when FILE can be read to its end; else 1 and
+# FL_BACKUP_PROBLEM says what is wrong, naming the file. An encrypted file
+# cannot be read without its key: only its size is checked.
+fl_backup_file_check() {
+  local f="$1" name="${1##*/}"
+  FL_BACKUP_PROBLEM=""
+  if [[ ! -f "$f" || ! -r "$f" ]]; then FL_BACKUP_PROBLEM="${name} cannot be read"; return 1; fi
+  if [[ ! -s "$f" ]]; then FL_BACKUP_PROBLEM="${name} is empty"; return 1; fi
+  case "$name" in *-enc.*) return 0 ;; esac
+  case "$name" in
+    *.sql.gz|*.tgz|*.tar.gz)
+      gzip -t "$f" >/dev/null 2>&1 || { FL_BACKUP_PROBLEM="${name} is not a complete gzip file (a backup cut short, or a disk that filled up)"; return 1; } ;;
+  esac
+  case "$name" in
+    *.tar|*.tgz|*.tar.gz)
+      tar -tf "$f" >/dev/null 2>&1 || { FL_BACKUP_PROBLEM="${name} is not a readable tar archive"; return 1; } ;;
+  esac
+  return 0
+}
+
+# fl_backup_set_check DIR FILE...: the files that are named (the database dump,
+# the file archives), read from DIR. 1 with FL_BACKUP_PROBLEM on the first one
+# that is empty, cut short or unreadable.
+fl_backup_set_check() {
+  local dir="$1" f
+  shift
+  for f in "$@"; do
+    [[ -n "$f" ]] || continue
+    fl_backup_file_check "${dir}/${f}" || return 1
+  done
+  return 0
 }
 
 # In JSON mode only the JSON goes to stdout (on fd 3); every line of text,
@@ -114,7 +235,7 @@ fl_cmd_site_backups() {
   while IFS= read -r stamp; do
     [[ -n "$stamp" ]] || continue
     set="$(fl_backup_set_json "$dir" "$stamp")"
-    rows+=("$(fl_backup_field "$set" time)|$(fl_fmt_bytes "$(fl_backup_field "$set" size_bytes)")|$([[ "$(fl_backup_field "$set" with_files)" == "true" ]] && printf yes || printf no)|$(basename "$(fl_backup_field "$set" path)")")
+    rows+=("$(fl_backup_field "$set" time)|$(fl_fmt_bytes "$(fl_backup_field "$set" size_bytes)")|$([[ "$(fl_backup_field "$set" with_files)" == "true" ]] && printf yes || printf no)|$(basename "$(fl_backup_field "$set" path)")$([[ "$(fl_backup_field "$set" complete)" == "true" ]] || printf '  (incomplete)')")
   done < <(fl_backup_stamps "$dir")
   if [[ "${#rows[@]}" == "1" ]]; then fl_info "no backups of ${name} yet; take one with: benchbar site backup ${name}"; return 0; fi
   fl_table "${rows[@]}"
@@ -157,11 +278,19 @@ fl_cmd_site_backup() {
   fl_bench_env_exports
   # frappe reads the site's settings through the bench's Redis cache
   fl_bench_redis_up "$FL_BENCH_DIR"
+  # bench's backup deletes the site's backups older than 23 hours: keep them
+  if ! fl_backups_keep_begin "$name"; then
+    rm -f "$before"
+    fl_bench_redis_down
+    fl_die "The older backups of ${name} could not be kept while bench takes a new one; nothing was backed up." "Free space on the volume of ${FL_STATE_DIR}, or move the old backups away."
+  fi
   if ! fl_bench_run_long "bench --site ${name} backup$([[ "$with_files" == "1" ]] && printf ' --with-files')" "$FL_BENCH_DIR" "${args[@]}"; then
     rm -f "$before"
+    fl_backups_keep_end
     fl_bench_redis_down
     fl_die "The backup of ${name} failed." "Run it by hand to see why: cd ${FL_BENCH_DIR} && ${args[*]}"
   fi
+  fl_backups_keep_end
   fl_bench_redis_down
   stamp="$(find "$dir" -maxdepth 1 -type f -newer "$before" -name '[0-9]*_[0-9]*-*' 2>/dev/null | sed -n 's#.*/\([0-9]\{8\}_[0-9]\{6\}\)-.*#\1#p' | sort -r | awk 'NR==1')"
   rm -f "$before"
@@ -175,6 +304,7 @@ fl_cmd_site_backup() {
   fi
   fl_ok "backup of ${name}: $(fl_backup_field "$set" path) ($(fl_fmt_bytes "$(fl_backup_field "$set" size_bytes)")$([[ "$with_files" == "1" ]] && printf ', with files'))"
   fl_note "folder: ${dir}"
+  fl_note "older backups are kept: bench's backup deletes files older than 23 hours there, benchbar puts them back"
 }
 
 # ---------------------------------------------------------------- drop
@@ -342,6 +472,11 @@ fl_cmd_site_drop() {
   fl_bench_env_exports
   fl_bench_redis_up "$FL_BENCH_DIR"
   archive_before="$(fl_site_archive_latest "$name")"
+  # the backup drop-site takes first deletes the site's backups older than 23 hours: keep them
+  if ! fl_backups_keep_begin "$name"; then
+    fl_bench_redis_down
+    fl_die "The older backups of ${name} could not be kept while bench takes the last one; nothing was dropped." "Free space on the volume of ${FL_STATE_DIR}, or move the old backups away."
+  fi
   # the password travels on stdin, never on the command line (see FL_PY_FRAPPE_SECRETS)
   FL__DB_PW="$FL_MARIADB_ROOT_PW"
   fl_run_long "bench drop-site ${name}" fl__frappe_with_secrets "$FL_BENCH_DIR" FL__DB_PW -- \
@@ -349,6 +484,7 @@ fl_cmd_site_drop() {
   FL__DB_PW=""
   fl_bench_redis_down
   if [[ "$code" != "0" ]]; then
+    fl_backups_keep_end
     fl_die "bench drop-site ${name} failed; the site is still there and stays the default." \
       "When the backup failed, fix that first. Manual command: cd ${FL_BENCH_DIR} && bench drop-site ${name}"
   fi
@@ -372,6 +508,8 @@ fl_cmd_site_drop() {
     fl_warn "bench drop-site finished, but no new folder for ${name} is in ${FL_BENCH_DIR}/archived/sites"
     archive=""
   fi
+  # the older backups go with the site folder, into the archive
+  if [[ -n "$archive" ]]; then fl_backups_keep_end "${archive}/private/backups"; else fl_backups_keep_end; fi
   if [[ -n "$archive" ]]; then
     stamp="$(fl_backup_stamps "${archive}/private/backups" | awk 'NR==1')"
     [[ -n "$stamp" ]] && backup="$(fl_backup_set_json "${archive}/private/backups" "$stamp")"

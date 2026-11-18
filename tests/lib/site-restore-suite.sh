@@ -41,7 +41,7 @@ make_set() {
   mkdir -p "$BENCH/sites/$1/private/backups"
   gzip -c "$SQL" >"${base}-database.sql.gz"
   printf '{"db_name":"_old","db_password":"olddbpw","encryption_key":"%s"}\n' "$SETKEY" >"${base}-site_config_backup.json"
-  if [[ "${3:-}" == "files" ]]; then printf 'public files\n' >"${base}-files.tar"; printf 'private files\n' >"${base}-private-files.tar"; fi
+  if [[ "${3:-}" == "files" ]]; then mktar "${base}-files.tar"; mktar "${base}-private-files.tar"; fi
 }
 default_site() { tr -d '[:space:]' <"$BENCH/sites/currentsite.txt"; }
 # line numbers of the first mock call matching a pattern

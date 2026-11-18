@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented here.
 
+## Unreleased
+
+### Backups
+
+- `site backup`, `site restore`, `site drop`, `pull --replace` and `app update` no longer delete the site's backups older than 23 hours. bench's backup did that silently; benchbar now keeps those files and puts them back. Nothing in a site's backup folder is pruned.
+- `site restore` and `pull` read a backup set before they change anything: a dump that is empty or cut short, or a file archive tar cannot read, stops the command with the file named. `site backups` marks a set with an empty part `(incomplete)` and has `"complete"` in JSON.
+- benchbar's own state folder keeps to a limit: the newest 100 run logs, 50 backup folders and 14 update checks, and old `state.env.*` temp files go. The run's `changed[]` says what was removed.
+- `benchup` keeps the logs of the last three starts as `bench.previous.1.log` to `.3.log`, so the evidence of a crash survives a quick second start.
+
 ## 0.8.3 - 2026-11-17
 
 0.8.3 is a fix pass for Windows from a full review and a live test on a

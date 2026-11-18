@@ -28,7 +28,13 @@ if [[ "${1:-}" == "-c" && "${3:-}" == "benchbar-secrets" && "${4:-}" == "frappe"
       site="$2"
       base="${site}/private/backups/20260929_110000-${site//./_}"
       mkdir -p "${site}/private/backups"
-      printf 'dump\n' >"${base}-database.sql.gz"; printf 'public\n' >"${base}-files.tar"; printf 'private\n' >"${base}-private-files.tar"
+      # MOCK_BENCH_BACKUP_PRUNE=1: frappe's delete_temp_backups first, as bench backup does
+      if [[ -n "${MOCK_BENCH_BACKUP_PRUNE:-}" ]]; then
+        for old in "${site}"/private/backups/*; do [[ -f "$old" ]] && rm -f "$old"; done
+      fi
+      printf 'dump\n' | gzip -c >"${base}-database.sql.gz"
+      d="$(mktemp -d "${TMPDIR:-/tmp}/mock-tar.XXXXXX")"; printf 'x\n' >"$d/member"
+      tar -cf "${base}-files.tar" -C "$d" member; tar -cf "${base}-private-files.tar" -C "$d" member; rm -rf "$d"
       mkdir -p ../archived/sites
       dest="../archived/sites/${site}"; n=""
       while [[ -e "${dest}${n}" ]]; do n=$(( ${n:-0} + 1 )); done
