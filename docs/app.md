@@ -144,6 +144,24 @@ BenchBar; the browser keeps the sign-in link in its history.
 install or delete anything. The [URL scheme](/reference/url-scheme/) page
 has every route and ready to use Raycast and Shortcuts recipes.
 
+**Any web page or app can open a `benchbar://` link.** A browser asks before
+it opens an app, but offers "always allow this site", and after that a page
+can stop or restart your bench, or open Terminal windows at a Frappe console
+or a database prompt, without a click. Nothing in a link deletes or
+installs anything, but a stopped bench during a demo or a restart during a
+migration is real. **Settings, Links, Ask before a link acts** makes BenchBar
+show an alert (the bench and the action, with Cancel) before a link starts,
+stops or restarts a bench or opens a console. It is **off by default**,
+because an alert on every link would break Raycast and Shortcuts, which exist
+to skip clicks. Turn it on if you do not use them, or if you visit pages you
+do not control. Links that only show a window, a log, a site or the editor
+never ask.
+
+The app logs a link it ignored or could not use with its action only
+(`benchbar://down`) and a fixed reason, never the bench, the site, the
+query or an address. A link that is not one of its own is logged as a short
+hash. The alert asks with Cancel as its default button.
+
 ## The BenchBar window
 
 Open it with ⌘M, **Manage Bench…** in the popover, or by
@@ -373,6 +391,20 @@ macOS asks whether BenchBar may send notifications; allow it for the
 crash alerts.
 
 ## What the app does not do
+
+**A person, not an agent.** A few commands (turning on Open as, printing a
+sign-in link, sharing, the firewall guard) are refused to a program that runs
+`benchbar` without a person: under `--for-agent`, `benchbar mcp` and
+`BENCHBAR_NONINTERACTIVE`. The app runs them for you after its own alert, so
+every call it makes this way says that it comes from the app: it sets
+`BENCHBAR_NONINTERACTIVE=0` and `BENCHBAR_SUDO=gui`, and its process id in
+`BENCHBAR_APP_PID`; the command line tool does not check that last one yet. This stops an agent that follows the rules in
+[AGENTS.md](https://github.com/askysh/benchbar/blob/main/AGENTS.md) and a
+script that runs by mistake. It does not stop another process of the same
+macOS user that sets those variables itself: such a process can already read
+your files and run your commands, and macOS gives the app no way to tell
+it apart. It is a safety rail, not a boundary. The steps that need the Mac's
+password still ask in macOS's own dialog, and that dialog is a real barrier.
 
 The app does not write plists, edit bench files, or run `bench`, `brew`,
 `git` or `launchctl`. Every button runs `benchbar ... --json` and reads

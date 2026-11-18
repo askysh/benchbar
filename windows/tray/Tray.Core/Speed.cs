@@ -2,7 +2,7 @@ namespace BenchBar.Tray.Core;
 
 /// <summary>
 /// Load to runner speed, as SpeedMapping in macos/BenchBar/Speed/SpeedSource.swift.
-/// The spike has no real CPU source: a Windows process cannot sample processes
+/// The tray has no real CPU source: a Windows process cannot sample processes
 /// inside WSL, so the fixture's <c>cpu-percent</c> stands in. Where the real
 /// number comes from is an open question for the CLI.
 /// </summary>

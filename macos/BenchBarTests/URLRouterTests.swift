@@ -35,7 +35,7 @@ struct URLRouterTests {
             }
         }
         #expect(route("https://up?bench=v16-bench") == .ignore("not a benchbar:// link"))
-        #expect(route("benchbar://drop?bench=v16-bench") == .ignore("unknown route \"drop\""))
+        #expect(route("benchbar://drop?bench=v16-bench") == .ignore("unknown route"))
     }
 
     @Test func benchByPath() {
@@ -51,7 +51,7 @@ struct URLRouterTests {
 
     @Test func twoBenchesWithOneNameNeedAPath() {
         let other = URLRouter.Bench(path: "/Users/me/work/frappe-bench", name: "frappe-bench", sites: [])
-        guard case .explain(let text) = route("benchbar://up?bench=frappe-bench", benches: [main, other]) else {
+        guard case .explain(let text, _) = route("benchbar://up?bench=frappe-bench", benches: [main, other]) else {
             Issue.record("an ambiguous name ran"); return
         }
         #expect(text.contains("full path"))
@@ -67,7 +67,7 @@ struct URLRouterTests {
     }
 
     @Test func withoutBenchAndNoChoiceExplains() {
-        guard case .explain(let text) = route("benchbar://up") else { Issue.record("ran without a bench"); return }
+        guard case .explain(let text, _) = route("benchbar://up") else { Issue.record("ran without a bench"); return }
         #expect(text.contains("?bench="))
         guard case .explain = route("benchbar://up", benches: []) else { Issue.record("ran without benches"); return }
         // the window needs no bench
@@ -83,7 +83,7 @@ struct URLRouterTests {
         #expect(route("benchbar://db?bench=frappe-bench&site=second") == .run(.db, bench: main.path, site: "second"))
         #expect(route("benchbar://editor?bench=frappe-bench&site=second") == .run(.editor, bench: main.path, site: nil))
         if case .explain = route("benchbar://db?bench=frappe-bench&site=nope") {} else { Issue.record("db on an unknown site ran") }
-        guard case .explain(let text) = route("benchbar://open?bench=frappe-bench&site=nope") else {
+        guard case .explain(let text, _) = route("benchbar://open?bench=frappe-bench&site=nope") else {
             Issue.record("an unknown site opened"); return
         }
         #expect(text.contains("nope"))

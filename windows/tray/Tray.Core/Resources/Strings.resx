@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <!-- User facing text of Tray.Core, read with UiText.Get(name). Add a Strings.<culture>.resx next to this file to translate; the app falls back to this one. -->
+  <data name="DemoNotice" xml:space="preserve">
+    <value>Demo data: BENCHBAR_TRAY_FIXTURES is set, so BenchBar shows recorded benches and changes nothing. Remove the variable and restart BenchBar to use your own.</value>
+  </data>
+  <data name="DistroStoppedLine" xml:space="preserve">
+    <value>The distro stopped. Follow is paused.</value>
+  </data>
+  <data name="BackupWithFiles" xml:space="preserve">
+    <value>with files</value>
+  </data>
+  <data name="BackupEncrypted" xml:space="preserve">
+    <value>encrypted</value>
+  </data>
+  <data name="BackupPartial" xml:space="preserve">
+    <value>partial</value>
+  </data>
+</root>

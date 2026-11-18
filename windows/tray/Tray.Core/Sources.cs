@@ -418,6 +418,11 @@ public static class BenchSourceFactory
 {
     public const string FixturesVariable = "BENCHBAR_TRAY_FIXTURES";
 
+    /// <summary>True when <see cref="FixturesVariable"/> is set: the tray shows recorded benches and a setup that installs nothing.</summary>
+    public static bool FixturesActive => Fixtures is not null;
+
+    public static string DemoNotice => UiText.Get("DemoNotice");
+
     private static string? Fixtures => Environment.GetEnvironmentVariable(FixturesVariable) is { } f && !string.IsNullOrWhiteSpace(f) ? f : null;
 
     public static IBenchSource FromEnvironment() =>

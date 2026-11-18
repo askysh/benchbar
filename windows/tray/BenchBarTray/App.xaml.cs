@@ -117,6 +117,8 @@ public partial class App : Application, ITrayHost
         _source = BenchSourceFactory.FromEnvironment();
         _setup = BenchSourceFactory.SetupFromEnvironment();
         _cli = BenchSourceFactory.CliFromEnvironment();
+        // a user level variable left from a demo must not pass for the real thing: say so in every window until it is removed
+        if (BenchSourceFactory.FixturesActive) _notices.Set(new Notice("demo-data", BenchSourceFactory.DemoNotice, Dismissible: false, Critical: false));
         var options = new TrayOptions
         {
             Runners = RunnerSet.Load(),

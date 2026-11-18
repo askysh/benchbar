@@ -1,6 +1,6 @@
 # Windows tray decisions
 
-One line per non obvious choice. The spike's code is in `spike/` and is not shipped.
+One line per non obvious choice. The 0.8.0 spike that chose WPF over WinUI was deleted in 0.9.0; its numbers are below, and git history keeps the code at `3de8812`.
 
 ## Spike: the shell (0.8.0)
 
@@ -25,7 +25,7 @@ One line per non obvious choice. The spike's code is in `spike/` and is not ship
 
 ## v1: the tray app (0.8.0)
 
-- The app is `windows/tray/BenchBarTray` with `Tray.Core` promoted out of the spike (copied, then grown); the spike stays as measured and keeps building under its own workflow. One solution, `BenchBarTray.sln`, classic format as asked.
+- The app is `windows/tray/BenchBarTray` with `Tray.Core` promoted out of the spike (copied, then grown); the spike was kept as measured until 0.9.0 and then deleted (`spike/` and `tray-spike.yml`). One solution, `BenchBarTray.sln`, classic format as asked.
 - The promoted `PollerTests.StartPollsAtOnceAndReportsTheBenches` failed every time on the laptop (2026-10-29) and passed on CI by timing: the probe's `Updated` handler was subscribed before the test's own, released the waiting test, and the test read the result before its handler ran. The promoted test reads `poller.Last`; the spike keeps the bug (Akash, 2026-10-29: the spike stays untouched).
 - Every fact comes from `benchbar.exe` (next to the tray exe first, then PATH). The spike's `wsl.exe bash -lc` fallback is gone: one path to the CLI, and the shim's one line fixes (no distro, no benchbar inside it) reach the flyout as text.
 - Before any `list` or `status` the poller asks `wsl.exe --list --running --quiet`, which never boots a distro (`-d` would). While the distro is stopped the tray makes no shim call at all and the probe backs off 30, 60, 120, 300 s (5 s with the flyout open): a `status` call boots the distro and would fight `vmIdleTimeout`. Keeping the distro up is the keepalive task's job, not the tray's.
@@ -209,3 +209,4 @@ One line per non obvious choice. The spike's code is in `spike/` and is not ship
 - **Versions: an older shim warns, a newer patch of the same minor does not, and a newer shim may be asked for the update check.** Only the old shim forwards `self-update` to the Linux CLI and boots the distro. A tray whose DLLs could not all be replaced can now reach the updater that fixes it.
 - **Install and adopt keep their passwords in the child's environment** (`ADMIN_PASSWORD`, `BENCHBAR_SUDO_PASSWORD`, `MARIADB_ROOT_PASSWORD`). The CLI reads them from there only (it removes `BENCHBAR_SUDO_PASSWORD` at once, docs/DECISIONS.md) and the shim forwards exactly those names through `WSLENV`; a stdin or file channel needs the CLI and the shim to change first. `docs/windows.md` says so. Left for a CLI and shim change.
 - **Config saves run on a pool thread, one after the other, and quit waits up to 3 s for the last one.** `Save` retries with `Thread.Sleep` for up to a second; on the UI thread that froze the window.
+- **The harness pipe, the logon log and `BENCHBAR_TRAY_THEME` are in Debug builds only** (`HARNESS` is defined unless the configuration is Release; the Release `HarnessLink` is an empty type, so no pipe, thread or variable read exists in what ships). The spike harness that used them is deleted. The fixtures mode stays (the docs and the demo use it) and now shows a "Demo data" notice that cannot be dismissed while `BENCHBAR_TRAY_FIXTURES` is set, so a stale user variable cannot pass for the real thing.
