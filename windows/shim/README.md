@@ -12,9 +12,9 @@ argument):
 | --- | --- |
 | `benchbar.exe --shim-version` | Print the shim version. |
 | `benchbar.exe adopt-distro [NAME] [--yes] [--json]` | Check a distro (registered, WSL 2, systemd, benchbar, linger) and record it as the target. |
-| `benchbar.exe wslconfig [--suggest] [--apply --yes] [--json]` | Show `.wslconfig` memory and idle settings, suggest or write safe values (with a backup). |
+| `benchbar.exe wslconfig [--suggest] [--apply --yes] [--json]` | Show `.wslconfig` memory and idle settings, suggest or write safe values (with a backup). A `memory` you set is never changed, even below 4 GB: the check only says so; an unset `memory` on a PC with less than 8 GB is suggested as 4GB. |
 | `benchbar.exe keepalive install\|remove\|status\|run` | A logon task that keeps the distro running. No admin, no service. |
-| `benchbar.exe path install\|status\|remove` | Put this folder on your user PATH, show where `benchbar.exe` resolves, or take exactly this folder out of the user PATH again (a clear line and no change when it is not there). |
+| `benchbar.exe path install\|status\|remove` | Put this folder on your user PATH, show where `benchbar.exe` resolves, or take exactly this folder out of the user PATH again (a clear line and no change when it is not there). Before it writes the PATH it saves the old value and its type in `%LOCALAPPDATA%\BenchBar\path-backup-<stamp>.txt`. |
 | `benchbar.exe setup check [--json] [--probe] [--distro NAME]` | Read only. Checks the PC step by step (Windows build, virtualization, WSL, restart, distro, Linux release, Linux user, systemd, CLI, linger, keepalive, `.wslconfig`, PATH). Never starts a stopped distro unless `--probe`, never asks for admin rights. |
 | `benchbar.exe setup run ACTION [--distro NAME] [--user NAME] [--force] [--jsonl]` | Runs one setup action (`wsl_enable`, `wsl_update`, `distro_install`, `distro_wsl2`, `distro_user`, `systemd`, `cli_install`, `linger`, `keepalive`, `wslconfig`, `path`). With `--jsonl` it prints only JSON lines. `wsl_enable` asks Windows for permission (UAC). |
 | `benchbar.exe report-windows [--json] [--distro NAME] [--bench PATH] [--context TEXT] [--tray-version V] [--include FILE]...` | Write a redacted zip for a bug report. Works with no WSL, no distro and no CLI. See "Bug report zip". |
@@ -261,6 +261,14 @@ folders of the distro. So are the proxy settings
 `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY` and `http_proxy`, `https_proxy`,
 `no_proxy` (Linux tools read the lower case ones). No other variable is
 passed.
+
+## Exit code 2 and a CLI of another release
+
+When the CLI exits 2 and its release differs from this `benchbar.exe`, the shim
+adds one line to stderr (`benchbar X in the distro is older than benchbar.exe
+Y. fix: ...`), because an older CLI answers a flag it does not know with 2 and
+a message that says nothing about versions. The exit code is the CLI's, and
+nothing is added when the releases match.
 
 ## The working folder
 
