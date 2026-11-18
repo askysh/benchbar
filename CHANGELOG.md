@@ -37,6 +37,11 @@ All notable changes to this project are documented here.
 - Bug reports hide secrets in JSON files (`"db_password": "..."`, `encryption_key`, `Authorization`, cookies) as well as `key=value` ones, including values with escaped quotes, arrays of strings and nested objects.
 - `schtasks.exe` and streamed `wsl.exe` output are read in the right code page, so a user name with accents no longer breaks the keepalive checks or garbles the setup log.
 - `BENCHBAR_LABS`, `BENCH_INIT_TIMEOUT_SECONDS`, `BENCHBAR_PROFILE_PATH` and the `BENCHBAR_MCP_*` settings now reach the CLI in WSL.
+- A `.wslconfig` `memory` value you set is no longer raised to 4 GB; `doctor` only says it is small. The setup step is named "Keep WSL from stopping idle benches (uses more RAM)".
+- `benchbar.exe path install` and `remove` save the old user PATH in `%LOCALAPPDATA%\BenchBar\path-backup-<stamp>.txt` first.
+- When a command exits 2 and the CLI in WSL is another release than `benchbar.exe`, one line says so and how to update.
+- The advice when no distro is installed now names `benchbar.exe setup run distro_install`; `setup check` only reports.
+- A hung `wsl.exe` (bug report copy, setup streams) or `schtasks.exe` is ended at its deadline, and a setup action stops when the program reading its output has gone.
 
 ### Agents never see a secret
 
