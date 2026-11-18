@@ -6,8 +6,8 @@ description: "benchbar ports plan, setup, apply, check and mode: give several be
 Each bench needs four ports of its own: web `8000 + n`, socketio
 `9000 + n`, and Redis `11000 + n` and `13000 + n`, a port block. The
 `ports` commands plan and apply those blocks for several benches at
-once, and check one bench for conflicts. The guide is
-[Benches and sites](../../guides/benches-and-sites.md#port-blocks).
+once, and check one bench for conflicts. The explanation is
+[Port blocks](../../concepts/port-blocks.md).
 
 Plan, setup and apply take bench folders after `--`, one or more, and
 use each bench's own site and profile; `--site` and `--profile` are

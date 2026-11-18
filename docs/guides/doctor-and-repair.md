@@ -662,7 +662,7 @@ at the same time.
 
 Fix: `benchbar service --port-offset <n> --bench-dir <bench>` moves this
 bench to the next free block (or stop the other bench). See
-[Port blocks](benches-and-sites.md#port-blocks).
+[Port blocks](../concepts/port-blocks.md).
 
 ### orphans
 
