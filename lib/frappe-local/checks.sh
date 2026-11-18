@@ -897,16 +897,6 @@ chk_redis_6379() {
   fi
 }
 
-# fl_site_ping_code [SECONDS]: the default site's ping (3 s; status asks with 1)
-fl_site_ping_code() {
-  local code
-  code="$(curl -s -o /dev/null -m "${1:-3}" -w '%{http_code}' -H "Host: ${FL_SITE}" "http://127.0.0.1:${FL_WEB_PORT}/api/method/ping" 2>/dev/null || true)"
-  case "$code" in
-    [0-9][0-9][0-9]) printf '%s' "$code" ;;
-    *) printf '000' ;;
-  esac
-}
-
 fl_hosts_has_site() {
   local site_re
   site_re="$(printf '%s' "$FL_SITE" | sed 's/\./\\./g')"
