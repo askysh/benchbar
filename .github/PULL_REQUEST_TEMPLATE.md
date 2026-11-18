@@ -14,7 +14,7 @@
 
 - [ ] `tests/run-tests.sh` passes (and `scripts/macos-build.sh --test` for app changes)
 - [ ] A second run changes nothing and says `unchanged`
-- [ ] A line in CHANGELOG.md under `## Unreleased`
+- [ ] A fragment `changelog.d/<issue>-<slug>.md` for a user facing change (not an edit of CHANGELOG.md), or none needed
 - [ ] A DECISIONS line per non obvious choice (docs/DECISIONS.md or macos/DECISIONS.md), or none needed
 
 ## AI disclosure

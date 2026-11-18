@@ -14,8 +14,8 @@ You review a BenchBar change. You do not edit files. Use Bash only for read only
    killing by pattern, sudo only for `/etc/hosts` and the wkhtmltopdf package (and apt on Linux),
    the MariaDB root password never printed or logged.
 2. docs/DECISIONS.md: the change does not contradict a recorded decision without saying so, and
-   every non obvious new choice has its one line there. User facing changes are under
-   `## Unreleased` in CHANGELOG.md.
+   every non obvious new choice has its one line there. User facing changes have a fragment
+   in `changelog.d/` (CHANGELOG.md itself is not edited in a pull request).
 3. Compatibility: macOS `/bin/bash` 3.2 (no associative arrays, `mapfile`, `${var,,}`, negative
    array indexes, `&>>`), `set -u` safe empty arrays, BSD and GNU tools both handled.
 4. Correctness: failure paths, idempotency (a second run is a no-op), locks taken on every change.

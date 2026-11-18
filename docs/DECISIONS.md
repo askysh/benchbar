@@ -1069,3 +1069,5 @@ Written for the macOS arm64 runner shortage of November 2026 (pull requests wait
 
 - A `memory` value in `.wslconfig` that the user set is never changed by `wslconfig --apply` or the setup step, only reported by the idle check: it is their limit for a small PC. Only an unset value on a PC with less than 8 GB gets the 4GB suggestion.
 - The shim does not print a "starting WSL" notice after a delay: its stdout and stderr are the child's own handles (no copy loop, a terminal stays a terminal for the CLI), so it cannot tell whether the CLI has printed. The version skew line after an exit 2 needs no such knowledge.
+
+- A pull request adds a changelog fragment (`changelog.d/<issue>-<slug>.md`) and does not edit `CHANGELOG.md`; `scripts/changelog-fold.sh` folds them into `## Unreleased` at release time, because every merge into `next-release` otherwise conflicted on that one block and reran CI. Sections are a fixed list in the script and in `changelog.d/README.md`, so a typo in a heading fails `--check` instead of making a new section; entries already in Unreleased stay where they are.

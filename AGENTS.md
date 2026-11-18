@@ -269,8 +269,11 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
 - Everything under `docs/` is published on the documentation site, so
   add a page there only when it is for users.
 - Record a non obvious choice as one line in `docs/DECISIONS.md` (CLI)
-  or `macos/DECISIONS.md` (app), and user facing changes under
-  `## Unreleased` in `CHANGELOG.md`. The PR description holds the rest.
+  or `macos/DECISIONS.md` (app). Put a user facing change in a fragment,
+  `changelog.d/<issue number>-<short-slug>.md` (format in
+  `changelog.d/README.md`), and never edit `CHANGELOG.md` for it: the
+  release step folds the fragments in. `scripts/changelog-fold.sh --check`
+  validates them. The PR description holds the rest.
 
 ## Reading the output
 
