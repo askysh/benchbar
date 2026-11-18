@@ -1070,6 +1070,7 @@ Written for the macOS arm64 runner shortage of November 2026 (pull requests wait
 - A `memory` value in `.wslconfig` that the user set is never changed by `wslconfig --apply` or the setup step, only reported by the idle check: it is their limit for a small PC. Only an unset value on a PC with less than 8 GB gets the 4GB suggestion.
 - The shim does not print a "starting WSL" notice after a delay: its stdout and stderr are the child's own handles (no copy loop, a terminal stays a terminal for the CLI), so it cannot tell whether the CLI has printed. The version skew line after an exit 2 needs no such knowledge.
 
+- The gateway tests register every server and child they start (`track` in `tests/share/helpers.js`) and close them in an `after` hook, and `writeDevices` renames a temp file into place like the device store does: the gateway reads `devices.json` on every tick, and a plain write let a tick see an empty file and die with `fatal schema`, which left the upstream server open and hung the file until the 600 s limit.
 
 ## Backups and state limits (0.9)
 
