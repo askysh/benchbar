@@ -280,7 +280,7 @@ fl_keychain_set() {
     exit 1
   ) 2>/dev/null || true
   [[ "$(fl_keychain_get || true)" == "$pw" ]] || { fl_warn "could not write the password file ${f}"; return 1; }
-  fl_ok "MariaDB root password saved to ${f} (benchbar mariadb-password prints it)"
+  fl_ok "MariaDB root password saved to ${f}"
   fl_log "secrets: wrote ${f}"
 }
 

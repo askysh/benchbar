@@ -10,6 +10,13 @@ case "$1" in
     if [[ -n "${MOCK_BENCH_VERSION_EXIT:-}" ]]; then printf '%s\n' "${MOCK_BENCH_VERSION_OUT:-Traceback}" >&2; exit "$MOCK_BENCH_VERSION_EXIT"; fi
     printf 'erpnext 15.0.0\nfrappe 15.0.0\n'; exit 0 ;;
   init)
+    # frappe-bench 5.31 makes the env with "uv venv": without uv on PATH it fails
+    # after it made its folders (issue 112), and leaves exactly that skeleton
+    if ! command -v uv >/dev/null 2>&1; then
+      mkdir -p "$2/apps" "$2/sites" "$2/config" "$2/logs"
+      printf "FileNotFoundError: [Errno 2] No such file or directory: 'uv'\n" >&2
+      exit 1
+    fi
     mkdir -p "$2/apps/frappe" "$2/env/bin" "$2/sites" "$2/config"
     cp "${0%/*}/../env-python" "$2/env/bin/python"; chmod +x "$2/env/bin/python"
     printf 'port 11000\n' >"$2/config/redis_queue.conf"; printf 'port 13000\n' >"$2/config/redis_cache.conf"
