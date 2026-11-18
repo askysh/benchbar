@@ -304,6 +304,7 @@ Daily
                       at boot (sudo, once; a person at a terminal). status (--json), remove, and
                       allow-node (lets the share gateway's node through the macOS firewall).
   mariadb-password    Print the MariaDB root password (Keychain; a 0600 file on Linux; asks first).
+                      A person's command: refused for agents, mcp and without a terminal.
   mcp                 Model Context Protocol server on stdio for coding agents
                       (claude mcp add benchbar -- benchbar mcp). Read tools, up, down, restart,
                       app add from a reviewed plan.
@@ -656,7 +657,7 @@ fl_jsonl_done_generic() {
   if [[ "$code" != "0" ]]; then
     FL_DIE_MESSAGE="${FL_DIE_MESSAGE:-$(fl_log_step_message 0)}"
     extra=",\"error\":$(fl_json_str "${FL_DIE_MESSAGE:-the command failed; see the log}")"
-    [[ "$code" != "2" || "${FL_EXIT2_NOT_PASSWORD:-0}" == "1" ]] || fl_next_action "Run the command again with MARIADB_ROOT_PASSWORD='...' in the environment" "The MariaDB root password is unknown"
+    [[ "$code" != "2" || "${FL_EXIT2_NOT_PASSWORD:-0}" == "1" ]] || fl_next_action "Ask the person for the MariaDB root password (do not look for it); they run the command again with MARIADB_ROOT_PASSWORD='...' in the environment" "The MariaDB root password is unknown"
   fi
   fl_done_fields_v f "$code"
   if [[ -n "$FL_DOC" ]]; then rest="$(fl_doc_rest "$FL_DOC"),"; else
@@ -679,7 +680,7 @@ fl_jsonl_on_exit() {
   FL_JSONL_QUIET=0
   [[ "$code" != "0" || -z "$FL_JSONL_URL" ]] || url="$(fl_json_str "$FL_JSONL_URL")"
   FL_DIE_MESSAGE="${FL_DIE_MESSAGE:-$(fl_log_step_message 0)}"
-  [[ "$code" != "2" ]] || fix="$(fl_json_str "The MariaDB root password is unknown: run the command again with MARIADB_ROOT_PASSWORD='...' in the environment")"
+  [[ "$code" != "2" ]] || fix="$(fl_json_str "The MariaDB root password is unknown: ask the person for it (do not look for it), then run the command again with MARIADB_ROOT_PASSWORD='...' in the environment")"
   # a failure with a stable id and a fix of its own (a port that is taken)
   if [[ "$code" != "0" && -n "$FL_ERROR_FIX" ]]; then
     fix="$(fl_json_str "$FL_ERROR_FIX")"

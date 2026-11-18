@@ -43,6 +43,12 @@ All notable changes to this project are documented here.
 - `schtasks.exe` and streamed `wsl.exe` output are read in the right code page, so a user name with accents no longer breaks the keepalive checks or garbles the setup log.
 - `BENCHBAR_LABS`, `BENCH_INIT_TIMEOUT_SECONDS`, `BENCHBAR_PROFILE_PATH` and the `BENCHBAR_MCP_*` settings now reach the CLI in WSL.
 
+### Agents never see a secret
+
+- `benchbar mariadb-password` is for a person at a terminal. It refuses under `--for-agent`, `BENCHBAR_NONINTERACTIVE`, `benchbar mcp` and when stdin is not a terminal, whatever `--yes` says, and no message or doc line tells an agent to run it (the install messages now say to ask the person who installed it). When the MariaDB root password is unknown (exit 2), the message tells an agent to ask the person. This stops the documented agent modes and a missing terminal. A process that runs as the same user and fakes a terminal is not stopped: these are guards against mistakes, not a boundary, as SECURITY.md says for the Keychain.
+- `benchbar open --as USER --print-url` is refused under `--for-agent`, `BENCHBAR_NONINTERACTIVE=1` and `benchbar mcp`, and now also when stdin is not a terminal, unless the caller sets `BENCHBAR_NONINTERACTIVE=0` itself (the Mac app does; BenchBar for Windows does not call it). The link holds a login session. Same limit as above: a process of the same user that fakes a terminal or sets the variable is not stopped.
+- `benchbar_site_add` no longer returns a generated Administrator password. It is saved in a 0600 file (`site-admin/SITE` in benchbar's state folder) and the result names that file; pass your own `admin_password` to choose one. The file is written as a new file and renamed into place, so an older file's mode never applies, and `benchbar site drop` removes it with the site.
+
 ## 0.8.3 - 2026-11-17
 
 0.8.3 is a fix pass for Windows from a full review and a live test on a
