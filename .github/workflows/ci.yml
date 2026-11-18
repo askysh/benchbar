@@ -415,6 +415,10 @@ jobs:
           $src = (wsl.exe -d $env:BENCHBAR_TEST_DISTRO --exec wslpath -u "$env:GITHUB_WORKSPACE").Trim()
           wsl.exe -d $env:BENCHBAR_TEST_DISTRO --exec /bin/sh -c 'set -eu; mkdir -p "$HOME/.local/bin"; cp -R "$0" "$HOME/benchbar-src"; ln -sf "$HOME/benchbar-src/benchbar" "$HOME/.local/bin/benchbar"' $src
           if ($LASTEXITCODE -ne 0) { exit 1 }
+          # An empty bench folder, so status --json answers state not_adopted like a
+          # machine where a bench is not yet managed (the fresh distro has none).
+          wsl.exe -d $env:BENCHBAR_TEST_DISTRO --exec /bin/sh -c 'mkdir -p "$HOME/frappe-bench/apps/frappe" "$HOME/frappe-bench/sites"'
+          if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Versions
         run: |
