@@ -24,6 +24,7 @@ export MOCK_PROCS="$MOCK_STATE/procs"
 export MOCK_LISTEN="$MOCK_STATE/listen"
 export MOCK_BREW_PREFIX="$TMP_DIR/brew"
 export MOCK_BREW_INSTALLED="python@3.11 node@22 mariadb@10.11 redis openssl@3 libffi zlib pipx pkgconf mariadb-connector-c"
+export MOCK_UV_SRC="$ROOT/tests/mocks/bin/uv"
 export MOCK_BREW_LEAVES="$MOCK_STATE/leaves"
 export MOCK_BREW_SERVICES="$MOCK_STATE/services"
 export MOCK_CURL_CODE="000"
@@ -99,6 +100,27 @@ export PATH="$ROOT/tests/mocks/bin:$PATH"
 FM="$ROOT/benchbar"
 # the CLI's own version, so a release bump needs no test edits
 VER="$(sed -n 's/^FL_VERSION="\(.*\)"$/\1/p' "$FM")"
+
+# use_mocks_without NAME...: PATH holds a copy of the mocks without the named
+# commands, and no folder that has any of them (a uv or pipx of the machine
+# running the suite): the Mac of a first time user. use_all_mocks puts it back.
+SAVED_PATH="$PATH"
+use_mocks_without() {
+  local d="$TMP_DIR/mocks-without" n dir newpath="" parts hit
+  rm -rf "$d"; mkdir -p "$d"; cp -R "$ROOT/tests/mocks/." "$d/"
+  for n in "$@"; do rm -f "$d/bin/$n"; done
+  IFS=: read -r -a parts <<<"$SAVED_PATH"
+  for dir in "${parts[@]}"; do
+    if [[ "$dir" == "$ROOT/tests/mocks/bin" ]]; then dir="$d/bin"; fi
+    hit=0
+    for n in "$@"; do [[ -x "$dir/$n" ]] && hit=1; done
+    [[ "$hit" == "0" ]] && newpath="${newpath:+${newpath}:}${dir}"
+  done
+  PATH="$newpath"
+  for n in "$@"; do ! command -v "$n" >/dev/null 2>&1 || fail "use_mocks_without: ${n} is still on PATH ($(command -v "$n"))"; done
+  command -v python3 >/dev/null 2>&1 || fail "use_mocks_without: python3 left PATH with the folders that hold ${*}"
+}
+use_all_mocks() { PATH="$SAVED_PATH"; }
 
 # ---------------------------------------------------------------- platform
 

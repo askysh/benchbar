@@ -258,7 +258,7 @@ else
     fl_warn "wkhtmltopdf is not installed: the bench works, PDF printing does not. Run ./$(fl_phase00_script) to add it later."
   fi
   # the apt MariaDB on Linux is this install's own: no existing-server note
-  if fl_port_listening 3306 && ! fl_is_linux; then
+  if fl_port_listening 3306 && ! fl_is_linux && ! fl_mariadb_listener_is_own; then
     fl_mariadb_safe_mode_note
   fi
   # (on Linux the systemd unit counts too)
@@ -280,8 +280,10 @@ prompt_value SITE_NAME "Site name (lowercase, hostname-like)" "${FL_TEAM_SITE:-$
 if ! [[ "$SITE_NAME" =~ ^[a-z0-9][a-z0-9.-]*$ ]]; then
   fl_die "Invalid site name: '${SITE_NAME}'." "Use lowercase letters, digits, '-' and '.' only."
 fi
+# a site folder with a "creating" marker is a cut short new-site, not a site: it
+# needs the passwords, since the rerun cleans it up and makes the site again
 SITE_EXISTS=0
-[[ -d "${BENCH_DIR}/sites/${SITE_NAME}" ]] && SITE_EXISTS=1
+[[ -d "${BENCH_DIR}/sites/${SITE_NAME}" && ! -f "$(fl_site_creating_marker "$BENCH_DIR" "$SITE_NAME")" ]] && SITE_EXISTS=1
 
 TEAM_APPS=0
 if [[ -n "$APPS" ]]; then
@@ -422,6 +424,9 @@ fl_bstate_set_for "$BENCH_DIR" APPS "${FL_SELECTED_APPS[*]}"
 fl_bstate_set_for "$BENCH_DIR" SITE_NAME "$SITE_NAME"
 fl_bstate_set_for "$BENCH_DIR" MARIADB_FORMULA "$FL_MARIADB_FORMULA"
 
+# bench init needs uv even when bench itself comes from pipx: said before pipx,
+# bench and the init cost any time (a bench that is complete needs no init)
+fl_bench_complete "$BENCH_DIR" || fl_bench_require_uv
 fl_install_pipx_if_needed
 fl_install_bench_if_needed
 fl_bench_init_if_needed "$BENCH_DIR" "$FRAPPE_REF" "$(command -v "$FL_PYTHON_BIN_NAME")" "$REPAIR_BENCH" "$([[ -n "$FRAPPE_COMMIT" ]] && printf 1 || printf 0)"
