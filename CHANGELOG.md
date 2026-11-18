@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented here.
 
+## Unreleased
+
+### Install
+
+- A first install on a Mac without `uv` no longer fails at `bench init`. Step 1 installs `uv` with Homebrew (a `uv` you already have is used as it is), and step 2 stops before it installs anything when `uv` is still missing, with the fix. frappe-bench needs `uv` for `bench init` even when bench itself came from pipx (#112).
+- A rerun after a failed `bench init` no longer stops at "Bench directory exists but is incomplete" when the folder holds only empty folders: it is moved to `<bench>.incomplete.<time>` and the init starts over. Nothing is deleted. `benchbar install` now takes `--repair-bench` for any other incomplete folder (never one with a site), and `--repair-bench --dry-run` shows the move (#112).
+- The note "Existing MariaDB/MySQL may already be using port 3306" is no longer printed when the server is the Homebrew MariaDB that BenchBar manages and the Keychain password works (#112).
+- A `bench new-site` that was cut short (Ctrl+C, a closed window) is cleaned up by the next `benchbar install`: BenchBar chooses the new site's database name, writes it to the marker before `new-site` starts, and on a rerun drops that database only (and its user), moves the half made folder to `archived/sites/`, and creates the site again. When it cannot prove the database is its own, it stops and prints the commands. New sites now get a random database name of the same shape as before (`_` and 16 hex digits).
+- `benchbar` is linked into `~/.local/bin` right after step 1, not only in step 3, and a failed bench step names the full path to run it again (#112).
+
 ## 0.8.3 - 2026-11-17
 
 0.8.3 is a fix pass for Windows from a full review and a live test on a

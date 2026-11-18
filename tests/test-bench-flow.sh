@@ -86,11 +86,26 @@ fl_bench_init_if_needed "$BENCH_DIR" version-15 /usr/bin/python3 0
 after="$(wc -l <"$BENCH_LOG")"
 assert_eq "$before" "$after"
 
+# a folder with something of the user's in it is not a skeleton: it stops until --repair-bench
 INCOMPLETE="$TMP_DIR/incomplete-bench"
 mkdir -p "$INCOMPLETE/apps"
+printf 'mine\n' >"$INCOMPLETE/notes.txt"
 assert_fails fl_bench_init_if_needed "$INCOMPLETE" version-15 /usr/bin/python3 0
 fl_bench_init_if_needed "$INCOMPLETE" version-15 /usr/bin/python3 1
 [[ -d "$INCOMPLETE/apps/frappe" ]]
+# a folder of empty folders (what a bench init that failed early leaves) is moved aside by a plain rerun
+SKEL="$TMP_DIR/skeleton-bench"
+mkdir -p "$SKEL/apps" "$SKEL/sites" "$SKEL/config" "$SKEL/logs"
+fl_bench_is_skeleton "$SKEL"
+fl_bench_init_if_needed "$SKEL" version-15 /usr/bin/python3 0 >/dev/null 2>&1
+[[ -d "$SKEL/apps/frappe" && -d "$SKEL/env" ]]
+set -- "$TMP_DIR"/skeleton-bench.incomplete.*
+assert_eq "1" "$#"
+[[ -d "$1/logs" ]]
+# a folder with an app, a site, a link or a file with content is not one
+for d in apps/x sites/s; do mkdir -p "$TMP_DIR/notskel/$d"; assert_fails fl_bench_is_skeleton "$TMP_DIR/notskel"; rmdir "$TMP_DIR/notskel/$d"; done
+printf 'x\n' >"$TMP_DIR/notskel/config/f" 2>/dev/null || { mkdir -p "$TMP_DIR/notskel/config"; printf 'x\n' >"$TMP_DIR/notskel/config/f"; }
+assert_fails fl_bench_is_skeleton "$TMP_DIR/notskel"
 
 # ---- a bench init that stopped half way is resumed by the next run, never deleted
 # (frappe cloned, no env or no apps.txt, no site): moved aside, then init again

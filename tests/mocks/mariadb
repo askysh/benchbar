@@ -43,6 +43,10 @@ case "$*" in
   *"-e "*|*"-sNe "*)
     check_login || { echo "ERROR 1045 (28000): Access denied for user '${user}'@'localhost' (using password: $([[ -n "${MYSQL_PWD:-}" ]] && echo YES || echo NO))" >&2; exit 1; }
     case "$*" in
+      # SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME='x': the names in $MOCK_STATE/mariadb_dbs
+      *"information_schema.SCHEMATA"*)
+        want="$(printf '%s' "$*" | sed -n "s/.*SCHEMA_NAME='\([^']*\)'.*/\1/p")"
+        grep -qx -- "$want" "$state/mariadb_dbs" 2>/dev/null && printf '%s\n' "$want" ;;
       *"character_set_server"*) printf 'character_set_server\tutf8mb4\n' ;;
       # root's native hash: 'invalid' until ALTER USER gave it a password
       *"SELECT authentication_string FROM mysql.user"*) if [[ -f "$pwfile" ]]; then printf '*%s\n' "$(printf '%s' "$(cat "$pwfile")" | shasum -a 1 | tr 'a-f' 'A-F' | cut -c1-40)"; else printf 'invalid\n'; fi ;;
@@ -55,5 +59,11 @@ case "$*" in
     printf '%s\n' "$sql" >>"$state/mariadb_sql.log"
     newpw="$(printf '%s\n' "$sql" | sed -n "s/.*ALTER USER 'root'@'localhost' IDENTIFIED VIA \(unix_socket OR \)\{0,1\}mysql_native_password USING PASSWORD('\([^']*\)').*/\2/p" | head -n1)"
     [[ -n "$newpw" ]] && printf '%s' "$newpw" >"$pwfile"
+    # DROP DATABASE IF EXISTS `x`: the name leaves $MOCK_STATE/mariadb_dbs
+    # shellcheck disable=SC2016
+    for dropped in $(printf '%s\n' "$sql" | sed -n 's/.*DROP DATABASE IF EXISTS `\([^`]*\)`.*/\1/p'); do
+      grep -vx -- "$dropped" "$state/mariadb_dbs" >"$state/mariadb_dbs.tmp" 2>/dev/null || true
+      mv "$state/mariadb_dbs.tmp" "$state/mariadb_dbs" 2>/dev/null || true
+    done
     exit 0 ;;
 esac

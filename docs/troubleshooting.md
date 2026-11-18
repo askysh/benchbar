@@ -33,6 +33,8 @@ then `benchup`.
 **The site loads without styling.** Run `benchbar doctor`. If the built
 assets are missing, `benchbar repair` runs `bench build`.
 
+**`install` fails at `bench init` with `No such file or directory: 'uv'`, or stops at `Bench directory exists but is incomplete`.** Update BenchBar and run `benchbar install` again: it installs `uv` and moves the empty folder the failed init left aside. The steps, by hand and otherwise, are in [If the install stops](quick-start.md#if-the-install-stops).
+
 **`bench: command not found` after phase 2.** benchbar installs `bench`
 with uv, or with pipx when uv is missing; both put it in `~/.local/bin`.
 Run `uv tool update-shell` (or `pipx ensurepath`) and open a new

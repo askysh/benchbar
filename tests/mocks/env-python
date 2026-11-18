@@ -20,8 +20,13 @@ if [[ "${1:-}" == "-c" && "${3:-}" == "benchbar-secrets" && "${4:-}" == "frappe"
   case "$cmd" in
     new-site)
       [[ -n "${MOCK_BENCH_NEW_SITE_EXIT:-}" ]] && exit "$MOCK_BENCH_NEW_SITE_EXIT"
-      site="$2"
-      mkdir -p "$site"; touch "$site/installed_apps"; printf '{"db_name": "_x"}\n' >"$site/site_config.json" ;;
+      site="$2"; db="_x"; prev=""
+      for a in "$@"; do [[ "$prev" == "--db-name" ]] && db="$a"; prev="$a"; done
+      mkdir -p "$site"; touch "$site/installed_apps"; printf '{"db_name": "%s"}\n' "$db" >"$site/site_config.json"
+      # the database is made, as frappe does before it fills it
+      printf '%s\n' "$db" >>"${MOCK_STATE:?}/mariadb_dbs"
+      # MOCK_NEW_SITE_CUT=1: the run is cut short (Ctrl+C) with the folder and the database in place
+      [[ -n "${MOCK_NEW_SITE_CUT:-}" ]] && exit 130 ;;
     drop-site)
       # like frappe: a backup with files (no config), then the folder to ../archived/sites
       [[ -n "${MOCK_DROP_SITE_EXIT:-}" ]] && { echo "Error: backup failed" >&2; exit "$MOCK_DROP_SITE_EXIT"; }

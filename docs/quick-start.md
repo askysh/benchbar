@@ -94,6 +94,44 @@ the full output is in `~/.local/state/benchbar/logs/` (`.benchbar/logs/`
 in a git checkout of benchbar). Re-running `install` is safe: it skips
 what is already done.
 
+### If the install stops
+
+Run `benchbar install` again: it picks up where it stopped. The cases
+below are the ones that need a word.
+
+**It stopped at `bench init` with `No such file or directory: 'uv'`
+(issue 112), and every run since says `Bench directory exists but is
+incomplete`.** Older releases did not install `uv`, which `bench init`
+needs even when bench itself came from pipx. Update BenchBar, then run
+`benchbar install` again: step 1 installs `uv` with Homebrew, and the
+empty folder the failed init left is moved to
+`~/frappe-bench.incomplete.<time>` (nothing is deleted; remove it when you
+like). On an older release the same fix by hand is:
+
+```bash
+brew install uv
+mv ~/frappe-bench ~/frappe-bench.incomplete.$(date +%Y%m%d%H%M%S)
+benchbar install
+```
+
+A folder that holds something other than empty folders (an app, your
+files) is not moved on its own. `benchbar install --repair-bench` moves
+it aside and starts over, and with `--dry-run` it shows the move first. A
+bench that has a site is never moved.
+
+**`benchbar: command not found`.** Step 1 links `benchbar` into
+`~/.local/bin`. A new terminal (or `source ~/.zshrc`) puts that folder on
+PATH; until then run `~/.local/bin/benchbar install`.
+
+**It was cut short while it created the site** (Ctrl+C, a closed window).
+Run `benchbar install` again. It drops the half made database that its
+own marker names, moves the half made site folder to
+`<bench>/archived/sites/<site>.incomplete.<time>` and creates the site
+again; it needs the MariaDB root password (the Keychain has it) and asks
+for the Administrator password again. When it cannot show that the
+database is its own (for example a marker an older release wrote), it
+touches nothing and prints the commands.
+
 To pick the Frappe version or the apps, pass a profile and a bundle, for
 example `benchbar install --profile v16-lts --bundle common`. The choices
 are in [Configuration](reference/configuration.md).

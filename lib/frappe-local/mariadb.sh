@@ -142,6 +142,18 @@ fl_mariadb_root_verify() {
   MYSQL_PWD="$1" "$bin" -u root --connect-timeout=2 -e "SELECT 1" >/dev/null 2>&1
 }
 
+# fl_mariadb_db_exists PASSWORD NAME: 0 the database exists, 1 it does not,
+# 2 it cannot be told (no client, no login). NAME is checked by a
+# comparison, not LIKE, where "_" would match any character.
+fl_mariadb_db_exists() {
+  local bin out
+  [[ "$2" =~ ^[A-Za-z0-9_]+$ ]] || return 2
+  bin="$(fl_mariadb_client)"
+  [[ -n "$bin" ]] || return 2
+  out="$(MYSQL_PWD="$1" "$bin" -u root --connect-timeout=2 -sNe "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME='$2'" 2>/dev/null)" || return 2
+  [[ "$out" == "$2" ]]
+}
+
 fl_mariadb_server_charset() {
   local bin
   bin="$(fl_mariadb_client)"
