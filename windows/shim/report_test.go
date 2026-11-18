@@ -471,3 +471,84 @@ func TestReportRedactsNamesWithNonASCIILetters(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
+
+func TestRedactionHidesJSONStyleSecrets(t *testing.T) {
+	r := &redactor{}
+	cases := []struct{ in, want string }{
+		{`"db_password": "hunter2"`, `"db_password": "<redacted>"`},
+		{`"admin_password":"hunter2"`, `"admin_password":"<redacted>"`},
+		{`"encryption_key": "abc"`, `"encryption_key": "<redacted>"`},
+		{`'private_key' : 'abc'`, `'private_key' : '<redacted>'`},
+		{`{"api_key": "k1", "host": "x"}`, `{"api_key": "<redacted>", "host": "x"}`},
+		{`"token": 12345`, `"token": <redacted>`},
+		{`Authorization: Bearer abc123`, `Authorization: <redacted>`},
+		{`"authorization": "Basic dXNlcjpwdw==", "x": 1`, `"authorization": "<redacted>", "x": 1`},
+		{`curl -H "Authorization: Bearer abc123def456"`, `curl -H "Authorization: <redacted>"`},
+		{`got Bearer abcdefghijklmnop1234 back`, `got Bearer <redacted> back`},
+		{"Cookie: sid=abc; other=def", "Cookie: <redacted>"},
+		{"Set-Cookie: a=b; Path=/", "Set-Cookie: <redacted>"},
+		{`"cookie": "a=b; c=d"`, `"cookie": "<redacted>"`},
+		{`sid=abc123`, `sid=<redacted>`},
+		{`"session_id": "s-1"`, `"session_id": "<redacted>"`},
+		{`password=hunter2`, `password=<redacted>`},
+		{`MARIADB_ROOT_PASSWORD=hunter2`, `MARIADB_ROOT_PASSWORD=<redacted>`},
+		// a string with escapes is read whole, an array of strings and a
+		// nested object are one value
+		{`"password": "ab\"cd"`, `"password": "<redacted>"`},
+		{`"password": "a\\"`, `"password": "<redacted>"`},
+		{`"secrets": ["s1","s2"]`, `"secrets": "<redacted>"`},
+		{`"secrets": [ "s1" , "s,2" ]`, `"secrets": "<redacted>"`},
+		{`"token": {"a": "s1", "b": {"c": ["s2", "s3"]}}, "host": "h"`, `"token": "<redacted>", "host": "h"`},
+		{`{"db": {"password": "p1", "host": "h", "inner": {"api_key": "k\"1"}}}`, `{"db": {"password": "<redacted>", "host": "h", "inner": {"api_key": "<redacted>"}}}`},
+		{`secrets=["a","b"] next`, `secrets="<redacted>" next`},
+		// words that only look similar stay
+		{`inside: the bench`, `inside: the bench`},
+		{`sidebar: open`, `sidebar: open`},
+		{`bearer of news`, `bearer of news`},
+	}
+	for _, c := range cases {
+		if got := r.text(c.in); got != c.want {
+			t.Errorf("%s\n got  %s\n want %s", c.in, got, c.want)
+		}
+	}
+	// no part of an escaped, listed or nested secret is left
+	for _, doc := range []string{
+		`{"secrets": ["s1","s2"], "password": "ab\"cd", "n": {"token": {"x": ["t1", {"y": "t2"}]}}, "ok": "fine"}`,
+		"{\n  \"secrets\": [\n    \"s1\",\n    \"s2\"\n  ],\n  \"ok\": 1\n}",
+	} {
+		out := r.text(doc)
+		var v map[string]any
+		if err := json.Unmarshal([]byte(out), &v); err != nil {
+			t.Fatalf("redacted JSON does not parse: %v\n%s", err, out)
+		}
+		for _, leak := range []string{"s1", "s2", "cd", "t1", "t2"} {
+			if strings.Contains(out, leak) {
+				t.Errorf("%q left in %s", leak, out)
+			}
+		}
+	}
+	// a JSON file stays JSON
+	doc := `{"db_password": "hunter2", "db_host": "localhost", "admin_password":"hunter2"}`
+	var v map[string]string
+	if err := json.Unmarshal([]byte(r.text(doc)), &v); err != nil {
+		t.Fatalf("redacted JSON does not parse: %v", err)
+	}
+	if v["db_host"] != "localhost" || v["db_password"] != "<redacted>" {
+		t.Errorf("%v", v)
+	}
+}
+
+func TestReportWindowsRedactsAnIncludedJSONFile(t *testing.T) {
+	e := reportEnv(t, true, false, nil)
+	inc := filepath.Join(e.root, "site_config.json")
+	body := `{"db_name": "_abc", "db_password": "hunter2", "encryption_key": "KEY123"}` + "\n"
+	if err := os.WriteFile(inc, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	e.writeConfig(`{"distro":"Ubuntu-24.04"}`)
+	r := e.reportJSON("--include", inc)
+	got := string(zipFiles(t, r.Zip)["included/site_config.json"])
+	if strings.Contains(got, "hunter2") || strings.Contains(got, "KEY123") || !strings.Contains(got, "_abc") {
+		t.Errorf("included file:\n%s", got)
+	}
+}

@@ -1,5 +1,5 @@
 <Project>
-  <!-- Common settings for every project in the tray shell spike. -->
+  <!-- Common settings for every project of the Windows tray app. -->
   <PropertyGroup>
     <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
@@ -16,7 +16,11 @@
     <!-- Not invariant: the Fluent ScrollViewer template asks for a specific culture and fails with "Cannot find non-neutral culture related to 'en-us'" (see DECISIONS.md). -->
     <InvariantGlobalization>false</InvariantGlobalization>
     <NeutralLanguage>en</NeutralLanguage>
-    <!-- English resources only, for both shells: the size comparison is like for like. -->
+    <!-- English resources only: no satellite assemblies of the WPF and Fluent libraries ship. -->
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+  <!-- Measurement hooks (the harness pipe, the logon log, a forced theme) exist in Debug builds only: they are not in what ships. -->
+  <PropertyGroup Condition="'$(Configuration)' != 'Release'">
+    <DefineConstants>$(DefineConstants);HARNESS</DefineConstants>
   </PropertyGroup>
 </Project>

@@ -651,6 +651,24 @@ every distro, so stop your benches first).
   slow and file watching does not work there. Keep benches in the distro's
   own file system, under your Linux home. If you accept the problems,
   `--allow-windows-fs` overrides the refusal.
+- **A relative path.** `benchbar.exe` starts the command in the folder you
+  run it in, so `benchbar.exe adopt .`, `--bench-dir .\bench` and
+  `site restore --from backup.sql.gz` mean that folder. This works for a
+  drive folder (`C:\work`), a network folder and a `\\wsl.localhost` folder
+  of your distro. A folder of another distro, or one the distro cannot
+  see (a missing folder, a drive WSL does not mount), starts in your Linux
+  home instead, and `benchbar.exe` says so with one line on stderr:
+  `benchbar.exe: <folder> has no path in WSL, running in ~`. Stdout is not
+  touched, so `--json` output stays one document. Check that line before you
+  run a command such as `adopt .` or `ports plan -- .`: it would act on your
+  home folder, not on the folder you meant. `.\x` and `..\x` are turned into
+  `./x` and `../x`; write other relative paths with `/`.
+- **Environment variables.** `benchbar.exe` passes `ADMIN_PASSWORD`,
+  `MARIADB_ROOT_PASSWORD`, `BENCHBAR_SUDO`, `BENCHBAR_SUDO_PASSWORD`,
+  `BENCHBAR_NONINTERACTIVE`, `BENCHBAR_LABS`, `BENCH_INIT_TIMEOUT_SECONDS`,
+  `BENCHBAR_PROFILE_PATH` (a Linux path of the distro), the
+  `BENCHBAR_MCP_TIMEOUT`, `_MAX_BYTES`, `_KILL_GRACE` and `_EOF_GRACE`
+  settings and your proxy variables into WSL. No other variable is passed.
 - **The tray does not open at logon.** The tray's **Open BenchBar at
   logon** makes a shortcut in your Startup folder. Windows can switch a Startup
   entry off in Settings > Apps > Startup. Turn **BenchBar Tray** on there.

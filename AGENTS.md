@@ -230,10 +230,13 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
   `bench_listen`, tell the user the fix; `benchbar listen local` and
   `benchbar restart` are safe to run when the user asked you to fix it.
 - Open as is the person's choice. Never run `benchbar site open-as on`
-  (it refuses an agent anyway) and never ask for or use an
+  (it refuses an agent anyway, but a process of the same user can set
+  the variables that tell the CLI a person is at the keyboard, so the rule is
+  yours to keep) and never ask for or use an
   `open --as --print-url` link: it holds a login session for that user.
 - Experiments are the person's choice. `benchbar labs` lists them; never
-  run `benchbar labs on` (it refuses an agent anyway). A command of an
+  run `benchbar labs on` (it refuses an agent anyway, and a process of the same
+  user can set the variables it looks at, so keep the rule). A command of an
   experiment that is off exits 2 with "Turn it on: benchbar labs on NAME":
   tell the user, do not work around it. `status --json` and
   `commands --json` list the `labs` that are on.

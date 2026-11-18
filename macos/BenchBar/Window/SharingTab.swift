@@ -289,12 +289,18 @@ struct SharingTab: View {
 
 /// The app's own alerts before a room action (U3: risky calls follow one).
 enum ShareConfirm {
-    static func ask(_ message: String, detail: String = "", button: String) -> Bool {
+    /// `cancelIsDefault`: Return and the blue highlight go to Cancel, for a question a link can
+    /// raise on its own: a stray Return must not confirm what a web page asked for.
+    static func ask(_ message: String, detail: String = "", button: String, cancelIsDefault: Bool = false) -> Bool {
         let alert = NSAlert()
         alert.messageText = message
         alert.informativeText = detail
-        alert.addButton(withTitle: button)
-        alert.addButton(withTitle: "Cancel")
+        let action = alert.addButton(withTitle: button)
+        let cancel = alert.addButton(withTitle: "Cancel")
+        if cancelIsDefault {
+            action.keyEquivalent = ""
+            cancel.keyEquivalent = "\r"
+        }
         return alert.runModal() == .alertFirstButtonReturn
     }
 }

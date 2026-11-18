@@ -1,3 +1,4 @@
+#if HARNESS
 using System.Diagnostics;
 using System.IO.Pipes;
 using System.Text;
@@ -113,3 +114,28 @@ public sealed class HarnessLink : IDisposable
         _cts.Dispose();
     }
 }
+#else
+namespace BenchBar.Tray.Core
+{
+    /// <summary>
+    /// The Release build of the measurement link: no pipe, no thread, no environment variable read. The type stays so the app compiles
+    /// the same; every member does nothing (see the Debug build for the real one).
+    /// </summary>
+    public sealed class HarnessLink : IDisposable
+    {
+        public static HarnessLink? FromEnvironment(string shellName) => null;
+
+        public static string? ForcedTheme() => null;
+
+        public static long Qpc() => 0;
+
+#pragma warning disable CS0067 // never raised: the Release link does not exist
+        public event Action<string>? Command;
+#pragma warning restore CS0067
+
+        public void Send(string line) { }
+
+        public void Dispose() { }
+    }
+}
+#endif

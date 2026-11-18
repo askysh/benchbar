@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"strings"
+	"unicode/utf16"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -287,4 +288,30 @@ func systemDir() string {
 		return ""
 	}
 	return d
+}
+
+var procGetOEMCP = windows.NewLazySystemDLL("kernel32.dll").NewProc("GetOEMCP")
+
+// osOEMDecode converts bytes in the OEM code page of this PC to UTF-8. When
+// the system cannot convert them, the bytes are kept as Latin 1, so a path
+// still reads and never turns into an error.
+func osOEMDecode(b []byte) string {
+	if len(b) == 0 {
+		return ""
+	}
+	cp, _, _ := procGetOEMCP.Call()
+	if cp != 0 {
+		n, err := windows.MultiByteToWideChar(uint32(cp), 0, &b[0], int32(len(b)), nil, 0)
+		if err == nil && n > 0 {
+			w := make([]uint16, n)
+			if _, err := windows.MultiByteToWideChar(uint32(cp), 0, &b[0], int32(len(b)), &w[0], n); err == nil {
+				return string(utf16.Decode(w))
+			}
+		}
+	}
+	r := make([]rune, len(b))
+	for i, c := range b {
+		r[i] = rune(c)
+	}
+	return string(r)
 }

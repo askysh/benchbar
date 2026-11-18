@@ -89,7 +89,7 @@ public sealed class LogViewModel : IDisposable
     /// <summary>Follow stopped because the distro stopped. It resumes only when the person turns Follow on again.</summary>
     public bool DistroPaused { get; private set; }
 
-    public const string DistroStoppedLine = "The distro stopped. Follow is paused.";
+    public static string DistroStoppedLine => UiText.Get("DistroStoppedLine");
 
     public event Action? Changed;
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,23 +15,162 @@ func (e *env) healthyWindows() {
 	os.WriteFile(filepath.Join(e.ProfileDir, ".wslconfig"), []byte("[wsl2]\nvmIdleTimeout=-1\n[general]\ninstanceIdleTimeout=-1\n"), 0o644)
 }
 
-func TestDoctorJSONAndFixHintsPassThroughUntouched(t *testing.T) {
-	for _, args := range [][]string{{"doctor", "--json"}, {"doctor", "--fix-hints"}, {"doctor", "--bench-dir", "/x", "--json"}} {
+func TestDoctorAskedForMachineOutputPrintsOnlyThat(t *testing.T) {
+	for _, flag := range []string{"--json", "--jsonl", "--for-agent"} {
 		e := newEnv(t)
 		e.healthyWindows()
-		if code := e.run(args...); code != 0 {
-			t.Fatalf("%v: exit %d", args, code)
+		e.script(map[string]any{"match": "doctor", "stdout": `{"schema_version":1,"checks":[],"summary":{"ok":0,"warn":0,"fail":0}}` + "\n"})
+		if code := e.run("doctor", "--bench-dir", "/x", flag); code != 0 {
+			t.Fatalf("%s: exit %d: %s", flag, code, e.stderr())
 		}
-		if e.stdout() != "" {
-			t.Errorf("%v: Windows lines leaked into the output: %q", args, e.stdout())
+		var doc struct {
+			Checks  []any `json:"checks"`
+			Windows []struct {
+				ID         string `json:"id"`
+				Level      string `json:"level"`
+				Status     string `json:"status"`
+				FixCommand string `json:"fix_command"`
+				Fix        string `json:"fix"`
+			} `json:"windows_checks"`
+		}
+		if err := json.Unmarshal([]byte(e.stdout()), &doc); err != nil {
+			t.Fatalf("%s: stdout is not one JSON document: %v\n%s", flag, err, e.stdout())
+		}
+		if strings.Contains(e.stdout(), "WINDOWS") || strings.Count(strings.TrimSpace(e.stdout()), "\n") != 0 {
+			t.Errorf("%s: stdout holds more than the document: %q", flag, e.stdout())
+		}
+		ids := map[string]string{}
+		for _, c := range doc.Windows {
+			ids[c.ID] = c.Level
+			if c.Level != c.Status || c.FixCommand != c.Fix {
+				t.Errorf("%s: level/status or fix_command/fix differ: %+v", flag, c)
+			}
+		}
+		if ids["path"] == "" || ids["distro"] != "ok" {
+			t.Errorf("%s: windows_checks %v", flag, ids)
+		}
+		if _, ok := ids["keepalive"]; !ok {
+			t.Errorf("%s: no keepalive check in %v", flag, ids)
 		}
 		st := e.starts()
-		if len(st) != 1 || strings.Join(st[0].Exec[4:], " ") != strings.Join(args, " ") {
-			t.Errorf("%v: forwarded as %+v", args, st)
+		if len(st) == 0 || !strings.Contains(strings.Join(st[len(st)-1].Exec[4:], " "), "doctor --bench-dir /x "+flag) {
+			t.Errorf("%s: forwarded as %+v", flag, st)
 		}
-		if len(e.tasks.calls) != 0 {
-			t.Errorf("%v: schtasks ran", args)
+	}
+}
+
+func TestDoctorJSONFailingWindowsCheckFailsTheExit(t *testing.T) {
+	e := newEnv(t)
+	e.healthyWindows()
+	e.distros.list = []Distro{{Name: "Ubuntu-24.04", Version: 1, Default: true}} // WSL 1: a failing Windows check
+	e.script(map[string]any{"match": "doctor", "stdout": `{"summary":{}}`})
+	if code := e.run("doctor", "--json"); code != 1 {
+		t.Errorf("exit %d, stderr %s", code, e.stderr())
+	}
+	if !strings.Contains(e.stdout(), `"windows_checks":[`) || !strings.Contains(e.stdout(), `"level":"fail"`) {
+		t.Errorf("stdout %q", e.stdout())
+	}
+}
+
+func TestDoctorJSONLeavesOtherOutputAlone(t *testing.T) {
+	for _, out := range []string{"", "not json\n", `[1,2]` + "\n", `{"a":1}{"b":2}`} {
+		e := newEnv(t)
+		e.healthyWindows()
+		e.script(map[string]any{"match": "doctor", "stdout": out, "exit": 0})
+		e.run("doctor", "--json")
+		if e.stdout() != out {
+			t.Errorf("%q became %q", out, e.stdout())
 		}
+	}
+	// --ack has its own document: no Windows checks, nothing run for them
+	e := newEnv(t)
+	e.healthyWindows()
+	e.script(map[string]any{"match": "doctor", "stdout": `{"acked":["x"]}` + "\n"})
+	e.run("doctor", "--ack", "x", "--json")
+	if e.stdout() != `{"acked":["x"]}`+"\n" || len(e.tasks.calls) != 0 {
+		t.Errorf("stdout %q, schtasks %v", e.stdout(), e.tasks.calls)
+	}
+}
+
+func TestDoctorFixHintsAddTheWindowsFixes(t *testing.T) {
+	e := newEnv(t)
+	e.healthyWindows()
+	e.script(map[string]any{"match": "doctor", "stdout": "benchbar repair\n"})
+	if code := e.run("doctor", "--fix-hints"); code != 0 {
+		t.Fatalf("exit %d: %s", code, e.stderr())
+	}
+	if got, want := e.stdout(), "benchbar repair\nbenchbar.exe keepalive install\n"; got != want {
+		t.Errorf("stdout %q, want %q", got, want)
+	}
+}
+
+func TestWithWindowsChecksKeepsTheDocumentAsItIs(t *testing.T) {
+	checks := []Check{{ID: "path", Label: "PATH", Status: "ok", Message: "m"}}
+	got := string(withWindowsChecks([]byte(" {\"a\": 1, \"b\": [2]}\n"), checks))
+	want := `{"a": 1, "b": [2],"windows_checks":[{"id":"path","label":"PATH","level":"ok","message":"m","fix_command":"","status":"ok","fix":""}]}` + "\n"
+	if got != want {
+		t.Errorf("got  %s\nwant %s", got, want)
+	}
+	if got := string(withWindowsChecks([]byte("{}"), nil)); got != `{"windows_checks":[]}`+"\n" {
+		t.Errorf("empty object: %s", got)
+	}
+}
+
+func TestWithWindowsChecksMergesIntoTheDoneLineOfAStream(t *testing.T) {
+	checks := []Check{{ID: "path", Label: "PATH", Status: "ok", Message: "m"}}
+	arr := `"windows_checks":[{"id":"path","label":"PATH","level":"ok","message":"m","fix_command":"","status":"ok","fix":""}]`
+	plan := `{"schema_version":1,"event":"plan","steps":[]}`
+	step := `{"schema_version":1,"event":"step","name":"a"}`
+	done := `{"schema_version":1,"event":"done","exit":0,"checks":[],"summary":{"ok":0}}`
+	got := string(withWindowsChecks([]byte(plan+"\n"+step+"\n"+done+"\n"), checks))
+	want := plan + "\n" + step + "\n" + strings.TrimSuffix(done, "}") + "," + arr + "}\n"
+	if got != want {
+		t.Errorf("got  %s\nwant %s", got, want)
+	}
+	// every line stays one JSON object and only the done line has the key
+	for i, l := range strings.Split(strings.TrimSpace(got), "\n") {
+		var m map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(l), &m); err != nil {
+			t.Fatalf("line %d is not JSON: %v", i, err)
+		}
+		if _, has := m["windows_checks"]; has != (i == 2) {
+			t.Errorf("line %d has windows_checks: %v", i, has)
+		}
+	}
+	// no done line (the CLI was cut off): the last line gets it, once
+	got = string(withWindowsChecks([]byte(plan+"\n"+step+"\n"), checks))
+	if strings.Count(got, "windows_checks") != 1 || !strings.Contains(strings.Split(got, "\n")[1], "windows_checks") {
+		t.Errorf("no done line: %s", got)
+	}
+	// a line that is not an object: the stream is left alone
+	if bad := plan + "\nnot json\n"; string(withWindowsChecks([]byte(bad), checks)) != bad {
+		t.Error("a stream with a bad line was changed")
+	}
+}
+
+func TestDoctorJSONLMergesTheWindowsChecksIntoTheDoneLine(t *testing.T) {
+	e := newEnv(t)
+	e.healthyWindows()
+	e.script(map[string]any{"match": "doctor", "stdout": `{"schema_version":1,"event":"step","name":"x"}` + "\n" +
+		`{"schema_version":1,"event":"done","exit":0,"summary":{"ok":1}}` + "\n"})
+	if code := e.run("doctor", "--jsonl"); code != 0 {
+		t.Fatalf("exit %d: %s", code, e.stderr())
+	}
+	lines := strings.Split(strings.TrimSpace(e.stdout()), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("stdout %q", e.stdout())
+	}
+	var done struct {
+		Event   string `json:"event"`
+		Windows []struct {
+			ID string `json:"id"`
+		} `json:"windows_checks"`
+	}
+	if err := json.Unmarshal([]byte(lines[1]), &done); err != nil || done.Event != "done" || len(done.Windows) == 0 {
+		t.Errorf("done line %q: %v %+v", lines[1], err, done)
+	}
+	if strings.Contains(lines[0], "windows_checks") {
+		t.Errorf("step line changed: %s", lines[0])
 	}
 }
 
