@@ -54,6 +54,16 @@ fragments() {
 }
 
 errors=0
+# a file the fold would skip (not NAME.md, or hidden) is an entry that would be lost
+if [[ -d "$FRAGDIR" ]]; then
+  for f in "$FRAGDIR"/* "$FRAGDIR"/.[!.]*; do
+    [[ -e "$f" ]] || continue
+    case "${f##*/}" in README.md) continue ;; .*|*[!.]) ;; esac
+    case "${f##*/}" in .*) ;; *.md) [[ -f "$f" ]] && continue ;; esac
+    printf 'changelog-fold: %s is not a fragment (NAME.md) and would not be folded\n' "${f#"$ROOT"/}" >&2
+    errors=$((errors + 1))
+  done
+fi
 bad() { printf '%s\n' "$1" >&2; errors=$((errors + 1)); }
 
 check_fragment() {
