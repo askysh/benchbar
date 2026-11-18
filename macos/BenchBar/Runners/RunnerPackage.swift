@@ -78,6 +78,35 @@ nonisolated enum RunnerLoader {
     static let maxFrames = 30
     static let maxBytes = 2 * 1024 * 1024
     static let manifestName = "manifest.json"
+    static let maxManifestBytes = 64 * 1024
+
+    enum PlainFileRead: Equatable {
+        case missing, notPlain, tooLarge
+        case data(Data)
+    }
+
+    /// Reads a regular file of at most `limit` bytes. The file comes from a zip
+    /// made by someone else, so it is opened without following a symlink and
+    /// without blocking (a FIFO would wait for ever), checked with fstat on the
+    /// descriptor it opened (no gap between check and read), and read no
+    /// further than `limit` + 1 bytes (/dev/zero would never end).
+    static func readPlainFile(_ url: URL, limit: Int) -> PlainFileRead {
+        let descriptor = open(url.path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
+        guard descriptor >= 0 else { return errno == ENOENT ? .missing : .notPlain }
+        defer { close(descriptor) }
+        var info = stat()
+        guard fstat(descriptor, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG else { return .notPlain }
+        guard info.st_size <= limit else { return .tooLarge }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 16 * 1024)
+        while data.count <= limit {
+            let count = read(descriptor, &buffer, min(buffer.count, limit + 1 - data.count))
+            if count < 0 { return .notPlain }
+            if count == 0 { break }
+            data.append(contentsOf: buffer[0..<count])
+        }
+        return data.count > limit ? .tooLarge : .data(data)
+    }
 
     static func load(folder: URL, id: String) throws(RunnerError) -> Runner {
         let manifest = try readManifest(in: folder)
@@ -104,8 +133,13 @@ nonisolated enum RunnerLoader {
 
     static func readManifest(in folder: URL) throws(RunnerError) -> RunnerManifest {
         let url = folder.appendingPathComponent(manifestName)
-        guard let data = try? Data(contentsOf: url) else { throw .missingManifest }
-        guard data.count <= 64 * 1024 else { throw .badManifest("it is larger than 64 KB") }
+        let data: Data
+        switch readPlainFile(url, limit: maxManifestBytes) {
+        case .missing: throw .missingManifest
+        case .notPlain: throw .badManifest("it is not a plain file")
+        case .tooLarge: throw .badManifest("it is larger than 64 KB")
+        case .data(let read): data = read
+        }
         let manifest: RunnerManifest
         do {
             manifest = try JSONDecoder().decode(RunnerManifest.self, from: data)

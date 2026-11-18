@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// `benchbar://` links, for Raycast, Shortcuts and the like. Pure: a URL
@@ -35,10 +36,12 @@ nonisolated enum URLRouter {
         case run(Route, bench: String, site: String?)
         /// The window, with no bench in particular.
         case window
-        /// The window, with a message: the bench or site was not found or
-        /// not clear.
-        case explain(String)
-        /// Not a link for us, or a route we do not have: log it, do nothing.
+        /// The window, with a message for the person: the bench or site was not found or
+        /// not clear. The message may name what they asked for; the log never does, it
+        /// holds only the `Why` (see `logLine`).
+        case explain(String, Why)
+        /// Not a link for us, or a route we do not have: log it, do nothing. The text is a
+        /// fixed sentence: it is logged, so it never repeats a part of the link.
         case ignore(String)
         /// Team Profiles with the import or subscribe sheet prefilled. The
         /// sheet waits for the user's click; the link itself fetches nothing.
@@ -48,6 +51,24 @@ nonisolated enum URLRouter {
         /// `benchbar://share/join?…`: the join sheet with the invite's code filled in, waiting
         /// for the Join click. It carries the code, so the link itself is never logged.
         case shareInvite(Result<ShareInvite, ShareInvite.Problem>)
+    }
+
+    /// Why a link was explained, as a kind. Its `logText` is fixed: no bench name, site, path
+    /// or address the link carried (MAC-10).
+    enum Why: String, CaseIterable, Equatable, Sendable {
+        case profileNeedsHTTPS, subscribeNeedsGit, noBench, needsBench, benchNotFound, benchAmbiguous, siteNotFound
+
+        var logText: String {
+            switch self {
+            case .profileNeedsHTTPS: "profile link refused: no https address"
+            case .subscribeNeedsGit: "subscribe link refused: no git address"
+            case .noBench: "link refused: no bench is known"
+            case .needsBench: "link refused: it does not say which bench"
+            case .benchNotFound: "link refused: no such bench"
+            case .benchAmbiguous: "link refused: the bench name is not unique"
+            case .siteNotFound: "link refused: no such site"
+            }
+        }
     }
 
     /// `benchbar://profile/import?url=` and `benchbar://profile/subscribe?url=`.
@@ -71,7 +92,7 @@ nonisolated enum URLRouter {
         let host = url.host(percentEncoded: false) ?? ""
         let word = (host.isEmpty ? components?.path ?? "" : host)
             .trimmingCharacters(in: CharacterSet(charactersIn: "/")).lowercased()
-        guard let route = Route(rawValue: word) else { return .failure(.unknownRoute(word)) }
+        guard let route = Route(rawValue: word) else { return .failure(word.isEmpty ? .noRoute : .unknownRoute) }
         let items = components?.queryItems ?? []
         func value(_ key: String) -> String? {
             guard let text = items.last(where: { $0.name.lowercased() == key })?.value?
@@ -83,14 +104,49 @@ nonisolated enum URLRouter {
 
     enum IgnoreReason: Error, Equatable, Sendable {
         case notOurScheme
-        case unknownRoute(String)
+        case unknownRoute
+        case noRoute
 
+        /// Fixed sentences: they are logged, so they never repeat the host, path or query.
         var message: String {
             switch self {
             case .notOurScheme: return "not a benchbar:// link"
-            case .unknownRoute(let word): return word.isEmpty ? "no route in the link" : "unknown route \"\(word)\""
+            case .unknownRoute: return "unknown route"
+            case .noRoute: return "no route in the link"
             }
         }
+    }
+
+    /// The one log line for a link the app ignored or explained: `link` is `logLabel(url)`.
+    /// Fixed texts only, so no host, path, query or bench name the link carried can reach the
+    /// log. nil for an outcome that is not logged here.
+    static func rejectionLogLine(link: String, outcome: Outcome) -> String? {
+        switch outcome {
+        case .ignore(let reason): return "Ignored \(link): \(reason)"
+        case .explain(_, let why): return "\(link): \(why.logText)"
+        default: return nil
+        }
+    }
+
+    /// What a link is called in the log: the scheme and the action word, never the host, path,
+    /// query or userinfo (a profile link can carry a token, a share link a room code). A link
+    /// that is not one of ours, or has a route we do not have, is only a short hash, enough to
+    /// tell two apart and nothing to read back.
+    static func logLabel(_ url: URL) -> String {
+        if url.scheme?.lowercased() == scheme {
+            let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            let words = ((url.host(percentEncoded: false) ?? "") + "/" + (components?.path ?? ""))
+                .split(separator: "/").map { $0.lowercased() }
+            if let first = words.first {
+                if Route(rawValue: first) != nil { return "\(scheme)://\(first)" }
+                if first == "share" { return "\(scheme)://share" }
+                if first == "profile", words.count > 1, words[1] == "import" || words[1] == "subscribe" {
+                    return "\(scheme)://profile/\(words[1])"
+                }
+            }
+        }
+        let digest = SHA256.hash(data: Data(url.absoluteString.utf8))
+        return "other link, hash " + digest.prefix(6).map { String(format: "%02x", $0) }.joined()
     }
 
     /// The whole decision: parse, then pick the bench. `selected` is the
@@ -119,18 +175,18 @@ nonisolated enum URLRouter {
         guard words.first == "profile" else { return nil }
         let action = words.count > 1 ? words[1] : ""
         guard action == "import" || action == "subscribe", words.count == 2 else {
-            return .ignore("unknown route \"\(words.joined(separator: "/"))\"")
+            return .ignore(IgnoreReason.unknownRoute.message)
         }
         let address = components?.queryItems?.last(where: { $0.name.lowercased() == "url" })?.value?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if action == "import" {
             guard ProfileSourceRule.isImportURL(address) else {
-                return .explain("The profile link has no https address in url=, so BenchBar did not open it.")
+                return .explain("The profile link has no https address in url=, so BenchBar did not open it.", .profileNeedsHTTPS)
             }
             return .profile(.importProfile(address))
         }
         guard ProfileSourceRule.isGitURL(address) else {
-            return .explain("The subscribe link has no git repository address in url=, so BenchBar did not open it.")
+            return .explain("The subscribe link has no git repository address in url=, so BenchBar did not open it.", .subscribeNeedsGit)
         }
         return .profile(.subscribe(address))
     }
@@ -154,19 +210,19 @@ nonisolated enum URLRouter {
         case .none where request.route == .window:
             return .window
         case .none:
-            return .explain(benches.isEmpty
-                ? "BenchBar knows no bench yet, so the link has nothing to act on."
-                : "More than one bench: add ?bench=NAME to the link to say which one.")
+            return benches.isEmpty
+                ? .explain("BenchBar knows no bench yet, so the link has nothing to act on.", .noBench)
+                : .explain("More than one bench: add ?bench=NAME to the link to say which one.", .needsBench)
         case .notFound(let query):
-            return .explain("No bench named \"\(query)\". The link uses the names and paths from benchbar list.")
+            return .explain("No bench named \"\(query)\". The link uses the names and paths from benchbar list.", .benchNotFound)
         case .ambiguous(let query):
-            return .explain("More than one bench is named \"\(query)\": use its full path in ?bench= instead.")
+            return .explain("More than one bench is named \"\(query)\": use its full path in ?bench= instead.", .benchAmbiguous)
         }
 
         var site: String?
         if request.route.takesSite, let wanted = request.site {
             guard let match = bench.sites.first(where: { $0.caseInsensitiveCompare(wanted) == .orderedSame }) else {
-                return .explain("\(bench.name) has no site named \"\(wanted)\".")
+                return .explain("\(bench.name) has no site named \"\(wanted)\".", .siteNotFound)
             }
             site = match
         }

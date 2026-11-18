@@ -111,16 +111,16 @@ public sealed record SiteBackup(string Stamp, DateTimeOffset? Time, string? Path
         : Partial ? "This is a partial backup; site restore takes a full set."
         : "This backup has no database file.";
 
-    /// <summary>"Sep 29 2026 10:15, 5.0 MB, with files".</summary>
-    public string Summary(TimeZoneInfo? zone = null)
+    /// <summary>"09/29/2026 10:15, 5.0 MB, with files" (the date, the time and the decimal sign follow <paramref name="culture"/>, by default the current one).</summary>
+    public string Summary(TimeZoneInfo? zone = null, System.Globalization.CultureInfo? culture = null)
     {
         var parts = new List<string>();
-        if (Time is { } t) parts.Add(TimeZoneInfo.ConvertTime(t, zone ?? TimeZoneInfo.Local).ToString("MMM d yyyy HH:mm", System.Globalization.CultureInfo.InvariantCulture));
+        if (Time is { } t) parts.Add(UiText.Date(t, zone, culture));
         else parts.Add(Stamp);
-        parts.Add(ByteSize.Format(SizeBytes));
-        if (WithFiles) parts.Add("with files");
-        if (Encrypted) parts.Add("encrypted");
-        if (Partial) parts.Add("partial");
+        parts.Add(ByteSize.Format(SizeBytes, culture));
+        if (WithFiles) parts.Add(UiText.Get("BackupWithFiles"));
+        if (Encrypted) parts.Add(UiText.Get("BackupEncrypted"));
+        if (Partial) parts.Add(UiText.Get("BackupPartial"));
         return string.Join(", ", parts);
     }
 }
@@ -131,13 +131,13 @@ public sealed record SiteBackupResult(string Site, SiteBackup? Backup);
 
 public static class ByteSize
 {
-    public static string Format(long bytes)
+    public static string Format(long bytes, System.Globalization.CultureInfo? culture = null)
     {
         string[] units = ["B", "KB", "MB", "GB", "TB"];
         double value = bytes;
         var i = 0;
         while (value >= 1024 && i < units.Length - 1) { value /= 1024; i++; }
-        return i == 0 ? $"{bytes} B" : value.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + " " + units[i];
+        return i == 0 ? $"{bytes} B" : UiText.OneDecimal(value, culture) + " " + units[i];
     }
 }
 

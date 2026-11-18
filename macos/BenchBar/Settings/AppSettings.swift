@@ -19,6 +19,7 @@ final class AppSettings {
         static let editorBundleID = "editorBundleID"
         static let checkUpdatesAutomatically = "checkUpdatesAutomatically"
         static let walkthroughSeen = "walkthroughSeen"
+        static let confirmLinkActions = "confirmLinkActions"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -42,6 +43,10 @@ final class AppSettings {
     var editorBundleID: String { didSet { defaults.set(editorBundleID, forKey: Key.editorBundleID) } }
     /// Ask GitHub for the latest release once a day (UpdateOffer).
     var checkUpdatesAutomatically: Bool { didSet { defaults.set(checkUpdatesAutomatically, forKey: Key.checkUpdatesAutomatically) } }
+
+    /// Ask before a benchbar:// link starts, stops or restarts a bench or opens a console. Off by
+    /// default so Raycast and Shortcuts keep working; any web page or app can open such a link.
+    var confirmLinkActions: Bool { didSet { defaults.set(confirmLinkActions, forKey: Key.confirmLinkActions) } }
 
     /// The walkthrough has been shown once on its own (never again after that).
     var walkthroughSeen: Bool { didSet { defaults.set(walkthroughSeen, forKey: Key.walkthroughSeen) } }
@@ -75,6 +80,7 @@ final class AppSettings {
         editorBundleID = defaults.string(forKey: Key.editorBundleID) ?? ""
         checkUpdatesAutomatically = defaults.bool(forKey: Key.checkUpdatesAutomatically)
         walkthroughSeen = defaults.bool(forKey: Key.walkthroughSeen)
+        confirmLinkActions = defaults.bool(forKey: Key.confirmLinkActions)
         installedEditors = findEditors()
         let workspace = NSWorkspace.shared.notificationCenter
         for name in [NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification] {
