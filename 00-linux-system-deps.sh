@@ -78,7 +78,8 @@ Exit codes:
 Environment:
   MARIADB_ROOT_PASSWORD   Password to set (fresh MariaDB) or to verify (existing one).
                           Otherwise a strong one is generated. It is kept in a 0600 file
-                          in the state folder (benchbar mariadb-password prints it).
+                          in the state folder; ask the person who installed it (they can read
+                          it in their own terminal with benchbar mariadb-password).
 
 Options:
   -y, --yes            Do not ask; confirmations are accepted (sudo still asks for its password)
