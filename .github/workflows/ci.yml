@@ -18,8 +18,8 @@
 #
 # The Windows shim (windows/shim, Go) is vetted, tested and built for
 # windows/amd64 and windows/arm64 on Linux in the "shim" job; the "wsl" job
-# runs its tests on Windows and against a real WSL distro on the self hosted
-# runner (windows/runner/README.md), never for a fork's pull request.
+# runs its tests on Windows and against a real WSL distro on a GitHub hosted
+# Windows runner.
 #
 # A change that touches only docs/** or site/** skips the CLI and app jobs
 # (the "changes" job decides; the docs site has its own workflow, docs.yml).
@@ -378,19 +378,18 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  # The shim against a real WSL distro on Akash's Windows laptop (the self
-  # hosted runner, label wsl). This repo is public and the runner runs what a
-  # workflow tells it to, so only pushes to main and pull requests whose head
-  # is this repo, never a fork's, and never pull_request_target
-  # (windows/runner/README.md). The runner is a logon task: while the laptop
-  # is off or logged out the job waits in the queue. Read only inside the
-  # distro: status, exit codes through the hop, quoting, mcp over stdio and
-  # wslconfig without --apply.
+  # The shim against a real WSL distro on a GitHub hosted Windows runner:
+  # Ubuntu 24.04 is installed with Vampire/setup-wsl and the CLI of this
+  # checkout is put on the distro's PATH the way the installer does
+  # (~/.local/bin/benchbar). No job depends on a personal machine, so a pull
+  # request from this repo runs in the same fenced VM as any other job. Read
+  # only inside the distro: status, exit codes through the hop, quoting, mcp
+  # over stdio and wslconfig without --apply.
   # Not a required check, so it skips as a whole when only docs/ or site/
   # changed, and for Dependabot's branches, which are in this repo but not
   # written by a person.
   wsl:
-    name: Windows shim against real WSL (self hosted)
+    name: Windows shim against real WSL
     needs: changes
     if: >-
       needs.changes.outputs.code == 'true' &&
@@ -398,10 +397,10 @@ jobs:
       (github.event_name == 'push' ||
        (github.event_name == 'pull_request' &&
         github.event.pull_request.head.repo.full_name == github.repository))
-    runs-on: [self-hosted, wsl]
+    runs-on: windows-2025
     timeout-minutes: 30
     env:
-      BENCHBAR_TEST_DISTRO: ${{ vars.WSL_DISTRO || 'Ubuntu-24.04' }}
+      BENCHBAR_TEST_DISTRO: Ubuntu-24.04
     defaults:
       run:
         shell: pwsh
@@ -409,11 +408,35 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: windows/shim/go.mod
+          cache-dependency-path: windows/shim/go.sum
+
+      # v7.2.0
+      - name: Install the Ubuntu 24.04 WSL distro
+        uses: Vampire/setup-wsl@4c48163d9f981914dd8caa0fc335fe19cca5bff4
+        with:
+          distribution: Ubuntu-24.04
+          use-cache: 'true'
+
+      - name: Put the CLI of this checkout in the distro
+        run: |
+          $src = (wsl.exe -d $env:BENCHBAR_TEST_DISTRO --exec wslpath -u "$env:GITHUB_WORKSPACE").Trim()
+          wsl.exe -d $env:BENCHBAR_TEST_DISTRO --exec /bin/sh -c 'set -eu; mkdir -p "$HOME/.local/bin"; cp -R "$0" "$HOME/benchbar-src"; ln -sf "$HOME/benchbar-src/benchbar" "$HOME/.local/bin/benchbar"' $src
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          # An empty bench folder, so status --json answers state not_adopted like a
+          # machine where a bench is not yet managed (the fresh distro has none).
+          wsl.exe -d $env:BENCHBAR_TEST_DISTRO --exec /bin/sh -c 'mkdir -p "$HOME/frappe-bench/apps/frappe" "$HOME/frappe-bench/sites"'
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
       - name: Versions
         run: |
           go version
           wsl.exe --version
+          wsl.exe -l -v
           wsl.exe -d $env:BENCHBAR_TEST_DISTRO --exec /bin/sh -c 'PATH="$HOME/.local/bin:$PATH"; benchbar --version'
+          if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: go vet and unit tests on Windows
         run: |

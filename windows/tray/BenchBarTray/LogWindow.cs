@@ -160,6 +160,9 @@ internal sealed class LogWindow : ToolWindow
         Content = root;
 
         Model.Changed += OnModelChanged;
+        // a minimized or hidden window follows nothing (and holds no timer); showing it again catches up with one poll
+        StateChanged += (_, _) => SyncHidden();
+        IsVisibleChanged += (_, _) => SyncHidden();
         Closed += (_, _) =>
         {
             Model.Changed -= OnModelChanged;
@@ -210,6 +213,8 @@ internal sealed class LogWindow : ToolWindow
         if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
         Activate();
     }
+
+    private void SyncHidden() => Model.Hidden = WindowState == WindowState.Minimized || !IsVisible;
 
     private void OnPrevious(bool on)
     {
