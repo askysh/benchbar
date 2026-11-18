@@ -157,7 +157,7 @@ public class SitesModelTests
     public void ABackupSummaryReadsWhenSizeAndFiles()
     {
         var first = SiteJson.ParseList(Doc("sites-backups.json")).Backups[0];
-        Assert.Equal("Sep 29 2026 04:45, 5.0 MB, with files", first.Summary(TimeZoneInfo.Utc, System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal("09/29/2026 04:45, 5.0 MB, with files", first.Summary(TimeZoneInfo.Utc, System.Globalization.CultureInfo.InvariantCulture));
         Assert.Equal("Sep 29 2026 10:15, 5.0 MB, with files", first.Summary(TimeZoneInfo.CreateCustomTimeZone("ist", TimeSpan.FromHours(5.5), "ist", "ist"), System.Globalization.CultureInfo.InvariantCulture));
         Assert.Equal("1.0 KB", ByteSize.Format(1024, System.Globalization.CultureInfo.InvariantCulture));
         Assert.Equal("12 B", ByteSize.Format(12, System.Globalization.CultureInfo.InvariantCulture));
@@ -254,7 +254,7 @@ public class SitesModelTests
         Assert.Equal("03/05/2026 14:30", UiText.Date(time, TimeZoneInfo.Utc, System.Globalization.CultureInfo.InvariantCulture));
         Assert.Equal("5,0 MB", ByteSize.Format(5 * 1024 * 1024, German()));
         var backup = new SiteBackup("20260305-143000", time, null, "db.sql.gz", null, null, null, 5 * 1024 * 1024, WithFiles: true, Encrypted: false, Partial: false);
-        Assert.Equal("M\u00e4r 5 2026 14:30, 5,0 MB, with files", backup.Summary(TimeZoneInfo.Utc, German()));
+        Assert.Equal("05.03.2026 14:30, 5,0 MB, with files", backup.Summary(TimeZoneInfo.Utc, German()));
     }
 
     [Fact]
