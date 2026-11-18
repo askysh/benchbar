@@ -11,7 +11,7 @@
 # Groups (used by "benchbar service" versus "benchbar repair"):
 #   system, bench, service, site
 
-FL_CHECK_ORDER="brew formula_dates python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac mole app_copies full_disk_access env_python env_setuptools bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy app_update_pending app_add_pending dependency_behind apps_behind lock_parse lock_drift profile_outdated logs bench_path honcho honcho_setuptools procfile runner agent runner_heartbeat fork_safety scheduler stop_flag helpers cli_link cli_duplicate legacy_agents dead_agents hosts port_clash share_scheduler orphans ping site_not_served"
+FL_CHECK_ORDER="brew formula_dates python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac mole app_copies full_disk_access env_python env_setuptools bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy app_update_pending app_add_pending dependency_behind apps_behind lock_parse lock_drift profile_outdated logs bench_path honcho honcho_setuptools procfile bench_listen runner agent runner_heartbeat fork_safety scheduler stop_flag helpers cli_link cli_duplicate legacy_agents dead_agents hosts port_clash share_scheduler orphans ping site_not_served"
 FL_LOG_WARN_MB="${FL_LOG_WARN_MB:-50}"
 # doctor --quick leaves these out: they start brew, python, node, bench, git
 # or ask the site, which takes seconds each; the JSON names them (skipped_checks)
@@ -56,6 +56,7 @@ fl_check_label() {
     assets) printf 'Built assets' ;;
     honcho) printf 'honcho' ;;
     procfile) printf 'Procfile.lean' ;;
+    bench_listen) printf 'Listen address' ;;
     runner) printf 'Runner script' ;;
     agent) printf 'launchd agent' ;;
     runner_heartbeat) printf 'Runner heartbeat' ;;
@@ -373,7 +374,57 @@ chk_bench_path() {
   fi
 }
 
-chk_procfile() { chk__template "Procfile.lean" "$(fl_procfile_path)" "$FL_R_PROCFILE" write_procfile; }
+# Procfile.lean, and in the default "local" listen mode the two files its web
+# and socketio lines start with: a Procfile that names a file that is gone
+# would stop the bench, so the files are part of this one check.
+chk_procfile() {
+  local f
+  chk__template "Procfile.lean" "$(fl_procfile_path)" "$FL_R_PROCFILE" write_procfile
+  [[ "$CHK_STATUS" == "ok" && -n "$FL_R_LISTEN_PY" ]] || return 0
+  for f in "$(fl_listen_py_path)|$FL_R_LISTEN_PY" "$(fl_listen_js_path)|$FL_R_LISTEN_JS"; do
+    chk__template "the listen file ${f%%|*}" "${f%%|*}" "${f#*|}" write_procfile
+    [[ "$CHK_STATUS" == "ok" ]] || return 0
+  done
+  chk__set ok "Procfile.lean and its listen files are current ($(fl_template_header_of "$FL_R_PROCFILE" | awk '{print $3, $4}'))"
+}
+
+# Where the dev web server (with its debugger) and socketio listen. Frappe
+# binds both to every interface; 0.9.0 starts them on 127.0.0.1 unless the
+# bench was set to "all" (benchbar listen all). Two ways to be exposed: the
+# setting says all, or a listener on a bench port is not on loopback although
+# the setting says local (the bench still runs the Procfile of before 0.9.0,
+# or something started it outside benchbar). Read only: both fixes are a
+# person's command.
+chk_bench_listen() {
+  local exposed="" port a addrs listening=0 fix
+  for port in "$FL_WEB_PORT" "$FL_SOCKETIO_PORT"; do
+    addrs="$(fl_port_listen_addresses "$port")"
+    [[ -z "$addrs" ]] && continue
+    listening=1
+    while IFS= read -r a; do
+      case "$a" in
+        127.0.0.1:*|"[::1]:"*|localhost:*) ;;
+        *) exposed="${exposed} ${a}" ;;
+      esac
+    done <<<"$addrs"
+  done
+  if fl_listen_is_all; then
+    if [[ -n "$exposed" ]]; then
+      chk__set warn "the web server and socketio listen on${exposed}: anyone on the network can reach the dev server and its debugger (listen is set to all)" "${FL_SELF} listen local --bench-dir ${FL_BENCH_DIR}, then ${FL_SELF} restart"
+    else
+      chk__set warn "listen is set to all: the web server and socketio listen on every interface once the bench runs (the dev server has its debugger on)" "${FL_SELF} listen local --bench-dir ${FL_BENCH_DIR}"
+    fi
+  elif [[ -n "$exposed" ]]; then
+    # a current Procfile only needs the restart; an older one needs the repair first
+    fix="${FL_SELF} restart --bench-dir ${FL_BENCH_DIR}"
+    [[ "$(fl_template_status "$(fl_procfile_path)" "$FL_R_PROCFILE")" == "current" ]] || fix="${FL_SELF} repair --bench-dir ${FL_BENCH_DIR}, then ${FL_SELF} restart --bench-dir ${FL_BENCH_DIR}"
+    chk__set warn "the web server or socketio listens on${exposed}, not on 127.0.0.1 only: the bench was started before listen local took effect, or outside benchbar" "$fix"
+  elif [[ "$listening" == "1" ]]; then
+    chk__set ok "the web server and socketio listen on 127.0.0.1 only"
+  else
+    chk__set ok "the web server and socketio start on 127.0.0.1 only (listen all changes that)"
+  fi
+}
 chk_runner() {
   chk__template "runner" "$(fl_runner_path)" "$FL_R_RUNNER" write_runner
   # frappe-mac-run.sh from before 0.3.0, left behind if a repair was interrupted

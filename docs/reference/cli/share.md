@@ -404,6 +404,16 @@ state folder (`lan-guard/pf.state`, never the bench), together with whether
 pf was already on before the first install, so that `lan-guard remove` can
 give it back.
 
+**Where the gateway listens.** The gateway listens on this Mac's address on
+the network the room is on (the default route's interface, the one `share
+preflight` reports as `lan_ip`), not on every interface. A VPN, a phone
+hotspot or an Ethernet port with its own address does not see port 8443. The
+room works as long as that address stays: when the Mac joins another network or
+gets a new address, the watchdog ends the room with "this Mac's network
+address changed" and you start it again. The bench's own web server and the
+share's web process listen on 127.0.0.1, which is where the gateway reaches
+them.
+
 **What lan-guard blocks.** The rule is global and always on, with or without
 a room open: TCP to ports 8000-8099 (web), 9000-9099 (socket.io),
 11000-11099 and 13000-13099 (Redis) and 3306 (MariaDB) is refused unless it

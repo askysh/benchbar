@@ -269,7 +269,15 @@ act_port_block() {
   return 0
 }
 
+# The two listen files go down before the Procfile that starts them: a
+# Procfile that names a file that is not there would stop the bench.
 act_write_procfile() {
+  if [[ -n "$FL_R_LISTEN_PY" ]]; then
+    fl_template_apply "$(fl_listen_py_path)" "$FL_R_LISTEN_PY" 644 || return 1
+    [[ "$FL_TEMPLATE_CHANGED" == "1" && "${FL_DRY_RUN:-0}" != "1" ]] && fl_ok "wrote $(fl_listen_py_path)"
+    fl_template_apply "$(fl_listen_js_path)" "$FL_R_LISTEN_JS" 644 || return 1
+    [[ "$FL_TEMPLATE_CHANGED" == "1" && "${FL_DRY_RUN:-0}" != "1" ]] && fl_ok "wrote $(fl_listen_js_path)"
+  fi
   fl_template_apply "$(fl_procfile_path)" "$FL_R_PROCFILE" 644 || return 1
   [[ "$FL_TEMPLATE_CHANGED" == "1" && "${FL_DRY_RUN:-0}" != "1" ]] && fl_ok "wrote $(fl_procfile_path)"
   return 0

@@ -601,6 +601,15 @@ curl.exe -H "Host: mysite.localhost" http://localhost:8000
 The second line asks `localhost` for the site by its name, which is the
 same request.
 
+Since 0.9.0 a bench's web server and socketio listen on 127.0.0.1 inside the
+distro, not on every interface. That does not change this: WSL 2 forwards
+`localhost` from Windows to a port bound to 127.0.0.1 in the distro, and so
+does mirrored networking mode (`localhostForwarding`, Microsoft's
+documentation of the `[wsl2]` settings says ports bound to the wildcard or to
+localhost are forwarded). What stops working is reaching the bench by the
+distro's own address, or from another device: run `benchbar listen all` in
+the distro for that, and see the [warning on `listen`](reference/cli/other.md#listen).
+
 If you set `localhostForwarding=false` under `[wsl2]` in
 `%USERPROFILE%\.wslconfig`, Windows cannot reach any bench at all. Remove
 the line, or set it to `true`, and restart WSL (`wsl --shutdown` stops

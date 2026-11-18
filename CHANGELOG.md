@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented here.
 
+## Unreleased
+
+### New defaults
+
+- The web server and socketio of a bench now listen on 127.0.0.1 only, on macOS, Linux and WSL. Until now `bench serve` and socketio listened on every interface (Frappe's own default), with the developer debugger on, so on a coffee shop Wi-Fi or a server with a public address anyone who knew the site name could reach the dev server. Redis and MariaDB were already local.
+- To go back, run `benchbar listen all` (then `benchbar restart`). It is kept per bench, `repair` and `service` keep it, `benchbar listen local` undoes it, and `benchbar listen` says which one a bench has. `status --json` has a new `listen` field.
+- `benchbar doctor` has a new check, `bench_listen`: it warns when a bench is set to `all`, or when the web or socketio port listens on a network address although the bench is set to `local` (for example a bench that was started before the update), and names the fix. The `procfile` check also covers the two small files in `config/benchbar-listen` that start the web and socketio lines.
+- The share gateway of a room (the lan-rooms experiment) listens on this Mac's Wi-Fi address only, not on every interface, so a VPN, a hotspot or an Ethernet port of the Mac does not see port 8443. If the Mac changes network during a room, the room ends with a message that says so.
+- Upgrade: after the update each bench shows `Procfile.lean is outdated` once. Run `benchbar repair` (or `benchbar service`) and then `benchbar restart`; until the restart the running bench keeps listening on every interface and doctor says so. Reaching a bench by the address of the computer, from a phone or another PC, now needs `benchbar listen all`. On Windows, a browser still opens `http://<site>.localhost:8000` through WSL's localhost forwarding.
+
 ## 0.8.3 - 2026-11-17
 
 0.8.3 is a fix pass for Windows from a full review and a live test on a

@@ -459,10 +459,28 @@ Fix: `benchbar repair` installs setuptools into honcho's own venv only.
 ### procfile
 
 `Procfile.lean` exists, was written by benchbar, and matches its
-template and the bench's settings (for example the scheduler choice).
+template and the bench's settings (for example the scheduler choice). With
+the default `listen local` the two files in `config/benchbar-listen` that
+its web and socketio lines start with are part of this check: a Procfile
+that names a file that is gone would stop the bench.
 
-Fix: `benchbar repair` writes it again; the old copy goes to the
-backups.
+Fix: `benchbar repair` writes them again; the old copies go to the
+backups. A running bench takes them at its next `benchbar restart`.
+
+### bench_listen
+
+The dev web server and socketio listen on 127.0.0.1 only. Frappe binds
+both to every interface, with its debugger on; 0.9.0 starts them on
+loopback unless the bench was set to `all` with `benchbar listen all`.
+A warning means one of two things: the bench is set to `all` (the message
+says so), or a listener on the bench's web or socketio port is not on
+loopback although the bench is set to `local`, because it was started
+before 0.9.0 or outside benchbar (`bench start`).
+
+Fix: `benchbar listen local` and `benchbar restart` for the first;
+`benchbar repair` (when `procfile` is outdated) and `benchbar restart` for
+the second. The check only reads, and `benchbar listen all` is a person's
+command.
 
 ### runner
 
