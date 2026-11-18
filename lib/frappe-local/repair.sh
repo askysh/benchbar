@@ -275,6 +275,7 @@ act_write_procfile() {
   if [[ -n "$FL_R_LISTEN_PY" ]]; then
     fl_template_apply "$(fl_listen_py_path)" "$FL_R_LISTEN_PY" 644 || return 1
     [[ "$FL_TEMPLATE_CHANGED" == "1" && "${FL_DRY_RUN:-0}" != "1" ]] && fl_ok "wrote $(fl_listen_py_path)"
+    # shellcheck disable=SC2153 # FL_R_LISTEN_JS is set with FL_R_LISTEN_PY in service.sh
     fl_template_apply "$(fl_listen_js_path)" "$FL_R_LISTEN_JS" 644 || return 1
     [[ "$FL_TEMPLATE_CHANGED" == "1" && "${FL_DRY_RUN:-0}" != "1" ]] && fl_ok "wrote $(fl_listen_js_path)"
   fi

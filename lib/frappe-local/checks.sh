@@ -381,6 +381,7 @@ chk_procfile() {
   local f
   chk__template "Procfile.lean" "$(fl_procfile_path)" "$FL_R_PROCFILE" write_procfile
   [[ "$CHK_STATUS" == "ok" && -n "$FL_R_LISTEN_PY" ]] || return 0
+  # shellcheck disable=SC2153 # FL_R_LISTEN_JS is set with FL_R_LISTEN_PY in service.sh
   for f in "$(fl_listen_py_path)|$FL_R_LISTEN_PY" "$(fl_listen_js_path)|$FL_R_LISTEN_JS"; do
     chk__template "the listen file ${f%%|*}" "${f%%|*}" "${f#*|}" write_procfile
     [[ "$CHK_STATUS" == "ok" ]] || return 0

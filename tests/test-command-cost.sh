@@ -66,8 +66,9 @@ assert_eq "0" "$CODE" "$OUT"
 export ADMIN_PASSWORD=admin MARIADB_ROOT_PASSWORD=root
 
 # the budgets: measured on macOS and Linux (the larger of the two), plus 10 percent
-cost "doctor" 327 "0 1" doctor --bench-dir "$BENCH"
-cost "doctor --json" 395 "0 1" doctor --json --bench-dir "$BENCH"
+# 0.9.0: +9 for the listen check (one listener lookup per port); #147 cuts doctor's forks as a whole
+cost "doctor" 340 "0 1" doctor --bench-dir "$BENCH"
+cost "doctor --json" 410 "0 1" doctor --json --bench-dir "$BENCH"
 cost "install --dry-run --yes" 519 "0" install --dry-run --yes --bench-dir "$HOME/fresh-bench" --site freshsite
 cost "adopt --dry-run --yes" 429 "0" adopt "$THIRD" --dry-run --yes
 cost "app list --json" 95 "0" app list --json --bench-dir "$BENCH"
