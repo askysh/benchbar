@@ -27,6 +27,7 @@ flag~install~--profile~NAME~Release profile (default v15-lts) or a team profile.
 flag~install~--bundle~NAME~App bundle: minimal, common or extended.
 flag~install~--port-offset~N~Use port block N (web 8000+N).
 flag~install~--make-default~~Make this the default bench even when another one is.
+flag~install~--repair-bench~~Move a bench folder that is incomplete aside and start over (never one that holds a site). With --dry-run it shows the move.
 flag~install~--allow-windows-fs~~WSL only: accept a bench on the Windows file system (/mnt/c, drvfs, 9p). It is refused by default: slow, no file watching, broken permissions.
 flag~install~--offline~~Skip the remote branch checks.
 flag~install~--frappe-commit~SHA~Pin the frappe clone to this commit (or FRAPPE_COMMIT, or the team profile).
