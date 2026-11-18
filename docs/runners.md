@@ -109,6 +109,9 @@ file.
 - At most **30 frames** per state.
 - At most **2 MB** for the whole folder.
 - No symbolic links.
+- `manifest.json` is read only when it is a plain file of at most 64 KB, never
+  through a link. A zip that holds a symbolic link or another file that is
+  not a plain file is refused whole.
 - Only `manifest.json` and the files it lists are copied on import;
   anything else in the folder or zip is left behind.
 

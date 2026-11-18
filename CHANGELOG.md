@@ -4,6 +4,13 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+### Mac app
+
+- New setting **Links, Ask before a link acts** (off by default): when on, BenchBar shows an alert before a `benchbar://` link starts, stops or restarts a bench or opens a console. Any web page or app can open such a link, and a browser's "always allow" removes its own question. The docs say so plainly.
+- The app's runs of `benchbar` that stand for a person's click now also set `BENCHBAR_APP_PID` to the app's process id, as a marker that the call comes from the app. The command line tool does not check it yet, and a process of the same user can set it too, so it is a safety rail and not a boundary; the docs say so.
+- The log no longer holds any part of a link the app ignored or could not use: only `benchbar://action` or a short hash, plus a fixed sentence that names the reason and never a host, path, query, bench or site from the link. The alert for a link that asks to start, stop or restart a bench has Cancel as its default button.
+- Importing a runner reads `manifest.json` only as a plain file of at most 64 KB, never through a symbolic link, and refuses a zip that holds a link or another file that is not a plain file. The zip is unpacked off the main thread, so the window does not freeze.
+
 ### Backups
 
 - `site backup`, `site restore`, `site drop`, `pull --replace` and `app update` no longer delete the site's backups older than 23 hours. bench's backup did that silently; benchbar now keeps those files and puts them back. Nothing in a site's backup folder is pruned. On the same volume the kept files are hard links (no space); when the state folder is on another volume each run copies the whole backup folder and stops before bench starts when the free space does not cover it.
@@ -18,6 +25,8 @@ All notable changes to this project are documented here.
 - The Logs window waits longer between requests while no new lines arrive, makes none while the PC is locked or asleep or the window is minimized, and asks at most every 30 seconds in battery saver. The bench poll with a running bench is every 60 seconds on battery.
 - A list, a status, a log or a health check from a newer `benchbar` than the tray is read when it still has what the tray needs, instead of blanking the whole window. A plan or a change from a newer one is still refused. A newer `benchbar.exe` no longer blocks Check for Updates, and a newer patch version of it no longer shows a version warning.
 - Saving a setting no longer freezes the window while an antivirus scan holds `config.json`.
+- A backup's date and size in Sites follow your Windows language (month names, time pattern and decimal sign).
+- With `BENCHBAR_TRAY_FIXTURES` set (recorded demo data) every window says "Demo data" and the notice cannot be closed, so a variable left over from a demo is noticed. The measurement hooks (`BENCHBAR_TRAY_HARNESS_PIPE`, `--logon-log`, `BENCHBAR_TRAY_THEME`) are no longer part of the released tray.
 
 ## 0.8.3 - 2026-11-17
 

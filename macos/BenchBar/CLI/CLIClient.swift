@@ -27,7 +27,12 @@ nonisolated struct CLIClient: Sendable {
     /// install, an adopt, a repair or `site hosts` run that the user
     /// confirmed in the app gets it, and `site open-as on` after its alert
     /// (there it marks the call as the app's, and no sudo runs).
-    static let guiSudo = ["BENCHBAR_SUDO": "gui"]
+    static let guiSudo = ["BENCHBAR_SUDO": "gui"].merging(appCaller) { _, new in new }
+
+    /// Says the run comes from this app: its process id (MAC-4). The CLI does not check it
+    /// today, and it is a claim any process of the same user could copy, so it is a rail
+    /// against agents that follow AGENTS.md and against mistakes, not a boundary; docs/app.md says so.
+    static var appCaller: [String: String] { ["BENCHBAR_APP_PID": String(ProcessInfo.processInfo.processIdentifier)] }
 
     /// Environment for the CLI: an explicit PATH (Finder launched apps do
     /// not get the shell's), no colors, no spinners.
@@ -357,7 +362,9 @@ nonisolated struct CLIClient: Sendable {
     /// a person waits for; `.default` for everything a person asked for.
     func run(_ arguments: [String], timeout: Duration, acceptExitCodes: Set<Int32>,
              extraEnvironment: [String: String] = [:], qos: QualityOfService = .default) async throws(CLIError) -> CommandOutput {
-        let env = environment().merging(extraEnvironment) { _, new in new }
+        var env = environment().merging(extraEnvironment) { _, new in new }
+        // a run that says it is a person's click (BENCHBAR_NONINTERACTIVE=0, open --as) also says which app
+        if extraEnvironment["BENCHBAR_NONINTERACTIVE"] == "0" { env.merge(Self.appCaller) { _, new in new } }
         let output = try await runner.run(executable: executable, arguments: arguments, environment: env, timeout: timeout, qos: qos)
         guard acceptExitCodes.contains(output.exitCode) else {
             throw .failed(command: arguments.first ?? "", exitCode: output.exitCode, message: Self.summarize(output))
