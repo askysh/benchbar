@@ -102,7 +102,7 @@ public sealed class SystemStreamRunner : IStreamRunner
         }
         catch (OperationCanceledException)
         {
-            try { process.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
+            ProcessKill.Tree(process);
             if (ct.IsCancellationRequested) throw;
             throw new TimeoutException($"{Path.GetFileName(fileName)} did not finish in {TimeoutText(timeout)}.");
         }

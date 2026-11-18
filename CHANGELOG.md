@@ -4,6 +4,13 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
+### Windows tray
+
+- A call to `benchbar.exe` that has finished no longer shows "did not finish" when a helper process it started keeps its output open: the tray waits a few seconds for the output and goes on.
+- The Logs window waits longer between requests while no new lines arrive, makes none while the PC is locked or asleep or the window is minimized, and asks at most every 30 seconds in battery saver. The bench poll with a running bench is every 60 seconds on battery.
+- A list, a status, a log or a health check from a newer `benchbar` than the tray is read when it still has what the tray needs, instead of blanking the whole window. A plan or a change from a newer one is still refused. A newer `benchbar.exe` no longer blocks Check for Updates, and a newer patch version of it no longer shows a version warning.
+- Saving a setting no longer freezes the window while an antivirus scan holds `config.json`.
+
 ### Install
 
 - A first install on a Mac without `uv` no longer fails at `bench init`. Step 1 installs `uv` with Homebrew (a `uv` you already have is used as it is), and step 2 stops before it installs anything when `uv` is still missing, with the fix. frappe-bench needs `uv` for `bench init` even when bench itself came from pipx (#112).

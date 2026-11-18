@@ -151,6 +151,20 @@ public class SelfUpdateTests : IDisposable
         Assert.Single(runner.Calls);
     }
 
+    [Theory]
+    [InlineData("benchbar.exe 0.8.5")] // a newer patch knows the command: asking it is how a tray with a locked DLL is fixed
+    [InlineData("benchbar.exe 0.9.0")]
+    public async Task ANewerShimIsAskedForTheCheck(string shimLine)
+    {
+        var runner = new FakeProcessRunner
+        {
+            Answer = (_, args) => args[0] == "--shim-version" ? new ProcessResult(0, shimLine + "\n", "") : new ProcessResult(0, Json("installer"), ""),
+        };
+        var check = await new SelfUpdateClient(runner, () => Shim, "0.8.4").CheckAsync(CancellationToken.None);
+        Assert.Null(check.Problem);
+        Assert.Equal(2, runner.Calls.Count);
+    }
+
     [Fact]
     public async Task NoShimOrAShimThatCannotStartIsAProblemNotAThrow()
     {
