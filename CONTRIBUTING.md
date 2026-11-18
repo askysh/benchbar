@@ -37,9 +37,15 @@ test builds its own `HOME` and mock state. `tests/run-tests.sh test-doctor`
 runs one file. [docs/testing.md](docs/testing.md) is the guide for
 trying a build on a real Mac.
 
-CI runs the suite on macOS, on Linux and under bash 3.2 in a container, installs a real bench on Ubuntu
-under `systemd --user`, builds the app, builds and tests the Windows shim
-and tray, and uploads an unsigned bundle for every pull request.
+CI plans each run from the changed files. A pull request runs the tests
+`tests/affected.sh` picks on Linux and under bash 3.2 in a container,
+shellcheck on the changed files, and the app build when `macos/` changed;
+macOS runs only for paths that need a Mac or with the label `test-macos`.
+Pushes to `next-release` and `main` and the nightly run the whole suite on
+macOS, Linux and bash 3.2, install a real bench on Ubuntu under
+`systemd --user`, build the app and build and test the Windows shim and
+tray. `CI result` is the one required check. Details:
+[docs/testing.md](docs/testing.md#what-ci-runs).
 
 ## How the code is written
 
