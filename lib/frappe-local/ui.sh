@@ -201,6 +201,8 @@ fl__json_csi_len_v() {
 }
 fl_json_escape_v() {
   local __e="$2" __o="" __p __n
+  # nothing to escape (almost every value): no substitutions, no loop
+  if [[ "$__e" != *[\\\"$FL_JSON_CTRL]* ]]; then printf -v "$1" '%s' "$__e"; return 0; fi
   __e="${__e//\\/\\\\}"
   __e="${__e//\"/\\\"}"
   # cut at each control character: bash 3.2's ${x//[set]/} is quadratic in
