@@ -48,6 +48,9 @@ public class LogsTests
         return (new LogViewModel(client, Bench, "frappe-bench", time: time) { SlowEvery = slow ?? TimeSpan.FromSeconds(30) }, runner, time);
     }
 
+    /// <summary>A poll that finds nothing new (the fixture logs-since-none.json starts a different log, which counts as new lines).</summary>
+    private const string EmptySince = """{"schema_version":1,"bench":"/home/akash/frappe-bench","file":"/home/akash/frappe-bench/logs/bench.log","lines":[]}""";
+
     private static int SinceCalls(ScriptedStreamRunner runner) => runner.Runs.Count(r => r.Args.Contains("--since"));
 
     private static async Task Until(Func<bool> condition)
@@ -365,7 +368,7 @@ public class LogsTests
     public async Task FollowWaitsLongerWhileNothingArrivesAndStartsOverWhenLinesDo()
     {
         var (model, runner, time) = MakeTimed();
-        var empty = runner.On(a => a.Contains("--since")).Print(CliFixture.Lines("logs-since-none.json"));
+        var empty = runner.On(a => a.Contains("--since")).Print(EmptySince);
         await model.LoadAsync(TestContext.Current.CancellationToken);
         model.Start();
         var waits = new List<double>();
@@ -403,7 +406,7 @@ public class LogsTests
         Assert.Equal(1, SinceCalls(runner));
 
         reply.Lines.Clear();
-        reply.Print(CliFixture.Lines("logs-since-none.json"));
+        reply.Print(EmptySince);
         time.Advance(time.LastDue);           // lines came last time: the CLI call alone, no probe
         await time.NextTimerAsync();
         Assert.Equal(1, probe.Calls);
@@ -442,7 +445,7 @@ public class LogsTests
     public async Task LockAndSleepPauseFollowThroughTheGate()
     {
         var (model, runner, time) = MakeTimed();
-        runner.On(a => a.Contains("--since")).Print(CliFixture.Lines("logs-since-none.json"));
+        runner.On(a => a.Contains("--since")).Print(EmptySince);
         var gate = new FollowGate();
         model.Gate = gate;
         await model.LoadAsync(TestContext.Current.CancellationToken);
@@ -482,7 +485,7 @@ public class LogsTests
     public async Task BatterySaverStretchesTheWaitAndANewPaceCutsTheWaitShort()
     {
         var (model, runner, time) = MakeTimed();
-        runner.On(a => a.Contains("--since")).Print(CliFixture.Lines("logs-since-none.json"));
+        runner.On(a => a.Contains("--since")).Print(EmptySince);
         var gate = new FollowGate();
         model.Gate = gate;
         await model.LoadAsync(TestContext.Current.CancellationToken);

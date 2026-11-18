@@ -213,12 +213,11 @@ public class PollerTests
         using (probe)
         {
             poller.Start();
-            await Task.Delay(50, TestContext.Current.CancellationToken); // inside the first poll
+            while (source.Lists == 0) await Task.Yield(); // the first poll is under way (it holds for 300 ms), however slow the machine
             for (var i = 0; i < 6; i++) poller.Kick();
 
             await probe.NextAsync();
             await probe.NextAsync();
-            await Task.Delay(700, TestContext.Current.CancellationToken);
 
             Assert.Equal(2, probe.Count);
             Assert.Equal(2, source.Lists);
