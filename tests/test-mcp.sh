@@ -498,6 +498,8 @@ assert_eq "True" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')" "$R"
 assert_contains "$R" "The site add plan changed"
 assert_no_file "$BENCH/sites/qa1.localhost" "(a stale token creates nothing)"
 reset_calls
+# an older file of that name with a loose mode and other content: the new password never lands in it
+mkdir -p "$FL_STATE_DIR/site-admin"; printf 'old\n' >"$FL_STATE_DIR/site-admin/qa1.localhost"; chmod 666 "$FL_STATE_DIR/site-admin/qa1.localhost"
 R="$(mcp "$(call 3 benchbar_site_add '{"site":"qa1.localhost","token":"'"$STOK"'","bench":"'"$BENCH"'"}')")"
 assert_eq "False" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')" "$R"
 assert_file "$BENCH/sites/qa1.localhost/site_config.json"
@@ -510,7 +512,8 @@ APW_FILE="$(printf '%s' "$SC" | jget - 'd["admin_password_file"]')"
 assert_eq "$FL_STATE_DIR/site-admin/qa1.localhost" "$APW_FILE"
 assert_file "$APW_FILE"; assert_eq "600" "$(perm_of "$APW_FILE")"; assert_eq "700" "$(perm_of "$FL_STATE_DIR/site-admin")"
 APW="$(cat "$APW_FILE")"
-assert_eq "20" "${#APW}" "(the file holds the generated password)"
+assert_eq "20" "${#APW}" "(the file holds the generated password, not the older content)"
+for tmpf in "$FL_STATE_DIR"/site-admin/.*.tmp; do [[ ! -e "$tmpf" ]] || fail "a temp file stays: $tmpf"; done
 assert_not_contains "$R" "$APW" "(the password is in no part of the reply)"
 assert_contains "$(printf '%s' "$SC" | jget - 'd["admin_password_note"]')" "person"
 assert_eq "macdev" "$(printf '%s' "$SC" | jget - '[s["name"] for s in d["sites"]["sites"] if s["default"]][0]')" "(the default site does not move)"

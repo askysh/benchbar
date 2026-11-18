@@ -93,7 +93,7 @@ share ([Sharing a profile](../guides/teams.md#sharing-a-profile)).
 
 | What | Where it lives | When you need it |
 |---|---|---|
-| MariaDB root | your Keychain, item `benchbar-mariadb` (on Linux a 0600 file in the state folder); `benchbar mariadb-password` prints it to a person at a terminal after a confirmation (never to an agent, `--for-agent` or `benchbar mcp`) | rarely: another `bench new-site`, or `mariadb -u root -p` |
+| MariaDB root | your Keychain, item `benchbar-mariadb` (on Linux a 0600 file in the state folder); `benchbar mariadb-password` prints it to a person at a terminal after a confirmation (it refuses under `--for-agent`, `benchbar mcp` and without a terminal; a process of your user that fakes a terminal is not stopped) | rarely: another `bench new-site`, or `mariadb -u root -p` |
 | Administrator | you choose it during `benchbar install` or `site add`, or `ADMIN_PASSWORD` | every login at `http://<site>:<port>`, by default `http://macdev:8000` |
 
 ## Environment variables

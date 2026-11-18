@@ -226,9 +226,12 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
 - Open as is the person's choice. Never run `benchbar site open-as on`
   (it refuses an agent anyway) and never ask for or use an
   `open --as --print-url` link: it holds a login session for that user.
-  The CLI enforces it: `open --as USER --print-url` refuses under
-  `--for-agent`, `BENCHBAR_NONINTERACTIVE` and `benchbar mcp`, as
-  `site open-as on` does.
+  The CLI guards it: `open --as USER --print-url` refuses under
+  `--for-agent`, `BENCHBAR_NONINTERACTIVE=1` and `benchbar mcp`, and when
+  stdin is not a terminal unless the caller sets `BENCHBAR_NONINTERACTIVE=0`
+  itself (the Mac app does), as `site open-as on` does. A process of the same
+  user that fakes a terminal or sets that variable is not stopped: the guard
+  is against a mistake, not a boundary, so the rule above is the rule.
 - Experiments are the person's choice. `benchbar labs` lists them; never
   run `benchbar labs on` (it refuses an agent anyway). A command of an
   experiment that is off exits 2 with "Turn it on: benchbar labs on NAME":
@@ -237,8 +240,11 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
 - Never print or log the MariaDB root password. It lives in the Keychain
   (a 0600 file on Linux). `benchbar mariadb-password` is the person's own
   command: it refuses under `--for-agent`, `BENCHBAR_NONINTERACTIVE`,
-  `benchbar mcp` and without a terminal, whatever `--yes` says. If you need
-  the password, ask the person; never try to read it another way.
+  `benchbar mcp` and without a terminal, whatever `--yes` says. That stops
+  the documented agent modes and a missing terminal; a process of the same
+  user that fakes a terminal, or reads the Keychain itself, is not stopped
+  (SECURITY.md says so). If you need the password, ask the person; never
+  try to read it another way.
 - When something is wrong, `./benchbar report --print` shows the redacted
   diagnostics; `./benchbar report` writes the zip for a bug report.
 - If doctor warns about CleanMyMac or Mole, tell the user to add the

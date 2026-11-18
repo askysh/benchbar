@@ -118,7 +118,10 @@ benchbar doctor --for-agent  # one JSON document
   then ask the person for it, do not look for it.
 - Two commands are a person's and refuse in this mode and under MCP:
   `benchbar mariadb-password` (the root password) and `benchbar open --as
-  USER --print-url` (a login session), whatever `--yes` says.
+  USER --print-url` (a login session), whatever `--yes` says; both also
+  refuse when stdin is not a terminal. That stops the documented agent modes
+  and a missing terminal, not a process of the same user that fakes a
+  terminal: they are guards against mistakes.
 - `benchbar doctor --quick` skips the slow checks and names them.
   `doctor --ack CHECK` silences one warning until its message changes;
   `--unack CHECK` undoes it. A failure cannot be acknowledged, and

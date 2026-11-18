@@ -48,13 +48,19 @@ The tools and their arguments are in
   trailing `... [truncated, N bytes total]`.
 - No tool returns a secret. The MariaDB root password has no tool, and
   `benchbar mariadb-password` refuses under the mode every tool runs in.
-  `open --as USER --print-url` (a login session) refuses there too. A new
-  site made by `benchbar_site_add` without `admin_password` gets a
-  generated Administrator password that is saved in a 0600 file,
-  `site-admin/SITE` in benchbar's state folder, and the result names that
-  file as `admin_password_file` and never holds the password. The person
-  reads it there; an agent that needs a login asks for one or passes its
-  own `admin_password`.
+  `open --as USER --print-url` (a login session) refuses there too. This
+  keeps the tools and a missing terminal away from them; it is not a
+  boundary against a process of the same user. A new site made by
+  `benchbar_site_add` without `admin_password` gets a generated
+  Administrator password that is saved in a 0600 file,
+  `site-admin/SITE` in benchbar's state folder (a 0700 folder: for
+  Homebrew and the one line installer, `~/.local/state/benchbar`), and the
+  result names that file as `admin_password_file` and never holds the
+  password. The file is written as a new file and renamed into place, so a
+  file that was there with another mode is replaced, not reused. It goes
+  when the site is dropped (`benchbar site drop`); a site that is only
+  archived by hand leaves it. The person reads it there; an agent that
+  needs a login asks for one or passes its own `admin_password`.
 - `tools/list` and `tools/call` before `initialize` get error `-32002`;
   `ping` always works. Unexpected errors come back as a plain `internal
   error` with the details on stderr, never a path.

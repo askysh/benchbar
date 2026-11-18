@@ -379,6 +379,8 @@ fl_cmd_site_drop() {
   fl_hosts_remove_name "$name" || true
   # a later site of the same name does not inherit the choice
   fl_open_as_set "$name" 0
+  # nor does it inherit the generated Administrator password benchbar mcp kept for the person
+  rm -f "${FL_STATE_DIR}/site-admin/${name}" 2>/dev/null || true
   fl_changed site "$name" "dropped${archive:+, archived to ${archive}}"
   [[ "$backup" == "null" ]] || fl_changed backup "$name" "$(fl_backup_field "$backup" path)"
   [[ "$FL_HOSTS_REMOVED" != "1" ]] || fl_changed hosts "$name" "line removed"

@@ -418,10 +418,23 @@ def keep_generated_password(site, password, call):
         os.makedirs(folder, mode=0o700, exist_ok=True)
         os.chmod(folder, 0o700)
         path = os.path.join(folder, site)
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "w") as f:
-            f.write(password + "\n")
-        os.chmod(path, 0o600)
+        # a new file of our own (O_EXCL, 0600) renamed over the target, so a file that was there
+        # with a looser mode, or as a link, never decides who can read the password
+        tmp = os.path.join(folder, ".%s.%d.%s.tmp" % (site, os.getpid(), secrets.token_hex(4)))
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            with os.fdopen(fd, "w") as f:
+                os.fchmod(f.fileno(), 0o600)
+                f.write(password + "\n")
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, path)
+        except BaseException:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
     except (OSError, ValueError, KeyError, TypeError):
         return lost
     return {"admin_password_generated": True, "admin_password_file": path, "admin_password_note":
