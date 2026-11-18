@@ -44,6 +44,14 @@ All notable changes to this project are documented here.
 - `benchbar open --as USER --print-url` is refused under `--for-agent`, `BENCHBAR_NONINTERACTIVE=1` and `benchbar mcp`, and now also when stdin is not a terminal, unless the caller sets `BENCHBAR_NONINTERACTIVE=0` itself (the Mac app does; BenchBar for Windows does not call it). The link holds a login session. Same limit as above: a process of the same user that fakes a terminal or sets the variable is not stopped.
 - `benchbar_site_add` no longer returns a generated Administrator password. It is saved in a 0600 file (`site-admin/SITE` in benchbar's state folder) and the result names that file; pass your own `admin_password` to choose one. The file is written as a new file and renamed into place, so an older file's mode never applies, and `benchbar site drop` removes it with the site.
 
+### Install
+
+- A first install on a Mac without `uv` no longer fails at `bench init`. Step 1 installs `uv` with Homebrew (a `uv` you already have is used as it is), and step 2 stops before it installs anything when `uv` is still missing, with the fix. frappe-bench needs `uv` for `bench init` even when bench itself came from pipx (#112).
+- A rerun after a failed `bench init` no longer stops at "Bench directory exists but is incomplete" when the folder holds only empty folders: it is moved to `<bench>.incomplete.<time>` and the init starts over. Nothing is deleted. `benchbar install` now takes `--repair-bench` for any other incomplete folder (never one with a site), and `--repair-bench --dry-run` shows the move (#112).
+- The note "Existing MariaDB/MySQL may already be using port 3306" is no longer printed when the server is the Homebrew MariaDB that BenchBar manages and the Keychain password works (#112).
+- A `bench new-site` that was cut short (Ctrl+C, a closed window) is cleaned up by the next `benchbar install`: BenchBar chooses the new site's database name, writes it to the marker before `new-site` starts, and keeps its own record of the name in its state folder. On a rerun it drops that database (and its user) only when that record names it, no site of this bench or of any bench BenchBar knows names it, it holds no users but Administrator and Guest (or no tables), and you confirm (default No) or pass `--yes`; then it moves the half made folder to `archived/sites/` and creates the site again. When any of that fails it drops and moves nothing, names the database and prints the commands. New sites now get a random database name of the same shape as before (`_` and 16 hex digits).
+- `benchbar` is linked into `~/.local/bin` right after step 1, not only in step 3, and a failed bench step names the full path to run it again (#112).
+
 ## 0.8.3 - 2026-11-17
 
 0.8.3 is a fix pass for Windows from a full review and a live test on a

@@ -167,6 +167,7 @@ done
 if [[ "$FL_DRY_RUN" == "1" ]]; then
   fl_section "DRY RUN"
   fl_run brew install "$FL_PYTHON_FORMULA"
+  fl_uv_on_path || fl_run brew install uv
   fl_run brew install "$FL_NODE_FORMULA"
   fl_run brew install "$FL_MARIADB_FORMULA"
   fl_run brew install redis
@@ -191,6 +192,18 @@ esac
 "$PY_BIN" -m pip --version >/dev/null 2>&1 || fl_die "pip not available for ${FL_PYTHON_BIN_NAME}."
 "$PY_BIN" -c 'import venv' >/dev/null 2>&1 || fl_die "venv module missing for ${FL_PYTHON_BIN_NAME}."
 fl_ok "pip and venv available"
+
+fl_section "UV"
+# bench init makes the bench's env with "uv venv", whoever installed bench
+# itself (frappe-bench 5.31, issue 112). A uv that is there already, from
+# any installer, is the one used.
+if fl_uv_on_path; then
+  fl_ok "uv at $(command -v uv)"
+else
+  fl_brew_ensure uv
+  fl_uv_on_path || fl_die "uv not found after brew install uv." "Try: brew reinstall uv"
+  fl_ok "uv installed at $(command -v uv)"
+fi
 
 fl_section "NODE"
 fl_brew_ensure "$FL_NODE_FORMULA"
@@ -218,7 +231,7 @@ fl_ok "yarn - ${YARN_VERSION} at ${YARN_BIN}"
 
 fl_section "DATABASE"
 fl_brew_ensure "$FL_MARIADB_FORMULA"
-if fl_port_listening 3306; then
+if fl_port_listening 3306 && ! fl_mariadb_listener_is_own; then
   fl_mariadb_safe_mode_note
 fi
 MARIADB_BIN="$(fl_mariadb_bin)"
