@@ -55,6 +55,7 @@ struct SettingsView: View {
                     case .general:
                         startupSection
                         notificationsSection
+                        linksSection
                         if !Updater.isAvailable { updatesSection }
                         cliSection
                         editorSection
@@ -323,6 +324,22 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: links
+
+    private var linksSection: some View {
+        Section {
+            Toggle(isOn: $settings.confirmLinkActions) {
+                Text("Ask before a link acts")
+                Text("When a benchbar:// link starts, stops or restarts a bench or opens a console, BenchBar asks first.")
+            }
+        } header: {
+            Text("Links")
+        } footer: {
+            Text("Off by default so Raycast and Shortcuts keep working. Any web page or app can open a benchbar:// link, and a browser's \"always allow\" removes its own question.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
     // MARK: updates
 
     /// Not in a Sparkle build: Sparkle has its own schedule and settings.
@@ -427,12 +444,15 @@ struct SettingsView: View {
         panel.canChooseFiles = true
         panel.allowedContentTypes = [.folder, .zip]
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        do throws(RunnerError) {
-            let id = try library.importRunner(from: url)
-            settings.runnerID = id
-            importMessage = "Imported \(library.runner(id).name)."
-        } catch {
-            importMessage = "Not imported: \(error.localizedDescription)"
+        importMessage = "Importing…"
+        Task {
+            switch await library.importRunnerInBackground(from: url) {
+            case .success(let id):
+                settings.runnerID = id
+                importMessage = "Imported \(library.runner(id).name)."
+            case .failure(let error):
+                importMessage = "Not imported: \(error.localizedDescription)"
+            }
         }
     }
 

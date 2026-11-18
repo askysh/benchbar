@@ -24,7 +24,10 @@ linkcheck` checks every internal link and anchor in it.
 - Link to other pages with relative paths to their `.md` files, for
   example `[Apps](guides/apps.md)`. The site turns them into its own URLs,
   and links to other files in the repo into GitHub links.
-- A new page goes into the sidebar in `site/astro.config.mjs`.
+- A new page goes into the sidebar in `site/astro.config.mjs`;
+  `tests/test-docs.sh` fails for a page that is in no group. A new user
+  feature also gets a row in `features.md` (platform and version), and a
+  new Lab must be named there.
 - `ROADMAP.md` and `CONTRIBUTING.md` stay at the repo root; the build
   copies them in as `/roadmap/` and `/contributing/`.
 - A new doctor check needs a `### <check_id>` heading in

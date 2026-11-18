@@ -88,6 +88,10 @@ type System struct {
 	Getenv      func(key string) string
 	Environ     func() []string
 
+	// Getwd is the current folder of benchbar.exe. Nil in tests that do not
+	// need it: the CLI then starts in the home folder.
+	Getwd func() (string, error)
+
 	ConfigDir  string // %LOCALAPPDATA%\BenchBar
 	ProfileDir string // %USERPROFILE%
 	ExePath    string

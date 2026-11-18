@@ -58,31 +58,66 @@ final class RunnerLibrary {
 
     // MARK: import
 
+    /// A source that passed validation: the folder to copy from, the id it gets, the files to copy.
+    /// `scratch` is the unpacked zip, removed after the copy.
+    nonisolated struct PreparedImport: Sendable {
+        var root: URL
+        var id: String
+        var files: Set<String>
+        var scratch: URL?
+    }
+
+    /// Unpacks (a zip) and validates; reads nothing but the source, so it can run off the main
+    /// actor: a zip from the internet must not freeze the window while it unpacks.
+    nonisolated static func prepareImport(from source: URL) throws(RunnerError) -> PreparedImport {
+        var scratch: URL?
+        do throws(RunnerError) {
+            let root: URL
+            let suggested: String
+            if source.pathExtension.lowercased() == "zip" {
+                let unpacked = try unzip(source)
+                scratch = unpacked
+                root = try runnerRoot(in: unpacked)
+                suggested = root == unpacked ? source.deletingPathExtension().lastPathComponent : root.lastPathComponent
+            } else {
+                root = source
+                suggested = source.lastPathComponent
+            }
+            let id = makeID(suggested)
+            guard !Runner.builtIns.contains(where: { $0.id == id }) else { throw .reservedID(id) }
+            _ = try RunnerLoader.load(folder: root, id: id)
+            let files = try RunnerLoader.frameFiles(RunnerLoader.readManifest(in: root))
+            return PreparedImport(root: root, id: id, files: files, scratch: scratch)
+        } catch {
+            if let scratch { try? FileManager.default.removeItem(at: scratch) }
+            throw error
+        }
+    }
+
     /// Imports a runner folder or a .zip of one, and returns its id.
     /// Only manifest.json and the frames it lists are copied, after they
     /// pass validation; anything else in the folder or zip is left behind.
     @discardableResult
     func importRunner(from source: URL) throws(RunnerError) -> String {
-        let fm = FileManager.default
-        var scratch: URL?
-        defer { if let scratch { try? fm.removeItem(at: scratch) } }
+        try install(try Self.prepareImport(from: source))
+    }
 
-        let root: URL
-        let suggested: String
-        if source.pathExtension.lowercased() == "zip" {
-            let unpacked = try Self.unzip(source)
-            scratch = unpacked
-            root = try Self.runnerRoot(in: unpacked)
-            suggested = root == unpacked ? source.deletingPathExtension().lastPathComponent : root.lastPathComponent
-        } else {
-            root = source
-            suggested = source.lastPathComponent
+    /// The same, with the unpacking and the checks off the main actor.
+    func importRunnerInBackground(from source: URL) async -> Result<String, RunnerError> {
+        let prepared = await Task.detached { () -> Result<PreparedImport, RunnerError> in
+            do throws(RunnerError) { return .success(try Self.prepareImport(from: source)) } catch { return .failure(error) }
+        }.value
+        switch prepared {
+        case .failure(let error): return .failure(error)
+        case .success(let ready):
+            do throws(RunnerError) { return .success(try install(ready)) } catch { return .failure(error) }
         }
+    }
 
-        let id = Self.makeID(suggested)
-        guard !Runner.builtIns.contains(where: { $0.id == id }) else { throw .reservedID(id) }
-        _ = try RunnerLoader.load(folder: root, id: id)
-        let files = try RunnerLoader.frameFiles(RunnerLoader.readManifest(in: root))
+    private func install(_ prepared: PreparedImport) throws(RunnerError) -> String {
+        let fm = FileManager.default
+        defer { if let scratch = prepared.scratch { try? fm.removeItem(at: scratch) } }
+        let root = prepared.root, id = prepared.id, files = prepared.files
 
         // copy into a fresh folder next to the destination, then swap it in
         do {
@@ -149,7 +184,36 @@ final class RunnerLibrary {
         let out = FileManager.default.temporaryDirectory.appendingPathComponent("benchbar-runner-\(UUID().uuidString)")
         let result = run("/usr/bin/ditto", ["-x", "-k", zip.path, out.path])
         guard result.status == 0 else { throw .badArchive("ditto could not unpack it") }
+        // a zip keeps symlinks and ditto restores them: a link to a device, a FIFO or a file
+        // elsewhere on the Mac has no place in a runner, so anything that is not a plain file
+        // or a folder stops the import before a single file is read
+        guard onlyPlainFiles(in: out) else {
+            try? FileManager.default.removeItem(at: out)
+            throw .badArchive("it holds a link or another file that is not a plain file")
+        }
         return out
+    }
+
+    /// Every entry under `folder` is a regular file or a folder, links not followed. Fails
+    /// closed: a folder that is not there, that is not a folder, or that the walk cannot read
+    /// to the end is not plain.
+    nonisolated static func onlyPlainFiles(in folder: URL) -> Bool {
+        var root = stat()
+        guard lstat(folder.path, &root) == 0, root.st_mode & S_IFMT == S_IFDIR else { return false }
+        // the error handler runs for an entry the walk cannot read; the walk then stops, and
+        // an unfinished walk must not pass
+        final class Failure: @unchecked Sendable { var happened = false }
+        let failure = Failure()
+        guard let walker = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: nil, options: [],
+                                                          errorHandler: { _, _ in failure.happened = true; return false })
+        else { return false }
+        for case let url as URL in walker {
+            var info = stat()
+            guard lstat(url.path, &info) == 0 else { return false }
+            let kind = info.st_mode & S_IFMT
+            if kind != S_IFREG && kind != S_IFDIR { return false }
+        }
+        return !failure.happened
     }
 
     /// "12 files, 34567 bytes uncompressed, ..." from zipinfo -t.

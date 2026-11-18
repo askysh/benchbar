@@ -1,6 +1,7 @@
 ---
 title: "Releasing BenchBar"
 description: "How BenchBar releases are built, signed, notarized and published, with the ad hoc and Developer ID paths."
+pagefind: false
 ---
 
 One workflow, `.github/workflows/release.yml`, two paths. It runs when a
