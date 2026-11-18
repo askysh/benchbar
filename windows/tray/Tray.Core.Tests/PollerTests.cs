@@ -102,7 +102,7 @@ public class PollerTests
             poller.Start();
             await probe.NextAsync();
             // read poller.Last, not a handler added here: Make already subscribed the probe, which releases
-            // the semaphore before a second handler would run (the spike's test had that race)
+            // the semaphore before a second handler would run (an earlier version of this test had that race)
             Assert.Equal(BenchState.Running, Assert.Single(poller.Last.Benches).State);
             Assert.Equal(40, poller.CpuPercent);
             Assert.Single(poller.Last.Benches);
