@@ -6,8 +6,9 @@
 # The formula and cask are rendered from packaging/homebrew with the sha256
 # of the published files (checked against SHA256SUMS first), put into a
 # clone of the tap, checked with brew style and brew audit, installed and
-# tested, then proposed as a pull request that merges itself once the tap's
-# checks pass (docs/releasing.md, "The Homebrew tap").
+# tested, then proposed as a pull request on the tap. The workflow stops
+# there: a person reads the pull request and merges it (docs/releasing.md,
+# "The Homebrew tap"). Nothing here merges, or turns on auto-merge.
 # It closes the open tap pull requests of older benchbar versions: the new
 # one replaces them. The tap's tests check only the files a pull request
 # changes, so a Margin release at the same time does not block this one.
@@ -71,6 +72,7 @@ jobs:
         if: steps.version.outputs.skip != 'true'
         with:
           ref: v${{ steps.version.outputs.version }}
+          persist-credentials: false
 
       - name: Download and check the release files
         if: steps.version.outputs.skip != 'true'
@@ -149,7 +151,7 @@ jobs:
           brew uninstall askysh/tap/benchbar
           [ ! -e "$(brew --prefix)/bin/benchbar" ] || { echo "::error::bin/benchbar is left after brew uninstall"; exit 1; }
 
-      - name: Open the tap pull request and let it merge itself
+      - name: Open the tap pull request (a person merges it)
         if: steps.version.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
@@ -178,7 +180,6 @@ jobs:
           body="benchbar ${VERSION} from https://github.com/askysh/benchbar/releases/tag/v${VERSION}, rendered, audited and installed by the release's homebrew-tap workflow."
           gh pr view "$branch" --repo askysh/homebrew-tap >/dev/null 2>&1 \
             || gh pr create --repo askysh/homebrew-tap --base main --head "$branch" --title "benchbar ${VERSION}" --body "$body"
-          gh pr merge "$branch" --repo askysh/homebrew-tap --auto --squash --delete-branch
           url="$(gh pr view "$branch" --repo askysh/homebrew-tap --json url --jq .url)"
           # An open pull request for an older benchbar version is replaced by this one: close it.
           gh pr list --repo askysh/homebrew-tap --state open --json headRefName --jq '.[].headRefName' \
@@ -190,4 +191,4 @@ jobs:
                   --comment "Replaced by $url (benchbar $VERSION)."
                 echo "::notice title=Closed::the tap pull request for benchbar $old, replaced by $VERSION."
               done
-          echo "::notice title=Tap pull request::$url merges itself once its checks pass."
+          echo "::notice title=Tap pull request::$url is open. Read it and merge it, so brew install gets this version."

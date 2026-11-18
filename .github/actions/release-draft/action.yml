@@ -41,10 +41,27 @@ runs:
         TAG: ${{ github.ref_name }}
         VERSION: ${{ inputs.version }}
       run: |
-        if gh release view "$TAG" >/dev/null 2>&1; then
+        # A published release is immutable: neither its notes nor its files may
+        # change. Only a draft is edited, and a file of the same name is deleted
+        # first, so nothing is overwritten in place (no --clobber).
+        if view="$(gh release view "$TAG" --json isDraft --jq .isDraft 2>&1)"; then
+          if [ "$view" != "true" ]; then
+            echo "::error title=Release already published::$TAG is a published release and is immutable, so this run will not edit it or replace its files. To fix a release, delete nothing: cut a new version."
+            exit 1
+          fi
           gh release edit "$TAG" --title "BenchBar ${VERSION}" --notes-file "$RUNNER_TEMP/notes.md"
-        else
+          existing="$(gh release view "$TAG" --json assets --jq '.assets[].name')"
+          for f in dist/*; do
+            name="$(basename "$f")"
+            if printf '%s\n' "$existing" | grep -Fxq -- "$name"; then
+              gh release delete-asset "$TAG" "$name" --yes
+            fi
+          done
+        elif printf '%s' "$view" | grep -qi 'not found'; then
           gh release create "$TAG" --draft --title "BenchBar ${VERSION}" --notes-file "$RUNNER_TEMP/notes.md"
+        else
+          echo "::error::gh release view $TAG failed: $view"
+          exit 1
         fi
-        gh release upload "$TAG" dist/* --clobber
+        gh release upload "$TAG" dist/*
         echo "::notice title=Draft release::https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG} (draft: review, then publish; publishing updates the Homebrew tap)"

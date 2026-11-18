@@ -7,7 +7,10 @@
 # -A), removes the keychain and keys in an always() step before the draft
 # step, and a tag build with a missing secret fails instead of going ad hoc;
 # macos-release.sh keeps the notary and Sparkle keys out of the environment
-# of the build.
+# of the build; no workflow replaces a published release's files (no
+# --clobber), the tap workflow never merges its own pull request, and an
+# ad hoc run is refused on a release tag.
+# shellcheck disable=SC2016  # the patterns hold literal $ on purpose
 # shellcheck source=tests/lib/harness.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
 
@@ -80,9 +83,41 @@ draft_line="$(printf '%s\n' "$SIGNED_JOB" | grep -n 'release-draft' | head -n 1 
 [[ -n "$clean_line" && -n "$draft_line" && "$clean_line" -lt "$draft_line" ]] || fail "the key cleanup step must come before the draft step"
 assert_contains "$(printf '%s\n' "$SIGNED_JOB" | sed -n "${clean_line},$((clean_line + 2))p")" "if: always()"
 
+assert_contains "$(cat "$RELEASE")" "never runs on a release tag"
+assert_contains "$SIGNED_JOB" "BENCHBAR_KEY_DIR"
+assert_contains "$(printf '%s\n' "$SIGNED_JOB" | sed -n "${clean_line},$((clean_line + 6))p")" 'rm -rf "$BENCHBAR_KEY_DIR"'
+
+# ---- no workflow overwrites or merges by itself
+for f in "$WF"/*.yml "$ROOT"/.github/actions/*/action.yml; do
+  case "$(grep -v '^[[:space:]]*#' "$f")" in
+    *--clobber*) fail "$f uses --clobber: a release file is replaced by deleting it first, on a draft only" ;;
+  esac
+done
+TAP="$(grep -v '^[[:space:]]*#' "$WF/homebrew-tap.yml")"
+assert_not_contains "$TAP" "gh pr merge"
+assert_not_contains "$TAP" "--auto"
+assert_contains "$TAP" "persist-credentials: false"
+
+# ---- a published release is refused; only a draft is edited, files deleted first
+DRAFT="$(cat "$ROOT/.github/actions/release-draft/action.yml")"
+assert_contains "$DRAFT" "--json isDraft"
+assert_contains "$DRAFT" '"$view" != "true"'
+assert_contains "$DRAFT" "gh release delete-asset"
+edit_line="$(printf '%s\n' "$DRAFT" | grep -n 'gh release edit' | head -n 1 | cut -d: -f1)"
+gate_line="$(printf '%s\n' "$DRAFT" | grep -n '"$view" != "true"' | head -n 1 | cut -d: -f1)"
+[[ -n "$edit_line" && -n "$gate_line" && "$gate_line" -lt "$edit_line" ]] || fail "release-draft must check the release is a draft before it edits it"
+WIN="$(cat "$WF/release-windows.yml")"
+assert_contains "$WIN" "gh release delete-asset"
+assert_contains "$WIN" "Release already published"
+win_gate="$(printf '%s\n' "$WIN" | grep -n 'Release already published' | head -n 1 | cut -d: -f1)"
+win_up="$(printf '%s\n' "$WIN" | grep -n 'gh release upload' | head -n 1 | cut -d: -f1)"
+[[ -n "$win_gate" && -n "$win_up" && "$win_gate" -lt "$win_up" ]] || fail "release-windows.yml must refuse a published release before it uploads"
+
 # ---- macos-release.sh: content keys never reach the build's environment
 assert_contains "$(cat "$SCRIPT")" "unset NOTARY_KEY_BASE64 SPARKLE_ED_KEY"
 assert_contains "$(cat "$SCRIPT")" "use_sparkle_key"
 assert_contains "$(cat "$SCRIPT")" "drop_notary_key"
+assert_contains "$(cat "$SCRIPT")" 'mktemp "${BENCHBAR_KEY_DIR:-${TMPDIR:-/tmp}}/benchbar-notary.XXXXXX"'
+assert_contains "$(cat "$SCRIPT")" 'mktemp "${BENCHBAR_KEY_DIR:-${TMPDIR:-/tmp}}/benchbar-sparkle.XXXXXX"'
 
 printf 'test-release-workflows: ok\n'

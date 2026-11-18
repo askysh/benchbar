@@ -14,6 +14,8 @@
 #   NOTARY_KEY_BASE64           its content in base64 (CI: no file until it is used)
 #   NOTARY_KEY_ID               its key id
 #   NOTARY_ISSUER_ID            its issuer id
+#   BENCHBAR_KEY_DIR            optional: the folder a key given as content is written into
+#                               (default $TMPDIR); the caller removes it
 #   SPARKLE_ED_KEY_PATH         Sparkle EdDSA private key file (generate_keys -x), or
 #   SPARKLE_ED_KEY              its content (CI)
 #   BENCHBAR_SPARKLE_PUBLIC_KEY the matching public key (goes into Info.plist)
@@ -48,7 +50,7 @@ VERSION=""
 for arg in "$@"; do
   case "$arg" in
     --check) CHECK_ONLY=1 ;;
-    -h|--help) sed -n '2,32p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,35p' "$0"; exit 0 ;;
     -*) die "Unknown option: $arg" ;;
     *) VERSION="$arg" ;;
   esac
@@ -72,7 +74,7 @@ trap cleanup EXIT
 # 0600 file for one notarytool call and delete it again.
 use_notary_key() {
   [[ -z "$NOTARY_KEY_B64" ]] && return 0
-  NOTARY_KEY_TMP="$(umask 077; mktemp "${TMPDIR:-/tmp}/benchbar-notary.XXXXXX")"
+  NOTARY_KEY_TMP="$(umask 077; mktemp "${BENCHBAR_KEY_DIR:-${TMPDIR:-/tmp}}/benchbar-notary.XXXXXX")"
   printf '%s' "$NOTARY_KEY_B64" | base64 --decode >"$NOTARY_KEY_TMP"
   NOTARY_KEY_PATH="$NOTARY_KEY_TMP"
 }
@@ -84,7 +86,7 @@ drop_notary_key() {
 }
 use_sparkle_key() {
   [[ -z "$SPARKLE_KEY_CONTENT" ]] && return 0
-  SPARKLE_KEY_TMP="$(umask 077; mktemp "${TMPDIR:-/tmp}/benchbar-sparkle.XXXXXX")"
+  SPARKLE_KEY_TMP="$(umask 077; mktemp "${BENCHBAR_KEY_DIR:-${TMPDIR:-/tmp}}/benchbar-sparkle.XXXXXX")"
   printf '%s' "$SPARKLE_KEY_CONTENT" >"$SPARKLE_KEY_TMP"
   SPARKLE_ED_KEY_PATH="$SPARKLE_KEY_TMP"
 }

@@ -60,7 +60,9 @@ On `next-release`, then into `main`:
 6. Wait for the release workflows, open the draft on the Releases page,
    check the files, publish.
 7. Publishing starts the Homebrew tap workflow (`homebrew-tap.yml`,
-   below). Check that its pull request on `askysh/homebrew-tap` merged.
+   below). It opens a pull request on `askysh/homebrew-tap` and stops.
+   Read it (the formula and cask diff) and merge it yourself; until then
+   `brew install` still gives the old version.
 
 The version comes from the tag, so the checkout is never edited by CI:
 
@@ -227,8 +229,8 @@ It downloads the release's tarball and DMG, checks them against
 `SHA256SUMS`, renders the formula and cask from `packaging/homebrew`
 with `scripts/homebrew-render.sh`, runs `brew style` and `brew audit
 --strict --online`, installs both, runs `brew test`, uninstalls, and
-opens a pull request on the tap that merges itself once the tap's
-checks pass. It also closes the open tap pull requests of older
+opens a pull request on the tap. It does not merge it: you read the
+pull request and merge it once the tap's checks pass. It also closes the open tap pull requests of older
 benchbar versions. The tap's `tests` check audits, installs and
 uninstalls only the files a pull request changes. Thus a Margin release
 at the same time does not block a benchbar release. A prerelease leaves
@@ -242,9 +244,11 @@ with Contents and Pull requests write access to `askysh/homebrew-tap`
 only, kept in the `release` environment. Only the last step reads it:
 the tap is cloned without it, so no credential sits in the clone while
 `brew` runs the formula. Without the token the workflow still checks
-everything and prints the two files to copy by hand. The tap repository needs auto-merge allowed
-(Settings, General) and its `tests` check required on `main`, or the
-pull request waits for you.
+everything and prints the two files to copy by hand. The tap's `tests`
+check should be required on `main`. The token acts as the owner's
+account, so it could merge a tap pull request too; the workflow never
+does. Closing that gap needs a second identity (a GitHub App) and is a
+known residual risk.
 
 People then install with:
 
@@ -307,12 +311,15 @@ the same way after you publish the draft; check the version only.
 
 The keys sit on the runner for as short a time as the build allows. The
 certificate is imported into a temporary keychain in the step that
-signs, for `codesign` only, and its file is deleted at once. The notary
+signs, for `codesign` only, and its file is deleted at once. The keychain
+locks after an hour without use (not shorter: signing, a notarization
+that can take 50 minutes, and signing again). The notary
 key and the Sparkle key are not in the environment of the build or its
-tests: `macos-release.sh` writes each to a 0600 file for the one command
-that uses it (`notarytool`, `generate_appcast`) and deletes it. An
-`always()` step deletes the keychain right after the build, before the
-draft is created, and the checkout keeps no token in `.git/config`.
+tests: `macos-release.sh` writes each to a 0600 file in one folder
+(`BENCHBAR_KEY_DIR`) for the one command that uses it (`notarytool`,
+`generate_appcast`) and deletes it. An `always()` step deletes the
+keychain and that folder right after the build, before the draft is
+created, and the checkout keeps no token in `.git/config`.
 
 **Rotating a key.** Make the new one, set it in the `release`
 environment (Settings, Environments, `release`, edit the secret), cut or
@@ -338,8 +345,11 @@ files (`config/release-profiles.tsv`, `macos/project.yml`,
 `macos/sparkle.yml`, `windows/shim/versioninfo.json`, this page). It
 takes effect when the ruleset on `main` turns on "Require review from
 Code Owners". Beside it the repository needs a tag ruleset for `v*`
-(no deletion, no update, no force push) and the "Immutable releases"
-setting, so a published tag and its files cannot be replaced; the tap
+(no deletion, no update) and the "Immutable releases"
+setting, so a published tag and its files cannot be replaced (the tag
+ruleset restricts update and deletion only: `auto-tag.yml` still creates
+the tag with the `GITHUB_TOKEN`). The release workflows fail on a
+published release and never use `--clobber`; the tap
 needs the same Code Owners rule on `Formula/` and `Casks/`.
 
 ### Secrets

@@ -68,6 +68,9 @@ jobs:
           ADHOC: ${{ inputs.adhoc }}
         run: |
           if [ "$ADHOC" = "true" ]; then
+            case "$REF" in
+              refs/tags/v*) echo "::error::The adhoc input is on, and this run is on the tag $REF. An ad hoc build never runs on a release tag: it would draft an unsigned release for it. Run it on a branch, or turn adhoc off for the signed release."; exit 1 ;;
+            esac
             echo "mode=adhoc" >> "$GITHUB_OUTPUT"
             echo "::notice title=Ad hoc build::The adhoc input is on: an unsigned test build that reads no secret."
           else
@@ -147,11 +150,18 @@ jobs:
           SPARKLE_ED_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
         run: |
           umask 077
+          # the one folder the script writes the notary and Sparkle key files
+          # into; the cleanup step removes it
+          mkdir -p "$RUNNER_TEMP/release-keys"
+          echo "BENCHBAR_KEY_DIR=$RUNNER_TEMP/release-keys" >> "$GITHUB_ENV"
+          export BENCHBAR_KEY_DIR="$RUNNER_TEMP/release-keys"
           keychain="$RUNNER_TEMP/release.keychain-db"
           keychain_password="$(uuidgen)"
           echo "KEYCHAIN=$keychain" >> "$GITHUB_ENV"
           printf '%s' "$CERT" | base64 --decode > "$RUNNER_TEMP/cert.p12"
           security create-keychain -p "$keychain_password" "$keychain"
+          # Locks after an hour without use. Not shorter: the build signs, waits
+          # for notarization (up to NOTARY_TIMEOUT, 50 minutes) and signs again.
           security set-keychain-settings -lut 3600 "$keychain"
           security unlock-keychain -p "$keychain_password" "$keychain"
           security import "$RUNNER_TEMP/cert.p12" -P "$CERT_PASSWORD" -T /usr/bin/codesign -t cert -f pkcs12 -k "$keychain"
@@ -167,7 +177,8 @@ jobs:
         if: always()
         run: |
           [ -z "${KEYCHAIN:-}" ] || security delete-keychain "$KEYCHAIN" 2>/dev/null || true
-          rm -f "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/AuthKey.p8" "$RUNNER_TEMP/sparkle_ed.key"
+          rm -f "$RUNNER_TEMP/cert.p12"
+          [ -z "${BENCHBAR_KEY_DIR:-}" ] || rm -rf "$BENCHBAR_KEY_DIR"
 
       - uses: ./.github/actions/release-draft
         with:

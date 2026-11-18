@@ -910,12 +910,26 @@ jobs:
             $isDraft = [bool]$rel.isDraft
           }
 
-          gh release upload $tag (Get-ChildItem dist -File | Where-Object { $_.Name -like 'benchbar-windows-*' } | ForEach-Object { $_.FullName }) --clobber
+          # A published release is immutable: fail, change nothing. On a draft a
+          # file of the same name is deleted first, so nothing is overwritten
+          # in place (no --clobber).
+          if (-not $isDraft) {
+            Write-Host "::error title=Release already published::Release $tag is published and immutable, so this run will not add or replace its files or edit its notes. To fix a release, delete nothing: cut a new version."
+            exit 1
+          }
+          $files = @(Get-ChildItem dist -File | Where-Object { $_.Name -like 'benchbar-windows-*' })
+          $existing = @(gh release view $tag --json assets --jq '.assets[].name')
+          if ($LASTEXITCODE -ne 0) { throw 'gh release view (assets) failed' }
+          foreach ($f in $files) {
+            if ($existing -contains $f.Name) {
+              gh release delete-asset $tag $f.Name --yes
+              if ($LASTEXITCODE -ne 0) { throw "gh release delete-asset $($f.Name) failed" }
+            }
+          }
+          gh release upload $tag ($files | ForEach-Object { $_.FullName })
           if ($LASTEXITCODE -ne 0) { throw 'gh release upload failed' }
 
-          if (-not $isDraft) {
-            Write-Host "::warning::Release $tag is already published. Assets uploaded; its notes are left alone."
-          } elseif (-not $created) {
+          if (-not $created) {
             $body = [string]$rel.body
             $start = $body.IndexOf('<!-- windows -->')
             $end = $body.IndexOf('<!-- /windows -->')
