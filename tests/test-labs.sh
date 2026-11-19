@@ -190,6 +190,19 @@ printf 'Linux version 6.6.0-microsoft-standard-WSL2 (root@build) (gcc) #1 SMP\n'
 run_fm labs on quick-switch --yes
 assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "quick-switch is not available on windows yet"
 
+# ---- labs off drops a saved entry this platform never turns on (a state copied from a Mac)
+printf 'LABS=lan-rooms quick-switch\n' >>"$FL_STATE_FILE"
+unset BENCHBAR_LABS
+fm_out labs status quick-switch --json
+assert_eq "False" "$(printf '%s' "$OUT" | jget - 'd["enabled"]')" "(the saved entry is not on here)"
+run_fm labs off quick-switch
+assert_eq "0" "$CODE" "$OUT"; assert_contains "$OUT" "was never on here"
+assert_eq "LABS=lan-rooms" "$(grep '^LABS=' "$FL_STATE_FILE" | tail -n 1)" "(only the stale entry went)"
+run_fm labs off quick-switch
+assert_contains "$OUT" "unchanged: quick-switch is already off"
+run_fm labs off lan-rooms
+assert_eq "LABS=" "$(grep '^LABS=' "$FL_STATE_FILE" | tail -n 1 | tr -d "'")" "(a lab this platform lists is turned off as before)"
+
 # ---- one availability check for every path: BENCHBAR_LABS names a lab that
 # the platform does not list, so the lab stays off (it used to pass the gate
 # and run the pf and launchctl code on Linux, before lan-rooms listed Linux)

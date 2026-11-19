@@ -303,13 +303,20 @@ fl_cmd_profile_list() {
   fl_info "team profiles: $(fl_team_profile_user_dir)/NAME.toml, then subscriptions ($(fl_profile_sources_list))${BENCHBAR_PROFILE_PATH:+, then BENCHBAR_PROFILE_PATH=${BENCHBAR_PROFILE_PATH}}"
 }
 
+# fl_profile_mariadb_text: what a profile installs for MariaDB: the Homebrew formula on a Mac, the apt package
+# and the versions the profile accepts on Linux (apt has no formula, and gives the series of the release)
+fl_profile_mariadb_text() {
+  if fl_is_linux; then printf 'mariadb-server from apt (the profile accepts %s to %s)' "$FL_MARIADB_MIN" "$FL_MARIADB_MAX"
+  else printf '%s' "$FL_MARIADB_FORMULA"; fi
+}
+
 fl_cmd_profile_show() {
   local name="$1" file spec n b r c rows=()
   [[ -n "$name" ]] || fl_die "Usage: benchbar profile show NAME"
   if fl_builtin_profile_exists "$name"; then
     fl_load_profile "$name"
     fl_table "Field|Value" "profile|${name} (built in)" "label|${FL_PROFILE_LABEL}" "frappe|${FL_FRAPPE_BRANCH}" "erpnext|${FL_ERPNEXT_BRANCH}" \
-      "python|${FL_PYTHON_FORMULA}" "node|${FL_NODE_FORMULA}" "mariadb|${FL_MARIADB_FORMULA}" "status|${FL_PROFILE_STATUS}"
+      "python|${FL_PYTHON_FORMULA}" "node|${FL_NODE_FORMULA}" "mariadb|$(fl_profile_mariadb_text)" "status|${FL_PROFILE_STATUS}"
     return 0
   fi
   file="$(fl_team_profile_file "$name")" || fl_die "No profile '${name}'." "Built in profiles: benchbar profile list. Team profiles live in $(fl_team_profile_user_dir)/${name}.toml or a BENCHBAR_PROFILE_PATH folder."
@@ -320,7 +327,7 @@ fl_cmd_profile_show() {
   [[ -n "$FL_TEAM_DESCRIPTION" ]] && rows+=("description|${FL_TEAM_DESCRIPTION}")
   rows+=("frappe|${FL_FRAPPE_BRANCH}${FL_TEAM_FRAPPE_COMMIT:+ at ${FL_TEAM_FRAPPE_COMMIT}}")
   [[ -z "$FL_TEAM_ERPNEXT_COMMIT" ]] || rows+=("erpnext|pinned at ${FL_TEAM_ERPNEXT_COMMIT}")
-  rows+=("python|${FL_PYTHON_FORMULA}" "node|${FL_NODE_FORMULA}" "mariadb|${FL_MARIADB_FORMULA}")
+  rows+=("python|${FL_PYTHON_FORMULA}" "node|${FL_NODE_FORMULA}" "mariadb|$(fl_profile_mariadb_text)")
   [[ -n "$FL_TEAM_BUNDLE" ]] && rows+=("bundle|${FL_TEAM_BUNDLE}: $(fl_bundle_apps "$FL_TEAM_BUNDLE")")
   [[ -n "$FL_TEAM_SITE" ]] && rows+=("site|${FL_TEAM_SITE}")
   [[ -n "$FL_TEAM_SCHEDULER" ]] && rows+=("scheduler|${FL_TEAM_SCHEDULER}")

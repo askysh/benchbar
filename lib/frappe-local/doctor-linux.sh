@@ -196,7 +196,7 @@ fl_mariadb_server_version() {
 
 # "formula version" of the server on 3306, the formula being the profile's
 # name for that series (mariadb@10.11), so the policy comparison works
-fl_mariadb_running_formula() {
+fl_mariadb_running_formula_linux() {
   local ver
   # fl_port_listening, not the owner pid: ss hides the owner of the apt mariadbd (user mysql) from a regular user
   fl_port_listening 3306 || return 0
