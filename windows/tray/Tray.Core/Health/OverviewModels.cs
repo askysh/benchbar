@@ -80,4 +80,61 @@ public static class OverviewArgs
 {
     /// <summary><c>service --yes --with-schedule</c> or <c>--without-schedule</c> for one bench.</summary>
     public static string[] Scheduler(bool on, string benchPath) => ["service", "--yes", on ? "--with-schedule" : "--without-schedule", "--bench-dir", benchPath];
+
+    /// <summary><c>up --services-only</c>: the bench's Redis and nothing else, for a restore or a migrate. <c>down</c> stops it again.</summary>
+    public static string[] ServicesOnly(string benchPath) => ["up", "--services-only", "--json", "--bench-dir", benchPath];
+
+    public static string[] StopServices(string benchPath) => ["down", "--json", "--bench-dir", benchPath];
+
+    /// <summary><c>autostart</c> without a word reads the setting; <c>on</c> or <c>off</c> changes it. There is no JSON mode.</summary>
+    public static string[] AutostartRead(string benchPath) => ["autostart", "--bench-dir", benchPath];
+
+    public static string[] Autostart(bool on, string benchPath) => ["autostart", on ? "on" : "off", "--bench-dir", benchPath];
+
+    /// <summary>The plan and apply of <c>service</c>: <c>--dry-run --json</c>, then <c>--apply TOKEN --yes --jsonl</c> (<see cref="PlanReviewRequest.Tokened"/>).</summary>
+    public static string[] ServiceBase(string benchPath, bool? scheduler = null) =>
+        scheduler is { } on ? ["service", on ? "--with-schedule" : "--without-schedule", "--bench-dir", benchPath] : ["service", "--bench-dir", benchPath];
+
+    /// <summary>
+    /// <c>watch</c> and <c>fg</c> run until the person ends them and have no JSON, so they open in a terminal the person closes. The command
+    /// is the CLI itself with the PATH the shim uses; the bench path is an argument of the shell script, never part of it.
+    /// </summary>
+    public static string[] InTerminal(string verb, string benchPath) =>
+        ["/bin/sh", "-c", "PATH=\"$HOME/.local/bin:$PATH\"; exec benchbar \"$@\"", "benchbar", verb, "--bench-dir", benchPath];
+}
+
+/// <summary>The lockfile calls that change things. The CLI has no plan or token for them, so the sheet shows what <c>--dry-run</c> prints and applies with <c>--yes</c>.</summary>
+public static class LockArgs
+{
+    public static string[] Preview(string verb, string benchPath) => ["lock", verb, "--dry-run", "--bench-dir", benchPath];
+
+    public static string[] Run(string verb, string benchPath) => ["lock", verb, "--yes", "--bench-dir", benchPath];
+
+    /// <summary>The sheet's request: the dry run's own text, then <c>--yes</c> after the person's yes.</summary>
+    public static PlanReviewRequest Review(string verb, string benchPath) => verb == "write"
+        ? new PlanReviewRequest("Write the lockfile", Preview(verb, benchPath), _ => Run(verb, benchPath))
+        {
+            ConfirmLabel = "Write", RequiresToken = false, PlanIsText = true,
+            Summary = "Writes benchbar.toml from this bench. The old file is backed up first.",
+        }
+        : new PlanReviewRequest("Apply the lockfile", Preview(verb, benchPath), _ => Run(verb, benchPath))
+        {
+            ConfirmLabel = "Apply", RequiresToken = false, PlanIsText = true,
+            Summary = "Clones missing apps, switches branches and fast forwards to the pinned commits. No site is touched.",
+        };
+}
+
+/// <summary>The setting <c>autostart</c> prints: "autostart is on (...)" or "autostart is off".</summary>
+public static class AutostartText
+{
+    /// <summary>True for on, false for off, null when the lines say neither (an unknown CLI wording: the control stays off).</summary>
+    public static bool? Parse(IEnumerable<string> lines)
+    {
+        foreach (var line in lines)
+        {
+            if (line.Contains("autostart is on", StringComparison.OrdinalIgnoreCase)) return true;
+            if (line.Contains("autostart is off", StringComparison.OrdinalIgnoreCase)) return false;
+        }
+        return null;
+    }
 }
