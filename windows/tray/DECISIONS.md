@@ -4,17 +4,31 @@ One line per non obvious choice. The 0.8.0 spike that chose WPF over WinUI was d
 
 ## Spike: the shell (0.8.0)
 
-- **The tray app is WPF on .NET 10 with the Fluent theme**, chosen under the rule below (2026-10-10, PR #70). Laptop (Ryzen 7 6800H, Windows 11 26300, medians of 5): private bytes at rest WPF 16.7 MB, WinUI 73.5 MB; CPU while animating WPF 0.94%, WinUI 1.12% of one core, both at 21 fps; click to flyout 4.7 and 12.1 ms; logon to icon 316 and 194 ms cold; the rule picks WPF. windows-latest: private bytes 16.6 and 23.6 MB; CPU not comparable by the rule (WinUI animated at 25.5 fps, WPF at 20.9), a tie per frame. Deployment points the same way: framework dependent WPF needs the .NET 10 Desktop Runtime (25.5 MB), WinUI also the Windows App SDK runtime (94.8 MB); self contained 186.5 and 276.1 MB.
+- **The tray app is WPF on .NET 10 with the Fluent theme**, chosen under the rule below (2026-10-10, PR #70). Laptop (Ryzen 7 6800H, Windows
+  11 26300, medians of 5): private bytes at rest WPF 16.7 MB, WinUI 73.5 MB; CPU while animating WPF 0.94%, WinUI 1.12% of one core, both at
+  21 fps; click to flyout 4.7 and 12.1 ms; logon to icon 316 and 194 ms cold; the rule picks WPF. windows-latest: private bytes 16.6 and
+  23.6 MB; CPU not comparable by the rule (WinUI animated at 25.5 fps, WPF at 20.9), a tie per frame. Deployment points the same way:
+  framework dependent WPF needs the .NET 10 Desktop Runtime (25.5 MB), WinUI also the Windows App SDK runtime (94.8 MB); self contained
+  186.5 and 276.1 MB.
 - Decision rule, fixed before any numbers existed: choose the shell with the lower private bytes at rest and CPU while animating, unless click to flyout is above 150 ms or logon to icon is above 2 s for that shell. A difference under 10% on a metric is a tie. On an overall tie, prefer the shell with less deployment friction on a clean Windows 11.
 - The shell is the only variable: both shells use one shared library (`spike/Tray.Core`) for the state model, the poller, the frame sequencer, the icon frames and the harness pipe, H.NotifyIcon for the icon (`.WinUI` and `.Wpf`), and the same flyout policy.
-- Runner frames are drawn to an HICON at run time, not exported to an `.ico` per frame: the tray slot's pixel size follows the taskbar monitor's DPI and can change while the app runs (16, 20, 24 or 32 px), the template runner is tinted for the taskbar's light or dark theme, custom runners are PNG folders loaded at run time anyway, and no Mac or Swift step enters the Windows build. Each frame is drawn once per (size, tint) and cached; an animation tick only swaps the cached handle with `NIM_MODIFY`.
+- Runner frames are drawn to an HICON at run time, not exported to an `.ico` per frame: the tray slot's pixel size follows the taskbar
+  monitor's DPI and can change while the app runs (16, 20, 24 or 32 px), the template runner is tinted for the taskbar's light or dark
+  theme, custom runners are PNG folders loaded at run time anyway, and no Mac or Swift step enters the Windows build. Each frame is drawn
+  once per (size, tint) and cached; an animation tick only swaps the cached handle with `NIM_MODIFY`.
 - Visual Studio 2026 has no `Microsoft.VisualStudio.Workload.WinUI`: "WinUI application development" is `Microsoft.VisualStudio.Workload.Universal` (the old UWP id, renamed). The preflight check uses that id, and installing it fails with exit code 8006 while Visual Studio or any MSBuild process runs (`--passive` answers the "close these processes" prompt with Cancel).
 - `benchbar` is on PATH only in a login shell inside the distro (`~/.local/bin` comes from `~/.profile`), so the fixture was recorded with `wsl.exe -d Ubuntu-24.04 -- bash -lc 'benchbar status --json'`. The shim must start a login shell, or call the CLI by its full path.
 - Smart App Control is on and enforcing on the development laptop and blocks freshly built, unsigned binaries now and then (`0x800711C7`, Code Integrity events 3077 and 3033). A clean Windows 11 with Smart App Control on would block an unsigned tray app outright, whichever shell is chosen, so the shipped app needs code signing; that is out of this spike's scope and does not change the comparison.
-- The harness checks the frame rate each shell actually achieves (`stats` over the pipe, answered by Tray.Core for both), because a cheaper CPU number would mean nothing if one shell drew fewer frames. Both reach 21.3 fps at the 30 fps target: a one shot dispatcher timer of 33 ms waits for the next 15.6 ms system timer tick, so it fires every 46.9 ms. The real app accepts the steps (64, 32, 21.3 fps) instead of calling `timeBeginPeriod`, which raises timer resolution for the whole process and costs power.
+- The harness checks the frame rate each shell actually achieves (`stats` over the pipe, answered by Tray.Core for both), because a cheaper
+  CPU number would mean nothing if one shell drew fewer frames. Both reach 21.3 fps at the 30 fps target: a one shot dispatcher timer of 33
+  ms waits for the next 15.6 ms system timer tick, so it fires every 46.9 ms. The real app accepts the steps (64, 32, 21.3 fps) instead of
+  calling `timeBeginPeriod`, which raises timer resolution for the whole process and costs power.
 - Icon order is the same in both shells: the controller and the first runner frame exist before `NIM_ADD`, so "icon added" means a runner is visible. It is reported from H.NotifyIcon's `TrayIcon.Created`, which fires after `Shell_NotifyIcon(NIM_ADD)` succeeded.
 - Both shells call H.NotifyIcon's `ForceCreate()` with its default, which puts the process in Windows efficiency mode (EcoQoS, idle priority). Neither shell leaves it when the flyout opens, so both are measured in efficiency mode for every metric, clicks included: equal, and if anything pessimistic for the click. The real app should leave efficiency mode while the flyout is open.
-- The WinUI shell's right click menu uses H.NotifyIcon's `ContextMenuMode.PopupMenu`, not `SecondWindow`: `SecondWindow` builds a hidden XAML window (`WinUIDesktopWin32WindowClass` plus a popup bridge) when the icon is created, which broke "no window at startup" and cost 25 MB private at rest (98.8 MB with it, 73.7 MB without, one run each). Found by counting each shell's top level windows at rest; WPF's `ContextMenu` gets its window only when it first opens.
+- The WinUI shell's right click menu uses H.NotifyIcon's `ContextMenuMode.PopupMenu`, not `SecondWindow`: `SecondWindow` builds a hidden
+  XAML window (`WinUIDesktopWin32WindowClass` plus a popup bridge) when the icon is created, which broke "no window at startup" and cost 25
+  MB private at rest (98.8 MB with it, 73.7 MB without, one run each). Found by counting each shell's top level windows at rest; WPF's
+  `ContextMenu` gets its window only when it first opens.
 - Both shells stamp the flyout's first frame the same way on every open, the first one included (the first `CompositionTarget.Rendering` after `Show` or `Activate`), and rebuild the bench rows only when a poll changed something. The click gate uses the warm opens; the cold first open is reported apart.
 - The harness sets `BENCHBAR_TRAY_REDUCE_MOTION=0` for both shells: the windows-latest runner has animation effects off, so its first measured run showed a still frame (0 fps) and the CPU "while animating" was idle CPU. The verdict now refuses the CPU comparison unless both shells reach 15 fps and are within 10% of each other.
 - WinUI's private bytes at rest depend on the graphics driver: 23.6 MB on the CI runner (a basic display adapter) and 73.5 MB on the laptop (AMD and NVIDIA drivers), while WPF is 16.4 and 16.7 MB on both. The XAML compositor sets up its Direct3D device even with no window shown. The laptop is the representative number: a real user has a GPU driver.
@@ -35,7 +49,10 @@ One line per non obvious choice. The 0.8.0 spike that chose WPF over WinUI was d
 - `paused` (crash guard, broken or port conflict) holds the alert pose without the stumble; only `crashed` stumbles three times. A setup problem shows the unknown pose, a stopped distro the sleeping one.
 - An unknown `state` keeps its raw name and shows as "unknown (NAME)", unknown fields are ignored, `site: null` shows "no site": Session 5 adds `not_adopted`, `pending_operations`, `redis` and `sites[].served` while this is built, and neither side waits for the other.
 - There is no CPU source on Windows yet (a Windows process cannot sample processes inside WSL and `status --json` carries no load), so the running loop plays at speed 1. `ILoadSource` and the Mac's speed mapping stay for when the CLI reports load.
-- Toasts: one per bench when it enters crashed, paused by the crash guard, paused by a port conflict or paused broken, with the fix line. The first good snapshot only seeds (no toast for a state found at launch, as on the Mac); unknown, distro stopped and problem snapshots never reset the memory, so crashed, unknown, crashed is one toast. Turned off, the policy keeps tracking, so turning it on does not replay old news.
+- Toasts: one per bench when it enters crashed, paused by the crash guard, paused by a port conflict or paused broken, with the fix line.
+  The first good snapshot only seeds (no toast for a state found at launch, as on the Mac); unknown, distro stopped and problem snapshots
+  never reset the memory, so crashed, unknown, crashed is one toast. Turned off, the policy keeps tracking, so turning it on does not replay
+  old news.
 - Toasts go through the tray icon's own notification (`Shell_NotifyIcon` with `NIF_INFO`), which Windows 10 and 11 show as a toast under the app's name: no AppUserModelID registration, no Start menu shortcut and no extra package.
 - `config.json` is the shim's file; the tray writes only its `tray` object and keeps every other key, at the top level and inside `tray`, atomically. A file that is not JSON loads as defaults and is copied to `config.json.bad` before the first save, so the shim's keys are never lost silently.
 - Custom runners use the Mac's manifest and rules unchanged (36 px tall frames), scaled to fit the square tray slot with the aspect kept; Windows adds refusals for reserved device names and any reparse point in the folder. Frames are decoded when drawn, not held in memory.
@@ -45,9 +62,18 @@ One line per non obvious choice. The 0.8.0 spike that chose WPF over WinUI was d
 - Efficiency mode (H.NotifyIcon's default) is left while the flyout, a Logs or a Doctor window is open and restored when the last one closes, so a click is not served at idle priority.
 - Single instance through a named mutex; a second start signals the first to open its flyout and exits.
 - The Startup shortcut is `BenchBar Tray.lnk`, written through `IShellLinkW`: the name the shim's doctor and `install.ps1` look for.
-- Measured 2026-10-29 on the laptop (Ryzen 7 6800H, RTX 3070 Ti; the display ran at 2560 by 1440 and 100 percent scaling that day, not the 1920 by 1080 at 125 percent the brief named), framework dependent Release build, the spike's harness pattern (the app's own pipe, 20 s warm up, 60 s window, medians of 5): at rest with the benches stopped 17.0 MB private, 0.08 percent of one core; the real frappe-bench running (the running loop at 4.8 fps) 17.4 MB, 0.57 percent; the spike's load fixture (21.1 fps) 18.9 MB, 0.93 percent. The spike's WPF shell measured with the same script: 17.4 MB at rest. Both targets (under 20 MB at rest, under 1.5 percent animating) hold until the flyout first opens.
+- Measured 2026-10-29 on the laptop (Ryzen 7 6800H, RTX 3070 Ti; the display ran at 2560 by 1440 and 100 percent scaling that day, not the
+  1920 by 1080 at 125 percent the brief named), framework dependent Release build, the spike's harness pattern (the app's own pipe, 20 s
+  warm up, 60 s window, medians of 5): at rest with the benches stopped 17.0 MB private, 0.08 percent of one core; the real frappe-bench
+  running (the running loop at 4.8 fps) 17.4 MB, 0.57 percent; the spike's load fixture (21.1 fps) 18.9 MB, 0.93 percent. The spike's WPF
+  shell measured with the same script: 17.4 MB at rest. Both targets (under 20 MB at rest, under 1.5 percent animating) hold until the
+  flyout first opens.
 - The first build measured 39.8 MB at rest: the right click menu was built at startup, and building it loaded WPF's render stack (wpfgfx, d3d9 and the NVIDIA user mode driver). The menu is now built on the first right click (`TrayRightMouseDown`, `TrayKeyboardContextMenu`, `PreviewTrayContextMenuOpen`). Found by stopping startup at each step and comparing loaded modules.
-- Once the flyout has opened, WPF keeps d3d9 and the GPU driver loaded for good, even in software rendering (it creates the device to read the render tier): 62.6 MB private after one open with hardware rendering. `RenderMode.SoftwareOnly` (the flyout is plain 2D; the acrylic is DWM's) and closing a flyout that stayed hidden for 30 s, with a compacting collection, bring that to 42.7 MB (3 runs). The remaining 25 MB is native WPF and driver memory no in process switch frees; the way below 20 MB after use is a flyout in a short lived second process, left for later. `BENCHBAR_TRAY_GPU=1` turns hardware rendering back on for comparison.
+- Once the flyout has opened, WPF keeps d3d9 and the GPU driver loaded for good, even in software rendering (it creates the device to read
+  the render tier): 62.6 MB private after one open with hardware rendering. `RenderMode.SoftwareOnly` (the flyout is plain 2D; the acrylic
+  is DWM's) and closing a flyout that stayed hidden for 30 s, with a compacting collection, bring that to 42.7 MB (3 runs). The remaining 25
+  MB is native WPF and driver memory no in process switch frees; the way below 20 MB after use is a flyout in a short lived second process,
+  left for later. `BENCHBAR_TRAY_GPU=1` turns hardware rendering back on for comparison.
 - Click to flyout on the laptop: warm 30 to 54 ms, after the 30 s release 15 to 17 ms, the first open of a process 321 to 353 ms (the spike's WPF shell: 266 to 273 ms first, 14 to 16 ms warm). The first open loads the render stack and the Fluent theme; ReadyToRun did not change it (tried, removed: it only grew the download).
 - The harness `stats` reply also carries `gc_heap` and `gc_committed`, so a measurement can split managed from native memory without a diagnostics tool.
 - The test host's `Post` takes a lock that the tests' own UI calls take too, as a dispatcher would serialize them: `RunnerIcons` is UI thread only, and running posted work inline on the poller's thread made two controller tests fail now and then with "Collection was modified".
@@ -68,18 +94,43 @@ One line per non obvious choice. The 0.8.0 spike that chose WPF over WinUI was d
 ## The release path (0.8.0)
 
 - A zip per CPU plus `install.ps1`, no MSI and no Inno Setup in v1: both add a toolchain and a second file to sign, and a zip plus a script matches `install.sh`. winget comes after the first signed release (an unsigned package gets SmartScreen warnings there too).
-- `release-windows.yml` is its own workflow; release.yml stays as it is. It attaches to the draft release.yml creates for the tag. On a tag push it waits up to 130 minutes (release.yml's macOS job allows 120) and creates a draft only when none appears, with a warning that a later release.yml run replaces the notes, so this workflow must be re-run afterwards. A manual run needs the draft to exist and fails otherwise. It never publishes.
+- `release-windows.yml` is its own workflow; release.yml stays as it is. It attaches to the draft release.yml creates for the tag. On a tag
+  push it waits up to 130 minutes (release.yml's macOS job allows 120) and creates a draft only when none appears, with a warning that a
+  later release.yml run replaces the notes, so this workflow must be re-run afterwards. A manual run needs the draft to exist and fails
+  otherwise. It never publishes.
 - The Windows sums file is `benchbar-windows-X.Y.Z-SHA256SUMS.txt`, not `SHA256SUMS`: the Mac release already has an asset with that name, and `install.sh` takes the first asset whose name ends in `SHA256SUMS`.
+- Signing through SignPath runs only when `SIGNPATH_API_TOKEN` and `SIGNPATH_ORGANIZATION_ID` exist and the run builds the release tag (tag
+  push, or dispatch with `draft_release` on); never on pull requests or for an artifact only dispatch. It covers the project's own binaries
+  only (`benchbar.exe`, `BenchBarTray.exe`, `BenchBarTray.dll`, `BenchBar.Tray.Core.dll`), because SignPath Foundation signs a project's own
+  code, not NuGet libraries. It is best effort: a signed file replaces the unsigned one only when `Get-AuthenticodeSignature` says Valid
+  (and, for an exe, its PE machine type matches the zip's CPU). A broken signature never ships.
+- The README and the release notes list what `Get-AuthenticodeSignature` says about every `.exe` and `.dll` in the zip, read after the swap: third party DLLs (H.NotifyIcon) show as not signed by this project, Microsoft's as signed. "Every file is signed" is written only when it is true.
+- A run that attaches to a release checks out `refs/tags/vX.Y.Z` and fails when the tag is missing, so a manual run can never put the wrong
+  commit into a release. `draft_release` defaults to off: an artifact only dispatch builds the dispatched ref and is never signed. The
+  package job has `contents: read` and `actions: read` (SignPath's action downloads the unsigned artifact with the GitHub token); only the
+  release job has `contents: write`, and it runs on ubuntu so the long wait is cheap.
 - No release step signs anything (2026-11-19, issue 135). The SignPath steps, the `SIGNPATH_*` secret checks, the 360 minute timeout, the `actions: read` grant and the `SIGNING_REQUIRED` gate left `release-windows.yml`, because SignPath Foundation declined the project and nothing could ever run them. `Get-AuthenticodeSignature` stays: the package job records it per file in `signing-ARCH.json` and README.txt and the release notes quote it, so a download says what is unsigned. A future signing route comes back as its own job.
 - The README and the release notes list what `Get-AuthenticodeSignature` says about every `.exe` and `.dll` in the zip, read after the swap: third party DLLs (H.NotifyIcon) show as not signed by this project, Microsoft's as signed. "Every file is signed" is written only when it is true.
 - A run that attaches to a release checks out `refs/tags/vX.Y.Z` and fails when the tag is missing, so a manual run can never put the wrong commit into a release. `draft_release` defaults to off: an artifact only dispatch builds the dispatched ref. The package job has only `contents: read`; only the release job has `contents: write`, and it runs on ubuntu so the wait for the Mac draft is cheap.
 - Every exe's PE machine type (0x8664, 0xAA64) is checked before packing, so an amd64 build cannot land in the Arm64 zip.
 - The workflow skips the tray with a warning when `windows/tray/BenchBarTray` is missing on the checked out ref, so it does not depend on the order the tray and release pull requests merge.
 - `workflow_dispatch` works only once the file is on main, so pull requests that change the workflow or `install.ps1` build both zips and run the installer on windows-latest (PowerShell 7, then Windows PowerShell 5.1 as an update, plus a refused bad checksum) without touching releases.
-- `install.ps1` replaces only files an earlier install wrote (`.installed-files.txt` in the install folder), renames a locked exe (a running keepalive holds `benchbar.exe`) to `.old` before the new copy goes in, and closes a running tray only by its exact path, never by name. Native programs run with `ErrorActionPreference=Continue`, because Windows PowerShell 5.1 turns their stderr into a terminating error under `Stop`.
-- `install.ps1` runs inside one script block, so piped into `iex` it leaves no variable or function behind and cannot overwrite the user's `$Version` or `$Source`; the file form still takes `-Version`, `-NoTray`, `-Yes` and `-Source`. It picks the zip from `RuntimeInformation.OSArchitecture` (the machine's CPU, so x64 PowerShell emulated on Arm64 installs the arm64 zip), checks the .NET runtime in the same two places as `benchbar.exe doctor`, and when `benchbar.exe` cannot start (Smart App Control, an antivirus) says so plainly and exits 1 before any PATH write. A tray app it closed is started again whatever fails.
+- `install.ps1` replaces only files an earlier install wrote (`.installed-files.txt` in the install folder), renames a locked exe (a running
+  keepalive holds `benchbar.exe`) to `.old` before the new copy goes in, and closes a running tray only by its exact path, never by name.
+  Native programs run with `ErrorActionPreference=Continue`, because Windows PowerShell 5.1 turns their stderr into a terminating error
+  under `Stop`.
+- `install.ps1` runs inside one script block, so piped into `iex` it leaves no variable or function behind and cannot overwrite the user's
+  `$Version` or `$Source`; the file form still takes `-Version`, `-NoTray`, `-Yes` and `-Source`. It picks the zip from
+  `RuntimeInformation.OSArchitecture` (the machine's CPU, so x64 PowerShell emulated on Arm64 installs the arm64 zip), checks the .NET
+  runtime in the same two places as `benchbar.exe doctor`, and when `benchbar.exe` cannot start (Smart App Control, an antivirus) says so
+  plainly and exits 1 before any PATH write. A tray app it closed is started again whatever fails.
 - Shim: `benchbar.exe doctor` gains `dotnet_desktop` and `tray_logon` (text form only) when `BenchBarTray.exe` sits next to it, about 50 lines. A missing runtime is a warning, so the optional tray never makes doctor exit 1; the check proves the shortcut and the tray exe exist and does not read the shortcut's target. Recorded here because docs/DECISIONS.md belongs to the CLI session this week.
 - The code signing policy in docs/windows.md is written in SignPath Foundation's required form and marked pending until the application is approved.
+- Test builds go to testers by hand before any release, unsigned (Akash, 2026-10-29: no signing yet). Each zip carries `install.ps1`; run
+  from the unpacked zip (benchbar.exe and SHA256SUMS beside it, no `-Version`, `-Zip` or `-Source`) it installs that folder, and `-Zip PATH`
+  installs a zip downloaded by hand. Every file is checked against the zip's own SHA256SUMS, and a program file the list does not name is
+  refused; that finds a damaged or half unpacked download, not a swapped one, so a checksums file next to a `-Zip` is checked as well when
+  present and its absence is a warning. The signing steps stay in the workflow and run only once the SignPath secrets exist.
 - Test builds go to testers by hand before any release, unsigned (Akash, 2026-10-29: no signing yet). Each zip carries `install.ps1`; run from the unpacked zip (benchbar.exe and SHA256SUMS beside it, no `-Version`, `-Zip` or `-Source`) it installs that folder, and `-Zip PATH` installs a zip downloaded by hand. Every file is checked against the zip's own SHA256SUMS, and a program file the list does not name is refused; that finds a damaged or half unpacked download, not a swapped one, so a checksums file next to a `-Zip` is checked as well when present and its absence is a warning. The workflow has no signing step.
 - The wizard state is a plain model in `Tray.Core` (`WizardModel`) that the views only draw. Pages are built once and then refreshed, so a poll or log line never takes the caret out of a field.
 - Passwords are `Secret`s (`SecureString`). They are read back only to fill the environment of the one child process, hidden in anything the child prints back, and never put in arguments, config or logs.
@@ -131,10 +182,20 @@ One line per non obvious choice. The 0.8.0 spike that chose WPF over WinUI was d
 ## 0.8.1: beta, Report a Bug and the review fixes
 
 - **BenchBar for Windows says it is a beta** in the window title, a "Beta" pill beside the app name (sidebar and About), the tooltip (`BenchBar (Beta): ...`), the Welcome page and a banner that stays until it is dismissed once (`tray.beta_banner_dismissed` in config.json). The wording lives in `BetaText` so the views and tests agree.
-- **Report a Bug is one flow for every entry point** (tray menu, About, beta banner, wizard footer, every Report This Problem button): `benchbar.exe report-windows --json` with the configured distro, the bench selected in the window (never the first bench), a context line (`ReportContext`: entry point, window or wizard page, the failure beside the button), the tray version and `--include` of the tray error log. The shim works with no WSL, a stopped distro and no CLI, so the old "distro is stopped" refusal is gone. A second click while a report is written is ignored.
-- **When benchbar.exe cannot start** (missing, SmartScreen, antivirus) or prints no report, the tray writes its own zip (`benchbar-tray-report-*.zip` in `%LOCALAPPDATA%\BenchBar\reports`, newest 10 kept: versions, Windows, context, the error, the tray log) and opens the same issue form with `versions`, `windows` and `what` filled. Names become `<user>` and paths `<path>` in the URL, which stays under 3900 characters.
+- **Report a Bug is one flow for every entry point** (tray menu, About, beta banner, wizard footer, every Report This Problem button):
+  `benchbar.exe report-windows --json` with the configured distro, the bench selected in the window (never the first bench), a context line
+  (`ReportContext`: entry point, window or wizard page, the failure beside the button), the tray version and `--include` of the tray error
+  log. The shim works with no WSL, a stopped distro and no CLI, so the old "distro is stopped" refusal is gone. A second click while a
+  report is written is ignored.
+- **When benchbar.exe cannot start** (missing, SmartScreen, antivirus) or prints no report, the tray writes its own zip
+  (`benchbar-tray-report-*.zip` in `%LOCALAPPDATA%\BenchBar\reports`, newest 10 kept: versions, Windows, context, the error, the tray log)
+  and opens the same issue form with `versions`, `windows` and `what` filled. Names become `<user>` and paths `<path>` in the URL, which
+  stays under 3900 characters.
 - **Continue on Check Your PC reads each step's `blocking` flag**, not the shim's `ready`. A blocking step in `warn` counts as done, except "not checked" (the distro was stopped and the probe did not run). An older shim without the field gets it from the step id (linger, keepalive, wslconfig, shim_path are advice).
-- **The tray cannot cancel the shim part way through `wsl_enable` in a way the shim could report**: the shim's context is never cancelled, and the tray ends it by killing the process tree. The elevated `wsl.exe` belongs to Windows and keeps running, so a cancel or the 10 minute timeout says "Stopped waiting" and lets the next check decide; only the shim's own `reboot_required` result forces Restart Now. A restart an action asked for stays on screen until Windows has restarted (the check may not read the marker yet).
+- **The tray cannot cancel the shim part way through `wsl_enable` in a way the shim could report**: the shim's context is never cancelled,
+  and the tray ends it by killing the process tree. The elevated `wsl.exe` belongs to Windows and keeps running, so a cancel or the 10
+  minute timeout says "Stopped waiting" and lets the next check decide; only the shim's own `reboot_required` result forces Restart Now. A
+  restart an action asked for stays on screen until Windows has restarted (the check may not read the marker yet).
 - **Stop Waiting on the plan sheet detaches the run instead of cancelling it**: the model stays alive, the sheet closes, and the result comes as a notification. The window close prompt counts it as a run in flight.
 - **The wizard makes the distro it checked the shim's distro** (`adopt-distro NAME --json`, once per name, without `--yes` so the linger change is never applied silently). If that fails, Continue stays off and the line says why.
 - **The Linux home folder is read, never guessed.** If `printenv HOME` fails and the wizard did not just create the user, Continue stays on the Check page with the reason.
@@ -145,7 +206,12 @@ One line per non obvious choice. The 0.8.0 spike that chose WPF over WinUI was d
 
 ## 0.8.1: live QA on a real Windows 11 PC
 
-- **The tray does not use InvariantGlobalization.** The Fluent ScrollViewer template asks for a specific culture, and with the invariant mode the XAML parse failed with "Cannot find non-neutral culture related to 'en-us'" about 35 times a second (the Check page never drew, the tray ran at 100 percent CPU). The flag came from the spike, where it kept the two shells' sizes like for like; the real tray has no size target for it, and the code already passes `InvariantCulture`/`Ordinal` wherever output is parsed or compared (a search of `ToLower`, `StartsWith`, `IndexOf` and number formats found nothing culture dependent). Re-measure private bytes at rest with the flag off before quoting the 17 MB figure again.
+- **The tray does not use InvariantGlobalization.** The Fluent ScrollViewer template asks for a specific culture, and with the invariant
+  mode the XAML parse failed with "Cannot find non-neutral culture related to 'en-us'" about 35 times a second (the Check page never drew,
+  the tray ran at 100 percent CPU). The flag came from the spike, where it kept the two shells' sizes like for like; the real tray has no
+  size target for it, and the code already passes `InvariantCulture`/`Ordinal` wherever output is parsed or compared (a search of `ToLower`,
+  `StartsWith`, `IndexOf` and number formats found nothing culture dependent). Re-measure private bytes at rest with the flag off before
+  quoting the 17 MB figure again.
 - **The error log writes an identical exception from the same place once a minute** and counts the rest ("repeated N more times since the last line"): a render or layout loop can throw faster than the 256 KB cap rotates, and the fix for the cause is not the log's job.
 - **A left aligned panel with a MaxWidth shrinks to its widest child**, so wizard rows changed width from state to state. Each page now sits in `Ui.Constrain`: a star column with a MaxWidth (560, 640 or 720) next to an auto column, so the column is the same width in every state and never wider than the window. The wizard's scroll viewer never scrolls sideways.
 - **An icon glyph with no brush was drawn in no color.** `Ui.Glyph` assigned `Foreground = null`, which is a local value that beats the inherited one; every glyph without a brush (More actions, the sidebar) was invisible while the ones with a status brush showed. It assigns only when it has a brush.
@@ -156,24 +222,57 @@ One line per non obvious choice. The 0.8.0 spike that chose WPF over WinUI was d
 - **Report a Bug reads no stale snapshot for the bench**: the distro comes from the config (read afresh), and the only bench taken from the last poll is the single bench of a poll that was for the same distro and neither stopped nor failed. The busy window says after 6 seconds that a distro that does not answer can take up to a minute (the shim waits up to 20 seconds for each `wsl.exe` call).
 - **GDI+ is one test collection.** `Image.Save` failed now and then with ArgumentNullException (encoder) when two test classes used GDI+ at once and the codec list came back empty; every class that draws or saves a bitmap is in the "GDI+" collection, and the PNG helper looks the encoder up under a lock.
 - **Render smoke tests** measure and arrange every wizard page, the main window states and tabs, the log window and Settings at their real sizes on an STA thread, and fail on an exception or on a button outside the window.
-- **The report ready window opens nothing by itself.** It used to open the GitHub issue and Explorer and then win the foreground back; on Windows 11 Chrome (after 0.15 s) and Explorer (after 0.8 s) always took it again, because the foreground rules favour the process that was started last. The window now lists the three steps and has Open GitHub Issue (the default button) and Show Zip in Explorer; a click is a user action, so what it opens comes to the front by the rules instead of against them. This also ends the occasional second Explorer window. A second Report a Bug click while the window is open brings it forward and starts no report.
+- **The report ready window opens nothing by itself.** It used to open the GitHub issue and Explorer and then win the foreground back; on
+  Windows 11 Chrome (after 0.15 s) and Explorer (after 0.8 s) always took it again, because the foreground rules favour the process that was
+  started last. The window now lists the three steps and has Open GitHub Issue (the default button) and Show Zip in Explorer; a click is a
+  user action, so what it opens comes to the front by the rules instead of against them. This also ends the occasional second Explorer
+  window. A second Report a Bug click while the window is open brings it forward and starts no report.
 - **Start for a distro checks itself.** After a Start the tray checks once, 30 seconds later, that the distro is up; if it is still stopped (the shim's keepalive refused, for example because another keepalive holds the mutex) a notice says "NAME did not start. Open the log or try again."
 - **The Review page shows blocker cards only when the plan has blockers**, each with its message and fix once; the red error line and the plan's own fix line show only when there are none. A step the person stopped shows no Report This Problem link.
 - **Five more built in runners are ports.** The runners added in 0.8.1 (Kettle, Server rack, Paper plane, Snail, Rocket) are hand ports of the Mac's drawing code, as the Bench and the Cup are. `RunnerCanvas` gained `Shape`, `CutDot`, `CutLine` and `CutArc` to match the Mac's new helpers; `BuiltInRunners.IsReserved` now checks every built in.
-- **Runner holes are cut through a mask.** `RunnerCanvas.Cutting` draws the hole shapes into a mask and keeps the part of each pixel's alpha the mask does not cover, as the Mac's clear blend mode does. It used to paint transparent ink with SourceCopy, which seems to wipe every pixel an antialiased edge touches: at 16 px the new Snail's spiral took most of its shell (7 inked pixels where the Mac drawing has 36). The Bench's and the Cup's eyes go through the same path and are now a little closer to the Mac's too.
+- **Runner holes are cut through a mask.** `RunnerCanvas.Cutting` draws the hole shapes into a mask and keeps the part of each pixel's alpha
+  the mask does not cover, as the Mac's clear blend mode does. It used to paint transparent ink with SourceCopy, which seems to wipe every
+  pixel an antialiased edge touches: at 16 px the new Snail's spiral took most of its shell (7 inked pixels where the Mac drawing has 36).
+  The Bench's and the Cup's eyes go through the same path and are now a little closer to the Mac's too.
 
 ## Windows onboarding fixes (review of 0.8.2 and a live test on Windows 11)
 
-- **The PC is held awake (`ES_CONTINUOUS | ES_SYSTEM_REQUIRED`) from the first install or setup action to the last exit path**: the end, an exception, Stop, the window closing, Quit. `IWizardHost.KeepAwake(bool)` is called from the UI thread only and the model counts holds, because the execution state belongs to the thread that set it. The timeouts stay (90 minutes for an install, 45 for an action) and keep counting in sleep; the awake hold is what keeps them honest. The display may still turn off. The Install page says to keep the PC plugged in and awake.
+- **The PC is held awake (`ES_CONTINUOUS | ES_SYSTEM_REQUIRED`) from the first install or setup action to the last exit path**: the end, an
+  exception, Stop, the window closing, Quit. `IWizardHost.KeepAwake(bool)` is called from the UI thread only and the model counts holds,
+  because the execution state belongs to the thread that set it. The timeouts stay (90 minutes for an install, 45 for an action) and keep
+  counting in sleep; the awake hold is what keeps them honest. The display may still turn off. The Install page says to keep the PC plugged
+  in and awake.
 - **A timeout is said in the unit it was set in** (`60 seconds`, `90 minutes`), not as `(int)TotalMinutes`, which printed "0 minutes" for the 60 s read timeout.
-- **A distro that WSL does not list is not a returning user's stopped distro**: `LaunchPlanner` lets `DistroMissing` fall through to the setup check, so a PC with WSL and no usable distro opens the wizard. `DistroName.FromRegistry` never returns `docker-desktop*`, `rancher-desktop*` or `podman-machine*`, default or not: the default when it is usable, else the only usable distro, else none. `windows/shim/distro.go` has the same rule.
-- **The poll and the setup check pick the document out of the output like `CliClient` does** (the whole output, else the first object among its lines, else an object that starts on a line and spans the next ones), refuse a newer `schema_version`, and turn anything unreadable into one line that names a version mismatch and quotes the first line of the output. No page shows a `System.Text.Json` message. `benchbar.exe --shim-version` is compared with the tray's version once at start (a dev build 0.0.0 never warns); a difference stays on the flyout and the window until they match, and the flyout footer shows the tray's version.
+- **A distro that WSL does not list is not a returning user's stopped distro**: `LaunchPlanner` lets `DistroMissing` fall through to the
+  setup check, so a PC with WSL and no usable distro opens the wizard. `DistroName.FromRegistry` never returns `docker-desktop*`,
+  `rancher-desktop*` or `podman-machine*`, default or not: the default when it is usable, else the only usable distro, else none.
+  `windows/shim/distro.go` has the same rule.
+- **The poll and the setup check pick the document out of the output like `CliClient` does** (the whole output, else the first object among
+  its lines, else an object that starts on a line and spans the next ones), refuse a newer `schema_version`, and turn anything unreadable
+  into one line that names a version mismatch and quotes the first line of the output. No page shows a `System.Text.Json` message.
+  `benchbar.exe --shim-version` is compared with the tray's version once at start (a dev build 0.0.0 never warns); a difference stays on the
+  flyout and the window until they match, and the flyout footer shows the tray's version.
 - **A step id or an action id the tray does not know is shown and run, not hidden.** The row uses the step's own `title`, `detail` and optional `fix` (or `fix_command`), a blocking one holds Continue back, and its action runs through the generic `setup run ACTION` path with the label Set Up (`cli_update` says Update). The tray decides nothing from an id except the few it names.
-- **Polling counts windows, not a flag.** The flyout and each window of ours add one viewer; only the last close drops polling to the slow rate. While every window is minimized or another program has had the focus for 30 seconds, the 5 s rate gives way to the rates of no window (30 s with a bench running, the idle back off otherwise); coming back polls at once. Measured live before the change: one open window cost one `benchbar.exe` and six `wsl.exe` starts every 5.4 s.
+- **Polling counts windows, not a flag.** The flyout and each window of ours add one viewer; only the last close drops polling to the slow
+  rate. While every window is minimized or another program has had the focus for 30 seconds, the 5 s rate gives way to the rates of no
+  window (30 s with a bench running, the idle back off otherwise); coming back polls at once. Measured live before the change: one open
+  window cost one `benchbar.exe` and six `wsl.exe` starts every 5.4 s.
 - **The old WSL share is a fallback**: `\\wsl.localhost\DISTRO\...` first, `\\wsl$\DISTRO\...` only when the first does not exist and the second does (older Windows 10 builds).
-- **Stop, a timeout and closing the window kill the Windows process tree only**; apt, dpkg or the CLI inside Ubuntu can keep going and hold the CLI's lock. The tray relies on the CLI's own refusal (`lib/frappe-local/lock.sh`: "Another benchbar run is active (pid N)", "... is starting", "Could not take the lock"), which has no stable id, so the lines are matched in `LockText`. After a Stop or a timeout, Retry first runs the read only setup check, and a run that meets the lock waits and tries again every 15 seconds for at most 10 minutes (the Install page says it is waiting, Stop ends the wait) instead of failing at once or starting a second install. The CLI refuses at the lock before it changes anything, so trying is safe.
-- **A closed tray leaves a trace.** `%LOCALAPPDATA%\BenchBar\running` (holding the version) is written at start and removed on a clean exit; found at the next start with the same version it means the tray ended some other way, and one notice says so with Report a Bug (and a balloon). A different version in the file is an update that closed the old tray: no notice. A caught exception on the UI thread shows one notice too instead of nothing. A fatal one takes the icon out of the notification area before the process ends.
-- **The update banner and the menu offer a release only when it has `benchbar-windows-<version>-<arch>.zip` for this PC's CPU** (`releases/latest` is shared with the Mac app). The action copies the documented one line installer, `irm https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1 | iex`, and says it closes BenchBar and starts it again; the release page stays as a second button. The tag pinned form is not used: `install.ps1` at a tag installs the latest release anyway, it has no version of its own.
+- **Stop, a timeout and closing the window kill the Windows process tree only**; apt, dpkg or the CLI inside Ubuntu can keep going and hold
+  the CLI's lock. The tray relies on the CLI's own refusal (`lib/frappe-local/lock.sh`: "Another benchbar run is active (pid N)", "... is
+  starting", "Could not take the lock"), which has no stable id, so the lines are matched in `LockText`. After a Stop or a timeout, Retry
+  first runs the read only setup check, and a run that meets the lock waits and tries again every 15 seconds for at most 10 minutes (the
+  Install page says it is waiting, Stop ends the wait) instead of failing at once or starting a second install. The CLI refuses at the lock
+  before it changes anything, so trying is safe.
+- **A closed tray leaves a trace.** `%LOCALAPPDATA%\BenchBar\running` (holding the version) is written at start and removed on a clean exit;
+  found at the next start with the same version it means the tray ended some other way, and one notice says so with Report a Bug (and a
+  balloon). A different version in the file is an update that closed the old tray: no notice. A caught exception on the UI thread shows one
+  notice too instead of nothing. A fatal one takes the icon out of the notification area before the process ends.
+- **The update banner and the menu offer a release only when it has `benchbar-windows-<version>-<arch>.zip` for this PC's CPU**
+  (`releases/latest` is shared with the Mac app). The action copies the documented one line installer, `irm
+  https://raw.githubusercontent.com/askysh/benchbar/main/install.ps1 | iex`, and says it closes BenchBar and starts it again; the release
+  page stays as a second button. The tag pinned form is not used: `install.ps1` at a tag installs the latest release anyway, it has no
+  version of its own.
 - **Open at logon honours Windows' own switch**: `HKCU\...\Explorer\StartupApproved\StartupFolder` (value named after the `.lnk`, first byte odd means off). `IsEnabled` reports off when it is off there, and Enable and Disable clear the value (absent means on). The registry is behind `IStartupApproval`.
 - **A password that is shown back is hidden in its JSON forms too** (as written, with `"` and `\` escaped, and as `System.Text.Json` escapes it), at any length. The forms ask for 8 characters or more (the CLI states no minimum) and refuse a line break in the Linux and the Administrator password.
 - **`benchbar.exe` not starting is told by the Windows error code**: 2 and 3 (missing: where it was expected, how to reinstall, that a security product may have removed it), 1260, 4551 and their HRESULTs (blocked: names Smart App Control), 5 (access denied).
@@ -189,30 +288,94 @@ One line per non obvious choice. The 0.8.0 spike that chose WPF over WinUI was d
 
 ## Update Now from the app
 
-- **One source of truth for updates: `benchbar.exe self-update --check --json`.** The tray's own GitHub call is gone; the shim picks the release as install.ps1 does (the Windows zip for this CPU and its sums), says how this copy was installed (`installer`, `store`, `other`) and never starts a stopped distro. The cost at rest does not change: the check still runs only when the BenchBar window opens, with the Settings switch on, at most once in six hours (plus the menu item and About on request), and it costs two short `benchbar.exe` starts instead of one HTTP call in the tray.
+- **One source of truth for updates: `benchbar.exe self-update --check --json`.** The tray's own GitHub call is gone; the shim picks the
+  release as install.ps1 does (the Windows zip for this CPU and its sums), says how this copy was installed (`installer`, `store`, `other`)
+  and never starts a stopped distro. The cost at rest does not change: the check still runs only when the BenchBar window opens, with the
+  Settings switch on, at most once in six hours (plus the menu item and About on request), and it costs two short `benchbar.exe` starts
+  instead of one HTTP call in the tray.
 - **The tray asks `--shim-version` before every check and only a shim of its own version is asked `self-update`.** An older shim forwards an unknown command to the Linux CLI, which would boot the distro and answer for the CLI only. An answer without `install` and `current` is not the shim's and counts as a failed check (quiet, logged).
-- **What is offered follows `install`**: `installer` gets Update Now with the update line under Other Ways; `other` (a dev build, a loose copy, an install kind this tray does not know) gets the update line only, as before; `store` gets no banner, and Check for Updates says the Store updates it. A check error behaves as a failed check did: nothing on screen, a line in tray.log, words only when the person asked.
-- **Update Now runs `powershell.exe -NoProfile -NoLogo -EncodedCommand ...` through ShellExecute**, a console window of its own in the profile folder, not a hidden child of the tray. The script runs `& 'PATH\benchbar.exe' self-update --yes`, says whether it finished and waits for Enter, so the result stays readable after the installer has closed and restarted the tray. `-EncodedCommand` means no shell parses the profile path; inside the single quoted string a quote (and PowerShell's typographic single quotes) is doubled. `cmd /k` was not used because cmd expands `%NAME%` inside quotes.
+- **What is offered follows `install`**: `installer` gets Update Now with the update line under Other Ways; `other` (a dev build, a loose
+  copy, an install kind this tray does not know) gets the update line only, as before; `store` gets no banner, and Check for Updates says
+  the Store updates it. A check error behaves as a failed check did: nothing on screen, a line in tray.log, words only when the person
+  asked.
+- **Update Now runs `powershell.exe -NoProfile -NoLogo -EncodedCommand ...` through ShellExecute**, a console window of its own in the
+  profile folder, not a hidden child of the tray. The script runs `& 'PATH\benchbar.exe' self-update --yes`, says whether it finished and
+  waits for Enter, so the result stays readable after the installer has closed and restarted the tray. `-EncodedCommand` means no shell
+  parses the profile path; inside the single quoted string a quote (and PowerShell's typographic single quotes) is doubled. `cmd /k` was not
+  used because cmd expands `%NAME%` inside quotes.
 - **A second Update Now while the window runs starts nothing** and says "An update is already running in its own window."; the buttons show Updating... and are off until the window closes (the process's Exited event, no timer).
 - **The installer can close the tray politely through the named event `Local\BenchBarTray.Quit`**: the tray quits as from its menu, so the run marker goes. `CloseMainWindow` cannot do it, because the tray usually has no visible window. install.ps1 is outside this folder; until it sets the event it falls back to its forced stop, which removes the marker itself.
-- **"BenchBar was updated to X" compares `tray.last_version` in config.json with the running version** at start: newer shows one notice with What's New (the release page of that version, as the banner's Release Page) and a balloon; the same version, an older one (a downgrade) and a first install say nothing; a dev build neither shows nor records. A config with a `tray` object but no `last_version` is a tray from before this change, so that start counts as an update. Notices now have a `Critical` flag: this one is news, drawn in the normal text color.
+- **"BenchBar was updated to X" compares `tray.last_version` in config.json with the running version** at start: newer shows one notice with
+  What's New (the release page of that version, as the banner's Release Page) and a balloon; the same version, an older one (a downgrade)
+  and a first install say nothing; a dev build neither shows nor records. A config with a `tray` object but no `last_version` is a tray from
+  before this change, so that start counts as an update. Notices now have a `Critical` flag: this one is news, drawn in the normal text
+  color.
 - **The first BenchBar window that closes shows one balloon** ("BenchBar is still running. Find it in the notification area near the clock ... or open BenchBar from the Start menu."), `tray.running_hint_shown` in config.json. Someone who updated already knows where BenchBar lives, so the updated notice marks the hint shown. The "Your Bench Is Ready" subtitle stays; it is a page, not a close hint.
-- **The wizard opens by itself only when that helps** (`LaunchPlanner.Decide`): the resume start after the restart for WSL (always), and while setup is unfinished the installer's `--installed` start (over an old `wizard_dismissed`, since uninstall keeps config.json) and the first start of a tray that never ran here (config.json had no `tray` object) unless dismissed. An ordinary logon start and a start after an update (`--restarted`, or a newer version than `tray.last_version`) never open it; a real PC with WSL and no distro had it open at every start. Any close before Done (Cancel, the window's X, Alt+F4, Quit) sets `wizard_dismissed`; the "Stop it and close?" question for a running step stays.
-- **Set Up BenchBar stays reachable while setup is unfinished**: the launch check runs `setup check` once at start on a PC with no bench, dismissed or not (it skipped dismissed PCs before), and its answer shows "Set Up BenchBar..." in the tray menu and a Set Up BenchBar button on the flyout's problem card; the window's cards had it already. A bench in a later poll or Done hides them. No timer is added.
+- **The wizard opens by itself only when that helps** (`LaunchPlanner.Decide`): the resume start after the restart for WSL (always), and
+  while setup is unfinished the installer's `--installed` start (over an old `wizard_dismissed`, since uninstall keeps config.json) and the
+  first start of a tray that never ran here (config.json had no `tray` object) unless dismissed. An ordinary logon start and a start after
+  an update (`--restarted`, or a newer version than `tray.last_version`) never open it; a real PC with WSL and no distro had it open at
+  every start. Any close before Done (Cancel, the window's X, Alt+F4, Quit) sets `wizard_dismissed`; the "Stop it and close?" question for a
+  running step stays.
+- **Set Up BenchBar stays reachable while setup is unfinished**: the launch check runs `setup check` once at start on a PC with no bench,
+  dismissed or not (it skipped dismissed PCs before), and its answer shows "Set Up BenchBar..." in the tray menu and a Set Up BenchBar
+  button on the flyout's problem card; the window's cards had it already. A bench in a later poll or Done hides them. No timer is added.
 
 ## 0.9.0: robustness (issue 167)
 
 - **`SystemProcessRunner` has the pipe grace of the stream runner** (5 s after the child exits; `ProcessKill.Tree` catches the Win32 and Aggregate exceptions of a kill that fails). It reads into buffers, not with `ReadToEnd`, so a call whose grandchild holds the pipe returns what the child printed. Two runners remain, for lines and for the whole text; they share the constant and the kill.
-- **Follow asks `logs --json --since` through one process while lines arrive, and the distro probe (a second process) only before the first poll, after an empty poll and after a pause.** A distro that stopped is found on the first empty poll, at most one poll late, instead of paying a probe per 2 s. The wait doubles from 2 s to 10 s while nothing arrives. Paused (locked, asleep, window minimized or hidden) holds no timer and catches up with one poll; battery saver means at least 30 s. It does not copy the bench poller's "30 s without focus" rule: a log on a second monitor is the use of Follow.
+- **Follow asks `logs --json --since` through one process while lines arrive, and the distro probe (a second process) only before the first
+  poll, after an empty poll and after a pause.** A distro that stopped is found on the first empty poll, at most one poll late, instead of
+  paying a probe per 2 s. The wait doubles from 2 s to 10 s while nothing arrives. Paused (locked, asleep, window minimized or hidden) holds
+  no timer and catches up with one poll; battery saver means at least 30 s. It does not copy the bench poller's "30 s without focus" rule: a
+  log on a second monitor is the use of Follow.
 - **The bench poller stretches the running interval to 60 s on battery** (`GetSystemPowerStatus`, read at start, on resume and on a power status change). The second part of the finding (skip the CLI poll while every bench is stopped and the distro is up) is left: it needs the probe to tell a keepalive only distro from a bench one.
-- **Newer schema: read only documents are read, changes are not.** `list`, `status`, `doctor`, `logs`, `setup check`, `site list`, `app list` and the other read commands of a newer `schema_version` are parsed anyway and refused (with "speaks schema N") only when the member the view is made of is missing; plans, applies and streams of a newer schema are still refused. docs/json-schema.md promises that new fields are not a break and that a break bumps the version, and the schema number is one constant for every document, so a bump for one command would have blanked the flyout.
+- **Newer schema: read only documents are read, changes are not.** `list`, `status`, `doctor`, `logs`, `setup check`, `site list`, `app
+  list` and the other read commands of a newer `schema_version` are parsed anyway and refused (with "speaks schema N") only when the member
+  the view is made of is missing; plans, applies and streams of a newer schema are still refused. docs/json-schema.md promises that new
+  fields are not a break and that a break bumps the version, and the schema number is one constant for every document, so a bump for one
+  command would have blanked the flyout.
 - **Versions: an older shim warns, a newer patch of the same minor does not, and a newer shim may be asked for the update check.** Only the old shim forwards `self-update` to the Linux CLI and boots the distro. A tray whose DLLs could not all be replaced can now reach the updater that fixes it.
-- **Install and adopt keep their passwords in the child's environment** (`ADMIN_PASSWORD`, `BENCHBAR_SUDO_PASSWORD`, `MARIADB_ROOT_PASSWORD`). The CLI reads them from there only (it removes `BENCHBAR_SUDO_PASSWORD` at once, docs/DECISIONS.md) and the shim forwards exactly those names through `WSLENV`; a stdin or file channel needs the CLI and the shim to change first. `docs/windows.md` says so. Left for a CLI and shim change.
+- **Install and adopt keep their passwords in the child's environment** (`ADMIN_PASSWORD`, `BENCHBAR_SUDO_PASSWORD`,
+  `MARIADB_ROOT_PASSWORD`). The CLI reads them from there only (it removes `BENCHBAR_SUDO_PASSWORD` at once, docs/DECISIONS.md) and the shim
+  forwards exactly those names through `WSLENV`; a stdin or file channel needs the CLI and the shim to change first. `docs/windows.md` says
+  so. Left for a CLI and shim change.
 - **Config saves run on a pool thread, one after the other, and quit waits up to 3 s for the last one.** `Save` retries with `Thread.Sleep` for up to a second; on the UI thread that froze the window.
-- **The harness pipe, the logon log and `BENCHBAR_TRAY_THEME` are in Debug builds only** (`HARNESS` is defined unless the configuration is Release; the Release `HarnessLink` is an empty type, so no pipe, thread or variable read exists in what ships). The spike harness that used them is deleted. The fixtures mode stays (the docs and the demo use it) and now shows a "Demo data" notice that cannot be dismissed while `BENCHBAR_TRAY_FIXTURES` is set, so a stale user variable cannot pass for the real thing.
-- **The release builds run the tray tests and start the tray** (`scripts/smoke.ps1`): the amd64 job tests the solution and starts the published, signed files on recorded data (`BENCHBAR_TRAY_FIXTURES=fixtures/rest`); the arm64 zip, built on an x64 runner, is started in its own job on `windows-11-arm`, which gates the release job. The script needs no debug hook: the run marker (`%LOCALAPPDATA%\BenchBar\running`, written at start, removed on a clean exit, holds the version) shows the app started and stamped the version the build was given, and the `Local\BenchBarTray.Quit` event is the way the installer closes a running tray. `tray.yml` tests and starts arm64 natively too, and also runs on pushes to `next-release`.
+- **The harness pipe, the logon log and `BENCHBAR_TRAY_THEME` are in Debug builds only** (`HARNESS` is defined unless the configuration is
+  Release; the Release `HarnessLink` is an empty type, so no pipe, thread or variable read exists in what ships). The spike harness that
+  used them is deleted. The fixtures mode stays (the docs and the demo use it) and now shows a "Demo data" notice that cannot be dismissed
+  while `BENCHBAR_TRAY_FIXTURES` is set, so a stale user variable cannot pass for the real thing.
+- **The release builds run the tray tests and start the tray** (`scripts/smoke.ps1`): the amd64 job tests the solution and starts the
+  published, signed files on recorded data (`BENCHBAR_TRAY_FIXTURES=fixtures/rest`); the arm64 zip, built on an x64 runner, is started in
+  its own job on `windows-11-arm`, which gates the release job. The script needs no debug hook: the run marker
+  (`%LOCALAPPDATA%\BenchBar\running`, written at start, removed on a clean exit, holds the version) shows the app started and stamped the
+  version the build was given, and the `Local\BenchBarTray.Quit` event is the way the installer closes a running tray. `tray.yml` tests and
+  starts arm64 natively too, and also runs on pushes to `next-release`.
 - **`labs on` from the Labs page runs `--yes --json` with `BENCHBAR_NONINTERACTIVE=0`, as the Mac app does.** The CLI refuses an experiment turned on under a non interactive run so that no agent can; the page's switch is the person's click and the warning is on the row, so there is no extra dialog. Turning one off never asks.
-- **A link goes to the running tray over a named pipe, not a file or the open event.** `BenchBarTray.Link.SESSION` takes one UTF-8 line (at most 2048 characters) from this user only (`PipeOptions.CurrentUserOnly`), so a link that carries a token never reaches the disk; the server waits for a connection and costs no timer at rest. A second copy that cannot reach the pipe (an older tray) falls back to the old open-flyout event and the link is dropped.
-- **The `benchbar:` registration is per user and the tray never takes it from another program.** `HKCU\Software\Classes\benchbar` is written at start when it is missing or points at a `BenchBarTray.exe` that is gone; another copy that still exists, or another program (also one registered for the whole machine: the tray reads the merged `HKEY_CLASSES_ROOT` view), is left alone. install.ps1 follows the same rule, so neither takes a link from the other. The command is `"BenchBarTray.exe" "%1"` and the tray reads only an argument that starts with `benchbar:` and is at most 2048 characters. A link may not hold `"`, `\`, `^`, `|`, `<`, `>` or a backtick (a real link percent encodes them): a `"` would end the quoted `%1` and turn the rest into arguments, so a start from a link also ignores the tray's own flags. Only a process named `BenchBarTray.exe` registers (a `dotnet run` start would register dotnet.exe). A demo run on recorded data never registers.
-- **Links wait for the first poll, and `~` in `bench=` means a bench under `/home/USER/` or `/root/`.** The bench list decides which bench a link means, so a link that starts the tray waits for the first snapshot (at most 16 wait). The tray does not know the distro's home folder, and a bench is never matched by a trailing part of its path. `.` and `..` in a path are resolved first, as the Mac's `standardizedFileURL` does.
+- **A link goes to the running tray over a named pipe, not a file or the open event.** `BenchBarTray.Link.SESSION` takes one UTF-8 line (at
+  most 2048 characters) from this user only (`PipeOptions.CurrentUserOnly`), so a link that carries a token never reaches the disk; the
+  server waits for a connection and costs no timer at rest. A second copy that cannot reach the pipe (an older tray) falls back to the old
+  open-flyout event and the link is dropped.
+- **The `benchbar:` registration is per user and the tray never takes it from another program.** `HKCU\Software\Classes\benchbar` is written
+  at start when it is missing or points at a `BenchBarTray.exe` that is gone; another copy that still exists, or another program (also one
+  registered for the whole machine: the tray reads the merged `HKEY_CLASSES_ROOT` view), is left alone. install.ps1 follows the same rule,
+  so neither takes a link from the other. The command is `"BenchBarTray.exe" "%1"` and the tray reads only an argument that starts with
+  `benchbar:` and is at most 2048 characters. A link may not hold `"`, `\`, `^`, `|`, `<`, `>` or a backtick (a real link percent encodes
+  them): a `"` would end the quoted `%1` and turn the rest into arguments, so a start from a link also ignores the tray's own flags. Only a
+  process named `BenchBarTray.exe` registers (a `dotnet run` start would register dotnet.exe). A demo run on recorded data never registers.
+- **Links wait for the first poll, and `~` in `bench=` means a bench under `/home/USER/` or `/root/`.** The bench list decides which bench a
+  link means, so a link that starts the tray waits for the first snapshot (at most 16 wait). The tray does not know the distro's home
+  folder, and a bench is never matched by a trailing part of its path. `.` and `..` in a path are resolved first, as the Mac's
+  `standardizedFileURL` does.
 - **The tray log gets fixed sentences only for links, and no bench name.** The Mac logs the bench of a link that ran; this log goes into bug reports, which keep bench names out, so it holds the action word and a fixed reason or a short hash.
+
+- **A timer poll skips the CLI while the distro is up and every bench was stopped on the last poll.** The probe alone runs, because every
+  `benchbar.exe` call touches the VM and keeps WSL from its idle shutdown. A kick (unlock, action, flyout), a bench that was not stopped, a
+  boost or an open flyout makes it a full poll, and a full poll runs at least every 20 minutes so a bench started from a terminal still shows up.
+- **Tests wait for outcomes, never for time.** A poll is held with a `TaskCompletionSource` gate or ended by the fake clock; "nothing happened"
+  is checked from state (`BenchPoller.IsPolling`, `LogViewModel.PausedWaits`), and `Eventually.Async` waits for a condition with no fixed sleep.
+  The only sleeps left are the retries for the GDI+ PNG encoder list, which depends on the system, not on time.
+- **A fatal fault (out of memory, access violation) is not handled by the UI exception hook.** Any other UI fault is logged, shown as one notice and survived;
+  a fatal one ends the process so the next start reports it from the run marker.
+- **Dates for display use the current culture (`UiText.Date`), user text lives in `Strings.resx`.** The tray menu, crash toasts, tooltip and WSL messages are moved;
+  `UiTextTests` fails when code asks for a missing name or an entry is unused. The pages of the BenchBar window still hold inline text.
