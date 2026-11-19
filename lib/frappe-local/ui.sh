@@ -420,11 +420,49 @@ fl_done_warning_add() {
   FL_DONE_WARNINGS="${FL_DONE_WARNINGS}${FL_DONE_WARNINGS:+,}$(fl_json_str "${1:0:500}")"
 }
 
-# fl_next_action COMMAND [WHY]: a fix line or next step, as {"command","why"}
+# A fix built by fl_fix_cmd (every word shell quoted, one plain command, an optional `cd DIR &&` before
+# it) starts with FL_FIXQ, so the code that prints or serializes it knows its words. The mark is the only
+# thing that lets an agent run the fix as an argv array (the MCP server returns fix_argv for no other fix):
+# a fix written as prose or with an unquoted path says nothing a program can rely on. The mark never
+# reaches the output: fl_fix_plain_v takes it off, and fl_json_escape_v drops it as a control character.
+# (\034, not \036: the parallel doctor jobs (doctor.sh) end each row they write with \036)
+FL_FIXQ=$'\034'
+
+# fl_fix_cmd WORD...: the fix command for WORDs, each quoted with printf %q (a bench path with a space or
+# an apostrophe, an app or branch name), marked as quoted. A word that is exactly && stays an operator.
+# No ~ and no $ in a word that should expand: a quoted word never expands. A note for a person goes after
+# it, three spaces and in parentheses: "$(fl_fix_cmd benchbar up)   (then open the site)".
+fl_fix_cmd() {
+  local __w __o="$FL_FIXQ" __sep=""
+  for __w in "$@"; do
+    if [[ "$__w" == "&&" ]]; then __o="${__o}${__sep}&&"; else __o="${__o}${__sep}$(printf '%q' "$__w")"; fi
+    __sep=" "
+  done
+  printf '%s' "$__o"
+}
+
+# fl_fix_marked TEXT: whether TEXT is a fix from fl_fix_cmd
+fl_fix_marked() { [[ "${1:0:1}" == "$FL_FIXQ" ]]; }
+
+# fl_fix_plain_v VAR TEXT: TEXT without the mark
+fl_fix_plain_v() {
+  local __t="$2"
+  if [[ "${__t:0:1}" == "$FL_FIXQ" ]]; then __t="${__t:1}"; fi
+  printf -v "$1" '%s' "$__t"
+}
+
+# fl_fix_quoted_json FIX: true when FIX is a marked fix, else false
+fl_fix_quoted_json() { if fl_fix_marked "$1"; then printf true; else printf false; fi; }
+
+# fl_next_action COMMAND [WHY]: a fix line or next step, as {"command","why"}; "quoted":true when COMMAND
+# came from fl_fix_cmd (and is not cut, which could end it inside a quote)
 fl_next_action() {
   [[ "$FL_DONE_NEXT_N" -lt 20 ]] || return 0
   FL_DONE_NEXT_N=$((FL_DONE_NEXT_N + 1))
-  FL_DONE_NEXT="${FL_DONE_NEXT}${FL_DONE_NEXT:+,}{\"command\":$(fl_json_str "${1:0:500}"),\"why\":$(fl_json_str "${2:0:500}")}"
+  local __c __q=""
+  fl_fix_plain_v __c "$1"
+  if fl_fix_marked "$1" && [[ "${#__c}" -le 500 ]]; then __q=',"quoted":true'; fi
+  FL_DONE_NEXT="${FL_DONE_NEXT}${FL_DONE_NEXT:+,}{\"command\":$(fl_json_str "${__c:0:500}"),\"why\":$(fl_json_str "${2:0:500}")${__q}}"
 }
 
 # fl_done_mark_v VAR: where warnings[] and next_actions[] stand now, for fl_done_forget
@@ -607,9 +645,11 @@ fl_note() {
   fl_log "   $1"
 }
 fl_fix() {
+  local __fx
+  fl_fix_plain_v __fx "$1"
   fl_spinner_pause
-  printf '     %sfix:%s %s\n' "$FL_CYAN" "$FL_RESET" "$1"
-  fl_log "   fix: $1"
+  printf '     %sfix:%s %s\n' "$FL_CYAN" "$FL_RESET" "$__fx"
+  fl_log "   fix: $__fx"
   fl_next_action "$1" "$FL_LAST_PROBLEM"
 }
 

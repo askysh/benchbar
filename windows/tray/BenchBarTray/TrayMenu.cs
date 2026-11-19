@@ -63,14 +63,14 @@ internal sealed class TrayMenuModel
 /// </summary>
 internal sealed class TrayMenu
 {
-    public const string LogonHeader = "Open BenchBar at logon";
-    public const string SetUpHeader = "Set Up BenchBar...";
+    public static string LogonHeader => UiText.Get("MenuLogon");
+    public static string SetUpHeader => UiText.Get("MenuSetUp");
 
     private readonly TrayMenuModel _model;
     private readonly MenuItem _logon = new() { Header = LogonHeader, IsCheckable = true };
-    private readonly MenuItem _appearance = new() { Header = "Appearance" };
-    private readonly MenuItem _runner = new() { Header = "Runner" };
-    private readonly MenuItem _notifications = new() { Header = "Notifications", IsCheckable = true };
+    private readonly MenuItem _appearance = new() { Header = UiText.Get("MenuAppearance") };
+    private readonly MenuItem _runner = new() { Header = UiText.Get("MenuRunner") };
+    private readonly MenuItem _notifications = new() { Header = UiText.Get("MenuNotifications"), IsCheckable = true };
     private readonly MenuItem _update = new() { Visibility = Visibility.Collapsed };
     private readonly MenuItem _setUp = new() { Header = SetUpHeader, Visibility = Visibility.Collapsed };
     private readonly Image _preview = new() { Width = 48, Height = 48, Stretch = Stretch.Uniform, SnapsToDevicePixels = true };
@@ -85,13 +85,13 @@ internal sealed class TrayMenu
         Menu = new ContextMenu();
 
         var items = new List<(string Header, Action Click)>();
-        if (model.ShowCheckForUpdates) items.Add(("Check for Updates", model.CheckForUpdates));
-        items.Add(("Help", model.Help));
-        items.Add(("Report a Bug", model.ReportBug));
+        if (model.ShowCheckForUpdates) items.Add((UiText.Get("MenuCheckForUpdates"), model.CheckForUpdates));
+        items.Add((UiText.Get("MenuHelp"), model.Help));
+        items.Add((UiText.Get("MenuReportBug"), model.ReportBug));
 
         _logon.Click += (_, _) => model.SetLogon(_logon.IsChecked);
         _notifications.Click += (_, _) => model.SetNotifications(_notifications.IsChecked);
-        foreach (var (mode, header) in new[] { (AppearanceMode.System, "System"), (AppearanceMode.Light, "Light"), (AppearanceMode.Dark, "Dark") })
+        foreach (var (mode, header) in new[] { (AppearanceMode.System, UiText.Get("MenuAppearanceSystem")), (AppearanceMode.Light, UiText.Get("MenuAppearanceLight")), (AppearanceMode.Dark, UiText.Get("MenuAppearanceDark")) })
         {
             var item = new MenuItem { Header = header, IsCheckable = true, Tag = mode };
             item.Click += (_, _) =>
@@ -107,9 +107,9 @@ internal sealed class TrayMenu
         _runner.SubmenuClosed += (_, e) => { if (ReferenceEquals(e.OriginalSource, _runner)) OnRunnerClosed(); };
         _animation.Tick += (_, _) => NextPreviewFrame();
 
-        var open = new MenuItem { Header = "Open BenchBar", FontWeight = FontWeights.SemiBold };
+        var open = new MenuItem { Header = UiText.Get("MenuOpen"), FontWeight = FontWeights.SemiBold };
         open.Click += (_, _) => model.OpenMain();
-        var settings = new MenuItem { Header = "Settings..." };
+        var settings = new MenuItem { Header = UiText.Get("MenuSettings") };
         settings.Click += (_, _) => model.OpenSettings();
         _setUp.Click += (_, _) => model.SetUp();
         Menu.Items.Add(open);
@@ -130,7 +130,7 @@ internal sealed class TrayMenu
             Menu.Items.Add(item);
         }
         Menu.Items.Add(new Separator());
-        var quit = new MenuItem { Header = "Quit" };
+        var quit = new MenuItem { Header = UiText.Get("MenuQuit") };
         quit.Click += (_, _) => model.Quit();
         Menu.Items.Add(quit);
 
@@ -174,7 +174,7 @@ internal sealed class TrayMenu
             return;
         }
         var running = _model.UpdateRunning();
-        _update.Header = running ? $"Updating to {offer.Version}..." : $"Update to {offer.Version}";
+        _update.Header = running ? UiText.Format("MenuUpdating", offer.Version) : UiText.Format("MenuUpdateTo", offer.Version);
         _update.IsEnabled = !running;
         _update.Visibility = Visibility.Visible;
     }
@@ -227,7 +227,7 @@ internal sealed class TrayMenu
         }
 
         _runner.Items.Add(new Separator());
-        var folder = new MenuItem { Header = "Open runners folder" };
+        var folder = new MenuItem { Header = UiText.Get("MenuOpenRunnersFolder") };
         folder.Click += (_, _) => _model.OpenRunnersFolder();
         _runner.Items.Add(folder);
 
