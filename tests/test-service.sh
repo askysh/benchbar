@@ -56,6 +56,29 @@ for name in benchbar frappe-mac; do
   [[ -L "$HOME/.local/bin/$name" && "$(readlink "$HOME/.local/bin/$name")" == "$ROOT/benchbar" ]] || fail "$name must be linked into ~/.local/bin"
   "$HOME/.local/bin/$name" --version | grep -q "benchbar ${VER}" || fail "the symlinked $name must resolve its own libraries"
 done
+# resource limits: a file descriptor limit that fits Frappe's watchers, and the
+# priority keys at their defaults (no change for a normal bench)
+grep -q '<key>SoftResourceLimits</key>' "$plist" || fail "plist must raise the file limit"
+grep -q '<key>NumberOfFiles</key><integer>10240</integer>' "$plist" || fail "plist: NumberOfFiles 10240"
+grep -q '<key>Nice</key><integer>0</integer>' "$plist" || fail "plist: Nice 0 by default"
+grep -q '<key>ProcessType</key><string>Standard</string>' "$plist" || fail "plist: ProcessType Standard by default"
+# the config keys of the bench: SERVICE_NICE and SERVICE_BACKGROUND, bad values fall back
+benv="$(ls "$FL_STATE_DIR"/benches/frappe-bench-????????.env)"
+printf 'SERVICE_NICE=5\nSERVICE_BACKGROUND=on\n' >>"$benv"
+run_fm doctor --bench-dir "$BENCH"
+assert_contains "$OUT" "[WARN] launchd agent: agent plist is outdated"
+run_fm repair --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+grep -q '<key>Nice</key><integer>5</integer>' "$plist" || fail "plist: SERVICE_NICE=5"
+grep -q '<key>ProcessType</key><string>Background</string>' "$plist" || fail "plist: SERVICE_BACKGROUND=on"
+printf 'SERVICE_NICE=99\nSERVICE_BACKGROUND=maybe\n' >>"$benv"
+run_fm repair --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+grep -q '<key>Nice</key><integer>0</integer>' "$plist" || fail "plist: a bad SERVICE_NICE is ignored"
+grep -q '<key>ProcessType</key><string>Standard</string>' "$plist" || fail "plist: a bad SERVICE_BACKGROUND is ignored"
+sed_inplace '/^SERVICE_/d' "$benv"
+run_fm repair --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
 grep -q '<key>AssociatedBundleIdentifiers</key>' "$plist" || fail "plist must name the BenchBar app"
 grep -q '<string>com.akashmishra.benchbar</string>' "$plist" || fail "plist must carry the app bundle id"
 assert_eq "manual" "$(cat "$BENCH/logs/.bench-stopped")"
@@ -156,8 +179,9 @@ find "$V16" -mindepth 1 -delete   # a cleanup tool emptied the folder
 # doctor of another bench names it, with the command that removes it
 make_fake_bench "$BENCH"
 run_fm doctor --json --bench-dir "$BENCH"
-assert_eq "warn" "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "dead_agents"][0]["status"]')"
+assert_eq "fail" "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "dead_agents"][0]["status"]')" "(a restart loop is a failure, not a warning)"
 assert_contains "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "dead_agents"][0]["fix"]')" "uninstall-service --bench-dir '$V16'"
+assert_eq "dead_agents" "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "dead_agents"][0]["action"]')"
 # uninstall-service works on the emptied folder: the agent goes, nothing else
 run_fm uninstall-service --dry-run --yes --bench-dir "$V16"
 assert_eq "0" "$CODE" "$OUT"
@@ -177,6 +201,60 @@ assert_no_file "$v16plist"
 [[ -n "$(find "$HOME/Library/LaunchAgents-disabled" -name 'com.benchbar.v16-bench.plist')" ]] || fail "its plist is kept aside"
 run_fm doctor --json --bench-dir "$BENCH"
 assert_eq "ok" "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "dead_agents"][0]["status"]')"
+# ---- repair removes a dead agent of another bench and never another program's agent
+run_fm service --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+V15="$HOME/dev/v15-bench"
+make_fake_bench "$V15" v15dev
+run_fm service --yes --bench-dir "$V15"
+assert_eq "0" "$CODE" "$OUT"
+v15plist="$HOME/Library/LaunchAgents/com.benchbar.v15-bench.plist"
+assert_file "$v15plist"
+find "$V15" -mindepth 1 -delete
+# a person's own agent with a missing script, and a com.benchbar agent that
+# runs a script that is not benchbar's runner: neither is ours to touch
+for pair in "com.example.nightly:/nowhere/nightly.sh" "com.benchbar.custom:/nowhere/custom.sh"; do
+  lbl="${pair%%:*}"; scr="${pair#*:}"
+  printf '<?xml version="1.0"?><plist version="1.0"><dict><key>Label</key><string>%s</string><key>ProgramArguments</key><array><string>/bin/bash</string><string>%s</string></array><key>WorkingDirectory</key><string>%s</string></dict></plist>\n' "$lbl" "$scr" "$HOME/dev/other" \
+    >"$HOME/Library/LaunchAgents/${lbl}.plist"
+  set_agent "$lbl" running 900 0
+done
+run_fm doctor --json --bench-dir "$BENCH"
+assert_eq "fail" "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "dead_agents"][0]["status"]')" "(v15 dead agent)"
+assert_contains "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "dead_agents"][0]["message"]')" "com.benchbar.v15-bench"
+assert_not_contains "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "dead_agents"][0]["message"]')" "custom"
+run_fm repair --dry-run --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "boot out and move aside the agents whose runner is gone"
+assert_file "$v15plist"
+run_fm repair --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "booted out com.benchbar.v15-bench"
+assert_no_file "$v15plist"
+! launchctl print "gui/$(id -u)/com.benchbar.v15-bench" >/dev/null 2>&1 || fail "repair must boot the dead agent out"
+[[ -n "$(find "$HOME/Library/LaunchAgents-disabled" -name 'com.benchbar.v15-bench.plist')" ]] || fail "its plist is kept aside"
+assert_file "$HOME/Library/LaunchAgents/com.example.nightly.plist"
+assert_file "$HOME/Library/LaunchAgents/com.benchbar.custom.plist"
+launchctl print "gui/$(id -u)/com.example.nightly" >/dev/null 2>&1 || fail "another program's agent stays loaded"
+launchctl print "gui/$(id -u)/com.benchbar.custom" >/dev/null 2>&1 || fail "an agent with a foreign script stays loaded"
+assert_file "$HOME/Library/LaunchAgents/com.benchbar.frappe-bench.plist"
+run_fm doctor --json --bench-dir "$BENCH"
+assert_eq "ok" "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "dead_agents"][0]["status"]')"
+# the current bench's own missing runner is written again, its agent stays
+set_agent com.benchbar.frappe-bench running 4242 0
+rm -f "$BENCH/benchbar-run.sh"
+run_fm doctor --json --bench-dir "$BENCH"
+assert_eq "fail" "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "dead_agents"][0]["status"]')" "(own runner gone)"
+run_fm repair --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+assert_file "$BENCH/benchbar-run.sh"
+assert_file "$HOME/Library/LaunchAgents/com.benchbar.frappe-bench.plist"
+run_fm doctor --json --bench-dir "$BENCH"
+assert_eq "ok" "$(printf '%s' "$OUT" | jget - '[c for c in d["checks"] if c["id"] == "dead_agents"][0]["status"]')"
+for lbl in com.example.nightly com.benchbar.custom; do rm -f "$HOME/Library/LaunchAgents/${lbl}.plist" "$MOCK_STATE/agents/${lbl}"; done
+run_fm uninstall-service --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+
 # a path with no bench and no agent: the old refusal, clearer
 run_fm uninstall-service --yes --bench-dir "$HOME/nowhere"
 assert_eq "1" "$CODE"

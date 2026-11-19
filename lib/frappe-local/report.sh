@@ -15,8 +15,11 @@
 # Redaction, applied to every file before it is packed:
 #   - site_config.json and common_site_config.json are never copied; only
 #     their key names are listed
-#   - any value whose key matches password, passwd, secret, token, key, api
-#     or auth (and pwd= as a keyword argument) is replaced by ***
+#   - any value whose key matches password, passwd, secret, token, key, api,
+#     auth, credential, cookie, session or sid, or is named pass or ends in
+#     _pass or _pwd (and pwd= as a keyword argument) is replaced by ***
+#   - the whole value of a Cookie or Set-Cookie header, the value of
+#     --password VALUE style flags, and -pVALUE on a mysql or mariadb line
 #   - values that look like a secret whatever their key: credentials inside
 #     URLs (user:token@host, redis://:password@host), JWTs, GitHub, Slack,
 #     OpenAI and AWS tokens, and email addresses (<email>)
@@ -29,7 +32,7 @@
 # applies it whole.
 
 FL_REPORT_TAIL_LINES="${FL_REPORT_TAIL_LINES:-200}"
-FL_REPORT_KEY_RE='[A-Za-z0-9_.-]*[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd][A-Za-z0-9_.-]*|[A-Za-z0-9_.-]*[Pp][Aa][Ss][Ss][Ww][Dd][A-Za-z0-9_.-]*|[A-Za-z0-9_.-]*[Ss][Ee][Cc][Rr][Ee][Tt][A-Za-z0-9_.-]*|[A-Za-z0-9_.-]*[Tt][Oo][Kk][Ee][Nn][A-Za-z0-9_.-]*|[A-Za-z0-9_.-]*[Kk][Ee][Yy][A-Za-z0-9_.-]*|[A-Za-z0-9_.-]*[Aa][Pp][Ii][A-Za-z0-9_.-]*|[A-Za-z0-9_.-]*[Aa][Uu][Tt][Hh][A-Za-z0-9_.-]*'
+FL_REPORT_KEY_RE='[A-Za-z0-9_.-]*[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd][A-Za-z0-9_.-]*|[A-Za-z0-9_.-]*[Pp][Aa][Ss][Ss][Ww][Dd][A-Za-z0-9_.-]*|[A-Za-z0-9_.-]*[Ss][Ee][Cc][Rr][Ee][Tt][A-Za-z0-9_.-]*|[A-Za-z0-9_.-]*[Tt][Oo][Kk][Ee][Nn][A-Za-z0-9_.-]*|[A-Za-z0-9_.-]*[Kk][Ee][Yy][A-Za-z0-9_.-]*|[A-Za-z0-9_.-]*[Aa][Pp][Ii][A-Za-z0-9_.-]*|[A-Za-z0-9_.-]*[Aa][Uu][Tt][Hh][A-Za-z0-9_.-]*|[A-Za-z0-9_.-]*[Cc][Rr][Ee][Dd][Ee][Nn][Tt][Ii][Aa][Ll][A-Za-z0-9_.-]*|[A-Za-z0-9_.-]*[Cc][Oo][Oo][Kk][Ii][Ee][A-Za-z0-9_.-]*|[A-Za-z0-9_.-]*[Ss][Ee][Ss][Ss][Ii][Oo][Nn][A-Za-z0-9_.-]*|[Ss][Ii][Dd]|([A-Za-z0-9_.-]*[_.-])?[Pp][Aa][Ss][Ss]([_.-][A-Za-z0-9_.-]*)?|[A-Za-z0-9_.-]*[_.-][Pp][Ww][Dd]([_.-][A-Za-z0-9_.-]*)?'
 # the kinds of redaction, in the order they are applied (the key forms first:
 # they know where a value ends; the value shapes then catch what has no key)
 FL_REDACT_KINDS="keys urls jwt tokens email"
@@ -232,7 +235,12 @@ fl_report_sed_escape() { printf '%s' "$1" | sed -e 's/[][\.*^$#]/\\&/g'; }
 #           (escaped quotes inside it included), otherwise to the end of the
 #           line or to the next quote or comma when the key sits inside a
 #           one line JSON document. pwd counts only as a keyword argument
-#           (fn(pwd=...)): PWD=/Users/... in an environment dump is a path.
+#           (fn(pwd=...)) or as the end of a name (db_pwd): PWD=/Users/...
+#           in an environment dump is a path. A name is pass only whole or
+#           between separators (smtp_pass), never inside passed or bypass.
+#           Also here: a Cookie or Set-Cookie header to the end of its line,
+#           --password VALUE (a space instead of =), and -pVALUE (or
+#           -p'a b') on a line that runs a mysql or mariadb program.
 #   urls    the user:password or :password in front of a URL's host
 #   jwt     three base64url parts starting with eyJ
 #   tokens  GitHub (ghp_ gho_ ghu_ ghs_ ghr_ github_pat_), Slack (xox?-),
@@ -247,6 +255,9 @@ fl_redact_exprs() {
   case "$1" in
     keys)
       printf '%s\n' \
+        's/(^|[^A-Za-z0-9_-])([Ss]et-)?([Cc]ookie[[:space:]]*:[[:space:]]*).*$/\1\2\3***/' \
+        's/(^|[[:space:]])(--([A-Za-z0-9-]*(password|passwd|passphrase|secret|token|credential|api-key|apikey)[A-Za-z0-9-]*|pass|pwd))[[:space:]]+("([^"\\]|\\.)*"|'"'"'([^'"'"'\\]|\\.)*'"'"'|[^[:space:]'"'"'"-][^[:space:]]*)/\1\2 ***/g' \
+        '/([Mm][Yy][Ss][Qq][Ll]|[Mm][Aa][Rr][Ii][Aa][Dd][Bb])/ s/(^|[[:space:]])-p("[^"]*"|'"'"'[^'"'"']*'"'"'|[^[:space:]'"'"'"-][^[:space:]]*)/\1-p***/g' \
         's/("('"$FL_REPORT_KEY_RE"')"[[:space:]]*:[[:space:]]*)"([^"\\]|\\.)*"/\1"***"/g' \
         's/("('"$FL_REPORT_KEY_RE"')"[[:space:]]*:[[:space:]]*)[0-9][0-9.]*/\1"***"/g' \
         "s/(${sq}(${FL_REPORT_KEY_RE})${sq}[[:space:]]*:[[:space:]]*)${pyval}/\\1${sq}***${sq}/g" \
@@ -362,11 +373,13 @@ fl_report_redact_all() {
     printf 'benchbar report %s, redactions applied before packing\n\n' "${FL_VERSION:-0}"
     printf 'Rules:\n'
     printf -- '- site_config.json and common_site_config.json are not included; site-config-keys.txt lists their key names only\n'
-    printf -- '- values of keys matching password, passwd, secret, token, key, api or auth (and pwd= keyword arguments) are replaced by ***\n'
+    printf -- '- values of keys matching password, passwd, secret, token, key, api, auth, credential, cookie, session or sid, keys named pass or ending in _pass or _pwd (and pwd= keyword arguments) are replaced by ***\n'
+    printf -- '- a Cookie or Set-Cookie header, --password VALUE style flags and -pVALUE on a mysql or mariadb line are replaced by ***\n'
     printf -- '- credentials inside URLs (user:password@ and ://:password@) are replaced by ***\n'
     printf -- '- JWTs and GitHub, Slack, OpenAI and AWS token shapes are replaced by ***\n'
     printf -- '- email addresses are replaced by <email>\n'
     printf -- '- the home folder is written as ~, the username as <user>, the hostname, Bonjour name and computer name as <host>\n\n'
+    printf -- '- the log tails (bench.log.tail, worker.error.log.tail) are program output, not data benchbar knows the shape of: they can hold names, phone numbers or addresses from SQL errors. Read them before you attach the zip to a public issue\n\n'
     printf 'Applied:\n'
     if [[ -n "$FL_REPORT_REDACTIONS" ]]; then printf '%s' "$FL_REPORT_REDACTIONS"; else printf '(nothing matched)\n'; fi
   } >"${FL_REPORT_DIR}/REDACTIONS.txt"

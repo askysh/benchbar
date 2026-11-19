@@ -97,6 +97,8 @@ fi
 [[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/profiles.sh"
 # shellcheck source=lib/frappe-local/state.sh
 . "${SCRIPT_DIR}/lib/frappe-local/state.sh"
+# shellcheck source=lib/frappe-local/plan-token.sh
+. "${SCRIPT_DIR}/lib/frappe-local/plan-token.sh"
 # shellcheck source=lib/frappe-local/lock.sh
 . "${SCRIPT_DIR}/lib/frappe-local/lock.sh"
 # shellcheck source=lib/frappe-local/templates.sh
@@ -1170,16 +1172,22 @@ cmd_service() {
 # adopt --json: the plan line, called by the repair engine once it knows the
 # actions (FL_ENGINE_PLAN_HOOK). Its steps are the actions, numbered from 1.
 fl_adopt_plan_json() {
-  local a n=0 pl_steps="" move=false off mode=terminal token
+  local a n=0 pl_steps="" move=false off mode=terminal token token_data code
   [[ "${FL_PM_APPLYING:-0}" != "1" ]] || return 0
   # the token of the plan: its actions and what they are made from (the
   # bench, the port block, the scheduler choice); service --apply TOKEN is
   # refused here, before any action runs, when it no longer matches
   off="${FL_PORT_TARGET:-$((FL_WEB_PORT - FL_PORT_BASE_WEB))}"
-  token="$(printf '%s\n' "$FL_BENCH_DIR" "$1" "$off" "${FL_SCHEDULER:-}" "$FL_SITE" | shasum -a 256 | awk '{print $1}')"
-  if [[ -n "${FL_SERVICE_APPLY_TOKEN:-}" && "$FL_SERVICE_APPLY_TOKEN" != "$token" ]]; then
-    fl_die "The service plan changed since it was shown (its actions, the ports or the scheduler). Nothing was changed." \
-      "Review a fresh plan: benchbar service --dry-run --json --bench-dir ${FL_BENCH_DIR}, then pass its token."
+  token_data="$(printf '%s\n' "$FL_BENCH_DIR" "$1" "$off" "${FL_SCHEDULER:-}" "$FL_SITE")"
+  fl_plan_token_v token "$token_data"
+  if [[ -n "${FL_SERVICE_APPLY_TOKEN:-}" ]]; then
+    code=0; fl_plan_token_check "$token_data" "$FL_SERVICE_APPLY_TOKEN" || code=$?
+    case "$code" in
+      0) ;;
+      2) fl_die "$(fl_plan_token_expired_text)" "Review a fresh plan: benchbar service --dry-run --json --bench-dir ${FL_BENCH_DIR}, then pass its token." ;;
+      *) fl_die "The service plan changed since it was shown (its actions, the ports or the scheduler). Nothing was changed." \
+        "Review a fresh plan: benchbar service --dry-run --json --bench-dir ${FL_BENCH_DIR}, then pass its token." ;;
+    esac
   fi
   for a in $1; do
     n=$((n + 1))

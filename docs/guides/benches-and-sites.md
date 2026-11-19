@@ -211,6 +211,27 @@ gives each bench its own block.
 Each bench has its own port block. How blocks work and how to sort out
 the ports of several benches is in [Port blocks](../concepts/port-blocks.md).
 
+## Limits of the background service
+
+The agent (launchd on a Mac, a systemd user unit on Linux) raises the open
+file limit of the bench: 10240 on a Mac, where launchd's own default of 256
+is too low for Frappe's file watchers, and 65536 on Linux. Nothing else
+changes by default: priority is normal and memory is not capped.
+
+Three optional settings go in the bench's own state file (`benchbar where
+--json` shows `state_dir`; the file is `benches/<name>-<hash>.env` in it),
+one `KEY=value` per line, then `benchbar repair` writes the agent again:
+
+| Key | Values | Effect |
+|---|---|---|
+| `SERVICE_NICE` | `0` to `19` | `Nice` (launchd) and `Nice=` (systemd): the bench yields to other programs |
+| `SERVICE_BACKGROUND` | `on` | launchd `ProcessType` Background: low CPU and disk priority (Mac only) |
+| `SERVICE_MEMORY_HIGH` | `4G`, `512M`, `50%` | systemd `MemoryHigh=`: the unit is slowed and its memory reclaimed above it, never killed (Linux only) |
+
+A value that is not valid is ignored and the default stays. A runaway
+worker is still yours to stop with `benchbar down`; these settings only
+make a bench a better neighbour on a laptop.
+
 ## Autostart
 
 A bench that was running comes back after you log in. To keep one bench

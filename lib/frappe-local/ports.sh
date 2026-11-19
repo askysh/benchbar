@@ -46,18 +46,19 @@ fl_ports_of_bench() {
 }
 
 fl__ports_of_file() {
-  local f="$1" line out="" key v got_w="" got_s="" got_q="" got_c=""
-  local re='^[[:space:]]*"(webserver_port|socketio_port|redis_queue|redis_cache)"[[:space:]]*:[[:space:]]*"?([^",]*)"?,?[[:space:]]*$'
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    [[ "$line" =~ $re ]] || continue
-    key="${BASH_REMATCH[1]}"; v="${BASH_REMATCH[2]}"
-    case "$key" in
-      webserver_port) [[ -n "$got_w" ]] || got_w="x:${v}" ;;
-      socketio_port) [[ -n "$got_s" ]] || got_s="x:${v}" ;;
-      redis_queue) [[ -n "$got_q" ]] || got_q="x:${v}" ;;
-      redis_cache) [[ -n "$got_c" ]] || got_c="x:${v}" ;;
-    esac
-  done <"$f"
+  local f="$1" text out="" v got_w="" got_s="" got_q="" got_c=""
+  # the whole file as one text: bench writes one key to a line, but a file
+  # written by hand or by another tool may hold every key on one line. The
+  # first place a key is named counts.
+  text="$(<"$f")" || return 0
+  local re_w='"webserver_port"[[:space:]]*:[[:space:]]*"?([^",}[:space:]]*)'
+  local re_s='"socketio_port"[[:space:]]*:[[:space:]]*"?([^",}[:space:]]*)'
+  local re_q='"redis_queue"[[:space:]]*:[[:space:]]*"?([^",}[:space:]]*)'
+  local re_c='"redis_cache"[[:space:]]*:[[:space:]]*"?([^",}[:space:]]*)'
+  [[ "$text" =~ $re_w ]] && got_w="x:${BASH_REMATCH[1]}"
+  [[ "$text" =~ $re_s ]] && got_s="x:${BASH_REMATCH[1]}"
+  [[ "$text" =~ $re_q ]] && got_q="x:${BASH_REMATCH[1]}"
+  [[ "$text" =~ $re_c ]] && got_c="x:${BASH_REMATCH[1]}"
   for v in "$got_w" "$got_s" "$got_q" "$got_c"; do
     v="${v#x:}"; v="${v##*:}"
     [[ "$v" =~ ^[0-9]+$ ]] && out="${out} ${v}"

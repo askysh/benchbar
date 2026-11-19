@@ -58,6 +58,49 @@ assert_contains "$out" "PWD=/Users/bob/dev/frappe-bench OLDPWD=/Users/bob"
 assert_contains "$out" "db.connect(pwd=***, host='db') and f(a=1, pwd=***)"
 assert_contains "$out" "rq:worker:worker@Bobs-MacBook.local started by root@localhost for <email> and <email>"
 
+# ---- the shapes that used to get through: cookies, -pSECRET, --password SECRET, keys named pass
+cat >"$IN" <<'LOG'
+Cookie: sid=0123456789abcdef; theme=dark; csrf_token_x=abc
+Set-Cookie: sid=0123456789abcdef; Path=/; HttpOnly
+10:00:01 web.1         | Cookie: full_name=Bob; sid=ZZ99ZZ99
+mysql -u root -pHunter2 -h 127.0.0.1
+mysql -u root -p'Hunter Two' sitedb
+mariadb-dump -pHunter2b --single-transaction db
+mariadb --password Hunter3 -e 'select 1'
+bench new-site x --db-root-password Hunter4 --admin-password "Hunter 4b" --force
+smtp_pass=Hunter5
+{"pass": "Hunter6", "mail_credential": "Hunter7", "session_id": "abcd1234ef"}
+sid=ff00ff00
+DB_PWD=Hunter8
+PWD=/Users/bob/dev stays
+user_pass: Hunter9
+LOG
+out="$(fl_redact_stream <"$IN")"
+assert_eq "$(wc -l <"$IN" | tr -d ' ')" "$(printf '%s\n' "$out" | wc -l | tr -d ' ')" "(the line count is unchanged)"
+for secret in 0123456789abcdef ZZ99ZZ99 theme=dark Hunter2 'Hunter Two' Hunter2b Hunter3 Hunter4 'Hunter 4b' Hunter5 Hunter6 Hunter7 abcd1234ef ff00ff00 Hunter8 Hunter9; do
+  assert_not_contains "$out" "$secret" "(fl_redact_stream must mask it)"
+done
+assert_contains "$out" "Cookie: ***"
+assert_contains "$out" "Set-Cookie: ***"
+assert_contains "$out" "web.1         | Cookie: ***"
+assert_contains "$out" "mysql -u root -p*** -h 127.0.0.1"
+assert_contains "$out" "mysql -u root -p*** sitedb"
+assert_contains "$out" "mariadb-dump -p*** --single-transaction db"
+assert_contains "$out" "mariadb --password *** -e 'select 1'"
+assert_contains "$out" "--db-root-password *** --admin-password *** --force"
+assert_contains "$out" "smtp_pass=***"
+assert_contains "$out" "PWD=/Users/bob/dev stays" "(a path in PWD stays)"
+# what only looks like these shapes stays
+cat >"$IN" <<'LOG'
+bench serve -p 8000 and tail -n 5
+mysql -u root -p
+tests passed=12 failed=0, bypass=1, compass: north, passenger_count: 3
+worker started pid 4242 with --port 8000 --keep-going
+git commit 3f786850e387550fdab836ed7e6dc881de23001b
+LOG
+out="$(fl_redact_stream <"$IN")"
+assert_eq "$(cat "$IN")" "$out" "(nothing in these lines is a secret)"
+
 # ---- fl_redact_url: only the user:token part of a URL, no process without an @
 assert_eq "clone https://***@github.com/x/y.git now" "$(fl_redact_url "clone https://user:tok3n@github.com/x/y.git now")"
 assert_eq "redis://***@127.0.0.1:13000" "$(fl_redact_url "redis://:pw@127.0.0.1:13000")"

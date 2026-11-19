@@ -143,4 +143,14 @@ assert_no_file "$HOME/dev/newbench"
 assert_eq "1" "$(printf '%s\n' "$OUT" | grep -c '^Summary')" "(the service pass must not print a second table)"
 printf '%s\n' "$OUT" | sed -n '/^Summary/,$p' | grep -q '3  Background service' || fail "the Summary lists the install's steps"
 
+# ---- a common_site_config.json written on one line still shows its ports
+ONE="$HOME/dev/oneline"
+mkdir -p "$ONE/sites"
+printf '{"webserver_port": 8005, "socketio_port": 9005, "redis_queue": "redis://127.0.0.1:11005", "redis_cache": "redis://127.0.0.1:13005", "serve_default_site": true}\n' >"$ONE/sites/common_site_config.json"
+# shellcheck disable=SC2016
+assert_eq "8005 9005 11005 13005" "$(bash -c '. "$1/lib/frappe-local/ui.sh"; . "$1/lib/frappe-local/ports.sh"; fl_ports_of_bench "$2"' _ "$ROOT" "$ONE")" "(one line JSON)"
+printf '{\n  "webserver_port": 8006,\n  "socketio_port": 9006,\n  "redis_queue": "redis://127.0.0.1:11006",\n  "redis_cache": "redis://127.0.0.1:13006"\n}\n' >"$ONE/sites/common_site_config.json"
+# shellcheck disable=SC2016
+assert_eq "8006 9006 11006 13006" "$(bash -c '. "$1/lib/frappe-local/ui.sh"; . "$1/lib/frappe-local/ports.sh"; fl_ports_of_bench "$2"' _ "$ROOT" "$ONE")" "(the pretty printed form reads as before)"
+
 printf 'test-ports: ok\n'

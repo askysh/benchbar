@@ -501,7 +501,21 @@ func TestRedactionHidesJSONStyleSecrets(t *testing.T) {
 		{`"token": {"a": "s1", "b": {"c": ["s2", "s3"]}}, "host": "h"`, `"token": "<redacted>", "host": "h"`},
 		{`{"db": {"password": "p1", "host": "h", "inner": {"api_key": "k\"1"}}}`, `{"db": {"password": "<redacted>", "host": "h", "inner": {"api_key": "<redacted>"}}}`},
 		{`secrets=["a","b"] next`, `secrets="<redacted>" next`},
+		// names ending in pass or pwd, credentials, and a flag whose value
+		// follows after a space (or -p glued to it on a SQL client line)
+		{`smtp_pass=hunter5`, `smtp_pass=<redacted>`},
+		{`"pass": "hunter6"`, `"pass": "<redacted>"`},
+		{`"mail_credential": "hunter7"`, `"mail_credential": "<redacted>"`},
+		{`DB_PWD=hunter8`, `DB_PWD=<redacted>`},
+		{`mariadb --password hunter3 -e 'select 1'`, `mariadb --password <redacted> -e 'select 1'`},
+		{`bench new-site x --db-root-password hunter4 --admin-password "hunter 4b" --force`, `bench new-site x --db-root-password <redacted> --admin-password <redacted> --force`},
+		{`mysql -u root -phunter2 -h 127.0.0.1`, `mysql -u root -p<redacted> -h 127.0.0.1`},
+		{`mysql -u root -p'hunter two' sitedb`, `mysql -u root -p<redacted> sitedb`},
+		{`mariadb-dump -phunter2b --single-transaction db`, `mariadb-dump -p<redacted> --single-transaction db`},
 		// words that only look similar stay
+		{`tests passed=12 bypass=1 compass: north`, `tests passed=12 bypass=1 compass: north`},
+		{`bench serve -p 8000 --keep-going`, `bench serve -p 8000 --keep-going`},
+		{`mysql -u root -p`, `mysql -u root -p`},
 		{`inside: the bench`, `inside: the bench`},
 		{`sidebar: open`, `sidebar: open`},
 		{`bearer of news`, `bearer of news`},

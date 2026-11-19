@@ -59,6 +59,11 @@ rm -r "$BENCH/sites/noname"; cp "$TMP_DIR/common_site_config.json.orig" "$BENCH/
 
 # ---- add: refusals first
 run_fm site add "Bad_Name" --bench-dir "$BENCH"; assert_eq "1" "$CODE"; assert_contains "$OUT" "Invalid site name"
+# the names bench keeps in sites/ for itself are no site names (site add assets said "already exists" and exited 0)
+for reserved in assets apps.txt; do
+  run_fm site add "$reserved" --bench-dir "$BENCH"; assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "Invalid site name: '${reserved}'"; assert_contains "$OUT" "keeps in sites/ for itself"
+  run_fm site add "$reserved" --dry-run --json --bench-dir "$BENCH"; assert_eq "1" "$CODE" "$OUT"
+done
 run_fm site add v16two --apps "nosuchapp" --bench-dir "$BENCH"; assert_eq "1" "$CODE"; assert_contains "$OUT" "ADMIN_PASSWORD="
 ADMIN_PASSWORD=x run_fm site add v16two --apps "nosuchapp" --bench-dir "$BENCH"; assert_eq "1" "$CODE"; assert_contains "$OUT" "nosuchapp is not in"
 run_fm site add v16two --yes --bench-dir "$BENCH"; assert_eq "1" "$CODE"; assert_contains "$OUT" "ADMIN_PASSWORD="

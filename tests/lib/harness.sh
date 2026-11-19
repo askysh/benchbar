@@ -63,6 +63,9 @@ unset BENCH_DIR SITE_NAME FL_DRY_RUN FL_ASSUME_YES 2>/dev/null || true
 mkdir -p "$HOME/Library/LaunchAgents" "$MOCK_STATE/agents" "$FL_STATE_DIR" "$MOCK_BREW_PREFIX/etc/my.cnf.d" \
   "$MOCK_BREW_PREFIX/opt/python@3.11/bin" "$MOCK_PIPX_HOME/venvs/frappe-bench/bin" "$HOME/.local/bin"
 : >"$MOCK_LOG"; : >"$MOCK_PROCS"; : >"$MOCK_LISTEN"; : >"$MOCK_BREW_SERVICES"
+# the plan token key: a real install makes it at its first plan; made here so a
+# test that checks "a dry run writes nothing" is not the first plan
+(umask 077; printf '%s\n' 5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed5eed >"$FL_STATE_DIR/plan-key")
 # 50 GB free on every volume (the df mock): the installer's 10 GB check must
 # not depend on the runner's disk, which is sometimes below it. A test of
 # the check writes its own value.

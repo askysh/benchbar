@@ -91,7 +91,11 @@ add only repos you trust, and read the plan:
 2. The agent shows you that plan and waits for your OK. benchbar cannot
    tell whether you saw it: the token proves only that the bench has not
    changed since the plan, and the tool says so, so ask your agent to
-   show the plan before it applies.
+   show the plan before it applies. A token is keyed with a secret that
+   stays on your Mac (`plan-key` in benchbar's state folder, readable by
+   you only), so it cannot be worked out from a plan, and it expires about
+   an hour (60 to 70 minutes) after the plan was made: an older one is
+   refused with "The plan token expired" and the agent plans again.
 3. `benchbar_app_add` with the same arguments and the `token` runs
    exactly that plan. If `sites/apps.txt`, `apps/` or the sites changed
    in between, the token is refused and the agent plans again.

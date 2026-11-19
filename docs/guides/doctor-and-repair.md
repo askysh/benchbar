@@ -662,13 +662,20 @@ Fix: `benchbar repair` boots them out and moves the plists to
 Every loaded `com.benchbar.*` agent still has its runner script. When a
 bench folder is emptied or deleted (a cleanup tool, `rm`) while its agent
 stays loaded, launchd starts the missing script every 20 seconds, it
-exits with code 127, and each try adds a line to the bench's log. The
-check looks at every bench's agent, not only the current one.
+exits with code 127, and each try adds a line to the bench's log, for as
+long as you are logged in. That is a FAIL, not a hint. The check looks at
+every bench's agent, not only the current one. Only agents that run a
+runner benchbar wrote (`benchbar-run.sh`, or `frappe-mac-run.sh` from
+before 0.3.0) count: your own agents, and a `com.benchbar` label you
+pointed at your own script, are never listed or touched.
 
-Fix: `benchbar uninstall-service --bench-dir <path>`, with the path the
-warning shows. It works when the folder is no longer a bench: it boots
-out the agent that points at the path and moves its plist to
-`~/Library/LaunchAgents-disabled/<timestamp>/`.
+Fix: `benchbar repair` (from any bench) boots out the agent of a folder
+that is no bench any more and moves its plist to
+`~/Library/LaunchAgents-disabled/<timestamp>/`. A bench that is still
+there gets its runner written again: `benchbar repair` in the bench for
+the current one, `benchbar repair --bench-dir <path>` for another.
+`benchbar uninstall-service --bench-dir <path>` does the removal for one
+folder by hand.
 
 ### hosts
 

@@ -20,9 +20,12 @@ Site config files are never copied, only their key names. Any value
 whose key looks like a password, secret, token, key, API or auth
 credential is replaced by `***`, and so is anything shaped like a secret
 whatever its key: `user:password@` in a URL (a redis URL, a git URL with
-a token), JWTs, GitHub, Slack, OpenAI and AWS tokens. Email addresses
-become `<email>`. Your home folder, user name and every name of the Mac
-are replaced by placeholders. `REDACTIONS.txt` inside the zip lists what
+a token), JWTs, GitHub, Slack, OpenAI and AWS tokens. Cookie and
+Set-Cookie headers, `--password VALUE` and `-pVALUE` are masked too. Email
+addresses become `<email>`. Your home folder, user name and every name of
+the Mac are replaced by placeholders. The log tails are program output and
+can hold names or phone numbers from a database error: read them before you
+attach the zip to a public issue. `REDACTIONS.txt` inside the zip lists what
 was replaced. `benchbar logs --json` (and the MCP log tool) applies the
 same rules.
 

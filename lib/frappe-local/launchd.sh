@@ -137,7 +137,11 @@ fl_user_manager_fix() { :; }
 
 # fl_render_agent RUN_AT_LOAD: FL_R_PLIST gets the agent's plist
 fl_render_agent() {
+  fl_service_limits
   FL_R_PLIST="$(fl_template_render launchagent.plist \
+    "NICE=${FL_SVC_NICE}" \
+    "PROCESS_TYPE=${FL_SVC_PROCESS_TYPE}" \
+    "NOFILE=${FL_SVC_NOFILE}" \
     "LABEL=$(fl_agent_label)" \
     "APP_BUNDLE_ID=${FL_APP_BUNDLE_ID}" \
     "RUNNER=$(fl_runner_path)" \
@@ -358,6 +362,14 @@ fl_agents_for_dir() {
   done < <(fl_agent_files)
 }
 
+# fl_runner_is_ours PATH: PATH is named like a runner benchbar writes (the
+# agent of a bench, not the share job or a script a person pointed a
+# com.benchbar label at). The dead agent check and repair only touch these.
+fl_runner_is_ours() {
+  case "${1##*/}" in benchbar-run.sh|frappe-mac-run.sh) return 0 ;; esac
+  return 1
+}
+
 # Loaded com.benchbar agents whose runner script is gone: launchd starts
 # them every 20 seconds, they exit 127 and fill bench.log. "plist|label|dir".
 fl_dead_agents_list() {
@@ -366,6 +378,7 @@ fl_dead_agents_list() {
     [[ -n "$f" ]] || continue
     runner="$(fl_plist_runner "$f")"
     [[ -n "$runner" && ! -f "$runner" ]] || continue
+    fl_runner_is_ours "$runner" || continue
     label="${f##*/}"; label="${label%.plist}"
     launchctl print "$(fl_launchd_domain)/${label}" >/dev/null 2>&1 || continue
     printf '%s|%s|%s\n' "$f" "$label" "$(fl_plist_working_dir "$f")"

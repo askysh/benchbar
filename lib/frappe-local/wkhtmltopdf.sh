@@ -9,6 +9,14 @@
 # Intel only binary (checked: the Mach-O is x86_64), so on Apple Silicon
 # it needs Rosetta 2. Installing the package itself needs sudo once.
 #
+# There is no Apple Silicon build to offer instead: github.com/wkhtmltopdf/
+# packaging has published one macOS package ever (0.12.6-2, June 2020, the
+# Intel one pinned here; its releases since 2022 are Linux only), the project
+# is archived, and Homebrew's wkhtmltopdf is the unpatched build that crashes
+# on Frappe templates. The way out is Chromium (Frappe v16, `chromium_path`),
+# which benchbar already checks; a person who does not want Rosetta 2 can
+# skip this package and lose PDFs from wkhtmltopdf only.
+#
 # fl_wkhtmltopdf_ensure returns 0 when the patched build is present or was
 # installed, 1 when it is not there and the user skipped it (PDFs will not
 # work; the bench itself is fine).
@@ -84,6 +92,17 @@ fl_wkhtmltopdf_state() {
   if fl__wk_text_patched "$raw"; then printf 'patched'; elif [[ -n "$raw" ]]; then printf 'unpatched'; else printf 'missing'; fi
 }
 
+# fl_wkhtmltopdf_arch_note: before anything is installed on Apple Silicon,
+# says what the package is and what it needs (printed once per run).
+FL_WKHTML_ARCH_NOTED=0
+fl_wkhtmltopdf_arch_note() {
+  [[ "$FL_WKHTML_ARCH_NOTED" == "0" ]] || return 0
+  FL_WKHTML_ARCH_NOTED=1
+  fl_is_linux && return 0
+  [[ "${FL_ARCH:-$(uname -m)}" == "arm64" ]] || return 0
+  fl_note "wkhtmltopdf has no Apple Silicon build: the official patched package is Intel only and runs under Rosetta 2. No newer macOS package exists (the project is archived), and Homebrew's build is not patched. Frappe v16 can print PDFs with Chromium instead."
+}
+
 fl_rosetta_installed() {
   [[ "${FL_ARCH:-$(uname -m)}" == "arm64" ]] || return 0
   arch -x86_64 /usr/bin/true >/dev/null 2>&1
@@ -127,14 +146,14 @@ fl_wkhtmltopdf_download() {
     return 0
   fi
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
-    fl_info "dry-run: curl -fL -o ${dest} ${FL_WKHTML_URL}"
+    fl_info "dry-run: curl -fL --proto =https --tlsv1.2 -o ${dest} ${FL_WKHTML_URL}"
     fl_info "dry-run: verify sha256 ${FL_WKHTML_SHA256}"
     return 0
   fi
   mkdir -p "$FL_WKHTML_DOWNLOAD_DIR"
   rm -f "$dest"
   # the stream's progress lines read the size of the file being written
-  FL_PROGRESS_FILE="${dest}.part" fl_run_long "download wkhtmltopdf ${FL_WKHTML_VERSION} (about 50 MB)" curl -fL --retry 3 -o "${dest}.part" "$FL_WKHTML_URL" || return 1
+  FL_PROGRESS_FILE="${dest}.part" fl_run_long "download wkhtmltopdf ${FL_WKHTML_VERSION} (about 50 MB)" curl -fL --proto '=https' --tlsv1.2 --retry 3 -o "${dest}.part" "$FL_WKHTML_URL" || return 1
   sum="$(fl_sha256_of "${dest}.part")"
   if [[ "$sum" != "$FL_WKHTML_SHA256" ]]; then
     rm -f "${dest}.part"
@@ -312,6 +331,7 @@ fl_wkhtmltopdf_ensure() {
     fl_warn "wkhtmltopdf is not installed (Frappe needs it for PDF printing)"
   fi
   fl_wkhtmltopdf_pin || return 1
+  fl_wkhtmltopdf_arch_note
   if fl_is_linux && [[ -z "$(fl_wkhtmltopdf_deb_arch)" ]]; then
     fl_warn "PDF printing is not set up on ${FL_ARCH:-$(uname -m)}: the official wkhtmltopdf package is built for x86_64 and arm64 only. Everything else works."
     fl_fix "print PDFs from a machine that has the package, or install a patched wkhtmltopdf by hand"

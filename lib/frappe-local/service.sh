@@ -737,7 +737,7 @@ fl_cmd_autostart() {
 # agent whose WorkingDirectory is that path. Nothing else is touched.
 # "confirmed": --all asked once already.
 fl_uninstall_orphan_agents() {
-  local list plist label dest code=0
+  local list plist label code=0
   list="$(fl_agents_for_dir "$FL_BENCH_DIR")"
   [[ -n "$list" ]] || fl_die "No bench at ${FL_BENCH_DIR}, and no com.benchbar agent points at it." \
     "Check the path, or list the agents: $(fl_agent_list_hint)"
@@ -746,30 +746,35 @@ fl_uninstall_orphan_agents() {
   [[ "${1:-}" == confirmed ]] || fl_confirm "Remove the agent for ${FL_BENCH_DIR}?" || { fl_warn "Cancelled."; return 1; }
   while IFS='|' read -r plist label; do
     [[ -n "$plist" ]] || continue
-    if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
-      fl_info "dry-run: would boot out ${label} and move ${plist} to ${FL_LEGACY_DIR}/"
-      continue
-    fi
-    if fl_agent_listed "$(fl_launchd_domain)/${label}"; then
-      # still loaded: keep the plist, or the job would go on restarting
-      # with nothing left on disk to remove it by
-      if ! fl_agent_unload "$(fl_launchd_domain)/${label}" "$plist"; then
-        fl_fail "${FL_AGENT_MANAGER} still runs ${label}; its plist stays at ${plist}"
-        fl_fix "$(fl_agent_bootout_hint "$(fl_launchd_domain)/${label}"), then run this command again"
-        code=1
-        continue
-      fi
-      fl_ok "booted out ${label}"
-    fi
-    dest="${FL_LEGACY_DIR}/${label}-$(fl_backup_stamp)"
-    if ! mkdir -p "$dest" 2>/dev/null || ! mv "$plist" "$dest/" 2>/dev/null; then
-      fl_fail "could not move ${plist} to ${dest}/"; code=1; continue
-    fi
-    fl_ok "moved ${plist} to ${dest}/"
-    fl_agent_files_changed
+    fl_agent_retire "$plist" "$label" || code=1
   done <<<"$list"
   [[ "$code" == "0" ]] || return 1
   fl_ok "agent removed; nothing else in ${FL_BENCH_DIR} was touched"
+}
+
+# fl_agent_retire PLIST LABEL: boots the agent out and moves its plist aside
+# (never deletes it). A job the manager still holds keeps its plist, or it
+# would go on restarting with nothing left on disk to remove it by.
+fl_agent_retire() {
+  local plist="$1" label="$2" dest
+  if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
+    fl_info "dry-run: would boot out ${label} and move ${plist} to ${FL_LEGACY_DIR}/"
+    return 0
+  fi
+  if fl_agent_listed "$(fl_launchd_domain)/${label}"; then
+    if ! fl_agent_unload "$(fl_launchd_domain)/${label}" "$plist"; then
+      fl_fail "${FL_AGENT_MANAGER} still runs ${label}; its plist stays at ${plist}"
+      fl_fix "$(fl_agent_bootout_hint "$(fl_launchd_domain)/${label}"), then run this command again"
+      return 1
+    fi
+    fl_ok "booted out ${label}"
+  fi
+  dest="${FL_LEGACY_DIR}/${label}-$(fl_backup_stamp)"
+  if ! mkdir -p "$dest" 2>/dev/null || ! mv "$plist" "$dest/" 2>/dev/null; then
+    fl_fail "could not move ${plist} to ${dest}/"; return 1
+  fi
+  fl_ok "moved ${plist} to ${dest}/"
+  fl_agent_files_changed
 }
 
 # fl_cmd_uninstall_service [confirmed]: "confirmed" when --all asked once

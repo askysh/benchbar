@@ -5,7 +5,7 @@
 # the check -> plan -> apply -> verify engine shared by "repair" and
 # "service" (the background phase).
 
-FL_ACTION_ORDER="python_leaves node_install yarn_install env_rebuild env_setuptools honcho_install honcho_setuptools node_requirements build clear_cache mariadb_bind mariadb_utf8 wkhtmltopdf_install legacy_migrate port_block write_procfile write_runner write_plist write_helpers write_cli_link hosts_entry share_resume kept_backups rotate_logs redis_stop"
+FL_ACTION_ORDER="python_leaves node_install yarn_install env_rebuild env_setuptools honcho_install honcho_setuptools node_requirements build clear_cache mariadb_bind mariadb_utf8 wkhtmltopdf_install legacy_migrate dead_agents port_block write_procfile write_runner write_plist write_helpers write_cli_link hosts_entry share_resume kept_backups rotate_logs redis_stop"
 # actions whose check may stay a warning after a run without failing it:
 # the user may decline them (or sudo) on purpose
 FL_OPTIONAL_ACTIONS="wkhtmltopdf_install hosts_entry redis_stop"
@@ -41,6 +41,7 @@ fl_action_label() {
     mariadb_utf8) printf 'write the utf8mb4 MariaDB drop-in%s%s' "$(fl_is_linux && printf ' (sudo)')" "$(fl_mariadb_restart_note)" ;;
     wkhtmltopdf_install) printf 'install the patched wkhtmltopdf package (sudo)' ;;
     legacy_migrate) printf 'migrate legacy launchd agents' ;;
+    dead_agents) printf 'boot out and move aside the agents whose runner is gone' ;;
     port_block) printf 'move the bench to port block %s (bench set-config, bench setup redis)' "${FL_PORT_TARGET:-?}" ;;
     write_procfile) printf 'write Procfile.lean' ;;
     write_runner) printf 'write the runner script' ;;
@@ -254,6 +255,25 @@ act_legacy_migrate() {
   # the old runner is free once no legacy agent runs it (the write_runner
   # and write_plist steps retire it too, but they may have nothing to write)
   fl_runner_legacy_retire || return 1
+  return 0
+}
+
+# Boots out and moves aside every loaded benchbar agent whose runner script
+# is gone and whose folder is no bench any more (any bench's agent, as the
+# check lists them). A bench that is still there gets its runner written
+# again by write_runner, or by repair run from its own folder; an agent
+# that runs a script benchbar did not write is never in the list.
+act_dead_agents() {
+  local list plist label dir failed=0
+  list="$(fl_dead_agents_list)"
+  [[ -n "$list" ]] || { FL_STEP_RESULT="unchanged"; return 0; }
+  while IFS='|' read -r plist label dir; do
+    [[ -n "$plist" ]] || continue
+    if [[ -n "$dir" ]] && fl_is_bench_dir "$dir"; then continue; fi
+    fl_info "${label}: ${dir:-no folder} is no bench, its runner is gone"
+    fl_agent_retire "$plist" "$label" || failed=1
+  done <<<"$list"
+  [[ "$failed" == "0" ]] || { fl_fail "a dead agent could not be removed; run benchbar repair again once launchd has let go of it"; return 1; }
   return 0
 }
 

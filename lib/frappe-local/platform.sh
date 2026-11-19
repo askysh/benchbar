@@ -231,8 +231,11 @@ fl_brew_formula_available() {
   brew list --formula --versions "$formula" >/dev/null 2>&1 || brew info "$formula" >/dev/null 2>&1
 }
 
+# A bare name (mariadbd, redis-server) is the name of the process, so an
+# editor or a tail with that word in its arguments does not count; anything
+# else is a pattern for the whole command line.
 fl_process_running() {
-  pgrep -qf "$1" 2>/dev/null
+  if [[ "$1" =~ ^[A-Za-z0-9._@-]+$ ]]; then pgrep -qx "$1" 2>/dev/null; else pgrep -qf "$1" 2>/dev/null; fi
 }
 
 fl_brew_service_running() {
@@ -242,9 +245,13 @@ fl_brew_service_running() {
   fl_has_line "$states" started
 }
 
+# lsof run by a normal user does not list a socket another user owns, so a
+# root owned listener on a bench port would look free; netstat lists every
+# listening socket (without the owner) and settles it.
 fl_port_listening() {
   local port="$1"
-  lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1
+  lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1 && return 0
+  netstat -an -p tcp 2>/dev/null | awk -v p="$port" '$NF == "LISTEN" { n = split($4, a, /[.:]/); if (a[n] == p) f = 1 } END { exit !f }'
 }
 
 # The working folder of whatever listens on PORT (the bench's own Redis runs
