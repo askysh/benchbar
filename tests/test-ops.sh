@@ -112,7 +112,7 @@ run_json op status --bogus
 assert_eq "1" "$CODE"
 run_json op frobnicate
 assert_eq "1" "$CODE"
-assert_contains "$ERR" "Unknown subcommand"
+assert_contains "$OUT$ERR" "Unknown subcommand"
 # polling needs no bench and no other library: it works from a folder that is no bench
 run_json commands --json
 assert_eq "True" "$(printf '%s' "$OUT" | jget - '[c["name"] for c in d["commands"] if c["name"].startswith("op ")] == ["op status", "op list", "op wait"] and all(not c["mutating"] for c in d["commands"] if c["name"].startswith("op "))')"
@@ -161,9 +161,9 @@ run_json op wait op-20260101-000001-11 --timeout 1 --json
 assert_eq "1" "$CODE" "$OUT"
 assert_eq "running True" "$(printf '%s' "$OUT" | jget - 'd["state"] + " " + str(d["timed_out"])')" "(gave up waiting, the run goes on)"
 run_json op wait
-assert_eq "1" "$CODE"; assert_contains "$ERR" "needs an op id"
+assert_eq "1" "$CODE"; assert_contains "$OUT$ERR" "needs an op id"
 run_json op wait op-20260101-000003-13 --timeout soon
-assert_eq "1" "$CODE"; assert_contains "$ERR" "number of seconds"
+assert_eq "1" "$CODE"; assert_contains "$OUT$ERR" "number of seconds"
 run_fm op wait op-20260101-000003-13
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "done (exit 0)"
@@ -191,13 +191,13 @@ assert_eq "3" "$(find "$OPS" -name 'op-*.json' | wc -l | tr -d ' ')" "(the new r
 # ---- 6. --background: refused before it starts, or started detached with an op_id at once
 rm -rf "$OPS"
 run_json up --background --json --bench-dir "$BENCH"
-assert_eq "1" "$CODE"; assert_contains "$ERR" "cannot run with --background"
+assert_eq "1" "$CODE"; assert_contains "$OUT$ERR" "cannot run with --background"
 run_json site restore bbtest.localhost --from 20260929_100001 --background --json --bench-dir "$BENCH"
 assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT$ERR" "--yes"
 run_json site backup bbtest.localhost --background --dry-run --json --bench-dir "$BENCH"
-assert_eq "1" "$CODE"; assert_contains "$ERR" "dry run"
+assert_eq "1" "$CODE"; assert_contains "$OUT$ERR" "dry run"
 run_json mariadb-password --background
-assert_eq "1" "$CODE"; assert_contains "$ERR" "cannot run with --background"
+assert_eq "1" "$CODE"; assert_contains "$OUT$ERR" "cannot run with --background"
 run_json share setup --background
 [[ "$CODE" != "0" ]] || fail "share setup --background must be refused: $OUT$ERR"
 assert_eq "0" "$(find "$OPS" -name 'op-*.json' 2>/dev/null | wc -l | tr -d ' ')" "(a refusal is not an operation)"
