@@ -15,6 +15,9 @@ public static class UiText
     /// <summary>The string named <paramref name="name"/> for the current UI culture; the name itself when it is missing, so a gap shows.</summary>
     public static string Get(string name, CultureInfo? culture = null) => Manager.GetString(name, culture) ?? name;
 
+    /// <summary>The string named <paramref name="name"/> with its <c>{0}</c> placeholders filled, formatted for the current culture.</summary>
+    public static string Format(string name, params object[] args) => string.Format(CultureInfo.CurrentCulture, Get(name), args);
+
     /// <summary>The culture's short date and short time, "3/5/2026 2:30 PM" in en-US, "05.03.2026 14:30" in de-DE (the invariant culture gives "03/05/2026 14:30").</summary>
     public static string Date(DateTimeOffset time, TimeZoneInfo? zone = null, CultureInfo? culture = null)
     {
