@@ -459,7 +459,8 @@ TOOLS["benchbar_doctor_prerequisites"] = (
 )
 TOOLS["benchbar_self_update_check"] = (
     "This benchbar and the BenchBar app against the latest release, and the command that would update them (available "
-    "is null when GitHub could not be asked). Read only: updating is for a person in a terminal (benchbar self-update).",
+    "is null when GitHub could not be asked). Read only: one request to GitHub (up to 10 seconds), no run lock and no run log; "
+    "updating is for a person in a terminal (benchbar self-update).",
     {},
     lambda a: ["self-update", "--check", "--json"],
     True,

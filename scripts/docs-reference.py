@@ -207,11 +207,14 @@ def main(argv):
             for t in tools:
                 if "`%s`" % t["name"] not in text:
                     problems.append("%s does not name the MCP tool %s" % (rel, t["name"]))
-        # docs to code: a page that names a tool the server does not have (a tool that was renamed or never built)
+        # docs to code: a page that names a tool the server does not have (a tool that was renamed or never built).
+        # Every page under docs/ and AGENTS.md; a heading anchor such as #...-and-benchbar_sudogui is not a tool name
         known = set(t["name"] for t in tools)
-        for rel in ("docs/guides/agents.md", "docs/reference/cli/mcp.md", "docs/features.md", "AGENTS.md"):
-            with open(os.path.join(ROOT, rel), encoding="utf-8") as fh:
-                for name in sorted(set(re.findall(r"benchbar_[a-z][a-z_]*", fh.read()))):
+        pages = sorted(glob.glob(os.path.join(ROOT, "docs", "**", "*.md"), recursive=True)) + [os.path.join(ROOT, "AGENTS.md")]
+        for page in pages:
+            rel = os.path.relpath(page, ROOT).replace(os.sep, "/")
+            with open(page, encoding="utf-8") as fh:
+                for name in sorted(set(re.findall(r"(?<![\w#-])benchbar_[a-z][a-z_]*", fh.read()))):
                     if name not in known:
                         problems.append("%s names %s, which is not an MCP tool of the server" % (rel, name))
         for p in problems:

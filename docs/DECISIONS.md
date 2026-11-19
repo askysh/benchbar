@@ -43,7 +43,7 @@ runs come first, the 0.3 easy install run follows.
 - `benchbar_app_update` has no `skip_backup`: the backup of every site that has the app is what makes an update recoverable, so only a person in a terminal can skip it. `--discard-pending` has no tool either (it drops a record).
 - `app focus NAME` and `app unfocus NAME` are not tools: they pin a state with no plan and no effect on the bench's files. `benchbar_app_focus_list` reads the state.
 - `benchbar_ports_plan` is a preview with no apply tool: its token is for `ports apply` in a terminal. It takes `paths` as an array, passed after `--`, and each path is checked like any value (no leading `-`).
-- `benchbar_self_update_check` is the one read tool that reaches GitHub, so it is marked open world. Under the CLI's own dispatch `self-update` takes the run lock even for `--check`, so a busy run answers with the lock's message.
+- `benchbar_self_update_check` is the one read tool that reaches GitHub, so it is marked open world. `self-update --check` (and only `--check`) takes no run lock and opens no run log: it is one curl of up to 10 seconds that writes nothing, so a poll never holds up an `up` or a repair and leaves no log file per call. The update itself still takes both.
 - The docs check now runs in both directions (MCP-6): every tool of the server is named in the agents guide and the MCP reference, and those pages, `docs/features.md` and `AGENTS.md` name no `benchbar_*` tool the server lacks.
 
 ## Docs process (2026-11)

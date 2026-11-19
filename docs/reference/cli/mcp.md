@@ -214,8 +214,9 @@ a person can run `benchbar app update NAME --skip-backup` in a terminal.
 `benchbar_site_backups` lists the backup sets of a site; its `stamp` is the
 `from` of `benchbar_site_restore_plan`. `benchbar_ports_plan` takes the bench
 paths (`paths`) and only previews: it returns a token that no tool applies.
-`benchbar_self_update_check` asks GitHub for the latest release and takes
-the CLI's run lock for a moment, so it can answer that another run is busy.
+`benchbar_self_update_check` asks GitHub for the latest release (one request,
+up to 10 seconds). It takes no run lock and writes no run log, so it never
+holds up another run.
 
 `benchbar_logs_tail` reads one file: `file` is `bench` (the default), `worker`, `worker_error` or `previous` (the log of the run before the last restart). `since` returns only the lines after a time, and `since_restart` only the lines since the bench last started; each line has its time in `ts`.
 

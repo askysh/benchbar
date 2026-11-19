@@ -1544,8 +1544,12 @@ case "$COMMAND" in
       fl_lock_acquire "${FL_STATE_DIR}/lock"
     fi ;;
   register|self-update)
-    fl_log_init "${FL_STATE_DIR}/logs"
-    fl_lock_acquire "${FL_STATE_DIR}/lock" ;;
+    # self-update --check only asks GitHub (one curl of up to 10 s) and writes nothing: no run lock, so a
+    # check never holds up an up or a repair, and no run log, so a poll leaves no file behind
+    if [[ "$COMMAND" == "self-update" && " ${ARGS[*]:-} " == *" --check "* ]]; then :; else
+      fl_log_init "${FL_STATE_DIR}/logs"
+      fl_lock_acquire "${FL_STATE_DIR}/lock"
+    fi ;;
   # labs on and off write the state file and off may stop a share; list and status read
   labs)
     if [[ "${ARGS[0]:-}" == "on" || "${ARGS[0]:-}" == "off" ]]; then
