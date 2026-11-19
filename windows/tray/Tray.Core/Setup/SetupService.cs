@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Globalization;
 using System.Text;
+using System.Text.Json.Nodes;
 
 namespace BenchBar.Tray.Core;
 
@@ -61,7 +62,19 @@ public interface ISetupService
 
     /// <summary><c>benchbar.exe --shim-version</c>, or null.</summary>
     Task<string?> ShimVersionAsync(CancellationToken ct);
+
+    /// <summary><c>profile list --json</c>: what the New Bench page offers. The default says the list was not read (the page then offers v15-lts only).</summary>
+    Task<ProfileListResult> ListProfilesAsync(CancellationToken ct) => Task.FromResult(new ProfileListResult([], "The profile list was not read."));
+
+    /// <summary>
+    /// Asks the CLI whether it installs <paramref name="profile"/> here: <c>install --dry-run --json --offline --profile NAME</c>, read for the
+    /// plan or the refusal. Changes nothing. The default accepts every profile.
+    /// </summary>
+    Task<ProfileGate> CheckProfileAsync(string profile, string benchDir, CancellationToken ct) => Task.FromResult(new ProfileGate(profile, null));
 }
+
+/// <summary>The profiles of <c>profile list --json</c>, or why they could not be read.</summary>
+public sealed record ProfileListResult(IReadOnlyList<ProfileInfo> Profiles, string? Error);
 
 /// <summary>The names of the variables that carry a password or a mode into a run. The shim's forwarder passes exactly these into WSL.</summary>
 public static class SetupEnv
@@ -317,6 +330,59 @@ public sealed class ShimSetupService : ISetupService
         {
             return null; // unknown: the page asks for the password
         }
+    }
+
+    public async Task<ProfileListResult> ListProfilesAsync(CancellationToken ct)
+    {
+        try
+        {
+            var result = await _runner.RunAsync(Shim, ProfilesModel.ListArgs(), ct, CliTimeouts.Read).ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(result.Output))
+                return new ProfileListResult([], ShimBenchSource.FirstLine(result.Error) ?? $"benchbar.exe profile list exited with code {result.ExitCode}.");
+            var profiles = CliOutput.Parse(result.Output, "profile list", json => ProfileListJson.Parse(JsonNode.Parse(json)!.AsObject()), requires: "profiles");
+            return new ProfileListResult(profiles, null);
+        }
+        catch (Win32Exception ex)
+        {
+            return new ProfileListResult([], ShimStart.Describe(ex, _locate()));
+        }
+        catch (SourceProblemException ex)
+        {
+            return new ProfileListResult([], ex.Message);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            return new ProfileListResult([], "benchbar.exe profile list did not answer in time.");
+        }
+    }
+
+    public async Task<ProfileGate> CheckProfileAsync(string profile, string benchDir, CancellationToken ct)
+    {
+        InstallPlan? plan = null;
+        InstallDone? done = null;
+        void OnLine(string raw)
+        {
+            try
+            {
+                switch (InstallJson.ParseLine(raw))
+                {
+                    case InstallEvent.Plan p: plan = p.Value; break;
+                    case InstallEvent.Done d: done = d.Value; break;
+                }
+            }
+            catch (UnsupportedSchemaException) { }
+        }
+        try
+        {
+            await RunStreamAsync(["install", "--dry-run", "--json", "--offline", "--bench-dir", benchDir, "--profile", profile],
+                new SecretEnvironment().Set(SetupEnv.NonInteractive, "1"), OnLine, PlanTimeout, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is SourceProblemException or TimeoutException or Win32Exception
+                                   || (ex is OperationCanceledException && !ct.IsCancellationRequested))
+        {
+            return new ProfileGate(profile, null); // no answer: the Review page's plan says what is wrong
+        }
+        return ProfileChoices.Read(profile, plan, done);
     }
 
     public async Task<string?> ShimVersionAsync(CancellationToken ct)
