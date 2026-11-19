@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -1246,5 +1248,73 @@ func TestSetupCheckJSONHasTheNewStepAndStaysOneDocument(t *testing.T) {
 	}
 	if !strings.Contains(e.stdout(), `"id":"distro_os"`) {
 		t.Error("no distro_os step")
+	}
+}
+
+// The line of a release runs the installer only when its sha256 is the one in
+// the release's SHA256SUMS: a fake curl serves the files, and the installer
+// stand-in says that it ran.
+func TestInstallerPipeChecksTheInstaller(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("bash on Windows can be the WSL launcher")
+	}
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("no bash")
+	}
+	if _, err := exec.LookPath("sha256sum"); err != nil {
+		t.Skip("no sha256sum")
+	}
+	withVersion(t, "0.9.1")
+	bin, serve, home := t.TempDir(), t.TempDir(), t.TempDir()
+	curl := `#!/bin/bash
+out=""; prev=""
+for a in "$@"; do [ "$prev" = "-o" ] && out="$a"; prev="$a"; done
+f="` + serve + `/$(basename "${*: -1}")"
+[ -f "$f" ] || { echo 'curl: (22) 404' >&2; exit 22; }
+if [ -n "$out" ]; then cp "$f" "$out"; else cat "$f"; fi
+`
+	if err := os.WriteFile(filepath.Join(bin, "curl"), []byte(curl), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write := func(name, text string) {
+		if err := os.WriteFile(filepath.Join(serve, name), []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run := func() (int, string) {
+		cmd := exec.Command(bash, "-c", installerPipe())
+		cmd.Env = append(os.Environ(), "HOME="+home, "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+		out, err := cmd.CombinedOutput()
+		if err == nil {
+			return 0, string(out)
+		}
+		if ee, ok := err.(*exec.ExitError); ok {
+			return ee.ExitCode(), string(out)
+		}
+		t.Fatal(err)
+		return -1, ""
+	}
+	installer := "echo INSTALLER RAN \"$@\"\n"
+	sum := sha256.Sum256([]byte(installer))
+	write("install.sh", installer)
+	write("SHA256SUMS", hex.EncodeToString(sum[:])+"  install.sh\n")
+	if code, out := run(); code != 0 || !strings.Contains(out, "INSTALLER RAN --version v0.9.1") {
+		t.Fatalf("a listed installer: exit %d\n%s", code, out)
+	}
+	write("install.sh", installer+"echo evil\n")
+	if code, out := run(); code == 0 || strings.Contains(out, "INSTALLER RAN") || !strings.Contains(out, "install.sh was not run") {
+		t.Fatalf("a changed installer: exit %d\n%s", code, out)
+	}
+	write("install.sh", installer)
+	write("SHA256SUMS", hex.EncodeToString(sum[:])+"  benchbar-cli-0.9.1.tar.gz\n")
+	if code, out := run(); code == 0 || strings.Contains(out, "INSTALLER RAN") {
+		t.Fatalf("sums without a line for install.sh: exit %d\n%s", code, out)
+	}
+	if err := os.Remove(filepath.Join(serve, "install.sh")); err != nil {
+		t.Fatal(err)
+	}
+	if code, out := run(); code != 22 {
+		t.Fatalf("a missing installer is curl's exit 22, got %d\n%s", code, out)
 	}
 }

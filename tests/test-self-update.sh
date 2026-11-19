@@ -34,6 +34,7 @@ JSON
 cat >"$MOCK_STATE/installer.sh" <<'SH'
 printf 'args: %s\n' "$*" >>"$MOCK_STATE/installer.log"
 printf 'app_dir: %s\n' "${BENCHBAR_APP_DIR:-}" >>"$MOCK_STATE/installer.log"
+printf 'api: %s repo: %s\n' "${BENCHBAR_API:-}" "${BENCHBAR_REPO:-}" >>"$MOCK_STATE/installer.log"
 echo "stub installer ran"
 SH
 installer_log() { cat "$MOCK_STATE/installer.log" 2>/dev/null || true; }
@@ -139,6 +140,18 @@ reset_calls
 BENCHBAR_INSTALLER_URL="https://raw.githubusercontent.com/askysh/benchbar/testing/install.sh" run_fm self-update --dry-run
 assert_contains "$OUT" "-o install.sh https://raw.githubusercontent.com/askysh/benchbar/testing/install.sh && "
 
+# ---- install.sh does not inherit BENCHBAR_API or BENCHBAR_REPO from the
+# shell, unless the tests ask for them (FL_TESTING=1)
+rm -f "$MOCK_STATE/installer.log"
+FL_TESTING=0 BENCHBAR_API="https://evil.example/api" BENCHBAR_REPO="https://evil.example/repo.git" run_fm self-update --yes
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "api:  repo: " "$(installer_log | sed -n 3p)" "(the installer got no BENCHBAR_API or BENCHBAR_REPO)"
+rm -f "$MOCK_STATE/installer.log"
+BENCHBAR_API="https://api.github.com/repos/askysh/benchbar" BENCHBAR_REPO="file:///repo.git" run_fm self-update --yes
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "api: https://api.github.com/repos/askysh/benchbar repo: file:///repo.git" "$(installer_log | sed -n 3p)" "(kept under FL_TESTING=1)"
+rm -f "$MOCK_STATE/installer.log"
+
 # ---- a managed install (the CLI in BENCHBAR_HOME): CLI and app
 reset_calls
 # a copy of the CLI that the git mock treats as a checkout (never the repo itself)
@@ -168,6 +181,7 @@ assert_calls_not_contain 'checkout'
 cat >"$MOCK_STATE/installer.sh" <<'SH'
 printf 'args: %s\n' "$*" >>"$MOCK_STATE/installer.log"
 printf 'app_dir: %s\n' "${BENCHBAR_APP_DIR:-}" >>"$MOCK_STATE/installer.log"
+printf 'api: %s repo: %s\n' "${BENCHBAR_API:-}" "${BENCHBAR_REPO:-}" >>"$MOCK_STATE/installer.log"
 echo "stub installer ran"
 SH
 sums_for_installer

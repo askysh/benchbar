@@ -59,7 +59,8 @@ list it is refused. A CLI that the installer manages is then checked out
 at the release's tag (`git fetch --tags`, `git checkout vX.Y.Z`): the
 installer pins only the app on a Mac. The addresses are fixed:
 `BENCHBAR_API` and `BENCHBAR_INSTALLER_URL` are read only by the tests
-(`FL_TESTING=1`). It changes no bench and never runs `bench update`.
+(`FL_TESTING=1`), and the installer is started without `BENCHBAR_API` and
+`BENCHBAR_REPO`. It changes no bench and never runs `bench update`.
 
 A CLI that is a git checkout of your own (not `~/.local/share/benchbar`)
 gets `--app-only` and the `git -C PATH pull` to run; a CLI installed

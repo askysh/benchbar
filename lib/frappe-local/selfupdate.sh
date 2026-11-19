@@ -346,22 +346,30 @@ fl_cmd_self_update() {
   fl_ok "install.sh of v${SU_PIN} matches the release's SHA256SUMS"
   # a CLI that install.sh manages is left at the release's tag: install.sh
   # pins only the app on a Mac (and a release candidate's CLI)
-  local pin_home=""
+  local pin_home="" strip=1
   [[ "$SU_APP_ONLY" == "1" ]] || pin_home="$FL_SELFUPDATE_HOME"
+  # install.sh reads BENCHBAR_API and BENCHBAR_REPO from the environment: a
+  # left over one would send the checked installer to another server for the
+  # release and the clone. Only the tests (FL_TESTING=1) may set them.
+  [[ "${FL_TESTING:-}" != "1" ]] || strip=0
   # exec: the installer may replace this very script with git pull; the lock
   # goes first, since exec skips the EXIT trap. The inner shell runs the
   # checked file, removes it, then checks the CLI out at the tag.
   fl_lock_release
   # shellcheck disable=SC2016  # $1 and $@ belong to the inner bash
-  exec bash -c 'dir="$1"; home="$2"; tag="$3"; shift 3
-    bash "$dir/install.sh" "$@"; rc=$?
+  exec bash -c 'dir="$1"; home="$2"; tag="$3"; strip="$4"; shift 4
+    if [ "$strip" = 1 ]; then
+      env -u BENCHBAR_API -u BENCHBAR_REPO bash "$dir/install.sh" "$@"; rc=$?
+    else
+      bash "$dir/install.sh" "$@"; rc=$?
+    fi
     rm -rf "$dir"
     [ "$rc" -eq 0 ] || exit "$rc"
     if [ -n "$home" ] && [ -e "$home/.git" ]; then
       git -C "$home" fetch --quiet --tags && git -C "$home" checkout --quiet "$tag" \
         || { echo "benchbar self-update: could not check the CLI out at $tag in $home (local changes?). The app is updated; the CLI stays as it was. fix: git -C $home checkout $tag" >&2; exit 1; }
       echo "CLI at $home is at $tag"
-    fi' _ "$SU_TMP" "$pin_home" "v${SU_PIN}" "${SU_ARGS[@]}"
+    fi' _ "$SU_TMP" "$pin_home" "v${SU_PIN}" "$strip" "${SU_ARGS[@]}"
 }
 
 # The path helpers of `where` (lean start): they live here, not in checks.sh,

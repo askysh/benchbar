@@ -7,7 +7,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -445,9 +444,9 @@ func selfUpdateRun(sys *System, o suOpts) int {
 	}
 
 	if o.installer == "" {
-		path, cleanup, err := fetchInstaller(sys, target)
-		if err != nil {
-			(&problem{Msg: err.Error(), Fix: "try again later, or install by hand: " + oneLineInstall}).print(sys)
+		path, cleanup, prob := fetchInstaller(sys, target)
+		if prob != nil {
+			prob.print(sys)
 			return 1
 		}
 		defer cleanup()
@@ -569,11 +568,13 @@ func psQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + 
 // release's checksums file, and returns a file holding the installer only
 // when its SHA256 is the one the checksums list for install.ps1. The file
 // is in a folder of its own under the user's temp folder; cleanup removes
-// it. A release made before install.ps1 was listed has no such line: the
-// installer is then not run.
-func fetchInstaller(sys *System, target string) (path string, cleanup func(), err error) {
+// it. A release made before install.ps1 was listed (every release before
+// 0.9.0) has no such line: its installer is then not run, and the problem
+// says so and how to install that release by hand.
+func fetchInstaller(sys *System, target string) (path string, cleanup func(), prob *problem) {
+	retry := "try again later, or install by hand: " + installByHand(target)
 	if sys.Web == nil {
-		return "", nil, errors.New("no network client to download the installer with")
+		return "", nil, &problem{Msg: "no network client to download the installer with", Fix: retry}
 	}
 	ctx, cancel := context.WithTimeout(sys.Ctx, 3*webTimeout)
 	defer cancel()
@@ -589,30 +590,58 @@ func fetchInstaller(sys *System, target string) (path string, cleanup func(), er
 	}
 	sums, err := get(sumsURLFor(target))
 	if err != nil {
-		return "", nil, fmt.Errorf("could not get the checksums of v%s: %v", target, err)
+		return "", nil, &problem{Msg: fmt.Sprintf("could not get the checksums of v%s: %v", target, err), Fix: retry}
 	}
 	want := installerSum(sums)
 	if want == "" {
-		return "", nil, fmt.Errorf("the checksums of v%s do not list install.ps1, so the installer cannot be checked and was not run", target)
+		why := fmt.Sprintf("the checksums of v%s do not list install.ps1", target)
+		if olderThan090(target) {
+			why = fmt.Sprintf("v%s is older than 0.9.0, and releases before 0.9.0 do not list install.ps1 in their checksums", target)
+		}
+		return "", nil, &problem{
+			Msg: why + ", so its installer cannot be checked, and benchbar.exe does not run an installer it cannot check. Nothing was changed",
+			Fix: "to install v" + target + " anyway, run (this installer is not checked): " + installByHand(target),
+		}
 	}
 	body, err := get(installerURLFor(target))
 	if err != nil {
-		return "", nil, fmt.Errorf("could not download install.ps1 of v%s: %v", target, err)
+		return "", nil, &problem{Msg: fmt.Sprintf("could not download install.ps1 of v%s: %v", target, err), Fix: retry}
 	}
 	sum := sha256.Sum256(body)
 	if got := hex.EncodeToString(sum[:]); got != want {
-		return "", nil, fmt.Errorf("install.ps1 of v%s does not match the release's checksums (file %s, checksums %s); it was not run", target, got, want)
+		return "", nil, &problem{
+			Msg: fmt.Sprintf("install.ps1 of v%s does not match the release's checksums (file %s, checksums %s); it was not run", target, got, want),
+			Fix: "try again later. If it repeats, report it at " + repoWeb + "/issues",
+		}
 	}
 	dir, err := os.MkdirTemp("", "benchbar-self-update-")
 	if err != nil {
-		return "", nil, fmt.Errorf("could not make a temporary folder for the installer: %v", err)
+		return "", nil, &problem{Msg: "could not make a temporary folder for the installer: " + err.Error(), Fix: retry}
 	}
 	path = filepath.Join(dir, "install.ps1")
 	if err := os.WriteFile(path, body, 0o600); err != nil {
 		os.RemoveAll(dir)
-		return "", nil, fmt.Errorf("could not write the installer: %v", err)
+		return "", nil, &problem{Msg: "could not write the installer: " + err.Error(), Fix: retry}
 	}
 	return path, func() { os.RemoveAll(dir) }, nil
+}
+
+// installByHand is the one line installer of the v<target> tag, for a person
+// to run themselves.
+func installByHand(target string) string {
+	return "& ([scriptblock]::Create((irm " + psQuote(installerURLFor(target)) + "))) -Version " + psQuote(target)
+}
+
+// olderThan090 is true for a release before 0.9.0, the first whose checksums
+// list install.sh and install.ps1.
+func olderThan090(v string) bool {
+	m := namedVersionRE.FindString(strings.TrimPrefix(v, "v"))
+	if m == "" {
+		return false
+	}
+	core, _, _ := strings.Cut(strings.TrimPrefix(m, "v"), "-")
+	parts := strings.Split(core, ".")
+	return len(parts) == 3 && parts[0] == "0" && len(parts[1]) == 1 && parts[1] < "9"
 }
 
 // installerSum is the SHA256 the checksums text lists for install.ps1

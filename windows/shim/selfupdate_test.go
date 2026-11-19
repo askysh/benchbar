@@ -969,7 +969,7 @@ func TestSelfUpdateRefusesAnInstallerThatDoesNotCheckOut(t *testing.T) {
 		}, "install.ps1 of v0.8.4 does not match the release's checksums"},
 		{"checksums without install.ps1", map[string]WebResponse{
 			sumsURLFor("0.8.4"): {Status: 200, Body: []byte(zipLine)},
-		}, "the checksums of v0.8.4 do not list install.ps1, so the installer cannot be checked and was not run"},
+		}, "v0.8.4 is older than 0.9.0, and releases before 0.9.0 do not list install.ps1 in their checksums, so its installer cannot be checked, and benchbar.exe does not run an installer it cannot check"},
 		{"no checksums file", map[string]WebResponse{
 			sumsURLFor("0.8.4"): {Status: 404},
 		}, "could not get the checksums of v0.8.4"},
@@ -1041,6 +1041,44 @@ func TestInstallerSumParsing(t *testing.T) {
 	} {
 		if got := installerSum([]byte(text)); got != want {
 			t.Errorf("installerSum(%q) = %q, want %q", text, got, want)
+		}
+	}
+}
+
+// A release before 0.9.0 has no install.ps1 line in its checksums. --version
+// for one is refused plainly, with how to install it, and not with "try
+// again later"; nothing runs unchecked.
+func TestSelfUpdateOldReleaseCannotBeChecked(t *testing.T) {
+	e := newSUEnv(t)
+	e.updateHandler("0.8.2", cliUpdated)
+	e.web.answers[sumsURLFor("0.8.2")] = WebResponse{Status: 200, Body: []byte(strings.Repeat("a", 64) + "  benchbar-windows-0.8.2-amd64.zip\n")}
+	if code := e.run("self-update", "--yes", "--version", "0.8.2"); code != 1 {
+		t.Fatalf("exit %d\n%s%s", code, e.stdout(), e.stderr())
+	}
+	msg := e.stderr()
+	for _, want := range []string{
+		"v0.8.2 is older than 0.9.0, and releases before 0.9.0 do not list install.ps1 in their checksums",
+		"benchbar.exe does not run an installer it cannot check. Nothing was changed",
+		"fix: to install v0.8.2 anyway, run (this installer is not checked): & ([scriptblock]::Create((irm 'https://raw.githubusercontent.com/askysh/benchbar/v0.8.2/install.ps1'))) -Version '0.8.2'",
+	} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("stderr lacks %q:\n%s", want, msg)
+		}
+	}
+	if strings.Contains(msg, "try again later") {
+		t.Errorf("an old release is not a transient failure:\n%s", msg)
+	}
+	if len(e.launch.calls) != 0 {
+		t.Fatalf("nothing runs: %+v", e.launch.calls)
+	}
+}
+
+func TestOlderThan090(t *testing.T) {
+	for v, want := range map[string]bool{
+		"0.8.3": true, "v0.8.3": true, "0.1.0": true, "0.9.0": false, "0.9.0-rc.1": false, "0.10.0": false, "1.0.0": false, "x": false,
+	} {
+		if got := olderThan090(v); got != want {
+			t.Errorf("olderThan090(%q) = %v, want %v", v, got, want)
 		}
 	}
 }
