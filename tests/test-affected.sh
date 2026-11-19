@@ -30,7 +30,7 @@ fl_site_two() {
 }
 EOF
 printf 'fl_ports_x() { :; }\n' >"$REPO/lib/frappe-local/ports.sh"
-for t in sites cli agent-contracts mentions-two ports other affected docs docs-command doctor doctor-hardening repair repair-json json share share-gateway release-notes install-json lock; do printf '# test\n' >"$REPO/tests/test-$t.sh"; done
+for t in sites cli agent-contracts mentions-two ports other affected docs docs-command doctor doctor-hardening repair repair-json json share share-gateway release-notes changelog install-json lock; do printf '# test\n' >"$REPO/tests/test-$t.sh"; done
 printf 'run fl_site_two here\n' >"$REPO/tests/test-mentions-two.sh"
 printf 'page\n' >"$REPO/docs/a.md"
 printf 'harness\n' >"$REPO/tests/lib/harness.sh"
@@ -122,6 +122,15 @@ printf '#!/bin/sh\n' >"$REPO/scripts/other.sh"
 aff --base main --list
 assert_contains "$OUT" "affected: test-release-notes shellcheck" "(scripts/)"
 reset
+printf '#!/bin/sh\n' >"$REPO/scripts/changelog-fold.sh"
+aff --base main --list
+assert_contains "$OUT" "affected: test-changelog test-release-notes shellcheck" "(scripts/changelog-fold.sh)"
+reset
+mkdir -p "$REPO/changelog.d"
+printf '### Docs\n' >"$REPO/changelog.d/1-x.md"
+aff --base main --list
+assert_contains "$OUT" "affected: test-changelog" "(changelog.d)"
+reset
 # the harness, the mocks, run-tests.sh, the entry point, templates and the selector itself run everything
 printf '# x\n' >>"$REPO/tests/affected.sh"
 aff --base main --list
@@ -191,6 +200,18 @@ reset
 printf '# changed\n' >>"$REPO/tests/test-ports.sh"
 aff --base main --list
 assert_contains "$OUT" "affected: test-ports shellcheck"
+reset
+
+# ---- the agent hooks and the project settings: test-guards and shellcheck
+mkdir -p "$REPO/.claude"
+printf '# hook\n' >"$REPO/.claude/guard-rm.sh"
+aff --base main --list
+assert_contains "$OUT" "affected: test-guards shellcheck"
+reset
+mkdir -p "$REPO/.claude"
+printf '{}\n' >"$REPO/.claude/settings.json"
+aff --base main --list
+assert_contains "$OUT" "affected: test-guards shellcheck"
 reset
 
 # ---- the full suite: the harness, the mocks, run-tests.sh, the entry point, templates

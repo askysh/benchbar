@@ -9,6 +9,11 @@ nonisolated struct CLIClient: Sendable {
     let executable: URL
     var runner: any CommandRunning = SubprocessRunner()
     var locator = CLILocator()
+    /// Where the entries of a list the CLI printed but this build could not read are named
+    /// (the rest of the list still shows). Logs by default; a test replaces it.
+    var onSkipped: @Sendable (_ source: String, _ entries: [String]) -> Void = { source, entries in
+        Log.cli.error("\(source, privacy: .public): skipped \(entries.count) entries: \(entries.joined(separator: "; "), privacy: .public)")
+    }
 
     /// Timeouts per kind of call. `up` and `restart` wait for the site to
     /// answer (45 seconds in the CLI), so they get more room.
@@ -43,6 +48,13 @@ nonisolated struct CLIClient: Sendable {
             "TERM": "dumb",
             "LANG": "en_US.UTF-8",
         ]
+    }
+
+    /// Names the entries a decoded document left out, once per document, so a CLI that
+    /// prints something this build cannot read leaves a trace in the log.
+    func reportSkipped(_ source: String, _ entries: [String]) {
+        guard !entries.isEmpty else { return }
+        onSkipped(source, entries)
     }
 
     // MARK: queries (read only, safe to poll)
@@ -95,7 +107,9 @@ nonisolated struct CLIClient: Sendable {
     /// doctor exits 1 when a check fails but still prints the full report.
     func doctor(bench: String) async throws(CLIError) -> DoctorReport {
         let output = try await run(["doctor", "--json", "--bench-dir", bench], timeout: Timeout.doctor, acceptExitCodes: [0, 1])
-        return try BenchJSON.decode(DoctorReport.self, from: Data(output.stdout.utf8))
+        let report = try BenchJSON.decode(DoctorReport.self, from: Data(output.stdout.utf8))
+        reportSkipped("doctor", report.skipped)
+        return report
     }
 
     /// The first line of `benchbar --version` ("benchbar 0.5.0"). A 0.5.5
@@ -154,7 +168,9 @@ nonisolated struct CLIClient: Sendable {
         // several git calls per app: on a cold start next to status and doctor
         // for every bench, 20 seconds was not always enough
         let output = try await run(args, timeout: Timeout.doctor, acceptExitCodes: [0], qos: .utility)
-        return try BenchJSON.decode(AppList.self, from: Data(output.stdout.utf8))
+        let list = try BenchJSON.decode(AppList.self, from: Data(output.stdout.utf8))
+        reportSkipped("app list", list.skipped)
+        return list
     }
 
     /// benchbar app add SOURCE --dry-run --json: the plan and its token. Read

@@ -14,8 +14,8 @@
 # from macos, linux, windows (Windows is Linux inside WSL).
 
 read -r -d '' FL_LAB_TABLE <<'TABLE' || true
-lab~lan-rooms~Share with people on the same Wi-Fi~Let colleagues on the office Wi-Fi browse a hardened copy of a site, signed in as a user you choose.~Asks for your password once to install a firewall rule, and opens port 8443 on this Mac while a share is on. A share stays up until you stop it.~0.9.0~share,lan-guard~macos
-lab~quick-switch~Quick Switch panel~A panel on a global keyboard shortcut to open a site as any pinned user.~Holds a system wide keyboard shortcut while the app runs.~0.9.0~~macos
+lab~lan-rooms~Share with people on the same Wi-Fi~Let colleagues on the office Wi-Fi browse a hardened copy of a site, signed in as a user you choose.~Asks for your password once to install a firewall rule, and opens port 8443 on this Mac while a share is on. A share stays up until you stop it.~0.8.2~share,lan-guard~macos
+lab~quick-switch~Quick Switch panel~A panel on a global keyboard shortcut to open a site as any pinned user.~Holds a system wide keyboard shortcut while the app runs.~0.8.2~~macos
 TABLE
 
 # The readers loop over the variable with a here string, never over a pipe: a
@@ -60,10 +60,14 @@ fl_lab_list_v() {
   printf -v "$1" '%s' "$__v"
 }
 
-# fl_lab_on NAME: true when the lab is known and on
+# fl_lab_on NAME: true when the lab is known, listed for this platform and on.
+# The platform test is here, not in `labs on` alone: BENCHBAR_LABS and a
+# state file copied from a Mac must not turn on a lab whose code (pf,
+# launchctl) this platform lacks.
 fl_lab_on() {
   local list n
   fl_lab_known "$1" || return 1
+  fl_lab_available "$1" || return 1
   fl_lab_list_v list
   for n in $list; do [[ "$n" == "$1" ]] && return 0; done
   return 1
@@ -86,18 +90,23 @@ fl_lab_set() {
   fl_state_set LABS "$out"
 }
 
-# fl_lab_of_cmd CMD: the lab that gates the top level command CMD, or nothing
-fl_lab_of_cmd() {
-  local k n c cmds x
-  while IFS='~' read -r k n _ _ _ _ c _; do
-    [[ "$k" == lab ]] || continue
-    IFS=',' read -r -a cmds <<<"$c"
-    for x in ${cmds[@]+"${cmds[@]}"}; do
-      [[ "$x" == "$1" ]] && { printf '%s' "$n"; return 0; }
+# fl_lab_of_cmd_v VAR CMD: the lab that gates the top level command CMD, or
+# nothing, into VAR (no subshell: commands --json asks for every command)
+fl_lab_of_cmd_v() {
+  local __k __n __c __cmds __x
+  printf -v "$1" '%s' ""
+  while IFS='~' read -r __k __n _ _ _ _ __c _; do
+    [[ "$__k" == lab ]] || continue
+    IFS=',' read -r -a __cmds <<<"$__c"
+    for __x in ${__cmds[@]+"${__cmds[@]}"}; do
+      [[ "$__x" == "$2" ]] && { printf -v "$1" '%s' "$__n"; return 0; }
     done
   done <<<"$FL_LAB_TABLE"
   return 0
 }
+
+# fl_lab_of_cmd CMD: the same, printed
+fl_lab_of_cmd() { local r; fl_lab_of_cmd_v r "$1"; printf '%s' "$r"; }
 
 # fl_lab_platform_v VAR: the platform this run is on: macos, linux or windows
 # (Linux inside WSL)
@@ -133,17 +142,23 @@ fl_lab_hidden_v() {
 fl_lab_require() {
   fl_lab_on "$1" && return 0
   FL_EXIT2_NOT_PASSWORD=1
+  # a lab this platform lacks has no way to turn on: say that, not the hint
+  local hint="Turn it on: benchbar labs on $1" plat
+  if ! fl_lab_available "$1"; then
+    fl_lab_platform_v plat
+    hint="${1} is not available on ${plat} yet"
+  fi
   # a --json document command (a stream gets its done line from fl_die's exit)
   # answers with its error object on stdout, the text on stderr
   if [[ "${OPT_JSON:-0}" == "1" && "${FL_JSONL:-0}" != "1" ]]; then
     local msg="benchbar ${2:-${COMMAND:-this command}} is an experiment and it is off." f
-    printf '%s Turn it on: benchbar labs on %s\n' "$msg" "$1" >&2
+    printf '%s %s\n' "$msg" "$hint" >&2
     FL_DONE_NO_BENCH=1; FL_DONE_NO_STATE=1
     fl_done_fields_v f 2
     printf '{"schema_version":%d,"cli_version":"%s",%s,"error":%s}\n' "${FL_SCHEMA_VERSION:-1}" "${FL_VERSION:-0}" "$f" "$(fl_json_str "$msg")"
     exit 2
   fi
-  fl_die "benchbar ${2:-${COMMAND:-this command}} is an experiment and it is off." "Turn it on: benchbar labs on $1" 2
+  fl_die "benchbar ${2:-${COMMAND:-this command}} is an experiment and it is off." "$hint" 2
 }
 
 # fl_lab_gate KEY: the dispatcher's one check; KEY is a command or a table key

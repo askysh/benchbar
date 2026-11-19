@@ -5,7 +5,7 @@
 # the check -> plan -> apply -> verify engine shared by "repair" and
 # "service" (the background phase).
 
-FL_ACTION_ORDER="python_leaves node_install yarn_install env_rebuild env_setuptools honcho_install honcho_setuptools node_requirements build clear_cache mariadb_bind mariadb_utf8 wkhtmltopdf_install legacy_migrate port_block write_procfile write_runner write_plist write_helpers write_cli_link hosts_entry share_resume rotate_logs redis_stop"
+FL_ACTION_ORDER="python_leaves node_install yarn_install env_rebuild env_setuptools honcho_install honcho_setuptools node_requirements build clear_cache mariadb_bind mariadb_utf8 wkhtmltopdf_install legacy_migrate port_block write_procfile write_runner write_plist write_helpers write_cli_link hosts_entry share_resume kept_backups rotate_logs redis_stop"
 # actions whose check may stay a warning after a run without failing it:
 # the user may decline them (or sudo) on purpose
 FL_OPTIONAL_ACTIONS="wkhtmltopdf_install hosts_entry redis_stop"
@@ -51,6 +51,7 @@ fl_action_label() {
       else printf 'link benchbar and frappe-mac into ~/.local/bin'; fi ;;
     hosts_entry) printf 'add %s to /etc/hosts (sudo)' "$FL_SITE" ;;
     rotate_logs) printf 'copy large logs aside and truncate them' ;;
+    kept_backups) printf "put the older backups that a cut short backup left in the state folder back into the sites' backup folders" ;;
     share_resume) printf 'resume the scheduler that a share setup left paused' ;;
     redis_stop) printf 'stop Homebrew redis on 6379' ;;
     *) printf '%s' "$1" ;;
@@ -592,6 +593,21 @@ act_rotate_logs() {
       i=$((i + 1))
     done
   done
+}
+
+# The backups that fl_backups_keep_begin kept and a run did not put back
+# (site-backups.sh) go back into the site's backup folder. A file that cannot
+# go back fails the action: the warning stays until a person has dealt with it.
+act_kept_backups() {
+  if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
+    fl_info "dry-run: would put the kept older backups of this bench back into the sites' backup folders"
+    return 0
+  fi
+  fl_backups_recover "$FL_BENCH_DIR"
+  if [[ -n "$(fl_kept_dirs "$FL_BENCH_DIR")" ]]; then
+    fl_fail "some older backups could not be put back (see the lines above)"
+    return 1
+  fi
 }
 
 act_share_resume() {

@@ -100,6 +100,7 @@ var forwardedEnv = []string{
 	"BENCHBAR_MCP_EOF_GRACE",
 	"BENCHBAR_MCP_APPLY_DELAY",
 	"BENCHBAR_MCP_ALLOW_BENCH",
+	"BENCHBAR_LOAD_ALL",
 }
 
 // noForwardEnv are CLI variables that are not passed on, with why.

@@ -1013,7 +1013,7 @@ reaches it is checked by `install`, before anything is built.
 
 ## `benchbar pull --json`
 
-Since 0.8 the `done` line also carries `changed`, `next_actions` and `state_after` ([done fields](#the-done-fields-08)); its `warnings` are as before.
+Since 0.8 the `done` line also carries `changed`, `next_actions` and `state_after` ([done fields](#the-done-fields-08)); its `warnings` are as before. Since 0.9 the `plan` line has `neutralise` and the `done` line `neutralised`.
 
 Added in 0.5. Unlike the commands above, `pull` changes things, so it
 streams: one JSON object per line on stdout, written as the run goes, and
@@ -1031,19 +1031,19 @@ answered counts as no). Each line carries `schema_version`,
 
 | Event | Fields | Notes |
 |---|---|---|
-| `plan` | `source`, `host`, `remote_site`, `remote_bench`, `from_dir`, `bench`, `site`, `replace`, `backup`, `encryption_key`, `apps`, `migrate`, `create_site`, `before_migrate`, `steps`, `dry_run` | once, after the read only checks. `backup.name`, `bytes` and `age_hours` are `null` with `--new-backup` (that backup does not exist yet). `encryption_key` says whether production has one to carry over, never its value. Since 0.8 `create_site` says the target does not exist and a `new_site` step makes it, `before_migrate` is the path of the `--before-migrate` script or `null`, and `migrate` is `false` with `--no-migrate`. A target the restore cannot go into (a folder without a `site_config.json`, a `bench new-site` that did not finish, no MariaDB root password) ends the run before this line, in a dry run too |
+| `plan` | `source`, `host`, `remote_site`, `remote_bench`, `from_dir`, `bench`, `site`, `replace`, `backup`, `encryption_key`, `neutralise`, `apps`, `migrate`, `create_site`, `before_migrate`, `steps`, `dry_run` | once, after the read only checks. `backup.name`, `bytes` and `age_hours` are `null` with `--new-backup` (that backup does not exist yet). `encryption_key` says whether production has one to carry over, never its value. Since 0.8 `create_site` says the target does not exist and a `new_site` step makes it, `before_migrate` is the path of the `--before-migrate` script or `null`, and `migrate` is `false` with `--no-migrate`. Since 0.9 `neutralise` is `false` with `--keep-secrets`. A target the restore cannot go into (a folder without a `site_config.json`, a `bench new-site` that did not finish, no MariaDB root password) ends the run before this line, in a dry run too |
 | `gate` | `name` (`new_backup`, `apply`, `replace`), `answer` (`yes`, `no`) | a question the run asked. `new_backup` is `yes` only when the typed (or `--confirm-site`) name matches |
 | `progress` | `file`, `bytes`, `total` | after each downloaded file; `bytes` counts the files so far |
 | `step` | `n`, `id`, `name`, `status` | `n` counts from 1 in the order of `plan.steps`; `status` is `done`, `unchanged`, `skipped` or `failed` |
-| `done` | `exit`, `site`, `warnings`, and on success `url` and `decrypt` | always the last line: also after a refusal or a failure (`exit` 1) and after `--dry-run` (`dry_run: true`) |
+| `done` | `exit`, `site`, `warnings`, and on success `url`, `decrypt` and `neutralised` | always the last line: also after a refusal or a failure (`exit` 1) and after `--dry-run` (`dry_run: true`) |
 
 `apps[].status` is `ok`, `missing`, `skipped` (`--skip-app`), `branch
 differs`, `local older` or `local newer`. `decrypt.ok` and
 `decrypt.failed` count the encrypted `__Auth` rows that do and do not
 decrypt with the site's `encryption_key`; `failed` above 0 means stored
-passwords must be entered again. Step ids: `new_backup`, `download`,
+passwords must be entered again; both are 0 when the copy was neutralised. `neutralised` is `{"on":false}` with `--keep-secrets`, else `{"on":true,"counts":{KEY:N,...},"labels":{KEY:"text",...}}`: the rows each part of the neutralisation changed (`stored_secrets` counts the deleted passwords) and the words for them. A key is never removed, so a count of 0 means there was nothing to do. Step ids: `new_backup`, `download`,
 `decrypt`, `local_backup`, `quiesce`, `new_site`, `restore`,
-`encryption_key`, `resume`, `dev_safety`, `skip_apps`, `before_migrate`,
+`encryption_key`, `resume`, `dev_safety`, `neutralise`, `skip_apps`, `before_migrate`,
 `migrate`, `clear_cache`, `admin_password`, `hosts`, `cleanup`, `verify`;
 a run lists only the ones it needs.
 
@@ -1096,7 +1096,7 @@ Exit 0. An argument other than `--json` exits 1.
 `labs list --json` is one document, with no done fields:
 
 ```json
-{"schema_version":1,"labs":[{"name":"lan-rooms","title":"...","description":"...","warning":"...","since":"0.9.0","enabled":false,"commands":["share","lan-guard"],"platforms":["macos"],"available":false}]}
+{"schema_version":1,"labs":[{"name":"lan-rooms","title":"...","description":"...","warning":"...","since":"0.8.2","enabled":false,"commands":["share","lan-guard"],"platforms":["macos"],"available":false}]}
 ```
 
 `commands` are the top level commands the lab gates (it may be empty, or name
@@ -1133,13 +1133,15 @@ share one timestamp:
   "size_bytes": 5242880,
   "with_files": true,
   "encrypted": false,
-  "partial": false
+  "partial": false,
+  "complete": true
 }
 ```
 
 | Field | Meaning |
 |---|---|
 | `stamp` | the timestamp at the start of the file names, in the site's time zone |
+| `complete` | `false` for a partial set, a set without a database file, or one with an empty part (a cheap check: `site restore` also reads the files to their end) |
 | `time` | when the database file was written, UTC |
 | `path` | the database file, the one a restore needs (else the first file of the set) |
 | `database`, `files`, `private_files`, `config` | each part, `null` when the set has none |

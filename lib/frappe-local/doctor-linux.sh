@@ -16,7 +16,7 @@
 #
 # Doctor stays read only and never reads the MariaDB password file.
 
-FL_CHECK_ORDER="brew mariadb_bind mariadb_utf8 pdf_engine env_python env_setuptools bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy app_update_pending app_add_pending dependency_behind apps_behind lock_parse lock_drift profile_outdated logs bench_path honcho honcho_setuptools procfile runner agent runner_heartbeat scheduler stop_flag helpers cli_link cli_duplicate dead_agents hosts port_clash orphans ping site_not_served"
+FL_CHECK_ORDER="brew mariadb_bind mariadb_utf8 pdf_engine env_python env_setuptools bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy app_update_pending app_add_pending dependency_behind apps_behind lock_parse lock_drift profile_outdated logs kept_backups bench_path honcho honcho_setuptools procfile runner agent runner_heartbeat scheduler stop_flag helpers cli_link cli_duplicate dead_agents hosts port_clash orphans ping site_not_served"
 
 # WSL only: the Windows host and NTP in the distro both set its clock
 if fl_is_wsl; then FL_CHECK_ORDER="${FL_CHECK_ORDER/ mariadb_bind/ wsl_time_sync mariadb_bind}"; fi
@@ -24,7 +24,7 @@ if fl_is_wsl; then FL_CHECK_ORDER="${FL_CHECK_ORDER/ mariadb_bind/ wsl_time_sync
 # repair: no python_leaves, legacy_migrate, hosts_entry or redis_stop. The sudo
 # steps come first: the credential is dropped right after them
 # (fl_sudo_phase_done), before pip, npm and bench run
-FL_ACTION_ORDER="mariadb_bind mariadb_utf8 wkhtmltopdf_install node_install yarn_install env_rebuild env_setuptools honcho_install honcho_setuptools node_requirements build clear_cache port_block write_procfile write_runner write_plist write_helpers write_cli_link rotate_logs"
+FL_ACTION_ORDER="mariadb_bind mariadb_utf8 wkhtmltopdf_install node_install yarn_install env_rebuild env_setuptools honcho_install honcho_setuptools node_requirements build clear_cache port_block write_procfile write_runner write_plist write_helpers write_cli_link kept_backups rotate_logs"
 FL_OPTIONAL_ACTIONS="wkhtmltopdf_install"
 
 # the apt packages a bench needs: the first two groups fail, the build ones warn
@@ -499,7 +499,8 @@ fl_prereq_platform_first() {
   else fl_prereq_add architecture warn "PDF printing is not set up on ${arch}: the patched wkhtmltopdf package is built for x86_64 and arm64 only" "use an x86_64 or arm64 machine to print PDFs from Frappe"; fi
 
   # the installer refuses root and asks for sudo itself
-  uid="${FL_EFFECTIVE_UID:-$EUID}"
+  uid="$EUID"
+  [[ "${FL_TESTING:-}" == "1" ]] && uid="${FL_EFFECTIVE_UID:-$EUID}"
   user="$(fl__prereq_user)"
   if [[ "$uid" == "0" ]]; then
     fl_prereq_add regular_user fail "running as root; benchbar must run as your own user" "log in as a normal user (in WSL: wsl -u <user>)"

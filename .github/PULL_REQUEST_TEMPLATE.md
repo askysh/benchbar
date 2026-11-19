@@ -12,10 +12,16 @@
 
 ## Checklist
 
-- [ ] `tests/run-tests.sh` passes (and `scripts/macos-build.sh --test` for app changes)
+Tick each box, or write "n/a" and why (a CI only change has no guide page).
+
+- [ ] Tests: the tests for the change pass (`bash tests/affected.sh`; `scripts/macos-build.sh --test` for app changes), and a bug fix has a test that failed before
 - [ ] A second run changes nothing and says `unchanged`
-- [ ] A line in CHANGELOG.md under `## Unreleased`
+- [ ] User docs: the guide or the app page that tells a user about the change is updated, not only the reference page
+- [ ] Features page: a new feature, Lab or platform has a row in `docs/features.md` (platform and version)
+- [ ] A fragment `changelog.d/<issue>-<slug>.md` for a user facing change (not an edit of CHANGELOG.md), or none needed
 - [ ] A DECISIONS line per non obvious choice (docs/DECISIONS.md or macos/DECISIONS.md), or none needed
+- [ ] No em dashes or en dashes in the code, the docs or this description
+- [ ] If a command, flag or MCP tool changed: `python3 -I scripts/docs-reference.py --write` was run and its tables are committed
 
 ## AI disclosure
 

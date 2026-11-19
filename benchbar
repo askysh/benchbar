@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# benchbar: one entrypoint (also installed as frappe-mac) for a local Frappe/ERPNext bench on macOS.
+# benchbar: one entrypoint (also installed as frappe-mac) for a local Frappe/ERPNext bench on macOS and Linux.
 #
 #   benchbar install        phases 00, 01 and the background service, idempotent
 #   benchbar up | down      start or stop the bench in the background
@@ -72,6 +72,17 @@ SCRIPT_DIR="$(fl_resolve_self)"
 # shellcheck source=lib/frappe-local/sudo-env.sh
 . "${SCRIPT_DIR}/lib/frappe-local/sudo-env.sh"
 
+# Lean start: path, commands, where, list, status, --version and --help (the
+# reads the shell helpers and the app run all day) load only the libraries
+# they use; parsing the other ones was most of their cost (tests/test-lean-load.sh
+# holds that the output is the same). BENCHBAR_LOAD_ALL=1 loads everything.
+FL_LEAN=0
+if [[ "${BENCHBAR_LOAD_ALL:-0}" != "1" ]]; then
+  case "${1:-}" in path|commands|where|list|status|--version|--help|-h) FL_LEAN=1 ;; esac
+  # --profile checks the name against the profiles (version-policy.sh, profiles.sh)
+  for _a in "$@"; do case "$_a" in --profile|--profile=*) FL_LEAN=0 ;; esac; done
+  unset _a
+fi
 # shellcheck source=lib/frappe-local/ui.sh
 . "${SCRIPT_DIR}/lib/frappe-local/ui.sh"
 # shellcheck source=lib/frappe-local/run.sh
@@ -79,19 +90,19 @@ SCRIPT_DIR="$(fl_resolve_self)"
 # shellcheck source=lib/frappe-local/platform.sh
 . "${SCRIPT_DIR}/lib/frappe-local/platform.sh"
 # shellcheck source=lib/frappe-local/version-policy.sh
-. "${SCRIPT_DIR}/lib/frappe-local/version-policy.sh"
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/version-policy.sh"
 # shellcheck source=lib/frappe-local/toml.sh
 . "${SCRIPT_DIR}/lib/frappe-local/toml.sh"
 # shellcheck source=lib/frappe-local/profiles.sh
-. "${SCRIPT_DIR}/lib/frappe-local/profiles.sh"
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/profiles.sh"
 # shellcheck source=lib/frappe-local/state.sh
 . "${SCRIPT_DIR}/lib/frappe-local/state.sh"
 # shellcheck source=lib/frappe-local/lock.sh
 . "${SCRIPT_DIR}/lib/frappe-local/lock.sh"
 # shellcheck source=lib/frappe-local/templates.sh
-. "${SCRIPT_DIR}/lib/frappe-local/templates.sh"
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/templates.sh"
 # shellcheck source=lib/frappe-local/shellrc.sh
-. "${SCRIPT_DIR}/lib/frappe-local/shellrc.sh"
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/shellrc.sh"
 # shellcheck source=lib/frappe-local/benchinfo.sh
 . "${SCRIPT_DIR}/lib/frappe-local/benchinfo.sh"
 # shellcheck source=lib/frappe-local/process.sh
@@ -107,11 +118,11 @@ SCRIPT_DIR="$(fl_resolve_self)"
 # shellcheck source=lib/frappe-local/port-management.sh
 . "${SCRIPT_DIR}/lib/frappe-local/port-management.sh"
 # shellcheck source=lib/frappe-local/checks.sh
-. "${SCRIPT_DIR}/lib/frappe-local/checks.sh"
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/checks.sh"
 # shellcheck source=lib/frappe-local/doctor.sh
-. "${SCRIPT_DIR}/lib/frappe-local/doctor.sh"
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/doctor.sh"
 # shellcheck source=lib/frappe-local/repair.sh
-. "${SCRIPT_DIR}/lib/frappe-local/repair.sh"
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/repair.sh"
 # shellcheck source=lib/frappe-local/service.sh
 . "${SCRIPT_DIR}/lib/frappe-local/service.sh"
 # shellcheck source=lib/frappe-local/report.sh
@@ -119,45 +130,47 @@ SCRIPT_DIR="$(fl_resolve_self)"
 # shellcheck source=lib/frappe-local/docs.sh
 . "${SCRIPT_DIR}/lib/frappe-local/docs.sh"
 # shellcheck source=lib/frappe-local/sudo.sh
-. "${SCRIPT_DIR}/lib/frappe-local/sudo.sh"
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/sudo.sh"
 # shellcheck source=lib/frappe-local/mariadb.sh
-. "${SCRIPT_DIR}/lib/frappe-local/mariadb.sh"
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/mariadb.sh"
 # shellcheck source=lib/frappe-local/wkhtmltopdf.sh
-. "${SCRIPT_DIR}/lib/frappe-local/wkhtmltopdf.sh"
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/wkhtmltopdf.sh"
 # shellcheck source=lib/frappe-local/bench.sh
-. "${SCRIPT_DIR}/lib/frappe-local/bench.sh"
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/bench.sh"
 # shellcheck source=lib/frappe-local/sites.sh
 . "${SCRIPT_DIR}/lib/frappe-local/sites.sh"
 # shellcheck source=lib/frappe-local/site-backups.sh
-. "${SCRIPT_DIR}/lib/frappe-local/site-backups.sh"
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/site-backups.sh"
 # shellcheck source=lib/frappe-local/consoles.sh
-. "${SCRIPT_DIR}/lib/frappe-local/consoles.sh"
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/consoles.sh"
 # shellcheck source=lib/frappe-local/open-as.sh
-. "${SCRIPT_DIR}/lib/frappe-local/open-as.sh"
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/open-as.sh"
+# shellcheck source=lib/frappe-local/neutralise.sh
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/neutralise.sh"
 # shellcheck source=lib/frappe-local/share-site.sh
-. "${SCRIPT_DIR}/lib/frappe-local/share-site.sh"
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/share-site.sh"
 # shellcheck source=lib/frappe-local/share.sh
-. "${SCRIPT_DIR}/lib/frappe-local/share.sh"
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/share.sh"
 # shellcheck source=lib/frappe-local/share-preflight.sh
-. "${SCRIPT_DIR}/lib/frappe-local/share-preflight.sh"
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/share-preflight.sh"
 # shellcheck source=lib/frappe-local/share-run.sh
-. "${SCRIPT_DIR}/lib/frappe-local/share-run.sh"
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/share-run.sh"
 # shellcheck source=lib/frappe-local/share-admin.sh
-. "${SCRIPT_DIR}/lib/frappe-local/share-admin.sh"
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/share-admin.sh"
 # shellcheck source=lib/frappe-local/lan-guard.sh
-. "${SCRIPT_DIR}/lib/frappe-local/lan-guard.sh"
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/lan-guard.sh"
 # shellcheck source=lib/frappe-local/apps.sh
 . "${SCRIPT_DIR}/lib/frappe-local/apps.sh"
 # shellcheck source=lib/frappe-local/freshness.sh
-. "${SCRIPT_DIR}/lib/frappe-local/freshness.sh"
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/freshness.sh"
 # shellcheck source=lib/frappe-local/app-plan.sh
-. "${SCRIPT_DIR}/lib/frappe-local/app-plan.sh"
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/app-plan.sh"
 # shellcheck source=lib/frappe-local/teamlock.sh
-. "${SCRIPT_DIR}/lib/frappe-local/teamlock.sh"
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/teamlock.sh"
 # shellcheck source=lib/frappe-local/pull.sh
-. "${SCRIPT_DIR}/lib/frappe-local/pull.sh"
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/pull.sh"
 # shellcheck source=lib/frappe-local/site-restore.sh
-. "${SCRIPT_DIR}/lib/frappe-local/site-restore.sh"
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/site-restore.sh"
 # shellcheck source=lib/frappe-local/selfupdate.sh
 . "${SCRIPT_DIR}/lib/frappe-local/selfupdate.sh"
 # shellcheck source=lib/frappe-local/labs.sh
@@ -166,6 +179,12 @@ SCRIPT_DIR="$(fl_resolve_self)"
 . "${SCRIPT_DIR}/lib/frappe-local/commands.sh"
 # the platform layer goes over the macOS functions last (Linux only)
 fl_platform_load service
+# the exit trap (fl_cleanup) calls these; a lean start did not load them and
+# has nothing for them to undo
+if [[ "$FL_LEAN" == "1" ]]; then
+  fl_pull_on_exit() { :; }; fl_share_on_exit() { :; }; fl_bench_redis_down() { :; }
+  fl_sp_listener_stop() { :; }; fl_sudo_end() { :; }; fl_backups_keep_on_exit() { :; }
+fi
 
 OPT_BENCH_DIR=""
 OPT_SITE=""
@@ -211,7 +230,7 @@ ARGS=()
 
 usage() {
   cat <<USAGE | fl_lab_usage_filter
-benchbar ${FL_VERSION}: local Frappe/ERPNext bench on macOS, in the background.
+benchbar ${FL_VERSION}: local Frappe/ERPNext bench on macOS and Linux, in the background.
 
 Usage: benchbar <command> [options]
 
@@ -371,7 +390,8 @@ Experiments (off until a person turns one on)
 Production copy
   pull HOST:SITE      Copy a production site over SSH into a NEW local site: the latest
                       backup on the server (nothing written there), the encryption key,
-                      email muted and the scheduler paused. HOST is from ~/.ssh/config.
+                      email muted, the scheduler paused and the copy neutralised
+                      (integrations off, stored secrets cleared). HOST is from ~/.ssh/config.
     --as NAME         Local site name (default: SITE.local)
     --from-dir DIR    A backup set downloaded by hand (Frappe Cloud), no SSH
     --remote-bench D  The bench folder on the server (default ~/frappe-bench)
@@ -380,6 +400,9 @@ Production copy
     --replace         Restore over an existing local site, after backing it up
     --skip-app APP    Restore without APP (its tables stay behind as orphans)
     --no-files        Database only; --keep-scheduler, --keep-staging
+    --keep-secrets    Leave the copy as production had it. By default it is neutralised:
+                      outbound integrations off, stored secrets cleared, tokens and
+                      queued mail dropped (the Administrator login is kept)
     --no-migrate      Stop after the restore, before bench migrate
     --before-migrate S  Run the executable SCRIPT after the restore, before migrate (with
                       BENCHBAR_SITE, BENCHBAR_BENCH, BENCHBAR_DB_NAME; no secret in its
@@ -571,12 +594,16 @@ fl_cleanup() {
   fl_pull_on_exit "$code"
   # share setup never leaves the scheduler of every site paused, whatever stopped it
   fl_share_on_exit
+  # a run cut short between the start and the end of bench's backup puts the kept older backups back
+  fl_backups_keep_on_exit
   # a setup Redis started for site add goes, however the command ends
   fl_bench_redis_down >/dev/null 2>&1 || true
   # share preflight's throwaway listener, when a signal ended the run while it was up
   fl_sp_listener_stop
   fl_sudo_end
   fl_lock_release
+  # a doctor run that was cut short leaves its folder of kept answers (facts.sh)
+  fl_facts_end
   # install --json and adopt --json: always the last line, after the lock is free
   fl_jsonl_on_exit "$code"
   # repair --json: its done line, when the run ended before it could send one
@@ -1242,13 +1269,15 @@ cmd_doctor() {
   # doctor --unack CHECK: no report needed; under --json one small document
   if [[ -n "$OPT_UNACK" ]]; then fl_doctor_unack "$OPT_UNACK"; fl_doctor_ack_doc unack "$OPT_UNACK"; return 0; fi
   [[ "$OPT_QUICK" != "1" || -n "$OPT_ACK" ]] || FL_DOCTOR_QUICK=1
+  # the prerequisites ride in doctor --json only (see below): they run beside the checks
+  if [[ "$OPT_JSON" == "1" && "$OPT_FIX_HINTS" != "1" && -z "$OPT_ACK" ]]; then FL_DOCTOR_PREREQ=1; fi
   fl_doctor_run
   # doctor --ack CHECK: records the warning it is about, then stops
   if [[ -n "$OPT_ACK" ]]; then fl_doctor_ack "$OPT_ACK"; fl_doctor_ack_doc ack "$OPT_ACK"; return 0; fi
   fl_doctor_apply_acks
   # the prerequisites ride in doctor --json only: a plain doctor keeps its
   # promise of a fix line after every WARN and FAIL, and of exit 1 on a FAIL
-  [[ "$OPT_JSON" != "1" || "$OPT_FIX_HINTS" == "1" ]] || fl_prereq_run
+  [[ "$OPT_JSON" != "1" || "$OPT_FIX_HINTS" == "1" || "$FL_P_RAN" == "1" ]] || fl_prereq_run
   if [[ "$OPT_FIX_HINTS" == "1" ]]; then
     fl_doctor_print_fix_hints >&3
   elif [[ "$OPT_JSON" == "1" ]]; then
@@ -1297,7 +1326,7 @@ cmd_repair() {
 FL_REPAIR_DONE_SENT=0
 fl_repair_done() {
   local code="$1" f err="" msg
-  [[ "$FL_JSON_EVENTS" == "1" && "$FL_REPAIR_DONE_SENT" != "1" ]] || return 0
+  [[ "${FL_JSON_EVENTS:-0}" == "1" && "$FL_REPAIR_DONE_SENT" != "1" ]] || return 0
   # a dry run that worked is the plan alone; one that was refused ends with its done line
   [[ "${FL_DRY_RUN:-0}" != "1" || "$code" != "0" ]] || return 0
   FL_REPAIR_DONE_SENT=1
@@ -1603,7 +1632,11 @@ case "$COMMAND" in
     else
       fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_uninstall_service
     fi ;;
-  path) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; printf '%s\n' "$FL_BENCH_DIR" ;;
+  # path only names the folder (benchcd runs it): no site, ports, profile or rendered templates
+  # (--profile still checks the name: the full context, and a full load)
+  path)
+    if [[ -n "$OPT_PROFILE" ]]; then fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; else fl_bench_detect "$OPT_BENCH_DIR"; fi
+    printf '%s\n' "$FL_BENCH_DIR" ;;
   console) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_console ${ARGS[@]+"${ARGS[@]}"} ;;
   open) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_open ${ARGS[@]+"${ARGS[@]}"} ;;
   users) fl_context_init "$OPT_BENCH_DIR" "$OPT_SITE" "$OPT_PROFILE"; fl_cmd_users ${ARGS[@]+"${ARGS[@]}"} ;;

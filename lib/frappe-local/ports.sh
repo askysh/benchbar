@@ -32,12 +32,34 @@ fl_port_offset_current() {
 }
 
 # Ports of a bench folder from its common_site_config.json, space separated.
+# One read of the file in bash (the first line of each key counts), and in a
+# doctor run (facts.sh) one read per bench.
 fl_ports_of_bench() {
-  local f="$1/sites/common_site_config.json" v out=""
+  local f="$1/sites/common_site_config.json" q
   [[ -f "$f" ]] || return 0
-  for v in webserver_port socketio_port redis_queue redis_cache; do
-    v="$(sed -n "s/^[[:space:]]*\"${v}\"[[:space:]]*:[[:space:]]*\"\{0,1\}\([^\",]*\)\"\{0,1\},\{0,1\}[[:space:]]*$/\1/p" "$f" | awk 'NR==1')"
-    v="${v##*:}"
+  if [[ -n "${FL_FACTS_DIR:-}" ]]; then
+    fl_memo_v q "ports:${1}" fl__ports_of_file "$f"
+    printf '%s' "$q"
+    return 0
+  fi
+  fl__ports_of_file "$f"
+}
+
+fl__ports_of_file() {
+  local f="$1" line out="" key v got_w="" got_s="" got_q="" got_c=""
+  local re='^[[:space:]]*"(webserver_port|socketio_port|redis_queue|redis_cache)"[[:space:]]*:[[:space:]]*"?([^",]*)"?,?[[:space:]]*$'
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ "$line" =~ $re ]] || continue
+    key="${BASH_REMATCH[1]}"; v="${BASH_REMATCH[2]}"
+    case "$key" in
+      webserver_port) [[ -n "$got_w" ]] || got_w="x:${v}" ;;
+      socketio_port) [[ -n "$got_s" ]] || got_s="x:${v}" ;;
+      redis_queue) [[ -n "$got_q" ]] || got_q="x:${v}" ;;
+      redis_cache) [[ -n "$got_c" ]] || got_c="x:${v}" ;;
+    esac
+  done <"$f"
+  for v in "$got_w" "$got_s" "$got_q" "$got_c"; do
+    v="${v#x:}"; v="${v##*:}"
     [[ "$v" =~ ^[0-9]+$ ]] && out="${out} ${v}"
   done
   printf '%s' "${out# }"
@@ -45,12 +67,17 @@ fl_ports_of_bench() {
 
 # Every port another known bench uses, one per line, as "port bench".
 fl_ports_taken_by_others() {
-  local d p
+  local d p line seen=$'\n'
   while IFS= read -r d; do
     [[ -n "$d" ]] || continue
     fl_same_path "$d" "$FL_BENCH_DIR" && continue
-    for p in $(fl_ports_of_bench "$d") $(fl_ports_pinned_reservation "$d"); do printf '%s %s\n' "$p" "$d"; done
-  done < <(fl_known_benches) | awk '!seen[$0]++'
+    for p in $(fl_ports_of_bench "$d") $(fl_ports_pinned_reservation "$d"); do
+      line="${p} ${d}"
+      case "$seen" in *$'\n'"$line"$'\n'*) continue ;; esac
+      seen="${seen}${line}"$'\n'
+      printf '%s\n' "$line"
+    done
+  done < <(fl_known_benches)
 }
 
 # Automatic allocations follow the actual bench config after external edits.

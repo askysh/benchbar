@@ -68,6 +68,18 @@ public sealed class SettingsModel(TrayConfig config, ISettingsHost host, ISetupS
         }
     }
 
+    /// <summary>Ask before a <c>benchbar://</c> link starts, stops or restarts a bench or opens a console. Off by default.</summary>
+    public bool ConfirmLinkActions
+    {
+        get => config.ConfirmLinkActions;
+        set
+        {
+            config.ConfirmLinkActions = value;
+            save();
+            Changed?.Invoke();
+        }
+    }
+
     public string Editor
     {
         get => EditorKind.Normalize(config.Editor);

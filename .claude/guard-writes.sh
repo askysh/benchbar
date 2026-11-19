@@ -5,10 +5,26 @@
 # python3, so it works in Git Bash on Windows; runs on macOS /bin/bash 3.2
 # too. Exit 2 blocks.
 #
-# gh api: reads pass. A write (a method other than GET, a -f/-F/--field/
-# --raw-field/--input body without an explicit GET, or a GraphQL mutation) is
-# blocked unless the whole command is the review thread resolve route:
+# A guard against mistakes, not a security boundary (see guard-rm.sh): it
+# reads the command text only. Known limits: a script file or a variable that
+# builds the call is not read, and neither is gh run through another program.
+#
+# gh api: reads pass. REST writes to repos/askysh/benchbar and
+# repos/askysh/homebrew-tap pass (see own_repo_write), by the owner's
+# decision. That includes the writes that hurt there: .../pulls/N/merge,
+# .../git/refs (delete a branch or a tag) and DELETE repos/askysh/NAME, which
+# this hook does not stop. In a normal session settings.json asks before
+# them; under a bypass mode "ask" does nothing and nothing else stops them.
+# Any other write (a
+# method other than GET, a -f/-F/--field/--raw-field/--input body without an
+# explicit GET, or a GraphQL mutation) is blocked unless the whole command is
+# the review thread resolve route:
 #   gh api -X POST repos/OWNER/REPO/pulls/N/ccr/comments/ID/resolve
+# Other gh verbs that write (pr, issue, release, workflow, run, secret,
+# variable, label, cache, repo) pass when they name no repository (the
+# checkout's own) or one of the two above, and are blocked when -R/--repo, a
+# github.com URL or "gh repo VERB NAME" names another one. Whether a risky verb
+# on our own repos runs without a question is settings.json's "ask" list.
 # schtasks: /Create only for the task "BenchBar Keepalive" (one /TN in that
 # call), /Delete and /Change never. Switches count with / or - in any case.
 #
@@ -27,6 +43,23 @@ cmd="$(printf '%s' "$cmd" | sed -e 's/\\[tr]/ /g' -e 's/\\n/ ; /g')"
 # calls are found and checked with them dropped. Only the task name check
 # below reads the quoted original.
 flat="$(printf '%s' "$cmd" | tr -d "'\"\\\\")"
+# GH_REPO=OWNER/REPO anywhere in the command (before gh, in an export or in
+# env) points every gh call at that repository.
+env_repos="$(printf '%s' "$flat" | grep -Eio '(^|[^A-Za-z0-9_])GH_REPO[[:space:]]*=[[:space:]]*[^[:space:];&|]*' | sed -E 's/^[^=]*=[[:space:]]*//')"
+# Returns 0 when GH_REPO names something other than our two repositories
+# (a $VAR, or an empty value, counts as other: it cannot be read).
+env_repo_other() {
+  local r
+  while IFS= read -r r; do
+    [ -n "$r" ] || continue
+    printf '%s' "$r" | grep -Eiq '^askysh/(benchbar|homebrew-tap)$' || return 0
+  done <<EOF3
+$env_repos
+EOF3
+  # GH_REPO= with no value: the first grep above keeps the empty match
+  printf '%s' "$flat" | grep -Eiq '(^|[^A-Za-z0-9_])GH_REPO[[:space:]]*=[[:space:]]*($|[;&|[:space:]])' && return 0
+  return 1
+}
 
 # Prints each chunk that starts with the pattern, up to the next match, one
 # per line (newlines inside the command are JSON escaped, so none are real).
@@ -71,6 +104,79 @@ allowed_write() {
   printf '%s' "$q" | grep -Eq 'resolvereviewthread[[:space:]]*\([[:space:]]*input[[:space:]]*:'
 }
 
+# REST writes to the project's own repositories pass: askysh/benchbar and
+# askysh/homebrew-tap (rulesets, environments, issues, releases). The call,
+# up to the first ; & | or newline, must name exactly one endpoint, and it
+# must be one of those two. GraphQL stays limited to allowed_write.
+own_repo_write() {
+  local n
+  matches "$1" 'graphql' && return 1
+  n="$(printf '%s' "$1" | grep -Eo '(^|[[:space:]=/])(repos|orgs|users|user|gists|enterprises|app|applications|installation|notifications|teams)/' | wc -l | tr -d ' ')"
+  [ "$n" = 1 ] || return 1
+  matches "$1" '(^|[[:space:]])/?repos/askysh/(benchbar|homebrew-tap)([/?[:space:]]|$)'
+}
+
+# gh verbs that write, other than gh api. A write that names a repository
+# other than askysh/benchbar or askysh/homebrew-tap (-R, --repo, a github.com
+# URL, or the name after "gh repo VERB") is blocked; one that names none
+# works on the checkout's own repository.
+gh_write_verbs='^gh([.]exe)?[[:space:]]+((pr|issue)[[:space:]]+(merge|close|reopen|comment|review|edit|create|ready|lock|unlock|update-branch|delete|transfer|pin|unpin|develop)|release[[:space:]]+(create|delete|edit|upload|delete-asset)|workflow[[:space:]]+(run|enable|disable)|run[[:space:]]+(rerun|cancel|delete)|(secret|variable)[[:space:]]+(set|delete|remove)|label[[:space:]]+(create|edit|delete|clone)|cache[[:space:]]+delete|repo[[:space:]]+(create|delete|edit|rename|archive|unarchive|fork|deploy-key|sync))([[:space:]]|$)'
+# the word after "gh repo VERB", when it is not a flag
+repo_operand() {
+  printf '%s' "$1" | sed -E 's/^gh([.]exe)?[[:space:]]+repo[[:space:]]+[a-z-]+[[:space:]]*//; s/[[:space:]].*//; s/^-.*//; s#.*github[.]com/##; s/[.]git$//'
+}
+# Returns 0 when the call is a gh write to a repository that is not ours.
+other_repo_write() {
+  local call named r pre head head_word head_rest
+  # chunks() keeps the character before "gh"
+  call="$(printf '%s' "$1" | sed -E 's/^[^a-z]+//; s/(;|&|\|).*//')"
+  # -R/--repo (and any other flag) may come before the verb: gh -R x/y pr merge.
+  # The repository goes to the list of names, the call loses the flag.
+  pre=""
+  head='^gh([.]exe)?[[:space:]]+'
+  while :; do
+    # call is lowercase (chunks)
+    if [[ $call =~ ${head}(-r|--repo)([[:space:]=]+)([^[:space:]]+)([[:space:]].*)?$ ]]; then
+      pre="$pre"$'\n'"${BASH_REMATCH[4]}"; call="gh${BASH_REMATCH[5]}"
+    elif [[ $call =~ ${head}-r([^[:space:]=]+)([[:space:]].*)?$ ]]; then
+      pre="$pre"$'\n'"${BASH_REMATCH[2]}"; call="gh${BASH_REMATCH[3]}"
+    elif [[ $call =~ ${head}-[^[:space:]]+([[:space:]].*)?$ ]]; then
+      call="gh${BASH_REMATCH[2]}"
+    elif [[ $call =~ ${head}([^-[:space:]][^[:space:]]*)([[:space:]].*)?$ ]]; then
+      # a word that is no verb is the value of a flag we skipped (--hostname HOST)
+      head_word="${BASH_REMATCH[2]}"; head_rest="${BASH_REMATCH[3]}"
+      case "$head_word" in
+        pr | issue | release | workflow | run | secret | variable | label | cache | repo | api) break ;;
+      esac
+      call="gh$head_rest"
+    else
+      break
+    fi
+  done
+  matches "$call" "$gh_write_verbs" || return 1
+  # a secret or variable for an organization or for the user is not a repo's
+  if matches "$call" '^gh([.]exe)?[[:space:]]+(secret|variable)[[:space:]]+(set|delete|remove)([[:space:]]|$)' &&
+    matches "$call" '(^|[[:space:]])(--org|--user|-o|-u)([[:space:]=]|$)|(^|[[:space:]])-o[A-Za-z0-9_]'; then
+    return 0
+  fi
+  env_repo_other && return 0
+  named="$pre"$'\n'"$(printf '%s' "$call" | grep -Eo '(^|[[:space:]])(-r[[:space:]=]*|--repo[[:space:]=]+)[^[:space:]]+|github[.]com/[^[:space:]/]+/[^[:space:]/]+' | sed -E 's/^[[:space:]]*(-r[[:space:]=]*|--repo[[:space:]=]+)//; s#.*github[.]com/##; s/[.]git$//')"
+  if matches "$call" '^gh([.]exe)?[[:space:]]+repo[[:space:]]+(create|fork)([[:space:]]|$)'; then
+    # these name the new repository, or the one to fork: none named is not ours
+    named="$named"$'\n'"$(repo_operand "$call")"
+    [ -n "$(printf '%s' "$named" | tr -d '[:space:]')" ] || return 0
+  elif matches "$call" '^gh([.]exe)?[[:space:]]+repo[[:space:]]+(delete|edit|rename|archive|unarchive|deploy-key|sync)([[:space:]]|$)'; then
+    named="$named"$'\n'"$(repo_operand "$call")"
+  fi
+  while IFS= read -r r; do
+    [ -n "$r" ] || continue
+    matches "$r" '^askysh/(benchbar|homebrew-tap)$' || return 0
+  done <<EOF2
+$named
+EOF2
+  return 1
+}
+
 while IFS= read -r call; do
   [ -n "$call" ] || continue
   write=0
@@ -82,16 +188,33 @@ while IFS= read -r call; do
   explicit_get=0
   matches "$own" '(^|[[:space:]])(-[A-Za-z]*X[[:space:]=]*|--method[[:space:]=]+)GET([^A-Za-z]|$)' && explicit_get=1
   # -f x=y, -fx=y, -iF x=y, --field, --raw-field, --input
-  if matches "$call" '(^|[[:space:]])(-[A-Za-z]*[fF]|--field|--raw-field|--input)' && [ "$explicit_get" = 0 ]; then
+  # Body flags count only in this call itself: a -F after a pipe belongs
+  # to awk or cut, not to gh.
+  if matches "$own" '(^|[[:space:]])(-[A-Za-z]*[fF]|--field|--raw-field|--input)' && [ "$explicit_get" = 0 ]; then
     write=1
   fi
   matches "$call" 'graphql' && matches "$call" 'mutation' && write=1
-  if [ "$write" = 1 ] && ! allowed_write; then
+  # {owner} and {repo} in the path are filled from GH_REPO
+  if [ "$write" = 1 ] && matches "$own" '[{](owner|repo)[}]' && env_repo_other; then
+    echo "Blocked: a gh api write with {owner}/{repo} and a GH_REPO that is not askysh/benchbar or askysh/homebrew-tap." >&2
+    exit 2
+  fi
+  if [ "$write" = 1 ] && ! allowed_write && ! own_repo_write "$own"; then
     echo "Blocked: gh api writes are not allowed here, except: gh api -X POST repos/O/R/pulls/N/ccr/comments/ID/resolve; gh api -X POST repos/askysh/benchbar/pulls/N/comments/ID/replies -F body=@FILE; gh api graphql -F query=@FILE that only reads or resolves review threads." >&2
     exit 2
   fi
 done <<EOF
 $(chunks '(^|[^A-Za-z0-9_.-])gh([.]exe)?[[:space:]]+api([[:space:]]|$)')
+EOF
+
+while IFS= read -r call; do
+  [ -n "$call" ] || continue
+  if other_repo_write "$call"; then
+    echo "Blocked: gh writes to a repository other than askysh/benchbar and askysh/homebrew-tap (or to an organization or user scope, or through GH_REPO) are not allowed here; run them yourself." >&2
+    exit 2
+  fi
+done <<EOF
+$(chunks '(^|[^A-Za-z0-9_.-])gh([.]exe)?[[:space:]]+(-[^[:space:]]+[[:space:]]+([^-[:space:]][^[:space:]]*[[:space:]]+)?)*(pr|issue|release|workflow|run|secret|variable|label|cache|repo)([[:space:]]|$)')
 EOF
 
 tasks="$(chunks '(^|[^A-Za-z0-9_.-])schtasks([.]exe)?([[:space:]]|$)')"
