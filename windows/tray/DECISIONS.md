@@ -392,6 +392,14 @@ One line per non obvious choice. The 0.8.0 spike that chose WPF over WinUI was d
   is Mac app code with no `benchbar` command behind it, and the tray drives the CLI through `benchbar.exe` JSON only, so P31 stays open: a
   `benchbar://share/join` link still shows the note. Writing that protocol again in C# would be a security review of its own.
 - **The tab exists only while the lan-rooms lab is on and available here**, the same switch as the Mac app and the CLI (`labs list`), read once per bench selection through the Labs model, never per poll. With the lab off or "not on Windows yet" there is no tab and no call.
+- **The setup plan has no token.** `share setup --dry-run --json` prints one plan line, so the sheet runs with `RequiresToken` off and its
+  Summary carries the data classes and the acknowledgement; the ticked box in the form and the sheet's "Make the copy" are the person's
+  answer, and the apply passes `--acknowledge-data --yes`. The view reads the plan itself first (for that summary), and the sheet reads it
+  again.
+- **The lan-guard buttons (`install`, `allow-node`) are the person's decision.** Each runs only from a click after its own question (the
+  Mac's wording), with the person environment, and never from a check, a poll, a link or a retry. They do not go through the sudo password
+  prompt of the plan sheet: on Linux the CLI has no LAN guard yet (another change adds nftables), so what it answers, including a refusal,
+  is shown as it is.
 - **Reading is all a poll or opening the tab does:** `share status --preflight` and, while the room is on, `share people` (at most every 8 s). Start, stop, extend, lock, code, invite and remove each follow a click, and start, stop and remove a question, with the CLI's person environment (`BENCHBAR_NONINTERACTIVE=0`, `BENCHBAR_SUDO=gui`, as on the Mac).
 - **The room code and the invite are read on a click and kept in memory only.** `ShareCode` and `ShareInvite` print as `hidden`, a failed
   read says that it failed without repeating stdout, the card shows dots until Show, the lines the tests read never hold the code, and Copy
@@ -401,6 +409,12 @@ One line per non obvious choice. The 0.8.0 spike that chose WPF over WinUI was d
   New code would end the invites already sent. So these clicks run `share code` without `--new`. Opening the tab still never reads it.
 - **A refusal is shown as the CLI worded it, never as an old CLI.** A status call that fails and has no `state` (the lab is off, exit 2) sets the
   error line from its `error` or first stderr line. "Needs a newer command line tool" is only for an ok document without the protocol fields.
+- **The lan-guard buttons follow the guard, not the lab.** The CLI's guard is a pf anchor and a macOS firewall rule, and `lan-guard` has no Linux
+  refusal of its own. `ShareModel.LanGuardSupported` is false here (`ShareText.LanGuardSupportedHere`) until the nftables guard lands: no button is
+  drawn, nothing runs, and the tab says so. A lab that lists Linux first cannot make the tray run root steps meant for a Mac.
+- **An unknown MariaDB root password (exit 2 on the copy) shows the CLI sentence and then what to do in a terminal.** The tray cannot ask for the
+  password. `PlanReviewRequest.ExplainFailure` adds the advice only when the CLI's own sentence does not already name `MARIADB_ROOT_PASSWORD`.
+- **Not ported from the Mac tab:** Move to (`share assign`), the activity log, Open copy as and teardown.
 - **Not ported from the Mac tab in this change:** setup and Refresh copy and the lan-guard buttons (next change), Move to (`share assign`), the activity log, Open copy as and teardown.
 ## The Microsoft Store package (MSIX)
 

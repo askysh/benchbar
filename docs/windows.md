@@ -415,20 +415,22 @@ A bench has four tabs:
 
 A fifth tab, **Sharing**, is there only while the **Share with people on
 the same Wi-Fi** experiment (`lan-rooms`) is on in Labs. It is the host
-side of a room, with the Mac app's words: **Start sharing** for 1 to 12
-hours after a question, **Stop**, **Extend**, **Lock room**, the room code
-(hidden until you press **Show**), **Copy invite** and **New code**, the
-checks, the copy, and the people in the room with **Remove**. Every one of
-those calls is made from your click and asks first where it ends a room or
-a person's session; nothing runs when the tab opens, it only reads. The
-room code and the invite are read only on your click, kept in memory,
-never written to a log and copied with a mark that keeps them out of the
-Windows clipboard history. Setting up the copy and the network protection
-are not in the tab yet: run `benchbar.exe share setup` and
-`benchbar.exe lan-guard install` in PowerShell, where they ask first. The tab shows
-what `benchbar.exe` reports, including where a platform has no network
-protection yet (Linux). While the experiment says it is not on Windows
-yet in Labs, the tab does not appear.
+side of a room, with the Mac app's words: **Set up sharing** (the people
+who get a seat, the source of the copy, the plan sheet with what the copy
+holds, and your tick that it holds real data), **Start sharing** for 1 to
+12 hours after a question, **Stop**, **Extend**, **Lock room**, the room
+code (hidden until you press **Show**), **Copy invite** and **New code**,
+the checks, the copy and **Refresh copy**, and the people in the room with
+**Remove**. Every one of those calls is made from your click and asks
+first; nothing runs when the tab opens, it only reads. The room code and
+the invite are read only on your click, kept in memory, never written to a
+log and copied with a mark that keeps them out of the Windows clipboard
+history. The network protection (`benchbar lan-guard install`, and
+`allow-node`) is a button with its own question and runs only when you
+press it; the tray never runs it by itself. Where the command line tool
+has no network protection yet (Linux), the tab shows what `benchbar.exe`
+says and nothing else. While the experiment says it is not on Windows yet
+in Labs, the tab does not appear.
 
 Start and Restart check the bench's ports first, from the window and from
 the flyout. A port another program holds stops the start with the reason
