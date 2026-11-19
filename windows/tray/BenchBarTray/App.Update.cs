@@ -110,6 +110,7 @@ public partial class App
     /// <summary>Check for Updates in the tray menu: says the answer in a dialog, with Update Now when it can.</summary>
     private async Task CheckForUpdatesAsync()
     {
+        if (!UpdatePolicy.ChecksForUpdates(_package)) return; // the Store updates the package
         var check = await RunUpdateCheckAsync();
         var text = UpdatePlanner.CheckText(check);
         var offer = UpdatePlanner.Offer(check.Status);

@@ -13,6 +13,18 @@ internal sealed class TrayMenuModel
 {
     public Func<bool> LogonEnabled { get; set; } = () => false;
     public Action<bool> SetLogon { get; set; } = _ => { };
+
+    /// <summary>False when the switch cannot be changed here (the packaged startup task turned off in Windows or by a policy, or not read yet).</summary>
+    public Func<bool> LogonAvailable { get; set; } = () => true;
+
+    /// <summary>The line that says why it cannot, shown as the item's tooltip.</summary>
+    public Func<string?> LogonNote { get; set; } = () => null;
+
+    /// <summary>Asks for a fresh read of the switch (packaged: the startup task); the menu is redrawn when it arrives.</summary>
+    public Action RefreshLogon { get; set; } = () => { };
+
+    /// <summary>False when the Store does the updating: no GitHub check, so no item.</summary>
+    public bool ShowCheckForUpdates { get; set; } = true;
     public Func<AppearanceMode> Appearance { get; set; } = () => AppearanceMode.System;
     public Action<AppearanceMode> SetAppearance { get; set; } = _ => { };
     public Func<RunnerSet> LoadRunners { get; set; } = () => RunnerSet.BuiltIn;
@@ -72,12 +84,10 @@ internal sealed class TrayMenu
         _model = model;
         Menu = new ContextMenu();
 
-        var items = new (string Header, Action Click)[]
-        {
-            ("Check for Updates", model.CheckForUpdates),
-            ("Help", model.Help),
-            ("Report a Bug", model.ReportBug),
-        };
+        var items = new List<(string Header, Action Click)>();
+        if (model.ShowCheckForUpdates) items.Add(("Check for Updates", model.CheckForUpdates));
+        items.Add(("Help", model.Help));
+        items.Add(("Report a Bug", model.ReportBug));
 
         _logon.Click += (_, _) => model.SetLogon(_logon.IsChecked);
         _notifications.Click += (_, _) => model.SetNotifications(_notifications.IsChecked);
@@ -124,7 +134,11 @@ internal sealed class TrayMenu
         quit.Click += (_, _) => model.Quit();
         Menu.Items.Add(quit);
 
-        Menu.Opened += (_, _) => RefreshChecks();
+        Menu.Opened += (_, _) =>
+        {
+            RefreshChecks();
+            model.RefreshLogon();
+        };
         Menu.Closed += (_, _) => _animation.Stop();
     }
 
@@ -142,6 +156,8 @@ internal sealed class TrayMenu
     public void RefreshChecks()
     {
         _logon.IsChecked = _model.LogonEnabled();
+        _logon.IsEnabled = _model.LogonAvailable();
+        _logon.ToolTip = _model.LogonNote();
         _notifications.IsChecked = _model.Notifications();
         _setUp.Visibility = _model.SetupPending() ? Visibility.Visible : Visibility.Collapsed;
         RefreshUpdate();
