@@ -55,7 +55,9 @@ def catalogue():
                 labs.append(line.split("~")[1])
     with tempfile.TemporaryDirectory() as home:
         env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": home, "LC_ALL": "C",
-               "BENCHBAR_LABS": ",".join(labs), "BENCHBAR_NONINTERACTIVE": "1", "NO_COLOR": "1"}
+               "BENCHBAR_LABS": ",".join(labs), "BENCHBAR_NONINTERACTIVE": "1", "NO_COLOR": "1",
+               # a lab is on only where its platforms say so: list every lab's commands whatever machine this runs on
+               "FL_PLATFORM": "macos"}
         out = subprocess.run(["bash", os.path.join(ROOT, "benchbar"), "commands", "--json"], env=env, cwd=home,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, check=True).stdout
     return json.loads(out)

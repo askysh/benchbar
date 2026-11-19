@@ -189,3 +189,29 @@ assert_not_contains "$(cat "$FL_STATE_FILE" 2>/dev/null)" "LABS=quick-switch"
 printf 'Linux version 6.6.0-microsoft-standard-WSL2 (root@build) (gcc) #1 SMP\n' >"$FL_PROC_VERSION"
 run_fm labs on quick-switch --yes
 assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "quick-switch is not available on windows yet"
+
+# ---- one availability check for every path: BENCHBAR_LABS names a lab that
+# the platform does not list, so the lab stays off (it used to pass the gate
+# and run the pf and launchctl code on Linux)
+printf 'Linux version 6.8.0-generic (buildd@lcy02) #1 SMP\n' >"$FL_PROC_VERSION"
+export BENCHBAR_LABS=lan-rooms,quick-switch
+fm_out labs list --json
+assert_eq "[False, False]" "$(printf '%s' "$OUT" | jget - '[l["enabled"] for l in d["labs"]]')" "(the override does not turn on a lab this platform lacks)"
+fm_out status --json --bench-dir "$BENCH"
+assert_eq "[]" "$(printf '%s' "$OUT" | jget - 'd["labs"]')"
+reset_calls
+fm_out commands --json
+assert_eq "[] 2" "$(printf '%s' "$OUT" | jget - 'd["labs"], len(d["gated"])' | tr -d "(),'")" "(share and lan-guard stay gated)"
+for c in share lan-guard; do
+  run_fm "$c" --bench-dir "$BENCH"
+  assert_eq "2" "$CODE" "$OUT"
+  assert_contains "$OUT" "benchbar $c is an experiment"
+  assert_contains "$OUT" "not available on linux"
+  assert_not_contains "$OUT" "Turn it on: benchbar labs on" "(that command would refuse here)"
+done
+assert_calls_not_contain '^(pfctl|launchctl|sudo)'
+# the same override on the platform that lists the lab still turns it on
+export FL_PLATFORM=macos
+fm_out labs list --json
+assert_eq "[True, True]" "$(printf '%s' "$OUT" | jget - '[l["enabled"] for l in d["labs"]]')"
+unset BENCHBAR_LABS

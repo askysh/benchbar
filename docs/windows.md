@@ -433,7 +433,10 @@ Bug and the MCP line.
 When a bench crashes, is paused by the crash guard or meets a port
 conflict, the tray shows one Windows notification with the bench and
 the command that fixes it. It does not repeat it until the state
-changes again.
+changes again. The tray reads the pause the runner records in the bench's
+`state.json` (the same record `benchbar status` shows), and the runner
+inside the distro sends no desktop notification of its own in WSL, so
+there is one notification, not two.
 
 ### When the distro is stopped
 
