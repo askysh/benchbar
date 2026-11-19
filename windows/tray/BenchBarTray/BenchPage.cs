@@ -154,6 +154,7 @@ internal sealed class BenchPage : UserControl
         {
             Overview.Bind(_context.Bench, _context.Site);
             Overview.EnsureLockChecked().Forget(); // once per bench, only while the Overview is the tab shown
+            Overview.EnsureCliFactsAsync().Forget();
         }
     }
 

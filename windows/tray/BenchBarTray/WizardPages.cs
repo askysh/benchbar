@@ -368,6 +368,8 @@ internal sealed partial class WizardView
         var admin = Ui.Password("Administrator password", s => SetSecret(_model.SetAdminPassword, s), 320);
         var problem = Note(error: true);
         var formHint = Note(); // says what Review is waiting for
+        var prerequisites = new StackPanel(); // the warnings and failures of doctor --prerequisites
+        var prerequisitesKey = "";
 
         var panel = new StackPanel();
         panel.Children.Add(Ui.Labeled("Bench folder", folder, "Inside Ubuntu. The default is in your Linux home folder."));
@@ -377,6 +379,7 @@ internal sealed partial class WizardView
         panel.Children.Add(profileTry);
         panel.Children.Add(Ui.Labeled("Apps", bundle, "minimal is Frappe only; common and extended add more apps."));
         panel.Children.Add(Ui.Labeled("Administrator password", admin, "The login of the new site. It is used for this install only and never saved."));
+        panel.Children.Add(prerequisites);
         panel.Children.Add(problem);
         panel.Children.Add(formHint);
 
@@ -393,9 +396,37 @@ internal sealed partial class WizardView
             Show(formHint, _model.FormProblem is { } waiting && !typed ? "Review is off. " + waiting : null);
             review.IsEnabled = _model.FormProblem is null;
             RefreshProfiles(profile, profileNote, profileTry, ref syncingProfile);
+            var found = _model.Prerequisites?.NeedsAttention ?? [];
+            var key = string.Join('|', found.Select(c => c.Id + c.Level + c.Message));
+            if (key != prerequisitesKey)
+            {
+                prerequisitesKey = key;
+                prerequisites.Children.Clear();
+                foreach (var check in found) prerequisites.Children.Add(PrerequisiteRowView(check));
+            }
             if (!folder.IsKeyboardFocusWithin && folder.Text != _model.Folder) folder.Text = _model.Folder;
         };
         return page;
+    }
+
+    /// <summary>One warning or failure of <c>doctor --prerequisites</c>: what it found and the fix the CLI names, to copy. Never run from here.</summary>
+    private UIElement PrerequisiteRowView(Prerequisite check)
+    {
+        var fail = check.Level == CheckLevel.Fail;
+        var row = new StackPanel { Margin = new Thickness(0, 6, 0, 0) };
+        var text = Ui.Text($"{(fail ? "Needs attention" : "Note")}: {check.Label}. {check.Message}", 13);
+        if (fail) text.Foreground = Ui.CriticalBrush;
+        row.Children.Add(text);
+        if (check.FixCommand is { Length: > 0 } fix)
+        {
+            var copy = Ui.Button("Copy fix", () => _model.Copy(fix), "Copy the fix for " + check.Label, minWidth: 0);
+            copy.Padding = new Thickness(8, 2, 8, 2);
+            copy.HorizontalAlignment = HorizontalAlignment.Left;
+            copy.Margin = new Thickness(0, 4, 0, 0);
+            copy.ToolTip = fix;
+            row.Children.Add(copy);
+        }
+        return row;
     }
 
     private string _profileKey = "";
