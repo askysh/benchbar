@@ -51,7 +51,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to build (X.Y.Z); with a release, the tag vX.Y.Z must exist"
+        description: "Version to build (X.Y.Z or X.Y.Z-rc.N); with a release, the tag vX.Y.Z must exist"
         required: true
         type: string
       draft_release:
@@ -106,8 +106,9 @@ jobs:
               ;;
             *) v="0.0.0-pr${PR_NUMBER}" ;;
           esac
-          if [ "$EVENT" != "pull_request" ] && ! [[ "$v" =~ ^[0-9]+[.][0-9]+[.][0-9]+$ ]]; then
-            echo "::error::'$v' is not a version (expected X.Y.Z)"; exit 1
+          # the same pattern as scripts/check-version.sh; test-version-sources keeps them equal
+          if [ "$EVENT" != "pull_request" ] && ! [[ "$v" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.[1-9][0-9]*)?$ ]]; then
+            echo "::error::'$v' is not a version (expected X.Y.Z or X.Y.Z-rc.N)"; exit 1
           fi
           if [ "$release" = "true" ] && ! git ls-remote --exit-code --tags "https://github.com/${GITHUB_REPOSITORY}.git" "refs/tags/v${v}" >/dev/null 2>&1; then
             echo "::error::The tag v${v} does not exist. A run that attaches to a release builds that tag, so push it first (release.yml builds the Mac side from the same tag)."
@@ -861,7 +862,9 @@ jobs:
             }
             Write-Host "::warning title=Draft created here::No release $tag appeared in 130 minutes, so this run created a draft with the Windows notes only. A later release.yml run will replace the notes (and this paragraph): re-run this workflow afterwards."
             [IO.File]::WriteAllText($notes, $blockText + "`n", $utf8)
-            gh release create $tag --draft --title "BenchBar $env:VERSION" --target $env:GITHUB_SHA --notes-file $notes
+            # a release candidate is a pre-release, as release.yml drafts it
+            $pre = if ($env:VERSION -like '*-rc.*') { '--prerelease' } else { '--prerelease=false' }
+            gh release create $tag --draft --title "BenchBar $env:VERSION" --target $env:GITHUB_SHA --notes-file $notes $pre
             if ($LASTEXITCODE -ne 0) { throw 'gh release create failed' }
             $isDraft = $true
             $created = $true

@@ -86,6 +86,7 @@ internal sealed partial class SitesView
         _findList = null;
         _findNote = null;
         _findButtons.Clear();
+        _pinButtons.Clear();
         ClosePanel();
     }
 
@@ -101,6 +102,7 @@ internal sealed partial class SitesView
         if (_findList is null) return;
         _findList.Children.Clear();
         _findButtons.Clear();
+        _pinButtons.Clear();
         if (find.Error is { } error)
         {
             _findList.Children.Add(PagePanels.Line(error, error: true));
@@ -122,13 +124,74 @@ internal sealed partial class SitesView
         text.Children.Add(Ui.Text(user.UserType == "System User" ? user.Title : $"{user.Title} ({user.UserType})", 14, FontWeights.SemiBold, margin: new Thickness(0)));
         text.Children.Add(Ui.Text(user.Name, 12, opacity: 0.7, margin: new Thickness(0)));
         if (user.RolesLine.Length > 0) text.Children.Add(Ui.Text(user.RolesLine, 12, opacity: 0.7, margin: new Thickness(0)));
+        if (_services.Pins.Of(Bench.Path, find.Site).FirstOrDefault(p => p.User == user.Name) is { } kept)
+        {
+            // the label Quick Switch shows for this user, as the Mac's Find User row has; saved when the person is done (Enter or leaving
+            // the field), not on every key, because every save writes config.json
+            var label = Ui.Field("Label for " + user.Name, kept.Label ?? "", _ => { }, 220);
+            label.LostFocus += (_, _) => CommitLabel(label, user.Name, find.Site);
+            label.KeyDown += (_, e) =>
+            {
+                if (e.Key != Key.Enter) return;
+                CommitLabel(label, user.Name, find.Site);
+                e.Handled = true;
+            };
+            label.ToolTip = "A short name for Quick Switch, for example NE";
+            label.HorizontalAlignment = HorizontalAlignment.Left;
+            label.Margin = new Thickness(0, 4, 0, 0);
+            text.Children.Add(label);
+        }
         grid.Children.Add(text);
         var open = Ui.Button("Open", () => Start(() => OpenUserAsync(find, user)), $"Open as {user.Name}", minWidth: 72);
         open.IsEnabled = !_busy;
         _findButtons[user.Name] = open;
-        Grid.SetColumn(open, 1);
-        grid.Children.Add(open);
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+        if (user.Name != OpenAsPins.Administrator) // Administrator is always in Quick Switch
+        {
+            var pinned = _services.Pins.IsPinned(user.Name, Bench.Path, find.Site);
+            var pin = Ui.Button(pinned ? "Unpin" : "Pin", () => TogglePin(find, user), (pinned ? "Unpin " : "Pin ") + user.Name, minWidth: 64);
+            pin.ToolTip = pinned ? "Remove from Quick Switch" : $"Keep in Quick Switch ({OpenAsPins.Max} at most)";
+            buttons.Children.Add(pin);
+            _pinButtons[user.Name] = pin;
+        }
+        buttons.Children.Add(open);
+        Grid.SetColumn(buttons, 1);
+        grid.Children.Add(buttons);
         return grid;
+    }
+
+    private readonly Dictionary<string, Button> _pinButtons = [];
+
+    /// <summary>The Pin and Unpin buttons of the open Find User panel, by user id (for tests).</summary>
+    internal IReadOnlyDictionary<string, Button> PinButtons => _pinButtons;
+
+    private void TogglePin(FindUserModel find, SiteUser user)
+    {
+        var pins = _services.Pins;
+        if (pins.IsPinned(user.Name, Bench.Path, find.Site)) pins.Unpin(user.Name, Bench.Path, find.Site);
+        else if (!pins.Pin(user.Name, user.FullName, Bench.Path, find.Site))
+        {
+            ShowFindNote($"A site keeps {OpenAsPins.Max} pinned users at most. Unpin one first.", true);
+            return;
+        }
+        DrawUsers(find);
+    }
+
+    private void ShowFindNote(string text, bool error)
+    {
+        if (_findNote is null) return;
+        _findNote.Text = text;
+        _findNote.Visibility = Visibility.Visible;
+        if (error) _findNote.Foreground = Ui.CriticalBrush;
+        else _findNote.ClearValue(TextBlock.ForegroundProperty);
+    }
+
+    /// <summary>Saves the label typed for a pinned user, once, when it differs from the one kept.</summary>
+    internal void CommitLabel(TextBox box, string user, string site)
+    {
+        var typed = string.IsNullOrWhiteSpace(box.Text) ? null : box.Text.Trim();
+        if (_services.Pins.Of(Bench.Path, site).FirstOrDefault(p => p.User == user) is not { } pin || pin.Label == typed) return;
+        _services.Pins.SetLabel(user, box.Text, Bench.Path, site);
     }
 
     internal async Task OpenUserAsync(FindUserModel find, SiteUser user)
@@ -137,9 +200,7 @@ internal sealed partial class SitesView
         PagePanels.OnUi(this, () =>
         {
             if (!ReferenceEquals(_find, find) || _findNote is null) return;
-            _findNote.Text = find.Note ?? "";
-            _findNote.Foreground = find.NoteIsError ? Ui.CriticalBrush : _findNote.Foreground;
-            _findNote.Visibility = find.Note is null ? Visibility.Collapsed : Visibility.Visible;
+            if (find.Note is { } note) ShowFindNote(note, find.NoteIsError);
         });
     }
 }
