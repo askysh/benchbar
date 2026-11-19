@@ -164,6 +164,7 @@ assert_contains "${SP_MSG[0]}" "sudo ufw allow 8443/tcp"
 
 # ---------------------------------------------------------------- WSL: a room needs mirrored networking
 # the mode, read as wslinfo prints it; no wslinfo (a WSL with no mirrored mode) is NAT; outside WSL there is none
+m=""; rule=""
 fl_sp_wsl_net_v m; assert_eq mirrored "$m" "(the mock's default)"
 MOCK_WSL_NETMODE=nat fl_sp_wsl_net_v m; assert_eq nat "$m"
 MOCK_WSL_NETMODE=Mirrored fl_sp_wsl_net_v m; assert_eq mirrored "$m" "(case does not matter)"
@@ -175,7 +176,7 @@ FL_WSLINFO="" fl_sp_wsl_net_v m; assert_eq nat "$m" "(wslinfo is set and empty)"
 WSL_PROC_VERSION="$(cat "$FL_PROC_VERSION")"
 printf 'Linux version 6.8.0-generic (buildd@lcy02) #1 SMP\n' >"$FL_PROC_VERSION"
 MOCK_WSL_NETMODE=nat fl_sp_wsl_net_v m; assert_eq "" "$m" "(not WSL: no mode, and nothing is asked)"
-code=0; out="$( (export MOCK_WSL_NETMODE=nat; fl_share_wsl_gate warn) 2>&1 )" || code=$?
+code=0; out="$(MOCK_WSL_NETMODE=nat fl_share_wsl_gate warn 2>&1)" || code=$?
 assert_eq 0 "$code" "$out"; assert_eq "" "$out" "(a real Linux PC is never stopped or warned)"
 printf '%s\n' "$WSL_PROC_VERSION" >"$FL_PROC_VERSION"
 
@@ -183,16 +184,16 @@ fl_sp_wsl_rule_v rule
 assert_eq "New-NetFirewallHyperVRule -Name BenchBarRoom -DisplayName \"BenchBar room\" -Direction Inbound -VMCreatorId '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -Protocol TCP -LocalPorts 8443" "$rule"
 
 # the gate: NAT stops with what NAT means and how to switch; mirrored warns with the rule; invite (no "warn") is quiet on mirrored
-code=0; out="$( (export MOCK_WSL_NETMODE=nat; fl_share_wsl_gate warn) 2>&1 )" || code=$?
+code=0; out="$(MOCK_WSL_NETMODE=nat fl_share_wsl_gate warn 2>&1)" || code=$?
 assert_eq 1 "$code" "$out"
 assert_contains "$out" "NAT networking"; assert_contains "$out" "not available on WSL NAT"
 assert_contains "$out" "networkingMode=mirrored"; assert_contains "$out" ".wslconfig"; assert_contains "$out" "wsl.exe --shutdown"
-code=0; out="$( (export MOCK_WSL_NETMODE=nat; fl_share_wsl_gate) 2>&1 )" || code=$?
+code=0; out="$(MOCK_WSL_NETMODE=nat fl_share_wsl_gate 2>&1)" || code=$?
 assert_eq 1 "$code" "(invite stops on NAT too) $out"
-code=0; out="$( (export MOCK_WSL_NETMODE=mirrored; fl_share_wsl_gate warn) 2>&1 )" || code=$?
+code=0; out="$(MOCK_WSL_NETMODE=mirrored fl_share_wsl_gate warn 2>&1)" || code=$?
 assert_eq 0 "$code" "$out"
 assert_contains "$out" "New-NetFirewallHyperVRule"; assert_contains "$out" "-LocalPorts 8443"; assert_contains "$out" "administrator"
-code=0; out="$( (export MOCK_WSL_NETMODE=mirrored; fl_share_wsl_gate) 2>&1 )" || code=$?
+code=0; out="$(MOCK_WSL_NETMODE=mirrored fl_share_wsl_gate 2>&1)" || code=$?
 assert_eq 0 "$code" "$out"; assert_eq "" "$out" "(invite does not repeat the warning)"
 
 # share preflight: a failing check on NAT, a warning with the rule on mirrored, none outside WSL
