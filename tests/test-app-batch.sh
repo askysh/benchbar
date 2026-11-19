@@ -133,7 +133,7 @@ assert_eq "1" "$CODE" "$ERR"
 assert_calls_contain '^bench get-app --skip-assets --branch main '
 assert_calls_not_contain '^bench build'
 assert_calls_not_contain 'install-app acme_nr'
-assert_contains "$ERR" "the clone does not reach the pinned commit (planned ${N1:0:12}, cloned $(remote_head acme_nr | cut -c1-12)); nothing was built or installed."
+assert_contains "$ERR" "the clone does not reach the pinned commit (planned ${N1:0:12}, cloned $(remote_head acme_nr | cut -c1-12)); get-app cloned it and installed its Python requirements, but nothing was built or installed on a site."
 assert_eq "failed skipped skipped skipped" "$(printf '%s' "$OUT" | jget - '" ".join(s["status"] for s in d["steps"])')"
 assert_eq "failed" "$(printf '%s' "$OUT" | jget - 'd["apps"][0]["clone"]')"
 assert_eq "skipped skipped" "$(printf '%s' "$OUT" | jget - 'd["apps"][0]["build"] + " " + d["apps"][0]["installs"][0]["status"]')"

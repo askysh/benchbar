@@ -76,7 +76,7 @@ lib_family() {
     repair) echo "test-repair test-repair-json test-doctor test-doctor-hardening test-install-json" ;;
     docs) echo "test-docs test-docs-command" ;;
     commands) echo "test-docs test-docs-command test-labs test-json" ;;
-    apps|app-plan) echo "test-apps test-app-cli test-app-batch test-app-recovery test-pull" ;;
+    apps|app-plan|teamlock) echo "test-apps test-app-cli test-app-batch test-app-recovery test-pull test-apps-git test-lock" ;;
     bench|benchinfo|benchstate|discovery|freshness) echo "test-bench-flow test-status-cost test-discovery test-multi-bench test-adopt test-json test-freshness test-ports test-port-management test-install-json" ;;
     sites|site-backups|site-restore|pull) echo "test-sites test-site-backups test-site-restore test-pull test-install-json" ;;
     ports|port-management) echo "test-ports test-port-management test-multi-bench test-adopt" ;;

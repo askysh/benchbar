@@ -68,7 +68,8 @@ escapes, no inline tables.
 | `schema` | no | `1` or `2`; `1` when absent. A file with any schema 2 key must say `schema = 2` |
 | `base` | yes | The built in profile for Python, Node and MariaDB, for example `"v15-lts"` |
 | `description` | no | One line shown by `profile list` |
-| `frappe_branch` | no | Another Frappe branch than the base's |
+| `frappe_branch` | no | Another Frappe branch than the base's. erpnext moves with it: `version-N` and `develop` give the same erpnext branch |
+| `erpnext_branch` | no | The erpnext branch that goes with `frappe_branch`. Required when `frappe_branch` is neither `version-N` nor `develop` and the bundle has erpnext |
 | `frappe_commit` | no | A commit to pin frappe to (7 to 40 lower case hex characters). `install` checks that the clone has it before it builds, and stops otherwise |
 | `erpnext_commit` | no | The same for erpnext (also `[[apps]]` `commit` for an erpnext listed there) |
 | `bundle` | no | An app bundle, instead of `[[apps]]`: a file with both is refused |
