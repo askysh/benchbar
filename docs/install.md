@@ -36,7 +36,8 @@ through `--json --yes`, which prints one JSON event per line; the format
 is in the [JSON API](json-schema.md).
 
 The cask needs Apple Silicon and macOS Sonoma or later. For the CLI
-alone, on an Intel Mac too:
+alone, on an Intel Mac too (written for it, not checked on real
+hardware):
 
 ```bash
 brew install askysh/tap/benchbar
@@ -64,7 +65,8 @@ installed: with the `benchbar` formula it skips the CLI, with the
 
 In more detail, in this order, and it says so before each step:
 
-1. It checks macOS and Apple Silicon (it warns on Intel), the Xcode
+1. It checks macOS (the app needs 14 or later; on an older macOS only the
+   CLI is installed) and Apple Silicon (it warns on Intel), the Xcode
    Command Line Tools (it offers `xcode-select --install` and waits) and
    Homebrew (it offers the official installer).
 2. It clones the CLI into `~/.local/share/benchbar`, or pulls when the
@@ -369,6 +371,31 @@ its window starts the [first run wizard](app.md#a-new-bench-from-the-app).
 
 ![The first run wizard's Welcome page](images/wizard-welcome.png)
 
+## Supported platforms
+
+| | The CLI | The app |
+|---|---|---|
+| macOS 14 (Sonoma) or later, Apple Silicon | supported | supported |
+| macOS 14 or later, Intel | written for it, **not verified** | not built (Apple Silicon only) |
+| macOS 13 or older | not supported | does not open |
+| Ubuntu 24.04, WSL 2 included | supported | none, the tray on Windows |
+
+- **Intel Macs.** The CLI is written to run there: Homebrew's prefix is
+  `/usr/local`, and the patched wkhtmltopdf package is an Intel binary, so
+  PDFs need no Rosetta 2. A check on a real Intel Mac is not part of 0.9.0,
+  so nobody has run `install` on one yet; the mocked tests cover it. Tell
+  us in an issue if it works or not. The one line installer skips the app
+  there and says so.
+- **macOS 13 and older.** The app needs macOS 14 (its deployment target,
+  and the cask's `depends_on`). The one line installer checks the version
+  and skips the app on an older macOS, with a warning, and installs the CLI.
+  `benchbar doctor --prerequisites` fails the macOS check there.
+- **Shells.** The one line installer writes the `PATH` block to `~/.zshrc`
+  (`$ZDOTDIR/.zshrc` when set). A fish user gets `fish_add_path` printed at
+  the end, a bash user on a Mac the line for `~/.bash_profile`. On Linux
+  the block goes to `~/.bashrc`, or `~/.zshrc` when your login shell is zsh.
+  The `bench*` helpers are zsh and bash functions; fish has none.
+
 ## Uninstall
 
 Uninstalling removes BenchBar, not your benches: every bench, site,
@@ -389,9 +416,11 @@ knowing first:
 What `install`, `adopt` and the rest wrote outside the bench stays too,
 and you remove it yourself when you want it gone:
 
-- The marked block in `/etc/hosts` with a line per site (macOS; edit it with `sudo`).
+- The marked block in `/etc/hosts` with a line per site (macOS). `benchbar uninstall-service --all` offers to remove it, with `sudo` and a backup, when you run it in a terminal; with `--yes` it prints the command instead and never edits the file.
 - The MariaDB root password: the Keychain item `benchbar-mariadb` on macOS, a 0600 file in the state folder on Linux.
 - The patched wkhtmltopdf package that `install` put in for PDF output; remove it with the package tool of your system.
+- On Linux, the apt packages `install` added (MariaDB, Redis and the rest), and uv and fnm with the Python and Node they fetched, under `~/.local`. On macOS the Homebrew packages stay.
+- The app's login item, when you turned on "Open BenchBar at login": turn it off in the app's Settings first, or remove it in System Settings, General, Login Items. Deleting the app leaves a dead entry there.
 - On Linux, linger for your user (`sudo loginctl disable-linger USER`), and the `~/.bashrc` helper block when you did not use `uninstall-service`.
 - The LAN guard of a room: `benchbar lan-guard remove` takes out the pf anchor and its launch daemon (macOS), or the nftables table, its systemd unit and its rules file (Linux).
 

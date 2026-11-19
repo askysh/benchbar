@@ -300,7 +300,7 @@ fl_cmd_share_setup() {
   done
   fl_noninteractive && fl_die "Sharing a site is a person's decision, so nothing run without a terminal can start it." \
     "Run it in a terminal: benchbar share setup"
-  [[ -t 0 || "${BENCHBAR_SUDO:-}" == gui ]] || fl_die "Sharing needs a person at a terminal, and this run has none." \
+  [[ -t 0 ]] || fl_person_env_ok BENCHBAR_SUDO gui || fl_die "Sharing needs a person at a terminal, and this run has none.${FL_PERSON_WHY:+ $FL_PERSON_WHY}" \
     "Run it in a terminal: benchbar share setup"
   [[ "$backup_now" == 0 || "$from" == latest ]] || fl_die "--backup-now and --from name two different sources." "Pass one of them."
   fl_require_bench

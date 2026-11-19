@@ -20,7 +20,9 @@ benchbar labs status NAME [--json]
 the experiment and asks first (`--yes` skips the question). Turning one on is
 a person's decision, so it stops with exit code 2 when nothing can ask:
 `BENCHBAR_NONINTERACTIVE=1`, `--for-agent` and `benchbar mcp` never turn one
-on. `labs off` always works. It undoes what the experiment started and turns
+on, and a run without a terminal is refused unless an app passes
+`BENCHBAR_NONINTERACTIVE=0` (the Mac app does, with `BENCHBAR_APP_PID`; the
+Windows tray does). That is a safety rail, not a boundary. `labs off` always works. It undoes what the experiment started and turns
 it off; a problem while undoing is a warning, and the experiment is off anyway.
 `labs status` exits 0 when the experiment is on and 1 when it is off.
 
