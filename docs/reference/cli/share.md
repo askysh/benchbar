@@ -30,6 +30,14 @@ certificate). `--users` picks the seats (enabled System Users).
 change the seats. Refused under `BENCHBAR_NONINTERACTIVE`, `--for-agent`
 and `mcp`, and without a terminal unless the app passes `BENCHBAR_SUDO=gui`.
 
+The hardening of the copy runs the same neutralisation as
+[`benchbar pull`](pull.md#what-the-copy-loses): every stored password,
+token and queued mail is gone, and webhooks, email accounts, notifications,
+social logins, backup uploads, LDAP, SMS, payment keys and jobs that call
+out are off, so a room never reaches the real services (a single list in one
+file, so the two cannot differ). Since 0.9 that list also covers LDAP, SMS,
+Google, Dropbox, S3 and payment settings, which the older hardening left on.
+
 Making the copy (the first setup, or `--refresh`) restores it as MariaDB's
 root user, so it needs the root password: from the Keychain, from
 `MARIADB_ROOT_PASSWORD`, or typed at a terminal (setup asks for it before

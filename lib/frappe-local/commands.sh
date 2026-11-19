@@ -115,6 +115,7 @@ flag~pull~--as~NAME~Local site name (default SITE.local).
 flag~pull~--from-dir~DIR~A backup set downloaded by hand, no SSH.
 flag~pull~--remote-bench~DIR~The bench folder on the server.
 flag~pull~--new-backup~~Run bench backup on the server first.
+flag~pull~--keep-secrets~~Keep the copy's integrations and stored secrets (by default they are switched off and cleared).
 flag~pull~--replace~~Restore over an existing local site, after backing it up.
 flag~pull~--confirm-site~SITE~With --new-backup: the site name, instead of typing it.
 flag~pull~--skip-app~APP~Restore without APP (its tables stay behind as orphans); repeat for more apps.
