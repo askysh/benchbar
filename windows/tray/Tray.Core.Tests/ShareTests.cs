@@ -13,7 +13,7 @@ public class ShareTests
     {
         SynchronizationContext.SetSynchronizationContext(null);
         var (client, runner) = Scripted();
-        return (new ShareModel(client, Bench), runner);
+        return (new ShareModel(client, Bench) { LanGuardSupported = true }, runner);
     }
 
     // --- the documents ---
@@ -62,8 +62,7 @@ public class ShareTests
         var unknown = checks.Single(c => c.Id == "future_check");
         Assert.Equal((ShareCheckStatus.Warn, ShareFixAction.None), (unknown.Status, unknown.Fix));
         Assert.Null(ShareText.FixLabel(unknown.Fix));
-        Assert.Null(ShareText.FixLabel(checks.Single(c => c.Id == "firewall_node").Fix)); // the firewall fix is a command of the next change
-        Assert.Equal("Start again", ShareText.FixLabel(checks.Single(c => c.Id == "gateway_reachable").Fix));
+        Assert.Equal("Allow...", ShareText.FixLabel(checks.Single(c => c.Id == "firewall_node").Fix));
         Assert.Equal(ShareState.Error, ShareJson.State("sharing-now-v2"));
     }
 
@@ -82,6 +81,23 @@ public class ShareTests
         var people = ShareJson.People(Doc("share-people.json"));
         Assert.Equal(["Priya", "Sam"], ShareText.Sorted(people).Select(p => p.Name));
         Assert.Equal("Priya · ThinkPad · 192.168.1.32", ShareText.PersonLine(people.Single(p => p.Name == "Priya")));
+    }
+
+    [Fact]
+    public void OnlyEnabledSystemUsersCanTakeASeatAndOneThatLosesRolesSaysSo()
+    {
+        var users = ShareJson.Users(Doc("share-users.json"));
+        Assert.Equal(["priya@example.com", "sam@example.com"], users.Where(u => u.Selectable).Select(u => u.Name));
+        Assert.Equal(["System Manager"], users[0].CodeCapableRoles);
+    }
+
+    [Fact]
+    public void TheSetupPlanSaysWhatTheCopyHolds()
+    {
+        var plan = ShareJson.SetupPlan(Doc("share-setup-plan.json"));
+        Assert.Equal((1.5, 4), (plan.SizeGb, plan.EstMinutes));
+        Assert.Equal("Customer 3, User 5", ShareText.DataClasses(plan.DataClasses));
+        Assert.Equal("Needs about 1.5 GB free", ShareText.NeedsDisk(plan.SizeGb));
     }
 
     // --- the secrets ---
@@ -173,10 +189,25 @@ public class ShareTests
     }
 
     [Fact]
-    public async Task StopAndTheOtherRoomCallsHaveTheirExactArguments()
+    public async Task ARefusalOfTheCliIsShownAsItIsAndFixesNothing()
     {
         var (model, runner) = Rig();
+        runner.On("lan-guard", "install").Print(Lines("lan-guard-sudo.jsonl")).Fail(1);
+        runner.On("share", "status").Print(Lines("share-status-off.json"));
+        Assert.False(await model.RunLanGuardAsync(false, TestContext.Current.CancellationToken));
+        Assert.Equal(["lan-guard", "install", "--yes", "--json"], runner.Runs[0].Args);
+        Assert.Contains(runner.Runs, r => r.Args[0] == "share"); // read again afterwards
+        Assert.Equal("sudo was not available, so nothing was changed.", model.LastError);
+    }
+
+    [Fact]
+    public async Task AllowNodeIsItsOwnCommandAndTheOtherRoomCallsHaveTheirExactArguments()
+    {
+        var (model, runner) = Rig();
+        runner.On("lan-guard").Print(Lines("share-done.jsonl"));
         runner.On("share").Print(Lines("share-done.jsonl"));
+        await model.RunLanGuardAsync(true, TestContext.Current.CancellationToken);
+        Assert.Equal(["lan-guard", "allow-node", "--yes", "--json"], runner.Runs[0].Args);
         await model.StopAsync(TestContext.Current.CancellationToken);
         Assert.Equal(["share", "stop", "--json", "--bench-dir", Bench], runner.Runs.First(r => r.Args[1] == "stop").Args);
         Assert.Equal(["share", "extend", "--by", "30m", "--json", "--bench-dir", Bench], model.ExtendArgs(30));
@@ -219,5 +250,100 @@ public class ShareTests
         Assert.Equal([("+30 min", 30), ("+1 hour", 60)], ShareText.ExtendOptions(3600));
         Assert.Equal([("+30 min", 30)], ShareText.ExtendOptions(1800));
         Assert.Empty(ShareText.ExtendOptions(0));
+    }
+
+    // --- set up ---
+
+    [Fact]
+    public async Task SetupPlansWithADryRunThenMakesTheCopyOnlyWhenTheSheetConfirms()
+    {
+        var (model, runner) = Rig();
+        runner.On("share", "setup").Print(Lines("share-setup-plan.json"));
+        var form = new ShareSetupForm("one.localhost");
+        Assert.False(form.CanRun);
+        form.Picked.Add("sam@example.com");
+        form.Picked.Add("priya@example.com");
+        Assert.False(form.CanRun); // the acknowledgement is not given
+        form.Acknowledged = true;
+        Assert.True(form.CanRun);
+        var request = form.Request(false);
+        var plan = await model.PlanSetupAsync(request, TestContext.Current.CancellationToken);
+        Assert.Equal(["share", "setup", "--site", "one.localhost", "--users", "priya@example.com,sam@example.com", "--backup-now", "--dry-run", "--json", "--bench-dir", Bench], runner.Runs[0].Args);
+
+        var review = model.SetupReview(request, plan!);
+        Assert.False(review.RequiresToken);
+        Assert.Equal("Make the copy", review.ConfirmLabel);
+        Assert.Contains("User 5", review.Summary);
+        Assert.Contains(ShareText.Acknowledgement, review.Summary);
+        Assert.Equal(["share", "setup", "--site", "one.localhost", "--users", "priya@example.com,sam@example.com", "--backup-now", "--acknowledge-data", "--yes", "--json", "--bench-dir", Bench], review.ApplyArgs(null!));
+        var env = new SecretEnvironment();
+        review.ConfigureEnv!(env);
+        Assert.Equal("0", env.Materialize()["BENCHBAR_NONINTERACTIVE"]);
+    }
+
+    [Fact]
+    public void ARefreshUsesTheLatestBackupWhenTheCopyIsNotMadeFromANewOne()
+    {
+        var request = new ShareSetupRequest("one.localhost", ["a"], false, true);
+        Assert.Equal(["--site", "one.localhost", "--users", "a", "--from", "latest", "--refresh"], request.Arguments);
+        Assert.Equal("Use the backup from 2 h ago", ShareSetupForm.SourceLabel(false, null, 7200));
+        Assert.Equal("Copy my site as it is now (about 4 min)", ShareSetupForm.SourceLabel(true, 4, null));
+        Assert.Equal("Use the newest backup", ShareSetupForm.SourceLabel(false, null, null)); // before a plan has read the backup's age
+    }
+
+    [Fact]
+    public async Task ARefusalOfTheUsersCallShowsItsErrorAndNotJustAnEmptyList()
+    {
+        var (model, runner) = Rig();
+        runner.On("share", "users").Print(Lines("share-lab-off.json")).Fail(2, "benchbar share is an experiment and it is off. lan-rooms is not available on windows yet");
+        await model.LoadUsersAsync("one.localhost", TestContext.Current.CancellationToken);
+        Assert.Empty(model.Users);
+        Assert.Equal("benchbar share is an experiment and it is off.", model.LastError);
+
+        var (ok, okRunner) = Rig();
+        okRunner.On("share", "users").Print(Lines("share-users.json"));
+        await ok.LoadUsersAsync("one.localhost", TestContext.Current.CancellationToken);
+        Assert.NotEmpty(ok.Users);
+        Assert.Null(ok.LastError);
+    }
+
+    [Fact]
+    public async Task AnUnknownRootPasswordOnApplyShowsTheCliSentenceAndWhatToDoInATerminal()
+    {
+        var (model, runner) = Rig();
+        runner.On("share", "setup").Print(Lines("share-setup-plan.json"));
+        var request = new ShareSetupRequest("one.localhost", ["priya@example.com"], true, false);
+        var plan = await model.PlanSetupAsync(request, TestContext.Current.CancellationToken);
+        var review = model.SetupReview(request, plan!);
+
+        var (client, scripted) = Scripted();
+        scripted.On(a => a.Contains("--dry-run")).Print(Lines("share-setup-plan.json"));
+        scripted.On(a => a.Contains("--acknowledge-data")).Print(Lines("share-setup-root-password.jsonl")).Fail(2);
+        var sheet = new PlanReviewModel(review, client);
+        await sheet.LoadAsync(TestContext.Current.CancellationToken);
+        await sheet.ConfirmAsync();
+        Assert.Equal(PlanPhase.Finished, sheet.Phase);
+        Assert.False(sheet.Result!.Ok);
+        Assert.Equal("The MariaDB root password is needed to make the copy; nothing was changed. " + ShareText.RootPasswordAdvice, sheet.Result.Error);
+        Assert.Contains("benchbar mariadb-password", sheet.Result.Error);
+        Assert.Contains("MARIADB_ROOT_PASSWORD", sheet.Result.Error);
+
+        // a CLI sentence that already names the variable, or any other failure, gets no advice
+        Assert.Null(ShareText.RootPasswordHelp(new CliStreamResult(2, null, "Pass MARIADB_ROOT_PASSWORD for the root password.", false, [])));
+        Assert.Null(ShareText.RootPasswordHelp(new CliStreamResult(1, null, "The MariaDB root password is needed.", false, [])));
+        Assert.Null(ShareText.RootPasswordHelp(new CliStreamResult(2, null, "benchbar share is an experiment and it is off.", false, [])));
+    }
+
+    [Fact]
+    public async Task WithoutALanGuardForThisPlatformNothingRunsAndTheSentenceSaysSo()
+    {
+        SynchronizationContext.SetSynchronizationContext(null);
+        var (client, runner) = Scripted();
+        var model = new ShareModel(client, Bench); // the default: no guard for this platform yet
+        Assert.False(model.LanGuardSupported);
+        Assert.False(await model.RunLanGuardAsync(false, TestContext.Current.CancellationToken));
+        Assert.False(await model.RunLanGuardAsync(true, TestContext.Current.CancellationToken));
+        Assert.Empty(runner.Runs);
+        Assert.Equal(ShareText.LanGuardUnavailable, model.LastError);
     }
 }
