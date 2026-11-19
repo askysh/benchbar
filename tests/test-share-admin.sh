@@ -320,7 +320,7 @@ assert_eq "1" "$CODE" "$OUT$ERR"
 assert_not_contains "$OUT$ERR" "482 913"
 assert_eq "" "$(ctl_ops)"
 cli code --bogus
-assert_eq "2" "$CODE" "$OUT$ERR"
+assert_eq "64" "$CODE" "$OUT$ERR"
 
 # ================================================================ the invite (the second exception that carries the code)
 export FL_ROUTE="$ROOT/tests/mocks/bin/route" FL_IPCONFIG="$ROOT/tests/mocks/bin/ipconfig"
@@ -381,7 +381,7 @@ done
 cli invite --install-url
 assert_eq "1" "$CODE" "$OUT$ERR"
 cli invite --bogus
-assert_eq "2" "$CODE" "$OUT$ERR"
+assert_eq "64" "$CODE" "$OUT$ERR"
 # refused for agents and scripts before the socket is asked; nothing carries the code
 ctl_reset
 cli invite --for-agent
