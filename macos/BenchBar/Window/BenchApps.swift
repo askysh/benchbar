@@ -8,6 +8,9 @@ struct BenchApps: View {
     let bench: BenchModel
     @State private var adding = false
     @State private var updating: AppInfo?
+    @State private var resumingUpdate: PendingOperation?
+    @State private var resumingAdd: PendingOperation?
+    @State private var discarding: PendingOperation?
 
     private var busy: Bool { !store.canChange(bench) }
     private var siteNames: [String] { bench.siteRows.map(\.name) }
@@ -15,6 +18,11 @@ struct BenchApps: View {
     var body: some View {
         let list = workbench.apps[bench.path]
         Form {
+            if !bench.pendingOperations.isEmpty {
+                PendingOperationsSection(operations: bench.pendingOperations, busy: busy) { operation in
+                    if operation.isUpdate { resumingUpdate = operation } else { resumingAdd = operation }
+                } discard: { discarding = $0 }
+            }
             Section {
                 if let list {
                     ForEach(list.apps) { app in row(app, sitesKnown: list.sitesKnown) }
@@ -66,7 +74,23 @@ struct BenchApps: View {
             AddAppSheet(workbench: workbench, bench: bench, sites: siteNames) { adding = false }
         }
         .sheet(item: $updating) { app in
-            UpdateAppSheet(workbench: workbench, bench: bench, app: app) { updating = nil }
+            UpdateAppSheet(workbench: workbench, bench: bench, app: app.name) { updating = nil }
+        }
+        .sheet(item: $resumingUpdate) { operation in
+            UpdateAppSheet(workbench: workbench, bench: bench, app: operation.app) { resumingUpdate = nil }
+        }
+        .sheet(item: $resumingAdd) { operation in
+            AddAppSheet(workbench: workbench, bench: bench, sites: siteNames, start: .init(source: operation.app)) { resumingAdd = nil }
+        }
+        .alert("Drop the record of \(discarding?.app ?? "")?", isPresented: Binding(get: { discarding != nil }, set: { if !$0 { discarding = nil } })) {
+            Button("Drop the Record", role: .destructive) {
+                guard let operation = discarding else { return }
+                discarding = nil
+                Task { await workbench.discardPending(operation, on: bench) }
+            }
+            Button("Cancel", role: .cancel) { discarding = nil }
+        } message: {
+            Text(discarding.map(PendingText.discardMessage) ?? "")
         }
     }
 
@@ -243,21 +267,26 @@ struct AddAppSheet: View {
 struct UpdateAppSheet: View {
     let workbench: Workbench
     let bench: BenchModel
-    let app: AppInfo
+    let app: String
     let close: () -> Void
     @State private var plan: AppUpdatePlan?
     @State private var error: String?
 
     private var phase: SheetPhase {
-        if let error { return .failed(error, title: "No changelog for \(app.name)") }
+        if let error { return .failed(error, title: "No changelog for \(app)") }
         guard let plan else { return .loading("Fetching the changes…") }
-        return plan.isUpToDate ? .done(.success("\(app.name) is up to date on \(plan.branch ?? "its branch").")) : .ready
+        return plan.isUpToDate ? .done(.success("\(app) is up to date on \(plan.branch ?? "its branch").")) : .ready
     }
 
     var body: some View {
-        SheetScaffold("Update \(app.name)",
-                      explanation: "Shows the new commits and the steps before anything changes.",
+        SheetScaffold("\(plan?.pending == nil ? "Update" : "Finish the Update of") \(app)",
+                      explanation: plan?.pending == nil
+                          ? "Shows the new commits and the steps before anything changes."
+                          : "An earlier update stopped part way. Only the steps that are left run.",
                       phase: phase) {
+            if let pending = plan?.pending {
+                SheetOutcome(symbol: "exclamationmark.triangle.fill", tint: .orange, title: pending.title, detail: pending.detail)
+            }
             if let plan, !plan.isUpToDate {
                 Text("\(plan.commitsTotal) new commit\(plan.commitsTotal == 1 ? "" : "s") on \(plan.branch ?? "the branch"):")
                     .font(.callout)
@@ -278,16 +307,16 @@ struct UpdateAppSheet: View {
                         Label(step.name, systemImage: "circle").font(.callout)
                     }
                 }
-                if !plan.sites.isEmpty {
+                if !plan.sites.isEmpty && plan.pending == nil {
                     SheetNote("Each site is backed up before it is migrated: \(plan.sites.joined(separator: ", ")).")
                 }
             }
         } actions: {
             if let plan, !plan.isUpToDate {
                 CancelButton(action: close)
-                Button("Update") {
+                Button(plan.pending == nil ? "Update" : "Finish Update") {
                     close()
-                    Task { await workbench.updateApp(app.name, on: bench) }
+                    Task { await workbench.updateApp(app, on: bench) }
                 }
                 .keyboardShortcut(.defaultAction)
             } else if plan == nil && error == nil {
@@ -297,7 +326,7 @@ struct UpdateAppSheet: View {
             }
         }
         .task {
-            switch await workbench.updatePlan(app.name, on: bench) {
+            switch await workbench.updatePlan(app, on: bench) {
             case .success(let p): plan = p
             case .failure(let e): error = e.message
             }
