@@ -63,16 +63,29 @@ func (in *integration) cmd(args ...string) *exec.Cmd {
 
 func (in *integration) run(stdin string, args ...string) (stdout, stderr string, code int) {
 	in.t.Helper()
+	out, errb, code := in.runBytes([]byte(stdin), args...)
+	return string(out), string(errb), code
+}
+
+// runBytes is run for binary input and output. A run that takes more than
+// three minutes is killed, so a hung hop fails the test and not the job.
+func (in *integration) runBytes(stdin []byte, args ...string) (stdout, stderr []byte, code int) {
+	in.t.Helper()
 	cmd := in.cmd(args...)
 	var out, errb bytes.Buffer
-	cmd.Stdin, cmd.Stdout, cmd.Stderr = strings.NewReader(stdin), &out, &errb
-	err := cmd.Run()
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = bytes.NewReader(stdin), &out, &errb
+	if err := cmd.Start(); err != nil {
+		in.t.Fatal(err)
+	}
+	timer := time.AfterFunc(3*time.Minute, func() { cmd.Process.Kill() })
+	defer timer.Stop()
+	err := cmd.Wait()
 	if ee, ok := err.(*exec.ExitError); ok {
 		code = ee.ExitCode()
 	} else if err != nil {
 		in.t.Fatal(err)
 	}
-	return out.String(), errb.String(), code
+	return out.Bytes(), errb.Bytes(), code
 }
 
 func TestIntegrationStatusJSON(t *testing.T) {
@@ -107,18 +120,72 @@ func TestIntegrationExitCodesThroughTheRealHop(t *testing.T) {
 }
 
 func TestIntegrationQuotingThroughTheRealWSL(t *testing.T) {
-	in := newIntegration(t, "/usr/bin/printf")
-	out, errs, code := in.run("", append([]string{`%s\n`}, trickyArgs...)...)
+	t.Run("tricky arguments", func(t *testing.T) {
+		in := newIntegration(t, "/usr/bin/printf")
+		out, errs, code := in.run("", append([]string{`%s\n`}, trickyArgs...)...)
+		if code != 0 {
+			t.Fatalf("exit %d, stderr %q", code, errs)
+		}
+		got := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
+		if len(got) != len(trickyArgs) {
+			t.Fatalf("got %d lines, want %d:\n%q", len(got), len(trickyArgs), out)
+		}
+		for i, want := range trickyArgs {
+			if got[i] != want {
+				t.Errorf("arg %d: got %q want %q", i, got[i], want)
+			}
+		}
+	})
+
+	// A newline, carriage return or tab inside an argument cannot be told
+	// from a separator when printf ends each argument with a newline, so
+	// these end each argument with a NUL byte.
+	t.Run("newline, carriage return and tab", func(t *testing.T) {
+		in := newIntegration(t, "/usr/bin/printf")
+		assertArgsRoundTrip(t, in, controlArgs)
+	})
+
+	// CreateProcess takes 32767 UTF-16 units. wsl.exe also gets the shim's
+	// wrapper (about 600) and the CLI path, so 30000 of arguments is close to
+	// the limit and still under it.
+	t.Run("a command line near 32 KB", func(t *testing.T) {
+		in := newIntegration(t, "/usr/bin/printf")
+		args := longArgs()
+		assertArgsRoundTrip(t, in, args)
+	})
+
+	t.Run("1 MB of binary on stdin through cat", func(t *testing.T) {
+		in := newIntegration(t, "/bin/cat")
+		data := binaryPayload(1 << 20)
+		out, errs, code := in.runBytes(data)
+		if code != 0 {
+			t.Fatalf("exit %d, stderr %q", code, errs)
+		}
+		if !bytes.Equal(out, data) {
+			i := 0
+			for i < len(out) && i < len(data) && out[i] == data[i] {
+				i++
+			}
+			t.Errorf("stdout is %d bytes, want %d; first difference at byte %d", len(out), len(data), i)
+		}
+	})
+}
+
+// assertArgsRoundTrip passes args to printf, which writes each one followed
+// by a NUL byte, and compares what came back.
+func assertArgsRoundTrip(t *testing.T, in *integration, args []string) {
+	t.Helper()
+	out, errs, code := in.runBytes(nil, append([]string{`%s\0`}, args...)...)
 	if code != 0 {
 		t.Fatalf("exit %d, stderr %q", code, errs)
 	}
-	got := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
-	if len(got) != len(trickyArgs) {
-		t.Fatalf("got %d lines, want %d:\n%q", len(got), len(trickyArgs), out)
+	got := strings.Split(strings.TrimSuffix(string(out), "\x00"), "\x00")
+	if len(got) != len(args) {
+		t.Fatalf("got %d arguments, want %d (output %d bytes)", len(got), len(args), len(out))
 	}
-	for i, want := range trickyArgs {
+	for i, want := range args {
 		if got[i] != want {
-			t.Errorf("arg %d: got %q want %q", i, got[i], want)
+			t.Errorf("arg %d: got %.80q want %.80q (%d and %d bytes)", i, got[i], want, len(got[i]), len(want))
 		}
 	}
 }
