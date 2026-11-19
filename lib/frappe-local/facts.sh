@@ -45,7 +45,11 @@ fl_facts_begin() {
 fl_facts_end() {
   fl_par_stop
   if [[ -n "$FL_FACTS_WAKE" ]]; then exec 9<&- 2>/dev/null || true; FL_FACTS_WAKE=""; fi
-  [[ -z "$FL_FACTS_DIR" ]] || rm -rf "$FL_FACTS_DIR"
+  # a stray writer (a process that left its group) can still add a file while
+  # rm walks the folder: a second pass takes it, as it ends within a moment
+  if [[ -n "$FL_FACTS_DIR" ]]; then
+    rm -rf "$FL_FACTS_DIR" 2>/dev/null || { sleep 0.1; rm -rf "$FL_FACTS_DIR" 2>/dev/null; } || true
+  fi
   FL_FACTS_DIR=""
   FL_PAR_PIDS=()
   return 0
@@ -141,8 +145,23 @@ fl_par_add() { FL_PAR_PIDS+=("$1"); }
 # no setsid; a job started under job control gets one), so one kill of the
 # group reaches the job's children too (brew's ruby, tr, git). The group stays
 # after set +m. A job started inside a job is left in the job's group.
-fl_par_group_on() { [[ -n "$FL_IN_JOB" ]] || set -m; }
-fl_par_group_off() { [[ -n "$FL_IN_JOB" ]] || set +m; }
+#
+# The two also bracket the moment a job is forked but its pid is not kept yet:
+# a stop signal that lands there would find no job to stop, and the job would
+# write into the folder fl_facts_end is deleting (a folder left behind, a
+# child left running). fl_on_signal (run.sh) leaves such a signal in
+# FL_SIG_DEFERRED; fl_par_group_off sends it again once the pid is kept.
+FL_PAR_STARTING=""
+FL_SIG_DEFERRED=""
+fl_par_group_on() { FL_PAR_STARTING=1; [[ -n "$FL_IN_JOB" ]] || set -m; }
+fl_par_group_off() {
+  local sig="$FL_SIG_DEFERRED"
+  [[ -n "$FL_IN_JOB" ]] || set +m
+  FL_PAR_STARTING=""
+  FL_SIG_DEFERRED=""
+  if [[ -n "$sig" ]]; then kill -s "$sig" "$$" 2>/dev/null || true; fi
+  return 0
+}
 
 # fl_par_stop: TERM to the group of every job of this run (and of the warming
 # of the apps' git), KILL to what is left after a second, and a wait for all
