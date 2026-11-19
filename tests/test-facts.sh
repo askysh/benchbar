@@ -57,9 +57,11 @@ add_listener 8000 4101 python3 127.0.0.1
 run_fm service --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 rows='"\n".join("|".join([c["id"], c["level"], c["message"], str(c["fix_command"]), str(c["action"])]) for c in d["checks"])'
+# a temp folder of their own: other tests running in parallel share /tmp
+OWN_TMP="$TMP_DIR/own-tmp"; mkdir -p "$OWN_TMP"
 set +e
-FL_DOCTOR_JOBS=1 "$FM" doctor --json --bench-dir "$BENCH" >"$TMP_DIR/serial.json" 2>/dev/null
-FL_DOCTOR_JOBS=6 "$FM" doctor --json --bench-dir "$BENCH" >"$TMP_DIR/parallel.json" 2>/dev/null
+TMPDIR="$OWN_TMP" FL_DOCTOR_JOBS=1 "$FM" doctor --json --bench-dir "$BENCH" >"$TMP_DIR/serial.json" 2>/dev/null
+TMPDIR="$OWN_TMP" FL_DOCTOR_JOBS=6 "$FM" doctor --json --bench-dir "$BENCH" >"$TMP_DIR/parallel.json" 2>/dev/null
 set -e
 serial="$(jget "$TMP_DIR/serial.json" "$rows")"
 parallel="$(jget "$TMP_DIR/parallel.json" "$rows")"
@@ -69,7 +71,7 @@ assert_eq "$serial" "$parallel" "(the parallel doctor differs from the serial on
 assert_eq "$(jget "$TMP_DIR/serial.json" 'd["summary"]')" "$(jget "$TMP_DIR/parallel.json" 'd["summary"]')"
 
 # ---- doctor leaves no folder of kept answers behind
-left="$(find "${TMPDIR:-/tmp}" -maxdepth 1 -name 'benchbar-facts.*' -newer "$TMP_DIR/serial.json" 2>/dev/null | wc -l | tr -d ' ')"
+left="$(find "$OWN_TMP" -maxdepth 1 -name 'benchbar-facts.*' 2>/dev/null | wc -l | tr -d ' ')"
 assert_eq "0" "$left"
 
 # ---- the folder of a run is the run's own: one named in the environment is never deleted
