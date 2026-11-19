@@ -33,11 +33,13 @@ FL_LOCK_MAIN=""
 FL_LOCK_LEVEL=""
 
 # fl__lock_start_v VAR PID: when the process started ("Thu Nov 19 10:00:00 2026", as ps
-# prints it), nothing for a process that is gone. A pid alone is not an identity: after a
-# crash the number comes round again and any live process can have it.
+# prints it, in UTC), nothing for a process that is gone. A pid alone is not an identity: after
+# a crash the number comes round again and any live process can have it. ps prints local time:
+# TZ=UTC keeps a time zone or DST change (or another TZ in a second shell) from making the
+# live owner's start time differ from the one the lock recorded.
 fl__lock_start_v() {
   local __s
-  __s="$(LC_ALL=C ps -o lstart= -p "$2" 2>/dev/null)" || __s=""
+  __s="$(TZ=UTC LC_ALL=C ps -o lstart= -p "$2" 2>/dev/null)" || __s=""
   __s="${__s//  / }"
   printf -v "$1" '%s' "${__s# }"
 }

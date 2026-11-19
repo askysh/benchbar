@@ -44,7 +44,7 @@ app_at() {
 # ---- --help lists it; its own help
 run_fm --help; assert_contains "$OUT" "self-update"
 run_fm self-update --help; assert_eq "0" "$CODE"; assert_contains "$OUT" "never runs"
-run_fm self-update --bogus; assert_eq "2" "$CODE"; assert_contains "$OUT" "Unknown option for self-update: --bogus"
+run_fm self-update --bogus; assert_eq "64" "$CODE"; assert_contains "$OUT" "Unknown option for self-update: --bogus"
 
 # ---- up to date: nothing runs
 release "$VER"

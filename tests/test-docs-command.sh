@@ -65,7 +65,7 @@ run_fm docs --help; assert_eq "0" "$CODE"
 assert_contains "$OUT" "Usage: benchbar docs [TOPIC]"
 assert_contains "$OUT" "quick-start, start"
 run_fm docs a b; assert_eq "1" "$CODE"; assert_contains "$OUT" "one topic"
-run_fm docs --bogus; assert_eq "2" "$CODE"; assert_contains "$OUT" "Unknown option for docs: --bogus"
+run_fm docs --bogus; assert_eq "64" "$CODE"; assert_contains "$OUT" "Unknown option for docs: --bogus"
 
 # a failing open says so
 MOCK_OPEN_EXIT=1 MOCK_CURL_CODE=200 run_fm docs; assert_eq "1" "$CODE"; assert_contains "$OUT" "could not open"

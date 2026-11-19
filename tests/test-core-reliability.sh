@@ -156,6 +156,17 @@ assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "Another benchbar run is ac
 rm -rf "$LOCK"
 # the lock records the start time of its holder
 sh_lib 'fl_lock_acquire "$1"; [[ -s "$1/pstart" ]] && printf "pstart ok"' "$LOCK" >"$TMP_DIR/o" 2>&1; assert_contains "$(cat "$TMP_DIR/o")" "pstart ok"
+# the start time does not depend on the caller's time zone: a lock taken in one zone still names
+# its live owner after the zone (or DST) changes, so a live run is never reclaimed as stale
+T_NY="$(TZ=America/New_York sh_lib 'fl__lock_start_v s "$1"; printf "%s" "$s"' "$HOLDER")"
+T_IN="$(TZ=Asia/Kolkata sh_lib 'fl__lock_start_v s "$1"; printf "%s" "$s"' "$HOLDER")"
+[[ -n "$T_NY" ]] || fail "no start time for the live holder"
+assert_eq "$T_NY" "$T_IN" "(the start time must not follow TZ)"
+mkdir -p "$LOCK"; printf '%s\n' "$HOLDER" >"$LOCK/pid"
+TZ=America/New_York sh_lib 'fl__lock_start_v s "$2"; printf "%s" "$s" >"$1/pstart"' "$LOCK" "$HOLDER"
+set +e; OUT="$(TZ=Asia/Kolkata FL_LOCK_WAIT_SECS=0 sh_lib 'fl_lock_acquire "$1"' "$LOCK" 2>&1)"; CODE=$?; set -e
+assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "Another benchbar run is active (pid ${HOLDER})"
+rm -rf "$LOCK"
 kill -KILL "$HOLDER"; wait "$HOLDER" 2>/dev/null || true
 # a state folder that is a file: the message names that, not a busy lock
 : >"$TMP_DIR/afile"

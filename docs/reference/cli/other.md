@@ -457,6 +457,6 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 |---|---|---|
 | `list` | `BENCHBAR_LOAD_ALL` | Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load). |
 | `where` | `BENCHBAR_LOAD_ALL` | Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load). |
-| `commands` | `BENCHBAR_LENIENT_FLAGS` | Applies to every command: 1 turns the error for an unknown option (exit 2) back into a warning on stderr, as before 0.9.0, for a script that passed options a command never read. Without it a typo of --dry-run next to --yes can no longer run for real. |
+| `commands` | `BENCHBAR_LENIENT_FLAGS` | Applies to every command: 1 turns the error for an unknown option (exit 64) back into a warning on stderr, as before 0.9.0, for a script that passed options a command never read. Without it a typo of --dry-run next to --yes can no longer run for real. |
 | `commands` | `BENCHBAR_LOAD_ALL` | Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load). |
 <!-- /generated:cli-commands -->

@@ -440,7 +440,7 @@ Environment:
   BENCHBAR_SUDO=gui   root steps (wkhtmltopdf, /etc/hosts) ask in a macOS password dialog, not sudo
   BENCHBAR_SUDO=env   Linux: sudo steps use the password in BENCHBAR_SUDO_PASSWORD, no terminal needed
   BENCH_INIT_TIMEOUT_SECONDS   install: how long bench init may run (default 2700, 0 for no limit)
-  BENCHBAR_LENIENT_FLAGS=1     an unknown option is a warning, not an error (exit 2), as before 0.9.0
+  BENCHBAR_LENIENT_FLAGS=1     an unknown option is a warning, not an error (exit 64), as before 0.9.0
 
 Shell helpers (written to your shell rc by install or repair):
   benchup benchdown benchrestart benchstatus benchlogs benchfg benchwatch benchdoctor benchcd
@@ -460,11 +460,21 @@ fl_print_version() {
 }
 
 # fl_opt_value FLAG ARGC VALUE: a flag that takes a value has one, and the value is not the next
-# option (benchbar where --bench-dir --json took --json for the folder). Exit 2, like any usage error.
+# option (benchbar where --bench-dir --json took --json for the folder). Exit 64, error_id
+# missing_value, like any usage error (fl_usage_refuse; BENCHBAR_LENIENT_FLAGS does not cover it).
+# Callers are plain statements of the main loop, and fl_usage_refuse ends in exit: it never relies
+# on set -e, which bash switches off inside a function that an `if` or `||` calls.
 fl_opt_value() {
-  [[ "$2" -ge 2 && "$3" != -* ]] || fl_die "$1 needs a value." "Example: benchbar COMMAND $1 VALUE (or $1=VALUE). Run: benchbar --help" 2
+  local key="" usage=""
+  [[ "$2" -ge 2 && "$3" != -* ]] && return 0
+  if [[ -n "$COMMAND" ]]; then key="$(fl_cmd_key_for "$COMMAND" "${ARGS[0]:-}")" || key=""; fi
+  [[ -z "$key" ]] || fl_cmd_usage_v usage "$key"
+  fl_usage_refuse missing_value "$1 needs a value." "${usage:+Usage: ${usage}. }Example: benchbar ${key:-COMMAND} $1 VALUE (or $1=VALUE). Every flag: benchbar ${key:-COMMAND} --help" "$key"
 }
 
+# the command line as it came: a usage error (fl_usage_refuse) reads --json and --for-agent from
+# it, because the loop below may not have reached them yet
+FL_ORIG_ARGS=("$@")
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
     --bench-dir) fl_opt_value "$1" "$#" "${2-}"; OPT_BENCH_DIR="$2"; shift 2 ;;
@@ -508,7 +518,7 @@ while [[ "$#" -gt 0 ]]; do
     -h|--help) if [[ "$COMMAND" == "docs" || "$COMMAND" == "self-update" ]]; then ARGS+=("$1"); shift; else FL_WANT_HELP=1; shift; fi ;;
     --) shift; FL_ARGS_FLAGS_N="${#ARGS[@]}"; ARGS+=("$@"); break ;;
     -*)
-      if [[ -n "$COMMAND" ]]; then ARGS+=("$1"); shift; else fl_die "Unknown option: $1" "Run: benchbar --help" 2; fi ;;
+      if [[ -n "$COMMAND" ]]; then ARGS+=("$1"); shift; else fl_usage_refuse unknown_flag "Unknown option: $1" "Run: benchbar --help"; fi ;;
     *)
       if [[ -z "$COMMAND" ]]; then COMMAND="$1"; else ARGS+=("$1"); fi
       shift ;;
@@ -516,7 +526,7 @@ while [[ "$#" -gt 0 ]]; do
 done
 export FL_DRY_RUN
 # the options after the command are the command's own: each is in its entry of commands.sh,
-# else the run stops (exit 2) before anything is taken, started or written
+# else the run stops (exit 64) before anything is taken, started or written
 [[ "$FL_WANT_HELP" == "1" || -z "$COMMAND" ]] || fl_args_validate
 # the passwords stay shell variables of this process: the phase scripts get
 # them on their own command line below, no other child (brew, pip, npm,

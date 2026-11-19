@@ -137,7 +137,7 @@ cmd~mcp~benchbar mcp [--print-agents-md]~Model Context Protocol server on stdio 
 flag~mcp~--print-agents-md~~Print a snippet for a project's AGENTS.md or CLAUDE.md and exit.
 cmd~help~benchbar help~The global help text.~no~no~no~no~none
 cmd~commands~benchbar commands --json~This table: every command, flag and environment variable.~no~no~no~no~document
-env~commands~BENCHBAR_LENIENT_FLAGS~Applies to every command: 1 turns the error for an unknown option (exit 2) back into a warning on stderr, as before 0.9.0, for a script that passed options a command never read. Without it a typo of --dry-run next to --yes can no longer run for real.
+env~commands~BENCHBAR_LENIENT_FLAGS~Applies to every command: 1 turns the error for an unknown option (exit 64) back into a warning on stderr, as before 0.9.0, for a script that passed options a command never read. Without it a typo of --dry-run next to --yes can no longer run for real.
 env~commands~BENCHBAR_LOAD_ALL~Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
 cmd~ports~benchbar ports plan|setup|apply|check|mode ...~Port allocation for several benches.~no~no~no~no~none
 cmd~ports plan~benchbar ports plan [--json] -- PATH ...~Read only preview of the allocation and its approval token.~no~no~no~no~document
@@ -514,28 +514,83 @@ fl_cmd_flag_check() {
   [[ -z "$FL_BAD_FLAGS" ]]
 }
 
+# fl_usage_refuse ERROR_ID MESSAGE FIX [KEY]: a command line that cannot be read is a usage
+# error: exit 64 (EX_USAGE), never 2 (the MariaDB root password is unknown: the Windows tray
+# shows its password prompt for a 2 without a done line) and never 1 (the app's calls that
+# accept [0,1] would parse an empty output). It runs before the stream, the log and the lock,
+# so the JSON answer is built here, in the shape every other refusal has: a command that
+# changes things (or --jsonl) ends in one `done` line, a command that reads in one document
+# (schema_version, cli_version, exit, error_id, error, fix). Which one comes from the table
+# entry of KEY; the options are read from the original command line because the main loop may
+# not have reached them yet.
+FL_USAGE_EXIT=64
+# fl_cmd_usage_v VAR KEY: the usage line of the table entry KEY (empty when there is none)
+fl_cmd_usage_v() {
+  local __line __u=""
+  while IFS= read -r __line; do
+    case "$__line" in "cmd~${2}~"*) __u="${__line#cmd~"${2}"~}"; __u="${__u%%~*}"; break ;; esac
+  done <<<"$FL_CMD_TABLE"
+  printf -v "$1" '%s' "$__u"
+}
+fl_usage_refuse() {
+  local id="$1" msg="$2" fix="$3" key="${4:-}" a want_json=0 want_jsonl=0 want_agent=0 kind="" mut="" f
+  [[ "${OPT_JSON:-0}" != 1 ]] || want_json=1
+  [[ "${OPT_JSONL:-0}" != 1 ]] || want_jsonl=1
+  [[ "${OPT_FOR_AGENT:-0}" != 1 ]] || want_agent=1
+  for a in ${FL_ORIG_ARGS[@]+"${FL_ORIG_ARGS[@]}"}; do
+    case "$a" in
+      --) break ;;
+      --json) want_json=1 ;;
+      --jsonl) want_json=1; want_jsonl=1 ;;
+      --for-agent) want_agent=1 ;;
+    esac
+  done
+  if [[ -n "$key" ]]; then
+    fl_cmd_attr_v kind "$key" json
+    fl_cmd_attr_v mut "$key" mutating
+  fi
+  # a command with no JSON of its own prints text, as it always did
+  if [[ "$kind" == "none" ]]; then want_json=0; want_agent=0; fi
+  if [[ "$want_agent" == 1 ]]; then
+    want_json=1
+    [[ "$mut" != "yes" ]] || want_jsonl=1
+  fi
+  if [[ "$want_json" == 1 ]]; then
+    FL_ERROR_ID="$id"; FL_ERROR_FIX="$fix"
+    FL_DONE_NO_BENCH=1; FL_DONE_NO_STATE=1
+    fl_redact_url_v msg "$msg"
+    printf '[FAIL] %s\n%s\n' "$msg" "$fix" >&2
+    fl_done_fields_v f "$FL_USAGE_EXIT"
+    if [[ "$want_jsonl" == 1 || "$kind" == "stream" ]]; then
+      printf '{"schema_version":%d,"cli_version":"%s","event":"done",%s,"bench":null,"fix":%s,"log":"","error":%s}\n' \
+        "${FL_SCHEMA_VERSION:-1}" "${FL_VERSION:-0}" "$f" "$(fl_json_str "$fix")" "$(fl_json_str "$msg")"
+    else
+      printf '{"schema_version":%d,"cli_version":"%s",%s,"fix":%s,"error":%s}\n' \
+        "${FL_SCHEMA_VERSION:-1}" "${FL_VERSION:-0}" "$f" "$(fl_json_str "$fix")" "$(fl_json_str "$msg")"
+    fi
+    exit "$FL_USAGE_EXIT"
+  fi
+  fl_die "$msg" "$fix" "$FL_USAGE_EXIT"
+}
+
 # fl_args_validate: the dispatcher's check of the options after the command
 # (ARGS, or the part before a bare --; FL_ARGS_FLAGS_N is its length).
-# An unknown option is an error, exit 2, naming the option and the command's
+# An unknown option is a usage error, exit 64 (error_id unknown_flag), naming the option and the command's
 # usage line. BENCHBAR_LENIENT_FLAGS=1 turns the error into a warning on
 # stderr, the way every release before 0.9.0 behaved.
 fl_args_validate() {
-  local key usage line bad n="${FL_ARGS_FLAGS_N:--1}"
+  local key usage bad n="${FL_ARGS_FLAGS_N:--1}"
   [[ "${#ARGS[@]}" -gt 0 ]] || return 0
   key="$(fl_cmd_key_for "$COMMAND" "${ARGS[0]:-}")" || return 0
   if [[ "$n" -lt 0 || "$n" -gt "${#ARGS[@]}" ]]; then n="${#ARGS[@]}"; fi
   fl_cmd_flag_check "$key" "${ARGS[@]:0:$n}" && return 0
-  while IFS= read -r line; do
-    case "$line" in "cmd~${key}~"*) usage="${line#cmd~"${key}"~}"; usage="${usage%%~*}"; break ;; esac
-  done <<<"$FL_CMD_TABLE"
+  fl_cmd_usage_v usage "$key"
   if [[ "${BENCHBAR_LENIENT_FLAGS:-0}" == "1" ]]; then
     for bad in $FL_BAD_FLAGS; do
       printf 'Ignoring unknown option for %s: %s (BENCHBAR_LENIENT_FLAGS=1; without it this is an error)\n' "$key" "$bad" >&2
     done
     return 0
   fi
-  # a run that is asked for JSON prints JSON on stdout and nothing else: its refusal is text on stderr
-  if [[ "${OPT_JSON:-0}" == 1 || "${OPT_FOR_AGENT:-0}" == 1 ]]; then exec 1>&2; fi
   # the first one, as the other commands name it
-  fl_die "Unknown option for ${key}: ${FL_BAD_FLAGS%% *}" "Usage: ${usage}. Every flag: benchbar ${key} --help. A script that relied on unknown options being ignored: BENCHBAR_LENIENT_FLAGS=1 turns this error into a warning." 2
+  fl_usage_refuse unknown_flag "Unknown option for ${key}: ${FL_BAD_FLAGS%% *}" "Usage: ${usage}. Every flag: benchbar ${key} --help. A script that relied on unknown options being ignored: BENCHBAR_LENIENT_FLAGS=1 turns this error into a warning." "$key"
 }

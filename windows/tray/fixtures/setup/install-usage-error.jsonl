@@ -1,0 +1,1 @@
+{"schema_version":1,"cli_version":"0.9.0","event":"done","exit":64,"error_id":"unknown_flag","bench":null,"fix":"Usage: benchbar install [--yes] [--json]. Every flag: benchbar install --help","log":"","error":"Unknown option for install: --bogus","changed":[],"warnings":[],"next_actions":[],"state_after":null}

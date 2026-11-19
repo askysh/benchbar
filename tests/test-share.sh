@@ -117,7 +117,7 @@ assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "No user 'nobody@example.co
 setup --users "$USERS" --acknowledge-data --backup-now --from "$OLD" --bench-dir "$BENCH"
 assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "--backup-now and --from"
 setup --users "$USERS" --acknowledge-data --name "x" --bogus --bench-dir "$BENCH"
-assert_eq "2" "$CODE" "$OUT"; assert_contains "$OUT" "Unknown option for share setup: --bogus"
+assert_eq "64" "$CODE" "$OUT"; assert_contains "$OUT" "Unknown option for share setup: --bogus"
 # not enough disk: the plan's size_gb, twice the set
 printf '0' >"$MOCK_STATE/df_avail_kb"
 setup --users "$USERS" --acknowledge-data --bench-dir "$BENCH"

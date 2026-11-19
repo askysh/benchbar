@@ -734,7 +734,7 @@ done
 cli start --for
 assert_eq "1" "$CODE"; assert_contains "$OUT$ERR" "--for"
 cli start --bogus
-assert_eq "2" "$CODE"; assert_contains "$OUT$ERR" "Unknown option for share start: --bogus"
+assert_eq "64" "$CODE"; assert_contains "$OUT$ERR" "Unknown option for share start: --bogus"
 redis_down
 cli start
 assert_eq "1" "$CODE"; assert_contains "$OUT$ERR" "The bench is not running"
