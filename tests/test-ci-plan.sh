@@ -52,6 +52,9 @@ plan EVENT=pull_request FILES="windows/shim/main.go"
 assert_eq "true" "$(val shim)"; assert_eq "true" "$(val wsl)"; assert_eq "[]" "$(val linux_shards)"
 plan EVENT=pull_request FILES="windows/tray/App.xaml.cs"
 assert_eq "false" "$(val shim)"; assert_eq "[]" "$(val linux_shards)"
+# the CLI's env records: the shim must forward or exclude every name they document
+plan EVENT=pull_request FILES="lib/frappe-local/commands.sh"
+assert_eq "true" "$(val shim)"; assert_eq "true" "$(val wsl)"
 
 # ---- a path that needs macOS adds the macOS leg, with the Linux layer left out
 plan EVENT=pull_request FILES="lib/frappe-local/platform.sh"

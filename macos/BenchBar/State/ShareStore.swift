@@ -93,7 +93,10 @@ nonisolated struct ShareEventTracker: Sendable, Equatable {
 /// when sharing stops.
 @Observable
 final class ShareStore {
+    /// While the Sharing tab is on screen: the person watches people come and go.
     nonisolated static let pollInterval: Duration = .seconds(5)
+    /// While sharing with the tab hidden: only the notices (joined, left) wait on it.
+    nonisolated static let backgroundPollInterval: Duration = .seconds(15)
     nonisolated static let preflightInterval: TimeInterval = 60
 
     let bench: String
@@ -134,7 +137,7 @@ final class ShareStore {
     @ObservationIgnored private(set) var pollTask: Task<Void, Never>?
 
     init(bench: String, client: any ShareCLI, clock: @escaping () -> Date = Date.init,
-         sleeper: @escaping @Sendable (Duration) async -> Void = { try? await Task.sleep(for: $0) },
+         sleeper: @escaping @Sendable (Duration) async -> Void = { try? await Task.sleep(for: $0, tolerance: $0 / 5) },
          log: @escaping (String) -> Void = ShareStore.defaultLog) {
         self.bench = bench
         self.client = client
@@ -153,7 +156,10 @@ final class ShareStore {
     }
 
     var isSharing: Bool { status?.isOn == true }
+    var isSharingOrStarting: Bool { status?.isLive == true }
     var shouldPoll: Bool { tabVisible || status?.state == .on || status?.state == .starting }
+    /// The 5 second poll runs only while someone looks at the tab.
+    var currentPollInterval: Duration { tabVisible ? Self.pollInterval : Self.backgroundPollInterval }
 
     // MARK: polling
 
@@ -165,7 +171,7 @@ final class ShareStore {
             while let self, !Task.isCancelled {
                 await self.refresh()
                 guard self.shouldPoll else { break }
-                await self.sleeper(Self.pollInterval)
+                await self.sleeper(self.currentPollInterval)
             }
             self?.pollTask = nil
         }

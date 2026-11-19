@@ -18,7 +18,7 @@ summary() { awk '{ print ($1 == "exec") ? $2 : $1 }' "$MOCK_LOG" | sort | uniq -
 # Programs a mock starts are not logged (_mocklib.sh exports BENCHBAR_TEST_MOCK).
 SHIMS="$TMP_DIR/shims"
 mkdir -p "$SHIMS"
-for n in sed awk tr head tail cut sort uniq grep cat cksum basename dirname id uname shasum date readlink wc mktemp mv rm cp ls stat touch mkdir find xargs sleep python3 perl ruby ps sysctl df getconf hostname sw_vers; do
+for n in sed awk tr head tail cut sort uniq grep cat cksum basename dirname id uname shasum date readlink wc mktemp mv rm cp ls stat touch mkdir find xargs sleep mkfifo python3 perl ruby ps sysctl df getconf hostname sw_vers; do
   real="$(command -v "$n" 2>/dev/null)" || continue
   case "$real" in "$ROOT"/tests/mocks/*) continue ;; esac
   cat >"$SHIMS/$n" <<SHIM
@@ -65,11 +65,14 @@ run_fm service --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 export ADMIN_PASSWORD=admin MARIADB_ROOT_PASSWORD=root
 
-# the budgets: measured on macOS and Linux (the larger of the two), plus 10 percent
-cost "doctor" 327 "0 1" doctor --bench-dir "$BENCH"
-cost "doctor --json" 395 "0 1" doctor --json --bench-dir "$BENCH"
-cost "install --dry-run --yes" 519 "0" install --dry-run --yes --bench-dir "$HOME/fresh-bench" --site freshsite
-cost "adopt --dry-run --yes" 429 "0" adopt "$THIRD" --dry-run --yes
-cost "app list --json" 95 "0" app list --json --bench-dir "$BENCH"
+# the budgets: the larger count of macOS and of the Linux layer run on a Mac
+# (FL_PLATFORM=linux), plus 10 percent. doctor: 79 programs and doctor --json 82
+# (293 and 356 before issue 147 and 94 and 101 after its first part: listeners,
+# brew, launchctl, each git config and the receipts of brew are read once)
+cost "doctor" 87 "0 1" doctor --bench-dir "$BENCH"
+cost "doctor --json" 91 "0 1" doctor --json --bench-dir "$BENCH"
+cost "install --dry-run --yes" 213 "0" install --dry-run --yes --bench-dir "$HOME/fresh-bench" --site freshsite
+cost "adopt --dry-run --yes" 165 "0" adopt "$THIRD" --dry-run --yes
+cost "app list --json" 59 "0" app list --json --bench-dir "$BENCH"
 
 printf 'test-command-cost: ok\n'

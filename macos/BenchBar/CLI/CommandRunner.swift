@@ -72,8 +72,14 @@ extension CommandRunning {
 /// - The program is always called by absolute path, never looked up on PATH.
 /// - stdin is closed (no prompts can hang it), stdout and stderr are
 ///   collected up to 4 MB each.
-/// - A timeout cancels the task; swift-subprocess then sends SIGTERM, waits
-///   2 seconds, and sends SIGKILL.
+/// - The child leads a process group of its own, and a timeout or a cancel
+///   signals the whole group: SIGTERM, then SIGKILL after 2 seconds. The CLI
+///   starts its own long commands in groups of their own and forwards TERM to
+///   them (benchbar, `fl_signal_traps_install`), so the TERM reaches them
+///   through the CLI; the group is what stops a grandchild of a plain script
+///   (a `git fetch` or `lsof` under a shell) that no trap knows.
+/// - A timeout throws `.timedOut`. A caller that is cancelled gets
+///   `.cancelled`, never a false "did not finish within N seconds".
 /// - Each process gets one `.info` line in the log (Log.cli), with the
 ///   command word only: the rest may hold paths or names.
 nonisolated struct SubprocessRunner: CommandRunning {
@@ -117,54 +123,21 @@ nonisolated struct SubprocessRunner: CommandRunning {
     ) async throws(CLIError) -> CommandOutput {
         let label = arguments.first ?? executable.lastPathComponent
         Self.log(label, qos)
-
-        do {
-            return try await withThrowingTaskGroup(of: CommandOutput.self) { group in
-                group.addTask {
-                    // PlatformOptions is not Sendable, so it is built inside the task
-                    var options = PlatformOptions()
-                    options.teardownSequence = [.gracefulShutDown(allowedDurationToNextStep: .seconds(2))]
-                    // utility: the child runs below the work a person waits for
-                    // (swift-subprocess sets only utility and background)
-                    options.qualityOfService = qos
-                    let overrides = Dictionary(uniqueKeysWithValues: Self.childEnvironment(environment, inherited: ProcessInfo.processInfo.environment).map {
-                        (Environment.Key(stringLiteral: $0.key), $0.value)
-                    })
-                    let result = try await Subprocess.run(
-                        .path(FilePath(executable.path)),
-                        arguments: Arguments(arguments),
-                        environment: .inherit.updating(overrides),
-                        platformOptions: options,
-                        output: .string(limit: Self.outputLimit),
-                        error: .string(limit: Self.outputLimit)
-                    )
-                    let code: Int32
-                    switch result.terminationStatus {
-                    case .exited(let value): code = value
-                    case .signaled(let signal): code = 128 + signal
-                    }
-                    return CommandOutput(
-                        exitCode: code,
-                        stdout: result.standardOutput,
-                        stderr: result.standardError
-                    )
-                }
-                group.addTask {
-                    try await Task.sleep(for: timeout)
-                    throw CLIError.timedOut(command: label, seconds: Int(timeout.components.seconds))
-                }
-                guard let first = try await group.next() else {
-                    throw CLIError.launchFailed(detail: "no result")
-                }
-                group.cancelAll()
-                return first
-            }
-        } catch let error as CLIError {
-            throw error
-        } catch is CancellationError {
-            throw .timedOut(command: label, seconds: Int(timeout.components.seconds))
-        } catch {
-            throw .launchFailed(detail: String(describing: error))
+        return try await Self.race(label: label, timeout: timeout) {
+            // PlatformOptions is not Sendable, so it is built inside the task
+            let result = try await Subprocess.run(
+                .path(FilePath(executable.path)),
+                arguments: Arguments(arguments),
+                environment: Self.environment(environment),
+                platformOptions: Self.platformOptions(qos: qos),
+                output: .string(limit: Self.outputLimit),
+                error: .string(limit: Self.outputLimit)
+            )
+            return CommandOutput(
+                exitCode: Self.code(result.terminationStatus),
+                stdout: result.standardOutput,
+                stderr: result.standardError
+            )
         }
     }
 
@@ -177,34 +150,37 @@ nonisolated struct SubprocessRunner: CommandRunning {
     ) async throws(CLIError) -> Int32 {
         let label = arguments.first ?? executable.lastPathComponent
         Self.log(label, .default)
-        do {
-            return try await withThrowingTaskGroup(of: Int32.self) { group in
-                group.addTask {
-                    var options = PlatformOptions()
-                    options.teardownSequence = [.gracefulShutDown(allowedDurationToNextStep: .seconds(2))]
-                    let overrides = Dictionary(uniqueKeysWithValues: Self.childEnvironment(environment, inherited: ProcessInfo.processInfo.environment).map {
-                        (Environment.Key(stringLiteral: $0.key), $0.value)
-                    })
-                    let result = try await Subprocess.run(
-                        .path(FilePath(executable.path)),
-                        arguments: Arguments(arguments),
-                        environment: .inherit.updating(overrides),
-                        platformOptions: options,
-                        input: .none,
-                        output: .sequence,
-                        error: .discarded
-                    ) { execution in
-                        // strings() splits on line breaks and buffers a partial
-                        // line (up to 128 KiB), so every call gets one whole event
-                        for try await line in execution.standardOutput.strings() {
-                            onLine(line)
-                        }
-                    }
-                    switch result.terminationStatus {
-                    case .exited(let value): return value
-                    case .signaled(let signal): return 128 + signal
-                    }
+        return try await Self.race(label: label, timeout: timeout) {
+            let result = try await Subprocess.run(
+                .path(FilePath(executable.path)),
+                arguments: Arguments(arguments),
+                environment: Self.environment(environment),
+                platformOptions: Self.platformOptions(qos: .default),
+                input: .none,
+                output: .sequence,
+                error: .discarded
+            ) { execution in
+                // strings() splits on line breaks and buffers a partial
+                // line (up to 128 KiB), so every call gets one whole event
+                for try await line in execution.standardOutput.strings() {
+                    onLine(line)
                 }
+            }
+            return Self.code(result.terminationStatus)
+        }
+    }
+
+    /// The work against a timer. The first to finish wins and the other is
+    /// cancelled, which makes swift-subprocess tear the child's group down.
+    /// A caller that was cancelled is told so, apart from a timeout.
+    private static func race<T: Sendable>(
+        label: String,
+        timeout: Duration,
+        _ work: @escaping @Sendable () async throws -> T
+    ) async throws(CLIError) -> T {
+        do {
+            return try await withThrowingTaskGroup(of: T.self) { group in
+                group.addTask { try await work() }
                 group.addTask {
                     try await Task.sleep(for: timeout)
                     throw CLIError.timedOut(command: label, seconds: Int(timeout.components.seconds))
@@ -213,14 +189,44 @@ nonisolated struct SubprocessRunner: CommandRunning {
                     throw CLIError.launchFailed(detail: "no result")
                 }
                 group.cancelAll()
+                // cancelled while the child ran: its group was stopped, and what
+                // came back is what a signal leaves, not an answer
+                if Task.isCancelled { throw CLIError.cancelled(command: label) }
                 return first
             }
         } catch let error as CLIError {
             throw error
         } catch is CancellationError {
-            throw .timedOut(command: label, seconds: Int(timeout.components.seconds))
+            throw .cancelled(command: label)
         } catch {
             throw .launchFailed(detail: String(describing: error))
+        }
+    }
+
+    private static func platformOptions(qos: QualityOfService) -> PlatformOptions {
+        var options = PlatformOptions()
+        // the child leads a new process group (setpgid(0, 0)): the teardown
+        // signals it as a whole, and never the app's own group
+        options.processGroupID = 0
+        options.teardownSequence = [.gracefulShutDown(toProcessGroup: true, allowedDurationToNextStep: .seconds(2))]
+        // utility: the child runs below the work a person waits for
+        // (swift-subprocess sets only utility and background)
+        options.qualityOfService = qos
+        return options
+    }
+
+    /// The call's own variables, and the removal of the stray BENCHBAR_* and FL_*
+    /// ones of the app's environment (`childEnvironment`, MAC-14).
+    private static func environment(_ own: [String: String]) -> Environment {
+        .inherit.updating(Dictionary(uniqueKeysWithValues: childEnvironment(own, inherited: ProcessInfo.processInfo.environment).map {
+            (Environment.Key(stringLiteral: $0.key), $0.value)
+        }))
+    }
+
+    private static func code(_ status: TerminationStatus) -> Int32 {
+        switch status {
+        case .exited(let value): return value
+        case .signaled(let signal): return 128 + signal
         }
     }
 

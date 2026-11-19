@@ -9,6 +9,8 @@ nonisolated enum Log {
     static let cli = logger("cli")
     /// When and why the store refreshes, samples and switches modes.
     static let poll = logger("poll")
+    /// App level events: a second copy handing over, the CLI link.
+    static let app = logger("app")
 
     /// Silent in the test host: it is a BenchBar process with the same
     /// subsystem, and its fake CLI calls would count next to a running app.

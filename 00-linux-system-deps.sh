@@ -83,7 +83,7 @@ Environment:
 
 Options:
   -y, --yes            Do not ask; confirmations are accepted (sudo still asks for its password)
-  --profile VALUE      Use release profile (default: v15-lts; the only one on Linux so far)
+  --profile VALUE      Use release profile (default: v15-lts; v16-lts and team profiles too)
   --list-profiles      Print known profiles and exit
   --check-updates      Check remote Frappe/ERPNext version branches
   --offline            Skip network checks and use cached update info
@@ -117,6 +117,8 @@ fi
 
 [[ -n "$PROFILE" ]] || PROFILE="$(fl_default_profile)"
 fl_load_profile "$PROFILE"
+# a server already running inside the profile's range is the one used, as on the Mac
+fl_mariadb_prefer_running
 
 fl_section "PROFILE"
 fl_linux_profile_require

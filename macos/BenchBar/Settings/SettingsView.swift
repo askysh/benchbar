@@ -98,7 +98,10 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Toggle(isOn: Binding(
                             get: { entry.enabled },
-                            set: { on in Task { try? await labs.set(name: entry.name, on: on) } })) {
+                            set: { on in
+                                if !on, !Self.confirmLabOff(entry) { return }
+                                Task { try? await labs.set(name: entry.name, on: on) }
+                            })) {
                             Text(entry.title)
                             Text(entry.description)
                         }
@@ -125,6 +128,16 @@ struct SettingsView: View {
         } footer: {
             Text("Experiments can change or disappear. Turning one off stops what it started.")
         }
+    }
+
+    /// Turning lan-rooms off ends a live room: asks first, with what ends (the Sharing tab's Stop asks the same).
+    private static func confirmLabOff(_ entry: LabEntry) -> Bool {
+        guard entry.name == Lab.lanRooms.rawValue else { return true }
+        let sharing = ShareCenter.shared.stores.values.filter(\.isSharingOrStarting)
+        let online = sharing.reduce(0) { $0 + ($1.status?.devicesOnline ?? 0) }
+        let joined = GuestSlot.shared.store?.runningForwarderCount ?? 0
+        guard let ask = SharePresentation.labOffConfirm(hosted: sharing.count, online: online, joined: joined) else { return true }
+        return ShareConfirm.ask(ask.message, detail: ask.detail, button: "Turn off")
     }
 
     // MARK: menu bar

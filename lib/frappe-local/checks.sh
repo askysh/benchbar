@@ -108,11 +108,54 @@ fl_check_label() {
 
 chk__set() { CHK_STATUS="$1"; CHK_MSG="$2"; CHK_FIX="${3:-}"; CHK_ACTION="${4:-}"; }
 
+# fl_brew_cellar_v VAR: Homebrew's Cellar folder (what "brew --prefix" says,
+# plus /Cellar, read from where the brew on PATH lives: no program), or
+# nothing when it is not there. brew's own answers about what is installed come
+# from the folders of the Cellar, so reading them is the same answer for the
+# time of one brew start.
+fl_brew_cellar_v() {
+  local __b __c=""
+  __b="$(command -v brew 2>/dev/null)" || __b=""
+  if [[ "$__b" == */bin/brew && -d "${__b%/bin/brew}/Cellar" ]]; then __c="${__b%/bin/brew}/Cellar"; fi
+  printf -v "$1" '%s' "$__c"
+}
+
+# fl_brew_has FORMULA: FORMULA is installed: a version folder in its Cellar
+# folder. Without a Cellar (a test's brew) one "brew list --formula
+# --versions" for every formula, kept for the doctor run (facts.sh).
+fl_brew_has() {
+  local list cellar d
+  fl_brew_cellar_v cellar
+  if [[ -n "$cellar" ]]; then
+    for d in "${cellar}/${1}"/*/; do [[ -d "$d" ]] && return 0; done
+    return 1
+  fi
+  fl_memo_v list brew-versions brew list --formula --versions || true
+  [[ $'\n'"$list" == *$'\n'"$1 "* ]]
+}
+
+# fl_brew_on_request FORMULA: FORMULA was installed on request, not as a
+# dependency (brew list --installed-on-request): the receipt of its newest
+# version says so. Without a Cellar, brew's own list.
+fl_brew_on_request() {
+  local cellar d r="" receipt requested
+  fl_brew_cellar_v cellar
+  if [[ -n "$cellar" ]]; then
+    for d in "${cellar}/${1}"/*/INSTALL_RECEIPT.json; do [[ -f "$d" ]] && r="$d"; done
+    [[ -n "$r" ]] || return 1
+    IFS= read -r -d '' receipt <"$r" || true
+    [[ "$receipt" =~ \"installed_on_request\":[[:space:]]*true ]]
+    return
+  fi
+  fl_memo_v requested brew-on-request brew list --formula --installed-on-request || true
+  fl_has_line "$requested" "$1"
+}
+
 chk_brew() {
   local missing="" f
   command -v brew >/dev/null 2>&1 || { chk__set fail "Homebrew is not installed" "Install from https://brew.sh"; return 0; }
   for f in "$FL_PYTHON_FORMULA" "$FL_NODE_FORMULA" "$FL_MARIADB_FORMULA" redis; do
-    brew list --formula --versions "$f" >/dev/null 2>&1 || missing="${missing} ${f}"
+    fl_brew_has "$f" || missing="${missing} ${f}"
   done
   if [[ "$missing" == " ${FL_NODE_FORMULA}" ]]; then
     # only the Node formula: a profile that moved to a newer Node (v15-lts
@@ -131,7 +174,7 @@ chk_brew() {
   fi
   # build formulae: mysqlclient (a frappe v16 dependency) compiles against them
   for f in $FL_BUILD_FORMULAE; do
-    brew list --formula --versions "$f" >/dev/null 2>&1 || missing="${missing} ${f}"
+    fl_brew_has "$f" || missing="${missing} ${f}"
   done
   if [[ -n "$missing" ]]; then
     chk__set warn "${FL_PYTHON_FORMULA}, ${FL_NODE_FORMULA}, ${FL_MARIADB_FORMULA}, redis installed; missing build formulae:${missing} (needed to build mysqlclient for frappe v16)" "brew install${missing}"
@@ -149,9 +192,13 @@ chk_brew() {
 chk_formula_dates() {
   local f days soon="" gone="" fix
   command -v brew >/dev/null 2>&1 || { chk__set ok "Homebrew is not installed; nothing to date"; return 0; }
-  local deprecated disabled dep_date dis_date unknown=""
+  local deprecated disabled dep_date dis_date unknown="" dates rest
+  # one brew info for the three (a start of brew costs a third of a second or more)
+  fl_memo_v rest formula-dates fl_brew_formulae_dates "$FL_PYTHON_FORMULA" "$FL_NODE_FORMULA" "$FL_MARIADB_FORMULA" || true
   for f in "$FL_PYTHON_FORMULA" "$FL_NODE_FORMULA" "$FL_MARIADB_FORMULA"; do
-    read -r deprecated disabled dep_date dis_date <<<"$(fl_brew_formula_dates "$f")"
+    dates="${rest%%$'\n'*}"
+    if [[ "$rest" == *$'\n'* ]]; then rest="${rest#*$'\n'}"; else rest=""; fi
+    read -r deprecated disabled dep_date dis_date <<<"$dates"
     if [[ "$deprecated" == "missing" ]]; then unknown="${unknown}${unknown:+, }${f}"; continue; fi
     days="$(fl_formula_disable_days_from "$deprecated" "$disabled" "$dis_date")"
     [[ -n "$days" ]] || continue
@@ -185,7 +232,7 @@ chk_python_leaves() {
   esac
   # installed on request, not "a leaf": brew leaves hides a formula another
   # formula depends on (python@3.14 under pipx or uv) even when it was asked for
-  if fl_has_line "$(brew list --formula --installed-on-request 2>/dev/null || true)" "$FL_PYTHON_FORMULA"; then
+  if fl_brew_on_request "$FL_PYTHON_FORMULA"; then
     chk__set ok "${FL_PYTHON_FORMULA} ${ver} is user-installed (safe from brew autoremove)"
   else
     chk__set warn "${FL_PYTHON_FORMULA} is only a dependency; brew autoremove could delete it" "brew tab --installed-on-request ${FL_PYTHON_FORMULA}" python_leaves
@@ -464,7 +511,7 @@ chk_helpers() {
   local rc status legacy recorded own=""
   rc="$(fl_rc_file)"
   status="$(fl_rc_block_status "$rc" "$FL_R_HELPERS")"
-  legacy="$(fl_rc_legacy_blocks "$rc" | tr '\n' ',' | sed 's/,$//')"
+  legacy="$(fl_rc_legacy_blocks "$rc")"; legacy="${legacy//$'\n'/,}"
   case "$status" in
     current) chk__set ok "helper block in ${rc} is current" ;;
     missing) chk__set warn "helper block missing from ${rc}" "${FL_SELF} repair" write_helpers ;;
@@ -474,7 +521,7 @@ chk_helpers() {
   # every helper runs the benchbar the block names: one that is gone (a
   # Cellar folder after brew cleanup, a checkout moved to the Trash) breaks
   # them all, whatever the block's hash says
-  recorded="$(fl_rc_block_extract "$rc" | sed -n 's/^BENCHBAR="\(.*\)"$/\1/p' | awk 'NR==1')"
+  fl_rc_recorded_cli_v recorded "$rc"
   if [[ -n "$recorded" && ! -e "$recorded" ]]; then
     chk__set fail "benchup and the other helpers in ${rc} run ${recorded}, which is gone" "${FL_SELF} repair" write_helpers
   elif [[ "$CHK_STATUS" != ok && "${FL_INSTALL_KIND:-}" == homebrew && -n "$recorded" ]]; then
@@ -1382,6 +1429,7 @@ chk_apps_txt() {
 
 chk_app_branch_policy() {
   local app want cur off="" fix="" n=0
+  fl_facts_wait_warm
   while IFS= read -r app; do
     if [[ -z "$app" ]] || ! fl_app_has_git "$app"; then continue; fi
     want="$(fl_app_policy_branch "$app")"
