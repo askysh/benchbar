@@ -159,7 +159,7 @@ and the run goes on without the call: follow it with `benchbar_op_status`
 until its state is `done` or `failed`; `result` then holds the `done`
 line, with `changed`, `warnings` and `next_actions`. Use it when the
 client gives up on a call after a few minutes. The plan, its token and the
-person's OK work as before. The tool list has no `benchbar_op_wait`: a
+person's OK work as before. There is no tool that waits for an operation: a
 tool that blocks for minutes is what `background` replaces.
 
 In a terminal the same handles are `benchbar op status|list|wait` and
