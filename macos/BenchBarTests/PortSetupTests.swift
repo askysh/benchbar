@@ -5,7 +5,7 @@ import Testing
 @Suite("Port setup", .serialized)
 struct PortSetupTests {
     let base: BenchStoreTests
-    init() throws { base = try BenchStoreTests() }
+    init(benchPath: String? = nil) throws { base = try BenchStoreTests(benchPath: benchPath) }
 
     func planJSON(blocked: Bool = false, mode: String = "automatic") -> String {
         """

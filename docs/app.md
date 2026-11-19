@@ -117,8 +117,10 @@ only while it is on. In the list:
 
 Typing filters the list, and from two characters it also searches the site's
 other users. ⌃⌥U again closes it. It uses no Accessibility permission. If
-another app already holds ⌃⌥U, the Labs row says so in red and the lab goes
-back to off.
+another app already holds ⌃⌥U, the Labs row says so in red and the lab stays
+on, without a key: turn it off and on again once the other app lets go. The
+key is the physical key that is U on a US keyboard; on another layout BenchBar
+names it by the letter your keyboard shows there.
 
 After a switch the site's row reads `as {name}`: the pin's label, else the
 user's full name, else the user id. That is BenchBar's own record of its last

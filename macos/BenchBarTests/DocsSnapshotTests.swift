@@ -6,6 +6,8 @@ import Testing
 /// The screens the documentation shows (docs/images), rendered in a real,
 /// key window so the selected sidebar row and tab draw as they do in the
 /// app. Fixture data only: no bench, site or app of the machine it runs on.
+/// A window opens on screen and the app is activated, so these run only
+/// when the `on-screen` marker is in the snapshot folder, never in CI.
 extension SnapshotTests {
     private nonisolated static let docsCLI = "/Applications/BenchBar.app/Contents/Resources/cli/benchbar"
     private static let frappeBench = "/Users/you/frappe-bench"
@@ -44,7 +46,7 @@ extension SnapshotTests {
             .frame(width: 1000, height: 700)
     }
 
-    @Test func docsWindowPanes() async throws {
+    @Test(.enabled(if: docsOnScreenEnabled)) func docsWindowPanes() async throws {
         let store = try await docsStore()
         let workbench = Workbench(store: store)
         let bench = try #require(store.benches.first { $0.path == Self.frappeBench })
@@ -73,14 +75,14 @@ extension SnapshotTests {
         try renderKey(docsWindow(store, workbench, router, about: about), "docs-window-about", size: CGSize(width: 1000, height: 700), wholeWindow: true)
     }
 
-    @Test func docsFindUser() async throws {
+    @Test(.enabled(if: docsOnScreenEnabled)) func docsFindUser() async throws {
         let store = try await docsStore()
         let bench = try #require(store.benches.first { $0.path == Self.frappeBench })
         let row = try #require(bench.siteRows.first { $0.name == "macdev" })
         try renderKey(FindUserSheet(store: store, bench: bench, row: row) {}.frame(width: 520), "docs-find-user", size: nil)
     }
 
-    @Test func docsWizard() async throws {
+    @Test(.enabled(if: docsOnScreenEnabled)) func docsWizard() async throws {
         let (_, welcome) = try await wizardRun([])
         try renderKey(page(welcome).frame(width: 760, height: 380, alignment: .top), "docs-wizard-welcome", size: CGSize(width: 760, height: 380))
         let (_, check) = try await wizardRun([.chooseNewBench, .prerequisites(try report(ok: true))])

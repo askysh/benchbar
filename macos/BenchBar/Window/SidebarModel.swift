@@ -20,7 +20,12 @@ nonisolated struct SidebarModel: Equatable, Sendable {
         var sites: [Site]
         /// Why it is not running and what to do (BenchGuidance), for the tooltip.
         var guidance: String?
+        /// The state in words ("Running", "Crashed (exit 1), restarting"), for VoiceOver:
+        /// the dot beside the name says it by colour only.
+        var statusText: String
         var id: String { path }
+        /// What VoiceOver reads for the row: the state, and the guidance when there is one.
+        var accessibilityValue: String { [statusText, guidance].compactMap { $0 }.joined(separator: ". ") }
     }
 
     /// The bench fields the sidebar needs.
@@ -31,6 +36,8 @@ nonisolated struct SidebarModel: Equatable, Sendable {
         var isBusy: Bool
         var sites: [Site]
         var guidance: BenchGuidance? = nil
+        /// The popover's headline for the state; the plain state name when not given.
+        var statusText: String? = nil
     }
 
     var benches: [Row]
@@ -44,7 +51,8 @@ nonisolated struct SidebarModel: Equatable, Sendable {
             return Row(path: input.path, name: input.name,
                        hint: twins ? URL(fileURLWithPath: input.path).deletingLastPathComponent().lastPathComponent : nil,
                        state: input.state, isBusy: input.isBusy, sites: input.sites,
-                       guidance: input.guidance.map { [$0.reason, $0.action.map { "Next: \($0.title)" }].compactMap { $0 }.joined(separator: " ") })
+                       guidance: input.guidance.map { [$0.reason, $0.action.map { "Next: \($0.title)" }].compactMap { $0 }.joined(separator: " ") },
+                       statusText: input.statusText ?? BenchText.headline(input.state, reason: nil, exitCode: nil))
         }
     }
 
@@ -68,7 +76,8 @@ extension SidebarModel {
     @MainActor init(benches: [BenchModel], showsNetwork: Bool = false) {
         self.init(benches.map { bench in
             Input(path: bench.path, name: bench.name, state: bench.state, isBusy: bench.isBusy,
-                  sites: bench.siteRows.map { Site(name: $0.name, isDefault: $0.isDefault) }, guidance: bench.guidance)
+                  sites: bench.siteRows.map { Site(name: $0.name, isDefault: $0.isDefault) }, guidance: bench.guidance,
+                  statusText: BenchText.headline(bench.state, reason: bench.machine.stopReason, exitCode: bench.status?.lastExitCode))
         }, showsNetwork: showsNetwork)
     }
 }

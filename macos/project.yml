@@ -110,6 +110,9 @@ targets:
     platform: macOS
     sources:
       - path: BenchBarTests
+        excludes:
+          # reference images, read from the source tree by SnapshotCompare
+          - "Snapshots/**"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.akashmishra.benchbar.tests

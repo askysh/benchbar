@@ -42,6 +42,7 @@ final class WizardRun {
     @ObservationIgnored private var tailer: LogTailer?
     @ObservationIgnored private var checkGeneration = 0
     @ObservationIgnored private var planGeneration = 0
+    @ObservationIgnored private var profilesGeneration = 0
     @ObservationIgnored private var pollGeneration = 0
 
     static let logLineLimit = 300
@@ -141,12 +142,18 @@ final class WizardRun {
 
     private func loadProfiles() {
         guard let client = store.cliClient else { send(.profilesFailed(BenchStore.noCLIMessage)); return }
+        profilesGeneration += 1
+        let generation = profilesGeneration
         Task { @MainActor in
+            let event: WizardState.Event
             do {
-                send(.profiles(try await client.profiles()))
+                event = .profiles(try await client.profiles())
             } catch {
-                send(.profilesFailed(error.localizedDescription))
+                event = .profilesFailed(error.localizedDescription)
             }
+            // a later read (Try Again) has the say
+            guard generation == profilesGeneration else { return }
+            send(event)
         }
     }
 
