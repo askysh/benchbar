@@ -381,7 +381,7 @@ fl_op_background() {
   fl_op_background_ok "$key" || fl_die "benchbar ${key:-$COMMAND} cannot run with --background." \
     "--background is for install, repair, pull, app add, app update, site add, site backup and site restore. A command that takes seconds runs in front; one only a person runs never runs unattended."
   [[ "$FL_DRY_RUN" != "1" ]] || fl_die "--background starts a change; a dry run prints its plan at once." "Run the plan without --background, then apply it with --background."
-  [[ -z "${FL_SUDO_PW_FD:-}" && "${FL_SUDO_PW_NEWLINE:-0}" != "1" ]] || fl_die "--background cannot carry BENCHBAR_SUDO_PASSWORD: a detached run has no pipe to read it from." \
+  [[ -z "${FL_SUDO_PW:-}" && "${FL_SUDO_PW_NEWLINE:-0}" != "1" ]] || fl_die "--background cannot carry BENCHBAR_SUDO_PASSWORD: a detached run has no pipe to read it from." \
     "Run the command in front, or cache the sudo credential first so that sudo -n works."
   for a in "$@"; do [[ "$a" == "--background" ]] || args+=("$a"); done
   args+=(--jsonl)
