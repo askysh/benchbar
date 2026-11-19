@@ -425,3 +425,23 @@ fl_site_ping_code() {
     *) printf '000' ;;
   esac
 }
+
+# fl_bench_guess_gate: a command that changes things and was not told which
+# bench (no --bench-dir, no BENCH_DIR, none remembered) acts on the first one
+# fl_bench_detect finds. Say which, and why; and where nobody can be asked
+# (--for-agent, BENCHBAR_NONINTERACTIVE=1) with more than one bench known,
+# refuse to guess. The note goes to stderr: a --json run keeps its stdout.
+fl_bench_guess_gate() {
+  local d n=0 list="" sep=""
+  fl_bench_detect "$OPT_BENCH_DIR"
+  [[ "${FL_BENCH_SOURCE:-}" == "detected" ]] || return 0
+  while IFS= read -r d; do
+    [[ -n "$d" ]] || continue
+    n=$((n + 1)); list="${list}${sep}${d}"; sep=", "
+  done < <(fl_known_benches)
+  if [[ "$n" -gt 1 ]] && fl_noninteractive; then
+    fl_die "More than one bench is possible and none was chosen: ${list}." "Choose one: benchbar ${COMMAND}${ARGS[0]:+ ${ARGS[0]}} --bench-dir PATH (or set BENCH_DIR). benchbar list shows them."
+  fi
+  printf 'benchbar: acting on %s (auto-detected: no --bench-dir, BENCH_DIR or remembered bench%s; pass --bench-dir to choose)\n' \
+    "$FL_BENCH_DIR" "$([[ "$n" -gt 1 ]] && printf '; %s benches are known: %s' "$n" "$list")" >&2
+}

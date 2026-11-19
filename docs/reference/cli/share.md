@@ -488,6 +488,8 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `share remove` | `--new-code` |  | Also draw a new room code, for when the person is not known: a fresh Mac could join again with the old one. The new code also lets the removed Mac back, if they get it. |
 | `share remove` | `--yes` |  | Do not ask first. |
 | `share remove` | `--json` |  | JSON lines: done, with removed, new_code and the wipe. |
+| `share revoke` | `--new-code` |  | As share remove --new-code. |
+| `share revoke` | `--yes` |  | Do not ask first. |
 | `share revoke` | `--json` |  | As share remove --json. |
 | `share assign` | `--json` |  | JSON lines: done, with the device and its new seat. |
 | `share log` | `--device` | `ID` | Only this Mac (an id of share people). |

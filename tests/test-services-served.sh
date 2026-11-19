@@ -81,7 +81,7 @@ suite() {
   assert_eq "0" "$CODE" "$OUT"
   assert_calls_not_contain '^redis-server'
   run_fm up --bogus --bench-dir "$BENCH"
-  assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "Unknown option for up: --bogus"
+  assert_eq "2" "$CODE" "$OUT"; assert_contains "$OUT" "Unknown option for up: --bogus"
   reset_calls
   run_fm up --services-only --bench-dir "$BENCH"
   assert_eq "0" "$CODE" "$OUT"

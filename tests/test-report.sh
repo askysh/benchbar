@@ -218,7 +218,7 @@ assert_contains "$nz_names" "versions.txt" "(the zip made without the zip progra
 assert_contains "$nz_names" "doctor.json"
 
 run_fm report --bench-dir "$BENCH" --bogus
-assert_eq "1" "$CODE"
-assert_contains "$OUT" "Unknown report option"
+assert_eq "2" "$CODE"
+assert_contains "$OUT" "Unknown option for report: --bogus"
 
 printf 'test-report: ok\n'

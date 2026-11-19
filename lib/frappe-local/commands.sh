@@ -89,6 +89,7 @@ flag~logs~--process~NAME~web, socketio, schedule or worker.
 flag~logs~--since~TIMESTAMP~Only lines at or after it (--json; ISO 8601, or HH:MM:SS today).
 flag~logs~--since-restart~~Only lines after the bench's last start (--json).
 flag~logs~--no-follow~~Print and exit.
+flag~logs~-n~N~The last N lines (default 50); -nN, or a bare number, also works.
 cmd~fg~benchbar fg~Stop the service and run honcho in the foreground.~yes~no~no~yes~none
 cmd~watch~benchbar watch~Run bench watch for asset rebuilds.~no~no~no~no~none
 cmd~autostart~benchbar autostart [on|off]~Whether the bench may come back after login.~no~no~no~yes~none
@@ -125,7 +126,9 @@ flag~pull~--keep-staging~~Keep the downloaded backup in the bench's .benchbar/pu
 env~pull~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
 cmd~report~benchbar report [--print] [--json]~Redacted diagnostics zip on the Desktop for bug reports.~no~no~no~no~document
 flag~report~--print~~Print to the terminal instead of writing the zip.
+flag~report~--out~DIR~Write the zip into this folder (default: the Desktop).
 cmd~docs~benchbar docs [TOPIC] [--print]~Open the documentation, or one topic's page.~no~no~no~no~none
+flag~docs~--print~~Print the page's address instead of opening it.
 cmd~self-update~benchbar self-update [--check] [--dry-run] [--json]~Update the benchbar CLI and the BenchBar app.~yes~no~yes~yes~document
 flag~self-update~--check~~This version against the latest.
 cmd~where~benchbar where [--json]~How this CLI was installed, its state folder and the app.~no~no~no~no~document
@@ -134,6 +137,7 @@ cmd~mcp~benchbar mcp [--print-agents-md]~Model Context Protocol server on stdio 
 flag~mcp~--print-agents-md~~Print a snippet for a project's AGENTS.md or CLAUDE.md and exit.
 cmd~help~benchbar help~The global help text.~no~no~no~no~none
 cmd~commands~benchbar commands --json~This table: every command, flag and environment variable.~no~no~no~no~document
+env~commands~BENCHBAR_LENIENT_FLAGS~Applies to every command: 1 turns the error for an unknown option (exit 2) back into a warning on stderr, as before 0.9.0, for a script that passed options a command never read. Without it a typo of --dry-run next to --yes can no longer run for real.
 env~commands~BENCHBAR_LOAD_ALL~Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
 cmd~ports~benchbar ports plan|setup|apply|check|mode ...~Port allocation for several benches.~no~no~no~no~none
 cmd~ports plan~benchbar ports plan [--json] -- PATH ...~Read only preview of the allocation and its approval token.~no~no~no~no~document
@@ -211,6 +215,8 @@ flag~share remove~--new-code~~Also draw a new room code, for when the person is 
 flag~share remove~--yes~~Do not ask first.
 flag~share remove~--json~~JSON lines: done, with removed, new_code and the wipe.
 cmd~share revoke~benchbar share revoke ID [--new-code] [--yes] [--json]~Another name for share remove.~yes~no~no~yes~stream
+flag~share revoke~--new-code~~As share remove --new-code.
+flag~share revoke~--yes~~Do not ask first.
 flag~share revoke~--json~~As share remove --json.
 cmd~share assign~benchbar share assign ID SEAT_ID [--json]~Move a person in the room to another free seat; the old seat's sessions end first.~no~no~no~yes~stream
 flag~share assign~--json~~JSON lines: done, with the device and its new seat.
@@ -259,6 +265,7 @@ flag~site drop~--dry-run~~Print the plan, change nothing.
 env~site drop~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
 cmd~app~benchbar app list|add|install|update|focus|unfocus ...~The apps of a bench.~no~no~no~no~none
 cmd~app list~benchbar app list [--json] [--no-sites]~Every app: branch, commit, local changes, the sites that have it.~no~no~no~no~document
+flag~app list~--no-sites~~Leave out the sites that have each app (faster).
 cmd~app add~benchbar app add NAME|URL [--branch B] [--name N] [--commit SHA] [--install-on S,S] [NAME|URL ...] [--site S|--all-sites] --dry-run --json, then --apply TOKEN --yes~bench get-app from config/apps.tsv or any git URL, as a reviewed plan.~no~no~yes~yes~document
 flag~app add~--branch~B~Branch or tag.
 flag~app add~--name~N~The app's package name.
@@ -274,23 +281,41 @@ flag~app update~--skip-backup~~Migrate without a backup first.
 flag~app update~--dry-run~~Print the plan as one JSON document with --json.
 flag~app update~--discard-pending~~Drop the record of an update or add that stopped part way and stop: none of its steps and no update runs.
 cmd~app focus~benchbar app focus [NAME] [--list] [--auto] [--fetch] [--json]~Focus apps: the ones you work on.~no~no~no~no~document
+flag~app focus~--list~~List the focus apps (the default without a name).
+flag~app focus~--auto~~With NAME: let benchbar decide again (undo a pin).
+flag~app focus~--fetch~~git fetch the branches of the focus apps first.
 cmd~app unfocus~benchbar app unfocus NAME~Pin NAME as not a focus app.~no~no~no~yes~none
 cmd~lock~benchbar lock write|check|apply ...~The team lockfile benchbar.toml.~no~no~no~no~none
 cmd~lock write~benchbar lock write [--lock PATH] [--no-commits] [--allow-dirty]~Write benchbar.toml from this bench.~yes~no~no~yes~none
+flag~lock write~--lock~PATH~Write this lockfile, and remember it for this bench.
+flag~lock write~--no-commits~~Leave the commit hashes out (branches only).
+flag~lock write~--allow-dirty~~Write it although an app has local changes.
 cmd~lock check~benchbar lock check [--json]~Compare the bench with benchbar.toml. Exit 1 on any difference.~no~no~no~no~document
+flag~lock check~--lock~PATH~Compare with this lockfile, and remember it for this bench.
 cmd~lock apply~benchbar lock apply~Clone missing apps, switch branches, fast forward to pinned commits.~yes~no~yes~yes~none
+flag~lock apply~--lock~PATH~Apply this lockfile, and remember it for this bench.
 cmd~profile~benchbar profile list|show|create|export|import|subscribe|update|remove|check ...~Team profiles.~no~no~no~no~none
 cmd~profile list~benchbar profile list [--json]~Built in and team profiles.~no~no~no~no~document
 cmd~profile show~benchbar profile show NAME~What a profile installs.~no~no~no~no~none
 cmd~profile create~benchbar profile create NAME --from-bench PATH [--dir DIR]~Write a team profile from a bench.~no~no~no~yes~none
+flag~profile create~--from-bench~PATH~The bench to read the apps from.
+flag~profile create~--dir~DIR~Write the profile into this folder (default ~/.config/benchbar/profiles).
 cmd~profile export~benchbar profile export NAME [--out FILE] [--plan] [--json]~A copy to share.~no~no~yes~yes~document
 flag~profile export~--out~FILE~Where to write (default ./NAME.toml).
 flag~profile export~--branch~APP=BR~Export APP on BR instead of its default branch; repeatable.
 flag~profile export~--drop~APP~Leave APP out of the copy; repeatable. Refused when a kept app requires it.
 flag~profile export~--plan~~Print the review only, write nothing.
+flag~profile export~--expect~DIGEST~Refuse unless the profile's digest is this (the one the plan showed).
 cmd~profile import~benchbar profile import FILE|URL [--as NAME] [--plan] [--json]~Add a profile someone sent.~yes~no~yes~yes~document
+flag~profile import~--as~NAME~Save it under this name.
+flag~profile import~--plan~~Print the review only, write nothing.
+flag~profile import~--expect~DIGEST~Refuse unless the profile's digest is this (the one the plan showed).
 cmd~profile subscribe~benchbar profile subscribe GIT_URL [--plan|--yes] [--json]~Clone a team's config repo.~yes~no~yes~yes~document
+flag~profile subscribe~--plan~~Print the review only, clone nothing.
 cmd~profile update~benchbar profile update NAME|--all [--plan] [--json]~Fetch an import or subscription again.~yes~no~yes~yes~document
+flag~profile update~--all~~Every import and subscription.
+flag~profile update~--plan~~Print the review only, change nothing.
+flag~profile update~--expect~DIGEST~Refuse unless the fetched profile's digest is this (the one the plan showed).
 cmd~profile remove~benchbar profile remove NAME [--yes] [--json]~Move an import or subscription aside.~yes~no~no~yes~document
 cmd~profile check~benchbar profile check NAME [--json]~Can git read every repo with your credentials?~no~no~yes~no~document
 cmd~labs~benchbar labs [list|on NAME|off NAME|status NAME] [--yes] [--json]~Experiments: off until a person turns one on.~no~no~no~no~document
@@ -433,4 +458,84 @@ fl_commands_json() {
   done <<<"$(fl_cmd_global_flags)"
   fl_lab_enabled_json_v labs_on
   printf '{"schema_version":%d,"cli_version":"%s","labs":%s,"gated":[%s],"global_flags":[%s],"commands":[%s]}\n' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}" "$labs_on" "$gated" "$gflags" "$out"
+}
+
+# fl_cmd_flag_check KEY ARG...: whether every option among ARG... (up to a
+# bare --) is one of the flags the table lists for KEY. An option of a flag
+# that takes a value skips the next word; --flag=VALUE and a short flag with
+# its value glued on (-n20) are the same flag. Returns 1 with FL_BAD_FLAGS
+# set to the unknown options, space separated. The options the main loop of
+# the entrypoint takes (--bench-dir, --json ...) never reach it.
+FL_BAD_FLAGS=""
+fl_cmd_flag_check() {
+  local key="$1" line rest name val tok skip=0 hit s
+  local longs=" " valued=" " shorts=" "
+  shift
+  FL_BAD_FLAGS=""
+  # most runs have no option among their arguments: no table read for those
+  hit=0
+  for tok in "$@"; do
+    [[ "$tok" != -- ]] || break
+    case "$tok" in -?*) hit=1; break ;; esac
+  done
+  [[ "$hit" == 1 ]] || return 0
+  while IFS= read -r line; do
+    case "$line" in
+      "flag~${key}~"*)
+        rest="${line#flag~"${key}"~}"; name="${rest%%~*}"; rest="${rest#*~}"; val="${rest%%~*}"
+        case "$name" in
+          --*) longs="${longs}${name} " ;;
+          *) shorts="${shorts}${name} " ;;
+        esac
+        [[ -z "$val" ]] || valued="${valued}${name} " ;;
+    esac
+  done <<<"$FL_CMD_TABLE"
+  for tok in "$@"; do
+    [[ "$tok" != -- ]] || break
+    if [[ "$skip" == 1 ]]; then skip=0; continue; fi
+    case "$tok" in
+      -|-h|--help) continue ;;
+      --*) name="${tok%%=*}"
+           case "$longs" in
+             *" ${name} "*) [[ "$tok" == *=* ]] || case "$valued" in *" ${name} "*) skip=1 ;; esac ;;
+             *) FL_BAD_FLAGS="${FL_BAD_FLAGS:+${FL_BAD_FLAGS} }${tok%%=*}" ;;
+           esac ;;
+      -?*) hit=0
+           for s in $shorts; do
+             case "$tok" in
+               "$s") hit=1; case "$valued" in *" ${s} "*) skip=1 ;; esac ;;
+               "$s"*) case "$valued" in *" ${s} "*) hit=1 ;; esac ;;
+             esac
+             [[ "$hit" == 0 ]] || break
+           done
+           [[ "$hit" == 1 ]] || FL_BAD_FLAGS="${FL_BAD_FLAGS:+${FL_BAD_FLAGS} }${tok}" ;;
+    esac
+  done
+  [[ -z "$FL_BAD_FLAGS" ]]
+}
+
+# fl_args_validate: the dispatcher's check of the options after the command
+# (ARGS, or the part before a bare --; FL_ARGS_FLAGS_N is its length).
+# An unknown option is an error, exit 2, naming the option and the command's
+# usage line. BENCHBAR_LENIENT_FLAGS=1 turns the error into a warning on
+# stderr, the way every release before 0.9.0 behaved.
+fl_args_validate() {
+  local key usage line bad n="${FL_ARGS_FLAGS_N:--1}"
+  [[ "${#ARGS[@]}" -gt 0 ]] || return 0
+  key="$(fl_cmd_key_for "$COMMAND" "${ARGS[0]:-}")" || return 0
+  if [[ "$n" -lt 0 || "$n" -gt "${#ARGS[@]}" ]]; then n="${#ARGS[@]}"; fi
+  fl_cmd_flag_check "$key" "${ARGS[@]:0:$n}" && return 0
+  while IFS= read -r line; do
+    case "$line" in "cmd~${key}~"*) usage="${line#cmd~"${key}"~}"; usage="${usage%%~*}"; break ;; esac
+  done <<<"$FL_CMD_TABLE"
+  if [[ "${BENCHBAR_LENIENT_FLAGS:-0}" == "1" ]]; then
+    for bad in $FL_BAD_FLAGS; do
+      printf 'Ignoring unknown option for %s: %s (BENCHBAR_LENIENT_FLAGS=1; without it this is an error)\n' "$key" "$bad" >&2
+    done
+    return 0
+  fi
+  # a run that is asked for JSON prints JSON on stdout and nothing else: its refusal is text on stderr
+  if [[ "${OPT_JSON:-0}" == 1 || "${OPT_FOR_AGENT:-0}" == 1 ]]; then exec 1>&2; fi
+  # the first one, as the other commands name it
+  fl_die "Unknown option for ${key}: ${FL_BAD_FLAGS%% *}" "Usage: ${usage}. Every flag: benchbar ${key} --help. A script that relied on unknown options being ignored: BENCHBAR_LENIENT_FLAGS=1 turns this error into a warning." 2
 }

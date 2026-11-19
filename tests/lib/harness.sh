@@ -37,6 +37,8 @@ export FL_HOSTS_FILE="$TMP_DIR/hosts"
 export FL_WKHTML_PKG_BIN="$TMP_DIR/usr-local-bin/wkhtmltopdf"
 export FL_RC_FILE="$HOME/.zshrc"
 export FL_UP_WAIT_SECS=2
+# a run that meets a live lock refuses at once (a production run waits a few seconds first)
+export FL_LOCK_WAIT_SECS=0
 # the status and doctor probes (Redis ports, a site's Host) talk to 127.0.0.1
 # in bash: off, so no test ever meets a real service of this machine; the
 # tests of the probes set FL_LOCAL_PROBES=1 and bring their own listeners

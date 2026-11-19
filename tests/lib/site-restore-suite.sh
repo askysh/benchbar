@@ -97,7 +97,7 @@ suite() {
   run_fm site restore acme.localhost --from "$SET1" --apply abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789 --bench-dir "$BENCH"
   assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "pass its token with --apply TOKEN --yes"
   run_fm site restore acme.localhost --from "$SET1" --bogus --bench-dir "$BENCH"
-  assert_eq "1" "$CODE" "$OUT"; assert_contains "$OUT" "Unknown option for site restore: --bogus"
+  assert_eq "2" "$CODE" "$OUT"; assert_contains "$OUT" "Unknown option for site restore: --bogus"
   # an encrypted set is not taken
   mkdir -p "$TMP_DIR/enc"; printf 'x' >"$TMP_DIR/enc/20260903_090000-acme_localhost-database-enc.sql.gz"
   run_fm site restore acme.localhost --from "$TMP_DIR/enc" --dry-run --bench-dir "$BENCH"

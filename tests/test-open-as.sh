@@ -201,7 +201,7 @@ MOCK_OPEN_AS_REFUSE="Frappe refused the login: Access not allowed from this IP A
 assert_eq "1" "$CODE"; assert_contains "$OUT" "Frappe refused the login: Access not allowed from this IP Address"
 run_fm open --as Guest --bench-dir "$BENCH"; assert_eq "1" "$CODE"; assert_contains "$OUT" "Guest has no session to open."
 run_fm open --as --bench-dir "$BENCH"; assert_eq "1" "$CODE"; assert_contains "$OUT" "--as needs a user."
-run_fm open --nonsense --bench-dir "$BENCH"; assert_eq "1" "$CODE"; assert_contains "$OUT" "Unknown argument for open: --nonsense"
+run_fm open --nonsense --bench-dir "$BENCH"; assert_eq "2" "$CODE"; assert_contains "$OUT" "Unknown option for open: --nonsense"
 # a flag that takes a value, given last: a message, not a silent exit
 run_fm open --bench-dir "$BENCH" --as priya@example.com --path; assert_eq "1" "$CODE"; assert_contains "$OUT" "--path needs a page."
 run_fm users --bench-dir "$BENCH" --search; assert_eq "1" "$CODE"; assert_contains "$OUT" "--search needs some text."

@@ -347,11 +347,32 @@ fl__kv_reclaim() {
   if fl__kv_stale "$guard" "${3:-}"; then rmdir "$guard" 2>/dev/null || true; fi
 }
 
+# fl__kv_dir_ok FILE: the folder of a state file is there and can be written. A
+# failing mkdir of the lock is otherwise taken for "someone else holds it", and
+# the wait never ends (a root owned state folder after a sudo run, a read only
+# volume, a file where a folder belongs). Dies naming the path.
+fl__kv_dir_ok() {
+  local dir="${1%/*}" why=""
+  [[ "$dir" != "$1" ]] || dir="."
+  [[ -d "$dir" ]] || mkdir -p "$dir" 2>/dev/null || true
+  if [[ -e "$dir" && ! -d "$dir" ]]; then why="is not a folder"
+  elif [[ ! -d "$dir" ]]; then why="cannot be created"
+  elif [[ ! -w "$dir" ]]; then why="is not writable (read only, or owned by another user: a run with sudo?)"
+  else return 0; fi
+  fl_die "Cannot write ${1}: ${dir} ${why}." "Make ${dir} a folder your user can write to (ls -ld ${dir} shows the owner), then run again."
+}
+
 fl__kv_lock() {
-  local lck="$1.lck" i=0 seen limit
+  local lck="$1.lck" i=0 seen limit failed=0
+  fl__kv_dir_ok "$1"
   while :; do
     if mkdir "$lck" 2>/dev/null; then
       fl__kv_claim "$lck" && return 0
+    elif [[ ! -d "$lck" ]]; then
+      # nothing holds it and the mkdir still fails: about a minute is enough to know it will not work
+      failed=$((failed + 1))
+      [[ "$failed" -lt 1200 ]] || fl_die "Could not lock ${1}: creating ${lck} keeps failing." "Check the folder's owner and free space (ls -ld ${1%/*}), then run again."
+      fl__kv_dir_ok "$1"
     fi
     i=$((i + 1))
     if [[ $((i % 40)) -eq 0 ]]; then
@@ -424,7 +445,7 @@ fl__kv_commit() {
 fl_kv_set() {
   local file="$1" key="$2" value="$3" tmp
   [[ "${FL_DRY_RUN:-0}" == "1" ]] && return 0
-  mkdir -p "$(dirname "$file")" 2>/dev/null || true
+  fl__kv_dir_ok "$file"
   # created by appending nothing: two first writers both find no file, and a
   # truncating ": >" from the slower one emptied what the faster one had
   # already written under the lock (a lost key, test-run-lock)

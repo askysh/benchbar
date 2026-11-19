@@ -144,7 +144,7 @@ assert_not_contains "$trace" "Zq7"
 fresh_machine
 trace="$(env BENCHBAR_SUDO=env BENCHBAR_NONINTERACTIVE=1 BENCHBAR_SUDO_PASSWORD="$SECRET" bash -x "$FM" install --dry-run --yes --json --bench-dir "$BENCH" --site linuxdev.localhost 2>&1 </dev/null | grep -v '^{"schema' || true)"
 assert_contains "$trace" "+ [[ -n x ]]" "(first image: the password variable was set)"
-assert_eq "2" "$(printf '%s\n' "$trace" | grep -c '^+ set -euo pipefail')" "(benchbar started twice: the second image has no variable)"
+assert_eq "2" "$(printf '%s\n' "$trace" | grep -c '^+ set -Eeuo pipefail')" "(benchbar started twice: the second image has no variable)"
 assert_contains "$trace" "+ [[ -n '' ]]" "(second image: the variable is gone)"
 assert_not_contains "$trace" "$SECRET" "(re-exec under xtrace)"
 if [[ -r /proc/self/environ ]]; then
