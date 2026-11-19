@@ -31,6 +31,9 @@ internal sealed class PageServices
 
     public Action<string> CopyText { get; set; } = _ => { };
 
+    /// <summary>Copies a secret (the room code, an invite) for a click, kept out of clipboard history. Never used for anything a poll or a link produced.</summary>
+    public Action<string> CopySecret { get; set; } = _ => { };
+
     public Action<string> OpenUrl { get; set; } = _ => { };
 
     /// <summary>Polls the benches now (after a change, so the sidebar and Overview catch up).</summary>
