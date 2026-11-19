@@ -108,17 +108,16 @@ fl_sudo_begin() {
 # is a child the loop waits for: bash runs a trap only after the foreground
 # command ends, so a plain "sleep 5" made fl_sudo_end wait up to 5 seconds.
 fl__sudo_keepalive() {
-  ( nap=""
-    trap '[[ -z "$nap" ]] || kill "$nap" 2>/dev/null; exit 0' TERM
+  ( # the trap stops whatever the loop has in the background (jobs -p knows the sleep from the
+    # moment it is forked, before any variable could name it), so no sleep is left behind
+    trap 'kill $(jobs -p) 2>/dev/null; exit 0' TERM
     parent="$$"
     while kill -0 "$parent" 2>/dev/null; do
       sudo -n true 2>/dev/null || exit 0
       slice=0
       while [[ "$slice" -lt 10 ]]; do
         sleep 5 &
-        nap="$!"
-        wait "$nap" 2>/dev/null || true
-        nap=""
+        wait "$!" 2>/dev/null || true
         kill -0 "$parent" 2>/dev/null || exit 0
         slice=$((slice + 1))
       done

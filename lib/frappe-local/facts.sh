@@ -44,6 +44,16 @@ fl_facts_begin() {
 # not printed.
 fl_facts_end() {
   fl_par_stop
+  # a load of the apps' facts (apps.sh) that a signal cut short: its collectors, then its folder
+  if [[ -n "${FL_AF_DIR:-}" ]]; then
+    {
+      local __p
+      for __p in ${FL_AF_PIDS[@]+"${FL_AF_PIDS[@]}"}; do kill -TERM "$__p" 2>/dev/null || true; done
+      for __p in ${FL_AF_PIDS[@]+"${FL_AF_PIDS[@]}"}; do wait "$__p" 2>/dev/null || true; done
+    } 2>/dev/null
+    rm -rf "$FL_AF_DIR"
+    FL_AF_DIR=""; FL_AF_PIDS=()
+  fi
   if [[ -n "$FL_FACTS_WAKE" ]]; then exec 9<&- 2>/dev/null || true; FL_FACTS_WAKE=""; fi
   # a job stopped a moment ago can still have a write in flight, so a removal that
   # leaves the folder ("directory not empty") is tried again, for up to a second

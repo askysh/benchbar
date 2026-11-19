@@ -8,6 +8,6 @@
 
 ### For contributors
 
-- `tests/run-tests.sh` fails a test that printed an "unbound variable" error even when bash 3.2 exited 0, runs a failed test once more on CI and prints `FLAKY: NAME` with the first failure when it passes, lists the tests that skipped themselves, and fails a test named in `NO_SKIP` that skips (#138).
+- `tests/run-tests.sh` fails a test that printed an "unbound variable" error even when bash 3.2 exited 0, runs a failed test once more on CI and prints `FLAKY: NAME` with the first failure when it passes, lists the tests that skipped themselves, and fails a test named in `NO_SKIP` that skips. A flake is shown in the run's summary, as an annotation and a table on GitHub, and `STRICT_FLAKY=1` fails the run for it (#138).
 - A new test, `test-suite-hygiene`, checks that every mock in `tests/mocks/bin` is mode 100755 in git, that ending a sudo session is quick, and the run-tests.sh guards above (#138).
 - `test-share-run` waits on a sign of life from the runner instead of a fixed number of seconds, and `test-services-served` takes its ports below the system's ephemeral range (#138).

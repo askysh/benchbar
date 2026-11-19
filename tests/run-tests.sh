@@ -14,6 +14,7 @@
 #   SECS_ONLY=1 ...                     print the weight (table seconds) of the chosen tests, run nothing
 #   NO_SKIP="test-a test-b" ...         those tests fail when they skip themselves ("NAME: ok (SKIPPED ...)")
 #   RERUN_FAILED=1 ...                  a failed test runs once more, and FLAKY says it passed then (on by default when CI is set)
+#   STRICT_FLAKY=1 ...                  a test that was FLAKY (failed, then passed on the rerun) fails the run at its end
 #   SHELLCHECK_FILES="a.sh b.sh" ...    the lint checks only those files; SC_JOBS=4 runs 4 shellcheck at once
 #
 # PARALLEL defaults to the number of CPUs. Every test builds its own HOME
@@ -72,7 +73,7 @@ test-profiles=45 test-process=43 test-adopt=42 test-profile-v16=38 test-run-lock
 test-command-cost=35 test-redact=35 test-repair-json=34 test-share-gateway=33 test-bench-flow=20 test-docs-command=20
 test-labs=20 test-prerequisites-linux=20 test-labs-share=19 test-runner=19 test-status-cost=14 test-run=13
 test-install-sh-linux=10 test-discovery=5 test-self-update=5 test-affected=4 test-shellrc=4 test-templates=4
-test-packaging=2 test-macos-appcast=2 test-docs=1 test-platform=0 test-release-notes=0 test-changelog=0 test-ui=0 test-version-policy=0 test-ci-plan=25 test-apps-speed=20 test-version-sources=1"
+test-packaging=2 test-macos-appcast=2 test-docs=1 test-platform=0 test-release-notes=0 test-changelog=0 test-ui=0 test-version-policy=0 test-ci-plan=25 test-apps-speed=20 test-version-sources=1 test-suite-hygiene=6"
 
 TEST_SECS_LINUX="test-doctor=184 test-apps=176 test-pull=175 test-sudo-env=172 test-windows-commands=165 test-install-json-2=164
 test-site-restore=159 test-repair=157 test-site-restore-2=153 test-app-batch=148 test-lock=148 test-mcp=145
@@ -86,7 +87,7 @@ test-profiles=33 test-report=32 test-repair-json=29 test-run-lock=27 test-state-
 test-redact=22 test-command-cost=20 test-docs-command=18 test-bench-flow=17 test-runner=17 test-share-gateway=17
 test-labs-share=14 test-prerequisites-linux=12 test-run=12 test-status-cost=10 test-install-sh-linux=7 test-self-update=7
 test-discovery=4 test-templates=4 test-affected=3 test-platform-linux=3 test-docs=2 test-shellrc=2
-test-packaging=1 test-macos-appcast=1 test-release-notes=1 test-changelog=0 test-platform=0 test-ui=0 test-version-policy=0 test-ci-plan=25 test-apps-speed=20 test-version-sources=1"
+test-packaging=1 test-macos-appcast=1 test-release-notes=1 test-changelog=0 test-platform=0 test-ui=0 test-version-policy=0 test-ci-plan=25 test-apps-speed=20 test-version-sources=1 test-suite-hygiene=6"
 # TEST_PLATFORM=mac or linux picks the table (default: this machine)
 case "${TEST_PLATFORM:-$(uname -s)}" in
   mac|Darwin) TEST_SECS="$TEST_SECS_MAC" ;;
@@ -287,6 +288,9 @@ start_job() {
         if run_one_test "$name" "$OUT_DIR/$idx.log"; then c=0; else c=$?; fi
         if [[ "$c" == 0 ]]; then
           { printf 'FLAKY: %s failed once and passed on the rerun. The first failure:\n' "$name"; sed 's/^/  | /' "$OUT_DIR/$idx.first"; } >>"$OUT_DIR/$idx.log"
+          # the line the run's summary and the GitHub annotation show (the main loop reads it)
+          { sed -n '/^FAIL/{p;q;}' "$OUT_DIR/$idx.first"; sed -n 1p "$OUT_DIR/$idx.first"; } 2>/dev/null | sed -n 1p >"$OUT_DIR/$idx.flaky"
+          [[ -s "$OUT_DIR/$idx.flaky" ]] || printf 'no output\n' >"$OUT_DIR/$idx.flaky"
         else
           { printf 'FAILED TWICE: %s. The first failure:\n' "$name"; sed 's/^/  | /' "$OUT_DIR/$idx.first"; } >>"$OUT_DIR/$idx.log"
         fi
@@ -302,7 +306,7 @@ start_job() {
 TOTAL="${#JOBS[@]}"
 printf 'running %s jobs, %s at a time (shard %s)\n' "$TOTAL" "$PARALLEL" "$SHARD"
 started_all="$SECONDS"
-next_start=0; next_print=0; running=0; FAILED=(); SKIPPED_TESTS=()
+next_start=0; next_print=0; running=0; FAILED=(); SKIPPED_TESTS=(); FLAKY_TESTS=()
 while [[ "$next_print" -lt "$TOTAL" ]]; do
   while [[ "$running" -lt "$PARALLEL" && "$next_start" -lt "$TOTAL" ]]; do
     start_job "$next_start"
@@ -329,6 +333,20 @@ while [[ "$next_print" -lt "$TOTAL" ]]; do
         *" $name "*) printf 'FAIL: %s skipped itself, and this run lists it in NO_SKIP (it must run here)\n' "$name"; rc=1 ;;
       esac
     fi
+    if [[ -f "$OUT_DIR/$next_print.flaky" ]]; then
+      flaky_line="$(cat "$OUT_DIR/$next_print.flaky")"
+      FLAKY_TESTS+=("$name")
+      # a flake must not hide in a log block nobody opens: an annotation on the run, a row in the job summary
+      if [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+        flaky_msg="${flaky_line//'%'/%25}"; flaky_msg="${flaky_msg//$'\r'/%0D}"
+        printf '::warning title=FLAKY::%s first failure: %s\n' "$name" "$flaky_msg"
+        if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+          [[ -s "$GITHUB_STEP_SUMMARY" ]] && grep -q '^### Flaky tests' "$GITHUB_STEP_SUMMARY" 2>/dev/null || printf '### Flaky tests\n\n| test | first failure |\n| --- | --- |\n' >>"$GITHUB_STEP_SUMMARY"
+          # shellcheck disable=SC2016  # the backticks are Markdown, not a command substitution
+          printf '| %s | `%s` |\n' "$name" "${flaky_line//|/\\|}" >>"$GITHUB_STEP_SUMMARY"
+        fi
+      fi
+    fi
     if [[ "$rc" == "0" ]]; then
       printf -- '--- ok: %s (%ss)\n' "$name" "$secs"
     else
@@ -342,7 +360,14 @@ done
 
 printf '\n%s jobs in %ss, %s failed\n' "$TOTAL" "$((SECONDS - started_all))" "${#FAILED[@]}"
 [[ "${#SKIPPED_TESTS[@]}" -eq 0 ]] || printf 'skipped: %s (%s)\n' "${#SKIPPED_TESTS[@]}" "${SKIPPED_TESTS[*]}"
+[[ "${#FLAKY_TESTS[@]}" -eq 0 ]] || printf 'flaky: %s (%s)\n' "${#FLAKY_TESTS[@]}" "${FLAKY_TESTS[*]}"
 if [[ "${#FAILED[@]}" -gt 0 ]]; then
   printf 'FAILED: %s\n' "${FAILED[*]}" >&2
+  exit 1
+fi
+# STRICT_FLAKY=1 (CI, on a push to next-release and the nightly): the rerun still runs, so every other test
+# still reports, but a flake is a failure of the run: "green N times in a row" cannot include one
+if [[ "${STRICT_FLAKY:-}" == 1 && "${#FLAKY_TESTS[@]}" -gt 0 ]]; then
+  printf 'FAILED: flaky tests (STRICT_FLAKY=1): %s\n' "${FLAKY_TESTS[*]}" >&2
   exit 1
 fi

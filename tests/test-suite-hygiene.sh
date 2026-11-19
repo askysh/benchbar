@@ -22,8 +22,8 @@ SKIPPED=""
 for f in "$ROOT"/tests/mocks/bin/*; do
   [[ -x "$f" ]] || fail "${f#"$ROOT"/} is not executable in this checkout"
 done
-if git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
-  modes="$(git -C "$ROOT" ls-files -s tests/mocks/bin)"
+if git -c safe.directory="*" -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+  modes="$(git -c safe.directory="*" -C "$ROOT" ls-files -s tests/mocks/bin)"
   [[ -n "$modes" ]] || fail "git lists no file under tests/mocks/bin"
   notexec="$(printf '%s\n' "$modes" | awk '$1 != "100755" { print $4 " (" $1 ")" }')"
   assert_eq "" "$notexec" "(not mode 100755 in git: fix with git update-index --chmod=+x FILE)"
@@ -35,7 +35,11 @@ fi
 export MOCK_STATE="$TMP_DIR/mock" MOCK_LOG="$TMP_DIR/mock/calls.log" FL_TESTING=1
 mkdir -p "$MOCK_STATE"
 : >"$MOCK_STATE/sudo_cred"
-took="$(PATH="$ROOT/tests/mocks/bin:$PATH" bash -c '
+# a sleep that names itself, to see whether one outlives the session
+mkdir -p "$TMP_DIR/shim"
+printf '#!/usr/bin/env bash\nexec -a "benchbar-suite-nap-%s" /bin/sleep "$@"\n' "$$" >"$TMP_DIR/shim/sleep"
+chmod +x "$TMP_DIR/shim/sleep"
+took="$(PATH="$TMP_DIR/shim:$ROOT/tests/mocks/bin:$PATH" bash -c '
   set -euo pipefail
   . "$1"
   fl_log() { :; }
@@ -43,12 +47,16 @@ took="$(PATH="$ROOT/tests/mocks/bin:$PATH" bash -c '
   fl__sudo_keepalive
   kid="$FL_SUDO_KEEPALIVE_PID"
   # the loop is in its first sleep by now
-  sleep 0.5
+  /bin/sleep 0.5
   start="$SECONDS"
   fl_sudo_end
   printf "%s" "$((SECONDS - start))"
   if kill -0 "$kid" 2>/dev/null; then printf " alive"; fi' _ "$ROOT/lib/frappe-local/sudo.sh")"
-assert_eq "0" "$took" "(seconds fl_sudo_end took to stop the keepalive; it must not wait for its sleep 5)"
+# whole seconds, so a second boundary can add one: the old wait was 4 or 5
+case "$took" in 0|1|2) ;; *) fail "fl_sudo_end took [$took] seconds to stop the keepalive; it must not wait for its sleep 5" ;; esac
+/bin/sleep 0.3
+orphans="$(/usr/bin/pgrep -f "benchbar-suite-nap-$$" | wc -l | tr -d ' ' || true)"
+assert_eq "0" "$orphans" "(a keepalive sleep outlived the session)"
 
 # ---- run-tests.sh: a copy over a root of its own with two stand in tests
 FAKE="$TMP_DIR/fake"
@@ -98,6 +106,23 @@ OUT="$(env -u RERUN_FAILED CI=true FLAKY_MARK="$TMP_DIR/mark" PARALLEL=1 SHELLCH
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "FLAKY: t-flaky failed once and passed on the rerun"
 assert_contains "$OUT" "the first run"
+# a flake is visible: the end of the run lists it, GitHub gets an annotation and a summary row
+assert_contains "$OUT" "flaky: 1 (t-flaky)"
+rm -f "$TMP_DIR/mark" "$TMP_DIR/summary"
+OUT="$(env -u RERUN_FAILED CI=true GITHUB_ACTIONS=true GITHUB_STEP_SUMMARY="$TMP_DIR/summary" FLAKY_MARK="$TMP_DIR/mark" PARALLEL=1 SHELLCHECK=0 bash "$FAKE/tests/run-tests.sh" t-fine t-flaky 2>&1)" && CODE=0 || CODE=$?
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "::warning title=FLAKY::t-flaky first failure: FAIL: the first run"
+assert_contains "$(cat "$TMP_DIR/summary")" "### Flaky tests"
+# shellcheck disable=SC2016  # the backticks are Markdown in the summary row
+
+assert_contains "$(cat "$TMP_DIR/summary")" '| t-flaky | `FAIL: the first run` |'
+# STRICT_FLAKY=1: the rerun still runs and the other tests still report, and the run fails at its end
+rm -f "$TMP_DIR/mark"
+OUT="$(env -u RERUN_FAILED CI=true STRICT_FLAKY=1 FLAKY_MARK="$TMP_DIR/mark" PARALLEL=1 SHELLCHECK=0 bash "$FAKE/tests/run-tests.sh" t-flaky t-fine 2>&1)" && CODE=0 || CODE=$?
+assert_eq "1" "$CODE" "(a flake passed a strict run: $OUT)"
+assert_contains "$OUT" "--- ok: t-flaky"
+assert_contains "$OUT" "--- ok: t-fine"
+assert_contains "$OUT" "FAILED: flaky tests (STRICT_FLAKY=1): t-flaky"
 # a test that fails twice still fails, with the first failure in the log
 OUT="$(env CI=true PARALLEL=1 SHELLCHECK=0 bash "$FAKE/tests/run-tests.sh" t-unbound 2>&1)" && CODE=0 || CODE=$?
 assert_eq "1" "$CODE" "$OUT"
