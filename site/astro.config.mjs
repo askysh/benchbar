@@ -106,6 +106,7 @@ export default defineConfig({
                 { label: 'profile', slug: 'reference/cli/profile' },
                 { label: 'lock', slug: 'reference/cli/lock' },
                 { label: 'pull', slug: 'reference/cli/pull' },
+                { label: 'run', slug: 'reference/cli/run' },
                 { label: 'mcp', slug: 'reference/cli/mcp' },
                 { label: 'labs (experiments)', slug: 'reference/cli/labs' },
                 { label: 'share and lan-guard', slug: 'reference/cli/share' },

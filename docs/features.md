@@ -49,6 +49,7 @@ macOS version. A row that says "macOS" does not work on Linux.
 | `ports setup` | Previews the ports of several benches, asks once, then applies. `ports check` and `ports mode` read and pin them. | 0.5.8 | macOS; Linux 0.8.0 | [ports](reference/cli/ports.md) |
 | Site backup and drop | Backs up a site, and drops one after a backup. | 0.5.8 | macOS; Linux 0.8.0 | [Benches and sites](guides/benches-and-sites.md#backing-up-and-dropping-a-site) |
 | Self update | `self-update` updates the CLI and the app. | 0.6.0 | macOS; Linux 0.8.0 | [Install](install.md#updating) |
+| Run bench commands | `benchbar run -- migrate`, `clear-cache`, `build`, `run-tests` and more from an allow list, with a plan and token for a change. | 0.9.0 | macOS, Linux | [run](reference/cli/run.md) |
 | Site restore | Restores a backup into the same site or into a copy for QA. | 0.8.0 | macOS, Linux | [site restore](reference/cli/site.md#site-restore) |
 | Agent mode | `--for-agent` prints JSON lines, never asks, and ends every change with one `done` line. | 0.8.0 | macOS, Linux | [Coding agents and MCP](guides/agents.md) |
 | Open as a user | `open --as USER` signs in to a development site as another user, with no password. Off until you turn it on for a site. | 0.8.1 | macOS, Linux | [open](reference/cli/other.md#open), [site open-as](reference/cli/site.md#site-open-as) |
@@ -126,6 +127,7 @@ Windows (`benchbar.exe mcp`) since 0.8.0. The tools below are the ones in
 | Profile tools | `benchbar_profile_list` and `benchbar_profile_check`. | 0.6.0 | macOS; Linux, Windows 0.8.0 | [Coding agents and MCP](guides/agents.md) |
 | App plan and apply | `benchbar_app_add_plan`, then `benchbar_app_add` with the plan's token. | 0.6.0 | macOS; Linux, Windows 0.8.0 | [Coding agents and MCP](guides/agents.md) |
 | `benchbar_app_list` | Every app of a bench, with branch, commit and sites. | 0.7.3 | macOS; Linux, Windows 0.8.0 | [Coding agents and MCP](guides/agents.md) |
+| Run tools | `benchbar_run_plan` and `benchbar_run`, and `benchbar_run_read` for `doctor`, `list-apps` and `version`. | 0.9.0 | macOS, Linux, Windows | [Coding agents and MCP](guides/agents.md) |
 | Site plan and apply | `benchbar_site_add_plan` and `benchbar_site_add`, `benchbar_site_restore_plan` and `benchbar_site_restore`. | 0.8.0 | macOS, Linux, Windows | [mcp](reference/cli/mcp.md) |
 | `benchbar_site_backup` | Backs up one site. | 0.8.0 | macOS, Linux, Windows | [mcp](reference/cli/mcp.md) |
 | Service plan and apply | `benchbar_service_install_plan` and `benchbar_service_install`, for a bench that has no service. | 0.8.0 | macOS, Linux, Windows | [mcp](reference/cli/mcp.md) |

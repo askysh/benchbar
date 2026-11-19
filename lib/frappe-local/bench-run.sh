@@ -264,6 +264,7 @@ fl_run_bench_command() {
   fl_log "run: ${RUN_ARGV[*]} (timeout ${RUN_TIMEOUT}s)"
   start="$SECONDS"; last_progress="$SECONDS"
   fl_run_bg_group "$FL_RUN_OUT" fl__in_dir "$FL_BENCH_DIR" "${RUN_ARGV[@]}"
+  # shellcheck disable=SC2153  # set by fl_run_bg_group
   pid="$FL_RUN_PID"
   fl_spinner_start "${RUN_ARGV[*]}" "$FL_RUN_OUT"
   while kill -0 "$pid" 2>/dev/null; do
@@ -325,7 +326,7 @@ fl_run_execute() {
     fi
     RUN_BACKUP_JSON="$FL_BACKUP_TAKEN_SET"
     fl_changed backup "$RUN_SITE" "$(fl_backup_field "$RUN_BACKUP_JSON" path)"
-    fl_step_end done
+    fl_step_end "done"
   fi
   fl_step_begin "$idx_run"
   RUN_RAN=1
@@ -333,7 +334,7 @@ fl_run_execute() {
   fl_run_collect_tail
   fl_bench_redis_down
   if [[ "$RUN_CODE" == "0" ]]; then
-    fl_step_end done
+    fl_step_end "done"
     if [[ "$RUN_CHANGES" == "yes" ]]; then
       if [[ -n "$RUN_SITE" ]]; then fl_changed site "$RUN_SITE" "bench ${RUN_CMD}"; else fl_changed bench "$FL_BENCH_DIR" "bench ${RUN_CMD}"; fi
     fi
