@@ -443,8 +443,12 @@ then `/usr/local/bin` when that is Homebrew's benchbar too, then
 `~/.local/bin`, the one line installer's link. With no CLI at all, the
 app says to install one with `brew install askysh/tap/benchbar` and
 asks once with a file picker.
-macOS asks whether BenchBar may send notifications; allow it for the
-crash alerts.
+BenchBar does not ask about notifications when it starts. macOS asks once,
+when the first alert has something to say (a bench crashed), or when you
+press **Allow Notifications** in the setup walkthrough or turn the setting on;
+allow it for the crash alerts. If you said no, **Settings, Notifications**
+says so and opens the macOS pane. An alert macOS refuses to show is
+named there too.
 
 ## What the app does not do
 

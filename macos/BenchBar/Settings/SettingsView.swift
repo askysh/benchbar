@@ -311,6 +311,10 @@ struct SettingsView: View {
                     Task { await notifier.requestPermission() }
                 }
             }
+            if settings.notificationsEnabled, let error = notifier.lastSendError {
+                Label("The last notification could not be sent: \(error)", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+            }
             if settings.notificationsEnabled && notifier.permission == .denied {
                 LabeledContent {
                     Button("Open Notifications…") { notifier.openSystemSettings() }

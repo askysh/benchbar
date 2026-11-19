@@ -156,8 +156,13 @@ fl_status_compute() {
   fi
 }
 
-# fl_pid_alive PID: kill -0, the builtin (FL_KILL_CMD stands in for it in the tests)
-fl_pid_alive() { "${FL_KILL_CMD:-kill}" -0 "$1" 2>/dev/null; }
+# fl_pid_alive PID: kill -0, the builtin (FL_KILL_CMD stands in for it in the
+# tests, and only under FL_TESTING=1)
+fl_pid_alive() {
+  local k=kill
+  [[ "${FL_TESTING:-}" == "1" ]] && k="${FL_KILL_CMD:-kill}"
+  "$k" -0 "$1" 2>/dev/null
+}
 
 # fl_bench_bin_v VAR: the `bench` executable the bench's service runs: the
 # first one on the PATH its agent (unit) bakes in, as a JSON string; null

@@ -11,7 +11,8 @@ plist="$HOME/Library/LaunchAgents/com.benchbar.frappe-bench.plist"
 
 # ---- legacy per-process agents from an older setup, one of them crash-looping
 for name in web worker socketio; do
-  printf '<?xml version="1.0"?><plist version="1.0"><dict><key>Label</key><string>com.akash.frappe-bench.%s</string><key>ProgramArguments</key><array><string>bench</string><string>%s</string></array></dict></plist>\n' "$name" "$name" \
+  case "$name" in web) cmd=serve ;; worker) cmd=worker ;; *) cmd=socketio ;; esac
+  printf '<?xml version="1.0"?><plist version="1.0"><dict><key>Label</key><string>com.akash.frappe-bench.%s</string><key>ProgramArguments</key><array><string>bench</string><string>%s</string></array><key>WorkingDirectory</key><string>%s</string></dict></plist>\n' "$name" "$cmd" "$BENCH" \
     >"$HOME/Library/LaunchAgents/com.akash.frappe-bench.${name}.plist"
 done
 set_agent com.akash.frappe-bench.web running 500 0
@@ -107,7 +108,7 @@ run_fm doctor --bench-dir "$BENCH"
 assert_contains "$OUT" "[WARN] Runner script: runner is outdated"
 run_fm repair --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
-grep -q 'benchbar-template: bench-run.sh v7' "$BENCH/benchbar-run.sh" || fail "runner must be regenerated"
+grep -q 'benchbar-template: bench-run.sh v8' "$BENCH/benchbar-run.sh" || fail "runner must be regenerated"
 
 # ---- reloading a running agent waits for launchd to let go of it
 # (real launchctl: bootout returns while the job still shuts down, and a

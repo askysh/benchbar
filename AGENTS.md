@@ -197,8 +197,14 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
   exceptions are its own lock folders (the run lock and
   `<bench>/.benchbar.lock`, with the `.stale.<pid>` name a stale one is
   renamed to and the `.reclaim` guard), the oldest `.old` log copies
-  beyond three, and `share teardown`'s removal of the share state folder
-  (`<state>/share`, outside the bench, confirmed first).
+  beyond three, the pruning of benchbar's own state folder beyond its
+  documented limits (run logs, backup stamp folders, update checks, old
+  `state.env.*` temp files; the newest are kept and `changed[]` says what
+  went), and `share teardown`'s removal of the share state folder
+  (`<state>/share`, outside the bench, confirmed first). Backups in a
+  site's `private/backups` are never pruned, and neither is a state backup
+  folder that holds `kept-sets` files (older backups that a cut short run
+  did not put back; `benchbar repair` puts them back).
 - Never run `bench update` unless the user asked for it by name.
 - Never write your own LaunchAgents or `Procfile`. Use `benchbar
   service`, which generates `Procfile.lean`, the runner and the agent
@@ -257,8 +263,13 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
 
 ## Contributing a change
 
-- Run `bash tests/affected.sh` for the tests your change touches; the full
-  suite (`bash tests/run-tests.sh`) before you hand the work back.
+- Run `bash tests/affected.sh` for the tests your change touches. CI runs
+  the full suite; run it yourself only when the selector says everything.
+- A change a user can see updates its guide or app page, `docs/features.md`
+  and `CHANGELOG.md`; a new command, flag or MCP tool also needs
+  `python3 scripts/docs-reference.py --write` (the reference tables are
+  generated, and `test-docs` fails when they drift). The pull request
+  template lists the same checks.
 - Branch from `next-release` and open the pull request against it.
   `main` holds the last release and moves only when one is cut
   (docs/releasing.md).
@@ -269,8 +280,11 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
 - Everything under `docs/` is published on the documentation site, so
   add a page there only when it is for users.
 - Record a non obvious choice as one line in `docs/DECISIONS.md` (CLI)
-  or `macos/DECISIONS.md` (app), and user facing changes under
-  `## Unreleased` in `CHANGELOG.md`. The PR description holds the rest.
+  or `macos/DECISIONS.md` (app). Put a user facing change in a fragment,
+  `changelog.d/<issue number>-<short-slug>.md` (format in
+  `changelog.d/README.md`), and never edit `CHANGELOG.md` for it: the
+  release step folds the fragments in. `scripts/changelog-fold.sh --check`
+  validates them. The PR description holds the rest.
 
 ## Reading the output
 

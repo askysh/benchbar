@@ -154,8 +154,9 @@ Terminal (a new tab has them already). `benchup` starts the bench in the
 background, waits for the site and ends with
 `bench is up: http://macdev:8000`.
 
-`macdev` is the default site name. When you picked another one, or
-adopted a bench, `benchbar status` shows the site's URL; use that.
+`macdev` is the default site name on macOS. On Linux (and in WSL) it is
+`linuxdev.localhost`, so open `http://linuxdev.localhost:8000`. When you picked
+another one, or adopted a bench, `benchbar status` shows the site's URL; use that.
 
 In the browser, log in as `Administrator` with the password you gave
 `install` (or your existing one), and walk through the setup wizard. You
@@ -163,7 +164,7 @@ can close Terminal; the bench keeps running until `benchdown`.
 
 ## Linux and Windows
 
-On Ubuntu 24.04, clone the repository and run `./benchbar install`, then
+On Ubuntu 24.04 (or another apt based system), clone the repository and run `./benchbar install`, then
 `source ~/.bashrc` and `benchup`. See [Install: Linux](install.md#linux).
 
 On Windows, install BenchBar for Windows (a beta) with the one line in

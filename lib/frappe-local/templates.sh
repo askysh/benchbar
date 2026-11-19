@@ -37,7 +37,8 @@
 FL_TEMPLATE_TOKEN="benchbar-template"
 FL_TEMPLATE_HEADER_RE='\(benchbar\|frappe-mac\)-template: [A-Za-z0-9._-]* v[0-9]* [0-9a-f]*'
 
-FL_TEMPLATE_DIR="${FL_TEMPLATE_DIR:-${SCRIPT_DIR}/templates}"
+# FL_TEMPLATE_DIR is a test seam: a production run ignores it (FL_TESTING)
+if [[ "${FL_TESTING:-}" == "1" ]]; then FL_TEMPLATE_DIR="${FL_TEMPLATE_DIR:-${SCRIPT_DIR}/templates}"; else FL_TEMPLATE_DIR="${SCRIPT_DIR}/templates"; fi
 FL_BACKUP_ROOT="${FL_BACKUP_ROOT:-${FL_STATE_DIR}/backups}"
 FL_BACKUP_STAMP=""
 FL_LAST_BACKUP=""
