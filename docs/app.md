@@ -520,16 +520,48 @@ only while that bench runs. The runner's speed is not read while the Mac
 sleeps, the screen is locked, the menu bar is hidden or Low Power Mode
 is on (the runner then plays at one speed).
 
+While the Mac sleeps or the screen is locked, the loops stop but the
+folder watchers stay, so a crash is announced at once, as it happens. A
+bench that crashed and was restarted by launchd while you were away shows
+`running` at wake; the app sees that it has a new start and a failing exit
+code, and tells you once.
+
+At most three `benchbar status` calls run at the same time, and opening
+the popover and the window together reads the benches once. A bench that
+has never run under the runner (no `state.json`) and that `benchbar status`
+called stopped is no longer asked every minute: the 5 minute check still
+asks, and its first start is heard from the folder.
+
 Two features read more often, and only while they are on screen. While the
-Sharing tab is open or a room runs, the app asks `benchbar share status`
-every 5 seconds and runs the protection checks once a minute. While **On
-your network** is open, it looks for nearby rooms every 5 seconds and asks
-each joined room every 10 seconds (less often when a room does not answer).
-All of it stops when you close the pane and no room runs or is open.
+Sharing tab is open, the app asks `benchbar share status` every 5 seconds
+and runs the protection checks once a minute. While you host a room (a
+Labs feature) and the tab is closed, `share status` is asked every 15
+seconds. While **On your network** is open, it looks for nearby rooms
+every 5 seconds and asks each joined room every 10 seconds (less often
+when a room does not answer). All of it stops when you close the pane and
+no room runs or is open.
 
 `benchbar status` pings only the default site. `benchbar status --ping`
 asks every site once and fills `ping_code` in the JSON; see
 [Running a bench](reference/cli/running.md).
+
+## Quitting and two copies
+
+If you quit while a change runs (an install, a repair, an app update, a
+site change, port setup, hosts lines, or a start, stop or restart), BenchBar
+asks. **Keep running** is the default; **Quit when it finishes** closes
+BenchBar as soon as the change is done. Quitting during a change would end
+it halfway and could leave a bench half installed or half migrated.
+
+Only one BenchBar runs at a time. Opening a second copy (from another
+folder, a DMG, Homebrew or Xcode) brings the running one to the front and
+quits the new one. The `benchbar` command line tool follows the copy in
+`/Applications`: a copy in `~/Applications` does not take it over, and an
+older copy never replaces a newer one on the same level.
+
+When a command times out or is cancelled, the app stops the command and
+everything it started (its process group): first SIGTERM, then SIGKILL
+after 2 seconds. A cancel is not reported as a timeout.
 
 ## Find existing benches in a folder
 

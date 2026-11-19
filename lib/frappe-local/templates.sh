@@ -119,24 +119,28 @@ fl_template_render() {
     esac
     only_token=0
     [[ "$line" =~ ^__[A-Z_]+__$ ]] && only_token=1
-    # a default stands in first, so the tokens inside it are filled below
-    for ((i = 0; i < nd; i++)); do
-      dv="${dvals[$i]}"
-      line="${line//__${dkeys[$i]}__/$dv}"
-    done
     hline="$line"
-    for ((i = 0; i < n; i++)); do
-      key="${keys[$i]}"
-      value="${vals[$i]}"
-      if [[ "$fmt" == xml ]]; then value="${evals[$i]}"
-      elif [[ -n "$quoted" ]]; then case "$quoted" in *" ${key} "*) value="${evals[$i]}" ;; esac
-      fi
-      line="${line//__${key}__/$value}"
-      # the hashed copy keeps an unhashed key's token
-      if [[ -n "$unhashed" ]]; then
-        case "$unhashed" in *" ${key} "*) ;; *) hline="${hline//__${key}__/$value}" ;; esac
-      fi
-    done
+    # most lines hold no token: they skip both loops (126 ms a render before)
+    if [[ "$line" == *__* ]]; then
+      # a default stands in first, so the tokens inside it are filled below
+      for ((i = 0; i < nd; i++)); do
+        dv="${dvals[$i]}"
+        line="${line//__${dkeys[$i]}__/$dv}"
+      done
+      hline="$line"
+      for ((i = 0; i < n; i++)); do
+        key="${keys[$i]}"
+        value="${vals[$i]}"
+        if [[ "$fmt" == xml ]]; then value="${evals[$i]}"
+        elif [[ -n "$quoted" ]]; then case "$quoted" in *" ${key} "*) value="${evals[$i]}" ;; esac
+        fi
+        line="${line//__${key}__/$value}"
+        # the hashed copy keeps an unhashed key's token
+        if [[ -n "$unhashed" ]]; then
+          case "$unhashed" in *" ${key} "*) ;; *) hline="${hline//__${key}__/$value}" ;; esac
+        fi
+      done
+    fi
     [[ -n "$unhashed" ]] || hline="$line"
     [[ "$only_token" == "1" && -z "$line" ]] && continue
     body="${body}${line}"$'\n'

@@ -48,15 +48,31 @@ fl_ui_init() {
   if [[ "$FL_TTY" == "1" ]]; then
     cols="$(tput cols 2>/dev/null || true)"
     [[ -n "$cols" && "$cols" -gt 40 ]] && FL_COLS="$cols"
-    FL_BOLD="$(tput bold 2>/dev/null || true)"
-    FL_DIM="$(tput dim 2>/dev/null || true)"
-    FL_RED="$(tput setaf 1 2>/dev/null || true)"
-    FL_GREEN="$(tput setaf 2 2>/dev/null || true)"
-    FL_YELLOW="$(tput setaf 3 2>/dev/null || true)"
-    FL_BLUE="$(tput setaf 4 2>/dev/null || true)"
-    FL_CYAN="$(tput setaf 6 2>/dev/null || true)"
-    FL_RESET="$(tput sgr0 2>/dev/null || true)"
-    FL_EL="$(tput el 2>/dev/null || true)"
+    # the color terminals of every Mac and Linux terminal app: the codes are
+    # fixed, so no tput process (nine of them, 19 ms) for them. A terminal
+    # whose terminfo has no colors (xterm-mono, vt100) asks tput, which then
+    # prints nothing for the colors, as before.
+    local __fixed=0
+    case "${TERM:-}" in
+      *mono*) ;;
+      xterm*|screen*|tmux*|rxvt*|linux|alacritty|foot*|wezterm) __fixed=1 ;;
+    esac
+    if [[ "$__fixed" == "1" ]]; then
+      local __e=$'\033['
+      FL_BOLD="${__e}1m"; FL_DIM="${__e}2m"
+      FL_RED="${__e}31m"; FL_GREEN="${__e}32m"; FL_YELLOW="${__e}33m"; FL_BLUE="${__e}34m"; FL_CYAN="${__e}36m"
+      FL_RESET="${__e}m"; FL_EL="${__e}K"
+    else
+      FL_BOLD="$(tput bold 2>/dev/null || true)"
+      FL_DIM="$(tput dim 2>/dev/null || true)"
+      FL_RED="$(tput setaf 1 2>/dev/null || true)"
+      FL_GREEN="$(tput setaf 2 2>/dev/null || true)"
+      FL_YELLOW="$(tput setaf 3 2>/dev/null || true)"
+      FL_BLUE="$(tput setaf 4 2>/dev/null || true)"
+      FL_CYAN="$(tput setaf 6 2>/dev/null || true)"
+      FL_RESET="$(tput sgr0 2>/dev/null || true)"
+      FL_EL="$(tput el 2>/dev/null || true)"
+    fi
   else
     FL_BOLD=""; FL_DIM=""; FL_RED=""; FL_GREEN=""; FL_YELLOW=""; FL_BLUE=""; FL_CYAN=""; FL_RESET=""; FL_EL=""
   fi
@@ -181,9 +197,25 @@ fl_redact_url() { local r; fl_redact_url_v r "$1"; printf '%s' "$r"; }
 
 fl_log() {
   [[ -n "$FL_LOG_FILE" ]] || return 0
-  local msg="$*"
+  local msg="$*" __ts
   fl_redact_url_v msg "$msg"
-  printf '%s %s\n' "$(date '+%H:%M:%S')" "$msg" >>"$FL_LOG_FILE" 2>/dev/null || true
+  fl_log_stamp_v __ts
+  printf '%s %s\n' "$__ts" "$msg" >>"$FL_LOG_FILE" 2>/dev/null || true
+}
+
+# fl_log_stamp_v VAR: HH:MM:SS now. One date at the first call, then the
+# clock moves with $SECONDS (a fork per log line was 114 forks in one adopt).
+FL_LOG_BASE=""
+FL_LOG_SECONDS0=0
+fl_log_stamp_v() {
+  local __h __m __s __t
+  if [[ -z "$FL_LOG_BASE" ]]; then
+    read -r __h __m __s < <(date '+%H %M %S')
+    FL_LOG_BASE=$((10#$__h * 3600 + 10#$__m * 60 + 10#$__s))
+    FL_LOG_SECONDS0="$SECONDS"
+  fi
+  __t=$(((FL_LOG_BASE + SECONDS - FL_LOG_SECONDS0) % 86400))
+  printf -v "$1" '%02d:%02d:%02d' $((__t / 3600)) $((__t % 3600 / 60)) $((__t % 60))
 }
 
 # fl_log_file_append FILE: a command's captured output into the run log,
@@ -245,6 +277,8 @@ fl__json_csi_len_v() {
 }
 fl_json_escape_v() {
   local __e="$2" __o="" __p __n
+  # nothing to escape (almost every value): no substitutions, no loop
+  if [[ "$__e" != *[\\\"$FL_JSON_CTRL]* ]]; then printf -v "$1" '%s' "$__e"; return 0; fi
   __e="${__e//\\/\\\\}"
   __e="${__e//\"/\\\"}"
   # cut at each control character: bash 3.2's ${x//[set]/} is quadratic in

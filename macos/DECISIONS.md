@@ -587,6 +587,14 @@ Asked for after the phases, to stop naming drift before the first release.
 - Labs toggles live in Settings and read the CLI's LABS key; the app never stores the flags itself, so the CLI, MCP and app agree. `Labs.shared` refreshes at launch, when Settings appears and when the window becomes key (at most every 5 s); turning one on passes `--yes` with BENCHBAR_NONINTERACTIVE=0 and BENCHBAR_SUDO=gui, as `site open-as on` does. A non zero exit from `labs list` is read as a CLI without the command.
 - When the lan-rooms lab reads off, `ShareCenter.tearDown` stops watching and drops the stores but keeps `shareActiveBenches`: only the CLI's `labs off` really stops shares, so a refresh that reports off must not forget which benches were sharing.
 
+## 0.9 process pass (issue 160)
+
+- Quitting during a change asks with two safe answers, Keep running (default) and Quit when it finishes (`QuitPolicy`, `QuitAfterChange`, `BenchStore.onIdle`). There is no "Quit anyway" for a change: the CLI would die on SIGPIPE halfway. The share cases keep their Quit anyway. A hung change ends at its own timeout.
+- The CLI child leads its own process group (`processGroupID = 0`) and the teardown signals the group (TERM, then KILL after 2 s). The CLI forwards TERM to its own command groups, so the signal reaches them through it. A cancelled caller gets `CLIError.cancelled`, never `timedOut`.
+- Sleep and lock keep the folder watchers (they cost nothing without events) and stop only the loops. While suspended, a state file change never starts a CLI call. At wake, a bench running before and after with a later `started_at` and a non zero `last_exit_code` gets one crash notice (`CrashWhileAway`), unless the watcher already told it. A manual restart after an earlier crash can read the same way: accepted.
+- `status` fan out is capped at 3 (`BenchStore.maxParallelStatus`). On screen triggers share one queued reload (`requestReload`). A `noFile` bench the CLI called final leaves the minute loop; one running by hand stays.
+- `share status` is polled at 15 s with 20 percent tolerance, at 5 s only while the Sharing tab shows.
+- A second copy of the app opens the running one and exits (`SingleInstance`), unless `BENCHBAR_ALLOW_SECOND_COPY=1`. A `benchbar://` link that launched the second copy is lost: accepted. The CLI link: a copy in `/Applications` always keeps or takes it, and on one level it never goes to an older version (`AppCLILink.mayReplace`).
 ## Rooms UI (0.9.0)
 
 - The guest health loop is `GuestRoomStore.healthTick()` (pure steps, tested) and runs only while the pane is visible or a loopback forwarder is open; it ends when no saved room can still be asked. A room that does not answer is asked after 20 s, 40 s and so on up to 5 minutes (`pingDelay`), and an answer resets it. Turning the lab off calls `shutDown()`, which now stops the loop as well.
