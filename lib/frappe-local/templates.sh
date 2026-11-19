@@ -44,8 +44,10 @@ FL_BACKUP_STAMP=""
 FL_LAST_BACKUP=""
 
 fl_content_hash() {
+  local sum
   if command -v shasum >/dev/null 2>&1; then
-    shasum -a 256 | cut -c1-12
+    # the first 12 hex digits, cut in bash (one program, not two)
+    sum="$(shasum -a 256)"; printf '%s\n' "${sum:0:12}"
   elif command -v sha256sum >/dev/null 2>&1; then
     # the same 12 hex digits as shasum -a 256 (no shasum on a minimal Linux)
     sha256sum | cut -c1-12
@@ -55,8 +57,12 @@ fl_content_hash() {
 }
 
 fl_template_version() {
-  local file="$1"
-  sed -n 's/^#@version[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$file" | awk 'NR==1'
+  local line re='^#@version[[:space:]]*([0-9][0-9]*)'
+  [[ -r "$1" ]] || return 0
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    if [[ "$line" =~ $re ]]; then printf '%s\n' "${BASH_REMATCH[1]}"; return 0; fi
+  done <"$1"
+  return 0
 }
 
 # The replacement of every ${var//pat/rep} here is a plain variable, never a
@@ -117,6 +123,9 @@ fl_template_render() {
         if [[ "$given" == "0" ]]; then dkeys[nd]="$dk"; dvals[nd]="${dv//"$bsn"/$nl}"; nd=$((nd + 1)); fi
         continue ;;
     esac
+    # a line with no __ in it holds no token, no default and no header: it goes in as it is
+    # (almost every line, and each of the others costs a substitution per key)
+    if [[ "$line" != *__* ]]; then body="${body}${line}"$'\n'; hbody="${hbody}${line}"$'\n'; continue; fi
     only_token=0
     [[ "$line" =~ ^__[A-Z_]+__$ ]] && only_token=1
     hline="$line"
@@ -150,9 +159,26 @@ fl_template_render() {
   printf '%s' "${body//__HEADER__/${FL_TEMPLATE_TOKEN}: ${name} v${version:-1} ${hash}}"
 }
 
-# Prints "<name> vN <hash>" from the first header on stdin, or nothing.
+# fl_template_header_line_v VAR LINE: "<name> vN <hash>" when LINE holds a
+# template header (what grep -o with FL_TEMPLATE_HEADER_RE found, minus the
+# "benchbar-template: " words), else VAR is left empty
+fl_template_header_line_v() {
+  local __re='(benchbar|frappe-mac)-template: ([A-Za-z0-9._-]* v[0-9]* [0-9a-f]*)'
+  printf -v "$1" '%s' ""
+  [[ "$2" == *-template:* && "$2" =~ $__re ]] && printf -v "$1" '%s' "${BASH_REMATCH[2]}"
+  return 0
+}
+
+# Prints "<name> vN <hash>" from the first header on stdin, or nothing. Read in
+# bash: doctor asks this for every service file, and a grep, an awk and a sed
+# for each of them was most of its programs.
 fl_template_header_key() {
-  grep -o "$FL_TEMPLATE_HEADER_RE" | awk 'NR==1' | sed 's/^[a-z-]*-template: //' || true
+  local line key=""
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    fl_template_header_line_v key "$line"
+    [[ -z "$key" ]] || { printf '%s\n' "$key"; return 0; }
+  done
+  return 0
 }
 
 # Prints the header key found in an existing file, or nothing.
@@ -163,7 +189,7 @@ fl_template_installed_header() {
 }
 
 fl_template_header_of() {
-  printf '%s' "$1" | fl_template_header_key
+  fl_template_header_key <<<"$1"
 }
 
 # fl_template_status PATH RENDERED -> missing | current | outdated | foreign

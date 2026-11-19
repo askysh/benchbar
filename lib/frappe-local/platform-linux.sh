@@ -296,6 +296,20 @@ fl_keychain_delete() {
 # A socket whose owner ss may not show (another user's) gets pid 0 and
 # command "?". Addresses read like lsof's: *:3306, 127.0.0.1:3306, [::1]:3306.
 fl__ss_listeners() {
+  local all port pid cmd addr
+  # in a doctor run (facts.sh) one ss for every port, filtered here
+  if [[ -n "${FL_FACTS_DIR:-}" ]]; then
+    fl_memo_v all ss-listeners fl__ss_listeners_run "" || true
+    if [[ -z "${1:-}" ]]; then printf '%s' "$all"; return 0; fi
+    while read -r port pid cmd addr; do
+      case ",${1}," in *",${port},"*) printf '%s %s %s %s\n' "$port" "$pid" "$cmd" "$addr" ;; esac
+    done <<<"$all"
+    return 0
+  fi
+  fl__ss_listeners_run "${1:-}"
+}
+
+fl__ss_listeners_run() {
   ss -Hltnp 2>/dev/null | awk -v want="${1:-}" '
     BEGIN { n = split(want, w, ","); for (i = 1; i <= n; i++) if (w[i] != "") ok[w[i]] = 1 }
     {
