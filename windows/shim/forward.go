@@ -209,6 +209,9 @@ func forward(sys *System, t target, args []string) int {
 	if raw != nil {
 		errorf(sys, "%s", wslFailureLine(*raw))
 	}
+	if code == 2 {
+		skewHint(sys, t)
+	}
 	if code == 127 && !cliExists(sys, t) {
 		where := "the default WSL distro"
 		if t.distro != "" {
@@ -251,6 +254,16 @@ func shimCwd(sys *System, distro string) string {
 		return ""
 	}
 	return wd
+}
+
+// skewHint explains an exit code 2 when the CLI in the distro is not the
+// release of this benchbar.exe: an older CLI answers an unknown flag with 2
+// and a message that says nothing about the version. It is one extra call,
+// made only after a 2, and says nothing when the releases match.
+func skewHint(sys *System, t target) {
+	if c, ok := cliVersionCheck(sys, t); ok && c.Status == "warn" {
+		fmt.Fprintf(sys.Stderr, "benchbar.exe: %s. fix: %s\n", c.Message, c.Fix)
+	}
 }
 
 // cliExists asks the distro again, so that a 127 from the CLI itself (a

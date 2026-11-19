@@ -117,10 +117,9 @@ func TestSuggestRules(t *testing.T) {
 			"[wsl2]\nmemory=4GB\nvmIdleTimeout=-1\n[general]\ninstanceIdleTimeout=-1\n"},
 		{"exactly 8 GB host keeps default", "", 8 * gb,
 			"[wsl2]\nvmIdleTimeout=-1\n[general]\ninstanceIdleTimeout=-1\n"},
-		{"memory below 4 GB", "[wsl2]\nmemory=2GB\nvmIdleTimeout=-1\n[general]\ninstanceIdleTimeout=-1\n", 32 * gb,
-			"[wsl2]\nmemory=4GB\n"},
-		{"memory in MB below 4 GB", "[wsl2]\nmemory=3500MB\n", 32 * gb,
-			"[wsl2]\nmemory=4GB\nvmIdleTimeout=-1\n[general]\ninstanceIdleTimeout=-1\n"},
+		{"memory below 4 GB is the user's own", "[wsl2]\nmemory=2GB\nvmIdleTimeout=-1\n[general]\ninstanceIdleTimeout=-1\n", 32 * gb, ""},
+		{"memory in MB below 4 GB is left alone", "[wsl2]\nmemory=3500MB\n", 32 * gb,
+			"[wsl2]\nvmIdleTimeout=-1\n[general]\ninstanceIdleTimeout=-1\n"},
 		{"memory at 4 GB kept", "[wsl2]\nmemory=4GB\nvmIdleTimeout=-1\n[general]\ninstanceIdleTimeout=-1\n", 4 * gb, ""},
 		{"memory unparsable is left alone", "[wsl2]\nmemory=lots\nvmIdleTimeout=-1\n[general]\ninstanceIdleTimeout=-1\n", 2 * gb, ""},
 		{"timeouts wrong", "[wsl2]\nvmIdleTimeout=5000\n[general]\ninstanceIdleTimeout=0\n", 32 * gb,
@@ -228,7 +227,7 @@ func TestApplyRoundTrip(t *testing.T) {
 	if code := e.run("wslconfig", "--apply", "--yes"); code != 0 {
 		t.Fatalf("exit %d: %s", code, e.stderr())
 	}
-	want := "\xEF\xBB\xBF# my settings\r\n[WSL2]\r\nMemory = 4GB\r\nprocessors=4\r\n; keep me\r\nvmIdleTimeout=-1\r\n\r\n[experimental]\r\nautoMemoryReclaim=gradual\r\nsparseVhd=true\r\n\r\n[general]\r\ninstanceIdleTimeout=-1\r\n"
+	want := "\xEF\xBB\xBF# my settings\r\n[WSL2]\r\nMemory = 2GB\r\nprocessors=4\r\n; keep me\r\nvmIdleTimeout=-1\r\n\r\n[experimental]\r\nautoMemoryReclaim=gradual\r\nsparseVhd=true\r\n\r\n[general]\r\ninstanceIdleTimeout=-1\r\n"
 	got, _ := os.ReadFile(path)
 	if string(got) != want {
 		t.Errorf("file\n got %q\nwant %q", got, want)
@@ -338,7 +337,7 @@ func TestUTF16ApplyKeepsEncodingBOMAndCRLF(t *testing.T) {
 		t.Fatalf("exit %d: %s", code, e.stderr())
 	}
 	got, _ := os.ReadFile(path)
-	want := utf16File(t, "# note\r\n[wsl2]\r\nmemory=4GB\r\nvmIdleTimeout=-1\r\n\r\n[general]\r\ninstanceIdleTimeout=-1\r\n", false, true)
+	want := utf16File(t, "# note\r\n[wsl2]\r\nmemory=2GB\r\nvmIdleTimeout=-1\r\n\r\n[general]\r\ninstanceIdleTimeout=-1\r\n", false, true)
 	if !bytes.Equal(got, want) {
 		t.Errorf("file\n got % x\nwant % x", got, want)
 	}
@@ -363,5 +362,19 @@ func TestUTF16ApplyKeepsEncodingBOMAndCRLF(t *testing.T) {
 	}
 	if backups, _ = filepath.Glob(path + ".benchbar-backup-*"); len(backups) != 1 {
 		t.Errorf("second apply made a backup: %v", backups)
+	}
+}
+
+func TestIdleCheckSaysSoWhenTheUsersMemoryIsSmallAndLeavesIt(t *testing.T) {
+	r := analyze("[wsl2]\nmemory=2GB\nvmIdleTimeout=-1\n[general]\ninstanceIdleTimeout=-1\n", 32<<30)
+	c := idleCheck(r)
+	if c.Status != "ok" || !strings.Contains(c.Message, "memory=2GB is below 4 GB, and is left as you set it") {
+		t.Errorf("%+v", c)
+	}
+	if len(r.Suggest) != 0 {
+		t.Errorf("suggests %v", r.Suggest)
+	}
+	if c := idleCheck(analyze("[wsl2]\nmemory=8GB\nvmIdleTimeout=-1\n[general]\ninstanceIdleTimeout=-1\n", 32<<30)); strings.Contains(c.Message, "below 4 GB") {
+		t.Errorf("%+v", c)
 	}
 }

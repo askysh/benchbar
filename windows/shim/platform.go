@@ -83,6 +83,10 @@ func defaultWSLPath() (string, error) {
 	return exec.LookPath("wsl.exe")
 }
 
+// schtasksTimeout ends a schtasks.exe that does not answer, so doctor and
+// keepalive cannot hang on it.
+var schtasksTimeout = 30 * time.Second
+
 type schtasksRunner struct{}
 
 func (schtasksRunner) Schtasks(args ...string) (string, int, error) {
@@ -92,7 +96,14 @@ func (schtasksRunner) Schtasks(args ...string) (string, int, error) {
 			path = p
 		}
 	}
-	out, err := exec.Command(path, args...).CombinedOutput()
+	ctx, cancel := context.WithTimeout(context.Background(), schtasksTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, path, args...)
+	cmd.WaitDelay = wslWaitDelay
+	out, err := cmd.CombinedOutput()
+	if ctx.Err() == context.DeadlineExceeded {
+		return decodeConsole(out), -1, fmt.Errorf("schtasks.exe did not answer in %d s", int(schtasksTimeout.Seconds()))
+	}
 	// schtasks writes in the OEM code page, not UTF-8
 	text := decodeConsole(out)
 	if err == nil {

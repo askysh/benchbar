@@ -64,17 +64,29 @@ type emitter struct {
 	w        io.Writer
 	jsonl    bool
 	doneSent bool
+	// onFail is called once, the first time a write fails (the tray closed
+	// its pipe, the console is gone): nobody reads the events any more, so
+	// the action is stopped and does not go on to restart the distro.
+	onFail func()
+	failed bool
 }
 
 func (e *emitter) write(v any, text string) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	var err error
 	if e.jsonl {
 		b, _ := json.Marshal(v)
-		e.w.Write(append(b, '\n'))
-		return
+		_, err = e.w.Write(append(b, '\n'))
+	} else {
+		_, err = fmt.Fprintln(e.w, text)
 	}
-	fmt.Fprintln(e.w, text)
+	if err != nil && !e.failed {
+		e.failed = true
+		if e.onFail != nil {
+			e.onFail()
+		}
+	}
 }
 
 func (e *emitter) step(id, status, msg string) {
@@ -237,7 +249,7 @@ var setupActions = map[string]setupAction{
 	"cli_install":    {"Install the BenchBar command line tool", actCLIInstall, []string{"linger"}},
 	"linger":         {"Keep benches running", actLinger, []string{"keepalive"}},
 	"keepalive":      {"Keep the distro awake", actKeepalive, []string{"wslconfig"}},
-	"wslconfig":      {"Set WSL idle settings", actWslconfigApply, []string{"path"}},
+	"wslconfig":      {"Keep WSL from stopping idle benches (uses more RAM)", actWslconfigApply, []string{"path"}},
 	"path":           {"Put benchbar.exe on PATH", actPath, []string{}},
 }
 
@@ -283,6 +295,7 @@ func cmdSetupRun(sys *System, args []string) int {
 	go func() { <-ctx.Done(); stop() }()
 	sys.Ctx = ctx
 	defer func() { sys.Ctx = parent; stop() }()
+	em.onFail = stop
 	rc := &runCtx{sys: sys, em: em, distro: distro, user: user, force: p.bools["--force"]}
 	if id == "wsl_enable" && !sys.Host.IsAdmin() {
 		return runWslEnableElevated(rc)
@@ -368,10 +381,14 @@ func validLinuxUser(s string) bool { return userNameRE.MatchString(s) && s != "r
 // run streams a wsl.exe command as log events. It returns the exit code
 // and every line the command printed.
 func (rc *runCtx) stream(stdin string, args ...string) (int, []string, error) {
-	cmd, err := wslCommand(rc.sys, args...)
+	// sys.Ctx ends on Ctrl+C, a closing console or a caller that is gone, and
+	// then ends wsl.exe; no WaitDelay, since the output of a long action is
+	// read to its end
+	cmd, err := wslCommandContext(rc.sys.Ctx, rc.sys, args...)
 	if err != nil {
 		return 1, nil, err
 	}
+	cmd.WaitDelay = 0
 	if rc.proxy {
 		cmd.Env = withEnvNames(rc.sys, cmd.Env, nil, proxyEnv)
 	}
