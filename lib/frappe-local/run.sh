@@ -373,6 +373,11 @@ fl_on_error() {
   # exit trap that is already running keeps set -e's own behaviour
   [[ "${FL_EXITING:-0}" != "1" ]] || return 0
   [[ -z "$cmd" || "$BASH_SUBSHELL" -eq 0 ]] || return 0
+  # a section that turned errexit off (`set +e; ( ... ); rc=$?; set -e`) collects its
+  # failures and decides for itself. The ERR trap fires there all the same (bash 4 and
+  # later even for the subshell's own exit status), so errexit being off is the mark of
+  # a handled failure. Commands in an `if`, `||` or `&&` context never reach the trap.
+  [[ -z "$cmd" || "$-" == *e* ]] || return 0
   # exit code 2 means "the MariaDB root password is unknown" and only an
   # explicit fl_die ... 2 may produce it; a command that happened to exit 2
   # (grep, awk, a usage error) is an ordinary failure

@@ -859,8 +859,8 @@ fl_cmd_uninstall_service_all() {
   fl_confirm "Uninstall the background service of these ${#dirs[@]} bench(es)?" || { fl_warn "Cancelled."; return 1; }
   # a subshell per bench: its own context, and a bench that fails (a job
   # launchd keeps) stops only itself. Not under if or ||, which would turn
-  # errexit off inside it. The ERR trap does not run in a function (no
-  # errtrace), so only this function's own return reaches it.
+  # errexit off inside it. The failure is collected under set +e, where
+  # fl_on_error stays silent (errtrace hands it the subshell's exit status too).
   for dir in "${dirs[@]}"; do
     fl_section "$dir"
     set +e

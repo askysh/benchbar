@@ -83,6 +83,49 @@ SH
 set +e; OUT="$(bash "$TMP_DIR/err2.sh" "$ROOT" 2>&1)"; CODE=$?; set -e
 assert_eq "1" "$CODE" "$OUT"
 
+# a failure the caller handles stays silent: a loop that collects the exit status of a
+# subshell or a function under set +e (uninstall-service --all does), an `if !`, an `||`.
+# The ERR trap fires for the first two all the same, so fl_on_error looks at errexit
+cat >"$TMP_DIR/err3.sh" <<'SH'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+. "$1/lib/frappe-local/ui.sh"; . "$1/lib/frappe-local/run.sh"
+FL_PLAIN=1; fl_ui_init
+trap 'fl_on_error "$BASH_COMMAND"' ERR
+inner() { mkdir /nonexistent-benchbar/a/b 2>/dev/null; return 3; }
+one_bench() { set -e; inner; echo not-reached-in-subshell; }
+step() {
+  local rc n=0 d
+  for d in a b c; do
+    set +e
+    (one_bench)
+    rc=$?
+    set -e
+    [[ "$rc" == "0" ]] || n=$((n + 1))
+  done
+  echo "collected ${n} of 3"
+  set +e; inner; rc=$?; set -e
+  echo "function rc=${rc}"
+  if ! (inner); then echo "handled by if"; fi
+  v="$(inner)" || v=fallback
+  echo "handled by ||: ${v}"
+}
+step
+echo finished
+mkdir /nonexistent-benchbar/a/b
+echo not-reached
+SH
+set +e; OUT="$(bash "$TMP_DIR/err3.sh" "$ROOT" 2>&1)"; CODE=$?; set -e
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "collected 3 of 3"
+assert_contains "$OUT" "function rc=3"
+assert_contains "$OUT" "handled by if"
+assert_contains "$OUT" "handled by ||: fallback"
+assert_contains "$OUT" "finished"
+assert_not_contains "$OUT" "not-reached"
+assert_eq "1" "$(grep -c 'Command failed' <<<"$OUT")" "(only the unhandled failure after the handled ones is reported)"
+assert_contains "$OUT" "mkdir /nonexistent-benchbar/a/b"
+
 # ---------------------------------------------------------------- CORE-4: a guessed bench is named
 mkdir -p "$HOME/dev"
 make_fake_bench "$HOME/dev/frappe-bench" other
