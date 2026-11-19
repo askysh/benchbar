@@ -125,6 +125,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `pull` | `--from-dir` | `DIR` | A backup set downloaded by hand, no SSH. |
 | `pull` | `--remote-bench` | `DIR` | The bench folder on the server. |
 | `pull` | `--new-backup` |  | Run bench backup on the server first. |
+| `pull` | `--keep-secrets` |  | Keep the copy's integrations and stored secrets (by default they are switched off and cleared). |
 | `pull` | `--replace` |  | Restore over an existing local site, after backing it up. |
 | `pull` | `--confirm-site` | `SITE` | With --new-backup: the site name, instead of typing it. |
 | `pull` | `--skip-app` | `APP` | Restore without APP (its tables stay behind as orphans); repeat for more apps. |
