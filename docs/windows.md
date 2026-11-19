@@ -405,6 +405,16 @@ management. **Team Profiles** creates a profile from a bench, imports or
 subscribes to one, exports, updates, checks access and removes. A Windows
 file path for import or export is converted with `wslpath`.
 
+**Labs** lists the experiments of `benchbar.exe labs list`, one row each,
+with a switch, a warning, the version it came in and what it is. The
+switch runs `benchbar.exe labs on NAME` or `labs off NAME`, the same calls
+as **Settings > Labs** in the Mac app, so the state is the same in the
+tray, in PowerShell and for an agent. Turning an experiment on is your
+decision, and the click is it: the warning is on the row. An experiment
+that does not list Linux among its platforms (the benches run in WSL)
+stays off and says why; `benchbar labs list` shows each experiment's
+platforms. Turning one off stops what it started.
+
 The log window filters by process, searches, follows the log (while the
 window is open), shows the previous log and opens `tail -f` in Windows
 Terminal. Follow asks every 2 seconds while lines arrive and waits up to 10
@@ -687,8 +697,10 @@ every distro, so stop your benches first).
 
 ## Labs
 
-Labs work the same on Windows. `benchbar.exe labs list` shows them, and the
-ones that are not on Windows yet say so. `benchbar.exe labs on NAME` asks
-first in PowerShell. Turning one on is a person's decision, so an agent with
-`BENCHBAR_NONINTERACTIVE=1` is refused. See
+Labs work the same on Windows. The **Labs** page of the BenchBar window
+and `benchbar.exe labs list` show them, and the ones that are not on
+Windows yet say so. `benchbar.exe labs on NAME` asks first in PowerShell.
+Turning one on is a person's decision, so an agent with
+`BENCHBAR_NONINTERACTIVE=1` is refused; the tray's switch is your click,
+so it runs the same call with the question already answered. See
 [labs](reference/cli/labs.md).
