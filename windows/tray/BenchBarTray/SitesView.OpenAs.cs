@@ -126,8 +126,16 @@ internal sealed partial class SitesView
         if (user.RolesLine.Length > 0) text.Children.Add(Ui.Text(user.RolesLine, 12, opacity: 0.7, margin: new Thickness(0)));
         if (_services.Pins.Of(Bench.Path, find.Site).FirstOrDefault(p => p.User == user.Name) is { } kept)
         {
-            // the label Quick Switch shows for this user, as the Mac's Find User row has; saved as typed
-            var label = Ui.Field("Label for " + user.Name, kept.Label ?? "", typed => _services.Pins.SetLabel(user.Name, typed, Bench.Path, find.Site), 220);
+            // the label Quick Switch shows for this user, as the Mac's Find User row has; saved when the person is done (Enter or leaving
+            // the field), not on every key, because every save writes config.json
+            var label = Ui.Field("Label for " + user.Name, kept.Label ?? "", _ => { }, 220);
+            label.LostFocus += (_, _) => CommitLabel(label, user.Name, find.Site);
+            label.KeyDown += (_, e) =>
+            {
+                if (e.Key != Key.Enter) return;
+                CommitLabel(label, user.Name, find.Site);
+                e.Handled = true;
+            };
             label.ToolTip = "A short name for Quick Switch, for example NE";
             label.HorizontalAlignment = HorizontalAlignment.Left;
             label.Margin = new Thickness(0, 4, 0, 0);
@@ -176,6 +184,14 @@ internal sealed partial class SitesView
         _findNote.Visibility = Visibility.Visible;
         if (error) _findNote.Foreground = Ui.CriticalBrush;
         else _findNote.ClearValue(TextBlock.ForegroundProperty);
+    }
+
+    /// <summary>Saves the label typed for a pinned user, once, when it differs from the one kept.</summary>
+    internal void CommitLabel(TextBox box, string user, string site)
+    {
+        var typed = string.IsNullOrWhiteSpace(box.Text) ? null : box.Text.Trim();
+        if (_services.Pins.Of(Bench.Path, site).FirstOrDefault(p => p.User == user) is not { } pin || pin.Label == typed) return;
+        _services.Pins.SetLabel(user, box.Text, Bench.Path, site);
     }
 
     internal async Task OpenUserAsync(FindUserModel find, SiteUser user)

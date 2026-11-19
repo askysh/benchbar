@@ -1,4 +1,6 @@
+using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using BenchBar.Tray.Core;
 using Xunit;
 using static BenchBar.Tray.Tests.PageKit;
@@ -156,8 +158,20 @@ public class SitesOpenAsViewTests
         Assert.Equal("Priya N", kit.Services.Pins.Of(PageKit.BenchPath, "one.localhost").Single().FullName);
         Assert.Equal("Unpin", System.Windows.Automation.AutomationProperties.GetName(view.PinButtons["priya@example.com"]).Split(' ')[0]);
         var label = Walk(view).OfType<TextBox>().Single(t => System.Windows.Automation.AutomationProperties.GetName(t) == "Label for priya@example.com");
-        label.Text = " NE ";
+        var saves = 0;
+        kit.Services.Pins.Changed += () => saves++;
+        foreach (var typed in new[] { " N", " NE", " NE " }) label.Text = typed; // every key is a change of text, none is a save
+        Assert.Equal(0, saves);
+        Assert.Null(kit.Services.Pins.Of(PageKit.BenchPath, "one.localhost").Single().Label);
+        label.RaiseEvent(new RoutedEventArgs(UIElement.LostFocusEvent)); // leaving the field commits
+        Assert.Equal(1, saves);
         Assert.Equal("NE", kit.Services.Pins.Of(PageKit.BenchPath, "one.localhost").Single().Label);
+        label.RaiseEvent(new RoutedEventArgs(UIElement.LostFocusEvent)); // nothing new: no save
+        Assert.Equal(1, saves);
+        label.Text = "Network";
+        label.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, new System.Windows.Interop.HwndSource(new System.Windows.Interop.HwndSourceParameters()), 0, Key.Enter) { RoutedEvent = Keyboard.KeyDownEvent }); // Enter commits
+        Assert.Equal(2, saves);
+        Assert.Equal("Network", kit.Services.Pins.Of(PageKit.BenchPath, "one.localhost").Single().Label);
         Click(view.PinButtons["priya@example.com"]);
         Assert.Empty(kit.Services.Pins.Map);
     });

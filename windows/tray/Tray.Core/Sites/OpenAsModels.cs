@@ -32,6 +32,9 @@ public static class OpenAsRules
         + "for a Website User. It may end that user's oldest session.\n\n"
         + "Use it on development sites only.";
 
+    /// <summary>What an opted in site says when the CLI sends no developer mode field (older than 0.8.1).</summary>
+    public const string UpdateCli = "Update the benchbar command line tool to use Open as";
+
     public enum Availability { Hidden, Available, Disabled }
 
     /// <summary>
@@ -51,7 +54,7 @@ public static class OpenAsRules
     {
         if (row.OpenAs is not { Enabled: true } state || state.Usable == true) return [];
         var reasons = new List<string>();
-        if (state.DeveloperMode is null) reasons.Add("Update the benchbar command line tool to use Open as");
+        if (state.DeveloperMode is null) reasons.Add(UpdateCli);
         else if (state.DeveloperMode == false) reasons.Add($"{row.Name} is not in developer mode. Run: bench --site {row.Name} set-config developer_mode 1");
         if (!row.IsDefault) reasons.Add("Only the default site can be used: port 8000 serves only it");
         else if (state.DeveloperMode == true) reasons.Add($"The web process answers as another site. Run: benchbar site default {row.Name}, then benchrestart");

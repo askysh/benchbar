@@ -67,7 +67,7 @@ internal sealed class QuickSwitchWindow : Window
         if (QuickSwitchTargets.Blocker(_benches, _targets) is { } blocker)
         {
             root.Children.Add(PagePanels.Line(blocker));
-            _status.Text = blocker;
+            SetStatus(blocker);
             Content = root;
             Blocker = blocker;
             PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) Close(); };
@@ -111,6 +111,9 @@ internal sealed class QuickSwitchWindow : Window
     /// <summary>The status line under the list: searching, an error, or what was opened.</summary>
     public string StatusText => _status.Text;
 
+    /// <summary>True while the status line has the error colour (for tests).</summary>
+    internal bool StatusIsError => _status.ReadLocalValue(TextBlock.ForegroundProperty) != DependencyProperty.UnsetValue;
+
     public IReadOnlyList<string> RowTexts => [.. _list.Items.OfType<ListBoxItem>().Select(i => (string)i.Content)];
 
     public TextBox SearchBox => _search;
@@ -118,15 +121,26 @@ internal sealed class QuickSwitchWindow : Window
     private void Select(QuickSwitchTarget target)
     {
         _model = new QuickSwitchModel(target, _host.Pins.Of(target.Bench, target.Site), _host.LastUser(target.Key));
-        _status.Text = "";
+        SetStatus("");
         Draw();
+    }
+
+    /// <summary>The one place the status line is set: a plain line takes the normal colour back, so an error never colours the next message.</summary>
+    private void SetStatus(string text, bool error = false)
+    {
+        _status.Text = text;
+        if (error) _status.Foreground = Ui.CriticalBrush;
+        else _status.ClearValue(TextBlock.ForegroundProperty);
     }
 
     private void OnTyped()
     {
         if (_model is null) return;
         _model.SetQuery(_search.Text);
+        if (!_opening) SetStatus(""); // the line belongs to the last text: "No users match" and an old error go with it
         Draw();
+        // two characters or more ask the CLI: until it answers, an empty list is not yet "no match"
+        if (_model.WantsSearch && !_opening) SetStatus("");
         _debounce.Stop();
         _searching?.Cancel();
         if (!_model.WantsSearch) return;
@@ -146,7 +160,7 @@ internal sealed class QuickSwitchWindow : Window
             _list.Items.Add(item);
         }
         if (_list.Items.Count > 0) _list.SelectedIndex = Math.Clamp(_model.Selection, 0, _list.Items.Count - 1);
-        else _status.Text = "No users match";
+        else SetStatus("No users match");
     }
 
     internal async Task SearchAsync()
@@ -154,12 +168,12 @@ internal sealed class QuickSwitchWindow : Window
         if (_model is not { WantsSearch: true } model) return;
         _searching?.Cancel();
         var cts = _searching = new CancellationTokenSource();
-        _status.Text = "Searching...";
+        SetStatus("Searching...");
         var args = OpenAsCommands.Users(model.Target.Site, model.Query, model.Target.Bench, QuickSwitchModel.SearchLimit);
         CliResult<SiteUserList> result;
         try
         {
-            result = await _host.Cli.RunJsonAsync(args, OpenAsCommands.PersonEnvironment(), CliTimeouts.Read, OpenAsJson.ParseUsers, cts.Token);
+            result = await _host.Cli.RunJsonAsync(args, null, CliTimeouts.Read, OpenAsJson.ParseUsers, cts.Token);
         }
         catch (OperationCanceledException)
         {
@@ -169,23 +183,25 @@ internal sealed class QuickSwitchWindow : Window
         if (result.Value is { } list)
         {
             model.SetRemote(list.Users);
-            _status.Text = "";
+            SetStatus("");
             Draw();
         }
         else
         {
-            _status.Text = "Could not search users: " + (result.Error ?? "no answer");
-            _status.Foreground = Ui.CriticalBrush;
+            SetStatus("Could not search users: " + (OpenAsRules.CliSentence(result.Error) ?? "no answer"), error: true);
         }
     }
 
     private void OnKey(object sender, KeyEventArgs e)
     {
-        if (HandleKey(e.Key)) e.Handled = true;
+        if (HandleKey(e.Key, Keyboard.Modifiers)) e.Handled = true;
     }
 
-    /// <summary>The panel's keys: Esc closes, Up and Down move, Enter opens the selected row, 0 to 9 open a row at once while the field is empty. True when the key was used.</summary>
-    internal bool HandleKey(Key key)
+    /// <summary>
+    /// The panel's keys: Esc closes, Up and Down move, Enter opens the selected row, 0 to 9 open a row at once while the field is empty and
+    /// no modifier is down (Shift+1 is "!", not pin 1, and Ctrl, Alt and Win digits belong to Windows and to the person). True when the key was used.
+    /// </summary>
+    internal bool HandleKey(Key key, ModifierKeys modifiers = ModifierKeys.None)
     {
         if (_model is null) return false;
         switch (key)
@@ -196,7 +212,7 @@ internal sealed class QuickSwitchWindow : Window
             case Key.Enter: OpenTask = OpenAsync(_model.Confirm()); OpenTask.Forget(); return true;
         }
         var digit = key is >= Key.D0 and <= Key.D9 ? key - Key.D0 : key is >= Key.NumPad0 and <= Key.NumPad9 ? key - Key.NumPad0 : -1;
-        if (digit < 0 || _model.ByDigit(digit) is not { } row) return false;
+        if (digit < 0 || modifiers != ModifierKeys.None || _model.ByDigit(digit) is not { } row) return false;
         OpenTask = OpenAsync(row);
         OpenTask.Forget();
         return true;
@@ -211,12 +227,11 @@ internal sealed class QuickSwitchWindow : Window
         if (row is null || _model is not { } model) return;
         if (_opening)
         {
-            _status.Text = "Already opening...";
+            SetStatus("Already opening...");
             return;
         }
         _opening = true;
-        _status.Text = $"Opening as {row.Title}...";
-        _status.ClearValue(TextBlock.ForegroundProperty);
+        SetStatus($"Opening as {row.Title}...");
         try
         {
             var target = model.Target;
@@ -228,8 +243,7 @@ internal sealed class QuickSwitchWindow : Window
                 Close();
                 return;
             }
-            _status.Text = result.Error ?? $"{target.Site} could not be opened as {row.Title}.";
-            _status.Foreground = Ui.CriticalBrush;
+            SetStatus(OpenAsRules.CliSentence(result.Error) ?? $"{target.Site} could not be opened as {row.Title}.", error: true);
         }
         finally
         {

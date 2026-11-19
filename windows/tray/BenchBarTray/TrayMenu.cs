@@ -105,7 +105,7 @@ internal sealed class TrayMenu
         var settings = new MenuItem { Header = UiText.Get("MenuSettings") };
         settings.Click += (_, _) => model.OpenSettings();
         _setUp.Click += (_, _) => model.SetUp();
-        var quick = new MenuItem { Header = "Quick Switch..." };
+        var quick = new MenuItem { Header = UiText.Get("MenuQuickSwitch") };
         quick.Click += (_, _) => model.QuickSwitch();
         Menu.Items.Add(open);
         Menu.Items.Add(_setUp);

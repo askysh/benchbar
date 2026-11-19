@@ -31,7 +31,7 @@ public class QuickSwitchWindowTests
         return (new QuickSwitchWindow(host, Theme), runner, opened, pins);
     }
 
-    private static bool Press(Key key, QuickSwitchWindow window) => window.HandleKey(key);
+    private static bool Press(Key key, QuickSwitchWindow window, ModifierKeys modifiers = ModifierKeys.None) => window.HandleKey(key, modifiers);
 
     [Fact]
     public void ThePanelListsAdministratorAndThePinsWithTheirDigitsAndMarksTheLastOpened() => Sta.Run(() =>
@@ -69,13 +69,62 @@ public class QuickSwitchWindowTests
     {
         var opened = new List<(QuickSwitchTarget, string)>();
         var failing = new ScriptedStreamRunner();
-        failing.On("open").Print(Fixture("open-as-refused.jsonl")).Fail(1);
+        failing.On("open").Fail(1, Fixture("open-as-refused.stderr.txt")[0].Trim()); // nothing on stdout, "  [FAIL] message" on stderr
         var host = new QuickSwitchHost { Cli = new CliClient(failing, () => "benchbar.exe"), Benches = () => [Ready()], Opened = (t, u) => opened.Add((t, u)) };
         var panel = new QuickSwitchWindow(host, Theme);
         Press(Key.D0, panel);
         Wait(panel.OpenTask);
-        Assert.Contains("not in developer mode", panel.StatusText);
+        Assert.Equal("one.localhost is not in developer mode, so benchbar will not sign in as another user.", panel.StatusText);
         Assert.Empty(opened);
+    });
+
+    [Theory]
+    [InlineData(Key.D1, ModifierKeys.Shift)]
+    [InlineData(Key.D0, ModifierKeys.Shift)]
+    [InlineData(Key.D1, ModifierKeys.Control)]
+    [InlineData(Key.D1, ModifierKeys.Alt)]
+    [InlineData(Key.D1, ModifierKeys.Windows)]
+    [InlineData(Key.NumPad1, ModifierKeys.Shift)]
+    [InlineData(Key.D1, ModifierKeys.Control | ModifierKeys.Shift)]
+    public void ADigitWithAModifierIsNotAShortcutAndOpensNothing(Key key, ModifierKeys modifiers) => Sta.Run(() =>
+    {
+        var (window, runner, opened, _) = Make(Ready());
+        Assert.False(Press(key, window, modifiers)); // Shift+1 on an empty field is "!", not pin 1
+        Assert.True(window.OpenTask.IsCompleted);
+        Assert.DoesNotContain(runner.Runs, r => r.Args[0] == "open");
+        Assert.Empty(opened);
+        Assert.True(Press(Key.D1, window)); // the plain digit still opens
+    });
+
+    [Fact]
+    public void NoUsersMatchGoesWhenTheTextChangesAndASearchErrorDoesNotColourTheNextLine() => Sta.Run(() =>
+    {
+        SynchronizationContext.SetSynchronizationContext(null);
+        var runner = new ScriptedStreamRunner();
+        runner.On("users").Fail(1, "[FAIL] The bench is not running.");
+        var host = new QuickSwitchHost { Cli = new CliClient(runner, () => "benchbar.exe"), Benches = () => [Ready()], Pins = new OpenAsPins(), Debounce = TimeSpan.Zero };
+        var window = new QuickSwitchWindow(host, Theme);
+        window.SearchBox.Text = "zz"; // matches no pin and Administrator: the list is empty
+        Wait(window.SearchAsync());
+        Assert.Equal("Could not search users: The bench is not running.", window.StatusText);
+        Assert.True(window.StatusIsError);
+
+        window.SearchBox.Text = "z"; // under two characters: no search, the list is empty, the line says so in the normal colour
+        Assert.Equal("No users match", window.StatusText);
+        Assert.False(window.StatusIsError);
+        window.SearchBox.Text = "adm"; // a row matches: nothing is left of the old line
+        Assert.Equal("", window.StatusText);
+        Assert.Contains(window.RowTexts, t => t.Contains("Administrator"));
+    });
+
+    [Fact]
+    public void WhileTheSearchIsAskedAnEmptyListIsNotYetNoMatchAndSearchingHasTheNormalColour() => Sta.Run(() =>
+    {
+        var (window, runner, _, _) = Make(Ready());
+        window.SearchBox.Text = "zz";
+        Assert.Equal("", window.StatusText); // the debounce has not fired: the CLI has not answered, so "no match" would be a guess
+        Wait(window.SearchAsync());
+        Assert.DoesNotContain(runner.Runs, r => r.Env.ContainsKey("BENCHBAR_NONINTERACTIVE") && r.Args[0] == "users"); // a typed search is a read, not a click
     });
 
     [Fact]

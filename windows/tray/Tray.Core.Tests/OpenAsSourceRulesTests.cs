@@ -47,9 +47,10 @@ public class OpenAsSourceRulesTests
     public void ThePersonsEnvironmentGoesOnlyToTurningOpenAsOnAndToOpeningAsAUser()
     {
         if (CodeLines() is not { } code) return;
-        var uses = code.Where(l => l.Contains("PersonEnvironment()") && !l.Contains("public static")).Select(l => l.Split(':')[0]).Order().ToList();
-        Assert.Equal(["OpenAsModels.cs", "SitesView.OpenAs.cs"], uses);
-        // the search is a read: a typed letter must not claim that a person clicked
+        var uses = code.Where(l => l.Contains("PersonEnvironment()") && !l.Contains("public static")).ToList();
+        Assert.Equal(["OpenAsModels.cs", "QuickSwitchWindow.cs", "SitesView.OpenAs.cs"], uses.Select(l => l.Split(':')[0]).Order());
+        // each one is the call of a click or Enter (turn on, open as); the searches for users are reads and never claim one
+        Assert.All(uses, l => Assert.True(l.Contains("OpenAsCommands.OpenAs(") || l.Contains("OpenAsCommands.Set("), l));
         Assert.DoesNotContain(code, l => l.Contains("OpenAsCommands.Users(") && l.Contains("PersonEnvironment"));
     }
 

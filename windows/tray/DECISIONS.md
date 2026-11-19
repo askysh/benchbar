@@ -394,8 +394,15 @@ One line per non obvious choice. The 0.8.0 spike that chose WPF over WinUI was d
 
 ## Tray parity: Quick Switch (0.9.0, #174)
 
-- **Quick Switch is the Mac's panel, not a bench switcher.** The Mac app's Quick Switch (`macos/BenchBar/QuickSwitch`) opens a site as Administrator or a pinned user from the keyboard, and "switch the default bench or site" is already `benchbar default` and the sidebar. The tray follows the Mac: the panel, the pins (nine per site, Administrator never one), the digits, the arrows, search from two characters (eight results) and the "last opened" mark.
+- **Quick Switch is the Mac's panel, not a bench switcher.** The Mac app's Quick Switch (`macos/BenchBar/QuickSwitch`) opens a site as
+  Administrator or a pinned user from the keyboard, and "switch the default bench or site" is already `benchbar default` and the sidebar.
+  The tray follows the Mac: the panel, the pins (nine per site, Administrator never one), the digits, the arrows, search from two characters
+  (eight results) and the "last opened" mark.
 - **It is not a Lab on Windows.** The Mac gates it by the `quick-switch` lab because the lab holds a system wide shortcut. Here the panel holds nothing: it opens from the tray menu on a click, and `labs list` says `quick-switch` is macOS only (so `labs on` would refuse it). A global shortcut would be a Labs style opt in of its own and is not in this change.
 - **The panel decides nothing for the person.** A site without Open as on is not a target and the panel says how to turn it on in the Sites tab; the one call is `open --site S --as USER --json`, and the answer `opened: false` or a refusal stays in the panel in the CLI's words.
 - **Pins are the tray's own record** (`tray.open_as_pins` in `config.json`, saved when pinned, replaced as one immutable map so the thread that saves never sees a half edit). The shim's keys are kept. A pinned user's row in Find User has a label field (the Mac's), saved as typed and trimmed when read.
+- **A digit opens a row only with no modifier down, and a label is saved when the person is done.** Shift+1 on an empty field is "!", not pin 1 (a
+  digit is a one key sign in), and Ctrl, Alt and Win digits are not ours. The label field of Find User saves on Enter
+  or leaving the field, because each save writes config.json. A blocker never says "turn it on" where Allow Open as is not offered (a name Windows
+  cannot find, a CLI too old to send the fields).
 

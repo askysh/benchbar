@@ -85,6 +85,8 @@ public class QuickSwitchTests
     [InlineData("stopped", "No bench is running. Start one first.")]
     [InlineData("off", "Open as is off for one.localhost. Turn it on with Allow Open as... in its Sites tab.")]
     [InlineData("nodev", "one.localhost is not in developer mode. Run: bench --site one.localhost set-config developer_mode 1")]
+    [InlineData("oldcli", "Update the benchbar command line tool to use Open as.")] // no Open as fields: Allow Open as would not be there
+    [InlineData("unresolved", "Set up shop.test in the BenchBar window: Windows cannot find that name.")] // the Sites tab offers no Allow Open as for it
     public void WhenThereIsNothingToOpenThePanelSaysWhyAndHowToFixIt(string scenario, string text)
     {
         IReadOnlyList<BenchStatus> benches = scenario switch
@@ -92,6 +94,8 @@ public class QuickSwitchTests
             "none" => [],
             "stopped" => [Running(BenchState.Stopped, Ready)],
             "off" => [Running(one: new SiteOpenAs(false, true, false))],
+            "oldcli" => [Running()],
+            "unresolved" => [Running() with { Sites = [new SiteInfo("shop.test", true, new SiteOpenAs(false, true, false))] }],
             _ => [Running(one: new SiteOpenAs(true, false, false))],
         };
         Assert.Equal(text, QuickSwitchTargets.Blocker(benches, QuickSwitchTargets.From(benches)));

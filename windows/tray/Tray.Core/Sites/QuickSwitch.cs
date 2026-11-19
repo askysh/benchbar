@@ -88,6 +88,9 @@ public static class QuickSwitchTargets
         {
             var rows = SiteRows.From(bench);
             if (rows.FirstOrDefault(r => r.IsDefault) is not { } site) return $"{bench.Name} has no default site. Make one the default in its Sites tab.";
+            // a site that Windows cannot find and a CLI that sends no Open as fields have no Allow Open as in the Sites tab: not "turn it on"
+            if (site.NeedsSetUp) return $"Set up {site.Name} in the BenchBar window: Windows cannot find that name.";
+            if (site.OpenAs is null) return OpenAsRules.UpdateCli + ".";
             if (site.OpenAs is not { Enabled: true }) return $"Open as is off for {site.Name}. Turn it on with Allow Open as... in its Sites tab.";
             var (state, why) = OpenAsRules.For(site, true, bench.Name);
             if (state == OpenAsRules.Availability.Disabled && why is not null) return why;
