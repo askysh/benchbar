@@ -1,0 +1,261 @@
+{
+  "schema_version": 1,
+  "cli_version": "0.8.3",
+  "labs": [],
+  "gated": [
+    {
+      "name": "share",
+      "lab": "lan-rooms"
+    },
+    {
+      "name": "lan-guard",
+      "lab": "lan-rooms"
+    }
+  ],
+  "global_flags": [
+    {
+      "name": "--bench-dir",
+      "value": "DIR",
+      "help": "Bench to act on (default: remembered, or auto-detected)."
+    },
+    {
+      "name": "--site",
+      "value": "NAME",
+      "help": "Site name (default: remembered, or from the bench)."
+    }
+  ],
+  "commands": [
+    {
+      "name": "service",
+      "usage": "benchbar service [--with-schedule|--without-schedule] [--port-offset N] [--dry-run|--apply TOKEN --yes] [--json]",
+      "summary": "Install or refresh only the background service (phase 02).",
+      "tty": true,
+      "sudo": false,
+      "network": false,
+      "mutating": true,
+      "json": "stream",
+      "flags": [
+        {
+          "name": "--with-schedule",
+          "value": null,
+          "help": "Add the scheduler to Procfile.lean."
+        },
+        {
+          "name": "--without-schedule",
+          "value": null,
+          "help": "Remove it again."
+        },
+        {
+          "name": "--port-offset",
+          "value": "N",
+          "help": "Use port block N."
+        },
+        {
+          "name": "--dry-run",
+          "value": null,
+          "help": "Print the plan and its token, change nothing."
+        },
+        {
+          "name": "--apply",
+          "value": "TOKEN",
+          "help": "Run exactly that plan (with --yes)."
+        }
+      ],
+      "env": [
+        {
+          "name": "BENCHBAR_SUDO",
+          "help": "Linux only: env makes the sudo steps use BENCHBAR_SUDO_PASSWORD, no terminal needed (a wrong one fails at once with error_id sudo_password_wrong, before any change)."
+        },
+        {
+          "name": "BENCHBAR_SUDO_PASSWORD",
+          "help": "The sudo password, with BENCHBAR_SUDO=env. Read once at startup and removed from the environment; never in argv, the log or a child."
+        }
+      ]
+    },
+    {
+      "name": "doctor",
+      "usage": "benchbar doctor [--json] [--fix-hints] [--quick] [--ack CHECK] [--unack CHECK] [--prerequisites] [--fetch]",
+      "summary": "Read only health report. Exit 1 when something FAILs.",
+      "tty": false,
+      "sudo": false,
+      "network": false,
+      "mutating": false,
+      "json": "document",
+      "flags": [
+        {
+          "name": "--json",
+          "value": null,
+          "help": "One JSON document."
+        },
+        {
+          "name": "--fix-hints",
+          "value": null,
+          "help": "Only the fix commands, one per line."
+        },
+        {
+          "name": "--quick",
+          "value": null,
+          "help": "Skip the slow checks and say which."
+        },
+        {
+          "name": "--ack",
+          "value": "CHECK",
+          "help": "Silence one named WARN for this bench until its message changes."
+        },
+        {
+          "name": "--unack",
+          "value": "CHECK",
+          "help": "Undo --ack."
+        },
+        {
+          "name": "--prerequisites",
+          "value": null,
+          "help": "What this machine needs before an install, no bench needed."
+        },
+        {
+          "name": "--fetch",
+          "value": null,
+          "help": "git fetch the branches of the apps your focus apps need first."
+        }
+      ],
+      "env": []
+    },
+    {
+      "name": "status",
+      "usage": "benchbar status [--json] [--ping]",
+      "summary": "State, pid, stop reason, site ping.",
+      "tty": false,
+      "sudo": false,
+      "network": false,
+      "mutating": false,
+      "json": "document",
+      "flags": [
+        {
+          "name": "--ping",
+          "value": null,
+          "help": "Ask every site, not only the default one."
+        }
+      ],
+      "env": [
+        {
+          "name": "BENCHBAR_LOAD_ALL",
+          "help": "Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load)."
+        }
+      ]
+    },
+    {
+      "name": "up",
+      "usage": "benchbar up [--services-only] [--json]",
+      "summary": "Start the bench in the background.",
+      "tty": true,
+      "sudo": false,
+      "network": false,
+      "mutating": true,
+      "json": "stream",
+      "flags": [
+        {
+          "name": "--services-only",
+          "value": null,
+          "help": "Start only the bench's Redis (for a restore or a migrate); down stops it."
+        }
+      ],
+      "env": []
+    },
+    {
+      "name": "down",
+      "usage": "benchbar down [--json]",
+      "summary": "Stop the bench and keep it stopped across reboots.",
+      "tty": false,
+      "sudo": false,
+      "network": false,
+      "mutating": true,
+      "json": "stream",
+      "flags": [],
+      "env": []
+    },
+    {
+      "name": "fg",
+      "usage": "benchbar fg",
+      "summary": "Stop the service and run honcho in the foreground.",
+      "tty": true,
+      "sudo": false,
+      "network": false,
+      "mutating": true,
+      "json": "none",
+      "flags": [],
+      "env": []
+    },
+    {
+      "name": "watch",
+      "usage": "benchbar watch",
+      "summary": "Run bench watch for asset rebuilds.",
+      "tty": false,
+      "sudo": false,
+      "network": false,
+      "mutating": false,
+      "json": "none",
+      "flags": [],
+      "env": []
+    },
+    {
+      "name": "autostart",
+      "usage": "benchbar autostart [on|off]",
+      "summary": "Whether the bench may come back after login.",
+      "tty": false,
+      "sudo": false,
+      "network": false,
+      "mutating": true,
+      "json": "none",
+      "flags": [],
+      "env": []
+    },
+    {
+      "name": "lock",
+      "usage": "benchbar lock write|check|apply ...",
+      "summary": "The team lockfile benchbar.toml.",
+      "tty": false,
+      "sudo": false,
+      "network": false,
+      "mutating": false,
+      "json": "none",
+      "flags": [],
+      "env": []
+    },
+    {
+      "name": "lock write",
+      "usage": "benchbar lock write [--lock PATH] [--no-commits] [--allow-dirty]",
+      "summary": "Write benchbar.toml from this bench.",
+      "tty": true,
+      "sudo": false,
+      "network": false,
+      "mutating": true,
+      "json": "none",
+      "flags": [],
+      "env": []
+    },
+    {
+      "name": "lock check",
+      "usage": "benchbar lock check [--json]",
+      "summary": "Compare the bench with benchbar.toml. Exit 1 on any difference.",
+      "tty": false,
+      "sudo": false,
+      "network": false,
+      "mutating": false,
+      "json": "document",
+      "flags": [],
+      "env": []
+    },
+    {
+      "name": "lock apply",
+      "usage": "benchbar lock apply",
+      "summary": "Clone missing apps, switch branches, fast forward to pinned commits.",
+      "tty": true,
+      "sudo": false,
+      "network": true,
+      "mutating": true,
+      "json": "none",
+      "flags": [],
+      "env": []
+    }
+  ]
+}

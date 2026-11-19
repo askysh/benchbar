@@ -110,6 +110,26 @@ assert_eq "1" "$CODE" "$OUT"
 assert_contains "$OUT" "not supported on Linux yet"
 assert_calls_not_contain '^(sudo|apt-get|uv|fnm|curl .*(wkhtmltox|astral\.sh/uv|fnm\.vercel))'
 
+# profile list says the same, per profile, with the same reason: the wizard asks once and never plans a dry run per profile
+FL_CONFIG_DIR="$TMP_DIR/config-future" run_fm profile list --json
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "True None" "$(printf '%s' "$OUT" | jget - '" ".join(str(x) for x in next((p["linux_supported"], p["unsupported_reason"]) for p in d["profiles"] if p["name"]=="v15-lts"))')"
+assert_eq "False" "$(printf '%s' "$OUT" | jget - 'next(p["linux_supported"] for p in d["profiles"] if p["name"]=="v17-future")')"
+assert_contains "$(printf '%s' "$OUT" | jget - 'next(p["unsupported_reason"] for p in d["profiles"] if p["name"]=="v17-future")')" "it needs MariaDB 12.0, apt on this release gives 10.11, and the profile accepts 11.4 to 12.0 only"
+mkdir -p "$HOME/.config/benchbar/profiles"
+printf 'schema = 1
+base = "v17-future"
+' >"$HOME/.config/benchbar/profiles/futureteam.toml"
+printf 'schema = 1
+base = "v15-lts"
+' >"$HOME/.config/benchbar/profiles/okteam.toml"
+printf 'base = "v15-lts"
+bogus = 1
+' >"$HOME/.config/benchbar/profiles/brokenteam.toml"
+FL_CONFIG_DIR="$TMP_DIR/config-future" run_fm profile list --json
+assert_eq "False True None None" "$(printf '%s' "$OUT" | jget - '" ".join(str(x) for x in [next(p["linux_supported"] for p in d["profiles"] if p["name"]=="futureteam"), next(p["linux_supported"] for p in d["profiles"] if p["name"]=="okteam"), next(p["linux_supported"] for p in d["profiles"] if p["name"]=="brokenteam"), next(p["unsupported_reason"] for p in d["profiles"] if p["name"]=="brokenteam")])')" "(a team profile passes or fails with its base; an invalid file is not asked)"
+find "$HOME/.config/benchbar/profiles" -name '*team.toml' -delete
+
 # ---- v16-lts on Linux: Python 3.14 from uv, Node 24 from fnm, and the MariaDB
 # apt gives (10.11 is inside v16's range, 10.6 to 11.8); the plan says so
 run00 --profile v16-lts --dry-run

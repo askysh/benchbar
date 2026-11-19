@@ -198,6 +198,10 @@ internal sealed class PlanReviewSheet : Window
         panel.Children.Add(Ui.Text(_model.Request.Title, 18, FontWeights.SemiBold));
         if (_model.Request.Summary is { Length: > 0 } summary) panel.Children.Add(Ui.Text(summary, 14, opacity: 0.85, margin: new Thickness(0, 6, 0, 0)));
         if (_model.Message is { Length: > 0 } message) panel.Children.Add(Ui.CriticalText(message));
+        if (_model.Request.Describe is { } describe)
+        {
+            foreach (var line in describe(plan)) panel.Children.Add(Ui.Text(line, 13, opacity: 0.9, margin: new Thickness(0, 4, 0, 0)));
+        }
         if (!plan.HasChanges && plan.Errors.Count == 0) panel.Children.Add(Ui.Text("There is nothing to change.", 14, opacity: 0.85, margin: new Thickness(0, 8, 0, 0)));
         if (plan.Steps.Count > 0)
         {
@@ -211,6 +215,12 @@ internal sealed class PlanReviewSheet : Window
                 if (step.Note is { Length: > 0 } note) line.Children.Add(Ui.Text(note, 12, opacity: 0.7));
                 panel.Children.Add(line);
             }
+        }
+        if (plan.Preview.Count > 0)
+        {
+            var preview = Ui.Mono(string.Join(Environment.NewLine, plan.Preview));
+            preview.Margin = new Thickness(0, 12, 0, 0);
+            panel.Children.Add(preview);
         }
         if (plan.Touches.Count > 0) panel.Children.Add(Ui.Text("Changes: " + string.Join(", ", plan.Touches), 13, opacity: 0.8, margin: new Thickness(0, 8, 0, 0)));
         if (_model.AsksPassword)
