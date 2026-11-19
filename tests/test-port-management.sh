@@ -212,7 +212,7 @@ assert_calls_not_contain '^bench (migrate|build|update|start)'
   fl_info() { :; }; fl_ok() { :; }; fl_fail() { printf '%s\n' "$*"; }
   fl_cmd_register() { printf '%s\n' "$1" >>"$TMP_DIR/completed"; }
   cmd_adopt() { printf '%s\n' "$1" >>"$TMP_DIR/attempted"; [[ "$1" != second ]]; }
-  fl_plan_token_v approved the-plan
+  approved=""; fl_plan_token_v approved the-plan
   if fl_cmd_ports apply "$approved" first second third >"$TMP_DIR/partial-output" 2>&1; then fail 'partial failure must fail the command'; fi
   assert_eq $'first\nsecond' "$(cat "$TMP_DIR/attempted")"
   assert_eq first "$(cat "$TMP_DIR/completed")"
