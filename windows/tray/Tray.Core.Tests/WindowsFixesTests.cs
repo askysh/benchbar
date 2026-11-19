@@ -13,15 +13,7 @@ public class WindowsFixesTests
 
     private static Secret Pass(string text) => Secret.From(text);
 
-    private static async Task UntilAsync(Func<bool> condition)
-    {
-        var deadline = DateTime.UtcNow.AddSeconds(10);
-        while (!condition())
-        {
-            Assert.True(DateTime.UtcNow < deadline, "condition not met in time");
-            await Task.Delay(10, TestContext.Current.CancellationToken);
-        }
-    }
+    private static Task UntilAsync(Func<bool> condition) => Eventually.Async(condition);
 
     private static async Task<WizardModel> ReviewedAsync(ISetupService service, FakeWizardHost host)
     {
@@ -533,7 +525,7 @@ public class WindowsFixesTests
 
             poller.SetViewerIdle(true);
             time.Advance(S(29.9));
-            await probe.NoneForAsync(100);
+            await probe.QuietAsync();
             time.Advance(S(0.1));
             await probe.NextAsync();
 

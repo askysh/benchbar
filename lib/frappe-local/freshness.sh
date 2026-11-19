@@ -369,9 +369,9 @@ chk_dependency_behind() {
     if [[ "$n" == "0" ]]; then fresh=$((fresh + 1)); continue; fi
     stale=1
     if fl_app_dirty "$dep"; then
-      fix="cd ${FL_BENCH_DIR}/apps/${dep} && git status   (commit or stash the changes, then: benchbar app update ${dep} --bench-dir ${FL_BENCH_DIR})"
+      fix="$(fl_fix_cmd cd "${FL_BENCH_DIR}/apps/${dep}" '&&' git status)   (commit or stash the changes, then: benchbar app update $(printf '%q' "$dep") --bench-dir $(printf '%q' "$FL_BENCH_DIR"))"
     else
-      fix="benchbar app update ${dep} --bench-dir ${FL_BENCH_DIR}"
+      fix="$(fl_fix_cmd benchbar app update "$dep" --bench-dir "$FL_BENCH_DIR")"
     fi
     CHK_MORE+=("warn"$'\037'"${dep} (needed by ${by//,/, }) is $(fl_behind_words "$n" "$days") ${up}${note}"$'\037'"${fix}"$'\037')
   done <<<"$deps"

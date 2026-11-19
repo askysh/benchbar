@@ -53,15 +53,7 @@ public class LogsTests
 
     private static int SinceCalls(ScriptedStreamRunner runner) => runner.Runs.Count(r => r.Args.Contains("--since"));
 
-    private static async Task Until(Func<bool> condition)
-    {
-        var deadline = DateTime.UtcNow.AddSeconds(10);
-        while (!condition())
-        {
-            if (DateTime.UtcNow > deadline) throw new TimeoutException("the condition was not met");
-            await Task.Delay(5, TestContext.Current.CancellationToken);
-        }
-    }
+    private static Task Until(Func<bool> condition) => Eventually.Async(condition);
 
     // --- parser ---
 
@@ -429,6 +421,7 @@ public class LogsTests
         await time.NextTimerAsync();
 
         model.Hidden = true;                  // minimized: the wait in progress is dropped
+        await Until(() => model.PausedWaits == 1); // the loop has seen it and parked, whatever the machine's speed
         var timers = time.Timers;
         time.Advance(TimeSpan.FromHours(8));
         Assert.Equal(0, model.Polls);
@@ -453,6 +446,7 @@ public class LogsTests
         await time.NextTimerAsync();
 
         gate.SetAway(true);
+        await Until(() => model.PausedWaits == 1);
         var timers = time.Timers;
         time.Advance(TimeSpan.FromHours(8));
         Assert.Equal(0, model.Polls);

@@ -20,4 +20,97 @@
   <data name="BackupPartial" xml:space="preserve">
     <value>partial</value>
   </data>
+  <data name="MenuLogon" xml:space="preserve">
+    <value>Open BenchBar at logon</value>
+  </data>
+  <data name="MenuSetUp" xml:space="preserve">
+    <value>Set Up BenchBar...</value>
+  </data>
+  <data name="MenuAppearance" xml:space="preserve">
+    <value>Appearance</value>
+  </data>
+  <data name="MenuRunner" xml:space="preserve">
+    <value>Runner</value>
+  </data>
+  <data name="MenuNotifications" xml:space="preserve">
+    <value>Notifications</value>
+  </data>
+  <data name="MenuCheckForUpdates" xml:space="preserve">
+    <value>Check for Updates</value>
+  </data>
+  <data name="MenuHelp" xml:space="preserve">
+    <value>Help</value>
+  </data>
+  <data name="MenuReportBug" xml:space="preserve">
+    <value>Report a Bug</value>
+  </data>
+  <data name="MenuAppearanceSystem" xml:space="preserve">
+    <value>System</value>
+  </data>
+  <data name="MenuAppearanceLight" xml:space="preserve">
+    <value>Light</value>
+  </data>
+  <data name="MenuAppearanceDark" xml:space="preserve">
+    <value>Dark</value>
+  </data>
+  <data name="MenuOpen" xml:space="preserve">
+    <value>Open BenchBar</value>
+  </data>
+  <data name="MenuSettings" xml:space="preserve">
+    <value>Settings...</value>
+  </data>
+  <data name="MenuQuit" xml:space="preserve">
+    <value>Quit</value>
+  </data>
+  <data name="MenuUpdating" xml:space="preserve">
+    <value>Updating to {0}...</value>
+  </data>
+  <data name="MenuUpdateTo" xml:space="preserve">
+    <value>Update to {0}</value>
+  </data>
+  <data name="MenuOpenRunnersFolder" xml:space="preserve">
+    <value>Open runners folder</value>
+  </data>
+  <data name="ToastCrashedTitle" xml:space="preserve">
+    <value>{0} crashed</value>
+  </data>
+  <data name="ToastCrashedBody" xml:space="preserve">
+    <value>It restarts on its own in about 20 seconds.</value>
+  </data>
+  <data name="ToastPausedTitle" xml:space="preserve">
+    <value>{0} paused after repeated crashes</value>
+  </data>
+  <data name="ToastPortConflictTitle" xml:space="preserve">
+    <value>{0} has a port conflict</value>
+  </data>
+  <data name="ToastNeedsRepairTitle" xml:space="preserve">
+    <value>{0} needs repair</value>
+  </data>
+  <data name="WslSilent" xml:space="preserve">
+    <value>wsl.exe did not answer: WSL may be starting or stuck. Run wsl.exe --status.</value>
+  </data>
+  <data name="WslMissing" xml:space="preserve">
+    <value>WSL is not installed: wsl.exe --install</value>
+  </data>
+  <data name="TooltipStarting" xml:space="preserve">
+    <value>starting</value>
+  </data>
+  <data name="TooltipOneBench" xml:space="preserve">
+    <value>{0}: {1} bench, {2}</value>
+  </data>
+  <data name="TooltipManyBenches" xml:space="preserve">
+    <value>{0}: {1} benches, {2}</value>
+  </data>
+  <data name="TooltipDistroNotInstalled" xml:space="preserve">
+    <value>{0}: {1} is not installed</value>
+  </data>
+  <data name="TooltipDistroNotRunning" xml:space="preserve">
+    <value>{0}: {1} is not running</value>
+  </data>
+  <data name="TooltipDefaultDistro" xml:space="preserve">
+    <value>WSL distro</value>
+  </data>
+  <data name="UnexpectedErrorNotice" xml:space="preserve">
+    <value>BenchBar hit an error and kept running. If something looks wrong, tell us.</value>
+  </data>
 </root>
