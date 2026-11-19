@@ -407,7 +407,7 @@ printf '%s\0' "$(fl_fix_cmd benchbar app update "weird name's#1" --bench-dir "$F
 fl_fix "$(fl_fix_cmd git -C "${FL_BENCH_DIR}/apps/x" status)   (note)" >/dev/null
 fl_fix "$(fl_fix_cmd git -C "${3}/apps/x" status)   (note)" >/dev/null
 fl_fix "mv ${FL_BENCH_DIR} /elsewhere, then run this again" >/dev/null
-fl_fix "$(fl_fix_cmd benchbar lock apply)" | cat -v | grep -q '\^\^' && echo MARK-LEAKED >&2
+grep -q '\^\^' <<<"$(fl_fix "$(fl_fix_cmd benchbar lock apply)" | cat -v)" && echo MARK-LEAKED >&2
 printf '%s\0' "$FL_DONE_NEXT"
 SH
 BAD_DIR="$TMP_DIR/Bob's  Bench \$HOME #1 \"q\" *"
