@@ -18,7 +18,7 @@ func newSystem() *System {
 		name = u.Username
 	}
 	local := os.Getenv("LOCALAPPDATA")
-	pkg := detectPackage()
+	pkg := detectPackage(exe)
 	configDir, legacyDir := "", ""
 	if local != "" {
 		legacyDir = filepath.Join(local, "BenchBar")

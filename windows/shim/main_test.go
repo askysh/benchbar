@@ -20,6 +20,9 @@ var fakeWSL string
 // test binary is the shim itself, run against fakes described by the
 // environment, so tests can start it as a subprocess.
 func TestMain(m *testing.M) {
+	if mode := os.Getenv(helperEnv); mode != "" {
+		os.Exit(runHelper(mode))
+	}
 	if os.Getenv("BENCHBAR_SHIM_TEST_MAIN") == "1" {
 		os.Exit(run(subprocessSystem(), os.Args[1:]))
 	}

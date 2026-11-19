@@ -6,7 +6,7 @@ using BenchBar.Tray.Core;
 namespace BenchBar.Tray;
 
 /// <summary>
-/// One line per exception in <c>%LOCALAPPDATA%\BenchBar\tray.log</c>. The file is capped at 256 KB: past that it
+/// One line per exception in <c>tray.log</c> in <see cref="DataFolder.Current"/>. The file is capped at 256 KB: past that it
 /// is moved to <c>tray.log.1</c> (replacing the old one). Never throws.
 /// </summary>
 internal sealed class ErrorLog(string? path = null, long maxBytes = 256 * 1024, Func<DateTime>? utcNow = null)
@@ -16,8 +16,7 @@ internal sealed class ErrorLog(string? path = null, long maxBytes = 256 * 1024, 
 
     private readonly Func<DateTime> _now = utcNow ?? (() => DateTime.UtcNow);
     private readonly Dictionary<string, (DateTime Written, int Suppressed)> _seen = [];
-    private readonly string _path = path ?? System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BenchBar", "tray.log");
+    private readonly string _path = path ?? DataFolder.In("tray.log");
     private readonly object _gate = new();
 
     public string Path => _path;
