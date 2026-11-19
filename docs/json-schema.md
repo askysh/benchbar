@@ -1076,7 +1076,7 @@ reaches it is checked by `install`, before anything is built.
 
 ## `benchbar pull --json`
 
-Since 0.8 the `done` line also carries `changed`, `next_actions` and `state_after` ([done fields](#the-done-fields-08)); its `warnings` are as before. Since 0.9 the `plan` line has `neutralise` and the `done` line `neutralised`.
+Since 0.8 the `done` line also carries `changed`, `next_actions` and `state_after` ([done fields](#the-done-fields-08)); its `warnings` are as before. Since 0.9 the `plan` line has `neutralise` and the `done` line `neutralised`. Since 0.9 the `plan` line has `token` (see `--apply TOKEN`).
 
 Added in 0.5. Unlike the commands above, `pull` changes things, so it
 streams: one JSON object per line on stdout, written as the run goes, and
@@ -1094,7 +1094,7 @@ answered counts as no). Each line carries `schema_version`,
 
 | Event | Fields | Notes |
 |---|---|---|
-| `plan` | `source`, `host`, `remote_site`, `remote_bench`, `from_dir`, `bench`, `site`, `replace`, `backup`, `encryption_key`, `neutralise`, `apps`, `migrate`, `create_site`, `before_migrate`, `steps`, `dry_run` | once, after the read only checks. `backup.name`, `bytes` and `age_hours` are `null` with `--new-backup` (that backup does not exist yet). `encryption_key` says whether production has one to carry over, never its value. Since 0.8 `create_site` says the target does not exist and a `new_site` step makes it, `before_migrate` is the path of the `--before-migrate` script or `null`, and `migrate` is `false` with `--no-migrate`. Since 0.9 `neutralise` is `false` with `--keep-secrets`. A target the restore cannot go into (a folder without a `site_config.json`, a `bench new-site` that did not finish, no MariaDB root password) ends the run before this line, in a dry run too |
+| `plan` | `source`, `host`, `remote_site`, `remote_bench`, `from_dir`, `bench`, `site`, `replace`, `backup`, `encryption_key`, `neutralise`, `apps`, `migrate`, `create_site`, `before_migrate`, `needs`, `steps`, `dry_run`, `token` | once, after the read only checks. `backup.name`, `bytes` and `age_hours` are `null` with `--new-backup` (that backup does not exist yet). `encryption_key` says whether production has one to carry over, never its value. Since 0.8 `create_site` says the target does not exist and a `new_site` step makes it, `before_migrate` is the path of the `--before-migrate` script or `null`, and `migrate` is `false` with `--no-migrate`. Since 0.9 `neutralise` is `false` with `--keep-secrets`. Since 0.9 `token` is a hash of the plan without `dry_run`, `bytes` and `age_hours`: pass it to `--apply TOKEN --yes` with the same arguments to run exactly this plan; a plan that changed since ends the run with exit 1 before anything is changed. A target the restore cannot go into (a folder without a `site_config.json`, a `bench new-site` that did not finish, no MariaDB root password) ends the run before this line, in a dry run too |
 | `gate` | `name` (`new_backup`, `apply`, `replace`), `answer` (`yes`, `no`) | a question the run asked. `new_backup` is `yes` only when the typed (or `--confirm-site`) name matches |
 | `progress` | `file`, `bytes`, `total` | after each downloaded file; `bytes` counts the files so far |
 | `step` | `n`, `id`, `name`, `status` | `n` counts from 1 in the order of `plan.steps`; `status` is `done`, `unchanged`, `skipped` or `failed` |
