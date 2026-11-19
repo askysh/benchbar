@@ -128,6 +128,36 @@ assert_calls_contain 'api.github.com/repos/askysh/benchbar/releases/latest'
 assert_calls_not_contain 'releases/tags/|releases\?'
 assert_eq "0.3.0" "$(installed_app_version)"
 
+# ---- the CLI only install (--no-app) pins a candidate on a Mac too (Homebrew
+# cannot install one, and benchbar self-update has no --version): a fresh clone
+# of that tag, a checkout of it in an existing clone, and a run without
+# --version goes back to main. Its own HOME, so the checkout above is not touched.
+# (an app update to a final release leaves the CLI on main: Update Now passes --version)
+reset_calls
+run_install --yes --version 0.3.0
+assert_eq "0" "$CODE" "$OUT"
+assert_calls_not_contain ' checkout '
+assert_calls_not_contain ' fetch '
+PIN_HOME="$TMP_DIR/pinhome"
+mkdir -p "$PIN_HOME"
+reset_calls
+HOME="$PIN_HOME" run_install --yes --no-app --version 0.9.0-rc.1
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "CLI v0.9.0-rc.1 cloned into ${PIN_HOME}/.local/share/benchbar"
+assert_calls_contain '^git clone --quiet --branch v0\.9\.0-rc\.1 '
+assert_calls_not_contain 'releases/'
+printf 'abc1234\n' >"$PIN_HOME/.local/share/benchbar/.git/HEAD"
+reset_calls
+HOME="$PIN_HOME" run_install --yes --no-app --version v0.9.0-rc.1
+assert_eq "0" "$CODE" "$OUT"
+assert_calls_contain "^git -C ${PIN_HOME}/.local/share/benchbar fetch --quiet --tags$"
+assert_calls_contain "^git -C ${PIN_HOME}/.local/share/benchbar checkout --quiet v0\\.9\\.0-rc\\.1$"
+assert_calls_not_contain ' pull '
+reset_calls
+HOME="$PIN_HOME" run_install --yes --no-app
+assert_eq "0" "$CODE" "$OUT"
+assert_calls_contain "^git -C ${PIN_HOME}/.local/share/benchbar checkout --quiet main$"
+
 # ---- a tampered zip is refused and the installed app is left alone
 make_release 0.5.0
 printf 'evil\n' >>"$MOCK_STATE/release.zip"

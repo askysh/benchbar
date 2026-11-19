@@ -42,7 +42,7 @@ if [[ "$RC" == "1" ]]; then
   printf '## Release candidate\n\n'
   printf 'This is a **pre-release** of BenchBar %s, for testing before the release. It is not offered as an update: Sparkle, the app'"'"'s update banner, `benchbar self-update`, the one line installers and Homebrew all stay on the last release. To try it, name the version:\n\n' "${VERSION%%-*}"
   printf '```bash\ncurl -fsSL https://raw.githubusercontent.com/askysh/benchbar/v%s/install.sh | bash -s -- --version v%s\n```\n\n' "$VERSION" "$VERSION"
-  printf 'On Windows, the notes below give the PowerShell line. To go back, run the normal installer without a version.\n\n'
+  printf 'On a Mac this line installs the app and the command line tool at this tag (add `--no-app` for the tool alone). Homebrew and `benchbar self-update` cannot install a candidate: they only see releases. On Windows, the notes below give the PowerShell line. To go back, run the normal installer without a version.\n\n'
   printf '## Changes so far\n'
   printf '%s\n' "$section"
   printf '\n---\n\n'

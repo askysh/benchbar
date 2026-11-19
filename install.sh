@@ -38,8 +38,10 @@
 #   --no-app          CLI only
 #   --app-only        app only
 #   --version vX.Y.Z  install that release of the app instead of the latest;
-#                     on Linux, check out that release of the CLI (a detached
-#                     checkout, a rerun without it goes back to main)
+#                     on Linux, with --no-app and for a release candidate
+#                     (vX.Y.Z-rc.N, installed only when named), also check
+#                     out that release of the CLI (a detached checkout, a
+#                     rerun without it goes back to main)
 #   --uninstall       remove the app, the links and the PATH block; offer to
 #                     stop and remove the launchd agents and the checkout
 #                     (with --yes: yes to both). Benches, sites and databases
@@ -90,6 +92,12 @@ while [[ "$#" -gt 0 ]]; do
   shift
 done
 [[ -z "$PIN" || "$PIN" == v* ]] || PIN="v${PIN}"
+# The CLI is checked out at the pinned release on Linux, with --no-app (the CLI
+# only, which Homebrew and self-update cannot pin) and for a release candidate.
+# An app update to a final release leaves the CLI on main: a tag would leave
+# the managed checkout detached (Update Now passes --version).
+CLI_PIN=""
+if [[ -n "$PIN" ]] && { [[ "$IS_LINUX" == "1" ]] || [[ "$DO_APP" == "0" ]] || [[ "$PIN" == *-rc.* ]]; }; then CLI_PIN="$PIN"; fi
 
 # ---------------------------------------------------------------- output
 
@@ -388,19 +396,19 @@ install_cli() {
   else
     command -v git >/dev/null 2>&1 || die "git not found" "install the Xcode Command Line Tools: xcode-select --install"
   fi
-  if [[ -d "${BENCHBAR_HOME}/.git" && "$IS_LINUX" == "1" && -n "$PIN" ]]; then
+  if [[ -d "${BENCHBAR_HOME}/.git" && -n "$CLI_PIN" ]]; then
     # pinned: this release exactly, a detached checkout (a run without
     # --version goes back to main)
     local before after out
     before="$(git -C "$BENCHBAR_HOME" rev-parse --short HEAD 2>/dev/null || true)"
     if [[ "$DRY" == "1" ]]; then
       info "dry-run: git -C ${BENCHBAR_HOME} fetch --quiet --tags"
-      info "dry-run: git -C ${BENCHBAR_HOME} checkout --quiet ${PIN}"
+      info "dry-run: git -C ${BENCHBAR_HOME} checkout --quiet ${CLI_PIN}"
     else
       out="$(git -C "$BENCHBAR_HOME" fetch --quiet --tags 2>&1)" || { printf '%s\n' "$out"; die "git fetch failed in ${BENCHBAR_HOME}" "check the network, then run this again"; }
-      out="$(git -C "$BENCHBAR_HOME" checkout --quiet "$PIN" 2>&1)" || { printf '%s\n' "$out"; die "no release ${PIN} in ${BENCHBAR_HOME}, or the checkout has changes" "fix the checkout or move it aside"; }
+      out="$(git -C "$BENCHBAR_HOME" checkout --quiet "$CLI_PIN" 2>&1)" || { printf '%s\n' "$out"; die "no release ${CLI_PIN} in ${BENCHBAR_HOME}, or the checkout has changes" "fix the checkout or move it aside"; }
       after="$(git -C "$BENCHBAR_HOME" rev-parse --short HEAD 2>/dev/null || true)"
-      if [[ "$before" == "$after" ]]; then same "CLI ${PIN} at ${BENCHBAR_HOME} (${after})"; else ok "CLI ${PIN} checked out in ${BENCHBAR_HOME} (${before} to ${after})"; CHANGED=1; fi
+      if [[ "$before" == "$after" ]]; then same "CLI ${CLI_PIN} at ${BENCHBAR_HOME} (${after})"; else ok "CLI ${CLI_PIN} checked out in ${BENCHBAR_HOME} (${before} to ${after})"; CHANGED=1; fi
     fi
   elif [[ -d "${BENCHBAR_HOME}/.git" ]]; then
     local before after out ref=0 changes
@@ -430,9 +438,9 @@ install_cli() {
     die "${BENCHBAR_HOME} exists but is not a git checkout" "move it aside and run this again"
   else
     run mkdir -p "$(dirname "$BENCHBAR_HOME")"
-    if [[ "$IS_LINUX" == "1" && -n "$PIN" ]]; then
-      run git clone --quiet --branch "$PIN" "$BENCHBAR_REPO" "$BENCHBAR_HOME" || die "could not clone ${PIN} from ${BENCHBAR_REPO}" "check the network and that the release exists"
-      [[ "$DRY" == "1" ]] || ok "CLI ${PIN} cloned into ${BENCHBAR_HOME}"
+    if [[ -n "$CLI_PIN" ]]; then
+      run git clone --quiet --branch "$CLI_PIN" "$BENCHBAR_REPO" "$BENCHBAR_HOME" || die "could not clone ${CLI_PIN} from ${BENCHBAR_REPO}" "check the network and that the release exists"
+      [[ "$DRY" == "1" ]] || ok "CLI ${CLI_PIN} cloned into ${BENCHBAR_HOME}"
     else
       run git clone --quiet "$BENCHBAR_REPO" "$BENCHBAR_HOME" || die "could not clone ${BENCHBAR_REPO}" "check the network, then run this again"
       [[ "$DRY" == "1" ]] || ok "CLI cloned into ${BENCHBAR_HOME}"

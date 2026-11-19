@@ -113,18 +113,22 @@ On `next-release`, then into `main`:
    [release candidate](#release-candidates) first. Wait until the push run
    of CI on the new `next-release` head is green: that run is the one the
    release is built on. Merge nothing else until the tag exists.
-5. Fast forward `main` to that commit. You need to be a repository admin who
-   can bypass the `main` ruleset:
+5. Fast forward `main` to that commit with `scripts/release-promote.sh`. You
+   need gh signed in, and to be a repository admin who can bypass the `main`
+   ruleset. Run it with `--dry-run` first: it prints the plan and pushes
+   nothing. It checks, and stops at the first failure:
+   - `main` is an ancestor of `next-release`. It never merges and never
+     forces (see the last paragraph of the next step);
+   - `benchbar` at that commit has a final version (not a candidate), every
+     place agrees and no fragment is left (`scripts/check-version.sh --folded`
+     on that commit's files);
+   - the tag `vX.Y.Z` does not exist yet;
+   - "CI result" is green on the commit, and on the nearest commit that
+     changed code (`scripts/release-ci-gate.sh`: a push that changed only
+     docs runs no tests, so its green says nothing about the code).
 
-   ```bash
-   git fetch origin
-   git merge-base --is-ancestor origin/main origin/next-release   # must succeed
-   git push origin origin/next-release:refs/heads/main
-   ```
-
-   Check first that the "CI result" of that commit is green, that
-   `main` is an ancestor of it (otherwise stop: see below) and that
-   `scripts/check-version.sh --folded` passes on it. Never force the push and never merge.
+   Then it asks, and pushes with `git push origin <sha>:refs/heads/main`
+   (`--yes` skips the question).
 6. `auto-tag.yml` runs `scripts/check-version.sh` (every place says the same
    version, CHANGELOG.md has its section, no fragment is left), refuses a
    release candidate version on `main`, tags `vX.Y.Z` on that commit and
@@ -132,11 +136,11 @@ On `next-release`, then into `main`:
    `main` that keeps the version and changes only docs tags nothing (a
    notice); one that changes code **fails** ("release PR merged without a
    version bump?"). A tag pushed by hand still starts both release workflows.
-   If `main` has a commit that `next-release` has not, the push is not a
-   fast forward and git refuses it: do not force it. The commit
-   was pushed to `main` by mistake or came from a fix made there; bring its
-   change to `next-release` by pull request, and ask the maintainer how to
-   put `main` right (it is a decision about history, not a script).
+   If `main` has a commit that `next-release` has not, the script refuses
+   (and git would refuse the push): do not force it. The commit was pushed
+   to `main` by mistake or came from a fix made there; bring its change to
+   `next-release` by pull request, and ask the maintainer how to put `main`
+   right (it is a decision about history, not a script).
 7. Wait for the release workflows, open the draft on the Releases page,
    check the files, publish.
 8. Publishing starts the Homebrew tap workflow (`homebrew-tap.yml`,
@@ -322,8 +326,18 @@ pre-releases:
 version, so Sparkle later moves it to `0.9.0` (its build number, the commit
 count, is higher). `benchbar.exe` built from a candidate behaves as a
 development build: it never offers an update, so a Windows tester installs
-the release with the one liner. `benchbar self-update` has no `--version`:
-to leave a candidate on the Mac, run the installer without a version.
+the release with the one liner.
+
+On a Mac, the installer pins both halves to the candidate: the app from the
+pre-release, and the CLI as a detached checkout of the tag
+(`install.sh --version v0.9.0-rc.1`, also with `--no-app` for the CLI alone).
+Two other routes cannot install a candidate, by design: **Homebrew** only
+ever sees a published release (the tap skips a candidate), and **`benchbar
+self-update` has no `--version`**: it installs the latest release. To leave
+a candidate and go back, run the installer without a version
+(`install.sh --yes`): it switches the CLI back to `main` and installs the
+latest app. An app update to a final release (Update Now) passes
+`--version` too, but leaves the CLI on `main`.
 
 ## When a release goes wrong
 
@@ -336,13 +350,13 @@ published release is its notes and its flags.
 ### A release run failed
 
 The release job does not run the test suite. It first checks that the CI
-result of the tagged commit is green (`scripts/release-ci-gate.sh`; for a
-merge commit still in CI, the parent with the same tree counts), then
-`scripts/check-version.sh`, then builds.
+result of the tagged commit is green, and of the nearest commit that
+changed code when the tagged one changed only docs
+(`scripts/release-ci-gate.sh`), then `scripts/check-version.sh`, then builds.
 
 | What failed | What to do |
 |---|---|
-| `auto-tag.yml` stopped on `check-version.sh` (nothing is tagged) | `main` already holds the merge. Fix the named place on `next-release` by pull request and release again with a new release pull request: a push to `main` with a version that has no tag tags it. |
+| `auto-tag.yml` stopped on `check-version.sh` (nothing is tagged) | `main` already holds the fast forward (`release-promote.sh` runs the same check first, so this is rare). Fix the named place on `next-release` by pull request and run `scripts/release-promote.sh` again: `main` is an ancestor of the fix, and a push to `main` with a version that has no tag tags it. |
 | The gate says CI is red or missing | Fix `next-release`, wait for a green push run, then release again as above. A tag that exists for a bad commit stays; the next patch version replaces it. |
 | `release.yml` failed after the tag exists (signing, notarization, a runner) | Re-run the failed jobs on the same run, or start it again on the tag: `gh workflow run release.yml --ref vX.Y.Z -f version=X.Y.Z`. Approve the `release` environment again. A draft of that tag is reused: files of the same name are deleted from the draft and uploaded again, nothing is overwritten. |
 | `release-windows.yml` failed | Re-run it the same way (`gh workflow run release-windows.yml --ref vX.Y.Z -f version=X.Y.Z -f draft_release=true`) after `release.yml` has made the draft. Re-run it again after any later `release.yml` run, which replaces the notes. |
