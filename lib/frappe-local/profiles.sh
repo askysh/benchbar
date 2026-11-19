@@ -224,6 +224,26 @@ fl_profile_versions_json_v() {
   printf -v "$1" ',"python":%s,"node":%s,"mariadb":%s' "$__j1" "$__j2" "$__j3"
 }
 
+# fl_profile_linux_json_v VAR NAME: the fields "linux_supported" and
+# "unsupported_reason" of a profile list entry, from the gate the install
+# uses on Linux (fl_linux_profile_problems, platform-linux.sh), run on the
+# profile loaded fresh in a subshell: true and null when Linux installs it,
+# false and the reasons when it does not. null and null where the gate does
+# not exist (macOS) and for a file that is invalid.
+fl_profile_linux_json_v() {
+  local __why="" __sup="null" __j2
+  if declare -F fl_linux_profile_problems >/dev/null; then
+    __why="$(
+      FL_MARIADB_SOURCE=profile
+      fl_load_profile "$2" >/dev/null 2>&1 || { printf 'it cannot be loaded'; exit 0; }
+      fl_linux_profile_problems | paste -sd ';' - | sed 's/;/; /g'
+    )"
+    __sup=true; [[ -z "$__why" ]] || __sup=false
+  fi
+  fl_json_str_v __j2 "$__why"
+  printf -v "$1" ',"linux_supported":%s,"unsupported_reason":%s' "$__sup" "$__j2"
+}
+
 # fl_bundles_json_v VAR: [{"name","label","apps":[...],"description"},...] from config/app-bundles.tsv
 fl_bundles_json_v() {
   local __out="[" __sep="" __name __label __apps __notes __a __list __asep
@@ -239,12 +259,13 @@ fl_bundles_json_v() {
 
 fl_cmd_profile_list() {
   local json="$1" sep="" rows=() kind name file status err seen=$'\n' p label base tsv shadow skind src sub subjson schema warns=() line
-  local sname surl sdir behind days fetched vers bundles
+  local sname surl sdir behind days fetched vers bundles lin
   tsv="$(fl_config_file release-profiles.tsv)"
   if [[ "$json" == "1" ]]; then
     printf '{"schema_version":%d,"cli_version":"%s","profiles":[' "$FL_SCHEMA_VERSION" "${FL_VERSION:-0}"
     while IFS=$'\t' read -r p label; do
       fl_profile_versions_json_v vers "$tsv" "$p"
+      fl_profile_linux_json_v lin "$p"; vers="${vers}${lin}"
       printf '%s{"name":%s,"kind":"builtin","source":"builtin","source_url":null,"subscription":null,"shadowed_by":null,"schema":null,"file":%s,"base":null,"label":%s,"frappe_branch":%s,"valid":true,"error":null%s}' \
         "$sep" "$(fl_json_str "$p")" "$(fl_json_str "$tsv")" "$(fl_json_str "$label")" \
         "$(fl_json_str "$(awk -F '\t' -v p="$p" 'NR > 1 && $1 == p {print $3}' "$tsv")")" "$vers"
@@ -284,6 +305,9 @@ fl_cmd_profile_list() {
     fi
     if [[ "$json" == "1" ]]; then
       fl_profile_versions_json_v vers "$tsv" "$base"
+      # an invalid file was never asked: its "error" says why
+      if [[ -z "$err" ]]; then fl_profile_linux_json_v lin "$name"; else lin=',"linux_supported":null,"unsupported_reason":null'; fi
+      vers="${vers}${lin}"
       printf '%s{"name":%s,"kind":"team","source":"%s","source_url":%s,"subscription":%s,"shadowed_by":%s,"schema":%s,"file":%s,"base":%s,"label":%s,"frappe_branch":%s,"valid":%s,"error":%s%s}' \
         "$sep" "$(fl_json_str "$name")" "$skind" "$(fl_json_str "$src")" "$subjson" "$(fl_json_str "$shadow")" "$(fl_json_num "$schema")" \
         "$(fl_json_str "$file")" "$(fl_json_str "$base")" \

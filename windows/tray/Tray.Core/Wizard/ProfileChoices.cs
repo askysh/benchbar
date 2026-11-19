@@ -8,6 +8,9 @@ public sealed record ProfileChoice(string Name, string Label, string? Versions, 
 {
     public bool Enabled => Refusal is null;
 
+    /// <summary>The profile list already carried the gate's answer (<c>linux_supported</c>), so no dry run of this profile is needed.</summary>
+    public bool Answered { get; init; }
+
     /// <summary>"v16-lts  Frappe/ERPNext v16 LTS", "acme  Acme ERP (team)": what the list shows.</summary>
     public string Text
     {
@@ -33,16 +36,22 @@ public static class ProfileChoices
 
     /// <summary>
     /// The built in profiles, then the valid team profiles that no earlier file hides (the Mac app's rule). An invalid file or a
-    /// shadowed one is not offered: <c>install --profile NAME</c> would refuse it, or take the other file.
+    /// shadowed one is not offered: <c>install --profile NAME</c> would refuse it, or take the other file. A profile whose list entry
+    /// has <c>linux_supported</c> is answered: it is off with the CLI's reason when false, and needs no dry run.
     /// </summary>
     public static IReadOnlyList<ProfileChoice> From(IReadOnlyList<ProfileInfo> profiles) =>
         profiles.Where(p => p.Valid && p.ShadowedBy is null && (p.Kind == "builtin" || p.IsTeam))
-            .Select(p => new ProfileChoice(p.Name, p.Label ?? p.Name, p.Versions.Length == 0 ? null : p.Versions, p.IsTeam))
+            .Select(p => new ProfileChoice(p.Name, p.Label ?? p.Name, p.Versions.Length == 0 ? null : p.Versions, p.IsTeam,
+                p.LinuxSupported == false ? Unsupported(p.UnsupportedReason) : null) { Answered = p.LinuxSupported is not null })
             .ToList();
 
-    /// <summary>The choices with the gate's refusals applied. A profile the gate has not answered for stays on offer.</summary>
+    /// <summary>"Not supported on Linux yet: it needs MariaDB 12.0, ..." from the CLI's reasons.</summary>
+    public static string Unsupported(string? reason) =>
+        "Not supported on Linux yet" + (string.IsNullOrWhiteSpace(reason) ? "." : ": " + reason.Trim().TrimEnd('.') + ".");
+
+    /// <summary>The choices with the gate's dry run answers applied (the fallback for a CLI whose list has no <c>linux_supported</c>). A profile with no answer keeps what it has.</summary>
     public static IReadOnlyList<ProfileChoice> Apply(IReadOnlyList<ProfileChoice> choices, IReadOnlyDictionary<string, string?> refusals) =>
-        choices.Select(c => refusals.TryGetValue(c.Name, out var why) && why is { Length: > 0 } ? c with { Refusal = why } : c with { Refusal = null }).ToList();
+        choices.Select(c => refusals.TryGetValue(c.Name, out var why) ? c with { Refusal = why is { Length: > 0 } ? why : null } : c).ToList();
 
     /// <summary>
     /// Reads the gate's answer from the stream of <c>install --dry-run --json --profile NAME</c>. A plan line means the CLI took the
