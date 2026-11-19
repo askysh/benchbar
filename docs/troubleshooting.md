@@ -224,7 +224,11 @@ installed, doctor warns until the bench is in `~/.config/mole/whitelist`.
 
 The bench log is `<bench>/logs/bench.log`; `benchup` keeps the tail of the
 previous run in `logs/bench.previous.log` and the three copies before it
-in `logs/bench.previous.1.log` to `.3.log`. `benchup` refuses to start
+in `logs/bench.previous.1.log` to `.3.log`. While the bench runs, its
+runner keeps `bench.log`, `worker.log` and `worker.error.log` under 20 MB:
+a log that grows past it is cut, in place, to its last lines (the first
+line says so). Set `BENCHBAR_LOG_MAX_KB` in the runner's environment to
+change the size. `benchup` refuses to start
 when a running bench or another program holds its ports, and asks when
 only a stopped bench shares them; `benchbar ports setup` gives each bench
 its own ports.

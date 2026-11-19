@@ -9,6 +9,8 @@
 # systemd system units. Ports and processes come from ss and /proc.
 
 FL_BREW_PREFIX=""
+# no Homebrew: the fallback paths stay what they were (nothing reads them)
+fl_brew_default_prefix() { printf '/opt/homebrew'; }
 # the files the layer reads, overridable for the tests
 FL_PROC_VERSION="${FL_PROC_VERSION:-/proc/version}"
 FL_OS_RELEASE="${FL_OS_RELEASE:-/etc/os-release}"

@@ -418,6 +418,12 @@ Fix: `benchbar profile update NAME` (shows the changes and asks).
 
 `bench.log`, `worker.log` and `worker.error.log` are under 50 MB each.
 
+A running bench keeps them small on its own: its runner cuts a log over
+20 MB to its last lines (see
+[Troubleshooting](../troubleshooting.md)). The check still warns for a
+bench that was stopped with a large log, or one started by an older
+runner.
+
 Fix: `benchbar repair` copies each large log to `<name>.old.<stamp>` and
 empties the live file in place, so the bench's processes keep writing to
 the file they have open. At most three copies are kept.

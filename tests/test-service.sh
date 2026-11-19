@@ -9,6 +9,26 @@ make_fake_bench "$BENCH"
 mkdir -p "$HOME/Library/LaunchAgents"
 plist="$HOME/Library/LaunchAgents/com.benchbar.frappe-bench.plist"
 
+
+# run_fm_answer ANSWER ARGS...: as run_fm_tty, and ANSWER typed at the first question
+run_fm_answer() {
+  local answer="$1"; shift
+  set +e
+  OUT="$(python3 -c '
+import os, pty, subprocess, sys, threading, time
+master, slave = pty.openpty()
+p = subprocess.Popen(sys.argv[2:], stdin=slave, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+def feed():
+    time.sleep(1.5)
+    os.write(master, (sys.argv[1] + "\n").encode())
+threading.Thread(target=feed, daemon=True).start()
+out = p.communicate()[0]
+sys.stdout.buffer.write(out)
+sys.exit(p.returncode)' "$answer" "$FM" "$@" 2>&1)"
+  CODE="$?"
+  set -e
+}
+
 # ---- legacy per-process agents from an older setup, one of them crash-looping
 for name in web worker socketio; do
   case "$name" in web) cmd=serve ;; worker) cmd=worker ;; *) cmd=socketio ;; esac
@@ -131,7 +151,7 @@ run_fm doctor --bench-dir "$BENCH"
 assert_contains "$OUT" "[WARN] Runner script: runner is outdated"
 run_fm repair --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
-grep -q 'benchbar-template: bench-run.sh v8' "$BENCH/benchbar-run.sh" || fail "runner must be regenerated"
+grep -q 'benchbar-template: bench-run.sh v9' "$BENCH/benchbar-run.sh" || fail "runner must be regenerated"
 
 # ---- reloading a running agent waits for launchd to let go of it
 # (real launchctl: bootout returns while the job still shuts down, and a
@@ -339,6 +359,37 @@ run_fm uninstall-service --all --yes
 assert_eq "0" "$CODE" "$OUT"
 ! grep -q -x -F "# >>> benchbar >>>" "$HOME/.zshrc" || fail "the helper block goes with --all"
 grep -q '^export EDITOR=vim$' "$HOME/.zshrc" || fail "user zshrc content must survive"
+
+# ---- uninstall-service --all and the benchbar block in /etc/hosts: no
+# command removes it on its own; a person at a terminal is offered it, and
+# --yes only prints the command (a script never edits /etc/hosts)
+# (earlier steps of this file may have written a block of their own)
+printf '127.0.0.1 localhost\n\n# >>> benchbar >>>\n127.0.0.1 macdev\n127.0.0.1 bdev\n# <<< benchbar <<<\n' >"$FL_HOSTS_FILE"
+hosts_before="$(cat "$FL_HOSTS_FILE")"
+run_fm uninstall-service --all --yes
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "hosts stays; to remove it: sudo sed -i"
+assert_eq "$hosts_before" "$(cat "$FL_HOSTS_FILE")" "(--yes leaves the hosts file alone)"
+run_fm uninstall-service --all --dry-run
+assert_contains "$OUT" "dry-run: would offer to remove the benchbar block (4 lines)"
+assert_eq "$hosts_before" "$(cat "$FL_HOSTS_FILE")" "(a dry run leaves the hosts file alone)"
+# a terminal, the answer is no: the block stays, with the command to run later
+run_fm_answer "n" uninstall-service --all
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "Remove the benchbar block from "
+assert_contains "$OUT" "kept; to remove it later: sudo sed -i"
+assert_eq "$hosts_before" "$(cat "$FL_HOSTS_FILE")"
+# a terminal, the answer is yes: the block (markers and its lines) goes, a backup first, other lines stay
+run_fm_answer "y" uninstall-service --all
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "removed the benchbar block from "
+! grep -q 'benchbar' "$FL_HOSTS_FILE" || fail "the block's markers must be gone"
+! grep -q 'macdev' "$FL_HOSTS_FILE" || fail "the block's lines must be gone"
+grep -q '^127.0.0.1 localhost$' "$FL_HOSTS_FILE" || fail "lines outside the block must survive"
+# no block left: nothing is offered
+run_fm_answer "y" uninstall-service --all
+assert_eq "0" "$CODE" "$OUT"
+assert_not_contains "$OUT" "with sudo?"
 
 # ---- launchd has the label on its disabled list (launchctl disable, an old
 # "launchctl remove"): bootstrap fails with 119 until it is enabled again

@@ -64,7 +64,7 @@ fl_honcho_install() {
 # ------------------------------------------------------------- agent
 
 fl_launchd_path_value() {
-  local brew="${FL_BREW_PREFIX:-/opt/homebrew}" p=""
+  local brew="${FL_BREW_PREFIX:-$(fl_brew_default_prefix)}" p=""
   [[ -n "${FL_PYTHON_FORMULA:-}" ]] && p="${brew}/opt/${FL_PYTHON_FORMULA}/bin:"
   [[ -n "${FL_NODE_FORMULA:-}" ]] && p="${p}${brew}/opt/${FL_NODE_FORMULA}/bin:"
   [[ -n "${FL_MARIADB_FORMULA:-}" ]] && p="${p}${brew}/opt/${FL_MARIADB_FORMULA}/bin:"
