@@ -1,0 +1,1 @@
+{"schema_version":1,"cli_version":"0.9.0","event":"done","exit":1,"error":"There is no LAN guard on this platform yet.","fix":"benchbar lan-guard status","changed":[],"warnings":[],"next_actions":[]}

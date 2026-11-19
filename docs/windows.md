@@ -395,6 +395,23 @@ A bench has four tabs:
 
 ![A bench on its Sites tab](images/windows-bench.png)
 
+A fifth tab, **Sharing**, is there only while the **Share with people on
+the same Wi-Fi** experiment (`lan-rooms`) is on in Labs. It is the host
+side of a room, with the Mac app's words: **Start sharing** for 1 to 12
+hours after a question, **Stop**, **Extend**, **Lock room**, the room code
+(hidden until you press **Show**), **Copy invite** and **New code**, the
+checks, the copy, and the people in the room with **Remove**. Every one of
+those calls is made from your click and asks first where it ends a room or
+a person's session; nothing runs when the tab opens, it only reads. The
+room code and the invite are read only on your click, kept in memory,
+never written to a log and copied with a mark that keeps them out of the
+Windows clipboard history. Setting up the copy and the network protection
+are not in the tab yet: run `benchbar.exe share setup` and
+`benchbar.exe lan-guard install` in PowerShell, where they ask first. The tab shows
+what `benchbar.exe` reports, including where a platform has no network
+protection yet (Linux). While the experiment says it is not on Windows
+yet in Labs, the tab does not appear.
+
 Start and Restart check the bench's ports first, from the window and from
 the flyout. A port another program holds stops the start with the reason
 and Review Port Conflict; BenchBar never stops that program.
@@ -753,9 +770,11 @@ every distro, so stop your benches first).
   USER` opens the site signed in as that user in your Windows browser. The
   site needs a `*.localhost` name, which the Windows browser reaches without
   a hosts line (see [`*.localhost` names](#localhost-names)). See [benchbar open](reference/cli/other.md).
-- It cannot join a room. Rooms (`benchbar share`) are Mac only for now:
-  WSL 2 does not expose a port to the Wi-Fi by default and Windows has no
-  pf. A `benchbar://share/...` link shows a note that says so.
+- It cannot join a room as a guest. The guest side (the room code
+  exchange, the pinned certificate and the local forwarder) is part of the
+  Mac app and has no `benchbar` command, so it is not on Windows yet. A
+  `benchbar://share/...` link shows a note that says so. Hosting a room is
+  the **Sharing** tab above.
 
 ## Labs
 
