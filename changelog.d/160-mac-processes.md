@@ -1,4 +1,4 @@
-### The macOS app
+### Mac app
 
 - Quitting during an install, repair, app update, site change or a start, stop or restart now asks first. "Quit when it finishes" waits for the change, so a bench is never left half installed.
 - A timeout or a cancel now stops the command's whole process group, not only the `benchbar` process, and a cancel is no longer reported as "did not finish within N seconds".
