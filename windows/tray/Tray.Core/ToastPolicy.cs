@@ -60,10 +60,10 @@ public sealed class ToastPolicy
         var path = PosixQuote(bench.Path);
         var (title, body) = kind switch
         {
-            AlertKind.Crashed => ($"{bench.Name} crashed", "It restarts on its own in about 20 seconds."),
-            AlertKind.PausedAfterCrashes => ($"{bench.Name} paused after repeated crashes", $"benchbar up --bench-dir {path}"),
-            AlertKind.PortConflict => ($"{bench.Name} has a port conflict", $"benchbar doctor --bench-dir {path}"),
-            _ => ($"{bench.Name} needs repair", $"benchbar doctor --bench-dir {path}"),
+            AlertKind.Crashed => (UiText.Format("ToastCrashedTitle", bench.Name), UiText.Get("ToastCrashedBody")),
+            AlertKind.PausedAfterCrashes => (UiText.Format("ToastPausedTitle", bench.Name), $"benchbar up --bench-dir {path}"),
+            AlertKind.PortConflict => (UiText.Format("ToastPortConflictTitle", bench.Name), $"benchbar doctor --bench-dir {path}"),
+            _ => (UiText.Format("ToastNeedsRepairTitle", bench.Name), $"benchbar doctor --bench-dir {path}"),
         };
         return new Toast(title, body, bench.Path, kind);
     }

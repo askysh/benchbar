@@ -98,8 +98,9 @@ public partial class App : Application, ITrayHost
         DispatcherUnhandledException += (_, args) =>
         {
             _log.Write("ui", args.Exception);
+            if (Observe.IsFatal(args.Exception)) return; // not handled: the process ends and the next start reports it
             args.Handled = true; // keep running, and say so once: a silent catch hid every fault from the person
-            _notices.Set(new Notice("unexpected", "BenchBar hit an error and kept running. If something looks wrong, tell us.", "Report a Bug", () => ReportBugAsync("Error notice").Forget()));
+            _notices.Set(new Notice("unexpected", UiText.Get("UnexpectedErrorNotice"), UiText.Get("MenuReportBug"), () => ReportBugAsync("Error notice").Forget()));
         };
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {
