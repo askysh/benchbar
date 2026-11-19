@@ -4,12 +4,6 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
-### Command line tool
-
-- `benchbar app list --json` reads each app's branch, remote, local changes and commit once and reads the apps side by side, instead of about 30 `git` calls per app (13 s for 36 apps before, about 1000 git processes). The author search for the focus apps looks only at the last `FL_FOCUS_DAYS` days. The output is unchanged.
-- `benchbar app list --json` also reads the policy branch, version, `required_apps` and sites of all apps in one pass instead of one `awk`, `tr` and `grep` per app (about 125 `awk`, 48 `tr` and 39 `grep` fewer for 36 apps), and starts no subshell per app for them.
-- `benchbar profile check` asks the repos side by side (8 at a time, a repo shared by two apps once), refilling a free slot the moment any repo answers (one hanging repo no longer holds up the rest), with a 5 second connect limit, and keeps a yes for 5 minutes (a 0600 file without any user name or token of the URL), so `check` and `install --profile` straight after it do not ask the same repo twice. `install` still asks the network again before it plans or changes anything: a branch deleted in between stops it before the plan with `Branch/tag ... not found`. A timed out `git` is now stopped together with the `ssh` it started and no longer stays running, and INT or TERM to `benchbar` while the checks run stops them too. The checks that read a remote (`app add` preflight, the plan, the version policy, the lock) share one helper.
-
 ### Mac app
 
 - New setting **Links, Ask before a link acts** (off by default): when on, BenchBar shows an alert before a `benchbar://` link starts, stops or restarts a bench or opens a console. Any web page or app can open such a link, and a browser's "always allow" removes its own question. The docs say so plainly.
