@@ -29,6 +29,7 @@ public sealed class LogViewModel : IDisposable
     private bool _open;
     private bool _disposed;
     private int _polls;
+    private int _pausedWaits;
     private bool _hidden;
     private IFollowGate? _followGate;
     private TaskCompletionSource _wake = NewWake();
@@ -105,6 +106,9 @@ public sealed class LogViewModel : IDisposable
 
     /// <summary>How many polls have run (for tests).</summary>
     public int Polls => Volatile.Read(ref _polls);
+
+    /// <summary>How many times the loop has parked itself with no timer (hidden, or away): a test waits on it instead of on a clock.</summary>
+    internal int PausedWaits => Volatile.Read(ref _pausedWaits);
 
     /// <summary>True while a Follow loop is running.</summary>
     public bool IsPolling
@@ -419,6 +423,7 @@ public sealed class LogViewModel : IDisposable
                 if (pace == FollowPace.Paused)
                 {
                     // no timer and no process until the PC or the window is back
+                    Interlocked.Increment(ref _pausedWaits);
                     await wake.Task.WaitAsync(ct).ConfigureAwait(false);
                     empty = 0;
                     probe = true;

@@ -9,6 +9,11 @@ public static class Observe
     /// <summary>Where a failure goes. The app sets it to its error log; nothing happens when unset (the failure is still observed).</summary>
     public static Action<Exception>? OnFault { get; set; }
 
+    /// <summary>A fault that leaves the process in an unknown state: the app lets it end the process (the run marker says so on the next start) instead of carrying on.</summary>
+    public static bool IsFatal(Exception ex) =>
+        ex is OutOfMemoryException or AccessViolationException or AppDomainUnloadedException or BadImageFormatException or InvalidProgramException
+        || ex.InnerException is { } inner && IsFatal(inner);
+
     public static void Forget(this Task task)
     {
         if (task.IsCompleted)

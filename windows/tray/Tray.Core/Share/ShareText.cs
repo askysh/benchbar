@@ -29,6 +29,22 @@ public static class ShareText
     public const string LanGuardAsk = "Network protection changes the firewall rules that keep the bench's ports closed to other computers while sharing. It asks for your password, and only after you confirm here.";
     public const string LanGuardAllowAsk = "This lets sharing through the firewall. It asks for your password, and only after you confirm here.";
     public const string PeopleTitle = "People in the room";
+    public const string LanGuardUnavailable = "Network protection is not available on Windows yet, so sharing cannot start here.";
+    public const string RootPasswordAdvice = "The tray cannot ask for it. In a terminal, run `benchbar mariadb-password` to read the one BenchBar saved, or run the same command there with MARIADB_ROOT_PASSWORD set.";
+
+    /// <summary>Whether the CLI's LAN guard runs on this platform: the pf anchor is macOS only, and the nftables guard for Linux (so WSL) is not written yet.</summary>
+    public const bool LanGuardSupportedHere = false;
+
+    /// <summary>
+    /// What to add to a failed run that exited 2 because the MariaDB root password is unknown (<c>share setup</c> stops there). The CLI's own sentence
+    /// stays first; the advice is added only when that sentence does not already say how to pass the password.
+    /// </summary>
+    public static string? RootPasswordHelp(CliStreamResult result)
+    {
+        if (result.Ok || result.Cancelled || result.Exit != 2 || result.Problem is not { } problem) return null;
+        if (!problem.Contains("root password", StringComparison.OrdinalIgnoreCase) || problem.Contains("MARIADB_ROOT_PASSWORD", StringComparison.Ordinal)) return null;
+        return RootPasswordAdvice;
+    }
 
     /// <summary>Checks that probe the gateway or the share web process: while sharing is off there is nothing to probe, so they wait for the start.</summary>
     public static readonly IReadOnlySet<string> ChecksOfTheRunningShare = new HashSet<string> { "gateway_reachable", "share_web_lan_closed", "share_traceback_off", "share_debugger_off" };

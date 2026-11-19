@@ -196,6 +196,7 @@ public sealed class PlanReviewModel : IDisposable
         else
         {
             Result = PlanResultModel.From(apply);
+            if (Request.ExplainFailure?.Invoke(apply) is { Length: > 0 } advice) Result = Result with { Error = $"{Result.Error} {advice}".Trim() };
             Outcome = new PlanOutcome(apply.Ok, apply.Cancelled, apply.Done);
             Phase = PlanPhase.Finished;
         }

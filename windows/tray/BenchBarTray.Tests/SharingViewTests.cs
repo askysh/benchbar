@@ -11,12 +11,12 @@ public class SharingViewTests
     /// <summary>The off room with every check passing, so Start is offered.</summary>
     private static string Clean(string from = "share-status-off.json") => Fixture(from)[0].Replace("\"fail\"", "\"ok\"");
 
-    private static (SharingView View, PageKit Kit, List<string> Asked) Make(string status, bool answer = true, Func<string, string>? tweak = null)
+    private static (SharingView View, PageKit Kit, List<string> Asked) Make(string status, bool answer = true, Func<string, string>? tweak = null, int statusExit = 0, bool guard = true)
     {
         var kit = new PageKit();
         kit.Runner.On(a => a.Contains("--acknowledge-data")).Print(Fixture("share-done.jsonl"));
         kit.Runner.On("share", "setup").Print(Fixture("share-setup-plan.json"));
-        kit.Runner.On("share", "status").Print(tweak is null ? Fixture(status)[0] : tweak(Fixture(status)[0]));
+        kit.Runner.On("share", "status").Print(tweak is null ? Fixture(status)[0] : tweak(Fixture(status)[0])).Fail(statusExit);
         kit.Runner.On("share", "people").Print(Fixture("share-people.json"));
         kit.Runner.On("share", "users").Print(Fixture("share-users.json"));
         kit.Runner.On("share", "code").Print(Fixture("share-code.json"));
@@ -24,7 +24,7 @@ public class SharingViewTests
         kit.Runner.On("share").Print(Fixture("share-done.jsonl"));
         kit.Runner.On("lan-guard").Print(Fixture("share-done.jsonl"));
         var asked = new List<string>();
-        var view = new SharingView(kit.Services, bench => new ShareModel(kit.Services.Cli, bench))
+        var view = new SharingView(kit.Services, bench => new ShareModel(kit.Services.Cli, bench) { LanGuardSupported = guard })
         {
             Confirm = (title, _, _) =>
             {
@@ -161,13 +161,63 @@ public class SharingViewTests
         var plain = new List<string>();
         kit.Services.CopySecret = secrets.Add;
         kit.Services.CopyText = plain.Add;
-        Assert.False(view.Buttons["Copy"].IsEnabled); // no code read yet
+        Assert.True(view.Buttons["Copy"].IsEnabled); // no code in memory yet, a click reads it
+        Assert.Equal(0, Calls(kit, "share", "code"));
+        Click(view.Buttons["Copy"]);
+        Wait(view.Pending);
+        Assert.Equal(["000000"], secrets); // the current code, without --new: invites already sent stay valid
+        Assert.Equal(["share", "code", "--json", "--bench-dir", P], kit.Runner.Runs.Single(r => r.Args[1] == "code").Args);
+        Assert.DoesNotContain("Room code: shown", view.Lines); // Copy does not reveal it
+        Click(view.Buttons["Copy"]);
+        Wait(view.Pending);
+        Assert.Equal(2, secrets.Count);
+        Assert.Equal(1, Calls(kit, "share", "code")); // the second Copy used the one in memory
         Click(view.Buttons["Copy invite"]);
         Wait(view.Pending);
-        Assert.Single(secrets);
-        Assert.StartsWith("Join my BenchBar room", secrets[0]);
+        Assert.StartsWith("Join my BenchBar room", secrets[2]);
         Assert.Empty(plain);
         Assert.Contains(ShareText.InviteCopied, view.Lines);
+        Assert.DoesNotContain(view.Lines, l => l.Contains("000000") || l.Contains("000 000"));
+    });
+
+    [Fact]
+    public void ShowWithNoCodeInMemoryReadsTheCurrentCodeWithoutNew() => Sta.Run(() =>
+    {
+        var (view, kit, _) = Make("share-status-on.json");
+        Assert.True(view.Buttons["Show"].IsEnabled);
+        Click(view.Buttons["Show"]);
+        Wait(view.Pending);
+        Assert.Equal(["share", "code", "--json", "--bench-dir", P], kit.Runner.Runs.Single(r => r.Args[1] == "code").Args);
+        Assert.Contains("Room code: shown", view.Lines);
+        Assert.Contains("000 000", Texts(view));
+        Assert.DoesNotContain(view.Lines, l => l.Contains("000000") || l.Contains("000 000"));
+        Click(view.Buttons["Hide"]);
+        Click(view.Buttons["Show"]);
+        Wait(view.Pending);
+        Assert.Equal(1, Calls(kit, "share", "code")); // shown again from memory
+
+        // a code that cannot be read shows the CLI's words and no card
+        var broken = new PageKit();
+        broken.Runner.On("share", "status").Print(Fixture("share-status-on.json")[0]);
+        broken.Runner.On("share", "people").Print(Fixture("share-people.json"));
+        broken.Runner.On("share", "code").Print(Fixture("share-lab-off.json")).Fail(2);
+        var failing = new SharingView(broken.Services, bench => new ShareModel(broken.Services.Cli, bench));
+        failing.Bind(new BenchContext(Bench(), null));
+        Wait(failing.Pending);
+        Click(failing.Buttons["Show"]);
+        Wait(failing.Pending);
+        Assert.Contains("Room code: hidden", failing.Lines);
+        Assert.Contains("benchbar share is an experiment and it is off.", failing.Lines);
+    });
+
+    [Fact]
+    public void ALabRefusalOfStatusIsShownAsItIsAndNotAsAnOldCli() => Sta.Run(() =>
+    {
+        var (view, kit, _) = Make("share-lab-off.json", statusExit: 2);
+        Assert.Contains("benchbar share is an experiment and it is off.", view.Lines);
+        Assert.DoesNotContain(ShareText.NewerCli, view.Lines);
+        Assert.DoesNotContain("[Update]", view.Lines);
+        Assert.Equal(0, Calls(kit, "share", "people"));
     });
 
     // --- every change asks first ---
@@ -197,7 +247,7 @@ public class SharingViewTests
         kit.Runner.On("share", "status").Print(clean);
         var asked = new List<(string Title, string Detail)>();
         var answer = false;
-        var view = new SharingView(kit.Services, b => new ShareModel(kit.Services.Cli, b)) { Confirm = (t, d, _) => { asked.Add((t, d)); return answer; } };
+        var view = new SharingView(kit.Services, b => new ShareModel(kit.Services.Cli, b) { LanGuardSupported = true }) { Confirm = (t, d, _) => { asked.Add((t, d)); return answer; } };
         view.Bind(new BenchContext(Bench(), null));
         Wait(view.Pending);
         Assert.Equal(0, Calls(kit, "lan-guard")); // reading the tab never installs anything
@@ -220,13 +270,42 @@ public class SharingViewTests
         var clean = Fixture("share-status-off.json")[0].Replace("\"lan_guard\":\"installed\"", "\"lan_guard\":\"missing\"");
         var kit = new PageKit();
         kit.Runner.On("share", "status").Print(clean);
-        kit.Runner.On("lan-guard").Print(Fixture("share-refused.jsonl")).Fail(1);
-        var view = new SharingView(kit.Services, b => new ShareModel(kit.Services.Cli, b)) { Confirm = (_, _, _) => true };
+        kit.Runner.On("lan-guard").Print(Fixture("lan-guard-sudo.jsonl")).Fail(1);
+        var view = new SharingView(kit.Services, b => new ShareModel(kit.Services.Cli, b) { LanGuardSupported = true }) { Confirm = (_, _, _) => true };
         view.Bind(new BenchContext(Bench(), null));
         Wait(view.Pending);
         Click(view.Buttons["Turn on network protection"]);
         Wait(view.Pending);
-        Assert.Contains("There is no LAN guard on this platform yet.", view.Lines);
+        Assert.Contains("sudo was not available, so nothing was changed.", view.Lines);
+    });
+
+    [Fact]
+    public void DecliningAllowRunsNothingAndAgreeingRunsAllowNodeOnce() => Sta.Run(() =>
+    {
+        var (declined, declinedKit, asked) = Make("share-status-off.json", answer: false);
+        Click(declined.Buttons["Allow..."]);
+        Wait(declined.Pending);
+        Assert.Equal(["Allow sharing through the firewall?"], asked);
+        Assert.Equal(0, Calls(declinedKit, "lan-guard"));
+
+        var (agreed, agreedKit, _) = Make("share-status-off.json", answer: true);
+        Click(agreed.Buttons["Allow..."]);
+        Wait(agreed.Pending);
+        Assert.Equal(["lan-guard", "allow-node", "--yes", "--json"], agreedKit.Runner.Runs.Single(r => r.Args[0] == "lan-guard").Args);
+    });
+
+    [Fact]
+    public void WithoutAGuardForThisPlatformTheLanGuardButtonsAreNotDrawnAndNothingRuns() => Sta.Run(() =>
+    {
+        // the lab may list this platform before the CLI has a guard for it: the buttons follow the guard, not the lab
+        static string Missing(string text) => text.Replace("\"lan_guard\":\"installed\"", "\"lan_guard\":\"missing\"");
+        var (view, kit, asked) = Make("share-status-off.json", tweak: Missing, guard: false);
+        Assert.Contains(ShareText.LanGuardUnavailable, view.Lines);
+        Assert.DoesNotContain("Turn on network protection", view.Buttons.Keys);
+        Assert.DoesNotContain("Allow...", view.Buttons.Keys); // the firewall_node fix is a lan-guard command too
+        Assert.Empty(asked);
+        Assert.Equal(0, Calls(kit, "lan-guard"));
+        AssertEveryControlIsNamed(view);
     });
 
     // --- set up ---
@@ -271,5 +350,23 @@ public class SharingViewTests
         Assert.Equal(["--dry-run", "--dry-run"], setups.Take(2).Select(r => r.Args.Single(a => a == "--dry-run")).ToList()); // the view planned, then the sheet planned
         Assert.Contains("--acknowledge-data", setups.Last().Args);
         Assert.Null(view.Form); // it was applied
+    });
+
+    [Fact]
+    public void DecliningStartAgainRunsNothingAndAgreeingStopsThenStarts() => Sta.Run(() =>
+    {
+        static string Broken(string text) => text.Replace("\"status\":\"ok\",\"message\":\"ok\",\"fix_action\":\"none\"", "\"status\":\"fail\",\"message\":\"The gateway does not answer.\",\"fix_action\":\"restart_sharing\"");
+        var (declined, declinedKit, asked) = Make("share-status-on.json", answer: false, Broken);
+        Assert.True(declined.Buttons["Start again"].IsEnabled);
+        Click(declined.Buttons["Start again"]);
+        Wait(declined.Pending);
+        Assert.Equal(["Restart sharing?"], asked);
+        Assert.Equal(0, Calls(declinedKit, "share", "stop") + Calls(declinedKit, "share", "start") + Calls(declinedKit, "share", "code"));
+
+        var (agreed, agreedKit, _) = Make("share-status-on.json", answer: true, Broken);
+        Click(agreed.Buttons["Start again"]);
+        Wait(agreed.Pending);
+        Assert.Equal(1, Calls(agreedKit, "share", "stop"));
+        Assert.Equal(1, Calls(agreedKit, "share", "start"));
     });
 }

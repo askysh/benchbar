@@ -143,7 +143,8 @@ internal sealed class SharingView : UserControl, IBenchPageView
         if (status.IsOn)
             foreach (var (label, minutes) in ShareText.ExtendOptions(status.CanExtendSeconds))
                 buttons.Add((label, () => Run(() => _model!.ExtendAsync(minutes)), true));
-        buttons.Add((ShareText.Title(primary), () => Run(() => OnPrimary(primary, status)), primary != SharePrimary.Start || ShareText.CanStart(status)));
+        if (primary == SharePrimary.TurnOnProtection && !_model!.LanGuardSupported) Line(ShareText.LanGuardUnavailable, 0.85, caution: true); // no button: nothing here can run it
+        else buttons.Add((ShareText.Title(primary), () => Run(() => OnPrimary(primary, status)), primary != SharePrimary.Start || ShareText.CanStart(status)));
         Row([.. buttons]);
         if (primary != SharePrimary.Start) return;
         var box = new ComboBox { Width = 90, Margin = new Thickness(0, 0, 0, 6), HorizontalAlignment = HorizontalAlignment.Left };
@@ -192,8 +193,8 @@ internal sealed class SharingView : UserControl, IBenchPageView
         text.FontFamily = new System.Windows.Media.FontFamily("Cascadia Mono, Consolas");
         Ui.Name(text, _revealed && code is not null ? "Room code" : "Room code, hidden");
         _root.Children.Add(text);
-        Row((_revealed ? "Hide" : "Show", () => { _revealed = !_revealed; Render(); }, code is not null),
-            ("Copy", () => { if (_model.Code is { } c) _services.CopySecret(c.Code); }, code is not null),
+        Row((_revealed ? "Hide" : "Show", () => Run(ToggleCodeAsync), true),
+            ("Copy", () => Run(CopyCodeAsync), true),
             ("Copy invite", () => Run(CopyInviteAsync), true),
             ("New code", () => Run(async () => { if (await _model.LoadCodeAsync(true)) _revealed = true; Render(); }), true),
             (status.Locked == true ? "Unlock" : "Lock room", () => Run(() => _model.SetLockedAsync(status.Locked != true)), true));
@@ -201,6 +202,25 @@ internal sealed class SharingView : UserControl, IBenchPageView
         if (_model.RemovedName is { } name) Line(ShareText.RemovedNotice(name), 0.8);
         Line(ShareText.CodeNote, 0.8);
         Line(ShareText.CodeProves, 0.65);
+    }
+
+    /// <summary>
+    /// The code is read on a click, never when the tab shows. A tab opened after a tray restart has no code in memory, so Show and Copy read
+    /// the current one (<c>share code</c>, no <c>--new</c>: a new code would end the invites already sent) and then do their job.
+    /// </summary>
+    private async Task<bool> HaveCodeAsync() => _model!.Code is not null || await _model.LoadCodeAsync();
+
+    private async Task ToggleCodeAsync()
+    {
+        if (_revealed) _revealed = false;
+        else if (await HaveCodeAsync()) _revealed = true;
+        Render();
+    }
+
+    private async Task CopyCodeAsync()
+    {
+        if (await HaveCodeAsync() && _model!.Code is { } code) _services.CopySecret(code.Code);
+        Render();
     }
 
     private async Task CopyInviteAsync()
@@ -225,14 +245,15 @@ internal sealed class SharingView : UserControl, IBenchPageView
     {
         _root.Children.Add(Ui.Heading("Checks"));
         Line(ShareText.ProtectionText(status.LanGuard));
-        if (status.LanGuard != LanGuardState.Installed)
+        if (status.LanGuard != LanGuardState.Installed && _model!.LanGuardSupported)
             Row(("Turn on network protection", () => Run(() => OnPrimary(SharePrimary.TurnOnProtection, status)), !status.IsLive));
         foreach (var check in status.Checks)
         {
             if (ShareText.WaitsForStart(check, status)) { Line($"{ShareText.CheckTitle(check)}: {ShareText.CheckedAtStart}", 0.7); continue; }
             Line($"{ShareText.CheckStatus(check.Status)}: {ShareText.CheckTitle(check)}", error: check.Status == ShareCheckStatus.Fail);
             if (check.Status != ShareCheckStatus.Ok && check.Message.Length > 0 && ShareText.CheckTitle(check) != check.Message) Line(check.Message, 0.65);
-            if (check.Status != ShareCheckStatus.Ok && ShareText.FixLabel(check.Fix) is { } label && check.Fix != ShareFixAction.InstallNetworkProtection)
+            if (check.Status != ShareCheckStatus.Ok && ShareText.FixLabel(check.Fix) is { } label && check.Fix != ShareFixAction.InstallNetworkProtection
+                && (_model!.LanGuardSupported || check.Fix != ShareFixAction.AllowNodeFirewall))
                 Row((label, () => Run(() => Fix(check.Fix, status)), true));
         }
     }
