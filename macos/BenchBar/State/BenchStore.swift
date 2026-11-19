@@ -59,6 +59,8 @@ final class BenchModel: Identifiable {
     var sitesKnown: Bool { (status?.sites ?? summary.sites) != nil }
     /// Procfile.lean runs the scheduler (status --json, CLI 0.4 and later).
     var schedulerOn: Bool? { status?.scheduler }
+    /// Updates and adds that stopped part way, from the latest status (CLI 0.8 and later).
+    var pendingOperations: [PendingOperation] { (status?.pendingOperations ?? []).filter { !$0.app.isEmpty } }
     /// When the current run started, while it is starting or running.
     var runningSince: Date? {
         guard state == .running || state == .starting else { return nil }

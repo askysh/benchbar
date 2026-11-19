@@ -19,18 +19,27 @@ func machineArch() string {
 	if err == nil {
 		defer k.Close()
 		if v, _, err := k.GetStringValue("PROCESSOR_ARCHITECTURE"); err == nil {
-			switch strings.ToUpper(strings.TrimSpace(v)) {
-			case "ARM64":
-				return "arm64"
-			case "AMD64":
-				return "amd64"
+			if arch, ok := archFromRegistry(v); ok {
+				return arch
 			}
 		}
 	}
 	return runtime.GOARCH
 }
 
-const internetSettingsKey = `Software\Microsoft\Windows\CurrentVersion\Internet Settings`
+// archFromRegistry maps a PROCESSOR_ARCHITECTURE value to a release arch.
+func archFromRegistry(v string) (string, bool) {
+	switch strings.ToUpper(strings.TrimSpace(v)) {
+	case "ARM64":
+		return "arm64", true
+	case "AMD64":
+		return "amd64", true
+	}
+	return "", false
+}
+
+// a variable so a test can point it at a throwaway key
+var internetSettingsKey = `Software\Microsoft\Windows\CurrentVersion\Internet Settings`
 
 // systemProxySettings is the manual proxy of Internet Options, when it is on.
 func systemProxySettings() (server, override string, ok bool) {

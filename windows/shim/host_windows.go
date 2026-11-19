@@ -98,6 +98,7 @@ type shellExecuteInfo struct {
 const (
 	seeMaskNoCloseProcess = 0x00000040
 	seeMaskNoAsync        = 0x00000100
+	seeMaskFlagNoUI       = 0x00000400
 	swHide                = 0
 )
 
@@ -107,6 +108,13 @@ type winElevator struct{}
 // program starts with the full administrator token. The parameters are
 // quoted here; callers pass fixed words and one validated path.
 func (winElevator) Start(exe string, args []string) (ElevatedProc, error) {
+	return shellExecute("runas", 0, exe, args)
+}
+
+// shellExecute is ShellExecuteEx with the given verb and extra mask bits.
+// Start passes runas; the tests pass open and the no UI flag, which starts a
+// harmless program through the same struct and handle code without a prompt.
+func shellExecute(verbName string, extraMask uint32, exe string, args []string) (ElevatedProc, error) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	// ShellExecuteEx wants COM in a single threaded apartment. S_FALSE and
@@ -120,7 +128,7 @@ func (winElevator) Start(exe string, args []string) (ElevatedProc, error) {
 	if procAllowSetForeground.Find() == nil {
 		procAllowSetForeground.Call(^uintptr(0) & 0xFFFFFFFF)
 	}
-	verb, _ := windows.UTF16PtrFromString("runas")
+	verb, _ := windows.UTF16PtrFromString(verbName)
 	file, err := windows.UTF16PtrFromString(exe)
 	if err != nil {
 		return nil, err
@@ -135,7 +143,7 @@ func (winElevator) Start(exe string, args []string) (ElevatedProc, error) {
 		return nil, err
 	}
 	info := shellExecuteInfo{
-		Mask: seeMaskNoCloseProcess | seeMaskNoAsync,
+		Mask: seeMaskNoCloseProcess | seeMaskNoAsync | extraMask,
 		Verb: verb, File: file, Parameters: params, Directory: dir, Show: swHide,
 	}
 	info.Size = uint32(unsafe.Sizeof(info))
