@@ -71,6 +71,7 @@ export default defineConfig({
             { label: 'Features', slug: 'features' },
             { label: 'Install', slug: 'install' },
             { label: 'Quick start', slug: 'quick-start' },
+            { label: 'Test a build', slug: 'testing' },
           ],
         },
         {
@@ -80,6 +81,9 @@ export default defineConfig({
             { label: 'Apps', slug: 'guides/apps' },
             { label: 'Teams: profiles, lockfile and pull', slug: 'guides/teams' },
             { label: 'Coding agents and MCP', slug: 'guides/agents' },
+            { label: 'Share a site on your network', slug: 'guides/share-on-your-network' },
+            { label: 'Labs', slug: 'guides/labs' },
+            { label: 'Quick Switch', slug: 'guides/quick-switch' },
             { label: 'Troubleshooting', slug: 'troubleshooting' },
           ],
         },
@@ -133,7 +137,6 @@ export default defineConfig({
           label: 'For contributors',
           items: [
             ...rootPage('Contributing', 'CONTRIBUTING.md', 'contributing'),
-            { label: 'Testing', slug: 'testing' },
             { label: 'Releasing', slug: 'releasing' },
             { label: 'Decisions', slug: 'decisions' },
             ...rootPage('Roadmap', 'ROADMAP.md', 'roadmap'),
