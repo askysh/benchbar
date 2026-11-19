@@ -1,0 +1,99 @@
+# The MSIX package of BenchBar for Windows (windows/msix), the form the
+# Microsoft Store takes. Builds it with windows/msix/build-msix.ps1 on a
+# Windows runner and uploads it as an artifact. On a pull request that
+# touches the package it builds the unsigned Store bundle as a check. By
+# hand (Actions, MSIX package, Run workflow) it builds either mode. It never
+# signs with a real certificate and never publishes anything: the
+# .msixupload is uploaded to Partner Center by a person. Sideload mode makes
+# one test package signed with a self signed certificate (test only).
+name: MSIX package
+
+on:
+  pull_request:
+    paths:
+      - 'windows/msix/**'
+      - '.github/workflows/msix.yml'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Sideload (self signed test package, x64) or Store (unsigned, x64 and arm64 bundle)'
+        type: choice
+        options: [Sideload, Store]
+        default: Sideload
+      version:
+        description: 'Package version A.B.C (the fourth part is always 0)'
+        type: string
+        default: '0.0.1'
+      app_version:
+        description: 'Version stamped into benchbar.exe and the tray, X.Y.Z (empty builds dev versions)'
+        type: string
+        default: ''
+      identity_name:
+        description: 'Store mode only: Identity Name, empty for BenchBar in Partner Center'
+        type: string
+        default: ''
+      publisher:
+        description: 'Store mode only: Identity Publisher from Partner Center (CN=...)'
+        type: string
+        default: ''
+      publisher_display_name:
+        description: 'Store mode only: PublisherDisplayName from Partner Center'
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: msix-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      MODE: ${{ inputs.mode || 'Store' }}
+      PKG_VERSION: ${{ inputs.version || '0.0.1' }}
+      APP_VERSION: ${{ inputs.app_version }}
+      IDENTITY_NAME: ${{ inputs.identity_name }}
+      PUBLISHER: ${{ inputs.publisher }}
+      PUBLISHER_DISPLAY_NAME: ${{ inputs.publisher_display_name }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: windows/shim/go.mod
+          cache-dependency-path: windows/shim/go.sum
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: windows/tray/global.json
+
+      - name: Build the package
+        shell: pwsh
+        run: |
+          $p = @{ Mode = $env:MODE; Version = $env:PKG_VERSION }
+          if ($env:MODE -eq 'Store') {
+            $p.Arch = 'both'
+            # empty inputs: the script uses BenchBar's product identity from Partner Center
+            if ($env:IDENTITY_NAME) { $p.IdentityName = $env:IDENTITY_NAME }
+            if ($env:PUBLISHER) { $p.Publisher = $env:PUBLISHER }
+            if ($env:PUBLISHER_DISPLAY_NAME) { $p.PublisherDisplayName = $env:PUBLISHER_DISPLAY_NAME }
+            if ($env:APP_VERSION) { $p.AppVersion = $env:APP_VERSION }
+          } else {
+            $p.Arch = 'x64'
+          }
+          ./windows/msix/build-msix.ps1 @p
+
+      - name: Upload the package
+        uses: actions/upload-artifact@v7
+        with:
+          name: benchbar-msix-${{ inputs.mode || 'Store' }}
+          path: |
+            windows/msix/out/*.msix
+            windows/msix/out/*.msixbundle
+            windows/msix/out/*.msixupload
+            windows/msix/out/*.cer
+          if-no-files-found: error
