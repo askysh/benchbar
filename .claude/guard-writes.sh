@@ -5,8 +5,17 @@
 # python3, so it works in Git Bash on Windows; runs on macOS /bin/bash 3.2
 # too. Exit 2 blocks.
 #
+# A guard against mistakes, not a security boundary (see guard-rm.sh): it
+# reads the command text only. Known limits: a script file or a variable that
+# builds the call is not read, and neither is gh run through another program.
+#
 # gh api: reads pass. REST writes to repos/askysh/benchbar and
-# repos/askysh/homebrew-tap pass (see own_repo_write). Any other write (a
+# repos/askysh/homebrew-tap pass (see own_repo_write), by the owner's
+# decision. That includes the writes that hurt there: .../pulls/N/merge,
+# .../git/refs (delete a branch or a tag) and DELETE repos/askysh/NAME, which
+# this hook does not stop. In a normal session settings.json asks before
+# them; under a bypass mode "ask" does nothing and nothing else stops them.
+# Any other write (a
 # method other than GET, a -f/-F/--field/--raw-field/--input body without an
 # explicit GET, or a GraphQL mutation) is blocked unless the whole command is
 # the review thread resolve route:
@@ -34,6 +43,23 @@ cmd="$(printf '%s' "$cmd" | sed -e 's/\\[tr]/ /g' -e 's/\\n/ ; /g')"
 # calls are found and checked with them dropped. Only the task name check
 # below reads the quoted original.
 flat="$(printf '%s' "$cmd" | tr -d "'\"\\\\")"
+# GH_REPO=OWNER/REPO anywhere in the command (before gh, in an export or in
+# env) points every gh call at that repository.
+env_repos="$(printf '%s' "$flat" | grep -Eio '(^|[^A-Za-z0-9_])GH_REPO[[:space:]]*=[[:space:]]*[^[:space:];&|]*' | sed -E 's/^[^=]*=[[:space:]]*//')"
+# Returns 0 when GH_REPO names something other than our two repositories
+# (a $VAR, or an empty value, counts as other: it cannot be read).
+env_repo_other() {
+  local r
+  while IFS= read -r r; do
+    [ -n "$r" ] || continue
+    printf '%s' "$r" | grep -Eiq '^askysh/(benchbar|homebrew-tap)$' || return 0
+  done <<EOF3
+$env_repos
+EOF3
+  # GH_REPO= with no value: the first grep above keeps the empty match
+  printf '%s' "$flat" | grep -Eiq '(^|[^A-Za-z0-9_])GH_REPO[[:space:]]*=[[:space:]]*($|[;&|[:space:]])' && return 0
+  return 1
+}
 
 # Prints each chunk that starts with the pattern, up to the next match, one
 # per line (newlines inside the command are JSON escaped, so none are real).
@@ -101,11 +127,40 @@ repo_operand() {
 }
 # Returns 0 when the call is a gh write to a repository that is not ours.
 other_repo_write() {
-  local call named r
+  local call named r pre head head_word head_rest
   # chunks() keeps the character before "gh"
   call="$(printf '%s' "$1" | sed -E 's/^[^a-z]+//; s/(;|&|\|).*//')"
+  # -R/--repo (and any other flag) may come before the verb: gh -R x/y pr merge.
+  # The repository goes to the list of names, the call loses the flag.
+  pre=""
+  head='^gh([.]exe)?[[:space:]]+'
+  while :; do
+    # call is lowercase (chunks)
+    if [[ $call =~ ${head}(-r|--repo)([[:space:]=]+)([^[:space:]]+)([[:space:]].*)?$ ]]; then
+      pre="$pre"$'\n'"${BASH_REMATCH[4]}"; call="gh${BASH_REMATCH[5]}"
+    elif [[ $call =~ ${head}-r([^[:space:]=]+)([[:space:]].*)?$ ]]; then
+      pre="$pre"$'\n'"${BASH_REMATCH[2]}"; call="gh${BASH_REMATCH[3]}"
+    elif [[ $call =~ ${head}-[^[:space:]]+([[:space:]].*)?$ ]]; then
+      call="gh${BASH_REMATCH[2]}"
+    elif [[ $call =~ ${head}([^-[:space:]][^[:space:]]*)([[:space:]].*)?$ ]]; then
+      # a word that is no verb is the value of a flag we skipped (--hostname HOST)
+      head_word="${BASH_REMATCH[2]}"; head_rest="${BASH_REMATCH[3]}"
+      case "$head_word" in
+        pr | issue | release | workflow | run | secret | variable | label | cache | repo | api) break ;;
+      esac
+      call="gh$head_rest"
+    else
+      break
+    fi
+  done
   matches "$call" "$gh_write_verbs" || return 1
-  named="$(printf '%s' "$call" | grep -Eo '(^|[[:space:]])(-r[[:space:]=]*|--repo[[:space:]=]+)[^[:space:]]+|github[.]com/[^[:space:]/]+/[^[:space:]/]+' | sed -E 's/^[[:space:]]*(-r[[:space:]=]*|--repo[[:space:]=]+)//; s#.*github[.]com/##; s/[.]git$//')"
+  # a secret or variable for an organization or for the user is not a repo's
+  if matches "$call" '^gh([.]exe)?[[:space:]]+(secret|variable)[[:space:]]+(set|delete|remove)([[:space:]]|$)' &&
+    matches "$call" '(^|[[:space:]])(--org|--user|-o|-u)([[:space:]=]|$)|(^|[[:space:]])-o[A-Za-z0-9_]'; then
+    return 0
+  fi
+  env_repo_other && return 0
+  named="$pre"$'\n'"$(printf '%s' "$call" | grep -Eo '(^|[[:space:]])(-r[[:space:]=]*|--repo[[:space:]=]+)[^[:space:]]+|github[.]com/[^[:space:]/]+/[^[:space:]/]+' | sed -E 's/^[[:space:]]*(-r[[:space:]=]*|--repo[[:space:]=]+)//; s#.*github[.]com/##; s/[.]git$//')"
   if matches "$call" '^gh([.]exe)?[[:space:]]+repo[[:space:]]+(create|fork)([[:space:]]|$)'; then
     # these name the new repository, or the one to fork: none named is not ours
     named="$named"$'\n'"$(repo_operand "$call")"
@@ -139,6 +194,11 @@ while IFS= read -r call; do
     write=1
   fi
   matches "$call" 'graphql' && matches "$call" 'mutation' && write=1
+  # {owner} and {repo} in the path are filled from GH_REPO
+  if [ "$write" = 1 ] && matches "$own" '[{](owner|repo)[}]' && env_repo_other; then
+    echo "Blocked: a gh api write with {owner}/{repo} and a GH_REPO that is not askysh/benchbar or askysh/homebrew-tap." >&2
+    exit 2
+  fi
   if [ "$write" = 1 ] && ! allowed_write && ! own_repo_write "$own"; then
     echo "Blocked: gh api writes are not allowed here, except: gh api -X POST repos/O/R/pulls/N/ccr/comments/ID/resolve; gh api -X POST repos/askysh/benchbar/pulls/N/comments/ID/replies -F body=@FILE; gh api graphql -F query=@FILE that only reads or resolves review threads." >&2
     exit 2
@@ -150,11 +210,11 @@ EOF
 while IFS= read -r call; do
   [ -n "$call" ] || continue
   if other_repo_write "$call"; then
-    echo "Blocked: gh writes to a repository other than askysh/benchbar and askysh/homebrew-tap are not allowed here; run them yourself." >&2
+    echo "Blocked: gh writes to a repository other than askysh/benchbar and askysh/homebrew-tap (or to an organization or user scope, or through GH_REPO) are not allowed here; run them yourself." >&2
     exit 2
   fi
 done <<EOF
-$(chunks '(^|[^A-Za-z0-9_.-])gh([.]exe)?[[:space:]]+(pr|issue|release|workflow|run|secret|variable|label|cache|repo)([[:space:]]|$)')
+$(chunks '(^|[^A-Za-z0-9_.-])gh([.]exe)?[[:space:]]+(-[^[:space:]]+[[:space:]]+([^-[:space:]][^[:space:]]*[[:space:]]+)?)*(pr|issue|release|workflow|run|secret|variable|label|cache|repo)([[:space:]]|$)')
 EOF
 
 tasks="$(chunks '(^|[^A-Za-z0-9_.-])schtasks([.]exe)?([[:space:]]|$)')"

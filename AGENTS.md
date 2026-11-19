@@ -212,9 +212,13 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
   and `guard-writes.sh` blocks `gh` writes to any repository but this one and
   the tap. They guard against mistakes and are not a security boundary: when
   one blocks a call, say so to the user, do not look for a way around it.
-- `.claude/settings.json` asks before `git push`, `git tag`, `gh pr merge`,
-  `gh pr close`, `gh run rerun|cancel|delete`, `gh release` and `sudo`, and
-  denies `bench update`, `bench restore` and `mariadb -u root`.
+- `.claude/settings.json` asks before `git push`, `git tag` (also behind
+  `-C`, `-c` or `--no-pager`), `gh pr merge`, `gh pr close`,
+  `gh run rerun|cancel|delete`, `gh release`, `gh repo delete|archive|rename|edit`,
+  `gh api` calls for merge, `git/refs` or a DELETE on askysh, and `sudo`, and
+  denies `bench update`, `bench restore` and `mariadb` or `mysql` as root.
+  Under a bypass mode `ask` does nothing and the hooks do not cover push,
+  tag or merge, so there you are the only fence: do not run them unasked.
 - `tests/test-guards.sh` holds a table of allowed and blocked command lines
   for both hooks. A change to a hook or to the settings adds its cases there.
 - Never write your own LaunchAgents or `Procfile`. Use `benchbar

@@ -12,6 +12,14 @@
 # follow it blocks. A person who wants to get around it can: a script file
 # that deletes is not read. It stops a tired agent, not an attacker.
 #
+# Known limits, left open on purpose because closing them needs a shell
+# parser: a name built in a variable (R=rm; $R -rf x), a glob for the name
+# (/bin/r?), a hidden file name (.g*) passed to find or rm, a delete word
+# put together in an interpreter (python 'r'+'m'), and a script or a makefile
+# that deletes. Closed cheaply: \rm, a command substitution or backtick as a
+# target, .git in any letter case, text with a delete piped to sh or bash,
+# and node's rmSync.
+#
 # What it checks:
 #   rm        a recursive rm (-r, -R, --recursive); force alone is not enough
 #             to look, since rm -f names files only
@@ -32,13 +40,17 @@ input="$(cat)"
 # TRIG in the python below; tests/test-guards.sh has a case for each entry.
 # Git Bash runs rm.exe too, and Windows finds RM as rm, so case and a .exe
 # suffix do not matter.
-trigger='(^|[^A-Za-z0-9_.-])(rm|unlink|shred|rimraf|rsync)(\.exe)?([^A-Za-z0-9_.-]|$)|rmtree|os\.(remove|unlink|removedirs)|\.unlink\(|fs\.(rm|unlink)|remove-item|(rmdir|rd)[[:space:]]+/s|FileUtils\.rm|File\.delete|git[^;&|]*[[:space:]](clean|reset)([^A-Za-z0-9_.-]|$)|[[:space:]]-delete([^A-Za-z0-9_.-]|$)'
-# JSON escapes for whitespace count as spaces; quotes and backslashes join
-# word fragments in the shell (r''m, r\m), so they are dropped.
-flat="$(printf '%s' "$input" | sed -e 's/\\[tnr]/ /g' | tr -d "'\"\\\\")"
-shopt -s nocasematch
-[[ $flat =~ $trigger ]] || exit 0
-shopt -u nocasematch
+trigger='(^|[^A-Za-z0-9_.-])(rm|unlink|shred|rimraf|rsync)(\.exe)?([^A-Za-z0-9_.-]|$)|rmtree|os\.(remove|unlink|removedirs)|\.unlink\(|fs\.(rm|unlink)|remove-item|(rmdir|rd)[[:space:]]+/s|FileUtils\.rm|File\.delete|rmSync|rmdirSync|unlinkSync|\.(rm|rmdir)\(|git[^;&|]*[[:space:]](clean|reset)([^A-Za-z0-9_.-]|$)|[[:space:]]-delete([^A-Za-z0-9_.-]|$)'
+# In the JSON a backslash of the command is two (\rm is \\rm), so those pairs
+# go first; only then is \t, \n or \r a whitespace escape and counts as a
+# space. Quotes and backslashes join word fragments in the shell (r''m, r\m),
+# so they are dropped. A \u escape can spell anything, so it goes to the parser.
+flat="$(printf '%s' "$input" | sed -e 's/\\\\//g' -e 's/\\[tnr]/ /g' | tr -d "'\"\\\\")"
+if [[ $input != *'\u'* ]]; then
+  shopt -s nocasematch
+  [[ $flat =~ $trigger ]] || exit 0
+  shopt -u nocasematch
+fi
 # The parsing needs python3. Without it (Git Bash, a Mac without the command
 # line tools) a call that mentions a delete is blocked rather than let through.
 # Running it, not just finding it, catches the Windows Store stub, which is
@@ -62,10 +74,11 @@ DEL_CMDS = ("rm", "unlink", "shred", "rimraf")
 # Keep in step with "trigger" in the bash above.
 TRIG = re.compile(r"(^|[^\w.-])(rm|unlink|shred|rimraf|rsync)(\.exe)?([^\w.-]|$)|rmtree|os\.(remove|unlink|removedirs)"
                   r"|\.unlink\(|fs\.(rm|unlink)|remove-item|(rmdir|rd)\s+/s|FileUtils\.rm|File\.delete"
+                  r"|rmSync|rmdirSync|unlinkSync|\.(rm|rmdir)\("
                   r"|git[^;&|]*\s(clean|reset)([^\w.-]|$)|\s-delete([^\w.-]|$)", re.I)
 # What an interpreter call may not hold from its own start to the end of the command.
 code_del = re.compile(r"rmtree|os\.(remove|unlink|removedirs)|\bunlink\b|fs\.(rm|unlink)|rimraf|remove-item"
-                      r"|(rmdir|rd)\s+/s|FileUtils\.rm|File\.delete", re.I)
+                      r"|(rmdir|rd)\s+/s|FileUtils\.rm|File\.delete|rmSync|rmdirSync|unlinkSync|\.(rm|rmdir)\(", re.I)
 interpreter = re.compile(r"^(python[0-9.]*|py|node|nodejs|perl|ruby|php|deno|bun|pwsh|powershell|cmd)$")
 # quotes and backslashes join word fragments (r\x27\x27m is rm)
 flat = re.sub(r"[\"\x27\\]", "", text)
@@ -152,7 +165,8 @@ def candidates(target, what, dirs=None):
     return [os.path.realpath(c) for c in found]
 def check(target, what, whole_ok=False, dirs=None):
     for path in candidates(target, what, dirs) or []:
-        if path == protected or path.startswith(protected + "/"):
+        # any letter case: a Mac volume treats .GIT as .git
+        if path.lower() == protected.lower() or path.lower().startswith(protected.lower() + "/"):
             block("%s of the repo history (%s); use git commands." % (what, path))
         if not any(path == a or path.startswith(a.rstrip("/") + "/") for a in allowed):
             block("%s outside the repo, the benchbar log folders and the temp folder: %s" % (what, path))
@@ -213,6 +227,50 @@ def check_git(words, via_xargs):
     for p in [w for w in rest[:end] if not w.startswith("-")] + rest[end + 1:]:
         check(p, what, whole_ok=True, dirs=dirs)
 pieces = re.split(r"(&&|\|\||;|\||\n|\$\(|\(|\)|`)", text)
+RECURSIVE = re.compile(r"(^|\s)-[A-Za-z]*[rR]|(^|\s)--rec")
+def rest_of_command(i):
+    # The text after piece i up to the end of its own command: what a
+    # substitution in piece i may be followed by (-r after $(...), -delete).
+    depth, tick, out = 0, False, []
+    for k in range(i + 1, len(pieces)):
+        tok = pieces[k]
+        if k % 2:
+            if tok in ("$(", "("):
+                depth += 1
+            elif tok == ")":
+                depth = max(0, depth - 1)
+            elif tok == "`":
+                tick = not tick
+            elif depth == 0 and not tick:
+                break
+        else:
+            out.append(tok)
+    return " ".join(out)
+def check_substitution(words, i):
+    # The piece ends where a $( or a backtick opens, so a target it holds is a
+    # command substitution: it names paths the guard cannot see.
+    head = base(words[0])
+    tail = " ".join(words[1:]) + " " + rest_of_command(i)
+    what = None
+    if head == "find":
+        # a start path is before the first option (-H, -L and -P aside)
+        if "-delete" in tail.split() and not any(w.startswith("-") and not re.match(r"^-[HLP]$", w) for w in words[1:]):
+            what = "find -delete"
+    elif head == "git":
+        if re.search(r"(^|\s)clean(\s|$)", tail) or \
+                (re.search(r"(^|\s)reset(\s|$)", tail) and re.search(r"(^|\s)--ha", tail)):
+            what = "git clean or git reset --hard"
+    elif head == "rsync":
+        if re.search(r"(^|\s)(--del\S*|--remove-source-files)(\s|$)", tail):
+            what = "rsync --delete"
+    else:
+        verb = next((base(w) for w in words if base(w) in DEL_CMDS), None)
+        # rm without -r names files only, as everywhere else in this guard
+        if verb and (verb != "rm" or RECURSIVE.search(tail)):
+            what = "recursive rm" if verb == "rm" else verb
+    if what:
+        block("%s with a command substitution as a target; the guard cannot see what it names. List the paths first, then name them." % what)
+shells = ("bash", "sh", "zsh", "dash", "ksh")
 for i in range(0, len(pieces), 2):
     part = pieces[i]
     before = pieces[i - 1] if i > 0 else ";"
@@ -245,9 +303,17 @@ for i in range(0, len(pieces), 2):
         words = words[1:]
     if not words:
         continue
-    if base(words[0]) in ("bash", "sh", "zsh", "dash", "ksh", "eval") and \
+    ticks = pieces[1:i:2].count("`")
+    if after == "$(" or (after == "`" and ticks % 2 == 0):
+        check_substitution(words, i)
+    if base(words[0]) in shells + ("eval",) and \
             any(TRIG.search(w) for w in words[1:]):
         block("a delete inside a nested shell or eval; run it directly so the guard can check it.")
+    if base(words[0]) in shells and before == "|":
+        # the text before the pipe, back to the start of its own command
+        k = max((j for j in range(1, i, 2) if pieces[j] in ("&&", "||", ";", "\n")), default=-1)
+        if TRIG.search(re.sub(r"[\"\x27\\]", "", "".join(pieces[k + 1:i]))):
+            block("a delete inside a nested shell or eval (text piped to a shell); run it directly so the guard can check it.")
     if interpreter.match(base(words[0])) and \
             code_del.search(re.sub(r"[\"\x27\\]", "", text[len("".join(pieces[:i])):])):
         block("%s with a delete in its code; the guard cannot see what it removes. Put the delete in a script file and run the file." % base(words[0]))

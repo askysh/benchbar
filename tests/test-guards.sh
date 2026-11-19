@@ -208,6 +208,61 @@ EOF' 'code'
   rm_no 'ruby -e "FileUtils.rm_rf(x)"'
   rm_no 'powershell -Command "Remove-Item -Recurse x"'
   rm_ok 'python3 tests/foo.py && rm -rf @REPO@/build'
+
+  # a backslash before the command name is how a person skips an alias; the
+  # JSON of it is two backslashes, and a \r there must not read as a CR
+  rm_no '\rm -rf @BENCH@' 'outside the repo'
+  rm_no '\rm -r @BENCH@'
+  rm_no 'command \rm -r @BENCH@'
+  rm_no '\rsync -a --delete src/ @BENCH@/' 'rsync --delete'
+  rm_no 'echo hi;\rm -rf @BENCH@'
+  rm_ok '\rm -rf @REPO@/build'
+  # a real newline or tab between words still separates them
+  rm_no $'echo x\nrm -rf @BENCH@'
+  rm_no "echo x;rm${TAB}-rf${TAB}@BENCH@"
+  rm_no $'echo x\n\nrm -rf @BENCH@'
+
+  # a command substitution or a backtick as the target: the piece has no
+  # operand the guard can read, so it is blocked, not passed
+  rm_no 'rm -rf $(cat list)' 'command substitution'
+  rm_no 'rm -r $(echo @BENCH@)' 'command substitution'
+  rm_no 'rm -r `cat list`' 'command substitution'
+  rm_no 'rm -rf @REPO@/x$(echo y)'
+  rm_no 'rm -rf @REPO@/a $(cat list)'
+  rm_no 'rm $(echo a) -rf @BENCH@'
+  rm_no 'rm $(echo a) -R @REPO@/b'
+  rm_no 'sudo rm -rf $(cat list)'
+  rm_no 'unlink $(cat list)'
+  rm_no 'shred -u `cat list`'
+  rm_no 'find $(echo @BENCH@) -delete' 'command substitution'
+  rm_no 'find `echo @BENCH@` -name x -delete'
+  rm_no 'git -C $(echo @BENCH@) clean -fd' 'command substitution'
+  rm_no 'git clean -fd $(cat list)'
+  rm_no 'git -C `echo @BENCH@` reset --hard'
+  rm_no 'rsync -a --delete src/ $(echo @BENCH@)' 'command substitution'
+  rm_no 'ls && rm -rf $(cat list)'
+  rm_ok 'rm -f $(cat list)'
+  rm_ok 'rm -rf @REPO@/x; echo $(date)'
+  rm_ok 'rm -rf @REPO@/x && echo `date`'
+  rm_ok 'echo `rm -rf @REPO@/x`'
+  rm_ok 'find . -name "$(echo x)" -name y'
+  rm_ok 'git -C $(echo @REPO@) status'
+  rm_ok 'git commit --amend --reset-author -m x'
+
+  # the repo history in any letter case (a Mac volume is case insensitive)
+  rm_no 'rm -rf @REPO@/.GIT' 'repo history'
+  rm_no 'rm -rf .Git/objects' 'repo history'
+  # the text of a delete fed to a shell on stdin
+  rm_no 'echo "rm -rf @BENCH@" | sh' 'nested shell'
+  rm_no "printf 'rm -rf %s' @BENCH@ | bash" 'nested shell'
+  rm_no 'echo rm -rf @REPO@/x | bash -s'
+  rm_ok 'echo hello | sh'
+  rm_ok 'cat install.sh | bash'
+  rm_ok 'echo "rm is a command" | cat'
+  # node: a delete that does not spell fs.rm
+  rm_no "node -e 'const {rmSync}=require(\"fs\"); rmSync(\"x\",{recursive:true})'"
+  rm_no "node -e 'require(\"fs\").rmSync(\"x\")'"
+  rm_no "node -e 'require(\"fs\").promises.rm(\"x\")'"
 else
   printf 'skip: guard-rm cases need python3\n'
 fi
@@ -293,6 +348,34 @@ gw_no 'gh repo create newthing --public'
 gw_no 'gh repo fork other/x'
 gw_no 'gh repo edit other/x --visibility private'
 gw_no 'gh pr view 1 && gh pr merge 5 -R other/repo'
+# -R, --repo and GH_REPO that come before the verb
+gw_ok 'gh -R askysh/benchbar pr merge 5'
+gw_ok 'GH_REPO=askysh/benchbar gh pr merge 5'
+gw_ok 'GH_REPO=askysh/homebrew-tap gh release create v1'
+gw_ok 'gh --repo askysh/benchbar issue close 4'
+gw_ok 'gh pr view 5 -R other/repo'
+gw_ok 'GH_REPO=other/repo gh pr view 5'
+gw_no 'gh -R other/repo pr merge 5' 'other than askysh'
+gw_no 'gh --repo other/repo pr merge 5'
+gw_no 'gh --repo=other/repo pr close 5'
+gw_no 'gh -Rother/repo pr merge 5'
+gw_no 'gh --hostname github.com -R other/repo release create v1'
+gw_no 'GH_REPO=other/repo gh pr merge 5'
+gw_no 'GH_REPO=other/repo gh release create v1'
+gw_no 'env GH_REPO=other/repo gh issue create -t x'
+gw_no 'export GH_REPO=other/repo; gh pr merge 5'
+gw_no 'GH_REPO=$R gh pr merge 5'
+gw_no 'GH_REPO= gh pr merge 5'
+gw_no 'GH_REPO=other/repo gh api -X POST repos/{owner}/{repo}/issues -f title=x'
+# secrets and variables of an organization or of the user are not a repo's
+gw_ok 'gh secret set X --body y'
+gw_ok 'gh variable set X --repo askysh/benchbar --body y'
+gw_no 'gh secret set X --org exponent --body y' 'other than askysh'
+gw_no 'gh secret set X -o exponent'
+gw_no 'gh variable set X --org=exponent --body y'
+gw_no 'gh variable set X -oexponent'
+gw_no 'gh secret set X --user'
+gw_no 'gh secret delete X --org exponent'
 # schtasks
 gw_no 'schtasks /Delete /TN x /F' 'schtasks'
 gw_no 'schtasks /Change /TN x /DISABLE'
@@ -318,7 +401,20 @@ for rule in ("Bash(git push *)", "Bash(git tag *)", "Bash(gh pr merge *)", "Bash
              "Bash(sudo *)"):
     if rule not in perm.get("ask", []):
         bad("ask list lacks " + rule)
-for rule in ("Bash(bench update*)", "Bash(bench restore*)", "Bash(mariadb -u root*)"):
+# the forms that skip "git push" by naming an option first, the REST writes of
+# our own repositories that guard-writes.sh lets through, and the repo verbs
+for verb in ("push", "tag"):
+    for opt in ("-C *", "-c *", "--no-pager"):
+        rule = "Bash(git %s %s*)" % (opt, verb)
+        if rule not in perm.get("ask", []):
+            bad("ask list lacks " + rule)
+for rule in ("Bash(gh api * merge*)", "Bash(gh api * git/refs*)", "Bash(gh api -X DELETE repos/askysh/*)",
+             "Bash(gh repo delete *)", "Bash(gh repo archive *)", "Bash(gh repo rename *)", "Bash(gh repo edit *)"):
+    if rule not in perm.get("ask", []):
+        bad("ask list lacks " + rule)
+for rule in ("Bash(bench update*)", "Bash(bench restore*)", "Bash(mariadb -u root*)", "Bash(mariadb -uroot*)",
+             "Bash(mariadb --user root*)", "Bash(mariadb --user=root*)", "Bash(mysql -uroot*)", "Bash(mysql -u root*)",
+             "Bash(mysql --user root*)"):
     if rule not in perm.get("deny", []):
         bad("deny list lacks " + rule)
 # the allow list is read only for gh, and names no verb that asks
