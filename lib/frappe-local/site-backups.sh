@@ -631,7 +631,7 @@ fl_cmd_site_drop() {
       fl_changed site "$new_default" "now the default site"
     else
       fl_fail "${name} is dropped, but the default did not move to ${new_default}; currentsite.txt still names ${name}"
-      fl_fix "cd ${FL_BENCH_DIR} && bench use ${new_default}, then: ${FL_SELF} site default ${new_default} --bench-dir ${FL_BENCH_DIR}"
+      fl_fix "$(fl_fix_cmd cd "$FL_BENCH_DIR" '&&' bench use "$new_default")   (then: ${FL_SELF} site default $(printf '%q' "$new_default") --bench-dir $(printf '%q' "$FL_BENCH_DIR"))"
       default_failed=1
     fi
   fi

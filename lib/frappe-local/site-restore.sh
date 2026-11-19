@@ -520,7 +520,7 @@ fl_srestore_execute() {
     # share setup resumes it on its way out (fl_share_on_exit)
     if [[ "${FL_PULL_QUIESCED:-0}" == "1" && "${SH_RESUME_ON_EXIT:-0}" != 1 ]]; then
       fl_warn "the scheduler of every site on this bench stays paused (pause_scheduler in common_site_config.json)"
-      fl_fix "cd ${FL_BENCH_DIR} && bench config remove-common-config pause_scheduler"
+      fl_fix "$(fl_fix_cmd cd "$FL_BENCH_DIR" '&&' bench config remove-common-config pause_scheduler)"
     fi
     return "$code"
   fi

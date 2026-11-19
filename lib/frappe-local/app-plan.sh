@@ -948,7 +948,7 @@ fl__ap_apply() {
           # the clone does not reach the commit that was reviewed
           res="failed"
           fl_fail "${arg}: the clone does not reach the pinned commit (planned ${AP_CI_PIN:0:12}, cloned ${AP__GOT:0:12}); nothing was built or installed."
-          fl_fix "Check the commit is on a branch or tag of ${AP_CI_REPO}, then: cd ${FL_BENCH_DIR} && bench remove-app ${FL_CLONED_DIR}, and plan again"
+          fl_fix "Check the commit is on a branch or tag of ${AP_CI_REPO}, then: cd $(printf '%q' "$FL_BENCH_DIR") && bench remove-app $(printf '%q' "$FL_CLONED_DIR"), and plan again"
         elif ! fl__ap_at_commit "$FL_CLONED_DIR" "$AP_CI_SHA"; then
           # the branch moved between the plan and get-app: build and install
           # would run code nobody reviewed
@@ -964,7 +964,7 @@ fl__ap_apply() {
           [[ -z "$e" ]] || s="${s}${s:+,}${e}"
         done
         s="${s:-$arg}"
-        fl_app_build "$s" || { res="failed"; fl_fix "cd ${FL_BENCH_DIR} && bench build --apps ${s}"; } ;;
+        fl_app_build "$s" || { res="failed"; fl_fix "$(fl_fix_cmd cd "$FL_BENCH_DIR" '&&' bench build --apps "$s")"; } ;;
       requirements_python)
         for a in ${arg//,/ }; do
           fl_run_long "bench setup requirements --python ${a}" fl__in_dir "$FL_BENCH_DIR" bench setup requirements --python "$a" || { res="failed"; break; }

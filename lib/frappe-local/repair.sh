@@ -111,7 +111,7 @@ act_env_rebuild() {
   local py
   if fl_profile_is_guess; then
     fl_fail "refusing to rebuild env: no profile matches this bench's Frappe, so ${FL_PROFILE} (the default) is a guess at its Python"
-    fl_fix "benchbar install --profile NAME --bench-dir ${FL_BENCH_DIR}   (or: cd ${FL_BENCH_DIR} && bench setup env --python /path/to/pythonX.Y)"
+    fl_fix "$(fl_fix_cmd benchbar install --profile NAME --bench-dir "$FL_BENCH_DIR")   (or: cd $(printf '%q' "$FL_BENCH_DIR") && bench setup env --python /path/to/pythonX.Y)"
     return 1
   fi
   if fl_bench_is_running; then
@@ -120,7 +120,7 @@ act_env_rebuild() {
       return 0
     fi
     fl_fail "refusing to rebuild env while the bench is running: its processes run from the env that would move aside"
-    fl_fix "${FL_SELF} down --bench-dir ${FL_BENCH_DIR}, then ${FL_SELF} repair, then benchup"
+    fl_fix "${FL_SELF} down --bench-dir $(printf '%q' "$FL_BENCH_DIR"), then ${FL_SELF} repair, then benchup"
     return 1
   fi
   py="$(fl_python_bin)"

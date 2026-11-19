@@ -439,7 +439,7 @@ fl_cmd_site_add() {
         # remembered site is the user's own business (a "bench use other" is fine)
         if [[ "$default_after" != "$default_before" ]]; then
           fl_fail "could not put the default site back to ${default_before} (currentsite.txt says ${default_after:-nothing})"
-          fl_fix "cd ${FL_BENCH_DIR} && bench use ${default_before}"
+          fl_fix "$(fl_fix_cmd cd "$FL_BENCH_DIR" '&&' bench use "$default_before")"
           return 1
         fi
       fi
