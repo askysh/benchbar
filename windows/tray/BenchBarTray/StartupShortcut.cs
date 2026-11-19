@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text;
+using BenchBar.Tray.Core;
 using Microsoft.Win32;
 
 namespace BenchBar.Tray;
@@ -41,7 +42,7 @@ internal sealed class RegistryStartupApproval : IStartupApproval
 /// The name is fixed: the shim's doctor looks for exactly this file. On means the file exists, points at this exe, and Windows
 /// has not switched the entry off (<see cref="IStartupApproval"/>). Turning it on clears Windows' off switch for the entry.
 /// </summary>
-internal sealed class StartupShortcut(string? folder = null, string? exePath = null, string? fileName = null, string arguments = "", IStartupApproval? approval = null)
+internal sealed class StartupShortcut(string? folder = null, string? exePath = null, string? fileName = null, string arguments = "", IStartupApproval? approval = null) : IShortcutLogon
 {
     private readonly IStartupApproval _approval = approval ?? new RegistryStartupApproval();
 

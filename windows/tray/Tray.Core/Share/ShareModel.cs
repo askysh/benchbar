@@ -2,10 +2,37 @@ using System.Text.Json.Nodes;
 
 namespace BenchBar.Tray.Core;
 
+/// <summary>What the setup form asks <c>share setup</c> for.</summary>
+public sealed record ShareSetupRequest(string Site, IReadOnlyList<string> Users, bool BackupNow, bool Refresh)
+{
+    public IReadOnlyList<string> Arguments =>
+        ["--site", Site, "--users", string.Join(',', Users), .. BackupNow ? new[] { "--backup-now" } : ["--from", "latest"], .. Refresh ? new[] { "--refresh" } : []];
+}
+
+/// <summary>The setup form: the people (seats), the source, and the acknowledgement that the copy holds real data. Run is off until all three are set.</summary>
+public sealed class ShareSetupForm(string site)
+{
+    public string Site { get; } = site;
+
+    public SortedSet<string> Picked { get; } = new(StringComparer.Ordinal);
+
+    public bool BackupNow { get; set; } = true;
+
+    public bool Acknowledged { get; set; }
+
+    public bool CanRun => Picked.Count > 0 && Acknowledged && Site.Length > 0;
+
+    public ShareSetupRequest Request(bool refresh) => new(Site, [.. Picked], BackupNow, refresh);
+
+    public static string SourceLabel(bool backupNow, int? estMinutes, int? backupAgeSeconds) =>
+        backupNow ? $"Copy my site as it is now (about {estMinutes ?? 1} min)"
+            : backupAgeSeconds is { } age ? $"Use the backup from {ShareText.Countdown(age)} ago" : "Use the newest backup"; // no age until a plan has read the backup
+}
+
 /// <summary>
 /// The Sharing tab of one bench (macos ShareStore): the CLI is the source of truth, so this reads <c>share status</c>, <c>share people</c> and
 /// <c>share users</c> and runs the room commands, and keeps nothing else. The room code and the invite are held in memory only, until the
-/// room ends. Every call that a person must decide (start, code, invite, stop, remove) is made from a click the view
+/// room ends. Every call that a person must decide (setup, start, code, invite, stop, remove, lan-guard) is made from a click the view
 /// confirmed; none runs by itself. <see cref="Changed"/> is raised on the thread that awaited (the UI thread in the app).
 /// </summary>
 public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? time = null)
@@ -21,9 +48,17 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
 
     public string BenchPath { get; } = benchPath;
 
+    /// <summary>
+    /// Whether this computer can run <c>lan-guard install</c> and <c>allow-node</c>. The CLI's guard is a pf anchor and a macOS firewall rule, and a bench
+    /// on Windows runs in Linux, which has no guard until the nftables one lands. False until then, so the buttons are not drawn and nothing runs.
+    /// </summary>
+    public bool LanGuardSupported { get; init; } = ShareText.LanGuardSupportedHere;
+
     public ShareStatus? Status { get; private set; }
 
     public IReadOnlyList<SharePerson> People { get; private set; } = [];
+
+    public IReadOnlyList<ShareUser> Users { get; private set; } = [];
 
     /// <summary>The room code, in memory only. Null until the host asked for it, and again once the room is off.</summary>
     public ShareCode? Code { get; private set; }
@@ -49,6 +84,8 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
 
     public string[] PeopleArgs() => Bench("share", "people", "--json");
 
+    public string[] UsersArgs(string site) => Bench("share", "users", "--site", site, "--json");
+
     public string[] CodeArgs(bool fresh) => Bench(["share", "code", .. fresh ? new[] { "--new" } : [], "--json"]);
 
     public string[] InviteArgs() => Bench("share", "invite", "--json");
@@ -62,6 +99,27 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
     public string[] LockArgs(bool locked) => Bench("share", locked ? "lock" : "unlock", "--json");
 
     public string[] RemoveArgs(string person) => Bench("share", "remove", person, "--yes", "--json");
+
+    public string[] SetupPlanArgs(ShareSetupRequest request) => Bench(["share", "setup", .. request.Arguments, "--dry-run", "--json"]);
+
+    /// <summary>
+    /// The setup as the plan sheet runs it: <c>--dry-run</c> to review, then <c>--acknowledge-data --yes</c> to make the copy. There is no
+    /// token in this plan. The sheet's confirm is the person's, and the summary above it says what the copy holds.
+    /// </summary>
+    public PlanReviewRequest SetupReview(ShareSetupRequest request, ShareSetupPlan plan) => new(request.Refresh ? "Refresh the shared copy" : "Set up sharing",
+        SetupPlanArgs(request), _ => Bench(["share", "setup", .. request.Arguments, "--acknowledge-data", "--yes", "--json"]))
+    {
+        ConfirmLabel = request.Refresh ? "Refresh copy" : "Make the copy",
+        RequiresToken = false,
+        ConfigureEnv = env => { foreach (var (name, value) in PersonEnvironment().Materialize()) env.Set(name, value); },
+        ExplainFailure = ShareText.RootPasswordHelp,
+        Summary = $"Makes a hardened copy of {plan.Site} in share.localhost, about {plan.SizeGb.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)} GB and {plan.EstMinutes} min. " +
+            $"The copy holds: {ShareText.DataClasses(plan.DataClasses)}. {ShareText.Acknowledgement}",
+    };
+
+    public static string[] LanGuardInstallArgs() => ["lan-guard", "install", "--yes", "--json"];
+
+    public static string[] LanGuardAllowNodeArgs() => ["lan-guard", "allow-node", "--yes", "--json"];
 
     // --- reading ---
 
@@ -102,6 +160,28 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
             _refreshing = false;
             Raise();
         }
+    }
+
+    public async Task LoadUsersAsync(string site, CancellationToken ct = default)
+    {
+        // read as a document: a refusal (the lab is off, exit 2) shows its error and an empty list, never an empty list alone
+        var result = await cli.RunJsonAsync(UsersArgs(site), null, CliTimeouts.Read, ct).ConfigureAwait(true);
+        if (result.Ok) Users = ShareJson.Users(result.Value!);
+        else
+        {
+            Users = [];
+            LastError = Refusal(result, "The site's users could not be read.");
+        }
+        Raise();
+    }
+
+    /// <summary><c>share setup --dry-run --json</c>: nothing changes. Null with <see cref="LastError"/> set when the CLI refused.</summary>
+    public async Task<ShareSetupPlan?> PlanSetupAsync(ShareSetupRequest request, CancellationToken ct = default)
+    {
+        var result = await cli.RunJsonAsync(SetupPlanArgs(request), PersonEnvironment(), CliTimeouts.Plan, ShareJson.SetupPlan, ct).ConfigureAwait(true);
+        LastError = result.Value is null ? result.Error ?? "The setup could not be planned." : null;
+        Raise();
+        return result.Value;
     }
 
     // --- the code and the invite: the only documents that hold it ---
@@ -166,6 +246,14 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
         return ok;
     }
 
+    /// <summary>
+    /// <c>lan-guard install</c> or <c>allow-node</c>: the view asked first, as the Mac's alert does. Never called by a poll, a link or a refresh.
+    /// What the CLI says (including that this platform has no LAN guard yet) is shown as it is.
+    /// </summary>
+    public Task<bool> RunLanGuardAsync(bool allowNode, CancellationToken ct = default) =>
+        !LanGuardSupported ? Refuse(ShareText.LanGuardUnavailable) : RunAsync(allowNode ? "Allowing sharing through the firewall..." : "Turning on network protection...", allowNode ? LanGuardAllowNodeArgs() : LanGuardInstallArgs(),
+            PersonEnvironment(), CliTimeouts.Apply, ct);
+
     private async Task<bool> RunAsync(string busy, string[] args, SecretEnvironment? env, TimeSpan timeout, CancellationToken ct)
     {
         if (!Begin(busy)) return false;
@@ -180,6 +268,13 @@ public sealed class ShareModel(ICliClient cli, string benchPath, TimeProvider? t
             End();
             await RefreshAsync(true, CancellationToken.None).ConfigureAwait(true);
         }
+    }
+
+    private Task<bool> Refuse(string sentence)
+    {
+        LastError = sentence;
+        Raise();
+        return Task.FromResult(false);
     }
 
     /// <summary>The CLI's sentence for a call that did not work (its <c>error</c> or stderr), else <paramref name="generic"/>. Never a field of stdout.</summary>

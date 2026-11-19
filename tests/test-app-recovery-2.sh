@@ -37,6 +37,14 @@ assert_eq "0" "$CODE" "$OUT"
 assert_eq "app_update acme_crm migrate" "$(printf '%s' "$OUT" | jget - 'd["pending_operations"][0]["op"] + " " + d["pending_operations"][0]["app"] + " " + d["pending_operations"][0]["failed_step"]')"
 assert_eq "migrate,build" "$(printf '%s' "$OUT" | jget - '",".join(s["kind"] for s in d["pending_operations"][0]["steps"])')"
 assert_eq "$to" "$(printf '%s' "$OUT" | jget - 'd["pending_operations"][0]["to"]')"
+# the app's Unfinished changes list reads these keys: every key of its fixtures is still printed
+printf '%s' "$OUT" | python3 -c '
+import json, sys
+live = json.load(sys.stdin)["pending_operations"][0]
+fixture = json.load(open(sys.argv[1]))["pending_operations"][0]
+assert set(fixture) <= set(live), set(fixture) - set(live)
+assert set(fixture["steps"][0]) <= set(live["steps"][0])
+' "$ROOT/macos/BenchBarTests/Fixtures/status-pending.json" || fail "status --json and the app fixture status-pending.json disagree"
 
 # ---- an app moved by hand since the update stopped: refused, naming --discard-pending
 git -C "$BENCH/apps/acme_crm" reset -q --hard HEAD~2

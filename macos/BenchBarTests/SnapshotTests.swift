@@ -406,8 +406,46 @@ struct SnapshotTests {
         base.cli.answer("app update", json: try Fixture.string("app-update-plan"))
         await workbench.loadApps(bench)
         let app = try #require(workbench.apps[bench.path]?.apps.first { $0.name != "frappe" } ?? workbench.apps[bench.path]?.apps.first)
-        try render(UpdateAppSheet(workbench: workbench, bench: bench, app: app) {}, "update-app-sheet")
+        try render(UpdateAppSheet(workbench: workbench, bench: bench, app: app.name) {}, "update-app-sheet")
         try render(CreateProfileSheet(benches: store.benches) { _, _ in } cancel: {}, "profile-create")
+    }
+
+    /// Restore and the unfinished operations (0.9 parity part 1): the plans are the CLI's own output.
+    @Test func restoreAndPendingSheets() async throws {
+        let store = try await windowStore()
+        base.cli.answer("site backups", json: try Fixture.string("site-backups"))
+        let workbench = Workbench(store: store)
+        let bench = try #require(store.benches.last)
+        await workbench.loadBackups(bench)
+        // the fixtures were recorded at another time: the backup is as old as the one on the Sites tab
+        func restorePlan(_ name: String) throws -> SiteRestorePlan {
+            var plan = try BenchJSON.decode(SiteRestorePlan.self, from: Fixture.data(name))
+            plan.source.set?.time = ISO8601DateFormatter().date(from: "2026-09-29T04:45:00Z")
+            return plan
+        }
+        func restoreStart(_ name: String, asNew: Bool = false, stale: Bool = false) throws -> SiteRestoreSheet.Start {
+            let plan = try restorePlan(name)
+            return .init(stamp: "20260929_101500", asNew: asNew, copyName: asNew ? plan.site : "", typed: asNew ? "" : "v16two",
+                         flow: .init(stage: stale ? .stale("The site restore plan changed since it was shown.") : .reviewing(plan)))
+        }
+        try render(SiteRestoreSheet(workbench: workbench, bench: bench, site: "v16two") {}, "site-restore-sheet")
+        try render(SiteRestoreSheet(workbench: workbench, bench: bench, site: "acme.localhost", start: restoreStart("site-restore-plan")) {}, "site-restore-plan")
+        try render(SiteRestoreSheet(workbench: workbench, bench: bench, site: "acme.localhost", start: restoreStart("site-restore-plan-new", asNew: true)) {},
+                   "site-restore-plan-copy")
+        try render(SiteRestoreSheet(workbench: workbench, bench: bench, site: "acme.localhost", start: restoreStart("site-restore-plan-errors")) {},
+                   "site-restore-plan-errors")
+        try render(SiteRestoreSheet(workbench: workbench, bench: bench, site: "acme.localhost", start: restoreStart("site-restore-plan", stale: true)) {},
+                   "site-restore-plan-stale")
+
+        let status = try BenchJSON.decode(BenchStatus.self, from: Fixture.data("status-pending"))
+        var operations = status.pendingOperations ?? []
+        operations.append(PendingOperation(op: "app_add", app: "acme_leaf", branch: "main", from: nil, to: "0301d720e23521bb5d8b8ab6bb8d8969de188db2",
+                                           steps: [.init(kind: "build", target: "acme_leaf", name: "Build"), .init(kind: "restart", target: "", name: "Restart")],
+                                           failedStep: "requirements_python", reason: "pip install failed with exit code 1", updatedAt: nil))
+        try render(Form { PendingOperationsSection(operations: operations, busy: false, resume: { _ in }, discard: { _ in }) }
+                       .formStyle(.grouped).frame(width: 640), "pending-operations")
+        base.cli.answer("app update", json: try Fixture.string("app-update-plan-pending"))
+        try render(UpdateAppSheet(workbench: workbench, bench: bench, app: "acme_crm") {}, "update-app-pending-sheet")
     }
 
     @Test func windowHealthAndDiscovery() async throws {

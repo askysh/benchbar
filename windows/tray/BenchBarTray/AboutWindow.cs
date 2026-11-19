@@ -8,6 +8,9 @@ namespace BenchBar.Tray;
 internal sealed class AboutActions
 {
     public string AppVersion { get; set; } = "0.0.0-dev";
+
+    /// <summary>The Microsoft Store updates the programs: the row says so and has no button.</summary>
+    public bool UpdatesFromStore { get; set; }
     public Func<Task<string?>> ShimVersion { get; set; } = () => Task.FromResult<string?>(null);
 
     /// <summary>The Linux CLI's version from the read only setup check (it never boots a stopped distro); null when unknown.</summary>
@@ -61,10 +64,17 @@ internal sealed class AboutWindow : ToolWindow
         versions.Children.Add(Row("benchbar.exe", _shim));
         versions.Children.Add(Row("Linux command line tool", _cli));
         var update = new StackPanel();
-        var check = Ui.Button("Check for Updates", () => CheckAsync().Forget(), "Check for updates");
-        update.Children.Add(check);
-        update.Children.Add(_update);
-        update.Children.Add(_updateButtons);
+        if (actions.UpdatesFromStore)
+        {
+            update.Children.Add(Ui.Text(UpdatePolicy.StoreLine, 13, opacity: 0.85));
+        }
+        else
+        {
+            var check = Ui.Button("Check for Updates", () => CheckAsync().Forget(), "Check for updates");
+            update.Children.Add(check);
+            update.Children.Add(_update);
+            update.Children.Add(_updateButtons);
+        }
         versions.Children.Add(Row("Updates", update));
         panel.Children.Add(Section("Versions", Ui.CardOf(versions)));
 
