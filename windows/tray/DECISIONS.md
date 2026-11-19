@@ -375,7 +375,6 @@ One line per non obvious choice. The 0.8.0 spike that chose WPF over WinUI was d
   folder, and a bench is never matched by a trailing part of its path. `.` and `..` in a path are resolved first, as the Mac's
   `standardizedFileURL` does.
 - **The tray log gets fixed sentences only for links, and no bench name.** The Mac logs the bench of a link that ran; this log goes into bug reports, which keep bench names out, so it holds the action word and a fixed reason or a short hash.
-
 - **A timer poll skips the CLI while the distro is up and every bench was stopped on the last poll.** The probe alone runs, because every
   `benchbar.exe` call touches the VM and keeps WSL from its idle shutdown. A kick (unlock, action, flyout), a bench that was not stopped, a
   boost or an open flyout makes it a full poll, and a full poll runs at least every 20 minutes so a bench started from a terminal still shows up.
@@ -386,3 +385,20 @@ One line per non obvious choice. The 0.8.0 spike that chose WPF over WinUI was d
   a fatal one ends the process so the next start reports it from the run marker.
 - **Dates for display use the current culture (`UiText.Date`), user text lives in `Strings.resx`.** The tray menu, crash toasts, tooltip and WSL messages are moved;
   `UiTextTests` fails when code asks for a missing name or an entry is unused. The pages of the BenchBar window still hold inline text.
+
+## Tray parity: rooms (0.9.0, #174)
+
+- **The Sharing tab is the host side only (P30).** The guest side of a room (the code exchange, the pinned certificate, the local forwarder)
+  is Mac app code with no `benchbar` command behind it, and the tray drives the CLI through `benchbar.exe` JSON only, so P31 stays open: a
+  `benchbar://share/join` link still shows the note. Writing that protocol again in C# would be a security review of its own.
+- **The tab exists only while the lan-rooms lab is on and available here**, the same switch as the Mac app and the CLI (`labs list`), read once per bench selection through the Labs model, never per poll. With the lab off or "not on Windows yet" there is no tab and no call.
+- **Reading is all a poll or opening the tab does:** `share status --preflight` and, while the room is on, `share people` (at most every 8 s). Start, stop, extend, lock, code, invite and remove each follow a click, and start, stop and remove a question, with the CLI's person environment (`BENCHBAR_NONINTERACTIVE=0`, `BENCHBAR_SUDO=gui`, as on the Mac).
+- **The room code and the invite are read on a click and kept in memory only.** `ShareCode` and `ShareInvite` print as `hidden`, a failed
+  read says that it failed without repeating stdout, the card shows dots until Show, the lines the tests read never hold the code, and Copy
+  uses a clipboard write marked `ExcludeClipboardContentFromMonitorProcessing`, `CanIncludeInClipboardHistory` 0 and
+  `CanUploadToCloudClipboard` 0 (the Mac's concealed and transient types).
+- **Show and Copy read the current code on a click when none is in memory.** After a tray restart or "Start again" the tab holds no code, and
+  New code would end the invites already sent. So these clicks run `share code` without `--new`. Opening the tab still never reads it.
+- **A refusal is shown as the CLI worded it, never as an old CLI.** A status call that fails and has no `state` (the lab is off, exit 2) sets the
+  error line from its `error` or first stderr line. "Needs a newer command line tool" is only for an ok document without the protocol fields.
+- **Not ported from the Mac tab in this change:** setup and Refresh copy and the lan-guard buttons (next change), Move to (`share assign`), the activity log, Open copy as and teardown.
