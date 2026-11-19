@@ -39,6 +39,8 @@ case "$1" in
     app="${*: -1}"; app="${app##*/}"; app="${app%.git}"
     # MOCK_BENCH_GET_APP_EARLY_EXIT: fails before anything is cloned (the network went away)
     [[ -n "${MOCK_BENCH_GET_APP_EARLY_EXIT:-}" ]] && exit "$MOCK_BENCH_GET_APP_EARLY_EXIT"
+    # MOCK_BENCH_GET_APP_FAIL_FOR=NAME: get-app of that one app fails before it clones anything; the others run
+    [[ -n "${MOCK_BENCH_GET_APP_FAIL_FOR:-}" && "$app" == "$MOCK_BENCH_GET_APP_FAIL_FOR" ]] && exit 1
     if [[ "${MOCK_GIT_REAL:-0}" == "1" ]]; then
       # like bench: clone with --origin upstream (shallow when asked), apps.txt
       shift; branch=""; repo=""

@@ -38,6 +38,9 @@ public sealed record BenchStatus(
 
     /// <summary><c>started_at</c> in the JSON: when the current (or last) run started. Null when the CLI gave none.</summary>
     public DateTimeOffset? StartedAt { get; init; }
+
+    /// <summary><c>pending_operations</c> in the JSON: an app update or app add that stopped part way. Empty when none, and from a CLI older than 0.8.</summary>
+    public IReadOnlyList<PendingOperation> PendingOperations { get; init; } = [];
 }
 
 /// <summary>One bench from <c>list --json</c> (<c>benches[]</c>).</summary>
@@ -135,6 +138,27 @@ internal sealed class StatusDto
     [JsonPropertyName("sites")] public List<SiteDto>? Sites { get; set; }
     [JsonPropertyName("scheduler")] public bool? Scheduler { get; set; }
     [JsonPropertyName("started_at")] public string? StartedAt { get; set; }
+    [JsonPropertyName("pending_operations")] public List<PendingDto>? PendingOperations { get; set; }
+}
+
+internal sealed class PendingDto
+{
+    [JsonPropertyName("op")] public string? Op { get; set; }
+    [JsonPropertyName("app")] public string? App { get; set; }
+    [JsonPropertyName("branch")] public string? Branch { get; set; }
+    [JsonPropertyName("from")] public string? From { get; set; }
+    [JsonPropertyName("to")] public string? To { get; set; }
+    [JsonPropertyName("steps")] public List<PendingStepDto>? Steps { get; set; }
+    [JsonPropertyName("failed_step")] public string? FailedStep { get; set; }
+    [JsonPropertyName("reason")] public string? Reason { get; set; }
+    [JsonPropertyName("updated_at")] public string? UpdatedAt { get; set; }
+}
+
+internal sealed class PendingStepDto
+{
+    [JsonPropertyName("kind")] public string? Kind { get; set; }
+    [JsonPropertyName("target")] public string? Target { get; set; }
+    [JsonPropertyName("name")] public string? Name { get; set; }
 }
 
 internal sealed class SiteDto
@@ -238,6 +262,7 @@ public static class BenchJson
             LogPath = dto.Log,
             Sites = sites,
             Scheduler = dto.Scheduler,
+            PendingOperations = PendingJson.Parse(dto.PendingOperations),
             StartedAt = DateTimeOffset.TryParse(dto.StartedAt, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal, out var started) ? started : null,
         };
     }
