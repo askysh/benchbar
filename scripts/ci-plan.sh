@@ -18,7 +18,8 @@
 # Output, one key=value per line: for each of linux, bash32 and macos the
 # tests (empty: the whole suite), skip (the tests that platform leaves out),
 # n (the shard count) and shards (a JSON array for the matrix, [] when the leg
-# does not run); shellcheck and shellcheck_files; app, shim, wsl, real,
+# does not run); shellcheck and shellcheck_files; app, shim, shim_win,
+# shim_arm, wsl, real,
 # full (every leg runs everything) and code (anything beyond docs changed).
 #
 # The rules (docs/DECISIONS.md, "CI tiering"):
@@ -219,8 +220,11 @@ read -r n_bash32 j_bash32 <<<"$(shard_plan "$run_bash32" linux "$SKIP_BASH32" "$
 read -r n_macos j_macos <<<"$(shard_plan "$run_macos" mac "$SKIP_MACOS" "$TARGET_MACOS" "$MAX_MACOS")"
 [[ -n "$n_linux" && -n "$n_bash32" && -n "$n_macos" ]] || { printf 'ci-plan: could not size the shards\n' >&2; exit 1; }
 
-# wsl: the hosted Windows job runs whenever the shim job does
+# wsl, shim_win, shim_arm: the hosted Windows jobs (the real distro, go test on
+# windows-latest, go test on the Arm runner) run whenever the shim job does
 wsl="$shim"
+shim_win="$shim"
+shim_arm="$shim"
 
 out code "$code"
 out full "$full"
@@ -238,6 +242,8 @@ out shellcheck "$shellcheck"
 out shellcheck_files "$shellcheck_files"
 out app "$app"
 out shim "$shim"
+out shim_win "$shim_win"
+out shim_arm "$shim_arm"
 out wsl "$wsl"
 out real "$real"
 

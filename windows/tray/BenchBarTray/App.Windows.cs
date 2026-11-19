@@ -38,7 +38,7 @@ public partial class App
             main.SetSnapshot(_controller.Snapshot, TrayController.UpText(_controller.Snapshot, _controller.Benches.Select(b => b.State).ToList()));
             if (_wizard is not null) main.ShowWizard(new WizardView(_wizard, BuildWizardActions()));
             main.Show();
-            CheckBannerAsync().Forget(); // the switch and the six hour cadence are checked inside; an offer already known is shown either way
+            if (UpdatePolicy.ChecksForUpdates(_package)) CheckBannerAsync().Forget(); // the switch and the six hour cadence are checked inside; an offer already known is shown either way
         }
         else
         {
@@ -128,7 +128,9 @@ public partial class App
     private PageServices NewPageServices()
     {
         var services = PageServices.ForApp(_cli, () => Theme, () => _main, CopyText, OpenUrl, () => _controller?.Poller.Kick());
+        services.Pins = _config.Pins;
         services.Distro = () => DistroName.Resolve(_config.Distro) ?? _controller?.Snapshot.Distro;
+        services.CopySecret = CopySecret;
         services.Notify = text => _icon?.TrayIcon.ShowNotification("BenchBar", text, H.NotifyIcon.Core.NotificationIcon.Info);
         services.ReportBug = (entry, problem) => ReportBugAsync(entry, problem).Forget();
         return services;
@@ -189,6 +191,9 @@ public partial class App
         model.ConfirmRestartDistro = question => Task.FromResult(
             MessageBox.Show(_main, question, "BenchBar", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes);
         model.CloseRequested += reason => CloseWizard(model, reason);
+        // the wizard's logon box shows what the startup task reports: read it now, and again whenever a request ends
+        Logon.Changed += model.Refresh;
+        Logon.RefreshAsync().Forget();
         _wizard = model;
         _main.ShowWizard(new WizardView(model, BuildWizardActions()));
         if (resume) model.ResumeAtCheck().Forget();
@@ -201,6 +206,7 @@ public partial class App
         if (!ReferenceEquals(model, _wizard)) return;
         RecordWizardClose(model, reason);
         _wizard = null;
+        Logon.Changed -= model.Refresh;
         _main?.CloseWizard();
         model.Dispose();
     }
@@ -302,8 +308,8 @@ public partial class App
 
         public bool OpenAtLogon
         {
-            get => app._startup.IsEnabled();
-            set => app.SetLogon(value);
+            get => app.Logon.View.IsOn;
+            set => app.Logon.SetAsync(value).Forget();
         }
 
         public void OpenUrl(string url) => App.OpenUrl(url);
@@ -334,12 +340,6 @@ public partial class App
         if (_controller is not null) _controller.Notifications = on;
     }
 
-    private void SetLogon(bool on)
-    {
-        try { if (on) _startup.Enable(); else _startup.Disable(); }
-        catch (Exception ex) { _log.Write("logon", ex); }
-    }
-
     // --- Settings and About ---
 
     private void ShowSettings()
@@ -367,9 +367,15 @@ public partial class App
     {
         public bool OpenAtLogon
         {
-            get => app._startup.IsEnabled();
-            set => app.SetLogon(value);
+            get => app.Logon.View.IsOn;
+            set => app.Logon.SetAsync(value).Forget();
         }
+
+        public IPackageInfo Package => app._package;
+
+        public ILogonControl? Logon => app.Logon;
+
+        public void OpenStartupSettings() => App.OpenUrl(LogonView.SettingsUri);
 
         public void ApplyAppearance(AppearanceMode mode)
         {
@@ -384,9 +390,51 @@ public partial class App
             if (app._controller is not null) app._controller.Notifications = on;
         }
 
-        public string? ShimPath => (app._source as ShimBenchSource)?.ShimPath;
+        public string? ShimPath => app.DisplayShimPath();
 
         public void DistroSwitched() => app._controller?.Poller.Kick();
+    }
+
+    // --- Quick Switch ---
+
+    private QuickSwitchWindow? _quickSwitch;
+    private string? _lastSwitchTarget;
+    private readonly Dictionary<string, string> _lastSwitchUser = [];
+
+    /// <summary>
+    /// The Quick Switch panel (one at a time). It reads the benches the last poll saw, and what it opens is the CLI's own <c>open --as</c>.
+    /// The last user it opened is remembered for this run only, to mark the row "last opened".
+    /// </summary>
+    private void ShowQuickSwitch()
+    {
+        if (_quitting || _setup is null) return;
+        if (_quickSwitch is { } open)
+        {
+            open.Activate();
+            return;
+        }
+        var window = new QuickSwitchWindow(new QuickSwitchHost
+        {
+            Cli = _cli,
+            Benches = () => _controller?.Snapshot.Benches ?? [],
+            Pins = _config.Pins,
+            LastTarget = () => _lastSwitchTarget,
+            LastUser = key => _lastSwitchUser.GetValueOrDefault(key),
+            Opened = (target, user) =>
+            {
+                _lastSwitchTarget = target.Key;
+                _lastSwitchUser[target.Key] = user;
+            },
+        }, Theme);
+        _quickSwitch = window;
+        window.Closed += (_, _) =>
+        {
+            _quickSwitch = null;
+            Viewer(false);
+        };
+        Viewer(true);
+        window.Show();
+        window.Activate();
     }
 
     private void ShowAbout()
@@ -400,6 +448,7 @@ public partial class App
         var window = new AboutWindow(new AboutActions
         {
             AppVersion = UpdateCheck.CurrentVersion(),
+            UpdatesFromStore = !UpdatePolicy.ChecksForUpdates(_package),
             ShimVersion = () => _setup.ShimVersionAsync(CancellationToken.None),
             CliVersion = ReadCliVersionAsync,
             CheckForUpdates = RunUpdateCheckAsync,

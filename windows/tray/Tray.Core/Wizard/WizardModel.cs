@@ -315,6 +315,28 @@ public sealed partial class WizardModel : IDisposable
 
     public string Bundle { get; private set; } = "minimal";
 
+    /// <summary>The profile the install runs on (<c>install --profile</c>): <c>v15-lts</c> until the person picks another.</summary>
+    public string Profile { get; private set; } = DefaultProfile;
+
+    private IReadOnlyList<ProfileChoice> _profileChoices = [ProfileChoices.Fallback];
+
+    /// <summary>The picker's lines: the built in and valid team profiles, with the ones the CLI refuses here marked. Before the list is read, v15-lts alone.</summary>
+    public IReadOnlyList<ProfileChoice> ProfileChoiceList => _profileChoices;
+
+    public ProfileChoice? SelectedProfile => _profileChoices.FirstOrDefault(c => c.Name == Profile);
+
+    /// <summary><c>profile list</c> is being read.</summary>
+    public bool ProfilesLoading { get; private set; }
+
+    /// <summary>The profiles are being asked of the install's gate one by one (each takes a dry run).</summary>
+    public bool ProfilesChecking { get; private set; }
+
+    /// <summary>Why the profile list could not be read; the picker then offers v15-lts only.</summary>
+    public string? ProfilesError { get; private set; }
+
+    private string? _profilesFor;
+    private List<ProfileChoice> _listed = [];
+
     public string ExistingPath { get; private set; } = "";
 
     public Secret AdminPassword => _adminPassword;
@@ -341,6 +363,8 @@ public sealed partial class WizardModel : IDisposable
             if (!IsValidFolder(Folder)) return FolderRule;
             if (!IsValidSite(Site)) return SiteRule;
             if (!Bundles.Contains(Bundle)) return "Choose a bundle.";
+            if (SelectedProfile is not { } profile) return "Choose a profile.";
+            if (profile.Refusal is { } refusal) return refusal;
             if (_adminPassword.IsEmpty) return "Choose the Administrator password for the site.";
             var admin = _adminPassword.Reveal();
             if (HasLineBreak(admin)) return "The Administrator password cannot contain a line break.";
@@ -367,7 +391,7 @@ public sealed partial class WizardModel : IDisposable
     /// <summary>What the plan found in the way (<c>blockers[]</c>), each with its message and fix.</summary>
     public IReadOnlyList<PlanBlocker> PlanBlockers { get; private set; } = [];
 
-    public InstallRequest Request => new(Folder, DefaultProfile, Bundle, Site);
+    public InstallRequest Request => new(Folder, Profile, Bundle, Site);
 
     // --- install ---
 
@@ -452,6 +476,9 @@ public sealed partial class WizardModel : IDisposable
     // --- helpers ---
 
     private void Raise() => Post(() => Changed?.Invoke());
+
+    /// <summary>Tells the page that something the host owns changed (the logon switch, after Windows answered).</summary>
+    public void Refresh() => Raise();
 
     /// <summary>Runs on the UI thread: inline when already on it or when there is no context (tests).</summary>
     private void Post(Action action)
@@ -852,7 +879,12 @@ public sealed partial class WizardModel : IDisposable
             return;
         }
         Go(WizardPage.NewBench);
+        ProfilesTask = LoadProfilesAsync();
+        ProfilesTask.Forget();
     }
+
+    /// <summary>The read of the profile list that Continue started (for tests); completed when none is running.</summary>
+    public Task ProfilesTask { get; private set; } = Task.CompletedTask;
 
     private async Task<bool> EnsureHomeAsync()
     {
@@ -961,6 +993,68 @@ public sealed partial class WizardModel : IDisposable
     {
         Bundle = bundle;
         Raise();
+    }
+
+    /// <summary>Picks a profile. One the CLI refuses here, or one that is not on offer, is ignored.</summary>
+    public void SetProfile(string name)
+    {
+        if (_profileChoices.FirstOrDefault(c => c.Name == name) is not { Enabled: true }) return;
+        Profile = name;
+        Raise();
+    }
+
+    /// <summary>
+    /// Reads <c>profile list</c> once per distro (again with <paramref name="force"/>, the Try Again link), then asks the install's own gate
+    /// about each profile in turn, so a profile Linux cannot install shows the CLI's reason and stays off. The picker works from the first
+    /// moment with v15-lts alone and fills in as the answers come.
+    /// </summary>
+    public async Task LoadProfilesAsync(bool force = false)
+    {
+        var key = Distro ?? "";
+        if (!force && _profilesFor == key) return;
+        _profilesFor = key;
+        ProfilesLoading = true;
+        ProfilesError = null;
+        Raise();
+        var refusals = new Dictionary<string, string?>();
+        try
+        {
+            var list = await _setup.ListProfilesAsync(_lifetime.Token).ConfigureAwait(true);
+            if (list.Error is not null || list.Profiles.Count == 0)
+            {
+                ProfilesError = list.Error ?? "The profile list was empty.";
+                _listed = [];
+                _profileChoices = [ProfileChoices.Fallback];
+                if (SelectedProfile is null) Profile = DefaultProfile;
+                return;
+            }
+            _listed = [.. ProfileChoices.From(list.Profiles)];
+            if (_listed.Count == 0) _listed = [ProfileChoices.Fallback];
+            _profileChoices = _listed;
+            ProfilesLoading = false;
+            ProfilesChecking = true;
+            Raise();
+            var bench = IsValidFolder(Folder) ? Folder : Home + "/frappe-bench";
+            foreach (var choice in _listed)
+            {
+                var gate = await _setup.CheckProfileAsync(choice.Name, bench, _lifetime.Token).ConfigureAwait(true);
+                refusals[choice.Name] = gate.Refusal;
+                _profileChoices = ProfileChoices.Apply(_listed, refusals);
+                Raise();
+            }
+            // the chosen profile may be one the CLI refuses: move to the first it takes, and say nothing is chosen when there is none
+            if (SelectedProfile is not { Enabled: true } && _profileChoices.FirstOrDefault(c => c.Enabled) is { } first) Profile = first.Name;
+        }
+        catch (OperationCanceledException)
+        {
+            _profilesFor = null; // closed or left mid way: the next visit reads again
+        }
+        finally
+        {
+            ProfilesLoading = false;
+            ProfilesChecking = false;
+            Raise();
+        }
     }
 
     public void SetExistingPath(string path)

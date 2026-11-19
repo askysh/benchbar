@@ -111,9 +111,21 @@ parses. A file of the same name is diffed and replaced only when you
 confirm. A profile names the repos `install` clones, and their code runs
 in your bench, so import only from people you trust and read the app
 list in the plan (`--plan` shows it without writing anything). `check` asks git, with your own keys and tokens and never a
-prompt, whether each repo and branch can be read. `install --profile`
-does the same and leaves out the apps it cannot clone, and every app that
-requires one, and lists them in its plan and at the end.
+prompt, whether each repo and branch can be read. The repos are asked
+side by side, 8 at a time, so a profile of 20 repos takes about as long as
+its slowest repo. `install --profile` does the same and leaves out the
+apps it cannot clone, and every app that requires one, and lists them in
+its plan and at the end.
+
+A repo that answered yes is remembered for 5 minutes, so `check` and an
+`install --profile` straight after it do not ask the same repo twice (a no
+or a timeout is never remembered: fix a key and run it again). That answer
+can be 5 minutes old, and a branch can go in that time, so `install` asks
+the network again for every app it is about to clone, before it plans or
+changes anything. If a branch was deleted meanwhile, `install` stops there,
+before its plan, with `Branch/tag 'NAME' not found for APP` and the repo; no
+bench folder, database or setting has been touched yet. Fix the profile
+(or pick another branch) and run it again.
 
 `benchbar profile update acme` fetches the source again, shows the diff
 and asks. `benchbar profile remove acme` moves an imported file to

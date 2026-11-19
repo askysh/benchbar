@@ -7,7 +7,7 @@ namespace BenchBar.Tray.Core;
 public enum AppearanceMode { System, Light, Dark }
 
 /// <summary>
-/// <c>%LOCALAPPDATA%\BenchBar\config.json</c>, shared with the shim. The shim owns <c>distro</c> and <c>cli_path</c>;
+/// <c>config.json</c> in <see cref="DataFolder.Current"/> (<c>%LOCALAPPDATA%\BenchBar</c>, or the package's data folder when packaged), shared with the shim. The shim owns <c>distro</c> and <c>cli_path</c>;
 /// the tray owns a <c>tray</c> object (<c>appearance</c>, <c>runner</c>, <c>notifications</c>). Save re-reads the file
 /// from disk and replaces only the <c>tray</c> object, so whatever the shim wrote since the tray started
 /// (<c>adopt-distro</c> sets <c>distro</c>) is never reverted; the write is atomic. <see cref="Distro"/> is read from
@@ -58,8 +58,7 @@ public sealed class TrayConfig
 
     public string Path { get; }
 
-    public static string DefaultPath { get; } = System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BenchBar", "config.json");
+    public static string DefaultPath { get; } = System.IO.Path.Combine(DataFolder.Current, "config.json");
 
     /// <summary>
     /// The shim's <c>distro</c> key; null when absent. The tray only reads it, and re-reads the file only when its
@@ -128,6 +127,9 @@ public sealed class TrayConfig
     /// </summary>
     public bool ConfirmLinkActions { get; set; }
 
+    /// <summary>The users pinned in the Quick Switch panel, per site; saved as <c>tray.open_as_pins</c> (<c>"bench|site"</c> to a list of <c>user</c>, <c>label</c>, <c>full_name</c>).</summary>
+    public OpenAsPins Pins { get; private set; } = new();
+
     /// <summary>The tray version that last started (X.Y.Z), so the first start of a newer one can say "BenchBar was updated". Null before 0.8.4.</summary>
     public string? LastVersion { get; set; }
 
@@ -136,6 +138,9 @@ public sealed class TrayConfig
 
     /// <summary>True when the file had a <c>tray</c> object when it was read: this tray (or an older one) ran and saved before.</summary>
     public bool HadTraySection { get; private set; }
+
+    /// <summary>The person closed the "two installs" notice; it stays away until the second install goes and comes back.</summary>
+    public bool TwoInstallsDismissed { get; set; }
 
     /// <summary>True when the file existed but was not valid JSON; Save then keeps it as <c>config.json.bad</c> first.</summary>
     public bool WasCorrupt => _corrupt;
@@ -180,7 +185,9 @@ public sealed class TrayConfig
             if (tray["wizard_dismissed"] is JsonValue w && w.TryGetValue<bool>(out var dismissed)) config.WizardDismissed = dismissed;
             if (tray["confirm_link_actions"] is JsonValue cl && cl.TryGetValue<bool>(out var confirmLinks)) config.ConfirmLinkActions = confirmLinks;
             if (tray["beta_banner_dismissed"] is JsonValue bb && bb.TryGetValue<bool>(out var betaDismissed)) config.BetaBannerDismissed = betaDismissed;
+            if (tray["two_installs_dismissed"] is JsonValue ti && ti.TryGetValue<bool>(out var twoDismissed)) config.TwoInstallsDismissed = twoDismissed;
             config.ResumeFlow = ReadString(tray, "resume_flow") == "existing" ? "existing" : "new";
+            config.Pins = new OpenAsPins(ReadPins(tray["open_as_pins"] as JsonObject));
         }
         return config;
     }
@@ -247,9 +254,11 @@ public sealed class TrayConfig
         tray["wizard_dismissed"] = WizardDismissed;
         tray["beta_banner_dismissed"] = BetaBannerDismissed;
         tray["confirm_link_actions"] = ConfirmLinkActions;
+        tray["two_installs_dismissed"] = TwoInstallsDismissed;
         tray["resume_flow"] = ResumeFlow == "existing" ? "existing" : "new";
         if (LastVersion is { Length: > 0 } lastVersion) tray["last_version"] = lastVersion;
         tray["running_hint_shown"] = RunningHintShown;
+        tray["open_as_pins"] = WritePins(Pins.Map);
         root["tray"] = tray;
 
         var temp = Path + "." + Environment.ProcessId + ".tmp";
@@ -265,6 +274,29 @@ public sealed class TrayConfig
             if (File.Exists(temp)) File.Delete(temp);
         }
         _corrupt = false;
+    }
+
+    private static Dictionary<string, IReadOnlyList<PinnedUser>> ReadPins(JsonObject? node)
+    {
+        var map = new Dictionary<string, IReadOnlyList<PinnedUser>>();
+        if (node is null) return map;
+        foreach (var (key, value) in node)
+        {
+            if (value is not JsonArray array) continue;
+            var list = array.OfType<JsonObject>().Where(p => ReadString(p, "user") is { Length: > 0 })
+                .Select(p => new PinnedUser(ReadString(p, "user")!, ReadString(p, "label"), ReadString(p, "full_name")))
+                .Take(OpenAsPins.Max).ToList();
+            if (list.Count > 0) map[key] = list;
+        }
+        return map;
+    }
+
+    private static JsonObject WritePins(IReadOnlyDictionary<string, IReadOnlyList<PinnedUser>> map)
+    {
+        var node = new JsonObject();
+        foreach (var (key, list) in map)
+            node[key] = new JsonArray([.. list.Select(p => (JsonNode)new JsonObject { ["user"] = p.User, ["label"] = p.Label, ["full_name"] = p.FullName })]);
+        return node;
     }
 
     /// <summary>The root object, or null when the text is not a JSON object. A duplicate key is invalid JSON here too.</summary>

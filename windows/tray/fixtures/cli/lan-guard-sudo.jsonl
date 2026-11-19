@@ -1,0 +1,1 @@
+{"schema_version":1,"cli_version":"0.9.0","event":"done","exit":1,"error":"sudo was not available, so nothing was changed.","fix":"Run in a terminal: benchbar lan-guard install","changed":[],"warnings":[],"next_actions":[]}

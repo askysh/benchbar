@@ -15,11 +15,11 @@ programs bring them to the Windows side:
 BenchBar for Windows is in beta. It works, and you may find rough edges.
 The tray and the window say so: a **Beta** pill, the window title
 "BenchBar (Beta)" and a banner that you can dismiss. Both programs are
-not signed yet. On our Windows 11 test PC (Smart App Control off) the one
-line installer needed no click through a warning. Smart App Control, when
-it is on, blocks unsigned programs: see
-[Before you install](#before-you-install) and
-[Signing and verification](#signing-and-verification).
+not signed, and 0.9.0 has no signed or Microsoft Store route. On our
+Windows 11 test PC (Smart App Control off) the one line installer needed
+no click through a warning. Smart App Control, when it is on, blocks the
+tray and `benchbar.exe`: see [Smart App Control](#smart-app-control) for
+what you can do, and [Signing and verification](#signing-and-verification).
 
 ## What you need
 
@@ -58,8 +58,10 @@ Open File dialog. It checks every file against `SHA256SUMS` first.
 
 Smart App Control is a Windows 11 feature. When it is on, it blocks
 programs that are not signed and have no known reputation, and it has no
-exception for one program. BenchBar is not signed yet, so with Smart App
-Control on, Windows blocks `benchbar.exe` and BenchBar Tray.
+exception for one program. BenchBar 0.9.0 is not signed and has no
+Microsoft Store package, so with Smart App Control on, Windows blocks
+`benchbar.exe` and BenchBar Tray. There is no signed route in this
+release.
 
 To check: open Windows Security, then **App & browser control**, then
 **Smart App Control**. It says **On**, **Evaluation** or **Off**.
@@ -67,16 +69,29 @@ To check: open Windows Security, then **App & browser control**, then
 What the installer does:
 
 - **On**: it stops before it downloads or writes anything, says what
-  Smart App Control is and that BenchBar is not signed yet, and links
-  here.
+  Smart App Control is and that BenchBar is not signed, and links here.
 - **Evaluation**: it warns and goes on. Windows may turn Smart App
   Control on later and block BenchBar then.
 - **Off**, or a Windows without it: it goes on.
 
-To use BenchBar while it is on, you have to turn it off in Windows
-Security > App & browser control > Smart App Control settings. On some
-versions of Windows you cannot turn it back on without resetting Windows.
-Think about that first.
+What you can do when it is on:
+
+- **Use the command line inside WSL.** `benchbar` runs inside your Ubuntu
+  24.04 distro, where Smart App Control does not apply, and it does all
+  the work: install it there with the line in
+  [The installer on Linux](install.md#the-installer-on-linux), then run
+  `benchbar install`. You lose only the Windows parts: `benchbar.exe` in
+  PowerShell and the tray. Run `wsl.exe -d Ubuntu-24.04 -- benchbar
+  status` from PowerShell instead.
+- **Turn Smart App Control off** in Windows Security > App & browser
+  control > Smart App Control settings, then run the one line installer
+  again. On some versions of Windows you cannot turn it back on without
+  resetting Windows. Think about that first.
+- **Wait for a signed build.** There is none in 0.9.0 and no date. See the
+  [roadmap](https://github.com/askysh/benchbar/blob/main/ROADMAP.md).
+
+With Smart App Control off, or in evaluation mode, the one line installer
+is the route to use.
 
 The installer also stops early when PowerShell runs in Constrained
 Language Mode, which a company policy can set. Ask whoever manages the PC.
@@ -128,6 +143,15 @@ For a distro whose user the wizard did not create, BenchBar asks for
 your Linux password right before the steps that use sudo.
 
 ![The New Bench page](images/windows-wizard-bench.png)
+
+The **Profile** list on the New Bench page holds the built in profiles
+(`v15-lts`, `v16-lts`) and the valid team profiles from
+`benchbar.exe profile list`. It starts on `v15-lts`; the choice goes to
+the install as `--profile NAME`. BenchBar asks the CLI about each
+profile with a dry run (`install --dry-run --json --offline --profile
+NAME`), so a profile that this Ubuntu cannot install shows off, with the
+CLI's own reason under the list. If the list cannot be read, `v15-lts` is
+the only choice and **Try Again** reads it again.
 
 ![Review, the plan before Install](images/windows-wizard-review.png)
 
@@ -306,9 +330,12 @@ tray while the runtime is missing.
 ## Signing and verification
 
 The Windows programs (`benchbar.exe`, `BenchBarTray.exe` and the tray's
-own DLLs) are not signed yet. In practice that means: Smart App Control
-blocks them, and a program you start from an unpacked zip shows the "Open
-File - Security Warning" dialog. See [Before you install](#before-you-install)
+own DLLs) are not signed, and 0.9.0 has no signed or Microsoft Store
+route: SignPath Foundation declined the project on 2026-11-13, and a
+Store package is not part of this release. In practice that means: Smart
+App Control blocks them (see [Smart App Control](#smart-app-control)),
+and a program you start from an unpacked zip shows the "Open File -
+Security Warning" dialog. See [Before you install](#before-you-install)
 for what to expect on each route.
 
 You can still check what you download:
@@ -384,7 +411,20 @@ A bench has four tabs:
   without files), **Backups...**, **Restore...**, **Drop Site...** (type
   the site's name to confirm) and Open. Browsers open `*.localhost` names
   without a hosts line, so BenchBar never edits a hosts file (see
-  [`*.localhost` names](#localhost-names)).
+  [`*.localhost` names](#localhost-names)). **Allow Open as...** in a
+  site's menu turns Open as on for that site, after the Mac app's question
+  (it signs in as any user without a password, and each sign in is a real
+  login that the apps' hooks and the Activity Log see). Turning it on is
+  your decision: nothing in BenchBar does it for you, and **Turn Off Open
+  as** needs no question. While it is on the site says "Open as is on", or
+  why it cannot be used (developer mode off, not the default site, the bench
+  stopped), and **Open as...** opens **Find User**: the site's enabled users,
+  searched by name or email, each with **Open**, which opens the site in your
+  Windows browser signed in as that user. `benchbar.exe` opens the browser
+  itself, so the sign in link, which holds a session, never passes through
+  the tray, a log or the screen. A site whose name Windows cannot find has no
+  Open as. **Pin** in Find User keeps a user (nine at most per site,
+  Administrator is always there) for Quick Switch.
 - **Apps**: Add App (from a git URL, with a branch or a commit, and the
   sites to install it on), Update after the dry run, Install on a site,
   focus pins and Check Remotes. An app with local changes cannot be
@@ -395,9 +435,39 @@ A bench has four tabs:
 
 ![A bench on its Sites tab](images/windows-bench.png)
 
+A fifth tab, **Sharing**, is there only while the **Share with people on
+the same Wi-Fi** experiment (`lan-rooms`) is on in Labs. It is the host
+side of a room, with the Mac app's words: **Set up sharing** (the people
+who get a seat, the source of the copy, the plan sheet with what the copy
+holds, and your tick that it holds real data), **Start sharing** for 1 to
+12 hours after a question, **Stop**, **Extend**, **Lock room**, the room
+code (hidden until you press **Show**), **Copy invite** and **New code**,
+the checks, the copy and **Refresh copy**, and the people in the room with
+**Remove**. Every one of those calls is made from your click and asks
+first; nothing runs when the tab opens, it only reads. The room code and
+the invite are read only on your click, kept in memory, never written to a
+log and copied with a mark that keeps them out of the Windows clipboard
+history. The network protection (`benchbar lan-guard install`, and
+`allow-node`) is a button with its own question and runs only when you
+press it; the tray never runs it by itself. Where the command line tool
+has no network protection yet (Linux), the tab shows what `benchbar.exe`
+says and nothing else. While the experiment says it is not on Windows yet
+in Labs, the tab does not appear.
+
 Start and Restart check the bench's ports first, from the window and from
 the flyout. A port another program holds stops the start with the reason
 and Review Port Conflict; BenchBar never stops that program.
+
+**Quick Switch...** in the tray menu opens a small panel over any window:
+Administrator, your pinned users and, when you type two letters or more,
+the site's other users. Up, Down and Enter choose, **0** to **9** open a row
+at once while the field is empty, and Esc closes it. It opens the site of a
+running bench that has Open as on (a list picks the site when there are
+several) in your browser signed in as that user, with the same
+`benchbar.exe open --as` call as Find User, and says why when there is
+nothing to open, for example that Open as is off for the site. The row of the
+last user it opened this run says "last opened". It never turns Open as on.
+There is no keyboard shortcut for it yet.
 
 **Find Benches** scans a folder inside the distro (default your Linux
 home), adds the benches it finds, sets up their ports and their
@@ -758,14 +828,15 @@ every distro, so stop your benches first).
 - It has no CPU source for the runner, so the runner runs at one speed.
 - It never reads files inside the distro: every fact comes from
   `benchbar.exe`.
-- It has no Open as menu yet. From PowerShell, `benchbar.exe site open-as on
-  NAME` turns it on for a site (it asks first), then `benchbar.exe open --as
-  USER` opens the site signed in as that user in your Windows browser. The
-  site needs a `*.localhost` name, which the Windows browser reaches without
-  a hosts line (see [`*.localhost` names](#localhost-names)). See [benchbar open](reference/cli/other.md).
-- It cannot join a room. Rooms (`benchbar share`) are Mac only for now:
-  WSL 2 does not expose a port to the Wi-Fi by default and Windows has no
-  pf. A `benchbar://share/...` link shows a note that says so.
+- Quick Switch has no global keyboard shortcut yet: open it from the tray
+  menu. Open as needs a `*.localhost` name, which the Windows browser reaches
+  without a hosts line (see [`*.localhost` names](#localhost-names)). See
+  [benchbar open](reference/cli/other.md).
+- It cannot join a room as a guest. The guest side (the room code
+  exchange, the pinned certificate and the local forwarder) is part of the
+  Mac app and has no `benchbar` command, so it is not on Windows yet. A
+  `benchbar://share/...` link shows a note that says so. Hosting a room is
+  the **Sharing** tab above.
 
 ## Labs
 

@@ -195,6 +195,14 @@ fl_redact_url_v() {
 }
 fl_redact_url() { local r; fl_redact_url_v r "$1"; printf '%s' "$r"; }
 
+# https://user:token@host/x -> https://host/x (never shown, never written). In
+# ui.sh so the phase scripts have it too: the reach cache of profile check needs it.
+fl_url_strip_userinfo_v() {
+  if [[ "$2" =~ ^(https?://)[^/@]*@(.*)$ ]]; then printf -v "$1" '%s%s' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"; else printf -v "$1" '%s' "$2"; fi
+}
+fl_url_strip_userinfo() { local u; fl_url_strip_userinfo_v u "$1"; printf '%s' "$u"; }
+
+
 fl_log() {
   [[ -n "$FL_LOG_FILE" ]] || return 0
   local msg="$*" __ts
