@@ -17,8 +17,10 @@
 #   3. release.yml and release-windows.yml are started for the tag. A tag
 #      pushed with GITHUB_TOKEN starts no workflow by itself, so they are
 #      dispatched here, with the tag as their ref;
-#   4. a warning when main has commits that next-release has not (it should
-#      never; the next release would refuse until a person sorts it out).
+#   4. a notice when main has only docs commits that next-release has not (a
+#      docs pull request may target main; the next release merges them in),
+#      a warning when it has more (the next release refuses until a person
+#      sorts it out).
 # This workflow never pushes a branch. A tag pushed by a person still starts
 # both release workflows as before.
 name: Auto tag
@@ -114,5 +116,13 @@ jobs:
           if git merge-base --is-ancestor "$GITHUB_SHA" origin/next-release; then
             echo "::notice::next-release has main already"
           else
-            echo "::warning title=main is ahead::main ($GITHUB_SHA) has commits that next-release has not. The next release is a fast forward of main to next-release, so it is refused until this is sorted out (docs/releasing.md)."
+            # a docs only pull request may target main: expected, and the next release merges it in
+            base="$(git merge-base "$GITHUB_SHA" origin/next-release || true)"
+            rc=0
+            if [[ -n "$base" ]]; then scripts/docs-only.sh "$base" "$GITHUB_SHA" >/dev/null || rc=$?; else rc=2; fi
+            if [[ "$rc" == 0 ]]; then
+              echo "::notice title=main is ahead::main ($GITHUB_SHA) has docs commits that next-release has not. The next release brings them in with one merge commit before it fast forwards main (docs/releasing.md)."
+            else
+              echo "::warning title=main is ahead::main ($GITHUB_SHA) has commits that next-release has not, and not only docs. The next release is a fast forward of main to next-release, so it is refused until this is sorted out (docs/releasing.md)."
+            fi
           fi
