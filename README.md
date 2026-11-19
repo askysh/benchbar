@@ -170,6 +170,7 @@ GitHub too, and `benchbar docs` opens them from the terminal.
 
 ## What's new and what is next
 
+The latest release is 0.8.3.
 [What's new](https://benchbar.akashmishra.com/whats-new/) says what changed
 in each release and what to do when you update. The [ROADMAP](ROADMAP.md)
 says what comes next, and the [CHANGELOG](CHANGELOG.md) is the full log.

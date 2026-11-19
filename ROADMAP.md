@@ -6,7 +6,7 @@ as issues.
 
 ## Released
 
-This page does not repeat what shipped. Each release is described in
+The latest release is 0.8.3. This page does not repeat what shipped. Each release is described in
 [What's new](https://benchbar.akashmishra.com/whats-new/) for users and in
 the [CHANGELOG](CHANGELOG.md) for contributors. The
 [Features](https://benchbar.akashmishra.com/features/) page lists every

@@ -40,7 +40,7 @@ be merged back. A fast forward needs `main` to be an ancestor of
 `next-release`. The one exception to "only a release moves `main`" is a
 docs only pull request, which may target `main` so that it goes live on the
 site at once (see [The docs site](#the-docs-site)): the next release first
-brings those commits into `next-release` with one merge commit (step 5 of
+brings those commits into `next-release` with one merge commit (step 6 of
 [Cutting a release](#cutting-a-release)). A commit on `main` that changes
 anything but docs makes the release refuse.
 
@@ -76,7 +76,7 @@ rule of `scripts/docs-only.sh`) may target `main`, and the site shows it as
 soon as it is merged. Everything else, and every pull request that also
 touches code, targets `next-release`. The squash commit on `main` is a commit
 `next-release` does not have, so the next release brings it in first, with one
-merge commit of `main` into `next-release` (step 5). That merge changes only
+merge commit of `main` into `next-release` (step 6). That merge changes only
 docs, so CI runs no tests on it and the release gate walks back to the last
 commit that did.
 
@@ -92,8 +92,8 @@ On `next-release`, then into `main`:
    `## X.Y.Z - date` with a new empty `## Unreleased` above it, and records
    the tray's CLI fixtures again (`tests/record-tray-fixtures.sh`: they hold
    `cli_version`). Commit what it changed.
-2. Write the release paragraph in `README.md` and in `ROADMAP.md`: the only
-   places the script cannot write for you. `scripts/check-version.sh` (the
+2. Change the "The latest release is X.Y.Z" line in `README.md` and in
+   `ROADMAP.md`: the only places the script cannot write for you. `scripts/check-version.sh` (the
    one check that `auto-tag.yml`, `release.yml` and
    `tests/test-version-sources.sh` all run) fails until both name the
    version, until the changelog has the section and until no fragment is
@@ -143,7 +143,7 @@ On `next-release`, then into `main`:
    changes only docs (`scripts/docs-only.sh --commit <sha>` for each), bring
    them into `next-release` with one merge commit and push it (a fast
    forward of `next-release`; the admin bypasses its ruleset), then wait for
-   the "CI result" of the merge before step 5 again:
+   the "CI result" of the merge before step 6 again:
 
    ```bash
    git checkout --detach origin/next-release
@@ -163,7 +163,7 @@ On `next-release`, then into `main`:
    version bump?"). A tag pushed by hand still starts both release workflows.
    If `main` has a commit that `next-release` has not, the push is not a
    fast forward and git refuses it: do not force it. Docs fixes are brought
-   over by the merge of step 5; a code commit on `main` was pushed by
+   over by the merge of step 6; a code commit on `main` was pushed by
    mistake, and it is a decision about history (not a script) how to put
    `main` right.
 8. Wait for the release workflows, open the draft on the Releases page,
