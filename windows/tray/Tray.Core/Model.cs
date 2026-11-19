@@ -7,7 +7,7 @@ namespace BenchBar.Tray.Core;
 public enum BenchState { Unknown, Stopped, Starting, Running, Crashed, Paused }
 
 /// <summary>A site of a bench (<c>sites[]</c> in <c>status --json</c>). Other fields of the CLI are ignored.</summary>
-public sealed record SiteInfo(string Name, bool IsDefault);
+public sealed record SiteInfo(string Name, bool IsDefault, SiteOpenAs? OpenAs = null);
 
 /// <summary>
 /// One bench as <c>status --json</c> reports it. <see cref="Site"/> is null for a bench that has none
@@ -165,6 +165,9 @@ internal sealed class SiteDto
 {
     [JsonPropertyName("name")] public string? Name { get; set; }
     [JsonPropertyName("default")] public bool? Default { get; set; }
+    [JsonPropertyName("open_as_enabled")] public bool? OpenAsEnabled { get; set; }
+    [JsonPropertyName("developer_mode")] public bool? DeveloperMode { get; set; }
+    [JsonPropertyName("open_as")] public bool? OpenAs { get; set; }
 }
 
 internal sealed class ListDto
@@ -251,7 +254,7 @@ public static class BenchJson
         var name = dto.Name ?? System.IO.Path.GetFileName(path.TrimEnd('/', '\\'));
         var sites = (dto.Sites ?? [])
             .Where(x => !string.IsNullOrEmpty(x.Name))
-            .Select(x => new SiteInfo(x.Name!, x.Default ?? false))
+            .Select(x => new SiteInfo(x.Name!, x.Default ?? false, x.OpenAsEnabled is { } enabled ? new SiteOpenAs(enabled, x.DeveloperMode, x.OpenAs) : null))
             .ToList();
         return new BenchStatus(name, path, ParseState(dto.State), dto.StopReason, dto.WebUrl, dto.Site)
         {

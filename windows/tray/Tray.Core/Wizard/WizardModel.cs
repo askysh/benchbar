@@ -477,6 +477,9 @@ public sealed partial class WizardModel : IDisposable
 
     private void Raise() => Post(() => Changed?.Invoke());
 
+    /// <summary>Tells the page that something the host owns changed (the logon switch, after Windows answered).</summary>
+    public void Refresh() => Raise();
+
     /// <summary>Runs on the UI thread: inline when already on it or when there is no context (tests).</summary>
     private void Post(Action action)
     {

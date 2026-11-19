@@ -23,7 +23,7 @@ public class PendingBannerTests
                 Requests.Add(request);
                 return Task.FromResult(new PlanOutcome(Applied, false, null));
             };
-            Kit.Services.ConfirmYesNo = (title, message, label) =>
+            Kit.Services.Confirm = (title, message, label) =>
             {
                 Questions.Add((title, message, label));
                 return Answer;

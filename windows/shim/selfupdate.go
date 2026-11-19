@@ -107,7 +107,7 @@ func installKind(sys *System) (kind, dir string) {
 		dir = local + `\Programs\BenchBar`
 	}
 	// a packaged program always runs from C:\Program Files\WindowsApps
-	if strings.Contains(strings.ToLower(strings.ReplaceAll(sys.ExePath, "/", `\`)), `\windowsapps\`) {
+	if underWindowsApps(sys.ExePath) {
 		return "store", dir
 	}
 	if dir != "" && normDir(parentDir(sys.ExePath), sys.Getenv) == normDir(dir, sys.Getenv) {

@@ -726,7 +726,25 @@ internal sealed partial class WizardView
         notify.Click += (_, _) => _model.Notifications = notify.IsChecked == true;
         Ui.Name(notify, "Show notifications");
         var logon = new CheckBox { Content = "Open BenchBar when I sign in to Windows", IsChecked = _model.OpenAtLogon, Margin = new Thickness(0, 0, 0, 12) };
-        logon.Click += (_, _) => _model.OpenAtLogon = logon.IsChecked == true;
+        // Checked/Unchecked (UI Automation's Toggle raises no Click); the box shows what Windows reports, never the click's guess.
+        var syncingLogon = false;
+        void ShowLogon()
+        {
+            syncingLogon = true;
+            try { logon.IsChecked = _model.OpenAtLogon; }
+            finally { syncingLogon = false; }
+        }
+        void LogonToggled()
+        {
+            if (syncingLogon) return;
+            var wanted = logon.IsChecked == true;
+            ShowLogon();
+            _model.OpenAtLogon = wanted;
+        }
+        logon.Checked += (_, _) => LogonToggled();
+        logon.Unchecked += (_, _) => LogonToggled();
+        _model.Changed += ShowLogon;
+        logon.Unloaded += (_, _) => _model.Changed -= ShowLogon;
         Ui.Name(logon, "Open BenchBar at logon");
         panel.Children.Add(notify);
         panel.Children.Add(logon);

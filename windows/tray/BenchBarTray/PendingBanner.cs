@@ -119,7 +119,7 @@ internal sealed class PendingBanner : UserControl
         var left = op.Steps.Count == 1 ? "1 step" : $"{op.Steps.Count} steps";
         var question = $"Drop the record of the unfinished {op.Command} of {op.App}? Its {left} will not run, and BenchBar does not undo what already ran. "
             + "Nothing else runs now; run the update or add again later if you still want it.";
-        if (!_services.ConfirmYesNo($"Discard the unfinished {op.Command}", question, "Discard")) return;
+        if (!_services.Confirm($"Discard the unfinished {op.Command}", question, "Discard")) return;
         _busy = true;
         Rebuild();
         var r = await _services.Cli.RunStreamAsync(AppCommands.DiscardPending(op.App, bench), null, CliTimeouts.Read, _ => { });

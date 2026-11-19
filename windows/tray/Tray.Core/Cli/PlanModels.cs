@@ -86,6 +86,9 @@ public sealed record PlanReviewRequest(string Title, IReadOnlyList<string> PlanA
     /// <summary>Adds the command's own secrets (an admin password) to the environment of the plan and apply calls.</summary>
     public Action<SecretEnvironment>? ConfigureEnv { get; init; }
 
+    /// <summary>A sentence added after the CLI's own error when an apply fails (what the CLI cannot say from here), or null.</summary>
+    public Func<CliStreamResult, string?>? ExplainFailure { get; init; }
+
     public TimeSpan PlanTimeout { get; init; } = CliTimeouts.Plan;
 
     public TimeSpan ApplyTimeout { get; init; } = CliTimeouts.Apply;

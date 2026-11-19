@@ -28,7 +28,9 @@ public partial class App : Application, ITrayHost
     private readonly NoticeBoard _notices = new();
     private readonly KeepAwakeGuard _keepAwake = new();
     private readonly RunMarker _runMarker = new();
+    private readonly IPackageInfo _package = PackageInfo.Current;
     private readonly StartupShortcut _startup = new();
+    private ILogonControl? _logonControl;
     private readonly Dictionary<string, LogWindow> _logs = [];
     private readonly Dictionary<string, DoctorWindow> _doctors = [];
     private Mutex? _mutex;
@@ -48,7 +50,7 @@ public partial class App : Application, ITrayHost
     private SettingsWindow? _settingsWindow;
     private AboutWindow? _aboutWindow;
     private WizardModel? _wizard;
-    private readonly StartupShortcut _resumeFlag = new(fileName: StartupShortcut.ResumeFileName, arguments: StartupShortcut.ResumeArgument);
+    private ResumeFlag? _resumeFlagValue;
     private EventWaitHandle? _setupEvent;
     private RegisteredWaitHandle? _setupWait;
     private EventWaitHandle? _quitEvent;
@@ -61,6 +63,24 @@ public partial class App : Application, ITrayHost
     private long _updateCheckedAt;
     private UpdateOffer? _updateOffer;
     private string? _updateDismissed;
+    /// <summary>The start Windows makes after a package update (<c>RegisterApplicationRestart</c>): quiet, and never a second flyout.</summary>
+    internal const string RestartedArgument = "--restarted";
+
+    private ResumeFlag _resumeFlag => _resumeFlagValue ??= new ResumeFlag(_package, new StartupShortcut(fileName: StartupShortcut.ResumeFileName, arguments: StartupShortcut.ResumeArgument));
+
+    /// <summary>
+    /// Open at logon: the Startup shortcut, or (packaged) the package's startup task. The WinRT task is only created for a packaged
+    /// process and only called when Settings, the menu or the wizard asks.
+    /// </summary>
+    private ILogonControl Logon => _logonControl ??= NewLogon();
+
+    private ILogonControl NewLogon()
+    {
+        var model = new LogonModel(_package, _startup, _package.IsPackaged ? new WinRtStartupTask() : null, ex => _log.Write("logon", ex));
+        model.Changed += () => Dispatcher.BeginInvoke(() => _menu?.RefreshChecks());
+        return model;
+    }
+
     private static readonly TimeSpan FlyoutKeepAlive = TimeSpan.FromSeconds(30);
     private readonly System.Windows.Threading.DispatcherTimer _releaseFlyout = new(System.Windows.Threading.DispatcherPriority.Background) { Interval = FlyoutKeepAlive };
     private long _flyoutHiddenAt;
@@ -97,15 +117,17 @@ public partial class App : Application, ITrayHost
 
         // a start from a benchbar:// link has no flags of its own: whatever follows the link on the command line is the link's text
         var ownArgs = LinkRouter.OwnArguments(e.Args);
-        var resume = ownArgs.Contains(StartupShortcut.ResumeArgument, StringComparer.OrdinalIgnoreCase);
+        var restarted = ownArgs.Contains(RestartedArgument, StringComparer.OrdinalIgnoreCase);
+        var resume = ownArgs.Contains(StartupShortcut.ResumeArgument, StringComparer.OrdinalIgnoreCase) || _resumeFlag.IsSet;
         var startLink = LinkRouter.FromArguments(e.Args);
-        if (!TakeSingleInstance(resume, startLink))
+        if (!TakeSingleInstance(resume, startLink, restarted))
         {
             Shutdown();
             return;
         }
 
-        var crashedLastTime = _runMarker.Begin(UpdateCheck.CurrentVersion().Split('+')[0]);
+        var crashedLastTime = _runMarker.Begin(UpdateCheck.CurrentVersion().Split('+')[0], restarted);
+        RegisterRestart();
         _notices.Changed += SyncNotices;
         Activated += (_, _) => PostViewerSync();
         Deactivated += (_, _) => PostViewerSync();
@@ -117,6 +139,7 @@ public partial class App : Application, ITrayHost
         if (_link is not null) _link.Command += cmd => Dispatcher.BeginInvoke(() => OnHarnessCommand(cmd));
 
         _config = TrayConfig.Load();
+        CheckTwoInstalls();
         ApplyThemeMode();
         RegisterLinkScheme();
         _source = BenchSourceFactory.FromEnvironment();
@@ -163,6 +186,8 @@ public partial class App : Application, ITrayHost
         _releaseFlyout.Tick += (_, _) => ReleaseFlyout();
         _controller.Start();
         if (startLink is not null) QueueLink(startLink); // waits for the first poll: the bench list decides which bench the link means
+        // Windows stopped the keepalive with the old package: start it again (does nothing without a keepalive task or when it runs)
+        KeepaliveRestart.RunAsync(restarted, new SystemProcessRunner(), () => ShimLocator.Find(), ex => _log.Write("keepalive", ex)).Forget();
         CheckShimVersionAsync().Forget();
         if (crashedLastTime)
         {
@@ -184,13 +209,38 @@ public partial class App : Application, ITrayHost
 
     // --- single instance ---
 
-    private bool TakeSingleInstance(bool resume, string? link)
+    /// <summary>
+    /// Packaged only: asks Windows to start this exe again after a package update ended it (it does not after a crash or a hang). Unpackaged, the installer
+    /// starts the tray again itself, and a second start there would only raise the flyout. The argument keeps that start quiet.
+    /// </summary>
+    private void RegisterRestart()
+    {
+        if (!_package.IsPackaged) return;
+        try
+        {
+            var result = NativeMethods.RegisterApplicationRestart(RestartedArgument, NativeMethods.RestartNoCrash | NativeMethods.RestartNoHang);
+            if (result != 0) _log.Write("restart-register", new InvalidOperationException($"RegisterApplicationRestart returned 0x{result:X8}"));
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+        {
+            _log.Write("restart-register", ex);
+        }
+    }
+
+    private bool TakeSingleInstance(bool resume, string? link, bool quiet = false)
     {
         _mutex = new Mutex(true, MutexName, out var first);
         if (!first)
         {
             // a link goes to the running tray as it is (nothing opens by itself: the link decides what shows); else ask it to open its
             // flyout (or the wizard, after a restart). Quietly nothing if it cannot be reached.
+            // A start by Windows after an update says nothing: the person did not click anything.
+            if (quiet)
+            {
+                _mutex.Dispose();
+                _mutex = null;
+                return false;
+            }
             try
             {
                 if (link is null || !PassLinkOn(link))
@@ -320,7 +370,28 @@ public partial class App : Application, ITrayHost
         _main?.SetNotices(_notices.All, DismissNotice);
     }
 
-    private void DismissNotice(string key) => _notices.Remove(key);
+    private void DismissNotice(string key)
+    {
+        _notices.Remove(key);
+        if (key == TwoInstalls.Key)
+        {
+            _config.TwoInstallsDismissed = true; // stays away until the second install goes and comes back
+            SaveConfig();
+        }
+    }
+
+    /// <summary>Packaged, with the one line installer's copy on the PC as well: one notice, until it is dismissed or the other copy is removed.</summary>
+    private void CheckTwoInstalls()
+    {
+        var applies = TwoInstalls.Applies(_package, PackageInfo.LocalAppData());
+        var show = TwoInstalls.ShouldShow(applies, _config.TwoInstallsDismissed, out var keep);
+        if (keep != _config.TwoInstallsDismissed)
+        {
+            _config.TwoInstallsDismissed = keep;
+            SaveConfig();
+        }
+        if (show) _notices.Set(new Notice(TwoInstalls.Key, TwoInstalls.Text, TwoInstalls.CopyLabel, () => CopyText(TwoInstalls.UninstallLine)));
+    }
 
     /// <summary>
     /// Once at start: <c>benchbar.exe --shim-version</c> against this tray's version. A PC was found whose keepalive ran an older shim from
@@ -330,10 +401,15 @@ public partial class App : Application, ITrayHost
     {
         if (_setup is null) return;
         var line = await _setup.ShimVersionAsync(CancellationToken.None);
-        var text = VersionMismatch.Notice(line, UpdateCheck.CurrentVersion(), (_source as ShimBenchSource)?.ShimPath);
+        var text = VersionMismatch.Notice(line, UpdateCheck.CurrentVersion(), DisplayShimPath());
         if (text is null) _notices.Remove("shim-version");
+        else if (_package.IsPackaged) _notices.Set(new Notice("shim-version", text, Dismissible: false)); // one package: the install line is not its fix
         else _notices.Set(new Notice("shim-version", text, "Copy Install Line", () => CopyText(UpdateLinks.InstallCommand), Dismissible: false));
     }
+
+    /// <summary>The shim's path as shown to the person: packaged, the alias in WindowsApps, never the versioned package folder.</summary>
+    private string? DisplayShimPath() =>
+        ShimPathDisplay.For(_package, (_source as ShimBenchSource)?.ShimPath, PackageInfo.LocalAppData());
 
     // --- efficiency mode ---
 
@@ -499,12 +575,12 @@ public partial class App : Application, ITrayHost
 
     private TrayMenuModel BuildMenuModel() => new()
     {
-        LogonEnabled = _startup.IsEnabled,
-        SetLogon = on =>
-        {
-            try { if (on) _startup.Enable(); else _startup.Disable(); }
-            catch (Exception ex) { _log.Write("logon", ex); }
-        },
+        LogonEnabled = () => Logon.View.IsOn,
+        LogonAvailable = () => Logon.View.CanChange,
+        LogonNote = () => Logon.View.Note,
+        RefreshLogon = () => Logon.RefreshAsync().Forget(),
+        SetLogon = on => Logon.SetAsync(on).Forget(),
+        ShowCheckForUpdates = UpdatePolicy.ChecksForUpdates(_package),
         Appearance = () => _config.Appearance,
         SetAppearance = mode =>
         {
@@ -682,6 +758,24 @@ public partial class App : Application, ITrayHost
     private void CopyText(string text)
     {
         try { Clipboard.SetText(text); }
+        catch (System.Runtime.InteropServices.COMException ex) { _log.Write("clipboard", ex); }
+    }
+
+    /// <summary>
+    /// The room code or invite, on a click only: marked so Windows clipboard history, the cloud clipboard and clipboard monitors leave it out
+    /// (the Mac's concealed and transient pasteboard types). A failure is logged without the text.
+    /// </summary>
+    private void CopySecret(string text)
+    {
+        try
+        {
+            var data = new DataObject();
+            data.SetText(text);
+            data.SetData("ExcludeClipboardContentFromMonitorProcessing", new byte[4] { 1, 0, 0, 0 });
+            data.SetData("CanIncludeInClipboardHistory", new byte[4]);
+            data.SetData("CanUploadToCloudClipboard", new byte[4]);
+            Clipboard.SetDataObject(data, true);
+        }
         catch (System.Runtime.InteropServices.COMException ex) { _log.Write("clipboard", ex); }
     }
 

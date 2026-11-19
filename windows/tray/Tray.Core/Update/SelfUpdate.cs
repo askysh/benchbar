@@ -120,6 +120,9 @@ public static class UpdatePlanner
 public sealed record SelfUpdateCheck(SelfUpdateStatus? Status, string? Problem)
 {
     public static SelfUpdateCheck Failed(string problem) => new(null, problem);
+
+    /// <summary>The answer for a packaged tray, which never asks GitHub: the Store updates it.</summary>
+    public static SelfUpdateCheck ForStore(string current) => new(new SelfUpdateStatus(current, null, false, InstallKind.Store, null), null);
 }
 
 /// <summary>
@@ -127,7 +130,7 @@ public sealed record SelfUpdateCheck(SelfUpdateStatus? Status, string? Problem)
 /// of this tray's own version knows the Windows <c>self-update</c>, and an older one would forward the command to the Linux CLI and boot the
 /// distro (a newer one is fine). Never throws for a missing or failing shim; the answer says why.
 /// </summary>
-public sealed class SelfUpdateClient(IProcessRunner runner, Func<string?> locateShim, string trayVersion)
+public sealed class SelfUpdateClient(IProcessRunner runner, Func<string?> locateShim, string trayVersion, IPackageInfo? package = null)
 {
     public static readonly TimeSpan VersionTimeout = TimeSpan.FromSeconds(10);
 
@@ -138,6 +141,7 @@ public sealed class SelfUpdateClient(IProcessRunner runner, Func<string?> locate
 
     public async Task<SelfUpdateCheck> CheckAsync(CancellationToken ct)
     {
+        if (package is { IsPackaged: true }) return SelfUpdateCheck.ForStore(trayVersion); // by construction: a packaged tray runs no check
         var shim = locateShim();
         if (shim is null) return SelfUpdateCheck.Failed("benchbar.exe was not found next to BenchBar.");
         try
@@ -174,7 +178,7 @@ public interface IStartedProcess
     event Action? Exited;
 }
 
-public enum UpdateStartKind { Started, AlreadyRunning, ShimMissing, Failed }
+public enum UpdateStartKind { Started, AlreadyRunning, ShimMissing, Failed, StoreManaged }
 
 /// <summary>The outcome of Update Now. <see cref="Message"/> says why it did not start.</summary>
 public sealed record UpdateStart(UpdateStartKind Kind, string? Message = null)
@@ -188,7 +192,7 @@ public sealed record UpdateStart(UpdateStartKind Kind, string? Message = null)
 /// result can be read. The script goes as <c>-EncodedCommand</c>, so no shell parses the profile path: spaces, quotes, <c>&amp;</c>,
 /// <c>%</c> and <c>$</c> in it stay as they are. A second Update Now while the window runs starts nothing.
 /// </summary>
-public sealed class SelfUpdateLauncher(Func<string?> locateShim, Func<ProcessStartInfo, IStartedProcess?> start, string systemDirectory, string workingDirectory)
+public sealed class SelfUpdateLauncher(Func<string?> locateShim, Func<ProcessStartInfo, IStartedProcess?> start, string systemDirectory, string workingDirectory, IPackageInfo? package = null)
 {
     public const string WindowTitle = "BenchBar update";
 
@@ -210,6 +214,8 @@ public sealed class SelfUpdateLauncher(Func<string?> locateShim, Func<ProcessSta
 
     public UpdateStart Start()
     {
+        // by construction: a packaged tray never runs the zip self-update, whatever surface asks for it
+        if (package is { IsPackaged: true }) return new UpdateStart(UpdateStartKind.StoreManaged, UpdateLinks.StoreLine);
         IStartedProcess? process;
         lock (_gate)
         {
