@@ -110,10 +110,13 @@ got="$(plant_probe -u FL_TESTING FL_SUDO_BIN="$PLANT/sudo")"
 assert_eq "/usr/bin/sudo" "$got" "(outside the tests FL_SUDO_BIN is ignored)"
 [[ ! -e "$TMP_DIR/planted-sudo-ran" ]] || fail "the planted sudo ran"
 # a call goes to /usr/bin/sudo (-V prints the version and asks for nothing), never to the planted one
-# shellcheck disable=SC2016
-got="$(env -u FL_TESTING -u FL_SUDO_BIN PATH="$PLANT:$PATH" FL_PLATFORM=macos SCRIPT_DIR="$ROOT" bash -c '. "$SCRIPT_DIR/lib/frappe-local/sudo.sh"; sudo -V' 2>&1 | head -1)"
-assert_not_contains "$got" "planted-sudo"
-[[ ! -e "$TMP_DIR/planted-sudo-ran" ]] || fail "the planted sudo ran for a call of sudo"
+# (only where /usr/bin/sudo exists: the bash 3.2 container has none)
+if [[ -x /usr/bin/sudo ]]; then
+  # shellcheck disable=SC2016
+  got="$(env -u FL_TESTING -u FL_SUDO_BIN PATH="$PLANT:$PATH" FL_PLATFORM=macos SCRIPT_DIR="$ROOT" bash -c '. "$SCRIPT_DIR/lib/frappe-local/sudo.sh"; sudo -V' 2>&1 || true)"
+  assert_not_contains "${got%%$'\n'*}" "planted-sudo"
+  [[ ! -e "$TMP_DIR/planted-sudo-ran" ]] || fail "the planted sudo ran for a call of sudo"
+fi
 # a test names its own program (the mock) on purpose
 got="$(plant_probe FL_TESTING=1 FL_SUDO_BIN="$PLANT/sudo")"
 assert_eq "$PLANT/sudo" "$got" "(FL_TESTING=1 lets a test name the sudo program)"

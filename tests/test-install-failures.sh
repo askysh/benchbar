@@ -41,7 +41,7 @@ forget_unit
 run_fm install --yes --bench-dir "$BENCH" --site linuxdev.localhost
 [[ "$CODE" != "0" ]] || fail "install exited 0 after a failed service step: $OUT"
 assert_contains "$OUT" "[FAIL]"
-printf '%s\n' "$OUT" | grep -q -E 'Background service +failed' || fail "the summary row is not failed: $OUT"
+grep -q -E 'Background service +failed' <<<"$OUT" || fail "the summary row is not failed: $OUT"
 assert_not_contains "$OUT" "Background service: warning"
 assert_contains "$OUT" "Next steps"
 assert_contains "$OUT" "benchbar repair"
@@ -53,13 +53,13 @@ run_fm install --json --yes --bench-dir "$BENCH" --site linuxdev.localhost
 last="$(printf '%s\n' "$OUT" | grep '^{' | tail -1)"
 assert_contains "$last" '"event":"done"'
 assert_contains "$last" '"exit":1'
-printf '%s\n' "$OUT" | grep -E '"id":"service"' | grep -q '"status":"failed"' || fail "the stream has no failed service step: $OUT"
+grep -E '"id":"service"' <<<"$OUT" | grep '"status":"failed"' >/dev/null || fail "the stream has no failed service step: $OUT"
 # a run whose steps all worked still says done, with Next steps as before
 rm -f "$MOCK_STATE/start_refused"
 forget_unit
 run_fm install --yes --bench-dir "$BENCH" --site linuxdev.localhost
 assert_eq "0" "$CODE" "$OUT"
-printf '%s\n' "$OUT" | grep -q -E 'Background service +done' || fail "the summary row is not done: $OUT"
+grep -q -E 'Background service +done' <<<"$OUT" || fail "the summary row is not done: $OUT"
 assert_contains "$OUT" "benchup"
 
 # ---- an optional action (the wkhtmltopdf package) that fails in the engine pass is a warning for
@@ -70,8 +70,8 @@ printf 'tampered\n' >"$MOCK_STATE/download_payload"
 run_fm install --yes --bench-dir "$BENCH" --site linuxdev.localhost
 assert_eq "1" "$CODE" "$OUT"
 assert_contains "$OUT" "checksum mismatch"
-printf '%s\n' "$OUT" | grep -q -E 'Background service +warning' || fail "an optional action that failed labels step 3: $OUT"
-printf '%s\n' "$OUT" | grep -q -E 'Background service +failed' && fail "step 3 is failed for a failed wkhtmltopdf package: $OUT"
+grep -q -E 'Background service +warning' <<<"$OUT" || fail "an optional action that failed labels step 3: $OUT"
+grep -q -E 'Background service +failed' <<<"$OUT" && fail "step 3 is failed for a failed wkhtmltopdf package: $OUT"
 assert_contains "$OUT" "benchbar repair"
 rm -f "$MOCK_STATE/wkhtml_missing"
 printf 'stub download\n' >"$MOCK_STATE/download_payload"
