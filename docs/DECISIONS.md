@@ -1151,6 +1151,15 @@ Written for the macOS arm64 runner shortage of November 2026 (pull requests wait
 - homebrew-tap.yml clones the tap without the token and gives it to `git push` on one command line, so no credential is in the clone's config while brew runs formula code.
 - The Windows package job runs for pull requests too and has only `contents: read`. No signing secret is read anywhere in the workflow.
 
+## Verified downloads
+
+- Downloads are verified by where they were built, not only by a checksum from the same release (#134): `release.yml` has an `attest` job after `build-signed` that attests the DMG, the app zip, the CLI tarball and `SHA256SUMS`, and it alone has `id-token` and `attestations` write. It runs on the signed (tag) path only: an ad hoc run is refused on a tag, so nothing ad hoc is attested as a release. `homebrew-tap.yml` runs `gh attestation verify` on the files and `SHA256SUMS` before it renders anything.
+- `install.sh` refuses when `gh attestation verify` fails, and says only the checksum was checked when `gh` is missing or signed out: most Macs have no `gh`, so a hard requirement would make the one line install unusable. A release from before attestations fails the check while `gh` is signed in; the docs say to sign `gh` out for that run or check by hand.
+- `install.sh` runs `codesign --verify --deep --strict` and `spctl --assess --type execute` on the unpacked app and refuses on either: `curl` sets no quarantine flag, so Gatekeeper never assessed the app. The app is copied to `BenchBar.app.new`, the old one renamed to `.old`, the new one renamed in and the old one removed, so a failed copy leaves the old app. On Linux it downloads no file (git is the transport), so there is nothing to attest there.
+- `install.ps1` keeps the internet mark unless `gh attestation verify` accepts the zip (a run from an unpacked folder has no zip: mark kept). Only a verified provenance proves more than the same-origin checksum, which was the reason the mark used to go. A failed or unavailable check does not stop the install, as the checksum did pass; it only keeps the mark and says so.
+- `install.ps1` always names a newer release it skipped for lack of Windows files; the test seam `BENCHBAR_TEST_RELEASES` (a JSON file for the release list) lets CI prove it without the network.
+- The sums files carry `install.sh` and `install.ps1` of the tag (`macos-release.sh` and `release-local.sh` append them, `release-windows.yml` adds `install.ps1` to the Windows sums), so `self-update` can check an installer against the release it belongs to.
+- The Mac app's own installer strings (`WizardViews.installerLine`, the update command) keep the short `curl -fsSL` form: the wizard snapshots hold it, and they cannot be regenerated without a Mac.
 
 ## 0.9.0: the bench listens on loopback by default
 

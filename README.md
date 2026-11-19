@@ -57,7 +57,7 @@ Line Tools and Homebrew, puts the CLI in `~/.local/bin` and the app in
 `~/Applications`, and never runs `sudo`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash
+curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash
 ```
 
 Or download the DMG from the

@@ -6,7 +6,8 @@
 # URLs answer 404, so a formula merged before publishing breaks brew install.
 #
 # The formula and cask are rendered from packaging/homebrew with the sha256
-# of the published files (checked against SHA256SUMS first), put into a
+# of the published files (checked against SHA256SUMS and their build
+# provenance, gh attestation verify, first), put into a
 # clone of the tap, checked with brew style and brew audit, installed and
 # tested, then proposed as a pull request on the tap. The workflow stops
 # there: a person reads the pull request and merges it (docs/releasing.md,
@@ -50,6 +51,10 @@ jobs:
     environment: release
     runs-on: macos-latest
     timeout-minutes: 30
+    # attestations: read is for gh attestation verify
+    permissions:
+      contents: read
+      attestations: read
     env:
       HOMEBREW_NO_AUTO_UPDATE: "1"
       HOMEBREW_NO_ANALYTICS: "1"
@@ -102,6 +107,14 @@ jobs:
             have="$(shasum -a 256 "$f" | awk '{print $1}')"
             [ -n "$want" ] && [ "$want" = "$have" ] || { echo "::error::$f does not match SHA256SUMS (${want:-not listed}, file $have)"; exit 1; }
             echo "$f: sha256 $have, matches SHA256SUMS"
+          done
+          # The sums come from the same release as the files, so they prove
+          # nothing about where the files were built. The attestation does:
+          # release.yml attested these files and SHA256SUMS, and a formula
+          # is rendered from files that verify only.
+          for f in $files SHA256SUMS; do
+            gh attestation verify "$f" -R askysh/benchbar || {
+              echo "::error::$f has no build provenance from askysh/benchbar (gh attestation verify failed); the formula is not rendered"; exit 1; }
           done
           [ "$signed" = "true" ] || echo "::notice title=Formula only::v$VERSION is not a signed release; the cask stays as it is."
           echo "dir=$dir" >> "$GITHUB_OUTPUT"

@@ -30,7 +30,7 @@ notes() { set +e; OUT="$(CHANGELOG="$TMP_DIR/CHANGELOG.md" bash "$NOTES" "$@" 2>
 notes 9.1.0
 assert_eq "0" "$CODE" "$OUT"
 assert_eq "## Update" "${OUT%%$'\n'*}" "(the Update section comes first)"
-assert_contains "$OUT" "curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash -s -- --yes"
+assert_contains "$OUT" "curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash -s -- --yes"
 assert_contains "$OUT" "**Update Now**"
 assert_contains "$OUT" "benchbar self-update"
 assert_contains "$OUT" "--app-only"

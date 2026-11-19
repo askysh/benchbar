@@ -16,7 +16,7 @@ Homebrew. The installer checks all of that and tells you what is missing.
 One line, in Terminal:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash
+curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash
 ```
 
 It clones the CLI into `~/.local/share/benchbar`, links `benchbar` into
@@ -185,7 +185,7 @@ what you did and what you expected. Screenshots of the app are welcome.
 ## Uninstall
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash -s -- --uninstall
+curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash -s -- --uninstall
 ```
 
 removes the app, the `benchbar` links and the PATH block. Then it asks,

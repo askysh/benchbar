@@ -137,12 +137,138 @@ assert_contains "$OUT" "checksum mismatch"
 assert_eq "0.3.0" "$(installed_app_version)"
 make_release 0.5.0
 
+# ---- the build provenance: gh signed in checks the zip, and a refusal stops the install
+make_release 0.6.0
+reset_calls
+run_install --yes --app-only
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "build provenance verified (gh attestation verify)"
+assert_calls_contain "^gh auth status"
+assert_calls_contain "^gh attestation verify .*BenchBar-0.6.0.zip -R askysh/benchbar$"
+assert_contains "$OUT" "code signature valid (codesign --verify --deep --strict)"
+assert_contains "$OUT" "Gatekeeper accepts the app: notarized (spctl --assess --type execute)"
+assert_calls_contain '^codesign --verify --deep --strict .*/unpacked/BenchBar.app$'
+assert_calls_contain '^spctl --assess --type execute .*/unpacked/BenchBar.app$'
+assert_eq "0.6.0" "$(installed_app_version)"
+# the new app was copied beside the old one and renamed over it: nothing left
+assert_no_file "$APP.new"
+assert_no_file "$APP.old"
+# every download goes over https only, TLS 1.2 or newer
+assert_calls_contain "^curl --proto =https --tlsv1.2 -fsSL .*releases/latest"
+assert_calls_contain "^curl --proto =https --tlsv1.2 -fsSL --retry 3 -o .*BenchBar-0.6.0.zip "
+assert_calls_not_contain '^curl -fsSL'
+
+make_release 0.7.0
+touch "$MOCK_STATE/gh_attest_fail"
+reset_calls
+run_install --yes --app-only
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "gh attestation verify did not accept BenchBar-0.7.0.zip"
+assert_contains "$OUT" "no attestations found"
+assert_contains "$OUT" "the build provenance of BenchBar-0.7.0.zip did not verify; nothing installed"
+assert_eq "0.6.0" "$(installed_app_version)"
+assert_calls_not_contain '^ditto'
+rm -f "$MOCK_STATE/gh_attest_fail"
+
+# gh signed out: only the checksum, and the command to run by hand
+touch "$MOCK_STATE/gh_signed_out"
+reset_calls
+run_install --yes --app-only
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "gh is not signed in (gh auth login): only the checksum was checked, not where the file was built"
+assert_contains "$OUT" "to check by hand: gh attestation verify BenchBar-0.7.0.zip -R askysh/benchbar"
+assert_not_contains "$OUT" "build provenance verified"
+assert_calls_not_contain '^gh attestation verify'
+assert_eq "0.7.0" "$(installed_app_version)"
+rm -f "$MOCK_STATE/gh_signed_out"
+
+# no gh at all: a PATH with every other command (the host's gh left out)
+mkdir -p "$TMP_DIR/nogh"
+for m in /usr/bin/* /bin/*; do [[ "${m##*/}" == gh ]] || ln -sf "$m" "$TMP_DIR/nogh/${m##*/}" 2>/dev/null || true; done
+for m in "$ROOT"/tests/mocks/bin/*; do [[ "$(basename "$m")" == gh ]] || ln -sf "$m" "$TMP_DIR/nogh/$(basename "$m")"; done
+make_release 0.8.0
+reset_calls
+PATH="$TMP_DIR/nogh" run_install --yes --app-only
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "gh (the GitHub CLI) is not installed: only the checksum was checked, not where the file was built"
+assert_contains "$OUT" "to check by hand: gh attestation verify BenchBar-0.8.0.zip -R askysh/benchbar"
+assert_eq "0.8.0" "$(installed_app_version)"
+
+# the signature: codesign or Gatekeeper refuses, and the old app stays
+make_release 0.9.0
+touch "$MOCK_STATE/codesign_fail"
+reset_calls
+run_install --yes --app-only
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "codesign --verify --deep --strict refused the app"
+assert_contains "$OUT" "the unpacked app did not pass the signature check; nothing installed"
+assert_eq "0.8.0" "$(installed_app_version)"
+assert_calls_not_contain '^spctl'
+rm -f "$MOCK_STATE/codesign_fail"
+touch "$MOCK_STATE/spctl_fail"
+run_install --yes --app-only
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "spctl --assess --type execute refused the app (not notarized"
+assert_eq "0.8.0" "$(installed_app_version)"
+rm -f "$MOCK_STATE/spctl_fail"
+
+# the copy beside the app fails: the old app is as it was, and no half copy stays
+touch "$MOCK_STATE/ditto_fail_new"
+run_install --yes --app-only
+assert_eq "1" "$CODE" "$OUT"
+assert_contains "$OUT" "could not put the app into ${HOME}/Applications; the old app is as it was"
+assert_eq "0.8.0" "$(installed_app_version)"
+assert_no_file "$APP.new"
+rm -f "$MOCK_STATE/ditto_fail_new"
+# a stale copy from a run that died is replaced
+mkdir -p "$APP.new" "$APP.old"; printf 'stale\n' >"$APP.new/stale"
+run_install --yes --app-only
+assert_eq "0" "$CODE" "$OUT"
+assert_eq "0.9.0" "$(installed_app_version)" "$OUT"
+assert_no_file "$APP.new"
+assert_no_file "$APP.old"
+
+# ---- --help reads its text from the script, not from $0: it works through a pipe
+set +e; OUT="$(bash -s -- --help <"$INSTALL" 2>&1)"; CODE=$?; set -e
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "the one line installer"
+assert_contains "$OUT" "gh attestation verify -R askysh/benchbar"
+assert_contains "$OUT" "curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash"
+
+# ---- a download that is cut short runs nothing: everything is in main, called on the last line
+reset_calls
+snap_before="$(snapshot "$HOME")"
+last="$(grep -n '^main "\$@"$' "$INSTALL" | cut -d: -f1)"
+assert_eq "$(wc -l <"$INSTALL" | tr -d ' ')" "$last" "(main is called on the last line)"
+set +e; OUT="$(head -n "$((last - 1))" "$INSTALL" | bash -s -- --yes 2>&1)"; CODE=$?; set -e
+assert_eq "0" "$CODE" "$OUT"
+assert_not_contains "$OUT" "BenchBar installer"
+set +e; OUT="$(head -c 30000 "$INSTALL" | bash -s -- --yes 2>&1)"; CODE=$?; set -e
+assert_not_contains "$OUT" "BenchBar installer"
+assert_calls_not_contain '^(git|curl|ditto|gh|codesign|spctl) '
+assert_eq "$snap_before" "$(snapshot "$HOME")" "(a cut download writes nothing)"
+
+# ---- --uninstall --yes removes BENCHBAR_HOME only when it holds benchbar and .git
+mkdir -p "$TMP_DIR/not-ours/docs"; printf 'mine\n' >"$TMP_DIR/not-ours/docs/notes"
+BENCHBAR_HOME="$TMP_DIR/not-ours" run_install --uninstall --yes
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "${TMP_DIR}/not-ours does not hold benchbar and .git, so it is not a BenchBar checkout; kept it"
+assert_file "$TMP_DIR/not-ours/docs/notes"
+mkdir -p "$TMP_DIR/half/.git"
+BENCHBAR_HOME="$TMP_DIR/half" run_install --uninstall --yes
+assert_contains "$OUT" "does not hold benchbar and .git"
+assert_file "$TMP_DIR/half/.git"
+# those uninstalls took the app and the PATH block: put them back for what follows
+run_install --yes --app-only
+assert_eq "0.9.0" "$(installed_app_version)" "$OUT"
+
 # ---- --no-app and --app-only
 reset_calls
 run_install --yes --no-app
 assert_eq "0" "$CODE" "$OUT"
 assert_not_contains "$OUT" "==> BenchBar app"
-assert_eq "0.3.0" "$(installed_app_version)"
+assert_eq "0.9.0" "$(installed_app_version)"
+make_release 0.5.0
 run_install --yes --app-only
 assert_eq "0" "$CODE" "$OUT"
 assert_not_contains "$OUT" "==> Command line tool"

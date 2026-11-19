@@ -197,7 +197,7 @@ says about every `.exe` and `.dll` (`signing-ARCH.json`), and `README.txt`
 and the release notes quote it, so a download says plainly what is
 unsigned. When a signing route exists, add it back as its own job.
 
-The release job also attests both zips with `actions/attest-build-provenance`
+The release job also attests both zips and the checksums file with `actions/attest-build-provenance`
 (it needs the `id-token` and `attestations` write permissions), so
 `gh attestation verify benchbar-windows-X.Y.Z-amd64.zip -R askysh/benchbar`
 works. The notes and `README.txt` tell users to run the one liner as
@@ -283,7 +283,7 @@ before the release. Nobody gets it by updating.
    and not latest. Check the files as for a release, then publish. Publishing
    a pre-release does not move "latest".
 4. Do the QA from the install line in the release notes, on a clean user or
-   Mac: `curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/v0.9.0-rc.1/install.sh | bash -s -- --version v0.9.0-rc.1`,
+   Mac: `curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/askysh/benchbar/v0.9.0-rc.1/install.sh | bash -s -- --version v0.9.0-rc.1`,
    and on Windows the one liner of the notes with `-Version 0.9.0-rc.1`.
 5. Fix what it shows with ordinary pull requests, and cut `rc.2` if the
    changes need another pass. Then run `scripts/bump-version.sh 0.9.0` and
@@ -379,7 +379,8 @@ which its own workflow updates.
 The workflow runs on publish, not with the draft: a draft's download
 URLs answer 404, so a formula merged earlier would break `brew install`.
 It downloads the release's tarball and DMG, checks them against
-`SHA256SUMS`, renders the formula and cask from `packaging/homebrew`
+`SHA256SUMS`, runs `gh attestation verify` on them and on `SHA256SUMS`
+(a file without build provenance from `release.yml` stops the run), renders the formula and cask from `packaging/homebrew`
 with `scripts/homebrew-render.sh`, runs `brew style` and `brew audit
 --strict --online`, installs both, runs `brew test`, uninstalls, and
 opens a pull request on the tap. It does not merge it: you read the
@@ -554,8 +555,23 @@ gh release create v0.3.0 dist/* --title "BenchBar 0.3.0" --draft
    app bundles (resource forks and symlinks survive).
 3. **DMG** with `hdiutil create`, holding the app and an Applications
    shortcut for drag and drop.
-4. **SHA256SUMS** with `shasum -a 256`. `install.sh` checks the zip
-   against it before unpacking.
+4. **SHA256SUMS** with `shasum -a 256`, and the lines for `install.sh` and
+   `install.ps1` of the tag, which `benchbar self-update` checks the
+   installer against. `install.sh` checks the zip against it before
+   unpacking.
+
+### Build provenance (`attest` job in `release.yml`)
+
+After `build-signed`, the `attest` job downloads the workflow artifact
+that `release-draft` uploaded and attests the DMG, the app zip, the CLI
+tarball and `SHA256SUMS` with `actions/attest-build-provenance`. It has
+`id-token: write` and `attestations: write`, and no other job in the file
+does; it reads no secret and has no environment. An ad hoc run never
+attests (it is refused on a tag, and a draft needs a tag). `gh attestation
+verify FILE -R askysh/benchbar` checks a download; `install.sh` and
+`homebrew-tap.yml` do it before they trust a file. Publish after the
+`attest` job is green: a tag release whose files carry no attestation
+fails the tap run and makes `install.sh` refuse when `gh` is signed in.
 
 ### Developer ID path (`scripts/macos-release.sh`)
 

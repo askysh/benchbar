@@ -1,0 +1,10 @@
+#!/bin/bash
+# spctl mock: "--assess --type execute APP" exits 3 when $MOCK_STATE/spctl_fail exists
+# shellcheck source=tests/mocks/bin/_mocklib.sh
+. "${0%/*}/_mocklib.sh"
+mock_log "$@"
+if [[ -f "${MOCK_STATE:-/nonexistent}/spctl_fail" ]]; then
+  echo "${*: -1}: rejected" >&2
+  exit 3
+fi
+exit 0

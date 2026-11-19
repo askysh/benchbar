@@ -253,6 +253,11 @@ function Install-BenchBar {
   }
 
   function Get-JsonFromGitHub([string]$Url) {
+    # a test seam: a JSON file stands in for the release list (the downloads
+    # still go to the addresses it names)
+    if ($env:BENCHBAR_TEST_RELEASES -and $Url -like '*/releases?per_page=*') {
+      return (Get-Content -LiteralPath $env:BENCHBAR_TEST_RELEASES -Raw | ConvertFrom-Json)
+    }
     $headers = @{ 'User-Agent' = 'benchbar-install.ps1'; 'Accept' = 'application/vnd.github+json' }
     $proxyArgs = Get-WebProxyArgs $Url
     try {
@@ -293,6 +298,42 @@ function Install-BenchBar {
 
   function Get-FileSha256([string]$Path) {
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+  }
+
+  # Build provenance of the zip: `gh attestation verify` says the zip came out
+  # of this repository's release workflow. The checksum file comes from the
+  # same place as the zip, so it finds a damaged download, not a swapped one;
+  # this is what the "downloaded from the internet" mark waits for. Returns
+  # $true when it verified, else $false after saying why (gh missing or not
+  # signed in, or the check failed). It never stops the install.
+  function Test-ZipAttestation([string]$ZipPath) {
+    $leaf = Split-Path -Leaf $ZipPath
+    $gh = Get-Command gh -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $gh) {
+      Say-Info 'gh (the GitHub CLI) is not installed: only the SHA256 was checked, not the build provenance.'
+      Say-Info "  to check by hand: gh attestation verify $leaf -R askysh/benchbar"
+      return $false
+    }
+    # 5.1 turns native stderr into a terminating error under 'Stop'
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+      $null = & $gh.Source auth status 2>&1
+      if ($LASTEXITCODE -ne 0) {
+        Say-Info 'gh is not signed in (gh auth login): only the SHA256 was checked, not the build provenance.'
+        Say-Info "  to check by hand: gh attestation verify $leaf -R askysh/benchbar"
+        return $false
+      }
+      $said = (& $gh.Source attestation verify $ZipPath -R askysh/benchbar 2>&1 | ForEach-Object { "$_" } | Out-String).Trim()
+      if ($LASTEXITCODE -eq 0) {
+        Say-Ok 'Build provenance verified (gh attestation verify)'
+        return $true
+      }
+      Say-Warn "gh attestation verify did not accept ${leaf}: $(($said -split "`n")[0].Trim())"
+      return $false
+    } finally {
+      $ErrorActionPreference = $previous
+    }
   }
 
   # Checks every file listed in the folder's SHA256SUMS (written when the zip
@@ -897,6 +938,7 @@ function Install-BenchBar {
     $sumsUrl = ''
     $releaseVersion = 'unknown'
     $staging = Join-Path $work 'staging'
+    $attested = $false   # the zip's build provenance verified (Test-ZipAttestation)
     if ($fromFolder) {
       # run from an unpacked zip: install what is in this folder
       Say-Step "Installing the build unpacked in $fromFolder"
@@ -943,6 +985,7 @@ function Install-BenchBar {
       } else {
         Say-Warn "No checksums file next to the zip: only the zip's own SHA256SUMS is checked, which finds a damaged download, not a swapped one. Install zips only from someone you trust."
       }
+      $attested = Test-ZipAttestation $zipFull
       Expand-Archive -LiteralPath $zipFull -DestinationPath $staging -Force
       if (-not (Test-Path -LiteralPath (Join-Path $staging 'benchbar.exe'))) { Stop-Install "$zipName holds no benchbar.exe." }
       Say-Ok 'Unpacked'
@@ -989,6 +1032,7 @@ function Install-BenchBar {
         Say-Ok "$tag, $zipName"
       } else {
         $tag = ''
+        $skipped = @()
         foreach ($release in $candidates) {
           $candidateVersion = ([string]$release.tag_name).TrimStart('v')
           $candidateZip = "benchbar-windows-$candidateVersion-$arch.zip"
@@ -1005,6 +1049,10 @@ function Install-BenchBar {
             $sumsUrl = [string]$sumsAsset.browser_download_url
             break
           }
+          $missing = @()
+          if (-not $zipAsset) { $missing += $candidateZip }
+          if (-not $sumsAsset) { $missing += $candidateSums }
+          $skipped += "v${candidateVersion}: it has no $($missing -join ' and ') yet"
           if ($Version) { Say-Info "release v$candidateVersion has no $candidateZip yet" }
         }
         if (-not $tag) {
@@ -1013,6 +1061,9 @@ function Install-BenchBar {
           }
           Stop-Install "No published release has a Windows build for $arch yet." "see $repoWeb/releases and https://benchbar.akashmishra.com/windows/"
         }
+        # a newer release without its Windows files is passed over: say so, so
+        # an older version is never installed without the person knowing
+        foreach ($why in $skipped) { Say-Warn "Skipped the newer release $why. Installing $tag instead; for the newer one, run the installer again once its Windows files are attached." }
         Say-Ok "$tag, $zipName"
       }
     }
@@ -1046,6 +1097,7 @@ function Install-BenchBar {
     $actual = Get-FileSha256 $zipPath
     if ($actual -ne $expected) { Stop-Install "SHA256 of $zipName does not match $sumsName (expected $expected, got $actual); refusing to install." 'run the installer again; if it repeats, report it at https://github.com/askysh/benchbar/issues' }
     Say-Ok "SHA256 matches ($($actual.Substring(0, 12))...)"
+    $attested = Test-ZipAttestation $zipPath
 
     Expand-Archive -LiteralPath $zipPath -DestinationPath $staging -Force
     if (-not (Test-Path -LiteralPath (Join-Path $staging 'benchbar.exe'))) { Stop-Install "$zipName holds no benchbar.exe." }
@@ -1109,12 +1161,19 @@ function Install-BenchBar {
     # A zip saved by a browser, or unpacked by Explorer, marks its files as
     # downloaded from the internet, and the copy keeps the mark. Windows then
     # asks "The publisher could not be verified" at every first start. The
-    # files were checked against SHA256SUMS above, so remove the mark.
-    try {
-      Get-ChildItem -LiteralPath $installDir -Recurse -File | Unblock-File
-      Say-Ok 'removed the "downloaded from the internet" mark from the installed files'
-    } catch {
-      Say-Warn "Could not remove the internet mark from the installed files: $($_.Exception.Message). Windows may ask you to confirm the first start of each program."
+    # SHA256SUMS above come from the same place as the files, so they are no
+    # reason to remove the mark: it goes only when the zip's build provenance
+    # verified (gh attestation verify). Otherwise it stays, and Windows asks
+    # once for each program.
+    if ($attested) {
+      try {
+        Get-ChildItem -LiteralPath $installDir -Recurse -File | Unblock-File
+        Say-Ok 'removed the "downloaded from the internet" mark from the installed files (the build provenance verified)'
+      } catch {
+        Say-Warn "Could not remove the internet mark from the installed files: $($_.Exception.Message). Windows may ask you to confirm the first start of each program."
+      }
+    } else {
+      Say-Info 'kept the "downloaded from the internet" mark: the build provenance was not verified. Windows may ask once to confirm the first start of a program; to check it first, run gh attestation verify on the zip (docs/install.md).'
     }
 
     # ---------------------------------------------------------- 5. PATH
