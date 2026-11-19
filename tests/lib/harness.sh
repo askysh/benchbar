@@ -61,6 +61,11 @@ export FL_LAUNCHD_PATH_SYSTEM=/usr/bin:/bin:/usr/sbin:/sbin
 export FL_OS_USER=tester
 export SHELL=/bin/zsh
 unset BENCH_DIR SITE_NAME FL_DRY_RUN FL_ASSUME_YES 2>/dev/null || true
+# the Mac app's marker and a process tree under it (the ps mock answers it): this CLI is a child
+# of a bash that is a child of BenchBar.app, so a run that says BENCHBAR_SUDO=gui or
+# BENCHBAR_NONINTERACTIVE=0 passes fl_person_env_ok like the app's own runs do.
+# tests/test-person-guard.sh changes the tree and the variable to see it refuse.
+export BENCHBAR_APP_PID=4200 FL_PERSON_SELF_PID=4201
 
 mkdir -p "$HOME/Library/LaunchAgents" "$MOCK_STATE/agents" "$FL_STATE_DIR" "$MOCK_BREW_PREFIX/etc/my.cnf.d" \
   "$MOCK_BREW_PREFIX/opt/python@3.11/bin" "$MOCK_PIPX_HOME/venvs/frappe-bench/bin" "$HOME/.local/bin"
@@ -71,6 +76,11 @@ mkdir -p "$HOME/Library/LaunchAgents" "$MOCK_STATE/agents" "$FL_STATE_DIR" "$MOC
 printf '%s' 52428800 >"$MOCK_STATE/df_avail_kb"
 printf 'python@3.11\nnode@22\nmariadb@10.11\nredis\n' >"$MOCK_BREW_LEAVES"
 printf "%s\\n" "$MOCK_BREW_INSTALLED" | tr " " "\\n" >"$MOCK_STATE/installed"
+mkdir -p "$MOCK_STATE/pstree"
+printf '1 /Applications/BenchBar.app/Contents/MacOS/BenchBar
+' >"$MOCK_STATE/pstree/4200"
+printf '4200 /bin/bash
+' >"$MOCK_STATE/pstree/4201"
 mkdir -p "$MOCK_BREW_PREFIX/opt/node@22/bin" "$MOCK_BREW_PREFIX/opt/mariadb@10.11/bin"
 cp "$ROOT/tests/mocks/python3.11" "$MOCK_BREW_PREFIX/opt/python@3.11/bin/python3.11"
 cp "$ROOT/tests/mocks/node" "$ROOT/tests/mocks/npm" "$ROOT/tests/mocks/yarn" "$MOCK_BREW_PREFIX/opt/node@22/bin/"
