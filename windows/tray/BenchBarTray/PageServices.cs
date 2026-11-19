@@ -26,6 +26,9 @@ internal sealed class PageServices
     /// <summary>Shows the typed confirmation dialog; the typed text when it matched and was confirmed, else null.</summary>
     public Func<TypedConfirmRequest, string?> ConfirmTyped { get; set; } = _ => null;
 
+    /// <summary>A themed yes or no question: title, message, the confirm button's label. The default says no.</summary>
+    public Func<string, string, string, bool> ConfirmYesNo { get; set; } = (_, _, _) => false;
+
     /// <summary>Asks for the Linux password (for a command that runs sudo without a plan sheet: build its environment with <see cref="CliSudo.Apply"/>).</summary>
     public Func<LinuxPasswordRequest, Task<Secret?>> AskLinuxPassword { get; set; } = _ => Task.FromResult<Secret?>(null);
 
@@ -75,6 +78,7 @@ internal sealed class PageServices
             RefreshNow = refresh,
             OpenTerminal = TerminalLauncher.Open,
             AskLinuxPassword = Ask,
+            ConfirmYesNo = (title, message, label) => ConfirmDialog.Ask(title, message, label, theme(), owner()),
             ConfirmTyped = request => TypedConfirmDialog.Ask(request, theme(), owner()),
             ReviewPlan = request => PlanReviewSheet.ReviewAsync(request, services!),
         };

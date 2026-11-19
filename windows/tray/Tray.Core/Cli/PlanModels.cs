@@ -93,6 +93,9 @@ public sealed record PlanReviewRequest(string Title, IReadOnlyList<string> PlanA
     /// <summary>Shown above the steps: what this will do, in a line.</summary>
     public string? Summary { get; init; }
 
+    /// <summary>Lines about the plan the CLI made (one per app of an add), shown under the summary of the review.</summary>
+    public Func<PlanDocument, IReadOnlyList<string>>? Describe { get; init; }
+
     /// <summary><c>baseArgs --dry-run --json</c> to plan, <c>baseArgs --apply TOKEN --yes --jsonl</c> to apply.</summary>
     public static PlanReviewRequest Tokened(string title, IReadOnlyList<string> baseArgs) => new(
         title, [.. baseArgs, "--dry-run", "--json"], plan => [.. baseArgs, "--apply", plan.Token ?? "", "--yes", "--jsonl"]);
