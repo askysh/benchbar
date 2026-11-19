@@ -235,4 +235,35 @@ last="$(cat "$hb")"
 sleep 2.5
 assert_eq "$last" "$(cat "$hb")" "(no beats after the runner exited)"
 
+# 12. SVC-14: the heartbeat loop keeps bench.log and the worker logs below a
+# size, in place (launchd and systemd append to the same inode, so a rename
+# would leave the live file empty for good). It keeps the tail and says so.
+rm -f "$flag"; : >"$hist"; reset_transitions
+LOGS="$BENCH/logs"
+rm -f "$LOGS"/bench.log "$LOGS"/worker.log "$LOGS"/worker.error.log
+python3 -c 'import sys
+for i in range(4000): print("2026-11-19 10:00:00 big line %05d %s" % (i, "x" * 40))' >"$LOGS/bench.log"
+cp "$LOGS/bench.log" "$LOGS/worker.log"
+printf 'small and under the limit\n' >"$LOGS/worker.error.log"
+big_bytes="$(wc -c <"$LOGS/bench.log" | tr -d ' ')"
+bench_ino="$(ino_mtime "$LOGS/bench.log" | cut -d' ' -f1)"
+BENCHBAR_LOG_MAX_KB=64 BENCHBAR_LOG_CHECK_EVERY=1 BENCHBAR_HEARTBEAT_EVERY=1 \
+  MOCK_HONCHO_SLEEP=30 MOCK_HONCHO_TERM_EXIT=143 "$runner" &
+rpid=$!
+for _ in $(seq 1 60); do grep -q 'truncated by size' "$LOGS/bench.log" 2>/dev/null && break; sleep 0.1; done
+grep -q 'truncated by size' "$LOGS/bench.log" || fail "bench.log over its limit must be truncated by the runner's heartbeat loop (was ${big_bytes} bytes)"
+[[ "$(wc -c <"$LOGS/bench.log" | tr -d ' ')" -lt 65536 ]] || fail "the truncated bench.log must be under the limit"
+grep -q 'big line 03999' "$LOGS/bench.log" || fail "the newest lines must stay"
+! grep -q 'big line 00000' "$LOGS/bench.log" || fail "the oldest lines must go"
+assert_eq "$bench_ino" "$(ino_mtime "$LOGS/bench.log" | cut -d' ' -f1)" "(truncated in place: the writers keep their file)"
+for _ in $(seq 1 30); do grep -q 'truncated by size' "$LOGS/worker.log" 2>/dev/null && break; sleep 0.1; done
+grep -q 'truncated by size' "$LOGS/worker.log" || fail "worker.log is bounded too"
+assert_eq "small and under the limit" "$(cat "$LOGS/worker.error.log")" "(a log under the limit is left alone)"
+# a writer that appends (honcho's output) lands after the kept tail
+printf 'after the cut\n' >>"$LOGS/bench.log"
+tail -n 1 "$LOGS/bench.log" | grep -q 'after the cut' || fail "appends after the truncation must land at the end"
+kill -TERM "$rpid"
+set +e; wait "$rpid"; set -e
+rm -f "$LOGS"/worker.log "$LOGS"/worker.error.log
+
 printf 'test-runner: ok\n'
