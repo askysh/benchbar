@@ -138,13 +138,57 @@ tap_if="$(grep -n -m 1 "if: github.event_name != 'release'" <<<"$TAP" | cut -d: 
 tap_env="$(grep -n -m 1 'environment: release' <<<"$TAP" | cut -d: -f1)"
 [[ -n "$tap_if" && -n "$tap_env" && "$tap_if" -lt "$tap_env" ]] || fail "the tap job must skip a pre-release (if:) before it asks for the environment"
 
-# ---- the release PR is merged, not squashed: auto-tag tags main's commit, refuses a
-# candidate on main, runs the one version check, and fast forwards next-release
+# ---- a release is a fast forward of main (docs/releasing.md): auto-tag tags main's
+# commit, refuses a candidate on main, runs the one version check, and pushes no
+# branch (main equals next-release after the fast forward, nothing to catch up)
 AUTO="$(grep -v '^[[:space:]]*#' "$WF/auto-tag.yml")"
 assert_contains "$AUTO" 'scripts/check-version.sh --folded "$cli"'
 assert_contains "$AUTO" 'scripts/check-version.sh --kind "$cli")" != final'
-assert_contains "$AUTO" 'git push origin "$GITHUB_SHA:refs/heads/next-release"'
+assert_not_contains "$AUTO" "refs/heads/next-release"
+assert_not_contains "$AUTO" "repos/\${GITHUB_REPOSITORY}/merges"
+if grep -Eq 'git merge( |$)' <<<"$AUTO"; then fail "auto-tag.yml merges"; fi
+assert_not_contains "$AUTO" "git push origin \"\$GITHUB_SHA"
 assert_not_contains "$AUTO" "--force"
 assert_not_contains "$AUTO" "push -f"
+# the only push is the tag
+assert_eq "1" "$(printf '%s\n' "$AUTO" | grep -c 'git push')"
+assert_contains "$AUTO" 'git push origin "refs/tags/v$VERSION"'
+# a tagged version with code in the push fails (it was a notice), a docs push stays one
+assert_contains "$AUTO" 'scripts/docs-only.sh "$BEFORE" "$GITHUB_SHA"'
+assert_contains "$AUTO" "release PR merged without a version bump?"
+assert_contains "$AUTO" "::error title=Release without a version bump"
+assert_contains "$AUTO" "main is ahead"
+bump_line="$(grep -n -m 1 'Release without a version bump' <<<"$AUTO" | cut -d: -f1)"
+assert_contains "$(printf '%s\n' "$AUTO" | sed -n "${bump_line},$((bump_line + 1))p")" "exit 1"
+
+# ---- scripts/docs-only.sh uses the rule of CI: the same pattern as ci-plan.sh, and it
+# tells docs from code in a real range
+ci_re="$(sed -n "s/^docs_paths='\(.*\)'\$/\1/p" "$ROOT/scripts/ci-plan.sh")"
+do_re="$(sed -n "s/^DOCS_RE='\(.*\)'\$/\1/p" "$ROOT/scripts/docs-only.sh")"
+[[ -n "$ci_re" && "$ci_re" == "$do_re" ]] || fail "docs-only.sh and ci-plan.sh disagree on what is docs: '$do_re' vs '$ci_re'"
+D="$TMP_DIR/docsrepo"
+(
+  PATH="/usr/bin:/bin:$PATH"   # a real git, not the mock of the harness
+  git init -q "$D"
+  cd "$D"
+  g() { git -c user.name=t -c user.email=t@example.com "$@"; }
+  mkdir -p docs site lib
+  echo a >lib/x.sh; echo a >docs/a.md; echo a >README.md; g add -A; g commit -q -m base
+  echo b >docs/a.md; echo b >site/index.html; echo b >CHANGES.md; g add -A; g commit -q -m docs
+  echo b >lib/x.sh; echo c >docs/a.md; g add -A; g commit -q -m code
+  DOC="$(git rev-parse HEAD~1)" BASE="$(git rev-parse HEAD~2)" CODE="$(git rev-parse HEAD)"
+  rc=0; out="$(bash "$ROOT/scripts/docs-only.sh" "$BASE" "$DOC")" || rc=$?
+  [[ "$rc" == 0 && -z "$out" ]] || { echo "docs range not accepted: rc=$rc $out" >&2; exit 1; }
+  rc=0; out="$(bash "$ROOT/scripts/docs-only.sh" "$BASE" "$CODE")" || rc=$?
+  [[ "$rc" == 1 && "$out" == "lib/x.sh" ]] || { echo "code range: rc=$rc out=$out" >&2; exit 1; }
+  rc=0; bash "$ROOT/scripts/docs-only.sh" --commit "$DOC" >/dev/null || rc=$?
+  [[ "$rc" == 0 ]] || { echo "--commit docs: rc=$rc" >&2; exit 1; }
+  rc=0; bash "$ROOT/scripts/docs-only.sh" --commit "$CODE" >/dev/null || rc=$?
+  [[ "$rc" == 1 ]] || { echo "--commit code: rc=$rc" >&2; exit 1; }
+  rc=0; bash "$ROOT/scripts/docs-only.sh" --commit "$BASE" >/dev/null || rc=$?
+  [[ "$rc" == 1 ]] || { echo "--commit root: rc=$rc" >&2; exit 1; }
+  rc=0; bash "$ROOT/scripts/docs-only.sh" --commit nosuch >/dev/null 2>&1 || rc=$?
+  [[ "$rc" == 2 ]] || { echo "--commit unknown: rc=$rc" >&2; exit 1; }
+) || fail "scripts/docs-only.sh"
 
 printf 'test-release-workflows: ok\n'

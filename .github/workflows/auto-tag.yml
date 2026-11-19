@@ -1,25 +1,26 @@
 # Tags a release when main moves to a new version, and starts its builds.
 #
-# Work lands on next-release; main moves only when a release is cut, by
-# merging next-release into it with a merge commit (docs/releasing.md): the
-# release adds no new squash of unreviewed work, and main's tip has the tree
-# of a next-release commit that CI already ran. On that push:
+# Work lands on next-release; main moves only when a release is cut, and then
+# by a fast forward to a next-release commit that CI already ran, pushed by
+# the maintainer (docs/releasing.md): no new squash, no merge commit, and
+# afterwards main and next-release are the same commit. On that push:
 #   1. the version is read from FL_VERSION in benchbar and must be a release
 #      (X.Y.Z; a release candidate is tagged by hand on next-release and never
 #      reaches main). scripts/check-version.sh checks that benchbar,
 #      macos/project.yml, the bug report forms, CHANGELOG.md, README.md and
 #      ROADMAP.md say it and that no changelog fragment is left;
-#   2. when the tag vX.Y.Z does not exist yet, it is created on this commit;
-#      a push to main that keeps the version (a docs fix) tags nothing;
+#   2. when the tag vX.Y.Z does not exist yet, it is created on this commit.
+#      When it exists, a push that changes only docs (the rule of CI, see
+#      scripts/docs-only.sh) tags nothing and is a notice; a push that
+#      changes anything else fails, because it is a release without a new
+#      version (a release pull request merged without a version bump);
 #   3. release.yml and release-windows.yml are started for the tag. A tag
 #      pushed with GITHUB_TOKEN starts no workflow by itself, so they are
 #      dispatched here, with the tag as their ref;
-#   4. next-release is fast forwarded to main, so both are the same commit
-#      and the next release pull request shows only what is new. When
-#      next-release has moved on in the meantime (a pull request merged after
-#      the release pull request), main is merged into it instead; a conflict
-#      there (a fix made on main alone) is left for a person, with a warning.
-# A tag pushed by a person still starts both release workflows as before.
+#   4. a warning when main has commits that next-release has not (it should
+#      never; the next release would refuse until a person sorts it out).
+# This workflow never pushes a branch. A tag pushed by a person still starts
+# both release workflows as before.
 name: Auto tag
 
 on:
@@ -46,6 +47,8 @@ jobs:
 
       - name: Version
         id: v
+        env:
+          BEFORE: ${{ github.event.before }}
         run: |
           cli="$(sed -n 's/^FL_VERSION="\([^"]*\)"$/\1/p' benchbar | head -n 1)"
           [ -n "$cli" ] || { echo "::error::no FL_VERSION in benchbar"; exit 1; }
@@ -57,7 +60,26 @@ jobs:
           echo "version=$cli" >> "$GITHUB_OUTPUT"
           if git rev-parse -q --verify "refs/tags/v$cli" >/dev/null; then
             echo "new=false" >> "$GITHUB_OUTPUT"
-            echo "::notice title=No release::v$cli is tagged already; this push to main starts no release."
+            # v$cli exists, so this push is not a release: fine for a docs fix,
+            # a mistake when it brings code (the release pull request carried no new version)
+            case "$BEFORE" in
+              ""|0000000000000000000000000000000000000000)
+                echo "::notice title=No release::v$cli is tagged already; this run (no push range) starts no release."
+                exit 0 ;;
+            esac
+            if ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+              echo "::warning title=No release::v$cli is tagged already, and the previous main tip ${BEFORE:0:9} is not in the clone, so the push could not be checked for code changes."
+              exit 0
+            fi
+            rc=0
+            changed="$(scripts/docs-only.sh "$BEFORE" "$GITHUB_SHA")" || rc=$?
+            case "$rc" in
+              0) echo "::notice title=No release::v$cli is tagged already; this push to main changes only docs and starts no release." ;;
+              1) echo "::error title=Release without a version bump::v$cli is tagged already, but this push to main changes code (release PR merged without a version bump?). Nothing was tagged and no build started. Changed outside docs: $(printf '%s' "$changed" | head -n 5 | tr '\n' ' ')"
+                 exit 1 ;;
+              *) echo "::warning title=No release::v$cli is tagged already, and the push could not be compared with ${BEFORE:0:9}."
+                 exit 0 ;;
+            esac
             exit 0
           fi
           scripts/check-version.sh --folded "$cli"
@@ -82,24 +104,15 @@ jobs:
           gh workflow run release-windows.yml --ref "v$VERSION" -f version="$VERSION" -f draft_release=true -f wait_for_draft=true
           echo "::notice title=Release builds::started release.yml and release-windows.yml for v$VERSION; the draft release appears when they finish"
 
-      - name: Move next-release up to main
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Warn when main is ahead of next-release
         run: |
           if ! git ls-remote --exit-code --heads origin next-release >/dev/null; then
-            echo "::notice::no next-release branch; nothing to move"
+            echo "::notice::no next-release branch; nothing to compare"
             exit 0
           fi
           git fetch --quiet origin next-release
           if git merge-base --is-ancestor "$GITHUB_SHA" origin/next-release; then
             echo "::notice::next-release has main already"
-          elif git merge-base --is-ancestor origin/next-release "$GITHUB_SHA"; then
-            # no merge commit and no force: next-release becomes main's commit
-            git push origin "$GITHUB_SHA:refs/heads/next-release"
-            echo "::notice::next-release is fast forwarded to main ($GITHUB_SHA)"
-          elif gh api "repos/${GITHUB_REPOSITORY}/merges" -f base=next-release -f head="$GITHUB_SHA" \
-               -f commit_message="Merge main ($GITHUB_SHA) back into next-release" >/dev/null 2>err.txt; then
-            echo "::notice::next-release had moved on; main is merged into it"
           else
-            echo "::warning title=Merge back::main could not be merged into next-release ($(cat err.txt)). Merge it by hand: git switch next-release && git merge origin/main"
+            echo "::warning title=main is ahead::main ($GITHUB_SHA) has commits that next-release has not. The next release is a fast forward of main to next-release, so it is refused until this is sorted out (docs/releasing.md)."
           fi
