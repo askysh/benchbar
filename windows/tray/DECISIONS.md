@@ -386,8 +386,23 @@ One line per non obvious choice. The 0.8.0 spike that chose WPF over WinUI was d
 - **Dates for display use the current culture (`UiText.Date`), user text lives in `Strings.resx`.** The tray menu, crash toasts, tooltip and WSL messages are moved;
   `UiTextTests` fails when code asks for a missing name or an entry is unused. The pages of the BenchBar window still hold inline text.
 
-## Tray parity: rooms (0.9.0, #174)
+## Tray parity: Open as (0.9.0, #174)
 
+- **Open as is a person's decision, so the tray asks and never decides.** "Allow Open as..." shows the Mac's text and runs `site open-as on
+  SITE --yes --json` only after a yes; `--yes` skips the CLI's copy of the question, not the person's. The tray runs it with
+  `BENCHBAR_NONINTERACTIVE=0` and `BENCHBAR_SUDO=gui` (the CLI refuses an opt in that nothing at a terminal or an app confirmed), and no
+  poll, link, retry or repair turns it on. Turning it off needs no question, as in the Mac app.
+  The environment goes only to `site open-as on` and `open --as` (a click or Enter); the search for users is a read and never claims one.
+- **A refusal of `open` and `users` is stderr text, not JSON.** They are not in the CLI's JSON modes, so a refusal prints nothing on stdout
+  and `  [FAIL] message` on stderr; the tray shows the message without the tag. A test scans the code so `site open-as on` has one way in.
+- **The sign in link never reaches the tray.** Find User runs `open --site S --as USER --json` (no `--print-url`, a test pins it) and the
+  CLI opens the browser itself (`wslview`, else `explorer.exe`), so the session id is not in the tray's memory, logs, clipboard or screen.
+  The Mac app reads the link to cache and reuse sessions; the tray does not cache, so each Open makes a new session on the site.
+- **Open as follows `status --json`.** A site's `open_as_enabled`, `developer_mode` and `open_as` come from the poll that is already running
+  (an older CLI has none and shows no Open as at all). A site whose name Windows cannot find has no Open as: the CLI would refuse it (WSL's
+  browser reads Windows' hosts file), and the tray never edits that file.
+
+## Tray parity: rooms (0.9.0, #174)
 - **The Sharing tab is the host side only (P30).** The guest side of a room (the code exchange, the pinned certificate, the local forwarder)
   is Mac app code with no `benchbar` command behind it, and the tray drives the CLI through `benchbar.exe` JSON only, so P31 stays open: a
   `benchbar://share/join` link still shows the note. Writing that protocol again in C# would be a security review of its own.
