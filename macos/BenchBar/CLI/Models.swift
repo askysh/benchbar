@@ -235,6 +235,8 @@ nonisolated struct BenchStatus: Codable, Sendable, Equatable {
     /// Added in 0.4.
     var sites: [SiteInfo]?
     var scheduler: Bool?
+    /// An `app update` or `app add` that stopped part way (CLI 0.8); nil from an older CLI.
+    var pendingOperations: [PendingOperation]?
     // state.json only
     var updatedAt: Date?
     var source: String?
@@ -244,6 +246,7 @@ nonisolated struct BenchStatus: Codable, Sendable, Equatable {
         case schemaVersion = "schema_version"
         case cliVersion = "cli_version"
         case stopReason = "stop_reason"
+        case pendingOperations = "pending_operations"
         case startedAt = "started_at"
         case lastExitCode = "last_exit_code"
         case webURL = "web_url"
@@ -526,11 +529,14 @@ nonisolated struct AppUpdatePlan: Codable, Sendable, Equatable {
     var commitsTotal: Int
     var sites: [String]
     var steps: [Step]
+    /// The record of an earlier run of this update that stopped part way: then `steps`
+    /// are only the ones it did not finish, and the run takes them even when the app is at `to`.
+    var pending: PendingOperation?
 
-    var isUpToDate: Bool { from == to || steps.isEmpty }
+    var isUpToDate: Bool { steps.isEmpty || (from == to && pending == nil) }
 
     enum CodingKeys: String, CodingKey {
-        case app, branch, from, to, commits, sites, steps
+        case app, branch, from, to, commits, sites, steps, pending
         case schemaVersion = "schema_version"
         case commitsTotal = "commits_total"
     }

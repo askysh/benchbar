@@ -74,7 +74,7 @@ JSON. See [The menu bar app](app.md).
 | Log window | Follows the bench log, with search and a filter per process. | 0.5.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
 | Find Benches | Finds benches in a folder you choose and adds them. | 0.5.7 | macOS | [Find existing benches](app.md#find-existing-benches-in-a-folder) |
 | Ports | Port Settings and Setup: a preview, Automatic or Fixed mode, and Resolve & Start. | 0.5.8 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
-| Backups | Backs up a site, with or without files, and drops one after a backup. The app has no restore yet. | 0.5.8 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
+| Backups | Backs up a site, with or without files, and drops one after a backup. | 0.5.8 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
 | CPU and memory charts | The last ten minutes of a running bench. | 0.5.8 | macOS | [Energy](app.md#energy) |
 | URL scheme | `benchbar://` links for Raycast, Shortcuts and your own scripts. | 0.5.8 | macOS | [URL scheme](reference/url-scheme.md) |
 | Team Profiles | Imports and subscribes to profiles. | 0.6.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
@@ -85,6 +85,8 @@ JSON. See [The menu bar app](app.md).
 | Sharing tab | Sets up, starts and stops a room, shows the room code and the people in it. **Lab** `lan-rooms`. | 0.8.2 | macOS | [Share on your network](app.md#share-on-your-network) |
 | On your network | Finds the rooms of colleagues on your Wi-Fi and joins them. **Lab** `lan-rooms`. | 0.8.2 | macOS | [Join a room](app.md#join-a-room-on-your-network) |
 | Settings > Labs | Lists the experiments, with a switch, a warning and the version of each. | 0.8.2 | macOS | [The menu bar app](app.md#the-benchbar-window) |
+| Restore a backup | Restores one of a site's backups into the site or into a copy, from the plan the CLI shows, by its token. | 0.9.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
+| Unfinished changes | Lists an app update or add that stopped part way, with Resume and Drop the Record. | 0.9.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
 
 ## BenchBar for Windows
 
