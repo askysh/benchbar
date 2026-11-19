@@ -22,7 +22,8 @@
 #                           so on), and every test that names a function whose
 #                           definition the change touched
 #   lib/frappe-local/share/*  the LAN share tests
-#   lib/frappe-local/mcp.py test-mcp, test-docs (the MCP tool table of the docs is generated from it), test-cli, test-agent-contracts
+#   lib/frappe-local/mcp.py test-mcp, test-docs (the MCP tool table of the docs is generated from it), test-json-schema, test-cli, test-agent-contracts
+#   schema/, scripts/json-schema-check.py, the Swift CLI models, the tray's models   test-json-schema
 #   A test split into parts (test-X.sh, test-X-2.sh, ...) is picked whole.
 #   tests/test-X.sh         itself
 #   .claude/guard-*.sh, .claude/settings.json   test-guards
@@ -68,23 +69,23 @@ done
 # test of its own name needs no entry; every other file needs one
 # (tests/test-affected.sh checks that, with --lib-coverage). LIB_CORE is the
 # set of end to end tests for code every command runs.
-LIB_CORE="test-doctor test-install-json test-phases test-repair test-service test-ports test-adopt test-json test-run-lock test-status-cost test-tray-fixtures"
+LIB_CORE="test-doctor test-install-json test-phases test-repair test-service test-ports test-adopt test-json test-json-schema test-run-lock test-status-cost test-tray-fixtures"
 lib_family() {
   case "$1" in
-    checks|doctor) echo "test-doctor test-doctor-hardening test-doctor-linux test-repair test-repair-json test-json" ;;
+    checks|doctor) echo "test-doctor test-doctor-hardening test-doctor-linux test-repair test-repair-json test-json test-json-schema" ;;
     doctor-linux|preflight-linux) echo "test-doctor-linux test-doctor test-repair test-wsl-preflight test-install-linux test-prerequisites-linux" ;;
     repair) echo "test-repair test-repair-json test-doctor test-doctor-hardening test-install-json" ;;
     docs) echo "test-docs test-docs-command" ;;
     commands) echo "test-docs test-docs-command test-labs test-json" ;;
-    apps|app-plan) echo "test-apps test-app-cli test-app-batch test-app-recovery test-pull" ;;
-    bench|benchinfo|benchstate|discovery|freshness) echo "test-bench-flow test-status-cost test-discovery test-multi-bench test-adopt test-json test-freshness test-ports test-port-management test-install-json" ;;
-    sites|site-backups|site-restore|pull) echo "test-sites test-site-backups test-site-restore test-pull test-install-json" ;;
-    ports|port-management) echo "test-ports test-port-management test-multi-bench test-adopt" ;;
+    apps|app-plan) echo "test-apps test-app-cli test-app-batch test-app-recovery test-pull test-json-schema" ;;
+    bench|benchinfo|benchstate|discovery|freshness) echo "test-bench-flow test-status-cost test-discovery test-multi-bench test-adopt test-json test-json-schema test-freshness test-ports test-port-management test-install-json" ;;
+    sites|site-backups|site-restore|pull) echo "test-sites test-site-backups test-site-restore test-pull test-install-json test-json-schema" ;;
+    ports|port-management) echo "test-ports test-port-management test-multi-bench test-adopt test-json-schema" ;;
     service|launchd|systemd|templates|shellrc|mariadb|wkhtmltopdf|platform|platform-linux) echo "test-platform test-platform-linux test-systemd test-service test-templates test-shellrc test-wsl-preflight test-install-linux test-install-json test-phases test-sudo-env test-windows-commands test-hygiene test-homebrew" ;;
     sudo|sudo-env) echo "test-sudo-env test-platform-linux test-install-json test-hygiene test-port-management" ;;
     ui|state|run|lock|process|install-kind|toml) echo "$LIB_CORE test-ui test-redact test-input-hygiene test-state-migrate test-process test-runner" ;;
-    profiles|teamlock|version-policy) echo "test-profiles test-profile-v16 test-version-policy test-doctor-linux test-self-update" ;;
-    labs) echo "test-labs test-labs-share test-docs" ;;
+    profiles|teamlock|version-policy) echo "test-profiles test-profile-v16 test-version-policy test-doctor-linux test-self-update test-json-schema" ;;
+    labs) echo "test-labs test-labs-share test-docs test-json-schema" ;;
     open-as) echo "test-open-as" ;;
     consoles) echo "test-cli" ;;
     report) echo "test-report test-redact" ;;
@@ -174,14 +175,15 @@ while IFS= read -r f; do
       fam="$(lib_family "$t" || true)"
       [[ -n "$fam" ]] || fam="$LIB_CORE"
       pick_family "$fam" ;;
-    lib/frappe-local/mcp.py) lib=1; pick_family "test-mcp test-docs" ;;
+    lib/frappe-local/mcp.py) lib=1; pick_family "test-mcp test-docs test-json-schema" ;;
     .claude/guard-*.sh | .claude/settings.json) pick test-guards; shell=1 ;;
     install.sh) pick test-install-sh; shell=1 ;;
     packaging/*) pick test-packaging; pick test-homebrew ;;
     scripts/macos-release.sh) pick test-release-workflows; shell=1 ;;
     .github/workflows/release.yml | .github/workflows/release-windows.yml | .github/workflows/homebrew-tap.yml | .github/workflows/auto-tag.yml | .github/actions/*) pick_family "test-release-workflows test-version-sources" ;;
-    macos/BenchBarTests/Fixtures/*) pick_family "test-json test-install-json test-lock" ;;
-    windows/tray/fixtures/* | tests/record-tray-fixtures.sh) pick test-tray-fixtures; shell=1 ;;
+    macos/BenchBarTests/Fixtures/*) pick_family "test-json test-install-json test-lock test-json-schema" ;;
+    windows/tray/fixtures/* | tests/record-tray-fixtures.sh) pick test-tray-fixtures; pick_family test-json-schema; shell=1 ;;
+    schema/* | scripts/json-schema-check.py | macos/BenchBar/CLI/* | windows/tray/Tray.Core/*.cs | windows/tray/Tray.Core/Cli/* | windows/tray/Tray.Core/Health/* | windows/tray/Tray.Core/Labs/* | windows/tray/Tray.Core/Logs/*) pick test-json-schema ;;
     scripts/*.sh)
       shell=1
       t="${f##*/}"; pick_family "$(script_tests "${t%.sh}")" ;;

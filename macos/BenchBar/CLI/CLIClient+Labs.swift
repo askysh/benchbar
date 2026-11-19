@@ -62,12 +62,25 @@ nonisolated struct LabsDocument: Codable, Sendable, Equatable {
     }
 }
 
-/// The closing line of a command that changes things.
+/// One entry of `changed[]` in the done fields: what the run really changed.
+nonisolated struct DoneChange: Codable, Sendable, Equatable {
+    var kind: String
+    var name: String
+    var detail: String?
+}
+
+/// One entry of `next_actions[]`: a command to run, and why.
+nonisolated struct DoneAction: Codable, Sendable, Equatable {
+    var command: String
+    var why: String?
+}
+
+/// The closing line of a command that changes things (the done fields of docs/json-schema.md).
 nonisolated struct DoneLine: Codable, Sendable, Equatable {
     var exit: Int?
-    var changed: [String]?
+    var changed: [DoneChange]?
     var warnings: [String]?
-    var nextActions: [String]?
+    var nextActions: [DoneAction]?
 
     enum CodingKeys: String, CodingKey {
         case exit, changed, warnings

@@ -32,6 +32,52 @@ Raycast extensions and the like can rely on it too.
 | `benchbar up\|down\|restart\|service\|site add\|site default --json` | JSON lines ending in one `done` (0.8), see [the done fields](#the-done-fields-08) |
 | `benchbar site drop NAME --json` | the plan (with `--dry-run`) or the result of dropping a site (0.5.8) |
 
+## The schema file
+
+[`schema/benchbar.schema.json`](https://github.com/askysh/benchbar/blob/main/schema/benchbar.schema.json)
+(JSON Schema 2020-12) is the source of truth. The tables below explain it;
+when they and the file disagree, the file is right and the tables are a bug.
+It has one definition under `$defs` per document or stream line that an app or
+the MCP server reads:
+
+| Definition | What it describes |
+|---|---|
+| `status`, `stateFile` | `status --json` and `logs/.benchbar/state.json` |
+| `list`, `listBench` | `list --json` |
+| `doctor`, `doctorCheck`, `doctorPrerequisites` | `doctor --json` and `doctor --prerequisites --json` |
+| `logs` | `logs --json` |
+| `appList`, `appFocus` | `app list --json` and `app focus --json` |
+| `siteList`, `siteBackups`, `siteBackup` | `site list`, `site backups` and `site backup` |
+| `profileList` | `profile list --json` |
+| `labsList` | `labs list --json` |
+| `portsCheck` | `ports check --json` |
+| `where`, `report` | `where --json` and `report --json` |
+| `planLine`, `stepLine`, `repairStepLine`, `progressLine`, `doneLine`, `streamLine` | the lines of a `--json` or `--jsonl` stream |
+| `doneFields` | the result envelope, see [the done fields](#the-done-fields-08) |
+| `document` | any other document: the envelope only, until it has a definition of its own |
+
+How to read it:
+
+- `required` lists the fields that every CLI version since the field arrived
+  prints, so a document recorded from an old CLI still fits. Everything else
+  is optional for a reader.
+- `x-since` says in which version a field arrived. `x-conditional` marks a
+  field printed only in some cases (a plan field of one command, the done
+  fields of a dry run). Every other field is printed by the CLI of the same
+  checkout, always, and `null` where it does not apply.
+- An `enum` lists the values this CLI prints. A reader still treats a value it
+  does not know as unknown, see below.
+
+`tests/test-json-schema.sh` keeps the file, the CLI and its readers together.
+It checks that every recorded fixture of the Mac app and the Windows tray fits
+its definition (`schema/fixtures.map`), that what the CLI prints under the
+mocks fits and prints every non conditional field, that the Swift models, the
+tray's C# models and the MCP server read only fields the schema has and need
+only fields it requires (`schema/models.map`, `CLI_READS` in
+`lib/frappe-local/mcp.py`), and that this page names every field of the schema.
+A pull request that adds a field to the CLI's JSON adds it to the schema in
+the same pull request, or the test fails.
+
 ## Rules for readers
 
 - Every document has `"schema_version": 1` and `"cli_version"` at the top.
@@ -1096,7 +1142,7 @@ Exit 0. An argument other than `--json` exits 1.
 
 ## `benchbar labs --json`
 
-`labs list --json` is one document, with no done fields:
+`labs list --json` is one document, with no done fields (`cli_version` is there since 0.9, as in `labs status` and `ports plan`):
 
 ```json
 {"schema_version":1,"labs":[{"name":"lan-rooms","title":"...","description":"...","warning":"...","since":"0.8.2","enabled":false,"commands":["share","lan-guard"],"platforms":["macos"],"available":false}]}
@@ -1433,7 +1479,7 @@ lines of all benches in one macOS password dialog, as `adopt` does for one
 Apply does not start services. Socket availability cannot be
 reserved against unrelated programs; start checks again before launching.
 
-`ports check --json --bench-dir PATH` returns `schema_version: 1`, `conflicts`
+`ports check --json --bench-dir PATH` returns `schema_version: 1`, `cli_version` (0.9; the labs and ports documents had none before), `conflicts`
 (strings), `mode`, and `already_running` (boolean, positively owned running
 processes). Clients may treat `up` as idempotent when `already_running` is true;
 restart still needs a conflict check. It checks configured reservations and all listening PIDs,

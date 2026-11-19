@@ -1,0 +1,58 @@
+# The models that read the CLI's JSON, and the definitions of schema/benchbar.schema.json they read.
+# tests/test-json-schema.sh checks, for each row, that every field the model decodes is in the
+# definition (the names, and the kind of a Swift String, Int, Bool or list of those), and that a
+# field the model cannot do without is required there. A model of a document that has no
+# definition yet is not in this file.
+#
+#   swift FILE STRUCT DEFINITION...   a Codable struct (Outer.Inner for a nested one)
+#   cs    FILE CLASS  DEFINITION...   a class whose properties have [JsonPropertyName]
+#   csread FILE DEFINITION...         a file that reads fields by name (JsonRead.Str(o, "key"), o["key"])
+#   mcp   FILE                        the CLI_READS table of the MCP server
+
+swift macos/BenchBar/CLI/Models.swift BenchPorts ports
+swift macos/BenchBar/CLI/Models.swift SiteInfo site
+swift macos/BenchBar/CLI/Models.swift BenchSummary listBench
+swift macos/BenchBar/CLI/Models.swift BenchList list
+swift macos/BenchBar/CLI/Models.swift BenchStatus status stateFile
+swift macos/BenchBar/CLI/Models.swift DoctorCheck doctorCheck
+swift macos/BenchBar/CLI/Models.swift DoctorSummary summary
+swift macos/BenchBar/CLI/Models.swift DoctorReport doctor
+swift macos/BenchBar/CLI/Models.swift AppInfo app
+swift macos/BenchBar/CLI/Models.swift AppList appList
+swift macos/BenchBar/CLI/Models.swift ProfileInfo profile
+swift macos/BenchBar/CLI/Models.swift AppBundle bundle
+swift macos/BenchBar/CLI/Models.swift ProfileList profileList
+swift macos/BenchBar/CLI/PendingOperation.swift PendingOperation pendingOperation
+swift macos/BenchBar/CLI/PendingOperation.swift PendingOperation.Step pendingStep
+swift macos/BenchBar/CLI/PortModels.swift PortCheck portsCheck
+swift macos/BenchBar/CLI/CLIClient+Labs.swift LabEntry lab
+swift macos/BenchBar/CLI/CLIClient+Labs.swift LabsDocument labsList
+swift macos/BenchBar/CLI/CLIClient+Labs.swift DoneLine doneFields
+swift macos/BenchBar/CLI/InstallEvents.swift InstallPlan planLine
+swift macos/BenchBar/CLI/InstallEvents.swift InstallStep stepLine
+swift macos/BenchBar/CLI/InstallEvents.swift InstallProgressLine progressLine
+swift macos/BenchBar/CLI/InstallEvents.swift InstallDone doneLine
+swift macos/BenchBar/CLI/PrerequisiteModels.swift Prerequisite prerequisite
+swift macos/BenchBar/CLI/PrerequisiteModels.swift PrerequisiteReport doctorPrerequisites
+swift macos/BenchBar/CLI/SiteModels.swift SiteBackup backup
+swift macos/BenchBar/CLI/SiteModels.swift SiteBackupList siteBackups
+swift macos/BenchBar/CLI/SiteModels.swift SiteBackupResult siteBackup
+
+cs windows/tray/Tray.Core/Model.cs StatusDto status
+cs windows/tray/Tray.Core/Model.cs PendingDto pendingOperation
+cs windows/tray/Tray.Core/Model.cs PendingStepDto pendingStep
+cs windows/tray/Tray.Core/Model.cs SiteDto site siteInStatus
+cs windows/tray/Tray.Core/Model.cs ListDto list
+cs windows/tray/Tray.Core/Model.cs ListBenchDto listBench
+cs windows/tray/Tray.Core/Model.cs DoctorDto doctor
+cs windows/tray/Tray.Core/Model.cs DoctorCheckDto doctorCheck
+cs windows/tray/Tray.Core/Model.cs DoctorSummaryDto summary
+cs windows/tray/Tray.Core/Model.cs LogsDto logs
+cs windows/tray/Tray.Core/Model.cs ReportDto report
+
+mcp lib/frappe-local/mcp.py
+
+csread windows/tray/Tray.Core/Cli/CliModels.cs planLine stepLine repairStepLine progressLine doneLine
+csread windows/tray/Tray.Core/Health/HealthModels.cs doctor
+csread windows/tray/Tray.Core/Labs/LabsModel.cs labsList
+csread windows/tray/Tray.Core/Logs/LogModels.cs logs
