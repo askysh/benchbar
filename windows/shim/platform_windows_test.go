@@ -59,6 +59,10 @@ func deleteTree(root registry.Key, path string) {
 
 func createTestKey(t *testing.T, path string) registry.Key {
 	t.Helper()
+	// only ever under a throwaway BenchBarShimTest key, whatever the caller passes
+	if !strings.HasPrefix(path, `Software\BenchBarShimTest-`) {
+		t.Fatalf("test key %q is not under a BenchBarShimTest key", path)
+	}
 	k, _, err := registry.CreateKey(registry.CURRENT_USER, path, registry.ALL_ACCESS)
 	if err != nil {
 		t.Skipf("cannot create a test key under HKCU: %v", err)
