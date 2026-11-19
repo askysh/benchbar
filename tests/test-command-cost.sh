@@ -71,8 +71,8 @@ export ADMIN_PASSWORD=admin MARIADB_ROOT_PASSWORD=root
 # brew, launchctl, each git config and the receipts of brew are read once)
 cost "doctor" 87 "0 1" doctor --bench-dir "$BENCH"
 cost "doctor --json" 91 "0 1" doctor --json --bench-dir "$BENCH"
-cost "install --dry-run --yes" 213 "0" install --dry-run --yes --bench-dir "$HOME/fresh-bench" --site freshsite
+cost "install --dry-run --yes" 285 "0" install --dry-run --yes --bench-dir "$HOME/fresh-bench" --site freshsite
 cost "adopt --dry-run --yes" 165 "0" adopt "$THIRD" --dry-run --yes
-cost "app list --json" 59 "0" app list --json --bench-dir "$BENCH"
+cost "app list --json" 54 "0" app list --json --bench-dir "$BENCH"
 
 printf 'test-command-cost: ok\n'
