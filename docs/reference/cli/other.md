@@ -474,9 +474,9 @@ These tables come from the code (`benchbar commands --json`); the sections above
 |---|---|---|---|---|---|
 | `benchbar mariadb-password [--yes]` | yes | no | no | no | none |
 | `benchbar list [--json]` | no | no | no | no | document |
-| `benchbar autostart [on\|off]` | no | no | no | yes | none |
-| `benchbar listen [local\|all] [--dry-run] [--yes]` | yes | no | no | yes | none |
-| `benchbar uninstall-service [--all] [--yes] [--dry-run]` | yes | no | no | yes | none |
+| `benchbar autostart [on\|off]` | no | no | no | yes | stream |
+| `benchbar listen [local\|all] [--dry-run] [--yes]` | yes | no | no | yes | stream |
+| `benchbar uninstall-service [--all] [--yes] [--dry-run]` | yes | no | no | yes | stream |
 | `benchbar console [--site S]` | yes | no | no | no | none |
 | `benchbar db [--site S]` | yes | no | no | no | none |
 | `benchbar open [--site S] [--as USER] [--path P] [--no-browser] [--print-url] [--json]` | no | no | no | no | document |

@@ -158,6 +158,15 @@ benchbar doctor --for-agent  # one JSON document
   `state_after` (the bench's `status --json` after the run). A second run
   that has nothing to do has an empty `changed`. The
   [JSON schema](../json-schema.md#the-done-fields-08) has every field.
+- Under `--for-agent` and `--jsonl` every command with a JSON mode ends
+  with the same envelope, on success, on a failure and on a refusal: the
+  last line of stdout has `exit` (the process exit code), `error` when
+  `exit` is not 0, and for a command that changes things the fields above.
+  A read prints its one document with `exit`; a read that fails, or a
+  command that does not exist, prints the envelope instead of silence.
+  There is no `ok` field: `exit` is 0 or it is not. The MCP tools return
+  the same fields in `structuredContent`. See [the result
+  envelope](../json-schema.md#the-result-envelope-09).
 - With `--json` stdout holds JSON and nothing else. A refusal is text on
   stderr.
 - With `BENCHBAR_NONINTERACTIVE=1` a command that lacks an input

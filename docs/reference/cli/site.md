@@ -300,7 +300,7 @@ These tables come from the code (`benchbar commands --json`); the sections above
 | `benchbar site add NAME [--bundle NAME\|--apps "a b"] [--dry-run\|--apply TOKEN] [--yes] [--json]` | yes | yes | no | yes | stream |
 | `benchbar site default NAME [--json]` | no | no | no | yes | stream |
 | `benchbar site open-as on\|off\|status [NAME] [--json]` | yes | no | no | yes | stream |
-| `benchbar site hosts` | yes | yes | no | yes | none |
+| `benchbar site hosts` | yes | yes | no | yes | stream |
 | `benchbar site backup NAME [--with-files] [--json]` | no | no | no | yes | document |
 | `benchbar site backups NAME [--json]` | no | no | no | no | document |
 | `benchbar site restore NAME --from STAMP\|PATH [--from-site S] [--new] [--no-migrate] [--before-migrate SCRIPT] [--with-files] --dry-run --json, then --apply TOKEN --yes` | no | yes | no | yes | document |

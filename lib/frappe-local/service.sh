@@ -768,6 +768,7 @@ fl_cmd_autostart() {
   fl_render_all
   act_write_plist || return 1
   [[ "$mode" == "on" ]] && fl_linger_ensure
+  fl_changed service "$FL_BENCH_NAME" "autostart ${mode}"
   fl_ok "autostart ${mode}"
 }
 
@@ -808,6 +809,7 @@ fl_cmd_listen() {
   fl_bench_is_running && running=1
   fl_render_all
   act_write_procfile || return 1
+  fl_changed service "$FL_BENCH_NAME" "listen ${mode}"
   fl_ok "listen ${mode}"
   if [[ "$running" == "1" && "${FL_DRY_RUN:-0}" != "1" ]]; then
     fl_warn "the running bench still listens as before; run: benchbar restart --bench-dir ${FL_BENCH_DIR}"
@@ -898,6 +900,7 @@ fl_cmd_uninstall_service() {
   [[ "${FL_DRY_RUN:-0}" == "1" || ! -f "$(fl_procfile_path)" ]] || { rm -f "$(fl_procfile_path)"; fl_ok "removed Procfile.lean (backup: ${FL_LAST_BACKUP})"; }
   fl_uninstall_listen_files || return 1
   fl_uninstall_helper_block "$rc"
+  fl_changed service "$FL_BENCH_NAME" "uninstalled"
   fl_ok "service uninstalled; start the bench by hand with: cd ${FL_BENCH_DIR} && bench start"
 }
 

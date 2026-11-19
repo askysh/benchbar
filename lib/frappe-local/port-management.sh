@@ -172,7 +172,7 @@ fl_pm_build() {
   agent_files=()
   while IFS= read -r d; do agent_files+=("$d"); done < <(fl_agent_files)
   PM_TOKEN="$( { printf '%s\n%s' "$rows" "$evidence"; cksum "$FL_STATE_FILE" ${agent_files[@]+"${agent_files[@]}"} 2>/dev/null || true; } | shasum -a 256 | awk '{print $1}')"
-  PM_JSON="{\"schema_version\":1,\"token\":\"$PM_TOKEN\",\"entries\":[$rows],\"can_apply\":$(fl_json_bool "$PM_CAN_APPLY") }"
+  PM_JSON="{\"schema_version\":1,\"cli_version\":\"${FL_VERSION}\",\"token\":\"$PM_TOKEN\",\"entries\":[$rows],\"can_apply\":$(fl_json_bool "$PM_CAN_APPLY") }"
 }
 fl_pm_check() {
   PM_TAKEN=""; PM_SOFT=""; fl_pm_known_reservations
@@ -225,13 +225,13 @@ fl_cmd_ports() {
     check)
       fl_bench_load "${OPT_BENCH_DIR:-}"; fl_require_bench; fl_pm_check
       running=0; fl_pm_running && running=1
-      printf '{"schema_version":1,"conflicts":%s,"mode":%s,"already_running":%s}\n' "$(fl_pm_strings_json "$PM_CONFLICTS")" "$(fl_json_str "$(fl_pm_mode "$FL_BENCH_DIR")")" "$(fl_json_bool "$running")" ;;
+      printf '{"schema_version":1,"cli_version":"%s","conflicts":%s,"mode":%s,"already_running":%s}\n' "$FL_VERSION" "$(fl_pm_strings_json "$PM_CONFLICTS")" "$(fl_json_str "$(fl_pm_mode "$FL_BENCH_DIR")")" "$(fl_json_bool "$running")" ;;
     mode)
       mode="${1:-}"; [[ "$mode" == automatic || "$mode" == fixed ]] || { fl_fail 'Mode must be automatic or fixed.'; return 1; }
       fl_bench_load "${OPT_BENCH_DIR:-}"; fl_require_bench
       fl_bstate_set PORT_MODE "$mode"; fl_bstate_set PORT_RESERVATION "$(fl_pm_current)"
       if [[ "${FL_DRY_RUN:-0}" == 1 ]]; then fl_info "dry-run: would set port mode to $mode. Nothing was changed."
-      else fl_ok "Port mode: $mode. Existing ports are unchanged."; fi ;;
+      else fl_changed ports "$FL_BENCH_DIR" "port mode ${mode}"; fl_ok "Port mode: $mode. Existing ports are unchanged."; fi ;;
     apply)
       token="${1:-}"; [[ "$#" == 0 ]] || shift
       [[ "${FL_ASSUME_YES:-0}" == 1 ]] || { fl_fail 'Review ports plan, then pass its token with --yes.'; return 1; }

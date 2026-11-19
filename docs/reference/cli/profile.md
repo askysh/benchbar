@@ -197,7 +197,7 @@ These tables come from the code (`benchbar commands --json`); the sections above
 | `benchbar profile list\|show\|create\|export\|import\|subscribe\|update\|remove\|check ...` | no | no | no | no | none |
 | `benchbar profile list [--json]` | no | no | no | no | document |
 | `benchbar profile show NAME` | no | no | no | no | none |
-| `benchbar profile create NAME --from-bench PATH [--dir DIR]` | no | no | no | yes | none |
+| `benchbar profile create NAME --from-bench PATH [--dir DIR]` | no | no | no | yes | stream |
 | `benchbar profile export NAME [--out FILE] [--plan] [--json]` | no | no | yes | yes | document |
 | `benchbar profile import FILE\|URL [--as NAME] [--plan] [--json]` | yes | no | yes | yes | document |
 | `benchbar profile subscribe GIT_URL [--plan\|--yes] [--json]` | yes | no | yes | yes | document |

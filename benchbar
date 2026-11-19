@@ -537,6 +537,13 @@ FL_JSON_MODE=""
 fl_json_mode_resolve() {
   local mut kind
   FL_JSON_KEY="$(fl_cmd_key_for "$COMMAND" "${ARGS[0]:-}")" || FL_JSON_KEY=""
+  # a command or subcommand that does not exist ends the stream like any refusal: one done line
+  if [[ -z "$FL_JSON_KEY" && ( "$OPT_FOR_AGENT" == "1" || "$OPT_JSONL" == "1" ) ]]; then
+    export BENCHBAR_NONINTERACTIVE=1 NO_COLOR=1
+    FL_PLAIN=1; fl_ui_init
+    OPT_JSON=1; OPT_JSONL=1; FL_JSON_MODE=stream
+    return 0
+  fi
   if [[ "$OPT_FOR_AGENT" == "1" ]]; then
     export BENCHBAR_NONINTERACTIVE=1 NO_COLOR=1
     FL_PLAIN=1; fl_ui_init
@@ -560,17 +567,29 @@ fl_json_mode_resolve() {
     "site open-as") if [[ "${ARGS[1]:-}" == "status" ]]; then FL_JSON_MODE=doc; else FL_JSON_MODE=stream; fi ;;
     "share setup"|"share start"|"share stop"|"share extend"|"share lock"|"share unlock"|"share remove"|"share revoke"|"share assign"|"share teardown") FL_JSON_MODE=stream ;;
     "share users"|"share preflight"|"share status"|"share code"|"share invite"|"share people"|"share devices"|"share log"|"share open-as") FL_JSON_MODE=doc ;;
-    "lan-guard install"|"lan-guard remove"|"lan-guard allow-node") FL_JSON_MODE=stream ;;
+    "lan-guard"|"lan-guard install"|"lan-guard remove"|"lan-guard allow-node") FL_JSON_MODE=stream ;;
     "lan-guard status") FL_JSON_MODE=doc ;;
     "labs on"|"labs off") FL_JSON_MODE=stream ;;
+    # the commands that changed things and had no JSON before: a stream, as site default
+    autostart|listen|uninstall-service|"app install"|"lock write"|"lock apply"|"profile create"|"ports setup"|"ports mode"|"site hosts") FL_JSON_MODE=stream ;;
+    # these print a document of their own under --json, and keep it
+    register|"app unfocus"|"profile export"|"profile import"|"profile subscribe"|"profile update"|"profile remove"|self-update) FL_JSON_MODE=doc ;;
   esac
 }
 # status, list and the other readers are polled: they skip the table unless
 # --for-agent asks for it
 case "$COMMAND" in
-  install|adopt|repair|pull|up|down|restart|service|site|app|ports|share|lan-guard|labs) fl_json_mode_resolve ;;
-  *) if [[ "$OPT_FOR_AGENT" == "1" ]]; then fl_json_mode_resolve; fi ;;
+  install|adopt|repair|pull|up|down|restart|service|site|app|ports|share|lan-guard|labs|register|autostart|listen|uninstall-service|profile|lock|self-update) fl_json_mode_resolve ;;
+  *) if [[ "$OPT_FOR_AGENT" == "1" || "$OPT_JSONL" == "1" ]]; then fl_json_mode_resolve; fi ;;
 esac
+# --jsonl and --for-agent: a command that only reads ends with one document that has `exit`
+# (a read that has the share family's fields already is only kept back to catch a failure)
+FL_READ_KIND=""; FL_READ_MUT=""
+if [[ "$OPT_JSON" == "1" && ( "$OPT_JSONL" == "1" || "$OPT_FOR_AGENT" == "1" ) && ( -z "$FL_JSON_MODE" || ( "$FL_JSON_MODE" == "doc" && "$OPT_JSONL" != "1" ) ) && -n "$FL_JSON_KEY" ]]; then
+  fl_cmd_attr_v FL_READ_KIND "$FL_JSON_KEY" json
+  fl_cmd_attr_v FL_READ_MUT "$FL_JSON_KEY" mutating
+  if [[ "$FL_READ_KIND" == "document" && "$FL_READ_MUT" == "no" ]]; then fl_read_env_begin; fi
+fi
 
 # fl_app_focus_is_listing ARGS...: "app focus" with no app name lists the
 # focus apps (a read), with any of --list, --json, --fetch
@@ -609,6 +628,8 @@ fl_cleanup() {
   fl_jsonl_on_exit "$code"
   # repair --json: its done line, when the run ended before it could send one
   fl_repair_done "$code"
+  # --jsonl and --for-agent on a command that reads: its document, with exit
+  fl_read_env_finish "$code"
   [[ -z "${FL_CHANGED_FILE:-}" || "${FL_CHANGED_OWNER:-}" != "$$" ]] || rm -f "$FL_CHANGED_FILE"
 }
 trap fl_cleanup EXIT
@@ -1329,7 +1350,8 @@ fl_repair_done() {
   local code="$1" f err="" msg
   [[ "${FL_JSON_EVENTS:-0}" == "1" && "$FL_REPAIR_DONE_SENT" != "1" ]] || return 0
   # a dry run that worked is the plan alone; one that was refused ends with its done line
-  [[ "${FL_DRY_RUN:-0}" != "1" || "$code" != "0" ]] || return 0
+  # (--jsonl and --for-agent end every command with the envelope: the dry run gets its done line too)
+  [[ "${FL_DRY_RUN:-0}" != "1" || "$code" != "0" || "$OPT_JSONL" == "1" ]] || return 0
   FL_REPAIR_DONE_SENT=1
   fl_done_fields_v f "$code"
   if [[ "$code" != "0" ]]; then
@@ -1337,7 +1359,7 @@ fl_repair_done() {
     err=",\"error\":$(fl_json_str "$msg")"
     { printf '[FAIL] %s\n' "${msg:-benchbar repair failed; see the log}" >&4; } 2>/dev/null || true
   fi
-  fl_event "{\"event\":\"done\",\"exit_code\":${code},${f},\"log\":$(fl_json_str "${FL_LOG_FILE:-}")${err}}"
+  fl_event "{\"event\":\"done\",\"schema_version\":${FL_SCHEMA_VERSION:-1},\"cli_version\":\"${FL_VERSION:-0}\",\"exit_code\":${code},${f},\"log\":$(fl_json_str "${FL_LOG_FILE:-}")${err}}"
 }
 
 # benchbar where [--json]: how this CLI was installed and where its things

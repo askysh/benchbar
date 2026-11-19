@@ -87,8 +87,12 @@ reads. It also sets `BENCHBAR_NONINTERACTIVE=1`, `NO_COLOR=1` and
 Every command that changes things ends with one `done` line (or adds
 the same fields to its one document): `exit`, `changed[]`, `warnings[]`,
 `next_actions[]` and `state_after`. Read `exit` and `next_actions` first.
-With `--json` stdout holds JSON and nothing else. A refusal goes to
-stderr.
+Under `--for-agent` and `--jsonl` the last line of stdout of every
+command with a JSON mode has `exit` (the process exit code) and, when it
+is not 0, `error`: a read prints its document with `exit`, and a read that
+fails, a refusal or an unknown command print that envelope instead of
+nothing. There is no `ok` field. With plain `--json` stdout holds JSON
+and nothing else, and a refusal of a read goes to stderr.
 
 With `BENCHBAR_NONINTERACTIVE=1` a command that needs an input it cannot
 ask for stops before it takes the lock, and names all missing inputs in
