@@ -140,6 +140,8 @@ else
   "$tool" --ed-key-file "$SPARKLE_ED_KEY_PATH" --download-url-prefix "$PREFIX" --link "https://github.com/askysh/benchbar" \
     ${notes_args[@]+"${notes_args[@]}"} "$feed"
   cp "${feed}/appcast.xml" "$OUT"
+  # the copy of the notarized zip is not needed any more
+  rm -rf "$feed"
   bash "$0" --check --require-signature "$OUT"
 fi
 printf '[OK] %s\n' "$OUT"

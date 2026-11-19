@@ -14,7 +14,7 @@ struct UpdaterTests {
         #expect(Updater.isAvailable)
         #expect(info["SUEnableAutomaticChecks"] as? Bool == true)
         #expect((info["SUFeedURL"] as? String)?.hasPrefix("https://") == true, "the feed is https")
-        #expect(info["SUPublicEDKey"] as? String != nil)
+        #expect(!((info["SUPublicEDKey"] as? String) ?? "").isEmpty)
         #else
         #expect(!Updater.isAvailable)
         #expect(info["SUFeedURL"] == nil, "no feed without Sparkle")
