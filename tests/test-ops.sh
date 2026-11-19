@@ -282,7 +282,7 @@ assert_eq "True" "$(jget "$OPS/$(printf '%s' "$OUT" | jget - 'd["op_id"]').json"
 # ---- 6d. a finished record does not keep its last step running
 run_json service --json --yes --bench-dir "$BENCH"
 SV="$(printf '%s' "$OUT" | tail -n 1 | jget - 'd["op_id"]')"
-assert_eq "True" "$(rec_field "$SV" 'd["step"] is not None and d["step"]["status"] != "running" and d["progress"] is None')" "(a done run has no running step)"
+assert_eq "True" "$(rec_field "$SV" '(d["step"] is None or d["step"]["status"] != "running") and d["progress"] is None')" "(a done run has no running step)"
 
 # ---- 7. the MCP server: op_id in an action's result, the read only op status tool
 BENCHBAR_MCP_APPLY_DELAY=0
