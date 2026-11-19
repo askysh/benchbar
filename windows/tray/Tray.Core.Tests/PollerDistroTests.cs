@@ -50,7 +50,7 @@ public class PollerDistroTests
             foreach (var seconds in new double[] { 30, 60, 120, 300, 300 })
             {
                 time.Advance(S(seconds - 0.5));
-                await probe.NoneForAsync(100);
+                await probe.QuietAsync();
                 Assert.Equal(calls, distro.Calls);
                 time.Advance(S(0.5));
                 await probe.NextAsync();
@@ -82,7 +82,7 @@ public class PollerDistroTests
             poller.Kick();
             await probe.NextAsync();
             time.Advance(S(29.5));
-            await probe.NoneForAsync(100);
+            await probe.QuietAsync();
             time.Advance(S(0.5)); // back at 30 s, not 120
             await probe.NextAsync();
             Assert.Equal(0, source.Lists);
@@ -108,6 +108,69 @@ public class PollerDistroTests
             Assert.False(poller.Last.DistroStopped);
             Assert.Equal(BenchState.Running, Assert.Single(poller.Last.Benches).State);
             Assert.Equal(1, source.Lists);
+        }
+    }
+
+    [Fact]
+    public async Task WithTheDistroUpAndEveryBenchStoppedATimerPollAsksTheProbeAloneUntilAFullPollIsDue()
+    {
+        var (poller, source, time, probe, distro) = Make(running: true);
+        using (poller)
+        using (probe)
+        {
+            poller.Start();
+            await probe.NextAsync();
+            Assert.Equal(1, source.Lists);
+
+            foreach (var seconds in new double[] { 30, 60, 120, 300 })
+            {
+                time.Advance(S(seconds));
+                await probe.NextAsync();
+            }
+            Assert.Equal(1, source.Lists); // five timer polls so far: the distro was asked each time, the CLI never again
+            Assert.Equal(1, source.Statuses);
+            Assert.Equal(5, distro.Calls);
+            Assert.Equal(BenchState.Stopped, Assert.Single(poller.Last.Benches).State);
+
+            time.Advance(BenchPoller.IdleFullPollEvery); // a bench started from a terminal must show up in the end
+            await probe.NextAsync();
+            Assert.Equal(2, source.Lists);
+        }
+    }
+
+    [Fact]
+    public async Task AKickOrARunningBenchOrAnOpenFlyoutIsAFullPollEvenWhenEveryBenchWasStopped()
+    {
+        var (poller, source, time, probe, _) = Make(running: true);
+        using (poller)
+        using (probe)
+        {
+            poller.Start();
+            await probe.NextAsync();
+            time.Advance(S(30));
+            await probe.NextAsync();
+            Assert.Equal(1, source.Lists); // skipped
+
+            poller.Kick(); // unlock, an action, the flyout: the CLI is asked
+            await probe.NextAsync();
+            Assert.Equal(2, source.Lists);
+
+            time.Advance(S(60));
+            await probe.NextAsync();
+            Assert.Equal(2, source.Lists); // skipped again
+
+            poller.SetFlyoutOpen(true); // someone is looking: every 5 s is a full poll
+            time.Advance(S(5));
+            await probe.NextAsync();
+            Assert.Equal(3, source.Lists);
+            poller.SetFlyoutOpen(false);
+
+            source.States["a"] = BenchState.Running; // it started outside the tray; the next full poll sees it and the skip ends
+            poller.Kick();
+            await probe.NextAsync();
+            time.Advance(S(30));
+            await probe.NextAsync();
+            Assert.Equal(5, source.Lists);
         }
     }
 
@@ -163,7 +226,7 @@ public class PollerDistroTests
             foreach (var seconds in new double[] { 30, 60, 120 })
             {
                 time.Advance(S(seconds - 0.5));
-                await probe.NoneForAsync(100);
+                await probe.QuietAsync();
                 time.Advance(S(0.5));
                 await probe.NextAsync();
             }
@@ -171,7 +234,7 @@ public class PollerDistroTests
             poller.Kick();
             await probe.NextAsync();
             time.Advance(S(29.5)); // reset: 30 s again, not 300
-            await probe.NoneForAsync(100);
+            await probe.QuietAsync();
             time.Advance(S(0.5));
             await probe.NextAsync();
             Assert.Equal(0, source.Lists);
@@ -211,7 +274,7 @@ public class PollerDistroTests
             }
 
             time.Advance(S(29.5)); // the boost is over: the idle 30 s again
-            await probe.NoneForAsync(100);
+            await probe.QuietAsync();
             time.Advance(S(0.5));
             await probe.NextAsync();
         }
@@ -243,7 +306,7 @@ public class PollerDistroTests
             Assert.False(poller.Last.DistroStopped);
 
             time.Advance(S(29.5)); // up: the fast window ended with it
-            await probe.NoneForAsync(100);
+            await probe.QuietAsync();
             time.Advance(S(0.5));
             await probe.NextAsync();
         }

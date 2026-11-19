@@ -90,15 +90,7 @@ public class TimeoutTests
         await Wait(() => runner.Calls.Count > calls);
     }
 
-    private static async Task Wait(Func<bool> condition)
-    {
-        var deadline = DateTime.UtcNow.AddSeconds(10);
-        while (!condition())
-        {
-            Assert.True(DateTime.UtcNow < deadline, "condition not met in time");
-            await Task.Delay(10, TestContext.Current.CancellationToken);
-        }
-    }
+    private static Task Wait(Func<bool> condition) => Eventually.Async(condition);
 }
 
 public class ConfigReviewTests : IDisposable
@@ -236,8 +228,7 @@ public class ControllerReviewTests
         using var controller = new TrayController(source, new FakeFrameClock(), host, new FakeTimeProvider(),
             new TrayOptions { ListenToSystemEvents = false });
         controller.Start();
-        var deadline = DateTime.UtcNow.AddSeconds(10);
-        while (host.Changes.Count == 0 && DateTime.UtcNow < deadline) await Task.Delay(10, TestContext.Current.CancellationToken);
+        await Eventually.Async(() => host.Changes.Count > 0);
 
         Assert.Null(controller.Snapshot.Problem);
         Assert.Contains(controller.Sequencer.Plan, new RunnerPlan?[] { new RunnerPlan.Stumble(3, RunnerPose.Alert), new RunnerPlan.Still(RunnerPose.Alert) });

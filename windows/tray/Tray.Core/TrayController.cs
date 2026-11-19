@@ -139,7 +139,7 @@ public sealed class TrayController : IDisposable
     {
         if (_started) return;
         _started = true;
-        _host.SetTooltip(TooltipName + ": starting");
+        _host.SetTooltip(TooltipName + ": " + UiText.Get("TooltipStarting"));
         _sequencer.Play(RunnerPlan.ForState(BenchState.Unknown, TrayMetrics.ReduceMotion()));
         if (_listenToSystemEvents)
         {
@@ -404,14 +404,14 @@ public sealed class TrayController : IDisposable
 
     /// <summary>"BenchBar (Beta): 2 benches, none up".</summary>
     public static string Tooltip(int benchCount, string upText) =>
-        $"{TooltipName}: {benchCount} {(benchCount == 1 ? "bench" : "benches")}, {upText}";
+        UiText.Format(benchCount == 1 ? "TooltipOneBench" : "TooltipManyBenches", TooltipName, benchCount, upText);
 
     /// <summary>The tooltip for a snapshot, at most 127 characters (the shell's limit).</summary>
     public static string Tooltip(TraySnapshot snapshot, string upText)
     {
         var text = snapshot.Problem is { } problem ? $"{TooltipName}: {problem}"
-            : snapshot.DistroMissing ? $"{TooltipName}: {snapshot.Distro ?? "WSL distro"} is not installed"
-            : snapshot.DistroStopped ? $"{TooltipName}: {snapshot.Distro ?? "WSL distro"} is not running"
+            : snapshot.DistroMissing ? UiText.Format("TooltipDistroNotInstalled", TooltipName, snapshot.Distro ?? UiText.Get("TooltipDefaultDistro"))
+            : snapshot.DistroStopped ? UiText.Format("TooltipDistroNotRunning", TooltipName, snapshot.Distro ?? UiText.Get("TooltipDefaultDistro"))
             : Tooltip(snapshot.Benches.Count, upText);
         return text.Length <= 127 ? text : text[..126] + "…";
     }
