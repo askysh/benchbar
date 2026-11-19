@@ -38,6 +38,8 @@ public class SudoRuleTests
             "SetupService.cs: env.Set(AdminPassword, secrets.Admin).Set(SudoPassword, secrets.LinuxPassword).Set(MariadbRootPassword, secrets.RootPassword);",
             // Set Up Management (adopt): asks when the plan has sudo steps
             "DiscoveryModel.cs: UsesSudoEnv = true,",
+            // the service plan (install or refresh the service, the scheduler): asks when its plan has sudo steps
+            "OverviewView.cs: UsesSudoEnv = true,",
             // the plan sheet: only for a request that says so, and a plan with sudo steps
             "PlanReviewModel.cs: if (password is not null) CliSudo.Apply(env, password);",
             "PlanReviewModel.cs: return env.Set(SetupEnv.Sudo, \"env\").Set(SetupEnv.NonInteractive, \"1\").Set(SetupEnv.SudoPassword, password);",
