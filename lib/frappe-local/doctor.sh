@@ -25,11 +25,133 @@ fl_check_relevant() {
   esac
 }
 
+# The checks that wait on a program or the network (brew, python, node,
+# bench, curl) and only read. A run starts them in the background, a few at a
+# time (FL_DOCTOR_JOBS, slowest first), while the others run in this shell, and
+# takes their rows in the order of FL_CHECK_ORDER. A check that must see what
+# another one set in this shell stays out of the list. A check in the list
+# that this platform does not run is left out.
+FL_PARALLEL_CHECKS="${FL_PARALLEL_CHECKS:-bench_version formula_dates python_leaves ping mariadb_version toolchain_pkgconfig honcho_setuptools env_setuptools env_python toolchain_node toolchain_yarn pdf_engine full_disk_access}"
+# 1 when doctor --json wants the prerequisites run as a job of the doctor run
+FL_DOCTOR_PREREQ=0
+FL_DOC_PENDING=""
+FL_DOC_PAR_IDS=()
+FL_DOC_PAR_PIDS=()
+
+# fl_doctor_job ID: runs one check in a background job and leaves its row in
+# the run's folder (status, message, fix, action, then the rows of CHK_MORE,
+# each ended by \036 and with \037 between its fields). The id "@prereq" is the
+# prerequisites of this Mac (doctor --json): its rows are the ones of FL_P_*.
+fl_doctor_job() {
+  local id="$1" row buf i=0
+  # a job is not the command: its end must not run the command's exit trap (lock, done line)
+  trap - EXIT ERR
+  FL_IN_JOB=1
+  if [[ "$id" == "@prereq" ]]; then
+    fl_prereq_run
+    buf=""
+    while [[ "$i" -lt "${#FL_P_IDS[@]}" ]]; do
+      buf="${buf}${FL_P_IDS[$i]}"$'\037'"${FL_P_LEVEL[$i]}"$'\037'"${FL_P_MSG[$i]}"$'\037'"${FL_P_FIX[$i]}"$'\037'"${FL_P_EXTRA[$i]}"$'\036'
+      i=$((i + 1))
+    done
+    printf '%s\035' "$buf" >"${FL_FACTS_DIR}/chk.prereq"
+  else
+    CHK_STATUS=""; CHK_MSG=""; CHK_FIX=""; CHK_ACTION=""; CHK_MORE=()
+    "chk_${id}" || true
+    buf="${CHK_STATUS}"$'\037'"${CHK_MSG}"$'\037'"${CHK_FIX}"$'\037'"${CHK_ACTION}"$'\036'
+    for row in ${CHK_MORE[@]+"${CHK_MORE[@]}"}; do buf="${buf}${row}"$'\036'; done
+    # one write, ended by \035: a file without it is a job that died half way
+    printf '%s\035' "$buf" >"${FL_FACTS_DIR}/chk.${id}"
+  fi
+  # tells the run that a slot is free (see fl_doctor_wait)
+  [[ -z "$FL_FACTS_WAKE" ]] || printf '.\n' >&9 2>/dev/null || true
+}
+
+# fl_doctor_start ID: a background job for ID, a process group of its own
+fl_doctor_start() {
+  fl_par_group_on
+  { fl_doctor_job "$1" & } 2>/dev/null
+  FL_DOC_PAR_IDS+=("$1"); FL_DOC_PAR_PIDS+=("$!"); fl_par_add "$!"
+  fl_par_group_off
+}
+
+# fl_doctor_pump: starts the pending parallel checks while a slot is free; never waits
+fl_doctor_pump() {
+  local id
+  while [[ -n "$FL_DOC_PENDING" ]] && fl_par_free; do
+    id="${FL_DOC_PENDING%% *}"
+    if [[ "$FL_DOC_PENDING" == *" "* ]]; then FL_DOC_PENDING="${FL_DOC_PENDING#* }"; else FL_DOC_PENDING=""; fi
+    fl_doctor_start "$id"
+  done
+  return 0
+}
+
+# fl_doctor_wait PID: waits for the job PID. While checks are still waiting
+# for a slot, each job that ends starts the next one at once: the wait is on
+# the wake fifo (one line per ended job), a second at most, not on PID.
+fl_doctor_wait() {
+  local x
+  if [[ -n "$FL_FACTS_WAKE" ]]; then
+    while [[ -n "$FL_DOC_PENDING" ]] && kill -0 "$1" 2>/dev/null; do
+      read -r -t 1 -u 9 x 2>/dev/null || true
+      fl_doctor_pump
+    done
+  fi
+  wait "$1" 2>/dev/null || true
+}
+
+# fl_doctor_unpend ID: ID will not be started in the background any more
+fl_doctor_unpend() {
+  local w out=""
+  for w in $FL_DOC_PENDING; do [[ "$w" == "$1" ]] || out="${out}${out:+ }${w}"; done
+  FL_DOC_PENDING="$out"
+}
+
+# fl_prereq_take: FL_P_* from the file of the prerequisites job; 1 when there is none
+fl_prereq_take() {
+  local blob="" rec
+  [[ -n "$FL_FACTS_DIR" && -f "${FL_FACTS_DIR}/chk.prereq" ]] || return 1
+  IFS= read -r -d '' blob <"${FL_FACTS_DIR}/chk.prereq" || true
+  [[ "$blob" == *$'\035' ]] || return 1
+  FL_P_IDS=(); FL_P_LEVEL=(); FL_P_MSG=(); FL_P_FIX=(); FL_P_EXTRA=()
+  while [[ "$blob" == *$'\036'* ]]; do
+    rec="${blob%%$'\036'*}"; blob="${blob#*$'\036'}"
+    FL_P_IDS+=("${rec%%$'\037'*}"); rec="${rec#*$'\037'}"
+    FL_P_LEVEL+=("${rec%%$'\037'*}"); rec="${rec#*$'\037'}"
+    FL_P_MSG+=("${rec%%$'\037'*}"); rec="${rec#*$'\037'}"
+    FL_P_FIX+=("${rec%%$'\037'*}"); FL_P_EXTRA+=("${rec#*$'\037'}")
+  done
+  FL_P_RAN=1
+}
+
+# fl_doctor_take ID: CHK_* and CHK_MORE from the file of a finished job; 1 when
+# the job left none (it died), and the caller runs the check itself
+fl_doctor_take() {
+  local blob="" rest rec
+  [[ -f "${FL_FACTS_DIR}/chk.${1}" ]] || return 1
+  IFS= read -r -d '' blob <"${FL_FACTS_DIR}/chk.${1}" || true
+  [[ "$blob" == *$'\035' ]] || return 1
+  CHK_MORE=()
+  rec="${blob%%$'\036'*}"; rest="${blob#*$'\036'}"
+  CHK_STATUS="${rec%%$'\037'*}"; rec="${rec#*$'\037'}"
+  CHK_MSG="${rec%%$'\037'*}"; rec="${rec#*$'\037'}"
+  CHK_FIX="${rec%%$'\037'*}"; CHK_ACTION="${rec#*$'\037'}"
+  while [[ "$rest" == *$'\036'* ]]; do
+    CHK_MORE+=("${rest%%$'\036'*}")
+    rest="${rest#*$'\036'}"
+  done
+  return 0
+}
+
 # fl_doctor_run [GROUP...]: runs every check (or only the given groups).
 CHK_MORE=()
 fl_doctor_run() {
-  local id groups="$*" g row
+  local id groups="$*" g row todo=() todo_str=" " i j started n rest pre_done
+  local pre_status=() pre_msg=() pre_fix=() pre_action=() pre_more=() pre_n=()
   fl_doctor_reset
+  # what the checks ask again and again is read once for the run (facts.sh)
+  fl_facts_begin
+  FL_DOC_PENDING=""; FL_DOC_PAR_IDS=(); FL_DOC_PAR_PIDS=()
   # a plan may add checks (port_block while ports move)
   for id in ${FL_PLAN_CHECKS:-} $FL_CHECK_ORDER; do
     fl_check_relevant "$id" || continue
@@ -40,8 +162,63 @@ fl_doctor_run() {
     if [[ "$FL_DOCTOR_QUICK" == "1" ]]; then
       case " $FL_QUICK_SKIP " in *" $id "*) FL_D_SKIPPED="${FL_D_SKIPPED}${FL_D_SKIPPED:+ }${id}"; continue ;; esac
     fi
-    CHK_STATUS=""; CHK_MSG=""; CHK_FIX=""; CHK_ACTION=""; CHK_MORE=()
-    "chk_${id}" || true
+    todo+=("$id"); todo_str="${todo_str}${id} "
+  done
+  if [[ -n "$FL_FACTS_DIR" && "$FL_DOCTOR_JOBS" -gt 1 ]]; then
+    # the listeners of every port, once, before any job needs them
+    if declare -F fl__listen_rows >/dev/null; then fl__listen_rows "" >/dev/null || true
+    elif declare -F fl__ss_listeners >/dev/null; then fl__ss_listeners "" >/dev/null || true; fi
+    if declare -F fl_facts_warm_apps >/dev/null; then fl_facts_warm_apps "$todo_str"; fi
+    # the prerequisites of doctor --json run beside the slow checks, third in line
+    n=0
+    for id in $FL_PARALLEL_CHECKS; do
+      case "$todo_str" in *" $id "*) FL_DOC_PENDING="${FL_DOC_PENDING}${FL_DOC_PENDING:+ }${id}"; n=$((n + 1)) ;; esac
+      if [[ "$n" == "2" && "$FL_DOCTOR_PREREQ" == "1" ]]; then FL_DOC_PENDING="${FL_DOC_PENDING} @prereq"; n=3; fi
+    done
+    if [[ "$FL_DOCTOR_PREREQ" == "1" && "$n" -lt 3 ]]; then FL_DOC_PENDING="${FL_DOC_PENDING}${FL_DOC_PENDING:+ }@prereq"; fi
+  fi
+  # The checks that are not in FL_PARALLEL_CHECKS run in this shell, one after
+  # the other as always. While background jobs are out they run first, right
+  # now, and their rows are kept: the run does not sit idle at a slow check
+  # whose job is still busy. The rows are still taken in the order of the list.
+  pre_done=" "
+  if [[ -n "$FL_FACTS_DIR" && "$FL_DOCTOR_JOBS" -gt 1 ]]; then
+    i=0
+    for id in ${todo[@]+"${todo[@]}"}; do
+      case " $FL_PARALLEL_CHECKS " in *" $id "*) i=$((i + 1)); continue ;; esac
+      fl_doctor_pump
+      CHK_STATUS=""; CHK_MSG=""; CHK_FIX=""; CHK_ACTION=""; CHK_MORE=()
+      "chk_${id}" || true
+      pre_status[i]="$CHK_STATUS"; pre_msg[i]="$CHK_MSG"; pre_fix[i]="$CHK_FIX"; pre_action[i]="$CHK_ACTION"
+      pre_more[i]=""
+      for row in ${CHK_MORE[@]+"${CHK_MORE[@]}"}; do pre_more[i]="${pre_more[i]}${row}"$'\036'; done
+      pre_n[i]="${#CHK_MORE[@]}"
+      pre_done="${pre_done}${i} "
+      i=$((i + 1))
+    done
+  fi
+  i=0
+  for id in ${todo[@]+"${todo[@]}"}; do
+    if [[ "$pre_done" == *" $i "* ]]; then
+      CHK_STATUS="${pre_status[i]}"; CHK_MSG="${pre_msg[i]}"; CHK_FIX="${pre_fix[i]}"; CHK_ACTION="${pre_action[i]}"; CHK_MORE=()
+      rest="${pre_more[i]}"
+      while [[ "$rest" == *$'\036'* ]]; do CHK_MORE+=("${rest%%$'\036'*}"); rest="${rest#*$'\036'}"; done
+    else
+      fl_doctor_pump
+      started=""
+      j=0
+      while [[ "$j" -lt "${#FL_DOC_PAR_IDS[@]}" ]]; do
+        if [[ "${FL_DOC_PAR_IDS[$j]}" == "$id" ]]; then started=1; fl_doctor_wait "${FL_DOC_PAR_PIDS[$j]}"; break; fi
+        j=$((j + 1))
+      done
+      # one that never got a slot is not waited for: it runs here, now
+      [[ -n "$started" ]] || fl_doctor_unpend "$id"
+      if [[ -z "$started" ]] || ! fl_doctor_take "$id"; then
+        CHK_STATUS=""; CHK_MSG=""; CHK_FIX=""; CHK_ACTION=""; CHK_MORE=()
+        "chk_${id}" || true
+      fi
+    fi
+    i=$((i + 1))
     # a check may report one row per finding instead (CHK_MORE, \037
     # separated status, message, fix, action), all under its id
     if [[ -n "$CHK_STATUS" || "${#CHK_MORE[@]}" == "0" ]]; then
@@ -54,6 +231,12 @@ fl_doctor_run() {
       fl_log "check ${id}: ${CHK_STATUS} ${CHK_MSG}"
     done
   done
+  # the prerequisites that never got a slot, or whose job died, are run by cmd_doctor
+  fl_doctor_unpend "@prereq"
+  fl_par_wait_all
+  if declare -F fl_facts_wait_warm >/dev/null; then fl_facts_wait_warm; fi
+  if [[ "$FL_DOCTOR_PREREQ" == "1" ]]; then fl_prereq_take || true; fi
+  fl_facts_end
 }
 
 fl_doctor_count() {
@@ -291,8 +474,11 @@ fl_prereq_platform_extra() {
 
 # fl_prereq_run: fills FL_P_*. The target folder is FL_BENCH_DIR.
 fl_prereq_run() {
-  local kb gb level dir p offset conflicts
+  local kb gb level dir p offset conflicts own=""
   FL_P_IDS=(); FL_P_LEVEL=(); FL_P_MSG=(); FL_P_FIX=(); FL_P_EXTRA=(); FL_P_RAN=1
+  # the listeners and the benches' ports are read once for the run (facts.sh);
+  # as a job of a doctor run they are the run's own
+  [[ -n "$FL_FACTS_DIR" ]] || { fl_facts_begin; own=1; }
 
   fl_prereq_platform_first
 
@@ -338,6 +524,7 @@ fl_prereq_run() {
     # this stops the wizard here, and no --port-offset can help
     fl_prereq_add default_ports fail "$(printf '%s' "$conflicts" | tr '\n' ';' | sed 's/;$//; s/;/; /g'); no port block up to ${FL_PORT_MAX_OFFSET} is free" "stop or remove a bench, or the program on these ports, to free a port block" ",\"port_offset\":null"
   fi
+  [[ -z "$own" ]] || fl_facts_end
 }
 
 # fl_prereq_print: the group, in the shape of doctor's own
@@ -377,15 +564,20 @@ fl_prereq_print_json() {
 # Schema 1 (docs/json-schema.md). "level" and "fix_command" are the contract
 # names; "status" and "fix" are the frappe-mac 0.2.0 names, kept for older readers.
 fl_doctor_print_json() {
-  local i=0 sep=""
+  local i=0 sep="" group label e_label e_msg e_fix j_fix j_act acked_s
   printf '{"schema_version":%d,"cli_version":"%s","bench":"%s","name":"%s","site":"%s","profile":"%s","profile_source":"%s","checks":[' \
     "${FL_SCHEMA_VERSION:-1}" "${FL_VERSION:-0}" "$(fl_json_escape "$FL_BENCH_DIR")" "$(fl_json_escape "$FL_BENCH_NAME")" \
     "$(fl_json_escape "$FL_SITE")" "$(fl_json_escape "$FL_PROFILE")" "$(fl_doctor_profile_source)"
   while [[ "$i" -lt "${#FL_D_IDS[@]}" ]]; do
+    # the _v forms: no process for each escaped value (fifty checks, six values each)
+    group="$(fl_check_group "${FL_D_IDS[$i]}")"; label="$(fl_check_label "${FL_D_IDS[$i]}")"
+    fl_json_escape_v e_label "$label"; fl_json_escape_v e_msg "${FL_D_MSG[$i]}"; fl_json_escape_v e_fix "${FL_D_FIX[$i]}"
+    fl_json_str_v j_fix "${FL_D_FIX[$i]}"; fl_json_str_v j_act "${FL_D_ACTION[$i]}"
+    if fl_doctor_is_acked "$i"; then acked_s=true; else acked_s=false; fi
     printf '%s{"id":"%s","group":"%s","label":"%s","level":"%s","message":"%s","fix_command":%s,"action":%s,"status":"%s","fix":"%s","acked":%s}' \
-      "$sep" "${FL_D_IDS[$i]}" "$(fl_check_group "${FL_D_IDS[$i]}")" "$(fl_json_escape "$(fl_check_label "${FL_D_IDS[$i]}")")" \
-      "${FL_D_STATUS[$i]}" "$(fl_json_escape "${FL_D_MSG[$i]}")" "$(fl_json_str "${FL_D_FIX[$i]}")" "$(fl_json_str "${FL_D_ACTION[$i]}")" \
-      "${FL_D_STATUS[$i]}" "$(fl_json_escape "${FL_D_FIX[$i]}")" "$(fl_doctor_is_acked "$i" && printf true || printf false)"
+      "$sep" "${FL_D_IDS[$i]}" "$group" "$e_label" \
+      "${FL_D_STATUS[$i]}" "$e_msg" "$j_fix" "$j_act" \
+      "${FL_D_STATUS[$i]}" "$e_fix" "$acked_s"
     sep=","
     i=$((i + 1))
   done

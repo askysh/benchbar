@@ -4,13 +4,19 @@
 #
 # Matched (and nothing else):
 #   honcho start -f Procfile.lean        whose working folder is this bench
-#   <bench>/env/bin/python -m frappe.utils.bench_helper frappe (serve|worker|schedule)
+#   -m frappe.utils.bench_helper frappe (serve|worker|schedule)
+#                                        whose working folder is this bench
 #   apps/frappe/socketio.js              whose working folder is this bench
 #   listeners on the bench's web, socketio and redis ports
 # A user's own "bench migrate" or "bench console" never matches, and neither
-# does another bench's honcho or socketio: both are started with a relative
-# path, so their command lines are the same in every bench and only the
-# working folder tells them apart.
+# does another bench's honcho, socketio, serve or worker: their command lines
+# are the same in every bench, so only the working folder tells them apart.
+# The command line never carries the bench or the interpreter path: a
+# Homebrew Python re-executes itself, so it shows the framework's Python
+# (/opt/homebrew/Cellar/python@3.11/.../Python.app/Contents/MacOS/Python),
+# and under uv on Linux it is the venv's python or uv's own interpreter.
+# The one pattern is fl_bench_helper_pattern; the runner template carries
+# the same text (tests/test-process-match.sh keeps them equal).
 
 # A backslash before every ERE special character, in bash: the same text
 # `sed 's/[][\.*^$+?(){}|\\]/\\&/g'` gives (the rendered runner embeds it, so
@@ -27,13 +33,31 @@ fl_regex_escape() {
   printf '%s' "$out"
 }
 
+# The command line of serve, worker and schedule, as an ERE for pgrep -f. It
+# matches every bench and every interpreter; the working folder
+# (fl_pids_in_bench) says whose it is. The leading space keeps pgrep from
+# reading the pattern as its own -m option.
 fl_bench_helper_pattern() {
-  printf '^%s/env/bin/python -m frappe\\.utils\\.bench_helper frappe (serve|worker|schedule)' "$(fl_regex_escape "$FL_BENCH_DIR")"
+  printf '%s' ' -m frappe\.utils\.bench_helper frappe (serve|worker|schedule)( |$)'
 }
 
 # The working folder of a process, from lsof; nothing when it cannot be read.
+# In a doctor run (facts.sh) one lsof per pid, read in bash.
 fl_pid_cwd() {
+  local out line
+  if [[ -n "${FL_FACTS_DIR:-}" ]]; then
+    fl_memo_v out "cwd:${1}" lsof -a -p "$1" -d cwd -Fn || true
+    while IFS= read -r line; do
+      [[ "$line" == n* ]] && { printf '%s\n' "${line#n}"; return 0; }
+    done <<<"$out"
+    return 0
+  fi
   lsof -a -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | awk 'NR==1'
+}
+
+# fl_pgrep_f PATTERN: pgrep -f, once per pattern in a doctor run
+fl_pgrep_f() {
+  if [[ -n "${FL_FACTS_DIR:-}" ]]; then fl_memo "pgrep:${1}" pgrep -f "$1" || true; else pgrep -f "$1" 2>/dev/null || true; fi
 }
 
 # fl_pid_is_bench_own_strict PID: the one ownership test. True only when
@@ -61,11 +85,17 @@ fl_pids_in_bench() {
 }
 
 fl_bench_honcho_pids() {
-  { pgrep -f "honcho start -f Procfile\\.lean" 2>/dev/null || true; } | fl_pids_in_bench
+  fl_pgrep_f "honcho start -f Procfile\\.lean" | fl_pids_in_bench
 }
 
 fl_bench_socketio_pids() {
-  { pgrep -f "apps/frappe/socketio\\.js" 2>/dev/null || true; } | fl_pids_in_bench
+  fl_pgrep_f "apps/frappe/socketio\\.js" | fl_pids_in_bench
+}
+
+# This bench's serve, worker and schedule pids: the command line says what
+# they are, the working folder (<bench>/sites) whose they are.
+fl_bench_helper_pids() {
+  fl_pgrep_f "$(fl_bench_helper_pattern)" | fl_pids_in_bench
 }
 
 # Listeners on the bench's ports that run inside the bench folder (redis,
@@ -74,7 +104,7 @@ fl_bench_socketio_pids() {
 # neither is one whose folder cannot be read: stopping needs proof.
 fl_bench_listener_pids() {
   local pid
-  { lsof -ti "tcp:${1:-$(fl_bench_ports_csv)}" -sTCP:LISTEN 2>/dev/null || true; } | while IFS= read -r pid; do
+  { fl_listener_pids_of "${1:-$(fl_bench_ports_csv)}"; } | while IFS= read -r pid; do
     [[ -n "$pid" ]] && fl_pid_is_bench_own_strict "$pid" && printf '%s\n' "$pid"
   done
   return 0
@@ -83,7 +113,7 @@ fl_bench_listener_pids() {
 fl_bench_process_pids() {
   {
     fl_bench_honcho_pids
-    pgrep -f "$(fl_bench_helper_pattern)" 2>/dev/null || true
+    fl_bench_helper_pids
     fl_bench_socketio_pids
     fl_bench_listener_pids
   } | sort -u
@@ -100,14 +130,14 @@ fl_bench_is_running() {
 # down and the waits that must see it gone.
 fl_bench_is_serving() {
   [[ -n "$(fl_bench_honcho_pids)" || -n "$(fl_bench_socketio_pids)" ]] && return 0
-  [[ -n "$(pgrep -f "$(fl_bench_helper_pattern)" 2>/dev/null || true)" ]] && return 0
+  [[ -n "$(fl_bench_helper_pids)" ]] && return 0
   [[ -n "$(fl_bench_listener_pids "${FL_WEB_PORT},${FL_SOCKETIO_PORT}")" ]]
 }
 
 # honcho on any Procfile whose working folder is this bench: benchfg and the
 # agent run Procfile.lean, "bench start" runs the bench's own Procfile
 fl_bench_any_honcho_pids() {
-  { pgrep -f "honcho start" 2>/dev/null || true; } | fl_pids_in_bench
+  fl_pgrep_f "honcho start" | fl_pids_in_bench
 }
 
 # fl_bench_running_outside_benchbar: the bench's honcho, serve, worker,
@@ -116,7 +146,7 @@ fl_bench_any_honcho_pids() {
 # them (bench start, benchfg, a hand-run honcho). That is a person's
 # terminal session: nothing of benchbar may stop or restart it.
 fl_bench_running_outside_benchbar() {
-  [[ -n "$(fl_bench_any_honcho_pids)" || -n "$(fl_bench_socketio_pids)" || -n "$(pgrep -f "$(fl_bench_helper_pattern)" 2>/dev/null || true)" ]] || return 1
+  [[ -n "$(fl_bench_any_honcho_pids)" || -n "$(fl_bench_socketio_pids)" || -n "$(fl_bench_helper_pids)" ]] || return 1
   [[ "$(fl_agent_field state 2>/dev/null)" != "running" ]]
 }
 
@@ -130,7 +160,7 @@ fl_bench_running_outside_benchbar() {
 # honcho and socketio run in the bench, serve and the workers in its sites/.
 fl_bench_status_pids() {
   local found line pid cmd all="" honcho=" " keep=" " cwds="" cur="" first="" rest=""
-  found="$(pgrep -lf 'honcho start -f Procfile\.lean|-m frappe\.utils\.bench_helper frappe (serve|worker|schedule)|apps/frappe/socketio\.js' 2>/dev/null)" || return 0
+  found="$(pgrep -lf "honcho start -f Procfile\\.lean|$(fl_bench_helper_pattern)|apps/frappe/socketio\\.js" 2>/dev/null)" || return 0
   while IFS= read -r line; do
     pid="${line%% *}"; cmd="${line#* }"
     [[ "$pid" =~ ^[0-9]+$ ]] || continue
@@ -163,16 +193,16 @@ fl_bench_status_pids() {
 
 # fl_bench_kill_processes [SIGNAL]
 fl_bench_kill_processes() {
-  local sig="${1:-TERM}" pids
+  local sig="${1:-TERM}" pids killer=kill
+  [[ "${FL_TESTING:-}" == "1" ]] && killer="${FL_KILL_CMD:-kill}"
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
     fl_info "dry-run: would stop this bench's honcho, serve, worker, socketio and port listeners"
     return 0
   fi
-  pkill "-${sig}" -f "$(fl_bench_helper_pattern)" 2>/dev/null || true
-  pids="$(fl_bench_honcho_pids; fl_bench_socketio_pids; fl_bench_listener_pids)"
+  pids="$(fl_bench_honcho_pids; fl_bench_helper_pids; fl_bench_socketio_pids; fl_bench_listener_pids)"
   if [[ -n "$pids" ]]; then
     # shellcheck disable=SC2086
-    "${FL_KILL_CMD:-kill}" "-${sig}" $pids 2>/dev/null || true
+    "$killer" "-${sig}" $pids 2>/dev/null || true
   fi
   fl_log "sent SIG${sig} to bench processes"
 }
@@ -189,22 +219,69 @@ fl_bench_wait_stopped() {
   return 0
 }
 
+# The listeners of a doctor run: one "lsof -nP -iTCP -sTCP:LISTEN" for every
+# port (facts.sh keeps it), filtered here. fl__listen_rows PORTS prints "port
+# pid command address" for each listening socket on one of the comma
+# separated PORTS, in lsof's order; the address ends with ":port".
+fl__listen_rows() {
+  local snap line cmd pid user fd type dev size node name rest port
+  fl_memo_v snap listeners lsof -nP -iTCP -sTCP:LISTEN || true
+  while IFS= read -r line; do
+    [[ -n "$line" && "$line" != COMMAND* ]] || continue
+    read -r cmd pid user fd type dev size node name rest <<<"$line"
+    port="${name##*:}"
+    case ",${1}," in *",${port},"*) printf '%s %s %s %s\n' "$port" "$pid" "$cmd" "$name" ;; esac
+  done <<<"$snap"
+}
+
+# fl_listener_pids_of PORTS: the pid of every listener on the comma separated
+# PORTS, once each, one per line (lsof -ti)
+fl_listener_pids_of() {
+  local port pid cmd addr seen=" "
+  if [[ -z "${FL_FACTS_DIR:-}" ]]; then lsof -ti "tcp:$1" -sTCP:LISTEN 2>/dev/null || true; return 0; fi
+  while read -r port pid cmd addr; do
+    case "$seen" in *" $pid "*) continue ;; esac
+    seen="${seen}${pid} "
+    printf '%s\n' "$pid"
+  done < <(fl__listen_rows "$1")
+}
+
 fl_port_listener_pid() {
+  local port pid cmd addr
+  if [[ -n "${FL_FACTS_DIR:-}" ]]; then
+    while read -r port pid cmd addr; do printf '%s\n' "$pid"; return 0; done < <(fl__listen_rows "$1")
+    return 0
+  fi
   lsof -ti "tcp:$1" -sTCP:LISTEN 2>/dev/null | awk 'NR==1' || true
 }
 
 # fl_port_listener_pids PORT: the pid of every listener on PORT, one per line
 fl_port_listener_pids() {
-  lsof -ti "tcp:$1" -sTCP:LISTEN 2>/dev/null || true
+  fl_listener_pids_of "$1"
 }
 
 fl_port_listener_summary() {
   # prints "pid command" for the first listener on a port, or nothing
+  local port pid cmd addr
+  if [[ -n "${FL_FACTS_DIR:-}" ]]; then
+    while read -r port pid cmd addr; do printf '%s %s\n' "$pid" "$cmd"; return 0; done < <(fl__listen_rows "$1")
+    return 0
+  fi
   lsof -nP -iTCP:"$1" -sTCP:LISTEN 2>/dev/null | awk 'NR == 2 {print $2 " " $1}' || true
 }
 
 fl_port_listen_addresses() {
   # prints the local address:port of every listener on a port, one per line
+  local port pid cmd addr out="" n=0
+  if [[ -n "${FL_FACTS_DIR:-}" ]]; then
+    while read -r port pid cmd addr; do
+      [[ $'\n'"$out" == *$'\n'"$addr"$'\n'* ]] && continue
+      out="${out}${addr}"$'\n'; n=$((n + 1))
+    done < <(fl__listen_rows "$1")
+    # one address needs no sort; several keep the order sort -u gives
+    if [[ "$n" -le 1 ]]; then printf '%s' "$out"; else printf '%s' "$out" | sort -u; fi
+    return 0
+  fi
   lsof -nP -iTCP:"$1" -sTCP:LISTEN 2>/dev/null | awk 'NR > 1 {print $9}' | sort -u || true
 }
 
@@ -212,9 +289,10 @@ fl_port_listen_addresses() {
 # Bash's own /dev/tcp, so the status path starts no program for it (the app
 # polls status for every bench on a timer). FL_LOCAL_PROBES=0 turns both
 # probes off (the tests, which must never talk to a service of the machine
-# they run on).
+# they run on); a production run (no FL_TESTING=1) ignores it.
+fl_local_probes_off() { [[ "${FL_TESTING:-}" == "1" && "${FL_LOCAL_PROBES:-1}" != "1" ]]; }
 fl_tcp_open() {
-  [[ "${FL_LOCAL_PROBES:-1}" == "1" ]] || return 1
+  ! fl_local_probes_off || return 1
   ( exec 9<>"/dev/tcp/127.0.0.1/$1" ) 2>/dev/null
 }
 
@@ -223,7 +301,7 @@ fl_tcp_open() {
 # within SECS seconds. Bash alone, like fl_tcp_open: no curl, no program.
 fl_http_code_v() {
   local __line=""
-  if [[ "${FL_LOCAL_PROBES:-1}" != "1" ]]; then printf -v "$1" '%s' ""; return 0; fi
+  if fl_local_probes_off; then printf -v "$1" '%s' ""; return 0; fi
   __line="$(
     {
       exec 9<>"/dev/tcp/127.0.0.1/$3" || exit 0

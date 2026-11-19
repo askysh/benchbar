@@ -499,7 +499,8 @@ fl_prereq_platform_first() {
   else fl_prereq_add architecture warn "PDF printing is not set up on ${arch}: the patched wkhtmltopdf package is built for x86_64 and arm64 only" "use an x86_64 or arm64 machine to print PDFs from Frappe"; fi
 
   # the installer refuses root and asks for sudo itself
-  uid="${FL_EFFECTIVE_UID:-$EUID}"
+  uid="$EUID"
+  [[ "${FL_TESTING:-}" == "1" ]] && uid="${FL_EFFECTIVE_UID:-$EUID}"
   user="$(fl__prereq_user)"
   if [[ "$uid" == "0" ]]; then
     fl_prereq_add regular_user fail "running as root; benchbar must run as your own user" "log in as a normal user (in WSL: wsl -u <user>)"

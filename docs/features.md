@@ -10,7 +10,8 @@ Mac app.
 
 **Labs** are experiments. A Lab is off until you turn it on, and it can
 change or go away. They are marked **Lab** below. Turn one on with
-`benchbar labs on NAME` or in **Settings > Labs** in the Mac app. See
+`benchbar labs on NAME`, in **Settings > Labs** in the Mac app or on the
+**Labs** page of the BenchBar window on Windows. See
 [labs](reference/cli/labs.md).
 
 Terms: a *bench* is one Frappe installation folder. A *site* is one
@@ -20,13 +21,14 @@ feature works.
 ## Command line tool
 
 The `benchbar` command runs on macOS, and on Ubuntu 24.04 (Linux and
-WSL). Linux and WSL first shipped in 0.8.0. A row that came in before
+WSL; other apt based systems work with a doctor warning). Linux and WSL first shipped in 0.8.0. A row that came in before
 that says "Linux 0.8.0": it was macOS only until then, and *Since* is the
 macOS version. A row that says "macOS" does not work on Linux.
 
 | Feature | What it does | Since | Platform | Guide |
 | --- | --- | --- | --- | --- |
 | Install | Installs the dependencies, a bench and a site. A second run changes nothing. | 0.1.0 | macOS; Linux 0.8.0 | [Install](install.md) |
+| Pick a profile at install | `install --profile` takes `v15-lts`, `v16-lts` or a team profile. On Linux, Python and Node come from uv and fnm, and MariaDB from apt (10.11). | 0.1.0 | macOS; Linux 0.9.0 (v15-lts only before) | [Install](install.md#profiles-on-linux) |
 | Background service | Runs each bench under launchd or `systemd --user`: it survives a closed Terminal, restarts after a crash and comes back after a reboot. | 0.2.0 | macOS; Linux 0.8.0 | [Benches and sites](guides/benches-and-sites.md) |
 | Doctor and repair | `doctor` reads the state and names the fix. `repair` applies only the flagged fixes, with a backup first. | 0.2.0 | macOS; Linux 0.8.0 | [Doctor and repair](guides/doctor-and-repair.md) |
 | Shell helpers | `benchup`, `benchdown`, `benchrestart`, `benchwatch`, `benchlogs` and `benchstatus`. | 0.2.0 | macOS; Linux 0.8.0 | [Benches and sites](guides/benches-and-sites.md#daily-use) |
@@ -65,7 +67,7 @@ JSON. See [The menu bar app](app.md).
 | --- | --- | --- | --- | --- |
 | Runner and popover | A small runner shows the state of your benches. The popover starts and stops a bench. | 0.3.0 | macOS | [The menu bar app](app.md#the-runner) |
 | Speed | The runner runs faster the busier the bench is. | 0.3.0 | macOS | [Energy](app.md#energy) |
-| Crash notification | A notice when a bench crashes or the crash guard pauses it. | 0.3.0 | macOS | [The menu bar app](app.md) |
+| Crash notification | A notice when a bench crashes or the crash guard pauses it. On Linux the runner calls `notify-send`; in WSL the tray shows the toast; a headless server has the record in `status`. | 0.3.0 | macOS; Linux 0.9.0 | [The menu bar app](app.md), [Linux](install.md#crash-notifications-on-linux) |
 | Custom runners | Draw your own menu bar runner. | 0.3.0 | macOS | [Runners](runners.md) |
 | BenchBar window | A page per bench for its overview, sites, apps and health. | 0.5.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
 | Doctor and repair | The Health page runs doctor and repairs with the plan first. | 0.5.0 | macOS | [The BenchBar window](app.md#the-benchbar-window) |
@@ -98,11 +100,13 @@ BenchBar for Windows is a beta. The benches run in WSL 2. See
 | Window: Sites, Apps, Health | A page per bench: Overview, Sites (backups, restore, drop), Apps and Health with Repair. | 0.8.1 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
 | Window: Ports | Port Settings and Setup in a bench's Overview. | 0.8.1 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
 | Window: Profiles, Find Benches | Team Profiles and Find Benches in the sidebar. | 0.8.1 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
+| Window: Labs | Lists the experiments with a switch, a warning, the version and, for one that is not on Windows yet, why. | 0.9.0 | Windows | [The BenchBar window](windows.md#the-benchbar-window) |
+| URL scheme | `benchbar://` links start, stop and open a bench from a launcher or a script. **Settings > Ask before a link acts** is off by default. | 0.9.0 | Windows | [benchbar:// links](windows.md#benchbar-links), [URL scheme](reference/url-scheme.md) |
 | Report a bug | The tray writes the diagnostics zip. | 0.8.1 | Windows | [Report a bug](windows.md#report-a-bug) |
 | Self update | `benchbar.exe self-update` and Update Now in the tray. | 0.8.3 | Windows | [Update](windows.md#update) |
 
 Rooms and Quick Switch are not available on Windows yet. A Lab lists its
-platforms, and `labs on` refuses on another one.
+platforms, and `labs on` refuses on another one. The Labs page shows why.
 
 ## MCP server
 

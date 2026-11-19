@@ -39,21 +39,18 @@ fl_rc_file() {
   esac
 }
 
-fl_rc_marker_count() {
-  local file="$1" marker="$2"
-  [[ -f "$file" ]] || { printf '0'; return 0; }
-  grep -c -x -F "$marker" "$file" 2>/dev/null || true
-}
-
-# fl_rc_markers_state FILE START END -> missing | present | broken
+# fl_rc_markers_state FILE START END -> missing | present | broken. One read
+# of the file in bash: how often each marker stands alone on a line, and where.
 fl_rc_markers_state() {
-  local file="$1" start="$2" end="$3" starts ends start_line end_line
-  starts="$(fl_rc_marker_count "$file" "$start")"
-  ends="$(fl_rc_marker_count "$file" "$end")"
-  [[ "${starts:-0}" == "0" && "${ends:-0}" == "0" ]] && { printf 'missing'; return 0; }
+  local file="$1" start="$2" end="$3" line n=0 starts=0 ends=0 start_line=0 end_line=0
+  [[ -f "$file" && -r "$file" ]] || { printf 'missing'; return 0; }
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    n=$((n + 1))
+    if [[ "$line" == "$start" ]]; then starts=$((starts + 1)); start_line="$n"; fi
+    if [[ "$line" == "$end" ]]; then ends=$((ends + 1)); end_line="$n"; fi
+  done <"$file"
+  [[ "$starts" == "0" && "$ends" == "0" ]] && { printf 'missing'; return 0; }
   [[ "$starts" == "1" && "$ends" == "1" ]] || { printf 'broken'; return 0; }
-  start_line="$(grep -n -x -F "$start" "$file" | cut -d: -f1)"
-  end_line="$(grep -n -x -F "$end" "$file" | cut -d: -f1)"
   [[ "$start_line" -lt "$end_line" ]] && printf 'present' || printf 'broken'
 }
 
@@ -70,9 +67,26 @@ fl_rc_block_state() {
 
 # Prints the managed content between the markers (markers excluded).
 fl_rc_block_extract() {
-  local file="$1"
+  local file="$1" line inb=0
   [[ "$(fl_rc_block_state "$file")" == "present" ]] || return 0
-  awk -v s="$FL_RC_START" -v e="$FL_RC_END" '$0 == e {inb = 0} inb {print} $0 == s {inb = 1}' "$file"
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    if [[ "$line" == "$FL_RC_END" ]]; then inb=0; fi
+    if [[ "$inb" == "1" ]]; then printf '%s\n' "$line"; fi
+    if [[ "$line" == "$FL_RC_START" ]]; then inb=1; fi
+  done <"$file"
+  return 0
+}
+
+# fl_rc_recorded_cli_v VAR FILE: the benchbar the helper block names
+# (BENCHBAR="..."), or nothing
+fl_rc_recorded_cli_v() {
+  local __line __block
+  printf -v "$1" '%s' ""
+  __block="$(fl_rc_block_extract "$2" 2>/dev/null)"
+  while IFS= read -r __line; do
+    if [[ "$__line" =~ ^BENCHBAR=\"(.*)\"$ ]]; then printf -v "$1" '%s' "${BASH_REMATCH[1]}"; return 0; fi
+  done <<<"$__block"
+  return 0
 }
 
 # fl_rc_block_status FILE CONTENT -> missing | current | outdated | broken
@@ -83,8 +97,8 @@ fl_rc_block_status() {
     missing|broken) printf '%s' "$state"; return 0 ;;
     legacy) printf 'outdated'; return 0 ;;
   esac
-  have="$(fl_rc_block_extract "$file" | fl_template_header_of_stdin)"
-  want="$(printf '%s' "$content" | fl_template_header_of_stdin)"
+  have="$(fl_template_header_of "$(fl_rc_block_extract "$file")")"
+  want="$(fl_template_header_of "$content")"
   if [[ -n "$have" && "$have" == "$want" ]]; then printf 'current'; else printf 'outdated'; fi
 }
 
@@ -215,9 +229,20 @@ fl_rc_block_remove() {
 # "frappe-bench helpers" blocks) so doctor can warn about them. The
 # installer's own PATH block (benchbar-path) is not one of them.
 fl_rc_legacy_blocks() {
-  local file="$1" ours="frappe-mac"
+  local file="$1" ours="frappe-mac" line name names="" n=0
+  local re='^# >>> ([A-Za-z0-9 ._-]*) >>>'
   [[ -f "$file" ]] || return 0
   # a frappe-mac block is ours to migrate, unless a benchbar block already exists
   [[ "$(fl_rc_markers_state "$file" "$FL_RC_START" "$FL_RC_END")" == "present" ]] && ours="benchbar"
-  grep -o '^# >>> [A-Za-z0-9 ._-]* >>>' "$file" 2>/dev/null | sed -e 's/^# >>> //' -e 's/ >>>$//' | grep -v -x -e 'benchbar' -e 'benchbar-path' -e "$ours" | sort -u || true
+  [[ -r "$file" ]] || return 0
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ "$line" =~ $re ]] || continue
+    name="${BASH_REMATCH[1]}"
+    case "$name" in benchbar|benchbar-path|"$ours") continue ;; esac
+    [[ $'\n'"$names" == *$'\n'"$name"$'\n'* ]] && continue
+    names="${names}${name}"$'\n'; n=$((n + 1))
+  done <"$file"
+  # one name needs no sort; several come out as sort -u gives them
+  if [[ "$n" -eq 1 ]]; then printf '%s' "$names"; elif [[ "$n" -gt 1 ]]; then printf '%s' "$names" | sort -u; fi
+  return 0
 }

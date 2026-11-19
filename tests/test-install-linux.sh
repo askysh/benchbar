@@ -86,17 +86,38 @@ fresh_machine() {
   reset_calls
 }
 
-# ---- platform choice and the Linux profile gate (no mutation at all)
+# ---- the profile gate (no mutation at all): a profile Linux cannot install is
+# refused with the reason before anything runs. v16-lts is not one (see below);
+# one whose MariaDB range excludes what apt gives is
+cp -R "$FL_CONFIG_DIR" "$TMP_DIR/config-future"
+printf 'v17-future\tFuture\tversion-17\tversion-17\tpython@3.15\tpython3.15\tnode@26\t26\tmariadb@12.0\t12.0\tsupported\t2031\tno\t11.4\t12.0\t5.30.0\n' >>"$TMP_DIR/config-future/release-profiles.tsv"
 fresh_machine
-run00 --profile v16-lts --yes
+FL_CONFIG_DIR="$TMP_DIR/config-future" run00 --profile v17-future --yes
 assert_eq "1" "$CODE" "$OUT"
 assert_contains "$OUT" "not supported on Linux yet"
-assert_contains "$OUT" "v15-lts is"
+assert_contains "$OUT" "MariaDB 12.0"
+assert_contains "$OUT" "10.11"
+assert_contains "$OUT" "11.4 to 12.0" "(the profile's range, so the reason is checkable)"
 assert_calls_not_contain '^(sudo|apt-get|uv|fnm|curl .*(wkhtmltox|astral\.sh/uv|fnm\.vercel))'
-run_fm install --profile v16-lts --dry-run
+FL_CONFIG_DIR="$TMP_DIR/config-future" run_fm install --profile v17-future --dry-run
 assert_eq "1" "$CODE" "$OUT"
 assert_contains "$OUT" "not supported on Linux yet"
 assert_calls_not_contain '^(sudo|apt-get|uv|fnm|curl .*(wkhtmltox|astral\.sh/uv|fnm\.vercel))'
+
+# ---- v16-lts on Linux: Python 3.14 from uv, Node 24 from fnm, and the MariaDB
+# apt gives (10.11 is inside v16's range, 10.6 to 11.8); the plan says so
+run00 --profile v16-lts --dry-run
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "Python:  3.14 from uv (python3.14)"
+assert_contains "$OUT" "Node:    24 from fnm"
+assert_contains "$OUT" "MariaDB: mariadb-server 10.11 from apt"
+assert_contains "$OUT" "uv python install 3.14"
+assert_contains "$OUT" "fnm install 24"
+assert_calls_not_contain '^(sudo|apt-get|uv|fnm|curl .*(wkhtmltox|astral\.sh/uv|fnm\.vercel))'
+run_fm install --profile v16-lts --dry-run --yes --bench-dir "$HOME/frappe-bench"
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "System dependencies (00-linux-system-deps.sh)"
+assert_calls_not_contain '^(sudo|apt-get|uv|fnm)'
 
 # ---- dry run on a fresh machine: the plan, no sudo, no apt-get, no installer
 run00 --profile v15-lts --dry-run
@@ -314,7 +335,7 @@ assert_contains "$OUT" "erp.test does not resolve to this machine; add it to /et
 assert_eq "127.0.0.1 localhost" "$(cat "$FL_HOSTS_FILE")" "(benchbar never edits /etc/hosts on Linux)"
 rm -rf "$BENCH"
 # the profile gate is in phase 01 too
-run01 --yes --offline --profile v16-lts
+FL_CONFIG_DIR="$TMP_DIR/config-future" run01 --yes --offline --profile v17-future
 assert_eq "1" "$CODE" "$OUT"
 assert_contains "$OUT" "not supported on Linux yet"
 # the hosts functions: *.localhost always reaches the machine; the JSON keeps its keys
@@ -412,3 +433,26 @@ assert_eq "0" "$(before_service | grep -c '^sudo ')"
 assert_eq "0" "$(before_service | grep -c -E '^apt-get (install|update)')"
 assert_not_contains "$OUT" "install the apt packages"
 unset ADMIN_PASSWORD
+
+# ---- v16-lts, the steps: a fresh machine gets Python 3.14 from uv and Node 24
+# from fnm, and the MariaDB apt gives (10.11, inside v16's range)
+fresh_machine
+run00 --yes --profile v16-lts
+assert_eq "0" "$CODE" "$OUT"
+assert_calls_contain '^uv python install 3\.14$'
+assert_calls_contain '^fnm install 24$'
+assert_calls_not_contain '^uv python install 3\.11$'
+assert_calls_not_contain '^fnm install 22$'
+assert_contains "$OUT" "[OK] python3.14 - 3.14.9"
+assert_contains "$OUT" "[OK] node - v24."
+assert_contains "$OUT" "[OK] mariadb - 10.11.14"
+grep -q "uv/python/cpython-3.14" "$HOME/.bashrc" || fail "the helper block names the v16 Python folder"
+grep -q "fnm/node-versions/v24" "$HOME/.bashrc" || fail "the helper block names the v16 Node folder"
+# a team profile follows its base: the same toolchain, the same plan
+mkdir -p "$HOME/.config/benchbar/profiles"
+printf 'schema = 1\nbase = "v16-lts"\nbundle = "minimal"\n' >"$HOME/.config/benchbar/profiles/acme16.toml"
+fresh_machine
+run_fm install --profile acme16 --dry-run --yes --bench-dir "$HOME/frappe-bench"
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "System dependencies (00-linux-system-deps.sh)"
+assert_calls_not_contain '^(sudo|apt-get|uv|fnm)'

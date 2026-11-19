@@ -285,9 +285,9 @@ unset MOCK_STOP_STUCK FL_BOOTOUT_WAIT_SECS
 . "$ROOT/lib/frappe-local/run.sh"
 . "$ROOT/lib/frappe-local/templates.sh"
 B=/home/u/dev/frappe-bench
-mac_runner="$(fl_template_render bench-run.sh "BENCH_DIR=$B" "BENCH_RE=$B" "BENCH_NAME=frappe-bench" "HONCHO=/h/honcho" \
+mac_runner="$(fl_template_render bench-run.sh "BENCH_DIR=$B" "BENCH_NAME=frappe-bench" "HONCHO=/h/honcho" \
   "PORTS=8000,9000,11000,13000" "LABEL=com.benchbar.frappe-bench" "MAX_STARTS=3" "WINDOW=600" "SITE=macdev" "WEB_PORT=8000" "CLI_VERSION=1.2.3")"
-assert_eq "bench-run.sh v7 e0168e9aee41" "$(fl_template_header_of "$mac_runner")" "(the macOS runner renders as before)"
+assert_eq "bench-run.sh v8 2eceb3cf1bf2" "$(fl_template_header_of "$mac_runner")" "(the macOS runner renders to a stable hash)"
 assert_contains "$mac_runner" "  pgrep -xq BenchBar 2>/dev/null && return 0
   osascript -e \"display notification \\\"\$1\\\" with title \\\"BenchBar: frappe-bench\\\"\" >/dev/null 2>&1
 }"
@@ -299,7 +299,7 @@ mac_plist="$(fl_template_render launchagent.plist "LABEL=com.benchbar.frappe-ben
 assert_eq "launchagent.plist v2 e8668b7bf322" "$(fl_template_header_of "$mac_plist")" "(the macOS plist renders as before)"
 # a value passed for a key beats the template's default, and a default is not
 # part of the hash twice
-over="$(fl_template_render bench-run.sh "BENCH_DIR=$B" "BENCH_RE=$B" "BENCH_NAME=frappe-bench" "HONCHO=/h/honcho" \
+over="$(fl_template_render bench-run.sh "BENCH_DIR=$B" "BENCH_NAME=frappe-bench" "HONCHO=/h/honcho" \
   "PORTS=8000,9000,11000,13000" "LABEL=com.benchbar.frappe-bench" "MAX_STARTS=3" "WINDOW=600" "SITE=macdev" "WEB_PORT=8000" "CLI_VERSION=1.2.3" "NOTIFY_BODY=:")"
 assert_not_contains "$over" "osascript"
 assert_contains "$over" "lsof -a -p"

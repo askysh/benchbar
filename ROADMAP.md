@@ -189,8 +189,7 @@ is the eventual home), `benchbar run --site X -- migrate|run-tests|...`
 with an allow list, site snapshots and rollback, scratch benches pinned to
 commits with a TTL and `bench gc`, leases per bench or site, `benchbar
 history --json`, `bench remove`, `bench forget`, `site move --to-bench`,
-`site hosts --prune`, `db orphans`, and `uninstall-service` scoped to one
-bench. Two measurements come first as well: a comparative benchmark of
+`site hosts --prune` and `db orphans`. Two measurements come first as well: a comparative benchmark of
 native versus container benches (idle memory, build time, file watch
 latency, startup) before the README keeps its performance wording, and a
 four week pilot with about ten developers across three teams.

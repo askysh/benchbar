@@ -129,7 +129,9 @@ decrypt. Frappe encrypts every stored password (email accounts,
 integrations, `Password` fields) with `encryption_key` from the site's
 `site_config.json`, and `bench restore` never copies it: a restored site
 without it generates a new key, which cannot read the old rows.
-`benchbar pull` copies the production key for you. After a restore by
+`benchbar pull` copies the production key for you (and since 0.9 clears
+the stored passwords of the copy unless you pass `--keep-secrets`, so a
+neutralised copy has none to decrypt). After a restore by
 hand, or when production had no key, first copy the local
 `sites/SITE/site_config.json` aside (`cp site_config.json
 site_config.json.bak` in that folder), then copy `encryption_key` from
@@ -231,8 +233,9 @@ moves the old agent aside and installs `com.benchbar.<bench>`, starting
 the bench again if it was running. `frappe-mac` keeps working as a name
 for `benchbar`.
 
-Per process LaunchAgents (one each for web, worker, socketio and so on)
-and hand made agents are listed by doctor with their launchctl state and
+Per process LaunchAgents of this bench (one each for web, worker,
+socketio and so on) and hand made agents that start this bench's honcho,
+runner, socketio, serve, worker or schedule are listed by doctor with their launchctl state and
 last exit code. Repair boots them out and moves the plists to
 `~/Library/LaunchAgents-disabled/<timestamp>/`. Nothing is deleted.
 

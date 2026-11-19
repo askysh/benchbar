@@ -60,8 +60,9 @@ fi
 # through osascript's administrator dialog instead of sudo, see fl_root_run.
 # BENCHBAR_SUDO=env (Linux, the Windows tray sets it) with the password in
 # BENCHBAR_SUDO_PASSWORD: see "BENCHBAR_SUDO=env" at the end of this file.
-# Any other value is the terminal path. FL_OSASCRIPT is for the tests.
-FL_OSASCRIPT="${FL_OSASCRIPT:-/usr/bin/osascript}"
+# Any other value is the terminal path. FL_OSASCRIPT is for the tests: a
+# production run (no FL_TESTING=1) always runs /usr/bin/osascript.
+if [[ "${FL_TESTING:-}" == "1" ]]; then FL_OSASCRIPT="${FL_OSASCRIPT:-/usr/bin/osascript}"; else FL_OSASCRIPT=/usr/bin/osascript; fi
 # macOS only: Linux has no osascript, and BENCHBAR_SUDO is ignored there
 fl_sudo_gui() { [[ "${BENCHBAR_SUDO:-}" == "gui" && "${FL_PLATFORM:-}" != "linux" ]]; }
 
