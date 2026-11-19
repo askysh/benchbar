@@ -48,16 +48,34 @@ fl_run_group_stop() {
   kill "-$1" -- "-${FL_RUN_PGID}" 2>/dev/null || kill "-$1" "$FL_RUN_PGID" 2>/dev/null || true
 }
 
-# fl_run_group_kill: TERM to the group, FL_KILL_GRACE seconds (default 1)
-# for it to go, then KILL; then the group is forgotten
+# fl_run_group_alive: a process of the running command's group is still there
+fl_run_group_alive() {
+  kill -0 -- "-${FL_RUN_PGID}" 2>/dev/null || kill -0 "$FL_RUN_PGID" 2>/dev/null
+}
+
+# fl_run_group_kill: TERM to the group, then up to FL_KILL_GRACE seconds
+# (default 1, tenths of a second as 0.3) for it to go, polled every 50 ms so a
+# group that ends at once is not waited for; what is left gets KILL. Then the
+# group is forgotten. The wait is bounded by the clock as well as by the count:
+# a loaded machine stretches each 50 ms poll, never the grace.
 fl_run_group_kill() {
   [[ -n "$FL_RUN_PGID" ]] || return 0
+  local grace="${FL_KILL_GRACE:-1}" whole fraction="" ms steps t0="$SECONDS"
+  whole="${grace%%.*}"
+  [[ "$grace" != *.* ]] || fraction="${grace#*.}"
+  fraction="${fraction}00"
+  ms=$((10#${whole:-0} * 1000 + 10#${fraction:0:2} * 10))
+  steps=$((ms / 50))
   fl_run_group_stop TERM
-  sleep "${FL_KILL_GRACE:-1}"
-  fl_run_group_stop KILL
-  wait "$FL_RUN_PGID" 2>/dev/null || true
+  while [[ "$steps" -gt 0 ]] && fl_run_group_alive; do
+    sleep 0.05
+    steps=$((steps - 1))
+    [[ $((SECONDS - t0)) -le $((ms / 1000 + 1)) ]] || break
+  done
+  if fl_run_group_alive; then fl_run_group_stop KILL; fi
+  wait "$FL_RUN_PGID" || true
   FL_RUN_PGID=""
-}
+} 2>/dev/null # the shell reports a command a signal ended ("Terminated: 15") on its own stderr
 
 # Background jobs a command runs side by side with the shell (the profile
 # check pool): their pids are in FL_BG_PIDS, so a signal to benchbar can stop
@@ -308,26 +326,49 @@ fl_run_with_timeout() {
 # (fl_run_group_kill), so neither a child nor a command that ignores TERM
 # runs on; exit 124. FL_RUN_PGID is put back afterwards: a signal that
 # arrives later still reaches the right group.
+# The deadline is the clock's, not a count of polls: a command that is still
+# running after its first 20 ms poll gets a `sleep` of the rest as its timer,
+# because a poll that a loaded machine stretches from 100 ms to 400 ms would
+# stretch the deadline with it (the first CI run of this took 4 s for 1 s).
+# A command that ends within that poll starts no timer.
 fl_run_capture_timeout() {
-  local secs="$1" out="$2" saved_pgid="$FL_RUN_PGID" pid waited=0 code=0
+  local secs="$1" out="$2" saved_pgid="$FL_RUN_PGID" pid waited=0 code=0 timer="" left expired=0
   local FL_RUN_ERR_FILE="$3"
   shift 3
   FL_RUN_PGID=""
   fl_run_bg_group "$out" "$@"
   pid="$FL_RUN_PID"
-  # a quick command (a local ls-remote) is noticed within 20 ms; a slow one is polled every 100 ms
+  # a quick command is noticed within 20 ms; a slow one is polled every 100 ms
   while kill -0 "$pid" 2>/dev/null; do
-    if [[ "$waited" -ge $((secs * 1000)) ]]; then
+    if [[ -n "$timer" ]]; then
+      kill -0 "$timer" 2>/dev/null || expired=1
+    elif [[ "$waited" -ge $((secs * 1000)) ]]; then
+      expired=1
+    elif [[ "$waited" -ge 20 ]]; then
+      left=$((secs * 1000 - waited))
+      printf -v left '%d.%03d' $((left / 1000)) $((left % 1000))
+      sleep "$left" >/dev/null 2>&1 3>&- &
+      timer="$!"
+    fi
+    if [[ "$expired" -eq 1 ]]; then
       fl_run_group_kill
       printf 'timed out after %ss\n' "$secs" >>"$FL_RUN_ERR_FILE"
       FL_RUN_PGID="$saved_pgid"
+      fl__timer_stop "$timer"
       return 124
     fi
-    if [[ "$waited" -lt 500 ]]; then sleep 0.02; waited=$((waited + 20)); else sleep 0.1; waited=$((waited + 100)); fi
+    if [[ "$waited" -lt 100 ]]; then sleep 0.02; waited=$((waited + 20)); else sleep 0.1; waited=$((waited + 100)); fi
   done
   wait "$pid" || code=$?
   FL_RUN_PGID="$saved_pgid"
+  fl__timer_stop "$timer"
   return "$code"
+}
+
+# fl__timer_stop PID: ends the timer of fl_run_capture_timeout, quietly
+fl__timer_stop() {
+  [[ -n "$1" ]] || return 0
+  { kill "$1" && wait "$1"; } 2>/dev/null || true
 }
 
 # ---------------------------------------------------------------- git over the network

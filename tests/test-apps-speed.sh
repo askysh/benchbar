@@ -117,17 +117,19 @@ alive_hang_pids() {
 }
 
 # a hanging ls-remote is cut after FL_PROFILE_NET_SECS and takes its children
-# along. Checked while profile check still runs (two repos at a time, so the
-# command outlives the first timeouts): a git that only dies when benchbar
-# exits is not cut. The first two repos have been timed out for 3 s: no
-# process of theirs may be left, though benchbar is still waiting for the rest.
-export SPEED_HANG="$TMP_DIR/hang-pids" FL_PROFILE_NET_SECS=1 FL_PROFILE_JOBS=2
+# along. Checked while profile check still runs (one repo at a time, six
+# seconds in all, so the command outlives the first timeouts): a git that only
+# dies when benchbar exits is not cut. The pids carry a start time in whole
+# seconds, so a process counts when it started 3 s ago: it has been cut for
+# more than 1 s (deadline 1 s, TERM at once) even on a loaded machine, and
+# benchbar is still waiting for the other repos.
+export SPEED_HANG="$TMP_DIR/hang-pids" FL_PROFILE_NET_SECS=1 FL_PROFILE_JOBS=1
 : >"$SPEED_HANG"
 "$FM" profile check speedprof --json --bench-dir "$BENCH" >"$TMP_DIR/hang.out" 2>"$TMP_DIR/hang.err" &
 HANG_PID="$!"
-sleep 3
+sleep 4
 kill -0 "$HANG_PID" 2>/dev/null || fail "profile check ended before the liveness check (test needs it to run)"
-LIVE="$(alive_hang_pids "$SPEED_HANG" 2)"
+LIVE="$(alive_hang_pids "$SPEED_HANG" 3)"
 assert_eq "0" "$LIVE" "(a timed out git is still running while profile check runs)"
 set +e; wait "$HANG_PID"; CODE="$?"; set -e
 OUT="$(cat "$TMP_DIR/hang.out")"; ERR="$(cat "$TMP_DIR/hang.err")"

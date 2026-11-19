@@ -237,5 +237,24 @@ for who in child grandchild; do
   if kill -0 "$pid" 2>/dev/null && [[ "$state" != Z* ]]; then fail "the ${who} (pid ${pid}, state ${state}) survived fl_run_capture_timeout"; fi
 done
 
+# the deadline is the clock's: on a loaded machine every 20 or 100 ms poll takes
+# 400 ms (here a sleep that is made slow), and a 1 s deadline must still end
+# within about 2 s (the macOS runner took 4 to 5 s when the deadline was a
+# count of polls). TERM is honoured here, so the grace is not waited for.
+cat >"$TMP_DIR/loaded.sh" <<SH
+set -euo pipefail
+. "$ROOT/lib/frappe-local/run.sh"
+sleep() { case "\$1" in 0.02|0.05|0.1) command sleep 0.4 ;; *) command sleep "\$@" ;; esac; }
+code=0
+start="\$SECONDS"
+fl_run_capture_timeout 1 "$TMP_DIR/ld.out" "$TMP_DIR/ld.err" bash -c 'echo \$\$ >"$TMP_DIR/ld.pid"; command sleep 60 & wait' || code=\$?
+printf '%s %s\\n' "\$code" "\$((SECONDS - start))"
+SH
+read -r code secs <<<"$(bash "$TMP_DIR/loaded.sh")"
+assert_eq "124" "$code"
+[[ "$secs" -le 3 ]] || fail "a 1s deadline took ${secs}s while every poll was slow"
+ldpid="$(cat "$TMP_DIR/ld.pid")"
+if kill -0 "$ldpid" 2>/dev/null; then fail "the timed out command (pid ${ldpid}) survived"; fi
+
 
 printf 'test-app-recovery-3 (%s): ok\n' "$RECOVERY_PASS"
