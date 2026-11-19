@@ -51,7 +51,7 @@ the argument `mcp`.
 | `benchbar_app_focus_list` | read | Every app of one bench with whether it is a focus app (the ones being worked on), why, and how far behind its remote it is, from the last git fetch. | `bench` |
 | `benchbar_app_install_plan` | plan (read only) | Plan installing an app that is already in a bench on one site (bench --site S install-app), read only: the step, and a token for benchbar_app_install. | `name`*, `site`*, `bench` |
 | `benchbar_app_install` | acts | Apply a plan from benchbar_app_install_plan: install the app on the site. | `name`*, `site`*, `bench`, `token`* |
-| `benchbar_app_update_plan` | plan (read only) | Plan fast forwarding one app to its remote branch, read only: the commits it takes (the changelog), the sites that have the app (each is backed up first, then migrated), every step, and a token for benchbar_app_update. | `name`*, `bench` |
+| `benchbar_app_update_plan` | plan (git fetch) | Plan fast forwarding one app to its remote branch; it runs git fetch on the app (which writes the app's .git/FETCH_HEAD and remote refs and nothing else): the commits it takes (the changelog), the sites that have the app (each is backed up first, then migrated), every step, and a token for benchbar_app_update. | `name`*, `bench` |
 | `benchbar_app_update` | acts | Apply a plan from benchbar_app_update_plan: back up the sites that have the app, fast forward it, requirements, migrate, build, restart a running bench. | `name`*, `bench`, `token`* |
 
 An argument marked `*` is required. `bench` (the bench's path, from `benchbar_list`) is optional on every tool that has it: without it the tool uses the default bench.
@@ -103,7 +103,8 @@ with the same arguments and the token.
 
 An app that is already in the bench is installed on a site with
 `benchbar_app_install_plan`, then `benchbar_app_install` (the app's own
-install hooks run and write into that site's database). An app is brought up
+install hooks run and write into that site's database; the plan has no
+backup step, so take `benchbar_site_backup` first when the data matters). An app is brought up
 to date with `benchbar_app_update_plan`, then `benchbar_app_update`: the plan
 lists the commits it takes (the changelog), the sites that have the app and
 every step. Each site that has the app is backed up first, then the app fast
@@ -111,12 +112,14 @@ forwards, its requirements are installed, the sites migrate, the assets build
 and a running bench restarts. There is no tool argument that skips the backup.
 
 The CLI prints these two plans without a token, so the server makes one from
-the plan. The apply plans again (for an update that is a `git fetch`) and
-refuses when the plan is no longer the same: the remote has new commits, a
-site or the app changed, or an earlier update was left half done. Plan again
-and show the person the new plan. The rest is as for any plan: the token
-must come from the plan tool through this server, at least 5 seconds old, and
-a client that can ask the person is asked from inside the apply.
+the plan. After the person's yes the apply plans again (for an update that is
+a `git fetch`) and refuses when the plan is no longer the same: the remote has
+new commits, a site or the app changed, or an earlier update was left half
+done. Plan again and show the person the new plan. The rest is as for any
+plan: the token must come from the plan tool through this server, at least 5
+seconds old, and a client that can ask the person is asked from inside the
+apply. `benchbar_app_update_plan` runs that `git fetch` too, which writes the
+app's `.git/FETCH_HEAD` and remote refs, so it is not a read only tool.
 
 ## Adding an app
 

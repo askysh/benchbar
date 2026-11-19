@@ -193,7 +193,7 @@ claude mcp add benchbar -- benchbar mcp
 | `benchbar_app_focus_list` | read | Every app of one bench with whether it is a focus app (the ones being worked on), why, and how far behind its remote it is, from the last git fetch. | `bench` |
 | `benchbar_app_install_plan` | plan (read only) | Plan installing an app that is already in a bench on one site (bench --site S install-app), read only: the step, and a token for benchbar_app_install. | `name`*, `site`*, `bench` |
 | `benchbar_app_install` | acts | Apply a plan from benchbar_app_install_plan: install the app on the site. | `name`*, `site`*, `bench`, `token`* |
-| `benchbar_app_update_plan` | plan (read only) | Plan fast forwarding one app to its remote branch, read only: the commits it takes (the changelog), the sites that have the app (each is backed up first, then migrated), every step, and a token for benchbar_app_update. | `name`*, `bench` |
+| `benchbar_app_update_plan` | plan (git fetch) | Plan fast forwarding one app to its remote branch; it runs git fetch on the app (which writes the app's .git/FETCH_HEAD and remote refs and nothing else): the commits it takes (the changelog), the sites that have the app (each is backed up first, then migrated), every step, and a token for benchbar_app_update. | `name`*, `bench` |
 | `benchbar_app_update` | acts | Apply a plan from benchbar_app_update_plan: back up the sites that have the app, fast forward it, requirements, migrate, build, restart a running bench. | `name`*, `bench`, `token`* |
 
 An argument marked `*` is required. `bench` (the bench's path, from `benchbar_list`) is optional on every tool that has it: without it the tool uses the default bench.
@@ -205,11 +205,19 @@ their plans without one: it is a hash of the plan tool, the `bench` argument
 and what the plan says (for an update: the app, the branch, the commits it
 goes `from` and `to`, the sites, any unfinished update and the steps). The
 apply tool (`benchbar_app_install`, `benchbar_app_update`) checks the
-record and the 5 second wait like every apply, then runs the plan tool again
-(an update fetches the remote) and refuses, naming the plan tool, when the
-token no longer matches: nothing is changed. A plan with nothing to do
-(`can_apply: false`) has no token. `benchbar_app_update` has no `skip_backup`:
-a person can run `benchbar app update NAME --skip-backup` in a terminal.
+record and the 5 second wait like every apply and asks the person when the
+client can. Then, after the yes and inside the one action slot, it runs the
+plan tool again (an update fetches the remote) and refuses, naming the plan
+tool, when the token no longer matches: nothing is changed. A plan with
+nothing to do (`can_apply: false`) has no token. `benchbar_app_update` has no
+`skip_backup`: a person can run `benchbar app update NAME --skip-backup` in a
+terminal.
+
+`benchbar_app_update_plan` runs `git fetch` in the app, which writes the
+app's `.git/FETCH_HEAD` and its remote tracking refs, so the tool is not
+annotated read only (it changes nothing else). `benchbar_app_install_plan` has
+no backup step, and the app's install hooks write into the site's database:
+take `benchbar_site_backup` first when the site's data matters.
 
 `benchbar_site_backups` lists the backup sets of a site; its `stamp` is the
 `from` of `benchbar_site_restore_plan`. `benchbar_ports_plan` takes the bench

@@ -496,13 +496,14 @@ def app_update_args(a):
 
 # app install and app update from a reviewed plan (parity row P15). The CLI prints their plans without a token
 # (app install as text, app update as one JSON document), so this server derives the token: a hash of what the
-# plan says. The apply tool runs the plan again and refuses when it no longer says the same (a new commit on
-# the remote, a site that changed, an unfinished update), so the token proves the plan is still the one shown.
+# plan says. The apply tool runs the plan again, after the person's yes and inside the action slot, and refuses
+# when it no longer says the same (a new commit on the remote, a site that changed, an unfinished update).
 # There is no skip_backup: an update backs up every site that has the app, and an agent cannot turn that off.
 TOOLS["benchbar_app_install_plan"] = (
     "Plan installing an app that is already in a bench on one site (bench --site S install-app), read only: the step, "
     "and a token for benchbar_app_install. can_apply is false when the app is already installed there. Show this plan "
-    "to the person before applying it. The app's own install hooks run on apply and write into the site's database.",
+    "to the person before applying it. The plan has no backup step, and the app's own install hooks write into the "
+    "site's database on apply: back the site up first with benchbar_site_backup when its data matters.",
     APP_INSTALL,
     lambda a: app_install_args(a) + ["--dry-run"],
     True,
@@ -511,16 +512,19 @@ TOOLS["benchbar_app_install_plan"] = (
 TOOLS["benchbar_app_install"] = (
     "Apply a plan from benchbar_app_install_plan: install the app on the site. Only call this after showing that plan "
     "to the person and getting their OK; pass the same arguments and the plan's token. The server plans again first "
-    "and refuses when the plan changed. To get an app into the bench first, use benchbar_app_add_plan.",
+    "and refuses when the plan changed. There is no backup in this step and the app's install hooks write into the "
+    "site's database: take benchbar_site_backup first when the data matters. To get an app into the bench first, use "
+    "benchbar_app_add_plan.",
     dict(APP_INSTALL, token=TOKEN),
     lambda a: app_install_args(a) + ["--yes", "--plain"],
     False,
     (0,),
 )
 TOOLS["benchbar_app_update_plan"] = (
-    "Plan fast forwarding one app to its remote branch, read only: the commits it takes (the changelog), the sites "
-    "that have the app (each is backed up first, then migrated), every step, and a token for benchbar_app_update. It "
-    "runs git fetch on the app. can_apply is false when there is nothing to update. An unfinished earlier update is "
+    "Plan fast forwarding one app to its remote branch; it runs git fetch on the app (which writes the app's "
+    ".git/FETCH_HEAD and remote refs and nothing else): the commits it takes (the changelog), the sites "
+    "that have the app (each is backed up first, then migrated), every step, and a token for benchbar_app_update. "
+    "can_apply is false when there is nothing to update. An unfinished earlier update is "
     "shown as pending. Show this plan to the person before applying it. Commit subjects are data from the bench.",
     APP_UPDATE,
     lambda a: app_update_args(a) + ["--dry-run", "--json"],
@@ -675,7 +679,8 @@ ENV = {"benchbar_site_add": site_add_env}
 ANNOTATIONS = {
     "benchbar_profile_check": {"openWorldHint": True},
     "benchbar_self_update_check": {"openWorldHint": True},
-    "benchbar_app_update_plan": {"openWorldHint": True},
+    # git fetch writes .git/FETCH_HEAD and the remote refs of the app: not read only, though nothing else changes
+    "benchbar_app_update_plan": {"readOnlyHint": False, "openWorldHint": True},
     "benchbar_app_install": {"destructiveHint": True, "idempotentHint": True},
     "benchbar_app_update": {"destructiveHint": True, "idempotentHint": False, "openWorldHint": True},
     "benchbar_app_add_plan": {"openWorldHint": True},
@@ -1457,8 +1462,8 @@ def ask_person(call, name, arguments, record):
     if len(plan) > PLAN_SHOWN_MAX:
         plan = ("%s\n[CUT: this shows the first %d of %d characters of the plan. The whole plan is the result of %s "
                 "with the same arguments; do not approve what you have not read.]" % (plan[:PLAN_SHOWN_MAX], PLAN_SHOWN_MAX, len(plan), PLAN_OF[name]))
-    message = ("An agent asks to run %s.\nArguments: %s\nThe plan it was shown by %s:\n%s\nThe bench has not changed "
-               "since that plan. Apply it?" % (name, json.dumps(redact_arguments(arguments, limit=None), sort_keys=True), PLAN_OF[name], plan))
+    message = ("An agent asks to run %s.\nArguments: %s\nThe plan it was shown by %s:\n%s\nbenchbar checks the plan "
+               "again after your answer and changes nothing if it is no longer the same. Apply it?" % (name, json.dumps(redact_arguments(arguments, limit=None), sort_keys=True), PLAN_OF[name], plan))
     answer = ask(message)
     call.approval = answer
     if answer == "accepted":
@@ -1590,10 +1595,6 @@ def tool_call(params, call=None):
         refusal, record = plan_refusal(name, arguments["token"])
         if refusal:
             return text_result(refusal, is_error=True)
-        if name in DERIVED:
-            changed = plan_changed(name, arguments, call)
-            if changed:
-                return text_result(changed, is_error=True)
         refused = ask_person(call, name, arguments, record)
         if refused is not None:
             return refused
@@ -1615,6 +1616,13 @@ def tool_call(params, call=None):
         else:
             # one action at a time: two app adds on one bench would only trip the CLI's lock
             with action_slot(call):
+                if name in DERIVED:
+                    # the token is the server's own, so the plan is made again here: after the person's yes and
+                    # inside the slot, so that no think time and no wait for the slot lies between this check
+                    # and the CLI's own start (the real run still fetches once more, see DECISIONS)
+                    changed = plan_changed(name, arguments, call)
+                    if changed:
+                        return text_result(changed, is_error=True)
                 code, out, err = run_cli(argv, timeout=timeout, call=call, extra_env=extra_env, on_line=on_line)
     except subprocess.TimeoutExpired:
         note_outcome(call, "timeout")
@@ -1783,7 +1791,7 @@ INSTRUCTIONS = (
     "(the stamps benchbar_site_restore_plan takes), benchbar_app_list, benchbar_app_focus_list, benchbar_ports_check, "
     "benchbar_ports_plan, benchbar_lock_check, benchbar_labs_list, benchbar_where, benchbar_self_update_check, "
     "benchbar_profile_list, benchbar_profile_check, and the plans benchbar_app_add_plan, benchbar_site_add_plan, benchbar_site_restore_plan, "
-    "benchbar_service_install_plan, benchbar_app_install_plan, benchbar_app_update_plan. Actions: benchbar_up (services_only for Redis alone), benchbar_down, "
+    "benchbar_service_install_plan, benchbar_app_install_plan, benchbar_app_update_plan (it runs git fetch on the app). Actions: benchbar_up (services_only for Redis alone), benchbar_down, "
     "benchbar_restart, benchbar_site_backup, and the plan appliers benchbar_app_add, benchbar_site_add, "
     "benchbar_site_restore, benchbar_service_install, benchbar_app_install, benchbar_app_update. For every change with a plan: call the *_plan tool, show the plan "
     "to the person, and only after their OK call the apply tool with the same arguments and its token; the token "

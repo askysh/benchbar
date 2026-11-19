@@ -100,7 +100,11 @@ for n in ("benchbar_down", "benchbar_restart"):
     assert an[n] == {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True, "openWorldHint": False}, (n, an[n])
 assert an["benchbar_app_install"] == {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True, "openWorldHint": False}, an["benchbar_app_install"]
 assert an["benchbar_app_update"] == {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": True}, an["benchbar_app_update"]
-assert an["benchbar_app_update_plan"]["readOnlyHint"] is True and an["benchbar_app_update_plan"]["openWorldHint"] is True, an["benchbar_app_update_plan"]
+# the update plan runs git fetch (it writes .git/FETCH_HEAD): not read only
+assert an["benchbar_app_update_plan"] == {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True}, an["benchbar_app_update_plan"]
+dd = {t["name"]: t["description"] for t in by[2]["result"]["tools"]}
+assert "benchbar_site_backup" in dd["benchbar_app_install"] and "benchbar_site_backup" in dd["benchbar_app_install_plan"], "the install says it has no backup"
+assert "no backup" in dd["benchbar_app_install"] and "git fetch" in dd["benchbar_app_update_plan"] and "read only" not in dd["benchbar_app_update_plan"]
 assert an["benchbar_app_add"] == {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": True}, an["benchbar_app_add"]
 lt = {t["name"]: t for t in by[2]["result"]["tools"]}["benchbar_logs_tail"]
 assert lt["inputSchema"]["properties"]["file"]["enum"] == ["bench", "worker", "worker_error", "previous"], lt

@@ -121,7 +121,8 @@ def mcp_block(tools):
         args = ", ".join(code(k) + ("*" if k in required else "") for k in schema["properties"]) or "none"
         a = t["annotations"]
         if t["name"].endswith("_plan") and t["name"][:-5] in names:
-            kind = "plan (read only)"
+            # a plan that runs git fetch writes .git/FETCH_HEAD: it is annotated as not read only
+            kind = "plan (read only)" if a["readOnlyHint"] else "plan (git fetch)"
         elif a["readOnlyHint"]:
             kind = "read"
         else:
