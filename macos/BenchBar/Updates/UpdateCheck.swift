@@ -106,6 +106,9 @@ nonisolated enum UpdateCheck {
     static func parse(_ data: Data, current: String) throws(UpdateCheckError) -> UpdateStatus {
         let release: Release
         do { release = try JSONDecoder().decode(Release.self, from: data) } catch { throw .unreadable }
+        // GitHub's "latest" is never a draft or a pre-release (a release candidate,
+        // X.Y.Z-rc.N, is one). Should an answer say it is, it is not an update.
+        if release.prerelease == true || release.draft == true { return .upToDate(latest: current) }
         guard let latest = AppVersion(release.tagName) else { throw .unreadable }
         let page = release.htmlURL ?? BenchBarLinks.releases
         if let mine = AppVersion(current), mine < latest {

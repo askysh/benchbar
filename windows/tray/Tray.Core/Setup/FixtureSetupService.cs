@@ -8,6 +8,9 @@ namespace BenchBar.Tray.Core;
 public sealed class FixtureSetupService(string directory) : ISetupService
 {
     private readonly string _dir = Path.Combine(directory, "setup");
+
+    /// <summary>The folder the fixtures are read from (it holds <c>setup</c>, and <c>cli/profile-list.json</c> for the profile picker).</summary>
+    public string Root => directory;
     private readonly List<string> _calls = [];
 
     public IReadOnlyList<string> Calls
@@ -100,6 +103,30 @@ public sealed class FixtureSetupService(string directory) : ISetupService
     }
 
     public Task<string?> HomeAsync(string? distro, CancellationToken ct) => Task.FromResult<string?>("/home/fixture");
+
+    /// <summary>The profiles come from <c>cli/profile-list.json</c> of the fixtures folder (the CLI fixtures the Profiles page uses), the built in ones when it is missing.</summary>
+    public async Task<ProfileListResult> ListProfilesAsync(CancellationToken ct)
+    {
+        Record("profile list");
+        var file = Path.Combine(directory, "cli", "profile-list.json");
+        if (!File.Exists(file)) return new ProfileListResult([], "The fixtures have no profile list.");
+        var text = await File.ReadAllTextAsync(file, ct).ConfigureAwait(false);
+        return new ProfileListResult(ProfileListJson.Parse(System.Text.Json.Nodes.JsonNode.Parse(text)!.AsObject()), null);
+    }
+
+    /// <summary>The gate takes every profile, unless <c>setup/profile-gate-NAME.jsonl</c> holds the stream the CLI printed when it refused it.</summary>
+    public async Task<ProfileGate> CheckProfileAsync(string profile, string benchDir, CancellationToken ct)
+    {
+        Record("gate " + profile);
+        InstallPlan? plan = null;
+        InstallDone? done = null;
+        foreach (var e in await ReadInstallAsync($"profile-gate-{profile}.jsonl", ct).ConfigureAwait(false))
+        {
+            if (e is InstallEvent.Plan p) plan = p.Value;
+            if (e is InstallEvent.Done d) done = d.Value;
+        }
+        return ProfileChoices.Read(profile, plan, done);
+    }
 
     public Task<IReadOnlyList<DistroInfo>> ListDistrosAsync(CancellationToken ct)
     {

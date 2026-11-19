@@ -490,3 +490,4 @@ One line per non obvious choice. The 0.8.0 spike that chose WPF over WinUI was d
   flipped the box, the handler puts it back to the model's value at once; the box changes only when the startup task's answer (after
   `RequestEnableAsync` or `Disable` plus a read) is published. The setup wizard's box does the same and re-reads the task when it opens.
   `LogonModel` runs one request at a time and ignores a toggle while one is in flight.
+- **The wizard asks the install itself which profiles it takes.** `profile list --json` has no per platform field, so each profile gets `install --dry-run --json --offline --profile NAME`, one after the other: a plan line means taken, a `done` that failed before any plan is the refusal, shown as the CLI worded it. No answer leaves the profile on offer; Review then says more (#175).
