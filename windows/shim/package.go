@@ -15,13 +15,30 @@ type PackageInfo struct {
 	Family   string
 }
 
-// detectPackage asks Windows. Another platform, or a Windows before 8, is
-// never packaged.
-func detectPackage() PackageInfo {
-	if fam, ok := packageFamilyName(); ok && fam != "" {
+// detectPackage asks Windows, and then checks the program's own path. A
+// process has package identity when it runs from a package, but a child can
+// inherit its parent's identity (a zip benchbar.exe that a packaged program
+// started), so identity alone is not enough: the executable must also sit
+// under a WindowsApps folder, as installKind requires for "store". Another
+// platform, or a Windows before 8, is never packaged.
+func detectPackage(exePath string) PackageInfo {
+	return packageFor(exePath, packageFamilyName)
+}
+
+func packageFor(exePath string, family func() (string, bool)) PackageInfo {
+	if !underWindowsApps(exePath) {
+		return PackageInfo{}
+	}
+	if fam, ok := family(); ok && fam != "" {
 		return PackageInfo{Packaged: true, Family: fam}
 	}
 	return PackageInfo{}
+}
+
+// underWindowsApps is true when path is inside a WindowsApps folder, which
+// is where Windows puts every package, in any letter case.
+func underWindowsApps(path string) bool {
+	return strings.Contains(strings.ToLower(strings.ReplaceAll(path, "/", `\`)), `\windowsapps\`)
 }
 
 // packagedDataDir is the physical folder a packaged process's writes under
