@@ -2,6 +2,9 @@
 #
 # lan-guard.sh: benchbar lan-guard install|status|remove|allow-node
 #
+# This file is the macOS guard and the dispatch; Linux has an nftables table and a systemd unit
+# (lan-guard-linux.sh). What follows describes macOS.
+#
 # The LAN guard is a pf anchor (com.apple/250.benchbar, loaded by Apple's own
 # pf.conf through its com.apple/* anchor) that refuses TCP from anything but
 # loopback to every bench port: web 8000:8099, socket.io 9000:9099, Redis
@@ -33,6 +36,9 @@ FL_LANGUARD_PF_TEXT="# BenchBar: Frappe bench ports answer this Mac only (benchb
 # LAN address, which is what lets a probe of that address prove the rule works.
 ${FL_SHARE_PF_TEMPLATE}"
 
+# the name the guard goes by: the pf anchor on macOS, the nftables table on Linux (status's "anchor")
+fl_lg_anchor_name() { if fl_is_linux; then printf '%s' "$FL_LGL_TABLE"; else printf '%s' "$FL_LANGUARD_PF_ANCHOR_NAME"; fi; }
+
 # where the checks read the two root files (the tests' seams); root always writes FL_SHARE_PF_*_FILE
 fl_lg_anchor() { printf '%s' "${FL_LANGUARD_ANCHOR:-$FL_SHARE_PF_ANCHOR_FILE}"; }
 fl_lg_daemon() { printf '%s' "${FL_LANGUARD_DAEMON:-$FL_SHARE_PF_DAEMON_FILE}"; }
@@ -40,10 +46,11 @@ fl_lg_daemon() { printf '%s' "${FL_LANGUARD_DAEMON:-$FL_SHARE_PF_DAEMON_FILE}"; 
 # fl_lg_state_v VAR: installed, missing or outdated, by the rule share preflight and share status use
 # (the anchor's non-comment lines, and a daemon that loads it)
 fl_lg_state_v() {
-  local __problem
+  local __problem __a __d
   fl_sp_pf_files_problem_v __problem
+  if fl_is_linux; then __a="$(fl_lgl_rules_path)"; __d="$(fl_lgl_unit_path)"; else __a="$(fl_lg_anchor)"; __d="$(fl_lg_daemon)"; fi
   if [[ -z "$__problem" ]]; then printf -v "$1" installed
-  elif [[ ! -r "$(fl_lg_anchor)" || ! -r "$(fl_lg_daemon)" ]]; then printf -v "$1" missing
+  elif [[ ! -r "$__a" || ! -r "$__d" ]]; then printf -v "$1" missing
   else printf -v "$1" outdated; fi
 }
 
@@ -77,7 +84,7 @@ fl_lg_say_active() {
 fl_lg_require_person() {
   [[ "${FL_DRY_RUN:-0}" != 1 ]] || return 0
   fl_noninteractive && fl_die "benchbar lan-guard $1 runs sudo, a person's decision, so nothing run without a terminal can do it." "Run it in a terminal: benchbar lan-guard $1"
-  [[ -t 0 || "${BENCHBAR_SUDO:-}" == gui ]] || fl_die "benchbar lan-guard $1 needs a person at a terminal (it asks for your password), and this run has none." "Run it in a terminal: benchbar lan-guard $1"
+  [[ -t 0 ]] || fl_sudo_gui || { fl_is_linux && fl_sudo_env_has_password; } || fl_die "benchbar lan-guard $1 needs a person at a terminal (it asks for your password), and this run has none." "Run it in a terminal: benchbar lan-guard $1"
 }
 
 # fl_lg_as_root REASON MANUAL SCRIPT: SCRIPT as root, once: one dialog with BENCHBAR_SUDO=gui, else sudo on
@@ -98,7 +105,7 @@ fl_lg_as_root() {
   fi
   fl_sudo_begin "$reason" || fl_die "sudo was not available, so nothing was changed." "Run in a terminal: ${manual}"
   FL_LG_ROOT_OUT="$(sudo /bin/bash -c "$script" benchbar-root)" || code=$?
-  fl_sudo_drop
+  if fl_is_linux; then fl_sudo_phase_done; else fl_sudo_drop; fi
   printf '%s\n' "$FL_LG_ROOT_OUT" | grep -v '^benchbar-pf-' || true
   [[ "$code" == 0 ]] || fl_die "The root step failed (exit ${code}); see the log." "Run: ${manual}"
 }
@@ -229,7 +236,7 @@ fl_lg_doc_v() {
   fl_lg_active_v __active
   [[ -z "$SP_LAN_IP" ]] || __ip="$(fl_json_str "$SP_LAN_IP")"
   printf -v "$1" '{"schema_version":%d,"cli_version":"%s","state":"%s","active":%s,"ports":"%s","anchor":"%s","lan_ip":%s}' \
-    "$FL_SCHEMA_VERSION" "$FL_VERSION" "$__state" "$__active" "$FL_LANGUARD_PORTS" "$FL_LANGUARD_PF_ANCHOR_NAME" "$__ip"
+    "$FL_SCHEMA_VERSION" "$FL_VERSION" "$__state" "$__active" "$FL_LANGUARD_PORTS" "$(fl_lg_anchor_name)" "$__ip"
   LG_STATE="$__state"; LG_ACTIVE="$__active"
 }
 
@@ -246,8 +253,10 @@ fl_cmd_lan_guard_status() {
   for a in "$@"; do fl_die "Unknown argument for lan-guard status: $a" "Use: benchbar lan-guard status [--json]"; done
   fl_lg_doc_v doc
   if [[ "${OPT_JSON:-0}" == 1 ]]; then fl_doc_emit 0 "$doc"; return 0; fi
-  fl_info "LAN guard: ${LG_STATE} (pf anchor ${FL_LANGUARD_PF_ANCHOR_NAME}: ${FL_LANGUARD_PORTS})"
+  if fl_is_linux; then fl_info "LAN guard: ${LG_STATE} (nftables table ${FL_LGL_TABLE}: ${FL_LANGUARD_PORTS})"
+  else fl_info "LAN guard: ${LG_STATE} (pf anchor ${FL_LANGUARD_PF_ANCHOR_NAME}: ${FL_LANGUARD_PORTS})"; fi
   fl_lg_say_active
+  ! fl_is_linux || fl_lgl_ufw_note
   [[ "$LG_STATE" == installed && "$LG_ACTIVE" != false ]] || fl_fix "benchbar lan-guard install"
 }
 
@@ -276,6 +285,7 @@ fl_lg_repair() {
 fl_cmd_lan_guard_install() {
   local a state doc
   for a in "$@"; do fl_die "Unknown argument for lan-guard install: $a" "Use: benchbar lan-guard install [--dry-run] [--yes] [--json]"; done
+  if fl_is_linux; then fl_lgl_install; return 0; fi
   fl_lg_require_person install
   fl_lg_state_v state
   if [[ "$state" == installed ]]; then
@@ -311,6 +321,7 @@ fl_cmd_lan_guard_remove() {
   local a state
   for a in "$@"; do fl_die "Unknown argument for lan-guard remove: $a" "Use: benchbar lan-guard remove [--yes] [--json]"; done
   [[ "${FL_DRY_RUN:-0}" != 1 ]] || fl_die "lan-guard remove has no dry run." "benchbar lan-guard status shows the guard."
+  if fl_is_linux; then fl_lgl_remove; return 0; fi
   fl_lg_require_person remove
   if [[ ! -e "$(fl_lg_anchor)" && ! -e "$(fl_lg_daemon)" ]]; then
     fl_ok "unchanged: the guard is not installed"
@@ -333,6 +344,7 @@ fl_cmd_lan_guard_remove() {
 fl_cmd_lan_guard_allow_node() {
   local a problem fw state app real doc
   for a in "$@"; do fl_die "Unknown argument for lan-guard allow-node: $a" "Use: benchbar lan-guard allow-node [--yes] [--json]"; done
+  if fl_is_linux; then fl_lgl_allow_node; return 0; fi
   [[ "${FL_DRY_RUN:-0}" != 1 ]] || fl_die "lan-guard allow-node has no dry run." "benchbar share preflight --static shows the firewall_node check."
   fl_lg_require_person allow-node
   fl_sp_node_path_problem_v problem
@@ -360,12 +372,13 @@ fl_cmd_lan_guard_allow_node() {
   [[ "${OPT_JSON:-0}" != 1 ]] || fl_doc_emit 0 "$doc"
 }
 
-# fl_lg_platform_ok SUB: stops the command, before anything is asked or run as root, on a platform whose
-# guard this file does not have. Every root script below names pf, launchd and macOS paths, so they must
-# never be reached from another platform.
+# fl_lg_platform_ok SUB: stops the command, before anything is asked or run as root, on a platform that has
+# no guard: macOS (pf, below) and Linux (nftables, lan-guard-linux.sh) have one. The root scripts of the
+# macOS half name pf, launchd and macOS paths, so they must never be reached from another platform.
 fl_lg_platform_ok() {
-  [[ "${FL_PLATFORM:-}" == macos ]] && return 0
-  fl_die "benchbar lan-guard ${1} is not available on ${FL_PLATFORM:-this platform}: the guard is written for macOS (a pf anchor and a launch daemon)."     "Nothing was changed. Run it on a Mac."
+  case "${FL_PLATFORM:-}" in macos|linux) return 0 ;; esac
+  fl_die "benchbar lan-guard ${1} is not available on ${FL_PLATFORM:-this platform}: it has a guard for macOS (pf) and Linux (nftables) only." \
+    "Nothing was changed."
 }
 
 fl_cmd_lan_guard() {
