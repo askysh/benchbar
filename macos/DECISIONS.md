@@ -574,6 +574,10 @@ Asked for after the phases, to stop naming drift before the first release.
 - A logged link is `benchbar://action` (`URLRouter.logLabel`), or "other link, hash" plus 12 hex characters for anything that is not a known route, and the reason beside it is a fixed text (`IgnoreReason.message`, `URLRouter.Why.logText`, built by `URLRouter.rejectionLogLine`): the host, path, query, userinfo, bench name or site of a rejected or explained link are never written to the unified log, where `log show` reads them as `privacy: .public`. The alert for the person may still name the bench they asked for. The confirm alert for a link has Cancel as its default button (`ShareConfirm.ask(cancelIsDefault:)`), so a stray Return does not confirm what a page asked.
 - A runner's `manifest.json` is opened with `O_NOFOLLOW | O_NONBLOCK`, checked with `fstat` on the open descriptor and read at most 64 KB + 1 (`RunnerLoader.readPlainFile`): a symlink, a FIFO or `/dev/zero` in a zip cannot hang or grow the app. An unpacked zip is walked with `lstat` and refused whole when it holds anything but plain files and folders. The unpacking and the checks run off the main actor; only the copy into the Runners folder is on it.
 
+## 0.9 release CI (MAC-6)
+
+- The Sparkle build is part of pull request CI (an unsigned appcast, checked by `scripts/macos-appcast.sh --check`), so a break of the Sparkle package, `sparkle.yml` or the feed format shows on the pull request. The release workflow has no ad hoc guard of its own: a `v*` tag is always signed and an ad hoc build is manual only (PR 190).
+
 ## Labs
 
 - Labs toggles live in Settings and read the CLI's LABS key; the app never stores the flags itself, so the CLI, MCP and app agree. `Labs.shared` refreshes at launch, when Settings appears and when the window becomes key (at most every 5 s); turning one on passes `--yes` with BENCHBAR_NONINTERACTIVE=0 and BENCHBAR_SUDO=gui, as `site open-as on` does. A non zero exit from `labs list` is read as a CLI without the command.

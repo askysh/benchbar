@@ -138,16 +138,11 @@ ok "dmg signed, notarized and stapled"
 
 # ---------------------------------------------------------------- Sparkle
 step "Sparkle appcast"
-tools="$(find "${ROOT}/macos/build/DerivedData/SourcePackages/artifacts" -type f -name generate_appcast -path '*Sparkle*' 2>/dev/null | head -n 1)"
-[[ -x "$tools" ]] || die "generate_appcast not found in the Sparkle package" "run scripts/macos-build.sh --sparkle once"
-feed="$(mktemp -d)"
-cp "$ZIP" "$feed/"
-"$tools" --ed-key-file "$SPARKLE_ED_KEY_PATH" \
-  --download-url-prefix "${REPO_URL}/releases/download/v${VERSION}/" \
-  --link "$REPO_URL" "$feed"
-cp "${feed}/appcast.xml" "${DIST}/appcast.xml"
-rm -rf "$feed"
-ok "appcast.xml signed"
+# scripts/macos-appcast.sh signs it, links the release notes and checks the result
+"${ROOT}/scripts/macos-appcast.sh" --url-prefix "${REPO_URL}/releases/download/v${VERSION}/" \
+  --notes-url "${REPO_URL}/releases/tag/v${VERSION}" "$DIST" "${DIST}/appcast.xml" || die "no signed appcast"
+[[ -f "${DIST}/appcast.xml" ]] || die "no appcast.xml: the release has no Mac zip" "build the app first"
+ok "appcast.xml signed and checked"
 
 # --------------------------------------------------------------- CLI tarball
 step "CLI tarball"
