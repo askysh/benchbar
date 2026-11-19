@@ -22,14 +22,16 @@
 #                           so on), and every test that names a function whose
 #                           definition the change touched
 #   lib/frappe-local/share/*  the LAN share tests
-#   lib/frappe-local/mcp.py test-mcp, test-cli, test-agent-contracts
+#   lib/frappe-local/mcp.py test-mcp, test-docs (the MCP tool table of the docs is generated from it), test-cli, test-agent-contracts
 #   A test split into parts (test-X.sh, test-X-2.sh, ...) is picked whole.
 #   tests/test-X.sh         itself
 #   install.sh              test-install-sh
 #   packaging/              test-packaging, test-homebrew
 #   macos/BenchBarTests/Fixtures/   the tests that compare CLI output with them
+#   windows/tray/fixtures/  test-tray-fixtures (the tray's recorded CLI output)
 #   scripts/X.sh            the tests that run it (script_tests below)
-#   docs/                   test-docs, test-docs-command
+#   changelog.d/            test-changelog (it checks the fragments)
+#   docs/, scripts/docs-reference.py   test-docs, test-docs-command
 #   any shell file          shellcheck
 #   tests/share/            test-share-gateway
 #   the release workflows, .github/actions/, scripts/macos-release.sh   test-release-workflows
@@ -65,7 +67,7 @@ done
 # test of its own name needs no entry; every other file needs one
 # (tests/test-affected.sh checks that, with --lib-coverage). LIB_CORE is the
 # set of end to end tests for code every command runs.
-LIB_CORE="test-doctor test-install-json test-phases test-repair test-service test-ports test-adopt test-json test-run-lock test-status-cost"
+LIB_CORE="test-doctor test-install-json test-phases test-repair test-service test-ports test-adopt test-json test-run-lock test-status-cost test-tray-fixtures"
 lib_family() {
   case "$1" in
     checks|doctor) echo "test-doctor test-doctor-hardening test-doctor-linux test-repair test-repair-json test-json" ;;
@@ -81,7 +83,7 @@ lib_family() {
     sudo|sudo-env) echo "test-sudo-env test-platform-linux test-install-json test-hygiene test-port-management" ;;
     ui|state|run|lock|process|install-kind|toml) echo "$LIB_CORE test-ui test-redact test-input-hygiene test-state-migrate test-process test-runner" ;;
     profiles|teamlock|version-policy) echo "test-profiles test-profile-v16 test-version-policy test-doctor-linux test-self-update" ;;
-    labs) echo "test-labs test-labs-share" ;;
+    labs) echo "test-labs test-labs-share test-docs" ;;
     open-as) echo "test-open-as" ;;
     consoles) echo "test-cli" ;;
     report) echo "test-report test-redact" ;;
@@ -95,6 +97,7 @@ lib_family() {
 script_tests() {
   case "$1" in
     release-notes) echo "test-release-notes" ;;
+    changelog-fold) echo "test-changelog test-release-notes" ;;
     app-embed-cli|cli-tarball|homebrew-render) echo "test-packaging test-homebrew" ;;
     check-profile-formulae) echo "test-doctor-hardening test-homebrew" ;;
     ci-plan|ci-timings) echo "test-ci-plan" ;;
@@ -167,16 +170,18 @@ while IFS= read -r f; do
       fam="$(lib_family "$t" || true)"
       [[ -n "$fam" ]] || fam="$LIB_CORE"
       pick_family "$fam" ;;
-    lib/frappe-local/mcp.py) lib=1; pick_parts test-mcp ;;
+    lib/frappe-local/mcp.py) lib=1; pick_family "test-mcp test-docs" ;;
     install.sh) pick test-install-sh; shell=1 ;;
     packaging/*) pick test-packaging; pick test-homebrew ;;
     scripts/macos-release.sh) pick test-release-workflows; shell=1 ;;
     .github/workflows/release.yml | .github/workflows/release-windows.yml | .github/workflows/homebrew-tap.yml | .github/workflows/auto-tag.yml | .github/actions/*) pick test-release-workflows ;;
     macos/BenchBarTests/Fixtures/*) pick_family "test-json test-install-json test-lock" ;;
+    windows/tray/fixtures/* | tests/record-tray-fixtures.sh) pick test-tray-fixtures; shell=1 ;;
     scripts/*.sh)
       shell=1
       t="${f##*/}"; pick_family "$(script_tests "${t%.sh}")" ;;
-    docs/*) pick_family "test-docs test-docs-command" ;;
+    changelog.d/*) pick test-changelog ;;
+    docs/* | scripts/docs-reference.py) pick_family "test-docs test-docs-command" ;;
     # no CLI test, by design: another job runs it (the app and the tray and shim jobs, the
     # Windows installer test of release-windows.yml for install.ps1, the workflow itself
     # for .github/, docs.yml for site/), or it is prose or agent tooling

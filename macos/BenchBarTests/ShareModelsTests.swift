@@ -120,6 +120,28 @@ struct ShareModelsTests {
         #expect(status.preflight?.checks[1].fixAction == .openLocalNetworkSettings)
     }
 
+    @Test func setupInterruptedIsDecodedAndOffersFinishSetup() throws {
+        let plain = try BenchJSON.decode(ShareStatus.self, from: Fixture.data("share-status"))
+        #expect(!plain.setupInterrupted)
+        let halfway = try BenchJSON.decode(ShareStatus.self, from: Fixture.data("share-status-interrupted"))
+        #expect(halfway.setupInterrupted)
+        #expect(halfway.state == .off && halfway.copy == nil)
+        #expect(SharePrimary.from(halfway) == .finishSetup)
+        #expect(SharePrimary.finishSetup.title == "Finish setup")
+        // an older CLI without the key reads as not interrupted
+        #expect(try BenchJSON.decode(ShareStatus.self, from: Fixture.data("share-status-old")).setupInterrupted == false)
+        // a copy that is still there does not hide the notice
+        #expect(SharePrimary.from(ShareStatus(state: .off, copy: ShareCopy(made: "2026-11-03T08:40:00Z", sourceSite: "s", ageS: 1), setupInterrupted: true)) == .finishSetup)
+    }
+
+    @Test func theRoomCodeIsDotsUntilShown() {
+        let code = ShareCode(code: "482913", isNew: false, budgetLeft: nil)
+        #expect(SharePresentation.codeText(code, revealed: false) == "••• •••")
+        #expect(SharePresentation.codeText(code, revealed: true) == "482 913")
+        #expect(SharePresentation.codeText(nil, revealed: true) == "••• •••")
+        #expect(!SharePresentation.codeText(code, revealed: false).contains("482"))
+    }
+
     @Test func unknownFixActionIsNone() throws {
         let status = try BenchJSON.decode(ShareStatus.self, from: Fixture.data("share-status"))
         #expect(status.preflight?.checks[2].fixAction == ShareFixAction.none)
@@ -208,7 +230,9 @@ struct ShareStoreTests {
         #expect(store.availability == .needsNewerCLI)
     }
 
-    @Test func pollsEveryFiveSecondsAndStopsWhenIdle() async {
+    /// MAC-8: 17,000 process launches a day while a room stays open is too many for a
+    /// tab nobody looks at; the notices can wait 15 seconds.
+    @Test func pollsEveryFifteenSecondsWhileTheTabIsHiddenAndStopsWhenIdle() async {
         let fake = FakeShareCLI([on(), on(), on(), ShareStatus(state: .off)])
         let slept = SleepLog()
         let store = ShareStore(bench: "/b", client: fake, sleeper: { slept.add($0); await Task.yield() }, log: { _ in })
@@ -216,9 +240,17 @@ struct ShareStoreTests {
         store.ensurePolling()
         await store.pollTask?.value
         #expect(fake.statusCalls.count == 4)
-        #expect(slept.values == [.seconds(5), .seconds(5)])
+        #expect(slept.values == [.seconds(15), .seconds(15)])
         #expect(store.pollTask == nil)
         #expect(!store.shouldPoll)
+    }
+
+    @Test func theIntervalFollowsTheTab() {
+        let store = ShareStore(bench: "/b", client: FakeShareCLI([ShareStatus(state: .off)]), sleeper: { _ in }, log: { _ in })
+        #expect(store.currentPollInterval == .seconds(15))
+        store.tabVisible = true
+        #expect(store.currentPollInterval == .seconds(5))
+        store.shutDown()
     }
 
     @Test func aStateChangeFromOutsideTheAppRunsTheChecksOnTheNextPoll() async {

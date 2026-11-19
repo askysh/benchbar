@@ -8,6 +8,13 @@ struct SharePresentationTests {
     private let red = SharePreflight(ok: false, checks: [ShareCheck(id: "local_network", status: .fail, fixAction: .openLocalNetworkSettings)])
     private let green = SharePreflight(ok: true, checks: [ShareCheck(id: "pf_active", status: .ok)])
 
+    @Test func aShareThatIsStartingCountsAsLiveForTheLabOffQuestion() {
+        #expect(ShareStatus(state: .starting).isLive)
+        #expect(ShareStatus(state: .on).isLive)
+        #expect(!ShareStatus(state: .off).isLive)
+        #expect(!ShareStatus(state: .starting).isOn)
+    }
+
     @Test func onePrimaryButtonPerState() {
         #expect(SharePrimary.from(ShareStatus(state: .off)) == .setUp)
         #expect(SharePrimary.from(ShareStatus(state: .off, copy: copy, lanGuard: .missing)) == .turnOnProtection)

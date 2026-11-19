@@ -155,6 +155,19 @@ nonisolated enum NetworkPanePresentation {
         "\(host) removed you from this room. Ask \(host) for a new invite to join again."
     }
 
+    /// Forget (or Remove and Join Again) signs this Mac out of the room for good: asked first, like every host action.
+    static func forgetConfirm(_ room: SavedRoom, identityChanged: Bool) -> (message: String, detail: String, button: String) {
+        let message = identityChanged ? "Remove \(room.room) and join again?" : "Forget \(room.room)?"
+        let detail = "This Mac signs out of the room and its seat, and the saved room and the host's key are deleted. "
+            + "To join again, \(room.host) has to send a new code or invite."
+        return (message, detail, identityChanged ? "Remove" : "Forget")
+    }
+
+    /// Open could not start the connection on this Mac (the loopback port is taken, or the forwarder failed).
+    static func openFailed(host: String) -> String {
+        "BenchBar could not open \(host)'s room: its local connection did not start. Another app may hold the port. Try Open again."
+    }
+
     /// Open is offered only when the room can still be opened.
     static func canOpen(_ state: GuestRoomStore.RoomHealth?) -> Bool {
         switch state {

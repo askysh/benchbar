@@ -73,7 +73,7 @@ are the main ones.
   same; `benchbar pull` copies a production site into a local one, email
   muted and scheduler paused. See
   [Teams: profiles, lockfile and pull](guides/teams.md).
-- **Linux and Windows.** The same CLI runs on Ubuntu 24.04 with each
+- **Linux and Windows.** The same CLI runs on Ubuntu 24.04 (tested) and other apt based systems (doctor warns about them), with each
   bench under `systemd --user`. On Windows (a beta) the benches run in
   WSL, `benchbar.exe` runs the CLI from PowerShell and a tray app shows
   them. The Windows programs are not signed yet: see
@@ -96,7 +96,7 @@ are the main ones.
 ## Requirements
 
 - macOS 14 or later on Apple Silicon. On Intel Macs the CLI works and the
-  app is skipped. On Linux, Ubuntu 24.04; on Windows, WSL 2 with such a
+  app is skipped. On Linux, Ubuntu 24.04 (tested) and other apt based systems (doctor warns about them); on Windows, WSL 2 with such a
   distro.
 - Homebrew and the Xcode Command Line Tools. The installer offers both.
 - About 5 GB of free disk under your home folder, and internet access.
@@ -126,8 +126,11 @@ No Docker, no VM, no preinstalled Python, Node, MariaDB or Redis.
   listeners on its ports that run inside the bench folder. Another
   bench, an unrelated server, and your own `bench migrate` or `bench
   console` keep running.
-- `sudo` is used for two things, lines in `/etc/hosts` and the
-  wkhtmltopdf package, once per run and only after saying why.
+- `sudo` is used for a short, fixed list, once per run and only after saying
+  why. On macOS: the line in `/etc/hosts`, the wkhtmltopdf package, and the
+  two [LAN guard](reference/cli/share.md#lan-guard-install) steps of a
+  room (the firewall rule and letting `node` through it). On Linux: apt,
+  the MariaDB admin step and starting a stopped `mariadb` or `redis-server`.
 - The MariaDB root password lives in the Keychain and reaches the client
   through `MYSQL_PWD`, never on a command line.
 - Full logs of every mutating run: `logs/<date>-<time>-<pid>.log` in the same

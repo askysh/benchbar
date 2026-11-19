@@ -124,7 +124,6 @@ fl_render_all() {
   fl_runner_extra_args
   FL_R_RUNNER="$(fl_template_render bench-run.sh \
     "BENCH_DIR=${FL_BENCH_DIR}" \
-    "BENCH_RE=$(fl_regex_escape "$FL_BENCH_DIR")" \
     "BENCH_NAME=${FL_BENCH_NAME}" \
     "HONCHO=${honcho}" \
     "PORTS=$(fl_bench_ports_csv)" \
@@ -189,11 +188,13 @@ fl_require_service() {
   [[ -f "$(fl_runner_path)" && -f "$(fl_agent_plist_path)" ]] && return 0
   # a bench set up before the rename still has its com.frappe-mac agent:
   # it is installed, it only needs the one time migration
-  local list legacy
+  local list legacy more="" why="set up before BenchBar's own service"
   list="$(fl_legacy_agents_list)"
   legacy="${list%%$'\n'*}"; legacy="${legacy#*|}"; legacy="${legacy%%|*}"
   if [[ -n "$legacy" ]]; then
-    fl_die "${FL_BENCH_NAME} still uses the old agent ${legacy}, from before the BenchBar rename." \
+    [[ "$list" == *$'\n'* ]] && more=" and $(printf '%s\n' "$list" | awk 'NF' | awk 'END {print NR - 1}') more"
+    [[ "$legacy" == com.frappe-mac.* ]] && why="from before the BenchBar rename"
+    fl_die "${FL_BENCH_NAME} still uses the old agent ${legacy}${more}, ${why}." \
       "Run: ${FL_SELF} repair (moves the old agent aside and installs $(fl_agent_label); sites and data are not touched)."
   fi
   fl_die "The background service for ${FL_BENCH_NAME} is not installed." "Run: ${FL_SELF} service (or benchbar install)."
@@ -231,7 +232,9 @@ fl_stop_flag_reason() {
 
 fl_arm_start() {
   # removes the stop flag and the crash history; keeps the tail of the old log
-  local flag hist log prev
+  # in bench.previous.log and the three copies before it in bench.previous.N.log,
+  # so a crash is still there after two quick restarts that wrote little
+  local flag hist log prev i
   flag="$(fl_stop_flag_path)"; hist="$(fl_starts_path)"; log="$(fl_bench_log_path)"
   prev="${FL_BENCH_DIR}/logs/bench.previous.log"
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
@@ -242,6 +245,15 @@ fl_arm_start() {
   rm -f "$flag"
   : >"$hist"
   if [[ -s "$log" ]]; then
+    if [[ -s "$prev" ]]; then
+      # previous.2 -> previous.3 (the oldest goes), previous.1 -> previous.2, previous -> previous.1
+      i=3
+      while [[ "$i" -gt 1 ]]; do
+        [[ -e "${prev%.log}.$((i - 1)).log" ]] && mv -f "${prev%.log}.$((i - 1)).log" "${prev%.log}.${i}.log" 2>/dev/null
+        i=$((i - 1))
+      done
+      mv -f "$prev" "${prev%.log}.1.log" 2>/dev/null || true
+    fi
     tail -n 500 "$log" >"$prev" 2>/dev/null || true
     : >"$log"
   fi

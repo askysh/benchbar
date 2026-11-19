@@ -72,7 +72,7 @@ fl_pm_known_reservations() {
 # start nothing. Listeners go to the clash check and the runner's cleanup.
 fl_pm_running() {
   [[ -n "$(fl_bench_honcho_pids)" || -n "$(fl_bench_socketio_pids)" ]] && return 0
-  [[ -n "$(pgrep -f "$(fl_bench_helper_pattern)" 2>/dev/null || true)" ]]
+  [[ -n "$(fl_bench_helper_pids)" ]]
 }
 # The caller captures this function with $(...), isolating the real planner: profile/port/render globals do
 # not escape, dry-run guards all writes, and logging goes only to /dev/null.

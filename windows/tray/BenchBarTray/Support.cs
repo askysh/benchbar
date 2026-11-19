@@ -22,6 +22,27 @@ internal sealed class ErrorLog(string? path = null, long maxBytes = 256 * 1024, 
 
     public string Path => _path;
 
+    /// <summary>One plain line, for an event that is not an exception (a link that was ignored). The caller passes fixed text only: this file goes into bug reports.</summary>
+    public void Info(string where, string text)
+    {
+        try
+        {
+            lock (_gate)
+            {
+                var line = string.Create(CultureInfo.InvariantCulture, $"{_now():yyyy-MM-ddTHH:mm:ssZ} {where}: {text.ReplaceLineEndings(" ")}{Environment.NewLine}");
+                var dir = System.IO.Path.GetDirectoryName(_path);
+                if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+                if (File.Exists(_path) && new FileInfo(_path).Length + line.Length > maxBytes)
+                    File.Move(_path, _path + ".1", overwrite: true);
+                File.AppendAllText(_path, line, Encoding.UTF8);
+            }
+        }
+        catch (Exception)
+        {
+            // the log must never be the thing that fails
+        }
+    }
+
     public void Write(string where, Exception ex)
     {
         try

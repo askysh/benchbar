@@ -18,11 +18,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var updateOffer: UpdateOffer!
     private var quickSwitch: QuickSwitchController!
     /// The guest side of rooms; filled only while the lan-rooms lab is on.
-    private let guestSlot = GuestSlot()
+    private let guestSlot = GuestSlot.shared
     private var guest: GuestRoomStore? { guestSlot.store }
     /// benchbar:// links that arrived before the bench list was loaded
     /// (a link can launch the app).
     private var pendingURLs: [URL] = []
+    /// "Quit when it finishes", chosen in the quit alert while a change ran.
+    private var quitWait = QuitAfterChange()
     private var benchesLoaded = false
     private static let urlLog = Logger(subsystem: "com.akashmishra.benchbar", category: "url")
 
@@ -47,14 +49,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store = BenchStore(settings: settings)
         statusItemController = StatusItemController(store: store, settings: settings, library: library)
         store.onChange = { [weak self] in self?.statusItemController.update() }
+        store.onIdle = { [weak self] in self?.quitIfWaiting() }
         let labsStore = store!
         Labs.shared.loader = .cli { await MainActor.run { labsStore.cliClient } }
         lanRoomsObservation = Labs.shared.observe(.lanRooms) { [weak self] on in self?.lanRoomsChanged(on) }
         NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.store.appBecameActive() }
+            MainActor.assumeIsolated {
+                self?.store.appBecameActive()
+                Labs.shared.refreshIfStale()
+            }
         }
 
         notifier = Notifier(settings: settings)
+        ShareNotices.notifier = notifier
         store.onAlert = { [weak self] bench, alert in self?.notifier.post(alert, bench: bench) }
         ShareCenter.shared.attach(store)
         store.confirmWhileSharing = { action, bench in
@@ -166,9 +173,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // open, close, occlusion and the page: the window's views stay alive
         // when it closes, so the store hears of them from the controller
         mainWindow.onKey = { Task { await Labs.shared.refresh() } }
-        NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
-            Task { @MainActor in Labs.shared.refreshIfStale() }
-        }
         mainWindow.onSight = { [weak self] sight in self?.store.setWindow(sight) }
 
         logWindows = LogWindowController { [weak self] path in self?.openLogsInTerminal(path) }
@@ -392,33 +396,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         openAboutAction()
     }
 
-    /// Opening BenchBar again (Finder, Spotlight, the Dock while a window is
-    /// open) shows the window: a menu bar app has nothing else to show.
-    /// A log window on screen does not count: `hasVisibleWindows` is true
-    /// for it, and the BenchBar window stayed closed.
-    /// Quitting kills a running share setup or teardown (the CLI gets SIGTERM):
-    /// the copy is left half made, so ask first. It also drops the people in a
-    /// room this Mac hosts and closes the forwarder to a room it joined, so
-    /// those ask too. Keep running is the default.
+    /// Quitting while a change runs (an install, a repair, an app update, a
+    /// site change, a start or stop) ends the CLI's pipe, and the CLI's next
+    /// write ends it halfway: the bench is left half installed or half
+    /// migrated. So ask, and offer to quit when it has finished. Keep
+    /// running is the default. It also kills a running share setup or
+    /// teardown (the copy is left half made), drops the people in a room this
+    /// Mac hosts and closes the forwarder to a room it joined: those ask
+    /// too, and Quit anyway is theirs (`QuitPolicy`).
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        let alert = NSAlert()
-        let labOn = Labs.shared.isOn(.lanRooms)
-        if labOn, ShareCenter.shared.setupOrTeardownRunning {
-            alert.messageText = "Sharing setup is still running."
-            alert.informativeText = "Quitting now stops it halfway; the copy will need setup again."
-        } else if labOn, let hosted = ShareCenter.shared.benchesWithGuests.first {
-            let people = hosted.status?.people ?? 0
-            alert.messageText = "People are in your room."
-            alert.informativeText = "\(people == 1 ? "1 person is" : "\(people) people are") in the room on \(URL(fileURLWithPath: hosted.bench).lastPathComponent). Quitting disconnects them."
-        } else if labOn, guest?.hasRunningForwarder == true {
-            alert.messageText = "You are connected to a room."
-            alert.informativeText = "Quitting closes the connection to the site you opened from it."
-        } else {
+        let hosted = ShareCenter.shared.benchesWithGuests.first
+        let facts = QuitPolicy.Facts(labOn: Labs.shared.isOn(.lanRooms), setupRunning: ShareCenter.shared.setupOrTeardownRunning,
+                                     hostedBench: hosted?.bench, people: hosted?.status?.people ?? 0,
+                                     guestForwarder: guest?.hasRunningForwarder == true,
+                                     changeRunning: store.runningChangeLabel)
+        guard let question = QuitPolicy.question(facts) else {
+            quitWait.disarm()
             return .terminateNow
         }
+        let alert = NSAlert()
+        alert.messageText = question.title
+        alert.informativeText = question.detail
         alert.addButton(withTitle: "Keep running")
-        alert.addButton(withTitle: "Quit anyway")
-        return alert.runModal() == .alertSecondButtonReturn ? .terminateNow : .terminateCancel
+        alert.addButton(withTitle: question.canWaitForIt ? "Quit when it finishes" : "Quit anyway")
+        guard alert.runModal() == .alertSecondButtonReturn else {
+            quitWait.disarm()
+            return .terminateCancel
+        }
+        guard question.canWaitForIt else { return .terminateNow }
+        // the store says when the change slot is free (onIdle)
+        quitWait.arm()
+        return .terminateCancel
+    }
+
+    /// The store has nothing running: the quit the person asked to wait for.
+    private func quitIfWaiting() {
+        guard quitWait.shouldQuitNow(changeRunning: store.runningChangeLabel != nil) else { return }
+        DispatchQueue.main.async { NSApp.terminate(nil) }
     }
 
     /// The lan-rooms lab flipped, live: on makes the guest store and restores a share that was on at
@@ -427,7 +441,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func lanRoomsChanged(_ on: Bool) {
         if on {
             if guestSlot.store == nil {
-                let browser = BrowserRouter()
+                let browser = BrowserRouter.shared
                 guestSlot.store = GuestRoomStore(dependencies: .live(identity: KeychainIdentity(), openURL: { browser.open($0) }))
             }
             ShareCenter.shared.restoreActive(among: store.benches.map(\.path))
@@ -442,6 +456,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Opening BenchBar again (Finder, Spotlight, the Dock while a window is
+    /// open) shows the window: a menu bar app has nothing else to show.
+    /// A log window on screen does not count: `hasVisibleWindows` is true
+    /// for it, and the BenchBar window stayed closed.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if !mainWindow.isVisible { openMainWindow() }
         return true
