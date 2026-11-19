@@ -224,7 +224,8 @@ fl_lab_enabled_json_v() {
 
 # labs [list] | on NAME | off NAME | status NAME. on and off change benchbar's
 # state only. on is a person's decision: refused when nothing can ask
-# (BENCHBAR_NONINTERACTIVE=1, so also --for-agent and benchbar mcp). off is
+# (BENCHBAR_NONINTERACTIVE=1, so also --for-agent and benchbar mcp) and without a terminal unless
+# the app says a person clicked (fl_person_env_ok BENCHBAR_NONINTERACTIVE 0). off is
 # always allowed and runs the lab's cleanup. status exits 1 for off.
 fl_cmd_labs() {
   local action="list" name="" a n state on_now=false t w en
@@ -271,6 +272,12 @@ fl_cmd_labs() {
     if fl_noninteractive; then
       FL_EXIT2_NOT_PASSWORD=1
       fl_die "turning on an experiment is a person's decision" "Run it in a terminal: benchbar labs on ${name}" 2
+    fi
+    # no terminal: only the apps say a person clicked (BENCHBAR_NONINTERACTIVE=0), and on a Mac only
+    # from the app's process tree (fl_person_env_ok). Unset is not a claim: a plain agent shell is refused.
+    if [[ "${FL_DRY_RUN:-0}" != "1" && ! -t 0 ]] && ! fl_person_env_ok BENCHBAR_NONINTERACTIVE 0; then
+      FL_EXIT2_NOT_PASSWORD=1
+      fl_die "turning on an experiment is a person's decision, and this run has no terminal.${FL_PERSON_WHY:+ $FL_PERSON_WHY}" "Run it in a terminal: benchbar labs on ${name}" 2
     fi
     if [[ "$on_now" != true && "${FL_DRY_RUN:-0}" != "1" ]]; then
       fl_lab_attr_v w "$name" warning
