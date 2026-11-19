@@ -291,7 +291,7 @@ check_system() {
   if [[ "$(uname -m)" == "arm64" ]]; then
     ok "Apple Silicon"
   else
-    warn "Intel Mac ($(uname -m)): the CLI works, the BenchBar app is built for Apple Silicon only and is skipped"
+    warn "Intel Mac ($(uname -m)): the CLI is written for it but not checked on real hardware; the BenchBar app is built for Apple Silicon only and is skipped"
     DO_APP=0
   fi
   # the prebuilt app needs only curl, shasum and ditto: developer tools are for the CLI

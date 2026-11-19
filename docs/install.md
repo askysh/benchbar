@@ -36,7 +36,8 @@ through `--json --yes`, which prints one JSON event per line; the format
 is in the [JSON API](json-schema.md).
 
 The cask needs Apple Silicon and macOS Sonoma or later. For the CLI
-alone, on an Intel Mac too:
+alone, on an Intel Mac too (written for it, not checked on real
+hardware):
 
 ```bash
 brew install askysh/tap/benchbar
