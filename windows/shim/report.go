@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -72,7 +73,19 @@ func splitIncludes(args []string) (rest, includes []string, err error) {
 // --- redaction --------------------------------------------------------------
 
 var (
-	secretLineRE = regexp.MustCompile(`(?i)\b([A-Za-z0-9_.-]*(?:password|passwd|secret|token|api[_-]?key)[A-Za-z0-9_.-]*)(\s*[=:]\s*)("[^"\r\n]*"|'[^'\r\n]*'|[^\s,;]+)`)
+	// secretNameRE is a name that holds a secret, then = or :. The name may end
+	// in a closing quote before the separator, so JSON ("db_password": "x")
+	// and key=value both match. sid is a name of its own, not part of another
+	// word. The value after it is read by secretValueEnd, not by the pattern:
+	// a quoted string with backslash escapes, an array or an object (with
+	// any nesting) cannot be matched by a regular expression.
+	secretNameRE = regexp.MustCompile(`(?i)(\b(?:[A-Za-z0-9_.-]*(?:password|passwd|secret|token|api[_-]?key|encryption[_-]?key|private[_-]?key|session[_-]?id|cookie)[A-Za-z0-9_.-]*|sid))(["']?\s*[=:]\s*)`)
+	// an Authorization header or field: the scheme (Bearer, Basic) and the
+	// credential after it; a bare "Bearer xxxx" is covered by bearerRE
+	authorizationRE = regexp.MustCompile(`(?i)(\bauthorization["']?\s*[=:]\s*["']?)[^\r\n"']+`)
+	bearerRE        = regexp.MustCompile(`(?i)\b(bearer\s+)[A-Za-z0-9._~+/=-]{16,}`)
+	// a Cookie or Set-Cookie header holds the whole line as secrets
+	cookieLineRE = regexp.MustCompile(`(?im)^(\s*(?:set-)?cookie\s*:\s*).+$`)
 	winUsersRE   = regexp.MustCompile(`(?i)([A-Za-z]:[\\/]+Users[\\/]+)[^\\/\s"'<>|:*?]+`)
 	wslHomeRE    = regexp.MustCompile(`(?i)(\\\\wsl(?:\.localhost|\$)\\[^\\\s"']+\\home\\)[^\\\s"'<>]+`)
 	mntUsersRE   = regexp.MustCompile(`(?i)(/mnt/[a-z]/Users/)[^/\s"'<>]+`)
@@ -114,9 +127,102 @@ func newRedactor(sys *System, linuxUser string) *redactor {
 	return r
 }
 
+// secretValueEnd is the end of the value that starts at s[i]: a quoted
+// string (backslash escapes kept whole), an array or an object (brackets
+// balanced, strings skipped, any depth) or a bare word up to a space, comma
+// or semicolon. kind is 'q' for a string, 'c' for a container and 'b' for a
+// bare word. end is i when there is no value.
+func secretValueEnd(s string, i int) (end int, kind byte) {
+	if i >= len(s) {
+		return i, 0
+	}
+	switch c := s[i]; c {
+	case '"', '\'':
+		if e := quotedEnd(s, i); e > 0 {
+			return e, 'q'
+		}
+	case '[', '{':
+		depth := 0
+		for j := i; j < len(s); j++ {
+			switch s[j] {
+			case '"':
+				e := quotedEnd(s, j)
+				if e < 0 {
+					j = len(s)
+					break
+				}
+				j = e - 1
+			case '[', '{':
+				depth++
+			case ']', '}':
+				depth--
+				if depth == 0 {
+					return j + 1, 'c'
+				}
+			}
+		}
+	}
+	j := i
+	for j < len(s) && !strings.ContainsRune(" \t\r\n,;", rune(s[j])) {
+		j++
+	}
+	return j, 'b'
+}
+
+// quotedEnd is the index after the quote that closes the string opened at
+// s[i], or -1 when it does not close on the same line.
+func quotedEnd(s string, i int) int {
+	q := s[i]
+	for j := i + 1; j < len(s); j++ {
+		switch s[j] {
+		case '\\':
+			j++
+		case q:
+			return j + 1
+		case '\r', '\n':
+			return -1
+		}
+	}
+	return -1
+}
+
+// redactSecrets replaces the value after every secret name and keeps the
+// quote around a string, so a JSON file stays valid JSON. An array or an
+// object becomes one string.
+func redactSecrets(s string) string {
+	var out strings.Builder
+	pos := 0
+	for _, m := range secretNameRE.FindAllStringSubmatchIndex(s, -1) {
+		if m[0] < pos {
+			continue // inside a value that was replaced already
+		}
+		end, kind := secretValueEnd(s, m[1])
+		if end == m[1] {
+			continue
+		}
+		out.WriteString(s[pos:m[1]])
+		switch kind {
+		case 'q':
+			out.WriteByte(s[m[1]])
+			out.WriteString("<redacted>")
+			out.WriteByte(s[m[1]])
+		case 'c':
+			out.WriteString(`"<redacted>"`)
+		default:
+			out.WriteString("<redacted>")
+		}
+		pos = end
+	}
+	out.WriteString(s[pos:])
+	return out.String()
+}
+
 // text hides the names and secrets in one text part.
 func (r *redactor) text(s string) string {
-	s = secretLineRE.ReplaceAllString(s, "${1}${2}<redacted>")
+	s = authorizationRE.ReplaceAllString(s, "${1}<redacted>")
+	s = cookieLineRE.ReplaceAllString(s, "${1}<redacted>")
+	s = bearerRE.ReplaceAllString(s, "${1}<redacted>")
+	s = redactSecrets(s)
 	if r.profile != nil {
 		s = r.profile.ReplaceAllString(s, `C:\Users\<user>`)
 	}
@@ -161,7 +267,11 @@ func wslText(sys *System, d time.Duration, args ...string) (wslResult, error) {
 // wslBytes runs wsl.exe and returns its raw stdout (a zip must not pass
 // through the text decoder).
 func wslBytes(sys *System, d time.Duration, max int, args ...string) ([]byte, int, error) {
-	cmd, err := wslCommand(sys, args...)
+	ctx, cancel := context.WithTimeout(sys.Ctx, d)
+	defer cancel()
+	// the deadline ends wsl.exe, and WaitDelay bounds the wait for a pipe
+	// that a helper process still holds
+	cmd, err := wslCommandContext(ctx, sys, args...)
 	if err != nil {
 		return nil, 1, err
 	}
@@ -173,27 +283,22 @@ func wslBytes(sys *System, d time.Duration, max int, args ...string) ([]byte, in
 		return nil, 1, err
 	}
 	defer attachKillOnClose(cmd.Process.Pid)()
-	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
-	select {
-	case err := <-done:
-		if o.over {
-			return nil, 1, errors.New("the output is larger than the limit")
-		}
-		code := 0
-		if err != nil {
-			var ee interface{ ExitCode() int }
-			if !errors.As(err, &ee) {
-				return nil, 1, err
-			}
-			code = ee.ExitCode()
-		}
-		return o.Bytes(), code, nil
-	case <-time.After(d):
-		cmd.Process.Kill()
-		<-done
+	err = cmd.Wait()
+	if ctx.Err() == context.DeadlineExceeded {
 		return nil, 1, fmt.Errorf("no answer within %s", d)
 	}
+	if o.over {
+		return nil, 1, errors.New("the output is larger than the limit")
+	}
+	code := 0
+	if err != nil {
+		var ee interface{ ExitCode() int }
+		if !errors.As(err, &ee) {
+			return nil, 1, err
+		}
+		code = ee.ExitCode()
+	}
+	return o.Bytes(), code, nil
 }
 
 // --- the parts ---------------------------------------------------------------

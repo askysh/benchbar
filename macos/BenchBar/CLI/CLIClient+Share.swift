@@ -167,9 +167,8 @@ extension CLIClient: ShareCLI {
                           timeout: Timeout.long, acceptExitCodes: [0], extraEnvironment: Self.personEnvironment)
     }
 
-    /// UNVERIFIED: `benchbar lan-guard` was not on this branch's CLI when this
-    /// was written; the words come from the share preflight's fix strings.
-    /// Check them against the real command here, in one place.
+    /// `benchbar lan-guard install|allow-node` (lib/frappe-local/lan-guard.sh): both take
+    /// `--yes`, and `--plain` is the CLI's global flag. One place for the words.
     static let lanGuardArguments = (install: ["lan-guard", "install", "--yes", "--plain"],
                                     allowNode: ["lan-guard", "allow-node", "--yes", "--plain"])
 

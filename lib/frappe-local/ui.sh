@@ -48,15 +48,31 @@ fl_ui_init() {
   if [[ "$FL_TTY" == "1" ]]; then
     cols="$(tput cols 2>/dev/null || true)"
     [[ -n "$cols" && "$cols" -gt 40 ]] && FL_COLS="$cols"
-    FL_BOLD="$(tput bold 2>/dev/null || true)"
-    FL_DIM="$(tput dim 2>/dev/null || true)"
-    FL_RED="$(tput setaf 1 2>/dev/null || true)"
-    FL_GREEN="$(tput setaf 2 2>/dev/null || true)"
-    FL_YELLOW="$(tput setaf 3 2>/dev/null || true)"
-    FL_BLUE="$(tput setaf 4 2>/dev/null || true)"
-    FL_CYAN="$(tput setaf 6 2>/dev/null || true)"
-    FL_RESET="$(tput sgr0 2>/dev/null || true)"
-    FL_EL="$(tput el 2>/dev/null || true)"
+    # the color terminals of every Mac and Linux terminal app: the codes are
+    # fixed, so no tput process (nine of them, 19 ms) for them. A terminal
+    # whose terminfo has no colors (xterm-mono, vt100) asks tput, which then
+    # prints nothing for the colors, as before.
+    local __fixed=0
+    case "${TERM:-}" in
+      *mono*) ;;
+      xterm*|screen*|tmux*|rxvt*|linux|alacritty|foot*|wezterm) __fixed=1 ;;
+    esac
+    if [[ "$__fixed" == "1" ]]; then
+      local __e=$'\033['
+      FL_BOLD="${__e}1m"; FL_DIM="${__e}2m"
+      FL_RED="${__e}31m"; FL_GREEN="${__e}32m"; FL_YELLOW="${__e}33m"; FL_BLUE="${__e}34m"; FL_CYAN="${__e}36m"
+      FL_RESET="${__e}m"; FL_EL="${__e}K"
+    else
+      FL_BOLD="$(tput bold 2>/dev/null || true)"
+      FL_DIM="$(tput dim 2>/dev/null || true)"
+      FL_RED="$(tput setaf 1 2>/dev/null || true)"
+      FL_GREEN="$(tput setaf 2 2>/dev/null || true)"
+      FL_YELLOW="$(tput setaf 3 2>/dev/null || true)"
+      FL_BLUE="$(tput setaf 4 2>/dev/null || true)"
+      FL_CYAN="$(tput setaf 6 2>/dev/null || true)"
+      FL_RESET="$(tput sgr0 2>/dev/null || true)"
+      FL_EL="$(tput el 2>/dev/null || true)"
+    fi
   else
     FL_BOLD=""; FL_DIM=""; FL_RED=""; FL_GREEN=""; FL_YELLOW=""; FL_BLUE=""; FL_CYAN=""; FL_RESET=""; FL_EL=""
   fi
@@ -94,6 +110,76 @@ fl_log_init() {
   # the phase scripts are child processes: they log to the same file and
   # back up into the same folder
   export FL_LOG_FILE FL_BACKUP_STAMP
+  fl_state_prune "$dir"
+}
+
+# ---------------------------------------------------------------- state limits
+
+# What benchbar writes into its own state folder keeps to a limit, applied at
+# the start of every run that makes a log (so a long running bench or a read
+# only command never prunes). Only benchbar's own names are touched, the
+# newest are kept, and what went is one line in changed[]:
+#   run logs            logs/<date>-<time>-<pid>.log        newest 100
+#   state backups       backups/<date>-<time>-<pid>/        newest 50 (a folder
+#                       that still holds a restore-set copy stays; that copy has
+#                       its own limit, the three newest of a bench; so does one
+#                       that holds a kept-sets file, which may be the only copy
+#                       of a site's older backup: the next backup of the site
+#                       puts it back, and doctor warns until then)
+#   update checks       update-check.<date>.txt             newest 14
+#   temp files          state.env.XXXXXX of a killed writer older than a day
+# The limits can be changed with FL_KEEP_RUN_LOGS, FL_KEEP_STATE_BACKUPS and
+# FL_KEEP_UPDATE_CHECKS (a number; the tests use small ones). Nothing in a
+# bench or in a site's backup folder is ever pruned here.
+# shellcheck disable=SC2010  # names this tool made, matched by a strict pattern
+fl_state_prune() {
+  local logdir="$1" keep_logs keep_bk keep_uc n f d name logs=0 baks=0 checks=0 temps=0 root
+  [[ "${FL_DRY_RUN:-0}" != "1" ]] || return 0
+  keep_logs="${FL_KEEP_RUN_LOGS:-100}"; [[ "$keep_logs" =~ ^[0-9]+$ && "$keep_logs" -ge 1 ]] || keep_logs=100
+  keep_bk="${FL_KEEP_STATE_BACKUPS:-50}"; [[ "$keep_bk" =~ ^[0-9]+$ && "$keep_bk" -ge 1 ]] || keep_bk=50
+  keep_uc="${FL_KEEP_UPDATE_CHECKS:-14}"; [[ "$keep_uc" =~ ^[0-9]+$ && "$keep_uc" -ge 1 ]] || keep_uc=14
+  # run logs: the names sort by time
+  n=0
+  while IFS= read -r name; do
+    [[ -n "$name" ]] || continue
+    n=$((n + 1))
+    [[ "$n" -gt "$keep_logs" ]] || continue
+    f="${logdir}/${name}"
+    [[ -f "$f" && ! -L "$f" && "$f" != "${FL_LOG_FILE:-}" ]] || continue
+    rm -f "$f" 2>/dev/null && logs=$((logs + 1))
+  done < <(ls -1 "$logdir" 2>/dev/null | grep -E '^[0-9]{8}-[0-9]{6}-[0-9]+(-[0-9]+)?\.log$' | sort -r || true)
+  # state backups: whole folders of this tool's own stamps
+  root="${FL_BACKUP_ROOT:-${FL_STATE_DIR}/backups}"
+  n=0
+  while IFS= read -r name; do
+    [[ -n "$name" ]] || continue
+    n=$((n + 1))
+    [[ "$n" -gt "$keep_bk" ]] || continue
+    d="${root}/${name}"
+    [[ -d "$d" && ! -L "$d" && ! -e "${d}/restore-set" && "$name" != "${FL_BACKUP_STAMP:-}" ]] || continue
+    # a kept older backup (site-backups.sh) that was not put back may be the only copy
+    [[ -z "$(find "${d}/kept-sets" -type f ! -name '.*' -print -quit 2>/dev/null)" ]] || continue
+    rm -rf -- "$d" 2>/dev/null && baks=$((baks + 1))
+  done < <(ls -1 "$root" 2>/dev/null | grep -E '^[0-9]{8}-[0-9]{6}-[0-9]+$' | sort -r || true)
+  # the update check of every day
+  n=0
+  while IFS= read -r name; do
+    [[ -n "$name" ]] || continue
+    n=$((n + 1))
+    [[ "$n" -gt "$keep_uc" ]] || continue
+    f="${FL_STATE_DIR}/${name}"
+    [[ -f "$f" && ! -L "$f" ]] || continue
+    rm -f "$f" 2>/dev/null && checks=$((checks + 1))
+  done < <(ls -1 "$FL_STATE_DIR" 2>/dev/null | grep -E '^update-check\.[0-9]{8}\.txt$' | sort -r || true)
+  # a temp file a killed writer left (state.sh: mktemp state.env.XXXXXX), a day old
+  while IFS= read -r f; do
+    [[ -n "$f" && -f "$f" && ! -L "$f" ]] || continue
+    rm -f "$f" 2>/dev/null && temps=$((temps + 1))
+  done < <(find "$FL_STATE_DIR" -maxdepth 3 -type f -name 'state.env.??????' -mmin +1440 2>/dev/null || true)
+  [[ $((logs + baks + checks + temps)) -gt 0 ]] || return 0
+  fl_log "pruned: ${logs} run logs, ${baks} state backup folders, ${checks} update checks, ${temps} temp files"
+  fl_changed pruned "state folder" "removed beyond the limits: ${logs} run logs (keeps ${keep_logs}), ${baks} backup folders (keeps ${keep_bk}), ${checks} update checks (keeps ${keep_uc}), ${temps} old temp files"
+  return 0
 }
 
 # fl_redact_url_v VAR TEXT: TEXT with the user:password (or :password) in
@@ -111,9 +197,25 @@ fl_redact_url() { local r; fl_redact_url_v r "$1"; printf '%s' "$r"; }
 
 fl_log() {
   [[ -n "$FL_LOG_FILE" ]] || return 0
-  local msg="$*"
+  local msg="$*" __ts
   fl_redact_url_v msg "$msg"
-  printf '%s %s\n' "$(date '+%H:%M:%S')" "$msg" >>"$FL_LOG_FILE" 2>/dev/null || true
+  fl_log_stamp_v __ts
+  printf '%s %s\n' "$__ts" "$msg" >>"$FL_LOG_FILE" 2>/dev/null || true
+}
+
+# fl_log_stamp_v VAR: HH:MM:SS now. One date at the first call, then the
+# clock moves with $SECONDS (a fork per log line was 114 forks in one adopt).
+FL_LOG_BASE=""
+FL_LOG_SECONDS0=0
+fl_log_stamp_v() {
+  local __h __m __s __t
+  if [[ -z "$FL_LOG_BASE" ]]; then
+    read -r __h __m __s < <(date '+%H %M %S')
+    FL_LOG_BASE=$((10#$__h * 3600 + 10#$__m * 60 + 10#$__s))
+    FL_LOG_SECONDS0="$SECONDS"
+  fi
+  __t=$(((FL_LOG_BASE + SECONDS - FL_LOG_SECONDS0) % 86400))
+  printf -v "$1" '%02d:%02d:%02d' $((__t / 3600)) $((__t % 3600 / 60)) $((__t % 60))
 }
 
 # fl_log_file_append FILE: a command's captured output into the run log,
@@ -175,6 +277,8 @@ fl__json_csi_len_v() {
 }
 fl_json_escape_v() {
   local __e="$2" __o="" __p __n
+  # nothing to escape (almost every value): no substitutions, no loop
+  if [[ "$__e" != *[\\\"$FL_JSON_CTRL]* ]]; then printf -v "$1" '%s' "$__e"; return 0; fi
   __e="${__e//\\/\\\\}"
   __e="${__e//\"/\\\"}"
   # cut at each control character: bash 3.2's ${x//[set]/} is quadratic in

@@ -10,6 +10,13 @@ case "$1" in
     if [[ -n "${MOCK_BENCH_VERSION_EXIT:-}" ]]; then printf '%s\n' "${MOCK_BENCH_VERSION_OUT:-Traceback}" >&2; exit "$MOCK_BENCH_VERSION_EXIT"; fi
     printf 'erpnext 15.0.0\nfrappe 15.0.0\n'; exit 0 ;;
   init)
+    # frappe-bench 5.31 makes the env with "uv venv": without uv on PATH it fails
+    # after it made its folders (issue 112), and leaves exactly that skeleton
+    if ! command -v uv >/dev/null 2>&1; then
+      mkdir -p "$2/apps" "$2/sites" "$2/config" "$2/logs"
+      printf "FileNotFoundError: [Errno 2] No such file or directory: 'uv'\n" >&2
+      exit 1
+    fi
     mkdir -p "$2/apps/frappe" "$2/env/bin" "$2/sites" "$2/config"
     cp "${0%/*}/../env-python" "$2/env/bin/python"; chmod +x "$2/env/bin/python"
     printf 'port 11000\n' >"$2/config/redis_queue.conf"; printf 'port 13000\n' >"$2/config/redis_cache.conf"
@@ -167,11 +174,18 @@ PY
             [[ -f "$old" && "$old" != "${base}"-* ]] && rm -f "$old"
           done
         fi
+        # MOCK_BENCH_BACKUP_SIGNAL=TERM: the run is cut short now (benchbar gets the signal, as on Ctrl-C),
+        # after the prune above and before the backup is written
+        if [[ -n "${MOCK_BENCH_BACKUP_SIGNAL:-}" ]]; then
+          kill -"$MOCK_BENCH_BACKUP_SIGNAL" "$(cat "$PWD/.benchbar.lock/pid")"
+          sleep 20
+          exit 1
+        fi
         # MOCK_BENCH_BACKUP_DB=FILE: the database file is a copy of FILE (a dump a restore can read)
-        if [[ -n "${MOCK_BENCH_BACKUP_DB:-}" ]]; then cp "$MOCK_BENCH_BACKUP_DB" "${base}-database.sql.gz"; else printf 'local backup\n' >"${base}-database.sql.gz"; fi
+        if [[ -n "${MOCK_BENCH_BACKUP_DB:-}" ]]; then cp "$MOCK_BENCH_BACKUP_DB" "${base}-database.sql.gz"; else printf 'local backup\n' | gzip -c >"${base}-database.sql.gz"; fi
         printf '{}\n' >"${base}-site_config_backup.json"
         # MOCK_BENCH_BACKUP_NOFILES=1: a backup that has no file archives
-        if [[ "${4:-}" == "--with-files" && -z "${MOCK_BENCH_BACKUP_NOFILES:-}" ]]; then printf 'public\n' >"${base}-files.tar"; printf 'private\n' >"${base}-private-files.tar"; fi
+        if [[ "${4:-}" == "--with-files" && -z "${MOCK_BENCH_BACKUP_NOFILES:-}" ]]; then mock_tar "${base}-files.tar"; mock_tar "${base}-private-files.tar"; fi
         exit 0 ;;
     esac
     exit 0 ;;

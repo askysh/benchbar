@@ -46,6 +46,13 @@ extension CLIError: LocalizedError {
         }
     }
 
+    /// The CLI's own answer to a command it does not have ("Unknown command: labs"), which is how
+    /// an older CLI shows. One place, so the checks cannot drift apart.
+    nonisolated var isUnknownCommand: Bool {
+        if case .failed(_, _, let message) = self { return message.localizedCaseInsensitiveContains("unknown command") }
+        return false
+    }
+
     nonisolated var recoverySuggestion: String? {
         switch self {
         case .notFound(let searched):
@@ -61,7 +68,7 @@ extension CLIError: LocalizedError {
         case .invalidJSON(_, let preview):
             return "Output started with: \(preview)"
         case .unsupportedSchema:
-            return "Build BenchBar from the same checkout as the CLI."
+            return "Update BenchBar, or choose a different benchbar in Settings."
         case .launchFailed:
             return nil
         }

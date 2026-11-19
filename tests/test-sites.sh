@@ -73,7 +73,7 @@ reset_calls
 ADMIN_PASSWORD=adminpw run_fm site add v16two --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 # the passwords go to frappe on stdin: placeholders on the command line, nothing in any log
-assert_calls_contain '^bench new-site v16two --mariadb-root-password @secret0@ --admin-password @secret1@ --no-mariadb-socket$'
+assert_calls_contain '^bench new-site v16two --mariadb-root-password @secret0@ --admin-password @secret1@ --no-mariadb-socket --db-name _[0-9a-f]{16}$'
 assert_eq "rootpw
 adminpw" "$(cat "$MOCK_STATE/stdin-new-site")"
 assert_not_contains "$(cat "$MOCK_LOG")" "adminpw"

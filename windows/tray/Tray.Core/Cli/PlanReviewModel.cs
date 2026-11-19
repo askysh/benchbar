@@ -35,10 +35,11 @@ public sealed class PlanReviewModel : IDisposable
     private CancellationTokenSource? _run;
     private bool _disposed;
 
-    public PlanReviewModel(PlanReviewRequest request, ICliClient cli)
+    public PlanReviewModel(PlanReviewRequest request, ICliClient cli, TimeProvider? time = null)
     {
         Request = request;
         _cli = cli;
+        _time = time ?? TimeProvider.System;
     }
 
     public PlanReviewRequest Request { get; }
@@ -59,10 +60,11 @@ public sealed class PlanReviewModel : IDisposable
 
     public string ProgressLabel { get; private set; } = "";
 
+    private readonly TimeProvider _time;
     private long? _runStarted;
 
     /// <summary>How long the apply has been running (zero before it starts). A long run shows this instead of a timeout.</summary>
-    public TimeSpan Elapsed => _runStarted is { } t ? System.Diagnostics.Stopwatch.GetElapsedTime(t) : TimeSpan.Zero;
+    public TimeSpan Elapsed => _runStarted is { } t ? _time.GetElapsedTime(t) : TimeSpan.Zero;
 
     public PlanResultModel? Result { get; private set; }
 
@@ -163,7 +165,7 @@ public sealed class PlanReviewModel : IDisposable
             PasswordWasWrong = false;
             Message = null;
             ProgressLabel = "";
-            _runStarted = System.Diagnostics.Stopwatch.GetTimestamp();
+            _runStarted = _time.GetTimestamp();
             Phase = PlanPhase.Running;
             Raise();
 

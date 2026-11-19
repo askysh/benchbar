@@ -54,10 +54,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Labs.shared.loader = .cli { await MainActor.run { labsStore.cliClient } }
         lanRoomsObservation = Labs.shared.observe(.lanRooms) { [weak self] on in self?.lanRoomsChanged(on) }
         NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.store.appBecameActive() }
+            MainActor.assumeIsolated {
+                self?.store.appBecameActive()
+                Labs.shared.refreshIfStale()
+            }
         }
 
         notifier = Notifier(settings: settings)
+        ShareNotices.notifier = notifier
         store.onAlert = { [weak self] bench, alert in self?.notifier.post(alert, bench: bench) }
         ShareCenter.shared.attach(store)
         store.confirmWhileSharing = { action, bench in
@@ -169,9 +173,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // open, close, occlusion and the page: the window's views stay alive
         // when it closes, so the store hears of them from the controller
         mainWindow.onKey = { Task { await Labs.shared.refresh() } }
-        NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
-            Task { @MainActor in Labs.shared.refreshIfStale() }
-        }
         mainWindow.onSight = { [weak self] sight in self?.store.setWindow(sight) }
 
         logWindows = LogWindowController { [weak self] path in self?.openLogsInTerminal(path) }
@@ -287,11 +288,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let benches = store.benches.map {
             URLRouter.Bench(path: $0.path, name: $0.name, sites: $0.siteRows.map(\.name))
         }
-        // a share link can carry a room code: its address is never logged, only a generic line
-        let link = url.host(percentEncoded: false)?.lowercased() == "share" ? "share link" : String(url.absoluteString.prefix(300))
-        switch URLRouter.route(url, benches: benches, selected: store.selectedPath, lanRooms: Labs.shared.isOn(.lanRooms)) {
-        case .ignore(let reason):
-            Self.urlLog.notice("Ignored \(link, privacy: .public): \(reason, privacy: .public)")
+        // a link can carry a room code or a profile token: only its scheme and action are logged (MAC-10)
+        let link = URLRouter.logLabel(url)
+        let outcome = URLRouter.route(url, benches: benches, selected: store.selectedPath, lanRooms: Labs.shared.isOn(.lanRooms))
+        // the log line is built from fixed texts and the short label only: never a host, path, query or bench name
+        if let line = URLRouter.rejectionLogLine(link: link, outcome: outcome) {
+            Self.urlLog.notice("\(line, privacy: .public)")
+        }
+        switch outcome {
+        case .ignore:
+            break
         case .window:
             openMainWindow()
         case .share(let target):
@@ -309,17 +315,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Self.urlLog.info("profile link: Team Profiles, sheet prefilled")
             mainWindow.router.profileRequest = link
             mainWindow.show(.profiles)
-        case .explain(let message):
-            Self.urlLog.notice("\(link, privacy: .public): \(message, privacy: .public)")
+        case .explain(let message, _):
             mainWindow.router.notice = message
             openMainWindow()
         case .run(let route, let path, let site):
             guard let bench = store.benches.first(where: { $0.path == path }) else { return }
+            if LinkConfirm.needsAsking(route, setting: settings.confirmLinkActions) {
+                let question = LinkConfirm.question(route, bench: bench.name)
+                guard ShareConfirm.ask(question.title, detail: question.detail, button: question.button, cancelIsDefault: true) else {
+                    Self.urlLog.info("\(route.rawValue, privacy: .public) on \(bench.name, privacy: .public): not confirmed")
+                    return
+                }
+            }
             Self.urlLog.info("\(route.rawValue, privacy: .public) on \(bench.name, privacy: .public)")
             switch route {
             case .up: Task { await store.perform(.up, on: bench) }
-            case .down: Task { await store.perform(.down, on: bench, fromLink: true) }
-            case .restart: Task { await store.perform(.restart, on: bench, fromLink: true) }
+            // with the confirm setting on, the alert above came first and the room confirm still follows
+            case .down: Task { await store.perform(.down, on: bench, fromLink: !settings.confirmLinkActions) }
+            case .restart: Task { await store.perform(.restart, on: bench, fromLink: !settings.confirmLinkActions) }
             case .open:
                 if let site, let row = bench.siteRows.first(where: { $0.name == site }) {
                     Workspace.open(row.url)
@@ -392,27 +405,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Mac hosts and closes the forwarder to a room it joined: those ask
     /// too, and Quit anyway is theirs (`QuitPolicy`).
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        let labOn = Labs.shared.isOn(.lanRooms)
-        var facts = QuitFacts(labOn: labOn, changeRunning: store.runningChangeLabel)
-        facts.shareSetupRunning = ShareCenter.shared.setupOrTeardownRunning
-        if let hosted = ShareCenter.shared.benchesWithGuests.first {
-            facts.hostedRoom = .init(bench: URL(fileURLWithPath: hosted.bench).lastPathComponent, people: hosted.status?.people ?? 0)
-        }
-        facts.guestForwarderUp = guest?.hasRunningForwarder == true
-        guard let prompt = QuitPolicy.prompt(for: facts) else {
+        let hosted = ShareCenter.shared.benchesWithGuests.first
+        let facts = QuitPolicy.Facts(labOn: Labs.shared.isOn(.lanRooms), setupRunning: ShareCenter.shared.setupOrTeardownRunning,
+                                     hostedBench: hosted?.bench, people: hosted?.status?.people ?? 0,
+                                     guestForwarder: guest?.hasRunningForwarder == true,
+                                     changeRunning: store.runningChangeLabel)
+        guard let question = QuitPolicy.question(facts) else {
             quitWait.disarm()
             return .terminateNow
         }
         let alert = NSAlert()
-        alert.messageText = prompt.title
-        alert.informativeText = prompt.detail
+        alert.messageText = question.title
+        alert.informativeText = question.detail
         alert.addButton(withTitle: "Keep running")
-        alert.addButton(withTitle: prompt.canWaitForIt ? "Quit when it finishes" : "Quit anyway")
+        alert.addButton(withTitle: question.canWaitForIt ? "Quit when it finishes" : "Quit anyway")
         guard alert.runModal() == .alertSecondButtonReturn else {
             quitWait.disarm()
             return .terminateCancel
         }
-        guard prompt.canWaitForIt else { return .terminateNow }
+        guard question.canWaitForIt else { return .terminateNow }
         // the store says when the change slot is free (onIdle)
         quitWait.arm()
         return .terminateCancel
@@ -430,7 +441,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func lanRoomsChanged(_ on: Bool) {
         if on {
             if guestSlot.store == nil {
-                let browser = BrowserRouter()
+                let browser = BrowserRouter.shared
                 guestSlot.store = GuestRoomStore(dependencies: .live(identity: KeychainIdentity(), openURL: { browser.open($0) }))
             }
             ShareCenter.shared.restoreActive(among: store.benches.map(\.path))

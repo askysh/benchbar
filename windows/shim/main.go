@@ -42,9 +42,10 @@ func run(sys *System, args []string) int {
 			// benchbar.exe, the tray and the CLI together; --cli is the CLI's own
 			return cmdSelfUpdate(sys, args[1:])
 		case "doctor":
-			if !hasAny(args[1:], "--json", "--fix-hints") {
-				return cmdDoctor(sys, args[1:])
+			if hasAny(args[1:], machineFlags...) {
+				return cmdDoctorMachine(sys, args[1:])
 			}
+			return cmdDoctor(sys, args[1:])
 		}
 	}
 	return cmdForward(sys, args)

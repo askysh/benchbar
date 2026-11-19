@@ -24,8 +24,9 @@ mkdir -p "$MOCK_STATE/keychain"; printf 'kc-secret-1\n' >"$MOCK_STATE/keychain/b
 FL_ASSUME_YES=1 run_fm mariadb-password </dev/null
 assert_eq "1" "$CODE" "$OUT"
 assert_not_contains "$OUT" "kc-secret-1" "(the environment must not print the password)"
-assert_contains "$OUT" "--yes"
-run_fm mariadb-password --yes
+assert_not_contains "$OUT" "--yes" "(no failure text tells an agent to pass --yes)"
+assert_contains "$OUT" "terminal"
+run_fm_tty mariadb-password --yes
 assert_eq "0" "$CODE" "$OUT"; assert_eq "kc-secret-1" "$OUT"
 # FL_MAKE_DEFAULT from the environment does not move the default bench
 A="$HOME/dev/bench-a"; B="$HOME/dev/bench-b"
@@ -163,7 +164,7 @@ assert_calls_not_contain '^security add-generic-password' "(the add command goes
 assert_not_contains "$(cat "$MOCK_LOG")" 'c\d' "(no part of the password on a command line)"
 grep -q -- '-T /usr/bin/security' "$MOCK_STATE/keychain/benchbar-mariadb--root.cmd" || fail "the item names /usr/bin/security as its trusted application"
 grep -q -- ' -U ' "$MOCK_STATE/keychain/benchbar-mariadb--root.cmd" || fail "the item is updated in place (-U)"
-run_fm mariadb-password --yes
+run_fm_tty mariadb-password --yes
 assert_eq "0" "$CODE" "$OUT"; assert_eq "$tricky" "$OUT"
 # a second run finds the same value and writes nothing
 reset_calls

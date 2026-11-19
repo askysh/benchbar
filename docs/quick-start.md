@@ -94,6 +94,49 @@ the full output is in `~/.local/state/benchbar/logs/` (`.benchbar/logs/`
 in a git checkout of benchbar). Re-running `install` is safe: it skips
 what is already done.
 
+### If the install stops
+
+Run `benchbar install` again: it picks up where it stopped. The cases
+below are the ones that need a word.
+
+**It stopped at `bench init` with `No such file or directory: 'uv'`
+(issue 112), and every run since says `Bench directory exists but is
+incomplete`.** Older releases did not install `uv`, which `bench init`
+needs even when bench itself came from pipx. Update BenchBar, then run
+`benchbar install` again: step 1 installs `uv` with Homebrew, and the
+empty folder the failed init left is moved to
+`~/frappe-bench.incomplete.<time>` (nothing is deleted; remove it when you
+like). On an older release the same fix by hand is:
+
+```bash
+brew install uv
+mv ~/frappe-bench ~/frappe-bench.incomplete.$(date +%Y%m%d%H%M%S)
+benchbar install
+```
+
+A folder that holds something other than empty folders (an app, your
+files) is not moved on its own. `benchbar install --repair-bench` moves
+it aside and starts over, and with `--dry-run` it shows the move first. A
+bench that has a site is never moved.
+
+**`benchbar: command not found`.** Step 1 links `benchbar` into
+`~/.local/bin`. A new terminal (or `source ~/.zshrc`) puts that folder on
+PATH; until then run `~/.local/bin/benchbar install`.
+
+**It was cut short while it created the site** (Ctrl+C, a closed window).
+Run `benchbar install` again. It drops the half made database only when
+it can prove that BenchBar made it just now and nobody uses it: BenchBar's
+own record in its state folder names it, no site of this bench or of any
+bench BenchBar knows names it, and it holds no users but Administrator
+and Guest (or no tables at all). It asks you first (the default is No);
+`--yes` answers for you. Then it moves the half made site folder to
+`<bench>/archived/sites/<site>.incomplete.<time>` and creates the site
+again; it needs the MariaDB root password (the Keychain has it) and asks
+for the Administrator password again. When any of that fails (a marker an
+older release wrote, a database another site names, a database with
+users), it drops and moves nothing, names the database and prints the
+commands for you to run once you have checked whose it is.
+
 To pick the Frappe version or the apps, pass a profile and a bundle, for
 example `benchbar install --profile v16-lts --bundle common`. The choices
 are in [Configuration](reference/configuration.md).
@@ -111,8 +154,9 @@ Terminal (a new tab has them already). `benchup` starts the bench in the
 background, waits for the site and ends with
 `bench is up: http://macdev:8000`.
 
-`macdev` is the default site name. When you picked another one, or
-adopted a bench, `benchbar status` shows the site's URL; use that.
+`macdev` is the default site name on macOS. On Linux (and in WSL) it is
+`linuxdev.localhost`, so open `http://linuxdev.localhost:8000`. When you picked
+another one, or adopted a bench, `benchbar status` shows the site's URL; use that.
 
 In the browser, log in as `Administrator` with the password you gave
 `install` (or your existing one), and walk through the setup wizard. You
@@ -120,7 +164,7 @@ can close Terminal; the bench keeps running until `benchdown`.
 
 ## Linux and Windows
 
-On Ubuntu 24.04, clone the repository and run `./benchbar install`, then
+On Ubuntu 24.04 (or another apt based system), clone the repository and run `./benchbar install`, then
 `source ~/.bashrc` and `benchup`. See [Install: Linux](install.md#linux).
 
 On Windows, install BenchBar for Windows (a beta) with the one line in

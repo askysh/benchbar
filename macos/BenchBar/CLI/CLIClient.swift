@@ -9,6 +9,11 @@ nonisolated struct CLIClient: Sendable {
     let executable: URL
     var runner: any CommandRunning = SubprocessRunner()
     var locator = CLILocator()
+    /// Where the entries of a list the CLI printed but this build could not read are named
+    /// (the rest of the list still shows). Logs by default; a test replaces it.
+    var onSkipped: @Sendable (_ source: String, _ entries: [String]) -> Void = { source, entries in
+        Log.cli.error("\(source, privacy: .public): skipped \(entries.count) entries: \(entries.joined(separator: "; "), privacy: .public)")
+    }
 
     /// Timeouts per kind of call. `up` and `restart` wait for the site to
     /// answer (45 seconds in the CLI), so they get more room.
@@ -27,7 +32,12 @@ nonisolated struct CLIClient: Sendable {
     /// install, an adopt, a repair or `site hosts` run that the user
     /// confirmed in the app gets it, and `site open-as on` after its alert
     /// (there it marks the call as the app's, and no sudo runs).
-    static let guiSudo = ["BENCHBAR_SUDO": "gui"]
+    static let guiSudo = ["BENCHBAR_SUDO": "gui"].merging(appCaller) { _, new in new }
+
+    /// Says the run comes from this app: its process id (MAC-4). The CLI does not check it
+    /// today, and it is a claim any process of the same user could copy, so it is a rail
+    /// against agents that follow AGENTS.md and against mistakes, not a boundary; docs/app.md says so.
+    static var appCaller: [String: String] { ["BENCHBAR_APP_PID": String(ProcessInfo.processInfo.processIdentifier)] }
 
     /// Environment for the CLI: an explicit PATH (Finder launched apps do
     /// not get the shell's), no colors, no spinners.
@@ -38,6 +48,13 @@ nonisolated struct CLIClient: Sendable {
             "TERM": "dumb",
             "LANG": "en_US.UTF-8",
         ]
+    }
+
+    /// Names the entries a decoded document left out, once per document, so a CLI that
+    /// prints something this build cannot read leaves a trace in the log.
+    func reportSkipped(_ source: String, _ entries: [String]) {
+        guard !entries.isEmpty else { return }
+        onSkipped(source, entries)
     }
 
     // MARK: queries (read only, safe to poll)
@@ -90,7 +107,9 @@ nonisolated struct CLIClient: Sendable {
     /// doctor exits 1 when a check fails but still prints the full report.
     func doctor(bench: String) async throws(CLIError) -> DoctorReport {
         let output = try await run(["doctor", "--json", "--bench-dir", bench], timeout: Timeout.doctor, acceptExitCodes: [0, 1])
-        return try BenchJSON.decode(DoctorReport.self, from: Data(output.stdout.utf8))
+        let report = try BenchJSON.decode(DoctorReport.self, from: Data(output.stdout.utf8))
+        reportSkipped("doctor", report.skipped)
+        return report
     }
 
     /// The first line of `benchbar --version` ("benchbar 0.5.0"). A 0.5.5
@@ -149,7 +168,9 @@ nonisolated struct CLIClient: Sendable {
         // several git calls per app: on a cold start next to status and doctor
         // for every bench, 20 seconds was not always enough
         let output = try await run(args, timeout: Timeout.doctor, acceptExitCodes: [0], qos: .utility)
-        return try BenchJSON.decode(AppList.self, from: Data(output.stdout.utf8))
+        let list = try BenchJSON.decode(AppList.self, from: Data(output.stdout.utf8))
+        reportSkipped("app list", list.skipped)
+        return list
     }
 
     /// benchbar app add SOURCE --dry-run --json: the plan and its token. Read
@@ -308,12 +329,17 @@ nonisolated struct CLIClient: Sendable {
     /// A session for `user` on a developer_mode site, as a login link (`--print-url`).
     /// The link holds the session id, so neither a decoding failure nor the
     /// CLI's own words are allowed to repeat it (`OpenAsLink.scrub`).
+    ///
+    /// The CLI prints a link only to a terminal or to a caller that says
+    /// BENCHBAR_NONINTERACTIVE=0 itself: this click is the person's decision,
+    /// and the app has no terminal, so the call says so (and a mode in the
+    /// app's own environment cannot turn it off).
     func openAs(bench: String, site: String, user: String, path: String?) async throws(CLIError) -> OpenAsResult {
         let pathArguments = path.map { ["--path", $0] } ?? []
         let output: CommandOutput
         do throws(CLIError) {
             output = try await run(["open", "--bench-dir", bench, "--site", site, "--as", user] + pathArguments + ["--print-url", "--json"],
-                                   timeout: Timeout.action, acceptExitCodes: [0])
+                                   timeout: Timeout.action, acceptExitCodes: [0], extraEnvironment: ["BENCHBAR_NONINTERACTIVE": "0"])
         } catch {
             if case .failed(let command, let code, let message) = error {
                 throw .failed(command: command, exitCode: code, message: OpenAsLink.scrub(message))
@@ -357,7 +383,9 @@ nonisolated struct CLIClient: Sendable {
     /// a person waits for; `.default` for everything a person asked for.
     func run(_ arguments: [String], timeout: Duration, acceptExitCodes: Set<Int32>,
              extraEnvironment: [String: String] = [:], qos: QualityOfService = .default) async throws(CLIError) -> CommandOutput {
-        let env = environment().merging(extraEnvironment) { _, new in new }
+        var env = environment().merging(extraEnvironment) { _, new in new }
+        // a run that says it is a person's click (BENCHBAR_NONINTERACTIVE=0, open --as) also says which app
+        if extraEnvironment["BENCHBAR_NONINTERACTIVE"] == "0" { env.merge(Self.appCaller) { _, new in new } }
         let output = try await runner.run(executable: executable, arguments: arguments, environment: env, timeout: timeout, qos: qos)
         guard acceptExitCodes.contains(output.exitCode) else {
             throw .failed(command: arguments.first ?? "", exitCode: output.exitCode, message: Self.summarize(output))

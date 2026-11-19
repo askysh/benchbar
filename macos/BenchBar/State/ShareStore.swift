@@ -198,7 +198,7 @@ final class ShareStore {
         do throws(CLIError) {
             next = try await client.shareStatus(bench: bench, preflight: wantPreflight)
         } catch {
-            if case .failed(_, _, let message) = error, message.localizedCaseInsensitiveContains("unknown command") {
+            if error.isUnknownCommand {
                 availability = .unavailable
                 status = nil
                 return

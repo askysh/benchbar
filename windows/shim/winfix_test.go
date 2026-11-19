@@ -767,6 +767,12 @@ func TestLinuxPathArg(t *testing.T) {
 		{`http://example.com/x`, "x", `http://example.com/x`},
 		{`/home/akash/bench`, "x", `/home/akash/bench`},
 		{`relative\path`, "x", `relative\path`},
+		{`.\bench`, "x", `./bench`},
+		{`..\a\b`, "x", `../a/b`},
+		{`.`, "x", `.`},
+		{`..`, "x", `..`},
+		{`./bench`, "x", `./bench`},
+		{`.hidden\x`, "x", `.hidden\x`},
 		{`\\server\share\x`, "x", `\\server\share\x`},
 		{``, "x", ``},
 		{`see C:\x`, "x", `see C:\x`},
@@ -783,9 +789,10 @@ func TestForwardConvertsWindowsPaths(t *testing.T) {
 	e.run("adopt", `C:\Users\x\bench`, "--bench-dir=D:/b", "--bench-dir", `\\wsl.localhost\Ubuntu-24.04\home\a\bench`,
 		"--", `E:\other`, "plain", "--msg=C:foo")
 	st := e.starts()
-	if len(st) != 1 {
-		t.Fatalf("%d calls", len(st))
+	if len(st) != 2 {
+		t.Fatalf("%d calls, want the drive probe and the command", len(st))
 	}
+	st = st[1:]
 	got := st[0].Exec[4:]
 	want := []string{"adopt", "/mnt/c/Users/x/bench", "--bench-dir=/mnt/d/b", "--bench-dir", "/home/a/bench",
 		"--", "/mnt/e/other", "plain", "--msg=C:foo"}

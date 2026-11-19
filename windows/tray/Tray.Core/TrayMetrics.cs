@@ -82,8 +82,9 @@ public static class TrayMetrics
 
     /// <summary>"Show animations in Windows" off means reduce motion.</summary>
     /// <summary>
-    /// The system's "animation effects" switch, unless BENCHBAR_TRAY_REDUCE_MOTION says 0 or 1: the harness
-    /// sets 0 for both shells, because a CI runner has animations off and would measure a still frame.
+    /// The system's "animation effects" switch, unless BENCHBAR_TRAY_REDUCE_MOTION says 0 or 1. It is a
+    /// documented override in every build: a person can force motion on or off, and the UI tests set 0
+    /// because a CI runner has animations off and would measure a still frame.
     /// </summary>
     public static bool ReduceMotion() => Environment.GetEnvironmentVariable("BENCHBAR_TRAY_REDUCE_MOTION") switch
     {

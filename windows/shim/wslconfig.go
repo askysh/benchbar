@@ -109,12 +109,9 @@ func analyzeWslconfig(f *ini, path string, exists bool, host uint64) wslReport {
 		s.Value, s.Set = f.get(s.Section, s.Key)
 	}
 	mem := r.Settings[0]
-	switch {
-	case mem.Set:
-		if n, ok := parseSize(mem.Value); ok && n < minMemory {
-			r.Suggest = append(r.Suggest, wslChange{"wsl2", "memory", "4GB"})
-		}
-	case host > 0 && host/2 < minMemory:
+	// a memory value the user set is theirs: the idle check only says so when
+	// it is small (idleCheck); only an unset value on a small PC is suggested
+	if !mem.Set && host > 0 && host/2 < minMemory {
 		r.Suggest = append(r.Suggest, wslChange{"wsl2", "memory", "4GB"})
 	}
 	if v := r.Settings[3]; !v.Set || v.Value != "-1" {
@@ -244,6 +241,11 @@ func idleCheck(r wslReport) Check {
 		c.Status = "warn"
 		c.Message = "WSL can stop idle benches: " + strings.Join(bad, ", ")
 		c.Fix = "benchbar.exe wslconfig --apply --yes"
+	}
+	if m := r.Settings[0]; m.Set {
+		if n, ok := parseSize(m.Value); ok && n < minMemory {
+			c.Message += "; memory=" + m.Value + " is below 4 GB, and is left as you set it (a bench may run out of memory)"
+		}
 	}
 	return c
 }

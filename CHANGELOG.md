@@ -2,6 +2,69 @@
 
 All notable changes to this project are documented here.
 
+## Unreleased
+
+### Mac app
+
+- New setting **Links, Ask before a link acts** (off by default): when on, BenchBar shows an alert before a `benchbar://` link starts, stops or restarts a bench or opens a console. Any web page or app can open such a link, and a browser's "always allow" removes its own question. The docs say so plainly.
+- The app's runs of `benchbar` that stand for a person's click now also set `BENCHBAR_APP_PID` to the app's process id, as a marker that the call comes from the app. The command line tool does not check it yet, and a process of the same user can set it too, so it is a safety rail and not a boundary; the docs say so.
+- The log no longer holds any part of a link the app ignored or could not use: only `benchbar://action` or a short hash, plus a fixed sentence that names the reason and never a host, path, query, bench or site from the link. The alert for a link that asks to start, stop or restart a bench has Cancel as its default button.
+- Importing a runner reads `manifest.json` only as a plain file of at most 64 KB, never through a symbolic link, and refuses a zip that holds a link or another file that is not a plain file. The zip is unpacked off the main thread, so the window does not freeze.
+
+### Docs
+
+- New [Features](docs/features.md) page: every feature by surface (command line tool, Mac app, Windows, MCP) with its platform and the version it came in (the first CHANGELOG heading that has it), Linux marked from 0.8.0, and the Labs marked. The home page and the README link to it.
+- The docs sidebar has seven groups: Start, Guides, Concepts, Reference, App, Windows and For contributors. The Labs reference is in it now. Doctor checks moved to Reference, Runners to App and Troubleshooting to Guides. No URL changed.
+- Two Concepts pages: [Port blocks](docs/concepts/port-blocks.md) and [How sharing keeps your bench safe](docs/concepts/sharing-safety.md), moved out of the benches guide and the share reference.
+- Testing, Releasing and Decisions are under For contributors. Decisions and Releasing no longer show in the site search.
+- The Mac app page describes the Sharing tab, On your network and the Labs list, and the energy cost of both.
+
+### Backups
+
+- `site backup`, `site restore`, `site drop`, `pull --replace` and `app update` no longer delete the site's backups older than 23 hours. bench's backup did that silently; benchbar now keeps those files and puts them back. Nothing in a site's backup folder is pruned. On the same volume the kept files are hard links (no space); when the state folder is on another volume each run copies the whole backup folder and stops before bench starts when the free space does not cover it.
+- A run that is cut short between keeping and putting back (Ctrl-C, TERM) puts the files back as it exits. A run that is killed outright, or a file that could not go back, leaves the copy in the state folder, which is then never pruned: the next backup puts it back (`changed[]` says so), `doctor` warns (`kept_backups`) until then, and `repair` puts the files back.
+- `site restore` and `pull` read a backup set before they change anything: a dump that is empty or cut short, or a file archive tar cannot read, stops the command with the file named. `site backups` marks a set with an empty part `(incomplete)` and has `"complete"` in JSON.
+- benchbar's own state folder keeps to a limit: the newest 100 run logs, 50 backup folders and 14 update checks, and old `state.env.*` temp files go. The run's `changed[]` says what was removed.
+- `benchup` keeps the logs of the last three starts as `bench.previous.1.log` to `.3.log`, so the evidence of a crash survives a quick second start.
+
+### Windows tray
+
+- A call to `benchbar.exe` that has finished no longer shows "did not finish" when a helper process it started keeps its output open: the tray waits a few seconds for the output and goes on.
+- The Logs window waits longer between requests while no new lines arrive, makes none while the PC is locked or asleep or the window is minimized, and asks at most every 30 seconds in battery saver. The bench poll with a running bench is every 60 seconds on battery.
+- A list, a status, a log or a health check from a newer `benchbar` than the tray is read when it still has what the tray needs, instead of blanking the whole window. A plan or a change from a newer one is still refused. A newer `benchbar.exe` no longer blocks Check for Updates, and a newer patch version of it no longer shows a version warning.
+- Saving a setting no longer freezes the window while an antivirus scan holds `config.json`.
+- A backup's date and size in Sites follow your Windows language (month names, time pattern and decimal sign).
+- With `BENCHBAR_TRAY_FIXTURES` set (recorded demo data) every window says "Demo data" and the notice cannot be closed, so a variable left over from a demo is noticed. The measurement hooks (`BENCHBAR_TRAY_HARNESS_PIPE`, `--logon-log`, `BENCHBAR_TRAY_THEME`) are no longer part of the released tray.
+
+### benchbar.exe
+
+- `benchbar.exe` starts the command in the folder you run it in (a drive folder, a network folder or a `\\wsl.localhost` folder of your distro), so `adopt .`, `--bench-dir .\bench`, `profile export` and `site restore --from file` work with relative paths. `.\x` and `..\x` become `./x` and `../x`.
+- When the folder has no path in WSL (a missing folder, a drive WSL does not mount, a folder of another distro), `benchbar.exe` still starts in your Linux home but now says so with one line on stderr, so `adopt .` does not act on your home folder unseen.
+- A drive path such as `D:\bench` uses the mount the distro really has, not a fixed `/mnt/d`.
+- `benchbar.exe doctor --json`, `--jsonl` and `--for-agent` print only the JSON document, with the Windows checks inside it as `windows_checks`. `--fix-hints` lists the Windows fixes too.
+- Bug reports hide secrets in JSON files (`"db_password": "..."`, `encryption_key`, `Authorization`, cookies) as well as `key=value` ones, including values with escaped quotes, arrays of strings and nested objects.
+- `schtasks.exe` and streamed `wsl.exe` output are read in the right code page, so a user name with accents no longer breaks the keepalive checks or garbles the setup log.
+- `BENCHBAR_LABS`, `BENCH_INIT_TIMEOUT_SECONDS`, `BENCHBAR_PROFILE_PATH` and the `BENCHBAR_MCP_*` settings now reach the CLI in WSL.
+- A `.wslconfig` `memory` value you set is no longer raised to 4 GB; `doctor` only says it is small. The setup step is named "Keep WSL from stopping idle benches (uses more RAM)".
+- `benchbar.exe path install` and `remove` save the old user PATH in `%LOCALAPPDATA%\BenchBar\path-backup-<stamp>.txt` first.
+- When a command exits 2 and the CLI in WSL is another release than `benchbar.exe`, one line says so and how to update.
+- The advice when no distro is installed now names `benchbar.exe setup run distro_install`; `setup check` only reports.
+- A hung `wsl.exe` (bug report copy, setup streams) or `schtasks.exe` is ended at its deadline, and a setup action stops when the program reading its output has gone.
+
+### Agents never see a secret
+
+- `benchbar mariadb-password` is for a person at a terminal. It refuses under `--for-agent`, `BENCHBAR_NONINTERACTIVE`, `benchbar mcp` and when stdin is not a terminal, whatever `--yes` says, and no message or doc line tells an agent to run it (the install messages now say to ask the person who installed it). When the MariaDB root password is unknown (exit 2), the message tells an agent to ask the person. This stops the documented agent modes and a missing terminal. A process that runs as the same user and fakes a terminal is not stopped: these are guards against mistakes, not a boundary, as SECURITY.md says for the Keychain.
+- `benchbar open --as USER --print-url` is refused under `--for-agent`, `BENCHBAR_NONINTERACTIVE=1` and `benchbar mcp`, and now also when stdin is not a terminal, unless the caller sets `BENCHBAR_NONINTERACTIVE=0` itself (the Mac app does; BenchBar for Windows does not call it). The link holds a login session. Same limit as above: a process of the same user that fakes a terminal or sets the variable is not stopped.
+- `benchbar_site_add` no longer returns a generated Administrator password. It is saved in a 0600 file (`site-admin/SITE` in benchbar's state folder) and the result names that file; pass your own `admin_password` to choose one. The file is written as a new file and renamed into place, so an older file's mode never applies, and `benchbar site drop` removes it with the site.
+
+### Install
+
+- A first install on a Mac without `uv` no longer fails at `bench init`. Step 1 installs `uv` with Homebrew (a `uv` you already have is used as it is), and step 2 stops before it installs anything when `uv` is still missing, with the fix. frappe-bench needs `uv` for `bench init` even when bench itself came from pipx (#112).
+- A rerun after a failed `bench init` no longer stops at "Bench directory exists but is incomplete" when the folder holds only empty folders: it is moved to `<bench>.incomplete.<time>` and the init starts over. Nothing is deleted. `benchbar install` now takes `--repair-bench` for any other incomplete folder (never one with a site), and `--repair-bench --dry-run` shows the move (#112).
+- The note "Existing MariaDB/MySQL may already be using port 3306" is no longer printed when the server is the Homebrew MariaDB that BenchBar manages and the Keychain password works (#112).
+- A `bench new-site` that was cut short (Ctrl+C, a closed window) is cleaned up by the next `benchbar install`: BenchBar chooses the new site's database name, writes it to the marker before `new-site` starts, and keeps its own record of the name in its state folder. On a rerun it drops that database (and its user) only when that record names it, no site of this bench or of any bench BenchBar knows names it, it holds no users but Administrator and Guest (or no tables), and you confirm (default No) or pass `--yes`; then it moves the half made folder to `archived/sites/` and creates the site again. When any of that fails it drops and moves nothing, names the database and prints the commands. New sites now get a random database name of the same shape as before (`_` and 16 hex digits).
+- `benchbar` is linked into `~/.local/bin` right after step 1, not only in step 3, and a failed bench step names the full path to run it again (#112).
+
 ## 0.8.3 - 2026-11-17
 
 0.8.3 is a fix pass for Windows from a full review and a live test on a

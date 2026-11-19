@@ -69,7 +69,7 @@ build from source: `git clone`
 this repository and run `./benchbar install`; the app needs Xcode 26.
 
 **Linux and Windows.** From 0.8 the same CLI runs on Linux (Ubuntu 24.04
-and other apt based systems, the v15-lts profile so far), with each bench
+tested, other apt based systems with a doctor warning, the v15-lts profile so far), with each bench
 under `systemd --user`; clone the repository and run `./benchbar install`.
 See [Install](https://benchbar.akashmishra.com/install/#linux).
 
@@ -131,6 +131,8 @@ what it is for and what to do next.
 
 ## Features
 
+The full list by platform, with the version of each feature, is on the [Features page](https://benchbar.akashmishra.com/features/). The main ones:
+
 - **One command installs everything:** Homebrew formulae, a MariaDB root password in your Keychain, wkhtmltopdf, a bench and a site.
 - **Runs in the background:** one launchd agent per bench, restarted after a crash, paused after three crashes in ten minutes.
 - **Doctor and repair:** read only checks that name the fix, then only the flagged fixes, with a backup before each change.
@@ -140,6 +142,7 @@ what it is for and what to do next.
 - **Several benches side by side:** a v15 and a v16 bench, each with its own ports, sites and scheduler, on one MariaDB.
 - **Apps from anywhere:** the app registry or any GitHub repository, private ones too, with a changelog before every update.
 - **Made for teams:** team profiles, the `benchbar.toml` lockfile, and `benchbar pull` for a local copy of production.
+- **Newer, and experiments:** Open as another user, Quick Switch and rooms on your Wi-Fi. Rooms and Quick Switch are Labs: off until you turn them on.
 - **For coding agents:** `benchbar mcp` lets Claude Code, Cursor and other agents read and drive your benches. Every command has `--help`, and `--for-agent` makes it print JSON and ask nothing.
 
 

@@ -11,7 +11,7 @@
 # Groups (used by "benchbar service" versus "benchbar repair"):
 #   system, bench, service, site
 
-FL_CHECK_ORDER="brew formula_dates python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac mole app_copies full_disk_access env_python env_setuptools bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy app_update_pending app_add_pending dependency_behind apps_behind lock_parse lock_drift profile_outdated logs bench_path honcho honcho_setuptools procfile runner agent runner_heartbeat fork_safety scheduler stop_flag helpers cli_link cli_duplicate legacy_agents dead_agents hosts port_clash share_scheduler orphans ping site_not_served"
+FL_CHECK_ORDER="brew formula_dates python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac mole app_copies full_disk_access env_python env_setuptools bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy app_update_pending app_add_pending dependency_behind apps_behind lock_parse lock_drift profile_outdated logs kept_backups bench_path honcho honcho_setuptools procfile runner agent runner_heartbeat fork_safety scheduler stop_flag helpers cli_link cli_duplicate legacy_agents dead_agents hosts port_clash share_scheduler orphans ping site_not_served"
 FL_LOG_WARN_MB="${FL_LOG_WARN_MB:-50}"
 # doctor --quick leaves these out: they start brew, python, node, bench, git
 # or ask the site, which takes seconds each; the JSON names them (skipped_checks)
@@ -32,7 +32,7 @@ fl_check_group() {
   case "$1" in
     brew|formula_dates|python_leaves|mariadb_bind|mariadb_utf8|pdf_engine|redis_6379|cleanmymac|mole|app_copies|full_disk_access|wsl_time_sync) printf 'system' ;;
     env_python|env_setuptools|bench_version|toolchain_*|socketio|assets|apps_txt|app_branch_policy|app_update_pending|app_add_pending|dependency_behind|apps_behind|lock_parse|lock_drift|logs) printf 'bench' ;;
-    profile_outdated) printf 'bench' ;;
+    profile_outdated|kept_backups) printf 'bench' ;;
     ping|site_not_served) printf 'site' ;;
     *) printf 'service' ;;
   esac
@@ -74,6 +74,7 @@ fl_check_label() {
     site_not_served) printf 'Sites served' ;;
     hosts) printf '/etc/hosts entry' ;;
     logs) printf 'Log sizes' ;;
+    kept_backups) printf 'Kept older backups' ;;
     bench_path) printf 'Bench path' ;;
     cleanmymac) printf 'CleanMyMac' ;;
     mole) printf 'Mole' ;;
@@ -490,20 +491,6 @@ chk_helpers() {
 
 fl_cli_link_path() { printf '%s/.local/bin/%s' "$HOME" "${1:-benchbar}"; }
 
-# Homebrew's benchbar by a path brew upgrade keeps: the opt path, or its
-# link in <prefix>/bin. Never a Cellar path, which brew cleanup deletes.
-fl_cli_path_is_brew() {
-  local p
-  case "$1" in
-    */opt/benchbar/bin/benchbar|*/opt/benchbar/bin/frappe-mac|*/opt/benchbar/libexec/benchbar|*/opt/benchbar/libexec/frappe-mac) return 0 ;;
-  esac
-  for p in "${FL_SELF_PREFIX:-}" "${FL_BREW_PREFIX:-}"; do
-    [[ -n "$p" ]] || continue
-    [[ "$1" == "${p}/bin/benchbar" || "$1" == "${p}/bin/frappe-mac" ]] && return 0
-  done
-  return 1
-}
-
 # fl_brew_cli: Homebrew's benchbar when its formula is installed (this CLI
 # under Homebrew, else <prefix>/opt/benchbar/bin/benchbar), or nothing.
 # Brew then puts benchbar on PATH, so a link in ~/.local/bin is optional.
@@ -545,18 +532,6 @@ fl_cli_own_state_v() {
 # The first release whose Homebrew and installer copies hand off to the
 # app's CLI (install-kind.sh). An older one runs itself.
 FL_HANDOFF_SINCE="0.7.1"
-
-# fl_cli_standalone_script PATH: the benchbar script behind Homebrew's or the
-# installer's CLI at PATH (as a link or the helper block names it), else
-# nothing. No process.
-fl_cli_standalone_script() {
-  case "$1" in
-    */opt/benchbar/bin/benchbar|*/opt/benchbar/bin/frappe-mac) printf '%s' "${1%/bin/*}/libexec/benchbar" ;;
-    */opt/benchbar/libexec/benchbar|*/opt/benchbar/libexec/frappe-mac) printf '%s' "${1%/*}/benchbar" ;;
-    "${FL_MANAGED_HOME}/benchbar"|"${FL_MANAGED_HOME}/frappe-mac") printf '%s' "${FL_MANAGED_HOME}/benchbar" ;;
-    *) if fl_cli_path_is_brew "$1"; then printf '%s' "${1%/bin/*}/opt/benchbar/libexec/benchbar"; fi ;;
-  esac
-}
 
 # fl_cli_hands_off PATH: true when this is the app's CLI and PATH is a
 # Homebrew or installer copy that hands off to it (new enough to, and the
@@ -625,9 +600,6 @@ chk_cli_link() {
     chk__set ok "~/.local/bin/benchbar and ~/.local/bin/frappe-mac point to this checkout"
   fi
 }
-
-# fl_cli_version_at FILE: the version a benchbar script declares, or nothing
-fl_cli_version_at() { sed -n 's/^FL_VERSION="\(.*\)"$/\1/p' "$1" 2>/dev/null | awk 'NR==1'; }
 
 # A second copy of the CLI: the one line installer's checkout next to
 # Homebrew's formula. Those two share one state folder (state.sh moves the
@@ -897,16 +869,6 @@ chk_redis_6379() {
   fi
 }
 
-# fl_site_ping_code [SECONDS]: the default site's ping (3 s; status asks with 1)
-fl_site_ping_code() {
-  local code
-  code="$(curl -s -o /dev/null -m "${1:-3}" -w '%{http_code}' -H "Host: ${FL_SITE}" "http://127.0.0.1:${FL_WEB_PORT}/api/method/ping" 2>/dev/null || true)"
-  case "$code" in
-    [0-9][0-9][0-9]) printf '%s' "$code" ;;
-    *) printf '000' ;;
-  esac
-}
-
 fl_hosts_has_site() {
   local site_re
   site_re="$(printf '%s' "$FL_SITE" | sed 's/\./\\./g')"
@@ -980,6 +942,23 @@ fl_file_mb() {
   # wc, not stat: BSD and GNU stat disagree on -f, and the suite runs on both
   bytes="$(wc -c <"$f" | tr -d ' ')"
   printf '%d' $((bytes / 1024 / 1024))
+}
+
+# older backups of a site that a run of bench's backup did not put back
+# (site-backups.sh): only in the state folder, never pruned there
+chk_kept_backups() {
+  local kdir n f msg=""
+  while IFS= read -r kdir; do
+    [[ -n "$kdir" ]] || continue
+    n=0
+    for f in "$kdir"/*; do [[ -f "$f" ]] && n=$((n + 1)); done
+    msg="${msg}${msg:+; }${n} file(s) of ${kdir##*/} in ${kdir}"
+  done < <(fl_kept_dirs "$FL_BENCH_DIR")
+  if [[ -n "$msg" ]]; then
+    chk__set warn "older backups that bench's backup deleted are only in the state folder (a run was cut short): ${msg}" "${FL_SELF} repair (puts them back into the site's backup folder)" kept_backups
+  else
+    chk__set ok "no older backups wait in the state folder"
+  fi
 }
 
 chk_logs() {

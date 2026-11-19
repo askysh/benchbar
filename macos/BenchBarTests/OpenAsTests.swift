@@ -126,6 +126,8 @@ struct OpenAsTests {
                                                   "--path", "/app/nst?status=Open#x", "--print-url", "--json"])
         _ = try await client.openAs(bench: bench, site: site, user: "a@x.com", path: nil)
         #expect(runner.calls.last?.arguments == ["open", "--bench-dir", bench, "--site", site, "--as", "a@x.com", "--print-url", "--json"])
+        // the CLI prints the link only to a terminal or to a caller that says it is a person's click
+        #expect(runner.calls.allSatisfy { $0.environment["BENCHBAR_NONINTERACTIVE"] == "0" })
     }
 
     @Test func usersPassesTheSearchAsOneArgument() async throws {

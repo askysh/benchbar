@@ -364,6 +364,8 @@ final class BenchStore {
         do {
             let list = try await client.list()
             if listError != nil { listError = nil }
+            // an entry the CLI printed without a path is left out; the others stay
+            if !list.skipped.isEmpty { Log.poll.error("list: skipped \(list.skipped.count) entries: \(list.skipped.joined(separator: "; "), privacy: .public)") }
             var models: [BenchModel] = []
             for summary in list.benches {
                 if let existing = benches.first(where: { $0.path == summary.path }) {

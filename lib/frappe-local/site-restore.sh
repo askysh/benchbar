@@ -136,8 +136,24 @@ fl_srestore_resolve_source() {
     fl_srestore_err "--with-files: the set ${SR_SET_STAMP} has no files (benchbar site backup NAME --with-files takes one)"
     return 1
   fi
+  # the files are read to their end now, and again when the restore runs
+  if ! fl_srestore_check_files; then
+    fl_srestore_err "${FL_BACKUP_PROBLEM}; nothing was changed. Restore another set (benchbar site backups ${SR_SET_SITE:-NAME} lists them)"
+    return 1
+  fi
   SR_SET_JSON="$(fl_backup_set_json "$dir" "$SR_SET_STAMP")"
   return 0
+}
+
+# fl_srestore_check_files: the set's database dump, and its file archives when
+# they are restored, can be read to their end (fl_backup_set_check). Sets
+# FL_BACKUP_PROBLEM.
+fl_srestore_check_files() {
+  if [[ "$FL_PULL_NO_FILES" == "1" ]]; then
+    fl_backup_set_check "$SR_SET_DIR" "$FL_PULL_DB"
+  else
+    fl_backup_set_check "$SR_SET_DIR" "$FL_PULL_DB" "$FL_PULL_PUB" "$FL_PULL_PRIV"
+  fi
 }
 
 # fl_srestore_plan: errors, steps, JSON and token, from reads only.
@@ -171,7 +187,7 @@ fl_srestore_plan() {
       SR_NEEDS='"MARIADB_ROOT_PASSWORD"'
       # a run in a terminal asks for it; any other run cannot
       [[ -t 0 && "${FL_ASSUME_YES:-0}" != "1" && "${OPT_JSON:-0}" != "1" && "$SR_APPLY" != "1" ]] \
-        || fl_srestore_err "the MariaDB root password is unknown to benchbar; run the command with MARIADB_ROOT_PASSWORD='...' in the environment"
+        || fl_srestore_err "the MariaDB root password is unknown to benchbar; ask the person for it (do not look for it), then run the command with MARIADB_ROOT_PASSWORD='...' in the environment"
     fi
   fi
   # the hook
@@ -442,6 +458,14 @@ fl_srestore_run() {
   # nested in another command's step (share setup): its steps hang under that one, unnumbered
   if [[ -n "$SR_STEP_PARENT" ]]; then fl_steps_ids -n -p "$SR_STEP_PARENT" "${ids[@]}"; else fl_steps_ids "${ids[@]}"; fi
   fl_site_default_file_v SR_DEFAULT_BEFORE
+  # the set is read again: the file may have changed since the plan, and
+  # nothing below may start with a set that cannot be restored
+  if ! fl_srestore_check_files; then
+    fl_fail "${FL_BACKUP_PROBLEM}; nothing was changed"
+    fl_fix "restore another set (benchbar site backups ${SR_SET_SITE:-$SR_TARGET} lists them)"
+    fl_bench_redis_down
+    return 1
+  fi
   # the backup first prunes old files in the target's backup folder, which is
   # where the set may be: restore from a copy of it outside sites/
   if [[ "$SR_EXISTS" == "1" ]]; then fl_srestore_copy_set || { fl_bench_redis_down; return 1; }; fi
@@ -483,7 +507,7 @@ fl_srestore_run() {
 fl_srestore_execute() {
   local code=0
   # the password is resolved (and tried against the server) before anything changes
-  [[ -n "$FL_MARIADB_ROOT_PW" && "${FL_MARIADB_ROOT_PW_SOURCE:-}" != dry-run ]] || fl_mariadb_root_password_resolve || fl_die "The MariaDB root password is needed for the restore." "Re-run with: MARIADB_ROOT_PASSWORD='...' benchbar site restore ..." 2
+  [[ -n "$FL_MARIADB_ROOT_PW" && "${FL_MARIADB_ROOT_PW_SOURCE:-}" != dry-run ]] || fl_mariadb_root_password_resolve || fl_die "The MariaDB root password is needed for the restore." "Ask the person for it (do not look for it), then re-run with: MARIADB_ROOT_PASSWORD='...' benchbar site restore ..." 2
   # nothing below may ask a question: frappe's downgrade prompt would hang a terminal
   exec 0</dev/null
   fl_srestore_run || code=$?

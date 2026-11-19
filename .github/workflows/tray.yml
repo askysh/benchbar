@@ -2,22 +2,18 @@
 # framework dependent as an artifact. Nothing is measured here; the cost at
 # rest numbers come from the development laptop (windows/tray/DECISIONS.md).
 #
-# Path filtered to the app and its library. The spike under
-# windows/tray/spike has its own workflow (tray-spike.yml) and does not
-# trigger this one.
+# Path filtered to the app, its library and its tests.
 name: Tray
 
 on:
   pull_request:
     paths:
       - 'windows/tray/**'
-      - '!windows/tray/spike/**'
       - '.github/workflows/tray.yml'
   push:
-    branches: [main]
+    branches: [main, next-release]
     paths:
       - 'windows/tray/**'
-      - '!windows/tray/spike/**'
       - '.github/workflows/tray.yml'
   workflow_dispatch:
     inputs:
@@ -57,6 +53,8 @@ jobs:
         run: dotnet test BenchBarTray.sln -c Release --no-build
       - name: Publish (framework dependent)
         run: dotnet publish BenchBarTray/BenchBarTray.csproj -c Release -o out/fd --self-contained false
+      - name: Start the published tray once (recorded data, then quit)
+        run: ./scripts/smoke.ps1 -Dir out/fd -Fixtures fixtures/rest
       - name: Publish (self contained)
         if: ${{ inputs.self_contained }}
         run: dotnet publish BenchBarTray/BenchBarTray.csproj -c Release -o out/sc --self-contained true
@@ -72,12 +70,13 @@ jobs:
           path: windows/tray/out/sc
           if-no-files-found: error
 
-  # Build only, no tests (the test projects are x64) and no artifact: the
-  # release ships an arm64 tray, so an arm64 break should show up in a pull
-  # request and not at release time. The same properties as release-windows.yml.
+  # The release ships an arm64 tray, so an arm64 break should show up in a pull
+  # request and not at release time. Runs on a hosted Windows on Arm runner
+  # (windows-11-arm): the tests natively, and the published tray is started once
+  # (scripts/smoke.ps1). The same properties as release-windows.yml.
   build-arm64:
-    name: build (arm64)
-    runs-on: windows-latest
+    name: build, test, start (arm64)
+    runs-on: windows-11-arm
     timeout-minutes: 30
     env:
       DOTNET_NOLOGO: '1'
@@ -87,8 +86,16 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: windows/tray/global.json
+      - name: Test for arm64
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          foreach ($project in 'Tray.Core.Tests/Tray.Core.Tests.csproj', 'BenchBarTray.Tests/BenchBarTray.Tests.csproj') {
+            dotnet test $project -c Release -r win-arm64 -p:Platform=arm64 -p:PlatformTarget=arm64
+          }
       - name: Publish for arm64 (framework dependent)
         run: |
           $PSNativeCommandUseErrorActionPreference = $true
           dotnet publish BenchBarTray/BenchBarTray.csproj -c Release -r win-arm64 --self-contained false -p:Platform=arm64 -p:PlatformTarget=arm64 -o out/arm64
           if (-not (Test-Path out/arm64/BenchBarTray.exe)) { throw 'dotnet publish did not produce BenchBarTray.exe' }
+      - name: Start the published tray once (recorded data, then quit)
+        run: ./scripts/smoke.ps1 -Dir out/arm64 -Fixtures fixtures/rest

@@ -85,6 +85,26 @@ extension CommandRunning {
 nonisolated struct SubprocessRunner: CommandRunning {
     static let outputLimit = 4 * 1024 * 1024
 
+    /// What the child changes in the environment it inherits: the call's own
+    /// variables, and a removal (nil) of every BENCHBAR_* and FL_* variable of
+    /// the app's environment that the call does not set itself, so a stray one
+    /// in the user's launchd environment cannot steer the CLI (MAC-14). The
+    /// variables docs/reference/configuration.md tells a person to set stay: they are
+    /// the person's, and the app is not a reason to ignore them. What goes is
+    /// every other one (the CLI's own state and the test seams, `FL_*`, the sudo mode and password).
+    static let keptVariables: Set<String> = [
+        "BENCHBAR_PROFILE_PATH", "BENCHBAR_OFFLINE", "BENCHBAR_LABS", "BENCHBAR_REPORT_DIR", "BENCHBAR_LOCK",
+        "BENCHBAR_NO_HANDOFF", "BENCHBAR_NONINTERACTIVE",
+    ]
+
+    static func childEnvironment(_ own: [String: String], inherited: [String: String]) -> [String: String?] {
+        var result: [String: String?] = own.mapValues { Optional($0) }
+        for key in inherited.keys where (key.hasPrefix("BENCHBAR_") || key.hasPrefix("FL_")) && own[key] == nil && !keptVariables.contains(key) {
+            result[key] = .some(nil)
+        }
+        return result
+    }
+
     func run(
         executable: URL,
         arguments: [String],
@@ -195,9 +215,11 @@ nonisolated struct SubprocessRunner: CommandRunning {
         return options
     }
 
-    private static func environment(_ overrides: [String: String]) -> Environment {
-        .inherit.updating(Dictionary(uniqueKeysWithValues: overrides.map {
-            (Environment.Key(stringLiteral: $0.key), Optional($0.value))
+    /// The call's own variables, and the removal of the stray BENCHBAR_* and FL_*
+    /// ones of the app's environment (`childEnvironment`, MAC-14).
+    private static func environment(_ own: [String: String]) -> Environment {
+        .inherit.updating(Dictionary(uniqueKeysWithValues: childEnvironment(own, inherited: ProcessInfo.processInfo.environment).map {
+            (Environment.Key(stringLiteral: $0.key), $0.value)
         }))
     }
 

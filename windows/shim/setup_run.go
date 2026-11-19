@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +14,8 @@ import (
 	"syscall"
 	"time"
 	"unicode"
+	"unicode/utf16"
+	"unicode/utf8"
 )
 
 // --- the event stream ------------------------------------------------------
@@ -61,17 +64,29 @@ type emitter struct {
 	w        io.Writer
 	jsonl    bool
 	doneSent bool
+	// onFail is called once, the first time a write fails (the tray closed
+	// its pipe, the console is gone): nobody reads the events any more, so
+	// the action is stopped and does not go on to restart the distro.
+	onFail func()
+	failed bool
 }
 
 func (e *emitter) write(v any, text string) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	var err error
 	if e.jsonl {
 		b, _ := json.Marshal(v)
-		e.w.Write(append(b, '\n'))
-		return
+		_, err = e.w.Write(append(b, '\n'))
+	} else {
+		_, err = fmt.Fprintln(e.w, text)
 	}
-	fmt.Fprintln(e.w, text)
+	if err != nil && !e.failed {
+		e.failed = true
+		if e.onFail != nil {
+			e.onFail()
+		}
+	}
 }
 
 func (e *emitter) step(id, status, msg string) {
@@ -102,18 +117,26 @@ func (e *emitter) done(d doneEvent) {
 
 // lineWriter turns child output into log events, one per line. A carriage
 // return ends a line too, so a progress bar does not become one long line.
+//
+// The output is decoded like the buffered wsl.exe calls: an old inbox wsl.exe
+// writes UTF-16 even with WSL_UTF8=1, which is found from the first bytes
+// (a BOM, or a NUL after the first letter) and kept for the whole stream; a
+// line that is not UTF-8 is in the OEM code page.
 type lineWriter struct {
-	mu   sync.Mutex
-	buf  []byte
-	emit func(string)
+	mu      sync.Mutex
+	buf     []byte // decoded text, UTF-8
+	pending []byte // bytes not yet decoded: the first byte, or half a UTF-16 unit
+	mode    int    // 0 not known yet, 1 bytes, 2 UTF-16LE
+	emit    func(string)
 }
 
 func (w *lineWriter) Write(p []byte) (int, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	w.buf = append(w.buf, p...)
+	w.pending = append(w.pending, p...)
+	w.decode()
 	for {
-		i := strings.IndexAny(string(w.buf), "\r\n")
+		i := bytes.IndexAny(w.buf, "\r\n")
 		if i < 0 {
 			break
 		}
@@ -123,7 +146,39 @@ func (w *lineWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
+// decode moves the pending bytes into buf.
+func (w *lineWriter) decode() {
+	if w.mode == 0 {
+		if len(w.pending) < 2 {
+			return
+		}
+		switch {
+		case w.pending[0] == 0xFF && w.pending[1] == 0xFE:
+			w.mode, w.pending = 2, w.pending[2:]
+		case w.pending[0] != 0 && w.pending[1] == 0:
+			w.mode = 2
+		default:
+			w.mode = 1
+		}
+	}
+	if w.mode == 1 {
+		w.buf = append(w.buf, w.pending...)
+		w.pending = nil
+		return
+	}
+	n := len(w.pending) &^ 1
+	u := make([]uint16, n/2)
+	for i := range u {
+		u[i] = uint16(w.pending[2*i]) | uint16(w.pending[2*i+1])<<8
+	}
+	w.buf = append(w.buf, string(utf16.Decode(u))...)
+	w.pending = w.pending[n:]
+}
+
 func (w *lineWriter) line(s string) {
+	if !utf8.ValidString(s) {
+		s = oemDecode([]byte(s))
+	}
 	s = strings.TrimSpace(strings.ReplaceAll(s, "\x00", ""))
 	s = strings.Map(func(r rune) rune {
 		if unicode.IsControl(r) && r != '\t' {
@@ -139,6 +194,10 @@ func (w *lineWriter) line(s string) {
 func (w *lineWriter) Flush() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	if w.mode == 0 && len(w.pending) > 0 {
+		w.mode = 1 // one byte only: not UTF-16
+		w.decode()
+	}
 	w.line(string(w.buf))
 	w.buf = nil
 }
@@ -190,7 +249,7 @@ var setupActions = map[string]setupAction{
 	"cli_install":    {"Install the BenchBar command line tool", actCLIInstall, []string{"linger"}},
 	"linger":         {"Keep benches running", actLinger, []string{"keepalive"}},
 	"keepalive":      {"Keep the distro awake", actKeepalive, []string{"wslconfig"}},
-	"wslconfig":      {"Set WSL idle settings", actWslconfigApply, []string{"path"}},
+	"wslconfig":      {"Keep WSL from stopping idle benches (uses more RAM)", actWslconfigApply, []string{"path"}},
 	"path":           {"Put benchbar.exe on PATH", actPath, []string{}},
 }
 
@@ -236,6 +295,7 @@ func cmdSetupRun(sys *System, args []string) int {
 	go func() { <-ctx.Done(); stop() }()
 	sys.Ctx = ctx
 	defer func() { sys.Ctx = parent; stop() }()
+	em.onFail = stop
 	rc := &runCtx{sys: sys, em: em, distro: distro, user: user, force: p.bools["--force"]}
 	if id == "wsl_enable" && !sys.Host.IsAdmin() {
 		return runWslEnableElevated(rc)
@@ -321,10 +381,14 @@ func validLinuxUser(s string) bool { return userNameRE.MatchString(s) && s != "r
 // run streams a wsl.exe command as log events. It returns the exit code
 // and every line the command printed.
 func (rc *runCtx) stream(stdin string, args ...string) (int, []string, error) {
-	cmd, err := wslCommand(rc.sys, args...)
+	// sys.Ctx ends on Ctrl+C, a closing console or a caller that is gone, and
+	// then ends wsl.exe; no WaitDelay, since the output of a long action is
+	// read to its end
+	cmd, err := wslCommandContext(rc.sys.Ctx, rc.sys, args...)
 	if err != nil {
 		return 1, nil, err
 	}
+	cmd.WaitDelay = 0
 	if rc.proxy {
 		cmd.Env = withEnvNames(rc.sys, cmd.Env, nil, proxyEnv)
 	}

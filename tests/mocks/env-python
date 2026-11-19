@@ -20,15 +20,27 @@ if [[ "${1:-}" == "-c" && "${3:-}" == "benchbar-secrets" && "${4:-}" == "frappe"
   case "$cmd" in
     new-site)
       [[ -n "${MOCK_BENCH_NEW_SITE_EXIT:-}" ]] && exit "$MOCK_BENCH_NEW_SITE_EXIT"
-      site="$2"
-      mkdir -p "$site"; touch "$site/installed_apps"; printf '{"db_name": "_x"}\n' >"$site/site_config.json" ;;
+      site="$2"; db="_x"; prev=""
+      for a in "$@"; do [[ "$prev" == "--db-name" ]] && db="$a"; prev="$a"; done
+      mkdir -p "$site"; touch "$site/installed_apps"; printf '{"db_name": "%s"}\n' "$db" >"$site/site_config.json"
+      # the database is made, as frappe does before it fills it
+      printf '%s\n' "$db" >>"${MOCK_STATE:?}/mariadb_dbs"
+      printf 'Administrator\nGuest\n' >"${MOCK_STATE}/mariadb_users.$db"
+      # MOCK_NEW_SITE_CUT=1: the run is cut short (Ctrl+C) with the folder and the database in place
+      [[ -n "${MOCK_NEW_SITE_CUT:-}" ]] && exit 130 ;;
     drop-site)
       # like frappe: a backup with files (no config), then the folder to ../archived/sites
       [[ -n "${MOCK_DROP_SITE_EXIT:-}" ]] && { echo "Error: backup failed" >&2; exit "$MOCK_DROP_SITE_EXIT"; }
       site="$2"
       base="${site}/private/backups/20260929_110000-${site//./_}"
       mkdir -p "${site}/private/backups"
-      printf 'dump\n' >"${base}-database.sql.gz"; printf 'public\n' >"${base}-files.tar"; printf 'private\n' >"${base}-private-files.tar"
+      # MOCK_BENCH_BACKUP_PRUNE=1: frappe's delete_temp_backups first, as bench backup does
+      if [[ -n "${MOCK_BENCH_BACKUP_PRUNE:-}" ]]; then
+        for old in "${site}"/private/backups/*; do [[ -f "$old" ]] && rm -f "$old"; done
+      fi
+      printf 'dump\n' | gzip -c >"${base}-database.sql.gz"
+      d="$(mktemp -d "${TMPDIR:-/tmp}/mock-tar.XXXXXX")"; printf 'x\n' >"$d/member"
+      tar -cf "${base}-files.tar" -C "$d" member; tar -cf "${base}-private-files.tar" -C "$d" member; rm -rf "$d"
       mkdir -p ../archived/sites
       dest="../archived/sites/${site}"; n=""
       while [[ -e "${dest}${n}" ]]; do n=$(( ${n:-0} + 1 )); done
