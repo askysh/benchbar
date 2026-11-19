@@ -66,7 +66,7 @@ fl_share_job_loaded && fail "the job is loaded before it was started"
 fl_share_job_start "$SHARE/job.plist"
 assert_file "$XDG_RUNTIME_DIR/systemd/user/$UNIT"
 assert_no_file "$HOME/.config/systemd/user/$UNIT"
-assert_eq 700 "$(stat -c %a "$XDG_RUNTIME_DIR/systemd/user")" "(the folder is private)"
+assert_eq 700 "$(stat -c %a "$XDG_RUNTIME_DIR/systemd/user" 2>/dev/null || stat -f %Lp "$XDG_RUNTIME_DIR/systemd/user")" "(the folder is private)"
 assert_calls_contain '^systemctl --user daemon-reload$'
 assert_calls_contain "^systemctl --user start ${UNIT}\$"
 fl_share_job_loaded || fail "the job is not loaded after the start"
