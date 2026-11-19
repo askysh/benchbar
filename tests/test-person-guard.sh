@@ -115,8 +115,8 @@ for env in "BENCHBAR_APP_PID=999" "BENCHBAR_APP_PID="; do
   assert_contains "$OUT" "counts only when the BenchBar app made the run"; assert_contains "$OUT" "benchbar lan-guard install"
   assert_calls_not_contain '^(sudo|pfctl|osascript)' "($env lan-guard)"
   for sub in "share start" "share setup --users priya@example.com --acknowledge-data --yes" "share code" "share invite" "share teardown --yes"; do
-    # shellcheck disable=SC2086  # the words of $sub are the arguments
-    set +e; OUT="$(env "$env" BENCHBAR_SUDO=gui "$FM" $sub --bench-dir "$BENCH" 2>&1)"; CODE="$?"; set -e
+    read -r -a words <<<"$sub"
+    set +e; OUT="$(env "$env" BENCHBAR_SUDO=gui "$FM" "${words[@]}" --bench-dir "$BENCH" 2>&1)"; CODE="$?"; set -e
     assert_eq "1" "$CODE" "($env $sub) $OUT"
     assert_contains "$OUT" "counts only when the BenchBar app made the run" "($env $sub)"
   done
