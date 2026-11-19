@@ -396,7 +396,7 @@ FL_P_EXTRA=()
 FL_P_RAN=0
 # where Homebrew lives when it is not on PATH yet, and how to install it
 # (the Apple Silicon prefix, or /usr/local on an Intel Mac)
-if [[ "$(uname -m)" == "x86_64" ]]; then FL_BREW_ALT_BIN="${FL_BREW_ALT_BIN:-/usr/local/bin/brew}"; else FL_BREW_ALT_BIN="${FL_BREW_ALT_BIN:-/opt/homebrew/bin/brew}"; fi
+# FL_BREW_ALT_BIN (a test sets it): else the prefix for this Mac, found only when the check runs
 # shellcheck disable=SC2016  # the command is for a person to run
 FL_BREW_INSTALL_CMD='/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
 # free space (GB) from which the disk check is ok and from which it only warns
@@ -459,7 +459,8 @@ fl_prereq_platform_first() {
   else fl_prereq_add command_line_tools fail "the Xcode Command Line Tools are not installed" "xcode-select --install"; fi
 
   brew_bin="$(command -v brew 2>/dev/null || true)"
-  [[ -n "$brew_bin" ]] || { [[ -x "$FL_BREW_ALT_BIN" ]] && brew_bin="$FL_BREW_ALT_BIN"; }
+  local alt_bin="${FL_BREW_ALT_BIN:-$(fl_brew_default_prefix)/bin/brew}"
+  [[ -n "$brew_bin" ]] || { [[ -x "$alt_bin" ]] && brew_bin="$alt_bin"; }
   if [[ -n "$brew_bin" ]]; then fl_prereq_add homebrew ok "brew at ${brew_bin}"
   else fl_prereq_add homebrew fail "brew was not found" "$FL_BREW_INSTALL_CMD"; fi
 }
