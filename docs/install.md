@@ -197,7 +197,7 @@ benchbar never edits `/etc/hosts` there. The `bench*` helpers go to
 `~/.bashrc`. `benchbar doctor --prerequisites` on Linux checks, without a bench and
 without sudo: the distro (Ubuntu 24.04 is tested, others warn), the CPU
 (x86_64 is needed for the PDF package), that you are not root, sudo (your
-user is in the sudo group), apt, systemd, linger, memory, free disk, the
+user is in the sudo group), apt, systemd, linger, the user bus (`systemctl --user` answers), memory, free disk, the
 bench folder, the default ports and the MariaDB root password state. Each
 check that is not ok names its fix.
 

@@ -545,6 +545,14 @@ fl_prereq_platform_first() {
     fl_prereq_add linger warn "lingering is off for ${user}; a bench returns after a reboot only once you log in (install turns it on)" "sudo loginctl enable-linger ${user}" ",\"enabled\":false"
   fi
 
+  # the user manager the bench unit runs under: sudo -iu, su - and cron have no login
+  # session, so systemctl --user finds no bus (the fix of issue 115)
+  if fl_user_manager_reachable; then
+    fl_prereq_add user_bus ok "the systemd user manager answers for ${user}"
+  else
+    fl_prereq_add user_bus warn "$(fl_user_manager_msg)" "$(fl_user_manager_fix)"
+  fi
+
   # memory: MariaDB, Redis, the web server, workers and the asset build
   mem_kb="$(awk '/^MemTotal:/ { print $2; exit }' "$FL_MEMINFO" 2>/dev/null || true)"
   if [[ "$mem_kb" =~ ^[0-9]+$ ]]; then
