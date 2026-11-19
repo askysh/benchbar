@@ -23,8 +23,9 @@ export default defineConfig({
       logo: { src: '../docs/images/app-icon.png', alt: 'BenchBar' },
       favicon: '/favicon.png',
       social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/askysh/benchbar' }],
-      // entry.filePath is relative to site/, so "../docs/x.md" resolves to docs/x.md on main
-      editLink: { baseUrl: 'https://github.com/askysh/benchbar/edit/main/site/' },
+      // entry.filePath is relative to site/, so "../docs/x.md" resolves to docs/x.md; the edit link opens
+      // next-release, where every pull request goes (the site itself is built from main)
+      editLink: { baseUrl: 'https://github.com/askysh/benchbar/edit/next-release/site/' },
       lastUpdated: true,
       customCss: ['./src/styles/custom.css'],
       components: {

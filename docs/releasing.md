@@ -25,6 +25,21 @@ the one line installers and the docs site, which read from `main`. A push
 to `main` with a new version tags it and starts the release builds
 (`auto-tag.yml`).
 
+## The docs site
+
+The site (<https://benchbar.akashmishra.com>) is built and deployed from
+`main` only (`docs.yml`), so it describes the last release and never a
+feature that has not shipped. A feature's pages are written on
+`next-release`, in the pull request of the feature, and go live with the
+release. Every pull request to `next-release` runs the docs test, the site
+build and the internal link check; the external links are checked once a
+week on `main` and a failure there means a link to fix, not a blocked
+pull request. A page's "Edit page" link opens the file on `next-release`.
+
+A docs only fix that cannot wait for a release (a wrong command, a typo)
+may go to `main` as its own pull request; merge `main` back into
+`next-release` afterwards so the next release does not undo it.
+
 ## Cutting a release
 
 On `next-release`, then into `main`:
@@ -34,8 +49,13 @@ On `next-release`, then into `main`:
    `bash tests/record-tray-fixtures.sh` and commit what it changes in
    `windows/tray/fixtures`: the tray's recorded CLI output holds `cli_version`,
    and `test-tray-fixtures` fails until it is regenerated.
-2. Add the `## X.Y.Z` section to `CHANGELOG.md`. The workflow refuses a
-   version without one, and uses the section as the release notes.
+2. Run `bash scripts/changelog-fold.sh`. It folds the fragments in
+   `changelog.d/` into `## Unreleased` of `CHANGELOG.md` and removes them
+   (`--print` shows the result first, `--check` only validates). Then
+   change the `## Unreleased` heading to `## X.Y.Z - date` and add a new
+   empty `## Unreleased` above it. The workflow refuses a version without
+   a `## X.Y.Z` section, and uses the section as the release notes
+   (`scripts/release-notes.sh` reads it as it is, folded or not).
 3. Refresh the screenshots in `docs/images` for every screen the release
    changed, and add new ones where a page still has none:
    - The Mac first run wizard and the walkthrough: `WizardSnapshotTests`
@@ -142,8 +162,8 @@ evaluation mode.
 
 ### Trying a build without a release
 
-Every pull request run of CI (`ci.yml`, job "Unsigned release bundle")
-uploads the same zip, dmg and `SHA256SUMS` as a workflow artifact named
+Every pull request run of CI that builds the app (`ci.yml`, job "App
+build, Swift tests and unsigned release bundle (macOS)") uploads the same zip, dmg and `SHA256SUMS` as a workflow artifact named
 `BenchBar-unsigned-<sha>`: open the run on the Actions tab, scroll to
 Artifacts, download. Locally, the same files come from:
 
@@ -336,8 +356,10 @@ gh release create v0.3.0 dist/* --title "BenchBar 0.3.0" --draft
    release. The app's `SUFeedURL` points at
    `https://github.com/askysh/benchbar/releases/latest/download/appcast.xml`,
    so the newest release's feed is always the one read.
-6. **Cask.** The template gets the version and the DMG's sha256, and a
-   pull request is opened on the tap when `HOMEBREW_TAP_TOKEN` exists.
+6. **Cask.** Not part of this script. The tap's formula and cask are
+   written after the release is published, from these files, by
+   `homebrew-tap.yml`, which opens a pull request on the tap when
+   `HOMEBREW_TAP_TOKEN` exists (see [The Homebrew tap](#5-the-homebrew-tap)).
 
 ## Sparkle in the app
 

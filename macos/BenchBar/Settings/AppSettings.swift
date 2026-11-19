@@ -84,7 +84,10 @@ final class AppSettings {
         installedEditors = findEditors()
         let workspace = NSWorkspace.shared.notificationCenter
         for name in [NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification] {
-            observers.append(workspace.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+            observers.append(workspace.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
+                // only an editor coming or going changes the answer: not every app on the Mac
+                let id = (note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.bundleIdentifier
+                guard Editors.isEditor(id) else { return }
                 MainActor.assumeIsolated { self?.refreshEditors() }
             })
         }

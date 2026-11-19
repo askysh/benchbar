@@ -82,7 +82,7 @@ cmd~restart~benchbar restart [--json]~Restart the bench, for example after chang
 cmd~logs~benchbar logs [-nN] [--worker|--worker-error|--previous] [--process NAME] [--since TIMESTAMP] [--since-restart] [--no-follow] [--json]~Tail logs/bench.log.~no~no~no~no~document
 flag~logs~--worker~~Read logs/worker.log.
 flag~logs~--worker-error~~Read logs/worker.error.log.
-flag~logs~--previous~~Read logs/bench.previous.log.
+flag~logs~--previous~~Read logs/bench.previous.log (the starts before it are bench.previous.1.log to .3.log).
 flag~logs~--process~NAME~web, socketio, schedule or worker.
 flag~logs~--since~TIMESTAMP~Only lines at or after it (--json; ISO 8601, or HH:MM:SS today).
 flag~logs~--since-restart~~Only lines after the bench's last start (--json).
@@ -112,6 +112,13 @@ flag~pull~--from-dir~DIR~A backup set downloaded by hand, no SSH.
 flag~pull~--remote-bench~DIR~The bench folder on the server.
 flag~pull~--new-backup~~Run bench backup on the server first.
 flag~pull~--replace~~Restore over an existing local site, after backing it up.
+flag~pull~--confirm-site~SITE~With --new-backup: the site name, instead of typing it.
+flag~pull~--skip-app~APP~Restore without APP (its tables stay behind as orphans); repeat for more apps.
+flag~pull~--no-files~~Database only.
+flag~pull~--no-migrate~~Stop after the restore and the dev safety, before bench migrate.
+flag~pull~--before-migrate~SCRIPT~An executable run after the restore, before migrate, in the bench folder, with BENCHBAR_SITE, BENCHBAR_BENCH and BENCHBAR_DB_NAME; a failing script stops the run.
+flag~pull~--keep-scheduler~~Leave the scheduler as production has it.
+flag~pull~--keep-staging~~Keep the downloaded backup in the bench's .benchbar/pulls/ after a successful run.
 env~pull~MARIADB_ROOT_PASSWORD~Only when MariaDB has a password benchbar does not know.
 cmd~report~benchbar report [--print] [--json]~Redacted diagnostics zip on the Desktop for bug reports.~no~no~no~no~document
 flag~report~--print~~Print to the terminal instead of writing the zip.
@@ -260,6 +267,7 @@ cmd~app install~benchbar app install NAME --site S~Install an app of the bench o
 cmd~app update~benchbar app update NAME [--skip-backup] [--dry-run] [--json]~Fast forward one app with a changelog first, back up its sites, migrate, build.~yes~no~yes~yes~stream
 flag~app update~--skip-backup~~Migrate without a backup first.
 flag~app update~--dry-run~~Print the plan as one JSON document with --json.
+flag~app update~--discard-pending~~Drop the record of an update or add that stopped part way and stop: none of its steps and no update runs.
 cmd~app focus~benchbar app focus [NAME] [--list] [--auto] [--fetch] [--json]~Focus apps: the ones you work on.~no~no~no~no~document
 cmd~app unfocus~benchbar app unfocus NAME~Pin NAME as not a focus app.~no~no~no~yes~none
 cmd~lock~benchbar lock write|check|apply ...~The team lockfile benchbar.toml.~no~no~no~no~none
@@ -271,6 +279,10 @@ cmd~profile list~benchbar profile list [--json]~Built in and team profiles.~no~n
 cmd~profile show~benchbar profile show NAME~What a profile installs.~no~no~no~no~none
 cmd~profile create~benchbar profile create NAME --from-bench PATH [--dir DIR]~Write a team profile from a bench.~no~no~no~yes~none
 cmd~profile export~benchbar profile export NAME [--out FILE] [--plan] [--json]~A copy to share.~no~no~yes~yes~document
+flag~profile export~--out~FILE~Where to write (default ./NAME.toml).
+flag~profile export~--branch~APP=BR~Export APP on BR instead of its default branch; repeatable.
+flag~profile export~--drop~APP~Leave APP out of the copy; repeatable. Refused when a kept app requires it.
+flag~profile export~--plan~~Print the review only, write nothing.
 cmd~profile import~benchbar profile import FILE|URL [--as NAME] [--plan] [--json]~Add a profile someone sent.~yes~no~yes~yes~document
 cmd~profile subscribe~benchbar profile subscribe GIT_URL [--plan|--yes] [--json]~Clone a team's config repo.~yes~no~yes~yes~document
 cmd~profile update~benchbar profile update NAME|--all [--plan] [--json]~Fetch an import or subscription again.~yes~no~yes~yes~document

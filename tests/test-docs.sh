@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # The docs site's promises to the CLI and the app: every doctor check id
 # has a "### <id>" heading in docs/guides/doctor-and-repair.md (doctor FAIL
-# lines link to /guides/doctor-and-repair/#<id>), every flag in a table of
-# docs/reference/cli/ appears in benchbar --help, and every markdown file
+# lines link to /guides/doctor-and-repair/#<id>), the generated tables of
+# docs/reference/cli/ and the MCP tools are what the code says, and every markdown file
 # in docs/ has a title and a description in its frontmatter, every page
 # is in the sidebar (DOC-3) and every Lab is on the Features page.
 # shellcheck source=tests/lib/harness.sh
@@ -20,19 +20,26 @@ for id in $ids; do
 done
 [[ "$n" -gt 30 ]] || fail "read only ${n} check ids from checks.sh"
 
-# ---- every flag in the reference tables exists in --help
-run_fm --help
-assert_eq "0" "$CODE" "$OUT"
-help="$OUT"
-for page in "$ROOT"/docs/reference/cli/*.md; do
-  while IFS= read -r flag; do
-    [[ -n "$flag" ]] || continue
-    case "$help" in
-      *"$flag"*) ;;
-      *) fail "$(basename "$page") documents ${flag}, which benchbar --help does not mention" ;;
-    esac
-  done < <(grep '^| `-' "$page" | grep -oE '`-[-a-zA-Z]+' | tr -d '`' | sort -u)
-done
+# ---- the CLI reference tables are generated from `benchbar commands --json` and
+# the MCP tool table from mcp.py (scripts/docs-reference.py). The check fails when
+# a committed table differs from what the script makes, when a command is on no
+# page, when a page documents a flag the CLI does not have, or when a guide leaves
+# an MCP tool out. Fix: python3 -I scripts/docs-reference.py --write
+OUT="$(python3 -I "$ROOT/scripts/docs-reference.py" --check 2>&1)" || fail "docs reference check: ${OUT}"
+assert_contains "$OUT" "docs-reference: ok"
+
+# the check really fails: a copy with one table row changed, and one with a flag added to the code
+COPY="$TMP_DIR/ref-copy"
+mkdir -p "$COPY"
+cp -R "$ROOT/benchbar" "$ROOT/lib" "$ROOT/scripts" "$ROOT/docs" "$COPY/"
+# shellcheck disable=SC2016
+sed -i.bak 's/^| `benchbar site list\([^|]*\)| [a-z]* |/| `benchbar site list\1| maybe |/' "$COPY/docs/reference/cli/site.md"
+if OUT="$(python3 -I "$COPY/scripts/docs-reference.py" --check 2>&1)"; then fail "a changed generated table passed the docs reference check"; fi
+assert_contains "$OUT" "site.md: a generated table differs from the code"
+cp "$ROOT/docs/reference/cli/site.md" "$COPY/docs/reference/cli/site.md"
+sed -i.bak 's/^flag~site backup~--with-files~~Include the uploads.$/&\nflag~site backup~--no-such-flag~~A flag the page does not list./' "$COPY/lib/frappe-local/commands.sh"
+if OUT="$(python3 -I "$COPY/scripts/docs-reference.py" --check 2>&1)"; then fail "a new flag in the code passed the docs reference check"; fi
+assert_contains "$OUT" "site.md: a generated table differs from the code"
 
 # ---- frontmatter on every page
 while IFS= read -r f; do
@@ -55,6 +62,14 @@ done < <(find "$ROOT/docs" -name '*.md')
 while IFS= read -r lab; do
   [[ -n "$lab" ]] || continue
   grep -q "\`${lab}\`" "$ROOT/docs/features.md" || fail "docs/features.md does not mention the Lab ${lab}"
+  # and the Since of its rows is the version the lab table says (DOC-10)
+  since="$(awk -F'~' -v l="$lab" '$1 == "lab" && $2 == l { print $6 }' "$ROOT/lib/frappe-local/labs.sh")"
+  while IFS= read -r row; do
+    case "$row" in
+      *"| ${since} |"*) ;;
+      *) fail "docs/features.md: the row of the Lab ${lab} does not say since ${since}: ${row}" ;;
+    esac
+  done < <(grep "\*\*Lab\*\* \`${lab}\`" "$ROOT/docs/features.md")
 done < <(sed -n 's/^lab~\([^~]*\)~.*/\1/p' "$ROOT/lib/frappe-local/labs.sh")
 
 printf 'test-docs: ok\n'

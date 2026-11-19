@@ -71,6 +71,9 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDevelopmentRegion: en
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        # arm64 only (ARCHS above): an Intel Mac says the app is not for this Mac, instead of a crash or a Rosetta run
+        LSArchitecturePriority: [arm64]
+        LSRequiresNativeExecution: true
         LSApplicationCategoryType: public.app-category.developer-tools
         # menu bar only: no Dock icon, no main menu
         LSUIElement: true

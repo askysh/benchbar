@@ -17,6 +17,23 @@ const HARNESS_JS = path.join(__dirname, "gateway_harness.js");
 const SID = "SIDSECRET0123456789abcdef0123456789ab";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Everything a test starts (upstream servers, gateway children) is registered here, so a failed
+// assertion, a failed start or a forgotten close never keeps node alive: the file ends at once
+// with the failure instead of hanging until the runner's time limit.
+const live = new Set();
+function track(close) {
+    live.add(close);
+    return () => { live.delete(close); return close(); };
+}
+async function closeAll() {
+    for (const close of [...live]) {
+        live.delete(close);
+        try { await close(); } catch { /* already gone */ }
+    }
+}
+require("node:test").after(closeAll);
+process.on("exit", () => { for (const close of [...live]) { try { close(); } catch { /* best effort */ } } });
+
 // Short names: a unix socket path is limited to 104 characters on macOS.
 const tmpDir = () => fs.mkdtempSync(path.join(os.tmpdir(), "bg-"));
 
@@ -64,7 +81,8 @@ async function startUpstream({ port: wanted } = {}) {
     });
     const port = wanted || (await freePort());
     await new Promise((r) => server.listen(port, "127.0.0.1", r));
-    return { port, hits, close: () => { server.closeAllConnections(); return new Promise((r) => server.close(r)); } };
+    const close = track(() => { server.closeAllConnections(); return new Promise((r) => server.close(r)); });
+    return { port, hits, close };
 }
 
 // Fake sign-in helper: records its argv, prints a known sid; user "failuser" fails.
@@ -88,8 +106,13 @@ process.stdout.write(${JSON.stringify(SID)} + "\\n");
 
 const SEATS = [1, 2, 3, 4, 5, 6].map((n) => ({ seat_id: `seat${n}`, user: `seat${n}@example.com`, full_name: `Seat ${n}`, roles: ["Sales User"] }));
 
+// Written like the device store writes it (temp file, then rename): the gateway's tick reads this
+// file every few ms, and a plain writeFileSync truncates it first, so a tick landing between the
+// truncate and the write read an empty file and the gateway died with "fatal schema".
 function writeDevices(file, devices, blocked = []) {
-    fs.writeFileSync(file, JSON.stringify({ v: 3, devices, blocked }, null, 2), { mode: 0o600 });
+    const tmp = `${file}.tmp-test-${process.pid}`;
+    fs.writeFileSync(tmp, JSON.stringify({ v: 3, devices, blocked }, null, 2), { mode: 0o600 });
+    fs.renameSync(tmp, file);
 }
 let deviceCounter = 0;
 function deviceRow(cert, extra = {}) {
@@ -145,28 +168,41 @@ async function startGateway(opts = {}) {
         devicesFile: cfg.devices,
         jump: (ms) => fs.writeFileSync(clockFile, String(ms)),
         control: (msg) => controlCall(cfg.control_sock, msg),
-        async stop() {
+        stop: track(async () => {
             if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
             await exited;
             if (!opts.upstream) await upstream.close();
-        }
+        })
     };
     if (opts.expectExit) return gw;
+    try {
+        await bringUp(gw, opts);
+    } catch (e) {
+        await gw.stop();
+        throw e;
+    }
+    return gw;
+}
+
+async function bringUp(gw, opts) {
+    const { child, cfg } = gw;
     for (let i = 0; i < 100; i++) {
-        if (child.exitCode !== null) throw new Error(`gateway exited early (${child.exitCode}): ${output}`);
+        if (child.exitCode !== null) throw new Error(`gateway exited early (${child.exitCode}): ${gw.output()}`);
+        let up = false;
         try {
-            const r = await controlCall(cfg.control_sock, { op: "status" });
-            // The gateway empties devices.json when it starts, so test rows go in once it is up.
-            if (r.ok) {
-                if (opts.devices) writeDevices(cfg.devices, opts.devices, opts.blocked);
-                // the gateway starts with the web marked down; the share runner marks it up after its checks
-                if (!opts.webDown) await controlCall(cfg.control_sock, { op: "web", state: "up" });
-                return gw;
-            }
+            up = (await controlCall(cfg.control_sock, { op: "status" })).ok;
         } catch { /* not up yet */ }
+        if (up) {
+            // Only the probe above may fail quietly: a failure below is a real one and ends the test.
+            // The gateway empties devices.json when it starts, so test rows go in once it is up.
+            if (opts.devices) writeDevices(cfg.devices, opts.devices, opts.blocked);
+            // the gateway starts with the web marked down; the share runner marks it up after its checks
+            if (!opts.webDown) await controlCall(cfg.control_sock, { op: "web", state: "up" });
+            return;
+        }
         await sleep(50);
     }
-    throw new Error(`gateway did not come up: ${output}`);
+    throw new Error(`gateway did not come up: ${gw.output()}`);
 }
 
 function controlCall(sock, msg) {
@@ -303,6 +339,6 @@ class GuestSession {
 const roomCode = async (gw) => (await gw.control({ op: "code" })).code;
 
 module.exports = {
-    OPENSSL, SID, sleep, tmpDir, makeCert, freePort, startUpstream, writeFakeHelper, writeDevices, deviceRow, startGateway,
+    track, closeAll, OPENSSL, SID, sleep, tmpDir, makeCert, freePort, startUpstream, writeFakeHelper, writeDevices, deviceRow, startGateway,
     controlCall, request, rawTls, sinkAgent, GuestSession, roomCode, serverSpkiRaw, exporterOf, SEATS
 };

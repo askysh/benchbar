@@ -53,7 +53,7 @@ for (const page of rootPages) {
     '---',
     `title: ${JSON.stringify(title)}`,
     `description: ${JSON.stringify(page.description)}`,
-    `editUrl: https://github.com/askysh/benchbar/edit/main/${page.file}`,
+    `editUrl: https://github.com/askysh/benchbar/edit/next-release/${page.file}`,
   ];
   const date = lastCommitDate(page.file);
   if (date) front.push(`lastUpdated: ${date}`);

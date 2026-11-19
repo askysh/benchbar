@@ -20,7 +20,7 @@ feature works.
 ## Command line tool
 
 The `benchbar` command runs on macOS, and on Ubuntu 24.04 (Linux and
-WSL). Linux and WSL first shipped in 0.8.0. A row that came in before
+WSL; other apt based systems work with a doctor warning). Linux and WSL first shipped in 0.8.0. A row that came in before
 that says "Linux 0.8.0": it was macOS only until then, and *Since* is the
 macOS version. A row that says "macOS" does not work on Linux.
 

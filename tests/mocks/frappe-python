@@ -36,7 +36,8 @@ if [[ "${1:-}" == "-m" && "${2:-}" == "frappe.utils.bench_helper" ]]; then
       ts="$(cat "${MOCK_STATE:?}/new_backup_ts" 2>/dev/null || printf '20260926_120000')"
       base="${site}/private/backups/${ts}-${site//./_}"
       cp "${MOCK_STATE}/remote_dump.sql.gz" "${base}-database.sql.gz"
-      printf 'public\n' >"${base}-files.tar"; printf 'private\n' >"${base}-private-files.tar"
+      d="$(mktemp -d "${TMPDIR:-/tmp}/mock-tar.XXXXXX")"; printf 'x\n' >"$d/member"
+      tar -cf "${base}-files.tar" -C "$d" member; tar -cf "${base}-private-files.tar" -C "$d" member; rm -rf "$d"
       printf '{}\n' >"${base}-site_config_backup.json"
       : >"${MOCK_STATE}/remote_backup_taken" ;;
   esac
