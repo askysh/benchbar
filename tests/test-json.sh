@@ -161,7 +161,7 @@ import json, sys
 live = json.load(sys.stdin); fixture = json.load(open(sys.argv[1]))
 assert live["schema_version"] == 1
 assert set(fixture) <= set(live), set(fixture) - set(live)
-for key in ("backup",):
+for key in ("backup", "source", "backup_first"):
     if isinstance(live.get(key), dict) and isinstance(fixture.get(key), dict):
         assert set(fixture[key]) <= set(live[key]), set(fixture[key]) - set(live[key])
 for key in ("backups", "steps"):
@@ -172,6 +172,9 @@ for key in ("backups", "steps"):
 json_call() { "$FM" "$@" 2>/dev/null >"$MOCK_STATE/json-out" || fail "$* failed"; }
 json_call site backup bbtest.localhost --with-files --json --bench-dir "$BENCH"; same_keys site-backup.json "site backup --json"
 json_call site backups bbtest.localhost --json --bench-dir "$BENCH"; same_keys site-backups.json "site backups --json"
+# the restore sheet reads this plan (and its token); the stamp is the backup just listed
+STAMP="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["backups"][0]["stamp"])' "$MOCK_STATE/json-out")"
+json_call site restore bbtest.localhost --from "$STAMP" --dry-run --json --bench-dir "$BENCH"; same_keys site-restore-plan.json "site restore --dry-run --json"
 json_call site drop bbtest.localhost --confirm-site bbtest.localhost --dry-run --json --bench-dir "$BENCH"; same_keys site-drop-plan.json "site drop --dry-run --json"
 json_call site drop bbtest.localhost --confirm-site bbtest.localhost --json --bench-dir "$BENCH" </dev/null; same_keys site-drop.json "site drop --json"
 

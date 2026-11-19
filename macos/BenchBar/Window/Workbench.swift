@@ -275,6 +275,40 @@ final class Workbench {
         return .failure(ChangeError(message: result?.error ?? "The site was not dropped."))
     }
 
+    // MARK: restore and unfinished changes
+
+    /// The reviewed plan of a restore, read only. Nothing is backed up or restored
+    /// and no change slot is taken; the person looks at it before `restoreSite`.
+    func restorePlan(_ request: SiteRestoreRequest, on bench: BenchModel) async -> Result<SiteRestorePlan, ChangeError> {
+        guard let client = store.cliClient else { return .failure(ChangeError(message: "The benchbar command line tool is not available.")) }
+        do {
+            return .success(try await client.restorePlan(request, bench: bench.path))
+        } catch {
+            return .failure(ChangeError(message: error.localizedDescription))
+        }
+    }
+
+    /// Runs the plan the person saw, by its token. Returns the CLI's message when it failed
+    /// (a stale token among them), nil when it worked. An existing site is backed up with its
+    /// files first by the CLI, so its backup list is read again either way.
+    @discardableResult
+    func restoreSite(_ request: SiteRestoreRequest, token: String, on bench: BenchModel) async -> String? {
+        let title = request.asNew ? "Copy \(request.fromSite) to \(request.target)" : "Restore \(request.target)"
+        let error = await change(title, on: bench) { client throws(CLIError) in
+            try await client.restoreSite(request, token: token, bench: bench.path)
+        }
+        await loadBackups(bench)
+        return error
+    }
+
+    /// Drops the record of an update or add that stopped part way (`app update NAME --discard-pending`).
+    /// None of its steps run. The change reads the status again, so the record leaves the page.
+    func discardPending(_ operation: PendingOperation, on bench: BenchModel) async {
+        await change("Drop the unfinished \(operation.isUpdate ? "update" : "add") of \(operation.app)", on: bench) { client throws(CLIError) in
+            try await client.discardPending(operation.app, bench: bench.path)
+        }
+    }
+
     // MARK: profiles
 
     func loadProfiles() async {
