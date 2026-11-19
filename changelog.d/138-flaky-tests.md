@@ -4,7 +4,7 @@
 
 ### Command line
 
-- Stopping `benchbar doctor` while it starts its background checks no longer leaves its temporary folder of kept answers behind, and the stop waits for every check it started (#138).
+- Stopping `benchbar doctor` at the moment it starts a background check now waits for that check too, so it is not left running (#138).
 
 ### For contributors
 
