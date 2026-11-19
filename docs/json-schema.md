@@ -1280,7 +1280,7 @@ The record is `ops/<op_id>.json` in benchbar's state folder (for Homebrew
 and the one line installer, `~/.local/state/benchbar/ops/`). It is made
 when the run makes its log, rewritten whole at each step and progress line
 (a temp file, then a rename: a reader never sees half of it) and finished
-by the run's exit trap before the `done` line goes out. The newest 100 are
+by the run's exit trap right after its `done` line goes out. The newest 100 are
 kept (`FL_KEEP_OPS`), and never one of a run that still runs.
 
 | Field | Type | Notes |

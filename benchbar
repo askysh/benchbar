@@ -619,10 +619,11 @@ fl_cleanup() {
   fl_lock_release
   # a doctor run that was cut short leaves its folder of kept answers (facts.sh)
   fl_facts_end
-  # the operation's record is finished before its done line goes out (ops.sh)
-  fl_op_end "$code"
   # install --json and adopt --json: always the last line, after the lock is free
   fl_jsonl_on_exit "$code"
+  # the operation's record is finished once its done line is out, so a reader that sees the run end
+  # finds the done line in its output (ops.sh)
+  fl_op_end "$code"
   # repair --json: its done line, when the run ended before it could send one
   fl_repair_done "$code"
   [[ -z "${FL_CHANGED_FILE:-}" || "${FL_CHANGED_OWNER:-}" != "$$" ]] || rm -f "$FL_CHANGED_FILE"

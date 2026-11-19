@@ -140,7 +140,7 @@ fl_op_note_progress() {
   fl_op_write running
 }
 
-# fl_op_end CODE: the run is over (the exit trap calls this before the done line goes out, so a reader
+# fl_op_end CODE: the run is over (the exit trap calls this after the done line is out, so a reader
 # that saw the done line finds the record finished). Only the process that began the op ends it.
 fl_op_end() {
   [[ -n "$FL_OP_ID" && "$FL_OP_OWNER" == "$$" && "$FL_OP_ENDED" != "1" ]] || return 0
