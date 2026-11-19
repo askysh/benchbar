@@ -185,7 +185,7 @@ unset MOCK_BENCH_BACKUP_EXIT
 run_json run --bench-dir "$BENCH" --for-agent --site macdev --dry-run -- migrate
 assert_eq "0" "$CODE" "$OUT$ERR"
 assert_eq "plan done" "$(printf '%s\n' "$OUT" | python3 -c 'import json,sys; print(" ".join(json.loads(l)["event"] for l in sys.stdin if l.strip()))')"
-T="$(printf '%s\n' "$OUT" | head -n 1 | jget - 'd["token"]')"
+T="$(jget - 'd["token"]' <<<"${OUT%%$'\n'*}")"
 run_json run --bench-dir "$BENCH" --for-agent --site macdev --apply "$T" --yes -- migrate
 assert_eq "0" "$CODE" "$OUT$ERR"
 assert_eq "step step step step done" "$(printf '%s\n' "$OUT" | python3 -c 'import json,sys; print(" ".join(json.loads(l)["event"] for l in sys.stdin if l.strip()))')"
