@@ -37,15 +37,18 @@ struct BenchStoreTests {
     let cli = ScriptedCLI()
     let settings: AppSettings
 
-    init() throws {
+    /// The bench's path in the CLI's answers. A temporary folder unless a
+    /// test passes one: a snapshot that draws the path needs a fixed one.
+    let benchPath: String
+
+    init(benchPath: String? = nil) throws {
         dir = try TempDir()
+        self.benchPath = benchPath ?? dir.url.appendingPathComponent("frappe-bench").path
         let defaults = UserDefaults(suiteName: "benchbar-tests-\(UUID().uuidString)")!
         settings = AppSettings(defaults: defaults)
         settings.cliPath = "/fake/benchbar"
         cli.answer("ports", json: #"{"schema_version":1,"conflicts":[],"mode":"automatic"}"#)
     }
-
-    var benchPath: String { dir.url.appendingPathComponent("frappe-bench").path }
 
     func listJSON(installed: Bool = true) -> String {
         """

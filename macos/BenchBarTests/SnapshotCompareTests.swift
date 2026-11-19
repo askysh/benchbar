@@ -27,8 +27,59 @@ struct SnapshotCompareTests {
     @Test func smallNoiseIsIgnored() {
         // every pixel off by 10 of 255: a different anti aliasing, not a different view
         #expect(SnapshotCompare.compare(image(fill: 250), to: image(fill: 240)) == .same)
-        // a few stray pixels
-        #expect(SnapshotCompare.compare(image(block(0..<3, 0..<3, 0)), to: image()) == .same)
+        // a few stray pixels, far apart, and a 2 by 2 speck
+        let stray = image { bytes, width in
+            for (x, y) in [(5, 5), (40, 12), (70, 40), (20, 50), (90, 8)] { block(x..<x + 1, y..<y + 1, 0)(&bytes, width) }
+            block(60..<62, 20..<22, 0)(&bytes, width)
+        }
+        #expect(SnapshotCompare.compare(stray, to: image()) == .same)
+    }
+
+    /// A status dot at 2 pt per pixel: a disc of 12 pixels (4 by 4 without its corners).
+    func dot(at x: Int, _ y: Int, _ value: UInt8) -> (inout [UInt8], Int) -> Void {
+        { bytes, width in
+            for yy in y..<y + 4 {
+                for xx in x..<x + 4 where !([x, x + 3].contains(xx) && [y, y + 3].contains(yy)) {
+                    for c in 0..<3 { bytes[(yy * width + xx) * 4 + c] = value }
+                }
+            }
+        }
+    }
+
+    /// The case the global limit cannot see: 12 changed pixels are 0.2% of a
+    /// 100 by 60 image and 0.01% of a window, so only the local rule fails it.
+    @Test func aWrongStatusDotFails() {
+        let green = image(dot(at: 30, 20, 60))
+        let red = image(dot(at: 30, 20, 200))
+        guard case .differs(let why) = SnapshotCompare.compare(red, to: green) else {
+            Issue.record("a red dot passed for a green one")
+            return
+        }
+        #expect(why.contains("8 by 8 window"))
+        // the same dot across the line of an aligned 8 pixel tile is found too
+        guard case .differs = SnapshotCompare.compare(image(dot(at: 6, 6, 200)), to: image(dot(at: 6, 6, 60))) else {
+            Issue.record("a dot on a tile border passed")
+            return
+        }
+    }
+
+    @Test func aBlankLabelFails() {
+        // a 60 by 6 pixel label of text strokes (every other column) drawn blank
+        let label = image { bytes, width in
+            for x in stride(from: 10, to: 70, by: 2) { block(x..<x + 1, 20..<26, 30)(&bytes, width) }
+        }
+        guard case .differs = SnapshotCompare.compare(image(), to: label) else {
+            Issue.record("a blank label passed")
+            return
+        }
+    }
+
+    @Test func fiveChangedPixelsInOneWindowPassAndSixFail() {
+        func speck(_ n: Int) -> SnapshotCompare.Pixels {
+            image { bytes, width in for x in 0..<n { block(x..<x + 1, 0..<1, 0)(&bytes, width) } }
+        }
+        #expect(SnapshotCompare.compare(speck(5), to: image()) == .same)
+        #expect(SnapshotCompare.compare(speck(6), to: image()) != .same)
     }
 
     /// The black selection bar of issue #43: a block of the window drawn dark.

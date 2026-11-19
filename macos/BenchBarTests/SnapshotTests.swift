@@ -19,6 +19,15 @@ nonisolated let snapshotDir = FileManager.default.homeDirectoryForCurrentUser
 
 nonisolated let docsOnScreenEnabled = FileManager.default.fileExists(atPath: snapshotDir.appendingPathComponent("on-screen").path)
 
+/// The clock of every render: uptime ("up 3d 8h") and the age of a backup
+/// ("Backed up 6 hours ago") come from it, so a render never depends on the
+/// time it ran. After the dates in the fixtures.
+nonisolated let snapshotNow = Date(timeIntervalSince1970: 1_790_676_000) // 2026-09-29T10:00:00Z
+
+/// The bench path of a render that draws it; a temporary folder would
+/// differ in every run and on every Mac.
+nonisolated let snapshotBenchPath = "/Users/you/frappe-bench"
+
 @Suite("Snapshots", .serialized)
 struct SnapshotTests {
     let base: BenchStoreTests
@@ -138,6 +147,12 @@ struct SnapshotTests {
         let model = LogViewModel(benchName: "frappe-bench", benchPath: bench.path)
         model.start()
         model.query.search = "customer"
+        // the tailer reads the file on its own queue: render when the last line is in
+        let deadline = Date().addingTimeInterval(5)
+        while !model.buffer.lines.contains(where: { $0.text.contains("Job OK") }), Date() < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(model.buffer.lines.contains { $0.text.contains("Job OK") }, "the log was not read in 5 seconds")
         try render(LogView(model: model, openInTerminal: {}).frame(width: 860, height: 400), "log-window")
         model.stop()
     }
@@ -318,14 +333,14 @@ struct SnapshotTests {
     }
 
     @Test func setupIncludesServicePreview() async throws {
-        let tests = try PortSetupTests()
+        let tests = try PortSetupTests(benchPath: snapshotBenchPath)
         let (_, run) = try await tests.setup()
         await run.loadPlan()
         try render(PortSetupSheet(run: run, close: {}), "port-setup-preview")
     }
 
     @Test func portSettingsOnAHealthyBench() async throws {
-        let tests = try PortSetupTests()
+        let tests = try PortSetupTests(benchPath: snapshotBenchPath)
         let (store, _) = try await tests.setup()
         tests.base.cli.answer("ports plan", json: tests.settledPlanJSON())
         let run = PortSetupRun(summaries: [try #require(store.selected).summary], store: store, opensSettings: true)
@@ -447,6 +462,7 @@ struct SnapshotTests {
             // draw what the system draws only in a key window (below)
             let hosting = NSHostingView(rootView: view.padding(0)
                 .environment(\.drawsGlass, false).environment(\.rendersOffscreen, true).environment(\.controlActiveState, .key)
+                .environment(\.pinnedNow, snapshotNow)
                 .environment(\.colorScheme, appearance == .darkAqua ? .dark : .light))
             hosting.appearance = look
             let window = NSWindow(contentRect: .zero, styleMask: [.borderless], backing: .buffered, defer: false)
@@ -466,7 +482,14 @@ struct SnapshotTests {
             window.setContentSize(size)
             hosting.frame = CGRect(origin: .zero, size: size)
             hosting.layoutSubtreeIfNeeded()
+            // the emphasis reaches the row's SwiftUI content on a later turn of
+            // the run loop: wait for it, or the text of a selected row draws
+            // dark on some runs
             emphasizeSelectedRows(in: hosting)
+            RunLoop.main.run(until: Date().addingTimeInterval(0.15))
+            emphasizeSelectedRows(in: hosting)
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+            hosting.layoutSubtreeIfNeeded()
             let rep = try #require(hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds))
             look.performAsCurrentDrawingAppearance {
                 hosting.cacheDisplay(in: hosting.bounds, to: rep)

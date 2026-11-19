@@ -406,6 +406,7 @@ private struct FindUserTarget: Identifiable {
 /// "Backed up 2 hours ago, 5.0 MB, with files" and Show in Finder.
 struct LastBackupLine: View {
     let backup: SiteBackup
+    @Environment(\.pinnedNow) private var pinnedNow
 
     var body: some View {
         HStack(spacing: 6) {
@@ -418,8 +419,15 @@ struct LastBackupLine: View {
     private var text: String {
         let size = ByteCountFormatter.string(fromByteCount: backup.sizeBytes, countStyle: .file)
         // a clock that is a little behind must not say "in 2 minutes"
-        let when = backup.time.map { "Backed up " + min($0, .now).formatted(.relative(presentation: .named)) } ?? "Backed up \(backup.stamp)"
+        let when = backup.time.map { "Backed up " + Self.age(of: $0, now: pinnedNow ?? .now) } ?? "Backed up \(backup.stamp)"
         return "\(when), \(size)\(backup.withFiles ? ", with files" : "")"
+    }
+
+    /// "2 hours ago"; a clock that is a little behind must not say "in 2 minutes".
+    static func age(of time: Date, now: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.dateTimeStyle = .named
+        return formatter.localizedString(for: min(time, now), relativeTo: now)
     }
 }
 

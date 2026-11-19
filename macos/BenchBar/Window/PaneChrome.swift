@@ -74,6 +74,20 @@ nonisolated extension EnvironmentValues {
     }
 }
 
+private nonisolated struct PinnedNowKey: EnvironmentKey {
+    static let defaultValue: Date? = nil
+}
+
+nonisolated extension EnvironmentValues {
+    /// A fixed "now" for the text that counts time (uptime, "Backed up 3
+    /// hours ago"). Set only by the snapshot tests, so two renders of the
+    /// same view draw the same text; nil in the app, which uses the clock.
+    var pinnedNow: Date? {
+        get { self[PinnedNowKey.self] }
+        set { self[PinnedNowKey.self] = newValue }
+    }
+}
+
 /// Flattens a small status mark to an image when drawn offscreen, so its
 /// colour survives a sidebar that draws it as white.
 private struct OffscreenSafe: ViewModifier {

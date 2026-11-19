@@ -160,6 +160,7 @@ extension SnapshotTests {
     }
 
     @Test func guidanceInThePopoverAndTheBenchHeader() async throws {
+        let base = try BenchStoreTests(benchPath: snapshotBenchPath)
         base.cli.answer("list", json: base.listJSON())
         base.cli.answer("status", json: base.statusJSON("paused", reason: "crash", exit: 1))
         let store = base.makeStore()
