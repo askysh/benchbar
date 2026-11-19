@@ -6,15 +6,7 @@ namespace Tray.Core.Tests;
 
 public class ControllerStateTests
 {
-    private static async Task UntilAsync(Func<bool> condition)
-    {
-        var deadline = DateTime.UtcNow.AddSeconds(10);
-        while (!condition())
-        {
-            Assert.True(DateTime.UtcNow < deadline, "condition not met in time");
-            await Task.Delay(10, TestContext.Current.CancellationToken);
-        }
-    }
+    private static Task UntilAsync(Func<bool> condition) => Eventually.Async(condition);
 
     private static (TrayController Controller, FakeHost Host, ScriptedSource Source, FakeTimeProvider Time) Make(
         BenchState state = BenchState.Running, TrayOptions? options = null)

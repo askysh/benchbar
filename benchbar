@@ -332,7 +332,7 @@ Daily
                       A person's command: refused for agents, mcp and without a terminal.
   mcp                 Model Context Protocol server on stdio for coding agents
                       (claude mcp add benchbar -- benchbar mcp). Read tools, up, down, restart,
-                      app add from a reviewed plan.
+                      changes from a reviewed plan. --calls [N] prints the audit log.
   docs [TOPIC]        Open the documentation, or one topic's page (benchbar docs --help lists
                       them: install, doctor, apps, mcp, json ...); --print prints the URL.
 

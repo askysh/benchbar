@@ -422,7 +422,10 @@ seconds while none do. It asks nothing while the PC is locked or asleep or
 the window is minimized, and catches up with one request when you are
 back. In Windows battery saver it asks at most every 30 seconds. With
 the bench running, the tray's own poll is 60 seconds instead of 30 on
-battery.
+battery. While the distro is up and every bench was stopped on the last
+poll, the tray only asks Windows whether the distro runs (no `benchbar.exe`
+call, which would keep WSL awake); it reads the benches again after an
+unlock, an action or when the flyout opens, and at least every 20 minutes.
 
 The tray reads the passwords of an install or an adopt (the Administrator
 password, the Linux password for `sudo`) once and hands them to
@@ -430,8 +433,9 @@ password, the Linux password for `sudo`) once and hands them to
 line tool takes them from `ADMIN_PASSWORD`, `BENCHBAR_SUDO_PASSWORD` and
 `MARIADB_ROOT_PASSWORD` and nowhere else. They are never on a command
 line, in a file or in the tray's logs, and the output of the run is
-cleaned of them. An install can last long, so for that time the values
-can be read by another program of your own user.
+cleaned of them. An install can last up to 90 minutes, so for that time the
+values can be read by another program of your own user. This stays so until
+the command line tool can take a secret from standard input or a file.
 
 Settings: Open BenchBar at logon, notifications, check for updates when the window
 opens, **Ask before a link acts** (see [benchbar:// links](#benchbar-links)), the distro (switching runs `benchbar.exe adopt-distro`), the editor
@@ -460,6 +464,12 @@ One keepalive runs at a time, for one distro. While it keeps one distro
 awake, Start cannot start a second distro, and the tray says so. Switch
 the distro in Settings, or stop the other keepalive first. This is a
 limit of the beta.
+
+A package update stops a running keepalive, and the task starts only at
+logon. `benchbar.exe keepalive start` runs the installed task again when
+its run process is not alive. It prints nothing and exits 0 when there is
+no task or the run is alive, and it never creates or changes the task. The
+tray calls it after an update.
 
 ### Settings
 
