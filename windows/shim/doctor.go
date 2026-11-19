@@ -47,6 +47,7 @@ func windowsChecks(sys *System, t target) []Check {
 	checks = append(checks, ka.Checks...)
 	checks = append(checks, trayChecks(sys)...)
 	checks = append(checks, installRecordChecks(sys, ka)...)
+	checks = append(checks, twoInstallsCheck(sys)...)
 	return checks
 }
 
@@ -263,7 +264,7 @@ func cliVersionCheck(sys *System, t target) (Check, bool) {
 	case newer:
 		c.Status = "warn"
 		c.Message = fmt.Sprintf("benchbar %s in %s is newer than benchbar.exe %s", cli, where, version)
-		c.Fix = "benchbar.exe self-update"
+		c.Fix = updateFix(sys)
 	}
 	return c, true
 }

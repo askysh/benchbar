@@ -194,8 +194,12 @@ native versus container benches (idle memory, build time, file watch
 latency, startup) before the README keeps its performance wording, and a
 four week pilot with about ten developers across three teams.
 
-**Windows past the preview.** Signed binaries once the SignPath
-Foundation application is approved. The preview of 0.8.0 runs the
+**Windows past the preview.** Signed binaries have no route in 0.9.0:
+SignPath Foundation declined the project on 2026-11-13, and the
+Microsoft Store submission (the MSIX package, PR 124) is dropped from
+this release. The package code is landing in parts and CI builds it, but
+nobody submits it. Until a signed route exists, Smart App Control users
+run the command line inside WSL. The preview of 0.8.0 runs the
 benches inside WSL with the Linux platform layer (uv Python, fnm Node,
 MariaDB and Redis from apt, each bench under `systemd --user`), a
 `benchbar.exe` shim and a tray app.

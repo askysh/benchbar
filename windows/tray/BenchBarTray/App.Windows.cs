@@ -130,6 +130,7 @@ public partial class App
         var services = PageServices.ForApp(_cli, () => Theme, () => _main, CopyText, OpenUrl, () => _controller?.Poller.Kick());
         services.Pins = _config.Pins;
         services.Distro = () => DistroName.Resolve(_config.Distro) ?? _controller?.Snapshot.Distro;
+        services.CopySecret = CopySecret;
         services.Notify = text => _icon?.TrayIcon.ShowNotification("BenchBar", text, H.NotifyIcon.Core.NotificationIcon.Info);
         services.ReportBug = (entry, problem) => ReportBugAsync(entry, problem).Forget();
         return services;

@@ -687,6 +687,24 @@ public partial class App : Application, ITrayHost
         catch (System.Runtime.InteropServices.COMException ex) { _log.Write("clipboard", ex); }
     }
 
+    /// <summary>
+    /// The room code or invite, on a click only: marked so Windows clipboard history, the cloud clipboard and clipboard monitors leave it out
+    /// (the Mac's concealed and transient pasteboard types). A failure is logged without the text.
+    /// </summary>
+    private void CopySecret(string text)
+    {
+        try
+        {
+            var data = new DataObject();
+            data.SetText(text);
+            data.SetData("ExcludeClipboardContentFromMonitorProcessing", new byte[4] { 1, 0, 0, 0 });
+            data.SetData("CanIncludeInClipboardHistory", new byte[4]);
+            data.SetData("CanUploadToCloudClipboard", new byte[4]);
+            Clipboard.SetDataObject(data, true);
+        }
+        catch (System.Runtime.InteropServices.COMException ex) { _log.Write("clipboard", ex); }
+    }
+
     private static void OpenUrl(string url)
     {
         try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true })?.Dispose(); }
