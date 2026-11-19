@@ -25,6 +25,7 @@
 #   lib/frappe-local/mcp.py test-mcp, test-docs (the MCP tool table of the docs is generated from it), test-cli, test-agent-contracts
 #   A test split into parts (test-X.sh, test-X-2.sh, ...) is picked whole.
 #   tests/test-X.sh         itself
+#   .claude/guard-*.sh, .claude/settings.json   test-guards
 #   install.sh              test-install-sh
 #   packaging/              test-packaging, test-homebrew
 #   macos/BenchBarTests/Fixtures/   the tests that compare CLI output with them
@@ -170,6 +171,7 @@ while IFS= read -r f; do
       [[ -n "$fam" ]] || fam="$LIB_CORE"
       pick_family "$fam" ;;
     lib/frappe-local/mcp.py) lib=1; pick_family "test-mcp test-docs" ;;
+    .claude/guard-*.sh | .claude/settings.json) pick test-guards; shell=1 ;;
     install.sh) pick test-install-sh; shell=1 ;;
     packaging/*) pick test-packaging; pick test-homebrew ;;
     macos/BenchBarTests/Fixtures/*) pick_family "test-json test-install-json test-lock" ;;
