@@ -417,6 +417,7 @@ One line per non obvious choice. The 0.8.0 spike that chose WPF over WinUI was d
   `tray.log` (`KeepaliveRestart`). A package update stops the keepalive process with the old package and nothing else starts it before the
   next logon. The call is safe for everyone because the shim does nothing and exits 0 when there is no keepalive task or it already runs. A
   normal start never makes the call.
+
 - Open at logon packaged is the manifest's startup task `BenchBarTrayLogon` and nothing in the Startup folder is read, written or deleted:
   the folder holds the other install's `BenchBar Tray.lnk`, and a shortcut into the versioned `WindowsApps` folder breaks on the next
   update. The WinRT call needed no new reference: the project already targets `net10.0-windows10.0.19041.0`, so
