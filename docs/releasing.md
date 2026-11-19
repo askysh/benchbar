@@ -37,9 +37,12 @@ then holds the very commits that were reviewed and run by CI on
 `next-release`, and its tip is a commit whose "CI result" is already green.
 `main` and `next-release` are the same commit afterwards, so nothing has to
 be merged back. A fast forward needs `main` to be an ancestor of
-`next-release`, so **nothing but a release is ever pushed to `main`**: a
-commit that only `main` has makes the next release refuse (see
-[Cutting a release](#cutting-a-release)).
+`next-release`. The one exception to "only a release moves `main`" is a
+docs only pull request, which may target `main` so that it goes live on the
+site at once (see [The docs site](#the-docs-site)): the next release first
+brings those commits into `next-release` with one merge commit (step 5 of
+[Cutting a release](#cutting-a-release)). A commit on `main` that changes
+anything but docs makes the release refuse.
 
 ### Repository settings
 
@@ -67,11 +70,15 @@ build and the internal link check; the external links are checked once a
 week on `main` and a failure there means a link to fix, not a blocked
 pull request. A page's "Edit page" link opens the file on `next-release`.
 
-A docs only fix that cannot wait for a release (a wrong command, a typo)
-goes to `next-release` like everything else and ships with the next
-release. Do not push it to `main` by itself: a commit that only `main` has
-is not in `next-release`, and the release (a fast forward) refuses until
-that is sorted out. When it cannot wait, cut a patch release.
+A docs only fix does not have to wait for a release (a wrong command, a
+typo): a pull request that changes only docs (`docs/`, `site/`, `*.md`: the
+rule of `scripts/docs-only.sh`) may target `main`, and the site shows it as
+soon as it is merged. Everything else, and every pull request that also
+touches code, targets `next-release`. The squash commit on `main` is a commit
+`next-release` does not have, so the next release brings it in first, with one
+merge commit of `main` into `next-release` (step 5). That merge changes only
+docs, so CI runs no tests on it and the release gate walks back to the last
+commit that did.
 
 ## Cutting a release
 
@@ -123,8 +130,25 @@ On `next-release`, then into `main`:
    ```
 
    Check first that the "CI result" of that commit is green, that
-   `main` is an ancestor of it (otherwise stop: see below) and that
-   `scripts/check-version.sh --folded` passes on it. Never force the push and never merge.
+   `main` is an ancestor of it and that `scripts/check-version.sh --folded`
+   passes on it. Never force the push.
+
+   If `main` is not an ancestor, look at what only `main` has
+   (`git log --oneline origin/next-release..origin/main`). When every commit
+   changes only docs (`scripts/docs-only.sh --commit <sha>` for each), bring
+   them into `next-release` with one merge commit and push it (a fast
+   forward of `next-release`; the admin bypasses its ruleset), then wait for
+   the "CI result" of the merge before step 5 again:
+
+   ```bash
+   git checkout --detach origin/next-release
+   git merge --no-ff origin/main -m "Merge main into next-release (docs fixes)"
+   git push origin HEAD:refs/heads/next-release
+   ```
+
+   On a conflict, stop (`git merge --abort`) and bring the change over by
+   pull request. If any commit of `main` changes code, do not merge: ask the
+   maintainer how to put `main` right.
 6. `auto-tag.yml` runs `scripts/check-version.sh` (every place says the same
    version, CHANGELOG.md has its section, no fragment is left), refuses a
    release candidate version on `main`, tags `vX.Y.Z` on that commit and
@@ -133,10 +157,10 @@ On `next-release`, then into `main`:
    notice); one that changes code **fails** ("release PR merged without a
    version bump?"). A tag pushed by hand still starts both release workflows.
    If `main` has a commit that `next-release` has not, the push is not a
-   fast forward and git refuses it: do not force it. The commit
-   was pushed to `main` by mistake or came from a fix made there; bring its
-   change to `next-release` by pull request, and ask the maintainer how to
-   put `main` right (it is a decision about history, not a script).
+   fast forward and git refuses it: do not force it. Docs fixes are brought
+   over by the merge of step 5; a code commit on `main` was pushed by
+   mistake, and it is a decision about history (not a script) how to put
+   `main` right.
 7. Wait for the release workflows, open the draft on the Releases page,
    check the files, publish.
 8. Publishing starts the Homebrew tap workflow (`homebrew-tap.yml`,
