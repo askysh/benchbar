@@ -931,7 +931,7 @@ func actCLIInstall(rc *runCtx) error {
 		if l := lastLine(lines); l != "" {
 			msg += ": " + l
 		}
-		if hint := curlHint(code, lines, rc.distro); hint != "" {
+		if hint := curlHint(code, lines, rc.distro, rc.sys.Package.Packaged); hint != "" {
 			msg += ". " + hint
 		}
 		return errors.New(msg)
@@ -959,7 +959,7 @@ var curlLineRE = regexp.MustCompile(`curl: \((\d+)\)`)
 // curlHint is what to do about the exit code of curl in the installer line.
 // It applies only when curl itself said so in the output, so an exit code of
 // the installer script is never taken for curl's.
-func curlHint(code int, lines []string, distro string) string {
+func curlHint(code int, lines []string, distro string, store bool) string {
 	seen := false
 	for _, l := range lines {
 		if m := curlLineRE.FindStringSubmatch(l); m != nil && m[1] == fmt.Sprint(code) {
@@ -971,6 +971,9 @@ func curlHint(code int, lines []string, distro string) string {
 	}
 	switch code {
 	case 22:
+		if releaseRE.MatchString(version) && store {
+			return fmt.Sprintf("the release v%s is not published for this build: update BenchBar in the Microsoft Store, then run this action again", version)
+		}
 		if releaseRE.MatchString(version) {
 			return fmt.Sprintf("the release v%s is not published for this build: install the latest benchbar.exe from the BenchBar releases page, then run this action again", version)
 		}
