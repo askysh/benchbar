@@ -420,7 +420,7 @@ spec = importlib.util.spec_from_file_location("mcp", mcp); m = importlib.util.mo
 p = subprocess.run(["/bin/bash", script, root, bad, good], capture_output=True, text=True)
 assert p.returncode == 0 and "MARK-LEAKED" not in p.stderr, p.stderr
 cmds = p.stdout.split("\0")
-assert cmds[0][0] == "\x1e" and cmds[1][0] == "\x1e", cmds[:2]           # marked; fl_fix and the JSON take the mark off
+assert cmds[0][0] == "\x1c" and cmds[1][0] == "\x1c", cmds[:2]           # marked; fl_fix and the JSON take the mark off
 assert shlex.split(cmds[0][1:]) == ["cd", bad, "&&", "bench", "build"], shlex.split(cmds[0][1:])
 assert shlex.split(cmds[1][1:]) == ["benchbar", "ports", "setup", "--", bad]
 words = shlex.split(m.FIX_NOTE.sub("", cmds[2][1:]))
@@ -428,7 +428,7 @@ assert words == ["benchbar", "app", "update", "weird name's#1", "--bench-dir", b
 # next_actions: only the command built by fl_fix_cmd is quoted; prose is not
 na = json.loads("[" + cmds[3] + "]")
 assert [bool(x.get("quoted")) for x in na] == [True, True, False], na
-assert all("\x1e" not in x["command"] for x in na), na
+assert all("\x1c" not in x["command"] for x in na), na
 out = m.add_argv({"next_actions": na})["next_actions"]
 assert out[0]["argv"] is None, out[0]                  # a $ in a word: not worth a guess, a person reads it
 assert out[1]["argv"] == ["git", "-C", good + "/apps/x", "status"], out[1]   # spaces, quotes, # and * in a path are fine

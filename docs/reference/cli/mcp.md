@@ -194,7 +194,7 @@ An argument marked `*` is required. `bench` (the bench's path, from `benchbar_li
 
 | Command | Terminal | `sudo` | Network | Changes things | JSON |
 |---|---|---|---|---|---|
-| `benchbar mcp [--print-agents-md]` | no | no | no | no | none |
+| `benchbar mcp [--print-agents-md] [--calls [N]] [--allow-bench PATH]` | no | no | no | no | none |
 
 Terminal: may ask a question on a terminal. `sudo`: may run `sudo`. Network: may reach the network.
 JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` line.
@@ -202,4 +202,10 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | Command | Flag | Value | What it does |
 |---|---|---|---|
 | `mcp` | `--print-agents-md` |  | Print a snippet for a project's AGENTS.md or CLAUDE.md and exit. |
+| `mcp` | `--calls` | `[N]` | Print the last N (default 50) lines of the audit log of MCP calls (mcp-calls.jsonl in the state folder) and exit. |
+| `mcp` | `--allow-bench` | `PATH` | Let the changing tools act on this bench folder although benchbar does not know it (repeatable; the environment variable BENCHBAR_MCP_ALLOW_BENCH holds a : separated list). A person's choice, never a tool argument. |
+
+| Command | Environment variable | What it does |
+|---|---|---|
+| `mcp` | `BENCHBAR_MCP_APPLY_DELAY` | Seconds a plan must have been returned before its apply is accepted (default 5; 0 turns the wait off). |
 <!-- /generated:cli-commands -->

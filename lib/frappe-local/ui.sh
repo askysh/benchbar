@@ -425,7 +425,8 @@ fl_done_warning_add() {
 # thing that lets an agent run the fix as an argv array (the MCP server returns fix_argv for no other fix):
 # a fix written as prose or with an unquoted path says nothing a program can rely on. The mark never
 # reaches the output: fl_fix_plain_v takes it off, and fl_json_escape_v drops it as a control character.
-FL_FIXQ=$'\036'
+# (\034, not \036: the parallel doctor jobs (doctor.sh) end each row they write with \036)
+FL_FIXQ=$'\034'
 
 # fl_fix_cmd WORD...: the fix command for WORDs, each quoted with printf %q (a bench path with a space or
 # an apostrophe, an app or branch name), marked as quoted. A word that is exactly && stays an operator.
