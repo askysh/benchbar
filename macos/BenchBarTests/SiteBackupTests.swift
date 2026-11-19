@@ -17,6 +17,18 @@ struct SiteBackupTests {
         return (Workbench(store: store), try #require(store.benches.first { $0.path == v16 }))
     }
 
+    /// `shop` and `shop2` on one bench: only the site that is backed up spins.
+    @Test func theBackUpSpinnerMatchesTheExactSite() {
+        for withFiles in [false, true] {
+            let activity = Workbench.backupActivity("shop", withFiles: withFiles)
+            #expect(Workbench.isBackingUp("shop", activity: activity))
+            #expect(!Workbench.isBackingUp("shop2", activity: activity))
+            #expect(!Workbench.isBackingUp("sho", activity: activity))
+        }
+        #expect(!Workbench.isBackingUp("shop", activity: nil))
+        #expect(!Workbench.isBackingUp("shop", activity: "Restart"))
+    }
+
     // MARK: models (the fixtures test-json.sh keeps in step with the CLI)
 
     @Test func decodesTheBackupList() throws {

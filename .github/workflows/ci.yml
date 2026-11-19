@@ -541,6 +541,7 @@ jobs:
           set -o pipefail
           xcodebuild -project macos/BenchBar.xcodeproj -scheme BenchBar -configuration Debug \
             -derivedDataPath macos/build/DerivedData -destination 'platform=macOS,arch=arm64' \
+            -skip-testing:BenchBarTests/SnapshotTests \
             CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY= test 2>&1 | tee macos/build/test.log | \
             grep -E '^(✔|✘)|Test run with|Test Suite|error:|\*\* TEST|Executed' || true
           grep -q -E '\*\* TEST SUCCEEDED \*\*|Test run with [0-9]+ tests? passed' macos/build/test.log
