@@ -181,7 +181,7 @@ fl_platform_load service
 # has nothing for them to undo
 if [[ "$FL_LEAN" == "1" ]]; then
   fl_pull_on_exit() { :; }; fl_share_on_exit() { :; }; fl_bench_redis_down() { :; }
-  fl_sp_listener_stop() { :; }; fl_sudo_end() { :; }
+  fl_sp_listener_stop() { :; }; fl_sudo_end() { :; }; fl_backups_keep_on_exit() { :; }
 fi
 
 OPT_BENCH_DIR=""

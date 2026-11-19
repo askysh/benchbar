@@ -1,4 +1,4 @@
-### Speed of the command line tool
+### Command line
 
 - `benchbar path` (what `benchcd` runs) takes about 30 ms instead of 400 ms: it finds the bench folder and does no work for the site, the ports or the templates.
 - `benchbar commands --json` takes about 0.15 s instead of 1 s (it started about 1000 subshells). The output is the same, byte for byte.
