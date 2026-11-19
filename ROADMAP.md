@@ -220,7 +220,9 @@ Not scheduled, kept because they came up more than once.
 - More failure path tests for bench creation and app installation.
 - `benchbar wipe`, the uninstall recipe behind an explicit confirmation,
   never touching MariaDB data without a backup.
-- Intel Mac verification of the CLI.
+- Intel Mac verification of the CLI on real hardware. Dropped from 0.9.0: the CLI is written for
+  x86_64 (Homebrew in `/usr/local`, the PDF package is an Intel binary) and the code has no known
+  blocker, but nobody has run `install` on an Intel Mac yet, so it stays unverified.
 
 ## Not planned
 

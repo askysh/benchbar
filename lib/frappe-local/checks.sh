@@ -899,7 +899,7 @@ chk_dead_agents() {
 }
 
 fl_mariadb_dropin_path() {
-  printf '%s/etc/my.cnf.d/frappe-mac-local-only.cnf' "${FL_BREW_PREFIX:-/opt/homebrew}"
+  printf '%s/etc/my.cnf.d/frappe-mac-local-only.cnf' "${FL_BREW_PREFIX:-$(fl_brew_default_prefix)}"
 }
 
 chk_mariadb_bind() {
@@ -920,7 +920,7 @@ chk_mariadb_bind() {
     fi
     return 0
   fi
-  if [[ -f "$dropin" ]] || grep -qs 'bind-address[[:space:]]*=[[:space:]]*127\.0\.0\.1' "${FL_BREW_PREFIX:-/opt/homebrew}"/etc/my.cnf.d/*.cnf 2>/dev/null; then
+  if [[ -f "$dropin" ]] || grep -qs 'bind-address[[:space:]]*=[[:space:]]*127\.0\.0\.1' "${FL_BREW_PREFIX:-$(fl_brew_default_prefix)}"/etc/my.cnf.d/*.cnf 2>/dev/null; then
     chk__set ok "MariaDB is not running; bind-address drop-in present"
   else
     chk__set warn "MariaDB is not running and no bind-address drop-in exists" "${FL_SELF} repair" mariadb_bind
@@ -930,7 +930,7 @@ chk_mariadb_bind() {
 chk_mariadb_utf8() {
   local dropin status mycnf
   dropin="$(fl_mariadb_utf8_dropin_path)"
-  mycnf="${FL_BREW_PREFIX:-/opt/homebrew}/etc/my.cnf"
+  mycnf="${FL_BREW_PREFIX:-$(fl_brew_default_prefix)}/etc/my.cnf"
   status="$(fl_template_status "$dropin" "$(fl_template_render mariadb-frappe.cnf)")"
   case "$status" in
     current) chk__set ok "utf8mb4 drop-in ${dropin} is current" ;;

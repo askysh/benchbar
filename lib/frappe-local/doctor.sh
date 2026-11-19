@@ -395,7 +395,8 @@ FL_P_FIX=()
 FL_P_EXTRA=()
 FL_P_RAN=0
 # where Homebrew lives when it is not on PATH yet, and how to install it
-FL_BREW_ALT_BIN="${FL_BREW_ALT_BIN:-/opt/homebrew/bin/brew}"
+# (the Apple Silicon prefix, or /usr/local on an Intel Mac)
+if [[ "$(uname -m)" == "x86_64" ]]; then FL_BREW_ALT_BIN="${FL_BREW_ALT_BIN:-/usr/local/bin/brew}"; else FL_BREW_ALT_BIN="${FL_BREW_ALT_BIN:-/opt/homebrew/bin/brew}"; fi
 # shellcheck disable=SC2016  # the command is for a person to run
 FL_BREW_INSTALL_CMD='/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
 # free space (GB) from which the disk check is ok and from which it only warns

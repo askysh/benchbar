@@ -278,7 +278,16 @@ check_system() {
   if [[ "$IS_LINUX" == "1" ]]; then check_system_linux; return 0; fi
   step "System"
   [[ "$(uname -s)" == "Darwin" ]] || die "This installer is for macOS and Linux (Ubuntu 24.04, WSL included)." "on Windows use the BenchBar tray or https://github.com/askysh/benchbar/blob/main/docs/windows.md"
-  ok "macOS $(sw_vers -productVersion 2>/dev/null || printf '?')"
+  local mac_ver mac_major
+  mac_ver="$(sw_vers -productVersion 2>/dev/null || printf '?')"
+  ok "macOS ${mac_ver}"
+  # the app needs 14.0 (macos/project.yml, the cask's depends_on): an older
+  # macOS would get an app that does not open, so the app is skipped there
+  mac_major="${mac_ver%%.*}"
+  if [[ "$mac_major" =~ ^[0-9]+$ && "$mac_major" -lt 14 && "$DO_APP" == "1" ]]; then
+    warn "macOS ${mac_ver} is older than 14 (Sonoma), which the BenchBar app needs: the app is skipped, the CLI is installed"
+    DO_APP=0
+  fi
   if [[ "$(uname -m)" == "arm64" ]]; then
     ok "Apple Silicon"
   else
@@ -715,6 +724,21 @@ uninstall() {
   else ok "nothing to remove (unchanged)"; fi
 }
 
+# shell_path_note: the PATH block is a zsh/bash line in RC_FILE. A fish
+# user, or a bash user on a Mac (bash reads ~/.bash_profile there), gets the
+# line to add by hand, so benchbar is on PATH in their shell too.
+shell_path_note() {
+  [[ "$DO_CLI" == "1" && "$DRY" != "1" ]] || return 0
+  case "$(basename "${SHELL:-}")" in
+    fish)
+      info "your shell is fish, which does not read ${RC_FILE}; to put benchbar on PATH, run once: fish_add_path ${BIN_DIR}" ;;
+    bash)
+      [[ "$IS_LINUX" == "1" ]] && return 0
+      info "your shell is bash, which does not read ${RC_FILE}; add this line to ~/.bash_profile: export PATH=\"$(rc_bin_dir):\$PATH\"" ;;
+  esac
+  return 0
+}
+
 # ---------------------------------------------------------------- main
 
 printf '\n%sBenchBar installer%s%s\n' "$B" "$R" "$([[ "$DRY" == "1" ]] && printf ' (dry-run: nothing is changed)')"
@@ -755,6 +779,7 @@ elif [[ "$CHANGED" == "1" ]]; then
 else
   ok "everything was already in place (unchanged)"
 fi
+shell_path_note
 [[ -d "$APP" ]] && info "app: open ${APP}"
 [[ "$DO_CLI" == "1" ]] && info "testing guide: ${BENCHBAR_HOME}/docs/testing.md"
 exit 0

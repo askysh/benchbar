@@ -254,6 +254,28 @@ assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "Intel Mac"
 assert_not_contains "$OUT" "==> BenchBar app"
 
+# ---- macOS 13: the app needs 14, so only the CLI is installed, with a warning
+MOCK_SW_VERS=13.6.1 run_install --yes
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "macOS 13.6.1 is older than 14 (Sonoma)"
+assert_not_contains "$OUT" "==> BenchBar app"
+assert_no_file "$APP"
+# macOS 14 and a two digit major version are fine
+MOCK_SW_VERS=14.0 run_install --yes --dry-run
+assert_not_contains "$OUT" "older than 14"
+MOCK_SW_VERS=26.1 run_install --yes --dry-run
+assert_not_contains "$OUT" "older than 14"
+
+# ---- a fish user gets the PATH line to run; a bash user on a Mac the line for ~/.bash_profile
+SHELL=/opt/homebrew/bin/fish run_install --yes --no-app
+assert_eq "0" "$CODE" "$OUT"
+assert_contains "$OUT" "fish_add_path ${HOME}/.local/bin"
+SHELL=/bin/bash run_install --yes --no-app
+assert_contains "$OUT" "add this line to ~/.bash_profile: export PATH=\"\$HOME/.local/bin:\$PATH\""
+SHELL=/bin/zsh run_install --yes --no-app
+assert_not_contains "$OUT" "fish_add_path"
+assert_not_contains "$OUT" "bash_profile"
+
 # ---- --uninstall --dry-run: the whole plan, nothing removed, the app keeps running
 run_install --yes --app-only
 assert_file "$APP"
