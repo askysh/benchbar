@@ -14,7 +14,8 @@
         "redis_socketio": {"type": "integer", "x-since": "0.4"},
         "redis_cache": {"type": "integer"}
       },
-      "required": ["web", "socketio", "redis_queue", "redis_cache"]
+      "required": ["web", "socketio", "redis_queue", "redis_cache"],
+      "x-doc": ["`benchbar list --json`"]
     },
     "site": {
       "type": "object",
@@ -28,7 +29,8 @@
         "open_as_enabled": {"type": "boolean", "x-since": "0.8.1"},
         "open_as": {"type": "boolean", "x-since": "0.8.1"}
       },
-      "required": ["name", "default", "hosts_entry", "ping_code"]
+      "required": ["name", "default", "hosts_entry", "ping_code"],
+      "x-doc": ["Sites"]
     },
     "siteInStatus": {
       "description": "A site of status --json: adds served.",
@@ -39,7 +41,8 @@
           "description": "Does the running web process serve it; null while stopped.",
           "properties": {"served": {"type": ["boolean", "null"], "x-since": "0.8"}}
         }
-      ]
+      ],
+      "x-doc": ["Sites"]
     },
     "siteInSiteList": {
       "description": "A site of site list --json: adds the database.",
@@ -52,12 +55,14 @@
             "db_port": {"type": "integer", "x-since": "0.7.3"}
           }
         }
-      ]
+      ],
+      "x-doc": ["Sites"]
     },
     "pendingStep": {
       "type": "object",
       "properties": {"kind": {"type": "string"}, "target": {"type": "string"}, "name": {"type": "string"}},
-      "required": ["kind", "target", "name"]
+      "required": ["kind", "target", "name"],
+      "x-doc": ["`benchbar status --json`"]
     },
     "pendingOperation": {
       "type": "object",
@@ -74,7 +79,8 @@
         "url": {"type": ["string", "null"]},
         "updated_at": {"type": "string"}
       },
-      "required": ["op", "app"]
+      "required": ["op", "app"],
+      "x-doc": ["`benchbar status --json`"]
     },
     "status": {
       "type": "object",
@@ -132,7 +138,8 @@
         "pending_operations": {"type": "array", "items": {"$ref": "#/$defs/pendingOperation"}, "x-since": "0.8.3"},
         "labs": {"type": "array", "items": {"type": "string"}, "x-since": "0.9"}
       },
-      "required": ["schema_version", "bench", "state"]
+      "required": ["schema_version", "bench", "state"],
+      "x-doc": ["`benchbar status --json`"]
     },
     "stateFile": {
       "type": "object",
@@ -154,7 +161,8 @@
         "updated_at": {"type": "string"},
         "source": {"type": "string"}
       },
-      "required": ["schema_version", "bench", "state"]
+      "required": ["schema_version", "bench", "state"],
+      "x-doc": ["`logs/.benchbar/state.json`"]
     },
     "listBench": {
       "type": "object",
@@ -172,7 +180,8 @@
         "lock_file": {"type": ["string", "null"], "x-since": "0.5"},
         "adopted": {"type": "boolean", "x-since": "0.9"}
       },
-      "required": ["path", "name", "site", "label", "web_url", "ports", "default", "service_installed", "state_file"]
+      "required": ["path", "name", "site", "label", "web_url", "ports", "default", "service_installed", "state_file"],
+      "x-doc": ["`benchbar list --json`"]
     },
     "list": {
       "type": "object",
@@ -183,7 +192,8 @@
         "default_bench": {"type": ["string", "null"]},
         "benches": {"type": "array", "items": {"$ref": "#/$defs/listBench"}}
       },
-      "required": ["schema_version", "benches"]
+      "required": ["schema_version", "benches"],
+      "x-doc": ["`benchbar list --json`"]
     },
     "doctorCheck": {
       "type": "object",
@@ -205,12 +215,14 @@
         "fix": {"type": "string", "description": "0.2.0 name of fix_command, \"\" instead of null", "x-conditional": true},
         "acked": {"type": "boolean", "x-since": "0.8"}
       },
-      "required": ["id"]
+      "required": ["id"],
+      "x-doc": ["`benchbar doctor --json`"]
     },
     "summary": {
       "type": "object",
       "properties": {"ok": {"type": "integer"}, "warn": {"type": "integer"}, "fail": {"type": "integer"}},
-      "required": ["ok", "warn", "fail"]
+      "required": ["ok", "warn", "fail"],
+      "x-doc": ["`benchbar doctor --json`"]
     },
     "doctor": {
       "type": "object",
@@ -230,7 +242,8 @@
         "skipped_checks": {"type": "array", "items": {"type": "string"}, "x-conditional": true, "x-since": "0.8"},
         "prerequisites": {"type": "array", "items": {"$ref": "#/$defs/prerequisite"}, "x-conditional": true, "x-since": "0.8"}
       },
-      "required": ["schema_version", "bench", "checks"]
+      "required": ["schema_version", "bench", "checks"],
+      "x-doc": ["`benchbar doctor --json`"]
     },
     "prerequisite": {
       "type": "object",
@@ -242,9 +255,10 @@
         "fix_command": {"type": ["string", "null"]},
         "fix_quoted": {"type": "boolean", "x-since": "0.8"},
         "free_gb": {"type": "integer", "x-conditional": true},
-        "port_offset": {"type": "integer", "x-conditional": true}
+        "port_offset": {"type": ["integer", "null"], "x-conditional": true}
       },
-      "required": ["id", "level"]
+      "required": ["id", "level"],
+      "x-doc": ["`benchbar doctor --prerequisites --json`"]
     },
     "doctorPrerequisites": {
       "type": "object",
@@ -256,7 +270,8 @@
         "prerequisites": {"type": "array", "items": {"$ref": "#/$defs/prerequisite"}},
         "summary": {"$ref": "#/$defs/summary"}
       },
-      "required": ["schema_version", "prerequisites"]
+      "required": ["schema_version", "prerequisites"],
+      "x-doc": ["`benchbar doctor --prerequisites --json`"]
     },
     "logs": {
       "type": "object",
@@ -274,7 +289,8 @@
         "truncated": {"type": "boolean", "x-conditional": true},
         "truncated_to": {"type": "integer", "x-conditional": true}
       },
-      "required": ["schema_version", "file", "lines"]
+      "required": ["schema_version", "file", "lines"],
+      "x-doc": ["`benchbar logs --json`"]
     },
     "app": {
       "type": "object",
@@ -299,7 +315,8 @@
         "behind": {"type": ["integer", "null"], "x-since": "0.6"},
         "behind_days": {"type": ["integer", "null"], "x-since": "0.6"}
       },
-      "required": ["name"]
+      "required": ["name"],
+      "x-doc": ["`benchbar app list --json`"]
     },
     "appList": {
       "type": "object",
@@ -313,7 +330,8 @@
         "sites_error": {"type": ["string", "null"]},
         "apps": {"type": "array", "items": {"$ref": "#/$defs/app"}}
       },
-      "required": ["schema_version", "bench", "apps"]
+      "required": ["schema_version", "bench", "apps"],
+      "x-doc": ["`benchbar app list --json`"]
     },
     "appFocus": {
       "type": "object",
@@ -343,7 +361,8 @@
           }
         }
       },
-      "required": ["schema_version", "bench", "apps"]
+      "required": ["schema_version", "bench", "apps"],
+      "x-doc": ["`benchbar app focus --json`"]
     },
     "siteList": {
       "type": "object",
@@ -355,7 +374,8 @@
         "default_site": {"type": ["string", "null"], "x-since": "0.8"},
         "sites": {"type": "array", "items": {"$ref": "#/$defs/siteInSiteList"}}
       },
-      "required": ["schema_version", "bench", "sites"]
+      "required": ["schema_version", "bench", "sites"],
+      "x-doc": ["Sites"]
     },
     "backup": {
       "type": "object",
@@ -373,7 +393,8 @@
         "encrypted": {"type": "boolean"},
         "partial": {"type": "boolean"}
       },
-      "required": ["stamp", "time", "path", "database", "size_bytes", "with_files", "encrypted", "partial"]
+      "required": ["stamp", "time", "path", "database", "size_bytes", "with_files", "encrypted", "partial"],
+      "x-doc": ["Site backups"]
     },
     "siteBackups": {
       "type": "object",
@@ -386,7 +407,8 @@
         "folder": {"type": "string"},
         "backups": {"type": "array", "items": {"$ref": "#/$defs/backup"}}
       },
-      "required": ["schema_version", "site", "folder", "backups"]
+      "required": ["schema_version", "site", "folder", "backups"],
+      "x-doc": ["Site backups"]
     },
     "siteBackup": {
       "description": "benchbar site backup NAME --json: the backup just taken, then the done fields.",
@@ -404,7 +426,8 @@
           "required": ["schema_version", "site", "backup"]
         },
         {"x-conditional": true, "$ref": "#/$defs/doneFields"}
-      ]
+      ],
+      "x-doc": ["Site backups"]
     },
     "profile": {
       "type": "object",
@@ -439,7 +462,8 @@
         "linux_supported": {"type": ["boolean", "null"], "x-since": "0.8.3"},
         "unsupported_reason": {"type": ["string", "null"], "x-since": "0.8.3"}
       },
-      "required": ["name", "kind"]
+      "required": ["name", "kind"],
+      "x-doc": ["`benchbar profile list --json`"]
     },
     "bundle": {
       "type": "object",
@@ -449,7 +473,8 @@
         "apps": {"type": "array", "items": {"type": "string"}},
         "description": {"type": "string"}
       },
-      "required": ["name", "apps"]
+      "required": ["name", "apps"],
+      "x-doc": ["`benchbar profile list --json`"]
     },
     "profileList": {
       "type": "object",
@@ -460,7 +485,8 @@
         "profiles": {"type": "array", "items": {"$ref": "#/$defs/profile"}},
         "bundles": {"type": "array", "items": {"$ref": "#/$defs/bundle"}, "x-since": "0.8"}
       },
-      "required": ["schema_version", "profiles"]
+      "required": ["schema_version", "profiles"],
+      "x-doc": ["`benchbar profile list --json`"]
     },
     "lab": {
       "type": "object",
@@ -475,7 +501,8 @@
         "platforms": {"type": "array", "items": {"type": "string", "enum": ["macos", "linux", "windows"]}},
         "available": {"type": "boolean"}
       },
-      "required": ["name", "enabled"]
+      "required": ["name", "enabled"],
+      "x-doc": ["`benchbar labs --json`"]
     },
     "labsList": {
       "type": "object",
@@ -485,7 +512,8 @@
         "cli_version": {"type": "string"},
         "labs": {"type": "array", "items": {"$ref": "#/$defs/lab"}}
       },
-      "required": ["schema_version", "labs"]
+      "required": ["schema_version", "labs"],
+      "x-doc": ["`benchbar labs --json`"]
     },
     "portsCheck": {
       "type": "object",
@@ -497,7 +525,8 @@
         "mode": {"type": "string", "enum": ["automatic", "fixed"]},
         "already_running": {"type": "boolean"}
       },
-      "required": ["schema_version", "conflicts", "mode", "already_running"]
+      "required": ["schema_version", "conflicts", "mode", "already_running"],
+      "x-doc": ["Port management"]
     },
     "where": {
       "type": "object",
@@ -514,7 +543,8 @@
         "handoff_from": {"type": ["string", "null"]},
         "handoff_from_version": {"type": ["string", "null"]}
       },
-      "required": ["schema_version", "install", "state_dir"]
+      "required": ["schema_version", "install", "state_dir"],
+      "x-doc": ["`benchbar where --json`"]
     },
     "report": {
       "type": "object",
@@ -525,13 +555,16 @@
         "zip": {"type": "string"},
         "redactions": {"type": "integer"}
       },
-      "required": ["schema_version", "zip"]
+      "required": ["schema_version", "zip"],
+      "x-doc": ["`benchbar report --json`"]
     },
     "document": {
       "type": "object",
       "description": "Any other versioned document of the CLI: the envelope only, until it has a definition of its own.",
       "properties": {"schema_version": {"const": 1}, "cli_version": {"type": "string"}},
-      "required": ["schema_version"]
+      "required": ["schema_version"],
+      "x-open": true,
+      "x-doc": ["Rules for readers"]
     },
     "changedEntry": {
       "type": "object",
@@ -543,12 +576,22 @@
         "name": {"type": "string"},
         "detail": {"type": ["string", "null"]}
       },
-      "required": ["kind", "name"]
+      "required": ["kind", "name"],
+      "x-doc": ["The `done` fields (0.8)"]
     },
     "nextAction": {
       "type": "object",
-      "properties": {"command": {"type": "string"}, "why": {"type": ["string", "null"]}, "quoted": {"type": "boolean"}},
-      "required": ["command"]
+      "properties": {
+        "command": {"type": "string"},
+        "why": {"type": ["string", "null"]},
+        "quoted": {
+          "type": "boolean",
+          "description": "true when every word of command was quoted for the shell; absent for a command written as text",
+          "x-conditional": true
+        }
+      },
+      "required": ["command"],
+      "x-doc": ["The `done` fields (0.8)"]
     },
     "doneFields": {
       "type": "object",
@@ -562,7 +605,8 @@
         "missing": {"type": "array", "items": {"type": "string"}, "x-conditional": true},
         "error": {"type": "string", "x-conditional": true},
         "error_id": {"type": "string", "x-conditional": true}
-      }
+      },
+      "x-doc": ["The `done` fields (0.8)"]
     },
     "planStep": {
       "type": "object",
@@ -574,13 +618,25 @@
         "sudo": {"type": "boolean"},
         "will_run": {"type": "boolean"}
       },
-      "required": ["id"]
+      "required": ["id"],
+      "x-doc": [
+        "`benchbar install --json`",
+        "`benchbar repair --json`",
+        "The `done` fields (0.8)",
+        "`benchbar service --dry-run --json`"
+      ]
     },
     "skippedStep": {
       "type": "object",
       "description": "A privileged step that was skipped, and the command to run by hand.",
       "properties": {"id": {"type": "string"}, "command": {"type": "string"}},
-      "required": ["id"]
+      "required": ["id"],
+      "x-doc": [
+        "`benchbar install --json`",
+        "`benchbar repair --json`",
+        "The `done` fields (0.8)",
+        "`benchbar service --dry-run --json`"
+      ]
     },
     "planLine": {
       "type": "object",
@@ -638,7 +694,14 @@
         "command": {"type": "string", "x-conditional": true},
         "log": {"type": ["string", "null"], "x-conditional": true}
       },
-      "required": ["event"]
+      "required": ["event"],
+      "x-open": true,
+      "x-doc": [
+        "`benchbar install --json`",
+        "`benchbar repair --json`",
+        "The `done` fields (0.8)",
+        "`benchbar service --dry-run --json`"
+      ]
     },
     "stepLine": {
       "type": "object",
@@ -656,7 +719,13 @@
         "message": {"type": "string", "x-conditional": true},
         "command": {"type": "string", "x-conditional": true}
       },
-      "required": ["event", "id", "status"]
+      "required": ["event", "id", "status"],
+      "x-doc": [
+        "`benchbar install --json`",
+        "`benchbar repair --json`",
+        "The `done` fields (0.8)",
+        "`benchbar service --dry-run --json`"
+      ]
     },
     "repairStepLine": {
       "type": "object",
@@ -667,7 +736,8 @@
         "status": {"type": "string", "enum": ["running", "done", "skipped", "failed"]},
         "message": {"type": "string", "x-conditional": true}
       },
-      "required": ["event", "action", "status"]
+      "required": ["event", "action", "status"],
+      "x-doc": ["`benchbar repair --json`"]
     },
     "progressLine": {
       "type": "object",
@@ -682,7 +752,13 @@
         "bytes": {"type": ["integer", "null"]},
         "total": {"type": ["integer", "null"]}
       },
-      "required": ["event", "step", "elapsed"]
+      "required": ["event", "step", "elapsed"],
+      "x-doc": [
+        "`benchbar install --json`",
+        "`benchbar repair --json`",
+        "The `done` fields (0.8)",
+        "`benchbar service --dry-run --json`"
+      ]
     },
     "doneLine": {
       "description": "The last line of a stream: the result envelope, and any fields of the document the command would have printed (bench, site, url, skipped, fix, log, created, ...). repair keeps exit_code next to exit.",
@@ -706,6 +782,13 @@
         },
         {"$ref": "#/$defs/doneFields"},
         {"anyOf": [{"required": ["exit"]}, {"required": ["exit_code"]}]}
+      ],
+      "x-open": true,
+      "x-doc": [
+        "`benchbar install --json`",
+        "`benchbar repair --json`",
+        "The `done` fields (0.8)",
+        "`benchbar service --dry-run --json`"
       ]
     },
     "streamLine": {

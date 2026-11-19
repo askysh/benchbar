@@ -24,9 +24,14 @@ check() {
   [[ -z "$out" ]] || printf '%s\n' "$out"
 }
 
-check fixtures
-check models
-check docs
+# the second pass (below) is the same live checks as the Linux CLI of WSL, in a shell of its own,
+# because the platform is chosen when the harness is sourced
+if [[ "${1:-}" != "--live-only" ]]; then
+  check fixtures
+  check models
+  check docs
+
+fi
 
 # ---- live: one fake bench, every command that prints a document
 BENCH="$HOME/dev/frappe-bench"
@@ -42,12 +47,26 @@ live() {
   "$FM" "$@" >"$LIVE/$name" 2>"$LIVE/$name.err" </dev/null
   CODE=$?
   set -e
-  assert_eq "0" "$CODE" "benchbar $* exited $CODE: $(cat "$LIVE/$name.err")"
+  # doctor exits 1 for a failing check and still prints its document
+  [[ "$CODE" == 0 || ( "$def" == doctor* && "$CODE" == 1 ) ]] || fail "benchbar $* exited $CODE: $(cat "$LIVE/$name.err")"
   check live "$def" "$LIVE/$name"
 }
 
 # the stream of a command that changes things: plan, steps, done with its envelope
 live streamLine service.jsonl service --yes --json --bench-dir "$BENCH"
+
+if [[ "${BENCHBAR_TEST_PLATFORM:-}" == "linux" ]]; then
+  # the Linux CLI prints fields the Mac's does not (a distro's prerequisites, the profiles it can install)
+  live status status.json status --json --bench-dir "$BENCH"
+  live doctor doctor.json doctor --json --bench-dir "$BENCH"
+  live doctorPrerequisites prerequisites.json doctor --prerequisites --json
+  live profileList profile-list.json profile list --json
+  live labsList labs-list.json labs list --json
+  live list list.json list --json
+  live where where.json where --json
+  printf 'test-json-schema (linux): ok\n'
+  exit 0
+fi
 live streamLine service-dry.jsonl service --dry-run --json --bench-dir "$BENCH"
 live streamLine up-dry.jsonl up --dry-run --json --bench-dir "$BENCH"
 live streamLine repair-dry.jsonl repair --dry-run --json --bench-dir "$BENCH"
@@ -78,5 +97,7 @@ printf 'rootpw' >"$MOCK_STATE/mariadb_root_pw"
 export MARIADB_ROOT_PASSWORD=rootpw
 live siteBackup site-backup.json site backup bbtest.localhost --with-files --json --bench-dir "$BENCH"
 live siteBackups site-backups.json site backups bbtest.localhost --json --bench-dir "$BENCH"
+
+BENCHBAR_TEST_PLATFORM=linux bash "${BASH_SOURCE[0]}" --live-only
 
 printf 'test-json-schema: ok\n'

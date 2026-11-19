@@ -114,6 +114,36 @@ class Validator:
         return errors
 
 
+def unknown_keys(root, value, schema, path="$"):
+    """Fields of value that no definition on the way names (a typo in a fixture). A schema marked x-open
+    (a plan line, a done line, a document without a definition) carries fields of its command: not checked."""
+    v = Validator(root)
+    out = []
+    parts = members(root, schema)
+    for m in list(parts):
+        for key in ("anyOf", "oneOf"):
+            for sub in m.get(key, []):
+                parts += members(root, sub)
+    if isinstance(value, dict):
+        if any(m.get("x-open") for m in parts):
+            return out
+        known = {}
+        for m in parts:
+            for k, sub in m.get("properties", {}).items():
+                known.setdefault(k, sub)
+        for k, x in value.items():
+            if k not in known:
+                out.append("%s: the schema has no field %s" % (path, k))
+            else:
+                out += unknown_keys(root, x, known[k], path + "." + k)
+    elif isinstance(value, list):
+        item = next((m["items"] for m in parts if "items" in m), None)
+        if item is not None:
+            for i, x in enumerate(value):
+                out += unknown_keys(root, x, item, "%s[%d]" % (path, i))
+    return out
+
+
 def documents(path):
     """The JSON values in a file: the whole file, else one per line."""
     with open(path) as f:
@@ -165,7 +195,8 @@ def required_of(root, name):
     return req
 
 
-def all_property_names(root):
+def all_property_names(root, node=None):
+    """Every property name under node (default: all definitions), nested ones included."""
     names = set()
 
     def walk(node):
@@ -177,7 +208,7 @@ def all_property_names(root):
         elif isinstance(node, list):
             for v in node:
                 walk(v)
-    walk(root["$defs"])
+    walk(root["$defs"] if node is None else node)
     return names
 
 
@@ -238,7 +269,10 @@ def check_fixtures():
             continue
         errs = []
         for i, doc in enumerate(docs):
-            errs += ["%s line %d %s" % (rel(path), i + 1, e) if len(docs) > 1 else "%s %s" % (rel(path), e) for e in v.check(doc, {"$ref": "#/$defs/" + name})]
+            found = v.check(doc, {"$ref": "#/$defs/" + name})
+            if not found and not want_invalid:
+                found = unknown_keys(root, doc, {"$ref": "#/$defs/" + name})
+            errs += ["%s line %d %s" % (rel(path), i + 1, e) if len(docs) > 1 else "%s %s" % (rel(path), e) for e in found]
         checked += 1
         if want_invalid and not errs:
             problems.append("%s should not fit %s (schema/fixtures.map:%d) but it does" % (rel(path), name, n))
@@ -333,11 +367,16 @@ def swift_model(text, struct):
     body = own_body(structs[struct])
     flat = strip_blocks(body)
     props = {}
-    for m in re.finditer(r"^\s*(?:public\s+|private\s+|internal\s+)*(let|var)\s+(\w+)\s*:\s*([^={\n]+?)\s*(=\s*[^{\n]+)?(\{)?\s*$", flat, re.M):
+    lead = r"^\s*(?:@\w+(?:\([^)]*\))?\s+)*(?:(?:public|private|internal|fileprivate|nonisolated)\s+)*"
+    for m in re.finditer(lead + r"(let|var)\s+(\w+)\s*:\s*([^={\n]+?)\s*(=\s*[^{\n]+)?(\{)?\s*$", flat, re.M):
         if m.group(5):
             continue  # computed
         props[m.group(2)] = (m.group(1), m.group(3).strip(), bool(m.group(4)))
     props = {k: v for k, v in props.items() if not re.search(r"\bstatic\s+(let|var)\s+" + k + r"\b", flat)}
+    # a stored property the pattern above did not read (split over lines, no type) must not vanish quietly
+    unparsed = [m.group(1) for m in re.finditer(lead + r"(?:let|var)\s+(\w+)[^\n{]*$", flat, re.M) if m.group(1) not in props
+                and not re.search(r"\bstatic\s+(?:let|var)\s+" + m.group(1) + r"\b", flat)
+                and not re.search(r"\blet\s+" + m.group(1) + r"\s*=", flat)]
     keys = {}
     ck = re.search(r"enum\s+CodingKeys\b[^{]*\{(.*?)\}", body, re.S)
     if ck:
@@ -382,7 +421,7 @@ def swift_model(text, struct):
             if prop in names:
                 typ = props.get(prop, ("var", "?", False))[1]
                 out[names[prop]] = (typ, prop in strict_props)
-    return out
+    return out, unparsed
 
 
 def swift_kind(typ):
@@ -420,7 +459,7 @@ def check_swift(root, file, struct, defs):
     with open(path) as f:
         text = f.read()
     try:
-        model = swift_model(text, struct)
+        model, unparsed = swift_model(text, struct)
     except KeyError:
         return ["%s: no struct %s (schema/models.map)" % (file, struct)]
     props, required = {}, []
@@ -432,6 +471,8 @@ def check_swift(root, file, struct, defs):
     problems = []
     if not model:
         problems.append("%s %s: read no field (the parser found nothing)" % (file, struct))
+    for name in unparsed:
+        problems.append("%s %s.%s: a property the checker could not read (put it on one line, with its type)" % (file, struct, name))
     for key, (typ, strict) in sorted(model.items()):
         where = "%s %s.%s" % (file, struct, key)
         if key not in props:
@@ -465,7 +506,7 @@ def cs_read_keys(text):
     keys = set()
     for m in re.finditer(r'JsonRead\.\w+\(\s*[\w.]+\s*,\s*"([^"]+)"', text):
         keys.add(m.group(1))
-    for m in re.finditer(r'\b(?:o|x|obj|doc|item|node|root)\["([a-z_]+)"\]', text):
+    for m in re.finditer(r'\b\w+\["([a-z_]+)"\]', text):
         keys.add(m.group(1))
     for m in re.finditer(r'ContainsKey\("([^"]+)"\)', text):
         keys.add(m.group(1))
@@ -495,9 +536,14 @@ def check_cs_dto(root, file, cls, defs):
     return problems
 
 
-def check_cs_keys(root, file, defs):
+def swift_read_keys(text):
+    """The keys a Swift file reads from a decoded dictionary: object["key"] and $0["key"]."""
+    return set(re.findall(r'(?:\b\w+|\$0)\["([a-z_]+)"\]', text))
+
+
+def check_read_keys(root, file, defs, scan):
     with open(os.path.join(ROOT, file)) as f:
-        keys = cs_read_keys(f.read())
+        keys = scan(f.read())
     props = set()
     for d in defs:
         if d not in root["$defs"]:
@@ -509,9 +555,11 @@ def check_cs_keys(root, file, defs):
             if cur in seen:
                 continue
             seen.add(cur)
-            props |= set(properties_of(root, cur))
+            props |= all_property_names(root, root["$defs"][cur])
             text = json.dumps(root["$defs"][cur])
             stack += re.findall(r'#/\$defs/(\w+)', text)
+    if not keys:
+        return ["%s: reads no key by name (schema/models.map)" % file]
     return ["%s: reads the field %s, which %s do not have" % (file, k, "/".join(defs)) for k in sorted(keys - props)]
 
 
@@ -531,7 +579,7 @@ def mcp_literal_keys(tree, skip):
     for node in ast.walk(tree):
         if node is skip:
             continue
-        if isinstance(node, ast.Subscript) and isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, str):
+        if isinstance(node, ast.Subscript) and isinstance(node.ctx, ast.Load) and isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, str):
             keys.add(node.slice.value)
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "get" and node.args \
                 and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
@@ -590,11 +638,84 @@ def check_mcp(root, file):
     return problems
 
 
+def mcp_functions(text):
+    out = {}
+    for fn in ast.walk(ast.parse(text)):
+        if isinstance(fn, ast.FunctionDef):
+            out[fn.name] = fn
+    return out
+
+
+def check_mcp_readers(root, file, readers, own):
+    """The functions that read CLI output read only fields of CLI_READS, and every function that parses
+    JSON is one of them or is named as reading something of its own."""
+    with open(os.path.join(ROOT, file)) as f:
+        text = f.read()
+    reads, _node = mcp_reads(text)
+    allowed = set(seg.replace("[]", "") for _d, field, _n in reads or [] for seg in field.split("."))
+    funcs = mcp_functions(text)
+    problems = []
+    for name in readers:
+        if name not in funcs:
+            problems.append("%s: schema/models.map names the function %s, which does not exist" % (file, name))
+            continue
+        for key in sorted(mcp_literal_keys(funcs[name], None) - allowed):
+            problems.append("%s: %s reads the key %s of CLI output, which CLI_READS does not list" % (file, name, key))
+    for name, fn in sorted(funcs.items()):
+        if "json.loads" in ast.unparse(fn) and name not in readers and name not in own:
+            problems.append("%s: %s parses JSON and is in neither the readers nor the own list of schema/models.map" % (file, name))
+    return problems
+
+
+def swift_codable_structs(text):
+    """Names (Outer.Inner) of the structs that conform to Codable or Decodable."""
+    out = []
+    for name in swift_structs(text):
+        m = re.search(r"\bstruct\s+" + re.escape(name.split(".")[-1]) + r"\s*:([^{]*)\{", text)
+        if m and re.search(r"\b(Codable|Decodable)\b", m.group(1)):
+            out.append(name)
+    return out
+
+
+def check_coverage(rows):
+    """Every model that reads the CLI's JSON is in a row of models.map, or is skipped there with a reason."""
+    mapped, skipped_files, skipped_structs = set(), set(), set()
+    for cols in rows:
+        if cols[0] in ("swift", "cs"):
+            mapped.add((cols[1], cols[2]))
+        elif cols[0] in ("csread", "swiftread"):
+            mapped.add((cols[1], "*"))
+        elif cols[0] == "skipfile":
+            skipped_files.add(cols[1])
+        elif cols[0] == "skip":
+            skipped_structs.add((cols[1], cols[2]))
+    mapped_files = set(f for f, _ in mapped)
+    problems = []
+    for path in sorted(glob.glob(os.path.join(ROOT, "macos", "BenchBar", "CLI", "*.swift"))):
+        file = rel(path)
+        with open(path) as f:
+            structs = swift_codable_structs(f.read())
+        if not structs or file in skipped_files:
+            continue
+        for name in structs:
+            if (file, name) not in mapped and (file, name) not in skipped_structs:
+                problems.append("%s: struct %s is in no row of schema/models.map (add a swift row, or skip %s %s with a reason)" % (file, name, file, name))
+    for path in sorted(glob.glob(os.path.join(ROOT, "windows", "tray", "Tray.Core", "**", "*.cs"), recursive=True)):
+        file = rel(path)
+        with open(path) as f:
+            text = f.read()
+        if (cs_dtos(text) or cs_read_keys(text)) and file not in mapped_files and file not in skipped_files:
+            problems.append("%s: reads JSON by field name and is in no row of schema/models.map (add a row, or skipfile it with a reason)" % file)
+    return problems
+
+
 def check_models():
     root = load_schema()
     problems = []
-    seen = {"swift": 0, "cs": 0, "csread": 0, "mcp": 0}
-    for n, cols in read_map("models.map"):
+    seen = {"swift": 0, "swiftread": 0, "cs": 0, "csread": 0, "mcp": 0}
+    rows = read_map("models.map")
+    problems += check_coverage([cols for _n, cols in rows])
+    for n, cols in rows:
         kind = cols[0]
         seen[kind] = seen.get(kind, 0) + 1
         if kind == "swift":
@@ -602,25 +723,61 @@ def check_models():
         elif kind == "cs":
             problems += check_cs_dto(root, cols[1], cols[2], cols[3:])
         elif kind == "csread":
-            problems += check_cs_keys(root, cols[1], cols[2:])
+            problems += check_read_keys(root, cols[1], cols[2:], cs_read_keys)
+        elif kind == "swiftread":
+            problems += check_read_keys(root, cols[1], cols[2:], swift_read_keys)
         elif kind == "mcp":
             problems += check_mcp(root, cols[1])
-        else:
+        elif kind == "mcpreaders":
+            problems += check_mcp_readers(root, cols[1], [c for c in cols[2:] if c != "|"][:cols.index("|") - 2] if "|" in cols else cols[2:],
+                                          cols[cols.index("|") + 1:] if "|" in cols else [])
+        elif kind not in ("skip", "skipfile"):
             problems.append("schema/models.map:%d: unknown kind %s" % (n, kind))
     return problems, seen
 
 
 # ---- the prose
 
+def doc_section(prose, heading):
+    """The text under the heading (its subsections included), or None."""
+    lines = prose.splitlines()
+    for n, line in enumerate(lines):
+        m = re.match(r"(#+)\s+(.*?)\s*$", line)
+        if m and m.group(2) == heading:
+            out = []
+            for later in lines[n + 1:]:
+                h = re.match(r"(#+)\s", later)
+                if h and len(h.group(1)) <= len(m.group(1)):
+                    break
+                out.append(later)
+            return "\n".join(out)
+    return None
+
+
 def check_docs():
+    """Every field of a definition is named, in code quotes or as a JSON key, in the section its x-doc names."""
     root = load_schema()
     with open(os.path.join(ROOT, "docs", "json-schema.md")) as f:
         prose = f.read()
     problems = []
-    names = all_property_names(root)
-    for name in sorted(names):
-        if not re.search(r'[`".]' + re.escape(name) + r'[`"\[:]', prose):
-            problems.append("docs/json-schema.md never mentions the field %s that the schema has" % name)
+    for name, d in root["$defs"].items():
+        names = all_property_names(root, d)
+        if not names:
+            continue
+        sections = []
+        for heading in d.get("x-doc", []):
+            text = doc_section(prose, heading)
+            if text is None:
+                problems.append("%s: x-doc names the heading %r, which docs/json-schema.md does not have" % (name, heading))
+            else:
+                sections.append(text)
+        if not d.get("x-doc"):
+            problems.append("%s: no x-doc (the heading of docs/json-schema.md that describes it)" % name)
+            continue
+        text = "\n".join(sections)
+        for field in sorted(names):
+            if not re.search(r'[`".]' + re.escape(field) + r'[`"\[:]', text):
+                problems.append("%s: docs/json-schema.md does not mention the field %s under %s" % (name, field, " or ".join(d["x-doc"])))
     return problems
 
 
@@ -637,7 +794,7 @@ def main(argv):
             problems = check_files(cmd == "live", argv[2], argv[3:])
         elif cmd == "models":
             problems, seen = check_models()
-            print("models checked: %d Swift, %d C# classes, %d C# files, %d MCP server" % (seen["swift"], seen["cs"], seen["csread"], seen["mcp"]))
+            print("models checked: %d Swift structs, %d Swift files, %d C# classes, %d C# files, %d MCP server" % (seen["swift"], seen["swiftread"], seen["cs"], seen["csread"], seen["mcp"]))
         elif cmd == "docs":
             problems = check_docs()
         else:
