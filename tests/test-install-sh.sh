@@ -112,6 +112,22 @@ assert_eq "0.3.0" "$(installed_app_version)"
 run_install --yes --version 0.3.0
 assert_contains "$OUT" "BenchBar 0.3.0 in ${HOME}/Applications (unchanged)"
 
+# ---- a release candidate is a GitHub pre-release: installed only when named.
+# The default asks for "latest", which GitHub answers without pre-releases.
+make_release 0.9.0-rc.1
+reset_calls
+run_install --yes --version 0.9.0-rc.1
+assert_eq "0" "$CODE" "$OUT"
+assert_calls_contain 'releases/tags/v0.9.0-rc.1'
+assert_eq "0.9.0-rc.1" "$(installed_app_version)"
+make_release 0.3.0
+reset_calls
+run_install --yes
+assert_eq "0" "$CODE" "$OUT"
+assert_calls_contain 'api.github.com/repos/askysh/benchbar/releases/latest'
+assert_calls_not_contain 'releases/tags/|releases\?'
+assert_eq "0.3.0" "$(installed_app_version)"
+
 # ---- a tampered zip is refused and the installed app is left alone
 make_release 0.5.0
 printf 'evil\n' >>"$MOCK_STATE/release.zip"

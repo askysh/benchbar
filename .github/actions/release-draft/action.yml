@@ -10,6 +10,10 @@ inputs:
   signed:
     description: "true for a Developer ID build, false for an ad hoc one"
     required: true
+  prerelease:
+    description: "true for a release candidate: the draft is a pre-release, so GitHub's latest release stays the last real one"
+    required: false
+    default: "false"
 runs:
   using: composite
   steps:
@@ -40,7 +44,12 @@ runs:
         GH_TOKEN: ${{ github.token }}
         TAG: ${{ github.ref_name }}
         VERSION: ${{ inputs.version }}
+        PRERELEASE: ${{ inputs.prerelease }}
       run: |
+        # A candidate is a pre-release and never "latest": publishing it does
+        # not move the feed, install.sh or the update checks. A final release
+        # is the opposite, and a draft that was a candidate's tag is not reused.
+        if [ "$PRERELEASE" = "true" ]; then flags=(--prerelease --latest=false); else flags=(--prerelease=false); fi
         # A published release is immutable: neither its notes nor its files may
         # change. Only a draft is edited, and a file of the same name is deleted
         # first, so nothing is overwritten in place (no --clobber).
@@ -49,7 +58,7 @@ runs:
             echo "::error title=Release already published::$TAG is a published release and is immutable, so this run will not edit it or replace its files. To fix a release, delete nothing: cut a new version."
             exit 1
           fi
-          gh release edit "$TAG" --title "BenchBar ${VERSION}" --notes-file "$RUNNER_TEMP/notes.md"
+          gh release edit "$TAG" --title "BenchBar ${VERSION}" --notes-file "$RUNNER_TEMP/notes.md" "${flags[@]}"
           existing="$(gh release view "$TAG" --json assets --jq '.assets[].name')"
           for f in dist/*; do
             name="$(basename "$f")"
@@ -58,10 +67,10 @@ runs:
             fi
           done
         elif printf '%s' "$view" | grep -qi 'not found'; then
-          gh release create "$TAG" --draft --title "BenchBar ${VERSION}" --notes-file "$RUNNER_TEMP/notes.md"
+          gh release create "$TAG" --draft --title "BenchBar ${VERSION}" --notes-file "$RUNNER_TEMP/notes.md" "${flags[@]}"
         else
           echo "::error::gh release view $TAG failed: $view"
           exit 1
         fi
         gh release upload "$TAG" dist/*
-        echo "::notice title=Draft release::https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG} (draft: review, then publish; publishing updates the Homebrew tap)"
+        echo "::notice title=Draft release::https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG} (draft: review, then publish; publishing updates the Homebrew tap unless it is a pre-release)"

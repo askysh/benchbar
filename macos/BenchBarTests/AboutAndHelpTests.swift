@@ -53,6 +53,15 @@ struct UpdateCheckTests {
         #expect(try UpdateCheck.parse(data, current: "?") == .upToDate(latest: "0.6.0"))
     }
 
+    @Test func aPreReleaseOrADraftIsNeverAnUpdate() throws {
+        let rc = Data(#"{"tag_name":"v0.9.0-rc.1","prerelease":true}"#.utf8)
+        #expect(try UpdateCheck.parse(rc, current: "0.8.3") == .upToDate(latest: "0.8.3"))
+        let draft = Data(#"{"tag_name":"v0.9.0","draft":true}"#.utf8)
+        #expect(try UpdateCheck.parse(draft, current: "0.8.3") == .upToDate(latest: "0.8.3"))
+        let plain = Data(#"{"tag_name":"v0.9.0","prerelease":false,"draft":false}"#.utf8)
+        #expect(try UpdateCheck.parse(plain, current: "0.8.3") == .available(version: "0.9.0", page: BenchBarLinks.releases))
+    }
+
     @Test func withoutAPageTheReleasesListIsUsed() throws {
         let data = Data(#"{"tag_name":"0.7.0"}"#.utf8)
         #expect(try UpdateCheck.parse(data, current: "0.5.0") == .available(version: "0.7.0", page: BenchBarLinks.releases))
