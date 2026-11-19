@@ -52,7 +52,7 @@ assert_eq "1" "$CODE"; assert_contains "$OUT" "no previous file"
 INIT='{"jsonrpc":"2.0","id":"init","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}'
 mcp() { printf '%s\n' "$INIT" '{"jsonrpc":"2.0","method":"notifications/initialized"}' "$@" | "$FM" mcp 2>/dev/null | tail -n +2; }
 call() { printf '{"jsonrpc":"2.0","id":%s,"method":"tools/call","params":{"name":"%s","arguments":%s}}' "$1" "$2" "$3"; }
-TOOL_NAMES='["benchbar_list", "benchbar_status", "benchbar_doctor", "benchbar_logs_tail", "benchbar_site_list", "benchbar_app_list", "benchbar_profile_list", "benchbar_profile_check", "benchbar_up", "benchbar_down", "benchbar_restart", "benchbar_app_add_plan", "benchbar_app_add", "benchbar_site_add_plan", "benchbar_site_add", "benchbar_site_backup", "benchbar_site_restore_plan", "benchbar_site_restore", "benchbar_service_install_plan", "benchbar_service_install"]'
+TOOL_NAMES='["benchbar_list", "benchbar_status", "benchbar_doctor", "benchbar_logs_tail", "benchbar_site_list", "benchbar_app_list", "benchbar_profile_list", "benchbar_profile_check", "benchbar_up", "benchbar_down", "benchbar_restart", "benchbar_app_add_plan", "benchbar_app_add", "benchbar_site_add_plan", "benchbar_site_add", "benchbar_site_backup", "benchbar_site_restore_plan", "benchbar_site_restore", "benchbar_service_install_plan", "benchbar_service_install", "benchbar_site_backups", "benchbar_ports_check", "benchbar_ports_plan", "benchbar_lock_check", "benchbar_labs_list", "benchbar_where", "benchbar_doctor_prerequisites", "benchbar_self_update_check", "benchbar_app_focus_list"]'
 REPLIES="$(mcp \
   '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}' \
   '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
@@ -81,10 +81,16 @@ names = [t["name"] for t in by[2]["result"]["tools"]]
 assert names == json.loads(sys.argv[1]), names
 # repairs and bench installs stay terminal work; a service install is a reviewed plan
 assert not any("repair" in n or n.endswith("_install_bench") or n == "benchbar_install" for n in names)
+# the safety decisions stay a person's: no tool turns a lab on, applies ports, shares, guards the LAN or updates
+assert not any(w in n for n in names for w in ("labs_on", "labs_off", "ports_apply", "ports_setup", "share", "lan_guard", "uninstall"))
+assert "benchbar_self_update" not in names
 an = {t["name"]: t["annotations"] for t in by[2]["result"]["tools"]}
-for n in ("benchbar_list", "benchbar_status", "benchbar_doctor", "benchbar_logs_tail", "benchbar_site_list", "benchbar_app_list", "benchbar_profile_list"):
+for n in ("benchbar_list", "benchbar_status", "benchbar_doctor", "benchbar_logs_tail", "benchbar_site_list", "benchbar_app_list", "benchbar_profile_list",
+          "benchbar_site_backups", "benchbar_ports_check", "benchbar_ports_plan", "benchbar_lock_check", "benchbar_labs_list", "benchbar_where",
+          "benchbar_doctor_prerequisites", "benchbar_app_focus_list"):
     assert an[n] == {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}, (n, an[n])
 assert an["benchbar_profile_check"] == {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True}, an["benchbar_profile_check"]
+assert an["benchbar_self_update_check"] == {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True}, an["benchbar_self_update_check"]
 assert an["benchbar_app_add_plan"] == {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True}, an["benchbar_app_add_plan"]
 assert an["benchbar_up"] == {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}, an["benchbar_up"]
 for n in ("benchbar_down", "benchbar_restart"):
@@ -627,10 +633,41 @@ assert_file "$NOSVC/Procfile.lean"
 run_fm status --json --bench-dir "$NOSVC"
 [[ "$(printf '%s' "$OUT" | jget - 'd["state"]')" != "not_adopted" ]] || fail "the bench still has no service after service install: $OUT"
 
+# ---- the read tools of review MCP-15 / PAR-7, on the real CLI: each returns the CLI's JSON, labeled
+python3 - "$FM" "$BENCH" <<'PY' || fail "MCP read tools on the real CLI"
+import json, subprocess, sys
+fm, bench = sys.argv[1], sys.argv[2]
+INIT = {"jsonrpc": "2.0", "id": "init", "method": "initialize", "params": {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "t", "version": "1"}}}
+calls = [
+    ("benchbar_site_backups", {"site": "macdev", "bench": bench}),
+    ("benchbar_ports_check", {"bench": bench}),
+    ("benchbar_where", {}),
+    ("benchbar_labs_list", {}),
+    ("benchbar_site_backups", {"site": "nosuch.localhost", "bench": bench}),
+]
+lines = [json.dumps(INIT), json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"})]
+for i, (name, args) in enumerate(calls, 1):
+    lines.append(json.dumps({"jsonrpc": "2.0", "id": i, "method": "tools/call", "params": {"name": name, "arguments": args}}))
+out = subprocess.run([fm, "mcp"], input="\n".join(lines) + "\n", capture_output=True, text=True, timeout=300).stdout
+by = {m["id"]: m["result"] for m in (json.loads(l) for l in out.splitlines() if l.strip()) if "result" in m and m["id"] != "init"}
+for i in (1, 2, 3, 4):
+    r = by[i]
+    assert not r["isError"], (calls[i - 1], r)
+    assert r["content"][0]["text"].startswith("Data from the bench ("), r["content"][0]["text"][:120]
+assert by[1]["structuredContent"]["site"] == "macdev" and by[1]["structuredContent"]["backups"] == [], by[1]
+assert "conflicts" in by[2]["structuredContent"] and by[2]["structuredContent"]["mode"], by[2]
+assert by[3]["structuredContent"]["state_dir"] and by[3]["structuredContent"]["install"], by[3]
+assert by[4]["structuredContent"]["labs"], by[4]
+bad = by[5]                                              # a site the bench does not have: the CLI's refusal, labeled
+assert bad["isError"] and bad["content"][0]["text"].startswith("Data from the bench ("), bad
+PY
+
 # ---- the AGENTS.md snippet
 run_fm mcp --print-agents-md
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "benchbar_site_add"
 assert_contains "$OUT" "Never probe MariaDB root"
+assert_contains "$OUT" "benchbar_site_backups"
+assert_contains "$OUT" "there is no tool for them"
 
 printf 'test-mcp: ok\n'
