@@ -396,7 +396,8 @@ A bench has four tabs:
   Windows browser signed in as that user. `benchbar.exe` opens the browser
   itself, so the sign in link, which holds a session, never passes through
   the tray, a log or the screen. A site whose name Windows cannot find has no
-  Open as.
+  Open as. **Pin** in Find User keeps a user (nine at most per site,
+  Administrator is always there) for Quick Switch.
 - **Apps**: Add App (from a git URL, with a branch or a commit, and the
   sites to install it on), Update after the dry run, Install on a site,
   focus pins and Check Remotes. An app with local changes cannot be
@@ -410,6 +411,17 @@ A bench has four tabs:
 Start and Restart check the bench's ports first, from the window and from
 the flyout. A port another program holds stops the start with the reason
 and Review Port Conflict; BenchBar never stops that program.
+
+**Quick Switch...** in the tray menu opens a small panel over any window:
+Administrator, your pinned users and, when you type two letters or more,
+the site's other users. Up, Down and Enter choose, **0** to **9** open a row
+at once while the field is empty, and Esc closes it. It opens the site of a
+running bench that has Open as on (a list picks the site when there are
+several) in your browser signed in as that user, with the same
+`benchbar.exe open --as` call as Find User, and says why when there is
+nothing to open, for example that Open as is off for the site. The row of the
+last user it opened this run says "last opened". It never turns Open as on.
+There is no keyboard shortcut for it yet.
 
 **Find Benches** scans a folder inside the distro (default your Linux
 home), adds the benches it finds, sets up their ports and their
@@ -760,10 +772,10 @@ every distro, so stop your benches first).
 - It has no CPU source for the runner, so the runner runs at one speed.
 - It never reads files inside the distro: every fact comes from
   `benchbar.exe`.
-- Open as has no pinned users and no Quick Switch panel yet: Find User
-  lists the users each time. The site needs a `*.localhost` name, which the
-  Windows browser reaches without a hosts line (see [`*.localhost`
-  names](#localhost-names)). See [benchbar open](reference/cli/other.md).
+- Quick Switch has no global keyboard shortcut yet: open it from the tray
+  menu. Open as needs a `*.localhost` name, which the Windows browser reaches
+  without a hosts line (see [`*.localhost` names](#localhost-names)). See
+  [benchbar open](reference/cli/other.md).
 - It cannot join a room. Rooms (`benchbar share`) are Mac only for now:
   WSL 2 does not expose a port to the Wi-Fi by default and Windows has no
   pf. A `benchbar://share/...` link shows a note that says so.

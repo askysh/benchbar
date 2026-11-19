@@ -116,6 +116,7 @@ public partial class App : Application, ITrayHost
         if (_link is not null) _link.Command += cmd => Dispatcher.BeginInvoke(() => OnHarnessCommand(cmd));
 
         _config = TrayConfig.Load();
+        _config.Pins.Changed += SaveConfig; // a pin or a label is saved at once, like any other setting
         ApplyThemeMode();
         RegisterLinkScheme();
         _source = BenchSourceFactory.FromEnvironment();
@@ -536,6 +537,7 @@ public partial class App : Application, ITrayHost
         Theme = () => Theme,
         OpenMain = OpenMain,
         OpenSettings = ShowSettings,
+        QuickSwitch = ShowQuickSwitch,
         SetupPending = () => _setupPending,
         SetUp = () => OpenWizard(resume: false, keepFlow: true),
         CheckForUpdates = () => CheckForUpdatesAsync().Forget(),

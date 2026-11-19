@@ -144,6 +144,38 @@ public class SitesOpenAsViewTests
     });
 
     [Fact]
+    public void PinKeepsAUserInQuickSwitchAndUnpinRemovesItButAdministratorHasNoPin() => Sta.Run(() =>
+    {
+        var (view, kit, _) = Make(WithOpenAs(new SiteOpenAs(true, true, true)));
+        ClickMenu(view, "More actions for one.localhost", "Open as...");
+        Wait(view.Pending);
+        Drain();
+        Assert.Equal(["priya@example.com", "web@example.com"], view.PinButtons.Keys); // Administrator is always in the panel
+        Click(view.PinButtons["priya@example.com"]);
+        Assert.True(kit.Services.Pins.IsPinned("priya@example.com", PageKit.BenchPath, "one.localhost"));
+        Assert.Equal("Priya N", kit.Services.Pins.Of(PageKit.BenchPath, "one.localhost").Single().FullName);
+        Assert.Equal("Unpin", System.Windows.Automation.AutomationProperties.GetName(view.PinButtons["priya@example.com"]).Split(' ')[0]);
+        var label = Walk(view).OfType<TextBox>().Single(t => System.Windows.Automation.AutomationProperties.GetName(t) == "Label for priya@example.com");
+        label.Text = " NE ";
+        Assert.Equal("NE", kit.Services.Pins.Of(PageKit.BenchPath, "one.localhost").Single().Label);
+        Click(view.PinButtons["priya@example.com"]);
+        Assert.Empty(kit.Services.Pins.Map);
+    });
+
+    [Fact]
+    public void ATenthPinIsRefusedWithAnExplanation() => Sta.Run(() =>
+    {
+        var (view, kit, _) = Make(WithOpenAs(new SiteOpenAs(true, true, true)));
+        for (var i = 1; i <= 9; i++) kit.Services.Pins.Pin($"u{i}@example.com", null, PageKit.BenchPath, "one.localhost");
+        ClickMenu(view, "More actions for one.localhost", "Open as...");
+        Wait(view.Pending);
+        Drain();
+        Click(view.PinButtons["priya@example.com"]);
+        Assert.False(kit.Services.Pins.IsPinned("priya@example.com", PageKit.BenchPath, "one.localhost"));
+        Assert.Contains("A site keeps 9 pinned users at most. Unpin one first.", Texts(view));
+    });
+
+    [Fact]
     public void ClosingTheBenchPanelDropsFindUser() => Sta.Run(() =>
     {
         var (view, _, _) = Make(WithOpenAs(new SiteOpenAs(true, true, true)));

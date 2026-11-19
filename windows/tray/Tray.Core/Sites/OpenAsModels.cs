@@ -86,9 +86,9 @@ public static class OpenAsCommands
     /// <summary><c>site open-as on|off SITE --yes --json</c>. <c>--yes</c> skips the CLI's question, which the tray asked before.</summary>
     public static string[] Set(string site, bool on, string bench) => ["site", "open-as", on ? "on" : "off", site, "--yes", "--json", "--bench-dir", bench];
 
-    public static string[] Users(string site, string? search, string bench) =>
+    public static string[] Users(string site, string? search, string bench, int limit = OpenAsRules.Limit) =>
         ["users", "--site", site, .. string.IsNullOrWhiteSpace(search) ? [] : new[] { "--search", search.Trim() },
-            "--limit", OpenAsRules.Limit.ToString(System.Globalization.CultureInfo.InvariantCulture), "--json", "--bench-dir", bench];
+            "--limit", limit.ToString(System.Globalization.CultureInfo.InvariantCulture), "--json", "--bench-dir", bench];
 
     /// <summary>
     /// <c>open --site SITE --as USER --json</c>: the CLI makes the session and opens the browser itself, so the sign in link never reaches
@@ -99,6 +99,9 @@ public static class OpenAsCommands
 
 public static class OpenAsJson
 {
+    /// <summary>The <c>opened</c> of <c>open --as --json</c>: the CLI opened the browser. The document never holds the sign in link.</summary>
+    public static bool Opened(JsonObject o) => JsonRead.Bool(o, "opened");
+
     public static SiteUserList ParseUsers(JsonObject o)
     {
         if (o["users"] is not JsonArray array) throw new FormatException("The document has no users list.");
@@ -133,7 +136,7 @@ public sealed class FindUserModel(ICliClient cli, string bench, string site)
     /// <summary>Opens the site in the browser signed in as <paramref name="user"/>. The answer is the CLI's: <c>opened</c> true, or its refusal as it words it.</summary>
     public async Task<bool> OpenAsync(SiteUser user, CancellationToken ct = default)
     {
-        var result = await cli.RunJsonAsync(OpenAsCommands.OpenAs(Site, user.Name, bench), OpenAsCommands.PersonEnvironment(), CliTimeouts.Plan, o => JsonRead.Bool(o, "opened"), ct).ConfigureAwait(true);
+        var result = await cli.RunJsonAsync(OpenAsCommands.OpenAs(Site, user.Name, bench), OpenAsCommands.PersonEnvironment(), CliTimeouts.Plan, OpenAsJson.Opened, ct).ConfigureAwait(true);
         var ok = result.Ok && result.Value;
         NoteIsError = !ok;
         Note = ok ? OpenAsRules.Opened(Site, user) : result.Error ?? $"{Site} could not be opened as {user.Title}.";

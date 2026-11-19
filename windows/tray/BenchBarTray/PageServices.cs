@@ -23,6 +23,9 @@ internal sealed class PageServices
     /// </summary>
     public Func<PlanReviewRequest, Task<PlanOutcome>> ReviewPlan { get; set; } = _ => Task.FromResult(PlanOutcome.None);
 
+    /// <summary>The users pinned in Quick Switch. In the app it saves to the config; here it lives in memory.</summary>
+    public OpenAsPins Pins { get; set; } = new();
+
     /// <summary>Asks a yes or no question (title, detail, the button that says yes); true only when the person confirmed. The default answer is no.</summary>
     public Func<string, string, string, bool> Confirm { get; set; } = (_, _, _) => false;
 
