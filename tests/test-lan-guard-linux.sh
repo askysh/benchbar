@@ -113,7 +113,7 @@ for p in "$FL_NFT" /usr/bin/systemctl /etc/benchbar/lan-guard.nft /etc/systemd/s
   assert_contains "$script" "$p" "(root names $p)"
 done
 for p in "$TMP_DIR" "$HOME" "${TMPDIR:-/tmp}/benchbar"; do
-  assert_not_contains "$(grep '^sudo /bin/bash' "$MOCK_LOG" | head -n1)" "$p" "(the first line of the root script names no user path)"
+  assert_not_contains "$(grep -m1 '^sudo /bin/bash' "$MOCK_LOG")" "$p" "(the first line of the root script names no user path)"
 done
 assert_eq "installed True" "$(jstat '" ".join(str(x) for x in (d["state"], d["active"]))')"
 
