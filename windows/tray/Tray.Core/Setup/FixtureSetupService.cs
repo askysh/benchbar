@@ -114,6 +114,15 @@ public sealed class FixtureSetupService(string directory) : ISetupService
         return new ProfileListResult(ProfileListJson.Parse(System.Text.Json.Nodes.JsonNode.Parse(text)!.AsObject()), null);
     }
 
+    public async Task<PrerequisiteResult> PrerequisitesAsync(string benchDir, CancellationToken ct)
+    {
+        Record("prerequisites");
+        var file = Path.Combine(directory, "cli", "prerequisites.json");
+        if (!File.Exists(file)) return new PrerequisiteResult(null, "The fixtures have no prerequisites.");
+        var text = await File.ReadAllTextAsync(file, ct).ConfigureAwait(false);
+        return new PrerequisiteResult(PrerequisiteReport.Parse(System.Text.Json.Nodes.JsonNode.Parse(text)!.AsObject()), null);
+    }
+
     /// <summary>The gate takes every profile, unless <c>setup/profile-gate-NAME.jsonl</c> holds the stream the CLI printed when it refused it.</summary>
     public async Task<ProfileGate> CheckProfileAsync(string profile, string benchDir, CancellationToken ct)
     {

@@ -147,6 +147,7 @@ run_fm profile list --json
 assert_eq "0" "$CODE" "$OUT"
 assert_eq "3.11 22 10.11" "$(printf '%s' "$OUT" | jget - '" ".join(next(p[k] for p in d["profiles"] if p["name"]=="v15-lts") for k in ("python","node","mariadb"))')"
 assert_eq "3.14 24 11.8" "$(printf '%s' "$OUT" | jget - '" ".join(next(p[k] for p in d["profiles"] if p["name"]=="v16-lts") for k in ("python","node","mariadb"))')"
+assert_eq "None None" "$(printf '%s' "$OUT" | jget - '" ".join(str(next(p[k] for p in d["profiles"] if p["name"]=="v16-lts")) for k in ("linux_supported","unsupported_reason"))')" "(the gate is the Linux install's: nothing to say on the Mac)"
 assert_eq "minimal common extended" "$(printf '%s' "$OUT" | jget - '" ".join(b["name"] for b in d["bundles"])')"
 assert_eq "True" "$(printf '%s' "$OUT" | jget - 'd["bundles"][0]["apps"] == ["erpnext"] and set(d["bundles"][0]) == {"name","label","apps","description"}')"
 mkdir -p "$HOME/.config/benchbar/profiles"

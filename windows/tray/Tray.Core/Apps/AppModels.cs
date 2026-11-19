@@ -155,6 +155,65 @@ public sealed record AppAddInput(string Source, string Branch = "", string Commi
     public string DisplayName => AppSource.DisplayName(TrimmedSource);
 }
 
+/// <summary>The apps of one Add App form (several in one plan): the check before the plan, the title and the plan's own lines.</summary>
+public static class AppAddBatch
+{
+    public const int MaxApps = 8;
+
+    /// <summary>The first problem of the form, naming the app when there are several; null when the plan can be asked for.</summary>
+    public static string? Problem(IReadOnlyList<AppAddInput> inputs)
+    {
+        if (inputs.Count == 0) return "Enter an app name or a git URL.";
+        for (var i = 0; i < inputs.Count; i++)
+        {
+            if (inputs[i].Problem is { } problem) return inputs.Count == 1 ? problem : $"App {i + 1}: {problem}";
+        }
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < inputs.Count; i++)
+        {
+            if (!seen.Add(inputs[i].DisplayName)) return $"App {i + 1}: {inputs[i].DisplayName} is listed twice.";
+        }
+        return null;
+    }
+
+    /// <summary>"Add acme_crm", "Add acme_crm and acme_hr", "Add 3 apps".</summary>
+    public static string Title(IReadOnlyList<AppAddInput> inputs) => inputs.Count switch
+    {
+        0 => "Add apps",
+        1 => "Add " + inputs[0].DisplayName,
+        2 => $"Add {inputs[0].DisplayName} and {inputs[1].DisplayName}",
+        _ => $"Add {inputs.Count} apps",
+    };
+
+    /// <summary>
+    /// One line per app of the plan the CLI made: "acme_crm: main at 9b1d2c4 (pinned), install on macdev". A plan for one app has no
+    /// <c>apps[]</c>; its fields are at the top. Fields the plan does not carry are left out.
+    /// </summary>
+    public static IReadOnlyList<string> PlanLines(PlanDocument plan)
+    {
+        var apps = plan.Raw["apps"] as System.Text.Json.Nodes.JsonArray;
+        var entries = apps is { Count: > 0 } ? apps.OfType<System.Text.Json.Nodes.JsonObject>().ToList() : [plan.Raw];
+        var lines = new List<string>();
+        foreach (var o in entries)
+        {
+            var name = JsonRead.Str(o, "app");
+            if (string.IsNullOrEmpty(name)) continue;
+            var parts = new List<string>();
+            if (JsonRead.Str(o, "branch") is { Length: > 0 } branch) parts.Add(branch);
+            if (JsonRead.Str(o, "commit") is { Length: >= 7 } commit)
+                parts.Add((parts.Count > 0 ? "at " : "") + commit[..7] + (JsonRead.Str(o, "commit_source") == "pin" ? " (pinned)" : ""));
+            var text = string.Join(' ', parts);
+            if (JsonRead.Bool(o, "present")) text += (text.Length > 0 ? ", " : "") + "already in the bench";
+            var on = o["install_on"] is System.Text.Json.Nodes.JsonArray ? JsonRead.Strings(o, "install_on") : [];
+            if (on.Count == 0 && entries.Count == 1 && o["sites"] is System.Text.Json.Nodes.JsonArray sites)
+                on = sites.OfType<System.Text.Json.Nodes.JsonObject>().Where(s => !JsonRead.Bool(s, "installed")).Select(s => JsonRead.Str(s, "name") ?? "").Where(n => n.Length > 0).ToList();
+            text += (text.Length > 0 ? ", " : "") + (on.Count > 0 ? "install on " + string.Join(", ", on) : "no site");
+            lines.Add($"{name}: {text}");
+        }
+        return lines;
+    }
+}
+
 public static class AppSource
 {
     public static bool IsUrl(string source)
@@ -184,15 +243,34 @@ public static class AppCommands
     public static string[] CheckRemotes(string bench) => ["app", "focus", "--fetch", "--json", "--bench-dir", bench];
 
     /// <summary>The base of the add plan; the plan sheet appends <c>--dry-run --json</c>, then <c>--apply TOKEN --yes --jsonl</c>.</summary>
-    public static string[] Add(AppAddInput input, string bench)
+    public static string[] Add(AppAddInput input, string bench) => AddMany([input], bench);
+
+    /// <summary>
+    /// Several apps in one plan: <c>app add A --branch B --commit C --install-on S,S  app add D ...</c>. An option belongs to the app before
+    /// it, so each app's options follow its own name (docs/reference/cli/app.md, "Several apps at once").
+    /// </summary>
+    public static string[] AddMany(IReadOnlyList<AppAddInput> inputs, string bench)
     {
-        var args = new List<string> { "app", "add", input.TrimmedSource };
-        if (input.Branch.Trim().Length > 0) args.AddRange(["--branch", input.Branch.Trim()]);
-        if (input.Commit.Trim().Length > 0) args.AddRange(["--commit", input.Commit.Trim()]);
-        if (input.InstallOn is { Count: > 0 } sites) args.AddRange(["--install-on", string.Join(',', sites)]);
+        var args = new List<string> { "app", "add" };
+        foreach (var input in inputs)
+        {
+            args.Add(input.TrimmedSource);
+            if (input.Branch.Trim().Length > 0) args.AddRange(["--branch", input.Branch.Trim()]);
+            if (input.Commit.Trim().Length > 0) args.AddRange(["--commit", input.Commit.Trim()]);
+            if (input.InstallOn is { Count: > 0 } sites) args.AddRange(["--install-on", string.Join(',', sites)]);
+        }
         args.AddRange(["--bench-dir", bench]);
         return [.. args];
     }
+
+    /// <summary>Finishes an unfinished <c>app add</c>: the same command with the app's name, whose plan lists the steps left.</summary>
+    public static string[] ResumeAdd(string app, string bench) => Add(new AppAddInput(app), bench);
+
+    /// <summary>The plan of a pending update: <c>app update NAME --dry-run --json</c>, then <c>app update NAME --yes --jsonl</c> (no token).</summary>
+    public static string[] ResumeUpdatePlan(string app, string bench) => UpdatePlan(app, bench);
+
+    /// <summary>Drops the record of an update or add that stopped part way, and stops. Text only: no <c>--json</c>.</summary>
+    public static string[] DiscardPending(string app, string bench) => ["app", "update", app, "--discard-pending", "--bench-dir", bench];
 
     public static string[] Install(string app, string site, string bench) => ["app", "install", app, "--site", site, "--yes", "--plain", "--bench-dir", bench];
 
