@@ -47,7 +47,10 @@ public class OpenAsSourceRulesTests
     public void ThePersonsEnvironmentGoesOnlyToTurningOpenAsOnAndToOpeningAsAUser()
     {
         if (CodeLines() is not { } code) return;
-        var uses = code.Where(l => l.Contains("PersonEnvironment()") && !l.Contains("public static")).Select(l => l.Split(':')[0]).Order().ToList();
+        // the Sharing tab has its own PersonEnvironment for its click-only actions (ShareModel.cs, its own rules
+        // and tests): this rule is about Open as
+        var uses = code.Where(l => l.Contains("PersonEnvironment()") && !l.Contains("public static") && !l.StartsWith("ShareModel.cs:"))
+            .Select(l => l.Split(':')[0]).Order().ToList();
         Assert.Equal(["OpenAsModels.cs", "SitesView.OpenAs.cs"], uses);
         // the search is a read: a typed letter must not claim that a person clicked
         Assert.DoesNotContain(code, l => l.Contains("OpenAsCommands.Users(") && l.Contains("PersonEnvironment"));
