@@ -73,13 +73,25 @@ public static class OpenAsRules
     public static string TurnedOff(string site) => $"Open as is off for {site}. Sign ins already made stay valid.";
 
     public static string Opened(string site, SiteUser user) => $"{site} opened in your browser as {user.Title}.";
+
+    /// <summary>
+    /// The CLI's sentence from what it wrote to stderr. <c>open</c> and <c>users</c> are not in the JSON modes, so a refusal prints nothing on
+    /// stdout and one <c>  [FAIL] message</c> line on stderr: the colour codes and the tag are dropped, the sentence stays as it is worded.
+    /// </summary>
+    public static string? CliSentence(string? stderr)
+    {
+        if (stderr is null) return null;
+        var text = System.Text.RegularExpressions.Regex.Replace(stderr, @"\x1b\[[0-9;]*m", "").Trim();
+        if (text.StartsWith("[FAIL]", StringComparison.Ordinal)) text = text["[FAIL]".Length..].Trim();
+        return text.Length == 0 ? null : text;
+    }
 }
 
 public static class OpenAsCommands
 {
     /// <summary>
-    /// The calls a person makes that the CLI refuses without a terminal (<c>site open-as on</c>, <c>open --as</c>, <c>users</c>): the click was
-    /// the person's decision, as the Mac's alert is. Never set for anything a poll, a link or an agent runs.
+    /// The calls a person makes that the CLI refuses without a terminal (<c>site open-as on</c>, <c>open --as</c>): the click or Enter was
+    /// the person's decision, as the Mac's alert is. Never set for anything a poll, a link, an agent or a read such as <c>users</c> runs.
     /// </summary>
     public static SecretEnvironment PersonEnvironment() => new SecretEnvironment().Set(SetupEnv.NonInteractive, "0").Set(SetupEnv.Sudo, "gui");
 
@@ -128,9 +140,9 @@ public sealed class FindUserModel(ICliClient cli, string bench, string site)
 
     public async Task SearchAsync(string? query, CancellationToken ct = default)
     {
-        var result = await cli.RunJsonAsync(OpenAsCommands.Users(Site, query, bench), OpenAsCommands.PersonEnvironment(), CliTimeouts.Read, OpenAsJson.ParseUsers, ct).ConfigureAwait(true);
+        var result = await cli.RunJsonAsync(OpenAsCommands.Users(Site, query, bench), null, CliTimeouts.Read, OpenAsJson.ParseUsers, ct).ConfigureAwait(true);
         List = result.Value ?? List;
-        Error = result.Value is null ? result.Error ?? "The users could not be read." : null;
+        Error = result.Value is null ? OpenAsRules.CliSentence(result.Error) ?? "The users could not be read." : null;
     }
 
     /// <summary>Opens the site in the browser signed in as <paramref name="user"/>. The answer is the CLI's: <c>opened</c> true, or its refusal as it words it.</summary>
@@ -139,7 +151,7 @@ public sealed class FindUserModel(ICliClient cli, string bench, string site)
         var result = await cli.RunJsonAsync(OpenAsCommands.OpenAs(Site, user.Name, bench), OpenAsCommands.PersonEnvironment(), CliTimeouts.Plan, OpenAsJson.Opened, ct).ConfigureAwait(true);
         var ok = result.Ok && result.Value;
         NoteIsError = !ok;
-        Note = ok ? OpenAsRules.Opened(Site, user) : result.Error ?? $"{Site} could not be opened as {user.Title}.";
+        Note = ok ? OpenAsRules.Opened(Site, user) : OpenAsRules.CliSentence(result.Error) ?? $"{Site} could not be opened as {user.Title}.";
         return ok;
     }
 }

@@ -77,13 +77,13 @@ public class SitesOpenAsViewTests
     {
         var failing = new PageKit();
         failing.Services.Confirm = (_, _, _) => true;
-        failing.Runner.On("site", "open-as").Print(Fixture("open-as-refused.jsonl")).Fail(1);
+        failing.Runner.On("site", "open-as").Print(Fixture("site-open-as-refused.jsonl")).Fail(1);
         var view = new SitesView(failing.Services);
         view.Bind(new BenchContext(WithOpenAs(new SiteOpenAs(false, true, false)), null));
         ClickMenu(view, "More actions for one.localhost", "Allow Open as...");
         Wait(view.Pending);
         Assert.True(view.MessageIsError);
-        Assert.Contains("not in developer mode", view.Message);
+        Assert.Contains("needs a person at a terminal", view.Message);
     });
 
     [Fact]
