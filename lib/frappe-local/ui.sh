@@ -179,11 +179,28 @@ fl_redact_url_v() {
 }
 fl_redact_url() { local r; fl_redact_url_v r "$1"; printf '%s' "$r"; }
 
+# fl_log_clock_v VAR: the time of day as HH:MM:SS. One date for the run: the
+# seconds since midnight when the first line was written, plus bash's SECONDS
+# (kept in a job too, which inherits both), so a line costs no process. A run
+# that crosses a change of the clock is off by that change; a log line is not
+# a clock.
+FL_LOG_CLOCK_BASE=""
+fl_log_clock_v() {
+  local h m s t
+  if [[ -z "$FL_LOG_CLOCK_BASE" ]]; then
+    IFS=: read -r h m s <<<"$(date '+%H:%M:%S')"
+    FL_LOG_CLOCK_BASE=$((10#$h * 3600 + 10#$m * 60 + 10#$s - SECONDS))
+  fi
+  t=$(((FL_LOG_CLOCK_BASE + SECONDS) % 86400))
+  printf -v "$1" '%02d:%02d:%02d' "$((t / 3600))" "$((t % 3600 / 60))" "$((t % 60))"
+}
+
 fl_log() {
   [[ -n "$FL_LOG_FILE" ]] || return 0
-  local msg="$*"
-  fl_redact_url_v msg "$msg"
-  printf '%s %s\n' "$(date '+%H:%M:%S')" "$msg" >>"$FL_LOG_FILE" 2>/dev/null || true
+  local msg now
+  fl_redact_url_v msg "$*"
+  fl_log_clock_v now
+  printf '%s %s\n' "$now" "$msg" >>"$FL_LOG_FILE" 2>/dev/null || true
 }
 
 # fl_log_file_append FILE: a command's captured output into the run log,

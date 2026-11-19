@@ -16,18 +16,35 @@
 #
 # Background jobs of one run (fl_par_*) are bounded by FL_DOCTOR_JOBS.
 
-FL_FACTS_DIR="${FL_FACTS_DIR:-}"
+# never taken from the environment: the folder is the run's own, and
+# fl_facts_end deletes it
+FL_FACTS_DIR=""
 FL_DOCTOR_JOBS="${FL_DOCTOR_JOBS:-6}"
 FL_PAR_PIDS=()
+# fd 9 is a fifo each job writes one line to when it ends: the run waits on it
+# for "any job ended" (bash 3.2 has no wait -n). Empty when there is none.
+FL_FACTS_WAKE=""
+# nonempty in a background job: it is already a group of its own
+FL_IN_JOB=""
 
 # fl_facts_begin: a fresh private folder for this run (none when mktemp cannot make one)
 fl_facts_begin() {
   fl_facts_end
   FL_FACTS_DIR="$(mktemp -d "${TMPDIR:-/tmp}/benchbar-facts.XXXXXX" 2>/dev/null)" || FL_FACTS_DIR=""
+  if [[ -n "$FL_FACTS_DIR" ]] && ! { true <&9; } 2>/dev/null && mkfifo "${FL_FACTS_DIR}/wake" 2>/dev/null; then
+    if exec 9<>"${FL_FACTS_DIR}/wake" 2>/dev/null; then FL_FACTS_WAKE=9; fi
+  fi
   return 0
 }
 
+# fl_facts_end: the run is over, or was cut short. Every job still running
+# (and the children of each, one group per job) gets TERM, then KILL after a
+# second, and is waited for, so nothing writes into the folder or outlives the
+# run; only then the folder goes. Quiet: bash's notices about killed jobs are
+# not printed.
 fl_facts_end() {
+  fl_par_stop
+  if [[ -n "$FL_FACTS_WAKE" ]]; then exec 9<&- 2>/dev/null || true; FL_FACTS_WAKE=""; fi
   [[ -z "$FL_FACTS_DIR" ]] || rm -rf "$FL_FACTS_DIR"
   FL_FACTS_DIR=""
   FL_PAR_PIDS=()
@@ -118,6 +135,39 @@ fl_par_wait_slot() {
 
 # fl_par_add PID: a started background job counts against the bound
 fl_par_add() { FL_PAR_PIDS+=("$1"); }
+
+# fl_par_group_on / fl_par_group_off: around "{ CMD & } 2>/dev/null" they make
+# the background job the leader of a process group of its own (bash 3.2 has
+# no setsid; a job started under job control gets one), so one kill of the
+# group reaches the job's children too (brew's ruby, tr, git). The group stays
+# after set +m. A job started inside a job is left in the job's group.
+fl_par_group_on() { [[ -n "$FL_IN_JOB" ]] || set -m; }
+fl_par_group_off() { [[ -n "$FL_IN_JOB" ]] || set +m; }
+
+# fl_par_stop: TERM to the group of every job of this run (and of the warming
+# of the apps' git), KILL to what is left after a second, and a wait for all
+# of them
+fl_par_stop() {
+  local pid any i=0 live=()
+  for pid in ${FL_PAR_PIDS[@]+"${FL_PAR_PIDS[@]}"} ${FL_WARM_PID:-}; do
+    # a group exists while any member lives; a pid that is gone is not signalled
+    if kill -0 "$pid" 2>/dev/null || kill -0 -- "-$pid" 2>/dev/null; then live+=("$pid"); fi
+  done
+  [[ "${#live[@]}" -gt 0 ]] || return 0
+  {
+    for pid in "${live[@]}"; do kill -TERM -- "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true; done
+    while [[ "$i" -lt 10 ]]; do
+      any=""
+      for pid in "${live[@]}"; do if kill -0 -- "-$pid" 2>/dev/null || kill -0 "$pid" 2>/dev/null; then any=1; fi; done
+      [[ -n "$any" ]] || break
+      sleep 0.1
+      i=$((i + 1))
+    done
+    for pid in "${live[@]}"; do kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true; done
+    for pid in "${live[@]}"; do wait "$pid" 2>/dev/null || true; done
+  } 2>/dev/null
+  return 0
+}
 
 # fl_par_free: forgets the jobs that ended; true when a slot is free. Never waits.
 fl_par_free() {

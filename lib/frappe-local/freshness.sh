@@ -69,7 +69,11 @@ fl_app_reference_branch() {
   b="$(fl_app_policy_branch "$app")"
   if [[ -z "$b" ]]; then
     remote="$(fl_app_remote "$app")"
-    [[ -n "$remote" ]] && b="$(fl_app_git "$app" symbolic-ref -q --short "refs/remotes/${remote}/HEAD" 2>/dev/null || true)"
+    if [[ -n "$remote" ]]; then
+      # the rows of the doctor run know it (HEAD of the remote is a symbolic ref); else git is asked
+      if fl__app_ref_v b "$app" "refs/remotes/${remote}/HEAD" sym; then b="${b#refs/remotes/}"
+      else b="$(fl_app_git "$app" symbolic-ref -q --short "refs/remotes/${remote}/HEAD" 2>/dev/null || true)"; fi
+    fi
     b="${b#"${remote}/"}"
   fi
   printf '%s' "$b"
@@ -172,12 +176,20 @@ fl_app_upstream() {
 # from 2011, a hotfix branch's commits), and those say nothing about how far
 # behind HEAD is: a release merged in is one step, not every commit in it.
 fl_app_behind() {
-  local app="$1" up remote branch ref n ct days=0
+  local app="$1" up remote branch ref n ct days=0 h hb
   up="$(fl_app_upstream "$app")"; [[ -n "$up" ]] || return 0
   remote="${up%% *}"; branch="${up#* }"
   ref="refs/remotes/${remote}/${branch}"
   # a ref that does not exist fails the count, so no separate rev-parse is asked
-  n="$(fl_app_git "$app" rev-list --count --first-parent "HEAD..${ref}" 2>/dev/null || true)"
+  # (in a doctor run the rows of for-each-ref say whether HEAD and the ref are one commit: 0 behind)
+  n=""
+  if fl__app_head_v h "$app" && fl__app_ref_v hb "$app" "$ref" oid; then
+    if [[ "${h#* }" == "$hb" ]]; then n=0; fi
+  elif fl__app_head_v h "$app" && fl__app_refs_v hb "$app"; then
+    # the ref is not among the refs (never fetched): the count fails, as git's would
+    return 0
+  fi
+  [[ -n "$n" ]] || n="$(fl_app_git "$app" rev-list --count --first-parent "HEAD..${ref}" 2>/dev/null || true)"
   [[ "$n" =~ ^[0-9]+$ ]] || return 0
   if [[ "$n" -gt 0 ]]; then
     ct="$(fl_app_git "$app" log --first-parent --format=%ct "HEAD..${ref}" 2>/dev/null)"; ct="${ct##*$'\n'}"
@@ -281,7 +293,9 @@ fl_facts_warm_apps() {
   FL_WARM_FULL=0
   case "$1" in *" dependency_behind "*|*" apps_behind "*) FL_WARM_FULL=1 ;; esac
   case "$1" in *" dependency_behind "*|*" apps_behind "*|*" app_branch_policy "*) ;; *) return 0 ;; esac
-  (
+  # a group of its own: a stop (facts.sh) reaches every git of it
+  fl_par_group_on
+  { (
     local app pids=() alive pid
     trap - EXIT ERR
     while IFS= read -r app; do
@@ -297,8 +311,9 @@ fl_facts_warm_apps() {
       pids+=("$!")
     done < <(fl_apps_all)
     wait
-  ) &
+  ) & } 2>/dev/null
   FL_WARM_PID="$!"
+  fl_par_group_off
 }
 
 # fl_facts_wait_warm: the checks that read the apps' git wait for the warming

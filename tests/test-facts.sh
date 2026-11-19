@@ -72,4 +72,67 @@ assert_eq "$(jget "$TMP_DIR/serial.json" 'd["summary"]')" "$(jget "$TMP_DIR/para
 left="$(find "${TMPDIR:-/tmp}" -maxdepth 1 -name 'benchbar-facts.*' -newer "$TMP_DIR/serial.json" 2>/dev/null | wc -l | tr -d ' ')"
 assert_eq "0" "$left"
 
+# ---- the folder of a run is the run's own: one named in the environment is never deleted
+mkdir -p "$TMP_DIR/not-mine"; : >"$TMP_DIR/not-mine/keep"
+out="$(FL_FACTS_DIR="$TMP_DIR/not-mine" bash -c '. "$1"; printf "[%s]" "$FL_FACTS_DIR"; fl_facts_begin; fl_facts_end' _ "$FACTS")"
+assert_eq "[]" "$out"
+[[ -f "$TMP_DIR/not-mine/keep" ]] || fail "a folder named in FL_FACTS_DIR was deleted"
+
+# ---- git config -l: a value after the key, whatever it holds (a branch named a=b)
+APPS="$ROOT/lib/frappe-local/apps.sh"
+mkdir -p "$TMP_DIR/cfgbench/apps/x"
+git -C "$TMP_DIR/cfgbench/apps/x" init -q
+git -C "$TMP_DIR/cfgbench/apps/x" config "branch.a=b.remote" "up=stream"
+git -C "$TMP_DIR/cfgbench/apps/x" config "branch.a=b.merge" "refs/heads/a=b"
+out="$(bash -c '
+  . "$1"; . "$2"
+  FL_BENCH_DIR="$3"
+  fl_facts_begin
+  fl_app_config_v r x "branch.a=b.remote"; fl_app_config_v m x "branch.a=b.merge"; fl_app_config_v none x "branch.a=b.nothing"
+  fl_facts_end
+  printf "%s|%s|[%s]" "$r" "$m" "$none"' _ "$FACTS" "$APPS" "$TMP_DIR/cfgbench")"
+assert_eq "up=stream|refs/heads/a=b|[]" "$out"
+
+# ---- a slot freed while the run waits for a slow check is refilled at once
+DOCTOR="$ROOT/lib/frappe-local/doctor.sh"
+out="$(bash -c '
+  . "$1"; . "$2"
+  D="$3"
+  FL_DOCTOR_JOBS=2
+  chk_a() { sleep 2; : >"$D/a.done"; }
+  chk_b() { :; }
+  chk_c() { if [[ -f "$D/a.done" ]]; then printf late; else printf early; fi >"$D/c.result"; }
+  fl_facts_begin
+  FL_DOC_PENDING="a b c"
+  fl_doctor_pump
+  fl_doctor_wait "${FL_DOC_PAR_PIDS[0]}"
+  fl_par_wait_all
+  fl_facts_end
+  cat "$D/c.result"' _ "$FACTS" "$DOCTOR" "$TMP_DIR")"
+assert_eq "early" "$out"
+
+# ---- stopped mid run: no folder, no child, nothing on stderr but benchbar's own line.
+# After 0.3, 0.8 and 1.5 s, and once a brew info is certainly under way ("brew":
+# the real pgrep; the mock one answers for every pattern).
+for t in 0.3 0.8 1.5 brew; do
+  rm -rf "$TMP_DIR/sigtmp"; mkdir -p "$TMP_DIR/sigtmp"
+  ( TMPDIR="$TMP_DIR/sigtmp" MOCK_BREW_SLEEP=7.37 FL_DOCTOR_JOBS=6 exec "$FM" doctor --json --bench-dir "$BENCH" >/dev/null 2>"$TMP_DIR/sig.err" ) &
+  pid=$!
+  if [[ "$t" == "brew" ]]; then
+    for _ in $(seq 1 150); do /usr/bin/pgrep -f 'sleep 7.37' >/dev/null 2>&1 && break; sleep 0.2; done
+    /usr/bin/pgrep -f 'sleep 7.37' >/dev/null 2>&1 || fail "no brew info was under way to stop"
+  else
+    sleep "$t"
+  fi
+  kill -TERM "$pid" 2>/dev/null || true
+  code=0; wait "$pid" 2>/dev/null || code=$?
+  assert_eq "143" "$code" "(stopped at ${t}s)"
+  left="$(find "$TMP_DIR/sigtmp" -maxdepth 1 -name 'benchbar-facts.*' | wc -l | tr -d ' ')"
+  assert_eq "0" "$left" "(a facts folder was left after a stop at ${t}s)"
+  kids="$(/usr/bin/pgrep -f 'sleep 7.37' | wc -l | tr -d ' ' || true)"
+  assert_eq "0" "$kids" "(a child outlived the run stopped at ${t}s)"
+  extra="$(grep -v -e '^$' -e 'stopped by SIG' "$TMP_DIR/sig.err" || true)"
+  assert_eq "" "$extra" "(stderr after a stop at ${t}s)"
+done
+
 printf 'test-facts: ok\n'

@@ -2,6 +2,8 @@
 # shellcheck source=tests/mocks/bin/_mocklib.sh
 . "${0%/*}/_mocklib.sh"
 mock_log "$@"
+# MOCK_BREW_SLEEP=N: a brew info that takes N seconds (a test that stops a run while its jobs are busy)
+[[ "${1:-}" == "info" && -n "${MOCK_BREW_SLEEP:-}" ]] && sleep "$MOCK_BREW_SLEEP"
 case "${1:-}" in
   --prefix) printf '%s\n' "${MOCK_BREW_PREFIX:?}" ;;
   --version) printf 'Homebrew 4.4.0\n' ;;
@@ -47,11 +49,23 @@ case "${1:-}" in
     # --json=v2 --formula F: the lifecycle fields from $MOCK_STATE/brew-info/F.json
     # when a test wrote one, else a formula that is neither deprecated nor disabled
     if [[ " $* " == *" --json=v2 "* ]]; then
-      f="${*: -1}"
-      # F.missing: brew knows no such formula (exit 1, nothing on stdout)
-      [[ -f "${MOCK_STATE:?}/brew-info/${f}.missing" ]] && { echo "Error: No available formula with the name \"$f\"." >&2; exit 1; }
-      if [[ -f "${MOCK_STATE:?}/brew-info/${f}.json" ]]; then cat "${MOCK_STATE}/brew-info/${f}.json"
-      else printf '{\n  "formulae": [\n    {\n      "name": "%s",\n      "deprecated": false,\n      "deprecation_date": null,\n      "disabled": false,\n      "disable_date": null\n    }\n  ],\n  "casks": []\n}\n' "$f"; fi
+      # one or more formulae, like brew: one JSON document with one entry each
+      names=(); for a in "${@:2}"; do [[ "$a" == -* ]] || names+=("$a"); done
+      # F.missing: brew knows no such formula (exit 1, nothing on stdout; one unknown fails the call)
+      for f in "${names[@]}"; do
+        [[ -f "${MOCK_STATE:?}/brew-info/${f}.missing" ]] && { echo "Error: No available formula with the name \"$f\"." >&2; exit 1; }
+      done
+      sep=""
+      printf '{\n  "formulae": ['
+      for f in "${names[@]}"; do
+        printf '%s' "$sep"; sep=","
+        # F.json: a test's own entry (the document of one formula, its entry lifted out), else not deprecated, not disabled
+        if [[ -f "${MOCK_STATE}/brew-info/${f}.json" ]]; then
+          e="$(cat "${MOCK_STATE}/brew-info/${f}.json")"; e="${e#*\"formulae\":}"; e="${e#*\[}"; e="${e%%\],*\"casks\"*}"
+          printf '%s' "$e"
+        else printf '\n    {\n      "name": "%s",\n      "deprecated": false,\n      "deprecation_date": null,\n      "disabled": false,\n      "disable_date": null\n    }' "$f"; fi
+      done
+      printf '\n  ],\n  "casks": []\n}\n'
     fi
     exit 0 ;;
   # self-update of a Homebrew CLI hands over to brew (the call is in MOCK_LOG)

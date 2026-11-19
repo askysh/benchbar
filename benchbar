@@ -1246,13 +1246,15 @@ cmd_doctor() {
   # doctor --unack CHECK: no report needed; under --json one small document
   if [[ -n "$OPT_UNACK" ]]; then fl_doctor_unack "$OPT_UNACK"; fl_doctor_ack_doc unack "$OPT_UNACK"; return 0; fi
   [[ "$OPT_QUICK" != "1" || -n "$OPT_ACK" ]] || FL_DOCTOR_QUICK=1
+  # the prerequisites ride in doctor --json only (see below): they run beside the checks
+  if [[ "$OPT_JSON" == "1" && "$OPT_FIX_HINTS" != "1" && -z "$OPT_ACK" ]]; then FL_DOCTOR_PREREQ=1; fi
   fl_doctor_run
   # doctor --ack CHECK: records the warning it is about, then stops
   if [[ -n "$OPT_ACK" ]]; then fl_doctor_ack "$OPT_ACK"; fl_doctor_ack_doc ack "$OPT_ACK"; return 0; fi
   fl_doctor_apply_acks
   # the prerequisites ride in doctor --json only: a plain doctor keeps its
   # promise of a fix line after every WARN and FAIL, and of exit 1 on a FAIL
-  [[ "$OPT_JSON" != "1" || "$OPT_FIX_HINTS" == "1" ]] || fl_prereq_run
+  [[ "$OPT_JSON" != "1" || "$OPT_FIX_HINTS" == "1" || "$FL_P_RAN" == "1" ]] || fl_prereq_run
   if [[ "$OPT_FIX_HINTS" == "1" ]]; then
     fl_doctor_print_fix_hints >&3
   elif [[ "$OPT_JSON" == "1" ]]; then

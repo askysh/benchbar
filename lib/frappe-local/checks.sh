@@ -108,13 +108,47 @@ fl_check_label() {
 
 chk__set() { CHK_STATUS="$1"; CHK_MSG="$2"; CHK_FIX="${3:-}"; CHK_ACTION="${4:-}"; }
 
-# fl_brew_has FORMULA: FORMULA is installed. One "brew list --formula
-# --versions" for every formula, kept for the doctor run (facts.sh), where the
-# check used to start brew once for each.
+# fl_brew_cellar_v VAR: Homebrew's Cellar folder (what "brew --prefix" says,
+# plus /Cellar, read from where the brew on PATH lives: no program), or
+# nothing when it is not there. brew's own answers about what is installed come
+# from the folders of the Cellar, so reading them is the same answer for the
+# time of one brew start.
+fl_brew_cellar_v() {
+  local __b __c=""
+  __b="$(command -v brew 2>/dev/null)" || __b=""
+  if [[ "$__b" == */bin/brew && -d "${__b%/bin/brew}/Cellar" ]]; then __c="${__b%/bin/brew}/Cellar"; fi
+  printf -v "$1" '%s' "$__c"
+}
+
+# fl_brew_has FORMULA: FORMULA is installed: a version folder in its Cellar
+# folder. Without a Cellar (a test's brew) one "brew list --formula
+# --versions" for every formula, kept for the doctor run (facts.sh).
 fl_brew_has() {
-  local list
+  local list cellar d
+  fl_brew_cellar_v cellar
+  if [[ -n "$cellar" ]]; then
+    for d in "${cellar}/${1}"/*/; do [[ -d "$d" ]] && return 0; done
+    return 1
+  fi
   fl_memo_v list brew-versions brew list --formula --versions || true
   [[ $'\n'"$list" == *$'\n'"$1 "* ]]
+}
+
+# fl_brew_on_request FORMULA: FORMULA was installed on request, not as a
+# dependency (brew list --installed-on-request): the receipt of its newest
+# version says so. Without a Cellar, brew's own list.
+fl_brew_on_request() {
+  local cellar d r="" receipt requested
+  fl_brew_cellar_v cellar
+  if [[ -n "$cellar" ]]; then
+    for d in "${cellar}/${1}"/*/INSTALL_RECEIPT.json; do [[ -f "$d" ]] && r="$d"; done
+    [[ -n "$r" ]] || return 1
+    IFS= read -r -d '' receipt <"$r" || true
+    [[ "$receipt" =~ \"installed_on_request\":[[:space:]]*true ]]
+    return
+  fi
+  fl_memo_v requested brew-on-request brew list --formula --installed-on-request || true
+  fl_has_line "$requested" "$1"
 }
 
 chk_brew() {
@@ -158,18 +192,12 @@ chk_brew() {
 chk_formula_dates() {
   local f days soon="" gone="" fix
   command -v brew >/dev/null 2>&1 || { chk__set ok "Homebrew is not installed; nothing to date"; return 0; }
-  local deprecated disabled dep_date dis_date unknown="" dates pids=() pid
-  # brew info takes a second or more for each formula: in a doctor run the three
-  # are asked side by side (facts.sh keeps the answers for the loop below)
-  if [[ -n "${FL_FACTS_DIR:-}" ]]; then
-    for f in "$FL_PYTHON_FORMULA" "$FL_NODE_FORMULA" "$FL_MARIADB_FORMULA"; do
-      ( trap - EXIT ERR; fl_memo_v dates "formula-dates:${f}" fl_brew_formula_dates "$f" ) &
-      pids+=("$!")
-    done
-    for pid in "${pids[@]}"; do wait "$pid" 2>/dev/null || true; done
-  fi
+  local deprecated disabled dep_date dis_date unknown="" dates rest
+  # one brew info for the three (a start of brew costs a third of a second or more)
+  fl_memo_v rest formula-dates fl_brew_formulae_dates "$FL_PYTHON_FORMULA" "$FL_NODE_FORMULA" "$FL_MARIADB_FORMULA" || true
   for f in "$FL_PYTHON_FORMULA" "$FL_NODE_FORMULA" "$FL_MARIADB_FORMULA"; do
-    fl_memo_v dates "formula-dates:${f}" fl_brew_formula_dates "$f" || true
+    dates="${rest%%$'\n'*}"
+    if [[ "$rest" == *$'\n'* ]]; then rest="${rest#*$'\n'}"; else rest=""; fi
     read -r deprecated disabled dep_date dis_date <<<"$dates"
     if [[ "$deprecated" == "missing" ]]; then unknown="${unknown}${unknown:+, }${f}"; continue; fi
     days="$(fl_formula_disable_days_from "$deprecated" "$disabled" "$dis_date")"
@@ -190,7 +218,7 @@ chk_formula_dates() {
 }
 
 chk_python_leaves() {
-  local py ver want requested
+  local py ver want
   py="$(fl_python_bin)"
   want="${FL_PYTHON_BIN_NAME#python}"
   if [[ ! -x "$py" ]]; then
@@ -204,8 +232,7 @@ chk_python_leaves() {
   esac
   # installed on request, not "a leaf": brew leaves hides a formula another
   # formula depends on (python@3.14 under pipx or uv) even when it was asked for
-  fl_memo_v requested brew-on-request brew list --formula --installed-on-request || true
-  if fl_has_line "$requested" "$FL_PYTHON_FORMULA"; then
+  if fl_brew_on_request "$FL_PYTHON_FORMULA"; then
     chk__set ok "${FL_PYTHON_FORMULA} ${ver} is user-installed (safe from brew autoremove)"
   else
     chk__set warn "${FL_PYTHON_FORMULA} is only a dependency; brew autoremove could delete it" "brew tab --installed-on-request ${FL_PYTHON_FORMULA}" python_leaves

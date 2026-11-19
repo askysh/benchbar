@@ -150,6 +150,50 @@ fl_brew_formula_dates() {
   printf '%s %s %s %s' "${deprecated:--}" "${disabled:--}" "${dep_date:--}" "${dis_date:--}"
 }
 
+# fl_brew_formulae_dates FORMULA...: fl_brew_formula_dates for each formula,
+# one line each, from ONE `brew info --json=v2 --formula F1 F2 F3` (brew takes
+# 0.3 s or more to start, whatever it is asked). The document is long (28 KB
+# for four formulae, and bash 3.2 matches patterns on a string in quadratic
+# time), so one grep cuts it to the five keys that matter, in order, and the
+# lines are read in bash. brew fails the whole call when it knows none of the
+# formulae (one removed from the tap), and a name it answers under another
+# one (an alias) is not found in the output: for any doubt each formula is
+# asked on its own, as before.
+fl_brew_formulae_dates() {
+  local f n="$#" args=("$@") i=-1 line key val out="" row
+  local r_dep=() r_dis=() r_depd=() r_disd=()
+  while IFS= read -r line; do
+    [[ "$line" =~ ^\"([a-z_]+)\":\ *(.*)$ ]] || continue
+    key="${BASH_REMATCH[1]}"; val="${BASH_REMATCH[2]}"
+    if [[ "$key" == "name" ]]; then
+      # the next formula asked for starts here; any other "name" is not a formula
+      if [[ "$((i + 1))" -lt "$n" && "$val" == "\"${args[$((i + 1))]}\"" ]]; then i=$((i + 1)); r_dep[i]="-"; r_dis[i]="-"; r_depd[i]="-"; r_disd[i]="-"; fi
+      continue
+    fi
+    [[ "$i" -ge 0 ]] || continue
+    # what the single call read with sed: the last field of that name in the formula
+    val="${val//\"/}"
+    case "$key" in
+      deprecated) r_dep[i]="${val:--}" ;;
+      disabled) r_dis[i]="${val:--}" ;;
+      deprecation_date) [[ "$val" =~ ^[0-9-]+$ ]] && r_depd[i]="$val" || r_depd[i]="-" ;;
+      disable_date) [[ "$val" =~ ^[0-9-]+$ ]] && r_disd[i]="$val" || r_disd[i]="-" ;;
+    esac
+  done < <(HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_ANALYTICS=1 brew info --json=v2 --formula "$@" 2>/dev/null | grep -oE '"(name|deprecated|disabled|deprecation_date|disable_date)": *("[^"]*"|[a-z]+)')
+  if [[ "$i" -ne "$((n - 1))" ]]; then
+    for f in "$@"; do out="${out}${out:+$'\n'}$(fl_brew_formula_dates "$f")"; done
+    printf '%s' "$out"
+    return 0
+  fi
+  i=0
+  while [[ "$i" -lt "$n" ]]; do
+    row="${r_dep[i]} ${r_dis[i]} ${r_depd[i]} ${r_disd[i]}"
+    out="${out}${out:+$'\n'}${row}"
+    i=$((i + 1))
+  done
+  printf '%s' "$out"
+}
+
 # fl_date_epoch YYYY-MM-DD: seconds since the epoch at midnight UTC of that
 # day (BSD date on macOS, GNU date elsewhere), nothing for a bad date.
 fl_date_epoch() {
