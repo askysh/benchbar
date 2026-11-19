@@ -250,14 +250,15 @@ assert_eq "False" "$(printf '%s' "$R" | jget - 'd["result"]["isError"]')" "$R"
 MID="$(printf '%s' "$R" | jget - 'd["result"]["structuredContent"]["op_id"]')"
 assert_eq "$MID" "$(printf '%s' "$R" | jget - 'd["result"]["structuredContent"]["result"]["op_id"]')" "(the op_id is at the top of the result and in the done line)"
 R="$(mcp "$(call 1 benchbar_op_status '{"op_id":"'"$MID"'"}')" "$(call 2 benchbar_op_status '{}')" "$(call 3 benchbar_op_status '{"op_id":"--help"}')" "$(call 4 benchbar_op_status '{"op_id":"op-1"}')" "$(call 5 benchbar_op_status '{"op_id":"op-20200101-000000-77"}')")"
-assert_eq "False done site backup" "$(printf '%s' "$R" | sed -n 1p | jget - 'str(d["result"]["isError"]) + " " + d["result"]["structuredContent"]["state"] + " " + d["result"]["structuredContent"]["command"]')" "$R"
-assert_contains "$(printf '%s' "$R" | sed -n 1p | jget - 'd["result"]["content"][0]["text"]')" "Data from the bench (operation records"
-assert_eq "True" "$(printf '%s' "$R" | sed -n 2p | jget - 'len(d["result"]["structuredContent"]["ops"]) >= 3')" "(without an op_id: the newest operations)"
-assert_eq "True True True" "$(printf '%s' "$R" | python3 -c '
+printf '%s' "$R" | python3 -c '
 import json, sys
 by = {json.loads(l)["id"]: json.loads(l) for l in sys.stdin.read().splitlines()}
 bad = lambda m: "error" in m or m["result"]["isError"]
-print(bad(by[3]), bad(by[4]), bad(by[5]))')" "(an option, a short id and an unknown id are errors)"
+one = by[1]["result"]
+assert not one["isError"] and one["structuredContent"]["state"] == "done" and one["structuredContent"]["command"] == "site backup", one
+assert one["content"][0]["text"].startswith("Data from the bench (operation records"), one["content"][0]["text"][:120]
+assert len(by[2]["result"]["structuredContent"]["ops"]) >= 3, by[2]   # without an op_id: the newest operations
+assert bad(by[3]) and bad(by[4]) and bad(by[5]), (by[3], by[4], by[5])   # an option, a short id and an unknown id' || fail "benchbar_op_status replies: $R"
 assert_eq "True" "$(mcp '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | jget - 'any(t["name"] == "benchbar_op_status" and t["annotations"]["readOnlyHint"] is True for t in d["result"]["tools"])')"
 assert_eq "True" "$(mcp '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | jget - 'all("background" in t["inputSchema"]["properties"] for t in d["result"]["tools"] if t["name"] in ("benchbar_app_add", "benchbar_site_restore")) and not any("background" in t["inputSchema"]["properties"] for t in d["result"]["tools"] if t["name"] in ("benchbar_site_add", "benchbar_up"))')"
 
