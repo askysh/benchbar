@@ -108,7 +108,7 @@ assert_eq "0" "$CODE" "$OUT"; at_least_one macos_n
 # pull request trigger, so ci.yml plans nothing for it. Guard that trigger.
 plan EVENT=pull_request FILES="install.ps1"
 assert_eq "0" "$CODE" "$OUT"; assert_eq "false" "$(val full)"; assert_eq "[]" "$(val linux_shards)"
-sed -n '/^  pull_request:/,/^permissions:/p' .github/workflows/release-windows.yml | grep -q '"install.ps1"' \
+grep -q '"install.ps1"' <<<"$(sed -n '/^  pull_request:/,/^permissions:/p' .github/workflows/release-windows.yml)" \
   || fail "release-windows.yml no longer runs on a pull request that changes install.ps1, and ci.yml plans nothing for it"
 # the app icon script is the app job's
 plan EVENT=pull_request FILES="scripts/app-icon.py"

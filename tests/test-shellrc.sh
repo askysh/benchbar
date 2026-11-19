@@ -39,7 +39,7 @@ grep -q '^export P=2$' "$rc" || fail "block content must be replaced"
 ! grep -q '^export P=1$' "$rc" || fail "old block content must be gone"
 grep -q '^export Z=9$' "$rc" || fail "content after the block must survive"
 assert_eq "current" "$(fl_rc_block_status "$rc" "$c2")"
-[[ -n "$(find "$FL_BACKUP_ROOT" -type f | head -n1)" ]] || fail "rc file must be backed up before a write"
+[[ -n "$(find "$FL_BACKUP_ROOT" -type f | awk 'NR==1')" ]] || fail "rc file must be backed up before a write"
 
 # ---- a symlinked rc file (a dotfiles repo): the write lands in the target,
 # the link stays a link, the target keeps its mode

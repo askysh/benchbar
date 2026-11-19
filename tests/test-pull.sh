@@ -167,8 +167,8 @@ assert_calls_contain '^rsync -a --partial --append-verify --info=progress2 -e ss
 assert_calls_contain '^python benchbar-frappe copy1 restore --mariadb-root-password [^ ]*/.benchbar/pulls/erp.example.com-20260925_020000/20260925_020000-erp_example_com-database.sql.gz --with-public-files [^ ]*-files.tar --with-private-files [^ ]*-private-files.tar$'
 assert_eq "rootpw" "$(cat "$MOCK_STATE/stdin-restore")" "(the root password reaches restore on stdin)"
 # the target did not exist: pull made it first, with the passwords on stdin
-n="$(grep -n '^bench new-site copy1 ' "$MOCK_LOG" | head -n1 | cut -d: -f1)"
-r="$(grep -n '^python benchbar-frappe copy1 restore' "$MOCK_LOG" | head -n1 | cut -d: -f1)"
+n="$(grep -m1 -n '^bench new-site copy1 ' "$MOCK_LOG" | cut -d: -f1)"
+r="$(grep -m1 -n '^python benchbar-frappe copy1 restore' "$MOCK_LOG" | cut -d: -f1)"
 [[ -n "$n" && -n "$r" && "$n" -lt "$r" ]] || fail "pull creates the site before the restore (${n} ${r})"$'\n'"$(cat "$MOCK_LOG")"
 assert_eq "rootpw" "$(sed -n 1p "$MOCK_STATE/stdin-new-site")" "(the root password reaches new-site on stdin)"
 assert_eq "adminpw" "$(sed -n 2p "$MOCK_STATE/stdin-new-site")" "(ADMIN_PASSWORD is the new site's Administrator password)"
@@ -207,8 +207,8 @@ assert_calls_not_contain '^rsync '
 reset_calls
 run_fm pull "$SRC" --as copy1 --skip-app hrms --replace --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
-b="$(grep -n '^bench --site copy1 backup --with-files$' "$MOCK_LOG" | head -n1 | cut -d: -f1)"
-r="$(grep -n '^python benchbar-frappe copy1 restore' "$MOCK_LOG" | head -n1 | cut -d: -f1)"
+b="$(grep -m1 -n '^bench --site copy1 backup --with-files$' "$MOCK_LOG" | cut -d: -f1)"
+r="$(grep -m1 -n '^python benchbar-frappe copy1 restore' "$MOCK_LOG" | cut -d: -f1)"
 [[ -n "$b" && -n "$r" && "$b" -lt "$r" ]] || fail "--replace backs the site up before the restore"
 assert_no_secrets "(replace)"
 
@@ -338,10 +338,10 @@ reset_calls
 run_fm pull --from-dir "$DL" --as livecopy --skip-app hrms --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
 assert_contains "$OUT" "Pause this bench's scheduler during the restore"
-q="$(grep -n 'set-config -g -p pause_scheduler 1$' "$MOCK_LOG" | head -n1 | cut -d: -f1)"
-r="$(grep -n 'benchbar-frappe livecopy restore' "$MOCK_LOG" | head -n1 | cut -d: -f1)"
-p="$(grep -n 'bench --site livecopy set-config -p pause_scheduler 1$' "$MOCK_LOG" | head -n1 | cut -d: -f1)"
-u="$(grep -n 'config remove-common-config pause_scheduler$' "$MOCK_LOG" | head -n1 | cut -d: -f1)"
+q="$(grep -m1 -n 'set-config -g -p pause_scheduler 1$' "$MOCK_LOG" | cut -d: -f1)"
+r="$(grep -m1 -n 'benchbar-frappe livecopy restore' "$MOCK_LOG" | cut -d: -f1)"
+p="$(grep -m1 -n 'bench --site livecopy set-config -p pause_scheduler 1$' "$MOCK_LOG" | cut -d: -f1)"
+u="$(grep -m1 -n 'config remove-common-config pause_scheduler$' "$MOCK_LOG" | cut -d: -f1)"
 [[ -n "$q" && -n "$r" && -n "$p" && -n "$u" && "$q" -lt "$r" && "$r" -lt "$p" && "$p" -lt "$u" ]] || fail "pause the bench, restore, pause the site, resume the bench (${q} ${r} ${p} ${u})"$'\n'"$(cat "$MOCK_LOG")"
 assert_eq "False" "$(python3 -c 'import json,sys; print("pause_scheduler" in json.load(open(sys.argv[1])))' "$BENCH/sites/common_site_config.json")"
 assert_eq "1" "$(conf_get livecopy pause_scheduler)"
@@ -373,7 +373,7 @@ run_fm pull --from-dir "$DL" --as nomig --skip-app hrms --no-migrate --dry-run -
 assert_eq "0" "$CODE" "$OUT"
 assert_not_contains "$OUT" "bench migrate"
 JOUT="$("$FM" pull --from-dir "$DL" --as nomig --skip-app hrms --no-migrate --dry-run --json --bench-dir "$BENCH" 2>/dev/null)" || fail "pull --dry-run --json"
-assert_eq "False True" "$(printf '%s\n' "$JOUT" | head -n1 | jget - 'str(d["migrate"]) + " " + str(d["create_site"])')"
+assert_eq "False True" "$(printf '%s\n' "${JOUT%%$'\n'*}" | jget - 'str(d["migrate"]) + " " + str(d["create_site"])')"
 reset_calls
 run_fm pull --from-dir "$DL" --as nomig --skip-app hrms --no-migrate --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
@@ -396,10 +396,10 @@ reset_calls
 export MY_API_TOKEN=tok1 DB_PASSWORD=pw1 KEEP_ME=kept
 MARIADB_ROOT_PASSWORD=rootpw ADMIN_PASSWORD=adminpw run_fm pull --from-dir "$DL" --as hooked --skip-app hrms --before-migrate "$HOOK" --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"
-r="$(grep -n 'benchbar-frappe hooked restore' "$MOCK_LOG" | head -n1 | cut -d: -f1)"
-p="$(grep -n 'bench --site hooked set-config -p pause_scheduler 1$' "$MOCK_LOG" | head -n1 | cut -d: -f1)"
-h="$(grep -n '^hook ran$' "$MOCK_LOG" | head -n1 | cut -d: -f1)"
-m="$(grep -n 'bench --site hooked migrate$' "$MOCK_LOG" | head -n1 | cut -d: -f1)"
+r="$(grep -m1 -n 'benchbar-frappe hooked restore' "$MOCK_LOG" | cut -d: -f1)"
+p="$(grep -m1 -n 'bench --site hooked set-config -p pause_scheduler 1$' "$MOCK_LOG" | cut -d: -f1)"
+h="$(grep -m1 -n '^hook ran$' "$MOCK_LOG" | cut -d: -f1)"
+m="$(grep -m1 -n 'bench --site hooked migrate$' "$MOCK_LOG" | cut -d: -f1)"
 [[ -n "$r" && -n "$p" && -n "$h" && -n "$m" && "$r" -lt "$p" && "$p" -lt "$h" && "$h" -lt "$m" ]] || fail "restore, dev safety, hook, migrate in order (${r} ${p} ${h} ${m})"$'\n'"$(cat "$MOCK_LOG")"
 grep -q "^cwd=$BENCH\$" "$MOCK_STATE/hook_env" || fail "the hook runs in the bench folder"
 grep -q '^BENCHBAR_SITE=hooked$' "$MOCK_STATE/hook_env" || fail "BENCHBAR_SITE"
@@ -421,7 +421,7 @@ assert_calls_not_contain 'hookfail clear-cache$'
 unset MY_API_TOKEN DB_PASSWORD KEEP_ME
 # the plan names the hook and the site it creates
 JOUT="$("$FM" pull --from-dir "$DL" --as hookplan --skip-app hrms --before-migrate "$HOOK" --dry-run --json --bench-dir "$BENCH" 2>/dev/null)" || fail "pull --dry-run --json"
-assert_eq "$HOOK True True" "$(printf '%s\n' "$JOUT" | head -n1 | jget - 'd["before_migrate"] + " " + str(d["migrate"]) + " " + str(d["create_site"])')"
+assert_eq "$HOOK True True" "$(printf '%s\n' "${JOUT%%$'\n'*}" | jget - 'd["before_migrate"] + " " + str(d["migrate"]) + " " + str(d["create_site"])')"
 assert_eq "devsite" "$(cat "$BENCH/sites/currentsite.txt")" "(the default site never moves)"
 
 printf 'test-pull: ok\n'

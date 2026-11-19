@@ -76,7 +76,7 @@ refused() {
   assert_contains "$(all)" "$msg"
 }
 # the only sudo calls are the password check up front (sudo -k, sudo -S -v); no command below runs anything as root
-no_root() { ! grep '^sudo ' "$MOCK_LOG" | grep -v -x -e 'sudo -k' -e 'sudo -S -p  -v' | grep -q . || fail "a command ran as root: $(grep '^sudo ' "$MOCK_LOG" | head -n3)"; }
+no_root() { ! grep '^sudo ' "$MOCK_LOG" | grep -v -x -e 'sudo -k' -e 'sudo -S -p  -v' >/dev/null || fail "a command ran as root: $(grep '^sudo ' "$MOCK_LOG" | awk 'NR<=3')"; }
 hosts_snap="$(cat "$FL_HOSTS_FILE")"
 no_hosts_edit() { assert_eq "$hosts_snap" "$(cat "$FL_HOSTS_FILE")" "(/etc/hosts is never edited on Linux)"; }
 

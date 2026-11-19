@@ -55,7 +55,7 @@ assert_eq "$before" "$(mtime_of "$target")" "(no rewrite when current)"
 # outdated apply backs up the old copy first
 fl_template_apply "$target" "$r3" 644
 assert_eq "1" "$FL_TEMPLATE_CHANGED"
-[[ -n "$(find "$FL_BACKUP_ROOT" -type f -name '*Procfile.lean' | head -n1)" ]] || fail "backup of the old Procfile.lean expected"
+[[ -n "$(find "$FL_BACKUP_ROOT" -type f -name '*Procfile.lean' | awk 'NR==1')" ]] || fail "backup of the old Procfile.lean expected"
 assert_eq "current" "$(fl_template_status "$target" "$r3")"
 
 # a user's own file is foreign and is backed up before replacement
