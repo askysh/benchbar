@@ -79,9 +79,13 @@ final class GuestRoomStore {
         var readPasteboard: () -> String?
         var now: () -> Date = Date.init
         var model: String = GuestRoomStore.hardwareModel()
+        /// The health loop's wait; tests pass one that returns at once.
+        var sleep: @Sendable (Duration) async -> Void = { try? await Task.sleep(for: $0, tolerance: $0 / 5) }
     }
 
     static let pingInterval: Duration = .seconds(10)
+    /// A room that does not answer is asked again after 20 s, 40 s and so on, never later than this.
+    nonisolated static let pingBackoffCap: Duration = .seconds(300)
     /// At most one nearby hello per room this often: the gateway allows 10 hellos a minute per
     /// address, shared with the join's own hello and the saved rooms' checks.
     static let helloSpacing: TimeInterval = 15
@@ -107,19 +111,43 @@ final class GuestRoomStore {
     private let deps: Dependencies
     private var forwarders: [String: any ForwarderRunning] = [:]
     /// A loopback forwarder is up for a joined room (the quit alert).
-    var hasRunningForwarder: Bool { forwarders.values.contains { $0.isRunning } }
+    var hasRunningForwarder: Bool { runningForwarderCount > 0 }
+    var runningForwarderCount: Int { forwarders.values.filter(\.isRunning).count }
 
-    /// The lan-rooms lab went off: every forwarder closes and browsing ends.
+    /// The lan-rooms lab went off: every forwarder closes, browsing ends and so does the health loop.
     func shutDown() {
+        paneVisible = false
+        stopHealthLoop()
         for forwarder in forwarders.values { forwarder.stop() }
         forwarders.removeAll()
         stopBrowsing(for: .popover)
         stopBrowsing(for: .pane)
     }
+
+    /// The pane is on screen: its rows show each room's health, so the rooms are asked.
+    func paneAppeared() {
+        paneVisible = true
+        startHealthLoop()
+    }
+
+    /// The pane went away: browsing ends, and so does the health loop unless a room is open in the
+    /// browser (its page shows "host gone" and "removed" from the same checks).
+    func paneDisappeared() {
+        paneVisible = false
+        stopBrowsing(for: .pane)
+        if !hasRunningForwarder { stopHealthLoop() }
+    }
     private var lastAttempt: Date?
     private var wrongInARow = 0
     private var lockedUntil: Date?
     private var pingTask: Task<Void, Never>?
+    /// The pane is on screen (set by `paneAppeared`); with a running forwarder it is what keeps the loop going.
+    var paneVisible = false
+    /// Consecutive rooms checks that got no answer, and when each room is due again.
+    private var pingFailures: [String: Int] = [:]
+    private var pingDue: [String: Date] = [:]
+    /// Why Open did nothing, per room id, until the next try.
+    private(set) var openFailed: [String: String] = [:]
     /// The saved room the join sheet is for, so its pin is used and never replaced (J19).
     private var rejoining: SavedRoom?
     /// Bumped by Cancel while joining: a join that resumes afterwards leaves the sheet closed.
@@ -451,8 +479,13 @@ final class GuestRoomStore {
         guard NetworkPanePresentation.canOpen(health[room.id]) else { return }
         let forwarder = forwarders[room.id] ?? deps.makeForwarder(room)
         forwarders[room.id] = forwarder
+        openFailed[room.id] = nil
         if !forwarder.isRunning {
-            do { try await forwarder.start() } catch { return }
+            do { try await forwarder.start() } catch {
+                forwarders[room.id] = nil
+                openFailed[room.id] = NetworkPanePresentation.openFailed(host: room.host)
+                return
+            }
             if room.localPort != forwarder.port {
                 var moved = room
                 moved.localPort = forwarder.port
@@ -480,7 +513,11 @@ final class GuestRoomStore {
         deps.rooms.forget(room)
         saved = deps.rooms.load()
         health[room.id] = nil
+        openFailed[room.id] = nil
+        pingFailures[room.id] = nil
+        pingDue[room.id] = nil
         if case .pickingSeat(let picking, _) = join, picking.id == room.id { join = .none }
+        if saved.isEmpty { stopHealthLoop() }
     }
 
     func forgetAll() async {
@@ -489,13 +526,18 @@ final class GuestRoomStore {
 
     // MARK: Health
 
+    var isHealthLooping: Bool { pingTask != nil }
+
+    /// Asks the rooms while the pane is on screen or a room is open in the browser; the loop ends
+    /// by itself when neither holds or no saved room can still be asked.
     func startHealthLoop() {
         guard pingTask == nil else { return }
-        pingTask = Task { [weak self] in
-            while !Task.isCancelled {
-                await self?.pingAll()
-                try? await Task.sleep(for: Self.pingInterval)
+        pingTask = Task { [weak self, sleep = deps.sleep] in
+            while !Task.isCancelled, let delay = await self?.healthTick() {
+                await sleep(delay)
             }
+            // ended by itself (not by stopHealthLoop, which may have started a newer loop since)
+            if !Task.isCancelled { self?.pingTask = nil }
         }
     }
 
@@ -504,28 +546,63 @@ final class GuestRoomStore {
         pingTask = nil
     }
 
+    var healthWanted: Bool { paneVisible || hasRunningForwarder }
+
+    /// Asks the rooms that are due, then says how long to wait for the next one; nil ends the loop
+    /// (nobody looks, or every saved room is removed, ended or has a changed key).
+    func healthTick() async -> Duration? {
+        guard healthWanted else { return nil }
+        let now = deps.now()
+        await pingRooms(saved.filter { NetworkPanePresentation.canOpen(health[$0.id]) && (pingDue[$0.id] ?? .distantPast) <= now })
+        let askable = saved.filter { NetworkPanePresentation.canOpen(health[$0.id]) }
+        guard healthWanted, let next = askable.map({ pingDue[$0.id] ?? now }).min() else { return nil }
+        return max(.seconds(1), .seconds(next.timeIntervalSince(deps.now()).rounded(.up)))
+    }
+
+    /// The wait after `failures` unanswered checks in a row: 10 s, then doubled up to the cap.
+    nonisolated static func pingDelay(failures: Int) -> Duration {
+        let seconds = Double(10) * pow(2, Double(min(max(failures, 0), 6)))
+        return min(.seconds(seconds), pingBackoffCap)
+    }
+
     /// One `GET /_benchbar/hello` per saved room, all at once so a silent room cannot hold up
     /// the others. A failure after a good hello is "host gone"; 403 not_paired is "removed" or
     /// "a new room"; a changed key is never connected to again.
     func pingAll() async {
-        await withTaskGroup(of: Void.self) { group in
-            for room in saved where NetworkPanePresentation.canOpen(health[room.id]) {
-                group.addTask { await self.ping(room) }
-            }
+        await pingRooms(saved.filter { NetworkPanePresentation.canOpen(health[$0.id]) })
+    }
+
+    private func pingRooms(_ rooms: [SavedRoom]) async {
+        let answered = await withTaskGroup(of: (String, Bool).self) { group in
+            for room in rooms { group.addTask { (room.id, await self.ping(room)) } }
+            var results: [String: Bool] = [:]
+            for await (id, ok) in group { results[id] = ok }
+            return results
+        }
+        let now = deps.now()
+        for (id, ok) in answered {
+            let failures = ok ? 0 : (pingFailures[id] ?? 0) + 1
+            pingFailures[id] = failures
+            let delay = Self.pingDelay(failures: failures)
+            pingDue[id] = now.addingTimeInterval(TimeInterval(delay.components.seconds))
         }
     }
 
-    private func ping(_ room: SavedRoom) async {
+    /// True when the host answered; false for no answer or a refusal (a refused room is no longer asked).
+    private func ping(_ room: SavedRoom) async -> Bool {
+        var answered = false
         do {
             let hello = try await withAPI(room) { api async throws(RoomAPIError) in try await api.hello() }
             health[room.id] = .ready(deadline: Date(timeIntervalSince1970: TimeInterval(hello.deadline_epoch)))
             forwarders[room.id]?.show(nil)
+            answered = true
         } catch .removed {
             set(await sameRoom(room) ? .removed : .newRoom, for: room)
         } catch {
             note(error, for: room)
         }
         if forwarders[room.id]?.stopIfIdle() == true { forwarders[room.id] = nil }
+        return answered
     }
 
     /// not_paired means removed, or a new room after a restart; only the pre-auth salt
@@ -634,5 +711,7 @@ extension GuestRoomStore.Dependencies {
 /// Keychain identity.
 @Observable @MainActor
 final class GuestSlot {
+    /// The one slot of the running app, so Settings can ask what the lab being turned off would close.
+    static let shared = GuestSlot()
     var store: GuestRoomStore?
 }

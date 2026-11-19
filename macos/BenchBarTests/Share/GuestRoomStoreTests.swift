@@ -17,6 +17,7 @@ nonisolated final class ScriptedTransport: RoomTransport, @unchecked Sendable {
 
     func set(_ path: String, _ status: Int, _ body: String) { lock.withLock { table[path] = (status, body) } }
     func remove(_ path: String) { lock.withLock { _ = table.removeValue(forKey: path) } }
+    func clearCalls() { lock.withLock { _calls.removeAll() } }
 
     func send(_ method: String, _ path: String, body: Data?) async throws(RoomConnectionError) -> RoomResponse {
         let answer = lock.withLock { () -> (Int, String)? in
@@ -72,7 +73,16 @@ nonisolated final class FakeForwarder: ForwarderRunning, @unchecked Sendable {
     var shown: ForwarderPage? { lock.withLock { _shown } }
     var isRunning: Bool { lock.withLock { running } }
     let port: UInt16 = 41234
-    func start() async throws { lock.withLock { running = true } }
+    struct StartFailed: Error {}
+    private var _failStart = false
+    var failStart: Bool {
+        get { lock.withLock { _failStart } }
+        set { lock.withLock { _failStart = newValue } }
+    }
+    func start() async throws {
+        if failStart { throw StartFailed() }
+        lock.withLock { running = true }
+    }
     func stop() { lock.withLock { running = false } }
     func show(_ page: ForwarderPage?) { lock.withLock { _shown = page } }
     func signInURL(next: String) -> URL? { URL(string: "http://standup-1a2b3c4d.localhost:41234/_benchbar/signin?next=\(next)") }
@@ -408,6 +418,120 @@ private final class Harness {
         #expect(h.transport.calls.contains("POST /_benchbar/leave"))
         #expect(h.store.saved.isEmpty)
         #expect(SavedRoomsStore(defaults: h.defaults).load().isEmpty)
+    }
+
+    // MARK: the health loop (UI-1)
+
+    @Test func theHealthLoopEndsWhenNobodyLooksAndNoRoomIsOpen() async {
+        let h = Harness()
+        await h.store.submit(code: "482913", for: Harness.room)
+        h.store.paneVisible = true
+        #expect(await h.store.healthTick() != nil)
+        h.store.paneVisible = false
+        #expect(await h.store.healthTick() == nil)
+        // a room open in the browser still needs its page kept right
+        await h.store.open(h.store.saved[0])
+        h.store.stopHealthLoop()
+        #expect(await h.store.healthTick() != nil)
+    }
+
+    @Test func leavingThePaneStopsTheLoopUnlessARoomIsOpen() async {
+        let h = Harness()
+        await h.store.submit(code: "482913", for: Harness.room)
+        h.store.paneAppeared()
+        #expect(h.store.isHealthLooping)
+        h.store.paneDisappeared()
+        #expect(!h.store.isHealthLooping)
+        await h.store.open(h.store.saved[0])
+        h.store.paneAppeared()
+        h.store.paneDisappeared()
+        #expect(h.store.isHealthLooping)
+        h.store.shutDown()
+        #expect(!h.store.isHealthLooping)
+        #expect(await h.store.healthTick() == nil)
+    }
+
+    @Test func aForgottenOrRemovedRoomIsNotAskedAgain() async {
+        let h = Harness()
+        await h.store.submit(code: "482913", for: Harness.room)
+        let room = h.store.saved[0]
+        h.store.paneVisible = true
+        h.transport.set("/_benchbar/hello", 403, #"{"error":"not_paired"}"#)
+        h.transport.set("/room/hello", 200, Harness.roomHello(salt: String(repeating: "00", count: 16)))
+        // the one saved room answers "removed": nothing is left to ask, so the loop ends
+        #expect(await h.store.healthTick() == nil)
+        #expect(h.store.health[room.id] == .removed)
+        h.transport.clearCalls()
+        #expect(await h.store.healthTick() == nil)
+        #expect(!h.transport.calls.contains("GET /_benchbar/hello"))
+        await h.store.forget(room)
+        #expect(!h.store.isHealthLooping)
+    }
+
+    @Test func aRoomThatDoesNotAnswerIsAskedLessOften() async {
+        let h = Harness()
+        await h.store.submit(code: "482913", for: Harness.room)
+        h.store.paneVisible = true
+        #expect(await h.store.healthTick() == .seconds(10))
+        h.transport.remove("/_benchbar/hello")
+        var delays: [Duration] = []
+        for _ in 0..<8 {
+            h.now = h.now.addingTimeInterval(400)
+            if let delay = await h.store.healthTick() { delays.append(delay) }
+        }
+        #expect(delays == [.seconds(20), .seconds(40), .seconds(80), .seconds(160), .seconds(300), .seconds(300), .seconds(300), .seconds(300)])
+        // not due yet: no dial at all
+        h.transport.clearCalls()
+        _ = await h.store.healthTick()
+        #expect(h.transport.calls.isEmpty)
+        // an answer brings the room back to the base interval
+        h.transport.set("/_benchbar/hello", 200, #"{"ok":true,"protocol":3,"device":"d_1","user_label":null,"deadline_epoch":1800003600,"label":"Priya","site_label":"macdev"}"#)
+        h.now = h.now.addingTimeInterval(400)
+        #expect(await h.store.healthTick() == .seconds(10))
+    }
+
+    @Test func theBackoffIsDoubledUpToAFiveMinuteCap() {
+        #expect([0, 1, 2, 3, 4, 5, 9].map { GuestRoomStore.pingDelay(failures: $0) }
+            == [.seconds(10), .seconds(20), .seconds(40), .seconds(80), .seconds(160), .seconds(300), .seconds(300)])
+    }
+
+    // MARK: Open and Forget (UI-3)
+
+    @Test func openSaysWhyItDidNothingWhenTheForwarderCannotStart() async {
+        let h = Harness()
+        await h.store.submit(code: "482913", for: Harness.room)
+        let room = h.store.saved[0]
+        h.forwarder.failStart = true
+        await h.store.open(room)
+        #expect(h.opened.isEmpty)
+        #expect(h.store.openFailed[room.id] == NetworkPanePresentation.openFailed(host: "Priya"))
+        h.forwarder.failStart = false
+        await h.store.open(room)
+        #expect(h.store.openFailed[room.id] == nil)
+        #expect(h.opened.count == 1)
+        h.store.stopHealthLoop()
+    }
+
+    @Test func forgetAsksWhatIsLostAndASeatReplacementNeedsANewCode() {
+        let room = SavedRoom(hostFingerprint: Fingerprint.prefix + String(repeating: "ab", count: 32), deviceId: "d_1", room: "Standup", host: "Priya",
+                             site: "macdev", serviceName: "x", lastHost: "", port: 0, localPort: nil, joinedAt: Date(), salt: nil)
+        let plain = NetworkPanePresentation.forgetConfirm(room, identityChanged: false)
+        #expect(plain.message == "Forget Standup?" && plain.button == "Forget")
+        #expect(plain.detail.contains("signs out of the room and its seat") && plain.detail.contains("host's key") && plain.detail.contains("new code or invite"))
+        let changed = NetworkPanePresentation.forgetConfirm(room, identityChanged: true)
+        #expect(changed.message == "Remove Standup and join again?" && changed.button == "Remove")
+    }
+
+    @Test func turningTheLabOffAsksOnlyWhileSomethingIsLive() {
+        #expect(SharePresentation.labOffConfirm(hosted: 0, online: 0, joined: 0) == nil)
+        let hosting = SharePresentation.labOffConfirm(hosted: 1, online: 2, joined: 0)
+        #expect(hosting?.detail.contains("2 people are connected and will be signed out") == true)
+        #expect(hosting?.detail.contains("room code stops working") == true)
+        #expect(SharePresentation.labOffConfirm(hosted: 1, online: 1, joined: 0)?.detail.contains("1 person is connected") == true)
+        #expect(SharePresentation.labOffConfirm(hosted: 1, online: 0, joined: 0)?.detail.contains("Nobody is connected") == true)
+        let guest = SharePresentation.labOffConfirm(hosted: 0, online: 0, joined: 2)
+        #expect(guest?.detail.contains("2 rooms you opened close") == true)
+        #expect(guest?.detail.contains("signed out") == false)
     }
 
     @Test func aDeepLinkOpensOnlyASavedRoom() async {

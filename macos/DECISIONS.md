@@ -586,3 +586,10 @@ Asked for after the phases, to stop naming drift before the first release.
 
 - Labs toggles live in Settings and read the CLI's LABS key; the app never stores the flags itself, so the CLI, MCP and app agree. `Labs.shared` refreshes at launch, when Settings appears and when the window becomes key (at most every 5 s); turning one on passes `--yes` with BENCHBAR_NONINTERACTIVE=0 and BENCHBAR_SUDO=gui, as `site open-as on` does. A non zero exit from `labs list` is read as a CLI without the command.
 - When the lan-rooms lab reads off, `ShareCenter.tearDown` stops watching and drops the stores but keeps `shareActiveBenches`: only the CLI's `labs off` really stops shares, so a refresh that reports off must not forget which benches were sharing.
+
+## Rooms UI (0.9.0)
+
+- The guest health loop is `GuestRoomStore.healthTick()` (pure steps, tested) and runs only while the pane is visible or a loopback forwarder is open; it ends when no saved room can still be asked. A room that does not answer is asked after 20 s, 40 s and so on up to 5 minutes (`pingDelay`), and an answer resets it. Turning the lab off calls `shutDown()`, which now stops the loop as well.
+- The room code is hidden by default, shown once after Start sharing and New code, and hidden again when the tab goes away (`codeRevealed` is view state, never stored). Copy and Copy invite are unchanged and work while it is hidden.
+- `setup_interrupted` makes the primary button `Finish setup` (the setup sheet in refresh mode), because `share setup` without `--refresh` and `share start` both refuse while it is set.
+- The lab off question is asked in Settings only for lan-rooms and only while a share is on or a joined room's forwarder is open (`SharePresentation.labOffConfirm`); the CLI's `labs off` itself stays unprompted.
