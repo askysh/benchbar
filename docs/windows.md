@@ -659,7 +659,8 @@ stay as they are.
 - `benchbar.exe self-update --check` only looks: the version you have, the
   newest release and the CLI in WSL. `--json` gives the same as JSON.
 - `--yes` does not ask. `--version X.Y.Z` installs that release, also an
-  older one.
+  older one, or a release candidate (`0.9.0-rc.1`), which the check and a
+  plain `self-update` never offer.
 - With no distro set up yet, the CLI part is skipped: the setup installs it.
 - BenchBar from the Microsoft Store is updated by the Store, and
   `self-update` changes nothing there.
