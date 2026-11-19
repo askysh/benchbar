@@ -48,13 +48,18 @@ benchbar self-update [--check] [--json] [--dry-run] [--yes]
 Updates the benchbar CLI and the BenchBar app with the one line
 installer (the app's Update Now ran the same command up to 0.7.0; since
 0.7.1 it asks Sparkle). With BenchBar.app installed, `benchbar` hands
-off to the app's CLI, so the app's case below applies. For release 0.7.2:
-`curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/askysh/benchbar/v0.7.2/install.sh | bash -s -- --yes --version v0.7.2`.
+off to the app's CLI, so the app's case below applies.
 It asks the GitHub API for the latest release, shows this CLI's and the
 app's versions and the command, and asks before it runs. The installer
 comes from that release's tag and installs that release, even if a newer
-one is published while you read the prompt. It changes no
-bench and never runs `bench update`.
+one is published while you read the prompt. It is downloaded to a
+temporary file and run only when its sha256 equals the line for
+`install.sh` in that release's `SHA256SUMS`; a release whose sums do not
+list it is refused. A CLI that the installer manages is then checked out
+at the release's tag (`git fetch --tags`, `git checkout vX.Y.Z`): the
+installer pins only the app on a Mac. The addresses are fixed:
+`BENCHBAR_API` and `BENCHBAR_INSTALLER_URL` are read only by the tests
+(`FL_TESTING=1`). It changes no bench and never runs `bench update`.
 
 A CLI that is a git checkout of your own (not `~/.local/share/benchbar`)
 gets `--app-only` and the `git -C PATH pull` to run; a CLI installed

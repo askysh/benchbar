@@ -34,7 +34,7 @@ func installerURL() string {
 // that run it name bash explicitly. A release build passes --version, so
 // install.sh checks out that release of the CLI too.
 func installerPipe() string {
-	line := "set -o pipefail; curl -fsSL " + installerURL() + " | bash"
+	line := "set -o pipefail; curl --proto '=https' --tlsv1.2 -fsSL " + installerURL() + " | bash"
 	if releaseRE.MatchString(version) {
 		line += " -s -- --version v" + version
 	}

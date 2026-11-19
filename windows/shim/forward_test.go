@@ -135,7 +135,7 @@ func TestForwardExit127Message(t *testing.T) {
 		t.Errorf("exit %d, want 1", code)
 	}
 	want := `benchbar.exe: benchbar was not found in WSL distro "Ubuntu-24.04". fix: install it inside the distro: ` +
-		`wsl.exe -d Ubuntu-24.04 -- bash -c "set -o pipefail; curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash"` + "\n"
+		`wsl.exe -d Ubuntu-24.04 -- bash -c "set -o pipefail; curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash"` + "\n"
 	if e.stderr() != want {
 		t.Errorf("stderr\n got %q\nwant %q", e.stderr(), want)
 	}

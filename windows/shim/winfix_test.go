@@ -628,7 +628,7 @@ func TestInstallerPipeFailsWhenTheDownloadFails(t *testing.T) {
 			t.Errorf("%s: a 404 must be exit 22, got %v", v, err)
 		}
 	}
-	if !strings.HasPrefix(installerPipe(), "set -o pipefail; curl -fsSL ") {
+	if !strings.HasPrefix(installerPipe(), "set -o pipefail; curl --proto '=https' --tlsv1.2 -fsSL ") {
 		t.Errorf("%q", installerPipe())
 	}
 }
