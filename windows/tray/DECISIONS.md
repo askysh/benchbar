@@ -109,6 +109,12 @@ One line per non obvious choice. The 0.8.0 spike that chose WPF over WinUI was d
   commit into a release. `draft_release` defaults to off: an artifact only dispatch builds the dispatched ref and is never signed. The
   package job has `contents: read` and `actions: read` (SignPath's action downloads the unsigned artifact with the GitHub token); only the
   release job has `contents: write`, and it runs on ubuntu so the long wait is cheap.
+- No release step signs anything (2026-11-19, issue 135). The SignPath steps, the `SIGNPATH_*` secret checks, the 360 minute timeout, the
+  `actions: read` grant and the `SIGNING_REQUIRED` gate left `release-windows.yml`, because SignPath Foundation declined the project and
+  nothing could ever run them. `Get-AuthenticodeSignature` stays: the package job records it per file in `signing-ARCH.json` and README.txt
+  and the release notes quote it, so a download says what is unsigned. A future signing route comes back as its own job.
+- The README and the release notes list what `Get-AuthenticodeSignature` says about every `.exe` and `.dll` in the zip, read after the swap: third party DLLs (H.NotifyIcon) show as not signed by this project, Microsoft's as signed. "Every file is signed" is written only when it is true.
+- A run that attaches to a release checks out `refs/tags/vX.Y.Z` and fails when the tag is missing, so a manual run can never put the wrong commit into a release. `draft_release` defaults to off: an artifact only dispatch builds the dispatched ref. The package job has only `contents: read`; only the release job has `contents: write`, and it runs on ubuntu so the wait for the Mac draft is cheap.
 - Every exe's PE machine type (0x8664, 0xAA64) is checked before packing, so an amd64 build cannot land in the Arm64 zip.
 - The workflow skips the tray with a warning when `windows/tray/BenchBarTray` is missing on the checked out ref, so it does not depend on the order the tray and release pull requests merge.
 - `workflow_dispatch` works only once the file is on main, so pull requests that change the workflow or `install.ps1` build both zips and run the installer on windows-latest (PowerShell 7, then Windows PowerShell 5.1 as an update, plus a refused bad checksum) without touching releases.
@@ -128,6 +134,11 @@ One line per non obvious choice. The 0.8.0 spike that chose WPF over WinUI was d
   installs a zip downloaded by hand. Every file is checked against the zip's own SHA256SUMS, and a program file the list does not name is
   refused; that finds a damaged or half unpacked download, not a swapped one, so a checksums file next to a `-Zip` is checked as well when
   present and its absence is a warning. The signing steps stay in the workflow and run only once the SignPath secrets exist.
+- Test builds go to testers by hand before any release, unsigned (Akash, 2026-10-29: no signing yet). Each zip carries `install.ps1`; run
+  from the unpacked zip (benchbar.exe and SHA256SUMS beside it, no `-Version`, `-Zip` or `-Source`) it installs that folder, and `-Zip PATH`
+  installs a zip downloaded by hand. Every file is checked against the zip's own SHA256SUMS, and a program file the list does not name is
+  refused; that finds a damaged or half unpacked download, not a swapped one, so a checksums file next to a `-Zip` is checked as well when
+  present and its absence is a warning. The workflow has no signing step.
 - The wizard state is a plain model in `Tray.Core` (`WizardModel`) that the views only draw. Pages are built once and then refreshed, so a poll or log line never takes the caret out of a field.
 - Passwords are `Secret`s (`SecureString`). They are read back only to fill the environment of the one child process, hidden in anything the child prints back, and never put in arguments, config or logs.
 - The tray never runs `reboot` through the shim. It confirms, writes a one-shot Startup shortcut (`--resume-setup`, deleted when the tray starts with it) and runs `shutdown /r /t 15`, so `shutdown /a` still aborts it.
