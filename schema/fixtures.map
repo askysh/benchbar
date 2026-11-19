@@ -1,0 +1,55 @@
+# Which definition of schema/benchbar.schema.json each recorded fixture must fit.
+# tests/test-json-schema.sh checks every row; a fixture in no row fails the test, so a new
+# one has to be placed here. The first row that matches a file wins.
+#
+#   PATTERN  DEFINITION    the file (a .jsonl one line at a time) fits the definition
+#   PATTERN  !DEFINITION   it must NOT fit (an unknown state, a newer schema_version: the readers refuse it)
+#   PATTERN  -             not a document of the CLI (a note says what it is)
+#
+# "document" is the envelope alone (schema_version 1): the documents with no definition of
+# their own yet. Moving a row to its own definition is how the schema grows.
+
+# not a CLI document
+macos/BenchBarTests/Fixtures/github-release-latest.json  -   # the GitHub API, read by the updater
+macos/BenchBarTests/Fixtures/share-vectors.json          -   # test vectors of the room protocol
+windows/tray/fixtures/setup/**                           -   # the Windows shim's own stream (windows/shim), not the CLI's
+windows/tray/fixtures/cli/open-as-refused.stderr.txt     -
+windows/tray/fixtures/cli/ports-apply.txt                -
+windows/tray/fixtures/cli/refusal.jsonl                  streamLine
+
+# readers must refuse these
+macos/BenchBarTests/Fixtures/status-future.json   !status   # a state this build does not know
+macos/BenchBarTests/Fixtures/status-schema2.json  !status   # schema_version 2
+
+# Mac app
+macos/BenchBarTests/Fixtures/status-*.json        status
+macos/BenchBarTests/Fixtures/state-runner.json    stateFile
+macos/BenchBarTests/Fixtures/list*.json           list
+macos/BenchBarTests/Fixtures/doctor-prerequisites*.json  doctorPrerequisites
+macos/BenchBarTests/Fixtures/doctor*.json         doctor
+macos/BenchBarTests/Fixtures/app-list*.json       appList
+macos/BenchBarTests/Fixtures/profile-list*.json   profileList
+macos/BenchBarTests/Fixtures/site-backups.json    siteBackups
+macos/BenchBarTests/Fixtures/site-backup.json     siteBackup
+macos/BenchBarTests/Fixtures/report.json          report
+macos/BenchBarTests/Fixtures/*.jsonl              streamLine
+macos/BenchBarTests/Fixtures/*.json               document
+
+# Windows tray
+windows/tray/fixtures/cli/health-doctor.json      !doctor   # one check has a level this build does not know
+windows/tray/fixtures/*/status*.json              status
+windows/tray/fixtures/*/list.json                 list
+windows/tray/fixtures/cli/status-*.json           status
+windows/tray/fixtures/cli/scan-list*.json         list
+windows/tray/fixtures/cli/apps-list*.json         appList
+windows/tray/fixtures/cli/apps-focus.json         appFocus
+windows/tray/fixtures/cli/health-doctor*.json     doctor
+windows/tray/fixtures/cli/labs-list.json          labsList
+windows/tray/fixtures/cli/logs-*.json             logs
+windows/tray/fixtures/cli/ports-check-*.json      portsCheck
+windows/tray/fixtures/cli/profile-list*.json      profileList
+windows/tray/fixtures/cli/sites-backups*.json     siteBackups
+windows/tray/fixtures/cli/sites-backup.json       siteBackup
+windows/tray/fixtures/cli/*.jsonl                 streamLine
+windows/tray/fixtures/cli/*.json                  document
+windows/tray/fixtures/recorded*/*.json            document

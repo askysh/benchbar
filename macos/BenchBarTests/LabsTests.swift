@@ -30,6 +30,18 @@ nonisolated final class FakeLabsBackend: @unchecked Sendable {
 
 @MainActor
 @Suite struct LabsTests {
+    /// The done fields as the CLI prints them (docs/json-schema.md): `changed` and `next_actions` are lists of objects.
+    @Test func doneLineReadsTheDoneFieldsTheCLIPrints() {
+        let stdout = """
+        {"schema_version":1,"cli_version":"0.9.0","lab":"lan-rooms","enabled":true,"exit":0,"changed":[{"kind":"state","name":"lan-rooms","detail":"on"}],"warnings":["w"],"next_actions":[{"command":"benchbar labs off lan-rooms","why":"Turn it back off"}]}
+        """
+        let done = DoneLine.parse(stdout)
+        #expect(done.exit == 0)
+        #expect(done.changed?.first?.name == "lan-rooms")
+        #expect(done.warnings == ["w"])
+        #expect(done.nextActions?.first?.command == "benchbar labs off lan-rooms")
+    }
+
     static let fixture = """
     {"schema_version":1,"labs":[
      {"name":"lan-rooms","title":"Share with people on the same Wi-Fi","description":"d","warning":"w","since":"0.9.0","enabled":true,"commands":["share","lan-guard"]},

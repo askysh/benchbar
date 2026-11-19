@@ -1,0 +1,119 @@
+# The models that read the CLI's JSON, and the definitions of schema/benchbar.schema.json they read.
+# tests/test-json-schema.sh checks, for each row, that every field the model decodes is in the
+# definition (the names, and the kind of a Swift String, Int, Bool or list of those), and that a
+# field the model cannot do without is required there. Every model that reads the CLI's JSON is a
+# row here or is skipped at the end with a reason (a new one that is neither fails the test).
+#
+#   swift FILE STRUCT DEFINITION...   a Codable struct (Outer.Inner for a nested one)
+#   cs    FILE CLASS  DEFINITION...   a class whose properties have [JsonPropertyName]
+#   csread FILE DEFINITION...         a file that reads fields by name (JsonRead.Str(o, "key"), o["key"])
+#   swiftread FILE DEFINITION...      a file that reads a decoded dictionary by key (object["key"])
+#   mcp   FILE                        the CLI_READS table of the MCP server
+#   mcpreaders FILE FUNC... | FUNC...  the functions that read CLI output (their keys must be in CLI_READS),
+#                                     then the ones that parse JSON of their own
+
+swift macos/BenchBar/CLI/Models.swift BenchPorts ports
+swift macos/BenchBar/CLI/Models.swift SiteInfo site
+swift macos/BenchBar/CLI/Models.swift BenchSummary listBench
+swift macos/BenchBar/CLI/Models.swift BenchList list
+swift macos/BenchBar/CLI/Models.swift BenchStatus status stateFile
+swift macos/BenchBar/CLI/Models.swift DoctorCheck doctorCheck
+swift macos/BenchBar/CLI/Models.swift DoctorSummary summary
+swift macos/BenchBar/CLI/Models.swift DoctorReport doctor
+swift macos/BenchBar/CLI/Models.swift AppInfo app
+swift macos/BenchBar/CLI/Models.swift AppList appList
+swift macos/BenchBar/CLI/Models.swift ProfileInfo profile
+swift macos/BenchBar/CLI/Models.swift AppBundle bundle
+swift macos/BenchBar/CLI/Models.swift ProfileList profileList
+swift macos/BenchBar/CLI/PendingOperation.swift PendingOperation pendingOperation
+swift macos/BenchBar/CLI/PendingOperation.swift PendingOperation.Step pendingStep
+swift macos/BenchBar/CLI/PortModels.swift PortCheck portsCheck
+swift macos/BenchBar/CLI/CLIClient+Labs.swift LabEntry lab
+swift macos/BenchBar/CLI/CLIClient+Labs.swift LabsDocument labsList
+swift macos/BenchBar/CLI/CLIClient+Labs.swift DoneLine doneFields
+swift macos/BenchBar/CLI/CLIClient+Labs.swift DoneChange changedEntry
+swift macos/BenchBar/CLI/CLIClient+Labs.swift DoneAction nextAction
+swift macos/BenchBar/CLI/InstallEvents.swift InstallPlan planLine
+swift macos/BenchBar/CLI/InstallEvents.swift InstallStep stepLine
+swift macos/BenchBar/CLI/InstallEvents.swift InstallProgressLine progressLine
+swift macos/BenchBar/CLI/InstallEvents.swift InstallDone doneLine
+swift macos/BenchBar/CLI/InstallEvents.swift InstallPlanStep planStep
+swift macos/BenchBar/CLI/InstallEvents.swift SkippedStep skippedStep
+swift macos/BenchBar/CLI/PrerequisiteModels.swift Prerequisite prerequisite
+swift macos/BenchBar/CLI/PrerequisiteModels.swift PrerequisiteReport doctorPrerequisites
+swift macos/BenchBar/CLI/SiteModels.swift SiteBackup backup
+swift macos/BenchBar/CLI/SiteModels.swift SiteBackupList siteBackups
+swift macos/BenchBar/CLI/SiteModels.swift SiteBackupResult siteBackup
+
+cs windows/tray/Tray.Core/Model.cs StatusDto status
+cs windows/tray/Tray.Core/Model.cs PendingDto pendingOperation
+cs windows/tray/Tray.Core/Model.cs PendingStepDto pendingStep
+cs windows/tray/Tray.Core/Model.cs SiteDto site siteInStatus
+cs windows/tray/Tray.Core/Model.cs ListDto list
+cs windows/tray/Tray.Core/Model.cs ListBenchDto listBench
+cs windows/tray/Tray.Core/Model.cs DoctorDto doctor
+cs windows/tray/Tray.Core/Model.cs DoctorCheckDto doctorCheck
+cs windows/tray/Tray.Core/Model.cs DoctorSummaryDto summary
+cs windows/tray/Tray.Core/Model.cs LogsDto logs
+cs windows/tray/Tray.Core/Model.cs ReportDto report
+
+mcp lib/frappe-local/mcp.py
+
+csread windows/tray/Tray.Core/Cli/CliModels.cs planLine stepLine repairStepLine progressLine doneLine
+csread windows/tray/Tray.Core/Health/HealthModels.cs doctor
+csread windows/tray/Tray.Core/Labs/LabsModel.cs labsList
+csread windows/tray/Tray.Core/Logs/LogModels.cs logs
+
+swiftread macos/BenchBar/CLI/Models.swift planLine repairStepLine doneLine
+swiftread macos/BenchBar/CLI/InstallEvents.swift planLine stepLine progressLine doneLine
+swiftread macos/BenchBar/CLI/CLIClient+Share.swift stepLine repairStepLine progressLine doneLine
+
+# the functions of mcp.py that read CLI output, then after | the ones that parse JSON of their own or mix it with the CLI's (state_dir: the environment and its own
+# cache around where.state_dir; shrink: the wrapper's output key around logs; tool_call: the tool arguments)
+mcpreaders lib/frappe-local/mcp.py stream_plan stream_done keep_generated_password known_bench_paths labs_enabled service_missing progress_relay relay add_argv remember_plan | state_dir shrink recall_plan tool_call dispatch
+
+# Models that read the CLI's JSON and are not checked yet, and why. A new model is mapped above or lands here with a reason.
+#   skip FILE STRUCT reason       one Codable struct of a mapped Swift file
+#   skipfile FILE reason          every model of a file
+skipfile macos/BenchBar/CLI/AppAddPlan.swift no definition yet: app add plan
+skipfile macos/BenchBar/CLI/RestorePlan.swift no definition yet: site restore plan
+skipfile macos/BenchBar/CLI/SiteAddPlan.swift no definition yet: site add plan
+skipfile macos/BenchBar/CLI/OpenAs.swift no definition yet: open-as
+skipfile macos/BenchBar/CLI/ProfileModels.swift no definition yet: profile sharing documents
+skip macos/BenchBar/CLI/Models.swift Skipped not a document: moves a list reader past a bad entry
+skip macos/BenchBar/CLI/Models.swift BenchScan no definition yet: scan
+skip macos/BenchBar/CLI/Models.swift SchemaProbe reads schema_version only
+skip macos/BenchBar/CLI/Models.swift AppUpdatePlan no definition yet: app update plan
+skip macos/BenchBar/CLI/Models.swift AppUpdatePlan.Commit no definition yet: app update plan
+skip macos/BenchBar/CLI/Models.swift AppUpdatePlan.Step no definition yet: app update plan
+skip macos/BenchBar/CLI/Models.swift Action repair plan action: read through the dictionary of RepairEvent, checked by the swiftread row
+skip macos/BenchBar/CLI/Models.swift BugReportFile no definition yet: bug report file list
+skip macos/BenchBar/CLI/PortModels.swift PortPlan no definition yet: ports plan
+skip macos/BenchBar/CLI/PortModels.swift PortPlan.Entry no definition yet: ports plan
+skip macos/BenchBar/CLI/SiteModels.swift SiteDropPlan no definition yet: site drop
+skip macos/BenchBar/CLI/SiteModels.swift SiteDropPlan.Step no definition yet: site drop
+skip macos/BenchBar/CLI/SiteModels.swift SiteDropResult no definition yet: site drop
+skip macos/BenchBar/CLI/SiteModels.swift LockCheck no definition yet: lock check
+skip macos/BenchBar/CLI/SiteModels.swift LockCheck.Drift no definition yet: lock check
+skipfile windows/tray/Tray.Core/Apps/AppModels.cs no definition yet: app update and app add plans
+skipfile windows/tray/Tray.Core/Cli/CliClient.cs runs the commands; its few keys are the envelope of the CliModels.cs row
+skipfile windows/tray/Tray.Core/Cli/PlanModels.cs no definition yet: site add, restore and drop plans
+skipfile windows/tray/Tray.Core/CustomRunner.cs the tray's own settings, not CLI output
+skipfile windows/tray/Tray.Core/Discovery/ScanModels.cs no definition yet: scan
+skipfile windows/tray/Tray.Core/Discovery/SetupPlanModels.cs no definition yet: adopt and ports plans
+skipfile windows/tray/Tray.Core/Health/OverviewModels.cs no definition yet: lock check
+skipfile windows/tray/Tray.Core/Health/RepairModel.cs no definition yet: repair plan
+skipfile windows/tray/Tray.Core/Ports/PortModels.cs no definition yet: ports plan
+skipfile windows/tray/Tray.Core/Profiles/ProfileModels.cs no definition yet: profile documents (list, export, import, subscribe, update, check)
+skipfile windows/tray/Tray.Core/Profiles/ProfileRuns.cs no definition yet: profile documents
+skipfile windows/tray/Tray.Core/Report/BugReport.cs no definition yet: report parts
+skipfile windows/tray/Tray.Core/Setup/InstallModels.cs the Windows shim's setup stream, not the CLI
+skipfile windows/tray/Tray.Core/Setup/SetupModels.cs the Windows shim's setup documents
+skipfile windows/tray/Tray.Core/Setup/SetupService.cs the Windows shim's setup documents
+skipfile windows/tray/Tray.Core/Setup/StepText.cs the Windows shim's step ids
+skipfile windows/tray/Tray.Core/Share/ShareModel.cs no definition yet: share status and rooms
+skipfile windows/tray/Tray.Core/Share/ShareModels.cs no definition yet: share documents
+skipfile windows/tray/Tray.Core/Sites/OpenAsModels.cs no definition yet: open-as
+skipfile windows/tray/Tray.Core/Sites/SiteModels.cs no definition yet: site restore and drop documents (site list and backups are read here too)
+skipfile windows/tray/Tray.Core/TrayConfig.cs the tray's own settings, not CLI output
+skipfile windows/tray/Tray.Core/Update/SelfUpdate.cs the shim's self-update document

@@ -628,3 +628,4 @@ Asked for after the phases, to stop naming drift before the first release.
 ## 0.9: restore and unfinished changes (parity part 1, #177)
 - Unfinished changes read `status.pending_operations` and do nothing else of their own: Resume opens the Update sheet (the plan lists only the steps left, `AppUpdatePlan.pending`) or Add App with the app's name, and Drop the Record runs `app update NAME --discard-pending --yes` after an alert. An entry without an app name is not shown, so one odd entry never hides the rest or breaks the status.
 
+- The Swift DoneLine reads `changed` and `next_actions` as lists of objects (#173): it declared them as lists of strings, which never decoded what the CLI prints, so `labsSet` returned an empty line; the schema check found it. Nothing reads the result today.

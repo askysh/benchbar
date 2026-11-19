@@ -42,6 +42,35 @@ import threading
 import time
 import traceback
 
+# What this server reads out of the CLI's own JSON: (definition, field path, needed). A field it does
+# not list is passed through unread. tests/test-json-schema.sh checks every row against
+# schema/benchbar.schema.json (the field is there, and required when needed is True) and that the
+# code reads the key. A new read of a CLI field is a new row.
+CLI_READS = (
+    ("list", "benches[].path", True),
+    ("list", "benches[].adopted", False),
+    ("status", "state", True),
+    ("where", "state_dir", True),
+    ("labsList", "labs[].name", True),
+    ("labsList", "labs[].enabled", True),
+    ("planLine", "token", False),
+    ("planLine", "can_apply", False),
+    ("planLine", "event", True),
+    ("doneLine", "event", True),
+    ("logs", "lines", True),
+    ("logs", "ts", False),
+    ("stepLine", "id", False),
+    ("stepLine", "name", False),
+    ("stepLine", "status", False),
+    ("progressLine", "step", False),
+    ("progressLine", "label", False),
+    ("progressLine", "elapsed", False),
+    ("doctorCheck", "fix_command", False),
+    ("doctorCheck", "fix_quoted", False),
+    ("doneFields", "next_actions[].command", False),
+    ("doneFields", "next_actions[].quoted", False),
+)
+
 SERVER = {"name": "benchbar", "version": os.environ.get("BENCHBAR_VERSION", "0")}
 PROTOCOLS = ["2025-06-18", "2025-03-26", "2024-11-05"]
 BENCHBAR = os.environ.get("BENCHBAR") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "benchbar")
