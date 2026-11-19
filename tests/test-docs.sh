@@ -72,4 +72,31 @@ while IFS= read -r lab; do
   done < <(grep "\*\*Lab\*\* \`${lab}\`" "$ROOT/docs/features.md")
 done < <(sed -n 's/^lab~\([^~]*\)~.*/\1/p' "$ROOT/lib/frappe-local/labs.sh")
 
+# ---- every image is in the manifest, and every manifest row is a file (DOC-11)
+MANIFEST="$ROOT/docs/images/manifest.tsv"
+assert_file "$MANIFEST"
+for f in "$ROOT"/docs/images/*.png; do
+  grep -q "^$(basename "$f")	" "$MANIFEST" || fail "docs/images/$(basename "$f") has no row in docs/images/manifest.tsv"
+done
+while IFS=$'\t' read -r img _; do
+  [[ "$img" == "#"* || "$img" == "image" ]] && continue
+  [[ -f "$ROOT/docs/images/$img" ]] || fail "docs/images/manifest.tsv lists $img, which is not in docs/images"
+done < "$MANIFEST"
+
+# ---- What's new has a section for the next release and every release from 0.8.0 (DOC-4)
+NEW="$ROOT/docs/whats-new.md"
+assert_file "$NEW"
+grep -q '^## 0\.9\.0' "$NEW" || fail "docs/whats-new.md has no section for the next release (0.9.0)"
+while IFS= read -r ver; do
+  grep -q "^## ${ver} " "$NEW" || fail "docs/whats-new.md has no section for ${ver}"
+done < <(sed -n 's/^## \(0\.8\.[0-9]*\) - .*/\1/p' "$ROOT/CHANGELOG.md")
+
+# ---- claims that were fixed stay fixed (DOC-7, DOC-8)
+for f in README.md SECURITY.md docs/index.md docs/reference/configuration.md; do
+  if grep -q 'twice per install\|used for two things' "$ROOT/$f"; then fail "$f gives an old sudo count"; fi
+done
+for f in README.md docs/index.md site/astro.config.mjs; do
+  if grep -q 'benches on your Mac, in the background\|benches on macOS, in the background\|benches on macOS"' "$ROOT/$f"; then fail "$f describes BenchBar as macOS only"; fi
+done
+
 printf 'test-docs: ok\n'

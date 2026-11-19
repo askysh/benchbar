@@ -55,8 +55,8 @@ macOS version. A row that says "macOS" does not work on Linux.
 | Rooms on your Wi-Fi (`share`, `lan-guard`) | Lets colleagues on the same Wi-Fi use a hardened copy of a site behind a room code. **Lab** `lan-rooms`. | 0.8.2 | macOS | [share and lan-guard](reference/cli/share.md), [How sharing keeps your bench safe](concepts/sharing-safety.md) |
 | Labs | `benchbar labs` lists, turns on and turns off experiments. | 0.8.2 | macOS, Linux | [labs](reference/cli/labs.md) |
 
-On Linux, only the v15-lts bench is supported, and the site is
-`linuxdev.localhost`. See [Install](install.md#linux).
+On Linux the default site is `linuxdev.localhost`. See
+[Install](install.md#linux).
 
 ## Mac app
 

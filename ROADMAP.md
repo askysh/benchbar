@@ -1,176 +1,69 @@
 # Roadmap
 
-Where BenchBar is and where it goes. Versions below 1.0 may change the
-JSON API and the runner format; 1.0 freezes both. Dates are not promised.
-Ideas are welcome as issues.
+Where BenchBar goes. Versions below 1.0 may change the JSON API and the
+runner format. 1.0 freezes both. Dates are not promised. Ideas are welcome
+as issues.
 
 ## Released
 
-**0.1, the CLI.** Benches under launchd with one agent each, a crash
-guard (three restarts in ten minutes, then pause and notify), resume
-after reboot only when the bench was running, doctor and repair for the
-common breakages (missing env, node modules or built assets, crash
-looping agents, a stray Redis, MariaDB bound to the network, CleanMyMac),
-idempotent installs, the lean Procfile and the `bench*` helpers.
+This page does not repeat what shipped. Each release is described in
+[What's new](https://benchbar.akashmishra.com/whats-new/) for users and in
+the [CHANGELOG](CHANGELOG.md) for contributors. The
+[Features](https://benchbar.akashmishra.com/features/) page lists every
+feature with the version it came in.
 
-**0.2, the menu bar app.** The rename to BenchBar with the `frappe-mac`
-alias kept and old agents migrated, a versioned JSON API, the animated
-runner that sleeps, runs, speeds up with load and stumbles on crashes,
-start, stop, restart, site, logs and a read only doctor from the popover,
-crash notifications, launch at login, Reduce Motion, custom runners.
+## 0.9.0
 
-**0.3, easy install.** The one line installer, the manual install steps
-automated (MariaDB root password in the Keychain, the secure installation
-in SQL, the utf8mb4 drop-in, the pinned and checksummed wkhtmltopdf with
-Rosetta offered, the `/etc/hosts` line inside markers, one `sudo` prompt
-per run), `benchbar adopt` for existing benches, `benchbar report` for
-redacted bug reports, CI on macOS and Linux, unsigned releases built as
-drafts from a tag.
+0.9.0 is the release of the codebase review of 2026-11-18: every finding
+fixed, plus the agent plan that was waiting for it. The list of issues is
+the [0.9.0 milestone](https://github.com/askysh/benchbar/milestone/1).
 
-**0.4, Frappe v16 and more than one bench.** The v16 profile tested end to
-end on a real Mac, one MariaDB server shared by every bench, several
-benches side by side with their own port blocks, settings and processes,
-sites (`site add`, `site default`, `site hosts`), the scheduler opt in,
-doctor checks from the community threads (Full Disk Access, the toolchain
-as the bench sees it, honcho without `pkg_resources`, stale processes),
-and the app with a bench list, the worst state in the menu bar and the
-sites of each bench.
+**Delivered on `next-release`** (it ships with 0.9.0):
 
-**0.5, the app does more, apps and team profiles.** The BenchBar window
-with a page per bench (sites, apps, doctor and Repair with its plan
-first), a log window, `benchbar repair --json`, `benchbar mcp` for coding
-agents, app installs and updates from the registry or any GitHub repo
-(private ones too), team profiles kept outside BenchBar, the
-`benchbar.toml` team lockfile, `benchbar pull` for a production copy
-with the encryption key carried over and email and the scheduler off, a
-new app icon, and the macOS 27 look.
+- The bench web server and socketio listen on 127.0.0.1, and `benchbar
+  listen all` switches back.
+- `benchbar pull` neutralizes the copy: integrations off, stored secrets
+  cleared, `--keep-secrets` to keep them.
+- Agents never see the MariaDB root password, a login link or a generated
+  Administrator password.
+- A fresh Mac without `uv` installs, and a rerun after a failed `bench init`
+  recovers.
+- Site backups are never pruned silently, and a backup is checked before a
+  restore.
+- `doctor` takes about 3 seconds, and `path`, `status` and `commands`
+  start faster.
+- The Mac app asks before it quits during a run, stops a whole process
+  group on cancel, polls less, and has VoiceOver labels and snapshot tests.
+- The Windows tray has a Labs page and `benchbar://` links.
+- Linux has crash notifications, `v16-lts` and team profiles.
+- Release keys live in a protected environment, CI is tiered, and the
+  docs have a features page, a generated CLI reference and a what's new
+  page.
 
-**0.5.5, the project skin.** The documentation site at
-benchbar.akashmishra.com with a page per command, a short README, the
-community files (contributing with an AI policy, code of conduct,
-security policy, issue forms), and in the app an About pane with an
-update check, a Help menu and Report a Bug; `benchbar docs` and doctor
-links into the docs.
+**Planned in the milestone, not merged yet:**
 
-**0.5.6, cleanup tools.** Doctor warns about Mole until the bench is in
-its whitelist, finds CleanMyMac installed from Setapp, and no longer
-flags the installer's PATH block.
+- Unknown options are errors, install reports a failed step as a failure,
+  and the Linux user bus is handled.
+- MCP safety (labels on every path, plan and apply apart, an audit log) and
+  more MCP tools.
+- Agent contracts: a result envelope for every command, `benchbar wait`,
+  operation handles for long jobs, `benchbar run` for bench commands, site
+  snapshots and rollback, pinned and scratch benches with `bench gc`,
+  leases, and `benchbar history --json`.
+- Parity: restore, pull and lock in the Mac app, and the same actions in the
+  Windows tray.
+- Rooms on Linux with an nftables LAN guard.
+- Verified downloads (attestations) and a Windows MSIX package.
 
-**0.5.7, find your benches.** Scan Folder in the menu bar and Find
-Benches in the app find existing benches in a folder, remember the ones
-you pick, and set up their service after showing the plan.
+**Dropped from 0.9.0**, because each needs hardware or a third party:
 
-**0.5.8, quick wins.** `benchbar://` links for Raycast and Shortcuts,
-CPU and memory charts per bench, site backup, backups and drop with a
-backup first, the lockfile badge, Open in VS Code or Cursor, `benchbar
-console` and `db`, `doctor --fix-hints`, and port blocks planned across
-benches with a check before every start.
+- Submitting BenchBar for Windows to the Microsoft Store.
+- A dedicated virtual machine as a CI runner.
+- A check of the CLI on a real Intel Mac.
 
-**0.6, sharing profiles between teams.** `benchbar profile export` writes
-a portable copy (SSH host aliases resolved, each app on its repo's
-default branch after a review, public, private and personal repos
-marked, the apps each one requires listed), `profile import` takes a
-file or an https URL and checks access to every repo first, `profile
-subscribe` follows a team's config repo with an outdated warning instead
-of silent pulls. Doctor warns when an app your work depends on falls
-behind, never about the app you are working on. The app checks for
-updates once a day and updates in one click, the CLI with `benchbar
-self-update`.
-
-**0.6.1, cost at rest, signed.** Under 0.1 percent of a core at rest
-(from about 6): status in 5 programs, a runner heartbeat, an app that
-polls on events. The first release signed with a Developer ID, notarized
-and stapled, with Sparkle updates.
-
-**0.7.0, Homebrew.** `brew install askysh/tap/benchbar
-askysh/tap/benchbar-app` installs the CLI and the app from
-`askysh/homebrew-tap`, and every release updates the tap. The CLI keeps
-its state in `~/.local/state/benchbar`, records paths that survive `brew
-upgrade`, and updates with `brew upgrade`; `benchbar repair` moves a one
-line install over, and doctor warns about a second CLI or app.
-
-**0.7.1, one CLI.** BenchBar.app carries the CLI of its own version, and
-Homebrew's and the one line installer's `benchbar` hand off to it, so
-every `benchbar` on the Mac is the app's and one update covers both.
-Update Now goes through Sparkle without Terminal; `benchbar where` names
-the copy that handed off.
-
-**0.7.2, a calmer window.** One main action per page, the rest in a ⋯
-menu, and one layout for every sheet (Return confirms, Esc cancels).
-
-**0.7.3, the fix pass.** Nine batches of review findings, checked on a
-real Mac before the release. benchbar stops only processes it can prove are the
-bench's, and the runner pauses with `port_conflict` instead of starting
-into a taken port. v15-lts moves to `node@22` before Homebrew disables
-`node@20` on 2026-10-28, with a Formula lifecycle check and a release
-gate. A fresh Homebrew MariaDB with a socket only root no longer stops
-the install. The env is never rebuilt on a guessed profile or while the
-bench runs. Long commands run in their own process group, and every run
-that changes a bench takes that bench's lock. Writes fail closed, step
-results say what really happened, secrets stay out of child processes
-and logs, and paths are checked before they reach root. The MCP server
-runs calls on threads, checks every argument against its schema and
-labels third party text. The installer's state moves in even when the
-app made the folder first. The app names a port conflict, and `doctor --json` says where the
-profile came from.
-
-**0.8.0, a bench without Terminal, Linux, a Windows preview and agent
-contracts.** A first run wizard in the app: check the Mac (doctor's new
-prerequisites), create a bench from a built in or team profile, or find
-and adopt the ones you have, with every step streamed (`install --json`,
-`adopt --json`) and the two privileged steps in macOS's own password
-dialog instead of `sudo` in Terminal. Benches are the home of the BenchBar
-window, with an Add Bench menu, Settings and About in the sidebar footer
-(Settings and About are windows of their own), and the app explains itself where
-you are: a four step walkthrough, why a bench is stopped and what to do
-next, empty lists that say how to fill them. The CLI runs on Linux
-(Ubuntu 24.04, v15-lts) with each bench under `systemd --user`. On
-Windows, a preview: `benchbar.exe` forwards the CLI from PowerShell to
-WSL, BenchBar Tray shows the benches in the notification area, and a zip
-per CPU with a one line installer is attached to each release (unsigned
-until the signing application is approved). Agents get a contract: `benchbar COMMAND --help`
-and `commands --json`, one JSON stream for every command that changes
-things ending in a `done` line (`exit`, `changed`, `warnings`,
-`next_actions`, `state_after`), `--for-agent`, a non interactive mode
-that names every missing input, `doctor --ack` and `--quick`, and logs
-with a time per line. An `app update` that stops half way is finished by
-the next one.
-
-**0.8.1, Windows beta and Open as.** The Windows tray takes a new PC
-from no WSL to a running bench and manages benches from its own window,
-with Report a Bug everywhere. `benchbar open --as USER` and Open as… in
-the app sign a development site in as any of its users, off until a
-person turns it on per site (`benchbar site open-as on`). Settings and
-About are panes of the one BenchBar window again, a live QA pass fixed
-the popover in dark mode and the Find User flow, and the menu bar has new
-runners. Behind the scenes: work lands on `next-release` and a release
-tags itself when it reaches `main`, and the mocked test suite runs about
-a quarter faster.
-
-**0.8.2, Labs.** Experiments ship behind one switch that the CLI owns
-(`benchbar labs`, Settings > Labs in the app). The first two: rooms,
-which share a hardened copy of a dev site with people on the same Wi-Fi
-behind a room code, with `lan-guard` keeping the bench ports off the LAN,
-and Quick Switch (⌃⌥U), which opens a site as another user from any app.
-Open as has keyboard shortcuts in the popover.
-
-**0.8.3, Windows fix pass.** A full review of the Windows side and a live
-test on a Windows 11 PC, from an empty PC to a running bench: the
-installer checks Smart App Control before it writes anything, removes the
-internet mark from what it installs and can uninstall; `benchbar.exe`
-puts deadlines on WSL calls and explains WSL errors; the tray's setup
-wizard recovers from more states; and `install` inside WSL checks
-systemd, ports, the network and the bench folder before it asks for sudo.
-The Windows programs are still unsigned.
-
-**Launch.** The post on discuss.frappe.io went up on 2026-10-04:
-[BenchBar: local Frappe benches on macOS with a menu bar app](https://discuss.frappe.io/t/benchbar-local-frappe-benches-on-macos-with-a-menu-bar-app/165049).
+Whatever code those findings name is still fixed.
 
 ## Later
-
-**The app's runner and CLI link.** The app's own runner stops a
-command's whole process group, as the CLI does since 0.7.3, and the app
-makes its CLI link again when a poll finds it missing.
 
 **Management in its own target.** Team profiles, bench discovery and
 port setup move out of the menu bar app into a separate management
@@ -178,27 +71,17 @@ target that runs only while it is open. The reason is scope: the menu
 bar app should start, stop and show benches. Not energy: 0.6.1 brought
 the app to under 0.1 percent of a core at rest with these in it.
 
-**0.8.x, the app for sites.** Restore from the app (backup and drop
-shipped in 0.5.8), and pull and lock apply in the app.
+**Agents, next.** The MCP tasks primitive (2025-11-25) as the home of
+operation handles. Two measurements come first as well: a comparative
+benchmark of native versus container benches (idle memory, build time,
+file watch latency, startup) before the README keeps its performance
+wording, and a four week pilot with about ten developers across three
+teams.
 
-**0.9, agents.** What the agent contracts round of 0.8 left out on
-purpose, so nobody reopens it in a pull request: operation handles for
-long jobs (an `op_id`, `benchbar op status`, MCP progress notifications
-fed by the stream's `progress` lines; the MCP 2025-11-25 tasks primitive
-is the eventual home), `benchbar run --site X -- migrate|run-tests|...`
-with an allow list, site snapshots and rollback, scratch benches pinned to
-commits with a TTL and `bench gc`, leases per bench or site, `benchbar
-history --json`, `bench remove`, `bench forget`, `site move --to-bench`,
-`site hosts --prune` and `db orphans`. Two measurements come first as well: a comparative benchmark of
-native versus container benches (idle memory, build time, file watch
-latency, startup) before the README keeps its performance wording, and a
-four week pilot with about ten developers across three teams.
-
-**Windows past the preview.** Signed binaries once the SignPath
-Foundation application is approved. The preview of 0.8.0 runs the
-benches inside WSL with the Linux platform layer (uv Python, fnm Node,
-MariaDB and Redis from apt, each bench under `systemd --user`), a
-`benchbar.exe` shim and a tray app.
+**Windows past the beta.** Signed programs. The SignPath Foundation
+declined the application in November 2026. 0.9.0 plans an MSIX package
+with every release, and a signing route comes after it. The programs are
+unsigned until then.
 
 **1.0.** A stable JSON API and runner format, an official Homebrew cask,
 full doctor coverage for v15 and v16. Vouch
@@ -220,7 +103,6 @@ Not scheduled, kept because they came up more than once.
 - More failure path tests for bench creation and app installation.
 - `benchbar wipe`, the uninstall recipe behind an explicit confirmation,
   never touching MariaDB data without a backup.
-- Intel Mac verification of the CLI.
 
 ## Not planned
 

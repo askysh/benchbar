@@ -7,12 +7,12 @@
 
 <h1 align="center">BenchBar</h1>
 
-<p align="center">Local Frappe and ERPNext benches on your Mac: a CLI that runs them under launchd and a menu bar app to watch them.</p>
+<p align="center">Local Frappe and ERPNext benches on macOS, Linux and Windows (WSL): a CLI that runs them in the background, with a menu bar app on the Mac and a tray app on Windows to watch them.</p>
 
 <p align="center">
   <a href="https://github.com/askysh/benchbar/releases/latest"><img src="https://img.shields.io/github/v/release/askysh/benchbar" alt="Latest release"></a>
   <a href="https://github.com/askysh/benchbar/actions/workflows/ci.yml"><img src="https://github.com/askysh/benchbar/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <img src="https://img.shields.io/badge/macOS-14%2B%20Apple%20Silicon-lightgrey" alt="macOS 14 or later, Apple Silicon">
+  <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows%20(WSL)-lightgrey" alt="Runs on macOS 14 or later (Apple Silicon), Ubuntu 24.04 and Windows with WSL">
   <a href="LICENSE"><img src="https://img.shields.io/github/license/askysh/benchbar" alt="License: MIT"></a>
   <a href="https://benchbar.akashmishra.com"><img src="https://img.shields.io/badge/docs-benchbar.akashmishra.com-blue" alt="Documentation"></a>
 </p>
@@ -68,12 +68,17 @@ in Terminal, add the CLI with Homebrew or the one line installer. Or
 build from source: `git clone`
 this repository and run `./benchbar install`; the app needs Xcode 26.
 
-**Linux and Windows.** From 0.8 the same CLI runs on Linux (Ubuntu 24.04
-tested, other apt based systems with a doctor warning, the v15-lts profile so far), with each bench
-under `systemd --user`; clone the repository and run `./benchbar install`.
-See [Install](https://benchbar.akashmishra.com/install/#linux).
+**Linux.** From 0.8 the same CLI runs on Linux (Ubuntu 24.04 tested, other
+apt based systems with a doctor warning), with each bench under
+`systemd --user`. Run the one line installer, open a new terminal and run
+`benchbar install`. See
+[Install](https://benchbar.akashmishra.com/install/#linux).
 
-On Windows (a beta) the benches run in WSL, `benchbar.exe` runs the
+```bash
+curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/main/install.sh | bash
+```
+
+**Windows (a beta).** The benches run in WSL, `benchbar.exe` runs the
 CLI from PowerShell, and BenchBar Tray shows the benches in the
 notification area in place of the menu bar app. Install both with one
 line in PowerShell. The tray's first run wizard then sets up WSL, the
@@ -88,7 +93,7 @@ line above showed no SmartScreen warning, but Smart App Control blocks
 unsigned programs: when it is on, the installer stops first and says what
 to do. What that means in practice is in
 [Before you install](https://benchbar.akashmishra.com/windows/#before-you-install).
-Every release has SHA256SUMS and, from the next release, build provenance
+Every release has SHA256SUMS, and the Windows zips have build provenance
 you can verify. To remove BenchBar again, run the installer
 with `-Uninstall`. For a bug, use **Report a Bug** in the tray: it writes
 a redacted zip and opens the bug form. See
@@ -162,9 +167,11 @@ has a reference page, and the JSON the app reads is a documented API.
 The same pages are plain markdown in [docs/](docs/), so they read fine on
 GitHub too, and `benchbar docs` opens them from the terminal.
 
-## Roadmap
+## What's new and what is next
 
-0.6.1 is the first signed and notarized release, with Sparkle updates. 0.7.0 installs the CLI and the app with Homebrew, in 0.7.1 the app ships the CLI, so one update covers both, 0.7.2 gives the window one main action per page and one layout for every sheet, and 0.7.3 is a fix pass from a full review (node@22 for v15, ownership checks, fail closed writes, MCP hardening). 0.8.0 brings the first run wizard and a new bench from the app, the CLI on Linux, a Windows preview (`benchbar.exe` and a tray app), and commands that agents can drive: one JSON stream with a closing `done` line and a non interactive mode. 0.8.1 makes Windows a beta: the tray takes a PC from no WSL to a running bench. 0.8.2 adds Labs, experiments that stay off until you turn them on: rooms on your Wi-Fi and Quick Switch. 0.8.3 is a fix pass for Windows: the installer, `benchbar.exe`, the tray and the install inside WSL have fewer dead ends and say what is wrong and how to fix it. The rest is in [ROADMAP.md](ROADMAP.md).
+[What's new](https://benchbar.akashmishra.com/whats-new/) says what changed
+in each release and what to do when you update. The [ROADMAP](ROADMAP.md)
+says what comes next, and the [CHANGELOG](CHANGELOG.md) is the full log.
 
 ## Contributing
 

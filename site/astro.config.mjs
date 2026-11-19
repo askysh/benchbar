@@ -19,7 +19,7 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'BenchBar',
-      description: 'Local Frappe and ERPNext development benches on macOS, in the background, with a menu bar app.',
+      description: 'Local Frappe and ERPNext development benches on macOS, Linux and Windows (WSL), run in the background, with a menu bar app and a Windows tray.',
       logo: { src: '../docs/images/app-icon.png', alt: 'BenchBar' },
       favicon: '/favicon.png',
       social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/askysh/benchbar' }],
@@ -44,7 +44,7 @@ export default defineConfig({
         { tag: 'meta', attrs: { property: 'og:image', content: `${site}/og.png` } },
         { tag: 'meta', attrs: { property: 'og:image:width', content: '1200' } },
         { tag: 'meta', attrs: { property: 'og:image:height', content: '630' } },
-        { tag: 'meta', attrs: { property: 'og:image:alt', content: 'BenchBar: local Frappe benches on macOS' } },
+        { tag: 'meta', attrs: { property: 'og:image:alt', content: 'BenchBar: local Frappe benches on macOS, Linux and Windows' } },
         { tag: 'meta', attrs: { name: 'twitter:card', content: 'summary_large_image' } },
         { tag: 'meta', attrs: { name: 'twitter:image', content: `${site}/og.png` } },
         // Umami analytics at analytics.akashmishra.com, only counted on benchbar.akashmishra.com
@@ -55,6 +55,8 @@ export default defineConfig({
             src: 'https://analytics.akashmishra.com/script.js',
             'data-website-id': '44b22d77-3180-41e4-adff-bf868420c142',
             'data-domains': 'benchbar.akashmishra.com',
+            // a browser with Do Not Track on is not counted (docs/privacy.md says so)
+            'data-do-not-track': 'true',
           },
         },
         // custom events (copied commands, downloads, outbound links): public/analytics-events.js
@@ -68,9 +70,12 @@ export default defineConfig({
           label: 'Start',
           items: [
             { label: 'Introduction', slug: 'index' },
+            { label: "What's new", slug: 'whats-new' },
             { label: 'Features', slug: 'features' },
             { label: 'Install', slug: 'install' },
             { label: 'Quick start', slug: 'quick-start' },
+            { label: 'First run problems', slug: 'first-run-problems' },
+            { label: 'Privacy of this site', slug: 'privacy' },
           ],
         },
         {
