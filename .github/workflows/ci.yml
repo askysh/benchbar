@@ -541,9 +541,36 @@ jobs:
           set -o pipefail
           xcodebuild -project macos/BenchBar.xcodeproj -scheme BenchBar -configuration Debug \
             -derivedDataPath macos/build/DerivedData -destination 'platform=macOS,arch=arm64' \
+            -skip-testing:BenchBarTests/SnapshotTests \
             CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY= test 2>&1 | tee macos/build/test.log | \
             grep -E '^(✔|✘)|Test run with|Test Suite|error:|\*\* TEST|Executed' || true
           grep -q -E '\*\* TEST SUCCEEDED \*\*|Test run with [0-9]+ tests? passed' macos/build/test.log
+
+      # The Sparkle configuration is the one that ships to people, and it was
+      # built first on release day. Build it here (the Sparkle package, the
+      # SPARKLE condition, SUFeedURL and the key in Info.plist), run the updater's
+      # test in it, and make an unsigned appcast from the build's zip and check
+      # it, with a placeholder key: no secret is needed. The default build above
+      # is untouched (dist/ was packed before this step).
+      - name: Sparkle build, updater test and unsigned appcast
+        env:
+          BENCHBAR_SPARKLE_PUBLIC_KEY: ci-unsigned-placeholder
+        run: |
+          set -o pipefail
+          scripts/macos-build.sh --sparkle
+          xcodebuild -project macos/BenchBar.xcodeproj -scheme BenchBar -configuration Debug \
+            -derivedDataPath macos/build/DerivedData -destination 'platform=macOS,arch=arm64' \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY= \
+            BENCHBAR_APPCAST_URL=https://github.com/askysh/benchbar/releases/latest/download/appcast.xml \
+            BENCHBAR_SPARKLE_PUBLIC_KEY="$BENCHBAR_SPARKLE_PUBLIC_KEY" \
+            -only-testing:BenchBarTests/UpdaterTests test 2>&1 | tee macos/build/sparkle-test.log | \
+            grep -E '^(✔|✘)|Test run with|error:|\*\* TEST' || true
+          grep -q -E '\*\* TEST SUCCEEDED \*\*|Test run with [0-9]+ tests? passed' macos/build/sparkle-test.log
+          test -d macos/build/BenchBar.app/Contents/Frameworks/Sparkle.framework
+          mkdir -p "$RUNNER_TEMP/sparkle-feed"
+          ditto -c -k --keepParent macos/build/BenchBar.app "$RUNNER_TEMP/sparkle-feed/BenchBar-ci.zip"
+          scripts/macos-appcast.sh --unsigned "$RUNNER_TEMP/sparkle-feed" "$RUNNER_TEMP/sparkle-feed/appcast.xml"
+          test -f "$RUNNER_TEMP/sparkle-feed/appcast.xml"
 
       - name: Annotate compiler errors and failed tests
         if: failure()
@@ -569,6 +596,7 @@ jobs:
           # no file and line (exit 65 with an empty job log)
           path: |
             macos/build/test.log
+            macos/build/sparkle-test.log
             macos/build/build.log
           if-no-files-found: ignore
 

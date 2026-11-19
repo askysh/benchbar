@@ -11,6 +11,12 @@ struct InstallPage: View {
         let state = run.state
         WizardScaffold("Installing \(state.form.site)", explanation: explanation(state), phase: phase(state)) {
             outcome(state)
+            if !state.planChanges.isEmpty {
+                Label("The plan changed after you reviewed it. These steps run now and were not in it: \(state.planChanges.joined(separator: ", ")).",
+                      systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange).font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             steps(state)
             output
         } leading: {

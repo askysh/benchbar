@@ -35,8 +35,31 @@ final class RunnerLibrary {
 
     func isCustom(_ id: String) -> Bool { custom.contains { $0.id == id } }
 
+    /// What `reload` last read: every entry of the folder with its size and
+    /// modification time.
+    @ObservationIgnored private var seen: [String]?
+
+    /// One line per file and folder under `folder`: path, size, modification time.
+    /// A stat of each, so cheap next to decoding the PNGs.
+    nonisolated static func fingerprint(of folder: URL) -> [String] {
+        let keys: [URLResourceKey] = [.fileSizeKey, .contentModificationDateKey]
+        guard let walker = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: keys,
+                                                          options: [.skipsHiddenFiles]) else { return [] }
+        let base = folder.standardizedFileURL.path
+        return walker.compactMap { ($0 as? URL) }.map { url -> String in
+            let values = try? url.resourceValues(forKeys: Set(keys))
+            let time = values?.contentModificationDate?.timeIntervalSince1970 ?? 0
+            return "\(url.standardizedFileURL.path.dropFirst(base.count))|\(values?.fileSize ?? 0)|\(time)"
+        }.sorted()
+    }
+
     /// Loads every folder again; a bad one becomes a problem, not a crash.
+    /// Does nothing when the folder is as it was at the last load: a reload
+    /// builds new images, which restarts the menu bar animation of a custom runner.
     func reload() {
+        let now = Self.fingerprint(of: folder)
+        guard now != seen else { return }
+        seen = now
         var runners: [Runner] = []
         var issues: [RunnerProblem] = []
         let entries = (try? FileManager.default.contentsOfDirectory(

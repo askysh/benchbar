@@ -3,17 +3,32 @@ import SwiftUI
 import Testing
 @testable import BenchBar
 
-/// Renders the popover and Settings window to PNG files, to look at them
-/// without clicking the menu bar. Off unless the output folder exists
-/// (xcodebuild passes no environment variables, and its own TMPDIR, to a
-/// hosted test):
+/// Renders the popover, the window, its panes and its sheets with fixture
+/// data, in light and dark, and checks each render against a reference image
+/// (SnapshotCompare, Snapshots/macos<N>/). The renders also go to
+/// ~/Library/Caches/BenchBarSnapshots, which the Snapshots workflow uploads.
 ///
-///   mkdir -p ~/Library/Caches/BenchBarSnapshots
-///   scripts/macos-build.sh --test
+///   scripts/macos-build.sh --test                         compare
+///   touch ~/Library/Caches/BenchBarSnapshots/record       write the references
+///
+/// Offscreen: nothing opens on screen and no app is activated. The docs
+/// images (DocsSnapshotTests) do open a window, so they run only when the
+/// `on-screen` marker is in that folder.
 nonisolated let snapshotDir = FileManager.default.homeDirectoryForCurrentUser
     .appendingPathComponent("Library/Caches/BenchBarSnapshots")
 
-@Suite("Snapshots", .serialized, .enabled(if: FileManager.default.fileExists(atPath: snapshotDir.path)))
+nonisolated let docsOnScreenEnabled = FileManager.default.fileExists(atPath: snapshotDir.appendingPathComponent("on-screen").path)
+
+/// The clock of every render: uptime ("up 3d 8h") and the age of a backup
+/// ("Backed up 6 hours ago") come from it, so a render never depends on the
+/// time it ran. After the dates in the fixtures.
+nonisolated let snapshotNow = Date(timeIntervalSince1970: 1_790_676_000) // 2026-09-29T10:00:00Z
+
+/// The bench path of a render that draws it; a temporary folder would
+/// differ in every run and on every Mac.
+nonisolated let snapshotBenchPath = "/Users/you/frappe-bench"
+
+@Suite("Snapshots", .serialized)
 struct SnapshotTests {
     let base: BenchStoreTests
     let out = snapshotDir
@@ -132,6 +147,12 @@ struct SnapshotTests {
         let model = LogViewModel(benchName: "frappe-bench", benchPath: bench.path)
         model.start()
         model.query.search = "customer"
+        // the tailer reads the file on its own queue: render when the last line is in
+        let deadline = Date().addingTimeInterval(5)
+        while !model.buffer.lines.contains(where: { $0.text.contains("Job OK") }), Date() < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(model.buffer.lines.contains { $0.text.contains("Job OK") }, "the log was not read in 5 seconds")
         try render(LogView(model: model, openInTerminal: {}).frame(width: 860, height: 400), "log-window")
         model.stop()
     }
@@ -300,20 +321,26 @@ struct SnapshotTests {
 
     @Test func popoverCLIMissing() async throws {
         base.settings.cliPath = ""
-        let store = base.makeStore()
+        // the places it looked in name the home folder: a fixed one, not this test's temporary folder
+        let runner = base.cli.runner()
+        let store = BenchStore(
+            settings: base.settings,
+            locator: CLILocator(home: URL(fileURLWithPath: "/Users/you"), isExecutable: { _ in false }),
+            makeClient: { CLIClient(executable: $0, runner: runner) },
+            pinger: { _, _ in 200 })
         await store.start(polling: false)
         try render(PopoverView(store: store, commands: AppCommands()), "popover-cli-missing")
     }
 
     @Test func setupIncludesServicePreview() async throws {
-        let tests = try PortSetupTests()
+        let tests = try PortSetupTests(benchPath: snapshotBenchPath)
         let (_, run) = try await tests.setup()
         await run.loadPlan()
         try render(PortSetupSheet(run: run, close: {}), "port-setup-preview")
     }
 
     @Test func portSettingsOnAHealthyBench() async throws {
-        let tests = try PortSetupTests()
+        let tests = try PortSetupTests(benchPath: snapshotBenchPath)
         let (store, _) = try await tests.setup()
         tests.base.cli.answer("ports plan", json: tests.settledPlanJSON())
         let run = PortSetupRun(summaries: [try #require(store.selected).summary], store: store, opensSettings: true)
@@ -431,7 +458,12 @@ struct SnapshotTests {
     func render(_ view: some View, _ name: String) throws {
         for (suffix, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             let look = try #require(NSAppearance(named: appearance))
-            let hosting = NSHostingView(rootView: view.padding(0).environment(\.drawsGlass, false))
+            // an offscreen window is never key: say so to SwiftUI, and
+            // draw what the system draws only in a key window (below)
+            let hosting = NSHostingView(rootView: view.padding(0)
+                .environment(\.drawsGlass, false).environment(\.rendersOffscreen, true).environment(\.controlActiveState, .key)
+                .environment(\.pinnedNow, snapshotNow)
+                .environment(\.colorScheme, appearance == .darkAqua ? .dark : .light))
             hosting.appearance = look
             let window = NSWindow(contentRect: .zero, styleMask: [.borderless], backing: .buffered, defer: false)
             window.appearance = look
@@ -450,6 +482,14 @@ struct SnapshotTests {
             window.setContentSize(size)
             hosting.frame = CGRect(origin: .zero, size: size)
             hosting.layoutSubtreeIfNeeded()
+            // the emphasis reaches the row's SwiftUI content on a later turn of
+            // the run loop: wait for it, or the text of a selected row draws
+            // dark on some runs
+            emphasizeSelectedRows(in: hosting)
+            RunLoop.main.run(until: Date().addingTimeInterval(0.15))
+            emphasizeSelectedRows(in: hosting)
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+            hosting.layoutSubtreeIfNeeded()
             let rep = try #require(hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds))
             look.performAsCurrentDrawingAppearance {
                 hosting.cacheDisplay(in: hosting.bounds, to: rep)
@@ -464,6 +504,20 @@ struct SnapshotTests {
             let png = try #require(NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]))
             try FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
             try png.write(to: out.appendingPathComponent("\(name)-\(suffix).png"))
+            try SnapshotCompare.verify(png, points: size, name: "\(name)-\(suffix)")
         }
+    }
+
+    /// A selected sidebar row draws as a solid black bar in a window that is
+    /// on no screen (the system paints the selection only in a key window).
+    /// Marking the row emphasized draws it with the accent colour, as the
+    /// key window does (issue #43).
+    func emphasizeSelectedRows(in view: NSView) {
+        func mark(_ view: NSView) {
+            if let row = view as? NSTableRowView { row.isEmphasized = true }
+            view.subviews.forEach(mark)
+        }
+        mark(view)
+        view.layoutSubtreeIfNeeded()
     }
 }

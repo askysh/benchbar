@@ -54,6 +54,11 @@ struct NewBenchPage: View {
             }
             .formStyle(.columns)
             SheetNote("The password goes to the benchbar process only, never on a command line or to disk. It is the login of the new site's Administrator.")
+        } leading: {
+            if state.profilesError != nil {
+                Button("Try Again") { run.send(.retryProfiles) }
+                    .help("Read the profiles again")
+            }
         } actions: {
             WizardBackButton(run: run)
             WizardPrimaryButton(run: run)

@@ -448,16 +448,19 @@ permission to "tell Terminal to do script".
 
 ### Seeing the UI without clicking
 
-`BenchBarTests/SnapshotTests.swift` renders the popover and Settings
-with fixture data to PNG files, light and dark:
+`BenchBarTests/SnapshotTests.swift` renders the popover, the window, its
+panes and its sheets with fixture data to PNG files, light and dark, and
+compares each one with its reference image in
+`BenchBarTests/Snapshots/macos<N>/`:
 
 ```bash
-mkdir -p ~/Library/Caches/BenchBarSnapshots
 scripts/macos-build.sh --test
 open ~/Library/Caches/BenchBarSnapshots
+# after a change you meant to make to a screen: write the references again
+touch ~/Library/Caches/BenchBarSnapshots/record
 ```
 
-The suite is off unless that folder exists.
+The suite always runs. A render that differs from its reference fails, and so does a missing reference when the folder for this macOS version exists or the `require` marker is in the output folder (the Snapshots workflow sets it). On a macOS version with no folder, a local run only writes the PNGs. The `record` marker is removed by the run that reads it.
 
 ### Files to read
 
