@@ -261,6 +261,22 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
   `config/benchbar-listen` to bind another address. If doctor warns
   `bench_listen`, tell the user the fix; `benchbar listen local` and
   `benchbar restart` are safe to run when the user asked you to fix it.
+- The "person, not an agent" guard is a safety rail, not a boundary.
+  `site open-as on`, `open --as --print-url`, `lan-guard` and `share` refuse
+  `--for-agent`, `benchbar mcp` and `BENCHBAR_NONINTERACTIVE=1`, and a run
+  without a terminal. On a Mac the Mac app lifts the missing terminal with
+  `BENCHBAR_SUDO=gui` or `BENCHBAR_NONINTERACTIVE=0`, and the CLI honors
+  either only when `BENCHBAR_APP_PID` names a running process that is an
+  ancestor of this CLI and whose name (the path `ps` prints) is
+  `*/BenchBar.app/Contents/MacOS/*` (`fl_person_env_ok`). It is a name check
+  on the parent chain: it stops an agent that only sets the variables, and
+  the refusal names the reason. It does not stop one that deliberately fakes
+  a parent named like the app, a process inside the app's process tree, a
+  faked terminal or the `FL_TESTING` seams. On Linux and WSL there is no
+  check at all (the Windows tray's process is not visible from inside WSL).
+  So do not set `BENCHBAR_SUDO`, `BENCHBAR_NONINTERACTIVE=0` or
+  `BENCHBAR_APP_PID` yourself to get past a refusal; the rule is yours to
+  keep, and the command is the person's to run.
 - Open as is the person's choice. Never run `benchbar site open-as on`
   (it refuses an agent anyway, but a process of the same user can set
   the variables that tell the CLI a person is at the keyboard, so the rule is
@@ -269,12 +285,15 @@ Resolve & Start flow. Do not bypass conflicts by killing unrelated processes.
   The CLI guards it: `open --as USER --print-url` refuses under
   `--for-agent`, `BENCHBAR_NONINTERACTIVE=1` and `benchbar mcp`, and when
   stdin is not a terminal unless the caller sets `BENCHBAR_NONINTERACTIVE=0`
-  itself (the Mac app does), as `site open-as on` does. A process of the same
-  user that fakes a terminal or sets that variable is not stopped: the guard
-  is against a mistake, not a boundary, so the rule above is the rule.
+  itself (the Mac app does, and the Mac CLI then checks `BENCHBAR_APP_PID`
+  as above), as `site open-as on` does. A process of the same user that fakes
+  a terminal, or that runs inside the app or on Linux, is not stopped: the
+  guard is against a mistake, not a boundary, so the rule above is the rule.
 - Experiments are the person's choice. `benchbar labs` lists them; never
-  run `benchbar labs on` (it refuses an agent anyway, and a process of the same
-  user can set the variables it looks at, so keep the rule). A command of an
+  run `benchbar labs on` (it refuses `--for-agent`, `benchbar mcp`,
+  `BENCHBAR_NONINTERACTIVE=1` and a run without a terminal unless the app
+  passes `BENCHBAR_NONINTERACTIVE=0`, and a guard of that kind is a safety
+  rail, so keep the rule). A command of an
   experiment that is off exits 2 with "Turn it on: benchbar labs on NAME":
   tell the user, do not work around it. `status --json` and
   `commands --json` list the `labs` that are on.
