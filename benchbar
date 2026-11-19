@@ -548,8 +548,11 @@ fi
 
 [[ -n "$COMMAND" ]] || { usage; exit 0; }
 # root owns files the user then cannot write (the state folder, logs, the bench lock): benchbar asks for sudo
-# itself, for the few steps that need it
-[[ "$COMMAND" == "help" ]] || fl_refuse_root
+# itself, for the few steps that need it. `doctor --prerequisites` only reads and reports, and its
+# regular_user check is how a person learns that they ran it as root, so it is not refused.
+if [[ "$COMMAND" != "help" ]] && ! [[ "$COMMAND" == "doctor" && "${OPT_PREREQ:-0}" == "1" ]]; then
+  fl_refuse_root
+fi
 
 # fl_json_mode_resolve: what --json, --jsonl and --for-agent mean for this
 # command, from its entry in commands.sh. Sets FL_JSON_KEY (its table key) and
