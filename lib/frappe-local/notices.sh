@@ -130,9 +130,9 @@ fl_notices_sync() {
       active="${active}${active:+ }${i}"
     fi
   done <<<"$FL_NOTICE_TABLE"
-  # the notices go first: a run that stops between the two writes shows them twice at worst
-  [[ "$active" == "$FL_NOTICES_ACTIVE" ]] || fl_state_set NOTICES "$active" || return 0
-  fl_state_set LAST_VERSION "${FL_VERSION:-0}" || return 0
+  # kept in memory for this run (status --json and the print read them); written by
+  # fl_notices_on_exit only when the run ends well, so a refused command writes nothing
+  FL_NOTICES_PENDING=1
   FL_NOTICES_LAST="${FL_VERSION:-0}"; FL_NOTICES_ACTIVE="$active"
   return 0
 }
@@ -145,6 +145,14 @@ fl_notices_sync() {
 # LAST_VERSION reads as 0.8.3. A run that made no state (a refusal, a read)
 # records nothing. Called by the exit trap.
 fl_notices_on_exit() {
+  # an update seen at the start (fl_notices_sync): its notices and version, once the run ended well
+  if [[ "${FL_NOTICES_PENDING:-0}" == "1" && "${1:-1}" == "0" && "${FL_DRY_RUN:-0}" != "1" ]]; then
+    FL_NOTICES_PENDING=0
+    # the notices go first: a run that stops between the two writes shows them twice at worst
+    fl_state_set NOTICES "$FL_NOTICES_ACTIVE" 2>/dev/null || return 0
+    fl_state_set LAST_VERSION "$FL_NOTICES_LAST" 2>/dev/null || true
+    return 0
+  fi
   [[ "$FL_NOTICES_FRESH" == "1" && "${FL_DRY_RUN:-0}" != "1" ]] || return 0
   FL_NOTICES_FRESH=0
   fl_notices_state_exists || return 0
@@ -241,7 +249,8 @@ fl_cmd_notices() {
     while IFS='~' read -r a id _; do [[ "$a" == notice ]] && names="${names}${names:+, }${id}"; done <<<"$FL_NOTICE_TABLE"
     fl_die "Unknown notice: ${dismiss}" "Ids: ${names}"
   fi
-  fl_notices_load
+  # an update seen at the start of this run is in memory until the run ends (fl_notices_on_exit)
+  [[ "${FL_NOTICES_PENDING:-0}" == "1" ]] || fl_notices_load
   if [[ "$all" == 1 ]]; then
     [[ -z "$FL_NOTICES_ACTIVE" ]] || fl_state_set NOTICES ""
     FL_NOTICES_ACTIVE=""
