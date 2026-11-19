@@ -370,13 +370,13 @@ fl_mariadb_root_password_resolve() {
 # ------------------------------------------------------------- drop-ins
 
 fl_mariadb_utf8_dropin_path() {
-  printf '%s/etc/my.cnf.d/frappe.cnf' "${FL_BREW_PREFIX:-/opt/homebrew}"
+  printf '%s/etc/my.cnf.d/frappe.cnf' "${FL_BREW_PREFIX:-$(fl_brew_default_prefix)}"
 }
 
 # true when $(brew --prefix)/etc/my.cnf pulls in my.cnf.d (or does not exist
 # yet: a fresh Homebrew MariaDB writes one that does)
 fl_mariadb_includedir_present() {
-  local brew="${FL_BREW_PREFIX:-/opt/homebrew}" mycnf
+  local brew="${FL_BREW_PREFIX:-$(fl_brew_default_prefix)}" mycnf
   mycnf="${brew}/etc/my.cnf"
   [[ -f "$mycnf" ]] || return 1
   grep -q "^!includedir ${brew}/etc/my.cnf.d" "$mycnf"
@@ -385,7 +385,7 @@ fl_mariadb_includedir_present() {
 # Makes sure $(brew --prefix)/etc/my.cnf includes my.cnf.d. Returns 0 always;
 # sets FL_MYCNF_CHANGED=1 when the file was written.
 fl_mariadb_includedir_ensure() {
-  local brew="${FL_BREW_PREFIX:-/opt/homebrew}" mycnf
+  local brew="${FL_BREW_PREFIX:-$(fl_brew_default_prefix)}" mycnf
   mycnf="${brew}/etc/my.cnf"
   FL_MYCNF_CHANGED=0
   if [[ -f "$mycnf" ]]; then

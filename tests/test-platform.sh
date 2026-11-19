@@ -15,6 +15,16 @@ assert_eq() {
 assert_eq "10.11.14" "$(printf '%s\n' 'mariadb  Ver 15.1 Distrib 10.11.14-MariaDB' | fl_parse_mariadb_version)"
 assert_eq "12.2.0" "$(printf '%s\n' 'mariadb from 12.2.0-MariaDB, client 15.2' | fl_parse_mariadb_version)"
 
+# Homebrew's default prefix follows the CPU: an Intel Mac never falls back to /opt/homebrew
+intel_bin="$(mktemp -d)"
+# shellcheck disable=SC2016  # the mock script, not this shell
+printf '#!/bin/sh\n[ "$1" = "-m" ] && echo x86_64 || echo Darwin\n' >"$intel_bin/uname"; chmod +x "$intel_bin/uname"
+assert_eq "/usr/local" "$(PATH="$intel_bin:$PATH" fl_brew_default_prefix)"
+# shellcheck disable=SC2016  # the mock script, not this shell
+printf '#!/bin/sh\n[ "$1" = "-m" ] && echo arm64 || echo Darwin\n' >"$intel_bin/uname"
+assert_eq "/opt/homebrew" "$(PATH="$intel_bin:$PATH" fl_brew_default_prefix)"
+find "$intel_bin" -delete
+
 FL_BREW_PREFIX="/opt/homebrew"
 FL_PYTHON_FORMULA="python@3.11"
 FL_PYTHON_BIN_NAME="python3.11"

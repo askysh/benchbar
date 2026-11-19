@@ -77,7 +77,7 @@ fl_lg_say_active() {
 fl_lg_require_person() {
   [[ "${FL_DRY_RUN:-0}" != 1 ]] || return 0
   fl_noninteractive && fl_die "benchbar lan-guard $1 runs sudo, a person's decision, so nothing run without a terminal can do it." "Run it in a terminal: benchbar lan-guard $1"
-  [[ -t 0 || "${BENCHBAR_SUDO:-}" == gui ]] || fl_die "benchbar lan-guard $1 needs a person at a terminal (it asks for your password), and this run has none." "Run it in a terminal: benchbar lan-guard $1"
+  [[ -t 0 ]] || fl_person_env_ok BENCHBAR_SUDO gui || fl_die "benchbar lan-guard $1 needs a person at a terminal (it asks for your password), and this run has none.${FL_PERSON_WHY:+ $FL_PERSON_WHY}" "Run it in a terminal: benchbar lan-guard $1"
 }
 
 # fl_lg_as_root REASON MANUAL SCRIPT: SCRIPT as root, once: one dialog with BENCHBAR_SUDO=gui, else sudo on

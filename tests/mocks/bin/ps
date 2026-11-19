@@ -1,8 +1,16 @@
 #!/bin/bash
 # ps mock: "ps -o command= -p PID" answers from $MOCK_STATE/ps/PID when a test
-# recorded one; everything else goes to the real ps.
+# recorded one; "ps -o ppid=,comm= -p PID" (fl_person_env_ok's walk up the
+# parents) answers from $MOCK_STATE/pstree/PID, one line "PPID COMM", and
+# exits 1 for a pid that has no file there (no such process); everything else
+# goes to the real ps.
 if [[ "${1:-}" == "-o" && "${2:-}" == "command=" && "${3:-}" == "-p" && -f "${MOCK_STATE:-/nonexistent}/ps/${4:-x}" ]]; then
   cat "${MOCK_STATE}/ps/$4"
+  exit 0
+fi
+if [[ "${1:-}" == "-o" && "${2:-}" == "ppid=,comm=" && "${3:-}" == "-p" && -d "${MOCK_STATE:-/nonexistent}/pstree" ]]; then
+  [[ -f "$MOCK_STATE/pstree/${4:-x}" ]] || exit 1
+  cat "$MOCK_STATE/pstree/$4"
   exit 0
 fi
 exec /bin/ps "$@"

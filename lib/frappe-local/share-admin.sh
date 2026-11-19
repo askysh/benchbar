@@ -131,7 +131,7 @@ fl_share_room_v() { fl_share_control_v "$1" "$2" "$FL_JS_SHARE_ROOM" "$3"; }
 # unless the app passes BENCHBAR_SUDO=gui after its own alert
 fl_share_require_person() {
   fl_noninteractive && fl_die "$1 is a person's decision, so nothing run without a terminal can do it." "Run it in a terminal: $2"
-  [[ -t 0 || "${BENCHBAR_SUDO:-}" == gui ]] || fl_die "$1 needs a person at a terminal, and this run has none." "Run it in a terminal: $2"
+  [[ -t 0 ]] || fl_person_env_ok BENCHBAR_SUDO gui || fl_die "$1 needs a person at a terminal, and this run has none.${FL_PERSON_WHY:+ $FL_PERSON_WHY}" "Run it in a terminal: $2"
 }
 
 fl_share_valid_device() {
