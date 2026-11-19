@@ -230,14 +230,19 @@ fl_profile_versions_json_v() {
 # profile loaded fresh in a subshell: true and null when Linux installs it,
 # false and the reasons when it does not. null and null where the gate does
 # not exist (macOS) and for a file that is invalid.
+# fl__profile_linux_why NAME: the Linux gate's reasons for profile NAME, one
+# line ("; " between them), empty when Linux installs it. Run in a subshell by
+# its caller: the profile it loads must not leak into the running command.
+fl__profile_linux_why() {
+  local FL_MARIADB_SOURCE=profile
+  fl_load_profile "$1" >/dev/null 2>&1 || { printf 'it cannot be loaded'; return 0; }
+  fl_linux_profile_problems | paste -sd ';' - | sed 's/;/; /g'
+}
+
 fl_profile_linux_json_v() {
   local __why="" __sup="null" __j2
   if declare -F fl_linux_profile_problems >/dev/null; then
-    __why="$(
-      FL_MARIADB_SOURCE=profile
-      fl_load_profile "$2" >/dev/null 2>&1 || { printf 'it cannot be loaded'; exit 0; }
-      fl_linux_profile_problems | paste -sd ';' - | sed 's/;/; /g'
-    )"
+    __why="$(fl__profile_linux_why "$2")"
     __sup=true; [[ -z "$__why" ]] || __sup=false
   fi
   fl_json_str_v __j2 "$__why"
