@@ -29,8 +29,8 @@ FL_FOCUS_DAYS="${FL_FOCUS_DAYS:-14}"
 FL_FETCH="${FL_FETCH:-0}"
 FL_FRESHNESS_FETCH_TIMEOUT="${FL_FRESHNESS_FETCH_TIMEOUT:-20}"
 
-# now as epoch seconds; FL_NOW fixes it (tests)
-fl_now() { if [[ -n "${FL_NOW:-}" ]]; then printf '%s' "$FL_NOW"; else date +%s; fi; }
+# now as epoch seconds; FL_NOW fixes it, only under FL_TESTING=1 (tests)
+fl_now() { if [[ "${FL_TESTING:-}" == "1" && -n "${FL_NOW:-}" ]]; then printf '%s' "$FL_NOW"; else date +%s; fi; }
 
 fl_epoch_iso() { [[ -n "$1" ]] || return 0; date -u -r "$1" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d "@$1" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || true; }
 
