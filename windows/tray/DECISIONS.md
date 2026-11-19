@@ -402,3 +402,18 @@ One line per non obvious choice. The 0.8.0 spike that chose WPF over WinUI was d
 - **A refusal is shown as the CLI worded it, never as an old CLI.** A status call that fails and has no `state` (the lab is off, exit 2) sets the
   error line from its `error` or first stderr line. "Needs a newer command line tool" is only for an ok document without the protocol fields.
 - **Not ported from the Mac tab in this change:** setup and Refresh copy and the lan-guard buttons (next change), Move to (`share assign`), the activity log, Open copy as and teardown.
+## The Microsoft Store package (MSIX)
+
+- A process is packaged when `kernel32!GetCurrentPackageFamilyName` answers; 15700 (no package) or any failure means unpackaged and nothing changes for the one line installer's copy. The family name is read at run time, never written in code. Everything that differs sits behind `IPackageInfo`, so `Tray.Core` logic is tested in both states.
+- Packaged, every file the tray keeps (`config.json`, `tray.log`, `running`, `runners`, `reports`, `recent-scan-folders.txt`,
+  `resume-setup`) is under `%LOCALAPPDATA%\Packages\<PackageFamilyName>\LocalCache\Local\BenchBar`, built in one place (`DataFolder`).
+  Writes to `%LOCALAPPDATA%\BenchBar` from a package are redirected to a private store whose content depends on what already existed, which
+  split `config.json` in two and made every shown path false; the physical path is never redirected. The shim uses the same expression and
+  does the one time import of an old `config.json`; the tray never writes to the old folder from a package.
+- `DisabledByUser` and `DisabledByPolicy` show the switch off and disabled, one line (Settings > Apps > Startup) and an "Open Startup
+  Settings" button (`ms-settings:startupapps`): an app cannot turn its own startup task back on after the person or a policy turned it off.
+  `EnabledByPolicy` shows on and disabled. A failed read shows off, disabled, with the same pointer, and writes the exception to `tray.log`.
+- A start with `--restarted` runs `benchbar.exe keepalive start` once, hidden, off the UI thread, 30 s timeout, and only logs a failure to
+  `tray.log` (`KeepaliveRestart`). A package update stops the keepalive process with the old package and nothing else starts it before the
+  next logon. The call is safe for everyone because the shim does nothing and exits 0 when there is no keepalive task or it already runs. A
+  normal start never makes the call.
