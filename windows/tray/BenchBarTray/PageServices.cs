@@ -12,6 +12,15 @@ internal sealed class PageServices
     /// <summary>Calls <c>benchbar.exe</c> and reads its JSON (<see cref="ICliClient.RunJsonAsync{T}"/>, <see cref="ICliClient.RunStreamAsync"/>).</summary>
     public ICliClient Cli { get; set; } = new CliClient(new ScriptedStreamRunner(), () => "benchbar.exe");
 
+    private CommandSupport? _commands;
+
+    /// <summary>What the CLI can do (<c>commands --json</c>), asked once: a page offers a command only when it is listed.</summary>
+    public CommandSupport Commands
+    {
+        get => _commands ??= new CommandSupport(Cli);
+        set => _commands = value;
+    }
+
     public Func<ResolvedTheme> Theme { get; set; } = () => new ResolvedTheme(true, true);
 
     /// <summary>The window sheets and dialogs belong to (the main window).</summary>

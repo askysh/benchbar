@@ -345,6 +345,31 @@ fl__ap_parse() {
   done
 }
 
+# fl__ap_resolve_local TARGET BRANCH NAME: sets FL_RES_* for a plain name that
+# no profile lists, from what the bench itself holds: its folder in apps/
+# (the repo is its remote), else the URL and branch its unfinished add kept.
+# An app added by URL is such a name, and so is one whose clone was never
+# reached, so finishing an add by name does not need a profile. 1 when the
+# name is a URL or a listed app, or the bench knows nothing of it (the
+# resolve then says "unknown app").
+fl__ap_resolve_local() {
+  local target="$1" branch="$2" name="$3" cur r repo=""
+  fl_is_url "$target" && return 1
+  [[ "$target" != "frappe" ]] || return 1
+  [[ -z "$(fl_lookup_app_policy "$target" "$FL_PROFILE" 2>/dev/null || true)" ]] || return 1
+  cur="$(fl_app_existing_dir "$target")"
+  if [[ -n "$cur" ]]; then
+    r="$(fl_app_remote "$cur")"
+    [[ -z "$r" ]] || repo="$(fl_app_git "$cur" remote get-url "$r" 2>/dev/null || true)"
+    FL_RES_NAME="${name:-$cur}"; FL_RES_REPO="$(fl_url_strip_userinfo "$repo")"; FL_RES_BRANCH="$branch"
+    return 0
+  fi
+  fl_pending_load "$target" && [[ "$PD_OP" == "app_add" && -n "$PD_URL" ]] || return 1
+  # a record is a local file, but a repo URL with a token in it is never used
+  fl_is_url "$PD_URL" && [[ "$(fl_url_strip_userinfo "$PD_URL")" == "$PD_URL" ]] || return 1
+  FL_RES_NAME="${name:-$target}"; FL_RES_REPO="$PD_URL"; FL_RES_BRANCH="${branch:-$PD_BRANCH}"
+}
+
 # fl__ap_target I: resolves target I (AP_T_*) and stores what it finds in
 # M_*. Its required apps are walked in a second pass, when every target is
 # known (one of them may be what another requires).
@@ -358,7 +383,7 @@ fl__ap_target() {
     [[ "$pin" =~ $pre ]] || fl_die "Invalid commit: '${pin}'." "Pass a commit hash of 7 to 40 hex characters: --commit 0123abc"
     pin="$(printf '%s' "$pin" | tr 'A-F' 'a-f')"
   fi
-  fl_app_resolve "$target" "$branch" "$name"
+  fl__ap_resolve_local "$target" "$branch" "$name" || fl_app_resolve "$target" "$branch" "$name"
   a_name="$FL_RES_NAME"; a_repo="$FL_RES_REPO"; a_branch="$FL_RES_BRANCH"
   if [[ -n "$branch" ]]; then a_bsrc="given"; elif [[ -n "$a_branch" ]]; then a_bsrc="policy"; fi
 
@@ -819,7 +844,7 @@ fl__ap_record() {
       esac
       i=$((i + 1))
     done
-    fl_pending_write app_add "${M_NAME[$m]}" "${M_BRANCH[$m]}" "" "${M_COMMIT[$m]}" "$1" "$2" ${left[@]+"${left[@]}"} || code=1
+    FL_PENDING_URL="${M_REPO[$m]}" fl_pending_write app_add "${M_NAME[$m]}" "${M_BRANCH[$m]}" "" "${M_COMMIT[$m]}" "$1" "$2" ${left[@]+"${left[@]}"} || code=1
   done
   return "$code"
 }
@@ -1001,9 +1026,9 @@ fl__ap_apply() {
         [[ "${M_INVOLVED[$m]}" == "1" ]] || continue
         nm="${M_NAME[$m]}"
         if [[ -n "$s" && -n "$e" ]]; then
-          fl_pending_write app_add "$nm" "${M_BRANCH[$m]}" "" "${M_COMMIT[$m]}" "$first_kind" "$first_reason" "requirements_python|${e}|Python requirements" "build|${s}|Build" "restart||Restart" || code=1
+          FL_PENDING_URL="${M_REPO[$m]}" fl_pending_write app_add "$nm" "${M_BRANCH[$m]}" "" "${M_COMMIT[$m]}" "$first_kind" "$first_reason" "requirements_python|${e}|Python requirements" "build|${s}|Build" "restart||Restart" || code=1
         elif [[ -n "$s" ]]; then
-          fl_pending_write app_add "$nm" "${M_BRANCH[$m]}" "" "${M_COMMIT[$m]}" "$first_kind" "$first_reason" "build|${s}|Build" "restart||Restart" || code=1
+          FL_PENDING_URL="${M_REPO[$m]}" fl_pending_write app_add "$nm" "${M_BRANCH[$m]}" "" "${M_COMMIT[$m]}" "$first_kind" "$first_reason" "build|${s}|Build" "restart||Restart" || code=1
         else
           fl_pending_remove "$nm"
         fi

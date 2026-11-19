@@ -238,7 +238,7 @@ listener: it is polled at rest (0.6.1).
 | `scheduler` | bool | added in 0.4: `Procfile.lean` runs `bench schedule` (`benchbar service --with-schedule`) |
 | `listen` | string | added in 0.9: `"local"` (the web server and socketio listen on 127.0.0.1) or `"all"` (every interface, `benchbar listen all`) |
 | `redis` | object | added in 0.8: `{"queue": {"port", "running"}, "cache": {"port", "running"}}`. `running` is whether something accepts a connection on the port, read by bash itself (`/dev/tcp`), so status starts no new program for it (a subshell for the probe). `benchbar up --services-only` starts these two and nothing else, `benchbar down` stops them |
-| `pending_operations` | array | `[]` when none. An `app update` or planned `app add` that stopped part way, one entry per app: `op` (`app_update` or `app_add`), `app`, `branch`, `from`, `to` (commits; `from` is null for an add), `steps[]` (`kind`, `target`, `name` of the steps not done yet), `failed_step` (the kind it stopped at, or null), `reason` (that step's own failure line, or null) and `updated_at`. Read from a record file in the bench's state folder: no extra process on the status path |
+| `pending_operations` | array | `[]` when none. An `app update` or planned `app add` that stopped part way, one entry per app: `op` (`app_update` or `app_add`), `app`, `branch`, `from`, `to` (commits; `from` is null for an add), `steps[]` (`kind`, `target`, `name` of the steps not done yet), `failed_step` (the kind it stopped at, or null), `reason` (that step's own failure line, or null), `url` (an add's repo URL, so `app add NAME` can finish an app that was never cloned or that no profile lists; null for an update and for a record an older version wrote) and `updated_at`. Read from a record file in the bench's state folder: no extra process on the status path |
 
 Kept from frappe-mac 0.2.0 for older readers: `url`, `agent`,
 `loaded` (`"yes"` or `"no"`), `stop_flag` (`"manual"`, `"crash"`,
@@ -906,6 +906,8 @@ subscription is behind comes from its last fetch.
 | `valid` | bool | `false` when `install --profile NAME` would refuse it |
 | `error` | string or null | why: a parse error (`FILE:LINE: not supported: ...`), a name that shadows a built in profile, or a name hidden by an earlier file |
 | `python`, `node`, `mariadb` | string or null | 0.8: the versions the profile brings (`"3.11"`, `"22"`, `"10.11"`), a team profile's from its base; `null` for an invalid file |
+| `linux_supported` | bool or null | 0.9: whether `install --profile NAME` passes the Linux profile gate (Python 3.10 or newer from uv, Node 18 or newer from fnm, a MariaDB that apt gives or the profile accepts). A team profile passes or fails with its base. `null` on macOS, where the gate does not exist, and for an invalid file (`error` says why) |
+| `unsupported_reason` | string or null | 0.9: when `linux_supported` is `false`, the reasons the install prints after "is not supported on Linux yet:", joined with `; `; `null` otherwise |
 
 0.8 adds `bundles` at the top: the app bundles `install --bundle` takes,
 each with `name`, `label`, `apps` (array of app names) and `description`,

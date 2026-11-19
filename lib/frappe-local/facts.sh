@@ -45,7 +45,14 @@ fl_facts_begin() {
 fl_facts_end() {
   fl_par_stop
   if [[ -n "$FL_FACTS_WAKE" ]]; then exec 9<&- 2>/dev/null || true; FL_FACTS_WAKE=""; fi
-  [[ -z "$FL_FACTS_DIR" ]] || rm -rf "$FL_FACTS_DIR"
+  # a job stopped a moment ago can still have a write in flight, so a removal that
+  # leaves the folder ("directory not empty") is tried again, for up to a second
+  local __try=0
+  while [[ -n "$FL_FACTS_DIR" && -e "$FL_FACTS_DIR" && "$__try" -lt 10 ]]; do
+    rm -rf "$FL_FACTS_DIR" 2>/dev/null || true
+    [[ -e "$FL_FACTS_DIR" ]] || break
+    sleep 0.1; __try=$((__try + 1))
+  done
   FL_FACTS_DIR=""
   FL_PAR_PIDS=()
   return 0

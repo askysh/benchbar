@@ -426,9 +426,18 @@ A bench has four tabs:
   Open as. **Pin** in Find User keeps a user (nine at most per site,
   Administrator is always there) for Quick Switch.
 - **Apps**: Add App (from a git URL, with a branch or a commit, and the
-  sites to install it on), Update after the dry run, Install on a site,
-  focus pins and Check Remotes. An app with local changes cannot be
-  updated from the window.
+  sites to install it on; **Add Another App** puts several apps in one
+  plan, each with its own branch, commit and sites, under one token),
+  Update after the dry run, Install on a site, focus pins and Check
+  Remotes. An app with local changes cannot be updated from the window.
+- **Unfinished updates and adds**: when an `app update` or an `app add`
+  stopped part way, the bench page shows a banner above the tabs with
+  what stopped, why, the fix command and two buttons. **Finish Update**
+  or **Finish Add** shows the plan of the same command, which lists only
+  the steps left. **Discard** asks first, then runs
+  `benchbar app update NAME --discard-pending`, which drops the record
+  and runs nothing; it does not undo what already ran. The banner reads
+  `pending_operations` of `benchbar.exe status --json`.
 - **Health**: the doctor checks with the Windows setup checks, Copy fix,
   and Repair, which shows the plan first and asks for your Linux password
   once when a step uses sudo.
@@ -457,6 +466,31 @@ in Labs, the tab does not appear.
 Start and Restart check the bench's ports first, from the window and from
 the flyout. A port another program holds stops the start with the reason
 and Review Port Conflict; BenchBar never stops that program.
+
+The **...** menu of a bench's Overview shows a command only when the CLI
+inside the distro lists it (`benchbar.exe commands --json`, asked once), so
+an older CLI never gets a call it would refuse. **Start Services Only**
+starts the bench's Redis and nothing else, for a restore or a migrate, on a
+stopped bench (`up --services-only`); **Stop Services** puts it away
+(`down`). **Install Service...** (or **Refresh Service...**) and the
+Scheduler box show the plan of `benchbar service` first and run it with its
+token only after your yes. **Write Lockfile...** and **Apply Lockfile...**
+show the text of `lock write --dry-run` or `lock apply --dry-run` and run
+`lock write --yes` or `lock apply --yes` only after your yes; the CLI has no
+plan token for them yet, so a change between the preview and the yes is not
+refused by a token. **Start again after Ubuntu restarts** is `autostart on`
+and `off`. **Watch Assets in Terminal** and **Run in Foreground in
+Terminal** open `benchbar watch` or `benchbar fg` in Windows Terminal inside
+the distro; closing that window ends them. The tray does not run either one
+as a child of its own: they have no way to be stopped from outside, and
+ending `benchbar.exe` on Windows can leave `bench watch` running in the
+distro. On the Health tab a warning has **Acknowledge** (`doctor --ack`),
+which silences it for this bench until its message changes, and an
+acknowledged one has **Undo Acknowledge**; nothing acknowledges by itself and
+a failure has no button. On the New Bench page of the setup wizard the
+warnings and failures of `doctor --prerequisites` for the folder are listed
+with the fix to copy; they stop nothing, the plan on the Review page still
+decides.
 
 **Quick Switch...** in the tray menu opens a small panel over any window:
 Administrator, your pinned users and, when you type two letters or more,

@@ -22,12 +22,15 @@ public class WizardProfileViewTests
         public void CopyText(string text) { }
     }
 
-    private static async Task<WizardModel> NewBenchPage(bool refuseV16)
+    /// <summary>The list of today's CLI (<paramref name="list"/>, every profile answered), or one of an older CLI whose gate is asked per profile (<paramref name="olderCli"/>).</summary>
+    private static async Task<WizardModel> NewBenchPage(bool refuseV16, string list = "profile-list-linux.json", bool olderCli = false)
     {
         SynchronizationContext.SetSynchronizationContext(null);
         var service = WindowViewTests.Fixture(ready: true);
         Directory.CreateDirectory(Path.Combine(service.Root, "cli"));
-        File.Copy(Path.Combine(FixtureFiles.Dir("cli"), "profile-list-linux.json"), Path.Combine(service.Root, "cli", "profile-list.json"));
+        var text = File.ReadAllText(Path.Combine(FixtureFiles.Dir("cli"), list));
+        if (olderCli) text = System.Text.RegularExpressions.Regex.Replace(text, ",\"linux_supported\":[a-z]+,\"unsupported_reason\":(\"[^\"]*\"|null)", "");
+        File.WriteAllText(Path.Combine(service.Root, "cli", "profile-list.json"), text);
         if (refuseV16)
             File.Copy(Path.Combine(FixtureFiles.Dir("setup"), "profile-gate-refused.jsonl"), Path.Combine(service.Root, "setup", "profile-gate-v16-lts.jsonl"));
         var model = new WizardModel(service, new Host());
@@ -58,9 +61,25 @@ public class WizardProfileViewTests
     }
 
     [Fact]
-    public async Task ARefusedProfileIsDisabledAndTheNoteSaysWhy()
+    public async Task AProfileTheListSaysLinuxCannotInstallIsDisabledAndTheNoteSaysWhy()
     {
-        var model = await NewBenchPage(refuseV16: true);
+        var model = await NewBenchPage(refuseV16: false, list: "profile-list-linux-gated.json");
+        Sta.Run(() =>
+        {
+            var view = new WizardView(model, new WizardActions());
+            view.Update();
+            var items = ProfileBox(view).Items.OfType<ComboBoxItem>().ToList();
+            var v16 = items.Single(i => (string)i.Tag == "v16-lts");
+            Assert.False(v16.IsEnabled);
+            Assert.EndsWith("(not available here)", (string)v16.Content);
+            Assert.Contains(Texts(view), t => t.Contains("v16-lts: Not supported on Linux yet: it needs MariaDB 12.0, apt on this release gives 10.11", StringComparison.Ordinal));
+        });
+    }
+
+    [Fact]
+    public async Task ARefusedProfileOfAnOlderCliIsDisabledAndTheNoteSaysWhy()
+    {
+        var model = await NewBenchPage(refuseV16: true, olderCli: true);
         Sta.Run(() =>
         {
             var view = new WizardView(model, new WizardActions());

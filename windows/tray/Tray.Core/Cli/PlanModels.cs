@@ -16,6 +16,13 @@ public sealed record PlanDocument(IReadOnlyList<PlanStepInfo> Steps, IReadOnlyLi
     /// <summary>The steps that ask for the Linux password and will run.</summary>
     public int SudoSteps => Steps.Count(s => s.Sudo && s.WillRun);
 
+    /// <summary>What a command without a JSON plan printed under <c>--dry-run</c> (<see cref="PlanReviewRequest.PlanIsText"/>), shown as it is.</summary>
+    public IReadOnlyList<string> Preview { get; init; } = [];
+
+    /// <summary>The plan of a command that prints text: its lines as the preview, "unchanged" when the CLI says there is nothing to do.</summary>
+    public static PlanDocument FromText(IReadOnlyList<string> lines) => new([], [], [], [], [], null, true,
+        !lines.Any(l => l.Contains("unchanged:", StringComparison.OrdinalIgnoreCase)), new System.Text.Json.Nodes.JsonObject()) { Preview = lines };
+
     public static PlanDocument FromJson(JsonObject o)
     {
         var steps = new List<PlanStepInfo>();
@@ -89,12 +96,21 @@ public sealed record PlanReviewRequest(string Title, IReadOnlyList<string> PlanA
     /// <summary>A sentence added after the CLI's own error when an apply fails (what the CLI cannot say from here), or null.</summary>
     public Func<CliStreamResult, string?>? ExplainFailure { get; init; }
 
+    /// <summary>
+    /// The command has no JSON plan (<c>lock write</c>, <c>lock apply</c>): <see cref="PlanArgs"/> is read as text and shown as it is, and
+    /// the apply runs after a yes. Without a token a change since the preview is not refused; the CLI then asks again of its own state.
+    /// </summary>
+    public bool PlanIsText { get; init; }
+
     public TimeSpan PlanTimeout { get; init; } = CliTimeouts.Plan;
 
     public TimeSpan ApplyTimeout { get; init; } = CliTimeouts.Apply;
 
     /// <summary>Shown above the steps: what this will do, in a line.</summary>
     public string? Summary { get; init; }
+
+    /// <summary>Lines about the plan the CLI made (one per app of an add), shown under the summary of the review.</summary>
+    public Func<PlanDocument, IReadOnlyList<string>>? Describe { get; init; }
 
     /// <summary><c>baseArgs --dry-run --json</c> to plan, <c>baseArgs --apply TOKEN --yes --jsonl</c> to apply.</summary>
     public static PlanReviewRequest Tokened(string title, IReadOnlyList<string> baseArgs) => new(
