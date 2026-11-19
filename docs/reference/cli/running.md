@@ -210,4 +210,9 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `logs` | `--since` | `TIMESTAMP` | Only lines at or after it (--json; ISO 8601, or HH:MM:SS today). |
 | `logs` | `--since-restart` |  | Only lines after the bench's last start (--json). |
 | `logs` | `--no-follow` |  | Print and exit. |
+
+| Command | Environment variable | What it does |
+|---|---|---|
+| `status` | `BENCHBAR_LOAD_ALL` | Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load). |
+| `path` | `BENCHBAR_LOAD_ALL` | Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load). |
 <!-- /generated:cli-commands -->
