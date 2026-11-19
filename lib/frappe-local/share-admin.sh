@@ -623,8 +623,8 @@ fl_cmd_share_teardown() {
     if [[ "$had_state" == 1 ]]; then
       fl_share_write_private "${dir}/stop_requested" 600 "" || fl_warn "could not leave the stop marker for a start on its way"
       fl_share_teardown
-      [[ "$SH_BOOTOUT_FAILED" == 0 ]] || fl_die "launchd still lists ${FL_SHARE_JOB_LABEL} after the bootout, so the share may still run; nothing else was torn down." \
-        "Run: launchctl bootout $(fl_share_job_target), then benchbar share teardown again"
+      [[ "$SH_BOOTOUT_FAILED" == 0 ]] || fl_die "$(fl_share_job_manager) still lists ${FL_SHARE_JOB_LABEL} after the bootout, so the share may still run; nothing else was torn down." \
+        "Run: $(fl_share_job_bootout_hint), then benchbar share teardown again"
       [[ "$SH_TORN" == 0 ]] || fl_changed process share "stopped"
     fi
     if [[ "$had_copy" == 1 ]]; then

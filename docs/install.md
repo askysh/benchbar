@@ -393,7 +393,7 @@ and you remove it yourself when you want it gone:
 - The MariaDB root password: the Keychain item `benchbar-mariadb` on macOS, a 0600 file in the state folder on Linux.
 - The patched wkhtmltopdf package that `install` put in for PDF output; remove it with the package tool of your system.
 - On Linux, linger for your user (`sudo loginctl disable-linger USER`), and the `~/.bashrc` helper block when you did not use `uninstall-service`.
-- The LAN guard of a room on macOS: `benchbar lan-guard remove` takes out the pf anchor and its launch daemon.
+- The LAN guard of a room: `benchbar lan-guard remove` takes out the pf anchor and its launch daemon (macOS), or the nftables table, its systemd unit and its rules file (Linux).
 
 ### Homebrew
 

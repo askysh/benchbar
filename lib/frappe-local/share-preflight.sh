@@ -308,6 +308,9 @@ fl_sp_probe_pf() {
 
   if [[ "$listener_bad" == 1 ]]; then
     fl_sp_add local_network critical skip "no probe could run"
+  elif [[ "$control_bad" == 1 && "${FL_PLATFORM:-macos}" == linux ]]; then
+    fl_sp_add local_network critical fail "This computer did not answer its own address ${ip} on a port outside the bench ports. A firewall may be refusing it." \
+      "Look at the host firewall: sudo nft list ruleset, and ufw status." none
   elif [[ "$control_bad" == 1 ]]; then
     fl_sp_add local_network critical fail "This Mac did not answer its own address ${ip} on a port outside the bench ports. If BenchBar has no Local Network access, allow it under System Settings > Privacy & Security > Local Network." \
       "Open System Settings > Privacy & Security > Local Network and allow BenchBar." open_local_network_settings
@@ -496,6 +499,11 @@ fl_sp_node_problem_v() {
 
 fl_sp_firewall() {
   local state app out real="$SP_NODE_REAL"
+  # Linux has no list of programs allowed through the firewall (lan-guard allow-node is the macOS one)
+  if [[ "${FL_PLATFORM:-macos}" == linux ]]; then
+    fl_sp_add firewall_node static skip "Linux has no per-program firewall list; with ufw on, the room's port needs: sudo ufw allow ${FL_SHARE_GATEWAY_PORT}/tcp"
+    return 0
+  fi
   if [[ -z "$real" ]]; then fl_sp_add firewall_node static skip "needs a usable node"; return 0; fi
   local fw="${FL_SOCKETFILTERFW:-/usr/libexec/ApplicationFirewall/socketfilterfw}"
   local blocked="macOS is blocking incoming connections to node."

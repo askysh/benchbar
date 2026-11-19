@@ -1,5 +1,5 @@
 #!/bin/bash
-#@version 6
+#@version 7
 #@quoted SHARE_DIR SOCK BENCH SHARE_SITE WEB_PORT PYTHON LIB NODE BENCHBAR DNS_SD CAFFEINATE LSOF CURL SITE_LABEL ROOM_LABEL  # SESSIONS_PY and CONTROL_JS sit in quoted here-documents, where they are literal
 # __HEADER__
 #
@@ -19,7 +19,9 @@
 #      here gateway_reachable must be ok: a skip proves nothing), and only then
 #      is the gateway told the web is up. It starts with the web down, answering
 #      every proxied request with its "restarting" page.
-#   5. dns-sd, and caffeinate for as long as this runner lives. Either one that
+#   5. dns-sd (avahi-publish on Linux), and caffeinate for as long as this runner lives. Either tool
+#      may be empty (no avahi-publish installed, no sleep inhibitor on Linux): that one is skipped, said
+#      once in the log, and never counts as degraded. Either one that
 #      ends is started again after a backoff that doubles (BACKOFF_MIN to
 #      BACKOFF_MAX polls) and resets once it has stayed up STABLE_POLLS. dns-sd
 #      ending makes the share degraded until it has stayed up that long; it
@@ -170,7 +172,11 @@ web_owns_port() {
   local pids nl='
 '
   alive "$WEB_PID" || return 1
-  pids="$("$LSOF" -ti "tcp:${WEB_PORT}" -sTCP:LISTEN 2>/dev/null)"
+  case "${LSOF##*/}" in
+    # Linux: ss names the owner of a listening socket as users:(("python",pid=N,fd=M))
+    ss) pids="$("$LSOF" -Hltnp "sport = :${WEB_PORT}" 2>/dev/null | grep -o 'pid=[0-9]*' | cut -d= -f2)" ;;
+    *) pids="$("$LSOF" -ti "tcp:${WEB_PORT}" -sTCP:LISTEN 2>/dev/null)" ;;
+  esac
   case "${nl}${pids}${nl}" in *"${nl}${WEB_PID}${nl}"*) return 0 ;; esac
   return 1
 }
@@ -273,13 +279,21 @@ start_gateway() {
 # start_dns [again]: the TXT record is for display only: no fingerprint, never the code. A start again is
 # logged by its backoff line alone.
 start_dns() {
-  "$DNS_SD" -R "$ROOM_LABEL" _benchbar-share._tcp local "$GATEWAY_PORT" v=3 "label=${ROOM_LABEL}" "site=${SITE_LABEL}" </dev/null &
+  if [ -z "$DNS_SD" ]; then
+    [ -n "${1:-}" ] || say "no advertiser (avahi-publish is not installed): this room is not listed on the network, people join with the address and the code"
+    return 0
+  fi
+  case "${DNS_SD##*/}" in
+    avahi-publish*) "$DNS_SD" -s "$ROOM_LABEL" _benchbar-share._tcp "$GATEWAY_PORT" v=3 "label=${ROOM_LABEL}" "site=${SITE_LABEL}" </dev/null >/dev/null 2>&1 & ;;
+    *) "$DNS_SD" -R "$ROOM_LABEL" _benchbar-share._tcp local "$GATEWAY_PORT" v=3 "label=${ROOM_LABEL}" "site=${SITE_LABEL}" </dev/null & ;;
+  esac
   DNS_PID=$!
   DNS_SINCE=$polls
   [ -n "${1:-}" ] || say "dns-sd started (pid ${DNS_PID})"
 }
 
 start_caffeinate() {
+  [ -n "$CAFFEINATE" ] || return 0
   "$CAFFEINATE" -i -w "$$" </dev/null &
   CAF_PID=$!
   CAF_SINCE=$polls

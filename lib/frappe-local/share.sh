@@ -85,10 +85,13 @@ fl_share_cfg_str_v() {
   printf -v "$1" '%s' "${__raw%\"}"
 }
 
+# fl_sha256: the SHA-256 of stdin, as shasum prints it (macOS), else sha256sum (Linux)
+fl_sha256() { if [[ -x /usr/bin/shasum ]]; then /usr/bin/shasum -a 256; else sha256sum; fi; }
+
 # fl_share_fingerprint_v VAR CERT: sha256:<hex of the SHA-256 of the certificate's SPKI, DER>
 fl_share_fingerprint_v() {
   local __h
-  __h="$(/usr/bin/openssl x509 -in "$2" -pubkey -noout | /usr/bin/openssl pkey -pubin -outform der | /usr/bin/shasum -a 256 | awk '{print $1}')"
+  __h="$(/usr/bin/openssl x509 -in "$2" -pubkey -noout | /usr/bin/openssl pkey -pubin -outform der | fl_sha256 | awk '{print $1}')"
   [[ "$__h" =~ ^[0-9a-f]{64}$ ]] || { fl_fail "could not read the public key of $2"; return 1; }
   printf -v "$1" 'sha256:%s' "$__h"
 }

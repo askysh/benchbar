@@ -161,6 +161,8 @@ fi
 [[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/lan-guard.sh"
 # shellcheck source=lib/frappe-local/lan-guard-linux.sh
 [[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/lan-guard-linux.sh"
+# shellcheck source=lib/frappe-local/share-linux.sh
+[[ "$FL_LEAN" == "1" ]] || . "${SCRIPT_DIR}/lib/frappe-local/share-linux.sh"
 # shellcheck source=lib/frappe-local/apps.sh
 . "${SCRIPT_DIR}/lib/frappe-local/apps.sh"
 # shellcheck source=lib/frappe-local/freshness.sh
