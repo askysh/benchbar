@@ -15,11 +15,11 @@ programs bring them to the Windows side:
 BenchBar for Windows is in beta. It works, and you may find rough edges.
 The tray and the window say so: a **Beta** pill, the window title
 "BenchBar (Beta)" and a banner that you can dismiss. Both programs are
-not signed yet. On our Windows 11 test PC (Smart App Control off) the one
-line installer needed no click through a warning. Smart App Control, when
-it is on, blocks unsigned programs: see
-[Before you install](#before-you-install) and
-[Signing and verification](#signing-and-verification).
+not signed, and 0.9.0 has no signed or Microsoft Store route. On our
+Windows 11 test PC (Smart App Control off) the one line installer needed
+no click through a warning. Smart App Control, when it is on, blocks the
+tray and `benchbar.exe`: see [Smart App Control](#smart-app-control) for
+what you can do, and [Signing and verification](#signing-and-verification).
 
 ## What you need
 
@@ -58,8 +58,10 @@ Open File dialog. It checks every file against `SHA256SUMS` first.
 
 Smart App Control is a Windows 11 feature. When it is on, it blocks
 programs that are not signed and have no known reputation, and it has no
-exception for one program. BenchBar is not signed yet, so with Smart App
-Control on, Windows blocks `benchbar.exe` and BenchBar Tray.
+exception for one program. BenchBar 0.9.0 is not signed and has no
+Microsoft Store package, so with Smart App Control on, Windows blocks
+`benchbar.exe` and BenchBar Tray. There is no signed route in this
+release.
 
 To check: open Windows Security, then **App & browser control**, then
 **Smart App Control**. It says **On**, **Evaluation** or **Off**.
@@ -67,16 +69,29 @@ To check: open Windows Security, then **App & browser control**, then
 What the installer does:
 
 - **On**: it stops before it downloads or writes anything, says what
-  Smart App Control is and that BenchBar is not signed yet, and links
-  here.
+  Smart App Control is and that BenchBar is not signed, and links here.
 - **Evaluation**: it warns and goes on. Windows may turn Smart App
   Control on later and block BenchBar then.
 - **Off**, or a Windows without it: it goes on.
 
-To use BenchBar while it is on, you have to turn it off in Windows
-Security > App & browser control > Smart App Control settings. On some
-versions of Windows you cannot turn it back on without resetting Windows.
-Think about that first.
+What you can do when it is on:
+
+- **Use the command line inside WSL.** `benchbar` runs inside your Ubuntu
+  24.04 distro, where Smart App Control does not apply, and it does all
+  the work: install it there with the line in
+  [The installer on Linux](install.md#the-installer-on-linux), then run
+  `benchbar install`. You lose only the Windows parts: `benchbar.exe` in
+  PowerShell and the tray. Run `wsl.exe -d Ubuntu-24.04 -- benchbar
+  status` from PowerShell instead.
+- **Turn Smart App Control off** in Windows Security > App & browser
+  control > Smart App Control settings, then run the one line installer
+  again. On some versions of Windows you cannot turn it back on without
+  resetting Windows. Think about that first.
+- **Wait for a signed build.** There is none in 0.9.0 and no date. See the
+  [roadmap](https://github.com/askysh/benchbar/blob/main/ROADMAP.md).
+
+With Smart App Control off, or in evaluation mode, the one line installer
+is the route to use.
 
 The installer also stops early when PowerShell runs in Constrained
 Language Mode, which a company policy can set. Ask whoever manages the PC.
@@ -306,9 +321,12 @@ tray while the runtime is missing.
 ## Signing and verification
 
 The Windows programs (`benchbar.exe`, `BenchBarTray.exe` and the tray's
-own DLLs) are not signed yet. In practice that means: Smart App Control
-blocks them, and a program you start from an unpacked zip shows the "Open
-File - Security Warning" dialog. See [Before you install](#before-you-install)
+own DLLs) are not signed, and 0.9.0 has no signed or Microsoft Store
+route: SignPath Foundation declined the project on 2026-11-13, and a
+Store package is not part of this release. In practice that means: Smart
+App Control blocks them (see [Smart App Control](#smart-app-control)),
+and a program you start from an unpacked zip shows the "Open File -
+Security Warning" dialog. See [Before you install](#before-you-install)
 for what to expect on each route.
 
 You can still check what you download:
@@ -483,6 +501,12 @@ One keepalive runs at a time, for one distro. While it keeps one distro
 awake, Start cannot start a second distro, and the tray says so. Switch
 the distro in Settings, or stop the other keepalive first. This is a
 limit of the beta.
+
+A package update stops a running keepalive, and the task starts only at
+logon. `benchbar.exe keepalive start` runs the installed task again when
+its run process is not alive. It prints nothing and exits 0 when there is
+no task or the run is alive, and it never creates or changes the task. The
+tray calls it after an update.
 
 ### Settings
 

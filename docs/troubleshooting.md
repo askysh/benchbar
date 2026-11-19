@@ -395,9 +395,10 @@ and PATH) do not stop you.
 - **Something else.** Use **Report a Bug** in the tray menu, the wizard
   footer or next to a failed step. It writes a redacted zip and opens the
   bug form. See [Report a bug](windows.md#report-a-bug).
-- **SmartScreen blocks `benchbar.exe`.** The program is unsigned until the
-  signing application is approved. Choose **More info**, then **Run
-  anyway**, and try the command again.
+- **SmartScreen blocks `benchbar.exe`.** The program is not signed (0.9.0 has
+  no signed or Store route). Choose **More info**, then **Run anyway**,
+  and try the command again. If Smart App Control blocks it instead,
+  see [Smart App Control](windows.md#smart-app-control).
 
 ## Things to avoid
 
