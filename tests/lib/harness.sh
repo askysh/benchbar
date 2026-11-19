@@ -41,6 +41,9 @@ export FL_UP_WAIT_SECS=2
 # in bash: off, so no test ever meets a real service of this machine; the
 # tests of the probes set FL_LOCAL_PROBES=1 and bring their own listeners
 export FL_LOCAL_PROBES=0
+# every FL_* and BENCHBAR_* test seam below is read only when this is 1;
+# a production run ignores them (docs/DECISIONS.md)
+export FL_TESTING=1
 export FL_KILL_CMD=mockkill
 export BENCHBAR_KILL_CMD=mockkill
 export FL_APP_DIRS="$HOME/Applications"

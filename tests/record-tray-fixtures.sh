@@ -80,6 +80,7 @@ shapes() {
   printf '%s\n' \
     "cli/apps-list.json|app list --json --bench-dir $BENCH" \
     "cli/health-doctor.json|doctor --json --bench-dir $BENCH" \
+    "cli/labs-list.json|labs list --json" \
     "cli/logs-first.json|logs --json -n5 --bench-dir $BENCH" \
     "cli/ports-check-conflict.json|ports check --json --bench-dir $BENCH" \
     "cli/ports-check-running.json|ports check --json --bench-dir $BENCH" \

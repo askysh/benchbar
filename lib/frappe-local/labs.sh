@@ -90,18 +90,23 @@ fl_lab_set() {
   fl_state_set LABS "$out"
 }
 
-# fl_lab_of_cmd CMD: the lab that gates the top level command CMD, or nothing
-fl_lab_of_cmd() {
-  local k n c cmds x
-  while IFS='~' read -r k n _ _ _ _ c _; do
-    [[ "$k" == lab ]] || continue
-    IFS=',' read -r -a cmds <<<"$c"
-    for x in ${cmds[@]+"${cmds[@]}"}; do
-      [[ "$x" == "$1" ]] && { printf '%s' "$n"; return 0; }
+# fl_lab_of_cmd_v VAR CMD: the lab that gates the top level command CMD, or
+# nothing, into VAR (no subshell: commands --json asks for every command)
+fl_lab_of_cmd_v() {
+  local __k __n __c __cmds __x
+  printf -v "$1" '%s' ""
+  while IFS='~' read -r __k __n _ _ _ _ __c _; do
+    [[ "$__k" == lab ]] || continue
+    IFS=',' read -r -a __cmds <<<"$__c"
+    for __x in ${__cmds[@]+"${__cmds[@]}"}; do
+      [[ "$__x" == "$2" ]] && { printf -v "$1" '%s' "$__n"; return 0; }
     done
   done <<<"$FL_LAB_TABLE"
   return 0
 }
+
+# fl_lab_of_cmd CMD: the same, printed
+fl_lab_of_cmd() { local r; fl_lab_of_cmd_v r "$1"; printf '%s' "$r"; }
 
 # fl_lab_platform_v VAR: the platform this run is on: macos, linux or windows
 # (Linux inside WSL)

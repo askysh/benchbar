@@ -450,4 +450,10 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `users` | `--json` |  | One JSON document. |
 | `report` | `--print` |  | Print to the terminal instead of writing the zip. |
 | `self-update` | `--check` |  | This version against the latest. |
+
+| Command | Environment variable | What it does |
+|---|---|---|
+| `list` | `BENCHBAR_LOAD_ALL` | Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load). |
+| `where` | `BENCHBAR_LOAD_ALL` | Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load). |
+| `commands` | `BENCHBAR_LOAD_ALL` | Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load). |
 <!-- /generated:cli-commands -->
