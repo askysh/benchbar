@@ -1,0 +1,6 @@
+### Command line
+
+- `benchbar down`, `restart`, `up` and the runner's start up cleanup now find the bench's serve, worker and schedule processes under Homebrew Python on a Mac and under uv Python on Linux. Their command line shows no bench path there, so the old match never found them: an orphaned worker or scheduler survived a stop, and the next start ran a second one. They are found by their command line and stopped only when their working folder is the bench; your own `bench migrate` or `bench console` and other benches are never touched.
+- `repair` and `benchup` no longer treat a LaunchAgent of your own as an old BenchBar agent because its name or script says "frappe" or it runs honcho for another project. Only an agent that starts this bench's own honcho, runner, socketio, serve, worker or schedule is moved aside. When `benchup` stops on one, the message no longer blames the BenchBar rename unless it is a frappe-mac agent.
+- The settings that only the tests use (`FL_KILL_CMD`, `FL_CONFIG_DIR`, `FL_TEMPLATE_DIR`, `FL_OSASCRIPT`, `FL_NOW`, `FL_LOCAL_PROBES`, `FL_EFFECTIVE_UID`, `FL_LOCK_GRACE_SECS`) are ignored unless `FL_TESTING=1` is set, so a variable in your environment cannot change what benchbar stops, renders or runs.
+- The runner is template v8: `doctor` shows an existing bench's runner as outdated until `benchbar repair` writes the new one.
