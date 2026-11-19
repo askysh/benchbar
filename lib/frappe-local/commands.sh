@@ -132,8 +132,11 @@ cmd~self-update~benchbar self-update [--check] [--dry-run] [--json]~Update the b
 flag~self-update~--check~~This version against the latest.
 cmd~where~benchbar where [--json]~How this CLI was installed, its state folder and the app.~no~no~no~no~document
 env~where~BENCHBAR_LOAD_ALL~Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).
-cmd~mcp~benchbar mcp [--print-agents-md]~Model Context Protocol server on stdio for coding agents.~no~no~no~no~none
+cmd~mcp~benchbar mcp [--print-agents-md] [--calls [N]] [--allow-bench PATH]~Model Context Protocol server on stdio for coding agents.~no~no~no~no~none
 flag~mcp~--print-agents-md~~Print a snippet for a project's AGENTS.md or CLAUDE.md and exit.
+flag~mcp~--calls~[N]~Print the last N (default 50) lines of the audit log of MCP calls (mcp-calls.jsonl in the state folder) and exit.
+flag~mcp~--allow-bench~PATH~Let the changing tools act on this bench folder although benchbar does not know it (repeatable; the environment variable BENCHBAR_MCP_ALLOW_BENCH holds a : separated list). A person's choice, never a tool argument.
+env~mcp~BENCHBAR_MCP_APPLY_DELAY~Seconds a plan must have been returned before its apply is accepted (default 5; 0 turns the wait off).
 cmd~help~benchbar help~The global help text.~no~no~no~no~none
 cmd~commands~benchbar commands --json~This table: every command, flag and environment variable.~no~no~no~no~document
 env~commands~BENCHBAR_LOAD_ALL~Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load).

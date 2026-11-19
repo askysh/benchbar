@@ -48,6 +48,8 @@ type reportResult struct {
 	Included      []string      `json:"included"`
 	Skipped       []skippedPart `json:"skipped"`
 	IssueURL      string        `json:"issue_url"`
+	Packaged      bool          `json:"packaged"`
+	DataDir       string        `json:"data_dir"`
 }
 
 // splitIncludes takes the repeatable --include out of args.
@@ -479,6 +481,7 @@ func cmdReportWindows(sys *System, args []string) int {
 	for _, pt := range parts {
 		res.Included = append(res.Included, pt.name)
 	}
+	res.Packaged, res.DataDir = sys.Package.Packaged, sys.ConfigDir
 	res.IssueURL = buildIssueURL(sys, rd, facts, distro, context, trayVersion, cliVersion)
 	if p.bools["--json"] {
 		printJSON(sys.Stdout, res)
@@ -581,6 +584,12 @@ func buildSummary(sys *System, f reportFacts, distro, context, trayVersion, cliV
 	w := func(k, v string) { fmt.Fprintf(&s, "%s: %s\n", k, v) }
 	w("BenchBar Windows report", sys.Now().Format(time.RFC3339))
 	w("benchbar.exe", version)
+	if sys.Package.Packaged {
+		w("install", "Microsoft Store package "+sys.Package.Family)
+	} else {
+		w("install", "not packaged")
+	}
+	w("data folder", firstNonEmpty(sys.ConfigDir, "unknown"))
 	w("tray", firstNonEmpty(trayVersion, "not given"))
 	w("benchbar CLI", firstNonEmpty(cliVersion, "not available"))
 	w("Windows", firstNonEmpty(f.product, "unknown")+fmt.Sprintf(", build %d, %s", f.build, f.arch))
