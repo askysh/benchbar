@@ -62,8 +62,7 @@ public class ShareTests
         var unknown = checks.Single(c => c.Id == "future_check");
         Assert.Equal((ShareCheckStatus.Warn, ShareFixAction.None), (unknown.Status, unknown.Fix));
         Assert.Null(ShareText.FixLabel(unknown.Fix));
-        Assert.Null(ShareText.FixLabel(checks.Single(c => c.Id == "firewall_node").Fix)); // the firewall fix is a command of the next change
-        Assert.Equal("Start again", ShareText.FixLabel(checks.Single(c => c.Id == "gateway_reachable").Fix));
+        Assert.Equal("Allow...", ShareText.FixLabel(checks.Single(c => c.Id == "firewall_node").Fix));
         Assert.Equal(ShareState.Error, ShareJson.State("sharing-now-v2"));
     }
 
@@ -82,6 +81,23 @@ public class ShareTests
         var people = ShareJson.People(Doc("share-people.json"));
         Assert.Equal(["Priya", "Sam"], ShareText.Sorted(people).Select(p => p.Name));
         Assert.Equal("Priya · ThinkPad · 192.168.1.32", ShareText.PersonLine(people.Single(p => p.Name == "Priya")));
+    }
+
+    [Fact]
+    public void OnlyEnabledSystemUsersCanTakeASeatAndOneThatLosesRolesSaysSo()
+    {
+        var users = ShareJson.Users(Doc("share-users.json"));
+        Assert.Equal(["priya@example.com", "sam@example.com"], users.Where(u => u.Selectable).Select(u => u.Name));
+        Assert.Equal(["System Manager"], users[0].CodeCapableRoles);
+    }
+
+    [Fact]
+    public void TheSetupPlanSaysWhatTheCopyHolds()
+    {
+        var plan = ShareJson.SetupPlan(Doc("share-setup-plan.json"));
+        Assert.Equal((1.5, 4), (plan.SizeGb, plan.EstMinutes));
+        Assert.Equal("Customer 3, User 5", ShareText.DataClasses(plan.DataClasses));
+        Assert.Equal("Needs about 1.5 GB free", ShareText.NeedsDisk(plan.SizeGb));
     }
 
     // --- the secrets ---
@@ -173,10 +189,25 @@ public class ShareTests
     }
 
     [Fact]
-    public async Task StopAndTheOtherRoomCallsHaveTheirExactArguments()
+    public async Task ARefusalOfTheCliIsShownAsItIsAndFixesNothing()
     {
         var (model, runner) = Rig();
+        runner.On("lan-guard", "install").Print(Lines("share-refused.jsonl")).Fail(1);
+        runner.On("share", "status").Print(Lines("share-status-off.json"));
+        Assert.False(await model.RunLanGuardAsync(false, TestContext.Current.CancellationToken));
+        Assert.Equal(["lan-guard", "install", "--yes", "--json"], runner.Runs[0].Args);
+        Assert.Contains(runner.Runs, r => r.Args[0] == "share"); // read again afterwards
+        Assert.Equal("There is no LAN guard on this platform yet.", model.LastError);
+    }
+
+    [Fact]
+    public async Task AllowNodeIsItsOwnCommandAndTheOtherRoomCallsHaveTheirExactArguments()
+    {
+        var (model, runner) = Rig();
+        runner.On("lan-guard").Print(Lines("share-done.jsonl"));
         runner.On("share").Print(Lines("share-done.jsonl"));
+        await model.RunLanGuardAsync(true, TestContext.Current.CancellationToken);
+        Assert.Equal(["lan-guard", "allow-node", "--yes", "--json"], runner.Runs[0].Args);
         await model.StopAsync(TestContext.Current.CancellationToken);
         Assert.Equal(["share", "stop", "--json", "--bench-dir", Bench], runner.Runs.First(r => r.Args[1] == "stop").Args);
         Assert.Equal(["share", "extend", "--by", "30m", "--json", "--bench-dir", Bench], model.ExtendArgs(30));
@@ -185,21 +216,48 @@ public class ShareTests
     }
 
     [Fact]
-    public async Task ARefusalOfTheCliIsShownAsItIsAndSurvivesTheReadAfterIt()
-    {
-        var (model, runner) = Rig();
-        runner.On("share", "start").Print(Lines("share-refused.jsonl")).Fail(1);
-        runner.On("share", "status").Print(Lines("share-status-off.json"));
-        Assert.False(await model.StartAsync(4, TestContext.Current.CancellationToken));
-        Assert.Contains(runner.Runs, r => r.Args[1] == "status"); // read again afterwards
-        Assert.Equal("There is no LAN guard on this platform yet.", model.LastError);
-    }
-
-    [Fact]
     public void ExtendOffersOnlyWhatTheCliAllows()
     {
         Assert.Equal([("+30 min", 30), ("+1 hour", 60)], ShareText.ExtendOptions(3600));
         Assert.Equal([("+30 min", 30)], ShareText.ExtendOptions(1800));
         Assert.Empty(ShareText.ExtendOptions(0));
+    }
+
+    // --- set up ---
+
+    [Fact]
+    public async Task SetupPlansWithADryRunThenMakesTheCopyOnlyWhenTheSheetConfirms()
+    {
+        var (model, runner) = Rig();
+        runner.On("share", "setup").Print(Lines("share-setup-plan.json"));
+        var form = new ShareSetupForm("one.localhost");
+        Assert.False(form.CanRun);
+        form.Picked.Add("sam@example.com");
+        form.Picked.Add("priya@example.com");
+        Assert.False(form.CanRun); // the acknowledgement is not given
+        form.Acknowledged = true;
+        Assert.True(form.CanRun);
+        var request = form.Request(false);
+        var plan = await model.PlanSetupAsync(request, TestContext.Current.CancellationToken);
+        Assert.Equal(["share", "setup", "--site", "one.localhost", "--users", "priya@example.com,sam@example.com", "--backup-now", "--dry-run", "--json", "--bench-dir", Bench], runner.Runs[0].Args);
+
+        var review = model.SetupReview(request, plan!);
+        Assert.False(review.RequiresToken);
+        Assert.Equal("Make the copy", review.ConfirmLabel);
+        Assert.Contains("User 5", review.Summary);
+        Assert.Contains(ShareText.Acknowledgement, review.Summary);
+        Assert.Equal(["share", "setup", "--site", "one.localhost", "--users", "priya@example.com,sam@example.com", "--backup-now", "--acknowledge-data", "--yes", "--json", "--bench-dir", Bench], review.ApplyArgs(null!));
+        var env = new SecretEnvironment();
+        review.ConfigureEnv!(env);
+        Assert.Equal("0", env.Materialize()["BENCHBAR_NONINTERACTIVE"]);
+    }
+
+    [Fact]
+    public void ARefreshUsesTheLatestBackupWhenTheCopyIsNotMadeFromANewOne()
+    {
+        var request = new ShareSetupRequest("one.localhost", ["a"], false, true);
+        Assert.Equal(["--site", "one.localhost", "--users", "a", "--from", "latest", "--refresh"], request.Arguments);
+        Assert.Equal("Use the backup from 2 h ago", ShareSetupForm.SourceLabel(false, null, 7200));
+        Assert.Equal("Copy my site as it is now (about 4 min)", ShareSetupForm.SourceLabel(true, 4, null));
     }
 }

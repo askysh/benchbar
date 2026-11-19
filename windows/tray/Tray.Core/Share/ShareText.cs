@@ -10,7 +10,6 @@ public static class ShareText
     public const string LabOff = "Sharing is an experiment. Turn on \"Share with people on the same Wi-Fi\" in Labs to use it.";
     public const string NewerCli = "Sharing needs a newer BenchBar command line tool.";
     public const string SetUpIntro = "Share a copy of this site with people on the same Wi-Fi. Setup makes the copy; nothing is shared until you press Start sharing.";
-    public const string SetUpElsewhere = "Setup is not in this window yet. In PowerShell, run: benchbar.exe share setup --site SITE --users USER";
     public const string LiveUpdates = "Guests see changes after a page refresh.";
     public const string CodeNote = "Anyone on this Wi-Fi with the code can join. Remove people anytime.";
     public const string CodeProves = "The code proves someone may join; it does not prove to them that this computer is the host.";
@@ -21,10 +20,14 @@ public static class ShareText
     public const string BudgetLocked = "Too many wrong codes; the room is locked. New code to reopen.";
     public const string JoinTrouble = "Someone is having trouble joining. Check the code.";
     public const string WipeOwed = "A sign-out is still owed in the copy. BenchBar retries it on the next room action.";
-    public const string SetupInterrupted = "Sharing setup was interrupted, so Start does not work yet. Refresh the copy to finish it (the command line: benchbar share setup --refresh).";
+    public const string SetupInterrupted = "Sharing setup was interrupted, so Start does not work yet. Choose Finish setup to refresh the copy (the command line: benchbar share setup --refresh).";
     public const string DriftWarning = "Your apps changed since the copy was made. Guests see the copy's code, not your working tree; Refresh copy to catch up.";
+    public const string RefreshConfirm = "Replaces the copy. Anything guests changed in it is lost.";
+    public const string Acknowledgement = "This copy contains real customer and employee data that your colleagues will be able to read.";
     public const string RemoveDetail = "They can't join again with the current code. Everyone else stays. To let them back in, copy a new invite and send it to them.";
     public const string CheckedAtStart = "Checked when sharing starts";
+    public const string LanGuardAsk = "Network protection changes the firewall rules that keep the bench's ports closed to other computers while sharing. It asks for your password, and only after you confirm here.";
+    public const string LanGuardAllowAsk = "This lets sharing through the firewall. It asks for your password, and only after you confirm here.";
     public const string PeopleTitle = "People in the room";
 
     /// <summary>Checks that probe the gateway or the share web process: while sharing is off there is nothing to probe, so they wait for the start.</summary>
@@ -89,7 +92,11 @@ public static class ShareText
 
     public static string? FixLabel(ShareFixAction action) => action switch
     {
+        ShareFixAction.InstallNetworkProtection => "Turn on network protection",
+        ShareFixAction.AllowNodeFirewall => "Allow...",
         ShareFixAction.UpdateCli => "Update",
+        ShareFixAction.RerunSetup => "Set up again",
+        ShareFixAction.RefreshCopy => "Refresh copy",
         ShareFixAction.RestartSharing => "Start again",
         _ => null, // open_local_network_settings is a macOS panel: no button here, the CLI's own message stays
     };
@@ -136,4 +143,10 @@ public static class ShareText
         [.. people.OrderByDescending(p => p.Online).ThenByDescending(p => p.LastSeen ?? "", StringComparer.Ordinal)];
 
     public static string RemovedNotice(string name) => $"{name} was removed. To let them back in, send a new invite.";
+
+    public static string NeedsDisk(double gb) => $"Needs about {gb.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)} GB free";
+
+    /// <summary>What the copy holds, one line: "User 5, Customer 3", or none.</summary>
+    public static string DataClasses(IReadOnlyDictionary<string, int> classes) =>
+        classes.Count == 0 ? "none counted" : string.Join(", ", classes.OrderBy(c => c.Key, StringComparer.Ordinal).Select(c => $"{c.Key} {c.Value}"));
 }

@@ -20,6 +20,9 @@ internal sealed class SharingView : UserControl, IBenchPageView
     private ShareModel? _model;
     private int _hours = 4;
     private bool _revealed;
+    private ShareSetupForm? _form;
+    private ShareSetupPlan? _formPlan;
+    private bool _formRefresh;
 
     public SharingView(PageServices services) : this(services, bench => new ShareModel(services.Cli, bench))
     {
@@ -47,6 +50,8 @@ internal sealed class SharingView : UserControl, IBenchPageView
     /// <summary>The buttons by their label (for tests and the keyboard).</summary>
     public IReadOnlyDictionary<string, Button> Buttons => _buttons;
 
+    public ShareSetupForm? Form => _form;
+
     /// <summary>The last action started by a button; tests wait on it.</summary>
     public Task Pending { get; private set; } = Task.CompletedTask;
 
@@ -57,6 +62,7 @@ internal sealed class SharingView : UserControl, IBenchPageView
             if (_model is not null) _model.Changed -= Render;
             _model = _newModel(context.Bench.Path);
             _model.Changed += Render;
+            _form = null;
             _revealed = false;
         }
         Context = context;
@@ -122,12 +128,12 @@ internal sealed class SharingView : UserControl, IBenchPageView
         var settingUp = primary is SharePrimary.SetUp or SharePrimary.FinishSetup;
         Line(settingUp ? ShareText.SetUpIntro : ShareText.LiveUpdates, 0.7);
         if (status.IsOn) Line(ShareText.Indicator(status), 1);
-        if (settingUp) Line(ShareText.SetUpElsewhere);
+        if (_form is not null) DrawForm();
         else DrawPrimary(status, primary);
         if (status.IsLive) DrawRoom(status);
         DrawNotices(status);
         if (!settingUp) DrawChecks(status);
-        if (status.Copy is { } copy) DrawCopy(copy);
+        if (status.Copy is { } copy) DrawCopy(status, copy);
         if (status.IsLive) DrawPeople(status);
     }
 
@@ -137,9 +143,7 @@ internal sealed class SharingView : UserControl, IBenchPageView
         if (status.IsOn)
             foreach (var (label, minutes) in ShareText.ExtendOptions(status.CanExtendSeconds))
                 buttons.Add((label, () => Run(() => _model!.ExtendAsync(minutes)), true));
-        if (primary is SharePrimary.Start or SharePrimary.Stop or SharePrimary.UpdateCli)
-            buttons.Add((ShareText.Title(primary), () => Run(() => OnPrimary(primary, status)), primary != SharePrimary.Start || ShareText.CanStart(status)));
-        else Line(ShareText.ProtectionText(status.LanGuard) + " Turn it on in PowerShell: benchbar.exe lan-guard install");
+        buttons.Add((ShareText.Title(primary), () => Run(() => OnPrimary(primary, status)), primary != SharePrimary.Start || ShareText.CanStart(status)));
         Row([.. buttons]);
         if (primary != SharePrimary.Start) return;
         var box = new ComboBox { Width = 90, Margin = new Thickness(0, 0, 0, 6), HorizontalAlignment = HorizontalAlignment.Left };
@@ -155,6 +159,12 @@ internal sealed class SharingView : UserControl, IBenchPageView
         var model = _model!;
         switch (primary)
         {
+            case SharePrimary.SetUp or SharePrimary.FinishSetup:
+                await OpenFormAsync(status.Copy is not null || status.SetupInterrupted);
+                break;
+            case SharePrimary.TurnOnProtection:
+                if (Confirm("Turn on network protection?", ShareText.LanGuardAsk, "Continue")) await model.RunLanGuardAsync(false);
+                break;
             case SharePrimary.Start:
                 if (!Confirm(ShareText.StartConfirm(Site), "", "Start sharing")) break;
                 if (await model.StartAsync(_hours) && await model.LoadCodeAsync()) _revealed = true;
@@ -215,6 +225,8 @@ internal sealed class SharingView : UserControl, IBenchPageView
     {
         _root.Children.Add(Ui.Heading("Checks"));
         Line(ShareText.ProtectionText(status.LanGuard));
+        if (status.LanGuard != LanGuardState.Installed)
+            Row(("Turn on network protection", () => Run(() => OnPrimary(SharePrimary.TurnOnProtection, status)), !status.IsLive));
         foreach (var check in status.Checks)
         {
             if (ShareText.WaitsForStart(check, status)) { Line($"{ShareText.CheckTitle(check)}: {ShareText.CheckedAtStart}", 0.7); continue; }
@@ -229,8 +241,14 @@ internal sealed class SharingView : UserControl, IBenchPageView
     {
         switch (action)
         {
+            case ShareFixAction.AllowNodeFirewall:
+                if (Confirm("Allow sharing through the firewall?", ShareText.LanGuardAllowAsk, "Allow")) await _model!.RunLanGuardAsync(true);
+                break;
             case ShareFixAction.UpdateCli:
                 _services.OpenUrl(AboutWindow.DocsUrl);
+                break;
+            case ShareFixAction.RerunSetup or ShareFixAction.RefreshCopy:
+                await OpenFormAsync(true);
                 break;
             case ShareFixAction.RestartSharing:
                 if (!Confirm("Restart sharing?", "Everyone in the room is disconnected and needs the new room code to join again.", "Restart")) break;
@@ -239,11 +257,12 @@ internal sealed class SharingView : UserControl, IBenchPageView
         }
     }
 
-    private void DrawCopy(ShareCopy copy)
+    private void DrawCopy(ShareStatus status, ShareCopy copy)
     {
         _root.Children.Add(Ui.Heading("The copy"));
         Line(ShareText.CopyLine(copy));
         if (copy.Drifted) Line(ShareText.DriftWarning, caution: true);
+        Row(("Refresh copy", () => { if (Confirm("Refresh the copy?", ShareText.RefreshConfirm, "Refresh")) Run(() => OpenFormAsync(true)); }, !status.IsLive));
     }
 
     private void DrawPeople(ShareStatus status)
@@ -260,5 +279,63 @@ internal sealed class SharingView : UserControl, IBenchPageView
     private async Task RemoveAsync(SharePerson person)
     {
         if (Confirm(ShareText.RemoveConfirm(person, Site), ShareText.RemoveDetail, "Remove")) await _model!.RemoveAsync(person);
+    }
+
+    // --- set up ---
+
+    private async Task OpenFormAsync(bool refresh)
+    {
+        _formRefresh = refresh;
+        _form = new ShareSetupForm(Site);
+        _formPlan = null;
+        await _model!.LoadUsersAsync(Site);
+        Render();
+    }
+
+    private void DrawForm()
+    {
+        var form = _form!;
+        _root.Children.Add(Ui.Heading(_formRefresh ? "Refresh the shared copy" : "Set up sharing"));
+        Line($"Site: {form.Site}", 0.7);
+        var source = new StackPanel { Margin = new Thickness(0, 2, 0, 6) };
+        foreach (var now in new[] { true, false })
+        {
+            var radio = new RadioButton { IsChecked = form.BackupNow == now, GroupName = "share-source", Content = ShareSetupForm.SourceLabel(now, _formPlan?.EstMinutes, _formPlan?.SourceAgeSeconds) };
+            radio.Checked += (_, _) => form.BackupNow = now;
+            Ui.Name(radio, (string)radio.Content);
+            source.Children.Add(radio);
+        }
+        _root.Children.Add(source);
+        Line("People (one seat each)", 1);
+        foreach (var user in _model!.Users.Where(u => u.Selectable))
+        {
+            var roles = string.Join(", ", user.Roles.Take(4).Select(r => user.CodeCapableRoles.Contains(r) ? $"{r} (removed in the copy)" : r));
+            var box = new CheckBox { IsChecked = form.Picked.Contains(user.Name), Content = roles.Length > 0 ? $"{user.FullName}: {roles}" : user.FullName, Margin = new Thickness(0, 2, 0, 2) };
+            box.Click += (_, _) => { if (box.IsChecked == true) form.Picked.Add(user.Name); else form.Picked.Remove(user.Name); Render(); };
+            Ui.Name(box, user.FullName);
+            _root.Children.Add(box);
+            _lines.Add(box.Content.ToString()!);
+        }
+        var ack = new CheckBox { IsChecked = form.Acknowledged, Content = new TextBlock { Text = ShareText.Acknowledgement, TextWrapping = TextWrapping.Wrap }, Margin = new Thickness(0, 8, 0, 4) };
+        ack.Click += (_, _) => { form.Acknowledged = ack.IsChecked == true; Render(); };
+        Ui.Name(ack, "Acknowledge the copy holds real data");
+        _root.Children.Add(ack);
+        _lines.Add(ShareText.Acknowledgement);
+        Row((_formRefresh ? "Refresh copy" : "Set up sharing", () => Run(ReviewSetupAsync), form.CanRun), ("Cancel", () => { _form = null; Render(); }, true));
+    }
+
+    /// <summary>Reads the plan (nothing changes), then the plan sheet shows it and makes the copy only on its confirm.</summary>
+    private async Task ReviewSetupAsync()
+    {
+        var form = _form!;
+        var request = form.Request(_formRefresh);
+        var plan = await _model!.PlanSetupAsync(request);
+        if (plan is null) return;
+        _formPlan = plan;
+        var outcome = await _services.ReviewPlan(_model.SetupReview(request, plan));
+        if (outcome.Applied) _form = null;
+        _services.RefreshNow();
+        await _model.RefreshAsync(true);
+        Render();
     }
 }

@@ -14,11 +14,15 @@ public class SharingViewTests
     private static (SharingView View, PageKit Kit, List<string> Asked) Make(string status, bool answer = true, Func<string, string>? tweak = null)
     {
         var kit = new PageKit();
+        kit.Runner.On(a => a.Contains("--acknowledge-data")).Print(Fixture("share-done.jsonl"));
+        kit.Runner.On("share", "setup").Print(Fixture("share-setup-plan.json"));
         kit.Runner.On("share", "status").Print(tweak is null ? Fixture(status)[0] : tweak(Fixture(status)[0]));
         kit.Runner.On("share", "people").Print(Fixture("share-people.json"));
+        kit.Runner.On("share", "users").Print(Fixture("share-users.json"));
         kit.Runner.On("share", "code").Print(Fixture("share-code.json"));
         kit.Runner.On("share", "invite").Print(Fixture("share-invite.json"));
         kit.Runner.On("share").Print(Fixture("share-done.jsonl"));
+        kit.Runner.On("lan-guard").Print(Fixture("share-done.jsonl"));
         var asked = new List<string>();
         var view = new SharingView(kit.Services, bench => new ShareModel(kit.Services.Cli, bench))
         {
@@ -66,8 +70,7 @@ public class SharingViewTests
     {
         var (view, kit, _) = Make("share-status-unset.json");
         Assert.Contains(ShareText.SetUpIntro, view.Lines);
-        Assert.Contains(ShareText.SetUpElsewhere, view.Lines);
-        Assert.DoesNotContain(view.Lines, l => l.StartsWith("[")); // no button starts anything here
+        Assert.Contains("[Set up sharing]", view.Lines);
         Assert.DoesNotContain(view.Lines, l => l.StartsWith("Checks"));
         Assert.Equal(1, Calls(kit, "share", "status"));
         Assert.Equal(0, Calls(kit, "share", "start") + Calls(kit, "share", "setup") + Calls(kit, "lan-guard") + Calls(kit, "share", "code"));
@@ -84,6 +87,7 @@ public class SharingViewTests
         Assert.Contains("Copy made 2 h 1 min ago from one.localhost. Guests' changes stay in the copy.", view.Lines);
         Assert.Contains(ShareText.DriftWarning, view.Lines);
         Assert.False(view.Buttons["Start sharing"].IsEnabled);
+        Assert.True(view.Buttons["Allow..."].IsEnabled);
         Assert.False(view.Buttons.ContainsKey("Stop"));
         AssertEveryControlIsNamed(view);
     });
@@ -183,5 +187,89 @@ public class SharingViewTests
         Wait(yes.Pending);
         Assert.Equal(["share", "remove", "d_0a1b2c3d", "--yes", "--json", "--bench-dir", P], yesKit.Runner.Runs.Single(r => r.Args[1] == "remove").Args);
         Assert.Contains("Sam was removed. To let them back in, send a new invite.", yes.Lines);
+    });
+
+    [Fact]
+    public void TheLanGuardIsOfferedAsAButtonAndRunsOnlyAfterTheQuestionIsAnswered() => Sta.Run(() =>
+    {
+        var clean = Fixture("share-status-off.json")[0].Replace("\"lan_guard\":\"installed\"", "\"lan_guard\":\"missing\"");
+        var kit = new PageKit();
+        kit.Runner.On("share", "status").Print(clean);
+        var asked = new List<(string Title, string Detail)>();
+        var answer = false;
+        var view = new SharingView(kit.Services, b => new ShareModel(kit.Services.Cli, b)) { Confirm = (t, d, _) => { asked.Add((t, d)); return answer; } };
+        view.Bind(new BenchContext(Bench(), null));
+        Wait(view.Pending);
+        Assert.Equal(0, Calls(kit, "lan-guard")); // reading the tab never installs anything
+        Click(view.Buttons["Turn on network protection"]);
+        Wait(view.Pending);
+        Assert.Equal(("Turn on network protection?", ShareText.LanGuardAsk), asked.Single());
+        Assert.Equal(0, Calls(kit, "lan-guard"));
+
+        answer = true;
+        kit.Runner.On("lan-guard").Print(Fixture("share-done.jsonl"));
+        Click(view.Buttons["Turn on network protection"]);
+        Wait(view.Pending);
+        Assert.Equal(1, Calls(kit, "lan-guard", "install"));
+        Assert.Equal("0", kit.Runner.Runs.Single(r => r.Args[0] == "lan-guard").Env["BENCHBAR_NONINTERACTIVE"]);
+    });
+
+    [Fact]
+    public void ARefusalOfTheLanGuardShowsTheCliSentence() => Sta.Run(() =>
+    {
+        var clean = Fixture("share-status-off.json")[0].Replace("\"lan_guard\":\"installed\"", "\"lan_guard\":\"missing\"");
+        var kit = new PageKit();
+        kit.Runner.On("share", "status").Print(clean);
+        kit.Runner.On("lan-guard").Print(Fixture("share-refused.jsonl")).Fail(1);
+        var view = new SharingView(kit.Services, b => new ShareModel(kit.Services.Cli, b)) { Confirm = (_, _, _) => true };
+        view.Bind(new BenchContext(Bench(), null));
+        Wait(view.Pending);
+        Click(view.Buttons["Turn on network protection"]);
+        Wait(view.Pending);
+        Assert.Contains("There is no LAN guard on this platform yet.", view.Lines);
+    });
+
+    // --- set up ---
+
+    [Fact]
+    public void SetUpIsOffUntilAPersonIsPickedAndTheDataIsAcknowledgedAndCancelMakesNothing() => Sta.Run(() =>
+    {
+        var (view, kit, _) = Make("share-status-unset.json");
+        Click(view.Buttons["Set up sharing"]);
+        Wait(view.Pending);
+        Assert.NotNull(view.Form);
+        Assert.Contains("Priya N: Sales User, System Manager (removed in the copy)", view.Lines);
+        Assert.Contains("Sam Seat: Accounts User", view.Lines);
+        Assert.DoesNotContain(view.Lines, l => l.StartsWith("Web User")); // not a System User: no seat
+        Assert.False(view.Buttons["Set up sharing"].IsEnabled);
+        AssertEveryControlIsNamed(view);
+        view.Form!.Picked.Add("priya@example.com");
+        view.Form.Acknowledged = true;
+        view.Bind(new BenchContext(Bench(), null)); // a poll draws the form again and keeps what was picked
+        Assert.True(view.Buttons["Set up sharing"].IsEnabled);
+        Click(view.Buttons["Cancel"]);
+        Assert.Null(view.Form);
+        Assert.Empty(kit.Plans);
+        Assert.Equal(0, Calls(kit, "share", "setup"));
+    });
+
+    [Fact]
+    public void TheCopyIsMadeOnlyThroughThePlanSheetWithTheSummaryOfWhatItHolds() => Sta.Run(() =>
+    {
+        var (view, kit, _) = Make("share-status-unset.json");
+        Click(view.Buttons["Set up sharing"]);
+        Wait(view.Pending);
+        view.Form!.Picked.Add("priya@example.com");
+        view.Form.Acknowledged = true;
+        view.Bind(new BenchContext(Bench(), null));
+        Click(view.Buttons["Set up sharing"]);
+        Wait(view.Pending);
+        var plan = Assert.Single(kit.Plans);
+        Assert.Contains("User 5", plan.Summary);
+        Assert.Equal("Make the copy", plan.ConfirmLabel);
+        var setups = kit.Runner.Runs.Where(r => r.Args[..2].SequenceEqual(["share", "setup"])).ToList();
+        Assert.Equal(["--dry-run", "--dry-run"], setups.Take(2).Select(r => r.Args.Single(a => a == "--dry-run")).ToList()); // the view planned, then the sheet planned
+        Assert.Contains("--acknowledge-data", setups.Last().Args);
+        Assert.Null(view.Form); // it was applied
     });
 }
