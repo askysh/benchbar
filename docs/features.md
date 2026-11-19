@@ -38,6 +38,7 @@ macOS version. A row that says "macOS" does not work on Linux.
 | `autostart`, `uninstall-service` | Let a bench come back after login or not, and remove its service. | 0.2.0 | macOS; Linux 0.8.0 | [autostart](reference/cli/other.md#autostart), [uninstall-service](reference/cli/other.md#uninstall-service) |
 | Adopt a bench | Registers a bench you already have, without touching its apps, sites or databases. | 0.3.0 | macOS; Linux 0.8.0 | [Quick start](quick-start.md) |
 | Report a bug | `benchbar report` writes a diagnostics zip with secrets removed. | 0.3.0 | macOS; Linux 0.8.0 | [report](reference/cli/other.md#report) |
+| Retire a bench | `bench forget` and `bench remove` with a plan and a token, scratch benches that expire (`install --scratch`, `bench gc`), `site hosts --prune`, `db orphans`. | 0.9.0 | macOS; Linux 0.9.0 | [bench](reference/cli/bench.md) |
 | Several benches | A bench per Frappe version, each with its own sites and scheduler. | 0.4.0 | macOS; Linux 0.8.0 | [Benches and sites](guides/benches-and-sites.md#several-benches) |
 | Port blocks | A new bench that clashes with another gets its own four ports. | 0.4.0 | macOS; Linux 0.8.0 | [Port blocks](concepts/port-blocks.md) |
 | Sites: add, list, default, hosts | Adds a site, lists them, sets the default and writes the hosts lines. | 0.4.0 | macOS; Linux 0.8.0 | [site](reference/cli/site.md) |

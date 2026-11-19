@@ -206,6 +206,23 @@ stopped bench shares the ports, it warns and asks, so the two can run one
 at a time. Either way it prints the fix, `benchbar ports setup`, which
 gives each bench its own block.
 
+## Retiring a bench
+
+`benchbar bench forget PATH` takes a bench out of benchbar: its service files
+are backed up and moved aside, its settings and its place in the list go, and
+the folder, its sites and its databases stay. `benchbar bench remove PATH`
+goes further: it backs up each site, drops its database and moves the folder
+to `.benchbar-trash` next to it. Both show a plan first (`--dry-run`) and run
+with `--apply TOKEN --yes`; `remove` is for a person at a terminal and asks you
+to repeat the folder's name.
+
+A bench for a try-out can say so: `benchbar install --scratch --ttl 3` sets it
+up as before and marks it to expire in 3 days. `benchbar bench gc --dry-run`
+lists the ones that expired (never the default bench), and a person at a
+terminal applies the plan. Afterwards `benchbar site hosts --prune` removes the
+hosts lines of sites that are gone, and `benchbar db orphans` lists databases
+no site refers to. See [bench](../reference/cli/bench.md).
+
 ## Port blocks
 
 Each bench has its own port block. How blocks work and how to sort out

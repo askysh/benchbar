@@ -182,6 +182,25 @@ stamps), plan first, show it to the user, then apply with the token:
 
 It backs the site up first, never moves the default site and ends with a
 check. Do not run `bench restore` or `mariadb -u root` yourself.
+
+## Retiring a bench
+
+```bash
+./benchbar bench forget PATH --dry-run --json      # plan and token; then --apply TOKEN --yes
+./benchbar bench remove PATH --dry-run --json      # the plan only: applying is a person's job
+./benchbar bench gc --dry-run --json               # the scratch benches that expired, same
+./benchbar db orphans --json                       # read only
+./benchbar site hosts --prune --dry-run            # stale hosts lines (sudo, a person)
+```
+
+`bench forget` moves the bench's service files aside and unregisters it; the
+folder, sites and databases stay. Show its plan to the user, and apply it only
+after their OK, with the token. `bench remove` and `bench gc --apply` drop
+databases and move a bench folder, so they refuse `--for-agent`, `mcp`,
+`BENCHBAR_NONINTERACTIVE` and a run without a terminal: read the plan, show it,
+and give the user the command. Benchbar never deletes a bench folder (it
+renames it into `.benchbar-trash`) and never drops an orphan database: do not
+finish the job by hand either (no deleting the folder, no `DROP DATABASE`).
 `benchbar up --services-only` starts only the bench's Redis.
 
 ## Port setup and conflicts

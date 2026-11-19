@@ -200,6 +200,27 @@ Exit codes: bench's; 1 when the site does not exist.
 benchbar db --site macdev
 ```
 
+### db orphans
+
+```
+benchbar db orphans [--json]
+```
+
+Lists the databases of frappe's shape (an underscore and 16 hex digits) on the
+MariaDB server that no site of any bench benchbar knows refers to; a database
+that an archived site folder (`archived/sites`) names says so. Read only, and
+it needs the root password like `site drop`. Benchbar never drops them: back
+one up (`mariadb-dump`) and drop it yourself. After
+[`bench remove`](bench.md#bench-remove) or `site drop` the databases are gone,
+so a name here is a leftover of an interrupted `new-site`, a deleted bench
+folder or a restore that went wrong.
+
+Exit codes: 0; 2 when the MariaDB root password is unknown.
+
+```bash
+benchbar db orphans --json
+```
+
 ## open
 
 ```
@@ -390,9 +411,10 @@ benchbar uninstall-service [--bench-dir DIR | --all] [--yes] [--dry-run]
 
 Stops the bench (like `benchbar down`), then removes its launchd agent,
 the runner and `Procfile.lean`, after asking. It also removes the
-`# >>> benchbar >>>` block from your shell rc file, so `benchup` and the
-other helpers are gone for every bench until `benchbar repair` or
-`benchbar service` on a remaining bench writes the block again. The
+`# >>> benchbar >>>` block from your shell rc file, but only with the last
+service: while another bench still has an agent, the block stays and the
+run says so. Without the block `benchup` and the other helpers are gone until
+`benchbar repair` or `benchbar service` writes it again. The
 bench, its sites, apps and databases are not touched; the plist is moved
 to `~/Library/LaunchAgents-disabled/` and the other files are backed up
 first. `--dry-run` shows the steps.
@@ -478,7 +500,8 @@ These tables come from the code (`benchbar commands --json`); the sections above
 | `benchbar listen [local\|all] [--dry-run] [--yes]` | yes | no | no | yes | none |
 | `benchbar uninstall-service [--all] [--yes] [--dry-run]` | yes | no | no | yes | none |
 | `benchbar console [--site S]` | yes | no | no | no | none |
-| `benchbar db [--site S]` | yes | no | no | no | none |
+| `benchbar db [--site S] \| benchbar db orphans [--json]` | yes | no | no | no | none |
+| `benchbar db orphans [--json]` | no | no | no | no | document |
 | `benchbar open [--site S] [--as USER] [--path P] [--no-browser] [--print-url] [--json]` | no | no | no | no | document |
 | `benchbar users [--site S] [--search Q] [--limit N] [--json]` | no | no | no | no | document |
 | `benchbar report [--print] [--json]` | no | no | no | no | document |
@@ -496,6 +519,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `mariadb-password` | `--yes` |  | Do not ask (still refused without a person at a terminal). |
 | `uninstall-service` | `--all` |  | Every bench with a benchbar agent, after one question. |
 | `uninstall-service` | `--yes` |  | Do not ask; required without a terminal. |
+| `db orphans` | `--json` |  | One document: checked and orphans, each with the archived site folder that names it, if any. |
 | `open` | `--as` | `USER` | Sign in as this user, no password. Refused unless site open-as is on for the site and developer_mode is on. A sign in runs the apps' on_login and on_session_creation hooks as a real login does: last_login, an Activity Log entry, a mail to System Managers for Administrator, an ERPNext Customer or Supplier for a Website User, and Frappe may end the user's oldest session (simultaneous_sessions). |
 | `open` | `--path` | `P` | Where to land, for example /app/todo. Default: /app, or / for a Website User. |
 | `open` | `--no-browser` |  | Start the session, open nothing. |
@@ -510,6 +534,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | Command | Environment variable | What it does |
 |---|---|---|
 | `list` | `BENCHBAR_LOAD_ALL` | Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load). |
+| `db orphans` | `MARIADB_ROOT_PASSWORD` | Only when MariaDB has a password benchbar does not know. |
 | `where` | `BENCHBAR_LOAD_ALL` | Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load). |
 | `commands` | `BENCHBAR_LOAD_ALL` | Debugging switch: 1 loads every library, as before the lean start (the output is the same; use it to see whether a problem comes from the lean load). |
 <!-- /generated:cli-commands -->

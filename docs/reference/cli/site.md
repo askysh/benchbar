@@ -75,16 +75,24 @@ benchbar site default v16two
 ## site hosts
 
 ```
-benchbar site hosts
+benchbar site hosts [--prune] [--dry-run]
 ```
 
 Adds a `127.0.0.1` line to `/etc/hosts` for every site that has none,
 inside benchbar's markers, with one `sudo` prompt.
 
+With `--prune` it removes instead the lines of benchbar's block whose site no
+bench benchbar knows has (a site that was dropped, or a bench that was
+forgotten): one backup, one `sudo` rewrite. A line outside the block, or with
+more than one name, is never touched. Without a terminal, or with
+`BENCHBAR_SUDO=gui`, it prints the `sed` command to run instead. macOS only:
+Linux has no hosts block.
+
 Exit codes: 0; 1 when the hosts file could not be written.
 
 ```bash
 benchbar site hosts
+benchbar site hosts --prune --dry-run
 ```
 
 ## site open-as
@@ -300,7 +308,7 @@ These tables come from the code (`benchbar commands --json`); the sections above
 | `benchbar site add NAME [--bundle NAME\|--apps "a b"] [--dry-run\|--apply TOKEN] [--yes] [--json]` | yes | yes | no | yes | stream |
 | `benchbar site default NAME [--json]` | no | no | no | yes | stream |
 | `benchbar site open-as on\|off\|status [NAME] [--json]` | yes | no | no | yes | stream |
-| `benchbar site hosts` | yes | yes | no | yes | none |
+| `benchbar site hosts [--prune] [--dry-run]` | yes | yes | no | yes | none |
 | `benchbar site backup NAME [--with-files] [--json]` | no | no | no | yes | document |
 | `benchbar site backups NAME [--json]` | no | no | no | no | document |
 | `benchbar site restore NAME --from STAMP\|PATH [--from-site S] [--new] [--no-migrate] [--before-migrate SCRIPT] [--with-files] --dry-run --json, then --apply TOKEN --yes` | no | yes | no | yes | document |
@@ -318,6 +326,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `site add` | `--yes` |  | Do not ask. |
 | `site open-as` | `--yes` |  | Do not ask before turning on (still refused without a terminal session, BENCHBAR_NONINTERACTIVE=1). |
 | `site open-as` | `--json` |  | JSON lines for on and off, one document for status. |
+| `site hosts` | `--prune` |  | Remove the stale lines of benchbar's block instead of adding the missing ones. macOS only. |
 | `site backup` | `--with-files` |  | Include the uploads. |
 | `site restore` | `--from` | `STAMP\|PATH` | The backup set: its stamp in the target's (or --from-site's) backup folder, or the database file's path. |
 | `site restore` | `--from-site` | `S` | Read the stamp from this site's backups. |
