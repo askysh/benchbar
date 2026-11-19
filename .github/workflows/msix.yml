@@ -1,7 +1,8 @@
 # The MSIX package of BenchBar for Windows (windows/msix), the form the
 # Microsoft Store takes. Builds it with windows/msix/build-msix.ps1 on a
 # Windows runner and uploads it as an artifact. On a pull request that
-# touches the package it builds the unsigned Store bundle as a check. By
+# touches the package, the tray or the shim (the programs inside it) it
+# builds the unsigned Store bundle as a check, so a break there is seen. By
 # hand (Actions, MSIX package, Run workflow) it builds either mode. It never
 # signs with a real certificate and never publishes anything: the
 # .msixupload is uploaded to Partner Center by a person. Sideload mode makes
@@ -12,6 +13,8 @@ on:
   pull_request:
     paths:
       - 'windows/msix/**'
+      - 'windows/tray/**'
+      - 'windows/shim/**'
       - '.github/workflows/msix.yml'
   workflow_dispatch:
     inputs:

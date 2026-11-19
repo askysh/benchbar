@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Builds BenchBar for Windows as an MSIX package (feasibility spike).
+  Builds BenchBar for Windows as an MSIX package.
 
 .DESCRIPTION
   Builds benchbar.exe (Go) and BenchBarTray.exe (.NET 10 WPF, self contained)
@@ -58,7 +58,8 @@ param(
   # For a size comparison only. The package will not start on a PC without the runtime.
   [switch]$FrameworkDependent,
 
-  # Also build resources.pri with MakePri.exe so the target size logos are found.
+  # Also build resources.pri with MakePri.exe, an index of logo variants. The package holds only the three logos
+  # the manifest names, so there is nothing to index yet; use it once scale and target size variants are added.
   [switch]$MakePri,
 
   # Folder that holds <10.0.x.y>\<arch>\makeappx.exe (the layout of "Windows Kits\10\bin"). For a PC
@@ -101,11 +102,11 @@ if ($Mode -eq 'Store') {
   if (-not $Publisher) { $Publisher = 'CN=BA1A2A4F-276F-4E64-8619-08871322A90C' }
   if (-not $PublisherDisplayName) { $PublisherDisplayName = 'Askysh' }
 } else {
-  if (-not $IdentityName) { $IdentityName = 'BenchBar.Spike' }
-  if (-not $Publisher) { $Publisher = 'CN=BenchBar Spike Test' }
-  if (-not $PublisherDisplayName) { $PublisherDisplayName = 'BenchBar Spike (test)' }
+  if (-not $IdentityName) { $IdentityName = 'BenchBar.Test' }
+  if (-not $Publisher) { $Publisher = 'CN=BenchBar Test' }
+  if (-not $PublisherDisplayName) { $PublisherDisplayName = 'BenchBar (test)' }
 }
-if ($Mode -eq 'Store' -and $Publisher -eq 'CN=BenchBar Spike Test') {
+if ($Mode -eq 'Store' -and $Publisher -eq 'CN=BenchBar Test') {
   Fail 'Store mode cannot use the test Publisher. Leave -Publisher out, or pass the one from Partner Center.'
 }
 # @( ) around the whole if: a one element array from an if expression is unrolled to a string, and $arches[0] is then its first character
@@ -312,7 +313,7 @@ if ($Mode -eq 'Store') {
 
 $msix = $msixFiles[0]
 $pkgDir = Join-Path $OutDir "pkg-$($arches[0])"
-$cer = Join-Path $OutDir 'BenchBar-Spike-Test.cer'
+$cer = Join-Path $OutDir 'BenchBar-Test.cer'
 
 $cert = Get-ChildItem Cert:\CurrentUser\My |
   Where-Object { $_.Subject -eq $Publisher -and $_.NotAfter -gt (Get-Date).AddDays(7) } |
@@ -322,7 +323,7 @@ if (-not $cert) {
   $cert = New-SelfSignedCertificate -Type Custom -KeyUsage DigitalSignature `
     -CertStoreLocation 'Cert:\CurrentUser\My' `
     -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3', '2.5.29.19={text}') `
-    -Subject $Publisher -FriendlyName 'BenchBar MSIX spike (test only)' -NotAfter (Get-Date).AddYears(1)
+    -Subject $Publisher -FriendlyName 'BenchBar MSIX (test only)' -NotAfter (Get-Date).AddYears(1)
 } else {
   Say "Reusing the certificate $($cert.Thumbprint) (subject '$Publisher')"
 }
