@@ -120,7 +120,7 @@ Tails `logs/bench.log` and follows it in a terminal.
 |---|---|
 | `--worker` | `logs/worker.log` instead |
 | `--worker-error` | `logs/worker.error.log` instead |
-| `--previous` | `logs/bench.previous.log`, the tail of the run before |
+| `--previous` | `logs/bench.previous.log`, the tail of the run before (the starts before that are `bench.previous.1.log` to `.3.log`, read them with `cat`) |
 | `-n50` | The last 50 lines (the default); any number works, `-n` then the count |
 | `--no-follow` | Print and exit |
 | `--process NAME` | Only the lines of one honcho process: `web`, `socketio`, `schedule`, `redis_queue`, `redis_cache`. `worker` reads `logs/worker.log` instead, where `Procfile.lean` sends the worker (it never writes to `bench.log`); `--previous` does not combine with it, since `worker.log` has no previous file |
@@ -205,7 +205,7 @@ JSON: `document` is one JSON line, `stream` is JSON lines ending in a `done` lin
 | `up` | `--services-only` |  | Start only the bench's Redis (for a restore or a migrate); down stops it. |
 | `logs` | `--worker` |  | Read logs/worker.log. |
 | `logs` | `--worker-error` |  | Read logs/worker.error.log. |
-| `logs` | `--previous` |  | Read logs/bench.previous.log. |
+| `logs` | `--previous` |  | Read logs/bench.previous.log (the starts before it are bench.previous.1.log to .3.log). |
 | `logs` | `--process` | `NAME` | web, socketio, schedule or worker. |
 | `logs` | `--since` | `TIMESTAMP` | Only lines at or after it (--json; ISO 8601, or HH:MM:SS today). |
 | `logs` | `--since-restart` |  | Only lines after the bench's last start (--json). |

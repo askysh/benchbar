@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 )
 
@@ -198,6 +199,7 @@ func cmdPath(sys *System, sub string) int {
 			fmt.Fprintf(sys.Stdout, "%s is not on your user PATH. Nothing to remove.\n", exeDir)
 			return 0
 		}
+		backupUserPath(sys, user)
 		if err := sys.Paths.SetUser(next, user.Expand); err != nil {
 			errorf(sys, "cannot write the user PATH: %v", err)
 			return 1
@@ -226,6 +228,7 @@ func cmdPath(sys *System, sub string) int {
 		}
 		if changed {
 			expand := user.Expand || !user.Exists
+			backupUserPath(sys, user)
 			if err := sys.Paths.SetUser(next, expand); err != nil {
 				errorf(sys, "cannot write the user PATH: %v", err)
 				return 1
@@ -240,4 +243,26 @@ func cmdPath(sys *System, sub string) int {
 	}
 	printCheck(sys.Stdout, pathCheck(sys))
 	return 0
+}
+
+// backupUserPath keeps the user PATH as it is before benchbar.exe changes it:
+// %LOCALAPPDATA%\BenchBar\path-backup-<stamp>.txt holds the type and the
+// value. A failed backup is said and does not stop the change.
+func backupUserPath(sys *System, user PathValue) {
+	if sys.ConfigDir == "" || !user.Exists {
+		return
+	}
+	kind := "REG_SZ"
+	if user.Expand {
+		kind = "REG_EXPAND_SZ"
+	}
+	name := filepath.Join(sys.ConfigDir, "path-backup-"+sys.Now().Format("20060102-150405")+".txt")
+	for n := 2; fileExists(name); n++ {
+		name = filepath.Join(sys.ConfigDir, fmt.Sprintf("path-backup-%s-%d.txt", sys.Now().Format("20060102-150405"), n))
+	}
+	if err := writeFileAtomic(name, []byte("# user PATH before benchbar.exe changed it (HKCU\\Environment\\Path)\r\n# type: "+kind+"\r\n"+user.Value+"\r\n")); err != nil {
+		fmt.Fprintf(sys.Stderr, "benchbar.exe: could not save the old user PATH (%v); going on\n", err)
+		return
+	}
+	fmt.Fprintf(sys.Stdout, "The old user PATH is saved in %s.\n", name)
 }

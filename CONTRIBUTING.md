@@ -98,8 +98,11 @@ tray. Details: [docs/testing.md](docs/testing.md#what-ci-runs).
   --write` and commit the result; `tests/test-docs.sh` fails when they
   differ. A bug with a workaround gets a troubleshooting entry in the
   same pull request.
-- **CHANGELOG.** A line under `## Unreleased` in
-  [CHANGELOG.md](CHANGELOG.md), in the section that fits.
+- **A changelog fragment.** Add `changelog.d/<issue number>-<short-slug>.md`
+  with a `### <Section>` heading and a bullet for each user facing change
+  ([format](changelog.d/README.md)). Do not edit [CHANGELOG.md](CHANGELOG.md):
+  the release step folds the fragments into it, so pull requests do not
+  conflict there. `bash scripts/changelog-fold.sh --check` validates yours.
 - **DECISIONS.** One line per non obvious choice: the decision, then the
   reason. CLI and repo choices go in
   [docs/DECISIONS.md](docs/DECISIONS.md), app choices in

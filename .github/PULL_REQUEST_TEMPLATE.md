@@ -18,8 +18,8 @@ Tick each box, or write "n/a" and why (a CI only change has no guide page).
 - [ ] A second run changes nothing and says `unchanged`
 - [ ] User docs: the guide or the app page that tells a user about the change is updated, not only the reference page
 - [ ] Features page: a new feature, Lab or platform has a row in `docs/features.md` (platform and version)
-- [ ] CHANGELOG: a line under `## Unreleased` in CHANGELOG.md, in the section that fits
-- [ ] DECISIONS: a line per non obvious choice (docs/DECISIONS.md or macos/DECISIONS.md), or none needed
+- [ ] A fragment `changelog.d/<issue>-<slug>.md` for a user facing change (not an edit of CHANGELOG.md), or none needed
+- [ ] A DECISIONS line per non obvious choice (docs/DECISIONS.md or macos/DECISIONS.md), or none needed
 - [ ] No em dashes or en dashes in the code, the docs or this description
 - [ ] If a command, flag or MCP tool changed: `python3 -I scripts/docs-reference.py --write` was run and its tables are committed
 

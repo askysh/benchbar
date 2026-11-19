@@ -81,6 +81,59 @@ it somewhere else when you need it to outlive the bench. Frappe's own
 folder that are older than the site's `keep_backups_for_hours` (23 hours
 when it is not set), so an old set there is not kept for you.
 
+What is kept, and for how long:
+
+- **Backups of a site: for ever.** bench's own `bench backup` deletes
+  every file in that folder that is older than `keep_backups_for_hours`
+  (23 hours by default). Every command of benchbar that takes a backup
+  (`site backup`, the backup first of `site restore`, `site drop`,
+  `pull --replace` and `app update`) keeps the older files: it holds a
+  second name for each one under benchbar's state folder while bench
+  runs, and puts back what bench deleted. benchbar never prunes a site's
+  backups and never changes the site's config for this; remove old ones
+  yourself when the disk fills. A backup that frappe's own scheduler
+  takes is still pruned by frappe (set `keep_backups_for_hours` in the
+  site config to keep more of those).
+
+  How it works: before bench runs, each file of the site's backup folder
+  gets a second name in the state folder
+  (`backups/<run>/kept-sets/<site>/`). On the same volume that is a hard
+  link and costs no space. When the state folder is on another volume
+  (the bench on an external disk, say) a link is impossible, so benchbar
+  copies the whole folder each run: it needs that much free space, checks
+  it first, and stops before bench starts when it is not there. Afterwards
+  the files bench deleted are put back and the second names go. A hard
+  link shares the file's inode, so making the second name changes its status
+  change time (`ctime`), which frappe reads to decide a backup is old:
+  an old set looks recent to frappe for another `keep_backups_for_hours`.
+
+  If a run is cut short (Ctrl-C, a closed terminal) benchbar puts the
+  files back as it exits. If it is killed outright, or a file could not
+  be put back, the kept copy may be the only copy, so benchbar never
+  prunes it. The next backup of any site puts it back first and says so in
+  `changed[]`, and until then `benchbar doctor` warns (`kept_backups`);
+  `benchbar repair` puts the files back.
+- **Read before use.** `site restore` and `pull` read the set before they
+  change anything: the dump has to be a complete gzip file and, with
+  `--with-files`, the file archives have to be readable tar archives. A
+  set that is empty, cut short or unreadable stops the command with the
+  file named, and `site backups` marks it `(incomplete)` when a part has
+  no bytes.
+- **benchbar's own files, newest kept.** In the state folder
+  (`benchbar where` shows it): the newest 100 run logs
+  (`logs/<date>-<time>-<pid>.log`), the newest 50 folders of
+  `backups/<date>-<time>-<pid>/` (one that still holds a `restore-set`
+  copy stays until that copy goes; the three newest per bench are kept),
+  the newest 14 `update-check.<date>.txt` files, and no `state.env.*`
+  temp file older than a day. The pruning runs at the start of a run
+  that makes a log, and the run's `changed[]` says what it removed. The
+  limits are `FL_KEEP_RUN_LOGS`, `FL_KEEP_STATE_BACKUPS` and
+  `FL_KEEP_UPDATE_CHECKS`.
+- **The bench's own log.** `benchup` keeps the tail of the log it
+  replaces in `logs/bench.previous.log` and the three copies before it
+  in `logs/bench.previous.1.log` to `.3.log`, so a crash is still there
+  after two quick restarts.
+
 `site restore` puts a backup back, into the site it came from or into a
 new site (`--new`), with the encryption key of the set. A site that is
 there is backed up with its files first, and the default site never

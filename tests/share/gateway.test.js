@@ -62,7 +62,7 @@ async function startMitm(gw, serverCert, clientCert) {
         });
     });
     await new Promise((r) => server.listen(0, "127.0.0.1", r));
-    return { port: server.address().port, close: () => { server.closeAllConnections(); server.close(); } };
+    return { port: server.address().port, close: H.track(() => { server.closeAllConnections(); server.close(); }) };
 }
 
 test("an unknown client certificate gets 403 not_paired, the connection closes, upstream sees nothing", async () => {
@@ -115,6 +115,7 @@ test("a certificate alone is not an identity: a client that holds the certificat
 test("the TLS exporter with an empty context equals the exporter with no context, on both ends", async () => {
     const host = cert("exporter-host");
     const server = tls.createServer({ key: host.key, cert: host.cert, minVersion: "TLSv1.3" });
+    const closeServer = H.track(() => server.close());
     const seen = new Promise((resolve) => server.on("secureConnection", (s) => { resolve([s.exportKeyingMaterial(32, "EXPORTER-bb-join-v3", Buffer.alloc(0)), s.exportKeyingMaterial(32, "EXPORTER-bb-join-v3")]); s.end(); }));
     await new Promise((r) => server.listen(0, "127.0.0.1", r));
     const client = await new Promise((resolve) => {
@@ -122,7 +123,7 @@ test("the TLS exporter with an empty context equals the exporter with no context
         c.on("error", () => {});
     });
     const [srvEmpty, srvNone] = await seen;
-    server.close();
+    closeServer();
     assert.deepStrictEqual(client[0], client[1]);
     assert.deepStrictEqual(srvEmpty, srvNone);
     assert.deepStrictEqual(client[0], srvEmpty);
@@ -203,11 +204,27 @@ test("sign-in: the 7th in a minute is 429; a helper failure is the friendly 503"
         const seventh = await request(gw, { path: "/_benchbar/signin", cert: c });
         assert.strictEqual(seventh.status, 429);
         assert.strictEqual(gw.helper.calls().length, 6);
+        // the window runs on the gateway's injected clock, not the wall clock: a minute on from the first hit it is open again
+        gw.jump(61_000);
+        assert.strictEqual((await request(gw, { path: "/_benchbar/signin", cert: c })).status, 302);
+        assert.strictEqual(gw.helper.calls().length, 7);
 
         const f = await request(gw, { path: "/_benchbar/signin", cert: bad, headers: { accept: "text/html" } });
         assert.strictEqual(f.status, 503);
         assert.match(f.text, /Test Host's bench is restarting, try again in a moment|Test Host&#39;s bench is restarting/);
         assert.ok(!f.text.includes(H.SID) && !f.text.includes("boom"));
+    });
+});
+
+test("devices.json rewritten under a ticking gateway is never seen half written", async () => {
+    const c = cert("rewrite1");
+    await withGateway({ tickMs: 5, devices: [deviceRow(c)] }, async (gw) => {
+        for (let i = 0; i < 400; i++) {
+            H.writeDevices(gw.devicesFile, [deviceRow(c)]);
+            if (i % 10 === 0) await sleep(1);
+        }
+        assert.strictEqual(gw.child.exitCode, null, gw.output());
+        assert.strictEqual((await gw.control({ op: "status" })).ok, true);
     });
 });
 

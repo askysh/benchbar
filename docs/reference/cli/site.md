@@ -133,6 +133,19 @@ and private files. The backup lands where bench always puts it,
 it has to outlive the bench. When the bench is stopped, its Redis is
 started for the backup and stopped again.
 
+bench's backup deletes the site's backups older than 23 hours
+(`keep_backups_for_hours`). benchbar keeps them: it holds a second name
+for every file of the folder under its state folder while bench runs and
+puts back what bench deleted. Nothing is pruned, and the site's config is
+not changed. On the same volume the second name is a hard link; when the
+state folder is on another volume it is a full copy of the folder each
+run, and the command stops before bench starts when the free space does
+not cover it. A run that is cut short puts the files back as it exits;
+after a kill, the next backup puts them back (doctor warns until then:
+`kept_backups`, fixed by `benchbar repair`). The same holds for the backup that `site restore`, `site
+drop`, `pull --replace` and `app update` take first. See [what is kept
+and for how long](../../guides/benches-and-sites.md#backing-up-and-dropping-a-site).
+
 | Flag | What it does |
 |---|---|
 | `--with-files` | Also back up the uploaded files (public and private) |
@@ -154,7 +167,10 @@ benchbar site backups NAME [--json]
 
 Every backup of the site, newest first: when it was taken, its size,
 whether it has the files, and the database file. Read only. The files
-that share a timestamp are one backup.
+that share a timestamp are one backup. A set with a part of zero bytes,
+a partial set or one without a database is marked `(incomplete)` (and
+`"complete": false` in JSON); `site restore` reads the files themselves
+before it changes anything.
 
 Exit codes: 0; 1 when the site does not exist.
 
