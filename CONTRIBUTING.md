@@ -71,8 +71,11 @@ tray. `CI result` is the one required check. Details:
 - **Against `next-release`.** `main` holds the last release and moves only
   when one is cut ([docs/releasing.md](docs/releasing.md#branches)).
 - **Small, one topic.** A fix and a refactor are two pull requests.
-- **CHANGELOG.** A line under `## Unreleased` in
-  [CHANGELOG.md](CHANGELOG.md), in the section that fits.
+- **A changelog fragment.** Add `changelog.d/<issue number>-<short-slug>.md`
+  with a `### <Section>` heading and a bullet for each user facing change
+  ([format](changelog.d/README.md)). Do not edit [CHANGELOG.md](CHANGELOG.md):
+  the release step folds the fragments into it, so pull requests do not
+  conflict there. `bash scripts/changelog-fold.sh --check` validates yours.
 - **DECISIONS.** One line per non obvious choice: the decision, then the
   reason. CLI and repo choices go in
   [docs/DECISIONS.md](docs/DECISIONS.md), app choices in

@@ -203,6 +203,17 @@ sed_inplace() { sed "$1" "$2" >"$2.tmp" && mv "$2.tmp" "$2"; }
 # mtime_of FILE: modification time in seconds
 mtime_of() { if [[ "$STAT_GNU" == "1" ]]; then stat -c %Y "$1"; else stat -f %m "$1"; fi; }
 
+# mkgz FILE [TEXT]: a real gzip file, the way a backup reader checks it (gzip -t)
+mkgz() { printf '%s\n' "${2:-dump}" | gzip -c >"$1"; }
+# mktar FILE: a real tar archive with one member (tar -tf reads it)
+mktar() {
+  local d
+  d="$(mktemp -d "${TMP_DIR}/mktar.XXXXXX")"
+  printf 'x\n' >"$d/member"
+  tar -cf "$1" -C "$d" member
+  rm -rf "$d"
+}
+
 # Snapshot of every file (path, size, mtime) under the given dirs, for
 # "second run writes nothing" assertions.
 snapshot() {

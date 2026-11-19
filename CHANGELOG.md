@@ -4,13 +4,6 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
-### Install
-
-- A failed step of `install` is reported as a failure: the "Background service" row of the summary says `failed` (not `warning`, which stays for a run whose steps worked and whose check pass still has something to look at), `install` exits 1 and the stream's closing `done` line has `exit` 1. "Next steps" then starts with `benchbar repair` and `benchbar doctor` instead of `benchup`. A wkhtmltopdf install that failed, which does not stop the install, is a `[WARN]` with its fix and lands in `warnings[]`, no longer a `[FAIL]` in a run that exits 0 (#116).
-- Linux: `status` says `unknown (no user bus)` for the agent, with the reason and the fix, instead of `loaded: no`, when `systemctl --user` cannot be reached (`sudo -iu`, `su -`, cron). `install` points `XDG_RUNTIME_DIR` at `/run/user/UID` again after it turned lingering on, waits a few seconds for the user manager, and when it is still not there stops before it changes anything and names the fix; the plan shows a `user_bus_unreachable` warning, and `doctor --prerequisites` has a new `user_bus` check (the Linux list has 14 checks). Until now the failure came at its last step with no reason (#115).
-- Linux: `install` accepts Ubuntu 24.04 only and stops, before sudo and before any package, on another system (Ubuntu 22.04 ships MariaDB 10.6, Debian 13 11.8; before, it installed packages and stopped afterwards). The blocker `linux_distro_unsupported` names the fix; `--allow-unsupported-distro` (or `BENCHBAR_ALLOW_UNSUPPORTED_DISTRO=1`) tries anyway.
-- macOS: every command that runs under `sudo` (the wkhtmltopdf package steps, the `/etc/hosts` rewrite) is named by its absolute path, not found through the user's `PATH`, which holds folders a program running as the user can write. The files `sudo` writes and reads (`/etc/hosts`, the wkhtmltopdf download folder and package path) are no longer taken from environment variables.
-
 ### Mac app
 
 - New setting **Links, Ask before a link acts** (off by default): when on, BenchBar shows an alert before a `benchbar://` link starts, stops or restarts a bench or opens a console. Any web page or app can open such a link, and a browser's "always allow" removes its own question. The docs say so plainly.
@@ -25,6 +18,14 @@ All notable changes to this project are documented here.
 - Two Concepts pages: [Port blocks](docs/concepts/port-blocks.md) and [How sharing keeps your bench safe](docs/concepts/sharing-safety.md), moved out of the benches guide and the share reference.
 - Testing, Releasing and Decisions are under For contributors. Decisions and Releasing no longer show in the site search.
 - The Mac app page describes the Sharing tab, On your network and the Labs list, and the energy cost of both.
+
+### Backups
+
+- `site backup`, `site restore`, `site drop`, `pull --replace` and `app update` no longer delete the site's backups older than 23 hours. bench's backup did that silently; benchbar now keeps those files and puts them back. Nothing in a site's backup folder is pruned. On the same volume the kept files are hard links (no space); when the state folder is on another volume each run copies the whole backup folder and stops before bench starts when the free space does not cover it.
+- A run that is cut short between keeping and putting back (Ctrl-C, TERM) puts the files back as it exits. A run that is killed outright, or a file that could not go back, leaves the copy in the state folder, which is then never pruned: the next backup puts it back (`changed[]` says so), `doctor` warns (`kept_backups`) until then, and `repair` puts the files back.
+- `site restore` and `pull` read a backup set before they change anything: a dump that is empty or cut short, or a file archive tar cannot read, stops the command with the file named. `site backups` marks a set with an empty part `(incomplete)` and has `"complete"` in JSON.
+- benchbar's own state folder keeps to a limit: the newest 100 run logs, 50 backup folders and 14 update checks, and old `state.env.*` temp files go. The run's `changed[]` says what was removed.
+- `benchup` keeps the logs of the last three starts as `bench.previous.1.log` to `.3.log`, so the evidence of a crash survives a quick second start.
 
 ### Windows tray
 

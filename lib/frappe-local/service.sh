@@ -231,7 +231,9 @@ fl_stop_flag_reason() {
 
 fl_arm_start() {
   # removes the stop flag and the crash history; keeps the tail of the old log
-  local flag hist log prev
+  # in bench.previous.log and the three copies before it in bench.previous.N.log,
+  # so a crash is still there after two quick restarts that wrote little
+  local flag hist log prev i
   flag="$(fl_stop_flag_path)"; hist="$(fl_starts_path)"; log="$(fl_bench_log_path)"
   prev="${FL_BENCH_DIR}/logs/bench.previous.log"
   if [[ "${FL_DRY_RUN:-0}" == "1" ]]; then
@@ -242,6 +244,15 @@ fl_arm_start() {
   rm -f "$flag"
   : >"$hist"
   if [[ -s "$log" ]]; then
+    if [[ -s "$prev" ]]; then
+      # previous.2 -> previous.3 (the oldest goes), previous.1 -> previous.2, previous -> previous.1
+      i=3
+      while [[ "$i" -gt 1 ]]; do
+        [[ -e "${prev%.log}.$((i - 1)).log" ]] && mv -f "${prev%.log}.$((i - 1)).log" "${prev%.log}.${i}.log" 2>/dev/null
+        i=$((i - 1))
+      done
+      mv -f "$prev" "${prev%.log}.1.log" 2>/dev/null || true
+    fi
     tail -n 500 "$log" >"$prev" 2>/dev/null || true
     : >"$log"
   fi

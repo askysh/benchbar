@@ -11,7 +11,7 @@
 # Groups (used by "benchbar service" versus "benchbar repair"):
 #   system, bench, service, site
 
-FL_CHECK_ORDER="brew formula_dates python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac mole app_copies full_disk_access env_python env_setuptools bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy app_update_pending app_add_pending dependency_behind apps_behind lock_parse lock_drift profile_outdated logs bench_path honcho honcho_setuptools procfile runner agent runner_heartbeat fork_safety scheduler stop_flag helpers cli_link cli_duplicate legacy_agents dead_agents hosts port_clash share_scheduler orphans ping site_not_served"
+FL_CHECK_ORDER="brew formula_dates python_leaves mariadb_bind mariadb_utf8 pdf_engine redis_6379 cleanmymac mole app_copies full_disk_access env_python env_setuptools bench_version toolchain_node toolchain_yarn mariadb_version toolchain_pkgconfig socketio assets apps_txt app_branch_policy app_update_pending app_add_pending dependency_behind apps_behind lock_parse lock_drift profile_outdated logs kept_backups bench_path honcho honcho_setuptools procfile runner agent runner_heartbeat fork_safety scheduler stop_flag helpers cli_link cli_duplicate legacy_agents dead_agents hosts port_clash share_scheduler orphans ping site_not_served"
 FL_LOG_WARN_MB="${FL_LOG_WARN_MB:-50}"
 # doctor --quick leaves these out: they start brew, python, node, bench, git
 # or ask the site, which takes seconds each; the JSON names them (skipped_checks)
@@ -34,7 +34,7 @@ fl_check_group() {
   case "$1" in
     brew|formula_dates|python_leaves|mariadb_bind|mariadb_utf8|pdf_engine|redis_6379|cleanmymac|mole|app_copies|full_disk_access|wsl_time_sync) printf 'system' ;;
     env_python|env_setuptools|bench_version|toolchain_*|socketio|assets|apps_txt|app_branch_policy|app_update_pending|app_add_pending|dependency_behind|apps_behind|lock_parse|lock_drift|logs) printf 'bench' ;;
-    profile_outdated) printf 'bench' ;;
+    profile_outdated|kept_backups) printf 'bench' ;;
     ping|site_not_served) printf 'site' ;;
     *) printf 'service' ;;
   esac
@@ -76,6 +76,7 @@ fl_check_label() {
     site_not_served) printf 'Sites served' ;;
     hosts) printf '/etc/hosts entry' ;;
     logs) printf 'Log sizes' ;;
+    kept_backups) printf 'Kept older backups' ;;
     bench_path) printf 'Bench path' ;;
     cleanmymac) printf 'CleanMyMac' ;;
     mole) printf 'Mole' ;;
@@ -982,6 +983,23 @@ fl_file_mb() {
   # wc, not stat: BSD and GNU stat disagree on -f, and the suite runs on both
   bytes="$(wc -c <"$f" | tr -d ' ')"
   printf '%d' $((bytes / 1024 / 1024))
+}
+
+# older backups of a site that a run of bench's backup did not put back
+# (site-backups.sh): only in the state folder, never pruned there
+chk_kept_backups() {
+  local kdir n f msg=""
+  while IFS= read -r kdir; do
+    [[ -n "$kdir" ]] || continue
+    n=0
+    for f in "$kdir"/*; do [[ -f "$f" ]] && n=$((n + 1)); done
+    msg="${msg}${msg:+; }${n} file(s) of ${kdir##*/} in ${kdir}"
+  done < <(fl_kept_dirs "$FL_BENCH_DIR")
+  if [[ -n "$msg" ]]; then
+    chk__set warn "older backups that bench's backup deleted are only in the state folder (a run was cut short): ${msg}" "${FL_SELF} repair (puts them back into the site's backup folder)" kept_backups
+  else
+    chk__set ok "no older backups wait in the state folder"
+  fi
 }
 
 chk_logs() {
