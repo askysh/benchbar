@@ -19,7 +19,9 @@ func osServices() (DistroSource, PathStore, Broadcaster) {
 	return winServices{}, winServices{}, winServices{}
 }
 
-const lxssKey = `Software\Microsoft\Windows\CurrentVersion\Lxss`
+// The per user registry paths are variables so a test can point them at a
+// throwaway key under HKCU; nothing else changes them.
+var lxssKey = `Software\Microsoft\Windows\CurrentVersion\Lxss`
 
 func (winServices) Distros() ([]Distro, error) {
 	k, err := registry.OpenKey(registry.CURRENT_USER, lxssKey, registry.READ)
@@ -55,10 +57,9 @@ func (winServices) Distros() ([]Distro, error) {
 	return out, nil
 }
 
-const (
-	userEnvKey    = `Environment`
-	machineEnvKey = `SYSTEM\CurrentControlSet\Control\Session Manager\Environment`
-)
+var userEnvKey = `Environment`
+
+const machineEnvKey = `SYSTEM\CurrentControlSet\Control\Session Manager\Environment`
 
 func (winServices) User() (PathValue, error) {
 	k, err := registry.OpenKey(registry.CURRENT_USER, userEnvKey, registry.QUERY_VALUE)
@@ -122,7 +123,7 @@ func (winServices) EnvironmentChanged() error {
 	return nil
 }
 
-const startupApprovedKey = `Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\StartupFolder`
+var startupApprovedKey = `Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\StartupFolder`
 
 func startupApproved(name string) ([]byte, error) {
 	k, err := registry.OpenKey(registry.CURRENT_USER, startupApprovedKey, registry.QUERY_VALUE)

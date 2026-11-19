@@ -264,10 +264,11 @@ distro, and BenchBar Tray, the notification area app. It checks the zip
 against its SHA256, puts the folder on your PATH, adds a Start menu
 shortcut, starts the tray and ends with `benchbar.exe doctor`. Run it
 again to update. On our Windows 11 test PC it showed no SmartScreen
-warning. The Windows programs are not signed yet, and Smart App Control
-blocks unsigned programs: when it is on, the installer stops first and
-says what to do (see
-[Before you install](windows.md#before-you-install)). Every release has
+warning. The Windows programs are not signed, and 0.9.0 has no signed or
+Microsoft Store route. Smart App Control blocks unsigned programs: when
+it is on, the installer stops first and says what to do. The command line
+inside WSL still works then (see
+[Smart App Control](windows.md#smart-app-control)). Every release has
 SHA256SUMS and, from the next release, build provenance you can verify
 (see [Signing and verification](windows.md#signing-and-verification)).
 
