@@ -284,6 +284,16 @@ run_json service --json --yes --bench-dir "$BENCH"
 SV="$(printf '%s' "$OUT" | tail -n 1 | jget - 'd["op_id"]')"
 assert_eq "True" "$(rec_field "$SV" '(d["step"] is None or d["step"]["status"] != "running") and d["progress"] is None')" "(a done run has no running step)"
 
+# no record of a run that ended (done or failed) keeps a step or a progress line running
+python3 -I -c '
+import glob, json, sys
+for f in glob.glob(sys.argv[1] + "/op-2026111*.json"):
+    d = json.load(open(f))
+    if d["state"] in ("done", "failed"):
+        assert d["step"] is None or d["step"]["status"] != "running", (f, d["step"])
+        assert d["progress"] is None, (f, d["progress"])
+' "$OPS" || fail "a finished record keeps a running step"
+
 # ---- 7. the MCP server: op_id in an action's result, the read only op status tool
 BENCHBAR_MCP_APPLY_DELAY=0
 export BENCHBAR_MCP_APPLY_DELAY
