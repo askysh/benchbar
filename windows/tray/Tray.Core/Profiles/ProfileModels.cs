@@ -33,6 +33,12 @@ public sealed record ProfileInfo(string Name, string Kind, string? Source, strin
 
     public string? Mariadb { get; init; }
 
+    /// <summary><c>linux_supported</c>: whether the Linux install's own profile gate takes the profile (a team profile with its base's answer). Null from a CLI older than 0.9, on macOS and for an invalid file.</summary>
+    public bool? LinuxSupported { get; init; }
+
+    /// <summary><c>unsupported_reason</c>: the gate's reasons when <see cref="LinuxSupported"/> is false.</summary>
+    public string? UnsupportedReason { get; init; }
+
     /// <summary>"Python 3.11, Node 22, MariaDB 10.11", the parts the CLI gave; empty when it gave none.</summary>
     public string Versions => string.Join(", ", new[] { Python is null ? null : "Python " + Python, Node is null ? null : "Node " + Node, Mariadb is null ? null : "MariaDB " + Mariadb }.OfType<string>());
 
@@ -107,6 +113,8 @@ public static class ProfileListJson
                 Python = JsonRead.Str(p, "python"),
                 Node = JsonRead.Str(p, "node"),
                 Mariadb = JsonRead.Str(p, "mariadb"),
+                LinuxSupported = p["linux_supported"] is JsonValue ls && ls.TryGetValue<bool>(out var supported) ? supported : null,
+                UnsupportedReason = JsonRead.Str(p, "unsupported_reason"),
             });
         }
         return profiles;
