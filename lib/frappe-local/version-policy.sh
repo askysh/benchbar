@@ -170,7 +170,7 @@ fl_policy_table_drop() { FL_POLTAB_ON=0; FL_POLTAB=""; }
 # without a subshell, from the loaded table (fl_policy_table_load); 1 when the
 # app has no row
 fl_lookup_app_policy_v() {
-  local __o="$1" app="$2" profile="$3" repo v15 v16 priority notes branch t
+  local __o="$1" app="$2" profile="$3" repo v15 v16 priority notes branch t _i
   # a loaded team profile names its own apps' repos and branches
   if [[ -n "${FL_TEAM_PROFILE:-}" ]] && declare -F fl_team_app_policy >/dev/null; then
     if t="$(fl_team_app_policy "$app")"; then printf -v "$__o" '%s' "$t"; return 0; fi
@@ -178,9 +178,14 @@ fl_lookup_app_policy_v() {
   t=$'\n'"$FL_POLTAB"
   [[ "$t" == *$'\n'"${app}"$'\t'* ]] || return 1
   t="${t#*$'\n'"${app}"$'\t'}"; t="${t%%$'\n'*}"
-  # tabs become \001, which (unlike a tab) does not swallow an empty field
-  t="${t//$'\t'/$'\001'}"
-  IFS=$'\001' read -r repo v15 v16 priority notes _ <<<"$t"
+  # split on tabs by hand: a tab in IFS swallows an empty field, and bash 3.2
+  # does not split on a \001 either
+  local -a fld=()
+  for _i in 1 2 3 4 5; do
+    fld+=("${t%%$'\t'*}")
+    if [[ "$t" == *$'\t'* ]]; then t="${t#*$'\t'}"; else t=""; fi
+  done
+  repo="${fld[0]}"; v15="${fld[1]}"; v16="${fld[2]}"; priority="${fld[3]}"; notes="${fld[4]}"
   case "$profile" in
     v16-lts) branch="$v16" ;;
     *) branch="$v15" ;;
