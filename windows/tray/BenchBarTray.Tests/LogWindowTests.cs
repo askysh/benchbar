@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using BenchBar.Tray.Core;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 using static BenchBar.Tray.Tests.PageKit;
 
@@ -11,7 +12,7 @@ public class LogWindowTests
 {
     private const string BenchPath = "/home/akash/frappe-bench";
 
-    private static (LogWindow Window, ScriptedStreamRunner Runner, List<string> Copied, List<TerminalLaunch> Terminals) Make(bool distro = true, bool polling = false)
+    private static (LogWindow Window, ScriptedStreamRunner Runner, List<string> Copied, List<TerminalLaunch> Terminals) Make(bool distro = true, FakeTimeProvider? time = null)
     {
         var (services, runner) = ScriptedServices();
         runner.On(a => a.Contains("--previous")).Print(Fixture("logs-previous.json"));
@@ -27,7 +28,7 @@ public class LogWindowTests
             return null;
         };
         SynchronizationContext.SetSynchronizationContext(null);
-        var model = new LogViewModel(services.Cli, BenchPath, "frappe-bench") { PollEvery = polling ? TimeSpan.FromMilliseconds(15) : TimeSpan.FromHours(1) };
+        var model = new LogViewModel(services.Cli, BenchPath, "frappe-bench", time: time) { PollEvery = time is null ? TimeSpan.FromHours(1) : TimeSpan.FromSeconds(2) };
         var window = new LogWindow(services, BenchWith(BenchState.Running), Theme, model);
         return (window, runner, copied, terminals);
     }
@@ -37,6 +38,14 @@ public class LogWindowTests
         window.StartAsync().GetAwaiter().GetResult();
         window.Sync();
     }
+
+    /// <summary>Moves the fake clock until the Follow loop has polled <paramref name="count"/> times: a timer the loop has not made yet misses an early Advance.</summary>
+    private static void PollsReach(LogWindow window, FakeTimeProvider time, int count) =>
+        WaitFor(() =>
+        {
+            time.Advance(TimeSpan.FromMinutes(5));
+            return window.Model.Polls >= count;
+        });
 
     [Fact]
     public void EveryControlOfTheWindowIsNamedAndThereAreAllTheControlsTheMacHas() => Sta.Run(() =>
@@ -154,18 +163,19 @@ public class LogWindowTests
     [Fact]
     public void FollowPollsOnlyWhileTheWindowIsOpenAndStopsWhenItCloses() => Sta.Run(() =>
     {
-        var (window, runner, _, _) = Make(polling: true);
+        var time = new FakeTimeProvider();
+        var (window, runner, _, _) = Make(time: time);
         Assert.Equal(0, window.Model.Polls); // built, not opened: nothing polls
         Open(window);
-        WaitFor(() => window.Model.Polls >= 2);
+        PollsReach(window, time, 2);
+        WaitFor(() => runner.Runs.Count(r => r.Args.Contains("--since")) >= window.Model.Polls); // the second poll's call has been made
         Assert.True(window.Model.IsPolling);
 
         window.Close();
         Assert.False(window.Model.IsPolling);
-        Thread.Sleep(80); // a poll already under way may end
-        var polls = window.Model.Polls;
+        var polls = window.Model.Polls; // every poll runs on the fake clock, so none is under way now
         var runs = runner.Runs.Count;
-        Thread.Sleep(200);
+        time.Advance(TimeSpan.FromHours(1));
         Assert.Equal(polls, window.Model.Polls);
         Assert.Equal(runs, runner.Runs.Count);
         Assert.Contains(runner.Runs, r => r.Args.Contains("--since") && r.Args.Contains("2026-10-30T10:00:04Z")); // each poll asks for what came after the last line shown
@@ -174,9 +184,10 @@ public class LogWindowTests
     [Fact]
     public void TurningFollowOffStopsThePollsAndTheCheckboxShowsIt() => Sta.Run(() =>
     {
-        var (window, _, _, _) = Make(polling: true);
+        var time = new FakeTimeProvider();
+        var (window, _, _, _) = Make(time: time);
         Open(window);
-        WaitFor(() => window.Model.Polls >= 1);
+        PollsReach(window, time, 1);
         window.FollowToggle.IsChecked = false;
         Assert.False(window.Model.Follow);
         Assert.False(window.Model.IsPolling);

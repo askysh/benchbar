@@ -107,7 +107,12 @@ internal sealed class ScriptedSource : IBenchSource, ILoadSource
     public int MaxConcurrent { get; private set; }
     public int Lists => Volatile.Read(ref _lists);
     public List<string> Actions { get; } = [];
-    public TimeSpan Latency { get; set; } = TimeSpan.Zero;
+
+    /// <summary>When set, <see cref="ListAsync"/> waits on it after it has counted the call: the test decides when a poll ends, not a clock.</summary>
+    public Task? ListGate { get; set; }
+
+    /// <summary>Completed by the first <see cref="ListAsync"/> call: the first poll is under way.</summary>
+    public TaskCompletionSource FirstList { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public Dictionary<string, BenchStatus> Overrides { get; } = [];
     public Exception? ListFails { get; set; }
     public Exception? StatusFails { get; set; }
@@ -121,8 +126,9 @@ internal sealed class ScriptedSource : IBenchSource, ILoadSource
         try
         {
             Interlocked.Increment(ref _lists);
+            FirstList.TrySetResult();
             if (ListFails is not null) throw ListFails;
-            if (Latency > TimeSpan.Zero) await Task.Delay(Latency, ct);
+            if (ListGate is not null) await ListGate.WaitAsync(ct);
             return [.. Entries];
         }
         finally { Leave(); }
@@ -215,4 +221,14 @@ internal sealed class FakeProcessRunner : IProcessRunner
         if (Throws is not null) throw Throws;
         Detached.Add((fileName, [.. args]));
     }
+}
+
+/// <summary>
+/// Waits for an outcome without a fixed sleep: it ends the moment the condition holds, and fails after ten seconds.
+/// Never use it to show that something did not happen; assert the state that proves it instead.
+/// </summary>
+internal static class Eventually
+{
+    public static Task Async(Func<bool> condition, string what = "the condition was not met in time") =>
+        Task.Run(() => Xunit.Assert.True(SpinWait.SpinUntil(condition, TimeSpan.FromSeconds(10)), what));
 }

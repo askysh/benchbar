@@ -323,16 +323,16 @@ fl_commit_present() {
 fl_commit_reach() {
   local dir="$1" sha="$2" remote
   fl_commit_present "$dir" "$sha" && return 0
-  env GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes' git -C "$dir" fetch --all --tags --quiet >>"${FL_LOG_FILE:-/dev/null}" 2>&1 || true
+  fl_git_net -C "$dir" fetch --all --tags --quiet >>"${FL_LOG_FILE:-/dev/null}" 2>&1 || true
   fl_commit_present "$dir" "$sha" && return 0
   if [[ "$(git -C "$dir" rev-parse --is-shallow-repository 2>/dev/null || true)" == "true" ]]; then
-    env GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes' git -C "$dir" fetch --all --tags --unshallow --quiet >>"${FL_LOG_FILE:-/dev/null}" 2>&1 || true
+    fl_git_net -C "$dir" fetch --all --tags --unshallow --quiet >>"${FL_LOG_FILE:-/dev/null}" 2>&1 || true
   fi
   fl_commit_present "$dir" "$sha" && return 0
   # a single branch clone has not seen a commit that is on another branch: the
   # remote may hand out a commit it has by its hash (GitHub does)
   for remote in $(git -C "$dir" remote 2>/dev/null || true); do
-    env GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes' git -C "$dir" fetch --quiet "$remote" "$sha" >>"${FL_LOG_FILE:-/dev/null}" 2>&1 || true
+    fl_git_net -C "$dir" fetch --quiet "$remote" "$sha" >>"${FL_LOG_FILE:-/dev/null}" 2>&1 || true
     fl_commit_present "$dir" "$sha" && return 0
   done
   return 1
@@ -625,11 +625,11 @@ fl_site_incomplete() {
   fl_fail "a previous bench new-site ${site_name} did not finish (started $(sed -n 1p "$marker" 2>/dev/null || printf '?')); the site folder is incomplete"
   [[ -z "${3:-}" ]] || fl_info "benchbar did not clean it up itself: ${3}"
   if [[ "$foreign" == "1" ]]; then
-    fl_fix "mv ${bench_dir}/sites/${site_name} ~/${site_name}.incomplete, then run this again; leave the database ${db:-it names} alone until you know whose it is"
+    fl_fix "mv $(printf '%q' "${bench_dir}/sites/${site_name}") ~/$(printf '%q' "${site_name}.incomplete"), then run this again; leave the database ${db:-it names} alone until you know whose it is"
   elif [[ -n "$db" ]]; then
-    fl_fix "mv ${bench_dir}/sites/${site_name} ~/${site_name}.incomplete, then run this again. The database ${db} may be left behind: first check that no site uses it (grep -l '\"${db}\"' ${bench_dir}/sites/*/site_config.json), then drop it yourself: $(fl__db_by_hand "$db")   If the site works already (bench --site ${site_name} doctor), only remove ${marker}"
+    fl_fix "mv $(printf '%q' "${bench_dir}/sites/${site_name}") ~/$(printf '%q' "${site_name}.incomplete"), then run this again. The database ${db} may be left behind: first check that no site uses it (grep -l '\"${db}\"' $(printf '%q' "$bench_dir")/sites/*/site_config.json), then drop it yourself: $(fl__db_by_hand "$db")   If the site works already (bench --site ${site_name} doctor), only remove ${marker}"
   else
-    fl_fix "mv ${bench_dir}/sites/${site_name} ~/${site_name}.incomplete   (then, if its database exists: cd ${bench_dir} && bench drop-site ${site_name} --force), then run this again; if the site works already (bench --site ${site_name} doctor), only remove ${marker}"
+    fl_fix "mv $(printf '%q' "${bench_dir}/sites/${site_name}") ~/$(printf '%q' "${site_name}.incomplete")   (then, if its database exists: cd $(printf '%q' "$bench_dir") && bench drop-site ${site_name} --force), then run this again; if the site works already (bench --site ${site_name} doctor), only remove ${marker}"
   fi
   return 0
 }
@@ -642,7 +642,7 @@ fl_site_orphan_stop() {
   marker="$(fl_site_creating_marker "$bench_dir" "$site_name")"
   fl_fail "a previous bench new-site ${site_name} did not finish and sites/${site_name} is gone; its database ${db} may be left behind"
   [[ -z "$FL_SITE_RECOVER_WHY" ]] || fl_info "benchbar did not clean it up itself: ${FL_SITE_RECOVER_WHY}"
-  fl_fix "check that no site uses ${db} (grep -l '\"${db}\"' ${bench_dir}/sites/*/site_config.json); if none does, drop it yourself: $(fl__db_by_hand "$db")   Then remove ${marker} and run this again"
+  fl_fix "check that no site uses ${db} (grep -l '\"${db}\"' $(printf '%q' "$bench_dir")/sites/*/site_config.json); if none does, drop it yourself: $(fl__db_by_hand "$db")   Then remove ${marker} and run this again"
   FL_SITE_RECOVER_FOREIGN=0; FL_SITE_RECOVER_DB=""
 }
 

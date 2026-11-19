@@ -64,7 +64,7 @@ command that read only prints none of them.
 | `exit` | the exit code; the process exits with the same number, so a pipe cannot hide a failure |
 | `changed[]` | what the run changed: `{"kind": "bench"\|"site"\|"app"\|"service"\|"ports"\|"hosts"\|"backup"\|"process"\|"state", "name", "detail"}`. Only what the run really changed: empty on a second run, and in a dry run. `install` reports the bench, the site and the apps its phase scripts create |
 | `warnings[]` | the run's `[WARN]` lines, as text |
-| `next_actions[]` | `{"command", "why"}`: the fix lines and next steps the text output prints |
+| `next_actions[]` | `{"command", "why"}`: the fix lines and next steps the text output prints. `"quoted": true` is added when the command was built with every word quoted for the shell (a program may split it); it is absent for a command written as text |
 | `state_after` | the bench's `status --json` object after the run (no per site ping), `null` when there is no bench, in a dry run, or when the run touched several benches (`ports apply`). A stream's is read after the CLI's locks are released; a one document command's and `pull`'s while its lock is still held (a read, so nothing waits on it) |
 | `missing[]` | only on a refusal of the non interactive mode: the inputs the command lacked (`ADMIN_PASSWORD`, `--yes`, `sudo`, `BENCHBAR_SUDO_PASSWORD`, ...) |
 | `error_id` | only on a failure that has a stable id, for programs to match instead of the text. Every CLI done line can carry it. So far: `sudo_password_wrong` (the password in `BENCHBAR_SUDO_PASSWORD` was refused, before any change). `password_has_newline` (a password in `ADMIN_PASSWORD`, `MARIADB_ROOT_PASSWORD` or `BENCHBAR_SUDO_PASSWORD` holds a line break; it travels on one line; refused before any change, only the variable's name is printed). `systemd_not_running` (Linux, `install` only: PID 1 is not systemd, and MariaDB, Redis and the bench service are systemd services; on WSL the fix names `[boot] systemd=true` in `/etc/wsl.conf`), `bench_on_windows_fs` (WSL, `install` and `adopt`: the bench folder is on the Windows file system, `/mnt/<drive>` or a drvfs or 9p mount; slow, no file watching, broken permissions; `--allow-windows-fs` accepts it), `github_unreachable` (Linux, `install` only: `github.com`, which holds frappe and the uv Pythons, did not answer within 10 seconds, after one retry; the plan's `blockers[]` names it, nothing was changed) and `port_3306_in_use` and `port_6379_in_use` (Linux, `install` only: another program, or on WSL another distro, already listens on the MariaDB or the system Redis port; the plan's `blockers[]` names them, the done line has `exit` 1, the `fix` and the `error`, and nothing was changed, no sudo asked). Docker, a native MariaDB or a second WSL distro are the usual cause: WSL distros share one network, so only one of them can run MariaDB on port 3306. Stop it in the other distro (`sudo systemctl stop mariadb`) and run `install` again; benchbar never stops it. The Windows shim adds `distro_running`, see [Windows shim](#windows-shim) |
@@ -175,6 +175,7 @@ How `status` decides (live facts win over the state file):
 | `benches[].sites` | array | added in 0.4, see [Sites](#sites) |
 | `benches[].default` | bool | same as `path == default_bench` |
 | `benches[].service_installed` | bool | the agent plist exists |
+| `benches[].adopted` | bool | benchbar knows this bench: it has a service, is registered or is the remembered bench. A folder that only looks like a bench under `~` or `~/dev` is listed with `false` (added in 0.9). The MCP tools that change a bench act only on `true` ones |
 | `benches[].state_file` | string | where the runner writes `state.json` |
 
 Benches are found in this order, without duplicates: the remembered
@@ -393,6 +394,7 @@ is replaced by a note in every result and error.
 | `checks[].level` | string | `ok`, `warn` or `fail` |
 | `checks[].message` | string | one line for humans |
 | `checks[].fix_command` | string or null | the exact command a human would run; `null` when nothing needs doing |
+| `checks[].fix_quoted` | boolean | `true` when the code that built `fix_command` quoted every word for the shell and it is one plain command (optionally after `cd DIR &&`), so a program may split it; `false` for a fix written as text. Also on `prerequisites[]` |
 | `checks[].action` | string or null | the `repair` action that fixes it, when `repair` can |
 | `summary` | object | counts per level |
 
@@ -1451,7 +1453,10 @@ shim itself. The full contract, with the step ids, is in
   `distro`, `ready`, `reboot_pending` and `steps`. Each step has `id`,
   `status` (`ok`, `missing`, `warn` or `fail`), `title`, `detail`, `action`
   (the `setup run` action that fixes it, or null), `needs_admin` and
-  `blocking`. It is read only.
+  `blocking`. It is read only. It also has `packaged` (true when `benchbar.exe`
+  runs from the Microsoft Store package) and `data_dir` (the folder with
+  `config.json`, `setup\`, `reports\` and the logs; in a package the physical
+  `%LOCALAPPDATA%\Packages\<family>\LocalCache\Local\BenchBar`).
 - `benchbar.exe setup run ACTION --jsonl` prints JSON lines: `step` and `log`
   events, then one `done` line. In the `done` line `changed` is a boolean (the
   action changed something), not the CLI's `changed[]` list. The line also has
@@ -1468,7 +1473,8 @@ shim itself. The full contract, with the step ids, is in
   `done` line. With `--fix-hints` the fix commands of
   the failing and warning Windows checks follow the CLI's.
 - `benchbar.exe report-windows --json` prints one line: `schema_version`,
-  `zip`, `included`, `skipped` (what was left out, and why) and `issue_url`.
+  `zip`, `included`, `skipped` (what was left out, and why), `issue_url`,
+  `packaged` and `data_dir` (as in `setup check`).
 - `benchbar.exe self-update --check --json` prints one document and exits 0
   whenever it printed: `schema_version`, `current` (this `benchbar.exe`),
   `latest` (the newest published release with a Windows zip for this PC, or

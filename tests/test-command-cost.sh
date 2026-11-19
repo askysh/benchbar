@@ -72,10 +72,11 @@ export ADMIN_PASSWORD=admin MARIADB_ROOT_PASSWORD=root
 # and the receipts of brew are read once). The listen check adds no lookup of
 # its own: it filters the listeners of that one snapshot; the rest is the two
 # listen files the procfile check reads (shasum, readlink, awk).
+# install --dry-run: 285 since issue 146 polls ls-remote with sleep; app list --json: 54 since issue 146
 cost "doctor" 106 "0 1" doctor --bench-dir "$BENCH"
 cost "doctor --json" 119 "0 1" doctor --json --bench-dir "$BENCH"
-cost "install --dry-run --yes" 219 "0" install --dry-run --yes --bench-dir "$HOME/fresh-bench" --site freshsite
+cost "install --dry-run --yes" 285 "0" install --dry-run --yes --bench-dir "$HOME/fresh-bench" --site freshsite
 cost "adopt --dry-run --yes" 172 "0" adopt "$THIRD" --dry-run --yes
-cost "app list --json" 61 "0" app list --json --bench-dir "$BENCH"
+cost "app list --json" 54 "0" app list --json --bench-dir "$BENCH"
 
 printf 'test-command-cost: ok\n'

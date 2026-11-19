@@ -26,7 +26,7 @@ fl_app_plan_wanted() {
 fl__ap_git() {
   local secs="$1" out="$2" err="$3"
   shift 3
-  fl_run_capture_timeout "$secs" "$out" "$err" env GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes' git "$@"
+  fl_run_capture_timeout "$secs" "$out" "$err" fl_git_net "$@"
 }
 
 fl__ap_first_line() { grep -v '^[[:space:]]*$' "$1" 2>/dev/null | grep -v '^warning:' | awk 'NR==1' || true; }
@@ -35,21 +35,17 @@ fl__ap_first_line() { grep -v '^[[:space:]]*$' "$1" 2>/dev/null | grep -v '^warn
 # and BRANCH (a branch or tag, when given) exists; else 1 with AP__ERR.
 # Without BRANCH it asks for the remote HEAD and sets AP__DEFAULT.
 fl__ap_remote() {
-  local repo="$1" branch="${2:-}" tmp code=0
+  local repo="$1" branch="${2:-}" secs="${FL_GIT_TIMEOUT:-30}" code=0
   AP__DEFAULT=""; AP__ERR=""
-  tmp="$(mktemp -d "${TMPDIR:-/tmp}/benchbar-plan.XXXXXX")"
   if [[ -z "$branch" ]]; then
-    fl__ap_git "${FL_GIT_TIMEOUT:-30}" "$tmp/out" "$tmp/err" ls-remote --symref -- "$repo" HEAD || code=$?
+    fl_git_remote_default "$repo" "$secs" || code=$?
+    AP__DEFAULT="$FL_GR_DEFAULT"
   else
-    fl__ap_git "${FL_GIT_TIMEOUT:-30}" "$tmp/out" "$tmp/err" ls-remote --exit-code --heads --tags -- "$repo" "$branch" || code=$?
+    fl_git_remote_ref "$repo" "$branch" "$secs" || code=$?
   fi
-  fl_log_file_append "$tmp/err"
   if [[ "$code" == "2" && -n "$branch" ]]; then AP__ERR="branch ${branch} not found in ${repo}"
-  elif [[ "$code" != "0" ]]; then AP__ERR="cannot read ${repo} (git ls-remote exit ${code}): $(fl__ap_first_line "$tmp/err")"
-  elif [[ -z "$branch" ]]; then
-    AP__DEFAULT="$(sed -n 's#^ref: refs/heads/\([^[:space:]]*\)[[:space:]]*HEAD$#\1#p' "$tmp/out" | awk 'NR==1')"
+  elif [[ "$code" != "0" ]]; then AP__ERR="cannot read ${repo} (git ls-remote exit ${code}): ${FL_GR_ERR}"
   fi
-  rm -rf "$tmp"
   [[ -z "$AP__ERR" ]]
 }
 
@@ -681,7 +677,7 @@ fl__ap_error_hints() {
     for ((i = 0; i < ${#M_NAME[@]}; i++)); do
       case "$e" in
         "branch ${M_BRANCH[$i]} not found in "*)
-          heads="$(fl_git_batch ls-remote --heads -- "${M_REPO[$i]}" 2>/dev/null | sed 's#.*refs/heads/##' | awk 'NR<=20' | tr '\n' ' ')"
+          heads="$(fl_git_remote_heads "${M_REPO[$i]}" | tr '\n' ' ')"
           fl_note "remote branches: ${heads:-none}"
           fl_fix "pass one of them with --branch" ;;
         "cannot read ${M_REPO[$i]} "*) fl_repo_access_hint "${M_REPO[$i]}" ;;
@@ -942,7 +938,7 @@ fl__ap_apply() {
           # the clone does not reach the commit that was reviewed
           res="failed"
           fl_fail "${arg}: the clone does not reach the pinned commit (planned ${AP_CI_PIN:0:12}, cloned ${AP__GOT:0:12}); nothing was built or installed."
-          fl_fix "Check the commit is on a branch or tag of ${AP_CI_REPO}, then: cd ${FL_BENCH_DIR} && bench remove-app ${FL_CLONED_DIR}, and plan again"
+          fl_fix "Check the commit is on a branch or tag of ${AP_CI_REPO}, then: cd $(printf '%q' "$FL_BENCH_DIR") && bench remove-app $(printf '%q' "$FL_CLONED_DIR"), and plan again"
         elif ! fl__ap_at_commit "$FL_CLONED_DIR" "$AP_CI_SHA"; then
           # the branch moved between the plan and get-app: build and install
           # would run code nobody reviewed
@@ -958,7 +954,7 @@ fl__ap_apply() {
           [[ -z "$e" ]] || s="${s}${s:+,}${e}"
         done
         s="${s:-$arg}"
-        fl_app_build "$s" || { res="failed"; fl_fix "cd ${FL_BENCH_DIR} && bench build --apps ${s}"; } ;;
+        fl_app_build "$s" || { res="failed"; fl_fix "$(fl_fix_cmd cd "$FL_BENCH_DIR" '&&' bench build --apps "$s")"; } ;;
       requirements_python)
         for a in ${arg//,/ }; do
           fl_run_long "bench setup requirements --python ${a}" fl__in_dir "$FL_BENCH_DIR" bench setup requirements --python "$a" || { res="failed"; break; }

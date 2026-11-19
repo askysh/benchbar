@@ -7,10 +7,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 )
 
-// configFile is %LOCALAPPDATA%\BenchBar\config.json. Keys the shim does not
+// configFile is config.json in the data folder (sys.ConfigDir). Keys the shim does not
 // know are kept when it writes.
 type configFile struct {
 	path string
@@ -115,19 +114,7 @@ func updateConfig(sys *System, change func(*configFile)) error {
 // not a JSON object is moved aside (to config.json.invalid) and a new one is
 // written, instead of an error.
 func updateConfigWith(sys *System, change func(*configFile), replaceInvalid bool) error {
-	if sys.Locks != nil {
-		for i := 0; i < 20; i++ {
-			release, ok, err := sys.Locks.TryLock(configLockName)
-			if err != nil {
-				break
-			}
-			if ok {
-				defer release()
-				break
-			}
-			sys.Sleep(sys.Ctx, 100*time.Millisecond)
-		}
-	}
+	defer lockConfig(sys)()
 	cfg, err := loadConfig(sys)
 	var ce *configError
 	if errors.As(err, &ce) && replaceInvalid {

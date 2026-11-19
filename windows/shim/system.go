@@ -92,11 +92,24 @@ type System struct {
 	// need it: the CLI then starts in the home folder.
 	Getwd func() (string, error)
 
-	ConfigDir  string // %LOCALAPPDATA%\BenchBar
-	ProfileDir string // %USERPROFILE%
-	ExePath    string
-	Pid        int
-	User       string // DOMAIN\user
+	// ConfigDir is the one data folder: %LOCALAPPDATA%\BenchBar, or when the
+	// process is packaged the physical folder under
+	// %LOCALAPPDATA%\Packages\<family>\LocalCache\Local\BenchBar.
+	ConfigDir string
+	// LegacyConfigDir is always %LOCALAPPDATA%\BenchBar. A package only reads
+	// config.json from it, once.
+	LegacyConfigDir string
+	LocalAppData    string // %LOCALAPPDATA%
+	// Package says whether this process runs from a Microsoft Store package.
+	Package PackageInfo
+	// LstatExists is true when the path exists, without opening it: an app
+	// execution alias cannot be opened or Stat'ed, only Lstat'ed. Nil means
+	// FileExists only.
+	LstatExists func(path string) bool
+	ProfileDir  string // %USERPROFILE%
+	ExePath     string
+	Pid         int
+	User        string // DOMAIN\user
 
 	Stdin           io.Reader
 	Stdout          io.Writer
