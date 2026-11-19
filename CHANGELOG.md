@@ -18,9 +18,6 @@ All notable changes to this project are documented here.
 - Two Concepts pages: [Port blocks](docs/concepts/port-blocks.md) and [How sharing keeps your bench safe](docs/concepts/sharing-safety.md), moved out of the benches guide and the share reference.
 - Testing, Releasing and Decisions are under For contributors. Decisions and Releasing no longer show in the site search.
 - The Mac app page describes the Sharing tab, On your network and the Labs list, and the energy cost of both.
-- The CLI reference tables (every command's flags, what it needs and whether it changes things) and the MCP tool table are generated from the code, so they list all 20 MCP tools and every flag. `tests/test-docs.sh` fails when they drift.
-- Drift fixed: Labs came in 0.8.2 (the `since` field of `labs list --json` says so now), the `sudo` list of the index page and SECURITY.md has all its steps, `BENCHBAR_SUDO=env` is in the configuration page, runners play at most 30 frames per second, `--help` says macOS and Linux, ROADMAP no longer lists `uninstall-service --bench-dir`, the quick start has the Linux site, the sites guide says that `bench backup` prunes old backups, and the install page lists what `install` leaves behind.
-- The site's "Edit page" link opens `next-release`, where pull requests go. The Docs workflow checks the external links once a week. The pull request template and CONTRIBUTING have boxes for docs, the features page, the CHANGELOG, DECISIONS and tests, and CONTRIBUTING says what CI does with a pull request.
 
 ### Windows tray
 
