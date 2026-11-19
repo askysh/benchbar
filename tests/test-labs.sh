@@ -5,6 +5,8 @@
 # shellcheck source=tests/lib/harness.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
 
+# a person turns labs on: the harness is the app's run (BENCHBAR_NONINTERACTIVE=0 with the app tree), tests/test-person-guard.sh covers the refusals
+export BENCHBAR_NONINTERACTIVE=0
 BENCH="$HOME/dev/frappe-bench"
 make_fake_bench "$BENCH" v16dev
 unset BENCHBAR_LABS

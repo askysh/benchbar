@@ -400,7 +400,7 @@ fl_cmd_share_start() {
   done
   fl_noninteractive && fl_die "Sharing on the network is a person's decision, so nothing run without a terminal can start it." \
     "Run it in a terminal: benchbar share start"
-  [[ -t 0 || "${BENCHBAR_SUDO:-}" == gui ]] || fl_die "Sharing needs a person at a terminal, and this run has none." \
+  [[ -t 0 ]] || fl_person_env_ok BENCHBAR_SUDO gui || fl_die "Sharing needs a person at a terminal, and this run has none.${FL_PERSON_WHY:+ $FL_PERSON_WHY}" \
     "Run it in a terminal: benchbar share start"
   ! fl_is_linux || fl_die "Sharing on the network needs macOS." "Run it on a Mac."
   fl_share_dur_v secs "$dur" --for
