@@ -29,6 +29,8 @@ All notable changes to this project are documented here.
 
 ### Windows tray
 
+- Finish Add works for an app you added by URL, and for one of a failed batch that was never cloned: `benchbar app add NAME` takes the app from `apps/` (or the repo URL and branch its unfinished add kept) when no profile lists it. The record and `status --json` `pending_operations[]` have a new `url`.
+- The profile picker reads `profile list --json` once: each profile has `linux_supported` and `unsupported_reason` (the same gate `install` uses), so a profile Linux cannot install is shown with its real reason and the wizard no longer plans a dry run per profile. A profile you picked that cannot be used keeps its place in the picker with the reason beside it, and a second distro choice stops the first one's list from loading.
 - A call to `benchbar.exe` that has finished no longer shows "did not finish" when a helper process it started keeps its output open: the tray waits a few seconds for the output and goes on.
 - The Logs window waits longer between requests while no new lines arrive, makes none while the PC is locked or asleep or the window is minimized, and asks at most every 30 seconds in battery saver. The bench poll with a running bench is every 60 seconds on battery.
 - A list, a status, a log or a health check from a newer `benchbar` than the tray is read when it still has what the tray needs, instead of blanking the whole window. A plan or a change from a newer one is still refused. A newer `benchbar.exe` no longer blocks Check for Updates, and a newer patch version of it no longer shows a version warning.

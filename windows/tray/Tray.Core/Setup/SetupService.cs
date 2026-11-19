@@ -71,6 +71,9 @@ public interface ISetupService
     /// plan or the refusal. Changes nothing. The default accepts every profile.
     /// </summary>
     Task<ProfileGate> CheckProfileAsync(string profile, string benchDir, CancellationToken ct) => Task.FromResult(new ProfileGate(profile, null));
+
+    /// <summary><c>doctor --prerequisites --json</c> for a bench that would go to <paramref name="benchDir"/>: read only, no bench needed. The default says it was not read.</summary>
+    Task<PrerequisiteResult> PrerequisitesAsync(string benchDir, CancellationToken ct) => Task.FromResult(new PrerequisiteResult(null, "The prerequisites were not read."));
 }
 
 /// <summary>The profiles of <c>profile list --json</c>, or why they could not be read.</summary>
@@ -353,6 +356,31 @@ public sealed class ShimSetupService : ISetupService
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
             return new ProfileListResult([], "benchbar.exe profile list did not answer in time.");
+        }
+    }
+
+    public async Task<PrerequisiteResult> PrerequisitesAsync(string benchDir, CancellationToken ct)
+    {
+        try
+        {
+            // exit 1 means a check failed; the document is still printed
+            var result = await _runner.RunAsync(Shim, PrerequisiteReport.Args(benchDir), ct, CliTimeouts.Read).ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(result.Output))
+                return new PrerequisiteResult(null, ShimBenchSource.FirstLine(result.Error) ?? $"benchbar.exe doctor --prerequisites exited with code {result.ExitCode}.");
+            var report = CliOutput.Parse(result.Output, "doctor --prerequisites", json => PrerequisiteReport.Parse(JsonNode.Parse(json)!.AsObject()), requires: "prerequisites");
+            return new PrerequisiteResult(report, null);
+        }
+        catch (Win32Exception ex)
+        {
+            return new PrerequisiteResult(null, ShimStart.Describe(ex, _locate()));
+        }
+        catch (SourceProblemException ex)
+        {
+            return new PrerequisiteResult(null, ex.Message);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            return new PrerequisiteResult(null, "benchbar.exe doctor --prerequisites did not answer in time.");
         }
     }
 

@@ -12,6 +12,9 @@ public static class HealthArgs
 
     public static string[] Repair(string benchPath) => ["repair", "--yes", "--json", "--bench-dir", benchPath];
 
+    /// <summary>Acknowledges one warning of this bench until its message changes (<c>doctor --ack</c>), or takes it back.</summary>
+    public static string[] Ack(string id, bool on, string benchPath) => ["doctor", on ? "--ack" : "--unack", id, "--json", "--bench-dir", benchPath];
+
     public static string[] LockCheck(string benchPath) => ["lock", "check", "--json", "--bench-dir", benchPath];
 }
 
@@ -52,6 +55,21 @@ public sealed class HealthModel : IDisposable
     public string? ShimError { get; private set; }
 
     public bool Repairable => Report?.Repairable == true;
+
+    /// <summary>Why the last acknowledge or take back failed.</summary>
+    public string? AckError { get; private set; }
+
+    /// <summary>
+    /// Acknowledges (or takes back) the warning <paramref name="check"/> after a person's click, then asks doctor again. A failing check
+    /// cannot be acknowledged: the CLI refuses it and the refusal is shown.
+    /// </summary>
+    public async Task AckAsync(HealthCheck check, bool on, CancellationToken ct = default)
+    {
+        AckError = null;
+        var result = await _cli.RunJsonAsync(HealthArgs.Ack(check.Id, on, BenchPath), null, CliTimeouts.Read, ct).ConfigureAwait(true);
+        if (!result.Ok) AckError = result.Error ?? $"The acknowledgement could not be {(on ? "saved" : "removed")}.";
+        await RunAsync(ct).ConfigureAwait(true);
+    }
 
     public async Task RunAsync(CancellationToken ct = default)
     {
