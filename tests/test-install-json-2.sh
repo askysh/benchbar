@@ -44,7 +44,7 @@ assert_contains "$(sx 'e[-1]["skipped"][1]["command"]')" "site hosts --bench-dir
 assert_eq "skipped skipped" "$(sx '" ".join(x["status"] for x in e if x.get("id") in ("wkhtmltopdf_install","hosts_entry") and x["status"]=="skipped")')"
 assert_eq "0" "$(osa_calls)"
 # only the probe: nothing that could ask for a password (sudo -v, sudo CMD) was run
-if grep '^sudo ' "$MOCK_LOG" | grep -v -x 'sudo -n true' | grep -q .; then fail "the stream must not run sudo beyond the probe: $(grep '^sudo ' "$MOCK_LOG")"; fi
+if grep '^sudo ' "$MOCK_LOG" | grep -v -x 'sudo -n true' >/dev/null; then fail "the stream must not run sudo beyond the probe: $(grep '^sudo ' "$MOCK_LOG")"; fi
 # a cached credential works without asking
 fresh_pdf; touch "$MOCK_STATE/sudo_cred"
 stream install --json --yes --bench-dir "$HOME/nogui-bench2" --site nogui2

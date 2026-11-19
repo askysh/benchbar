@@ -213,7 +213,7 @@ assert c2[4] == sys.argv[4], c2[4]
 PY
 grep -qx '127.0.0.1 oddsite' "$ODD_HOSTS" || fail "the line is in the odd hosts file"
 assert_eq "1" "$(grep -c '^# >>> benchbar >>>$' "$ODD_HOSTS")"
-awk '/^# >>> benchbar >>>$/{b=1;next} /^# <<< benchbar <<<$/{b=0} b' "$ODD_HOSTS" | grep -qx '127.0.0.1 oddsite' || fail "the line sits inside the block"
+grep -qx '127.0.0.1 oddsite' <<<"$(awk '/^# >>> benchbar >>>$/{b=1;next} /^# <<< benchbar <<<$/{b=0} b' "$ODD_HOSTS")" || fail "the line sits inside the block"
 assert_file "$ODD_BENCH/benchbar-run.sh"
 
 # ---- progress lines: every FL_PROGRESS_SECS while a long command runs, bytes for the download
@@ -239,7 +239,7 @@ wrong_delta() { fl_root_run "Add" "$(fl_hosts_root_script)" "$FL_HOSTS_FILE" rew
 "$@"
 code=$?
 printf 'code=%s result=%s\n' "$code" "$FL_STEP_RESULT"
-printf 'output=%s\n' "${FL_ROOT_OUTPUT:-}" | head -n 3
+printf 'output=%s\n' "${FL_ROOT_OUTPUT:-}" | awk 'NR<=3'
 BAILSH
 bail() { set +e; OUT="$(ROOT="$ROOT" BENCH_FOR_BAIL="$HOME/bail-bench" bash "$TMP_DIR/bail.sh" "$@" 2>&1)"; CODE=$?; set -e; }
 osa_reset

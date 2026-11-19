@@ -45,8 +45,8 @@ assert_contains "$OUT" "site.md: a generated table differs from the code"
 while IFS= read -r f; do
   [[ "$(basename "$f")" == "README.md" ]] && continue
   [[ "$(head -n1 "$f")" == "---" ]] || fail "${f#"$ROOT"/} has no frontmatter"
-  head -n5 "$f" | grep -q '^title: ' || fail "${f#"$ROOT"/} has no title"
-  head -n5 "$f" | grep -q '^description: ' || fail "${f#"$ROOT"/} has no description"
+  grep -q '^title: ' <<<"$(head -n5 "$f")" || fail "${f#"$ROOT"/} has no title"
+  grep -q '^description: ' <<<"$(head -n5 "$f")" || fail "${f#"$ROOT"/} has no description"
 done < <(find "$ROOT/docs" -name '*.md')
 
 # ---- every page is in the sidebar (a page nobody can find is not documented)

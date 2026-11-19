@@ -45,7 +45,7 @@ make_set() {
 }
 default_site() { tr -d '[:space:]' <"$BENCH/sites/currentsite.txt"; }
 # line numbers of the first mock call matching a pattern
-at() { grep -n -E -- "$1" "$MOCK_LOG" | head -n1 | cut -d: -f1; }
+at() { grep -m1 -n -E -- "$1" "$MOCK_LOG" | cut -d: -f1; }
 
 suite() {
   local tag="$1" fresh="$2" plan token snap n r m h rs

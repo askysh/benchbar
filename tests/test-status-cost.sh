@@ -314,7 +314,7 @@ for loc in "$UTF8_LOC" C; do
     for k in default_site redis_cache socketio_port webserver_port background_workers missing; do
       for FL_CONTEXT_LIGHT in 0 1; do
         fl_site_config_prime
-        [[ "$(fl_site_config_value "$k")" == "$(sed -n "s/^[[:space:]]*\"${k}\"[[:space:]]*:[[:space:]]*\"\{0,1\}\([^\",]*\)\"\{0,1\},\{0,1\}[[:space:]]*\$/\1/p" "$TMP_DIR/scc.json" | head -n1)" ]] || { echo "config value differs for $k (light $FL_CONTEXT_LIGHT)"; exit 1; }
+        [[ "$(fl_site_config_value "$k")" == "$(sed -n "s/^[[:space:]]*\"${k}\"[[:space:]]*:[[:space:]]*\"\{0,1\}\([^\",]*\)\"\{0,1\},\{0,1\}[[:space:]]*\$/\1/p" "$TMP_DIR/scc.json" | awk 'NR==1')" ]] || { echo "config value differs for $k (light $FL_CONTEXT_LIGHT)"; exit 1; }
       done
     done
   ' || fail "a bash reader differs from the tool it replaced ($loc)"
