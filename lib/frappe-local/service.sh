@@ -280,6 +280,14 @@ fl_cmd_wait() {
   esac
   [[ "$json" != "1" ]] || fl_json_doc_begin
   fl_require_bench
+  if [[ "$part" == "stale" ]]; then
+    # stale is null (not known) for a bench that does not run or has no started_at, and
+    # a null part counts as holding: waiting for it would end at once and say nothing
+    FL_RD_REDIS_Q=""
+    fl_status_compute
+    fl_ready_compute 1
+    [[ "$RD_STALE" != "null" ]] || fl_die "wait: --for stale cannot tell: ${FL_BENCH_NAME} is ${ST_STATE} and its start time is $([[ "$ST_PROCS" == "1" ]] && printf 'not known (no logs/.benchbar/state.json with started_at)' || printf 'not known while it does not run')." "Start it first (${FL_SELF} up), or wait for the whole bench: ${FL_SELF} wait"
+  fi
   fl_daily_steps wait:"Wait for the bench"
   fl_step_begin 0
   [[ "$json" == "1" ]] || fl_spinner_start "waiting for ${part:-the bench} (${FL_BENCH_NAME})" "$(fl_bench_log_path)"

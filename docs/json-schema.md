@@ -264,6 +264,7 @@ bench carries it. Use it instead of probing ports and processes yourself.
 ```json
 "ready": {
   "ready": false,
+  "deep": true,
   "agent": true, "processes": true, "web": true, "socketio": true, "redis": true,
   "workers": true, "stale": true,
   "stale_file": "apps/erpnext/erpnext/hooks.py",
@@ -275,13 +276,14 @@ bench carries it. Use it instead of probing ports and processes yourself.
 | Field | Type | Notes |
 |---|---|---|
 | `ready` | bool | true when no part is `false` and `stale` is not `true` |
+| `deep` | bool | the deep parts (`workers`, `stale`) were asked: `status --json --deep`, `wait`, `up`, `restart` and the MCP tools. `false` means `workers` and `stale` are `null` because nobody asked |
 | `agent` | bool | the service is loaded in launchd or systemd |
 | `processes` | bool | the bench's processes run (`processes_running`) |
 | `web` | bool | the default site's ping answered with a 2xx or 3xx (`web_ping_code`) |
 | `socketio` | bool | the realtime port accepts a connection (asked only while processes run) |
 | `redis` | bool | the queue and the cache Redis accept a connection (`redis`) |
 | `workers` | bool or null | a background worker of this bench runs. `null` unless asked (see below) |
-| `stale` | bool or null | a `*.py` file under `apps/` (not in `node_modules`, `.git` or `__pycache__`) changed after the bench started, so the running code is old and the bench needs `benchbar restart`. `null` unless asked, or when the start time is not known (no `state.json`) |
+| `stale` | bool or null | a `*.py` file under `apps/` (not in `node_modules`, `.git` or `__pycache__`) changed after the bench started, so the running code is old and the bench needs `benchbar restart`. Any `*.py` counts, tests and docs too, so a false positive is possible (it errs towards a restart). `null` when not asked (`deep` is `false`), when the bench's processes do not run, or when the start time is not known (no `started_at`, so no `state.json`) |
 | `stale_file` | string or null | the first such file, relative to the bench |
 | `waiting_on` | array | the names of the parts that are not ready, in the order above |
 | `fix` | string or null | the command that moves the first missing part; `null` when ready |
@@ -293,7 +295,8 @@ loaded its code. Without `--deep`, `status` starts no program for `ready`:
 `socketio` and `redis` from bash itself (`/dev/tcp`). `workers` and `stale`
 need `pgrep`, `lsof` and `find`, so they are `null` in a plain `status`
 and are asked by `status --json --deep`, `benchbar wait`, and the MCP tool
-`benchbar_status`. A `null` part never makes `ready` false.
+`benchbar_status`. A `null` part never makes `ready` false: a reader that needs
+`stale` to be known checks `deep` and that `stale` is not `null`.
 Not ready is not an error: `status` exits 0.
 
 ### `benchbar wait --json`
@@ -308,7 +311,10 @@ and starts nothing. `--timeout` is whole seconds, 0 to 3600, default 60;
 0 checks once. Exit 0 when ready, 1 when not: after the timeout, or at once
 for a bench that cannot become ready by itself (`state` `paused`, or
 `not_adopted`). A stopped bench is waited for, because another command may be
-starting it. Exit 2 is never used (it stays the MariaDB password).
+starting it. `--for stale` is refused (exit 1, with the reason) when `stale` is
+`null`, that is for a bench that does not run or has no `started_at`: a `null`
+part counts as holding, so the wait would end at once and say nothing. Exit 2
+is never used (it stays the MariaDB password).
 
 | Field | Type | Notes |
 |---|---|---|

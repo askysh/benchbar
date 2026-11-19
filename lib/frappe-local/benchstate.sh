@@ -318,7 +318,15 @@ fl_ready_stale_v() {
     __since="${BASH_REMATCH[1]} ${BASH_REMATCH[2]}"
   fi
   if [[ -z "$__since" || ! -d "${FL_BENCH_DIR}/apps" ]]; then printf -v "$1" '%s' null; return 0; fi
-  __hit="$(TZ=UTC find "${FL_BENCH_DIR}/apps" \( -name node_modules -o -name .git -o -name __pycache__ \) -prune -o -type f -name '*.py' -newermt "$__since" -print -quit 2>/dev/null || true)"
+  # -H follows the symlinks named on the command line: an app folder that is a
+  # link to a checkout elsewhere (bench get-app --soft-link, a dev clone) is searched,
+  # and links inside an app are not followed, so there is no loop to guard against
+  local __app
+  for __app in "${FL_BENCH_DIR}/apps"/*/; do
+    [[ -d "$__app" ]] || continue
+    __hit="$(TZ=UTC find -H "${__app%/}" \( -name node_modules -o -name .git -o -name __pycache__ \) -prune -o -type f -name '*.py' -newermt "$__since" -print -quit 2>/dev/null || true)"
+    [[ -z "$__hit" ]] || break
+  done
   if [[ -n "$__hit" ]]; then RD_STALE_FILE="${__hit#"${FL_BENCH_DIR}/"}"; printf -v "$1" '%s' true; else printf -v "$1" '%s' false; fi
 }
 
@@ -327,7 +335,7 @@ fl_ready_stale_v() {
 fl_ready_compute() {
   local deep="${1:-0}"
   RD_AGENT=false; RD_PROCESSES=false; RD_WEB=false; RD_SOCKETIO=false; RD_REDIS=false
-  RD_WORKERS=null; RD_STALE=null; RD_STALE_FILE=""
+  RD_WORKERS=null; RD_STALE=null; RD_STALE_FILE=""; RD_DEEP=false
   [[ "$ST_LOADED" != "1" ]] || RD_AGENT=true
   [[ "$ST_PROCS" != "1" ]] || RD_PROCESSES=true
   ! fl_ready_web_ok "$ST_PING" || RD_WEB=true
@@ -335,6 +343,7 @@ fl_ready_compute() {
   fl_redis_probe
   [[ "$FL_RD_REDIS_Q" == true && "$FL_RD_REDIS_C" == true ]] && RD_REDIS=true
   if [[ "$deep" == "1" ]]; then
+    RD_DEEP=true
     RD_WORKERS=false
     if [[ "$ST_PROCS" == "1" ]]; then
       [[ -z "$(fl_pgrep_f ' -m frappe\.utils\.bench_helper frappe worker( |$)' | fl_pids_in_bench)" ]] || RD_WORKERS=true
@@ -375,8 +384,8 @@ fl_ready_json_v() {
   for __p in $RD_WAITING; do __w="${__w}${__w:+,}\"${__p}\""; done
   fl_json_str_v __fix "$RD_FIX"; [[ -n "$RD_FIX" ]] || __fix=null
   fl_json_str_v __stale_file "$RD_STALE_FILE"; [[ -n "$RD_STALE_FILE" ]] || __stale_file=null
-  printf -v "$1" '{"ready":%s,"agent":%s,"processes":%s,"web":%s,"socketio":%s,"redis":%s,"workers":%s,"stale":%s,"stale_file":%s,"waiting_on":[%s],"fix":%s}' \
-    "$RD_READY" "$RD_AGENT" "$RD_PROCESSES" "$RD_WEB" "$RD_SOCKETIO" "$RD_REDIS" "$RD_WORKERS" "$RD_STALE" "$__stale_file" "$__w" "$__fix"
+  printf -v "$1" '{"ready":%s,"deep":%s,"agent":%s,"processes":%s,"web":%s,"socketio":%s,"redis":%s,"workers":%s,"stale":%s,"stale_file":%s,"waiting_on":[%s],"fix":%s}' \
+    "$RD_READY" "$RD_DEEP" "$RD_AGENT" "$RD_PROCESSES" "$RD_WEB" "$RD_SOCKETIO" "$RD_REDIS" "$RD_WORKERS" "$RD_STALE" "$__stale_file" "$__w" "$__fix"
 }
 
 # fl_state_after_v VAR: the bench's status --json object as it is now, for the

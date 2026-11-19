@@ -287,7 +287,7 @@ unset MOCK_STOP_STUCK FL_BOOTOUT_WAIT_SECS
 B=/home/u/dev/frappe-bench
 mac_runner="$(fl_template_render bench-run.sh "BENCH_DIR=$B" "BENCH_NAME=frappe-bench" "HONCHO=/h/honcho" \
   "PORTS=8000,9000,11000,13000" "LABEL=com.benchbar.frappe-bench" "MAX_STARTS=3" "WINDOW=600" "SITE=macdev" "WEB_PORT=8000" "CLI_VERSION=1.2.3")"
-assert_eq "bench-run.sh v8 2eceb3cf1bf2" "$(fl_template_header_of "$mac_runner")" "(the macOS runner renders to a stable hash)"
+assert_eq "bench-run.sh v9 1c5af000e65c" "$(fl_template_header_of "$mac_runner")" "(the macOS runner renders to a stable hash)"
 assert_contains "$mac_runner" "  pgrep -xq BenchBar 2>/dev/null && return 0
   osascript -e \"display notification \\\"\$1\\\" with title \\\"BenchBar: frappe-bench\\\"\" >/dev/null 2>&1
 }"

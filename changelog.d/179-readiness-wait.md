@@ -6,3 +6,7 @@
 ### MCP
 
 - The new read tool `benchbar_wait` waits for a bench to be ready, with progress notifications and a 120 second cap. `benchbar_status` returns the `ready` object, including `stale` when Python code changed since the start (#179).
+
+### Mac app
+
+- The bench pill reads "Ready", "Needs restart (code changed)" or "Running, not ready" from the new `ready` object, and keeps the word when the runner rewrites its state file, until the bench's state or process changes (#179).

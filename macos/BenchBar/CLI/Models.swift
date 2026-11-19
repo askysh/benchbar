@@ -263,6 +263,8 @@ nonisolated struct BenchStatus: Codable, Sendable, Equatable {
 /// bench not ready. Every field is optional: a CLI older than 0.9 sends no `ready` at all.
 nonisolated struct ReadyInfo: Codable, Sendable, Equatable {
     var ready: Bool
+    /// true when the deep parts (`workers`, `stale`) were asked
+    var deep: Bool?
     var agent: Bool?
     var processes: Bool?
     var web: Bool?
@@ -276,7 +278,7 @@ nonisolated struct ReadyInfo: Codable, Sendable, Equatable {
     var fix: String?
 
     enum CodingKeys: String, CodingKey {
-        case ready, agent, processes, web, socketio, redis, workers, stale, fix
+        case ready, deep, agent, processes, web, socketio, redis, workers, stale, fix
         case staleFile = "stale_file"
         case waitingOn = "waiting_on"
     }

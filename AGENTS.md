@@ -63,8 +63,8 @@ tools: run them in a terminal, with the user, as described here.
 
 Both are safe to run at any time. After `up` or `restart`, or after you
 changed Python code, `./benchbar wait --json` blocks until the bench is
-ready (exit 0) or says what is not (exit 1, with the fix); `status --json
---deep` shows the same `ready` object without waiting. Every check carries a `fix` string
+ready (exit 0) or says what is not (exit 1, with the fix); `status --json --deep`
+shows the same `ready` object without waiting. Every check carries a `fix` string
 (the exact command) and an `action` id (what `repair` would do).
 
 The examples run `./benchbar` from this checkout. On a user's Mac the

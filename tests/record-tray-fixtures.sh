@@ -55,10 +55,12 @@ assert_eq "0" "$CODE" "$OUT"
 cli_out() {
   run_fm "$@" </dev/null
   [[ "$CODE" == 0 ]] || fail "benchbar $* exited $CODE: $OUT"
-  printf '%s\n' "$OUT" | TMP="$TMP_DIR" python3 -c '
+  printf '%s\n' "$OUT" | TMP="$TMP_DIR" CHECKOUT="$ROOT" python3 -c '
 import os, sys
 tmp = os.environ["TMP"]
 text = sys.stdin.read()
+# a fix command runs the checkout the recorder runs from: the fixture names plain benchbar
+text = text.replace(os.environ["CHECKOUT"] + "/benchbar ", "benchbar ")
 for old, new in ((tmp + "/home/frappe-bench", "/home/akash/frappe-bench"), (tmp + "/home/empty", "/home/akash/empty"),
                  (tmp + "/home", "/home/akash"), (tmp + "/config", "/opt/benchbar/config"), (tmp, "/tmp/benchbar")):
     text = text.replace(old, new)

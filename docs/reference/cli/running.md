@@ -125,8 +125,9 @@ Blocks until the bench is ready: the service is loaded, its processes run,
 the default site answers its ping with a 2xx or 3xx, socketio and both Redis
 ports accept connections, a worker runs, and no Python file under `apps/`
 changed since the bench started. `--for PART` waits for one part only
-(`agent`, `processes`, `web`, `socketio`, `redis`, `workers` or `stale`).
-`--timeout` is in seconds (default 60; 0 checks once). It reads only: it
+(`agent`, `processes`, `web`, `socketio`, `redis`, `workers` or `stale`;
+`--for stale` is refused with the reason for a bench that does not run or
+has no start time, since `stale` is not known then). `--timeout` is in seconds (default 60; 0 checks once). It reads only: it
 starts nothing and takes no lock.
 
 Exit 0 when ready. Exit 1 when it is not ready in time, naming what is not
