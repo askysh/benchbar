@@ -289,7 +289,7 @@ wait_for() {
     sleep 0.1
   done
 }
-has_event() { order | grep -q -E "$1"; }
+has_event() { grep -q -E "$1" <<<"$(order)"; }
 pid_gone() { ! kill -0 "$1" 2>/dev/null; }
 # every_recorded_gone: no stand-in the runner started still runs
 every_recorded_gone() {
@@ -430,7 +430,7 @@ assert_eq "wipe web warm preflight gateway preflight webop-up" "$(events | cut -
 assert_contains "$(order)" "warm -s -o /dev/null -m ${FL_SHARE_WARM_SECS} -H Host: share.localhost http://127.0.0.1:8001/"
 assert_eq "$((FL_SHARE_LISTEN_SECS + FL_SHARE_WARM_SECS + 5))" "$(fl_share_phase_secs starting:web)" "(share start waits for the warm-up too)"
 # the two start together; the stand-ins write when they get to it, and a watchdog check may come first under load
-assert_eq "caffeinate dns-sd" "$(events | cut -d' ' -f8- | tr ' ' '\n' | grep -v '^preflight$' | head -n2 | sort | tr '\n' ' ' | sed 's/ $//')"
+assert_eq "caffeinate dns-sd" "$(events | cut -d' ' -f8- | tr ' ' '\n' | grep -v '^preflight$' | awk 'NR<=2' | sort | tr '\n' ' ' | sed 's/ $//')"
 started_order() { grep -o -E '(dns-sd|caffeinate) started' "$1" | awk '{print $1}' | tr '\n' ' ' | sed 's/ $//'; }
 assert_eq "dns-sd caffeinate" "$(started_order "$TMP_DIR/runner.log")" "(Bonjour before caffeinate, from the runner's own log)"
 assert_contains "$(order)" "wipe share.localhost keep=[]" "(the whole copy, at start: covers a runner killed with -9)"
@@ -781,6 +781,9 @@ if (!ok) { console.error(JSON.stringify(c)); process.exit(1); }
 ' "$ROOT" "$SHARE_DIR/gateway.json" "$SOCK" "$BENCH" || fail "gateway.json is what config.js validates"
 assert_not_contains "$(cat "$SHARE_DIR/gateway.json")" "socketio"
 assert_not_contains "$(cat "$SHARE_DIR/gateway.json")" "9000"
+# SHARE-7: the gateway listens on the address of the network the room is on, not on every interface
+assert_eq "192.168.1.20" "$(jget "$SHARE_DIR/gateway.json" 'd["listen"]["host"]')" "(the LAN address of the default route)"
+assert_not_contains "$(cat "$SHARE_DIR/gateway.json")" "0.0.0.0"
 assert_eq "True" "$(jget "$SHARE_DIR/devices.json" 'd["devices"] == [] and d["blocked"] == []')" "(devices are scoped to one room)"
 # the runner names node and benchbar by absolute paths, never by PATH
 runner_text="$(cat "$SHARE_DIR/share-run.sh")"
@@ -1119,8 +1122,8 @@ rm -f "$MOCK_STATE/agents/$LABEL"
 pattern="$(SCRIPT_DIR="$ROOT" FL_BENCH_DIR="$BENCH" bash -c '. "$1/lib/frappe-local/process.sh"; fl_bench_helper_pattern' _ "$ROOT")"
 for cmdline in "${BENCH}/env/bin/python ${ROOT}/lib/frappe-local/share/share_web.py --site share.localhost --port 8001" \
   "/usr/bin/env -u DEV_SERVER CI=1 ${BENCH}/env/bin/python ${ROOT}/lib/frappe-local/share/share_web.py --site share.localhost --port 8001"; do
-  if printf '%s\n' "$cmdline" | grep -qE "$pattern"; then fail "benchbar down's pattern matches the share web: $cmdline"; fi
+  if grep -qE "$pattern" <<<"$cmdline"; then fail "benchbar down's pattern matches the share web: $cmdline"; fi
 done
-printf '%s\n' "${BENCH}/env/bin/python -m frappe.utils.bench_helper frappe serve --port 8000" | grep -qE "$pattern" || fail "the pattern still matches the bench's own web"
+grep -qE "$pattern" <<<"${BENCH}/env/bin/python -m frappe.utils.bench_helper frappe serve --port 8000" || fail "the pattern still matches the bench's own web"
 
 printf 'test-share-run: ok\n'

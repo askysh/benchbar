@@ -42,7 +42,7 @@ plan() { run_json app add "$@" --dry-run --json --bench-dir "$BENCH"; }
 apply() { run_json app add "$@" --apply "$TOKEN" --yes --json --bench-dir "$BENCH"; }
 calls() { grep -c -E "$1" "$MOCK_LOG" || true; }
 steps_of() { printf '%s' "$OUT" | jget - '",".join(s["name"] for s in d["steps"])'; }
-pending_file() { find "$FL_STATE_DIR/benches" -path "*.pending/$1.json" 2>/dev/null | head -n1; }
+pending_file() { find "$FL_STATE_DIR/benches" -path "*.pending/$1.json" 2>/dev/null | awk 'NR==1'; }
 remote_head() { git -C "$REMOTES/$1.git" rev-parse "${2:-main}"; }
 # app_line N: the Nth app of the last result: app, cloned, clone, build and its first install
 app_line() {

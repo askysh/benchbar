@@ -93,6 +93,7 @@ flag~logs~-n~N~The last N lines (default 50); -nN, or a bare number, also works.
 cmd~fg~benchbar fg~Stop the service and run honcho in the foreground.~yes~no~no~yes~none
 cmd~watch~benchbar watch~Run bench watch for asset rebuilds.~no~no~no~no~none
 cmd~autostart~benchbar autostart [on|off]~Whether the bench may come back after login.~no~no~no~yes~none
+cmd~listen~benchbar listen [local|all] [--dry-run] [--yes]~Where the bench's web server and socketio listen: local is 127.0.0.1 only (the default), all is every interface. Stored per bench, applied to Procfile.lean; restart the bench to use it. all is a person's decision and is refused without a terminal.~yes~no~no~yes~none
 cmd~uninstall-service~benchbar uninstall-service [--all] [--yes] [--dry-run]~Remove the agent, runner, Procfile.lean and shell helpers.~yes~no~no~yes~none
 flag~uninstall-service~--all~~Every bench with a benchbar agent, after one question.
 flag~uninstall-service~--yes~~Do not ask; required without a terminal.

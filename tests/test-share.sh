@@ -153,7 +153,7 @@ snap="$(snap_all)"
 reset_calls
 jsetup --users "$USERS" --dry-run
 assert_eq "0" "$CODE" "$OUT$ERR"
-printf '%s\n' "$OUT" | head -n1 >"$TMP_DIR/plan.json"
+printf '%s\n' "${OUT%%$'\n'*}" >"$TMP_DIR/plan.json"
 assert_eq "plan" "$(jget "$TMP_DIR/plan.json" 'd["event"]')"
 assert_eq "True" "$(jget "$TMP_DIR/plan.json" 'isinstance(d["size_gb"], (int, float)) and isinstance(d["est_minutes"], int) and isinstance(d["source_age_s"], int) and d["data_classes"]["Customer"] == 3 and d["share_site"] == "share.localhost"')"
 assert_eq "$snap" "$(snap_all)" "(a dry run writes nothing)"
@@ -285,8 +285,8 @@ reset_calls
 jsetup --users "priya@example.com" --acknowledge-data --refresh --yes --backup-now
 assert_eq "0" "$CODE" "$OUT$ERR"
 assert_calls_contain '^bench --site macdev backup$'
-b="$(grep -n -E '^bench --site macdev backup$' "$MOCK_LOG" | head -n1 | cut -d: -f1)"
-n="$(grep -n -E 'benchbar-secrets|restore' "$MOCK_LOG" | head -n1 | cut -d: -f1)"
+b="$(grep -m1 -n -E '^bench --site macdev backup$' "$MOCK_LOG" | cut -d: -f1)"
+n="$(grep -m1 -n -E 'benchbar-secrets|restore' "$MOCK_LOG" | cut -d: -f1)"
 [[ -n "$b" && -n "$n" && "$b" -lt "$n" ]] || fail "the backup comes before the restore ($b, $n)"
 assert_contains "$(cfg 'd["copy_source_stamp"]')" "2026"
 

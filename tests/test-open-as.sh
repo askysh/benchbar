@@ -207,7 +207,7 @@ run_fm open --bench-dir "$BENCH" --as priya@example.com --path; assert_eq "1" "$
 run_fm users --bench-dir "$BENCH" --search; assert_eq "1" "$CODE"; assert_contains "$OUT" "--search needs some text."
 run_fm users --bench-dir "$BENCH" --limit; assert_eq "1" "$CODE"; assert_contains "$OUT" "--limit needs a number from 1 to 500."
 # no here-string carries the session id: bash 3.2 writes those to /var/tmp
-if grep -n '<<<' "$ROOT/lib/frappe-local/open-as.sh" | grep -q -E 'fields|__out'; then fail "a here-string carries helper output in open-as.sh"; fi
+if grep -q -E 'fields|__out' <<<"$(grep -n '<<<' "$ROOT/lib/frappe-local/open-as.sh")"; then fail "a here-string carries helper output in open-as.sh"; fi
 
 # ---- developer_mode off: refused before any Python runs, Administrator included
 printf '{\n "db_name": "_v16dev"\n}\n' >"$BENCH/sites/v16dev/site_config.json"
