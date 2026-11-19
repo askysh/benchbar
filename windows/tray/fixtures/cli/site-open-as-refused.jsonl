@@ -1,0 +1,1 @@
+{"schema_version":1,"cli_version":"0.9.0","event":"done","exit":1,"error":"Turning on Open as needs a person at a terminal, and this run has none.","fix":"Run it in a terminal: benchbar site open-as on one.localhost","changed":[],"warnings":[],"next_actions":[]}
