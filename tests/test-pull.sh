@@ -416,6 +416,14 @@ assert_eq "0" "$CODE" "$OUT"
 assert_not_contains "$OUT" "bench migrate"
 JOUT="$("$FM" pull --from-dir "$DL" --as nomig --skip-app hrms --no-migrate --dry-run --json --bench-dir "$BENCH" 2>/dev/null)" || fail "pull --dry-run --json"
 assert_eq "False True" "$(printf '%s\n' "${JOUT%%$'\n'*}" | jget - 'str(d["migrate"]) + " " + str(d["create_site"])')"
+# the app's Pull sheet reads the plan line: every key of its fixture is still printed, and so are the nested ones it reads
+printf '%s\n' "${JOUT%%$'\n'*}" | python3 -c '
+import json, sys
+live = json.loads(sys.stdin.readline())
+fixture = json.loads(open(sys.argv[1]).readline())
+assert fixture["event"] == "plan" and set(fixture) <= set(live), set(fixture) - set(live)
+assert set(fixture["backup"]) <= set(live["backup"]) and set(fixture["apps"][0]) <= set(live["apps"][0])
+' "$ROOT/macos/BenchBarTests/Fixtures/pull-plan.jsonl" || fail "pull --dry-run --json and the app fixture pull-plan.jsonl disagree"
 reset_calls
 run_fm pull --from-dir "$DL" --as nomig --skip-app hrms --no-migrate --yes --bench-dir "$BENCH"
 assert_eq "0" "$CODE" "$OUT"

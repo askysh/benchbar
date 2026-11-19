@@ -1,6 +1,6 @@
 import Foundation
 
-/// Restore and the pending operations of a bench. Every change here
+/// Restore, pull and the pending operations of a bench. Every change here
 /// goes through the CLI's own review: a plan first (`--dry-run --json`),
 /// then the run. The app never touches the bench's files or MariaDB.
 nonisolated extension CLIClient {
@@ -19,6 +19,29 @@ nonisolated extension CLIClient {
     func restoreSite(_ request: SiteRestoreRequest, token: String, bench: String) async throws(CLIError) -> CommandOutput {
         try await run(["site", "restore"] + request.arguments + ["--apply", token, "--yes", "--plain", "--bench-dir", bench],
                       timeout: Timeout.install, acceptExitCodes: [0])
+    }
+
+    /// benchbar pull ... --dry-run --json: checks the server and the bench, prints the plan.
+    /// A refused check ends the stream with `done` exit 1 and the reason on stderr.
+    func pullPlan(_ request: PullRequest, bench: String) async throws(CLIError) -> PullPlan {
+        let output = try await run(request.arguments + ["--dry-run", "--json", "--bench-dir", bench],
+                                   timeout: Timeout.action, acceptExitCodes: [0, 1, 2])
+        guard output.exitCode == 0, let plan = PullStream.plan(in: output.stdout) else {
+            throw .failed(command: "pull", exitCode: output.exitCode, message: PullStream.failure(output))
+        }
+        return plan
+    }
+
+    /// benchbar pull ... --yes --json: the copy. No token exists for a pull; the CLI checks
+    /// again and the person said yes to the plan they saw. No password goes in: the Administrator
+    /// login is then production's (the CLI says so), and the hosts line is left for Sites.
+    func pull(_ request: PullRequest, bench: String) async throws(CLIError) -> PullRun {
+        let output = try await run(request.arguments + ["--yes", "--json", "--bench-dir", bench],
+                                   timeout: Timeout.install, acceptExitCodes: [0, 1, 2])
+        guard output.exitCode == 0, let done = PullStream.done(in: output.stdout), done.exit == 0 else {
+            throw .failed(command: "pull", exitCode: output.exitCode, message: PullStream.failure(output))
+        }
+        return PullRun(done: done, plan: PullStream.plan(in: output.stdout))
     }
 
     /// benchbar app update NAME --discard-pending: drops the record of an update or add that stopped

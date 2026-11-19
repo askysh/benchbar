@@ -620,8 +620,10 @@ Asked for after the phases, to stop naming drift before the first release.
 - The back up spinner compares the bench's activity text with the exact strings `Workbench.backupActivity` builds, not a prefix.
 - A failed profile list in the wizard has Try Again (`WizardState.Event.retryProfiles`), one read at a time, and the Review problem text says to use it.
 
-## 0.9: restore and unfinished changes (parity part 1, #177)
+## 0.9: restore, pull and unfinished changes (parity part 1, #177)
 
 - Restore goes through the plan and its token like Add Site: `site restore ... --dry-run --json`, then the same arguments with `--apply TOKEN --yes`. Only the site's own backups are offered (a copy uses `--new --from-site`), and a plain complete set only: the CLI refuses encrypted and partial ones. Restoring into the site needs its name typed and is never the default button (the Drop Site rule); a copy is not destructive and is the default. The plan's `needs` (a MariaDB password the CLI does not have) or `errors` make it unrunnable and the sheet points to Terminal: the app never asks for or reads that password.
+- `pull` has no plan token in the CLI, so the app cannot make it refuse a changed plan. It reviews with `--dry-run --json`, runs with `--yes --json` and the same arguments, and compares the plan line of the run with the one reviewed (`PullPlan.differences`): a new step or another backup is said in the banner, as Repair does for its steps. A token in `pull` is the stricter fix and is left for the CLI.
+- A pull never carries `--keep-secrets` unless the person turned on the switch, which says what stays; the default is the CLI's neutralised copy. The Administrator password is not asked: the CLI says the copy keeps production's, and the result banner repeats it. The hosts line needs sudo, so the plan and the result point to Add Hosts Lines.
 - Unfinished changes read `status.pending_operations` and do nothing else of their own: Resume opens the Update sheet (the plan lists only the steps left, `AppUpdatePlan.pending`) or Add App with the app's name, and Drop the Record runs `app update NAME --discard-pending --yes` after an alert. An entry without an app name is not shown, so one odd entry never hides the rest or breaks the status.
 

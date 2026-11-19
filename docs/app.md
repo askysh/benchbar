@@ -218,9 +218,18 @@ Every bench has a page:
   you to type its name, never sits on Return, and has the CLI back the
   site up with its files first; the backup is listed on the Sites tab
   afterwards. A copy leaves the original alone. Encrypted and partial
-  backups are not offered. The sheet asks for no password: the MariaDB
-  password stays with `benchbar`, and when it does not have it (the plan
-  says `MARIADB_ROOT_PASSWORD` is needed) the sheet tells you to run the
+  backups are not offered. **Pull…** in the header of the Sites section
+  copies a production site over SSH (`HOST:SITE`, a Host of your
+  `~/.ssh/config`), or a backup you downloaded, into a new site. It shows
+  the plan (`benchbar pull --dry-run --json`) first. The copy is
+  neutralised, as the command does since 0.9: integrations off and stored
+  passwords cleared. **Keep production's passwords and integrations** is
+  off unless you turn it on, and the plan says so in orange when it is.
+  A pull has no plan token, so the app tells you in the result when the
+  run had a step or a backup that the plan you reviewed did not show.
+  Neither sheet asks for a password: the MariaDB password stays with
+  `benchbar`, and when it does not have it (the plan says
+  `MARIADB_ROOT_PASSWORD` is needed) the sheet tells you to run the
   command in Terminal.
 - **Apps**: add an app from the registry or any GitHub URL, and update it
   after reading the changelog. Each app's ⋯ menu installs it on a site
