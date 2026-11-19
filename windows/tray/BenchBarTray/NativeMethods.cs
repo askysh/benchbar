@@ -17,6 +17,12 @@ internal static partial class NativeMethods
     internal const uint MonitorDefaultToPrimary = 1;
     internal const int MdtEffectiveDpi = 0;
 
+    internal const uint RestartNoCrash = 1, RestartNoHang = 2;
+
+    /// <summary>Asks Windows to start this exe again after an update ends it. The command line does not hold the exe's name.</summary>
+    [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf16)]
+    internal static partial int RegisterApplicationRestart(string? commandLine, uint flags);
+
     [LibraryImport("user32.dll", EntryPoint = "FindWindowW", StringMarshalling = StringMarshalling.Utf16)]
     internal static partial IntPtr FindWindow(string cls, string? title);
 

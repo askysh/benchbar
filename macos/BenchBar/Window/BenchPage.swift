@@ -260,6 +260,7 @@ struct BenchSites: View {
     @State private var addingSite = false
     @State private var hosts: HostsRun?
     @State private var dropping: String?
+    @State private var restoring: String?
     @State private var findingUser: String?
     @State private var allowingOpenAs: String?
 
@@ -297,7 +298,7 @@ struct BenchSites: View {
                         }
                         .disabled(!row.needsHosts && bench.state != .running)
                         SiteMenu(workbench: workbench, bench: bench, row: row, busy: busy, onlySite: rows.count == 1,
-                                 openAs: { turnOpenAs(row) }) { dropping = row.name }
+                                 openAs: { turnOpenAs(row) }, restore: { restoring = row.name }) { dropping = row.name }
                     }
                 }
             } header: {
@@ -363,6 +364,9 @@ struct BenchSites: View {
         }
         .sheet(isPresented: $addingSite) {
             AddSiteSheet(workbench: workbench, bench: bench) { addingSite = false }
+        }
+        .sheet(item: Binding(get: { restoring.map(DropTarget.init) }, set: { restoring = $0?.site })) { target in
+            SiteRestoreSheet(workbench: workbench, bench: bench, site: target.site) { restoring = nil }
         }
     }
 }
@@ -441,10 +445,11 @@ struct SiteMenu: View {
     let busy: Bool
     let onlySite: Bool
     let openAs: () -> Void
+    let restore: () -> Void
     let drop: () -> Void
 
     var body: some View {
-        MoreMenu(help: "Make \(row.name) the default, back it up or drop it") {
+        MoreMenu(help: "Make \(row.name) the default, back it up, restore it or drop it") {
             if !row.isDefault {
                 Button("Make Default") { Task { await workbench.setDefaultSite(row.name, on: bench) } }
                 Divider()
@@ -458,6 +463,8 @@ struct SiteMenu: View {
                 }
                 .disabled(list.backups.isEmpty)
             }
+            Button("Restore a Backup…", action: restore)
+                .disabled(workbench.backups(of: row.name, on: bench)?.backups.isEmpty ?? true)
             Divider()
             Button("Open Console") { Workspace.openShell(.console, site: row.name, bench: bench, store: workbench.store) }
             Button("Open Database") { Workspace.openShell(.db, site: row.name, bench: bench, store: workbench.store) }

@@ -87,6 +87,7 @@ shapes() {
     "cli/ports-check-conflict.json|ports check --json --bench-dir $BENCH" \
     "cli/ports-check-running.json|ports check --json --bench-dir $BENCH" \
     "cli/profile-list.json|profile list --json" \
+    "cli/profile-list-linux.json|profile list --json" \
     "cli/scan-list.json|list --json"
 }
 
