@@ -609,8 +609,8 @@ fl_cleanup() {
   fl_sp_listener_stop
   fl_sudo_end
   fl_lock_release
-  # the first run of a fresh install records its version (notices.sh)
-  fl_notices_on_exit "$code"
+  # the first run of a fresh install records its version, whatever its exit code (notices.sh)
+  fl_notices_on_exit
   # a doctor run that was cut short leaves its folder of kept answers (facts.sh)
   fl_facts_end
   # install --json and adopt --json: always the last line, after the lock is free

@@ -14,7 +14,11 @@
 #   NOTICES          the notices that are active, space separated ids
 #   NOTICES_SHOWN    the ids the terminal printed already
 # A run whose version differs from LAST_VERSION, coming from below a notice's
-# SINCE, makes that notice active. A state folder that has content but no
+# SINCE, makes that notice active. Versions are compared without their
+# prerelease part (0.9.0-rc.1 counts as 0.9.0 for SINCE), so an update from
+# 0.8.3 to an rc activates the notices and the final release adds nothing; a
+# recorded version that is newer than the running one (two CLIs of different
+# versions share the state folder) is left as it is: no write, no notice. A state folder that has content but no
 # LAST_VERSION is an install of 0.8.3 or older (they never wrote one); an empty
 # or missing one is a fresh install, which gets no notice. Any command records
 # the change (so the app's first status call counts), only a human command
@@ -26,7 +30,7 @@
 # DOC is a path of the documentation site.
 
 read -r -d '' FL_NOTICE_TABLE <<'TABLE' || true
-notice~listen-local~0.9.0~The bench now listens on this computer only~The web server and socketio of a bench now accept connections from this computer only (127.0.0.1). Before, they listened on every interface, so anyone on your Wi-Fi could reach the dev server and its debugger. A bench that is running keeps listening on every interface until you run `benchbar repair` and then `benchbar restart` (`benchbar doctor` shows `Procfile.lean is outdated`). If you open the bench from a phone or another PC by this computer's address, run `benchbar listen all` to switch back; `benchbar listen local` undoes it. On Windows, http://SITE.localhost:8000 keeps working.~benchbar listen all~/whats-new/#the-bench-listens-on-this-computer-only
+notice~listen-local~0.9.0~The bench now listens on this computer only~The web server and socketio of a bench now accept connections from this computer only (127.0.0.1). Before, they listened on every interface, so anyone on your Wi-Fi could reach the dev server and its debugger. A bench that is running keeps listening on every interface until its service files are rewritten: run `benchbar repair` once per bench (`benchbar doctor` shows `Procfile.lean is outdated`). Repair may restart a running bench itself; if it did not, run `benchbar restart`. If you open the bench from a phone or another PC by this computer's address, run `benchbar listen all` to switch back; `benchbar listen local` undoes it. On Windows, http://SITE.localhost:8000 keeps working.~benchbar listen all~/whats-new/#the-bench-listens-on-this-computer-only
 notice~unknown-flags~0.9.0~An option a command does not take is now an error~An option a command does not take now stops the run with exit 64 and changes nothing. Before, it was ignored and the command ran: `benchbar repair --dry-rn --yes` ran for real. If a script of yours passes options a command never read, remove them. To go back for now, set BENCHBAR_LENIENT_FLAGS=1: an unknown option is then a warning on stderr and the command runs, as before. A flag that needs a value and has none stays an error.~BENCHBAR_LENIENT_FLAGS=1~/whats-new/#unknown-options-are-errors
 notice~pull-neutralise~0.9.0~benchbar pull now neutralises the copy~benchbar pull now neutralises the copy: integrations are switched off and stored passwords are deleted, except the Administrator login. A copy you already pulled keeps what it has until you pull again with --replace. Add --keep-secrets to keep production's integrations and passwords in the copy, as before.~benchbar pull --keep-secrets~/whats-new/#pull-neutralises-the-copy
 TABLE
@@ -85,6 +89,15 @@ fl_notice_without_v() {
   printf -v "$1" '%s' "$__r"
 }
 
+# fl_notices_since_lt FROM SINCE: the version FROM came from is below SINCE,
+# without the prerelease part of either (selfupdate.sh's fl_version_lt, which
+# is the one that wins in every start, orders 0.9.0-rc.1 below 0.9.0: not what
+# a SINCE test wants)
+fl_notices_since_lt() {
+  local a="${1#v}" b="${2#v}"
+  fl_version_lt "${a%%[-+]*}" "${b%%[-+]*}"
+}
+
 # fl_notices_state_exists: the state folder holds something from an earlier
 # run (a state file with content, the list of registered benches or a bench's
 # own file), so an empty LAST_VERSION means an install of 0.8.3 or older, not
@@ -102,6 +115,8 @@ fl_notices_sync() {
   fl_notices_load
   [[ "$FL_NOTICES_LAST" != "${FL_VERSION:-0}" ]] || return 0
   local prev="$FL_NOTICES_LAST" k i s active="$FL_NOTICES_ACTIVE"
+  # recorded by a newer CLI (the app's, say, next to a Homebrew one): nothing to record or activate
+  if [[ -n "$prev" ]] && fl_version_lt "${FL_VERSION:-0}" "$prev"; then return 0; fi
   if [[ -z "$prev" ]]; then
     # no version recorded: a fresh install has nothing to be told. It writes
     # nothing now (a refusal or a read leaves no state behind): fl_notices_on_exit
@@ -111,7 +126,7 @@ fl_notices_sync() {
   if [[ -d "$FL_STATE_DIR" ]]; then [[ -w "$FL_STATE_DIR" ]] || return 0; fi
   while IFS='~' read -r k i s _; do
     [[ "$k" == notice ]] || continue
-    if fl_version_lt "$prev" "$s" && ! fl_notice_has "$active" "$i" && ! fl_notice_has "$FL_NOTICES_SHOWN" "$i"; then
+    if fl_notices_since_lt "$prev" "$s" && ! fl_notice_has "$active" "$i" && ! fl_notice_has "$FL_NOTICES_SHOWN" "$i"; then
       active="${active}${active:+ }${i}"
     fi
   done <<<"$FL_NOTICE_TABLE"
@@ -122,12 +137,15 @@ fl_notices_sync() {
   return 0
 }
 
-# fl_notices_on_exit CODE: a run that began with no state and ended well,
-# having made state of its own (install, register, adopt), was the first run
-# of a fresh install: it records the version, so the next run is not taken for
-# an update from 0.8. Called by the exit trap.
+# fl_notices_on_exit: a run that began with no state and made state of its
+# own (install, register, adopt) was the first run of a fresh install: it
+# records the version, so the next run is not taken for an update from 0.8.
+# Whatever the exit code: install writes state (PIPX_BIN_DIR, BENCH_BIN,
+# RC_FILE) well before it can fail, and a state folder with content and no
+# LAST_VERSION reads as 0.8.3. A run that made no state (a refusal, a read)
+# records nothing. Called by the exit trap.
 fl_notices_on_exit() {
-  [[ "$FL_NOTICES_FRESH" == "1" && "${1:-1}" == "0" && "${FL_DRY_RUN:-0}" != "1" ]] || return 0
+  [[ "$FL_NOTICES_FRESH" == "1" && "${FL_DRY_RUN:-0}" != "1" ]] || return 0
   FL_NOTICES_FRESH=0
   fl_notices_state_exists || return 0
   [[ -w "$FL_STATE_DIR" ]] || return 0
@@ -139,6 +157,9 @@ fl_notices_on_exit() {
 # stderr, then recorded as shown. Called for a human command only.
 fl_notices_print_once() {
   [[ "${FL_DRY_RUN:-0}" != "1" ]] || return 0
+  # a terminal only: a pipe or a file (a script's 2>log, cron) must not use up the one print,
+  # so it is not recorded as shown and the next run in a terminal prints it
+  [[ -t 2 ]] || return 0
   local id title text sw doc fresh="" shown="$FL_NOTICES_SHOWN" first=1
   for id in $FL_NOTICES_ACTIVE; do
     fl_notice_has "$shown" "$id" && continue
@@ -162,7 +183,7 @@ fl_notices_print_once() {
 }
 
 # fl_notices_run: the dispatcher's one call. Records the version change, and
-# prints for a person: not --json, --jsonl or --for-agent, not
+# prints for a person (stderr is a terminal): not --json, --jsonl or --for-agent, not
 # BENCHBAR_NONINTERACTIVE (so not benchbar mcp either), and not for the
 # commands whose output a script reads or that name the notices themselves.
 fl_notices_run() {
