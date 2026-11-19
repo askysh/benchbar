@@ -1,0 +1,9 @@
+
++- benchbar lock write --------------------------------+
+| mode     dry-run                                     |
+| profile  v15-lts                                     |
+| bench    /home/akash/frappe-bench |
+| site     linuxdev.localhost                          |
++------------------------------------------------------+
+  [FAIL] not written: apps/frappe is not a git checkout; apps/erpnext is not a git checkout
+     fix: commit or stash local changes and check out a branch first, or pass --allow-dirty to pin what is there

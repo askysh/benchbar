@@ -1,0 +1,3 @@
+{"schema_version":1,"cli_version":"0.8.3","event":"step","n":1,"id":"start_redis","parent":null,"name":"Start the bench's Redis","status":"running"}
+{"schema_version":1,"cli_version":"0.8.3","event":"step","n":1,"id":"start_redis","parent":null,"name":"Start the bench's Redis","status":"done","secs":1}
+{"schema_version":1,"cli_version":"0.8.3","event":"done","bench":"/home/akash/frappe-bench","exit":0,"changed":[{"kind":"process","name":"frappe-bench","detail":"Redis started (queue 11000, cache 13000)"}],"warnings":[],"log":null}

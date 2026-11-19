@@ -27,6 +27,7 @@ internal sealed class BenchPage : UserControl
     private readonly TabControl _tabs = new() { BorderThickness = new Thickness(0), Background = System.Windows.Media.Brushes.Transparent, Padding = new Thickness(0, 12, 0, 0) };
     private readonly Dictionary<BenchTab, UIElement> _views = [];
     private readonly Dictionary<BenchTab, TabItem> _items = [];
+    private readonly PendingBanner _banner;
     private BenchContext? _context;
     private bool _syncing;
 
@@ -46,7 +47,9 @@ internal sealed class BenchPage : UserControl
         }
         _tabs.SelectionChanged += OnTabChanged;
         Ui.Name(_tabs, "Bench tabs");
-        Content = _tabs;
+        _banner = new PendingBanner(services);
+        DockPanel.SetDock(_banner, Dock.Top);
+        Content = new DockPanel { LastChildFill = true, Children = { _banner, _tabs } };
         _syncing = true;
         _tabs.SelectedIndex = 0;
         _syncing = false;
@@ -54,6 +57,9 @@ internal sealed class BenchPage : UserControl
     }
 
     public OverviewView Overview { get; }
+
+    /// <summary>The banner for app updates and adds that stopped part way, above the tabs (for tests).</summary>
+    internal PendingBanner Pending => _banner;
 
     public BenchTab Tab { get; private set; } = BenchTab.Overview;
 
@@ -102,6 +108,7 @@ internal sealed class BenchPage : UserControl
     public void Bind(BenchStatus bench, string? site, bool navigate)
     {
         _context = new BenchContext(bench, site);
+        _banner.Bind(bench);
         if (navigate) Select(site is null ? BenchTab.Overview : BenchTab.Sites);
         BindShown();
     }
@@ -147,6 +154,7 @@ internal sealed class BenchPage : UserControl
         {
             Overview.Bind(_context.Bench, _context.Site);
             Overview.EnsureLockChecked().Forget(); // once per bench, only while the Overview is the tab shown
+            Overview.EnsureCliFactsAsync().Forget();
         }
     }
 
