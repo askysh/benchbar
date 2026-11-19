@@ -51,7 +51,7 @@ final class OpenAsStore {
 
     /// `checkSession(siteURL, sid)` answers with the user the id belongs to, nil when nothing answered.
     init(defaults: UserDefaults = .standard,
-         browser: any BrowserOpening = BrowserRouter(),
+         browser: any BrowserOpening = BrowserRouter.shared,
          checkSession: @escaping @Sendable (URL, String) async -> String? = OpenAsStore.probeSession,
          clock: @escaping () -> Date = Date.init) {
         self.defaults = defaults
