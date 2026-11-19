@@ -384,7 +384,19 @@ A bench has four tabs:
   without files), **Backups...**, **Restore...**, **Drop Site...** (type
   the site's name to confirm) and Open. Browsers open `*.localhost` names
   without a hosts line, so BenchBar never edits a hosts file (see
-  [`*.localhost` names](#localhost-names)).
+  [`*.localhost` names](#localhost-names)). **Allow Open as...** in a
+  site's menu turns Open as on for that site, after the Mac app's question
+  (it signs in as any user without a password, and each sign in is a real
+  login that the apps' hooks and the Activity Log see). Turning it on is
+  your decision: nothing in BenchBar does it for you, and **Turn Off Open
+  as** needs no question. While it is on the site says "Open as is on", or
+  why it cannot be used (developer mode off, not the default site, the bench
+  stopped), and **Open as...** opens **Find User**: the site's enabled users,
+  searched by name or email, each with **Open**, which opens the site in your
+  Windows browser signed in as that user. `benchbar.exe` opens the browser
+  itself, so the sign in link, which holds a session, never passes through
+  the tray, a log or the screen. A site whose name Windows cannot find has no
+  Open as.
 - **Apps**: Add App (from a git URL, with a branch or a commit, and the
   sites to install it on), Update after the dry run, Install on a site,
   focus pins and Check Remotes. An app with local changes cannot be
@@ -748,11 +760,10 @@ every distro, so stop your benches first).
 - It has no CPU source for the runner, so the runner runs at one speed.
 - It never reads files inside the distro: every fact comes from
   `benchbar.exe`.
-- It has no Open as menu yet. From PowerShell, `benchbar.exe site open-as on
-  NAME` turns it on for a site (it asks first), then `benchbar.exe open --as
-  USER` opens the site signed in as that user in your Windows browser. The
-  site needs a `*.localhost` name, which the Windows browser reaches without
-  a hosts line (see [`*.localhost` names](#localhost-names)). See [benchbar open](reference/cli/other.md).
+- Open as has no pinned users and no Quick Switch panel yet: Find User
+  lists the users each time. The site needs a `*.localhost` name, which the
+  Windows browser reaches without a hosts line (see [`*.localhost`
+  names](#localhost-names)). See [benchbar open](reference/cli/other.md).
 - It cannot join a room. Rooms (`benchbar share`) are Mac only for now:
   WSL 2 does not expose a port to the Wi-Fi by default and Windows has no
   pf. A `benchbar://share/...` link shows a note that says so.

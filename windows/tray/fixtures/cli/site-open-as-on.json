@@ -1,0 +1,1 @@
+{"schema_version":1,"cli_version":"0.9.0","event":"done","exit":0,"bench":"/home/akash/frappe-bench","site":"one.localhost","default_site":"one.localhost","open_as_enabled":true,"developer_mode":true,"open_as":true,"changed":[{"kind":"open_as","name":"one.localhost","detail":"turned on"}],"warnings":[],"next_actions":[]}
