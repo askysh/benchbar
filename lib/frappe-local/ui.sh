@@ -1096,6 +1096,50 @@ fl_steps_counts() {
 # instead of waiting, reading end of input as "no", or guessing a default.
 fl_noninteractive() { [[ "${BENCHBAR_NONINTERACTIVE:-0}" == "1" ]]; }
 
+# fl_person_env_ok NAME VALUE: the one test for "the app says a person is here". A command only a
+# person runs (open-as on, open --as --print-url, lan-guard, share) is refused without a terminal;
+# the Mac app has none and says so with BENCHBAR_SUDO=gui or BENCHBAR_NONINTERACTIVE=0, after its own
+# alert. Any process can set those two, so on macOS the claim counts only when BENCHBAR_APP_PID names
+# a process that is above this one in the process tree and whose name (the path ps prints) is inside a BenchBar.app (a name check, not a proof; the app sets
+# it for every run that makes the claim). Returns 0 when NAME is VALUE and the claim holds, 1
+# otherwise; FL_PERSON_WHY then says why a claim that was made did not count, for the refusal.
+# Only the paths above call it, and only without a terminal: nothing else pays for the walk.
+# On Linux and WSL there is no such check: the Windows tray's process is not visible from inside WSL,
+# so the variable is taken as it is. There, and on a Mac for a process that already runs inside the
+# app's process tree, it is a safety rail against mistakes, not a boundary (AGENTS.md says so).
+# FL_TESTING=1 reads FL_PERSON_SELF_PID (the pid the walk starts from) and FL_PS_CMD (a ps mock).
+FL_PERSON_WHY=""
+fl_person_env_ok() {
+  local name="$1" want="$2" app="${BENCHBAR_APP_PID:-}" pid="$$" ps_cmd=/bin/ps line ppid comm hops=0 why
+  FL_PERSON_WHY=""
+  [[ "${!name:-}" == "$want" ]] || return 1
+  fl_is_linux && return 0
+  why="${name}=${want} counts only when the BenchBar app made the run, and"
+  if [[ "${FL_TESTING:-}" == "1" ]]; then pid="${FL_PERSON_SELF_PID:-$$}"; ps_cmd="${FL_PS_CMD:-ps}"; fi
+  if [[ -z "$app" ]]; then FL_PERSON_WHY="${why} BENCHBAR_APP_PID is not set."; return 1; fi
+  if [[ ! "$app" =~ ^[1-9][0-9]{0,9}$ ]]; then FL_PERSON_WHY="${why} BENCHBAR_APP_PID is not a process id."; return 1; fi
+  while [[ "$pid" =~ ^[1-9][0-9]*$ && "$hops" -lt 64 ]]; do
+    line="$("$ps_cmd" -o ppid=,comm= -p "$pid" 2>/dev/null)" || line=""
+    line="${line#"${line%%[![:space:]]*}"}"
+    [[ -n "$line" ]] || break
+    ppid="${line%%[[:space:]]*}"
+    comm="${line#"$ppid"}"; comm="${comm#"${comm%%[![:space:]]*}"}"
+    if [[ "$pid" == "$app" ]]; then
+      case "$comm" in
+        */BenchBar.app/Contents/MacOS/?*) return 0 ;;
+      esac
+      FL_PERSON_WHY="${why} BENCHBAR_APP_PID=${app} is not a BenchBar.app process."
+      return 1
+    fi
+    pid="$ppid"; hops=$((hops + 1))
+  done
+  # the app was not met on the way up: say whether it runs at all
+  line="$("$ps_cmd" -o ppid=,comm= -p "$app" 2>/dev/null)" || line=""
+  if [[ -n "${line//[[:space:]]/}" ]]; then FL_PERSON_WHY="${why} BENCHBAR_APP_PID=${app} is not above this command."
+  else FL_PERSON_WHY="${why} BENCHBAR_APP_PID=${app} names no running process."; fi
+  return 1
+}
+
 # fl_secrets_single_line NAME...: refuses, before any work, a password (the
 # variable NAME holds it) that contains a line break. The sudo password
 # travels on a pipe and the site's passwords on a standard input, one line
