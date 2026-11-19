@@ -160,6 +160,26 @@ struct WorkbenchTests {
         #expect(bench.activity == nil)
     }
 
+    /// The bench changes in another terminal between Review and Repair: the
+    /// real run has a step the user never saw, and the list says so.
+    @Test func aStepThatWasNotReviewedIsMarked() async throws {
+        let (store, _) = try await store()
+        let bench = try #require(store.benches.first { $0.path == v16 })
+        base.cli.answer("doctor", json: try Fixture.string("doctor"))
+        base.cli.answer("repair", json: #"{"event":"plan","actions":[{"id":"build","label":"bench build","fixes":[],"sudo":false}],"log":null}"#)
+        let run = RepairRun(bench: bench, store: store)
+        await run.loadPlan()
+        #expect(run.unreviewedSteps.isEmpty)
+        base.cli.answer("repair", json: """
+        {"event":"plan","actions":[{"id":"build","label":"bench build","fixes":[],"sudo":false},{"id":"hosts_entry","label":"add v16two to /etc/hosts (sudo)","fixes":[],"sudo":true}],"log":null}
+        {"event":"done","exit_code":0,"log":null}
+        """)
+        await run.run()
+        #expect(run.steps.map(\.id) == ["build", "hosts_entry"])
+        #expect(run.unreviewedSteps.map(\.id) == ["hosts_entry"])
+        #expect(!run.steps[0].unreviewed)
+    }
+
     @Test func aFailedRunIsNotOverwrittenByItsEvents() async throws {
         let (store, _) = try await store()
         let bench = try #require(store.benches.first { $0.path == v16 })

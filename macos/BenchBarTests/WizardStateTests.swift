@@ -34,6 +34,41 @@ struct WizardStateTests {
         for event in try InstallEvent.decodeAll(try Fixture.lines(name)) { s.send(.install(event)) }
     }
 
+    /// Between Review and Install another step starts to run: the install
+    /// page lists it, and a plan with the same steps lists nothing.
+    @Test func installStepsThatWereNotReviewedAreNamed() throws {
+        let real = try plan()
+        var reviewed = real
+        let hosts = try #require(reviewed.steps.firstIndex { $0.id == "hosts_entry" })
+        reviewed.steps[hosts].willRun = false
+        var s = try filled()
+        s.send(.primary)
+        s.send(.planned(reviewed))
+        s.send(.primary)
+        #expect(s.planChanges.isEmpty)
+        s.send(.install(.plan(real)))
+        #expect(s.planChanges == [real.steps[hosts].name])
+        #expect(WizardState.unreviewedSteps(reviewed: real, real: real).isEmpty)
+    }
+
+    /// The CLI failed once while reading the profiles: the page says so, and
+    /// Try Again asks again (once) instead of waiting for Back and Continue.
+    @Test func aFailedProfileListCanBeReadAgain() throws {
+        var s = WizardState(home: Self.home)
+        s.send(.chooseNewBench)
+        s.send(.prerequisites(try report()))
+        #expect(s.send(.primary) == [.loadProfiles])
+        #expect(s.send(.retryProfiles).isEmpty, "nothing failed yet")
+        s.send(.profilesFailed("The command timed out."))
+        #expect(s.profilesError == "The command timed out.")
+        #expect(s.formProblem?.contains("Try Again") == true, "not the same words as a read that is still running")
+        #expect(s.send(.retryProfiles) == [.loadProfiles])
+        #expect(s.profilesError == nil && s.profilesLoading && s.formProblem == "Reading the profiles…")
+        #expect(s.send(.retryProfiles).isEmpty, "one read at a time")
+        s.send(.profiles(try profileList()))
+        #expect(s.profilesLoaded && !s.profilesLoading && s.profilesError == nil)
+    }
+
     func installing() throws -> WizardState {
         var s = try filled()
         s.send(.primary)
