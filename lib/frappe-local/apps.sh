@@ -806,10 +806,15 @@ fl__au_command() {
 
 # fl__au_run KIND TARGET APP TO: one step of app update; its own [FAIL] line says why it failed
 fl__au_run() {
-  local kind="$1" target="$2" app="$3" to="$4"
+  local kind="$1" target="$2" app="$3" to="$4" code
   case "$kind" in
     backup) fl_bench_redis_up "$FL_BENCH_DIR" >/dev/null 2>&1 || true
-      fl_run_long "bench --site ${target} backup" fl__in_dir "$FL_BENCH_DIR" bench --site "$target" backup ;;
+      # bench's backup deletes the site's backups older than 23 hours: keep them
+      fl_backups_keep_begin "$target" || return 1
+      code=0
+      fl_run_long "bench --site ${target} backup" fl__in_dir "$FL_BENCH_DIR" bench --site "$target" backup || code=$?
+      fl_backups_keep_end
+      return "$code" ;;
     fast_forward) fl_run_long "git merge --ff-only" git -C "$(fl_app_path "$app")" merge --ff-only --quiet "$to" ;;
     requirements_python) fl_run_long "bench setup requirements --python ${app}" fl__in_dir "$FL_BENCH_DIR" bench setup requirements --python "$app" ;;
     requirements_node) fl_run_long "bench setup requirements --node ${app}" fl__in_dir "$FL_BENCH_DIR" bench setup requirements --node "$app" ;;

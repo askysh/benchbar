@@ -4,10 +4,6 @@ All notable changes to this project are documented here.
 
 ## Unreleased
 
-### Command line tool
-
-- `benchbar doctor` is much faster: on a bench with 41 apps `doctor --json` went from about 10 s to about 4 s on an M4 (issue #147; `--quick` takes about 2 s). It reads what its checks share once (one `lsof` for every port, one `brew list`, one `launchctl print`, one `git config` and one read of each config file per app), starts the slow checks (`bench version`, `brew info`, Python and Node probes, the site ping) side by side, asks git about the apps several at a time, and does its text work in bash instead of starting `awk`, `sed`, `grep` and `tr` for it. The checks, their order and their messages are the same. `FL_DOCTOR_JOBS=1` runs everything one after the other.
-
 ### Mac app
 
 - New setting **Links, Ask before a link acts** (off by default): when on, BenchBar shows an alert before a `benchbar://` link starts, stops or restarts a bench or opens a console. Any web page or app can open such a link, and a browser's "always allow" removes its own question. The docs say so plainly.
@@ -22,6 +18,14 @@ All notable changes to this project are documented here.
 - Two Concepts pages: [Port blocks](docs/concepts/port-blocks.md) and [How sharing keeps your bench safe](docs/concepts/sharing-safety.md), moved out of the benches guide and the share reference.
 - Testing, Releasing and Decisions are under For contributors. Decisions and Releasing no longer show in the site search.
 - The Mac app page describes the Sharing tab, On your network and the Labs list, and the energy cost of both.
+
+### Backups
+
+- `site backup`, `site restore`, `site drop`, `pull --replace` and `app update` no longer delete the site's backups older than 23 hours. bench's backup did that silently; benchbar now keeps those files and puts them back. Nothing in a site's backup folder is pruned. On the same volume the kept files are hard links (no space); when the state folder is on another volume each run copies the whole backup folder and stops before bench starts when the free space does not cover it.
+- A run that is cut short between keeping and putting back (Ctrl-C, TERM) puts the files back as it exits. A run that is killed outright, or a file that could not go back, leaves the copy in the state folder, which is then never pruned: the next backup puts it back (`changed[]` says so), `doctor` warns (`kept_backups`) until then, and `repair` puts the files back.
+- `site restore` and `pull` read a backup set before they change anything: a dump that is empty or cut short, or a file archive tar cannot read, stops the command with the file named. `site backups` marks a set with an empty part `(incomplete)` and has `"complete"` in JSON.
+- benchbar's own state folder keeps to a limit: the newest 100 run logs, 50 backup folders and 14 update checks, and old `state.env.*` temp files go. The run's `changed[]` says what was removed.
+- `benchup` keeps the logs of the last three starts as `bench.previous.1.log` to `.3.log`, so the evidence of a crash survives a quick second start.
 
 ### Windows tray
 

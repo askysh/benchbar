@@ -51,10 +51,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Labs.shared.loader = .cli { await MainActor.run { labsStore.cliClient } }
         lanRoomsObservation = Labs.shared.observe(.lanRooms) { [weak self] on in self?.lanRoomsChanged(on) }
         NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.store.appBecameActive() }
+            MainActor.assumeIsolated {
+                self?.store.appBecameActive()
+                Labs.shared.refreshIfStale()
+            }
         }
 
         notifier = Notifier(settings: settings)
+        ShareNotices.notifier = notifier
         store.onAlert = { [weak self] bench, alert in self?.notifier.post(alert, bench: bench) }
         ShareCenter.shared.attach(store)
         store.confirmWhileSharing = { action, bench in
@@ -166,9 +170,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // open, close, occlusion and the page: the window's views stay alive
         // when it closes, so the store hears of them from the controller
         mainWindow.onKey = { Task { await Labs.shared.refresh() } }
-        NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
-            Task { @MainActor in Labs.shared.refreshIfStale() }
-        }
         mainWindow.onSight = { [weak self] sight in self?.store.setWindow(sight) }
 
         logWindows = LogWindowController { [weak self] path in self?.openLogsInTerminal(path) }
@@ -401,21 +402,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// room this Mac hosts and closes the forwarder to a room it joined, so
     /// those ask too. Keep running is the default.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        let hosted = ShareCenter.shared.benchesWithGuests.first
+        let facts = QuitPolicy.Facts(labOn: Labs.shared.isOn(.lanRooms), setupRunning: ShareCenter.shared.setupOrTeardownRunning,
+                                     hostedBench: hosted?.bench, people: hosted?.status?.people ?? 0,
+                                     guestForwarder: guest?.hasRunningForwarder == true)
+        guard let question = QuitPolicy.question(facts) else { return .terminateNow }
         let alert = NSAlert()
-        let labOn = Labs.shared.isOn(.lanRooms)
-        if labOn, ShareCenter.shared.setupOrTeardownRunning {
-            alert.messageText = "Sharing setup is still running."
-            alert.informativeText = "Quitting now stops it halfway; the copy will need setup again."
-        } else if labOn, let hosted = ShareCenter.shared.benchesWithGuests.first {
-            let people = hosted.status?.people ?? 0
-            alert.messageText = "People are in your room."
-            alert.informativeText = "\(people == 1 ? "1 person is" : "\(people) people are") in the room on \(URL(fileURLWithPath: hosted.bench).lastPathComponent). Quitting disconnects them."
-        } else if labOn, guest?.hasRunningForwarder == true {
-            alert.messageText = "You are connected to a room."
-            alert.informativeText = "Quitting closes the connection to the site you opened from it."
-        } else {
-            return .terminateNow
-        }
+        alert.messageText = question.title
+        alert.informativeText = question.detail
         alert.addButton(withTitle: "Keep running")
         alert.addButton(withTitle: "Quit anyway")
         return alert.runModal() == .alertSecondButtonReturn ? .terminateNow : .terminateCancel
@@ -427,7 +421,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func lanRoomsChanged(_ on: Bool) {
         if on {
             if guestSlot.store == nil {
-                let browser = BrowserRouter()
+                let browser = BrowserRouter.shared
                 guestSlot.store = GuestRoomStore(dependencies: .live(identity: KeychainIdentity(), openURL: { browser.open($0) }))
             }
             ShareCenter.shared.restoreActive(among: store.benches.map(\.path))
