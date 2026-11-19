@@ -213,7 +213,7 @@ fl_bench_adopted() {
 # fl_status_print_json [PINGS]: PINGS "ping" asks every site (status --ping);
 # without it only web_ping_code, the default site's, is known.
 fl_status_print_json() {
-  local mode="${1:-none}" j_listen j_labs j_ports j_sites j_redis j_sched j_file j_log j_loaded j_astate j_procs j_url j_label j_bin j_pending sched=0
+  local mode="${1:-none}" j_notices j_listen j_labs j_ports j_sites j_redis j_sched j_file j_log j_loaded j_astate j_procs j_url j_label j_bin j_pending sched=0
   # a folder benchbar does not know has no site of its own to name: never the
   # default bench's, never one it guessed
   [[ "$ST_STATE" != "not_adopted" ]] || FL_SITE=""
@@ -242,7 +242,8 @@ fl_status_print_json() {
     "$j_url" "$j_label" "$([[ "$ST_LOADED" == "1" ]] && printf yes || printf no)" "${ST_FLAG:-none}" "$ST_PING"
   # app update or app add runs that stopped half way, with the steps left
   fl_lab_enabled_json_v j_labs
-  printf ',"pending_operations":%s,"labs":%s}\n' "$j_pending" "$j_labs"
+  fl_notices_json_v j_notices
+  printf ',"pending_operations":%s,"labs":%s,"notices":%s}\n' "$j_pending" "$j_labs" "$j_notices"
 }
 
 # fl_redis_json_v VAR: {"queue":{"port","running"},"cache":{...}}. running is whether

@@ -619,3 +619,7 @@ Asked for after the phases, to stop naming drift before the first release.
 - `RunnerLibrary.reload` returns at once when the folder's files, sizes and modification times are as at the last load: Settings reloads on every appear, and new images made `isSame` false, which restarted the menu bar animation of a custom runner.
 - The back up spinner compares the bench's activity text with the exact strings `Workbench.backupActivity` builds, not a prefix.
 - A failed profile list in the wizard has Try Again (`WizardState.Event.retryProfiles`), one read at a time, and the Review problem text says to use it.
+
+## Update notices (0.9.0, issue 188)
+
+- The window shows `status --json` `notices[]` as one banner at a time (`DefaultsNoticeBanner`, a `PaneBanner` under the update banner) with Learn More and a Dismiss that runs `benchbar notices --dismiss ID`. The list belongs to the store and comes from any bench's status, since the notices are global. A CLI without `notices[]` leaves the list as it was, and a failed dismissal brings the banner back with the next status. The Windows tray part is a separate change.

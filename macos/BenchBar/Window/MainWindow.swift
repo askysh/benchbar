@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Where the BenchBar window is: an app pane, the first run wizard, or one
@@ -169,6 +170,10 @@ struct MainWindowView: View {
                     VStack(spacing: 0) {
                         if let offer = about.offer, offer.showsBanner {
                             UpdateBanner(offer: offer).padding([.horizontal, .top], WindowMetrics.paneInset)
+                        }
+                        if let first = store.notices.first {
+                            DefaultsNoticeBanner(notice: first, more: store.notices.count - 1) { store.dismissNotice(first.id) }
+                                .padding([.horizontal, .top], WindowMetrics.paneInset)
                         }
                         if let notice = router.notice {
                             NoticeBanner(text: notice) { router.notice = nil }
@@ -346,6 +351,32 @@ struct NoticeBanner: View {
 
     var body: some View {
         PaneBanner(symbol: "link", tint: .orange, title: "A BenchBar link did nothing", detail: text, dismiss: dismiss)
+    }
+}
+
+/// A default an update changed: what it is, the switch back and a link to the
+/// page that explains it. One at a time; Dismiss runs `benchbar notices --dismiss ID`
+/// and shows the next.
+struct DefaultsNoticeBanner: View {
+    let notice: BenchNotice
+    /// How many more notices wait behind this one.
+    let more: Int
+    let dismiss: () -> Void
+
+    var title: String { more > 0 ? "\(notice.title) (\(more) more after this)" : notice.title }
+
+    var body: some View {
+        PaneBanner(symbol: "info.circle.fill", tint: .orange, title: title, detail: notice.banner,
+                   dismissHelp: "Dismiss this notice", dismiss: dismiss) {
+            HStack {
+                if let doc = notice.doc, let url = URL(string: doc) {
+                    Button("Learn More") { NSWorkspace.shared.open(url) }
+                }
+                Button("Dismiss", action: dismiss)
+            }
+            .controlSize(.small)
+            .padding(.top, 2)
+        }
     }
 }
 

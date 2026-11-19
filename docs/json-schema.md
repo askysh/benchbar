@@ -1114,6 +1114,17 @@ can ask. Added after 0.8.1: `status --json` and `commands --json` have `labs`
 for a command left out because its lab is off) and a command of an enabled lab
 has `lab`.
 
+## Notices (0.9.0)
+
+`status --json` has `notices`: the defaults an update changed, until they are
+dismissed. `[]` when there are none, and a fresh install has none. Each entry:
+`id` (`listen-local`, `unknown-flags`, `pull-neutralise`), `title`, `text`,
+`switch_back` (the command or variable that goes back), `doc` (a full URL of
+the page that explains it) and `since` (the version of the change).
+`benchbar notices --json` prints `{"schema_version":1,"cli_version":"...","notices":[...]}`;
+`--dismiss ID` or `--all` hides entries and prints what is left. A client shows
+a notice once and dismisses it through that command.
+
 ## Site backups
 
 Since 0.8 the results of `site backup` and `site drop` (not their plans) also carry the [done fields](#the-done-fields-08), and `site drop`'s plan and result `default_site`. `--jsonl` turns either into a stream whose `done` carries the document's fields.

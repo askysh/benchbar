@@ -310,6 +310,10 @@ cmd~labs off~benchbar labs off NAME [--json]~Turn an experiment off and undo wha
 flag~labs off~--json~~JSON lines, ending in a done line.
 cmd~labs status~benchbar labs status NAME [--json]~Whether an experiment is on. Exit 0 on, 1 off.~no~no~no~no~document
 flag~labs status~--json~~One JSON document.
+cmd~notices~benchbar notices [--json] [--dismiss ID|--all]~The notices an update left: a default that changed, how to switch back and where it is explained. Each shows once in the terminal after the update and stays in status --json until dismissed.~no~no~no~no~document
+flag~notices~--json~~One JSON document: notices[] with id, title, text, switch_back, doc and since.
+flag~notices~--dismiss~ID~Hide one notice (also in the BenchBar app). An id that is already hidden is unchanged.
+flag~notices~--all~~Hide every notice.
 TABLE
 
 fl_cmd_table() { printf '%s\n' "$FL_CMD_TABLE"; }
