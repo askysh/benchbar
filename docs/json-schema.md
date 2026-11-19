@@ -1453,7 +1453,10 @@ shim itself. The full contract, with the step ids, is in
   `distro`, `ready`, `reboot_pending` and `steps`. Each step has `id`,
   `status` (`ok`, `missing`, `warn` or `fail`), `title`, `detail`, `action`
   (the `setup run` action that fixes it, or null), `needs_admin` and
-  `blocking`. It is read only.
+  `blocking`. It is read only. It also has `packaged` (true when `benchbar.exe`
+  runs from the Microsoft Store package) and `data_dir` (the folder with
+  `config.json`, `setup\`, `reports\` and the logs; in a package the physical
+  `%LOCALAPPDATA%\Packages\<family>\LocalCache\Local\BenchBar`).
 - `benchbar.exe setup run ACTION --jsonl` prints JSON lines: `step` and `log`
   events, then one `done` line. In the `done` line `changed` is a boolean (the
   action changed something), not the CLI's `changed[]` list. The line also has
@@ -1470,7 +1473,8 @@ shim itself. The full contract, with the step ids, is in
   `done` line. With `--fix-hints` the fix commands of
   the failing and warning Windows checks follow the CLI's.
 - `benchbar.exe report-windows --json` prints one line: `schema_version`,
-  `zip`, `included`, `skipped` (what was left out, and why) and `issue_url`.
+  `zip`, `included`, `skipped` (what was left out, and why), `issue_url`,
+  `packaged` and `data_dir` (as in `setup check`).
 - `benchbar.exe self-update --check --json` prints one document and exits 0
   whenever it printed: `schema_version`, `current` (this `benchbar.exe`),
   `latest` (the newest published release with a Windows zip for this PC, or
