@@ -46,6 +46,13 @@ fl_open_url() {
   open "$1"
 }
 
+# Homebrew's prefix when brew is not on PATH to ask: /opt/homebrew on Apple
+# Silicon, /usr/local on an Intel Mac. Every "${FL_BREW_PREFIX:-...}"
+# fallback uses it, so an Intel Mac never looks in the Apple Silicon place.
+fl_brew_default_prefix() {
+  if [[ "$(uname -m)" == "x86_64" ]]; then printf '/usr/local'; else printf '/opt/homebrew'; fi
+}
+
 FL_BREW_PREFIX="${FL_BREW_PREFIX:-}"
 FL_ARCH="${FL_ARCH:-}"
 FL_MIN_DISK_GB="${FL_MIN_DISK_GB:-10}"
