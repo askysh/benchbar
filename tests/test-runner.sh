@@ -13,7 +13,7 @@ make_fake_bench "$BENCH"
 FL_BENCH_DIR="$BENCH"
 HONCHO="$MOCK_PIPX_HOME/venvs/frappe-bench/bin/honcho"
 runner="$BENCH/benchbar-run.sh"
-fl_template_render bench-run.sh "BENCH_DIR=$BENCH" "BENCH_RE=$(fl_regex_escape "$BENCH")" "BENCH_NAME=bench" \
+fl_template_render bench-run.sh "BENCH_DIR=$BENCH" "BENCH_NAME=bench" \
   "HONCHO=$HONCHO" "PORTS=8000,9000,11000,13000" "LABEL=com.benchbar.bench" "MAX_STARTS=3" "WINDOW=600" \
   "SITE=macdev" "WEB_PORT=8000" "CLI_VERSION=9.9.9" >"$runner"
 chmod +x "$runner"
@@ -28,8 +28,8 @@ transitions() { python3 -c 'import json,sys; print(" ".join(json.loads(l)["state
 reset_transitions() { : >"$BENCHBAR_STATE_LOG"; }
 
 # 1. normal start: leftovers of this bench are cleared, honcho runs
-add_proc 111 "$BENCH/env/bin/python -m frappe.utils.bench_helper frappe serve --port 8000"
-add_proc 222 "$BENCH/env/bin/python -m frappe.utils.bench_helper frappe --site macdev migrate"
+add_proc 111 "$BENCH/env/bin/python -m frappe.utils.bench_helper frappe serve --port 8000" "$BENCH/sites"
+add_proc 222 "$BENCH/env/bin/python -m frappe.utils.bench_helper frappe --site macdev migrate" "$BENCH/sites"
 add_proc 333 "node apps/frappe/socketio.js" "$BENCH"
 add_proc 444 "node apps/frappe/socketio.js" "$HOME/another-bench"
 # honcho ends with 0 without a stop request: a process of the bench ended,

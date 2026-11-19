@@ -29,9 +29,10 @@ FL_FOCUS_DAYS="${FL_FOCUS_DAYS:-14}"
 FL_FETCH="${FL_FETCH:-0}"
 FL_FRESHNESS_FETCH_TIMEOUT="${FL_FRESHNESS_FETCH_TIMEOUT:-20}"
 
-# now as epoch seconds; FL_NOW fixes it (tests)
+# now as epoch seconds; FL_NOW fixes it, only under FL_TESTING=1 (tests). In a
+# doctor run the clock is read once (facts.sh).
 fl_now() {
-  if [[ -n "${FL_NOW:-}" ]]; then printf '%s' "$FL_NOW"
+  if [[ "${FL_TESTING:-}" == "1" && -n "${FL_NOW:-}" ]]; then printf '%s' "$FL_NOW"
   elif [[ -n "${FL_FACTS_DIR:-}" ]]; then fl_memo now date +%s
   else date +%s; fi
 }

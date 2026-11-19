@@ -372,10 +372,22 @@ fl_dead_agents_list() {
   done < <(fl_agent_files)
 }
 
+# fl_plist_runs_this_bench PLIST: an agent that starts this bench's own
+# processes: its plist names this bench's folder and runs honcho, the old or
+# the new runner, socketio.js, or bench serve, worker, schedule, socketio or
+# start. A plist that only says "frappe" somewhere, runs honcho for another
+# project or runs a one off bench command in this folder (backup, migrate) is
+# a person's own agent and never matches.
+fl_plist_runs_this_bench() {
+  grep -q -E "$(fl_regex_escape "$FL_BENCH_DIR")(/|<)" "$1" 2>/dev/null || return 1
+  grep -q -E 'honcho|socketio\.js|frappe-mac-run\.sh|benchbar-run\.sh|bench_helper frappe (serve|worker|schedule)|<string>(serve|worker|schedule|start|socketio)</string>' "$1" 2>/dev/null
+}
+
 # Lists LaunchAgents to migrate for this bench. Prints "path|label|state|last-exit" lines.
 #   com.frappe-mac.*   the frappe-mac 0.2.0 agent, only when its WorkingDirectory is this bench
-#   anything else      older per-process Frappe setups or a hand-made agent
-# com.benchbar.* agents (this bench and others) are never listed.
+#   anything else      an older per-process setup of this bench (fl_plist_runs_this_bench)
+# com.benchbar.* agents (this bench and others) are never listed, and neither
+# is a person's own agent that merely mentions frappe.
 fl_legacy_agents_list() {
   local f label state code dir="$HOME/Library/LaunchAgents"
   [[ -d "$dir" ]] || return 0
@@ -386,7 +398,7 @@ fl_legacy_agents_list() {
       com.frappe-mac.*)
         [[ "$(fl_plist_working_dir "$f")" == "$FL_BENCH_DIR" ]] || continue ;;
       *)
-        grep -q -F "$FL_BENCH_DIR" "$f" 2>/dev/null || grep -q -i -E 'frappe|honcho|socketio\.js|bench_helper|bench-run' "$f" 2>/dev/null || continue ;;
+        fl_plist_runs_this_bench "$f" || continue ;;
     esac
     label="$(fl_plist_label "$f")"
     [[ -n "$label" ]] || label="$(basename "$f" .plist)"

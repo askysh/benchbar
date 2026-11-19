@@ -446,7 +446,7 @@ fl_install_port_blockers() {
 # whole command line with -a; -l prints only the name) and the folders in /proc
 fl_bench_status_pids() {
   local found line pid cmd first="" rest=""
-  found="$(pgrep -af 'honcho start -f Procfile\.lean|-m frappe\.utils\.bench_helper frappe (serve|worker|schedule)|apps/frappe/socketio\.js' 2>/dev/null)" || return 0
+  found="$(pgrep -af "honcho start -f Procfile\\.lean|$(fl_bench_helper_pattern)|apps/frappe/socketio\\.js" 2>/dev/null)" || return 0
   while IFS= read -r line; do
     pid="${line%% *}"; cmd="${line#* }"
     [[ "$pid" =~ ^[0-9]+$ ]] || continue
@@ -481,7 +481,8 @@ fl_phase00_script() { printf '00-linux-system-deps.sh'; }
 fl_service_start_hint() { printf 'sudo systemctl start %s' "$(fl__apt_unit "$1")"; }
 
 fl_preflight_not_root() {
-  local effective_uid="${FL_EFFECTIVE_UID:-$EUID}"
+  local effective_uid="$EUID"
+  [[ "${FL_TESTING:-}" == "1" ]] && effective_uid="${FL_EFFECTIVE_UID:-$EUID}"
   [[ "$effective_uid" != "0" ]] || fl_die "Do not run this installer as root." "Run it as your normal user; the scripts ask for sudo only where apt and MariaDB need it."
   fl_ok "Running as a regular user"
 }

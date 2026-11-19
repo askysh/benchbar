@@ -538,20 +538,6 @@ chk_helpers() {
 
 fl_cli_link_path() { printf '%s/.local/bin/%s' "$HOME" "${1:-benchbar}"; }
 
-# Homebrew's benchbar by a path brew upgrade keeps: the opt path, or its
-# link in <prefix>/bin. Never a Cellar path, which brew cleanup deletes.
-fl_cli_path_is_brew() {
-  local p
-  case "$1" in
-    */opt/benchbar/bin/benchbar|*/opt/benchbar/bin/frappe-mac|*/opt/benchbar/libexec/benchbar|*/opt/benchbar/libexec/frappe-mac) return 0 ;;
-  esac
-  for p in "${FL_SELF_PREFIX:-}" "${FL_BREW_PREFIX:-}"; do
-    [[ -n "$p" ]] || continue
-    [[ "$1" == "${p}/bin/benchbar" || "$1" == "${p}/bin/frappe-mac" ]] && return 0
-  done
-  return 1
-}
-
 # fl_brew_cli: Homebrew's benchbar when its formula is installed (this CLI
 # under Homebrew, else <prefix>/opt/benchbar/bin/benchbar), or nothing.
 # Brew then puts benchbar on PATH, so a link in ~/.local/bin is optional.
@@ -593,18 +579,6 @@ fl_cli_own_state_v() {
 # The first release whose Homebrew and installer copies hand off to the
 # app's CLI (install-kind.sh). An older one runs itself.
 FL_HANDOFF_SINCE="0.7.1"
-
-# fl_cli_standalone_script PATH: the benchbar script behind Homebrew's or the
-# installer's CLI at PATH (as a link or the helper block names it), else
-# nothing. No process.
-fl_cli_standalone_script() {
-  case "$1" in
-    */opt/benchbar/bin/benchbar|*/opt/benchbar/bin/frappe-mac) printf '%s' "${1%/bin/*}/libexec/benchbar" ;;
-    */opt/benchbar/libexec/benchbar|*/opt/benchbar/libexec/frappe-mac) printf '%s' "${1%/*}/benchbar" ;;
-    "${FL_MANAGED_HOME}/benchbar"|"${FL_MANAGED_HOME}/frappe-mac") printf '%s' "${FL_MANAGED_HOME}/benchbar" ;;
-    *) if fl_cli_path_is_brew "$1"; then printf '%s' "${1%/bin/*}/opt/benchbar/libexec/benchbar"; fi ;;
-  esac
-}
 
 # fl_cli_hands_off PATH: true when this is the app's CLI and PATH is a
 # Homebrew or installer copy that hands off to it (new enough to, and the
@@ -672,16 +646,6 @@ chk_cli_link() {
   else
     chk__set ok "~/.local/bin/benchbar and ~/.local/bin/frappe-mac point to this checkout"
   fi
-}
-
-# fl_cli_version_at FILE: the version a benchbar script declares, or nothing
-fl_cli_version_at() {
-  local line
-  [[ -r "$1" ]] || return 0
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    if [[ "$line" =~ ^FL_VERSION=\"(.*)\"$ ]]; then printf '%s\n' "${BASH_REMATCH[1]}"; return 0; fi
-  done <"$1"
-  return 0
 }
 
 # A second copy of the CLI: the one line installer's checkout next to
@@ -950,16 +914,6 @@ chk_redis_6379() {
   else
     chk__set warn "redis on 6379 (${who}) is not used by the bench" "brew services stop redis (only if nothing else needs it)" redis_stop
   fi
-}
-
-# fl_site_ping_code [SECONDS]: the default site's ping (3 s; status asks with 1)
-fl_site_ping_code() {
-  local code
-  code="$(curl -s -o /dev/null -m "${1:-3}" -w '%{http_code}' -H "Host: ${FL_SITE}" "http://127.0.0.1:${FL_WEB_PORT}/api/method/ping" 2>/dev/null || true)"
-  case "$code" in
-    [0-9][0-9][0-9]) printf '%s' "$code" ;;
-    *) printf '000' ;;
-  esac
 }
 
 fl_hosts_has_site() {

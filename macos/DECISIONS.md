@@ -316,7 +316,7 @@ Asked for after the phases, to stop naming drift before the first release.
 - The bench state file and `common_site_config.json` are cached (`FL_BS_*`, `FL_SCC_*`) only in the light mode: a writing command could write from a subshell, which a parent's cache would never see. The label (`FL_AGENT_LABEL`) is cached in every mode, keyed by `FL_BENCH_DIR`: the label a run computes is the one it writes, so it cannot change during the run.
 - `fl_honcho_resolve` tries one candidate at a time in the old order: the word list expanded every candidate first, so `pipx environment` (a Python start that also writes a log file) ran on every command, `status` included, even with honcho on PATH.
 - `--ping` needs nothing from the app: a 0.6.0 CLI passes an unknown option after the command through and ignores it.
-- `pid` liveness goes through `FL_KILL_CMD` (unset: the `kill` builtin), so the tests answer it from the fake process table instead of probing real pids on the host.
+- `pid` liveness goes through `FL_KILL_CMD` (read only under `FL_TESTING=1`; otherwise the `kill` builtin), so the tests answer it from the fake process table instead of probing real pids on the host.
 - Measured on this Mac (M4, macOS 27.0), through the `~/.local/bin` link as the app runs it: `status --json` on the running bench went from 212 to 5 programs (bash, readlink, cksum, launchctl, curl; 6 with the shebang's env), about 576 to 34 forks, 0.86 to 0.03 s of CPU; on the stopped bench 198 to 6 programs (pgrep and lsof in place of curl) and about 568 to 38 forks. `list --json` for two benches went from 119 to 4 programs, about 323 to 60 forks and 0.39 to 0.04 s of CPU. The JSON of `status`, `list`, `site list` and `ports check` for both real benches is identical to 0.6.0's, key order included, except `sites[].ping_code`.
 
 ### Phase 2: runner heartbeat
@@ -586,3 +586,12 @@ Asked for after the phases, to stop naming drift before the first release.
 
 - Labs toggles live in Settings and read the CLI's LABS key; the app never stores the flags itself, so the CLI, MCP and app agree. `Labs.shared` refreshes at launch, when Settings appears and when the window becomes key (at most every 5 s); turning one on passes `--yes` with BENCHBAR_NONINTERACTIVE=0 and BENCHBAR_SUDO=gui, as `site open-as on` does. A non zero exit from `labs list` is read as a CLI without the command.
 - When the lan-rooms lab reads off, `ShareCenter.tearDown` stops watching and drops the stores but keeps `shareActiveBenches`: only the CLI's `labs off` really stops shares, so a refresh that reports off must not forget which benches were sharing.
+
+## 0.9 process pass (issue 160)
+
+- Quitting during a change asks with two safe answers, Keep running (default) and Quit when it finishes (`QuitPolicy`, `QuitAfterChange`, `BenchStore.onIdle`). There is no "Quit anyway" for a change: the CLI would die on SIGPIPE halfway. The share cases keep their Quit anyway. A hung change ends at its own timeout.
+- The CLI child leads its own process group (`processGroupID = 0`) and the teardown signals the group (TERM, then KILL after 2 s). The CLI forwards TERM to its own command groups, so the signal reaches them through it. A cancelled caller gets `CLIError.cancelled`, never `timedOut`.
+- Sleep and lock keep the folder watchers (they cost nothing without events) and stop only the loops. While suspended, a state file change never starts a CLI call. At wake, a bench running before and after with a later `started_at` and a non zero `last_exit_code` gets one crash notice (`CrashWhileAway`), unless the watcher already told it. A manual restart after an earlier crash can read the same way: accepted.
+- `status` fan out is capped at 3 (`BenchStore.maxParallelStatus`). On screen triggers share one queued reload (`requestReload`). A `noFile` bench the CLI called final leaves the minute loop; one running by hand stays.
+- `share status` is polled at 15 s with 20 percent tolerance, at 5 s only while the Sharing tab shows.
+- A second copy of the app opens the running one and exits (`SingleInstance`), unless `BENCHBAR_ALLOW_SECOND_COPY=1`. A `benchbar://` link that launched the second copy is lost: accepted. The CLI link: a copy in `/Applications` always keeps or takes it, and on one level it never goes to an older version (`AppCLILink.mayReplace`).

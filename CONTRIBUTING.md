@@ -37,6 +37,10 @@ test builds its own `HOME` and mock state. `tests/run-tests.sh test-doctor`
 runs one file. [docs/testing.md](docs/testing.md) is the guide for
 trying a build on a real Mac.
 
+A new test seam (a variable that lets a test replace a program, a path or
+the clock) is read only when `FL_TESTING=1`, which `tests/lib/harness.sh`
+sets: a production run must ignore it.
+
 ### What CI will do with your pull request
 
 CI plans each run from the changed files. A pull request runs the tests
