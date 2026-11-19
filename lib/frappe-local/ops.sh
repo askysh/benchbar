@@ -50,17 +50,17 @@ fl__op_str_v() {
 
 # fl_op_new_id_v VAR: a new op id, its file made empty (noclobber, so two runs never share one)
 fl_op_new_id_v() {
-  local dir stamp id n=0
-  dir="$(fl_ops_dir)"
-  mkdir -p "$dir" 2>/dev/null || return 1
-  stamp="$(date +%Y%m%d-%H%M%S)-$$"
-  id="op-${stamp}"
-  until ( set -o noclobber; : >"${dir}/${id}.json" ) 2>/dev/null; do
-    n=$((n + 1))
-    [[ "$n" -le 20 ]] || return 1
-    id="op-${stamp}-${n}"
+  local __dir __stamp __id __n=0
+  __dir="$(fl_ops_dir)"
+  mkdir -p "$__dir" 2>/dev/null || return 1
+  __stamp="$(date +%Y%m%d-%H%M%S)-$$"
+  __id="op-${__stamp}"
+  until ( set -o noclobber; : >"${__dir}/${__id}.json" ) 2>/dev/null; do
+    __n=$((__n + 1))
+    [[ "$__n" -le 20 ]] || return 1
+    __id="op-${__stamp}-${__n}"
   done
-  printf -v "$1" '%s' "$id"
+  printf -v "$1" '%s' "$__id"
 }
 
 # fl_op_write STATE [EXIT]: the record of the run that FL_OP_ID names, whole, through a temp file and a
