@@ -378,14 +378,44 @@ One line per non obvious choice. The 0.8.0 spike that chose WPF over WinUI was d
 ## The Microsoft Store package (MSIX)
 
 - A process is packaged when `kernel32!GetCurrentPackageFamilyName` answers; 15700 (no package) or any failure means unpackaged and nothing changes for the one line installer's copy. The family name is read at run time, never written in code. Everything that differs sits behind `IPackageInfo`, so `Tray.Core` logic is tested in both states.
-- Packaged, every file the tray keeps (`config.json`, `tray.log`, `running`, `runners`, `reports`, `recent-scan-folders.txt`, `resume-setup`) is under `%LOCALAPPDATA%\Packages\<PackageFamilyName>\LocalCache\Local\BenchBar`, built in one place (`DataFolder`). Writes to `%LOCALAPPDATA%\BenchBar` from a package are redirected to a private store whose content depends on what already existed, which split `config.json` in two and made every shown path false; the physical path is never redirected. The shim uses the same expression and does the one time import of an old `config.json`; the tray never writes to the old folder from a package.
-- `DisabledByUser` and `DisabledByPolicy` show the switch off and disabled, one line (Settings > Apps > Startup) and an "Open Startup Settings" button (`ms-settings:startupapps`): an app cannot turn its own startup task back on after the person or a policy turned it off. `EnabledByPolicy` shows on and disabled. A failed read shows off, disabled, with the same pointer, and writes the exception to `tray.log`.
-- A start with `--restarted` runs `benchbar.exe keepalive start` once, hidden, off the UI thread, 30 s timeout, and only logs a failure to `tray.log` (`KeepaliveRestart`). A package update stops the keepalive process with the old package and nothing else starts it before the next logon. The call is safe for everyone because the shim does nothing and exits 0 when there is no keepalive task or it already runs. A normal start never makes the call.
-- Open at logon packaged is the manifest's startup task `BenchBarTrayLogon` and nothing in the Startup folder is read, written or deleted: the folder holds the other install's `BenchBar Tray.lnk`, and a shortcut into the versioned `WindowsApps` folder breaks on the next update. The WinRT call needed no new reference: the project already targets `net10.0-windows10.0.19041.0`, so `Microsoft.Windows.SDK.NET.dll` (24.9 MB) ships in the framework dependent publish with or without it. The publish grew 22 KB (27,398,386 to 27,420,402 bytes, 10 files without pdbs), and the call works from Windows 10 19041, so 19045 is covered. The WinRT type is touched only when Settings, the menu or the wizard asks, never at start, so private bytes at rest do not change.
-- The setup wizard's resume flag (`BenchBar Setup Resume.lnk` in the Startup folder, which starts the tray with `--resume-setup`) is a file `resume-setup` in the data folder when packaged, read when the tray next starts (at logon if open at logon is on, else when the person opens BenchBar). A package cannot write a Startup shortcut, and a registry RunOnce value written from a package lands in its private hive.
-- Packaged: no update check through benchbar.exe, no banner, no Update Now, no "Copy Update Line", no "Check for Updates" in the menu or About, no "Check for updates" switch in Settings; Settings and About say "Updates come from the Microsoft Store". The version mismatch notice stays and loses its "Copy Install Line" button (one package: the install line is not its fix). The CLI inside WSL updates as before.
+- Packaged, every file the tray keeps (`config.json`, `tray.log`, `running`, `runners`, `reports`, `recent-scan-folders.txt`,
+  `resume-setup`) is under `%LOCALAPPDATA%\Packages\<PackageFamilyName>\LocalCache\Local\BenchBar`, built in one place (`DataFolder`).
+  Writes to `%LOCALAPPDATA%\BenchBar` from a package are redirected to a private store whose content depends on what already existed, which
+  split `config.json` in two and made every shown path false; the physical path is never redirected. The shim uses the same expression and
+  does the one time import of an old `config.json`; the tray never writes to the old folder from a package.
+- `DisabledByUser` and `DisabledByPolicy` show the switch off and disabled, one line (Settings > Apps > Startup) and an "Open Startup
+  Settings" button (`ms-settings:startupapps`): an app cannot turn its own startup task back on after the person or a policy turned it off.
+  `EnabledByPolicy` shows on and disabled. A failed read shows off, disabled, with the same pointer, and writes the exception to `tray.log`.
+- A start with `--restarted` runs `benchbar.exe keepalive start` once, hidden, off the UI thread, 30 s timeout, and only logs a failure to
+  `tray.log` (`KeepaliveRestart`). A package update stops the keepalive process with the old package and nothing else starts it before the
+  next logon. The call is safe for everyone because the shim does nothing and exits 0 when there is no keepalive task or it already runs. A
+  normal start never makes the call.
+- Open at logon packaged is the manifest's startup task `BenchBarTrayLogon` and nothing in the Startup folder is read, written or deleted:
+  the folder holds the other install's `BenchBar Tray.lnk`, and a shortcut into the versioned `WindowsApps` folder breaks on the next
+  update. The WinRT call needed no new reference: the project already targets `net10.0-windows10.0.19041.0`, so
+  `Microsoft.Windows.SDK.NET.dll` (24.9 MB) ships in the framework dependent publish with or without it. The publish grew 22 KB (27,398,386
+  to 27,420,402 bytes, 10 files without pdbs), and the call works from Windows 10 19041, so 19045 is covered. The WinRT type is touched only
+  when Settings, the menu or the wizard asks, never at start, so private bytes at rest do not change.
+- The setup wizard's resume flag (`BenchBar Setup Resume.lnk` in the Startup folder, which starts the tray with `--resume-setup`) is a file
+  `resume-setup` in the data folder when packaged, read when the tray next starts (at logon if open at logon is on, else when the person
+  opens BenchBar). A package cannot write a Startup shortcut, and a registry RunOnce value written from a package lands in its private hive.
+- Packaged: no update check through benchbar.exe, no banner, no Update Now, no "Copy Update Line", no "Check for Updates" in the menu or
+  About, no "Check for updates" switch in Settings; Settings and About say "Updates come from the Microsoft Store". The version mismatch
+  notice stays and loses its "Copy Install Line" button (one package: the install line is not its fix). The CLI inside WSL updates as
+  before.
 - The packaged gate is also inside `SelfUpdateClient` and `SelfUpdateLauncher` (they take `IPackageInfo`): a packaged tray gets the Store answer and `UpdateStartKind.StoreManaged` without running a process, so no surface (flyout, menu, About, Settings) can reach the zip self-update even if its button were shown. `App.RunUpdateCheckAsync` and `App.UpdateNow` return early on the same policy.
 - Settings shows the alias `%LOCALAPPDATA%\Microsoft\WindowsApps\benchbar.exe` when packaged, not the versioned package folder that changes on every update; the tray still runs the `benchbar.exe` next to itself.
-- `RegisterApplicationRestart("--restarted", RESTART_NO_CRASH | RESTART_NO_HANG)` runs only when packaged: unpackaged, `install.ps1` starts the tray again itself, and a second start would only raise the first one's flyout. A start with `--restarted` never counts a leftover `running` marker as a crash (Windows ended the earlier run on purpose; a crash or hang is never restarted) and never signals a running tray to open its flyout.
-- Two installs: packaged, when `%LOCALAPPDATA%\Programs\BenchBar\BenchBarTray.exe` exists, one dismissible notice in the BenchBar window and flyout with "Copy Uninstall Line" (the installer run as a script block with `-Uninstall`, which leaves no variable set in the window). The dismissal is `tray.two_installs_dismissed`; it is reset when the other copy is gone, so a later second install is told once more. The unpackaged tray says nothing: the named mutex is shared, and whichever tray started second exits, so the notice shows only when the packaged tray is the one that runs.
-- The logon checkbox listens to Checked and Unchecked, not Click: UI Automation's Toggle pattern flips a WPF CheckBox through `OnToggle` and raises no Click, so the request was never sent and the box kept the flipped value (shown On while the task stayed disabled). Whatever flipped the box, the handler puts it back to the model's value at once; the box changes only when the startup task's answer (after `RequestEnableAsync` or `Disable` plus a read) is published. The setup wizard's box does the same and re-reads the task when it opens. `LogonModel` runs one request at a time and ignores a toggle while one is in flight.
+- `RegisterApplicationRestart("--restarted", RESTART_NO_CRASH | RESTART_NO_HANG)` runs only when packaged: unpackaged, `install.ps1` starts
+  the tray again itself, and a second start would only raise the first one's flyout. A start with `--restarted` never counts a leftover
+  `running` marker as a crash (Windows ended the earlier run on purpose; a crash or hang is never restarted) and never signals a running
+  tray to open its flyout.
+- Two installs: packaged, when `%LOCALAPPDATA%\Programs\BenchBar\BenchBarTray.exe` exists, one dismissible notice in the BenchBar window and
+  flyout with "Copy Uninstall Line" (the installer run as a script block with `-Uninstall`, which leaves no variable set in the window). The
+  dismissal is `tray.two_installs_dismissed`; it is reset when the other copy is gone, so a later second install is told once more. The
+  unpackaged tray says nothing: the named mutex is shared, and whichever tray started second exits, so the notice shows only when the
+  packaged tray is the one that runs.
+- The logon checkbox listens to Checked and Unchecked, not Click: UI Automation's Toggle pattern flips a WPF CheckBox through `OnToggle` and
+  raises no Click, so the request was never sent and the box kept the flipped value (shown On while the task stayed disabled). Whatever
+  flipped the box, the handler puts it back to the model's value at once; the box changes only when the startup task's answer (after
+  `RequestEnableAsync` or `Disable` plus a read) is published. The setup wizard's box does the same and re-reads the task when it opens.
+  `LogonModel` runs one request at a time and ignores a toggle while one is in flight.
