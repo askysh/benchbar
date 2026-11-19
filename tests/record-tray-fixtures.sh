@@ -155,10 +155,18 @@ while IFS='|' read -r file cmd; do
 done < <(generated)
 
 # ---- generated text files: what the CLI prints, word for word, when it has no JSON
+# no_header_box: the text without the run's header box (the lines from the first "+-" line to
+# the next one)
+no_header_box() {
+  awk 'box == 0 && /^\+-.*-\+$/ { box = 1; next } box == 1 { if (/^\+-+\+$/) box = 2; next } { print }'
+}
+
 text_fixture() {
   local file="$1" new="$2"
   if [[ "$CHECK" == 1 ]]; then
-    if ! cmp -s "$new" "$FIXTURES/$file"; then
+    # the header box is as wide as its longest line, the bench path, which is not the same on every
+    # runner (a macOS TMPDIR is long): the box is left out of the comparison, the tray does not read it
+    if ! cmp -s <(no_header_box <"$new") <(no_header_box <"$FIXTURES/$file"); then
       printf 'windows/tray/fixtures/%s differs from what the CLI prints now:\n' "$file" >&2
       diff -u "$FIXTURES/$file" "$new" >&2 || true
       status=1
