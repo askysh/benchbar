@@ -19,7 +19,8 @@
     5. runs "benchbar.exe path install" to put that folder on your user PATH
     6. unless -NoTray: checks the .NET 10 Desktop Runtime for the tray app
        (offers to install it with winget), makes a Start menu shortcut, offers
-       a Startup shortcut and starts the tray app
+       a Startup shortcut, registers benchbar:// links for your user (no admin
+       rights) and starts the tray app
     7. runs "benchbar.exe doctor" and prints what it says, then what to do next
 
   A run over an earlier install is an update. It keeps your choices: it adds
@@ -46,8 +47,8 @@
   installer stops first and says what to do.
 
   To remove BenchBar from this PC, run it with -Uninstall. That removes the
-  tray app, the keepalive task, the shortcuts, the PATH entry and the files
-  in the install folder. It never touches WSL, a distro, your benches or
+  tray app, the keepalive task, the shortcuts, the benchbar:// registration,
+  the PATH entry and the files in the install folder. It never touches WSL, a distro, your benches or
   %USERPROFILE%\.wslconfig.
 
   When piped into iex there is no way to pass parameters, so these
@@ -558,6 +559,64 @@ function Install-BenchBar {
     try { if (Test-Path -LiteralPath $marker -PathType Leaf) { Remove-Item -LiteralPath $marker -Force } } catch { }
   }
 
+  # benchbar:// links: HKCU\Software\Classes\benchbar, per user, no admin
+  # rights. The tray writes the same values at its first start. The command
+  # passes the link as one quoted argument, which the tray reads as data.
+  $schemeKey = 'Software\Classes\benchbar'
+
+  function Get-SchemeCommand {
+    $key = $null
+    try {
+      $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("$schemeKey\shell\open\command")
+      if ($key) { return [string]$key.GetValue('') }
+    } catch { } finally { if ($key) { $key.Close() } }
+    return $null
+  }
+
+  # The program of a registry command: the quoted part, else the first word.
+  function Get-CommandExe([string]$Command) {
+    $text = "$Command".Trim()
+    if (-not $text) { return $null }
+    if ($text.StartsWith('"')) {
+      $end = $text.IndexOf('"', 1)
+      if ($end -gt 1) { return $text.Substring(1, $end - 1) }
+      return $null
+    }
+    $space = $text.IndexOf(' ')
+    if ($space -gt 0) { return $text.Substring(0, $space) }
+    return $text
+  }
+
+  # Register-BenchBarScheme: writes the registration for this install's tray.
+  # Returns 'registered', 'current' or 'other' (a program that is not a
+  # BenchBarTray.exe owns benchbar:// on this PC: left alone).
+  function Register-BenchBarScheme {
+    $command = '"' + $trayExe + '" "%1"'
+    $existing = Get-SchemeCommand
+    if ($existing) {
+      $exe = Get-CommandExe $existing
+      if (-not $exe -or ([IO.Path]::GetFileName($exe) -ine 'BenchBarTray.exe')) { return 'other' }
+      if (($exe -ieq $trayExe) -and ($existing.Trim() -ceq $command)) { return 'current' }
+    }
+    $root = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($schemeKey)
+    try {
+      $root.SetValue('', 'URL:BenchBar')
+      $root.SetValue('URL Protocol', '')
+      $icon = $root.CreateSubKey('DefaultIcon'); try { $icon.SetValue('', "$trayExe,0") } finally { $icon.Close() }
+      $open = $root.CreateSubKey('shell\open\command'); try { $open.SetValue('', $command) } finally { $open.Close() }
+    } finally { $root.Close() }
+    return 'registered'
+  }
+
+  # Remove-BenchBarScheme: removes the registration when it points to this
+  # install's tray app. Another program's registration stays.
+  function Remove-BenchBarScheme {
+    $exe = Get-CommandExe (Get-SchemeCommand)
+    if (-not $exe -or ($exe -ine $trayExe)) { return $false }
+    [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree($schemeKey, $false)
+    return $true
+  }
+
   function Get-StartMenuLink { return (Join-Path ([Environment]::GetFolderPath('Programs')) 'BenchBar.lnk') }
   function Get-StartupLink { return (Join-Path ([Environment]::GetFolderPath('Startup')) 'BenchBar Tray.lnk') }
   function Get-ResumeLink { return (Join-Path ([Environment]::GetFolderPath('Startup')) 'BenchBar Setup Resume.lnk') }
@@ -633,7 +692,7 @@ function Install-BenchBar {
   function Invoke-BenchBarUninstall {
     Say-Step 'Removing BenchBar from this PC'
     Say-Info "install folder: $installDir"
-    Say-Info 'This removes the tray app, the keepalive task, the shortcuts, the PATH entry and the BenchBar files.'
+    Say-Info 'This removes the tray app, the keepalive task, the shortcuts, the benchbar:// registration, the PATH entry and the BenchBar files.'
     Say-Info 'It does not touch WSL, your Linux distro, your benches or %USERPROFILE%\.wslconfig.'
     if (-not (Confirm-Choice 'Remove BenchBar now?' $true $false)) {
       Say-Info 'nothing was changed. To remove without being asked, run the installer again with -Yes (or set BENCHBAR_YES=1).'
@@ -665,6 +724,12 @@ function Install-BenchBar {
       try { if (Remove-BenchBarShortcut $link) { $removedLinks++ } } catch { Say-Warn "Could not remove ${link}: $(Get-UserMessage $_)" }
     }
     Say-Ok "$removedLinks shortcuts removed"
+
+    try {
+      if (Remove-BenchBarScheme) { Say-Ok 'benchbar:// registration removed' } else { Say-Info 'there was no benchbar:// registration of this install' }
+    } catch {
+      Say-Warn "Could not remove the benchbar:// registration: $(Get-UserMessage $_). Delete HKEY_CURRENT_USER\Software\Classes\benchbar in the Registry Editor."
+    }
 
     try {
       if (Remove-InstallDirFromUserPath) { Say-Ok 'removed from your user PATH (open terminals keep the old PATH)' } else { Say-Info 'the install folder was not on your user PATH' }
@@ -1108,6 +1173,17 @@ function Install-BenchBar {
           Say-Info 'no Startup shortcut'
         }
         [IO.File]::WriteAllText((Join-Path $installDir '.installed-shortcuts.txt'), ($recorded -join "`r`n") + "`r`n", (New-Object Text.UTF8Encoding $false))
+
+        # benchbar:// links open the tray (Raycast style launchers, scripts, bookmarks)
+        try {
+          switch (Register-BenchBarScheme) {
+            'registered' { Say-Ok 'benchbar:// links registered for your user' }
+            'current' { Say-Ok 'benchbar:// links are registered' }
+            default { Say-Info 'benchbar:// is registered to another program on this PC: left alone' }
+          }
+        } catch {
+          Say-Warn "Could not register benchbar:// links: $(Get-UserMessage $_). Everything else works; the tray tries again when it starts."
+        }
       }
     }
 
