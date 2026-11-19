@@ -86,6 +86,32 @@ public static class LinkRouter
         return null;
     }
 
+    /// <summary>
+    /// The arguments the tray reads its own flags from (<c>--resume-setup</c>, <c>--installed</c>, <c>--restarted</c>). When the first
+    /// argument is a link, the start came from the scheme's registry command, and everything after it is the link's own text split by
+    /// the command line, never the tray's flags: none.
+    /// </summary>
+    public static IReadOnlyList<string> OwnArguments(IReadOnlyList<string> args) =>
+        args.Count > 0 && args[0].StartsWith(Scheme + ":", StringComparison.OrdinalIgnoreCase) ? [] : args;
+
+    /// <summary>
+    /// Characters a link may not hold. The registry command is <c>"BenchBarTray.exe" "%1"</c>: a <c>"</c> ends the quoted link and what
+    /// follows becomes arguments of the tray, a <c>\</c> before the closing quote can swallow it, and the rest are what a command line
+    /// or shell treats specially. A real link percent encodes all of these. (<c>&amp;</c> stays: it separates query pairs, and no
+    /// launch goes through a shell.)
+    /// </summary>
+    private static bool HasCommandLineCharacter(string text) => text.IndexOfAny(['"', '\\', '^', '|', '<', '>', '`']) >= 0;
+
+    /// <summary>The longest piece of a link's own text a note repeats back.</summary>
+    private const int NoteLength = 40;
+
+    private static string Short(string text)
+    {
+        if (text.Length <= NoteLength) return text;
+        var cut = char.IsHighSurrogate(text[NoteLength - 1]) ? NoteLength - 1 : NoteLength; // never half of an emoji
+        return text[..cut] + "...";
+    }
+
     // --- parse ---
 
     private sealed record Parts(string[] Words, IReadOnlyList<(string Name, string Value)> Query);
@@ -94,7 +120,7 @@ public static class LinkRouter
     {
         parts = new Parts([], []);
         var text = link.Trim();
-        if (text.Length == 0 || text.Length > MaxLength || text.Any(c => char.IsControl(c) || char.IsWhiteSpace(c))) return false;
+        if (text.Length == 0 || text.Length > MaxLength || text.Any(c => char.IsControl(c) || char.IsWhiteSpace(c)) || HasCommandLineCharacter(text)) return false;
         if (!text.StartsWith(Scheme + ":", StringComparison.OrdinalIgnoreCase)) return false;
         var rest = text[(Scheme.Length + 1)..];
         var hash = rest.IndexOf('#');
@@ -177,9 +203,9 @@ public static class LinkRouter
                     ? new LinkOutcome.Explain("BenchBar knows no bench yet, so the link has nothing to act on.", LinkWhy.NoBench)
                     : new LinkOutcome.Explain("More than one bench: add ?bench=NAME to the link to say which one.", LinkWhy.NeedsBench);
             case NotFound nf:
-                return new LinkOutcome.Explain($"No bench named \"{nf.Query}\". The link uses the names and paths from benchbar list.", LinkWhy.BenchNotFound);
+                return new LinkOutcome.Explain($"No bench named \"{Short(nf.Query)}\". The link uses the names and paths from benchbar list.", LinkWhy.BenchNotFound);
             case Ambiguous am:
-                return new LinkOutcome.Explain($"More than one bench is named \"{am.Query}\": use its full path in ?bench= instead.", LinkWhy.BenchAmbiguous);
+                return new LinkOutcome.Explain($"More than one bench is named \"{Short(am.Query)}\": use its full path in ?bench= instead.", LinkWhy.BenchAmbiguous);
             default:
                 return new LinkOutcome.Ignore(LinkIgnore.UnknownRoute);
         }
@@ -188,7 +214,7 @@ public static class LinkRouter
         if (TakesSite(route) && siteQuery is { } wanted)
         {
             site = bench.Sites.FirstOrDefault(s => string.Equals(s, wanted, StringComparison.OrdinalIgnoreCase));
-            if (site is null) return new LinkOutcome.Explain($"{bench.Name} has no site named \"{wanted}\".", LinkWhy.SiteNotFound);
+            if (site is null) return new LinkOutcome.Explain($"{bench.Name} has no site named \"{Short(wanted)}\".", LinkWhy.SiteNotFound);
         }
         return new LinkOutcome.Run(route, bench.Path, site);
     }
@@ -235,11 +261,24 @@ public static class LinkRouter
         return afterUser > 0 && path[afterUser..] == rest;
     }
 
-    /// <summary>Collapses repeated slashes and drops a trailing one, the only differences a link can reasonably have.</summary>
+    /// <summary>
+    /// Collapses repeated slashes, drops a trailing one and resolves <c>.</c> and <c>..</c> (the Mac's <c>standardizedFileURL</c>); a
+    /// <c>..</c> at the root stays at the root.
+    /// </summary>
     internal static string NormalizePath(string path)
     {
-        var parts = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        return "/" + string.Join('/', parts);
+        var kept = new List<string>();
+        foreach (var part in path.Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (part == ".") continue;
+            if (part == "..")
+            {
+                if (kept.Count > 0) kept.RemoveAt(kept.Count - 1);
+                continue;
+            }
+            kept.Add(part);
+        }
+        return "/" + string.Join('/', kept);
     }
 
     // --- the log ---

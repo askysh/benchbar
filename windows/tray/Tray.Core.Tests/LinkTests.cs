@@ -139,7 +139,7 @@ public class LinkTests
     [InlineData("benchbar://update", LinkIgnore.UnknownRoute)]
     [InlineData("benchbar://up.evil.example", LinkIgnore.UnknownRoute)]
     [InlineData("benchbar://user@up", LinkIgnore.UnknownRoute)]
-    [InlineData("benchbar://up\"%20--x", LinkIgnore.UnknownRoute)]
+    [InlineData("benchbar://up\"%20--x", LinkIgnore.NotOurScheme)]
     public void WhatIsNotARouteIsIgnoredWithAFixedSentence(string link, string reason) =>
         Assert.Equal(reason, Assert.IsType<LinkOutcome.Ignore>(Route(link, Main)).Reason);
 
@@ -153,6 +153,76 @@ public class LinkTests
             if (link == "benchbar://up\n") Assert.IsType<LinkOutcome.Run>(outcome);
             else Assert.Equal(LinkIgnore.NotOurScheme, Assert.IsType<LinkOutcome.Ignore>(outcome).Reason);
         }
+    }
+
+    [Theory]
+    [InlineData("benchbar://up\"")]
+    [InlineData("benchbar://up\"%20--installed")]
+    [InlineData("benchbar://up?bench=x\\")]
+    [InlineData("benchbar://up^x")]
+    [InlineData("benchbar://up|x")]
+    [InlineData("benchbar://up<x")]
+    [InlineData("benchbar://up>x")]
+    [InlineData("benchbar://up`x")]
+    public void ALinkWithACommandLineCharacterIsIgnoredAndNeverRouted(string link)
+    {
+        Assert.Equal(LinkIgnore.NotOurScheme, Assert.IsType<LinkOutcome.Ignore>(Route(link, Main)).Reason);
+        Assert.StartsWith("other link, hash ", LinkRouter.LogLabel(link));
+        // the percent encoded spelling is the same text and works
+        Assert.IsType<LinkOutcome.Run>(Route("benchbar://up?bench=frappe-bench&x=%22%5C%5E", Main));
+    }
+
+    [Fact]
+    public void TheTrayReadsNoFlagsOfItsOwnWhenItWasStartedWithALink()
+    {
+        // the registry command is "BenchBarTray.exe" "%1": a link that smuggled a quote in would split into more arguments
+        string[] smuggled = ["benchbar://up", "--installed", "--restarted", "--resume-setup"];
+        Assert.Empty(LinkRouter.OwnArguments(smuggled));
+        Assert.Equal(new LaunchStart(true, false), LaunchStart.From(LinkRouter.OwnArguments(smuggled), firstRun: true, dismissed: false, updated: false));
+        Assert.False(LaunchStart.From(LinkRouter.OwnArguments(smuggled), false, false, false).Restarted);
+        Assert.DoesNotContain("--resume-setup", LinkRouter.OwnArguments(smuggled), StringComparer.OrdinalIgnoreCase);
+        Assert.Empty(LinkRouter.OwnArguments(["BENCHBAR:down", "--restarted"]));
+        // the tray's own starts keep their flags
+        string[] own = ["--restarted", "--resume-setup"];
+        Assert.Equal(own, LinkRouter.OwnArguments(own));
+        Assert.Empty(LinkRouter.OwnArguments([]));
+    }
+
+    [Fact]
+    public void TheNoteRepeatsOnlyTheStartOfALongBenchOrSiteName()
+    {
+        var longName = new string('a', LinkRouter.MaxLength - 40);
+        var missing = Assert.IsType<LinkOutcome.Explain>(Route("benchbar://up?bench=" + longName, Main));
+        Assert.Equal(LinkWhy.BenchNotFound, missing.Why);
+        Assert.True(missing.Message.Length < 200, missing.Message);
+        Assert.Contains(new string('a', 40) + "...", missing.Message);
+        Assert.DoesNotContain(new string('a', 41), missing.Message);
+
+        var site = Assert.IsType<LinkOutcome.Explain>(Route("benchbar://open?site=" + longName, Main));
+        Assert.Equal(LinkWhy.SiteNotFound, site.Why);
+        Assert.True(site.Message.Length < 200, site.Message);
+
+        // a short name is repeated whole, and a name cut inside an emoji does not leave half of it
+        Assert.Contains("\"nope\"", Assert.IsType<LinkOutcome.Explain>(Route("benchbar://up?bench=nope", Main)).Message);
+        var emoji = Assert.IsType<LinkOutcome.Explain>(Route("benchbar://up?bench=" + new string('a', 39) + "\U0001F600tail", Main));
+        Assert.DoesNotContain("\U0001F600", emoji.Message);
+        Assert.Contains(new string('a', 39) + "...", emoji.Message);
+    }
+
+    [Theory]
+    [InlineData("/home/akash/work/../frappe-bench")]
+    [InlineData("/home/akash/./frappe-bench/")]
+    [InlineData("/home//akash/x/y/../../frappe-bench")]
+    [InlineData("/../home/akash/frappe-bench")]
+    [InlineData("~/frappe-bench/../frappe-bench")]
+    public void ADotDotInABenchPathIsResolvedLikeTheMacDoes(string query) =>
+        Assert.Equal(Main.Path, Run("benchbar://up?bench=" + Uri.EscapeDataString(query), Main, Other).BenchPath);
+
+    [Fact]
+    public void ADotDotThatLeavesTheBenchStillNeedsAMatch()
+    {
+        Assert.Equal(LinkWhy.BenchNotFound, Assert.IsType<LinkOutcome.Explain>(Route("benchbar://up?bench=" + Uri.EscapeDataString("/home/akash/frappe-bench/.."), Main)).Why);
+        Assert.Equal(LinkWhy.BenchNotFound, Assert.IsType<LinkOutcome.Explain>(Route("benchbar://up?bench=" + Uri.EscapeDataString("/home/akash/frappe-bench/../v16-bench"), Main, Other)).Why);
     }
 
     [Fact]
@@ -277,11 +347,18 @@ public class LinkTests
 
     private sealed class FakeStore : ISchemeStore
     {
+        /// <summary>This user's key (HKCU).</summary>
         public string? Command { get; set; }
+
+        /// <summary>The machine's key (HKLM): shown in the merged view when this user has none.</summary>
+        public string? MachineCommand { get; set; }
+
         public string? Icon { get; private set; }
         public int Writes { get; private set; }
 
-        public string? ReadCommand() => Command;
+        public string? ReadCommand() => Command ?? MachineCommand;
+
+        public string? ReadUserCommand() => Command;
 
         public void Write(string command, string iconPath)
         {
@@ -324,6 +401,40 @@ public class LinkTests
         Assert.Equal(0, other.Writes);
         Assert.Equal("benchbar:// is registered to another program: left alone", UrlSchemeRegistration.LogLine(SchemeResult.OtherProgram));
         Assert.Null(UrlSchemeRegistration.LogLine(SchemeResult.Current));
+    }
+
+    [Fact]
+    public void AMachineWideRegistrationOfAnotherProgramIsSeenAndNotShadowed()
+    {
+        var machine = new FakeStore { MachineCommand = "\"C:\\Program Files\\Other\\other.exe\" \"%1\"" };
+        Assert.Equal(SchemeResult.OtherProgram, UrlSchemeRegistration.Ensure(machine, Exe, _ => true));
+        Assert.Equal(0, machine.Writes);
+        Assert.Null(machine.Command);
+
+        // a machine wide copy of the tray that is gone is replaced, in this user's key only
+        var gone = new FakeStore { MachineCommand = "\"D:\\old\\BenchBarTray.exe\" \"%1\"" };
+        Assert.Equal(SchemeResult.Repaired, UrlSchemeRegistration.Ensure(gone, Exe, _ => false));
+        Assert.Equal(UrlSchemeRegistration.CommandFor(Exe), gone.Command);
+
+        // this user's own entry wins over the machine's, as in the merged view
+        var both = new FakeStore { Command = UrlSchemeRegistration.CommandFor(Exe), MachineCommand = "\"C:\\Other\\other.exe\" \"%1\"" };
+        Assert.Equal(SchemeResult.Current, UrlSchemeRegistration.Ensure(both, Exe, _ => true));
+        Assert.Equal(0, both.Writes);
+    }
+
+    [Theory]
+    [InlineData(@"C:\Program Files\dotnet\dotnet.exe")]
+    [InlineData(@"C:\Users\akash\src\BenchBarTray.Tests\testhost.exe")]
+    [InlineData(@"C:\Users\akash\BenchBarTray.exe.bak")]
+    public void OnlyBenchBarTrayExeRegistersTheScheme(string exe)
+    {
+        var store = new FakeStore();
+        Assert.Equal(SchemeResult.NotTray, UrlSchemeRegistration.Ensure(store, exe, _ => true));
+        Assert.Null(store.Command);
+        Assert.Equal(0, store.Writes);
+        Assert.Null(UrlSchemeRegistration.LogLine(SchemeResult.NotTray));
+        // a lower case or forward slash spelling of the tray is still the tray
+        Assert.Equal(SchemeResult.Registered, UrlSchemeRegistration.Ensure(new FakeStore(), "c:/bb/benchbartray.exe", _ => true));
     }
 
     [Fact]

@@ -13,7 +13,14 @@ internal sealed class RegistrySchemeStore : ISchemeStore
 {
     private const string KeyPath = @"Software\Classes\" + LinkRouter.Scheme;
 
+    /// <summary>The merged view (this user's key, then the machine's), which is what a link click uses.</summary>
     public string? ReadCommand()
+    {
+        using var key = Registry.ClassesRoot.OpenSubKey(LinkRouter.Scheme + @"\shell\open\command");
+        return key?.GetValue(null) as string;
+    }
+
+    public string? ReadUserCommand()
     {
         using var key = Registry.CurrentUser.OpenSubKey(KeyPath + @"\shell\open\command");
         return key?.GetValue(null) as string;

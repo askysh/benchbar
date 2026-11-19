@@ -94,7 +94,9 @@ public partial class App : Application, ITrayHost
             args.SetObserved();
         };
 
-        var resume = e.Args.Contains(StartupShortcut.ResumeArgument, StringComparer.OrdinalIgnoreCase);
+        // a start from a benchbar:// link has no flags of its own: whatever follows the link on the command line is the link's text
+        var ownArgs = LinkRouter.OwnArguments(e.Args);
+        var resume = ownArgs.Contains(StartupShortcut.ResumeArgument, StringComparer.OrdinalIgnoreCase);
         var startLink = LinkRouter.FromArguments(e.Args);
         if (!TakeSingleInstance(resume, startLink))
         {
@@ -170,7 +172,7 @@ public partial class App : Application, ITrayHost
         // read before NoteVersion saves the file: a config with no tray object means no tray ran here before (an unreadable one is not that)
         var firstRun = !_config.HadTraySection && !_config.Unreadable;
         var updated = NoteVersion();
-        _launchStart = LaunchStart.From(e.Args, firstRun, _config.WizardDismissed, updated);
+        _launchStart = LaunchStart.From(ownArgs, firstRun, _config.WizardDismissed, updated);
         if (resume)
         {
             // the one shot flag did its job: take it away before anything can fail

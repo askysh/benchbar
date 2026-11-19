@@ -117,6 +117,7 @@ Browsers ask before a page opens an app, but they also offer "always
 allow this site", and after that a page can open any route above without a
 click. That is the risk of the scheme: a page you visit can stop or restart
 your bench or open Terminal windows. **Settings, Links, Ask before a link acts**
+(on Windows: **Settings > Ask before a link acts**, in the tray's Settings window)
 makes BenchBar ask first for `up`, `down`, `restart`, `console` and `db`. The
 routes `open`, `logs`, `window`, `doctor` and `editor` never ask. The setting is
 off by default so Raycast and Shortcuts keep working; see

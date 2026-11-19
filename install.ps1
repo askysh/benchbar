@@ -564,10 +564,14 @@ function Install-BenchBar {
   # passes the link as one quoted argument, which the tray reads as data.
   $schemeKey = 'Software\Classes\benchbar'
 
-  function Get-SchemeCommand {
+  # The command Windows would run for a benchbar:// link: this user's key
+  # first, then the machine's (the merged HKEY_CLASSES_ROOT view). -UserOnly
+  # reads this user's key alone, which is what Remove-BenchBarScheme changes.
+  function Get-SchemeCommand([switch]$UserOnly) {
     $key = $null
     try {
-      $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("$schemeKey\shell\open\command")
+      if ($UserOnly) { $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("$schemeKey\shell\open\command") }
+      else { $key = [Microsoft.Win32.Registry]::ClassesRoot.OpenSubKey('benchbar\shell\open\command') }
       if ($key) { return [string]$key.GetValue('') }
     } catch { } finally { if ($key) { $key.Close() } }
     return $null
@@ -588,15 +592,22 @@ function Install-BenchBar {
   }
 
   # Register-BenchBarScheme: writes the registration for this install's tray.
-  # Returns 'registered', 'current' or 'other' (a program that is not a
-  # BenchBarTray.exe owns benchbar:// on this PC: left alone).
+  # One rule, the same as the tray's (UrlSchemeRegistration.Ensure): the same
+  # program with another argument form is put right; a BenchBarTray.exe that
+  # is gone is replaced; a BenchBarTray.exe that is still there (another copy)
+  # and any other program are left alone. Returns 'registered', 'current',
+  # 'copy' (another existing BenchBarTray.exe owns it) or 'other'.
   function Register-BenchBarScheme {
     $command = '"' + $trayExe + '" "%1"'
     $existing = Get-SchemeCommand
     if ($existing) {
       $exe = Get-CommandExe $existing
       if (-not $exe -or ([IO.Path]::GetFileName($exe) -ine 'BenchBarTray.exe')) { return 'other' }
-      if (($exe -ieq $trayExe) -and ($existing.Trim() -ceq $command)) { return 'current' }
+      if ($exe -ieq $trayExe) {
+        if ($existing.Trim() -ceq $command) { return 'current' }
+      } elseif (Test-Path -LiteralPath $exe -PathType Leaf) {
+        return 'copy'
+      }
     }
     $root = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($schemeKey)
     try {
@@ -611,7 +622,7 @@ function Install-BenchBar {
   # Remove-BenchBarScheme: removes the registration when it points to this
   # install's tray app. Another program's registration stays.
   function Remove-BenchBarScheme {
-    $exe = Get-CommandExe (Get-SchemeCommand)
+    $exe = Get-CommandExe (Get-SchemeCommand -UserOnly)
     if (-not $exe -or ($exe -ine $trayExe)) { return $false }
     [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree($schemeKey, $false)
     return $true
@@ -1179,6 +1190,7 @@ function Install-BenchBar {
           switch (Register-BenchBarScheme) {
             'registered' { Say-Ok 'benchbar:// links registered for your user' }
             'current' { Say-Ok 'benchbar:// links are registered' }
+            'copy' { Say-Info 'benchbar:// links point to another BenchBar copy that is still there: left alone' }
             default { Say-Info 'benchbar:// is registered to another program on this PC: left alone' }
           }
         } catch {

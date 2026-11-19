@@ -484,13 +484,17 @@ The tray registers the scheme for your user (under
 `HKEY_CURRENT_USER\Software\Classes\benchbar`, so no administrator
 rights) the first time it starts, and the installer writes the same
 values. Uninstalling removes them. If another program already owns
-`benchbar://`, the tray leaves it alone, and so does the installer.
+`benchbar://` (for you or for the whole PC), or another copy of
+`BenchBarTray.exe` that is still there does, the tray leaves it alone, and
+so does the installer. A registration of a copy that is gone is replaced.
 
 If the tray is running, a second start with a link hands the link to it
 and quits; if not, the link starts the tray first and the link waits for
 its first look at your benches. A link that is not one of the routes, or
 is not well formed, does nothing and is logged by its action only (or a
 short hash), never with the bench, the site or the address it carried.
+A link that holds a double quote, a backslash or one of `^ | < >` is
+ignored too; a real link writes those as `%22`, `%5C` and so on.
 
 Any web page can open a `benchbar://` link, and a browser can remember
 "always allow". **Settings > Ask before a link acts** makes the tray ask
