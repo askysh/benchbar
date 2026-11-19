@@ -42,12 +42,14 @@ if OUT="$(python3 -I "$COPY/scripts/docs-reference.py" --check 2>&1)"; then fail
 assert_contains "$OUT" "site.md: a generated table differs from the code"
 cp "$ROOT/lib/frappe-local/commands.sh" "$COPY/lib/frappe-local/commands.sh"
 # a page that names a tool the server does not have (MCP-6): in the other direction, a tool the pages do not name, is checked above
+# shellcheck disable=SC2016 # the backticks are Markdown
 printf '
 The tool `benchbar_no_such_tool` does nothing.
 ' >>"$COPY/docs/guides/agents.md"
 if OUT="$(python3 -I "$COPY/scripts/docs-reference.py" --check 2>&1)"; then fail "a page naming a tool the server lacks passed the docs reference check"; fi
 assert_contains "$OUT" "agents.md names benchbar_no_such_tool, which is not an MCP tool of the server"
 cp "$ROOT/docs/guides/agents.md" "$COPY/docs/guides/agents.md"
+# shellcheck disable=SC2016 # the backticks are Markdown
 sed -i.bak 's/`benchbar_where`/benchbar_where/g' "$COPY/docs/reference/cli/mcp.md"
 if OUT="$(python3 -I "$COPY/scripts/docs-reference.py" --check 2>&1)"; then fail "a tool the pages do not name passed the docs reference check"; fi
 assert_contains "$OUT" "mcp.md does not name the MCP tool benchbar_where"
