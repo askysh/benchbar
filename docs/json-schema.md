@@ -160,8 +160,10 @@ Which line carries it:
   `error` when it is not 0, and for an action tool `changed`, `warnings` and
   `next_actions` copied from the `done` line next to `result`. `exit_code`
   stays for readers of the first release. A tool error the server raises
-  itself, before it runs the CLI (an invalid argument, an unknown bench), is
-  text only.
+  itself carries `exit` and `error` too: an invalid argument, a bench that is
+  not known, a plan that is missing or stale, and a plan the person did not
+  approve are `exit` 1; a call that ran out of time is 124 and a benchbar
+  that could not be started is 127.
 - A command with no JSON mode (`fg`, `watch`, `console`, `db`, `docs`,
   `mcp`, `help`, `mariadb-password`, `path` and the groups `site`, `app`,
   `ports`, `lock`, `profile`, `share`) has no envelope: they are terminals,

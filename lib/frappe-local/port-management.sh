@@ -198,7 +198,7 @@ fl_pm_hosts_batch() {
 fl_pm_jstep() { if declare -F fl_jsonl_step >/dev/null; then fl_jsonl_step "$@"; fi; }
 fl_pm_changed() { if declare -F fl_changed >/dev/null; then fl_changed "$@"; fi; }
 fl_cmd_ports() {
-  local sub="${1:-}" token mode i d current offset running
+  local sub="${1:-}" token mode i d current offset running old
   [[ "$#" == 0 ]] || shift
   case "$sub" in
     plan|setup|apply)
@@ -229,9 +229,10 @@ fl_cmd_ports() {
     mode)
       mode="${1:-}"; [[ "$mode" == automatic || "$mode" == fixed ]] || { fl_fail 'Mode must be automatic or fixed.'; return 1; }
       fl_bench_load "${OPT_BENCH_DIR:-}"; fl_require_bench
+      old="$(fl_pm_mode "$FL_BENCH_DIR")|$(fl_bstate_get PORT_RESERVATION 2>/dev/null || true)"
       fl_bstate_set PORT_MODE "$mode"; fl_bstate_set PORT_RESERVATION "$(fl_pm_current)"
       if [[ "${FL_DRY_RUN:-0}" == 1 ]]; then fl_info "dry-run: would set port mode to $mode. Nothing was changed."
-      else fl_changed ports "$FL_BENCH_DIR" "port mode ${mode}"; fl_ok "Port mode: $mode. Existing ports are unchanged."; fi ;;
+      else [[ "$old" == "${mode}|$(fl_pm_current)" ]] || fl_changed ports "$FL_BENCH_DIR" "port mode ${mode}"; fl_ok "Port mode: $mode. Existing ports are unchanged."; fi ;;
     apply)
       token="${1:-}"; [[ "$#" == 0 ]] || shift
       [[ "${FL_ASSUME_YES:-0}" == 1 ]] || { fl_fail 'Review ports plan, then pass its token with --yes.'; return 1; }

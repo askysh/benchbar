@@ -7,15 +7,58 @@
 # lands in one of the two lists or this test fails, so no command can skip the envelope by being forgotten.
 # shellcheck source=tests/lib/agent-contracts-fixtures.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/agent-contracts-fixtures.sh"
-make_second_bench
+# a second bench on its own ports (the same ports as the first would be a port conflict that stops up)
+B2="$HOME/dev/second-bench"
+make_fake_bench "$B2" second
+cat >"$B2/sites/common_site_config.json" <<JSON
+{"default_site": "second", "redis_cache": "redis://127.0.0.1:13001", "redis_queue": "redis://127.0.0.1:11001", "socketio_port": 9001, "webserver_port": 8001}
+JSON
+printf 'port 11001\n' >"$B2/config/redis_queue.conf"; printf 'port 13001\n' >"$B2/config/redis_cache.conf"
 export BENCHBAR_LABS=lan-rooms,quick-switch
 export MOCK_KICKSTART_PING=200
 NOBENCH="$HOME/no-such-bench"
 
+# the fixtures the success rows need: real git apps with a remote, a second site, a team config repo,
+# a release to compare with, a server to pull from, and Open as on for the users row
+export MOCK_GIT_REAL=1
+REMOTES="$TMP_DIR/remotes"; mkdir -p "$REMOTES" "$TMP_DIR/x"
+for a in frappe erpnext; do
+  printf '%s\n' "$a" >"$BENCH/apps/$a/README"
+  (cd "$BENCH/apps/$a" && git init -q -b version-15 . && git add -A && git -c user.email=t@example.com -c user.name=t commit -q -m init \
+    && git clone -q --bare . "$REMOTES/$a.git" && git remote add origin "file://$REMOTES/$a.git" && git fetch -q origin && git branch -q -u origin/version-15)
+done
+mkdir -p "$BENCH/sites/newsite"; printf '{"db_name": "_newsite"}\n' >"$BENCH/sites/newsite/site_config.json"
+mkdir -p "$TMP_DIR/team-config/profiles"
+(cd "$TMP_DIR/team-config" && git init -q -b main . && printf 'base = "v15-lts"\ndescription = "Team A"\n' >profiles/team-a.toml && git add -A \
+  && git -c user.email=t@example.com -c user.name=t commit -q -m profiles && git init -q --bare "$REMOTES/team-config.git" \
+  && git remote add origin "file://$REMOTES/team-config.git" && git push -q origin main)
+printf '{"url": "https://api.github.com/repos/askysh/benchbar/releases/1", "html_url": "https://github.com/askysh/benchbar/releases/tag/v%s", "tag_name": "v%s", "draft": false}\n' "$VER" "$VER" >"$MOCK_STATE/release.json"
+RS="erp.example.com"; RB="$MOCK_STATE/remote/home/frappe-bench"; BK="$RB/sites/$RS/private/backups"
+mkdir -p "$BK" "$RB/env/bin"
+cp "$ROOT/tests/mocks/frappe-python" "$RB/env/bin/python"; chmod +x "$RB/env/bin/python"
+for a in frappe erpnext; do
+  mkdir -p "$RB/apps/$a/.git"; printf 'ref: refs/heads/version-15\n' >"$RB/apps/$a/.git/HEAD"
+  printf 'https://github.com/frappe/%s.git\n' "$a" >"$RB/apps/$a/.git/origin_url"
+done
+printf 'frappe  15.40.0 version-15\nerpnext 15.30.0 version-15\n' >"$RB/sites/$RS/installed_apps"
+printf '{"db_name": "_prod", "db_password": "proddbpw"}' >"$RB/sites/$RS/site_config.json"
+gzip -c </dev/null >"$BK/20260925_020000-erp_example_com-database.sql.gz"
+mktar "$BK/20260925_020000-erp_example_com-files.tar"
+mktar "$BK/20260925_020000-erp_example_com-private-files.tar"
+cp "$RB/sites/$RS/site_config.json" "$BK/20260925_020000-erp_example_com-site_config_backup.json"
+printf '{\n "db_name": "_macdev",\n "db_password": "fake-db-pw",\n "developer_mode": 1\n}\n' >"$BENCH/sites/macdev/site_config.json"
+BENCHBAR_SUDO=gui run_fm site open-as on macdev --yes --bench-dir "$BENCH"
+assert_eq "0" "$CODE" "$OUT"
+
 # commands with no JSON mode: a terminal program, a text only helper, or a group that prints its usage
 NO_JSON=" fg watch console db docs mcp help mariadb-password path site app lock profile share lan-guard ports profile-show "
 
-# key|args that succeed|args that fail ("-" for none). $B is the bench, $N a folder that is no bench.
+# key|args that succeed|args that fail ("-" for none)|exit of the success row (default 0)
+# $B is the bench, $NOBENCH a folder that is no bench; @TOKEN@ is the token of `ports plan` for the bench.
+# The rows run in this order, on one fixture bench: up before open and users, create before export and import.
+# The last field is for a row that cannot exit 0 for an agent: a person's decision (labs on, share setup, start,
+# code, invite, open-as and teardown, lan-guard remove and allow-node) is refused under --for-agent with exit 1
+# (2 for labs on), and with nothing shared (a person has to start it) the commands of a room refuse with exit 1.
 ROWS="
 install|install --dry-run|install
 adopt|adopt $BENCH --dry-run|adopt $NOBENCH --dry-run
@@ -27,79 +70,79 @@ list|list|-
 scan|scan $HOME|scan
 register|register $B2|register $NOBENCH
 up|up|up --bench-dir $NOBENCH
-down|down|down --bench-dir $NOBENCH
+open|open --print-url|open --bench-dir $NOBENCH
+users|users|users --bench-dir $NOBENCH
 restart|restart|restart --bench-dir $NOBENCH
+down|down|down --bench-dir $NOBENCH
 logs|logs --no-follow|logs --no-follow --bench-dir $NOBENCH
 autostart|autostart on|autostart --bench-dir $NOBENCH
 listen|listen local|listen bogus
-uninstall-service|uninstall-service --dry-run|uninstall-service --all --bench-dir $NOBENCH
-open|open --print-url|open --bench-dir $NOBENCH
-users|users|users --bench-dir $NOBENCH
-pull|pull host:site --dry-run|pull
-report|report --print|report --bench-dir $NOBENCH
+uninstall-service|uninstall-service --dry-run --yes|uninstall-service --all --bench-dir $NOBENCH
+pull|pull prod:erp.example.com --as copy1 --dry-run|pull
+report|report --out $TMP_DIR/report|report --bogus
 self-update|self-update --check|self-update --bogus
 where|where|-
 commands|commands|-
 ports plan|ports plan -- $BENCH|ports plan -- $NOBENCH
 ports setup|ports setup --dry-run -- $BENCH|ports setup -- $NOBENCH
-ports apply|ports apply BADTOKEN --yes -- $BENCH|ports apply
+ports apply|ports apply @TOKEN@ --yes -- $BENCH|ports apply
 ports check|ports check|ports check --bench-dir $NOBENCH
 ports mode|ports mode fixed|ports mode bogus
 site list|site list|site list --bench-dir $NOBENCH
 site add|site add s3 --dry-run|site add --bench-dir $NOBENCH
 site default|site default macdev|site default nosuchsite
 site open-as|site open-as status|site open-as bogus
-site hosts|site hosts|site hosts --bench-dir $NOBENCH
+site hosts|site hosts --yes|site hosts --bench-dir $NOBENCH
 site backup|site backup macdev|site backup nosuchsite
 site backups|site backups macdev|site backups nosuchsite
-site restore|site restore macdev --from nonexist --dry-run|site restore nosuchsite --from nonexist --dry-run
+site restore|site restore macdev --from nonexist --dry-run|site restore --dry-run
 site drop|site drop newsite --confirm-site newsite --dry-run|site drop nosuchsite --confirm-site nosuchsite --dry-run
 app list|app list|app list --bench-dir $NOBENCH
 app add|app add frappe --dry-run|app add --dry-run
-app install|app install erpnext --site macdev|app install nosuchapp --site nosuchsite
+app install|app install erpnext --site macdev --yes|app install nosuchapp --site nosuchsite
 app update|app update frappe --dry-run|app update nosuchapp --dry-run
 app focus|app focus --list|app focus nosuchapp
-app unfocus|app unfocus nosuchapp|app unfocus
-lock check|lock check|lock check --bench-dir $NOBENCH
-lock write|lock write --lock $TMP_DIR/benchbar.toml|lock write --bench-dir $NOBENCH
-lock apply|lock apply|lock apply --bench-dir $NOBENCH
+app unfocus|app unfocus erpnext|app unfocus
+lock write|lock write --yes --lock $TMP_DIR/benchbar.toml|lock write --bench-dir $NOBENCH
+lock check|lock check --lock $TMP_DIR/benchbar.toml|lock check --bench-dir $NOBENCH
+lock apply|lock apply --yes --lock $TMP_DIR/benchbar.toml|lock apply --bench-dir $NOBENCH
 profile list|profile list|-
-profile create|profile create envprof --from-bench $BENCH|profile create envprof --from-bench $NOBENCH
-profile export|profile export v15-lts --plan|profile export nosuchprofile --plan
-profile import|profile import $TMP_DIR/none.toml --plan|profile import $NOBENCH --plan
-profile subscribe|profile subscribe $NOBENCH --plan|profile subscribe
+profile create|profile create envprof --from-bench $BENCH --yes|profile create envprof --from-bench $NOBENCH
+profile export|profile export envprof --out $TMP_DIR/x/acme.toml --yes|profile export nosuchprofile --plan
+profile import|profile import $TMP_DIR/x/acme.toml --yes|profile import $NOBENCH --plan
+profile subscribe|profile subscribe file://$REMOTES/team-config.git --yes|profile subscribe
 profile update|profile update --all --plan|profile update nosuchprofile --plan
-profile remove|profile remove nosuchprofile --yes|profile remove
-profile check|profile check v15-lts|profile check nosuchprofile
-labs|labs|labs nosuchverb
+profile remove|profile remove acme --yes|profile remove
+profile check|profile check envprof|profile check nosuchprofile
+labs|labs|labs on
 labs list|labs list|-
-labs on|labs on lan-rooms|labs on nosuchlab
+labs on|labs on lan-rooms|labs on nosuchlab|2
 labs off|labs off lan-rooms|labs off nosuchlab
 labs status|labs status lan-rooms|labs status nosuchlab
-lan-guard|lan-guard|lan-guard nosuchverb
+lan-guard|lan-guard install --dry-run|lan-guard nosuchverb
 lan-guard install|lan-guard install --dry-run|lan-guard install
 lan-guard status|lan-guard status|-
-lan-guard remove|lan-guard remove|lan-guard remove
-lan-guard allow-node|lan-guard allow-node|lan-guard allow-node
-share setup|share setup --dry-run|share setup --site nosuchsite
+lan-guard remove|lan-guard remove|lan-guard remove|1
+lan-guard allow-node|lan-guard allow-node|lan-guard allow-node|1
+share setup|share setup --dry-run|share setup --site nosuchsite|1
 share users|share users|share users --site nosuchsite
-share preflight|share preflight --static|-
-share start|share start --dry-run|share start
+share preflight|share preflight --static|-|1
+share start|share start --dry-run|share start|1
 share stop|share stop|-
-share extend|share extend --by 1h|share extend
+share extend|share extend --by 1h|share extend|1
 share status|share status|-
-share code|share code|-
-share invite|share invite|-
-share lock|share lock|-
-share unlock|share unlock|-
+share code|share code|-|1
+share invite|share invite|-|1
+share lock|share lock|-|1
+share unlock|share unlock|-|1
 share people|share people|-
 share devices|share devices|-
-share remove|share remove nobody --yes|share remove
-share revoke|share revoke nobody --yes|share revoke
-share assign|share assign nobody nowhere|share assign
-share log|share log --limit 0|-
-share open-as|share open-as nobody|share open-as
-share teardown|share teardown --yes|-
+share remove|share remove d_0123abcd --yes|share remove|1
+share revoke|share revoke d_0123abcd --yes|share revoke|1
+share assign|share assign d_0123abcd nowhere|share assign|1
+share log|share log --limit 5|-
+share open-as|share open-as nobody|share open-as|1
+share teardown|share teardown --yes|-|1
 "
 
 BENCHBAR_LABS="" run_fm commands --json
@@ -165,21 +208,80 @@ PY
   if [[ "$rc" != "0" ]]; then FAILS="${FAILS}"$'\n'"  ${msg##*AssertionError: } || stdout: $(head -c 250 "$STREAM" | tr '\n' ' ')"; fi
 }
 
-while IFS='|' read -r key ok_args bad_args; do
+# commands whose success row changes something in this fixture: changed[] must name it
+CHANGES="|register|app install|lock write|profile create|"
+while IFS='|' read -r key ok_args bad_args ok_exit; do
   [[ -n "$key" ]] || continue
   # ENVELOPE_ONLY=REGEX: only the rows whose key matches, while a row is being fixed
   [[ -z "${ENVELOPE_ONLY:-}" || "$key" =~ $ENVELOPE_ONLY ]] || continue
   mutating="$(python3 -I -c 'import json,sys; print(next(c["mutating"] for c in json.load(open(sys.argv[1]))["commands"] if c["name"] == sys.argv[2]))' "$TMP_DIR/commands-labs.json" "$key")"
+  mut="$([[ "$mutating" == "True" ]] && echo yes || echo no)"
+  # open and users need a bench that serves (a listener on its web port); restart and later rows need the ports free again
+  case "$key" in
+    open) add_listener 8000 4242 python; add_listener 13000 4243 redis-server ;;
+    restart) { grep -v -E "^(8000|13000) " "$MOCK_LISTEN" || true; } >"$MOCK_LISTEN.new"; mv "$MOCK_LISTEN.new" "$MOCK_LISTEN" ;;
+  esac
+  if [[ "$ok_args" == *@TOKEN@* ]]; then
+    token="$("$FM" ports plan --json -- "$BENCH" </dev/null 2>/dev/null | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["token"])')"
+    ok_args="${ok_args//@TOKEN@/$token}"
+  fi
   # shellcheck disable=SC2086
   run_events --for-agent $ok_args
-  check "$key (success)" "$([[ "$mutating" == "True" ]] && echo yes || echo no)"
+  [[ "$CODE" == "${ok_exit:-0}" ]] || FAILS="${FAILS}"$'\n'"  ${key} (success): exit ${CODE}, not ${ok_exit:-0} || stdout: $(head -c 200 "$STREAM" | tr '\n' ' ') || stderr: $(head -c 200 "$STREAM.err" | tr '\n' ' ')"
+  check "$key (success)" "$mut"
+  if [[ "$CHANGES" == *"|${key}|"* ]]; then
+    [[ "$(python3 -I -c 'import json,sys; print(len(json.loads([l for l in open(sys.argv[1]) if l.strip()][-1])["changed"]))' "$STREAM")" -ge 1 ]] \
+      || FAILS="${FAILS}"$'\n'"  ${key} (success): changed[] is empty, but the run changed something"
+  fi
   if [[ "$bad_args" != "-" ]]; then
     # shellcheck disable=SC2086
     run_events --for-agent $bad_args
-    check "$key (failure)" "$([[ "$mutating" == "True" ]] && echo yes || echo no)"
+    [[ "$CODE" != "0" ]] || FAILS="${FAILS}"$'\n'"  ${key} (failure): exit 0, but the row must fail"
+    check "$key (failure)" "$mut"
   fi
 done <<<"$ROWS"
 [[ -z "$FAILS" ]] || fail "commands without the envelope:$FAILS"
+
+# ---------------------------------------------------------------- a second run changes nothing
+
+# changed_n: how many entries the last done line has in changed[]
+changed_n() { python3 -I -c 'import json,sys; print(len(json.loads([l for l in open(sys.argv[1]) if l.strip()][-1])["changed"]))' "$STREAM"; }
+# again FIRST ARGS...: the command runs twice and exits 0 both times. FIRST is "changes" (the first run
+# changed something, so the second run is a real "nothing to do") or "any".
+again() {
+  local first="$1"; shift
+  run_events --for-agent "$@"
+  assert_eq "0" "$CODE" "$* (first run): $(head -c 300 "$STREAM.err")"
+  [[ "$first" != "changes" ]] || assert_eq "1" "$([[ "$(changed_n)" -ge 1 ]] && echo 1 || echo 0)" "$* (first run records what it changed)"
+  run_events --for-agent "$@"
+  assert_eq "0" "$CODE" "$* (second run): $(head -c 300 "$STREAM.err")"
+  assert_eq "0" "$(changed_n)" "$* (second run: changed is empty)"
+}
+if [[ -z "${ENVELOPE_ONLY:-}" ]]; then
+  again changes autostart off
+  again any listen local
+  again changes ports mode automatic --bench-dir "$BENCH"
+  again any ports mode fixed --bench-dir "$BENCH"
+  again any register "$B2"
+  again any app install erpnext --site macdev --yes
+fi
+
+# ---------------------------------------------------------------- the other output modes
+
+# --jsonl on a read, --jsonl on a changer and plain --json on a changer end with the envelope too
+if [[ -z "${ENVELOPE_ONLY:-}" ]]; then
+  run_events --jsonl list
+  check "list (--jsonl read)" no
+  run_events --jsonl site default macdev
+  check "site default (--jsonl changer)" yes
+  run_events --json site default macdev
+  check "site default (--json changer)" yes
+  run_events --jsonl site default nosuchsite
+  check "site default (--jsonl failure)" yes
+  [[ -z "$FAILS" ]] || fail "output modes without the envelope:$FAILS"
+  # the first uninstall removes the service of the bench: the last run, nothing uses the bench after it
+  again changes uninstall-service --yes --bench-dir "$BENCH"
+fi
 
 # ---------------------------------------------------------------- the MCP server: the same fields in structuredContent
 

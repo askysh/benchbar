@@ -580,9 +580,16 @@ FL_READ_BUF=""
 FL_DOC_ENVELOPED=0
 
 fl_read_env_begin() {
-  FL_READ_ENV=1
-  FL_READ_BUF="${FL_STATE_DIR}/.read-doc.$$"
   [[ -d "$FL_STATE_DIR" ]] || mkdir -p "$FL_STATE_DIR" 2>/dev/null || true
+  # the state folder first; when it is not writable the temp folder holds the
+  # document (fl_read_env_finish removes the file on every exit)
+  FL_READ_BUF="${FL_STATE_DIR}/.read-doc.$$"
+  if ! : >"$FL_READ_BUF" 2>/dev/null; then
+    FL_READ_BUF="${TMPDIR:-/tmp}/.benchbar-read-doc.$$"
+    # no place to keep the document back: the read prints as it did before the envelope
+    : >"$FL_READ_BUF" 2>/dev/null || { FL_READ_BUF=""; return 0; }
+  fi
+  FL_READ_ENV=1
   exec 8>&1 1>"$FL_READ_BUF"
 }
 

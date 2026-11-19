@@ -587,11 +587,11 @@ def unknown_bench_error(arguments):
         return None
     known = known_bench_paths()
     if known is None:
-        return text_result("could not read the bench list (benchbar list --json); not touching %s" % bench, is_error=True)
+        return failed_result("could not read the bench list (benchbar list --json); not touching %s" % bench, 1)
     if os.path.realpath(bench) not in known:
-        return text_result("%s is not a bench benchbar knows (registered, remembered or with a service; see benchbar_list, "
-                           "where adopted says which); nothing was changed. Register it first in a terminal: "
-                           "benchbar register %s" % (bench, shlex.quote(bench)), is_error=True)
+        return failed_result("%s is not a bench benchbar knows (registered, remembered or with a service; see benchbar_list, "
+                             "where adopted says which); nothing was changed. Register it first in a terminal: "
+                             "benchbar register %s" % (bench, shlex.quote(bench)), 1)
     return None
 
 
@@ -1221,7 +1221,7 @@ def ask_person(call, name, arguments, record):
     call.approval = answer
     if answer == "accepted":
         return None
-    return text_result("The person did not approve %s (%s). Nothing was changed; ask them what they want changed in the plan." % (name, answer), is_error=True)
+    return failed_result("The person did not approve %s (%s). Nothing was changed; ask them what they want changed in the plan." % (name, answer), 1)
 
 
 def envelope(label, data):
@@ -1338,7 +1338,7 @@ def tool_call(params, call=None):
     check_argument_values(arguments)
     problem = validate(props, arguments)
     if problem:
-        return text_result("invalid argument for %s: %s" % (name, problem), is_error=True)
+        return failed_result("invalid argument for %s: %s" % (name, problem), 1)
     timeout = tool_timeout(name)
     if not read_only:
         refused = unknown_bench_error(arguments)
@@ -1347,7 +1347,7 @@ def tool_call(params, call=None):
     if name in PLAN_OF:
         refusal, record = plan_refusal(name, arguments["token"])
         if refusal:
-            return text_result(refusal, is_error=True)
+            return failed_result(refusal, 1)
         refused = ask_person(call, name, arguments, record)
         if refused is not None:
             return refused
@@ -1372,10 +1372,10 @@ def tool_call(params, call=None):
                 code, out, err = run_cli(argv, timeout=timeout, call=call, extra_env=extra_env, on_line=on_line)
     except subprocess.TimeoutExpired:
         note_outcome(call, "timeout")
-        return text_result("benchbar did not answer in time (%ss); it and everything it started were stopped" % timeout, is_error=True)
+        return failed_result("benchbar did not answer in time (%ss); it and everything it started were stopped" % timeout, 124)
     except OSError as e:
         note_outcome(call, "error")
-        return text_result("could not run benchbar (%s): %s" % (BENCHBAR, e), is_error=True)
+        return failed_result("could not run benchbar (%s): %s" % (BENCHBAR, e), 127)
     if call is not None:
         call.exit = code
     if read_only:
@@ -1532,6 +1532,15 @@ class action_slot:
 
 def text_result(text, is_error=False):
     return {"content": [{"type": "text", "text": text}], "isError": is_error}
+
+
+def failed_result(text, code):
+    """An error result of the server itself (benchbar never ran, or never finished): the envelope's
+    exit and error as structuredContent, like a failed CLI read. 1 is a refusal, 124 a timeout,
+    127 benchbar could not be started."""
+    result = text_result(text, is_error=True)
+    result["structuredContent"] = {"exit": code, "error": text[:500]}
+    return result
 
 
 class RpcError(Exception):
