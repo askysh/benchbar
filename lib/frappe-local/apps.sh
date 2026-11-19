@@ -424,7 +424,7 @@ fl_app_clone_rollback() {
     [[ -n "$d" && -d "$(fl_app_path "$d")" ]] || continue
     if fl_app_in_apps_txt "$d"; then
       fl_warn "apps/${d} is half cloned and already listed in sites/apps.txt; benchbar does not edit sites/"
-      fl_fix "cd ${FL_BENCH_DIR} && bench remove-app ${d}   (then benchbar app add ${d} again)"
+      fl_fix "$(fl_fix_cmd cd "$FL_BENCH_DIR" '&&' bench remove-app "$d")   (then benchbar app add $(printf '%q' "$d") again)"
       continue
     fi
     dest="${FL_BACKUP_ROOT}/$(fl_backup_stamp)/apps"
@@ -453,7 +453,7 @@ fl_app_clone() {
   after="$(fl__apps_dirs)"
   # shellcheck disable=SC2046  # folder names are words
   fl_app_clone_rollback $(comm -13 <(printf '%s\n' "$before") <(printf '%s\n' "$after"))
-  fl_fix "cd ${FL_BENCH_DIR} && bench get-app --skip-assets --branch ${branch} ${repo}"
+  fl_fix "$(fl_fix_cmd cd "$FL_BENCH_DIR" '&&' bench get-app --skip-assets --branch "$branch" "$repo")"
   return 1
 }
 
@@ -467,7 +467,7 @@ fl_app_install_on_sites() {
   [[ -n "$FL_SETUP_REDIS_PORTS" ]] || fl_bench_redis_up "$FL_BENCH_DIR"
   for s in "$@"; do
     if ! fl_run_long "bench --site ${s} install-app ${app}" fl__in_dir "$FL_BENCH_DIR" bench --site "$s" install-app "$app"; then
-      fl_fix "cd ${FL_BENCH_DIR} && bench --site ${s} install-app ${app}   (or run this command again)"
+      fl_fix "$(fl_fix_cmd cd "$FL_BENCH_DIR" '&&' bench --site "$s" install-app "$app")   (or run this command again)"
       code=1
     fi
   done
@@ -523,7 +523,7 @@ fl_cmd_app_install() {
   missing="$(fl_app_required_apps "$app" | while IFS= read -r dep; do fl_app_in_apps_txt "$dep" || printf '%s ' "$dep"; done)"
   if [[ -n "$missing" ]]; then
     fl_fail "${app} requires ${missing% }, which the bench does not have"
-    for dep in $missing; do fl_fix "benchbar app add ${dep}"; done
+    for dep in $missing; do fl_fix "$(fl_fix_cmd benchbar app add "$dep")"; done
     return 1
   fi
   fl_header "benchbar app install" "$(fl_mode_name)" "$FL_PROFILE" "$FL_BENCH_DIR" "$OPT_SITE"
@@ -993,7 +993,7 @@ fl_cmd_app_update() {
         fl_fail "update of ${app} stopped at: ${name}"
         [[ "$(fl_app_commit "$app")" != "$old" ]] && fl_note "the code is at ${new:0:12}; to go back (not run for you): git -C ${FL_BENCH_DIR}/apps/${app} reset --hard ${old}"
         [[ "$skip_backup" != "1" && "${#sites[@]}" -gt 0 ]] && fl_note "site backups are in ${FL_BENCH_DIR}/sites/<site>/private/backups"
-        fl_fix "benchbar app update ${app} --bench-dir ${FL_BENCH_DIR}   (runs the steps that did not finish, nothing else)"
+        fl_fix "$(fl_fix_cmd benchbar app update "$app" --bench-dir "$FL_BENCH_DIR")   (runs the steps that did not finish, nothing else)"
         return 1
       fi
       fl_step_end "done"

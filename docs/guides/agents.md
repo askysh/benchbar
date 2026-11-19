@@ -76,7 +76,11 @@ add only repos you trust, and read the plan:
    plan in the question, and runs only on your yes. Without elicitation
    the gate is your client's approval of the apply tool: keep it on
    "ask" for `benchbar_app_add` and the other apply tools, and do not
-   auto approve them.
+   auto approve them. The same holds for elicitation: a client that
+   answers every question by itself, with nobody looking, defeats the
+   gate, because its `accept` looks like yours. The question holds the
+   whole plan (a plan over 20000 characters is cut, and the question says
+   so).
 3. `benchbar_app_add` with the same arguments and the `token` runs
    exactly that plan. If `sites/apps.txt`, `apps/` or the sites changed
    in between, the token is refused and the agent plans again.
@@ -99,13 +103,16 @@ in your client's setup for that server (`benchbar mcp --allow-bench PATH`).
 Every call is logged in `mcp-calls.jsonl` in benchbar's state folder
 (for Homebrew and the one line installer,
 `~/.local/state/benchbar/mcp-calls.jsonl`): when, which client, which
-tool, its arguments (tokens and passwords are `***`) and how it ended.
+tool, its arguments (anything named like a password, secret, token or
+key is `***`, and so are the credentials of a URL) and how it ended. A
+call that was rejected for its arguments logs only their names.
 `benchbar mcp --calls 20` prints the last 20. After an agent session it
 answers "what did it run, and in what order".
 
 Fix commands in a doctor report come twice: the text, for you, and
 `fix_argv` (with `fix_cwd`), an array a program can run without a shell.
-It is `null` when the fix is not one plain command; read the text then.
+It is there only when benchbar quoted the fix itself and it is one plain
+command; for any other fix it is `null`: read the text then.
 The JSON each one returns is described in the [JSON schema](../json-schema.md).
 
 ## The CLI as an agent contract

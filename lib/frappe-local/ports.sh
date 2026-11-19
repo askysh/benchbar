@@ -183,7 +183,7 @@ fl_ports_plan() {
     conflicts="$(fl_port_block_conflicts "$want")"
     if [[ -n "$conflicts" ]]; then
       fl_fail "port block ${want} is not free: $(printf '%s' "$conflicts" | tr '\n' ';' | sed 's/;$//; s/;/; /g')"
-      fl_fix "benchbar service --port-offset $(fl_port_next_free_offset || printf 'N') --bench-dir ${FL_BENCH_DIR}"
+      fl_fix "$(fl_fix_cmd benchbar service --port-offset "$(fl_port_next_free_offset || printf 'N')" --bench-dir "$FL_BENCH_DIR")"
       return 1
     fi
     [[ "$want" == "$cur" ]] && { fl_ok "ports already use block ${want} (web ${FL_WEB_PORT})"; return 0; }

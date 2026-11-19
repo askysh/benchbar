@@ -144,7 +144,7 @@ chk_toolchain_node() {
     chk__set ok "Node ${ver} at ${where}, profile ${FL_PROFILE} expects ${FL_NODE_MAJOR}"
   elif [[ "$where" == "env/bin/node" ]]; then
     # bench put it there; fnm cannot change it
-    chk__set warn "Node ${ver:-unknown} at ${where}, profile ${FL_PROFILE} expects ${FL_NODE_MAJOR}" "$(fl_fnm_cmd) install ${FL_NODE_MAJOR}, then remove ${FL_BENCH_DIR}/env/bin/node so the bench uses ${bindir}/node"
+    chk__set warn "Node ${ver:-unknown} at ${where}, profile ${FL_PROFILE} expects ${FL_NODE_MAJOR}" "$(fl_fnm_cmd) install ${FL_NODE_MAJOR}, then remove $(printf '%q' "${FL_BENCH_DIR}/env/bin/node") so the bench uses $(printf '%q' "${bindir}/node")"
   else
     chk__set warn "Node ${ver:-unknown} at ${where}, profile ${FL_PROFILE} expects ${FL_NODE_MAJOR}" "$(fl_fnm_cmd) install ${FL_NODE_MAJOR}   (the bench's PATH puts ${bindir} first)" node_install
   fi

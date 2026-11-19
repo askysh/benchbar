@@ -36,7 +36,8 @@ supports MCP elicitation asks the person from inside the apply: plan,
 show, wait for the OK, then apply, in separate turns. Every call is
 logged in `mcp-calls.jsonl` in the state folder (`benchbar mcp --calls`
 prints it). A doctor `fix_command` comes with `fix_argv` for a program that
-runs it without a shell. The tools change only benches benchbar knows
+runs it without a shell, only when benchbar quoted that fix itself (`null`
+otherwise: read the text). The tools change only benches benchbar knows
 (`adopted` in `benchbar_list`).
 
 Never probe MariaDB root, the Keychain or benchbar's state folder for a

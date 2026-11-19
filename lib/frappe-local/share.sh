@@ -222,7 +222,7 @@ fl_share_on_exit() {
     fl_share_site_config mute_emails 1 || true
   fi
   if fl_pull_step_resume; then rm -f "$(fl_share_pause_marker)"
-  else fl_fix "cd ${FL_BENCH_DIR} && bench config remove-common-config pause_scheduler"; fi
+  else fl_fix "$(fl_fix_cmd cd "$FL_BENCH_DIR" '&&' bench config remove-common-config pause_scheduler)"; fi
 }
 
 # fl_share_user_ok NAME: a name that survives a comma separated list, one line of

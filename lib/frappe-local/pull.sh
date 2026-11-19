@@ -566,9 +566,8 @@ fl_pull_require_apps() {
   fl_fail "this bench lacks apps the production site has installed; a restored site with a missing app fails at migrate"
   while IFS='|' read -r a branch origin; do
     [[ -n "$a" ]] || continue
-    cmd="cd ${FL_BENCH_DIR} && bench get-app"
-    [[ -n "$branch" ]] && cmd="${cmd} --branch ${branch}"
-    cmd="${cmd} ${origin:-$a}"
+    if [[ -n "$branch" ]]; then cmd="$(fl_fix_cmd cd "$FL_BENCH_DIR" '&&' bench get-app --branch "$branch" "${origin:-$a}")"
+    else cmd="$(fl_fix_cmd cd "$FL_BENCH_DIR" '&&' bench get-app "${origin:-$a}")"; fi
     fl_fix "$cmd"
   done <<<"$FL_PULL_MISSING"
   fl_info "or leave an app out with --skip-app APP: the site forgets it, but its doctypes and tables stay behind as orphans"
@@ -899,7 +898,7 @@ fl_pull_step_new_site() {
   fl_new_site_create "$FL_BENCH_DIR" "$FL_PULL_AS" "$FL_MARIADB_ROOT_PW" "$pw" || code=$?
   pw=""
   if [[ "$code" != "0" ]]; then
-    fl_fix "cd ${FL_BENCH_DIR} && bench new-site ${FL_PULL_AS} $(fl_new_site_scope)   (it asks for both passwords). If sites/${FL_PULL_AS} was left behind, move it aside first."
+    fl_fix "cd $(printf '%q' "$FL_BENCH_DIR") && bench new-site $(printf '%q' "$FL_PULL_AS") $(fl_new_site_scope)   (it asks for both passwords). If sites/${FL_PULL_AS} was left behind, move it aside first."
     return 1
   fi
   [[ -f "${FL_BENCH_DIR}/sites/${FL_PULL_AS}/site_config.json" ]] || { fl_fail "bench new-site left no sites/${FL_PULL_AS}/site_config.json"; return 1; }
@@ -1014,7 +1013,7 @@ fl_pull_step_before_migrate() {
   fl_bench_env_exports
   fl_run_long "${FL_PULL_HOOK##*/} (before migrate)" fl_pull_hook_run || {
     fl_fail "the --before-migrate script failed; ${FL_PULL_AS} is restored but not migrated"
-    fl_fix "fix the script and run it by hand, then: cd ${FL_BENCH_DIR} && bench --site ${FL_PULL_AS} migrate"
+    fl_fix "fix the script and run it by hand, then: cd $(printf '%q' "$FL_BENCH_DIR") && bench --site $(printf '%q' "$FL_PULL_AS") migrate"
     return 1
   }
 }
@@ -1028,7 +1027,7 @@ fl_pull_step_migrate() {
   fl_bench_env_exports
   [[ -n "$FL_SETUP_REDIS_PORTS" ]] || fl_bench_redis_up "$FL_BENCH_DIR"
   fl_run_long "bench --site ${FL_PULL_AS} migrate" fl__in_dir "$FL_BENCH_DIR" bench --site "$FL_PULL_AS" migrate || {
-    fl_fix "cd ${FL_BENCH_DIR} && bench --site ${FL_PULL_AS} migrate"
+    fl_fix "$(fl_fix_cmd cd "$FL_BENCH_DIR" '&&' bench --site "$FL_PULL_AS" migrate)"
     return 1
   }
 }
@@ -1190,7 +1189,7 @@ fl_cmd_pull() {
       fi
       if [[ "${FL_PULL_QUIESCED:-0}" == "1" ]]; then
         fl_warn "the scheduler of every site on this bench stays paused (pause_scheduler in common_site_config.json)"
-        fl_fix "once ${FL_PULL_AS} is fixed or removed: cd ${FL_BENCH_DIR} && bench config remove-common-config pause_scheduler"
+        fl_fix "once $(printf '%q' "$FL_PULL_AS") is fixed or removed: cd $(printf '%q' "$FL_BENCH_DIR") && bench config remove-common-config pause_scheduler"
       fi
       exit 1
     fi

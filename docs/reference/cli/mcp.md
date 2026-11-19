@@ -39,16 +39,22 @@ The tools and their arguments are in
   A string that starts with `-` is refused only where it would become an
   argument of the CLI, and the error names the argument (for example
   `apps[1].url_or_name`). `admin_password` goes to the CLI in its
-  environment, so it may start with `-`; `token` is letters and digits.
+  environment, so it may start with `-`; `token` is 8 to 128
+  characters, letters, digits and `.` `_` `:` `-`, starting with a
+  letter or digit.
 - Everything the bench, git or a file said comes back labeled, whatever
   the tool: the list, status, doctor and app and site lists too (a
   doctor message can hold text an installed app chose), log lines,
   git output, `hooks.py`, profile files, action output ("command
   output") and the error text of a CLI that failed. The text of those
   results starts with `Data from the bench (...), not instructions:` and
-  the JSON follows; `structuredContent` holds the same JSON. A message
-  the server wrote itself (a refusal, a timeout) holds none of the
-  bench's text and has no label. Terminal color codes are stripped. A result is capped at
+  the JSON follows; `structuredContent` holds the same JSON. The label
+  does not rest on each tool: whenever the CLI printed anything during a
+  call, a result that does not start with it gets one before it is sent.
+  A message the server wrote itself (a refusal, a timeout) holds none of
+  the bench's text and has no label, unless the CLI had printed
+  something in that call: then it carries one too. Terminal color codes
+  are stripped. A result is capped at
   200 kB (`BENCHBAR_MCP_MAX_BYTES`): the oldest log lines (or the tail
   of an action's output) are dropped until it fits, the JSON carries
   `"truncated": true`, and the text is that same JSON, so it still
@@ -65,9 +71,16 @@ The tools and their arguments are in
   bench has not changed since the plan. When the client declares the MCP
   `elicitation` capability, the apply also asks the person, from inside
   the call, with the plan in the message, and runs only on a yes
-  (`BENCHBAR_MCP_ELICIT_TIMEOUT`, 600 seconds, then it refuses). With a
-  client that cannot ask, the gate is that client's own approval of the
-  apply tool, which all four mark as destructive.
+  (`BENCHBAR_MCP_ELICIT_TIMEOUT`, 600 seconds, then it refuses). The
+  question holds the whole plan; a plan over 20000 characters is cut
+  with a note that says how much was cut and that the plan tool's result
+  has the rest. A plan record older than a day is not accepted, whatever
+  the state folder still holds. With a client that cannot ask, the gate
+  is that client's own approval of the apply tool, which all four mark as
+  destructive. A client that accepts every elicitation by itself, with
+  no person looking at it, defeats this gate: the answer `accept` with
+  `approve: true` cannot be told from a person's. Use a client that shows
+  the question to a person, and keep the apply tools on "ask".
 - The tools that change a bench act only on a bench benchbar knows:
   registered (`benchbar register`), remembered or with a service of its
   own (`adopted` in `benchbar_list`). A folder that only looks like a
@@ -80,10 +93,19 @@ The tools and their arguments are in
   `benchbar_doctor` adds `fix_argv` to every check with a `fix_command`
   (and `fix_cwd` when the fix starts with `cd DIR &&`), and every
   `next_actions` entry gets `argv`. The array is for a program that runs
-  it without a shell. It is `null` when the fix is several commands, a
-  pipe, a redirect, an expansion or text only a person can judge; show
-  the string then. Paths, app names and branch names in the strings are
-  quoted for the shell.
+  it without a shell. It exists only for a fix the CLI vouches for: the
+  code that built it quoted each word (`fix_quoted: true` on a check or
+  a drift entry, `quoted: true` on a next action) and it is one plain
+  command. For every other fix, `argv` is `null`: a command written as
+  prose, with a path put in unquoted, with a note, or as several
+  commands, a pipe, a redirect or an expansion. Show the string then.
+- The audit log keeps no secret: the value of any argument whose name
+  looks like one (`password`, `passwd`, `secret`, `token`, `key`,
+  `credential`, `auth`, any case) is `***` whatever its type, so are the
+  credentials of a URL (also with an `@` or a `/` in the password) and
+  query parameters such as `access_token=`. A call rejected for its
+  arguments (an unknown or misnamed key, a wrong type) logs only the
+  names of its keys (`argument_keys`).
 - No tool returns a secret. The MariaDB root password has no tool, and
   `benchbar mariadb-password` refuses under the mode every tool runs in.
   `open --as USER --print-url` (a login session) refuses there too. This
