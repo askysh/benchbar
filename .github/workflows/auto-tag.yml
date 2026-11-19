@@ -1,18 +1,24 @@
 # Tags a release when main moves to a new version, and starts its builds.
 #
 # Work lands on next-release; main moves only when a release is cut, by
-# squash merging next-release into it (docs/releasing.md). On that push:
-#   1. the version is read from FL_VERSION in benchbar and MARKETING_VERSION
-#      in macos/project.yml (they must agree) and CHANGELOG.md must have its
-#      "## X.Y.Z" section;
+# merging next-release into it with a merge commit (docs/releasing.md): the
+# release adds no new squash of unreviewed work, and main's tip has the tree
+# of a next-release commit that CI already ran. On that push:
+#   1. the version is read from FL_VERSION in benchbar and must be a release
+#      (X.Y.Z; a release candidate is tagged by hand on next-release and never
+#      reaches main). scripts/check-version.sh checks that benchbar,
+#      macos/project.yml, the bug report forms, CHANGELOG.md, README.md and
+#      ROADMAP.md say it and that no changelog fragment is left;
 #   2. when the tag vX.Y.Z does not exist yet, it is created on this commit;
 #      a push to main that keeps the version (a docs fix) tags nothing;
 #   3. release.yml and release-windows.yml are started for the tag. A tag
 #      pushed with GITHUB_TOKEN starts no workflow by itself, so they are
 #      dispatched here, with the tag as their ref;
-#   4. main is merged back into next-release, so the next release pull
-#      request shows only what is new. A conflict there (a fix made on main
-#      alone) is left for a person, with a warning.
+#   4. next-release is fast forwarded to main, so both are the same commit
+#      and the next release pull request shows only what is new. When
+#      next-release has moved on in the meantime (a pull request merged after
+#      the release pull request), main is merged into it instead; a conflict
+#      there (a fix made on main alone) is left for a person, with a warning.
 # A tag pushed by a person still starts both release workflows as before.
 name: Auto tag
 
@@ -42,16 +48,19 @@ jobs:
         id: v
         run: |
           cli="$(sed -n 's/^FL_VERSION="\([^"]*\)"$/\1/p' benchbar | head -n 1)"
-          app="$(sed -n 's/^ *MARKETING_VERSION: *"\{0,1\}\([0-9][0-9.]*\)"\{0,1\} *$/\1/p' macos/project.yml | head -n 1)"
           [ -n "$cli" ] || { echo "::error::no FL_VERSION in benchbar"; exit 1; }
-          [ "$cli" = "$app" ] || { echo "::error::FL_VERSION in benchbar is $cli but MARKETING_VERSION in macos/project.yml is $app"; exit 1; }
+          scripts/check-version.sh --valid "$cli" || exit 1
+          if [ "$(scripts/check-version.sh --kind "$cli")" != final ]; then
+            echo "::error::main carries the release candidate version $cli. A candidate is tagged on next-release by hand and never merged into main: set the release version (scripts/bump-version.sh X.Y.Z) before the release pull request"
+            exit 1
+          fi
           echo "version=$cli" >> "$GITHUB_OUTPUT"
           if git rev-parse -q --verify "refs/tags/v$cli" >/dev/null; then
             echo "new=false" >> "$GITHUB_OUTPUT"
             echo "::notice title=No release::v$cli is tagged already; this push to main starts no release."
             exit 0
           fi
-          grep -q "^## $cli\( \|$\)" CHANGELOG.md || { echo "::error::CHANGELOG.md has no '## $cli' section; add it on next-release before cutting the release"; exit 1; }
+          scripts/check-version.sh --folded "$cli"
           echo "new=true" >> "$GITHUB_OUTPUT"
 
       - name: Tag
@@ -73,17 +82,24 @@ jobs:
           gh workflow run release-windows.yml --ref "v$VERSION" -f version="$VERSION" -f draft_release=true -f wait_for_draft=true
           echo "::notice title=Release builds::started release.yml and release-windows.yml for v$VERSION; the draft release appears when they finish"
 
-      - name: Merge main back into next-release
+      - name: Move next-release up to main
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           if ! git ls-remote --exit-code --heads origin next-release >/dev/null; then
-            echo "::notice::no next-release branch; nothing to merge back"
+            echo "::notice::no next-release branch; nothing to move"
             exit 0
           fi
-          if gh api "repos/${GITHUB_REPOSITORY}/merges" -f base=next-release -f head="$GITHUB_SHA" \
+          git fetch --quiet origin next-release
+          if git merge-base --is-ancestor "$GITHUB_SHA" origin/next-release; then
+            echo "::notice::next-release has main already"
+          elif git merge-base --is-ancestor origin/next-release "$GITHUB_SHA"; then
+            # no merge commit and no force: next-release becomes main's commit
+            git push origin "$GITHUB_SHA:refs/heads/next-release"
+            echo "::notice::next-release is fast forwarded to main ($GITHUB_SHA)"
+          elif gh api "repos/${GITHUB_REPOSITORY}/merges" -f base=next-release -f head="$GITHUB_SHA" \
                -f commit_message="Merge main ($GITHUB_SHA) back into next-release" >/dev/null 2>err.txt; then
-            echo "::notice::main is merged back into next-release"
+            echo "::notice::next-release had moved on; main is merged into it"
           else
             echo "::warning title=Merge back::main could not be merged into next-release ($(cat err.txt)). Merge it by hand: git switch next-release && git merge origin/main"
           fi

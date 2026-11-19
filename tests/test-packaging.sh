@@ -115,5 +115,10 @@ assert_eq 1 "$CODE" "(no tarball)"
 assert_contains "$OUT" "scripts/cli-tarball.sh ${VER}"
 set +e; OUT="$(bash "$RENDER_SH" --version 1.0 --cli "$TARBALL" "$TMP_DIR/tap5" 2>&1)"; CODE=$?; set -e
 assert_eq 1 "$CODE" "(not X.Y.Z)"
+# a release candidate is a form the tarball takes (it is then checked against FL_VERSION)
+set +e; OUT="$(bash "$TARBALL_SH" 9.9.9-rc.1 "$TMP_DIR/rc-out" 2>&1)"; CODE=$?; set -e
+assert_eq 1 "$CODE" "(FL_VERSION is not 9.9.9-rc.1)"
+assert_contains "$OUT" 'says FL_VERSION='
+assert_not_contains "$OUT" "is not X.Y.Z"
 
 printf 'test-packaging: ok\n'

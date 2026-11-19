@@ -6,7 +6,9 @@ pagefind: false
 
 One workflow, `.github/workflows/release.yml`, two paths. It runs when a
 `v*` tag is pushed and drafts a GitHub release with the files below. You
-review the draft and publish it.
+review the draft and publish it. A tag with a suffix (`v0.9.0-rc.1`) is a
+release candidate: the same build, drafted as a pre-release that no updater
+offers (see [Release candidates](#release-candidates)).
 
 | Path | When | What people get |
 |---|---|---|
@@ -28,6 +30,31 @@ the one line installers and the docs site, which read from `main`. A push
 to `main` with a new version tags it and starts the release builds
 (`auto-tag.yml`).
 
+A release is the merge of reviewed work, not a new squash of it: the pull
+request from `next-release` into `main` is merged with a **merge commit**,
+so `main` gets the commits that were reviewed and run by CI on
+`next-release`, and its tip has the tree of a `next-release` commit that
+already passed. After tagging, `auto-tag.yml` fast forwards `next-release`
+to `main` (no merge back commit). Only when a pull request was merged into
+`next-release` after the release pull request does it merge `main` into
+`next-release` instead; keep `next-release` closed to merges from the
+release pull request until the tag exists.
+
+### Repository settings the release needs
+
+These are settings of the repository, not files, so a pull request cannot
+change them (the maintainer sets them once):
+
+1. Settings, General, Pull Requests: **Allow merge commits** on.
+2. Settings, Rules, Rulesets, the `main` ruleset:
+   - turn **Require linear history** off (a merge commit is not linear);
+   - under **Require a pull request before merging**, set **Allowed merge
+     methods** to **Merge** only, so a release cannot be squashed by
+     mistake (pull requests into `next-release` are not under this
+     ruleset and still squash).
+3. The `next-release` ruleset stays as it is: no deletion, no force push.
+   `auto-tag.yml` pushes to it without force, which a fast forward needs.
+
 ## The docs site
 
 The site (<https://benchbar.akashmishra.com>) is built and deployed from
@@ -47,18 +74,22 @@ may go to `main` as its own pull request; merge `main` back into
 
 On `next-release`, then into `main`:
 
-1. Bump `MARKETING_VERSION` in `macos/project.yml` and `FL_VERSION` in
-   `benchbar`. The workflow refuses a tag that does not match both. Then run
-   `bash tests/record-tray-fixtures.sh` and commit what it changes in
-   `windows/tray/fixtures`: the tray's recorded CLI output holds `cli_version`,
-   and `test-tray-fixtures` fails until it is regenerated.
-2. Run `bash scripts/changelog-fold.sh`. It folds the fragments in
-   `changelog.d/` into `## Unreleased` of `CHANGELOG.md` and removes them
-   (`--print` shows the result first, `--check` only validates). Then
-   change the `## Unreleased` heading to `## X.Y.Z - date` and add a new
-   empty `## Unreleased` above it. The workflow refuses a version without
-   a `## X.Y.Z` section, and uses the section as the release notes
-   (`scripts/release-notes.sh` reads it as it is, folded or not).
+1. Run `scripts/bump-version.sh X.Y.Z`. It sets `FL_VERSION` in
+   `benchbar`, `MARKETING_VERSION` in `macos/project.yml` and the version
+   placeholder of the two bug report forms, folds the fragments in
+   `changelog.d/` into `## Unreleased` of `CHANGELOG.md` (it runs
+   `scripts/changelog-fold.sh`) and turns that section into
+   `## X.Y.Z - date` with a new empty `## Unreleased` above it, and records
+   the tray's CLI fixtures again (`tests/record-tray-fixtures.sh`: they hold
+   `cli_version`). Commit what it changed.
+2. Write the release paragraph in `README.md` and in `ROADMAP.md`: the only
+   places the script cannot write for you. `scripts/check-version.sh` (the
+   one check that `auto-tag.yml`, `release.yml` and
+   `tests/test-version-sources.sh` all run) fails until both name the
+   version, until the changelog has the section and until no fragment is
+   left, so a gap shows on the release pull request and not after the
+   merge. The workflow uses the changelog section as the release notes
+   (`scripts/release-notes.sh`).
 3. Refresh the screenshots in `docs/images` for every screen the release
    changed, and add new ones where a page still has none:
    - The Mac first run wizard and the walkthrough: `WizardSnapshotTests`
@@ -74,13 +105,17 @@ On `next-release`, then into `main`:
      Find User sheet and three wizard pages in a real key window (the
      window panes are captured as the window server draws them, so the
      sidebar and the selection look as in the app).
-4. Merge those changes into `next-release`, then open a pull request
-   from `next-release` into `main` and **squash merge** it (`main` keeps a
-   linear history: one commit per release).
-5. `auto-tag.yml` checks that `FL_VERSION` and `MARKETING_VERSION` agree
-   and that CHANGELOG.md has the section, tags `vX.Y.Z` on that commit,
-   starts `release.yml` and `release-windows.yml` for the tag, and merges
-   `main` back into `next-release`. A push to `main` that keeps the version
+4. Merge those changes into `next-release`. For a release with a big change,
+   cut a [release candidate](#release-candidates) first. Then open a pull
+   request from `next-release` into `main` and merge it with a **merge
+   commit**, not a squash (the repository settings are under
+   [Branches](#branches)). Merge nothing else into `next-release` until the
+   tag exists.
+5. `auto-tag.yml` runs `scripts/check-version.sh` (every place says the same
+   version, CHANGELOG.md has its section, no fragment is left), refuses a
+   release candidate version on `main`, tags `vX.Y.Z` on the merge commit,
+   starts `release.yml` and `release-windows.yml` for the tag, and fast
+   forwards `next-release` to `main`. A push to `main` that keeps the version
    tags nothing. A tag pushed by hand still starts both release workflows.
 6. Wait for the release workflows, open the draft on the Releases page,
    check the files, publish.
@@ -186,6 +221,56 @@ ls dist/
 
 `release-local.sh` needs full Xcode, XcodeGen and nothing else. It is the
 ad hoc path of the workflow, running on your Mac.
+
+## Release candidates
+
+A release candidate (`X.Y.Z-rc.N`, for example `0.9.0-rc.1`) is the release
+build, signed and notarized the same way, published as a GitHub
+**pre-release**. It exists so one live QA pass can run on the real files
+before the release. Nobody gets it by updating.
+
+**Cut one.** On `next-release`:
+
+1. `scripts/bump-version.sh 0.9.0-rc.1` sets the version in every place. A
+   candidate needs no changelog section, no README or ROADMAP paragraph and
+   no folded fragments; its notes are `## Unreleased` with the fragments
+   folded in. Merge that change into `next-release` by pull request.
+2. Tag the merged commit by hand and push the tag:
+   `git tag v0.9.0-rc.1 COMMIT && git push origin v0.9.0-rc.1`. The tag
+   starts `release.yml` and `release-windows.yml`. The `release` environment
+   accepts it (its `v*` rule) and waits for you as for a release. The build
+   refuses a tag whose commit is not on `main` or `next-release`.
+3. When both workflows are done, open the draft: it is marked **pre-release**
+   and not latest. Check the files as for a release, then publish. Publishing
+   a pre-release does not move "latest".
+4. Do the QA from the install line in the release notes, on a clean user or
+   Mac: `curl -fsSL https://raw.githubusercontent.com/askysh/benchbar/v0.9.0-rc.1/install.sh | bash -s -- --version v0.9.0-rc.1`,
+   and on Windows the one liner of the notes with `-Version 0.9.0-rc.1`.
+5. Fix what it shows with ordinary pull requests, and cut `rc.2` if the
+   changes need another pass. Then run `scripts/bump-version.sh 0.9.0` and
+   release as above. Do not delete a published candidate; releases are
+   immutable.
+
+**Who ignores it, and how.** Each of these reads GitHub's "latest release",
+which is never a pre-release or a draft, or lists releases and skips
+pre-releases:
+
+| Reader | How it skips a candidate |
+|---|---|
+| Sparkle (the app's own updates) | The feed is `releases/latest/download/appcast.xml`: GitHub redirects it to the latest release, so a candidate's own `appcast.xml` is reachable only by its tag URL. |
+| The app's update banner and Update Now | `UpdateCheck` reads `releases/latest` and also ignores an answer marked `prerelease` or `draft`. |
+| `install.sh`, `benchbar self-update` | `releases/latest`. |
+| Homebrew tap (`homebrew-tap.yml`) | The job has `if: ... !github.event.release.prerelease`, so it does not even ask for the environment. A run by hand for a version with a suffix stops at once. The nightly formula check skips a candidate too. |
+| `install.ps1`, `benchbar.exe self-update`, the tray's update check | They list releases and skip a draft, a pre-release and any tag that is not `X.Y.Z`. |
+
+**Opt in.** Name the version: `install.sh --version v0.9.0-rc.1`,
+`install.ps1 -Version 0.9.0-rc.1`, `benchbar.exe self-update --version
+0.9.0-rc.1`. The Mac app built from a candidate carries `0.9.0-rc.1` as its
+version, so Sparkle later moves it to `0.9.0` (its build number, the commit
+count, is higher). `benchbar.exe` built from a candidate behaves as a
+development build: it never offers an update, so a Windows tester installs
+the release with the one liner. `benchbar self-update` has no `--version`:
+to leave a candidate on the Mac, run the installer without a version.
 
 ## The Developer ID path: one time setup
 
@@ -329,8 +414,8 @@ environment without needing a secret.
 **What you approve.** GitHub shows "Review pending deployments" on the
 run: it names the workflow, the tag and the commit, and says the job
 wants the `release` environment. Check that the tag is the one you cut
-(`auto-tag.yml` tagged it, or you did), that its commit is the squash
-merge you expect on `main`, and that nobody pushed a different commit
+(`auto-tag.yml` tagged it, or you did), that its commit is the merge
+commit you expect on `main`, and that nobody pushed a different commit
 under that tag. Approving hands the keys to that commit's
 `scripts/macos-release.sh` and workflow files, so read the diff of
 `.github/`, `scripts/` and `packaging/` since the last release first if

@@ -120,4 +120,31 @@ assert_contains "$(cat "$SCRIPT")" "drop_notary_key"
 assert_contains "$(cat "$SCRIPT")" 'mktemp "${BENCHBAR_KEY_DIR:-${TMPDIR:-/tmp}}/benchbar-notary.XXXXXX"'
 assert_contains "$(cat "$SCRIPT")" 'mktemp "${BENCHBAR_KEY_DIR:-${TMPDIR:-/tmp}}/benchbar-sparkle.XXXXXX"'
 
+# ---- release candidates (docs/releasing.md, "Release candidates"): a tag with a
+# suffix builds like a release but is a GitHub pre-release, which no updater
+# offers and the tap skips; a tag must sit on merged work
+assert_contains "$(cat "$RELEASE")" 'prerelease: ${{ steps.version.outputs.prerelease }}'
+assert_contains "$SIGNED_JOB" 'prerelease: ${{ needs.check.outputs.prerelease }}'
+assert_contains "$SIGNED_JOB" "is not on main"
+assert_contains "$SIGNED_JOB" 'git merge-base --is-ancestor "$GITHUB_SHA" origin/main'
+assert_contains "$DRAFT" "--prerelease --latest=false"
+assert_contains "$DRAFT" '"${flags[@]}"'
+assert_contains "$(cat "$ROOT/.github/actions/release-prepare/action.yml")" 'scripts/check-version.sh --folded "$VERSION"'
+assert_contains "$WIN" "'--prerelease'"
+assert_contains "$TAP" "if: github.event_name != 'release' || !github.event.release.prerelease"
+assert_contains "$TAP" "case \"\$v\" in *-rc.*) PRERELEASE=true ;; esac"
+# no job that starts the environment for a release candidate: the tap job is skipped before it
+tap_if="$(grep -n -m 1 "if: github.event_name != 'release'" <<<"$TAP" | cut -d: -f1)"
+tap_env="$(grep -n -m 1 'environment: release' <<<"$TAP" | cut -d: -f1)"
+[[ -n "$tap_if" && -n "$tap_env" && "$tap_if" -lt "$tap_env" ]] || fail "the tap job must skip a pre-release (if:) before it asks for the environment"
+
+# ---- the release PR is merged, not squashed: auto-tag tags main's commit, refuses a
+# candidate on main, runs the one version check, and fast forwards next-release
+AUTO="$(grep -v '^[[:space:]]*#' "$WF/auto-tag.yml")"
+assert_contains "$AUTO" 'scripts/check-version.sh --folded "$cli"'
+assert_contains "$AUTO" 'scripts/check-version.sh --kind "$cli")" != final'
+assert_contains "$AUTO" 'git push origin "$GITHUB_SHA:refs/heads/next-release"'
+assert_not_contains "$AUTO" "--force"
+assert_not_contains "$AUTO" "push -f"
+
 printf 'test-release-workflows: ok\n'

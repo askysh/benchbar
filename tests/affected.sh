@@ -98,6 +98,7 @@ lib_family() {
 script_tests() {
   case "$1" in
     release-notes) echo "test-release-notes" ;;
+    check-version|bump-version) echo "test-version-sources test-release-notes test-release-workflows" ;;
     changelog-fold) echo "test-changelog test-release-notes" ;;
     app-embed-cli|cli-tarball|homebrew-render) echo "test-packaging test-homebrew" ;;
     check-profile-formulae) echo "test-doctor-hardening test-homebrew" ;;
@@ -176,7 +177,7 @@ while IFS= read -r f; do
     install.sh) pick test-install-sh; shell=1 ;;
     packaging/*) pick test-packaging; pick test-homebrew ;;
     scripts/macos-release.sh) pick test-release-workflows; shell=1 ;;
-    .github/workflows/release.yml | .github/workflows/release-windows.yml | .github/workflows/homebrew-tap.yml | .github/workflows/auto-tag.yml | .github/actions/*) pick test-release-workflows ;;
+    .github/workflows/release.yml | .github/workflows/release-windows.yml | .github/workflows/homebrew-tap.yml | .github/workflows/auto-tag.yml | .github/actions/*) pick_family "test-release-workflows test-version-sources" ;;
     macos/BenchBarTests/Fixtures/*) pick_family "test-json test-install-json test-lock" ;;
     windows/tray/fixtures/* | tests/record-tray-fixtures.sh) pick test-tray-fixtures; shell=1 ;;
     scripts/*.sh)
