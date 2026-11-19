@@ -15,8 +15,10 @@ company receives the data. Umami sets no cookie.
 A page view sends the URL path (not the query string), the referrer, the
 browser language, the screen size, the browser and the operating system.
 The request carries your IP address, as every web request does. Umami
-uses it only to find the country and does not store it. The page view
-has no cookie and no ID that follows you to another site.
+uses it to find the location (country, region and city) and, hashed with
+a value that changes every month, to tell visits apart. It does not
+store the address. The page view has no cookie and no ID that follows
+you to another site.
 
 Besides page views, the site sends three custom events:
 
